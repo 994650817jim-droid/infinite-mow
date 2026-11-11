@@ -1,0 +1,206 @@
+import Phaser from 'phaser';
+import { LubuUltimate } from './LubuUltimate';
+import type { Enemy } from '../entities/Enemy';
+import type { Player } from '../entities/Player';
+import { LUBU_COMBAT as C } from '../data/chapters';
+import { DEPTH } from '../config';
+
+export type LubuState = 'approach' | 'sweepWindup' | 'sweep' | 'dashWindup' | 'dash' | 'recover' | 'ultTakeoff' | 'ultAirborne' | 'ultLanding';
+interface LubuHost {
+  scene: Phaser.Scene;
+  boss: Enemy;
+  player: Player;
+  playSfx(kind: string): void;
+  onPhase2(): void;
+  hurtTroops?(x: number, y: number, radius: number, damage: number, now: number, angle?: number, arc?: number): void;
+}
+function segmentDistance(px: number, py: number, ax: number, ay: number, bx: number, by: number): number {
+  const dx = bx - ax, dy = by - ay;
+  const t = Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / (dx * dx + dy * dy || 1)));
+  return Math.hypot(px - ax - t * dx, py - ay - t * dy);
+}
+
+/** 近战Boss：仅由冻结的战斗时钟驱动，无独立Timer、无召唤/法球。 */
+export class LubuBoss {
+  state: LubuState = 'approach';
+  phase2 = false;
+  energy = 0;
+  private readonly ultimate: LubuUltimate;
+  private until = 0;
+  private startedAt = 0;
+  private sweepCd = 1.5;
+  private dashCd = 4;
+  private angle = 0;
+  private ox = 0;
+  private oy = 0;
+  private travelled = 0;
+  private hitApplied = false;
+  private readonly slash: Phaser.GameObjects.Image;
+  private walkMs = 0;
+  private readonly sweepMask: Phaser.GameObjects.Graphics;
+  private lastAttack: 'sweep' | 'dash' = 'sweep';
+  private facing: 'down' | 'left' | 'right' | 'up' = 'down';
+  private readonly gfx: Phaser.GameObjects.Graphics;
+
+  constructor(private readonly host: LubuHost) {
+    this.ultimate = new LubuUltimate(host.scene, host.boss, host.player, host.playSfx, host.hurtTroops);
+    this.gfx = host.scene.add.graphics().setDepth(DEPTH.fx - 1);
+    this.sweepMask = host.scene.add.graphics().setVisible(false);
+    this.slash = host.scene.add.image(0, 0, 'lubu_slash', 0).setDisplaySize(300, 300).setAlpha(.85).setBlendMode(Phaser.BlendModes.NORMAL).setDepth(DEPTH.player - 1).setVisible(false);
+    this.slash.setMask(this.sweepMask.createGeometryMask());
+  }
+
+  private now = 0;
+  get telegraphProgress(): number {
+    return this.state === 'sweepWindup' || this.state === 'dashWindup'
+      ? Math.max(0, Math.min(1, (this.now - this.startedAt) / Math.max(1, this.until - this.startedAt))) : 0;
+  }
+  get statusLabel(): string {
+    return { approach: this.phase2 ? '震怒追击' : '追击', sweepWindup: '横扫预警', sweep: '方天横扫', dashWindup: '冲锋蓄力', dash: '破阵冲锋', recover: '收招 · 反击机会', ultTakeoff: '魔神降世 · 起飞可击杀', ultAirborne: '腾空无敌 · 离开红圈', ultLanding: '落地挥戟 · 圈内双抗' }[this.state];
+  }
+
+  update(dt: number, now: number): void {
+    const { boss, player, scene } = this.host;
+    if (!boss.active) { this.clear(); return; }
+    const previousX = boss.x, previousY = boss.y;
+    this.now = now;
+    this.gfx.clear();
+    if (!this.phase2 && boss.hp <= boss.maxHp * .5) {
+      this.phase2 = true; this.host.onPhase2();
+    }
+    if (this.phase2 && !this.ultimate.active) this.energy = Math.min(100, this.energy + dt * C.ultEnergyPerSecond);
+    this.tryUltimate(now);
+    const wasUltimate = this.ultimate.active;
+    this.ultimate.update(now);
+    if (wasUltimate) {
+      this.slash.setVisible(false);
+      if (this.ultimate.phase === 'idle') this.recover(now);
+      else this.state = ({ takeoff: 'ultTakeoff', airborne: 'ultAirborne', landing: 'ultLanding' } as const)[this.ultimate.phase];
+      return;
+    }
+    if (this.state === 'approach') {
+      this.sweepCd -= dt; this.dashCd -= dt;
+      const dx = player.x - boss.x, dy = player.y - boss.y, distance = Math.hypot(dx, dy) || 1;
+      if (this.dashCd <= 0 && distance >= 145 && distance <= 520) this.begin('dashWindup', now);
+      else if (this.sweepCd <= 0 && distance <= C.sweepRadius) this.begin('sweepWindup', now);
+      else {
+        const step = Math.min(Math.max(0, distance - 70), boss.def.speed * (this.phase2 ? C.enragedMoveMul : 1) * dt);
+        boss.sprite.x += dx / distance * step; boss.sprite.y += dy / distance * step;
+      }
+    }
+    if (this.state === 'sweepWindup') {
+      this.drawSweep(0xffb347, .06 + this.telegraphProgress * .08);
+      if (now >= this.until) {
+        this.state = 'sweep'; this.until = now + C.sweepFlashMs;
+        this.host.hurtTroops?.(this.ox, this.oy, C.sweepRadius, C.sweepDamage, now, this.angle, C.sweepAngle * Math.PI / 180);
+        const dx = player.x - this.ox, dy = player.y - this.oy, d = Math.hypot(dx, dy);
+        if (!this.hitApplied && d <= C.sweepRadius && Math.cos(Math.atan2(dy, dx) - this.angle) >= Math.cos(C.sweepAngle * Math.PI / 360)) {
+          this.hitApplied = true; this.hurt(C.sweepDamage, now);
+        }
+        this.host.playSfx('allySlash'); scene.cameras.main.shake(90, .003);
+      }
+    }
+    if (this.state === 'sweep') {
+      this.drawSweep(0xffb347, .045);
+      if (now >= this.until) this.recover(now);
+    } else if (this.state === 'dashWindup') {
+      const ex = this.ox + Math.cos(this.angle) * C.dashLength, ey = this.oy + Math.sin(this.angle) * C.dashLength;
+      this.gfx.lineStyle(C.dashHalfWidth * 2, 0xff5f46, .18 + this.telegraphProgress * .15);
+      this.gfx.lineBetween(this.ox, this.oy, ex, ey);
+      this.gfx.fillStyle(0xff5f46, .22); this.gfx.fillCircle(this.ox, this.oy, C.dashHalfWidth); this.gfx.fillCircle(ex, ey, C.dashHalfWidth);
+      this.gfx.lineStyle(2, 0xffb347, .9); this.gfx.lineBetween(this.ox, this.oy, ex, ey);
+      if (now >= this.until) { this.state = 'dash'; this.travelled = 0; this.host.playSfx('chargeWarn'); }
+    } else if (this.state === 'dash') {
+      const ax = boss.x, ay = boss.y, step = Math.min(C.dashLength - this.travelled, C.dashSpeed * dt);
+      boss.sprite.x += Math.cos(this.angle) * step; boss.sprite.y += Math.sin(this.angle) * step; this.travelled += step;
+      this.host.hurtTroops?.((ax + boss.x) / 2, (ay + boss.y) / 2, C.dashHalfWidth + step / 2, C.dashDamage, now);
+      this.gfx.lineStyle(5, 0xffb347, .55); this.gfx.lineBetween(ax - Math.cos(this.angle) * 40, ay - Math.sin(this.angle) * 40, boss.x, boss.y);
+      this.gfx.lineStyle(2, 0xfff3dd, .85); this.gfx.lineBetween(ax, ay, boss.x, boss.y);
+      if (!this.hitApplied && segmentDistance(player.x, player.y, ax, ay, boss.x, boss.y) <= C.dashHalfWidth + player.radius) {
+        this.hitApplied = true; this.hurt(C.dashDamage, now);
+      }
+      if (this.travelled >= C.dashLength) this.recover(now);
+    } else if (this.state === 'recover' && now >= this.until) {
+      this.state = 'approach';
+    }
+    this.updateArt(dt, now, boss.x - previousX, boss.y - previousY);
+    if (this.phase2) { this.gfx.lineStyle(2, 0xff5f46, .6); this.gfx.strokeCircle(boss.x, boss.y, boss.radius + 8); }
+  }
+
+  tryUltimate(now: number): boolean {
+    if (!this.phase2 || this.energy < 100 || this.state !== 'approach') return false;
+    this.energy = 0; this.ultimate.start(now); this.state = 'ultTakeoff'; return true;
+  }
+  incomingDamageMultiplier(source: 'melee' | 'arrow' | 'fire', now: number): number { return this.ultimate.damageMultiplier(source, now); }
+  ultimateInfo() { return this.ultimate.snapshot(); }
+
+  private updateArt(dt: number, now: number, dx: number, dy: number): void {
+    const boss = this.host.boss;
+    const moving = Math.hypot(dx, dy) > .01;
+    const angle = this.state === 'approach' && moving ? Math.atan2(dy, dx) : this.angle;
+    if (moving || this.state !== 'approach') this.facing = Math.abs(Math.cos(angle)) > Math.abs(Math.sin(angle)) ? (Math.cos(angle) < 0 ? 'left' : 'right') : (Math.sin(angle) < 0 ? 'up' : 'down');
+    let texture = 'boss_lubu', frame = 0;
+    if (this.state === 'approach' && moving) { this.walkMs += dt * 1000; frame = Math.floor(this.walkMs / 250) % 4; }
+    else this.walkMs = 0;
+    if (this.state === 'sweepWindup') { texture = 'lubu_attack'; frame = now - this.startedAt < 100 ? 0 : 1; }
+    else if (this.state === 'sweep') { texture = 'lubu_attack'; frame = now < this.until - 90 ? 2 : 3; }
+    else if (this.state === 'dashWindup') { texture = 'lubu_attack'; frame = 1; }
+    else if (this.state === 'dash') { texture = 'lubu_attack'; frame = 2; }
+    else if (this.state === 'recover' && this.lastAttack === 'sweep') { texture = 'lubu_attack'; frame = 3; }
+    const frameKey = `${this.facing}_${frame}`;
+    if (boss.sprite.texture.key !== texture || boss.sprite.frame.name !== frameKey) boss.sprite.setTexture(texture, frameKey);
+    this.slash.setVisible(false);
+    const hitAt = this.state === 'sweepWindup' ? this.until : this.state === 'sweep' ? this.until - C.sweepFlashMs : -Infinity;
+    const fxFrame = Math.floor((now - hitAt + 90) / 30);
+    if ((this.state === 'sweepWindup' || this.state === 'sweep') && fxFrame >= 0 && fxFrame < 6) {
+      this.slash.setFrame(fxFrame).setPosition(this.ox, this.oy).setRotation(this.angle).setVisible(true);
+    }
+  }
+
+  private begin(state: 'sweepWindup' | 'dashWindup', now: number): void {
+    const { boss, player } = this.host;
+    this.state = state; this.startedAt = now; this.ox = boss.x; this.oy = boss.y;
+    this.angle = Math.atan2(player.y - boss.y, player.x - boss.x); this.hitApplied = false;
+    const warn = state === 'sweepWindup' ? (this.phase2 ? C.enragedSweepWarnMs : C.sweepWarnMs) : (this.phase2 ? C.enragedDashWarnMs : C.dashWarnMs);
+    this.lastAttack = state === 'sweepWindup' ? 'sweep' : 'dash';
+    if (state === 'sweepWindup') {
+      this.sweepMask.clear();
+      this.fillCone(this.sweepMask, 0xffffff, 1);
+    }
+    this.until = now + warn; this.host.playSfx('chargeWarn');
+  }
+  private recover(now: number): void {
+    this.state = 'recover'; this.until = now + C.recoveryMs;
+    this.sweepCd = this.phase2 ? C.enragedSweepCooldown : C.sweepCooldown;
+    this.dashCd = this.phase2 ? C.enragedDashCooldown : C.dashCooldown;
+  }
+  private drawSweep(color: number, alpha: number): void {
+    const half = C.sweepAngle * Math.PI / 360;
+    this.fillCone(this.gfx, color, alpha);
+    this.gfx.lineStyle(2, color, .78);
+    this.gfx.beginPath(); this.gfx.moveTo(this.ox, this.oy);
+    this.gfx.arc(this.ox, this.oy, C.sweepRadius, this.angle - half, this.angle + half, false);
+    this.gfx.closePath(); this.gfx.strokePath();
+  }
+  /** Fixed triangle fan avoids rerunning Earcut on a large sector every render. */
+  private fillCone(g: Phaser.GameObjects.Graphics, color: number, alpha: number): void {
+    const half = C.sweepAngle * Math.PI / 360;
+    const segments = Math.ceil(C.sweepAngle / 12);
+    let px = this.ox + Math.cos(this.angle - half) * C.sweepRadius;
+    let py = this.oy + Math.sin(this.angle - half) * C.sweepRadius;
+    g.fillStyle(color, alpha);
+    for (let i = 1; i <= segments; i++) {
+      const a = this.angle - half + half * 2 * i / segments;
+      const x = this.ox + Math.cos(a) * C.sweepRadius, y = this.oy + Math.sin(a) * C.sweepRadius;
+      g.fillTriangle(this.ox, this.oy, px, py, x, y);
+      px = x; py = y;
+    }
+  }
+  private hurt(damage: number, now: number): void {
+    if (this.host.player.takeDamage(damage, now)) this.host.scene.cameras.main.flash(90, 180, 40, 40, false);
+  }
+  clear(): void { this.ultimate.clear(); this.state = 'approach'; this.energy = 0; this.gfx.clear(); this.slash.setVisible(false); }
+  snapshot(): { state: LubuState; phase2: boolean; until: number; progress: number; hitApplied: boolean } {
+    return { state: this.state, phase2: this.phase2, until: this.until, progress: this.telegraphProgress, hitApplied: this.hitApplied };
+  }
+}

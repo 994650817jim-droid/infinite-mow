@@ -1,0 +1,33 @@
+import { chromium } from 'playwright';
+import { mkdirSync, writeFileSync } from 'node:fs';
+const out='assets/review/menu-update';mkdirSync(out,{recursive:true});const b=await chromium.launch({channel:'chrome',headless:true}),checks=[],errors=[];
+const check=(name,ok,detail)=>{checks.push({name,ok,detail});console.log(ok?'PASS':'FAIL',name,JSON.stringify(detail));};
+try{
+ const p=await b.newPage({viewport:{width:390,height:844},hasTouch:true,isMobile:true});p.on('pageerror',e=>errors.push(e.message));
+ await p.addInitScript(()=>localStorage.setItem('im_chapter1_cleared','true'));
+ await p.goto('http://127.0.0.1:5173/?dev=1');await p.waitForFunction(()=>window.__game?.scene.isActive('MenuScene'));
+ const tap=async(type,index=0)=>{const pos=await p.evaluate(({type,index})=>{const s=window.__game.scene.getScene('MenuScene');const o=type==='chapter'?s.chapterButtons[index].bg:type==='hero'?s.charCards[index].bg:s.startButton;const r=o.getBounds(),c=document.querySelector('canvas').getBoundingClientRect();return{x:c.x+r.centerX/s.scale.width*c.width,y:c.y+r.centerY/s.scale.height*c.height};},{type,index});await p.touchscreen.tap(pos.x,pos.y);};
+ await tap('chapter',1);await tap('hero',3);
+ check('mobile_select_chapter_and_hero',await p.evaluate(()=>{const s=window.__game.scene.getScene('MenuScene');return s.selectedChapter==='hulao'&&s.selectedChar===3&&s.startLabel.text.includes('虎牢关')&&s.weapon.text.includes('烈焰');}));
+ await p.screenshot({path:`${out}/select-mobile.png`});await tap('start');await p.waitForFunction(()=>!!window.__IM);await p.waitForTimeout(180);
+ const opening=await p.evaluate(()=>{const s=window.__game.scene.getScene('GameScene');s.spawnTimer=s.eliteTimer=1e8;return{chapter:s.chapter.id,char:s.runConfig.character,mode:s.mode,army:s.legion.count,wave:s.waveIndex,elapsed:s.elapsed};});
+ check('selected_configuration_starts_game',opening.chapter==='hulao'&&opening.char==='zhuge',opening);
+ check('opening_wave_starts_without_recruit',opening.mode==='none'&&opening.army===0&&opening.wave===0&&opening.elapsed>0,opening);
+ check('opening_wave_cannot_manually_recruit',await p.evaluate(()=>{const s=window.__game.scene.getScene('GameScene');s.openRecruit();return s.mode==='none'&&s.legion.count===0;}));
+ await p.evaluate(()=>{const s=window.__game.scene.getScene('GameScene');s.elapsed=s.chapter.waves[1].start;});await p.waitForFunction(()=>window.__game.scene.getScene('GameScene').mode==='recruit');
+ check('first_completed_wave_opens_three_choices',await p.evaluate(()=>{const s=window.__game.scene.getScene('GameScene');return s.waveIndex===1&&s.recruitOptions.length===3&&s.legion.count===0;}));
+ const pos=await p.evaluate(()=>{const s=window.__game.scene.getScene('GameScene'),ui=s.legionUI,kind=s.recruitOptions[0].kind,o=ui.rows.find(r=>r.kind===kind).buy,r=o.getBounds(),c=document.querySelector('canvas').getBoundingClientRect();return{x:c.x+r.centerX/s.scale.width*c.width,y:c.y+r.centerY/s.scale.height*c.height};});await p.touchscreen.tap(pos.x,pos.y);
+ check('first_completed_wave_recruits_only_one',await p.evaluate(()=>{const s=window.__game.scene.getScene('GameScene');s.chooseRecruit(0);s.openRecruit();return s.legion.count===1&&s.mode==='none';}));
+ await p.locator('#dev-panel > div').first().click();await p.getByRole('button',{name:'从第一章开始',exact:true}).click();await p.waitForFunction(()=>window.__game.scene.getScene('GameScene').chapter.id==='huangjin');await p.waitForTimeout(80);
+ check('dev_start_chapter_one_is_fresh',await p.evaluate(()=>{const s=window.__game.scene.getScene('GameScene');return s.chapter.id==='huangjin'&&s.mode==='none'&&s.legion.count===0&&s.elapsed<1;}));
+ await p.evaluate(()=>{const s=window.__game.scene.getScene('GameScene');s.elapsed=s.chapter.waves[1].start;});await p.waitForFunction(()=>window.__game.scene.getScene('GameScene').mode==='recruit');
+ check('chapter_one_first_wave_end_recruits',await p.evaluate(()=>window.__game.scene.getScene('GameScene').waveIndex===1));
+ await p.locator('#dev-panel > div').first().click();await p.getByRole('button',{name:'从第二章开始',exact:true}).click();await p.waitForFunction(()=>window.__game.scene.getScene('GameScene').chapter.id==='hulao');
+ check('dev_chapter_switch_clears_old_choice',await p.evaluate(()=>{const s=window.__game.scene.getScene('GameScene');return s.mode==='none'&&s.legion.count===0&&s.pendingRecruit===false;}));
+ const desktop=await b.newPage({viewport:{width:1280,height:720}});desktop.on('pageerror',e=>errors.push(e.message));await desktop.goto('http://127.0.0.1:5173/?dev=1');await desktop.waitForFunction(()=>window.__game?.scene.isActive('MenuScene'));
+ check('desktop_cards_and_cta_inside_canvas',await desktop.evaluate(()=>{const s=window.__game.scene.getScene('MenuScene');return [...s.charCards.map(c=>c.bg),s.startButton].every(o=>{const r=o.getBounds();return r.left>=0&&r.right<=s.scale.width&&r.top>=0&&r.bottom<=s.scale.height;});}));
+ check('portraits_do_not_overlap_names',await desktop.evaluate(()=>{const s=window.__game.scene.getScene('MenuScene');return s.charCards.every((card,i)=>{const names=['赵云','关羽','黄忠','诸葛亮'];const name=s.children.list.find(o=>o.text===names[i]);return name&&card.icon.getBounds().bottom<name.getBounds().top;});}));
+ await desktop.screenshot({path:`${out}/select-desktop.png`});
+ check('no_page_errors',errors.length===0,errors);
+}finally{await b.close();writeFileSync(`${out}/checks.json`,JSON.stringify(checks,null,2));}
+console.log(`SUMMARY ${checks.filter(c=>c.ok).length}/${checks.length}`);if(checks.some(c=>!c.ok))process.exitCode=1;

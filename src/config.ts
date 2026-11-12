@@ -36,6 +36,8 @@ export function switchLayout(mode: 'desktop' | 'mobile'): void {
   window.location.reload();
 }
 
+export const TITLE_FONT = '"IMWarTitle","STKaiti","KaiTi",serif';
+export const HEADING_FONT = '"IMWarHeading","Noto Serif SC","Songti SC","SimSun",serif';
 export const FONT = '"PingFang SC","Microsoft YaHei","Noto Sans SC",Arial,sans-serif';
 
 export const COLORS = {
@@ -87,3 +89,8 @@ export const DEPTH = {
   hud: 1000,
   overlay: 1500,
 } as const;
+
+/** Shared ground-contact ordering, bounded below weapon and effect layers. */
+export function actorDepth(footY: number): number {
+  return DEPTH.enemy + 1 + Math.atan(footY / 256) / Math.PI * 1.8;
+}

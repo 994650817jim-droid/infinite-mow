@@ -95,7 +95,13 @@ export class LubuUltimate {
   }
   private warning(t: number): void {
     this.warningArt.setVisible(true).setFrame(Math.min(7, Math.floor(t * 8))).setPosition(this.targetX, this.targetY);
-    const r = C.ultRadius; this.gfx.lineStyle(3, 0xff6c4b, .9).strokeCircle(this.targetX, this.targetY, r);
+    const r = C.ultRadius;
+    // Fixed boundary markers distinguish the true hit area from the expanding countdown.
+    for(let i=0;i<8;i++) {
+      const a=i*Math.PI/4,x=this.targetX+Math.cos(a)*r,y=this.targetY+Math.sin(a)*r;
+      this.gfx.lineStyle(3,0xffe0a3,.9).lineBetween(x-Math.cos(a)*6,y-Math.sin(a)*6,x,y);
+    }
+    this.gfx.lineStyle(3, 0xff6c4b, .9).strokeCircle(this.targetX, this.targetY, r);
     this.gfx.lineStyle(2, 0xffd08a, .8).strokeCircle(this.targetX, this.targetY, r * t);
     this.gfx.lineStyle(2, 0xffb67a, .85).lineBetween(this.targetX - 13, this.targetY, this.targetX + 13, this.targetY).lineBetween(this.targetX, this.targetY - 13, this.targetX, this.targetY + 13);
   }

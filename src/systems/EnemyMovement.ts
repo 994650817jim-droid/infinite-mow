@@ -7,14 +7,16 @@ export class EnemyMovement {
   private readonly allies: Ally[] = [];
   private readonly neighbors: Enemy[] = [];
 
-  prepare(enemies: readonly Enemy[], grid: SpatialGrid<Enemy>, allyGrid: SpatialGrid<Ally>, px: number, py: number, dt: number): void {
+  prepare(enemies: readonly Enemy[], grid: SpatialGrid<Enemy>, allyGrid: SpatialGrid<Ally>, px: number, py: number, dt: number, now=0): void {
     const blend = 1 - Math.exp(-14 * dt);
     for (const enemy of enemies) {
-      if (!enemy.active) continue;
+      if (!enemy.active||enemy.isSupplySlot) continue;
       if (enemy.kind === 'boss' || enemy.controlImmune || (enemy.kind === 'cavalry' && enemy.chargeState !== 'none')) {
         enemy.moveVx = enemy.moveVy = 0;
         continue;
       }
+      const yellow=eYellow(enemy);
+      if(enemy.def.behavior==='wall'||(yellow||enemy.def.walkVisual?.texture.startsWith('yellow_'))&&(enemy.poseUntil>now||enemy.attackUntil>now)){enemy.moveVx=enemy.moveVy=0;continue;}
       // Ordinary troops can engage soldiers. Bosses and cavalry keep their special targeting.
       if (enemy.kind !== 'cavalry') {
         const old = enemy.targetAlly;
@@ -33,7 +35,8 @@ export class EnemyMovement {
       const nx = distance > .001 ? dx / distance : 0, ny = distance > .001 ? dy / distance : 0;
       const speed = enemy.def.speed;
       // Preserve ranged approach/retreat distances and retreat speed. No arrive slowdown for melee.
-      const goal = enemy.kind === 'archer' ? distance > 230 ? 1 : distance < 150 ? -.8 : 0 : target && distance < enemy.radius + target.radius ? 0 : 1;
+      const behavior=enemy.def.behavior,ranged=behavior==='shaman'||behavior==='thunder',reach=ranged?240:behavior==='spear'?92:behavior==='halberd'?105:62;
+      const goal = yellow ? distance>reach*.9?1:ranged&&distance<145?-1:0 : enemy.kind === 'archer' ? distance > 230 ? 1 : distance < 150 ? -.8 : 0 : target && distance < enemy.radius + target.radius ? 0 : 1;
       let sx = 0, sy = 0;
       for (const other of grid.query(enemy.x, enemy.y, enemy.radius + 38, this.neighbors)) {
         if (other === enemy || !other.active) continue;
@@ -78,3 +81,5 @@ export class EnemyMovement {
     }
   }
 }
+
+function eYellow(enemy:Enemy):boolean{return !!enemy.def.behavior||enemy.kind==='shield'&&!!enemy.def.walkVisual?.texture.startsWith('yellow_');}

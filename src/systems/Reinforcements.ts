@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { warText } from '../ui/WarStyle';
 import { CHARACTERS, type CharacterId } from '../data/characters';
 import { DEPTH, FONT, GAME_HEIGHT, GAME_WIDTH } from '../config';
 import type { Enemy } from '../entities/Enemy';
@@ -30,12 +31,21 @@ export class Reinforcements {
     this.helper = scene.add.image(0, 0, 'hero_walk_sheet', 'down_0').setScale(.8).setVisible(false).setDepth(DEPTH.player);
     this.text = scene.add.text(GAME_WIDTH / 2, GAME_HEIGHT * .25, '', { fontFamily: FONT, fontSize: '23px', color: '#ffe2a0', stroke: '#22130e', strokeThickness: 3 }).setOrigin(.5).setScrollFactor(0).setDepth(DEPTH.hud + 5).setVisible(false);
     this.panel = scene.add.container(0, 0).setScrollFactor(0).setDepth(DEPTH.overlay + 2).setVisible(false);
-    this.panel.add(scene.add.rectangle(0, 0, GAME_WIDTH, GAME_HEIGHT, 0x111610, .95).setOrigin(0).setInteractive());
+    this.panel.add(scene.add.rectangle(0, 0, GAME_WIDTH, GAME_HEIGHT, 0x0d1d15, .86).setOrigin(0).setInteractive());
     this.panel.add(scene.add.text(GAME_WIDTH / 2, GAME_HEIGHT * .15, '援军抵达 · 选择合击武将', { fontFamily: FONT, fontSize: '25px', color: '#ffe2a0' }).setOrigin(.5));
+    this.panel.add(scene.add.text(GAME_WIDTH/2,GAME_HEIGHT*.215,'短暂登场 · 释放合击后离场',warText(14,'#a8bca8')).setOrigin(.5));
     for (let i = 0; i < this.choices.length; i++) {
       const id = this.choices[i], char = CHARACTERS.find(c => c.id === id)!, pair = this.find(id), y = GAME_HEIGHT * (.32 + i * .18);
-      const row = scene.add.text(GAME_WIDTH / 2, y, `${char.name}\n${pair?.name ?? '合击配置待补充'}`, { fontFamily: FONT, fontSize: '21px', color: pair ? '#e8e5cc' : '#77776c', backgroundColor: '#283725', align: 'center', fixedWidth: Math.min(400, GAME_WIDTH - 60) }).setOrigin(.5).setPadding(18);
-      if (pair) row.setInteractive({ useHandCursor: true }).on('pointerdown', () => choose(id));
+      const width = Math.min(600,GAME_WIDTH-60), height = GAME_HEIGHT>600 ? 128 : 88;
+      const card = scene.add.image(GAME_WIDTH/2,y,'ui_war_card').setDisplaySize(width,height);
+      const portrait = scene.add.image(GAME_WIDTH/2-width/2+60,y,char.portrait);
+      portrait.setScale(Math.min((height-16)/portrait.width,(height-16)/portrait.height));
+      const row = scene.add.text(GAME_WIDTH/2-width/2+120,y,`${char.name}\n${pair?.name ?? '合击配置待补充'}`,{...warText(GAME_HEIGHT>600?20:18,pair?'#e9dab5':'#7e897b'),lineSpacing:8}).setOrigin(0,.5);
+      if (pair) {
+        card.setInteractive({useHandCursor:true}).on('pointerdown',()=>choose(id)).on('pointerover',()=>card.setTint(0xe4d5b6)).on('pointerout',()=>card.clearTint());
+        row.setInteractive({useHandCursor:true}).on('pointerdown',()=>choose(id));
+      }
+      this.panel.add([card,portrait]);
       this.panel.add(row);
     }
     for (const child of this.panel.list) (child as Phaser.GameObjects.Text).setScrollFactor(0);

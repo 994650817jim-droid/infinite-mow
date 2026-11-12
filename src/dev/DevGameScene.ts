@@ -15,8 +15,8 @@ export class DevGameScene extends GameScene {
 
   protected override installDevelopment(): void {
     this.installDebug();
-    this.devText = this.add.text(16, GAME_HEIGHT - 74, '', { fontFamily: FONT, fontSize: '11px', color: '#8a8078' })
-      .setScrollFactor(0).setDepth(DEPTH.hud + 2);
+    this.devText = this.add.text(16, GAME_HEIGHT - 8, '', { fontFamily: FONT, fontSize: '11px', color: '#8a8078' })
+      .setOrigin(0,1).setResolution(2).setStroke('#111710',2).setScrollFactor(0).setDepth(DEPTH.hud + 2);
     this.setupPerfMode();
     if (new URLSearchParams(window.location.search).get('dev') === '1') this.setupDevPanel();
   }
@@ -55,6 +55,8 @@ export class DevGameScene extends GameScene {
       mark();
     };
     const actions: Record<string, () => void> = {
+      worldMap: () => { scene.registry.remove('campaignTransfer'); scene.scene.start('WorldMapScene'); },
+      homeCity: () => { scene.registry.remove('campaignTransfer'); scene.scene.start('CityScene'); },
       chapter1: () => { scene.registry.remove('campaignTransfer'); scene.registry.set('runConfig', { ...scene.runConfig, chapter: 'huangjin' }); scene.scene.restart(); },
       chapter2: () => { scene.registry.remove('campaignTransfer'); scene.registry.set('runConfig', { ...scene.runConfig, chapter: 'hulao' }); scene.scene.restart(); },
       selectStart: () => { scene.scene.start('MenuScene'); },
@@ -88,9 +90,10 @@ export class DevGameScene extends GameScene {
       allySpear: () => { scene.devSpawnAlly('spearman'); },
       allyLevel3: () => { for (const k of ['swordsman', 'spearman', 'archer', 'crossbowman', 'guardian', 'rider', 'halberdier', 'medic'] as AllyKind[]) while (scene.legion.levels[k] < 3) scene.legion.train(k, true); mark(); },
       legionFood: () => { scene.legion.food += 100; mark(); },
-      legionEight: () => { for (const k of ['swordsman', 'spearman', 'archer', 'crossbowman', 'guardian', 'rider', 'halberdier', 'medic'] as AllyKind[]) scene.legion.recruit(k, 3, true); mark(); },
+      legionEight: () => { for (const k of ['swordsman', 'spearman', 'archer', 'crossbowman', 'guardian', 'rider', 'halberdier', 'medic'] as AllyKind[]) scene.legion.recruit(k, 3, true, true); mark(); },
       aid: () => { scene.reinforcements.nextAt = scene.elapsed; mark(); },
       clearAllies: () => { scene.devClearAllies(); },
+      supply: () => { scene.supplies?.spawnForTest(); mark(); },
       heal: () => { scene.player.hp = scene.player.maxHp; mark(); },
       god: () => { scene.player.damageImmune = !scene.player.damageImmune; mark(); },
       enemy50: () => { for (let i = 0; i < 50; i += 1) scene.spawnAroundPlayer('infantry'); mark(); },
@@ -123,7 +126,7 @@ export class DevGameScene extends GameScene {
 
   private devSpawnAlly(kind: AllyKind): void {
     this.debugModified = true;
-    this.legion.recruit(kind, 1, true);
+    this.legion.recruit(kind, 1, true, true);
   }
 
   private devClearAllies(): void {
@@ -464,7 +467,7 @@ export class DevGameScene extends GameScene {
       openRecruit(): void { scene.openRecruit(); },
       chooseRecruit(index: number): void { scene.chooseRecruit(index); },
       spawnAlly(kind: 'swordsman' | 'archer' | 'spearman' = 'swordsman'): void {
-        scene.legion.recruit(kind, 1, true);
+        scene.legion.recruit(kind, 1, true, true);
       },
       allyInfo(): Array<{ x: number; y: number; active: boolean }> {
         return scene.allies.map((a) => ({ x: Math.round(a.x), y: Math.round(a.y), active: a.active }));

@@ -5,7 +5,13 @@ interface Slot { image: Phaser.GameObjects.Image; enemy: Enemy | null; spawnId: 
 /** Reuses supplied art for procedural transitions; not independent hand-drawn attack frames. */
 export class BattleFeedback {
   private readonly slots: Slot[] = [];
-  constructor(private readonly scene: Phaser.Scene) {}
+  private readonly impacts: Array<{x:number;y:number;angle:number;until:number;color:number}> = [];
+  private readonly impactGfx: Phaser.GameObjects.Graphics;
+  constructor(private readonly scene: Phaser.Scene) { this.impactGfx=scene.add.graphics().setDepth(DEPTH.fx); }
+  hit(x:number,y:number,angle:number,now:number,source:'melee'|'arrow'|'fire'):void {
+    if(this.impacts.length>=32)return;
+    this.impacts.push({x,y:y-8,angle,until:now+130,color:source==='fire'?0xffbd76:source==='arrow'?0xe9d49c:0xf1ebcc});
+  }
   attack(enemy: Enemy, angle: number, now: number, duration = 230): void {
     if (!enemy.def.walkVisual || !enemy.walkSheet) return;
     enemy.holdAttackPose(now, angle, duration);
@@ -23,6 +29,16 @@ export class BattleFeedback {
       .setPosition(enemy.x, enemy.y).setScale(enemy.sprite.scaleX, enemy.sprite.scaleY).setRotation(0).setAlpha(.85).setVisible(true);
   }
   update(now: number, resultDeltaMs = 0): void {
+    this.impactGfx.clear();
+    for(let i=this.impacts.length-1;i>=0;i--) {
+      const p=this.impacts[i],t=(p.until-now)/130;
+      if(t<=0){this.impacts.splice(i,1);continue;}
+      this.impactGfx.fillStyle(p.color,t).fillRect(p.x-2,p.y-2,4,4);
+      for(let ray=0;ray<3;ray++) {
+        const a=p.angle+(ray-1)*.9,reach=5+(1-t)*9;
+        this.impactGfx.lineStyle(2,p.color,t*.8).lineBetween(p.x+Math.cos(a)*reach,p.y+Math.sin(a)*reach,p.x+Math.cos(a)*(reach+3),p.y+Math.sin(a)*(reach+3));
+      }
+    }
     for (const slot of this.slots) {
       if (!slot.active) continue;
       if (slot.death) {
@@ -34,7 +50,7 @@ export class BattleFeedback {
       else this.draw(slot, now);
     }
   }
-  clearAttacks(): void { for (const slot of this.slots) if (!slot.death) this.release(slot); }
+  clearAttacks(): void { this.impacts.length=0;this.impactGfx.clear(); for (const slot of this.slots) if (!slot.death) this.release(slot); }
   private acquire(priority = false): Slot | undefined {
     let slot = this.slots.find(s => !s.active);
     if (!slot && this.slots.length < 24) {

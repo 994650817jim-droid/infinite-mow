@@ -1,13 +1,34 @@
+import {worldUnlocked} from '../world/WorldStore';
 import Phaser from 'phaser';
+import {createReadableTextures} from '../systems/ReadableTextures';
 import { GAME_WIDTH } from '../config';
 import { createGameTextures, createWalkPlaceholders, registerWalkSheet } from '../systems/TextureFactory';
 
 export class BootScene extends Phaser.Scene {
+  private shellOnly=false;
   constructor() {
     super('BootScene');
   }
 
   preload(): void {
+    const params=new URLSearchParams(window.location.search);
+    this.shellOnly=worldUnlocked()&&!this.registry.get('loadBattle')&&!params.has('dev')&&!params.has('autostart')&&!params.has('perf');
+    if(this.shellOnly){if(!this.textures.exists('art_panel'))this.load.image('art_panel','assets/processed/overhaul/bronze-panel-mobile.png');return;}
+    for(const key of ['zhangliang_walk','zhangliang_attack','zhangbao_walk','zhangbao_cast','spear_walk','spear_attack','archer_walk','archer_attack','shield_walk','shield_attack','shaman_walk','shaman_cast'])this.load.spritesheet(`yellow_${key}`,`assets/processed/yellow/${key==='spear_walk'?'spear-walk-v2':key==='spear_attack'?'spear-attack-v2':key}.png`,{frameWidth:96,frameHeight:96});
+    for(let i=1;i<=3;i++)this.load.image(`yellow_ground_${i}`,`assets/processed/yellow/ground-${i}.png`);
+    for(const key of ['yellow_shaman_ground_sigil_warning','zhangbao_earth_rift_warning_and_burst','zhangbao_earth_shockwave','zhangbao_earth_wall_spawn','zhangbao_ritual_circle','zhangliang_call_reinforcements','zhangliang_charge_warning','zhangliang_slash','yellow_archer_arrow','yellow_shield_short_stab'])this.load.spritesheet(key,`assets/processed/yellow/${key}.png`,{frameWidth:128,frameHeight:128});
+    this.load.spritesheet('yellow_props','assets/processed/yellow/camp-props.png',{frameWidth:128,frameHeight:128});
+    for(const key of ['zhang_bao_altar','zhang_jiao_altar'])this.load.image(key,`assets/processed/yellow/${key}.png`);
+    this.load.spritesheet('prop_debris','assets/processed/yellow/prop-debris.png',{frameWidth:96,frameHeight:96});
+    this.load.spritesheet('prop_break_fx','assets/processed/yellow/prop-break-fx.png',{frameWidth:96,frameHeight:96});
+    this.load.image('yellow_arrow','assets/processed/yellow/arrow-tight.png');
+    this.load.image('rest_camp','assets/world/rest-camp.webp');
+    this.load.image('legion_halberdier_action','assets/processed/legion/halberdier-attack-v1.png');
+    this.load.image('art_fx','assets/processed/overhaul/combat-fx-mobile.png');
+    this.load.image('art_props', 'assets/processed/overhaul/battlefield-props-mobile.png');
+    this.load.image('art_panel', 'assets/processed/overhaul/bronze-panel-mobile.png');
+    this.load.image('ground_overhaul_hulao', 'assets/processed/overhaul/hulao-ground-mobile.png');
+    this.load.image('ground_overhaul_huangjin', 'assets/processed/overhaul/huangjin-ground-mobile.png');
     for (const kind of ['medic', 'crossbowman']) this.load.spritesheet(`legion_${kind}_action`, `assets/processed/legion/${kind}-action.png`, { frameWidth: 96, frameHeight: 96 });
     for (const kind of ['medic', 'crossbowman', 'guardian', 'rider', 'halberdier']) {
       this.load.spritesheet(`legion_${kind}_walk`, `assets/processed/legion/${kind}-walk.png`, { frameWidth: 96, frameHeight: 96 });
@@ -76,7 +97,17 @@ export class BootScene extends Phaser.Scene {
   }
 
   create(): void {
+    if(this.shellOnly){const hint=document.getElementById('boot-hint');if(hint)hint.style.display='none';this.scene.start('CityScene');return;}
+    for(const key of ['zhangliang_walk','zhangliang_attack','zhangbao_walk','zhangbao_cast','spear_walk','spear_attack','archer_walk','archer_attack','shield_walk','shield_attack','shaman_walk','shaman_cast']){
+      const tex=this.textures.get(`yellow_${key}`);['down','left','right','up'].forEach((dir,row)=>{for(let col=0;col<4;col++)tex.add(`${dir}_${col}`,0,col*96,row*96,96,96);});
+    }
     createGameTextures(this);
+    const halberd=this.textures.get('legion_halberdier_action');
+    ['down','left','right','up'].forEach((dir,row)=>{for(let col=0;col<4;col++)halberd.add(`${dir}_${col}`,0,col*128,row*112,128,112);});
+    const fx=this.textures.get('art_fx'), fxImage=fx.getSourceImage();
+    for(let row=0;row<2;row++)for(let col=0;col<4;col++){const x=Math.round(col*fxImage.width/4),y=Math.round(row*fxImage.height/2);fx.add(String(row*4+col),0,x,y,Math.round((col+1)*fxImage.width/4)-x,Math.round((row+1)*fxImage.height/2)-y);}
+    const props=this.textures.get('art_props'), image=props.getSourceImage();
+    for(let row=0;row<2;row++)for(let col=0;col<4;col++){const x=Math.round(col*image.width/4),y=Math.round(row*image.height/2);props.add(String(row*4+col),0,x,y,Math.round((col+1)*image.width/4)-x,Math.round((row+1)*image.height/2)-y);}
     createWalkPlaceholders(this);
     registerWalkSheet(this);
     for (const kind of ['medic', 'crossbowman']) {
@@ -110,8 +141,17 @@ export class BootScene extends Phaser.Scene {
     } catch {
       // ignore
     }
+    // Filter by content: nearest for sprite atlases, linear for downsampled terrain.
+    // Text textures created later retain linear filtering for legible small Chinese text.
+    for (const key of this.textures.getTextureKeys()) {
+      this.textures.get(key).setFilter((key.startsWith('ground') && !key.startsWith('ground_overhaul')) || key === 'shadow'
+        ? Phaser.Textures.FilterMode.LINEAR : Phaser.Textures.FilterMode.NEAREST);
+    }
+    createReadableTextures(this);
     const hint = document.getElementById('boot-hint');
     if (hint) hint.style.display = 'none';
+    this.registry.set('battleReady',true);
+    this.registry.set('battleTextureKeys',this.textures.getTextureKeys().filter(k=>!k.startsWith('__')&&!k.startsWith('ui_war_')&&k!=='art_panel'&&k!=='icon_guandao'));
     this.scene.start('MenuScene');
   }
 }

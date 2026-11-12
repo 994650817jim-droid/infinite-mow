@@ -47,7 +47,7 @@ function weaponUpgrade(weapon: WeaponState, player: Player): UpgradeOption {
   const damage = (level: number): string => def.damage(level, player.stats).toFixed(1).replace(/\.0$/, '');
   let desc = `伤害 ${damage(weapon.level)} → ${damage(next)} · 冷却 ${def.cooldown(weapon.level, player.stats).toFixed(2)} → ${def.cooldown(next, player.stats).toFixed(2)}秒`;
   if (weapon.id === 'spear_orbit') desc += `\n枪数 ${weapon.level} → ${next}，穿透 ${SPEAR_PIERCE[next - 1].len}`;
-  if (weapon.id === 'guandao') desc += `\n范围 ${GUANDAO_TABLE[next - 1].radius}${weapon.level < 3 && next >= 3 ? '，解锁二段刀气' : ''}`;
+  if (weapon.id === 'guandao') desc += `\n范围 ${GUANDAO_TABLE[weapon.level - 1].radius} → ${GUANDAO_TABLE[next - 1].radius}${weapon.level < 3 && next >= 3 ? '，解锁二段刀气' : ''}`;
   return {
     id: `up_${weapon.id}`,
     name: `${WEAPON_META[weapon.id].name} 强化`,

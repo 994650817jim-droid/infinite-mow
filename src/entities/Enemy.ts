@@ -1,3 +1,4 @@
+import {visualTextureKey} from '../systems/ReadableTextures';
 import Phaser from 'phaser';
 import { DEPTH } from '../config';
 import { ENEMY_DEFS, type EnemyDef } from '../data/enemies';
@@ -10,6 +11,7 @@ const WALK_STRIDES: Partial<Record<EnemyKind, number>> = { infantry: 11, shield:
 
 export class Enemy {
   static spawnSeq = 0;
+  isSupplySlot=false;
   readonly uid: number = (enemyUidSeq += 1);
   /** 每次 spawn 递增的实例 ID：池复用后仍能区分新旧生成。 */
   spawnId = 0;
@@ -173,6 +175,7 @@ export class Enemy {
     if (!def.walkVisual && this.kind === 'archer' && this.scene.textures.exists('enemy_archer_attack_sheet')) {
       this.attackSheet = 'enemy_archer_attack_sheet';
     }
+    if(def.attackVisual&&this.scene.textures.exists(def.attackVisual))this.attackSheet=def.attackVisual;
     this.chargeSheet = '';
     this.chargeState = 'none';
     this.chargeAt = 0;
@@ -240,7 +243,7 @@ export class Enemy {
     const frame = this.def.walkVisual ? (this.chargeState === 'charge' ? Math.floor(now / 90) % 4 : 0) : this.chargeState === 'charge' ? 2 : 1;
     const key = `${this.direction}_${frame}`;
     if (key !== this.chargeFrame) {
-      this.sprite.setTexture(this.walkSheet, key);
+      this.sprite.setTexture(visualTextureKey(this.scene,this.walkSheet), key);
       this.chargeFrame = key;
     }
   }
@@ -251,11 +254,11 @@ export class Enemy {
     this.attackFrame = '';
     this.direction = dir;
     // Walk-only assets hold a neutral pose; never impersonate an attack animation.
-    if (this.def.walkVisual) {
+    if (this.def.walkVisual && !this.def.attackVisual) {
       this.sprite.setTexture(this.walkSheet, `${dir}_0`);
       return;
     }
-    this.sprite.setTexture(this.attackSheet, `atk_${dir}_0`);
+    this.sprite.setTexture(visualTextureKey(this.scene,this.attackSheet), this.def.attackVisual?`${dir}_0`:`atk_${dir}_0`);
     this.attackFrame = `atk_${dir}_0`;
   }
 
@@ -266,12 +269,12 @@ export class Enemy {
       this.attackUntil = 0;
       return;
     }
-    if (this.def.walkVisual) return;
+    if (this.def.walkVisual && !this.def.attackVisual) return;
     const remain = this.attackUntil - now;
     const col = remain > 180 ? 0 : 1;
-    const key = `atk_${this.direction}_${col}`;
+    const key = this.def.attackVisual ? `${this.direction}_${Math.min(3,Math.floor((360-remain)/90))}` : `atk_${this.direction}_${col}`;
     if (key !== this.attackFrame) {
-      this.sprite.setTexture(this.attackSheet, key);
+      this.sprite.setTexture(visualTextureKey(this.scene,this.attackSheet), key);
       this.attackFrame = key;
     }
   }
@@ -317,11 +320,11 @@ export class Enemy {
     } else {
       this.walkDistance = 0;
     }
-    const stride = WALK_STRIDES[this.kind] ?? 18;
+    const stride = this.walkSheet==='yellow_spear_walk'?8:WALK_STRIDES[this.kind] ?? 18;
     const frame = this.walking ? Math.floor(this.walkDistance / stride) % 4 : 0;
     const key = `${this.direction}_${frame}`;
-    if (key !== this.appliedFrame || this.sprite.texture.key !== this.walkSheet) {
-      this.sprite.setTexture(this.walkSheet, key);
+    if (key !== this.appliedFrame || this.sprite.texture.key !== visualTextureKey(this.scene,this.walkSheet)) {
+      this.sprite.setTexture(visualTextureKey(this.scene,this.walkSheet), key);
       this.appliedFrame = key;
     }
   }

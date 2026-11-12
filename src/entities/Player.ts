@@ -1,6 +1,7 @@
+import {visualTextureKey} from '../systems/ReadableTextures';
 import Phaser from 'phaser';
 import { CharacterPassives } from '../systems/CharacterPassives';
-import { BALANCE, DEPTH } from '../config';
+import { BALANCE, DEPTH, FONT, actorDepth } from '../config';
 import { applySetBonus, RELIC_BY_ID, type RelicSchool } from '../data/relics';
 import type { PlayerStats, WeaponState } from '../types';
 
@@ -11,6 +12,8 @@ export class Player {
   readonly scene: Phaser.Scene;
   readonly sprite: Phaser.GameObjects.Image;
   readonly shadow: Phaser.GameObjects.Image;
+  private readonly markerLabel: Phaser.GameObjects.Text;
+  private readonly marker: Phaser.GameObjects.Graphics;
 
   hp: number = BALANCE.player.maxHp;
   level = 1;
@@ -58,8 +61,13 @@ export class Player {
 
   constructor(scene: Phaser.Scene, x: number, y: number) {
     this.scene = scene;
-    this.shadow = scene.add.image(x, y + 16, 'shadow').setDisplaySize(48, 20).setDepth(DEPTH.player - 1).setAlpha(0.8);
-    this.sprite = scene.add.image(x, y, 'hero_zhaoyun').setDepth(DEPTH.player);
+    this.shadow = scene.add.image(x, y + 16, 'shadow').setDisplaySize(48, 20).setDepth(DEPTH.enemy - 1).setAlpha(0.8);
+    this.sprite = scene.add.image(x, y, 'hero_zhaoyun').setDepth(actorDepth(y + 26));
+    this.marker=scene.add.graphics().setDepth(DEPTH.fx+1);
+    this.marker.fillStyle(0x17251c).fillTriangle(-7,-3,7,-3,0,6)
+      .fillStyle(0xf3e6b0).fillTriangle(-4,-1,4,-1,0,3);
+    this.marker.setPosition(x,y-38);
+    this.markerLabel=scene.add.text(x,y-45,'主将',{fontFamily:FONT,fontSize:'12px',resolution:2,color:'#f3e6b0',stroke:'#16241b',strokeThickness:3}).setOrigin(.5,1).setDepth(DEPTH.hud-1);
     this.applyTextureScale();
   }
 
@@ -88,6 +96,7 @@ export class Player {
     this.knockVx = dx / (duration / 1000); this.knockVy = dy / (duration / 1000);
   }
   move(dt: number, vx: number, vy: number): void {
+    this.sprite.setDepth(actorDepth(this.y + 26));
     const now = (this.scene as Phaser.Scene & { combatNow?: number }).combatNow ?? this.scene.time.now;
     if (now < this.knockedUntil) {
       this.sprite.x += this.knockVx * dt; this.sprite.y += this.knockVy * dt;
@@ -122,7 +131,7 @@ export class Player {
     this.direction = dir;
     this.faceLeft = dir === 'left';
     if (this.scene.textures.exists(this.walkSheet) && this.scene.textures.get(this.walkSheet).has(`${dir}_0`)) {
-      this.sprite.setTexture(this.walkSheet, `${dir}_0`);
+      this.sprite.setTexture(visualTextureKey(this.scene,this.walkSheet), `${dir}_0`);
     }
   }
 
@@ -132,7 +141,7 @@ export class Player {
     // 立刻切到该武将的待机帧，避免进战斗先闪一下赵云
     try {
       if (this.scene.textures.get(key).has('down_0')) {
-        this.sprite.setTexture(key, 'down_0');
+        this.sprite.setTexture(visualTextureKey(this.scene,key), 'down_0');
         this.applyTextureScale();
       }
     } catch {
@@ -149,10 +158,10 @@ export class Player {
       const frame = Math.floor(this.walkPhase) % 4;
       if (sheet) {
         const name = `${this.direction}_${frame}`;
-        if (this.sprite.frame.name !== name) this.sprite.setTexture(this.walkSheet, name);
+        if (this.sprite.frame.name !== name) this.sprite.setTexture(visualTextureKey(this.scene,this.walkSheet), name);
       } else {
         const key = `${dirKey}_${frame}`;
-        if (this.sprite.texture.key !== key) this.sprite.setTexture(key);
+        if (this.sprite.texture.key !== key) this.sprite.setTexture(visualTextureKey(this.scene,key));
       }
     } else if (!hasFrames && this.sprite.texture.key !== this.charTexture) {
       this.sprite.setTexture(this.charTexture);
@@ -221,6 +230,8 @@ export class Player {
   }
 
   update(now: number, dt: number): void {
+    this.marker.setPosition(this.x,this.y-38).setVisible(this.alive);
+    this.markerLabel.setPosition(this.x,this.y-45).setVisible(this.alive);
     const t = now < this.knockedUntil ? (now - this.knockedAt) / (this.knockedUntil - this.knockedAt) : 1;
     const lift = t < 1 ? Math.sin(Math.PI * Math.max(0, t)) * 42 : 0;
     this.sprite.setOrigin(.5, .5 + lift / this.targetHeight);

@@ -14,6 +14,7 @@ interface SfxConfig {
 }
 
 const CONFIG: Record<string, SfxConfig> = {
+  propBreak:{freq:170,dur:.12,type:'triangle',gain:.04,throttleMs:70,max:2,priority:0,slideTo:65},
   hitLight: { freq: 220, dur: 0.05, type: 'triangle', gain: 0.035, throttleMs: 60, max: 3, priority: 0, pitchVar: 0.05 },
   hitHeavy: { freq: 150, dur: 0.08, type: 'triangle', gain: 0.04, throttleMs: 80, max: 2, priority: 0, pitchVar: 0.05 },
   hitArrow: { freq: 520, dur: 0.04, type: 'square', gain: 0.03, throttleMs: 60, max: 3, priority: 0, pitchVar: 0.06 },

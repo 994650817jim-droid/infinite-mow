@@ -33,11 +33,11 @@ export interface WeaponHost {
 }
 
 export const GUANDAO_TABLE = [
-  { radius: 125, angle: 120, damage: 32, cooldown: 1.45, arc: 105 },
-  { radius: 135, angle: 120, damage: 38, cooldown: 1.45, arc: 115 },
-  { radius: 145, angle: 125, damage: 43, cooldown: 1.45, arc: 125 },
-  { radius: 155, angle: 130, damage: 49, cooldown: 1.3, arc: 135 },
-  { radius: 170, angle: 135, damage: 56, cooldown: 1.25, arc: 150 },
+  { radius: 125, angle: 120, damage: 32, cooldown: 1.45, arc: 181.25 },
+  { radius: 150, angle: 120, damage: 38, cooldown: 1.45, arc: 217.5 },
+  { radius: 175, angle: 125, damage: 43, cooldown: 1.45, arc: 253.75 },
+  { radius: 200, angle: 130, damage: 49, cooldown: 1.3, arc: 290.0 },
+  { radius: 225, angle: 135, damage: 56, cooldown: 1.25, arc: 326.25 },
 ];
 const levelIndex = (level: number): number => Math.max(0, Math.min(4, Math.floor(level) - 1));
 

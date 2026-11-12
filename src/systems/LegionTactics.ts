@@ -1,0 +1,165 @@
+import type { Ally } from '../entities/Ally';
+import type { Enemy } from '../entities/Enemy';
+import type { Player } from '../entities/Player';
+import type { Order } from '../data/legion';
+import type { SpatialGrid } from './SpatialGrid';
+
+export const TACTICS = { thinkMs: 240, retreatHp: .3, returnHp: .6, retreatMinMs: 1600, guardLeash: 260, sortieLeash: 400, blockMs: 1500, chargeMs: 550, chargeCooldownMs: 4200 } as const;
+export interface TacticState {
+  nextThink: number; mode: 'advance' | 'retreat' | 'regroup' | 'charge' | 'return'; until: number;
+  spaceX: number; spaceY: number; target: Enemy | null; spawn: number; x: number; y: number; danger: number;
+  chargeReady: number; chargeHits: Set<number>; faceX: number; faceY: number; blockReady: number; blockUntil: number;
+}
+export function createTacticState(x = 0, y = 0): TacticState {
+  return { nextThink: 0, mode: 'advance', until: 0, spaceX:0,spaceY:0,target: null, spawn: 0, x, y, danger: 0, chargeReady: 0, chargeHits: new Set(), faceX: 0, faceY: 1, blockReady: 0, blockUntil: 0 };
+}
+/** Cached decisions; all candidate searches use the existing grids, never an all-enemy scan. */
+export class LegionTactics {
+  private readonly enemies: Enemy[] = [];
+  private readonly densityScratch: Enemy[] = [];
+  private readonly friends: Ally[] = [];
+  private friendGrid: SpatialGrid<Ally> | null = null;
+  constructor(private readonly player: Player) {}
+  private dangerAt(x: number, y: number, grid: SpatialGrid<Enemy>): number {
+    let danger = 0;
+    for (const e of grid.query(x, y, 105, this.densityScratch)) if (e.active && !e.isSupplySlot && Math.hypot(e.x - x, e.y - y) < 105) danger += e.kind === 'boss' ? 3 : e.kind === 'elite' ? 2 : 1;
+    return danger;
+  }
+  private readonly clusterCache = new Map<number, number>();
+  private epoch = -1;
+  private priority(u: Ally, e: Enemy, distance: number, grid: SpatialGrid<Enemy>): number {
+    let score = distance;
+    if(e.isSupplySlot)return distance*4+300;
+    if (u.kind === 'spearman') score *= e.kind === 'cavalry' ? .4 : e.kind === 'elite' ? .65 : 1;
+    if (u.kind === 'archer' && e.kind === 'archer') score *= .4;
+    if (u.kind === 'crossbowman') score *= e.kind === 'elite' || e.kind === 'cavalry' || e.targetAlly?.def.ranged || e.targetAlly?.kind === 'medic' ? .55 : 1;
+    if (u.kind === 'swordsman' || u.kind === 'guardian') {
+      if (e.targetAlly?.def.ranged || e.targetAlly?.kind === 'medic') score *= .4;
+    }
+    if (u.kind === 'halberdier') {
+      let density = this.clusterCache.get(e.spawnId);
+      if (density === undefined) { density = this.dangerAt(e.x, e.y, grid); this.clusterCache.set(e.spawnId, density); }
+      score /= 1 + Math.min(6, density) * .3;
+    }
+    return score;
+  }
+  select(u: Ally, grid: SpatialGrid<Enemy>, search: number, leash: number): Enemy | null {
+    let best: Enemy | null = null, score = Infinity;
+    for (const e of grid.query(u.x, u.y, search, this.enemies)) {
+      if (!e.active || e.invulnerable || Math.hypot(e.x - this.player.x, e.y - this.player.y) > leash) continue;
+      const distance = Math.hypot(e.x - u.x, e.y - u.y); if (distance > search) continue;
+      const rank = this.priority(u, e, distance, grid) * (e === u.ai.target && e.spawnId === u.ai.spawn ? .85 : 1);
+      if (rank < score) { score = rank; best = e; }
+    }
+    return best;
+  }
+  private safe(u: Ally, cx: number, cy: number, grid: SpatialGrid<Enemy>): void {
+    let best = Infinity;
+    for (let i = 0; i < 8; i++) {
+      const a = i * Math.PI / 4 + (u.slot%7)*.13, radius = 70 + u.slot % 4 * 13, x = cx + Math.cos(a) * radius, y = cy + Math.sin(a) * radius;
+      let occupancy=0;
+      if(this.friendGrid)for(const f of this.friendGrid.query(x,y,44,this.friends))if(f.active&&f!==u){const d=Math.hypot(f.x-x,f.y-y);if(d<44)occupancy+=(44-d)/44;}
+      const score = this.dangerAt(x, y, grid) * 120 + Math.hypot(x - u.x, y - u.y) * .25 + occupancy*35;
+      if (score < best) { best = score; u.ai.x = x; u.ai.y = y; }
+    }
+  }
+  think(u: Ally, now: number, order: Order, grid: SpatialGrid<Enemy>, friends: SpatialGrid<Ally>): void {
+    this.friendGrid=friends;
+    const epoch = Math.floor(now / TACTICS.thinkMs);
+    if (epoch !== this.epoch) { this.epoch = epoch; this.clusterCache.clear(); }
+    const a = u.ai, ratio = u.hp / u.maxHp, leash = order === 'guard' ? TACTICS.guardLeash : TACTICS.sortieLeash;
+    // Low health is urgent; the recovery threshold and minimum duration prevent oscillation.
+    if (ratio < TACTICS.retreatHp && a.mode !== 'retreat') { a.mode = 'retreat'; a.until = now + TACTICS.retreatMinMs; a.nextThink = 0; u.attackUntil = now; }
+    if (a.mode === 'retreat' && ratio >= TACTICS.returnHp && now >= a.until) { a.mode = 'advance'; a.nextThink = 0; }
+    if (a.mode === 'charge' && now >= a.until) a.nextThink = 0;
+    if (now < a.nextThink) return;
+    a.nextThink = now + TACTICS.thinkMs + u.slot % 5 * 17;
+    const friendRadius = u.kind === 'medic' ? 320 : 170;
+    const nearFriends = friends.query(u.x, u.y, friendRadius, this.friends);
+    let support = 0, medic: Ally | null = null, wounded: Ally | null = null, lowest = 1, front: Ally | null = null, frontDistance = 0;
+    for (const f of nearFriends) {
+      if (!f.active || f === u || Math.hypot(f.x - u.x, f.y - u.y) > friendRadius) continue;
+      if (!f.def.ranged && f.kind !== 'medic' && f.ai.mode !== 'retreat') support++;
+      if (f.kind === 'medic') medic = f;
+      if (f.hp / f.maxHp < lowest) { lowest = f.hp / f.maxHp; wounded = f; }
+      const d = Math.hypot(f.x - this.player.x, f.y - this.player.y);
+      if (!f.def.ranged && f.kind !== 'medic' && d > frontDistance) { front = f; frontDistance = d; }
+    }
+    a.danger = this.dangerAt(u.x, u.y, grid);
+    if (a.mode === 'retreat') {
+      a.target = null;
+      const healSafe = medic && this.dangerAt(medic.x, medic.y, grid) < 3;
+      this.safe(u, healSafe && medic ? medic.x : this.player.x, healSafe && medic ? medic.y : this.player.y, grid); return;
+    }
+    if (a.mode === 'charge' && now >= a.until) { a.mode = 'return'; a.until = now + 1100; }
+    if (a.mode === 'return' && now >= a.until) a.mode = 'advance';
+    if (a.danger >= Math.max(4, (support + 1) * 2) || Math.hypot(u.x - this.player.x, u.y - this.player.y) > leash + 50) {
+      a.mode = a.mode === 'return' ? 'return' : 'regroup'; a.until = Math.max(a.until, now + 900);
+    } else if (a.mode === 'regroup' && now >= a.until) a.mode = 'advance';
+    if (a.mode === 'regroup' || a.mode === 'return') { a.target = null; this.safe(u, this.player.x, this.player.y, grid); return; }
+    const target = u.kind === 'medic' ? null : this.select(u, grid, order === 'guard' ? Math.max(210, u.def.range) : 500, leash);
+    a.target = target; a.spawn = target?.spawnId ?? 0;
+    // Front/back offsets follow the threat axis rather than sending every role to one point.
+    let fx = target ? target.x - this.player.x : 0, fy = target ? target.y - this.player.y : -1;
+    const length = Math.hypot(fx, fy) || 1; fx /= length; fy /= length;
+    const depth = u.kind === 'guardian' ? 60 : u.kind === 'swordsman' ? 40 : u.kind === 'spearman' ? 5 : u.kind === 'halberdier' ? 25 : u.kind === 'medic' ? -110 : u.kind === 'rider' ? 0 : -80;
+    const lateral = (u.slot % 5 - 2) * 24 + (u.kind === 'rider' ? u.slot % 2 ? 90 : -90 : 0);
+    a.x = this.player.x + fx * (depth - Math.floor(u.slot / 5) * 16) - fy * lateral;
+    a.y = this.player.y + fy * (depth - Math.floor(u.slot / 5) * 16) + fx * lateral;
+    if (u.kind === 'medic') {
+      const friend = wounded ?? (order === 'sortie' ? front : null);
+      if (friend && Math.hypot(friend.x - this.player.x, friend.y - this.player.y) < leash) {
+        const dx = friend.x - this.player.x, dy = friend.y - this.player.y, d = Math.hypot(dx, dy) || 1;
+        a.x = friend.x - dx / d * 70; a.y = friend.y - dy / d * 70;
+      }
+      if (a.danger > 0) this.safe(u, this.player.x, this.player.y, grid);
+      return;
+    }
+    if (!target) return;
+    const dx = target.x - u.x, dy = target.y - u.y, distance = Math.hypot(dx, dy) || 1;
+    a.faceX = dx / distance; a.faceY = dy / distance;
+    if (u.kind === 'rider' && a.mode !== 'charge' && now >= a.chargeReady && distance > u.def.range && distance < 210 && a.danger <= 2 && (support > 0 || this.dangerAt(target.x, target.y, grid) < 3)) {
+      a.mode = 'charge'; a.until = now + TACTICS.chargeMs; a.chargeReady = now + TACTICS.chargeCooldownMs; a.chargeHits.clear();
+    }
+    if (a.mode === 'charge') { a.x = target.x + a.faceX * 55; a.y = target.y + a.faceY * 55; return; }
+    const minRange = u.def.ranged ? Math.min(130, u.def.range * .5) : u.kind === 'spearman' ? 75 : 0;
+    if (distance < minRange) {
+      const escape = distance < 2 ? (u.slot % 2 ? 1 : -1) : -dx / distance;
+      a.x = u.x + escape * 65; a.y = u.y - dy / distance * 65;
+      if (this.dangerAt(a.x, a.y, grid) > a.danger) this.safe(u, this.player.x, this.player.y, grid);
+    } else {
+      const stop = u.def.range * (u.def.ranged ? .82 : u.kind === 'spearman' ? .82 : .7);
+      if (distance > stop) { a.x = target.x - dx / distance * stop; a.y = target.y - dy / distance * stop; }
+      else { a.x = u.x; a.y = u.y; }
+    }
+  }
+  move(u: Ally, dt: number, now: number, friends: SpatialGrid<Ally>): void {
+    const a = u.ai;
+    const attacking=now<u.attackUntil && a.mode!=='retreat' && a.mode!=='regroup' && a.mode!=='charge';
+    let sx=0,sy=0;
+    for(const f of friends.query(u.x,u.y,64,this.friends)){
+      if(!f.active||f===u)continue;
+      let dx=u.x-f.x,dy=u.y-f.y,d=Math.hypot(dx,dy);
+      const min=u.radius+f.radius+8;
+      if(d>=min)continue;
+      if(d<.01){const lo=Math.min(u.id,f.id),hi=Math.max(u.id,f.id),angle=((lo*73+hi*151)%360)*Math.PI/180,sign=u.id<f.id?1:-1;dx=Math.cos(angle)*sign;dy=Math.sin(angle)*sign;d=1;}
+      const weight=(1-Math.min(1,d/min));sx+=dx/d*weight;sy+=dy/d*weight;
+    }
+    // Keep a small breathing space around the hero; charges retain their special path.
+    if(a.mode!=='charge'){
+      const dx=u.x-this.player.x,dy=u.y-this.player.y,d=Math.hypot(dx,dy),min=42;
+      if(d<min){const angle=u.slot*2.399963;sx+=(d>.01?dx/d:Math.cos(angle))*(1-d/min);sy+=(d>.01?dy/d:Math.sin(angle))*(1-d/min);}
+    }
+    const length=Math.hypot(sx,sy),scale=length>1?1/length:1;
+    const blend=1-Math.exp(-14*dt);
+    a.spaceX+=(sx*scale-a.spaceX)*blend;a.spaceY+=(sy*scale-a.spaceY)*blend;
+    if(attacking){
+      // Small cosmetic-space adjustment within existing reach, preserving facing and attack frames.
+      if(Math.hypot(a.spaceX,a.spaceY)>.05)u.moveTo(u.x+a.spaceX*24,u.y+a.spaceY*24,dt,28,true);
+    }else{
+      u.moveTo(a.x+a.spaceX*36,a.y+a.spaceY*36,dt,u.def.speed*(a.mode==='charge'?1.8:1));
+    }
+  }
+
+  canAttack(u: Ally): boolean { return u.ai.mode === 'advance' || u.ai.mode === 'charge'; }
+}

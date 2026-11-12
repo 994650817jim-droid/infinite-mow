@@ -3,7 +3,7 @@ import type { PlayerStats, WeaponState } from '../types';
 import type { Player } from '../entities/Player';
 import type { Legion, LegionState } from './Legion';
 export interface CampaignTransfer {
-  character: CharacterId; chapter: 'hulao'; army: LegionState;
+  character: CharacterId; chapter: 'hulao' | 'huangjin'; stage?:1|2|3; army: LegionState;
   player: { stats: PlayerStats; level: number; xp: number; xpNext: number; relics: string[]; weapons: WeaponState[] };
 }
 export function packCampaign(character: CharacterId, player: Player, army: Legion): CampaignTransfer {

@@ -6,6 +6,8 @@ export interface EnemyDef {
   tint?: number;
   /** Chapter-specific walk art; presentation only. */
   walkVisual?: { texture: string; scale: number; groundY: number };
+  attackVisual?: string;
+  behavior?: "spear" | "shaman" | "halberd" | "thunder" | "wall" | "supply";
   hp: number;
   speed: number;
   damage: number;

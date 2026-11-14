@@ -9,7 +9,7 @@ export const MARTIALS = {
   dragon_gallop: {character:'zhaoyun',name:'龙胆连刺',desc:'每级连刺效率 +8%'},
   cloud_pierce: {character:'zhaoyun',name:'游龙穿云',desc:'每级枪长 +10%、穿透 +1'},
   dragon_charge: {character:'guanyu',name:'青龙蓄势',desc:'四次基础挥砍后重斩 140%/165%/190%；三级击退'},
-  dragging_blade: {character:'guanyu',name:'拖刀斩',desc:'主动移动 200/160/130px 蓄刀气；三级回旋'},
+  dragging_blade: {character:'guanyu',name:'拖刀斩',desc:'移动约5/4/3个身位蓄刀气；三级回旋'},
   steady_aim: {character:'huangzhong',name:'百步穿杨',desc:'静止最多5秒，每秒暴击 +3/4/5%；移动衰减'},
   pearl_volley: {character:'huangzhong',name:'连珠齐射',desc:'每 5/4/3 次基础射击追加70%伤害箭'},
   wildfire: {character:'zhuge',name:'烽火燎原',desc:'爆发留火 1/1.8/2.5秒，每0.5秒20%伤害'},

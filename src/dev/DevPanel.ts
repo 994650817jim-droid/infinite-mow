@@ -1,158 +1,113 @@
 /** DEV-only 测试面板：仅在 `?dev=1` + 开发构建出现，正式构建不加载。 */
 export type DevActions = Record<string, () => void>;
+export interface DevItem { key: string; label: string; active?: () => boolean; hint?: string }
+export interface DevSection { title: string; items: DevItem[] }
+export interface DevPanelSpec { sections: DevSection[]; actions: DevActions; info: () => string }
 
-const ROWS: Array<{ title: string; items: Array<[string, string]> }> = [
-  { title: '天下与主城（退出当前测试局）', items: [['worldMap', '进入地图选择'], ['homeCity', '进入义军营寨']] },
-  { title: '起始章节（开始新测试局）', items: [['chapter1', '从第一章开始'], ['chapter2', '从第二章开始'], ['chapter3','第三章选关'], ['selectStart', '返回选将选章']] },
-  {
-    title: '等级 / 时间',
-    items: [
-      ['level+1', '等级+1'],
-      ['level5', 'Lv5'],
-      ['level10', 'Lv10'],
-      ['wave1', '第1波'],
-      ['wave2', '第2波'],
-      ['wave3', '第3波'],
-      ['wave4', '第4波'],
-      ['wave5', '第5波'],
-      ['wave6', '第6波'],
-      ['wave7', '第7波'],
-      ['wave8', '第8波'],
-      ['time+10', '+10秒'],
-      ['speed0.5', '0.5×'],
-      ['speed1', '1×'],
-      ['speed2', '2×'],
-      ['speed4', '4×'],
-    ],
-  },
-  {
-    title: 'Boss',
-    items: [
-      ['boss', '召唤本章Boss'],
-      ['boss50', '50% 血'],
-      ['bossEnergy', '满能量'],
-      ['bossUlt', '释放本章大招'],
-    ],
-  },
-  {
-    title: '武器',
-    items: [
-      ['weaponSpear1', '枪 Lv1'],
-      ['weaponSpear5', '枪 Lv5'],
-      ['weaponBow3', '弓 Lv3'],
-      ['weaponFlag3', '旗 Lv3'],
-      ['clearWeapons', '清空武器'],
-    ],
-  },
-  {
-    title: '蜀军',
-    items: [
-      ['allySword', '刀兵'],
-      ['allyArcher', '弓兵'],
-      ['allySpear', '枪兵'],
-      ['allyLevel3', '全体 Lv3'],
-      ['clearAllies', '清空蜀军'],
-      ['legionFood', '+100军粮'],
-      ['legionEight', '八兵种各3人'],
-    ],
-  },
-  {
-    title: '玩家 / 敌人',
-    items: [
-      ['heal', '回满血'],
-        ['supply','回血补给罐'],
-      ['brazier','火盆测试'],
-      ['god', '无敌开关'],
-      ['enemy50', '50 敌'],
-      ['enemy150', '150 敌'],
-      ['clearEnemies', '清场'],
-      ['movementNew', '新版群移'],
-      ['movementOld', '旧版追踪'],
-    ],
-  },
-  {
-    title: '预设 / 重置',
-    items: [
-      ['presetLow', '低构筑'],
-      ['presetNormal', '普通构筑'],
-      ['presetStrong', '强构筑'],
-      ['reset', '重置正常局'],
-    ],
-  },
-];
+const STORE = 'im_dev_panel';
+interface Saved { collapsed: boolean; x?: number; y?: number; scroll?: number }
+const load = (): Saved => { try { return { collapsed: true, ...JSON.parse(localStorage.getItem(STORE) ?? '{}') }; } catch { return { collapsed: true }; } };
+const save = (s: Saved): void => { try { localStorage.setItem(STORE, JSON.stringify(s)); } catch { /* ignore */ } };
 
-export function createDevPanel(actions: DevActions): () => void {
-  const old = document.getElementById('dev-panel');
-  if (old) old.remove();
+/**
+ * 面板：标题栏点按展开/收起、拖动换位置（避开暂停按钮等 HUD），位置/展开/滚动记忆在本机。
+ * 开关类按钮按 active() 高亮；信息栏每 0.5 秒刷新。
+ */
+export function createDevPanel(spec: DevPanelSpec): () => void {
+  document.getElementById('dev-panel')?.remove();
+  const state = load();
   const root = document.createElement('div');
   root.id = 'dev-panel';
   root.style.cssText = [
-    'position:fixed',
-    'right:8px',
-    'top:8px',
-    'z-index:999999',
-    'background:rgba(20,14,10,0.92)',
-    'border:1px solid #c9a45c',
-    'border-radius:8px',
-    'font:12px/1.3 system-ui,sans-serif',
-    'color:#f0e2c8',
-    'width:250px',
-    'max-width:calc(100vw - 16px)',
-    'pointer-events:auto',
-    'box-sizing:border-box',
+    'position:fixed', 'z-index:999999', 'background:rgba(20,14,10,0.94)', 'border:1px solid #c9a45c', 'border-radius:8px',
+    'font:12px/1.35 system-ui,sans-serif', 'color:#f0e2c8', 'width:272px', 'max-width:calc(100vw - 16px)', 'box-sizing:border-box',
+    'box-shadow:0 4px 18px rgba(0,0,0,.45)', 'touch-action:none',
   ].join(';');
 
-  // 标题栏：点按展开 / 收起，默认收起避免遮挡手机视野与摇杆
   const header = document.createElement('div');
-  header.style.cssText = 'display:flex;align-items:center;justify-content:space-between;padding:6px 8px;cursor:pointer;user-select:none;font-weight:700;color:#ffd166';
-  const title = document.createElement('span');
-  title.textContent = 'DEV 测试面板';
-  const toggle = document.createElement('span');
-  toggle.textContent = '▶';
-  toggle.style.cssText = 'color:#c9a45c;font-size:10px';
-  header.appendChild(title);
-  header.appendChild(toggle);
+  header.style.cssText = 'display:flex;align-items:center;gap:6px;padding:6px 8px;cursor:pointer;user-select:none;font-weight:700;color:#ffd166;white-space:nowrap';
+  const grip = document.createElement('span'); grip.textContent = '⠿'; grip.title = '拖动'; grip.style.cssText = 'cursor:move;color:#8a6a3a;font-size:14px;padding:0 2px';
+  const title = document.createElement('span'); title.textContent = 'DEV 测试面板'; title.style.flex = '1';
+  const quick = document.createElement('span'); quick.style.cssText = 'font-weight:400;color:#b9a88c;font-size:11px';
+  const toggle = document.createElement('span'); toggle.style.cssText = 'color:#c9a45c;font-size:10px';
+  header.append(grip, title, quick, toggle);
   root.appendChild(header);
 
-  // 内容区：独立滚动，最高 65vh
   const body = document.createElement('div');
-  body.style.cssText = 'display:none;max-height:65vh;overflow:auto;padding:0 8px 8px;box-sizing:border-box';
+  body.style.cssText = 'max-height:min(62vh,calc(100vh - 60px));overflow:auto;padding:0 8px 8px;box-sizing:border-box';
   const info = document.createElement('div');
-  info.style.cssText = 'color:#b9a88c;margin-bottom:6px;white-space:pre';
+  info.style.cssText = 'color:#d8c7a6;background:rgba(0,0,0,.25);border-radius:4px;padding:4px 6px;margin-bottom:4px;white-space:pre-wrap;font:11px/1.45 ui-monospace,Consolas,monospace';
   body.appendChild(info);
-  for (const row of ROWS) {
+  const toggles: Array<[HTMLButtonElement, () => boolean]> = [];
+  for (const section of spec.sections) {
+    if (!section.items.length) continue;
     const h = document.createElement('div');
-    h.textContent = row.title;
-    h.style.cssText = 'margin:6px 0 3px;color:#e8c76a;font-weight:600';
+    h.textContent = section.title;
+    h.style.cssText = 'margin:7px 0 3px;color:#e8c76a;font-weight:600';
     body.appendChild(h);
     const wrap = document.createElement('div');
     wrap.style.cssText = 'display:flex;flex-wrap:wrap;gap:4px';
-    for (const [action, label] of row.items) {
+    for (const item of section.items) {
       const btn = document.createElement('button');
-      btn.textContent = label;
-      btn.style.cssText = 'font:11px system-ui;padding:4px 6px;border-radius:4px;border:1px solid #8a6a3a;background:#3a2a1c;color:#f0e2c8;cursor:pointer';
-      btn.onclick = () => actions[action]?.();
+      btn.textContent = item.label;
+      if (item.hint) btn.title = item.hint;
+      btn.style.cssText = 'font:11px system-ui;padding:4px 7px;border-radius:4px;border:1px solid #8a6a3a;background:#3a2a1c;color:#f0e2c8;cursor:pointer';
+      btn.onclick = (ev) => {
+        ev.stopPropagation();
+        try { spec.actions[item.key]?.(); } catch (e) { console.error('[DEV]', item.key, e); btn.style.borderColor = '#e05a4a'; }
+        refresh();
+      };
+      if (item.active) toggles.push([btn, item.active]);
       wrap.appendChild(btn);
     }
     body.appendChild(wrap);
   }
   root.appendChild(body);
+  body.addEventListener('scroll', () => { state.scroll = body.scrollTop; save(state); });
 
-  let collapsed = true;
+  const place = (): void => {
+    const w = root.offsetWidth || 272, h = root.offsetHeight || 32;
+    const x = Math.min(Math.max(4, state.x ?? window.innerWidth - w - 8), window.innerWidth - w - 4);
+    // 展开时整块面板都要在屏幕内：下方放不下就上移（不改保存的位置）。
+    const y = Math.min(Math.max(4, state.y ?? Math.round(window.innerHeight * .42)), window.innerHeight - (state.collapsed ? Math.min(h, 40) : h) - 4);
+    root.style.left = x + 'px'; root.style.top = y + 'px';
+  };
   const applyState = (): void => {
-    body.style.display = collapsed ? 'none' : 'block';
-    toggle.textContent = collapsed ? '▶' : '▼';
+    body.style.display = state.collapsed ? 'none' : 'block';
+    toggle.textContent = state.collapsed ? '▶' : '▼';
+    root.style.width = state.collapsed ? 'auto' : '272px';
+    place();
+    if (!state.collapsed && state.scroll) body.scrollTop = state.scroll;
   };
-  header.onclick = () => { collapsed = !collapsed; applyState(); };
-  applyState();
-  document.body.appendChild(root);
 
-  const timer = window.setInterval(() => {
-    const dev = (window as unknown as { __DEV_INFO?: () => string }).__DEV_INFO;
-    if (dev) info.textContent = dev();
-  }, 500);
-  return () => {
-    window.clearInterval(timer);
-    root.remove();
+  // 拖动：按住标题栏移动超过 6px 视为拖动，否则视为点按展开/收起。
+  let drag: { sx: number; sy: number; ox: number; oy: number; moved: boolean } | null = null;
+  header.addEventListener('pointerdown', (e) => { drag = { sx: e.clientX, sy: e.clientY, ox: root.offsetLeft, oy: root.offsetTop, moved: false }; header.setPointerCapture(e.pointerId); e.stopPropagation(); });
+  header.addEventListener('pointermove', (e) => {
+    if (!drag) return; const dx = e.clientX - drag.sx, dy = e.clientY - drag.sy;
+    if (!drag.moved && Math.hypot(dx, dy) < 6) return; drag.moved = true;
+    state.x = drag.ox + dx; state.y = drag.oy + dy; place();
+  });
+  header.addEventListener('pointerup', (e) => {
+    e.stopPropagation(); const d = drag; drag = null;
+    if (d?.moved) { save(state); return; }
+    state.collapsed = !state.collapsed; save(state); applyState();
+  });
+  root.addEventListener('pointerdown', (e) => e.stopPropagation());
+
+  const refresh = (): void => {
+    try { info.textContent = spec.info(); } catch { info.textContent = '-'; }
+    for (const [btn, active] of toggles) {
+      let on = false; try { on = active(); } catch { /* ignore */ }
+      btn.style.background = on ? '#7a5a2a' : '#3a2a1c'; btn.style.borderColor = on ? '#f0cf86' : '#8a6a3a'; btn.style.color = on ? '#fff3d0' : '#f0e2c8';
+    }
+    const first = spec.info().split('\n')[0] ?? '';
+    quick.textContent = state.collapsed ? first.replace(/^.*?(FPS \d+).*$/, '$1') : '';
   };
+  document.body.appendChild(root);
+  applyState(); refresh();
+  const onResize = (): void => place();
+  window.addEventListener('resize', onResize);
+  const timer = window.setInterval(refresh, 500);
+  return () => { window.clearInterval(timer); window.removeEventListener('resize', onResize); root.remove(); };
 }

@@ -2,6 +2,13 @@
 export let GAME_WIDTH = 540;
 export let GAME_HEIGHT = 960;
 export let IS_DESKTOP = false;
+/** 渲染倍率：画布按 设计分辨率×RENDER_SCALE 实际绘制，各场景相机放大同倍数，逻辑坐标不变。
+ * 解决 540×960 / 960×540 画布被拉伸到高分屏后发糊的问题。?hd=1|2|3 或 localStorage im_render_scale 可覆盖。 */
+export let RENDER_SCALE = 1;
+/** 指针的画布像素坐标 → 设计分辨率坐标（与界面摆放坐标一致）。 */
+export function screenPoint(p: { x: number; y: number }): { x: number; y: number } {
+  return { x: p.x / RENDER_SCALE, y: p.y / RENDER_SCALE };
+}
 
 /** 启动前根据 URL / 本地偏好 / 设备自动选择布局。 */
 export function initLayout(): boolean {
@@ -15,8 +22,29 @@ export function initLayout(): boolean {
   const autoDesktop = window.innerWidth >= 900 && !window.matchMedia('(pointer: coarse)').matches;
   IS_DESKTOP = fromUrl ? fromUrl === 'desktop' : pref ? pref === 'desktop' : autoDesktop;
   GAME_WIDTH = IS_DESKTOP ? 960 : 540;
-  GAME_HEIGHT = IS_DESKTOP ? 540 : 960;
+  // 手机竖屏：宽固定540，高度按屏幕比例延伸（9:16→960，19.5:9约1170，最高1280），消除长屏上下黑边。
+  // 960以内的设计坐标保持不变；新增高度由各场景按 GAME_HEIGHT 贴底或居中处理。?tall=0 可关闭。
+  GAME_HEIGHT = IS_DESKTOP ? 540 : mobileHeight();
+  RENDER_SCALE = pickRenderScale();
   return IS_DESKTOP;
+}
+
+function mobileHeight(): number {
+  if (new URLSearchParams(window.location.search).get('tall') === '0') return 960;
+  const w = window.innerWidth, h = window.innerHeight;
+  if (!(w > 0 && h > 0)) return 960;
+  return Math.round(Math.min(1280, Math.max(960, 540 * h / w)) / 2) * 2;
+}
+
+function pickRenderScale(): number {
+  let forced: string | null = new URLSearchParams(window.location.search).get('hd');
+  if (!forced) try { forced = localStorage.getItem('im_render_scale'); } catch { /* ignore */ }
+  const n = Number(forced);
+  if (forced && [1, 2, 3].includes(n)) return n;
+  // 按实际显示像素选择：显示区域比设计分辨率大 1.25 倍以上才提升到 2 倍，默认最高 2 倍以控制填充开销。
+  const dpr = Math.min(3, window.devicePixelRatio || 1);
+  const fit = Math.min(window.innerWidth / GAME_WIDTH, window.innerHeight / GAME_HEIGHT) * dpr;
+  return fit >= 1.25 ? 2 : 1;
 }
 
 /** 切换布局：写偏好并刷新页面（画布尺寸需重建）。 */

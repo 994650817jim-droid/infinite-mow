@@ -1,3 +1,4 @@
+import {playMenuMusic,menuMusic} from '../systems/Music';
 import Phaser from 'phaser';
 import {W,H,worldText,worldButton,worldShell,panel,worldAssets,releaseWorldArt} from '../world/WorldUI';
 import {loadWorld,worldUnlocked,recruitReserve} from '../world/WorldStore';
@@ -8,7 +9,7 @@ export class CityRecruitScene extends Phaser.Scene{
  private page=0;private content:Phaser.GameObjects.Container|undefined;private status!:Phaser.GameObjects.Text;private message='';private owned:string[]=[];
  constructor(){super('CityRecruitScene');}
  preload(){if(!worldUnlocked()&&!isChapterTestRun())return;worldAssets(this,'city_recruit_art','assets/world/rest-camp.webp');this.owned=[];for(const kind of TROOP_KINDS){const def=TROOPS[kind],key=def.walkVisual?.texture??`${def.art}_walk_sheet`;if(!this.textures.exists(key)){this.load.spritesheet(key,def.walkVisual?`assets/processed/legion/${kind}-walk.png`:`assets/processed/${def.art}_walk_sheet.png`,{frameWidth:96,frameHeight:96});this.owned.push(key);}}}
- create(){if(!worldUnlocked()&&!isChapterTestRun()){this.scene.start('MenuScene');return;}worldShell(this,'主城招募');releaseWorldArt(this,'city_recruit_art');this.add.image(W/2,H/2,'city_recruit_art').setDisplaySize(Math.max(W,H*1.5),Math.max(H,W/1.5)).setAlpha(.35).setDepth(-1);for(const kind of TROOP_KINDS){const d=TROOPS[kind],key=d.walkVisual?.texture??`${d.art}_walk_sheet`;if(!this.textures.get(key).has('down_0'))this.textures.get(key).add('down_0',0,0,0,96,96);}createReadableTextures(this);
+ create(){playMenuMusic(this);if(!worldUnlocked()&&!isChapterTestRun()){this.scene.start('MenuScene');return;}worldShell(this,'主城招募');releaseWorldArt(this,'city_recruit_art');this.add.image(W/2,H/2,'city_recruit_art').setDisplaySize(Math.max(W,H*1.5),Math.max(H,W/1.5)).setAlpha(.35).setDepth(-1);for(const kind of TROOP_KINDS){const d=TROOPS[kind],key=d.walkVisual?.texture??`${d.art}_walk_sheet`;if(!this.textures.get(key).has('down_0'))this.textures.get(key).add('down_0',0,0,0,96,96);}createReadableTextures(this);
  this.events.once('shutdown',()=>{for(const key of this.owned){if(this.textures.exists(`readable_${key}`))this.textures.remove(`readable_${key}`);if(this.textures.exists(key))this.textures.remove(key);}});
  this.status=worldText(this,24,66,'',13,'#b9ceb8').setWordWrapWidth(W-48);
  worldButton(this,W/2,H-62,'返回义军营寨',()=>this.scene.start('CityScene'),240).image.setName('reserve-home');this.render();}

@@ -1,6 +1,6 @@
 import {ThirdSpearWarnings,THIRD_SPEAR,type SpearWindup} from '../systems/ThirdSpearWarnings';
 import {EnemyCamps} from '../systems/EnemyCamps';
-import Phaser from 'phaser';import{GameScene}from'./GameScene';import{ThirdBoss}from'../systems/ThirdBoss';import{thirdBattle,THIRD_STAGES,type ThirdStage}from'../data/thirdChapter';import{isChapterTestRun}from'../systems/ChapterProgress';import{beginThirdExpedition,settleThirdExpedition,thirdStageUnlocked,permanentEffects,takeExpeditionReserve}from'../world/WorldStore';import{packCampaign,type CampaignTransfer}from'../systems/Campaign';import{thirdScenery}from'../systems/ThirdScenery';import{SishuiObstacles}from'../systems/SishuiObstacles';import type{Enemy}from'../entities/Enemy';import type{RunEndReason}from'../types';import type{RunConfig}from'../data/characters';
+import Phaser from 'phaser';import{GameScene}from'./GameScene';import{ThirdBoss}from'../systems/ThirdBoss';import{thirdBattle,THIRD_STAGES,type ThirdStage}from'../data/thirdChapter';import{isChapterTestRun}from'../systems/ChapterProgress';import{abandonExpedition,beginThirdExpedition,settleThirdExpedition,thirdStageUnlocked,permanentEffects,takeExpeditionReserve}from'../world/WorldStore';import{packCampaign,type CampaignTransfer}from'../systems/Campaign';import{thirdScenery}from'../systems/ThirdScenery';import{SishuiObstacles}from'../systems/SishuiObstacles';import type{Enemy}from'../entities/Enemy';import type{RunEndReason}from'../types';import type{RunConfig}from'../data/characters';
 export function thirdGameSceneClass(Base:typeof GameScene){return class ThirdGameScene extends Base{
  private enemyCamps?:EnemyCamps;
  private thirdStage:ThirdStage=1;private controller?:ThirdBoss;private thirdReceipt='';private thirdTest=false;private spear=new WeakMap<Enemy,SpearWindup>();private spearWarnings?:ThirdSpearWarnings;
@@ -20,6 +20,7 @@ export function thirdGameSceneClass(Base:typeof GameScene){return class ThirdGam
   const keys=(this.registry.get('battleTextureKeys')??[])as string[];this.registry.set('battleTextureKeys',[...new Set([...keys,...THIRD_STAGES.map(d=>'third_'+d.id),art.key,'third_road_'+this.thirdStage])]);
   this.hudTexts.chapter.setText(this.chapter.name);this.events.once('shutdown',()=>{this.spearWarnings?.clear();this.spearWarnings=undefined;this.enemyCamps?.clear();this.enemyCamps=undefined;this.controller?.clear();this.controller=undefined;});
  }
+ protected abandonRun(){if(!this.over)abandonExpedition(this.thirdReceipt,this.allies.filter(u=>u.active&&u.reserveSoldier).map(u=>u.kind));}
  protected handleBattlePointer(pointer:Phaser.Input.Pointer){return this.mode==='none'&&!this.over?(this.enemyCamps?.pointer(pointer)??false):false;}
  protected priorityWeaponTarget(range:number,bodyRadius=true){return this.enemyCamps?.target(range,bodyRadius)??null;}
  protected tryCustomBossSkill(){if(!this.controller||!this.boss?.active)return false;this.controller.forceSkill(this.combatNow);return true;}

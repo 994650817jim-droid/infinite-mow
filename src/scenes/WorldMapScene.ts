@@ -1,3 +1,5 @@
+import {playMenuMusic,menuMusic} from '../systems/Music';
+import {RENDER_SCALE,screenPoint} from '../config';
 import {thirdChapterUnlocked} from '../world/WorldStore';
 import {isChapterTestRun} from '../systems/ChapterProgress';
 import {worldUnlocked} from '../world/WorldStore';
@@ -11,7 +13,7 @@ export class WorldMapScene extends Phaser.Scene {
  private markers:Array<{node:WorldNode;root:Phaser.GameObjects.Container}>=[];private area={x:20,y:110,w:W-40,h:H-360};private minZoom=1;private zoom=1;private pointerX=0;private pointerY=0;private pinch=0;private pinching=false;private readonly mapW=1536;private readonly mapH=1024;
  constructor(){super('WorldMapScene');}
  preload(){if(!worldUnlocked()&&!isChapterTestRun())return;worldAssets(this,'strategy_art','assets/world/strategy-map.webp');}
- create(){
+ create(){playMenuMusic(this);
   if(!worldUnlocked()&&!isChapterTestRun()){this.registry.set('loadBattle',true);this.scene.start(this.registry.get('battleReady')?'MenuScene':'BootScene');return;}worldShell(this,this.registry.get('worldReveal')?'三国天下开启':'三国天下');if(this.registry.get('worldReveal')){this.registry.remove('worldReveal');this.cameras.main.fadeIn(900,0,0,0);}releaseWorldArt(this,'strategy_art');this.markers=[];const s=loadWorld();worldText(this,24,64,`军功 ${s.merits}    粮草 ${s.provisions}`,15,'#bdcdb6');
   worldButton(this,W-105,43,'返回主城',()=>this.scene.start('CityScene'),150);
   const desktop=W>600;this.area={x:20,y:105,w:W-40,h:desktop?H-250:H-360};
@@ -22,14 +24,14 @@ export class WorldMapScene extends Phaser.Scene {
    const marker=this.add.container(0,0);const circle=this.add.circle(0,0,18,0x16271e,.94).setStrokeStyle(2,color).setInteractive({useHandCursor:!!active}).setName(`node-${node.id}`);
    const icon=worldText(this,0,0,node.kind==='home'?'营':active?'战':'锁',13,active?'#f5dc9e':'#a4aa9c').setOrigin(.5);
    const label=worldText(this,0,25,node.name,13,active?'#fff0cd':'#b6b8aa').setOrigin(.5).setStroke('#142016',3);
-   circle.on('pointerup',(pointer:Phaser.Input.Pointer)=>{if(pointer.getDistance()>10||this.pinching)return;this.selected=node;this.refresh();});marker.add([circle,icon,label]);this.markers.push({node,root:marker});
+   circle.on('pointerup',(pointer:Phaser.Input.Pointer)=>{if(pointer.getDistance()>10*RENDER_SCALE||this.pinching)return;this.selected=node;this.refresh();});marker.add([circle,icon,label]);this.markers.push({node,root:marker});
   }
   this.minZoom=Math.max(this.area.w/this.mapW,this.area.h/this.mapH);this.zoom=this.minZoom*1.2;
   this.layer.setScale(this.zoom).setPosition(W/2-this.mapW*.52*this.zoom,this.area.y+this.area.h/2-this.mapH*.45*this.zoom);this.clampMap();
-  const inside=(p:Phaser.Input.Pointer)=>p.x>=this.area.x&&p.x<=this.area.x+this.area.w&&p.y>=this.area.y&&p.y<=this.area.y+this.area.h;
-  this.input.on('pointerdown',(p:Phaser.Input.Pointer)=>{this.pointerX=p.x;this.pointerY=p.y;this.pinch=0;this.pinching=false;});
-  this.input.on('pointermove',(p:Phaser.Input.Pointer)=>{if(!p.isDown||!inside(p))return;const a=this.input.manager.pointers.filter(q=>q.isDown&&inside(q));if(a.length>=2){this.pinching=true;const distance=Phaser.Math.Distance.Between(a[0].x,a[0].y,a[1].x,a[1].y);if(this.pinch>0)this.setZoom(this.zoom*distance/this.pinch,(a[0].x+a[1].x)/2,(a[0].y+a[1].y)/2);this.pinch=distance;}else{this.pinch=0;this.layer.x+=p.x-this.pointerX;this.layer.y+=p.y-this.pointerY;this.clampMap();}this.pointerX=p.x;this.pointerY=p.y;});
-  this.input.on('wheel',(p:Phaser.Input.Pointer,_objs:unknown,_dx:number,dy:number)=>{if(inside(p))this.setZoom(this.zoom*(dy>0?.9:1.1),p.x,p.y);});
+  const inside=(q:Phaser.Input.Pointer)=>{const p=screenPoint(q);return p.x>=this.area.x&&p.x<=this.area.x+this.area.w&&p.y>=this.area.y&&p.y<=this.area.y+this.area.h;};
+  this.input.on('pointerdown',(q:Phaser.Input.Pointer)=>{const p=screenPoint(q);this.pointerX=p.x;this.pointerY=p.y;this.pinch=0;this.pinching=false;});
+  this.input.on('pointermove',(q:Phaser.Input.Pointer)=>{if(!q.isDown||!inside(q))return;const p=screenPoint(q),a=this.input.manager.pointers.filter(o=>o.isDown&&inside(o)).map(screenPoint);if(a.length>=2){this.pinching=true;const distance=Phaser.Math.Distance.Between(a[0].x,a[0].y,a[1].x,a[1].y);if(this.pinch>0)this.setZoom(this.zoom*distance/this.pinch,(a[0].x+a[1].x)/2,(a[0].y+a[1].y)/2);this.pinch=distance;}else{this.pinch=0;this.layer.x+=p.x-this.pointerX;this.layer.y+=p.y-this.pointerY;this.clampMap();}this.pointerX=p.x;this.pointerY=p.y;});
+  this.input.on('wheel',(q:Phaser.Input.Pointer,_objs:unknown,_dx:number,dy:number)=>{const p=screenPoint(q);if(inside(q))this.setZoom(this.zoom*(dy>0?.9:1.1),p.x,p.y);});
   const py=desktop?H-76:H-140,ph=desktop?132:200;panel(this,W/2,py,W-40,ph);
   this.detail=worldText(this,40,py-ph/2+14,'',desktop?14:16).setWordWrapWidth(desktop?W-300:W-80);
   this.action=worldButton(this,desktop?W-140:W/2,desktop?py:H-80,'进入主城',()=>this.enterNode(),desktop?190:W-100);this.action.image.setName('map-action');

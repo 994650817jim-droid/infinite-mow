@@ -91,9 +91,9 @@ export class LegionUI {
         const count=army.units.filter(u=>u.active&&u.kind===row.kind).length;
         row.title.setText(`${TROOPS[row.kind].name} · Lv${army.levels[row.kind]}`).setPosition(D?width/2:118,18).setOrigin(D?.5:0,0).setFontSize(19);
         row.icon.setScale(94/Math.max(row.icon.frame.width,row.icon.frame.height)).setPosition(D?width/2:55,D?98:76);
-        row.detail.setText(`${ROLES[row.kind]}\n已编入 ${count} 人 · ${TROOPS[row.kind].cost}军粮/人`).setPosition(D?width/2:118,D?153:53).setOrigin(D?.5:0,0).setAlign(D?'center':'left').setWordWrapWidth(D?width-24:width-128);
-        row.buy.setText(`招募 1 人 · ${TROOPS[row.kind].cost}军粮`).setPosition(D?14:118,D?207:105).setFixedSize(D?width-28:width-136,0).setAlign('center');
-        const canBuy=army.food>=TROOPS[row.kind].cost;row.buy.setAlpha(canBuy?1:.45);if(canBuy)row.buy.setInteractive({useHandCursor:true});else row.buy.disableInteractive();row.train.setVisible(false);
+        row.detail.setText(`${ROLES[row.kind]}\n已编入 ${count} 人 · ${army.recruitCost(row.kind)}军粮/人`).setPosition(D?width/2:118,D?153:53).setOrigin(D?.5:0,0).setAlign(D?'center':'left').setWordWrapWidth(D?width-24:width-128);
+        row.buy.setText(`招募 1 人 · ${army.recruitCost(row.kind)}军粮`).setPosition(D?14:118,D?207:105).setFixedSize(D?width-28:width-136,0).setAlign('center');
+        const canBuy=army.food>=army.recruitCost(row.kind);row.buy.setAlpha(canBuy?1:.45);if(canBuy)row.buy.setInteractive({useHandCursor:true});else row.buy.disableInteractive();row.train.setVisible(false);
       }
       return;
     }
@@ -112,13 +112,13 @@ export class LegionUI {
       const iconSize = wave ? D ? 94 : 96 : D ? 56 : 70;
       const frame = row.icon.frame;
       row.icon.setScale(iconSize / Math.max(frame.width, frame.height)).setPosition(wave ? D ? width / 2 : 55 : D ? 44 : 52, wave ? D ? 98 : 76 : D ? 60 : 80);
-      row.detail.setText(wave ? `${ROLES[row.kind]}\n已编入 ${count} 人` : D ? `${count}人 · ${TROOPS[row.kind].cost}粮/人` : `已编入 ${count}人\n${TROOPS[row.kind].perk}`)
+      row.detail.setText(wave ? `${ROLES[row.kind]}\n已编入 ${count} 人` : D ? `${count}人 · ${army.recruitCost(row.kind)}粮/人` : `已编入 ${count}人\n${TROOPS[row.kind].perk}`)
         .setPosition(wave ? D ? width / 2 : 118 : D ? 85 : 98, wave ? D ? 153 : 53 : D ? 47 : 59)
         .setOrigin(wave && D ? .5 : 0, 0).setAlign(wave && D ? 'center' : 'left').setLineSpacing(5)
         .setWordWrapWidth(wave ? D ? width - 24 : width - 128 : width - (D ? 92 : 110));
-      row.buy.setText(wave ? '＋ 招募入队' : `招募 1 人 · ${TROOPS[row.kind].cost}粮`).setPosition(wave && !D ? 118 : 14, wave ? D ? 207 : 105 : D ? 84 : 140).setFixedSize(wave && !D ? width - 136 : width - 28, 0).setAlign('center');
+      row.buy.setText(wave ? '＋ 招募入队' : `招募 1 人 · ${army.recruitCost(row.kind)}粮`).setPosition(wave && !D ? 118 : 14, wave ? D ? 207 : 105 : D ? 84 : 140).setFixedSize(wave && !D ? width - 136 : width - 28, 0).setAlign('center');
       row.train.setVisible(!wave).setText(level === 3 ? '训练已满级' : `训练至Lv${level + 1}　${LEGION.trainCost[level]}粮`).setPosition(10, D ? 124 : 193).setFixedSize(width - 20, 0).setAlign('center');
-      const canBuy = (wave || army.food >= TROOPS[row.kind].cost), canTrain = !wave && level < 3 && army.food >= LEGION.trainCost[level];
+      const canBuy = (wave || army.food >= army.recruitCost(row.kind)), canTrain = !wave && level < 3 && army.food >= LEGION.trainCost[level];
       row.buy.setAlpha(canBuy ? 1 : .45).setColor(canBuy ? '#eee4ca' : '#98a393'); if (canBuy) row.buy.setInteractive({ useHandCursor: true }); else row.buy.disableInteractive();
       row.train.setAlpha(canTrain ? 1 : .45).setColor(canTrain ? '#d9c28a' : '#98a393'); if (canTrain) row.train.setInteractive({ useHandCursor: true }); else row.train.disableInteractive();
     }

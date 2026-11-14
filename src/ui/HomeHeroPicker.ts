@@ -9,8 +9,9 @@ export class HomeHeroPicker{
  constructor(private s:Phaser.Scene,private confirm:(index:number)=>void,private close:()=>void){
  this.root=s.add.container(0,0).setDepth(300).setVisible(false).setName('hero-picker');this.root.add(s.add.rectangle(W/2,H/2,W,H,0x17130e,1).setInteractive());
  const text=(x:number,y:number,value:string,size:number)=>s.add.text(x,y,value,{fontFamily:HEADING_FONT,fontSize:size+'px',color:'#e6c88e',resolution:2}).setOrigin(.5);
- this.root.add(text(W/2,D?40:57,'点将 · 义军将录',D?30:29));this.root.add(text(W/2,D?77:99,'择一良将，匡扶汉室',13));
- CHARACTERS.forEach((c,i)=>{const w=D?198:216,h=D?330:302,x=D?W/2+(i-2)*214+8:46+i%2*232,y=D?109+Math.abs(i-1.5)*8:137+Math.floor(i/2)*326;
+ const pad=D?0:Math.max(0,Math.round((H-960)/2));
+ this.root.add(text(W/2,D?40:57+pad,'点将 · 义军将录',D?30:29));this.root.add(text(W/2,D?77:99+pad,'择一良将，匡扶汉室',13));
+ CHARACTERS.forEach((c,i)=>{const w=D?198:216,h=D?330:330,x=D?W/2+(i-2)*214+8:46+i%2*232,y=D?109+Math.abs(i-1.5)*8:137+pad+Math.floor(i/2)*352;
  const card=new HeroWarCard(s,x,y,w,h);card.hit.setName('pick-'+c.id).on('pointerdown',()=>{this.candidate=i;this.refreshArt();});card.root.setName('pick-'+c.id).on('pointerdown',()=>{this.candidate=i;this.refreshArt();});this.root.add(card.root);this.cards.push(card);
 
  });

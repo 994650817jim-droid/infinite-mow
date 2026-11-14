@@ -1,4 +1,5 @@
 import {visualTextureKey} from '../systems/ReadableTextures';
+import {figureCorrection} from '../systems/SpriteMetrics';
 import Phaser from 'phaser';
 import { createTacticState } from '../systems/LegionTactics';
 import { DEPTH, FONT, actorDepth } from '../config';
@@ -6,6 +7,8 @@ import { TROOPS, type TroopKind } from '../data/legion';
 export type AllyKind = TroopKind;
 export interface AllyView { sprite: Phaser.GameObjects.Image; shadow: Phaser.GameObjects.Image; label: Phaser.GameObjects.Text; }
 let sequence = 0;
+/** 出手前冲距离（像素）；负数为远程后坐。 */
+const LUNGE: Partial<Record<TroopKind, number>> = { spearman: 10, swordsman: 7, guardian: 5, rider: 6, halberdier: 3, archer: -2, crossbowman: -3 };
 /** Persistent soldier record; render handles are pooled separately by Legion. */
 export class Ally {
   readonly id = ++sequence;
@@ -53,13 +56,14 @@ export class Ally {
     if(!preserveFacing)this.dir = useX ? dx < 0 ? 'left' : 'right' : dy < 0 ? 'up' : 'down';
     this.push(dx / distance * step, dy / distance * step);
   }
+  face(x: number, y: number): void { const dx = x - this.x, dy = y - this.y; if (Math.abs(dx) < 1 && Math.abs(dy) < 1) return; this.dir = Math.abs(dx) > Math.abs(dy) ? dx < 0 ? 'left' : 'right' : dy < 0 ? 'up' : 'down'; }
   attach(view: AllyView): void { this.view = view; view.sprite.setPosition(this.px, this.py); this.render(0); }
   act(x: number, y: number, now: number, duration: number): void { this.dir = Math.abs(x - this.x) > Math.abs(y - this.y) ? x < this.x ? 'left' : 'right' : y < this.y ? 'up' : 'down'; this.attackStarted = now; this.attackUntil = now + duration; }
   release(): AllyView | null { const v = this.view; if (v) { this.px = v.sprite.x; this.py = v.sprite.y; v.sprite.setVisible(false); v.shadow.setVisible(false); v.label.setVisible(false); } this.view = null; return v; }
   render(now: number): void {
     const v = this.view; if (!v) return; const art = this.def.art, reused = art.startsWith('xiliang'), custom = this.def.walkVisual;
     const sheet = custom?.texture ?? (reused ? `${art}_walk` : `${art}_walk_sheet`);
-    const attack = !custom && !reused && this.kind !== 'spearman' && this.kind !== 'medic' && now < this.attackUntil;
+    const attack = !custom && !reused && this.kind !== 'medic' && now < this.attackUntil && this.scene.textures.exists(`${art}_attack_sheet`);
     const meleeAction=this.kind==='halberdier';
     const anticipation=meleeAction&&this.cooldown>0&&this.cooldown<=.1&&this.ai.target?.active&&Math.hypot(this.ai.target.x-this.x,this.ai.target.y-this.y)<=this.def.range;
     const progress=Math.max(0,Math.min(1,(now-this.attackStarted)/Math.max(1,this.attackUntil-this.attackStarted)));
@@ -69,7 +73,12 @@ export class Ally {
     const scale = custom?.scale ?? (this.kind === 'rider' ? .8 : .58);
     const frameHeight=action&&meleeAction?112:96;
     const ground = action&&meleeAction?100/112:custom?.groundY ?? (reused ? .875 : .98);
-    v.sprite.setVisible(this.active).setTexture(visualTextureKey(this.scene,texture), frame).setScale(scale).setTint(now < this.hurtUntil ? 0xff9999 : this.def.tint).setOrigin(.5-(this.kind==='spearman'&&now<this.attackUntil?this.facingX*Math.sin(progress*Math.PI)*3/(96*scale):0), ground - this.radius * .72 / (frameHeight * scale)).setDepth(actorDepth(this.y + this.radius * .72));
+    // 行走起伏：每步上下约 2px，与步伐帧同步，正对镜头时也能看出在走。
+    const hop=this.moving&&now>=this.attackUntil?Math.abs(Math.sin(Math.PI*this.walked/14))*2:0;
+    // 出手动作：沿朝向前冲后收回（远程为后坐），并带轻微伸缩；保持同一角色素材，不冒充独立攻击帧。
+    const strike=now<this.attackUntil?Math.sin(progress*Math.PI):0,lunge=(LUNGE[this.kind]??0)*strike,horizontal=this.facingX!==0;
+    const tex=visualTextureKey(this.scene,texture),corr=texture===sheet?1:figureCorrection(this.scene,visualTextureKey(this.scene,sheet),tex,frame);
+    v.sprite.setVisible(this.active).setTexture(tex, frame).setScale(corr*scale*(1+(horizontal?.07:-.03)*Math.abs(strike)*(lunge?1:0)),corr*scale*(1+(horizontal?-.03:.06)*Math.abs(strike)*(lunge?1:0))).setTint(now < this.hurtUntil ? 0xff9999 : this.def.tint).setOrigin(.5-this.facingX*lunge/(96*scale), ground - this.radius * .72 / (frameHeight * scale)-this.facingY*lunge/(frameHeight*scale)+hop/(frameHeight*scale)).setDepth(actorDepth(this.y + this.radius * .72));
     // Same-character procedural follow-through where independent attack art is still absent.
     const follow=now<this.attackUntil?Math.sin(progress*Math.PI):0;
     v.sprite.setRotation(this.kind==='guardian'?follow*.035*(this.facingX||1):this.kind==='rider'?follow*.045*(this.facingX||1):0);

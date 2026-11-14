@@ -1,3 +1,4 @@
+import { stopMenuMusic } from '../systems/Music';
 import {CampRestUI} from '../ui/CampRestUI';
 import {buildVfx} from '../systems/BuildVfx';
 import {AwakeningCombat} from '../systems/AwakeningCombat';
@@ -16,13 +17,14 @@ import {getSishuiEncounter} from '../data/sishui';
 import {BattlefieldSupplies,MAX_PROP_SLOTS} from '../systems/BattlefieldSupplies';
 import {YellowBattle} from '../systems/YellowBattle';
 import {dongzhuoStageUnlocked,yellowStageUnlocked} from '../world/WorldStore';
-import {beginExpedition,settleExpedition,permanentEffects,worldUnlocked,worldChapterCleared,takeExpeditionReserve} from '../world/WorldStore';
+import {abandonExpedition,beginExpedition,settleExpedition,permanentEffects,worldUnlocked,worldChapterCleared,takeExpeditionReserve} from '../world/WorldStore';
 import Phaser from 'phaser';
 import { ArtEffects } from '../systems/ArtEffects';
 import { BattlefieldDetails } from '../systems/BattlefieldDetails';
 import { WAR, warText, ensureWarTextures } from '../ui/WarStyle';
 import { chapterUnlocked, isChapterTestRun, recordChapterVictory } from '../systems/ChapterProgress';
-import { BALANCE, COLORS, DEPTH, FONT, GAME_HEIGHT, GAME_WIDTH, IS_DESKTOP, actorDepth } from '../config';
+import { BALANCE, COLORS, DEPTH, FONT, GAME_HEIGHT, GAME_WIDTH, HEADING_FONT, IS_DESKTOP, actorDepth, screenPoint } from '../config';
+import { upgradeCardTexture } from '../ui/HomeCommand';
 import type { EnemyDef } from '../data/enemies';
 import { RELICS, SCHOOL_NAMES, type RelicSchool } from '../data/relics';
 import { WEAPON_META, buildUpgradeOptions } from '../data/upgrades';
@@ -74,7 +76,15 @@ interface CardView {
   name: Phaser.GameObjects.Text;
   desc: Phaser.GameObjects.Text;
   tag: Phaser.GameObjects.Text;
+  /** 卡片容器：入场滑入与悬停上浮作用在整张卡上。 */
+  root: Phaser.GameObjects.Container;
+  rule: Phaser.GameObjects.Graphics;
+  hint: Phaser.GameObjects.Text;
+  w: number; h: number; baseY: number; medal: { x: number; y: number; r: number };
+  accent: number; rare: boolean; hover: boolean; lift: number;
 }
+/** 三选一卡片类别色。 */
+const UPGRADE_ACCENT: Record<string, number> = { weapon: 0xc9973a, martial: 0x2f9e7e, tactic: 0x2f8a8a, treasure: 0xd08f2a, attribute: 0x3f78a8, potion: 0xb04a32, trinket: 0x8a5cb8, foundation: 0x7a8a46, relic: 0xc9a030, rare: 0xb04a3a, passive: 0x4a8a6a };
 
 interface ChasingBoss {enemy:Enemy;life:number;stage:number;name:string;battle:YellowBattle|null;huaxiong:HuaxiongBoss|null;xurong:XurongBoss|null;label:Phaser.GameObjects.Text;}
 
@@ -190,7 +200,7 @@ export class GameScene extends Phaser.Scene {
   protected freeRecruit = false;
   protected resting = false;
   protected campUI?:CampRestUI;
-  private readonly recruitedWaves = new Set<number>();
+  protected readonly recruitedWaves = new Set<number>();
   private readonly legionBulletScratch: Ally[] = [];
   protected spearShots: SpearShot[] = [];
   protected weaponHost!: WeaponHost;
@@ -241,6 +251,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   create(): void {
+    stopMenuMusic();
     this.resetState();
     ensureWarTextures(this);
     this.hudAcc = 1; this.lastHudMode = '';
@@ -544,6 +555,7 @@ export class GameScene extends Phaser.Scene {
 
     if(this.finaleFadeMs>0){this.finaleFadeMs=Math.max(0,this.finaleFadeMs-delta);const a=this.finaleFadeMs/800;this.bossUltGfx.setAlpha(a);this.bossShieldGfx?.setAlpha(a);if(!this.finaleFadeMs){this.bossUltGfx.clear().setAlpha(1);this.bossShieldGfx?.clear().setAlpha(1);}}
     this.huaxiong?.updateDeath(delta);this.xurong?.updateDeath(delta);for(const controller of this.deadBossControllers)controller.updateDeath(delta);
+    this.animateUpgradeCards();
     if (this.mode !== 'none' || this.over) return;
 
     if(this.battleStage()<3&&!this.runConfig.encounter&&this.boss?.active&&this.firstBossAt>=0&&this.combatNow>=this.firstBossAt+90000)this.advanceFrontline();
@@ -864,6 +876,8 @@ export class GameScene extends Phaser.Scene {
   }
 
   protected advanceEnemy(enemy: Enemy, nx: number, ny: number, dt: number): void {
+    // 出手（拉弓放箭、挥砍）期间原地站定，避免攻击帧边播边平移；首领与骑兵冲锋有各自的位移逻辑。
+    if (enemy.kind !== 'boss' && enemy.kind !== 'cavalry' && enemy.attackUntil > this.combatNow) { enemy.moveVx = enemy.moveVy = 0; return; }
     const controlSpeed=this.controlBuild?.motion(enemy,this.combatNow,dt)??1;
     const martialSpeed=controlSpeed*(enemy.kind!=='boss'&&this.combatNow<enemy.martialSlowUntil?enemy.martialSlow:1);
     enemy.sprite.x += (this.crowdSteering ? enemy.moveVx : nx * enemy.def.speed) * dt * martialSpeed;
@@ -1176,6 +1190,8 @@ export class GameScene extends Phaser.Scene {
 
   // ---------------- 武器 ----------------
 
+  /** 暂停菜单主动离开：本场作废，仍存活的后备兵归还主城。 */
+  protected abandonRun():void{if(this.worldCampaign&&!this.over)abandonExpedition(this.expeditionId,this.allies.filter(a=>a.active&&a.reserveSoldier).map(a=>a.kind));}
   protected handleBattlePointer(_pointer:Phaser.Input.Pointer):boolean{return false;}
   protected priorityWeaponTarget(_range:number,_bodyRadius=true):Enemy|null{return null;}
   protected createWeaponHost(): WeaponHost {
@@ -1475,8 +1491,10 @@ export class GameScene extends Phaser.Scene {
     gem.img.setTexture(value >= 10 ? 'gem_large' : 'gem_small').setPosition(x, y).setVisible(true).setAlpha(1).setScale(1);
   }
 
+  /** “搜集辎重”：此时刻之前全场宝石无视距离飞向主将。 */
+  gemMagnetUntil = 0;
   protected updateGems(dt: number): void {
-    const radius = this.player.stats.pickupRadius;
+    const radius = this.combatNow < this.gemMagnetUntil ? 1e9 : this.player.stats.pickupRadius;
     for (const gem of this.gems) {
       if (!gem.active) continue;
       const dx = this.player.x - gem.img.x;
@@ -1658,15 +1676,23 @@ export class GameScene extends Phaser.Scene {
         view.tag.setVisible(false);
         continue;
       }
+      view.root.setVisible(true);
       view.bg.setVisible(true);
       view.name.setVisible(true);
       view.desc.setVisible(true);
       view.tag.setVisible(true);
+      view.accent=UPGRADE_ACCENT[option.kind]??UPGRADE_ACCENT.passive;view.rare=option.kind==='treasure'||option.kind==='rare';view.hover=false;
+      this.paintUpgradeCard(view);
       view.name.setText(option.name);
-      view.desc.setText(option.desc).setFontSize(IS_DESKTOP?17:18);
-      while(view.desc.height>(IS_DESKTOP?155:77)&&parseInt(String(view.desc.style.fontSize))>14)view.desc.setFontSize(parseInt(String(view.desc.style.fontSize))-1);
-      view.name.setFontSize(IS_DESKTOP?20:21);
-      while(view.name.height>(IS_DESKTOP?49:29)&&parseInt(String(view.name.style.fontSize))>15)view.name.setFontSize(parseInt(String(view.name.style.fontSize))-1);
+      // 卡片说明统一称“首领”：中英混排时“Boss”会被拆成两行。
+      view.desc.setText(option.desc.replace(/Boss/g,'首领')).setFontSize(IS_DESKTOP?16:17);
+      while(view.desc.height>(IS_DESKTOP?view.h-246:view.h-104)&&parseInt(String(view.desc.style.fontSize))>13)view.desc.setFontSize(parseInt(String(view.desc.style.fontSize))-1);
+      view.name.setFontSize(IS_DESKTOP?21:21);
+      while(view.name.height>(IS_DESKTOP?50:30)&&parseInt(String(view.name.style.fontSize))>15)view.name.setFontSize(parseInt(String(view.name.style.fontSize))-1);
+      // 名称与说明之间的分隔线（带菱形），随名称高度下移。
+      const ruleY=view.name.y+view.name.height+(IS_DESKTOP?10:6),rx0=IS_DESKTOP?-view.w/2+30:104-view.w/2,rx1=IS_DESKTOP?view.w/2-30:view.w/2-18,accentLight=0xe0c58a;
+      view.rule.clear().lineStyle(1,accentLight,.4).lineBetween(rx0,ruleY,rx1,ruleY).fillStyle(accentLight,.8).fillRect((rx0+rx1)/2-3,ruleY-3,6,6);
+      view.desc.setY(ruleY+(IS_DESKTOP?10:7));
       let tagText = '被动';
       if (option.categoryLabel) tagText = option.categoryLabel;
       else if (option.kind === 'rare') tagText = '稀有';
@@ -1676,7 +1702,7 @@ export class GameScene extends Phaser.Scene {
         const owned = option.weaponId ? this.player.weapons.find((w) => w.id === option.weaponId) : undefined;
         tagText = owned ? `武器 Lv.${owned.level} → ${owned.level + 1}` : '新武器';
       }
-      view.tag.setText(tagText);
+      view.tag.setText(view.rare&&option.kind==='treasure'?'✦ '+tagText:tagText);
       const categoryStyle:Record<UpgradeOption['kind'],{bg:string;color:string}>={
         tactic:{bg:'#345650',color:'#c6edce'},treasure:{bg:'#67502c',color:'#ffe2a0'},weapon:{bg:'#584729',color:'#ffe6a4'},martial:{bg:'#285448',color:'#9ce1c8'},
         attribute:{bg:'#354b5b',color:'#b9dcf0'},potion:{bg:'#63402d',color:'#ffd0a0'},
@@ -1698,11 +1724,30 @@ export class GameScene extends Phaser.Scene {
               : option.weaponId === 'guandao' ? 'icon_guandao' : 'icon_passive';
       const rewardIcon=upgradeIcon(option);
       if (rewardIcon && this.textures.exists(rewardIcon)) {
-        view.icon.setTexture(rewardIcon).setDisplaySize(44, 44).setVisible(true);
+        view.icon.setTexture(rewardIcon).setDisplaySize(52, 52).setVisible(true);
       } else {
-        view.icon.setTexture(iconKey).setDisplaySize(44, 44).setVisible(true);
+        view.icon.setTexture(iconKey).setDisplaySize(52, 52).setVisible(true);
       }
     }
+    this.upgradeAnimAt = performance.now();
+  }
+
+  /** 卡面贴图按类别色/悬停/稀有切换。 */
+  private paintUpgradeCard(view: CardView): void {
+    view.bg.setTexture(upgradeCardTexture(this, view.w, view.h, view.accent, view.medal, view.hover, view.rare)).setDisplaySize(view.w + 32, view.h + 32);
+    (view.bg.getData('fitHit') as (() => void) | undefined)?.();
+  }
+
+  /** 三选一动画：卡片依次自下滑入淡入，悬停上浮 6px。升级时计时器与补间暂停，因此逐帧手动推进。 */
+  private upgradeAnimAt = 0;
+  protected animateUpgradeCards(): void {
+    if (!this.levelPanel?.visible) return;
+    const now = performance.now();
+    this.cardViews.forEach((v, i) => {
+      const k = Phaser.Math.Clamp((now - this.upgradeAnimAt - i * 70) / 240, 0, 1), ease = 1 - Math.pow(1 - k, 3);
+      v.lift += ((v.hover ? -6 : 0) - v.lift) * .3;
+      v.root.setY(v.baseY + (1 - ease) * 36 + v.lift).setAlpha(ease);
+    });
   }
 
   protected chooseUpgrade(index: number): void {
@@ -1763,6 +1808,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   protected showWaveBanner(text: string, danger = false): void {
+    this.sfx?.play(danger ? 'gong' : 'waveDrum');
     // Keep one notice at a time; no opaque panel over the battlefield.
     for (const notice of this.children.list.filter(o => o.name === 'combat-notice')) {
       this.tweens.killTweensOf(notice); notice.destroy();
@@ -1800,8 +1846,8 @@ export class GameScene extends Phaser.Scene {
       const pct=Math.round(Phaser.Math.Clamp(ratio,0,1)*100);
       knob.x=cx-width/2+width*pct/100;fill.width=width*pct/100;percent.setText(`${pct}%`);onChange(pct);
     };
-    hit.on('pointerdown',(p:Phaser.Input.Pointer)=>apply((p.x-(cx-width/2))/width));
-    hit.on('pointermove',(p:Phaser.Input.Pointer)=>{if(p.isDown)apply((p.x-(cx-width/2))/width);});
+    hit.on('pointerdown',(p:Phaser.Input.Pointer)=>apply((screenPoint(p).x-(cx-width/2))/width));
+    hit.on('pointermove',(p:Phaser.Input.Pointer)=>{if(p.isDown)apply((screenPoint(p).x-(cx-width/2))/width);});
     this.input.setDraggable(knob);
     knob.on('drag',(_p:Phaser.Input.Pointer,x:number)=>apply((x-(cx-width/2))/width));
     return [text,percent,track,fill,hit,knob];
@@ -1829,6 +1875,7 @@ export class GameScene extends Phaser.Scene {
     if (this.mode === 'rest' && this.resting) {
       if(train||!INITIAL_TROOPS.includes(kind))return;
       const ok = train ? this.legion.train(kind) : this.legion.recruit(kind, 1);
+      if (ok) this.sfx.play(train ? 'purchase' : 'recruit');
       if (ok) this.renderRecruit();
       return;
     }
@@ -2179,13 +2226,13 @@ export class GameScene extends Phaser.Scene {
 
   protected buildOverlays(): void {
     this.levelPanel = this.add.container(0, 0).setScrollFactor(0).setDepth(DEPTH.overlay).setVisible(false);
-    const dim = this.add.rectangle(0, 0, GAME_WIDTH, GAME_HEIGHT, 0x100d09, 0.8).setOrigin(0, 0).setInteractive();
+    const dim = this.add.rectangle(0, 0, GAME_WIDTH, GAME_HEIGHT, 0x0c0906, 0.86).setOrigin(0, 0).setInteractive();
     const d = IS_DESKTOP;
     const title = this.add
-      .text(GAME_WIDTH / 2, d ? 48 : 120, '将星精进 · 择一强化', { fontFamily: FONT, fontSize: d ? '20px' : '24px', color: '#e8c76a' })
-      .setOrigin(0.5);
+      .text(GAME_WIDTH / 2, d ? 52 : 120 + Math.max(0, Math.round((GAME_HEIGHT - 960) / 2)), '将星精进 · 择一强化', { fontFamily: HEADING_FONT, fontSize: d ? '28px' : '30px', color: '#f0d79e', resolution: 2 })
+      .setOrigin(0.5).setLetterSpacing(4).setShadow(0, 2, '#0a0603', 4, true, true);
     title.setName('upgrade-title');this.levelPanel.add([dim, title]);
-    this.rerollButton=this.add.text(GAME_WIDTH-(d?28:32),d?24:42,'',{fontFamily:FONT,fontSize:'16px',color:'#e8cf91',resolution:2}).setOrigin(1,0).setPadding(14,12).setBackgroundColor('#35291c').setName('upgrade-reroll').setInteractive({useHandCursor:true}).on('pointerdown',()=>this.rerollUpgrades());this.levelPanel.add(this.rerollButton);
+    this.rerollButton=this.add.text(GAME_WIDTH-(d?28:32),d?24:42,'',{fontFamily:FONT,fontSize:'16px',color:'#e8cf91',resolution:2}).setOrigin(1,0).setPadding(16,10).setBackgroundColor('rgba(52,38,24,0.92)').setShadow(0,1,'#0a0603',2,true,true).setName('upgrade-reroll').setInteractive({useHandCursor:true}).on('pointerdown',()=>this.rerollUpgrades());this.levelPanel.add(this.rerollButton);
 
 
 
@@ -2194,17 +2241,29 @@ export class GameScene extends Phaser.Scene {
       for(const x of [11,289])for(const y of [11,289])art.fillStyle(0xc2a16b).fillRect(x-2,y-2,4,4);
       art.generateTexture('ui_upgrade_bronze',300,300);art.destroy();
     }
-    this.levelPanel.add(this.add.text(GAME_WIDTH/2,d?80:155,'三择其一 · 点击卡片获得强化',warText(14,'#c6b99e')).setOrigin(.5));
+    const sub=this.add.text(GAME_WIDTH/2,d?88:160+Math.max(0,Math.round((GAME_HEIGHT-960)/2)),'三择其一 · 点击卡片获得强化',warText(14,'#c6b99e')).setOrigin(.5).setName('upgrade-subtitle');
+    const subRule=this.add.graphics().lineStyle(1,0xc9a96a,.45).lineBetween(GAME_WIDTH/2-170,sub.y,GAME_WIDTH/2-110,sub.y).lineBetween(GAME_WIDTH/2+110,sub.y,GAME_WIDTH/2+170,sub.y);
+    this.levelPanel.add([sub,subRule]);
+    // 三选一卡片：每张卡是一个容器（入场滑入、悬停上浮），卡面按类别着色。电脑横排、手机竖排。
+    const pad=d?0:Math.max(0,Math.round((GAME_HEIGHT-960)/2));
     for(let i=0;i<3;i++){
-      const w=d?264:476,h=d?320:174,x=d?196+i*284:GAME_WIDTH/2,y=d?278:280+i*188,left=x-w/2,top=y-h/2;
-      const bg=this.add.image(x,y,'ui_upgrade_bronze').setDisplaySize(w,h).setInteractive({useHandCursor:true}).setName('upgrade-card-'+i);
-      bg.on('pointerdown',()=>bg.setTint(0xd0b889)).on('pointerup',()=>{bg.clearTint();this.chooseUpgrade(i);}).on('pointerover',()=>bg.setTint(0xffe6b8)).on('pointerout',()=>bg.clearTint());
-      const icon=this.add.image(left+40,top+42,'icon_1').setDisplaySize(44,44).setVisible(false);
-      const tag=this.add.text(left+73,top+18,'',warText(12,'#c9b993')).setResolution(2).setPadding(5,2);
-      const name=this.add.text(d?left+20:left+73,d?top+80:top+42,'',{...warText(d?20:21,'#f4e6c8'),wordWrap:{width:d?w-40:w-95,useAdvancedWrap:true}});
-      const desc=this.add.text(left+20,d?top+136:top+83,'',{...warText(d?17:18,'#d5cbb9'),lineSpacing:4,wordWrap:{width:w-40,useAdvancedWrap:true}});
-      const rule=this.add.graphics().lineStyle(1,0x8c734b,.45).lineBetween(left+20,d?top+124:top+74,left+w-20,d?top+124:top+74);
-      this.levelPanel.add([bg,rule,icon,name,desc,tag]);this.cardViews.push({bg,icon,name,desc,tag});
+      const w=d?272:480,h=d?340:176,x=d?GAME_WIDTH/2+(i-1)*292:GAME_WIDTH/2,y=d?300:292+pad+i*192;
+      const medal=d?{x:Math.round(w/2),y:70,r:36}:{x:56,y:Math.round(h/2),r:34};
+      const root=this.add.container(x,y);
+      const bg=this.add.image(0,0,upgradeCardTexture(this,w,h,UPGRADE_ACCENT.passive,medal)).setDisplaySize(w+32,h+32).setInteractive({useHandCursor:true}).setName('upgrade-card-'+i);
+      // 输入区域只覆盖卡面（不含外发光留白）；贴图按渲染倍率绘制，命中矩形用贴图像素坐标。
+      const fitHit=()=>{const k=bg.frame.width/(w+32);bg.input!.hitArea.setTo(16*k,16*k,w*k,h*k);};fitHit();bg.setData('fitHit',fitHit);
+      const icon=this.add.image(medal.x-w/2,medal.y-h/2,'icon_1').setDisplaySize(52,52).setVisible(false);
+      const tag=this.add.text(d?0:104-w/2,d?120-h/2:18-h/2,'',warText(12,'#c9b993')).setResolution(2).setPadding(8,3).setOrigin(d?.5:0,0);
+      const name=this.add.text(d?0:104-w/2,d?148-h/2:42-h/2,'',{...warText(d?21:21,'#f6e8c8'),fontFamily:HEADING_FONT,align:d?'center':'left',wordWrap:{width:d?w-36:w-122,useAdvancedWrap:true}}).setOrigin(d?.5:0,0).setShadow(0,1,'#0a0603',3,true,true);
+      const desc=this.add.text(d?0:104-w/2,d?204-h/2:88-h/2,'',{...warText(d?16:17,'#dacfba'),align:d?'center':'left',lineSpacing:5,wordWrap:{width:d?w-40:w-122,useAdvancedWrap:true}}).setOrigin(d?.5:0,0);
+      const rule=this.add.graphics();
+      const hint=this.add.text(d?0:w/2-16,d?h/2-22:h/2-14,d?'按 '+(i+1)+' 选择':'点击选择',warText(11,'#9d8f78')).setOrigin(d?.5:1,1).setAlpha(.85);
+      // 子元素也必须固定在屏幕上，否则命中检测按相机滚动偏移（点不中卡片）。
+      for(const o of [bg,rule,icon,tag,name,desc,hint])o.setScrollFactor(0);root.add([bg,rule,icon,tag,name,desc,hint]);root.setScrollFactor(0);this.levelPanel.add(root);
+      const view:CardView={bg,icon,name,desc,tag,root,rule,hint,w,h,baseY:y,medal,accent:UPGRADE_ACCENT.passive,rare:false,hover:false,lift:0};
+      bg.on('pointerdown',()=>bg.setTint(0xe0cfa8)).on('pointerup',()=>{bg.clearTint();this.chooseUpgrade(i);}).on('pointerover',()=>{view.hover=true;this.paintUpgradeCard(view);}).on('pointerout',()=>{bg.clearTint();view.hover=false;this.paintUpgradeCard(view);});
+      this.cardViews.push(view);
     }
 
     this.pausePanel = this.add.container(0,0).setScrollFactor(0).setDepth(DEPTH.overlay).setVisible(false);
@@ -2225,7 +2284,7 @@ export class GameScene extends Phaser.Scene {
     buildLink.on('pointerdown',()=>this.openBuildPanel());this.pausePanel.add(buildLink);
     const exit=this.add.text(cx,top+ph-65,'返回选将',warText(16,'#b5c4b2')).setOrigin(.5).setPadding(24,12).setInteractive({useHandCursor:true}).setName('pause-exit');
     exit.on('pointerdown',()=>{
-      if(exit.getData('confirm')){this.registry.remove('campaignTransfer');this.scene.start(this.worldCampaign&&worldUnlocked()?'CityScene':'MenuScene');}
+      if(exit.getData('confirm')){this.abandonRun();this.registry.remove('campaignTransfer');this.scene.start(this.worldCampaign&&worldUnlocked()?'CityScene':'MenuScene');}
       else exit.setData('confirm',true).setText('确认离开？本局进度不保留').setColor('#e7b68e');
     });
     const keys=this.add.text(cx,top+ph-22,d?'Esc / P 继续战斗':'战斗已冻结 · 点击「继续战斗」恢复',warText(12,'#7f9987')).setOrigin(.5);

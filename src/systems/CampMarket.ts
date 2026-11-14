@@ -9,6 +9,6 @@ export function campOption(offer:CampOffer,player:Player):UpgradeOption|null{
 /** Inventory is generated once per actual camp visit, not every tab open. */
 export class CampMarket{
  readonly offers:CampOffer[]=[];
- constructor(player:Player){const b=player.growth.build,pool:CampOffer[]=[];for(const id of Object.keys(TACTICS)as TacticId[])if(b.canLearn(id))pool.push({id,kind:'tactic',level:b.level(id),price:20+b.level(id)*6,sold:false});for(const id of Object.keys(TREASURES)as TreasureId[])if(!b.treasures.includes(id))pool.push({id,kind:'treasure',level:0,price:36,sold:false});while(pool.length&&this.offers.length<3){const i=Math.floor(Math.random()*pool.length);this.offers.push(pool.splice(i,1)[0]);}}
+ constructor(player:Player){const b=player.growth.build,pool:CampOffer[]=[];for(const id of Object.keys(TACTICS)as TacticId[])if(b.canLearn(id))pool.push({id,kind:'tactic',level:b.level(id),price:45+b.level(id)*15,sold:false});for(const id of Object.keys(TREASURES)as TreasureId[])if(!b.treasures.includes(id))pool.push({id,kind:'treasure',level:0,price:90,sold:false});while(pool.length&&this.offers.length<3){const i=Math.floor(Math.random()*pool.length);this.offers.push(pool.splice(i,1)[0]);}}
  buy(index:number,player:Player,army:Legion):boolean{const o=this.offers[index];if(!o||o.sold||army.food<o.price)return false;const option=campOption(o,player);if(!option)return false;option.apply(player,player.weapons,player.growth);army.food-=o.price;o.sold=true;return true;}
 }

@@ -15,6 +15,7 @@ export class Player {
   readonly sprite: Phaser.GameObjects.Image;
   readonly shadow: Phaser.GameObjects.Image;
   private readonly commandRing:Phaser.GameObjects.Graphics;
+  private readonly commandGlow:Phaser.GameObjects.Image;
   private readonly markerLabel: Phaser.GameObjects.Text;
   private readonly marker: Phaser.GameObjects.Graphics;
 
@@ -67,9 +68,10 @@ export class Player {
     this.scene = scene;
     this.shadow = scene.add.image(x, y + 16, 'shadow').setDisplaySize(48, 20).setDepth(DEPTH.enemy - 1).setAlpha(0.8);
     this.sprite = scene.add.image(x, y, 'hero_zhaoyun').setDepth(actorDepth(y + 26));
-    this.commandRing=scene.add.graphics().setDepth(DEPTH.player-.1);
-    this.commandRing.lineStyle(2,0x14241f,.8).strokeEllipse(0,0,45,18).lineStyle(1,0xd7c38a,.85).strokeEllipse(0,0,43,16).lineStyle(1,0x9ac8c2,.65).strokeEllipse(0,0,36,12);
-    for(const x of[-24,24])this.commandRing.fillStyle(0xdec896,.9).fillRect(x-2,-1,4,2);
+    this.commandRing=scene.add.graphics().setDepth(DEPTH.enemy-.7);
+    // 主将脚下：暖金色地面柔光 + 两段缓慢旋转的细金弧（取代原先深色/金/青三层椭圆与侧点，减少瞄准圈感）。
+    if(!scene.textures.exists('hero-ground-glow')){const c=document.createElement('canvas');c.width=128;c.height=48;const g=c.getContext('2d')!;g.translate(64,24);g.scale(1,24/64);const r=g.createRadialGradient(0,0,4,0,0,62);r.addColorStop(0,'rgba(255,214,140,0)');r.addColorStop(.55,'rgba(255,206,120,.22)');r.addColorStop(.82,'rgba(240,186,96,.30)');r.addColorStop(1,'rgba(240,186,96,0)');g.fillStyle=r;g.beginPath();g.arc(0,0,64,0,Math.PI*2);g.fill();scene.textures.addCanvas('hero-ground-glow',c);}
+    this.commandGlow=scene.add.image(x,y+21,'hero-ground-glow').setDisplaySize(54,20).setDepth(DEPTH.enemy-.8).setBlendMode(Phaser.BlendModes.ADD).setAlpha(.9);
     this.marker=scene.add.graphics().setDepth(DEPTH.fx+1);
     this.marker.fillStyle(0x17251c).fillTriangle(-7,-3,7,-3,0,6)
       .fillStyle(0xf3e6b0).fillTriangle(-4,-1,4,-1,0,3);
@@ -194,6 +196,7 @@ export class Player {
     const afterArmor = Math.max(1, raw - this.stats.armor);
     const unguarded = Math.max(1, Math.round(afterArmor * this.stats.damageTakenMul * this.armyDamageTakenMul * this.growth.incomingDamageMultiplier()));
     const dmg=Math.max(1,this.damageGuard?.(unguarded,now)??unguarded);
+    (this.scene as unknown as {sfx?:{play(k:string):void}}).sfx?.play('playerHurt');
     const ironRescue=this.hp<=dmg&&this.growth.build.tags().bulwark>=4&&!this.growth.awakenRescueUsed;
     if(ironRescue)this.growth.awakenRescueUsed=true;
     const rescue=!ironRescue&&this.hp<=dmg&&this.growth.build.treasures.includes('revival_jade')&&!this.growth.revivalUsed;
@@ -243,8 +246,15 @@ export class Player {
     return gained;
   }
 
+  private drawCommandRing(now:number):void{
+    const g=this.commandRing.clear().setPosition(this.x,this.y+21).setVisible(this.alive);if(!this.alive)return;
+    const rx=24,ry=8.5,spin=now/1600;
+    for(const base of[0,Math.PI]){g.lineStyle(2,0xf6dc9a,.9).beginPath();for(let i=0;i<=14;i++){const a=spin+base+(-.7+1.4*i/14);const px=Math.cos(a)*rx,py=Math.sin(a)*ry;if(i===0)g.moveTo(px,py);else g.lineTo(px,py);}g.strokePath();}
+  }
+
   update(now: number, dt: number): void {
-    this.commandRing.setPosition(this.x,this.y+21).setVisible(this.alive);
+    this.commandGlow.setPosition(this.x,this.y+21).setVisible(this.alive).setAlpha(.75+.15*Math.sin(now/420));
+    this.drawCommandRing(now);
     this.marker.setPosition(this.x,this.y-38).setVisible(this.alive);
     this.markerLabel.setPosition(this.x,this.y-45).setVisible(this.alive);
     const t = now < this.knockedUntil ? (now - this.knockedAt) / (this.knockedUntil - this.knockedAt) : 1;

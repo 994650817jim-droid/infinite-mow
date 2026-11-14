@@ -1,3 +1,4 @@
+import {playMenuMusic,menuMusic} from '../systems/Music';
 import Phaser from 'phaser';
 import {THIRD_STAGES,type ThirdStage} from '../data/thirdChapter';
 import {thirdChapterUnlocked,thirdStageUnlocked,loadWorld} from '../world/WorldStore';
@@ -12,7 +13,7 @@ export class ThirdChapterScene extends Phaser.Scene {
  preload(){for(const d of THIRD_STAGES)if(!this.textures.exists('third_'+d.id))this.load.spritesheet('third_'+d.id,'assets/phase23/'+d.id+'.png',{frameWidth:128,frameHeight:128});}
  private text(x:number,y:number,s:string,size=16,color='#ded2b9'){return worldText(this,x,y,s,size,color);}
  private action(x:number,y:number,w:number,h:number,label:string,fn:()=>void,primary=false){const bg=this.add.rectangle(x,y,w,h,primary?0x744530:0x241e1a,.96).setStrokeStyle(1,primary?0xc39b61:0x70604b).setInteractive({useHandCursor:true});const t=this.text(x,y,label,primary?22:17,primary?'#ffdf9d':'#d1c2a7').setOrigin(.5);bg.on('pointerover',()=>bg.setFillStyle(primary?0x8b5438:0x3a2c23)).on('pointerout',()=>bg.setFillStyle(primary?0x744530:0x241e1a)).on('pointerdown',()=>bg.setAlpha(.7)).on('pointerup',()=>{bg.setAlpha(1);fn();});return{bg,t};}
- create(){
+ create(){playMenuMusic(this);
   if(!this.registry.get('battleReady')){this.registry.set('pendingThird',true);this.registry.set('loadBattle',true);this.scene.start('BootScene');return;}
   this.cards=[];this.heroButtons=[];const desk=W>600,state=loadWorld(),test=isChapterTestRun();this.selected=Math.min(3,state.warlordStages+1)as ThirdStage;const params=new URLSearchParams(location.search);if(test&&['1','2','3'].includes(params.get('thirdStage')??''))this.selected=Number(params.get('thirdStage'))as ThirdStage;
   try{const saved=localStorage.getItem('im_last_hero');if(CHARACTERS.some(c=>c.id===saved))this.hero=saved as CharacterId;}catch{}

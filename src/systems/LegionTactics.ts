@@ -154,7 +154,11 @@ export class LegionTactics {
       // Small cosmetic-space adjustment within existing reach, preserving facing and attack frames.
       if(Math.hypot(a.spaceX,a.spaceY)>.05)u.moveTo(u.x+a.spaceX*24,u.y+a.spaceY*24,dt,28,true);
     }else{
-      const tx=a.x+a.spaceX*36,ty=a.y+a.spaceY*36,goal=a.mode==='charge'?{x:tx,y:ty}:this.navigate?.(u,tx,ty,now)??{x:tx,y:ty};u.moveTo(goal.x,goal.y,dt,u.def.speed*(a.mode==='charge'?1.8:1));
+      const tx=a.x+a.spaceX*36,ty=a.y+a.spaceY*36,goal=a.mode==='charge'?{x:tx,y:ty}:this.navigate?.(u,tx,ty,now)??{x:tx,y:ty};
+      // 近战接敌（含长枪兵拉开距离）时保持面向目标，避免一退一进来回翻身造成闪烁。
+      const target=a.target,engaged=!!target?.active&&!u.def.ranged&&u.kind!=='rider'&&a.mode!=='retreat'&&a.mode!=='regroup'&&Math.hypot(target.x-u.x,target.y-u.y)<=u.def.range*1.2;
+      if(engaged&&target)u.face(target.x,target.y);
+      u.moveTo(goal.x,goal.y,dt,u.def.speed*(a.mode==='charge'?1.8:1),engaged);
     }
   }
 

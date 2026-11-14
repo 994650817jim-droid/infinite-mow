@@ -1,4 +1,5 @@
 import {visualTextureKey} from '../systems/ReadableTextures';
+import {figureCorrection,sheetFigureHeight} from '../systems/SpriteMetrics';
 import Phaser from 'phaser';
 import { DEPTH } from '../config';
 import { ENEMY_DEFS, type EnemyDef } from '../data/enemies';
@@ -24,6 +25,12 @@ export class Enemy {
   kind: EnemyKind = 'infantry';
   /** 普通杂兵临时步动：记录基础缩放与相位。 */
   baseScaleY = 1;
+  /** 素材比例校正倍数（按行走表标准身高统一攻击表与个别画小的帧）。 */
+  frameScale = 1;
+  private stepStretch = 0;
+  private baseOriginY = .5;
+  /** 步伐相位：每 1.0 换一帧；按实际速度自适应步幅，慢速被挤动时也保持每秒约 7 次换帧。 */
+  private stepPhase = 0;
   walkPhase = Math.random() * Math.PI * 2;
   /** 四方向行走（仅普通步兵启用）。 */
   static walkEnabled = true;
@@ -161,10 +168,15 @@ export class Enemy {
         infantry: 46, shield: 50, archer: 46, cavalry: 68, elite: 78,
       };
       const displayH = displayHeights[this.kind] ?? 66;
-      this.sprite.setScale(def.walkVisual?.scale ?? displayH / 96);
+      // 普通兵按人物实际像素身高统一：不同章节/批次的素材留白不同，按格子缩放会一高一矮。
+      const figureTarget: Partial<Record<EnemyKind, number>> = { infantry: 48, archer: 46, shield: 50 };
+      const median = figureTarget[this.kind] ? sheetFigureHeight(this.scene, sheetKey) : undefined;
+      this.sprite.setScale(median ? figureTarget[this.kind]! / median : def.walkVisual?.scale ?? displayH / 96);
       this.sprite.setOrigin(.5, (def.walkVisual?.groundY ?? 94 / 96) - def.radius * .72 / (96 * this.sprite.scaleY));
       this.baseScaleY = this.sprite.scaleY;
-      this.sprite.setTexture(this.walkSheet, 'down_0');
+      this.baseOriginY = this.sprite.originY;
+      this.frameScale = 1;
+      this.applyFrame(this.walkSheet, 'down_0');
       this.appliedFrame = 'down_0';
     }
     if (def.texture === 'boss_lubu' && this.scene.textures.get('boss_lubu').has('down_0')) {
@@ -222,7 +234,7 @@ export class Enemy {
     this.chargeHit = false;
     this.direction = dir;
     // 冲锋表现复用奔跑表（charge 表切图有边缘/朝向问题，暂不使用）
-    if (this.walkSheet) this.sprite.setTexture(this.walkSheet, `${dir}_${this.def.walkVisual ? 0 : 1}`);
+    if (this.walkSheet) this.applyFrame(this.walkSheet, `${dir}_${this.def.walkVisual ? 0 : 1}`);
     this.chargeFrame = this.walkSheet ? `${dir}_${this.def.walkVisual ? 0 : 1}` : '';
     this.sprite.setTint(0xff8888);
   }
@@ -246,7 +258,7 @@ export class Enemy {
     const frame = this.def.walkVisual ? (this.chargeState === 'charge' ? Math.floor(now / 90) % 4 : 0) : this.chargeState === 'charge' ? 2 : 1;
     const key = `${this.direction}_${frame}`;
     if (key !== this.chargeFrame) {
-      this.sprite.setTexture(visualTextureKey(this.scene,this.walkSheet), key);
+      this.applyFrame(visualTextureKey(this.scene,this.walkSheet), key);
       this.chargeFrame = key;
     }
   }
@@ -258,10 +270,10 @@ export class Enemy {
     this.direction = dir;
     // Walk-only assets hold a neutral pose; never impersonate an attack animation.
     if (this.def.walkVisual && !this.def.attackVisual) {
-      this.sprite.setTexture(this.walkSheet, `${dir}_0`);
+      this.applyFrame(this.walkSheet, `${dir}_0`);
       return;
     }
-    this.sprite.setTexture(visualTextureKey(this.scene,this.attackSheet), this.def.attackVisual?`${dir}_0`:`atk_${dir}_0`);
+    this.applyFrame(visualTextureKey(this.scene,this.attackSheet), this.def.attackVisual?`${dir}_0`:`atk_${dir}_0`);
     this.attackFrame = `atk_${dir}_0`;
   }
 
@@ -277,7 +289,7 @@ export class Enemy {
     const col = remain > 180 ? 0 : 1;
     const key = this.def.attackVisual ? `${this.direction}_${Math.min(3,Math.floor((360-remain)/90))}` : `atk_${this.direction}_${col}`;
     if (key !== this.attackFrame) {
-      this.sprite.setTexture(visualTextureKey(this.scene,this.attackSheet), key);
+      this.applyFrame(visualTextureKey(this.scene,this.attackSheet), key);
       this.attackFrame = key;
     }
   }
@@ -286,7 +298,7 @@ export class Enemy {
     if (!this.def.walkVisual || !this.walkSheet) return;
     this.poseUntil = now + duration;
     this.direction = Math.abs(Math.cos(angle)) > Math.abs(Math.sin(angle)) ? (Math.cos(angle) < 0 ? 'left' : 'right') : (Math.sin(angle) < 0 ? 'up' : 'down');
-    this.sprite.setTexture(this.walkSheet, `${this.direction}_0`);
+    this.applyFrame(this.walkSheet, `${this.direction}_0`);
     this.appliedFrame = '';
   }
 
@@ -296,19 +308,28 @@ export class Enemy {
     const moved = Math.hypot(dx, dy);
     const actualSpeed = moved / Math.max(dt, 0.0001);
     const intentSpeed = Math.hypot(this.intentDx, this.intentDy) / Math.max(dt, 0.0001);
-    // 主动移动才算走：意图速度够 + 实际有位移；被挤开不算
+    // 按实际位移判定走路：与蜀军缠斗、相互挤开、被友军推着走时也播放步伐，避免定格站立帧“平移”。
+    // 单帧位移远超自身步速视为被击退/冲撞，不算走路。
     const startSpeed = Math.min(12, this.def.speed * .18);
     const stopSpeed = Math.min(5, this.def.speed * .08);
-    const wantsMove = intentSpeed >= startSpeed && actualSpeed >= startSpeed;
+    const shoved = moved > Math.max(5, this.def.speed * Math.max(dt, 1 / 60) * 2.5);
+    const wantsMove = !shoved && actualSpeed >= startSpeed;
     if (wantsMove) this.walkTimer += dt;
-    else this.walkTimer = 0;
-    if (this.walkTimer >= 0.08) this.walking = true;
-    if (intentSpeed < stopSpeed || actualSpeed < stopSpeed) this.walking = false;
+    else if (!shoved) this.walkTimer = 0;
+    if (this.walkTimer >= 0.06) this.walking = true;
+    if (actualSpeed < stopSpeed) this.walking = false;
+    const intended = intentSpeed >= startSpeed;
 
-    if (this.walking) {
+    // The newer 4-frame Yellow Turban sheets have a short, readable step cycle.
+    const stride = this.walkSheet==='yellow_spear_walk'?7:this.walkSheet.startsWith('yellow_')?10:WALK_STRIDES[this.kind] ?? 18;
+    if (this.walking && !shoved) {
+      // 朝向跟随自己的移动意图；纯被推挤时保持原朝向（不随推力乱转身）。
       const blend = 1 - Math.exp(-12 * dt);
-      this.facingVx += (dx / Math.max(dt, .0001) - this.facingVx) * blend;
-      this.facingVy += (dy / Math.max(dt, .0001) - this.facingVy) * blend;
+      const fx = intended ? this.intentDx : 0, fy = intended ? this.intentDy : 0;
+      if (intended) {
+        this.facingVx += (fx / Math.max(dt, .0001) - this.facingVx) * blend;
+        this.facingVy += (fy / Math.max(dt, .0001) - this.facingVy) * blend;
+      }
       const ax = Math.abs(this.facingVx);
       const ay = Math.abs(this.facingVy);
       let next = this.direction;
@@ -320,18 +341,43 @@ export class Enemy {
       }
       this.frameElapsed += dt;
       this.walkDistance += moved;
-    } else {
+      // Tie cadence to travelled distance so eased movement and low FPS stay in sync, but never
+      // slower than ~7 frame changes per second (slow archers / crowd-pushed units no longer slide).
+      const effStride = Math.min(stride, Math.max(4, actualSpeed / 7));
+      this.stepPhase += moved / effStride;
+    } else if (!this.walking) {
       this.walkDistance = 0;
+      this.stepPhase = 0;
     }
-    // The newer 4-frame Yellow Turban sheets have a short, readable step cycle.
-    // Tie cadence to travelled distance so eased movement and low FPS stay in sync.
-    const stride = this.walkSheet==='yellow_spear_walk'?7:this.walkSheet.startsWith('yellow_')?10:WALK_STRIDES[this.kind] ?? 18;
-    const frame = this.walking ? Math.floor(this.walkDistance / stride) % 4 : 0;
+    const frame = this.walking ? Math.floor(this.stepPhase) % 4 : 0;
     const key = `${this.direction}_${frame}`;
     if (key !== this.appliedFrame || this.sprite.texture.key !== visualTextureKey(this.scene,this.walkSheet)) {
-      this.sprite.setTexture(visualTextureKey(this.scene,this.walkSheet), key);
+      this.applyFrame(visualTextureKey(this.scene,this.walkSheet), key);
       this.appliedFrame = key;
     }
+    // 行走帧本身腿部变化很小（尤其正对/背对镜头）：叠加每步约 2.5px 的上下起伏、伸缩与左右摆动，
+    // 缩到 50px 左右也能一眼看出在走。
+    const step = this.walking ? Math.sin(Math.PI * this.stepPhase) : 0;
+    this.stepStretch = Math.abs(step);
+    this.sprite.setRotation(step * (this.direction === 'left' || this.direction === 'right' ? .06 : .05));
+    this.applyScale();
+  }
+
+  /** 设置帧并按素材比例校正缩放；非行走调用会清除步伐摆动。 */
+  private applyFrame(key: string, frame: string): void {
+    this.sprite.setTexture(key, frame);
+    this.frameScale = this.walkSheet && this.kind !== 'boss' ? figureCorrection(this.scene, this.walkSheet, key, frame) : 1;
+    this.stepStretch = 0;
+    this.sprite.setRotation(0);
+    this.applyScale();
+  }
+
+  private applyScale(): void {
+    if (!this.walkSheet) return;
+    const k = this.baseScaleY * this.frameScale;
+    this.sprite.setScale(k * (1 - .025 * this.stepStretch), k * (1 + .05 * this.stepStretch));
+    // 起伏：抬高原点即整体上移（脚底阴影不动），每步最高约 2.5 像素。
+    this.sprite.setOrigin(this.sprite.originX, this.baseOriginY + 2.5 * this.stepStretch / Math.max(1, this.sprite.frame.height * k));
   }
 
   flash(now: number): void {

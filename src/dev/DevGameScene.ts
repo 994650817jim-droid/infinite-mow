@@ -1,9 +1,15 @@
-import { BALANCE, DEPTH, FONT, GAME_HEIGHT, GAME_WIDTH, IS_DESKTOP } from '../config';
+import { BALANCE, DEPTH, FONT, GAME_HEIGHT, GAME_WIDTH, IS_DESKTOP, switchLayout } from '../config';
 import type { EnemyDef } from '../data/enemies';
 import type { RelicSchool } from '../data/relics';
 import { Enemy } from '../entities/Enemy';
 import { Ally, type AllyKind } from '../entities/Ally';
-import { createDevPanel } from './DevPanel';
+import Phaser from 'phaser';
+import { createDevPanel, type DevSection } from './DevPanel';
+import { getCharacter } from '../data/characters';
+import { TROOPS } from '../data/legion';
+import { TACTICS, TAG_NAMES, type TacticId } from '../data/builds';
+import { chapterBossTime } from '../data/chapters';
+import { waveIndexAt } from '../data/waves';
 import { GUANDAO_TABLE, SPEAR_PIERCE, WEAPON_DEFS } from '../weapons/registry';
 import type { RunStats, WeaponState } from '../types';
 import { GameScene } from '../scenes/GameScene';
@@ -46,6 +52,7 @@ export class DevGameScene extends GameScene {
     this.debugModified = true;
   }
 
+  /** DEV 面板：按当前局动态生成按钮；保留旧动作名供既有测试脚本使用。 */
   private setupDevPanel(): void {
     const scene = this;
     const mark = (): void => { scene.debugModified = true; };
@@ -54,68 +61,187 @@ export class DevGameScene extends GameScene {
       if (scene.boss) scene.boss.hp = scene.boss.maxHp;
       mark();
     };
+    const nativeWeapon = (): string => getCharacter(scene.player.growth.character).startWeapon;
+    const kinds: AllyKind[] = ['swordsman', 'spearman', 'archer', 'crossbowman', 'guardian', 'rider', 'halberdier', 'medic'];
+    const waves = scene.chapter.waves;
     const actions: Record<string, () => void> = {
       worldMap: () => { scene.registry.remove('campaignTransfer'); scene.scene.start('WorldMapScene'); },
       homeCity: () => { scene.registry.remove('campaignTransfer'); scene.scene.start('CityScene'); },
-      chapter1: () => { scene.registry.remove('campaignTransfer'); scene.registry.remove('thirdTransfer');scene.registry.set('runConfig', {character:scene.runConfig.character,chapter:'huangjin',stage:1});scene.scene.start('GameScene'); },
-      chapter3:()=>{this.registry.remove('campaignTransfer');this.scene.start('ThirdChapterScene');},
-      chapter2: () => { scene.registry.remove('campaignTransfer'); scene.registry.remove('thirdTransfer');scene.registry.set('runConfig', {character:scene.runConfig.character,chapter:'hulao',westStage:1});scene.scene.start('GameScene'); },
+      chapter1: () => { scene.registry.remove('campaignTransfer'); scene.registry.remove('thirdTransfer'); scene.registry.set('runConfig', { character: scene.runConfig.character, chapter: 'huangjin', stage: 1 }); scene.scene.start('GameScene'); },
+      chapter2: () => { scene.registry.remove('campaignTransfer'); scene.registry.remove('thirdTransfer'); scene.registry.set('runConfig', { character: scene.runConfig.character, chapter: 'hulao', westStage: 1 }); scene.scene.start('GameScene'); },
+      chapter3: () => { scene.registry.remove('campaignTransfer'); scene.scene.start('ThirdChapterScene'); },
       selectStart: () => { scene.scene.start('MenuScene'); },
-      'level+1': () => { scene.devLevelUp(); },
-      level5: () => { while (scene.player.level < 5) scene.devLevelUp(); },
-      level10: () => { while (scene.player.level < 10) scene.devLevelUp(); },
-      wave1: () => { scene.devSetTime(scene.chapter.waves[0]?.start + .1); mark(); },
-      wave2: () => { scene.devSetTime(scene.chapter.waves[1]?.start + .1); mark(); },
-      wave3: () => { scene.devSetTime(scene.chapter.waves[2]?.start + .1); mark(); },
-      wave4: () => { scene.devSetTime(scene.chapter.waves[3]?.start + .1); mark(); },
-      wave5: () => { scene.devSetTime(scene.chapter.waves[4]?.start + .1); mark(); },
-      wave6: () => { scene.devSetTime(scene.chapter.waves[5]?.start + .1); mark(); },
-      wave7: () => { if (scene.chapter.waves[6]) scene.devSetTime(scene.chapter.waves[6].start + .1); },
-      wave8: () => { if (scene.chapter.waves[7]) scene.devSetTime(scene.chapter.waves[7].start + .1); },
-      'time+10': () => { scene.devSetTime(scene.elapsed + 10); mark(); },
-      'speed0.5': () => { scene.devTimeScale = 0.5; mark(); },
-      speed1: () => { scene.devTimeScale = 1; mark(); },
-      speed2: () => { scene.devTimeScale = 2; mark(); },
-      speed4: () => { scene.devTimeScale = 4; mark(); },
-      boss: () => { ensureBoss(); },
-      boss50: () => { if (scene.boss) scene.boss.hp = scene.boss.maxHp * 0.5; mark(); },
-      bossEnergy: () => { scene.bossEnergy = 100; if (scene.lubu) scene.lubu.energy = 100; mark(); },
-      bossUlt: () => { if(scene.tryCustomBossSkill()){mark();return;}if (scene.lubu) scene.lubu.tryUltimate(scene.combatNow); if (scene.boss && !scene.lubu) scene.startBossUltimate(scene.combatNow); mark(); },
+      reset: () => { scene.devTimeScale = 1; scene.scene.restart(); },
+      layoutMobile: () => { if (IS_DESKTOP) switchLayout('mobile'); },
+      layoutDesktop: () => { if (!IS_DESKTOP) switchLayout('desktop'); },
+      // 成长：走真实升级流程（出现三选一），不再只改等级数字。
+      'level+1': () => { scene.devGrantLevels(1, false); },
+      level5: () => { scene.devGrantLevels(Math.max(0, 5 - scene.player.level), true); },
+      level10: () => { scene.devGrantLevels(Math.max(0, 10 - scene.player.level), true); },
+      autoLevel5: () => { scene.devGrantLevels(5, true); },
+      weaponNative1: () => { scene.devGiveWeapon(nativeWeapon(), 1); },
+      weaponNative3: () => { scene.devGiveWeapon(nativeWeapon(), 3); },
+      weaponNative5: () => { scene.devGiveWeapon(nativeWeapon(), 5); },
+      randomTactic: () => { const b = scene.player.growth.build, ids = (Object.keys(TACTICS) as TacticId[]).filter(id => b.canLearn(id)); if (ids.length) { b.learn(ids[Math.floor(Math.random() * ids.length)]); mark(); } },
+      attributes4: () => { scene.player.growth.addAttributePoints(4); mark(); },
+      // 旧动作名（测试脚本兼容）：非本命武器仅用于混搭测试。
       weaponSpear1: () => { scene.devGiveWeapon('spear_orbit', 1); },
       weaponSpear5: () => { scene.devGiveWeapon('spear_orbit', 5); },
       weaponBow3: () => { scene.devGiveWeapon('crossbow', 3); },
       weaponFlag3: () => { scene.devGiveWeapon('flame_banner', 3); },
       clearWeapons: () => { scene.player.weapons = []; mark(); },
+      'time+10': () => { scene.devSetTime(scene.elapsed + 10); mark(); },
+      // 跳到 Boss 前：跳过沿途招兵弹窗（视为已招），直接进入 Boss 登场前 3 秒。
+      toBoss: () => { for (let i = 0; i <= waves.length; i++) scene.recruitedWaves.add(i); scene.pendingRecruit = false; scene.devSetTime(Math.max(scene.elapsed, chapterBossTime(scene.chapter) - 3)); mark(); },
+      closePopup: () => { if (scene.mode === 'recruit') { scene.recruitedWaves.add(scene.waveIndex); scene.freeRecruit = false; scene.pendingRecruit = false; scene.resumePendingChoices(); } else if (scene.mode === 'levelup') scene.chooseUpgrade(0); else if (scene.mode === 'pause') scene.togglePause(); },
+      'speed0.5': () => { scene.devTimeScale = 0.5; mark(); },
+      speed1: () => { scene.devTimeScale = 1; mark(); },
+      speed2: () => { scene.devTimeScale = 2; mark(); },
+      speed4: () => { scene.devTimeScale = 4; mark(); },
+      boss: () => { ensureBoss(); },
+      boss50: () => { if (scene.boss) { scene.boss.hp = scene.boss.maxHp * 0.5; scene.ensureBossPhase2(); } mark(); },
+      bossEnergy: () => { scene.bossEnergy = 100; if (scene.lubu) scene.lubu.energy = 100; mark(); },
+      bossUlt: () => { if (scene.tryCustomBossSkill()) { mark(); return; } if (scene.lubu) scene.lubu.tryUltimate(scene.combatNow); if (scene.boss && !scene.lubu) scene.startBossUltimate(scene.combatNow); mark(); },
+      bossSkill: () => { if (!scene.boss?.active) ensureBoss(); if (scene.yellow) { scene.yellow.forceNextSkill(); mark(); return; } actions.bossUlt(); },
+      killBoss: () => { if (!scene.boss?.active) ensureBoss(); if (scene.boss) scene.killEnemy(scene.boss); mark(); },
+      winNow: () => { actions.killBoss(); },
+      loseNow: () => { scene.player.damageImmune = false; scene.finish(false, 'death'); },
       allySword: () => { scene.devSpawnAlly('swordsman'); },
       allyArcher: () => { scene.devSpawnAlly('archer'); },
       allySpear: () => { scene.devSpawnAlly('spearman'); },
-      allyLevel3: () => { for (const k of ['swordsman', 'spearman', 'archer', 'crossbowman', 'guardian', 'rider', 'halberdier', 'medic'] as AllyKind[]) while (scene.legion.levels[k] < 3) scene.legion.train(k, true); mark(); },
+      allyLevel3: () => { for (const k of kinds) while (scene.legion.levels[k] < 3) scene.legion.train(k, true); mark(); },
       legionFood: () => { scene.legion.food += 100; mark(); },
-      legionEight: () => { for (const k of ['swordsman', 'spearman', 'archer', 'crossbowman', 'guardian', 'rider', 'halberdier', 'medic'] as AllyKind[]) scene.legion.recruit(k, 3, true, true); mark(); },
+      legionFood1000: () => { scene.legion.food += 1000; mark(); },
+      legionEight: () => { for (const k of kinds) scene.legion.recruit(k, 3, true, true); mark(); },
       clearAllies: () => { scene.devClearAllies(); },
       supply: () => { scene.supplies?.spawnForTest(); mark(); },
       brazier: () => { scene.supplies?.spawnForTest(35); mark(); },
       heal: () => { scene.player.hp = scene.player.maxHp; mark(); },
       god: () => { scene.player.damageImmune = !scene.player.damageImmune; mark(); },
+      oneHit: () => { scene.devOneHit = !scene.devOneHit; mark(); },
       enemy50: () => { for (let i = 0; i < 50; i += 1) scene.spawnAroundPlayer('infantry'); mark(); },
       enemy150: () => { for (let i = 0; i < 150; i += 1) scene.spawnAroundPlayer('infantry'); mark(); },
       clearEnemies: () => { scene.devClearEnemies(); },
       movementNew: () => { scene.crowdSteering = true; for (const e of scene.enemies) e.moveVx = e.moveVy = 0; mark(); },
       movementOld: () => { scene.crowdSteering = false; for (const e of scene.enemies) e.moveVx = e.moveVy = 0; mark(); },
+      ranges: () => { scene.devRanges = !scene.devRanges; if (!scene.devRanges) scene.devRangeGfx?.clear(); },
+      hideHud: () => { scene.devToggleHud(); },
       presetLow: () => { scene.devPreset('low'); },
       presetNormal: () => { scene.devPreset('normal'); },
       presetStrong: () => { scene.devPreset('strong'); },
-      reset: () => { scene.devTimeScale = 1; scene.scene.restart(); },
+    };
+    waves.forEach((w, i) => { actions['wave' + (i + 1)] = () => { scene.devSetTime(w.start + .1); mark(); }; });
+    for (const k of kinds) actions['ally_' + k] = () => { scene.devSpawnAlly(k); };
+    const speed = (v: number) => () => scene.devTimeScale === v;
+    const sections: DevSection[] = [
+      { title: '跳转（离开当前测试局）', items: [
+        { key: 'chapter1', label: '从第一章开始' }, { key: 'chapter2', label: '从第二章开始' }, { key: 'chapter3', label: '第三章选关' },
+        { key: 'worldMap', label: '天下地图' }, { key: 'homeCity', label: '义军营寨' }, { key: 'selectStart', label: '返回选将' }, { key: 'reset', label: '重开本关' },
+        { key: 'layoutMobile', label: '手机布局', active: () => !IS_DESKTOP }, { key: 'layoutDesktop', label: '电脑布局', active: () => IS_DESKTOP },
+      ] },
+      { title: '时间 / 速度', items: [
+        ...waves.map((w, i) => ({ key: 'wave' + (i + 1), label: '第' + (i + 1) + '波', hint: w.name })),
+        { key: 'time+10', label: '+10秒' }, { key: 'toBoss', label: '跳到Boss前', hint: '跳过沿途招兵' }, { key: 'closePopup', label: '关闭弹窗', hint: '招兵弹窗跳过 / 三选一选第一项 / 取消暂停' },
+        { key: 'speed0.5', label: '0.5×', active: speed(.5) }, { key: 'speed1', label: '1×', active: speed(1) }, { key: 'speed2', label: '2×', active: speed(2) }, { key: 'speed4', label: '4×', active: speed(4) },
+      ] },
+      { title: '成长（真实三选一）', items: [
+        { key: 'level+1', label: '升1级·选卡' }, { key: 'autoLevel5', label: '连升5级·自动选' }, { key: 'level10', label: '到Lv10·自动选' },
+        { key: 'weaponNative1', label: '本命武器Lv1' }, { key: 'weaponNative3', label: 'Lv3' }, { key: 'weaponNative5', label: 'Lv5' },
+        { key: 'randomTactic', label: '随机战法+1' }, { key: 'attributes4', label: '属性点+4' },
+      ] },
+      { title: 'Boss', items: [
+        { key: 'boss', label: '召唤Boss' }, { key: 'boss50', label: '50%血·二阶段' }, { key: 'bossEnergy', label: '满能量' },
+        { key: 'bossSkill', label: '下一个技能' }, { key: 'bossUlt', label: '释放大招' }, { key: 'killBoss', label: '击败Boss' },
+      ] },
+      { title: '蜀军', items: [
+        ...kinds.map(k => ({ key: 'ally_' + k, label: TROOPS[k].name })),
+        { key: 'legionEight', label: '各3人' }, { key: 'allyLevel3', label: '全体Lv3' }, { key: 'legionFood', label: '+100粮' }, { key: 'legionFood1000', label: '+1000粮' }, { key: 'clearAllies', label: '清空' },
+      ] },
+      { title: '主将 / 敌人', items: [
+        { key: 'heal', label: '回满血' }, { key: 'god', label: '无敌', active: () => scene.player.damageImmune }, { key: 'oneHit', label: '秒杀', active: () => scene.devOneHit, hint: '主将与蜀军伤害×10000' },
+        { key: 'enemy50', label: '+50敌' }, { key: 'enemy150', label: '+150敌' }, { key: 'clearEnemies', label: '清场' },
+        { key: 'supply', label: '补给罐' }, { key: 'brazier', label: '火盆' },
+        { key: 'movementNew', label: '新版群移', active: () => scene.crowdSteering }, { key: 'movementOld', label: '旧版追踪', active: () => !scene.crowdSteering },
+      ] },
+      { title: '结算 / 显示 / 预设', items: [
+        { key: 'winNow', label: '立即胜利' }, { key: 'loseNow', label: '立即失败' },
+        { key: 'ranges', label: '显示射程', active: () => scene.devRanges, hint: '主将武器实际可命中范围、敌人碰撞半径' }, { key: 'hideHud', label: '隐藏界面', active: () => scene.devHudHidden, hint: '截图用' },
+        { key: 'presetLow', label: '低构筑' }, { key: 'presetNormal', label: '普通构筑' }, { key: 'presetStrong', label: '强构筑' },
+      ] },
+    ];
+    const info = (): string => {
+      const p = scene.player, w = p.weapons.find(x => x.id === nativeWeapon()) ?? p.weapons[0], tags = p.growth.build.tags();
+      const tagText = (Object.keys(tags) as Array<keyof typeof tags>).filter(k => tags[k] > 0).map(k => TAG_NAMES[k] + tags[k]).join(' ') || '无';
+      const waveNo = Math.max(1, waveIndexAt(scene.elapsed, waves) + 1);
+      return [
+        `FPS ${Math.round(scene.game.loop.actualFps)} · ${scene.chapter.name}`,
+        `${getCharacter(p.growth.character).name} Lv${p.level} · 武器Lv${w?.level ?? 0} · HP ${Math.ceil(p.hp)}/${p.maxHp}`,
+        `${scene.elapsed.toFixed(1)}s · 第${waveNo}/${waves.length}波 · Boss ${chapterBossTime(scene.chapter)}s · ${scene.devTimeScale}×`,
+        `敌 ${scene.activeEnemyCount()} · 蜀军 ${scene.legion.count} · 军粮 ${scene.legion.food}`,
+        `构筑 ${tagText}`,
+        `${p.damageImmune ? '无敌 ' : ''}${scene.devOneHit ? '秒杀 ' : ''}${scene.debugModified ? '已修改(不计正式进度)' : '未修改'}`,
+      ].join('\n');
     };
     this.disposePanel?.();
-    this.disposePanel = createDevPanel(actions);
-    (window as unknown as { __DEV_INFO?: () => string }).__DEV_INFO = () => {
-      const fps = Math.round(scene.game.loop.actualFps);
-      const enemies = scene.enemies.filter((e) => e.active).length;
-      const allies = scene.allies.length;
-      return `FPS ${fps} | 敌 ${enemies} | 蜀军 ${allies} | 等级 ${scene.player.level} | 时间 ${scene.elapsed.toFixed(1)}s | 无敌:${scene.player.damageImmune ? '开' : '关'} | 修改:${scene.debugModified ? '是' : '否'}`;
-    };
+    this.disposePanel = createDevPanel({ sections, actions, info });
+    (window as unknown as { __DEV_INFO?: () => string }).__DEV_INFO = info;
     (this as unknown as { __DEV_ACTIONS?: Record<string, () => void> }).__DEV_ACTIONS = actions;
+  }
+
+  // ---- DEV 辅助 ----
+  private devOneHit = false;
+  private devRanges = false;
+  private devRangeGfx?: Phaser.GameObjects.Graphics;
+  private devHudHidden = false;
+  private devHiddenObjects: Phaser.GameObjects.GameObject[] = [];
+
+  /** 走真实升级：补足经验触发三选一；auto 时依次自动选第一项。 */
+  private devGrantLevels(count: number, auto: boolean): void {
+    if (count <= 0 || this.over) return;
+    this.debugModified = true;
+    for (let i = 0; i < count; i++) {
+      const gained = this.player.gainXp(Math.max(0, this.player.xpNext - this.player.xp) + .001);
+      this.pendingLevels += gained;
+    }
+    if (this.mode === 'none') this.openUpgrade();
+    if (!auto) return;
+    for (let guard = 0; guard < 60 && this.mode === 'levelup'; guard++) this.chooseUpgrade(0);
+  }
+
+  protected override hitEnemy(enemy: Enemy, rawDamage: number, time: number, source: 'melee' | 'arrow' | 'fire' = 'melee', fromAlly = false, weaponHit = true): boolean {
+    return super.hitEnemy(enemy, this.devOneHit ? rawDamage * 10000 : rawDamage, time, source, fromAlly, weaponHit);
+  }
+
+  override update(time: number, delta: number): void {
+    super.update(time, delta);
+    if (this.devRanges) this.drawDevRanges();
+  }
+
+  /** 射程叠加：主将本命武器实际可命中范围（金）、敌人碰撞半径（红）、近战友军射程（绿，最多 30 人）。 */
+  private drawDevRanges(): void {
+    const g = this.devRangeGfx ??= this.add.graphics().setDepth(DEPTH.fx + 5);
+    g.clear();
+    const p = this.player, id = getCharacter(p.growth.character).startWeapon, w = p.weapons.find(x => x.id === id);
+    if (w) {
+      const lv = Math.max(1, Math.min(5, w.level));
+      const reach = id === 'spear_orbit' ? Math.min(220, SPEAR_PIERCE[lv - 1].len * p.growth.spearLengthMultiplier() + SPEAR_PIERCE[lv - 1].width / 2)
+        : id === 'guandao' ? GUANDAO_TABLE[lv - 1].radius * p.passive.rangeMultiplier('guandao') : id === 'crossbow' ? 500 : 300;
+      g.lineStyle(2, 0xffd36a, .8).strokeCircle(p.x, p.y - (id === 'spear_orbit' ? 6 : 0), reach);
+    }
+    const view = this.cameras.main.worldView;
+    for (const e of this.enemies) if (e.active && view.contains(e.x, e.y)) g.lineStyle(1, e.kind === 'boss' ? 0xff4040 : 0xff8a7a, .7).strokeCircle(e.x, e.y, e.radius);
+    let n = 0;
+    for (const u of this.allies) if (u.active && !u.def.ranged && n++ < 30) g.lineStyle(1, 0x7fe0a0, .35).strokeCircle(u.x, u.y, u.def.range);
+  }
+
+  /** 隐藏/恢复所有固定在屏幕上的界面元素（截图用），DEV 面板本身是网页层不受影响。 */
+  private devToggleHud(): void {
+    if (this.devHudHidden) { for (const o of this.devHiddenObjects) (o as unknown as Phaser.GameObjects.Components.Visible).setVisible(true); this.devHiddenObjects = []; this.devHudHidden = false; return; }
+    for (const o of this.children.list) {
+      const c = o as unknown as { scrollFactorX?: number; visible?: boolean; depth?: number; setVisible?: (v: boolean) => void };
+      if (c.scrollFactorX === 0 && c.visible && (c.depth ?? 0) >= DEPTH.hud - 10 && c.setVisible) { c.setVisible(false); this.devHiddenObjects.push(o); }
+    }
+    this.devHudHidden = true;
   }
 
   private devGiveWeapon(id: string, level: number): void {
@@ -147,21 +273,17 @@ export class DevGameScene extends GameScene {
     this.bossSpawned = false;
   }
 
+  /** 预设只用本命武器（与正式规则一致）：低=Lv1+1兵，普通=Lv3+3兵+Lv5，强=Lv5+6兵+Lv10。 */
   private devPreset(kind: 'low' | 'normal' | 'strong'): void {
     this.debugModified = true;
+    const own = getCharacter(this.player.growth.character).startWeapon;
     this.player.weapons = [];
     this.devClearAllies();
     this.player.hp = this.player.maxHp;
-    if (kind === 'low') {
-      this.devGiveWeapon('spear_orbit', 1);
-      this.devSpawnAlly('swordsman');
-      return;
-    }
-    this.devGiveWeapon('spear_orbit', kind === 'strong' ? 5 : 3);
-    this.devGiveWeapon('crossbow', kind === 'strong' ? 5 : 2);
-    this.devGiveWeapon('flame_banner', kind === 'strong' ? 5 : 2);
-    const n = kind === 'strong' ? 5 : 3;
+    this.devGiveWeapon(own, kind === 'low' ? 1 : kind === 'normal' ? 3 : 5);
+    const n = kind === 'low' ? 1 : kind === 'normal' ? 3 : 6;
     for (let i = 0; i < n; i += 1) this.devSpawnAlly(i % 3 === 0 ? 'swordsman' : i % 3 === 1 ? 'archer' : 'spearman');
+    if (kind !== 'low') this.devGrantLevels(Math.max(0, (kind === 'normal' ? 5 : 10) - this.player.level), true);
   }
 
   private setupPerfMode(): void {

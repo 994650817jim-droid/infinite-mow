@@ -48,9 +48,13 @@ function weaponUpgrade(weapon: WeaponState, player: Player): UpgradeOption {
   const def = WEAPON_DEFS[weapon.id];
   const next = Math.min(def.maxLevel, weapon.level + 1);
   const damage = (level: number): string => def.damage(level, player.stats).toFixed(1).replace(/\.0$/, '');
-  let desc = `每次伤害 ${damage(weapon.level)} → ${damage(next)}
-攻击间隔 ${def.cooldown(weapon.level, player.stats).toFixed(2)} → ${def.cooldown(next, player.stats).toFixed(2)}秒`;
-  if (weapon.id === 'spear_orbit') desc += `\n枪数 ${weapon.level} → ${next}，穿透 ${SPEAR_PIERCE[next - 1].len}`;
+  // 只列出真正变化的数值；伤害附提升百分比，攻击间隔不变时不显示。
+  const d0 = def.damage(weapon.level, player.stats), d1 = def.damage(next, player.stats);
+  const c0 = def.cooldown(weapon.level, player.stats), c1 = def.cooldown(next, player.stats);
+  let desc = `每次伤害 ${damage(weapon.level)} → ${damage(next)}（+${Math.round((d1 / Math.max(.01, d0) - 1) * 100)}%）`;
+  if (Math.abs(c1 - c0) >= .005) desc += `\n攻击间隔 ${c0.toFixed(2)} → ${c1.toFixed(2)}秒`;
+  if (weapon.id === 'spear_orbit') desc += `\n枪数 ${weapon.level} → ${next}，每枪穿透${SPEAR_PIERCE[weapon.level - 1].cap === SPEAR_PIERCE[next - 1].cap ? SPEAR_PIERCE[next - 1].cap : SPEAR_PIERCE[weapon.level - 1].cap + '→' + SPEAR_PIERCE[next - 1].cap}人
+枪长 ${SPEAR_PIERCE[weapon.level - 1].len} → ${SPEAR_PIERCE[next - 1].len}`;
   if (weapon.id === 'guandao') desc += `\n范围 ${GUANDAO_TABLE[weapon.level - 1].radius} → ${GUANDAO_TABLE[next - 1].radius}${weapon.level < 3 && next >= 3 ? '，解锁二段刀气' : ''}`;
   return {
     id: `signature_weapon_${weapon.id}`,
@@ -122,7 +126,7 @@ export function martialDescription(id:MasteryId,level:number):string {
  dragon_gallop:'枪刺攻击速度提高'+(8*n)+'%。\n出枪更快，最多强化3级。',
  cloud_pierce:'枪刺长度增加'+(10*n)+'%，多穿透'+n+'名敌人。\n适合攻击密集敌群。',
  dragon_charge:'普通挥刀4次后，下一刀造成'+[140,165,190][i]+'%伤害。'+(n===3?'\n这一刀还能击退普通敌人。':''),
- dragging_blade:'主动移动'+[200,160,130][i]+'像素后，下次挥刀追加半月刀气。'+(n===3?'\n再追加一道较弱的回旋刀气。':''),
+ dragging_blade:'主动移动约'+['5','4','3'][i]+'个身位后，下次挥刀追加半月刀气。'+(n===3?'\n再追加一道较弱的回旋刀气。':''),
  steady_aim:'站立蓄势，最多5秒提高'+[15,20,25][i]+'个百分点暴击率。\n自动射击不打断，移动会逐渐失去蓄势。',
  pearl_volley:'每射击'+[5,4,3][i]+'次，自动多射一发70%伤害的箭。'+(n===3?'\n追加箭可再弹射一次。':''),
  wildfire:'战旗爆炸后，留下'+[1,1.8,2.5][i]+'秒残火。\n每半秒烧伤一次。'+(n===3?'燃烧范围也变大。':''),
@@ -159,6 +163,15 @@ function trinketOption(id: TrinketId, growth: RunGrowth, replace?: TrinketId): U
     apply: (_player, _weapons, current) => current?.equipTrinket(id, replace) };
 }
 
+/** 保底选项：原数值（+5生命/+5%拾取/+0.1回复）几乎无感，提高到可感知并各附带一个即时效果。 */
+export function foundationOptions():UpgradeOption[]{
+  return [
+    {id:'foundation_hp',name:'固本培元',desc:'最大生命+12\n并立即回复12生命',kind:'foundation',categoryLabel:'基础成长',apply:p=>{p.stats.maxHpBonus+=12;p.heal(12);}},
+    {id:'foundation_pickup',name:'搜集辎重',desc:'拾取范围+15%\n并立刻收拢全场军功宝石',kind:'foundation',categoryLabel:'基础成长',apply:p=>{p.stats.pickupRadius*=1.15;const s=p.scene as unknown as {gemMagnetUntil?:number;combatNow?:number};s.gemMagnetUntil=(s.combatNow??0)+2500;}},
+    {id:'foundation_recovery',name:'调息养元',desc:'每秒生命恢复+0.3\n并立即回复15%生命',kind:'foundation',categoryLabel:'基础成长',apply:p=>{p.stats.regen+=.3;p.heal(Math.round(p.maxHp*.15));}},
+  ];
+}
+
 /** 只从当前角色可用的局内成长中抽取三张唯一奖励；绝不授予其他武将的武器。 */
 export function buildUpgradeOptions(player: Player, weapons: WeaponState[], growth: RunGrowth = player.growth): UpgradeOption[] {
   const pool: UpgradeOption[] = [];
@@ -189,11 +202,7 @@ export function buildUpgradeOptions(player: Player, weapons: WeaponState[], grow
     }});
   }
   // Potions leave the normal pool. Valid, non-healing fallback choices avoid exhausted-pool deadlocks.
-  const foundations:UpgradeOption[]=[
-    {id:'foundation_hp',name:'固本培元',desc:'最大生命增加5，恢复5生命',kind:'foundation',categoryLabel:'基础成长',apply:p=>{p.stats.maxHpBonus+=5;p.heal(5);}},
-    {id:'foundation_pickup',name:'搜集辎重',desc:'拾取范围增加5%',kind:'foundation',categoryLabel:'基础成长',apply:p=>{p.stats.pickupRadius*=1.05;}},
-    {id:'foundation_recovery',name:'调息养元',desc:'每秒生命恢复增加0.1',kind:'foundation',categoryLabel:'基础成长',apply:p=>{p.stats.regen+=.1;}},
-  ];
+  const foundations=foundationOptions();
   if(!core)pool.push(foundations[0]);
   const guaranteed=core??foundations[0];
   const weight=(option:UpgradeOption):number=>{const id=option.id.replace('tactic_','')as TacticId;return option.kind==='tactic'?1+Math.min(2,tags[TACTICS[id].tag]*.5):1;};

@@ -1,3 +1,4 @@
+import {playMenuMusic,menuMusic} from '../systems/Music';
 import {isChapterTestRun} from '../systems/ChapterProgress';
 import {worldUnlocked} from '../world/WorldStore';
 import Phaser from 'phaser';
@@ -8,7 +9,7 @@ export class CityScene extends Phaser.Scene {
  private readonly labels:Partial<Record<BuildingId,Phaser.GameObjects.Text>>={};
  constructor(){super('CityScene');}
  preload(){if(!worldUnlocked()&&!isChapterTestRun())return;worldAssets(this,'city_art','assets/world/camp.webp');if(!this.textures.exists('art_panel'))this.load.image('art_panel','assets/processed/overhaul/bronze-panel-mobile.png');}
- create(){
+ create(){playMenuMusic(this);
   if(!worldUnlocked()&&!isChapterTestRun()){this.registry.set('loadBattle',true);this.scene.start(this.registry.get('battleReady')?'MenuScene':'BootScene');return;}
   // Battle atlases are reloaded on the next expedition, never kept alongside strategic artwork.
   const keys=this.registry.get('battleTextureKeys') as string[]|undefined;

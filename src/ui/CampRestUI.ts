@@ -1,6 +1,5 @@
-import Phaser from 'phaser';import {GAME_WIDTH as W,GAME_HEIGHT as H,IS_DESKTOP as D,FONT,HEADING_FONT,DEPTH} from '../config';import type {Player} from '../entities/Player';import type {Legion} from '../systems/Legion';import {CampMarket,campOption} from '../systems/CampMarket';import {CAMP_TRAINING,type CampTrainingId,type CampGroup} from '../data/camp';import {INITIAL_TROOPS,TROOPS,type TroopKind} from '../data/legion';import {TACTICS,TREASURES,TAG_NAMES,tacticDescription,type TacticId,type TreasureId,type BuildTag} from '../data/builds';import {AWAKENINGS,activeAwakenings} from '../data/awakenings';import {getCharacter} from '../data/characters';import {WEAPON_META} from '../data/upgrades';import {ATTRIBUTE_INFO,MARTIALS,type AttributeId,type MasteryId} from '../systems/RunGrowth';
-const GROUPS:CampGroup[]=['front','middle','rear'];const GN={front:'前排',middle:'中排',rear:'后排'};
-import {homeCommand} from './HomeCommand';
+import Phaser from 'phaser';import {GAME_WIDTH as W,GAME_HEIGHT as H,IS_DESKTOP as D,FONT,HEADING_FONT,DEPTH,screenPoint} from '../config';import type {Player} from '../entities/Player';import type {Legion} from '../systems/Legion';import {CampMarket,campOption} from '../systems/CampMarket';import {CAMP_TRAINING,type CampTrainingId,type CampGroup} from '../data/camp';import {INITIAL_TROOPS,TROOPS,type TroopKind} from '../data/legion';import {TACTICS,TREASURES,TAG_NAMES,tacticDescription,type TacticId,type TreasureId,type BuildTag} from '../data/builds';import {AWAKENINGS,activeAwakenings} from '../data/awakenings';import {getCharacter} from '../data/characters';import {WEAPON_META} from '../data/upgrades';import {ATTRIBUTE_INFO,MARTIALS,type AttributeId,type MasteryId} from '../systems/RunGrowth';
+import {homeCommand,warPanelTexture} from './HomeCommand';
 import {visualTextureKey} from '../systems/ReadableTextures';
 export class CampRestUI {
  readonly root:Phaser.GameObjects.Container;
@@ -10,7 +9,7 @@ export class CampRestUI {
  private next:Phaser.GameObjects.Text;
  private detail:Phaser.GameObjects.Text;
  private tabs:Phaser.GameObjects.Text[]=[];
- private tabFrames:Phaser.GameObjects.Graphics[]=[];
+ private tabFrames:Phaser.GameObjects.Image[]=[];
  private buildSection=0;private buildOffset=0;private modal?:Phaser.GameObjects.Container;
  private market?:CampMarket;private visit='';private tab=0;private page=0;private destination='';private notice='';
  constructor(private scene:Phaser.Scene,private player:Player,private army:Legion,depart:()=>void){
@@ -24,7 +23,7 @@ export class CampRestUI {
   this.root.add([this.header,this.resources,this.next]);
   const labels=['招兵营','练兵营','军需商人','将帅帐'],icons=['icon_shu_swordsman','growth_icon_might','build_icon_return_drum','growth_icon_points'];
   const tabW=D?172:(W-48)/4,tabY=D?96:155;
-  labels.forEach((label,i)=>{const x=D?40+i*180:24+i*tabW;const frame=scene.add.graphics().setScrollFactor(0);this.tabFrames.push(frame);this.root.add(frame);
+  labels.forEach((label,i)=>{const x=D?40+i*180:24+i*tabW;const frame=scene.add.image(x+(tabW-6)/2,tabY+23,warPanelTexture(scene,tabW-6,46)).setScrollFactor(0);this.tabFrames.push(frame);this.root.add(frame);
    if(scene.textures.exists(icons[i]))this.root.add(scene.add.image(x+21,tabY+(D?22:21),icons[i]).setDisplaySize(D?29:27,D?29:27).setScrollFactor(0));
    const hit=this.text(x,tabY,label,D?17:16).setPadding(D?43:39,D?12:13,0,0).setFixedSize(tabW-6,46).setInteractive({useHandCursor:true}).setName('camp-tab-'+i);
    hit.on('pointerdown',()=>{this.tab=i;this.page=0;this.notice='';this.render();}).on('pointerover',()=>hit.setColor('#fff0cd')).on('pointerout',()=>hit.setColor(i===this.tab?'#f6dfb0':'#bcae93'));this.tabs.push(hit);this.root.add(hit);
@@ -33,46 +32,43 @@ export class CampRestUI {
   this.detail=this.text(D?40:28,D?H-103:H-176,'',D?13:15).setWordWrapWidth(W-(D?80:56),true);this.detail.setMaxLines(D?3:5);this.root.add(this.detail);
   const command=homeCommand(scene,W/2,H-(D?35:48),D?290:W-72,D?48:56,'率军出征',true);[command.g,command.caption,command.hit].forEach(o=>o.setScrollFactor(0));command.hit.setName('camp-depart').on('pointerdown',depart);this.root.add([command.g,command.caption,command.hit]);
  }
+ private sound(kind:string){(this.scene as unknown as {sfx?:{play(k:string):void}}).sfx?.play(kind);}
  private text(x:number,y:number,s:string,size=16){return this.scene.add.text(x,y,s,{fontFamily:FONT,fontSize:size+'px',color:'#dfd4bd',resolution:2,stroke:'#17120c',strokeThickness:1,wordWrap:{width:W-100,useAdvancedWrap:true}}).setScrollFactor(0);}
+ /** 营帐按钮：沿用首页的漆匾样式；返回可点击区域（保留原 setName / pointerdown 接口）。 */
  private button(x:number,y:number,s:string,fn:()=>void,width=150,enabled=true){
-  const g=this.scene.add.graphics().setScrollFactor(0);this.body.add(g);
-  const paint=(hover=false,pressed=false)=>{const off=pressed?1:0;g.clear().fillStyle(enabled?(hover?0x5a432a:0x352a1d):0x292823,.9).lineStyle(1,enabled?0x9a7b48:0x5c584c,.9).beginPath().moveTo(x+5,y+off).lineTo(x+width-5,y+off).lineTo(x+width,y+5+off).lineTo(x+width,y+39+off).lineTo(x+width-5,y+44+off).lineTo(x+5,y+44+off).lineTo(x,y+39+off).lineTo(x,y+5+off).closePath().fillPath().strokePath();g.lineStyle(1,enabled?0xb79a61:0x625c4f,.35).lineBetween(x+8,y+4+off,x+width-8,y+4+off).lineBetween(x+8,y+40+off,x+width-8,y+40+off);};paint();
-  const t=this.text(x,y,s,D?15:17).setPadding(4,11).setFixedSize(width,44).setAlign('center').setColor(enabled?'#efd8aa':'#938b7b');
-  if(enabled)t.setInteractive({useHandCursor:true}).on('pointerdown',()=>{paint(true,true);fn();}).on('pointerover',()=>paint(true)).on('pointerout',()=>paint()).on('pointerup',()=>paint(true));
-  return t;
+  const c=homeCommand(this.scene,x+width/2,y+22,width,42,s,false,enabled,D?15:16);
+  for(const o of [c.g,c.caption,c.hit])o.setScrollFactor(0);this.body.add([c.g,c.caption]);
+  if(enabled)c.hit.on('pointerdown',()=>fn());c.hit.setData('paint',c.paint);
+  return c.hit;
  }
 
  open(key:string,destination:string){if(this.visit!==key){this.visit=key;this.market=new CampMarket(this.player);this.page=this.tab=0;this.buildSection=this.buildOffset=0;this.notice='';}this.destination=destination;this.render();}
  setVisible(visible:boolean){this.root.setVisible(visible);if(!visible){this.modal?.destroy();this.modal=undefined;}}
- private plate(x:number,y:number,w:number,h:number){
-  const g=this.scene.add.graphics().setScrollFactor(0);g.fillStyle(0x1b1811,.78).fillRect(x,y,w,h).lineStyle(1,0x8c734a,.9).strokeRect(x,y,w,h);
-  g.lineStyle(1,0x504532,.6).strokeRect(x+4,y+4,w-8,h-8);
-  for(const side of[-1,1])for(const bottom of[false,true]){const xx=side<0?x:x+w,yy=bottom?y+h:y,dy=bottom?-1:1;g.lineStyle(2,0xc1a16a,.9).beginPath().moveTo(xx-side*16,yy).lineTo(xx,yy).lineTo(xx,yy+dy*16).strokePath();}
-  // Fine engraved hatch on the foot of each copper-edged card.
-  g.lineStyle(1,0x8c734a,.16);for(let i=14;i<w-14;i+=13)g.lineBetween(x+i,y+h-7,x+i+4,y+h-11);
-  this.body.add(g);return g;
+ private plate(x:number,y:number,w:number,h:number,accent=false){
+  const img=this.scene.add.image(x+w/2,y+h/2,warPanelTexture(this.scene,w,h,accent)).setDisplaySize(Math.round(w)+16,Math.round(h)+16).setScrollFactor(0);
+  this.body.add(img);return img;
  }
  private card(index:number){const x=D?40+index*(W-68)/3:24,y=D?158:229,w=D?(W-104)/3:W-48,h=D?246:161;return{x,y:y+(D?0:index*174),w,h};}
  private icon(x:number,y:number,key:string,size:number){if(this.scene.textures.exists(key))this.body.add(this.scene.add.image(x,y,key).setDisplaySize(size,size).setScrollFactor(0));}
  private row(y:number,title:string,description:string,icon?:string,compact=false){const x=D?40:24,w=W-(D?80:48),h=D?66:92;this.plate(x,y,w,h);if(icon)this.icon(x+28,y+27,icon,35);const offset=icon?54:16;this.body.add(this.text(x+offset,y+9,title,D?17:19).setWordWrapWidth(w-offset-16,true));this.body.add(this.text(x+16,y+(D?36:43),compact&&description.length>(D?80:44)?description.slice(0,D?80:44)+'…':description,D?12:14).setWordWrapWidth(w-32,true));return{x,y,w,h};}
  private render(){
-  this.body.removeAll(true);this.tabs.forEach((t,i)=>{t.setColor(i===this.tab?'#f6dfb0':'#bcae93');const g=this.tabFrames[i],x=t.x,y=t.y,w=t.width;g.clear().fillStyle(i===this.tab?0x4f3922:0x1a1610,i===this.tab?.88:.55).fillRect(x,y,w,46).lineStyle(1,i===this.tab?0xc6a36a:0x655438,.8).strokeRect(x,y,w,46);if(i===this.tab)g.fillStyle(0xc6a36a).fillRect(x+12,y+44,w-24,2);});
+  this.body.removeAll(true);this.tabs.forEach((t,i)=>{t.setColor(i===this.tab?'#f6dfb0':'#bcae93');const w=t.width;this.tabFrames[i].setTexture(warPanelTexture(this.scene,w,46,i===this.tab)).setDisplaySize(w+16,46+16).setAlpha(i===this.tab?1:.82);});
   this.resources.setText('军粮 '+this.army.food+'   /   当前兵力：'+this.army.count);this.next.setText('下一关 · '+this.destination);this.detail.setText(this.notice);
   if(this.tab===0)this.renderRecruit();if(this.tab===1)this.renderTraining();if(this.tab===2)this.renderMarket();if(this.tab===3)this.renderBuild(D?154:229);
  }
  private renderRecruit(){
+  // 只保留“招募”：编组位置沿用默认/既有设定，生命不在此展示。价格随在编兵力递增。
   const roles=['持盾护卫 · 近身作战','长枪突刺 · 较远近战','远程弓箭 · 后排支援'];
-  INITIAL_TROOPS.forEach((kind,i)=>{const u=this.army.units.filter(a=>a.active&&a.kind===kind),group=this.army.groups[kind]??GROUPS[i],r=this.card(i),{x,y,w,h}=r;this.plate(x,y,w,h);
-   const sheet='shu_'+kind+'_walk_sheet',key=visualTextureKey(this.scene,sheet);if(this.scene.textures.exists(key))this.body.add(this.scene.add.image(x+(D?w/2:48),y+(D?85:77),key,'down_0').setDisplaySize(D?100:90,D?100:90).setScrollFactor(0));else this.icon(x+(D?w/2:48),y+(D?85:77),'icon_shu_'+kind,D?78:72);
-   this.body.add(this.text(x+(D?17:101),y+15,TROOPS[kind].name,D?21:22).setFontFamily(HEADING_FONT).setColor('#efdbb4'));
-   this.body.add(this.text(x+w-17,y+18,u.length+'人',D?17:19).setOrigin(1,0).setColor('#d1b57e'));
-   this.body.add(this.text(x+(D?17:101),y+(D?132:49),roles[i],D?13:15));
-   const hp=Math.ceil(u.reduce((n,a)=>n+a.hp,0)),max=u.reduce((n,a)=>n+a.maxHp,0);this.body.add(this.text(x+(D?17:101),y+(D?156:73),'生命 '+hp+' / '+max,D?15:17).setColor('#afc2a0'));
-   const poor=this.army.food<TROOPS[kind].cost;
-   const buy=this.button(x+w-(D?132:146),y+h-55,poor?'军粮不足':'招募 · '+TROOPS[kind].cost+'粮',()=>{this.notice=this.army.recruit(kind,1)?'新兵入队 · 出征时随军':'无法招募';this.render();},D?115:133,!poor).setName('camp-recruit-'+kind);this.body.add(buy);
-   this.body.add(this.button(x+12,y+h-55,GN[group]+' ↔',()=>{this.army.groups[kind]=GROUPS[(GROUPS.indexOf(group)+1)%3];this.render();},D?79:110));
-   this.body.add(this.button(x+(D?96:132),y+h-55,'生命',()=>{this.notice=TROOPS[kind].name+'：'+(u.map((a,j)=>'#'+(j+1)+' '+Math.ceil(a.hp)+'/'+a.maxHp).join(' · ')||'尚未招募');this.detail.setText(this.notice);},D?51:68));
-  });if(!this.notice)this.detail.setText('前 / 中 / 后排决定初始编组与护阵随行位置；交战、撤退时允许脱阵。');
+  INITIAL_TROOPS.forEach((kind,i)=>{const count=this.army.units.filter(a=>a.active&&a.kind===kind).length,{x,y,w,h}=this.card(i);this.plate(x,y,w,h);
+   const sheet='shu_'+kind+'_walk_sheet',key=visualTextureKey(this.scene,sheet),sx=x+(D?w/2:58),sy=y+(D?98:80);
+   const glow=this.scene.add.ellipse(sx,sy+(D?36:30),D?92:70,D?22:18,0xe6c07a,.16).setScrollFactor(0);this.body.add(glow);
+   if(this.scene.textures.exists(key))this.body.add(this.scene.add.image(sx,sy,key,'down_0').setDisplaySize(D?108:92,D?108:92).setScrollFactor(0));else this.icon(sx,sy,'icon_shu_'+kind,D?80:72);
+   const name=this.text(D?x+w/2:x+112,y+(D?16:20),TROOPS[kind].name,D?22:22).setFontFamily(HEADING_FONT).setColor('#f1ddb5').setShadow(0,1,'#0a0603',3,true,true);if(D)name.setOrigin(.5,0);this.body.add(name);
+   const badge=this.text(x+w-16,y+(D?16:20),'在编 '+count,D?14:15).setOrigin(1,0).setColor('#e4c588').setBackgroundColor('rgba(14,10,6,0.7)').setPadding(8,3);this.body.add(badge);
+   const role=this.text(D?x+w/2:x+112,y+(D?160:56),roles[i],D?14:15).setColor('#c9b38a');if(D)role.setOrigin(.5,0);this.body.add(role);
+   const cost=this.army.recruitCost(kind),poor=this.army.food<cost,bw=D?w-36:w-130;
+   const buy=this.button(D?x+18:x+112,y+h-(D?60:58),poor?'军粮不足 · '+cost+'粮':'招募 · '+cost+'粮',()=>{const ok=this.army.recruit(kind,1);if(ok)this.sound('recruit');this.notice=ok?TROOPS[kind].name+'入队 · 下一名招募价 '+this.army.recruitCost(kind)+'粮':'无法招募';this.render();},bw,!poor).setName('camp-recruit-'+kind);this.body.add(buy);
+  });if(!this.notice)this.detail.setText('兵力越多，招募越贵：每名在编士兵使招募价 +20%（当前在编 '+this.army.count+' 人）。');
  }
  private renderTraining(){
   const icons=['growth_icon_constitution','growth_icon_might','growth_icon_heart_mirror'],effects=['最大生命','基础攻击','受到伤害'],notes=['保留当前生命比例，不额外回血','当前与后续招募士兵均生效','与既有防护按原规则结算'];
@@ -81,15 +77,15 @@ export class CampRestUI {
    const sign=id==='armor'?'−':'+';this.body.add(this.text(x+(D?17:96),y+(D?118:76),effects[i]+' '+sign+Math.round(d.perLevel*lv*100)+'%',D?17:18));
    this.body.add(this.text(x+(D?17:96),y+(D?149:101),lv<3?'下一级 '+sign+Math.round(d.perLevel*(lv+1)*100)+'%':'已完成全部训练',D?14:15).setColor('#b8bb9d'));
    if(D)this.body.add(this.text(x+17,y+174,notes[i],12));
-   this.body.add(this.button(x+(D?17:w-168),y+h-55,lv>=3?'已满级':this.army.food<cost?'军粮不足':'训练 · '+cost+'粮',()=>{this.notice=this.army.purchaseCampTraining(id)?'训练完成 · 本战役持续生效':'无法训练';this.render();},D?w-34:154,lv<3&&this.army.food>=cost).setName('camp-training-'+id));
+   this.body.add(this.button(x+(D?17:w-168),y+h-55,lv>=3?'已满级':this.army.food<cost?'军粮不足':'训练 · '+cost+'粮',()=>{const ok=this.army.purchaseCampTraining(id);if(ok)this.sound('purchase');this.notice=ok?'训练完成 · 本战役持续生效':'无法训练';this.render();},D?w-34:154,lv<3&&this.army.food>=cost).setName('camp-training-'+id));
   });if(!this.notice)this.detail.setText('军团训练仅在本次连续战役内保留。体魄训练按原生命比例调整，不免费回满。');
  }
  private renderMarket(){this.market?.offers.forEach((o,i)=>{const option=campOption(o,this.player),d=o.kind==='tactic'?TACTICS[o.id as TacticId]:TREASURES[o.id as TreasureId],{x,y,w,h}=this.card(i);this.plate(x,y,w,h);this.icon(x+38,y+38,'build_icon_'+o.id,47);
   this.body.add(this.text(x+71,y+16,TAG_NAMES[d.tag]+' · '+(o.kind==='tactic'?'战法':'宝物'),D?13:15).setColor('#bca579'));
   const title=(option?.name??d.name);this.body.add(this.text(x+71,y+39,title,D?16:18).setWordWrapWidth(w-84,true));
-  const desc=option?.desc??'当前条件已变化，无法购买';const brief=desc.split('\n')[0].split(/[。；]/)[0],summary=brief.length>34?brief.slice(0,34)+'…':brief+'。';const description=this.text(x+16,y+(D?85:72),summary,15).setWordWrapWidth(w-(D?32:177),true).setMaxLines(D?5:2).setName('camp-description-'+i);this.body.add(description);
+  const desc=option?.desc??'当前条件已变化，无法购买';const brief=desc.split('\n')[0].split(/[。；]/)[0],summary=brief.length>34?brief.slice(0,34)+'…':brief;const description=this.text(x+16,y+(D?85:72),summary,15).setWordWrapWidth(w-(D?32:177),true).setMaxLines(D?5:2).setName('camp-description-'+i);this.body.add(description);
   const inspect=this.scene.add.rectangle(x+8,y+8,w-16,62,0,0.001).setOrigin(0).setScrollFactor(0).setInteractive({useHandCursor:true}).on('pointerdown',()=>this.showDetails(title,desc+(o.kind==='treasure'?'\n\n'+this.replacementImpact(o.id as TreasureId):'')));this.body.add(inspect);
-  this.body.add(this.button(x+(D?17:w-160),y+h-55,o.sold?'已售罄':!option?'不可购买':this.army.food<o.price?'军粮不足':'购入 · '+o.price+'粮',()=>{if(o.kind==='treasure'&&option?.desc.includes('替换：')){this.showDetails('确认宝物替换',option.desc+'\n\n'+this.replacementImpact(o.id as TreasureId),()=>{this.notice=this.market?.buy(i,this.player,this.army)?'已替换 · 构筑已更新':'无法购买';this.render();});return;}this.notice=this.market?.buy(i,this.player,this.army)?'已购入 · 构筑已更新':'无法购买';this.render();},D?w-34:146,!o.sold&&!!option&&this.army.food>=o.price).setName('camp-goods-'+i));
+  this.body.add(this.button(x+(D?17:w-160),y+h-55,o.sold?'已售罄':!option?'不可购买':this.army.food<o.price?'军粮不足':'购入 · '+o.price+'粮',()=>{if(o.kind==='treasure'&&option?.desc.includes('替换：')){this.showDetails('确认宝物替换',option.desc+'\n\n'+this.replacementImpact(o.id as TreasureId),()=>{const ok=!!this.market?.buy(i,this.player,this.army);if(ok)this.sound('purchase');this.notice=ok?'已替换 · 构筑已更新':'无法购买';this.render();});return;}const ok=!!this.market?.buy(i,this.player,this.army);if(ok)this.sound('purchase');this.notice=ok?'已购入 · 构筑已更新':'无法购买';this.render();},D?w-34:146,!o.sold&&!!option&&this.army.food>=o.price).setName('camp-goods-'+i));
  });if(!this.notice)this.detail.setText('点击商品标题查看完整效果。库存固定；宝物满两格时需确认替换及流派变化。');}
 
  private replacementImpact(id:TreasureId){
@@ -120,7 +116,7 @@ export class CampRestUI {
   const pending=AWAKENINGS.filter(a=>missing(a).length).sort((a,c)=>missing(a).reduce((n,t)=>n+t.n,0)-missing(c).reduce((n,t)=>n+t.n,0));
   const condition=(a:typeof AWAKENINGS[number])=>missing(a).map(t=>TAG_NAMES[t.tag]+'缺'+t.n+'个不同来源').join('；');
   const names=['武将总览','战法','宝物','流派觉醒'],cw=(W-(D?80:48))/4;
-  names.forEach((name,i)=>{const btn=this.button((D?40:24)+i*cw,top,name,()=>{this.buildSection=i;this.buildOffset=0;this.notice='';this.render();},cw-6).setName('camp-build-section-'+i);if(i===this.buildSection)btn.setColor('#ffe4ab');this.body.add(btn);});
+  names.forEach((name,i)=>{const btn=this.button((D?40:24)+i*cw,top,name,()=>{this.buildSection=i;this.buildOffset=0;this.notice='';this.render();},cw-6).setName('camp-build-section-'+i);if(i===this.buildSection)(btn.getData('paint') as (s:string)=>void)('selected');this.body.add(btn);});
   const entries:Array<{name:string;desc:string;icon?:string}>=[];
   if(this.buildSection===0){
    const weapon=this.player.weapons[0],arts=(Object.keys(MARTIALS)as MasteryId[]).filter(id=>MARTIALS[id].character===g.character).map(id=>MARTIALS[id].name+' Lv.'+g.masteries[id]).join(' / ');
@@ -142,7 +138,7 @@ export class CampRestUI {
    this.body.add(this.text(x+pad,y+(D?5:7),e.name,D?14:18).setWordWrapWidth(w-pad-12,true).setMaxLines(1));
    this.body.add(this.text(x+14,y+(D?26:35),e.desc,D?11:14).setWordWrapWidth(w-28,true).setMaxLines(D?1:2));
    let downY=0;const hit=this.scene.add.rectangle(x,y,w,h,0,.001).setOrigin(0).setScrollFactor(0).setInteractive({useHandCursor:true}).setName('camp-build-entry-'+(this.buildOffset+i));
-   hit.on('pointerdown',(p:Phaser.Input.Pointer)=>{downY=p.y;}).on('pointerup',(p:Phaser.Input.Pointer)=>{if(Math.abs(p.y-downY)>24)shift(p.y<downY?1:-1);else this.showDetails(e.name,e.desc);}).on('wheel',(_p:unknown,_dx:number,dy:number)=>shift(dy>0?1:-1));this.body.add(hit);
+   hit.on('pointerdown',(p:Phaser.Input.Pointer)=>{downY=screenPoint(p).y;}).on('pointerup',(q:Phaser.Input.Pointer)=>{const p=screenPoint(q);if(Math.abs(p.y-downY)>24)shift(p.y<downY?1:-1);else this.showDetails(e.name,e.desc);}).on('wheel',(_p:unknown,_dx:number,dy:number)=>shift(dy>0?1:-1));this.body.add(hit);
   });
   const controlY=D?H-151:H-255;
   this.body.add(this.button(D?40:24,controlY,'↑ 上移',()=>shift(-1),110,this.buildOffset>0));

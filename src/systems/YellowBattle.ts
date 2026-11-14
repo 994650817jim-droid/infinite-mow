@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+const DEPTH_WALL_WARN=12;
 import type { Enemy } from '../entities/Enemy';
 import type { Player } from '../entities/Player';
 import type { Legion } from './Legion';
@@ -13,7 +14,9 @@ export class YellowBattle {
  private readonly hazards:Hazard[]=[];
  private readonly clips:Phaser.GameObjects.Graphics[]=[];
  private readonly visuals:Phaser.GameObjects.Image[]=[];
- private readonly walls:Array<{enemy:Enemy;life:number;until:number}>=[];
+ private readonly walls:Array<{enemy:Enemy;life:number;until:number;born:number}>=[];
+ private readonly wallPlans:Array<{x:number;y:number;rise:number;owner:Enemy;life:number}>=[];
+ private wallGfx?:Phaser.GameObjects.Graphics;
  private readonly rallies:Array<{enemy:Enemy;life:number;until:number;speed:number}>=[];
  private bossCd=2000; private summonCd=8000; private cycle=0;
  private dash:{owner:Enemy;life:number;x:number;y:number;vx:number;vy:number;start:number;end:number;hit:boolean}|null=null;
@@ -71,7 +74,7 @@ export class YellowBattle {
     else this.warn(boss,boss.x,boss.y,145,enraged?550:750,16,'sweep',angle,Math.PI*.8);
    }else if(n===0){for(let i=-1;i<=1;i++)this.warn(boss,p.x+i*78,p.y,55,1000,17,'rift');}
    else if(n===1){this.warn(boss,boss.x,boss.y,230,1050,18,'ring',0,Math.PI*2,115);}
-   else {for(let i=-2;i<=2;i++)if(i!==0){const w=this.h.spawn({...ENEMY_DEFS.shield,behavior:'wall',texture:'enemy_shield',walkVisual:undefined,hp:65,speed:0,damage:0,xp:0,radius:22},p.x+i*52,p.y-95);if(w){w.walkSheet='';w.attackSheet='';w.sprite.setTexture('zhangbao_earth_wall_spawn',5).setDisplaySize(64,64);this.walls.push({enemy:w,life:w.spawnId,until:now+6500});this.metrics.walls++;}}}
+   else this.castEarthWall(boss,now);
   }
   if(this.summonCd<=0){this.summonCd=enraged?8500:12000;const count=Math.min(3,Math.max(0,8-this.h.enemies.filter(e=>e.active&&e.def.behavior==='shaman').length));this.warn(boss,boss.x,boss.y,95,650,0,'ritual');
    for(let i=0;i<count;i++){const def=this.variant(ENEMY_DEFS.infantry,60),a=i*Math.PI*2/3;const unit=this.h.spawn(this.stage===2&&enraged?{...def,behavior:'shaman',walkVisual:{texture:'yellow_shaman_walk',scale:.72,groundY:91/96},attackVisual:'yellow_shaman_cast'}:def,boss.x+Math.cos(a)*85,boss.y+Math.sin(a)*85);if(unit){if(this.stage===1){unit.shootCd=.3;const speed=unit.def.speed;unit.def={...unit.def,speed:speed*1.18};this.rallies.push({enemy:unit,life:unit.spawnId,until:now+4000,speed});}this.metrics.summons++;}}
@@ -81,7 +84,7 @@ export class YellowBattle {
   this.now=now;
   for(let i=this.rallies.length-1;i>=0;i--){const r=this.rallies[i];if(now>=r.until||!r.enemy.active||r.enemy.spawnId!==r.life){if(r.enemy.spawnId===r.life)r.enemy.def={...r.enemy.def,speed:r.speed};this.rallies.splice(i,1);}}
   if(this.dash){const d=this.dash;if(!d.owner.active||d.owner.spawnId!==d.life||d.owner.stunUntil>now||now>d.end)this.dash=null;else if(now>=d.start){d.owner.sprite.x+=d.vx*dt;d.owner.sprite.y+=d.vy*dt;const p=this.h.player;if(!d.hit&&Phaser.Geom.Intersects.LineToCircle(new Phaser.Geom.Line(d.owner.x-d.vx*dt,d.owner.y-d.vy*dt,d.owner.x,d.owner.y),new Phaser.Geom.Circle(p.x,p.y,40+p.radius))){p.takeDamage(18,now);d.hit=true;}this.h.army.hurtArea(d.owner.x,d.owner.y,36,18,now);}}
-  for(let i=this.walls.length-1;i>=0;i--){const w=this.walls[i];if(!w.enemy.active||w.enemy.spawnId!==w.life||now>=w.until){if(w.enemy.spawnId===w.life)w.enemy.deactivate();this.walls.splice(i,1);continue;}const p=this.h.player,dx=p.x-w.enemy.x,dy=p.y-w.enemy.y,d=Math.hypot(dx,dy)||1,min=p.radius+w.enemy.radius;if(d<min){p.sprite.x=w.enemy.x+dx/d*min;p.sprite.y=w.enemy.y+dy/d*min;}}
+  this.updateEarthWalls(now);
   this.gfx.clear();for(const image of this.visuals)image.setVisible(false);
   let index=0;
   for(let i=this.hazards.length-1;i>=0;i--){const z=this.hazards[i];if(!z.owner.active||z.owner.spawnId!==z.life||now>=z.end){this.hazards.splice(i,1);continue;}
@@ -103,5 +106,40 @@ export class YellowBattle {
   if(z.kind==='charge'){const nx=Math.cos(z.angle),ny=Math.sin(z.angle),x=z.x,y=z.y,r=z.radius;g.beginPath().moveTo(x-ny*36,y+nx*36).lineTo(x+nx*r-ny*36,y+ny*r+nx*36).lineTo(x+nx*r+ny*36,y+ny*r-nx*36).lineTo(x+ny*36,y-nx*36).closePath().fillPath();return;}
   const steps=Math.max(8,Math.ceil(z.arc*8));for(let i=0;i<steps;i++){const a=z.angle-z.arc/2+z.arc*i/steps,b=z.angle-z.arc/2+z.arc*(i+1)/steps,ax=z.x+Math.cos(a)*z.radius,ay=z.y+Math.sin(a)*z.radius,bx=z.x+Math.cos(b)*z.radius,by=z.y+Math.sin(b)*z.radius,ix=z.x+Math.cos(a)*z.inner,iy=z.y+Math.sin(a)*z.inner,jx=z.x+Math.cos(b)*z.inner,jy=z.y+Math.sin(b)*z.inner;g.fillTriangle(ax,ay,bx,by,ix,iy);if(z.inner)g.fillTriangle(ix,iy,bx,by,jx,jy);}
  }
- clear():void {for(const r of this.rallies)if(r.enemy.spawnId===r.life)r.enemy.def={...r.enemy.def,speed:r.speed};this.rallies.length=0;this.hazards.length=0;this.dash=null;this.gfx.clear();for(const v of this.visuals)v.setVisible(false);for(const w of this.walls)if(w.enemy.spawnId===w.life)w.enemy.deactivate();this.walls.length=0;}
+ /** 去掉土墙素材里大片浅色半透明尘雾（原图在地面上显示为发白方框），保留墙体与深色碎石。 */
+ private wallTexture():string{
+  const key='zhangbao_earth_wall_clean',s=this.h.scene;if(s.textures.exists(key))return key;
+  const src=s.textures.get('zhangbao_earth_wall_spawn').getSourceImage() as HTMLImageElement,c=document.createElement('canvas');c.width=src.width;c.height=src.height;
+  const ctx=c.getContext('2d',{willReadFrequently:true})!;ctx.drawImage(src,0,0);const img=ctx.getImageData(0,0,c.width,c.height),d=img.data;
+  for(let i=0;i<d.length;i+=4){const a=d[i+3];if(a<235&&d[i]>170&&d[i+1]>150&&d[i+2]>120)d[i+3]=Math.round(a*.12);}
+  ctx.putImageData(img,0,0);const tex=s.textures.addCanvas(key,c)!;for(let f=0;f<8;f++)tex.add(f,0,(f%4)*128,Math.floor(f/4)*128,128,128);return key;
+ }
+ /** 地裂土墙：在玩家身后（相对张宝）围出一道 150° 弧形墙，0.7 秒地面预警后逐段升起，6.5 秒后下沉消失。 */
+ private castEarthWall(boss:Enemy,now:number):void{
+  const p=this.h.player,away=Math.atan2(p.y-boss.y,p.x-boss.x),radius=118,count=7;
+  for(let i=0;i<count;i++){const a=away+(i-(count-1)/2)*(Math.PI*150/180)/(count-1);this.wallPlans.push({x:p.x+Math.cos(a)*radius,y:p.y+Math.sin(a)*radius,rise:now+700+i*70,owner:boss,life:boss.spawnId});}
+  this.metrics.casts++;
+ }
+ private updateEarthWalls(now:number):void{
+  const g=this.wallGfx??=this.h.scene.add.graphics().setDepth(DEPTH_WALL_WARN);g.clear();
+  for(let i=this.wallPlans.length-1;i>=0;i--){const plan=this.wallPlans[i];
+   if(!plan.owner.active||plan.owner.spawnId!==plan.life){this.wallPlans.splice(i,1);continue;}
+   if(now<plan.rise){const k=1-(plan.rise-now)/700;g.fillStyle(0x3a2412,.18+.25*k).fillEllipse(plan.x,plan.y+10,56,18).lineStyle(2,0xd99a48,.35+.5*k).strokeEllipse(plan.x,plan.y+10,56*(.6+.4*k),18*(.6+.4*k));
+    g.lineStyle(1,0x2a1a0c,.6*k).lineBetween(plan.x-18,plan.y+8,plan.x-4,plan.y+13).lineBetween(plan.x-4,plan.y+13,plan.x+9,plan.y+6).lineBetween(plan.x+9,plan.y+6,plan.x+20,plan.y+12);continue;}
+   this.wallPlans.splice(i,1);
+   const w=this.h.spawn({...ENEMY_DEFS.shield,behavior:'wall',texture:'enemy_shield',walkVisual:undefined,hp:65,speed:0,damage:0,xp:0,radius:24},plan.x,plan.y);
+   if(w){w.walkSheet='';w.attackSheet='';w.sprite.setTexture(this.wallTexture(),0).setDisplaySize(86,86).setOrigin(.5,.78);this.walls.push({enemy:w,life:w.spawnId,until:now+6500,born:now});this.metrics.walls++;
+    const p=this.h.player,dx=p.x-w.x,dy=p.y-w.y,d=Math.hypot(dx,dy)||1;if(d<p.radius+w.radius+6){p.takeDamage(8,now);p.sprite.x=w.x+dx/d*(p.radius+w.radius+6);p.sprite.y=w.y+dy/d*(p.radius+w.radius+6);}
+    this.h.scene.cameras.main.shake(70,.0025);(this.h.scene as unknown as {sfx?:{play(k:string):void}}).sfx?.play('wallRise');}
+  }
+  for(let i=this.walls.length-1;i>=0;i--){const w=this.walls[i];
+   if(!w.enemy.active||w.enemy.spawnId!==w.life||now>=w.until){if(w.enemy.spawnId===w.life)w.enemy.deactivate();this.walls.splice(i,1);continue;}
+   // 升起 0~420ms 播 0→7 帧；最后 500ms 反向下沉并淡出。
+   const age=now-w.born,left=w.until-now,frame=left<500?Math.max(2,Math.round(7*left/500)):Math.min(7,Math.floor(age/60));
+   w.enemy.sprite.setFrame(frame).setAlpha(left<500?.4+.6*left/500:1);
+   const p=this.h.player,dx=p.x-w.enemy.x,dy=p.y-w.enemy.y,d=Math.hypot(dx,dy)||1,min=p.radius+w.enemy.radius;if(d<min){p.sprite.x=w.enemy.x+dx/d*min;p.sprite.y=w.enemy.y+dy/d*min;}}
+ }
+ /** DEV：让首领下一帧立即施放下一个技能。 */
+ forceNextSkill():void{this.bossCd=0;}
+ clear():void {for(const r of this.rallies)if(r.enemy.spawnId===r.life)r.enemy.def={...r.enemy.def,speed:r.speed};this.rallies.length=0;this.hazards.length=0;this.dash=null;this.gfx.clear();for(const v of this.visuals)v.setVisible(false);for(const w of this.walls)if(w.enemy.spawnId===w.life)w.enemy.deactivate();this.walls.length=0;this.wallPlans.length=0;this.wallGfx?.clear();}
 }

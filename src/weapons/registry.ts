@@ -110,11 +110,12 @@ function distPointToSegment(px: number, py: number, ax: number, ay: number, bx: 
 
 /** 七探盘龙枪穿透参数：穿透长度 / 判定宽度(总宽) / 单枪命中上限。 */
 export const SPEAR_PIERCE = [
-  { len: 150, width: 22, cap: 2 },
-  { len: 155, width: 24, cap: 2 },
-  { len: 160, width: 24, cap: 3 },
-  { len: 165, width: 26, cap: 3 },
-  { len: 170, width: 28, cap: 4 },
+  // 2026-11-14 平衡：单枪命中上限各级 +1（原 2/2/3/3/4），补赵云前中期清群；伤害、枪数、冷却不变。
+  { len: 150, width: 22, cap: 3 },
+  { len: 155, width: 24, cap: 3 },
+  { len: 160, width: 24, cap: 4 },
+  { len: 165, width: 26, cap: 4 },
+  { len: 170, width: 28, cap: 5 },
 ];
 
 /** 武器行为：保持旧版判定、视觉与音效不变，不做玩法改动。 */
@@ -176,8 +177,12 @@ export const WEAPON_BEHAVIORS: Record<WeaponId, (host: WeaponHost, weapon: Weapo
     weapon.cooldownLeft -= dt;
     if (weapon.cooldownLeft > 0) return;
     const priority=host.priorityTarget?.(pierce.len*host.player.growth.spearLengthMultiplier()-6)??null;
-    const targets = host.grid.query(host.player.x, host.player.y, 240)
-      .filter((e) => e.active && Math.hypot(e.x - host.player.x, e.y - host.player.y) <= 220 + e.radius)
+    // 只锁定这一枪真正刺得到的敌人（与下方线段命中判定同一出枪点与枪长），
+    // 否则 176~234px 的敌人会被锁定后刺空，白白消耗冷却。被动强化只会更长，不影响此下限。
+    const reachBase = pierce.len * host.player.growth.spearLengthMultiplier() + pierce.width / 2;
+    const ox = host.player.x, oy = host.player.y - 6;
+    const targets = host.grid.query(host.player.x, host.player.y, Math.min(220, reachBase) + 60)
+      .filter((e) => e.active && Math.hypot(e.x - ox, e.y - oy) <= Math.min(220, reachBase) + e.radius)
       .sort((a, b) => Math.hypot(a.x - host.player.x, a.y - host.player.y) - Math.hypot(b.x - host.player.x, b.y - host.player.y));
     if(priority){const index=targets.indexOf(priority);if(index>=0)targets.splice(index,1);targets.unshift(priority);}
     if (!targets.length) return;

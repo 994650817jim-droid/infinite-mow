@@ -26,6 +26,9 @@ export class BootScene extends Phaser.Scene {
     this.load.image('epic_bg_'+homeChapter+'_'+homeLayout,'assets/epic-home/'+homeChapter+'-'+homeLayout+'.webp');
     let homeHero='zhaoyun';try{const id=localStorage.getItem('im_last_hero');if(id&&['zhaoyun','guanyu','huangzhong','zhuge'].includes(id))homeHero=id;}catch{}
     this.load.image('epic_hero_'+homeHero,'assets/epic-home/'+homeHero+'.webp');
+    // 武将卡立轴（生成美术）：外框、宣纸与当前武将的水墨立绘
+    this.load.image('ink_frame','assets/ink-scroll/frame.webp');this.load.image('ink_paper','assets/ink-scroll/paper.webp');
+    this.load.image('ink_hero_'+homeHero,'assets/ink-scroll/'+homeHero+'.webp');
     // Menu fallback and rest screens share the rest_camp texture allocation.
     // Both formal west stages can be selected after this boot; preload their existing atlases once.
     this.load.spritesheet('xurong','assets/phase17/xurong/sheet.png',{frameWidth:128,frameHeight:128});

@@ -1,5 +1,7 @@
+import {playMenuMusic,menuMusic} from '../systems/Music';
 import {GameCodex} from '../ui/GameCodex';
 import {HeroWarCard} from '../ui/HeroWarCard';
+import {CampaignChronicle} from '../ui/CampaignChronicle';
 import {attachHomeVideo} from '../ui/HomeVideo';
 import {homeCommand} from '../ui/HomeCommand';
 import {HomeHeroPicker} from '../ui/HomeHeroPicker';
@@ -25,6 +27,8 @@ interface HeroCard { bg: Phaser.GameObjects.Rectangle; icon: Phaser.GameObjects.
 
 /** Preparation only. Chapter persistence lives in ChapterProgress, combat stays in GameScene. */
 export class MenuScene extends Phaser.Scene {
+  /** 手机长屏：首页按960设计的内容整体下移一半多出的高度，保持居中；背景与贴底元素仍按真实高度。 */
+  private get padY(): number { return D ? 0 : Math.max(0, Math.round((H - 960) / 2)); }
   private selectedWestStage:YellowStage=1;private westModal?:Phaser.GameObjects.Container;private westRows:Array<{bg:Phaser.GameObjects.Rectangle;status:Phaser.GameObjects.Text;stage:YellowStage;decor:Phaser.GameObjects.Graphics;icon:Phaser.GameObjects.Image}>=[];
   private westDeploy?:Phaser.GameObjects.Rectangle;private westDeployLabel?:Phaser.GameObjects.Text;
   private selectedStage:YellowStage=1;
@@ -47,7 +51,7 @@ export class MenuScene extends Phaser.Scene {
   private startButton!: Phaser.GameObjects.Rectangle;
   private startLabel!: Phaser.GameObjects.Text;
   constructor() { super('MenuScene'); }
-  create(): void {
+  create(): void {playMenuMusic(this);
     ensureWarTextures(this);
     this.cameras.main.fadeIn(180,0,0,0);
     this.selectedStage=Math.min(3,loadWorld().yellowStages+1) as YellowStage;this.stageTabs=[];
@@ -133,12 +137,14 @@ export class MenuScene extends Phaser.Scene {
     const ornament = this.add.graphics().lineStyle(1, 0xe5ca8c, .55);
     ornament.lineBetween(W / 2 - startW / 2 - 30, startY, W / 2 - startW / 2 - 10, startY).lineBetween(W / 2 + startW / 2 + 10, startY, W / 2 + startW / 2 + 30, startY);
     this.startButton.on('pointerdown', () => this.startGame()).on('pointerover', () => { if (!this.started && chapterUnlocked(this.selectedChapter)) this.startButton.setFillStyle(0xe0c17b); }).on('pointerout', () => this.renderSelection());
-    text(W / 2, D ? 522 : 902, isChapterTestRun() ? '测试模式 · 调试战斗不记录章节通关' : '开局直接战斗 · 第一波结束后招募援兵', D ? 10 : 12, '#7e9283').setOrigin(.5);
+    text(W / 2, D ? 522 : 890, isChapterTestRun() ? '测试模式 · 调试战斗不记录章节通关' : '开局直接战斗 · 第一波结束后招募援兵', D ? 10 : 12, '#7e9283').setOrigin(.5);
     const keyboard = this.input.keyboard;
     const bind = (key: string, action: () => void) => { keyboard?.on(key, action); this.events.once('shutdown', () => keyboard?.off(key, action)); };
     bind('keydown-ENTER', () => this.startGame()); bind('keydown-L', () => switchLayout(D ? 'mobile' : 'desktop'));
     ['ONE', 'TWO', 'THREE', 'FOUR'].forEach((key, i) => bind(`keydown-${key}`, () => { this.selectedChar = i; this.renderSelection(); }));
-    text(28,D?522:902,'返回首页',12,'#d5bd8e').setPadding(6,6).setInteractive({useHandCursor:true}).setName('review-home').on('pointerdown',()=>this.scene.restart());
+    // 返回首页：原先是贴着画面底边的小字（电脑版被裁掉，进来就出不去），改为明显按钮 + Esc。
+    const home=homeCommand(this,D?112:W/2,D?490:932,D?150:200,D?44:42,'返回首页');home.hit.setName('review-home').on('pointerdown',()=>this.scene.restart());
+    bind('keydown-ESC',()=>this.scene.restart());
     this.createWestPicker();this.renderSelection();
     if (params.has('autostart') || params.has('perf')) this.time.delayedCall(80, () => this.startGame());
   }
@@ -148,38 +154,40 @@ export class MenuScene extends Phaser.Scene {
     const epicBackground='epic_bg_'+(this.selectedChapter==='hulao'?'dongzhuo':'huangjin')+'_'+(D?'desktop':'mobile');
     const bg=this.add.image(W/2,H/2,this.textures.exists(epicBackground)?epicBackground:'rest_camp');bg.setScale(Math.max(W/bg.width,H/bg.height));this.homeBackground=bg;bg.setDepth(-2);this.ensureHomeArt();if(this.selectedChapter==='huangjin')attachHomeVideo(this,W,H);
     const shade=this.add.graphics();shade.fillStyle(0x100b08,.14).fillRect(0,0,W,H);for(let y=0;y<H;y+=8){const a=y<H*.24?.36*(1-y/(H*.24)):y>H*.55?.82*(y-H*.55)/(H*.45):0;if(a>0)shade.fillStyle(0x100b08,a).fillRect(0,y,W,8);}
-    text(D?230:W/2,D?63:112,'乱世千军',D?52:36,'#efd399').setFontFamily(TITLE_FONT).setLetterSpacing(4).setShadow(0,3,'#130a05',2,true,true);
+    if(D){const titleShade=this.add.graphics();for(let i=0;i<40;i++){const k=i/40;titleShade.fillStyle(0x0f0a06,.02+k*.012).fillEllipse(230,92,430*(1-k*.8),150*(1-k*.8));}}
+    text(D?230:W/2,D?58:112+this.padY,'乱世千军',D?52:36,'#efd399').setFontFamily(TITLE_FONT).setLetterSpacing(4).setShadow(0,3,'#130a05',2,true,true);
     const west=this.selectedChapter==='hulao',save=loadWorld(),info=west?DONGZHUO_STAGES[this.selectedWestStage-1]:YELLOW_STAGES[this.selectedStage-1];
-    text(D?230:W/2,D?105:148,west?'汉末烽烟 · 诸侯并起，挥师讨董':'苍天已乱 · 黄巾四起，义军初兴',D?15:16,'#d0bea1');
+    text(D?230:W/2,D?98:148+this.padY,west?'汉末烽烟 · 诸侯并起，挥师讨董':'苍天已乱 · 黄巾四起，义军初兴',D?15:16,'#d0bea1').setShadow(0,1,'#0b0604',4,true,true);
     const cx=D?W*.73:W/2;
-    const readingShade=this.add.graphics();for(let i=0;i<48;i++){const t=i/48;readingShade.fillStyle(0x0f0c09,.018+t*.01).fillEllipse(cx,D?264:758,(D?480:W-12)*(1-t*.85),(D?244:176)*(1-t*.85));}
-    text(cx,D?40:26,west?'第二章 · 讨伐董卓':'第一章 · 黄巾之乱',15,'#e4c38d');
-    text(cx,D?83:63,isChapterTestRun()?`${west?'2':'1'}-${west?this.selectedWestStage:this.selectedStage}  ${info.name}`:info.name,D?31:33,'#f4dfb5');
-    text(cx,D?244:758,save.cleared.hulao?'天下已开。重整兵马，再赴征途。':west?'群雄会盟，关隘烽烟。挥师西进，问鼎中原。':'黄巾四起，烽火蔓延。整备义军，踏上征途。',14,'#e2d4bd').setWordWrapWidth(D?310:W-96).setAlign('center');
-    this.homeCard=new HeroWarCard(this,D?94:104,D?126:172,D?300:332,D?340:410);this.homeCard.setSelected(true);this.homeCard.root.setName('current-hero-card');
-    let folded=this.registry.get('heroCardFolded')===true;
-    this.homeCard.setFolded(folded);
-    this.homeCard.hit.on('pointerdown',()=>{folded=!folded;this.registry.set('heroCardFolded',folded);this.homeCard?.setFolded(folded);});
+    const readingShade=this.add.graphics();for(let i=0;i<48;i++){const t=i/48;readingShade.fillStyle(0x0f0c09,.018+t*.01).fillEllipse(cx,D?160:758+this.padY,(D?440:W-12)*(1-t*.85),(D?230:176)*(1-t*.85));}if(D){readingShade.lineStyle(1,0xc9a66a,.45).lineBetween(cx-110,178,cx-12,178).lineBetween(cx+12,178,cx+110,178).fillStyle(0xd8b676,.8).fillRect(cx-4,174,8,8);}
+    text(cx,D?104:26+this.padY,west?'第二章 · 讨伐董卓':'第一章 · 黄巾之乱',15,'#e4c38d');
+    text(cx,D?142:63+this.padY,isChapterTestRun()?`${west?'2':'1'}-${west?this.selectedWestStage:this.selectedStage}  ${info.name}`:info.name,D?31:33,'#f4dfb5').setShadow(0,2,'#0b0604',4,true,true);
+    text(cx,D?210:758+this.padY,save.cleared.hulao?'天下已开。重整兵马，再赴征途。':west?'群雄会盟，关隘烽烟。挥师西进，问鼎中原。':'黄巾四起，烽火蔓延。整备义军，踏上征途。',14,'#e2d4bd').setShadow(0,1,'#0b0604',4,true,true).setWordWrapWidth(D?310:W-96).setAlign('center');
+    this.homeCard=new HeroWarCard(this,D?80:104,D?127:180+this.padY,D?300:332,D?321:410);this.homeCard.setSelected(true);this.homeCard.root.setName('current-hero-card');
+    // 点击武将卷轴直接打开“更换武将”（原为折叠卡片，卷轴折叠态显示破碎，已取消）。
+    this.registry.remove('heroCardFolded');
     this.homePortrait=this.homeCard.art;this.heroName=this.homeCard.name;this.weapon=this.homeCard.weapon;
     this.passiveName=text(-1000,-1000,'',13).setVisible(false);this.passive=text(-1000,-1000,'',13).setVisible(false);
-    const navY=D?494:631;
-    const heroEntry=homeCommand(this,D?244:W/2,navY,D?190:220,D?48:64,'更换武将');const pick=heroEntry.hit.setName('choose-hero');this.heroEntryPaint=heroEntry.paint;
-    if(isChapterTestRun())text(D?W*.61:W*.36,D?494:924,'战役回顾',D?18:20,'#e5ccb0').setPadding(16,16).setInteractive({useHandCursor:true}).setName('home-review').on('pointerdown',()=>{this.registry.set('menuChapterPicker',true);this.scene.restart();});
-    text(isChapterTestRun()?(D?W*.80:W*.70):(D?W*.73:W/2),D?494:924,'设置',D?18:20,'#e5ccb0').setPadding(18,16).setInteractive({useHandCursor:true}).setName('home-settings').on('pointerdown',()=>this.openHomeSettings());
-    text(40,D?494:924,'图鉴',D?18:20,'#e5ccb0').setOrigin(0,.5).setPadding(12,16).setInteractive({useHandCursor:true}).setName('home-codex').on('pointerdown',()=>{if(this.children.getByName('game-codex'))return;this.ensureHomeArt(true);new GameCodex(this,index=>{this.selectedChar=index;this.registry.set('heroConfirmed',true);try{localStorage.setItem('im_last_hero',CHARACTERS[index].id);}catch{}this.renderSelection();});});
+    const navY=D?484:631+this.padY;
+    const heroEntry=homeCommand(this,D?230:W/2,navY,D?220:220,D?46:64,'更换武将');const pick=heroEntry.hit.setName('choose-hero');this.heroEntryPaint=heroEntry.paint;
+    // 战役回顾：乱世编年（已平定的关显示史录，未打到的锁住）；“前往选关”沿用原入口。
+    text(D?cx:W*.36,D?476:924+this.padY,'战役回顾',D?18:20,'#e5ccb0').setLetterSpacing(D?2:0).setPadding(16,16).setInteractive({useHandCursor:true}).setName('home-review').on('pointerdown',()=>{if(this.children.getByName('campaign-chronicle'))return;new CampaignChronicle(this,arc=>{if(arc==='qunxiong'){this.scene.start('ThirdChapterScene');return;}this.registry.set('menuChapterPicker',true);this.scene.restart();});});
+    text(D?cx+110:W*.70,D?476:924+this.padY,'设置',D?18:20,'#e5ccb0').setLetterSpacing(4).setPadding(18,16).setInteractive({useHandCursor:true}).setName('home-settings').on('pointerdown',()=>this.openHomeSettings());
+    text(D?cx-110:40,D?476:924+this.padY,'图鉴',D?18:20,'#e5ccb0').setLetterSpacing(4).setOrigin(D?.5:0,.5).setPadding(12,16).setInteractive({useHandCursor:true}).setName('home-codex').on('pointerdown',()=>{if(this.children.getByName('game-codex'))return;this.ensureHomeArt(true);new GameCodex(this,index=>{this.selectedChar=index;this.registry.set('heroConfirmed',true);try{localStorage.setItem('im_last_hero',CHARACTERS[index].id);}catch{}this.renderSelection();});});
     if(worldUnlocked()){
-      text(W-36,38,'主城',16).setOrigin(1,.5).setPadding(12,12).setInteractive({useHandCursor:true}).setName('home-city').on('pointerdown',()=>this.scene.start('CityScene'));
-      text(W-126,38,'天下地图',16).setOrigin(1,.5).setPadding(12,12).setInteractive({useHandCursor:true}).setName('home-world').on('pointerdown',()=>this.scene.start('WorldMapScene'));
+      text(W-28,D?34:54,'主城',16).setOrigin(1,.5).setPadding(16,8).setBackgroundColor('rgba(22,14,9,0.72)').setInteractive({useHandCursor:true}).setName('home-city').on('pointerdown',()=>this.scene.start('CityScene'));
+      text(W-104,D?34:54,'天下地图',16).setOrigin(1,.5).setPadding(16,8).setBackgroundColor('rgba(22,14,9,0.72)').setInteractive({useHandCursor:true}).setName('home-world').on('pointerdown',()=>this.scene.start('WorldMapScene'));
     }
-    if(west&&!save.dongzhuoStages){const reveal=text(W/2,D?157:228,'新篇揭晓 · 讨伐董卓',15,'#f0c389').setAlpha(0);this.tweens.add({targets:reveal,alpha:1,duration:700});}
+    if(west&&!save.dongzhuoStages){const reveal=text(W/2,D?157:228+this.padY,'新篇揭晓 · 讨伐董卓',15,'#f0c389').setAlpha(0);this.tweens.add({targets:reveal,alpha:1,duration:700});}
     const closeHeroes=()=>{this.heroModal?.setVisible(false);this.heroEntryPaint?.();};
     this.heroPicker=new HomeHeroPicker(this,index=>{this.selectedChar=index;this.registry.set('heroConfirmed',true);try{localStorage.setItem('im_last_hero',CHARACTERS[index].id);}catch{}closeHeroes();this.renderSelection();},closeHeroes);
     this.heroModal=this.heroPicker.root;const modal=this.heroModal;
-    const openHeroes=()=>{this.ensureHomeArt(true);this.heroPicker?.open(this.selectedChar);this.heroEntryPaint?.('selected');};pick.on('pointerdown',openHeroes);
-    const startY=D?409:857,startW=D?292:W-156,startH=D?56:64;
+    const openHeroes=()=>{this.ensureHomeArt(true);this.heroPicker?.open(this.selectedChar);this.heroEntryPaint?.('selected');};pick.on('pointerdown',openHeroes);this.homeCard?.hit.on('pointerup',openHeroes);
+    const startY=D?414:857+this.padY,startW=D?292:W-156,startH=D?56:64;
     const primary=homeCommand(this,D?W*.73:W/2,startY,startW,startH,'匡扶汉室',true);this.startButton=primary.hit.setName('start-campaign');this.startLabel=primary.caption;
     this.startButton.on('pointerdown',()=>{let chosen=!!this.registry.get('heroConfirmed');try{chosen=chosen||!!localStorage.getItem('im_last_hero');}catch{}if(!chosen&&!params.has('autostart')&&!params.has('perf')){openHeroes();return;}this.startGame();});
-    if(isChapterTestRun())text(W/2,D?529:955,'测试战斗不记录正式进度',10,'#8c806f');
+    if(D)for(const dx of[-66,66])text(cx+dx,476,'·',18,'#a68a57');
+    if(isChapterTestRun())text(W/2,D?529:955+this.padY,'测试战斗不记录正式进度',10,'#8c806f');
     if(isChapterTestRun())text(W-34,24,'测试选关 ›',14,'#dcc399').setOrigin(1,.5).setPadding(12,10).setInteractive({useHandCursor:true}).setName('dev-stage-picker').on('pointerdown',()=>this.openTestStages());
     const keys=this.input.keyboard,enter=()=>{if(modal.visible)modal.getByName('hero-confirm')?.emit('pointerdown');else this.startButton.emit('pointerdown');},escape=()=>closeHeroes();
     keys?.on('keydown-ENTER',enter);keys?.on('keydown-ESC',escape);this.events.once('shutdown',()=>{keys?.off('keydown-ENTER',enter);keys?.off('keydown-ESC',escape);});
@@ -212,7 +220,7 @@ export class MenuScene extends Phaser.Scene {
     if(this.load.isLoading()){this.load.once('complete',()=>{if(this.sys.isActive())this.ensureHomeArt(all);});return;}
     const background='epic_bg_'+(this.selectedChapter==='hulao'?'dongzhuo':'huangjin')+'_'+(D?'desktop':'mobile');const files:Array<[string,string]>=[];
     if(!this.textures.exists(background))files.push([background,'assets/epic-home/'+(this.selectedChapter==='hulao'?'dongzhuo':'huangjin')+'-'+(D?'desktop':'mobile')+'.webp']);
-    for(const c of all?CHARACTERS:[CHARACTERS[this.selectedChar]])if(!this.textures.exists('epic_hero_'+c.id))files.push(['epic_hero_'+c.id,'assets/epic-home/'+c.id+'.webp']);
+    for(const c of all?CHARACTERS:[CHARACTERS[this.selectedChar]]){if(!this.textures.exists('epic_hero_'+c.id))files.push(['epic_hero_'+c.id,'assets/epic-home/'+c.id+'.webp']);if(!this.textures.exists('ink_hero_'+c.id))files.push(['ink_hero_'+c.id,'assets/ink-scroll/'+c.id+'.webp']);}
     if(!files.length)return;
     for(const [key,url]of files)this.load.image(key,url);
     this.load.once('complete',()=>{if(!this.sys.isActive())return;for(const [key]of files)if(this.textures.exists(key))this.textures.get(key).setFilter(Phaser.Textures.FilterMode.LINEAR);if(this.homeBackground&&this.homeBackground.scene&&this.textures.exists(background)){this.homeBackground.setTexture(background);this.homeBackground.setScale(Math.max(W/this.homeBackground.width,H/this.homeBackground.height));}this.renderSelection();});this.load.start();
@@ -221,7 +229,7 @@ export class MenuScene extends Phaser.Scene {
     const modal=this.add.container(0,0).setDepth(500).setName('home-settings-panel');
     const label=(x:number,y:number,value:string,size=20)=>this.add.text(x,y,value,{fontFamily:FONT,fontSize:size+'px',color:'#e8d0aa',resolution:2}).setOrigin(.5);
     modal.add(this.add.rectangle(W/2,H/2,W,H,0x130d09,.97).setInteractive());modal.add(label(W/2,H/2-130,'军中设置',28));
-    ['音乐','音效'].forEach((name,i)=>{const key=i?'im_sfx_vol':'im_bgm_vol',y=H/2-40+i*76;let volume= i?90:40;try{volume=Number(localStorage.getItem(key)??volume);}catch{}const value=label(W/2,y,name+'  '+volume+'%');modal.add(value);for(const dir of [-1,1])modal.add(label(W/2+dir*140,y,dir<0?'－':'＋',28).setPadding(16,12).setInteractive({useHandCursor:true}).on('pointerdown',()=>{volume=Math.max(0,Math.min(100,volume+dir*10));try{localStorage.setItem(key,String(volume));}catch{}value.setText(name+'  '+volume+'%');}));});
+    ['音乐','音效'].forEach((name,i)=>{const key=i?'im_sfx_vol':'im_bgm_vol',y=H/2-40+i*76;let volume= i?90:40;try{volume=Number(localStorage.getItem(key)??volume);}catch{}const value=label(W/2,y,name+'  '+volume+'%');modal.add(value);for(const dir of [-1,1])modal.add(label(W/2+dir*140,y,dir<0?'－':'＋',28).setPadding(16,12).setInteractive({useHandCursor:true}).on('pointerdown',()=>{volume=Math.max(0,Math.min(100,volume+dir*10));try{localStorage.setItem(key,String(volume));}catch{}if(!i)menuMusic().setVolume(volume);value.setText(name+'  '+volume+'%');}));});
     modal.add(label(W/2,H/2+135,'返回',20).setPadding(40,16).setInteractive({useHandCursor:true}).setName('settings-close').on('pointerdown',()=>modal.destroy()));
   }
   private corners(g: Phaser.GameObjects.Graphics, bg: Phaser.GameObjects.Rectangle, selected: boolean): void {
@@ -264,7 +272,7 @@ export class MenuScene extends Phaser.Scene {
     if(this.compactHome&&this.homeCard){this.homeCard.setHero(this.selectedChar);if(!this.textures.exists('epic_hero_'+c.id))this.ensureHomeArt();}
     else if (c) {
       this.heroName.setText(this.compactHome?c.name+' · '+ROLES[this.selectedChar].split(' · ')[0]:`${c.name}  ·  ${ROLES[this.selectedChar].split(' · ')[0]}`);
-      if(this.homePortrait){const key='epic_hero_'+c.id,image=this.homePortrait,target=this.textures.exists(key)?key:c.portrait;const apply=()=>{if(!image.scene)return;image.setTexture(target,'__BASE');image.setScale(Math.min((D?320:350)/image.width,(D?270:355)/image.height));};if(image.texture.key!==target&&image.getData('nextArt')!==target){image.setData('nextArt',target);this.tweens.killTweensOf(image);this.tweens.add({targets:image,alpha:0,duration:75,onComplete:()=>{apply();this.tweens.add({targets:image,alpha:1,duration:160});}});}image.setOrigin(.5,1).setPosition(D?W*.25:W/2,D?403:565);if(image.texture.key===target)apply();if(!this.textures.exists(key))this.ensureHomeArt();}
+      if(this.homePortrait){const key='epic_hero_'+c.id,image=this.homePortrait,target=this.textures.exists(key)?key:c.portrait;const apply=()=>{if(!image.scene)return;image.setTexture(target,'__BASE');image.setScale(Math.min((D?320:350)/image.width,(D?270:355)/image.height));};if(image.texture.key!==target&&image.getData('nextArt')!==target){image.setData('nextArt',target);this.tweens.killTweensOf(image);this.tweens.add({targets:image,alpha:0,duration:75,onComplete:()=>{apply();this.tweens.add({targets:image,alpha:1,duration:160});}});}image.setOrigin(.5,1).setPosition(D?W*.25:W/2,D?403:565+this.padY);if(image.texture.key===target)apply();if(!this.textures.exists(key))this.ensureHomeArt();}
       this.weapon.setText(`专属兵器  ${WEAPON_META[c.startWeapon].name}`);
       this.passiveName.setText(`天赋被动  ${CHARACTER_PASSIVES[c.id].name}`);
       this.passive.setText(PASSIVE_HINTS[this.selectedChar]);

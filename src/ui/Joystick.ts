@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { COLORS, DEPTH, FONT, GAME_HEIGHT } from '../config';
+import { COLORS, DEPTH, FONT, GAME_HEIGHT, GAME_WIDTH, screenPoint } from '../config';
 
 /** 虚拟摇杆：固定底座 + 拖拽摇杆头，输出归一化向量（死区 8%）。 */
 export class Joystick {
@@ -33,8 +33,9 @@ export class Joystick {
   handleDown(pointer: Phaser.Input.Pointer): void {
     if (!this.enabled) return;
     if (this.active) return;
-    if (pointer.x > this.scene.scale.width * 0.68) return;
-    if (pointer.y < GAME_HEIGHT * 0.32) return;
+    const at = screenPoint(pointer);
+    if (at.x > GAME_WIDTH * 0.68) return;
+    if (at.y < GAME_HEIGHT * 0.32) return;
     this.active = true;
     this.pointerId = pointer.id;
     this.apply(pointer);
@@ -76,8 +77,9 @@ export class Joystick {
   }
 
   private apply(pointer: Phaser.Input.Pointer): void {
-    const dx = pointer.x - this.baseX;
-    const dy = pointer.y - this.baseY;
+    const at = screenPoint(pointer);
+    const dx = at.x - this.baseX;
+    const dy = at.y - this.baseY;
     const len = Math.hypot(dx, dy);
     if (len < 1) {
       this.vector.set(0, 0);

@@ -42,7 +42,7 @@ export class Legion {
   private stopped = false;
   private readonly views: AllyView[] = [];
   private readonly near: Enemy[] = []; private readonly friends: Ally[] = [];
-  private readonly effects: Array<{ x: number; y: number; tx: number; ty: number; until: number; heal: boolean; sweep: boolean; stab?:boolean }> = [];
+  private readonly effects: Array<{ x: number; y: number; tx: number; ty: number; until: number; heal: boolean; sweep: boolean; stab?:boolean; ranged?:boolean }> = [];
   private readonly artEffects: ArtEffects;
   private readonly gfx: Phaser.GameObjects.Graphics;
   constructor(private readonly scene: Phaser.Scene, readonly units: Ally[], private readonly player: Player, _legacyCapacity?: number) {
@@ -59,12 +59,15 @@ export class Legion {
     for(const kind of TROOP_KINDS){const saved=state.soldiers.filter(s=>s.kind===kind),start=this.units.length;if(saved.length)this.recruit(kind,saved.length,true,true);saved.forEach((s,i)=>{const u=this.units[start+i];u.hp=Math.max(0,Math.min(u.maxHp,s.hp));u.reserveSoldier=s.reserveSoldier===true;});}for(const u of this.units){const p=this.formation.position(u);u.setPosition(p.x,p.y);}
     this.food = state.food; this.dead = state.dead; this.recruited = state.recruited; this.rebuildGrid();
   }
+  /** 招兵价格随当前在编兵力递增：基础价 ×（1 + 0.2 × 在编人数），大军团需要更多军粮维持。extra 用于一次招多人时逐个累加。 */
+  recruitCost(kind: TroopKind, extra = 0): number { return Math.round(TROOPS[kind].cost * (1 + .2 * (this.count + extra))); }
   /** Legacy bypass argument is accepted for old DEV/Campaign callers; all recruitment is uncapped. */
   recruit(kind: TroopKind, count = 1, free = false, _bypassCapacity = false): boolean {
     if (!TROOPS[kind] || !Number.isSafeInteger(count) || count <= 0) return false;
     if (!Number.isSafeInteger(TROOPS[kind].cost*count)) return false;
+    let cost = 0; for (let i = 0; i < count; i++) cost += this.recruitCost(kind, i);
     const newborn:Ally[]=[],reusable=this.units.filter(u=>!u.active);
-    const cost = TROOPS[kind].cost * count; if (!free && this.food < cost) return false;
+    if (!free && this.food < cost) return false;
     if (!free) this.food -= cost;
     for (let i = 0; i < count; i++) {
       const x = this.player.x + (i % 3 - 1) * 26, y = this.player.y + 55 + Math.floor(i / 3) * 26;
@@ -137,7 +140,7 @@ export class Legion {
       this.heals.splice(i, 1);
       if (h.owner.active && h.owner.lifeId === h.life && h.target.active && h.target.lifeId === h.targetLife && Math.hypot(h.owner.x - h.target.x, h.owner.y - h.target.y) <= h.owner.def.range) { h.target.hp = Math.min(h.target.maxHp, h.target.hp + h.amount); this.fx(h.owner, h.target.x, h.target.y, now, true); }
     }
-    for(let i=this.strikes.length-1;i>=0;i--){const hit=this.strikes[i];if(now<hit.due)continue;this.strikes.splice(i,1);if(hit.owner.active&&hit.owner.lifeId===hit.life&&hit.target.active&&hit.target.spawnId===hit.spawn&&Math.hypot(hit.owner.x-hit.target.x,hit.owner.y-hit.target.y)<=hit.owner.def.range+hit.target.radius){this.fx(hit.owner,hit.target.x,hit.target.y,now,false);damage(hit.target,hit.amount);}if(this.stopped)return;}
+    for(let i=this.strikes.length-1;i>=0;i--){const hit=this.strikes[i];if(now<hit.due)continue;this.strikes.splice(i,1);if(hit.owner.active&&hit.owner.lifeId===hit.life&&hit.target.active&&hit.target.spawnId===hit.spawn&&Math.hypot(hit.owner.x-hit.target.x,hit.owner.y-hit.target.y)<=hit.owner.def.range+hit.target.radius){this.fx(hit.owner,hit.target.x,hit.target.y,now,false);this.knock(hit.owner,hit.target,4,now);damage(hit.target,hit.amount);}if(this.stopped)return;}
     this.viewClock += dt; this.combatClock += dt;
     const stats = { range: 1, melee: this.player.growth.allyDamageMultiplier()*(this.order==='sortie'&&this.player.growth.build.tags().command>=4?1.15:1), attackSpeed: 1 };
     for (const u of this.units) {
@@ -178,7 +181,7 @@ export class Legion {
           const amount = u.def.damage * (1+CAMP_TRAINING.attack.perLevel*this.training.attack) * (1 + .25 * (u.level - 1)) * stats.melee * (u.kind === 'spearman' && e.kind === 'cavalry' && u.level === 3 ? 2 : 1);
           if (u.def.ranged) { if (u.kind === 'crossbowman') { const total = Math.max(1, Math.round(amount)), first = u.level === 3 ? total : Math.ceil(total / 2), second = u.level === 3 ? total : Math.floor(total / 2); this.projectiles.fire(u, e, first, now + 180); if (second) this.projectiles.fire(u, e, second, now + 260); } else this.projectiles.fire(u, e, amount, now + 180); }
           else if(u.kind==='spearman'){this.strikes.push({owner:u,life:u.lifeId,target:e,spawn:e.spawnId,due:now+120,amount});}
-          else { this.fx(u, e.x, e.y, now, false); damage(e, amount); }
+          else { this.fx(u, e.x, e.y, now, false); this.knock(u, e, u.kind==='rider'?5:3, now); damage(e, amount); }
           if (this.stopped) return;
         }
       }
@@ -209,13 +212,24 @@ export class Legion {
     }
     for (let i = this.effects.length - 1; i >= 0; i--) {
       const e = this.effects[i]; if (now >= e.until) { this.effects.splice(i, 1); continue; }
-      const fade = (e.until-now)/160;
+      const fade = Math.min(1,(e.until-now)/(e.heal?160:200));
       if (e.heal) {
         this.gfx.lineStyle(2,0x91cda7,fade).lineBetween(e.tx-4,e.ty-18,e.tx+4,e.ty-18).lineBetween(e.tx,e.ty-22,e.tx,e.ty-14);
         this.gfx.fillStyle(0xc8efbd,fade).fillRect(e.tx-10,e.ty-23-(1-fade)*7,2,2).fillRect(e.tx+8,e.ty-12-(1-fade)*8,2,2);
       } else {
-        this.gfx.lineStyle(2,0xe6d1a4,fade).lineBetween(e.x,e.y,e.tx,e.ty);
-        this.gfx.fillStyle(0xffedc2,fade).fillRect(e.tx-2,e.ty-6,4,4);
+        // 出手表现：长枪有“伸出→命中”的突刺过程，其余近战为目标处的弧形斩击；不再从士兵到敌人瞬间画直线。
+        const t=1-fade,angle=Math.atan2(e.ty-e.y,e.tx-e.x),cx=Math.cos(angle),cy=Math.sin(angle),hitY=e.ty-8;
+        if(e.stab){
+          const sx=e.x+cx*12,sy=e.y-10+cy*12,reach=Math.min(1,t/.35),tx=sx+(e.tx-cx*6-sx)*reach,ty=sy+(hitY-sy)*reach;
+          this.gfx.lineStyle(2,0x7a5a33,Math.min(1,fade*1.6)).lineBetween(sx,sy,tx,ty);
+          this.gfx.fillStyle(0xe9edf2,Math.min(1,fade*1.8)).fillTriangle(tx+cx*7,ty+cy*7,tx-cy*3,ty+cx*3,tx+cy*3,ty-cx*3);
+          if(reach<1)this.gfx.lineStyle(1,0xfff4d6,.5*fade).lineBetween(tx-cx*18,ty-cy*18,tx,ty);
+        }else if(!e.sweep&&!e.ranged){
+          const r=15,start=angle-1.1+t*.5,end=start+1.5*Math.min(1,t/.3+.2);
+          this.gfx.lineStyle(4*fade+1,0xf5e8c6,.85*fade).beginPath().arc(e.tx,hitY,r,start,end,false).strokePath();
+          this.gfx.lineStyle(1,0xffffff,.7*fade).beginPath().arc(e.tx,hitY,r-3,start+.2,end,false).strokePath();
+        }
+        if(!e.ranged&&t>.25){const k=(t-.25)/.75,len=4+k*7;this.gfx.lineStyle(2,0xffe2a0,fade);for(let i=0;i<4;i++){const a=angle+Math.PI+(i-1.5)*.55;this.gfx.lineBetween(e.tx+Math.cos(a)*(3+k*4),hitY+Math.sin(a)*(3+k*4),e.tx+Math.cos(a)*(3+len),hitY+Math.sin(a)*(3+len));}}
         if (e.sweep) {
           const angle=Math.atan2(e.ty-e.y,e.tx-e.x),radius=Math.min(100,Math.hypot(e.tx-e.x,e.ty-e.y));
           this.gfx.lineStyle(3,0xc4dbbf,fade*.6).beginPath().arc(e.x,e.y,radius,angle-.4,angle+.4,false).strokePath();
@@ -223,7 +237,10 @@ export class Legion {
       }
     }
   }
-  private fx(u: Ally, x: number, y: number, now: number, heal: boolean): void { if(!heal&&this.visibleCount>=60){if(now<this.visualAt)return;this.visualAt=now+24;} if(heal)this.artEffects.show(5,x,y-10,38,now,260); else if(u.kind==='rider')this.artEffects.show(6,x,y,44,now,180); else if(u.kind==='halberdier')this.artEffects.show(1,u.x,u.y,65,now,140,Math.atan2(y-u.y,x-u.x)); if (this.effects.length < 48 && u.view) this.effects.push({ x: u.x, y: u.y, tx: x, ty: y, until: now + 160, heal, sweep: u.kind === 'halberdier',stab:u.kind==='spearman' }); }
+  /** 近战受击小幅后退，增加打击感；首领、免控、墙体与补给不受影响。 */
+  private readonly knockedAt = new WeakMap<Enemy, number>();
+  private knock(u: Ally, e: Enemy, px: number, now: number): void { if ((this.knockedAt.get(e) ?? -Infinity) > now - 120) return; this.knockedAt.set(e, now); if (!e.active || e.kind === 'boss' || e.controlImmune || e.def.behavior === 'wall' || e.isSupplySlot) return; const dx = e.x - u.x, dy = e.y - u.y, d = Math.hypot(dx, dy) || 1; e.sprite.x += dx / d * px; e.sprite.y += dy / d * px; }
+  private fx(u: Ally, x: number, y: number, now: number, heal: boolean): void { if(!heal&&this.visibleCount>=60){if(now<this.visualAt)return;this.visualAt=now+24;} if(heal)this.artEffects.show(5,x,y-10,38,now,260); else if(u.kind==='rider')this.artEffects.show(6,x,y,44,now,180); else if(u.kind==='halberdier')this.artEffects.show(1,u.x,u.y,65,now,140,Math.atan2(y-u.y,x-u.x)); if (this.effects.length < 48 && u.view) this.effects.push({ x: u.x, y: u.y, tx: x, ty: y, until: now + 200, heal, sweep: u.kind === 'halberdier',stab:u.kind==='spearman',ranged:!!u.def.ranged }); }
   private selectViews(): void {
     const view=this.scene.cameras.main.worldView;
     const active=this.units.filter(u=>u.active&&u.x>=view.x-100&&u.x<=view.right+100&&u.y>=view.y-100&&u.y<=view.bottom+100);

@@ -1,7 +1,12 @@
-import {yellowStageUnlocked,loadWorld,worldUnlocked} from '../world/WorldStore';
+import {GameCodex} from '../ui/GameCodex';
+import {HeroWarCard} from '../ui/HeroWarCard';
+import {attachHomeVideo} from '../ui/HomeVideo';
+import {homeCommand} from '../ui/HomeCommand';
+import {HomeHeroPicker} from '../ui/HomeHeroPicker';
+import {dongzhuoStageUnlocked,nextDongzhuoStage,yellowStageUnlocked,loadWorld,worldUnlocked} from '../world/WorldStore';
 import Phaser from 'phaser';
 import { WAR, ensureWarTextures, warFrame } from '../ui/WarStyle';
-import { CHAPTERS, YELLOW_STAGES, getChapter, type YellowStage, type ChapterId } from '../data/chapters';
+import { CHAPTERS, YELLOW_STAGES,DONGZHUO_STAGES, getChapter, type YellowStage, type ChapterId } from '../data/chapters';
 import { CHARACTERS, type RunConfig } from '../data/characters';
 import { CHARACTER_PASSIVES } from '../data/passives';
 import { WEAPON_META } from '../data/upgrades';
@@ -20,10 +25,15 @@ interface HeroCard { bg: Phaser.GameObjects.Rectangle; icon: Phaser.GameObjects.
 
 /** Preparation only. Chapter persistence lives in ChapterProgress, combat stays in GameScene. */
 export class MenuScene extends Phaser.Scene {
+  private selectedWestStage:YellowStage=1;private westModal?:Phaser.GameObjects.Container;private westRows:Array<{bg:Phaser.GameObjects.Rectangle;status:Phaser.GameObjects.Text;stage:YellowStage;decor:Phaser.GameObjects.Graphics;icon:Phaser.GameObjects.Image}>=[];
+  private westDeploy?:Phaser.GameObjects.Rectangle;private westDeployLabel?:Phaser.GameObjects.Text;
   private selectedStage:YellowStage=1;
   private stageTabs:Phaser.GameObjects.Text[]=[];
   private compactHome=false;
   private heroModal?:Phaser.GameObjects.Container;
+  private homeCard?:HeroWarCard;
+  private heroPicker?:HomeHeroPicker;private heroEntryPaint?:(state?:string)=>void;
+  private homeBackground?:Phaser.GameObjects.Image;
   private homePortrait?:Phaser.GameObjects.Image;
   private started = false;
   private selectedChar = 0;
@@ -41,17 +51,21 @@ export class MenuScene extends Phaser.Scene {
     ensureWarTextures(this);
     this.cameras.main.fadeIn(180,0,0,0);
     this.selectedStage=Math.min(3,loadWorld().yellowStages+1) as YellowStage;this.stageTabs=[];
+    this.westRows=[];this.westModal=undefined;this.westDeploy=undefined;this.westDeployLabel=undefined;this.selectedWestStage=nextDongzhuoStage();
     this.started = false; this.chapterButtons = []; this.charCards = [];
     const params = new URLSearchParams(window.location.search), saved = this.registry.get('runConfig') as RunConfig | undefined;
     if(isChapterTestRun()&&['1','2','3'].includes(params.get('stage')??''))this.selectedStage=Number(params.get('stage')) as YellowStage;
     const fromWorld=this.registry.has('selectedWorldChapter');
     const expanded=fromWorld||this.registry.get('menuChapterPicker')===true||((params.has('autostart')||params.has('perf'))&&params.has('chapter'));
-    this.registry.remove('menuChapterPicker');this.compactHome=!expanded;this.heroModal=undefined;this.homePortrait=undefined;
-    const requested = getChapter(this.registry.get('selectedWorldChapter') ?? params.get('chapter') ?? saved?.chapter).id;
+    this.registry.remove('menuChapterPicker');this.compactHome=!expanded;this.homeCard=undefined;this.heroPicker=undefined;this.heroEntryPaint=undefined;this.heroModal=undefined;this.homePortrait=undefined;this.homeBackground=undefined;
+    const requested = getChapter(this.registry.get('selectedWorldChapter') ?? params.get('chapter') ?? (chapterOneCleared()?'hulao':saved?.chapter)).id;
+    const west=Number(this.registry.get('selectedWorldStage')??params.get('westStage')??(isChapterTestRun()&&requested==='hulao'?params.get('stage'):undefined)??nextDongzhuoStage());
+    this.registry.remove('selectedWorldStage');if([1,2,3].includes(west)&&(dongzhuoStageUnlocked(west)||isChapterTestRun()))this.selectedWestStage=west as YellowStage;
     this.registry.remove('selectedWorldChapter');
     this.selectedChapter = chapterUnlocked(requested)||isChapterTestRun() ? requested : 'huangjin';
-    this.selectedChar = params.has('autostart') || params.has('perf') ? 0 : Math.max(0, CHARACTERS.findIndex(c => c.id === saved?.character));
-    if(this.compactHome){this.selectedChapter='huangjin';this.createLanding(params);return;}
+    let lastHero=saved?.character;try{lastHero=localStorage.getItem('im_last_hero') as RunConfig['character']||lastHero;}catch{}
+    this.selectedChar = params.has('autostart') || params.has('perf') ? 0 : Math.max(0, CHARACTERS.findIndex(c => c.id === lastHero));
+    if(this.compactHome){if(!(isChapterTestRun()&&params.has('chapter')))this.selectedChapter=chapterOneCleared()||loadWorld().legacyHulaoAccess?'hulao':'huangjin';this.createLanding(params);return;}
     this.cameras.main.resetFX(); this.cameras.main.setBackgroundColor('#101813');
     const text = (x: number, y: number, value: string, size: number, color = '#ede4cc') => this.add.text(x, y, value, { fontFamily: size>=18?HEADING_FONT:FONT, fontSize: `${size}px`, color, resolution: 2 });
     this.add.tileSprite(0, 0, W, H, 'ground_hulao').setOrigin(0).setAlpha(.16);
@@ -82,7 +96,7 @@ export class MenuScene extends Phaser.Scene {
       const tag = text(x + width / 2 - 12, y - height / 2 + 9, '', 11).setOrigin(1, 0).setPadding(5,3).setBackgroundColor('#12291f');
       const name = text(x - width / 2 + 16, y - (D ? 2 : 7), chapter.name, D ? 21 : 20, '#ead5a7').setOrigin(0, .5);
       const hint = text(x - width / 2 + 16, y + (D ? 23 : 27), '', D ? 12 : 13, '#a6b8ab').setOrigin(0, .5);
-      bg.on('pointerdown', () => { if (!chapterUnlocked(chapter.id)&&!isChapterTestRun()) return; this.selectedChapter = chapter.id; this.renderSelection(); });
+      bg.on('pointerdown', () => { if (!chapterUnlocked(chapter.id)&&!isChapterTestRun()) return; this.selectedChapter = chapter.id; this.renderSelection();if(chapter.id==='hulao')this.westModal?.setVisible(true); });
       bg.on('pointerover', () => { if (chapterUnlocked(chapter.id) && this.selectedChapter !== chapter.id) bg.setFillStyle(0x263c30).setStrokeStyle(1, 0xa6b996); });
       bg.on('pointerout', () => this.renderSelection());
       this.chapterButtons.push({ id: chapter.id, bg, name, tag, hint, decor });
@@ -124,56 +138,91 @@ export class MenuScene extends Phaser.Scene {
     const bind = (key: string, action: () => void) => { keyboard?.on(key, action); this.events.once('shutdown', () => keyboard?.off(key, action)); };
     bind('keydown-ENTER', () => this.startGame()); bind('keydown-L', () => switchLayout(D ? 'mobile' : 'desktop'));
     ['ONE', 'TWO', 'THREE', 'FOUR'].forEach((key, i) => bind(`keydown-${key}`, () => { this.selectedChar = i; this.renderSelection(); }));
-    this.renderSelection();
+    text(28,D?522:902,'返回首页',12,'#d5bd8e').setPadding(6,6).setInteractive({useHandCursor:true}).setName('review-home').on('pointerdown',()=>this.scene.restart());
+    this.createWestPicker();this.renderSelection();
     if (params.has('autostart') || params.has('perf')) this.time.delayedCall(80, () => this.startGame());
   }
   private createLanding(params:URLSearchParams):void {
-    this.cameras.main.setBackgroundColor('#0d1712');
+    this.cameras.main.setBackgroundColor('#201710');
     const text=(x:number,y:number,value:string,size:number,color='#e8d8b2')=>this.add.text(x,y,value,{fontFamily:size>=18?HEADING_FONT:FONT,fontSize:`${size}px`,color,resolution:2}).setOrigin(.5);
-    this.add.tileSprite(W/2,H/2,W,H,'ground_hulao').setAlpha(.1);
-    this.add.rectangle(W/2,H/2,W,H,0x0b1612,.8);
-    this.add.image(W/2,H/2,'vignette').setDisplaySize(W,H).setAlpha(.6);
-    const frame=this.add.graphics();warFrame(frame,18,18,W-36,H-36,WAR.gold,false);
-    text(W/2,D?57:115,'乱世千军',D?50:56,'#edcf8b').setFontFamily(TITLE_FONT).setLetterSpacing(4).setShadow(0,2,'#060c08',0,true,true);
-    text(W/2,D?101:166,'三国乱世 · 一将起义，千军相随',D?13:16,'#92aa99');
-    const info=YELLOW_STAGES[this.selectedStage-1];
-    text(W/2,D?139:231,`${loadWorld().yellowStages?'当前征程':'首战'} · 1-${this.selectedStage} ${info.name}`,D?13:16,'#c8bc95');
-    this.homePortrait=this.add.image(W/2,D?228:373,CHARACTERS[this.selectedChar].portrait);
-    this.heroName=text(W/2,D?316:513,'',D?31:35,'#f1d99f').setFontFamily(TITLE_FONT);
-    this.weapon=text(W/2,D?349:555,'',D?13:17,'#bdcdbf');
-    this.passiveName=text(W/2,D?376:588,'',D?13:16,'#87bca4');
-    this.passive=text(W/2,D?402:623,'',D?12:15,'#99ae9d').setWordWrapWidth(Math.min(450,W-88)).setAlign('center');
-    const pickY=D?440:704,pickW=D?210:W-140;
-    this.add.image(W/2,pickY,'ui_war_panel').setDisplaySize(pickW,D?40:58);
-    const pick=this.add.rectangle(W/2,pickY,pickW,D?40:58,0x172b23,.2).setStrokeStyle(1,0x8e9c75).setInteractive({useHandCursor:true}).setName('choose-hero');
-    text(W/2,pickY,'选择武将',D?17:21,'#dfd1ad');
-    this.heroModal=this.add.container(0,0).setDepth(300).setVisible(false).setName('hero-picker');
-    const modal=this.heroModal;
-    const dim=this.add.rectangle(0,0,W,H,0x030906,.9).setOrigin(0).setInteractive().on('pointerdown',()=>modal.setVisible(false));modal.add(dim);
-    modal.add(text(W/2,D?81:173,'选择出战武将',D?25:30,'#efd493').setFontStyle('bold'));
-    modal.add(text(W/2,D?115:216,'四将各有所长 · 点选后返回',D?12:15,'#9bb4a2'));
-    const cw=D?180:(W-92)/2,ch=D?226:214;
-    CHARACTERS.forEach((c,i)=>{
-      const x=D?W/2+(i-1.5)*(cw+14):46+cw/2+i%2*(cw+16),y=D?273:354+Math.floor(i/2)*(ch+18);
-      const skin=this.add.image(x,y,'ui_war_panel').setDisplaySize(cw,ch);
-      const bg=this.add.rectangle(x,y,cw,ch,0x182c22,.2).setInteractive({useHandCursor:true}).setName(`pick-${c.id}`);
-      const decor=this.add.graphics(),icon=this.add.image(x,y-32,c.portrait);icon.setScale(Math.min(116/icon.width,116/icon.height));
-      const name=text(x,y+49,c.name,26,'#f0dfb4').setFontFamily(TITLE_FONT),role=text(x,y+79,ROLES[i],D?10:12,'#a2baa9');
-      const badge=text(x+cw/2-12,y-ch/2+17,'出战',12,'#f2d69a').setOrigin(1,.5);
-      bg.on('pointerdown',()=>{this.selectedChar=i;this.renderSelection();modal.setVisible(false);});
-      modal.add([skin,bg,decor,icon,name,role,badge]);this.charCards.push({bg,icon,badge,decor});
-    });
-    const back=text(W/2,D?449:857,'返回',D?17:21,'#d5c39c').setPadding(36,14).setInteractive({useHandCursor:true}).setName('hero-picker-close').on('pointerdown',()=>modal.setVisible(false));modal.add(back);
-    pick.on('pointerdown',()=>{modal.setVisible(true);this.renderSelection();});
-    const startY=D?493:820,startW=D?360:W-112,startH=D?48:66;
-    this.startButton=this.add.rectangle(W/2,startY,startW,startH,0xc7aa65).setStrokeStyle(1,0xf3dca2).setInteractive({useHandCursor:true}).setName('start-campaign');
-    this.startLabel=text(W/2,startY,'开始匡扶汉室',D?23:26,'#17251a').setFontStyle('bold');
-    this.startButton.on('pointerdown',()=>this.startGame()).on('pointerover',()=>this.startButton.setFillStyle(0xe1c37e)).on('pointerout',()=>this.renderSelection());
-    text(W/2,D?528:901,'第一波结束后招募援兵 · 关卡进度自动保存',D?10:13,'#788f7e');
-    if(isChapterTestRun())text(W-34,37,'测试选关',13,'#d9bf7e').setOrigin(1,.5).setPadding(12,10).setInteractive({useHandCursor:true}).setName('dev-stage-picker').on('pointerdown',()=>{this.registry.set('menuChapterPicker',true);this.scene.restart();});
-    const keys=this.input.keyboard,enter=()=>{if(modal.visible)modal.setVisible(false);else this.startGame();},escape=()=>modal.setVisible(false);
+    const epicBackground='epic_bg_'+(this.selectedChapter==='hulao'?'dongzhuo':'huangjin')+'_'+(D?'desktop':'mobile');
+    const bg=this.add.image(W/2,H/2,this.textures.exists(epicBackground)?epicBackground:'rest_camp');bg.setScale(Math.max(W/bg.width,H/bg.height));this.homeBackground=bg;bg.setDepth(-2);this.ensureHomeArt();if(this.selectedChapter==='huangjin')attachHomeVideo(this,W,H);
+    const shade=this.add.graphics();shade.fillStyle(0x100b08,.14).fillRect(0,0,W,H);for(let y=0;y<H;y+=8){const a=y<H*.24?.36*(1-y/(H*.24)):y>H*.55?.82*(y-H*.55)/(H*.45):0;if(a>0)shade.fillStyle(0x100b08,a).fillRect(0,y,W,8);}
+    text(D?230:W/2,D?63:112,'乱世千军',D?52:36,'#efd399').setFontFamily(TITLE_FONT).setLetterSpacing(4).setShadow(0,3,'#130a05',2,true,true);
+    const west=this.selectedChapter==='hulao',save=loadWorld(),info=west?DONGZHUO_STAGES[this.selectedWestStage-1]:YELLOW_STAGES[this.selectedStage-1];
+    text(D?230:W/2,D?105:148,west?'汉末烽烟 · 诸侯并起，挥师讨董':'苍天已乱 · 黄巾四起，义军初兴',D?15:16,'#d0bea1');
+    const cx=D?W*.73:W/2;
+    const readingShade=this.add.graphics();for(let i=0;i<48;i++){const t=i/48;readingShade.fillStyle(0x0f0c09,.018+t*.01).fillEllipse(cx,D?264:758,(D?480:W-12)*(1-t*.85),(D?244:176)*(1-t*.85));}
+    text(cx,D?40:26,west?'第二章 · 讨伐董卓':'第一章 · 黄巾之乱',15,'#e4c38d');
+    text(cx,D?83:63,isChapterTestRun()?`${west?'2':'1'}-${west?this.selectedWestStage:this.selectedStage}  ${info.name}`:info.name,D?31:33,'#f4dfb5');
+    text(cx,D?244:758,save.cleared.hulao?'天下已开。重整兵马，再赴征途。':west?'群雄会盟，关隘烽烟。挥师西进，问鼎中原。':'黄巾四起，烽火蔓延。整备义军，踏上征途。',14,'#e2d4bd').setWordWrapWidth(D?310:W-96).setAlign('center');
+    this.homeCard=new HeroWarCard(this,D?94:104,D?126:172,D?300:332,D?340:410);this.homeCard.setSelected(true);this.homeCard.root.setName('current-hero-card');
+    let folded=this.registry.get('heroCardFolded')===true;
+    this.homeCard.setFolded(folded);
+    this.homeCard.hit.on('pointerdown',()=>{folded=!folded;this.registry.set('heroCardFolded',folded);this.homeCard?.setFolded(folded);});
+    this.homePortrait=this.homeCard.art;this.heroName=this.homeCard.name;this.weapon=this.homeCard.weapon;
+    this.passiveName=text(-1000,-1000,'',13).setVisible(false);this.passive=text(-1000,-1000,'',13).setVisible(false);
+    const navY=D?494:631;
+    const heroEntry=homeCommand(this,D?244:W/2,navY,D?190:220,D?48:64,'更换武将');const pick=heroEntry.hit.setName('choose-hero');this.heroEntryPaint=heroEntry.paint;
+    if(isChapterTestRun())text(D?W*.61:W*.36,D?494:924,'战役回顾',D?18:20,'#e5ccb0').setPadding(16,16).setInteractive({useHandCursor:true}).setName('home-review').on('pointerdown',()=>{this.registry.set('menuChapterPicker',true);this.scene.restart();});
+    text(isChapterTestRun()?(D?W*.80:W*.70):(D?W*.73:W/2),D?494:924,'设置',D?18:20,'#e5ccb0').setPadding(18,16).setInteractive({useHandCursor:true}).setName('home-settings').on('pointerdown',()=>this.openHomeSettings());
+    text(40,D?494:924,'图鉴',D?18:20,'#e5ccb0').setOrigin(0,.5).setPadding(12,16).setInteractive({useHandCursor:true}).setName('home-codex').on('pointerdown',()=>{if(this.children.getByName('game-codex'))return;this.ensureHomeArt(true);new GameCodex(this,index=>{this.selectedChar=index;this.registry.set('heroConfirmed',true);try{localStorage.setItem('im_last_hero',CHARACTERS[index].id);}catch{}this.renderSelection();});});
+    if(worldUnlocked()){
+      text(W-36,38,'主城',16).setOrigin(1,.5).setPadding(12,12).setInteractive({useHandCursor:true}).setName('home-city').on('pointerdown',()=>this.scene.start('CityScene'));
+      text(W-126,38,'天下地图',16).setOrigin(1,.5).setPadding(12,12).setInteractive({useHandCursor:true}).setName('home-world').on('pointerdown',()=>this.scene.start('WorldMapScene'));
+    }
+    if(west&&!save.dongzhuoStages){const reveal=text(W/2,D?157:228,'新篇揭晓 · 讨伐董卓',15,'#f0c389').setAlpha(0);this.tweens.add({targets:reveal,alpha:1,duration:700});}
+    const closeHeroes=()=>{this.heroModal?.setVisible(false);this.heroEntryPaint?.();};
+    this.heroPicker=new HomeHeroPicker(this,index=>{this.selectedChar=index;this.registry.set('heroConfirmed',true);try{localStorage.setItem('im_last_hero',CHARACTERS[index].id);}catch{}closeHeroes();this.renderSelection();},closeHeroes);
+    this.heroModal=this.heroPicker.root;const modal=this.heroModal;
+    const openHeroes=()=>{this.ensureHomeArt(true);this.heroPicker?.open(this.selectedChar);this.heroEntryPaint?.('selected');};pick.on('pointerdown',openHeroes);
+    const startY=D?409:857,startW=D?292:W-156,startH=D?56:64;
+    const primary=homeCommand(this,D?W*.73:W/2,startY,startW,startH,'匡扶汉室',true);this.startButton=primary.hit.setName('start-campaign');this.startLabel=primary.caption;
+    this.startButton.on('pointerdown',()=>{let chosen=!!this.registry.get('heroConfirmed');try{chosen=chosen||!!localStorage.getItem('im_last_hero');}catch{}if(!chosen&&!params.has('autostart')&&!params.has('perf')){openHeroes();return;}this.startGame();});
+    if(isChapterTestRun())text(W/2,D?529:955,'测试战斗不记录正式进度',10,'#8c806f');
+    if(isChapterTestRun())text(W-34,24,'测试选关 ›',14,'#dcc399').setOrigin(1,.5).setPadding(12,10).setInteractive({useHandCursor:true}).setName('dev-stage-picker').on('pointerdown',()=>this.openTestStages());
+    const keys=this.input.keyboard,enter=()=>{if(modal.visible)modal.getByName('hero-confirm')?.emit('pointerdown');else this.startButton.emit('pointerdown');},escape=()=>closeHeroes();
     keys?.on('keydown-ENTER',enter);keys?.on('keydown-ESC',escape);this.events.once('shutdown',()=>{keys?.off('keydown-ENTER',enter);keys?.off('keydown-ESC',escape);});
     this.renderSelection();if(params.has('autostart')||params.has('perf'))this.time.delayedCall(80,()=>this.startGame());
+  }
+  /** DEV-only direct entry; campaign unlocks and persistent progress stay untouched. */
+  private openTestStages():void {
+    if(!isChapterTestRun()||this.children.getByName('dev-stages'))return;
+    const modal=this.add.container(0,0).setDepth(600).setName('dev-stages');
+    const label=(x:number,y:number,value:string,size=18)=>this.add.text(x,y,value,{fontFamily:FONT,fontSize:size+'px',color:'#ead5b0',resolution:2}).setOrigin(.5);
+    modal.add(this.add.rectangle(W/2,H/2,W,H,0x160f0b,.97).setInteractive());
+    modal.add(label(W/2,D?52:94,'测试选关',28));
+    modal.add(label(W/2,D?88:137,'直接进入 · 不写入正式通关与奖励',13));
+    for(const [column,chapter,stages]of [[0,'huangjin',YELLOW_STAGES],[1,'hulao',DONGZHUO_STAGES]] as const){
+      const x=D?W*(column? .73:.27):W/2,top=D?150:198+column*310;
+      modal.add(label(x,top,column?'第二章 · 讨伐董卓':'第一章 · 黄巾之乱',19));
+      for(const [i,info]of stages.entries()){
+        const y=top+55+i*(D?70:74),button=homeCommand(this,x,y,D?360:W-72,D?54:60,`${column+1}-${info.stage}  ${info.name} · ${info.boss}`,false);
+        modal.add([button.g,button.hit,button.caption]);
+        button.hit.setName(`test-stage-${column+1}-${info.stage}`).on('pointerdown',()=>{
+          this.selectedChapter=chapter;
+          if(chapter==='huangjin')this.selectedStage=info.stage;else this.selectedWestStage=info.stage;
+          modal.destroy();this.startGame();
+        });
+      }
+    }
+    const back=label(W/2,D?H-40:H-70,'返回首页',20).setPadding(32,14).setInteractive({useHandCursor:true}).setName('dev-stages-close').on('pointerdown',()=>modal.destroy());modal.add(back);
+  }
+  private ensureHomeArt(all=false):void{
+    if(this.load.isLoading()){this.load.once('complete',()=>{if(this.sys.isActive())this.ensureHomeArt(all);});return;}
+    const background='epic_bg_'+(this.selectedChapter==='hulao'?'dongzhuo':'huangjin')+'_'+(D?'desktop':'mobile');const files:Array<[string,string]>=[];
+    if(!this.textures.exists(background))files.push([background,'assets/epic-home/'+(this.selectedChapter==='hulao'?'dongzhuo':'huangjin')+'-'+(D?'desktop':'mobile')+'.webp']);
+    for(const c of all?CHARACTERS:[CHARACTERS[this.selectedChar]])if(!this.textures.exists('epic_hero_'+c.id))files.push(['epic_hero_'+c.id,'assets/epic-home/'+c.id+'.webp']);
+    if(!files.length)return;
+    for(const [key,url]of files)this.load.image(key,url);
+    this.load.once('complete',()=>{if(!this.sys.isActive())return;for(const [key]of files)if(this.textures.exists(key))this.textures.get(key).setFilter(Phaser.Textures.FilterMode.LINEAR);if(this.homeBackground&&this.homeBackground.scene&&this.textures.exists(background)){this.homeBackground.setTexture(background);this.homeBackground.setScale(Math.max(W/this.homeBackground.width,H/this.homeBackground.height));}this.renderSelection();});this.load.start();
+  }
+  private openHomeSettings():void {
+    const modal=this.add.container(0,0).setDepth(500).setName('home-settings-panel');
+    const label=(x:number,y:number,value:string,size=20)=>this.add.text(x,y,value,{fontFamily:FONT,fontSize:size+'px',color:'#e8d0aa',resolution:2}).setOrigin(.5);
+    modal.add(this.add.rectangle(W/2,H/2,W,H,0x130d09,.97).setInteractive());modal.add(label(W/2,H/2-130,'军中设置',28));
+    ['音乐','音效'].forEach((name,i)=>{const key=i?'im_sfx_vol':'im_bgm_vol',y=H/2-40+i*76;let volume= i?90:40;try{volume=Number(localStorage.getItem(key)??volume);}catch{}const value=label(W/2,y,name+'  '+volume+'%');modal.add(value);for(const dir of [-1,1])modal.add(label(W/2+dir*140,y,dir<0?'－':'＋',28).setPadding(16,12).setInteractive({useHandCursor:true}).on('pointerdown',()=>{volume=Math.max(0,Math.min(100,volume+dir*10));try{localStorage.setItem(key,String(volume));}catch{}value.setText(name+'  '+volume+'%');}));});
+    modal.add(label(W/2,H/2+135,'返回',20).setPadding(40,16).setInteractive({useHandCursor:true}).setName('settings-close').on('pointerdown',()=>modal.destroy()));
   }
   private corners(g: Phaser.GameObjects.Graphics, bg: Phaser.GameObjects.Rectangle, selected: boolean): void {
     g.clear();
@@ -187,39 +236,99 @@ export class MenuScene extends Phaser.Scene {
       c.bg.setFillStyle(!unlocked ? 0x161c19 : selected ? 0x2b4030 : 0x182a22,.22).setStrokeStyle(selected ? 2 : 1, selected ? 0xc6aa6c : unlocked ? 0x45604d : 0x363d34);
       if (unlocked) c.bg.setInteractive({ useHandCursor: true }); else c.bg.disableInteractive();
       c.name.setColor(!unlocked ? '#747e71' : selected ? '#f4d99f' : '#c8d4bf');
-      c.tag.setText(!unlocked ? '未解锁' : c.id === 'huangjin' && chapterOneCleared() ? '已通关' : selected ? '已选择' : '可出征').setColor(!unlocked ? '#8f8c7b' : '#d4bb7e');
+      c.tag.setText(!unlocked ? '未解锁' : (c.id === 'huangjin' && chapterOneCleared()||c.id==='hulao'&&loadWorld().cleared.hulao) ? '已通关' : selected ? '已选择' : '可出征').setColor(!unlocked ? '#8f8c7b' : '#d4bb7e');
       c.hint.setVisible(c.id!=='huangjin');
+      if(!unlocked)c.name.setText('未揭晓战役');
       if(c.id==='huangjin')c.name.setText(`1-${this.selectedStage} ${YELLOW_STAGES[this.selectedStage-1].name}`).setFontSize(D?20:18);
-      c.hint.setText(!unlocked ? '通关第一章后解锁' : `${chapter.waves.length} 波敌军   /   首领 · ${chapter.bossName}`).setColor(!unlocked ? '#818778' : '#a4b8a4');
+      c.hint.setText(!unlocked ? '击败张角后解锁' : c.id==='hulao'?`2-${this.selectedWestStage} ${DONGZHUO_STAGES[this.selectedWestStage-1].name} · ${DONGZHUO_STAGES[this.selectedWestStage-1].boss}  选关 ›`:`${chapter.waves.length} 波敌军   /   首领 · ${chapter.bossName}`).setColor(!unlocked ? '#818778' : '#a4b8a4');
       this.corners(c.decor, c.bg, selected);
     });
     this.stageTabs.forEach((t,i)=>{const unlocked=yellowStageUnlocked(i+1)||isChapterTestRun();t.setText(`1-${i+1}${unlocked?'':' 锁'}`).setColor(!unlocked?'#758075':this.selectedStage===i+1?'#ffe0a0':'#a9bfac').setBackgroundColor(this.selectedStage===i+1?'#354a36':'#12271f');});
     this.charCards.forEach((c, i) => {
       const selected = i === this.selectedChar;
       c.bg.setFillStyle(selected ? 0x2c4232 : 0x15271f,.22).setStrokeStyle(selected ? 2 : 1, selected ? 0xd2b474 : 0x3e5648);
+      const epic='epic_hero_'+CHARACTERS[i].id;if(this.textures.exists(epic)){c.icon.setTexture(epic);c.icon.setScale(Math.min(130/c.icon.width,142/c.icon.height));}
       c.badge.setVisible(selected); c.icon.setAlpha(selected ? 1 : .83); this.corners(c.decor, c.bg, selected);
     });
-    const c = CHARACTERS[this.selectedChar], ready = !!c && (chapterUnlocked(this.selectedChapter)||isChapterTestRun()) && !this.started;
-    if (c) {
-      this.heroName.setText(this.compactHome?c.name:`${c.name}  ·  ${ROLES[this.selectedChar].split(' · ')[0]}`);
-      if(this.homePortrait){this.homePortrait.setTexture(c.portrait);this.homePortrait.setScale(Math.min((D?154:200)/this.homePortrait.width,(D?154:200)/this.homePortrait.height));}
+    for(const row of this.westRows){
+      const open=dongzhuoStageUnlocked(row.stage)||isChapterTestRun(),done=loadWorld().dongzhuoStages>=row.stage,chosen=this.selectedChapter==='hulao'&&row.stage===this.selectedWestStage;
+      row.bg.setFillStyle(chosen?0x493323:open?0x2d211a:0x211b17,1).setStrokeStyle(chosen?2:1,chosen?0xdbb478:open?0x8e6e47:0x494038);
+      row.status.setText(!open?'未解锁':done?chosen?'已通关 · 当前':'已通关':chosen?'当前选择':'可出征').setColor(!open?'#8a8072':done?'#c8b685':'#edc889');row.icon.setAlpha(1).setVisible(open);
+      const r=row.bg.getBounds(),g=row.decor;g.clear().lineStyle(1,chosen?0xd6b47a:0x776047,chosen?.8:.5).strokeRect(r.x+5,r.y+5,r.width-10,r.height-10);
+      g.fillStyle(chosen?0xc39a5b:0x786147,1);for(const x of [r.x+10,r.right-10])for(const y of [r.y+10,r.bottom-10])g.fillRect(x-2,y-2,4,4);
+      g.lineStyle(1,0xc09a66,.2).lineBetween(r.x+14,r.bottom-12,r.right-14,r.bottom-12);
+    }
+    if(this.heroModal?.visible)this.heroPicker?.refreshArt();
+    const westReady=dongzhuoStageUnlocked(this.selectedWestStage)||isChapterTestRun();this.westDeploy?.setAlpha(westReady?1:.4);if(westReady)this.westDeploy?.setInteractive({useHandCursor:true});else this.westDeploy?.disableInteractive();this.westDeployLabel?.setAlpha(westReady?1:.4);
+    const c = CHARACTERS[this.selectedChar], ready = !!c && (chapterUnlocked(this.selectedChapter)||isChapterTestRun()) && (this.selectedChapter!=='hulao'||dongzhuoStageUnlocked(this.selectedWestStage)||isChapterTestRun()) && !this.started;
+    if(this.compactHome&&this.homeCard){this.homeCard.setHero(this.selectedChar);if(!this.textures.exists('epic_hero_'+c.id))this.ensureHomeArt();}
+    else if (c) {
+      this.heroName.setText(this.compactHome?c.name+' · '+ROLES[this.selectedChar].split(' · ')[0]:`${c.name}  ·  ${ROLES[this.selectedChar].split(' · ')[0]}`);
+      if(this.homePortrait){const key='epic_hero_'+c.id,image=this.homePortrait,target=this.textures.exists(key)?key:c.portrait;const apply=()=>{if(!image.scene)return;image.setTexture(target,'__BASE');image.setScale(Math.min((D?320:350)/image.width,(D?270:355)/image.height));};if(image.texture.key!==target&&image.getData('nextArt')!==target){image.setData('nextArt',target);this.tweens.killTweensOf(image);this.tweens.add({targets:image,alpha:0,duration:75,onComplete:()=>{apply();this.tweens.add({targets:image,alpha:1,duration:160});}});}image.setOrigin(.5,1).setPosition(D?W*.25:W/2,D?403:565);if(image.texture.key===target)apply();if(!this.textures.exists(key))this.ensureHomeArt();}
       this.weapon.setText(`专属兵器  ${WEAPON_META[c.startWeapon].name}`);
       this.passiveName.setText(`天赋被动  ${CHARACTER_PASSIVES[c.id].name}`);
       this.passive.setText(PASSIVE_HINTS[this.selectedChar]);
     }
-    this.startButton.setFillStyle(ready ? 0xc7aa65 : 0x465047).setAlpha(ready ? 1 : .6);
+    this.startButton.setFillStyle(ready ? 0xc7aa65 : 0x465047,this.compactHome?.001:1).setStrokeStyle(this.compactHome?0:1,0xf3dca2).setAlpha(ready ? 1 : .6);
     if (ready) this.startButton.setInteractive({ useHandCursor: true }); else this.startButton.disableInteractive();
-    this.startLabel.setText(ready&&this.compactHome?'开始匡扶汉室':ready ? `出征 · ${this.selectedChapter==='huangjin'?YELLOW_STAGES[this.selectedStage-1].name:getChapter(this.selectedChapter).name}` : this.started ? '正在出征…' : '请选择可用章节与武将');
+    this.startLabel.setText(ready&&this.compactHome?'匡扶汉室':ready ? `出征 · ${this.selectedChapter==='huangjin'?YELLOW_STAGES[this.selectedStage-1].name:DONGZHUO_STAGES[this.selectedWestStage-1].name}` : this.started ? '正在出征…' : '请选择可用章节与武将');
   }
+  private createWestPicker():void{
+    const modal=this.add.container(0,0).setDepth(400).setVisible(false).setName('dongzhuo-picker');this.westModal=modal;
+    const text=(x:number,y:number,value:string,size:number,color='#e5d3a8')=>this.add.text(x,y,value,{fontFamily:size>=18?HEADING_FONT:FONT,fontSize:size+'px',color,resolution:2}).setOrigin(.5);
+    modal.add(this.add.rectangle(0,0,W,H,0x191310,1).setOrigin(0).setInteractive());
+    const art=this.add.graphics();modal.add(art);
+    art.lineStyle(1,0x80603a,.12);for(let y=12;y<H;y+=12)art.lineBetween(18,y,W-18,y);
+    art.lineStyle(1,0x8d6d44,.5).strokeRect(16,18,W-32,H-36);
+    const headY=D?57:95;
+    art.fillStyle(0x54241d,1).fillRect(W/2-140,headY-37,280,64).fillTriangle(W/2-140,headY+27,W/2+140,headY+27,W/2,headY+44);
+    art.lineStyle(1,0xb18d54,.8).lineBetween(W/2-140,headY-37,W/2+140,headY-37);
+    modal.add(text(W/2,headY-14,'第 二 章',12,'#c3a26c'));
+    modal.add(text(W/2,headY+16,'讨伐董卓',D?35:38,'#f2d49a').setFontFamily(TITLE_FONT).setLetterSpacing(3));
+    modal.add(text(W/2,D?121:168,'汜水破敌  /  荥阳破围  /  虎牢决战',D?13:15,'#bda88a'));
+    const features=['铁甲统帅 · 横扫与裂地重斩','两翼伏击 · 骑兵突袭与箭雨','无双猛将 · 冲锋与魔神降临'];
+    DONGZHUO_STAGES.forEach((info,i)=>{
+      const known=dongzhuoStageUnlocked(info.stage)||isChapterTestRun();
+      const x=D?W/2+(i-1)*286:W/2,y=D?291:283+i*190,cw=D?266:W-76,ch=D?282:174;
+      const bg=this.add.rectangle(x,y,cw,ch,0x2b2019,1).setInteractive({useHandCursor:true}).setName('west-stage-'+info.stage);
+      const decor=this.add.graphics();
+      const icon=this.add.image(D?x:x-cw/2+68,D?y-42:y+3,i===0?'huaxiong_portrait':i===1?'xurong':'boss_lubu',0).setName('west-boss-'+info.stage);
+      if(i===0)icon.setDisplaySize(D?96:104,D?96:104);else icon.setDisplaySize(D?112:124,D?112:124);
+      const tx=D?x:x-cw/2+143;
+      const number=text(D?x-cw/2+30:x-cw/2+28,y-ch/2+25,'0'+info.stage,14,'#caa875');
+      const title=text(tx,D?y+29:y-34,known?info.name:'未揭晓战役',D?26:29,'#f3dfb8').setOrigin(D?.5:0,.5);
+      const boss=text(tx,D?y+61:y+3,known?'首领 · '+info.boss:'完成前一战役后揭晓',17,'#d4ad75').setOrigin(D?.5:0,.5);
+      const feature=text(tx,D?y+91:y+39,known?features[i]:'逐关破敌 · 推进当前征程',D?12:13,'#bda88f').setOrigin(D?.5:0,.5);
+      const status=text(x+cw/2-17,y-ch/2+25,'',12).setOrigin(1,.5);
+      bg.on('pointerdown',()=>{if(!dongzhuoStageUnlocked(info.stage)&&!isChapterTestRun())return;this.selectedChapter='hulao';this.selectedWestStage=info.stage;this.renderSelection();});
+      bg.on('pointerover',()=>{if(dongzhuoStageUnlocked(info.stage)||isChapterTestRun())bg.setAlpha(.85);}).on('pointerout',()=>bg.setAlpha(1));
+      modal.add([bg,decor,icon,number,title,boss,feature,status]);this.westRows.push({bg,status,stage:info.stage,decor,icon});
+    });
+    const footer=D?H-51:H-92;
+    art.fillStyle(0x191310,1).fillRect(24,footer-43,W-48,86).lineStyle(1,0x8d6d44,.65).lineBetween(32,footer-45,W-32,footer-45);
+    const button=(x:number,width:number,label:string,primary:boolean,action:()=>void,name:string)=>{
+      const bg=this.add.rectangle(x,footer,width,D?48:62,primary?0x96623a:0x33251d,1).setStrokeStyle(1,primary?0xd8b373:0x8b6c48).setInteractive({useHandCursor:true}).setName(name);
+      const caption=text(x,footer,label,D?17:20,primary?'#fff0ce':'#d2bda0');
+      bg.on('pointerdown',()=>bg.setAlpha(.7)).on('pointerout',()=>bg.setAlpha(1)).on('pointerup',()=>{bg.setAlpha(1);action();});modal.add([bg,caption]);return{bg,caption};
+    };
+    button(D?W/2-163:W*.24,D?170:W*.32,'返回',false,()=>modal.setVisible(false),'west-back');
+    const deploy=button(D?W/2+91:W*.66,D?300:W*.46,'出征当前关卡',true,()=>{modal.setVisible(false);this.startGame();},'west-deploy');
+    this.westDeploy=deploy.bg;this.westDeployLabel=deploy.caption;
+    modal.add(text(W/2,D?H-13:H-35,loadWorld().legacyHulaoAccess?'旧版虎牢关访问权限已保留':'逐关破敌 · 通关进度自动保存',11,'#917c61'));
+  }
+
   private startGame(): void {
-    if (this.heroModal?.visible) return;
+    if (this.heroModal?.visible||this.westModal?.visible||this.children.getByName('home-settings-panel')||this.children.getByName('game-codex')) return;
+    if(this.selectedChapter==='hulao'&&!dongzhuoStageUnlocked(this.selectedWestStage)&&!isChapterTestRun())return;
     if (this.started || (!chapterUnlocked(this.selectedChapter)&&!isChapterTestRun()) || !CHARACTERS[this.selectedChar]) return;
     this.started = true; this.renderSelection();
     if(!isChapterTestRun())this.registry.set('worldCampaign',true);
     const c = CHARACTERS[this.selectedChar];
+    try{localStorage.setItem('im_last_hero',c.id);}catch{}
     this.registry.remove('campaignTransfer');
-    this.registry.set('runConfig', { chapter: this.selectedChapter, stage: this.selectedChapter==='huangjin'?this.selectedStage:undefined, character: c.id, weapon: c.startWeapon } satisfies RunConfig);
+    this.registry.set('runConfig', { chapter: this.selectedChapter, stage: this.selectedChapter==='huangjin'?this.selectedStage:undefined,westStage:this.selectedChapter==='hulao'?this.selectedWestStage:undefined, character: c.id, weapon: c.startWeapon } satisfies RunConfig);
     this.cameras.main.fadeOut(150, 0, 0, 0);
     this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => this.scene.start('GameScene'));
   }
 }
+

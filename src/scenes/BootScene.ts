@@ -1,4 +1,6 @@
-import {worldUnlocked} from '../world/WorldStore';
+import {GROWTH_ICON_IDS} from '../ui/GrowthIcons';
+import {TACTICS,TREASURES} from '../data/builds';
+import {loadWorld,worldUnlocked} from '../world/WorldStore';
 import Phaser from 'phaser';
 import {createReadableTextures} from '../systems/ReadableTextures';
 import { GAME_WIDTH } from '../config';
@@ -11,13 +13,33 @@ export class BootScene extends Phaser.Scene {
   }
 
   preload(): void {
+    this.load.spritesheet('build_vfx','assets/build-vfx/styles-ai-v1.png',{frameWidth:64,frameHeight:64});
+    this.load.spritesheet('refined_spear','assets/combat-refined/spear-sequence.png',{frameWidth:384,frameHeight:64});
+    this.load.spritesheet('refined_impact','assets/combat-refined/impact-sequence.png',{frameWidth:64,frameHeight:64});
+    for(const id of GROWTH_ICON_IDS)this.load.image('growth_icon_'+id,'assets/growth-icons/'+id+'.png');
+    for(const id of [...Object.keys(TACTICS),...Object.keys(TREASURES)])this.load.image('build_icon_'+id,'assets/build/'+id+'.png');
     const params=new URLSearchParams(window.location.search);
-    this.shellOnly=worldUnlocked()&&!this.registry.get('loadBattle')&&!params.has('dev')&&!params.has('autostart')&&!params.has('perf');
+    this.shellOnly=false;
     if(this.shellOnly){if(!this.textures.exists('art_panel'))this.load.image('art_panel','assets/processed/overhaul/bronze-panel-mobile.png');return;}
+    const homeSave=loadWorld(),homeChapter=homeSave.yellowStages>=3||homeSave.cleared.huangjin||homeSave.legacyHulaoAccess?'dongzhuo':'huangjin';
+    const homeLayout=GAME_WIDTH>600?'desktop':'mobile';
+    this.load.image('epic_bg_'+homeChapter+'_'+homeLayout,'assets/epic-home/'+homeChapter+'-'+homeLayout+'.webp');
+    let homeHero='zhaoyun';try{const id=localStorage.getItem('im_last_hero');if(id&&['zhaoyun','guanyu','huangzhong','zhuge'].includes(id))homeHero=id;}catch{}
+    this.load.image('epic_hero_'+homeHero,'assets/epic-home/'+homeHero+'.webp');
+    // Menu fallback and rest screens share the rest_camp texture allocation.
+    // Both formal west stages can be selected after this boot; preload their existing atlases once.
+    this.load.spritesheet('xurong','assets/phase17/xurong/sheet.png',{frameWidth:128,frameHeight:128});
+    this.load.image('xingyang_ground','assets/phase17/xurong/ground.png');
+    for(const key of ['walk','attack','actions','sweep'])this.load.spritesheet('huaxiong_'+key,'assets/phase17/huaxiong/'+key+'.png',{frameWidth:128,frameHeight:128});
+    this.load.image('huaxiong_portrait','assets/phase17/huaxiong/portrait.png');
+    this.load.spritesheet('sishui_props','assets/phase17/huaxiong/props.png',{frameWidth:256,frameHeight:256});
     for(const key of ['zhangliang_walk','zhangliang_attack','zhangbao_walk','zhangbao_cast','spear_walk','spear_attack','archer_walk','archer_attack','shield_walk','shield_attack','shaman_walk','shaman_cast'])this.load.spritesheet(`yellow_${key}`,`assets/processed/yellow/${key==='spear_walk'?'spear-walk-v2':key==='spear_attack'?'spear-attack-v2':key}.png`,{frameWidth:96,frameHeight:96});
+    for(const key of ['swordsman-walk-v4','swordsman-attack-v4','shield-walk-v4','shield-attack-v4','spear-walk-v4'])this.load.spritesheet(`yellow_${key}`,`assets/processed/yellow/${key}.png`,{frameWidth:96,frameHeight:96});
+    for(const [key,file] of [['brazier_burning','brazier_burning-v4.png'],['brazier_breaking','brazier_breaking-v4.png'],['ground_fire','ground_fire-v4.png']] as const)this.load.spritesheet(key,`assets/processed/yellow/${file}`,{frameWidth:444,frameHeight:444});
     for(let i=1;i<=3;i++)this.load.image(`yellow_ground_${i}`,`assets/processed/yellow/ground-${i}.png`);
     for(const key of ['yellow_shaman_ground_sigil_warning','zhangbao_earth_rift_warning_and_burst','zhangbao_earth_shockwave','zhangbao_earth_wall_spawn','zhangbao_ritual_circle','zhangliang_call_reinforcements','zhangliang_charge_warning','zhangliang_slash','yellow_archer_arrow','yellow_shield_short_stab'])this.load.spritesheet(key,`assets/processed/yellow/${key}.png`,{frameWidth:128,frameHeight:128});
     this.load.spritesheet('yellow_props','assets/processed/yellow/camp-props.png',{frameWidth:128,frameHeight:128});
+    this.load.spritesheet('yellow_contact_shadow','assets/processed/yellow/camp-props-contact-shadows-v1.png',{frameWidth:128,frameHeight:128});
     for(const key of ['zhang_bao_altar','zhang_jiao_altar'])this.load.image(key,`assets/processed/yellow/${key}.png`);
     this.load.spritesheet('prop_debris','assets/processed/yellow/prop-debris.png',{frameWidth:96,frameHeight:96});
     this.load.spritesheet('prop_break_fx','assets/processed/yellow/prop-break-fx.png',{frameWidth:96,frameHeight:96});
@@ -101,6 +123,9 @@ export class BootScene extends Phaser.Scene {
     for(const key of ['zhangliang_walk','zhangliang_attack','zhangbao_walk','zhangbao_cast','spear_walk','spear_attack','archer_walk','archer_attack','shield_walk','shield_attack','shaman_walk','shaman_cast']){
       const tex=this.textures.get(`yellow_${key}`);['down','left','right','up'].forEach((dir,row)=>{for(let col=0;col<4;col++)tex.add(`${dir}_${col}`,0,col*96,row*96,96,96);});
     }
+    for(const key of ['swordsman-walk-v4','swordsman-attack-v4','shield-walk-v4','shield-attack-v4','spear-walk-v4']){
+      const tex=this.textures.get(`yellow_${key}`);['down','left','right','up'].forEach((dir,row)=>{for(let col=0;col<4;col++)tex.add(`${dir}_${col}`,0,col*96,row*96,96,96);});
+    }
     createGameTextures(this);
     const halberd=this.textures.get('legion_halberdier_action');
     ['down','left','right','up'].forEach((dir,row)=>{for(let col=0;col<4;col++)halberd.add(`${dir}_${col}`,0,col*128,row*112,128,112);});
@@ -145,13 +170,14 @@ export class BootScene extends Phaser.Scene {
     // Text textures created later retain linear filtering for legible small Chinese text.
     for (const key of this.textures.getTextureKeys()) {
       this.textures.get(key).setFilter((key.startsWith('ground') && !key.startsWith('ground_overhaul')) || key === 'shadow'
-        ? Phaser.Textures.FilterMode.LINEAR : Phaser.Textures.FilterMode.NEAREST);
+        ||key.startsWith('epic_') ? Phaser.Textures.FilterMode.LINEAR : Phaser.Textures.FilterMode.NEAREST);
     }
+    for(const key of ['huaxiong_walk','huaxiong_attack']){if(!this.textures.exists(key))continue;const t=this.textures.get(key);['down','left','right','up'].forEach((dir,row)=>{for(let col=0;col<4;col++)if(!t.has(dir+'_'+col))t.add(dir+'_'+col,0,col*128,row*128,128,128);});}
     createReadableTextures(this);
     const hint = document.getElementById('boot-hint');
     if (hint) hint.style.display = 'none';
     this.registry.set('battleReady',true);
     this.registry.set('battleTextureKeys',this.textures.getTextureKeys().filter(k=>!k.startsWith('__')&&!k.startsWith('ui_war_')&&k!=='art_panel'&&k!=='icon_guandao'));
-    this.scene.start('MenuScene');
+    if(import.meta.env.DEV&&new URLSearchParams(location.search).get('dev')==='1'&&new URLSearchParams(location.search).has('thirdStage')){this.scene.start('ThirdChapterScene');}else if(this.registry.get('pendingThird')){this.registry.remove('pendingThird');this.scene.start('ThirdChapterScene');}else this.scene.start('MenuScene');
   }
 }

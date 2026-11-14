@@ -1,7 +1,22 @@
+import {CampRestUI} from '../ui/CampRestUI';
+import {buildVfx} from '../systems/BuildVfx';
+import {AwakeningCombat} from '../systems/AwakeningCombat';
+import {BulwarkBuild} from '../systems/BulwarkBuild';
+import {ControlBuild} from '../systems/ControlBuild';
+import {terrainSurface,architecturalSurface} from '../systems/SceneSurfaces';
+import {upgradeIcon} from '../ui/GrowthIcons';
+import {BuffHud} from '../ui/BuffHud';
+import {BuildCombat} from '../systems/BuildCombat';
+import {TACTICS,TREASURES,TAG_NAMES,type TacticId} from '../data/builds';
+import {SishuiObstacles} from '../systems/SishuiObstacles';
+import {HuaxiongBoss} from '../systems/HuaxiongBoss';
+import {getXingyangEncounter} from '../data/xingyang';
+import {XurongBoss} from '../systems/XurongBoss';
+import {getSishuiEncounter} from '../data/sishui';
 import {BattlefieldSupplies,MAX_PROP_SLOTS} from '../systems/BattlefieldSupplies';
 import {YellowBattle} from '../systems/YellowBattle';
-import {yellowStageUnlocked} from '../world/WorldStore';
-import {beginExpedition,settleExpedition,permanentEffects,worldUnlocked,takeExpeditionReserve} from '../world/WorldStore';
+import {dongzhuoStageUnlocked,yellowStageUnlocked} from '../world/WorldStore';
+import {beginExpedition,settleExpedition,permanentEffects,worldUnlocked,worldChapterCleared,takeExpeditionReserve} from '../world/WorldStore';
 import Phaser from 'phaser';
 import { ArtEffects } from '../systems/ArtEffects';
 import { BattlefieldDetails } from '../systems/BattlefieldDetails';
@@ -9,7 +24,7 @@ import { WAR, warText, ensureWarTextures } from '../ui/WarStyle';
 import { chapterUnlocked, isChapterTestRun, recordChapterVictory } from '../systems/ChapterProgress';
 import { BALANCE, COLORS, DEPTH, FONT, GAME_HEIGHT, GAME_WIDTH, IS_DESKTOP, actorDepth } from '../config';
 import type { EnemyDef } from '../data/enemies';
-import { SCHOOL_NAMES, type RelicSchool } from '../data/relics';
+import { RELICS, SCHOOL_NAMES, type RelicSchool } from '../data/relics';
 import { WEAPON_META, buildUpgradeOptions } from '../data/upgrades';
 import { waveIndexAt } from '../data/waves';
 import { getChapter, getBattleChapter, chapterBossTime, type ChapterDef } from '../data/chapters';
@@ -23,6 +38,8 @@ import { EnemyMovement } from '../systems/EnemyMovement';
 import { Legion } from '../systems/Legion';
 import { LegionUI } from '../ui/LegionUI';
 import { Reinforcements } from '../systems/Reinforcements';
+import { MartialFields } from '../systems/MartialFields';
+import { RunGrowth, ATTRIBUTE_INFO, ATTRIBUTE_MAX, type AttributeId } from '../systems/RunGrowth';
 import { packCampaign, restoreCampaign, type CampaignTransfer } from '../systems/Campaign';
 import { TROOP_KINDS, INITIAL_TROOPS, LEGION, type TroopKind } from '../data/legion';
 import { DEFAULT_RUN_CONFIG, getCharacter, type RunConfig } from '../data/characters';
@@ -59,13 +76,17 @@ interface CardView {
   tag: Phaser.GameObjects.Text;
 }
 
-type Mode = 'none' | 'levelup' | 'pause' | 'result' | 'recruit' | 'aid' | 'rest';
+interface ChasingBoss {enemy:Enemy;life:number;stage:number;name:string;battle:YellowBattle|null;huaxiong:HuaxiongBoss|null;xurong:XurongBoss|null;label:Phaser.GameObjects.Text;}
+
+type Mode = 'none' | 'levelup' | 'pause' | 'attributes' | 'result' | 'recruit' | 'aid' | 'rest' | 'bossloot';
 
 export class GameScene extends Phaser.Scene {
   protected player!: Player;
   protected joystick!: Joystick;
   private expeditionId="";
   private worldCampaign=false;
+  private huaxiong:HuaxiongBoss|null=null;private xurong:XurongBoss|null=null;
+  protected sishuiObstacles:SishuiObstacles|null=null;
   protected runConfig: RunConfig = DEFAULT_RUN_CONFIG;
   protected chapter: ChapterDef = getChapter();
   protected lubu: LubuBoss | null = null;
@@ -108,11 +129,12 @@ export class GameScene extends Phaser.Scene {
   private hudAcc = 1;
   private lastHudMode = '';
   private artEffects!: ArtEffects;
-  private battlefieldDetails!: BattlefieldDetails;
+  protected battlefieldDetails!: BattlefieldDetails;
   protected ground!: Phaser.GameObjects.TileSprite;
   protected hudGfx!: Phaser.GameObjects.Graphics;
   protected hudTexts!: Record<string, Phaser.GameObjects.Text>;
   protected passiveHud!: PassiveHud;
+  private buffHud!:BuffHud;
   protected blades: Phaser.GameObjects.Image[] = [];
   protected grid = new SpatialGrid<Enemy>(48);
 
@@ -121,6 +143,7 @@ export class GameScene extends Phaser.Scene {
   protected bullets: Bolt[] = [];
   protected gems: Gem[] = [];
   protected dmgFx: DmgFx[] = [];
+  private navigationAt=0;
 
   /** 游戏内毫秒时钟：暂停、升级和招募期间冻结。 */
   combatNow = 0;
@@ -164,13 +187,28 @@ export class GameScene extends Phaser.Scene {
   protected legion!: Legion;
   protected legionUI!: LegionUI;
   protected reinforcements!: Reinforcements;
-  private freeRecruit = false;
-  private resting = false;
+  protected freeRecruit = false;
+  protected resting = false;
+  protected campUI?:CampRestUI;
   private readonly recruitedWaves = new Set<number>();
   private readonly legionBulletScratch: Ally[] = [];
   protected spearShots: SpearShot[] = [];
   protected weaponHost!: WeaponHost;
+  private martialFields!: MartialFields;
+  private buildCombat!:BuildCombat;
+  private controlBuild?:ControlBuild;
+  private bulwarkBuild?:BulwarkBuild;
+  private awakeningCombat?:AwakeningCombat;
+  private relicWaveGfx!:Phaser.GameObjects.Graphics;private relicWaves:Array<{x:number;y:number;at:number}>=[];
+  private firstBossAt=-1;private settledFrontlineKills=0;private frontlineNextSettlement=1;
+  private frontlineVictories=new Map<number,{elapsed:number}>();private frontlineStarts=new Map<number,number>();
+  private chasingBosses:ChasingBoss[]=[];private deadBossControllers:Array<HuaxiongBoss|XurongBoss>=[];
+  private get trailingBoss():ChasingBoss|null{return this.chasingBosses[0]??null;}
+  private lootContinue:(()=>void)|null=null;private relicHits=0;private relicFireAt=0;private relicHealAt=0;
+  private attributeReturn:'pause'|'none'='pause';private rerolls=0;private rerollButton?:Phaser.GameObjects.Text;private pointsButton?:Phaser.GameObjects.Text;
+  private aimIndicator!: Phaser.GameObjects.Text;
   protected recruitOptions: Array<{ kind: AllyKind; upgrade: boolean }> = [];
+  private readonly pendingGrowthNotices: string[] = [];
   protected recruitViews: Array<{ bg: Phaser.GameObjects.Image; name: Phaser.GameObjects.Text; desc: Phaser.GameObjects.Text; icon: Phaser.GameObjects.Image; tag: Phaser.GameObjects.Text }> = [];
   protected recruitPanel!: Phaser.GameObjects.Container;
   protected pendingRecruit = false;
@@ -183,6 +221,12 @@ export class GameScene extends Phaser.Scene {
   protected resultPanel!: Phaser.GameObjects.Container;
   protected resultTexts!: Record<string, Phaser.GameObjects.Text>;
   protected pausePanel!: Phaser.GameObjects.Container;
+  protected attributePanel!: Phaser.GameObjects.Container;
+  protected attributePauseText!: Phaser.GameObjects.Text;
+  protected attributePointsText!: Phaser.GameObjects.Text;
+  protected attributeWeaponText!: Phaser.GameObjects.Text;
+  protected attributeSummaryText!: Phaser.GameObjects.Text;
+  protected attributeRows: Array<{ value: Phaser.GameObjects.Text; button: Phaser.GameObjects.Image }> = [];
 
   protected cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
   protected wasd!: Record<string, Phaser.Input.Keyboard.Key>;
@@ -192,8 +236,8 @@ export class GameScene extends Phaser.Scene {
   protected debugMove = new Phaser.Math.Vector2();
   protected debugMoveActive = false;
 
-  constructor() {
-    super('GameScene');
+  constructor(key='GameScene') {
+    super(key);
   }
 
   create(): void {
@@ -203,41 +247,70 @@ export class GameScene extends Phaser.Scene {
     this.feedback = new BattleFeedback(this);
     this.sfx = new Sfx();
     const registryConfig = this.registry.get('runConfig') as RunConfig | undefined;
-    const requested = getBattleChapter(registryConfig?.chapter, registryConfig?.stage);
-    this.chapter = (chapterUnlocked(requested.id) && (!requested.stage || yellowStageUnlocked(requested.stage))) || isChapterTestRun() ? requested : getBattleChapter('huangjin',1);
-    this.runConfig = { ...DEFAULT_RUN_CONFIG, ...registryConfig, chapter: this.chapter.id, stage:this.chapter.stage };
+    const requested = getBattleChapter(registryConfig?.chapter, registryConfig?.stage,registryConfig?.westStage);
+    this.chapter = (chapterUnlocked(requested.id) && (!requested.stage || yellowStageUnlocked(requested.stage)) && (!requested.westStage||dongzhuoStageUnlocked(requested.westStage))) || isChapterTestRun() ? requested : getBattleChapter('huangjin',1);
+    const encounter=new URLSearchParams(location.search).get('encounter')||registryConfig?.encounter;const preview=encounter==='sishui'||encounter==='xingyang'||encounter==='qunxiong'&&!!this.customChapter();
+    if(preview)this.chapter=encounter==='xingyang'?getXingyangEncounter():getSishuiEncounter();
+    this.chapter=this.customChapter()??this.chapter;
+    this.runConfig = { ...DEFAULT_RUN_CONFIG, ...registryConfig, chapter: this.chapter.id, stage:this.chapter.stage,westStage:this.chapter.westStage };
+    if(preview)this.runConfig.encounter=encounter as 'sishui'|'xingyang'|'qunxiong';
+    this.frontlineNextSettlement=this.battleStage();this.frontlineStarts.set(this.battleStage(),this.combatNow);
+    const scenery=this.chapter.bossStyle==='huaxiong'?'sishui':this.chapter.bossStyle==='xurong'?'xingyang':null;
     this.cameras.main.setBackgroundColor(COLORS.bg);
     this.chargeGfx = this.add.graphics().setDepth(DEPTH.fx);
+    this.relicWaveGfx=this.add.graphics().setDepth(DEPTH.fx);
     this.bossUltGfx = this.add.graphics().setDepth(DEPTH.fx + 1);
     this.bossShieldGfx = this.add.graphics().setDepth(DEPTH.fx + 2);
     this.cameras.main.setRoundPixels(true);
 
-    const terrainKey = this.chapter.stage ? this.chapter.ground : 'ground_overhaul_hulao';
+    const terrainKey = scenery==='xingyang'?'xingyang_ground':this.chapter.stage ? this.chapter.ground : 'ground_overhaul_hulao';
     const groundKey = this.textures.exists(terrainKey) ? terrainKey : this.textures.exists('ground_ai') ? 'ground_ai' : 'ground';
+    architecturalSurface(this);
+    const surface=terrainSurface(this,groundKey,groundKey.startsWith('ground_overhaul')||groundKey.startsWith('yellow_ground')?1:.5);
     this.ground = this.add
-      .tileSprite(0, 0, GAME_WIDTH + 512, GAME_HEIGHT + 512, groundKey)
+      .tileSprite(0, 0, GAME_WIDTH + 512, GAME_HEIGHT + 512, surface.key)
       .setOrigin(0, 0)
       .setScrollFactor(1)
       .setDepth(DEPTH.ground);
-    if (groundKey !== 'ground') this.ground.setTileScale(groundKey.startsWith('ground_overhaul')||groundKey.startsWith('yellow_ground') ? 1 : .5);
-    this.battlefieldDetails = new BattlefieldDetails(this, this.chapter.id, this.chapter.stage);
+    this.ground.setTileScale(surface.scale);
+    if(scenery==='sishui'){for(const [frame,x,y,size]of [[0,0,-220,250],[1,-230,-220,150],[1,230,-220,150],[2,-250,-110,160],[2,260,-130,160]])this.add.image(x,y,'sishui_props_refined',frame).setOrigin(.5,1).setDisplaySize(size,size).setDepth(actorDepth(y));}
+    if(scenery==='xingyang'){for(const [frame,x,y,size]of [[2,-260,-180,130],[2,300,230,140],[6,-310,170,100],[4,270,-160,100]])this.add.image(x,y,'sishui_props',frame).setOrigin(.5,1).setDisplaySize(size,size).setDepth(actorDepth(y));}
+    this.battlefieldDetails = new BattlefieldDetails(this, this.chapter.id, this.chapter.id==='huangjin'?this.chapter.stage:undefined,groundKey);
     this.artEffects = new ArtEffects(this);
 
 
     this.player = new Player(this, 0, 0);
     this.applyRunConfig(this.runConfig);
-    this.worldCampaign=this.registry.get('worldCampaign')===true;
-    this.expeditionId=this.worldCampaign?beginExpedition(this.chapter.id,this.chapter.stage):'';
+    this.worldCampaign=!preview&&!isChapterTestRun()&&this.registry.get('worldCampaign')===true;
+    this.expeditionId=this.worldCampaign?beginExpedition(this.chapter.id,this.chapter.stage??this.chapter.westStage):'';
     this.weaponHost = this.createWeaponHost();
+    this.martialFields = new MartialFields(this.weaponHost);
+    this.aimIndicator=this.add.text(0,0,'',{fontSize:'12px',color:'#ead28b',stroke:'#18251e',strokeThickness:3}).setOrigin(.5).setDepth(100);
     // 新存档开局无兵，第一波后招募；已开放主城的出征另应用军营与后备。
     this.allies = [];
-    this.legion = new Legion(this, this.allies, this.player, worldUnlocked() ? permanentEffects().armyCapacity : 5);
+    this.legion = new Legion(this, this.allies, this.player);
     this.yellow=this.chapter.stage?new YellowBattle({scene:this,player:this.player,army:this.legion,enemies:this.enemies,move:(e,nx,ny,dt)=>this.advanceEnemy(e,nx,ny,dt),spawn:(def,x,y)=>this.spawnEnemy(def.kind,x,y,1,true,def)},this.chapter.stage):null;
     this.supplies=new BattlefieldSupplies(this,this.player,this.enemies,()=>this.combatNow,()=>{this.sfx.play('pickup');this.artEffects.show(5,this.player.x,this.player.y-12,35,this.combatNow,280);});
+    if(scenery){if(scenery==='sishui')this.sishuiObstacles=new SishuiObstacles();this.supplies.spawnSishui(3,-330,180,116);this.supplies.spawnSishui(5,-310,350,105);this.supplies.spawnSishui(7,230,-50,100);this.supplies.spawnSishui(4,290,210,104);this.supplies.spawnSishui(6,300,370,110);}
     const transfer = this.registry.get('campaignTransfer') as CampaignTransfer | undefined;
     this.registry.remove('campaignTransfer');
-    if (transfer && this.chapter.id === transfer.chapter && this.runConfig.character === transfer.character) restoreCampaign(transfer, this.player, this.legion);
-    if(this.worldCampaign&&worldUnlocked()){const effects=permanentEffects();this.legion.healingMultiplier=effects.healMultiplier;if(!transfer){for(let i=0;i<effects.reinforcements;i++)this.legion.recruit(i===0?'swordsman':'spearman',1,true);}if(!transfer&&!isChapterTestRun())for(const kind of takeExpeditionReserve(this.legion.capacity-this.legion.count)){this.legion.recruit(kind,1,true);this.allies[this.allies.length-1].reserveSoldier=true;}}
+    if (transfer && this.chapter.id === transfer.chapter && this.runConfig.character === transfer.character) {
+      restoreCampaign(transfer, this.player, this.legion);
+      const ownId=getCharacter(this.runConfig.character).startWeapon;
+      const ownLevel=this.player.weapons.find(weapon=>weapon.id===ownId)?.level??1;
+      this.player.weapons=[{id:ownId,level:ownLevel,cooldownLeft:0}];
+    }
+    if(this.worldCampaign&&worldUnlocked()){const effects=permanentEffects();this.legion.healingMultiplier=effects.healMultiplier;if(!transfer){for(let i=0;i<effects.reinforcements;i++)this.legion.recruit(i===0?'swordsman':'spearman',1,true);}if(!transfer&&!isChapterTestRun())for(const kind of takeExpeditionReserve()){this.legion.recruit(kind,1,true);this.allies[this.allies.length-1].reserveSoldier=true;}}
+    this.buildCombat=new BuildCombat(this.player.growth.build,(x,y,r)=>this.grid.query(x,y,r),(e,n,fire)=>this.hitEnemy(e,n,this.combatNow,fire?'fire':'melee',false,false),(e,fire)=>{this.artEffects.show(fire?5:3,e.x,e.y-8,32,this.combatNow,160);buildVfx(this).emit(fire?'flame':'combo',e.x,e.y-8,this.combatNow,fire?42:38);});
+    this.bulwarkBuild=new BulwarkBuild(this,this.player.growth.build,this.player,this.allies,(x,y,r)=>this.grid.query(x,y,r),(e,n)=>this.hitEnemy(e,n,this.combatNow,'melee',false,false));
+    this.player.damageGuard=(n,now)=>this.bulwarkBuild?.guard(n,now)??n;this.legion.defense=this.bulwarkBuild;
+    this.events.once('shutdown',()=>{this.bulwarkBuild?.clear();this.bulwarkBuild=undefined;this.player.damageGuard=undefined;});
+    this.controlBuild=new ControlBuild(this,this.player.growth.build,(x,y,r)=>this.grid.query(x,y,r));
+    this.events.once('shutdown',()=>{this.controlBuild?.clear();this.controlBuild=undefined;});
+    this.awakeningCombat=new AwakeningCombat(this,this.player,this.allies,(x,y,r)=>this.grid.query(x,y,r),(e,n,fire)=>this.hitEnemy(e,n,this.combatNow,fire?'fire':'melee',false,false),(e,n)=>this.controlBuild?.isControlled(e,n)??false,(e,n)=>this.buildCombat.naturalBurn(e,n),(e,n,now)=>this.buildCombat.igniteDerived(e,n,now),text=>this.showGrowthNotice(text),()=>this.legion.order,(e,n)=>this.legion.command.onHit(e,n));
+    this.legion.awakeningDefense={incoming:(u,n)=>this.awakeningCombat?.allyIncoming(u,n)??1,onAllyHurt:(u,n)=>this.awakeningCombat?.onAllyHurt(u,n)};
+    this.events.once('shutdown',()=>{this.awakeningCombat?.clear();this.awakeningCombat=undefined;});
+    this.buildCombat.setOrigin(()=>({x:this.player.x,y:this.player.y}));
     const cam = this.cameras.main;
     cam.setRoundPixels(false);
     cam.setScroll(this.player.x - GAME_WIDTH / 2, this.player.y - GAME_HEIGHT / 2);
@@ -255,10 +328,12 @@ export class GameScene extends Phaser.Scene {
 
     this.buildHud();
     this.buildOverlays();
+    if(preview&&encounter==='sishui'&&!this.customChapter())this.add.image(48,180,'huaxiong_portrait').setDisplaySize(42,42).setScrollFactor(0).setDepth(901);
     this.legionUI = new LegionUI(this, () => { if (this.mode === 'none' && !this.over) this.legion.cycleOrder(); }, (kind, train) => this.buyTroops(kind, train), () => {
       if (this.mode === 'rest') this.continueCampaign();
       else if (this.mode === 'recruit') { this.recruitedWaves.add(this.waveIndex); this.freeRecruit = false; this.resumePendingChoices(); }
     });
+    this.campUI=new CampRestUI(this,this.player,this.legion,()=>this.continueCampaign());
     this.reinforcements = new Reinforcements(this, this.runConfig.character, this.player, id => {
       if (this.mode !== 'aid' || !this.reinforcements.start(id, this.combatNow, this.enemies)) return;
       this.resumePendingChoices();
@@ -282,6 +357,7 @@ export class GameScene extends Phaser.Scene {
   /** 把开局选择（武将/初始武器）应用到本局。 */
   protected applyRunConfig(config: RunConfig): void {
     const character = getCharacter(config.character);
+    this.player.growth = new RunGrowth(character.id);
     this.player.passive.reset(character.id, this.combatNow);
     this.player.stats.maxHpBonus += Math.round(BALANCE.player.maxHp * (character.hpMul - 1));
     this.player.stats.moveMul *= character.speedMul;
@@ -295,7 +371,11 @@ export class GameScene extends Phaser.Scene {
   }
 
   protected resetState(): void {
+    this.relicWaves=[];
+    this.firstBossAt=-1;this.settledFrontlineKills=0;this.frontlineNextSettlement=1;this.frontlineVictories.clear();this.frontlineStarts.clear();this.chasingBosses=[];this.deadBossControllers=[];this.lootContinue=null;this.relicHits=0;this.relicFireAt=0;this.relicHealAt=0;
+    this.rerolls=0;this.pointsButton=undefined;this.rerollButton=undefined;
     this.crowdSteering = true; this.freeRecruit = false; this.resting = false; this.recruitedWaves.clear();
+    this.pendingGrowthNotices.length = 0;
     this.separationScratch.length = 0;
     this.allyScratch.length = 0;
     this.allies = [];
@@ -334,7 +414,7 @@ export class GameScene extends Phaser.Scene {
     this.spawnTimer = 0.5;
     this.eliteTimer = BALANCE.eliteFirst;
     this.boss = null;
-    this.lubu = null; this.yellow=null; this.supplies=null; this.yellowAltar=null;this.finaleFadeMs=0;
+    this.sishuiObstacles=null;this.huaxiong=null;this.xurong=null;this.lubu = null; this.yellow=null; this.supplies=null; this.yellowAltar=null;this.finaleFadeMs=0;
     this.bossSpawned = false;
     this.bossCastCd = 3;
     this.bossSummonCd = 6;
@@ -370,6 +450,7 @@ export class GameScene extends Phaser.Scene {
     // activePointers 已在 main.ts 配置；场景重开不再分配全局指针。
     this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
       this.sfx.unlock();
+      if(this.handleBattlePointer(pointer))return;
       this.joystick.handleDown(pointer);
     });
     // BGM 在首次真实手势后启动；离开场景时停止并清理监听
@@ -382,7 +463,7 @@ export class GameScene extends Phaser.Scene {
       this.music.dispose();
       this.sfx.dispose();
       this.disposeDevelopment();
-      this.legion.stop(); this.reinforcements.clear();this.yellow?.clear();this.supplies?.clear();
+      this.legion.stop(); this.reinforcements.clear();this.yellow?.clear();this.clearChasingBosses();this.supplies?.clear();
     });
     this.input.on('pointermove', (pointer: Phaser.Input.Pointer) => this.joystick.handleMove(pointer));
     this.input.on('pointerup', (pointer: Phaser.Input.Pointer) => this.joystick.handleUp(pointer));
@@ -400,7 +481,7 @@ export class GameScene extends Phaser.Scene {
     keyboard.on('keydown-TWO', () => this.chooseUpgrade(1));
     keyboard.on('keydown-THREE', () => this.chooseUpgrade(2));
     keyboard.on('keydown-R', () => {
-      if (this.mode === 'result') this.scene.restart();
+      if (this.mode === 'result'&&this.victory) this.scene.restart();
     });
     let lastE = -1;
 
@@ -415,7 +496,7 @@ export class GameScene extends Phaser.Scene {
     this.time.timeScale = this.devTimeScale;
     this.tweens.timeScale = this.devTimeScale;
     this.updateCamera(dt);
-    this.music.setIntensity(this.boss && this.boss.active ? 1 : 0);
+    this.music.setIntensity(this.boss?.active||this.chasingBosses.some(t=>t.enemy.active&&t.enemy.spawnId===t.life)?1:0);
     if (!this.boss || !this.boss.active) this.music.setDuck(1);
     const nextWave = waveIndexAt(this.elapsed, this.chapter.waves);
     if (!this.over && nextWave !== this.waveIndex) {
@@ -424,7 +505,7 @@ export class GameScene extends Phaser.Scene {
       if (this.waveBannerShown || nextWave > 0) this.showWaveBanner(`第 ${nextWave + 1}/${this.chapter.waves.length} 波 · ${this.chapter.waves[nextWave].name}`);
       this.waveBannerShown = true;
       // Finish a wave before recruiting; the opening wave starts immediately.
-      if (nextWave > 0) this.scheduleRecruit();
+      if (nextWave > 0 && this.chapter.recruitWaves.includes(nextWave)) this.scheduleRecruit();
     }
     if (!this.over && this.elapsed >= chapterBossTime(this.chapter) - 10 && !this.bossWarned) {
       this.bossWarned = true;
@@ -444,6 +525,7 @@ export class GameScene extends Phaser.Scene {
     this.hudAcc += dt;
     this.updateHud();
     this.artEffects.update(this.combatNow);
+    this.updateRelicWaves();
     this.feedback.update(this.combatNow, this.mode === 'result' ? delta : 0);
     this.updatePerf(dt);
     this.devAcc += dt;
@@ -461,29 +543,49 @@ export class GameScene extends Phaser.Scene {
     }
 
     if(this.finaleFadeMs>0){this.finaleFadeMs=Math.max(0,this.finaleFadeMs-delta);const a=this.finaleFadeMs/800;this.bossUltGfx.setAlpha(a);this.bossShieldGfx?.setAlpha(a);if(!this.finaleFadeMs){this.bossUltGfx.clear().setAlpha(1);this.bossShieldGfx?.clear().setAlpha(1);}}
+    this.huaxiong?.updateDeath(delta);this.xurong?.updateDeath(delta);for(const controller of this.deadBossControllers)controller.updateDeath(delta);
     if (this.mode !== 'none' || this.over) return;
 
+    if(this.battleStage()<3&&!this.runConfig.encounter&&this.boss?.active&&this.firstBossAt>=0&&this.combatNow>=this.firstBossAt+90000)this.advanceFrontline();
     this.elapsed += dt;
     this.combatNow += dt * 1000;
     time = this.combatNow;
     const move = this.readMove();
-    this.player.move(dt, move.x, move.y);
+    const moveX=this.player.x,moveY=this.player.y;
+    const driven=Math.hypot(move.x,move.y)>.1;
+    this.player.move(dt, driven?move.x:0, driven?move.y:0);
+
     this.player.update(time, dt);
 
-    this.supplies?.update(dt,time,this.battlefieldDetails.props);
+    this.supplies?.update(dt,time,this.battlefieldDetails.props,(enemy,damage)=>this.hitEnemy(enemy,damage,time,'fire',false,false),this.allies,(ally,damage,now)=>this.legion.hurt(ally,damage,now));
     this.updateEnemies(dt, time);
     this.yellow?.update(dt,time);
+    for(const t of this.chasingBosses){if(t.enemy.active&&t.enemy.spawnId===t.life){t.battle?.update(dt,time);t.label.setPosition(t.enemy.x,t.enemy.y-100).setText(t.name+" · 追兵 "+Math.ceil(Math.max(0,t.enemy.hp)/t.enemy.maxHp*100)+"%");}}
     this.rebuildGrid();
+    if(time>=this.navigationAt){this.navigationAt=time+250;const boxes=[...(this.sishuiObstacles?.footprints??[])];this.supplies?.appendNavigationBoxes(boxes);this.legion.navigation.setBoxes(boxes);}
     this.legion.update(dt, time, this.enemies, this.grid, (enemy, amount) => this.hitEnemy(enemy, amount, this.combatNow, 'melee', true));
     if (this.over) return;
     this.rebuildGrid();
     this.separateEnemies();
-    this.separateAlliesFromEnemies();
-    this.supplies?.resolveBodies(this.allies);
+    this.separateAlliesFromEnemies(dt);
+    this.supplies?.resolveBodies(this.allies,(a,d,n)=>this.legion.hurt(a,d,n),(e,d,n)=>this.hitEnemy(e,d,n,'melee',false,false));
+    this.sishuiObstacles?.resolve(this.player,this.allies,this.enemies);
+    this.player.growth.recordMovement(Math.hypot(move.x,move.y)>.1&&time>=this.player.knockedUntil?Math.hypot(this.player.x-moveX,this.player.y-moveY):0,dt);
+    this.awakeningCombat?.movement(Math.hypot(move.x,move.y)>.1&&time>=this.player.knockedUntil?Math.hypot(this.player.x-moveX,this.player.y-moveY):0);
+    this.buildCombat.movement(Math.hypot(move.x,move.y)>.1&&time>=this.player.knockedUntil?Math.hypot(this.player.x-moveX,this.player.y-moveY):0);
+    this.aimIndicator.setPosition(this.player.x,this.player.y-44).setVisible(this.player.growth.masteries.steady_aim>0).setText('◆'.repeat(Math.floor(this.player.growth.stationarySeconds))+'◇'.repeat(5-Math.floor(this.player.growth.stationarySeconds)));
     this.updateEnemyWalkAnimations(dt);
     this.rebuildGrid();
     this.applyContactDamage();
     if (this.over) return;
+    this.martialFields.update(dt);
+    this.buildCombat.update(this.combatNow);
+    this.controlBuild?.update(this.combatNow);
+    this.bulwarkBuild?.update(this.combatNow);
+    this.awakeningCombat?.update(this.combatNow);
+    const vfx=buildVfx(this);vfx.update(this.combatNow);
+    if(this.buildCombat.charged()&&this.player.growth.build.tags().charge>0)vfx.emit('charge',this.player.x+14,this.player.y-14,this.combatNow,34);
+    if(Math.hypot(move.x,move.y)>.1&&this.player.growth.build.tags().skirmish>0)vfx.emit('skirmish',this.player.x-move.x*12,this.player.y-move.y*12,this.combatNow,40,Math.atan2(move.y,move.x));
     this.updateWeapons(dt, time);
     this.reinforcements.update(time, this.enemies, (enemy, amount, fire) => this.hitEnemy(enemy, amount, time, fire ? 'fire' : 'melee', true, false));
     if (this.over) return;
@@ -494,7 +596,8 @@ export class GameScene extends Phaser.Scene {
     if (this.mode === 'none' && !this.over) this.player.passive.update(time, (enemy, amount) => this.hitEnemy(enemy, amount, time, 'fire', false, false));
     this.updateDmgFx(dt);
     this.checkEnd();
-    if (!this.over && this.mode === 'none' && this.elapsed >= this.reinforcements.nextAt) this.setMode('aid');
+    // Hero reinforcement events are temporarily disabled; the system remains
+    // available for a later pass but does not interrupt the current campaign.
   }
 
   /** World-aligned overscan patch: ground and props share camera translation, rounding and shake.
@@ -611,6 +714,11 @@ export class GameScene extends Phaser.Scene {
     void time;
   }
 
+  protected spawnSceneProp(frame:number,x:number,y:number,size:number):void{if(Number.isInteger(frame)&&frame>=3&&frame<=7)this.supplies?.spawnSishui(frame as 3|4|5|6|7,x,y,size);}
+  protected tryCustomBossSkill():boolean{return false;}
+  protected customChapter():ChapterDef|null{return null;}
+  protected customEnemyStep(_enemy:Enemy,_dt:number,_now:number,_target:{x:number;y:number}):boolean{return false;}
+  protected customBossStep(_enemy:Enemy,_dt:number,_now:number):boolean{return false;}
   protected spawnBoss(): void {
     if(this.boss?.active)return;this.yellowAltar?.destroy();this.yellowAltar=null;
     if (this.bossSpawned) return;
@@ -624,8 +732,11 @@ export class GameScene extends Phaser.Scene {
       return;
     }
     this.boss = boss;
+    this.firstBossAt=this.combatNow;
     if(this.chapter.stage&&this.chapter.stage>=2){this.yellowAltar=this.add.image(x,y+10,this.chapter.stage===2?'zhang_bao_altar':'zhang_jiao_altar').setDepth(DEPTH.ground+2).setDisplaySize(245,200).setAlpha(.75);}
 
+    if(this.chapter.bossStyle==='xurong')this.xurong=new XurongBoss({scene:this,boss,player:this.player,army:this.legion,spawn:(kind,x,y)=>this.spawnEnemy(kind,x,y,1),sfx:()=>this.sfx.play('allySlash')},this.combatNow);
+    if(this.chapter.bossStyle==='huaxiong'){this.huaxiong=new HuaxiongBoss({scene:this,boss,player:this.player,army:this.legion,hurtTroops:(x,y,r,d,n,a,arc)=>this.legion.hurtArea(x,y,r,d,n,a,arc),sfx:()=>this.sfx.play('allySlash')},this.combatNow);}
     if (this.chapter.bossStyle === 'lubu') {
       this.lubu = new LubuBoss({ scene: this, boss, player: this.player,
         hurtTroops: (x, y, radius, damage, now, angle, arc) => this.legion.hurtArea(x, y, radius, damage, now, angle, arc),
@@ -660,7 +771,8 @@ export class GameScene extends Phaser.Scene {
       const nx = dx / dist;
       const ny = dy / dist;
 
-      if (this.yellow?.handleEnemy(enemy,dt,this.combatNow,target)) {
+      if(this.customEnemyStep(enemy,dt,this.combatNow,target)){}
+      else if (this.yellow?.handleEnemy(enemy,dt,this.combatNow,target)) {
         // Stage-specific spear, earth caster, shield and temporary elite behaviors.
       } else if (enemy.kind === 'archer') {
         if (dist > 230) {
@@ -683,7 +795,7 @@ export class GameScene extends Phaser.Scene {
             if (!enemy.active || enemy.spawnId !== spawnId || this.over) return;
             const p = enemy.targetAlly?.active && enemy.targetAlly.lifeId === enemy.targetLife ? enemy.targetAlly : this.player;
             this.sfx.play('enemyArrow');
-            this.fireBolt(this.bullets, enemy.x, enemy.y, p.x, p.y, enemy.def.damage, 0, false, 210,this.chapter.stage?'yellow_arrow':undefined);
+            this.fireBolt(this.bullets, enemy.x, enemy.y, p.x, p.y, enemy.def.damage, 0, false, 210);
           });
         }
       } else if (enemy.kind === 'cavalry') {
@@ -728,7 +840,12 @@ export class GameScene extends Phaser.Scene {
           }
         }
       } else if (enemy.kind === 'boss') {
-        if (this.yellow && this.chapter.stage!==3) this.yellow.moveBoss(enemy,dt,this.combatNow);
+        const chasing=this.chasingBosses.find(t=>t.enemy===enemy&&t.life===enemy.spawnId);
+        if(this.customBossStep(enemy,dt,this.combatNow)){}
+        else if(chasing){if(chasing.huaxiong)chasing.huaxiong.update(dt,this.combatNow);else if(chasing.xurong)chasing.xurong.update(dt,this.combatNow);else chasing.battle?.moveBoss(enemy,dt,this.combatNow);}
+        else if (this.yellow && this.chapter.stage!==3) this.yellow.moveBoss(enemy,dt,this.combatNow);
+        else if(this.huaxiong)this.huaxiong.update(dt,this.combatNow);
+        else if(this.xurong)this.xurong.update(dt,this.combatNow);
         else if (this.lubu) this.lubu.update(dt, this.combatNow);
         else {
           enemy.sprite.x += nx * enemy.def.speed * dt;
@@ -746,30 +863,34 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  private advanceEnemy(enemy: Enemy, nx: number, ny: number, dt: number): void {
-    enemy.sprite.x += (this.crowdSteering ? enemy.moveVx : nx * enemy.def.speed) * dt;
-    enemy.sprite.y += (this.crowdSteering ? enemy.moveVy : ny * enemy.def.speed) * dt;
+  protected advanceEnemy(enemy: Enemy, nx: number, ny: number, dt: number): void {
+    const controlSpeed=this.controlBuild?.motion(enemy,this.combatNow,dt)??1;
+    const martialSpeed=controlSpeed*(enemy.kind!=='boss'&&this.combatNow<enemy.martialSlowUntil?enemy.martialSlow:1);
+    enemy.sprite.x += (this.crowdSteering ? enemy.moveVx : nx * enemy.def.speed) * dt * martialSpeed;
+    enemy.sprite.y += (this.crowdSteering ? enemy.moveVy : ny * enemy.def.speed) * dt * martialSpeed;
   }
 
   /** 分离与网格都稳定后，再统一结算接触伤害。 */
   /** 特殊位移保留硬分离，普通敌军由柔性分离处理。 */
-  protected separateAlliesFromEnemies(): void {
+  protected separateAlliesFromEnemies(dt=1/60): void {
     for (const ally of this.allies) {
       if (!ally.active) continue;
       const near = this.grid.query(ally.x, ally.y, ally.radius + 26, this.allyScratch);
       for (const enemy of near) {
         if (!enemy.active || enemy.isSupplySlot || enemy.controlImmune) continue;
-        if (this.crowdSteering && enemy.kind !== 'boss' && !(enemy.kind === 'cavalry' && enemy.chargeState !== 'none')) continue;
-        const dx = enemy.x - ally.x;
-        const dy = enemy.y - ally.y;
-        const dist = Math.hypot(dx, dy);
-        const min = ally.radius + enemy.radius;
+        const soft=this.crowdSteering&&enemy.kind!=='boss'&&!(enemy.kind==='cavalry'&&enemy.chargeState!=='none');
+        let dx = enemy.x - ally.x;
+        let dy = enemy.y - ally.y;
+        let dist = Math.hypot(dx, dy);
+        if(dist<.001){const angle=(enemy.uid*73+ally.id*151)*Math.PI/180;dx=Math.cos(angle);dy=Math.sin(angle);dist=1;}
+        const min = (ally.radius + enemy.radius)*(soft?.85:1);
         if (dist > 0.001 && dist < min - 1.5) {
           const overlap = min - dist;
           const nx = dx / dist;
           const ny = dy / dist;
-          const enemyPush = Math.min(6, overlap * 0.7);
-          const allyPush = Math.min(6, overlap * 0.3);
+          const limit=soft?Math.min(2,120*dt):6;
+          const enemyPush = Math.min(limit, overlap * 0.7);
+          const allyPush = Math.min(soft?limit*.4:6, overlap * 0.3);
           enemy.sprite.x += nx * enemyPush;
           enemy.sprite.y += ny * enemyPush;
           ally.push(-nx * allyPush, -ny * allyPush);
@@ -784,8 +905,9 @@ export class GameScene extends Phaser.Scene {
     const margin = 80;
     for (const enemy of this.enemies) {
       if (!enemy.active) continue;
-      enemy.shadow.setPosition(enemy.x,enemy.isSupplySlot?enemy.y:enemy.y + enemy.radius * .72);
+      enemy.shadow.setPosition(enemy.x,enemy.isSupplySlot?enemy.y+2:enemy.y + enemy.radius * .72);
       if (enemy.kind !== 'boss') enemy.sprite.setDepth(actorDepth(enemy.isSupplySlot?enemy.y:enemy.y + enemy.radius * .72));
+      if((this.huaxiong||this.xurong)&&enemy===this.boss){enemy.shadow.setPosition(enemy.x,enemy.y+1).setDisplaySize(74,20);continue;}
       if (!enemy.walkSheet) continue;
       const onScreen =
         enemy.x > view.x - margin &&
@@ -1054,6 +1176,8 @@ export class GameScene extends Phaser.Scene {
 
   // ---------------- 武器 ----------------
 
+  protected handleBattlePointer(_pointer:Phaser.Input.Pointer):boolean{return false;}
+  protected priorityWeaponTarget(_range:number,_bodyRadius=true):Enemy|null{return null;}
   protected createWeaponHost(): WeaponHost {
     const scene = this;
     return {
@@ -1064,11 +1188,13 @@ export class GameScene extends Phaser.Scene {
       get spearShots() { return scene.spearShots; }, get bolts() { return scene.bolts; },
       hitEnemy: (...args) => scene.hitEnemy(...args),
       nearestEnemy: (...args) => scene.nearestEnemy(...args),
+      priorityTarget: (range,bodyRadius)=>scene.priorityWeaponTarget(range,bodyRadius),
       fireBolt: (...args) => scene.fireBolt(...args),
       spawnGuandaoSlash: (...args) => scene.spawnGuandaoSlash(...args),
       spawnFlagSwingFx: (...args) => scene.spawnFlagSwingFx(...args),
       spawnFlameGatherFx: (...args) => scene.spawnFlameGatherFx(...args),
       spawnFlameFx: (...args) => scene.spawnFlameFx(...args),
+      martialField: (...args) => scene.martialFields.add(...args),
     };
   }
 
@@ -1090,7 +1216,8 @@ export class GameScene extends Phaser.Scene {
     else if (source === 'fire') this.sfx.play('hitFire');
     else this.sfx.play('hitLight');
     if (enemy === this.boss && this.lubu) rawDamage *= this.lubu.incomingDamageMultiplier(source, time);
-    const crit = weaponHit && Math.random() < Math.min(1, this.player.stats.critChance + (!fromAlly ? this.player.passive.critBonus(time) : 0));
+    const crit = weaponHit && Math.random() < Math.min(0.65, this.player.stats.critChance + this.player.growth.criticalBonus() + (!fromAlly ? this.player.passive.critBonus(time) + this.player.growth.aimCriticalBonus() + this.buildCombat.criticalBonus() : 0));
+    if(!fromAlly&&weaponHit)rawDamage=this.buildCombat.damage(enemy,rawDamage,crit,time);
     let damage = Math.max(1, Math.round(rawDamage * (crit ? BALANCE.critMultiplier : 1)));
     enemy.flash(time);
     if(!fromAlly&&source==='arrow')this.artEffects.show(3,enemy.x,enemy.y-8,32,time,120);
@@ -1098,21 +1225,26 @@ export class GameScene extends Phaser.Scene {
     if (!fromAlly && weaponHit) this.player.passive.onWeaponHit(time);
     const credit = (n: number): void => { if (fromAlly) this.allyDamageDealt += n; else this.playerDamageDealt += n; };
     // Boss 护盾优先吸收伤害
-    if (enemy.kind === 'boss' && this.bossShield > 0) {
+    if (enemy === this.boss && this.bossShield > 0) {
       const absorbed = Math.min(this.bossShield, damage);
       this.bossShield -= absorbed;
       damage -= absorbed;
       this.damageDealt += absorbed;
       credit(absorbed);
       if (damage <= 0) {
-        this.spawnDamageText(enemy.x, enemy.y - enemy.radius, absorbed, crit);
+        this.spawnDamageText(enemy.x, enemy.y - enemy.radius, absorbed, crit, !fromAlly||enemy.kind==='boss');
         return true;
       }
     }
     enemy.hp -= damage;
     this.damageDealt += damage;
     credit(damage);
-    this.spawnDamageText(enemy.x, enemy.y - enemy.radius, damage, crit);
+    this.spawnDamageText(enemy.x, enemy.y - enemy.radius, damage, crit, !fromAlly||enemy.kind==='boss');
+    if(!fromAlly&&weaponHit){const tags=this.player.growth.build.tags();const vfx=buildVfx(this);const a=Math.atan2(enemy.y-this.player.y,enemy.x-this.player.x);if(tags.combo)vfx.emit('combo',enemy.x,enemy.y-8,time,42,a);if(crit&&tags.critical)vfx.emit('critical',enemy.x,enemy.y-8,time,48);if(tags.charge&&this.buildCombat.charged())vfx.emit('pure_charge',enemy.x,enemy.y-8,time,70,a);this.legion.command.onHit(enemy,time);this.controlBuild?.onHit(enemy,time);this.awakeningCombat?.onHit(enemy,rawDamage,crit,time,this.buildCombat.charged());this.buildCombat.onHit(enemy,rawDamage,crit,time);this.relicHits++;
+      if(this.player.relics.includes('human_seal')&&this.relicHits%12===0){if(this.relicWaves.length>=4)this.relicWaves.shift();this.relicWaves.push({x:enemy.x,y:enemy.y,at:time});for(const e of this.grid.query(enemy.x,enemy.y,110).filter(e=>e.active&&!e.isSupplySlot&&Math.hypot(e.x-enemy.x,e.y-enemy.y)<=110).slice(0,4))this.hitEnemy(e,rawDamage*.35,time,'melee',false,false);}
+      if(this.player.relics.includes('heaven_ember')&&time>=this.relicFireAt){this.relicFireAt=time+5000;this.martialFields.add(enemy.x,enemy.y,65,rawDamage,1500,1);this.spawnFlameFx(enemy.x,enemy.y,65);}
+    }
+    if(enemy===this.boss){this.huaxiong?.hit(time);this.xurong?.hit(time);}else{const old=this.chasingBosses.find(t=>t.enemy===enemy&&t.life===enemy.spawnId);old?.huaxiong?.hit(time);old?.xurong?.hit(time);}
     if (enemy.hp <= 0) this.killEnemy(enemy);
     else if (enemy === this.boss) this.ensureBossPhase2();
     return true;
@@ -1122,17 +1254,24 @@ export class GameScene extends Phaser.Scene {
     if (!enemy.active) return;
     const kind = enemy.kind;
     if (enemy.def.texture === 'boss_lubu') this.feedback.death(enemy);
+    if(kind==='boss'){const old=this.chasingBosses.find(t=>t.enemy===enemy&&t.life===enemy.spawnId),h=old?old.huaxiong:this.huaxiong,x=old?old.xurong:this.xurong;h?.defeat();x?.defeat();if(old){if(h)this.deadBossControllers.push(h);if(x)this.deadBossControllers.push(x);}}
     enemy.deactivate();
     if(enemy.isSupplySlot){this.sfx.play('propBreak');this.supplies?.onBroken(enemy);return;}
     if(enemy.def.behavior==='wall')return;
     this.kills += 1;
+    this.awakeningCombat?.onKill(enemy,this.combatNow);
+    this.buildCombat.onKill(enemy,this.combatNow);
+    this.controlBuild?.onKill(enemy,this.combatNow);
     this.legion.onKill(enemy);
+    if(this.player.relics.includes('army_jade')&&this.combatNow>=this.relicHealAt){this.relicHealAt=this.combatNow+1000;this.player.heal(1);this.artEffects.show(5,this.player.x,this.player.y-12,35,this.combatNow,260);for(const u of this.allies.filter(u=>u.active&&u.hp<u.maxHp).slice(0,2)){u.hp=Math.min(u.maxHp,u.hp+2);this.artEffects.show(5,u.x,u.y-10,30,this.combatNow,260);}}
     this.sfx.play('enemyDie');
     if (kind === 'boss') {
-      this.bossKilled = true;
-      this.boss = null;
-      this.finish(true, 'boss');
-      return;
+      const index=this.chasingBosses.findIndex(t=>t.enemy===enemy&&t.life===enemy.spawnId);
+      if(index>=0){
+        const old=this.chasingBosses[index];old.battle?.clear();old.huaxiong?.clear();old.xurong?.clear();old.label.destroy();this.chasingBosses.splice(index,1);
+        this.recordFrontlineVictory(old.stage);
+      }else{this.bossKilled=true;this.boss=null;this.recordFrontlineVictory(this.battleStage());}
+      this.offerBossLoot(()=>{if(this.bossKilled&&this.chasingBosses.length===0)this.finish(true,'boss');else{this.resumePendingChoices();if(this.bossKilled)this.showGrowthNotice('当前首领已败 · 仍有'+this.chasingBosses.length+'名追击首领');}});return;
     }
     this.spawnGem(enemy.x, enemy.y, enemy.def.xp);
   }
@@ -1270,8 +1409,13 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  protected spawnDamageText(x: number, y: number, value: number, crit: boolean): void {
+  protected spawnDamageText(x: number, y: number, value: number, crit: boolean, priority=true): void {
+    const crowded=this.legion.visibleCount>=60,limit=crowded?18:32;
+    const merged=this.dmgFx.find(f=>f.active&&f.crit===crit&&f.life>.25&&Math.hypot(f.text.x-x,f.text.y-y)<(crowded?44:22));
+    if(merged){merged.text.setText(String(Number(merged.text.text)+value));return;}
+    const active=this.dmgFx.filter(f=>f.active);if(!crit&&!priority&&active.length>=limit)return;
     let fx = this.dmgFx.find((f) => !f.active);
+    if(!fx&&(crit||priority)&&this.dmgFx.length>=40)fx=this.dmgFx.filter(f=>!f.crit).sort((a,b)=>a.life-b.life)[0];
     if (!fx) {
       if (this.dmgFx.length >= 40) return;
       fx = {
@@ -1455,19 +1599,26 @@ export class GameScene extends Phaser.Scene {
   protected setMode(mode: Mode): void {
     // 所有战斗 Timer / Tween 一起冻结；绝对期限使用 combatNow。
     this.mode = mode;
+    if(mode!=='pause')this.children.getByName('build-panel')?.destroy();
     const canPlay = mode === 'none' && !this.over;
     this.time.paused = !canPlay;
     if (canPlay) this.tweens.resumeAll();
     else this.tweens.pauseAll();
+    if (canPlay && this.pendingGrowthNotices.length) this.showGrowthNotice(this.pendingGrowthNotices.shift()!);
     this.joystick.setEnabled(canPlay);
     for (const child of this.children.list) if (child.name === 'combat-notice') (child as Phaser.GameObjects.Text).setVisible(canPlay);
     if (!canPlay) this.joystick.reset();
-    if (this.levelPanel) this.levelPanel.setVisible(mode === 'levelup');
+    if (this.levelPanel) this.levelPanel.setVisible(mode === 'levelup'||mode==='bossloot');
+    this.rerollButton?.setVisible(mode==='levelup');
+    this.pointsButton?.setVisible(mode==='none'&&!this.over&&this.player.growth.unallocated>0);
+    if (this.attributePanel) this.attributePanel.setVisible(mode === 'attributes');
     if (this.recruitPanel) this.recruitPanel.setVisible(false);
-    this.legionUI?.panel.setVisible(mode === 'recruit' || mode === 'rest');
+    this.legionUI?.panel.setVisible(mode === 'recruit');
+    this.campUI?.setVisible(mode==='rest');
     this.reinforcements?.panel.setVisible(mode === 'aid');
     if (this.pausePanel) {
       this.pausePanel.setVisible(mode === 'pause');
+      this.attributePauseText?.setText(`分配属性点 · ${this.player?.growth.unallocated ?? 0}`);
       const exit=this.pausePanel.getByName('pause-exit') as Phaser.GameObjects.Text|null;
       exit?.setData('confirm',false).setText('返回选将').setColor('#b5c4b2');
     }
@@ -1477,12 +1628,25 @@ export class GameScene extends Phaser.Scene {
   protected openUpgrade(): void {
     if (this.over || this.pendingLevels <= 0) return;
     this.sfx.level();
-    this.upgradeOptions = buildUpgradeOptions(this.player, this.player.weapons);
+    (this.levelPanel.getByName('upgrade-title') as Phaser.GameObjects.Text)?.setText('选择本次强化');
+    this.rerolls=0;
+    this.upgradeOptions = buildUpgradeOptions(this.player, this.player.weapons, this.player.growth);
     this.renderCards();
     this.setMode('levelup');
   }
 
+  private rerollUpgrades():void{
+    if(this.mode!=='levelup')return;
+    const cost=10+this.rerolls*10;
+    if(this.legion.food<cost)return;
+    const old=this.upgradeOptions.map(o=>o.id).sort().join('|');let options=this.upgradeOptions;
+    for(let i=0;i<12;i++){options=buildUpgradeOptions(this.player,this.player.weapons);if(options.map(o=>o.id).sort().join('|')!==old)break;}
+    if(options.map(o=>o.id).sort().join('|')===old){this.rerollButton?.setText('暂无可换');return;}
+    this.legion.food-=cost;this.rerolls++;this.upgradeOptions=options;this.renderCards();
+  }
   protected renderCards(): void {
+    if(this.rerollButton){const cost=10+this.rerolls*10;this.rerollButton.setText('换一批 · '+cost+'粮').setAlpha(this.legion.food>=cost?1:.5);if(this.legion.food>=cost)this.rerollButton.setInteractive({useHandCursor:true});else this.rerollButton.disableInteractive();}
+
     for (let i = 0; i < this.cardViews.length; i += 1) {
       const view = this.cardViews[i];
       const option = this.upgradeOptions[i];
@@ -1499,9 +1663,13 @@ export class GameScene extends Phaser.Scene {
       view.desc.setVisible(true);
       view.tag.setVisible(true);
       view.name.setText(option.name);
-      view.desc.setText(option.desc);
+      view.desc.setText(option.desc).setFontSize(IS_DESKTOP?17:18);
+      while(view.desc.height>(IS_DESKTOP?155:77)&&parseInt(String(view.desc.style.fontSize))>14)view.desc.setFontSize(parseInt(String(view.desc.style.fontSize))-1);
+      view.name.setFontSize(IS_DESKTOP?20:21);
+      while(view.name.height>(IS_DESKTOP?49:29)&&parseInt(String(view.name.style.fontSize))>15)view.name.setFontSize(parseInt(String(view.name.style.fontSize))-1);
       let tagText = '被动';
-      if (option.kind === 'rare') tagText = '稀有';
+      if (option.categoryLabel) tagText = option.categoryLabel;
+      else if (option.kind === 'rare') tagText = '稀有';
       else if (option.kind === 'relic') {
         tagText = `${SCHOOL_NAMES[(option.school ?? 'wushuang') as RelicSchool]} 遗物`;
       } else if (option.kind === 'weapon') {
@@ -1509,9 +1677,17 @@ export class GameScene extends Phaser.Scene {
         tagText = owned ? `武器 Lv.${owned.level} → ${owned.level + 1}` : '新武器';
       }
       view.tag.setText(tagText);
-      view.tag.setBackgroundColor(option.id.startsWith('new_') ? '#526047' : option.kind === 'weapon' ? '#51452a' : '#293e34');
-      view.tag.setColor(option.kind === 'relic' ? '#ffd166' : option.kind === 'weapon' ? '#ffe9b0' : option.kind === 'rare' ? '#ffd0c0' : '#d8ffe9');
-      const iconKey = option.weaponId === 'spear_orbit'
+      const categoryStyle:Record<UpgradeOption['kind'],{bg:string;color:string}>={
+        tactic:{bg:'#345650',color:'#c6edce'},treasure:{bg:'#67502c',color:'#ffe2a0'},weapon:{bg:'#584729',color:'#ffe6a4'},martial:{bg:'#285448',color:'#9ce1c8'},
+        attribute:{bg:'#354b5b',color:'#b9dcf0'},potion:{bg:'#63402d',color:'#ffd0a0'},
+        trinket:{bg:'#4c3d59',color:'#dfc6fa'},foundation:{bg:'#3e5032',color:'#d8e7ae'},
+        relic:{bg:'#5c4920',color:'#ffd166'},rare:{bg:'#64352e',color:'#ffd0c0'},passive:{bg:'#293e34',color:'#d8ffe9'},
+      };
+      const style=categoryStyle[option.kind];
+      view.tag.setBackgroundColor(style.bg).setColor(style.color);
+      const iconKey = option.kind === 'potion' ? 'icon_rare' : option.kind === 'weapon' ? ({
+        spear_orbit:'icon_1',crossbow:'icon_2',flame_banner:'icon_3',guandao:'icon_guandao',
+      } as const)[option.weaponId!] : option.weaponId === 'spear_orbit'
         ? 'icon_1'
         : option.weaponId === 'crossbow'
           ? 'icon_2'
@@ -1520,8 +1696,9 @@ export class GameScene extends Phaser.Scene {
             : option.kind === 'rare'
               ? 'icon_rare'
               : option.weaponId === 'guandao' ? 'icon_guandao' : 'icon_passive';
-      if (option.kind === 'relic' && option.icon) {
-        view.icon.setTexture(option.icon).setDisplaySize(44, 44).setVisible(true);
+      const rewardIcon=upgradeIcon(option);
+      if (rewardIcon && this.textures.exists(rewardIcon)) {
+        view.icon.setTexture(rewardIcon).setDisplaySize(44, 44).setVisible(true);
       } else {
         view.icon.setTexture(iconKey).setDisplaySize(44, 44).setVisible(true);
       }
@@ -1529,17 +1706,39 @@ export class GameScene extends Phaser.Scene {
   }
 
   protected chooseUpgrade(index: number): void {
+    if(this.mode==='bossloot'){
+      const option=this.upgradeOptions[index],done=this.lootContinue;if(!option||!done)return;
+      this.lootContinue=null;this.upgradeOptions=[];option.apply(this.player,this.player.weapons,this.player.growth);this.artEffects.show(5,this.player.x,this.player.y-10,80,this.combatNow,450);done();return;
+    }
     if (this.mode !== 'levelup' || this.pendingLevels <= 0) return;
     const option = this.upgradeOptions[index];
     if (!option) return;
     const beforeSet = option.school ? this.player.schoolCount(option.school as RelicSchool) : 0;
+    let growthNotice = '';
+    if (option.kind === 'potion') {
+      growthNotice = option.id === 'potion_rejuvenation'
+        ? `回春丹 · 恢复 ${Math.round(Math.max(0, Math.min(this.player.maxHp - this.player.hp, Math.round(this.player.maxHp * .3))))} 生命`
+        : '狂战丹 · 伤害与攻速提升 10 秒';
+    }
     this.upgradeOptions = []; // 先消费选项，防止重复点击旧卡。
-    option.apply(this.player, this.player.weapons);
+    option.apply(this.player, this.player.weapons, this.player.growth);
     if (option.kind === 'relic' && option.school && beforeSet === 1 && this.player.schoolCount(option.school as RelicSchool) === 2) {
       this.showSetToast(option.school as RelicSchool);
     }
     this.pendingLevels -= 1;
     this.resumePendingChoices();
+    if (growthNotice) {
+      if ((this.mode as string) === 'none') this.showGrowthNotice(growthNotice);
+      else this.pendingGrowthNotices.push(growthNotice);
+    }
+  }
+
+  protected showGrowthNotice(message: string): void {
+    const notice = this.add.text(GAME_WIDTH / 2, GAME_HEIGHT * .36, message, {
+      fontFamily: FONT, fontSize: IS_DESKTOP ? '18px' : '17px', color: '#f0d28b',
+      fontStyle: 'bold', align: 'center', resolution: 2, stroke: '#211b12', strokeThickness: 4,
+    }).setOrigin(.5).setScrollFactor(0).setDepth(DEPTH.overlay + 50).setName('combat-notice');
+    this.tweens.add({ targets: notice, y: notice.y - 22, alpha: 0, delay: 700, duration: 450, onComplete: () => notice.destroy() });
   }
 
   protected resumePendingChoices(): void {
@@ -1547,7 +1746,6 @@ export class GameScene extends Phaser.Scene {
     this.setMode('none');
     if (this.pendingLevels > 0) this.openUpgrade();
     else if (this.pendingRecruit) this.openRecruit();
-    else if (this.elapsed >= this.reinforcements.nextAt) this.setMode('aid');
   }
 
   protected showSetToast(school: RelicSchool): void {
@@ -1625,7 +1823,7 @@ export class GameScene extends Phaser.Scene {
     this.renderRecruit(); this.setMode('recruit');
   }
 
-  protected renderRecruit(): void { this.legionUI?.render(this.legion, this.resting ? 'rest' : 'wave', this.recruitOptions.map(o => o.kind));if(this.resting)this.legionUI.setCampDestination(this.chapter.stage===1?'下曲阳破阵':'广宗决战'); }
+  protected renderRecruit(): void { if(this.resting){const next=this.chapter.id==='hulao'?((this.chapter.westStage??1)===1?'荥阳之战':'虎牢关决战'):this.chapter.stage===3?'汜水关':this.chapter.stage===1?'下曲阳破阵':'广宗决战';this.campUI?.open(this.chapter.id+'-'+this.battleStage(),next);return;}  this.legionUI?.render(this.legion, this.resting ? 'rest' : 'wave', this.recruitOptions.map(o => o.kind));if(this.resting)this.legionUI.setCampDestination(this.chapter.id==='hulao'?((this.chapter.westStage??1)===1?'荥阳之战':'虎牢关决战'):this.chapter.stage===3?'第二章 · 汜水关':this.chapter.stage===1?'下曲阳破阵':'广宗决战',this.chapter.id==='hulao'?'讨董军营 · 战后休整':'黄巾败退 · 战后休整'); }
 
   private buyTroops(kind: TroopKind, train: boolean): void {
     if (this.mode === 'rest' && this.resting) {
@@ -1636,6 +1834,7 @@ export class GameScene extends Phaser.Scene {
     }
     if (this.mode !== 'recruit' || !this.freeRecruit || train || this.recruitedWaves.has(this.waveIndex) || !this.recruitOptions.some(o => o.kind === kind)) return;
     if (this.legion.recruit(kind, 1, true)) {
+      if(this.waveIndex%2===0){const id=this.player.hp<this.player.maxHp?'rejuvenation':'berserk';this.player.growth.usePotion(id,this.player,this.combatNow);this.showGrowthNotice(id==='rejuvenation'?'整军奖励 · 回春丹':'整军奖励 · 狂战丹');}
       this.recruitedWaves.add(this.waveIndex); this.freeRecruit = false; this.recruitOptions = [];
       this.resumePendingChoices();
     }
@@ -1643,12 +1842,16 @@ export class GameScene extends Phaser.Scene {
 
   protected chooseRecruit(index: number): void { const option = this.recruitOptions[index]; if (option) this.buyTroops(option.kind, false); }
 
-  private continueCampaign(): void {
-    if (!this.resting || this.mode !== 'rest') return;
-    const stage=this.chapter.stage??1,next=Math.min(3,stage+1) as 1|2|3;
-    const transfer=packCampaign(this.runConfig.character,this.player,this.legion);transfer.chapter='huangjin';transfer.stage=next;
+  protected continueCampaign(): void {
+    if (!this.resting || this.mode !== 'rest' || this.children.getByName('chapter1-volunteers')) return;
+    const west=this.chapter.id==='hulao';
+    const stage=west?(this.chapter.westStage??3):(this.chapter.stage??1);
+    const chapter=west||stage===3?'hulao':'huangjin';
+    const next=(west?stage+1:stage===3?1:stage+1) as 1|2|3;
+    if(next>3||(chapter==='hulao'&&!dongzhuoStageUnlocked(next)&&!isChapterTestRun()))return;
+    const transfer=packCampaign(this.runConfig.character,this.player,this.legion);transfer.chapter=chapter;transfer.stage=chapter==='huangjin'?next:undefined;
     this.registry.set('campaignTransfer',transfer);
-    this.registry.set('runConfig',{...this.runConfig,chapter:'huangjin',stage:next});
+    this.registry.set('runConfig',{...this.runConfig,chapter,stage:chapter==='huangjin'?next:undefined,westStage:chapter==='hulao'?next:undefined});
     this.resting = false; this.scene.restart();
   }
 
@@ -1660,6 +1863,40 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
+  private updateRelicWaves():void{
+    if(!this.relicWaveGfx)return;const g=this.relicWaveGfx;g.clear();
+    for(let i=this.relicWaves.length-1;i>=0;i--){const r=this.relicWaves[i],p=(this.combatNow-r.at)/240;if(p>=1||this.over){this.relicWaves.splice(i,1);continue;}g.lineStyle(2,0xe9ca83,(1-p)*.8).strokeCircle(r.x,r.y,110).lineStyle(1,0xffe5b0,(1-p)*.65).strokeCircle(r.x,r.y,110*(.35+.65*p));}
+  }
+  private offerBossLoot(done:()=>void):void{
+    if(!this.player.alive){this.finish(false);return;}
+    const special=RELICS.filter(r=>['human_seal','heaven_ember','army_jade'].includes(r.id)&&!this.player.relics.includes(r.id));
+    const pool=special.length?special:RELICS.filter(r=>!this.player.relics.includes(r.id)).slice(0,3);
+    if(!pool.length){this.legion.food+=15;done();return;}
+    this.lootContinue=done;this.upgradeOptions=pool.map(r=>({id:'boss_'+r.id,name:r.name,desc:r.desc,kind:'relic',categoryLabel:'Boss战利品 · 本局永久',icon:r.icon,apply:p=>{p.addRelic(r.id);}}));
+    (this.levelPanel.getByName('upgrade-title') as Phaser.GameObjects.Text)?.setText('强敌败退 · 选择一件遗物');this.renderCards();this.setMode('bossloot');
+  }
+  private battleStage():number{return this.chapter.stage??this.chapter.westStage??3;}
+  private recordFrontlineVictory(stage:number):void{
+    this.frontlineVictories.set(stage,{elapsed:Math.max(0,(this.combatNow-(this.frontlineStarts.get(stage)??0))/1000)});
+    // Settle only a contiguous defeated prefix. The current stage remains owned by finish().
+    while(this.frontlineNextSettlement<this.battleStage()){
+      const stage=this.frontlineNextSettlement,result=this.frontlineVictories.get(stage);if(!result)break;
+      if(this.worldCampaign){settleExpedition(this.expeditionId,{chapter:this.chapter.id,victory:true,bossKilled:true,reason:'boss',elapsed:result.elapsed,kills:Math.max(0,this.kills-this.settledFrontlineKills),debug:isChapterTestRun()||this.debugModified||this.debugJumped||this.player.damageImmune});this.settledFrontlineKills=this.kills;this.expeditionId=beginExpedition(this.chapter.id,stage+1,this.allies.filter(a=>a.active&&a.reserveSoldier).map(a=>a.kind));}
+      this.frontlineVictories.delete(stage);this.frontlineNextSettlement++;
+    }
+  }
+  private clearChasingBosses():void{for(const t of this.chasingBosses){t.battle?.clear();t.huaxiong?.clear();t.xurong?.clear();t.label.destroy();}this.chasingBosses=[];}
+  private advanceFrontline():void{
+    const boss=this.boss,stage=this.battleStage();if(!boss?.active||stage>=3||this.runConfig.encounter)return;
+    const name=this.chapter.bossName,label=this.add.text(boss.x,boss.y-100,name+' · 追兵',{fontFamily:FONT,fontSize:'15px',color:'#f0c58b',stroke:'#21160e',strokeThickness:3,resolution:2}).setOrigin(.5).setDepth(100);
+    this.chasingBosses.push({enemy:boss,life:boss.spawnId,stage,name,battle:this.yellow,huaxiong:this.huaxiong,xurong:this.xurong,label});
+    const next=(stage+1) as 2|3,west=this.chapter.id==='hulao';
+    this.chapter=getBattleChapter(this.chapter.id,west?undefined:next,west?next:undefined);this.runConfig={...this.runConfig,stage:west?undefined:next,westStage:west?next:undefined};
+    this.frontlineStarts.set(next,this.combatNow);this.elapsed=0;this.waveIndex=-1;this.boss=null;this.bossSpawned=false;this.bossWarned=false;this.bossKilled=false;this.firstBossAt=-1;this.bossShield=0;this.bossPhase2=false;this.bossEnergy=0;this.recruitedWaves.clear();this.spawnTimer=.2;this.huaxiong=null;this.xurong=null;
+    this.yellow=west?null:new YellowBattle({scene:this,player:this.player,army:this.legion,enemies:this.enemies,move:(e,nx,ny,dt)=>this.advanceEnemy(e,nx,ny,dt),spawn:(def,x,y)=>this.spawnEnemy(def.kind,x,y,1,true,def)},next);
+    this.showWaveBanner('战线推进 · '+this.chapter.name,true);
+    const march=this.add.graphics().setScrollFactor(0).setDepth(DEPTH.overlay-12);this.tweens.addCounter({from:0,to:1,duration:1100,onUpdate:t=>{const p=t.getValue()??0;march.clear().lineStyle(2,0xd5ae6b,Math.sin(p*Math.PI)*.45);for(let i=0;i<5;i++){const x=(p*GAME_WIDTH+i*GAME_WIDTH/5)%GAME_WIDTH;march.lineBetween(x-10,GAME_HEIGHT*.3,x,GAME_HEIGHT*.3+8).lineBetween(x,GAME_HEIGHT*.3+8,x-10,GAME_HEIGHT*.3+16);}},onComplete:()=>march.destroy()});
+  }
   protected checkEnd(): void {
     if (this.over) return;
     if (!this.player.alive) {
@@ -1675,10 +1912,14 @@ export class GameScene extends Phaser.Scene {
     this.over = true;
     this.player.passive.stop();
     this.legion.stop();
+    buildVfx(this).clear();
+    this.awakeningCombat?.clear();
+    this.bulwarkBuild?.clear();
+    this.controlBuild?.clear();
     this.reinforcements.clear();
     this.victory = victory;
     this.music.stop();
-    this.lubu?.clear();this.yellow?.clear();this.supplies?.clear();
+    this.lubu?.clear();this.huaxiong?.clear();this.xurong?.clear();this.yellow?.clear();this.clearChasingBosses();this.supplies?.clear();
     if(victory&&this.chapter.stage===3)this.finaleFadeMs=800;
     this.feedback.clearAttacks();
     if (victory) this.sfx.win();
@@ -1713,19 +1954,46 @@ export class GameScene extends Phaser.Scene {
         row('结局', victory ? '讨伐成功' : reason === 'timeout' ? '超时' : '阵亡'),
       ].join('\n'),
     );
-    if(this.worldCampaign){const reward=settleExpedition(this.expeditionId,{...stats,chapter:this.chapter.id,returned:this.allies.filter(a=>a.active&&a.reserveSoldier).map(a=>a.kind),debug:isChapterTestRun()||this.debugModified||this.debugJumped||this.player.damageImmune});
+    if(this.worldCampaign){const reward=settleExpedition(this.expeditionId,{...stats,kills:Math.max(0,stats.kills-this.settledFrontlineKills),chapter:this.chapter.id,returned:this.allies.filter(a=>a.active&&a.reserveSoldier).map(a=>a.kind),debug:isChapterTestRun()||this.debugModified||this.debugJumped||this.player.damageImmune});
       this.resultTexts.body.setFontSize(IS_DESKTOP?14:16).setLineSpacing(IS_DESKTOP?5:8).setText(this.resultTexts.body.text+`\n永久奖励  军功 +${reward.merits} · 粮草 +${reward.provisions}`);
       this.resultTexts.subtitle.setText(victory&&this.chapter.id==='huangjin'&&this.chapter.stage===3&&worldUnlocked()?'黄巾平定 · 三国天下开启':victory?this.chapter.victoryText:reward.message);
     }
-    if(victory&&this.chapter.stage===3&&worldUnlocked())this.registry.set('worldReveal',true);
-    const homeLink=this.resultPanel.getByName('result-home') as Phaser.GameObjects.Text|null;homeLink?.setText(this.worldCampaign&&worldUnlocked()?this.chapter.stage===3&&this.victory?'三国天下开启':'返回主城':'返回选关');
-    recordChapterVictory({ stage:this.chapter.stage,chapter: this.chapter.id, victory, reason, bossKilled: this.bossKilled,
+    if(victory&&!this.runConfig.encounter&&this.chapter.id==='hulao'&&this.chapter.westStage===3&&worldUnlocked())this.registry.set('worldReveal',true);
+    if(!this.runConfig.encounter)recordChapterVictory({ stage:this.chapter.stage,chapter: this.chapter.id, victory, reason, bossKilled: this.bossKilled,
       debug: isChapterTestRun() || this.debugModified || this.debugJumped || this.player.damageImmune });
+    const nextWest=victory&&this.worldCampaign&&!this.runConfig.encounter&&((this.chapter.id==='huangjin'&&this.chapter.stage===3)?1:(this.chapter.id==='hulao'&&(this.chapter.westStage??3)<3)?(this.chapter.westStage??1)+1:0);
+    const canAdvance=!!nextWest&&dongzhuoStageUnlocked(nextWest);
+    const openedMap=victory&&this.worldCampaign&&this.chapter.id==='hulao'&&(this.chapter.westStage??3)===3&&worldUnlocked();
+    const homeLink=this.resultPanel.getByName('result-home') as Phaser.GameObjects.Text|null;
+    this.resultPanel.getByName('result-restart')?.setActive(victory);(this.resultPanel.getByName('result-restart') as Phaser.GameObjects.Image)?.setVisible(victory);(this.resultPanel.getByName('result-restart-text') as Phaser.GameObjects.Text)?.setVisible(victory);
+    homeLink?.setText(!victory?'返回主菜单':canAdvance?`下一关 · ${nextWest===1?'汜水关':nextWest===2?'荥阳':'虎牢关'}`:openedMap?'三国天下开启':this.worldCampaign&&worldUnlocked()?'返回主城':'返回选关');
+    homeLink?.removeAllListeners('pointerdown').on('pointerdown',()=>{
+      if(!victory){this.registry.remove('campaignTransfer');this.registry.remove('menuChapterPicker');this.scene.start('MenuScene');return;}
+      if(canAdvance){this.registry.remove('campaignTransfer');const {encounter:_preview,...config}=this.runConfig;this.registry.set('runConfig',{...config,chapter:'hulao',stage:undefined,westStage:nextWest});this.scene.restart();return;}
+      if(this.worldCampaign&&worldUnlocked())this.scene.start(this.registry.get('worldReveal')?'WorldMapScene':'CityScene');
+      else {this.registry.set('menuChapterPicker',true);this.scene.start('MenuScene');}
+    });
     this.onRunFinished(stats);
-    if (victory && this.chapter.id === 'huangjin' && (this.chapter.stage??3)<3) {
+    if (victory && !this.runConfig.encounter && (this.chapter.id==='huangjin'||(this.chapter.westStage??3)<3)) {
       this.cameras.main.flashEffect.reset(); this.cameras.main.shakeEffect.reset();
       this.pendingRecruit = false; this.pendingLevels = 0; this.freeRecruit = false; this.resting = true;
-      this.player.hp = this.player.maxHp; this.legion.recover(); this.renderRecruit(); this.legionUI.setCampDestination(this.chapter.stage===1?'下曲阳破阵':'广宗决战'); this.setMode('rest');
+      this.player.hp = this.player.maxHp; this.legion.recover(); this.renderRecruit(); this.legionUI.setCampDestination(this.chapter.id==='hulao'?((this.chapter.westStage??1)===1?'荥阳之战':'虎牢关决战'):this.chapter.stage===3?'第二章 · 汜水关':this.chapter.stage===1?'下曲阳破阵':'广宗决战',this.chapter.id==='hulao'?'讨董军营 · 战后休整':'黄巾败退 · 战后休整'); this.setMode('rest');
+      if(this.chapter.stage===3){
+        this.legionUI.panel.setVisible(false);
+        const notice=this.add.container(0,0).setScrollFactor(0).setDepth(DEPTH.overlay+10).setName('chapter1-volunteers');
+        const label=(y:number,value:string,size:number)=>this.add.text(GAME_WIDTH/2,y,value,{fontFamily:FONT,fontSize:size+'px',color:'#f0ddba',align:'center',resolution:2}).setOrigin(.5).setScrollFactor(0);
+        notice.add(this.add.rectangle(GAME_WIDTH/2,GAME_HEIGHT/2,GAME_WIDTH,GAME_HEIGHT,0x100c08,.8).setScrollFactor(0).setInteractive());
+        const cy=GAME_HEIGHT/2,cw=Math.min(640,GAME_WIDTH-48);
+        notice.add(this.add.image(GAME_WIDTH/2,cy,'rest_camp').setDisplaySize(cw,340).setScrollFactor(0));
+        notice.add(this.add.rectangle(GAME_WIDTH/2,cy,cw,340,0x1a110b,.72).setStrokeStyle(1,0xb3935b).setScrollFactor(0));
+        const trim=this.add.graphics().setScrollFactor(0);trim.lineStyle(1,0xc5a165,.7).strokeRect((GAME_WIDTH-cw)/2+8,cy-162,cw-16,324).lineBetween(GAME_WIDTH/2-90,cy-42,GAME_WIDTH/2+90,cy-42);notice.add(trim);
+        notice.add(label(cy-133,'第一章 · 黄巾之乱 告捷',14).setColor('#c6ae80'));
+        notice.add(label(cy+40,'整顿兵马  →  补充援兵  →  汜水讨董',13).setColor('#c6ae80'));
+        notice.add(label(GAME_HEIGHT/2-84,'黄巾平定 · 义士来投',26));
+        notice.add(label(GAME_HEIGHT/2-12,'将军威名远扬，四方义士前来投靠。\n且回军营整顿兵马，再赴讨董征途。',16).setLineSpacing(12));
+        const confirm=label(GAME_HEIGHT/2+104,'确认 · 进入军营',20).setPadding(28,14).setInteractive({useHandCursor:true}).setName('volunteers-confirm').setBackgroundColor('#59452d').on('pointerover',()=>confirm.setColor('#ffe7ae')).on('pointerout',()=>confirm.setColor('#f0ddba'));
+        confirm.on('pointerdown',()=>{notice.destroy();this.legionUI.panel.setVisible(true);});notice.add(confirm);
+      }
     }
   }
 
@@ -1787,6 +2055,7 @@ export class GameScene extends Phaser.Scene {
     this.hudTexts.gear = this.add.text(32, 236, '', {...style(12,'#dfd5bc'),wordWrap:{width:GAME_WIDTH>600?370:GAME_WIDTH-72},lineSpacing:4})
       .setScrollFactor(0).setDepth(DEPTH.hud+1);
     this.passiveHud = new PassiveHud(this);
+    this.buffHud=new BuffHud(this);
     this.muteText = this.hudTexts.mute;
     this.hudTexts.music.setText(this.music.mutedState ? '音乐:关' : '音乐:开');
     this.hudTexts.relics = this.add
@@ -1796,6 +2065,7 @@ export class GameScene extends Phaser.Scene {
       .setPadding(4, 2, 4, 2)
       .setInteractive({ useHandCursor: true })
       .on('pointerdown', () => { this.relicExpanded = !this.relicExpanded; });
+    this.pointsButton=this.add.text(GAME_WIDTH-58,GAME_HEIGHT-240,'＋',{fontFamily:FONT,fontSize:'32px',color:'#ffe2a4',resolution:2}).setOrigin(.5).setPadding(16,6).setBackgroundColor('#3b3021').setScrollFactor(0).setDepth(DEPTH.hud+4).setName('attribute-plus').setInteractive({useHandCursor:true}).setVisible(false).on('pointerdown',()=>{if(this.mode==='none'&&!this.over&&this.player.growth.unallocated>0){this.attributeReturn='none';this.renderAttributePanel();this.setMode('attributes');}});
     this.relicIcons = [];
     for (let i = 0; i < 8; i += 1) {
       const icon = this.add
@@ -1812,8 +2082,11 @@ export class GameScene extends Phaser.Scene {
     if (this.hudAcc < .1 && this.lastHudMode === this.mode) return;
     this.hudAcc = 0; this.lastHudMode = this.mode;
     const overlay = this.mode !== 'none';
+    if(this.pointsButton)this.pointsButton.setVisible(!overlay&&!this.over&&this.player.growth.unallocated>0).setText('＋').setData('points',this.player.growth.unallocated);
     this.legionUI?.update(this.legion, !overlay && !this.over);
     this.passiveHud.update(this.player.passive, this.combatNow, !overlay);
+    buildVfx(this).density=this.enemies.filter(e=>e.active&&!e.isSupplySlot).length+this.legion.count;
+    this.buffHud.update(this.player,this.combatNow,!overlay&&!this.over&&!this.relicExpanded);
     this.hudGfx.setVisible(!overlay);
     if (this.hudTexts) for (const t of Object.values(this.hudTexts)) t.setVisible(!overlay);
     for (const icon of this.relicIcons) icon.setVisible(!overlay && icon.visible);
@@ -1840,13 +2113,17 @@ export class GameScene extends Phaser.Scene {
     this.hudTexts.hp.setText(`${Math.ceil(this.player.hp)}/${this.player.maxHp}`);
     this.hudTexts.level.setText(`${getCharacter(this.runConfig.character).name}  Lv.${this.player.level}`);
     this.hudTexts.timer.setText(this.formatTime(this.elapsed));
+    this.hudTexts.chapter.setText(this.chapter.name);
     this.hudTexts.kills.setText(`击杀 ${this.kills}`);
     if (this.waveIndex >= 0) {
       this.hudTexts.wave.setText(`第 ${this.waveIndex + 1}/${this.chapter.waves.length} 波 · ${this.chapter.waves[this.waveIndex].name}`);
     }
     this.hudTexts.details.setText(this.relicExpanded?'收起战况 ▴':'战况 ▾');
     for(const key of ['music','mute','gear','relics']) this.hudTexts[key].setVisible(this.relicExpanded);
-    this.hudTexts.gear.setText(this.player.weapons.map(w=>`${WEAPON_META[w.id].name} Lv.${w.level}`).join(' · ')+'\n'+this.passiveHud.description);
+    const weapon = this.player.weapons[0];
+    const mastery = '\n'+this.player.growth.masteryLabel();
+    const trinkets = `\n饰品 ${this.player.growth.trinkets.length}/2`;
+    this.hudTexts.gear.setText(`${weapon ? `${WEAPON_META[weapon.id].name} Lv.${weapon.level}` : '本命武器'}${mastery}${trinkets}\n属性点 ${this.player.growth.unallocated} · ${this.passiveHud.description}`);
     const relicList = this.player.relics;
     const schoolParts: string[] = [];
     for (const sc of ['wushuang', 'shenshe', 'lieyan', 'tiebi'] as RelicSchool[]) {
@@ -1859,7 +2136,7 @@ export class GameScene extends Phaser.Scene {
       const icon = this.relicIcons[i];
       const id = relicList[i];
       if (!showIcons || !id) { icon.setVisible(false); continue; }
-      icon.setTexture(`item_${id === 'whetstone' ? 'whetstone' : id}`).setVisible(true);
+      icon.setTexture(RELICS.find(r=>r.id===id)?.icon??'item_drum').setVisible(true);
     }
 
     const boss = this.boss;
@@ -1869,13 +2146,13 @@ export class GameScene extends Phaser.Scene {
       const barY = GAME_HEIGHT - 68;
       const ratio = Phaser.Math.Clamp(boss.hp / boss.maxHp, 0, 1);
       this.hintText?.setVisible(false);
-      this.hudTexts.boss.setVisible(true).setPosition(left, barY - 24);
+      this.hudTexts.boss.setVisible(true).setPosition(left, barY - 24).setText(this.chapter.bossName);
       const hpLabel = this.bossShield > 0 ? `${Math.round(ratio * 100)}% 🛡${Math.round(this.bossShield)}` : `${Math.round(ratio * 100)}%`;
       this.hudTexts.bossHp.setVisible(true).setPosition(left + barW, barY - 24).setText(hpLabel);
-      const stageBoss=!!this.chapter.stage&&this.chapter.stage<3;
+      const stageBoss=!!this.xurong||!!this.huaxiong||!!this.chapter.stage&&this.chapter.stage<3;
       const energy = this.lubu ? this.lubu.energy : this.bossEnergy;
       this.hudTexts.bossEnergy.setVisible(true).setPosition(left + barW, barY + 31)
-        .setText(this.lubu ? `${this.lubu.phase2 ? `魔神 ${Math.floor(energy)}%` : '半血解锁大招'} · ${this.lubu.statusLabel}` : stageBoss?`${boss.hp<=boss.maxHp*.5?'半血强化 · ':''}${this.chapter.stage===1?'留意扇形与冲锋预警':'地裂与环形震荡 · 躲开金线'}`:`⚡ ${Math.floor(energy)}%`);
+        .setText(this.xurong?this.xurong.label+' · 推进 '+Math.max(0,Math.ceil(90-(this.combatNow-this.firstBossAt)/1000))+'秒':this.huaxiong?this.huaxiong.label+' · 推进 '+Math.max(0,Math.ceil(90-(this.combatNow-this.firstBossAt)/1000))+'秒':this.lubu ? `${this.lubu.phase2 ? `魔神 ${Math.floor(energy)}%` : '半血解锁大招'} · ${this.lubu.statusLabel}` : stageBoss?`${boss.hp<=boss.maxHp*.5?'半血强化 · ':''}${this.battleStage()<3?'战线推进倒计时 '+Math.max(0,Math.ceil(90-(this.combatNow-this.firstBossAt)/1000))+'秒':'注意地裂与环形预警'}`:`⚡ ${Math.floor(energy)}%`);
       g.fillStyle(0x000000, 0.72);
       g.fillRect(left, barY, barW, 12);
       g.fillStyle(COLORS.red, 0.95);
@@ -1902,34 +2179,32 @@ export class GameScene extends Phaser.Scene {
 
   protected buildOverlays(): void {
     this.levelPanel = this.add.container(0, 0).setScrollFactor(0).setDepth(DEPTH.overlay).setVisible(false);
-    const dim = this.add.rectangle(0, 0, GAME_WIDTH, GAME_HEIGHT, 0x09140e, 0.8).setOrigin(0, 0).setInteractive();
+    const dim = this.add.rectangle(0, 0, GAME_WIDTH, GAME_HEIGHT, 0x100d09, 0.8).setOrigin(0, 0).setInteractive();
     const d = IS_DESKTOP;
     const title = this.add
-      .text(GAME_WIDTH / 2, d ? 58 : 205, '将星精进 · 择一强化', { fontFamily: FONT, fontSize: d ? '20px' : '24px', color: '#e8c76a' })
+      .text(GAME_WIDTH / 2, d ? 48 : 120, '将星精进 · 择一强化', { fontFamily: FONT, fontSize: d ? '20px' : '24px', color: '#e8c76a' })
       .setOrigin(0.5);
-    this.levelPanel.add([dim, title]);
+    title.setName('upgrade-title');this.levelPanel.add([dim, title]);
+    this.rerollButton=this.add.text(GAME_WIDTH-(d?28:32),d?24:42,'',{fontFamily:FONT,fontSize:'16px',color:'#e8cf91',resolution:2}).setOrigin(1,0).setPadding(14,12).setBackgroundColor('#35291c').setName('upgrade-reroll').setInteractive({useHandCursor:true}).on('pointerdown',()=>this.rerollUpgrades());this.levelPanel.add(this.rerollButton);
 
-    const ys = d ? [148, 284, 420] : [310, 454, 598];
-    for (let i = 0; i < 3; i += 1) {
-      const y = ys[i];
-      const bg = this.add
-        .image(GAME_WIDTH / 2, y, 'ui_war_card')
-        .setDisplaySize(d ? 480 : 452, 126)
-        .setInteractive({ useHandCursor: true });
-      bg.on('pointerdown', () => bg.setTint(0xffe4a5)).on('pointerup', () => this.chooseUpgrade(i)).on('pointerover', () => bg.setTint(0xe7d6b3)).on('pointerout', () => bg.clearTint());
-      const icon = this.add.image(GAME_WIDTH / 2 - (d ? 201 : 187), y - 25, 'icon_1').setDisplaySize(44, 44).setVisible(false);
-      const name = this.add
-        .text(GAME_WIDTH / 2 - (d ? 166 : 152), y - 23, '', { ...warText(d ? 18 : 19), wordWrap: {width:d ? 380 : 350} })
-        .setOrigin(0,0);
-      const desc = this.add
-        .text(GAME_WIDTH / 2 - (d ? 220 : 206), y + 7, '', { ...warText(14,'#c8cbb7'), lineSpacing: 3, wordWrap: { width: d ? 440 : 412 } })
-        .setOrigin(0,0);
-      const tag = this.add
-        .text(GAME_WIDTH / 2 - (d ? 166 : 152), y - 51, '', { fontFamily: FONT, fontSize: d ? '12px' : '13px', color: '#f5efe6' })
-        .setOrigin(0,0).setResolution(2).setBackgroundColor('#263e2c')
-        .setPadding(6, 2, 6, 2);
-      this.levelPanel.add([bg, icon, name, desc, tag]);
-      this.cardViews.push({ bg, icon, name, desc, tag });
+
+
+    if(!this.textures.exists('ui_upgrade_bronze')){
+      const art=this.add.graphics();art.fillStyle(0x211c16).fillRect(0,0,300,300).fillStyle(0x30271c).fillRect(5,5,290,80).lineStyle(2,0x9e8050).strokeRect(2,2,296,296).lineStyle(1,0x554631).strokeRect(7,7,286,286);
+      for(const x of [11,289])for(const y of [11,289])art.fillStyle(0xc2a16b).fillRect(x-2,y-2,4,4);
+      art.generateTexture('ui_upgrade_bronze',300,300);art.destroy();
+    }
+    this.levelPanel.add(this.add.text(GAME_WIDTH/2,d?80:155,'三择其一 · 点击卡片获得强化',warText(14,'#c6b99e')).setOrigin(.5));
+    for(let i=0;i<3;i++){
+      const w=d?264:476,h=d?320:174,x=d?196+i*284:GAME_WIDTH/2,y=d?278:280+i*188,left=x-w/2,top=y-h/2;
+      const bg=this.add.image(x,y,'ui_upgrade_bronze').setDisplaySize(w,h).setInteractive({useHandCursor:true}).setName('upgrade-card-'+i);
+      bg.on('pointerdown',()=>bg.setTint(0xd0b889)).on('pointerup',()=>{bg.clearTint();this.chooseUpgrade(i);}).on('pointerover',()=>bg.setTint(0xffe6b8)).on('pointerout',()=>bg.clearTint());
+      const icon=this.add.image(left+40,top+42,'icon_1').setDisplaySize(44,44).setVisible(false);
+      const tag=this.add.text(left+73,top+18,'',warText(12,'#c9b993')).setResolution(2).setPadding(5,2);
+      const name=this.add.text(d?left+20:left+73,d?top+80:top+42,'',{...warText(d?20:21,'#f4e6c8'),wordWrap:{width:d?w-40:w-95,useAdvancedWrap:true}});
+      const desc=this.add.text(left+20,d?top+136:top+83,'',{...warText(d?17:18,'#d5cbb9'),lineSpacing:4,wordWrap:{width:w-40,useAdvancedWrap:true}});
+      const rule=this.add.graphics().lineStyle(1,0x8c734b,.45).lineBetween(left+20,d?top+124:top+74,left+w-20,d?top+124:top+74);
+      this.levelPanel.add([bg,rule,icon,name,desc,tag]);this.cardViews.push({bg,icon,name,desc,tag});
     }
 
     this.pausePanel = this.add.container(0,0).setScrollFactor(0).setDepth(DEPTH.overlay).setVisible(false);
@@ -1942,15 +2217,48 @@ export class GameScene extends Phaser.Scene {
     const resume=this.add.image(cx,resumeY,'ui_war_button').setDisplaySize(pw-64,50).setInteractive({useHandCursor:true}).setName('pause-resume');
     const resumeText=this.add.text(cx,resumeY,'继续战斗',warText(21,'#17281d')).setOrigin(.5);
     resume.on('pointerdown',()=>this.togglePause()).on('pointerover',()=>resume.setTint(0xffe8ad)).on('pointerout',()=>resume.clearTint());
+    this.attributePauseText=this.add.text(cx,top+153,'分配属性点 · 0',warText(15,'#e8cf91')).setOrigin(.5).setPadding(12,5).setInteractive({useHandCursor:true}).setName('pause-attributes');
+    this.attributePauseText.on('pointerdown',()=>{this.attributeReturn='pause';this.renderAttributePanel();this.setMode('attributes');});
     const bgmRow=this.createVolumeRow('战场音乐',top+191,this.music.getVolume(),v=>this.music.setVolume(v));
     const sfxRow=this.createVolumeRow('战斗音效',top+263,this.sfx.getVolume(),v=>this.sfx.setVolume(v));
+    const buildLink=this.add.text(cx,top+ph-98,'战法与宝物 · 查看构筑',warText(15,'#e6cc90')).setOrigin(.5).setPadding(14,6).setInteractive({useHandCursor:true}).setName('pause-build');
+    buildLink.on('pointerdown',()=>this.openBuildPanel());this.pausePanel.add(buildLink);
     const exit=this.add.text(cx,top+ph-65,'返回选将',warText(16,'#b5c4b2')).setOrigin(.5).setPadding(24,12).setInteractive({useHandCursor:true}).setName('pause-exit');
     exit.on('pointerdown',()=>{
       if(exit.getData('confirm')){this.registry.remove('campaignTransfer');this.scene.start(this.worldCampaign&&worldUnlocked()?'CityScene':'MenuScene');}
       else exit.setData('confirm',true).setText('确认离开？本局进度不保留').setColor('#e7b68e');
     });
     const keys=this.add.text(cx,top+ph-22,d?'Esc / P 继续战斗':'战斗已冻结 · 点击「继续战斗」恢复',warText(12,'#7f9987')).setOrigin(.5);
-    this.pausePanel.add([pauseDim,panel,pauseTitle,pauseHint,resume,resumeText,...bgmRow,...sfxRow,exit,keys]);
+    this.pausePanel.add([pauseDim,panel,pauseTitle,pauseHint,resume,resumeText,this.attributePauseText,...bgmRow,...sfxRow,exit,keys]);
+
+    this.attributePanel=this.add.container(0,0).setScrollFactor(0).setDepth(DEPTH.overlay+1).setVisible(false);
+    const attrDim=this.add.rectangle(0,0,GAME_WIDTH,GAME_HEIGHT,0x07120d,.76).setOrigin(0).setInteractive();
+    const attrW=d?560:GAME_WIDTH-32,attrH=d?520:650,attrTop=(GAME_HEIGHT-attrH)/2,attrCx=GAME_WIDTH/2;
+    const attrFrame=this.add.image(attrCx,GAME_HEIGHT/2,'ui_war_panel').setDisplaySize(attrW,attrH).setInteractive();
+    const attrTitle=this.add.text(attrCx,attrTop+34,'武将修习 · 属性分配',warText(24,'#e8cf91')).setOrigin(.5);
+    this.attributePointsText=this.add.text(attrCx,attrTop+74,'未分配属性点：0',warText(15,'#91ab98')).setOrigin(.5);
+    this.attributeWeaponText=this.add.text(attrCx,attrTop+104,'',warText(13,'#d3bd86')).setOrigin(.5);
+    this.attributeSummaryText=this.add.text(attrCx,attrTop+133,'',{...warText(d?11:12,'#c7d6c8'),align:'center',lineSpacing:3}).setOrigin(.5).setWordWrapWidth(attrW-46);
+    this.attributePanel.add([attrDim,attrFrame,attrTitle,this.attributePointsText,this.attributeWeaponText,this.attributeSummaryText]);
+    const rowH=d?61:70,firstY=attrTop+(d?166:178),rowW=attrW-50;
+    this.attributeRows=[];
+    (Object.keys(ATTRIBUTE_INFO) as AttributeId[]).forEach((id,index)=>{
+      const y=firstY+index*rowH;
+      const row=this.add.image(attrCx,y,'ui_war_card').setDisplaySize(rowW,rowH-7);
+      const attributeIcon=this.add.image(attrCx-rowW/2+27,y,'growth_icon_'+id).setDisplaySize(26,26);
+      const label=this.add.text(attrCx-rowW/2+48,y,ATTRIBUTE_INFO[id].name,{...warText(d?16:16,'#f0dfb4')}).setOrigin(0,.5);
+      const value=this.add.text(attrCx+rowW/2-88,y,`Lv.0/${ATTRIBUTE_MAX}`,warText(14,'#b6c3ab')).setOrigin(.5);
+      const button=this.add.image(attrCx+rowW/2-35,y,'ui_war_button').setDisplaySize(48,42).setInteractive({useHandCursor:true});
+      const plus=this.add.text(button.x,button.y,'+',warText(23,'#18271d')).setOrigin(.5);
+      button.on('pointerdown',()=>{if(this.player.growth.allocate(this.player,id)){this.renderAttributePanel();this.updateHud();}});
+      this.attributePanel.add([row,attributeIcon,label,value,button,plus]);
+      this.attributeRows.push({value,button});
+    });
+    const attrCloseY=attrTop+attrH-38;
+    const attrClose=this.add.text(attrCx,attrCloseY,'返回暂停菜单',warText(16,'#d8c9ae')).setOrigin(.5).setPadding(18,8).setInteractive({useHandCursor:true});
+    attrClose.setName('attributes-close').on('pointerdown',()=>this.setMode(this.attributeReturn));
+    this.attributePanel.add(attrClose);
+    this.renderAttributePanel();
 
     this.recruitViews = [];
     this.recruitPanel = this.add.container(0, 0).setScrollFactor(0).setDepth(DEPTH.overlay).setVisible(false);
@@ -1992,7 +2300,8 @@ export class GameScene extends Phaser.Scene {
     const btnText = this.add
       .text(GAME_WIDTH / 2, d ? 468 : 700, '再来一局', { fontFamily: FONT, fontSize: d ? '20px' : '22px', color: '#2a1c0c' })
       .setOrigin(0.5);
-    btn.on('pointerdown', () => this.scene.restart());
+    btn.setName('result-restart');btnText.setName('result-restart-text');
+    btn.on('pointerdown', () => {if(this.victory)this.scene.restart();});
     const selectChapter = this.add.text(GAME_WIDTH / 2, d ? 522 : 802, this.worldCampaign&&worldUnlocked()?this.chapter.stage===3&&this.victory?'三国天下开启':'返回主城':'返回选关', { fontFamily: FONT, fontSize: '16px', color: '#e8c76a' })
       .setOrigin(.5).setPadding(18, 6).setInteractive({ useHandCursor: true });
     selectChapter.setName('result-home').on('pointerdown', () => this.scene.start(this.worldCampaign&&worldUnlocked()?(this.registry.get('worldReveal')?'WorldMapScene':'CityScene'):'MenuScene'));
@@ -2011,6 +2320,54 @@ export class GameScene extends Phaser.Scene {
     fixInput(this.pausePanel);
     fixInput(this.resultPanel);
     fixInput(this.recruitPanel);
+    fixInput(this.attributePanel);
+  }
+
+  private openBuildPanel():void{
+    if(this.mode!=='pause'||this.children.getByName('build-panel'))return;
+    const root=this.add.container(0,0).setDepth(DEPTH.overlay+4).setScrollFactor(0).setName('build-panel'),b=this.player.growth.build;
+    const text=(x:number,y:number,value:string,size=16)=>this.add.text(x,y,value,{fontFamily:FONT,fontSize:size+'px',color:'#ecd9b5',resolution:2,wordWrap:{width:GAME_WIDTH-90}}).setScrollFactor(0);
+    root.add(this.add.rectangle(GAME_WIDTH/2,GAME_HEIGHT/2,GAME_WIDTH,GAME_HEIGHT,0x17130e,.98).setScrollFactor(0).setInteractive());
+    root.add(text(36,24,'本局构筑 · 战法 '+Object.keys(b.tactics).length+'/6 · 宝物 '+(b.treasures.length+this.player.growth.trinkets.length)+'/2',22));
+    let y=66;for(const id of Object.keys(b.tactics) as TacticId[]){root.add(this.add.image(48,y+16,'build_icon_'+id).setDisplaySize(26,26).setScrollFactor(0));root.add(text(70,y,TACTICS[id].name+' Lv.'+b.level(id)+'  ['+TAG_NAMES[TACTICS[id].tag]+']',17));root.add(text(36,y+23,TACTICS[id].desc,13));y+=IS_DESKTOP?45:68;}
+    if(!Object.keys(b.tactics).length){root.add(text(36,y,'升级时选择战法，构筑你的战斗风格。'));y+=42;}
+    for(const id of b.treasures){root.add(this.add.image(48,y+10,'build_icon_'+id).setDisplaySize(24,24).setScrollFactor(0));root.add(text(70,y,TREASURES[id].name+' · '+TREASURES[id].desc,14));y+=IS_DESKTOP?29:48;}
+    if(this.player.growth.trinkets.length)root.add(text(36,y,'既有饰品：'+this.player.growth.trinkets.map(id=>({tiger_tally:'虎符',heart_mirror:'护心镜',wind_boots:'疾风靴'})[id]).join(' · '),14));
+    root.add(text(36,GAME_HEIGHT-106,Object.entries(b.tags()).map(([id,n])=>TAG_NAMES[id as keyof typeof TAG_NAMES]+' '+n+'件').join('  '),14));
+    root.add(text(36,GAME_HEIGHT-78,'标签仅记录进度；2件加成 / 4件觉醒将在后续阶段开放。',12));
+    root.add(text(GAME_WIDTH/2-70,GAME_HEIGHT-46,'返回暂停菜单',17).setPadding(12,8).setInteractive({useHandCursor:true}).on('pointerdown',()=>root.destroy()));
+  }
+  protected renderAttributePanel(): void {
+    if (!this.player || !this.attributePointsText) return;
+    const growth=this.player.growth;
+    (this.attributePanel.getByName('attributes-close') as Phaser.GameObjects.Text)?.setText(this.attributeReturn==='none'?'继续战斗':'返回暂停菜单');
+    this.attributePointsText.setText(`未分配属性点：${growth.unallocated}`);
+    this.attributePauseText?.setText(`分配属性点 · ${growth.unallocated}`);
+    const weapon=this.player.weapons[0];
+    this.attributeWeaponText?.setText((weapon?WEAPON_META[weapon.id].name:'')+' · '+growth.masteryLabel());
+    const character=getCharacter(growth.character),stats=this.player.stats;
+    const baseline={...stats,damageMul:character.damageMul,cooldownMul:1,moveMul:character.speedMul,critChance:.05,
+      maxHpBonus:Math.round(BALANCE.player.maxHp*(character.hpMul-1)),meleeMul:1,arrowMul:1,fireMul:1};
+    const def=weapon?WEAPON_DEFS[weapon.id]:undefined,level=weapon?.level??1,now=this.combatNow;
+    const baseDamage=def?.damage(level,baseline)??1;
+    const currentDamage=(def?.damage(level,stats)??1)*growth.damageMultiplier(now);
+    const damageBonus=Math.round((currentDamage/Math.max(1,baseDamage)-1)*100);
+    const masteryRate=weapon?.id==='spear_orbit'?1+.08*growth.weaponMasteryLevel:1;
+    const currentCooldown=Math.max(.25,(def?.cooldown(level,stats)??1)/growth.attackSpeedMultiplier(now)/masteryRate);
+    const baseCooldown=Math.max(.25,def?.cooldown(level,baseline)??1);
+    const attackBonus=Math.round((baseCooldown/currentCooldown-1)*100);
+    const crit=Math.min(.65,stats.critChance+growth.criticalBonus()+growth.aimCriticalBonus()+this.player.passive.critBonus(now)+this.buildCombat.criticalBonus());
+    const baseHp=BALANCE.player.maxHp*character.hpMul,baseSpeed=BALANCE.player.speed*character.speedMul;
+    const hpBonus=Math.round((this.player.maxHp/baseHp-1)*100),moveBonus=Math.round((this.player.speed/baseSpeed-1)*100);
+    this.attributeSummaryText?.setText(`实际属性　伤害 +${damageBonus}% · 攻速 +${attackBonus}% · 暴击 ${(crit*100).toFixed(0)}%\n生命 ${Math.round(this.player.hp)}/${Math.round(this.player.maxHp)}（上限 +${hpBonus}%） · 移速 ${Math.round(this.player.speed)}（+${moveBonus}%）`);
+    const ids=Object.keys(ATTRIBUTE_INFO) as AttributeId[];
+    for(let i=0;i<ids.length;i++){
+      const id=ids[i],level=growth.attributes[id],row=this.attributeRows[i];
+      if(!row)continue;
+      row.value.setText(`Lv.${level}/${ATTRIBUTE_MAX}`).setColor(level>=ATTRIBUTE_MAX?'#8f987e':'#e5d4ab');
+      if(growth.unallocated>0&&level<ATTRIBUTE_MAX){row.button.setAlpha(1).setInteractive({useHandCursor:true});}
+      else row.button.setAlpha(.42).disableInteractive();
+    }
   }
 
   // ---------------- 性能测试模式（?perf=1，仅 DEV） ----------------

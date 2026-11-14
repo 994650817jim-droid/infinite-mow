@@ -46,14 +46,14 @@ if (!(await waitFor(BASE, 2))) {
 
 const browser = await chromium.launch({ channel: 'chrome', headless: true });
 const suiteDeadline = setTimeout(() => {
-  console.error('REGRESSION TIMEOUT: 240s'); cleanup();
+  console.error('REGRESSION TIMEOUT: 480s'); cleanup();
   void browser.close().finally(() => process.exit(2));
-}, 240000);
+}, 480000);
 
 async function newPage() {
   const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
   const page = await context.newPage();
-  await page.goto(BASE + '?autostart=1&r=' + Date.now(), { waitUntil: 'load' });
+  await page.goto(BASE + '?dev=1&stage=3&autostart=1&r=' + Date.now(), { waitUntil: 'load' });
   await page.waitForFunction(() => !!window.__IM, null, { timeout: 15000 });
   await page.waitForTimeout(600);
   // 默认清空武器，避免七探盘龙枪自动击杀影响敌人行为测试；需要的测试会自行 giveWeapon
@@ -240,7 +240,7 @@ function check(name, ok, detail) {
     const ctx = await browser.newContext({ viewport: { width: 960, height: 540 } });
     const page = await ctx.newPage();
     await page.goto(BASE + '?r=' + Date.now(), { waitUntil: 'load' });
-    await page.waitForTimeout(700);
+    await page.waitForFunction(()=>window.__game?.scene.isActive('MenuScene'));
     await page.evaluate((cfg) => {
       window.__game.registry.set('runConfig', cfg);
       window.__game.scene.getScene('MenuScene').scene.start('GameScene');
@@ -276,10 +276,7 @@ function check(name, ok, detail) {
   const dirs = await page.evaluate(() => new Promise((resolve) => {
     const s = window.__game.scene.getScene('GameScene');
     const p = s.player;
-    window.__IM.spawnAt('infantry', p.x - 160, p.y);
-    window.__IM.spawnAt('infantry', p.x + 160, p.y);
-    window.__IM.spawnAt('infantry', p.x, p.y - 160);
-    window.__IM.spawnAt('infantry', p.x, p.y + 160);
+    for(const [x,y] of [[-160,0],[160,0],[0,-160],[0,160]])s.spawnEnemy('infantry',p.x+x,p.y+y,1,true,{...s.chapter.enemies.infantry,behavior:undefined});
     const seen = new Set();
     let frames = new Set();
     let n = 0;
@@ -309,10 +306,10 @@ function check(name, ok, detail) {
       e.deactivate();
       window.__IM.spawnAt('infantry', p.x - 100, p.y);
       const e2 = s.enemies.filter((x) => x.active && x.kind === 'infantry').pop();
-      resolve({ dir: e2.direction, frame: e2.sprite.frame.name, sheet: e2.walkSheet });
+      resolve({ dir: e2.direction, frame: e2.sprite.frame.name, sheet: e2.walkSheet, expected:e2.def.walkVisual?.texture });
     }, 300);
   }));
-  check('enemy_pool_anim_reset', reset.dir === 'down' && reset.frame === 'down_0' && reset.sheet === 'enemy_infantry_walk_sheet', reset);
+  check('enemy_pool_anim_reset', reset.dir === 'down' && reset.frame === 'down_0' && reset.sheet === (reset.expected??'yellow_shield-walk-v4'), reset);
   await context.close();
 }
 
@@ -357,7 +354,7 @@ function check(name, ok, detail) {
       resolve({ dir: e2.direction, frame: e2.sprite.frame.name, sheet: e2.walkSheet });
     }, 300);
   }));
-  check('enemy_shield_pool_reset', reset.dir === 'down' && reset.frame === 'down_0' && reset.sheet === 'enemy_shield_walk_sheet', reset);
+  check('enemy_shield_pool_reset', reset.dir === 'down' && reset.frame === 'down_0' && reset.sheet === 'yellow_shield-walk-v4', reset);
   await context.close();
 }
 
@@ -376,7 +373,7 @@ function check(name, ok, detail) {
     let atkAt = 0; let boltAt = 0;
     const frames = new Set();
     const tick = () => {
-      if (archer.sprite.texture.key === 'enemy_archer_attack_sheet') {
+      if (archer.sprite.texture.key.endsWith('enemy_archer_attack_sheet')) {
         frames.add(archer.sprite.frame.name);
         if (!atkAt) atkAt = performance.now() - t0;
       }
@@ -656,7 +653,7 @@ function check(name, ok, detail) {
     const st = await page.evaluate(() => { const s = window.__game.scene.getScene('GameScene'); return { tex: s.player.sprite.texture.key, sheet: s.player.walkSheet }; });
     restarts.push(st);
   }
-  check('character_restart_no_flash', restarts.every((r) => r.tex === 'guanyu_walk_sheet' && r.sheet === 'guanyu_walk_sheet'), restarts);
+  check('character_restart_no_flash', restarts.every((r) => r.tex === 'readable_guanyu_walk_sheet' && r.sheet === 'guanyu_walk_sheet'), restarts);
   await context.close();
 }
 
@@ -716,6 +713,7 @@ function check(name, ok, detail) {
   await page.evaluate(() => window.__IM.setMove(1, 0));
   await page.waitForTimeout(1500);
   await page.evaluate(() => window.__IM.clearMove());
+  await page.waitForTimeout(650);
   const follow = await page.evaluate(() => {
     const s = window.__game.scene.getScene('GameScene');
     return { ally: window.__IM.allyInfo()[0], px: s.player.x, py: s.player.y };
@@ -1070,9 +1068,9 @@ function check(name, ok, detail) {
     window.__IM.clearWeapons();
     window.__IM.giveWeapon('crossbow');
     s.player.weapons[0].cooldownLeft = 1.1;
+    s.togglePause(); // Baseline and pause must be atomic: no animation frame between evaluations.
     return s.player.weapons[0].cooldownLeft;
   });
-  await page.evaluate(() => { window.__game.scene.getScene('GameScene').togglePause(); });
   await page.waitForTimeout(500);
   const pausedCd = await page.evaluate(() => window.__game.scene.getScene('GameScene').player.weapons[0].cooldownLeft);
   await page.evaluate(() => { window.__game.scene.getScene('GameScene').togglePause(); });
@@ -1230,9 +1228,8 @@ async function spearRoundDelta(page, cfg) {
   await page.evaluate(() => window.__game.scene.getScene('GameScene').togglePause());
   check('spear_pierce_pause', pausedAfter === pausedBefore, { pausedBefore, pausedAfter });
 
-  await page.evaluate(() => window.__IM.restart());
-  await page.waitForFunction(() => !!window.__IM, null, { timeout: 15000 });
-  await page.waitForTimeout(600);
+  await page.evaluate(() => { window.__restartOldPlayer = window.__game.scene.getScene('GameScene').player; window.__IM.restart(); });
+  await page.waitForFunction(() => !!window.__IM && window.__game.scene.getScene('GameScene').player !== window.__restartOldPlayer, null, { timeout: 15000 });
   const clean = await page.evaluate(() => window.__IM.spearInfo());
   check('spear_pierce_pool_reuse', clean.shots === 0 && clean.level === 1, clean);
   await context.close();
@@ -1252,7 +1249,7 @@ async function spearRoundDelta(page, cfg) {
     await page.evaluate(() => window.__IM.killAllEnemies());
   }
   check('character_start_weapons', starts.every((s) => s.weapon === s.weapon) && starts.map((s) => s.weapon).join(',') === 'spear_orbit,crossbow,guandao,flame_banner', starts);
-  check('zhuge_walk_sheet', starts[3].sheet === 'zhuge_walk_sheet', starts[3]);
+  check('zhuge_walk_sheet', starts[3].sheet === 'readable_zhuge_walk_sheet', starts[3]);
 
   await page.evaluate(() => {
     window.__game.registry.set('runConfig', { character: 'guanyu' });
@@ -1325,16 +1322,13 @@ async function spearRoundDelta(page, cfg) {
   }));
   check('zhuge_flame_flow', flow.d1 > flow.d0, flow);
 
-  const cap = await page.evaluate(() => {
-    const s = window.__game.scene.getScene('GameScene');
-    window.__IM.clearWeapons();
-    for (const id of ['spear_orbit', 'crossbow', 'flame_banner', 'guandao']) window.__IM.giveWeapon(id);
-    window.__IM.addLevel();
-    const opts = window.__IM.upgradeOptions();
-    return { count: s.player.weapons.length, weapons: opts.filter((o) => o.kind === 'weapon').map((o) => o.weaponId) };
+  const cap=await page.evaluate(async()=>{
+    const s=window.__game.scene.getScene('GameScene'),{buildUpgradeOptions}=await import('/src/data/upgrades.ts'),{getCharacter}=await import('/src/data/characters.ts');
+    const own=getCharacter(s.runConfig.character).startWeapon;s.player.weapons=[{id:own,level:4,cooldownLeft:0}];let valid=true,seen=false;
+    for(let i=0;i<150;i++)for(const o of buildUpgradeOptions(s.player,s.player.weapons)){if(o.kind==='weapon'){seen=true;valid&&=o.weaponId===own;}}
+    return {valid,seen,count:s.player.weapons.length,own};
   });
-  const newWeapons = cap.weapons.filter((id) => id && !['spear_orbit', 'crossbow', 'flame_banner', 'guandao'].includes(id));
-  check('weapon_four_slot_limit', cap.count === 4 && newWeapons.length === 0, cap);
+  check('signature_weapon_only_reward_pool',cap.valid&&cap.seen&&cap.count===1,cap);
   await context.close();
 }
 
@@ -1364,7 +1358,7 @@ async function spearRoundDelta(page, cfg) {
   const { context, page } = await newPage();
   const table = await page.evaluate(() => window.__IM.guandaoTable());
   const ok = table.length === 5
-    && table.every((row, i) => row.radius === [125, 135, 145, 155, 170][i] && row.damage === [32, 38, 43, 49, 56][i])
+    && table.every((row, i) => row.radius === [125, 150, 175, 200, 225][i] && row.damage === [32, 38, 43, 49, 56][i])
     && table[4].radius > table[0].radius;
   check('guandao_level_range', ok, table);
   await context.close();

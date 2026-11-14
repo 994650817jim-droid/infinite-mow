@@ -6,9 +6,17 @@ interface Slot { image: Phaser.GameObjects.Image; enemy: Enemy | null; spawnId: 
 export class BattleFeedback {
   private readonly slots: Slot[] = [];
   private readonly impacts: Array<{x:number;y:number;angle:number;until:number;color:number}> = [];
+  private readonly hitSprites:Array<{image:Phaser.GameObjects.Image;start:number;until:number}>=[];
   private readonly impactGfx: Phaser.GameObjects.Graphics;
   constructor(private readonly scene: Phaser.Scene) { this.impactGfx=scene.add.graphics().setDepth(DEPTH.fx); }
   hit(x:number,y:number,angle:number,now:number,source:'melee'|'arrow'|'fire'):void {
+    if(source!=='fire'&&this.scene.textures.exists('refined_impact')){
+      if(!this.scene.cameras.main.worldView.contains(x,y))return;
+      let slot=this.hitSprites.find(s=>s.until<=now);
+      if(!slot&&this.hitSprites.length<20){slot={image:this.scene.add.image(0,0,'refined_impact',0).setDepth(DEPTH.fx),start:0,until:0};this.hitSprites.push(slot);}
+      if(slot){slot.start=now;slot.until=now+180;slot.image.setPosition(x,y-8).setRotation(angle).setFrame(0).setDisplaySize(source==='arrow'?26:34,source==='arrow'?26:34).setAlpha(1).setVisible(true);}
+      return;
+    }
     if(this.impacts.length>=32)return;
     this.impacts.push({x,y:y-8,angle,until:now+130,color:source==='fire'?0xffbd76:source==='arrow'?0xe9d49c:0xf1ebcc});
   }
@@ -29,6 +37,7 @@ export class BattleFeedback {
       .setPosition(enemy.x, enemy.y).setScale(enemy.sprite.scaleX, enemy.sprite.scaleY).setRotation(0).setAlpha(.85).setVisible(true);
   }
   update(now: number, resultDeltaMs = 0): void {
+    for(const slot of this.hitSprites){if(now>=slot.until){slot.image.setVisible(false);continue;}slot.image.setFrame(Math.min(5,Math.floor((now-slot.start)/30)));}
     this.impactGfx.clear();
     for(let i=this.impacts.length-1;i>=0;i--) {
       const p=this.impacts[i],t=(p.until-now)/130;
@@ -50,7 +59,7 @@ export class BattleFeedback {
       else this.draw(slot, now);
     }
   }
-  clearAttacks(): void { this.impacts.length=0;this.impactGfx.clear(); for (const slot of this.slots) if (!slot.death) this.release(slot); }
+  clearAttacks(): void { for(const s of this.hitSprites){s.until=0;s.image.setVisible(false);}this.impacts.length=0;this.impactGfx.clear(); for (const slot of this.slots) if (!slot.death) this.release(slot); }
   private acquire(priority = false): Slot | undefined {
     let slot = this.slots.find(s => !s.active);
     if (!slot && this.slots.length < 24) {

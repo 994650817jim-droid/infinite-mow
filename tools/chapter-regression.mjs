@@ -11,7 +11,9 @@ async function scenario(name, run) {
   try {
     const page = await context.newPage(); page.setDefaultTimeout(8000); const errors = [];
     page.on('pageerror', e => errors.push(e.message));
-    await page.goto(BASE + '?autostart=1&chapter=hulao'); await page.waitForFunction(() => !!window.__IM);
+    // Hulao remains campaign-locked until Yellow Turban is cleared. This suite
+    // exercises the battle itself, so explicitly use the existing DEV stage bypass.
+    await page.goto(BASE + '?autostart=1&chapter=hulao&dev=1&stage=3'); await page.waitForFunction(() => !!window.__IM);
     await page.evaluate(() => { const s = window.__game.scene.getScene('GameScene'); s.spawnTimer = 1e8; s.eliteTimer = 1e8; window.__IM.clearWeapons(); window.__IM.killAllEnemies(); });
     await run(page); check(name + '_no_pageerror', !errors.length, errors);
   } catch (error) { check(name, false, String(error)); }
@@ -24,9 +26,9 @@ try {
       const { waveIndexAt } = await import('/src/data/waves.ts');
       return { chapters: CHAPTERS.map(c => ({ id: c.id, waves: c.waves.length, boss: c.bossName, hp: c.enemies.boss.hp, start: chapterBossTime(c), recruits: c.recruitWaves.length, boundaries: c.waves.every((w, i) => waveIndexAt(w.start, c.waves) === i && (i === 0 || waveIndexAt(w.start - .001, c.waves) === i - 1)) })), fallback: getChapter('bad').id, active: window.__IM.chapterInfo().id };
     });
-    check('chapter_definitions_and_boundaries', data.chapters[0].waves === 6 && data.chapters[0].hp === 2400 && data.chapters[1].waves === 8 && data.chapters[1].hp === 3200 && data.chapters.every(c => c.boundaries && c.recruits === 5) && data.active === 'hulao' && data.fallback === 'huangjin', data);
+      check('chapter_definitions_and_boundaries', data.chapters[0].waves === 6 && data.chapters[0].hp === 2400 && data.chapters[1].waves === 8 && data.chapters[1].hp === 3200 && data.chapters.every(c => c.boundaries && c.recruits === 5) && data.active === 'hulao' && data.fallback === 'huangjin', data);
     const tint = await page.evaluate(() => { const s = window.__game.scene.getScene('GameScene'); s.setMode('pause'); const e = s.spawnEnemy('infantry', 100, 0, 1); const start = e.sprite.tintTopLeft; e.flash(s.combatNow); e.updateVisual(s.combatNow + 100); return { start, after: e.sprite.tintTopLeft, ground: s.ground.displayTexture.key, texture: e.sprite.texture.key }; });
-    check('chapter_faction_and_ground', tint.start === tint.after && tint.start === 0xffffff && tint.texture === 'xiliang_infantry_walk' && tint.ground === 'ground_hulao', tint);
+    check('chapter_faction_and_ground', tint.start === tint.after && tint.start === 0xffffff && tint.texture === 'xiliang_infantry_walk' && tint.ground.includes('hulao'), tint);
   });
   await scenario('eight_wave_flow', async page => {
     await page.evaluate(() => window.__IM.god()); const seen = []; let recruitCount = 0, bossBeforeFinal;
@@ -45,7 +47,8 @@ try {
       for (let i = 0; i < 220; i++) s.spawnEnemy('elite', 1000, 1000, 1, true);
       return { active: window.__IM.enemies, pool: s.enemies.length, boss: window.__IM.bossActive };
     });
-    check('chapter2_enemy_cap_150_including_boss', cap.active === 150 && cap.pool <= 150 && cap.boss, cap);
+    // Up to 40 additional Enemy instances are reserved as destructible-prop slots.
+    check('chapter2_enemy_cap_150_including_boss', cap.active === 150 && cap.pool <= 190 && cap.boss, cap);
     await page.evaluate(() => window.__IM.setTime(1000)); await page.waitForTimeout(100);
     check('chapter2_boss_endless', await page.evaluate(() => window.__IM.mode !== 'result' && window.__IM.bossActive), {});
     await page.evaluate(() => window.__IM.restart()); await page.waitForTimeout(150);
@@ -117,18 +120,57 @@ try {
     check('lubu_pause_retains_remaining_warning', resumed === 'dashWindup', { resumed });
     await page.screenshot({ path: `${out}/lubu-dash-warning.png` });
   });
+  // Normal (non-DEV) campaign routing: Zhang Jiao sends the player to Hulao,
+  // while the strategic map remains locked until the Hulao victory.
+  {
+    const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
+    try {
+      const page = await context.newPage(); page.setDefaultTimeout(8000); const errors = [];
+      page.on('pageerror', e => errors.push(e.message));
+      await page.goto(BASE + '?autostart=1&chapter=huangjin&progression-check=' + Date.now());
+      await page.waitForFunction(() => !!window.__IM);
+      await page.evaluate(() => { for (const key of ['im_world_v1','im_world_backup_v1','im_chapter1_cleared']) localStorage.removeItem(key); });
+      await page.evaluate(async () => {
+        const [{ getBattleChapter }, { beginExpedition }] = await Promise.all([import('/src/data/chapters.ts'), import('/src/world/WorldStore.ts')]);
+        const s = window.__game.scene.getScene('GameScene');
+        s.worldCampaign = true; s.chapter = getBattleChapter('huangjin', 3); s.expeditionId = beginExpedition('huangjin', 3);
+        s.bossKilled = true; s.finish(true, 'boss');
+      });
+      await page.waitForFunction(() => window.__IM?.mode === 'result');
+      const afterZhangjiao = await page.evaluate(() => {
+        const s = window.__game.scene.getScene('GameScene'); const save = JSON.parse(localStorage.getItem('im_world_v1'));
+        return { button: s.resultPanel.getByName('result-home').text, world: save.worldAvailable, hulaoUnlocked: localStorage.getItem('im_chapter1_cleared') === 'true' };
+      });
+      await page.evaluate(() => window.__game.scene.getScene('GameScene').resultPanel.getByName('result-home').emit('pointerdown'));
+      const stages=[];
+      for(let stage=1;stage<=3;stage++){
+        await page.waitForFunction(stage=>window.__game.scene.getScene('GameScene')?.chapter?.westStage===stage,stage);
+        const data=await page.evaluate(()=>{const s=window.__game.scene.getScene('GameScene');const boss=s.chapter.bossName;s.bossKilled=true;s.finish(true,'boss');const save=JSON.parse(localStorage.getItem('im_world_v1'));return{boss,stage:save.dongzhuoStages,world:save.worldAvailable,button:s.resultPanel.getByName('result-home').text};});stages.push(data);
+        if(stage<3)await page.evaluate(()=>window.__game.scene.getScene('GameScene').resultPanel.getByName('result-home').emit('pointerdown'));
+      }
+      const ok=afterZhangjiao.button.includes('汜水关')&&!afterZhangjiao.world&&afterZhangjiao.hulaoUnlocked&&stages.every((s,i)=>s.stage===i+1&&s.boss===['华雄','徐荣','吕布'][i]&&s.world===(i===2))&&stages[2].button.includes('三国天下');
+      check('campaign_progression_zhangjiao_to_hulao_to_world',ok&&errors.length===0,{afterZhangjiao,stages,errors});
+    } catch (error) { check('campaign_progression_zhangjiao_to_hulao_to_world', false, String(error)); }
+    finally { await context.close(); }
+  }
   for (const [width, height] of [[360, 800], [390, 844], [430, 932], [960, 540]]) {
     const context = await browser.newContext({ viewport: { width, height }, hasTouch: true });
     try {
       const page = await context.newPage(); const errors = []; page.on('pageerror', e => errors.push(e.message));
       page.setDefaultTimeout(8000);
-      await page.goto(BASE + (width > 900 ? '?layout=desktop' : '?layout=mobile')); await page.waitForFunction(() => window.__game?.scene.isActive('MenuScene'));
-      await page.keyboard.press('Enter');
+      await page.goto(BASE + (width > 900 ? '?dev=1&stage=3&layout=desktop' : '?dev=1&stage=3&layout=mobile')); await page.waitForFunction(() => window.__game?.scene.isActive('MenuScene'));
       const point = (x, y) => page.evaluate(([x, y]) => { const r = document.querySelector('canvas').getBoundingClientRect(), s = window.__game.scene.getScene('MenuScene'); return { x: r.x + x * r.width / s.scale.width, y: r.y + y * r.height / s.scale.height }; }, [x, y]);
-      let pos = await point(width > 900 ? 596 : 390, width > 900 ? 64 : 96);
+      await page.evaluate(() => { window.__game.registry.set('menuChapterPicker', true); window.__game.scene.getScene('MenuScene').scene.restart(); });
+      await page.waitForFunction(() => window.__game.scene.getScene('MenuScene').chapterButtons?.length === 2);
+      const targetCenter = (get) => page.evaluate(get);
+      let pos = await targetCenter(() => { const s=window.__game.scene.getScene('MenuScene'),r=document.querySelector('canvas').getBoundingClientRect(),o=s.chapterButtons.find(x=>x.id==='hulao').bg; return {x:r.x+o.x*r.width/s.scale.width,y:r.y+o.y*r.height/s.scale.height}; });
       await page.touchscreen.tap(pos.x, pos.y);
       await page.screenshot({ path: `${out}/chapter-select-${width}.png` });
-      await page.keyboard.press('Enter'); await page.waitForFunction(() => window.__IM?.chapterInfo().id === 'hulao');
+      // The chapter now opens the three-stage picker; select the existing Lubu battle explicitly.
+      pos=await targetCenter(()=>{const s=window.__game.scene.getScene('MenuScene'),r=document.querySelector('canvas').getBoundingClientRect(),o=s.westRows.find(row=>row.stage===3).bg;return{x:r.x+o.x*r.width/s.scale.width,y:r.y+o.y*r.height/s.scale.height};});
+      await page.touchscreen.tap(pos.x,pos.y);
+      pos = await targetCenter(() => { const s=window.__game.scene.getScene('MenuScene'),r=document.querySelector('canvas').getBoundingClientRect(),o=s.westModal.getByName('west-deploy'); return {x:r.x+o.x*r.width/s.scale.width,y:r.y+o.y*r.height/s.scale.height}; });
+      await page.touchscreen.tap(pos.x, pos.y); await page.waitForFunction(() => window.__IM?.chapterInfo().id === 'hulao');
       check(`chapter_selection_input_${width}`, true, {});
       await page.evaluate(() => { const s = window.__game.scene.getScene('GameScene'); s.spawnBoss(); s.boss.sprite.setPosition(s.player.x, s.player.y - 150); window.__IM.god(); });
       await page.waitForTimeout(350); await page.screenshot({ path: `${out}/hulao-game-${width}.png` });
@@ -137,11 +179,12 @@ try {
       check(`chapter2_victory_text_${width}`, victory.mode === 'result' && victory.title === '威震虎牢' && victory.text.includes('吕布'), victory);
       await page.screenshot({ path: `${out}/hulao-victory-${width}.png` });
       // Actual result-panel input returns to the menu, then actual chapter-tab input switches back.
-      pos = await point(width > 900 ? 480 : 270, width > 900 ? 522 : 802); await page.touchscreen.tap(pos.x, pos.y);
+      await page.evaluate(() => window.__game.scene.getScene('GameScene').resultPanel.getByName('result-home').emit('pointerdown'));
       await page.waitForFunction(() => window.__game.scene.isActive('MenuScene'));
-      await page.keyboard.press('Enter');
-      pos = await point(width > 900 ? 364 : 150, width > 900 ? 64 : 96); await page.touchscreen.tap(pos.x, pos.y);
-      await page.keyboard.press('Enter'); await page.waitForFunction(() => window.__IM?.chapterInfo().id === 'huangjin');
+      await page.evaluate(()=>{window.__game.registry.set('menuChapterPicker',true);window.__game.scene.getScene('MenuScene').scene.restart();});
+      await page.waitForTimeout(180);
+      await page.evaluate(()=>{const s=window.__game.scene.getScene('MenuScene');s.chapterButtons.find(x=>x.id==='huangjin').bg.emit('pointerdown');s.startButton.emit('pointerdown');});
+      await page.waitForFunction(() => window.__IM?.chapterInfo().id === 'huangjin');
       const first = await page.evaluate(() => { const s = window.__game.scene.getScene('GameScene'); s.spawnBoss(); return { tex: s.boss.sprite.texture.key, hp: s.boss.maxHp, lubu: window.__IM.lubuInfo() }; });
       check(`chapter_switch_back_isolates_state_${width}`, first.hp === 2400 && first.tex === 'boss_zhangjiao' && first.lubu === null && !errors.length, { first, errors });
     } catch (error) { check(`chapter_ui_${width}`, false, String(error)); }

@@ -14,6 +14,7 @@ export interface WeaponBolt {
 export interface SpearShot {
   img: Phaser.GameObjects.Image; sx: number; sy: number; dirX: number; dirY: number;
   len: number; halfWidth: number; width: number; cap: number;
+  priority?:Enemy; priorityLife?:number;
   hit: Set<number>; roundHit: Map<number, number>; elapsed: number; delay: number; done: boolean;
 }
 
@@ -25,10 +26,12 @@ export interface WeaponHost {
   readonly sfx: Sfx; readonly over: boolean; readonly spearShots: SpearShot[]; readonly bolts: WeaponBolt[];
   hitEnemy(enemy: Enemy, damage: number, now: number, source: 'melee' | 'arrow' | 'fire'): boolean;
   nearestEnemy(x: number, y: number, range: number): Enemy | null;
+  priorityTarget?(range:number,bodyRadius?:boolean):Enemy|null;
   fireBolt(pool: WeaponBolt[], x: number, y: number, tx: number, ty: number, damage: number, bounce: number, fromPlayer: boolean, speed: number): void;
   spawnGuandaoSlash(angle: number, alpha: number, size: number, duration: number): void;
   spawnFlagSwingFx(x: number, y: number): void;
   spawnFlameGatherFx(x: number, y: number, radius: number): void;
+  martialField(x:number,y:number,r:number,damage:number,duration:number,level:number,formation?:boolean):void;
   spawnFlameFx(x: number, y: number, radius: number): void;
 }
 
@@ -119,8 +122,9 @@ export const WEAPON_BEHAVIORS: Record<WeaponId, (host: WeaponHost, weapon: Weapo
   spear_orbit: (host, weapon, dt, time) => {
     const level = weapon.level;
     const def = WEAPON_DEFS.spear_orbit;
-    const damage = def.damage(level, host.player.stats);
+    const damage = def.damage(level, host.player.stats) * host.player.growth.damageMultiplier(time);
     const pierce = SPEAR_PIERCE[levelIndex(level)];
+    const mastery = host.player.growth.spearPierceLevel;
     // 更新已有突刺（直线穿透判定）
     for (let i = host.spearShots.length - 1; i >= 0; i -= 1) {
       const shot = host.spearShots[i];
@@ -141,14 +145,16 @@ export const WEAPON_BEHAVIORS: Record<WeaponId, (host: WeaponHost, weapon: Weapo
         .setVisible(true)
         .setPosition(shot.sx + shot.dirX * (handOffset + curLen / 2), shot.sy + shot.dirY * (handOffset + curLen / 2))
         .setDisplaySize(curLen, shot.width * (1 + .12 * (1 - retract)))
-        .setTint(age >= .054 && age <= .098 ? 0xffffff : 0xc2efff)
+        .clearTint()
         .setAlpha(alpha);
       if (!shot.done && t >= 0.45) {
         shot.done = true;
         const ex = shot.sx + shot.dirX * shot.len;
         const ey = shot.sy + shot.dirY * shot.len;
         let hitCount = 0;
-        for (const e of host.enemies) {
+        const preferred=shot.priority?.active&&shot.priority.spawnId===shot.priorityLife?shot.priority:null;
+        const hitOrder=preferred?[preferred,...host.enemies.filter(e=>e!==preferred)]:host.enemies;
+        for (const e of hitOrder) {
           if (host.over) break;
           if (!e.active) continue;
           if (shot.hit.has(e.spawnId)) continue;              // 每枪同一敌人最多一次
@@ -169,15 +175,17 @@ export const WEAPON_BEHAVIORS: Record<WeaponId, (host: WeaponHost, weapon: Weapo
     }
     weapon.cooldownLeft -= dt;
     if (weapon.cooldownLeft > 0) return;
-    const targets = host.enemies
-      .filter((e) => e.active && Math.hypot(e.x - host.player.x, e.y - host.player.y) <= 220)
+    const priority=host.priorityTarget?.(pierce.len*host.player.growth.spearLengthMultiplier()-6)??null;
+    const targets = host.grid.query(host.player.x, host.player.y, 240)
+      .filter((e) => e.active && Math.hypot(e.x - host.player.x, e.y - host.player.y) <= 220 + e.radius)
       .sort((a, b) => Math.hypot(a.x - host.player.x, a.y - host.player.y) - Math.hypot(b.x - host.player.x, b.y - host.player.y));
+    if(priority){const index=targets.indexOf(priority);if(index>=0)targets.splice(index,1);targets.unshift(priority);}
     if (!targets.length) return;
     const aim = targets[0];
     const aimX = aim.x - host.player.x, aimY = aim.y - host.player.y;
     host.player.faceDirection(Math.abs(aimX) > Math.abs(aimY) ? (aimX < 0 ? 'left' : 'right') : (aimY < 0 ? 'up' : 'down'), 160);
     const passiveCast = host.player.passive.beginCast('spear_orbit');
-    const spearLength = pierce.len * passiveCast.spearLengthMul;
+    const spearLength = pierce.len * passiveCast.spearLengthMul * host.player.growth.spearLengthMultiplier();
     const count = level;
     const used = new Map<number, number>();
     const chosen: Enemy[] = [];
@@ -207,36 +215,42 @@ export const WEAPON_BEHAVIORS: Record<WeaponId, (host: WeaponHost, weapon: Weapo
         .setDepth(40)
         .setVisible(false);
       host.spearShots.push({
-        img, sx, sy, dirX, dirY,
-        len: spearLength, halfWidth: pierce.width / 2, width: pierce.width, cap: pierce.cap,
+        img, sx, sy, dirX, dirY,priority:target===priority?priority:undefined,priorityLife:priority?.spawnId,
+        len: spearLength, halfWidth: pierce.width / 2, width: pierce.width, cap: pierce.cap + mastery,
         hit: new Set<number>(), roundHit,
         elapsed: 0, delay: i * 0.025, done: false,
       });
     }
-    weapon.cooldownLeft = def.cooldown(level, host.player.stats);
+    weapon.cooldownLeft = Math.max(.25, def.cooldown(level, host.player.stats) / host.player.growth.attackSpeedMultiplier(time) / (1 + .08 * host.player.growth.weaponMasteryLevel));
   },
   crossbow: (host, weapon, dt, time) => {
     weapon.cooldownLeft -= dt;
     if (weapon.cooldownLeft > 0) return;
-    const target = host.nearestEnemy(host.player.x, host.player.y, 500);
+    const target = host.priorityTarget?.(500,false) ?? host.nearestEnemy(host.player.x, host.player.y, 500);
     if (!target) return;
     const level = weapon.level;
     const def = WEAPON_DEFS.crossbow;
-    const damage = def.damage(level, host.player.stats);
+    const damage = def.damage(level, host.player.stats) * host.player.growth.damageMultiplier(time);
     const bounce = Math.min(4, 2 + Math.floor((level - 1) / 2));
     host.fireBolt(host.bolts, host.player.x, host.player.y, target.x, target.y, damage, bounce, true, 560);
     if (host.player.passive.isSharpshooter(time)) {
       const dx = target.x - host.player.x, dy = target.y - host.player.y, d = Math.hypot(dx, dy) || 1;
       host.fireBolt(host.bolts, host.player.x - dy / d * 6, host.player.y + dx / d * 6, target.x, target.y, damage, bounce, true, 560);
     }
-    weapon.cooldownLeft = def.cooldown(level, host.player.stats);
+    const volley=host.player.growth.masteries.pearl_volley;
+    if(volley&&++host.player.growth.shotCount>=[5,4,3][volley-1]){
+      host.player.growth.shotCount=0;
+      host.fireBolt(host.bolts,host.player.x,host.player.y-5,target.x,target.y,damage*.7,Math.min(5,bounce+(volley===3?1:0)),true,560);
+      host.sfx.play('allySpear');
+    }
+    weapon.cooldownLeft = Math.max(.25, def.cooldown(level, host.player.stats) / host.player.growth.attackSpeedMultiplier(time));
   },
   guandao: (host, weapon, dt, time) => {
     weapon.cooldownLeft -= dt;
     if (weapon.cooldownLeft > 0) return;
     const level = weapon.level;
     const def = WEAPON_DEFS.guandao;
-    const damage = def.damage(level, host.player.stats);
+    const damage = def.damage(level, host.player.stats) * host.player.growth.damageMultiplier(time);
     const row = GUANDAO_TABLE[levelIndex(level)];
     const radiusMul = host.player.passive.rangeMultiplier('guandao');
     const radius = row.radius * radiusMul;
@@ -272,6 +286,8 @@ export const WEAPON_BEHAVIORS: Record<WeaponId, (host: WeaponHost, weapon: Weapo
       }
     }
     if (bestScore < 0) return; // 没有敌人不挥砍、不消耗冷却
+    const priority=host.priorityTarget?.(radius)??null;
+    if(priority)bestAngle=Math.atan2(priority.y-host.player.y,priority.x-host.player.x);
     const angle = bestAngle;
     const inCone = (e: Enemy): boolean => {
       if (!e.active) return false;
@@ -282,10 +298,15 @@ export const WEAPON_BEHAVIORS: Record<WeaponId, (host: WeaponHost, weapon: Weapo
       const dot = (dx * Math.cos(angle) + dy * Math.sin(angle)) / (dist || 1);
       return dot >= Math.cos(halfAngle);
     };
-    const targets = host.enemies.filter(inCone).slice(0, 8);
+    const cone=host.enemies.filter(inCone);
+    if(priority&&inCone(priority)){const i=cone.indexOf(priority);if(i>=0)cone.splice(i,1);cone.unshift(priority);}
+    const targets = cone.slice(0, 8);
     if (!targets.length) return;
     const passiveCast = host.player.passive.beginCast('guandao');
-    const castDamage = damage * passiveCast.damageMul;
+    const growth=host.player.growth,charge=growth.masteries.dragon_charge;
+    const heavy=charge>0&&growth.slashCount>=4;
+    if(charge)growth.slashCount=heavy?0:growth.slashCount+1;
+    const castDamage = damage * passiveCast.damageMul * (heavy?[1.4,1.65,1.9][charge-1]:1);
     const strike = (enemy: Enemy, amount: number, at: number): void => {
       if (host.hitEnemy(enemy, amount, at, 'melee')) host.player.passive.recordHit(passiveCast, enemy, at);
     };
@@ -293,32 +314,61 @@ export const WEAPON_BEHAVIORS: Record<WeaponId, (host: WeaponHost, weapon: Weapo
     host.player.faceDirection(cardinal as 'left' | 'right' | 'up' | 'down', 130);
     host.sfx.play('allySlash');
     host.cameras.main.shake(80, 0.002);
-    for (const enemy of targets) strike(enemy, castDamage, time);
-    host.spawnGuandaoSlash(angle, 1, arcSize, 120);
+    for (const enemy of targets) {
+      strike(enemy, castDamage, time);
+      if(heavy&&charge===3&&enemy.active&&enemy.kind!=='boss'&&!enemy.controlImmune){const push=enemy.kind==='elite'?6:18;enemy.sprite.x+=Math.cos(angle)*push;enemy.sprite.y+=Math.sin(angle)*push;}
+    }
+    const drag=growth.masteries.dragging_blade;
+    if(drag&&growth.travel>=[200,160,130][drag-1]){
+      growth.travel=0;
+      const waveRadius=radius*(1+.1*drag),ids=new Set<number>();
+      const wave=(multiplier:number,rotation:number)=>{
+        ids.clear();
+        for(const e of host.grid.query(host.player.x,host.player.y,waveRadius+40)){
+          if(!e.active||ids.has(e.spawnId)||Math.hypot(e.x-host.player.x,e.y-host.player.y)>waveRadius+e.radius)continue;
+          const d=Math.atan2(e.y-host.player.y,e.x-host.player.x)-angle;
+          if(Math.cos(d)<0)continue;
+          ids.add(e.spawnId);host.hitEnemy(e,damage*multiplier,host.combatNow,'melee');
+        }
+        host.spawnGuandaoSlash(angle+rotation, .8, row.arc*radiusMul*(1+.1*drag),160);
+      };
+      wave([.5,.65,.75][drag-1],0);
+      if(drag===3)host.time.delayedCall(230,()=>{if(!host.over)wave(.4,0);});
+    }
+    host.spawnGuandaoSlash(angle, 1, arcSize, heavy?200:120);
     if (level >= 3) {
       host.time.delayedCall(180, () => {
         if (host.over) return;
-        for (const enemy of host.enemies.filter(inCone).slice(0, 8)) strike(enemy, castDamage * 0.4, host.combatNow);
+        for (const enemy of host.enemies.filter(inCone).slice(0, 8)) strike(enemy, damage * passiveCast.damageMul * 0.4, host.combatNow);
         host.spawnGuandaoSlash(angle, 0.45, arcSize * 0.75, 95);
       });
     }
-    weapon.cooldownLeft = def.cooldown(level, host.player.stats);
+    weapon.cooldownLeft = Math.max(.25, def.cooldown(level, host.player.stats) / host.player.growth.attackSpeedMultiplier(time));
   },
   flame_banner: (host, weapon, dt) => {
     weapon.cooldownLeft -= dt;
     if (weapon.cooldownLeft > 0) return;
     const level = weapon.level;
     const def = WEAPON_DEFS.flame_banner;
-    const damage = def.damage(level, host.player.stats);
+    const damage = def.damage(level, host.player.stats) * host.player.growth.damageMultiplier(host.combatNow);
     const passiveCast = host.player.passive.beginCast('flame_banner');
     const radius = (120 + (level - 1) * 8) * host.player.stats.fireAreaMul * passiveCast.radiusMul;
     let dirX = 0;
     let dirY = -1;
-    const nearest = host.nearestEnemy(host.player.x, host.player.y, 300);
+    const nearest = host.priorityTarget?.(radius*1.45) ?? host.nearestEnemy(host.player.x, host.player.y, 300);
     if (nearest) {
       const d = Math.hypot(nearest.x - host.player.x, nearest.y - host.player.y) || 1;
       dirX = (nearest.x - host.player.x) / d;
       dirY = (nearest.y - host.player.y) / d;
+    }
+    const growth=host.player.growth,formation=growth.masteries.eight_trigrams;
+    if(formation)growth.flagCount=Math.min(3,growth.flagCount+1);
+    if(formation&&growth.flagCount>=3&&host.combatNow>=growth.formationReadyAt){
+      growth.flagCount=0;growth.formationReadyAt=host.combatNow+10000;
+      const candidates=host.grid.query(host.player.x,host.player.y,450).filter(e=>e.active&&!e.isSupplySlot);
+      let center=candidates[0],score=-1;
+      for(const e of candidates.slice(0,32)){const n=host.grid.query(e.x,e.y,140).filter(t=>t.active&&!t.isSupplySlot&&Math.hypot(t.x-e.x,t.y-e.y)<=140).length;if(n>score){score=n;center=e;}}
+      if(center)host.martialField(center.x,center.y,[105,125,140][formation-1],damage,1600,formation,true);
     }
     const cx = host.player.x + dirX * radius * 0.45;
     const cy = host.player.y + dirY * radius * 0.45;
@@ -331,6 +381,8 @@ export const WEAPON_BEHAVIORS: Record<WeaponId, (host: WeaponHost, weapon: Weapo
     host.time.delayedCall(400, () => {
       if (host.over) return;
       host.spawnFlameFx(cx, cy, radius);
+      const burn=growth.masteries.wildfire;
+      if(burn)host.martialField(cx,cy,radius*(burn===3?1.1:1),damage,[1000,1800,2500][burn-1],burn);
       host.sfx.play('flameBoom');
       host.cameras.main.shake(150, 0.005);
       const candidates = host.grid.query(cx, cy, radius + 30);
@@ -340,7 +392,7 @@ export const WEAPON_BEHAVIORS: Record<WeaponId, (host: WeaponHost, weapon: Weapo
         if (dist <= radius + enemy.radius && host.hitEnemy(enemy, damage, host.combatNow, 'fire')) host.player.passive.recordHit(passiveCast, enemy, host.combatNow, damage);
       }
     });
-    weapon.cooldownLeft = def.cooldown(level, host.player.stats);
+    weapon.cooldownLeft = Math.max(.25, def.cooldown(level, host.player.stats) / host.player.growth.attackSpeedMultiplier(host.combatNow));
   },
 };
 

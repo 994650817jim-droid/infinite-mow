@@ -55,7 +55,7 @@ export class EnemyMovement {
       }
       // A few allies use the same avoidance budget, instead of a second hard push per ally.
       for (const ally of allyGrid.query(enemy.x, enemy.y, enemy.radius + 22, this.allies)) {
-        if (!ally.active || ally === target) continue;
+        if (!ally.active) continue;
         const ox = enemy.x - ally.x, oy = enemy.y - ally.y;
         const range = enemy.radius + ally.radius;
         const dist = Math.hypot(ox, oy);

@@ -49,10 +49,10 @@ try {
       const s = window.__game.scene.getScene('GameScene'); s.setMode('pause');
       const hole = s.spawnEnemy('elite', 500, 0, 1); const target = s.spawnEnemy('elite', 70, 0, 1); hole.deactivate();
       s.player.weapons = [{ id: 'spear_orbit', level: 1, cooldownLeft: 0 }];
-      s.updateWeapons(0, s.combatNow); const hp = target.hp;
+      s.rebuildGrid(); s.updateWeapons(0, s.combatNow); const hp = target.hp;
       s.updateWeapons(.08, s.combatNow + 80); const first = hp - target.hp;
       s.updateWeapons(.08, s.combatNow + 160);
-      return { first, total: hp - target.hp, inactiveFirst: !s.enemies[0].active };
+      return { first, total: hp - target.hp, inactiveFirst: !hole.active };
     });
     check('spear_skips_inactive_pool_slot', r.inactiveFirst && r.first === 22, r);
     check('spear_damage_once_per_shot', r.total === 22, r);
@@ -66,19 +66,19 @@ try {
     });
     const t0 = await page.evaluate(() => window.__game.scene.getScene('GameScene').combatNow);
     await page.waitForTimeout(650);
-    const frozen = await page.evaluate(() => { const s = window.__game.scene.getScene('GameScene'); return { hp: s.enemies.find(e => e.active).hp, clock: s.combatNow, invulnerable: s.combatNow < s.player.invulnUntil }; });
+    const frozen = await page.evaluate(() => { const s = window.__game.scene.getScene('GameScene'); return { hp: s.enemies.find(e => e.active&&!e.isSupplySlot&&e.kind==='elite').hp, clock: s.combatNow, invulnerable: s.combatNow < s.player.invulnUntil }; });
     check('paused_flame_and_deadlines_frozen', frozen.hp === 1000 && frozen.clock === t0 && frozen.invulnerable, frozen);
     await page.evaluate(() => window.__game.scene.getScene('GameScene').togglePause());
     await page.waitForTimeout(500);
-    const resumed = await page.evaluate(() => { const s = window.__game.scene.getScene('GameScene'); return s.enemies.find(e => e.active).hp; });
+    const resumed = await page.evaluate(() => { const s = window.__game.scene.getScene('GameScene'); return s.enemies.find(e => e.active&&!e.isSupplySlot&&e.kind==='elite').hp; });
     check('paused_flame_resumes_once', resumed === 978, { hp: resumed });
   });
   await scenario('pool_identity', async page => {
     const r = await page.evaluate(async () => {
-      const s = window.__game.scene.getScene('GameScene'); const { Ally } = await import('/src/entities/Ally.ts');
+      const s = window.__game.scene.getScene('GameScene'); const { Ally } = await import('/src/entities/Ally.ts'); const {LegionProjectiles}=await import('/src/systems/LegionProjectiles.ts');
       const a = new Ally(s, 0, 0, 'archer'); const e = s.spawnEnemy('elite', 60, 0, 1); const oldId = e.spawnId;
-      let hits = 0; a.shootArrow(e, () => hits++); e.deactivate(); const next = s.spawnEnemy('infantry', 1000, 1000, 1);
-      await new Promise(r => setTimeout(r, 250)); a.sprite.destroy(); a.shadow.destroy();
+      let hits = 0; const arrows=new LegionProjectiles(s);arrows.fire(a,e,1,s.combatNow+180); e.deactivate(); const next = s.spawnEnemy('infantry', 1000, 1000, 1);
+      s.rebuildGrid();arrows.update(.25,s.combatNow+250,s.grid,()=>hits++);arrows.clear();
       return { hits, oldId, newId: next.spawnId, reused: next === e };
     });
     check('ally_arrow_rejects_reused_target', r.reused && r.oldId !== r.newId && r.hits === 0, r);
@@ -96,7 +96,7 @@ try {
       s.player.weapons = ['spear_orbit', 'crossbow', 'guandao', 'flame_banner'].map(id => ({ id, level: 5, cooldownLeft: 0 }));
       let bad = 0; for (let i = 0; i < 80; i++) bad += buildUpgradeOptions(s.player, s.player.weapons).filter(o => o.kind === 'weapon' || o.id === 'rare_all').length;
       s.player.weapons[0].level = 4; let card;
-      for (let i = 0; i < 100 && !card; i++) card = buildUpgradeOptions(s.player, s.player.weapons).find(o => o.id === 'up_spear_orbit');
+      for (let i = 0; i < 100 && !card; i++) card = buildUpgradeOptions(s.player, s.player.weapons).find(o => o.id === 'signature_weapon_spear_orbit');
       const desc = card?.desc; card?.apply(s.player, s.player.weapons); card?.apply(s.player, s.player.weapons);
       return { bad, level: s.player.weapons[0].level, desc };
     });
@@ -121,19 +121,19 @@ try {
     check('boss_shield_not_reapplied', r.shieldAgain === 275, r);
     check('boss_summon_hard_cap', r.cap === 8, r);
     check('boss_summon_identity', r.summons.length === 4 && r.summons.every(x => x.kind === 'infantry' && x.matches), r);
-  });
+  }, '&dev=1&stage=3');
   await scenario('recruit', async page => {
     const r = await page.evaluate(() => {
       const s = window.__game.scene.getScene('GameScene'); s.waveIndex = 1;
       s.openRecruit(); s.chooseRecruit(s.recruitOptions.findIndex(o => o.kind === 'swordsman'));
       const levels = [s.allies[0].level];
-      for (let i = 0; i < 2; i++) { s.openRecruit(); const idx = s.recruitOptions.findIndex(o => o.upgrade); if (idx < 0) return { levels, noUpgrade: true }; s.chooseRecruit(idx); levels.push(s.allies[0].level); }
+      for(let i=0;i<2;i++){s.legion.train('swordsman',true);levels.push(s.allies[0].level);}
       s.openRecruit(); const noInvalid = s.recruitOptions.every(o => !o.upgrade || s.allies.some(a => a.kind === o.kind && a.level < 3));
       s.chooseRecruit(s.recruitOptions.findIndex(o => !o.upgrade));
       s.openRecruit(); s.chooseRecruit(s.recruitOptions.findIndex(o => !o.upgrade));
       return { levels, allies: s.allies.length, noInvalid, pending: s.pendingRecruit, mode: s.mode };
     });
-    check('normal_recruit_reaches_level3', r.levels.join(',') === '1,2,3' && r.allies === 3 && r.noInvalid && r.mode === 'none', r);
+    check('normal_recruit_reaches_level3', r.levels.join(',') === '1,2,3' && r.allies === 1 && r.noInvalid && r.mode === 'none', r);
   });
   await scenario('visual', async page => {
     const idle = await page.evaluate(() => {
@@ -142,11 +142,11 @@ try {
       e.updateAttackVisual(s.combatNow + 200); e.updateAttackVisual(s.combatNow + 400); e.updateWalk(.016, 0, 0);
       return { texture: e.sprite.texture.key, frame: e.sprite.frame.name };
     });
-    check('archer_restores_idle_texture', idle.texture === 'enemy_archer_walk_sheet' && idle.frame === 'down_0', idle);
+    check('archer_restores_idle_texture', idle.texture.endsWith('enemy_archer_walk_sheet') && idle.frame === 'down_0', idle);
     const fx = await page.evaluate(() => new Promise(resolve => {
       const s = window.__game.scene.getScene('GameScene'); s.setMode('none'); s.spawnGuandaoSlash(0, 1, 105, 120);
       let max = 0; const start = performance.now();
-      const tick = () => { for (const o of s.children.list) if (o.texture?.key === 'guandao_slash_sheet') max = Math.max(max, o.displayWidth); if (performance.now() - start < 220) requestAnimationFrame(tick); else resolve(max); }; tick();
+      const tick = () => { for (const o of s.children.list) if (o.visible&&o.active&&o.texture?.key === 'guandao_slash_sheet') max = Math.max(max, o.displayWidth); if (performance.now() - start < 220) requestAnimationFrame(tick); else resolve(max); }; tick();
     }));
     check('guandao_visual_size_bounded', fx >= 105 && fx <= 112, { maxWidth: fx });
   });

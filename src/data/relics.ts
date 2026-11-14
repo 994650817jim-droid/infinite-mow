@@ -33,6 +33,9 @@ export function applySetBonus(player: Player, school: RelicSchool): void {
 }
 
 export const RELICS: RelicDef[] = [
+  {id:'human_seal',name:'人公将印',icon:'item_drum',school:'wushuang',desc:'伤害增加12%。每命中12次，震击附近最多4名敌人。',apply:p=>{p.stats.damageMul*=1.12;}},
+  {id:'heaven_ember',name:'赤霄火珠',icon:'item_torch',school:'lieyan',desc:'火焰伤害增加15%。武器命中时生成残火，每5秒一次。',apply:p=>{p.stats.fireMul+=.15;}},
+  {id:'army_jade',name:'护军玉璧',icon:'item_armor',school:'tiebi',desc:'受到伤害减少10%。击杀时为自己和受伤友军回复少量生命，每秒一次。',apply:p=>{p.stats.damageTakenMul*=.9;}},
   {
     id: 'drum',
     name: '战鼓',

@@ -8,6 +8,7 @@ interface Arrow { active: boolean; launched: boolean; owner: Ally; lifeId: numbe
 /** Logical arrows have no gameplay cap; a small reusable display pool bounds visual cost. */
 export class LegionProjectiles {
   private readonly shots: Arrow[] = [];
+  private readonly free:Arrow[]=[];
   private readonly images: Phaser.GameObjects.Image[] = [];
   private rendered = 0;
   private readonly impacts: Array<{x:number;y:number;until:number}> = [];
@@ -15,7 +16,7 @@ export class LegionProjectiles {
   private readonly gfx: Phaser.GameObjects.Graphics;
   constructor(private readonly scene: Phaser.Scene) { this.gfx = scene.add.graphics().setDepth(DEPTH.projectile - .1); }
   fire(owner: Ally, target: Enemy, damage: number, due: number): void {
-    const shot = this.shots.find(s => !s.active);
+    const shot = this.free.pop();
     const state = { active: true, launched: false, owner, lifeId: owner.lifeId, target, spawnId: target.spawnId, due, x: owner.x, y: owner.y, vx: 0, vy: 0, ttl: 0, damage, image: null };
     if (shot) Object.assign(shot, state); else this.shots.push(state);
   }
@@ -54,5 +55,5 @@ export class LegionProjectiles {
       this.gfx.fillStyle(0xffe5a7,(p.until-now)/110).fillRect(p.x-1,p.y-5,2,10).fillRect(p.x-5,p.y-1,10,2);
     }
   }
-  private release(s: Arrow): void { s.active = false; if (s.image) { s.image.setVisible(false); this.images.push(s.image); s.image = null; this.rendered--; } }
+  private release(s: Arrow): void { s.active = false;this.free.push(s); if (s.image) { s.image.setVisible(false); this.images.push(s.image); s.image = null; this.rendered--; } }
 }

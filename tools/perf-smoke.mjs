@@ -14,6 +14,7 @@ try {
     for (const id of ['spear_orbit', 'crossbow', 'guandao', 'flame_banner']) { window.__IM.giveWeapon(id); s.player.weapons.at(-1).level = 5; }
     for (const kind of ['swordsman', 'archer', 'spearman', 'swordsman', 'spearman']) window.__IM.spawnAlly(kind);
   });
+  if(process.argv.includes('--martials'))await page.evaluate(()=>{const s=window.__game.scene.getScene('GameScene');for(const id of Object.keys(s.player.growth.masteries))s.player.growth.masteries[id]=3;s.legion.recruit('swordsman',15,true,true);});
   await page.waitForTimeout(1000);
   const cdp = await context.newCDPSession(page); await cdp.send('HeapProfiler.collectGarbage');
   const heapBefore = await cdp.send('Runtime.getHeapUsage');

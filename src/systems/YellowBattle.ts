@@ -11,6 +11,7 @@ interface Hazard { owner:Enemy; life:number; x:number;y:number; radius:number; a
 export class YellowBattle {
  private readonly gfx:Phaser.GameObjects.Graphics;
  private readonly hazards:Hazard[]=[];
+ private readonly clips:Phaser.GameObjects.Graphics[]=[];
  private readonly visuals:Phaser.GameObjects.Image[]=[];
  private readonly walls:Array<{enemy:Enemy;life:number;until:number}>=[];
  private readonly rallies:Array<{enemy:Enemy;life:number;until:number;speed:number}>=[];
@@ -20,20 +21,24 @@ export class YellowBattle {
  readonly metrics={casts:0,impacts:0,summons:0,walls:0};
  constructor(private h:Host,readonly stage:YellowStage){
   this.gfx=h.scene.add.graphics().setDepth(40);
-  for(let i=0;i<20;i++)this.visuals.push(h.scene.add.image(0,0,'yellow_shaman_ground_sigil_warning',0).setVisible(false).setDepth(39));
+  for(let i=0;i<20;i++){const clip=h.scene.make.graphics({x:0,y:0});this.clips.push(clip);this.visuals.push(h.scene.add.image(0,0,'yellow_shaman_ground_sigil_warning',0).setVisible(false).setDepth(39).setMask(clip.createGeometryMask()));}
+  h.scene.events.once('shutdown',()=>{for(const clip of this.clips)clip.destroy();});
  }
  variant(base:EnemyDef,elapsed=0):EnemyDef {
-  if(this.stage===1||elapsed<60)return base;
-  if(base.kind==='archer')return {...base,walkVisual:{texture:'yellow_archer_walk',scale:.68,groundY:91/96},attackVisual:'yellow_archer_attack'};
-  if(base.kind==='shield')return {...base,walkVisual:{texture:'yellow_shield_walk',scale:.78,groundY:91/96},attackVisual:'yellow_shield_attack'};
-  if(base.kind!=='infantry')return base;
-  const r=Math.random();
-  const behavior=this.stage>=3&&r<.08?'thunder':this.stage>=3&&r<.16?'halberd':this.stage>=2&&r<.3?'shaman':r<.7?'spear':undefined;
-  if(!behavior)return base;
-  const sheet=behavior==='spear'?'spear':behavior==='halberd'?'spear':'shaman';
-  return {...base,behavior,hp:behavior==='halberd'?base.hp*2:behavior==='thunder'?base.hp*1.8:base.hp,speed:behavior==='shaman'||behavior==='thunder'?52:base.speed,
-   tint:behavior==='thunder'?0xbca6e8:behavior==='halberd'?0xc7a268:0xffffff,
-   walkVisual:{texture:`yellow_${sheet}_walk`,scale:behavior==='halberd'||behavior==='thunder'?.91:.72,groundY:91/96},attackVisual:`yellow_${sheet}_${sheet==='shaman'?'cast':'attack'}`};
+  if(this.stage===1&&base.kind!=='infantry')return base;
+  // 1-2 introduces shield soldiers in its fourth wave (waves start every 60s).
+  // 1-3 exposes the complete Yellow Turban roster from the opening wave.
+  // Keep the first-pass archer artwork and its matching attack sheet.
+  if(base.kind==='archer')return base;
+  if(base.kind==='shield')return {...base,walkVisual:{texture:'yellow_shield-walk-v4',scale:.62,groundY:88/96},attackVisual:'yellow_shield-attack-v4'};
+  if(base.kind==='infantry'){
+   if(this.stage===3){
+    const r=Math.random(),behavior=r<.08?'thunder':r<.16?'halberd':r<.3?'shaman':r<.7?'spear':undefined;
+    if(behavior){const sheet=behavior==='spear'||behavior==='halberd'?'spear':'shaman';return {...base,behavior,hp:behavior==='halberd'?base.hp*2:behavior==='thunder'?base.hp*1.8:base.hp,speed:behavior==='shaman'||behavior==='thunder'?52:base.speed,tint:behavior==='thunder'?0xbca6e8:behavior==='halberd'?0xc7a268:0xffffff,walkVisual:{texture:sheet==='spear'?'yellow_spear-walk-v4':`yellow_${sheet}_walk`,scale:behavior==='halberd'||behavior==='thunder'?.74:behavior==='shaman'?.72:.66,groundY:sheet==='spear'?88/96:91/96},attackVisual:`yellow_${sheet}_${sheet==='shaman'?'cast':'attack'}`};}
+   }
+   return {...base,walkVisual:{texture:'yellow_swordsman-walk-v4',scale:.62,groundY:88/96},attackVisual:'yellow_swordsman-attack-v4'};
+  }
+  return base;
  }
  private warn(e:Enemy,x:number,y:number,radius:number,delay:number,damage:number,kind:string,angle=0,arc=Math.PI*2,inner=0):void {
   if(this.hazards.length>=20)return;
@@ -82,12 +87,21 @@ export class YellowBattle {
   for(let i=this.hazards.length-1;i>=0;i--){const z=this.hazards[i];if(!z.owner.active||z.owner.spawnId!==z.life||now>=z.end){this.hazards.splice(i,1);continue;}
    if(now>=z.at&&!z.fired){z.fired=true;this.metrics.impacts++;const p=this.h.player,dx=p.x-z.x,dy=p.y-z.y,d=Math.hypot(dx,dy),inside=d<=z.radius+p.radius&&d>=z.inner-p.radius&&(z.arc>=Math.PI*2||Math.cos(Math.atan2(dy,dx)-z.angle)>=Math.cos(z.arc/2));if(inside&&z.damage)p.takeDamage(z.damage,now);if(z.damage)for(const u of this.h.army.units){if(!u.active)continue;const dx=u.x-z.x,dy=u.y-z.y,d=Math.hypot(dx,dy);if(d<=z.radius+u.radius&&d>=z.inner-u.radius&&(z.arc>=Math.PI*2||Math.cos(Math.atan2(dy,dx)-z.angle)>=Math.cos(z.arc/2)))this.h.army.hurt(u,z.damage,now);}z.owner.startAttack(now-180,z.owner.direction);}
    const key=z.kind==='sweep'?'zhangliang_slash':z.kind==='charge'?'zhangliang_charge_warning':z.kind==='ring'?'zhangbao_earth_shockwave':z.kind==='ritual'?'zhangbao_ritual_circle':z.kind==='rift'?'zhangbao_earth_rift_warning_and_burst':z.kind==='stab'?'yellow_shield_short_stab':'yellow_shaman_ground_sigil_warning';
-   const image=this.visuals[index++];if(image)image.setTexture(key,z.fired?Math.min(7,4+Math.floor((now-z.at)/55)):Math.min(3,Math.floor((now-z.from)/Math.max(1,z.at-z.from)*4))).setPosition(z.x,z.y).setDisplaySize(z.radius*2,z.radius*2).setAlpha(z.fired?.8:.38).setRotation(z.arc<Math.PI*2?z.angle:0).setVisible(true);if(image&&z.kind==='charge')image.setPosition(z.x+Math.cos(z.angle)*z.radius/2,z.y+Math.sin(z.angle)*z.radius/2).setDisplaySize(z.radius,72);
-   this.gfx.lineStyle(z.fired?3:2,z.fired?0xffe0a0:0xf5a34a,.9);
+   const image=this.visuals[index],clip=this.clips[index++],progress=Phaser.Math.Clamp((now-z.from)/Math.max(1,z.at-z.from),0,1);
+   if(clip){clip.clear().fillStyle(0xffffff,1);this.area(clip,z);}
+   if(image)image.setTexture(key,Math.min(7,4+Math.floor((now-z.at)/55))).setPosition(z.x,z.y).setDisplaySize(z.radius*2,z.radius*2).setAlpha(.7).setRotation(z.arc<Math.PI*2?z.angle:0).setVisible(z.fired);
+   if(image&&z.kind==='charge')image.setPosition(z.x+Math.cos(z.angle)*z.radius/2,z.y+Math.sin(z.angle)*z.radius/2).setDisplaySize(z.radius,72);
+   this.gfx.fillStyle(z.fired?0xe0a064:0x8e241b,z.fired?.12:.12+progress*.16);this.area(this.gfx,z);
+   this.gfx.lineStyle(z.fired?2:2,z.fired?0xffd29b:0xe87752,z.fired?.7:.85);
    if(z.kind==='charge'){const nx=Math.cos(z.angle),ny=Math.sin(z.angle);for(const side of [-1,1])this.gfx.lineBetween(z.x-ny*side*36,z.y+nx*side*36,z.x+nx*z.radius-ny*side*36,z.y+ny*z.radius+nx*side*36);}
-   else if(z.arc<Math.PI*2){this.gfx.beginPath().moveTo(z.x,z.y).arc(z.x,z.y,z.radius,z.angle-z.arc/2,z.angle+z.arc/2).closePath().strokePath();}
-   else {this.gfx.strokeCircle(z.x,z.y,z.radius);if(z.inner)this.gfx.strokeCircle(z.x,z.y,z.inner);}
+   else {const a=z.angle-z.arc/2,b=z.angle+z.arc/2;this.gfx.beginPath().arc(z.x,z.y,z.radius,a,b).strokePath();if(z.inner)this.gfx.beginPath().arc(z.x,z.y,z.inner,a,b).strokePath();if(z.arc<Math.PI*2)for(const angle of [a,b])this.gfx.lineBetween(z.x+Math.cos(angle)*z.inner,z.y+Math.sin(angle)*z.inner,z.x+Math.cos(angle)*z.radius,z.y+Math.sin(angle)*z.radius);
+   if(!z.fired)this.gfx.lineStyle(3,0xf2ad6e,.8).beginPath().arc(z.x,z.y,z.radius,a,a+z.arc*progress).strokePath();}
+
   }
+ }
+ private area(g:Phaser.GameObjects.Graphics,z:Hazard):void{
+  if(z.kind==='charge'){const nx=Math.cos(z.angle),ny=Math.sin(z.angle),x=z.x,y=z.y,r=z.radius;g.beginPath().moveTo(x-ny*36,y+nx*36).lineTo(x+nx*r-ny*36,y+ny*r+nx*36).lineTo(x+nx*r+ny*36,y+ny*r-nx*36).lineTo(x+ny*36,y-nx*36).closePath().fillPath();return;}
+  const steps=Math.max(8,Math.ceil(z.arc*8));for(let i=0;i<steps;i++){const a=z.angle-z.arc/2+z.arc*i/steps,b=z.angle-z.arc/2+z.arc*(i+1)/steps,ax=z.x+Math.cos(a)*z.radius,ay=z.y+Math.sin(a)*z.radius,bx=z.x+Math.cos(b)*z.radius,by=z.y+Math.sin(b)*z.radius,ix=z.x+Math.cos(a)*z.inner,iy=z.y+Math.sin(a)*z.inner,jx=z.x+Math.cos(b)*z.inner,jy=z.y+Math.sin(b)*z.inner;g.fillTriangle(ax,ay,bx,by,ix,iy);if(z.inner)g.fillTriangle(ix,iy,bx,by,jx,jy);}
  }
  clear():void {for(const r of this.rallies)if(r.enemy.spawnId===r.life)r.enemy.def={...r.enemy.def,speed:r.speed};this.rallies.length=0;this.hazards.length=0;this.dash=null;this.gfx.clear();for(const v of this.visuals)v.setVisible(false);for(const w of this.walls)if(w.enemy.spawnId===w.life)w.enemy.deactivate();this.walls.length=0;}
 }

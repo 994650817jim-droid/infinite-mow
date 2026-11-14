@@ -3,7 +3,7 @@ export type DevActions = Record<string, () => void>;
 
 const ROWS: Array<{ title: string; items: Array<[string, string]> }> = [
   { title: '天下与主城（退出当前测试局）', items: [['worldMap', '进入地图选择'], ['homeCity', '进入义军营寨']] },
-  { title: '起始章节（开始新测试局）', items: [['chapter1', '从第一章开始'], ['chapter2', '从第二章开始'], ['selectStart', '返回选将选章']] },
+  { title: '起始章节（开始新测试局）', items: [['chapter1', '从第一章开始'], ['chapter2', '从第二章开始'], ['chapter3','第三章选关'], ['selectStart', '返回选将选章']] },
   {
     title: '等级 / 时间',
     items: [
@@ -54,7 +54,6 @@ const ROWS: Array<{ title: string; items: Array<[string, string]> }> = [
       ['clearAllies', '清空蜀军'],
       ['legionFood', '+100军粮'],
       ['legionEight', '八兵种各3人'],
-      ['aid', '援军事件'],
     ],
   },
   {
@@ -62,6 +61,7 @@ const ROWS: Array<{ title: string; items: Array<[string, string]> }> = [
     items: [
       ['heal', '回满血'],
         ['supply','回血补给罐'],
+      ['brazier','火盆测试'],
       ['god', '无敌开关'],
       ['enemy50', '50 敌'],
       ['enemy150', '150 敌'],

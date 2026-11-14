@@ -14,10 +14,10 @@ export const TROOPS: Record<TroopKind, TroopDef> = {
 };
 export const TROOP_KINDS = Object.keys(TROOPS) as TroopKind[];
 export const ORDERS: Record<Order, string> = { guard: '护阵', sortie: '出击' };
-export const LEGION = { startingFood: 0, waveFood: 0, trainCost: [0, 40, 80], visualBudget: 72, squadSize: 12, nearStep: .1, farStep: .5 } as const;
+export const LEGION = { startingFood: 0, waveFood: 0, trainCost: [0, 40, 80], squadSize: 12, nearStep: .1, farStep: .5 } as const;
 
 export const INITIAL_TROOPS:readonly TroopKind[]=['swordsman','spearman','archer'];
 
 /** Living soldiers, including starting reinforcements and reserves. */
-export const ARMY_CAPACITY = [5, 8, 12] as const;
-export function armyCapacity(level: number): number { return ARMY_CAPACITY[Math.max(0, Math.min(2, Math.floor(level) - 1))] ?? ARMY_CAPACITY[0]; }
+/** Compatibility helper; barracks upgrades no longer restrict army size. */
+export function armyCapacity(_level: number): number { return Infinity; }

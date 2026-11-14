@@ -20,7 +20,10 @@ export interface CharacterDef {
 }
 
 export interface RunConfig {
+  encounter?: 'sishui' | 'xingyang' | 'qunxiong';
+  thirdStage?:1|2|3;
   stage?: 1 | 2 | 3;
+  westStage?: 1 | 2 | 3;
   chapter?: ChapterId;
   character: CharacterId;
   /** 兼容旧调试入口；正常开局由武将 startWeapon 决定。 */

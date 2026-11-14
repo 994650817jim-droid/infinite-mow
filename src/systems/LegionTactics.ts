@@ -19,7 +19,7 @@ export class LegionTactics {
   private readonly densityScratch: Enemy[] = [];
   private readonly friends: Ally[] = [];
   private friendGrid: SpatialGrid<Ally> | null = null;
-  constructor(private readonly player: Player) {}
+  constructor(private readonly player: Player,private readonly preferred:(u:Ally)=>Enemy|null=()=>null,private readonly anchor?:(u:Ally)=>{x:number;y:number},private readonly extent:()=>number=()=>0,private readonly navigate?:(u:Ally,x:number,y:number,now:number)=>{x:number;y:number}) {}
   private dangerAt(x: number, y: number, grid: SpatialGrid<Enemy>): number {
     let danger = 0;
     for (const e of grid.query(x, y, 105, this.densityScratch)) if (e.active && !e.isSupplySlot && Math.hypot(e.x - x, e.y - y) < 105) danger += e.kind === 'boss' ? 3 : e.kind === 'elite' ? 2 : 1;
@@ -44,6 +44,7 @@ export class LegionTactics {
     return score;
   }
   select(u: Ally, grid: SpatialGrid<Enemy>, search: number, leash: number): Enemy | null {
+    const marked=this.preferred(u);if(marked&&u.kind!=='medic'&&!['retreat','regroup','return'].includes(u.ai.mode)&&Math.hypot(marked.x-this.player.x,marked.y-this.player.y)<=leash&&Math.hypot(marked.x-u.x,marked.y-u.y)<=search)return marked;
     let best: Enemy | null = null, score = Infinity;
     for (const e of grid.query(u.x, u.y, search, this.enemies)) {
       if (!e.active || e.invulnerable || Math.hypot(e.x - this.player.x, e.y - this.player.y) > leash) continue;
@@ -67,13 +68,13 @@ export class LegionTactics {
     this.friendGrid=friends;
     const epoch = Math.floor(now / TACTICS.thinkMs);
     if (epoch !== this.epoch) { this.epoch = epoch; this.clusterCache.clear(); }
-    const a = u.ai, ratio = u.hp / u.maxHp, leash = order === 'guard' ? TACTICS.guardLeash : TACTICS.sortieLeash;
+    const a = u.ai, ratio = u.hp / u.maxHp, leash = (order === 'guard' ? TACTICS.guardLeash : TACTICS.sortieLeash)+this.extent();
     // Low health is urgent; the recovery threshold and minimum duration prevent oscillation.
     if (ratio < TACTICS.retreatHp && a.mode !== 'retreat') { a.mode = 'retreat'; a.until = now + TACTICS.retreatMinMs; a.nextThink = 0; u.attackUntil = now; }
     if (a.mode === 'retreat' && ratio >= TACTICS.returnHp && now >= a.until) { a.mode = 'advance'; a.nextThink = 0; }
     if (a.mode === 'charge' && now >= a.until) a.nextThink = 0;
     if (now < a.nextThink) return;
-    a.nextThink = now + TACTICS.thinkMs + u.slot % 5 * 17;
+    a.nextThink = now + TACTICS.thinkMs + (u.id*53)%97;
     const friendRadius = u.kind === 'medic' ? 320 : 170;
     const nearFriends = friends.query(u.x, u.y, friendRadius, this.friends);
     let support = 0, medic: Ally | null = null, wounded: Ally | null = null, lowest = 1, front: Ally | null = null, frontDistance = 0;
@@ -99,13 +100,8 @@ export class LegionTactics {
     if (a.mode === 'regroup' || a.mode === 'return') { a.target = null; this.safe(u, this.player.x, this.player.y, grid); return; }
     const target = u.kind === 'medic' ? null : this.select(u, grid, order === 'guard' ? Math.max(210, u.def.range) : 500, leash);
     a.target = target; a.spawn = target?.spawnId ?? 0;
-    // Front/back offsets follow the threat axis rather than sending every role to one point.
-    let fx = target ? target.x - this.player.x : 0, fy = target ? target.y - this.player.y : -1;
-    const length = Math.hypot(fx, fy) || 1; fx /= length; fy /= length;
-    const depth = u.kind === 'guardian' ? 60 : u.kind === 'swordsman' ? 40 : u.kind === 'spearman' ? 5 : u.kind === 'halberdier' ? 25 : u.kind === 'medic' ? -110 : u.kind === 'rider' ? 0 : -80;
-    const lateral = (u.slot % 5 - 2) * 24 + (u.kind === 'rider' ? u.slot % 2 ? 90 : -90 : 0);
-    a.x = this.player.x + fx * (depth - Math.floor(u.slot / 5) * 16) - fy * lateral;
-    a.y = this.player.y + fy * (depth - Math.floor(u.slot / 5) * 16) + fx * lateral;
+    const home=this.anchor?.(u)??{x:this.player.x+(u.slot%5-2)*38,y:this.player.y+70+Math.floor(u.slot/5)*38};
+    a.x=home.x;a.y=home.y;
     if (u.kind === 'medic') {
       const friend = wounded ?? (order === 'sortie' ? front : null);
       if (friend && Math.hypot(friend.x - this.player.x, friend.y - this.player.y) < leash) {
@@ -116,6 +112,7 @@ export class LegionTactics {
       return;
     }
     if (!target) return;
+    if(order==='guard'&&Math.hypot(target.x-home.x,target.y-home.y)>Math.max(180,u.def.range))return;
     const dx = target.x - u.x, dy = target.y - u.y, distance = Math.hypot(dx, dy) || 1;
     a.faceX = dx / distance; a.faceY = dy / distance;
     if (u.kind === 'rider' && a.mode !== 'charge' && now >= a.chargeReady && distance > u.def.range && distance < 210 && a.danger <= 2 && (support > 0 || this.dangerAt(target.x, target.y, grid) < 3)) {
@@ -129,7 +126,7 @@ export class LegionTactics {
       if (this.dangerAt(a.x, a.y, grid) > a.danger) this.safe(u, this.player.x, this.player.y, grid);
     } else {
       const stop = u.def.range * (u.def.ranged ? .82 : u.kind === 'spearman' ? .82 : .7);
-      if (distance > stop) { a.x = target.x - dx / distance * stop; a.y = target.y - dy / distance * stop; }
+      if (distance > stop) { const angle=Math.atan2(dy,dx)+(u.slot%7-3)*.11;a.x = target.x-Math.cos(angle)*stop; a.y = target.y-Math.sin(angle)*stop; }
       else { a.x = u.x; a.y = u.y; }
     }
   }
@@ -157,7 +154,7 @@ export class LegionTactics {
       // Small cosmetic-space adjustment within existing reach, preserving facing and attack frames.
       if(Math.hypot(a.spaceX,a.spaceY)>.05)u.moveTo(u.x+a.spaceX*24,u.y+a.spaceY*24,dt,28,true);
     }else{
-      u.moveTo(a.x+a.spaceX*36,a.y+a.spaceY*36,dt,u.def.speed*(a.mode==='charge'?1.8:1));
+      const tx=a.x+a.spaceX*36,ty=a.y+a.spaceY*36,goal=a.mode==='charge'?{x:tx,y:ty}:this.navigate?.(u,tx,ty,now)??{x:tx,y:ty};u.moveTo(goal.x,goal.y,dt,u.def.speed*(a.mode==='charge'?1.8:1));
     }
   }
 

@@ -1,4 +1,5 @@
 import type { Player } from './entities/Player';
+import type { RunGrowth } from './systems/RunGrowth';
 
 export type EnemyKind = 'infantry' | 'shield' | 'archer' | 'cavalry' | 'elite' | 'boss';
 
@@ -35,12 +36,13 @@ export interface UpgradeOption {
   id: string;
   name: string;
   desc: string;
-  kind: 'weapon' | 'passive' | 'rare' | 'relic';
+  kind: 'tactic' | 'treasure' | 'weapon' | 'passive' | 'rare' | 'relic' | 'martial' | 'attribute' | 'potion' | 'trinket' | 'foundation';
+  categoryLabel?: string;
   weaponId?: WeaponId;
   relicId?: string;
   school?: string;
   icon?: string;
-  apply: (player: Player, weapons: WeaponState[]) => void;
+  apply: (player: Player, weapons: WeaponState[], growth?: RunGrowth) => void;
 }
 
 export type RunEndReason = 'boss' | 'death' | 'timeout';

@@ -1,0 +1,3 @@
+import {getSishuiEncounter} from './sishui';
+import type {ChapterDef} from './chapters';
+export function getXingyangEncounter():ChapterDef{const base=getSishuiEncounter();return {...base,name:'2-2 荥阳之战',label:'讨伐董卓 · 荥阳',description:'道路伏击 · 徐荣统军',bossName:'徐荣',bossStyle:'xurong',waves:['荥阳斥候','道路伏击','两翼合围','徐荣统军'].map((name,i)=>({name,start:i*45})),enemies:{...base.enemies,boss:{...base.enemies.boss,texture:'xurong',walkVisual:{texture:'xurong',scale:1.1,groundY:114/128},attackVisual:undefined,hp:1900,speed:48,damage:12}},victoryTitle:'破围荥阳',victoryText:'徐荣败退 · 荥阳试玩完成'};}

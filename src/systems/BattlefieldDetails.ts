@@ -1,9 +1,10 @@
+import {propDisplaySize,mayMirrorProp} from '../data/sceneArt';
 import Phaser from 'phaser';
 import { DEPTH, GAME_WIDTH, GAME_HEIGHT } from '../config';
 import type { ChapterId } from '../data/chapters';
 
 /** Decorative only. Deterministic world cells, bounded image pool, no combat RNG or colliders. */
-export interface BattlefieldProp {key:string;x:number;y:number;frame:number;size:number;flip:boolean;}
+export interface BattlefieldProp {key:string;x:number;y:number;frame:number;size:number;flip:boolean;texture?:'art_props';}
 export class BattlefieldDetails {
   readonly props:BattlefieldProp[]=[];
   private readonly images: Phaser.GameObjects.Image[] = [];
@@ -13,12 +14,12 @@ export class BattlefieldDetails {
   private readonly cellSize = 224;
   private readonly columns = Math.ceil(GAME_WIDTH / this.cellSize) + 2;
   private readonly rows = Math.ceil(GAME_HEIGHT / this.cellSize) + 2;
-  constructor(private readonly scene: Phaser.Scene, private readonly chapter: ChapterId,private readonly stage?:1|2|3) {
+  constructor(private readonly scene: Phaser.Scene, private readonly chapter: ChapterId,private readonly stage?:1|2|3,groundKey?:string) {
     this.makeTextures();
     const key=`quiet_soil_${chapter}_${stage??0}`;
     if(!scene.textures.exists(key)){
       const texture=scene.textures.createCanvas(key,128,128)!,ctx=texture.context;
-      const source=scene.textures.get(stage?`yellow_ground_${stage}`:chapter==='huangjin'?'ground_overhaul_huangjin':'ground_overhaul_hulao').getSourceImage() as HTMLImageElement;
+      const source=scene.textures.get(groundKey??(stage?`yellow_ground_${stage}`:chapter==='huangjin'?'ground_overhaul_huangjin':'ground_overhaul_hulao')).getSourceImage() as HTMLImageElement;
       const sample=document.createElement('canvas');sample.width=source.width;sample.height=source.height;const sc=sample.getContext('2d')!;sc.drawImage(source,0,0);
       const pixels=sc.getImageData(0,0,sample.width,sample.height).data,palette:number[][]=[];
       for(let i=0;i<pixels.length&&palette.length<512;i+=44)if(pixels[i]>pixels[i+1]*1.22&&pixels[i+1]>pixels[i+2]*1.25)palette.push([pixels[i],pixels[i+1],pixels[i+2]]);
@@ -35,7 +36,10 @@ export class BattlefieldDetails {
       this.images.push(scene.add.image(0,0,`field_${chapter}_0`).setDepth(DEPTH.ground+1).setAlpha(.7));
     }
   }
+  private structured=false;
+  useStructuredLayout():void {this.structured=true;this.props.length=0;for(const image of [...this.images,...this.quietPatches])image.setVisible(false);}
   update(scrollX: number, scrollY: number): void {
+    if(this.structured)return;
     const cx=Math.floor(scrollX/this.cellSize)-1,cy=Math.floor(scrollY/this.cellSize)-1;
     if(cx===this.cellX&&cy===this.cellY)return;
     this.cellX=cx;this.cellY=cy;this.props.length=0;
@@ -53,19 +57,25 @@ export class BattlefieldDetails {
         .setFlipX((h&16)!==0).setScale(.75+(h%5)*.1).setAlpha(this.chapter==='huangjin'?.45:.4).setOrigin(.5).clearTint().setVisible(true);
       // Quiet and busy macro-regions; do not cover every cell with extra details.
       const region=this.hash(Math.floor(x/3),Math.floor(y/3),7);
-      img.setVisible(region%5!==0 && h%3!==1);
-      if(n===0 && h%5===0) {
+      img.setVisible(region%5!==0 && h%3!==1 && (region%3!==0||n===0));
+      if(n===0 && h%5===0 && region%4!==0) {
         // Flags are rarer than low rubble, and never appear in adjacent cells.
         const flag=(x%4===0 && y%4===0 && h%2===0);
         const frame=this.chapter==='huangjin'?(flag?0:1+h%3):(flag?4:5+h%3);
-        const size=flag?92:68+(h>>>6)%39;
+        // These frames have narrower silhouettes than crates and tents. Enlarge
+        // them modestly so they read clearly at phone scale; BattlefieldSupplies
+        // uses this same display size for footprint and contact shadow alignment.
+        const baseSize=flag?104:frame===5?112:frame===6?108:120;
         if(this.stage){
           // Individual objects only; large tents restricted to sparse deterministic cells.
           const tent=this.stage===2&&x%6===0&&y%6===0;
           const choices=this.stage===3?[14,15,19,22,24,25,26,27,28,29,30,32,33]:[10,11,14,15,16,19,20,21,22,24,25,26,27,28];
-          const prop=tent?h%4:flag?4+h%6:choices[h%choices.length];
-          this.props.push({key:`prop-${x},${y}`,x:img.x,y:img.y,frame:prop,size:tent?138:size,flip:(h&16)!==0});img.setVisible(false);
-        }else img.setTexture('art_props',String(frame)).setDisplaySize(size,size).setOrigin(.5,.75).setAlpha(1).setTint(0xe5dcc7).setVisible(true);
+          const prop=h%19===0?35:tent?h%4:flag?4+h%6:choices[h%choices.length];
+          const size=propDisplaySize(prop);
+          this.props.push({key:`prop-${x},${y}`,x:img.x,y:img.y,frame:prop,size,flip:mayMirrorProp(prop)&&(h&16)!==0});img.setVisible(false);
+        }else if(this.chapter==='hulao'&&[4,5,7].includes(frame)){
+          this.props.push({key:`prop-${x},${y}`,x:img.x,y:img.y,frame,size:frame===5?140:frame===7?128:baseSize,flip:false,texture:'art_props'});img.setVisible(false);
+        }else img.setTexture('art_props',String(frame)).setDisplaySize(baseSize,baseSize).setOrigin(.5,.75).setFlipX(false).setAlpha(1).clearTint().setVisible(true);
       }
     }
   }

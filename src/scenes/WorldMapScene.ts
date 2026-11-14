@@ -1,3 +1,4 @@
+import {thirdChapterUnlocked} from '../world/WorldStore';
 import {isChapterTestRun} from '../systems/ChapterProgress';
 import {worldUnlocked} from '../world/WorldStore';
 import Phaser from 'phaser';
@@ -17,7 +18,7 @@ export class WorldMapScene extends Phaser.Scene {
   this.layer=this.add.container(0,0);this.layer.add(this.add.image(0,0,'strategy_art').setOrigin(0).setDisplaySize(this.mapW,this.mapH));
   const mask=this.make.graphics({x:0,y:0}).fillStyle(0xffffff).fillRect(this.area.x,this.area.y,this.area.w,this.area.h);
   this.layer.setMask(mask.createGeometryMask());this.events.once('shutdown',()=>mask.destroy());
-  for(const node of WORLD_NODES){const active=node.kind==='home'||node.chapter&&chapterUnlocked(node.chapter),color=active?node.kind==='home'?0x88c5a4:0xe5c47d:0x747a6f;
+  for(const node of WORLD_NODES){const active=node.kind==='home'||node.campaign==='qunxiong'&&(thirdChapterUnlocked()||isChapterTestRun())||node.chapter&&chapterUnlocked(node.chapter),color=active?node.kind==='home'?0x88c5a4:0xe5c47d:0x747a6f;
    const marker=this.add.container(0,0);const circle=this.add.circle(0,0,18,0x16271e,.94).setStrokeStyle(2,color).setInteractive({useHandCursor:!!active}).setName(`node-${node.id}`);
    const icon=worldText(this,0,0,node.kind==='home'?'营':active?'战':'锁',13,active?'#f5dc9e':'#a4aa9c').setOrigin(.5);
    const label=worldText(this,0,25,node.name,13,active?'#fff0cd':'#b6b8aa').setOrigin(.5).setStroke('#142016',3);
@@ -38,6 +39,6 @@ export class WorldMapScene extends Phaser.Scene {
  }
  private setZoom(next:number,x:number,y:number){const z=Phaser.Math.Clamp(next,this.minZoom,this.minZoom*2.7),ratio=z/this.zoom;this.layer.x=x-(x-this.layer.x)*ratio;this.layer.y=y-(y-this.layer.y)*ratio;this.zoom=z;this.layer.setScale(z);this.clampMap();}
  private clampMap(){const a=this.area;this.layer.x=Phaser.Math.Clamp(this.layer.x,a.x+a.w-this.mapW*this.zoom,a.x);this.layer.y=Phaser.Math.Clamp(this.layer.y,a.y+a.h-this.mapH*this.zoom,a.y);for(const m of this.markers){const x=this.layer.x+m.node.x*this.mapW*this.zoom,y=this.layer.y+m.node.y*this.mapH*this.zoom;m.root.setPosition(x,y).setVisible(x>a.x+20&&x<a.x+a.w-20&&y>a.y+20&&y<a.y+a.h-45);}}
- private refresh(){const n=this.selected,locked=n.kind==='future'||!!n.chapter&&!chapterUnlocked(n.chapter);this.detail.setText(`${n.name}\n${n.region} · ${n.kind==='home'?'玩家领地':n.kind==='future'?'地区开发中':locked?'通关黄巾之乱后解锁':'战役已开放'}\n${n.kind==='battle'?'战斗军粮为单局资源，战后另结算永久资源。':'从义军营寨出发，建设后再次出征。'}`);this.action.text.setText(locked?'尚未开放':n.kind==='home'?'进入主城':'选择武将 · 出征');this.action.image.setAlpha(locked?.45:1);if(locked)this.action.image.disableInteractive();else this.action.image.setInteractive({useHandCursor:true});}
- private enterNode(){const n=this.selected;if(n.kind==='home'){this.scene.start('CityScene');return;}if(!n.chapter||!chapterUnlocked(n.chapter))return;this.registry.set('worldCampaign',true);this.registry.set('selectedWorldChapter',n.chapter);if(this.registry.get('battleReady'))this.scene.start('MenuScene');else{this.registry.set('loadBattle',true);this.scene.start('BootScene');}}
+ private refresh(){const n=this.selected,locked=n.kind==='future'||(n.campaign==='qunxiong'?!thirdChapterUnlocked()&&!isChapterTestRun():!!n.chapter&&!chapterUnlocked(n.chapter));this.detail.setText(`${n.name}\n${n.region} · ${n.kind==='home'?'玩家领地':n.kind==='future'?'地区开发中':locked?n.campaign==='qunxiong'?'通关虎牢关后解锁':'通关黄巾之乱后解锁':'战役已开放'}\n${n.kind==='battle'?'战斗军粮为单局资源，战后另结算永久资源。':'从义军营寨出发，建设后再次出征。'}`);this.action.text.setText(locked?'尚未开放':n.kind==='home'?'进入主城':'选择武将 · 出征');this.action.image.setAlpha(locked?.45:1);if(locked)this.action.image.disableInteractive();else this.action.image.setInteractive({useHandCursor:true});}
+ private enterNode(){const n=this.selected;if(n.campaign==='qunxiong'){if(thirdChapterUnlocked()||isChapterTestRun())this.scene.start('ThirdChapterScene');return;}if(n.kind==='home'){this.scene.start('CityScene');return;}if(!n.chapter||!chapterUnlocked(n.chapter))return;this.registry.set('worldCampaign',true);this.registry.set('selectedWorldChapter',n.chapter);if(this.registry.get('battleReady'))this.scene.start('MenuScene');else{this.registry.set('loadBattle',true);this.scene.start('BootScene');}}
 }

@@ -61,6 +61,8 @@ export class Enemy {
   invulnerable = false;
   controlImmune = false;
   stunUntil = 0;
+  martialSlow = 1;
+  martialSlowUntil = 0;
 
   flashUntil = 0;
   private baseTint = 0xffffff;
@@ -93,6 +95,7 @@ export class Enemy {
   spawn(x: number, y: number, def: EnemyDef, hpScale: number, now: number): void {
     this.def = def;
     this.kind = def.kind;
+    this.martialSlow=1;this.martialSlowUntil=0;
     this.spawnId = (Enemy.spawnSeq += 1);
     this.hp = Math.round(def.hp * hpScale);
     this.maxHp = this.hp;
@@ -320,7 +323,9 @@ export class Enemy {
     } else {
       this.walkDistance = 0;
     }
-    const stride = this.walkSheet==='yellow_spear_walk'?8:WALK_STRIDES[this.kind] ?? 18;
+    // The newer 4-frame Yellow Turban sheets have a short, readable step cycle.
+    // Tie cadence to travelled distance so eased movement and low FPS stay in sync.
+    const stride = this.walkSheet==='yellow_spear_walk'?7:this.walkSheet.startsWith('yellow_')?10:WALK_STRIDES[this.kind] ?? 18;
     const frame = this.walking ? Math.floor(this.walkDistance / stride) % 4 : 0;
     const key = `${this.direction}_${frame}`;
     if (key !== this.appliedFrame || this.sprite.texture.key !== visualTextureKey(this.scene,this.walkSheet)) {

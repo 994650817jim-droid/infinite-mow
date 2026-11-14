@@ -1,6 +1,7 @@
 import {visualTextureKey} from '../systems/ReadableTextures';
 import Phaser from 'phaser';
 import { CharacterPassives } from '../systems/CharacterPassives';
+import { RunGrowth } from '../systems/RunGrowth';
 import { BALANCE, DEPTH, FONT, actorDepth } from '../config';
 import { applySetBonus, RELIC_BY_ID, type RelicSchool } from '../data/relics';
 import type { PlayerStats, WeaponState } from '../types';
@@ -9,9 +10,11 @@ import type { PlayerStats, WeaponState } from '../types';
 export class Player {
   armyDamageTakenMul = 1;
   readonly passive = new CharacterPassives();
+  growth = new RunGrowth('zhaoyun');
   readonly scene: Phaser.Scene;
   readonly sprite: Phaser.GameObjects.Image;
   readonly shadow: Phaser.GameObjects.Image;
+  private readonly commandRing:Phaser.GameObjects.Graphics;
   private readonly markerLabel: Phaser.GameObjects.Text;
   private readonly marker: Phaser.GameObjects.Graphics;
 
@@ -22,6 +25,7 @@ export class Player {
   alive = true;
   invulnUntil = 0;
   damageImmune = false;
+  damageGuard?: (damage:number,now:number)=>number;
 
   stats: PlayerStats = {
     damageMul: 1,
@@ -45,7 +49,7 @@ export class Player {
 
   weapons: WeaponState[] = [{ id: 'spear_orbit', level: 1, cooldownLeft: 0 }];
 
-  private knockedUntil = 0;
+  knockedUntil = 0;
   private knockedAt = 0;
   private knockVx = 0;
   private knockVy = 0;
@@ -63,6 +67,9 @@ export class Player {
     this.scene = scene;
     this.shadow = scene.add.image(x, y + 16, 'shadow').setDisplaySize(48, 20).setDepth(DEPTH.enemy - 1).setAlpha(0.8);
     this.sprite = scene.add.image(x, y, 'hero_zhaoyun').setDepth(actorDepth(y + 26));
+    this.commandRing=scene.add.graphics().setDepth(DEPTH.player-.1);
+    this.commandRing.lineStyle(2,0x14241f,.8).strokeEllipse(0,0,45,18).lineStyle(1,0xd7c38a,.85).strokeEllipse(0,0,43,16).lineStyle(1,0x9ac8c2,.65).strokeEllipse(0,0,36,12);
+    for(const x of[-24,24])this.commandRing.fillStyle(0xdec896,.9).fillRect(x-2,-1,4,2);
     this.marker=scene.add.graphics().setDepth(DEPTH.fx+1);
     this.marker.fillStyle(0x17251c).fillTriangle(-7,-3,7,-3,0,6)
       .fillStyle(0xf3e6b0).fillTriangle(-4,-1,4,-1,0,3);
@@ -80,7 +87,7 @@ export class Player {
   }
 
   get maxHp(): number {
-    return BALANCE.player.maxHp + this.stats.maxHpBonus;
+    return BALANCE.player.maxHp + this.stats.maxHpBonus + this.growth.bonusMaxHp();
   }
 
   get radius(): number {
@@ -88,7 +95,7 @@ export class Player {
   }
 
   get speed(): number {
-    return BALANCE.player.speed * this.stats.moveMul;
+    return BALANCE.player.speed * Math.min(1.6, this.stats.moveMul * this.growth.movementMultiplier()*(this.growth.build.tags().skirmish>=2?1.04:1));
   }
 
   knockUp(now: number, duration: number, dx: number, dy: number): void {
@@ -96,7 +103,8 @@ export class Player {
     this.knockVx = dx / (duration / 1000); this.knockVy = dy / (duration / 1000);
   }
   move(dt: number, vx: number, vy: number): void {
-    this.sprite.setDepth(actorDepth(this.y + 26));
+    // Keep the identification marker above crowds, but let the body pass behind buildings.
+    this.sprite.setDepth(actorDepth(this.y + 26) + .002);
     const now = (this.scene as Phaser.Scene & { combatNow?: number }).combatNow ?? this.scene.time.now;
     if (now < this.knockedUntil) {
       this.sprite.x += this.knockVx * dt; this.sprite.y += this.knockVy * dt;
@@ -184,9 +192,15 @@ export class Player {
   takeDamage(raw: number, now: number): boolean {
     if (!this.alive || this.damageImmune || now < this.invulnUntil) return false;
     const afterArmor = Math.max(1, raw - this.stats.armor);
-    const dmg = Math.max(1, Math.round(afterArmor * this.stats.damageTakenMul * this.armyDamageTakenMul));
-    this.hp = Math.max(0, this.hp - dmg);
+    const unguarded = Math.max(1, Math.round(afterArmor * this.stats.damageTakenMul * this.armyDamageTakenMul * this.growth.incomingDamageMultiplier()));
+    const dmg=Math.max(1,this.damageGuard?.(unguarded,now)??unguarded);
+    const ironRescue=this.hp<=dmg&&this.growth.build.tags().bulwark>=4&&!this.growth.awakenRescueUsed;
+    if(ironRescue)this.growth.awakenRescueUsed=true;
+    const rescue=!ironRescue&&this.hp<=dmg&&this.growth.build.treasures.includes('revival_jade')&&!this.growth.revivalUsed;
+    if(rescue)this.growth.revivalUsed=true;
+    this.hp = (rescue||ironRescue)?1:Math.max(0, this.hp - dmg);
     this.invulnUntil = now + BALANCE.player.invuln * 1000;
+    if(rescue||ironRescue)this.invulnUntil=Math.max(this.invulnUntil,now+1000);
     this.passive.onDamage(now);
     if (this.hp <= 0) { this.alive = false; this.passive.stop(); }
     return true;
@@ -230,6 +244,7 @@ export class Player {
   }
 
   update(now: number, dt: number): void {
+    this.commandRing.setPosition(this.x,this.y+21).setVisible(this.alive);
     this.marker.setPosition(this.x,this.y-38).setVisible(this.alive);
     this.markerLabel.setPosition(this.x,this.y-45).setVisible(this.alive);
     const t = now < this.knockedUntil ? (now - this.knockedAt) / (this.knockedUntil - this.knockedAt) : 1;

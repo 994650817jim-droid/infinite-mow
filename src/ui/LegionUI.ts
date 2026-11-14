@@ -50,6 +50,7 @@ export class LegionUI {
     this.panel.add(scene.add.rectangle(0, 0, W, H, 0x121b17, 0).setOrigin(0).setScrollFactor(0).setInteractive());
     this.campBackground=scene.add.image(W/2,H/2,'rest_camp').setScrollFactor(0).setDisplaySize(Math.max(W,H*1.5),Math.max(H,W/1.5)).setAlpha(1);
     this.panel.addAt(this.campBackground,0);
+    this.panel.addAt(scene.add.rectangle(W/2,H/2,W,H,0x1a110a,.36).setScrollFactor(0),1);
     this.heading = text(W / 2, D ? 54 : 75, '', D ? 26 : 28).setOrigin(.5, 0);
     this.summary = text(W / 2, D ? 96 : 122, '', 14).setOrigin(.5, 0);
     this.panel.add([this.heading, this.summary]);
@@ -71,7 +72,7 @@ export class LegionUI {
     this.close = button('', close).setPosition(W / 2, H - (D ? 54 : 103)).setOrigin(.5, 0).setFontSize(18);
     this.panel.add([this.prev, this.next, this.pageText, this.close]);
   }
-  setCampDestination(name:string):void {this.heading.setText('黄巾败退 · 战后休整');this.close.setText(`率军出征 · ${name}`);}
+  setCampDestination(name:string,title='黄巾败退 · 战后休整'):void {this.heading.setText(title);this.close.setText(`出征 · ${name}`).setBackgroundColor('#59452d').setColor('#ffe5b3').setPadding(30,14);}
   render(army: Legion, mode: 'wave' | 'rest', options: TroopKind[] = []): void { if (this.mode !== mode) this.page = 0; this.army = army; this.mode = mode; this.options = options; this.repaint(); }
   private repaint(): void {
     const army = this.army; if (!army) return;
@@ -80,7 +81,7 @@ export class LegionUI {
     this.heading.setY(wave ? D ? 54 : 75 : D ? 22 : 62);
     this.summary.setY(wave ? D ? 96 : 122 : D ? 61 : 112);
     this.heading.setText(wave ? '战地招募'  : '黄巾已破 · 战后休整');
-    this.summary.setText(wave ? `兵力 ${army.count}/${army.capacity} · ${army.count >= army.capacity ? "已满员，请继续战斗" : "免费招募 1 人"}` : `军粮 ${army.food}　兵力 ${army.count}/${army.capacity}　阵亡 ${army.dead}\n仅开放刀盾、长枪、弓箭兵 · 使用本局军粮`).setAlign('center');
+    this.summary.setText(wave ? `当前兵力：${army.count} · 免费招募 1 人` : `军粮 ${army.food}　当前兵力：${army.count}　阵亡 ${army.dead}\n仅开放刀盾、长枪、弓箭兵 · 使用本局军粮`).setAlign('center');
     this.close.setText(wave ? '跳过本次 · 继续战斗' : '率军出征 · 虎牢关');
     if(!wave){
       this.prev.setVisible(false);this.next.setVisible(false);this.pageText.setVisible(false);
@@ -91,8 +92,8 @@ export class LegionUI {
         row.title.setText(`${TROOPS[row.kind].name} · Lv${army.levels[row.kind]}`).setPosition(D?width/2:118,18).setOrigin(D?.5:0,0).setFontSize(19);
         row.icon.setScale(94/Math.max(row.icon.frame.width,row.icon.frame.height)).setPosition(D?width/2:55,D?98:76);
         row.detail.setText(`${ROLES[row.kind]}\n已编入 ${count} 人 · ${TROOPS[row.kind].cost}军粮/人`).setPosition(D?width/2:118,D?153:53).setOrigin(D?.5:0,0).setAlign(D?'center':'left').setWordWrapWidth(D?width-24:width-128);
-        row.buy.setText(army.count >= army.capacity ? "兵力已满" : `招募 1 人 · ${TROOPS[row.kind].cost}军粮`).setPosition(D?14:118,D?207:105).setFixedSize(D?width-28:width-136,0).setAlign('center');
-        const canBuy=army.count<army.capacity&&army.food>=TROOPS[row.kind].cost;row.buy.setAlpha(canBuy?1:.45);if(canBuy)row.buy.setInteractive({useHandCursor:true});else row.buy.disableInteractive();row.train.setVisible(false);
+        row.buy.setText(`招募 1 人 · ${TROOPS[row.kind].cost}军粮`).setPosition(D?14:118,D?207:105).setFixedSize(D?width-28:width-136,0).setAlign('center');
+        const canBuy=army.food>=TROOPS[row.kind].cost;row.buy.setAlpha(canBuy?1:.45);if(canBuy)row.buy.setInteractive({useHandCursor:true});else row.buy.disableInteractive();row.train.setVisible(false);
       }
       return;
     }
@@ -115,15 +116,15 @@ export class LegionUI {
         .setPosition(wave ? D ? width / 2 : 118 : D ? 85 : 98, wave ? D ? 153 : 53 : D ? 47 : 59)
         .setOrigin(wave && D ? .5 : 0, 0).setAlign(wave && D ? 'center' : 'left').setLineSpacing(5)
         .setWordWrapWidth(wave ? D ? width - 24 : width - 128 : width - (D ? 92 : 110));
-      row.buy.setText(army.count >= army.capacity ? '兵力已满' : wave ? '＋ 招募入队' : `招募 1 人 · ${TROOPS[row.kind].cost}粮`).setPosition(wave && !D ? 118 : 14, wave ? D ? 207 : 105 : D ? 84 : 140).setFixedSize(wave && !D ? width - 136 : width - 28, 0).setAlign('center');
+      row.buy.setText(wave ? '＋ 招募入队' : `招募 1 人 · ${TROOPS[row.kind].cost}粮`).setPosition(wave && !D ? 118 : 14, wave ? D ? 207 : 105 : D ? 84 : 140).setFixedSize(wave && !D ? width - 136 : width - 28, 0).setAlign('center');
       row.train.setVisible(!wave).setText(level === 3 ? '训练已满级' : `训练至Lv${level + 1}　${LEGION.trainCost[level]}粮`).setPosition(10, D ? 124 : 193).setFixedSize(width - 20, 0).setAlign('center');
-      const canBuy = army.count < army.capacity && (wave || army.food >= TROOPS[row.kind].cost), canTrain = !wave && level < 3 && army.food >= LEGION.trainCost[level];
+      const canBuy = (wave || army.food >= TROOPS[row.kind].cost), canTrain = !wave && level < 3 && army.food >= LEGION.trainCost[level];
       row.buy.setAlpha(canBuy ? 1 : .45).setColor(canBuy ? '#eee4ca' : '#98a393'); if (canBuy) row.buy.setInteractive({ useHandCursor: true }); else row.buy.disableInteractive();
       row.train.setAlpha(canTrain ? 1 : .45).setColor(canTrain ? '#d9c28a' : '#98a393'); if (canTrain) row.train.setInteractive({ useHandCursor: true }); else row.train.disableInteractive();
     }
     this.prev.setVisible(!wave && !D).setAlpha(this.page === 0 ? .4 : 1); this.next.setVisible(!wave && !D).setAlpha(this.page === 1 ? .4 : 1); this.pageText.setVisible(!wave && !D).setText(`${this.page + 1} / 2`);
   }
-  update(army: Legion, visible: boolean): void { this.hud.setVisible(visible); if (!visible) return; this.status.setText(`军粮 ${army.food} · 兵力 ${army.count}/${army.capacity}${army.dead ? ` · 阵亡 ${army.dead}` : ''}${army.count > LEGION.visualBudget ? '\n余部编组参战' : ''}`); this.paintOrder(army); }
+  update(army: Legion, visible: boolean): void { this.hud.setVisible(visible); if (!visible) return; this.status.setText(`军粮 ${army.food} · 当前兵力：${army.count}${army.dead ? ` · 阵亡 ${army.dead}` : ''}`); this.paintOrder(army); }
   private paintOrder(army: Legion): void {
     if (this.orderState === army.order) return;
     this.orderState = army.order;

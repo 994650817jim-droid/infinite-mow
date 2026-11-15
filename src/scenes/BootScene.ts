@@ -22,6 +22,8 @@ export class BootScene extends Phaser.Scene {
     for(const id of GROWTH_ICON_IDS)this.load.image('growth_icon_'+id,'assets/upgrade-icons/'+id+'.webp');
     for(const id of [...Object.keys(TACTICS),...Object.keys(TREASURES)])this.load.image('build_icon_'+id,'assets/upgrade-icons/'+id+'.webp');
     // 水墨按钮底板（ChatGPT 生成，tools/prepare-button-art.mjs 切图）；homeCommand 有图即用，缺图退回程序画底板
+    // 成就图标（解锁提示与成就面板用，约 200 KB）
+    for(const id of ['first_win','zhangjiao','lubu','qunxiong','guandu','kills_1000','kills_10000','level_20','all_heroes','chaser','first_siege','cities_5','luoyang','defense','focus','town_build','town_all','town_lv3','money_500','caravan','events_10','year_190','potions_10','reserve_20'])this.load.image('ach_'+id,'assets/achievements/'+id+'.webp');
     for(const n of ['primary-normal','primary-hover','primary-pressed','secondary-normal','secondary-hover','secondary-pressed','disabled'])this.load.image('btn_ink_'+n.replace('-','_'),'assets/ui-buttons/'+n+'.webp');
     const params=new URLSearchParams(window.location.search);
     this.shellOnly=false;
@@ -197,7 +199,7 @@ export class BootScene extends Phaser.Scene {
     if (hint) hint.style.display = 'none';
     this.registry.set('battleReady',true);
     // 界面通用贴图（水墨按钮、小镇美术）常驻，不随战斗图集卸载
-    this.registry.set('battleTextureKeys',this.textures.getTextureKeys().filter(k=>!k.startsWith('__')&&!k.startsWith('ui_war_')&&!k.startsWith('btn_ink_')&&!k.startsWith('town_')&&k!=='art_panel'&&k!=='icon_guandao'));
+    this.registry.set('battleTextureKeys',this.textures.getTextureKeys().filter(k=>!k.startsWith('__')&&!k.startsWith('ui_war_')&&!k.startsWith('btn_ink_')&&!k.startsWith('town_')&&!k.startsWith('ach_')&&k!=='art_panel'&&k!=='icon_guandao'));
     if(import.meta.env.DEV&&new URLSearchParams(location.search).get('dev')==='1'&&new URLSearchParams(location.search).has('thirdStage')){this.scene.start('ThirdChapterScene');}else if(this.registry.get('pendingThird')){this.registry.remove('pendingThird');this.scene.start('ThirdChapterScene');}else if(this.registry.get('pendingWarlord')){const key=String(this.registry.get('pendingWarlord'));this.registry.remove('pendingWarlord');this.scene.start(key);}else this.scene.start('MenuScene');
   }
 }

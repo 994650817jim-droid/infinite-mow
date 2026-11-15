@@ -25,6 +25,9 @@ export class AchievementsUI {
       this.root.add([next.g, next.hit, next.caption]);
     }
     this.render();
+    // 成就图标（public/assets/achievements/<id>.webp）按需加载，加载完成后重绘
+    const missing = ACHIEVEMENTS.filter(a => !scene.textures.exists('ach_' + a.id));
+    if (missing.length) { for (const a of missing) scene.load.image('ach_' + a.id, `assets/achievements/${a.id}.webp`); scene.load.once('complete', () => { if (this.root.active) this.render(); }); scene.load.start(); }
   }
   private get perPage(): number { return IS_DESKTOP ? 24 : 12; }
   private render(): void {
@@ -36,9 +39,10 @@ export class AchievementsUI {
     list.forEach((a, i) => {
       const col = i % cols, row = Math.floor(i / cols), x = (D ? 20 : 16) + col * (cw + 20), y = top + row * (ch + (D ? 2 : 6)), on = !!got[a.id];
       this.body!.add(s.add.image(x + cw / 2, y + ch / 2, warPanelTexture(s, cw, ch, on)).setDisplaySize(cw + 16, ch + 16).setAlpha(on ? 1 : .55));
-      this.body!.add(s.add.text(x + 12, y + ch / 2, on ? '◆' : '◇', { fontFamily: FONT, fontSize: '14px', color: on ? '#f0c76a' : '#6f6658', resolution: 2 }).setOrigin(0, .5));
-      const name = s.add.text(x + 32, D ? y + ch / 2 : y + 16, `${a.name}`, { fontFamily: HEADING_FONT, fontSize: '15px', color: on ? '#f4d99f' : '#9a9080', resolution: 2 }).setOrigin(0, .5).setName('ach-' + a.id);
-      const desc = s.add.text(D ? x + 128 : x + 32, D ? y + ch / 2 : y + 38, a.desc, { fontFamily: FONT, fontSize: '12px', color: on ? '#d8cdb4' : '#857b6c', resolution: 2 }).setOrigin(0, .5);
+      if (s.textures.exists('ach_' + a.id)) { const icon = s.add.image(x + 18, y + ch / 2, 'ach_' + a.id).setDisplaySize(ch - 2, ch - 2); if (!on) icon.setTint(0x6a6560).setAlpha(.55); this.body!.add(icon); }
+      else this.body!.add(s.add.text(x + 12, y + ch / 2, on ? '◆' : '◇', { fontFamily: FONT, fontSize: '14px', color: on ? '#f0c76a' : '#6f6658', resolution: 2 }).setOrigin(0, .5));
+      const name = s.add.text(x + (D ? 38 : 50), D ? y + ch / 2 : y + 16, `${a.name}`, { fontFamily: HEADING_FONT, fontSize: '15px', color: on ? '#f4d99f' : '#9a9080', resolution: 2 }).setOrigin(0, .5).setName('ach-' + a.id);
+      const desc = s.add.text(D ? x + 134 : x + 50, D ? y + ch / 2 : y + 38, a.desc, { fontFamily: FONT, fontSize: '12px', color: on ? '#d8cdb4' : '#857b6c', resolution: 2 }).setOrigin(0, .5);
       this.body!.add([name, desc]);
       if (on) this.body!.add(s.add.text(x + cw - 10, y + ch / 2, new Date(got[a.id]).toLocaleDateString('zh-CN'), { fontFamily: FONT, fontSize: '11px', color: '#a99d88', resolution: 2 }).setOrigin(1, .5));
       else this.body!.add(s.add.text(x + cw - 10, y + ch / 2, a.group, { fontFamily: FONT, fontSize: '11px', color: '#6f6658', resolution: 2 }).setOrigin(1, .5));

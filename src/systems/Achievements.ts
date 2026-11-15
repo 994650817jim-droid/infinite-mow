@@ -113,8 +113,9 @@ function toast(def: AchievementDef): void {
   const W = scene.scale.width / (scene.cameras.main.zoom || 1), w = 260, x = W - w / 2 - 14, y = 52 + stack * 68;
   const root = scene.add.container(x, y - 20).setScrollFactor(0).setDepth(1e6).setAlpha(0).setName('achievement-toast');
   root.add(scene.add.rectangle(0, 0, w, 60, 0x1a120b, .94).setStrokeStyle(1.5, 0xd9b46a));
-  root.add(scene.add.circle(-w / 2 + 30, 0, 18, 0x9a2a1e).setStrokeStyle(1.5, 0xe8c98a));
-  root.add(scene.add.text(-w / 2 + 30, 0, '功', { fontFamily: HEADING_FONT, fontSize: '18px', color: '#fbe9c9', resolution: 2 }).setOrigin(.5));
+  // 有成就图标时用图标，否则用“功”字印
+  if (scene.textures.exists('ach_' + def.id)) root.add(scene.add.image(-w / 2 + 30, 0, 'ach_' + def.id).setDisplaySize(44, 44));
+  else { root.add(scene.add.circle(-w / 2 + 30, 0, 18, 0x9a2a1e).setStrokeStyle(1.5, 0xe8c98a)); root.add(scene.add.text(-w / 2 + 30, 0, '功', { fontFamily: HEADING_FONT, fontSize: '18px', color: '#fbe9c9', resolution: 2 }).setOrigin(.5)); }
   root.add(scene.add.text(-w / 2 + 58, -12, '成就解锁 · ' + def.name, { fontFamily: HEADING_FONT, fontSize: '16px', color: '#f4d99f', resolution: 2 }).setOrigin(0, .5));
   root.add(scene.add.text(-w / 2 + 58, 12, def.desc, { fontFamily: FONT, fontSize: '12px', color: '#cfc3a6', resolution: 2 }).setOrigin(0, .5));
   for (const o of root.list) (o as unknown as Phaser.GameObjects.Components.ScrollFactor).setScrollFactor(0);

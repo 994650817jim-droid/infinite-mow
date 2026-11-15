@@ -196,7 +196,8 @@ export class BootScene extends Phaser.Scene {
     const hint = document.getElementById('boot-hint');
     if (hint) hint.style.display = 'none';
     this.registry.set('battleReady',true);
-    this.registry.set('battleTextureKeys',this.textures.getTextureKeys().filter(k=>!k.startsWith('__')&&!k.startsWith('ui_war_')&&k!=='art_panel'&&k!=='icon_guandao'));
+    // 界面通用贴图（水墨按钮、小镇美术）常驻，不随战斗图集卸载
+    this.registry.set('battleTextureKeys',this.textures.getTextureKeys().filter(k=>!k.startsWith('__')&&!k.startsWith('ui_war_')&&!k.startsWith('btn_ink_')&&!k.startsWith('town_')&&k!=='art_panel'&&k!=='icon_guandao'));
     if(import.meta.env.DEV&&new URLSearchParams(location.search).get('dev')==='1'&&new URLSearchParams(location.search).has('thirdStage')){this.scene.start('ThirdChapterScene');}else if(this.registry.get('pendingThird')){this.registry.remove('pendingThird');this.scene.start('ThirdChapterScene');}else if(this.registry.get('pendingWarlord')){const key=String(this.registry.get('pendingWarlord'));this.registry.remove('pendingWarlord');this.scene.start(key);}else this.scene.start('MenuScene');
   }
 }

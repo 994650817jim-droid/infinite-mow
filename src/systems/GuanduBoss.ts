@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { warnCircle, warnLane } from '../ui/Telegraph';
 import type {Enemy} from '../entities/Enemy';
 import type {Player} from '../entities/Player';
 import type {Legion} from './Legion';
@@ -172,11 +173,10 @@ export class GuanduBoss {
   private draw(z: Zone, alpha: number) {
     const g = this.gfx; g.lineStyle(2, 0xe4ba78, .9).fillStyle(this.kit === 'wenchou' ? 0xa8603a : 0xb8502f, alpha);
     if (z.radius) {
-      if (z.inner > 0) { g.lineStyle(z.radius - z.inner, 0xb8502f, alpha).strokeCircle(z.x, z.y, (z.radius + z.inner) / 2); g.lineStyle(2, 0xe4ba78, .9).strokeCircle(z.x, z.y, z.radius).strokeCircle(z.x, z.y, z.inner); }
-      else { g.fillCircle(z.x, z.y, z.radius).strokeCircle(z.x, z.y, z.radius); g.lineStyle(1, 0xe7c890, .4).lineBetween(z.x - 12, z.y, z.x + 12, z.y).lineBetween(z.x, z.y - 12, z.x, z.y + 12); }
+      if (z.inner > 0) { g.lineStyle(z.radius - z.inner, 0xb8502f, alpha * .55).strokeCircle(z.x, z.y, (z.radius + z.inner) / 2); g.lineStyle(1.4, 0xe4ba78, .5).strokeCircle(z.x, z.y, z.radius).strokeCircle(z.x, z.y, z.inner); }
+      else warnCircle(g, z.x, z.y, z.radius, alpha >= .3 ? 1 : .45, this.kit === 'wenchou' ? 0xa8603a : 0xb8502f, 0xe4ba78, alpha >= .3, this.at);
     } else {
-      const c = Math.cos(z.angle), s = Math.sin(z.angle), w = z.width / 2;
-      g.beginPath().moveTo(z.x - s * w, z.y + c * w).lineTo(z.x + c * z.length - s * w, z.y + s * z.length + c * w).lineTo(z.x + c * z.length + s * w, z.y + s * z.length - c * w).lineTo(z.x + s * w, z.y - c * w).closePath().fillPath().strokePath();
+      warnLane(g, z.x, z.y, z.angle, z.length, z.width, alpha >= .3 ? 1 : .45, this.kit === 'wenchou' ? 0xa8603a : 0xb8502f, 0xe4ba78, alpha >= .3);
     }
   }
   /** 沿线移动首领并结算路径伤害；返回本帧位移。 */

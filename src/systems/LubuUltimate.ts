@@ -1,3 +1,4 @@
+import { warnCircle } from '../ui/Telegraph';
 import Phaser from 'phaser';
 import type { Enemy } from '../entities/Enemy';
 import type { Player } from '../entities/Player';
@@ -87,8 +88,7 @@ export class LubuUltimate {
     }
     if (now < this.fieldUntil) {
       this.groundArt.setVisible(true).setFrame(Math.floor((C.ultFieldMs - this.fieldUntil + now) / 160) % 6).setPosition(this.targetX, this.targetY);
-      this.gfx.lineStyle(3, 0xdc5148, .75).strokeCircle(this.targetX, this.targetY, C.ultRadius);
-      this.gfx.lineStyle(1, 0xffc77d, .5).strokeCircle(this.targetX, this.targetY, C.ultRadius - 8);
+      warnCircle(this.gfx, this.targetX, this.targetY, C.ultRadius, 0, 0xdc5148, 0xffc77d, false, now);
       // Eight small perimeter standards, no opaque screen-sized glow.
       for (let i = 0; i < 8; i++) { const a = i * Math.PI / 4, x = this.targetX + Math.cos(a) * C.ultRadius, y = this.targetY + Math.sin(a) * C.ultRadius; this.gfx.lineStyle(2, 0xd8b677, .8).lineBetween(x, y - 9, x, y + 6); this.gfx.fillStyle(0xa42e30, .9).fillTriangle(x, y - 9, x + 9, y - 5, x, y - 1); }
     }

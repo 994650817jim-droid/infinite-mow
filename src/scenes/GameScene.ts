@@ -1,4 +1,5 @@
 import { stopMenuMusic } from '../systems/Music';
+import { warnCircle } from '../ui/Telegraph';
 import {applyCitySpecialties} from '../systems/CityBonuses';
 import {cityIncomeLine} from '../world/WorldStore';
 import {CampRestUI} from '../ui/CampRestUI';
@@ -1206,12 +1207,7 @@ export class GameScene extends Phaser.Scene {
       gfx.clear();
       const pulse = 1 + Math.sin(now / 70) * 0.06;
       for (const pt of this.bossUltPoints) {
-        gfx.lineStyle(3, 0xcc88ff, 0.95);
-        gfx.strokeCircle(pt.x, pt.y, 72 * pulse);
-        gfx.lineStyle(1.5, 0xfff2a8, 0.8);
-        gfx.strokeCircle(pt.x, pt.y, 46 * pulse);
-        gfx.fillStyle(0x7a3cff, 0.14);
-        gfx.fillCircle(pt.x, pt.y, 72 * pulse);
+        warnCircle(gfx, pt.x, pt.y, 72 * pulse, 1 - Math.max(0, this.bossUltAt - now) / 800, 0x7a3cff, 0xd9c2ff, false, now);
       }
       if (now >= this.bossUltAt) {
         this.bossUltPhase = 'strike';

@@ -10,6 +10,8 @@ interface DesktopBridge {
   testMode?: boolean;
   store: { load(): Record<string, string> | null; set(key: string, value: string): boolean; remove(key: string): boolean; replace(all: Record<string, string>): boolean; path(): string };
   quit(): void; toggleFullscreen(): void; isFullscreen(): boolean;
+  /** Steam 成就（S3）：有 steamworks.js 与 App ID 时同步，否则忽略。 */
+  achievement?(id: string): void; steamStatus?(): { enabled: boolean; reason: string };
   /** 显示设置（S2）：窗口分辨率、全屏、垂直同步（重启生效）。 */
   display?: { get(): DisplaySettings; set(patch: Partial<Pick<DisplaySettings, 'width' | 'height' | 'fullscreen' | 'vsync'>>): DisplaySettings };
 }

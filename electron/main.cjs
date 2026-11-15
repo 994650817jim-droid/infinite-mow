@@ -7,6 +7,7 @@ const { app, BrowserWindow, protocol, net, ipcMain, globalShortcut, screen } = r
 const path = require('node:path');
 const fs = require('node:fs');
 const { pathToFileURL } = require('node:url');
+const { initSteam, unlockAchievement, steamStatus } = require('./steam.cjs');
 
 const DIST = path.join(__dirname, '..', 'dist');
 const SAVE_FILE = () => path.join(app.getPath('userData'), 'save.json');
@@ -36,6 +37,11 @@ function saveDisplay() {
 const display = loadDisplay();
 const vsyncActive = display.vsync !== false;
 if (!vsyncActive) { app.commandLine.appendSwitch('disable-gpu-vsync'); app.commandLine.appendSwitch('disable-frame-rate-limit'); }
+
+// Steam（可选）：未安装 steamworks.js 或无 App ID 时为空操作
+initSteam(app);
+ipcMain.on('steam:achievement', (_e, id) => { unlockAchievement(id); });
+ipcMain.on('steam:status', e => { e.returnValue = steamStatus(); });
 
 protocol.registerSchemesAsPrivileged([{ scheme: 'app', privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true } }]);
 

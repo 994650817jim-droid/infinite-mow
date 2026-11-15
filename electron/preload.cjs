@@ -14,6 +14,9 @@ contextBridge.exposeInMainWorld('imDesktop', {
   toggleFullscreen: () => ipcRenderer.send('app:fullscreen'),
   isFullscreen: () => ipcRenderer.sendSync('app:isFullscreen'),
   // 显示设置：{ width, height, fullscreen, vsync, vsyncActive, resolutions }
+  // Steam 成就（S3）：桌面版有 Steamworks 时同步，否则忽略
+  achievement: id => ipcRenderer.send('steam:achievement', String(id)),
+  steamStatus: () => ipcRenderer.sendSync('steam:status'),
   display: {
     get: () => ipcRenderer.sendSync('display:get'),
     set: patch => ipcRenderer.sendSync('display:set', patch),

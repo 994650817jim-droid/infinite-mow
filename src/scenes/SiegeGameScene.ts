@@ -25,6 +25,8 @@ import type {RunConfig} from '../data/characters';
 export function siegeGameSceneClass(Base: typeof GameScene) {
   return class SiegeGameScene extends Base {
     protected achievementArc() { return this.defense ? 'defense' : 'siege'; }
+    protected padTargets() { return this.enemyCamps?.padTargets() ?? []; }
+    protected padClearTargets() { this.enemyCamps?.cancel(); }
     private city!: CityDef; private owner: FactionId = 'han'; private defense = false; private receipt = ''; private test = false;
     private enemyCamps?: EnemyCamps; private controller?: GuanduBoss;
     private gate: Enemy | null = null; private gateLife = 0; private gateLabel?: Phaser.GameObjects.Text; private gateWarned = false;

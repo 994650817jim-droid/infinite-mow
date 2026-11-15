@@ -19,6 +19,8 @@ export class EnemyCamps{
  /** Validated by spawn life, never persisted or inherited across maps. */
  get selected():Enemy|null{const c=this.focus;if(!c)return null;if(c.destroyed||!c.enemy.active||c.enemy.spawnId!==c.life||Math.hypot(c.point.x-this.h.player.x,c.point.y-this.h.player.y)>600){this.cancel();return null;}return c.enemy;}
  cancel():void{this.focus=null;this.assistIds.clear();this.marker.clear();}
+ /** 手柄：600 内可锁定的敌营（距离、是否当前锁定、锁定它）。 */
+ padTargets():Array<{dist:number;current:boolean;select:()=>void}>{return this.camps.filter(c=>!c.destroyed&&c.enemy.active&&c.enemy.spawnId===c.life).map(c=>({dist:Math.hypot(c.point.x-this.h.player.x,c.point.y-this.h.player.y),current:this.focus===c,select:()=>{this.focus=c;this.assistAt=0;this.updateMarker();}})).filter(t=>t.dist<=600);}
  target(range:number,bodyRadius=true):Enemy|null{const e=this.selected;return e&&Math.hypot(e.x-this.h.player.x,e.y-this.h.player.y)<=range+(bodyRadius?e.radius:0)?e:null;}
  pointer(pointer:Phaser.Input.Pointer):boolean{
   // Interactive HUD controls and the fixed joystick remain independent of world targeting.

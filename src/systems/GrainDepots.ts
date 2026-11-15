@@ -76,6 +76,8 @@ export class GrainDepots {
   // —— 点选优先目标（与敌营一致） ——
   get selected(): Enemy | null { const d = this.focus; if (!d) return null; if (d.state !== 'intact' || !this.alive(d) || Math.hypot(d.point.x - this.h.player.x, d.point.y - this.h.player.y) > 600) { this.cancel(); return null; } return d.enemy; }
   cancel() { this.focus = null; this.marker.clear(); }
+  /** 手柄：600 内可锁定的粮草。 */
+  padTargets(): Array<{dist: number; current: boolean; select: () => void}> { return this.depots.filter(d => d.state === 'intact' && this.alive(d)).map(d => ({dist: Math.hypot(d.point.x - this.h.player.x, d.point.y - this.h.player.y), current: this.focus === d, select: () => { this.focus = d; }})).filter(t => t.dist <= 600); }
   target(range: number, bodyRadius = true): Enemy | null { const e = this.selected; return e && Math.hypot(e.x - this.h.player.x, e.y - this.h.player.y) <= range + (bodyRadius ? e.radius : 0) ? e : null; }
   pointer(pointer: Phaser.Input.Pointer): boolean {
     const hud = this.h.scene.input.hitTestPointer(pointer).some(o => (o as Phaser.GameObjects.Image).scrollFactorX === 0); if (hud) return false;

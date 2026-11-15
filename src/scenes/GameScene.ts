@@ -1997,6 +1997,9 @@ export class GameScene extends Phaser.Scene {
     if (this.mode === 'none' && !this.over) {
       if (button === PAD.X) { this.usePotion(); return true; }
       if (button === PAD.Y) { this.legion.cycleOrder(); return true; }
+      // RB：轮流锁定附近的敌营 / 粮草（由近到远）；LB：取消锁定
+      if (button === PAD.RB) { const list = this.padTargets().sort((a, b) => a.dist - b.dist); if (!list.length) return false; const i = list.findIndex(t => t.current); this.padClearTargets(); list[(i + 1) % list.length].select(); return true; }
+      if (button === PAD.LB) { this.padClearTargets(); return true; }
       return false;
     }
     if (button === PAD.B && this.mode === 'pause' && !this.children.getByName('build-panel')) { this.togglePause(); return true; }
@@ -2235,6 +2238,9 @@ export class GameScene extends Phaser.Scene {
 
   /** 成就用：本场属于哪条战线（攻城 / 守城 / 群雄 / 官渡由子类返回）。 */
   protected achievementArc(): string | undefined { return undefined; }
+  /** 手柄锁定目标：子类（有敌营 / 粮草的战场）返回可锁定列表。 */
+  protected padTargets(): Array<{dist: number; current: boolean; select: () => void}> { return []; }
+  protected padClearTargets(): void {}
 
   protected formatTime(seconds: number): string {
     const m = Math.floor(seconds / 60);

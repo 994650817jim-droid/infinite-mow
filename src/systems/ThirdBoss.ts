@@ -6,14 +6,15 @@ export class ThirdBoss{
  state:'approach'|'warn'|'attack'|'recover'|'rage'|'dead'='approach';phase2=false;private at=0;private until=0;private next=0;private index=0;private skill=0;private angle=0;private zones:Zone[]=[];private seen=new Set<string>();private travelled=0;private hitAt=0;
  private gfx:Phaser.GameObjects.Graphics;private corpse?:Phaser.GameObjects.Image;private deathMs=0;
  readonly metrics={charge:0,command:0,thrust:0,ambush:0,flags:0,guards:0,rage:0,damage:0};
- constructor(private h:Host,readonly stage:ThirdStage,now:number){this.gfx=h.scene.add.graphics().setDepth(39);this.next=now+800;h.boss.controlImmune=true;}
+ constructor(private h:Host,readonly stage:ThirdStage,now:number,private look?:{texture:string;name:string;skills?:[string,string,string]}){this.gfx=h.scene.add.graphics().setDepth(39);this.next=now+800;h.boss.controlImmune=true;}
  forceSkill(now:number){this.state='approach';this.next=now;this.update(0,now);}
- get label(){const names=this.stage===1?['铁骑破阵','号令援军','军刀横扫']:this.stage===2?['连环枪击','突刺追击','伏兵包围']:['旗令轰击','亲军护驾','弓阵齐射'];return this.state==='dead'?this.name+'负伤退走':this.state==='rage'?'军势强化 · 躲避下一轮':(this.state==='warn'?'预警 · ':this.state==='recover'?'收势 · 反击机会 · ':'')+names[this.skill];}
- get name(){return THIRD_STAGES[this.stage-1].boss;}
+ get label(){const names=this.look?.skills??(this.stage===1?['铁骑破阵','号令援军','军刀横扫']:this.stage===2?['连环枪击','突刺追击','伏兵包围']:['旗令轰击','亲军护驾','弓阵齐射']);return this.state==='dead'?this.name+'负伤退走':this.state==='rage'?'军势强化 · 躲避下一轮':(this.state==='warn'?'预警 · ':this.state==='recover'?'收势 · 反击机会 · ':'')+names[this.skill];}
+ get name(){return this.look?.name??THIRD_STAGES[this.stage-1].boss;}
+ private get tex(){return this.look?.texture??'third_'+THIRD_STAGES[this.stage-1].id;}
  /** Commander cohesion disperses large-army focus; every soldier attack is still settled. */
  incoming(ally:boolean){return(this.state==='rage'?.25:this.state==='warn'?.6:1)*(ally?1/Math.sqrt(Math.max(1,this.h.army.count/12)):1);}
  hit(now:number){this.hitAt=now+100;}
- private pose(frame:number){const b=this.h.boss;b.sprite.setTexture('third_'+THIRD_STAGES[this.stage-1].id,frame).setDisplaySize(144,144).setOrigin(.5,114/128).setFlipX(frame>=16&&Math.cos(this.angle)<0).setTint(this.hitAt>this.at?0xffbbbb:0xffffff);}
+ private pose(frame:number){const b=this.h.boss;b.sprite.setTexture(this.tex,frame).setDisplaySize(144,144).setOrigin(.5,114/128).setFlipX(frame>=16&&Math.cos(this.angle)<0).setTint(this.hitAt>this.at?0xffbbbb:0xffffff);}
  private zone(x:number,y:number,angle=0,length=0,width=0,radius=0,due=0){this.zones.push({x,y,angle,length,width,radius,due,done:false});}
  private begin(now:number){const b=this.h.boss,p=this.h.player;this.skill=this.index++%3;this.angle=Math.atan2(p.y-b.y,p.x-b.x);this.zones=[];this.seen.clear();this.travelled=0;this.state='warn';this.at=now;this.until=now+(this.stage===2?720:900);
  if(this.stage===1){if(this.skill===0){this.metrics.charge++;this.zone(b.x,b.y,this.angle,340,60);if(this.phase2)this.zone(b.x,b.y,this.angle+.32,340,60);}else if(this.skill===1){this.metrics.command++;for(const side of[-1,1])this.zone(p.x+side*190,p.y+30,0,0,0,40);}else this.zone(b.x,b.y,this.angle,140,110);}
@@ -37,7 +38,7 @@ export class ThirdBoss{
   if(now>=this.until){this.state='recover';this.until=now+650;}
  }else if(this.state==='recover'){this.pose(23);if(now>=this.until){this.state='approach';this.next=now+(this.phase2?1000:1700);}}
  }
- defeat(){this.state='dead';this.gfx.clear();const b=this.h.boss;this.corpse=this.h.scene.add.image(b.x,b.y,'third_'+THIRD_STAGES[this.stage-1].id,28).setDisplaySize(144,144).setOrigin(.5,114/128).setDepth(28);}
+ defeat(){this.state='dead';this.gfx.clear();const b=this.h.boss;this.corpse=this.h.scene.add.image(b.x,b.y,this.tex,28).setDisplaySize(144,144).setOrigin(.5,114/128).setDepth(28);}
  updateDeath(delta:number){if(this.corpse){this.deathMs+=delta;this.corpse.setFrame(28+Math.min(3,Math.floor(this.deathMs/180)));}}
  clear(){this.gfx.clear();}
 }

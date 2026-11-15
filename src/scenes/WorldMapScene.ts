@@ -3,7 +3,7 @@ import {checkWorld} from '../systems/Achievements';
 import {RENDER_SCALE,screenPoint} from '../config';
 import {thirdChapterUnlocked,arcUnlocked} from '../world/WorldStore';
 /** 群雄篇章节点：是否开放、未开放提示、进入的选关场景。 */
-const CAMPAIGNS={qunxiong:{open:()=>thirdChapterUnlocked(),hint:'通关虎牢关后解锁',scene:'ThirdChapterScene'},guandu:{open:()=>arcUnlocked('guandu'),hint:'平定群雄割据后解锁',scene:'GuanduChapterScene'}} as const;
+const CAMPAIGNS={qunxiong:{open:()=>thirdChapterUnlocked(),hint:'通关虎牢关后解锁',scene:'ThirdChapterScene'},guandu:{open:()=>arcUnlocked('guandu'),hint:'平定群雄割据后解锁',scene:'GuanduChapterScene'},chibi:{open:()=>arcUnlocked('chibi'),hint:'官渡之战告捷后解锁',scene:'ChibiChapterScene'}} as const;
 import {isChapterTestRun} from '../systems/ChapterProgress';
 import {worldUnlocked} from '../world/WorldStore';
 import Phaser from 'phaser';

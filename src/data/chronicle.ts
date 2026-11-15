@@ -2,7 +2,7 @@
  * 战役回顾 · 乱世编年：九关的史事摘要（原创撰写，据《后汉书》《三国志》等常见史载概括；
  * 演义情节明确标注为“演义”）。只做展示，不影响玩法。
  */
-export type ChronicleArc = 'huangjin' | 'dongzhuo' | 'qunxiong' | 'guandu';
+export type ChronicleArc = 'huangjin' | 'dongzhuo' | 'qunxiong' | 'guandu' | 'chibi';
 export interface ChronicleStage { code: string; name: string; boss: string; bossTitle: string; seal: string; year: string; story: string; legacy: string }
 export interface ChronicleChapter { arc: ChronicleArc; title: string; years: string; intro: string; stages: ChronicleStage[] }
 
@@ -65,6 +65,21 @@ export const CHRONICLE: ChronicleChapter[] = [
       { code: '4-3', name: '乌巢焚粮', boss: '淳于琼', bossTitle: '乌巢守将', seal: '琼', year: '建安五年 · 200',
         story: '两军相持官渡，曹军乏粮。许攸来投，献计袭乌巢。曹操亲率步骑夜行，火烧袁军屯粮，斩淳于琼；袁军闻讯大溃，袁绍仅率八百骑渡河北归。',
         legacy: '北方大势由此归曹，袁氏渐衰。' },
+    ],
+  },
+  {
+    arc: 'chibi', title: '第五章 · 赤壁之战', years: '公元208年',
+    intro: '曹操平定北方，挥师南下荆州；孙刘联军据长江以拒，火攻赤壁，天下三分之势由此而定。',
+    stages: [
+      { code: '5-1', name: '长坂突围', boss: '曹纯', bossTitle: '虎豹骑统领', seal: '纯', year: '建安十三年 · 208',
+        story: '刘琮举荆州降曹，刘备率军民南走。曹操亲选精骑五千，由曹纯统率虎豹骑一日一夜行三百余里，追及于当阳长坂。赵云怀抱幼主血战突围，张飞据水断桥，刘备得以脱身。',
+        legacy: '刘备辗转至夏口，与孙权遣来的鲁肃结好，孙刘联盟由此而起。' },
+      { code: '5-2', name: '赤壁鏖兵', boss: '蔡瑁', bossTitle: '荆州水军都督', seal: '瑁', year: '建安十三年 · 208',
+        story: '曹军得荆州水军，顺江东下，与孙刘联军遇于赤壁。曹军以铁索连舟，黄盖献火攻之策，诈降而以火船乘东南风直冲曹营，烟炎张天，人马烧溺死者甚众。',
+        legacy: '曹操大败北还，再无力南图江东。' },
+      { code: '5-3', name: '江陵夺城', boss: '曹仁', bossTitle: '征南将军', seal: '仁', year: '建安十四年 · 209',
+        story: '曹操北归，留曹仁守江陵。周瑜率军围攻经年，曹仁坚守不下，亲率数十骑出城救出被围部将，军中称其为天人。终因孤城难守，曹仁弃城北撤。',
+        legacy: '孙刘分据荆州，三分天下之势已成。' },
     ],
   },
 ];

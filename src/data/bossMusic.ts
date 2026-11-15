@@ -39,6 +39,9 @@ export const BOSS_PROFILES: Record<string, BossProfile> = {
   颜良: P('颜良', '河北上将', 112, 60, ZHI, [0, 0, 3, 3, 0, 4, 2, 0], 'suona', 'heavy', ['horn', 'gong']),
   文丑: P('文丑', '河北名将', 124, 62, ZHI, [0, 3, 0, 4, 0, 3, 1, 0], 'pipa', 'gallop', ['horn']),
   淳于琼: P('淳于琼', '乌巢守将', 100, 63, JUE, [0, 0, 2, 2, 3, 3, 1, 0], 'flute', 'tense', ['fire']),
+  曹纯: P('曹纯', '虎豹骑统领', 136, 61, SHANG, [0, 0, 4, 3, 0, 0, 2, 1], 'pipa', 'gallop', ['horn']),
+  蔡瑁: P('蔡瑁', '荆州水军都督', 94, 59, YU, [0, 2, 3, 2, 0, 4, 3, 0], 'flute', 'tense', ['fire', 'gong']),
+  曹仁: P('曹仁', '天人之将', 108, 60, GONG, [0, 0, 3, 3, 4, 4, 1, 0], 'suona', 'heavy', ['earth', 'gong']),
 };
 /** 攻城 / 守城等非固定首领共用。 */
 export const SIEGE_PROFILE: BossProfile = P('守将', '城池守将', 108, 62, SHANG, [0, 0, 3, 2, 0, 4, 3, 0], 'pipa', 'march', ['horn']);

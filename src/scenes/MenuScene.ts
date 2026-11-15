@@ -187,7 +187,7 @@ export class MenuScene extends Phaser.Scene {
     this.homeSaveButton(navX(0),navRowY);
     if(IS_DESKTOP_APP)this.homeQuitButton(navX(4),navRowY);
     // 战役回顾：乱世编年（已平定的关显示史录，未打到的锁住）；“前往选关”沿用原入口。
-    text(navX(2),navRowY,'战役回顾',D?18:20,'#e5ccb0').setLetterSpacing(D?2:0).setPadding(16,16).setInteractive({useHandCursor:true}).setName('home-review').on('pointerdown',()=>{if(this.children.getByName('campaign-chronicle'))return;new CampaignChronicle(this,arc=>{if(arc==='qunxiong'){this.scene.start('ThirdChapterScene');return;}if(arc==='guandu'){this.scene.start('GuanduChapterScene');return;}this.registry.set('menuChapterPicker',true);this.scene.restart();},(arc,stage)=>this.replayStage(arc,stage));});
+    text(navX(2),navRowY,'战役回顾',D?18:20,'#e5ccb0').setLetterSpacing(D?2:0).setPadding(16,16).setInteractive({useHandCursor:true}).setName('home-review').on('pointerdown',()=>{if(this.children.getByName('campaign-chronicle'))return;new CampaignChronicle(this,arc=>{if(arc==='qunxiong'){this.scene.start('ThirdChapterScene');return;}if(arc==='chibi'){this.scene.start('ChibiChapterScene');return;}if(arc==='guandu'){this.scene.start('GuanduChapterScene');return;}this.registry.set('menuChapterPicker',true);this.scene.restart();},(arc,stage)=>this.replayStage(arc,stage));});
     text(navX(3),navRowY,'设置',D?18:20,'#e5ccb0').setLetterSpacing(4).setPadding(18,16).setInteractive({useHandCursor:true}).setName('home-settings').on('pointerdown',()=>this.openHomeSettings());
     text(navX(1),navRowY,'图鉴',D?18:20,'#e5ccb0').setLetterSpacing(4).setOrigin(.5,.5).setPadding(12,16).setInteractive({useHandCursor:true}).setName('home-codex').on('pointerdown',()=>{if(this.children.getByName('game-codex'))return;this.ensureHomeArt(true);new GameCodex(this,index=>{this.selectedChar=index;this.registry.set('heroConfirmed',true);try{localStorage.setItem('im_last_hero',CHARACTERS[index].id);}catch{}this.renderSelection();});});
     // 成就入口（右上角；天下已开时排在主城 / 天下地图左侧）
@@ -394,7 +394,7 @@ export class MenuScene extends Phaser.Scene {
   }
 
   /** 战役回顾“再战/出征”：以当前武将直接出征指定关（只允许已解锁的关；通关进度只增不减）。 */
-  private replayStage(arc:'huangjin'|'dongzhuo'|'qunxiong'|'guandu',stage:number):void{
+  private replayStage(arc:'huangjin'|'dongzhuo'|'qunxiong'|'guandu'|'chibi',stage:number):void{
     if((arc!=='huangjin'&&arc!=='dongzhuo')||![1,2,3].includes(stage))return;
     if(arc==='huangjin'){if(!yellowStageUnlocked(stage)&&!isChapterTestRun())return;this.selectedChapter='huangjin';this.selectedStage=stage as YellowStage;}
     else{if(!dongzhuoStageUnlocked(stage)&&!isChapterTestRun())return;this.selectedChapter='hulao';this.selectedWestStage=stage as YellowStage;}

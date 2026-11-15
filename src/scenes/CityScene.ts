@@ -33,7 +33,7 @@ export class CityScene extends Phaser.Scene {
  private mapRect={x:0,y:0,w:0,h:0};private sideRect={x:0,y:0,w:0,h:0};
  constructor(){super('CityScene');}
  init(){D=W>600;if(D){this.mapRect={x:20,y:74,w:612,h:396};this.sideRect={x:646,y:74,w:W-666,h:396};}else{const top=112,avail=H-top-170-12,mh=Math.round(Math.min(470,avail*.5));this.mapRect={x:14,y:top,w:W-28,h:mh};this.sideRect={x:14,y:top+mh+12,w:W-28,h:avail-mh};}}
- preload(){if(!worldUnlocked()&&!isChapterTestRun())return;worldAssets(this,'city_art','assets/world/camp.webp');if(!this.textures.exists('art_panel'))this.load.image('art_panel','assets/processed/overhaul/bronze-panel-mobile.png');
+ preload(){if(!worldUnlocked()&&!isChapterTestRun())return;worldAssets(this,'city_art','assets/world/camp.webp');worldAssets(this,'town_ground','assets/town/ground.webp');if(!this.textures.exists('art_panel'))this.load.image('art_panel','assets/processed/overhaul/bronze-panel-mobile.png');
   for(const lv of TOWN_ART_LEVELS)for(const id of Object.keys(TOWN_BUILDINGS)){const key=`town_${id}_${lv}`;if(!this.textures.exists(key))this.load.image(key,`assets/town/${id}_${lv}.webp`);}}
  create(){playMenuMusic(this);
   if(!worldUnlocked()&&!isChapterTestRun()){this.registry.set('loadBattle',true);this.scene.start(this.registry.get('battleReady')?'MenuScene':'BootScene');return;}
@@ -47,10 +47,13 @@ export class CityScene extends Phaser.Scene {
   if(!D)this.top.setPosition(24,90).setOrigin(0,.5);
   // 地图底：程序画的营地地面、道路（T4 有小镇底图时替换）
   const r=this.mapRect;
-  if(this.textures.exists('town_ground'))this.add.image(r.x+r.w/2,r.y+r.h/2,'town_ground').setDisplaySize(r.w,r.h);
-  else{const g=this.add.graphics();g.fillStyle(0x6b5a3c,1).fillRoundedRect(r.x,r.y,r.w,r.h,10);for(let i=0;i<140;i++){g.fillStyle(i%3?0x5e4f35:0x77673f,.35).fillCircle(r.x+((i*97)%r.w),r.y+((i*53)%r.h),2+(i%4));}
-   g.fillStyle(0x8f7a55,.85);g.fillRect(r.x,r.y+r.h/3-6,r.w,12).fillRect(r.x,r.y+r.h*2/3-6,r.w,12);for(let c=1;c<4;c++)g.fillRect(r.x+r.w*c/4-5,r.y,10,r.h);
-   g.lineStyle(2,0xb3935b,.8).strokeRoundedRect(r.x,r.y,r.w,r.h,10);}
+  // 地面：可平铺的泥地贴图（public/assets/town/ground.webp，ChatGPT 生成）；缺图时用程序画的底色
+  {const g=this.add.graphics();
+   if(this.textures.exists('town_ground')){const ts=this.add.tileSprite(r.x,r.y,r.w,r.h,'town_ground').setOrigin(0).setTileScale(.42);const mask=this.make.graphics({x:0,y:0}).fillStyle(0xffffff).fillRoundedRect(r.x,r.y,r.w,r.h,10);ts.setMask(mask.createGeometryMask());this.events.once('shutdown',()=>mask.destroy());}
+   else{g.fillStyle(0x6b5a3c,1).fillRoundedRect(r.x,r.y,r.w,r.h,10);for(let i=0;i<140;i++){g.fillStyle(i%3?0x5e4f35:0x77673f,.35).fillCircle(r.x+((i*97)%r.w),r.y+((i*53)%r.h),2+(i%4));}}
+   // 道路与外框
+   const road=this.add.graphics();road.fillStyle(0xd9bf8a,this.textures.exists('town_ground')?.32:.85);road.fillRect(r.x,r.y+r.h/3-6,r.w,12).fillRect(r.x,r.y+r.h*2/3-6,r.w,12);for(let c=1;c<4;c++)road.fillRect(r.x+r.w*c/4-5,r.y,10,r.h);
+   road.lineStyle(2,0xb3935b,.8).strokeRoundedRect(r.x,r.y,r.w,r.h,10);}
   this.map=this.add.container(0,0);this.side=this.add.container(0,0);
   this.add.image(this.sideRect.x+this.sideRect.w/2,this.sideRect.y+this.sideRect.h/2,warPanelTexture(this,this.sideRect.w,this.sideRect.h)).setDisplaySize(this.sideRect.w+16,this.sideRect.h+16).setDepth(-1);
   // 底部导航：电脑一行 6 个；手机 3 列 × 2 行
@@ -91,10 +94,10 @@ export class CityScene extends Phaser.Scene {
   for(let i=0;i<PLOT_COUNT;i++){
    const cx=r.x+cw*(i%4)+cw/2,cy=r.y+ch*Math.floor(i/4)+ch/2,pw=cw-22,ph=ch-24,p=t.plots[i],locked=i>=open&&!p,sel=i===this.selected;
    const g=this.add.graphics();
-   g.fillStyle(locked?0x3a3328:p?0x857150:0x9c8a62,locked?.55:.9).fillRoundedRect(cx-pw/2,cy-ph/2,pw,ph,8);
+   g.fillStyle(locked?0x2a241c:p?0x857150:0x9c8a62,locked?.62:p?.45:.6).fillRoundedRect(cx-pw/2,cy-ph/2,pw,ph,8);
    g.lineStyle(sel?3:1.5,sel?0xffd76a:locked?0x5a5040:0xc9ad74,sel?1:.8).strokeRoundedRect(cx-pw/2,cy-ph/2,pw,ph,8);
    this.map.add(g);
-   if(locked){this.map.add(txt(this,cx,cy,'🔒\n城墙扩地',12,'#8a7f6a').setOrigin(.5).setAlign('center'));}
+   if(locked){this.map.add(txt(this,cx,cy,'🔒\n城墙扩地',12,'#d8cbb0').setOrigin(.5).setAlign('center'));}
    else if(p){this.drawingPlot=i;this.drawBuilding(p.id,p.level,cx,cy-8,pw,ph);this.map.add(txt(this,cx,cy+ph/2-14,`${TOWN_BUILDINGS[p.id].name} Lv${p.level}`,13,'#fff1cf').setOrigin(.5).setShadow(0,1,'#000',3,true,true));}
    else this.map.add(txt(this,cx,cy,'＋ 空地',14,'#f3e2b8').setOrigin(.5).setAlpha(.85));
    const hit=this.add.rectangle(cx,cy,pw,ph,0,0.001).setName(`plot-${i}`);

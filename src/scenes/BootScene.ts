@@ -16,8 +16,10 @@ export class BootScene extends Phaser.Scene {
     this.load.spritesheet('build_vfx','assets/build-vfx/styles-ai-v1.png',{frameWidth:64,frameHeight:64});
     this.load.spritesheet('refined_spear','assets/combat-refined/spear-sequence.png',{frameWidth:384,frameHeight:64});
     this.load.spritesheet('refined_impact','assets/combat-refined/impact-sequence.png',{frameWidth:64,frameHeight:64});
-    for(const id of GROWTH_ICON_IDS)this.load.image('growth_icon_'+id,'assets/growth-icons/'+id+'.png');
-    for(const id of [...Object.keys(TACTICS),...Object.keys(TREASURES)])this.load.image('build_icon_'+id,'assets/build/'+id+'.png');
+    // 三选一 / 增益栏图标：2026-11-14 起使用 ChatGPT 生成的厚涂图标（assets/upgrade-icons，tools/build-upgrade-icons.mjs 切图）；
+    // 旧像素图标仍保留在 growth-icons / build 目录，未被删除。
+    for(const id of GROWTH_ICON_IDS)this.load.image('growth_icon_'+id,'assets/upgrade-icons/'+id+'.webp');
+    for(const id of [...Object.keys(TACTICS),...Object.keys(TREASURES)])this.load.image('build_icon_'+id,'assets/upgrade-icons/'+id+'.webp');
     const params=new URLSearchParams(window.location.search);
     this.shellOnly=false;
     if(this.shellOnly){if(!this.textures.exists('art_panel'))this.load.image('art_panel','assets/processed/overhaul/bronze-panel-mobile.png');return;}
@@ -116,9 +118,8 @@ export class BootScene extends Phaser.Scene {
     this.load.image('ui_card', 'assets/processed/ui_card.png');
     this.load.image('ui_panel', 'assets/processed/ui_panel.png');
     this.load.image('ui_button', 'assets/processed/ui_button.png');
-    this.load.image('icon_1', 'assets/processed/icon_1.png');
-    this.load.image('icon_2', 'assets/processed/icon_2.png');
-    this.load.image('icon_3', 'assets/processed/icon_3.png');
+    // 本命武器 / 通用被动 / 稀有：新厚涂图标（程序化 icon_* 在已存在时不会再生成）
+    for(const [key,id] of [['icon_1','weapon_spear'],['icon_2','weapon_crossbow'],['icon_3','weapon_flame'],['icon_guandao','weapon_guandao'],['icon_passive','passive'],['icon_rare','rare']] as const)this.load.image(key,'assets/upgrade-icons/'+id+'.webp');
   }
 
   create(): void {
@@ -173,7 +174,9 @@ export class BootScene extends Phaser.Scene {
     // Text textures created later retain linear filtering for legible small Chinese text.
     for (const key of this.textures.getTextureKeys()) {
       this.textures.get(key).setFilter((key.startsWith('ground') && !key.startsWith('ground_overhaul')) || key === 'shadow'
-        ||key.startsWith('epic_') ? Phaser.Textures.FilterMode.LINEAR : Phaser.Textures.FilterMode.NEAREST);
+        ||key.startsWith('epic_')
+        // 厚涂图标（128px 缩到约 52px 显示）用线性过滤，避免锯齿
+        ||key.startsWith('growth_icon_')||key.startsWith('build_icon_')||/^icon_(1|2|3|guandao|passive|rare)$/.test(key) ? Phaser.Textures.FilterMode.LINEAR : Phaser.Textures.FilterMode.NEAREST);
     }
     for(const key of ['huaxiong_walk','huaxiong_attack']){if(!this.textures.exists(key))continue;const t=this.textures.get(key);['down','left','right','up'].forEach((dir,row)=>{for(let col=0;col<4;col++)if(!t.has(dir+'_'+col))t.add(dir+'_'+col,0,col*128,row*128,128,128);});}
     createReadableTextures(this);
@@ -181,6 +184,6 @@ export class BootScene extends Phaser.Scene {
     if (hint) hint.style.display = 'none';
     this.registry.set('battleReady',true);
     this.registry.set('battleTextureKeys',this.textures.getTextureKeys().filter(k=>!k.startsWith('__')&&!k.startsWith('ui_war_')&&k!=='art_panel'&&k!=='icon_guandao'));
-    if(import.meta.env.DEV&&new URLSearchParams(location.search).get('dev')==='1'&&new URLSearchParams(location.search).has('thirdStage')){this.scene.start('ThirdChapterScene');}else if(this.registry.get('pendingThird')){this.registry.remove('pendingThird');this.scene.start('ThirdChapterScene');}else this.scene.start('MenuScene');
+    if(import.meta.env.DEV&&new URLSearchParams(location.search).get('dev')==='1'&&new URLSearchParams(location.search).has('thirdStage')){this.scene.start('ThirdChapterScene');}else if(this.registry.get('pendingThird')){this.registry.remove('pendingThird');this.scene.start('ThirdChapterScene');}else if(this.registry.get('pendingWarlord')){const key=String(this.registry.get('pendingWarlord'));this.registry.remove('pendingWarlord');this.scene.start(key);}else this.scene.start('MenuScene');
   }
 }

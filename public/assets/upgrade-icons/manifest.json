@@ -1,0 +1,710 @@
+{
+ "source": "ChatGPT 生成（2026-11-14，用户确认保存），originals/sheet-1..4.png",
+ "size": 128,
+ "icons": [
+  {
+   "id": "deflect",
+   "bytes": 8388,
+   "bbox": [
+    46,
+    56,
+    253,
+    238
+   ],
+   "edge": false
+  },
+  {
+   "id": "rebound",
+   "bytes": 10728,
+   "bbox": [
+    39,
+    48,
+    247,
+    255
+   ],
+   "edge": false
+  },
+  {
+   "id": "watch",
+   "bytes": 8646,
+   "bbox": [
+    45,
+    49,
+    212,
+    259
+   ],
+   "edge": false
+  },
+  {
+   "id": "coordination",
+   "bytes": 8942,
+   "bbox": [
+    26,
+    45,
+    248,
+    263
+   ],
+   "edge": false
+  },
+  {
+   "id": "rally",
+   "bytes": 9970,
+   "bbox": [
+    45,
+    33,
+    259,
+    264
+   ],
+   "edge": false
+  },
+  {
+   "id": "breakout",
+   "bytes": 9346,
+   "bbox": [
+    30,
+    35,
+    261,
+    266
+   ],
+   "edge": false
+  },
+  {
+   "id": "snare",
+   "bytes": 8840,
+   "bbox": [
+    7,
+    62,
+    281,
+    216
+   ],
+   "edge": false
+  },
+  {
+   "id": "traction",
+   "bytes": 6570,
+   "bbox": [
+    13,
+    63,
+    262,
+    226
+   ],
+   "edge": false
+  },
+  {
+   "id": "confinement",
+   "bytes": 8778,
+   "bbox": [
+    36,
+    40,
+    272,
+    226
+   ],
+   "edge": false
+  },
+  {
+   "id": "stored_edge",
+   "bytes": 6798,
+   "bbox": [
+    29,
+    18,
+    251,
+    267
+   ],
+   "edge": false
+  },
+  {
+   "id": "heavy_break",
+   "bytes": 8730,
+   "bbox": [
+    4,
+    19,
+    268,
+    263
+   ],
+   "edge": true
+  },
+  {
+   "id": "concentration",
+   "bytes": 4090,
+   "bbox": [
+    10,
+    71,
+    269,
+    127
+   ],
+   "edge": false
+  },
+  {
+   "id": "pursuit",
+   "bytes": 6206,
+   "bbox": [
+    38,
+    68,
+    268,
+    146
+   ],
+   "edge": false
+  },
+  {
+   "id": "chain",
+   "bytes": 9088,
+   "bbox": [
+    21,
+    14,
+    263,
+    247
+   ],
+   "edge": false
+  },
+  {
+   "id": "momentum",
+   "bytes": 9392,
+   "bbox": [
+    13,
+    4,
+    274,
+    267
+   ],
+   "edge": true
+  },
+  {
+   "id": "eagle",
+   "bytes": 9198,
+   "bbox": [
+    5,
+    11,
+    270,
+    253
+   ],
+   "edge": false
+  },
+  {
+   "id": "sunder",
+   "bytes": 10930,
+   "bbox": [
+    23,
+    19,
+    281,
+    278
+   ],
+   "edge": false
+  },
+  {
+   "id": "reap",
+   "bytes": 10468,
+   "bbox": [
+    11,
+    12,
+    284,
+    293
+   ],
+   "edge": false
+  },
+  {
+   "id": "windstep",
+   "bytes": 10916,
+   "bbox": [
+    15,
+    18,
+    281,
+    282
+   ],
+   "edge": false
+  },
+  {
+   "id": "flank",
+   "bytes": 9434,
+   "bbox": [
+    17,
+    33,
+    273,
+    262
+   ],
+   "edge": false
+  },
+  {
+   "id": "swift",
+   "bytes": 9626,
+   "bbox": [
+    16,
+    31,
+    276,
+    241
+   ],
+   "edge": false
+  },
+  {
+   "id": "ember",
+   "bytes": 8614,
+   "bbox": [
+    39,
+    19,
+    236,
+    264
+   ],
+   "edge": false
+  },
+  {
+   "id": "spread",
+   "bytes": 7614,
+   "bbox": [
+    22,
+    19,
+    273,
+    248
+   ],
+   "edge": false
+  },
+  {
+   "id": "hotwind",
+   "bytes": 10760,
+   "bbox": [
+    19,
+    21,
+    280,
+    265
+   ],
+   "edge": false
+  },
+  {
+   "id": "iron_mirror",
+   "bytes": 7868,
+   "bbox": [
+    21,
+    13,
+    275,
+    280
+   ],
+   "edge": false
+  },
+  {
+   "id": "army_seal",
+   "bytes": 8624,
+   "bbox": [
+    30,
+    13,
+    256,
+    274
+   ],
+   "edge": false
+  },
+  {
+   "id": "general_tally",
+   "bytes": 8696,
+   "bbox": [
+    34,
+    3,
+    254,
+    289
+   ],
+   "edge": true
+  },
+  {
+   "id": "return_drum",
+   "bytes": 9316,
+   "bbox": [
+    13,
+    18,
+    277,
+    273
+   ],
+   "edge": false
+  },
+  {
+   "id": "control_disk",
+   "bytes": 9230,
+   "bbox": [
+    27,
+    22,
+    263,
+    262
+   ],
+   "edge": false
+  },
+  {
+   "id": "stored_jade",
+   "bytes": 8398,
+   "bbox": [
+    30,
+    7,
+    250,
+    282
+   ],
+   "edge": false
+  },
+  {
+   "id": "soul_bell",
+   "bytes": 10344,
+   "bbox": [
+    13,
+    5,
+    272,
+    292
+   ],
+   "edge": false
+  },
+  {
+   "id": "slayer_tally",
+   "bytes": 7204,
+   "bbox": [
+    8,
+    50,
+    288,
+    198
+   ],
+   "edge": false
+  },
+  {
+   "id": "horse_order",
+   "bytes": 9666,
+   "bbox": [
+    23,
+    13,
+    266,
+    297
+   ],
+   "edge": true
+  },
+  {
+   "id": "wildfire_lamp",
+   "bytes": 10154,
+   "bbox": [
+    25,
+    18,
+    269,
+    285
+   ],
+   "edge": false
+  },
+  {
+   "id": "breaker_jade",
+   "bytes": 9560,
+   "bbox": [
+    27,
+    9,
+    275,
+    294
+   ],
+   "edge": false
+  },
+  {
+   "id": "revival_jade",
+   "bytes": 10680,
+   "bbox": [
+    14,
+    15,
+    287,
+    290
+   ],
+   "edge": false
+  },
+  {
+   "id": "dragon_gallop",
+   "bytes": 9004,
+   "bbox": [
+    13,
+    16,
+    292,
+    283
+   ],
+   "edge": false
+  },
+  {
+   "id": "cloud_pierce",
+   "bytes": 10210,
+   "bbox": [
+    3,
+    3,
+    308,
+    299
+   ],
+   "edge": true
+  },
+  {
+   "id": "dragon_charge",
+   "bytes": 9664,
+   "bbox": [
+    3,
+    7,
+    308,
+    304
+   ],
+   "edge": true
+  },
+  {
+   "id": "dragging_blade",
+   "bytes": 9188,
+   "bbox": [
+    3,
+    11,
+    300,
+    280
+   ],
+   "edge": true
+  },
+  {
+   "id": "steady_aim",
+   "bytes": 7154,
+   "bbox": [
+    9,
+    12,
+    291,
+    275
+   ],
+   "edge": false
+  },
+  {
+   "id": "pearl_volley",
+   "bytes": 9270,
+   "bbox": [
+    3,
+    15,
+    308,
+    286
+   ],
+   "edge": true
+  },
+  {
+   "id": "wildfire",
+   "bytes": 10734,
+   "bbox": [
+    3,
+    3,
+    307,
+    299
+   ],
+   "edge": true
+  },
+  {
+   "id": "eight_trigrams",
+   "bytes": 10150,
+   "bbox": [
+    7,
+    8,
+    297,
+    281
+   ],
+   "edge": false
+  },
+  {
+   "id": "might",
+   "bytes": 7420,
+   "bbox": [
+    7,
+    3,
+    276,
+    301
+   ],
+   "edge": true
+  },
+  {
+   "id": "quickness",
+   "bytes": 11070,
+   "bbox": [
+    3,
+    10,
+    294,
+    277
+   ],
+   "edge": true
+  },
+  {
+   "id": "critical",
+   "bytes": 8930,
+   "bbox": [
+    3,
+    3,
+    308,
+    291
+   ],
+   "edge": true
+  },
+  {
+   "id": "constitution",
+   "bytes": 9938,
+   "bbox": [
+    3,
+    3,
+    308,
+    297
+   ],
+   "edge": true
+  },
+  {
+   "id": "agility",
+   "bytes": 9488,
+   "bbox": [
+    23,
+    11,
+    269,
+    288
+   ],
+   "edge": false
+  },
+  {
+   "id": "points",
+   "bytes": 10094,
+   "bbox": [
+    11,
+    17,
+    292,
+    289
+   ],
+   "edge": false
+  },
+  {
+   "id": "rejuvenation",
+   "bytes": 8434,
+   "bbox": [
+    12,
+    21,
+    274,
+    278
+   ],
+   "edge": false
+  },
+  {
+   "id": "berserk",
+   "bytes": 8972,
+   "bbox": [
+    9,
+    16,
+    286,
+    287
+   ],
+   "edge": false
+  },
+  {
+   "id": "tiger_tally",
+   "bytes": 7500,
+   "bbox": [
+    14,
+    48,
+    291,
+    205
+   ],
+   "edge": false
+  },
+  {
+   "id": "heart_mirror",
+   "bytes": 9560,
+   "bbox": [
+    11,
+    10,
+    294,
+    285
+   ],
+   "edge": false
+  },
+  {
+   "id": "wind_boots",
+   "bytes": 9984,
+   "bbox": [
+    14,
+    9,
+    289,
+    280
+   ],
+   "edge": false
+  },
+  {
+   "id": "hp",
+   "bytes": 9856,
+   "bbox": [
+    7,
+    18,
+    295,
+    278
+   ],
+   "edge": false
+  },
+  {
+   "id": "pickup",
+   "bytes": 9412,
+   "bbox": [
+    11,
+    11,
+    289,
+    270
+   ],
+   "edge": false
+  },
+  {
+   "id": "recovery",
+   "bytes": 8780,
+   "bbox": [
+    29,
+    3,
+    253,
+    279
+   ],
+   "edge": true
+  },
+  {
+   "id": "weapon_spear",
+   "bytes": 8670,
+   "bbox": [
+    9,
+    3,
+    296,
+    295
+   ],
+   "edge": true
+  },
+  {
+   "id": "weapon_crossbow",
+   "bytes": 9050,
+   "bbox": [
+    8,
+    14,
+    300,
+    270
+   ],
+   "edge": false
+  },
+  {
+   "id": "weapon_flame",
+   "bytes": 11308,
+   "bbox": [
+    14,
+    3,
+    291,
+    295
+   ],
+   "edge": true
+  },
+  {
+   "id": "weapon_guandao",
+   "bytes": 9756,
+   "bbox": [
+    18,
+    3,
+    272,
+    297
+   ],
+   "edge": true
+  },
+  {
+   "id": "passive",
+   "bytes": 9468,
+   "bbox": [
+    16,
+    3,
+    286,
+    291
+   ],
+   "edge": true
+  },
+  {
+   "id": "rare",
+   "bytes": 9656,
+   "bbox": [
+    9,
+    5,
+    285,
+    291
+   ],
+   "edge": false
+  }
+ ]
+}

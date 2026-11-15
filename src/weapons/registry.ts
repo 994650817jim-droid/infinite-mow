@@ -185,6 +185,14 @@ export const WEAPON_BEHAVIORS: Record<WeaponId, (host: WeaponHost, weapon: Weapo
       .filter((e) => e.active && Math.hypot(e.x - ox, e.y - oy) <= Math.min(220, reachBase) + e.radius)
       .sort((a, b) => Math.hypot(a.x - host.player.x, a.y - host.player.y) - Math.hypot(b.x - host.player.x, b.y - host.player.y));
     if(priority){const index=targets.indexOf(priority);if(index>=0)targets.splice(index,1);targets.unshift(priority);}
+    // 首领 / 精锐优先：每轮至少一枪留给刺程内最近的首领（没有首领时为精锐）。
+    // 原规则每枪先分给最近的不同敌人，首领身边的小兵会吸走全部枪（实测整局仅命中首领 0~11 次）。
+    let focus: Enemy | null = null;
+    for (const e of targets) {
+      if (e === priority || (e.kind !== 'boss' && e.kind !== 'elite')) continue;
+      if (!focus || (e.kind === 'boss' && focus.kind !== 'boss')) focus = e; // targets 已按距离排序
+    }
+    if (focus) { targets.splice(targets.indexOf(focus), 1); targets.splice(priority && targets[0] === priority ? 1 : 0, 0, focus); }
     if (!targets.length) return;
     const aim = targets[0];
     const aimX = aim.x - host.player.x, aimY = aim.y - host.player.y;
@@ -220,7 +228,8 @@ export const WEAPON_BEHAVIORS: Record<WeaponId, (host: WeaponHost, weapon: Weapo
         .setDepth(40)
         .setVisible(false);
       host.spearShots.push({
-        img, sx, sy, dirX, dirY,priority:target===priority?priority:undefined,priorityLife:priority?.spawnId,
+        // 指向营寨优先目标或首领/精锐的那一枪，命中判定先结算该目标，避免单枪上限被沿途小兵占满
+        img, sx, sy, dirX, dirY,priority:target===priority||target===focus?target:undefined,priorityLife:target.spawnId,
         len: spearLength, halfWidth: pierce.width / 2, width: pierce.width, cap: pierce.cap + mastery,
         hit: new Set<number>(), roundHit,
         elapsed: 0, delay: i * 0.025, done: false,
@@ -389,7 +398,7 @@ export const WEAPON_BEHAVIORS: Record<WeaponId, (host: WeaponHost, weapon: Weapo
       const burn=growth.masteries.wildfire;
       if(burn)host.martialField(cx,cy,radius*(burn===3?1.1:1),damage,[1000,1800,2500][burn-1],burn);
       host.sfx.play('flameBoom');
-      host.cameras.main.shake(150, 0.005);
+      // 2026-11-14 用户要求：诸葛亮战旗爆炸不再震屏（高频普攻震屏易疲劳）；爆炸特效与音效保留。
       const candidates = host.grid.query(cx, cy, radius + 30);
       for (const enemy of candidates) {
         if (!enemy.active) continue;

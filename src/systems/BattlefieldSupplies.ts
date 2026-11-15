@@ -85,6 +85,13 @@ export class BattlefieldSupplies {
   slot.halfW=58;slot.halfH=22;slot.offsetY=-20;slot.shadow.setVisible(false);
   return slot.enemy;
  }
+ /** 第四章袁军粮草（粮仓 frame 1 / 粮垛 frame 16 / 辎重车 frame 24）：与敌营同一套武器命中、碰撞、破坏特效与残骸。 */
+ spawnDepot(x:number,y:number,hp:number,frame:1|16|24,size:number):Enemy|null {
+  const slot=this.freeSlot();if(!slot)return null;
+  this.place(slot,`fixed-depot-${x},${y}`,x,y,frame,size);
+  slot.enemy.hp=slot.enemy.maxHp=hp;slot.enemy.def={...slot.enemy.def,hp,radius:size*.34};
+  return slot.enemy;
+ }
  onBroken(enemy:Enemy):void {
   const crate=this.crates.find(c=>c.enemy===enemy&&c.life===enemy.spawnId);if(!crate||!crate.cell||this.broken.has(crate.cell))return;
   this.broken.add(crate.cell);crate.cell=null;crate.shadow.setVisible(false);

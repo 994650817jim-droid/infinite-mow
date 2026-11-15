@@ -1,4 +1,5 @@
 import {playMenuMusic,menuMusic} from '../systems/Music';
+import {uiSfx} from '../systems/Sfx';
 import {GameCodex} from '../ui/GameCodex';
 import {HeroWarCard} from '../ui/HeroWarCard';
 import {CampaignChronicle} from '../ui/CampaignChronicle';
@@ -165,15 +166,21 @@ export class MenuScene extends Phaser.Scene {
     text(cx,D?210:758+this.padY,save.cleared.hulao?'天下已开。重整兵马，再赴征途。':west?'群雄会盟，关隘烽烟。挥师西进，问鼎中原。':'黄巾四起，烽火蔓延。整备义军，踏上征途。',14,'#e2d4bd').setShadow(0,1,'#0b0604',4,true,true).setWordWrapWidth(D?310:W-96).setAlign('center');
     this.homeCard=new HeroWarCard(this,D?80:104,D?127:180+this.padY,D?300:332,D?321:410);this.homeCard.setSelected(true);this.homeCard.root.setName('current-hero-card');
     // 点击武将卷轴直接打开“更换武将”（原为折叠卡片，卷轴折叠态显示破碎，已取消）。
-    this.registry.remove('heroCardFolded');
+    // 点击卷轴：收起/展开（状态保留到返回首页）；更换武将只走下方按钮
+    const startFolded=this.registry.get('heroCardFolded')===true;if(startFolded)this.homeCard.setFolded(true);
     this.homePortrait=this.homeCard.art;this.heroName=this.homeCard.name;this.weapon=this.homeCard.weapon;
     this.passiveName=text(-1000,-1000,'',13).setVisible(false);this.passive=text(-1000,-1000,'',13).setVisible(false);
     const navY=D?484:631+this.padY;
     const heroEntry=homeCommand(this,D?230:W/2,navY,D?220:220,D?46:64,'更换武将');const pick=heroEntry.hit.setName('choose-hero');this.heroEntryPaint=heroEntry.paint;
+    // 卷轴收起时，“更换武将”跟着卷轴上移（与卷轴底保持原间距）；展开时回到原位
+    const card=this.homeCard,entryY=(folded:boolean)=>navY-(card.height-card.heightWhen(folded));
+    if(startFolded)heroEntry.setY(entryY(true));
+    card.hit.on('pointerup',()=>{const next=!card.isFolded;this.registry.set('heroCardFolded',next);card.setFolded(next,true);const sfx=uiSfx();sfx.unlock();sfx.play('uiClick');
+      const from=heroEntry.y,to=entryY(next);this.tweens.addCounter({from:0,to:1,duration:380,ease:'Cubic.easeInOut',onUpdate:tw=>heroEntry.setY(from+(to-from)*(tw.getValue()??0))});});
     // 战役回顾：乱世编年（已平定的关显示史录，未打到的锁住）；“前往选关”沿用原入口。
-    text(D?cx:W*.36,D?476:924+this.padY,'战役回顾',D?18:20,'#e5ccb0').setLetterSpacing(D?2:0).setPadding(16,16).setInteractive({useHandCursor:true}).setName('home-review').on('pointerdown',()=>{if(this.children.getByName('campaign-chronicle'))return;new CampaignChronicle(this,arc=>{if(arc==='qunxiong'){this.scene.start('ThirdChapterScene');return;}this.registry.set('menuChapterPicker',true);this.scene.restart();});});
-    text(D?cx+110:W*.70,D?476:924+this.padY,'设置',D?18:20,'#e5ccb0').setLetterSpacing(4).setPadding(18,16).setInteractive({useHandCursor:true}).setName('home-settings').on('pointerdown',()=>this.openHomeSettings());
-    text(D?cx-110:40,D?476:924+this.padY,'图鉴',D?18:20,'#e5ccb0').setLetterSpacing(4).setOrigin(D?.5:0,.5).setPadding(12,16).setInteractive({useHandCursor:true}).setName('home-codex').on('pointerdown',()=>{if(this.children.getByName('game-codex'))return;this.ensureHomeArt(true);new GameCodex(this,index=>{this.selectedChar=index;this.registry.set('heroConfirmed',true);try{localStorage.setItem('im_last_hero',CHARACTERS[index].id);}catch{}this.renderSelection();});});
+    text(D?cx:W/2,D?476:924+this.padY,'战役回顾',D?18:20,'#e5ccb0').setLetterSpacing(D?2:0).setPadding(16,16).setInteractive({useHandCursor:true}).setName('home-review').on('pointerdown',()=>{if(this.children.getByName('campaign-chronicle'))return;new CampaignChronicle(this,arc=>{if(arc==='qunxiong'){this.scene.start('ThirdChapterScene');return;}if(arc==='guandu'){this.scene.start('GuanduChapterScene');return;}this.registry.set('menuChapterPicker',true);this.scene.restart();},(arc,stage)=>this.replayStage(arc,stage));});
+    text(D?cx+110:W*.79,D?476:924+this.padY,'设置',D?18:20,'#e5ccb0').setLetterSpacing(4).setPadding(18,16).setInteractive({useHandCursor:true}).setName('home-settings').on('pointerdown',()=>this.openHomeSettings());
+    text(D?cx-110:W*.21,D?476:924+this.padY,'图鉴',D?18:20,'#e5ccb0').setLetterSpacing(4).setOrigin(.5,.5).setPadding(12,16).setInteractive({useHandCursor:true}).setName('home-codex').on('pointerdown',()=>{if(this.children.getByName('game-codex'))return;this.ensureHomeArt(true);new GameCodex(this,index=>{this.selectedChar=index;this.registry.set('heroConfirmed',true);try{localStorage.setItem('im_last_hero',CHARACTERS[index].id);}catch{}this.renderSelection();});});
     if(worldUnlocked()){
       text(W-28,D?34:54,'主城',16).setOrigin(1,.5).setPadding(16,8).setBackgroundColor('rgba(22,14,9,0.72)').setInteractive({useHandCursor:true}).setName('home-city').on('pointerdown',()=>this.scene.start('CityScene'));
       text(W-104,D?34:54,'天下地图',16).setOrigin(1,.5).setPadding(16,8).setBackgroundColor('rgba(22,14,9,0.72)').setInteractive({useHandCursor:true}).setName('home-world').on('pointerdown',()=>this.scene.start('WorldMapScene'));
@@ -182,11 +189,12 @@ export class MenuScene extends Phaser.Scene {
     const closeHeroes=()=>{this.heroModal?.setVisible(false);this.heroEntryPaint?.();};
     this.heroPicker=new HomeHeroPicker(this,index=>{this.selectedChar=index;this.registry.set('heroConfirmed',true);try{localStorage.setItem('im_last_hero',CHARACTERS[index].id);}catch{}closeHeroes();this.renderSelection();},closeHeroes);
     this.heroModal=this.heroPicker.root;const modal=this.heroModal;
-    const openHeroes=()=>{this.ensureHomeArt(true);this.heroPicker?.open(this.selectedChar);this.heroEntryPaint?.('selected');};pick.on('pointerdown',openHeroes);this.homeCard?.hit.on('pointerup',openHeroes);
+    const openHeroes=()=>{this.ensureHomeArt(true);this.heroPicker?.open(this.selectedChar);this.heroEntryPaint?.('selected');};pick.on('pointerdown',openHeroes);
     const startY=D?414:857+this.padY,startW=D?292:W-156,startH=D?56:64;
     const primary=homeCommand(this,D?W*.73:W/2,startY,startW,startH,'匡扶汉室',true);this.startButton=primary.hit.setName('start-campaign');this.startLabel=primary.caption;
     this.startButton.on('pointerdown',()=>{let chosen=!!this.registry.get('heroConfirmed');try{chosen=chosen||!!localStorage.getItem('im_last_hero');}catch{}if(!chosen&&!params.has('autostart')&&!params.has('perf')){openHeroes();return;}this.startGame();});
     if(D)for(const dx of[-66,66])text(cx+dx,476,'·',18,'#a68a57');
+    else for(const fx of[.355,.645])text(W*fx,924+this.padY,'·',20,'#a68a57');
     if(isChapterTestRun())text(W/2,D?529:955+this.padY,'测试战斗不记录正式进度',10,'#8c806f');
     if(isChapterTestRun())text(W-34,24,'测试选关 ›',14,'#dcc399').setOrigin(1,.5).setPadding(12,10).setInteractive({useHandCursor:true}).setName('dev-stage-picker').on('pointerdown',()=>this.openTestStages());
     const keys=this.input.keyboard,enter=()=>{if(modal.visible)modal.getByName('hero-confirm')?.emit('pointerdown');else this.startButton.emit('pointerdown');},escape=()=>closeHeroes();
@@ -325,6 +333,13 @@ export class MenuScene extends Phaser.Scene {
     modal.add(text(W/2,D?H-13:H-35,loadWorld().legacyHulaoAccess?'旧版虎牢关访问权限已保留':'逐关破敌 · 通关进度自动保存',11,'#917c61'));
   }
 
+  /** 战役回顾“再战/出征”：以当前武将直接出征指定关（只允许已解锁的关；通关进度只增不减）。 */
+  private replayStage(arc:'huangjin'|'dongzhuo'|'qunxiong'|'guandu',stage:number):void{
+    if((arc!=='huangjin'&&arc!=='dongzhuo')||![1,2,3].includes(stage))return;
+    if(arc==='huangjin'){if(!yellowStageUnlocked(stage)&&!isChapterTestRun())return;this.selectedChapter='huangjin';this.selectedStage=stage as YellowStage;}
+    else{if(!dongzhuoStageUnlocked(stage)&&!isChapterTestRun())return;this.selectedChapter='hulao';this.selectedWestStage=stage as YellowStage;}
+    this.startGame();
+  }
   private startGame(): void {
     if (this.heroModal?.visible||this.westModal?.visible||this.children.getByName('home-settings-panel')||this.children.getByName('game-codex')) return;
     if(this.selectedChapter==='hulao'&&!dongzhuoStageUnlocked(this.selectedWestStage)&&!isChapterTestRun())return;

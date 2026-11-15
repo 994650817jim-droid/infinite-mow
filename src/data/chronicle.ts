@@ -2,7 +2,7 @@
  * 战役回顾 · 乱世编年：九关的史事摘要（原创撰写，据《后汉书》《三国志》等常见史载概括；
  * 演义情节明确标注为“演义”）。只做展示，不影响玩法。
  */
-export type ChronicleArc = 'huangjin' | 'dongzhuo' | 'qunxiong';
+export type ChronicleArc = 'huangjin' | 'dongzhuo' | 'qunxiong' | 'guandu';
 export interface ChronicleStage { code: string; name: string; boss: string; bossTitle: string; seal: string; year: string; story: string; legacy: string }
 export interface ChronicleChapter { arc: ChronicleArc; title: string; years: string; intro: string; stages: ChronicleStage[] }
 
@@ -50,6 +50,21 @@ export const CHRONICLE: ChronicleChapter[] = [
       { code: '3-3', name: '寿春讨逆', boss: '袁术', bossTitle: '仲家伪帝', seal: '术', year: '建安二年 · 197',
         story: '袁术于寿春僭号称帝，奢靡无度，江淮饥荒，部众离心。曹操出兵击之，袁术势衰，两年后呕血而亡。',
         legacy: '称帝之举失尽人心，天下诸侯共弃之。' },
+    ],
+  },
+  {
+    arc: 'guandu', title: '第四章 · 官渡之战', years: '公元200年',
+    intro: '袁绍尽有河北四州，举兵南下；曹操据官渡相拒，胜负系于粮道。',
+    stages: [
+      { code: '4-1', name: '白马解围', boss: '颜良', bossTitle: '河北名将', seal: '良', year: '建安五年 · 200',
+        story: '袁绍遣颜良围东郡太守刘延于白马。曹操声东击西，引兵直趋白马；关羽望见颜良麾盖，策马刺之于万众之中，斩其首而还，白马之围遂解。',
+        legacy: '袁军首战失利，锐气受挫。' },
+      { code: '4-2', name: '延津诱敌', boss: '文丑', bossTitle: '河北名将', seal: '丑', year: '建安五年 · 200',
+        story: '曹操护送白马辎重沿河西撤，袁军追至延津。曹操令骑兵解鞍放马、弃辎重于道，袁军争相掠取，阵乱之际曹军纵兵出击，文丑战死。',
+        legacy: '颜良、文丑相继授首，河北军心大震。' },
+      { code: '4-3', name: '乌巢焚粮', boss: '淳于琼', bossTitle: '乌巢守将', seal: '琼', year: '建安五年 · 200',
+        story: '两军相持官渡，曹军乏粮。许攸来投，献计袭乌巢。曹操亲率步骑夜行，火烧袁军屯粮，斩淳于琼；袁军闻讯大溃，袁绍仅率八百骑渡河北归。',
+        legacy: '北方大势由此归曹，袁氏渐衰。' },
     ],
   },
 ];

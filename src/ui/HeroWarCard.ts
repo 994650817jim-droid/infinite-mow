@@ -157,6 +157,15 @@ function inkFrameTexture(s:Phaser.Scene,w:number,h:number):string{
  let dy=0;for(let r=0;r<4;r++){let dx=0;for(let q=0;q<5;q++){if(dw[q]>0&&dh[r]>0)ctx.drawImage(src,C[q]*k,R[r]*k,(C[q+1]-C[q])*k,(R[r+1]-R[r])*k,dx,dy,dw[q]+.6,dh[r]+.6);dx+=dw[q];}dy+=dh[r];}
  s.textures.addCanvas(key,c)?.setFilter(Phaser.Textures.FilterMode.LINEAR);return key;
 }
+/** 收卷：只留上木轴（至 ROLL_TOP）与地头+下木轴（自 ROLL_BOT），名字写在地头织锦上。 */
+const ROLL_TOP=176,ROLL_BOT=1370,ROLL_NAME=1411;
+/** 从已拼好的外框里取出“地头+下木轴”，收卷动画中随卷起位置上移。 */
+function rollTexture(s:Phaser.Scene,frameKey:string,w:number,h:number,hang:number,rollH:number):string{
+ const key='ink-roll-'+frameKey;if(s.textures.exists(key))return key;
+ const src=s.textures.get(frameKey).getSourceImage() as HTMLCanvasElement,k=src.height/(h+hang),{c,ctx}=canvasOf(w,rollH);
+ ctx.drawImage(src,0,Math.round((hang+h-rollH)*k),src.width,Math.round(rollH*k),0,0,w,rollH);
+ s.textures.addCanvas(key,c)?.setFilter(Phaser.Textures.FilterMode.LINEAR);return key;
+}
 /** 立绘：裁进画心，人物偏左给名列留位，下部渐隐给题跋留白。 */
 function inkHeroTexture(s:Phaser.Scene,id:string,pw:number,ph:number,small:boolean):string{
  const key=`ink-hero3-${id}-${Math.round(pw)}x${Math.round(ph)}-${RENDER_SCALE}`;if(s.textures.exists(key))return key;
@@ -182,6 +191,7 @@ function glowTexture(s:Phaser.Scene,w:number,h:number,state:FrameState,inset=1):
 export class HeroWarCard{
  readonly root:Phaser.GameObjects.Container;readonly art:Phaser.GameObjects.Image;readonly name:Phaser.GameObjects.Text;readonly weapon:Phaser.GameObjects.Text;readonly hit:Phaser.GameObjects.Rectangle;
  private scroll:Phaser.GameObjects.Image;private paper:Phaser.GameObjects.Image;private glow:Phaser.GameObjects.Image;private nameV:Phaser.GameObjects.Text;private brush:Phaser.GameObjects.Image;private title:Phaser.GameObjects.Text;private seal:Phaser.GameObjects.Image;private roleSeal:Phaser.GameObjects.Image;private role:Phaser.GameObjects.Text;private verse:Phaser.GameObjects.Text;private leisureSeal:Phaser.GameObjects.Image;private skills:Phaser.GameObjects.Text;private passive:Phaser.GameObjects.Text;private rules:Phaser.GameObjects.Graphics;
+ private roll?:Phaser.GameObjects.Image;private foldName?:Phaser.GameObjects.Text;private rollH=0;private prog=1;private rollTween?:Phaser.Tweens.Tween;
  private folded=false;private index=-1;private artKey='';private chosen=false;private readonly L:ScrollLayout;private readonly painted:boolean;private readonly colX:number;private readonly nameTop:number;
  constructor(private s:Phaser.Scene,x:number,y:number,readonly width:number,readonly height:number){
   const w=width,h=height;this.painted=s.textures.exists(INK_FRAME_KEY)&&s.textures.exists(INK_PAPER_KEY);
@@ -193,6 +203,8 @@ export class HeroWarCard{
   const hang=I?I.rod:HANG;
   this.scroll=s.add.image(0,-hang,I?inkFrameTexture(s,w,h):scrollTexture(s,w,h)).setOrigin(0).setDisplaySize(w,h+hang);
   const ink=(tx:number,ty:number,value:string,size:number,color='#2a2017',font=HEADING_FONT)=>s.add.text(tx,ty,value,{fontFamily:font,fontSize:size+'px',color,resolution:2});
+  if(I){this.rollH=(INK.h-ROLL_BOT)*I.bv;this.roll=s.add.image(0,h-this.rollH,rollTexture(s,this.scroll.texture.key,w,h,hang,this.rollH)).setOrigin(0).setDisplaySize(w,this.rollH).setVisible(false);
+   this.foldName=ink(w/2,0,'',small?18:22,'#fff0cf',TITLE_FONT).setOrigin(.5).setStroke('#3a2210',4).setLetterSpacing(small?4:8).setAlpha(0).setVisible(false);}
   const nameSize=small?28:38;
   // 名列：画卷版挂在右惊燕之下（不出画心）；程序版沿用右侧竖列
   this.colX=I?Math.min(I.tabR,px+pw-nameSize/2-(small?5:7)):px+pw-(small?24:31);
@@ -219,7 +231,7 @@ export class HeroWarCard{
   this.leisureSeal=s.add.image(px+pw-(small?12:16),py+ph-(small?11:14),sealTexture(s,'常胜',small?26:32,true)).setOrigin(.5,1).setDisplaySize(Math.round((small?26:32)*.72),small?26:32).setRotation(.06).setAlpha(.92);
   this.hit=s.add.rectangle(w/2,h/2,w,h,0,0.001).setInteractive({useHandCursor:true});
   // 画卷版：外框（含惊燕）压在立绘之上；文字与印在最上层
-  this.root.add([this.glow,this.paper,this.art,this.scroll,this.brush,this.nameV,this.title,this.seal,this.roleSeal,this.verse,this.rules,this.weapon,this.passive,this.skills,this.leisureSeal,this.role,this.name,this.hit]);
+  this.root.add([this.glow,this.paper,this.art,this.scroll,...(this.roll?[this.roll]:[]),...(this.foldName?[this.foldName]:[]),this.brush,this.nameV,this.title,this.seal,this.roleSeal,this.verse,this.rules,this.weapon,this.passive,this.skills,this.leisureSeal,this.role,this.name,this.hit]);
   this.paint();
   this.hit.on('pointerover',()=>this.paint('hover')).on('pointerout',()=>this.paint()).on('pointerdown',()=>this.paint('pressed')).on('pointerup',()=>this.paint());
  }
@@ -230,8 +242,31 @@ export class HeroWarCard{
   this.glow.setTexture(glowTexture(this.s,this.width,h,st==='pressed'?'hover':st,inset)).setDisplaySize(this.width+28,h+28);
   this.root.setScale(st==='pressed'?.985:1);
  }
- private get foldedHeight(){return this.painted?Math.round(this.width*.24):this.L.rod*2+44;}
- setFolded(value:boolean):void{
+ private get foldedHeight(){return this.painted?Math.round((ROLL_TOP-INK.rod)*(this.L as InkLayout).bv+this.rollH):this.L.rod*2+44;}
+ /** 画卷收放进度 p（1=展开，0=收起）：下木轴随 p 上移，外框/宣纸/立绘按卷起位置裁切，文字淡出，收起后地头上显示名字。 */
+ private applyRoll(p:number):void{
+  this.prog=p;const I=this.L as InkLayout,w=this.width,h=this.height,fh=this.foldedHeight,H=fh+(h-fh)*p,rollTop=H-this.rollH,open=p>=1;
+  this.roll!.setVisible(!open).setY(rollTop);
+  const fr=this.scroll.frame;if(open)this.scroll.setCrop();else this.scroll.setCrop(0,0,fr.width,(I.rod+rollTop)/(h+I.rod)*fr.height);
+  for(const im of [this.paper,this.art]){const k=Phaser.Math.Clamp((rollTop-im.y)/Math.max(1,im.displayHeight),0,1);if(open)im.setCrop();else im.setCrop(0,0,im.frame.width,k*im.frame.height);im.setVisible(k>0);}
+  const a=Phaser.Math.Clamp((p-.45)/.55,0,1),hideVerse=this.L.small&&!IS_DESKTOP;
+  for(const item of [this.brush,this.nameV,this.title,this.seal,this.roleSeal,this.verse,this.rules,this.weapon,this.passive,this.skills,this.leisureSeal]){
+   item.setAlpha(a*(item===this.verse?.86:item===this.leisureSeal?.92:1)).setVisible(a>0&&!(item===this.verse&&hideVerse));
+  }
+  const fa=Phaser.Math.Clamp(1-p*2.2,0,1);this.foldName!.setAlpha(fa).setVisible(fa>0).setY(rollTop+(ROLL_NAME-ROLL_BOT)*I.bv);
+  this.glow.setVisible(p<=0||open);
+  this.hit.setSize(w,H).setPosition(w/2,H/2);if(this.hit.input)this.hit.input.hitArea.setTo(0,0,w,H);
+ }
+ get isFolded():boolean{return this.folded;}
+ /** 当前（收起/展开）状态下卷轴占用的高度。 */
+ heightWhen(folded:boolean):number{return folded?this.foldedHeight:this.height;}
+ setFolded(value:boolean,animate=false):void{
+  if(this.painted){
+   this.folded=value;this.rollTween?.stop();const to=value?0:1;
+   if(!animate||this.prog===to){this.applyRoll(to);this.paint();return;}
+   const from=this.prog;this.rollTween=this.s.tweens.addCounter({from:0,to:1,duration:Math.round(380*Math.abs(to-from)),ease:'Cubic.easeInOut',onUpdate:tw=>this.applyRoll(from+(to-from)*(tw.getValue()??0)),onComplete:()=>{this.applyRoll(to);this.paint();}});
+   return;
+  }
   this.folded=value;for(const item of this.detail)item.setVisible(!value&&(item!==this.paper||this.painted)&&!(item===this.verse&&this.painted&&this.L.small&&!IS_DESKTOP));
   const hh=value?this.foldedHeight:this.height;
   if(this.painted){const hang=INK.rod*inkScale(this.width,hh).bv*HANG_K;this.scroll.setTexture(inkFrameTexture(this.s,this.width,hh)).setPosition(0,-hang).setDisplaySize(this.width,hh+hang);}
@@ -258,8 +293,9 @@ export class HeroWarCard{
    this.index=index;this.artKey=artKey;this.art.setTexture(artKey,'__BASE');place();
    this.s.tweens.killTweensOf(this.art);this.art.setAlpha(.3);this.s.tweens.add({targets:this.art,alpha:1,duration:220});
   }
-  this.name.setText(c.name);
-  if(!this.folded)this.nameV.setText([...c.name].join('\n'));
+  this.name.setText(c.name);this.foldName?.setText(c.name);
+  // 画卷版收起时名字写在 foldName 上，竖排名始终更新（否则“先收起再进首页/换将”展开后名字为空）
+  if(this.painted||!this.folded)this.nameV.setText([...c.name].join('\n'));else this.nameV.setText(c.name);
   this.title.setText([...titles[index]].join('\n'));
   const nameBottom=this.nameV.y+this.nameV.height;this.seal.setY(nameBottom+(small?4:6));
   this.brush.setDisplaySize(small?40:52,Math.max(small?96:128,this.nameV.height+(small?14:20)));

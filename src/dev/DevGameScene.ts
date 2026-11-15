@@ -70,6 +70,7 @@ export class DevGameScene extends GameScene {
       chapter1: () => { scene.registry.remove('campaignTransfer'); scene.registry.remove('thirdTransfer'); scene.registry.set('runConfig', { character: scene.runConfig.character, chapter: 'huangjin', stage: 1 }); scene.scene.start('GameScene'); },
       chapter2: () => { scene.registry.remove('campaignTransfer'); scene.registry.remove('thirdTransfer'); scene.registry.set('runConfig', { character: scene.runConfig.character, chapter: 'hulao', westStage: 1 }); scene.scene.start('GameScene'); },
       chapter3: () => { scene.registry.remove('campaignTransfer'); scene.scene.start('ThirdChapterScene'); },
+      chapter4: () => { scene.registry.remove('campaignTransfer'); scene.scene.start('GuanduChapterScene'); },
       selectStart: () => { scene.scene.start('MenuScene'); },
       reset: () => { scene.devTimeScale = 1; scene.scene.restart(); },
       layoutMobile: () => { if (IS_DESKTOP) switchLayout('mobile'); },
@@ -135,7 +136,7 @@ export class DevGameScene extends GameScene {
     const speed = (v: number) => () => scene.devTimeScale === v;
     const sections: DevSection[] = [
       { title: '跳转（离开当前测试局）', items: [
-        { key: 'chapter1', label: '从第一章开始' }, { key: 'chapter2', label: '从第二章开始' }, { key: 'chapter3', label: '第三章选关' },
+        { key: 'chapter1', label: '从第一章开始' }, { key: 'chapter2', label: '从第二章开始' }, { key: 'chapter3', label: '第三章选关' }, { key: 'chapter4', label: '第四章选关' },
         { key: 'worldMap', label: '天下地图' }, { key: 'homeCity', label: '义军营寨' }, { key: 'selectStart', label: '返回选将' }, { key: 'reset', label: '重开本关' },
         { key: 'layoutMobile', label: '手机布局', active: () => !IS_DESKTOP }, { key: 'layoutDesktop', label: '电脑布局', active: () => IS_DESKTOP },
       ] },

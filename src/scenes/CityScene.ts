@@ -126,7 +126,9 @@ export class CityScene extends Phaser.Scene {
   const line=(v:string,size=14,color='#e9dcc0')=>{const o=add(txt(this,x0,y,v,size,color).setWordWrapWidth(wrap,true));y+=o.height+6;return o;};
   if(!p){
    line(`空地 · 第 ${this.selected+1} 块`,18,'#f4d99f');line('选择要建造的建筑：',13,'#b9a98a');
-   const rowH=D?25:Math.max(24,Math.min(30,(this.sideRect.h-120)/10));
+   // 空地将满又没有城墙时提醒（城墙每级可再开 2 块地）
+   {const open=unlockedPlots(t),free=t.plots.filter((x,i)=>!x&&i<open).length;if(!countOf(t,'wall')&&free<=2)line('提示：空地不多了，先建城墙可再开 2 块地',12,'#e8b77a');}
+   const rowH=D?(countOf(t,'wall')?25:23):Math.max(24,Math.min(30,(this.sideRect.h-140)/10));
    for(const id of BUILD_ORDER){
     const def=TOWN_BUILDINGS[id],full=countOf(t,id)>=def.max,afford=canAfford(have,def.build),on=this.choice===id;
     const row=add(txt(this,x0,y,`${on?'◆ ':''}${def.name}${def.max>1?`（${countOf(t,id)}/${def.max}）`:''}`,14,full?'#6f6658':on?'#ffe7a8':afford?'#efe2c4':'#a58f74'));

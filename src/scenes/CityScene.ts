@@ -123,7 +123,7 @@ export class CityScene extends Phaser.Scene {
   const s=loadWorld(),t=s.town,r=this.sideRect,p=t.plots[this.selected],x0=r.x+16,wrap=r.w-32,have={merits:s.merits,provisions:s.provisions,money:t.money};
   const add=<T extends Phaser.GameObjects.GameObject>(o:T)=>{this.side.add(o);return o;};
   let y=r.y+14;
-  const line=(v:string,size=14,color='#e9dcc0')=>{const o=add(txt(this,x0,y,v,size,color).setWordWrapWidth(wrap));y+=o.height+6;return o;};
+  const line=(v:string,size=14,color='#e9dcc0')=>{const o=add(txt(this,x0,y,v,size,color).setWordWrapWidth(wrap,true));y+=o.height+6;return o;};
   if(!p){
    line(`空地 · 第 ${this.selected+1} 块`,18,'#f4d99f');line('选择要建造的建筑：',13,'#b9a98a');
    const rowH=D?25:Math.max(24,Math.min(30,(this.sideRect.h-120)/10));
@@ -135,7 +135,7 @@ export class CityScene extends Phaser.Scene {
     if(!full)hit.setInteractive({useHandCursor:true}).on('pointerdown',()=>{this.choice=id;this.message='';this.drawSide();});
     y+=rowH;
    }
-   if(this.choice){const def=TOWN_BUILDINGS[this.choice],by=r.y+r.h-28;add(txt(this,x0,by-26,def.effect(1),12,'#cfe0c8').setWordWrapWidth(wrap).setOrigin(0,1));
+   if(this.choice){const def=TOWN_BUILDINGS[this.choice],by=r.y+r.h-28;add(txt(this,x0,by-26,def.effect(1),12,'#cfe0c8').setWordWrapWidth(wrap,true).setOrigin(0,1));
     const b=homeCommand(this,r.x+r.w/2,by,Math.min(220,r.w-40),38,'建造 '+def.name,true,canAfford(have,def.build),15);b.hit.setName('town-build').setData('padDefault',true).on('pointerdown',()=>this.act(townBuild(this.selected,this.choice!),true));for(const o of [b.g,b.hit,b.caption])add(o);y+=50;}
   }else{
    const def=TOWN_BUILDINGS[p.id],next=upgradeCostFor(p.id,p.level);
@@ -150,7 +150,7 @@ export class CityScene extends Phaser.Scene {
   this.drawMessage();
  }
  private msgText?:Phaser.GameObjects.Text;
- private drawMessage(){this.msgText?.destroy();const r=this.sideRect,warn=storageUnavailable?(incompatibleSave?'存档版本较新，本次修改不会保存':'存储不可用，修改仅保留本次会话'):'';const v=[this.message,warn].filter(Boolean).join('\n');if(!v)return;this.msgText=txt(this,r.x+16,r.y+r.h-(D?78:76),v,12,'#e8c98a').setWordWrapWidth(r.w-32);this.side.add(this.msgText);}
+ private drawMessage(){this.msgText?.destroy();const r=this.sideRect,warn=storageUnavailable?(incompatibleSave?'存档版本较新，本次修改不会保存':'存储不可用，修改仅保留本次会话'):'';const v=[this.message,warn].filter(Boolean).join('\n');if(!v)return;this.msgText=txt(this,r.x+16,r.y+r.h-(D?78:76),v,12,'#e8c98a').setWordWrapWidth(r.w-32,true);this.side.add(this.msgText);}
  private act(res:{ok:boolean;message:string},pop=false){this.message=res.message;if(res.ok){this.choice=null;if(pop)this.popPlot=this.selected;}this.refresh();}
  /** 建成 / 升级后播放一次的地块（建筑弹起 + 尘土）。 */
  private popPlot=-1;private drawingPlot=-1;
@@ -183,11 +183,11 @@ export class CityScene extends Phaser.Scene {
    ...(q.event?[`本季大事　${eventById(q.event)?.title??''}`]:[]),
    '',`接下来：${seasonLabel(t.year,t.season)}`,
   ].join('\n'):'尚无季度报告。\n出征（战役、攻城、守城）结束、坚持 60 秒以上或获胜时，营寨过一季并在此结算。';
-  m.root.add(txt(this,m.x+40,m.y+66,body,D?16:15,'#efe2c4').setLineSpacing(10).setWordWrapWidth(m.w-80).setName('town-report-body'));
+  m.root.add(txt(this,m.x+40,m.y+66,body,D?16:15,'#efe2c4').setLineSpacing(10).setWordWrapWidth(m.w-80,true).setName('town-report-body'));
  }
  private openTax(){
   const t=loadWorld().town,m=this.modal('town-tax','税率',D?330:420);
-  m.root.add(txt(this,W/2,m.y+62,'税越重收钱越多；T3 起重税会招来流民、盗匪等坏事件。',13,'#c9bf99').setOrigin(.5).setWordWrapWidth(m.w-60).setAlign('center'));
+  m.root.add(txt(this,W/2,m.y+62,'税越重收钱越多；T3 起重税会招来流民、盗匪等坏事件。',13,'#c9bf99').setOrigin(.5).setWordWrapWidth(m.w-60,true).setAlign('center'));
   (['low','mid','high'] as TaxRate[]).forEach((rate,i)=>{
    const y=m.y+(D?120:120)+i*58,on=t.tax===rate,b=homeCommand(this,W/2,y,Math.min(360,m.w-60),46,`${TAX_NAME[rate]} · 每户 ${TAX_PER_HOUSEHOLD[rate]} 钱${on?'（当前）':''}`,on,true,15);
    b.hit.setName('tax-'+rate).on('pointerdown',()=>{this.message=setTaxRate(rate).message;this.openTax();this.refresh();});if(on)b.hit.setData('padDefault',true);m.root.add([b.g,b.hit,b.caption]);
@@ -219,12 +219,12 @@ export class CityScene extends Phaser.Scene {
  private openIntro(){
   const m=this.modal('town-intro','义军营寨 · 经营指南',D?380:560);
   const lines=[
-   '· 每打完一仗（胜利或坚持 60 秒以上），营寨过一季：农田产粮、市集收税、城池按发展方向产出，并扣除后备兵军粮。',
-   '· 点空地建造，点建筑升级或拆除。民居和市集带来钱；城墙可以扩地；校场、铁匠铺、城墙让出征更强。',
-   '· 税越重收钱越多，但坏事件更常发生；每季可能出现大事，需要二选一。',
-   '· 有市集可买卖粮草，有驿站可派商队去自己的城池换钱；在「城池发展」为占领的城池选重农、重商或重军。',
+   '◆每打完一仗（胜利或坚持60秒以上），营寨过一季：农田产粮、市集收税、城池按发展方向产出，并扣除后备兵军粮。',
+   '◆点空地建造，点建筑升级或拆除。民居和市集带来钱；城墙可以扩地；校场、铁匠铺、城墙让出征更强。',
+   '◆税越重收钱越多，但坏事件更常发生；每季可能出现大事，需要二选一。',
+   '◆有市集可买卖粮草，有驿站可派商队去自己的城池换钱；在「城池发展」为占领的城池选重农、重商或重军。',
   ];
-  m.root.add(txt(this,m.x+34,m.y+68,lines.join(String.fromCharCode(10)),D?14:15,'#e9dcc0').setLineSpacing(10).setWordWrapWidth(m.w-68));
+  m.root.add(txt(this,m.x+34,m.y+68,lines.join(String.fromCharCode(10)),D?14:15,'#e9dcc0').setLineSpacing(10).setWordWrapWidth(m.w-68,true));
   try{localStorage.setItem('im_town_intro','1');}catch{/* 存储不可用 */}
  }
 
@@ -237,11 +237,11 @@ export class CityScene extends Phaser.Scene {
   root.add(this.add.image(W/2,H/2,warPanelTexture(this,w,h,true)).setDisplaySize(w+16,h+16));
   root.add(txt(this,W/2,y+26,ev.kind==='bad'?'急报':ev.kind==='good'?'喜讯':'军中议事',13,ev.kind==='bad'?'#e59a83':ev.kind==='good'?'#a9d6a0':'#c9bf99').setOrigin(.5));
   root.add(txt(this,W/2,y+56,ev.title,26,'#efd399',HEADING_FONT).setOrigin(.5).setName('town-event-title'));
-  root.add(txt(this,W/2,y+98,ev.text,15,'#e9dcc0').setOrigin(.5,0).setWordWrapWidth(w-70).setAlign('center'));
+  root.add(txt(this,W/2,y+98,ev.text,15,'#e9dcc0').setOrigin(.5,0).setWordWrapWidth(w-70,true).setAlign('center'));
   ev.options.forEach((o,i)=>{
    const bw=D?(w-80)/2:w-60,bx=D?x+40+bw/2+i*(bw+0):W/2,by=D?y+h-92:y+h-200+i*96;
    const btn=homeCommand(this,bx,by,Math.min(bw,260),46,o.label,i===0,true,16);btn.hit.setName('event-option-'+i).on('pointerdown',()=>{const res=resolveTownEvent(i);if(res.ok)addCounter('events',1);this.message=res.message;root.destroy();this.refresh();});if(i===0)btn.hit.setData('padDefault',true);
-   root.add([btn.g,btn.hit,btn.caption]);root.add(txt(this,bx,by+34,o.note,12,'#c9bf99').setOrigin(.5,0).setWordWrapWidth(Math.min(bw,280)).setAlign('center'));
+   root.add([btn.g,btn.hit,btn.caption]);root.add(txt(this,bx,by+34,o.note,12,'#c9bf99').setOrigin(.5,0).setWordWrapWidth(Math.min(bw,280),true).setAlign('center'));
   });
  }
  /** 商贸：市集买卖粮；驿站派商队。 */
@@ -252,16 +252,16 @@ export class CityScene extends Phaser.Scene {
   m.root.add(txt(this,left,y,'市集',18,'#f4d99f',HEADING_FONT));y+=30;
   if(!levelOf(t,'market')){m.root.add(txt(this,left,y,'尚未建造市集：在空地上建市集后可买卖粮草。',13,'#a99d88'));y+=40;}
   else{
-   m.root.add(txt(this,left,y,`卖粮每 1 粮得 ${grainSellPrice(t)} 钱 · 买粮每 1 粮花 ${grainBuyPrice(t)} 钱（市集越高越划算）`,12,'#b9c9b2').setWordWrapWidth(m.w-60));y+=28;
+   m.root.add(txt(this,left,y,`卖粮每 1 粮得 ${grainSellPrice(t)} 钱 · 买粮每 1 粮花 ${grainBuyPrice(t)} 钱（市集越高越划算）`,12,'#b9c9b2').setWordWrapWidth(m.w-60,true));y+=28;
    const acts:Array<[string,string,()=>void]>=[['卖粮 20','trade-sell-20',()=>this.tradeAct(tradeGrain(true,20))],['卖粮 50','trade-sell-50',()=>this.tradeAct(tradeGrain(true,50))],['买粮 20','trade-buy-20',()=>this.tradeAct(tradeGrain(false,20))]];
    const bw=Math.min(150,(m.w-80)/3);acts.forEach(([label,name,fn],i)=>{const b=homeCommand(this,left+bw/2+i*(bw+10),y+20,bw,38,label,false,true,14);b.hit.setName(name).on('pointerdown',fn);if(i===0)b.hit.setData('padDefault',true);m.root.add([b.g,b.hit,b.caption]);});y+=56;
   }
   m.root.add(txt(this,left,y,'驿站商队',18,'#f4d99f',HEADING_FONT));y+=30;
   const slots=caravanSlots(t),owned=s.ownedCities.map(id=>cityById(id)).filter((c):c is NonNullable<typeof c>=>!!c);
-  if(!slots){m.root.add(txt(this,left,y,'尚未建造驿站：建驿站后可派商队载粮去己方城池，下季带钱回来。',13,'#a99d88').setWordWrapWidth(m.w-60));}
+  if(!slots){m.root.add(txt(this,left,y,'尚未建造驿站：建驿站后可派商队载粮去己方城池，下季带钱回来。',13,'#a99d88').setWordWrapWidth(m.w-60,true));}
   else if(!owned.length){m.root.add(txt(this,left,y,'尚未占领城池，没有商队目的地。',13,'#a99d88'));}
   else{
-   m.root.add(txt(this,left,y,`每季 ${slots} 支 · 在途 ${t.caravans.length} 支 · 去重商城池收益更高，有一定被劫风险`,12,'#b9c9b2').setWordWrapWidth(m.w-60));y+=26;
+   m.root.add(txt(this,left,y,`每季 ${slots} 支 · 在途 ${t.caravans.length} 支 · 去重商城池收益更高，有一定被劫风险`,12,'#b9c9b2').setWordWrapWidth(m.w-60,true));y+=26;
    for(const c of owned.slice(0,D?3:4)){
     const busy=t.caravans.some(x=>x.to===c.id),focus=t.focus[c.id]??'balanced';
     m.root.add(txt(this,left,y+10,`${c.name}（${TIER_NAME[c.tier]}·${FOCUS_NAME[focus]}）${busy?' · 商队在途':''}`,14,busy?'#8f8676':'#efe2c4'));

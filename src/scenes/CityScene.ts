@@ -12,7 +12,7 @@ import {FONT,HEADING_FONT} from '../config';
 import {homeCommand,warPanelTexture} from '../ui/HomeCommand';
 import {uiSfx} from '../systems/Sfx';
 import {checkWorld,addCounter} from '../systems/Achievements';
-import {loadWorld,saveWorld,worldUnlocked,storageUnavailable,incompatibleSave,townUpgrade,setTaxRate,setCityFocus,resolveTownEvent,tradeGrain,sendCaravan} from '../world/WorldStore';
+import {loadWorld,saveWorld,worldUnlocked,storageUnavailable,incompatibleSave,townUpgrade,granaryLevy,setTaxRate,setCityFocus,resolveTownEvent,tradeGrain,sendCaravan} from '../world/WorldStore';
 import {TOWN_BUILDINGS,TAX_NAME,TAX_PER_HOUSEHOLD,FOCUS_NAME,FOCUS_INCOME,FOCUS_CHANGE_COST,CITY_SIZE,CITY_TITLE,HALL_UPGRADE,nextCost,buildBlockers,citySize,households,levelOf,canAfford,costText,seasonLabel,SEASONS,eventById,grainSellPrice,grainBuyPrice,caravanValue,caravanSlots,CARAVAN_CARGO,buildingBattleEffects,TOWN_ART_LEVELS,townArtLevel,type TownBuildingId,type TaxRate,type CityFocus,type TownState} from '../town/TownData';
 import {PANO_W,PANO_H,CITY_SLOTS,LEVEL_SCALE,CITY_BG_SIZES,CITY_ART_LEVELS} from '../town/CityLayout';
 import {cityById,TIER_NAME} from '../world/WorldCities';
@@ -248,6 +248,7 @@ export class CityScene extends Phaser.Scene {
    market:['买卖粮草',()=>{m.root.destroy();this.openTrade();}],
    post:['派遣商队',()=>{m.root.destroy();this.openTrade();}],
    hall:['季度报告',()=>{m.root.destroy();this.openReport();}],
+   granary:['开仓募兵',()=>{const res=granaryLevy();if(!res.ok){msg.setText(res.message);return;}m.root.destroy();this.refresh();this.toast(res.message);}],
   },fn=lv>0?funcs[id]:undefined,bw=fn?Math.min(200,(m.w-80)/2):Math.min(240,m.w-60),ux=fn?W/2+bw/2+8:W/2;
   if(fn){const f=homeCommand(this,W/2-bw/2-8,m.y+h-(D?84:94),bw,42,fn[0],false,true,15);f.hit.setName('town-card-func').on('pointerdown',fn[1]);m.root.add([f.g,f.hit,f.caption]);}
   const up=homeCommand(this,ux,m.y+h-(D?84:94),bw,42,cost?(lv?`升级到 Lv${lv+1}`:'建造'):'已满级',true,ok,16);

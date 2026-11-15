@@ -27,6 +27,8 @@ export interface TownState {
   report: SeasonReport | null;
   /** T3：下季修正、下一场出征加成、待处理事件、在途商队。 */
   mods: SeasonMods; boon: BattleBoon; pendingEvent: string | null; caravans: Caravan[];
+  /** 粮仓「开仓募兵」上次使用的季度（年-季），每季一次。 */
+  levied?: string;
 }
 
 export const MAX_LEVEL = 3, START_YEAR = 184;
@@ -64,7 +66,7 @@ export const TOWN_BUILDINGS: Record<TownBuildingId, BuildingDef> = {
   post: { name: '驿站', max: 1, build: C(40, 60, 40), minHall: 2, blurb: '驿马往来，商队通达诸城。', effect: l => `派商队载粮去己方城池换钱（每季 ${l} 支）` },
   smithy: { name: '铁匠铺', max: 1, build: C(40, 40, 60), minHall: 2, blurb: '百炼精钢，打造兵刃。', effect: l => `打造兵器：出征时本命武器伤害 +${l * 4}%` },
   drill: { name: '校场', max: 1, build: C(50, 60, 40), minHall: 2, blurb: '演武操练，将士精进。', effect: l => `出征开局属性点 +${[1, 1, 2][l - 1]}` },
-  granary: { name: '粮仓', max: 1, build: C(20, 80), blurb: '广积粮，备荒年。', effect: l => `季度军粮开销 −${GRANARY_CUT[l - 1] * 100}%；旱灾损失减半` },
+  granary: { name: '粮仓', max: 1, build: C(20, 80), blurb: '广积粮，备荒年。', effect: l => `季度军粮开销 −${GRANARY_CUT[l - 1] * 100}%；旱灾损失减半；每季可开仓募兵 ${LEVY_SOLDIERS[l]} 人` },
   wall: { name: '城墙', max: 1, build: C(60, 100, 60), blurb: '高墙深池，扩城的前提。', effect: l => `府衙升级的前提；出征时主将生命 +${l * 3}%` },
   pavilion: { name: '麒麟阁', max: 1, maxLevel: 1, build: C(400, 1200, 800), minHall: 3, blurb: '奇观：图画功臣、表彰忠义，天下英雄慕名来投。', effect: () => '出征时伤害 +6%、主将生命 +6%、开局属性点 +1' },
   tavern: { name: '酒肆', max: 1, build: C(30, 40, 50), minHall: 2, blurb: '四方豪杰汇聚之所。', effect: l => `季度好事件（名士、商队、祥瑞…）出现率 +${l * 35}%` },
@@ -72,6 +74,9 @@ export const TOWN_BUILDINGS: Record<TownBuildingId, BuildingDef> = {
 /** 每种建筑一座：农田 / 民居的产出按等级放大（旧版最多 3 块农田、4 片民居）。 */
 export const FARM_GRAIN = [30, 65, 110], HOUSE_HOUSEHOLDS = [30, 75, 140], GRANARY_CUT = [.15, .3, .45];
 export const MARKET_MULT = [.3, 1, 1.3, 1.6];
+/** 开仓募兵：粮仓等级 → 每季可募后备兵人数；花费粮草与钱。 */
+export const LEVY_SOLDIERS = [0, 2, 3, 4], LEVY_COST = { provisions: 120, perSoldier: 30, money: 20 };
+export function levyCost(level: number): Cost { return C(0, LEVY_COST.provisions + LEVY_COST.perSoldier * LEVY_SOLDIERS[level], LEVY_COST.money); }
 /** 府衙升级：花费与前提建筑（英雄无敌式建造树）。 */
 export const HALL_UPGRADE: Record<number, { cost: Cost; needs: Partial<Record<TownBuildingId, number>> }> = {
   1: { cost: C(80, 160, 120), needs: { wall: 1, house: 1, market: 1 } },
@@ -156,6 +161,7 @@ export function parseTown(v: unknown, levels: { barracks: number; farm: number; 
   t.mods = { taxMul: num(m.taxMul, .2, 3, 1), grainMul: num(m.grainMul, .2, 3, 1), badRisk: num(m.badRisk, -1, 3, 0) };
   t.boon = { attributePoints: int(bo.attributePoints, 5), damage: num(bo.damage, -.3, .5, 0), maxHp: num(bo.maxHp, -.3, .5, 0) };
   t.pendingEvent = typeof o.pendingEvent === 'string' && eventById(o.pendingEvent) ? o.pendingEvent : null;
+  t.levied = typeof o.levied === 'string' && o.levied.length <= 16 ? o.levied : undefined;
   t.caravans = Array.isArray(o.caravans) ? (o.caravans as Caravan[]).filter(c => c && typeof c.to === 'string' && c.to.length <= 32).slice(0, 3).map(c => ({ to: c.to, cargo: int(c.cargo, 1000), value: int(c.value, 10000) })) : [];
   if (!t.levels.barracks) t.levels.barracks = 1;
   return t;

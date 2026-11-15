@@ -1,7 +1,7 @@
 import {armyCapacity,TROOPS,TROOP_KINDS,type TroopKind} from '../data/legion';
 import type {ChapterId} from '../data/chapters';
 import {territorySummary,cityAttacker,cityById,eraChanges,eraIndexFor,type FactionId} from './WorldCities';
-import {type TownState,type TownBuildingId,type TaxRate,type CityFocus,type SeasonReport,TOWN_BUILDINGS,FOCUS_CHANGE_COST,FOCUS_NAME,TAX_NAME,migrateTown,parseTown,legacyLevels,settleSeason,nextCost,buildBlockers,CITY_SIZE,canAfford,costText,seasonLabel,buildingBattleEffects,noBoon,eventById,grainSellPrice,grainBuyPrice,caravanValue,caravanSlots,levelOf} from '../town/TownData';
+import {type TownState,type TownBuildingId,type TaxRate,type CityFocus,type SeasonReport,TOWN_BUILDINGS,FOCUS_CHANGE_COST,FOCUS_NAME,TAX_NAME,migrateTown,parseTown,legacyLevels,settleSeason,nextCost,buildBlockers,CITY_SIZE,levyCost,LEVY_SOLDIERS,canAfford,costText,seasonLabel,buildingBattleEffects,noBoon,eventById,grainSellPrice,grainBuyPrice,caravanValue,caravanSlots,levelOf} from '../town/TownData';
 /** W4 告急：某座玩家城池正被来犯；cause 为时代更替或攻城后反扑。 */
 export interface CityAlert{city:string;attacker:FactionId;cause:'era'|'retaliation';}
 export type BuildingId='barracks'|'farm'|'clinic';
@@ -74,6 +74,10 @@ export function resolveTownEvent(choice:number):TownResult{const s=loadWorld(),t
  for(const [k,n] of Object.entries(e.reserve??{}))if(TROOP_KINDS.includes(k as TroopKind))s.reserve[k]=Math.min(999,(s.reserve[k]??0)+n);
  t.pendingEvent=null;return townCommit(s,`${ev.title} · ${opt.label}`);}
 /** 市集买卖粮：sell=true 卖粮换钱，否则花钱买粮。需要市集。 */
+/** 粮仓「开仓募兵」：每季一次，粮草与钱换后备刀盾 / 长枪兵。 */
+export function granaryLevy():TownResult{const s=loadWorld(),t=s.town,lv=levelOf(t,'granary');if(!lv)return{ok:false,message:'需要先建粮仓'};const key=t.year+'-'+t.season;if(t.levied===key)return{ok:false,message:'本季已开仓募兵，下季再来'};
+ const cost=levyCost(lv);if(!canAfford(have(s),cost))return{ok:false,message:'资源不足：需要 '+costText(cost)};pay(s,cost);const n=LEVY_SOLDIERS[lv];for(let i=0;i<n;i++){const k=i%2?'spearman':'swordsman';s.reserve[k]=Math.min(999,(s.reserve[k]??0)+1);}t.levied=key;
+ return townCommit(s,`开仓募兵：后备兵 +${n}（${costText(cost)}）`);}
 export function tradeGrain(sell:boolean,amount:number):TownResult{const s=loadWorld(),t=s.town;if(!levelOf(t,'market'))return{ok:false,message:'需要先建市集'};const n=Math.max(1,Math.floor(amount));
  if(sell){if(s.provisions<n)return{ok:false,message:'粮草不足'};const gain=Math.floor(n*grainSellPrice(t));s.provisions-=n;t.money+=gain;return townCommit(s,`卖粮 ${n}，得钱 ${gain}`);}
  const cost=Math.ceil(n*grainBuyPrice(t));if(t.money<cost)return{ok:false,message:`钱不足：需要 ${cost}`};t.money-=cost;s.provisions=Math.min(1_000_000,s.provisions+n);return townCommit(s,`买粮 ${n}，花钱 ${cost}`);}

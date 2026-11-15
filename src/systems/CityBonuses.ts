@@ -8,6 +8,6 @@ import type {permanentEffects} from '../world/WorldStore';
 export function applyCitySpecialties(player: Player, effects: ReturnType<typeof permanentEffects>, firstStage: boolean): void {
   player.growth.permanentDamage = effects.damageBonus;
   if (!firstStage) return;
-  if (effects.maxHpBonus > 0) { player.stats.maxHpBonus += Math.round(player.maxHp * effects.maxHpBonus); player.hp = player.maxHp; }
+  if (effects.maxHpBonus !== 0) { player.stats.maxHpBonus += Math.round(player.maxHp * effects.maxHpBonus); player.hp = player.maxHp; }
   if (effects.attributePoints > 0) player.growth.addAttributePoints(effects.attributePoints);
 }

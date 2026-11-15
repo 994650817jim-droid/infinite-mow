@@ -1,7 +1,7 @@
 import {armyCapacity,TROOPS,TROOP_KINDS,type TroopKind} from '../data/legion';
 import type {ChapterId} from '../data/chapters';
 import {territorySummary,cityAttacker,cityById,eraChanges,eraIndexFor,type FactionId} from './WorldCities';
-import {type TownState,type TownBuildingId,type TaxRate,type CityFocus,type SeasonReport,TOWN_BUILDINGS,FOCUS_CHANGE_COST,FOCUS_NAME,TAX_NAME,migrateTown,parseTown,legacyLevels,settleSeason,upgradeCostFor,demolishRefund,countOf,unlockedPlots,canAfford,costText,seasonLabel} from '../town/TownData';
+import {type TownState,type TownBuildingId,type TaxRate,type CityFocus,type SeasonReport,TOWN_BUILDINGS,FOCUS_CHANGE_COST,FOCUS_NAME,TAX_NAME,migrateTown,parseTown,legacyLevels,settleSeason,upgradeCostFor,demolishRefund,countOf,unlockedPlots,canAfford,costText,seasonLabel,buildingBattleEffects,noBoon,eventById,grainSellPrice,grainBuyPrice,caravanValue,caravanSlots,levelOf} from '../town/TownData';
 /** W4 告急：某座玩家城池正被来犯；cause 为时代更替或攻城后反扑。 */
 export interface CityAlert{city:string;attacker:FactionId;cause:'era'|'retaliation';}
 export type BuildingId='barracks'|'farm'|'clinic';
@@ -72,11 +72,26 @@ export function setTaxRate(rate:TaxRate):TownResult{const s=loadWorld();if(!(rat
 export function setCityFocus(cityId:string,focus:CityFocus):TownResult{const s=loadWorld(),c=cityById(cityId);if(!c||!s.ownedCities.includes(cityId))return{ok:false,message:'不是你的城池'};if(!(focus in FOCUS_NAME)||focus==='balanced')return{ok:false,message:'无效方向'};
  const cur=s.town.focus[cityId]??'balanced';if(cur===focus)return{ok:false,message:'已是'+FOCUS_NAME[focus]};const cost=cur==='balanced'?0:FOCUS_CHANGE_COST[c.tier];
  if(s.town.money<cost)return{ok:false,message:`钱不足：改方向需要 ${cost}`};s.town.money-=cost;s.town.focus[cityId]=focus;return townCommit(s,`${c.name}改为${FOCUS_NAME[focus]}`);}
+/** 处理待决事件（0 / 1 号选项）。 */
+export function resolveTownEvent(choice:number):TownResult{const s=loadWorld(),t=s.town,ev=t.pendingEvent?eventById(t.pendingEvent):undefined;if(!ev)return{ok:false,message:'没有待处理的事件'};const opt=ev.options[choice===1?1:0],e=opt.effect;
+ s.town.money=Math.max(0,t.money+(e.money??0));s.provisions=Math.max(0,s.provisions+(e.provisions??0));s.merits=Math.max(0,s.merits+(e.merits??0));
+ if(e.taxMul)t.mods.taxMul=Math.max(.2,Math.min(3,t.mods.taxMul*e.taxMul));if(e.grainMul)t.mods.grainMul=Math.max(.2,Math.min(3,t.mods.grainMul*e.grainMul));if(e.badRisk)t.mods.badRisk=Math.max(-1,Math.min(3,t.mods.badRisk+e.badRisk));
+ t.boon.attributePoints=Math.min(5,t.boon.attributePoints+(e.attributePoints??0));t.boon.damage=Math.max(-.3,Math.min(.5,t.boon.damage+(e.damage??0)));t.boon.maxHp=Math.max(-.3,Math.min(.5,t.boon.maxHp+(e.maxHp??0)));
+ for(const [k,n] of Object.entries(e.reserve??{}))if(TROOP_KINDS.includes(k as TroopKind))s.reserve[k]=Math.min(999,(s.reserve[k]??0)+n);
+ t.pendingEvent=null;return townCommit(s,`${ev.title} · ${opt.label}`);}
+/** 市集买卖粮：sell=true 卖粮换钱，否则花钱买粮。需要市集。 */
+export function tradeGrain(sell:boolean,amount:number):TownResult{const s=loadWorld(),t=s.town;if(!levelOf(t,'market'))return{ok:false,message:'需要先建市集'};const n=Math.max(1,Math.floor(amount));
+ if(sell){if(s.provisions<n)return{ok:false,message:'粮草不足'};const gain=Math.floor(n*grainSellPrice(t));s.provisions-=n;t.money+=gain;return townCommit(s,`卖粮 ${n}，得钱 ${gain}`);}
+ const cost=Math.ceil(n*grainBuyPrice(t));if(t.money<cost)return{ok:false,message:`钱不足：需要 ${cost}`};t.money-=cost;s.provisions=Math.min(1_000_000,s.provisions+n);return townCommit(s,`买粮 ${n}，花钱 ${cost}`);}
+/** 驿站派商队：带粮去己方城池，下季结算时带钱回来（可能被劫）。 */
+export function sendCaravan(cityId:string,cargo:number):TownResult{const s=loadWorld(),t=s.town,c=cityById(cityId);if(!caravanSlots(t))return{ok:false,message:'需要先建驿站'};if(!c||!s.ownedCities.includes(cityId))return{ok:false,message:'只能派往己方城池'};
+ if(t.caravans.length>=caravanSlots(t))return{ok:false,message:`驿站 Lv${caravanSlots(t)} 每季最多 ${caravanSlots(t)} 支商队`};if(t.caravans.some(x=>x.to===cityId))return{ok:false,message:c.name+'已有商队在途'};
+ const n=Math.max(10,Math.floor(cargo));if(s.provisions<n)return{ok:false,message:'粮草不足'};const value=caravanValue(n,c.tier,t.focus[cityId]??'balanced');s.provisions-=n;t.caravans.push({to:cityId,cargo:n,value});return townCommit(s,`商队载粮 ${n} 前往${c.name}，预计下季带回 ${value} 钱`);}
 export type {TownState,TownBuildingId,TaxRate,CityFocus,SeasonReport};
 /** 主城建筑 + W3 大城特产的出征开局效果。 */
-export function permanentEffects(){const s=loadWorld(),b=s.buildings,sp=territorySummary(s.ownedCities).specialties.map(x=>x.specialty),sum=(k:'damage'|'maxHp'|'reserveSlots'|'attributePoints'|'provisions'|'reinforcements')=>sp.reduce((n,x)=>n+(x[k]??0),0);
+export function permanentEffects(){const s=loadWorld(),b=s.buildings,be=buildingBattleEffects(s.town),sp=territorySummary(s.ownedCities).specialties.map(x=>x.specialty),sum=(k:'damage'|'maxHp'|'reserveSlots'|'attributePoints'|'provisions'|'reinforcements')=>sp.reduce((n,x)=>n+(x[k]??0),0);
  return{armyCapacity:armyCapacity(b.barracks),reinforcements:b.barracks-1+sum('reinforcements'),healMultiplier:1+(b.clinic-1)*.06,provisionsMultiplier:1+(b.farm-1)*.08,
-  damageBonus:sum('damage'),maxHpBonus:sum('maxHp'),reserveSlots:2+sum('reserveSlots'),attributePoints:sum('attributePoints'),provisionsBonus:sum('provisions')};}
+  damageBonus:sum('damage')+be.damage+s.town.boon.damage,maxHpBonus:Math.max(-.2,sum('maxHp')+be.maxHp+s.town.boon.maxHp),reserveSlots:2+sum('reserveSlots'),attributePoints:sum('attributePoints')+be.attributePoints+s.town.boon.attributePoints,provisionsBonus:sum('provisions')};}
 /**
  * 结算时（胜利或坚持 60 秒以上）过一个季度（TOWN_PLAN.md · T1）：农田产粮、市集收税、城池按发展方向产出、扣后备兵军粮。
  * 寿春特产仍提高本次全部粮草收益。返回的 provisions 已是净值（含产粮与开销）；钱直接记入 town.money。
@@ -86,7 +101,7 @@ function applyIncome(s:WorldSave,eligible:boolean,merits:number,provisions:numbe
  if(!eligible)return{merits,provisions:battle,cityMerits:0,cityProvisions:0,season:null};
  const cities=s.ownedCities.map(id=>cityById(id)).filter((c):c is NonNullable<typeof c>=>!!c).map(c=>({tier:c.tier,focus:s.town.focus[c.id]??'balanced' as CityFocus}));
  const troops=Object.values(s.reserve).reduce((n,v)=>n+(v||0),0);
- const r=settleSeason(s.town,{troops,cities,provisionsHave:s.provisions+battle,provisionsMultiplier:bonus});
+ const r=settleSeason(s.town,{troops,cities,provisionsHave:s.provisions+battle,provisionsMultiplier:bonus});s.town.boon=noBoon();
  return{merits:merits+r.cityMerits,provisions:battle+r.grain+r.cityProvisions-r.upkeep,cityMerits:r.cityMerits,cityProvisions:r.cityProvisions,season:r};}
 /** 结算面板上的“城池产出”一行（无产出时为空）。 */
 export function cityIncomeLine(r:{cityMerits?:number;cityProvisions?:number;season?:SeasonReport|null}):string{const q=r.season;if(!q)return r.cityMerits||r.cityProvisions?`\n城池产出 · 军功 +${r.cityMerits??0} / 粮草 +${r.cityProvisions??0}`:'';

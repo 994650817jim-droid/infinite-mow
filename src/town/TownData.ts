@@ -16,12 +16,16 @@ export interface SeasonReport {
   grain: number; households: number; tax: number; upkeep: number; shortage: number;
   /** 城池按发展方向的产出。 */
   cityMerits: number; cityProvisions: number; cityMoney: number;
+  /** T3：商队带回的钱、被劫的商队数、本季抽到的事件 id。 */
+  caravanMoney?: number; caravanLost?: number; event?: string | null;
 }
 export interface TownState {
   money: number; year: number; season: number; tax: TaxRate;
   plots: Array<PlotBuilding | null>;
   focus: Record<string, CityFocus>;
   report: SeasonReport | null;
+  /** T3：下季修正、下一场出征加成、待处理事件、在途商队。 */
+  mods: SeasonMods; boon: BattleBoon; pendingEvent: string | null; caravans: Caravan[];
 }
 
 export const PLOT_COUNT = 12, BASE_PLOTS = 6, MAX_LEVEL = 3, START_YEAR = 184;
@@ -45,12 +49,12 @@ export const TOWN_BUILDINGS: Record<TownBuildingId, BuildingDef> = {
   clinic: { name: '医馆', max: 1, build: C(20, 40), effect: l => `军医治疗量 +${(l - 1) * 6}%` },
   house: { name: '民居', max: 4, build: C(0, 30), effect: l => `民户 +${HOUSE_HOUSEHOLDS[l - 1]}（税收的基础）` },
   market: { name: '市集', max: 1, build: C(30, 60), effect: l => `按民户收税 ×${MARKET_MULT[l]}（无市集只收三成）` },
-  post: { name: '驿站', max: 1, build: C(40, 60, 40), effect: l => `开放商队（第 ${l} 级：每季 ${l} 支）` },
-  smithy: { name: '铁匠铺', max: 1, build: C(40, 40, 60), effect: l => `打造兵器：出征开局武器升级（第 ${l} 级）` },
+  post: { name: '驿站', max: 1, build: C(40, 60, 40), effect: l => `派商队载粮去己方城池换钱（每季 ${l} 支）` },
+  smithy: { name: '铁匠铺', max: 1, build: C(40, 40, 60), effect: l => `打造兵器：出征时本命武器伤害 +${l * 4}%` },
   drill: { name: '校场', max: 1, build: C(50, 60, 40), effect: l => `出征开局属性点 +${[1, 1, 2][l - 1]}` },
   granary: { name: '粮仓', max: 1, build: C(20, 80), effect: l => `季度军粮开销 −${GRANARY_CUT[l - 1] * 100}%；旱灾损失减半` },
-  wall: { name: '城墙', max: 1, build: C(60, 100, 60), effect: l => `扩地 +${l * 2} 块；守城加成（第 ${l} 级）` },
-  tavern: { name: '酒肆', max: 1, build: C(30, 40, 50), effect: l => `名士、商队等好事件更常出现（第 ${l} 级）` },
+  wall: { name: '城墙', max: 1, build: C(60, 100, 60), effect: l => `扩地 +${l * 2} 块；出征时主将生命 +${l * 3}%` },
+  tavern: { name: '酒肆', max: 1, build: C(30, 40, 50), effect: l => `季度好事件（名士、商队、祥瑞…）出现率 +${l * 35}%` },
 };
 export const FARM_GRAIN = [20, 35, 55], HOUSE_HOUSEHOLDS = [20, 35, 55], GRANARY_CUT = [.15, .3, .45];
 export const MARKET_MULT = [.3, 1, 1.3, 1.6];
@@ -80,7 +84,7 @@ export const FOCUS_INCOME: Record<CityTier, Record<CityFocus, Cost>> = {
 export const FOCUS_CHANGE_COST: Record<CityTier, number> = { small: 20, medium: 40, large: 80 };
 
 export function emptyTown(): TownState {
-  return { money: 0, year: START_YEAR, season: 0, tax: 'mid', plots: new Array(PLOT_COUNT).fill(null), focus: {}, report: null };
+  return { money: 0, year: START_YEAR, season: 0, tax: 'mid', plots: new Array(PLOT_COUNT).fill(null), focus: {}, report: null, mods: noMods(), boon: noBoon(), pendingEvent: null, caravans: [] };
 }
 /** 旧存档迁移：原有军营 / 农田 / 医馆按原等级放在前三块地。 */
 export function migrateTown(levels: { barracks: number; farm: number; clinic: number }): TownState {
@@ -105,6 +109,12 @@ export function parseTown(v: unknown, levels: { barracks: number; farm: number; 
   if (o.focus && typeof o.focus === 'object') for (const [k, f] of Object.entries(o.focus as Record<string, unknown>).slice(0, 64)) if (k.length <= 32 && (f === 'farm' || f === 'trade' || f === 'military' || f === 'balanced')) t.focus[k] = f;
   const r = o.report as SeasonReport | null;
   t.report = r && typeof r === 'object' && typeof r.grain === 'number' ? r : null;
+  const num = (v: unknown, lo: number, hi: number, d: number): number => typeof v === 'number' && Number.isFinite(v) ? Math.max(lo, Math.min(hi, v)) : d;
+  const m = (o.mods ?? {}) as Partial<SeasonMods>, bo = (o.boon ?? {}) as Partial<BattleBoon>;
+  t.mods = { taxMul: num(m.taxMul, .2, 3, 1), grainMul: num(m.grainMul, .2, 3, 1), badRisk: num(m.badRisk, -1, 3, 0) };
+  t.boon = { attributePoints: int(bo.attributePoints, 5), damage: num(bo.damage, -.3, .5, 0), maxHp: num(bo.maxHp, -.3, .5, 0) };
+  t.pendingEvent = typeof o.pendingEvent === 'string' && eventById(o.pendingEvent) ? o.pendingEvent : null;
+  t.caravans = Array.isArray(o.caravans) ? (o.caravans as Caravan[]).filter(c => c && typeof c.to === 'string' && c.to.length <= 32).slice(0, 3).map(c => ({ to: c.to, cargo: int(c.cargo, 1000), value: int(c.value, 10000) })) : [];
   if (!t.plots.some(p => p?.id === 'barracks')) { const free = t.plots.findIndex(p => !p); if (free >= 0) t.plots[free] = { id: 'barracks', level: 1 }; }
   return t;
 }
@@ -127,20 +137,98 @@ export function costText(c: Cost): string { return [c.merits ? `军功 ${c.merit
  * troops：后备兵总数（用于军粮开销）；cities：已占城池（档次与发展方向）；provisionsHave：开销前可用粮草。
  * 返回本季报告；调用方把 grain + cityProvisions − upkeep 计入粮草、cityMerits 计入军功、tax + cityMoney 计入钱。
  */
-export function settleSeason(t: TownState, input: { troops: number; cities: Array<{ tier: CityTier; focus: CityFocus }>; provisionsHave: number; provisionsMultiplier?: number }): SeasonReport {
-  const s = t.season;
-  const grain = Math.round(t.plots.reduce((n, p) => n + (p?.id === 'farm' ? FARM_GRAIN[p.level - 1] : 0), 0) * SEASON_GRAIN[s]);
+export function settleSeason(t: TownState, input: { troops: number; cities: Array<{ tier: CityTier; focus: CityFocus }>; provisionsHave: number; provisionsMultiplier?: number; rng?: () => number }): SeasonReport {
+  const s = t.season, rng = input.rng ?? Math.random, mods = t.mods ?? noMods();
+  const grain = Math.round(t.plots.reduce((n, p) => n + (p?.id === 'farm' ? FARM_GRAIN[p.level - 1] : 0), 0) * SEASON_GRAIN[s] * mods.grainMul);
   const hh = households(t), market = levelOf(t, 'market');
-  const tax = Math.round(hh * TAX_PER_HOUSEHOLD[t.tax] * MARKET_MULT[market]);
+  const tax = Math.round(hh * TAX_PER_HOUSEHOLD[t.tax] * MARKET_MULT[market] * mods.taxMul);
+  // 在途商队回城（坏事件风险越高越易被劫）
+  let caravanMoney = 0, caravanLost = 0;
+  for (const c of t.caravans ?? []) { if (rng() < CARAVAN_LOSS * (1 + Math.max(0, mods.badRisk))) caravanLost++; else caravanMoney += c.value; }
+  t.caravans = [];
+  // 本季事件（已有未处理的事件时不再抽新的）
+  const event = t.pendingEvent ? null : rollTownEvent(t, s, rng);
+  if (event) t.pendingEvent = event.id;
+  t.mods = noMods();
   let cityMerits = 0, cityProvisions = 0, cityMoney = 0;
   for (const c of input.cities) { const inc = FOCUS_INCOME[c.tier][c.focus]; cityMerits += inc.merits; cityProvisions += inc.provisions; cityMoney += inc.money; }
   cityProvisions = Math.round(cityProvisions * (input.provisionsMultiplier ?? 1));
   const need = Math.round(Math.max(0, input.troops) * SEASON_UPKEEP[s] * (1 - (GRANARY_CUT[levelOf(t, 'granary') - 1] ?? 0)));
   const available = input.provisionsHave + grain + cityProvisions, upkeep = Math.min(need, available), shortage = need - upkeep;
-  const report: SeasonReport = { year: t.year, season: s, grain, households: hh, tax, upkeep, shortage, cityMerits, cityProvisions, cityMoney };
-  t.money = Math.min(1_000_000, t.money + tax + cityMoney);
+  const report: SeasonReport = { year: t.year, season: s, grain, households: hh, tax, upkeep, shortage, cityMerits, cityProvisions, cityMoney, caravanMoney, caravanLost, event: event?.id ?? null };
+  t.money = Math.min(1_000_000, t.money + tax + cityMoney + caravanMoney);
   t.season = (s + 1) % 4; if (t.season === 0) t.year++;
   t.report = report;
   return report;
 }
 export function seasonLabel(year: number, season: number): string { return `${year} 年 · ${SEASONS[season]}`; }
+
+// ———————————————— T3：随机事件、商贸、战斗加成 ————————————————
+/** 下一季生效的修正（结算时用掉）。 */
+export interface SeasonMods { taxMul: number; grainMul: number; badRisk: number }
+/** 下一场出征的加成 / 减益（下一次有资格结算时用掉）。 */
+export interface BattleBoon { attributePoints: number; damage: number; maxHp: number }
+export interface Caravan { to: string; cargo: number; value: number }
+export interface EventEffect { money?: number; provisions?: number; merits?: number; taxMul?: number; grainMul?: number; badRisk?: number; attributePoints?: number; damage?: number; maxHp?: number; reserve?: Record<string, number> }
+export interface EventOption { label: string; note: string; effect: EventEffect }
+export type EventKind = 'good' | 'bad' | 'neutral';
+export interface TownEventDef { id: string; title: string; text: string; kind: EventKind; weight: number; seasons?: number[]; requires?: TownBuildingId; minTax?: TaxRate; options: [EventOption, EventOption] }
+
+const O = (label: string, note: string, effect: EventEffect): EventOption => ({ label, note, effect });
+/** 约 20 种季度事件。note 为给玩家看的效果说明。 */
+export const TOWN_EVENTS: TownEventDef[] = [
+  { id: 'drought', title: '旱魃为虐', text: '入夏无雨，田垄龟裂，乡民望天兴叹。', kind: 'bad', weight: 10, seasons: [1, 2], options: [O('开仓赈济', '粮草 −40；百姓感恩，下季税收 +20%', { provisions: -40, taxMul: 1.2 }), O('听天由命', '下季税收 −30%', { taxMul: .7 })] },
+  { id: 'refugees', title: '流民投奔', text: '数百流民扶老携幼来到营寨外，请求收留。', kind: 'neutral', weight: 10, options: [O('开门收留', '粮草 −30；民户增多，下季税收 +25%', { provisions: -30, taxMul: 1.25 }), O('好言劝走', '无事；但流民落草，下季坏事件更易发生', { badRisk: .5 })] },
+  { id: 'western_caravan', title: '西域商队', text: '一支西域驼队途经营寨，愿以重金收购本地土产。', kind: 'good', weight: 8, options: [O('出售土产', '钱 +40', { money: 40 }), O('换取精铁', '下一场出征本命武器伤害 +5%', { damage: .05 })] },
+  { id: 'scholar', title: '名士来访', text: '一位游学名士途经此地，愿留营中参赞军机数日。', kind: 'good', weight: 7, options: [O('厚礼相待', '钱 −30；下一场出征开局属性点 +1', { money: -30, attributePoints: 1 }), O('以礼送别', '军功 +5', { merits: 5 })] },
+  { id: 'bandits', title: '盗匪劫掠', text: '山中盗匪趁夜劫掠了城外村落。', kind: 'bad', weight: 10, options: [O('发兵清剿', '军功 +15、粮草 −20', { merits: 15, provisions: -20 }), O('暂且忍耐', '钱 −20（损失财物）', { money: -20 })] },
+  { id: 'harvest_festival', title: '丰年祭', text: '秋收在望，乡老请求举办丰年祭祀。', kind: 'good', weight: 8, seasons: [1, 2], options: [O('隆重举办', '钱 −20；下季产粮 +30%', { money: -20, grainMul: 1.3 }), O('一切从简', '钱 +5', { money: 5 })] },
+  { id: 'plague', title: '疫病流行', text: '营中出现时疫，不少士卒发热卧床。', kind: 'bad', weight: 7, options: [O('延医施药', '钱 −30', { money: -30 }), O('静待自愈', '下一场出征主将生命 −5%', { maxHp: -.05 })] },
+  { id: 'gentry_grain', title: '豪强献粮', text: '本地豪强遣人送来粮车，言辞恭顺。', kind: 'good', weight: 8, options: [O('收下粮车', '粮草 +50', { provisions: 50 }), O('婉言谢绝', '清名远播，军功 +10', { merits: 10 })] },
+  { id: 'yellow_remnants', title: '黄巾余党', text: '一股黄巾余党盘踞附近山谷，时出时没。', kind: 'bad', weight: 7, options: [O('招安收编', '粮草 −20；后备刀盾兵 +2', { provisions: -20, reserve: { swordsman: 2 } }), O('出兵剿灭', '粮草 −10；下一场出征伤害 +3%', { provisions: -10, damage: .03 })] },
+  { id: 'smith_master', title: '铁匠求师', text: '铁匠铺的学徒想拜访名匠，求一笔盘缠。', kind: 'good', weight: 6, requires: 'smithy', options: [O('资助学艺', '钱 −25；下一场出征伤害 +6%', { money: -25, damage: .06 }), O('不必远行', '钱 +5', { money: 5 })] },
+  { id: 'merchant_loan', title: '商贾借贷', text: '大商贾愿借钱给营寨，约定下季以税抵债。', kind: 'neutral', weight: 6, options: [O('借钱', '钱 +60；下季税收 −20%', { money: 60, taxMul: .8 }), O('不借', '无事', {})] },
+  { id: 'locusts', title: '蝗灾', text: '蝗群自西而来，遮天蔽日。', kind: 'bad', weight: 7, seasons: [1, 2], options: [O('组织扑蝗', '粮草 −15', { provisions: -15 }), O('听天由命', '下季产粮 −50%', { grainMul: .5 })] },
+  { id: 'deserters', title: '降卒来投', text: '一队溃散的官军前来投靠，愿效犬马之劳。', kind: 'good', weight: 6, options: [O('收编入营', '粮草 −20；后备长枪兵 +2', { provisions: -20, reserve: { spearman: 2 } }), O('发放路费', '钱 −10；军功 +8', { money: -10, merits: 8 })] },
+  { id: 'omen', title: '天降祥瑞', text: '营寨后山现出五彩祥云，军民议论纷纷。', kind: 'good', weight: 5, options: [O('设坛祭天', '钱 −20；下一场出征开局属性点 +1', { money: -20, attributePoints: 1 }), O('不以为意', '军功 +5', { merits: 5 })] },
+  { id: 'flood_road', title: '暴雨毁路', text: '连日暴雨冲毁了通往城外的道路。', kind: 'bad', weight: 7, seasons: [0, 1], options: [O('拨钱修路', '钱 −25', { money: -25 }), O('暂不修缮', '商旅不通，下季税收 −20%', { taxMul: .8 })] },
+  { id: 'school', title: '学子求学', text: '乡里学子请求在营中开设学堂。', kind: 'neutral', weight: 6, options: [O('开设学堂', '钱 −30；下季税收 +15%', { money: -30, taxMul: 1.15 }), O('军务繁忙', '无事', {})] },
+  { id: 'brawl', title: '军中斗殴', text: '两营士卒因琐事斗殴，各有损伤。', kind: 'bad', weight: 6, options: [O('严明军纪', '下一场出征伤害 +3%（军纪严明）', { damage: .03 }), O('从轻发落', '军功 −5', { merits: -5 })] },
+  { id: 'passing_caravan', title: '远方商旅', text: '经驿站来往的商旅想收购一批粮草。', kind: 'good', weight: 7, requires: 'post', options: [O('卖粮', '粮草 −30、钱 +35', { provisions: -30, money: 35 }), O('留粮自用', '无事', {})] },
+  { id: 'elders_tax', title: '乡老请命', text: '乡老联名上书，言重税之下民不聊生。', kind: 'bad', weight: 12, minTax: 'high', options: [O('暂缓征收', '下季税收 −10%，坏事件减少', { taxMul: .9, badRisk: -.5 }), O('置之不理', '民怨渐起，下季坏事件更易发生', { badRisk: .8 })] },
+  { id: 'cold_wave', title: '寒潮来袭', text: '朔风骤起，大雪封路，士卒衣单。', kind: 'bad', weight: 9, seasons: [3], options: [O('发放寒衣', '钱 −20', { money: -20 }), O('咬牙坚持', '下一场出征主将生命 −5%', { maxHp: -.05 })] },
+  { id: 'wine_feast', title: '犒赏三军', text: '酒肆掌柜献上美酒，请为将士庆功。', kind: 'good', weight: 6, requires: 'tavern', options: [O('设宴犒军', '钱 −15；下一场出征伤害 +4%', { money: -15, damage: .04 }), O('留待凯旋', '钱 +10', { money: 10 })] },
+];
+export const EVENT_CHANCE = .75;
+const TAX_RANK: Record<TaxRate, number> = { low: 0, mid: 1, high: 2 };
+const TAX_BAD: Record<TaxRate, number> = { low: .6, mid: 1, high: 1.6 };
+
+/** 按季节、建筑、税率、酒肆与坏事件风险加权抽取一个事件（可能为空）。 */
+export function rollTownEvent(t: TownState, season: number, rng: () => number = Math.random): TownEventDef | null {
+  if (rng() >= EVENT_CHANCE) return null;
+  const tavern = levelOf(t, 'tavern'), risk = Math.max(0, 1 + (t.mods?.badRisk ?? 0));
+  const pool = TOWN_EVENTS.filter(e => (!e.seasons || e.seasons.includes(season)) && (!e.requires || levelOf(t, e.requires) > 0) && (!e.minTax || TAX_RANK[t.tax] >= TAX_RANK[e.minTax]))
+    .map(e => ({ e, w: e.weight * (e.kind === 'bad' ? TAX_BAD[t.tax] * risk : e.kind === 'good' ? 1 + tavern * .35 : 1) }));
+  const total = pool.reduce((n, x) => n + x.w, 0); let r = rng() * total;
+  for (const x of pool) { r -= x.w; if (r <= 0) return x.e; }
+  return pool.at(-1)?.e ?? null;
+}
+export function eventById(id: string): TownEventDef | undefined { return TOWN_EVENTS.find(e => e.id === id); }
+
+// —— 商贸 ——
+/** 市集卖粮 / 买粮价（每 1 粮的钱）；市集等级越高越划算。 */
+export function grainSellPrice(t: TownState): number { return [0, .35, .42, .5][levelOf(t, 'market')]; }
+export function grainBuyPrice(t: TownState): number { return [0, .7, .62, .55][levelOf(t, 'market')]; }
+/** 商队：带粮去己方城池，下季带钱回来。去重商城池 ×1.3，大城 ×1.2、中城 ×1.1。 */
+export function caravanValue(cargo: number, tier: CityTier, focus: CityFocus): number { return Math.round(cargo * .6 * (focus === 'trade' ? 1.3 : 1) * (tier === 'large' ? 1.2 : tier === 'medium' ? 1.1 : 1)); }
+export const CARAVAN_CARGO = [30, 60], CARAVAN_LOSS = .08;
+export function caravanSlots(t: TownState): number { return levelOf(t, 'post'); }
+
+// —— 建筑的出征加成 ——
+/** 校场：开局属性点；铁匠铺：本命武器伤害；城墙：主将生命。 */
+export function buildingBattleEffects(t: TownState): BattleBoon {
+  return { attributePoints: [0, 1, 1, 2][levelOf(t, 'drill')], damage: [0, .04, .08, .12][levelOf(t, 'smithy')], maxHp: [0, .03, .06, .09][levelOf(t, 'wall')] };
+}
+
+export function noMods(): SeasonMods { return { taxMul: 1, grainMul: 1, badRisk: 0 }; }
+export function noBoon(): BattleBoon { return { attributePoints: 0, damage: 0, maxHp: 0 }; }

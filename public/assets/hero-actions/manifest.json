@@ -1,0 +1,54 @@
+{
+ "zhaoyun": {
+  "width": 948,
+  "height": 1659,
+  "transparent": 0.63,
+  "removed": 0,
+  "frames": 28,
+  "output": "512x896",
+  "scale": 0.4766,
+  "empty": [],
+  "detected": true,
+  "rowBands": 7,
+  "edgeFrames": []
+ },
+ "guanyu": {
+  "width": 948,
+  "height": 1659,
+  "transparent": 0.66,
+  "removed": 0,
+  "frames": 28,
+  "output": "512x896",
+  "scale": 0.4978,
+  "empty": [],
+  "detected": true,
+  "rowBands": 7,
+  "edgeFrames": []
+ },
+ "huangzhong": {
+  "width": 948,
+  "height": 1659,
+  "transparent": 0.61,
+  "removed": 0,
+  "frames": 28,
+  "output": "512x896",
+  "scale": 0.4553,
+  "empty": [],
+  "detected": true,
+  "rowBands": 7,
+  "edgeFrames": []
+ },
+ "zhuge": {
+  "width": 948,
+  "height": 1659,
+  "transparent": 0.66,
+  "removed": 0,
+  "frames": 28,
+  "output": "512x896",
+  "scale": 0.5209,
+  "empty": [],
+  "detected": true,
+  "rowBands": 7,
+  "edgeFrames": []
+ }
+}

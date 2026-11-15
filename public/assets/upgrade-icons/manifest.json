@@ -1,5 +1,5 @@
 {
- "source": "ChatGPT 生成（2026-11-14，用户确认保存），originals/sheet-1..4.png",
+ "source": "ChatGPT 生成（2026-11-14，用户确认保存），originals/sheet-1..4.png；后补单图 originals/blood_jade.png、warfeed.png",
  "size": 128,
  "icons": [
   {
@@ -703,6 +703,28 @@
     5,
     285,
     291
+   ],
+   "edge": false
+  },
+  {
+   "id": "blood_jade",
+   "bytes": 7348,
+   "bbox": [
+    242,
+    29,
+    824,
+    1174
+   ],
+   "edge": false
+  },
+  {
+   "id": "warfeed",
+   "bytes": 11124,
+   "bbox": [
+    65,
+    32,
+    1141,
+    1169
    ],
    "edge": false
   }

@@ -117,13 +117,14 @@ export function getBattleChapter(id?:string, stage:YellowStage=1,westStage:Yello
   if(stage===2){
    const r=Math.random();
    // 1-2 opens with cavalry and archers; shield soldiers join at wave four.
+   // 弓手占比按用户反馈调低（原 33% / 26% → 约 15% / 14%），其余补给步兵与骑兵
    if(t>=180){
-    if(r<.24)return 'infantry';
-    if(r<.46)return 'cavalry';
-    if(r<.72)return 'archer';
+    if(r<.34)return 'infantry';
+    if(r<.56)return 'cavalry';
+    if(r<.70)return 'archer';
     return 'shield';
    }
-   return r<.35?'infantry':r<.67?'cavalry':'archer';
+   return r<.5?'infantry':r<.85?'cavalry':'archer';
   }
   return pickEnemyKind(t);
  },

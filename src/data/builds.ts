@@ -27,6 +27,7 @@ export const TACTICS={
  ember:{name:'火种',tag:'flame',desc:'命中15/22/30%概率灼烧2秒，每0.5秒造成该次基础伤害10%'},
  spread:{name:'蔓延',tag:'flame',desc:'燃烧敌人死亡时，引燃附近1/2/3人；传染火焰不再传染'},
  hotwind:{name:'焚风',tag:'flame',desc:'本命命中燃烧目标增伤10/15/20%'},
+ warfeed:{name:'以战养战',tag:'bulwark',desc:'每击杀12/10/8名敌人（含部下击杀），回复最大生命2/2.5/3%'},
 } as const;
 export type TacticId=keyof typeof TACTICS;
 export const TREASURES={
@@ -42,6 +43,7 @@ export const TREASURES={
  wildfire_lamp:{name:'燎原灯',tag:'flame',desc:'命中必定附加弱灼烧；燃烧的敌人死亡时点燃附近2人，传出去的火不会再传'},
  breaker_jade:{name:'破军佩',tag:'combo',desc:'每10次本命命中，震击目标附近3人，造成35%伤害'},
  revival_jade:{name:'回生玉佩',tag:'skirmish',desc:'每关首次致命伤害保留1生命，并获得1秒无敌'},
+ blood_jade:{name:'饮血佩',tag:'bulwark',desc:'本命武器命中时，回复造成伤害的5%生命；每秒最多回复最大生命的3%'},
 } as const;
 export type TreasureId=keyof typeof TREASURES;
 export interface BuildSnapshot {tactics:Partial<Record<TacticId,number>>;treasures:TreasureId[];}
@@ -83,5 +85,6 @@ export function tacticDescription(id:TacticId,level:number):string{
  ember:`命中有${[15,22,30][i]}%概率点燃敌人2秒。\n每半秒烧伤一次，每次为攻击伤害的10%。`,
  spread:`燃烧的敌人死亡后，再点燃附近${n}人。\n传过去的火焰较弱，且不会继续传染。`,
  hotwind:`攻击正在燃烧的敌人时，伤害增加${[10,15,20][i]}%。\n搭配「火种」或「燎原灯」使用。`,
+ warfeed:`每击杀${[12,10,8][i]}名敌人（部下击杀也算），回复最大生命的${[2,2.5,3][i]}%。\n以战养战，越打越稳。`,
  };return descriptions[id];
 }

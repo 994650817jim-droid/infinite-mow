@@ -17,6 +17,8 @@ export class Ally {
   active = true; level = 1; hp = 1; maxHp = 1; cooldown = 0; hurtUntil = 0; attackUntil = 0;
   reserveSoldier=false;
   lifeId = 0; attackStarted = 0;
+  /** 弓兵射击时目标在左侧（攻击表各行都朝右拉弓，向左射时需镜像）。 */
+  private aimLeft = false;
   ai = createTacticState();
   slot = 0; simDebt = 0; deathsReported = false;
   private px: number; private py: number; private walked = 0;
@@ -58,7 +60,7 @@ export class Ally {
   }
   face(x: number, y: number): void { const dx = x - this.x, dy = y - this.y; if (Math.abs(dx) < 1 && Math.abs(dy) < 1) return; this.dir = Math.abs(dx) > Math.abs(dy) ? dx < 0 ? 'left' : 'right' : dy < 0 ? 'up' : 'down'; }
   attach(view: AllyView): void { this.view = view; view.sprite.setPosition(this.px, this.py); this.render(0); }
-  act(x: number, y: number, now: number, duration: number): void { this.dir = Math.abs(x - this.x) > Math.abs(y - this.y) ? x < this.x ? 'left' : 'right' : y < this.y ? 'up' : 'down'; this.attackStarted = now; this.attackUntil = now + duration; }
+  act(x: number, y: number, now: number, duration: number): void { this.aimLeft = x < this.x; this.dir = Math.abs(x - this.x) > Math.abs(y - this.y) ? x < this.x ? 'left' : 'right' : y < this.y ? 'up' : 'down'; this.attackStarted = now; this.attackUntil = now + duration; }
   release(): AllyView | null { const v = this.view; if (v) { this.px = v.sprite.x; this.py = v.sprite.y; v.sprite.setVisible(false); v.shadow.setVisible(false); v.label.setVisible(false); } this.view = null; return v; }
   render(now: number): void {
     const v = this.view; if (!v) return; const art = this.def.art, reused = art.startsWith('xiliang'), custom = this.def.walkVisual;
@@ -69,7 +71,9 @@ export class Ally {
     const progress=Math.max(0,Math.min(1,(now-this.attackStarted)/Math.max(1,this.attackUntil-this.attackStarted)));
     const action = this.def.actionVisual && (now < this.attackUntil || anticipation);
     const texture = action ? this.def.actionVisual!.texture : attack ? `${art}_attack_sheet` : sheet;
-    const frame = action ? `${this.dir}_${(meleeAction?(now>=this.attackUntil?0:Math.min(3,1+Math.floor(progress*3))):Math.min(3,Math.floor(progress*4)))}` : attack ? `atk_${this.dir}_${(now-this.attackStarted)/Math.max(1,this.attackUntil-this.attackStarted)<.5 ? 0 : 1}` : `${this.dir}_${!this.moving || (custom||this.kind==='spearman') && now < this.attackUntil ? 0 : Math.floor(this.walked / 14) % 4}`;
+    // 弓兵攻击表的“左”行实为朝右、上下行也朝右拉弓：统一用朝右的侧身拉弓/放箭两帧，目标在左时水平镜像
+    const archerAim = attack && this.kind === 'archer';
+    const frame = action ? `${this.dir}_${(meleeAction?(now>=this.attackUntil?0:Math.min(3,1+Math.floor(progress*3))):Math.min(3,Math.floor(progress*4)))}` : attack ? `atk_${archerAim ? 'right' : this.dir}_${(now-this.attackStarted)/Math.max(1,this.attackUntil-this.attackStarted)<.5 ? 0 : 1}` : `${this.dir}_${!this.moving || (custom||this.kind==='spearman') && now < this.attackUntil ? 0 : Math.floor(this.walked / 14) % 4}`;
     const scale = custom?.scale ?? (this.kind === 'rider' ? .8 : .58);
     const frameHeight=action&&meleeAction?112:96;
     const ground = action&&meleeAction?100/112:custom?.groundY ?? (reused ? .875 : .98);
@@ -82,6 +86,7 @@ export class Ally {
     // Same-character procedural follow-through where independent attack art is still absent.
     const follow=now<this.attackUntil?Math.sin(progress*Math.PI):0;
     v.sprite.setRotation(this.kind==='guardian'?follow*.035*(this.facingX||1):this.kind==='rider'?follow*.045*(this.facingX||1):0);
+    v.sprite.setFlipX(archerAim && this.aimLeft);
     v.shadow.setVisible(this.active).setPosition(this.x, this.y + this.radius * .72);
     v.label.setVisible(false);
   }

@@ -43,6 +43,8 @@ export const GUANDAO_TABLE = [
   { radius: 225, angle: 135, damage: 56, cooldown: 1.25, arc: 326.25 },
 ];
 const levelIndex = (level: number): number => Math.max(0, Math.min(4, Math.floor(level) - 1));
+/** 黄忠连弩每级额外箭数（Lv1 0 支 … Lv5 4 支，共 5 支）。 */
+export const crossbowExtraArrows = (level: number): number => levelIndex(level);
 
 export interface WeaponDef {
   id: WeaponId;
@@ -198,6 +200,8 @@ export const WEAPON_BEHAVIORS: Record<WeaponId, (host: WeaponHost, weapon: Weapo
     const aimX = aim.x - host.player.x, aimY = aim.y - host.player.y;
     host.player.faceDirection(Math.abs(aimX) > Math.abs(aimY) ? (aimX < 0 ? 'left' : 'right') : (aimY < 0 ? 'up' : 'down'), 160);
     const passiveCast = host.player.passive.beginCast('spear_orbit');
+    // 招牌技动作：七进七出（龙胆蓄满的强化一击）
+    if (passiveCast.empowered) host.player.playAction('skill', aimX < 0 ? 'left' : 'right');
     const spearLength = pierce.len * passiveCast.spearLengthMul * host.player.growth.spearLengthMultiplier();
     const count = level;
     const used = new Map<number, number>();
@@ -246,7 +250,23 @@ export const WEAPON_BEHAVIORS: Record<WeaponId, (host: WeaponHost, weapon: Weapo
     const def = WEAPON_DEFS.crossbow;
     const damage = def.damage(level, host.player.stats) * host.player.growth.damageMultiplier(time);
     const bounce = Math.min(4, 2 + Math.floor((level - 1) / 2));
+    { const ax = target.x - host.player.x, ay = target.y - host.player.y; host.player.faceDirection(Math.abs(ax) > Math.abs(ay) ? (ax < 0 ? 'left' : 'right') : (ay < 0 ? 'up' : 'down'), 160);
+      // 黄忠招牌技动作「百步穿杨」：神射状态或站立蓄势满时出手，至多每 4 秒一次
+      const g = host.player.growth, full = g.masteries.steady_aim > 0 && g.stationarySeconds >= 4.99;
+      if ((full || host.player.passive.isSharpshooter(time)) && time >= host.player.nextSkillAction && host.player.playAction('skill', ax < 0 ? 'left' : 'right')) host.player.nextSkillAction = time + 4000; }
     host.fireBolt(host.bolts, host.player.x, host.player.y, target.x, target.y, damage, bounce, true, 560);
+    // 每升一级多射 1 支（Lv5 共 5 支）：额外的箭优先分射附近其他敌人，70% 伤害；不够目标时散射同一目标
+    const extra = crossbowExtraArrows(level);
+    if (extra > 0) {
+      const px = host.player.x, py = host.player.y;
+      const others = host.grid.query(px, py, 500).filter(e => e.active && !e.isSupplySlot && e !== target && e.hp > 0)
+        .map(e => ({ e, d: Math.hypot(e.x - px, e.y - py) })).filter(o => o.d <= 500).sort((a, b) => a.d - b.d).slice(0, extra);
+      for (let k = 0; k < extra; k += 1) {
+        const t = others[k]?.e;
+        if (t) host.fireBolt(host.bolts, px, py, t.x, t.y, damage * .7, bounce, true, 560);
+        else { const a = Math.atan2(target.y - py, target.x - px) + (k % 2 ? 1 : -1) * (.12 + .06 * Math.floor(k / 2)), d = Math.hypot(target.x - px, target.y - py) || 1; host.fireBolt(host.bolts, px, py, px + Math.cos(a) * d, py + Math.sin(a) * d, damage * .7, bounce, true, 560); }
+      }
+    }
     if (host.player.passive.isSharpshooter(time)) {
       const dx = target.x - host.player.x, dy = target.y - host.player.y, d = Math.hypot(dx, dy) || 1;
       host.fireBolt(host.bolts, host.player.x - dy / d * 6, host.player.y + dx / d * 6, target.x, target.y, damage, bounce, true, 560);
@@ -326,6 +346,8 @@ export const WEAPON_BEHAVIORS: Record<WeaponId, (host: WeaponHost, weapon: Weapo
     };
     const cardinal = Math.abs(Math.cos(angle)) > Math.abs(Math.sin(angle)) ? (Math.cos(angle) < 0 ? 'left' : 'right') : Math.sin(angle) < 0 ? 'up' : 'down';
     host.player.faceDirection(cardinal as 'left' | 'right' | 'up' | 'down', 130);
+    // 招牌技动作：武势蓄满的强化一刀或青龙蓄势重斩
+    if (passiveCast.empowered || heavy) host.player.playAction('skill', cardinal === 'left' ? 'left' : 'right');
     host.sfx.play('allySlash');
     host.cameras.main.shake(80, 0.002);
     for (const enemy of targets) {
@@ -375,6 +397,9 @@ export const WEAPON_BEHAVIORS: Record<WeaponId, (host: WeaponHost, weapon: Weapo
       dirX = (nearest.x - host.player.x) / d;
       dirY = (nearest.y - host.player.y) / d;
     }
+    // 出手时面向目标（同时播放普攻动作）
+    host.player.faceDirection(Math.abs(dirX) > Math.abs(dirY) ? (dirX < 0 ? 'left' : 'right') : (dirY < 0 ? 'up' : 'down'), 200);
+    if (passiveCast.empowered) host.player.playAction('skill', dirX < 0 ? 'left' : 'right');
     const growth=host.player.growth,formation=growth.masteries.eight_trigrams;
     if(formation)growth.flagCount=Math.min(3,growth.flagCount+1);
     if(formation&&growth.flagCount>=3&&host.combatNow>=growth.formationReadyAt){
@@ -382,7 +407,7 @@ export const WEAPON_BEHAVIORS: Record<WeaponId, (host: WeaponHost, weapon: Weapo
       const candidates=host.grid.query(host.player.x,host.player.y,450).filter(e=>e.active&&!e.isSupplySlot);
       let center=candidates[0],score=-1;
       for(const e of candidates.slice(0,32)){const n=host.grid.query(e.x,e.y,140).filter(t=>t.active&&!t.isSupplySlot&&Math.hypot(t.x-e.x,t.y-e.y)<=140).length;if(n>score){score=n;center=e;}}
-      if(center)host.martialField(center.x,center.y,[105,125,140][formation-1],damage,1600,formation,true);
+      if(center){host.martialField(center.x,center.y,[105,125,140][formation-1],damage,1600,formation,true);host.player.playAction('skill',center.x<host.player.x?'left':'right');}
     }
     const cx = host.player.x + dirX * radius * 0.45;
     const cy = host.player.y + dirY * radius * 0.45;

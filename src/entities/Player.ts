@@ -1,4 +1,7 @@
 import {visualTextureKey} from '../systems/ReadableTextures';
+import {figureCorrection, sheetFigureHeight} from '../systems/SpriteMetrics';
+import {ACTION_MS, HERO_ACTIONS, IDLE_FRAME_MS, ZHUGE_FALLBACK, type ActionFrame, type HeroActionKind, type HeroActionSet} from '../data/heroActions';
+import type {CharacterId} from '../data/characters';
 import Phaser from 'phaser';
 import { CharacterPassives } from '../systems/CharacterPassives';
 import { RunGrowth } from '../systems/RunGrowth';
@@ -63,6 +66,11 @@ export class Player {
   private readonly charTexture = 'hero_zhaoyun';
   /** 当前使用的行走表 key；关羽/黄忠正式素材到位后替换。 */
   walkSheet = 'hero_walk_sheet';
+  /** 动作层（HERO_ACTIONS_PLAN.md）：当前武将的动作素材与正在播放的动作。 */
+  private actionSet?: HeroActionSet;
+  /** 招牌技动作的节流（战斗时间，黄忠用）。 */
+  nextSkillAction = 0;
+  private action: {kind: HeroActionKind; frames: ActionFrame[]; mirror: boolean; start: number; until: number; hold: boolean} | null = null;
 
   constructor(scene: Phaser.Scene, x: number, y: number) {
     this.scene = scene;
@@ -140,9 +148,68 @@ export class Player {
     this.forcedUntil = ((this.scene as Phaser.Scene & { combatNow?: number }).combatNow ?? this.scene.time.now) + ms;
     this.direction = dir;
     this.faceLeft = dir === 'left';
+    if (this.playAction('attack', dir)) return;
     if (this.scene.textures.exists(this.walkSheet) && this.scene.textures.get(this.walkSheet).has(`${dir}_0`)) {
       this.sprite.setTexture(visualTextureKey(this.scene,this.walkSheet), `${dir}_0`);
     }
+  }
+
+  /** 按武将设置动作素材；没有素材的武将保持原样（只有行走）。 */
+  setActionSet(id: CharacterId): void { let set = HERO_ACTIONS[id]; if (id === 'zhuge' && set && !this.scene.textures.exists(set.texture)) set = ZHUGE_FALLBACK; this.actionSet = set && this.scene.textures.exists(set.texture) ? set : undefined; this.action = null; }
+  get hasActions(): boolean { return !!this.actionSet; }
+  /** 当前动作（测试与调试用）。 */
+  get currentAction(): HeroActionKind | null { return this.action && (this.action.hold || this.clock() < this.action.until) ? this.action.kind : null; }
+  private clock(): number { return (this.scene as Phaser.Scene & { combatNow?: number }).combatNow ?? this.scene.time.now; }
+  /**
+   * 播放动作。优先级：倒地 / 胜利 > 招牌技 > 受伤 > 普攻；招牌技播放中不被普攻、受伤打断。
+   * 没有对应素材时返回 false（招牌技缺图时用普攻帧代替）。
+   */
+  playAction(kind: HeroActionKind, dir: 'down' | 'up' | 'left' | 'right' = this.direction): boolean {
+    const set = this.actionSet; if (!set) return false;
+    const now = this.clock(), cur = this.currentAction;
+    if (cur === 'die' || cur === 'win') return false;
+    if (cur === 'skill' && (kind === 'attack' || kind === 'hurt')) return false;
+    if (cur === 'hurt' && kind === 'attack') return false;
+    let frames: ActionFrame[] | undefined, mirror = false;
+    if (kind === 'attack' || (kind === 'skill' && !set.skill?.length)) {
+      if (dir === 'left') { frames = set.attack.left ?? set.attack.right; mirror = !set.attack.left; } else frames = set.attack[dir];
+    } else { frames = set[kind]; mirror = dir === 'left'; }
+    if (!frames?.length) return false;
+    // 胜利 / 倒地发生在结算时：战斗时钟已停、主角不再更新，改用真实时钟并由计时器逐帧刷新
+    const hold = kind === 'win' || kind === 'die', start = hold ? this.scene.time.now : now;
+    this.action = {kind, frames, mirror, start, until: start + ACTION_MS[kind], hold};
+    this.renderAction(false);
+    // 结算后场景计时器暂停（time.paused），改挂每帧的 postupdate，播完自动解除
+    if (hold) { const tick = (): void => { if (!this.action?.hold || !this.sprite.active) { this.scene.events.off('postupdate', tick); return; } this.renderAction(false); if (this.scene.time.now >= this.action.until + 60) this.scene.events.off('postupdate', tick); }; this.scene.events.on('postupdate', tick); this.scene.events.once('shutdown', () => this.scene.events.off('postupdate', tick)); }
+    return true;
+  }
+  /** 动作或待机帧；返回 true 表示已覆盖行走帧。 */
+  private renderAction(moving: boolean): boolean {
+    const set = this.actionSet; if (!set) return false;
+    const a = this.action, now = a?.hold ? this.scene.time.now : this.clock();
+    let frame: ActionFrame | undefined, mirror = false;
+    if (a && (a.hold || now < a.until)) {
+      const t = Math.min(.999, Math.max(0, (now - a.start) / Math.max(1, a.until - a.start)));
+      frame = a.frames[a.hold && now >= a.until ? a.frames.length - 1 : Math.floor(t * a.frames.length)]; mirror = a.mirror;
+    } else {
+      if (a) {
+        // 动作结束：站着不动时行走层不会换帧，须主动切回当前朝向的站立帧
+        this.action = null;
+        if (this.scene.textures.exists(this.walkSheet)) { this.sprite.setTexture(visualTextureKey(this.scene, this.walkSheet), `${this.direction}_0`).setFlipX(false); this.applyTextureScale(moving); }
+      }
+      if (moving || !set.idle?.length || this.direction !== 'down') return false;
+      frame = set.idle[Math.floor(now / IDLE_FRAME_MS) % set.idle.length];
+    }
+    const key = visualTextureKey(this.scene, set.texture);
+    if (this.sprite.texture.key !== key || this.sprite.frame.name !== String(frame)) this.sprite.setTexture(key, frame);
+    this.sprite.setFlipX(mirror);
+    // 按行走表的帧高换算：figureCorrection 给的是“人物像素高度”之比，动作表帧（128）与行走表帧（96）大小不同，
+    // 若按动作帧高缩放，人物会比行走时小约两成
+    const walkKey = visualTextureKey(this.scene, this.walkSheet), walkFrameH = this.scene.textures.exists(walkKey) ? this.scene.textures.getFrame(walkKey, 'down_0')?.height || 96 : 96;
+    // 两表人物中位身高之比统一大小；表内个别画小/画大的帧再单独校正（以动作表自身为参照）
+    const sheetRatio = (sheetFigureHeight(this.scene, walkKey) ?? 90) / (sheetFigureHeight(this.scene, key) ?? 90), inSheet = figureCorrection(this.scene, key, key, frame);
+    const k = this.targetHeight / walkFrameH * sheetRatio * inSheet; this.sprite.setScale(k, k);
+    return true;
   }
 
   setWalkSheet(key: string): void {
@@ -161,6 +228,7 @@ export class Player {
 
   /** 有 4 方向行走素材时播放；没有时用轻微步态占位。 */
   private applyWalkVisual(moving: boolean): void {
+    if (this.renderAction(moving)) return;
     const sheet = this.scene.textures.exists(this.walkSheet);
     const dirKey = `hero_walk_${this.direction}`;
     const hasFrames = this.scene.textures.exists(`${dirKey}_0`) || sheet;
@@ -205,7 +273,8 @@ export class Player {
     this.invulnUntil = now + BALANCE.player.invuln * 1000;
     if(rescue||ironRescue)this.invulnUntil=Math.max(this.invulnUntil,now+1000);
     this.passive.onDamage(now);
-    if (this.hp <= 0) { this.alive = false; this.passive.stop(); }
+    if (this.hp <= 0) { this.alive = false; this.passive.stop(); this.playAction('die'); }
+    else this.playAction('hurt');
     return true;
   }
 
@@ -243,6 +312,8 @@ export class Player {
       gained += 1;
       this.xpNext = this.level <= 4 ? [16, 36, 52, 68][this.level - 2] ?? 68 : 68 + (this.level - 4) * 20;
     }
+    // 每升一级自动获得 1 个属性点（取代三选一「通脉修习」卡；属性全满后不再累积）
+    if (gained > 0) this.growth.addAttributePoints(gained);
     return gained;
   }
 
@@ -263,5 +334,6 @@ export class Player {
     if (this.stats.regen > 0) this.heal(this.stats.regen * dt);
     const blinking = now < this.invulnUntil;
     this.sprite.setAlpha(blinking ? (Math.floor(now / 80) % 2 === 0 ? 0.35 : 1) : 1);
+    if (this.action?.hold) this.renderAction(false);
   }
 }

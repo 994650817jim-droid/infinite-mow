@@ -147,6 +147,32 @@ export class GameScene extends Phaser.Scene {
   protected hudTexts!: Record<string, Phaser.GameObjects.Text>;
   protected passiveHud!: PassiveHud;
   private buffHud!:BuffHud;
+  /** 战法「以战养战」：每击杀 12/10/8 名敌人（含部下击杀）回复最大生命 2/2.5/3%。 */
+  private warfeedCount=0;
+  private warfeedKill():void{
+    const level=this.player.growth.build.level('warfeed');if(!level||!this.player.alive)return;
+    const i=Math.min(3,level)-1;if(++this.warfeedCount<[12,10,8][i])return;
+    this.warfeedCount=0;if(this.player.hp>=this.player.maxHp)return;
+    this.player.heal(this.player.maxHp*[.02,.025,.03][i]);
+    this.artEffects.show(5,this.player.x,this.player.y-10,48,this.combatNow,320);
+  }
+  /** 饮血佩：本命命中回复伤害 5%，每秒（战斗时间）最多回复最大生命 3%。 */
+  private bloodWindow=-1;private bloodHealed=0;
+  /** 站立蓄势环：每站稳 1 秒点亮一段（共 5 段），满势时外圈脉动；移动时逐渐熄灭，未蓄势时隐藏。 */
+  private drawAimIndicator():void{
+    const g=this.aimIndicator,sec=this.player.growth.stationarySeconds,on=this.player.growth.masteries.steady_aim>0&&sec>.05&&this.player.alive;
+    g.clear().setVisible(on);if(!on)return;
+    const x=this.player.x,y=this.player.y+19,rx=30,ry=11,full=sec>=4.99,arc=(a0:number,a1:number)=>{g.beginPath();for(let a=a0;a<=a1+.001;a+=Math.PI/36){const px=x+Math.cos(a)*rx,py=y+Math.sin(a)*ry;if(a===a0)g.moveTo(px,py);else g.lineTo(px,py);}g.strokePath();};
+    const seg=Math.PI*2/5,gap=.12;
+    for(let i=0;i<5;i++){const a0=-Math.PI/2+i*seg+gap/2,fill=Phaser.Math.Clamp(sec-i,0,1);g.lineStyle(3,0x18251e,.45);arc(a0,a0+seg-gap);if(fill>0){g.lineStyle(full?3.5:2.5,full?0xffe08a:0xe0c070,full?1:.55+.4*fill);arc(a0,a0+(seg-gap)*fill);}}
+    if(full){const pulse=.35+.3*Math.sin(this.combatNow/160);g.lineStyle(5,0xffd66b,pulse);g.strokeEllipse(x,y,rx*2+10,ry*2+6);}
+  }
+  private bloodJadeHeal(damage:number,time:number):void{
+    if(this.bloodWindow<0||time<this.bloodWindow||time-this.bloodWindow>=1000){this.bloodWindow=time;this.bloodHealed=0;}
+    const amount=Math.min(damage*.05,this.player.maxHp*.03-this.bloodHealed);
+    if(amount<=0||this.player.hp>=this.player.maxHp)return;
+    this.bloodHealed+=amount;this.player.heal(amount);
+  }
   protected blades: Phaser.GameObjects.Image[] = [];
   protected grid = new SpatialGrid<Enemy>(48);
 
@@ -217,8 +243,9 @@ export class GameScene extends Phaser.Scene {
   private chasingBosses:ChasingBoss[]=[];private deadBossControllers:Array<HuaxiongBoss|XurongBoss>=[];
   private get trailingBoss():ChasingBoss|null{return this.chasingBosses[0]??null;}
   private lootContinue:(()=>void)|null=null;private relicHits=0;private relicFireAt=0;private relicHealAt=0;
-  private attributeReturn:'pause'|'none'='pause';private rerolls=0;private rerollButton?:Phaser.GameObjects.Text;private pointsButton?:Phaser.GameObjects.Text;
-  private aimIndicator!: Phaser.GameObjects.Text;
+  private attributeReturn:'pause'|'none'='pause';private rerolls=0;private rerollButton?:Phaser.GameObjects.Text;private pointsButton?:Phaser.GameObjects.Container;private pointsBadge?:Phaser.GameObjects.Text;
+  /** 黄忠「百步穿杨」站立蓄势：脚下五段金色椭圆环（原为头顶 ◆◇ 文字，与“主将”标签重叠）。 */
+  private aimIndicator!: Phaser.GameObjects.Graphics;
   protected recruitOptions: Array<{ kind: AllyKind; upgrade: boolean }> = [];
   private readonly pendingGrowthNotices: string[] = [];
   protected recruitViews: Array<{ bg: Phaser.GameObjects.Image; name: Phaser.GameObjects.Text; desc: Phaser.GameObjects.Text; icon: Phaser.GameObjects.Image; tag: Phaser.GameObjects.Text }> = [];
@@ -238,7 +265,7 @@ export class GameScene extends Phaser.Scene {
   protected attributePointsText!: Phaser.GameObjects.Text;
   protected attributeWeaponText!: Phaser.GameObjects.Text;
   protected attributeSummaryText!: Phaser.GameObjects.Text;
-  protected attributeRows: Array<{ value: Phaser.GameObjects.Text; button: Phaser.GameObjects.Image }> = [];
+  protected attributeRows: Array<{ value: Phaser.GameObjects.Text; button: Phaser.GameObjects.Image; plus: Phaser.GameObjects.Text; pips: Phaser.GameObjects.Graphics; pipX: number; pipY: number }> = [];
 
   protected cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
   protected wasd!: Record<string, Phaser.Input.Keyboard.Key>;
@@ -298,12 +325,14 @@ export class GameScene extends Phaser.Scene {
     this.expeditionId=this.worldCampaign?beginExpedition(this.chapter.id,this.chapter.stage??this.chapter.westStage):'';
     this.weaponHost = this.createWeaponHost();
     this.martialFields = new MartialFields(this.weaponHost);
-    this.aimIndicator=this.add.text(0,0,'',{fontSize:'12px',color:'#ead28b',stroke:'#18251e',strokeThickness:3}).setOrigin(.5).setDepth(100);
+    this.aimIndicator=this.add.graphics().setDepth(DEPTH.enemy-.6).setName('aim-indicator');
     // 新存档开局无兵，第一波后招募；已开放主城的出征另应用军营与后备。
     this.allies = [];
     this.legion = new Legion(this, this.allies, this.player);
     this.yellow=this.chapter.stage?new YellowBattle({scene:this,player:this.player,army:this.legion,enemies:this.enemies,move:(e,nx,ny,dt)=>this.advanceEnemy(e,nx,ny,dt),spawn:(def,x,y)=>this.spawnEnemy(def.kind,x,y,1,true,def)},this.chapter.stage):null;
     this.supplies=new BattlefieldSupplies(this,this.player,this.enemies,()=>this.combatNow,()=>{this.sfx.play('pickup');this.artEffects.show(5,this.player.x,this.player.y-12,35,this.combatNow,280);});
+    // 酒罐 / 药篓不生成在房屋、城墙等障碍里（第三/四章、攻城在 create 之后才设置障碍，故调用时读取）
+    this.supplies.healBlocked=(x,y,r)=>!!this.sishuiObstacles?.footprints.some(b=>x>b.left-r&&x<b.right+r&&y>b.top-r&&y<b.bottom+r);
     if(scenery){if(scenery==='sishui')this.sishuiObstacles=new SishuiObstacles();this.supplies.spawnSishui(3,-330,180,116);this.supplies.spawnSishui(5,-310,350,105);this.supplies.spawnSishui(7,230,-50,100);this.supplies.spawnSishui(4,290,210,104);this.supplies.spawnSishui(6,300,370,110);}
     const transfer = this.registry.get('campaignTransfer') as CampaignTransfer | undefined;
     this.registry.remove('campaignTransfer');
@@ -379,6 +408,7 @@ export class GameScene extends Phaser.Scene {
     const sheetKey = `${config.character}_walk_sheet`;
     const hasOwnSheet = this.textures.exists(sheetKey);
     this.player.setWalkSheet(hasOwnSheet ? sheetKey : 'hero_walk_sheet');
+    this.player.setActionSet(config.character);
     if (!hasOwnSheet && character.battleTint) this.player.sprite.setTint(character.battleTint);
     this.player.weapons = [{ id: character.startWeapon, level: 1, cooldownLeft: 0 }];
   }
@@ -386,7 +416,7 @@ export class GameScene extends Phaser.Scene {
   protected resetState(): void {
     this.relicWaves=[];
     this.firstBossAt=-1;this.settledFrontlineKills=0;this.frontlineNextSettlement=1;this.frontlineVictories.clear();this.frontlineStarts.clear();this.chasingBosses=[];this.deadBossControllers=[];this.lootContinue=null;this.relicHits=0;this.relicFireAt=0;this.relicHealAt=0;
-    this.rerolls=0;this.pointsButton=undefined;this.rerollButton=undefined;
+    this.rerolls=0;this.warfeedCount=0;this.pointsButton=undefined;this.pointsBadge=undefined;this.rerollButton=undefined;
     this.crowdSteering = true; this.freeRecruit = false; this.resting = false; this.recruitedWaves.clear();
     this.pendingGrowthNotices.length = 0;
     this.separationScratch.length = 0;
@@ -587,7 +617,7 @@ export class GameScene extends Phaser.Scene {
     this.player.growth.recordMovement(Math.hypot(move.x,move.y)>.1&&time>=this.player.knockedUntil?Math.hypot(this.player.x-moveX,this.player.y-moveY):0,dt);
     this.awakeningCombat?.movement(Math.hypot(move.x,move.y)>.1&&time>=this.player.knockedUntil?Math.hypot(this.player.x-moveX,this.player.y-moveY):0);
     this.buildCombat.movement(Math.hypot(move.x,move.y)>.1&&time>=this.player.knockedUntil?Math.hypot(this.player.x-moveX,this.player.y-moveY):0);
-    this.aimIndicator.setPosition(this.player.x,this.player.y-44).setVisible(this.player.growth.masteries.steady_aim>0).setText('◆'.repeat(Math.floor(this.player.growth.stationarySeconds))+'◇'.repeat(5-Math.floor(this.player.growth.stationarySeconds)));
+    this.drawAimIndicator();
     this.updateEnemyWalkAnimations(dt);
     this.rebuildGrid();
     this.applyContactDamage();
@@ -1258,6 +1288,7 @@ export class GameScene extends Phaser.Scene {
     this.damageDealt += damage;
     credit(damage);
     this.spawnDamageText(enemy.x, enemy.y - enemy.radius, damage, crit, !fromAlly||enemy.kind==='boss');
+    if (!fromAlly && weaponHit && this.player.growth.build.treasures.includes('blood_jade')) this.bloodJadeHeal(damage, time);
     if(!fromAlly&&weaponHit){const tags=this.player.growth.build.tags();const vfx=buildVfx(this);const a=Math.atan2(enemy.y-this.player.y,enemy.x-this.player.x);if(tags.combo)vfx.emit('combo',enemy.x,enemy.y-8,time,42,a);if(crit&&tags.critical)vfx.emit('critical',enemy.x,enemy.y-8,time,48);if(tags.charge&&this.buildCombat.charged())vfx.emit('pure_charge',enemy.x,enemy.y-8,time,70,a);this.legion.command.onHit(enemy,time);this.controlBuild?.onHit(enemy,time);this.awakeningCombat?.onHit(enemy,rawDamage,crit,time,this.buildCombat.charged());this.buildCombat.onHit(enemy,rawDamage,crit,time);this.relicHits++;
       if(this.player.relics.includes('human_seal')&&this.relicHits%12===0){if(this.relicWaves.length>=4)this.relicWaves.shift();this.relicWaves.push({x:enemy.x,y:enemy.y,at:time});for(const e of this.grid.query(enemy.x,enemy.y,110).filter(e=>e.active&&!e.isSupplySlot&&Math.hypot(e.x-enemy.x,e.y-enemy.y)<=110).slice(0,4))this.hitEnemy(e,rawDamage*.35,time,'melee',false,false);}
       if(this.player.relics.includes('heaven_ember')&&time>=this.relicFireAt){this.relicFireAt=time+5000;this.martialFields.add(enemy.x,enemy.y,65,rawDamage,1500,1);this.spawnFlameFx(enemy.x,enemy.y,65);}
@@ -1275,6 +1306,7 @@ export class GameScene extends Phaser.Scene {
     if(kind==='boss'){const old=this.chasingBosses.find(t=>t.enemy===enemy&&t.life===enemy.spawnId),h=old?old.huaxiong:this.huaxiong,x=old?old.xurong:this.xurong;h?.defeat();x?.defeat();if(old){if(h)this.deadBossControllers.push(h);if(x)this.deadBossControllers.push(x);}}
     enemy.deactivate();
     if(enemy.isSupplySlot){this.sfx.play('propBreak');this.supplies?.onBroken(enemy);return;}
+    this.warfeedKill();
     if(enemy.def.behavior==='wall')return;
     this.kills += 1;
     this.awakeningCombat?.onKill(enemy,this.combatNow);
@@ -1505,7 +1537,7 @@ export class GameScene extends Phaser.Scene {
       if (dist < 22) {
         gem.active = false;
         gem.img.setVisible(false);
-        this.sfx.play('pickup');
+        // 拾取军功宝石不再播放音效（用户要求；战场补给拾取仍有音效）
         const gained = this.player.gainXp(gem.value);
         if (gained > 0) {
           this.pendingLevels += gained;
@@ -1960,6 +1992,8 @@ export class GameScene extends Phaser.Scene {
     if (this.over) return;
     this.over = true;
     this.player.passive.stop();
+    // 动作层：胜利举兵器 / 战败倒地（有素材的武将才播放，播完定格）
+    this.player.playAction(victory ? 'win' : 'die', 'down');
     this.legion.stop();
     buildVfx(this).clear();
     this.awakeningCombat?.clear();
@@ -2114,7 +2148,20 @@ export class GameScene extends Phaser.Scene {
       .setPadding(4, 2, 4, 2)
       .setInteractive({ useHandCursor: true })
       .on('pointerdown', () => { this.relicExpanded = !this.relicExpanded; });
-    this.pointsButton=this.add.text(GAME_WIDTH-58,GAME_HEIGHT-240,'＋',{fontFamily:FONT,fontSize:'32px',color:'#ffe2a4',resolution:2}).setOrigin(.5).setPadding(16,6).setBackgroundColor('#3b3021').setScrollFactor(0).setDepth(DEPTH.hud+4).setName('attribute-plus').setInteractive({useHandCursor:true}).setVisible(false).on('pointerdown',()=>{if(this.mode==='none'&&!this.over&&this.player.growth.unallocated>0){this.attributeReturn='none';this.renderAttributePanel();this.setMode('attributes');}});
+    {
+      const bx=GAME_WIDTH-58,by=GAME_HEIGHT-240,root=this.add.container(bx,by).setScrollFactor(0).setDepth(DEPTH.hud+4).setName('attribute-plus').setVisible(false);
+      const glow=this.add.circle(0,0,33,0xffd27a,0).setStrokeStyle(3,0xffd27a,.55);
+      const disc=this.add.circle(0,0,29,0x1b241b,.94).setStrokeStyle(2,0xd8b56a,1);
+      const icon=this.add.image(0,-1,this.textures.exists('growth_icon_points')?'growth_icon_points':'icon_passive').setDisplaySize(40,40);
+      const bubble=this.add.circle(21,-21,11,0xb8322a,1).setStrokeStyle(1.5,0xffe2a4,1);
+      this.pointsBadge=this.add.text(21,-21,'0',{fontFamily:FONT,fontSize:'13px',color:'#fff6e0',resolution:2,fontStyle:'bold'}).setOrigin(.5);
+      const caption=this.add.text(0,40,'加点',{fontFamily:FONT,fontSize:'13px',color:'#ffe2a4',resolution:2,stroke:'#17140d',strokeThickness:3}).setOrigin(.5);
+      root.add([glow,disc,icon,bubble,this.pointsBadge,caption]);
+      root.setInteractive(new Phaser.Geom.Circle(0,0,34),Phaser.Geom.Circle.Contains).on('pointerdown',(_p:Phaser.Input.Pointer,_x:number,_y:number,event:Phaser.Types.Input.EventData)=>{event?.stopPropagation?.();if(this.mode==='none'&&!this.over&&this.player.growth.unallocated>0){this.attributeReturn='none';this.renderAttributePanel();this.setMode('attributes');}});
+      if(root.input)root.input.cursor='pointer';
+      this.tweens.add({targets:glow,scale:1.18,alpha:{from:.9,to:.15},duration:900,yoyo:true,repeat:-1,ease:'Sine.easeInOut'});
+      this.pointsButton=root;
+    }
     this.relicIcons = [];
     for (let i = 0; i < 8; i += 1) {
       const icon = this.add
@@ -2131,7 +2178,7 @@ export class GameScene extends Phaser.Scene {
     if (this.hudAcc < .1 && this.lastHudMode === this.mode) return;
     this.hudAcc = 0; this.lastHudMode = this.mode;
     const overlay = this.mode !== 'none';
-    if(this.pointsButton)this.pointsButton.setVisible(!overlay&&!this.over&&this.player.growth.unallocated>0).setText('＋').setData('points',this.player.growth.unallocated);
+    this.pointsBadge?.setText(String(Math.min(99,this.player.growth.unallocated)));if(this.pointsButton)this.pointsButton.setVisible(!overlay&&!this.over&&this.player.growth.unallocated>0).setData('points',this.player.growth.unallocated);
     this.legionUI?.update(this.legion, !overlay && !this.over);
     this.passiveHud.update(this.player.passive, this.combatNow, !overlay);
     buildVfx(this).density=this.enemies.filter(e=>e.active&&!e.isSupplySlot).length+this.legion.count;
@@ -2294,26 +2341,29 @@ export class GameScene extends Phaser.Scene {
 
     this.attributePanel=this.add.container(0,0).setScrollFactor(0).setDepth(DEPTH.overlay+1).setVisible(false);
     const attrDim=this.add.rectangle(0,0,GAME_WIDTH,GAME_HEIGHT,0x07120d,.76).setOrigin(0).setInteractive();
-    const attrW=d?560:GAME_WIDTH-32,attrH=d?520:650,attrTop=(GAME_HEIGHT-attrH)/2,attrCx=GAME_WIDTH/2;
+    const attrW=d?600:GAME_WIDTH-32,attrH=d?580:700,attrTop=(GAME_HEIGHT-attrH)/2,attrCx=GAME_WIDTH/2;
     const attrFrame=this.add.image(attrCx,GAME_HEIGHT/2,'ui_war_panel').setDisplaySize(attrW,attrH).setInteractive();
     const attrTitle=this.add.text(attrCx,attrTop+34,'武将修习 · 属性分配',warText(24,'#e8cf91')).setOrigin(.5);
-    this.attributePointsText=this.add.text(attrCx,attrTop+74,'未分配属性点：0',warText(15,'#91ab98')).setOrigin(.5);
+    this.attributePointsText=this.add.text(attrCx,attrTop+74,'可分配属性点 0',warText(16,'#91ab98')).setOrigin(.5).setPadding(14,4);
     this.attributeWeaponText=this.add.text(attrCx,attrTop+104,'',warText(13,'#d3bd86')).setOrigin(.5);
     this.attributeSummaryText=this.add.text(attrCx,attrTop+133,'',{...warText(d?11:12,'#c7d6c8'),align:'center',lineSpacing:3}).setOrigin(.5).setWordWrapWidth(attrW-46);
     this.attributePanel.add([attrDim,attrFrame,attrTitle,this.attributePointsText,this.attributeWeaponText,this.attributeSummaryText]);
-    const rowH=d?61:70,firstY=attrTop+(d?166:178),rowW=attrW-50;
+    const rowH=d?62:72,firstY=attrTop+(d?200:212),rowW=attrW-50;
     this.attributeRows=[];
     (Object.keys(ATTRIBUTE_INFO) as AttributeId[]).forEach((id,index)=>{
-      const y=firstY+index*rowH;
-      const row=this.add.image(attrCx,y,'ui_war_card').setDisplaySize(rowW,rowH-7);
-      const attributeIcon=this.add.image(attrCx-rowW/2+27,y,'growth_icon_'+id).setDisplaySize(26,26);
-      const label=this.add.text(attrCx-rowW/2+48,y,ATTRIBUTE_INFO[id].name,{...warText(d?16:16,'#f0dfb4')}).setOrigin(0,.5);
-      const value=this.add.text(attrCx+rowW/2-88,y,`Lv.0/${ATTRIBUTE_MAX}`,warText(14,'#b6c3ab')).setOrigin(.5);
-      const button=this.add.image(attrCx+rowW/2-35,y,'ui_war_button').setDisplaySize(48,42).setInteractive({useHandCursor:true});
-      const plus=this.add.text(button.x,button.y,'+',warText(23,'#18271d')).setOrigin(.5);
+      const y=firstY+index*rowH,left=attrCx-rowW/2;
+      const row=this.add.image(attrCx,y,'ui_war_card').setDisplaySize(rowW,rowH-8);
+      const attributeIcon=this.add.image(left+30,y,'growth_icon_'+id).setDisplaySize(34,34);
+      const label=this.add.text(left+56,y-11,ATTRIBUTE_INFO[id].name,{...warText(17,'#f0dfb4')}).setOrigin(0,.5);
+      const effect=this.add.text(left+56,y+12,ATTRIBUTE_INFO[id].effect,warText(12,'#a9b9a3')).setOrigin(0,.5);
+      // 等级：5 格，右侧数值
+      const pipX=attrCx+rowW/2-(d?196:178),pipY=y,pips=this.add.graphics();
+      const value=this.add.text(attrCx+rowW/2-80,y,`0/${ATTRIBUTE_MAX}`,warText(13,'#b6c3ab')).setOrigin(1,.5);
+      const button=this.add.image(attrCx+rowW/2-38,y,'ui_war_button').setDisplaySize(50,44).setInteractive({useHandCursor:true}).setName('attribute-add-'+id);
+      const plus=this.add.text(button.x,button.y-1,'+',warText(26,'#18271d')).setOrigin(.5);
       button.on('pointerdown',()=>{if(this.player.growth.allocate(this.player,id)){this.renderAttributePanel();this.updateHud();}});
-      this.attributePanel.add([row,attributeIcon,label,value,button,plus]);
-      this.attributeRows.push({value,button});
+      this.attributePanel.add([row,attributeIcon,label,effect,pips,value,button,plus]);
+      this.attributeRows.push({value,button,plus,pips,pipX,pipY});
     });
     const attrCloseY=attrTop+attrH-38;
     const attrClose=this.add.text(attrCx,attrCloseY,'返回暂停菜单',warText(16,'#d8c9ae')).setOrigin(.5).setPadding(18,8).setInteractive({useHandCursor:true});
@@ -2402,7 +2452,7 @@ export class GameScene extends Phaser.Scene {
     if (!this.player || !this.attributePointsText) return;
     const growth=this.player.growth;
     (this.attributePanel.getByName('attributes-close') as Phaser.GameObjects.Text)?.setText(this.attributeReturn==='none'?'继续战斗':'返回暂停菜单');
-    this.attributePointsText.setText(`未分配属性点：${growth.unallocated}`);
+    this.attributePointsText.setText(growth.unallocated>0?`可分配属性点 ${growth.unallocated}`:'属性点已用完 · 每次升级获得 1 点').setColor(growth.unallocated>0?'#1c160c':'#91ab98').setBackgroundColor(growth.unallocated>0?'#e2bd6a':'#00000000');
     this.attributePauseText?.setText(`分配属性点 · ${growth.unallocated}`);
     const weapon=this.player.weapons[0];
     this.attributeWeaponText?.setText((weapon?WEAPON_META[weapon.id].name:'')+' · '+growth.masteryLabel());
@@ -2425,9 +2475,12 @@ export class GameScene extends Phaser.Scene {
     for(let i=0;i<ids.length;i++){
       const id=ids[i],level=growth.attributes[id],row=this.attributeRows[i];
       if(!row)continue;
-      row.value.setText(`Lv.${level}/${ATTRIBUTE_MAX}`).setColor(level>=ATTRIBUTE_MAX?'#8f987e':'#e5d4ab');
-      if(growth.unallocated>0&&level<ATTRIBUTE_MAX){row.button.setAlpha(1).setInteractive({useHandCursor:true});}
-      else row.button.setAlpha(.42).disableInteractive();
+      row.value.setText(level>=ATTRIBUTE_MAX?'已满':`${level}/${ATTRIBUTE_MAX}`).setColor(level>=ATTRIBUTE_MAX?'#e2bd6a':'#e5d4ab');
+      row.pips.clear();for(let k=0;k<ATTRIBUTE_MAX;k++){const x=row.pipX+k*15;row.pips.fillStyle(k<level?0xe2bd6a:0x2a3328,1).fillRect(x,row.pipY-5,11,10).lineStyle(1,k<level?0xfff0c0:0x5d6a58,.9).strokeRect(x+.5,row.pipY-4.5,10,9);}
+      const can=growth.unallocated>0&&level<ATTRIBUTE_MAX;
+      if(can){row.button.setAlpha(1).setInteractive({useHandCursor:true});}
+      else row.button.setAlpha(.38).disableInteractive();
+      row.plus.setAlpha(can?1:.45);
     }
   }
 

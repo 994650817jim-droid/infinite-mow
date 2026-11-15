@@ -37,7 +37,7 @@ export class YellowBattle {
   if(base.kind==='infantry'){
    if(this.stage===3){
     const r=Math.random(),behavior=r<.08?'thunder':r<.16?'halberd':r<.3?'shaman':r<.7?'spear':undefined;
-    if(behavior){const sheet=behavior==='spear'||behavior==='halberd'?'spear':'shaman';return {...base,behavior,hp:behavior==='halberd'?base.hp*2:behavior==='thunder'?base.hp*1.8:base.hp,speed:behavior==='shaman'||behavior==='thunder'?52:base.speed,tint:behavior==='thunder'?0xbca6e8:behavior==='halberd'?0xc7a268:0xffffff,walkVisual:{texture:sheet==='spear'?'yellow_spear-walk-v4':`yellow_${sheet}_walk`,scale:behavior==='halberd'||behavior==='thunder'?.74:behavior==='shaman'?.72:.66,groundY:sheet==='spear'?88/96:91/96},attackVisual:`yellow_${sheet}_${sheet==='shaman'?'cast':'attack'}`};}
+    if(behavior){const sheet=behavior==='spear'||behavior==='halberd'?'spear':'shaman';return {...base,behavior,hp:behavior==='halberd'?base.hp*2:behavior==='thunder'?base.hp*1.8:base.hp,speed:behavior==='shaman'||behavior==='thunder'?52:base.speed,tint:behavior==='thunder'?0xbca6e8:behavior==='halberd'?0xc7a268:0xffffff,walkVisual:{texture:sheet==='spear'?'yellow_spear-walk-v2':`yellow_${sheet}_walk`,scale:sheet==='spear'?(behavior==='halberd'?1:.9):behavior==='thunder'?.74:behavior==='shaman'?.72:.66,groundY:91/96},attackVisual:`yellow_${sheet}_${sheet==='shaman'?'cast':'attack'}`};}
    }
    return {...base,walkVisual:{texture:'yellow_swordsman-walk-v4',scale:.62,groundY:88/96},attackVisual:'yellow_swordsman-attack-v4'};
   }

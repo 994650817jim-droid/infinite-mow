@@ -1,8 +1,9 @@
-import {TACTICS,TREASURES,TAG_NAMES,tacticDescription,type TacticId,type TreasureId} from './builds';
+import {TACTICS,TREASURES,TAG_NAMES,tacticDescription,type TacticId,type TreasureId,type BuildTag} from './builds';
+import {AWAKENINGS} from './awakenings';
 import { BALANCE } from '../config';
 import type { Player } from '../entities/Player';
 import { RELICS, relicChanceForLevel } from './relics';
-import { WEAPON_DEFS, SPEAR_PIERCE, GUANDAO_TABLE } from '../weapons/registry';
+import { WEAPON_DEFS, SPEAR_PIERCE, GUANDAO_TABLE, crossbowExtraArrows } from '../weapons/registry';
 import type { UpgradeOption, WeaponId, WeaponState } from '../types';
 import { getCharacter } from './characters';
 import { ATTRIBUTE_INFO, type AttributeId, type PotionId, type RunGrowth, type TrinketId, MARTIALS, type MasteryId } from '../systems/RunGrowth';
@@ -10,7 +11,7 @@ import { ATTRIBUTE_INFO, type AttributeId, type PotionId, type RunGrowth, type T
 export const WEAPON_META: Record<WeaponId, { name: string; desc: string }> = {
   spear_orbit: { name: '七探盘龙枪', desc: '银枪自动索敌，向不同敌人突刺' },
   guandao: { name: '青龙偃月斩', desc: '前方 120° 扇形劈砍，最多命中 8 人' },
-  crossbow: { name: '连弩齐射', desc: '自动射向最近敌人，命中后弹射' },
+  crossbow: { name: '连弩齐射', desc: '自动射向最近敌人，命中后弹射；每级多射 1 支分射其他敌人' },
   flame_banner: { name: '烈焰战旗', desc: '前方爆发烈焰，范围灼烧' },
 };
 
@@ -55,7 +56,8 @@ function weaponUpgrade(weapon: WeaponState, player: Player): UpgradeOption {
   if (Math.abs(c1 - c0) >= .005) desc += `\n攻击间隔 ${c0.toFixed(2)} → ${c1.toFixed(2)}秒`;
   if (weapon.id === 'spear_orbit') desc += `\n枪数 ${weapon.level} → ${next}，每枪穿透${SPEAR_PIERCE[weapon.level - 1].cap === SPEAR_PIERCE[next - 1].cap ? SPEAR_PIERCE[next - 1].cap : SPEAR_PIERCE[weapon.level - 1].cap + '→' + SPEAR_PIERCE[next - 1].cap}人
 枪长 ${SPEAR_PIERCE[weapon.level - 1].len} → ${SPEAR_PIERCE[next - 1].len}`;
-  if (weapon.id === 'guandao') desc += `\n范围 ${GUANDAO_TABLE[weapon.level - 1].radius} → ${GUANDAO_TABLE[next - 1].radius}${weapon.level < 3 && next >= 3 ? '，解锁二段刀气' : ''}`;
+  if (weapon.id === 'crossbow') desc += `\n每轮 ${1 + crossbowExtraArrows(weapon.level)} → ${1 + crossbowExtraArrows(next)} 支箭（多出的箭分射其他敌人，70%伤害）`;
+  if (weapon.id === 'guandao') desc += `\n范围${GUANDAO_TABLE[weapon.level - 1].radius} → ${GUANDAO_TABLE[next - 1].radius}${weapon.level < 3 && next >= 3 ? '，解锁二段刀气' : ''}`;
   return {
     id: `signature_weapon_${weapon.id}`,
     name: `本命武器强化 · Lv.${weapon.level}→${next}`,
@@ -138,10 +140,6 @@ function martialOption(id:MasteryId,level:number):UpgradeOption {
  const n=level+1;return {id:'martial_'+id+'_'+n,name:MARTIALS[id].name+' · Lv.'+n,desc:martialDescription(id,n),kind:'martial',categoryLabel:'专属武艺',apply:(_p,_w,g)=>{g?.learn(id);}};
 }
 
-function attributeOption(): UpgradeOption {
-  return { id: 'attribute_points_2', name: '通脉修习', desc: '获得2点属性。\n点击战场右下角「＋」，选择要增强的能力。', kind: 'attribute', categoryLabel: '属性点',
-    apply: (_player, _weapons, growth) => growth?.addAttributePoints(2) };
-}
 
 function potionOption(id: PotionId): UpgradeOption {
   return { id: `potion_${id}`, name: POTIONS[id].name, desc: POTIONS[id].desc, kind: 'potion', categoryLabel: '宝药',
@@ -172,6 +170,19 @@ export function foundationOptions():UpgradeOption[]{
   ];
 }
 
+/**
+ * 战法卡上的流派说明（原“1→2/4 · 2基础 / 4觉醒”难懂）：一件 = 该流派的一个战法或宝物。
+ * 同流派集齐 4 件觉醒；或与搭档流派各 2 件双系觉醒。升级已学战法不增加件数。
+ */
+export function schoolLabel(tag:BuildTag,tags:Record<BuildTag,number>,learned:boolean):string{
+  const name=TAG_NAMES[tag],now=tags[tag];
+  if(learned)return name+'流派 · 升级（仍为'+Math.min(4,now)+'/4件）';
+  const next=now+1;if(next>=4)return name+'流派 第'+Math.min(4,next)+'/4件 · 觉醒';
+  const pair=AWAKENINGS.find(a=>a.tags.length===2&&(a.tags as readonly BuildTag[]).includes(tag)),partner=pair?(pair.tags as readonly BuildTag[]).find(t=>t!==tag):undefined;
+  if(partner&&next>=2&&tags[partner]>=2)return name+'流派 第'+next+'/4件 · 与'+TAG_NAMES[partner]+'各2件，双系觉醒';
+  if(partner&&next>=1)return name+'流派 第'+next+'/4件 · 集齐4件，或与'+TAG_NAMES[partner]+'各2件觉醒';
+  return name+'流派 第'+next+'/4件 · 集齐4件觉醒';
+}
 /** 只从当前角色可用的局内成长中抽取三张唯一奖励；绝不授予其他武将的武器。 */
 export function buildUpgradeOptions(player: Player, weapons: WeaponState[], growth: RunGrowth = player.growth): UpgradeOption[] {
   const pool: UpgradeOption[] = [];
@@ -179,14 +190,14 @@ export function buildUpgradeOptions(player: Player, weapons: WeaponState[], grow
   const ownWeapon = weapons.find(weapon => weapon.id === ownWeaponId);
   if (ownWeapon && ownWeapon.level < WEAPON_DEFS[ownWeaponId].maxLevel) pool.push(weaponUpgrade(ownWeapon, player));
   for (const id of Object.keys(MARTIALS) as MasteryId[]) if (growth.canLearn(id)) pool.push(martialOption(id,growth.masteries[id]));
-  if (growth.hasAttributeRoom) pool.push(attributeOption());
+  // 属性点改为每次升级自动 +1（Player.gainXp），三选一不再出现「通脉修习」
   // Reserve a core progression choice whenever one remains available.
   const core=pool.length?shuffle(pool)[0]:undefined;
   const b=growth.build,tags=b.tags();
   if(canOfferRejuvenation(player))pool.push(potionOption('rejuvenation'));
   for(const id of Object.keys(TACTICS)as TacticId[])if(b.canLearn(id)){
     const d=TACTICS[id],n=b.level(id)+1;
-    pool.push({id:'tactic_'+id,name:d.name+' · Lv.'+n,desc:tacticDescription(id,n),kind:'tactic',icon:'build_icon_'+id,categoryLabel:TAG_NAMES[d.tag]+' · '+tags[d.tag]+'→'+(tags[d.tag]+(b.level(id)?0:1))+'/4 · '+(tags[d.tag]+(b.level(id)?0:1)>=4?'觉醒达成':'2基础 / 4觉醒'),apply:(_p,_w,g)=>{g?.build.learn(id);}});
+    pool.push({id:'tactic_'+id,name:d.name+' · Lv.'+n,desc:tacticDescription(id,n),kind:'tactic',icon:'build_icon_'+id,categoryLabel:schoolLabel(d.tag,tags,!!b.level(id)),apply:(_p,_w,g)=>{g?.build.learn(id);}});
   }
   // Treasures are rare, and share two slots with the existing trinkets.
   if(Math.random()<.18)for(const id of Object.keys(TREASURES)as TreasureId[])if(!b.treasures.includes(id)){

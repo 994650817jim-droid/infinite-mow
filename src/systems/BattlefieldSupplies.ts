@@ -12,12 +12,20 @@ const CELL=640,MAX_CRATES=3,HEAL_TOTAL=10,HEAL_RATE=2;
 // These loose materials and braziers already read cleanly against the ground;
 // keep the original art unobstructed instead of adding a contact-shadow overlay.
 const NO_PROP_SHADOW=new Set([16,27,28,29,30,31,35]);
-interface Crate {enemy:Enemy;shadow:Phaser.GameObjects.Image;cell:string|null;life:number;frame:number;halfW:number;halfH:number;offsetX:number;offsetY?:number;spiked?:boolean;}
-interface Potion {image:Phaser.GameObjects.Image;until:number;active:boolean;}
+interface Crate {enemy:Enemy;shadow:Phaser.GameObjects.Image;cell:string|null;life:number;frame:number;halfW:number;halfH:number;offsetX:number;offsetY?:number;spiked?:boolean;/** 回血道具：酒罐 / 药篓，打碎掉落对应补给。 */heal?:HealProp;}
+export type HealProp='wine'|'herb';
+/** 回血道具（heal_props 图集帧：0 酒罐 / 1 药篓 / 2 酒葫芦 / 3 草药包）；回复量按最大生命比例，2.5 秒内回完。 */
+export const HEAL_PROPS:Record<HealProp,{name:string;frame:number;drop:number;ratio:number;size:number}>={wine:{name:'酒罐',frame:0,drop:2,ratio:.08,size:70},herb:{name:'药篓',frame:1,drop:3,ratio:.12,size:66}};
+interface Potion {image:Phaser.GameObjects.Image;until:number;active:boolean;amount?:number;}
 interface BrazierFire {x:number;y:number;started:number;nextHit:number;active:boolean;tripod?:boolean;}
 /** Rare, deterministic breakables share weapon hit detection, but not enemy slots/rewards. */
 export class BattlefieldSupplies {
  randomGeneration=true;
+ /** 关闭随机物件的关卡（第三/四章、攻城）仍会稀疏生成酒罐/药篓。 */
+ healGeneration=true;
+ /** 场景障碍（房屋、城墙等）；回血道具不放进去。 */
+ healBlocked?:(x:number,y:number,r:number)=>boolean;
+ private healRate=HEAL_RATE;
  readonly crates:Crate[]=[];
  readonly potions:Potion[]=[];
  private readonly breakFx:Array<{image:Phaser.GameObjects.Image;start:number;row:number;active:boolean}>=[];
@@ -56,7 +64,7 @@ export class BattlefieldSupplies {
  private hash(x:number,y:number):number {let h=Math.imul(x,73856093)^Math.imul(y,19349663)^0x65df03;h=Math.imul(h^(h>>>16),0x45d9f3b);return(h^(h>>>16))>>>0;}
  private place(slot:Crate,cell:string,x:number,y:number,frame=18,size=92,flip=false):void {
   flip=flip&&mayMirrorProp(frame);
-  slot.spiked=false;slot.offsetY=undefined;
+  slot.spiked=false;slot.offsetY=undefined;slot.heal=undefined;
   slot.enemy.spawn(x,y,{...ENEMY_DEFS.shield,behavior:'supply',texture:'yellow_props',hp:frame===18?24:frame<4?80:frame<10?18:frame<14?45:frame>=24&&frame<=28?50:36,speed:0,damage:0,xp:0,radius:Math.max(14,size*.32)},1,this.now());
   slot.enemy.walkSheet='';slot.enemy.attackSheet='';slot.enemy.sprite.setTexture(frame===35?'brazier_burning':'yellow_props',frame===35?0:frame).setOrigin(.5,.9375).setDisplaySize(size,size).setFlipX(flip);
   slot.enemy.shadow.setVisible(false);
@@ -64,6 +72,15 @@ export class BattlefieldSupplies {
   slot.cell=cell;slot.life=slot.enemy.spawnId;slot.frame=frame;slot.halfW=size*(frame<4?.34:frame<10?.12:frame<14?.43:frame>=24&&frame<=28?.37:.28);slot.halfH=size*(frame<4?.17:.12);slot.offsetX=frame>=4&&frame<=9?[-.20,0,-.20,0,-.08,-.12][frame-4]*size*(flip?-1:1):0;
   if(frame>=25&&frame<=28){slot.halfW=size*.39;slot.halfH=size*(frame===27?.18:.25);slot.offsetY=-size*(frame===27?.17:.25);}
  }
+ /** 放置回血道具：沿用补给箱的命中与碎裂，贴图换成 heal_props。 */
+ private placeHeal(slot:Crate,cell:string,x:number,y:number,kind:HealProp):void {
+  const d=HEAL_PROPS[kind];this.place(slot,cell,x,y,18,d.size);slot.heal=kind;
+  slot.enemy.sprite.setTexture('heal_props',d.frame).setOrigin(.5,.92).setDisplaySize(d.size,d.size).setDepth(actorDepth(y)).setFlipX(false);
+  slot.enemy.hp=slot.enemy.maxHp=kind==='wine'?18:24;slot.shadow.setVisible(false);slot.halfW=d.size*.24;slot.halfH=d.size*.1;
+ }
+ get healArt():boolean{return this.scene.textures.exists('heal_props');}
+ /** DEV / 测试：在主角附近放一个回血道具。 */
+ spawnHealForTest(kind:HealProp,dx=90,dy=0):Enemy|null{if(!this.healArt)return null;const slot=this.freeSlot();if(!slot)return null;this.placeHeal(slot,'dev-heal-'+(this.devId++),this.player.x+dx,this.player.y+dy,kind);return slot.enemy;}
  /** Explicit DEV fixture; ordinary generation remains rare. */
  spawnForTest(frame=18):boolean {const slot=this.freeSlot();if(!slot)return false;const i=this.devId++,angle=i*2.399963;this.place(slot,`dev-${i}`,this.player.x+Math.cos(angle)*110,this.player.y+Math.sin(angle)*90,frame);return true;}
  /** Fixed preview props use existing weapon targeting, wooden break animation and persistent debris. */
@@ -104,7 +121,7 @@ export class BattlefieldSupplies {
  onBroken(enemy:Enemy):void {
   const crate=this.crates.find(c=>c.enemy===enemy&&c.life===enemy.spawnId);if(!crate||!crate.cell||this.broken.has(crate.cell))return;
   this.broken.add(crate.cell);crate.cell=null;crate.shadow.setVisible(false);
-  const material=crate.frame===18?1:crate.frame===29||crate.frame===30||crate.frame===32||crate.frame===33?2:crate.frame<10||crate.frame===34?3:0;
+  const material=crate.heal==='herb'?0:crate.frame===18?1:crate.frame===29||crate.frame===30||crate.frame===32||crate.frame===33?2:crate.frame<10||crate.frame===34?3:0;
   if(crate.frame===35){const index=this.fires.findIndex(f=>!f.active);if(index>=0){const fire=this.fires[index];fire.x=enemy.x;fire.y=enemy.y;fire.started=this.now();fire.nextHit=this.now()+640;fire.active=true;fire.tripod=enemy.sprite.texture.key.startsWith('sishui_props');
     if(fire.tripod){this.remains.push({x:enemy.x,y:enemy.y,size:enemy.sprite.displayWidth*.8,row:2,at:this.now()+440});this.nextDebrisCheck=0;const fx=this.breakFx.find(f=>!f.active);if(fx){fx.active=true;fx.start=this.now();fx.row=2;fx.image.setTexture('prop_break_fx',12).setPosition(enemy.x,enemy.y).setOrigin(.5,.85).setDisplaySize(85,85).setAlpha(1).setVisible(true);}this.brazierBreak[index].setVisible(false);}
     else this.brazierBreak[index].setTexture('brazier_breaking',0).setPosition(enemy.x,enemy.y).setOrigin(.5,.92).setDisplaySize(92,92).setVisible(true);
@@ -112,9 +129,12 @@ export class BattlefieldSupplies {
   this.remains.push({x:enemy.x,y:enemy.y,size:enemy.sprite.displayWidth*.85,row:material,at:this.now()+440});this.nextDebrisCheck=0;
   const fx=this.breakFx.find(f=>!f.active);if(fx){fx.active=true;fx.start=this.now();fx.row=material;fx.image.setTexture('prop_break_fx',fx.row*6).setPosition(enemy.x,enemy.y).setOrigin(.5,.85).setDisplaySize(enemy.sprite.displayWidth*1.15,enemy.sprite.displayWidth*1.15).setAlpha(1).setVisible(true);}
   if(crate.frame!==18)return;
+  const heal=crate.heal?HEAL_PROPS[crate.heal]:undefined;crate.heal=undefined;
   let potion=this.potions.find(p=>!p.active);
   if(!potion){if(this.potions.length>=12)return;potion={image:this.scene.add.image(0,0,'healing_potion').setDepth(DEPTH.gem+1),until:0,active:false};this.potions.push(potion);}
-  potion.active=true;potion.until=this.now()+60000;potion.image.setPosition(enemy.x,enemy.y+10).setDisplaySize(24,29).setAlpha(1).setVisible(true);
+  potion.active=true;potion.until=this.now()+60000;
+  if(heal){potion.amount=this.player.maxHp*heal.ratio;potion.image.setTexture('heal_props',heal.drop).setPosition(enemy.x,enemy.y+6).setDisplaySize(34,34).setAlpha(1).setVisible(true);}
+  else{potion.amount=undefined;potion.image.setTexture('healing_potion').setPosition(enemy.x,enemy.y+10).setDisplaySize(24,29).setAlpha(1).setVisible(true);}
  }
  update(dt:number,now:number,placements:readonly BattlefieldProp[]=[],burn:(enemy:Enemy,damage:number)=>void=()=>{},allies:readonly Ally[]=[],hurtAlly:(ally:Ally,damage:number,now:number)=>void=()=>{}):void {
   this.updateDebris(now);
@@ -136,11 +156,12 @@ export class BattlefieldSupplies {
   for(const p of placements){if(this.broken.has(p.key)||this.crates.some(c=>c.enemy.active&&c.cell===p.key)||!this.placementClear(p.x,p.y,p.size))continue;const slot=this.freeSlot();if(!slot)break;this.place(slot,p.key,p.x,p.y,p.texture?p.frame===4?4:p.frame===5?10:14:p.frame,p.size,p.flip);
    if(p.texture){slot.spiked=p.frame===5;slot.enemy.sprite.setTexture(p.texture,String(p.frame)).setOrigin(.5,.92).setPosition(p.x,p.y+p.size*.17).setDepth(actorDepth(p.y+p.size*.17)).clearTint();slot.shadow.setVisible(false);slot.offsetX=p.frame===4?-p.size*.24*(p.flip?-1:1):0;slot.halfW=p.size*(p.frame===4?.08:.39);slot.halfH=p.size*(p.frame===4?.06:.13);}
   }
-  if(this.healRemaining>0&&this.player.alive){const n=Math.min(this.healRemaining,HEAL_RATE*dt);this.player.heal(n);this.healRemaining=Math.max(0,this.healRemaining-n);}
+  if(this.healRemaining>0&&this.player.alive){const n=Math.min(this.healRemaining,this.healRate*dt);this.player.heal(n);this.healRemaining=Math.max(0,this.healRemaining-n);}
   for(const p of this.potions){if(!p.active)continue;if(now>=p.until){p.active=false;p.image.setVisible(false);continue;}
-   if(this.player.alive&&this.player.hp<this.player.maxHp-.01&&this.healRemaining<.00001&&Math.hypot(p.image.x-this.player.x,p.image.y-this.player.y)<30){p.active=false;p.image.setVisible(false);this.healRemaining=HEAL_TOTAL;this.onPickup();}
+   if(this.player.alive&&this.player.hp<this.player.maxHp-.01&&this.healRemaining<.00001&&Math.hypot(p.image.x-this.player.x,p.image.y-this.player.y)<30){p.active=false;p.image.setVisible(false);this.healRemaining=p.amount??HEAL_TOTAL;this.healRate=p.amount?p.amount/2.5:HEAL_RATE;this.onPickup();}
   }
   for(const c of this.crates)if(c.enemy.active&&!c.cell?.startsWith('fixed-')&&Math.hypot(c.enemy.x-this.player.x,c.enemy.y-this.player.y)>1400){c.enemy.deactivate();c.shadow.setVisible(false);c.cell=null;}
+  this.generateHealProps();
   if(!this.randomGeneration)return;
   const cx=Math.floor(this.player.x/CELL),cy=Math.floor(this.player.y/CELL);
   for(let y=cy-1;y<=cy+1;y++)for(let x=cx-1;x<=cx+1;x++){
@@ -156,6 +177,17 @@ export class BattlefieldSupplies {
   for(let i=0;i<this.debrisImages.length;i++){const image=this.debrisImages[i],r=nearby[i];if(!r){image.setVisible(false);continue;}image.setFrame(r.row).setPosition(r.x,r.y).setDisplaySize(r.size,r.size).setVisible(true);}
  }
  /** Reserve visible silhouettes as well as footprints; keep small walking gaps. */
+ /** 酒罐 / 药篓：按格子哈希稀疏、确定地生成（打碎后该格不再生成），避开障碍与其他物件。 */
+ private generateHealProps():void {
+  if(!this.healGeneration||!this.healArt)return;
+  const cx=Math.floor(this.player.x/CELL),cy=Math.floor(this.player.y/CELL),every=this.randomGeneration?12:9;
+  for(let y=cy-1;y<=cy+1;y++)for(let x=cx-1;x<=cx+1;x++){
+   const h=this.hash(x+9173,y-4421),cell='heal-'+x+','+y;if(h%every!==5||this.broken.has(cell)||this.crates.some(c=>c.enemy.active&&c.cell===cell))continue;
+   const px=x*CELL+120+(h>>>8)%400,py=y*CELL+120+(h>>>16)%400,kind:HealProp=(h>>>4)%5<3?'wine':'herb';
+   if(Math.hypot(px-this.player.x,py-this.player.y)>1250||Math.hypot(px-this.player.x,py-this.player.y)<160||!this.placementClear(px,py,80)||this.healBlocked?.(px,py,48))continue;
+   if(this.crates.filter(c=>c.enemy.active&&c.heal).length>=4)return;const slot=this.freeSlot();if(!slot)return;this.placeHeal(slot,cell,px,py,kind);
+  }
+ }
  private placementClear(x:number,y:number,size:number):boolean {
   return !this.crates.some(c=>c.enemy.active&&Math.abs(c.enemy.x-x)<(c.enemy.sprite.displayWidth+size)*.43+16&&Math.abs(c.enemy.y-y)<(c.enemy.sprite.displayHeight+size)*.32+12);
  }

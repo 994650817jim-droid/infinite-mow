@@ -1,0 +1,40 @@
+{
+ "source": "ChatGPT 生成（2026-11-15，用户确认保存）assets/source/heal-props-raw/sheet.png",
+ "frames": [
+  "wine_jar",
+  "herb_basket",
+  "wine_gourd_drop",
+  "herb_drop"
+ ],
+ "frameSize": 128,
+ "boxes": [
+  {
+   "x0": 51,
+   "x1": 390,
+   "y0": 331,
+   "y1": 708,
+   "scale": 0.307
+  },
+  {
+   "x0": 463,
+   "x1": 819,
+   "y0": 320,
+   "y1": 710,
+   "scale": 0.297
+  },
+  {
+   "x0": 881,
+   "x1": 1115,
+   "y0": 445,
+   "y1": 683,
+   "scale": 0.435
+  },
+  {
+   "x0": 1195,
+   "x1": 1455,
+   "y0": 442,
+   "y1": 692,
+   "scale": 0.398
+  }
+ ]
+}

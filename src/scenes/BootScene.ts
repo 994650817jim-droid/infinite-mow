@@ -1,3 +1,4 @@
+import {HOME_ART_HEROES} from '../data/characters';
 import {GROWTH_ICON_IDS} from '../ui/GrowthIcons';
 import {TACTICS,TREASURES} from '../data/builds';
 import {loadWorld,worldUnlocked} from '../world/WorldStore';
@@ -31,11 +32,11 @@ export class BootScene extends Phaser.Scene {
     const homeSave=loadWorld(),homeChapter=homeSave.yellowStages>=3||homeSave.cleared.huangjin||homeSave.legacyHulaoAccess?'dongzhuo':'huangjin';
     const homeLayout=GAME_WIDTH>600?'desktop':'mobile';
     this.load.image('epic_bg_'+homeChapter+'_'+homeLayout,'assets/epic-home/'+homeChapter+'-'+homeLayout+'.webp');
-    let homeHero='zhaoyun';try{const id=localStorage.getItem('im_last_hero');if(id&&['zhaoyun','guanyu','huangzhong','zhuge'].includes(id))homeHero=id;}catch{}
-    this.load.image('epic_hero_'+homeHero,'assets/epic-home/'+homeHero+'.webp');
+    let homeHero='zhaoyun';try{const id=localStorage.getItem('im_last_hero');if(id&&['zhaoyun','guanyu','huangzhong','zhuge','zhangfei'].includes(id))homeHero=id;}catch{}
+    if(HOME_ART_HEROES.includes(homeHero))this.load.image('epic_hero_'+homeHero,'assets/epic-home/'+homeHero+'.webp');
     // 武将卡立轴（生成美术）：外框、宣纸与当前武将的水墨立绘
     this.load.image('ink_frame','assets/ink-scroll/frame.webp');this.load.image('ink_paper','assets/ink-scroll/paper.webp');
-    this.load.image('ink_hero_'+homeHero,'assets/ink-scroll/'+homeHero+'.webp');
+    if(HOME_ART_HEROES.includes(homeHero))this.load.image('ink_hero_'+homeHero,'assets/ink-scroll/'+homeHero+'.webp');
     // Menu fallback and rest screens share the rest_camp texture allocation.
     // Both formal west stages can be selected after this boot; preload their existing atlases once.
     this.load.spritesheet('xurong','assets/phase17/xurong/sheet.png',{frameWidth:128,frameHeight:128});
@@ -88,6 +89,7 @@ export class BootScene extends Phaser.Scene {
     this.load.image('ground_ai2', 'assets/processed/ground_ai2.png');
     this.load.spritesheet('hero_walk_sheet', 'assets/processed/hero_walk_sheet.png', { frameWidth: 96, frameHeight: 96 });
     this.load.spritesheet('guanyu_walk_sheet', 'assets/processed/guanyu_walk_sheet.png', { frameWidth: 96, frameHeight: 96 });
+    this.load.spritesheet('zhangfei_walk_sheet', 'assets/processed/zhangfei_walk_sheet.png', { frameWidth: 96, frameHeight: 96 });
     this.load.spritesheet('huangzhong_walk_sheet', 'assets/processed/huangzhong_walk_sheet.png', { frameWidth: 96, frameHeight: 96 });
     this.load.spritesheet('enemy_infantry_walk_sheet', 'assets/processed/enemy_infantry_walk_sheet.png', { frameWidth: 96, frameHeight: 96 });
     this.load.spritesheet('enemy_shield_walk_sheet', 'assets/processed/enemy_shield_walk_sheet.png', { frameWidth: 96, frameHeight: 96 });
@@ -120,6 +122,7 @@ export class BootScene extends Phaser.Scene {
     this.load.spritesheet('guandao_slash_sheet', 'assets/processed/guandao_slash_sheet.png', { frameWidth: 256, frameHeight: 256 });
     this.load.image('huangzhong_portrait', 'assets/processed/huangzhong_portrait.png');
     this.load.image('guanyu_portrait', 'assets/processed/guanyu_portrait.png');
+    this.load.image('zhangfei_portrait', 'assets/processed/zhangfei_portrait.png');
     this.load.image('item_drum', 'assets/processed/item_drum.png');
     this.load.image('item_whetstone', 'assets/processed/item_whetstone.png');
     this.load.image('item_armor', 'assets/processed/item_armor.png');

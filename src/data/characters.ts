@@ -1,7 +1,7 @@
 import type { ChapterId } from './chapters';
 import type { WeaponId } from '../types';
 
-export type CharacterId = 'zhaoyun' | 'guanyu' | 'huangzhong' | 'zhuge';
+export type CharacterId = 'zhaoyun' | 'guanyu' | 'huangzhong' | 'zhuge' | 'zhangfei';
 
 export interface CharacterDef {
   id: CharacterId;
@@ -73,7 +73,20 @@ export const CHARACTERS: CharacterDef[] = [
     portrait: 'portrait_zhuge',
     startWeapon: 'flame_banner',
   },
+  {
+    id: 'zhangfei',
+    name: '张飞',
+    desc: '猛将 · 伤害高，怒吼震慑敌阵',
+    hpMul: 1.1,
+    speedMul: 0.96,
+    damageMul: 1.2,
+    portrait: 'zhangfei_portrait',
+    startWeapon: 'spear_orbit',
+  },
 ];
+
+/** 有主页大幅立绘（epic-home）与水墨立轴（ink-scroll）的武将；其余用 portrait。 */
+export const HOME_ART_HEROES: readonly string[] = ['zhaoyun', 'guanyu', 'huangzhong', 'zhuge'];
 
 export const STARTING_WEAPONS: Array<{ id: WeaponId; name: string; icon: string; desc: string }> = [
   { id: 'spear_orbit', name: '枪影旋舞', icon: 'icon_1', desc: '环绕枪刃，近身持续伤害' },

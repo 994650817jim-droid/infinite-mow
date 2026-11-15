@@ -14,9 +14,9 @@ import {dongzhuoStageUnlocked,nextDongzhuoStage,yellowStageUnlocked,loadWorld,wo
 import Phaser from 'phaser';
 import { WAR, ensureWarTextures, warFrame } from '../ui/WarStyle';
 import { CHAPTERS, YELLOW_STAGES,DONGZHUO_STAGES, getChapter, type YellowStage, type ChapterId } from '../data/chapters';
-import { CHARACTERS, type RunConfig } from '../data/characters';
+import { CHARACTERS, HOME_ART_HEROES, type RunConfig } from '../data/characters';
 import { CHARACTER_PASSIVES } from '../data/passives';
-import { WEAPON_META } from '../data/upgrades';
+import { WEAPON_META,weaponName } from '../data/upgrades';
 import { chapterOneCleared, chapterUnlocked, isChapterTestRun } from '../systems/ChapterProgress';
 import { FONT, TITLE_FONT, HEADING_FONT, GAME_HEIGHT as H, GAME_WIDTH as W, IS_DESKTOP as D, switchLayout } from '../config';
 
@@ -113,10 +113,10 @@ export class MenuScene extends Phaser.Scene {
       if(i===0)for(const stage of YELLOW_STAGES){const tab=text(x-width/2+16+(stage.stage-1)*(width-24)/3,y+(D?16:29),`1-${stage.stage}`,D?12:14).setPadding(5,4).setInteractive({useHandCursor:true});tab.on('pointerdown',()=>{if(!yellowStageUnlocked(stage.stage)&&!isChapterTestRun())return;this.selectedStage=stage.stage;this.selectedChapter='huangjin';this.renderSelection();});this.stageTabs.push(tab);}
 
     });
-    section(D ? 195 : 287, '贰', '选择武将', '四将各有所长');
-    const cardW = D ? (W - 92) / 4 : (W - 68) / 2, cardH = D ? 162 : 164;
+    section(D ? 195 : 287, '贰', '选择武将', '诸将各有所长');
+    const nH = CHARACTERS.length, mCols = nH > 4 ? 3 : 2, cardW = D ? (W - 56 - 12 * (nH - 1)) / nH : (W - 56 - 12 * (mCols - 1)) / mCols, cardH = D ? 162 : 164;
     CHARACTERS.forEach((c, i) => {
-      const x = 28 + cardW / 2 + (D ? i : i % 2) * (cardW + 12), y = D ? 291 : 389 + Math.floor(i / 2) * 178;
+      const x = 28 + cardW / 2 + (D ? i : i % mCols) * (cardW + 12), y = D ? 291 : 389 + Math.floor(i / mCols) * 178;
       this.add.image(x,y,'ui_war_panel').setDisplaySize(cardW,cardH);
       const bg = this.add.rectangle(x, y, cardW, cardH, 0x15251e).setInteractive({ useHandCursor: true });
       const decor = this.add.graphics();
@@ -241,7 +241,7 @@ export class MenuScene extends Phaser.Scene {
     if(this.load.isLoading()){this.load.once('complete',()=>{if(this.sys.isActive())this.ensureHomeArt(all);});return;}
     const background='epic_bg_'+(this.selectedChapter==='hulao'?'dongzhuo':'huangjin')+'_'+(D?'desktop':'mobile');const files:Array<[string,string]>=[];
     if(!this.textures.exists(background))files.push([background,'assets/epic-home/'+(this.selectedChapter==='hulao'?'dongzhuo':'huangjin')+'-'+(D?'desktop':'mobile')+'.webp']);
-    for(const c of all?CHARACTERS:[CHARACTERS[this.selectedChar]]){if(!this.textures.exists('epic_hero_'+c.id))files.push(['epic_hero_'+c.id,'assets/epic-home/'+c.id+'.webp']);if(!this.textures.exists('ink_hero_'+c.id))files.push(['ink_hero_'+c.id,'assets/ink-scroll/'+c.id+'.webp']);}
+    for(const c of all?CHARACTERS:[CHARACTERS[this.selectedChar]]){if(!HOME_ART_HEROES.includes(c.id))continue;if(!this.textures.exists('epic_hero_'+c.id))files.push(['epic_hero_'+c.id,'assets/epic-home/'+c.id+'.webp']);if(!this.textures.exists('ink_hero_'+c.id))files.push(['ink_hero_'+c.id,'assets/ink-scroll/'+c.id+'.webp']);}
     if(!files.length)return;
     for(const [key,url]of files)this.load.image(key,url);
     this.load.once('complete',()=>{if(!this.sys.isActive())return;for(const [key]of files)if(this.textures.exists(key))this.textures.get(key).setFilter(Phaser.Textures.FilterMode.LINEAR);if(this.homeBackground&&this.homeBackground.scene&&this.textures.exists(background)){this.homeBackground.setTexture(background);this.homeBackground.setScale(Math.max(W/this.homeBackground.width,H/this.homeBackground.height));}this.renderSelection();});this.load.start();
@@ -341,7 +341,7 @@ export class MenuScene extends Phaser.Scene {
     else if (c) {
       this.heroName.setText(this.compactHome?c.name+' · '+ROLES[this.selectedChar].split(' · ')[0]:`${c.name}  ·  ${ROLES[this.selectedChar].split(' · ')[0]}`);
       if(this.homePortrait){const key='epic_hero_'+c.id,image=this.homePortrait,target=this.textures.exists(key)?key:c.portrait;const apply=()=>{if(!image.scene)return;image.setTexture(target,'__BASE');image.setScale(Math.min((D?320:350)/image.width,(D?270:355)/image.height));};if(image.texture.key!==target&&image.getData('nextArt')!==target){image.setData('nextArt',target);this.tweens.killTweensOf(image);this.tweens.add({targets:image,alpha:0,duration:75,onComplete:()=>{apply();this.tweens.add({targets:image,alpha:1,duration:160});}});}image.setOrigin(.5,1).setPosition(D?W*.25:W/2,D?403:565+this.padY);if(image.texture.key===target)apply();if(!this.textures.exists(key))this.ensureHomeArt();}
-      this.weapon.setText(`专属兵器  ${WEAPON_META[c.startWeapon].name}`);
+      this.weapon.setText(`专属兵器  ${weaponName(c.startWeapon,c.id)}`);
       this.passiveName.setText(`天赋被动  ${CHARACTER_PASSIVES[c.id].name}`);
       this.passive.setText(PASSIVE_HINTS[this.selectedChar]);
     }

@@ -5,6 +5,8 @@ import { CHARACTER_PASSIVES, PASSIVE_RULES as R } from '../data/passives';
 export interface PassiveCast {
   owner: CharacterId; generation: number; weapon: WeaponId; empowered: boolean;
   radiusMul: number; damageMul: number; extraSpear: boolean; spearLengthMul: number;
+  /** 张飞满怒：本次出枪附带燕人咆哮（震慑周围敌人）。 */
+  roar: boolean;
   hits: Set<number>; awarded: boolean;
 }
 interface Burn { enemy: Enemy; spawnId: number; until: number; nextTick: number; damage: number; }
@@ -24,7 +26,8 @@ export class CharacterPassives {
   private get maxStacks(): number { return CHARACTER_PASSIVES[this.character].maxStacks; }
   onDamage(now: number): void { if (!this.stopped) this.lastDamage = now; }
   onWeaponHit(now: number): void {
-    if (this.stopped || this.character !== 'zhaoyun' || this.stacks >= this.maxStacks || now - this.lastGain + 1e-6 < R.dragonIntervalMs) return;
+    const interval = this.character === 'zhaoyun' ? R.dragonIntervalMs : this.character === 'zhangfei' ? R.roarIntervalMs : -1;
+    if (this.stopped || interval < 0 || this.stacks >= this.maxStacks || now - this.lastGain + 1e-6 < interval) return;
     this.lastGain = now; this.stacks++; this.gains++;
   }
   isSharpshooter(now: number): boolean { return !this.stopped && this.character === 'huangzhong' && now - this.lastDamage >= R.calmMs; }
@@ -33,10 +36,12 @@ export class CharacterPassives {
     return !this.stopped && this.character === 'guanyu' && weapon === 'guandao' ? 1 + this.stacks * R.guandaoRangePerStack : 1;
   }
   beginCast(weapon: WeaponId): PassiveCast {
-    const c: PassiveCast = { owner: this.character, generation: this.generation, weapon, empowered: false, radiusMul: this.rangeMultiplier(weapon), damageMul: 1, extraSpear: false, spearLengthMul: 1, hits: new Set(), awarded: false };
+    const c: PassiveCast = { owner: this.character, generation: this.generation, weapon, empowered: false, radiusMul: this.rangeMultiplier(weapon), damageMul: 1, extraSpear: false, spearLengthMul: 1, roar: false, hits: new Set(), awarded: false };
     if (this.stopped) return c;
     if (this.character === 'zhaoyun' && weapon === 'spear_orbit' && this.stacks === this.maxStacks) {
       c.empowered = c.extraSpear = true; c.spearLengthMul = R.spearLengthMul;
+    } else if (this.character === 'zhangfei' && weapon === 'spear_orbit' && this.stacks === this.maxStacks) {
+      c.empowered = c.roar = true;
     } else if (this.character === 'guanyu' && weapon === 'guandao' && this.stacks === this.maxStacks) {
       c.empowered = true; c.damageMul = R.guandaoDamageMul;
     } else if (this.character === 'zhuge' && weapon === 'flame_banner' && this.stacks === this.maxStacks) {
@@ -82,6 +87,6 @@ export class CharacterPassives {
   label(now: number): string {
     const name = CHARACTER_PASSIVES[this.character].name;
     if (this.character === 'huangzhong') return this.isSharpshooter(now) ? `${name} · 神射：暴击+10% / 连弩+1` : `${name} · 蓄势 ${Math.min(3, Math.max(0, (now - this.lastDamage) / 1000)).toFixed(1)}/3秒`;
-    return `${name} · ${this.character === 'zhaoyun' ? '龙胆' : this.character === 'guanyu' ? '武势' : '谋略'} ${this.stacks}/${CHARACTER_PASSIVES[this.character].maxStacks}${this.snapshot(now).ready ? ' · 下次强化' : ''}${this.character === 'zhuge' && this.burns.size ? ` · 灼烧${this.burns.size}` : ''}`;
+    return `${name} · ${this.character === 'zhaoyun' ? '龙胆' : this.character === 'guanyu' ? '武势' : this.character === 'zhangfei' ? '怒气' : '谋略'} ${this.stacks}/${CHARACTER_PASSIVES[this.character].maxStacks}${this.snapshot(now).ready ? ' · 下次强化' : ''}${this.character === 'zhuge' && this.burns.size ? ` · 灼烧${this.burns.size}` : ''}`;
   }
 }

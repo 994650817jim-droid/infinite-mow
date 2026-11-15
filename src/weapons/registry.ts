@@ -4,6 +4,7 @@ import type { Player } from '../entities/Player';
 import type { SpatialGrid } from '../systems/SpatialGrid';
 import type { Sfx } from '../systems/Sfx';
 import type { PlayerStats, WeaponId, WeaponState } from '../types';
+import { PASSIVE_RULES } from '../data/passives';
 
 export interface WeaponBolt {
   img: Phaser.GameObjects.Image; vx: number; vy: number; life: number;
@@ -202,6 +203,17 @@ export const WEAPON_BEHAVIORS: Record<WeaponId, (host: WeaponHost, weapon: Weapo
     const passiveCast = host.player.passive.beginCast('spear_orbit');
     // 招牌技动作：七进七出（龙胆蓄满的强化一击）
     if (passiveCast.empowered) host.player.playAction('skill', aimX < 0 ? 'left' : 'right');
+    // 张飞满怒：燕人咆哮——震慑并重创周围敌人（首领不受控，只吃伤害）
+    if (passiveCast.roar) {
+      const R = PASSIVE_RULES, px = host.player.x, py = host.player.y, now = host.combatNow;
+      for (const e of host.grid.query(px, py, R.roarRadius + 40)) {
+        if (!e.active || e.isSupplySlot || Math.hypot(e.x - px, e.y - py) > R.roarRadius + e.radius) continue;
+        if (host.hitEnemy(e, damage * R.roarDamageMul, now, 'melee')) host.player.passive.recordHit(passiveCast, e, now);
+        if (!e.controlImmune) e.stunUntil = Math.max(e.stunUntil, now + R.roarStunMs);
+      }
+      for (let k = 0; k < 2; k++) { const ring = host.add.circle(px, py - 6, 30, 0xffd27a, 0).setStrokeStyle(6 - k * 2, k ? 0xff8a3c : 0xffe2a0, .9).setDepth(41); ring.scene.tweens.add({ targets: ring, radius: R.roarRadius, alpha: 0, delay: k * 90, duration: 420, onComplete: () => ring.destroy() }); }
+      host.cameras.main.shake(160, .006); host.sfx.play('waveDrum');
+    }
     const spearLength = pierce.len * passiveCast.spearLengthMul * host.player.growth.spearLengthMultiplier();
     const count = level;
     const used = new Map<number, number>();

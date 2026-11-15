@@ -52,14 +52,16 @@ export class RunGrowth {
     this.stationarySeconds=distance>.5?Math.max(0,this.stationarySeconds-dt*2):Math.min(5,this.stationarySeconds+dt);
   }
   aimCriticalBonus(): number { return this.masteries.steady_aim ? this.stationarySeconds*(.02+.01*this.masteries.steady_aim) : 0; }
-  masteryLabel(): string { return (Object.keys(MARTIALS) as MasteryId[]).filter(id=>MARTIALS[id].character===this.character).map(id=>`${MARTIALS[id].name} Lv.${this.masteries[id]}`).join(' · '); }
+  masteryLabel(): string { return (Object.keys(MARTIALS) as MasteryId[]).filter(id=>this.owns(id)).map(id=>`${MARTIALS[id].name} Lv.${this.masteries[id]}`).join(' · '); }
 
   constructor(readonly character: CharacterId) {}
 
   get hasAttributeRoom(): boolean { return Object.values(this.attributes).reduce((n,level)=>n+ATTRIBUTE_MAX-level,0)>this.unallocated; }
   get weaponMasteryLevel(): number { return this.masteries.dragon_gallop; }
   get spearPierceLevel(): number { return this.masteries.cloud_pierce; }
-  canLearn(id: MasteryId): boolean { return this.character === MARTIALS[id].character && this.masteries[id] < 3; }
+  /** 张飞同用长枪，与赵云共用两项枪术专精。 */
+  owns(id: MasteryId): boolean { const c = MARTIALS[id].character as string; return c === this.character || this.character === 'zhangfei' && c === 'zhaoyun'; }
+  canLearn(id: MasteryId): boolean { return this.owns(id) && this.masteries[id] < 3; }
 
   addAttributePoints(amount = 2): void { this.unallocated = Math.min(Object.values(this.attributes).reduce((n,level)=>n+ATTRIBUTE_MAX-level,0),this.unallocated+Math.max(0, Math.floor(amount))); }
 

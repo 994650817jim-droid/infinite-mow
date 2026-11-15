@@ -164,7 +164,7 @@ function drawZhangjiao(ctx: CanvasRenderingContext2D): void {
 /** 正式素材到位后：384x384、4x4、每格 96x96，行顺序 下/左/右/上。 */
 export function registerWalkSheet(scene: Phaser.Scene): void {
   const dirs = ['down', 'left', 'right', 'up'];
-  for (const sheetKey of ['hero_walk_sheet', 'guanyu_walk_sheet', 'huangzhong_walk_sheet', 'enemy_infantry_walk_sheet', 'enemy_shield_walk_sheet', 'enemy_archer_walk_sheet', 'enemy_cavalry_run_sheet', 'enemy_officer_walk_sheet', 'shu_swordsman_walk_sheet', 'shu_archer_walk_sheet', 'shu_spearman_walk_sheet', 'zhuge_walk_sheet']) {
+  for (const sheetKey of ['hero_walk_sheet', 'guanyu_walk_sheet', 'huangzhong_walk_sheet', 'zhangfei_walk_sheet', 'enemy_infantry_walk_sheet', 'enemy_shield_walk_sheet', 'enemy_archer_walk_sheet', 'enemy_cavalry_run_sheet', 'enemy_officer_walk_sheet', 'shu_swordsman_walk_sheet', 'shu_archer_walk_sheet', 'shu_spearman_walk_sheet', 'zhuge_walk_sheet']) {
     if (!scene.textures.exists(sheetKey)) continue;
     const texture = scene.textures.get(sheetKey);
     for (let row = 0; row < 4; row += 1) {

@@ -58,7 +58,7 @@ export class GuanduChapterScene extends Phaser.Scene {
     });
     const hy = desk ? 431 : 787;
     this.text(30, desk ? 397 : 735, '出战武将', 13, '#b6a07b'); this.text(W - 30, desk ? 397 : 735, '点击更换 · 不影响征程进度', 11, '#8f8473').setOrigin(1, 0);
-    CHARACTERS.forEach((c, i) => { const w = (W - 70) / 4, x = 28 + i * (w + 5), a = this.action(x + w / 2, hy, w, desk ? 42 : 55, c.name, () => { this.hero = c.id; this.refresh(); }); a.bg.setName('guandu-hero-' + c.id); this.heroButtons.push(a.bg); });
+    CHARACTERS.forEach((c, i) => { const w = (W - 50 - 5 * CHARACTERS.length) / CHARACTERS.length, x = 28 + i * (w + 5), a = this.action(x + w / 2, hy, w, desk ? 42 : 55, c.name, () => { this.hero = c.id; this.refresh(); }); a.bg.setName('guandu-hero-' + c.id); this.heroButtons.push(a.bg); });
     g.lineStyle(1, 0x8b704a, .45).lineBetween(28, desk ? 466 : 838, W - 28, desk ? 466 : 838);
     const a = this.action(desk ? W - 178 : W / 2, desk ? 503 : 885, desk ? 300 : W - 56, desk ? 50 : 62, '', () => this.depart(), true);
     this.deployBg = a.bg.setName('guandu-deploy'); this.deployText = a.t;

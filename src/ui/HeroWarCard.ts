@@ -1,13 +1,13 @@
 import Phaser from 'phaser';
 import {CHARACTERS} from '../data/characters';
 import {MARTIALS} from '../systems/RunGrowth';
-import {WEAPON_META} from '../data/upgrades';
+import {WEAPON_META,weaponName} from '../data/upgrades';
 import {CHARACTER_PASSIVES} from '../data/passives';
 import {FONT,HEADING_FONT,TITLE_FONT,RENDER_SCALE,IS_DESKTOP} from '../config';
-const titles=['游龙先锋','重甲武圣','百步神射','卧龙军师'];const roles=['突进','近战','远程','法术'];
+const titles=['游龙先锋','重甲武圣','百步神射','卧龙军师','燕人猛将'];const roles=['突进','近战','远程','法术','猛攻'];
 /** 闲章与题句（原创短句，取材常见三国典故）。 */
-const leisure=['常胜','忠义','神射','卧龙'];
-const verses=['长坂单骑护幼主','千里单骑寻故主','定军山下斩夏侯','隆中一对定三分'];
+const leisure=['常胜','忠义','神射','卧龙','万夫'];
+const verses=['长坂单骑护幼主','千里单骑寻故主','定军山下斩夏侯','隆中一对定三分','据水断桥喝曹军'];
 type FrameState='normal'|'hover'|'selected'|'pressed';
 
 /** 立轴形制尺寸：木轴、天头（上）、地头（下）、两侧绫边；画心为宣纸。 */
@@ -303,7 +303,7 @@ export class HeroWarCard{
   this.roleSeal.setTexture(sealTexture(this.s,roles[index],small?30:36,false,HEADING_FONT)).setDisplaySize(small?30:36,small?30:36);
   this.verse.setText([...verses[index]].join('\n'));
   this.leisureSeal.setTexture(sealTexture(this.s,leisure[index],small?26:32,true)).setDisplaySize(Math.round((small?26:32)*.72),small?26:32);
-  this.weapon.setText(WEAPON_META[c.startWeapon].name);
+  this.weapon.setText(weaponName(c.startWeapon,c.id));
   this.passive.setText('天赋 · '+CHARACTER_PASSIVES[c.id].name);
   this.skills.setText(Object.values(MARTIALS).filter(a=>a.character===c.id).map(a=>a.name).join('  ◆  ')).setWordWrapWidth(pw-12).setAlign('center');
  }

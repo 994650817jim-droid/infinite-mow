@@ -33,7 +33,7 @@ import { BALANCE, COLORS, DEPTH, FONT, GAME_HEIGHT, GAME_WIDTH, HEADING_FONT, IS
 import { upgradeCardTexture } from '../ui/HomeCommand';
 import type { EnemyDef } from '../data/enemies';
 import { RELICS, SCHOOL_NAMES, type RelicSchool } from '../data/relics';
-import { WEAPON_META, buildUpgradeOptions } from '../data/upgrades';
+import { WEAPON_META, weaponName, buildUpgradeOptions } from '../data/upgrades';
 import { waveIndexAt } from '../data/waves';
 import { getChapter, getBattleChapter, chapterBossTime, type ChapterDef } from '../data/chapters';
 import { BattleFeedback } from '../systems/BattleFeedback';
@@ -2408,7 +2408,7 @@ export class GameScene extends Phaser.Scene {
     const weapon = this.player.weapons[0];
     const mastery = '\n'+this.player.growth.masteryLabel();
     const trinkets = `\n饰品 ${this.player.growth.trinkets.length}/2`;
-    this.hudTexts.gear.setText(`${weapon ? `${WEAPON_META[weapon.id].name} Lv.${weapon.level}` : '本命武器'}${mastery}${trinkets}\n属性点 ${this.player.growth.unallocated} · ${this.passiveHud.description}`);
+    this.hudTexts.gear.setText(`${weapon ? `${weaponName(weapon.id,this.runConfig.character)} Lv.${weapon.level}` : '本命武器'}${mastery}${trinkets}\n属性点 ${this.player.growth.unallocated} · ${this.passiveHud.description}`);
     const relicList = this.player.relics;
     const schoolParts: string[] = [];
     for (const sc of ['wushuang', 'shenshe', 'lieyan', 'tiebi'] as RelicSchool[]) {
@@ -2646,7 +2646,7 @@ export class GameScene extends Phaser.Scene {
     this.attributePointsText.setText(growth.unallocated>0?`可分配属性点 ${growth.unallocated}`:'属性点已用完 · 每次升级获得 1 点').setColor(growth.unallocated>0?'#1c160c':'#91ab98').setBackgroundColor(growth.unallocated>0?'#e2bd6a':'#00000000');
     this.attributePauseText?.setText(`分配属性点 · ${growth.unallocated}`);
     const weapon=this.player.weapons[0];
-    this.attributeWeaponText?.setText((weapon?WEAPON_META[weapon.id].name:'')+' · '+growth.masteryLabel());
+    this.attributeWeaponText?.setText((weapon?weaponName(weapon.id,this.runConfig.character):'')+' · '+growth.masteryLabel());
     const character=getCharacter(growth.character),stats=this.player.stats;
     const baseline={...stats,damageMul:character.damageMul,cooldownMul:1,moveMul:character.speedMul,critChance:.05,
       maxHpBonus:Math.round(BALANCE.player.maxHp*(character.hpMul-1)),meleeMul:1,arrowMul:1,fireMul:1};

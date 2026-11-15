@@ -97,7 +97,7 @@ export function checkWorld(w: WorldSave): void {
   if (Object.values(w.town.focus).some(f => f !== 'balanced')) unlock('focus');
   const lv = w.town.levels as Record<string, number>;
   if (Object.entries(lv).some(([id, l]) => l > 0 && !['hall', 'barracks', 'farm', 'clinic'].includes(id))) unlock('town_build');
-  if (Object.keys(TOWN_BUILDINGS).every(id => (lv[id] ?? 0) > 0)) unlock('town_all');
+  if (Object.keys(TOWN_BUILDINGS).filter(id => id !== 'pavilion').every(id => (lv[id] ?? 0) > 0)) unlock('town_all');
   if (Object.entries(lv).some(([id, l]) => id !== 'hall' && l >= 3)) unlock('town_lv3');
   if (w.town.money >= 500) unlock('money_500');
   if ((w.town.report?.caravanMoney ?? 0) > 0) unlock('caravan');

@@ -20,14 +20,14 @@ import {cityById,TIER_NAME} from '../world/WorldCities';
 /** 是否电脑布局：在场景构造时读取（模块加载时布局尚未初始化）。 */
 let D=false;
 /** 建造总览的顺序。 */
-const ORDER:TownBuildingId[]=['hall','wall','house','market','farm','granary','barracks','clinic','post','smithy','drill','tavern'];
+const ORDER:TownBuildingId[]=['hall','wall','house','market','farm','granary','barracks','clinic','post','smithy','drill','tavern','pavilion'];
 /** 占位建筑：屋顶颜色与牌匾字。 */
 const LOOK:Record<TownBuildingId,{roof:number;wall:number;mark:string}>={
  hall:{roof:0x5b2a22,wall:0xb69a6c,mark:'府'},
  barracks:{roof:0x7a2f24,wall:0x8b7356,mark:'营'},farm:{roof:0x6f8a3a,wall:0x9a8456,mark:'田'},clinic:{roof:0x3f6f6a,wall:0xb9a882,mark:'医'},
  house:{roof:0x5a4a3a,wall:0xb8a27c,mark:'民'},market:{roof:0xa8692c,wall:0xc2a676,mark:'市'},post:{roof:0x4b5f7a,wall:0xa99a7c,mark:'驿'},
  smithy:{roof:0x3d3a38,wall:0x8a7a6a,mark:'铁'},drill:{roof:0x8a3d2a,wall:0x9c8c6c,mark:'校'},granary:{roof:0x9b7a3a,wall:0xb59a6a,mark:'仓'},
- wall:{roof:0x5c5650,wall:0x8a8274,mark:'墙'},tavern:{roof:0x7a4a5a,wall:0xb69e7a,mark:'酒'},
+ wall:{roof:0x5c5650,wall:0x8a8274,mark:'墙'},tavern:{roof:0x7a4a5a,wall:0xb69e7a,mark:'酒'},pavilion:{roof:0xb08a2c,wall:0xd9c9a0,mark:'麟'},
 };
 const txt=(s:Phaser.Scene,x:number,y:number,v:string,size=15,color='#ede3c9',font=FONT)=>s.add.text(x,y,v,{fontFamily:font,fontSize:size+'px',color,resolution:2});
 type Have={merits:number;provisions:number;money:number};
@@ -47,7 +47,7 @@ export class CityScene extends Phaser.Scene {
  preload(){if(!worldUnlocked()&&!isChapterTestRun())return;worldAssets(this,'town_ground','assets/town/ground.webp');
   for(const n of CITY_BG_SIZES)worldAssets(this,`city_bg_${n}`,`assets/city/bg_${n}.webp`);
   const ids=Object.keys(TOWN_BUILDINGS) as TownBuildingId[];
-  for(const lv of CITY_ART_LEVELS)for(const id of ids)worldAssets(this,`city_${id}_${lv}`,`assets/city/${id}_${lv}.webp`);
+  for(const lv of CITY_ART_LEVELS)for(const id of ids)if(lv<=(TOWN_BUILDINGS[id].maxLevel??3))worldAssets(this,`city_${id}_${lv}`,`assets/city/${id}_${lv}.webp`);
   // 旧小镇像素画作为缺图时的退路（府衙没有旧图）
   if(!CITY_ART_LEVELS.length)for(const lv of TOWN_ART_LEVELS)for(const id of ids)if(id!=='hall')worldAssets(this,`town_${id}_${lv}`,`assets/town/${id}_${lv}.webp`);}
  create(){playMenuMusic(this);
@@ -146,6 +146,8 @@ export class CityScene extends Phaser.Scene {
   const ids=(Object.keys(slots) as TownBuildingId[]).sort((a,b)=>slots[a].y-slots[b].y);
   for(const id of ids){
    const sl=slots[id],lv=levelOf(t,id),x=sl.x*k,y=sl.y*k,st=statusOf(t,id,have);
+   // 奇观：城池规模不够时不在城中显示空地（建造总览里仍可查看）
+   if(!lv&&TOWN_BUILDINGS[id].maxLevel===1&&(TOWN_BUILDINGS[id].minHall??1)>size)continue;
    let w=sl.w*k*(LEVEL_SCALE[Math.max(1,lv)]),h=w*.72;
    if(lv>0){
     const key=this.artKey(id,lv);
@@ -236,11 +238,19 @@ export class CityScene extends Phaser.Scene {
   line(lv?'现在：'+def.effect(lv):'尚未建造',14,'#efe2c4');
   if(cost){line((lv?'下一级：':'建成后：')+def.effect(lv+1),14,'#cfe0c8');line('花费：'+costText(cost),14,canAfford(have,cost)?'#d9c58f':'#d4887a','town-card-cost');}
   else line('已达最高等级',14,'#b9a98a');
-  if(id==='hall'&&cost&&HALL_UPGRADE[lv])line(`扩建为${CITY_SIZE[lv+1]}：解锁 Lv${lv+1} 建筑${lv===1?'，以及驿站、铁匠铺、校场、酒肆':''}`,13,'#b9d2a8');
+  if(id==='hall'&&cost&&HALL_UPGRADE[lv])line(`扩建为${CITY_SIZE[lv+1]}：解锁 Lv${lv+1} 建筑${lv===1?'，以及驿站、铁匠铺、校场、酒肆':'，以及奇观麒麟阁'}`,13,'#b9d2a8');
   if(block.length&&cost)line('需要：'+block.join('、'),14,'#e59a83','town-card-block');
   if(id==='house'||id==='market')line(`民户 ${households(t)} · ${TAX_NAME[t.tax]}每户 ${TAX_PER_HOUSEHOLD[t.tax]} 钱`,12,'#b9c9b2');
   const msg=txt(this,W/2,m.y+h-(D?118:132),'',13,'#e8c98a').setOrigin(.5).setName('town-card-msg');m.root.add(msg);
-  const up=homeCommand(this,W/2,m.y+h-(D?84:94),Math.min(240,m.w-60),42,cost?(lv?`升级到 Lv${lv+1}`:'建造'):'已满级',true,ok,16);
+  // 建筑功能（已建成才有）：军营招募、市集 / 驿站商贸、府衙报告与税率
+  const funcs:Partial<Record<TownBuildingId,[string,()=>void]>>={
+   barracks:['招募后备',()=>this.scene.start('CityRecruitScene')],
+   market:['买卖粮草',()=>{m.root.destroy();this.openTrade();}],
+   post:['派遣商队',()=>{m.root.destroy();this.openTrade();}],
+   hall:['季度报告',()=>{m.root.destroy();this.openReport();}],
+  },fn=lv>0?funcs[id]:undefined,bw=fn?Math.min(200,(m.w-80)/2):Math.min(240,m.w-60),ux=fn?W/2+bw/2+8:W/2;
+  if(fn){const f=homeCommand(this,W/2-bw/2-8,m.y+h-(D?84:94),bw,42,fn[0],false,true,15);f.hit.setName('town-card-func').on('pointerdown',fn[1]);m.root.add([f.g,f.hit,f.caption]);}
+  const up=homeCommand(this,ux,m.y+h-(D?84:94),bw,42,cost?(lv?`升级到 Lv${lv+1}`:'建造'):'已满级',true,ok,16);
   up.hit.setName('town-upgrade').setData('padDefault',true).on('pointerdown',()=>{if(!ok){msg.setText(cost?(block.length?'需要 '+block.join('、'):'资源不足：需要 '+costText(cost)):'已达最高等级');return;}
    const res=townUpgrade(id);if(!res.ok){msg.setText(res.message);return;}
    this.children.getByName('town-overview')?.destroy();m.root.destroy();this.popId=id;this.focusOn(id);this.refresh();this.toast(res.message);});
@@ -251,7 +261,7 @@ export class CityScene extends Phaser.Scene {
  private focusOn(id:TownBuildingId){const sl=CITY_SLOTS[citySize(loadWorld().town) as 1|2|3][id];this.scrollTo(sl.x*this.k-this.vr.w/2,sl.y*this.k-this.vr.h*.62);}
  /** 建造总览：12 座建筑的等级与状态，点卡片打开建筑面板。 */
  private openOverview(){
-  const s=loadWorld(),t=s.town,have=haveOf(s),cols=D?6:3,rows=Math.ceil(ORDER.length/cols),cw=D?96:Math.floor((W-24-48-16)/3),ch=D?118:122,h=D?120+rows*(ch+10)+60:118+rows*(ch+8)+60;
+  const s=loadWorld(),t=s.town,have=haveOf(s),cols=D?7:3,rows=Math.ceil(ORDER.length/cols),cw=D?80:Math.floor((W-24-48-16)/3),ch=D?118:122,h=D?120+rows*(ch+10)+60:118+rows*(ch+8)+60;
   const m=this.modal('town-overview',`建造总览 · ${CITY_SIZE[citySize(t)]}`,h);
   m.root.add(txt(this,W/2,m.y+56,'绿色可建造 / 升级 · 黄色缺资源 · 灰色需扩城',12,'#c9bf99').setOrigin(.5));
   const x0=W/2-(cols*cw+(cols-1)*8)/2;

@@ -4,7 +4,7 @@
  */
 import type { CityTier } from '../world/WorldCities';
 
-export type TownBuildingId = 'hall' | 'barracks' | 'farm' | 'clinic' | 'house' | 'market' | 'post' | 'smithy' | 'drill' | 'granary' | 'wall' | 'tavern';
+export type TownBuildingId = 'hall' | 'barracks' | 'farm' | 'clinic' | 'house' | 'market' | 'post' | 'smithy' | 'drill' | 'granary' | 'wall' | 'tavern' | 'pavilion';
 export type TaxRate = 'low' | 'mid' | 'high';
 /** 占领城池发展方向：均衡（未选择，产出与旧版一致）/ 重农 / 重商 / 重军。 */
 export type CityFocus = 'balanced' | 'farm' | 'trade' | 'military';
@@ -50,6 +50,8 @@ export interface BuildingDef {
   minHall?: number;
   /** 一句话简介（建造面板）。 */
   blurb: string;
+  /** 最高等级（默认 3；奇观只有 1 级）。 */
+  maxLevel?: number;
 }
 const C = (merits: number, provisions: number, money = 0): Cost => ({ merits, provisions, money });
 export const TOWN_BUILDINGS: Record<TownBuildingId, BuildingDef> = {
@@ -64,6 +66,7 @@ export const TOWN_BUILDINGS: Record<TownBuildingId, BuildingDef> = {
   drill: { name: '校场', max: 1, build: C(50, 60, 40), minHall: 2, blurb: '演武操练，将士精进。', effect: l => `出征开局属性点 +${[1, 1, 2][l - 1]}` },
   granary: { name: '粮仓', max: 1, build: C(20, 80), blurb: '广积粮，备荒年。', effect: l => `季度军粮开销 −${GRANARY_CUT[l - 1] * 100}%；旱灾损失减半` },
   wall: { name: '城墙', max: 1, build: C(60, 100, 60), blurb: '高墙深池，扩城的前提。', effect: l => `府衙升级的前提；出征时主将生命 +${l * 3}%` },
+  pavilion: { name: '麒麟阁', max: 1, maxLevel: 1, build: C(400, 1200, 800), minHall: 3, blurb: '奇观：图画功臣、表彰忠义，天下英雄慕名来投。', effect: () => '出征时伤害 +6%、主将生命 +6%、开局属性点 +1' },
   tavern: { name: '酒肆', max: 1, build: C(30, 40, 50), minHall: 2, blurb: '四方豪杰汇聚之所。', effect: l => `季度好事件（名士、商队、祥瑞…）出现率 +${l * 35}%` },
 };
 /** 每种建筑一座：农田 / 民居的产出按等级放大（旧版最多 3 块农田、4 片民居）。 */
@@ -77,7 +80,7 @@ export const HALL_UPGRADE: Record<number, { cost: Cost; needs: Partial<Record<To
 
 /** 军营 / 农田 / 医馆沿用旧版升级价；其它建筑按建造价 ×2.2（Lv2）/ ×4.5（Lv3），且至少要 20 / 60 钱。 */
 export function upgradeCostFor(id: TownBuildingId, level: number): Cost | null {
-  if (level >= MAX_LEVEL) return null;
+  if (level >= (TOWN_BUILDINGS[id].maxLevel ?? MAX_LEVEL)) return null;
   if (id === 'hall') return HALL_UPGRADE[level]?.cost ?? null;
   if (id === 'barracks' || id === 'farm' || id === 'clinic') return level === 1 ? C(35, 50) : C(90, 140);
   const b = TOWN_BUILDINGS[id].build, k = level === 1 ? 2.2 : 4.5;
@@ -88,7 +91,7 @@ export function nextCost(t: TownState, id: TownBuildingId): Cost | null { const 
 /** 下一步缺少的前提（城池规模、府衙前提建筑）；空数组 = 可以建造 / 升级（不含资源）。 */
 export function buildBlockers(t: TownState, id: TownBuildingId): string[] {
   const l = levelOf(t, id), hall = levelOf(t, 'hall'), out: string[] = [];
-  if (l >= MAX_LEVEL) return ['已达最高等级'];
+  if (l >= (TOWN_BUILDINGS[id].maxLevel ?? MAX_LEVEL)) return ['已达最高等级'];
   if (id === 'hall') { for (const [b, need] of Object.entries(HALL_UPGRADE[l]?.needs ?? {}) as Array<[TownBuildingId, number]>) if (levelOf(t, b) < need) out.push(`${TOWN_BUILDINGS[b].name} Lv${need}`); return out; }
   const minHall = TOWN_BUILDINGS[id].minHall ?? 1;
   if (l === 0 && hall < minHall) out.push(`城池规模达到${CITY_SIZE[minHall]}（府衙 Lv${minHall}）`);
@@ -109,7 +112,7 @@ export const FOCUS_INCOME: Record<CityTier, Record<CityFocus, Cost>> = {
 export const FOCUS_CHANGE_COST: Record<CityTier, number> = { small: 20, medium: 40, large: 80 };
 
 export function emptyLevels(): Record<TownBuildingId, number> {
-  return { hall: 1, barracks: 0, farm: 0, clinic: 0, house: 0, market: 0, post: 0, smithy: 0, drill: 0, granary: 0, wall: 0, tavern: 0 };
+  return { hall: 1, barracks: 0, farm: 0, clinic: 0, house: 0, market: 0, post: 0, smithy: 0, drill: 0, granary: 0, wall: 0, tavern: 0, pavilion: 0 };
 }
 export function emptyTown(): TownState {
   return { money: 0, year: START_YEAR, season: 0, tax: 'mid', levels: emptyLevels(), focus: {}, report: null, mods: noMods(), boon: noBoon(), pendingEvent: null, caravans: [] };
@@ -263,7 +266,8 @@ export function caravanSlots(t: TownState): number { return levelOf(t, 'post'); 
 // —— 建筑的出征加成 ——
 /** 校场：开局属性点；铁匠铺：本命武器伤害；城墙：主将生命。 */
 export function buildingBattleEffects(t: TownState): BattleBoon {
-  return { attributePoints: [0, 1, 1, 2][levelOf(t, 'drill')], damage: [0, .04, .08, .12][levelOf(t, 'smithy')], maxHp: [0, .03, .06, .09][levelOf(t, 'wall')] };
+  const pav = levelOf(t, 'pavilion') > 0 ? 1 : 0;
+  return { attributePoints: [0, 1, 1, 2][levelOf(t, 'drill')] + pav, damage: [0, .04, .08, .12][levelOf(t, 'smithy')] + pav * .06, maxHp: [0, .03, .06, .09][levelOf(t, 'wall')] + pav * .06 };
 }
 
 export function noMods(): SeasonMods { return { taxMul: 1, grainMul: 1, badRisk: 0 }; }

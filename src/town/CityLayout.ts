@@ -24,6 +24,7 @@ const BASE: Layout = {
   drill: { x: 1340, y: 950, w: 310 },
   barracks: { x: 1090, y: 1010, w: 290 },
   wall: { x: 760, y: 1024, w: 310 },
+  pavilion: { x: 1150, y: 860, w: 260 },
 };
 // 大城底图：正中笔直的青石御道（x≈640–1000）直通城门，y≈460–510 一条横街，分出四片方地；府衙坐落在城门内御道上。
 const LARGE: Layout = {
@@ -39,6 +40,7 @@ const LARGE: Layout = {
   farm: { x: 180, y: 960, w: 280 },
   barracks: { x: 1240, y: 1010, w: 280 },
   wall: { x: 768, y: 1024, w: 310 },
+  pavilion: { x: 768, y: 712, w: 280 },
 };
 export const CITY_SLOTS: Record<1 | 2 | 3, Layout> = { 1: BASE, 2: BASE, 3: LARGE };
 /** 等级对应的显示比例（Lv1 小、Lv3 满）。 */

@@ -17,6 +17,9 @@ export type HealProp='wine'|'herb';
 /** 回血道具（heal_props 图集帧：0 酒罐 / 1 药篓 / 2 酒葫芦 / 3 草药包）；回复量按最大生命比例，2.5 秒内回完。 */
 export const HEAL_PROPS:Record<HealProp,{name:string;frame:number;drop:number;ratio:number;size:number}>={wine:{name:'酒罐',frame:0,drop:2,ratio:.08,size:70},herb:{name:'药篓',frame:1,drop:3,ratio:.12,size:66}};
 interface Potion {image:Phaser.GameObjects.Image;until:number;active:boolean;amount?:number;}
+/** 药囊里的一份药：回复量（未设则为原药瓶的固定 10 点）与图标。 */
+export interface PouchItem {amount?:number;texture:string;frame?:number;name:string;}
+export const POUCH_MAX=3;
 interface BrazierFire {x:number;y:number;started:number;nextHit:number;active:boolean;tripod?:boolean;}
 /** Rare, deterministic breakables share weapon hit detection, but not enemy slots/rewards. */
 export class BattlefieldSupplies {
@@ -26,6 +29,8 @@ export class BattlefieldSupplies {
  /** 场景障碍（房屋、城墙等）；回血道具不放进去。 */
  healBlocked?:(x:number,y:number,r:number)=>boolean;
  private healRate=HEAL_RATE;
+ /** 药囊：拾取的药先收起，玩家按“用药”按钮（或 Q 键）才回血。 */
+ readonly pouch:PouchItem[]=[];
  readonly crates:Crate[]=[];
  readonly potions:Potion[]=[];
  private readonly breakFx:Array<{image:Phaser.GameObjects.Image;start:number;row:number;active:boolean}>=[];
@@ -79,6 +84,12 @@ export class BattlefieldSupplies {
   slot.enemy.hp=slot.enemy.maxHp=kind==='wine'?18:24;slot.shadow.setVisible(false);slot.halfW=d.size*.24;slot.halfH=d.size*.1;
  }
  get healArt():boolean{return this.scene.textures.exists('heal_props');}
+ /** 正在按疗程回血（上一份药未回完）。 */
+ get healing():boolean{return this.healRemaining>.00001;}
+ /** 能否用药：药囊非空、未满血、上一份药已回完、主角存活。 */
+ get canUsePotion():boolean{return this.pouch.length>0&&this.player.alive&&this.player.hp<this.player.maxHp-.01&&!this.healing;}
+ /** 用掉药囊里最早的一份；按原规则在一段时间内回血（药瓶 10 点 / 每秒 2 点，酒葫芦与草药包 2.5 秒回完）。 */
+ usePotion():PouchItem|null{if(!this.canUsePotion)return null;const item=this.pouch.shift()!;this.healRemaining=item.amount??HEAL_TOTAL;this.healRate=item.amount?item.amount/2.5:HEAL_RATE;return item;}
  /** DEV / 测试：在主角附近放一个回血道具。 */
  spawnHealForTest(kind:HealProp,dx=90,dy=0):Enemy|null{if(!this.healArt)return null;const slot=this.freeSlot();if(!slot)return null;this.placeHeal(slot,'dev-heal-'+(this.devId++),this.player.x+dx,this.player.y+dy,kind);return slot.enemy;}
  /** Explicit DEV fixture; ordinary generation remains rare. */
@@ -158,7 +169,7 @@ export class BattlefieldSupplies {
   }
   if(this.healRemaining>0&&this.player.alive){const n=Math.min(this.healRemaining,this.healRate*dt);this.player.heal(n);this.healRemaining=Math.max(0,this.healRemaining-n);}
   for(const p of this.potions){if(!p.active)continue;if(now>=p.until){p.active=false;p.image.setVisible(false);continue;}
-   if(this.player.alive&&this.player.hp<this.player.maxHp-.01&&this.healRemaining<.00001&&Math.hypot(p.image.x-this.player.x,p.image.y-this.player.y)<30){p.active=false;p.image.setVisible(false);this.healRemaining=p.amount??HEAL_TOTAL;this.healRate=p.amount?p.amount/2.5:HEAL_RATE;this.onPickup();}
+   if(this.player.alive&&this.pouch.length<POUCH_MAX&&Math.hypot(p.image.x-this.player.x,p.image.y-this.player.y)<30){p.active=false;p.image.setVisible(false);const heal=p.image.texture.key==='heal_props';this.pouch.push({amount:p.amount,texture:p.image.texture.key,frame:heal?Number(p.image.frame.name):undefined,name:heal?(Number(p.image.frame.name)===2?'酒葫芦':'草药包'):'疗伤药'});this.onPickup();}
   }
   for(const c of this.crates)if(c.enemy.active&&!c.cell?.startsWith('fixed-')&&Math.hypot(c.enemy.x-this.player.x,c.enemy.y-this.player.y)>1400){c.enemy.deactivate();c.shadow.setVisible(false);c.cell=null;}
   this.generateHealProps();

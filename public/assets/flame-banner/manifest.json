@@ -1,0 +1,43 @@
+{
+ "source": "ChatGPT 生成（2026-11-15，用户确认保存）assets/source/flame-banner-raw",
+ "banner": {
+  "width": 151,
+  "height": 256,
+  "poleX": 0.302
+ },
+ "sigil": {
+  "width": 512,
+  "height": 359
+ },
+ "burst": {
+  "frames": 6,
+  "frame": 256,
+  "scale": 0.494,
+  "sizes": [
+   [
+    335,
+    258
+   ],
+   [
+    379,
+    274
+   ],
+   [
+    494,
+    352
+   ],
+   [
+    465,
+    269
+   ],
+   [
+    467,
+    292
+   ],
+   [
+    397,
+    272
+   ]
+  ]
+ }
+}

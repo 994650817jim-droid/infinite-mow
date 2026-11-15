@@ -1,0 +1,32 @@
+{
+ "a": {
+  "width": 1254,
+  "height": 1254,
+  "scale": 0.395,
+  "greenRows": 3,
+  "transparentBefore": 0,
+  "removedBg": 1229171
+ },
+ "b": {
+  "width": 1254,
+  "height": 1254,
+  "scale": 0.392,
+  "greenRows": 0,
+  "transparentBefore": 0,
+  "removedBg": 1201053
+ },
+ "rows": {
+  "a": [
+   "swordsman",
+   "spearman",
+   "archer",
+   "crossbowman"
+  ],
+  "b": [
+   "guardian",
+   "rider",
+   "halberdier",
+   "medic"
+  ]
+ }
+}

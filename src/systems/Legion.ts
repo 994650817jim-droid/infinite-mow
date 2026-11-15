@@ -12,6 +12,7 @@ import { LegionProjectiles } from './LegionProjectiles';
 import { SpatialGrid } from './SpatialGrid';
 import { LEGION, TROOPS, TROOP_KINDS, type Order, type TroopKind } from '../data/legion';
 import { DEPTH } from '../config';
+import { AllyCorpses } from './AllyCorpses';
 export interface LegionState { training?:CampTraining;groups?:Partial<Record<TroopKind,CampGroup>>; food: number; dead: number; recruited: number; levels: Record<TroopKind, number>; soldiers: Array<{ kind: TroopKind; hp: number;reserveSoldier?:boolean }> }
 
 export class Legion {
@@ -41,11 +42,14 @@ export class Legion {
   private viewClock = 0; private combatClock = 0; private nextSquadSlot = 0;
   private stopped = false;
   private readonly views: AllyView[] = [];
+  /** 阵亡士兵的倒地动画与尸体（留 60 秒）。 */
+  readonly corpses: AllyCorpses;
   private readonly near: Enemy[] = []; private readonly friends: Ally[] = [];
   private readonly effects: Array<{ x: number; y: number; tx: number; ty: number; until: number; heal: boolean; sweep: boolean; stab?:boolean; ranged?:boolean }> = [];
   private readonly artEffects: ArtEffects;
   private readonly gfx: Phaser.GameObjects.Graphics;
   constructor(private readonly scene: Phaser.Scene, readonly units: Ally[], private readonly player: Player, _legacyCapacity?: number) {
+    this.corpses = new AllyCorpses(scene);
     this.formation=new LegionFormation(player);this.artEffects=new ArtEffects(scene);
     this.command=new CommandBuild(scene,player.growth.build,units,player,(u,now)=>this.fx(u,u.x,u.y,now,true));
     this.gfx = scene.add.graphics().setDepth(DEPTH.fx);
@@ -118,6 +122,7 @@ export class Legion {
     u.hurtUntil = now + 350;
     this.defense?.onAllyHurt(u,now);this.awakeningDefense?.onAllyHurt(u,now);
     if (!u.hp) {
+      this.corpses.spawn(u, u.view?.sprite, now);
       u.active = false; this.dead++; u.deathsReported = true; const v = u.release(); if (v) this.views.push(v); this.regroup();
      
     }
@@ -128,8 +133,9 @@ export class Legion {
   }
   onKill(enemy: Enemy): void { this.food += enemy.kind === 'boss' ? 20 : enemy.kind === 'elite' ? 5 : 1; }
   stop(): void { this.command.clear(); this.stopped = true; this.player.armyDamageTakenMul = 1; this.effects.length = 0; this.artEffects.clear(); this.heals.length = 0; this.strikes.length=0; this.projectiles.clear(); this.gfx.clear(); }
-  clear(): void { this.command.clear();this.projectiles.clear(); this.heals.length = 0;this.strikes.length=0; for (const u of this.units) { const v = u.release(); if (v) this.views.push(v); } this.units.length = 0;this.navigation.clear();this.formation.clear(); this.squads.clear(); this.grid.clear(); }
+  clear(): void { this.corpses.clear(); this.command.clear();this.projectiles.clear(); this.heals.length = 0;this.strikes.length=0; for (const u of this.units) { const v = u.release(); if (v) this.views.push(v); } this.units.length = 0;this.navigation.clear();this.formation.clear(); this.squads.clear(); this.grid.clear(); }
   update(dt: number, now: number, enemies: Enemy[], enemyGrid: SpatialGrid<Enemy>, damage: (e: Enemy, n: number) => void): void {
+    this.corpses.update(now);
     if (this.stopped) return;
     this.formation.setNarrow(this.navigation.nearWall(this.player.x,this.player.y,this.formation.narrow));this.formation.update(dt);const signature=JSON.stringify(this.groups);if(signature!==this.groupSignature){this.groupSignature=signature;this.regroup();for(const u of this.units)u.ai.nextThink=now+(u.id*53)%240;}
     this.command.update(now,(x,y,r)=>enemyGrid.query(x,y,r));

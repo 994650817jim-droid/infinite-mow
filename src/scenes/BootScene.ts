@@ -105,6 +105,12 @@ export class BootScene extends Phaser.Scene {
     this.load.spritesheet('zhuge_attack_sheet', 'assets/processed/zhuge_attack_sheet.png', { frameWidth: 96, frameHeight: 96 });
     // 武将动作图集（HERO_ACTIONS_PLAN.md）：128×128，4 列 × 7 行
     for (const [key, url] of Object.entries(HERO_ACTION_FILES)) this.load.spritesheet(key, url, { frameWidth: 128, frameHeight: 128 });
+    // 我方士兵倒地帧（AllyCorpses）：4 兵种 × 4 帧，128×128
+    for (const id of ['a', 'b']) this.load.spritesheet(`troop_deaths_${id}`, `assets/troop-deaths/troop_deaths_${id}.png`, { frameWidth: 128, frameHeight: 128 });
+    // 诸葛亮「烈焰战旗」：战旗、八卦火阵预警地纹、6 帧爆炸（tools/prepare-flame-banner-art.mjs）
+    this.load.image('zhuge_banner', 'assets/flame-banner/zhuge_banner.png');
+    this.load.image('fire_sigil', 'assets/flame-banner/fire_sigil.png');
+    this.load.spritesheet('flame_burst', 'assets/flame-banner/flame_burst.png', { frameWidth: 256, frameHeight: 256 });
     this.load.image('portrait_zhuge', 'assets/processed/portrait_zhuge.png');
     this.load.image('spear_thrust', 'assets/processed/spear_thrust.png');
     this.load.spritesheet('guandao_slash_sheet', 'assets/processed/guandao_slash_sheet.png', { frameWidth: 256, frameHeight: 256 });

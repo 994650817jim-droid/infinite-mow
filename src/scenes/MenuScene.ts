@@ -55,8 +55,9 @@ export class MenuScene extends Phaser.Scene {
   create(): void {playMenuMusic(this);
     ensureWarTextures(this);
     this.cameras.main.fadeIn(180,0,0,0);
-    this.selectedStage=Math.min(3,loadWorld().yellowStages+1) as YellowStage;this.stageTabs=[];
-    this.westRows=[];this.westModal=undefined;this.westDeploy=undefined;this.westDeployLabel=undefined;this.selectedWestStage=nextDongzhuoStage();
+    // 2026-11-15 用户要求：开局每次从本章第 1 关打起（原为“下一个未通关”）；想打后面的关可在选关 / 战役回顾中选
+    this.selectedStage=1;this.stageTabs=[];
+    this.westRows=[];this.westModal=undefined;this.westDeploy=undefined;this.westDeployLabel=undefined;this.selectedWestStage=1;
     this.started = false; this.chapterButtons = []; this.charCards = [];
     const params = new URLSearchParams(window.location.search), saved = this.registry.get('runConfig') as RunConfig | undefined;
     if(isChapterTestRun()&&['1','2','3'].includes(params.get('stage')??''))this.selectedStage=Number(params.get('stage')) as YellowStage;
@@ -64,7 +65,7 @@ export class MenuScene extends Phaser.Scene {
     const expanded=fromWorld||this.registry.get('menuChapterPicker')===true||((params.has('autostart')||params.has('perf'))&&params.has('chapter'));
     this.registry.remove('menuChapterPicker');this.compactHome=!expanded;this.homeCard=undefined;this.heroPicker=undefined;this.heroEntryPaint=undefined;this.heroModal=undefined;this.homePortrait=undefined;this.homeBackground=undefined;
     const requested = getChapter(this.registry.get('selectedWorldChapter') ?? params.get('chapter') ?? (chapterOneCleared()?'hulao':saved?.chapter)).id;
-    const west=Number(this.registry.get('selectedWorldStage')??params.get('westStage')??(isChapterTestRun()&&requested==='hulao'?params.get('stage'):undefined)??nextDongzhuoStage());
+    const west=Number(this.registry.get('selectedWorldStage')??params.get('westStage')??(isChapterTestRun()&&requested==='hulao'?params.get('stage'):undefined)??1);
     this.registry.remove('selectedWorldStage');if([1,2,3].includes(west)&&(dongzhuoStageUnlocked(west)||isChapterTestRun()))this.selectedWestStage=west as YellowStage;
     this.registry.remove('selectedWorldChapter');
     this.selectedChapter = chapterUnlocked(requested)||isChapterTestRun() ? requested : 'huangjin';

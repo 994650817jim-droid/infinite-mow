@@ -147,6 +147,13 @@ export class GameScene extends Phaser.Scene {
   protected hudTexts!: Record<string, Phaser.GameObjects.Text>;
   protected passiveHud!: PassiveHud;
   private buffHud!:BuffHud;
+  /** 用药：药囊里最早的一份，按原规则回血；不能用时轻微提示。 */
+  protected usePotion():void{
+    if(this.mode!=='none'||this.over||!this.supplies)return;
+    const item=this.supplies.usePotion();
+    if(!item){if(this.supplies.pouch.length)this.showWaveBanner(this.supplies.healing?'正在疗伤…':'生命已满',false);return;}
+    this.sfx.play('pickup');this.artEffects.show(5,this.player.x,this.player.y-12,40,this.combatNow,320);
+  }
   /** 战法「以战养战」：每击杀 12/10/8 名敌人（含部下击杀）回复最大生命 2/2.5/3%。 */
   private warfeedCount=0;
   private warfeedKill():void{
@@ -244,6 +251,8 @@ export class GameScene extends Phaser.Scene {
   private get trailingBoss():ChasingBoss|null{return this.chasingBosses[0]??null;}
   private lootContinue:(()=>void)|null=null;private relicHits=0;private relicFireAt=0;private relicHealAt=0;
   private attributeReturn:'pause'|'none'='pause';private rerolls=0;private rerollButton?:Phaser.GameObjects.Text;private pointsButton?:Phaser.GameObjects.Container;private pointsBadge?:Phaser.GameObjects.Text;
+  /** 用药按钮（药囊）：拾取的药收起，手动使用。 */
+  private potionButton?:Phaser.GameObjects.Container;private potionBadge?:Phaser.GameObjects.Text;private potionIcon?:Phaser.GameObjects.Image;private potionGlow?:Phaser.GameObjects.Arc;
   /** 黄忠「百步穿杨」站立蓄势：脚下五段金色椭圆环（原为头顶 ◆◇ 文字，与“主将”标签重叠）。 */
   private aimIndicator!: Phaser.GameObjects.Graphics;
   protected recruitOptions: Array<{ kind: AllyKind; upgrade: boolean }> = [];
@@ -416,7 +425,7 @@ export class GameScene extends Phaser.Scene {
   protected resetState(): void {
     this.relicWaves=[];
     this.firstBossAt=-1;this.settledFrontlineKills=0;this.frontlineNextSettlement=1;this.frontlineVictories.clear();this.frontlineStarts.clear();this.chasingBosses=[];this.deadBossControllers=[];this.lootContinue=null;this.relicHits=0;this.relicFireAt=0;this.relicHealAt=0;
-    this.rerolls=0;this.warfeedCount=0;this.pointsButton=undefined;this.pointsBadge=undefined;this.rerollButton=undefined;
+    this.rerolls=0;this.warfeedCount=0;this.pointsButton=undefined;this.pointsBadge=undefined;this.potionButton=undefined;this.potionBadge=undefined;this.potionIcon=undefined;this.potionGlow=undefined;this.rerollButton=undefined;
     this.crowdSteering = true; this.freeRecruit = false; this.resting = false; this.recruitedWaves.clear();
     this.pendingGrowthNotices.length = 0;
     this.separationScratch.length = 0;
@@ -519,6 +528,7 @@ export class GameScene extends Phaser.Scene {
     this.cursors = keyboard.createCursorKeys();
     this.wasd = keyboard.addKeys('W,A,S,D') as Record<string, Phaser.Input.Keyboard.Key>;
     keyboard.on('keydown-P', () => this.togglePause());
+    keyboard.on('keydown-Q', () => this.usePotion());
     keyboard.on('keydown-ESC', () => this.togglePause());
     keyboard.on('keydown-ONE', () => this.chooseUpgrade(0));
     keyboard.on('keydown-TWO', () => this.chooseUpgrade(1));
@@ -1590,59 +1600,54 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
+  /** 诸葛亮挥旗：正式战旗素材握在旗杆底端，朝目标一侧前挥；缺图时退回程序旗子。 */
   protected spawnFlagSwingFx(dirX: number, dirY: number): void {
-    const px = this.player.x;
-    const py = this.player.y;
+    const px = this.player.x, py = this.player.y;
+    if (this.textures.exists('zhuge_banner')) {
+      const side = dirX < -0.15 ? -1 : 1, k = 86 / 256, ox = 0.302, from = -0.28 * side, to = 0.62 * side;
+      const make = (alpha: number) => this.add.image(px + 10 * side, py + 18, 'zhuge_banner').setOrigin(side > 0 ? ox : 1 - ox, 1).setFlipX(side < 0).setScale(k).setDepth(DEPTH.fx - 1).setAlpha(alpha).setRotation(from);
+      for (let i = 0; i < 2; i += 1) { const ghost = make(0.22 - i * 0.08); this.tweens.add({ targets: ghost, rotation: to, alpha: 0, duration: 240, delay: 20 + i * 30, ease: 'Sine.Out', onComplete: () => ghost.destroy() }); }
+      const flag = make(1).setDepth(DEPTH.fx);
+      this.tweens.add({ targets: flag, rotation: to, duration: 230, ease: 'Back.Out', onComplete: () => this.tweens.add({ targets: flag, alpha: 0, rotation: to * 0.8, duration: 160, onComplete: () => flag.destroy() }) });
+      return;
+    }
     const angle = Math.atan2(dirY, dirX);
-    // 旗子更小（0.68），挥动 ±18°，旗面做轻微颤动
     for (let i = 0; i < 3; i += 1) {
-      const ghost = this.add
-        .image(px, py + 6, 'war_flag')
-        .setOrigin(0.5, 1)
-        .setDepth(DEPTH.fx - 1)
-        .setAlpha(0.16 - i * 0.035)
-        .setScale(0.68)
-        .setRotation(angle - 0.32 + i * 0.18);
+      const ghost = this.add.image(px, py + 6, 'war_flag').setOrigin(0.5, 1).setDepth(DEPTH.fx - 1).setAlpha(0.16 - i * 0.035).setScale(0.68).setRotation(angle - 0.32 + i * 0.18);
       this.tweens.add({ targets: ghost, rotation: angle + 0.32, alpha: 0, duration: 230, delay: i * 25, onComplete: () => ghost.destroy() });
     }
-    const flag = this.add.image(px, py + 6, 'war_flag').setOrigin(0.5, 1).setDepth(DEPTH.fx).setScale(0.68);
-    flag.setRotation(angle - 0.32);
-    this.tweens.add({
-      targets: flag,
-      rotation: angle + 0.32,
-      duration: 220,
-      ease: 'Sine.InOut',
-      onComplete: () => {
-        this.tweens.add({ targets: flag, alpha: 0, duration: 120, onComplete: () => flag.destroy() });
-      },
-    });
-    // 旗面飘扬：横向缩放 + 上下轻摆，模拟布料
+    const flag = this.add.image(px, py + 6, 'war_flag').setOrigin(0.5, 1).setDepth(DEPTH.fx).setScale(0.68).setRotation(angle - 0.32);
+    this.tweens.add({ targets: flag, rotation: angle + 0.32, duration: 220, ease: 'Sine.InOut', onComplete: () => { this.tweens.add({ targets: flag, alpha: 0, duration: 120, onComplete: () => flag.destroy() }); } });
     this.tweens.add({ targets: flag, scaleX: 0.74, yoyo: true, repeat: 2, duration: 90, ease: 'Sine.InOut' });
   }
 
+  /** 爆炸预警：地面亮起八卦火阵（扁椭圆、半透明），几点火星向中心聚拢；缺图时退回橙色圆圈。 */
   protected spawnFlameGatherFx(x: number, y: number, radius: number): void {
-    const warn = this.add.circle(x, y, radius * 0.55, 0xff6a2a, 0.16).setStrokeStyle(3, 0xffb347, 0.9).setDepth(DEPTH.fx - 2);
-    this.tweens.add({ targets: warn, scale: 1.18, alpha: 0.4, duration: 150, yoyo: true, onComplete: () => warn.destroy() });
-    for (let i = 0; i < 10; i += 1) {
-      const a = Math.random() * Math.PI * 2;
-      const dist = radius * (0.7 + Math.random() * 0.5);
-      const ember = this.add.circle(x + Math.cos(a) * dist, y + Math.sin(a) * dist, 3, 0xffc46a, 0.9).setDepth(DEPTH.fx);
-      this.tweens.add({ targets: ember, x, y, alpha: 0, duration: 150, delay: i * 8, onComplete: () => ember.destroy() });
+    if (this.textures.exists('fire_sigil')) {
+      const w = radius * 2.1, sigil = this.add.image(x, y, 'fire_sigil').setDisplaySize(w * 0.8, w * 0.8 * 0.5).setDepth(DEPTH.ground + 4).setAlpha(0).setBlendMode(Phaser.BlendModes.ADD).setName('fire-sigil');
+      this.tweens.add({ targets: sigil, alpha: 0.85, displayWidth: w, displayHeight: w * 0.5, duration: 150, ease: 'Quad.Out', onComplete: () => this.tweens.add({ targets: sigil, alpha: 0, duration: 260, delay: 60, onComplete: () => sigil.destroy() }) });
+    } else {
+      const warn = this.add.circle(x, y, radius * 0.55, 0xff6a2a, 0.16).setStrokeStyle(3, 0xffb347, 0.9).setDepth(DEPTH.fx - 2);
+      this.tweens.add({ targets: warn, scale: 1.18, alpha: 0.4, duration: 150, yoyo: true, onComplete: () => warn.destroy() });
+    }
+    for (let i = 0; i < 6; i += 1) {
+      const a = Math.random() * Math.PI * 2, dist = radius * (0.7 + Math.random() * 0.4);
+      const ember = this.add.circle(x + Math.cos(a) * dist, y + Math.sin(a) * dist * 0.5, 2, 0xffd27a, 0.9).setDepth(DEPTH.fx);
+      this.tweens.add({ targets: ember, x, y, alpha: 0, duration: 150, delay: i * 10, onComplete: () => ember.destroy() });
     }
   }
 
+  /** 爆炸：6 帧火焰爆发序列（八卦亮起→火球→烈焰→贴地火环→余烬→淡烟），按爆炸半径缩放、以地面为中心；缺图时退回放大火球。 */
   protected spawnFlameFx(x: number, y: number, radius: number): void {
+    if (this.textures.exists('flame_burst')) {
+      const size = radius * 2.5, burst = this.add.image(x, y, 'flame_burst', 0).setOrigin(0.5, 0.82).setDisplaySize(size, size).setDepth(actorDepth(y) + 0.5).setName('flame-burst');
+      this.tweens.addCounter({ from: 0, to: 5.99, duration: 420, onUpdate: t => burst.setFrame(Math.floor(t.getValue() ?? 0)), onComplete: () => this.tweens.add({ targets: burst, alpha: 0, duration: 120, onComplete: () => burst.destroy() }) });
+      return;
+    }
     this.artEffects.show(2,x,y,radius*1.5,this.combatNow,280);
     for (let i = 0; i < 2; i += 1) {
       const flame = this.add.image(x, y, 'flame').setDepth(DEPTH.fx).setAlpha(0.9).setScale(0.45);
-      this.tweens.add({
-        targets: flame,
-        alpha: 0,
-        scale: radius / 34,
-        duration: 320,
-        ease: 'Quad.easeOut',
-        onComplete: () => flame.destroy(),
-      });
+      this.tweens.add({ targets: flame, alpha: 0, scale: radius / 34, duration: 320, ease: 'Quad.easeOut', onComplete: () => flame.destroy() });
     }
   }
 
@@ -2162,6 +2167,21 @@ export class GameScene extends Phaser.Scene {
       this.tweens.add({targets:glow,scale:1.18,alpha:{from:.9,to:.15},duration:900,yoyo:true,repeat:-1,ease:'Sine.easeInOut'});
       this.pointsButton=root;
     }
+    {
+      // 用药按钮：在加点按钮上方；药囊有药时显示，满血或上一份药未回完时变暗
+      const root=this.add.container(GAME_WIDTH-58,GAME_HEIGHT-340).setScrollFactor(0).setDepth(DEPTH.hud+4).setName('potion-button').setVisible(false);
+      const glow=this.add.circle(0,0,33,0xff7a4a,0).setStrokeStyle(3,0xff8a5a,.6);
+      const disc=this.add.circle(0,0,29,0x2a1a14,.94).setStrokeStyle(2,0xd8b56a,1);
+      const icon=this.add.image(0,-1,'healing_potion').setDisplaySize(30,36);
+      const bubble=this.add.circle(21,-21,11,0x3f8a4a,1).setStrokeStyle(1.5,0xffe2a4,1);
+      this.potionBadge=this.add.text(21,-21,'0',{fontFamily:FONT,fontSize:'13px',color:'#fff6e0',resolution:2,fontStyle:'bold'}).setOrigin(.5);
+      const caption=this.add.text(0,40,'用药',{fontFamily:FONT,fontSize:'13px',color:'#ffe2a4',resolution:2,stroke:'#17140d',strokeThickness:3}).setOrigin(.5);
+      root.add([glow,disc,icon,bubble,this.potionBadge,caption]);
+      root.setInteractive(new Phaser.Geom.Circle(0,0,34),Phaser.Geom.Circle.Contains).on('pointerdown',(_p:Phaser.Input.Pointer,_x:number,_y:number,event:Phaser.Types.Input.EventData)=>{event?.stopPropagation?.();this.usePotion();});
+      if(root.input)root.input.cursor='pointer';
+      this.tweens.add({targets:glow,scale:1.2,alpha:{from:.95,to:.2},duration:600,yoyo:true,repeat:-1,ease:'Sine.easeInOut'});
+      this.potionButton=root;this.potionIcon=icon;this.potionGlow=glow;
+    }
     this.relicIcons = [];
     for (let i = 0; i < 8; i += 1) {
       const icon = this.add
@@ -2178,6 +2198,13 @@ export class GameScene extends Phaser.Scene {
     if (this.hudAcc < .1 && this.lastHudMode === this.mode) return;
     this.hudAcc = 0; this.lastHudMode = this.mode;
     const overlay = this.mode !== 'none';
+    if(this.potionButton&&this.supplies){
+      const bag=this.supplies.pouch,next=bag[0],can=this.supplies.canUsePotion,low=this.player.hp<this.player.maxHp*.4;
+      this.potionButton.setVisible(!overlay&&!this.over&&bag.length>0).setAlpha(can?1:.5);
+      this.potionBadge?.setText(String(bag.length));
+      if(next&&this.potionIcon&&(this.potionIcon.texture.key!==next.texture||(next.frame!==undefined&&this.potionIcon.frame.name!==String(next.frame))))this.potionIcon.setTexture(next.texture,next.frame).setDisplaySize(next.texture==='heal_props'?40:30,next.texture==='heal_props'?40:36);
+      this.potionGlow?.setVisible(can&&low);
+    }
     this.pointsBadge?.setText(String(Math.min(99,this.player.growth.unallocated)));if(this.pointsButton)this.pointsButton.setVisible(!overlay&&!this.over&&this.player.growth.unallocated>0).setData('points',this.player.growth.unallocated);
     this.legionUI?.update(this.legion, !overlay && !this.over);
     this.passiveHud.update(this.player.passive, this.combatNow, !overlay);

@@ -54,7 +54,7 @@ async function startGame(): Promise<void> {
   const BattleScene = import.meta.env.DEV ? (await import('./dev/DevGameScene')).DevGameScene : GameScene;
   const ThirdBattleScene=thirdGameSceneClass(BattleScene);
   const GuanduBattleScene=guanduGameSceneClass(BattleScene);
-  const ChibiBattleScene=thirdGameSceneClass(BattleScene,{key:'ChibiGameScene',arc:'chibi',stageKey:'chibiStage',transferKey:'chibiTransfer',stages:CHIBI_STAGES,texture:id=>'chibi_'+id,sheet:id=>'assets/chibi/'+id+'.png',battle:s=>chibiBattle(s),campPrefix:'chibi-'});
+  const ChibiBattleScene=thirdGameSceneClass(BattleScene,{key:'ChibiGameScene',arc:'chibi',stageKey:'chibiStage',transferKey:'chibiTransfer',stages:CHIBI_STAGES,texture:id=>'chibi_'+id,sheet:id=>'assets/chibi/'+id+'.png',battle:s=>chibiBattle(s),campPrefix:'chibi-',fireShips:[2]});
   const SiegeBattleScene=siegeGameSceneClass(BattleScene);
   const game = new Phaser.Game({
     type: Phaser.AUTO,

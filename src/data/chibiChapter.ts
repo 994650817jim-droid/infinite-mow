@@ -14,11 +14,19 @@ export const CHIBI_STAGES: readonly ChibiStageInfo[] = [
 ];
 export const CHIBI_SHEETS: Record<string, string> = { chibi_caochun: 'assets/chibi/caochun.png', chibi_caimao: 'assets/chibi/caimao.png', chibi_caoren: 'assets/chibi/caoren.png' };
 
+const WAVE_NAMES: string[][] = [
+  ['当阳道上', '虎豹骑追至', '长坂坡前', '曹纯督阵'],
+  ['江上烽火', '水寨弓阵', '连环战船', '蔡瑁号令'],
+  ['江陵城下', '坚阵连枪', '城门伏兵', '曹仁出城'],
+];
 /** 第五章战斗：以对应招式组的第三章战斗为底，换首领、名称与数值（比第三章略强）。 */
 export function chibiBattle(stage: ChibiStage): ChapterDef {
   const d = CHIBI_STAGES[stage - 1], base = thirdBattle(d.behavior);
   return {
-    ...base, name: `5-${stage} ${d.name}`, label: `第五章 · 赤壁之战 · ${d.name}`, description: d.story, bossName: d.boss, bossStyle: d.id,
+    ...base,
+    // 波次名换成本关史事（波数与开始时间沿用招式组对应的第三章关）
+    waves: base.waves.map((w, i) => ({ ...w, name: WAVE_NAMES[stage - 1][i] ?? w.name })),
+    name: `5-${stage} ${d.name}`, label: `第五章 · 赤壁之战 · ${d.name}`, description: d.story, bossName: d.boss, bossStyle: d.id,
     enemies: { ...base.enemies, boss: { ...base.enemies.boss, texture: 'chibi_' + d.id, hp: [2300, 2500, 2800][stage - 1], speed: [64, 40, 42][stage - 1], damage: [15, 14, 15][stage - 1] } },
     victoryTitle: d.boss + '败退', victoryText: stage === 3 ? '江陵易帜 · 赤壁之战告捷 · 三分天下之势已成' : d.name + '告捷 · 进入军营休整',
   };

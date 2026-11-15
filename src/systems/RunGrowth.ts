@@ -38,6 +38,8 @@ export class RunGrowth {
   readonly masteries: Record<MasteryId, number> = { dragon_gallop: 0, cloud_pierce: 0, dragon_charge:0, dragging_blade:0, steady_aim:0, pearl_volley:0, wildfire:0, eight_trigrams:0 };
   readonly trinkets: TrinketId[] = [];
   unallocated = 0;
+  /** W3 大城特产（洛阳）：本命武器伤害加成，开局由 applyCitySpecialties 设置。 */
+  permanentDamage = 0;
   berserkUntil = 0;
   stationarySeconds = 0;
   travel = 0;
@@ -95,7 +97,7 @@ export class RunGrowth {
 
   damageMultiplier(now: number): number {
     const might = 1 + 0.05 * this.attributes.might;
-    return Math.min(2, might * (now < this.berserkUntil ? 1.25 : 1));
+    return Math.min(2, might * (now < this.berserkUntil ? 1.25 : 1) * (1 + this.permanentDamage));
   }
 
   attackSpeedMultiplier(now: number): number {

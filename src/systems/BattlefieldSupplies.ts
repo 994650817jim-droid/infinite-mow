@@ -92,6 +92,15 @@ export class BattlefieldSupplies {
   slot.enemy.hp=slot.enemy.maxHp=hp;slot.enemy.def={...slot.enemy.def,hp,radius:size*.34};
   return slot.enemy;
  }
+ /** 攻城战大城城门（汜水关城门物件 frame 0）：可被武器攻击的高耐久物件，碰撞框与原城门一致。 */
+ spawnGate(x:number,y:number,hp:number,size:number):Enemy|null {
+  const slot=this.freeSlot();if(!slot)return null;
+  this.place(slot,`fixed-gate-${x},${y}`,x,y,2,size);
+  slot.enemy.sprite.setTexture('sishui_props_refined',0).setOrigin(.5,1).setDepth(actorDepth(y));
+  slot.enemy.hp=slot.enemy.maxHp=hp;slot.enemy.def={...slot.enemy.def,hp,radius:size*.32};
+  slot.halfW=size*.33;slot.halfH=size*.1;slot.offsetY=-size*.06;slot.shadow.setVisible(false);
+  return slot.enemy;
+ }
  onBroken(enemy:Enemy):void {
   const crate=this.crates.find(c=>c.enemy===enemy&&c.life===enemy.spawnId);if(!crate||!crate.cell||this.broken.has(crate.cell))return;
   this.broken.add(crate.cell);crate.cell=null;crate.shadow.setVisible(false);

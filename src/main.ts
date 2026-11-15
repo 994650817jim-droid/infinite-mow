@@ -1,4 +1,4 @@
-import {ThirdChapterScene} from './scenes/ThirdChapterScene';import {thirdGameSceneClass} from './scenes/ThirdGameScene';import {GuanduChapterScene} from './scenes/GuanduChapterScene';import {guanduGameSceneClass} from './scenes/GuanduGameScene';
+import {ThirdChapterScene} from './scenes/ThirdChapterScene';import {thirdGameSceneClass} from './scenes/ThirdGameScene';import {GuanduChapterScene} from './scenes/GuanduChapterScene';import {guanduGameSceneClass} from './scenes/GuanduGameScene';import {siegeGameSceneClass} from './scenes/SiegeGameScene';
 import {loadGameFonts} from './ui/GameFonts';
 import Phaser from 'phaser';
 import { GAME_HEIGHT, GAME_WIDTH, IS_DESKTOP, RENDER_SCALE, initLayout, switchLayout } from './config';
@@ -50,6 +50,7 @@ async function startGame(): Promise<void> {
   const BattleScene = import.meta.env.DEV ? (await import('./dev/DevGameScene')).DevGameScene : GameScene;
   const ThirdBattleScene=thirdGameSceneClass(BattleScene);
   const GuanduBattleScene=guanduGameSceneClass(BattleScene);
+  const SiegeBattleScene=siegeGameSceneClass(BattleScene);
   const game = new Phaser.Game({
     type: Phaser.AUTO,
     parent: 'game',
@@ -67,7 +68,7 @@ async function startGame(): Promise<void> {
     input: {
       activePointers: 3,
     },
-    scene: [BootScene, CityScene, CityRecruitScene, WorldMapScene, MenuScene, BattleScene, ThirdChapterScene, ThirdBattleScene, GuanduChapterScene, GuanduBattleScene],
+    scene: [BootScene, CityScene, CityRecruitScene, WorldMapScene, MenuScene, BattleScene, ThirdChapterScene, ThirdBattleScene, GuanduChapterScene, GuanduBattleScene, SiegeBattleScene],
   });
 
   if (import.meta.env.DEV) (window as unknown as { __game?: Phaser.Game }).__game = game;

@@ -49,10 +49,11 @@ export class GuanduBoss {
   private gfx: Phaser.GameObjects.Graphics; private corpse?: Phaser.GameObjects.Image; private deathMs = 0;
   readonly metrics = {dash: 0, cleave: 0, spin: 0, siege: 0, feint: 0, volley: 0, loot: 0, looted: 0, healed: 0, guard: 0, arrows: 0, catapult: 0, shaken: 0, rage: 0, damage: 0};
 
-  constructor(private h: Host, readonly stage: GuanduStage, now: number) {
+  /** opts：攻城战大将借用技能时覆盖图集与名字。 */
+  constructor(private h: Host, readonly stage: GuanduStage, now: number, private opts: {atlas?: string; name?: string} = {}) {
     this.gfx = h.scene.add.graphics().setDepth(39); this.next = now + 800; h.boss.controlImmune = true;
   }
-  private get info() { return GUANDU_STAGES[this.stage - 1]; }
+  private get info() { const d = GUANDU_STAGES[this.stage - 1]; return {...d, atlas: this.opts.atlas ?? d.atlas, boss: this.opts.name ?? d.boss}; }
   private get kit(): 'yanliang' | 'wenchou' | 'chunyuqiong' { return this.stage === 2 ? 'wenchou' : this.stage === 3 ? 'chunyuqiong' : 'yanliang'; }
   get name() { return this.info.boss; }
   forceSkill(now: number) { this.state = 'approach'; this.next = now; this.update(0, now); }

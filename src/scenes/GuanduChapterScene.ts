@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import {playMenuMusic} from '../systems/Music';
 import {GUANDU_STAGES, GUANDU_PLAYABLE, GUANDU_ATLAS_FILES, type GuanduStage} from '../data/guanduChapter';
-import {arcUnlocked, arcStageUnlocked, arcStages} from '../world/WorldStore';
+import {arcUnlocked, arcStageUnlocked, arcStages, alertLossWarning} from '../world/WorldStore';
 import {isChapterTestRun} from '../systems/ChapterProgress';
 import {CHARACTERS, type CharacterId} from '../data/characters';
 import {worldText, W, H} from '../world/WorldUI';
@@ -62,6 +62,7 @@ export class GuanduChapterScene extends Phaser.Scene {
     g.lineStyle(1, 0x8b704a, .45).lineBetween(28, desk ? 466 : 838, W - 28, desk ? 466 : 838);
     const a = this.action(desk ? W - 178 : W / 2, desk ? 503 : 885, desk ? 300 : W - 56, desk ? 50 : 62, '', () => this.depart(), true);
     this.deployBg = a.bg.setName('guandu-deploy'); this.deployText = a.t;
+    { const warn = isChapterTestRun() ? '' : alertLossWarning(); if (warn) this.text(desk ? W - 178 : W / 2, desk ? 459 : 826, warn, desk ? 11 : 12, '#ff8a70').setOrigin(.5).setName('chapter-alert-warning'); }
     if (desk) this.text(30, 488, '焚其粮草 · 断其根本', 15, '#b8a17d');
     this.text(desk ? 30 : W / 2, desk ? 512 : 934, '关间可休整 · 成长与部队随军继承', 11, '#8f8473').setOrigin(desk ? 0 : .5, 0);
     this.refresh();

@@ -6,7 +6,7 @@ import {CampaignChronicle} from '../ui/CampaignChronicle';
 import {attachHomeVideo} from '../ui/HomeVideo';
 import {homeCommand} from '../ui/HomeCommand';
 import {HomeHeroPicker} from '../ui/HomeHeroPicker';
-import {dongzhuoStageUnlocked,nextDongzhuoStage,yellowStageUnlocked,loadWorld,worldUnlocked} from '../world/WorldStore';
+import {dongzhuoStageUnlocked,nextDongzhuoStage,yellowStageUnlocked,loadWorld,worldUnlocked,alertLossWarning} from '../world/WorldStore';
 import Phaser from 'phaser';
 import { WAR, ensureWarTextures, warFrame } from '../ui/WarStyle';
 import { CHAPTERS, YELLOW_STAGES,DONGZHUO_STAGES, getChapter, type YellowStage, type ChapterId } from '../data/chapters';
@@ -192,6 +192,8 @@ export class MenuScene extends Phaser.Scene {
     const openHeroes=()=>{this.ensureHomeArt(true);this.heroPicker?.open(this.selectedChar);this.heroEntryPaint?.('selected');};pick.on('pointerdown',openHeroes);
     const startY=D?414:857+this.padY,startW=D?292:W-156,startH=D?56:64;
     const primary=homeCommand(this,D?W*.73:W/2,startY,startW,startH,'匡扶汉室',true);this.startButton=primary.hit.setName('start-campaign');this.startLabel=primary.caption;
+    // W4：有城池告急时提示“出征将失守”
+    const lossWarn=isChapterTestRun()?'':alertLossWarning();if(lossWarn)text(D?W*.73:W/2,startY-startH/2-(D?14:16),lossWarn,D?12:13,'#ff8a70').setStroke('#1a0e08',3).setName('home-alert-warning');
     this.startButton.on('pointerdown',()=>{let chosen=!!this.registry.get('heroConfirmed');try{chosen=chosen||!!localStorage.getItem('im_last_hero');}catch{}if(!chosen&&!params.has('autostart')&&!params.has('perf')){openHeroes();return;}this.startGame();});
     if(D)for(const dx of[-66,66])text(cx+dx,476,'·',18,'#a68a57');
     else for(const fx of[.355,.645])text(W*fx,924+this.padY,'·',20,'#a68a57');

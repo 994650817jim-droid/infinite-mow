@@ -2017,7 +2017,9 @@ export class GameScene extends Phaser.Scene {
     this.potionCaption?.setText(pad ? '用药 ' + PAD_LABEL.X : '用药');
     this.pauseKeysText?.setText(pad ? PAD_LABEL.START + ' / ' + PAD_LABEL.B + ' 继续战斗' : IS_DESKTOP ? 'Esc / P 继续战斗' : '战斗已冻结 · 点击「继续战斗」恢复');
     this.hudTexts?.pause?.setText(pad ? PAD_LABEL.START + ' 暂停' : '暂停');
-    this.hintText?.setText(pad ? '左摇杆移动 · 自动攻击' : IS_DESKTOP ? 'WASD / 方向键移动 · 自动攻击' : '自动攻击 · 拖动摇杆移动');
+    // 有敌营 / 粮草可锁定的战场（子类覆写了 padTargets）多提示 RB
+    const lockable = this.padTargets !== GameScene.prototype.padTargets;
+    this.hintText?.setText(pad ? (lockable ? '左摇杆移动 · RB 锁定敌营 / 粮草 · 自动攻击' : '左摇杆移动 · 自动攻击') : IS_DESKTOP ? 'WASD / 方向键移动 · 自动攻击' : '自动攻击 · 拖动摇杆移动');
     this.legionUI?.setKeyHint(pad ? PAD_LABEL.Y : IS_DESKTOP ? 'E' : '⇄');
     for (const [i, v] of (this.cardViews ?? []).entries()) v.hint.setText(pad ? PAD_LABEL.A + ' 选择' : IS_DESKTOP ? '按 ' + (i + 1) + ' 选择' : '点击选择');
   }

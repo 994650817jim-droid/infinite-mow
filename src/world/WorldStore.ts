@@ -1,12 +1,15 @@
 import {armyCapacity,TROOPS,TROOP_KINDS,type TroopKind} from '../data/legion';
 import type {ChapterId} from '../data/chapters';
 import {territorySummary,cityAttacker,cityById,eraChanges,eraIndexFor,type FactionId} from './WorldCities';
+import {type TownState,type TownBuildingId,type TaxRate,type CityFocus,type SeasonReport,TOWN_BUILDINGS,FOCUS_CHANGE_COST,FOCUS_NAME,TAX_NAME,migrateTown,parseTown,legacyLevels,settleSeason,upgradeCostFor,demolishRefund,countOf,unlockedPlots,canAfford,costText,seasonLabel} from '../town/TownData';
 /** W4 告急：某座玩家城池正被来犯；cause 为时代更替或攻城后反扑。 */
 export interface CityAlert{city:string;attacker:FactionId;cause:'era'|'retaliation';}
 export type BuildingId='barracks'|'farm'|'clinic';
 /** 第三章起的群雄篇章：各自独立的关卡进度与失败最佳成绩。 */
 export type WarlordArc='qunxiong'|'guandu';
-export interface WorldSave {version:7; yellowStages:number; warlordStages:number;thirdFailureBest:number; guanduStages:number; guanduFailureBest:number;
+export interface WorldSave {version:8;
+ /** v8 城镇建设与运营（TOWN_PLAN.md）：钱、地块、季度、税率、城池发展方向。buildings 由地块推导，供旧的战斗加成使用。 */
+ town:TownState; yellowStages:number; warlordStages:number;thirdFailureBest:number; guanduStages:number; guanduFailureBest:number;
  /** v7 天下地图：玩家已占城池 id；已看过的时代（W4 时局变化用）。 */
  ownedCities:string[]; eraSeen:number; capturedEver:string[]; alerts:CityAlert[]; lastLost:string[]; dongzhuoStages:number; legacyHulaoAccess:boolean; worldAvailable:boolean; revision:number; merits:number; provisions:number; buildings:Record<BuildingId,number>; cleared:Record<ChapterId,boolean>; failureBest:Record<ChapterId,number>; nodes:string[]; reserve:Record<string,number>; armyPlan:{capacity:number;garrison:number;priority?:TroopKind}; active:null|{id:string;chapter:ChapterId;state:'active'|'settled';arc?:WarlordArc|'siege'|'defense';cityId?:string;farm:number;stage?:number;deployed?:TroopKind[]}; receipts:Array<{id:string;merits:number;provisions:number}>;}
 export const WORLD_KEY='im_world_v1',BACKUP_KEY='im_world_backup_v1';
@@ -15,12 +18,12 @@ let memory:WorldSave|undefined;
 export let storageUnavailable=false;
 export let incompatibleSave=false;
 const integer=(v:unknown,max=1_000_000)=>typeof v==='number'&&Number.isFinite(v)?Math.max(0,Math.min(max,Math.floor(v))):0;
-const defaults=():WorldSave=>({version:7,ownedCities:[],eraSeen:0,capturedEver:[],alerts:[],lastLost:[],yellowStages:0,warlordStages:0,thirdFailureBest:0,guanduStages:0,guanduFailureBest:0,dongzhuoStages:0,legacyHulaoAccess:false,worldAvailable:false,revision:0,merits:0,provisions:0,buildings:{barracks:1,farm:1,clinic:1},cleared:{huangjin:false,hulao:false},failureBest:{huangjin:0,hulao:0},nodes:['huangjin'],reserve:{},armyPlan:{capacity:2,garrison:0},active:null,receipts:[]});
-function parse(raw:string|null):WorldSave|null {try{if(!raw)return null;const v=JSON.parse(raw);if(![1,2,3,4,5,6,7].includes(v.version)||!v.buildings||!v.cleared)return null;const s=defaults();s.warlordStages=integer(v.warlordStages,3);s.thirdFailureBest=integer(v.thirdFailureBest,20);
+const defaults=():WorldSave=>({version:8,town:migrateTown({barracks:1,farm:1,clinic:1}),ownedCities:[],eraSeen:0,capturedEver:[],alerts:[],lastLost:[],yellowStages:0,warlordStages:0,thirdFailureBest:0,guanduStages:0,guanduFailureBest:0,dongzhuoStages:0,legacyHulaoAccess:false,worldAvailable:false,revision:0,merits:0,provisions:0,buildings:{barracks:1,farm:1,clinic:1},cleared:{huangjin:false,hulao:false},failureBest:{huangjin:0,hulao:0},nodes:['huangjin'],reserve:{},armyPlan:{capacity:2,garrison:0},active:null,receipts:[]});
+function parse(raw:string|null):WorldSave|null {try{if(!raw)return null;const v=JSON.parse(raw);if(![1,2,3,4,5,6,7,8].includes(v.version)||!v.buildings||!v.cleared)return null;const s=defaults();s.warlordStages=integer(v.warlordStages,3);s.thirdFailureBest=integer(v.thirdFailureBest,20);
  // v6：第四章（官渡）进度；旧档默认为 0，第三章全通后开放。
  s.guanduStages=v.version>=6?integer(v.guanduStages,3):0;s.guanduFailureBest=v.version>=6?integer(v.guanduFailureBest,20):0;
  // v7：天下地图城池；旧档无城池，eraSeen=0（之后按当前时代处理）
- s.ownedCities=v.version>=7&&Array.isArray(v.ownedCities)?[...new Set(v.ownedCities.filter((c:unknown)=>typeof c==='string'&&c.length<=32))].slice(0,64) as string[]:[];s.eraSeen=v.version>=7?integer(v.eraSeen,3):0;s.capturedEver=v.version>=7&&Array.isArray(v.capturedEver)?[...new Set(v.capturedEver.filter((c:unknown)=>typeof c==='string'&&c.length<=32))].slice(0,64) as string[]:[];s.alerts=v.version>=7&&Array.isArray(v.alerts)?v.alerts.filter((a:CityAlert)=>a&&typeof a.city==='string'&&s.ownedCities.includes(a.city)&&typeof a.attacker==='string'&&a.attacker.length<=16).slice(0,16).map((a:CityAlert)=>({city:a.city,attacker:a.attacker,cause:a.cause==='era'?'era':'retaliation'})):[];s.lastLost=v.version>=7&&Array.isArray(v.lastLost)?v.lastLost.filter((c:unknown)=>typeof c==='string'&&c.length<=32).slice(0,16):[];s.yellowStages=integer(v.yellowStages,3);s.revision=integer(v.revision);s.merits=integer(v.merits);s.provisions=integer(v.provisions);for(const id of ['barracks','farm','clinic'] as BuildingId[])s.buildings[id]=Math.max(1,integer(v.buildings[id],3));for(const id of ['huangjin','hulao'] as ChapterId[]){s.cleared[id]=v.cleared[id]===true;s.failureBest[id]=integer(v.failureBest?.[id],20);}if(s.cleared.huangjin||s.cleared.hulao)s.yellowStages=3;
+ s.ownedCities=v.version>=7&&Array.isArray(v.ownedCities)?[...new Set(v.ownedCities.filter((c:unknown)=>typeof c==='string'&&c.length<=32))].slice(0,64) as string[]:[];s.eraSeen=v.version>=7?integer(v.eraSeen,3):0;s.capturedEver=v.version>=7&&Array.isArray(v.capturedEver)?[...new Set(v.capturedEver.filter((c:unknown)=>typeof c==='string'&&c.length<=32))].slice(0,64) as string[]:[];s.alerts=v.version>=7&&Array.isArray(v.alerts)?v.alerts.filter((a:CityAlert)=>a&&typeof a.city==='string'&&s.ownedCities.includes(a.city)&&typeof a.attacker==='string'&&a.attacker.length<=16).slice(0,16).map((a:CityAlert)=>({city:a.city,attacker:a.attacker,cause:a.cause==='era'?'era':'retaliation'})):[];s.lastLost=v.version>=7&&Array.isArray(v.lastLost)?v.lastLost.filter((c:unknown)=>typeof c==='string'&&c.length<=32).slice(0,16):[];s.yellowStages=integer(v.yellowStages,3);s.revision=integer(v.revision);s.merits=integer(v.merits);s.provisions=integer(v.provisions);for(const id of ['barracks','farm','clinic'] as BuildingId[])s.buildings[id]=Math.max(1,integer(v.buildings[id],3));s.town=parseTown(v.version>=8?v.town:null,s.buildings);s.buildings=legacyLevels(s.town);for(const id of ['huangjin','hulao'] as ChapterId[]){s.cleared[id]=v.cleared[id]===true;s.failureBest[id]=integer(v.failureBest?.[id],20);}if(s.cleared.huangjin||s.cleared.hulao)s.yellowStages=3;
  // v1/v2 builds opened the map directly after Zhangjiao. Keep that access for existing saves;
  // new v3 runs unlock it only after Hulao is cleared.
  s.worldAvailable=v.version<3?(s.yellowStages===3||s.cleared.huangjin||s.cleared.hulao):v.worldAvailable===true;
@@ -30,7 +33,7 @@ function parse(raw:string|null):WorldSave|null {try{if(!raw)return null;const v=
  if(s.cleared.hulao)s.dongzhuoStages=3;
  if(s.dongzhuoStages===3){s.cleared.hulao=true;s.worldAvailable=true;}
 s.nodes=[...new Set([...(Array.isArray(v.nodes)?v.nodes.filter((n:unknown)=>typeof n==='string').slice(0,128):[]),...(s.worldAvailable?['home','huangjin','hulao']:['huangjin'])])];for(const kind of TROOP_KINDS)s.reserve[kind]=integer(v.reserve?.[kind],999);if(v.active&&typeof v.active.id==='string'&&['huangjin','hulao'].includes(v.active.chapter)&&['active','settled'].includes(v.active.state))s.active={arc:v.active.arc==='qunxiong'||v.active.arc==='guandu'||v.active.arc==='siege'||v.active.arc==='defense'?v.active.arc:undefined,cityId:typeof v.active.cityId==='string'?v.active.cityId.slice(0,32):undefined,stage:Math.max(1,integer(v.active.stage??3,3)),deployed:Array.isArray(v.active.deployed)?v.active.deployed.filter((k:TroopKind)=>TROOP_KINDS.includes(k)).slice(0,2):[],id:v.active.id.slice(0,100),chapter:v.active.chapter,state:v.active.state,farm:Math.max(1,integer(v.active.farm,3))};if(s.cleared.hulao&&!s.nodes.includes('qunxiong'))s.nodes.push('qunxiong');if(s.warlordStages>=3&&!s.nodes.includes('guandu'))s.nodes.push('guandu');s.armyPlan.capacity=Math.max(1,integer(v.armyPlan?.capacity??2,999));s.armyPlan.garrison=integer(v.armyPlan?.garrison,999);if(TROOP_KINDS.includes(v.armyPlan?.priority))s.armyPlan.priority=v.armyPlan.priority;s.receipts=Array.isArray(v.receipts)?v.receipts.filter((r:unknown)=>r&&typeof r==='object'&&typeof (r as {id?:unknown}).id==='string').slice(-32).map((r:{id:string;merits:unknown;provisions:unknown})=>({id:r.id.slice(0,100),merits:integer(r.merits),provisions:integer(r.provisions)})):[];return s;}catch{return null;}}
-export function loadWorld():WorldSave {if(storageUnavailable&&memory)return structuredClone(memory);let s:WorldSave;try{const raw=localStorage.getItem(WORLD_KEY),backup=localStorage.getItem(BACKUP_KEY);let future=false;try{future=JSON.parse(raw??'null')?.version>7;}catch{}if(future){incompatibleSave=true;storageUnavailable=true;s=memory??defaults();}else {const current=parse(raw),previous=parse(backup);s=current??previous??defaults();
+export function loadWorld():WorldSave {if(storageUnavailable&&memory)return structuredClone(memory);let s:WorldSave;try{const raw=localStorage.getItem(WORLD_KEY),backup=localStorage.getItem(BACKUP_KEY);let future=false;try{future=JSON.parse(raw??'null')?.version>8;}catch{}if(future){incompatibleSave=true;storageUnavailable=true;s=memory??defaults();}else {const current=parse(raw),previous=parse(backup);s=current??previous??defaults();
  // The legacy chapter-clear flag is also written by current campaign progression.
  // Only use it to migrate saves that have no structured save at all; otherwise a
  // fresh Zhangjiao clear would incorrectly unlock the world map before Hulao.
@@ -45,15 +48,50 @@ export const BUILDINGS:Record<BuildingId,{name:string;description:(level:number)
  clinic:{name:'医馆',description:l=>`军医治疗量 +${(l-1)*6}%`},
 };
 export function upgradeCost(level:number):{merits:number;provisions:number}|null{return level===1?{merits:35,provisions:50}:level===2?{merits:90,provisions:140}:null;}
-export function upgradeBuilding(id:BuildingId):{ok:boolean;message:string}{const s=loadWorld(),cost=upgradeCost(s.buildings[id]);if(!cost)return{ok:false,message:'已达Lv3'};if(s.merits<cost.merits||s.provisions<cost.provisions)return{ok:false,message:'资源不足，出征可获取军功与粮草'};s.merits-=cost.merits;s.provisions-=cost.provisions;s.buildings[id]++;const persisted=commit(s);return{ok:true,message:persisted?'建筑升级完成':'已在本次会话升级；浏览器存储不可用'};}
+export function upgradeBuilding(id:BuildingId):{ok:boolean;message:string}{const s=loadWorld();let best=-1;s.town.plots.forEach((p,i)=>{if(p?.id===id&&(best<0||p.level>s.town.plots[best]!.level))best=i;});if(best<0)return{ok:false,message:'尚未建造'};return townUpgrade(best);}
+// —— 城镇建设（TOWN_PLAN.md · T1）：界面在 T2 接入 ——
+type TownResult={ok:boolean;message:string};
+const have=(s:WorldSave)=>({merits:s.merits,provisions:s.provisions,money:s.town.money});
+function pay(s:WorldSave,c:{merits:number;provisions:number;money:number}){s.merits-=c.merits;s.provisions-=c.provisions;s.town.money-=c.money;}
+function townCommit(s:WorldSave,message:string):TownResult{s.buildings=legacyLevels(s.town);const persisted=commit(s);return{ok:true,message:persisted?message:message+'（仅本次会话，存储不可用）'};}
+/** 在空地块上建造。 */
+export function townBuild(plot:number,id:TownBuildingId):TownResult{const s=loadWorld(),t=s.town,def=TOWN_BUILDINGS[id];
+ if(!def||!Number.isInteger(plot)||plot<0||plot>=unlockedPlots(t))return{ok:false,message:'该地块尚未开放'};
+ if(t.plots[plot])return{ok:false,message:'地块已有建筑'};
+ if(countOf(t,id)>=def.max)return{ok:false,message:`${def.name}最多 ${def.max} 座`};
+ if(!canAfford(have(s),def.build))return{ok:false,message:'资源不足：需要 '+costText(def.build)};
+ pay(s,def.build);t.plots[plot]={id,level:1};return townCommit(s,def.name+'建成');}
+/** 升级地块上的建筑（Lv1–3）。 */
+export function townUpgrade(plot:number):TownResult{const s=loadWorld(),p=s.town.plots[plot];if(!p)return{ok:false,message:'空地'};const cost=upgradeCostFor(p.id,p.level);if(!cost)return{ok:false,message:'已达Lv3'};
+ if(!canAfford(have(s),cost))return{ok:false,message:'资源不足：需要 '+costText(cost)};pay(s,cost);p.level++;return townCommit(s,`${TOWN_BUILDINGS[p.id].name}升至 Lv${p.level}`);}
+/** 拆除（返还已投入的一半）；军营不能拆。 */
+export function townDemolish(plot:number):TownResult{const s=loadWorld(),p=s.town.plots[plot];if(!p)return{ok:false,message:'空地'};if(p.id==='barracks')return{ok:false,message:'军营不能拆除'};
+ const back=demolishRefund(p);s.merits+=back.merits;s.provisions+=back.provisions;s.town.money+=back.money;s.town.plots[plot]=null;return townCommit(s,`已拆除${TOWN_BUILDINGS[p.id].name}，返还 ${costText(back)}`);}
+export function setTaxRate(rate:TaxRate):TownResult{const s=loadWorld();if(!(rate in TAX_NAME))return{ok:false,message:'无效税率'};s.town.tax=rate;return townCommit(s,'税率改为'+TAX_NAME[rate]);}
+/** 占领城池的发展方向：从“均衡”首次选择免费，之后按城池档次花钱。 */
+export function setCityFocus(cityId:string,focus:CityFocus):TownResult{const s=loadWorld(),c=cityById(cityId);if(!c||!s.ownedCities.includes(cityId))return{ok:false,message:'不是你的城池'};if(!(focus in FOCUS_NAME)||focus==='balanced')return{ok:false,message:'无效方向'};
+ const cur=s.town.focus[cityId]??'balanced';if(cur===focus)return{ok:false,message:'已是'+FOCUS_NAME[focus]};const cost=cur==='balanced'?0:FOCUS_CHANGE_COST[c.tier];
+ if(s.town.money<cost)return{ok:false,message:`钱不足：改方向需要 ${cost}`};s.town.money-=cost;s.town.focus[cityId]=focus;return townCommit(s,`${c.name}改为${FOCUS_NAME[focus]}`);}
+export type {TownState,TownBuildingId,TaxRate,CityFocus,SeasonReport};
 /** 主城建筑 + W3 大城特产的出征开局效果。 */
 export function permanentEffects(){const s=loadWorld(),b=s.buildings,sp=territorySummary(s.ownedCities).specialties.map(x=>x.specialty),sum=(k:'damage'|'maxHp'|'reserveSlots'|'attributePoints'|'provisions'|'reinforcements')=>sp.reduce((n,x)=>n+(x[k]??0),0);
  return{armyCapacity:armyCapacity(b.barracks),reinforcements:b.barracks-1+sum('reinforcements'),healMultiplier:1+(b.clinic-1)*.06,provisionsMultiplier:1+(b.farm-1)*.08,
   damageBonus:sum('damage'),maxHpBonus:sum('maxHp'),reserveSlots:2+sum('reserveSlots'),attributePoints:sum('attributePoints'),provisionsBonus:sum('provisions')};}
-/** W3 城池产出：结算时（胜利或坚持 60 秒以上）按已占城池发放；寿春特产提高本次全部粮草收益。 */
-function applyIncome(s:WorldSave,eligible:boolean,merits:number,provisions:number){const t=territorySummary(s.ownedCities),bonus=1+t.specialties.reduce((n,x)=>n+(x.specialty.provisions??0),0),cityMerits=eligible?t.merits:0,cityProvisions=eligible?Math.round(t.provisions*bonus):0;return{merits:merits+cityMerits,provisions:Math.round(provisions*bonus)+cityProvisions,cityMerits,cityProvisions};}
+/**
+ * 结算时（胜利或坚持 60 秒以上）过一个季度（TOWN_PLAN.md · T1）：农田产粮、市集收税、城池按发展方向产出、扣后备兵军粮。
+ * 寿春特产仍提高本次全部粮草收益。返回的 provisions 已是净值（含产粮与开销）；钱直接记入 town.money。
+ */
+function applyIncome(s:WorldSave,eligible:boolean,merits:number,provisions:number):{merits:number;provisions:number;cityMerits:number;cityProvisions:number;season:SeasonReport|null}{
+ const t=territorySummary(s.ownedCities),bonus=1+t.specialties.reduce((n,x)=>n+(x.specialty.provisions??0),0),battle=Math.round(provisions*bonus);
+ if(!eligible)return{merits,provisions:battle,cityMerits:0,cityProvisions:0,season:null};
+ const cities=s.ownedCities.map(id=>cityById(id)).filter((c):c is NonNullable<typeof c>=>!!c).map(c=>({tier:c.tier,focus:s.town.focus[c.id]??'balanced' as CityFocus}));
+ const troops=Object.values(s.reserve).reduce((n,v)=>n+(v||0),0);
+ const r=settleSeason(s.town,{troops,cities,provisionsHave:s.provisions+battle,provisionsMultiplier:bonus});
+ return{merits:merits+r.cityMerits,provisions:battle+r.grain+r.cityProvisions-r.upkeep,cityMerits:r.cityMerits,cityProvisions:r.cityProvisions,season:r};}
 /** 结算面板上的“城池产出”一行（无产出时为空）。 */
-export function cityIncomeLine(r:{cityMerits?:number;cityProvisions?:number}):string{return r.cityMerits||r.cityProvisions?`\n城池产出 · 军功 +${r.cityMerits??0} / 粮草 +${r.cityProvisions??0}`:'';}
+export function cityIncomeLine(r:{cityMerits?:number;cityProvisions?:number;season?:SeasonReport|null}):string{const q=r.season;if(!q)return r.cityMerits||r.cityProvisions?`\n城池产出 · 军功 +${r.cityMerits??0} / 粮草 +${r.cityProvisions??0}`:'';
+ const city=q.cityMerits||q.cityProvisions||q.cityMoney?` · 城池 功+${q.cityMerits} 粮+${q.cityProvisions} 钱+${q.cityMoney}`:'';
+ return `\n${seasonLabel(q.year,q.season)} · 农田 +${q.grain} 粮 · 税 +${q.tax} 钱${city} · 军粮 −${q.upkeep}${q.shortage?`（缺 ${q.shortage}）`:''}`;}
 let expeditionSequence=0;
 /** LAN HTTP may omit randomUUID. IDs are local receipt keys, not authentication tokens. */
 export function createExpeditionId():string {
@@ -71,17 +109,17 @@ function refundStaleExpedition(s:WorldSave):void{if(s.active?.state==='active')r
 /** 战斗中主动退出：归还仍存活的后备兵，本场作废、不发奖励。id 不匹配或已结算时不做任何事。 */
 export function abandonExpedition(id:string,returned:TroopKind[]):void{if(!id)return;const s=loadWorld();if(s.active?.id!==id||s.receipts.some(r=>r.id===id))return;if(returnDeployed(s,returned))commit(s);}
 export function beginExpedition(chapter:ChapterId,stage=3,deployed:TroopKind[]=[]):string {const s=loadWorld(),id=createExpeditionId();refundStaleExpedition(s);loseAlerted(s);s.active={id,chapter,stage,state:'active',farm:s.buildings.farm,deployed:[...deployed]};commit(s);return id;}
-export function settleExpedition(id:string,result:{chapter:ChapterId;victory:boolean;bossKilled:boolean;elapsed:number;kills:number;reason:string;debug:boolean;returned?:TroopKind[]}):{merits:number;provisions:number;cityMerits?:number;cityProvisions?:number;message:string}{const s=loadWorld(),zero={merits:0,provisions:0};if(!s.active||s.active.arc||s.active.id!==id||s.active.chapter!==result.chapter||s.active.state!=='active'||s.receipts.some(r=>r.id===id))return{...zero,message:'本次奖励已结算或出征已失效'};const available=[...(s.active.deployed??[])];for(const kind of result.returned??[]){const i=available.indexOf(kind);if(i>=0){available.splice(i,1);s.reserve[kind]=Math.min(999,(s.reserve[kind]??0)+1);}}s.active.state='settled';let merits=0,provisions=0;const valid=Number.isFinite(result.elapsed)&&Number.isFinite(result.kills)&&result.elapsed>=0&&result.kills>=0&&(result.chapter!=='hulao'||((s.cleared.huangjin||s.yellowStages===3||s.legacyHulaoAccess)&&Number.isInteger(s.active.stage??3)&&(s.active.stage??3)>=1&&(s.active.stage??3)<=3&&(s.legacyHulaoAccess||(s.active.stage??3)<=s.dongzhuoStages+1)));
+export function settleExpedition(id:string,result:{chapter:ChapterId;victory:boolean;bossKilled:boolean;elapsed:number;kills:number;reason:string;debug:boolean;returned?:TroopKind[]}):{merits:number;provisions:number;cityMerits?:number;cityProvisions?:number;season?:SeasonReport|null;message:string}{const s=loadWorld(),zero={merits:0,provisions:0};if(!s.active||s.active.arc||s.active.id!==id||s.active.chapter!==result.chapter||s.active.state!=='active'||s.receipts.some(r=>r.id===id))return{...zero,message:'本次奖励已结算或出征已失效'};const available=[...(s.active.deployed??[])];for(const kind of result.returned??[]){const i=available.indexOf(kind);if(i>=0){available.splice(i,1);s.reserve[kind]=Math.min(999,(s.reserve[kind]??0)+1);}}s.active.state='settled';let merits=0,provisions=0;const valid=Number.isFinite(result.elapsed)&&Number.isFinite(result.kills)&&result.elapsed>=0&&result.kills>=0&&(result.chapter!=='hulao'||((s.cleared.huangjin||s.yellowStages===3||s.legacyHulaoAccess)&&Number.isInteger(s.active.stage??3)&&(s.active.stage??3)>=1&&(s.active.stage??3)<=3&&(s.legacyHulaoAccess||(s.active.stage??3)<=s.dongzhuoStages+1)));
  if(valid&&!result.debug){const victory=result.victory&&result.bossKilled&&result.reason==='boss';const farm=1+(s.active.farm-1)*.08;if(victory){const stage=s.active.stage??3;const first=result.chapter==='huangjin'?s.yellowStages<stage:s.dongzhuoStages<stage;merits=60+Math.floor(Math.min(result.kills,1500)/100)+(first?20:0);provisions=Math.floor((90+Math.floor(Math.min(result.kills,1500)/25)+(first?30:0))*farm);if(result.chapter==='huangjin'){s.yellowStages=Math.max(s.yellowStages,stage);if(stage===3)s.cleared.huangjin=true;}else {s.dongzhuoStages=Math.max(s.dongzhuoStages,stage);if(stage===3){s.cleared.hulao=true;s.worldAvailable=true;}}s.nodes=[...new Set([...s.nodes,...(s.worldAvailable?['home','huangjin','hulao']:['huangjin'])])];}else if(!result.victory&&result.elapsed>=60&&result.kills>=20){const score=Math.min(20,Math.floor(result.kills/20)+Math.floor(result.elapsed/120)),gain=Math.max(0,score-s.failureBest[result.chapter]);merits=gain;provisions=Math.floor(gain*2*farm);s.failureBest[result.chapter]=Math.max(score,s.failureBest[result.chapter]);}}
  const inc=applyIncome(s,valid&&!result.debug&&(result.victory||result.elapsed>=60),merits,provisions);merits=inc.merits;provisions=inc.provisions;
- s.merits=Math.min(1_000_000,s.merits+merits);s.provisions=Math.min(1_000_000,s.provisions+provisions);s.receipts.push({id,merits,provisions});s.receipts=s.receipts.slice(-32);const persisted=commit(s);return{merits,provisions,cityMerits:inc.cityMerits,cityProvisions:inc.cityProvisions,message:result.debug?'测试战斗 · 不发放永久资源':!persisted?'奖励仅保留本次会话（存储不可用）':merits||provisions?'已自动入库':'未超过本章失败最佳成绩，无新增奖励'};}
+ s.merits=Math.min(1_000_000,s.merits+merits);s.provisions=Math.min(1_000_000,s.provisions+provisions);s.receipts.push({id,merits,provisions});s.receipts=s.receipts.slice(-32);const persisted=commit(s);return{merits,provisions,cityMerits:inc.cityMerits,cityProvisions:inc.cityProvisions,season:inc.season,message:result.debug?'测试战斗 · 不发放永久资源':!persisted?'奖励仅保留本次会话（存储不可用）':merits||provisions?'已自动入库':'未超过本章失败最佳成绩，无新增奖励'};}
 
 /** 天下地图：玩家已占城池（W2 攻城后写入）。 */
 export function ownedCities():string[]{return loadWorld().ownedCities;}
 /** 攻城出征：调用方先校验城池可攻打（相邻）；记录目标城池以便结算。 */
 export function beginSiege(cityId:string,attackable:boolean,deployed:TroopKind[]=[]):string{if(!attackable||loadWorld().ownedCities.includes(cityId))return '';const s=loadWorld(),id=createExpeditionId();refundStaleExpedition(s);loseAlerted(s);s.active={id,chapter:'hulao',arc:'siege',cityId,stage:1,state:'active',farm:s.buildings.farm,deployed:[...deployed]};commit(s);return id;}
 /** 攻城结算：胜利（击败守将）即占领该城并发放奖励，首次攻占额外 bonus；失败不丢东西。 */
-export function settleSiege(id:string,result:{victory:boolean;bossKilled:boolean;debug:boolean;elapsed?:number;reward:{merits:number;provisions:number};firstBonus:number;returned?:TroopKind[]}):{merits:number;provisions:number;cityMerits?:number;cityProvisions?:number;captured:boolean;first:boolean;alert?:CityAlert|null;message:string}{
+export function settleSiege(id:string,result:{victory:boolean;bossKilled:boolean;debug:boolean;elapsed?:number;reward:{merits:number;provisions:number};firstBonus:number;returned?:TroopKind[]}):{merits:number;provisions:number;cityMerits?:number;cityProvisions?:number;season?:SeasonReport|null;captured:boolean;first:boolean;alert?:CityAlert|null;message:string}{
  const zero={merits:0,provisions:0,captured:false,first:false};if(result.debug)return{...zero,message:'测试战斗，不写入永久进度'};
  const s=loadWorld(),a=s.active;if(!a||a.arc!=='siege'||!a.cityId||a.id!==id||a.state!=='active'||s.receipts.some(r=>r.id===id))return{...zero,message:'本场已结算或无效'};
  a.state='settled';let merits=0,provisions=0,captured=false,first=false,alert:CityAlert|null=null;
@@ -90,9 +128,9 @@ export function settleSiege(id:string,result:{victory:boolean;bossKilled:boolean
  if(result.victory&&result.bossKilled&&!s.ownedCities.includes(a.cityId)){first=!s.capturedEver.includes(a.cityId);const k=first?1+result.firstBonus:1;merits=Math.round(result.reward.merits*k);provisions=Math.round(result.reward.provisions*k*(1+(a.farm-1)*.08));s.ownedCities=[...s.ownedCities,a.cityId];if(first)s.capturedEver=[...s.capturedEver,a.cityId];captured=true;alert=retaliate(s,a.cityId);}
  const available=[...(a.deployed??[])];for(const k of result.returned??[]){const i=available.indexOf(k);if(i>=0){available.splice(i,1);s.reserve[k]=Math.min(999,(s.reserve[k]??0)+1);}}
  {const bonus=1+territorySummary(s.ownedCities.filter(c=>c!==a.cityId||!captured)).specialties.reduce((n,x)=>n+(x.specialty.provisions??0),0);provisions=Math.round(provisions*bonus);}
- merits+=inc.cityMerits;provisions+=inc.cityProvisions;
+ merits+=inc.merits;provisions+=inc.provisions; // 季度净收益：城池产出 + 农田产粮 − 军粮（攻城本身奖励不受寿春加成以外的影响）
  s.merits=Math.min(1_000_000,s.merits+merits);s.provisions=Math.min(1_000_000,s.provisions+provisions);s.receipts.push({id,merits,provisions});s.receipts=s.receipts.slice(-32);const persisted=commit(s);
- return{merits,provisions,cityMerits:inc.cityMerits,cityProvisions:inc.cityProvisions,captured,first,alert,message:persisted?(captured?'城池已归入版图':'未能破城'):'已保留本次会话，存储不可用'};
+ return{merits,provisions,cityMerits:inc.cityMerits,cityProvisions:inc.cityProvisions,season:inc.season,captured,first,alert,message:persisted?(captured?'城池已归入版图':'未能破城'):'已保留本次会话，存储不可用'};
 }
 /* —— W4：时局变化与反攻 —— */
 /** 随机源（测试可替换）。 */
@@ -123,7 +161,7 @@ export function advanceEra():EraAdvance|null{const s=loadWorld(),to=eraOf(s);if(
 /** 守城出征：须为告急中的我方城池；不触发失守。 */
 export function beginDefense(cityId:string,deployed:TroopKind[]=[]):string{const s=loadWorld();if(!s.ownedCities.includes(cityId)||!s.alerts.some(a=>a.city===cityId))return '';const id=createExpeditionId();refundStaleExpedition(s);s.active={id,chapter:'hulao',arc:'defense',cityId,stage:1,state:'active',farm:s.buildings.farm,deployed:[...deployed]};commit(s);return id;}
 /** 守城结算：胜利解除告急并发放攻城奖励的一半；失败城池仍在、告急不变。 */
-export function settleDefense(id:string,result:{victory:boolean;bossKilled:boolean;debug:boolean;elapsed?:number;reward:{merits:number;provisions:number};returned?:TroopKind[]}):{merits:number;provisions:number;cityMerits?:number;cityProvisions?:number;held:boolean;message:string}{
+export function settleDefense(id:string,result:{victory:boolean;bossKilled:boolean;debug:boolean;elapsed?:number;reward:{merits:number;provisions:number};returned?:TroopKind[]}):{merits:number;provisions:number;cityMerits?:number;cityProvisions?:number;season?:SeasonReport|null;held:boolean;message:string}{
  const zero={merits:0,provisions:0,held:false};if(result.debug)return{...zero,message:'测试战斗，不写入永久进度'};
  const s=loadWorld(),a=s.active;if(!a||a.arc!=='defense'||!a.cityId||a.id!==id||a.state!=='active'||s.receipts.some(r=>r.id===id))return{...zero,message:'本场已结算或无效'};
  a.state='settled';let merits=0,provisions=0,held=false;
@@ -131,7 +169,7 @@ export function settleDefense(id:string,result:{victory:boolean;bossKilled:boole
  const available=[...(a.deployed??[])];for(const k of result.returned??[]){const i=available.indexOf(k);if(i>=0){available.splice(i,1);s.reserve[k]=Math.min(999,(s.reserve[k]??0)+1);}}
  const inc=applyIncome(s,result.victory||(result.elapsed??0)>=60,merits,provisions);merits=inc.merits;provisions=inc.provisions;
  s.merits=Math.min(1_000_000,s.merits+merits);s.provisions=Math.min(1_000_000,s.provisions+provisions);s.receipts.push({id,merits,provisions});s.receipts=s.receipts.slice(-32);const persisted=commit(s);
- return{merits,provisions,cityMerits:inc.cityMerits,cityProvisions:inc.cityProvisions,held,message:persisted?(held?'城池守住了':'守城失利，城池仍告急'):'已保留本次会话，存储不可用'};
+ return{merits,provisions,cityMerits:inc.cityMerits,cityProvisions:inc.cityProvisions,season:inc.season,held,message:persisted?(held?'城池守住了':'守城失利，城池仍告急'):'已保留本次会话，存储不可用'};
 }
 /** Fresh campaigns open the world after Lubu; migrated saves keep prior access. */
 export function worldUnlocked():boolean{return loadWorld().worldAvailable;}
@@ -150,14 +188,14 @@ export function arcStages(arc:WarlordArc):number{return loadWorld()[ARC_FIELDS[a
 export function arcUnlocked(arc:WarlordArc):boolean{const s=loadWorld();return arc==='qunxiong'?s.cleared.hulao:s.cleared.hulao&&s.warlordStages>=3;}
 export function arcStageUnlocked(arc:WarlordArc,stage:number):boolean{return Number.isInteger(stage)&&stage>=1&&stage<=3&&arcUnlocked(arc)&&stage<=arcStages(arc)+1;}
 export function beginArcExpedition(arc:WarlordArc,stage:number,deployed:TroopKind[]=[]):string{if(!arcStageUnlocked(arc,stage))return '';const s=loadWorld(),id=createExpeditionId();refundStaleExpedition(s);loseAlerted(s);s.active={id,chapter:'hulao',arc,stage,state:'active',farm:s.buildings.farm,deployed:[...deployed]};commit(s);return id;}
-export function settleArcExpedition(arc:WarlordArc,id:string,result:{victory:boolean;bossKilled:boolean;kills:number;elapsed:number;debug:boolean;returned?:TroopKind[]}):{merits:number;provisions:number;cityMerits?:number;cityProvisions?:number;message:string}{
+export function settleArcExpedition(arc:WarlordArc,id:string,result:{victory:boolean;bossKilled:boolean;kills:number;elapsed:number;debug:boolean;returned?:TroopKind[]}):{merits:number;provisions:number;cityMerits?:number;cityProvisions?:number;season?:SeasonReport|null;message:string}{
  const zero={merits:0,provisions:0};if(result.debug)return{...zero,message:'测试战斗，不写入永久进度'};
  const s=loadWorld(),a=s.active,F=ARC_FIELDS[arc];if(!a||a.arc!==arc||a.id!==id||a.state!=='active'||s.receipts.some(r=>r.id===id)||!Number.isFinite(result.kills)||!Number.isFinite(result.elapsed)||result.kills<0||result.elapsed<0)return{...zero,message:'本场已结算或无效'};
  const stage=a.stage??1;if(!arcStageUnlocked(arc,stage))return{...zero,message:'关卡尚未开放'};a.state='settled';let merits=0,provisions=0;
  if(result.victory&&result.bossKilled){const first=s[F.stages]<stage;merits=60+Math.floor(Math.min(result.kills,1500)/100)+(first?20:0);provisions=Math.floor((90+Math.floor(Math.min(result.kills,1500)/25)+(first?30:0))*(1+(a.farm-1)*.08));s[F.stages]=Math.max(s[F.stages],stage);if(arc==='qunxiong'&&s.warlordStages>=3&&!s.nodes.includes('guandu'))s.nodes.push('guandu');}else if(!result.victory&&result.elapsed>=60&&result.kills>=20){const score=Math.min(20,Math.floor(result.kills/20)+Math.floor(result.elapsed/120));merits=Math.max(0,score-s[F.best]);provisions=merits*2;s[F.best]=Math.max(s[F.best],score);}
  const available=[...(a.deployed??[])];for(const k of result.returned??[]){const i=available.indexOf(k);if(i>=0){available.splice(i,1);s.reserve[k]=Math.min(999,(s.reserve[k]??0)+1);}}
  const inc=applyIncome(s,result.victory||result.elapsed>=60,merits,provisions);merits=inc.merits;provisions=inc.provisions;
- s.merits=Math.min(1_000_000,s.merits+merits);s.provisions=Math.min(1_000_000,s.provisions+provisions);s.receipts.push({id,merits,provisions});s.receipts=s.receipts.slice(-32);const persisted=commit(s);return{merits,provisions,cityMerits:inc.cityMerits,cityProvisions:inc.cityProvisions,message:persisted?'战后奖励已入库':'已保留本次会话，存储不可用'};
+ s.merits=Math.min(1_000_000,s.merits+merits);s.provisions=Math.min(1_000_000,s.provisions+provisions);s.receipts.push({id,merits,provisions});s.receipts=s.receipts.slice(-32);const persisted=commit(s);return{merits,provisions,cityMerits:inc.cityMerits,cityProvisions:inc.cityProvisions,season:inc.season,message:persisted?'战后奖励已入库':'已保留本次会话，存储不可用'};
 }
 /** 第三章旧接口（保持不变的调用点与测试）。 */
 export function thirdChapterUnlocked():boolean{return arcUnlocked('qunxiong');}

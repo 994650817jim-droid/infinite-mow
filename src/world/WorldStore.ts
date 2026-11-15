@@ -1,7 +1,7 @@
 import {armyCapacity,TROOPS,TROOP_KINDS,type TroopKind} from '../data/legion';
 import type {ChapterId} from '../data/chapters';
 import {territorySummary,cityAttacker,cityById,eraChanges,eraIndexFor,type FactionId} from './WorldCities';
-import {type TownState,type TownBuildingId,type TaxRate,type CityFocus,type SeasonReport,TOWN_BUILDINGS,FOCUS_CHANGE_COST,FOCUS_NAME,TAX_NAME,migrateTown,parseTown,legacyLevels,settleSeason,upgradeCostFor,demolishRefund,countOf,unlockedPlots,canAfford,costText,seasonLabel,buildingBattleEffects,noBoon,eventById,grainSellPrice,grainBuyPrice,caravanValue,caravanSlots,levelOf} from '../town/TownData';
+import {type TownState,type TownBuildingId,type TaxRate,type CityFocus,type SeasonReport,TOWN_BUILDINGS,FOCUS_CHANGE_COST,FOCUS_NAME,TAX_NAME,migrateTown,parseTown,legacyLevels,settleSeason,nextCost,buildBlockers,CITY_SIZE,canAfford,costText,seasonLabel,buildingBattleEffects,noBoon,eventById,grainSellPrice,grainBuyPrice,caravanValue,caravanSlots,levelOf} from '../town/TownData';
 /** W4 告急：某座玩家城池正被来犯；cause 为时代更替或攻城后反扑。 */
 export interface CityAlert{city:string;attacker:FactionId;cause:'era'|'retaliation';}
 export type BuildingId='barracks'|'farm'|'clinic';
@@ -48,25 +48,19 @@ export const BUILDINGS:Record<BuildingId,{name:string;description:(level:number)
  clinic:{name:'医馆',description:l=>`军医治疗量 +${(l-1)*6}%`},
 };
 export function upgradeCost(level:number):{merits:number;provisions:number}|null{return level===1?{merits:35,provisions:50}:level===2?{merits:90,provisions:140}:null;}
-export function upgradeBuilding(id:BuildingId):{ok:boolean;message:string}{const s=loadWorld();let best=-1;s.town.plots.forEach((p,i)=>{if(p?.id===id&&(best<0||p.level>s.town.plots[best]!.level))best=i;});if(best<0)return{ok:false,message:'尚未建造'};return townUpgrade(best);}
-// —— 城镇建设（TOWN_PLAN.md · T1）：界面在 T2 接入 ——
+export function upgradeBuilding(id:BuildingId):{ok:boolean;message:string}{return townUpgrade(id);}
+// —— 城镇建设（英雄无敌式：每种建筑一座，点建筑建造 / 升级）——
 type TownResult={ok:boolean;message:string};
 const have=(s:WorldSave)=>({merits:s.merits,provisions:s.provisions,money:s.town.money});
 function pay(s:WorldSave,c:{merits:number;provisions:number;money:number}){s.merits-=c.merits;s.provisions-=c.provisions;s.town.money-=c.money;}
 function townCommit(s:WorldSave,message:string):TownResult{s.buildings=legacyLevels(s.town);const persisted=commit(s);return{ok:true,message:persisted?message:message+'（仅本次会话，存储不可用）'};}
-/** 在空地块上建造。 */
-export function townBuild(plot:number,id:TownBuildingId):TownResult{const s=loadWorld(),t=s.town,def=TOWN_BUILDINGS[id];
- if(!def||!Number.isInteger(plot)||plot<0||plot>=unlockedPlots(t))return{ok:false,message:'该地块尚未开放'};
- if(t.plots[plot])return{ok:false,message:'地块已有建筑'};
- if(countOf(t,id)>=def.max)return{ok:false,message:`${def.name}最多 ${def.max} 座`};
- if(!canAfford(have(s),def.build))return{ok:false,message:'资源不足：需要 '+costText(def.build)};
- pay(s,def.build);t.plots[plot]={id,level:1};return townCommit(s,def.name+'建成');}
-/** 升级地块上的建筑（Lv1–3）。 */
-export function townUpgrade(plot:number):TownResult{const s=loadWorld(),p=s.town.plots[plot];if(!p)return{ok:false,message:'空地'};const cost=upgradeCostFor(p.id,p.level);if(!cost)return{ok:false,message:'已达Lv3'};
- if(!canAfford(have(s),cost))return{ok:false,message:'资源不足：需要 '+costText(cost)};pay(s,cost);p.level++;return townCommit(s,`${TOWN_BUILDINGS[p.id].name}升至 Lv${p.level}`);}
-/** 拆除（返还已投入的一半）；军营不能拆。 */
-export function townDemolish(plot:number):TownResult{const s=loadWorld(),p=s.town.plots[plot];if(!p)return{ok:false,message:'空地'};if(p.id==='barracks')return{ok:false,message:'军营不能拆除'};
- const back=demolishRefund(p);s.merits+=back.merits;s.provisions+=back.provisions;s.town.money+=back.money;s.town.plots[plot]=null;return townCommit(s,`已拆除${TOWN_BUILDINGS[p.id].name}，返还 ${costText(back)}`);}
+/** 建造（Lv0→1）或升级一座建筑；检查城池规模、府衙前提与资源。 */
+export function townUpgrade(id:TownBuildingId):TownResult{const s=loadWorld(),t=s.town,def=TOWN_BUILDINGS[id];if(!def)return{ok:false,message:'未知建筑'};
+ const cost=nextCost(t,id);if(!cost)return{ok:false,message:'已达最高等级'};
+ const block=buildBlockers(t,id);if(block.length)return{ok:false,message:'需要 '+block.join('、')};
+ if(!canAfford(have(s),cost))return{ok:false,message:'资源不足：需要 '+costText(cost)};
+ pay(s,cost);const lv=++t.levels[id];
+ return townCommit(s,id==='hall'?`府衙升至 Lv${lv}，城池扩建为${CITY_SIZE[lv]}`:lv===1?def.name+'建成':`${def.name}升至 Lv${lv}`);}
 export function setTaxRate(rate:TaxRate):TownResult{const s=loadWorld();if(!(rate in TAX_NAME))return{ok:false,message:'无效税率'};s.town.tax=rate;return townCommit(s,'税率改为'+TAX_NAME[rate]);}
 /** 占领城池的发展方向：从“均衡”首次选择免费，之后按城池档次花钱。 */
 export function setCityFocus(cityId:string,focus:CityFocus):TownResult{const s=loadWorld(),c=cityById(cityId);if(!c||!s.ownedCities.includes(cityId))return{ok:false,message:'不是你的城池'};if(!(focus in FOCUS_NAME)||focus==='balanced')return{ok:false,message:'无效方向'};

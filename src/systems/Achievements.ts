@@ -95,10 +95,10 @@ export function checkWorld(w: WorldSave): void {
   if (w.ownedCities.length >= 5) unlock('cities_5');
   if (w.ownedCities.includes('luoyang')) unlock('luoyang');
   if (Object.values(w.town.focus).some(f => f !== 'balanced')) unlock('focus');
-  const plots = w.town.plots.filter((p): p is NonNullable<typeof p> => !!p);
-  if (plots.some(p => !['barracks', 'farm', 'clinic'].includes(p.id)) || plots.filter(p => p.id === 'farm').length > 1) unlock('town_build');
-  if (Object.keys(TOWN_BUILDINGS).every(id => plots.some(p => p.id === id))) unlock('town_all');
-  if (plots.some(p => p.level >= 3)) unlock('town_lv3');
+  const lv = w.town.levels as Record<string, number>;
+  if (Object.entries(lv).some(([id, l]) => l > 0 && !['hall', 'barracks', 'farm', 'clinic'].includes(id))) unlock('town_build');
+  if (Object.keys(TOWN_BUILDINGS).every(id => (lv[id] ?? 0) > 0)) unlock('town_all');
+  if (Object.entries(lv).some(([id, l]) => id !== 'hall' && l >= 3)) unlock('town_lv3');
   if (w.town.money >= 500) unlock('money_500');
   if ((w.town.report?.caravanMoney ?? 0) > 0) unlock('caravan');
   if (w.town.year >= 190) unlock('year_190');

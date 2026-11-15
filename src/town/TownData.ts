@@ -4,7 +4,7 @@
  */
 import type { CityTier } from '../world/WorldCities';
 
-export type TownBuildingId = 'barracks' | 'farm' | 'clinic' | 'house' | 'market' | 'post' | 'smithy' | 'drill' | 'granary' | 'wall' | 'tavern';
+export type TownBuildingId = 'hall' | 'barracks' | 'farm' | 'clinic' | 'house' | 'market' | 'post' | 'smithy' | 'drill' | 'granary' | 'wall' | 'tavern';
 export type TaxRate = 'low' | 'mid' | 'high';
 /** 占领城池发展方向：均衡（未选择，产出与旧版一致）/ 重农 / 重商 / 重军。 */
 export type CityFocus = 'balanced' | 'farm' | 'trade' | 'military';
@@ -21,57 +21,82 @@ export interface SeasonReport {
 }
 export interface TownState {
   money: number; year: number; season: number; tax: TaxRate;
-  plots: Array<PlotBuilding | null>;
+  /** 城池建造（英雄无敌式）：每种建筑一座，0 = 未建。府衙等级即城池规模（1 小城 / 2 中城 / 3 大城）。 */
+  levels: Record<TownBuildingId, number>;
   focus: Record<string, CityFocus>;
   report: SeasonReport | null;
   /** T3：下季修正、下一场出征加成、待处理事件、在途商队。 */
   mods: SeasonMods; boon: BattleBoon; pendingEvent: string | null; caravans: Caravan[];
 }
 
-export const PLOT_COUNT = 12, BASE_PLOTS = 6, MAX_LEVEL = 3, START_YEAR = 184;
+export const MAX_LEVEL = 3, START_YEAR = 184;
+/** 城池规模：府衙等级 1–3。 */
+export const CITY_SIZE = ['', '小城', '中城', '大城'] as const, CITY_TITLE = ['', '县城', '郡城', '州府'] as const;
 export const SEASONS = ['春', '夏', '秋', '冬'] as const;
 /** 季节对农田产粮、军粮开销的系数（秋收、冬耗）。 */
 export const SEASON_GRAIN = [1, 1, 1.5, .5], SEASON_UPKEEP = [1, 1, 1, 1.5];
 export const TAX_NAME: Record<TaxRate, string> = { low: '轻税', mid: '常税', high: '重税' };
 /** 每户每季的税（钱）。无市集时只能收到三成。 */
 export const TAX_PER_HOUSEHOLD: Record<TaxRate, number> = { low: .3, mid: .5, high: .75 };
+/** 府衙（城池规模）带来的基础民户。 */
+export const HALL_HOUSEHOLDS = [10, 10, 20, 35];
 export const BASE_HOUSEHOLDS = 10;
 
 export interface BuildingDef {
   name: string; max: number; build: Cost;
   /** 每级效果说明（Lv1–3）。 */
   effect: (level: number) => string;
+  /** 建造需要的城池规模（府衙等级），默认 1。 */
+  minHall?: number;
+  /** 一句话简介（建造面板）。 */
+  blurb: string;
 }
 const C = (merits: number, provisions: number, money = 0): Cost => ({ merits, provisions, money });
 export const TOWN_BUILDINGS: Record<TownBuildingId, BuildingDef> = {
-  barracks: { name: '军营', max: 1, build: C(0, 0), effect: l => `出征开局增援 ${l - 1} 人` },
-  farm: { name: '农田', max: 3, build: C(10, 40), effect: l => `每季产粮 ${FARM_GRAIN[l - 1]}（秋收 ×1.5、冬 ×0.5）；最高一块农田使战后粮草 +${(l - 1) * 8}%` },
-  clinic: { name: '医馆', max: 1, build: C(20, 40), effect: l => `军医治疗量 +${(l - 1) * 6}%` },
-  house: { name: '民居', max: 4, build: C(0, 30), effect: l => `民户 +${HOUSE_HOUSEHOLDS[l - 1]}（税收的基础）` },
-  market: { name: '市集', max: 1, build: C(30, 60), effect: l => `按民户收税 ×${MARKET_MULT[l]}（无市集只收三成）` },
-  post: { name: '驿站', max: 1, build: C(40, 60, 40), effect: l => `派商队载粮去己方城池换钱（每季 ${l} 支）` },
-  smithy: { name: '铁匠铺', max: 1, build: C(40, 40, 60), effect: l => `打造兵器：出征时本命武器伤害 +${l * 4}%` },
-  drill: { name: '校场', max: 1, build: C(50, 60, 40), effect: l => `出征开局属性点 +${[1, 1, 2][l - 1]}` },
-  granary: { name: '粮仓', max: 1, build: C(20, 80), effect: l => `季度军粮开销 −${GRANARY_CUT[l - 1] * 100}%；旱灾损失减半` },
-  wall: { name: '城墙', max: 1, build: C(60, 100, 60), effect: l => `扩地 +${l * 2} 块；出征时主将生命 +${l * 3}%` },
-  tavern: { name: '酒肆', max: 1, build: C(30, 40, 50), effect: l => `季度好事件（名士、商队、祥瑞…）出现率 +${l * 35}%` },
+  hall: { name: '府衙', max: 1, build: C(0, 0), blurb: '一城之主，决定城池规模；其它建筑的等级不能高于府衙。', effect: l => `城池规模：${CITY_SIZE[l]}（${CITY_TITLE[l]}）；基础民户 ${HALL_HOUSEHOLDS[l]}${l < 3 ? `；可建 Lv${l} 建筑` : '；可建全部 Lv3 建筑'}` },
+  barracks: { name: '军营', max: 1, build: C(0, 0), blurb: '操练义军。', effect: l => `出征开局增援 ${l - 1} 人` },
+  farm: { name: '农田', max: 1, build: C(10, 40), blurb: '城外良田，四季产粮。', effect: l => `每季产粮 ${FARM_GRAIN[l - 1]}（秋收 ×1.5、冬 ×0.5）；战后粮草 +${(l - 1) * 8}%` },
+  clinic: { name: '医馆', max: 1, build: C(20, 40), blurb: '延请名医，救治伤兵。', effect: l => `军医治疗量 +${(l - 1) * 6}%` },
+  house: { name: '民居', max: 1, build: C(0, 30), blurb: '百姓安居，税收之本。', effect: l => `民户 +${HOUSE_HOUSEHOLDS[l - 1]}（税收的基础）` },
+  market: { name: '市集', max: 1, build: C(30, 60), blurb: '商贾云集，收税与买卖粮草。', effect: l => `按民户收税 ×${MARKET_MULT[l]}（无市集只收三成）；可买卖粮草` },
+  post: { name: '驿站', max: 1, build: C(40, 60, 40), minHall: 2, blurb: '驿马往来，商队通达诸城。', effect: l => `派商队载粮去己方城池换钱（每季 ${l} 支）` },
+  smithy: { name: '铁匠铺', max: 1, build: C(40, 40, 60), minHall: 2, blurb: '百炼精钢，打造兵刃。', effect: l => `打造兵器：出征时本命武器伤害 +${l * 4}%` },
+  drill: { name: '校场', max: 1, build: C(50, 60, 40), minHall: 2, blurb: '演武操练，将士精进。', effect: l => `出征开局属性点 +${[1, 1, 2][l - 1]}` },
+  granary: { name: '粮仓', max: 1, build: C(20, 80), blurb: '广积粮，备荒年。', effect: l => `季度军粮开销 −${GRANARY_CUT[l - 1] * 100}%；旱灾损失减半` },
+  wall: { name: '城墙', max: 1, build: C(60, 100, 60), blurb: '高墙深池，扩城的前提。', effect: l => `府衙升级的前提；出征时主将生命 +${l * 3}%` },
+  tavern: { name: '酒肆', max: 1, build: C(30, 40, 50), minHall: 2, blurb: '四方豪杰汇聚之所。', effect: l => `季度好事件（名士、商队、祥瑞…）出现率 +${l * 35}%` },
 };
-export const FARM_GRAIN = [20, 35, 55], HOUSE_HOUSEHOLDS = [20, 35, 55], GRANARY_CUT = [.15, .3, .45];
+/** 每种建筑一座：农田 / 民居的产出按等级放大（旧版最多 3 块农田、4 片民居）。 */
+export const FARM_GRAIN = [30, 65, 110], HOUSE_HOUSEHOLDS = [30, 75, 140], GRANARY_CUT = [.15, .3, .45];
 export const MARKET_MULT = [.3, 1, 1.3, 1.6];
+/** 府衙升级：花费与前提建筑（英雄无敌式建造树）。 */
+export const HALL_UPGRADE: Record<number, { cost: Cost; needs: Partial<Record<TownBuildingId, number>> }> = {
+  1: { cost: C(80, 160, 120), needs: { wall: 1, house: 1, market: 1 } },
+  2: { cost: C(220, 360, 360), needs: { wall: 2, house: 2, market: 2, granary: 1 } },
+};
 
 /** 军营 / 农田 / 医馆沿用旧版升级价；其它建筑按建造价 ×2.2（Lv2）/ ×4.5（Lv3），且至少要 20 / 60 钱。 */
 export function upgradeCostFor(id: TownBuildingId, level: number): Cost | null {
   if (level >= MAX_LEVEL) return null;
+  if (id === 'hall') return HALL_UPGRADE[level]?.cost ?? null;
   if (id === 'barracks' || id === 'farm' || id === 'clinic') return level === 1 ? C(35, 50) : C(90, 140);
   const b = TOWN_BUILDINGS[id].build, k = level === 1 ? 2.2 : 4.5;
   return C(Math.round(b.merits * k), Math.round(b.provisions * k), Math.max(level === 1 ? 20 : 60, Math.round(b.money * k)));
 }
-/** 拆除返还：已投入总价的一半（向下取整）。 */
-export function demolishRefund(p: PlotBuilding): Cost {
-  const total = C(0, 0); const add = (c: Cost | null) => { if (c) { total.merits += c.merits; total.provisions += c.provisions; total.money += c.money; } };
-  add(TOWN_BUILDINGS[p.id].build); for (let l = 1; l < p.level; l++) add(upgradeCostFor(p.id, l));
-  return C(Math.floor(total.merits / 2), Math.floor(total.provisions / 2), Math.floor(total.money / 2));
+/** 下一步（建造或升级）的花费；已满级为 null。 */
+export function nextCost(t: TownState, id: TownBuildingId): Cost | null { const l = levelOf(t, id); return l <= 0 ? TOWN_BUILDINGS[id].build : upgradeCostFor(id, l); }
+/** 下一步缺少的前提（城池规模、府衙前提建筑）；空数组 = 可以建造 / 升级（不含资源）。 */
+export function buildBlockers(t: TownState, id: TownBuildingId): string[] {
+  const l = levelOf(t, id), hall = levelOf(t, 'hall'), out: string[] = [];
+  if (l >= MAX_LEVEL) return ['已达最高等级'];
+  if (id === 'hall') { for (const [b, need] of Object.entries(HALL_UPGRADE[l]?.needs ?? {}) as Array<[TownBuildingId, number]>) if (levelOf(t, b) < need) out.push(`${TOWN_BUILDINGS[b].name} Lv${need}`); return out; }
+  const minHall = TOWN_BUILDINGS[id].minHall ?? 1;
+  if (l === 0 && hall < minHall) out.push(`城池规模达到${CITY_SIZE[minHall]}（府衙 Lv${minHall}）`);
+  else if (l + 1 > hall) out.push(`城池规模达到${CITY_SIZE[l + 1]}（府衙 Lv${l + 1}）`);
+  return out;
 }
+/** 城池规模（府衙等级 1–3）。 */
+export function citySize(t: TownState): number { return Math.max(1, Math.min(3, levelOf(t, 'hall'))); }
 
 /** 城池发展方向：各档城每次结算的产出。均衡 = 旧版固定收益。 */
 export const FOCUS_NAME: Record<CityFocus, string> = { balanced: '均衡', farm: '重农', trade: '重商', military: '重军' };
@@ -83,14 +108,32 @@ export const FOCUS_INCOME: Record<CityTier, Record<CityFocus, Cost>> = {
 /** 改发展方向的花费（钱）；从“均衡”首次选择免费。 */
 export const FOCUS_CHANGE_COST: Record<CityTier, number> = { small: 20, medium: 40, large: 80 };
 
-export function emptyTown(): TownState {
-  return { money: 0, year: START_YEAR, season: 0, tax: 'mid', plots: new Array(PLOT_COUNT).fill(null), focus: {}, report: null, mods: noMods(), boon: noBoon(), pendingEvent: null, caravans: [] };
+export function emptyLevels(): Record<TownBuildingId, number> {
+  return { hall: 1, barracks: 0, farm: 0, clinic: 0, house: 0, market: 0, post: 0, smithy: 0, drill: 0, granary: 0, wall: 0, tavern: 0 };
 }
-/** 旧存档迁移：原有军营 / 农田 / 医馆按原等级放在前三块地。 */
+export function emptyTown(): TownState {
+  return { money: 0, year: START_YEAR, season: 0, tax: 'mid', levels: emptyLevels(), focus: {}, report: null, mods: noMods(), boon: noBoon(), pendingEvent: null, caravans: [] };
+}
+/** 旧存档迁移：原有军营 / 农田 / 医馆保留原等级，小城起步。 */
 export function migrateTown(levels: { barracks: number; farm: number; clinic: number }): TownState {
   const t = emptyTown();
-  t.plots[0] = { id: 'barracks', level: levels.barracks }; t.plots[1] = { id: 'farm', level: levels.farm }; t.plots[2] = { id: 'clinic', level: levels.clinic };
+  t.levels.barracks = levels.barracks; t.levels.farm = levels.farm; t.levels.clinic = levels.clinic;
   return t;
+}
+/**
+ * 由旧版 12 块地小镇（plots）转换：每种建筑取最高等级，多座农田 / 民居每多一座再 +1 级（最高 3）；
+ * 府衙 = 1 + 城墙等级（有城墙的老玩家直接是中城 / 大城）。已有建筑等级可以高于府衙，只是不能再往上升。
+ */
+function levelsFromPlots(plots: unknown[]): Record<TownBuildingId, number> {
+  const lv = emptyLevels(), count: Partial<Record<TownBuildingId, number>> = {};
+  for (const p of plots.slice(0, 12)) {
+    const b = p as { id?: string; level?: number } | null;
+    if (!b || !IDS.includes(b.id as TownBuildingId) || b.id === 'hall') continue;
+    const id = b.id as TownBuildingId; count[id] = (count[id] ?? 0) + 1; lv[id] = Math.max(lv[id], int(b.level, MAX_LEVEL, 1));
+  }
+  for (const id of IDS) if ((count[id] ?? 0) > 1) lv[id] = Math.min(MAX_LEVEL, lv[id] + (count[id]! - 1));
+  lv.hall = Math.min(MAX_LEVEL, 1 + lv.wall);
+  return lv;
 }
 const IDS = Object.keys(TOWN_BUILDINGS) as TownBuildingId[];
 const int = (v: unknown, max: number, min = 0): number => typeof v === 'number' && Number.isFinite(v) ? Math.max(min, Math.min(max, Math.floor(v))) : min;
@@ -100,12 +143,8 @@ export function parseTown(v: unknown, levels: { barracks: number; farm: number; 
   const o = v as Record<string, unknown>, t = emptyTown();
   t.money = int(o.money, 1_000_000); t.year = int(o.year, 400, START_YEAR); t.season = int(o.season, 3);
   t.tax = o.tax === 'low' || o.tax === 'high' ? o.tax : 'mid';
-  const counts: Partial<Record<TownBuildingId, number>> = {};
-  if (Array.isArray(o.plots)) o.plots.slice(0, PLOT_COUNT).forEach((p, i) => {
-    const b = p as PlotBuilding | null;
-    if (!b || !IDS.includes(b.id) || (counts[b.id] ?? 0) >= TOWN_BUILDINGS[b.id].max) return;
-    counts[b.id] = (counts[b.id] ?? 0) + 1; t.plots[i] = { id: b.id, level: int(b.level, MAX_LEVEL, 1) };
-  });
+  if (o.levels && typeof o.levels === 'object') { const l = o.levels as Record<string, unknown>; for (const id of IDS) t.levels[id] = int(l[id], MAX_LEVEL, id === 'hall' ? 1 : 0); }
+  else if (Array.isArray(o.plots)) t.levels = levelsFromPlots(o.plots);
   if (o.focus && typeof o.focus === 'object') for (const [k, f] of Object.entries(o.focus as Record<string, unknown>).slice(0, 64)) if (k.length <= 32 && (f === 'farm' || f === 'trade' || f === 'military' || f === 'balanced')) t.focus[k] = f;
   const r = o.report as SeasonReport | null;
   t.report = r && typeof r === 'object' && typeof r.grain === 'number' ? r : null;
@@ -115,16 +154,13 @@ export function parseTown(v: unknown, levels: { barracks: number; farm: number; 
   t.boon = { attributePoints: int(bo.attributePoints, 5), damage: num(bo.damage, -.3, .5, 0), maxHp: num(bo.maxHp, -.3, .5, 0) };
   t.pendingEvent = typeof o.pendingEvent === 'string' && eventById(o.pendingEvent) ? o.pendingEvent : null;
   t.caravans = Array.isArray(o.caravans) ? (o.caravans as Caravan[]).filter(c => c && typeof c.to === 'string' && c.to.length <= 32).slice(0, 3).map(c => ({ to: c.to, cargo: int(c.cargo, 1000), value: int(c.value, 10000) })) : [];
-  if (!t.plots.some(p => p?.id === 'barracks')) { const free = t.plots.findIndex(p => !p); if (free >= 0) t.plots[free] = { id: 'barracks', level: 1 }; }
+  if (!t.levels.barracks) t.levels.barracks = 1;
   return t;
 }
 
-export function countOf(t: TownState, id: TownBuildingId): number { return t.plots.filter(p => p?.id === id).length; }
-/** 某种建筑的最高等级（没有为 0）。 */
-export function levelOf(t: TownState, id: TownBuildingId): number { return Math.max(0, ...t.plots.map(p => p?.id === id ? p.level : 0)); }
-/** 已开放地块数：基础 6 块，城墙每级 +2。 */
-export function unlockedPlots(t: TownState): number { return Math.min(PLOT_COUNT, BASE_PLOTS + levelOf(t, 'wall') * 2); }
-export function households(t: TownState): number { return BASE_HOUSEHOLDS + t.plots.reduce((n, p) => n + (p?.id === 'house' ? HOUSE_HOUSEHOLDS[p.level - 1] : 0), 0); }
+/** 某种建筑的等级（没有为 0）。 */
+export function levelOf(t: TownState, id: TownBuildingId): number { return t.levels?.[id] ?? 0; }
+export function households(t: TownState): number { const h = levelOf(t, 'house'); return HALL_HOUSEHOLDS[citySize(t)] + (h ? HOUSE_HOUSEHOLDS[h - 1] : 0); }
 /** 旧版建筑等级（战斗加成仍按它计算）：没有该建筑时视为 1 级（无加成）。 */
 export function legacyLevels(t: TownState): { barracks: number; farm: number; clinic: number } {
   return { barracks: Math.max(1, levelOf(t, 'barracks')), farm: Math.max(1, levelOf(t, 'farm')), clinic: Math.max(1, levelOf(t, 'clinic')) };
@@ -139,7 +175,7 @@ export function costText(c: Cost): string { return [c.merits ? `军功 ${c.merit
  */
 export function settleSeason(t: TownState, input: { troops: number; cities: Array<{ tier: CityTier; focus: CityFocus }>; provisionsHave: number; provisionsMultiplier?: number; rng?: () => number }): SeasonReport {
   const s = t.season, rng = input.rng ?? Math.random, mods = t.mods ?? noMods();
-  const grain = Math.round(t.plots.reduce((n, p) => n + (p?.id === 'farm' ? FARM_GRAIN[p.level - 1] : 0), 0) * SEASON_GRAIN[s] * mods.grainMul);
+  const farm = levelOf(t, 'farm'), grain = Math.round((farm ? FARM_GRAIN[farm - 1] : 0) * SEASON_GRAIN[s] * mods.grainMul);
   const hh = households(t), market = levelOf(t, 'market');
   const tax = Math.round(hh * TAX_PER_HOUSEHOLD[t.tax] * MARKET_MULT[market] * mods.taxMul);
   // 在途商队回城（坏事件风险越高越易被劫）

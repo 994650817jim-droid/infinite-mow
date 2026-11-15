@@ -1294,6 +1294,7 @@ export class GameScene extends Phaser.Scene {
       spawnFlagSwingFx: (...args) => scene.spawnFlagSwingFx(...args),
       spawnFlameGatherFx: (...args) => scene.spawnFlameGatherFx(...args),
       spawnFlameFx: (...args) => scene.spawnFlameFx(...args),
+      rallyAllies: (fraction: number) => { for (const u of scene.allies) if (u.active) u.hp = Math.min(u.maxHp, u.hp + u.maxHp * fraction); },
       martialField: (...args) => scene.martialFields.add(...args),
     };
   }

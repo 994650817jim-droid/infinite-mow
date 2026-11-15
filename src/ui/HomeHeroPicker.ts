@@ -1,24 +1,36 @@
 import Phaser from 'phaser';
-import {FONT,HEADING_FONT,GAME_WIDTH as W,GAME_HEIGHT as H,IS_DESKTOP as D} from '../config';
+import {HEADING_FONT,GAME_WIDTH as W,GAME_HEIGHT as H,IS_DESKTOP as D} from '../config';
 import {HeroWarCard} from './HeroWarCard';
 import {CHARACTERS} from '../data/characters';
 import {homeCommand} from './HomeCommand';
+/** 每页 4 名武将（电脑一行 4 张、手机 2×2），武将多于 4 名时用 ‹ › 翻页。 */
+const PER=4;
 export class HomeHeroPicker{
- readonly root:Phaser.GameObjects.Container;private candidate=0;private cards:HeroWarCard[]=[];
+ readonly root:Phaser.GameObjects.Container;private candidate=0;private page=0;private cards:HeroWarCard[]=[];private pageText?:Phaser.GameObjects.Text;
  get preview():Phaser.GameObjects.Image{return this.cards[this.candidate].art;}
+ private get pages(){return Math.ceil(CHARACTERS.length/PER);}
  constructor(private s:Phaser.Scene,private confirm:(index:number)=>void,private close:()=>void){
  this.root=s.add.container(0,0).setDepth(300).setVisible(false).setName('hero-picker');this.root.add(s.add.rectangle(W/2,H/2,W,H,0x17130e,1).setInteractive());
  const text=(x:number,y:number,value:string,size:number)=>s.add.text(x,y,value,{fontFamily:HEADING_FONT,fontSize:size+'px',color:'#e6c88e',resolution:2}).setOrigin(.5);
  const pad=D?0:Math.max(0,Math.round((H-960)/2));
  this.root.add(text(W/2,D?40:57+pad,'点将 · 义军将录',D?30:29));this.root.add(text(W/2,D?77:99+pad,'择一良将，匡扶汉室',13));
- const n=CHARACTERS.length,sp=Math.min(214,(W-40)/n),mc=n>4?3:2,mw=n>4?Math.floor((W-40)/3)-10:216;
- CHARACTERS.forEach((c,i)=>{const w=D?sp-16:mw,h=330,x=D?W/2-(n*sp-16)/2+i*sp:(n>4?20+i%mc*(mw+10):46+i%2*232),y=D?109+Math.abs(i-(n-1)/2)*8:137+pad+Math.floor(i/mc)*352;
- const card=new HeroWarCard(s,x,y,w,h);card.hit.setName('pick-'+c.id).on('pointerdown',()=>{this.candidate=i;this.refreshArt();});card.root.setName('pick-'+c.id).on('pointerdown',()=>{this.candidate=i;this.refreshArt();});this.root.add(card.root);this.cards.push(card);
-
+ CHARACTERS.forEach((c,i)=>{const k=i%PER,w=D?198:216,h=330,x=D?W/2+(k-2)*214+8:46+k%2*232,y=D?109+Math.abs(k-1.5)*8:137+pad+Math.floor(k/2)*352;
+  const card=new HeroWarCard(s,x,y,w,h);card.hit.setName('pick-'+c.id).on('pointerdown',()=>{this.candidate=i;this.refreshArt();});card.root.setName('pick-'+c.id).on('pointerdown',()=>{this.candidate=i;this.refreshArt();});this.root.add(card.root);this.cards.push(card);
  });
+ if(this.pages>1){
+  // 翻页：电脑放在卡片两侧，手机放在标题两侧
+  const py=D?109+165:99+pad,lx=D?26:58,rx=D?W-26:W-58;
+  const arrow=(x:number,label:string,name:string,dir:number)=>{const t=s.add.text(x,py,label,{fontFamily:HEADING_FONT,fontSize:(D?44:34)+'px',color:'#e6c88e',resolution:2}).setOrigin(.5).setName(name).setInteractive({useHandCursor:true});t.on('pointerdown',()=>this.turn(dir));this.root.add(t);};
+  arrow(lx,'‹','hero-page-prev',-1);arrow(rx,'›','hero-page-next',1);
+  this.pageText=text(W/2,D?H-86:H-142,'',13);this.root.add(this.pageText);
+ }
  const back=homeCommand(s,D?W/2-140:128,D?H-43:H-82,D?160:160,60,'返回');back.hit.setName('hero-picker-close').on('pointerdown',()=>this.close());this.root.add([back.g,back.hit,back.caption]);
  const ok=homeCommand(s,D?W/2+105:356,D?H-43:H-82,D?260:248,64,'确认出战',true);ok.hit.setName('hero-confirm').setData('padDefault',true).on('pointerdown',()=>this.confirm(this.candidate));this.root.add([ok.g,ok.hit,ok.caption]);
  }
- open(index:number):void{this.candidate=index;this.root.setVisible(true);this.refreshArt();}
- refreshArt(_animate=false):void{this.cards.forEach((c,i)=>{c.setHero(i);c.setSelected(i===this.candidate);});}
+ private turn(dir:number){this.page=(this.page+dir+this.pages)%this.pages;this.refreshArt();}
+ open(index:number):void{this.candidate=index;this.page=Math.floor(index/PER);this.root.setVisible(true);this.refreshArt();}
+ refreshArt(_animate=false):void{
+  this.cards.forEach((c,i)=>{const on=Math.floor(i/PER)===this.page;c.root.setVisible(on);c.hit.setVisible(on);if(c.hit.input)c.hit.input.enabled=on;if(on){c.setHero(i);c.setSelected(i===this.candidate);}});
+  this.pageText?.setText(`第 ${this.page+1} / ${this.pages} 页 · 共 ${CHARACTERS.length} 将`);
+ }
 }

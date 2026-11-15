@@ -1,7 +1,7 @@
 import type { ChapterId } from './chapters';
 import type { WeaponId } from '../types';
 
-export type CharacterId = 'zhaoyun' | 'guanyu' | 'huangzhong' | 'zhuge' | 'zhangfei';
+export type CharacterId = 'zhaoyun' | 'guanyu' | 'huangzhong' | 'zhuge' | 'zhangfei' | 'machao' | 'weiyan' | 'liubei';
 
 export interface CharacterDef {
   id: CharacterId;
@@ -82,6 +82,36 @@ export const CHARACTERS: CharacterDef[] = [
     damageMul: 1.2,
     portrait: 'zhangfei_portrait',
     startWeapon: 'spear_orbit',
+  },
+  {
+    id: 'machao',
+    name: '马超',
+    desc: '突骑 · 移速快，满势冲锋破阵',
+    hpMul: 1,
+    speedMul: 1.1,
+    damageMul: 1.1,
+    portrait: 'machao_portrait',
+    startWeapon: 'spear_orbit',
+  },
+  {
+    id: 'weiyan',
+    name: '魏延',
+    desc: '悍将 · 生命高，血战越战越勇',
+    hpMul: 1.2,
+    speedMul: 0.97,
+    damageMul: 1.12,
+    portrait: 'weiyan_portrait',
+    startWeapon: 'guandao',
+  },
+  {
+    id: 'liubei',
+    name: '刘备',
+    desc: '仁君 · 部曲坚韧，仁德聚义',
+    hpMul: 1.05,
+    speedMul: 1,
+    damageMul: 1,
+    portrait: 'liubei_portrait',
+    startWeapon: 'guandao',
   },
 ];
 

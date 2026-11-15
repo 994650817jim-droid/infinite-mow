@@ -34,6 +34,8 @@ export interface WeaponHost {
   spawnFlameGatherFx(x: number, y: number, radius: number): void;
   martialField(x:number,y:number,r:number,damage:number,duration:number,level:number,formation?:boolean):void;
   spawnFlameFx(x: number, y: number, radius: number): void;
+  /** 为身边部曲回复最大生命的比例（刘备仁德）。 */
+  rallyAllies?(fraction: number): void;
 }
 
 export const GUANDAO_TABLE = [
@@ -203,6 +205,20 @@ export const WEAPON_BEHAVIORS: Record<WeaponId, (host: WeaponHost, weapon: Weapo
     const passiveCast = host.player.passive.beginCast('spear_orbit');
     // 招牌技动作：七进七出（龙胆蓄满的强化一击）
     if (passiveCast.empowered) host.player.playAction('skill', aimX < 0 ? 'left' : 'right');
+    // 马超满铁骑：铁骑冲锋——朝目标突进，沿途敌人受重创（借用受击位移平滑移动主将）
+    if (passiveCast.dash) {
+      const R = PASSIVE_RULES, now = host.combatNow, d = Math.hypot(aimX, aimY) || 1, ux = aimX / d, uy = aimY / d, px = host.player.x, py = host.player.y;
+      for (const e of host.grid.query(px + ux * R.dashLength / 2, py + uy * R.dashLength / 2, R.dashLength / 2 + R.dashWidth)) {
+        if (!e.active || e.isSupplySlot) continue;
+        const dx = e.x - px, dy = e.y - py, along = dx * ux + dy * uy, side = Math.abs(-dx * uy + dy * ux);
+        if (along < -e.radius || along > R.dashLength + e.radius || side > R.dashWidth / 2 + e.radius) continue;
+        if (host.hitEnemy(e, damage * R.dashDamageMul, now, 'melee')) host.player.passive.recordHit(passiveCast, e, now);
+      }
+      host.player.knockUp(now, R.dashMs, ux * R.dashLength, uy * R.dashLength);
+      const trail = host.add.image(px + ux * R.dashLength / 2, py - 6 + uy * R.dashLength / 2, 'spear_thrust', 'tight').setRotation(Math.atan2(uy, ux)).setDisplaySize(R.dashLength + 40, 34).setTint(0xbfe0ff).setAlpha(.85).setDepth(41);
+      trail.scene.tweens.add({ targets: trail, alpha: 0, scaleY: trail.scaleY * 1.8, duration: 320, onComplete: () => trail.destroy() });
+      host.sfx.play('allySpear');
+    }
     // 张飞满怒：燕人咆哮——震慑并重创周围敌人（首领不受控，只吃伤害）
     if (passiveCast.roar) {
       const R = PASSIVE_RULES, px = host.player.x, py = host.player.y, now = host.combatNow;
@@ -353,6 +369,9 @@ export const WEAPON_BEHAVIORS: Record<WeaponId, (host: WeaponHost, weapon: Weapo
     const heavy=charge>0&&growth.slashCount>=4;
     if(charge)growth.slashCount=heavy?0:growth.slashCount+1;
     const castDamage = damage * passiveCast.damageMul * (heavy?[1.4,1.65,1.9][charge-1]:1);
+    // 魏延 / 刘备满层：回复（刘备连同部曲）
+    if (passiveCast.heal) host.player.heal(host.player.maxHp * passiveCast.heal);
+    if (passiveCast.rally) host.rallyAllies?.(passiveCast.rally);
     const strike = (enemy: Enemy, amount: number, at: number): void => {
       if (host.hitEnemy(enemy, amount, at, 'melee')) host.player.passive.recordHit(passiveCast, enemy, at);
     };

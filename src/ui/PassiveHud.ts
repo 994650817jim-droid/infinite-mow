@@ -4,7 +4,10 @@ import { CHARACTER_PASSIVES } from '../data/passives';
 import type { CharacterPassives } from '../systems/CharacterPassives';
 
 /** 被动技能完整说明（悬停 / 点按弹出）。数值见 data/passives.ts 的 PASSIVE_RULES。 */
-export const PASSIVE_DETAILS: Record<'zhaoyun' | 'guanyu' | 'huangzhong' | 'zhuge' | 'zhangfei', string> = {
+export const PASSIVE_DETAILS: Record<'zhaoyun' | 'guanyu' | 'huangzhong' | 'zhuge' | 'zhangfei' | 'liubei' | 'weiyan' | 'machao', string> = {
+  machao: '金枪每命中敌人积累 1 层铁骑（每 0.3 秒最多 1 层）。\n满 6 层后，下一次出枪化为冲锋：向目标突进约 150 像素，沿途敌人受到 160% 伤害，随后清空。',
+  weiyan: '一次劈砍命中至少 3 名敌人积 1 层战意。\n满 4 层后，下一次劈砍伤害 +40%，并回复 5% 最大生命，随后清空。',
+  liubei: '一次挥剑命中至少 3 名敌人积 1 层仁德。\n满 4 层后，下一次挥剑伤害 +15%，自身回复 8% 最大生命，并为身边全部部曲回复 35% 生命，随后清空。',
   zhangfei: '蛇矛每命中敌人积累 1 层怒气（每 0.35 秒最多 1 层）。\n满 5 层后，下一次出枪附带「燕人咆哮」：周围敌人受到 140% 伤害并被震慑 1.2 秒（首领只受伤害），随后清空。',
   zhaoyun: '本命龙枪每命中敌人积累 1 层龙胆（每 0.15 秒最多 1 层）。\n满 7 层后，下一次出枪多 1 枪、枪长 +25%，随后清空重新积累。',
   guanyu: '一次斩击命中至少 3 名敌人积 1 层武势，每层斩击范围 +6%。\n满 3 层后，下一次斩击伤害 +25%、范围 +18%，随后清空。',
@@ -66,11 +69,11 @@ export class PassiveHud {
     if (!visible) { this.renderTip(now, false); return; }
     const s = passive.snapshot(now);
     this.character = s.character; this.ready = s.ready;
-    const colors = { zhaoyun: 0x70cbdc, guanyu: 0x88c88b, huangzhong: 0xe8c16a, zhuge: 0xe49a6d, zhangfei: 0xd8645a };
+    const colors = { zhaoyun: 0x70cbdc, guanyu: 0x88c88b, huangzhong: 0xe8c16a, zhuge: 0xe49a6d, zhangfei: 0xd8645a, liubei: 0xe0c37a, weiyan: 0xc8885a, machao: 0x9fc6e8 };
     const tint = s.ready ? 0xf5d780 : colors[s.character];
     const g = this.graphics.clear();
     g.fillStyle(tint, 1).fillRect(0, 10, 3, 22);
-    this.emblem.setText({ zhaoyun: '龙', guanyu: '势', huangzhong: '弓', zhuge: '策', zhangfei: '怒' }[s.character]);
+    this.emblem.setText({ zhaoyun: '龙', guanyu: '势', huangzhong: '弓', zhuge: '策', zhangfei: '怒', liubei: '仁', weiyan: '战', machao: '骑' }[s.character]);
     this.emblem.setColor(`#${tint.toString(16).padStart(6, '0')}`);
     this.title.setText(CHARACTER_PASSIVES[s.character].name);
     this.counter.setText(s.ready ? (s.character === 'huangzhong' ? '神射中' : '已就绪') : s.maxStacks ? `${s.stacks} / ${s.maxStacks}` : `${(s.calmProgress * 3).toFixed(1)}秒`);
@@ -88,6 +91,9 @@ export class PassiveHud {
       zhaoyun: s.ready ? '下次龙枪 +1枪 · 穿透距离 +25%' : '命中蓄龙胆 · 每0.15秒最多1层',
       guanyu: s.ready ? '下次斩击 伤害+25% · 范围+18%' : `斩中3敌蓄势 · 当前范围 +${s.stacks * 6}%`,
       huangzhong: s.ready ? '暴击率 +10% · 连弩 +1箭' : '3秒不受伤进入神射 · 受伤重置',
+      machao: s.ready ? '下次出枪 铁骑冲锋 · 沿途 160%' : '命中积铁骑 · 每0.3秒最多1层',
+      weiyan: s.ready ? '下次劈砍 伤害+40% · 回复5%生命' : '斩中3敌积战意',
+      liubei: s.ready ? '下次挥剑 回复自身8% · 部曲35%' : '剑中3敌积仁德',
       zhangfei: s.ready ? '下次出枪 燕人咆哮 · 震慑周围' : '命中积怒气 · 每0.35秒最多1层',
       zhuge: s.ready ? '下次战旗 范围+25% · 附加灼烧' : `爆炸命中3敌积谋${s.burns ? ` · 灼烧中 ${s.burns}` : ''}`,
     };

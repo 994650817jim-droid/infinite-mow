@@ -41,17 +41,38 @@ function commandTexture(scene:Phaser.Scene,width:number,height:number,primary:bo
  scene.textures.addCanvas(key,canvas);return key;
 }
 
+/** 水墨按钮美术（public/assets/ui-buttons，BootScene 加载；tools/prepare-button-art.mjs 切图）。
+ * 每张贴图 1061×204，墨身约占中间 68% 高、中心比画布中心高约 6%；左右各 18% 为笔锋，拉伸时不变形。 */
+const INK={capRatio:.18,bodyRatio:.68,bodyOffset:-.06,overhang:1.1};
+function buttonArt(scene:Phaser.Scene,primary:boolean,state:CommandState):{key:string;w:number;h:number;cap:number}|null{
+ const key=state==='disabled'?'btn_ink_disabled':`btn_ink_${primary?'primary':'secondary'}_${state==='selected'?'hover':state}`;
+ if(!scene.textures.exists(key))return null;
+ const src=scene.textures.get(key).getSourceImage() as {width:number;height:number};
+ return{key,w:src.width,h:src.height,cap:Math.round(src.width*INK.capRatio)};
+}
+/** 把墨身对齐到按钮矩形：高按墨身比例放大，笔锋略超出两端；窄按钮横向压缩笔锋。 */
+function fitArt(g:Phaser.GameObjects.NineSlice,a:{w:number;h:number;cap:number},width:number,height:number,y:number,pressed:boolean):void{
+ const dispH=height/INK.bodyRatio,k=a.h/dispH,dispW=width*INK.overhang,nsW=Math.max(dispW*k,a.cap*2+4);
+ g.setSlices(nsW,a.h,a.cap,a.cap,0,0);g.setScale(dispW/nsW,1/k).setY(y-INK.bodyOffset*dispH+(pressed?1:0));
+}
+
 /** 首页/军营通用命令按钮。返回 g（底板图像）、hit、caption、paint(state) 与旧接口一致。 */
 export function homeCommand(scene:Phaser.Scene,x:number,y:number,width:number,height:number,label:string,primary=false,enabled=true,fontSize?:number){
- const g=scene.add.image(x,y,commandTexture(scene,width,height,primary,enabled?'normal':'disabled')).setDisplaySize(width+PAD*2,height+PAD*2);
+ // 有青铜按钮美术时用三段拉伸（两端花纹不变形）；缺图时退回程序画底板
+ const art=buttonArt(scene,primary,enabled?'normal':'disabled');
+ let g:Phaser.GameObjects.Image|Phaser.GameObjects.NineSlice;
+ if(art){g=scene.add.nineslice(x,y,art.key,undefined,art.w,art.h,art.cap,art.cap,0,0);fitArt(g,art,width,height,y,false);}
+ else g=scene.add.image(x,y,commandTexture(scene,width,height,primary,enabled?'normal':'disabled')).setDisplaySize(width+PAD*2,height+PAD*2);
  const hit=scene.add.rectangle(x,y,width,height,0,0.001);if(enabled)hit.setInteractive({useHandCursor:true});
  const size=fontSize??(primary?Math.min(24,Math.round(height*.4)):Math.min(18,Math.round(height*.34)));
- const caption=scene.add.text(x,y,label,{fontFamily:HEADING_FONT,fontSize:size+'px',fontStyle:'bold',color:!enabled?'#8e8576':primary?'#f8e6bf':'#e8d3a6',resolution:2}).setOrigin(.5).setLetterSpacing(primary?6:label.length>4?1:3).setShadow(0,1,'#120a05',3,true,true);
+ const caption=scene.add.text(x,y,label,{fontFamily:HEADING_FONT,fontSize:size+'px',fontStyle:'bold',color:!enabled?(art?'#3a332a':'#8e8576'):primary?'#f8e6bf':'#e8d3a6',resolution:2}).setOrigin(.5).setLetterSpacing(primary?6:label.length>4?1:3).setShadow(0,1,'#120a05',3,true,true);
  let current:CommandState='normal';
  const paint=(state:string='normal')=>{
   if(!enabled)return;
   const s:CommandState=state==='hover'||state==='pressed'||state==='selected'?state:'normal';current=s;
-  g.setTexture(commandTexture(scene,width,height,primary,s)).setDisplaySize(width+PAD*2,height+PAD*2).setY(y+(s==='pressed'?1:0));
+  const a=buttonArt(scene,primary,s);
+  if(a&&g instanceof Phaser.GameObjects.NineSlice){g.setTexture(a.key);fitArt(g,a,width,height,y,s==='pressed');}
+  else if(g instanceof Phaser.GameObjects.Image)g.setTexture(commandTexture(scene,width,height,primary,s)).setDisplaySize(width+PAD*2,height+PAD*2).setY(y+(s==='pressed'?1:0));
   caption.setY(y+(s==='pressed'?1:0)).setColor(s==='hover'||s==='selected'?'#fff3d4':primary?'#f8e6bf':'#e8d3a6');
  };
  paint();

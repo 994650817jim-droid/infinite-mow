@@ -22,11 +22,12 @@ import {dongzhuoStageUnlocked,yellowStageUnlocked} from '../world/WorldStore';
 import {abandonExpedition,beginExpedition,settleExpedition,permanentEffects,worldUnlocked,worldChapterCleared,takeExpeditionReserve} from '../world/WorldStore';
 import Phaser from 'phaser';
 import { PAD, PAD_LABEL, gamepad, keyHint } from '../platform/gamepad';
+import { bossProfile } from '../data/bossMusic';
 import { ArtEffects } from '../systems/ArtEffects';
 import { BattlefieldDetails } from '../systems/BattlefieldDetails';
 import { WAR, warText, ensureWarTextures } from '../ui/WarStyle';
 import { chapterUnlocked, isChapterTestRun, recordChapterVictory } from '../systems/ChapterProgress';
-import { BALANCE, COLORS, DEPTH, FONT, GAME_HEIGHT, GAME_WIDTH, HEADING_FONT, IS_DESKTOP, actorDepth, screenPoint } from '../config';
+import { BALANCE, COLORS, DEPTH, FONT, GAME_HEIGHT, GAME_WIDTH, HEADING_FONT, IS_DESKTOP, TITLE_FONT, actorDepth, screenPoint } from '../config';
 import { upgradeCardTexture } from '../ui/HomeCommand';
 import type { EnemyDef } from '../data/enemies';
 import { RELICS, SCHOOL_NAMES, type RelicSchool } from '../data/relics';
@@ -237,6 +238,9 @@ export class GameScene extends Phaser.Scene {
   protected reinforcements!: Reinforcements;
   protected freeRecruit = false;
   protected resting = false;
+  /** 本关已播放过“入营”水墨过场（每关一次；场景重开即重置）。 */
+  private restIntroPlayed = false;
+  private restIntroSkip?: () => void;
   protected campUI?:CampRestUI;
   protected readonly recruitedWaves = new Set<number>();
   private readonly legionBulletScratch: Ally[] = [];
@@ -433,7 +437,7 @@ export class GameScene extends Phaser.Scene {
     this.relicWaves=[];
     this.firstBossAt=-1;this.settledFrontlineKills=0;this.frontlineNextSettlement=1;this.frontlineVictories.clear();this.frontlineStarts.clear();this.chasingBosses=[];this.deadBossControllers=[];this.lootContinue=null;this.relicHits=0;this.relicFireAt=0;this.relicHealAt=0;
     this.rerolls=0;this.warfeedCount=0;this.pointsButton=undefined;this.pointsBadge=undefined;this.potionButton=undefined;this.potionBadge=undefined;this.potionIcon=undefined;this.potionGlow=undefined;this.rerollButton=undefined;
-    this.crowdSteering = true; this.freeRecruit = false; this.resting = false; this.recruitedWaves.clear();
+    this.crowdSteering = true; this.freeRecruit = false; this.resting = false; this.restIntroPlayed = false; this.restIntroSkip = undefined; this.recruitedWaves.clear();
     this.pendingGrowthNotices.length = 0;
     this.separationScratch.length = 0;
     this.allyScratch.length = 0;
@@ -809,6 +813,33 @@ export class GameScene extends Phaser.Scene {
     }
     this.sfx.boss();
     this.cameras.main.flash(320, 120, 40, 30, false);
+    // 首领出场：专属锣鼓出场段 + 主题曲（data/bossMusic.ts），并显示名号标题（不暂停战斗）
+    const profile = bossProfile(this.chapter.bossName);
+    this.music.setBoss(profile);
+    this.announceBoss(profile.title, this.chapter.bossName);
+  }
+
+  /** 首领名号标题：一道浓墨横贯画面上部，墨上名号小字 + 名字大字，约 2.6 秒淡出；不拦截点击、不暂停。 */
+  protected announceBoss(title: string, name: string): void {
+    this.children.getByName('boss-announce')?.destroy();
+    const W = GAME_WIDTH, D = IS_DESKTOP, y = GAME_HEIGHT * (D ? .3 : .27);
+    const root = this.add.container(0, 0).setScrollFactor(0).setDepth(DEPTH.overlay - 8).setName('boss-announce').setVisible(this.mode === 'none');
+    const ink = this.textures.exists('btn_ink_secondary_normal') ? this.add.image(W / 2, y, 'btn_ink_secondary_normal').setDisplaySize(Math.min(W * 1.15, 900), D ? 150 : 140).setTint(0x2a2420) : this.add.rectangle(W / 2, y, W, 110, 0x120d0a, .85);
+    const t1 = this.add.text(W / 2, y - (D ? 26 : 24), title, { fontFamily: HEADING_FONT, fontSize: '17px', color: '#d9b26a', resolution: 2 }).setOrigin(.5).setLetterSpacing(8);
+    const t2 = this.add.text(W / 2, y + (D ? 12 : 12), name, { fontFamily: TITLE_FONT, fontSize: (D ? 50 : 46) + 'px', color: '#e2412b', resolution: 2 }).setOrigin(.5).setLetterSpacing(14).setShadow(0, 2, '#000', 6, true, true);
+    root.add([ink, t1, t2]);
+    for (const o of root.list) (o as unknown as Phaser.GameObjects.Components.ScrollFactor).setScrollFactor(0);
+    root.setAlpha(0);
+    // 用真实时钟驱动（与战斗计时器解耦，暂停 / 升级弹窗期间也能正常淡出）
+    const start = performance.now();
+    const tick = (): void => {
+      const t = performance.now() - start, a = t < 250 ? t / 250 : t > 2300 ? Math.max(0, 1 - (t - 2300) / 400) : 1;
+      root.setAlpha(a).setVisible(this.mode === 'none');
+      t2.setScale(1.25 - .25 * Math.min(1, t / 300));
+      if (t >= 2700 || !root.active) { this.events.off(Phaser.Scenes.Events.POST_UPDATE, tick); root.destroy(); }
+    };
+    this.events.on(Phaser.Scenes.Events.POST_UPDATE, tick);
+    this.events.once('shutdown', () => this.events.off(Phaser.Scenes.Events.POST_UPDATE, tick));
   }
 
   protected updateEnemies(dt: number, time: number): void {
@@ -1689,6 +1720,7 @@ export class GameScene extends Phaser.Scene {
       exit?.setData('confirm',false).setText('返回选将').setColor('#b5c4b2');
     }
     if (this.resultPanel) this.resultPanel.setVisible(mode === 'result');
+    if (mode === 'rest' && !this.restIntroPlayed) { this.restIntroPlayed = true; this.playRestIntro(); }
   }
 
   protected openUpgrade(): void {
@@ -1855,7 +1887,7 @@ export class GameScene extends Phaser.Scene {
     this.tweens.add({ targets: text, y: text.y - 30, alpha: 0, duration: 900, onComplete: () => text.destroy() });
   }
 
-  protected showWaveBanner(text: string, danger = false): void {
+  protected showWaveBanner(text: string, danger = false, captionText?: string): void {
     this.sfx?.play(danger ? 'gong' : 'waveDrum');
     // Keep one notice at a time; no opaque panel over the battlefield.
     for (const notice of this.children.list.filter(o => o.name === 'combat-notice')) {
@@ -1864,7 +1896,7 @@ export class GameScene extends Phaser.Scene {
     const match = /^第 (\d+)\/(\d+) 波 · (.+)$/.exec(text);
     const label = this.add.container(GAME_WIDTH / 2, GAME_HEIGHT * .21)
       .setScrollFactor(0).setDepth(DEPTH.overlay - 10).setName('combat-notice').setVisible(this.mode === 'none');
-    const caption = this.add.text(0, -21, match ? `第 ${match[1]} / ${match[2]} 波` : '战场警报', {
+    const caption = this.add.text(0, -21, captionText ?? (match ? `第 ${match[1]} / ${match[2]} 波` : '战场警报'), {
       fontFamily: FONT, fontSize: IS_DESKTOP ? '13px' : '14px', color: danger ? '#efb39c' : '#e1cf9d',
       resolution: 2, stroke: '#241d12', strokeThickness: 3,
     }).setOrigin(.5).setScrollFactor(0);
@@ -1957,6 +1989,7 @@ export class GameScene extends Phaser.Scene {
   padCapture(): boolean { return this.mode === 'none' && !this.over; }
   /** ☰ 暂停 / 继续，Ⓧ 用药，Ⓨ 护阵 / 出击；暂停中 Ⓑ 继续战斗。 */
   padButton(button: number): boolean {
+    if (this.restIntroSkip && (button === PAD.A || button === PAD.B || button === PAD.START)) { this.restIntroSkip(); return true; }
     if (button === PAD.START && ((this.mode === 'none' && !this.over) || this.mode === 'pause')) { this.togglePause(); return true; }
     if (this.mode === 'none' && !this.over) {
       if (button === PAD.X) { this.usePotion(); return true; }
@@ -1981,6 +2014,70 @@ export class GameScene extends Phaser.Scene {
     this.hintText?.setText(pad ? '左摇杆移动 · 自动攻击' : IS_DESKTOP ? 'WASD / 方向键移动 · 自动攻击' : '自动攻击 · 拖动摇杆移动');
     this.legionUI?.setKeyHint(pad ? PAD_LABEL.Y : IS_DESKTOP ? 'E' : '⇄');
     for (const [i, v] of (this.cardViews ?? []).entries()) v.hint.setText(pad ? PAD_LABEL.A + ' 选择' : IS_DESKTOP ? '按 ' + (i + 1) + ' 选择' : '点击选择');
+  }
+
+  /**
+   * 打完一关进入行营的水墨过场（约 3 秒，可点击 / 任意键 / 手柄跳过）：
+   * 先停在战场看武将胜利动作并压暗四周 → 数道浓墨笔触从左向右扫过盖住战场 → 墨上朱砂大字「某某 · 平定」与“捷”字印 → 墨色淡去露出行营。
+   * 关卡结束后战斗计时器已暂停，所以用真实时钟（postupdate）驱动。
+   */
+  private playRestIntro(): void {
+    const W = GAME_WIDTH, H = GAME_HEIGHT, D = IS_DESKTOP;
+    const hidden: Phaser.GameObjects.GameObject[] = [];
+    const hide = (o?: Phaser.GameObjects.GameObject & { visible?: boolean; setVisible?: (v: boolean) => unknown } | null): void => { if (o && o.visible) { o.setVisible!(false); hidden.push(o); } };
+    hide(this.children.getByName('camp-rest') as never); hide(this.legionUI?.panel as never); hide(this.children.getByName('chapter1-volunteers') as never);
+    const root = this.add.container(0, 0).setScrollFactor(0).setDepth(DEPTH.overlay + 60).setName('rest-intro');
+    const blocker = this.add.rectangle(W / 2, H / 2, W, H, 0x000000, 0.001).setInteractive();
+    if (!this.textures.exists('rest_vignette')) { const c = document.createElement('canvas'); c.width = 512; c.height = 512; const g = c.getContext('2d')!, r = g.createRadialGradient(256, 256, 120, 256, 256, 362); r.addColorStop(0, 'rgba(11,7,5,0)'); r.addColorStop(.55, 'rgba(11,7,5,.35)'); r.addColorStop(1, 'rgba(11,7,5,.92)'); g.fillStyle = r; g.fillRect(0, 0, 512, 512); this.textures.addCanvas('rest_vignette', c); }
+    const vignette = this.add.image(W / 2, H / 2, 'rest_vignette').setDisplaySize(W, H).setAlpha(0);
+    const ink = this.textures.exists('btn_ink_secondary_normal') ? 'btn_ink_secondary_normal' : null;
+    const strokes: Phaser.GameObjects.Image[] = [];
+    const bands = D ? 4 : 6, bandH = H / bands * 1.75;
+    for (let i = 0; i < bands; i++) {
+      const y = H * (i + .5) / bands + (i % 2 ? 6 : -6);
+      const img = ink ? this.add.image(-W, y, ink).setDisplaySize(W * 1.9, bandH).setFlipY(i % 2 === 1) : this.add.image(-W, y, '__WHITE').setDisplaySize(W * 1.9, bandH).setTint(0x0d0a08);
+      img.setAlpha(.98).setTint(0x2a2622); strokes.push(img);
+    }
+    const fill = this.add.rectangle(W / 2, H / 2, W, H, 0x0d0b09, 0);
+    const stageName = String(this.chapter.name ?? '').replace(/^\d+-\d+\s*/, '') || '此役';
+    const title = this.add.text(W / 2, H / 2 - (D ? 8 : 20), stageName + ' · 平定', { fontFamily: TITLE_FONT, fontSize: (D ? 54 : 44) + 'px', color: '#c8321f', resolution: 2 }).setOrigin(.5).setLetterSpacing(8).setShadow(0, 2, '#000', 6, true, true).setAlpha(0);
+    const sub = this.add.text(W / 2, H / 2 + (D ? 48 : 40), '收兵回营 · 整军再战', { fontFamily: HEADING_FONT, fontSize: '18px', color: '#d9c7a4', resolution: 2 }).setOrigin(.5).setLetterSpacing(6).setAlpha(0);
+    const sealX = W / 2 + title.width / 2 + (D ? 44 : 34), sealY = title.y - 6;
+    const seal = this.add.container(sealX, sealY).setAlpha(0);
+    seal.add(this.add.rectangle(0, 0, 46, 46, 0xb8281c).setStrokeStyle(2, 0xe0573f));
+    seal.add(this.add.text(0, 1, '捷', { fontFamily: TITLE_FONT, fontSize: '30px', color: '#f6e4c8', resolution: 2 }).setOrigin(.5));
+    seal.setAngle(-6).setScale(1.6);
+    const skipHint = this.add.text(W - 20, H - 18, '点击跳过', { fontFamily: FONT, fontSize: '12px', color: '#8e8270', resolution: 2 }).setOrigin(1, 1).setAlpha(.0);
+    root.add([vignette, ...strokes, fill, title, sub, seal, skipHint, blocker]);
+    const start = performance.now(), T = { hold: 900, sweep: 650, show: 1100, fade: 600 };
+    const total = T.hold + T.sweep + T.show + T.fade;
+    let revealed = false, done = false;
+    const reveal = (): void => { if (revealed) return; revealed = true; for (const o of hidden) (o as unknown as { setVisible(v: boolean): void }).setVisible(true); };
+    const ease = (x: number): number => 1 - Math.pow(1 - Math.max(0, Math.min(1, x)), 3);
+    const finish = (): void => {
+      if (done) return; done = true; reveal();
+      this.events.off(Phaser.Scenes.Events.POST_UPDATE, tick); this.input.keyboard?.off('keydown', finish);
+      this.restIntroSkip = undefined; root.destroy();
+    };
+    const tick = (): void => {
+      const t = performance.now() - start;
+      vignette.setAlpha(ease(t / T.hold) * (1 - ease((t - T.hold - T.sweep - T.show) / T.fade)));
+      strokes.forEach((img, i) => { const p = ease((t - T.hold - i * 90) / T.sweep); img.x = -W + p * (W * 1.5); img.setAlpha(.98 * (1 - ease((t - T.hold - T.sweep - T.show) / T.fade))); });
+      fill.setFillStyle(0x0d0b09, .85 * ease((t - T.hold - T.sweep * .6) / 300) * (1 - ease((t - T.hold - T.sweep - T.show) / T.fade)));
+      const showP = (t - T.hold - T.sweep) / 350, fadeOut = 1 - ease((t - T.hold - T.sweep - T.show) / (T.fade * .7));
+      title.setAlpha(ease(showP) * fadeOut).setScale(1.12 - .12 * ease(showP));
+      sub.setAlpha(ease(showP - .4) * fadeOut);
+      const sp = ease((t - T.hold - T.sweep - 280) / 220); seal.setAlpha(sp * fadeOut).setScale(1.6 - .6 * sp);
+      skipHint.setAlpha(Math.min(.8, t / 400) * fadeOut);
+      if (t >= T.hold + T.sweep + T.show) reveal();
+      if (t >= total) finish();
+    };
+    this.events.on(Phaser.Scenes.Events.POST_UPDATE, tick);
+    blocker.on('pointerdown', finish);
+    this.input.keyboard?.once('keydown', finish);
+    this.restIntroSkip = finish;
+    this.events.once('shutdown', () => { this.events.off(Phaser.Scenes.Events.POST_UPDATE, tick); this.restIntroSkip = undefined; });
+    tick();
   }
 
   protected togglePause(): void {
@@ -2020,9 +2117,12 @@ export class GameScene extends Phaser.Scene {
     this.chasingBosses.push({enemy:boss,life:boss.spawnId,stage,name,battle:this.yellow,huaxiong:this.huaxiong,xurong:this.xurong,label});
     const next=(stage+1) as 2|3,west=this.chapter.id==='hulao';
     this.chapter=getBattleChapter(this.chapter.id,west?undefined:next,west?next:undefined);this.runConfig={...this.runConfig,stage:west?undefined:next,westStage:west?next:undefined};
-    this.frontlineStarts.set(next,this.combatNow);this.elapsed=0;this.waveIndex=-1;this.boss=null;this.bossSpawned=false;this.bossWarned=false;this.bossKilled=false;this.firstBossAt=-1;this.bossShield=0;this.bossPhase2=false;this.bossEnergy=0;this.recruitedWaves.clear();this.spawnTimer=.2;this.huaxiong=null;this.xurong=null;
+    this.frontlineStarts.set(next,this.combatNow);this.elapsed=0;this.waveIndex=0;this.boss=null;this.bossSpawned=false;this.bossWarned=false;this.bossKilled=false;this.firstBossAt=-1;this.bossShield=0;this.bossPhase2=false;this.bossEnergy=0;this.recruitedWaves.clear();this.spawnTimer=.2;this.huaxiong=null;this.xurong=null;
     this.yellow=west?null:new YellowBattle({scene:this,player:this.player,army:this.legion,enemies:this.enemies,move:(e,nx,ny,dt)=>this.advanceEnemy(e,nx,ny,dt),spawn:(def,x,y)=>this.spawnEnemy(def.kind,x,y,1,true,def)},next);
-    this.showWaveBanner('战线推进 · '+this.chapter.name,true);
+    // 战线推进与新一关第 1 波合成一条提示（原先“战线推进”下一帧就被第 1 波提示顶掉）
+    const waves=this.chapter.waves,first=waves[0];
+    this.hudTexts.wave.setText(`第 1/${waves.length} 波 · ${first.name}`);
+    this.showWaveBanner(`第 1/${waves.length} 波 · ${first.name}`,true,`战线推进 · ${this.chapter.name} · 第 1/${waves.length} 波`);
     const march=this.add.graphics().setScrollFactor(0).setDepth(DEPTH.overlay-12);this.tweens.addCounter({from:0,to:1,duration:1100,onUpdate:t=>{const p=t.getValue()??0;march.clear().lineStyle(2,0xd5ae6b,Math.sin(p*Math.PI)*.45);for(let i=0;i<5;i++){const x=(p*GAME_WIDTH+i*GAME_WIDTH/5)%GAME_WIDTH;march.lineBetween(x-10,GAME_HEIGHT*.3,x,GAME_HEIGHT*.3+8).lineBetween(x,GAME_HEIGHT*.3+8,x-10,GAME_HEIGHT*.3+16);}},onComplete:()=>march.destroy()});
   }
   protected checkEnd(): void {
@@ -2307,25 +2407,27 @@ export class GameScene extends Phaser.Scene {
       icon.setTexture(RELICS.find(r=>r.id===id)?.icon??'item_drum').setVisible(true);
     }
 
-    const boss = this.boss;
+    // 本关首领未击败、战线已推进时，追兵首领的血条继续显示（用户反馈血条不应消失）
+    const chaser = this.boss?.active ? null : this.chasingBosses.find(t => t.enemy.active && t.enemy.spawnId === t.life) ?? null;
+    const boss = this.boss?.active ? this.boss : chaser?.enemy ?? null;
     if (boss && boss.active) {
       const barW = Math.min(440, GAME_WIDTH * 0.9);
       const left = (GAME_WIDTH - barW) / 2;
       const barY = GAME_HEIGHT - 68;
       const ratio = Phaser.Math.Clamp(boss.hp / boss.maxHp, 0, 1);
       this.hintText?.setVisible(false);
-      this.hudTexts.boss.setVisible(true).setPosition(left, barY - 24).setText(this.chapter.bossName);
-      const hpLabel = this.bossShield > 0 ? `${Math.round(ratio * 100)}% 🛡${Math.round(this.bossShield)}` : `${Math.round(ratio * 100)}%`;
+      this.hudTexts.boss.setVisible(true).setPosition(left, barY - 24).setText(chaser ? chaser.name + ' · 追兵' : this.chapter.bossName);
+      const hpLabel = !chaser && this.bossShield > 0 ? `${Math.round(ratio * 100)}% 🛡${Math.round(this.bossShield)}` : `${Math.round(ratio * 100)}%`;
       this.hudTexts.bossHp.setVisible(true).setPosition(left + barW, barY - 24).setText(hpLabel);
-      const stageBoss=!!this.xurong||!!this.huaxiong||!!this.chapter.stage&&this.chapter.stage<3;
+      const stageBoss=!!chaser||!!this.xurong||!!this.huaxiong||!!this.chapter.stage&&this.chapter.stage<3;
       const energy = this.lubu ? this.lubu.energy : this.bossEnergy;
-      this.hudTexts.bossEnergy.setVisible(true).setPosition(left + barW, barY + 31)
+      this.hudTexts.bossEnergy.setVisible(!chaser).setPosition(left + barW, barY + 31)
         .setText(this.xurong?this.xurong.label+' · 推进 '+Math.max(0,Math.ceil(90-(this.combatNow-this.firstBossAt)/1000))+'秒':this.huaxiong?this.huaxiong.label+' · 推进 '+Math.max(0,Math.ceil(90-(this.combatNow-this.firstBossAt)/1000))+'秒':this.lubu ? `${this.lubu.phase2 ? `魔神 ${Math.floor(energy)}%` : '半血解锁大招'} · ${this.lubu.statusLabel}` : stageBoss?`${boss.hp<=boss.maxHp*.5?'半血强化 · ':''}${this.battleStage()<3?'战线推进倒计时 '+Math.max(0,Math.ceil(90-(this.combatNow-this.firstBossAt)/1000))+'秒':'注意地裂与环形预警'}`:`⚡ ${Math.floor(energy)}%`);
       g.fillStyle(0x000000, 0.72);
       g.fillRect(left, barY, barW, 12);
       g.fillStyle(COLORS.red, 0.95);
       g.fillRect(left + 2, barY + 2, Math.max(0, (barW - 4) * ratio), 8);
-      if (this.bossShield > 0) {
+      if (!chaser && this.bossShield > 0) {
         const sr = Math.min(1, this.bossShield / 300);
         g.fillStyle(0x66d9ff, 0.9);
         // 独立细盾条，不与生命段拼接后溢出容器。

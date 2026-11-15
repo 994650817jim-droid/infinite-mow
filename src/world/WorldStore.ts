@@ -36,7 +36,7 @@ export function loadWorld():WorldSave {if(storageUnavailable&&memory)return stru
  // fresh Zhangjiao clear would incorrectly unlock the world map before Hulao.
  if(!current&&!previous&&localStorage.getItem(LEGACY)==='true'){s.cleared.huangjin=true;s.yellowStages=3;s.worldAvailable=true;s.legacyHulaoAccess=true;s.nodes=['home','huangjin','hulao'];}
  }}catch{storageUnavailable=true;s=memory??defaults();}memory=s;return structuredClone(s);}
-function commit(s:WorldSave):boolean {s.revision++;if(storageUnavailable){memory=structuredClone(s);return false;}try{const old=localStorage.getItem(WORLD_KEY);if(parse(old))localStorage.setItem(BACKUP_KEY,old!);localStorage.setItem(WORLD_KEY,JSON.stringify(s));memory=structuredClone(s);return true;}catch{storageUnavailable=true;memory=structuredClone(s);return false;}}
+function commit(s:WorldSave):boolean {s.revision++;if(storageUnavailable){memory=structuredClone(s);return false;}try{const old=localStorage.getItem(WORLD_KEY);if(parse(old))localStorage.setItem(BACKUP_KEY,old!);localStorage.setItem(WORLD_KEY,JSON.stringify(s));localStorage.setItem('im_slot_touched',String(Date.now()));memory=structuredClone(s);return true;}catch{storageUnavailable=true;memory=structuredClone(s);return false;}}
 export function saveWorld():void{commit(loadWorld());}
 export function worldChapterCleared(chapter:ChapterId):boolean{return loadWorld().cleared[chapter];}
 export const BUILDINGS:Record<BuildingId,{name:string;description:(level:number)=>string}>= {

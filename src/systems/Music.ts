@@ -4,6 +4,7 @@
  * 配器：古筝拨弦琶音（带滑音）、竹笛主旋律（气声+颤音）、低音持续音、太鼓、梆子、锣；整体经卷积混响。
  * 首领战（intensity=1）：太鼓改为八分音符推进、加堂鼓与琵琶轮指，每 8 小节一记锣。
  */
+import { type BossProfile, bossMotif, composeBossMelody, profileScale } from '../data/bossMusic';
 const midi = (n: number): number => 440 * Math.pow(2, (n - 69) / 12);
 /** 旋律音级：D4 F4 G4 A4 C5 D5 F5 G5 A5 */
 const SCALE = [62, 65, 67, 69, 72, 74, 77, 79, 81];
@@ -57,6 +58,8 @@ export class Music {
   private readonly stepDur: number; // 十六分音符
   /** 预先展开的旋律：每个十六分步上的 [MIDI, 持续步数] 或 null。 */
   private readonly melodyAt: Array<[number, number] | null> = new Array(32 * 16).fill(null);
+  /** 首领专属主题（data/bossMusic.ts）：出场锣鼓后切入，首领离场（intensity 回 0）即回到战斗曲。 */
+  private boss: { p: BossProfile; scale: number[]; melody: Array<[number, number] | null>; stepDur: number; step: number; startAt: number } | null = null;
 
   constructor(readonly theme: MusicTheme = 'battle') {
     this.bpm = theme === 'menu' ? 72 : 92;
@@ -158,10 +161,122 @@ export class Music {
   private schedule(): void {
     if (!this.ctx || !this.playing) return;
     while (this.nextTime < this.ctx.currentTime + 0.35) {
+      const b = this.intensity === 1 ? this.boss : null;
+      if (b) {
+        if (this.nextTime >= b.startAt) { this.scheduleBossStep(b, b.step, this.nextTime); b.step = (b.step + 1) % 256; }
+        this.nextTime += b.stepDur;
+        continue;
+      }
       this.scheduleStep(this.step, this.nextTime);
       this.step = (this.step + 1) % 512;
       this.nextTime += this.stepDur;
     }
+  }
+
+  /** 首领出场：奏出场锣鼓（约 2.4 秒），之后切入该首领主题。传 null 清除。 */
+  setBoss(p: BossProfile | null): void {
+    if (!p) { this.boss = null; return; }
+    const stepDur = 60 / p.bpm / 4, now = this.ctx?.currentTime ?? 0;
+    this.boss = { p, scale: profileScale(p), melody: composeBossMelody(p), stepDur, step: 0, startAt: now + 2.45 };
+    if (this.ctx && this.playing) this.stinger(p, now + .05);
+  }
+  get bossName(): string | null { return this.boss?.p.name ?? null; }
+
+  /** 出场段：重锣 → 太鼓由疏到密的滚奏 → 主奏乐器三音动机 → 收锣。 */
+  private stinger(p: BossProfile, t: number): void {
+    this.gong(t, .22);
+    if (p.fx.includes('thunder')) this.thunder(t + .1, .22);
+    if (p.fx.includes('earth')) this.earth(t, .2);
+    let x = .25; for (let i = 0; i < 14; i++) { this.taiko(t + x, .18 + i * .025); x += Math.max(.05, .17 - i * .009); }
+    const motif = bossMotif(p), lt = t + 1.55;
+    motif.forEach((m, i) => this.lead(p, midi(m), lt + i * .22, i === 2 ? .7 : .2, i === 2 ? .085 : .07));
+    this.taiko(t + 2.2, .6); this.gong(t + 2.2, .2);
+    if (p.fx.includes('horn')) this.horn(midi(p.tonic - 12), t + 2.0, 1.6, .06);
+    if (p.fx.includes('bells')) for (let k = 0; k < 3; k++) this.bell(midi(motif[k] + 12), lt + k * .22, .02);
+  }
+
+  private scheduleBossStep(b: NonNullable<Music['boss']>, step: number, t: number): void {
+    const p = b.p, bar = Math.floor(step / 16) % 16, pos = step % 16, sd = b.stepDur, deg = p.bass[bar % 8];
+    const root = p.tonic - 12 + p.mode[deg % p.mode.length] + (deg >= p.mode.length ? 12 : 0);
+    if (pos === 0) { this.drone(midi(root - 12), t, sd * 16 * 1.1, .065); if (bar % 4 === 0) this.drone(midi(root - 5), t, sd * 32, .028); }
+    // 伴奏拨弦：快曲十六分、慢曲八分
+    const fast = p.bpm >= 110, arp = [root, root + 7, root + 12, root + 12 + p.mode[2]];
+    if (pos % (fast ? 1 : 2) === 0) { const i = [0, 1, 2, 3, 2, 1, 2, 3][(fast ? pos : pos / 2) % 8]; this.pluck(midi(arp[i]), t, fast ? .036 : .05, pos === 0 && bar % 2 === 1); }
+    const note = b.melody[(bar * 16 + pos) % b.melody.length];
+    if (note) this.lead(p, midi(b.scale[note[0]]), t, note[1] * sd, .062);
+    this.bossDrums(p.drums, bar, pos, t);
+    for (const fx of p.fx) {
+      if (fx === 'gong' && pos === 0 && bar % 4 === 0) this.gong(t, .13);
+      if (fx === 'thunder' && pos === 0 && bar % 8 === 4) this.thunder(t, .16);
+      if (fx === 'bells' && pos === 0 && bar % 2 === 0) this.bell(midi(b.scale[bar % 4 === 0 ? 5 : 3] + 12), t, .018);
+      if (fx === 'horn' && pos === 0 && bar % 8 === 0) this.horn(midi(root), t, sd * 12, .05);
+      if (fx === 'earth' && pos === 0 && bar % 4 === 2) this.earth(t, .14);
+      if (fx === 'fire' && Math.random() < .22) this.noiseBurst(t + Math.random() * sd, .02 + Math.random() * .03, 'highpass', 2500 + Math.random() * 3000, .025, this.dryGain());
+    }
+  }
+
+  private bossDrums(kind: BossProfile['drums'], bar: number, pos: number, t: number): void {
+    switch (kind) {
+      case 'march': if (pos % 4 === 0) this.taiko(t, pos === 0 ? .5 : .28); if (pos === 6 || pos === 14) this.tanggu(t, .16); if (pos === 0 && bar % 8 === 0) this.gong(t, .14); break;
+      case 'gallop': if ([0, 2, 3, 4, 6, 7, 8, 10, 11, 12, 14, 15].includes(pos)) this.taiko(t, pos % 8 === 0 ? .5 : pos % 4 === 0 ? .3 : .18); if (pos % 8 === 4) this.tanggu(t, .14); break;
+      case 'ritual': if (pos === 0 || pos === 6 || pos === 8) this.taiko(t, pos === 0 ? .45 : .26); if (pos % 2 === 1) this.clapper(t); break;
+      case 'heavy': if (pos === 0 || pos === 8 || pos === 10) this.taiko(t, pos === 0 ? .62 : .38); if (pos === 4 || pos === 12) this.tanggu(t, .2); if (pos === 0 && bar % 4 === 0) this.gong(t, .12); break;
+      case 'ceremony': if (pos === 0 || pos === 8) this.taiko(t, pos === 0 ? .36 : .2); if (pos === 12) this.clapper(t); break;
+      case 'tense': if (pos % 2 === 0) this.clapper(t); if (pos === 0 || pos === 7 || pos === 10) this.taiko(t, pos === 0 ? .42 : .26); if (pos === 14 && bar % 2 === 1) this.tanggu(t, .14); break;
+    }
+  }
+
+  /** 主奏：琵琶（轮指）、唢呐、竹笛、古琴。 */
+  private lead(p: BossProfile, freq: number, t: number, dur: number, gain: number): void {
+    if (p.lead === 'pipa') { const n = Math.max(1, Math.min(8, Math.round(dur / (this.boss?.stepDur ?? .1) * 2))); for (let k = 0; k < n; k++) this.pluck(freq, t + k * dur / n, k === 0 ? gain * 1.15 : gain * .6, false, true); }
+    else if (p.lead === 'suona') this.suona(freq, t, dur * .95, gain * .8);
+    else if (p.lead === 'flute') this.flute(freq, t, dur * .9, gain);
+    else this.pluck(freq / 2, t, gain * 1.3, true);
+  }
+
+  private dryGain(): GainNode { const g = this.ctx!.createGain(); this.out(g, .3); return g; }
+
+  /** 唢呐：锯齿波经带通（鼻音感）+ 颤音，起音带滑。 */
+  private suona(freq: number, start: number, dur: number, gain: number): void {
+    const ctx = this.ctx!, g = ctx.createGain(), f = ctx.createBiquadFilter(), f2 = ctx.createBiquadFilter(), o = ctx.createOscillator(), lfo = ctx.createOscillator(), depth = ctx.createGain();
+    f.type = 'bandpass'; f.frequency.value = Math.min(3200, freq * 2.2); f.Q.value = 1.6; f2.type = 'lowpass'; f2.frequency.value = 4200;
+    o.type = 'sawtooth'; o.frequency.setValueAtTime(freq * .97, start); o.frequency.exponentialRampToValueAtTime(freq, start + .05);
+    lfo.frequency.value = 6.2; depth.gain.setValueAtTime(0, start); depth.gain.linearRampToValueAtTime(freq * .012, start + Math.min(.3, dur * .5));
+    lfo.connect(depth); depth.connect(o.frequency);
+    g.gain.setValueAtTime(0, start); g.gain.linearRampToValueAtTime(gain, start + .03); g.gain.setValueAtTime(gain * .85, start + Math.max(.05, dur - .08)); g.gain.linearRampToValueAtTime(0, start + Math.max(.1, dur));
+    o.connect(f); f.connect(f2); f2.connect(g); this.out(g, .45);
+    o.start(start); lfo.start(start); o.stop(start + dur + .05); lfo.stop(start + dur + .05);
+  }
+  /** 号角：低音锯齿波渐强渐弱，低通。 */
+  private horn(freq: number, start: number, dur: number, gain: number): void {
+    const ctx = this.ctx!, g = ctx.createGain(), f = ctx.createBiquadFilter(), o = ctx.createOscillator(), o2 = ctx.createOscillator(), g2 = ctx.createGain();
+    f.type = 'lowpass'; f.frequency.setValueAtTime(300, start); f.frequency.linearRampToValueAtTime(900, start + dur * .4); f.frequency.linearRampToValueAtTime(400, start + dur);
+    o.type = 'sawtooth'; o2.type = 'sawtooth'; o.frequency.value = freq; o2.frequency.value = freq * 1.5; g2.gain.value = .35;
+    g.gain.setValueAtTime(0, start); g.gain.linearRampToValueAtTime(gain, start + dur * .35); g.gain.linearRampToValueAtTime(0, start + dur);
+    o.connect(f); o2.connect(g2); g2.connect(f); f.connect(g); this.out(g, .5);
+    o.start(start); o2.start(start); o.stop(start + dur + .05); o2.stop(start + dur + .05);
+  }
+  /** 编钟：低泛音更重、余音更长的金属钟声。 */
+  private bell(freq: number, start: number, gain: number): void {
+    const ctx = this.ctx!, g = ctx.createGain(); this.out(g, .85);
+    g.gain.setValueAtTime(0, start); g.gain.linearRampToValueAtTime(gain, start + .004); g.gain.exponentialRampToValueAtTime(.0001, start + 2.6);
+    for (const [r, a] of [[.5, 1], [1, .8], [2.4, .4], [4.1, .2]] as const) { const o = ctx.createOscillator(), e = ctx.createGain(); o.type = 'sine'; o.frequency.value = freq * r; e.gain.value = a; o.connect(e); e.connect(g); o.start(start); o.stop(start + 2.7); }
+  }
+  /** 雷声：低通噪声长滚。 */
+  private thunder(start: number, gain: number): void {
+    if (!this.noise) return;
+    const ctx = this.ctx!, src = ctx.createBufferSource(), f = ctx.createBiquadFilter(), g = ctx.createGain();
+    src.buffer = this.noise; src.loop = true; f.type = 'lowpass'; f.frequency.setValueAtTime(900, start); f.frequency.exponentialRampToValueAtTime(140, start + 2.4);
+    g.gain.setValueAtTime(0, start); g.gain.linearRampToValueAtTime(gain, start + .06); g.gain.setValueAtTime(gain * .6, start + .4); g.gain.exponentialRampToValueAtTime(.0001, start + 2.8);
+    src.connect(f); f.connect(g); this.out(g, .6); src.start(start); src.stop(start + 2.9);
+  }
+  /** 地鸣：极低频正弦下坠 + 低通噪声。 */
+  private earth(start: number, gain: number): void {
+    const ctx = this.ctx!, g = ctx.createGain(), o = ctx.createOscillator(); this.out(g, .4);
+    o.type = 'sine'; o.frequency.setValueAtTime(58, start); o.frequency.exponentialRampToValueAtTime(32, start + 1.4);
+    g.gain.setValueAtTime(0, start); g.gain.linearRampToValueAtTime(gain, start + .08); g.gain.exponentialRampToValueAtTime(.0001, start + 1.6);
+    o.connect(g); o.start(start); o.stop(start + 1.7);
+    this.noiseBurst(start, 1.2, 'lowpass', 220, gain * .5, g);
   }
 
   private scheduleStep(step: number, t: number): void {

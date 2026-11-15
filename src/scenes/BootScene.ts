@@ -21,6 +21,8 @@ export class BootScene extends Phaser.Scene {
     // 旧像素图标仍保留在 growth-icons / build 目录，未被删除。
     for(const id of GROWTH_ICON_IDS)this.load.image('growth_icon_'+id,'assets/upgrade-icons/'+id+'.webp');
     for(const id of [...Object.keys(TACTICS),...Object.keys(TREASURES)])this.load.image('build_icon_'+id,'assets/upgrade-icons/'+id+'.webp');
+    // 水墨按钮底板（ChatGPT 生成，tools/prepare-button-art.mjs 切图）；homeCommand 有图即用，缺图退回程序画底板
+    for(const n of ['primary-normal','primary-hover','primary-pressed','secondary-normal','secondary-hover','secondary-pressed','disabled'])this.load.image('btn_ink_'+n.replace('-','_'),'assets/ui-buttons/'+n+'.webp');
     const params=new URLSearchParams(window.location.search);
     this.shellOnly=false;
     if(this.shellOnly){if(!this.textures.exists('art_panel'))this.load.image('art_panel','assets/processed/overhaul/bronze-panel-mobile.png');return;}

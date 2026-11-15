@@ -5,7 +5,8 @@ import {GameCodex} from '../ui/GameCodex';
 import {HeroWarCard} from '../ui/HeroWarCard';
 import {CampaignChronicle} from '../ui/CampaignChronicle';
 import {attachHomeVideo} from '../ui/HomeVideo';
-import {homeCommand} from '../ui/HomeCommand';
+import {homeCommand,warPanelTexture} from '../ui/HomeCommand';
+import {SaveSlotsUI} from '../ui/SaveSlotsUI';
 import {HomeHeroPicker} from '../ui/HomeHeroPicker';
 import {dongzhuoStageUnlocked,nextDongzhuoStage,yellowStageUnlocked,loadWorld,worldUnlocked,alertLossWarning} from '../world/WorldStore';
 import Phaser from 'phaser';
@@ -179,10 +180,14 @@ export class MenuScene extends Phaser.Scene {
     if(startFolded)heroEntry.setY(entryY(true));
     card.hit.on('pointerup',()=>{const next=!card.isFolded;this.registry.set('heroCardFolded',next);card.setFolded(next,true);const sfx=uiSfx();sfx.unlock();sfx.play('uiClick');
       const from=heroEntry.y,to=entryY(next);this.tweens.addCounter({from:0,to:1,duration:380,ease:'Cubic.easeInOut',onUpdate:tw=>heroEntry.setY(from+(to-from)*(tw.getValue()??0))});});
+    // 底部一行：存档 · 图鉴 · 战役回顾 · 设置（· 退出游戏，仅桌面版）
+    const navItems=IS_DESKTOP_APP?5:4,navX=(k:number)=>D?cx+(k-(navItems-1)/2)*100:W*(.14+k*.24),navRowY=D?476:924+this.padY;
+    this.homeSaveButton(navX(0),navRowY);
+    if(IS_DESKTOP_APP)this.homeQuitButton(navX(4),navRowY);
     // 战役回顾：乱世编年（已平定的关显示史录，未打到的锁住）；“前往选关”沿用原入口。
-    text(D?cx:W/2,D?476:924+this.padY,'战役回顾',D?18:20,'#e5ccb0').setLetterSpacing(D?2:0).setPadding(16,16).setInteractive({useHandCursor:true}).setName('home-review').on('pointerdown',()=>{if(this.children.getByName('campaign-chronicle'))return;new CampaignChronicle(this,arc=>{if(arc==='qunxiong'){this.scene.start('ThirdChapterScene');return;}if(arc==='guandu'){this.scene.start('GuanduChapterScene');return;}this.registry.set('menuChapterPicker',true);this.scene.restart();},(arc,stage)=>this.replayStage(arc,stage));});
-    text(D?cx+110:W*.79,D?476:924+this.padY,'设置',D?18:20,'#e5ccb0').setLetterSpacing(4).setPadding(18,16).setInteractive({useHandCursor:true}).setName('home-settings').on('pointerdown',()=>this.openHomeSettings());
-    text(D?cx-110:W*.21,D?476:924+this.padY,'图鉴',D?18:20,'#e5ccb0').setLetterSpacing(4).setOrigin(.5,.5).setPadding(12,16).setInteractive({useHandCursor:true}).setName('home-codex').on('pointerdown',()=>{if(this.children.getByName('game-codex'))return;this.ensureHomeArt(true);new GameCodex(this,index=>{this.selectedChar=index;this.registry.set('heroConfirmed',true);try{localStorage.setItem('im_last_hero',CHARACTERS[index].id);}catch{}this.renderSelection();});});
+    text(navX(2),navRowY,'战役回顾',D?18:20,'#e5ccb0').setLetterSpacing(D?2:0).setPadding(16,16).setInteractive({useHandCursor:true}).setName('home-review').on('pointerdown',()=>{if(this.children.getByName('campaign-chronicle'))return;new CampaignChronicle(this,arc=>{if(arc==='qunxiong'){this.scene.start('ThirdChapterScene');return;}if(arc==='guandu'){this.scene.start('GuanduChapterScene');return;}this.registry.set('menuChapterPicker',true);this.scene.restart();},(arc,stage)=>this.replayStage(arc,stage));});
+    text(navX(3),navRowY,'设置',D?18:20,'#e5ccb0').setLetterSpacing(4).setPadding(18,16).setInteractive({useHandCursor:true}).setName('home-settings').on('pointerdown',()=>this.openHomeSettings());
+    text(navX(1),navRowY,'图鉴',D?18:20,'#e5ccb0').setLetterSpacing(4).setOrigin(.5,.5).setPadding(12,16).setInteractive({useHandCursor:true}).setName('home-codex').on('pointerdown',()=>{if(this.children.getByName('game-codex'))return;this.ensureHomeArt(true);new GameCodex(this,index=>{this.selectedChar=index;this.registry.set('heroConfirmed',true);try{localStorage.setItem('im_last_hero',CHARACTERS[index].id);}catch{}this.renderSelection();});});
     if(worldUnlocked()){
       text(W-28,D?34:54,'主城',16).setOrigin(1,.5).setPadding(16,8).setBackgroundColor('rgba(22,14,9,0.72)').setInteractive({useHandCursor:true}).setName('home-city').on('pointerdown',()=>this.scene.start('CityScene'));
       text(W-104,D?34:54,'天下地图',16).setOrigin(1,.5).setPadding(16,8).setBackgroundColor('rgba(22,14,9,0.72)').setInteractive({useHandCursor:true}).setName('home-world').on('pointerdown',()=>this.scene.start('WorldMapScene'));
@@ -197,8 +202,7 @@ export class MenuScene extends Phaser.Scene {
     // W4：有城池告急时提示“出征将失守”
     const lossWarn=isChapterTestRun()?'':alertLossWarning();if(lossWarn)text(D?W*.73:W/2,startY-startH/2-(D?14:16),lossWarn,D?12:13,'#ff8a70').setStroke('#1a0e08',3).setName('home-alert-warning');
     this.startButton.on('pointerdown',()=>{let chosen=!!this.registry.get('heroConfirmed');try{chosen=chosen||!!localStorage.getItem('im_last_hero');}catch{}if(!chosen&&!params.has('autostart')&&!params.has('perf')){openHeroes();return;}this.startGame();});
-    if(D)for(const dx of[-66,66])text(cx+dx,476,'·',18,'#a68a57');
-    else for(const fx of[.355,.645])text(W*fx,924+this.padY,'·',20,'#a68a57');
+    for(let k=0;k<navItems-1;k++)text((navX(k)+navX(k+1))/2,navRowY,'·',D?18:20,'#a68a57');
     if(isChapterTestRun())text(W/2,D?529:955+this.padY,'测试战斗不记录正式进度',10,'#8c806f');
     if(isChapterTestRun())text(W-34,24,'测试选关 ›',14,'#dcc399').setOrigin(1,.5).setPadding(12,10).setInteractive({useHandCursor:true}).setName('dev-stage-picker').on('pointerdown',()=>this.openTestStages());
     const keys=this.input.keyboard,enter=()=>{if(modal.visible)modal.getByName('hero-confirm')?.emit('pointerdown');else this.startButton.emit('pointerdown');},escape=()=>closeHeroes();
@@ -236,6 +240,27 @@ export class MenuScene extends Phaser.Scene {
     if(!files.length)return;
     for(const [key,url]of files)this.load.image(key,url);
     this.load.once('complete',()=>{if(!this.sys.isActive())return;for(const [key]of files)if(this.textures.exists(key))this.textures.get(key).setFilter(Phaser.Textures.FilterMode.LINEAR);if(this.homeBackground&&this.homeBackground.scene&&this.textures.exists(background)){this.homeBackground.setTexture(background);this.homeBackground.setScale(Math.max(W/this.homeBackground.width,H/this.homeBackground.height));}this.renderSelection();});this.load.start();
+  }
+  /** 主页「存档」：3 个存档位。 */
+  private homeSaveButton(x:number,y:number):void{
+    this.add.text(x,y,'存档',{fontFamily:FONT,fontSize:(D?18:20)+'px',color:'#e5ccb0',resolution:2}).setOrigin(.5).setLetterSpacing(4).setPadding(18,16).setInteractive({useHandCursor:true}).setName('home-saves')
+      .on('pointerdown',()=>{if(!this.children.getByName('save-slots-panel'))new SaveSlotsUI(this);});
+  }
+  /** 主页「退出游戏」（桌面版）：弹出确认。 */
+  private homeQuitButton(x:number,y:number):void{
+    this.add.text(x,y,'退出',{fontFamily:FONT,fontSize:'18px',color:'#e7b68e',resolution:2}).setOrigin(.5).setLetterSpacing(4).setPadding(18,16).setInteractive({useHandCursor:true}).setName('home-quit')
+      .on('pointerdown',()=>this.confirmQuit());
+  }
+  private confirmQuit():void{
+    if(this.children.getByName('quit-confirm')||!desktop)return;
+    const app=desktop,modal=this.add.container(0,0).setDepth(560).setName('quit-confirm');
+    modal.add(this.add.rectangle(W/2,H/2,W,H,0x0b0806,.82).setInteractive());
+    modal.add(this.add.image(W/2,H/2,warPanelTexture(this,420,200,true)).setDisplaySize(436,216));
+    modal.add(this.add.text(W/2,H/2-50,'退出游戏？',{fontFamily:HEADING_FONT,fontSize:'26px',color:'#efd399',resolution:2}).setOrigin(.5).setLetterSpacing(4));
+    modal.add(this.add.text(W/2,H/2-14,'进度已自动保存',{fontFamily:FONT,fontSize:'13px',color:'#a99d88',resolution:2}).setOrigin(.5));
+    const cancel=homeCommand(this,W/2-95,H/2+48,150,46,'取消');cancel.hit.setName('quit-cancel').setData('padDefault',true).on('pointerdown',()=>modal.destroy());
+    const ok=homeCommand(this,W/2+95,H/2+48,150,46,'退出游戏',true);ok.hit.setName('quit-ok').on('pointerdown',()=>app.quit());
+    modal.add([cancel.g,cancel.hit,cancel.caption,ok.g,ok.hit,ok.caption]);
   }
   private openHomeSettings():void {
     const modal=this.add.container(0,0).setDepth(500).setName('home-settings-panel');

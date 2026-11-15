@@ -54,3 +54,4 @@ assets/raw/*
 !/tools/landing-fixes-smoke.mjs
 
 !/tools/fonts-spear-supplies-smoke.mjs
+/release/

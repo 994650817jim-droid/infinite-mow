@@ -1,3 +1,4 @@
+import { IS_DESKTOP_APP, desktop } from '../platform/desktop';
 import {playMenuMusic,menuMusic} from '../systems/Music';
 import {uiSfx} from '../systems/Sfx';
 import {GameCodex} from '../ui/GameCodex';
@@ -86,7 +87,7 @@ export class MenuScene extends Phaser.Scene {
     text(28,D?22:48,'乱世千军',D?36:42,'#efd493').setFontFamily(TITLE_FONT).setLetterSpacing(3);
     text(D ? 196 : 30, D ? 32 : 99, '三国割草 · 将星出征', D ? 13 : 14, '#8eaa9c');
     text(W-130,D?29:59,worldUnlocked()||isChapterTestRun()?'主城':'主城未开放',12,'#d9c58d').setOrigin(1,0).setPadding(8,6).setInteractive({useHandCursor:true}).on('pointerdown',()=>{if(worldUnlocked()||isChapterTestRun())this.scene.start('CityScene');});
-    const layout = text(W - 28, D ? 29 : 59, D ? '手机布局' : '电脑布局', 12, '#acb5a0').setOrigin(1, 0).setPadding(6, 6).setInteractive({ useHandCursor: true });
+    const layout = text(W - 28, D ? 29 : 59, D ? '手机布局' : '电脑布局', 12, '#acb5a0').setOrigin(1, 0).setPadding(6, 6).setInteractive({ useHandCursor: true }).setVisible(!IS_DESKTOP_APP);
     layout.on('pointerdown', () => switchLayout(D ? 'mobile' : 'desktop')).on('pointerover', () => layout.setColor('#f1d69a')).on('pointerout', () => layout.setColor('#acb5a0'));
     const section = (y: number, n: string, title: string, tip: string) => {
       text(28, y, n, 12, '#63a99a'); text(55, y - 2, title, 15, '#d5c397');
@@ -241,7 +242,16 @@ export class MenuScene extends Phaser.Scene {
     const label=(x:number,y:number,value:string,size=20)=>this.add.text(x,y,value,{fontFamily:FONT,fontSize:size+'px',color:'#e8d0aa',resolution:2}).setOrigin(.5);
     modal.add(this.add.rectangle(W/2,H/2,W,H,0x130d09,.97).setInteractive());modal.add(label(W/2,H/2-130,'军中设置',28));
     ['音乐','音效'].forEach((name,i)=>{const key=i?'im_sfx_vol':'im_bgm_vol',y=H/2-40+i*76;let volume= i?90:40;try{volume=Number(localStorage.getItem(key)??volume);}catch{}const value=label(W/2,y,name+'  '+volume+'%');modal.add(value);for(const dir of [-1,1])modal.add(label(W/2+dir*140,y,dir<0?'－':'＋',28).setPadding(16,12).setInteractive({useHandCursor:true}).on('pointerdown',()=>{volume=Math.max(0,Math.min(100,volume+dir*10));try{localStorage.setItem(key,String(volume));}catch{}if(!i)menuMusic().setVolume(volume);value.setText(name+'  '+volume+'%');}));});
-    modal.add(label(W/2,H/2+135,'返回',20).setPadding(40,16).setInteractive({useHandCursor:true}).setName('settings-close').on('pointerdown',()=>modal.destroy()));
+    const app=desktop;
+    if(IS_DESKTOP_APP&&app){
+      // 桌面版：全屏切换与退出游戏
+      const full=label(W/2,H/2+96,app.isFullscreen()?'窗口模式（F11）':'全屏（F11）',18).setPadding(24,10).setInteractive({useHandCursor:true}).setName('settings-fullscreen');
+      full.on('pointerdown',()=>{app.toggleFullscreen();this.time.delayedCall(250,()=>full.setText(app.isFullscreen()?'窗口模式（F11）':'全屏（F11）'));});
+      const quit=label(W/2,H/2+142,'退出游戏',18).setColor('#e7b68e').setPadding(24,10).setInteractive({useHandCursor:true}).setName('settings-quit');
+      quit.on('pointerdown',()=>{if(quit.getData('confirm'))app.quit();else quit.setData('confirm',true).setText('确认退出？再点一次');});
+      modal.add([full,quit]);
+    }
+    modal.add(label(W/2,IS_DESKTOP_APP?H/2+200:H/2+135,'返回',20).setPadding(40,16).setInteractive({useHandCursor:true}).setName('settings-close').on('pointerdown',()=>modal.destroy()));
   }
   private corners(g: Phaser.GameObjects.Graphics, bg: Phaser.GameObjects.Rectangle, selected: boolean): void {
     g.clear();

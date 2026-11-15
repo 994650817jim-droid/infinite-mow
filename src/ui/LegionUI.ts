@@ -20,8 +20,10 @@ export class LegionUI {
   private readonly orderPlate: Phaser.GameObjects.Graphics;
   private readonly orderHint: Phaser.GameObjects.Text;
   private orderState = '';
-  private readonly orderX = W - (D ? 148 : 164);
-  private readonly orderY = H - 156;
+  /** 军令按钮（护阵 / 出击）：紧凑半透明胶囊，靠右下（2026-11-15 用户反馈原样式太显眼）。 */
+  private readonly orderW = D ? 96 : 108; private readonly orderH = D ? 30 : 38;
+  private readonly orderX = W - (D ? 112 : 124);
+  private readonly orderY = H - (D ? 128 : 150);
   private readonly close: Phaser.GameObjects.Text;
   private readonly prev: Phaser.GameObjects.Text;
   private readonly next: Phaser.GameObjects.Text;
@@ -37,14 +39,16 @@ export class LegionUI {
     this.hud = scene.add.container(0, 0).setScrollFactor(0).setDepth(DEPTH.hud + 3);
     this.status = text(28, 115, '', 15).setStroke('#171a13', 2);
     this.orderPlate = scene.add.graphics().setScrollFactor(0);
-    this.order = text(this.orderX, this.orderY, '', D ? 17 : 19).setPadding(43, 7, 0, 0)
-      .setFixedSize(D ? 132 : 148, D ? 48 : 60).setInteractive({ useHandCursor: true })
-      .on('pointerdown', () => { this.orderPlate.setAlpha(.7); order(); })
-      .on('pointerup', () => this.orderPlate.setAlpha(1))
+    this.order = text(this.orderX, this.orderY, '', D ? 14 : 16).setPadding(32, D ? 6 : 9, 0, 0)
+      .setFixedSize(this.orderW, this.orderH).setInteractive({ useHandCursor: true }).setAlpha(.9)
+      .on('pointerdown', () => { this.orderPlate.setAlpha(.55); order(); })
+      .on('pointerup', () => this.orderPlate.setAlpha(.8))
       .on('pointerover', () => this.orderPlate.setAlpha(1))
-      .on('pointerout', () => this.orderPlate.setAlpha(.9));
-    this.orderHint = text(this.orderX + 43, this.orderY + (D ? 29 : 35), '', D ? 10 : 12).setColor('#acbeb0');
-    const key = text(this.orderX + (D ? 109 : 123), this.orderY + 10, D ? 'E' : '⇄', 11).setColor('#d9d2b8');
+      .on('pointerout', () => this.orderPlate.setAlpha(.8));
+    this.orderPlate.setAlpha(.8);
+    // 说明行不再显示（军令名已说明含义）；保留对象以免改动其它逻辑
+    this.orderHint = text(this.orderX + 32, this.orderY + this.orderH, '', 10).setColor('#acbeb0').setVisible(false);
+    const key = text(this.orderX + this.orderW - 14, this.orderY + this.orderH / 2, D ? 'E' : '⇄', 10).setColor('#9fa592').setAlpha(.7).setOrigin(.5);
     this.hud.add([this.status, this.orderPlate, this.order, this.orderHint, key]);
     this.panel = scene.add.container(0, 0).setScrollFactor(0).setDepth(DEPTH.overlay + 1).setVisible(false);
     this.panel.add(scene.add.rectangle(0, 0, W, H, 0x121b17, 0).setOrigin(0).setScrollFactor(0).setInteractive());
@@ -128,22 +132,20 @@ export class LegionUI {
   private paintOrder(army: Legion): void {
     if (this.orderState === army.order) return;
     this.orderState = army.order;
-    const guard = army.order === 'guard', x = this.orderX, y = this.orderY, width = D ? 132 : 148, height = D ? 48 : 60;
+    const guard = army.order === 'guard', x = this.orderX, y = this.orderY, width = this.orderW, height = this.orderH;
     const color = guard ? 0x83c8b3 : 0xe9b777, g = this.orderPlate;
     this.order.setText(ORDERS[army.order]).setColor(guard ? '#ddf3e9' : '#ffdfb4');
     this.orderHint.setText(guard ? '跟随护卫' : '主动迎敌');
-    g.clear().fillStyle(0x101e19, .84).fillRoundedRect(x, y, width, height, 10)
-      .lineStyle(1, color, .75).strokeRoundedRect(x, y, width, height, 10)
-      .fillStyle(color, .15).fillCircle(x + 23, y + height / 2, 15)
-      .lineStyle(2, color, 1);
-    const cy = y + height / 2;
+    const r = height / 2, cx = x + 16, cy = y + r;
+    g.clear().fillStyle(0x101e19, .5).fillRoundedRect(x, y, width, height, r)
+      .lineStyle(1, color, .35).strokeRoundedRect(x, y, width, height, r)
+      .lineStyle(1.5, color, .9);
+    // 小图标：盾（护阵）/ 箭头（出击）
     if (guard) {
-      g.beginPath().moveTo(x + 23, cy - 10).lineTo(x + 32, cy - 6).lineTo(x + 30, cy + 4)
-        .lineTo(x + 23, cy + 11).lineTo(x + 16, cy + 4).lineTo(x + 14, cy - 6).closePath().strokePath();
-      g.lineBetween(x + 23, cy - 5, x + 23, cy + 5);
+      g.beginPath().moveTo(cx, cy - 7).lineTo(cx + 6, cy - 4).lineTo(cx + 5, cy + 3)
+        .lineTo(cx, cy + 7).lineTo(cx - 5, cy + 3).lineTo(cx - 6, cy - 4).closePath().strokePath();
     } else {
-      g.lineBetween(x + 16, cy + 7, x + 30, cy - 7).lineBetween(x + 21, cy - 7, x + 30, cy - 7)
-        .lineBetween(x + 30, cy - 7, x + 30, cy + 2).lineBetween(x + 14, cy + 1, x + 21, cy + 8);
+      g.lineBetween(cx - 5, cy + 5, cx + 5, cy - 5).lineBetween(cx - 1, cy - 5, cx + 5, cy - 5).lineBetween(cx + 5, cy - 5, cx + 5, cy + 1);
     }
   }
 

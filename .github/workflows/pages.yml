@@ -21,7 +21,10 @@ jobs:
         with:
           node-version: '22'
           cache: npm
+      # 网页版构建不需要 Electron 运行时（桌面版本地打包用），跳过其 ~115 MB 下载
       - run: npm ci
+        env:
+          ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
       - run: npm run build
       - uses: actions/upload-pages-artifact@v4
         with:

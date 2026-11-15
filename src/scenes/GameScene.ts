@@ -2107,8 +2107,9 @@ export class GameScene extends Phaser.Scene {
       bossHp: this.add.text(GAME_WIDTH / 2, 66, '100%', style(13, '#f5efe6')).setOrigin(1, 0).setScrollFactor(0).setDepth(DEPTH.hud + 1).setVisible(false),
       bossEnergy: this.add.text(GAME_WIDTH / 2, 100, '', style(11, '#c9a8ff')).setOrigin(1, 0).setScrollFactor(0).setDepth(DEPTH.hud + 1).setVisible(false),
       mute: this.add
-        .text(145, 198, '音效:开', style(13, '#a89c8c'))
-        .setOrigin(0, 0)
+        // 2026-11-15：音效 / 音乐开关常驻右上（原藏在「战况」下拉里）
+        .text(GAME_WIDTH - 24, 98, '音效:开', style(13, '#c9bea8'))
+        .setOrigin(1, 0)
         .setScrollFactor(0)
         .setDepth(DEPTH.hud + 1)
         .setPadding(8, 4, 8, 4)
@@ -2118,8 +2119,8 @@ export class GameScene extends Phaser.Scene {
           this.muteText?.setText(muted ? '音效:关' : '音效:开');
         }),
       music: this.add
-        .text(28, 198, '音乐:开', style(13, '#a89c8c'))
-        .setOrigin(0, 0)
+        .text(GAME_WIDTH - 24, 124, '音乐:开', style(13, '#c9bea8'))
+        .setOrigin(1, 0)
         .setScrollFactor(0)
         .setDepth(DEPTH.hud + 1)
         .setPadding(8, 4, 8, 4)
@@ -2139,12 +2140,13 @@ export class GameScene extends Phaser.Scene {
     };
     this.hudTexts.details = this.add.text(GAME_WIDTH - 24, 94, '战况 ▾', style(13, '#dfcfab'))
       .setOrigin(1,0).setFixedSize(96,62).setAlign('center').setPadding(10,12).setScrollFactor(0).setDepth(DEPTH.hud+1)
-      .setInteractive({useHandCursor:true}).on('pointerdown',()=>{this.relicExpanded=!this.relicExpanded;this.hudAcc=1;});
+      .setVisible(false); // 「战况」下拉已取消（用户反馈不需要）；音效 / 音乐开关改为常驻
     this.hudTexts.gear = this.add.text(32, 236, '', {...style(12,'#dfd5bc'),wordWrap:{width:GAME_WIDTH>600?370:GAME_WIDTH-72},lineSpacing:4})
       .setScrollFactor(0).setDepth(DEPTH.hud+1);
     this.passiveHud = new PassiveHud(this);
     this.buffHud=new BuffHud(this);
     this.muteText = this.hudTexts.mute;
+    this.muteText.setText(this.sfx.muted ? '音效:关' : '音效:开');
     this.hudTexts.music.setText(this.music.mutedState ? '音乐:关' : '音乐:开');
     this.hudTexts.relics = this.add
       .text(28, 308, '', style(12, '#cfc3b0')).setWordWrapWidth(GAME_WIDTH - 56)
@@ -2242,7 +2244,8 @@ export class GameScene extends Phaser.Scene {
       this.hudTexts.wave.setText(`第 ${this.waveIndex + 1}/${this.chapter.waves.length} 波 · ${this.chapter.waves[this.waveIndex].name}`);
     }
     this.hudTexts.details.setText(this.relicExpanded?'收起战况 ▴':'战况 ▾');
-    for(const key of ['music','mute','gear','relics']) this.hudTexts[key].setVisible(this.relicExpanded);
+    for(const key of ['gear','relics']) this.hudTexts[key].setVisible(this.relicExpanded);
+    this.hudTexts.details.setVisible(false);
     const weapon = this.player.weapons[0];
     const mastery = '\n'+this.player.growth.masteryLabel();
     const trinkets = `\n饰品 ${this.player.growth.trinkets.length}/2`;

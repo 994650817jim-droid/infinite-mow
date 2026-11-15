@@ -20,7 +20,8 @@ export function initLayout(): boolean {
   }
   const fromUrl = new URLSearchParams(window.location.search).get('layout');
   const autoDesktop = window.innerWidth >= 900 && !window.matchMedia('(pointer: coarse)').matches;
-  IS_DESKTOP = fromUrl ? fromUrl === 'desktop' : pref ? pref === 'desktop' : autoDesktop;
+  // 桌面版（Steam）固定电脑布局
+  IS_DESKTOP = window.imDesktop ? true : fromUrl ? fromUrl === 'desktop' : pref ? pref === 'desktop' : autoDesktop;
   GAME_WIDTH = IS_DESKTOP ? 960 : 540;
   // 手机竖屏：宽固定540，高度按屏幕比例延伸（9:16→960，19.5:9约1170，最高1280），消除长屏上下黑边。
   // 960以内的设计坐标保持不变；新增高度由各场景按 GAME_HEIGHT 贴底或居中处理。?tall=0 可关闭。

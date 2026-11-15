@@ -1,3 +1,5 @@
+// 桌面版（Steam）平台层必须最先执行：替换 localStorage 为存档文件
+import './platform/desktop';
 import {ThirdChapterScene} from './scenes/ThirdChapterScene';import {thirdGameSceneClass} from './scenes/ThirdGameScene';import {GuanduChapterScene} from './scenes/GuanduChapterScene';import {guanduGameSceneClass} from './scenes/GuanduGameScene';import {siegeGameSceneClass} from './scenes/SiegeGameScene';
 import {loadGameFonts} from './ui/GameFonts';
 import Phaser from 'phaser';
@@ -71,7 +73,8 @@ async function startGame(): Promise<void> {
     scene: [BootScene, CityScene, CityRecruitScene, WorldMapScene, MenuScene, BattleScene, ThirdChapterScene, ThirdBattleScene, GuanduChapterScene, GuanduBattleScene, SiegeBattleScene],
   });
 
-  if (import.meta.env.DEV) (window as unknown as { __game?: Phaser.Game }).__game = game;
+  // 开发构建，或桌面版自动测试（IM_TEST=1 启动）时暴露游戏实例供测试脚本使用；正式发行的玩家环境不暴露
+  if (import.meta.env.DEV || window.imDesktop?.testMode) (window as unknown as { __game?: Phaser.Game }).__game = game;
   if (import.meta.env.DEV && new URLSearchParams(window.location.search).get('dev') === '1') mountDevLayoutToggle();
 
 }

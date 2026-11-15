@@ -1,5 +1,5 @@
 import {visualTextureKey} from '../systems/ReadableTextures';
-import {figureCorrection, sheetFigureHeight} from '../systems/SpriteMetrics';
+import {sheetFigureHeight} from '../systems/SpriteMetrics';
 import {ACTION_MS, HERO_ACTIONS, IDLE_FRAME_MS, ZHUGE_FALLBACK, type ActionFrame, type HeroActionKind, type HeroActionSet} from '../data/heroActions';
 import type {CharacterId} from '../data/characters';
 import Phaser from 'phaser';
@@ -207,8 +207,10 @@ export class Player {
     // 若按动作帧高缩放，人物会比行走时小约两成
     const walkKey = visualTextureKey(this.scene, this.walkSheet), walkFrameH = this.scene.textures.exists(walkKey) ? this.scene.textures.getFrame(walkKey, 'down_0')?.height || 96 : 96;
     // 两表人物中位身高之比统一大小；表内个别画小/画大的帧再单独校正（以动作表自身为参照）
-    const sheetRatio = (sheetFigureHeight(this.scene, walkKey) ?? 90) / (sheetFigureHeight(this.scene, key) ?? 90), inSheet = figureCorrection(this.scene, key, key, frame);
-    const k = this.targetHeight / walkFrameH * sheetRatio * inSheet; this.sprite.setScale(k, k);
+    // 动作图集在切图时已按全表统一缩放：各帧必须用同一个比例。举刀过顶、下蹲等姿势本来就高矮不同，
+    // 若逐帧“校正”到统一身高，人物会忽大忽小（关羽满势重斩时明显）。
+    const sheetRatio = (sheetFigureHeight(this.scene, walkKey) ?? 90) / (sheetFigureHeight(this.scene, key) ?? 90);
+    const k = this.targetHeight / walkFrameH * sheetRatio; this.sprite.setScale(k, k);
     return true;
   }
 

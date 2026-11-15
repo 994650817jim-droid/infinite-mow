@@ -17,14 +17,47 @@
     "test:mobile": "node tools/mobile-smoke.mjs",
     "test:perf": "node tools/perf-smoke.mjs",
     "pretest:chapter": "npm run build",
-    "test:chapter": "node tools/chapter-regression.mjs"
+    "test:chapter": "node tools/chapter-regression.mjs",
+    "desktop": "npm run build && node electron/run-desktop.mjs",
+    "dist:win": "npm run build && node electron/build-win.mjs"
   },
   "dependencies": {
     "phaser": "^3.90.0"
   },
   "devDependencies": {
+    "electron": "^33.4.11",
+    "electron-builder": "^25.1.8",
     "playwright": "^1.65.0",
     "typescript": "^5.9.2",
     "vite": "^7.1.0"
+  },
+  "allowScripts": {
+    "electron@33.4.11": true
+  },
+  "main": "electron/main.cjs",
+  "build": {
+    "appId": "com.infinitemow.game",
+    "productName": "InfiniteMow",
+    "copyright": "无限割草：乱世千军",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "electron/main.cjs",
+      "electron/preload.cjs",
+      "package.json",
+      "!node_modules/**/*"
+    ],
+    "asar": true,
+    "win": {
+      "target": [
+        "dir"
+      ]
+    },
+    "extraMetadata": {
+      "main": "electron/main.cjs"
+    },
+    "electronDist": "node_modules/electron/dist"
   }
 }

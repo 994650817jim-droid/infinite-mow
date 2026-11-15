@@ -77,6 +77,10 @@ export function summarize(i: number): SlotSummary {
   if (w.ownedCities?.length) parts.push(`城池 ${w.ownedCities.length}`);
   if (w.merits !== undefined) parts.push(`军功 ${w.merits}`);
   if (w.provisions !== undefined) parts.push(`粮草 ${w.provisions}`);
+  // v8 城镇：钱与当前季节
+  const town = (w as { town?: { money?: number; year?: number; season?: number } }).town;
+  if (town && typeof town.money === 'number') parts.push(`钱 ${town.money}`);
+  if (town && typeof town.year === 'number' && typeof town.season === 'number') parts.push(`${town.year} 年${'春夏秋冬'[town.season] ?? ''}`);
   let hero: string | undefined;
   try { hero = d!.im_last_hero ? getCharacter(d!.im_last_hero as never).name : undefined; } catch { hero = undefined; }
   const at = Number(d![SLOT_TOUCH_KEY]);

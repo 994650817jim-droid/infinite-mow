@@ -10,6 +10,7 @@ import Phaser from 'phaser';
 import {W,H,worldText,worldButton,worldShell,panel,worldAssets,releaseWorldArt} from '../world/WorldUI';
 import {WORLD_NODES,type WorldNode} from '../world/WorldNodes';
 import {loadWorld} from '../world/WorldStore';
+import {FOCUS_INCOME,FOCUS_NAME,costText,type CityFocus} from '../town/TownData';
 import {chapterUnlocked} from '../systems/ChapterProgress';
 import {CITIES,CITY_LINKS,CITY_INCOME,FACTIONS,HOME,SPECIALTIES,TIER_NAME,cityAttackable,cityById,cityOwner,eraDef,eraIndexFor,territorySummary,type CityDef} from '../world/WorldCities';
 import {cityMarker,factionLegend,markAlert,paintSelection,territoryTexture,MARKER_FILES,type CityMarker} from '../world/WorldMapLayers';
@@ -115,7 +116,7 @@ export class WorldMapScene extends Phaser.Scene {
   const w=Math.min(this.area.w-24-76,520),sum=territorySummary(this.owned),root=this.add.container(this.area.x+12,this.area.y+52).setDepth(20).setName('territory-panel');
   const lines=this.owned.length?[
    `我方城池 ${this.owned.length} 座 · 大城 ${sum.counts.large} / 中城 ${sum.counts.medium} / 小城 ${sum.counts.small}`,
-   `每次出征结算产出：军功 +${sum.merits} · 粮草 +${sum.provisions}`,
+   (()=>{const focus=loadWorld().town.focus,t={merits:0,provisions:0,money:0};for(const id of this.owned){const c=cityById(id);if(!c)continue;const inc=FOCUS_INCOME[c.tier][(focus[id]??'balanced') as CityFocus];t.merits+=inc.merits;t.provisions+=inc.provisions;t.money+=inc.money;}return `每季产出（按各城发展方向）：${costText(t)}`;})(),
    sum.specialties.length?'大城特产：\n'+sum.specialties.map(x=>`· ${x.city.name}「${x.specialty.title}」${x.specialty.text}`).join('\n'):'大城特产：尚无（攻占大城可获得永久加成）',
    '城池：'+this.owned.map(id=>cityById(id)?.name).filter(Boolean).join('、'),
   ]:['尚无城池。','攻下与营寨相邻的城池（许昌、汝南、官渡）后，每次出征结算都会获得城池产出；攻占大城还有永久特产加成。'];
@@ -147,7 +148,7 @@ export class WorldMapScene extends Phaser.Scene {
   if(this.selected.kind==='city'){
    const c=this.selected.city,owner=cityOwner(c.id,this.era,this.owned),era=eraDef(this.era),attack=cityAttackable(c.id,this.owned);
    const neighbors=[...(CITY_LINKS.get(c.id)??[])].map(id=>id===HOME.id?'义军营寨':cityById(id)!.name).join('、');
-   const inc=CITY_INCOME[c.tier],sp=SPECIALTIES[c.id],yieldText=`${owner==='player'?'产出':'占领后产出'}：每次出征 ${inc.merits?'军功 +'+inc.merits+' · ':''}粮草 +${inc.provisions}${sp?` · 特产「${sp.title}」${sp.text}`:''}`;
+   const focus=(loadWorld().town.focus[c.id]??'balanced') as CityFocus,inc=FOCUS_INCOME[c.tier][owner==='player'?focus:'balanced'],sp=SPECIALTIES[c.id],yieldText=`${owner==='player'?`产出（${FOCUS_NAME[focus]}，主城「城池发展」可改）`:'占领后产出'}：每季 ${costText(inc)}${sp?` · 特产「${sp.title}」${sp.text}`:''}`;
    const alert=this.alertFor(c.id),usable=attack||!!alert,warn=attack?this.lossWarning():'';
    this.detail.setText(`${c.name} · ${TIER_NAME[c.tier]} · ${c.region}\n归属：${FACTIONS[owner].name}（公元${era.year}年 · ${era.name}）\n${alert?`告急：${FACTIONS[alert.attacker].name}来犯！守住可解除；出征别处则此城失守`:owner==='player'?'你的城池':attack?warn||'与你的领地相邻，可以攻打':'尚不相邻：先攻下相邻城池'}\n${yieldText}\n相邻：${neighbors}`);
    this.action.text.setText(alert?'守城 · 选择武将':owner==='player'?'我方城池':attack?'攻城 · 选择武将':'尚不可攻打');this.action.image.setAlpha(usable?1:.45);if(usable)this.action.image.setInteractive({useHandCursor:true});else this.action.image.disableInteractive();

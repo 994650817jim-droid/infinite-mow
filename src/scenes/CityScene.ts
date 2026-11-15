@@ -67,7 +67,7 @@ export class CityScene extends Phaser.Scene {
    const btn=homeCommand(this,x,y,navW,navH,label,primary,true,D?14:15);btn.hit.setName(name).on('pointerdown',fn);if(name==='city-tax')this.taxCaption=btn.caption;});
   this.refresh();
   // 出征归来：有新的季度报告就自动弹出一次
-  const t=loadWorld().town,key=t.report?`${t.report.year}-${t.report.season}`:'';if(key&&this.registry.get('townReportSeen')!==key){this.registry.set('townReportSeen',key);this.time.delayedCall(250,()=>this.openReport());}else if(t.pendingEvent)this.time.delayedCall(250,()=>this.openEvent());
+  const t=loadWorld().town,key=t.report?`${t.report.year}-${t.report.season}`:'';if(!this.introSeen()){this.time.delayedCall(250,()=>this.openIntro());}else if(key&&this.registry.get('townReportSeen')!==key){this.registry.set('townReportSeen',key);this.time.delayedCall(250,()=>this.openReport());}else if(t.pendingEvent)this.time.delayedCall(250,()=>this.openEvent());
  }
  private taxCaption?:Phaser.GameObjects.Text;private boonText?:Phaser.GameObjects.Text;
  private openPreparation(){if(this.registry.get('battleReady'))this.scene.start('MenuScene');else{this.registry.set('loadBattle',true);this.scene.start('BootScene');}}
@@ -168,7 +168,7 @@ export class CityScene extends Phaser.Scene {
   root.add(this.add.rectangle(W/2,H/2,W,H,0x0b0806,.78).setInteractive());
   root.add(this.add.image(W/2,H/2,warPanelTexture(this,w,h,true)).setDisplaySize(w+16,h+16));
   root.add(txt(this,W/2,y+30,title,22,'#efd399',HEADING_FONT).setOrigin(.5));
-  const close=homeCommand(this,W/2,y+h-34,160,40,'返回',false,true,15);close.hit.setName(name+'-close').setData('padDefault',true).on('pointerdown',()=>{root.destroy();this.refresh();if(name==='town-report'&&loadWorld().town.pendingEvent)this.openEvent();});root.add([close.g,close.hit,close.caption]);
+  const close=homeCommand(this,W/2,y+h-34,160,40,'返回',false,true,15);close.hit.setName(name+'-close').setData('padDefault',true).on('pointerdown',()=>{root.destroy();this.refresh();if(name==='town-intro')this.afterIntro();else if(name==='town-report'&&loadWorld().town.pendingEvent)this.openEvent();});root.add([close.g,close.hit,close.caption]);
   return{root,x:(W-w)/2,y,w};
  }
  private openReport(){
@@ -212,6 +212,21 @@ export class CityScene extends Phaser.Scene {
   if(this.message)m.root.add(txt(this,W/2,m.y+(D?470:Math.min(H-40,640))-74,this.message,12,'#e8c98a').setOrigin(.5));
  }
  private focusPage=0;
+ /** 引导关闭后：有新报告先看报告，否则有待决事件就弹事件。 */
+ private afterIntro(){const t=loadWorld().town,key=t.report?`${t.report.year}-${t.report.season}`:'';if(key&&this.registry.get('townReportSeen')!==key){this.registry.set('townReportSeen',key);this.openReport();}else if(t.pendingEvent)this.openEvent();}
+ private introSeen():boolean{try{return localStorage.getItem('im_town_intro')==='1';}catch{return true;}}
+ /** 首次进入主城的简短引导（看过一次后不再弹出）。 */
+ private openIntro(){
+  const m=this.modal('town-intro','义军营寨 · 经营指南',D?380:560);
+  const lines=[
+   '· 每打完一仗（胜利或坚持 60 秒以上），营寨过一季：农田产粮、市集收税、城池按发展方向产出，并扣除后备兵军粮。',
+   '· 点空地建造，点建筑升级或拆除。民居和市集带来钱；城墙可以扩地；校场、铁匠铺、城墙让出征更强。',
+   '· 税越重收钱越多，但坏事件更常发生；每季可能出现大事，需要二选一。',
+   '· 有市集可买卖粮草，有驿站可派商队去自己的城池换钱；在「城池发展」为占领的城池选重农、重商或重军。',
+  ];
+  m.root.add(txt(this,m.x+34,m.y+68,lines.join(String.fromCharCode(10)),D?14:15,'#e9dcc0').setLineSpacing(10).setWordWrapWidth(m.w-68));
+  try{localStorage.setItem('im_town_intro','1');}catch{/* 存储不可用 */}
+ }
 
  /** 季度事件：二选一，必须选择（没有返回按钮）。 */
  private openEvent(){

@@ -16,7 +16,7 @@ export class HomeHeroPicker{
 
  });
  const back=homeCommand(s,D?W/2-140:128,D?H-43:H-82,D?160:160,60,'返回');back.hit.setName('hero-picker-close').on('pointerdown',()=>this.close());this.root.add([back.g,back.hit,back.caption]);
- const ok=homeCommand(s,D?W/2+105:356,D?H-43:H-82,D?260:248,64,'确认出战',true);ok.hit.setName('hero-confirm').on('pointerdown',()=>this.confirm(this.candidate));this.root.add([ok.g,ok.hit,ok.caption]);
+ const ok=homeCommand(s,D?W/2+105:356,D?H-43:H-82,D?260:248,64,'确认出战',true);ok.hit.setName('hero-confirm').setData('padDefault',true).on('pointerdown',()=>this.confirm(this.candidate));this.root.add([ok.g,ok.hit,ok.caption]);
  }
  open(index:number):void{this.candidate=index;this.root.setVisible(true);this.refreshArt();}
  refreshArt(_animate=false):void{this.cards.forEach((c,i)=>{c.setHero(i);c.setSelected(i===this.candidate);});}

@@ -193,7 +193,7 @@ export class MenuScene extends Phaser.Scene {
     this.heroModal=this.heroPicker.root;const modal=this.heroModal;
     const openHeroes=()=>{this.ensureHomeArt(true);this.heroPicker?.open(this.selectedChar);this.heroEntryPaint?.('selected');};pick.on('pointerdown',openHeroes);
     const startY=D?414:857+this.padY,startW=D?292:W-156,startH=D?56:64;
-    const primary=homeCommand(this,D?W*.73:W/2,startY,startW,startH,'匡扶汉室',true);this.startButton=primary.hit.setName('start-campaign');this.startLabel=primary.caption;
+    const primary=homeCommand(this,D?W*.73:W/2,startY,startW,startH,'匡扶汉室',true);this.startButton=primary.hit.setName('start-campaign').setData('padDefault',true);this.startLabel=primary.caption;
     // W4：有城池告急时提示“出征将失守”
     const lossWarn=isChapterTestRun()?'':alertLossWarning();if(lossWarn)text(D?W*.73:W/2,startY-startH/2-(D?14:16),lossWarn,D?12:13,'#ff8a70').setStroke('#1a0e08',3).setName('home-alert-warning');
     this.startButton.on('pointerdown',()=>{let chosen=!!this.registry.get('heroConfirmed');try{chosen=chosen||!!localStorage.getItem('im_last_hero');}catch{}if(!chosen&&!params.has('autostart')&&!params.has('perf')){openHeroes();return;}this.startGame();});
@@ -240,18 +240,35 @@ export class MenuScene extends Phaser.Scene {
   private openHomeSettings():void {
     const modal=this.add.container(0,0).setDepth(500).setName('home-settings-panel');
     const label=(x:number,y:number,value:string,size=20)=>this.add.text(x,y,value,{fontFamily:FONT,fontSize:size+'px',color:'#e8d0aa',resolution:2}).setOrigin(.5);
-    modal.add(this.add.rectangle(W/2,H/2,W,H,0x130d09,.97).setInteractive());modal.add(label(W/2,H/2-130,'军中设置',28));
-    ['音乐','音效'].forEach((name,i)=>{const key=i?'im_sfx_vol':'im_bgm_vol',y=H/2-40+i*76;let volume= i?90:40;try{volume=Number(localStorage.getItem(key)??volume);}catch{}const value=label(W/2,y,name+'  '+volume+'%');modal.add(value);for(const dir of [-1,1])modal.add(label(W/2+dir*140,y,dir<0?'－':'＋',28).setPadding(16,12).setInteractive({useHandCursor:true}).on('pointerdown',()=>{volume=Math.max(0,Math.min(100,volume+dir*10));try{localStorage.setItem(key,String(volume));}catch{}if(!i)menuMusic().setVolume(volume);value.setText(name+'  '+volume+'%');}));});
-    const app=desktop;
-    if(IS_DESKTOP_APP&&app){
-      // 桌面版：全屏切换与退出游戏
-      const full=label(W/2,H/2+96,app.isFullscreen()?'窗口模式（F11）':'全屏（F11）',18).setPadding(24,10).setInteractive({useHandCursor:true}).setName('settings-fullscreen');
-      full.on('pointerdown',()=>{app.toggleFullscreen();this.time.delayedCall(250,()=>full.setText(app.isFullscreen()?'窗口模式（F11）':'全屏（F11）'));});
-      const quit=label(W/2,H/2+142,'退出游戏',18).setColor('#e7b68e').setPadding(24,10).setInteractive({useHandCursor:true}).setName('settings-quit');
+    const app=desktop,desk=IS_DESKTOP_APP&&!!app;
+    // 桌面版行距收紧，放下显示设置（分辨率 / 全屏 / 垂直同步）
+    const rowY=(i:number)=>desk?H/2-150+i*54:H/2-40+i*76;
+    modal.add(this.add.rectangle(W/2,H/2,W,H,0x130d09,.97).setInteractive());modal.add(label(W/2,desk?H/2-205:H/2-130,'军中设置',28));
+    /** 一行“名称  数值”，左右 －/＋（或 ‹ ›）调节；手柄焦点在行上时左右键也能调。 */
+    const row=(i:number,name:string,get:()=>string,step:(dir:number)=>void,arrows:[string,string]=['－','＋'])=>{
+      const y=rowY(i),value=label(W/2,y,name+'  '+get(),desk?18:20).setName('settings-row-'+i);modal.add(value);
+      for(const dir of [-1,1]){const b=label(W/2+dir*(desk?170:140),y,dir<0?arrows[0]:arrows[1],desk?24:28).setPadding(16,desk?8:12).setInteractive({useHandCursor:true}).setName(`settings-row-${i}-${dir<0?'dec':'inc'}`);
+        b.setData('padAdjust',(d:number)=>{step(d);value.setText(name+'  '+get());}).on('pointerdown',()=>{step(dir);value.setText(name+'  '+get());});modal.add(b);}
+      return value;
+    };
+    ['音乐','音效'].forEach((name,i)=>{const key=i?'im_sfx_vol':'im_bgm_vol';let volume= i?90:40;try{volume=Number(localStorage.getItem(key)??volume);}catch{}
+      row(i,name,()=>volume+'%',dir=>{volume=Math.max(0,Math.min(100,volume+dir*10));try{localStorage.setItem(key,String(volume));}catch{}if(!i)menuMusic().setVolume(volume);});});
+    if(desk&&app){
+      // 桌面版：显示模式、窗口分辨率、垂直同步、退出游戏
+      const disp=()=>app.display?.get();
+      const full=row(2,'显示模式',()=>app.isFullscreen()?'全屏':'窗口',()=>{app.toggleFullscreen();this.time.delayedCall(250,()=>{full.setText('显示模式  '+(app.isFullscreen()?'全屏':'窗口'));resText();});},['‹','›']).setName('settings-fullscreen');
+      const resName=()=>{const d=disp();return d?`${d.width}×${d.height}`:'—';};
+      const res=row(3,'窗口分辨率',resName,dir=>{const d=disp();if(!d||!app.display)return;const list=d.resolutions;let i=list.findIndex(([w,h])=>w===d.width&&h===d.height);i=Math.max(0,Math.min(list.length-1,(i<0?0:i)+dir));app.display.set({width:list[i][0],height:list[i][1]});},['‹','›']).setName('settings-resolution');
+      const resNote=label(W/2,rowY(3)+22,'',11).setColor('#9d8f78');modal.add(resNote);
+      const resText=()=>{res.setText('窗口分辨率  '+resName());resNote.setText(app.isFullscreen()?'全屏时按屏幕分辨率显示；窗口模式下生效':'');};resText();
+      const vs=row(4,'垂直同步',()=>{const d=disp();return d?(d.vsync?'开':'关'):'—';},()=>{const d=disp();if(d&&app.display)app.display.set({vsync:!d.vsync});vsNote();},['‹','›']).setName('settings-vsync');
+      const vsyncNote=label(W/2,rowY(4)+22,'',11).setColor('#9d8f78');modal.add(vsyncNote);
+      const vsNote=()=>{const d=disp();vsyncNote.setText(d&&d.vsync!==d.vsyncActive?'重启游戏后生效':'');};vsNote();void vs;
+      const quit=label(W/2,rowY(5)+6,'退出游戏',18).setColor('#e7b68e').setPadding(24,10).setInteractive({useHandCursor:true}).setName('settings-quit');
       quit.on('pointerdown',()=>{if(quit.getData('confirm'))app.quit();else quit.setData('confirm',true).setText('确认退出？再点一次');});
-      modal.add([full,quit]);
+      modal.add(quit);
     }
-    modal.add(label(W/2,IS_DESKTOP_APP?H/2+200:H/2+135,'返回',20).setPadding(40,16).setInteractive({useHandCursor:true}).setName('settings-close').on('pointerdown',()=>modal.destroy()));
+    modal.add(label(W/2,desk?rowY(6)+8:H/2+135,'返回',20).setPadding(40,desk?12:16).setInteractive({useHandCursor:true}).setName('settings-close').setData('padDefault',true).on('pointerdown',()=>modal.destroy()));
   }
   private corners(g: Phaser.GameObjects.Graphics, bg: Phaser.GameObjects.Rectangle, selected: boolean): void {
     g.clear();

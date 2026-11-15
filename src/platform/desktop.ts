@@ -10,7 +10,10 @@ interface DesktopBridge {
   testMode?: boolean;
   store: { load(): Record<string, string> | null; set(key: string, value: string): boolean; remove(key: string): boolean; replace(all: Record<string, string>): boolean; path(): string };
   quit(): void; toggleFullscreen(): void; isFullscreen(): boolean;
+  /** 显示设置（S2）：窗口分辨率、全屏、垂直同步（重启生效）。 */
+  display?: { get(): DisplaySettings; set(patch: Partial<Pick<DisplaySettings, 'width' | 'height' | 'fullscreen' | 'vsync'>>): DisplaySettings };
 }
+export interface DisplaySettings { width: number; height: number; fullscreen: boolean; vsync: boolean; vsyncActive: boolean; resolutions: [number, number][] }
 declare global { interface Window { imDesktop?: DesktopBridge } }
 
 export const desktop: DesktopBridge | undefined = typeof window !== 'undefined' ? window.imDesktop : undefined;

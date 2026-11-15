@@ -13,4 +13,9 @@ contextBridge.exposeInMainWorld('imDesktop', {
   quit: () => ipcRenderer.send('app:quit'),
   toggleFullscreen: () => ipcRenderer.send('app:fullscreen'),
   isFullscreen: () => ipcRenderer.sendSync('app:isFullscreen'),
+  // 显示设置：{ width, height, fullscreen, vsync, vsyncActive, resolutions }
+  display: {
+    get: () => ipcRenderer.sendSync('display:get'),
+    set: patch => ipcRenderer.sendSync('display:set', patch),
+  },
 });

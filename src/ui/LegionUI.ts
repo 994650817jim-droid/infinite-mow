@@ -19,6 +19,9 @@ export class LegionUI {
   private readonly order: Phaser.GameObjects.Text;
   private readonly orderPlate: Phaser.GameObjects.Graphics;
   private readonly orderHint: Phaser.GameObjects.Text;
+  private keyHint?: Phaser.GameObjects.Text;
+  /** 护阵 / 出击按键提示（E / 手柄 Ⓨ）。 */
+  setKeyHint(label: string): void { this.keyHint?.setText(label); }
   private orderState = '';
   /** 军令按钮（护阵 / 出击）：紧凑半透明胶囊，靠右下（2026-11-15 用户反馈原样式太显眼）。 */
   private readonly orderW = D ? 96 : 108; private readonly orderH = D ? 30 : 38;
@@ -48,7 +51,7 @@ export class LegionUI {
     this.orderPlate.setAlpha(.8);
     // 说明行不再显示（军令名已说明含义）；保留对象以免改动其它逻辑
     this.orderHint = text(this.orderX + 32, this.orderY + this.orderH, '', 10).setColor('#acbeb0').setVisible(false);
-    const key = text(this.orderX + this.orderW - 14, this.orderY + this.orderH / 2, D ? 'E' : '⇄', 10).setColor('#9fa592').setAlpha(.7).setOrigin(.5);
+    const key = this.keyHint = text(this.orderX + this.orderW - 14, this.orderY + this.orderH / 2, D ? 'E' : '⇄', 10).setColor('#9fa592').setAlpha(.7).setOrigin(.5);
     this.hud.add([this.status, this.orderPlate, this.order, this.orderHint, key]);
     this.panel = scene.add.container(0, 0).setScrollFactor(0).setDepth(DEPTH.overlay + 1).setVisible(false);
     this.panel.add(scene.add.rectangle(0, 0, W, H, 0x121b17, 0).setOrigin(0).setScrollFactor(0).setInteractive());

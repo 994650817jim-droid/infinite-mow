@@ -21,6 +21,7 @@ import {YellowBattle} from '../systems/YellowBattle';
 import {dongzhuoStageUnlocked,yellowStageUnlocked} from '../world/WorldStore';
 import {abandonExpedition,beginExpedition,settleExpedition,permanentEffects,worldUnlocked,worldChapterCleared,takeExpeditionReserve} from '../world/WorldStore';
 import Phaser from 'phaser';
+import { PAD, PAD_LABEL, gamepad, keyHint } from '../platform/gamepad';
 import { ArtEffects } from '../systems/ArtEffects';
 import { BattlefieldDetails } from '../systems/BattlefieldDetails';
 import { WAR, warText, ensureWarTextures } from '../ui/WarStyle';
@@ -95,6 +96,8 @@ type Mode = 'none' | 'levelup' | 'pause' | 'attributes' | 'result' | 'recruit' |
 export class GameScene extends Phaser.Scene {
   protected player!: Player;
   protected joystick!: Joystick;
+  protected potionCaption?: Phaser.GameObjects.Text;
+  protected pauseKeysText?: Phaser.GameObjects.Text;
   private expeditionId="";
   private worldCampaign=false;
   private huaxiong:HuaxiongBoss|null=null;private xurong:XurongBoss|null=null;
@@ -392,6 +395,10 @@ export class GameScene extends Phaser.Scene {
     this.joystick = new Joystick(this);
     if (IS_DESKTOP) this.joystick.setHidden(true);
     this.bindInput();
+    // 手柄 / 键鼠切换时刷新按键提示
+    const offHints = gamepad.onDeviceChange(() => this.refreshInputHints());
+    this.events.once('shutdown', offHints);
+    this.events.once(Phaser.Scenes.Events.UPDATE, () => this.refreshInputHints());
     if (import.meta.env.DEV) this.installDevelopment();
 
     this.hintText = this.add
@@ -680,6 +687,8 @@ export class GameScene extends Phaser.Scene {
     if (this.joystick.active && this.joystick.vector.lengthSq() > 0.001) {
       return this.joystick.vector.clone();
     }
+    // 手柄左摇杆 / 十字键（模拟量，推得浅走得慢）
+    if (gamepad.move.x || gamepad.move.y) return new Phaser.Math.Vector2(gamepad.move.x, gamepad.move.y);
     const out = new Phaser.Math.Vector2(0, 0);
     if (this.cursors) {
       if (this.cursors.left.isDown) out.x -= 1;
@@ -1889,6 +1898,8 @@ export class GameScene extends Phaser.Scene {
     hit.on('pointermove',(p:Phaser.Input.Pointer)=>{if(p.isDown)apply((screenPoint(p).x-(cx-width/2))/width);});
     this.input.setDraggable(knob);
     knob.on('drag',(_p:Phaser.Input.Pointer,x:number)=>apply((x-(cx-width/2))/width));
+    // 手柄：焦点在滑条上时左右键每次 ±10%
+    hit.setData('padAdjust',(dir:number)=>apply((knob.x-(cx-width/2))/width+dir*.1));
     return [text,percent,track,fill,hit,knob];
   }
 
@@ -1939,6 +1950,37 @@ export class GameScene extends Phaser.Scene {
     this.registry.set('campaignTransfer',transfer);
     this.registry.set('runConfig',{...this.runConfig,chapter,stage:chapter==='huangjin'?next:undefined,westStage:chapter==='hulao'?next:undefined});
     this.resting = false; this.scene.restart();
+  }
+
+  // —— 手柄（STEAM_PLAN.md · S2；导航见 ui/PadNavigator.ts）——
+  /** 战斗进行中：摇杆用于移动，不做界面导航。 */
+  padCapture(): boolean { return this.mode === 'none' && !this.over; }
+  /** ☰ 暂停 / 继续，Ⓧ 用药，Ⓨ 护阵 / 出击；暂停中 Ⓑ 继续战斗。 */
+  padButton(button: number): boolean {
+    if (button === PAD.START && ((this.mode === 'none' && !this.over) || this.mode === 'pause')) { this.togglePause(); return true; }
+    if (this.mode === 'none' && !this.over) {
+      if (button === PAD.X) { this.usePotion(); return true; }
+      if (button === PAD.Y) { this.legion.cycleOrder(); return true; }
+      return false;
+    }
+    if (button === PAD.B && this.mode === 'pause' && !this.children.getByName('build-panel')) { this.togglePause(); return true; }
+    return false;
+  }
+  /** 面板打开时只在面板（overlay 层）里导航，不跳到 HUD 按钮。 */
+  padFilter(obj: Phaser.GameObjects.GameObject): boolean {
+    if (this.mode === 'none') return true;
+    let root = obj as Phaser.GameObjects.GameObject & { depth?: number }; while (root.parentContainer) root = root.parentContainer as typeof root;
+    return (root.depth ?? 0) >= DEPTH.overlay;
+  }
+  /** 按当前输入设备刷新按键提示。 */
+  protected refreshInputHints(): void {
+    const pad = gamepad.device === 'pad';
+    this.potionCaption?.setText(pad ? '用药 ' + PAD_LABEL.X : '用药');
+    this.pauseKeysText?.setText(pad ? PAD_LABEL.START + ' / ' + PAD_LABEL.B + ' 继续战斗' : IS_DESKTOP ? 'Esc / P 继续战斗' : '战斗已冻结 · 点击「继续战斗」恢复');
+    this.hudTexts?.pause?.setText(pad ? PAD_LABEL.START + ' 暂停' : '暂停');
+    this.hintText?.setText(pad ? '左摇杆移动 · 自动攻击' : IS_DESKTOP ? 'WASD / 方向键移动 · 自动攻击' : '自动攻击 · 拖动摇杆移动');
+    this.legionUI?.setKeyHint(pad ? PAD_LABEL.Y : IS_DESKTOP ? 'E' : '⇄');
+    for (const [i, v] of (this.cardViews ?? []).entries()) v.hint.setText(pad ? PAD_LABEL.A + ' 选择' : IS_DESKTOP ? '按 ' + (i + 1) + ' 选择' : '点击选择');
   }
 
   protected togglePause(): void {
@@ -2177,7 +2219,7 @@ export class GameScene extends Phaser.Scene {
       const icon=this.add.image(0,-1,'healing_potion').setDisplaySize(30,36);
       const bubble=this.add.circle(21,-21,11,0x3f8a4a,1).setStrokeStyle(1.5,0xffe2a4,1);
       this.potionBadge=this.add.text(21,-21,'0',{fontFamily:FONT,fontSize:'13px',color:'#fff6e0',resolution:2,fontStyle:'bold'}).setOrigin(.5);
-      const caption=this.add.text(0,40,'用药',{fontFamily:FONT,fontSize:'13px',color:'#ffe2a4',resolution:2,stroke:'#17140d',strokeThickness:3}).setOrigin(.5);
+      const caption=this.potionCaption=this.add.text(0,40,'用药',{fontFamily:FONT,fontSize:'13px',color:'#ffe2a4',resolution:2,stroke:'#17140d',strokeThickness:3}).setOrigin(.5);
       root.add([glow,disc,icon,bubble,this.potionBadge,caption]);
       root.setInteractive(new Phaser.Geom.Circle(0,0,34),Phaser.Geom.Circle.Contains).on('pointerdown',(_p:Phaser.Input.Pointer,_x:number,_y:number,event:Phaser.Types.Input.EventData)=>{event?.stopPropagation?.();this.usePotion();});
       if(root.input)root.input.cursor='pointer';
@@ -2352,7 +2394,7 @@ export class GameScene extends Phaser.Scene {
     const pauseTitle=this.add.text(cx,top+34,'战斗暂停',warText(27,'#e8cf91')).setOrigin(.5);
     const pauseHint=this.add.text(cx,top+66,'稍歇片刻 · 战斗进度已暂停',warText(13,'#91ab98')).setOrigin(.5);
     const resumeY=top+114;
-    const resume=this.add.image(cx,resumeY,'ui_war_button').setDisplaySize(pw-64,50).setInteractive({useHandCursor:true}).setName('pause-resume');
+    const resume=this.add.image(cx,resumeY,'ui_war_button').setDisplaySize(pw-64,50).setInteractive({useHandCursor:true}).setName('pause-resume').setData('padDefault',true);
     const resumeText=this.add.text(cx,resumeY,'继续战斗',warText(21,'#17281d')).setOrigin(.5);
     resume.on('pointerdown',()=>this.togglePause()).on('pointerover',()=>resume.setTint(0xffe8ad)).on('pointerout',()=>resume.clearTint());
     this.attributePauseText=this.add.text(cx,top+153,'分配属性点 · 0',warText(15,'#e8cf91')).setOrigin(.5).setPadding(12,5).setInteractive({useHandCursor:true}).setName('pause-attributes');
@@ -2366,7 +2408,7 @@ export class GameScene extends Phaser.Scene {
       if(exit.getData('confirm')){this.abandonRun();this.registry.remove('campaignTransfer');this.scene.start(this.worldCampaign&&worldUnlocked()?'CityScene':'MenuScene');}
       else exit.setData('confirm',true).setText('确认离开？本局进度不保留').setColor('#e7b68e');
     });
-    const keys=this.add.text(cx,top+ph-22,d?'Esc / P 继续战斗':'战斗已冻结 · 点击「继续战斗」恢复',warText(12,'#7f9987')).setOrigin(.5);
+    const keys=this.pauseKeysText=this.add.text(cx,top+ph-22,d?'Esc / P 继续战斗':'战斗已冻结 · 点击「继续战斗」恢复',warText(12,'#7f9987')).setOrigin(.5);
     this.pausePanel.add([pauseDim,panel,pauseTitle,pauseHint,resume,resumeText,this.attributePauseText,...bgmRow,...sfxRow,exit,keys]);
 
     this.attributePanel=this.add.container(0,0).setScrollFactor(0).setDepth(DEPTH.overlay+1).setVisible(false);

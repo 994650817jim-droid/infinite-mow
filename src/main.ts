@@ -10,6 +10,7 @@ import { CityRecruitScene } from './scenes/CityRecruitScene';
 import { CityScene } from './scenes/CityScene';
 import { WorldMapScene } from './scenes/WorldMapScene';
 import { MenuScene } from './scenes/MenuScene';
+import { installGamepad } from './ui/PadNavigator';
 
 initLayout();
 
@@ -73,8 +74,10 @@ async function startGame(): Promise<void> {
     scene: [BootScene, CityScene, CityRecruitScene, WorldMapScene, MenuScene, BattleScene, ThirdChapterScene, ThirdBattleScene, GuanduChapterScene, GuanduBattleScene, SiegeBattleScene],
   });
 
+  // 手柄：每帧轮询 + 界面焦点导航（STEAM_PLAN.md · S2）
+  const pad = installGamepad(game);
   // 开发构建，或桌面版自动测试（IM_TEST=1 启动）时暴露游戏实例供测试脚本使用；正式发行的玩家环境不暴露
-  if (import.meta.env.DEV || window.imDesktop?.testMode) (window as unknown as { __game?: Phaser.Game }).__game = game;
+  if (import.meta.env.DEV || window.imDesktop?.testMode) { (window as unknown as { __game?: Phaser.Game }).__game = game; (window as unknown as { __pad?: unknown }).__pad = pad; }
   if (import.meta.env.DEV && new URLSearchParams(window.location.search).get('dev') === '1') mountDevLayoutToggle();
 
 }

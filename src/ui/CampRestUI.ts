@@ -30,7 +30,7 @@ export class CampRestUI {
   });
   this.body=scene.add.container(0,0);this.root.add(this.body);
   this.detail=this.text(D?40:28,D?H-103:H-176,'',D?13:15).setWordWrapWidth(W-(D?80:56),true);this.detail.setMaxLines(D?3:5);this.root.add(this.detail);
-  const command=homeCommand(scene,W/2,H-(D?35:48),D?290:W-72,D?48:56,'率军出征',true);[command.g,command.caption,command.hit].forEach(o=>o.setScrollFactor(0));command.hit.setName('camp-depart').on('pointerdown',depart);this.root.add([command.g,command.caption,command.hit]);
+  const command=homeCommand(scene,W/2,H-(D?35:48),D?290:W-72,D?48:56,'率军出征',true);[command.g,command.caption,command.hit].forEach(o=>o.setScrollFactor(0));command.hit.setName('camp-depart').setData('padDefault',true).on('pointerdown',depart);this.root.add([command.g,command.caption,command.hit]);
  }
  private sound(kind:string){(this.scene as unknown as {sfx?:{play(k:string):void}}).sfx?.play(kind);}
  private text(x:number,y:number,s:string,size=16){return this.scene.add.text(x,y,s,{fontFamily:FONT,fontSize:size+'px',color:'#dfd4bd',resolution:2,stroke:'#17120c',strokeThickness:1,wordWrap:{width:W-100,useAdvancedWrap:true}}).setScrollFactor(0);}

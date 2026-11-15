@@ -10,7 +10,7 @@ export interface ArcSceneConfig{
  key:string;arc:WarlordArc;
  /** registry 键：当前关、关间继承。 */
  stageKey:string;transferKey:string;
- stages:readonly{id:string;name:string;boss:string;behavior?:ThirdStage;scenery?:ThirdStage;skills?:[string,string,string]}[];
+ stages:readonly{id:string;name:string;boss:string;behavior?:ThirdStage;scenery?:ThirdStage;skills?:[string,string,string];signature?:string}[];
  texture:(id:string)=>string;sheet:(id:string)=>string;
  battle:(stage:ThirdStage)=>ChapterDef;
  /** 军营休整界面的键前缀。 */
@@ -51,7 +51,7 @@ export function thirdGameSceneClass(Base:typeof GameScene,cfg:ArcSceneConfig=THI
  protected priorityWeaponTarget(range:number,bodyRadius=true){return this.enemyCamps?.target(range,bodyRadius)??null;}
  protected tryCustomBossSkill(){if(!this.controller||!this.boss?.active)return false;this.controller.forceSkill(this.combatNow);return true;}
  protected customChapter(){return cfg.battle(this.thirdStage);}
- protected spawnBoss(){super.spawnBoss();const d=cfg.stages[this.thirdStage-1];if(this.boss)this.controller=new ThirdBoss({scene:this,boss:this.boss,player:this.player,army:this.legion,spawn:(kind,x,y)=>this.spawnEnemy(kind,x,y,1,true)},this.behavior,this.combatNow,cfg===THIRD_CONFIG?undefined:{texture:cfg.texture(d.id),name:d.boss,skills:d.skills});}
+ protected spawnBoss(){super.spawnBoss();const d=cfg.stages[this.thirdStage-1];if(this.boss)this.controller=new ThirdBoss({scene:this,boss:this.boss,player:this.player,army:this.legion,spawn:(kind,x,y)=>this.spawnEnemy(kind,x,y,1,true)},this.behavior,this.combatNow,cfg===THIRD_CONFIG?undefined:{texture:cfg.texture(d.id),name:d.boss,skills:d.skills,signature:d.signature?{id:d.id as 'caochun'|'caimao'|'caoren',name:d.signature}:undefined});}
  protected customBossStep(enemy:Enemy,dt:number,now:number){if(enemy!==this.boss||!this.controller)return false;this.controller.update(dt,now);return true;}
 
  protected customEnemyStep(enemy:Enemy,dt:number,now:number,target:{x:number;y:number}){

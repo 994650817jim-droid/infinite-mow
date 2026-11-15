@@ -232,3 +232,7 @@ export function buildingBattleEffects(t: TownState): BattleBoon {
 
 export function noMods(): SeasonMods { return { taxMul: 1, grainMul: 1, badRisk: 0 }; }
 export function noBoon(): BattleBoon { return { attributePoints: 0, damage: 0, maxHp: 0 }; }
+
+/** 已导入的小镇建筑美术等级（public/assets/town/<建筑>_<等级>.webp，tools/prepare-town-art.mjs 切图）。缺某级时用不高于它的最高已有等级。 */
+export const TOWN_ART_LEVELS: number[] = [1, 2, 3];
+export function townArtLevel(level: number): number { let best = 0; for (const l of TOWN_ART_LEVELS) if (l <= level && l > best) best = l; return best; }

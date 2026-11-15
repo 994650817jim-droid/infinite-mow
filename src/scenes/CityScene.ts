@@ -9,8 +9,9 @@ import Phaser from 'phaser';
 import {W,H,worldShell,worldAssets} from '../world/WorldUI';
 import {FONT,HEADING_FONT} from '../config';
 import {homeCommand,warPanelTexture} from '../ui/HomeCommand';
+import {uiSfx} from '../systems/Sfx';
 import {loadWorld,saveWorld,worldUnlocked,storageUnavailable,incompatibleSave,townBuild,townUpgrade,townDemolish,setTaxRate,setCityFocus,resolveTownEvent,tradeGrain,sendCaravan} from '../world/WorldStore';
-import {TOWN_BUILDINGS,PLOT_COUNT,TAX_NAME,TAX_PER_HOUSEHOLD,FOCUS_NAME,FOCUS_INCOME,FOCUS_CHANGE_COST,upgradeCostFor,demolishRefund,countOf,unlockedPlots,households,levelOf,canAfford,costText,seasonLabel,SEASONS,eventById,grainSellPrice,grainBuyPrice,caravanValue,caravanSlots,CARAVAN_CARGO,buildingBattleEffects,type TownBuildingId,type TaxRate,type CityFocus} from '../town/TownData';
+import {TOWN_BUILDINGS,PLOT_COUNT,TAX_NAME,TAX_PER_HOUSEHOLD,FOCUS_NAME,FOCUS_INCOME,FOCUS_CHANGE_COST,upgradeCostFor,demolishRefund,countOf,unlockedPlots,households,levelOf,canAfford,costText,seasonLabel,SEASONS,eventById,grainSellPrice,grainBuyPrice,caravanValue,caravanSlots,CARAVAN_CARGO,buildingBattleEffects,TOWN_ART_LEVELS,townArtLevel,type TownBuildingId,type TaxRate,type CityFocus} from '../town/TownData';
 import {cityById,TIER_NAME} from '../world/WorldCities';
 
 /** 是否电脑布局：在场景构造时读取（模块加载时布局尚未初始化）。 */
@@ -31,7 +32,8 @@ export class CityScene extends Phaser.Scene {
  private mapRect={x:0,y:0,w:0,h:0};private sideRect={x:0,y:0,w:0,h:0};
  constructor(){super('CityScene');}
  init(){D=W>600;if(D){this.mapRect={x:20,y:74,w:612,h:396};this.sideRect={x:646,y:74,w:W-666,h:396};}else{const top=112,avail=H-top-170-12,mh=Math.round(Math.min(470,avail*.5));this.mapRect={x:14,y:top,w:W-28,h:mh};this.sideRect={x:14,y:top+mh+12,w:W-28,h:avail-mh};}}
- preload(){if(!worldUnlocked()&&!isChapterTestRun())return;worldAssets(this,'city_art','assets/world/camp.webp');if(!this.textures.exists('art_panel'))this.load.image('art_panel','assets/processed/overhaul/bronze-panel-mobile.png');}
+ preload(){if(!worldUnlocked()&&!isChapterTestRun())return;worldAssets(this,'city_art','assets/world/camp.webp');if(!this.textures.exists('art_panel'))this.load.image('art_panel','assets/processed/overhaul/bronze-panel-mobile.png');
+  for(const lv of TOWN_ART_LEVELS)for(const id of Object.keys(TOWN_BUILDINGS)){const key=`town_${id}_${lv}`;if(!this.textures.exists(key))this.load.image(key,`assets/town/${id}_${lv}.webp`);}}
  create(){playMenuMusic(this);
   if(!worldUnlocked()&&!isChapterTestRun()){this.registry.set('loadBattle',true);this.scene.start(this.registry.get('battleReady')?'MenuScene':'BootScene');return;}
   // 战斗图集在下次出征重新加载，不与战略界面美术同时常驻
@@ -75,7 +77,7 @@ export class CityScene extends Phaser.Scene {
   this.top.setText(`军功 ${s.merits}   粮草 ${s.provisions}   钱 ${t.money}`);
   const be=buildingBattleEffects(t),bo=t.boon,pts=be.attributePoints+bo.attributePoints,dmg=Math.round((be.damage+bo.damage)*100),hp=Math.round((be.maxHp+bo.maxHp)*100);
   this.boonText?.destroy();const parts=[pts?`属性点 +${pts}`:'',dmg?`伤害 ${dmg>0?'+':''}${dmg}%`:'',hp?`生命 ${hp>0?'+':''}${hp}%`:''].filter(Boolean);
-  if(parts.length)this.boonText=txt(this,D?W-24:24,D?54:112-12,'出征加成 · '+parts.join(' · '),12,'#b9d2a8').setOrigin(D?1:0,.5);
+  if(parts.length)this.boonText=txt(this,W-24,D?54:68,'出征加成 · '+parts.join(' · '),12,'#b9d2a8').setOrigin(1,.5);
   this.taxCaption?.setText('税率 · '+TAX_NAME[t.tax]);
   this.drawMap();this.drawSide();
  }
@@ -85,13 +87,13 @@ export class CityScene extends Phaser.Scene {
   this.map.removeAll(true);
   const s=loadWorld(),t=s.town,r=this.mapRect,open=unlockedPlots(t),cw=r.w/4,ch=r.h/3;
   for(let i=0;i<PLOT_COUNT;i++){
-   const cx=r.x+cw*(i%4)+cw/2,cy=r.y+ch*Math.floor(i/4)+ch/2,pw=cw-22,ph=ch-24,p=t.plots[i],locked=i>=open,sel=i===this.selected;
+   const cx=r.x+cw*(i%4)+cw/2,cy=r.y+ch*Math.floor(i/4)+ch/2,pw=cw-22,ph=ch-24,p=t.plots[i],locked=i>=open&&!p,sel=i===this.selected;
    const g=this.add.graphics();
    g.fillStyle(locked?0x3a3328:p?0x857150:0x9c8a62,locked?.55:.9).fillRoundedRect(cx-pw/2,cy-ph/2,pw,ph,8);
    g.lineStyle(sel?3:1.5,sel?0xffd76a:locked?0x5a5040:0xc9ad74,sel?1:.8).strokeRoundedRect(cx-pw/2,cy-ph/2,pw,ph,8);
    this.map.add(g);
    if(locked){this.map.add(txt(this,cx,cy,'🔒\n城墙扩地',12,'#8a7f6a').setOrigin(.5).setAlign('center'));}
-   else if(p){this.drawBuilding(p.id,p.level,cx,cy-8,pw,ph);this.map.add(txt(this,cx,cy+ph/2-14,`${TOWN_BUILDINGS[p.id].name} Lv${p.level}`,13,'#fff1cf').setOrigin(.5).setShadow(0,1,'#000',3,true,true));}
+   else if(p){this.drawingPlot=i;this.drawBuilding(p.id,p.level,cx,cy-8,pw,ph);this.map.add(txt(this,cx,cy+ph/2-14,`${TOWN_BUILDINGS[p.id].name} Lv${p.level}`,13,'#fff1cf').setOrigin(.5).setShadow(0,1,'#000',3,true,true));}
    else this.map.add(txt(this,cx,cy,'＋ 空地',14,'#f3e2b8').setOrigin(.5).setAlpha(.85));
    const hit=this.add.rectangle(cx,cy,pw,ph,0,0.001).setName(`plot-${i}`);
    if(!locked)hit.setInteractive({useHandCursor:true}).on('pointerdown',()=>{this.selected=i;this.choice=null;this.message='';this.refresh();});
@@ -100,8 +102,9 @@ export class CityScene extends Phaser.Scene {
   }
  }
  private drawBuilding(id:TownBuildingId,level:number,x:number,y:number,w:number,h:number){
-  const key=`town_${id}_${level}`;
-  if(this.textures.exists(key)){const img=this.add.image(x,y,key);const k=Math.min((w-6)/img.width,(h-26)/img.height);img.setScale(k);this.map.add(img);return;}
+  const art=townArtLevel(level),key=`town_${id}_${art}`;
+  // 有美术：底边对齐地块，等级高于已有美术时稍放大以示区别
+  if(art&&this.textures.exists(key)){const img=this.add.image(x,y+(h-26)/2-2,key).setOrigin(.5,1);const k=Math.min((w-6)/img.width,(h-22)/img.height)*(1+(level-art)*.08);img.setScale(k);this.map.add(img);if(this.popPlot===this.drawingPlot){this.popPlot=-1;this.playPop(img,x,y+(h-26)/2-2);}return;}
   const L=LOOK[id],g=this.add.graphics(),bw=Math.min(w*.62,70+level*8),bh=Math.min(h*.5,34+level*6);
   g.fillStyle(0x000000,.25).fillEllipse(x,y+bh/2+4,bw*1.15,12);
   g.fillStyle(L.wall,1).fillRect(x-bw/2,y-bh/2+10,bw,bh-10);
@@ -131,14 +134,14 @@ export class CityScene extends Phaser.Scene {
     y+=rowH;
    }
    if(this.choice){const def=TOWN_BUILDINGS[this.choice],by=r.y+r.h-28;add(txt(this,x0,by-26,def.effect(1),12,'#cfe0c8').setWordWrapWidth(wrap).setOrigin(0,1));
-    const b=homeCommand(this,r.x+r.w/2,by,Math.min(220,r.w-40),38,'建造 '+def.name,true,canAfford(have,def.build),15);b.hit.setName('town-build').setData('padDefault',true).on('pointerdown',()=>this.act(townBuild(this.selected,this.choice!)));for(const o of [b.g,b.hit,b.caption])add(o);y+=50;}
+    const b=homeCommand(this,r.x+r.w/2,by,Math.min(220,r.w-40),38,'建造 '+def.name,true,canAfford(have,def.build),15);b.hit.setName('town-build').setData('padDefault',true).on('pointerdown',()=>this.act(townBuild(this.selected,this.choice!),true));for(const o of [b.g,b.hit,b.caption])add(o);y+=50;}
   }else{
    const def=TOWN_BUILDINGS[p.id],next=upgradeCostFor(p.id,p.level);
    line(`${def.name} · Lv${p.level}`,19,'#f4d99f');line(def.effect(p.level),14);
    if(p.id==='house'||p.id==='market')line(`民户 ${households(t)} · ${TAX_NAME[t.tax]}每户 ${TAX_PER_HOUSEHOLD[t.tax]} 钱`,12,'#b9c9b2');
    if(next){y+=4;line('下一级：'+def.effect(p.level+1),13,'#cfe0c8');line('花费：'+costText(next),13,canAfford(have,next)?'#d9c58f':'#c98a76');}else line('已达最高等级',13,'#b9a98a');
    const by=r.y+r.h-(D?36:34),bw=Math.min(150,(r.w-48)/2);
-   const up=homeCommand(this,r.x+r.w/2-bw/2-8,by,bw,40,next?'升级':'已满级',true,!!next&&canAfford(have,next),15);up.hit.setName('town-upgrade').setData('padDefault',true).on('pointerdown',()=>this.act(townUpgrade(this.selected)));
+   const up=homeCommand(this,r.x+r.w/2-bw/2-8,by,bw,40,next?'升级':'已满级',true,!!next&&canAfford(have,next),15);up.hit.setName('town-upgrade').setData('padDefault',true).on('pointerdown',()=>this.act(townUpgrade(this.selected),true));
    const back=demolishRefund(p),dem=homeCommand(this,r.x+r.w/2+bw/2+8,by,bw,40,'拆除',false,p.id!=='barracks',15);dem.hit.setName('town-demolish').on('pointerdown',()=>{if(!dem.hit.getData('confirm')){dem.hit.setData('confirm',true);dem.caption.setText('确认拆除？');this.message='拆除返还 '+costText(back);this.drawMessage();return;}this.act(townDemolish(this.selected));});
    for(const o of [up.g,up.hit,up.caption,dem.g,dem.hit,dem.caption])add(o);
   }
@@ -146,7 +149,15 @@ export class CityScene extends Phaser.Scene {
  }
  private msgText?:Phaser.GameObjects.Text;
  private drawMessage(){this.msgText?.destroy();const r=this.sideRect,warn=storageUnavailable?(incompatibleSave?'存档版本较新，本次修改不会保存':'存储不可用，修改仅保留本次会话'):'';const v=[this.message,warn].filter(Boolean).join('\n');if(!v)return;this.msgText=txt(this,r.x+16,r.y+r.h-(D?78:76),v,12,'#e8c98a').setWordWrapWidth(r.w-32);this.side.add(this.msgText);}
- private act(res:{ok:boolean;message:string}){this.message=res.message;if(res.ok)this.choice=null;this.refresh();}
+ private act(res:{ok:boolean;message:string},pop=false){this.message=res.message;if(res.ok){this.choice=null;if(pop)this.popPlot=this.selected;}this.refresh();}
+ /** 建成 / 升级后播放一次的地块（建筑弹起 + 尘土）。 */
+ private popPlot=-1;private drawingPlot=-1;
+ private playPop(target:Phaser.GameObjects.Components.Transform&Phaser.GameObjects.GameObject,x:number,y:number){
+  const sx=(target as unknown as {scaleX:number}).scaleX,sy=(target as unknown as {scaleY:number}).scaleY;(target as unknown as Phaser.GameObjects.Image).setScale(sx*.55,sy*.35);
+  this.tweens.add({targets:target,scaleX:sx,scaleY:sy,duration:420,ease:'Back.easeOut'});
+  for(let i=0;i<10;i++){const a=Math.PI*(i/9),d=this.add.circle(x,y,5+Math.random()*5,0xc9b28a,.75).setDepth(5);this.tweens.add({targets:d,x:x+Math.cos(a)*(40+Math.random()*30)*(i%2?1:-1),y:y-10-Math.random()*20,alpha:0,scale:1.8,duration:560+Math.random()*200,onComplete:()=>d.destroy()});}
+  uiSfx().play('uiClick');
+ }
 
  // —— 弹窗：季度报告 / 税率 / 城池发展 ——
  private modal(name:string,title:string,h:number):{root:Phaser.GameObjects.Container;x:number;y:number;w:number}{

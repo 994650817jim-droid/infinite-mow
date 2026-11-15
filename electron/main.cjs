@@ -91,7 +91,7 @@ function createWindow() {
   win = new BrowserWindow({
     width: display.width, height: display.height, minWidth: 960, minHeight: 540, useContentSize: true,
     fullscreen: process.env.IM_WINDOWED === '1' ? false : display.fullscreen !== false, backgroundColor: '#0b0907', autoHideMenuBar: true, show: false,
-    title: '无限割草：乱世千军',
+    title: '无限割草：乱世千军', icon: path.join(__dirname, 'icon.png'),
     webPreferences: { preload: path.join(__dirname, 'preload.cjs'), contextIsolation: true, sandbox: false, nodeIntegration: false, devTools: devMode },
   });
   win.removeMenu();

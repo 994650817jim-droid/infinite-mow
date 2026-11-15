@@ -46,6 +46,7 @@
       "dist/**/*",
       "electron/main.cjs",
       "electron/preload.cjs",
+      "electron/icon.png",
       "package.json",
       "!node_modules/**/*"
     ],
@@ -53,7 +54,8 @@
     "win": {
       "target": [
         "dir"
-      ]
+      ],
+      "icon": "electron/icon.ico"
     },
     "extraMetadata": {
       "main": "electron/main.cjs"

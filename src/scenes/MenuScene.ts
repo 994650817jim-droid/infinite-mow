@@ -7,6 +7,8 @@ import {CampaignChronicle} from '../ui/CampaignChronicle';
 import {attachHomeVideo} from '../ui/HomeVideo';
 import {homeCommand,warPanelTexture} from '../ui/HomeCommand';
 import {SaveSlotsUI} from '../ui/SaveSlotsUI';
+import {AchievementsUI} from '../ui/AchievementsUI';
+import {checkWorld,ACHIEVEMENTS,unlockedMap} from '../systems/Achievements';
 import {HomeHeroPicker} from '../ui/HomeHeroPicker';
 import {dongzhuoStageUnlocked,nextDongzhuoStage,yellowStageUnlocked,loadWorld,worldUnlocked,alertLossWarning} from '../world/WorldStore';
 import Phaser from 'phaser';
@@ -188,6 +190,9 @@ export class MenuScene extends Phaser.Scene {
     text(navX(2),navRowY,'战役回顾',D?18:20,'#e5ccb0').setLetterSpacing(D?2:0).setPadding(16,16).setInteractive({useHandCursor:true}).setName('home-review').on('pointerdown',()=>{if(this.children.getByName('campaign-chronicle'))return;new CampaignChronicle(this,arc=>{if(arc==='qunxiong'){this.scene.start('ThirdChapterScene');return;}if(arc==='guandu'){this.scene.start('GuanduChapterScene');return;}this.registry.set('menuChapterPicker',true);this.scene.restart();},(arc,stage)=>this.replayStage(arc,stage));});
     text(navX(3),navRowY,'设置',D?18:20,'#e5ccb0').setLetterSpacing(4).setPadding(18,16).setInteractive({useHandCursor:true}).setName('home-settings').on('pointerdown',()=>this.openHomeSettings());
     text(navX(1),navRowY,'图鉴',D?18:20,'#e5ccb0').setLetterSpacing(4).setOrigin(.5,.5).setPadding(12,16).setInteractive({useHandCursor:true}).setName('home-codex').on('pointerdown',()=>{if(this.children.getByName('game-codex'))return;this.ensureHomeArt(true);new GameCodex(this,index=>{this.selectedChar=index;this.registry.set('heroConfirmed',true);try{localStorage.setItem('im_last_hero',CHARACTERS[index].id);}catch{}this.renderSelection();});});
+    // 成就入口（右上角；天下已开时排在主城 / 天下地图左侧）
+    try{checkWorld(save);}catch{/* 存档不可用 */}
+    {const got=Object.keys(unlockedMap()).filter(id=>ACHIEVEMENTS.some(a=>a.id===id)).length;text(worldUnlocked()?W-218:W-28,D?34:54,`成就 ${got}/${ACHIEVEMENTS.length}`,16).setOrigin(1,.5).setPadding(16,8).setBackgroundColor('rgba(22,14,9,0.72)').setInteractive({useHandCursor:true}).setName('home-achievements').on('pointerdown',()=>{if(!this.children.getByName('achievements-panel'))new AchievementsUI(this);});}
     if(worldUnlocked()){
       text(W-28,D?34:54,'主城',16).setOrigin(1,.5).setPadding(16,8).setBackgroundColor('rgba(22,14,9,0.72)').setInteractive({useHandCursor:true}).setName('home-city').on('pointerdown',()=>this.scene.start('CityScene'));
       text(W-104,D?34:54,'天下地图',16).setOrigin(1,.5).setPadding(16,8).setBackgroundColor('rgba(22,14,9,0.72)').setInteractive({useHandCursor:true}).setName('home-world').on('pointerdown',()=>this.scene.start('WorldMapScene'));

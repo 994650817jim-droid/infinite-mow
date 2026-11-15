@@ -10,6 +10,7 @@ import {W,H,worldShell,worldAssets} from '../world/WorldUI';
 import {FONT,HEADING_FONT} from '../config';
 import {homeCommand,warPanelTexture} from '../ui/HomeCommand';
 import {uiSfx} from '../systems/Sfx';
+import {checkWorld,addCounter} from '../systems/Achievements';
 import {loadWorld,saveWorld,worldUnlocked,storageUnavailable,incompatibleSave,townBuild,townUpgrade,townDemolish,setTaxRate,setCityFocus,resolveTownEvent,tradeGrain,sendCaravan} from '../world/WorldStore';
 import {TOWN_BUILDINGS,PLOT_COUNT,TAX_NAME,TAX_PER_HOUSEHOLD,FOCUS_NAME,FOCUS_INCOME,FOCUS_CHANGE_COST,upgradeCostFor,demolishRefund,countOf,unlockedPlots,households,levelOf,canAfford,costText,seasonLabel,SEASONS,eventById,grainSellPrice,grainBuyPrice,caravanValue,caravanSlots,CARAVAN_CARGO,buildingBattleEffects,TOWN_ART_LEVELS,townArtLevel,type TownBuildingId,type TaxRate,type CityFocus} from '../town/TownData';
 import {cityById,TIER_NAME} from '../world/WorldCities';
@@ -73,6 +74,7 @@ export class CityScene extends Phaser.Scene {
 
  private refresh(){
   const s=loadWorld(),t=s.town;
+  checkWorld(s);
   this.season.setText(`${seasonLabel(t.year,t.season)}（下一季）`);
   this.top.setText(`军功 ${s.merits}   粮草 ${s.provisions}   钱 ${t.money}`);
   const be=buildingBattleEffects(t),bo=t.boon,pts=be.attributePoints+bo.attributePoints,dmg=Math.round((be.damage+bo.damage)*100),hp=Math.round((be.maxHp+bo.maxHp)*100);
@@ -223,7 +225,7 @@ export class CityScene extends Phaser.Scene {
   root.add(txt(this,W/2,y+98,ev.text,15,'#e9dcc0').setOrigin(.5,0).setWordWrapWidth(w-70).setAlign('center'));
   ev.options.forEach((o,i)=>{
    const bw=D?(w-80)/2:w-60,bx=D?x+40+bw/2+i*(bw+0):W/2,by=D?y+h-92:y+h-200+i*96;
-   const btn=homeCommand(this,bx,by,Math.min(bw,260),46,o.label,i===0,true,16);btn.hit.setName('event-option-'+i).on('pointerdown',()=>{this.message=resolveTownEvent(i).message;root.destroy();this.refresh();});if(i===0)btn.hit.setData('padDefault',true);
+   const btn=homeCommand(this,bx,by,Math.min(bw,260),46,o.label,i===0,true,16);btn.hit.setName('event-option-'+i).on('pointerdown',()=>{const res=resolveTownEvent(i);if(res.ok)addCounter('events',1);this.message=res.message;root.destroy();this.refresh();});if(i===0)btn.hit.setData('padDefault',true);
    root.add([btn.g,btn.hit,btn.caption]);root.add(txt(this,bx,by+34,o.note,12,'#c9bf99').setOrigin(.5,0).setWordWrapWidth(Math.min(bw,280)).setAlign('center'));
   });
  }

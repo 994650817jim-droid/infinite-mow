@@ -1,4 +1,5 @@
 import {playMenuMusic} from '../systems/Music';
+import {checkWorld} from '../systems/Achievements';
 import {RENDER_SCALE,screenPoint} from '../config';
 import {thirdChapterUnlocked,arcUnlocked} from '../world/WorldStore';
 /** 群雄篇章节点：是否开放、未开放提示、进入的选关场景。 */
@@ -33,7 +34,7 @@ export class WorldMapScene extends Phaser.Scene {
   // W5 城池徽框与军旗（缩小显示，用线性过滤）
   for(const [key,url] of Object.entries(MARKER_FILES))worldAssets(this,key,url);
   this.load.once('complete',()=>{for(const key of Object.keys(MARKER_FILES))if(this.textures.exists(key))this.textures.get(key).setFilter(Phaser.Textures.FilterMode.LINEAR);});}
- create(){playMenuMusic(this);
+ create(){playMenuMusic(this);try{checkWorld(loadWorld());}catch{/* 存档不可用 */}
   if(!worldUnlocked()&&!isChapterTestRun()){this.registry.set('loadBattle',true);this.scene.start(this.registry.get('battleReady')?'MenuScene':'BootScene');return;}worldShell(this,this.registry.get('worldReveal')?'三国天下开启':'三国天下');if(this.registry.get('worldReveal')){this.registry.remove('worldReveal');this.cameras.main.fadeIn(900,0,0,0);}releaseWorldArt(this,'strategy_art');this.markers=[];this.cityMarkers=[];this.legend=undefined;
   this.siegeModal=undefined;this.territory=undefined;this.notice=undefined;const advance=isChapterTestRun()?null:advanceEra(),lost=isChapterTestRun()?[]:takeLostNotice();const s=loadWorld();this.owned=s.ownedCities;this.alerts=s.alerts;this.capturedEver=s.capturedEver;this.era=eraIndexFor({hulaoCleared:s.cleared.hulao,warlordStages:s.warlordStages,guanduStages:s.guanduStages});
   worldText(this,24,64,`军功 ${s.merits}    粮草 ${s.provisions}`,15,'#bdcdb6');

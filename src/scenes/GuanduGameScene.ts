@@ -26,6 +26,7 @@ const LAST_PLAYABLE = Math.min(3, GUANDU_PLAYABLE) as GuanduStage;
  */
 export function guanduGameSceneClass(Base: typeof GameScene) {
   return class GuanduGameScene extends Base {
+    protected achievementArc() { return 'guandu'; }
     private enemyCamps?: EnemyCamps;
     /** 焚粮目标（粮垛 / 辎重车）。 */
     private depots?: GrainDepots;

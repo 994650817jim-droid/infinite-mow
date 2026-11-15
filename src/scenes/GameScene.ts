@@ -23,6 +23,8 @@ import {abandonExpedition,beginExpedition,settleExpedition,permanentEffects,worl
 import Phaser from 'phaser';
 import { PAD, PAD_LABEL, gamepad, keyHint } from '../platform/gamepad';
 import { bossProfile } from '../data/bossMusic';
+import { onBattleEnd, unlock as unlockAchievement, addCounter, checkWorld } from '../systems/Achievements';
+import { loadWorld as loadWorldState } from '../world/WorldStore';
 import { ArtEffects } from '../systems/ArtEffects';
 import { BattlefieldDetails } from '../systems/BattlefieldDetails';
 import { WAR, warText, ensureWarTextures } from '../ui/WarStyle';
@@ -156,7 +158,7 @@ export class GameScene extends Phaser.Scene {
     if(this.mode!=='none'||this.over||!this.supplies)return;
     const item=this.supplies.usePotion();
     if(!item){if(this.supplies.pouch.length)this.showWaveBanner(this.supplies.healing?'正在疗伤…':'生命已满',false);return;}
-    this.sfx.play('pickup');this.artEffects.show(5,this.player.x,this.player.y-12,40,this.combatNow,320);
+    addCounter('potions',1);this.sfx.play('pickup');this.artEffects.show(5,this.player.x,this.player.y-12,40,this.combatNow,320);
   }
   /** 战法「以战养战」：每击杀 12/10/8 名敌人（含部下击杀）回复最大生命 2/2.5/3%。 */
   private warfeedCount=0;
@@ -1368,6 +1370,7 @@ export class GameScene extends Phaser.Scene {
     if (kind === 'boss') {
       const index=this.chasingBosses.findIndex(t=>t.enemy===enemy&&t.life===enemy.spawnId);
       if(index>=0){
+        unlockAchievement('chaser');
         const old=this.chasingBosses[index];old.battle?.clear();old.huaxiong?.clear();old.xurong?.clear();old.label.destroy();this.chasingBosses.splice(index,1);
         this.recordFrontlineVictory(old.stage);
       }else{this.bossKilled=true;this.boss=null;this.recordFrontlineVictory(this.battleStage());}
@@ -2204,6 +2207,9 @@ export class GameScene extends Phaser.Scene {
       else {this.registry.set('menuChapterPicker',true);this.scene.start('MenuScene');}
     });
     this.onRunFinished(stats);
+    // 成就：战斗结果与天下 / 城镇状态（测试战斗、调试改动过的战斗不计）
+    onBattleEnd({victory,debug:isChapterTestRun()||this.debugModified||this.debugJumped||!!this.player.damageImmune||!!this.runConfig.encounter,kills:this.kills,level:this.player.level,hero:this.runConfig.character,chapter:this.chapter.id,stage:this.chapter.stage,westStage:this.chapter.westStage,arc:this.achievementArc(),bossKilled:this.bossKilled});
+    try{checkWorld(loadWorldState());}catch{/* 存档不可用 */}
     if (victory && !this.runConfig.encounter && (this.chapter.id==='huangjin'||(this.chapter.westStage??3)<3)) {
       this.cameras.main.flashEffect.reset(); this.cameras.main.shakeEffect.reset();
       this.pendingRecruit = false; this.pendingLevels = 0; this.freeRecruit = false; this.resting = true;
@@ -2226,6 +2232,9 @@ export class GameScene extends Phaser.Scene {
       }
     }
   }
+
+  /** 成就用：本场属于哪条战线（攻城 / 守城 / 群雄 / 官渡由子类返回）。 */
+  protected achievementArc(): string | undefined { return undefined; }
 
   protected formatTime(seconds: number): string {
     const m = Math.floor(seconds / 60);

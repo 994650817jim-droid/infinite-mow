@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { FONT, GAME_HEIGHT, GAME_WIDTH, HEADING_FONT, screenPoint } from '../config';
-import { AFFIXES, QUALITIES, SLOTS, SPECIALS, formatAffix, itemName, itemSlot, type AffixId, type ItemInstance } from '../data/items';
+import { AFFIXES, QUALITIES, SLOTS, SPECIALS, formatAffix, itemName, itemSlot, relicDef, type AffixId, type ItemInstance } from '../data/items';
 
 /** 与当前同槽装备的词条差：▲ 涨（绿）/ ▼ 降（红）。 */
 export function compareLines(item: ItemInstance, current?: ItemInstance): { text: string; up: boolean }[] {
@@ -34,7 +34,8 @@ export class ItemTooltip {
     const g = s.add.graphics().setScrollFactor(0); this.root.add(g);
     let y = pad;
     txt(pad, y, itemName(item), 17, q.css, true).setName('item-tooltip-name'); y += 24;
-    txt(pad, y, `${q.name} · ${SLOTS[itemSlot(item)].name}`, 12, '#b9a57a'); y += 20;
+    const relic = relicDef(item.base);
+    txt(pad, y, `${relic ? '首领遗珍（' + relic.boss + '）· ' : ''}${q.name} · ${SLOTS[itemSlot(item)].name}`, 12, relic ? '#f3c66a' : '#b9a57a'); y += 20;
     const aff = txt(pad, y, item.affixes.map(a => (a.minor ? '· ' : '') + formatAffix(a)).join('\n'), 13, '#e9dcbc').setLineSpacing(3).setName('item-tooltip-affixes'); y += aff.height + 4;
     if (item.special) { const sp = txt(pad, y, `★ ${SPECIALS[item.special].name}：${SPECIALS[item.special].desc}`, 12, '#f3c37a'); y += sp.height + 4; }
     const cmp = compareLines(item, current);

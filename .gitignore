@@ -72,6 +72,7 @@ assets/raw/*
 !/tools/test-gamepad.mjs
 !/tools/test-gear-revamp.mjs
 !/tools/test-hero-level.mjs
+!/tools/test-boss-relics.mjs
 !/tools/phase19-progression.mjs
 !/tools/rest-flow-smoke.mjs
 !/tools/prepare-troop-portraits.mjs
@@ -83,6 +84,7 @@ assets/raw/*
 !/tools/artv2-prompts.mjs
 !/tools/artv2-troops.mjs
 !/tools/artv2-enemies.mjs
+!/tools/artv2-portraits.mjs
 !/tools/walk-anim-record.mjs
 !/tools/test-dragging-blade.mjs
 !/tools/test-iff.mjs

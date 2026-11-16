@@ -52,12 +52,13 @@ import { Enemy } from '../entities/Enemy';
 import { Player } from '../entities/Player';
 import { Joystick } from '../ui/Joystick';
 import { PassiveHud } from '../ui/PassiveHud';
+import { PassiveShout } from '../ui/PassiveShout';
 import { EnemyMovement } from '../systems/EnemyMovement';
 import { Legion } from '../systems/Legion';
 import { LegionUI } from '../ui/LegionUI';
 import { Reinforcements } from '../systems/Reinforcements';
 import { MartialFields } from '../systems/MartialFields';
-import { RunGrowth, ATTRIBUTE_INFO, ATTRIBUTE_MAX, type AttributeId } from '../systems/RunGrowth';
+import { RunGrowth, ATTRIBUTE_INFO, ATTRIBUTE_MAX, attributeIcon, type AttributeId } from '../systems/RunGrowth';
 import { allocateHeroAttr, claimFirstClear, creditHeroXp, enlistHero, heroFreePoints, heroLevel, type HeroKey } from '../systems/HeroProgress';
 import { packCampaign, restoreCampaign, type CampaignTransfer } from '../systems/Campaign';
 import { TROOP_KINDS, INITIAL_TROOPS, LEGION, type TroopKind } from '../data/legion';
@@ -189,7 +190,7 @@ export class GameScene extends Phaser.Scene {
   private hudChipState: Record<'pause' | 'mute' | 'music' | 'bag', LqState> = { pause: 'idle', mute: 'idle', music: 'idle', bag: 'idle' };
   private readonly hudChipRect = new Phaser.Geom.Rectangle();
   protected hudTexts!: Record<string, Phaser.GameObjects.Text>;
-  protected passiveHud!: PassiveHud;
+  protected passiveHud!: PassiveHud; protected passiveShout!: PassiveShout;
   private buffHud!:BuffHud;
   /** 用药：药囊里最早的一份，按原规则回血；不能用时轻微提示。 */
   protected usePotion():void{
@@ -656,6 +657,8 @@ export class GameScene extends Phaser.Scene {
     this.battlefieldDetails.update(this.cameras.main.scrollX, this.cameras.main.scrollY);
     this.hudAcc += dt;
     this.updateHud();
+    // 被动满层台词每帧检测（HUD 0.1 秒一刷，孙尚香这类攒满后马上触发的会漏掉）
+    this.passiveShout.update(this.player.passive, this.combatNow, this.player.x, this.player.y, this.mode === 'none' && !this.over, this.player.sprite);
     this.artEffects.update(this.combatNow);
     this.updateRelicWaves();
     this.feedback.update(this.combatNow, this.mode === 'result' ? delta : 0);
@@ -2330,8 +2333,12 @@ export class GameScene extends Phaser.Scene {
     g.unallocated = Math.min(room, g.heroFree + (carried ? bonusLeft : 0));
     this.player.hp = carried ? Math.max(1, Math.min(this.player.maxHp, Math.round(this.player.maxHp * ratio))) : this.player.maxHp;
   }
-  /** 结算：本场经验折进武将经验（主线 100%，攻城 / 军情 / 挑战等 50%）。测试战斗不记。 */
-  protected heroXpRate(): number { return ['GameScene', 'ThirdGameScene', 'GuanduGameScene', 'ChibiGameScene'].includes(this.scene.key) && !(this.scene.key === 'GameScene' && this.runConfig.encounter) ? 1 : .5; }
+  /** 结算：本场经验折进武将经验（主线 70%，攻城 / 军情 / 挑战等 35%；2026-11-16 平衡会话改版）。测试战斗不记。 */
+  protected heroXpRate(): number { return ['GameScene', 'ThirdGameScene', 'GuanduGameScene', 'ChibiGameScene'].includes(this.scene.key) && !(this.scene.key === 'GameScene' && this.runConfig.encounter) ? .7 : .35; }
+  /** 首次通关经验（不乘折算比例），结算时由 claimFirstClear 给出。 */
+  protected heroXpBonus = 0;
+  /** 主公本场记入的武将经验 = 本场经验 × 折算 + 首次通关经验（随行各拿一半）。 */
+  protected lordHeroXp(): number { return this.player.runXp * this.heroXpRate() + this.heroXpBonus; }
   /** 换装后重算兵装加成：生命按原比例换算，不因换装回满血。 */
   protected refreshGear(): void {
     const ratio = this.player.maxHp > 0 ? this.player.hp / this.player.maxHp : 1;
@@ -2417,11 +2424,11 @@ export class GameScene extends Phaser.Scene {
     // 武将等级：本场经验折进武将经验（测试 / 调试战斗不记）
     {const debug=isChapterTestRun()||this.debugModified||this.debugJumped||!!this.player.damageImmune;
      // 主线关首次通关经验（每关一次），并进本场经验一起折算，随行也按一半分到
-     const firstClear=!debug&&victory&&this.bossKilled?claimFirstClear(this.stableRewardKey()):0;if(firstClear){this.player.runXp+=firstClear;this.resultTexts.body.setText(this.resultTexts.body.text+'\n首次通关  经验 +'+firstClear);}
-     if(!debug&&this.player.runXp>0){const name=getCharacter(this.runConfig.character).name,r=creditHeroXp(this.runConfig.character,this.player.runXp*this.heroXpRate());
+     const firstClear=!debug&&victory&&this.bossKilled?claimFirstClear(this.stableRewardKey()):0;if(firstClear){this.heroXpBonus=firstClear;this.resultTexts.body.setText(this.resultTexts.body.text+'\n首次通关  经验 +'+firstClear);}
+     if(!debug&&this.lordHeroXp()>0){const name=getCharacter(this.runConfig.character).name,r=creditHeroXp(this.runConfig.character,this.lordHeroXp());
       this.resultTexts.body.setText(this.resultTexts.body.text+'\n武将等级  '+name+(r.to>r.from?' Lv.'+r.from+' → Lv.'+r.to:' Lv.'+r.to)+' · 经验 +'+r.gained+(r.capped?' · 已到本章上限 Lv.'+r.cap+'，经验暂存':''));
       // 随行武将：每人拿主公折算后经验的一半（hero-level-proposal 方案 A，用户批准）
-      const half=this.player.runXp*this.heroXpRate()/2,lines:string[]=[];for(const f of this.followers?.members??[]){const fr=creditHeroXp((f.recruit.hero??f.recruit.id) as HeroKey,half),fn=f.recruit.name.replace(/（.*）/,'');lines.push(fr.to>fr.from?fn+' Lv.'+fr.from+' → Lv.'+fr.to:fn+' Lv.'+fr.to);}
+      const half=this.lordHeroXp()/2,lines:string[]=[];for(const f of this.followers?.members??[]){const fr=creditHeroXp((f.recruit.hero??f.recruit.id) as HeroKey,half),fn=f.recruit.name.replace(/（.*）/,'');lines.push(fr.to>fr.from?fn+' Lv.'+fr.from+' → Lv.'+fr.to:fn+' Lv.'+fr.to);}
       if(lines.length)this.resultTexts.body.setText(this.resultTexts.body.text+'\n随行  '+lines.join(' · ')+' · 各得经验 +'+Math.floor(half));}}
     // 马厩：各章首领首次击杀赠马（第一章通关送驽马由 ItemStore 读档时补发）
     {const key=victory&&this.bossKilled&&!(isChapterTestRun()||this.debugModified||this.debugJumped||this.player.damageImmune)?this.stableRewardKey():null,horse=key?horseForReward(key):undefined;
@@ -2547,7 +2554,7 @@ export class GameScene extends Phaser.Scene {
     for (const k of ['pause', 'mute', 'music', 'bag'] as const) this.hudTexts[k]
       .on('pointerover', () => { this.hudChipState[k] = 'hover'; }).on('pointerout', () => { this.hudChipState[k] = 'idle'; })
       .on('pointerdown', () => { this.hudChipState[k] = 'down'; }).on('pointerup', () => { this.hudChipState[k] = 'hover'; });
-    this.passiveHud = new PassiveHud(this);
+    this.passiveHud = new PassiveHud(this); this.passiveShout = new PassiveShout(this, () => this.sfx.play('passiveFull'));
     this.buffHud=new BuffHud(this);
     this.muteText = this.hudTexts.mute;
     this.muteText.setText(this.sfx.muted ? '音效:关' : '音效:开');
@@ -2795,7 +2802,7 @@ export class GameScene extends Phaser.Scene {
 
     this.attributePanel=this.add.container(0,0).setScrollFactor(0).setDepth(DEPTH.overlay+1).setVisible(false);
     const attrDim=this.add.rectangle(0,0,GAME_WIDTH,GAME_HEIGHT,0x07120d,.76).setOrigin(0).setInteractive();
-    const attrW=d?600:GAME_WIDTH-32,attrH=d?580:700,attrTop=(GAME_HEIGHT-attrH)/2,attrCx=GAME_WIDTH/2;
+    const attrW=d?600:GAME_WIDTH-32,attrH=d?Math.min(580,GAME_HEIGHT-16):700,attrTop=(GAME_HEIGHT-attrH)/2,attrCx=GAME_WIDTH/2;
     const attrFrameG=this.add.graphics();lqPanel(attrFrameG,attrCx-attrW/2,attrTop,attrW,attrH);
     const attrFrame=this.add.rectangle(attrCx,GAME_HEIGHT/2,attrW,attrH,0x000000,.001).setInteractive();
     const attrTitle=this.add.text(attrCx,attrTop+34,'武将修习 · 属性分配',warText(24,'#e8cf91')).setOrigin(.5);
@@ -2803,22 +2810,22 @@ export class GameScene extends Phaser.Scene {
     this.attributeWeaponText=this.add.text(attrCx,attrTop+104,'',warText(13,'#d3bd86')).setOrigin(.5);
     this.attributeSummaryText=this.add.text(attrCx,attrTop+133,'',{...warText(d?11:12,'#c7d6c8'),align:'center',lineSpacing:3}).setOrigin(.5).setWordWrapWidth(attrW-46);
     this.attributePanel.add([attrDim,attrFrameG,attrFrame,attrTitle,this.attributePointsText,this.attributeWeaponText,this.attributeSummaryText]);
-    const rowH=d?62:72,firstY=attrTop+(d?200:212),rowW=attrW-50;
+    const rowH=d?50:66,firstY=attrTop+(d?186:206),rowW=attrW-50;
     this.attributeRows=[];
     (Object.keys(ATTRIBUTE_INFO) as AttributeId[]).forEach((id,index)=>{
       const y=firstY+index*rowH,left=attrCx-rowW/2;
       const row=this.add.graphics();row.fillStyle(LQ.lacquerHi,.5).fillRoundedRect(left,y-(rowH-8)/2,rowW,rowH-8,6).lineStyle(1,LQ.gold,.38).strokeRoundedRect(left,y-(rowH-8)/2,rowW,rowH-8,6);
-      const attributeIcon=this.add.image(left+30,y,'growth_icon_'+id).setDisplaySize(34,34);
+      const attrIconImg=this.add.image(left+30,y,attributeIcon(id)).setDisplaySize(34,34);
       const label=this.add.text(left+56,y-11,ATTRIBUTE_INFO[id].name,{...warText(17,'#f0dfb4')}).setOrigin(0,.5);
       const effect=this.add.text(left+56,y+12,ATTRIBUTE_INFO[id].effect,warText(12,'#a9b9a3')).setOrigin(0,.5);
-      // 等级：5 格，右侧数值
-      const pipX=attrCx+rowW/2-(d?196:178),pipY=y,pips=this.add.graphics();
+      // 等级：8 格，右侧数值
+      const pipX=attrCx+rowW/2-(d?206:192),pipY=y,pips=this.add.graphics();
       const value=this.add.text(attrCx+rowW/2-80,y,`0/${ATTRIBUTE_MAX}`,warText(13,'#b6c3ab')).setOrigin(1,.5);
       const button=this.add.image(attrCx+rowW/2-38,y,'ui_war_button').setDisplaySize(50,44).setInteractive({useHandCursor:true}).setName('attribute-add-'+id);
       const plus=this.add.text(button.x,button.y-1,'+',warText(26,'#ffe9bd')).setOrigin(.5).setStroke('#2a170b',3);
       lqImageButton(this,button,50,44,'gold',plus);
       button.on('pointerdown',()=>{const g=this.player.growth;if(g.allocate(this.player,id)){if(g.heroFree>0){g.heroFree--;if(!isChapterTestRun())allocateHeroAttr(this.runConfig.character,id);}this.renderAttributePanel();this.updateHud();}});
-      this.attributePanel.add([row,attributeIcon,label,effect,pips,value,button,plus]);
+      this.attributePanel.add([row,attrIconImg,label,effect,pips,value,button,plus]);
       this.attributeRows.push({value,button,plus,pips,pipX,pipY});
     });
     const attrCloseY=attrTop+attrH-38;
@@ -2925,7 +2932,7 @@ export class GameScene extends Phaser.Scene {
     if (!this.player || !this.attributePointsText) return;
     const growth=this.player.growth;
     {const close=this.attributePanel.getByName('attributes-close') as Phaser.GameObjects.Text|null;close?.setText(this.attributeReturn==='none'?'继续战斗':'返回暂停菜单');if(close&&!close.getData('hitBox')){lqHitBox(close,220,44);close.setData('hitBox',true);}}
-    this.attributePointsText.setText(growth.unallocated>0?`可分配属性点 ${growth.unallocated}`:`属性点已用完 · 武将每升 2 级获得 1 点（当前 Lv.${this.heroLv}）`).setColor(growth.unallocated>0?'#1c160c':'#91ab98').setBackgroundColor(growth.unallocated>0?'#e2bd6a':'#00000000');
+    this.attributePointsText.setText(growth.unallocated>0?`可分配属性点 ${growth.unallocated}`:`属性点已用完 · 武将每升 1 级获得 1 点（当前 Lv.${this.heroLv}）`).setColor(growth.unallocated>0?'#1c160c':'#91ab98').setBackgroundColor(growth.unallocated>0?'#e2bd6a':'#00000000');
     this.attributePauseText?.setText(`分配属性点 · ${growth.unallocated}`);
     const weapon=this.player.weapons[0];
     this.attributeWeaponText?.setText((weapon?weaponName(weapon.id,this.runConfig.character):'')+' · '+growth.masteryLabel());
@@ -2949,7 +2956,7 @@ export class GameScene extends Phaser.Scene {
       const id=ids[i],level=growth.attributes[id],row=this.attributeRows[i];
       if(!row)continue;
       row.value.setText(level>=ATTRIBUTE_MAX?'已满':`${level}/${ATTRIBUTE_MAX}`).setColor(level>=ATTRIBUTE_MAX?'#e2bd6a':'#e5d4ab');
-      row.pips.clear();for(let k=0;k<ATTRIBUTE_MAX;k++){const x=row.pipX+k*15;row.pips.fillStyle(k<level?0xe2bd6a:0x2a3328,1).fillRect(x,row.pipY-5,11,10).lineStyle(1,k<level?0xfff0c0:0x5d6a58,.9).strokeRect(x+.5,row.pipY-4.5,10,9);}
+      row.pips.clear();for(let k=0;k<ATTRIBUTE_MAX;k++){const x=row.pipX+k*12;row.pips.fillStyle(k<level?0xe2bd6a:0x2a3328,1).fillRect(x,row.pipY-5,9,10).lineStyle(1,k<level?0xfff0c0:0x5d6a58,.9).strokeRect(x+.5,row.pipY-4.5,8,9);}
       const can=growth.unallocated>0&&level<ATTRIBUTE_MAX;
       if(can){row.button.setAlpha(1).setInteractive({useHandCursor:true});}
       else row.button.setAlpha(.38).disableInteractive();

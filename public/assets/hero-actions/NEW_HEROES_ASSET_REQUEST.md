@@ -71,3 +71,8 @@ fx_c 四行依次为：
 - 切图脚本：`tools/prepare-hero-icon-sheet.mjs`（KEY=strict 用于粉紫物件）、`reslice-magenta-sheet.mjs`。
 - 原图在 `originals/`：fx_d、heroes_icons2、heroes_sprites、sun_maid_walk。
 - 缺图时各处仍退回程序化特效。马超改为枪挑破阵后不再需要西凉骑兵图。
+
+## 2026-11-16 孙尚香新画风（持飞刀，用户认可）
+- 行走 / 动作：ChatGPT 原图 processed-v2/originals/artv2_sunshangxiang_walk.png、hero-actions-v2/originals/artv2_sunshangxiang_actions.png，按美术风格会话 tools/prepare-artv2.mjs（方案 C 放大版）出 processed-v2/sunshangxiang_walk_sheet.png（704×704）、hero-actions-v2/sunshangxiang.png（928×1624）。接入靠美术风格分支 ArtStyle.ts 的 ART_V2_FILES（两分支合并后加 sunshangxiang_walk_sheet / sunshangxiang_actions 两行）；v1 图保留。
+- 主页立绘 / 选将头像：originals/sunshangxiang_epic.png（新），旧弓箭版改名 sunshangxiang_epic_v1.png；水墨立轴暂沿用旧图。
+- 侍婢刀光：hero-fx/sun_maid_slash.png（3×2，每帧 256，黑底叠加），原图 originals/sunshangxiang_v2_maidslash.png。

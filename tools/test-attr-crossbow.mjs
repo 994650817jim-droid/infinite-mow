@@ -27,7 +27,7 @@ for (const layout of ['mobile', 'desktop']) {
     }, [G, mod('/src/data/upgrades.ts')]);
     // 2026-11-15 规则：每升 2 级（到达偶数等级）得 1 点；连升多级按途经的偶数级给点
     const even = (a, b) => Math.floor(b / 2) - Math.floor(a / 2);
-    ck('每升 2 级得 1 点；连升多级按途经的偶数等级给点', lv.gained === 1 && lv.one === even(lv.l0, lv.l1) && lv.many === even(lv.l1, lv.l2) && lv.many >= 1, lv);
+    ck('局内升级（战功）不再给属性点（2026-11-16 起属性点来自武将等级，每级 1 点，见 test-hero-level）', lv.gained === 1 && lv.one === 0 && lv.many === 0, lv);
     ck('三选一不再出现「通脉修习」', !lv.card);
     // 关掉升级面板，看战场加点按钮
     await p.evaluate(G0 => { const s = eval(G0); s.pendingLevels = 0; s.upgradeOptions = []; s.setMode('none'); s.player.growth.unallocated = 3; }, G);
@@ -42,10 +42,10 @@ for (const layout of ['mobile', 'desktop']) {
     ck('“实际属性”两行不再被属性行压住', panel.summaryBottom <= panel.firstRowTop, panel);
     await p.evaluate(G0 => { const s = eval(G0); s.attributePanel.getByName('attribute-add-might').emit('pointerdown'); s.attributePanel.getByName('attribute-add-might').emit('pointerdown'); }, G);
     const after = await p.evaluate(G0 => { const s = eval(G0); return { might: s.player.growth.attributes.might, left: s.player.growth.unallocated, value: s.attributeRows[0].value.text, points: s.attributePointsText.text }; }, G);
-    ck('加两点武力：2/5，剩 1 点', after.might === 2 && after.left === 1 && after.value === '2/5' && after.points === '可分配属性点 1', after);
+    ck('加两点武力：2/8，剩 1 点', after.might === 2 && after.left === 1 && after.value === '2/8' && after.points === '可分配属性点 1', after);
     await p.screenshot({ path: `${out}/mobile-attribute-panel.png` });
     await p.evaluate(G0 => { const s = eval(G0); s.attributePanel.getByName('attribute-add-quickness').emit('pointerdown'); }, G);
-    ck('点数用完后提示“每升 2 级获得 1 点 · 再升 N 级可加点”', /每升 2 级获得 1 点 · 再升 [12] 级可加点/.test(await p.evaluate(G0 => eval(G0).attributePointsText.text, G)));
+    ck('点数用完后提示“武将每升 1 级获得 1 点”', /武将每升 1 级获得 1 点/.test(await p.evaluate(G0 => eval(G0).attributePointsText.text, G)));
     await p.evaluate(G0 => eval(G0).attributePanel.getByName('attributes-close').emit('pointerdown'), G);
     // 黄忠连弩：各级每轮箭数
     const bow = await p.evaluate(async ([G0, R]) => {

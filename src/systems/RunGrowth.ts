@@ -4,7 +4,7 @@ import type { CharacterId } from '../data/characters';
 import type { Player } from '../entities/Player';
 import { emptyGear, type GearStats } from './ItemEffects';
 
-export type AttributeId = 'might' | 'quickness' | 'critical' | 'constitution' | 'agility';
+export type AttributeId = 'might' | 'quickness' | 'critical' | 'constitution' | 'agility' | 'command';
 export type ZhaoMasteryId = 'dragon_gallop' | 'cloud_pierce';
 export const MARTIALS = {
   dragon_gallop: {character:'zhaoyun',name:'龙胆连刺',desc:'每级连刺效率 +8%'},
@@ -37,9 +37,10 @@ export type MasteryId = keyof typeof MARTIALS;
 export type PotionId = 'rejuvenation' | 'berserk';
 export type TrinketId = 'tiger_tally' | 'heart_mirror' | 'wind_boots';
 
-export const ATTRIBUTE_MAX = 5;
+/** 2026-11-16 属性点改版（平衡会话提议、用户批准）：每级 1 点、单项上限 8、每点效果减半，新增「统御」。 */
+export const ATTRIBUTE_MAX = 8;
 /** 每升几级发放 1 个属性点（Lv.2、4、6…）。升级三选一仍每级一次。 */
-export const ATTRIBUTE_POINT_EVERY = 2;
+export const ATTRIBUTE_POINT_EVERY = 1;
 /** 从 from 级升到 to 级途中到达的「加点等级」数。 */
 export function attributePointsBetween(from: number, to: number): number { return Math.max(0, Math.floor(to / ATTRIBUTE_POINT_EVERY) - Math.floor(from / ATTRIBUTE_POINT_EVERY)); }
 /** 当前等级再升几级可获得下一个属性点（1 或 2）。 */
@@ -47,20 +48,25 @@ export function levelsToNextAttributePoint(level: number): number { return ATTRI
 /** 局内「战功」与武将等级共用的经验表：从 level 升到 level+1 所需经验。 */
 export function xpToNext(level: number): number { return level <= 1 ? 16 : level <= 4 ? [16, 36, 52][level - 2] : 68 + (level - 4) * 20; }
 export const TRINKET_SLOTS = 2;
+/** 每点效果（数值归平衡会话）。 */
+export const ATTRIBUTE_STEP: Record<AttributeId, number> = { might: .025, quickness: .02, critical: .01, constitution: .05, agility: .015, command: .03 };
 export const ATTRIBUTE_INFO: Record<AttributeId, { name: string; effect: string }> = {
-  might: { name: '武力', effect: '本命武器伤害 +5% / 点' },
-  quickness: { name: '迅捷', effect: '攻击速度 +4% / 点' },
-  critical: { name: '会心', effect: '暴击率 +2% / 点' },
-  constitution: { name: '体魄', effect: '基础生命上限 +10% / 点' },
-  agility: { name: '身法', effect: '移动速度 +3% / 点' },
+  might: { name: '武力', effect: '本命武器伤害 +2.5% / 点' },
+  quickness: { name: '迅捷', effect: '攻击速度 +2% / 点' },
+  critical: { name: '会心', effect: '暴击率 +1% / 点' },
+  constitution: { name: '体魄', effect: '基础生命上限 +5% / 点' },
+  agility: { name: '身法', effect: '移动速度 +1.5% / 点' },
+  command: { name: '统御', effect: '部曲伤害 +3% / 点' },
 };
+/** 属性图标：统御暂借「虎符」图标（没有专属图）。 */
+export function attributeIcon(id: AttributeId): string { return id === 'command' ? 'growth_icon_tiger_tally' : 'growth_icon_' + id; }
 
 /** Per-battle growth. It is intentionally not part of the permanent save model. */
 export class RunGrowth {
   readonly build=new BuildState();
   revivalUsed=false;
   awakenRescueUsed=false;
-  readonly attributes: Record<AttributeId, number> = { might: 0, quickness: 0, critical: 0, constitution: 0, agility: 0 };
+  readonly attributes: Record<AttributeId, number> = { might: 0, quickness: 0, critical: 0, constitution: 0, agility: 0, command: 0 };
   readonly masteries: Record<MasteryId, number> = { dragon_gallop: 0, cloud_pierce: 0, dragon_charge:0, dragging_blade:0, steady_aim:0, pearl_volley:0, wildfire:0, eight_trigrams:0, kaishan:0, gujun:0, fulei:0, lianying:0, huishen:0, baibi:0, nichang:0, meirenji:0, baibu:0, laoji:0, wanrendi:0, dahe:0, jinma:0, tieqi:0, taoyuan:0, xiemin:0 };
   readonly trinkets: TrinketId[] = [];
   unallocated = 0;
@@ -133,25 +139,25 @@ export class RunGrowth {
   }
 
   damageMultiplier(now: number): number {
-    const might = 1 + 0.05 * this.attributes.might;
+    const might = 1 + ATTRIBUTE_STEP.might * this.attributes.might;
     const fury = this.lowHp && this.gear.specials.includes('fury') ? 1.25 : 1;
     return Math.min(2, might * (now < this.berserkUntil ? 1.25 : 1) * (1 + this.permanentDamage) * (1 + this.gear.damage)) * fury;
   }
 
   attackSpeedMultiplier(now: number): number {
-    const quickness = 1 + 0.04 * this.attributes.quickness;
+    const quickness = 1 + ATTRIBUTE_STEP.quickness * this.attributes.quickness;
     return Math.min(1.8, quickness * (now < this.berserkUntil ? 1.2 : 1) * (1 + this.gear.attackSpeed));
   }
 
   movementMultiplier(): number {
     const windrider = this.lowHp && this.gear.specials.includes('windrider') ? 1.2 : 1;
-    return Math.min(1.45, (1 + [0,.03,.05,.07][this.build.level('swift')]) * (1 + 0.03 * this.attributes.agility) * (this.trinkets.includes('wind_boots') ? 1.1 : 1) * (1 + this.gear.move)) * windrider;
+    return Math.min(1.45, (1 + [0,.03,.05,.07][this.build.level('swift')]) * (1 + ATTRIBUTE_STEP.agility * this.attributes.agility) * (this.trinkets.includes('wind_boots') ? 1.1 : 1) * (1 + this.gear.move)) * windrider;
   }
 
-  criticalBonus(): number { return Math.min(0.1, 0.02 * this.attributes.critical) + this.gear.crit; }
-  bonusMaxHp(): number { return Math.round(BALANCE.player.maxHp * (0.1 * this.attributes.constitution + this.gear.hp)); }
+  criticalBonus(): number { return Math.min(0.1, ATTRIBUTE_STEP.critical * this.attributes.critical) + this.gear.crit; }
+  bonusMaxHp(): number { return Math.round(BALANCE.player.maxHp * (ATTRIBUTE_STEP.constitution * this.attributes.constitution + this.gear.hp)); }
   incomingDamageMultiplier(): number { return (this.trinkets.includes('heart_mirror') ? 0.85 : 1)*(this.build.tags().bulwark>=2?.95:1)*Math.max(.6, 1 - this.gear.reduce); }
-  allyDamageMultiplier(): number { return (this.trinkets.includes('tiger_tally') ? 1.2 : 1)*(this.build.tags().command>=2?1.05:1)*(1 + this.gear.ally); }
+  allyDamageMultiplier(): number { return (this.trinkets.includes('tiger_tally') ? 1.2 : 1)*(this.build.tags().command>=2?1.05:1)*(1 + this.gear.ally)*(1 + ATTRIBUTE_STEP.command * this.attributes.command); }
   /** 兵装「对精锐 / 首领伤害」与名器「斩将」：只作用于武将本人的命中。 */
   gearHitMultiplier(kind: string): number { return kind === 'boss' ? 1 + this.gear.elite + this.gear.boss : kind === 'elite' ? 1 + this.gear.elite : 1; }
   /** 兵装「经验获取」：小数部分累计，不丢失。 */

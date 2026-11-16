@@ -64,7 +64,7 @@ const hint2 = await p.evaluate(async G0 => {
   return out;
 }, G);
 ck('战功 4 面板提示', /^战功 4/.test(hint2.even), hint2);
-ck('属性面板：点数用完时提示「武将每升 2 级获得 1 点」', /武将每升 2 级获得 1 点/.test(hint2.panel), hint2);
+ck('属性面板：点数用完时提示「武将每升 1 级获得 1 点」', /武将每升 1 级获得 1 点/.test(hint2.panel), hint2);
 
 // 2) 掉落与拾取
 const drops = await p.evaluate(async G0 => {

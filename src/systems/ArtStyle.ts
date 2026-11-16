@@ -181,6 +181,41 @@ export function regridV2(scene: Phaser.Scene, key: string): boolean {
   });
   // 旧切帧删掉后 firstFrame 仍指向已不存在的 "0"：不带帧名的 setTexture(key)（如 Enemy.spawn 用 def.texture）会取到 undefined 帧而崩溃
   t.firstFrame = 'down_0';
+  if (/walk|run/.test(key)) rotateV2StandFrames(scene, key);
   t.setFilter(v2Filter(RENDER_SCALE));
   return true;
+}
+
+/**
+ * v2 行走图的站立帧：ChatGPT 画的走路循环第 0 帧是迈步帧，停下时冻在它上面会「侧着站、两脚还分开」。
+ * 全游戏停步都用 <方向>_0，这里按每个方向找脚底一带（脚底线往上 8% 格高）横向跨度最小的那一帧（双脚并拢），
+ * 把该行的帧名循环平移，让它成为 _0；走路循环顺序不变。只用于行走 / 奔跑表，攻击表不动。
+ */
+export function rotateV2StandFrames(scene: Phaser.Scene, key: string): number[] {
+  if (!isV2Texture(key) || !scene.textures.exists(key)) return [];
+  const t = scene.textures.get(key), src = t.getSourceImage() as HTMLImageElement | HTMLCanvasElement;
+  const w = src.width, h = src.height, cell = w / 4, foot = cell - 8, band = Math.max(4, Math.round(cell * .08));
+  if (!cell || h < cell * 4) return [];
+  // 帧宽按 宽/4，行数可以是 4（只有走路）或 5（第 5 行是站立图）
+  let data: Uint8ClampedArray;
+  try {
+    const c = document.createElement('canvas'); c.width = w; c.height = h;
+    const g = c.getContext('2d', { willReadFrequently: true })!; g.drawImage(src, 0, 0); data = g.getImageData(0, 0, w, h).data;
+  } catch { return []; }
+  const span = (row: number, col: number): number => {
+    let lo = Infinity, hi = -Infinity;
+    for (let y = row * cell + foot - band; y <= row * cell + foot; y++) for (let x = col * cell; x < (col + 1) * cell; x++) if (data[(y * w + x) * 4 + 3] > 24) { if (x < lo) lo = x; if (x > hi) hi = x; }
+    return hi >= lo ? hi - lo : Infinity;
+  };
+  const shifts: number[] = [];
+  ['down', 'left', 'right', 'up'].forEach((dir, row) => {
+    let best = 0, min = Infinity;
+    for (let col = 0; col < 4; col++) { const s = span(row, col); if (s < min - 1) { min = s; best = col; } }
+    shifts.push(best);
+    for (let i = 0; i < 4; i++) { const name = `${dir}_${i}`; if (t.has(name)) t.remove(name); t.add(name, 0, ((i + best) % 4) * cell, row * cell, cell, cell); }
+    // <方向>_stand：图集有第 5 行（专门画的站立图，列 = 下 / 左 / 右 / 上）就用它，否则用选出的最并拢帧
+    const stand = `${dir}_stand`; if (t.has(stand)) t.remove(stand);
+    if (h >= cell * 5) t.add(stand, 0, row * cell, 4 * cell, cell, cell); else t.add(stand, 0, best * cell, row * cell, cell, cell);
+  });
+  return shifts;
 }

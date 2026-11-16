@@ -2,11 +2,11 @@
 // 输入：ChatGPT 生成的网格图（洋红 #FF00FF 底，COLS×ROWS 等分），原图放 <模块>/originals/（不入库）。
 // 步骤：抠洋红 → 按网格切帧取人物外框 → 全表统一缩放（参照行的中位身高 = FIG 美术像素）→ 面积平均降采样成真像素
 //      → 全表共用 ≤PAL 色调色板（k-means）→ 去孤立杂点 → 1 像素深褐黑外描边 → 脚底对齐第 FOOT 行、按腿部重心水平居中
-//      → 拼回图集（方案 C：原生格 144 / 192，1 美术像素 = 1080p 全屏下 1 个屏幕像素；UP 默认 1）；可最近邻放大 UP 倍（宽度须大于 HdHeroSheets 的标清阈值，才会按 宽/4 重切帧）。
+//      → 拼回图集（方案 C（放大版）：原生格 176 / 232，1 美术像素 = 1080p 全屏下 1 个屏幕像素；UP 默认 1）；可最近邻放大 UP 倍（宽度须大于 HdHeroSheets 的标清阈值，才会按 宽/4 重切帧）。
 // 用法（不需要开发服务器）：
 //   SRC=public/assets/hero-actions-v2/originals/artv2_zhaoyun_walk.png OUT=public/assets/processed-v2/zhaoyun_walk_sheet.png ROWS=4 node tools/prepare-artv2.mjs
-//   SRC=... OUT=public/assets/hero-actions-v2/zhaoyun.png ROWS=7 CELL=192 FOOT=176 REF=0 node tools/prepare-artv2.mjs
-// 可选：COLS（默认 4）、CELL（原生格，默认 144）、FOOT（脚底行，默认 CELL-8）、FIG（人物身高，默认 124）、
+//   SRC=... OUT=public/assets/hero-actions-v2/zhaoyun.png ROWS=7 CELL=232 FOOT=216 REF=0 node tools/prepare-artv2.mjs
+// 可选：COLS（默认 4）、CELL（原生格，默认 176）、FOOT（脚底行，默认 CELL-8）、FIG（人物身高，默认 152）、
 //      DEMAGENTA（去洋红偏色强度，默认 .7）、GAMMA（中间调，默认 .85，<1 提亮）、SAT（饱和度，默认 1.12）、
 //      MINBLOB（小于此像素数的碎块丢弃，默认 40）、REF（参与定身高的行，逗号分隔，默认全部）、PAL（调色板色数，默认 160）、UP（放大倍数，默认 1）、
 //      ORDER（输出行取自原图哪一行，逗号分隔，默认 0..ROWS-1；用于 ChatGPT 行序与规范不同时重排）、
@@ -19,8 +19,8 @@ import { dirname, join, basename } from 'node:path';
 const env = process.env;
 const SRC = env.SRC, OUT = env.OUT;
 if (!SRC || !OUT) { console.error('需要 SRC 和 OUT'); process.exit(2); }
-const COLS = +(env.COLS ?? 4), ROWS = +(env.ROWS ?? 4), CELL = +(env.CELL ?? 144), FOOT = +(env.FOOT ?? CELL - 8);
-const FIG = +(env.FIG ?? 124), PAL = +(env.PAL ?? 160), UP = +(env.UP ?? 1), MINBLOB = +(env.MINBLOB ?? 40);
+const COLS = +(env.COLS ?? 4), ROWS = +(env.ROWS ?? 4), CELL = +(env.CELL ?? 176), FOOT = +(env.FOOT ?? CELL - 8);
+const FIG = +(env.FIG ?? 152), PAL = +(env.PAL ?? 160), UP = +(env.UP ?? 1), MINBLOB = +(env.MINBLOB ?? 40);
 const DEMAGENTA = +(env.DEMAGENTA ?? .7), GAMMA = +(env.GAMMA ?? .85), SAT = +(env.SAT ?? 1.12);
 const SRC_ROWS = +(env.SRC_ROWS ?? ROWS);
 const ORDER = env.ORDER ? env.ORDER.split(',').map(Number) : Array.from({ length: ROWS }, (_, i) => i);

@@ -28,8 +28,8 @@ for (const art of ['v1', 'v2']) {
     const v = new Phaser.Math.Vector2(1, 0); s.readMove = () => v.clone(); window.__v = v;
     window.__step = n => { for (let i = 0; i < n; i++) { T += 1000 / 60; g.step(T, 1000 / 60); } };
     const sp = s.player.sprite;
-    window.__foot = () => { // v2 图集脚底行固定（行走格 144 第 136 行 / 动作格 192 第 176 行），换算成相对精灵中心的世界像素
-      const fh = sp.frame.height, row = fh === 144 ? 136 : fh === 192 ? 176 : NaN;
+    window.__foot = () => { // v2 图集脚底行固定（行走格 176 第 168 行 / 动作格 232 第 216 行），换算成相对精灵中心的世界像素
+      const fh = sp.frame.height, row = fh === 176 ? 168 : fh === 232 ? 216 : NaN;
       return ((row + 1) - sp.originY * fh) * sp.scaleY;
     };
   }, G);
@@ -67,7 +67,7 @@ const v2 = results.v2, v1 = results.v1;
 const spread = a => a.length ? Math.max(...a) - Math.min(...a) : 0;
 ck('v1 仍用旧图集（线性过滤）', v1.tex === 'readable_hero_walk_sheet' || v1.tex === 'hero_walk_sheet', { tex: v1.tex, filter: v1.filter });
 ck('v2 主将行走用 hero_walk_sheet 且最近邻过滤（不再套浅色描边派生图）', v2.tex === 'hero_walk_sheet' && v2.filter === 'nearest', { tex: v2.tex, filter: v2.filter });
-ck('v2 行走整格显示 72 逻辑像素（原生 144，全屏像素 1:1）', Math.abs(v2.walkH - 72) < 3.5, { walkH: v2.walkH });
+ck('v2 行走整格显示 88 逻辑像素（原生 176，全屏像素 1:1）', Math.abs(v2.walkH - 88) < 3.5, { walkH: v2.walkH });
 ck('v2 普攻用 zhaoyun_actions 动作图集', v2.actTex === 'zhaoyun_actions', { actTex: v2.actTex, n: v2.actFoot.length });
 const walkMed = [...v2.walkFoot].sort((a, b) => a - b)[v2.walkFoot.length >> 1] ?? 0;
 ck('v2 出手时脚底与行走脚底同一高度（偏差 ≤4px）', v2.actFoot.length > 0 && v2.actFoot.every(f => Math.abs(f - walkMed) <= 4), { walkMed, act: [Math.min(...v2.actFoot), Math.max(...v2.actFoot)], walkSpread: spread(v2.walkFoot) });

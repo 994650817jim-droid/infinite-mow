@@ -10,13 +10,20 @@ export type ArtStyle = 'v1' | 'v2';
 export const DEFAULT_ART_STYLE: ArtStyle = 'v1';
 const STORE_KEY = 'im_art_style';
 
-/** v2 图集：纹理键 → 文件（行走 4×4、动作 4×7，原生格 144 / 192，人物约 124 美术像素高，160 色）。 */
+/** v2 图集：纹理键 → 文件（行走 4×4、动作 4×7，原生格 176 / 232，人物约 152 美术像素高，160 色）。 */
 export const ART_V2_FILES: Readonly<Record<string, string>> = {
   hero_walk_sheet: 'assets/processed-v2/zhaoyun_walk_sheet.png',
   zhaoyun_actions: 'assets/hero-actions-v2/zhaoyun.png',
 };
-/** v2 主将行走整格的显示高度（逻辑像素）：原生格 144 → 72，即 1080p 全屏（渲染 2 倍）下 1 美术像素 = 1 屏幕像素。 */
-export const V2_WALK_DISPLAY = 72;
+/** v2 主将行走整格的显示高度（逻辑像素）：原生格 176 → 88，即 1080p 全屏（渲染 2 倍）下 1 美术像素 = 1 屏幕像素。
+ * 人物约 76 逻辑像素高（用户要求比 v1 大一些）。 */
+export const V2_WALK_DISPLAY = 88;
+/** v2 行走格的脚底行（描边所在最低行，原生像素）与格高。 */
+export const V2_WALK_FOOT = 168, V2_WALK_CELL = 176;
+/** 行走帧纵向锚点：让脚底落在精灵中心下方 31 逻辑像素，与 v1 一致（阴影、选中光圈、碰撞位置都不用动）。 */
+export const V2_WALK_ORIGIN_Y = (V2_WALK_FOOT + 1) / V2_WALK_CELL - 31 / V2_WALK_DISPLAY;
+/** 「主将」标记离精灵中心的高度：v2 人物更高，标记跟着上移。 */
+export const V2_MARKER_LIFT = 52;
 /** v2 图集的采样：渲染倍率 ≥2 时像素 1:1 对屏幕，用最近邻保持清晰；低于 2 倍要缩小显示，用线性避免丢像素。 */
 export function v2Filter(renderScale: number): Phaser.Textures.FilterMode {
   return renderScale >= 2 ? Phaser.Textures.FilterMode.NEAREST : Phaser.Textures.FilterMode.LINEAR;

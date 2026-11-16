@@ -9,7 +9,7 @@ import { BALANCE, DEPTH, FONT, actorDepth } from '../config';
 import { applySetBonus, RELIC_BY_ID, type RelicSchool } from '../data/relics';
 import type { PlayerStats, WeaponState } from '../types';
 import { WalkGait } from '../systems/WalkGait';
-import { isV2Texture, V2_WALK_DISPLAY } from '../systems/ArtStyle';
+import { isV2Texture, V2_MARKER_LIFT, V2_WALK_DISPLAY, V2_WALK_ORIGIN_Y } from '../systems/ArtStyle';
 
 /**
  * 枪将普攻节奏（260ms）：蓄力 31ms → 刺出 36ms → 刺到底 109ms → 收枪 84ms。
@@ -93,8 +93,12 @@ export class Player {
   readonly gait: WalkGait;
   private gaitHero = '';
   private gaitLift = 0;
-  /** 行走帧整格的显示高度（逻辑像素）。v2 整格 72（原生 144，全屏 1080p 下像素 1:1），v1 为 66。 */
+  /** 行走帧整格的显示高度（逻辑像素）。v2 整格 88（原生 176，全屏 1080p 下像素 1:1），v1 为 66。 */
   private get targetHeight(): number { return isV2Texture(this.walkSheet) ? V2_WALK_DISPLAY : 66; }
+  /** 行走帧纵向锚点：v1 居中；v2 让脚底仍落在中心下方 31 像素。 */
+  private get walkOriginY(): number { return isV2Texture(this.walkSheet) ? V2_WALK_ORIGIN_Y : .5; }
+  /** 「主将」标记离精灵中心的高度。 */
+  private get markerLift(): number { return isV2Texture(this.walkSheet) ? V2_MARKER_LIFT : 38; }
   /** 当前帧的纵向锚点（行走帧 0.5；动作帧按脚线换算，使站姿脚底与行走时同一位置）。 */
   private baseOriginY = .5;
   /** 每套动作图集相对行走表的统一缩放与锚点（按待机站姿测量，一次计算后缓存）。 */
@@ -296,7 +300,7 @@ export class Player {
     const actRef = framesFigure(this.scene, key, set.idle?.length ? set.idle : set.attack.down);
     const walkH = walkRef?.height ?? sheetFigureHeight(this.scene, walkKey) ?? 90, actH = actRef?.height ?? sheetFigureHeight(this.scene, key) ?? 90;
     const kw = this.targetHeight / walkFrameH, k = kw * walkH / actH;
-    const walkFoot = ((walkRef?.bottom ?? walkFrameH * .96) + 1 - walkFrameH / 2) * kw; // 行走脚底相对中心（世界像素）
+    const walkFoot = ((walkRef?.bottom ?? walkFrameH * .96) + 1 - walkFrameH * this.walkOriginY) * kw; // 行走脚底相对中心（世界像素）
     const originY = ((actRef?.bottom ?? actFrameH * .89) + 1 - walkFoot / k) / actFrameH;
     const fit = { k, originY: Phaser.Math.Clamp(originY, .3, .95) };
     // 测量失败（纹理未就绪）时不缓存，下次再算
@@ -353,7 +357,7 @@ export class Player {
       ? 1 + Math.sin(this.walkPhase * 2) * 0.02
       : 1;
     this.sprite.setScale(base, base * bob);
-    this.baseOriginY = .5; this.sprite.setOrigin(.5, .5);
+    this.baseOriginY = this.walkOriginY; this.sprite.setOrigin(.5, this.baseOriginY);
   }
 
   takeDamage(raw: number, now: number): boolean {
@@ -424,8 +428,8 @@ export class Player {
   update(now: number, dt: number): void {
     this.commandGlow.setPosition(this.x,this.y+21).setVisible(this.alive).setAlpha(.75+.15*Math.sin(now/420));
     this.drawCommandRing(now);
-    this.marker.setPosition(this.x,this.y-38-this.riseY).setVisible(this.alive);
-    this.markerLabel.setPosition(this.x,this.y-45-this.riseY).setVisible(this.alive);
+    this.marker.setPosition(this.x,this.y-this.markerLift-this.riseY).setVisible(this.alive);
+    this.markerLabel.setPosition(this.x,this.y-this.markerLift-7-this.riseY).setVisible(this.alive);
     // 胜利 / 倒地在结算后播放，move 已不再调用：清掉残留的步伐起伏与前倾
     if (this.action?.hold && (this.gaitLift || this.sprite.rotation)) { this.gaitLift = 0; this.sprite.setRotation(0); }
     const t = now < this.knockedUntil ? (now - this.knockedAt) / (this.knockedUntil - this.knockedAt) : 1;

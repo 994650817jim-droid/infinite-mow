@@ -58,7 +58,7 @@ import { LegionUI } from '../ui/LegionUI';
 import { Reinforcements } from '../systems/Reinforcements';
 import { MartialFields } from '../systems/MartialFields';
 import { RunGrowth, ATTRIBUTE_INFO, ATTRIBUTE_MAX, type AttributeId } from '../systems/RunGrowth';
-import { allocateHeroAttr, claimClearXp, creditHeroXp, enlistHero, heroFreePoints, heroLevel, type HeroKey } from '../systems/HeroProgress';
+import { allocateHeroAttr, creditHeroXp, enlistHero, heroFreePoints, heroLevel, type HeroKey } from '../systems/HeroProgress';
 import { packCampaign, restoreCampaign, type CampaignTransfer } from '../systems/Campaign';
 import { TROOP_KINDS, INITIAL_TROOPS, LEGION, type TroopKind } from '../data/legion';
 import { DEFAULT_RUN_CONFIG, getCharacter, type RunConfig , HERO_TINT, HERO_FX } from '../data/characters';
@@ -2416,10 +2416,8 @@ export class GameScene extends Phaser.Scene {
       debug: isChapterTestRun() || this.debugModified || this.debugJumped || this.player.damageImmune });
     // 武将等级：本场经验折进武将经验（测试 / 调试战斗不记）
     {const debug=isChapterTestRun()||this.debugModified||this.debugJumped||!!this.player.damageImmune;
-     // 主线关首次通关另给通关经验（CLEAR_XP，每个存档每关一次；攻城 / 军情等 heroXpRate < 1 的战斗不给）
-     const clearXp=!debug&&victory&&this.bossKilled&&this.heroXpRate()===1?claimClearXp(this.hardKey(),this.hardStage()):0;
-     if(!debug&&(this.player.runXp>0||clearXp>0)){const name=getCharacter(this.runConfig.character).name,r=creditHeroXp(this.runConfig.character,this.player.runXp*this.heroXpRate()+clearXp);
-      this.resultTexts.body.setText(this.resultTexts.body.text+'\n武将等级  '+name+(r.to>r.from?' Lv.'+r.from+' → Lv.'+r.to:' Lv.'+r.to)+' · 经验 +'+r.gained+(clearXp?'（含首通 +'+clearXp+'）':'')+(r.capped?' · 已到本章上限 Lv.'+r.cap+'，经验暂存':''));
+     if(!debug&&this.player.runXp>0){const name=getCharacter(this.runConfig.character).name,r=creditHeroXp(this.runConfig.character,this.player.runXp*this.heroXpRate());
+      this.resultTexts.body.setText(this.resultTexts.body.text+'\n武将等级  '+name+(r.to>r.from?' Lv.'+r.from+' → Lv.'+r.to:' Lv.'+r.to)+' · 经验 +'+r.gained+(r.capped?' · 已到本章上限 Lv.'+r.cap+'，经验暂存':''));
       // 随行武将：每人拿主公折算后经验的一半（hero-level-proposal 方案 A，用户批准）
       const half=this.player.runXp*this.heroXpRate()/2,lines:string[]=[];for(const f of this.followers?.members??[]){const fr=creditHeroXp((f.recruit.hero??f.recruit.id) as HeroKey,half),fn=f.recruit.name.replace(/（.*）/,'');lines.push(fr.to>fr.from?fn+' Lv.'+fr.from+' → Lv.'+fr.to:fn+' Lv.'+fr.to);}
       if(lines.length)this.resultTexts.body.setText(this.resultTexts.body.text+'\n随行  '+lines.join(' · ')+' · 各得经验 +'+Math.floor(half));}}

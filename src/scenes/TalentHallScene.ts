@@ -3,6 +3,7 @@
  * 史事名将与大众脸暂无立绘：用品质色印章 + 模板字（枪 / 刀 / 弓 / 谋）作程序化过渡；可玩名将用现有头像。
  */
 import Phaser from 'phaser';
+import { heroLevel, type HeroKey } from '../systems/HeroProgress';
 import { playMenuMusic } from '../systems/Music';
 import { isChapterTestRun } from '../systems/ChapterProgress';
 import { W, H, worldText, worldButton, worldShell, panel } from '../world/WorldUI';
@@ -98,10 +99,10 @@ export class TalentHallScene extends Phaser.Scene {
     this.content!.add(panel(this, W / 2, y, w, h));
     const size = h - 16; this.seal(x0 + 12 + size / 2, y, size, r.quality, TEMPLATES[r.template].name, r.hero ? getCharacter(r.hero).portrait : undefined, r.template);
     const tx = x0 + 24 + size, b = rankBonus(r);
-    this.content!.add(worldText(this, tx, y - h / 2 + 8, `${r.name}${lord ? ' · 主公' : ''}${following ? ' · 随行' : ''}`, D ? 17 : 18, q.css).setName('talent-roster-name'));
+    this.content!.add(worldText(this, tx, y - h / 2 + 8, `${r.name} Lv.${heroLevel((r.hero ?? r.id) as HeroKey)}${lord ? ' · 主公' : ''}${following ? ' · 随行' : ''}`, D ? 17 : 18, q.css).setName('talent-roster-name'));
     const c = RANK.cost(r.rank + 1), canRank = r.rank < cap;
     const line = `将阶 ${r.rank}/${cap}${canRank ? ` · 下一阶 ${c.provisions} 军粮` : r.rank >= RANK.max ? ' · 已满' : ' · 升级招贤馆可继续'}
-兵器 +${Math.round(b.damage * 100)}% · 生命 +${Math.round(b.hp * 100)}%${r.hero ? ` · 当主将开局 +${Math.round(b.lead * 100)}%` : ' · 只能随行'}`;
+兵器 +${Math.round(b.damage * 100)}% · 生命 +${Math.round(b.hp * 100)}%${r.hero ? '' : ' · 只能随行'}`;
     this.content!.add(worldText(this, tx, y - h / 2 + (D ? 30 : 34), line, 12, '#cdbf9f').setWordWrapWidth(D ? w - size - 330 : w - size - 40));
     const bx = D ? W - 16 - 320 : tx + 50, by = D ? y : y + h / 2 - 24;
     this.small(bx, by, D ? 96 : 92, '升·兵器', () => { this.message = rankUp(r.id, 'weapon').message; this.render(); }, `talent-rank-weapon-${r.id}`, canRank);

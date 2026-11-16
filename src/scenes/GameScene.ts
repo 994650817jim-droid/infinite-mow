@@ -1,6 +1,6 @@
 import { stopMenuMusic } from '../systems/Music';
 import {FollowerSquad} from '../systems/FollowerSquad';
-import {followersFor,leadRankBonus} from '../systems/RosterStore';
+import {followersFor} from '../systems/RosterStore';
 import { warnCircle, TELEGRAPH_CLASSIC, groundCracks, windupFlash } from '../ui/Telegraph';
 import {applyCitySpecialties} from '../systems/CityBonuses';
 import {cityIncomeLine} from '../world/WorldStore';
@@ -58,7 +58,7 @@ import { LegionUI } from '../ui/LegionUI';
 import { Reinforcements } from '../systems/Reinforcements';
 import { MartialFields } from '../systems/MartialFields';
 import { RunGrowth, ATTRIBUTE_INFO, ATTRIBUTE_MAX, type AttributeId } from '../systems/RunGrowth';
-import { allocateHeroAttr, creditHeroXp, enlistHero, heroFreePoints, heroLevel } from '../systems/HeroProgress';
+import { allocateHeroAttr, creditHeroXp, enlistHero, heroFreePoints, heroLevel, type HeroKey } from '../systems/HeroProgress';
 import { packCampaign, restoreCampaign, type CampaignTransfer } from '../systems/Campaign';
 import { TROOP_KINDS, INITIAL_TROOPS, LEGION, type TroopKind } from '../data/legion';
 import { DEFAULT_RUN_CONFIG, getCharacter, type RunConfig , HERO_TINT, HERO_FX } from '../data/characters';
@@ -422,7 +422,7 @@ export class GameScene extends Phaser.Scene {
       this.player.weapons=[{id:ownId,level:ownLevel,cooldownLeft:0}];
     }
     this.applyHeroLevel(!!transfer && this.chapter.id === transfer.chapter && this.runConfig.character === transfer.character);
-    if(this.worldCampaign&&worldUnlocked()){const effects=permanentEffects();this.legion.healingMultiplier=effects.healMultiplier;applyCitySpecialties(this.player,effects,!transfer,{legion:this.legion,supplies:this.supplies});{const lead=leadRankBonus(this.runConfig.character);if(lead>0){this.player.growth.permanentDamage+=lead;if(!transfer){this.player.stats.maxHpBonus+=Math.round(this.player.maxHp*lead);this.player.hp=this.player.maxHp;}}}if(!transfer){for(let i=0;i<effects.reinforcements;i++)this.legion.recruit(i===0?'swordsman':'spearman',1,true);}if(!transfer&&!isChapterTestRun())for(const kind of takeExpeditionReserve(effects.reserveSlots)){this.legion.recruit(kind,1,true);this.allies[this.allies.length-1].reserveSoldier=true;}}
+    if(this.worldCampaign&&worldUnlocked()){const effects=permanentEffects();this.legion.healingMultiplier=effects.healMultiplier;applyCitySpecialties(this.player,effects,!transfer,{legion:this.legion,supplies:this.supplies});if(!transfer){for(let i=0;i<effects.reinforcements;i++)this.legion.recruit(i===0?'swordsman':'spearman',1,true);}if(!transfer&&!isChapterTestRun())for(const kind of takeExpeditionReserve(effects.reserveSlots)){this.legion.recruit(kind,1,true);this.allies[this.allies.length-1].reserveSoldier=true;}}
     this.buildCombat=new BuildCombat(this.player.growth.build,(x,y,r)=>this.grid.query(x,y,r),(e,n,fire)=>this.hitEnemy(e,n,this.combatNow,fire?'fire':'melee',false,false),(e,fire)=>{this.artEffects.show(fire?5:3,e.x,e.y-8,32,this.combatNow,160);buildVfx(this).emit(fire?'flame':'combo',e.x,e.y-8,this.combatNow,fire?42:38);});
     this.bulwarkBuild=new BulwarkBuild(this,this.player.growth.build,this.player,this.allies,(x,y,r)=>this.grid.query(x,y,r),(e,n)=>this.hitEnemy(e,n,this.combatNow,'melee',false,false));
     this.player.damageGuard=(n,now)=>this.bulwarkBuild?.guard(n,now)??n;this.legion.defense=this.bulwarkBuild;
@@ -2417,7 +2417,10 @@ export class GameScene extends Phaser.Scene {
     // 武将等级：本场经验折进武将经验（测试 / 调试战斗不记）
     {const debug=isChapterTestRun()||this.debugModified||this.debugJumped||!!this.player.damageImmune;
      if(!debug&&this.player.runXp>0){const name=getCharacter(this.runConfig.character).name,r=creditHeroXp(this.runConfig.character,this.player.runXp*this.heroXpRate());
-      this.resultTexts.body.setText(this.resultTexts.body.text+'\n武将等级  '+name+(r.to>r.from?' Lv.'+r.from+' → Lv.'+r.to:' Lv.'+r.to)+' · 经验 +'+r.gained+(r.capped?' · 已到本章上限 Lv.'+r.cap+'，经验暂存':''));}}
+      this.resultTexts.body.setText(this.resultTexts.body.text+'\n武将等级  '+name+(r.to>r.from?' Lv.'+r.from+' → Lv.'+r.to:' Lv.'+r.to)+' · 经验 +'+r.gained+(r.capped?' · 已到本章上限 Lv.'+r.cap+'，经验暂存':''));
+      // 随行武将：每人拿主公折算后经验的一半（hero-level-proposal 方案 A，用户批准）
+      const half=this.player.runXp*this.heroXpRate()/2,lines:string[]=[];for(const f of this.followers?.members??[]){const fr=creditHeroXp((f.recruit.hero??f.recruit.id) as HeroKey,half),fn=f.recruit.name.replace(/（.*）/,'');lines.push(fr.to>fr.from?fn+' Lv.'+fr.from+' → Lv.'+fr.to:fn+' Lv.'+fr.to);}
+      if(lines.length)this.resultTexts.body.setText(this.resultTexts.body.text+'\n随行  '+lines.join(' · ')+' · 各得经验 +'+Math.floor(half));}}
     // 马厩：各章首领首次击杀赠马（第一章通关送驽马由 ItemStore 读档时补发）
     {const key=victory&&this.bossKilled&&!(isChapterTestRun()||this.debugModified||this.debugJumped||this.player.damageImmune)?this.stableRewardKey():null,horse=key?horseForReward(key):undefined;
      if(horse&&grantHorse(horse.id))this.resultTexts.body.setText(this.resultTexts.body.text+'\n获得坐骑  '+horse.name+' · 已入马厩（休整时可换马）');}

@@ -275,10 +275,9 @@ export function rankUp(id: string, line: RankLine): RosterResult {
   r.rank++; r.picks.push(line); write(s); return { ok: true, message: `${r.name}升到将阶 ${r.rank}（${line === 'weapon' ? '兵器' : '被动'}）` };
 }
 /** 将阶带来的加成：兵器线伤害、被动线生命与攻速；当主将时的开局加成。 */
-export function rankBonus(r: Pick<Recruit, 'rank' | 'picks'>): { damage: number; hp: number; haste: number; lead: number } {
+export function rankBonus(r: Pick<Recruit, 'rank' | 'picks'>): { damage: number; hp: number; haste: number } {
   const w = r.picks.filter(p => p === 'weapon').length, p = r.picks.filter(x => x === 'passive').length;
-  return { damage: w * RANK.weaponStep, hp: p * RANK.passiveHp, haste: p * RANK.passiveHaste, lead: (r.rank - 1) * RANK.leadPerRank };
+  return { damage: w * RANK.weaponStep, hp: p * RANK.passiveHp, haste: p * RANK.passiveHaste };
 }
 /** 主将的将阶开局加成（未拥有记录时为 0）。 */
-export function leadRankBonus(hero: CharacterId): number { if (!worldUnlocked()) return 0; const r = loadRoster().owned.find(x => x.hero === hero); return r ? rankBonus(r).lead : 0; }
 export { FOLLOW };

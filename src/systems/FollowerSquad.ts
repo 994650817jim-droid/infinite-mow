@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { heroAttrs, heroLevel, type HeroKey } from './HeroProgress';
 import { DEPTH, FONT } from '../config';
 import { getCharacter } from '../data/characters';
 import { QUALITIES, type ItemQuality } from '../data/items';
@@ -31,7 +32,7 @@ export class Follower {
   hp = 1; maxHp = 1; cooldown = 0; restUntil = 0; target: Enemy | null = null; nextQuery = 0; nextContact = 0;
   slot = 0; dir: 'down' | 'up' | 'left' | 'right' = 'down'; walk = 0; stuckAt = 0; lastX = 0; lastY = 0; hurtUntil = 0; downs = 0; kills = 0; hits = 0;
   readonly sprite: Phaser.GameObjects.Image; readonly shadow: Phaser.GameObjects.Ellipse; readonly label: Phaser.GameObjects.Text; readonly bar: Phaser.GameObjects.Graphics;
-  readonly sheet: string; readonly template: FollowerTemplate; readonly damage: number; readonly speedMul: number; readonly haste: number; readonly gear: GearStats;
+  readonly sheet: string; readonly template: FollowerTemplate; readonly damage: number; readonly speedMul: number; readonly haste: number; readonly gear: GearStats; level: number;
   constructor(readonly scene: Phaser.Scene, readonly recruit: Recruit, x: number, y: number, leaderLevelHp: number) {
     this.template = recruit.template;
     const t = TEMPLATES[this.template], b = rankBonus(recruit), hero = recruit.hero ? getCharacter(recruit.hero) : null, q = QUALITY_POWER[recruit.quality];
@@ -40,8 +41,13 @@ export class Follower {
     // 自己身上的兵装（行囊里给这名武将穿的，不叠到主将身上；招来的 r_ 武将不骑马）
     let g = emptyGear(); try { g = gearFromItems(Object.values(loadout((recruit.hero ?? recruit.id) as GearOwner)).filter((i): i is ItemInstance => !!i)); } catch { /* 行囊不可用 */ }
     this.gear = g;
-    this.damage = t.damage * q * (hero?.damageMul ?? 1) * (1 + b.damage) * (1 + g.damage) * (1 + g.crit);
-    this.maxHp = Math.round(t.hp * q * (hero?.hpMul ?? 1) * (1 + b.hp) * (1 + g.hp) * leaderLevelHp); this.hp = this.maxHp;
+    // 武将等级：可玩名将用自己加过的属性点（武力 / 体魄），招来的 r_ 武将按等级直接成长
+    let dmgLv = 1, hpLv = 1; this.level = 1;
+    try { const key = (recruit.hero ?? recruit.id) as HeroKey; this.level = heroLevel(key);
+      if (recruit.hero) { const a = heroAttrs(key); dmgLv = 1 + FOLLOW.mightDamage * a.might; hpLv = 1 + FOLLOW.constitutionHp * a.constitution; }
+      else { dmgLv = 1 + FOLLOW.levelDamage * Math.max(0, this.level - 1); hpLv = 1 + FOLLOW.levelHp * Math.max(0, this.level - 1); } } catch { /* 等级存档不可用 */ }
+    this.damage = t.damage * q * (hero?.damageMul ?? 1) * (1 + b.damage) * (1 + g.damage) * (1 + g.crit) * dmgLv;
+    this.maxHp = Math.round(t.hp * q * (hero?.hpMul ?? 1) * (1 + b.hp) * (1 + g.hp) * hpLv * leaderLevelHp); this.hp = this.maxHp;
     this.speedMul = t.speed * (hero?.speedMul ?? 1) * (1 + g.move);
     this.haste = (1 + b.haste) * (1 + g.attackSpeed);
     this.cooldown = .3 + Math.random() * .4;

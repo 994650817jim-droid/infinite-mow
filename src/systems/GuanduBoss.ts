@@ -173,12 +173,16 @@ export class GuanduBoss {
   private draw(z: Zone, alpha: number) {
     const g = this.gfx; g.lineStyle(2, 0xe4ba78, .9).fillStyle(this.kit === 'wenchou' ? 0xa8603a : 0xb8502f, alpha);
     if (!TELEGRAPH_CLASSIC && alpha < .3) windupFlash(this.h.boss, this.at);
+    // 特效型警示用哪种：淳于琼 守粮阵 / 弓阵齐射 / 霹雳车投石 = 地动 / 箭雨 / 落火；颜良号令攻城 = 落火；其余圆形 = 地动
+    // 蓄力进度：预警阶段（alpha .13）按剩余时间算，出手后等落点（.15）视为蓄满
+    const pr = alpha >= .3 ? 1 : alpha < .14 ? Math.max(0, Math.min(1, 1 - (this.until - this.at) / TIMING.warnMs)) : 1;
+    const fx = this.kit === 'chunyuqiong' ? (['slam', 'arrows', 'fire'] as const)[this.skill] ?? 'slam' : this.kit === 'yanliang' && this.skill === 2 ? 'fire' : 'slam';
     if (z.radius) {
-      if (z.inner > 0 && !TELEGRAPH_CLASSIC) groundCracks(g, z.x, z.y, z.radius, alpha >= .3 ? 1 : .45, 0, Math.PI * 2, z.inner, alpha >= .3);
+      if (z.inner > 0 && !TELEGRAPH_CLASSIC) groundCracks(g, z.x, z.y, z.radius, pr, 0, Math.PI * 2, z.inner, alpha >= .3, fx);
       else if (z.inner > 0) { g.lineStyle(z.radius - z.inner, 0xb8502f, alpha * .55).strokeCircle(z.x, z.y, (z.radius + z.inner) / 2); g.lineStyle(1.4, 0xe4ba78, .5).strokeCircle(z.x, z.y, z.radius).strokeCircle(z.x, z.y, z.inner); }
-      else warnCircle(g, z.x, z.y, z.radius, alpha >= .3 ? 1 : .45, this.kit === 'wenchou' ? 0xa8603a : 0xb8502f, 0xe4ba78, alpha >= .3, this.at);
+      else warnCircle(g, z.x, z.y, z.radius, pr, this.kit === 'wenchou' ? 0xa8603a : 0xb8502f, 0xe4ba78, alpha >= .3, this.at, fx);
     } else {
-      warnLane(g, z.x, z.y, z.angle, z.length, z.width, alpha >= .3 ? 1 : .45, this.kit === 'wenchou' ? 0xa8603a : 0xb8502f, 0xe4ba78, alpha >= .3);
+      warnLane(g, z.x, z.y, z.angle, z.length, z.width, pr, this.kit === 'wenchou' ? 0xa8603a : 0xb8502f, 0xe4ba78, alpha >= .3);
     }
   }
   /** 沿线移动首领并结算路径伤害；返回本帧位移。 */

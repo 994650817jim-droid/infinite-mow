@@ -11,13 +11,29 @@ import { DEPTH } from '../config';
  *  （地面圈在格子里的直径约占 73%（雷）/ 70%（吕布），显示时按此换算，让圈的外缘正好是命中范围）
  *  lubu      256×256 · 3 行 × 6：方天戟虚影压下 / 红色杀气火舌圈（循环）/ 落地冲击
  *  rift      1024×160 · 6 行 × 1：裂地重斩（横条，朝右）第 1–4 行蓄力、第 5–6 行炸开
+ *  通用（铺开到所有首领 / 敌人，见 Telegraph.groundCracks / laneCracks）：
+ *  charge    1024×160 · 6 行 × 1：冲锋道（尘土 + 马蹄印，朝右）第 1–4 行蓄力、第 5 行冲过、第 6 行余尘
+ *  sweep     256×340  · 3 行 × 6（等分格）：扇形圆心、半径见 SWEEP_CX / SWEEP_R；刀气蓄势 / 斩下 / 碎石尘土
+ *  fire / arrows / slam 256×256 · 3 行 × 6：俯视正圆 将燃·箭影·地动（蓄力）/ 窜火·箭落·炸开 / 余火·余尘
  */
-export type WarnKind = 'lightning' | 'lubu' | 'rift';
+export type WarnKind = 'lightning' | 'lubu' | 'rift' | ShapeKind;
+export type ShapeKind = 'charge' | 'sweep' | 'fire' | 'arrows' | 'slam';
 export const WARN_FX_FILES: Record<WarnKind, { key: string; file: string; w: number; h: number }> = {
   lightning: { key: 'warnfx_lightning', file: 'assets/warn-fx/lightning.png', w: 256, h: 256 },
   lubu: { key: 'warnfx_lubu', file: 'assets/warn-fx/lubu.png', w: 256, h: 256 },
   rift: { key: 'warnfx_rift', file: 'assets/warn-fx/rift.png', w: 1024, h: 160 },
+  charge: { key: 'warnfx_charge', file: 'assets/warn-fx/charge.png', w: 1024, h: 160 },
+  sweep: { key: 'warnfx_sweep', file: 'assets/warn-fx/sweep.png', w: 256, h: 340 },
+  fire: { key: 'warnfx_fire', file: 'assets/warn-fx/fire.png', w: 256, h: 256 },
+  arrows: { key: 'warnfx_arrows', file: 'assets/warn-fx/arrows.png', w: 256, h: 256 },
+  slam: { key: 'warnfx_slam', file: 'assets/warn-fx/slam.png', w: 256, h: 256 },
 };
+/** 圆形图里那圈在格子中的直径占比（按实际切出的图量，tools 里量），显示时按此换算让外缘 = 命中范围。 */
+const RING_FRAC: Partial<Record<WarnKind, number>> = { fire: .78, arrows: .78, slam: .72 };
+/** 横扫图（等分格切出）：扇形圆心在格宽 28.5% 处、垂直居中，半径约 0.59 格宽（按实际图量）。 */
+const SWEEP_CX = .285, SWEEP_R = .59;
+/** 长条图里内容在格子中的高度占比：显示高度 = 宽度 / 占比。 */
+const LANE_FRAC: Partial<Record<WarnKind, number>> = { charge: .57, rift: .5 };
 /** 关闭特效警示（只看方案 C 的样子）：?warnfx=0。 */
 export const WARN_FX_ON: boolean = (() => { try { return new URLSearchParams(globalThis.location?.search ?? '').get('warnfx') !== '0'; } catch { return true; } })();
 
@@ -76,7 +92,47 @@ export class WarnFx {
     return true;
   }
 
-  clear(): void { for (const e of this.live.values()) for (const i of e.imgs) i.destroy(); this.live.clear(); }
+  // ---------- 通用形状（圆 / 环、长条、扇形），供 Telegraph.groundCracks / laneCracks 统一调用 ----------
+  private impacted = new Map<string, number>();
+
+  /** 圆 / 环形落点蓄力：第 1 行按进度换帧，外缘 = r。 */
+  circle(id: string, kind: 'fire' | 'arrows' | 'slam', x: number, y: number, r: number, progress: number, now: number): boolean {
+    if (!this.has(kind)) return false;
+    const p = clamp01(progress), d = r * 2 / (RING_FRAC[kind] ?? .72);
+    this.get(id, 1, WARN_FX_FILES[kind].key, now).imgs[0].setFrame(step6(p)).setOrigin(.5).setRotation(0).setPosition(x, y).setDisplaySize(d, d).setAlpha(.4 + .5 * p).setDepth(DEPTH.ground + 4);
+    return true;
+  }
+  /** 长条（冲锋道）蓄力：从 (x,y) 沿 angle 伸出 length，宽 width。 */
+  lane(id: string, kind: 'charge', x: number, y: number, angle: number, length: number, width: number, progress: number, now: number): boolean {
+    if (!this.has(kind)) return false;
+    const p = clamp01(progress);
+    this.get(id, 1, WARN_FX_FILES[kind].key, now).imgs[0].setFrame(Math.min(3, Math.floor(p * 4))).setOrigin(0, .5).setPosition(x, y).setRotation(angle).setDisplaySize(length, width / (LANE_FRAC[kind] ?? .5)).setAlpha(.7 + .3 * p).setDepth(DEPTH.ground + 4);
+    return true;
+  }
+  /** 扇形（横扫）蓄力：圆心 (x,y)、半径 r、朝 angle。图里扇形张开约 140°，不随 arc 变形。 */
+  sector(id: string, x: number, y: number, r: number, angle: number, progress: number, now: number): boolean {
+    if (!this.has('sweep')) return false;
+    const p = clamp01(progress), w = r / SWEEP_R, f = WARN_FX_FILES.sweep;
+    this.get(id, 1, f.key, now).imgs[0].setFrame(step6(p)).setOrigin(SWEEP_CX, .5).setPosition(x, y).setRotation(angle).setDisplaySize(w, w * f.h / f.w).setAlpha(.45 + .5 * p).setDepth(DEPTH.ground + 4);
+    return true;
+  }
+  /** 通用形状的落下：同一个 id 只播一次（调用方在命中窗口里每帧都会调）。 */
+  shapeImpact(id: string, kind: ShapeKind, x: number, y: number, size: number, angle: number, now: number, width = 0): boolean {
+    if (!this.has(kind)) return false;
+    if ((this.impacted.get(id) ?? -1) > now) return true;
+    this.impacted.set(id, now + 1500);
+    if (this.impacted.size > 64) for (const [k, t] of this.impacted) if (t < now) this.impacted.delete(k);
+    const f = WARN_FX_FILES[kind], lane = kind === 'charge', first = lane ? 4 : 6, count = lane ? 2 : 12;
+    const img = this.scene.add.image(x, y, f.key, first).setDepth(lane ? DEPTH.ground + 5 : DEPTH.fx - 1);
+    if (lane) img.setOrigin(0, .5).setRotation(angle).setDisplaySize(size, width / (LANE_FRAC[kind] ?? .5));
+    else if (kind === 'sweep') { const w = size / SWEEP_R; img.setOrigin(SWEEP_CX, .5).setRotation(angle).setDisplaySize(w, w * f.h / f.w); }
+    else { const d = size * 2 / (RING_FRAC[kind] ?? .72); img.setDisplaySize(d, d); }
+    this.scene.tweens.addCounter({ from: 0, to: count - .01, duration: lane ? 360 : 620, onUpdate: t => img.setFrame(first + Math.floor(t.getValue() ?? 0)),
+      onComplete: () => this.scene.tweens.add({ targets: img, alpha: 0, duration: 140, onComplete: () => img.destroy() }) });
+    return true;
+  }
+
+  clear(): void { for (const e of this.live.values()) for (const i of e.imgs) i.destroy(); this.live.clear(); this.impacted.clear(); }
 
   private get(id: string, n: number, key: string, now: number): Live {
     let e = this.live.get(id);

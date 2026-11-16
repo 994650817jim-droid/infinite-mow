@@ -7,7 +7,7 @@ import { arcUnlocked } from '../world/WorldStore';
  * 武将等级（跨战斗永久，2026-11-16 用户批准 hero-level-proposal.md 做法 A）：
  * - 每位武将（可玩名将 CharacterId 或招募的 r_ 编号）各记等级、经验、已加的属性点；存档键 im_heroes_v1（SaveSlots.PROGRESS_KEYS）。
  * - 结算时本场经验折进武将经验（主线 100%、攻城 / 军情 / 挑战 50%，测试战斗不记）；经验表与局内相同（xpToNext）。
- * - 每 2 级 1 个属性点，分配永久保留；局内升级不再给属性点（局内只出三选一，见 Player.gainXp「战功」）。
+ * - 每级 1 个属性点（Lv.N 共 N−1 点，2026-11-16 改版），单项最多 8，分配永久保留；局内升级不再给属性点（局内只出三选一，见 Player.gainXp「战功」）。
  * - 等级上限随章节开放：一章 10、二章 15、三章 20、四章 25、五章 30；超出的经验先存着，开新章后再升。
  * - 第一次出战的武将：只开第一章时 Lv1，之后从「当前上限 − 5」起步（避免后期才用的武将打不动）。
  */
@@ -15,10 +15,11 @@ export const HEROES_KEY = 'im_heroes_v1';
 export const LEVEL_CAPS: readonly number[] = [10, 15, 20, 25, 30];
 export type HeroKey = CharacterId | `r_${number}`;
 export interface HeroRecord { level: number; xp: number; attributes: Record<AttributeId, number> }
-interface HeroSave { version: 1; heroes: Record<string, HeroRecord>; migrated: boolean; firstClears: string[] }
+/** attrScale = 2：属性点已按「每级 1 点、效果减半」换算（旧记录的已加点 ×2）。 */
+interface HeroSave { version: 1; heroes: Record<string, HeroRecord>; migrated: boolean; firstClears: string[]; attrScale?: number }
 
-const ATTRS: readonly AttributeId[] = ['might', 'quickness', 'critical', 'constitution', 'agility'];
-const zeroAttrs = (): Record<AttributeId, number> => ({ might: 0, quickness: 0, critical: 0, constitution: 0, agility: 0 });
+const ATTRS: readonly AttributeId[] = ['might', 'quickness', 'critical', 'constitution', 'agility', 'command'];
+const zeroAttrs = (): Record<AttributeId, number> => ({ might: 0, quickness: 0, critical: 0, constitution: 0, agility: 0, command: 0 });
 const int = (v: unknown, max: number, min = 0) => Number.isSafeInteger(v) ? Math.max(min, Math.min(max, v as number)) : min;
 const isKey = (k: string) => /^r_\d{1,9}$/.test(k) || /^[a-z]{2,20}$/.test(k);
 
@@ -30,16 +31,16 @@ export function levelCap(): number { return LEVEL_CAPS[chaptersOpen() - 1]; }
 /** 第一次出战的武将的起始等级。 */
 export function startLevel(): number { const cap = levelCap(); return cap <= LEVEL_CAPS[0] ? 1 : cap - 5; }
 /** 某等级累计可得的属性点。 */
-export function pointsAt(level: number): number { return Math.floor(level / ATTRIBUTE_POINT_EVERY); }
+export function pointsAt(level: number): number { return Math.max(0, Math.floor((level - 1) / ATTRIBUTE_POINT_EVERY)); }
 
 let memory: HeroSave | null = null;
 function read(): HeroSave {
   if (memory) return memory;
-  let s: HeroSave = { version: 1, heroes: {}, migrated: false, firstClears: [] };
+  let s: HeroSave = { version: 1, heroes: {}, migrated: false, firstClears: [], attrScale: 2 };
   try {
     const v = JSON.parse(localStorage.getItem(HEROES_KEY) ?? 'null');
     if (v && v.version === 1 && v.heroes && typeof v.heroes === 'object') {
-      s.migrated = v.migrated === true;
+      s.migrated = v.migrated === true; s.attrScale = v.attrScale === 2 ? 2 : 1;
       s.firstClears = Array.isArray(v.firstClears) ? [...new Set((v.firstClears as unknown[]).filter((k): k is string => typeof k === 'string' && /^[a-z]+-\d$/.test(k)))].slice(0, 60) : [];
       for (const [k, r] of Object.entries(v.heroes as Record<string, Partial<HeroRecord>>)) {
         if (!isKey(k) || !r) continue;
@@ -47,8 +48,10 @@ function read(): HeroSave {
         s.heroes[k] = { level: int(r.level, LEVEL_CAPS[LEVEL_CAPS.length - 1], 1), xp: int(r.xp, 1e8), attributes };
       }
     }
-  } catch { s = { version: 1, heroes: {}, migrated: false, firstClears: [] }; }
+  } catch { s = { version: 1, heroes: {}, migrated: false, firstClears: [], attrScale: 2 }; }
   memory = s;
+  // 属性点改版：旧记录已加的点 ×2（每点效果减半，换算后强度不变），单项最多 8；可用点按新规则（每级 1 点）重算
+  if (s.attrScale !== 2) { for (const r of Object.values(s.heroes)) for (const a of ATTRS) r.attributes[a] = Math.min(ATTRIBUTE_MAX, r.attributes[a] * 2); s.attrScale = 2; commit(); }
   if (!s.migrated) migrate(s);
   return s;
 }

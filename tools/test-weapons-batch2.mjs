@@ -1,6 +1,6 @@
 // 第二批专属武器（2026-11-16）：黄忠宝雕弓、张飞当阳喝断、马超虎头湛金枪、刘备双股剑。
 // 手机 390×844 与电脑 1280×720 各跑一遍；检查武器机制与被动招牌技；全程无 pageerror / console error。截图 assets/review/weapons-batch2/。
-// 用法：BASE=http://127.0.0.1:5173/ node tools/test-weapons-batch2.mjs [heroId...]
+// 用法：BASE=http://127.0.0.1:5173/ [LAYOUT=desktop|mobile] node tools/test-weapons-batch2.mjs [heroId...]
 import { chromium } from 'playwright';
 import { mkdirSync } from 'node:fs';
 const base = process.env.BASE ?? 'http://127.0.0.1:5173/', out = 'assets/review/weapons-batch2';
@@ -9,7 +9,7 @@ let pass = 0, fail = 0; const errors = [];
 const ck = (n, ok, d) => { ok ? pass++ : fail++; console.log((ok ? 'PASS ' : 'FAIL ') + n + (d !== undefined ? ' · ' + JSON.stringify(d).slice(0, 420) : '')); };
 const ALL = { huangzhong: { name: '黄忠', weapon: 'baodiao_bow' }, zhangfei: { name: '张飞', weapon: 'dangyang_roar' }, machao: { name: '马超', weapon: 'zhanjin_lance' }, liubei: { name: '刘备', weapon: 'shuanggu_swords' } };
 const only = process.argv.slice(2), HEROES = Object.fromEntries(Object.entries(ALL).filter(([k]) => !only.length || only.includes(k)));
-const LAYOUTS = { mobile: { width: 390, height: 844 }, desktop: { width: 1280, height: 720 } };
+const LAYOUTS = Object.fromEntries(Object.entries({ mobile: { width: 390, height: 844 }, desktop: { width: 1280, height: 720 } }).filter(([k]) => !process.env.LAYOUT || process.env.LAYOUT === k));
 const b = await chromium.launch({ channel: 'chrome', headless: true });
 const G = "window.__game.scene.getScene('GameScene')";
 const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -75,11 +75,15 @@ for (const [layout, viewport] of Object.entries(LAYOUTS)) for (const [hero, h] o
     // 西凉铁骑满层：下一枪化为向前冲锋（主将突进）
     const c = await p.evaluate(async ([G0, MK]) => {
       const s = eval(G0), pl = s.player; const mk = eval(MK); for (const e of s.enemies) if (e.active && !e.isSupplySlot) e.hp = 0;
-      await new Promise(r => setTimeout(r, 1500)); mk(pl.x + 120, pl.y); const x0 = pl.x; pl.passive.stacks = 6; let charge = false, moved = 0; const t0 = performance.now();
-      while (performance.now() - t0 < 4000) { await new Promise(r => setTimeout(r, 20)); charge = charge || !!s.children.getByName('machao-charge'); moved = Math.max(moved, pl.x - x0); if (charge && moved >= 120) break; }
-      return { charge, moved: Math.round(moved), triggers: pl.passive.snapshot(s.combatNow).triggers };
+      await new Promise(r => setTimeout(r, 1500)); mk(pl.x + 120, pl.y); const x0 = pl.x, shout0 = s.passiveShout.count; pl.passive.stacks = 6; let charge = false, moved = 0, shoutText = ''; const t0 = performance.now();
+      while (performance.now() - t0 < 4000) { await new Promise(r => setTimeout(r, 20)); charge = charge || !!s.children.getByName('machao-charge'); moved = Math.max(moved, pl.x - x0); shoutText = shoutText || s.children.getByName('passive-shout')?.text || ''; if (charge && moved >= 120) break; }
+      const shouts = s.passiveShout.count - shout0;
+      // 紧接着再攒满一次：15 秒内不再喊（不刷屏）
+      pl.passive.stacks = 6; await new Promise(r => setTimeout(r, 1200));
+      return { charge, moved: Math.round(moved), triggers: pl.passive.snapshot(s.combatNow).triggers, shouts, shoutText, shoutsAfterRefill: s.passiveShout.count - shout0 };
     }, [G, mk]);
     ck(`${tag}：铁骑满层，下一枪化为锦马冲锋（向前突进 ≥120 像素）`, c.charge && c.moved >= 120 && c.triggers >= 1, c);
+    ck(`${tag}：铁骑攒满时头顶喊一句台词（只喊一次，15 秒内再满不重复）`, c.shouts === 1 && c.shoutText.length > 0 && c.shoutsAfterRefill === 1, c);
   } else {
     const r = await p.evaluate(async ([G0, MK]) => {
       const s = eval(G0), pl = s.player; const mk = eval(MK);

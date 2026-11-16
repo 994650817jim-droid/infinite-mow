@@ -119,9 +119,21 @@ export function migrateTown(levels: { barracks: number; farm: number; clinic: nu
   return t;
 }
 
-/** v8 → v9：删掉的建筑每级退还的军粮（占位，平衡会话定）。 */
-export const REMOVED_REFUND_PER_LEVEL = 60;
-const REMOVED = ['house', 'market', 'post', 'tavern', 'clinic', 'smithy', 'drill', 'wall'] as const;
+/**
+ * v8 → v9：功能整体删除的建筑（民居、市集、驿站、酒肆）按 v8 价目 100% 退还（平衡会话建议，统筹要求迁移无损）。
+ * 医馆、铁匠铺、校场、城墙已换成对应科技，不另退。v8 价目：建造价；Lv2 = 建造价 ×2.2、Lv3 = ×4.5，钱至少 20 / 60。
+ */
+export const REMOVED_REFUND_RATE = 1;
+const V8_BUILD: Record<'house' | 'market' | 'post' | 'tavern', [number, number, number]> = { house: [0, 30, 0], market: [30, 60, 0], post: [40, 60, 40], tavern: [30, 40, 50] };
+/** 某座已删建筑升到 level 一共花过多少（折成军粮）。 */
+export function v8Spent(id: keyof typeof V8_BUILD, level: number): number {
+  const [m, p, $] = V8_BUILD[id]; let total = 0;
+  for (let l = 1; l <= Math.min(MAX_LEVEL, level); l++) {
+    const k = l === 1 ? 1 : l === 2 ? 2.2 : 4.5, money = l === 1 ? $ : Math.max(l === 2 ? 20 : 60, Math.round($ * k));
+    total += Math.round(m * k) * MERIT_TO_GRAIN + Math.round(p * k) + money * MONEY_TO_GRAIN;
+  }
+  return Math.round(total * REMOVED_REFUND_RATE);
+}
 const IDS = Object.keys(TOWN_BUILDINGS) as TownBuildingId[];
 const int = (v: unknown, max: number, min = 0): number => typeof v === 'number' && Number.isFinite(v) ? Math.max(min, Math.min(max, Math.floor(v))) : min;
 /** 旧版 12 块地（plots）：每种建筑取最高等级，多座再 +1 级。 */
@@ -161,7 +173,7 @@ export function parseTown(v: unknown, legacy: { barracks: number; farm: number; 
     if (lv('drill') >= 1) { tech.add('forge'); tech.add('drill_points'); }
     t.tech = [...tech];
     if (t.tech.length) t.levels.academy = Math.max(1, Math.min(t.levels.hall, Math.max(lv('smithy'), lv('drill'), lv('wall'), lv('clinic') - 1)));
-    for (const id of REMOVED) refund += lv(id) * REMOVED_REFUND_PER_LEVEL;
+    for (const id of Object.keys(V8_BUILD) as Array<keyof typeof V8_BUILD>) refund += v8Spent(id, lv(id));
     money = int(o.money, 9_999_999);
     if (Array.isArray(o.caravans)) for (const c of o.caravans.slice(0, 3) as Array<{ value?: unknown }>) money += int(c?.value, 10000);
   }

@@ -25,8 +25,8 @@ const base8 = { version: 8, yellowStages: 3, dongzhuoStages: 0, warlordStages: 0
       levels: { hall: 2, barracks: 2, farm: 3, clinic: 3, house: 2, market: 1, post: 1, smithy: 3, drill: 1, granary: 1, wall: 2, tavern: 1, pavilion: 0 } } };
   const p = await page(old);
   const r = await store(p, w => { const s = w.loadWorld(); w.saveWorld(); const raw = JSON.parse(localStorage.getItem('im_world_v1')), bak = JSON.parse(localStorage.getItem('im_world_backup_v1')); return { s, rawVersion: raw.version, bakVersion: bak?.version }; });
-  const s = r.s, t = s.town, refund = 14 * 60, expect = 200 + 150 + Math.round(70 * 1.5) + refund;
-  ck('迁移：军功、钱（含在途商队）、删掉建筑的退还折成军粮', s.provisions === expect && s.merits === 0, { got: s.provisions, expect });
+  const s = r.s, t = s.town, refund = 126 + 105 + 180 + 160, expect = 200 + 150 + Math.round(70 * 1.5) + refund;
+  ck('迁移：军功、钱（含在途商队）折成军粮，民居 / 市集 / 驿站 / 酒肆按原价全额退还', s.provisions === expect && s.merits === 0, { got: s.provisions, expect });
   ck('迁移：旧加成建筑点亮科技（医术、磨砺、百炼、坚甲、操练）', ['medicine', 'forge', 'forge2', 'armor', 'drill_points'].every(id => t.tech.includes(id)) && t.tech.length === 5, t.tech);
   ck('迁移：讲武堂等级不高于主帐，保留主帐 / 军营 / 农田 / 粮仓', t.levels.academy === 2 && t.levels.hall === 2 && t.levels.barracks === 2 && t.levels.farm === 3 && t.levels.granary === 1 && t.levels.stable === 0, t.levels);
   ck('迁移：删掉的建筑与税 / 事件 / 钱字段不再存在', !('house' in t.levels) && !('money' in t) && !('tax' in t) && !('pendingEvent' in t) && !('caravans' in t), Object.keys(t));

@@ -15,8 +15,8 @@ const STEP = 3; // 地图像素 / 网格
 const REACH = {large: 250, medium: 190, small: 140} as const;
 const WEIGHT = {large: 1.3, medium: 1.08, small: .9} as const;
 const labelCache = new Map<string, TerritoryLabel[]>();
-/** 2026-11-16 用户反馈「想更清楚看到我的派系范围」：我方疆域底色更实、疆界加金色柔光描边、疆域名改金字。效果图阶段：?realm=v2 开启。 */
-export const REALM_V2 = (() => { try { return new URLSearchParams(location.search).get('realm') === 'v2'; } catch { return false; } })();
+/** 2026-11-16 用户反馈「想更清楚看到我的派系范围」：我方疆域底色更实、疆界加金色柔光描边、疆域名改金字。用户 2026-11-16 批准，默认开启；?realm=v1 回到旧版。 */
+export const REALM_V2 = (() => { try { return new URLSearchParams(location.search).get('realm') !== 'v1'; } catch { return true; } })();
 
 /** 低频值噪声（确定性），让疆界不是直线。 */
 function noise(x: number, y: number): number {

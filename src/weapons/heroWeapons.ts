@@ -330,12 +330,14 @@ export function sunKnivesBehavior(host: WeaponHost, weapon: WeaponState, dt: num
     const a = s.spin + i * Math.PI * 2 / s.orbit.length, x = pl.x + Math.cos(a) * R.knifeOrbitR, y = pl.y - 6 + Math.sin(a) * R.knifeOrbitR * .8;
     const ready = time >= k.readyAt;
     k.img.setPosition(x, y).setRotation(a + Math.PI / 2).setVisible(pl.alive).setAlpha(ready ? 1 : Math.max(.15, 1 - (k.readyAt - time) / R.knifeRegenMs));
-    if (!ready || !pl.alive) return;
+    if (!pl.alive) return;
+    // 掷出后正在补刀的那一把也照样割伤（50%）：否则掷刀节奏（≤0.9 秒）与补刀（1.2 秒）、环绕周期（约 2 秒）
+    // 会对上相位，经过某个贴身敌人的总是“空位”，近身防守时有时无（2026-11-16 回归发现）
     for (const e of host.grid.query(x, y, 40)) {
       if (!e.active || e.isSupplySlot || Math.hypot(e.x - x, e.y - y) > 12 + e.radius) continue;
       if ((s.orbitHit.get(e.spawnId) ?? 0) > time) continue;
       s.orbitHit.set(e.spawnId, time + R.knifeOrbitHitMs);
-      host.hitEnemy(e, orbitDamage, time, 'melee');
+      host.hitEnemy(e, orbitDamage * (ready ? 1 : .5), time, 'melee');
     }
   });
   if (s.orbitHit.size > 300) for (const [id, t] of s.orbitHit) if (t <= time) s.orbitHit.delete(id);

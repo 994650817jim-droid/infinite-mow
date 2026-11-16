@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import {CHARACTERS} from '../data/characters';
+import {CHARACTERS,HOME_ART_HEROES} from '../data/characters';
 import {MARTIALS} from '../systems/RunGrowth';
 import {WEAPON_META,weaponName} from '../data/upgrades';
 import {CHARACTER_PASSIVES} from '../data/passives';
@@ -280,6 +280,10 @@ export class HeroWarCard{
  setHero(index:number):void{
   const c=CHARACTERS[index],key='epic_hero_'+c.id,target=this.s.textures.exists(key)?key:c.portrait;
   const {px,py,pw,ph,small}=this.L;
+  // 立绘（水墨 / 主页大图）正在加载时不先显示像素头像（会先闪出“游戏里的小人”）：画像留空，加载完由 refreshArt 再次调用时淡入。
+  // 加载结束仍没有立绘（缺图）时，下一次调用照旧退回像素头像。
+  const artPending=!this.s.textures.exists(inkHeroKey(c.id))&&!this.s.textures.exists(key)&&HOME_ART_HEROES.includes(c.id)&&this.s.load.isLoading();
+  if(artPending&&(this.index!==index||this.artKey!=='')){this.index=index;this.artKey='';this.s.tweens.killTweensOf(this.art);this.art.setAlpha(0);}
   let artKey:string,place:()=>void;
   if(this.painted&&this.s.textures.exists(inkHeroKey(c.id))){
    artKey=inkHeroTexture(this.s,c.id,pw,ph,small);place=()=>this.art.setOrigin(0).setDisplaySize(pw,ph).setPosition(px,py);
@@ -289,7 +293,7 @@ export class HeroWarCard{
    if(target===key){artKey='hero-card-ink-'+c.id+'-'+aw+'x'+ah;place=()=>this.art.setOrigin(.5,0).setDisplaySize(aw,ah).setPosition(px+pw*.4,py+4);
     if(!this.s.textures.exists(artKey)){const source=this.s.textures.get(key).getSourceImage() as HTMLImageElement;const artLeft=pw*.4-aw/2,colFrom=(pw-(small?66:84)-artLeft)/aw;this.s.textures.addCanvas(artKey,inkPortrait(source,aw,ah,index*97+aw,colFrom))?.setFilter(Phaser.Textures.FilterMode.LINEAR);}}
   }
-  if(this.index!==index||this.artKey!==artKey){
+  if(!artPending&&(this.index!==index||this.artKey!==artKey)){
    this.index=index;this.artKey=artKey;this.art.setTexture(artKey,'__BASE');place();
    this.s.tweens.killTweensOf(this.art);this.art.setAlpha(.3);this.s.tweens.add({targets:this.art,alpha:1,duration:220});
   }

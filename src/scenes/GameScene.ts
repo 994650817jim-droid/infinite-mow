@@ -34,7 +34,7 @@ import { loadWorld as loadWorldState } from '../world/WorldStore';
 import { ArtEffects } from '../systems/ArtEffects';
 import { BattlefieldDetails } from '../systems/BattlefieldDetails';
 import { WAR, warText, ensureWarTextures } from '../ui/WarStyle';
-import { LQ, lqButton, lqDivider, lqImageButton, lqPanel, lqSkin, type LqState } from '../ui/LacquerKit';
+import { LQ, lqButton, lqDivider, lqHitBox, lqImageButton, lqPanel, lqSkin, type LqState } from '../ui/LacquerKit';
 import { chapterUnlocked, isChapterTestRun, recordChapterVictory } from '../systems/ChapterProgress';
 import { BALANCE, COLORS, DEPTH, FONT, GAME_HEIGHT, GAME_WIDTH, HEADING_FONT, IS_DESKTOP, TITLE_FONT, actorDepth, screenPoint } from '../config';
 import { upgradeCardTexture } from '../ui/HomeCommand';
@@ -2623,7 +2623,7 @@ export class GameScene extends Phaser.Scene {
     const keys=this.pauseKeysText=this.add.text(cx,top+ph-22,d?'Esc / P 继续战斗':'战斗已冻结 · 点击「继续战斗」恢复',warText(12,'#7f9987')).setOrigin(.5);
     // 暂停菜单里的文字入口改为漆金小牌：有底板、悬停 / 按下态，命中区与底板一致
     const pauseChips=([[this.attributePauseText,pw-120,30],[bagLink,pw-120,32],[buildLink,pw-120,32],[exit,pw-120,36]] as const).map(([t,w,h])=>{
-      const skin=lqSkin(this,t,t,()=>({w,h}),{tone:'quiet'});t.input?.hitArea.setTo((t.width-w)/2,(t.height-h)/2,w,h);return skin.gfx;});
+      const skin=lqSkin(this,t,t,()=>({w,h}),{tone:'quiet'});lqHitBox(t,w,h);return skin.gfx;});
     this.pausePanel.add([pauseDim,panelG,panel,pauseTitle,pauseHint,...pauseChips,resume,resumeText,...bgmRow,...sfxRow]);
     this.pausePanel.add(this.attributePauseText);this.pausePanel.bringToTop(bagLink);this.pausePanel.bringToTop(buildLink);this.pausePanel.add([exit,keys]);
 
@@ -2720,7 +2720,7 @@ export class GameScene extends Phaser.Scene {
     this.layoutResultButtons = () => {
       const both = btn.visible;
       btn.setX(both ? pcx - rbw / 2 - 10 : pcx); selectChapter.setPosition(both ? pcx + rbw / 2 + 10 : pcx, rby);
-      selectChapter.input?.hitArea.setTo((selectChapter.width - rbw) / 2, (selectChapter.height - rbh) / 2, rbw, rbh);
+      lqHitBox(selectChapter, rbw, rbh);
       selectChapter.off('pointerdown', homeDown).on('pointerdown', homeDown);
       restartSkin.repaint('idle'); homeSkin.repaint('idle');
     };
@@ -2758,7 +2758,7 @@ export class GameScene extends Phaser.Scene {
   protected renderAttributePanel(): void {
     if (!this.player || !this.attributePointsText) return;
     const growth=this.player.growth;
-    {const close=this.attributePanel.getByName('attributes-close') as Phaser.GameObjects.Text|null;close?.setText(this.attributeReturn==='none'?'继续战斗':'返回暂停菜单');close?.input?.hitArea.setTo((close.width-220)/2,(close.height-44)/2,220,44);}
+    {const close=this.attributePanel.getByName('attributes-close') as Phaser.GameObjects.Text|null;close?.setText(this.attributeReturn==='none'?'继续战斗':'返回暂停菜单');if(close&&!close.getData('hitBox')){lqHitBox(close,220,44);close.setData('hitBox',true);}}
     this.attributePointsText.setText(growth.unallocated>0?`可分配属性点 ${growth.unallocated}`:`属性点已用完 · 每升 2 级获得 1 点 · 再升 ${levelsToNextAttributePoint(this.player.level)} 级可加点`).setColor(growth.unallocated>0?'#1c160c':'#91ab98').setBackgroundColor(growth.unallocated>0?'#e2bd6a':'#00000000');
     this.attributePauseText?.setText(`分配属性点 · ${growth.unallocated}`);
     const weapon=this.player.weapons[0];

@@ -5,7 +5,7 @@ import { AFFIXES, BAG_CAPACITY, LEGENDS, QUALITIES, QUALITY_ORDER, SLOTS, SLOT_O
 import { gearFromItems, gearSummary } from '../systems/ItemEffects';
 import { equipItem, equippedBy, loadItems, loadout, salvageItems, salvageUpTo, unequipSlot } from '../systems/ItemStore';
 import { drawQualityFrame, ensureItemTextures, itemTile } from './ItemQuality';
-import { lqDivider, lqPanel, lqSkin } from './LacquerKit';
+import { lqDivider, lqHitBox, lqPanel, lqSkin } from './LacquerKit';
 import { padNavigator } from './PadNavigator';
 
 export interface ItemBagOptions { hero: CharacterId; runLoot?: ItemInstance[]; readOnly?: boolean; onClose?: () => void }
@@ -53,7 +53,7 @@ export class ItemBagUI {
     const bw = o.w ? o.w + 24 : Math.max(t.width, 44), bh = Math.max(30, t.height);
     if (t.width > bw - 6) t.setScale((bw - 6) / t.width);
     if (!o.disabled) t.setInteractive({ useHandCursor: true }).on('pointerdown', (_p: unknown, _x: unknown, _y: unknown, e?: Phaser.Types.Input.EventData) => { e?.stopPropagation?.(); onClick(); });
-    t.input?.hitArea.setTo((t.width - bw) / 2, (t.height - bh) / 2, bw, bh);
+    lqHitBox(t, bw, bh);
     const skin = lqSkin(this.scene, t, t, () => ({ w: bw, h: bh }), { tone: o.active ? 'cinnabar' : 'quiet', on: () => !!o.active, enabled: () => !o.disabled });
     skin.gfx.setScrollFactor(0); parent.addAt(skin.gfx, parent.getIndex(t));
     return t;

@@ -74,6 +74,23 @@ export function lqSkin(scene: Phaser.Scene, target: Phaser.GameObjects.GameObjec
   return { gfx, repaint };
 }
 
+/**
+ * 文字按钮的命中区固定为底板大小（w×h），并始终对齐到文字中心。
+ * Phaser 的 Text 每次重排（setText / setColor / setStyle…）都会把非自定义命中区的宽高重置为文字大小、却不动 x/y 偏移，
+ * lqSkin 每次重绘都会 setColor，于是「hitArea.setTo(偏移…)」写法的命中区会缩成文字宽并整体错位（例如暂停菜单「返回选将」按不中）。
+ * 这里把命中区标记为自定义（Phaser 不再改它），并在这个文本每次重排后按新尺寸重新居中。
+ */
+export function lqHitBox(label: Phaser.GameObjects.Text, w: number, h: number): void {
+  if (!label.input) return;
+  label.input.customHitArea = true;
+  // 命中区在文字的本地坐标里（未缩放）；文字被 setScale 缩小时，按缩放换算回底板大小
+  const fit = (): void => { if (!label.input) return; const lw = w / (label.scaleX || 1), lh = h / (label.scaleY || 1); label.input.hitArea.setTo((label.width - lw) / 2, (label.height - lh) / 2, lw, lh); };
+  const t = label as unknown as { updateText: () => Phaser.GameObjects.Text };
+  const update = t.updateText.bind(label);
+  t.updateText = () => { const r = update(); fit(); return r; };
+  fit();
+}
+
 export function lqText(scene: Phaser.Scene, x: number, y: number, value: string, size: number, color: string, heading = false): Phaser.GameObjects.Text {
   return scene.add.text(x, y, value, { fontFamily: heading ? HEADING_FONT : FONT, fontSize: size + 'px', color, resolution: 2 });
 }

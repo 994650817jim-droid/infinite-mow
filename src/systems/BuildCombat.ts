@@ -1,5 +1,6 @@
 import type {Enemy} from '../entities/Enemy';
 import type {BuildState,TacticId} from '../data/builds';
+import {type BuffProgress,countProgress,distanceProgress,chargeProgress,timerProgress} from '../ui/BuffProgress';
 interface Mark {chain:number;last:number;vulnerable:number;}
 interface Burn {enemy:Enemy;spawn:number;until:number;next:number;damage:number;spread:boolean;}
 /** One bounded proc dispatcher. Generated damage never re-enters onHit. */
@@ -49,6 +50,22 @@ export class BuildCombat {
  const targets=this.targets(e,area?70:160);for(let i=0;i<Math.min(area?3:1,targets.length);i++){this.fx(targets[i],false);this.deal(targets[i],raw*ratio,false);}
  }
  if(crit&&this.has('slayer_tally')&&(e.kind==='elite'||e.kind==='boss')&&now>=this.slayerAt&&e.active){this.slayerAt=now+500;this.fx(e,false);this.deal(e,raw*.25,false);}
+ }
+ /** 增益图标的触发进度（只读，供 BuffHud 显示「还差多少」；不改任何触发规则）。id 同 BuffHud 条目 id。 */
+ progress(id:string,now:number):BuffProgress|null{
+ switch(id){
+ case 'tactic_pursuit':{const l=this.lv('pursuit');if(!l)return null;const n=[6,5,4][l-1];return countProgress(this.hits%n,n,'下一击追击');}
+ case 'treasure_soul_bell':return countProgress(this.hits%8,8,'下一击追魂');
+ case 'treasure_breaker_jade':return countProgress(this.hits%10,10,'下一击震击');
+ case 'tactic_windstep':return distanceProgress(this.distances.windstep,120,'下一击增伤');
+ case 'tactic_flank':{const l=this.lv('flank');return l?distanceProgress(this.distances.flank,[200,170,140][l-1],'下一击范围追击'):null;}
+ case 'treasure_horse_order':return distanceProgress(this.distances.horse,150,'下一击追加伤害');
+ case 'tactic_stored_edge':return chargeProgress(this.idle,2000,'下一击增伤');
+ case 'tactic_heavy_break':return now<this.heavyAt?timerProgress(this.heavyAt,3000,now,'','冷却'):chargeProgress(this.idle,2000,'下一击冲击');
+ case 'treasure_stored_jade':return now<this.jadeAt?timerProgress(this.jadeAt,4000,now,'','冷却'):chargeProgress(this.idle,2000,'下一击释放冲击');
+ case 'tactic_concentration':return now<this.focusAt?timerProgress(this.focusAt,2000,now,'','冷却'):chargeProgress(this.still,1500,'下一击贯穿','静止');
+ }
+ return null;
  }
  onKill(e:Enemy,now:number):void{
  this.kills=Math.min(5,now<this.killUntil?this.kills+1:1);this.killUntil=now+3000;

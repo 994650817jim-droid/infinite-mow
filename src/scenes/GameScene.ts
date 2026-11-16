@@ -19,6 +19,7 @@ import { SHOW_RANGE_RINGS } from '../ui/RangeRings';
 import {terrainSurface,architecturalSurface} from '../systems/SceneSurfaces';
 import {upgradeIcon} from '../ui/GrowthIcons';
 import {BuffHud} from '../ui/BuffHud';
+import { type BuffProgress, countProgress, timerProgress } from '../ui/BuffProgress';
 import {BuildCombat} from '../systems/BuildCombat';
 import {TACTICS,TREASURES,TAG_NAMES,type TacticId} from '../data/builds';
 import {SishuiObstacles} from '../systems/SishuiObstacles';
@@ -222,6 +223,13 @@ export class GameScene extends Phaser.Scene {
   }
   /** 战法「以战养战」：每击杀 12/10/8 名敌人（含部下击杀）回复最大生命 2/2.5/3%。 */
   private warfeedCount=0;
+  /** 增益图标的触发进度（BuffHud 读，见 ui/BuffProgress）：战法 / 宝物 / 觉醒 / 遗物里的「每 N 次 / 每 N 秒 / 攒满」计数。 */
+  private buffProgress(id:string,now:number):BuffProgress|null{
+    if(id.startsWith('awakening_'))return this.awakeningCombat?.progress(id.slice(10),now)??null;
+    if(id==='tactic_warfeed'){const l=this.player.growth.build.level('warfeed');if(!l)return null;const n=[12,10,8][Math.min(3,l)-1];return countProgress(this.warfeedCount,n,'再击杀 1 名回血','名');}
+    if(id==='relic_heaven_ember')return timerProgress(this.relicFireAt,5000,now,'下一击留残火','冷却');
+    return this.buildCombat?.progress(id,now)??this.legion?.command.progress(id,now)??null;
+  }
   private warfeedKill():void{
     const level=this.player.growth.build.level('warfeed');if(!level||!this.player.alive)return;
     const i=Math.min(3,level)-1;if(++this.warfeedCount<[12,10,8][i])return;
@@ -2690,7 +2698,7 @@ export class GameScene extends Phaser.Scene {
     this.legionUI?.update(this.legion, !overlay && !this.over);
     this.passiveHud.update(this.player.passive, this.combatNow, !overlay);
     buildVfx(this).density=this.enemies.filter(e=>e.active&&!e.isSupplySlot).length+this.legion.count;
-    this.buffHud.update(this.player,this.combatNow,!overlay&&!this.over&&!this.relicExpanded);
+    this.buffHud.update(this.player,this.combatNow,!overlay&&!this.over&&!this.relicExpanded,(id,now)=>this.buffProgress(id,now));
     this.hudGfx.setVisible(!overlay);
     if (this.hudTexts) for (const t of Object.values(this.hudTexts)) t.setVisible(!overlay);
     for (const icon of this.relicIcons) icon.setVisible(!overlay && icon.visible);

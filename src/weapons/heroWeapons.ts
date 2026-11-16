@@ -8,7 +8,7 @@ import { smartTarget } from './heroWeapons2';
 
 /**
  * 魏延「镇北环首刀」与庞统「凤雏连环令」两把专属本命武器（2026-11-15 重做，不再沿用关羽偃月刀 / 诸葛亮战旗）。
- * 特效均为程序化过渡方案（地裂纹、碎石、火雷、锁链）；魏延劈下瞬间沿用他已有的劈地序列帧，庞统火烧连环沿用火凤序列帧。
+ * 魏延特效为程序化过渡（地裂纹、碎石），劈下瞬间沿用劈地序列帧；庞统 2026-11-16 改为方案 A「铁索连环」，见下方庞统段落。
  */
 /** 正式序列帧图集是否已加载（缺图时退回程序化特效）。 */
 export const hasFxSheet = (host: WeaponHost, sheet: string): boolean => (host.add as unknown as { scene: Phaser.Scene }).scene.textures.exists('hero_fx_' + sheet);
@@ -118,42 +118,87 @@ export function zhenbeiBehavior(host: WeaponHost, weapon: WeaponState, dt: numbe
 }
 
 // ───────────────────────── 庞统 · 凤雏连环令 ─────────────────────────
+// 2026-11-16 方案 A「铁索连环」（用户选定）：边走边在脚下落火雷，雷与雷之间拉起烧红的铁索。
+//  Lv1 新雷连上一枚雷，铁索上的敌人减速；Lv2 铁索灼伤；Lv3 雷炸时火沿铁索烧向相连的雷（链上敌人挨打）、落雷更快；
+//  Lv4 双链（再连最近的另一枚）、火雷上限 +2；Lv5「铁索连舟」：绕回来让铁索首尾相接，圈内地面起火 3 秒后整圈齐爆。
+//  特效：像素图集 pangtong_fx（6×4，每帧 256，黑底叠加：烧红铁索 / 沿索火苗 / 地火 / 雷芯闪）；缺图时退回程序化过渡，不画地面圈。
 
-/** 每次落雷枚数：Lv1–4 一枚（脚下）、Lv5 两枚（脚下 + 身旁一侧，雷链加宽）。 */
-export const lianhuanMinesPerCast = (level: number): number => (level >= 5 ? 2 : 1);
+/** 每枚新雷连几条铁索：Lv1–3 一条（连上一枚雷），Lv4 起两条（再连最近的另一枚）。 */
+export const lianhuanLinksPerMine = (level: number): number => (level >= 4 ? 2 : 1);
 export const LIANHUAN_DEF = {
   id: 'lianhuan_mines' as const, name: '凤雏连环令', maxLevel: 5,
   damage: (level: number, stats: PlayerStats) => 26 * (1 + .18 * (level - 1)) * stats.damageMul * stats.fireMul,
-  // 2026-11-16 重做（用户批准）：改为定时在脚下落雷、边走边留下雷链；Lv3 起落雷间隔缩短
+  // 脚下定时落雷；Lv3 起落雷间隔缩短
   cooldown: (level: number, stats: PlayerStats) => ((level >= 3 ? R.mineDropFastSec : R.mineDropSec) * stats.cooldownMul) / (1 + .03 * (level - 1)),
-  desc: '每隔片刻在脚下落一枚火雷，边走边留下雷链；敌人踩中引爆，附近火雷连环引爆',
+  desc: '边走边在脚下落火雷，雷与雷之间拉起烧红的铁索：碰到铁索的敌人减速，踩雷引爆并连环引爆附近的雷',
 };
 const mineRadius = (level: number) => R.mineRadius * (1 + .05 * (level - 1));
 
-interface Mine { x: number; y: number; armAt: number; until: number; body: Phaser.GameObjects.Container; lit: boolean; ring?: RingGroup; }
+type MineKind = 'trail' | 'ring' | 'fengpo';
+interface Mine { x: number; y: number; armAt: number; until: number; body: Phaser.GameObjects.Container; core?: Phaser.GameObjects.Sprite; lit: boolean; ring?: RingGroup; kind: MineKind; seq: number; loop?: LoopFire; warned?: number; fuseAt?: number; }
 interface RingGroup { x: number; y: number; fuseAt: number; mines: Mine[]; links: Phaser.GameObjects.Container; fired: boolean; }
+interface Tether { a: Mine; b: Mine; body: Phaser.GameObjects.Container; }
+interface LoopFire { poly: { x: number; y: number }[]; mines: Mine[]; until: number; nextTick: number; fx: Phaser.GameObjects.Container; box: [number, number, number, number]; onEnd?: () => void; }
 interface Chain { count: number; awarded: boolean; }
-interface MineState { mines: Mine[]; rings: RingGroup[]; fengpoReadyAt: number; side: number; }
+interface MineState { mines: Mine[]; rings: RingGroup[]; tethers: Tether[]; loops: LoopFire[]; burnAt: Map<number, { spawn: number; at: number }>; fengpoReadyAt: number; seq: number; lastTrail: Mine | null; }
 const STATE = new WeakMap<Player, MineState>();
-const stateOf = (p: Player): MineState => { let s = STATE.get(p); if (!s) { s = { mines: [], rings: [], fengpoReadyAt: 0, side: 1 }; STATE.set(p, s); } return s; };
+const stateOf = (p: Player): MineState => { let s = STATE.get(p); if (!s) { s = { mines: [], rings: [], tethers: [], loops: [], burnAt: new Map(), fengpoReadyAt: 0, seq: 0, lastTrail: null }; STATE.set(p, s); } return s; };
 
 const texOk = (host: WeaponHost, key: string): boolean => (host.add as unknown as { scene: Phaser.Scene }).scene.textures.exists(key);
-/** 火雷：正式贴图（青铜雷壳）+ 叠加混合的跳动红芯；缺图时退回程序化雷壳。 */
-function mineBody(host: WeaponHost, x: number, y: number): Phaser.GameObjects.Container {
-  if (texOk(host, 'pangtong_mine')) {
-    const shell = host.add.image(0, 0, 'pangtong_mine').setDisplaySize(30, 30);
+/** 像素特效图集 pangtong_fx 的帧段：0–5 烧红铁索、6–11 沿索火苗、12–17 地火、18–23 雷芯闪。 */
+const PT = { hot: 0, run: 6, ground: 12, core: 18 } as const;
+const ptFx = (host: WeaponHost): boolean => texOk(host, 'pangtong_fx');
+/** 播放 pangtong_fx 的一段帧（不依赖全局动画表）：loop 时循环，否则播完停在最后一帧。 */
+function playPt(sprite: Phaser.GameObjects.Sprite, start: number, fps: number, loop: boolean, offset = 0): void {
+  const st = { t: offset };
+  sprite.setFrame(start + (offset % 6));
+  sprite.scene.tweens.add({ targets: st, t: offset + 6, duration: 6000 / fps, repeat: loop ? -1 : 0,
+    onUpdate: () => { if (sprite.active) sprite.setFrame(start + (Math.floor(st.t) % 6)); } });
+}
+const tetherLen = (p: Player): number => R.tetherLen * (1 + .15 * p.growth.masteries.lianying);
+/** 点到线段的距离。 */
+function segDist(px: number, py: number, a: { x: number; y: number }, b: { x: number; y: number }): number {
+  const vx = b.x - a.x, vy = b.y - a.y, l2 = vx * vx + vy * vy || 1, t = Math.max(0, Math.min(1, ((px - a.x) * vx + (py - a.y) * vy) / l2));
+  return Math.hypot(px - (a.x + vx * t), py - (a.y + vy * t));
+}
+function inPoly(x: number, y: number, poly: { x: number; y: number }[]): boolean {
+  let inside = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const a = poly[i], b = poly[j];
+    if ((a.y > y) !== (b.y > y) && x < (b.x - a.x) * (y - a.y) / (b.y - a.y || 1e-6) + a.x) inside = !inside;
+  }
+  return inside;
+}
+const polyArea = (poly: { x: number; y: number }[]): number => Math.abs(poly.reduce((s, p, i) => { const q = poly[(i + 1) % poly.length]; return s + p.x * q.y - q.x * p.y; }, 0)) / 2;
+
+/** 火雷：青铜雷壳 + 跳动的雷芯（像素帧；缺图时程序化红芯）。 */
+function mineBody(host: WeaponHost, x: number, y: number): { body: Phaser.GameObjects.Container; core?: Phaser.GameObjects.Sprite } {
+  const parts: Phaser.GameObjects.GameObject[] = [];
+  if (texOk(host, 'pangtong_mine')) parts.push(host.add.image(0, 0, 'pangtong_mine').setDisplaySize(30, 30));
+  else parts.push(host.add.circle(0, 0, 11, 0x6a4a24).setStrokeStyle(2, 0xc8a050, 1), host.add.circle(0, 0, 7, 0x3a2614));
+  let core: Phaser.GameObjects.Sprite | undefined;
+  if (ptFx(host)) {
+    // 雷芯：平时在 18–20 帧间慢慢明灭（暗红），将爆时快速闪到亮白
+    core = host.add.sprite(0, -1, 'pangtong_fx', PT.core).setDisplaySize(32, 32).setBlendMode('ADD');
+    const st = { t: 0 }; core.scene.tweens.add({ targets: st, t: 3, duration: 780, yoyo: true, repeat: -1, onUpdate: () => { if (core?.active && !core.getData('warn')) core.setFrame(PT.core + Math.min(2, Math.floor(st.t))); } });
+    parts.push(core);
+  } else {
     const glow = host.add.circle(0, -1, 5, 0xff5a2a, .8).setBlendMode(1);
     glow.scene.tweens.add({ targets: glow, scale: 1.8, alpha: .35, yoyo: true, repeat: -1, duration: 260 });
-    return host.add.container(x, y, [shell, glow]).setDepth(19).setName('pangtong-mine');
+    parts.push(glow);
   }
-  const shell = host.add.circle(0, 0, 11, 0x6a4a24).setStrokeStyle(2, 0xc8a050, 1);
-  const rim = host.add.circle(0, 0, 7, 0x3a2614);
-  const core = host.add.circle(0, 0, 4, 0xff4a2a);
-  core.scene.tweens.add({ targets: core, scale: 1.6, alpha: .55, yoyo: true, repeat: -1, duration: 260 });
-  return host.add.container(x, y, [shell, rim, core]).setDepth(19).setName('pangtong-mine');
+  return { body: host.add.container(x, y, parts).setDepth(19).setName('pangtong-mine'), core };
+}
+/** 雷将爆示警：雷芯闪到亮白，fast 时闪得更快（引信后段）；缺图时雷体程序化跳动。 */
+function warnMine(m: Mine, fast = false): void {
+  const lvl = fast ? 2 : 1;
+  if ((m.warned ?? 0) >= lvl || !m.body.active) return; m.warned = lvl;
+  m.body.scene.tweens.killTweensOf(m.body); m.body.setScale(1);
+  if (m.core) { m.core.scene.tweens.killTweensOf(m.core); m.core.setData('warn', true); playPt(m.core, PT.core, fast ? 26 : 11, true, 2); }
+  m.body.scene.tweens.add({ targets: m.body, scale: fast ? 1.22 : 1.12, yoyo: true, repeat: -1, duration: fast ? 70 : 160 });
 }
 
-/** 两枚火雷间的锁链（连环）：正式铁链贴图平铺；缺图时画程序化链环。放进 into（火烧连环常驻）或闪一下淡出。 */
+/** 两雷之间的锁链：正式铁链贴图平铺；缺图时画程序化链环。放进 into（常驻）或闪一下淡出。 */
 function linkFx(host: WeaponHost, a: { x: number; y: number }, b: { x: number; y: number }, into?: Phaser.GameObjects.Container): void {
   const d = Math.hypot(b.x - a.x, b.y - a.y);
   let obj: Phaser.GameObjects.TileSprite | Phaser.GameObjects.Graphics;
@@ -170,15 +215,47 @@ function linkFx(host: WeaponHost, a: { x: number; y: number }, b: { x: number; y
   else { obj.setName('pangtong-link'); obj.scene.tweens.add({ targets: obj, alpha: 0, duration: 320, onComplete: () => obj.destroy() }); }
 }
 
-function placeMine(host: WeaponHost, s: MineState, x: number, y: number, now: number, life: number, ring?: RingGroup): Mine {
-  const m: Mine = { x, y, armAt: now + R.mineArmMs, until: now + life, body: mineBody(host, x, y), lit: false, ring };
+/** 拉一段烧红铁索（常驻，直到任一端的雷炸掉）：铁链 + 叠加的烧红光（像素帧）。 */
+function tie(host: WeaponHost, s: MineState, a: Mine, b: Mine): void {
+  if (a === b || s.tethers.some(t => (t.a === a && t.b === b) || (t.a === b && t.b === a))) return;
+  const body = host.add.container(0, 0).setDepth(19.5).setName('pangtong-tether');
+  linkFx(host, a, b, body);
+  if (ptFx(host)) {
+    const d = Math.hypot(b.x - a.x, b.y - a.y), hot = host.add.sprite((a.x + b.x) / 2, (a.y + b.y) / 2, 'pangtong_fx', PT.hot)
+      .setDisplaySize(d + 10, 72).setRotation(Math.atan2(b.y - a.y, b.x - a.x)).setBlendMode('ADD').setAlpha(.85); // 图里铁索只占帧高中间约 1/4
+    playPt(hot, PT.hot, 9, true, Math.floor(Math.random() * 6)); body.add(hot);
+  }
+  s.tethers.push({ a, b, body });
+}
+const tethered = (s: MineState, a: Mine, b: Mine): boolean => s.tethers.some(t => (t.a === a && t.b === b) || (t.a === b && t.b === a));
+function untieAll(s: MineState, m: Mine): void {
+  for (let i = s.tethers.length - 1; i >= 0; i--) { const t = s.tethers[i]; if (t.a === m || t.b === m) { t.body.destroy(); s.tethers.splice(i, 1); } }
+}
+
+function placeMine(host: WeaponHost, s: MineState, x: number, y: number, now: number, life: number, kind: MineKind, ring?: RingGroup): Mine {
+  const { body, core } = mineBody(host, x, y);
+  const m: Mine = { x, y, armAt: now + R.mineArmMs, until: now + life, body, core, lit: false, ring, kind, seq: ++s.seq };
   s.mines.push(m); return m;
 }
 
-function explode(host: WeaponHost, s: MineState, m: Mine, damage: number, radius: number, chain: Chain | null, chainRange: number, chained: boolean, now: number): void {
+/** 火走铁索（Lv3）：火苗沿铁索从 a 跑到 b，铁索上的敌人挨一下。 */
+function fireRun(host: WeaponHost, a: Mine, b: Mine, damage: number, now: number): void {
+  for (const e of host.grid.query((a.x + b.x) / 2, (a.y + b.y) / 2, Math.hypot(b.x - a.x, b.y - a.y) / 2 + 40))
+    if (e.active && !e.isSupplySlot && segDist(e.x, e.y, a, b) <= R.tetherWidth / 2 + e.radius + 6) host.hitEnemy(e, damage, now, 'fire');
+  if (ptFx(host)) {
+    const f = host.add.sprite(a.x, a.y, 'pangtong_fx', PT.run).setDisplaySize(52, 52).setRotation(Math.atan2(b.y - a.y, b.x - a.x)).setBlendMode('ADD').setDepth(41).setName('pangtong-firerun');
+    playPt(f, PT.run, 40, true);
+    f.scene.tweens.add({ targets: f, x: b.x, y: b.y, duration: R.mineChainDelayMs, onComplete: () => f.destroy() });
+  } else linkFx(host, a, b);
+}
+
+function explode(host: WeaponHost, s: MineState, m: Mine, damage: number, radius: number, chain: Chain | null, chainRange: number, chained: boolean, now: number, level: number): void {
   if (m.lit) return; m.lit = true;
   const i = s.mines.indexOf(m); if (i >= 0) s.mines.splice(i, 1);
+  const linked = s.mines.filter(o => tethered(s, m, o));
+  untieAll(s, m);
   m.body.destroy();
+  if (s.lastTrail === m) s.lastTrail = null;
   if (host.over) return;
   host.spawnFlameFx(m.x, m.y, radius); host.sfx.play('flameBoom');
   const dmg = damage * (chained && host.player.growth.masteries.lianying >= 3 ? 1.2 : 1);
@@ -186,18 +263,45 @@ function explode(host: WeaponHost, s: MineState, m: Mine, damage: number, radius
   if (!chain) return;
   chain.count++;
   if (!chain.awarded && chain.count >= R.mineChainStack) { chain.awarded = true; host.player.passive.onMineChain(chain.count); }
-  // 连环：附近未引爆的火雷依次连锁
+  // 连环：附近（或铁索相连）未引爆的火雷依次连锁；Lv3 起沿铁索走火
   for (const o of [...s.mines]) {
-    if (o.lit || o.ring || Math.hypot(o.x - m.x, o.y - m.y) > chainRange) continue;
-    o.lit = true; linkFx(host, m, o);
-    host.time.delayedCall(R.mineChainDelayMs, () => { o.lit = false; explode(host, s, o, damage, radius, chain, chainRange, true, host.combatNow); });
+    const onTether = linked.includes(o);
+    if (o.lit || o.ring || (!onTether && Math.hypot(o.x - m.x, o.y - m.y) > chainRange)) continue;
+    o.lit = true;
+    if (onTether && level >= 3) fireRun(host, m, o, damage * R.fireRunMul, now); else linkFx(host, m, o);
+    host.time.delayedCall(R.mineChainDelayMs, () => { o.lit = false; explode(host, s, o, damage, radius, chain, chainRange, true, host.combatNow, level); });
   }
 }
 
-function fireRing(host: WeaponHost, s: MineState, g: RingGroup, damage: number, radius: number, now: number): void {
+/** 铁索连舟（Lv5）/ 满级火烧连环：多边形圈内整片起火 loopMs，之后整圈齐爆。 */
+function startLoop(host: WeaponHost, s: MineState, mines: Mine[], now: number, onEnd?: () => void): LoopFire {
+  const poly = mines.map(m => ({ x: m.x, y: m.y }));
+  const xs = poly.map(p => p.x), ys = poly.map(p => p.y), box: [number, number, number, number] = [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)];
+  const fx = host.add.container(0, 0).setDepth(18).setName('pangtong-loopfire');
+  // 地火：在圈内按 34 像素网格铺像素火（最多 48 块），火铺满的地方就是范围，不画外圈
+  const pts: { x: number; y: number }[] = [];
+  for (let y = box[1] + 17; y < box[3]; y += 34) for (let x = box[0] + 17; x < box[2]; x += 34) if (inPoly(x, y, poly)) pts.push({ x: x + (Math.random() - .5) * 10, y: y + (Math.random() - .5) * 10 });
+  if (!pts.length) pts.push({ x: xs.reduce((a, b) => a + b, 0) / xs.length, y: ys.reduce((a, b) => a + b, 0) / ys.length });
+  for (const p of pts.slice(0, 48)) {
+    if (ptFx(host)) { const g = host.add.sprite(p.x, p.y, 'pangtong_fx', PT.ground).setDisplaySize(52, 52).setBlendMode('ADD').setAlpha(.9); playPt(g, PT.ground, 10, true, Math.floor(Math.random() * 6)); fx.add(g); }
+    else if (texOk(host, 'wf_flame')) { const g = host.add.image(p.x, p.y, 'wf_flame').setDisplaySize(30, 30).setBlendMode('ADD').setAlpha(.8); g.scene.tweens.add({ targets: g, scaleY: g.scaleY * 1.3, alpha: .5, yoyo: true, repeat: -1, duration: 200 + Math.random() * 120 }); fx.add(g); }
+  }
+  fx.setAlpha(0); fx.scene.tweens.add({ targets: fx, alpha: 1, duration: 200 });
+  const loop: LoopFire = { poly, mines, until: now + R.loopMs, nextTick: now, fx, box, onEnd };
+  for (const m of mines) m.loop = loop;
+  s.loops.push(loop); return loop;
+}
+
+function fireRing(host: WeaponHost, s: MineState, g: RingGroup, damage: number, radius: number, now: number, level: number): void {
   if (g.fired) return; g.fired = true;
-  g.links.destroy(); s.rings.splice(s.rings.indexOf(g), 1);
-  for (const m of g.mines) explode(host, s, m, damage, radius, null, 0, false, now);
+  s.rings.splice(s.rings.indexOf(g), 1);
+  if (level >= 5) {
+    // 满级：火烧连环这一圈先化作「铁索连舟」整片地火，烧完再齐爆
+    startLoop(host, s, g.mines, now, () => { g.links.destroy(); host.heroFx?.('phoenix', g.x, g.y - R.ringRadius * .3, R.ringRadius * 3); });
+    return;
+  }
+  g.links.destroy();
+  for (const m of g.mines) explode(host, s, m, damage, radius, null, 0, false, now, level);
   host.heroFx?.('phoenix', g.x, g.y - R.ringRadius * .3, R.ringRadius * 3);
   host.martialField(g.x, g.y, R.ringRadius + 20, damage, R.ringFireMs, 2);
 }
@@ -205,24 +309,67 @@ function fireRing(host: WeaponHost, s: MineState, g: RingGroup, damage: number, 
 export function lianhuanBehavior(host: WeaponHost, weapon: WeaponState, dt: number, time: number): void {
   const pl = host.player, s = stateOf(pl), growth = pl.growth, level = weapon.level;
   const damage = LIANHUAN_DEF.damage(level, pl.stats) * growth.damageMultiplier(time), radius = mineRadius(level);
-  const chainRange = R.mineChainRange * (1 + .15 * growth.masteries.lianying);
-  // 火雷：踩中或到期引爆，带出连锁
+  const chainRange = R.mineChainRange * (1 + .15 * growth.masteries.lianying), len = tetherLen(pl);
+  // 火雷：被踩后先烧引信（mineFuseMs，期间再有人踩不重新计时）再爆并带出连锁；到期无人踩则原地自爆。铁索连舟中的雷由地火统一引爆
   for (const m of [...s.mines]) {
-    if (m.lit || m.ring || time < m.armAt) continue;
-    const stepped = time >= m.until || host.grid.query(m.x, m.y, R.mineTrigger + 30).some(e => e.active && !e.isSupplySlot && Math.hypot(e.x - m.x, e.y - m.y) <= R.mineTrigger + e.radius);
-    if (time >= m.until) { explode(host, s, m, damage, radius, null, 0, false, time); continue; }
-    if (stepped) explode(host, s, m, damage, radius, { count: 0, awarded: false }, chainRange, false, time);
+    if (m.lit || m.ring || m.loop || time < m.armAt) continue;
+    if (m.fuseAt !== undefined) {
+      if (time >= m.fuseAt) explode(host, s, m, damage, radius, { count: 0, awarded: false }, chainRange, false, time, level);
+      else if (m.fuseAt - time <= R.mineFuseMs * .4) warnMine(m, true);
+      continue;
+    }
+    if (time >= m.until) { explode(host, s, m, damage, radius, null, 0, false, time, level); continue; }
+    if (host.grid.query(m.x, m.y, R.mineTrigger + 30).some(e => e.active && !e.isSupplySlot && Math.hypot(e.x - m.x, e.y - m.y) <= R.mineTrigger + e.radius)) {
+      m.fuseAt = time + R.mineFuseMs; warnMine(m);
+    }
   }
-  // 火烧连环：敌人踏入圈内或 2 秒后整圈齐爆
+  // 铁索：碰到的敌人减速（首领不受影响）；Lv2 起每 0.5 秒灼伤
+  for (const t of s.tethers) {
+    for (const e of host.grid.query((t.a.x + t.b.x) / 2, (t.a.y + t.b.y) / 2, Math.hypot(t.b.x - t.a.x, t.b.y - t.a.y) / 2 + 40)) {
+      if (!e.active || e.isSupplySlot || segDist(e.x, e.y, t.a, t.b) > R.tetherWidth / 2 + e.radius) continue;
+      if (e.kind !== 'boss') { e.martialSlow = Math.min(time >= e.martialSlowUntil ? 1 : e.martialSlow, 1 - R.tetherSlow); e.martialSlowUntil = time + 150; }
+      if (level < 2) continue;
+      const b = s.burnAt.get(e.uid);
+      if (b && b.spawn === e.spawnId && time < b.at) continue;
+      s.burnAt.set(e.uid, { spawn: e.spawnId, at: time + R.tetherTickMs });
+      host.hitEnemy(e, damage * R.tetherBurnMul, time, 'fire');
+    }
+  }
+  if (s.burnAt.size > 400) s.burnAt.clear();
+  // 铁索连舟 / 满级火烧连环：圈内地火每 0.5 秒灼伤并减速，最后 0.8 秒雷芯闪烁示警，到时整圈齐爆
+  for (const lp of [...s.loops]) {
+    if (time >= lp.nextTick) {
+      lp.nextTick = time + R.loopTickMs;
+      const cx = (lp.box[0] + lp.box[2]) / 2, cy = (lp.box[1] + lp.box[3]) / 2, r = Math.hypot(lp.box[2] - lp.box[0], lp.box[3] - lp.box[1]) / 2 + 20;
+      for (const e of host.grid.query(cx, cy, r)) {
+        if (!e.active || e.isSupplySlot || !inPoly(e.x, e.y, lp.poly)) continue;
+        host.hitEnemy(e, damage * R.loopMul, time, 'fire');
+        if (e.kind !== 'boss') { e.martialSlow = Math.min(time >= e.martialSlowUntil ? 1 : e.martialSlow, 1 - R.loopSlow); e.martialSlowUntil = time + R.loopTickMs + 60; }
+      }
+    }
+    if (time >= lp.until - 800) for (const m of lp.mines) warnMine(m);
+    if (time >= lp.until || host.over) {
+      s.loops.splice(s.loops.indexOf(lp), 1);
+      lp.fx.scene.tweens.add({ targets: lp.fx, alpha: 0, duration: 260, onComplete: () => lp.fx.destroy() });
+      const chain: Chain = { count: 0, awarded: false };
+      for (const m of lp.mines) { m.loop = undefined; m.ring = undefined; if (s.mines.includes(m)) explode(host, s, m, damage, radius, chain, chainRange, false, time, level); }
+      lp.onEnd?.();
+    }
+  }
+  // 火烧连环：2 秒后整圈齐爆；敌人踏入圈内则改为再烧一段引信（不晚于原定时间）。满级先化作整片地火
   for (const g of [...s.rings]) {
     const inside = host.grid.query(g.x, g.y, R.ringRadius + 30).some(e => e.active && !e.isSupplySlot && Math.hypot(e.x - g.x, e.y - g.y) <= R.ringRadius - 10);
-    if (time >= g.fuseAt || (inside && time >= g.mines[0].armAt)) fireRing(host, s, g, damage, radius, time);
+    if (inside && time >= g.mines[0].armAt) g.fuseAt = Math.min(g.fuseAt, time + R.mineFuseMs);
+    if (level < 5 && g.fuseAt - time <= R.mineFuseMs * .4) for (const m of g.mines) warnMine(m, true); // 满级这一圈先化作地火，示警留给地火收尾
+    if (time >= g.fuseAt) fireRing(host, s, g, damage, radius, time, level);
   }
-  const max = R.mineMax + 2 * growth.masteries.fulei, life = R.mineLifeMs + 2000 * growth.masteries.fulei;
-  // 落凤坡伏兵：生命 <30% 时脚下布 4 枚火雷护身（每 30 秒最多一次）
+  const max = R.mineMax + 2 * growth.masteries.fulei + (level >= 4 ? R.mineMaxLv4Bonus : 0), life = R.mineLifeMs + 2000 * growth.masteries.fulei;
+  // 落凤坡伏兵：生命 <30% 时脚下布 4 枚火雷，以铁索连成方阵护身（每 30 秒最多一次）
   if (pl.alive && pl.hp < pl.maxHp * R.fengpoHp && time >= s.fengpoReadyAt) {
     s.fengpoReadyAt = time + R.fengpoCooldownMs;
-    for (let k = 0; k < R.fengpoMines; k++) { const a = k * Math.PI / 2 + Math.PI / 4; placeMine(host, s, pl.x + Math.cos(a) * 46, pl.y + Math.sin(a) * 46, time, life); }
+    const sq: Mine[] = [];
+    for (let k = 0; k < R.fengpoMines; k++) { const a = k * Math.PI / 2 + Math.PI / 4; sq.push(placeMine(host, s, pl.x + Math.cos(a) * 46, pl.y + Math.sin(a) * 46, time, life, 'fengpo')); }
+    for (let k = 0; k < sq.length; k++) tie(host, s, sq[k], sq[(k + 1) % sq.length]);
     const t = host.add.text(pl.x, pl.y - 66, '落凤坡伏兵', { fontFamily: 'serif', fontSize: '20px', color: '#ffd9a0', stroke: '#5a1a10', strokeThickness: 5 }).setOrigin(.5).setDepth(60).setName('pangtong-fengpo');
     t.scene.tweens.add({ targets: t, y: pl.y - 96, alpha: 0, delay: 500, duration: 600, onComplete: () => t.destroy() });
   }
@@ -240,25 +387,37 @@ export function lianhuanBehavior(host: WeaponHost, weapon: WeaponState, dt: numb
     host.sfx.play('flameSwing');
     pl.playAction('skill', foes[0].x < pl.x ? 'left' : 'right');
     const g: RingGroup = { x: pl.x, y: pl.y, fuseAt: time + R.ringFuseMs, mines: [], links: host.add.container(0, 0).setDepth(19.5).setName('pangtong-ring'), fired: false };
-    for (let k = 0; k < R.ringMines; k++) { const a = k * Math.PI * 2 / R.ringMines; g.mines.push(placeMine(host, s, pl.x + Math.cos(a) * R.ringRadius, pl.y + Math.sin(a) * R.ringRadius, time, R.ringFuseMs + 500, g)); }
+    for (let k = 0; k < R.ringMines; k++) { const a = k * Math.PI * 2 / R.ringMines; g.mines.push(placeMine(host, s, pl.x + Math.cos(a) * R.ringRadius, pl.y + Math.sin(a) * R.ringRadius, time, R.ringFuseMs + R.loopMs + 1000, 'ring', g)); }
     for (let k = 0; k < R.ringMines; k++) linkFx(host, g.mines[k], g.mines[(k + 1) % R.ringMines], g.links);
     s.rings.push(g);
   } else {
-    // 脚下落雷：边走边留下雷链，追兵踩中即连环引爆。Lv5 另在身旁一侧（与最近敌人方向垂直，左右交替）多落一枚
-    const n = lianhuanMinesPerCast(level);
-    const dx = foes[0].x - pl.x, dy = foes[0].y - pl.y, d = Math.hypot(dx, dy) || 1;
-    s.side = -s.side || 1;
-    for (let k = 0; k < n; k++) {
-      const off = k === 0 ? 0 : R.mineSideOffset * s.side, x = pl.x - dy / d * off, y = pl.y + dx / d * off;
-      while (s.mines.filter(m => !m.ring).length >= max) { const old = s.mines.find(m => !m.ring && !m.lit); if (!old) break; explode(host, s, old, damage, radius, null, 0, false, time); }
-      placeMine(host, s, x, y, time, life);
+    // 脚下落雷，拉铁索连上一枚雷（Lv4 起再连最近的另一枚）
+    while (s.mines.filter(m => m.kind === 'trail').length >= max) { const old = s.mines.find(m => m.kind === 'trail' && !m.lit && !m.loop); if (!old) break; explode(host, s, old, damage, radius, null, 0, false, time, level); }
+    const m = placeMine(host, s, pl.x, pl.y, time, life, 'trail'), prev = s.lastTrail;
+    if (prev && !prev.lit && s.mines.includes(prev) && Math.hypot(prev.x - m.x, prev.y - m.y) <= len) tie(host, s, prev, m);
+    if (lianhuanLinksPerMine(level) >= 2) {
+      const near = s.mines.filter(o => o !== m && o !== prev && !o.lit && !o.ring && Math.hypot(o.x - m.x, o.y - m.y) <= len)
+        .sort((a, b) => Math.hypot(a.x - m.x, a.y - m.y) - Math.hypot(b.x - m.x, b.y - m.y))[0];
+      if (near) tie(host, s, near, m);
     }
+    // Lv5 铁索连舟：绕回来、新雷挨近至少 3 枚之前的旧雷 → 铁索首尾相接，圈内（面积够大才算）整片起火
+    if (level >= 5) {
+      const back = s.mines.filter(o => o.kind === 'trail' && !o.lit && !o.loop && o.seq <= m.seq - R.loopBackSteps && Math.hypot(o.x - m.x, o.y - m.y) <= len)
+        .sort((a, b) => Math.hypot(a.x - m.x, a.y - m.y) - Math.hypot(b.x - m.x, b.y - m.y))[0];
+      if (back) {
+        const ring = s.mines.filter(o => o.kind === 'trail' && !o.lit && !o.loop && o.seq >= back.seq && o.seq <= m.seq).sort((a, b) => a.seq - b.seq);
+        if (ring.length >= 3 && polyArea(ring) >= R.loopMinArea) { tie(host, s, back, m); startLoop(host, s, ring, time); host.sfx.play('flameSwing'); }
+      }
+    }
+    s.lastTrail = m;
   }
   weapon.cooldownLeft = Math.max(.25, LIANHUAN_DEF.cooldown(level, pl.stats) / growth.attackSpeedMultiplier(time));
 }
 
 /** 测试 / 调试用：当前场上火雷数。 */
 export function lianhuanMineCount(p: Player): number { return STATE.get(p)?.mines.length ?? 0; }
+/** 测试 / 调试用：铁索段数、正在燃烧的连舟数。 */
+export function lianhuanNetStats(p: Player): { tethers: number; loops: number } { const s = STATE.get(p); return { tethers: s?.tethers.length ?? 0, loops: s?.loops.length ?? 0 }; }
 
 // ───────────────────────── 孙尚香 · 弓腰姬飞刀 ─────────────────────────
 // 近：身边环绕飞刀，割伤贴身敌人；远：从环里掷出一把，穿透、不飞回，1.2 秒后在身边重新凝成一把。
@@ -546,4 +705,13 @@ export function diaochanFansBehavior(host: WeaponHost, weapon: WeaponState, dt: 
   }
   host.sfx.play('allySlash');
   weapon.cooldownLeft = Math.max(.25, DIAOCHAN_FANS_DEF.cooldown(level, pl.stats) / growth.attackSpeedMultiplier(time));
+}
+/** 测试用：清掉庞统场上所有火雷、铁索、连舟地火与火烧连环（不引爆）。 */
+export function lianhuanClear(p: Player): void {
+  const s = STATE.get(p); if (!s) return;
+  for (const m of s.mines) m.body.destroy();
+  for (const t of s.tethers) t.body.destroy();
+  for (const l of s.loops) l.fx.destroy();
+  for (const g of s.rings) g.links.destroy();
+  s.mines.length = s.tethers.length = s.loops.length = s.rings.length = 0; s.lastTrail = null; s.burnAt.clear();
 }

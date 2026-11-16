@@ -76,3 +76,6 @@ fx_c 四行依次为：
 - 行走 / 动作：ChatGPT 原图 processed-v2/originals/artv2_sunshangxiang_walk.png、hero-actions-v2/originals/artv2_sunshangxiang_actions.png，按美术风格会话 tools/prepare-artv2.mjs（方案 C 放大版）出 processed-v2/sunshangxiang_walk_sheet.png（704×704）、hero-actions-v2/sunshangxiang.png（928×1624）。接入靠美术风格分支 ArtStyle.ts 的 ART_V2_FILES（两分支合并后加 sunshangxiang_walk_sheet / sunshangxiang_actions 两行）；v1 图保留。
 - 主页立绘 / 选将头像：originals/sunshangxiang_epic.png（新），旧弓箭版改名 sunshangxiang_epic_v1.png；水墨立轴暂沿用旧图。
 - 侍婢刀光：hero-fx/sun_maid_slash.png（3×2，每帧 256，黑底叠加），原图 originals/sunshangxiang_v2_maidslash.png。
+
+## 2026-11-16 庞统「铁索连环」像素特效（方案 A，用户选定）
+- hero-fx/pangtong_fx.png：6×4，每帧 256，黑底叠加。第 1 行烧红铁索热光、第 2 行沿铁索奔跑的火苗、第 3 行地火（拼铺成连舟地火）、第 4 行雷芯由暗红闪到白金（将爆示警）。原图 originals/pangtong_fx_raw.png（ChatGPT「生成游戏特效精灵表」）。缺图时武器退回程序化过渡；不画地面范围圈。

@@ -49,12 +49,12 @@ export class TalentHallScene extends Phaser.Scene {
   private render() {
     this.content?.destroy(true); this.content = this.add.container(0, 0);
     const s = loadRoster(), w = loadWorld(), D = W > 600, cap = followerCap(s);
-    this.status.setText(`军粮 ${w.provisions} · 军功 ${w.merits} · 钱 ${w.town.money}\n招贤馆 ${s.hall} 级 · 席位 ${RECRUIT.seats[s.hall - 1]} · 随行 ${s.followers.length}/${cap} · 将阶上限 ${rankCap(s)}`);
+    this.status.setText(`军粮 ${w.provisions}\n招贤馆 ${s.hall} 级 · 席位 ${RECRUIT.seats[s.hall - 1]} · 随行 ${s.followers.length}/${cap} · 将阶上限 ${rankCap(s)}`);
     // 页签
     const tabY = D ? 112 : 124;
     this.small(D ? 90 : 90, tabY, 140, `人才（${s.offers.length + s.captives.length}）`, () => { this.tab = 'offers'; this.page = 0; this.render(); }, 'talent-tab-offers', true, this.tab === 'offers');
     this.small(D ? 240 : 240, tabY, 140, `麾下（${s.owned.length}）`, () => { this.tab = 'roster'; this.page = 0; this.render(); }, 'talent-tab-roster', true, this.tab === 'roster');
-    if (s.hall < 3) { const c = RECRUIT.hallUpgrade[s.hall - 1]; this.small(W - (D ? 130 : 110), tabY, D ? 220 : 180, `升级招贤馆 钱${c.money} 功${c.merits}`, () => { this.message = upgradeHall().message; this.render(); }, 'talent-hall-up'); }
+    if (s.hall < 3) { const c = RECRUIT.hallUpgrade[s.hall - 1]; this.small(W - (D ? 130 : 110), tabY, D ? 220 : 180, `升级招贤馆（${c.provisions} 军粮）`, () => { this.message = upgradeHall().message; this.render(); }, 'talent-hall-up'); }
     const top = tabY + (D ? 26 : 34), bottom = H - (D ? 64 : 104) - 30, rowH = D ? 74 : this.tab === 'roster' ? 118 : 104;
     const per = Math.max(1, Math.floor((bottom - top) / rowH));
     const rows: Array<() => void> = [];
@@ -97,7 +97,7 @@ export class TalentHallScene extends Phaser.Scene {
     const tx = x0 + 24 + size, b = rankBonus(r);
     this.content!.add(worldText(this, tx, y - h / 2 + 8, `${r.name}${lord ? ' · 主公' : ''}${following ? ' · 随行' : ''}`, D ? 17 : 18, q.css).setName('talent-roster-name'));
     const c = RANK.cost(r.rank + 1), canRank = r.rank < cap;
-    const line = `将阶 ${r.rank}/${cap}${canRank ? ` · 下一阶 粮${c.provisions} 功${c.merits}` : r.rank >= RANK.max ? ' · 已满' : ' · 升级招贤馆可继续'}
+    const line = `将阶 ${r.rank}/${cap}${canRank ? ` · 下一阶 ${c.provisions} 军粮` : r.rank >= RANK.max ? ' · 已满' : ' · 升级招贤馆可继续'}
 兵器 +${Math.round(b.damage * 100)}% · 生命 +${Math.round(b.hp * 100)}%${r.hero ? ` · 当主将开局 +${Math.round(b.lead * 100)}%` : ' · 只能随行'}`;
     this.content!.add(worldText(this, tx, y - h / 2 + (D ? 30 : 34), line, 12, '#cdbf9f').setWordWrapWidth(D ? w - size - 330 : w - size - 40));
     const bx = D ? W - 16 - 300 : tx + 50, by = D ? y : y + h / 2 - 24;

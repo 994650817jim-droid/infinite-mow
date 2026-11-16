@@ -225,7 +225,7 @@ export function followersFor(lead: CharacterId): Recruit[] {
 export function upgradeHall(): RosterResult {
   const s = loadRoster(); if (s.hall >= 3) return { ok: false, message: '招贤馆已满级' };
   const c = RECRUIT.hallUpgrade[s.hall - 1];
-  if (!spendWorld({ money: c.money, merits: c.merits })) return { ok: false, message: `需要钱 ${c.money}、军功 ${c.merits}` };
+  if (!spendWorld({ provisions: c.provisions })) return { ok: false, message: `军粮不足：升级需要 ${c.provisions}` };
   s.hall++; write(s); return { ok: true, message: `招贤馆升到 ${s.hall} 级：席位 ${RECRUIT.seats[s.hall - 1]}，随行 ${RECRUIT.followerCap[s.hall - 1]} 人` };
 }
 export function rankCap(s: RosterSave = loadRoster()): number { return RANK.capByHall[s.hall - 1]; }
@@ -233,7 +233,7 @@ export function rankUp(id: string, line: RankLine): RosterResult {
   const s = loadRoster(), r = s.owned.find(x => x.id === id); if (!r) return { ok: false, message: '不在麾下' };
   if (r.rank >= rankCap(s)) return { ok: false, message: r.rank >= RANK.max ? '将阶已满' : '将阶已到招贤馆上限，升级招贤馆后可继续' };
   const c = RANK.cost(r.rank + 1);
-  if (!spendWorld(c)) return { ok: false, message: `需要军粮 ${c.provisions}、军功 ${c.merits}` };
+  if (!spendWorld(c)) return { ok: false, message: `军粮不足：升阶需要 ${c.provisions}` };
   r.rank++; r.picks.push(line); write(s); return { ok: true, message: `${r.name}升到将阶 ${r.rank}（${line === 'weapon' ? '兵器' : '被动'}）` };
 }
 /** 将阶带来的加成：兵器线伤害、被动线生命与攻速；当主将时的开局加成。 */

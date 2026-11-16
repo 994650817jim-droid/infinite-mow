@@ -21,8 +21,8 @@ export const RECRUIT = {
   /** 招贤馆等级 1 / 2 / 3 的席位数与随行人数上限。 */
   seats: [3, 4, 5],
   followerCap: [1, 2, 3],
-  /** 招贤馆升级费用（从 Lv1 → Lv2、Lv2 → Lv3）：主城钱 + 军功。 */
-  hallUpgrade: [{ money: 300, merits: 120 }, { money: 800, merits: 300 }],
+  /** 招贤馆升级费用（从 Lv1 → Lv2、Lv2 → Lv3），只收军粮（主城统一军粮后：军粮 = 粮草 + 2×军功 + 1.5×钱，原价 钱300+功120 / 钱800+功300 折算；待平衡会话复核）。 */
+  hallUpgrade: [{ provisions: 690 }, { provisions: 1800 }],
   /** 手动刷新：第 n 次花 base + step × (n − 1) 军粮，换季归零。 */
   refreshBase: 30, refreshStep: 30,
   /** 每个席位独立抽：大众脸 / 史事名将 / 可玩名将，按招贤馆等级。 */
@@ -59,8 +59,8 @@ export const FOLLOW = {
 /** 将阶（技能升级）：1–10 级；招贤馆等级决定上限；每级花军粮与军功。 */
 export const RANK = {
   max: 10, capByHall: [4, 7, 10],
-  cost: (next: number) => ({ provisions: 60 * next, merits: 20 * next }),
-  /** 兵器线每次 +6% 伤害；被动线每次 +4% 生命与 +3% 攻速（模板被动）；当主将时每级开局伤害、生命各 +2%。 */
+  cost: (next: number) => ({ provisions: 100 * next }),
+  /** 将阶第 n 阶只收军粮 100×n（原 60n 粮 + 20n 军功折算）。兵器线每次 +6% 伤害；被动线每次 +4% 生命与 +3% 攻速（模板被动）；当主将时每级开局伤害、生命各 +2%。 */
   weaponStep: .06, passiveHp: .04, passiveHaste: .03, leadPerRank: .02,
 } as const;
 

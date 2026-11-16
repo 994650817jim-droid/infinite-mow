@@ -17,7 +17,7 @@ export class ChibiChapterScene extends Phaser.Scene {
  private action(x:number,y:number,w:number,h:number,label:string,fn:()=>void,primary=false){const bg=this.add.rectangle(x,y,w,h,primary?0x744530:0x241e1a,.96).setStrokeStyle(1,primary?0xc39b61:0x70604b).setInteractive({useHandCursor:true});const t=this.text(x,y,label,primary?22:17,primary?'#ffdf9d':'#d1c2a7').setOrigin(.5);bg.on('pointerover',()=>bg.setFillStyle(primary?0x8b5438:0x3a2c23)).on('pointerout',()=>bg.setFillStyle(primary?0x744530:0x241e1a)).on('pointerdown',()=>bg.setAlpha(.7)).on('pointerup',()=>{bg.setAlpha(1);fn();});return{bg,t};}
  create(){playMenuMusic(this);
   if(!this.registry.get('battleReady')){this.registry.set('pendingWarlord','ChibiChapterScene');this.registry.set('loadBattle',true);this.scene.start('BootScene');return;}
-  this.cards=[];this.heroButtons=[];const desk=W>600,state=loadWorld(),test=isChapterTestRun();this.selected=Math.min(3,state.chibiStages+1)as ChibiStage;
+  this.cards=[];this.heroButtons=[];const desk=W>600,state=loadWorld(),test=isChapterTestRun();this.selected=Math.min(3,state.chibiStages+1)as ChibiStage;{const pick=Number(this.registry.get('worldStagePick'));this.registry.remove('worldStagePick');if([1,2,3].includes(pick)&&(stageOpen(pick)||test))this.selected=pick as ChibiStage;}
   try{const saved=localStorage.getItem('im_last_hero');if(CHARACTERS.some(c=>c.id===saved))this.hero=saved as CharacterId;}catch{}
   this.cameras.main.setBackgroundColor('#191815');
   // Quiet campaign-map lines and mountain silhouettes, all behind interactive content.

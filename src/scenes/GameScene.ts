@@ -4,6 +4,9 @@ import {applyCitySpecialties} from '../systems/CityBonuses';
 import {cityIncomeLine} from '../world/WorldStore';
 import {CampRestUI} from '../ui/CampRestUI';
 import {chapterVictoryNotice} from '../ui/ChapterVictoryNotice';
+import {HARD_MODE,HARD_TITLES} from '../data/hardMode';
+import {recordHardClear} from '../world/WorldStore';
+import {chapterState,openChapterCount,type TimelineChapterId} from '../world/ChapterTimeline';
 import {buildVfx} from '../systems/BuildVfx';
 import {AwakeningCombat} from '../systems/AwakeningCombat';
 import {BulwarkBuild} from '../systems/BulwarkBuild';
@@ -109,6 +112,8 @@ export class GameScene extends Phaser.Scene {
   protected pauseKeysText?: Phaser.GameObjects.Text;
   private expeditionId="";
   private worldCampaign=false;
+  /** 乱世难度（天下地图对已平定章节发起）：敌军生命 / 伤害放大，见 data/hardMode.ts。 */
+  protected hardMode=false;
   private huaxiong:HuaxiongBoss|null=null;private xurong:XurongBoss|null=null;
   protected sishuiObstacles:SishuiObstacles|null=null;
   protected runConfig: RunConfig = DEFAULT_RUN_CONFIG;
@@ -348,6 +353,8 @@ export class GameScene extends Phaser.Scene {
     this.player = new Player(this, 0, 0);
     this.applyRunConfig(this.runConfig);
     this.worldCampaign=!preview&&!isChapterTestRun()&&this.registry.get('worldCampaign')===true;
+    this.hardMode=!preview&&this.registry.get('hardChapter')===this.hardKey()&&(chapterState(this.hardKey() as TimelineChapterId,loadWorldState())==='cleared'||isChapterTestRun());
+    if(this.hardMode){const tag=this.add.text(GAME_WIDTH/2,GAME_HEIGHT*.3,'乱世难度 · 敌军更强',{fontFamily:FONT,fontSize:'26px',color:'#ffb08a',stroke:'#1b0805',strokeThickness:5,resolution:2}).setOrigin(.5).setScrollFactor(0).setDepth(DEPTH.overlay).setName('hard-mode-tag');this.tweens.add({targets:tag,alpha:0,delay:2400,duration:700,onComplete:()=>tag.destroy()});}
     this.expeditionId=this.worldCampaign?beginExpedition(this.chapter.id,this.chapter.stage??this.chapter.westStage):'';
     this.weaponHost = this.createWeaponHost();
     this.martialFields = new MartialFields(this.weaponHost);
@@ -758,7 +765,8 @@ export class GameScene extends Phaser.Scene {
       this.enemies.push(enemy);
     }
     const base=override??this.chapter.enemies[kind];
-    enemy.spawn(x,y,!override&&this.yellow&&kind!=='boss'?this.yellow.variant(base,this.elapsed):base,hpScale,this.combatNow);
+    const def=!override&&this.yellow&&kind!=='boss'?this.yellow.variant(base,this.elapsed):base;
+    enemy.spawn(x,y,this.hardMode?{...def,damage:def.damage*HARD_MODE.damage}:def,this.hardMode?hpScale*(kind==='boss'?HARD_MODE.bossHp:HARD_MODE.enemyHp):hpScale,this.combatNow);
     return enemy;
   }
 
@@ -2244,7 +2252,7 @@ export class GameScene extends Phaser.Scene {
     const openedMap=victory&&this.worldCampaign&&this.chapter.id==='hulao'&&(this.chapter.westStage??3)===3&&worldUnlocked();
     const homeLink=this.resultPanel.getByName('result-home') as Phaser.GameObjects.Text|null;
     this.resultPanel.getByName('result-restart')?.setActive(victory);(this.resultPanel.getByName('result-restart') as Phaser.GameObjects.Image)?.setVisible(victory);(this.resultPanel.getByName('result-restart-text') as Phaser.GameObjects.Text)?.setVisible(victory);
-    homeLink?.setText(!victory?'返回主菜单':canAdvance?`下一关 · ${nextWest===1?'汜水关':nextWest===2?'荥阳':'虎牢关'}`:openedMap?'天下地图 · 新篇解锁':this.worldCampaign&&worldUnlocked()?'返回主城':'返回选关');
+    homeLink?.setText(!victory?'返回主菜单':canAdvance?`下一关 · ${nextWest===1?'汜水关':nextWest===2?'荥阳':'虎牢关'}`:openedMap?(openChapterCount(loadWorldState())>loadWorldState().chapterSeen?'天下地图 · 新篇解锁':'返回天下地图'):this.worldCampaign&&worldUnlocked()?'返回主城':'返回选关');
     homeLink?.removeAllListeners('pointerdown').on('pointerdown',()=>{
       if(!victory){this.registry.remove('campaignTransfer');this.registry.remove('menuChapterPicker');this.scene.start('MenuScene');return;}
       if(canAdvance){this.registry.remove('campaignTransfer');const {encounter:_preview,...config}=this.runConfig;this.registry.set('runConfig',{...config,chapter:'hulao',stage:undefined,westStage:nextWest});this.scene.restart();return;}
@@ -2255,6 +2263,9 @@ export class GameScene extends Phaser.Scene {
     // 成就：战斗结果与天下 / 城镇状态（测试战斗、调试改动过的战斗不计）
     onBattleEnd({victory,debug:isChapterTestRun()||this.debugModified||this.debugJumped||!!this.player.damageImmune||!!this.runConfig.encounter,kills:this.kills,level:this.player.level,hero:this.runConfig.character,chapter:this.chapter.id,stage:this.chapter.stage,westStage:this.chapter.westStage,arc:this.achievementArc(),bossKilled:this.bossKilled});
     try{checkWorld(loadWorldState());}catch{/* 存档不可用 */}
+    // 乱世难度首通（该章第三关击败首领）：一次性军功 / 粮草与称号
+    if(victory&&this.hardMode&&this.bossKilled&&this.hardStage()===3&&!isChapterTestRun()&&!this.debugModified&&!this.debugJumped&&!this.player.damageImmune){const key=this.hardKey() as TimelineChapterId;if(recordHardClear(key,HARD_MODE.reward))this.resultTexts.body.setText(this.resultTexts.body.text+`
+乱世首通 · 称号「${HARD_TITLES[key]}」 · 军功 +${HARD_MODE.reward.merits} · 粮草 +${HARD_MODE.reward.provisions}`);}
     if (victory && !this.runConfig.encounter && (this.chapter.id==='huangjin'||(this.chapter.westStage??3)<3)) {
       this.cameras.main.flashEffect.reset(); this.cameras.main.shakeEffect.reset();
       this.pendingRecruit = false; this.pendingLevels = 0; this.freeRecruit = false; this.resting = true;
@@ -2273,6 +2284,10 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
+  /** 乱世难度用：本场所属章节（黄巾 / 讨董取 chapter.id，群雄 / 官渡 / 赤壁取战线）。 */
+  protected hardKey(): string { return this.achievementArc() ?? this.chapter.id; }
+  /** 乱世难度用：本场是该章第几关。 */
+  protected hardStage(): number { const k = this.hardKey(), key = k === 'qunxiong' ? 'thirdStage' : k === 'guandu' ? 'guanduStage' : k === 'chibi' ? 'chibiStage' : ''; return key ? Number(this.registry.get(key) ?? 1) : this.battleStage(); }
   /** 成就用：本场属于哪条战线（攻城 / 守城 / 群雄 / 官渡由子类返回）。 */
   protected achievementArc(): string | undefined { return undefined; }
   /** 手柄锁定目标：子类（有敌营 / 粮草的战场）返回可锁定列表。 */

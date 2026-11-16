@@ -11,7 +11,7 @@ const TARGET: Record<FactionId, Target> = {
   player: null, dongzhuo: null,
   yuanshao: {hue: 42, sat: .82}, yellow: {hue: 52, sat: .9}, caocao: {hue: 218, sat: .7}, yuanshu: {hue: 282, sat: .6},
   liubiao: {hue: 178, sat: .65}, sun: {hue: 22, sat: .95}, mateng: {hue: 32, sat: .55}, liuzhang: {hue: 78, sat: .55},
-  zhanglu: {hue: 228, sat: .35}, taoqian: {hue: 140, sat: .5}, han: 'gray', gongsun: 'gray',
+  zhanglu: {hue: 228, sat: .35}, taoqian: {hue: 140, sat: .5}, han: 'gray', court: 'gray', gongsun: 'gray',
 };
 export function factionKey(faction: FactionId, key: string): string { return TARGET[faction] ? `f_${faction}_${key}` : key; }
 

@@ -10,8 +10,8 @@ export const CHARACTER_PASSIVES: Record<CharacterId, { name: string; maxStacks: 
   liubei: { name: '仁德聚义', maxStacks: 4 },
   weiyan: { name: '镇守汉中', maxStacks: 5 },
   machao: { name: '西凉铁骑', maxStacks: 6 },
-  sunshangxiang: { name: '弓腰姬', maxStacks: 6 },
-  diaochan: { name: '闭月倾城', maxStacks: 3 },
+  sunshangxiang: { name: '侍婢执刀', maxStacks: 6 },
+  diaochan: { name: '离间', maxStacks: 5 },
 };
 export const PASSIVE_RULES = {
   dragonIntervalMs: 150, spearLengthMul: 1.25,
@@ -30,9 +30,13 @@ export const PASSIVE_RULES = {
   liubeiDamageMul: 1.15, liubeiHeal: .08, liubeiRally: .35,
   cavalryIntervalMs: 300, dashLength: 150, dashWidth: 56, dashDamageMul: 1.6, dashMs: 200,
   roarIntervalMs: 350, roarRadius: 175, roarStunMs: 1200, roarDamageMul: 1.4,
-  /** 孙尚香：移动中每 0.5 秒积 1 层疾步；满层环身 8 向连射（60% 伤害）。 */
-  stepIntervalMs: 500, ringBolts: 8, ringDamageMul: .6,
-  /** 貂蝉：倾城——命中敌人 2.5 秒内受到的伤害 +25%、移速 -40%（首领只易伤不减速）。 */
-  charmMs: 2500, charmVulnerability: 1.25, charmSlow: .6,
+  /** 孙尚香·侍婢执刀：移动中每 0.5 秒积 1 层疾步（满 6）；满层召 2 名执刀侍婢护身 8 秒（上限 4 名），绕身 70 像素内每 0.5 秒挥刀 60% 伤害。 */
+  stepIntervalMs: 500, maidSummon: 2, maidMax: 4, maidMs: 8000, maidRange: 70, maidSlashMs: 500, maidDamageMul: .6,
+  /** 孙尚香·弓腰姬飞刀：环绕刀（半径 / 每名敌人割伤间隔）、掷刀（射程 / 速度 / 穿透 / 补刀时间 / 移动中间隔倍率）。 */
+  knifeOrbitR: 55, knifeOrbitHitMs: 500, knifeRange: 380, knifeSpeed: 650, knifePierce: 2, knifeRegenMs: 1200, knifeMovingCdMul: .7,
+  /** 貂蝉·双花扇：回旋飞扇（距离 / 速度）；离间：魅惑 3 层倒戈 3 秒（精锐减半），倒戈者受伤 +20%、冲向 260 内最近同伴每 0.5 秒撞一次；首领改为 3 秒受伤 +25%；4 秒没扇中魅惑消散。 */
+  fanRange: 230, fanSpeed: 520, charmNeed: 3, turnMs: 3000, turnVulnerability: 1.2, charmVulnerability: 1.25, turnSeek: 260, turnHitMs: 500, charmDecayMs: 4000,
+  /** 貂蝉·闭月：舞带环身 2 秒，半径 160，每 0.4 秒 50% 伤害，圈内敌人倒戈。 */
+  moonMs: 2000, moonRadius: 160, moonTickMs: 400, moonDamageMul: .5,
   fireRadiusMul: 1.25, burnMs: 2000, burnTickMs: 1000, burnDamageFraction: .10,
 } as const;

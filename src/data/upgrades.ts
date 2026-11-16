@@ -3,7 +3,7 @@ import {AWAKENINGS} from './awakenings';
 import { BALANCE } from '../config';
 import type { Player } from '../entities/Player';
 import { RELICS, relicChanceForLevel } from './relics';
-import { WEAPON_DEFS, SPEAR_PIERCE, GUANDAO_TABLE, crossbowExtraArrows, zhenbeiCracks, lianhuanMinesPerCast } from '../weapons/registry';
+import { WEAPON_DEFS, SPEAR_PIERCE, GUANDAO_TABLE, crossbowExtraArrows, zhenbeiCracks, lianhuanMinesPerCast, sunOrbitKnives, diaochanFanCount } from '../weapons/registry';
 import type { UpgradeOption, WeaponId, WeaponState } from '../types';
 import { getCharacter } from './characters';
 import { ATTRIBUTE_INFO, type AttributeId, type PotionId, type RunGrowth, type TrinketId, MARTIALS, type MasteryId } from '../systems/RunGrowth';
@@ -15,9 +15,11 @@ export const WEAPON_META: Record<WeaponId, { name: string; desc: string }> = {
   flame_banner: { name: '烈焰战旗', desc: '前方爆发烈焰，范围灼烧' },
   zhenbei_blade: { name: '镇北环首刀', desc: '朝敌群重劈，地面裂开直线冲击波，穿透全部敌人；贴身伤害更高' },
   lianhuan_mines: { name: '凤雏连环令', desc: '挥令旗在敌人来路布下火雷，踩中引爆，附近火雷连环引爆' },
+  sun_knives: { name: '弓腰姬飞刀', desc: '身边环绕飞刀割伤近敌，并不断掷出飞刀穿透远敌；移动中掷得更快' },
+  diaochan_fans: { name: '双花扇', desc: '掷出回旋团扇，去回各打一次；命中积魅惑，满层的敌人倒戈攻击同伴' },
 };
 /** 武器显示名：张飞用同一套长枪，叫丈八蛇矛。 */
-export function weaponName(id: WeaponId, character?: string): string { return character === 'zhangfei' && id === 'spear_orbit' ? '丈八蛇矛' : character === 'huangyueying' ? '机关连弩' : character === 'pangtong' && id === 'lianhuan_mines' ? '凤雏连环令' : character === 'liubei' ? '双股剑' : character === 'weiyan' && id === 'zhenbei_blade' ? '镇北环首刀' : character === 'machao' ? '虎头湛金枪' : character === 'sunshangxiang' ? '弓腰姬长弓' : character === 'diaochan' ? '闭月花扇' : WEAPON_META[id].name; }
+export function weaponName(id: WeaponId, character?: string): string { return character === 'zhangfei' && id === 'spear_orbit' ? '丈八蛇矛' : character === 'huangyueying' ? '机关连弩' : character === 'pangtong' && id === 'lianhuan_mines' ? '凤雏连环令' : character === 'liubei' ? '双股剑' : character === 'weiyan' && id === 'zhenbei_blade' ? '镇北环首刀' : character === 'machao' ? '虎头湛金枪' : character === 'sunshangxiang' && id === 'sun_knives' ? '弓腰姬飞刀' : character === 'diaochan' && id === 'diaochan_fans' ? '双花扇' : WEAPON_META[id].name; }
 
 const WEAPON_IDS: WeaponId[] = ['spear_orbit', 'crossbow', 'flame_banner', 'guandao'];
 
@@ -63,6 +65,8 @@ function weaponUpgrade(weapon: WeaponState, player: Player): UpgradeOption {
   if (weapon.id === 'crossbow') desc += `\n每轮 ${1 + crossbowExtraArrows(weapon.level)} → ${1 + crossbowExtraArrows(next)} 支箭（多出的箭分射其他敌人，70%伤害）`;
   if (weapon.id === 'zhenbei_blade' && [1, 3, 5].includes(next) && next !== weapon.level) desc += `\n裂波 ${zhenbeiCracks(weapon.level)} → ${zhenbeiCracks(next)} 道`;
   if (weapon.id === 'lianhuan_mines' && lianhuanMinesPerCast(next) !== lianhuanMinesPerCast(weapon.level)) desc += `\n每次布雷 ${lianhuanMinesPerCast(weapon.level)} → ${lianhuanMinesPerCast(next)} 枚`;
+  if (weapon.id === 'sun_knives' && sunOrbitKnives(next) !== sunOrbitKnives(weapon.level)) desc += `\n环绕飞刀 ${sunOrbitKnives(weapon.level)} → ${sunOrbitKnives(next)} 把`;
+  if (weapon.id === 'diaochan_fans' && diaochanFanCount(next) !== diaochanFanCount(weapon.level)) desc += `\n每次掷扇 ${diaochanFanCount(weapon.level)} → ${diaochanFanCount(next)} 柄`;
   if (weapon.id === 'guandao') desc += `\n范围${GUANDAO_TABLE[weapon.level - 1].radius} → ${GUANDAO_TABLE[next - 1].radius}${weapon.level < 3 && next >= 3 ? '，解锁二段刀气' : ''}`;
   return {
     id: `signature_weapon_${weapon.id}`,
@@ -143,6 +147,10 @@ export function martialDescription(id:MasteryId,level:number):string {
  gujun:'身边160像素内每有1名敌人，伤害提高'+[1.5,2,2.5][i]+'%（最多算15名）。\n越是陷入重围越勇。',
  fulei:'火雷同时存在上限 +'+(2*n)+'，每枚多存在'+(2*n)+'秒。',
  lianying:'火雷连锁引爆的距离增加'+(15*n)+'%。'+(n===3?'\n被连锁引爆的火雷伤害再 +20%。':''),
+ huishen:'移动中掷出的飞刀多穿透'+n+'名敌人。\n边跑边掷，越跑越利。',
+ baibi:'执刀侍婢上限 +'+n+'，每名多护卫'+(2*n)+'秒。',
+ nichang:'飞扇飞行距离增加'+(15*n)+'%。'+(n===3?'\n每次多掷 1 柄团扇。':''),
+ meirenji:'被离间的敌人多倒戈'+(0.5*n)+'秒。'+(n===3?'\n只需 2 层魅惑即可离间。':''),
  };
  return descriptions[id];
 }

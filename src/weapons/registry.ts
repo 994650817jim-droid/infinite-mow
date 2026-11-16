@@ -6,8 +6,8 @@ import type { Sfx } from '../systems/Sfx';
 import type { PlayerStats, WeaponId, WeaponState } from '../types';
 import { PASSIVE_RULES } from '../data/passives';
 import { HERO_TINT } from '../data/characters';
-import { ZHENBEI_DEF, LIANHUAN_DEF, zhenbeiBehavior, lianhuanBehavior, hasFxSheet } from './heroWeapons';
-export { zhenbeiCracks, lianhuanMinesPerCast } from './heroWeapons';
+import { ZHENBEI_DEF, LIANHUAN_DEF, SUN_KNIVES_DEF, DIAOCHAN_FANS_DEF, zhenbeiBehavior, lianhuanBehavior, sunKnivesBehavior, diaochanFansBehavior } from './heroWeapons';
+export { zhenbeiCracks, lianhuanMinesPerCast, sunOrbitKnives, diaochanFanCount } from './heroWeapons';
 
 export interface WeaponBolt {
   img: Phaser.GameObjects.Image; vx: number; vy: number; life: number;
@@ -100,6 +100,8 @@ export const WEAPON_DEFS: Record<WeaponId, WeaponDef> = {
   },
   zhenbei_blade: ZHENBEI_DEF,
   lianhuan_mines: LIANHUAN_DEF,
+  sun_knives: SUN_KNIVES_DEF,
+  diaochan_fans: DIAOCHAN_FANS_DEF,
 };
 
 export const WEAPON_ORDER: WeaponId[] = ['spear_orbit', 'crossbow', 'flame_banner', 'guandao'];
@@ -118,20 +120,6 @@ function distPointToSegment(px: number, py: number, ax: number, ay: number, bx: 
   const cx = ax + abx * t;
   const cy = ay + aby * t;
   return Math.hypot(px - cx, py - cy);
-}
-
-/**
- * 貂蝉花扇：把火令爆发换成粉紫花瓣（程序化过渡特效，判定与伤害不变）。
- * strong = 倾城（满层）时加一圈更大的光环。正式序列帧到位后替换。
- */
-function petalBurst(host: WeaponHost, cx: number, cy: number, radius: number, strong = false): void {
-  const flash = host.add.circle(cx, cy, radius * .35, 0xf6c2ff, .32).setDepth(41);
-  flash.scene.tweens.add({ targets: flash, radius: radius * .95, alpha: 0, duration: 380, ease: 'Quad.easeOut', onComplete: () => flash.destroy() });
-  if (strong) host.heroFx?.('charm', cx, cy - 6, radius * 2.4);
-  if (strong && !hasFxSheet(host, 'c')) { const ring = host.add.circle(cx, cy, radius * .3, 0xf0b4ff, .18).setStrokeStyle(4, 0xffd6f4, .9).setDepth(41); ring.scene.tweens.add({ targets: ring, radius: radius * 1.05, alpha: 0, duration: 520, onComplete: () => ring.destroy() }); }
-  const n = strong ? 18 : 12;
-  for (let k = 0; k < n; k++) { const a = k * Math.PI * 2 / n + Math.random() * .35, d = radius * (.55 + Math.random() * .4), petal = host.add.ellipse(cx, cy, strong ? 13 : 11, strong ? 7 : 6, k % 3 === 0 ? 0xffe4f6 : k % 2 ? 0xffb6e6 : 0xd99cff, .95).setRotation(a).setDepth(42);
-    petal.scene.tweens.add({ targets: petal, x: cx + Math.cos(a) * d, y: cy + Math.sin(a) * d - 14, rotation: a + 2.6, alpha: 0, duration: strong ? 720 : 560, ease: 'Sine.easeOut', onComplete: () => petal.destroy() }); }
 }
 
 /** 七探盘龙枪穿透参数：穿透长度 / 判定宽度(总宽) / 单枪命中上限。 */
@@ -309,13 +297,7 @@ export const WEAPON_BEHAVIORS: Record<WeaponId, (host: WeaponHost, weapon: Weapo
     // 黄月英满层：机关连弩——朝目标方向扇形齐射 6 支（60% 伤害，弹射 +1）
     { const pc = host.player.passive.beginCast('crossbow'); if (pc.fan) { const px = host.player.x, py = host.player.y, a0 = Math.atan2(target.y - py, target.x - px), n = PASSIVE_RULES.mechBolts;
       host.player.playAction('skill', target.x < px ? 'left' : 'right'); host.heroFx?.('gears', px, py - 10, 240, a0);
-      for (let k = 0; k < n; k++) { const a = a0 + (k - (n - 1) / 2) * .16; host.fireBolt(host.bolts, px, py, px + Math.cos(a) * 420, py + Math.sin(a) * 420, damage * PASSIVE_RULES.mechDamageMul, Math.min(5, bounce + 1), true, 600); } }
-      // 孙尚香满层：环身连射——以自身为中心朝 8 个方向各射一箭（60% 伤害，弹射不变）
-      else if (pc.ring) { const px = host.player.x, py = host.player.y, n = PASSIVE_RULES.ringBolts, a0 = Math.atan2(target.y - py, target.x - px);
-        host.player.playAction('skill', target.x < px ? 'left' : 'right'); host.sfx.play('allySpear');
-        host.heroFx?.('ringVolley', px, py - 8, 320);
-        if (!hasFxSheet(host, 'c')) for (let k = 0; k < 2; k++) { const ring = host.add.circle(px, py - 6, 24, 0xff9a8a, 0).setStrokeStyle(5 - k * 2, k ? 0xffd2a0 : 0xff7a6a, .9).setDepth(41); ring.scene.tweens.add({ targets: ring, radius: 150, alpha: 0, delay: k * 80, duration: 360, onComplete: () => ring.destroy() }); }
-        for (let k = 0; k < n; k++) { const a = a0 + k * Math.PI * 2 / n; host.fireBolt(host.bolts, px, py, px + Math.cos(a) * 420, py + Math.sin(a) * 420, damage * PASSIVE_RULES.ringDamageMul, bounce, true, 620); } } }
+      for (let k = 0; k < n; k++) { const a = a0 + (k - (n - 1) / 2) * .16; host.fireBolt(host.bolts, px, py, px + Math.cos(a) * 420, py + Math.sin(a) * 420, damage * PASSIVE_RULES.mechDamageMul, Math.min(5, bounce + 1), true, 600); } } }
     // 每升一级多射 1 支（Lv5 共 5 支）：额外的箭优先分射附近其他敌人，70% 伤害；不够目标时散射同一目标
     const extra = crossbowExtraArrows(level);
     if (extra > 0) {
@@ -474,18 +456,17 @@ export const WEAPON_BEHAVIORS: Record<WeaponId, (host: WeaponHost, weapon: Weapo
       for(const e of candidates.slice(0,32)){const n=host.grid.query(e.x,e.y,140).filter(t=>t.active&&!t.isSupplySlot&&Math.hypot(t.x-e.x,t.y-e.y)<=140).length;if(n>score){score=n;center=e;}}
       if(center){host.martialField(center.x,center.y,[105,125,140][formation-1],damage,1600,formation,true);host.player.playAction('skill',center.x<host.player.x?'left':'right');}
     }
-    const petals = host.player.passive.characterId === 'diaochan'; // 貂蝉：花扇花瓣代替火焰表现
     const cx = host.player.x + dirX * radius * 0.45;
     const cy = host.player.y + dirY * radius * 0.45;
     host.sfx.play('flameSwing');
     host.spawnFlagSwingFx(dirX, dirY);
     host.time.delayedCall(250, () => {
       if (host.over) return;
-      if (!petals) host.spawnFlameGatherFx(cx, cy, radius);
+      host.spawnFlameGatherFx(cx, cy, radius);
     });
     host.time.delayedCall(400, () => {
       if (host.over) return;
-      if (petals) petalBurst(host, cx, cy, radius, passiveCast.charm); else host.spawnFlameFx(cx, cy, radius);
+      host.spawnFlameFx(cx, cy, radius);
       const burn=growth.masteries.wildfire;
       if(burn)host.martialField(cx,cy,radius*(burn===3?1.1:1),damage,[1000,1800,2500][burn-1],burn);
       host.sfx.play('flameBoom');
@@ -496,11 +477,12 @@ export const WEAPON_BEHAVIORS: Record<WeaponId, (host: WeaponHost, weapon: Weapo
         const dist = Math.hypot(enemy.x - cx, enemy.y - cy);
         if (dist <= radius + enemy.radius && host.hitEnemy(enemy, damage, host.combatNow, 'fire')) host.player.passive.recordHit(passiveCast, enemy, host.combatNow, damage);
       }
-      // 貂蝉满层：倾城——命中的敌人已在 recordHit 里挂上易伤与减速；表现在上面 petalBurst(strong) 里。
     });
     weapon.cooldownLeft = Math.max(.25, def.cooldown(level, host.player.stats) / host.player.growth.attackSpeedMultiplier(host.combatNow));
   },
   zhenbei_blade: zhenbeiBehavior,
   lianhuan_mines: lianhuanBehavior,
+  sun_knives: sunKnivesBehavior,
+  diaochan_fans: diaochanFansBehavior,
 };
 

@@ -890,6 +890,8 @@ export class GameScene extends Phaser.Scene {
       enemy.frameStartX = enemy.x;
       enemy.frameStartY = enemy.y;
       if (!enemy.controlImmune && enemy.stunUntil > time) { enemy.moveVx = enemy.moveVy = enemy.intentDx = enemy.intentDy = 0; continue; }
+      // 貂蝉「离间」：倒戈中的敌人不追主将，转身冲撞最近的同伴（逻辑在 CharacterPassives.driveTurned）
+      if (player.passive.driveTurned(enemy, dt, this.combatNow, (x, y, r) => this.grid.query(x, y, r), (t, n) => this.hitEnemy(t, n, this.combatNow, 'melee', true, false))) { enemy.contactCd = Math.max(0, enemy.contactCd - dt); continue; }
       enemy.contactCd = Math.max(0, enemy.contactCd - dt);
       enemy.shootCd -= dt;
       enemy.dashCd -= dt;
@@ -1058,6 +1060,7 @@ export class GameScene extends Phaser.Scene {
     for (const enemy of this.enemies) {
       if (!enemy.active || (enemy.def.behavior==='wall'||enemy.isSupplySlot) || enemy.contactCd > 0) continue;
       if (enemy === this.boss && this.lubu && this.lubu.state !== 'approach') continue;
+      if (player.passive.isTurned(enemy, this.combatNow)) continue; // 倒戈中的敌人不撞主将
       const dist = Math.hypot(player.x - enemy.x, player.y - enemy.y);
       if (dist < player.radius + enemy.radius + 2) {
         enemy.contactCd = 1.0;
@@ -1851,7 +1854,7 @@ export class GameScene extends Phaser.Scene {
       const style=categoryStyle[option.kind];
       view.tag.setBackgroundColor(style.bg).setColor(style.color);
       const iconKey = option.kind === 'potion' ? 'icon_rare' : option.kind === 'weapon' ? ({
-        spear_orbit:'icon_1',crossbow:'icon_2',flame_banner:'icon_3',guandao:'icon_guandao',zhenbei_blade:'icon_zhenbei',lianhuan_mines:'icon_lianhuan',
+        spear_orbit:'icon_1',crossbow:'icon_2',flame_banner:'icon_3',guandao:'icon_guandao',zhenbei_blade:'icon_zhenbei',lianhuan_mines:'icon_lianhuan',sun_knives:'icon_2',diaochan_fans:'icon_3',
       } as const)[option.weaponId!] : option.weaponId === 'spear_orbit'
         ? 'icon_1'
         : option.weaponId === 'crossbow'

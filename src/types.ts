@@ -3,7 +3,7 @@ import type { RunGrowth } from './systems/RunGrowth';
 
 export type EnemyKind = 'infantry' | 'shield' | 'archer' | 'cavalry' | 'elite' | 'boss';
 
-export type WeaponId = 'spear_orbit' | 'crossbow' | 'flame_banner' | 'guandao' | 'zhenbei_blade' | 'lianhuan_mines';
+export type WeaponId = 'spear_orbit' | 'crossbow' | 'flame_banner' | 'guandao' | 'zhenbei_blade' | 'lianhuan_mines' | 'sun_knives' | 'diaochan_fans';
 
 export interface WeaponState {
   id: WeaponId;

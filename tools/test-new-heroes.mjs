@@ -1,4 +1,6 @@
-// 新女将：孙尚香（吴 · 弓腰姬：移动积疾步 → 环身 8 向连射）、貂蝉（群雄 · 闭月倾城：爆发命中积舞势 → 倾城易伤 + 减速）。
+// 新女将（2026-11-16 重做专属武器）：
+//  孙尚香「弓腰姬飞刀」：环绕飞刀割伤贴身敌人 + 掷刀穿透远敌（不飞回、1.2 秒补刀）；被动「侍婢执刀」移动积疾步，满层召执刀侍婢护身。
+//  貂蝉「双花扇」：回旋飞扇去回各打一次，命中积魅惑，满 3 层倒戈（离间）去撞同伴；被动满 5 层「闭月」舞带旋舞令圈内敌人倒戈。
 // 每将：手机 390×844 与电脑 1280×720 两种布局进第 1 关；检查行走 / 动作图、立绘、本命武器、被动触发效果；
 // 选将界面能翻到并选中新将；全程无 pageerror / console error。截图存 assets/review/new-heroes/。
 // 需要开发服务器。用法：BASE=http://127.0.0.1:5191/ node tools/test-new-heroes.mjs
@@ -8,7 +10,7 @@ const base = process.env.BASE ?? 'http://127.0.0.1:5173/', out = 'assets/review/
 mkdirSync(out, { recursive: true });
 let pass = 0, fail = 0; const errors = [];
 const ck = (n, ok, d) => { ok ? pass++ : fail++; console.log((ok ? 'PASS ' : 'FAIL ') + n + (d !== undefined ? ' · ' + JSON.stringify(d).slice(0, 400) : '')); };
-const HEROES = { sunshangxiang: { name: '孙尚香', weapon: 'crossbow', index: 10 }, diaochan: { name: '貂蝉', weapon: 'flame_banner', index: 11 } };
+const HEROES = { sunshangxiang: { name: '孙尚香', weapon: 'sun_knives', index: 10 }, diaochan: { name: '貂蝉', weapon: 'diaochan_fans', index: 11 } };
 const LAYOUTS = { mobile: { width: 390, height: 844 }, desktop: { width: 1280, height: 720 } };
 const b = await chromium.launch({ channel: 'chrome', headless: true });
 const G = "window.__game.scene.getScene('GameScene')";
@@ -29,35 +31,49 @@ for (const [layout, viewport] of Object.entries(LAYOUTS)) for (const [hero, h] o
   ck(`${tag}：行走 / 动作图（正式高清）、立绘、本命武器、专属被动`, st.walk === hero + '_walk_sheet' && st.weapon === h.weapon && st.passive === hero && st.portrait && st.actions && st.frameH > 30, st);
 
   if (hero === 'sunshangxiang') {
-    // 敌人放远一些，先按住 D 键走 4 秒积疾步，再观察环身连射
-    await p.evaluate(G0 => { const s = eval(G0), pl = s.player; window.__shots = []; const orig = s.fireBolt.bind(s); s.fireBolt = (...a) => { if (a[0] === s.bolts) window.__shots.push(Math.round(s.combatNow)); return orig(...a); }; for (let i = 0; i < 8; i++) { const a = i * Math.PI / 4, e = s.spawnEnemy('infantry', pl.x + 260 + Math.cos(a) * 60, pl.y + Math.sin(a) * 60, 1); if (e) { e.hp = e.maxHp = 99999; e.speed = 0; } } }, G);
+    // 1) 环绕飞刀割贴身敌人；2) 掷刀打中远处一列敌人
+    const r = await p.evaluate(async G0 => {
+      const s = eval(G0), pl = s.player, mk = (x, y) => { const e = s.spawnEnemy('infantry', x, y, 1); if (e) { e.hp = e.maxHp = 99999; e.stunUntil = 1e12; } return e; };
+      const near = mk(pl.x, pl.y + 52), far = [mk(pl.x + 220, pl.y), mk(pl.x + 250, pl.y), mk(pl.x + 280, pl.y)];
+      let thrownSeen = 0; const t0 = performance.now();
+      while (performance.now() - t0 < 5000) { await new Promise(r => setTimeout(r, 30)); thrownSeen = Math.max(thrownSeen, s.children.list.filter(o => o.name === 'sun-thrown-knife').length); if (near.hp < near.maxHp && far.filter(e => e.hp < e.maxHp).length >= 2) break; }
+      return { orbit: s.children.list.filter(o => o.name === 'sun-orbit-knife').length, nearHurt: near.maxHp - near.hp, farHurt: far.map(e => e.maxHp - e.hp), thrownSeen };
+    }, G);
+    ck(`${tag}：环绕 2 把飞刀割伤贴身敌人，掷出的飞刀打中远处敌人`, r.orbit === 2 && r.nearHurt > 0 && r.farHurt.filter(n => n > 0).length >= 2 && r.thrownSeen >= 1, r);
+    // 3) 走路积疾步，满 6 层召 2 名执刀侍婢
     await p.mouse.click(viewport.width / 2, 40).catch(() => {});
-    await p.keyboard.down('KeyD'); await p.waitForTimeout(1800); await p.keyboard.up('KeyD');
-    await p.keyboard.down('KeyA'); await p.waitForTimeout(1800); await p.keyboard.up('KeyA');
-    const r = await p.evaluate(async G0 => {
-      const s = eval(G0), pl = s.player, sn0 = pl.passive.snapshot(s.combatNow);
-      const t0 = performance.now(); let sn = sn0;
-      while (performance.now() - t0 < 8000) { await new Promise(r => setTimeout(r, 30)); sn = pl.passive.snapshot(s.combatNow); if (sn.triggers > 0) break; }
-      await new Promise(r => setTimeout(r, 100));
-      const per = {}; for (const t of window.__shots) per[t] = (per[t] ?? 0) + 1;
-      return { stacksAfterWalk: sn0.stacks, gains: sn.gains, triggers: sn.triggers, maxBolts: Math.max(0, ...Object.values(per)) };
+    await p.keyboard.down('KeyD'); await p.waitForTimeout(1700); await p.keyboard.up('KeyD');
+    await p.keyboard.down('KeyA'); await p.waitForTimeout(1700); await p.keyboard.up('KeyA');
+    const m = await p.evaluate(async G0 => {
+      const s = eval(G0), pl = s.player, sn0 = pl.passive.snapshot(s.combatNow); let maids = 0; const t0 = performance.now();
+      while (performance.now() - t0 < 6000) { await new Promise(r => setTimeout(r, 30)); maids = Math.max(maids, s.children.list.filter(o => o.name === 'sun-maid' && o.active).length); if (maids >= 2) break; }
+      return { stacksAfterWalk: sn0.stacks, gains: pl.passive.snapshot(s.combatNow).gains, triggers: pl.passive.snapshot(s.combatNow).triggers, maids };
     }, G);
-    ck(`${tag}：移动积满 6 层疾步，下一射触发环身连射（同一帧射出 ≥9 箭：普射 1 + 环射 8）`, r.stacksAfterWalk + r.triggers * 6 >= 6 && r.triggers >= 1 && r.maxBolts >= 9, r);
-    await p.waitForTimeout(120);
-  } else {
-    const r = await p.evaluate(async G0 => {
-      const s = eval(G0), pl = s.player, foes = [];
-      for (let i = 0; i < 10; i++) { const a = i * Math.PI / 5, e = s.spawnEnemy('infantry', pl.x + Math.cos(a) * 70, pl.y + Math.sin(a) * 70, 1); if (e) { e.hp = e.maxHp = 99999; foes.push(e); } }
-      const t0 = performance.now(); let sn = pl.passive.snapshot(s.combatNow), seen = null;
-      while (performance.now() - t0 < 25000) {
-        await new Promise(r => setTimeout(r, 30)); sn = pl.passive.snapshot(s.combatNow);
-        if (sn.charms > 0 && !seen) { const e = foes.find(f => f.active && pl.passive.vulnerability(f, s.combatNow) > 1); if (e) seen = { vul: pl.passive.vulnerability(e, s.combatNow), slow: e.martialSlow, slowLeft: Math.round(e.martialSlowUntil - s.combatNow), charms: sn.charms }; }
-        if (seen) break;
-      }
-      return { triggers: sn.triggers, gains: sn.gains, seen };
-    }, G);
-    ck(`${tag}：舞势积满后倾城——命中敌人易伤 ×1.25、减速至 60%`, r.triggers >= 1 && r.seen && Math.abs(r.seen.vul - 1.25) < 1e-6 && r.seen.slow <= .6 + 1e-6 && r.seen.slowLeft > 0, r);
+    ck(`${tag}：移动积满 6 层疾步，召出 2 名执刀侍婢`, m.gains >= 6 && m.triggers >= 1 && m.maids >= 2, m);
     await p.waitForTimeout(150);
+  } else {
+    // 1) 回旋飞扇去回各打一次 → 魅惑叠到 3 层倒戈；2) 倒戈者去撞同伴
+    const r = await p.evaluate(async G0 => {
+      const s = eval(G0), pl = s.player;
+      const a = s.spawnEnemy('infantry', pl.x + 150, pl.y, 1); a.hp = a.maxHp = 99999;
+      const b2 = s.spawnEnemy('infantry', pl.x + 150, pl.y + 130, 1); b2.hp = b2.maxHp = 99999; b2.stunUntil = 1e12;
+      const marks = () => pl.passive.charmViews().find(c => c.enemy === a); let firstThrow = null, turned = false; const t0 = performance.now();
+      while (performance.now() - t0 < 8000) { await new Promise(r => setTimeout(r, 30)); const c = marks(); if (!firstThrow && c && s.children.list.filter(o => o.name === 'diaochan-fan').length === 0) firstThrow = { marks: c.marks }; if (pl.passive.isTurned(a, s.combatNow)) { turned = true; break; } }
+      const vul = pl.passive.vulnerability(a, s.combatNow), b0 = b2.hp; const t1 = performance.now();
+      while (performance.now() - t1 < 3000 && b2.hp === b0) await new Promise(r => setTimeout(r, 30));
+      return { firstThrow, turned, vul, allyHurt: b0 - b2.hp, mark: !!s.children.getByName('diaochan-mark') };
+    }, G);
+    ck(`${tag}：一柄飞扇去回各中一次（魅惑 2 层），满 3 层倒戈、受伤 ×1.2，并去撞同伴`, r.firstThrow?.marks === 2 && r.turned && Math.abs(r.vul - 1.2) < 1e-6 && r.allyHurt > 0 && r.mark, r);
+    // 3) 舞势满 5 层 → 闭月：舞带环身，圈内敌人倒戈
+    const d = await p.evaluate(async G0 => {
+      const s = eval(G0), pl = s.player, foes = [];
+      for (let i = 0; i < 6; i++) { const ang = i * Math.PI / 3, e = s.spawnEnemy('infantry', pl.x + Math.cos(ang) * 110, pl.y + Math.sin(ang) * 110, 1); if (e) { e.hp = e.maxHp = 99999; foes.push(e); } }
+      pl.passive.stacks = 5; let moon = false; const t0 = performance.now();
+      while (performance.now() - t0 < 5000) { await new Promise(r => setTimeout(r, 30)); if (s.children.getByName('diaochan-moon')) { moon = true; await new Promise(r => setTimeout(r, 500)); break; } }
+      return { moon, turned: foes.filter(e => pl.passive.isTurned(e, s.combatNow)).length, triggers: pl.passive.snapshot(s.combatNow).triggers };
+    }, G);
+    ck(`${tag}：舞势满层「闭月」——舞带环身，圈内敌人倒戈（≥4 名）`, d.moon && d.turned >= 4 && d.triggers >= 1, d);
+    await p.waitForTimeout(100);
   }
   await p.screenshot({ path: `${out}/${hero}-battle-${layout}.png` });
   await p.close();

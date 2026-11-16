@@ -19,6 +19,10 @@ export const MARTIALS = {
   gujun: {character:'weiyan',name:'孤军深入',desc:'身边每名敌人伤害 +1.5%/2%/2.5%（最多 15 名）'},
   fulei: {character:'pangtong',name:'伏雷',desc:'每级火雷上限 +2、存在时间 +2 秒'},
   lianying: {character:'pangtong',name:'连营',desc:'每级连锁距离 +15%；3 级时连锁引爆伤害 +20%'},
+  huishen: {character:'sunshangxiang',name:'回身飞刀',desc:'移动中掷出的飞刀每级多穿透 1 人'},
+  baibi: {character:'sunshangxiang',name:'百婢',desc:'每级侍婢上限 +1、存在时间 +2 秒'},
+  nichang: {character:'diaochan',name:'霓裳',desc:'每级飞扇距离 +15%；3 级时多掷 1 柄'},
+  meirenji: {character:'diaochan',name:'美人计',desc:'每级倒戈时间 +0.5 秒；3 级时 2 层魅惑即可离间'},
 } as const;
 export type MasteryId = keyof typeof MARTIALS;
 export type PotionId = 'rejuvenation' | 'berserk';
@@ -46,7 +50,7 @@ export class RunGrowth {
   revivalUsed=false;
   awakenRescueUsed=false;
   readonly attributes: Record<AttributeId, number> = { might: 0, quickness: 0, critical: 0, constitution: 0, agility: 0 };
-  readonly masteries: Record<MasteryId, number> = { dragon_gallop: 0, cloud_pierce: 0, dragon_charge:0, dragging_blade:0, steady_aim:0, pearl_volley:0, wildfire:0, eight_trigrams:0, kaishan:0, gujun:0, fulei:0, lianying:0 };
+  readonly masteries: Record<MasteryId, number> = { dragon_gallop: 0, cloud_pierce: 0, dragon_charge:0, dragging_blade:0, steady_aim:0, pearl_volley:0, wildfire:0, eight_trigrams:0, kaishan:0, gujun:0, fulei:0, lianying:0, huishen:0, baibi:0, nichang:0, meirenji:0 };
   readonly trinkets: TrinketId[] = [];
   unallocated = 0;
   /** 兵装加成（局外道具，开局按武将读入，见 ItemEffects.gearFor）。 */
@@ -78,7 +82,7 @@ export class RunGrowth {
   get weaponMasteryLevel(): number { return this.masteries.dragon_gallop; }
   get spearPierceLevel(): number { return this.masteries.cloud_pierce; }
   /** 张飞同用长枪，与赵云共用两项枪术专精。 */
-  owns(id: MasteryId): boolean { const c = MARTIALS[id].character as string; return c === this.character || this.character === 'zhangfei' && c === 'zhaoyun' || this.character === 'huangyueying' && c === 'huangzhong'  || this.character === 'liubei' && c === 'guanyu'  || this.character === 'machao' && c === 'zhaoyun' || this.character === 'sunshangxiang' && c === 'huangzhong' || this.character === 'diaochan' && c === 'zhuge'; }
+  owns(id: MasteryId): boolean { const c = MARTIALS[id].character as string; return c === this.character || this.character === 'zhangfei' && c === 'zhaoyun' || this.character === 'huangyueying' && c === 'huangzhong'  || this.character === 'liubei' && c === 'guanyu'  || this.character === 'machao' && c === 'zhaoyun'; }
   canLearn(id: MasteryId): boolean { return this.owns(id) && this.masteries[id] < 3; }
 
   addAttributePoints(amount = 2): void { this.unallocated = Math.min(Object.values(this.attributes).reduce((n,level)=>n+ATTRIBUTE_MAX-level,0),this.unallocated+Math.max(0, Math.floor(amount))); }

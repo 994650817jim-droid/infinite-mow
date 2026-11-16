@@ -5,8 +5,8 @@ import type { CharacterPassives } from '../systems/CharacterPassives';
 
 /** 被动技能完整说明（悬停 / 点按弹出）。数值见 data/passives.ts 的 PASSIVE_RULES。 */
 export const PASSIVE_DETAILS: Record<'zhaoyun' | 'guanyu' | 'huangzhong' | 'zhuge' | 'zhangfei' | 'huangyueying' | 'pangtong' | 'liubei' | 'weiyan' | 'machao' | 'sunshangxiang' | 'diaochan', string> = {
-  sunshangxiang: '移动中每 0.5 秒积 1 层疾步（停下不会掉层）。\n满 6 层后，下一次射击额外以自身为中心朝 8 个方向各射一箭（60% 伤害），随后清空。',
-  diaochan: '花扇爆发命中至少 3 名敌人积 1 层舞势。\n满 3 层后，下一次爆发令命中的敌人「倾城」2.5 秒：受到的伤害 +25%（含部曲），移速 -40%（精锐减半，首领不减速），随后清空。',
+  sunshangxiang: '侍婢执刀：移动中每 0.5 秒积 1 层疾步（停下不会掉层）。\n满 6 层后，下一次掷刀时召来 2 名执刀侍婢护身 8 秒（最多 4 名）：绕身巡护，70 像素内的敌人每 0.5 秒挨一刀（60% 伤害），随后清空。',
+  diaochan: '离间：飞扇每命中一次加 1 层魅惑，满 3 层的敌人倒戈 3 秒（精锐 1.5 秒）——转身去撞最近的同伴，自己受伤 +20%；首领不倒戈，改为 3 秒受伤 +25%。\n每离间 1 名敌人积 1 层舞势，满 5 层后下一次化为「闭月」：舞带环身旋舞 2 秒，半径 160 内每 0.4 秒 50% 伤害并令圈内敌人倒戈。',
   machao: '金枪每命中敌人积累 1 层铁骑（每 0.3 秒最多 1 层）。\n满 6 层后，下一次出枪化为冲锋：向目标突进约 150 像素，沿途敌人受到 160% 伤害，随后清空。',
   weiyan: '镇守汉中：每次受到伤害积 1 层拒敌（每 0.5 秒最多 1 层）。\n满 5 层后，下一刀化为「谁敢杀我」：怒吼并朝 6 个方向劈出裂波（各 80% 伤害），自身 3 秒内受到伤害 -30%，随后清空。',
   liubei: '一次挥剑命中至少 3 名敌人积 1 层仁德。\n满 4 层后，下一次挥剑伤害 +15%，自身回复 8% 最大生命，并为身边全部部曲回复 35% 生命，随后清空。',
@@ -100,8 +100,8 @@ export class PassiveHud {
       liubei: s.ready ? '下次挥剑 回复自身8% · 部曲35%' : '剑中3敌积仁德',
       pangtong: s.ready ? '下次布雷 火烧连环' : '一次连锁引爆3雷积计策',
       huangyueying: s.ready ? '下次射击 扇形齐射6箭' : '命中上机括 · 每0.25秒最多1层',
-      sunshangxiang: s.ready ? '下次射击 环身8向连射' : '移动积疾步 · 每0.5秒1层',
-      diaochan: s.ready ? '下次爆发 倾城：易伤+25% · 减速' : `爆发命中3敌积舞势${s.charms ? ` · 倾城中 ${s.charms}` : ''}`,
+      sunshangxiang: s.ready ? '下次掷刀 召侍婢护身' : '移动积疾步 · 每0.5秒1层',
+      diaochan: s.ready ? '下次出手 闭月：圈内敌人倒戈' : `离间敌人积舞势${s.turned ? ` · 倒戈中 ${s.turned}` : ''}`,
       zhangfei: s.ready ? '下次出枪 燕人咆哮 · 震慑周围' : '命中积怒气 · 每0.35秒最多1层',
       zhuge: s.ready ? '下次战旗 范围+25% · 附加灼烧' : `爆炸命中3敌积谋${s.burns ? ` · 灼烧中 ${s.burns}` : ''}`,
     };

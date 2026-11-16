@@ -371,9 +371,18 @@ export function sunKnivesBehavior(host: WeaponHost, weapon: WeaponState, dt: num
     if (!best) continue;
     m.nextSlash = time + R.maidSlashMs; m.img.setFlipX(best.x < m.img.x);
     host.hitEnemy(best, maidDamage, time, 'melee');
-    const a = Math.atan2(best.y - m.img.y, best.x - m.img.x), arc = host.add.graphics().setDepth(41);
-    arc.lineStyle(3, 0xffe0c0, .95).beginPath().arc(m.img.x, m.img.y, 26, a - .8, a + .8).strokePath();
-    arc.scene.tweens.add({ targets: arc, alpha: 0, duration: 160, onComplete: () => arc.destroy() });
+    const a = Math.atan2(best.y - m.img.y, best.x - m.img.x);
+    if (texOk(host, 'sun_maid_slash')) {
+      // 正式刀光：6 帧弧形斩击（图里弧背朝左上，转 a + 3π/4 让弧背朝向目标），叠加混合，约 0.25 秒播完
+      const fx = host.add.sprite(m.img.x + Math.cos(a) * 14, m.img.y + Math.sin(a) * 14, 'sun_maid_slash', 0).setDisplaySize(64, 64)
+        .setRotation(a + Math.PI * .75).setBlendMode('ADD').setDepth(41).setName('sun-maid-slash');
+      const f = { t: 0 };
+      fx.scene.tweens.add({ targets: f, t: 5.99, duration: 250, onUpdate: () => fx.setFrame(Math.floor(f.t)), onComplete: () => fx.destroy() });
+    } else {
+      const arc = host.add.graphics().setDepth(41);
+      arc.lineStyle(3, 0xffe0c0, .95).beginPath().arc(m.img.x, m.img.y, 26, a - .8, a + .8).strokePath();
+      arc.scene.tweens.add({ targets: arc, alpha: 0, duration: 160, onComplete: () => arc.destroy() });
+    }
   }
   // 掷刀
   weapon.cooldownLeft -= dt;

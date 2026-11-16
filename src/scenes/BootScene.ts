@@ -135,6 +135,8 @@ export class BootScene extends Phaser.Scene {
     // 2026-11-16 专属武器贴图（tools/prepare-hero-icon-sheet.mjs 切出）与执刀侍婢行走图
     for (const k of ['sun_knife', 'diaochan_fan', 'huangzhong_arrow', 'charm_heart', 'charm_broken', 'zhangfei_spear']) this.load.image(k, 'assets/hero-fx/' + k + '.png');
     this.load.spritesheet('sun_maid_walk', 'assets/hero-fx/sun_maid_walk.png', { frameWidth: 96, frameHeight: 96 });
+    // 执刀侍婢挥刀刀光：3×2 共 6 帧（每帧 256，黑底，叠加混合）
+    this.load.spritesheet('sun_maid_slash', 'assets/hero-fx/sun_maid_slash.png', { frameWidth: 256, frameHeight: 256 });
     this.load.spritesheet('flame_burst', 'assets/flame-banner/flame_burst.png', { frameWidth: 256, frameHeight: 256 });
     this.load.image('portrait_zhuge', 'assets/processed/portrait_zhuge.png');
     this.load.image('spear_thrust', 'assets/processed/spear_thrust.png');

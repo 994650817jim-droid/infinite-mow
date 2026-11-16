@@ -52,6 +52,7 @@ import { Enemy } from '../entities/Enemy';
 import { Player } from '../entities/Player';
 import { Joystick } from '../ui/Joystick';
 import { PassiveHud } from '../ui/PassiveHud';
+import { PassiveShout } from '../ui/PassiveShout';
 import { EnemyMovement } from '../systems/EnemyMovement';
 import { Legion } from '../systems/Legion';
 import { LegionUI } from '../ui/LegionUI';
@@ -189,7 +190,7 @@ export class GameScene extends Phaser.Scene {
   private hudChipState: Record<'pause' | 'mute' | 'music' | 'bag', LqState> = { pause: 'idle', mute: 'idle', music: 'idle', bag: 'idle' };
   private readonly hudChipRect = new Phaser.Geom.Rectangle();
   protected hudTexts!: Record<string, Phaser.GameObjects.Text>;
-  protected passiveHud!: PassiveHud;
+  protected passiveHud!: PassiveHud; protected passiveShout!: PassiveShout;
   private buffHud!:BuffHud;
   /** 用药：药囊里最早的一份，按原规则回血；不能用时轻微提示。 */
   protected usePotion():void{
@@ -656,6 +657,8 @@ export class GameScene extends Phaser.Scene {
     this.battlefieldDetails.update(this.cameras.main.scrollX, this.cameras.main.scrollY);
     this.hudAcc += dt;
     this.updateHud();
+    // 被动满层台词每帧检测（HUD 0.1 秒一刷，孙尚香这类攒满后马上触发的会漏掉）
+    this.passiveShout.update(this.player.passive, this.combatNow, this.player.x, this.player.y, this.mode === 'none' && !this.over, this.player.sprite);
     this.artEffects.update(this.combatNow);
     this.updateRelicWaves();
     this.feedback.update(this.combatNow, this.mode === 'result' ? delta : 0);
@@ -2547,7 +2550,7 @@ export class GameScene extends Phaser.Scene {
     for (const k of ['pause', 'mute', 'music', 'bag'] as const) this.hudTexts[k]
       .on('pointerover', () => { this.hudChipState[k] = 'hover'; }).on('pointerout', () => { this.hudChipState[k] = 'idle'; })
       .on('pointerdown', () => { this.hudChipState[k] = 'down'; }).on('pointerup', () => { this.hudChipState[k] = 'hover'; });
-    this.passiveHud = new PassiveHud(this);
+    this.passiveHud = new PassiveHud(this); this.passiveShout = new PassiveShout(this, () => this.sfx.play('passiveFull'));
     this.buffHud=new BuffHud(this);
     this.muteText = this.hudTexts.mute;
     this.muteText.setText(this.sfx.muted ? '音效:关' : '音效:开');

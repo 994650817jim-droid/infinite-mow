@@ -45,6 +45,7 @@ const CONFIG: Record<string, SfxConfig> = {
   waveDrum: { freq: 0, dur: .9, type: 'sine', gain: 0, throttleMs: 400, max: 1, priority: 2 },
   gong: { freq: 0, dur: 2.6, type: 'sine', gain: 0, throttleMs: 600, max: 1, priority: 2 },
   playerHurt: { freq: 0, dur: .2, type: 'sine', gain: 0, throttleMs: 160, max: 1, priority: 2 },
+  passiveFull: { freq: 0, dur: .4, type: 'sine', gain: 0, throttleMs: 1000, max: 1, priority: 2 },
 };
 
 const GLOBAL_MAX = 14;
@@ -99,6 +100,8 @@ const RECIPES: Record<string, (v: Voice, t: number, p: number) => number> = {
   wallRise: (v, t) => { v.noise(t, .55, 'lowpass', 260, .16, 120); v.tone(t, .45, 'sine', 70, .1, 38); v.noise(t + .08, .2, 'bandpass', 900, .05, 500, 1.2); return .56; },
   waveDrum: (v, t) => { v.drum(t, 115, 46, .26, .4); v.drum(t + .2, 115, 46, .22, .35); v.drum(t + .4, 120, 44, .32, .5); return .9; },
   gong: (v, t) => { v.metal(t, 98, .08, 2.6); v.noise(t, .25, 'bandpass', 2200, .04, 1400); return 2.6; },
+  /** 被动满层：两声轻鼓 + 一点金属余音，不抢战斗音。 */
+  passiveFull: (v, t) => { v.drum(t, 140, 60, .12, .22); v.drum(t + .12, 150, 62, .15, .26); v.metal(t + .12, 1320, .008, .3); return .4; },
   playerHurt: (v, t, p) => { v.noise(t, .12, 'lowpass', 1400 * p, .09, 300); v.tone(t, .16, 'sine', 230 * p, .06, 110); return .17; },
 };
 

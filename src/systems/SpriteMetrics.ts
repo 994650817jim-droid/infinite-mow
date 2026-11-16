@@ -72,13 +72,14 @@ export function sheetFigureHeight(scene: Phaser.Scene, key: string): number | un
  * 相对行走表标准身高的校正倍数：偏差小于 8% 视为同一比例不处理；限制在 0.8~1.5，
  * 防止举枪、俯身等姿势本来就矮的帧被过度放大。
  */
-export function figureCorrection(scene: Phaser.Scene, referenceKey: string, key: string, frame: string | number): number {
+export function figureCorrection(scene: Phaser.Scene, referenceKey: string, key: string, frame: string | number, perFrame = true): number {
   const ref = sheetFigureHeight(scene, referenceKey), sheet = sheetFigureHeight(scene, key), own = figureHeight(scene, key, frame);
   if (!ref || !sheet || !own) return 1;
   // 不同表之间按整表中位身高统一（攻击表里下蹲、前刺等姿势的相对高低得以保留）。
   let ratio = Math.abs(ref / sheet - 1) < .08 ? 1 : ref / sheet;
   // 同一表内：只校正明显画小/画大的个别帧（偏差 >18%），保留正常的步伐起伏。
   const inSheet = sheet / own;
-  if (Math.abs(inSheet - 1) >= .18) ratio *= inSheet;
+  // perFrame=false：整表已按统一比例切好（下蹲出刀本来就矮），逐帧校正会让出手帧突然变大。
+  if (perFrame && Math.abs(inSheet - 1) >= .18) ratio *= inSheet;
   return Phaser.Math.Clamp(ratio, .8, 1.5);
 }

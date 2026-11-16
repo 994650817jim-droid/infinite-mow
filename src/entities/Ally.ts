@@ -81,7 +81,7 @@ export class Ally {
     const hop=this.moving&&now>=this.attackUntil?Math.abs(Math.sin(Math.PI*this.walked/14))*2:0;
     // 出手动作：沿朝向前冲后收回（远程为后坐），并带轻微伸缩；保持同一角色素材，不冒充独立攻击帧。
     const strike=now<this.attackUntil?Math.sin(progress*Math.PI):0,lunge=(LUNGE[this.kind]??0)*strike,horizontal=this.facingX!==0;
-    const tex=visualTextureKey(this.scene,texture),corr=texture===sheet?1:figureCorrection(this.scene,visualTextureKey(this.scene,sheet),tex,frame);
+    const tex=visualTextureKey(this.scene,texture),corr=texture===sheet?1:figureCorrection(this.scene,visualTextureKey(this.scene,sheet),tex,frame,!(attack&&!action));
     v.sprite.setVisible(this.active).setTexture(tex, frame).setScale(corr*scale*(1+(horizontal?.07:-.03)*Math.abs(strike)*(lunge?1:0)),corr*scale*(1+(horizontal?-.03:.06)*Math.abs(strike)*(lunge?1:0))).setTint(now < this.hurtUntil ? 0xff9999 : this.def.tint).setOrigin(.5-this.facingX*lunge/(96*scale), ground - this.radius * .72 / (frameHeight * scale)-this.facingY*lunge/(frameHeight*scale)+hop/(frameHeight*scale)).setDepth(actorDepth(this.y + this.radius * .72));
     // Same-character procedural follow-through where independent attack art is still absent.
     const follow=now<this.attackUntil?Math.sin(progress*Math.PI):0;

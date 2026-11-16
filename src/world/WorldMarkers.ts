@@ -68,6 +68,10 @@ function tower(ctx: CanvasRenderingContext2D, cx: number, bottom: number, w: num
 }
 
 const CITADEL = {large: {w: 56, h: 46}, medium: {w: 44, h: 36}, small: {w: 32, h: 26}} as const;
+/** 城郭正式图（ChatGPT 生成，2026-11-15，见 public/assets/world/markers-v2/ASSET_REQUEST.md W2-1/2/3）；缺图时退回程序画。 */
+export const CITY_ART_FILES = {wm2_city_large: 'assets/world/markers-v2/W2-1_city_large.png', wm2_city_medium: 'assets/world/markers-v2/W2-2_city_medium.png', wm2_city_small: 'assets/world/markers-v2/W2-3_city_small.png'} as const;
+/** 正式图在地图上的显示宽度（设计像素）。 */
+const CITY_ART_W = {large: 78, medium: 62, small: 50} as const;
 
 /** 城郭图标：大城 = 双角楼 + 两层城楼；中城 = 城门楼；小城 = 木栅寨 + 望楼。 */
 export function citadelTexture(scene: Phaser.Scene, tier: CityDef['tier']): string {
@@ -134,14 +138,18 @@ function flag(scene: Phaser.Scene, x: number, bottom: number, height: number, co
 /** v2 城池标记：城郭图标立在城址上，旗插在城楼左侧，名牌在下。 */
 export function cityMarkerV2(scene: Phaser.Scene, city: CityDef, owner: FactionId): CityMarker {
   // 贴图按基准尺寸绘制，显示时按城级放大（渲染倍率足够，不发糊）
-  const K = city.tier === 'large' ? 1.15 : city.tier === 'medium' ? 1.3 : 1.4, root = scene.add.container(0, 0), w = CITADEL[city.tier].w * K, h = CITADEL[city.tier].h * K, color = FACTIONS[owner].color;
+  const art = 'wm2_city_' + city.tier, hasArt = scene.textures.exists(art), root = scene.add.container(0, 0), color = FACTIONS[owner].color;
+  let w: number, h: number;
+  if (hasArt) { const fr = scene.textures.getFrame(art); w = CITY_ART_W[city.tier]; h = w * fr.height / fr.width; }
+  else { const K = city.tier === 'large' ? 1.15 : city.tier === 'medium' ? 1.3 : 1.4; w = CITADEL[city.tier].w * K; h = CITADEL[city.tier].h * K; }
   const ring = scene.add.graphics();
-  const icon = scene.add.image(0, 8, citadelTexture(scene, city.tier)).setOrigin(.5, 1).setDisplaySize(w, h);
+  // 正式图脚下带一片草地，底边比城址略低，名牌压在草地上
+  const icon = scene.add.image(0, hasArt ? 11 : 8, hasArt ? art : citadelTexture(scene, city.tier)).setOrigin(.5, 1).setDisplaySize(w, h);
   const parts: Phaser.GameObjects.GameObject[] = [ring, icon];
   const ch = BANNER_CHAR[owner];
   if (owner !== 'han') parts.push(...flag(scene, -w * .5 + (city.tier === 'small' ? 5 : 3), 8 - h * .38, city.tier === 'large' ? 40 : city.tier === 'medium' ? 34 : 26, color, ch));
   if (owner === 'player') { const g = scene.add.graphics(); g.lineStyle(1.5, 0xf3d48a, .85).strokeEllipse(0, 3, w * .98, 9); parts.unshift(g); }
-  const plate = namePlate(scene, 9, city.name, owner, city.tier === 'large' ? 13 : city.tier === 'medium' ? 12 : 11);
+  const plate = namePlate(scene, hasArt ? 7 : 9, city.name, owner, city.tier === 'large' ? 13 : city.tier === 'medium' ? 12 : 11);
   const hit = scene.add.circle(0, -h * .3, Math.max(w * .5, 16), 0, .001).setInteractive({useHandCursor: true}).setName('city-' + city.id);
   root.add([...parts, plate.g, plate.t, hit]);
   root.setData('banner', ch ?? null).setData('v2', true).setData('plate', plate.g).setData('icon', icon);

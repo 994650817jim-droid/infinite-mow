@@ -14,7 +14,7 @@ import {FOCUS_INCOME,FOCUS_NAME,costText,type CityFocus} from '../town/TownData'
 import {chapterUnlocked} from '../systems/ChapterProgress';
 import {CITIES,CITY_LINKS,CITY_INCOME,FACTIONS,HOME,SPECIALTIES,TIER_NAME,cityAttackable,cityById,cityOwner,eraDef,eraIndexFor,territorySummary,type CityDef,type EraId} from '../world/WorldCities';
 import {cityMarker,factionLegend,markAlert,paintSelection,MARKER_FILES,type CityMarker} from '../world/WorldMapLayers';
-import {MARKERS_V2,cityMarkerV2,intelGlyphPos,intelPennant,nodeMarkerV2,paintSelectionV2,sealGraphics} from '../world/WorldMarkers';
+import {CITY_ART_FILES,MARKERS_V2,cityMarkerV2,intelGlyphPos,intelPennant,nodeMarkerV2,paintSelectionV2,sealGraphics} from '../world/WorldMarkers';
 import {buildTerritory} from '../world/WorldTerritory';
 import {factionStrip,lacquerPlate,ownerSeal,realmLabels,resourceBar,sealGlyph} from '../world/WorldMapChrome';
 import {advanceEra,takeLostNotice,takeNewChapters,type CityAlert,type EraAdvance} from '../world/WorldStore';
@@ -54,7 +54,8 @@ export class WorldMapScene extends Phaser.Scene {
  preload(){if(!worldUnlocked()&&!isChapterTestRun())return;worldAssets(this,'strategy_art','assets/world/strategy-map.webp');
   // W5 城池徽框与军旗（缩小显示，用线性过滤）
   for(const [key,url] of Object.entries(MARKER_FILES))worldAssets(this,key,url);
-  this.load.once('complete',()=>{for(const key of Object.keys(MARKER_FILES))if(this.textures.exists(key))this.textures.get(key).setFilter(Phaser.Textures.FilterMode.LINEAR);});}
+  if(MARKERS_V2)for(const [key,url] of Object.entries(CITY_ART_FILES))worldAssets(this,key,url);
+  this.load.once('complete',()=>{for(const key of [...Object.keys(MARKER_FILES),...Object.keys(CITY_ART_FILES)])if(this.textures.exists(key))this.textures.get(key).setFilter(Phaser.Textures.FilterMode.LINEAR);});}
  create(){playMenuMusic(this);try{checkWorld(loadWorld());}catch{/* 存档不可用 */}
   if(!worldUnlocked()&&!isChapterTestRun()){this.registry.set('loadBattle',true);this.scene.start(this.registry.get('battleReady')?'MenuScene':'BootScene');return;}worldShell(this,this.registry.get('worldReveal')?'三国天下开启':'三国天下');if(this.registry.get('worldReveal')){this.registry.remove('worldReveal');this.cameras.main.fadeIn(900,0,0,0);}releaseWorldArt(this,'strategy_art');this.markers=[];this.cityMarkers=[];this.legend=undefined;
   this.siegeModal=undefined;this.territory=undefined;this.notice=undefined;this.pins=[];this.route=undefined;this.routeChapter=undefined;this.fog=undefined;this.registry.remove('hardChapter');const advance=isChapterTestRun()?null:advanceEra(),lost=isChapterTestRun()?[]:takeLostNotice();if(!isChapterTestRun())ensureIntel();const s=loadWorld();this.intel=intelEvents();this.intelMarkers=[];this.owned=s.ownedCities;this.alerts=s.alerts;this.capturedEver=s.capturedEver;this.era=!s.cleared.hulao?0:eraIndexFor({hulaoCleared:s.cleared.hulao,warlordStages:s.warlordStages,guanduStages:s.guanduStages});
@@ -214,13 +215,20 @@ export class WorldMapScene extends Phaser.Scene {
   this.drawLinks();
  }
  /** v2：章节牙旗 / 关卡印落在城郭上时挪开：依次试城上方、右侧、左侧、名牌下方，取第一个不压到别的城的位置。 */
- private liftOffCity(x:number,y:number):{x:number;y:number}{if(!MARKERS_V2)return{x,y};
+ private liftOffCity(x:number,y:number,pin=false):{x:number;y:number}{if(!MARKERS_V2)return{x,y};
   const cities=this.cityMarkers.filter(m=>!m.root.getData('fogged')).map(m=>({m,p:this.toScreen(m.city.x,m.city.y)}));
-  const hitAt=(px:number,py:number,skip?:CityMarker)=>cities.find(c=>c.m!==skip&&Math.abs(c.p.x-px)<c.m.outer+16&&py>c.p.y-c.m.top-6&&py<c.p.y+30);
+  // 牙旗 / 关卡印占据锚点上方约 44、下方约 26（名牌）；城占据城郭顶到名牌底
+  const hitAt=(px:number,py:number,skip?:CityMarker)=>cities.find(c=>c.m!==skip&&Math.abs(c.p.x-px)<c.m.outer+18&&py-44<c.p.y+30&&py+26>c.p.y-c.m.top-6);
   const under=hitAt(x,y);if(!under)return{x,y};
   const {m,p}=under,side=m.outer+30;
-  for(const c of [{x,y:p.y-m.top-26},{x:p.x+side,y:p.y},{x:p.x-side,y:p.y},{x,y:p.y+62}])if(!hitAt(c.x,c.y,m))return c;
-  return{x,y:p.y-m.top-26};}
+  const a=this.area,inMap=(c:{x:number;y:number})=>c.x>a.x+20&&c.x<a.x+a.w-20&&c.y-44>a.y&&c.y+26<a.y+a.h;
+  // 关卡印必须留在史实位置附近：只允许抬到城郭正上方（且不出地图框），否则不动
+  if(pin){const up={x,y:p.y-m.top-26};return inMap(up)?up:{x,y};}
+  // 章节牙旗：计分 = 压到几座城（含原城）；取分最低的位置，挪不出地图边框；全都更差就留在原处
+  const cost=(c:{x:number;y:number})=>cities.filter(q=>Math.abs(q.p.x-c.x)<q.m.outer+18&&c.y-44<q.p.y+30&&c.y+26>q.p.y-q.m.top-6).length;
+  let best={x,y},bestCost=cost(best);
+  for(const c of [{x,y:p.y-m.top-26},{x:p.x+side,y:p.y},{x:p.x-side,y:p.y},{x,y:p.y+62}]){if(!inMap(c))continue;const k=cost(c);if(k<bestCost){best=c;bestCost=k;if(!k)break;}}
+  return best;}
  /** v2：名牌按优先级避让（选中城 > 关卡印 > 章节牙旗 > 大城 > 中城 > 小城）。图标（城郭、牙旗、关卡印）也算障碍：
   * 关卡标签被挡时翻到印的上方；城名牌与已摆好的名牌或别家图标重叠时本轮隐藏。地图缩放 / 拖动后重算。 */
  private declutterLabels(){const placed:Phaser.Geom.Rectangle[]=[],pad=2,inter=Phaser.Geom.Intersects.RectangleToRectangle;
@@ -361,7 +369,7 @@ export class WorldMapScene extends Phaser.Scene {
    root.add([MARKERS_V2?sealGraphics(this,isDone?'cleared':open?'open':'locked',r):g,glyph,label,hit]);root.setData('label',label).setData('icon',hit);this.pins.push({stage:n,x:pt.x,y:pt.y,root});});}
  /** 路线重排：关卡标记跟随地图；关卡之间画虚线与箭头。 */
  private layoutRoute(visible:(x:number,y:number)=>boolean){if(!this.route)return;this.route.clear();const sel=this.selected;
-  const pts=this.pins.map(p=>{const s0=this.toScreen(p.x,p.y),s=this.liftOffCity(s0.x,s0.y);p.root.setPosition(s.x,s.y).setVisible(visible(s.x,s.y));const on=sel.kind==='stage'&&sel.chapter===this.routeChapter&&sel.stage===p.stage;p.root.setScale(on?1.25:1);return s;});
+  const pts=this.pins.map(p=>{const s0=this.toScreen(p.x,p.y),s=this.liftOffCity(s0.x,s0.y,true);p.root.setPosition(s.x,s.y).setVisible(visible(s.x,s.y));const on=sel.kind==='stage'&&sel.chapter===this.routeChapter&&sel.stage===p.stage;p.root.setScale(on?1.25:1);return s;});
   for(let i=1;i<pts.length;i++){const a=pts[i-1],b=pts[i],len=Math.hypot(b.x-a.x,b.y-a.y),ux=(b.x-a.x)/len,uy=(b.y-a.y)/len;if(len<40)continue;
    this.route.lineStyle(3,0x1b120b,.55);for(let t=20;t<len-20;t+=14)this.route.lineBetween(a.x+ux*t,a.y+uy*t,a.x+ux*Math.min(t+8,len-20),a.y+uy*Math.min(t+8,len-20));
    this.route.lineStyle(2,0xffd27a,.95);for(let t=20;t<len-20;t+=14)this.route.lineBetween(a.x+ux*t,a.y+uy*t,a.x+ux*Math.min(t+8,len-20),a.y+uy*Math.min(t+8,len-20));

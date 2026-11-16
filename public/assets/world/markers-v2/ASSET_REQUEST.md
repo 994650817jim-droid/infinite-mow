@@ -18,3 +18,9 @@
 | W2-10 | 名牌底 | 九宫格 96×28 | 2 | 漆木横匾（普通 / 己方描金），左右两端 24 px 不拉伸；顶边留 3 px 白条供染势力色 |
 
 交付后放在 public/assets/world/markers-v2/，文件名用上表编号（如 W2-1_city_large.png）。
+
+## 交付记录
+- 2026-11-15 W2-1 / W2-2 / W2-3（大城、中城、小城）已交付：ChatGPT「生成城郭素材」对话（用户 Chrome，UI 会话发起），附地图原画局部与 v2 程序画效果作参考，一次出图 1536×1024 真透明 PNG。
+  原图 assets/source/world-markers-v2-raw/originals/dsh_ui_city_sheet.png；按透明列切成三件，裁边留 4 px，缩到宽 228 / 180 / 144 px（地图上显示 78 / 62 / 50 设计像素）。
+  代码：src/world/WorldMarkers.ts 的 CITY_ART_FILES；缺图时自动退回程序画城郭。
+- 其余（W2-4 告急版、W2-5 军旗、W2-6 牙旗、W2-7 营寨、W2-8 方印、W2-9 令旗、W2-10 名牌底）仍为程序化过渡美术。

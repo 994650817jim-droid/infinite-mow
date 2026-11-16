@@ -25,7 +25,8 @@ export function smartTarget(host: WeaponHost, range: number, minDist = 0): Enemy
   if (locked && Math.hypot(locked.x - pl.x, locked.y - pl.y) >= minDist) return locked;
   const list = host.grid.query(pl.x, pl.y, range + 30).filter(e => alive(e) && e.def.behavior !== 'wall')
     .map(e => ({ e, d: Math.hypot(e.x - pl.x, e.y - pl.y) })).filter(o => o.d <= range + o.e.radius && o.d >= minDist).sort((a, b) => a.d - b.d);
-  if (!list.length) return null;
+  // 空间网格每帧重建一次：本帧刚生成的敌人还不在网格里，此时退回逐个扫描的最近敌人（不限最小距离时）
+  if (!list.length) return minDist > 0 ? null : host.nearestEnemy(pl.x, pl.y, range);
   let best = list[0].e, most = 0;
   for (const { e } of list.slice(0, 40)) {
     let n = 0; for (const o of host.grid.query(e.x, e.y, 80)) if (o !== e && alive(o) && Math.hypot(o.x - e.x, o.y - e.y) <= 80) n++;

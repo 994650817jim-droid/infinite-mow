@@ -21,3 +21,14 @@ export const INITIAL_TROOPS:readonly TroopKind[]=['swordsman','spearman','archer
 /** Living soldiers, including starting reinforcements and reserves. */
 /** Compatibility helper; barracks upgrades no longer restrict army size. */
 export function armyCapacity(_level: number): number { return Infinity; }
+
+/**
+ * 首领对部曲（2026-11-16 用户要求：首领能快速清理小兵，不至于被小兵围死）。只影响打士兵，打主将不变。
+ * contactMul：首领横扫伤害倍率——每秒打到身边 sweepReach 像素内的所有士兵（长枪 / 弓兵不贴身也躲不开）；skillMul：首领招式（范围 / 冲锋 / 箭雨等）打士兵的倍率。
+ */
+export const BOSS_VS_TROOPS = { contactMul: 3, skillMul: 2, sweepReach: 60 } as const;
+/**
+ * 招兵价随在场兵数浮动（用户要求：兵越多越贵、越少越便宜）：每人 = 基础价 ×（a + b·n + c·n²）。
+ * 0 人半价；10 人约 2.4 倍、20 人约 4.1 倍、33 人约 9.8 倍（原为 1 + 0.2n）。
+ */
+export const RECRUIT_PRICE = { a: .5, b: .15, c: .004 } as const;

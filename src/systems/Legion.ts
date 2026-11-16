@@ -10,7 +10,7 @@ import type { Player } from '../entities/Player';
 import { LegionTactics, TACTICS } from './LegionTactics';
 import { LegionProjectiles } from './LegionProjectiles';
 import { SpatialGrid } from './SpatialGrid';
-import { LEGION, TROOPS, TROOP_KINDS, type Order, type TroopKind } from '../data/legion';
+import { LEGION, TROOPS, TROOP_KINDS, type Order, type TroopKind, BOSS_VS_TROOPS, RECRUIT_PRICE } from '../data/legion';
 import { DEPTH } from '../config';
 import { AllyCorpses } from './AllyCorpses';
 export interface LegionState { training?:CampTraining;groups?:Partial<Record<TroopKind,CampGroup>>; food: number; dead: number; recruited: number; levels: Record<TroopKind, number>; soldiers: Array<{ kind: TroopKind; hp: number;reserveSoldier?:boolean }> }
@@ -64,7 +64,7 @@ export class Legion {
     this.food = state.food; this.dead = state.dead; this.recruited = state.recruited; this.rebuildGrid();
   }
   /** 招兵价格随当前在编兵力递增：基础价 ×（1 + 0.2 × 在编人数），大军团需要更多军粮维持。extra 用于一次招多人时逐个累加。 */
-  recruitCost(kind: TroopKind, extra = 0): number { return Math.round(TROOPS[kind].cost * (1 + .2 * (this.count + extra))); }
+  recruitCost(kind: TroopKind, extra = 0): number { const n = this.count + extra; return Math.max(1, Math.round(TROOPS[kind].cost * (RECRUIT_PRICE.a + RECRUIT_PRICE.b * n + RECRUIT_PRICE.c * n * n))); }
   /** Legacy bypass argument is accepted for old DEV/Campaign callers; all recruitment is uncapped. */
   recruit(kind: TroopKind, count = 1, free = false, _bypassCapacity = false): boolean {
     if (!TROOPS[kind] || !Number.isSafeInteger(count) || count <= 0) return false;
@@ -128,8 +128,16 @@ export class Legion {
     }
     return true;
   }
+  /** 首领横扫提示：一圈淡金刀光，0.25 秒散去（不震屏）。 */
+  private bossSweepFx(x: number, y: number, r: number): void {
+    const ring = this.scene.add.circle(x, y, r * .6, 0xffd27a, 0).setStrokeStyle(4, 0xffe0a0, .75).setDepth(DEPTH.fx);
+    this.scene.tweens.add({ targets: ring, radius: r, alpha: 0, duration: 250, onComplete: () => ring.destroy() });
+  }
+  /** 首领招式打到士兵（伤害 × BOSS_VS_TROOPS.skillMul）。各首领系统直接结算士兵伤害时都走这里。 */
+  hurtByBoss(u: Ally, raw: number, now: number): boolean { return this.hurt(u, raw * BOSS_VS_TROOPS.skillMul, now); }
+  /** 范围伤害：目前只有首领招式调用（张角雷、华雄、吕布、徐荣），按首领倍率结算。 */
   hurtArea(x: number, y: number, radius: number, damage: number, now: number, angle?: number, arc = Math.PI * 2): void {
-    for (const u of this.grid.query(x, y, radius + 20, this.friends)) if (u.active && Math.hypot(u.x - x, u.y - y) <= radius + u.radius && (angle === undefined || Math.cos(Math.atan2(u.y - y, u.x - x) - angle) >= Math.cos(arc / 2))) this.hurt(u, damage, now);
+    for (const u of this.grid.query(x, y, radius + 20, this.friends)) if (u.active && Math.hypot(u.x - x, u.y - y) <= radius + u.radius && (angle === undefined || Math.cos(Math.atan2(u.y - y, u.x - x) - angle) >= Math.cos(arc / 2))) this.hurtByBoss(u, damage, now);
   }
   onKill(enemy: Enemy): void { this.food += enemy.kind === 'boss' ? 20 : enemy.kind === 'elite' ? 5 : 1; }
   stop(): void { this.command.clear(); this.stopped = true; this.player.armyDamageTakenMul = 1; this.effects.length = 0; this.artEffects.clear(); this.heals.length = 0; this.strikes.length=0; this.projectiles.clear(); this.gfx.clear(); }
@@ -192,8 +200,11 @@ export class Legion {
         }
       }
       for (const e of enemies) if (e.active && e.def.behavior!=='wall' && !e.isSupplySlot && !e.invulnerable && (e.controlImmune || now >= e.stunUntil) && e.contactCd <= 0) {
-        const victims = this.grid.query(e.x, e.y, e.radius + 22, this.friends);
-        for (const u of victims) if (u.active && Math.hypot(u.x - e.x, u.y - e.y) < u.radius + e.radius + 2) { this.hurt(u, e.def.damage, now, { x: e.x, y: e.y, normal: e.kind !== 'boss' }); e.contactCd = 1; if (e.kind !== 'boss' && e.kind !== 'cavalry') e.startAttack(now, Math.abs(u.x - e.x) > Math.abs(u.y - e.y) ? u.x < e.x ? 'left' : 'right' : u.y < e.y ? 'up' : 'down'); break; }
+        const boss = e.kind === 'boss', reach = boss ? BOSS_VS_TROOPS.sweepReach : 2, victims = this.grid.query(e.x, e.y, e.radius + 20 + reach, this.friends);
+        { let hitAny = false;
+          // 首领：伤害 × contactMul，横扫身边 sweepReach 内所有士兵；其他敌人贴身一次只打一个
+          for (const u of victims) if (u.active && Math.hypot(u.x - e.x, u.y - e.y) < u.radius + e.radius + reach) { this.hurt(u, e.def.damage * (boss ? BOSS_VS_TROOPS.contactMul : 1), now, { x: e.x, y: e.y, normal: !boss }); hitAny = true; if (!boss && e.kind !== 'cavalry') e.startAttack(now, Math.abs(u.x - e.x) > Math.abs(u.y - e.y) ? u.x < e.x ? 'left' : 'right' : u.y < e.y ? 'up' : 'down'); if (!boss) break; }
+          if (hitAny) { e.contactCd = 1; if (boss) this.bossSweepFx(e.x, e.y, e.radius + reach); } }
       }
     }
    

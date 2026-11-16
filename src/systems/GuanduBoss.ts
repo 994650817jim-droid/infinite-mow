@@ -168,7 +168,7 @@ export class GuanduBoss {
     const hit = (id: string, x: number, y: number, r: number, fn: () => void) => { const k = key + ':' + id; if (!this.seen.has(k) && this.inside(z, x, y, r)) { this.seen.add(k); fn(); this.metrics.damage++; } };
     hit('p', p.x, p.y, p.radius, () => p.takeDamage(damage, now));
     const cx = z.radius ? z.x : z.x + Math.cos(z.angle) * z.length / 2, cy = z.radius ? z.y : z.y + Math.sin(z.angle) * z.length / 2;
-    for (const u of this.h.army.grid.query(cx, cy, z.radius || z.length / 2 + z.width)) if (u.active) hit(u.id + ':' + u.lifeId, u.x, u.y, u.radius, () => this.h.army.hurt(u, damage, now));
+    for (const u of this.h.army.grid.query(cx, cy, z.radius || z.length / 2 + z.width)) if (u.active) hit(u.id + ':' + u.lifeId, u.x, u.y, u.radius, () => this.h.army.hurtByBoss(u, damage, now));
   }
   private draw(z: Zone, alpha: number) {
     const g = this.gfx; g.lineStyle(2, 0xe4ba78, .9).fillStyle(this.kit === 'wenchou' ? 0xa8603a : 0xb8502f, alpha);

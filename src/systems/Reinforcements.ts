@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { frameScale } from './HdHeroSheets';
 import { warText } from '../ui/WarStyle';
 import { CHARACTERS, type CharacterId } from '../data/characters';
 import { DEPTH, FONT, GAME_HEIGHT, GAME_WIDTH } from '../config';
@@ -58,7 +59,7 @@ export class Reinforcements {
     this.tx = targets[0]?.x ?? this.ox + 180; this.ty = targets[0]?.y ?? this.oy;
     this.marks.length = 0; for (const enemy of targets.slice(0, 5)) this.marks.push({ enemy, spawn: enemy.spawnId });
     const sheet = partner === 'zhaoyun' ? 'hero_walk_sheet' : `${partner}_walk_sheet`;
-    this.helper.setTexture(sheet, 'down_0').setPosition(this.ox + 45, this.oy + 20).setVisible(true).setAlpha(1);
+    this.helper.setTexture(sheet, 'down_0').setScale(.8 * frameScale(this.helper.scene, sheet, 'down_0')).setPosition(this.ox + 45, this.oy + 20).setVisible(true).setAlpha(1);
     this.text.setText(`${pair.name} · 援军合击`).setVisible(true);
     this.nextAt = now / 1000 + 75 + Math.random() * 25; return true;
   }

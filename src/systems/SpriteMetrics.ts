@@ -7,6 +7,8 @@ import Phaser from 'phaser';
  */
 const frameHeights = new Map<string, Map<string, number>>();
 const medians = new Map<string, number>();
+/** 每帧人物脚底（最低不透明像素所在行，相对帧顶）。 */
+const frameBottoms = new Map<string, Map<string, number>>();
 
 function measure(scene: Phaser.Scene, key: string): Map<string, number> | undefined {
   const cached = frameHeights.get(key);
@@ -16,7 +18,8 @@ function measure(scene: Phaser.Scene, key: string): Map<string, number> | undefi
   const source = texture.getSourceImage() as HTMLImageElement | HTMLCanvasElement;
   const w = source.width, h = source.height;
   if (!w || !h) return undefined;
-  const result = new Map<string, number>();
+  const result = new Map<string, number>(), bottoms = new Map<string, number>();
+  frameBottoms.set(key, bottoms);
   try {
     const canvas = document.createElement('canvas');
     canvas.width = w; canvas.height = h;
@@ -28,13 +31,27 @@ function measure(scene: Phaser.Scene, key: string): Map<string, number> | undefi
       let top = -1, bottom = -1;
       for (let y = f.cutY; y < f.cutY + f.cutHeight && top < 0; y++) for (let x = f.cutX; x < f.cutX + f.cutWidth; x++) if (data[(y * w + x) * 4 + 3] > 24) { top = y; break; }
       for (let y = f.cutY + f.cutHeight - 1; y >= f.cutY && bottom < 0; y--) for (let x = f.cutX; x < f.cutX + f.cutWidth; x++) if (data[(y * w + x) * 4 + 3] > 24) { bottom = y; break; }
-      if (top >= 0 && bottom >= top) result.set(name, bottom - top + 1);
+      if (top >= 0 && bottom >= top) { result.set(name, bottom - top + 1); bottoms.set(name, bottom - f.cutY); }
     }
   } catch {
     // 跨域或画布不可读：不做校正。
   }
   frameHeights.set(key, result);
   return result;
+}
+
+/**
+ * 指定若干帧的人物中位身高与中位脚底（相对帧顶）。用作两张表之间的比例参照：
+ * 整表中位会被下蹲 / 前刺 / 举刀等攻击姿势拉偏，导致待机时比行走大一圈。
+ */
+export function framesFigure(scene: Phaser.Scene, key: string, frames: (string | number)[]): { height: number; bottom: number } | undefined {
+  const hs = measure(scene, key), bs = frameBottoms.get(key);
+  if (!hs || !bs) return undefined;
+  const h: number[] = [], b: number[] = [];
+  for (const fr of frames) { const n = String(fr), v = hs.get(n), w = bs.get(n); if (v !== undefined && w !== undefined) { h.push(v); b.push(w); } }
+  if (!h.length) return undefined;
+  const med = (a: number[]) => a.sort((x, y) => x - y)[Math.floor(a.length / 2)];
+  return { height: med(h), bottom: med(b) };
 }
 
 /** 单帧人物高度（像素，未缩放）；无法测量时返回 undefined。 */

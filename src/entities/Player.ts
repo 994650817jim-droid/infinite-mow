@@ -1,5 +1,5 @@
 import {visualTextureKey} from '../systems/ReadableTextures';
-import {sheetFigureHeight} from '../systems/SpriteMetrics';
+import {framesFigure, sheetFigureHeight} from '../systems/SpriteMetrics';
 import {ACTION_MS, HERO_ACTIONS, IDLE_FRAME_MS, ZHUGE_FALLBACK, type ActionFrame, type HeroActionKind, type HeroActionSet} from '../data/heroActions';
 import type {CharacterId} from '../data/characters';
 import Phaser from 'phaser';
@@ -63,6 +63,10 @@ export class Player {
   private forcedUntil = 0;
   private walkPhase = 0;
   private readonly targetHeight = 66;
+  /** 当前帧的纵向锚点（行走帧 0.5；动作帧按脚线换算，使站姿脚底与行走时同一位置）。 */
+  private baseOriginY = .5;
+  /** 每套动作图集相对行走表的统一缩放与锚点（按待机站姿测量，一次计算后缓存）。 */
+  private actionFit = new Map<string, { k: number; originY: number }>();
   private readonly charTexture = 'hero_zhaoyun';
   /** 当前使用的行走表 key；关羽/黄忠正式素材到位后替换。 */
   walkSheet = 'hero_walk_sheet';
@@ -205,13 +209,35 @@ export class Player {
     this.sprite.setFlipX(mirror);
     // 按行走表的帧高换算：figureCorrection 给的是“人物像素高度”之比，动作表帧（128）与行走表帧（96）大小不同，
     // 若按动作帧高缩放，人物会比行走时小约两成
-    const walkKey = visualTextureKey(this.scene, this.walkSheet), walkFrameH = this.scene.textures.exists(walkKey) ? this.scene.textures.getFrame(walkKey, 'down_0')?.height || 96 : 96;
-    // 两表人物中位身高之比统一大小；表内个别画小/画大的帧再单独校正（以动作表自身为参照）
-    // 动作图集在切图时已按全表统一缩放：各帧必须用同一个比例。举刀过顶、下蹲等姿势本来就高矮不同，
-    // 若逐帧“校正”到统一身高，人物会忽大忽小（关羽满势重斩时明显）。
-    const sheetRatio = (sheetFigureHeight(this.scene, walkKey) ?? 90) / (sheetFigureHeight(this.scene, key) ?? 90);
-    const k = this.targetHeight / walkFrameH * sheetRatio; this.sprite.setScale(k, k);
+    const fit = this.actionFitFor(key, set);
+    // 整套动作用同一个比例：举刀过顶、下蹲前刺等姿势本来就高矮不同，逐帧“校正”会让人物忽大忽小。
+    this.sprite.setScale(fit.k, fit.k);
+    this.baseOriginY = fit.originY;
+    this.sprite.setOrigin(.5, this.baseOriginY);
     return true;
+  }
+
+  /**
+   * 动作图集 → 世界缩放与锚点。参照帧选“站姿”：行走表全部 16 帧 vs 动作表待机行。
+   * 以前用整张动作表（含下蹲、前刺）的中位身高做参照，中位被攻击姿势拉低，待机时人物比行走大 4–11%。
+   * 锚点：让待机脚线落在行走帧脚线的同一世界位置，切换动作时脚不上下跳。
+   */
+  private actionFitFor(key: string, set: HeroActionSet): { k: number; originY: number } {
+    const walkKey = visualTextureKey(this.scene, this.walkSheet), cacheKey = walkKey + '|' + key;
+    const hit = this.actionFit.get(cacheKey); if (hit) return hit;
+    const walkFrameH = this.scene.textures.exists(walkKey) ? this.scene.textures.getFrame(walkKey, 'down_0')?.height || 96 : 96;
+    const actFrameH = this.scene.textures.getFrame(key, set.idle?.[0] ?? set.attack.down[0])?.height || 128;
+    const walkNames = (['down', 'left', 'right', 'up'] as const).flatMap(d => [0, 1, 2, 3].map(i => `${d}_${i}`));
+    const walkRef = framesFigure(this.scene, walkKey, walkNames);
+    const actRef = framesFigure(this.scene, key, set.idle?.length ? set.idle : set.attack.down);
+    const walkH = walkRef?.height ?? sheetFigureHeight(this.scene, walkKey) ?? 90, actH = actRef?.height ?? sheetFigureHeight(this.scene, key) ?? 90;
+    const kw = this.targetHeight / walkFrameH, k = kw * walkH / actH;
+    const walkFoot = ((walkRef?.bottom ?? walkFrameH * .96) + 1 - walkFrameH / 2) * kw; // 行走脚底相对中心（世界像素）
+    const originY = ((actRef?.bottom ?? actFrameH * .89) + 1 - walkFoot / k) / actFrameH;
+    const fit = { k, originY: Phaser.Math.Clamp(originY, .3, .95) };
+    // 测量失败（纹理未就绪）时不缓存，下次再算
+    if (walkRef && actRef) this.actionFit.set(cacheKey, fit);
+    return fit;
   }
 
   setWalkSheet(key: string): void {
@@ -259,6 +285,7 @@ export class Player {
       ? 1 + Math.sin(this.walkPhase * 2) * 0.02
       : 1;
     this.sprite.setScale(base, base * bob);
+    this.baseOriginY = .5; this.sprite.setOrigin(.5, .5);
   }
 
   takeDamage(raw: number, now: number): boolean {
@@ -332,7 +359,8 @@ export class Player {
     this.markerLabel.setPosition(this.x,this.y-45).setVisible(this.alive);
     const t = now < this.knockedUntil ? (now - this.knockedAt) / (this.knockedUntil - this.knockedAt) : 1;
     const lift = t < 1 ? Math.sin(Math.PI * Math.max(0, t)) * 42 : 0;
-    this.sprite.setOrigin(.5, .5 + lift / this.targetHeight);
+    // 被挑飞时的抬升按当前帧的实际显示高度换算（动作帧 128 格与行走帧 96 格不同）
+    this.sprite.setOrigin(.5, this.baseOriginY + lift / Math.max(1, this.sprite.displayHeight));
     if (this.stats.regen > 0) this.heal(this.stats.regen * dt);
     const blinking = now < this.invulnUntil;
     this.sprite.setAlpha(blinking ? (Math.floor(now / 80) % 2 === 0 ? 0.35 : 1) : 1);

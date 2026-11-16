@@ -22,8 +22,6 @@ import { WEAPON_META,weaponName } from '../data/upgrades';
 import { chapterOneCleared, chapterUnlocked, isChapterTestRun } from '../systems/ChapterProgress';
 import { FONT, TITLE_FONT, HEADING_FONT, GAME_HEIGHT as H, GAME_WIDTH as W, IS_DESKTOP as D, switchLayout } from '../config';
 import { lqDivider, lqHitBox, lqPanel, lqSkin } from '../ui/LacquerKit';
-import { ItemBagUI } from '../ui/ItemBagUI';
-import { bagBadgeCount } from '../systems/ItemStore';
 
 const ROLES = ['游龙先锋 · 灵动突刺', '重甲武圣 · 横扫千军', '百步神射 · 远程压制', '卧龙军师 · 火阵爆发'];
 const PASSIVE_HINTS = [
@@ -203,12 +201,9 @@ export class MenuScene extends Phaser.Scene {
     try{checkWorld(save);}catch{/* 存档不可用 */}
     {const got=Object.keys(unlockedMap()).filter(id=>ACHIEVEMENTS.some(a=>a.id===id)).length,py=D?34:54;let rx=W-24;
      if(worldUnlocked()){rx-=homePlaque(this,rx,py,{label:'营寨',name:'home-city',glyph:'营',onClick:()=>this.scene.start('CityScene')},D)+8;rx-=homePlaque(this,rx,py,{label:'天下地图',name:'home-world',glyph:'图',onClick:()=>this.scene.start('WorldMapScene')},D)+8;}
-     rx-=homePlaque(this,rx,py,{label:'成就',name:'home-achievements',icon:'ach_first_win',progress:[got,ACHIEVEMENTS.length],onClick:()=>{if(!this.children.getByName('achievements-panel'))new AchievementsUI(this);}},D)+8;
-     // 行囊（兵装）：每位武将各一套，默认打开当前选中的武将
-     // 手机且天下已开（四块匾）时排不下，放到第二行右侧
-     const bagRow2=!D&&worldUnlocked(),bagX=bagRow2?W-24:rx,bagY=bagRow2?py+54:py;homePlaque(this,bagX,bagY,{label:'行囊',name:'home-bag',glyph:'囊',onClick:()=>{if(this.children.getByName('item-bag'))return;badge?.destroy();new ItemBagUI(this,{hero:CHARACTERS[this.selectedChar]?.id??'zhaoyun'});}},D);
-     // 行囊角标：新收入的兵装件数 / 改版、马厩提示（打开行囊后清零）
-     const unseen=bagBadgeCount(),badge=unseen?this.add.text(bagX+4,bagY-(D?26:28),unseen>99?'99+':String(unseen),{fontFamily:'sans-serif',fontSize:'13px',color:'#fff',backgroundColor:'#c0392b',resolution:2}).setOrigin(1,0).setPadding(6,2).setDepth(21).setName('home-bag-badge'):null;}
+     homePlaque(this,rx,py,{label:'成就',name:'home-achievements',icon:'ach_first_win',progress:[got,ACHIEVEMENTS.length],onClick:()=>{if(!this.children.getByName('achievements-panel'))new AchievementsUI(this);}},D);
+     // 2026-11-16 用户：「界面的行囊可以不要」——主页不再放行囊匾；行囊仍可在战斗 HUD、暂停菜单、行营休整（换装换马）里打开。
+    }
     if(west&&!save.dongzhuoStages){const reveal=text(W/2,D?157:228+this.padY,'新篇揭晓 · 讨伐董卓',15,'#f0c389').setAlpha(0);this.tweens.add({targets:reveal,alpha:1,duration:700});}
     const closeHeroes=()=>{this.heroModal?.setVisible(false);this.heroEntryPaint?.();};
     this.heroPicker=new HomeHeroPicker(this,index=>{this.selectedChar=index;this.registry.set('heroConfirmed',true);try{localStorage.setItem('im_last_hero',CHARACTERS[index].id);}catch{}closeHeroes();this.renderSelection();},closeHeroes);

@@ -52,18 +52,25 @@ for (const [layout, viewport] of Object.entries(LAYOUTS)) for (const [hero, h] o
     ck(`${tag}：移动积满 6 层疾步，召出 2 名执刀侍婢`, m.gains >= 6 && m.triggers >= 1 && m.maids >= 2, m);
     await p.waitForTimeout(150);
   } else {
-    // 1) 回旋飞扇去回各打一次 → 魅惑叠到 3 层倒戈；2) 倒戈者去撞同伴
+    // 1) 回旋飞扇去回各打一次 → 魅惑满层（charmNeed）倒戈；2) 倒戈者去撞同伴
     const r = await p.evaluate(async G0 => {
       const s = eval(G0), pl = s.player;
       const a = s.spawnEnemy('infantry', pl.x + 150, pl.y, 1); a.hp = a.maxHp = 99999;
       const b2 = s.spawnEnemy('infantry', pl.x + 150, pl.y + 130, 1); b2.hp = b2.maxHp = 99999; b2.stunUntil = 1e12;
-      const marks = () => pl.passive.charmViews().find(c => c.enemy === a); let firstThrow = null, turned = false; const t0 = performance.now();
-      while (performance.now() - t0 < 8000) { await new Promise(r => setTimeout(r, 30)); const c = marks(); if (!firstThrow && c && s.children.list.filter(o => o.name === 'diaochan-fan').length === 0) firstThrow = { marks: c.marks }; if (pl.passive.isTurned(a, s.combatNow)) { turned = true; break; } }
+      // 一柄飞扇去程、回程各中一次；魅惑层数达到 PASSIVE_RULES.charmNeed（平衡后为 2）即倒戈。记下倒戈前出现过几柄扇子、敌人挨了几下
+      const { PASSIVE_RULES } = await import('/src/data/passives.ts'); const need = PASSIVE_RULES.charmNeed;
+      const fans = new Set(); let hits = 0, hp = a.hp, turned = false; const t0 = performance.now();
+      while (performance.now() - t0 < 8000) {
+        await new Promise(r => setTimeout(r, 15));
+        for (const o of s.children.list) if (o.name === 'diaochan-fan') fans.add(o);
+        if (a.hp < hp) { hits++; hp = a.hp; }
+        if (pl.passive.isTurned(a, s.combatNow)) { turned = true; break; }
+      }
       const vul = pl.passive.vulnerability(a, s.combatNow), b0 = b2.hp; const t1 = performance.now();
       while (performance.now() - t1 < 3000 && b2.hp === b0) await new Promise(r => setTimeout(r, 30));
-      return { firstThrow, turned, vul, allyHurt: b0 - b2.hp, mark: !!s.children.getByName('diaochan-mark') };
+      return { need, fansBeforeTurn: fans.size, hitsBeforeTurn: hits, turned, vul, allyHurt: b0 - b2.hp, mark: !!s.children.getByName('diaochan-mark') };
     }, G);
-    ck(`${tag}：一柄飞扇去回各中一次（魅惑 2 层），满 3 层倒戈、受伤 ×1.2，并去撞同伴`, r.firstThrow?.marks === 2 && r.turned && Math.abs(r.vul - 1.2) < 1e-6 && r.allyHurt > 0 && r.mark, r);
+    ck(`${tag}：飞扇去回各中一次，魅惑满层（${r.need} 层）倒戈、受伤 ×1.2，并去撞同伴`, r.turned && r.hitsBeforeTurn === r.need && r.fansBeforeTurn === Math.ceil(r.need / 2) && Math.abs(r.vul - 1.2) < 1e-6 && r.allyHurt > 0 && r.mark, r);
     // 3) 舞势满 5 层 → 闭月：舞带环身，圈内敌人倒戈
     const d = await p.evaluate(async G0 => {
       const s = eval(G0), pl = s.player, foes = [];

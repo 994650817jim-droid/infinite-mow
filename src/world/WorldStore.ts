@@ -241,11 +241,11 @@ export function addTownMoney(amount:number):void{const n=Math.floor(amount);if(!
 function liveIntel(s:WorldSave):IntelEvent[]{const now=seasonIndex(s.town);return s.intel.filter(e=>e.expires>=now&&(e.kind==='bounty'?!s.ownedCities.includes(e.city):e.kind==='bandit'?s.ownedCities.includes(e.city):true));}
 /** 本季流寇未平的我方城池（季度结算时产出减半）。 */
 function raidedNow(s:WorldSave):string[]{return liveIntel(s).filter(e=>e.kind==='bandit').map(e=>e.city);}
-function spawnIntel(s:WorldSave):IntelEvent[]{if(!s.cleared.hulao)return[];const fresh=rollIntel({era:eraOf(s),owned:s.ownedCities,alerts:s.alerts.map(a=>a.city),existing:s.intel,season:seasonIndex(s.town),seq:s.intelSeq,random});s.intel=[...s.intel,...fresh];s.intelSeq+=Math.max(1,fresh.length);return fresh;}
+function spawnIntel(s:WorldSave,first=false):IntelEvent[]{if(!s.cleared.hulao)return[];const fresh=rollIntel({era:eraOf(s),owned:s.ownedCities,alerts:s.alerts.map(a=>a.city),existing:s.intel,season:seasonIndex(s.town),seq:s.intelSeq,random,noBandit:first});s.intel=[...s.intel,...fresh];s.intelSeq+=Math.max(1,fresh.length);return fresh;}
 /** 季度推进后：清掉过期 / 失效的军情，再刷新一批。 */
 function refreshIntel(s:WorldSave):void{s.intel=liveIntel(s);spawnIntel(s);}
-/** 打开天下地图时调用：讨董后首次进入（从未刷过军情）先刷一批，免得要等下一季。返回是否有新军情。 */
-export function ensureIntel():boolean{const s=loadWorld();if(!s.cleared.hulao||s.intelSeq>0)return false;const fresh=spawnIntel(s);commit(s);return fresh.length>0;}
+/** 打开天下地图时调用：讨董后首次进入（从未刷过军情）先刷一批，免得要等下一季；这一批不刷流寇（本季来不及应对就减产不公平）。返回是否有新军情。 */
+export function ensureIntel():boolean{const s=loadWorld();if(!s.cleared.hulao||s.intelSeq>0)return false;const fresh=spawnIntel(s,true);commit(s);return fresh.length>0;}
 export function intelEvents():IntelEvent[]{return liveIntel(loadWorld());}
 /** 军情出征：事件须仍有效。与攻城一样算“出征别处”（告急城池失守）。 */
 export function beginIntel(eventId:string,deployed:TroopKind[]=[]):string{const s=loadWorld(),e=liveIntel(s).find(x=>x.id===eventId);if(!e)return '';const id=createExpeditionId();refundStaleExpedition(s);loseAlerted(s);s.active={id,chapter:'hulao',arc:'intel',cityId:e.city,intelId:e.id,stage:1,state:'active',farm:s.buildings.farm,deployed:[...deployed]};commit(s);return id;}

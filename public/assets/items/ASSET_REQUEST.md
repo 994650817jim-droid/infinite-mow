@@ -1,4 +1,10 @@
-# 兵装道具素材需求（当前为程序化占位图）
+# 兵装道具素材需求
+
+> **2026-11-16 已交付**：ChatGPT 对话「三国兵装图标绘制」出了 9 张洋红底拼图（原图在 `originals/dsh_items_*.png`，不进包）。`tools/prepare-item-icons.mjs` 抠底、按连通块切分后生成：
+> - `item-icons.webp` + `item-icons.json`：66 帧图集（48 基础 + 18 名器，帧名 = 道具 id，每帧 128×128），BootScene 以 `item_icons` 加载；
+> - `item-chest.webp`：宝箱 3 帧（关 / 开 / 空，96×80），以 `item_chest` 加载，开箱时播放。
+> 品质框仍由 `ItemQuality.ts` 程序绘制；某个 id 缺帧或图集没加载时，该道具自动回退为程序化槽位剪影。第 4 项品质光柱未做（仍为程序绘制）。
+> 以下为当初的需求原文。
 
 现状：`src/ui/ItemQuality.ts` 的 `ensureItemTextures` 为 6 个槽位各画一张 64×64 剪影（`item_icon_<槽位>`）和战场宝箱 `item_chest`。品质只靠边框和底色区分，同槽位道具图标相同。素材到位后按下面的贴图键名加载即可替换（缺图时自动用占位图）。
 

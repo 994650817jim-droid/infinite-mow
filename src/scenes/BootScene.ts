@@ -26,6 +26,9 @@ export class BootScene extends Phaser.Scene {
     // 水墨按钮底板（ChatGPT 生成，tools/prepare-button-art.mjs 切图）；homeCommand 有图即用，缺图退回程序画底板
     // 成就图标（解锁提示与成就面板用，约 200 KB）
     for(const id of ['first_win','zhangjiao','lubu','qunxiong','guandu','kills_1000','kills_10000','level_20','all_heroes','chaser','first_siege','cities_5','luoyang','defense','focus','town_build','town_all','town_lv3','money_500','caravan','events_10','year_190','potions_10','reserve_20'])this.load.image('ach_'+id,'assets/achievements/'+id+'.webp');
+    // 兵装道具图标图集（帧名 = 道具 id）与战场宝箱 3 帧（ChatGPT 生成，tools/prepare-item-icons.mjs 切图）；缺图时 ItemQuality 退回程序化剪影
+    this.load.atlas('item_icons','assets/items/item-icons.webp','assets/items/item-icons.json');
+    this.load.spritesheet('item_chest','assets/items/item-chest.webp',{frameWidth:96,frameHeight:80});
     for(const n of ['primary-normal','primary-hover','primary-pressed','secondary-normal','secondary-hover','secondary-pressed','disabled'])this.load.image('btn_ink_'+n.replace('-','_'),'assets/ui-buttons/'+n+'.webp');
     const params=new URLSearchParams(window.location.search);
     this.shellOnly=false;

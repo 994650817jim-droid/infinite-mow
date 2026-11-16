@@ -163,7 +163,7 @@ export class ItemBagUI {
     if (horse) { const ic = horseIcon(this.scene, horse.id), k = ic.art ? .84 : .72; mountTile.add(this.scene.add.image(0, 0, ic.key, ic.frame).setDisplaySize(size * k, size * k).setTint(ic.art ? 0xffffff : mountStyle(horse.id).tint)); }
     else mountTile.add(this.scene.add.image(0, 0, itemIconKey('mount')).setDisplaySize(size * .72, size * .72).setAlpha(.22));
     if (!unlocked || !this.canChangeHorse || this.hero.startsWith('r_')) mountTile.add(this.scene.add.text(size / 2 - 3, size / 2 - 3, '锁', { fontFamily: FONT, fontSize: '12px', color: '#1c140a', backgroundColor: '#b9a57a', resolution: 2 }).setOrigin(1, 1).setPadding(2, 0));
-    mountTile.setName('item-slot-mount').setSize(size, size).setInteractive({ useHandCursor: true }).on('pointerup', () => this.select('stable'));
+    mountTile.setName('item-slot-mount').setSize(size, size).setInteractive({ useHandCursor: true }); this.onTap(mountTile, () => this.select('stable'));
     this.text(lx, my + size / 2 + 10, !unlocked ? '坐骑 · 一章通关开放' : horse ? horse.name : '坐骑', 12, horse ? '#f3c37a' : '#8d7d60').setOrigin(.5).setName('item-slot-label-mount');
     // 本局宝物 2 格
     const tre = this.o.treasures ?? [], tdx = D ? 46 : 60;
@@ -173,7 +173,7 @@ export class ItemBagUI {
       const g = this.scene.add.graphics(); g.fillStyle(0x1b120b, .8).fillRoundedRect(-size / 2, -size / 2, size, size, 7); g.lineStyle(t ? 2 : 1, t ? 0xc9a35e : 0x6b5a40, t ? 1 : .55).strokeRoundedRect(-size / 2, -size / 2, size, size, 7); c.add(g);
       if (t && this.scene.textures.exists(t.icon)) c.add(this.scene.add.image(0, 0, t.icon).setDisplaySize(size * .78, size * .78));
       else c.add(this.scene.add.text(0, 0, '宝', { fontFamily: HEADING_FONT, fontSize: Math.round(size * .42) + 'px', color: t ? '#f3d48a' : '#5d5040', resolution: 2 }).setOrigin(.5));
-      c.setName('item-treasure-' + i).setSize(size, size).setInteractive({ useHandCursor: true }).on('pointerup', () => this.select('treasure:' + i));
+      c.setName('item-treasure-' + i).setSize(size, size).setInteractive({ useHandCursor: true }); this.onTap(c, () => this.select('treasure:' + i));
       this.text(tx, my + size / 2 + 10, t ? t.name : this.battle ? '空' : '出征后获得', 12, t ? '#f3d48a' : '#6f6250').setOrigin(.5).setName('item-treasure-label-' + i);
     }
 
@@ -241,7 +241,13 @@ export class ItemBagUI {
   }
 
   /** 点击：pointerup 触发（手柄 Ⓐ 依次发 pointerdown + pointerup）。2026-11-16 用户要求去掉拖拽穿戴，只保留点击。 */
-  private onTap(tile: Phaser.GameObjects.Container, onTap: () => void): void { tile.on('pointerup', onTap); }
+  private onTap(tile: Phaser.GameObjects.Container, onTap: () => void): void {
+    // 必须在这个格子上按下、再在它上面松开才算点击。关详情框的按钮在按下时就重绘了行囊，松手那一下
+    // 会落到新露出来的格子上（2026-11-16 用户报「点 X 又点到其他装备」）：新格子没按下过，不响应。
+    tile.on('pointerdown', () => tile.setData('armed', true));
+    tile.on('pointerout', () => tile.setData('armed', false));
+    tile.on('pointerup', () => { if (!tile.getData('armed')) return; tile.setData('armed', false); onTap(); });
+  }
 
   /** 手柄默认焦点：卡片 → 穿戴 / 卸下 / 骑乘 / 关闭；否则回到刚看过的道具，再否则沿用重绘前的焦点、第一格、关闭。 */
   private markPadDefault(prevName: string | null): void {

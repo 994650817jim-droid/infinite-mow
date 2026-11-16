@@ -222,6 +222,23 @@ await d.evaluate(async M0 => { const m = eval(M0), st = await window.__mod('/src
 const dk = await d.evaluate(M0 => { const bag = eval(M0).children.getByName('item-bag'); return { mount: window.__find(bag, 'item-slot-label-mount')?.text, t0: window.__find(bag, 'item-treasure-label-0')?.text }; }, M);
 ck('电脑纸娃娃：关羽骑赤兔，宝物栏写「出征后获得」', dk.mount === '赤兔' && dk.t0 === '出征后获得', dk);
 await d.screenshot({ path: `${out}/desktop-home-doll.png` });
+// 点详情框的 × 不能穿透到下面的装备格（2026-11-16 用户报 Bug）
+const openDetail = () => d.evaluate(async M0 => { const m = eval(M0), bag = m.children.getByName('item-bag'); window.__tap(window.__find(bag, 'item-cell-0')); await new Promise(r => setTimeout(r, 150)); return !!window.__find(m.children.getByName('item-bag'), 'item-detail'); }, M);
+const closeAt = await (async () => { await openDetail(); return d.evaluate(M0 => { const m = eval(M0), bag = m.children.getByName('item-bag'), x = window.__find(bag, 'item-detail-close'), b = x.getBounds(), r = window.__game.canvas.getBoundingClientRect(), cam = m.cameras.main, k = r.width / cam.width * cam.zoom; return { x: r.left + b.centerX * k, y: r.top + b.centerY * k }; }, M); })();
+await d.mouse.click(closeAt.x, closeAt.y); await d.waitForTimeout(250);
+const afterMouse = await d.evaluate(M0 => !!window.__find(eval(M0).children.getByName('item-bag'), 'item-detail'), M);
+// 模拟最坏情况：在 × 上按下（关框并重绘），松手正好落在新露出的格子上
+await openDetail();
+const synthetic = await d.evaluate(async M0 => { const m = eval(M0); window.__find(m.children.getByName('item-bag'), 'item-detail-close').emit('pointerdown'); await new Promise(r => setTimeout(r, 60));
+  const bag = m.children.getByName('item-bag'); for (let k = 0; k < 6; k++) window.__find(bag, 'item-cell-' + k)?.emit('pointerup'); await new Promise(r => setTimeout(r, 120)); return !!window.__find(m.children.getByName('item-bag'), 'item-detail'); }, M);
+// 点框外的遮罩关闭，同样不穿透；正常点击格子仍能打开
+await openDetail();
+const shade = await d.evaluate(async M0 => { const m = eval(M0), card = window.__find(m.children.getByName('item-bag'), 'item-detail'); card.list[0].emit('pointerdown'); await new Promise(r => setTimeout(r, 60));
+  const bag = m.children.getByName('item-bag'); for (let k = 0; k < 6; k++) window.__find(bag, 'item-cell-' + k)?.emit('pointerup'); await new Promise(r => setTimeout(r, 120)); return !!window.__find(m.children.getByName('item-bag'), 'item-detail'); }, M);
+const stillOpens = await openDetail();
+ck('点详情框的 ×、点框外关闭：都不会穿透打开下面的装备；正常点格子仍能打开', !afterMouse && !synthetic && !shade && stillOpens, { afterMouse, synthetic, shade, stillOpens, closeAt });
+await d.evaluate(M0 => { const bag = eval(M0).children.getByName('item-bag'); window.__find(bag, 'item-detail-close')?.emit('pointerdown'); }, M);
+await d.waitForTimeout(150);
 await d.evaluate(async M0 => { const bag = eval(M0).children.getByName('item-bag'); window.__tap(window.__find(bag, 'item-slot-mount')); await new Promise(r => setTimeout(r, 150)); }, M);
 await d.screenshot({ path: `${out}/desktop-home-stable.png` });
 await d.evaluate(M0 => { const bag = eval(M0).children.getByName('item-bag'); window.__find(bag, 'item-bag-close')?.emit('pointerdown'); }, M);

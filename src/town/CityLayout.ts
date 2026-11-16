@@ -34,8 +34,8 @@ const LARGE: Layout = {
   pavilion: { x: 768, y: 712, w: 280 },
 };
 export const CITY_SLOTS: Record<1 | 2 | 3, Layout> = { 1: BASE, 2: BASE, 3: LARGE };
-/** 新建筑暂无独立美术：复用旧建筑图过渡（讲武堂 ← 校场，招贤馆 ← 酒肆，马厩 ← 驿站）。 */
-export const ART_ALIAS: Partial<Record<TownBuildingId, string>> = { academy: 'drill', talent: 'tavern', stable: 'post' };
+/** 建筑贴图别名（某建筑暂无独立美术时借用另一座的图）。讲武堂 / 马厩 / 招贤馆已有正式图（ChatGPT 2026-11-16，tools/prepare-camp-art.mjs）。 */
+export const ART_ALIAS: Partial<Record<TownBuildingId, string>> = {};
 /** 等级对应的显示比例（Lv1 小、Lv3 满）。 */
 export const LEVEL_SCALE = [0, .86, .96, 1.06];
 

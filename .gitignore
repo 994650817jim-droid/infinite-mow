@@ -89,3 +89,4 @@ assets/raw/*
 !/tools/pad-harness.mjs
 !/tools/test-chibi.mjs
 !/tools/test-items.mjs
+!/tools/prepare-camp-art.mjs

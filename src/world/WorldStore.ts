@@ -90,7 +90,7 @@ export function techEffects(){return techTotals(loadWorld().town.tech);}
 /** 招贤馆等级（1–3），招募系统读它代替 RosterSave.hall；升级走 townUpgrade('talent')（花军粮，价目即 RECRUIT.hallUpgrade）。 */
 export function talentLevel():number{return Math.max(1,Math.min(3,levelOf(loadWorld().town,'talent')));}
 /** 军营「练兵」：当前等级、上限（随已开放章节）、下一级价格（满了为 null）。 */
-export function drillInfo(s:WorldSave=loadWorld()):{level:number;cap:number;cost:number|null;multiplier:number}{const level=s.town.drill??0,cap=drillCap(openChapterCount(s));return{level,cap,cost:level<cap?drillCost(level+1):null,multiplier:drillMultiplier(level)};}
+export function drillInfo(s:WorldSave=loadWorld()):{level:number;cap:number;cost:number|null;multiplier:number;next:number}{const level=s.town.drill??0,cap=drillCap(openChapterCount(s));return{level,cap,cost:level<cap?drillCost(level+1):null,multiplier:drillMultiplier(level),next:drillMultiplier(level+1)};}
 /** 练兵升一级：花军粮，受章节上限限制。 */
 export function trainTroops():TownResult{const s=loadWorld(),d=drillInfo(s);if(d.cost===null)return{ok:false,message:d.level>=DRILL_MAX?'练兵已满级':`练兵上限 ${d.cap} 级，开放新章节后提高`};if(s.provisions<d.cost)return{ok:false,message:'军粮不足：需要 '+d.cost};s.provisions-=d.cost;s.town.drill=d.level+1;return townCommit(s,`练兵升至 ${d.level+1} 级：部曲生命、伤害 ×${drillMultiplier(d.level+1).toFixed(2)}`);}
 export function stableLevel():number{return levelOf(loadWorld().town,'stable');}

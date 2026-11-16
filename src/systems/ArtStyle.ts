@@ -83,6 +83,15 @@ export const ART_V2_FILES: Readonly<Record<string, string>> = {
   icon_shu_swordsman: 'assets/troop-portraits-v2/icon_swordsman.png',
   icon_shu_spearman: 'assets/troop-portraits-v2/icon_spearman.png',
   icon_shu_archer: 'assets/troop-portraits-v2/icon_archer.png',
+  // 第 4 批：第 3~5 章首领（4×8 动作图集，每格 288；由 loadBossSheet 在章节场景 preload 里载入）
+  third_lijue: 'assets/bosses-v2/third_lijue.png',
+  third_yuanshu: 'assets/bosses-v2/third_yuanshu.png',
+  third_zhangxiu: 'assets/bosses-v2/third_zhangxiu.png',
+  guandu_yanliang: 'assets/bosses-v2/guandu_yanliang.png',
+  guandu_wenchou: 'assets/bosses-v2/guandu_wenchou.png',
+  guandu_chunyuqiong: 'assets/bosses-v2/guandu_chunyuqiong.png',
+  chibi_caimao: 'assets/bosses-v2/chibi_caimao.png',
+  chibi_caochun: 'assets/bosses-v2/chibi_caochun.png',
 };
 /** v2 主将行走整格的显示高度（逻辑像素）：原生格 176 → 88，即 1080p 全屏（渲染 2 倍）下 1 美术像素 = 1 屏幕像素。
  * 人物约 76 逻辑像素高（用户要求比 v1 大一些）。 */
@@ -136,6 +145,22 @@ export function applyArtStyleUrls(load: Phaser.Loader.LoaderPlugin): string[] {
     if (o.type === 'image') load.image(file.key, o.url); else load.spritesheet(file.key, o.url, o.config as Phaser.Types.Loader.FileTypes.ImageFrameConfig);
   });
   return swapped;
+}
+
+/** v2 首领图集格边长：脚底 256 / 288 ≈ 旧版 114 / 128，首领控制器按 setDisplaySize(144) 显示，正好 1080p 下像素 1:1。 */
+export const V2_BOSS_CELL = 288;
+/** 章节首领图集（4×8，数字帧 0~31）：v2 时载 288 格新图，失败退回旧图；v1 照旧按 cell 载入。 */
+export function loadBossSheet(load: Phaser.Loader.LoaderPlugin, key: string, url: string, cell = 128): void {
+  if (!isV2Texture(key)) { load.spritesheet(key, url, {frameWidth: cell, frameHeight: cell}); return; }
+  const onError = (file: Phaser.Loader.File): void => {
+    if (file.key !== key) return;
+    load.off(Phaser.Loader.Events.FILE_LOAD_ERROR, onError);
+    V2_FAILED.add(key); console.warn('[ArtStyle] v2 首领图缺失，退回 v1：' + key);
+    load.spritesheet(key, url, {frameWidth: cell, frameHeight: cell});
+  };
+  load.on(Phaser.Loader.Events.FILE_LOAD_ERROR, onError);
+  load.once(`filecomplete-spritesheet-${key}`, () => { load.off(Phaser.Loader.Events.FILE_LOAD_ERROR, onError); if (isV2Texture(key)) load.textureManager.get(key).setFilter(v2Filter(RENDER_SCALE)); });
+  load.spritesheet(key, ART_V2_FILES[key], {frameWidth: V2_BOSS_CELL, frameHeight: V2_BOSS_CELL});
 }
 
 /**

@@ -3,7 +3,7 @@ import {AWAKENINGS} from './awakenings';
 import { BALANCE } from '../config';
 import type { Player } from '../entities/Player';
 import { RELICS, relicChanceForLevel } from './relics';
-import { WEAPON_DEFS, SPEAR_PIERCE, GUANDAO_TABLE, crossbowExtraArrows, zhenbeiCracks, lianhuanMinesPerCast, sunOrbitKnives, diaochanFanCount } from '../weapons/registry';
+import { WEAPON_DEFS, SPEAR_PIERCE, GUANDAO_TABLE, crossbowExtraArrows, zhenbeiCracks, lianhuanMinesPerCast, sunOrbitKnives, sunThrowCount, sunThrowPierce, diaochanFanCount } from '../weapons/registry';
 import type { UpgradeOption, WeaponId, WeaponState } from '../types';
 import { getCharacter } from './characters';
 import { ATTRIBUTE_INFO, type AttributeId, type PotionId, type RunGrowth, type TrinketId, MARTIALS, type MasteryId } from '../systems/RunGrowth';
@@ -71,6 +71,8 @@ function weaponUpgrade(weapon: WeaponState, player: Player): UpgradeOption {
   if (weapon.id === 'lianhuan_mines' && lianhuanMinesPerCast(next) !== lianhuanMinesPerCast(weapon.level)) desc += `\n每次落雷 ${lianhuanMinesPerCast(weapon.level)} → ${lianhuanMinesPerCast(next)} 枚（身旁多落一枚，雷链加宽）`;
   if (weapon.id === 'lianhuan_mines' && next === 3) desc += '\n落雷间隔缩短';
   if (weapon.id === 'sun_knives' && sunOrbitKnives(next) !== sunOrbitKnives(weapon.level)) desc += `\n环绕飞刀 ${sunOrbitKnives(weapon.level)} → ${sunOrbitKnives(next)} 把`;
+  if (weapon.id === 'sun_knives' && sunThrowCount(next) !== sunThrowCount(weapon.level)) desc += `\n每次掷出 ${sunThrowCount(weapon.level)} → ${sunThrowCount(next)} 把（多出的飞向其他敌人，60%）`;
+  if (weapon.id === 'sun_knives' && sunThrowPierce(next) !== sunThrowPierce(weapon.level)) desc += `\n每把穿透 ${sunThrowPierce(weapon.level)} → ${sunThrowPierce(next)} 人`;
   if (weapon.id === 'diaochan_fans' && diaochanFanCount(next) !== diaochanFanCount(weapon.level)) desc += `\n每次掷扇 ${diaochanFanCount(weapon.level)} → ${diaochanFanCount(next)} 柄`;
   if (weapon.id === 'guandao') desc += `\n范围${GUANDAO_TABLE[weapon.level - 1].radius} → ${GUANDAO_TABLE[next - 1].radius}${weapon.level < 3 && next >= 3 ? '，解锁二段刀气' : ''}`;
   return {

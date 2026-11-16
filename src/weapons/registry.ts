@@ -8,7 +8,7 @@ import { PASSIVE_RULES } from '../data/passives';
 import { HERO_TINT } from '../data/characters';
 import { BAODIAO_DEF, DANGYANG_DEF, ZHANJIN_DEF, SHUANGGU_DEF, baodiaoBehavior, dangyangBehavior, zhanjinBehavior, shuangguBehavior, smartTarget } from './heroWeapons2';
 import { ZHENBEI_DEF, LIANHUAN_DEF, SUN_KNIVES_DEF, DIAOCHAN_FANS_DEF, zhenbeiBehavior, lianhuanBehavior, sunKnivesBehavior, diaochanFansBehavior } from './heroWeapons';
-export { zhenbeiCracks, lianhuanMinesPerCast, sunOrbitKnives, diaochanFanCount } from './heroWeapons';
+export { zhenbeiCracks, lianhuanMinesPerCast, sunOrbitKnives, sunThrowCount, sunThrowPierce, diaochanFanCount } from './heroWeapons';
 
 export interface WeaponBolt {
   img: Phaser.GameObjects.Image; vx: number; vy: number; life: number;

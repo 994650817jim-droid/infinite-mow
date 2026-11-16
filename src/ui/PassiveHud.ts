@@ -5,7 +5,7 @@ import type { CharacterPassives } from '../systems/CharacterPassives';
 
 /** 被动技能完整说明（悬停 / 点按弹出）。数值见 data/passives.ts 的 PASSIVE_RULES。 */
 export const PASSIVE_DETAILS: Record<'zhaoyun' | 'guanyu' | 'huangzhong' | 'zhuge' | 'zhangfei' | 'huangyueying' | 'pangtong' | 'liubei' | 'weiyan' | 'machao' | 'sunshangxiang' | 'diaochan', string> = {
-  sunshangxiang: '侍婢执刀：移动中每 0.5 秒积 1 层疾步（停下不会掉层）。\n满 6 层后，下一次掷刀时召来 2 名执刀侍婢护身 8 秒（最多 4 名）：绕身巡护，70 像素内的敌人每 0.5 秒挨一刀（60% 伤害），随后清空。',
+  sunshangxiang: '侍婢执刀：移动中每 0.8 秒积 1 层疾步（停下不会掉层）。\n满 6 层后，下一次掷刀时召来 2 名执刀侍婢护身 6 秒（最多 3 名）：绕身巡护，70 像素内的敌人每 0.5 秒挨一刀（掷刀伤害的 50%–70%，随武器等级提高），随后清空。',
   diaochan: '离间：飞扇每命中一次加 1 层魅惑，满 3 层的敌人倒戈 3 秒（精锐 1.5 秒）——转身去撞最近的同伴，自己受伤 +20%；首领不倒戈，改为 3 秒受伤 +25%。\n每离间 1 名敌人积 1 层舞势，满 5 层后下一次化为「闭月」：舞带环身旋舞 2 秒，半径 160 内每 0.4 秒 50% 伤害并令圈内敌人倒戈。',
   machao: '西凉铁骑：湛金枪每命中敌人积 1 层铁骑（每 0.3 秒最多 1 层）。\n满 6 层后，下一枪化为「锦马冲锋」：向前突进 180 像素，沿途敌人受到 160% 伤害并被撞开，随后清空。',
   weiyan: '镇守汉中：每次受到伤害积 1 层拒敌（每 0.5 秒最多 1 层）。\n满 5 层后，下一刀化为「谁敢杀我」：怒吼并朝 6 个方向劈出裂波（各 80% 伤害），自身 3 秒内受到伤害 -30%，随后清空。',
@@ -100,7 +100,7 @@ export class PassiveHud {
       liubei: s.ready ? '下次出剑 回复8% · 攻速+30%' : '双剑砍中2敌积仁德',
       pangtong: s.ready ? '下次布雷 火烧连环' : '一次连锁引爆3雷积计策',
       huangyueying: s.ready ? '下次射击 扇形齐射6箭' : '命中上机括 · 每0.25秒最多1层',
-      sunshangxiang: s.ready ? '下次掷刀 召侍婢护身' : '移动积疾步 · 每0.5秒1层',
+      sunshangxiang: s.ready ? '下次掷刀 召侍婢护身' : '移动积疾步 · 每0.8秒1层',
       diaochan: s.ready ? '下次出手 闭月：圈内敌人倒戈' : `离间敌人积舞势${s.turned ? ` · 倒戈中 ${s.turned}` : ''}`,
       zhangfei: s.ready ? '下次大喝 据水断桥' : '声浪命中积怒气 · 每0.35秒1层',
       zhuge: s.ready ? '下次战旗 范围+25% · 附加灼烧' : `爆炸命中3敌积谋${s.burns ? ` · 灼烧中 ${s.burns}` : ''}`,

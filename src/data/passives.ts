@@ -34,9 +34,12 @@ export const PASSIVE_RULES = {
   cavalryIntervalMs: 300, dashLength: 150, dashWidth: 56, dashDamageMul: 1.6, dashMs: 200,
   roarIntervalMs: 350, roarRadius: 175, roarStunMs: 1200, roarDamageMul: 1.4,
   /** 孙尚香·侍婢执刀：移动中每 0.5 秒积 1 层疾步（满 6）；满层召 2 名执刀侍婢护身 8 秒（上限 4 名），绕身 70 像素内每 0.5 秒挥刀 60% 伤害。 */
-  stepIntervalMs: 500, maidSummon: 2, maidMax: 4, maidMs: 8000, maidRange: 70, maidSlashMs: 500, maidDamageMul: .6,
+  // 2026-11-16 成长曲线调整（用户批准，平衡会话核对）：疾步 0.5 → 0.8 秒、侍婢上限 4 → 3、持续 8 → 6 秒；侍婢伤害随武器等级 50% → 70%（原固定 60%）
+  stepIntervalMs: 800, maidSummon: 2, maidMax: 3, maidMs: 6000, maidRange: 70, maidSlashMs: 500, maidDamageByLevel: [.5, .55, .6, .65, .7],
   /** 孙尚香·弓腰姬飞刀：环绕刀（半径 / 每名敌人割伤间隔）、掷刀（射程 / 速度 / 穿透 / 补刀时间 / 移动中间隔倍率）。 */
-  knifeOrbitR: 55, knifeOrbitHitMs: 500, knifeRange: 380, knifeSpeed: 650, knifePierce: 2, knifeRegenMs: 1200, knifeMovingCdMul: .7,
+  knifeOrbitR: 55, knifeOrbitHitMs: 500, knifeRange: 380, knifeSpeed: 650, knifeRegenMs: 1200, knifeMovingCdMul: .7,
+  /** 每次掷几把（多出的飞向别的敌人、伤害 knifeExtraMul）与每把穿透人数，按武器等级 Lv1–Lv5。 */
+  knifeCountByLevel: [1, 1, 2, 2, 3], knifePierceByLevel: [2, 2, 3, 3, 4], knifeExtraMul: .6,
   /** 貂蝉·双花扇：回旋飞扇（距离 / 速度）；离间：魅惑 3 层倒戈 3 秒（精锐减半），倒戈者受伤 +20%、冲向 260 内最近同伴每 0.5 秒撞一次；首领改为 3 秒受伤 +25%；4 秒没扇中魅惑消散。 */
   // 2026-11-16 平衡（12 将基线：1-1 整关放不出大招）：倒戈所需扇中次数 3 → 2
   fanRange: 230, fanSpeed: 520, charmNeed: 2, turnMs: 3000, turnVulnerability: 1.2, charmVulnerability: 1.25, turnSeek: 260, turnHitMs: 500, charmDecayMs: 4000,

@@ -269,10 +269,14 @@ export const sunOrbitKnives = (level: number): number => (level >= 5 ? 4 : level
 export const SUN_KNIVES_DEF = {
   id: 'sun_knives' as const, name: '弓腰姬飞刀', maxLevel: 5,
   /** 掷刀伤害；环绕割伤用 sunOrbitDamage。 */
-  damage: (level: number, stats: PlayerStats) => [18, 20, 23, 26, 30][lv(level)] * stats.damageMul * stats.arrowMul,
+  // 2026-11-16 前低后高（原 18/20/23/26/30），后两级加高补打首领
+  damage: (level: number, stats: PlayerStats) => [16, 19, 23, 28, 35][lv(level)] * stats.damageMul * stats.arrowMul,
   cooldown: (level: number, stats: PlayerStats) => [.9, .9, .85, .8, .75][lv(level)] * stats.cooldownMul,
   desc: '身边环绕飞刀割伤近敌，并不断掷出飞刀穿透远敌；移动中掷得更快',
 };
+/** 每次掷几把 / 每把穿透（Lv1–Lv5）。 */
+export const sunThrowCount = (level: number): number => R.knifeCountByLevel[lv(level)];
+export const sunThrowPierce = (level: number): number => R.knifePierceByLevel[lv(level)];
 export const sunOrbitDamage = (level: number, stats: PlayerStats): number => [10, 11, 12, 13, 15][lv(level)] * stats.damageMul * stats.meleeMul;
 
 interface OrbitKnife { img: Phaser.GameObjects.Image; readyAt: number; }
@@ -353,7 +357,7 @@ export function sunKnivesBehavior(host: WeaponHost, weapon: WeaponState, dt: num
     if (k.left <= 0 || k.pierce <= 0 || host.over) { k.img.destroy(); s.thrown.splice(i, 1); }
   }
   // 侍婢：绕身护卫，近敌挥刀
-  const maidDamage = SUN_KNIVES_DEF.damage(level, pl.stats) * growth.damageMultiplier(time) * R.maidDamageMul;
+  const maidDamage = SUN_KNIVES_DEF.damage(level, pl.stats) * growth.damageMultiplier(time) * R.maidDamageByLevel[lv(level)];
   for (let i = s.maids.length - 1; i >= 0; i--) {
     const m = s.maids[i];
     if (time >= m.until || host.over) { m.img.scene.tweens.add({ targets: m.img, alpha: 0, duration: 200, onComplete: () => m.img.destroy() }); s.maids.splice(i, 1); continue; }
@@ -379,19 +383,29 @@ export function sunKnivesBehavior(host: WeaponHost, weapon: WeaponState, dt: num
   // 统一索敌：环外（首领 > 精锐 > 群怪 > 最近），环外没有敌人时才打环内
   const target = smartTarget(host, R.knifeRange, outer) ?? smartTarget(host, R.knifeRange);
   if (!target) return;
-  const knife = s.orbit.find(k => time >= k.readyAt);
-  if (!knife) { weapon.cooldownLeft = .1; return; }
+  const ready = s.orbit.filter(k => time >= k.readyAt);
+  if (!ready.length) { weapon.cooldownLeft = .1; return; }
   const cast = pl.passive.beginCast('sun_knives');
   const maidCap = R.maidMax + growth.masteries.baibi, maidMs = R.maidMs + 2000 * growth.masteries.baibi;
   if (cast.maids) { pl.playAction('skill', target.x < pl.x ? 'left' : 'right'); summonMaids(host, s, time, R.maidSummon, maidMs, maidCap); }
   else pl.playAction('attack', target.x < pl.x ? 'left' : 'right');
   pl.faceDirection(target.x < pl.x ? 'left' : 'right', 160);
   const moving = pl.passive.isMoving(time);
-  const sx = knife.img.x, sy = knife.img.y, d = Math.hypot(target.x - sx, target.y - sy) || 1;
-  knife.readyAt = time + R.knifeRegenMs;
-  s.thrown.push({ img: host.add.image(sx, sy, tex).setDisplaySize(32, 15).setDepth(41).setRotation(Math.atan2(target.y - sy, target.x - sx)).setName('sun-thrown-knife'),
-    vx: (target.x - sx) / d * R.knifeSpeed, vy: (target.y - sy) / d * R.knifeSpeed, left: R.knifeRange + 40,
-    pierce: R.knifePierce + (moving ? growth.masteries.huishen : 0), hit: new Set(), damage: SUN_KNIVES_DEF.damage(level, pl.stats) * growth.damageMultiplier(time) });
+  // 每次掷几把随等级 1/1/2/2/3：第一把打主目标，其余飞向主目标以外的近敌（伤害 60%）；没有别的敌人时散射在主目标两侧
+  const base = SUN_KNIVES_DEF.damage(level, pl.stats) * growth.damageMultiplier(time), pierce = R.knifePierceByLevel[lv(level)] + (moving ? growth.masteries.huishen : 0);
+  const count = Math.min(ready.length, R.knifeCountByLevel[lv(level)]);
+  const others = host.grid.query(pl.x, pl.y, R.knifeRange).filter(e => e.active && !e.isSupplySlot && e !== target && Math.hypot(e.x - pl.x, e.y - pl.y) <= R.knifeRange)
+    .sort((a, b) => Math.hypot(a.x - pl.x, a.y - pl.y) - Math.hypot(b.x - pl.x, b.y - pl.y));
+  for (let k = 0; k < count; k++) {
+    const knife = ready[k], sx = knife.img.x, sy = knife.img.y, t = k === 0 ? target : others[k - 1];
+    let ax = (t ?? target).x - sx, ay = (t ?? target).y - sy;
+    if (!t) { const a = Math.atan2(ay, ax) + (k % 2 ? 1 : -1) * .22 * Math.ceil(k / 2), d0 = Math.hypot(ax, ay); ax = Math.cos(a) * d0; ay = Math.sin(a) * d0; }
+    const d = Math.hypot(ax, ay) || 1;
+    knife.readyAt = time + R.knifeRegenMs;
+    s.thrown.push({ img: host.add.image(sx, sy, tex).setDisplaySize(32, 15).setDepth(41).setRotation(Math.atan2(ay, ax)).setName('sun-thrown-knife'),
+      vx: ax / d * R.knifeSpeed, vy: ay / d * R.knifeSpeed, left: R.knifeRange + 40,
+      pierce, hit: new Set(), damage: base * (k === 0 ? 1 : R.knifeExtraMul) });
+  }
   host.sfx.play('allySpear');
   weapon.cooldownLeft = Math.max(.2, SUN_KNIVES_DEF.cooldown(level, pl.stats) * (moving ? R.knifeMovingCdMul : 1) / growth.attackSpeedMultiplier(time));
 }

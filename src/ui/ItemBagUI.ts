@@ -152,7 +152,7 @@ export class ItemBagUI {
       const [sx, sy] = place[slot], item = worn[slot] ?? null;
       const tile = this.add(itemTile(this.scene, sx, sy, size, item, slot, { selected: !!item && item.uid === this.selected }));
       tile.setName('item-slot-' + slot).setData('uid', item?.uid ?? null).setSize(size, size).setInteractive({ useHandCursor: true });
-      this.onTap(tile, () => { if (item) this.select(item.uid); else { this.filter = slot; this.page = 0; this.notice = `行囊已筛选 · ${SLOTS[slot].name}（点道具或拖到槽位穿戴）`; this.render(); } });
+      this.onTap(tile, () => { if (item) this.select(item.uid); else { this.filter = slot; this.page = 0; this.notice = `行囊已筛选 · ${SLOTS[slot].name}（点道具穿戴）`; this.render(); } });
       if (item) this.tip.attach(tile, () => item, () => item);
       this.text(sx, sy + size / 2 + 10, item ? itemName(item) : SLOTS[slot].name, 12, item ? QUALITIES[item.quality].css : '#8d7d60').setOrigin(.5).setName('item-slot-label-' + slot);
     }
@@ -183,7 +183,7 @@ export class ItemBagUI {
     this.text(sumX, sumY, '兵装加成', D ? 14 : 15, '#ecd49a', true);
     const half = Math.ceil(lines.length / 2), cols = D && lines.length > 3 ? [lines.slice(0, half), lines.slice(half)] : [lines];
     // 手机：一行接一行；词条内用不换行空格，避免「受到伤 / 害」被拆开
-    const sumText = lines.length ? (D ? cols.map(c => c.join('\n')) : [lines.map(l => l.replace(/ /g, ' ')).join('　 ')]) : ['尚未穿戴兵装 · 点行囊中的道具或拖到槽位穿戴'];
+    const sumText = lines.length ? (D ? cols.map(c => c.join('\n')) : [lines.map(l => l.replace(/ /g, ' ')).join('　 ')]) : ['尚未穿戴兵装 · 点行囊中的道具穿戴'];
     const sum = this.text(sumX + (D ? 0 : 0), sumY + 22, sumText[0], D ? 12 : 13, '#d8ccb0').setWordWrapWidth(D ? 320 : pw - 56).setLineSpacing(3).setName('item-gear-summary');
     if (sumText[1]) this.text(sumX + 168, sumY + 22, sumText[1], 12, '#d8ccb0').setLineSpacing(3).setName('item-gear-summary-2');
     let sumBottom = sum.y + sum.height;
@@ -349,14 +349,14 @@ export class ItemBagUI {
     const current = loadout(this.hero, s)[slot];
     const lines = item.affixes.map(a => (a.minor ? '· ' : '') + formatAffix(a));
     const compare = this.compare(item, current && current.uid !== item.uid ? current : undefined);
-    const legend = def?.legend ?? LEGENDS.find(l => l.id === item.base);
+    const legend = def?.legend ?? LEGENDS.find(l => l.id === item.base) ?? def?.relic;
     // 先估算高度定位，排完文字后按实际高度画底
     const est = 96 + lines.length * 25 + (item.special ? 44 : 0) + (legend ? 22 : 0) + (compare ? 22 + compare.split('\n').length * 18 : 0) + 64;
     const x = (W - cw) / 2, y = Math.max(20, (H - est) / 2);
     const g = this.add(this.scene.add.graphics(), card);
     card.add(itemTile(this.scene, x + 50, y + 52, 64, item).setScrollFactor(0));
     this.text(x + 92, y + 22, itemName(item), 22, q.css, true, card).setName('item-detail-name');
-    this.text(x + 92, y + 56, `${q.name} · ${SLOTS[slot].name}${owner ? ' · ' + ownerName(owner) + '已穿戴' : ''}`, 13, '#b9a57a', false, card).setName('item-detail-quality');
+    this.text(x + 92, y + 56, `${def?.relic ? '首领遗珍 · ' + def.relic.boss + ' · ' : ''}${q.name} · ${SLOTS[slot].name}${owner ? ' · ' + ownerName(owner) + '已穿戴' : ''}`, 13, '#b9a57a', false, card).setName('item-detail-quality');
     let ty = y + 96;
     this.text(x + 26, ty, lines.join('\n'), 15, '#e9dcbc', false, card).setLineSpacing(6).setName('item-detail-affixes'); ty += lines.length * 25 + 6;
     if (item.special) { this.text(x + 26, ty, `★ ${SPECIALS[item.special].name}：${SPECIALS[item.special].desc}`, 14, '#f3c37a', false, card).setWordWrapWidth(cw - 52); ty += 44; }
@@ -378,7 +378,7 @@ export class ItemBagUI {
       if (wornHere) this.takeOff(slot); else this.wear(item);
       this.lastUid = item.uid; this.selected = null; this.render();
     }, { parent: card, size: 16 });
-    this.button(x + cw * .7, by, owner ? '已穿戴不可分解' : `分解 · 军粮 +${rewardGrain(0, 0, q.salvage)}`, 'item-salvage', () => { const m = salvageItems([item.uid]); this.notice = `分解 ${itemName(item)} · 军粮 +${rewardGrain(0, 0, m)}`; this.selected = null; this.render(); }, { parent: card, size: 14, disabled: !!owner });
+    this.button(x + cw * .7, by, def?.relic ? '遗珍不可分解' : owner ? '已穿戴不可分解' : `分解 · 军粮 +${rewardGrain(0, 0, q.salvage)}`, 'item-salvage', () => { const m = salvageItems([item.uid]); this.notice = `分解 ${itemName(item)} · 军粮 +${rewardGrain(0, 0, m)}`; this.selected = null; this.render(); }, { parent: card, size: 14, disabled: !!owner || !!def?.relic });
   }
 
   /** 与当前同槽装备的词条差，如「▲ 生命上限 +2.1%」「▼ 暴击率 −1.0%」。 */

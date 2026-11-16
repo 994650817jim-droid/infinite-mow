@@ -72,6 +72,7 @@ assets/raw/*
 !/tools/test-gamepad.mjs
 !/tools/test-gear-revamp.mjs
 !/tools/test-hero-level.mjs
+!/tools/test-boss-relics.mjs
 !/tools/phase19-progression.mjs
 !/tools/rest-flow-smoke.mjs
 !/tools/prepare-troop-portraits.mjs

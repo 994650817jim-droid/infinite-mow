@@ -14,6 +14,7 @@ import {FOCUS_INCOME,FOCUS_NAME,costText,type CityFocus} from '../town/TownData'
 import {chapterUnlocked} from '../systems/ChapterProgress';
 import {CITIES,CITY_LINKS,CITY_INCOME,FACTIONS,HOME,SPECIALTIES,TIER_NAME,cityAttackable,cityById,cityOwner,eraDef,eraIndexFor,territorySummary,type CityDef,type EraId} from '../world/WorldCities';
 import {cityMarker,factionLegend,markAlert,paintSelection,MARKER_FILES,type CityMarker} from '../world/WorldMapLayers';
+import {MARKERS_V2,cityMarkerV2,intelGlyphPos,intelPennant,nodeMarkerV2,paintSelectionV2,sealGraphics} from '../world/WorldMarkers';
 import {buildTerritory} from '../world/WorldTerritory';
 import {factionStrip,lacquerPlate,ownerSeal,realmLabels,resourceBar,sealGlyph} from '../world/WorldMapChrome';
 import {advanceEra,takeLostNotice,takeNewChapters,type CityAlert,type EraAdvance} from '../world/WorldStore';
@@ -72,18 +73,21 @@ export class WorldMapScene extends Phaser.Scene {
   this.layer.setMask(mask.createGeometryMask());this.events.once('shutdown',()=>mask.destroy());this.mapMask=mask;
   // 选中城池时显示其道路相邻（屏幕坐标）
   this.links=this.add.graphics();this.links.setMask(mask.createGeometryMask());
-  for(const city of CITIES){const m=cityMarker(this,city,cityOwner(city.id,this.era,this.owned));m.hit.on('pointerup',(pointer:Phaser.Input.Pointer)=>{if(pointer.getDistance()>10*RENDER_SCALE||this.pinching)return;this.selected={kind:'city',city};this.refresh();});if(this.alertFor(city.id))markAlert(this,m);this.cityMarkers.push(m);}
+  for(const city of CITIES){const m=(MARKERS_V2?cityMarkerV2:cityMarker)(this,city,cityOwner(city.id,this.era,this.owned));m.hit.on('pointerup',(pointer:Phaser.Input.Pointer)=>{if(pointer.getDistance()>10*RENDER_SCALE||this.pinching)return;this.selected={kind:'city',city};this.refresh();});if(this.alertFor(city.id))markAlert(this,m);this.cityMarkers.push(m);}
   // 纸雾下的城池：不显示、不可点（已占 / 告急城池始终可见）
   for(const m of this.cityMarkers){const fogged=!this.revealedAt(m.city.x,m.city.y)&&!this.owned.includes(m.city.id)&&!this.alertFor(m.city.id);m.root.setData('fogged',fogged);if(fogged)m.hit.disableInteractive();}
   const current=currentChapter(s).id;
   for(const node of WORLD_NODES){const st=this.nodeState(node),active=st!=='locked',info=this.chapterOf(node),color=st==='home'?0x88c5a4:st==='cleared'?0x9fd18a:active?0xe5c47d:0x747a6f;
    const marker=this.add.container(0,0);
    // 当前该打的一章：金色脉冲圈
-   if(st==='open'&&info?.id===current){const ring=this.add.circle(0,0,18).setStrokeStyle(3,0xffd27a,.9).setName(`node-pulse-${node.id}`);marker.add(ring);this.tweens.add({targets:ring,scale:1.8,alpha:0,duration:1300,repeat:-1,ease:'Sine.easeOut'});}
-   const circle=this.add.circle(0,0,18,st==='cleared'?0x3a2a12:0x16271e,.94).setStrokeStyle(2,color).setInteractive({useHandCursor:true}).setName(`node-${node.id}`).setData('state',st);
-   const icon=worldText(this,0,0,st==='home'?'营':st==='cleared'?'捷':active?'战':'锁',13,st==='cleared'?'#ffe7a8':active?'#f5dc9e':'#a4aa9c').setOrigin(.5);
-   const label=worldText(this,0,25,info?`${info.numeral} · ${node.name}`:node.name,13,active?'#fff0cd':'#b6b8aa').setOrigin(.5).setStroke('#142016',3);
-   circle.on('pointerup',(pointer:Phaser.Input.Pointer)=>{if(pointer.getDistance()>10*RENDER_SCALE||this.pinching)return;this.selected={kind:'node',node};this.refresh();});marker.add([circle,icon,label]);this.markers.push({node,root:marker});
+   if(st==='open'&&info?.id===current){const ring=(MARKERS_V2?this.add.ellipse(0,6,40,14):this.add.circle(0,0,18)).setStrokeStyle(3,0xffd27a,.9).setName(`node-pulse-${node.id}`);marker.add(ring);this.tweens.add({targets:ring,scale:1.8,alpha:0,duration:1300,repeat:-1,ease:'Sine.easeOut'});}
+   const glyphText=st==='home'?'营':st==='cleared'?'捷':active?'战':'锁',labelText=info?`${info.numeral} · ${node.name}`:node.name;
+   // v2：牙旗 / 营帐 + 名牌；命中区沿用 node-<id>
+   const v2=MARKERS_V2?nodeMarkerV2(this,st,glyphText,labelText,active):null;
+   const circle=(v2?v2.hit:this.add.circle(0,0,18,st==='cleared'?0x3a2a12:0x16271e,.94).setStrokeStyle(2,color)).setInteractive({useHandCursor:true}).setName(`node-${node.id}`).setData('state',st);
+   const icon=v2?null:worldText(this,0,0,glyphText,13,st==='cleared'?'#ffe7a8':active?'#f5dc9e':'#a4aa9c').setOrigin(.5);
+   const label=v2?null:worldText(this,0,25,labelText,13,active?'#fff0cd':'#b6b8aa').setOrigin(.5).setStroke('#142016',3);
+   circle.on('pointerup',(pointer:Phaser.Input.Pointer)=>{if(pointer.getDistance()>10*RENDER_SCALE||this.pinching)return;this.selected={kind:'node',node};this.refresh();});marker.add(v2?[...v2.parts,circle]:[circle,icon!,label!]);this.markers.push({node,root:marker});
   }
   for(const event of this.intel){const city=cityById(event.city);if(city)this.intelMarkers.push(this.intelMarker(event,city));}
   this.minZoom=Math.max(this.area.w/this.mapW,this.area.h/this.mapH);this.zoom=this.minZoom*1.2;
@@ -203,7 +207,7 @@ export class WorldMapScene extends Phaser.Scene {
   // 小城名字在放大后才显示，避免默认视图拥挤
   const showSmall=this.zoom>=this.minZoom*1.65;
   // 军旗高出徽框，靠近地图上沿时整个标记隐藏，免得旗子伸出地图框
-  for(const m of this.cityMarkers){const p=this.toScreen(m.city.x,m.city.y),flag=m.root.getData('banner')?m.outer+40:m.top;m.root.setPosition(p.x,p.y).setVisible(visible(p.x,p.y)&&p.y-flag>a.y&&!m.root.getData('fogged'));m.label.setVisible(m.city.tier!=='small'||showSmall||this.isSelected(m.city));}
+  for(const m of this.cityMarkers){const p=this.toScreen(m.city.x,m.city.y),flag=m.root.getData('banner')?m.outer+40:m.top;m.root.setPosition(p.x,p.y).setVisible(visible(p.x,p.y)&&p.y-flag>a.y&&!m.root.getData('fogged'));m.label.setVisible(m.city.tier!=='small'||showSmall||this.isSelected(m.city));(m.root.getData('plate') as Phaser.GameObjects.Graphics|undefined)?.setVisible(m.label.visible);}
   this.layoutRoute(visible);
   for(const m of this.intelMarkers){const p=this.toScreen(m.city.x,m.city.y),x=p.x+20,y=p.y-30;m.root.setPosition(x,y).setVisible(visible(x,y)&&y-16>a.y&&this.revealedAt(m.city.x,m.city.y));}
   this.drawLinks();
@@ -227,7 +231,7 @@ export class WorldMapScene extends Phaser.Scene {
  }
  private refresh(){
   const sel=this.selected,routeId=sel.kind==='stage'?sel.chapter:sel.kind==='node'?this.chapterOf(sel.node)?.id:undefined;this.showRoute(routeId);
-  for(const m of this.cityMarkers)paintSelection(m,this.isSelected(m.city));this.clampMap();this.paintChips();
+  for(const m of this.cityMarkers)(MARKERS_V2?paintSelectionV2:paintSelection)(m,this.isSelected(m.city));this.clampMap();this.paintChips();
   for(const m of this.intelMarkers)m.ring.setStrokeStyle(this.selected.kind==='intel'&&this.selected.event.id===m.event.id?3:0,0xfff0c0,1);
   if(this.selected.kind==='intel'){this.intelDetail(this.selected.event);return;}
   if(this.selected.kind==='city'){
@@ -314,12 +318,12 @@ export class WorldMapScene extends Phaser.Scene {
   STAGE_POINTS[id].forEach((pt,i)=>{const n=i+1,d=stages[i];if(!d)return;const isDone=n<=done,open=stageOpen(id,n,save)||isChapterTestRun(),next=open&&!isDone;
    const root=this.add.container(0,0).setDepth(3).setName(`stage-pin-root-${id}-${n}`),g=this.add.graphics(),r=15;
    if(next){const ring=this.add.circle(0,0,r).setStrokeStyle(3,0xffd27a,.9);root.add(ring);this.tweens.add({targets:ring,scale:1.9,alpha:0,duration:1200,repeat:-1,ease:'Sine.easeOut'});}
-   const pts=[{x:0,y:-r},{x:r,y:0},{x:0,y:r},{x:-r,y:0}];g.fillStyle(isDone?0x3a2a12:open?0x5a1a12:0x2a2d28,.95).fillPoints(pts,true).lineStyle(2,isDone?0x9fd18a:open?0xffd27a:0x747a6f,1).strokePoints(pts,true,true);
+   const pts=[{x:0,y:-r},{x:r,y:0},{x:0,y:r},{x:-r,y:0}];if(MARKERS_V2){g.destroy();}else g.fillStyle(isDone?0x3a2a12:open?0x5a1a12:0x2a2d28,.95).fillPoints(pts,true).lineStyle(2,isDone?0x9fd18a:open?0xffd27a:0x747a6f,1).strokePoints(pts,true,true);
    const glyph=worldText(this,0,0,isDone?'捷':open?d.seal:'锁',12,isDone?'#ffe7a8':open?'#ffe2a0':'#a4aa9c').setOrigin(.5);
    const label=worldText(this,0,24,`${d.code} ${d.name}`,12,open?'#fff0cd':'#b6b8aa').setOrigin(.5).setStroke('#142016',3);
    const hit=this.add.circle(0,0,r+6,0x000000,.001).setInteractive({useHandCursor:true}).setName(`stage-pin-${id}-${n}`).setData('state',isDone?'cleared':open?'open':'locked');
    hit.on('pointerup',(pointer:Phaser.Input.Pointer)=>{if(pointer.getDistance()>10*RENDER_SCALE||this.pinching)return;this.selected={kind:'stage',chapter:id,stage:n};this.refresh();});
-   root.add([g,glyph,label,hit]);this.pins.push({stage:n,x:pt.x,y:pt.y,root});});}
+   root.add([MARKERS_V2?sealGraphics(this,isDone?'cleared':open?'open':'locked',r):g,glyph,label,hit]);this.pins.push({stage:n,x:pt.x,y:pt.y,root});});}
  /** 路线重排：关卡标记跟随地图；关卡之间画虚线与箭头。 */
  private layoutRoute(visible:(x:number,y:number)=>boolean){if(!this.route)return;this.route.clear();const sel=this.selected;
   const pts=this.pins.map(p=>{const s=this.toScreen(p.x,p.y);p.root.setPosition(s.x,s.y).setVisible(visible(s.x,s.y));const on=sel.kind==='stage'&&sel.chapter===this.routeChapter&&sel.stage===p.stage;p.root.setScale(on?1.25:1);return s;});
@@ -353,10 +357,11 @@ export class WorldMapScene extends Phaser.Scene {
  private intelMarker(event:IntelEvent,city:CityDef):IntelMarker{const info=INTEL_INFO[event.kind],root=this.add.container(0,0).setName('intel-'+event.id);
   const pulse=this.add.circle(0,0,15).setStrokeStyle(2,info.color,.9);this.tweens.add({targets:pulse,scale:1.9,alpha:0,duration:1500,repeat:-1,ease:'Sine.easeOut'});
   const ring=this.add.circle(0,0,17).setStrokeStyle(0,0xfff0c0,1);
-  const body=this.add.circle(0,0,14,info.color,.95).setStrokeStyle(2,0x1a120b,.9).setInteractive({useHandCursor:true}).setName('intel-hit-'+event.id);
-  const glyph=worldText(this,0,0,info.glyph,14,'#fff6dc').setOrigin(.5).setStroke('#2a160c',3);
+  const body=(MARKERS_V2?this.add.circle(2,-12,18,0,.001):this.add.circle(0,0,14,info.color,.95).setStrokeStyle(2,0x1a120b,.9)).setInteractive({useHandCursor:true}).setName('intel-hit-'+event.id);
+  const glyph=worldText(this,MARKERS_V2?intelGlyphPos.x:0,MARKERS_V2?intelGlyphPos.y:0,info.glyph,MARKERS_V2?12:14,'#fff6dc').setOrigin(.5).setStroke('#2a160c',3);
+  if(MARKERS_V2){pulse.setPosition(0,12).setScale(1,.35);}
   body.on('pointerup',(pointer:Phaser.Input.Pointer)=>{if(pointer.getDistance()>10*RENDER_SCALE||this.pinching)return;this.selected={kind:'intel',event};this.refresh();});
-  root.add([pulse,ring,body,glyph]);root.setDepth(5);return{event,city,root,ring};}
+  root.add(MARKERS_V2?[pulse,ring,intelPennant(this,info.color),glyph,body]:[pulse,ring,body,glyph]);root.setDepth(5);return{event,city,root,ring};}
  /** 军情匾：依次选中下一件军情并居中。 */
  private nextIntel(){if(!this.intel.length)return;const i=this.selected.kind==='intel'?this.intel.findIndex(e=>e.id===(this.selected as {event:IntelEvent}).event.id):-1,event=this.intel[(i+1)%this.intel.length];this.selected={kind:'intel',event};const c=cityById(event.city);if(c)this.centerOnCity(c);this.refresh();}
  private centerOnCity(c:CityDef){this.layer.setPosition(this.area.x+this.area.w/2-c.x*this.zoom,this.area.y+this.area.h/2-c.y*this.zoom);this.clampMap();}

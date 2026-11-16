@@ -74,13 +74,15 @@ const R = (p, fn, arg) => p.evaluate(async ([src, a]) => { const r = await impor
   ck('随行上限 1；升级招贤馆后可带 2 人', !r.full.ok && r.hall.ok && r.add.ok && r.cap2 === 2, r);
   // 随行装备：招来的 r_ 武将可以穿戴，存档校验接受 r_ 键、丢掉非法键；行囊只列麾下；遣散时卸回行囊
   const g = await p.evaluate(async id => {
-    const I = await import('/src/systems/ItemStore.ts'), R = await import('/src/systems/RosterStore.ts'), o = {};
+    // 故意用另一个模块实例（带查询参数），模拟常开 dev server 热更新后 RosterStore 与测试各持一份行囊缓存的情况
+    const I = await import('/src/systems/ItemStore.ts?inst=test'), R = await import('/src/systems/RosterStore.ts'), o = {};
     I.addItems([{ uid: 'g1', base: 'lamellar', quality: 'blue', affixes: [{ id: 'damage', value: .05 }] }]);
     o.equip = I.equipItem(id, 'g1'); o.worn = Object.keys(I.loadout(id));
     const raw = JSON.parse(localStorage.getItem('im_items_v2')); raw.loadouts.hacker = { armor: 'g1' }; raw.loadouts.r_x = { armor: 'g1' }; localStorage.setItem('im_items_v2', JSON.stringify(raw)); I.resetItemCache();
     const s = I.loadItems(); o.keys = Object.keys(s.loadouts).sort(); o.kept = I.equippedBy(s, 'g1');
     o.horse = I.rideHorse(id, null); o.owners = R.gearOwners().map(x => x.id); o.name = R.ownerName(id);
-    o.dismiss = R.dismiss(id); o.after = I.equippedBy(I.loadItems(), 'g1') ?? null; o.inBag = I.loadItems().bag.some(i => i.uid === 'g1');
+    // 常开的 dev server 热更新过 ItemStore 时，测试导入的模块和 RosterStore 引用的可能是两个实例（各有内存缓存）：清缓存后从存档读
+    o.dismiss = R.dismiss(id); I.resetItemCache(); o.after = I.equippedBy(I.loadItems(), 'g1') ?? null; o.inBag = I.loadItems().bag.some(i => i.uid === 'g1');
     return o;
   }, r.zhId);
   ck('招来的武将能穿兵装，存档只认可玩武将与 r_ 编号', g.equip && g.worn.join() === 'armor' && g.kept === r.zhId && !g.keys.includes('hacker') && !g.keys.includes('r_x'), g);

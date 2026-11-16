@@ -4,7 +4,7 @@ import { FOLLOW, HERO_TEMPLATE, RANK, RECRUIT, TEMPLATE_ORDER, commonName, type 
 import { BOUNTY_GENERALS, seasonIndex } from '../world/WorldIntel';
 import { MAJOR_FACTIONS, type FactionId } from '../world/WorldCities';
 import { loadWorld, spendWorld, worldUnlocked } from '../world/WorldStore';
-import { loadItems, loadout, unequipSlot, type GearOwner } from './ItemStore';
+import { loadItems, loadout, resetItemCache, unequipSlot, type GearOwner } from './ItemStore';
 import { isChapterTestRun } from './ChapterProgress';
 
 /**
@@ -196,7 +196,8 @@ export function dismiss(id: string): RosterResult {
   if (s.owned[i].hero && s.owned[i].hero === s.lord) return { ok: false, message: '主公不能遣散' };
   const name = s.owned[i].name, gear = s.owned[i].hero ?? s.owned[i].id;
   // 身上的兵装卸回行囊（道具会话约定用 unequipSlot）
-  try { for (const slot of Object.keys(loadout(gear as GearOwner))) unequipSlot(gear as GearOwner, slot as never); } catch { /* 行囊不可用 */ }
+  // 先丢掉行囊的内存缓存，按存档里的实际穿戴来卸（缓存可能比存档旧）
+  try { resetItemCache(); for (const slot of Object.keys(loadout(gear as GearOwner))) unequipSlot(gear as GearOwner, slot as never); } catch { /* 行囊不可用 */ }
   s.owned.splice(i, 1); s.followers = s.followers.filter(f => f !== id); write(s); return { ok: true, message: `${name}辞去${gear.startsWith('r_') ? '，兵装已卸回行囊' : ''}` };
 }
 

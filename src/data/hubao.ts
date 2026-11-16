@@ -11,7 +11,7 @@ export const HUBAO_RAID = {
   damage: 20, knockback: 56, troopRadius: 32, troopDamage: 20,
 } as const;
 export const HUBAO = {
-  hpMul: 1.4, damageAdd: 2, scale: 1.08, tint: 0x8d93ab,
+  hpMul: 1.4, damageAdd: 2, scale: 1.08, tint: 0x8d93ab, baseScale: .9127,
   first: [35, 60, 60] as readonly number[], interval: [16, 30, 30] as readonly number[],
   guards: 4, guardRing: 95, guardLeash: 230, regroupMs: 25000, regroupBelow: 2, regroupCount: 2,
 } as const;

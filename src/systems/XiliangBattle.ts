@@ -6,6 +6,7 @@ import type {EnemyDef} from '../data/enemies';
 import type {EnemyKind} from '../types';
 import {warnLane} from '../ui/Telegraph';
 import {XILIANG_RAID as R, FEIXIONG as F} from '../data/xiliang';
+import {ensureTroopArt, troopArtReady} from './TroopArt';
 
 /** 铁骑突阵参数（西凉铁骑见 XILIANG_RAID；虎豹骑见 data/hubao.ts）。 */
 export type RaidParams = {readonly riders: number; readonly spacing: number; readonly lead: number; readonly aimJitter: number; readonly distance: number; readonly speed: number; readonly warnMs: number; readonly damage: number; readonly knockback: number; readonly troopRadius: number; readonly troopDamage: number};
@@ -32,26 +33,29 @@ export interface Host {
   banner: (text: string, caption: string) => void; sfx: (key: 'chargeWarn' | 'hitHeavy') => void;
 }
 export interface Raid {id: number; x: number; y: number; dx: number; dy: number; warnUntil: number; riders: Array<{e: Enemy; life: number; ox: number; oy: number; hit: boolean; hurtAt: number}>; g: Phaser.GameObjects.Graphics; traveled: number}
-interface Bash {e: Enemy; life: number; state: 'windup' | 'lunge'; until: number; dx: number; dy: number; hit: boolean; g: Phaser.GameObjects.Graphics}
+interface Bash {e: Enemy; life: number; state: 'windup' | 'lunge'; until: number; dx: number; dy: number; hit: boolean; anim?: boolean; g: Phaser.GameObjects.Graphics}
 
 /**
  * 第二章 · 讨伐董卓 的西凉军专属战法（只在主线第二章三关生效，攻守城 / 军情不启用）：
  * - 铁骑突阵：三骑并排，地面先亮一条冲锋道（约 1.1 秒），随后高速贯穿战场；撞到主将造成伤害并横向撞开，撞到部曲同样受伤。冲过后归入普通骑兵。
  * - 飞熊军（董卓亲军重甲步兵，荥阳、虎牢关出现）：受弓弩伤害减半；贴身时蓄力（地面短预警）后举盾猛撞，撞退主将。
- * 飞熊军为过渡造型：西凉刀盾兵放大并染铁青色（无独立美术）。
+ * 飞熊军造型：ChatGPT 生成的行走图与盾击动作图（public/assets/xiliang/feixiong-*.png，战斗开始时加载）；加载完成前为西凉刀盾兵放大并染铁青色。
  */
 export class XiliangBattle {
   protected raids: Raid[] = []; private bashes: Bash[] = []; private nextRaidAt: number; private nextFeixiongAt: number = F.first; private raidSeq = 0; private lastT = 0; private announced = false; private feixiongAnnounced = false;
   private readonly bashCd = new WeakMap<Enemy, number>();
   protected readonly raid: RaidParams;
-  constructor(protected h: Host, protected o: TacticsOptions = {}) { this.raid = o.raid ?? R; this.nextRaidAt = o.first ?? R.first; }
+  constructor(protected h: Host, protected o: TacticsOptions = {}) { this.raid = o.raid ?? R; this.nextRaidAt = o.first ?? R.first; if (o.feixiong !== false) ensureTroopArt(h.scene, ['feixiong_walk', 'feixiong_attack']); }
   private intervalFor(stage: 1 | 2 | 3): number | null { return this.o.interval ? this.o.interval(stage) : R.interval[stage - 1]; }
   /** 子类（虎豹骑护驾）接管普通敌兵移动的钩子。 */
   protected guardStep(_e: Enemy, _dt: number, _now: number): boolean { return false; }
   /** 飞熊军定义（测试也用）。 */
   feixiongDef(): EnemyDef {
     const base = this.h.def('shield'), wv = base.walkVisual;
-    return {...base, variant: 'feixiong', hp: F.hp, speed: F.speed, damage: F.damage, xp: F.xp, radius: F.radius, tint: F.tint, walkVisual: wv ? {...wv, scale: wv.scale * F.scale} : undefined};
+    const def: EnemyDef = {...base, variant: 'feixiong', hp: F.hp, speed: F.speed, damage: F.damage, xp: F.xp, radius: F.radius, tint: F.tint, walkVisual: wv ? {...wv, scale: wv.scale * F.scale} : undefined};
+    // 正式美术（ChatGPT 行走 + 盾击动作图）就绪后不再染色
+    if (wv && troopArtReady(this.h.scene, 'feixiong_walk')) { def.tint = undefined; def.walkVisual = {...wv, texture: 'feixiong_walk', scale: wv.scale * F.scale}; def.attackVisual = troopArtReady(this.h.scene, 'feixiong_attack') ? 'feixiong_attack' : undefined; }
+    return def;
   }
   isFeixiong(e: Enemy): boolean { return e.def.variant === 'feixiong'; }
   /** 受击倍率：飞熊军重甲，弓弩伤害减半。 */
@@ -78,6 +82,8 @@ export class XiliangBattle {
       e.moveVx = e.moveVy = 0;
       const t = 1 - (b.until - now) / F.windupMs;
       b.g.clear(); warnLane(b.g, e.x, e.y, Math.atan2(b.dy, b.dx), F.lungeDistance + 20, 46, Math.max(0, Math.min(1, t)), 0x7d8bb0, 0xd8e2ff);
+      // 盾击动作四帧（360ms）：蓄力末段起播，撞出时到最远帧
+      if (!b.anim && now >= b.until - 190) { b.anim = true; e.startAttack(now, Math.abs(b.dx) > Math.abs(b.dy) ? (b.dx < 0 ? 'left' : 'right') : b.dy < 0 ? 'up' : 'down'); }
       if (now >= b.until) { b.state = 'lunge'; b.until = now + F.lungeMs; b.g.clear(); }
       return true;
     }
@@ -133,8 +139,10 @@ export class XiliangBattle {
     const step = this.raid.speed * dt; r.traveled += step;
     const p = this.h.player;
     for (const x of live) {
-      const e = x.e; e.chargeState = 'charge'; e.sprite.x += r.dx * step; e.sprite.y += r.dy * step; e.moveVx = r.dx * this.raid.speed; e.moveVy = r.dy * this.raid.speed;
-      if (!x.hit && Math.hypot(p.x - e.x, p.y - e.y) < p.radius + e.radius + 8) {
+      const e = x.e, x0 = e.x, y0 = e.y; e.chargeState = 'charge'; e.sprite.x += r.dx * step; e.sprite.y += r.dy * step; e.moveVx = r.dx * this.raid.speed; e.moveVy = r.dy * this.raid.speed;
+      // 按本帧走过的线段判定（低帧率时一帧可走几十像素，只看终点会穿过主将）
+      const along = Math.max(0, Math.min(step, (p.x - x0) * r.dx + (p.y - y0) * r.dy)), cx = x0 + r.dx * along, cy = y0 + r.dy * along;
+      if (!x.hit && Math.hypot(p.x - cx, p.y - cy) < p.radius + e.radius + 8) {
         x.hit = true; if (p.takeDamage(this.raid.damage, now)) this.h.scene.cameras.main.flash(120, 180, 40, 40, false);
         // 横向撞开（离开冲锋道）
         const cross = (p.x - e.x) * -r.dy + (p.y - e.y) * r.dx, s = cross >= 0 ? 1 : -1;

@@ -48,6 +48,38 @@ for (const [layout, viewport] of Object.entries(LAYOUTS)) for (const [hero, h] o
       return { first, groupHurt: group.filter(e => e.hp < e.maxHp).length, sharp: pl.passive.isSharpshooter(s.combatNow) };
     }, [G, mk]);
     ck(`${tag}：重箭先打远处敌群而不是近处落单的（单体、击退），神射时爆裂波及同群`, r.first && r.first.near === 0 && r.first.group > 0 && r.first.pushed >= 20 && r.groupHurt >= 2, r);
+    // 2026-11-16 方案 C「老当益壮」：静心缩短进入神射时间；3 级神射第一箭扇形三连重箭（像素爆裂）
+    const jx = await p.evaluate(async ([G0, MK]) => {
+      const s = eval(G0), pl = s.player, mk = eval(MK), calm = [];
+      for (const lvl of [0, 1, 2, 3]) { pl.growth.masteries.jingxin = lvl; await new Promise(r => setTimeout(r, 120)); calm.push(pl.passive.sharpCalmMs); }
+      for (const e of s.enemies) if (e.active && !e.isSupplySlot) e.deactivate();
+      for (let i = 0; i < 5; i++) mk(pl.x + 320, pl.y - 80 + i * 40);
+      pl.passive.onDamage(s.combatNow); pl.weapons[0].cooldownLeft = 0; await new Promise(r => setTimeout(r, 200));
+      pl.passive.grantSharp(s.combatNow, 0); // 直接进入神射（等同不受伤满 3.5 秒）
+      let most = 0, burst = false, enter = false; const t0 = performance.now();
+      while (performance.now() - t0 < 3000) { await new Promise(r => setTimeout(r, 15)); most = Math.max(most, s.children.list.filter(o => o.name === 'huangzhong-heavy-arrow' && o.active).length); burst = burst || !!s.children.getByName('huangzhong-burst'); enter = enter || !!s.children.getByName('huangzhong-sharp-enter'); }
+      return { calm, most, burst, enter, fx: s.textures.exists('huangzhong_fx') };
+    }, [G, mk]);
+    ck(`${tag}：静心——进入神射 5 → 4.5/4/3.5 秒；3 级神射第一箭扇形三连重箭，带像素爆裂与进入神射金光`, jx.calm.join() === '5000,4500,4000,3500' && jx.most >= 3 && (!jx.fx || (jx.burst && jx.enter)), jx);
+    // 老骥伏枥（用户：「不靠残血触发」）：越战越勇——本关每击杀 10 名敌人射速 +2.5%（上限 15/20/25%）；残血不再加速。
+    // 3 级「宝刀未老」：神射中射杀精锐 / 首领回复 4% 生命，2 秒内受伤不退出神射
+    const lj = await p.evaluate(async ([G0, MK]) => {
+      const s = eval(G0), pl = s.player, mk = eval(MK), w = pl.weapons[0]; for (const e of s.enemies) if (e.active && !e.isSupplySlot) e.deactivate();
+      const { PASSIVE_RULES: R, } = await import('/src/data/passives.ts'), { BAODIAO_DEF } = await import('/src/weapons/heroWeapons2.ts');
+      // 射速：看出手后的冷却。先把击杀数归零看基础冷却，再用 passive.onKill 记 100 次击杀
+      const cdAfterShot = async () => { mk(pl.x + 300, pl.y); w.cooldownLeft = 0; const t0 = performance.now(); while (performance.now() - t0 < 1500 && w.cooldownLeft <= 0) await new Promise(r => setTimeout(r, 10)); const cd = w.cooldownLeft; for (const e of s.enemies) if (e.active && !e.isSupplySlot) e.deactivate(); return cd; };
+      pl.growth.masteries.laoji = 1; pl.hp = Math.round(pl.maxHp * .3); const lowHpNoKills = await cdAfterShot(); pl.growth.masteries.laoji = 0; const base = await cdAfterShot(); pl.hp = pl.maxHp;
+      for (let i = 0; i < 100; i++) pl.passive.onKill('infantry', s.combatNow);
+      const fast = []; for (const lvl of [1, 2, 3]) { pl.growth.masteries.laoji = lvl; fast.push(await cdAfterShot()); }
+      // 宝刀未老：神射中射杀精锐
+      pl.hp = Math.round(pl.maxHp * .5); const hp0 = pl.hp; pl.passive.grantSharp(s.combatNow, 0);
+      const el = s.spawnEnemy('elite', pl.x + 200, pl.y, 1); if (el) { el.hp = 1; el.stunUntil = 1e12; } w.cooldownLeft = 0;
+      const t0 = performance.now(); while (performance.now() - t0 < 3000 && el?.active) await new Promise(r => setTimeout(r, 20));
+      await new Promise(r => setTimeout(r, 100)); const healed = pl.hp - hp0, text = !!s.children.getByName('huangzhong-laoji-text');
+      pl.passive.onDamage(s.combatNow); const keptAfterHit = pl.passive.isSharpshooter(s.combatNow); pl.hp = pl.maxHp;
+      return { base: +base.toFixed(3), lowHpNoKills: +lowHpNoKills.toFixed(3), fast: fast.map(v => +v.toFixed(3)), ratio: fast.map(v => +(base / v).toFixed(3)), killed: !el?.active, healed, text, keptAfterHit };
+    }, [G, mk]);
+    ck(`${tag}：老骥伏枥——残血不再加速；击杀 100 名后射速 +15/20/25%；3 级神射中射杀精锐回血、神射不因受伤退出`, Math.abs(lj.lowHpNoKills - lj.base) < .02 && Math.abs(lj.ratio[0] - 1.15) < .02 && Math.abs(lj.ratio[1] - 1.2) < .02 && Math.abs(lj.ratio[2] - 1.25) < .02 && lj.killed && lj.healed > 0 && lj.text && lj.keptAfterHit, lj);
   } else if (hero === 'zhangfei') {
     const r = await p.evaluate(async ([G0, MK]) => {
       const s = eval(G0), pl = s.player; const mk = eval(MK);
@@ -71,7 +103,8 @@ for (const [layout, viewport] of Object.entries(LAYOUTS)) for (const [hero, h] o
       while (performance.now() - t0 < 4000) { await new Promise(r => setTimeout(r, 20)); lifted = Math.max(lifted, y0 - t.sprite.y); land = land || !!s.children.getByName('machao-land'); if (land && side.hp < side.maxHp) break; }
       return { lifted: Math.round(lifted), land, targetHurt: t.maxHp - t.hp, sideHurt: side.maxHp - side.hp };
     }, [G, mk]);
-    ck(`${tag}：一枪挑飞目标，落地砸出范围伤害`, r.lifted >= 20 && r.land && r.targetHurt > 0 && r.sideHurt > 0, r);
+    // 落地范围圈（machao-land）在技能提示方案 c 下不画了（只留首领大招提示），所以只看伤害
+    ck(`${tag}：一枪挑飞目标，落地砸出范围伤害`, r.lifted >= 20 && r.targetHurt > 0 && r.sideHurt > 0, r);
     // 西凉铁骑满层：下一枪化为向前冲锋（主将突进）
     const c = await p.evaluate(async ([G0, MK]) => {
       const s = eval(G0), pl = s.player; const mk = eval(MK); for (const e of s.enemies) if (e.active && !e.isSupplySlot) e.hp = 0;

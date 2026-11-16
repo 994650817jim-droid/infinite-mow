@@ -1488,6 +1488,7 @@ export class GameScene extends Phaser.Scene {
     this.warfeedKill();
     if(enemy.def.behavior==='wall')return;
     this.kills += 1;
+    this.player.passive.onKill(kind, this.combatNow);
     this.awakeningCombat?.onKill(enemy,this.combatNow);
     this.buildCombat.onKill(enemy,this.combatNow);
     this.controlBuild?.onKill(enemy,this.combatNow);

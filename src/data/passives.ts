@@ -54,6 +54,11 @@ export const PASSIVE_RULES = {
   moonMs: 2000, moonRadius: 160, moonTickMs: 400, moonDamageMul: .5,
   /** 黄忠·宝雕弓：重箭（速度 / 射程 / 击退）；神射时命中处小范围爆裂（半径 / 伤害倍率）。 */
   heavyArrowSpeed: 900, heavyArrowRange: 600, heavyArrowKnock: 40, heavyBurstRadius: 60, heavyBurstMul: .5,
+  /** 2026-11-16 方案 C「老当益壮」（用户选定，初值待平衡）：静心每级缩短进入神射时间 jingxinStepMs；3 级神射第一箭扇形三连（夹角 fanSpreadRad、每支 fanMul）；
+   *  老骥伏枥（2026-11-16 用户：「不靠残血触发」→ 越战越勇）：本关每击杀 laojiKillsPerStack 名敌人射速 +laojiPerStack，上限 laojiCap（Lv1–3）；
+   *  3 级「宝刀未老」：神射中每射杀一名精锐 / 首领，回复 laojiHealMul 最大生命，且 laojiGuardMs 内受伤不退出神射。 */
+  jingxinStepMs: 500, fanSpreadRad: .22, fanMul: .7,
+  laojiKillsPerStack: 10, laojiPerStack: .025, laojiCap: [.15, .2, .25], laojiHealMul: .04, laojiGuardMs: 2000,
   /** 张飞·当阳喝断：声浪推进速度 / 推后力度；据水断桥：断桥区半径与持续。震慑与 140% 伤害沿用 roarRadius / roarStunMs / roarDamageMul。 */
   roarWaveSpeed: 480, roarWavePush: 2.5, bridgeRadius: 150, bridgeMs: 3000,
   /** 马超·枪挑破阵：挑飞（索敌距离 / 腾空时长 / 挑起伤害倍率）、落地范围半径；西凉铁骑满层冲锋（距离 / 宽 / 伤害倍率 / 突进时长）。命中积层间隔沿用 cavalryIntervalMs。 */

@@ -312,16 +312,22 @@ export function createGameTextures(scene: Phaser.Scene): void {
   }, true);
   makeTexture(scene, 'boss_zhangjiao', 56, 60, drawZhangjiao, true);
 
-  makeTexture(scene, 'gem_small', 10, 10, (ctx) => {
-    rect(ctx, 3, 1, 4, 8, '#3fd6a0');
-    rect(ctx, 2, 3, 6, 4, '#5ff0bd');
-    rect(ctx, 4, 2, 2, 2, '#c9ffe9');
-  });
-  makeTexture(scene, 'gem_large', 14, 14, (ctx) => {
-    rect(ctx, 4, 1, 6, 12, '#e8c76a');
-    rect(ctx, 3, 3, 8, 8, '#f5dd93');
-    rect(ctx, 5, 2, 3, 3, '#fff6d6');
-  });
+  // 2026-11-16 用户反馈：小怪掉落的军粮（经验）原为绿色菱形，不好看、太跳。改成「魂」一样的小火苗：
+  // 小颗：银白芯 + 很淡的冷蓝光晕（暖色地面上看得清又不刺眼）；大颗：淡金魂火，更亮略大。上尖下圆，不加动画。
+  const wisp = (ctx: CanvasRenderingContext2D, w: number, h: number, core: string, mid: string, halo: string) => {
+    ctx.imageSmoothingEnabled = true;
+    const cx = w / 2, cy = h * .62, r = w * .32;
+    const glow = ctx.createRadialGradient(cx, cy, 0, cx, cy, w * .5);
+    glow.addColorStop(0, halo); glow.addColorStop(1, halo.replace(/[\d.]+\)$/, '0)'));
+    ctx.fillStyle = glow; ctx.fillRect(0, 0, w, h);
+    const body = ctx.createRadialGradient(cx, cy - r * .2, 0, cx, cy, r * 1.25);
+    body.addColorStop(0, core); body.addColorStop(.55, mid); body.addColorStop(1, mid.replace(/[\d.]+\)$/, '0)'));
+    ctx.fillStyle = body; ctx.beginPath();
+    ctx.moveTo(cx, h * .08); ctx.quadraticCurveTo(cx + r * 1.15, cy - r * .4, cx + r, cy);
+    ctx.arc(cx, cy, r, 0, Math.PI); ctx.quadraticCurveTo(cx - r * 1.15, cy - r * .4, cx, h * .08); ctx.fill();
+  };
+  makeTexture(scene, 'gem_small', 12, 14, (ctx, w, h) => wisp(ctx, w, h, 'rgba(250,253,255,1)', 'rgba(196,222,255,.85)', 'rgba(150,195,255,.34)'));
+  makeTexture(scene, 'gem_large', 16, 18, (ctx, w, h) => wisp(ctx, w, h, 'rgba(255,253,240,1)', 'rgba(255,200,110,.95)', 'rgba(255,190,90,.42)'));
 
   makeTexture(scene, 'bolt', 18, 6, (ctx) => {
     rect(ctx, 0, 2, 12, 2, '#8b5a2b');

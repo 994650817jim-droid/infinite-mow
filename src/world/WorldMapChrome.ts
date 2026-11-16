@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import {FONT, HEADING_FONT} from '../config';
 import {FACTIONS, factionStrength, type FactionId, type EraId} from './WorldCities';
 import {BANNER_CHAR} from './WorldMapLayers';
-import type {TerritoryLabel} from './WorldTerritory';
+import {REALM_V2, type TerritoryLabel} from './WorldTerritory';
 
 /** 天下地图界面件（漆底描金，与主页漆金小匾同系）：资源栏、势力排行条、疆域大字、详情旗印。仅表现。 */
 const GOLD = 0xc9a35e, LACQUER = 0x1b120b;
@@ -65,8 +65,9 @@ export function factionStrip(scene: Phaser.Scene, x: number, y: number, maxW: nu
 export function realmLabels(scene: Phaser.Scene, labels: readonly TerritoryLabel[]): Phaser.GameObjects.Text[] {
   return labels.filter(l => l.faction !== 'han').map(l => {
     const name = FACTIONS[l.faction].name.split('').join(' ');
-    return scene.add.text(l.x, l.y, name, {fontFamily: HEADING_FONT, fontSize: Math.round(l.size) + 'px', color: FACTIONS[l.faction].css, resolution: 2})
-      .setOrigin(.5).setAlpha(.62).setStroke('#120c06', Math.max(3, l.size * .09)).setShadow(0, 2, '#000000', 4, true, true).setName('realm-' + l.faction);
+    const mine = REALM_V2 && l.faction === 'player';
+    return scene.add.text(l.x, l.y, name, {fontFamily: HEADING_FONT, fontSize: Math.round(l.size * (mine ? 1.15 : 1)) + 'px', color: mine ? '#ffe08a' : FACTIONS[l.faction].css, resolution: 2})
+      .setOrigin(.5).setAlpha(mine ? .92 : .62).setStroke('#120c06', Math.max(3, l.size * .09)).setShadow(0, 2, '#000000', 4, true, true).setName('realm-' + l.faction);
   });
 }
 

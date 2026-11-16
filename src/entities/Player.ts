@@ -17,8 +17,11 @@ import type { PlayerStats, WeaponState } from '../types';
 /**
  * 刀将（偃月刀，出手当帧即结算伤害）：举刀只留 16ms，下劈 42ms，砍到底帧 57–172ms，收刀 88ms。
  * 均分时砍到底要到 130ms 才出现，刀光与掉血明显早于挥刀动作。
+ * 弓弩 / 火旗（箭与挥旗特效都在出手当帧生成）：拉弓 10ms、满弓 21ms，放箭 / 挥扇帧 31–161ms；
+ * 均分时放箭帧到 130ms 才出现，箭已飞出约 70 像素。
  */
-const ATTACK_WEIGHTS: Partial<Record<CharacterId, readonly number[]>> = (() => { const w = [.12, .14, .42, .32] as const, blade = [.06, .16, .44, .34] as const; return {zhaoyun: w, machao: w, zhangfei: w, guanyu: blade, weiyan: blade, liubei: blade}; })();
+const ATTACK_WEIGHTS: Partial<Record<CharacterId, readonly number[]>> = (() => { const w = [.12, .14, .42, .32] as const, blade = [.06, .16, .44, .34] as const, release = [.04, .08, .50, .38] as const;
+  return {zhaoyun: w, machao: w, zhangfei: w, guanyu: blade, weiyan: blade, liubei: blade, huangzhong: release, huangyueying: release, zhuge: release, pangtong: release}; })();
 function weightedIndex(t: number, n: number, weights?: readonly number[]): number {
   if (!weights) return Math.min(n - 1, Math.floor(t * n));
   let acc = 0; for (let i = 0; i < n; i++) { acc += weights[i]; if (t < acc) return i; }

@@ -35,7 +35,6 @@ export const HERO_ACTIONS: Partial<Record<CharacterId, HeroActionSet>> = {
   liubei: fullSet('liubei_actions'),
   weiyan: fullSet('weiyan_actions'),
   machao: fullSet('machao_actions'),
-  // 孙尚香 / 貂蝉：过渡素材——运行时由黄月英动作图换色生成（systems/PlaceholderHeroArt.ts），正式图到位后替换
   sunshangxiang: fullSet('sunshangxiang_actions'),
   diaochan: fullSet('diaochan_actions'),
 };
@@ -47,4 +46,4 @@ function fullSet(texture: string): HeroActionSet {
   return {texture, idle: row(0), attack: {down: row(1), right: row(2), up: row(3)}, skill: row(4), hurt: row(5, 0, 2), win: row(5, 2, 2), die: row(6)};
 }
 /** 需加载的正式动作图集（key → 文件）。 */
-export const HERO_ACTION_FILES: Record<string, string> = {zhaoyun_actions: 'assets/hero-actions/zhaoyun.png', guanyu_actions: 'assets/hero-actions/guanyu.png', huangzhong_actions: 'assets/hero-actions/huangzhong.png', zhangfei_actions: 'assets/hero-actions/zhangfei.png', huangyueying_actions: 'assets/hero-actions/huangyueying.png', pangtong_actions: 'assets/hero-actions/pangtong.png', liubei_actions: 'assets/hero-actions/liubei.png', weiyan_actions: 'assets/hero-actions/weiyan.png', machao_actions: 'assets/hero-actions/machao.png', zhuge_actions: 'assets/hero-actions/zhuge.png'};
+export const HERO_ACTION_FILES: Record<string, string> = {sunshangxiang_actions: 'assets/hero-actions/sunshangxiang.png', diaochan_actions: 'assets/hero-actions/diaochan.png', zhaoyun_actions: 'assets/hero-actions/zhaoyun.png', guanyu_actions: 'assets/hero-actions/guanyu.png', huangzhong_actions: 'assets/hero-actions/huangzhong.png', zhangfei_actions: 'assets/hero-actions/zhangfei.png', huangyueying_actions: 'assets/hero-actions/huangyueying.png', pangtong_actions: 'assets/hero-actions/pangtong.png', liubei_actions: 'assets/hero-actions/liubei.png', weiyan_actions: 'assets/hero-actions/weiyan.png', machao_actions: 'assets/hero-actions/machao.png', zhuge_actions: 'assets/hero-actions/zhuge.png'};

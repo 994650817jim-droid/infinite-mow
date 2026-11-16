@@ -297,7 +297,7 @@ export class HeroWarCard{
   // 画卷版收起时名字写在 foldName 上，竖排名始终更新（否则“先收起再进首页/换将”展开后名字为空）
   if(this.painted||!this.folded)this.nameV.setText([...c.name].join('\n'));else this.nameV.setText(c.name);
   this.title.setText([...titles[index]].join('\n'));
-  const nameBottom=this.nameV.y+this.nameV.height;this.seal.setY(nameBottom+(small?4:6));
+  const nameBottom=this.nameV.y+this.nameV.height;this.seal.setTexture(sealTexture(this.s,c.faction??'蜀',small?26:32)).setDisplaySize(small?26:32,small?26:32).setY(nameBottom+(small?4:6));
   this.brush.setDisplaySize(small?40:52,Math.max(small?96:128,this.nameV.height+(small?14:20)));
   this.role.setText(roles[index]);
   this.roleSeal.setTexture(sealTexture(this.s,roles[index],small?30:36,false,HEADING_FONT)).setDisplaySize(small?30:36,small?30:36);

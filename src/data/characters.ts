@@ -17,6 +17,8 @@ export interface CharacterDef {
   portrait: string;
   /** 武将专属初始武器（开局固定，不再选择）。 */
   startWeapon: WeaponId;
+  /** 选将卡上的势力印（缺省为蜀）。 */
+  faction?: '蜀' | '吴' | '魏' | '群';
 }
 
 export interface RunConfig {
@@ -145,6 +147,7 @@ export const CHARACTERS: CharacterDef[] = [
     damageMul: 1,
     portrait: 'sunshangxiang_portrait',
     startWeapon: 'crossbow',
+    faction: '吴',
   },
   {
     id: 'diaochan',
@@ -155,6 +158,7 @@ export const CHARACTERS: CharacterDef[] = [
     damageMul: 0.98,
     portrait: 'diaochan_portrait',
     startWeapon: 'flame_banner',
+    faction: '群',
   },
 ];
 

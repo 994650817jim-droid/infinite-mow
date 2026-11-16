@@ -7,8 +7,9 @@ import type { PlayerStats, WeaponId, WeaponState } from '../types';
 import { PASSIVE_RULES } from '../data/passives';
 import { HERO_TINT } from '../data/characters';
 import { BAODIAO_DEF, DANGYANG_DEF, ZHANJIN_DEF, SHUANGGU_DEF, baodiaoBehavior, dangyangBehavior, zhanjinBehavior, shuangguBehavior, smartTarget } from './heroWeapons2';
+import { HINT_MOCK, groundScar } from '../ui/HintStyle';
 import { ZHENBEI_DEF, LIANHUAN_DEF, SUN_KNIVES_DEF, DIAOCHAN_FANS_DEF, zhenbeiBehavior, lianhuanBehavior, sunKnivesBehavior, diaochanFansBehavior } from './heroWeapons';
-export { zhenbeiCracks, lianhuanMinesPerCast, sunOrbitKnives, sunThrowCount, sunThrowPierce, diaochanFanCount } from './heroWeapons';
+export { zhenbeiCracks, lianhuanLinksPerMine, sunOrbitKnives, sunThrowCount, sunThrowPierce, diaochanFanCount } from './heroWeapons';
 
 export interface WeaponBolt {
   img: Phaser.GameObjects.Image; vx: number; vy: number; life: number;
@@ -245,7 +246,8 @@ export const WEAPON_BEHAVIORS: Record<WeaponId, (host: WeaponHost, weapon: Weapo
         if (!e.controlImmune) e.stunUntil = Math.max(e.stunUntil, now + R.roarStunMs);
       }
       host.heroFx?.('roar', px, py - 10, R.roarRadius * 2.6);
-      for (let k = 0; k < 2; k++) { const ring = host.add.circle(px, py - 6, 30, 0xffd27a, 0).setStrokeStyle(6 - k * 2, k ? 0xff8a3c : 0xffe2a0, .9).setDepth(41); ring.scene.tweens.add({ targets: ring, radius: R.roarRadius, alpha: 0, delay: k * 90, duration: 420, onComplete: () => ring.destroy() }); }
+      if (HINT_MOCK === 'b') groundScar(host.player.sprite.scene, px, py, R.roarRadius, 'crack');
+      if (!HINT_MOCK) for (let k = 0; k < 2; k++) { const ring = host.add.circle(px, py - 6, 30, 0xffd27a, 0).setStrokeStyle(6 - k * 2, k ? 0xff8a3c : 0xffe2a0, .9).setDepth(41); ring.scene.tweens.add({ targets: ring, radius: R.roarRadius, alpha: 0, delay: k * 90, duration: 420, onComplete: () => ring.destroy() }); }
       host.cameras.main.shake(160, .006); host.sfx.play('waveDrum');
     }
     const spearLength = pierce.len * passiveCast.spearLengthMul * host.player.growth.spearLengthMultiplier();

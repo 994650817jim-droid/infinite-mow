@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { QUALITIES, SLOT_ORDER, itemSlot, type ItemInstance, type ItemQuality, type ItemSlot } from '../data/items';
+import { QUALITIES, SLOT_ORDER, itemSlot, relicDef, type ItemInstance, type ItemQuality, type ItemSlot } from '../data/items';
 
 /**
  * 道具品质的统一表现：边框（白细线 → 绿单线 → 蓝双线 → 紫双线 + 四角菱饰 → 橙漆金描边 + 菱饰 + 外发光）
@@ -103,6 +103,8 @@ export function itemTile(scene: Phaser.Scene, x: number, y: number, size: number
   const slot = item ? itemSlot(item) : slotHint;
   if (item) { const ic = itemIcon(scene, item), k = ic.art ? .84 : .72; c.add(scene.add.image(0, 0, ic.key, ic.frame).setDisplaySize(size * k, size * k).setName('item-icon').setData('art', ic.art)); }
   else if (slot) c.add(scene.add.image(0, 0, itemIconKey(slot)).setDisplaySize(size * .72, size * .72).setAlpha(.22));
+  // 首领遗珍：右下角「珍」字
+  if (item && relicDef(item.base)) c.add(scene.add.text(size / 2 - 3, size / 2 - 3, '珍', { fontFamily: 'serif', fontSize: Math.max(10, Math.round(size * .2)) + 'px', color: '#2a1606', backgroundColor: '#f3c66acc', resolution: 2 }).setOrigin(1, 1).setPadding(2, 0).setName('item-relic-badge'));
   if (item?.special) c.add(scene.add.text(size / 2 - 4, -size / 2 + 2, '★', { fontFamily: 'serif', fontSize: Math.round(size * .26) + 'px', color: '#ffd27a', resolution: 2 }).setOrigin(1, 0));
   return c;
 }

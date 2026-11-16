@@ -25,12 +25,15 @@ export class HeroMount {
   private readonly trampled = new WeakMap<Enemy, number>(); private readonly trampleMul: number;
   /** 本局践踏次数、落马次数（测试与结算用）。 */
   tramples = 0; falls = 0;
-  constructor(private h: Host, item: {base: string; name: string}, hero: CharacterId) {
+  /** opts：遗珍「虎豹铁面」践踏 ×2、上马间隔缩短（BossRelics.RELIC.hubao*）。 */
+  private readonly remountMs: number;
+  constructor(private h: Host, item: {base: string; name: string}, hero: CharacterId, opts: {trampleMul?: number; remountMs?: number} = {}) {
+    this.remountMs = opts.remountMs ?? MOUNT.remountMs;
     ensureHorseTextures(h.scene);
     this.style = mountStyle(item.base); this.name = item.name;
     const cav = CAVALRY_HEROES.includes(hero);
     this.maxStamina = MOUNT.stamina + (this.style.stamina ?? 0) + (cav ? CAVALRY_BONUS.stamina : 0); this.stamina = this.maxStamina;
-    this.trampleMul = (this.style.trampleMul ?? 1) * (cav ? CAVALRY_BONUS.trample : 1);
+    this.trampleMul = (this.style.trampleMul ?? 1) * (cav ? CAVALRY_BONUS.trample : 1) * (opts.trampleMul ?? 1);
     const k = MOUNT.horseSize / HORSE_FRAME;
     this.horse = h.scene.add.image(h.player.x, h.player.y, 'mount_horse', 'down_0').setOrigin(.5, HORSE_FOOT / HORSE_FRAME).setScale(k).setTint(this.style.tint).setName('hero-mount');
     this.tack = h.scene.add.image(h.player.x, h.player.y, 'mount_tack', 'down_0').setOrigin(.5, HORSE_FOOT / HORSE_FRAME).setScale(k);
@@ -54,7 +57,7 @@ export class HeroMount {
   }
   dismount(now: number): void {
     if (!this.mounted) return;
-    const p = this.h.player; this.mounted = false; this.stamina = 0; this.remountAt = now + MOUNT.remountMs; this.falls++;
+    const p = this.h.player; this.mounted = false; this.stamina = 0; this.remountAt = now + this.remountMs; this.falls++;
     this.applyRider(false);
     const dx = p.direction === 'left' ? -1 : p.direction === 'right' ? 1 : 0, dy = p.direction === 'up' ? -1 : p.direction === 'down' ? 1 : 0;
     if (this.style.leap) { p.invulnUntil = Math.max(p.invulnUntil, now + 1200); p.knockUp(now, 380, dx * 120, dy * 120); this.h.notice(`${this.name}一跃 · 落马无伤`); }

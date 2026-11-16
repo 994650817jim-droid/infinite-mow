@@ -13,11 +13,12 @@ import { SpatialGrid } from './SpatialGrid';
 import { LEGION, TROOPS, TROOP_KINDS, type Order, type TroopKind, BOSS_VS_TROOPS, RECRUIT_PRICE } from '../data/legion';
 import { DEPTH } from '../config';
 import { AllyCorpses } from './AllyCorpses';
+import { HINT_MOCK, groundScar } from '../ui/HintStyle';
 export interface LegionState { training?:CampTraining;groups?:Partial<Record<TroopKind,CampGroup>>; food: number; dead: number; recruited: number; levels: Record<TroopKind, number>; soldiers: Array<{ kind: TroopKind; hp: number;reserveSoldier?:boolean }> }
 
 export class Legion {
   training=freshTraining();groups:Partial<Record<TroopKind,CampGroup>>={};
-  purchaseCampTraining(id:CampTrainingId):boolean{const def=CAMP_TRAINING[id],lv=this.training[id];if(!def||lv>=3||this.food<def.costs[lv])return false;this.food-=def.costs[lv];this.training[id]++;if(id==='hp')for(const u of this.units)if(u.active)u.applyCampaignHp(1+CAMP_TRAINING.hp.perLevel*this.training.hp);return true;}
+  purchaseCampTraining(id:CampTrainingId):boolean{const def=CAMP_TRAINING[id],lv=this.training[id];if(!def||lv>=3||this.food<def.costs[lv])return false;this.food-=def.costs[lv];this.training[id]++;if(id==='hp')for(const u of this.units)if(u.active)u.applyCampaignHp(this.hpMultiplier());return true;}
   campTarget?:(u:Ally)=>Enemy|null;
   readonly command:CommandBuild;
   readonly formation:LegionFormation;
@@ -25,6 +26,8 @@ export class Legion {
   private visualAt=0;
   /** Legacy callers may still inspect capacity; recruitment has no gameplay cap. */
   readonly capacity=Infinity;
+  /** 本场战地免费招兵每波人数（GameScene 开局按章节设定，LegionUI 显示用）。 */
+  freeRecruitCount=1;
   private groupSignature='';
   awakeningDefense?:{incoming:(u:Ally,now:number)=>number;onAllyHurt:(u:Ally,now:number)=>void};
   defense?:{incoming:(u:Ally,now:number)=>number;onAllyHurt:(u:Ally,now:number)=>void};
@@ -32,6 +35,11 @@ export class Legion {
   readonly levels = Object.fromEntries(TROOP_KINDS.map(k => [k, 1])) as Record<TroopKind, number>;
   readonly squads = new Map<TroopKind, Ally[][]>();
   healingMultiplier = 1;
+  /** 营寨军营「练兵」：全体部曲生命、伤害、军医治疗量倍率（setDrill 设置，开局与每关都设）。 */
+  drillMultiplier = 1;
+  /** 设置练兵倍率，并按新倍率重算在场部曲的生命上限（保持血量比例）。 */
+  setDrill(multiplier: number): void { this.drillMultiplier = Math.max(1, multiplier); for (const u of this.units) if (u.active) u.applyCampaignHp(this.hpMultiplier()); }
+  private hpMultiplier(): number { return (1 + CAMP_TRAINING.hp.perLevel * this.training.hp) * this.drillMultiplier; }
   food: number = LEGION.startingFood; dead = 0; recruited = 0;
   order: Order = 'guard';
   private readonly projectiles: LegionProjectiles;
@@ -78,7 +86,7 @@ export class Legion {
       let u = reusable.pop();
       if (u) u.reset(x, y, kind, this.levels[kind], this.nextSquadSlot++);
       else { u = new Ally(this.scene, x, y, kind, this.nextSquadSlot++); u.train(this.levels[kind]); this.units.push(u); }
-      this.navigation.forget(u.id);u.applyCampaignHp(1+CAMP_TRAINING.hp.perLevel*this.training.hp);newborn.push(u);this.recruited++;
+      this.navigation.forget(u.id);u.applyCampaignHp(this.hpMultiplier());newborn.push(u);this.recruited++;
     }
     this.regroup();for(const u of newborn){const p=this.formation.position(u);u.setPosition(p.x,p.y);u.ai.x=p.x;u.ai.y=p.y;} this.viewClock = 1; this.rebuildGrid(); return true;
   }
@@ -130,6 +138,7 @@ export class Legion {
   }
   /** 首领横扫提示：一圈淡金刀光，0.25 秒散去（不震屏）。 */
   private bossSweepFx(x: number, y: number, r: number): void {
+    if (HINT_MOCK) { if (HINT_MOCK === 'b') groundScar(this.scene, x, y, r * .8, 'crack'); return; }
     const ring = this.scene.add.circle(x, y, r * .6, 0xffd27a, 0).setStrokeStyle(4, 0xffe0a0, .75).setDepth(DEPTH.fx);
     this.scene.tweens.add({ targets: ring, radius: r, alpha: 0, duration: 250, onComplete: () => ring.destroy() });
   }
@@ -175,7 +184,7 @@ export class Legion {
         const range = u.def.range * (u.def.ranged ? stats.range : u.kind === 'halberdier' && u.level === 3 ? 1.25 : 1);
         if (u.kind === 'medic') {
           const wounded = this.grid.query(u.x, u.y, range, this.friends).filter(a => a.active && a.hp < a.maxHp && Math.hypot(a.x - u.x, a.y - u.y) <= range).sort((a, b) => a.hp / a.maxHp - b.hp / b.maxHp);
-          for (const friend of wounded.slice(0, u.level === 3 ? 3 : 1)) { u.act(friend.x, friend.y, now, 480); this.heals.push({ owner: u, life: u.lifeId, target: friend, targetLife: friend.lifeId, amount: u.def.damage * (1 + .35 * (u.level - 1)) * this.healingMultiplier, due: now + 240 }); }
+          for (const friend of wounded.slice(0, u.level === 3 ? 3 : 1)) { u.act(friend.x, friend.y, now, 480); this.heals.push({ owner: u, life: u.lifeId, target: friend, targetLife: friend.lifeId, amount: u.def.damage * (1 + .35 * (u.level - 1)) * this.healingMultiplier * this.drillMultiplier, due: now + 240 }); }
           if (wounded.length) u.cooldown = u.def.cooldown * (1 - .1 * (u.level - 1)) / stats.attackSpeed;
           continue;
         }
@@ -192,7 +201,7 @@ export class Legion {
             if (u.ai.chargeHits.has(e.spawnId) || u.ai.chargeHits.size >= (u.level === 3 ? 3 : 1)) continue;
             u.ai.chargeHits.add(e.spawnId);
           }
-          const amount = u.def.damage * (1+CAMP_TRAINING.attack.perLevel*this.training.attack) * (1 + .25 * (u.level - 1)) * stats.melee * (u.kind === 'spearman' && e.kind === 'cavalry' && u.level === 3 ? 2 : 1);
+          const amount = u.def.damage * this.drillMultiplier * (1+CAMP_TRAINING.attack.perLevel*this.training.attack) * (1 + .25 * (u.level - 1)) * stats.melee * (u.kind === 'spearman' && e.kind === 'cavalry' && u.level === 3 ? 2 : 1);
           if (u.def.ranged) { if (u.kind === 'crossbowman') { const total = Math.max(1, Math.round(amount)), first = u.level === 3 ? total : Math.ceil(total / 2), second = u.level === 3 ? total : Math.floor(total / 2); this.projectiles.fire(u, e, first, now + 180); if (second) this.projectiles.fire(u, e, second, now + 260); } else this.projectiles.fire(u, e, amount, now + 180); }
           else if(u.kind==='spearman'){this.strikes.push({owner:u,life:u.lifeId,target:e,spawn:e.spawnId,due:now+120,amount});}
           else { this.fx(u, e.x, e.y, now, false); this.knock(u, e, u.kind==='rider'?5:3, now); damage(e, amount); }

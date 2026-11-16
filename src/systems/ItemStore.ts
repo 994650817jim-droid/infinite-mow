@@ -3,6 +3,7 @@ import { CHARACTERS, type CharacterId } from '../data/characters';
 export type GearOwner = CharacterId | `r_${number}`;
 export const isGearOwner = (k: unknown): k is GearOwner => typeof k === 'string' && (/^r_\d{1,9}$/.test(k) || CHARACTERS.some(c => c.id === k));
 const isHeroId = (k: GearOwner): k is CharacterId => !k.startsWith('r_');
+import { isRelic } from '../data/items';
 import { AFFIXES, BAG_CAPACITY, BAG_OVERFLOW, LEGACY_MOUNT_BASES, LEGACY_WEAPON_BASES, QUALITIES, QUALITY_ORDER, SLOT_ORDER, itemDef, itemSlot, type ItemInstance, type ItemQuality, type ItemSlot, type PityState } from '../data/items';
 import { HORSES, STARTER_HORSE, horseDef, type HorseDef } from '../data/mounts';
 import { addTownMoney } from '../world/WorldStore';
@@ -162,7 +163,8 @@ function addToBag(s: ItemSave, items: ItemInstance[]): ItemInstance[] {
   for (const i of items.filter(valid)) { if (s.autoSalvageWhite && i.quality === 'white') auto.push(i); else s.bag.push(structuredClone(i)); }
   const loose = () => { const worn = new Set(Object.values(s.loadouts).flatMap(l => Object.values(l ?? {}))); return s.bag.filter(i => !worn.has(i.uid)).sort((a, b) => qIndex(a.quality) - qIndex(b.quality)); };
   for (let l = loose(); l.length > BAG_CAPACITY; l = loose()) {
-    const victim = l.find(i => qIndex(i.quality) < qIndex('purple')) ?? (l.length > BAG_CAPACITY + BAG_OVERFLOW ? l[0] : undefined);
+    // 首领遗珍永不分解（超出上限也不动）
+    const victim = l.find(i => qIndex(i.quality) < qIndex('purple') && !isRelic(i)) ?? (l.length > BAG_CAPACITY + BAG_OVERFLOW ? l.find(i => !isRelic(i)) : undefined);
     if (!victim) break;
     s.bag.splice(s.bag.indexOf(victim), 1); auto.push(victim);
   }
@@ -210,7 +212,7 @@ export function unequipSlot(hero: GearOwner, slot: ItemSlot): boolean {
 /** 分解未穿戴的道具，返还钱。 */
 export function salvageItems(uids: string[]): number {
   const s = loadItems(); let money = 0;
-  for (const uid of uids) { const i = s.bag.findIndex(x => x.uid === uid); if (i < 0 || equippedBy(s, uid)) continue; money += QUALITIES[s.bag[i].quality].salvage; s.bag.splice(i, 1); }
+  for (const uid of uids) { const i = s.bag.findIndex(x => x.uid === uid); if (i < 0 || equippedBy(s, uid) || isRelic(s.bag[i])) continue; money += QUALITIES[s.bag[i].quality].salvage; s.bag.splice(i, 1); }
   if (money) { s.salvaged += money; commit(s); addTownMoney(money); }
   return money;
 }

@@ -124,15 +124,16 @@ function rawBattleChapter(id?:string, stage:YellowStage=1,westStage:YellowStage=
  const info=YELLOW_STAGES[stage-1]??YELLOW_STAGES[0];stage=info.stage;
  if(stage===3)return {...base,stage,name:'1-3 广宗决战',waves:['黄巾先锋','黄巾大军','张角决战'].map((name,i)=>({name,start:i*45})),recruitWaves:[1,2],ground:'yellow_ground_3',victoryTitle:'黄巾平定',victoryText:'雷云消散 · 讨伐董卓已解锁'};
  const boss=stage===1?'zhangliang':'zhangbao';
- const names=stage===1?['外围哨兵','长枪阻路','张梁迎战']:['营寨前锋','弓盾合击','张宝祭阵'];
+ const names=stage===1?['外围哨兵','刀盾阻路','张梁迎战']:['营寨前锋','弓盾合击','张宝祭阵'];
  return {...base,stage,name:`1-${stage} ${info.name}`,ground:`yellow_ground_${stage}`,bossName:info.boss,bossStyle:boss,
  waves:names.map((name,i)=>({name,start:i*45})),recruitWaves:[1,2],
- // 关卡目标：1-1 歼敌 80 → 张梁；1-2 按用户反馈改回普通推波（打完 3 波张宝登场）。摧毁目标的代码保留在 StageObjectives，供以后别的关复用
- objective:stage===1?{kind:'kills',count:80,label:'歼灭黄巾 80 人',limit:200}:undefined,
+ // 1-1、1-2 按用户反馈都是普通推波：打完 3 波首领登场（不设歼敌 / 祭坛目标；目标系统代码保留在 StageObjectives 供以后复用）
  enemies:{...ENEMY_DEFS,boss:{...ENEMY_DEFS.boss,texture:`yellow_${boss}_walk`,walkVisual:{texture:`yellow_${boss}_walk`,scale:1.35,groundY:91/96},attackVisual:`yellow_${boss}_${stage===1?'attack':'cast'}`,hp:stage===1?1100:1700,speed:stage===1?54:35,damage:stage===1?12:14}},
  hpScale:t=>1+t/600,spawnInterval:t=>t<60?.8:.6,spawnBurst:t=>t<60?1:2,
  pickEnemy:t=>{
-  if(stage===1)return 'infantry';
+  // 1-1 新手关（用户 2026-11-16：只要 3 波、不要歼敌）。t 为加速后的刷怪时间轴（pace 4/3：每波 45 秒 ≈ 60）
+  // 第 1 波 外围哨兵：全是刀兵；第 2 波 刀盾阻路：刀兵 85% · 刀盾兵 15%（初见两段盾）；第 3 波 张梁迎战：刀兵 75% · 刀盾兵 15% · 弓手 10%
+  if(stage===1){const r=Math.random();if(t<60)return 'infantry';if(t<120)return r<.85?'infantry':'shield';return r<.75?'infantry':r<.9?'shield':'archer';}
   if(stage===2){
    const r=Math.random();
    // 1-2 opens with cavalry and archers; shield soldiers join at wave four.

@@ -1,4 +1,5 @@
 import { warnCircle, TELEGRAPH_CLASSIC, groundCracks } from '../ui/Telegraph';
+import { HINT_MOCK, keyOutline } from '../ui/HintStyle';
 import Phaser from 'phaser';
 import type { Enemy } from '../entities/Enemy';
 import type { Player } from '../entities/Player';
@@ -83,8 +84,8 @@ export class LubuUltimate {
       this.body('landing', Math.min(7, 3 + Math.floor(t * 5)), 0);
       this.slash.setAlpha(.45).setVisible(t >= .15 && t < .75).setFrame(Math.min(5, Math.floor(t * 8))).setPosition(this.targetX, this.targetY)
         .setDisplaySize(C.ultRadius * 2, C.ultRadius * 2).setRotation(t * Math.PI * 2);
-      this.gfx.lineStyle(4 * (1 - t) + 1, 0xffe0b0, .85 * (1 - t)).strokeCircle(this.targetX, this.targetY, 30 + t * C.ultRadius);
-      for (let i = 0; i < 8; i++) { const a = i * Math.PI / 4; this.gfx.lineStyle(2, 0xffa151, .65 * (1 - t)); this.gfx.lineBetween(this.targetX + Math.cos(a) * 35, this.targetY + Math.sin(a) * 35, this.targetX + Math.cos(a) * C.ultRadius * .8, this.targetY + Math.sin(a) * C.ultRadius * .8); }
+      if (HINT_MOCK !== 'a' && HINT_MOCK !== 'c') this.gfx.lineStyle(4 * (1 - t) + 1, 0xffe0b0, .85 * (1 - t)).strokeCircle(this.targetX, this.targetY, 30 + t * C.ultRadius);
+      if (HINT_MOCK !== 'a' && HINT_MOCK !== 'c') for (let i = 0; i < 8; i++) { const a = i * Math.PI / 4; this.gfx.lineStyle(2, 0xffa151, .65 * (1 - t)); this.gfx.lineBetween(this.targetX + Math.cos(a) * 35, this.targetY + Math.sin(a) * 35, this.targetX + Math.cos(a) * C.ultRadius * .8, this.targetY + Math.sin(a) * C.ultRadius * .8); }
     }
     if (now < this.fieldUntil) {
       this.groundArt.setVisible(true).setFrame(Math.floor((C.ultFieldMs - this.fieldUntil + now) / 160) % 6).setPosition(this.targetX, this.targetY);
@@ -97,7 +98,8 @@ export class LubuUltimate {
     this.warningArt.setVisible(true).setFrame(Math.min(7, Math.floor(t * 8))).setPosition(this.targetX, this.targetY);
     const r = C.ultRadius;
     // 首领大招预警保留但弱化（默认）：预警图从 0.3 调到 0.2，去掉实心外圈 / 进度圈 / 十字准星，改为落点地裂纹（?telegraph=1 恢复）
-    if (!TELEGRAPH_CLASSIC) this.warningArt.setAlpha(.2);
+    if (!TELEGRAPH_CLASSIC) this.warningArt.setAlpha(HINT_MOCK === 'a' || HINT_MOCK === 'c' ? 0 : .2);
+    if (!TELEGRAPH_CLASSIC && HINT_MOCK === 'c') { keyOutline(this.gfx, this.targetX, this.targetY, r, t, this.now); return; }
     if (!TELEGRAPH_CLASSIC) { groundCracks(this.gfx, this.targetX, this.targetY, r, t); return; }
     // Fixed boundary markers distinguish the true hit area from the expanding countdown.
     for(let i=0;i<8;i++) {

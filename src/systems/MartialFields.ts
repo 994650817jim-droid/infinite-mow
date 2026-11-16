@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { softField } from './SoftField';
+import { SHOW_OWN_RANGE_FX } from '../ui/HintStyle';
 import type { WeaponHost } from '../weapons/registry';
 
 interface FireFx {decal:Phaser.GameObjects.Image;glow:Phaser.GameObjects.Image;flames:Phaser.GameObjects.Particles.ParticleEmitter;sparks:Phaser.GameObjects.Particles.ParticleEmitter;smoke:Phaser.GameObjects.Particles.ParticleEmitter;}
@@ -30,7 +31,7 @@ export class MartialFields {
     const gfx=this.host.add.graphics().setDepth(19);
     let fire:FireFx|undefined,aura:Phaser.GameObjects.Image|undefined;
     // 八阵：柔和青绿光晕（原为硬描边圆 + 8 道刻度，用户反馈难看）
-    if(formation)aura=softField((this.host.add as unknown as {scene:Phaser.Scene}).scene,x,y,r,0x7fc4a4,.45);
+    if(formation){if(SHOW_OWN_RANGE_FX)aura=softField((this.host.add as unknown as {scene:Phaser.Scene}).scene,x,y,r,0x7fc4a4,.45);} // 只保留关键提示（默认）：八阵不画光晕
     else fire=this.spawnFire(x,y,r,level);
     this.fields.push({x,y,r,damage,end:this.host.combatNow+duration,next:this.host.combatNow+500,level,formation,gfx,fire,aura});
   }

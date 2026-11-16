@@ -12,10 +12,12 @@ export interface PassiveFullShout { lines: readonly string[]; color: string; min
 export const PASSIVE_FULL_SHOUTS: Partial<Record<CharacterId, PassiveFullShout>> = {
   // 2026-11-16 用户选定台词：马超「西凉铁骑」满 6 层、下一枪要冲锋时喊一句，三句轮流
   machao: { lines: ['吾乃西凉马孟起！', '铁骑踏阵，片甲不留！', '锦马超在此，谁敢一战！'], color: '#ffd77a', minGapMs: 15000 },
+  // 2026-11-16 孙尚香「侍婢执刀」疾步满 6 层、下一次掷刀召侍婢时喊一句（建议台词，待用户定稿）
+  sunshangxiang: { lines: ['侍婢何在，随我执刀！', '弓腰姬在此，谁敢近前！', '江东孙尚香，岂输男儿！'], color: '#ffb8a0', minGapMs: 15000 },
 };
 
 export class PassiveShout {
-  private wasReady = false; private character: CharacterId | null = null;
+  private wasReady = false; private triggers = 0; private character: CharacterId | null = null;
   private lastAt = -Infinity; private next = 0;
   /** 测试用：累计喊了几次、最近一句。 */
   count = 0; lastLine = '';
@@ -23,9 +25,11 @@ export class PassiveShout {
   /** 每帧调用。x / y 为武将脚底位置，now 为战斗时间（毫秒）。 */
   update(passive: CharacterPassives, now: number, x: number, y: number, visible: boolean): void {
     const id = passive.characterId;
-    if (id !== this.character) { this.character = id; this.wasReady = false; this.lastAt = -Infinity; this.next = 0; }
-    const ready = passive.snapshot(now).ready, rose = ready && !this.wasReady;
-    this.wasReady = ready;
+    const snap = passive.snapshot(now);
+    if (id !== this.character) { this.character = id; this.wasReady = false; this.triggers = snap.triggers; this.lastAt = -Infinity; this.next = 0; }
+    // 刚攒满；或同一帧里攒满又立刻放出（没看到满层就多了一次触发）也算
+    const ready = snap.ready, rose = (ready && !this.wasReady) || (snap.triggers > this.triggers && !this.wasReady);
+    this.wasReady = ready; this.triggers = snap.triggers;
     const cfg = PASSIVE_FULL_SHOUTS[id];
     if (!rose || !cfg || !visible || now - this.lastAt < cfg.minGapMs) return;
     this.lastAt = now;

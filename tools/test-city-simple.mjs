@@ -25,7 +25,7 @@ const base8 = { version: 8, yellowStages: 3, dongzhuoStages: 0, warlordStages: 0
       levels: { hall: 2, barracks: 2, farm: 3, clinic: 3, house: 2, market: 1, post: 1, smithy: 3, drill: 1, granary: 1, wall: 2, tavern: 1, pavilion: 0 } } };
   const p = await page(old);
   const r = await store(p, w => { const s = w.loadWorld(); w.saveWorld(); const raw = JSON.parse(localStorage.getItem('im_world_v1')), bak = JSON.parse(localStorage.getItem('im_world_backup_v1')); return { s, rawVersion: raw.version, bakVersion: bak?.version }; });
-  const s = r.s, t = s.town, refund = 126 + 105 + 180 + 160, expect = 200 + 150 + Math.round(70 * 1.5) + refund;
+  const s = r.s, t = s.town, refund = 126 + 120 + 200 + 175, expect = 200 + 100 * 2 + Math.round(70 * 1.5) + refund; // 2026-11-16 平衡：军功 → 军粮 ×2（原 ×1.5），退还里的军功部分同步变
   ck('迁移：军功、钱（含在途商队）折成军粮，民居 / 市集 / 驿站 / 酒肆按原价全额退还', s.provisions === expect && s.merits === 0, { got: s.provisions, expect });
   ck('迁移：旧加成建筑点亮科技（医术、磨砺、百炼、坚甲、操练）', ['medicine', 'forge', 'forge2', 'armor', 'drill_points'].every(id => t.tech.includes(id)) && t.tech.length === 5, t.tech);
   ck('迁移：讲武堂等级不高于主帐，保留主帐 / 军营 / 农田 / 粮仓', t.levels.academy === 2 && t.levels.hall === 2 && t.levels.barracks === 2 && t.levels.farm === 3 && t.levels.granary === 1 && t.levels.stable === 0, t.levels);
@@ -61,7 +61,7 @@ const base8 = { version: 8, yellowStages: 3, dongzhuoStages: 0, warlordStages: 0
   ck('马厩需县城；主帐扩建需第二章通关', !r.stable.ok && r.stable.message.includes('县城') && !r.hallBlocked.ok && r.hallBlocked.message.includes('第二章'), [r.stable, r.hallBlocked]);
   ck('讲武堂未建不能研究；建成后研究回血药扣军粮；不能重复研究', !r.potionNoAcademy.ok && r.academy.ok && r.potion.ok && !r.potionAgain.ok, [r.potionNoAcademy, r.potion, r.potionAgain]);
   ck('前置与层数限制（弓弩操练需刀枪操练；第二层需讲武堂 Lv2）', !r.rangedNeeds.ok && !r.tier2.ok && r.tier2.message.includes('Lv2'), [r.rangedNeeds, r.tier2]);
-  ck('花费正确：讲武堂 100 + 回血药 120 + 刀枪 150 + 磨砺 150', r.after.grain === 3000 - 100 - 120 - 150 - 150 && r.melee.ok && r.forge.ok, r.after);
+  ck('花费正确：讲武堂 150 + 回血药 150 + 刀枪 150 + 磨砺 150', r.after.grain === 3000 - 150 - 150 - 150 - 150 && r.melee.ok && r.forge.ok, r.after);
   ck('出征效果：回血药 2 份 30%、刀盾 / 长枪开局 Lv2、伤害 +4%', r.eff.potions?.count === 2 && r.eff.potions.ratio === .3 && r.eff.troopLevels.swordsman === 2 && r.eff.troopLevels.spearman === 2 && Math.abs(r.eff.damageBonus - .04) < 1e-9, r.eff);
   ck('第二章后扩建县城、建马厩（接口：等级 1、可养 2 匹）', r.hall.ok && r.stable2.ok && r.lvl === 1 && r.cap === 2, [r.hall, r.stable2, r.cap]);
   ck('城池发展在州府前不开放', !r.focusLocked.ok && r.focusLocked.message.includes('州府'), r.focusLocked);
@@ -118,7 +118,7 @@ for (const layout of ['mobile', 'desktop']) {
   await p.evaluate(() => window.__game.scene.getScene('CityScene').children.getByName('town-tech').getByName('tech-potion').emit('pointerdown'));
   await p.waitForTimeout(300);
   const after = await store(p, w => { const s = w.loadWorld(); return { grain: s.provisions, tech: s.town.tech, academy: s.town.levels.academy }; });
-  ck(`${layout}：界面上建讲武堂并研究回血药`, after.academy === 1 && after.tech.includes('potion') && after.grain === 800 - 100 - 120, after);
+  ck(`${layout}：界面上建讲武堂并研究回血药`, after.academy === 1 && after.tech.includes('potion') && after.grain === 800 - 150 - 150, after);
   await p.close();
 }
 

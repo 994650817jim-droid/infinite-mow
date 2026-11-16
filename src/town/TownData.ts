@@ -38,7 +38,8 @@ export interface TownState {
 export interface TownProgress { hulao: boolean; bigCity: boolean }
 
 /** 旧货币折算成军粮：军功 ×a、钱 ×b（旧存档迁移，以及仍按军功 / 钱给出的奖励表）。占位，平衡会话定。 */
-export const MERIT_TO_GRAIN = 1.5, MONEY_TO_GRAIN = 1.5;
+// 2026-11-16 平衡（用户批准，city-values-balance.md）：军功 → 军粮 ×2（收支里军功与粮草都约 1:2），钱 → 军粮 ×1.5（市集约 1.5 粮 / 钱）
+export const MERIT_TO_GRAIN = 2, MONEY_TO_GRAIN = 1.5;
 export const MAX_LEVEL = 3, START_YEAR = 184;
 export const CITY_SIZE = ['', '营寨', '县城', '州府'] as const, CITY_TITLE = ['', '义军营寨', '县城', '州府'] as const;
 export const SEASONS = ['春', '夏', '秋', '冬'] as const;
@@ -62,17 +63,17 @@ export function levyCost(level: number): Cost { return LEVY_COST.base + LEVY_COS
 export const TOWN_BUILDINGS: Record<TownBuildingId, BuildingDef> = {
   hall: { name: '主帐', build: 0, blurb: '义军中枢，决定营寨规模；其它建筑的等级不能高于主帐。', effect: l => `规模：${CITY_TITLE[l]}${l < 3 ? `；可建 Lv${l} 建筑` : '；可建全部 Lv3 建筑'}` },
   barracks: { name: '军营', build: 0, upgrade: [120, 320], blurb: '操练义军，招募后备兵。', effect: l => `招募后备兵；出征开局增援 ${l - 1} 人` },
-  farm: { name: '农田', build: 0, upgrade: [100, 280], blurb: '营外良田，每打完一仗收一次粮。', effect: l => `每场出征后产军粮 ${FARM_GRAIN[l]}；战场军粮收益 +${(l - 1) * 8}%` },
-  academy: { name: '讲武堂', build: 100, upgrade: [260, 600], blurb: '研习兵法、改良军械：研究科技。', effect: l => `可研究第 ${l} 层科技（军需 / 兵略 / 武备）` },
-  stable: { name: '马厩', build: 200, upgrade: [360, 700], minHall: 2, blurb: '养马换马之所；只能在营中休整时换马。', effect: l => `可养马 ${STABLE_HORSES[l]} 匹；在此更换坐骑` },
-  granary: { name: '粮仓', build: 160, upgrade: [320, 640], minHall: 2, blurb: '广积粮：后备兵吃得少，荒时可开仓募兵。', effect: l => `后备兵口粮 −${GRANARY_CUT[l] * 100}%；每季可开仓募兵 ${LEVY_SOLDIERS[l]} 人` },
+  farm: { name: '农田', build: 0, upgrade: [120, 320], blurb: '营外良田，每打完一仗收一次粮。', effect: l => `每场出征后产军粮 ${FARM_GRAIN[l]}；战场军粮收益 +${(l - 1) * 8}%` },
+  academy: { name: '讲武堂', build: 150, upgrade: [450, 1100], blurb: '研习兵法、改良军械：研究科技。', effect: l => `可研究第 ${l} 层科技（军需 / 兵略 / 武备）` },
+  stable: { name: '马厩', build: 200, upgrade: [450, 900], minHall: 2, blurb: '养马换马之所；只能在营中休整时换马。', effect: l => `可养马 ${STABLE_HORSES[l]} 匹；在此更换坐骑` },
+  granary: { name: '粮仓', build: 120, upgrade: [260, 540], minHall: 2, blurb: '广积粮：后备兵吃得少，荒时可开仓募兵。', effect: l => `后备兵口粮 −${GRANARY_CUT[l] * 100}%；每季可开仓募兵 ${LEVY_SOLDIERS[l]} 人` },
   talent: { name: '招贤馆', build: 0, upgrade: [RECRUIT.hallUpgrade[0].provisions, RECRUIT.hallUpgrade[1].provisions], noHallCap: true, blurb: '延揽四方英才：招募武将、随行出征（招募会话的招贤馆）。', effect: l => `席位 ${RECRUIT.seats[l - 1]} · 随行 ${RECRUIT.followerCap[l - 1]} 人` },
-  pavilion: { name: '麒麟阁', build: 2000, maxLevel: 1, minHall: 3, blurb: '奇观：图画功臣、表彰忠义，天下英雄慕名来投。', effect: () => '出征时伤害 +6%、主将生命 +6%、开局属性点 +1' },
+  pavilion: { name: '麒麟阁', build: 3200, maxLevel: 1, minHall: 3, blurb: '奇观：图画功臣、表彰忠义，天下英雄慕名来投。', effect: () => '出征时伤害 +6%、主将生命 +6%、开局属性点 +1' },
 };
 /** 主帐扩建：花费与章节前提。 */
 export const HALL_UPGRADE: Record<number, { cost: Cost; needs: string; ok: (p: TownProgress) => boolean }> = {
-  1: { cost: 300, needs: '第二章（讨董）通关', ok: p => p.hulao },
-  2: { cost: 800, needs: '第三章通关或占领一座城池', ok: p => p.bigCity },
+  1: { cost: 560, needs: '第二章（讨董）通关', ok: p => p.hulao },
+  2: { cost: 1400, needs: '第三章通关或占领一座城池', ok: p => p.bigCity },
 };
 
 export function upgradeCostFor(id: TownBuildingId, level: number): Cost | null {

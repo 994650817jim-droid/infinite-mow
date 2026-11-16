@@ -23,10 +23,10 @@ const R = (p, fn, arg) => p.evaluate(async ([src, a]) => { const r = await impor
 
 // —— 1. 存档：老档迁移、天下首开只送主公、选将锁定 ——
 {
-  const p = await page('mobile');
+  const p = await page('mobile', '', { im_achievements: JSON.stringify({ unlocked: {}, counters: {}, heroes: ['huangzhong', 'zhaoyun'] }) });
   await p.waitForFunction(() => window.__game.scene.isActive('MenuScene'), null, { timeout: 90000 });
   const r = await R(p, (r) => { const s = r.loadRoster(); return { lord: s.lord, owned: r.ownedHeroes(), zf: r.heroOwned('zhangfei'), def: r.defaultHero('zhangfei'), offers: s.offers.length, enforced: r.rosterEnforced(), raw: !!localStorage.getItem('im_roster_v1') }; });
-  ck('老存档迁移：主公赵云 + 穿过兵装的关羽', r.lord === 'zhaoyun' && r.owned.join() === 'zhaoyun,guanyu', r);
+  ck('老存档迁移：主公赵云 + 穿过兵装的关羽 + 打赢过仗的黄忠', r.lord === 'zhaoyun' && r.owned.join() === 'zhaoyun,guanyu,huangzhong', r);
   ck('未招募的张飞不可出战，默认回主公', !r.zf && r.def === 'zhaoyun' && r.enforced, r);
   ck('招贤馆 1 级 3 个席位，已写入 im_roster_v1', r.offers === 3 && r.raw, r);
   const f = await R(p, (r) => { localStorage.removeItem('im_roster_v1'); localStorage.setItem('im_last_hero', 'machao'); r.rosterFreshUnlock(); const owned = r.ownedHeroes(); r.rosterFreshUnlock(); return { owned, again: r.ownedHeroes() }; });

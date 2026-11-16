@@ -81,10 +81,14 @@ export function rosterFreshUnlock(): void {
   const s = empty(); s.lord = lastHero(); s.owned = [heroRecruit(s.lord)]; write(s);
 }
 
-/** 老存档（天下已开放但还没有人才库）：主公 + 行囊里穿过装备的武将。 */
+/** 老存档（天下已开放但还没有人才库）：主公 + 行囊里穿过装备的 + 打赢过仗的武将（用过的不收回）。 */
 function migrate(): RosterSave {
   const s = empty(); s.lord = lastHero(); s.owned = [heroRecruit(s.lord)];
-  try { const items = loadItems(); for (const [hero, slots] of Object.entries(items.loadouts)) if (isHero(hero) && hero !== s.lord && slots && Object.keys(slots).length) s.owned.push(heroRecruit(hero)); } catch { /* 行囊不可读：只送主公 */ }
+  const keep = new Set<CharacterId>();
+  try { const items = loadItems(); for (const [hero, slots] of Object.entries(items.loadouts)) if (isHero(hero) && slots && Object.keys(slots).length) keep.add(hero); } catch { /* 行囊不可读 */ }
+  // 用过的武将不收回：成就存档记着每位打赢过一场的武将（im_achievements.heroes）
+  try { const a = JSON.parse(localStorage.getItem('im_achievements') ?? 'null'); if (Array.isArray(a?.heroes)) for (const h of a.heroes) if (isHero(h)) keep.add(h); } catch { /* 成就不可读 */ }
+  for (const h of CHARACTERS.map(c => c.id)) if (h !== s.lord && keep.has(h)) s.owned.push(heroRecruit(h));
   write(s); return s;
 }
 

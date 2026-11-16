@@ -199,7 +199,7 @@ export class LegionUI {
     this.summary.setY(wave ? waveTop - (D ? 46 : 62) : D ? 61 : 112).setColor(wave ? '#d9c79f' : '#eee2c1');
     this.flourish.clear();
     if (wave) { const fy = waveTop - (D ? 56 : 74), fx = W / 2; this.flourish.lineStyle(1, WAR.gold, .7).lineBetween(fx - 130, fy, fx - 10, fy).lineBetween(fx + 10, fy, fx + 130, fy).fillStyle(0xf3d48a, 1).fillTriangle(fx - 5, fy, fx, fy - 5, fx + 5, fy).fillTriangle(fx - 5, fy, fx, fy + 5, fx + 5, fy); }
-    this.heading.setText(wave ? '战地招募'  : '黄巾已破 · 战后休整');
+    this.heading.setText(wave ? '战斗支援'  : '黄巾已破 · 战后休整');
     this.summary.setText(wave ? `免费招募 ${army.freeRecruitCount} 人 · 点选兵种卡入队　当前兵力 ${army.count}` : `随军粮 ${army.food}　当前兵力：${army.count}　阵亡 ${army.dead}\n仅开放刀盾、长枪、弓箭兵 · 使用本局军粮`).setAlign('center');
     this.close.setText(wave ? '跳过本次 · 继续战斗' : '率军出征 · 虎牢关');
     if (wave) this.close.setBackgroundColor('rgba(27,18,11,0.88)').setColor('#d9c79f').setFontSize(D ? 16 : 18).setPadding(26, 12).setY(D ? waveTop + waveCardH + 34 : Math.min(H - 103, waveTop + waveCardH * cards + waveGap * (cards - 1) + 40));

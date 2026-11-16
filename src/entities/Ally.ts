@@ -1,5 +1,6 @@
 import {visualTextureKey} from '../systems/ReadableTextures';
 import {figureCorrection} from '../systems/SpriteMetrics';
+import {isV2Texture, V2_TROOP_SCALE, v2TroopGround} from '../systems/ArtStyle';
 import Phaser from 'phaser';
 import { createTacticState } from '../systems/LegionTactics';
 import { DEPTH, FONT, actorDepth } from '../config';
@@ -74,15 +75,17 @@ export class Ally {
     // 弓兵攻击表的“左”行实为朝右、上下行也朝右拉弓：统一用朝右的侧身拉弓/放箭两帧，目标在左时水平镜像
     const archerAim = attack && this.kind === 'archer';
     const frame = action ? `${this.dir}_${(meleeAction?(now>=this.attackUntil?0:Math.min(3,1+Math.floor(progress*3))):Math.min(3,Math.floor(progress*4)))}` : attack ? `atk_${archerAim ? 'right' : this.dir}_${(now-this.attackStarted)/Math.max(1,this.attackUntil-this.attackStarted)<.5 ? 0 : 1}` : `${this.dir}_${!this.moving || (custom||this.kind==='spearman') && now < this.attackUntil ? 0 : Math.floor(this.walked / 14) % 4}`;
-    const scale = custom?.scale ?? (this.kind === 'rider' ? .8 : .58);
-    const frameHeight=action&&meleeAction?112:96;
-    const ground = action&&meleeAction?100/112:custom?.groundY ?? (reused ? .875 : .98);
+    // 人物画风 v2：图集格子更大、像素 1:1（ArtStyle.V2_TROOP_SCALE），按实际帧高换算脚底锚点
+    const v2art = isV2Texture(texture), v2fh = v2art ? (this.scene.textures.getFrame(texture, frame)?.height || 96) : 0;
+    const scale = v2art ? V2_TROOP_SCALE : custom?.scale ?? (this.kind === 'rider' ? .8 : .58);
+    const frameHeight=v2art?v2fh:action&&meleeAction?112:96;
+    const ground = v2art?v2TroopGround(v2fh):action&&meleeAction?100/112:custom?.groundY ?? (reused ? .875 : .98);
     // 行走起伏：每步上下约 2px，与步伐帧同步，正对镜头时也能看出在走。
     const hop=this.moving&&now>=this.attackUntil?Math.abs(Math.sin(Math.PI*this.walked/14))*2:0;
     // 出手动作：沿朝向前冲后收回（远程为后坐），并带轻微伸缩；保持同一角色素材，不冒充独立攻击帧。
     const strike=now<this.attackUntil?Math.sin(progress*Math.PI):0,lunge=(LUNGE[this.kind]??0)*strike,horizontal=this.facingX!==0;
-    const tex=visualTextureKey(this.scene,texture),corr=texture===sheet?1:figureCorrection(this.scene,visualTextureKey(this.scene,sheet),tex,frame,!(attack&&!action));
-    v.sprite.setVisible(this.active).setTexture(tex, frame).setScale(corr*scale*(1+(horizontal?.07:-.03)*Math.abs(strike)*(lunge?1:0)),corr*scale*(1+(horizontal?-.03:.06)*Math.abs(strike)*(lunge?1:0))).setTint(now < this.hurtUntil ? 0xff9999 : this.def.tint).setOrigin(.5-this.facingX*lunge/(96*scale), ground - this.radius * .72 / (frameHeight * scale)-this.facingY*lunge/(frameHeight*scale)+hop/(frameHeight*scale)).setDepth(actorDepth(this.y + this.radius * .72));
+    const tex=visualTextureKey(this.scene,texture),corr=texture===sheet||v2art?1:figureCorrection(this.scene,visualTextureKey(this.scene,sheet),tex,frame,!(attack&&!action));
+    v.sprite.setVisible(this.active).setTexture(tex, frame).setScale(corr*scale*(1+(horizontal?.07:-.03)*Math.abs(strike)*(lunge?1:0)),corr*scale*(1+(horizontal?-.03:.06)*Math.abs(strike)*(lunge?1:0))).setTint(now < this.hurtUntil ? 0xff9999 : this.def.tint).setOrigin(.5-this.facingX*lunge/((v2art?v2fh:96)*scale), ground - this.radius * .72 / (frameHeight * scale)-this.facingY*lunge/(frameHeight*scale)+hop/(frameHeight*scale)).setDepth(actorDepth(this.y + this.radius * .72));
     // Same-character procedural follow-through where independent attack art is still absent.
     const follow=now<this.attackUntil?Math.sin(progress*Math.PI):0;
     v.sprite.setRotation(this.kind==='guardian'?follow*.035*(this.facingX||1):this.kind==='rider'?follow*.045*(this.facingX||1):0);

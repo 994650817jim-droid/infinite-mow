@@ -1,0 +1,77 @@
+{
+  "note": "人物画风 v2 兵种胸像清单：由 tools/prepare-troop-portraits.mjs（DIR=public/assets/troop-portraits-v2）生成。",
+  "portraits": [
+    {
+      "kind": "swordsman",
+      "file": "swordsman_portrait.webp",
+      "png": "swordsman_portrait.png",
+      "headY": 0.242,
+      "source": "originals/swordsman_portrait_original.png",
+      "keyedBackground": false,
+      "date": "2026-11-16"
+    },
+    {
+      "kind": "spearman",
+      "file": "spearman_portrait.webp",
+      "png": "spearman_portrait.png",
+      "headY": 0.222,
+      "source": "originals/spearman_portrait_original.png",
+      "keyedBackground": false,
+      "date": "2026-11-16"
+    },
+    {
+      "kind": "archer",
+      "file": "archer_portrait.webp",
+      "png": "archer_portrait.png",
+      "headY": 0.24,
+      "source": "originals/archer_portrait_original.png",
+      "keyedBackground": false,
+      "date": "2026-11-16"
+    },
+    {
+      "kind": "crossbowman",
+      "file": "crossbowman_portrait.webp",
+      "png": "crossbowman_portrait.png",
+      "headY": 0.241,
+      "source": "originals/crossbowman_portrait_original.png",
+      "keyedBackground": false,
+      "date": "2026-11-16"
+    },
+    {
+      "kind": "guardian",
+      "file": "guardian_portrait.webp",
+      "png": "guardian_portrait.png",
+      "headY": 0.234,
+      "source": "originals/guardian_portrait_original.png",
+      "keyedBackground": false,
+      "date": "2026-11-16"
+    },
+    {
+      "kind": "rider",
+      "file": "rider_portrait.webp",
+      "png": "rider_portrait.png",
+      "headY": 0.233,
+      "source": "originals/rider_portrait_original.png",
+      "keyedBackground": false,
+      "date": "2026-11-16"
+    },
+    {
+      "kind": "halberdier",
+      "file": "halberdier_portrait.webp",
+      "png": "halberdier_portrait.png",
+      "headY": 0.231,
+      "source": "originals/halberdier_portrait_original.png",
+      "keyedBackground": false,
+      "date": "2026-11-16"
+    },
+    {
+      "kind": "medic",
+      "file": "medic_portrait.webp",
+      "png": "medic_portrait.png",
+      "headY": 0.23,
+      "source": "originals/medic_portrait_original.png",
+      "keyedBackground": false,
+      "date": "2026-11-16"
+    }
+  ]
+}

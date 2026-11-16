@@ -9,6 +9,18 @@ import { BALANCE, DEPTH, FONT, actorDepth } from '../config';
 import { applySetBonus, RELIC_BY_ID, type RelicSchool } from '../data/relics';
 import type { PlayerStats, WeaponState } from '../types';
 
+/**
+ * 枪将普攻节奏（260ms）：蓄力 31ms → 刺出 36ms → 刺到底 109ms → 收枪 84ms。
+ * 枪芒在出手后约 18–72ms 伸出、72ms 起逐枪结算伤害（多枪每枪晚 25ms），
+ * 让“刺到底”帧从 68ms 停到约 176ms，命中判定都落在这一帧上。均分时它要到 130ms 才出现，比伤害晚一拍。
+ */
+const SPEAR_ATTACK_WEIGHTS: Partial<Record<CharacterId, readonly number[]>> = (() => { const w = [.12, .14, .42, .32] as const; return {zhaoyun: w, machao: w, zhangfei: w}; })();
+function weightedIndex(t: number, n: number, weights?: readonly number[]): number {
+  if (!weights) return Math.min(n - 1, Math.floor(t * n));
+  let acc = 0; for (let i = 0; i < n; i++) { acc += weights[i]; if (t < acc) return i; }
+  return n - 1;
+}
+
 /** 赵云：位置/生命/等级/属性。表现层只负责把 sprite 摆到位。 */
 export class Player {
   armyDamageTakenMul = 1;
@@ -74,7 +86,9 @@ export class Player {
   private actionSet?: HeroActionSet;
   /** 招牌技动作的节流（战斗时间，黄忠用）。 */
   nextSkillAction = 0;
-  private action: {kind: HeroActionKind; frames: ActionFrame[]; mirror: boolean; start: number; until: number; hold: boolean} | null = null;
+  private action: {kind: HeroActionKind; frames: ActionFrame[]; mirror: boolean; start: number; until: number; hold: boolean; weights?: readonly number[]} | null = null;
+  /** 当前武将普攻四帧的时长占比（枪将：蓄力 / 刺出 / 刺到底 / 收枪）；未设置时四帧均分。 */
+  private attackWeights?: readonly number[];
 
   constructor(scene: Phaser.Scene, x: number, y: number) {
     this.scene = scene;
@@ -159,7 +173,7 @@ export class Player {
   }
 
   /** 按武将设置动作素材；没有素材的武将保持原样（只有行走）。 */
-  setActionSet(id: CharacterId): void { let set = HERO_ACTIONS[id]; if (id === 'zhuge' && set && !this.scene.textures.exists(set.texture)) set = ZHUGE_FALLBACK; this.actionSet = set && this.scene.textures.exists(set.texture) ? set : undefined; this.action = null; }
+  setActionSet(id: CharacterId): void { this.attackWeights = SPEAR_ATTACK_WEIGHTS[id]; let set = HERO_ACTIONS[id]; if (id === 'zhuge' && set && !this.scene.textures.exists(set.texture)) set = ZHUGE_FALLBACK; this.actionSet = set && this.scene.textures.exists(set.texture) ? set : undefined; this.action = null; }
   get hasActions(): boolean { return !!this.actionSet; }
   /** 当前动作（测试与调试用）。 */
   get currentAction(): HeroActionKind | null { return this.action && (this.action.hold || this.clock() < this.action.until) ? this.action.kind : null; }
@@ -181,7 +195,7 @@ export class Player {
     if (!frames?.length) return false;
     // 胜利 / 倒地发生在结算时：战斗时钟已停、主角不再更新，改用真实时钟并由计时器逐帧刷新
     const hold = kind === 'win' || kind === 'die', start = hold ? this.scene.time.now : now;
-    this.action = {kind, frames, mirror, start, until: start + ACTION_MS[kind], hold};
+    this.action = {kind, frames, mirror, start, until: start + ACTION_MS[kind], hold, weights: kind === 'attack' && this.attackWeights?.length === frames.length ? this.attackWeights : undefined};
     this.renderAction(false);
     // 结算后场景计时器暂停（time.paused），改挂每帧的 postupdate，播完自动解除
     if (hold) { const tick = (): void => { if (!this.action?.hold || !this.sprite.active) { this.scene.events.off('postupdate', tick); return; } this.renderAction(false); if (this.scene.time.now >= this.action.until + 60) this.scene.events.off('postupdate', tick); }; this.scene.events.on('postupdate', tick); this.scene.events.once('shutdown', () => this.scene.events.off('postupdate', tick)); }
@@ -194,7 +208,7 @@ export class Player {
     let frame: ActionFrame | undefined, mirror = false;
     if (a && (a.hold || now < a.until)) {
       const t = Math.min(.999, Math.max(0, (now - a.start) / Math.max(1, a.until - a.start)));
-      frame = a.frames[a.hold && now >= a.until ? a.frames.length - 1 : Math.floor(t * a.frames.length)]; mirror = a.mirror;
+      frame = a.frames[a.hold && now >= a.until ? a.frames.length - 1 : weightedIndex(t, a.frames.length, a.weights)]; mirror = a.mirror;
     } else {
       if (a) {
         // 动作结束：站着不动时行走层不会换帧，须主动切回当前朝向的站立帧

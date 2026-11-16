@@ -58,7 +58,8 @@ export function lqSkin(scene: Phaser.Scene, target: Phaser.GameObjects.GameObjec
   let cur: LqState = 'idle';
   const repaint = (s?: LqState) => {
     if (s) cur = s;
-    if (!target.active || !gfx.active) return; // 点击后面板整体重绘，旧按钮已销毁
+    // 只在对象已销毁时跳过（点击后面板整体重绘）；setActive(false) 的按钮仍要重绘，以便底板随之隐藏
+    if (!target.scene || !gfx.scene || !label.scene) return;
     const enabled = opts.enabled ? opts.enabled() : true;
     const st: LqState = !enabled ? 'off' : opts.on?.() && cur === 'idle' ? 'on' : cur;
     const { w, h } = size();
@@ -110,9 +111,9 @@ function lqButtonScaled(g: Phaser.GameObjects.Graphics, cx: number, cy: number, 
 export function lqImageButton(scene: Phaser.Scene, image: Phaser.GameObjects.Image, w: number, h: number, tone: LqTone = 'gold', label?: Phaser.GameObjects.Text): void {
   const pad = 6;
   const set = (st: LqState) => {
-    if (!image.active) return;
+    if (!image.scene) return;
     image.setTexture(lqButtonTexture(scene, w, h, st, tone)).setDisplaySize(w + pad * 2, h + pad * 2);
-    if (label?.active) label.setColor(lqLabelColor(st));
+    if (label?.scene) label.setColor(lqLabelColor(st));
   };
   set('idle');
   // 已经 setInteractive 过的旧按钮：命中区按新贴图重设（各状态贴图同尺寸，之后不必再改）

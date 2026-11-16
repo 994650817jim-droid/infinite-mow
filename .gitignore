@@ -78,3 +78,4 @@ assets/raw/*
 !/tools/test-hubao.mjs
 !/tools/test-mount.mjs
 !/tools/test-shield.mjs
+!/tools/test-objectives.mjs

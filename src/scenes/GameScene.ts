@@ -69,6 +69,7 @@ import {gearFor} from '../systems/ItemEffects';
 import {depositRunLoot,loadout} from '../systems/ItemStore';
 import {HeroMount} from '../systems/HeroMount';
 import {armShield,absorbShield,ShieldBars} from '../systems/ShieldGuard';
+import {StageObjectives} from '../systems/StageObjectives';
 import {itemName} from '../data/items';
 import {ItemBagUI} from '../ui/ItemBagUI';
 
@@ -131,6 +132,8 @@ export class GameScene extends Phaser.Scene {
   protected mount:HeroMount|null=null;
   /** 盾牌兵两段血：盾条与碎盾效果（data/shields.ts）。 */
   private shieldBars:ShieldBars|null=null;
+  /** 关卡目标（歼敌 / 摧毁 / 护送 / 坚守，data/objectives.ts）：完成后首领出阵。 */
+  protected objective:StageObjectives|null=null;private objectiveText?:Phaser.GameObjects.Text;
   protected supplies:BattlefieldSupplies|null=null;
   /** 道具掉落与本局缴获（局外兵装，结算带回行囊）。 */
   protected itemDrops:ItemDrops|null=null;
@@ -382,7 +385,8 @@ export class GameScene extends Phaser.Scene {
     this.supplies=new BattlefieldSupplies(this,this.player,this.enemies,()=>this.combatNow,()=>{this.sfx.play('pickup');this.artEffects.show(5,this.player.x,this.player.y-12,35,this.combatNow,280);});
     // 兵装：开局读入该武将穿戴的道具加成（生命上限增加的部分补满）
     {const oldMax=this.player.maxHp;this.player.growth.gear=gearFor(this.runConfig.character);this.player.heal(this.player.maxHp-oldMax);}
-    this.shieldBars=new ShieldBars(this);this.events.once('shutdown',()=>{this.shieldBars?.clear();this.shieldBars=null;});
+    this.shieldBars=new ShieldBars(this);this.events.once('shutdown',()=>{this.shieldBars?.clear();this.shieldBars=null;this.objective?.clear();this.objective=null;this.objectiveText=undefined;});
+    this.setupObjective();
     {const horse=loadout(this.runConfig.character).mount;this.mount=horse?new HeroMount({scene:this,player:this.player,enemies:this.enemies,hit:(e,d,now)=>this.hitEnemy(e,d,now,'melee',false,false),notice:t=>this.showGrowthNotice(t)},{base:horse.base,name:itemName(horse)},this.runConfig.character):null;this.player.mountGuard=this.mount?(n,now)=>this.mount?.guard(n,now)??n:undefined;this.events.once('shutdown',()=>{this.mount?.clear();this.mount=null;});}
     this.itemDrops=new ItemDrops(this,this.player,this.itemTier(),()=>this.elapsed,()=>this.isFinalBoss(),()=>this.sfx.play('pickup'));
     // 酒罐 / 药篓不生成在房屋、城墙等障碍里（第三/四章、攻城在 create 之后才设置障碍，故调用时读取）
@@ -610,7 +614,7 @@ export class GameScene extends Phaser.Scene {
       // Finish a wave before recruiting; the opening wave starts immediately.
       if (nextWave > 0 && this.chapter.recruitWaves.includes(nextWave)) this.scheduleRecruit();
     }
-    if (!this.over && this.elapsed >= chapterBossTime(this.chapter) - 10 && !this.bossWarned) {
+    if (!this.over && !this.objective && this.elapsed >= chapterBossTime(this.chapter) - 10 && !this.bossWarned) {
       this.bossWarned = true;
       this.showWaveBanner(`${this.chapter.bossName}即将登场！`, true);
     }
@@ -664,7 +668,7 @@ export class GameScene extends Phaser.Scene {
     if(!this.over)this.itemDrops?.update();
     this.supplies?.update(dt,time,this.battlefieldDetails.props,(enemy,damage)=>this.hitEnemy(enemy,damage,time,'fire',false,false),this.allies,(ally,damage,now)=>this.legion.hurt(ally,damage,now));
     this.updateEnemies(dt, time);
-    this.yellow?.update(dt,time);this.xiliang?.update(dt,this.combatNow);this.shieldBars?.draw(this.enemies);
+    this.yellow?.update(dt,time);this.xiliang?.update(dt,this.combatNow);this.shieldBars?.draw(this.enemies);if(this.objective){this.objective.update(dt);this.objectiveText?.setText(this.objective.text);}
     for(const t of this.chasingBosses){if(t.enemy.active&&t.enemy.spawnId===t.life){t.battle?.update(dt,time);t.label.setPosition(t.enemy.x,t.enemy.y-100).setText(t.name+" · 追兵 "+Math.ceil(Math.max(0,t.enemy.hp)/t.enemy.maxHp*100)+"%");}}
     this.rebuildGrid();
     if(time>=this.navigationAt){this.navigationAt=time+250;const boxes=[...(this.sishuiObstacles?.footprints??[])];this.supplies?.appendNavigationBoxes(boxes);this.legion.navigation.setBoxes(boxes);}
@@ -788,6 +792,15 @@ export class GameScene extends Phaser.Scene {
     return enemy;
   }
 
+  /** 关卡目标：按当前关的 chapter.objective 建立（战线推进到下一关时重建）；HUD 在章节名下方显示一行。 */
+  protected setupObjective(): void {
+    this.objective?.clear(); this.objective = null;
+    const o = this.chapter.objective; if (!o) { this.objectiveText?.setVisible(false); return; }
+    this.objective = new StageObjectives({scene: this, player: this.player, enemies: this.enemies, spawn: (k, x, y) => this.spawnEnemy(k, x, y, undefined, true), spawnCamp: (x, y, hp) => this.supplies?.spawnCamp(x, y, Math.round(hp * this.chapter.hpScale(this.elapsed))) ?? null, kills: () => this.kills, elapsed: () => this.elapsed, banner: (t, c) => this.showWaveBanner(t, false, c)}, o);
+    if (!this.objectiveText?.active) this.objectiveText = this.add.text(GAME_WIDTH / 2, 78, '', warText(14, '#ffd98a')).setOrigin(.5, 0).setScrollFactor(0).setDepth(DEPTH.hud + 1).setStroke('#1a120b', 4).setName('objective-text');
+    this.objectiveText.setVisible(true).setText(this.objective.text);
+  }
+
   /** 盾碎：碎片效果，换成同章步兵造型（飞熊军等专属造型保留原样）。 */
   protected breakShield(enemy: Enemy): void {
     this.shieldBars?.shatter(enemy.x, enemy.y); this.sfx.play('hitHeavy');
@@ -824,7 +837,7 @@ export class GameScene extends Phaser.Scene {
       }
     }
 
-    if (!this.bossSpawned && this.elapsed >= chapterBossTime(this.chapter) && this.mode === 'none') {
+    if (!this.bossSpawned && (this.objective ? this.objective.done : this.elapsed >= chapterBossTime(this.chapter)) && this.mode === 'none') {
       this.spawnBoss();
     }
     void time;
@@ -1415,6 +1428,7 @@ export class GameScene extends Phaser.Scene {
 
   protected killEnemy(enemy: Enemy): void {
     if (!enemy.active) return;
+    this.objective?.onKill(enemy);
     const kind = enemy.kind;
     if (enemy.def.texture === 'boss_lubu') this.feedback.death(enemy);
     if(kind==='boss'){const old=this.chasingBosses.find(t=>t.enemy===enemy&&t.life===enemy.spawnId),h=old?old.huaxiong:this.huaxiong,x=old?old.xurong:this.xurong;h?.defeat();x?.defeat();if(old){if(h)this.deadBossControllers.push(h);if(x)this.deadBossControllers.push(x);}}
@@ -2206,7 +2220,7 @@ export class GameScene extends Phaser.Scene {
     this.chasingBosses.push({enemy:boss,life:boss.spawnId,stage,name,battle:this.yellow,huaxiong:this.huaxiong,xurong:this.xurong,label});
     const next=(stage+1) as 2|3,west=this.chapter.id==='hulao';
     this.chapter=getBattleChapter(this.chapter.id,west?undefined:next,west?next:undefined);this.runConfig={...this.runConfig,stage:west?undefined:next,westStage:west?next:undefined};
-    this.frontlineStarts.set(next,this.combatNow);this.elapsed=0;this.waveIndex=0;this.boss=null;this.bossSpawned=false;this.bossWarned=false;this.bossKilled=false;this.firstBossAt=-1;this.bossShield=0;this.bossPhase2=false;this.bossEnergy=0;this.recruitedWaves.clear();this.spawnTimer=.2;this.huaxiong=null;this.xurong=null;
+    this.frontlineStarts.set(next,this.combatNow);this.setupObjective();this.elapsed=0;this.waveIndex=0;this.boss=null;this.bossSpawned=false;this.bossWarned=false;this.bossKilled=false;this.firstBossAt=-1;this.bossShield=0;this.bossPhase2=false;this.bossEnergy=0;this.recruitedWaves.clear();this.spawnTimer=.2;this.huaxiong=null;this.xurong=null;
     this.yellow=west?null:new YellowBattle({scene:this,player:this.player,army:this.legion,enemies:this.enemies,move:(e,nx,ny,dt)=>this.advanceEnemy(e,nx,ny,dt),spawn:(def,x,y)=>this.spawnEnemy(def.kind,x,y,1,true,def)},next);
     // 战线推进与新一关第 1 波合成一条提示（原先“战线推进”下一帧就被第 1 波提示顶掉）
     const waves=this.chapter.waves,first=waves[0];
@@ -2221,7 +2235,7 @@ export class GameScene extends Phaser.Scene {
       return;
     }
     // 第六波 Boss 战不再限时：Boss 出现后只有击杀或玩家死亡结束
-    if (!this.bossSpawned && this.elapsed >= chapterBossTime(this.chapter) + 60) this.finish(false, 'timeout');
+    if (!this.bossSpawned && (this.objective ? this.objective.failed || this.elapsed >= this.objective.o.limit : this.elapsed >= chapterBossTime(this.chapter) + 60)) this.finish(false, 'timeout');
   }
 
   /** 道具掉落的章节档：0 黄巾 / 1 讨董 / 2 群雄·攻守城 / 3 官渡·赤壁。 */

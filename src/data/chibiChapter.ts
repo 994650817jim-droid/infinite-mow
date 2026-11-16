@@ -15,9 +15,9 @@ export const CHIBI_STAGES: readonly ChibiStageInfo[] = [
 export const CHIBI_SHEETS: Record<string, string> = { chibi_caochun: 'assets/chibi/caochun.png', chibi_caimao: 'assets/chibi/caimao.png', chibi_caoren: 'assets/chibi/caoren.png' };
 
 const WAVE_NAMES: string[][] = [
-  ['当阳道上', '虎豹骑追至', '长坂坡前', '曹纯督阵'],
-  ['江上烽火', '水寨弓阵', '连环战船', '蔡瑁号令'],
-  ['江陵城下', '坚阵连枪', '城门伏兵', '曹仁出城'],
+  ['当阳道上', '虎豹骑追至', '曹纯督阵'],
+  ['江上烽火', '连环战船', '蔡瑁号令'],
+  ['江陵城下', '城门伏兵', '曹仁出城'],
 ];
 /** 第五章战斗：以对应招式组的第三章战斗为底，换首领、名称与数值（比第三章略强）。 */
 export function chibiBattle(stage: ChibiStage): ChapterDef {

@@ -424,7 +424,7 @@ export class GameScene extends Phaser.Scene {
     this.legionUI = new LegionUI(this, () => { if (this.mode === 'none' && !this.over) this.legion.cycleOrder(); }, (kind, train) => this.buyTroops(kind, train), () => {
       if (this.mode === 'rest') this.continueCampaign();
       else if (this.mode === 'recruit') { this.recruitedWaves.add(this.waveIndex); this.freeRecruit = false; this.resumePendingChoices(); }
-    });
+    }, () => this.takeRecruitPotion());
     this.campUI=new CampRestUI(this,this.player,this.legion,()=>this.continueCampaign());
     this.campUI.onBuyItem=item=>this.itemDrops?.runLoot.push(item);
     this.reinforcements = new Reinforcements(this, this.runConfig.character, this.player, id => {
@@ -2032,6 +2032,19 @@ export class GameScene extends Phaser.Scene {
   }
 
   protected chooseRecruit(index: number): void { const option = this.recruitOptions[index]; if (option) this.buyTroops(option.kind, false); }
+
+  /** 临时值（待「平衡与数值」会话确认）：战地招募第 4 张血药卡，立即回复 25% 最大生命。用户 2026-11-16 批准加卡。 */
+  static readonly RECRUIT_POTION_HEAL = .25;
+  /** 战地招募选「血药」：代替本波的免费招兵，立即回血，然后继续战斗。 */
+  protected takeRecruitPotion(): void {
+    if (this.mode !== 'recruit' || !this.freeRecruit || this.recruitedWaves.has(this.waveIndex)) return;
+    const amount = Math.round(this.player.maxHp * GameScene.RECRUIT_POTION_HEAL);
+    this.player.heal(amount);
+    this.sfx.play('recruit');
+    this.showGrowthNotice('血药 · 回复生命 ' + amount);
+    this.recruitedWaves.add(this.waveIndex); this.freeRecruit = false; this.recruitOptions = [];
+    this.resumePendingChoices();
+  }
 
   protected continueCampaign(): void {
     if (!this.resting || this.mode !== 'rest' || this.children.getByName('chapter1-volunteers')) return;

@@ -75,3 +75,4 @@ assets/raw/*
 # 主将步态（walk-anim）
 !/tools/test-walk-anim.mjs
 !/tools/walk-anim-record.mjs
+!/tools/test-recruit-potion.mjs

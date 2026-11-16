@@ -1321,8 +1321,8 @@ export class GameScene extends Phaser.Scene {
       spawnFlagSwingFx: (...args) => scene.spawnFlagSwingFx(...args),
       spawnFlameGatherFx: (...args) => scene.spawnFlameGatherFx(...args),
       spawnFlameFx: (...args) => scene.spawnFlameFx(...args),
-      rallyAllies: (fraction: number) => { for (const u of scene.allies) if (u.active) u.hp = Math.min(u.maxHp, u.hp + u.maxHp * fraction); },
       heroFx: (id: string, x: number, y: number, size: number, rotation = 0) => scene.playHeroFx(id, x, y, size, rotation),
+      rallyAllies: (fraction: number) => { for (const u of scene.allies) if (u.active) u.hp = Math.min(u.maxHp, u.hp + u.maxHp * fraction); },
       martialField: (...args) => scene.martialFields.add(...args),
     };
   }
@@ -1662,10 +1662,10 @@ export class GameScene extends Phaser.Scene {
   spawnGuandaoSlash(angle: number, alphaScale: number, size = 110, duration = 120): void {
     const reachOffset = size * .19;
     this.artEffects.show(1,this.player.x+Math.cos(angle)*reachOffset,this.player.y+Math.sin(angle)*reachOffset,size,this.combatNow,duration,angle);
-    if (!this.textures.exists('guandao_slash_sheet')) return;
     // 刘备 / 魏延：普攻用自己的剑气 / 劈地特效，不再借用关羽的青龙刀光
     const own = ({ liubei: 'liubeiSlash', weiyan: 'weiyanSlash' } as Record<string, string>)[this.runConfig.character];
     if (own && this.textures.exists('hero_fx_' + HERO_FX[own].sheet)) { if (alphaScale >= .9) this.playHeroFx(own, this.player.x + Math.cos(angle) * reachOffset * 1.6, this.player.y + Math.sin(angle) * reachOffset * 1.6, size * 1.15, own === 'liubeiSlash' ? angle : 0); return; }
+    if (!this.textures.exists('guandao_slash_sheet')) return;
     const originX = this.player.x, originY = this.player.y;
     for (let f = 0; f < 3; f += 1) {
       this.time.delayedCall(f * 45, () => {
@@ -1676,13 +1676,12 @@ export class GameScene extends Phaser.Scene {
           .setRotation(angle)
           .setDepth(41)
           .setAlpha(0.62 * alphaScale);
-        this.tweens.add({ targets: fx, alpha: 0, scaleX: fx.scaleX * 1.06, scaleY: fx.scaleY * 1.06, duration, onComplete: () => fx.destroy() });
         { const tint = HERO_TINT[this.runConfig.character]; if (tint) fx.setTint(tint); }
+        this.tweens.add({ targets: fx, alpha: 0, scaleX: fx.scaleX * 1.06, scaleY: fx.scaleY * 1.06, duration, onComplete: () => fx.destroy() });
       });
     }
   }
 
-  /** 诸葛亮挥旗：正式战旗素材握在旗杆底端，朝目标一侧前挥；缺图时退回程序旗子。 */
   /** 新武将招牌技序列帧（黑底、叠加混合）：6 帧约 0.45 秒，末帧淡出。缺图时不显示。 */
   playHeroFx(id: string, x: number, y: number, size: number, rotation = 0): void {
     const def = HERO_FX[id], key = def ? 'hero_fx_' + def.sheet : ''; if (!def || !this.textures.exists(key)) return;
@@ -1690,6 +1689,7 @@ export class GameScene extends Phaser.Scene {
     this.tweens.addCounter({ from: 0, to: 5.99, duration: 450, onUpdate: t => fx.setFrame(def.row * 6 + Math.floor(t.getValue() ?? 0)), onComplete: () => this.tweens.add({ targets: fx, alpha: 0, duration: 140, onComplete: () => fx.destroy() }) });
   }
 
+  /** 诸葛亮挥旗：正式战旗素材握在旗杆底端，朝目标一侧前挥；缺图时退回程序旗子。 */
   protected spawnFlagSwingFx(dirX: number, dirY: number): void {
     const px = this.player.x, py = this.player.y;
     if (this.textures.exists('zhuge_banner')) {
@@ -1730,8 +1730,8 @@ export class GameScene extends Phaser.Scene {
   protected spawnFlameFx(x: number, y: number, radius: number): void {
     if (this.textures.exists('flame_burst')) {
       const size = radius * 2.5, burst = this.add.image(x, y, 'flame_burst', 0).setOrigin(0.5, 0.82).setDisplaySize(size, size).setDepth(actorDepth(y) + 0.5).setName('flame-burst');
-      this.tweens.addCounter({ from: 0, to: 5.99, duration: 420, onUpdate: t => burst.setFrame(Math.floor(t.getValue() ?? 0)), onComplete: () => this.tweens.add({ targets: burst, alpha: 0, duration: 120, onComplete: () => burst.destroy() }) });
       { const tint = HERO_TINT[this.runConfig.character]; if (tint) burst.setTint(tint); }
+      this.tweens.addCounter({ from: 0, to: 5.99, duration: 420, onUpdate: t => burst.setFrame(Math.floor(t.getValue() ?? 0)), onComplete: () => this.tweens.add({ targets: burst, alpha: 0, duration: 120, onComplete: () => burst.destroy() }) });
       return;
     }
     this.artEffects.show(2,x,y,radius*1.5,this.combatNow,280);

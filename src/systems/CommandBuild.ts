@@ -1,5 +1,6 @@
 import {buildVfx} from './BuildVfx';
 import {SHOW_RANGE_RINGS} from '../ui/RangeRings';
+import {HINT_MOCK} from '../ui/HintStyle';
 import Phaser from 'phaser';
 import type {Ally} from '../entities/Ally';import type {Enemy} from '../entities/Enemy';import type {Player} from '../entities/Player';import type {BuildState} from '../data/builds';
 /** Orders augment the existing Legion AI; no separate soldiers, projectiles or timers. */
@@ -22,7 +23,7 @@ export class CommandBuild {
  const n=this.state.level('breakout');if(n&&now>=this.thinkAt&&now>=this.breakAt){this.thinkAt=now+150;for(const u of this.units){if(!u.active||Math.hypot(u.x-this.player.x,u.y-this.player.y)>260)continue;const crowd=nearby(u.x,u.y,65).filter(e=>e.active&&!e.isSupplySlot&&Math.hypot(e.x-u.x,e.y-u.y)<=65);if(crowd.length<3)continue;const movable=crowd.filter(e=>e.kind!=='boss'&&!e.controlImmune&&e.def.behavior!=='wall').slice(0,[3,4,5][n-1]);if(!movable.length)continue;this.breakAt=now+[8000,7000,6000][n-1];for(const e of movable){let dx=e.x-u.x,dy=e.y-u.y,d=Math.hypot(dx,dy);if(d<.01){dx=1;dy=0;d=1;}const step=[30,42,54][n-1]*(e.kind==='elite'?.5:1);e.sprite.x+=dx/d*step;e.sprite.y+=dy/d*step;}this.pulse(u.x,u.y,now,false);break;}}
  this.gfx.clear();for(const[u,m]of this.focus){const e=m.enemy;this.gfx.lineStyle(1,0xdbbd78,.5).lineBetween(u.x,u.y-12,e.x,e.y-12);if(SHOW_RANGE_RINGS)this.gfx.lineStyle(2,0xe0c283,.9).strokeCircle(e.x,e.y-12,13);else this.gfx.fillStyle(0xf2d38a,.5).fillCircle(e.x,e.y-28,3.5);} // 集火目标：默认只在头顶点一颗金点
  for(const[u]of this.guards)this.gfx.lineStyle(2,0x92c1b2,.8).beginPath().arc(u.x,u.y-12,18,-Math.PI*.9,-Math.PI*.1).strokePath();
- for(let i=this.pulses.length-1;i>=0;i--){const p=this.pulses[i],t=(p.until-now)/450;if(t<=0){this.pulses.splice(i,1);continue;}this.gfx.lineStyle(2,p.heal?0x9bc6a1:0xd0b47b,t*.7).strokeCircle(p.x,p.y,10+(1-t)*45);}
+ for(let i=this.pulses.length-1;i>=0;i--){const p=this.pulses[i],t=(p.until-now)/450;if(t<=0){this.pulses.splice(i,1);continue;}if(!HINT_MOCK)this.gfx.lineStyle(2,p.heal?0x9bc6a1:0xd0b47b,t*.7).strokeCircle(p.x,p.y,10+(1-t)*45);}
  }
  private pulse(x:number,y:number,now:number,heal:boolean){if(this.pulses.length<16)this.pulses.push({x,y,until:now+450,heal});}
  clear():void{this.focus.clear();this.guards.clear();this.pulses=[];this.markAt=this.healAt=this.breakAt=this.thinkAt=this.clock=0;this.gfx.clear();}

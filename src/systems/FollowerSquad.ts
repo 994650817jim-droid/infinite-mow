@@ -6,6 +6,7 @@ import { FOLLOW, TEMPLATES, type FollowerTemplate } from '../data/recruits';
 import type { Enemy } from '../entities/Enemy';
 import type { Player } from '../entities/Player';
 import { visualTextureKey } from './ReadableTextures';
+import { HINT_MOCK, groundScar } from '../ui/HintStyle';
 import { rankBonus, type Recruit } from './RosterStore';
 import { loadout, type GearOwner } from './ItemStore';
 import { emptyGear, gearFromItems, type GearStats } from './ItemEffects';
@@ -21,7 +22,7 @@ import type { ItemInstance } from '../data/items';
  */
 type Query = (x: number, y: number, r: number) => Enemy[];
 type Hit = (enemy: Enemy, damage: number, fire: boolean) => void;
-interface Fx { kind: FollowerTemplate | 'arrow'; x: number; y: number; tx: number; ty: number; angle: number; at: number; until: number; hitAt?: number; damage?: number; owner?: Follower }
+interface Fx { kind: FollowerTemplate | 'arrow'; x: number; y: number; tx: number; ty: number; angle: number; at: number; until: number; hitAt?: number; damage?: number; owner?: Follower; scar?: boolean }
 
 const QUALITY_POWER: Record<ItemQuality, number> = { white: 1, green: 1.15, blue: 1.3, purple: 1.5, orange: 1.6 };
 const TROOP_SHEET: Record<FollowerTemplate, string> = { spear: 'shu_spearman_walk_sheet', blade: 'shu_swordsman_walk_sheet', bow: 'shu_archer_walk_sheet', strategist: 'shu_archer_walk_sheet' };
@@ -169,6 +170,7 @@ export class FollowerSquad {
       if (fx.kind === 'spear') { g.lineStyle(4, 0xe8f2ff, .8 * (1 - k)); g.beginPath(); g.arc(fx.x, fx.y - 16, TEMPLATES.spear.range * (.6 + .4 * k), fx.angle - 2.4 * k - .6, fx.angle + .6); g.strokePath(); }
       else if (fx.kind === 'blade') { g.lineStyle(5, 0xffe2a8, .85 * (1 - k)); g.beginPath(); g.arc(fx.x, fx.y - 16, TEMPLATES.blade.range * .8, fx.angle - .9, fx.angle - .9 + 1.8 * Math.min(1, k * 1.6)); g.strokePath(); }
       else if (fx.kind === 'arrow') { const hx = fx.x + (fx.tx - fx.x) * k, hy = fx.y + (fx.ty - fx.y) * k; g.lineStyle(2, 0xfff1c8, .9); g.lineBetween(hx - Math.cos(fx.angle) * 18, hy - Math.sin(fx.angle) * 18, hx, hy); }
+      else if (HINT_MOCK) { if (HINT_MOCK === 'b' && fx.hitAt === undefined && !fx.scar) { fx.scar = true; groundScar(this.scene, fx.tx, fx.ty, 48, 'fire'); } }
       else { const pre = fx.hitAt !== undefined; g.fillStyle(pre ? 0xff8a3a : 0xffb347, pre ? .25 + .25 * k : .5 * (1 - k)); g.fillCircle(fx.tx, fx.ty, pre ? 48 * (.4 + .6 * k) : 48); if (pre) { g.lineStyle(2, 0xffc070, .7); g.strokeCircle(fx.tx, fx.ty, 48); } }
     }
   }

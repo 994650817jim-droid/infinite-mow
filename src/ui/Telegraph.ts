@@ -1,4 +1,5 @@
 import type Phaser from 'phaser';
+import { HINT_MOCK, impactDust } from './HintStyle';
 
 /**
  * 统一的地面预警圈（首领范围技、落雷、箭雨等）：
@@ -55,6 +56,7 @@ const jit = (seed: number, i: number): number => { const v = Math.sin(seed * 12.
  * progress 0~1 随蓄力加深；impact 为落下瞬间：尘点更亮、裂纹到头。只用线段与小方块，不做多边形填充。
  */
 export function groundCracks(g: Phaser.GameObjects.Graphics, x: number, y: number, r: number, progress = 0, angle = 0, arc = Math.PI * 2, inner = 0, impact = false): void {
+  if (HINT_MOCK === 'a' || HINT_MOCK === 'c') { if (impact && HINT_MOCK === 'a') impactDust(g, x, y, r * .6); return; }
   const p = impact ? 1 : Math.max(0, Math.min(1, progress)), full = arc >= Math.PI * 1.99;
   const n = full ? 7 : Math.max(3, Math.round(arc * 2.2)), seed = Math.round(x * .37 + y * .61 + r);
   const a0 = .22 + p * .4, reach = .45 + p * .5, pts: number[] = [];
@@ -81,6 +83,7 @@ export function groundCracks(g: Phaser.GameObjects.Graphics, x: number, y: numbe
 
 /** 长条落点（冲锋道、枪阵、火船道）：沿方向一道断续裂纹 + 两侧尘点，随进度向前延伸。 */
 export function laneCracks(g: Phaser.GameObjects.Graphics, x: number, y: number, angle: number, length: number, width: number, progress = 0, impact = false): void {
+  if (HINT_MOCK === 'a' || HINT_MOCK === 'c') { if (impact && HINT_MOCK === 'a') for (let k = 1; k <= 3; k++) impactDust(g, x + Math.cos(angle) * length * k / 4, y + Math.sin(angle) * length * k / 4, width); return; }
   const p = impact ? 1 : Math.max(0, Math.min(1, progress)), c = Math.cos(angle), s = Math.sin(angle), seed = Math.round(x * .37 + y * .61 + length);
   const len = length * (.35 + .65 * p), steps = Math.max(4, Math.round(len / 38));
   const a0 = .22 + p * .4;

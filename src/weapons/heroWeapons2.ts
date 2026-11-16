@@ -5,6 +5,7 @@ import type { PlayerStats, WeaponState } from '../types';
 import { PASSIVE_RULES as R } from '../data/passives';
 import type { WeaponHost } from './registry';
 import { SHOW_RANGE_RINGS } from '../ui/RangeRings';
+import { HINT_MOCK, SHOW_OWN_RANGE_FX, groundScar } from '../ui/HintStyle';
 
 /**
  * 第二批专属本命武器（2026-11-16，用户确认）：黄忠「宝雕弓」、张飞「当阳喝断」、马超「虎头湛金枪」、刘备「双股剑」。
@@ -90,8 +91,9 @@ export function baodiaoBehavior(host: WeaponHost, weapon: WeaponState, dt: numbe
         flash.scene.tweens.add({ targets: flash, radius: 34, alpha: 0, duration: 240, onComplete: () => flash.destroy() }); }
       if (a.burst) { // 神射：命中处小范围爆裂
         for (const o of host.grid.query(ex, ey, R.heavyBurstRadius + 30)) if (alive(o) && o !== e && Math.hypot(o.x - ex, o.y - ey) <= R.heavyBurstRadius + o.radius) host.hitEnemy(o, a.damage * R.heavyBurstMul, time, 'arrow');
-        const ring = host.add.circle(ex, ey - 6, 12, 0xffd27a, 0).setStrokeStyle(4, 0xffe6a0, .9).setDepth(42);
-        ring.scene.tweens.add({ targets: ring, radius: R.heavyBurstRadius, alpha: 0, duration: 300, onComplete: () => ring.destroy() });
+        if (!HINT_MOCK) { const ring = host.add.circle(ex, ey - 6, 12, 0xffd27a, 0).setStrokeStyle(4, 0xffe6a0, .9).setDepth(42);
+        ring.scene.tweens.add({ targets: ring, radius: R.heavyBurstRadius, alpha: 0, duration: 300, onComplete: () => ring.destroy() }); }
+        else if (HINT_MOCK === 'b') groundScar(e.sprite.scene, ex, ey, R.heavyBurstRadius, 'crack');
       }
       if (a.pierce-- <= 0) { a.left = 0; break; }
     }
@@ -197,7 +199,8 @@ export function dangyangBehavior(host: WeaponHost, weapon: WeaponState, dt: numb
     }
     host.heroFx?.('roar', pl.x, pl.y - 10, R.roarRadius * 2.6);
     const bg = host.add.graphics().setDepth(18.8).setName('zhangfei-bridge');
-    bg.fillStyle(0xff8a3c, .12).fillCircle(pl.x, pl.y, R.bridgeRadius); // 断桥区：默认只铺淡淡一层，?rings=1 时加描边范围圈
+    if (SHOW_OWN_RANGE_FX) bg.fillStyle(0xff8a3c, .12).fillCircle(pl.x, pl.y, R.bridgeRadius);
+    if (HINT_MOCK === 'b') groundScar(bg.scene, pl.x, pl.y, R.bridgeRadius, 'crack', 0, 360); // 断桥区：默认只铺淡淡一层，?rings=1 时加描边范围圈
     if (SHOW_RANGE_RINGS) bg.lineStyle(4, 0xffb060, .8).strokeCircle(pl.x, pl.y, R.bridgeRadius);
     st.bridges.push({ x: pl.x, y: pl.y, until: time + R.bridgeMs + 500 * g.masteries.dahe, g: bg });
     host.cameras.main.shake(140, .005);
@@ -221,8 +224,9 @@ export const ZHANJIN_DEF = {
 export const zhanjinLandRadius = (level: number, jinma: number): number => R.landRadius * (1 + (level >= 3 ? .1 : 0) + .15 * jinma);
 function landSlam(host: WeaponHost, x: number, y: number, radius: number, damage: number, time: number, echo: boolean): void {
   for (const e of host.grid.query(x, y, radius + 30)) if (alive(e) && Math.hypot(e.x - x, e.y - y) <= radius + e.radius) host.hitEnemy(e, damage, time, 'melee');
-  const ring = host.add.circle(x, y, 10, 0xffe08a, 0).setStrokeStyle(5, 0xffd27a, .9).setDepth(41).setName('machao-land');
-  ring.scene.tweens.add({ targets: ring, radius, alpha: 0, duration: 260, onComplete: () => ring.destroy() });
+  if (!HINT_MOCK) { const ring = host.add.circle(x, y, 10, 0xffe08a, 0).setStrokeStyle(5, 0xffd27a, .9).setDepth(41).setName('machao-land');
+  ring.scene.tweens.add({ targets: ring, radius, alpha: 0, duration: 260, onComplete: () => ring.destroy() }); }
+  else if (HINT_MOCK === 'b') groundScar(host.player.sprite.scene, x, y, radius, 'crack');
   for (let k = 0; k < 6; k++) { const a = k * Math.PI / 3 + Math.random() * .4, dust = host.add.circle(x, y, 4, 0xb89a6a, .8).setDepth(40);
     dust.scene.tweens.add({ targets: dust, x: x + Math.cos(a) * radius * .8, y: y + Math.sin(a) * radius * .5, alpha: 0, duration: 360, onComplete: () => dust.destroy() }); }
   if (echo) host.time.delayedCall(260, () => { if (!host.over) landSlam(host, x, y, radius * 1.2, damage * .5, host.combatNow, false); });

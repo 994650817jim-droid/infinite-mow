@@ -5,19 +5,13 @@ import {LUBU_CHALLENGE, lubuChallengeChapter} from '../data/dongzhuo';
 import {isChapterTestRun} from '../systems/ChapterProgress';
 import {beginLubuChallenge, cityIncomeLine, lubuChallengeOpen, permanentEffects, settleLubuChallenge, takeExpeditionReserve, abandonExpedition} from '../world/WorldStore';
 import {applyCitySpecialties} from '../systems/CityBonuses';
-import {LEGENDS, QUALITIES, affixValue, newItemUid, type ItemInstance} from '../data/items';
-import {addItems} from '../systems/ItemStore';
+import {grantHorse} from '../systems/ItemStore';
+import {horseForReward} from '../data/mounts';
 import type {RunEndReason} from '../types';
 import type {RunConfig} from '../data/characters';
 
-/** 赤兔（橙色名器）：首次击败吕布的奖励。 */
-export function chituItem(rng: () => number = Math.random): ItemInstance | null {
-  const l = LEGENDS.find(x => x.id === LUBU_CHALLENGE.firstItem); if (!l) return null;
-  return {uid: newItemUid(), base: l.id, quality: 'orange', affixes: l.affixes.map(id => ({id, value: affixValue(id, 'orange', rng)})), special: l.special};
-}
-
 /**
- * 天下地图挑战关「虎牢关 · 三英战吕布」：原第二章虎牢关的吕布战（3 波），可反复挑战；首次击败吕布得赤兔。
+ * 天下地图挑战关「虎牢关 · 三英战吕布」：原第二章虎牢关的吕布战（3 波），可反复挑战；首次击败吕布得名马赤兔（入马厩，mounts.ts HORSES 的 reward 'lubu'）。
  * 不推进讨董进度；结算走 WorldStore.settleLubuChallenge。
  */
 export function lubuGameSceneClass(Base: typeof GameScene) {
@@ -46,7 +40,7 @@ export function lubuGameSceneClass(Base: typeof GameScene) {
       const debug = this.test || this.debugModified || this.debugJumped || this.player.damageImmune;
       const r = settleLubuChallenge(this.receipt, {victory, bossKilled: this.bossKilled, debug, elapsed: this.elapsed, returned: this.allies.filter(u => u.active && u.reserveSoldier).map(u => u.kind)});
       let loot = '';
-      if (r.first && !debug) { const it = chituItem(); if (it) { addItems([it]); loot = ` · 名马「赤兔」（${QUALITIES.orange.label}）入行囊`; } }
+      if (r.first && !debug) { const horse = horseForReward('lubu'); if (horse && grantHorse(horse.id)) loot = `\n获得坐骑  ${horse.name} · 已入马厩（休整时可换马）`; }
       this.resultTexts.subtitle.setText(victory ? (r.first ? '三英战吕布 · 首胜得赤兔' : this.chapter.victoryText) : '吕布难当 · 整军再战');
       this.resultTexts.body.setText(this.resultTexts.body.text + '\n挑战 · 军功 +' + r.merits + ' / 粮草 +' + r.provisions + loot + cityIncomeLine(r) + (debug ? '\n' + r.message : ''));
       const home = this.resultPanel.getByName('result-home') as Phaser.GameObjects.Text;

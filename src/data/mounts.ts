@@ -54,7 +54,7 @@ export const HORSES: readonly HorseDef[] = [
   {id: 'nag', name: '驽马', bonus: {move: .026}, reward: 'huangjin-3', lore: '第一章通关时赠送'},
   {id: 'grey_horse', name: '青骢', bonus: {move: .026}, reward: 'hulao-1', lore: '汜水关击败华雄'},
   {id: 'yellow_horse', name: '黄骠马', bonus: {pickup: .1}, reward: 'hulao-2', lore: '荥阳击败徐荣'},
-  {id: 'chitu', name: '赤兔', legend: true, bonus: {move: .04, damage: .08}, reward: 'hulao-3', lore: '人中吕布，马中赤兔 · 虎牢关击败吕布'},
+  {id: 'chitu', name: '赤兔', legend: true, bonus: {move: .04, damage: .08}, reward: 'lubu', lore: '人中吕布，马中赤兔 · 天下地图挑战关「三英战吕布」首胜'},
   {id: 'black_horse', name: '乌骓', bonus: {damage: .05}, reward: 'third-1', lore: '群雄割据第一关首领'},
   {id: 'mule', name: '骡车', bonus: {ally: .05}, reward: 'third-2', lore: '群雄割据第二关首领'},
   {id: 'white_horse', name: '白马', bonus: {ally: .05}, reward: 'third-3', lore: '群雄割据章末首领'},

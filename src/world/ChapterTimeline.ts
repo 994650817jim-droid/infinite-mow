@@ -3,6 +3,7 @@
  * 只读存档字段（纯函数），不写存档；解锁规则与 WorldStore.arcUnlocked / ChapterProgress.chapterUnlocked 一致：
  *   黄巾之乱（始终开放）→ 讨伐董卓（通关黄巾）→ 群雄割据（通关讨董）→ 官渡之战（群雄三关）→ 赤壁之战（官渡三关）。
  */
+import { CHRONICLE, type ChronicleStage } from '../data/chronicle';
 export type TimelineChapterId = 'huangjin' | 'hulao' | 'qunxiong' | 'guandu' | 'chibi';
 export type ChapterState = 'cleared' | 'open' | 'locked';
 
@@ -52,3 +53,49 @@ export function openChapterCount(s: TimelineProgress): number {
 export function currentChapter(s: TimelineProgress): TimelineChapter {
   return CHAPTER_TIMELINE.find(c => chapterState(c.id, s) === 'open') ?? CHAPTER_TIMELINE[CHAPTER_TIMELINE.length - 1];
 }
+
+// ———— 三关路线（地图像素坐标，strategy-map 1536×1024）与史事 ————
+const ARC_OF: Record<TimelineChapterId, string> = { huangjin: 'huangjin', hulao: 'dongzhuo', qunxiong: 'qunxiong', guandu: 'guandu', chibi: 'chibi' };
+/** 各章三关在地图上的位置（按史事地名大致方位，避开城池徽标）。 */
+export const STAGE_POINTS: Record<TimelineChapterId, ReadonlyArray<{ x: number; y: number }>> = {
+  huangjin: [{ x: 822, y: 212 }, { x: 738, y: 158 }, { x: 905, y: 262 }],   // 广宗外围 · 下曲阳 · 广宗决战
+  hulao: [{ x: 795, y: 280 }, { x: 858, y: 405 }, { x: 722, y: 338 }],      // 汜水关 · 荥阳 · 虎牢关
+  qunxiong: [{ x: 305, y: 365 }, { x: 605, y: 525 }, { x: 1022, y: 590 }],  // 长安 · 宛城 · 寿春
+  guandu: [{ x: 975, y: 200 }, { x: 1010, y: 300 }, { x: 1052, y: 400 }],  // 白马 · 延津 · 乌巢
+  chibi: [{ x: 420, y: 598 }, { x: 800, y: 790 }, { x: 360, y: 742 }],      // 长坂 · 赤壁 · 江陵
+};
+export function chapterStages(id: TimelineChapterId): readonly ChronicleStage[] {
+  return CHRONICLE.find(c => c.arc === ARC_OF[id])?.stages ?? [];
+}
+export function chapterIntro(id: TimelineChapterId): string {
+  return CHRONICLE.find(c => c.arc === ARC_OF[id])?.intro ?? '';
+}
+/** 第 n 关是否可出征：本章已开放，且前一关已告捷（讨董旧存档保留全关权限）。 */
+export function stageOpen(id: TimelineChapterId, stage: number, s: TimelineProgress): boolean {
+  if (chapterState(id, s) === 'locked') return false;
+  if (id === 'hulao' && s.legacyHulaoAccess) return true;
+  return stage <= chapterStagesDone(id, s) + 1;
+}
+
+// ———— 地图揭开：每章开放时揭去该地区的「天下未定」纸雾 ————
+/** 各章地区的揭开圆（地图像素）。 */
+export const CHAPTER_REGIONS: Record<TimelineChapterId, ReadonlyArray<{ x: number; y: number; r: number }>> = {
+  huangjin: [{ x: 800, y: 230, r: 280 }, { x: 1160, y: 300, r: 210 }, { x: 799, y: 573, r: 210 }],
+  hulao: [{ x: 650, y: 390, r: 250 }, { x: 920, y: 420, r: 160 }],
+  qunxiong: [{ x: 290, y: 400, r: 250 }, { x: 560, y: 590, r: 210 }, { x: 1060, y: 620, r: 220 }, { x: 1240, y: 560, r: 180 }],
+  guandu: [{ x: 960, y: 200, r: 260 }, { x: 470, y: 130, r: 220 }, { x: 1200, y: 90, r: 230 }, { x: 1300, y: 400, r: 200 }],
+  chibi: [{ x: 460, y: 700, r: 260 }, { x: 950, y: 820, r: 260 }, { x: 1340, y: 690, r: 230 }, { x: 150, y: 520, r: 200 }],
+};
+
+// ———— 攻城分区：某城在其所属章节通关后才可攻打 ————
+export const CITY_CHAPTER: Readonly<Record<string, TimelineChapterId>> = {
+  luoyang: 'hulao', sishui: 'hulao', hongnong: 'hulao', hangu: 'hulao', xuchang: 'hulao', chenliu: 'hulao', runan: 'hulao', guandu: 'hulao',
+  changan: 'qunxiong', tianshui: 'qunxiong', wancheng: 'qunxiong', xinye: 'qunxiong', shouchun: 'qunxiong', xiapi: 'qunxiong', lujiang: 'qunxiong', hanzhong: 'qunxiong',
+  ye: 'guandu', nanpi: 'guandu', baima: 'guandu', wuchao: 'guandu', jinyang: 'guandu', shangdang: 'guandu', ji: 'guandu', pingyuan: 'guandu', linzi: 'guandu', beihai: 'guandu', donglai: 'guandu',
+  xiangyang: 'chibi', jiangxia: 'chibi', wujun: 'chibi',
+};
+/** 城池所属章节已通关（可攻打）；未列出的城默认随讨董开放。 */
+export function citySiegeOpen(cityId: string, s: TimelineProgress): boolean {
+  return chapterState(CITY_CHAPTER[cityId] ?? 'hulao', s) === 'cleared';
+}
+export function chapterById(id: TimelineChapterId): TimelineChapter { return CHAPTER_TIMELINE.find(c => c.id === id)!; }

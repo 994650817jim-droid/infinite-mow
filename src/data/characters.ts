@@ -37,9 +37,10 @@ export const CHARACTERS: CharacterDef[] = [
     id: 'zhaoyun',
     name: '赵云',
     desc: '均衡 · 移速与输出稳定',
-    hpMul: 1,
+    // 2026-11-15 平衡（用户批准）：生命 1 → 1.1、伤害 1 → 1.05（测量中承伤最高、DPS 中下）
+    hpMul: 1.1,
     speedMul: 1,
-    damageMul: 1,
+    damageMul: 1.05,
     portrait: 'hero_zhaoyun',
     startWeapon: 'spear_orbit',
   },
@@ -50,7 +51,8 @@ export const CHARACTERS: CharacterDef[] = [
     battleTint: 0x9be0a8,
     hpMul: 1.25,
     speedMul: 0.92,
-    damageMul: 1.15,
+    // 2026-11-15 平衡（用户批准）：伤害 1.15 → 1.08（约 −6%，三关首领战输出领先）
+    damageMul: 1.08,
     portrait: 'guanyu_portrait',
     startWeapon: 'guandao',
   },
@@ -69,7 +71,8 @@ export const CHARACTERS: CharacterDef[] = [
     id: 'zhuge',
     name: '诸葛亮',
     desc: '军师 · 火焰范围爆发，生命较低',
-    hpMul: 0.86,
+    // 2026-11-15 平衡（用户批准）：生命 0.86 → 0.95（测量中阵亡次数最多）
+    hpMul: 0.95,
     speedMul: 1.04,
     damageMul: 1.0,
     portrait: 'portrait_zhuge',

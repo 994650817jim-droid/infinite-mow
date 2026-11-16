@@ -68,6 +68,8 @@ export class MenuScene extends Phaser.Scene {
     const params = new URLSearchParams(window.location.search), saved = this.registry.get('runConfig') as RunConfig | undefined;
     if(isChapterTestRun()&&['1','2','3'].includes(params.get('stage')??''))this.selectedStage=Number(params.get('stage')) as YellowStage;
     const fromWorld=this.registry.has('selectedWorldChapter');
+    // 天下地图点选的关卡（黄巾 / 讨董）；乱世难度只对从地图出征有效
+    const worldStage=Number(this.registry.get('selectedWorldStage'));if(!fromWorld)this.registry.remove('hardChapter');
     const expanded=fromWorld||this.registry.get('menuChapterPicker')===true||((params.has('autostart')||params.has('perf'))&&params.has('chapter'));
     this.registry.remove('menuChapterPicker');this.compactHome=!expanded;this.homeCard=undefined;this.heroPicker=undefined;this.heroEntryPaint=undefined;this.heroModal=undefined;this.homePortrait=undefined;this.homeBackground=undefined;
     const requested = getChapter(this.registry.get('selectedWorldChapter') ?? params.get('chapter') ?? (chapterOneCleared()?'hulao':saved?.chapter)).id;
@@ -75,6 +77,7 @@ export class MenuScene extends Phaser.Scene {
     this.registry.remove('selectedWorldStage');if([1,2,3].includes(west)&&(dongzhuoStageUnlocked(west)||isChapterTestRun()))this.selectedWestStage=west as YellowStage;
     this.registry.remove('selectedWorldChapter');
     this.selectedChapter = chapterUnlocked(requested)||isChapterTestRun() ? requested : 'huangjin';
+    if(fromWorld&&this.selectedChapter==='huangjin'&&[1,2,3].includes(worldStage)&&(yellowStageUnlocked(worldStage)||isChapterTestRun()))this.selectedStage=worldStage as YellowStage;
     let lastHero=saved?.character;try{lastHero=localStorage.getItem('im_last_hero') as RunConfig['character']||lastHero;}catch{}
     this.selectedChar = params.has('autostart') || params.has('perf') ? 0 : Math.max(0, CHARACTERS.findIndex(c => c.id === lastHero));
     if(this.compactHome){if(!(isChapterTestRun()&&params.has('chapter')))this.selectedChapter=chapterOneCleared()||loadWorld().legacyHulaoAccess?'hulao':'huangjin';this.createLanding(params);return;}
@@ -185,7 +188,7 @@ export class MenuScene extends Phaser.Scene {
     card.hit.on('pointerup',()=>{const next=!card.isFolded;this.registry.set('heroCardFolded',next);card.setFolded(next,true);const sfx=uiSfx();sfx.unlock();sfx.play('uiClick');
       const from=heroEntry.y,to=entryY(next);this.tweens.addCounter({from:0,to:1,duration:380,ease:'Cubic.easeInOut',onUpdate:tw=>heroEntry.setY(from+(to-from)*(tw.getValue()??0))});});
     // 底部一行：存档 · 图鉴 · 战役回顾 · 设置（· 退出游戏，仅桌面版）
-    const navItems=IS_DESKTOP_APP?5:4,navX=(k:number)=>D?cx+(k-(navItems-1)/2)*100:W*(.14+k*.24),navRowY=D?476:924+this.padY;
+    const navItems=IS_DESKTOP_APP?5:4,navX=(k:number)=>D?cx+(k-(navItems-1)/2)*(navItems>4?100:116):W*(.14+k*.24),navRowY=D?476:924+this.padY;
     this.homeSaveButton(navX(0),navRowY);
     if(IS_DESKTOP_APP)this.homeQuitButton(navX(4),navRowY);
     // 战役回顾：乱世编年（已平定的关显示史录，未打到的锁住）；“前往选关”沿用原入口。

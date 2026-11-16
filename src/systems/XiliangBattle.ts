@@ -1,0 +1,139 @@
+import Phaser from 'phaser';
+import type {Enemy} from '../entities/Enemy';
+import type {Player} from '../entities/Player';
+import type {Legion} from './Legion';
+import type {EnemyDef} from '../data/enemies';
+import type {EnemyKind} from '../types';
+import {warnLane} from '../ui/Telegraph';
+import {XILIANG_RAID as R, FEIXIONG as F} from '../data/xiliang';
+
+interface Host {
+  scene: Phaser.Scene; player: Player; army: Legion; enemies: Enemy[];
+  spawn: (kind: EnemyKind, x: number, y: number, override?: EnemyDef) => Enemy | null;
+  /** 当前关（2-1 汜水关 / 2-2 荥阳 / 2-3 虎牢关）与本关已过秒数。 */
+  stage: () => 1 | 2 | 3; elapsed: () => number;
+  /** 当前关的西凉骑兵 / 刀盾兵定义（飞熊军以刀盾兵为底）。 */
+  def: (kind: 'cavalry' | 'shield') => EnemyDef;
+  banner: (text: string, caption: string) => void; sfx: (key: 'chargeWarn' | 'hitHeavy') => void;
+}
+interface Raid {id: number; x: number; y: number; dx: number; dy: number; warnUntil: number; riders: Array<{e: Enemy; life: number; ox: number; oy: number; hit: boolean; hurtAt: number}>; g: Phaser.GameObjects.Graphics; traveled: number}
+interface Bash {e: Enemy; life: number; state: 'windup' | 'lunge'; until: number; dx: number; dy: number; hit: boolean; g: Phaser.GameObjects.Graphics}
+
+/**
+ * 第二章 · 讨伐董卓 的西凉军专属战法（只在主线第二章三关生效，攻守城 / 军情不启用）：
+ * - 铁骑突阵：三骑并排，地面先亮一条冲锋道（约 1.1 秒），随后高速贯穿战场；撞到主将造成伤害并横向撞开，撞到部曲同样受伤。冲过后归入普通骑兵。
+ * - 飞熊军（董卓亲军重甲步兵，荥阳、虎牢关出现）：受弓弩伤害减半；贴身时蓄力（地面短预警）后举盾猛撞，撞退主将。
+ * 飞熊军为过渡造型：西凉刀盾兵放大并染铁青色（无独立美术）。
+ */
+export class XiliangBattle {
+  private raids: Raid[] = []; private bashes: Bash[] = []; private nextRaidAt: number = R.first; private nextFeixiongAt: number = F.first; private raidSeq = 0; private lastT = 0; private announced = false; private feixiongAnnounced = false;
+  private readonly bashCd = new WeakMap<Enemy, number>();
+  constructor(private h: Host) {}
+  /** 飞熊军定义（测试也用）。 */
+  feixiongDef(): EnemyDef {
+    const base = this.h.def('shield'), wv = base.walkVisual;
+    return {...base, variant: 'feixiong', hp: F.hp, speed: F.speed, damage: F.damage, xp: F.xp, radius: F.radius, tint: F.tint, walkVisual: wv ? {...wv, scale: wv.scale * F.scale} : undefined};
+  }
+  isFeixiong(e: Enemy): boolean { return e.def.variant === 'feixiong'; }
+  /** 受击倍率：飞熊军重甲，弓弩伤害减半。 */
+  incoming(e: Enemy, source: 'melee' | 'arrow' | 'fire'): number { return this.isFeixiong(e) && source === 'arrow' ? F.arrowMul : 1; }
+  /** 本帧是否由西凉战法接管该敌兵的移动。 */
+  handleEnemy(e: Enemy, dt: number, now: number): boolean {
+    for (const r of this.raids) if (r.riders.some(x => x.e === e && x.e.spawnId === x.life)) return true;
+    if (!this.isFeixiong(e)) return false;
+    const b = this.bashes.find(x => x.e === e && x.e.spawnId === x.life);
+    if (b) return this.stepBash(b, dt, now);
+    const p = this.h.player, d = Math.hypot(p.x - e.x, p.y - e.y);
+    if (d < F.bashRange && now >= (this.bashCd.get(e) ?? 0)) {
+      this.bashCd.set(e, now + F.bashCooldown);
+      const dx = (p.x - e.x) / (d || 1), dy = (p.y - e.y) / (d || 1);
+      this.bashes.push({e, life: e.spawnId, state: 'windup', until: now + F.windupMs, dx, dy, hit: false, g: this.h.scene.add.graphics().setDepth(3)});
+      e.moveVx = e.moveVy = 0; return true;
+    }
+    return false;
+  }
+  private stepBash(b: Bash, dt: number, now: number): boolean {
+    const e = b.e;
+    if (b.state === 'windup') {
+      e.moveVx = e.moveVy = 0;
+      const t = 1 - (b.until - now) / F.windupMs;
+      b.g.clear(); warnLane(b.g, e.x, e.y, Math.atan2(b.dy, b.dx), F.lungeDistance + 20, 46, Math.max(0, Math.min(1, t)), 0x7d8bb0, 0xd8e2ff);
+      if (now >= b.until) { b.state = 'lunge'; b.until = now + F.lungeMs; b.g.clear(); }
+      return true;
+    }
+    const step = F.lungeDistance / (F.lungeMs / 1000) * dt;
+    e.sprite.x += b.dx * step; e.sprite.y += b.dy * step;
+    const p = this.h.player;
+    if (!b.hit && Math.hypot(p.x - e.x, p.y - e.y) < p.radius + e.radius + 10) {
+      b.hit = true; this.h.sfx('hitHeavy');
+      if (p.takeDamage(F.bashDamage, now)) this.h.scene.cameras.main.shake(120, .004);
+      p.sprite.x += b.dx * F.knockback; p.sprite.y += b.dy * F.knockback;
+    }
+    if (now >= b.until) { this.bashes.splice(this.bashes.indexOf(b), 1); b.g.destroy(); }
+    return true;
+  }
+  update(dt: number, now: number): void {
+    const t = this.h.elapsed(), stage = this.h.stage();
+    // 战线推进到下一关时本关计时归零：战法排期随之重置
+    if (t < this.lastT) { this.nextRaidAt = R.first; this.nextFeixiongAt = F.first; }
+    this.lastT = t;
+    // 失效的突阵 / 盾击（敌兵已死或被回收）
+    for (const b of [...this.bashes]) if (!b.e.active || b.e.spawnId !== b.life) { b.g.destroy(); this.bashes.splice(this.bashes.indexOf(b), 1); }
+    if (t >= this.nextRaidAt) { this.nextRaidAt = t + R.interval[stage - 1]; this.startRaid(now); }
+    if (stage >= 2 && t >= this.nextFeixiongAt) { this.nextFeixiongAt = t + F.interval[stage - 1]; this.spawnFeixiong(); }
+    for (const r of [...this.raids]) this.stepRaid(r, dt, now);
+  }
+  /** 立即发起一次铁骑突阵（测试与调试用）；返回突阵编号。 */
+  startRaid(now: number): number {
+    const p = this.h.player, a = Math.random() * Math.PI * 2, dx = Math.cos(a), dy = Math.sin(a), side = (Math.random() - .5) * 2 * R.aimJitter;
+    const x = p.x - dx * R.lead - dy * side, y = p.y - dy * R.lead + dx * side;
+    const riders: Raid['riders'] = [], def = this.h.def('cavalry'), dir = Math.abs(dx) > Math.abs(dy) ? (dx < 0 ? 'left' : 'right') : dy < 0 ? 'up' : 'down';
+    for (let i = 0; i < R.riders; i++) {
+      const off = (i - (R.riders - 1) / 2) * R.spacing, ox = -dy * off, oy = dx * off, e = this.h.spawn('cavalry', x + ox, y + oy, def);
+      if (!e) continue;
+      e.startCharge(now, dir); e.chargeAt = now + 1e7; e.moveVx = e.moveVy = 0;
+      riders.push({e, life: e.spawnId, ox, oy, hit: false, hurtAt: 0});
+    }
+    if (!riders.length) return -1;
+    const raid: Raid = {id: ++this.raidSeq, x, y, dx, dy, warnUntil: now + R.warnMs, riders, g: this.h.scene.add.graphics().setDepth(3).setName('xiliang-raid-lane'), traveled: 0};
+    this.raids.push(raid); this.h.sfx('chargeWarn');
+    if (!this.announced) { this.announced = true; this.h.banner('西凉铁骑 · 突阵！', '看准冲锋道，侧身闪开'); }
+    return raid.id;
+  }
+  private stepRaid(r: Raid, dt: number, now: number): void {
+    const live = r.riders.filter(x => x.e.active && x.e.spawnId === x.life);
+    const width = R.spacing * (R.riders - 1) + 56, angle = Math.atan2(r.dy, r.dx);
+    if (now < r.warnUntil) {
+      const t = 1 - (r.warnUntil - now) / R.warnMs;
+      r.g.clear(); warnLane(r.g, r.x, r.y, angle, R.distance, width, t);
+      for (const x of live) { x.e.sprite.x = r.x + x.ox; x.e.sprite.y = r.y + x.oy; x.e.moveVx = x.e.moveVy = 0; }
+      return;
+    }
+    r.g.clear();
+    const step = R.speed * dt; r.traveled += step;
+    const p = this.h.player;
+    for (const x of live) {
+      const e = x.e; e.chargeState = 'charge'; e.sprite.x += r.dx * step; e.sprite.y += r.dy * step; e.moveVx = r.dx * R.speed; e.moveVy = r.dy * R.speed;
+      if (!x.hit && Math.hypot(p.x - e.x, p.y - e.y) < p.radius + e.radius + 8) {
+        x.hit = true; if (p.takeDamage(R.damage, now)) this.h.scene.cameras.main.flash(120, 180, 40, 40, false);
+        // 横向撞开（离开冲锋道）
+        const cross = (p.x - e.x) * -r.dy + (p.y - e.y) * r.dx, s = cross >= 0 ? 1 : -1;
+        p.sprite.x += -r.dy * s * R.knockback + r.dx * 18; p.sprite.y += r.dx * s * R.knockback + r.dy * 18;
+      }
+      if (now >= x.hurtAt) { x.hurtAt = now + 250; this.h.army.hurtArea(e.x, e.y, R.troopRadius, R.troopDamage, now); }
+    }
+    if (r.traveled >= R.distance || !live.length) {
+      // 冲过之后归入普通骑兵
+      for (const x of live) { x.e.chargeState = 'recover'; x.e.chargeAt = now + 350; x.e.dashCd = 4; }
+      r.g.destroy(); this.raids.splice(this.raids.indexOf(r), 1);
+    }
+  }
+  private spawnFeixiong(): void {
+    if (this.h.enemies.filter(e => e.active && this.isFeixiong(e)).length >= F.maxAlive) return;
+    const p = this.h.player, a = Math.random() * Math.PI * 2, e = this.h.spawn('shield', p.x + Math.cos(a) * F.spawnDistance, p.y + Math.sin(a) * F.spawnDistance, this.feixiongDef());
+    if (e && !this.feixiongAnnounced) { this.feixiongAnnounced = true; this.h.banner('飞熊军压阵', '董卓亲军重甲：弓弩难伤，近身会举盾猛撞'); }
+  }
+  /** 当前进行中的突阵数（测试用）。 */
+  get activeRaids(): number { return this.raids.length; }
+  clear(): void { for (const r of this.raids) r.g.destroy(); for (const b of this.bashes) b.g.destroy(); this.raids = []; this.bashes = []; }
+}

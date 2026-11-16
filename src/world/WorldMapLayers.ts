@@ -1,10 +1,10 @@
 import Phaser from 'phaser';
 import {RENDER_SCALE} from '../config';
-import {CITIES, FACTIONS, HOME, MAP_H, MAP_W, cityOwner, type CityDef, type FactionId} from './WorldCities';
+import {CITIES, FACTIONS, HOME, MAP_H, MAP_W, cityOwner, type CityDef, type FactionId, type EraId} from './WorldCities';
 import {worldText} from './WorldUI';
 
 /** 势力领地染色：每座城以势力色做柔和径向晕染，半分辨率画布，随地图缩放。 */
-export function territoryTexture(scene: Phaser.Scene, era: 1 | 2 | 3, owned: readonly string[]): string {
+export function territoryTexture(scene: Phaser.Scene, era: EraId, owned: readonly string[]): string {
   const key = `world_territory_${era}_${owned.join('.')}`;
   if (scene.textures.exists(key)) return key;
   const k = .5, c = document.createElement('canvas'); c.width = MAP_W * k; c.height = MAP_H * k;
@@ -75,7 +75,7 @@ export function paintSelection(m: CityMarker, on: boolean) {
 }
 
 /** 势力图例：本时代各势力及城池数。 */
-export function factionLegend(scene: Phaser.Scene, x: number, y: number, era: 1 | 2 | 3, owned: readonly string[], width: number): Phaser.GameObjects.Container {
+export function factionLegend(scene: Phaser.Scene, x: number, y: number, era: EraId, owned: readonly string[], width: number): Phaser.GameObjects.Container {
   const counts = new Map<FactionId, number>();
   for (const c of CITIES) { const o = cityOwner(c.id, era, owned); counts.set(o, (counts.get(o) ?? 0) + 1); }
   const rows = [...counts.entries()].sort((a, b) => b[1] - a[1]);

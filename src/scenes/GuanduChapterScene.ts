@@ -30,6 +30,7 @@ export class GuanduChapterScene extends Phaser.Scene {
     this.cards = []; this.heroButtons = [];
     const desk = W > 600;
     this.selected = Math.min(GUANDU_PLAYABLE, arcStages('guandu') + 1) as GuanduStage;
+    { const pick = Number(this.registry.get('worldStagePick')); this.registry.remove('worldStagePick'); if ([1, 2, 3].includes(pick) && pick <= GUANDU_PLAYABLE && this.open(pick)) this.selected = pick as GuanduStage; }
     try { const saved = localStorage.getItem('im_last_hero'); if (CHARACTERS.some(c => c.id === saved)) this.hero = saved as CharacterId; } catch { /* storage unavailable */ }
     this.cameras.main.setBackgroundColor('#1a1813');
     const g = this.add.graphics(); g.fillStyle(0x2b2619, .6);

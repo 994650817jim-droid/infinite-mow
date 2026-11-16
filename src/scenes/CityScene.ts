@@ -50,7 +50,7 @@ export class CityScene extends Phaser.Scene {
   for(const lv of CITY_ART_LEVELS)for(const id of ids)if(lv<=(TOWN_BUILDINGS[id].maxLevel??3))worldAssets(this,`city_${id}_${lv}`,`assets/city/${id}_${lv}.webp`);
   // 旧小镇像素画作为缺图时的退路（府衙没有旧图）
   if(!CITY_ART_LEVELS.length)for(const lv of TOWN_ART_LEVELS)for(const id of ids)if(id!=='hall')worldAssets(this,`town_${id}_${lv}`,`assets/town/${id}_${lv}.webp`);}
- create(){playMenuMusic(this);
+ create(){playMenuMusic(this);this.registry.remove('hardChapter');
   if(!worldUnlocked()&&!isChapterTestRun()){this.registry.set('loadBattle',true);this.scene.start(this.registry.get('battleReady')?'MenuScene':'BootScene');return;}
   // 战斗图集在下次出征重新加载，不与战略界面美术同时常驻
   const keys=this.registry.get('battleTextureKeys') as string[]|undefined;
@@ -324,7 +324,7 @@ export class CityScene extends Phaser.Scene {
  private introSeen():boolean{try{return localStorage.getItem('im_town_intro2')==='1';}catch{return true;}}
  /** 首次进入主城的简短引导（看过一次后不再弹出）。 */
  private openIntro(){
-  const m=this.modal('town-intro','义军主城 · 经营指南',D?400:600);
+  const m=this.modal('town-intro','义军主城 · 经营指南',D?400:470);
   const lines=[
    '◆点城中的建筑或空地即可建造、升级；「建造总览」一览全部建筑。拖动画面可查看全城。',
    '◆府衙决定城池规模：小城 → 中城 → 大城。扩城需要城墙、民居、市集等前提；其它建筑的等级不能高于府衙。',

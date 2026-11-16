@@ -1,6 +1,6 @@
 // 桌面版（Steam）平台层必须最先执行：替换 localStorage 为存档文件
 import './platform/desktop';
-import {ThirdChapterScene} from './scenes/ThirdChapterScene';import {ChibiChapterScene} from './scenes/ChibiChapterScene';import {CHIBI_STAGES,chibiBattle} from './data/chibiChapter';import {thirdGameSceneClass} from './scenes/ThirdGameScene';import {GuanduChapterScene} from './scenes/GuanduChapterScene';import {guanduGameSceneClass} from './scenes/GuanduGameScene';import {siegeGameSceneClass} from './scenes/SiegeGameScene';
+import {ThirdChapterScene} from './scenes/ThirdChapterScene';import {ChibiChapterScene} from './scenes/ChibiChapterScene';import {CHIBI_STAGES,chibiBattle} from './data/chibiChapter';import {thirdGameSceneClass} from './scenes/ThirdGameScene';import {GuanduChapterScene} from './scenes/GuanduChapterScene';import {guanduGameSceneClass} from './scenes/GuanduGameScene';import {siegeGameSceneClass} from './scenes/SiegeGameScene';import {intelGameSceneClass} from './scenes/IntelGameScene';
 import {loadGameFonts} from './ui/GameFonts';
 import Phaser from 'phaser';
 import { GAME_HEIGHT, GAME_WIDTH, IS_DESKTOP, RENDER_SCALE, initLayout, switchLayout } from './config';
@@ -11,9 +11,11 @@ import { CityScene } from './scenes/CityScene';
 import { WorldMapScene } from './scenes/WorldMapScene';
 import { MenuScene } from './scenes/MenuScene';
 import { installGamepad } from './ui/PadNavigator';
+import { installCjkWrap } from './ui/CjkWrap';
 import { installAchievements } from './systems/Achievements';
 
 initLayout();
+installCjkWrap();
 
 // 高清渲染：画布放大 RENDER_SCALE 倍，每个相机以左上角为原点同倍缩放，
 // 所有场景继续使用 540×960 / 960×540 的设计坐标；文字内部画布同倍率绘制以免发糊。
@@ -56,6 +58,7 @@ async function startGame(): Promise<void> {
   const GuanduBattleScene=guanduGameSceneClass(BattleScene);
   const ChibiBattleScene=thirdGameSceneClass(BattleScene,{key:'ChibiGameScene',arc:'chibi',stageKey:'chibiStage',transferKey:'chibiTransfer',stages:CHIBI_STAGES,texture:id=>'chibi_'+id,sheet:id=>'assets/chibi/'+id+'.png',battle:s=>chibiBattle(s),campPrefix:'chibi-',fireShips:[2]});
   const SiegeBattleScene=siegeGameSceneClass(BattleScene);
+  const IntelBattleScene=intelGameSceneClass(BattleScene);
   const game = new Phaser.Game({
     type: Phaser.AUTO,
     parent: 'game',
@@ -73,7 +76,7 @@ async function startGame(): Promise<void> {
     input: {
       activePointers: 3,
     },
-    scene: [BootScene, CityScene, CityRecruitScene, WorldMapScene, MenuScene, BattleScene, ThirdChapterScene, ThirdBattleScene, GuanduChapterScene, GuanduBattleScene, ChibiChapterScene, ChibiBattleScene, SiegeBattleScene],
+    scene: [BootScene, CityScene, CityRecruitScene, WorldMapScene, MenuScene, BattleScene, ThirdChapterScene, ThirdBattleScene, GuanduChapterScene, GuanduBattleScene, ChibiChapterScene, ChibiBattleScene, SiegeBattleScene, IntelBattleScene],
   });
 
   // 手柄：每帧轮询 + 界面焦点导航（STEAM_PLAN.md · S2）

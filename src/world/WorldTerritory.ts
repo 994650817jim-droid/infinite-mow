@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import {CITIES, FACTIONS, HOME, MAP_H, MAP_W, cityOwner, type FactionId} from './WorldCities';
+import {CITIES, FACTIONS, HOME, MAP_H, MAP_W, cityOwner, type FactionId, type EraId} from './WorldCities';
 
 /**
  * 势力范围（参考全面战争：三国 / 三国志的疆域图）：
@@ -44,7 +44,7 @@ function waterMask(scene: Phaser.Scene, gw: number, gh: number): Uint8Array {
   return mask;
 }
 
-export function buildTerritory(scene: Phaser.Scene, era: 1 | 2 | 3, owned: readonly string[]): Territory {
+export function buildTerritory(scene: Phaser.Scene, era: EraId, owned: readonly string[]): Territory {
   const key = `world_realm_${era}_${owned.join('.')}`;
   if (scene.textures.exists(key) && labelCache.has(key)) return {key, labels: labelCache.get(key)!};
   // 只缓存当前局面一张（约 1024×683）：时代或领地变化时丢掉旧图

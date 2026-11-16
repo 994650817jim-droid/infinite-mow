@@ -3,10 +3,12 @@
  * 坐标为 strategy-map.webp（1536×1024）上原画聚落的位置，名称按大致方位分配，并非精确历史地理。
  */
 export type CityTier = 'large' | 'medium' | 'small';
-export type FactionId = 'player' | 'han' | 'dongzhuo' | 'yuanshao' | 'caocao' | 'yuanshu' | 'gongsun' | 'taoqian' | 'liubiao' | 'sun' | 'mateng' | 'liuzhang' | 'zhanglu' | 'yellow';
+export type FactionId = 'player' | 'court' | 'han' | 'dongzhuo' | 'yuanshao' | 'caocao' | 'yuanshu' | 'gongsun' | 'taoqian' | 'liubiao' | 'sun' | 'mateng' | 'liuzhang' | 'zhanglu' | 'yellow';
 export interface CityDef {id: string; name: string; tier: CityTier; x: number; y: number; region: string;}
 export interface FactionDef {name: string; color: number; css: string;}
-export interface EraDef {id: 1 | 2 | 3; year: number; name: string; summary: string; owners: Record<string, FactionId>;}
+/** 0 = 讨董前夕（184–190，仅地图显示用，存档时代仍为 1–3）。 */
+export type EraId = 0 | 1 | 2 | 3;
+export interface EraDef {id: EraId; year: number; name: string; summary: string; owners: Record<string, FactionId>;}
 
 export const MAP_W = 1536, MAP_H = 1024;
 export const TIER_NAME: Record<CityTier, string> = {large: '大城', medium: '中城', small: '小城'};
@@ -52,6 +54,7 @@ export const HOME = {id: 'home', x: 799, y: 573} as const;
 
 export const FACTIONS: Record<FactionId, FactionDef> = {
   player: {name: '义军', color: 0x3f9a5a, css: '#5cc07a'},
+  court: {name: '汉廷', color: 0x5a6470, css: '#a4b0bc'},
   han: {name: '地方豪强', color: 0x8a8f7a, css: '#b4b8a6'},
   yellow: {name: '黄巾余党', color: 0xc9b23a, css: '#e3cf5c'},
   dongzhuo: {name: '董卓', color: 0x8c2a2a, css: '#d06060'},
@@ -95,12 +98,16 @@ export function eraIndexFor(progress: {hulaoCleared: boolean; warlordStages: num
   if (progress.warlordStages >= 3) return 2;
   return 1;
 }
-export function eraDef(id: 1 | 2 | 3): EraDef { return ERAS[id - 1]; }
+/** 讨董前夕（黄巾平定后、讨董之前）：州郡仍奉汉廷；董卓据洛阳与关隘，黄巾余党散在青、冀、汝南。 */
+export const ERA_HAN: EraDef = {id: 0, year: 189, name: '讨董前夕', summary: '黄巾虽平，余党散入青、冀；董卓入京废立、专擅朝政，关东州郡仍奉汉廷。',
+  owners: {luoyang: 'dongzhuo', hongnong: 'dongzhuo', hangu: 'dongzhuo', sishui: 'dongzhuo', tianshui: 'mateng', hanzhong: 'liuzhang',
+    nanpi: 'yellow', linzi: 'yellow', donglai: 'yellow', runan: 'yellow'}};
+export function eraDef(id: EraId): EraDef { return id === 0 ? ERA_HAN : ERAS[id - 1]; }
 
 /** 城池实际归属：玩家已占优先，其余按时代表。 */
-export function cityOwner(cityId: string, era: 1 | 2 | 3, owned: readonly string[]): FactionId {
+export function cityOwner(cityId: string, era: EraId, owned: readonly string[]): FactionId {
   if (owned.includes(cityId)) return 'player';
-  return eraDef(era).owners[cityId] ?? 'han';
+  return eraDef(era).owners[cityId] ?? (era === 0 ? 'court' : 'han');
 }
 
 /** 相邻关系：按原画道路距离连线（距离阈值 + 每城至少连最近两城），营寨连其最近的三城。 */
@@ -152,13 +159,13 @@ export function territorySummary(owned: readonly string[]): {merits: number; pro
 /** W4：会主动来犯的势力（地方豪强、黄巾余党不反攻）。 */
 export const MAJOR_FACTIONS: readonly FactionId[] = ['dongzhuo', 'yuanshao', 'caocao', 'yuanshu', 'gongsun', 'taoqian', 'liubiao', 'sun', 'mateng', 'liuzhang', 'zhanglu'];
 /** 某时代各势力的城池数（不含玩家已占）。 */
-export function factionStrength(era: 1 | 2 | 3, owned: readonly string[]): Map<FactionId, number> {
+export function factionStrength(era: EraId, owned: readonly string[]): Map<FactionId, number> {
   const m = new Map<FactionId, number>();
   for (const c of CITIES) { const f = cityOwner(c.id, era, owned); if (f !== 'player') m.set(f, (m.get(f) ?? 0) + 1); }
   return m;
 }
 /** 可能来犯某座玩家城池的势力：相邻城池中最强的大势力；没有则 null。 */
-export function cityAttacker(cityId: string, era: 1 | 2 | 3, owned: readonly string[]): FactionId | null {
+export function cityAttacker(cityId: string, era: EraId, owned: readonly string[]): FactionId | null {
   const power = factionStrength(era, owned); let best: FactionId | null = null;
   for (const n of CITY_LINKS.get(cityId) ?? []) {
     if (n === HOME.id) continue; const f = cityOwner(n, era, owned);

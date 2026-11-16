@@ -40,7 +40,8 @@ export const CHARACTERS: CharacterDef[] = [
     // 2026-11-15 平衡（用户批准）：生命 1 → 1.1、伤害 1 → 1.05（测量中承伤最高、DPS 中下）
     hpMul: 1.1,
     speedMul: 1,
-    damageMul: 1.05,
+    // 2026-11-16 平衡（用户批准；基线 v2 综合分 0.89，1-1 首领只掉 46%）：伤害 1.05 → 1.12
+    damageMul: 1.12,
     portrait: 'hero_zhaoyun',
     startWeapon: 'spear_orbit',
   },
@@ -63,7 +64,8 @@ export const CHARACTERS: CharacterDef[] = [
     battleTint: 0xffcf7a,
     hpMul: 0.9,
     speedMul: 1.06,
-    damageMul: 0.95,
+    // 2026-11-16 平衡（用户批准；基线 v2 综合分 0.83，1-1 击杀太少只升到 2 级）：伤害 0.95 → 1.05
+    damageMul: 1.05,
     portrait: 'huangzhong_portrait',
     startWeapon: 'baodiao_bow',
   },
@@ -75,7 +77,8 @@ export const CHARACTERS: CharacterDef[] = [
     // 2026-11-16 平衡（12 将基线：承伤最高、综合分 0.70）：生命 0.95 → 1.05
     hpMul: 1.05,
     speedMul: 1.04,
-    damageMul: 1.0,
+    // 2026-11-16 平衡（用户批准；基线 v2 综合分 0.80，三关都在最后几名）：伤害 1.0 → 1.1
+    damageMul: 1.1,
     portrait: 'portrait_zhuge',
     startWeapon: 'flame_banner',
   },
@@ -138,7 +141,8 @@ export const CHARACTERS: CharacterDef[] = [
     hpMul: 0.88,
     speedMul: 1.04,
     // 2026-11-16 平衡（12 将基线：三关第一、综合分 1.66）：伤害 1 → 0.9
-    damageMul: 0.9,
+    // 2026-11-16 平衡（用户批准；基线 v2 仍第一 1.26）：伤害 0.9 → 0.85
+    damageMul: 0.85,
     portrait: 'huangyueying_portrait',
     startWeapon: 'crossbow',
   },

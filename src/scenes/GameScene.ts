@@ -1339,6 +1339,7 @@ export class GameScene extends Phaser.Scene {
     else if (source === 'fire') this.sfx.play('hitFire');
     else this.sfx.play('hitLight');
     if (enemy === this.boss && this.lubu) rawDamage *= this.lubu.incomingDamageMultiplier(source, time);
+    rawDamage *= this.player.passive.vulnerability(enemy, time); // 貂蝉倾城：易伤（部曲伤害同样吃加成）
     const crit = weaponHit && Math.random() < Math.min(0.65, this.player.stats.critChance + this.player.growth.criticalBonus() + (!fromAlly ? this.player.passive.critBonus(time) + this.player.growth.aimCriticalBonus() + this.buildCombat.criticalBonus() : 0));
     if(!fromAlly&&weaponHit)rawDamage=this.buildCombat.damage(enemy,rawDamage,crit,time);
     if(!fromAlly)rawDamage*=this.player.growth.gearHitMultiplier(enemy.kind);

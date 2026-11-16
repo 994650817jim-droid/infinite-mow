@@ -1800,7 +1800,7 @@ export class GameScene extends Phaser.Scene {
 
   /** 爆炸预警：地面亮起八卦火阵（扁椭圆、半透明），几点火星向中心聚拢；缺图时退回橙色圆圈。 */
   protected spawnFlameGatherFx(x: number, y: number, radius: number): void {
-    if (!SHOW_OWN_RANGE_FX) { /* 样品方案：不铺八卦火阵，只留火星向中心聚拢 */ }
+    if (!SHOW_OWN_RANGE_FX) { /* 默认（只保留关键提示）：不铺八卦火阵，只留火星向中心聚拢 */ }
     else if (this.textures.exists('fire_sigil')) {
       const w = radius * 2.1, sigil = this.add.image(x, y, 'fire_sigil').setDisplaySize(w * 0.8, w * 0.8 * 0.5).setDepth(DEPTH.ground + 4).setAlpha(0).setBlendMode(Phaser.BlendModes.ADD).setName('fire-sigil');
       this.tweens.add({ targets: sigil, alpha: 0.85, displayWidth: w, displayHeight: w * 0.5, duration: 150, ease: 'Quad.Out', onComplete: () => this.tweens.add({ targets: sigil, alpha: 0, duration: 260, delay: 60, onComplete: () => sigil.destroy() }) });
@@ -1821,7 +1821,7 @@ export class GameScene extends Phaser.Scene {
     if (this.textures.exists('flame_burst')) {
       const size = radius * 2.5, burst = this.add.image(x, y, 'flame_burst', 0).setOrigin(0.5, 0.82).setDisplaySize(size, size).setDepth(actorDepth(y) + 0.5).setName('flame-burst');
       { const tint = HERO_TINT[this.runConfig.character]; if (tint) burst.setTint(tint); }
-      if (!SHOW_OWN_RANGE_FX && this.textures.exists('build_vfx')) { // 样品方案：原序列帧自带八卦地纹，改用像素火焰爆发（战法特效图集「烈焰」行，无地纹）
+      if (!SHOW_OWN_RANGE_FX && this.textures.exists('build_vfx')) { // 默认（只保留关键提示）：原序列帧自带八卦地纹，改用像素火焰爆发（战法特效图集「烈焰」行，无地纹）
         burst.destroy(); const fire = this.add.image(x, y, 'build_vfx', 18).setOrigin(.5, .72).setDisplaySize(radius * 1.9, radius * 1.9).setDepth(actorDepth(y) + .5).setName('flame-burst');
         { const tint = HERO_TINT[this.runConfig.character]; if (tint) fire.setTint(tint); }
         this.tweens.addCounter({ from: 18, to: 23.99, duration: 380, onUpdate: t => fire.setFrame(Math.floor(t.getValue() ?? 18)), onComplete: () => fire.destroy() });

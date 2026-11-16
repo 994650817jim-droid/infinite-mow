@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import {HINT_MOCK,groundScar} from '../ui/HintStyle';
-/** 阵纹 / 火门 / 石环这类「画出范围」的样式；样品方案下不播放（b 方案换成一闪而过的地面痕迹）。 */
+/** 阵纹 / 火门 / 石环这类「画出范围」的样式；默认（只保留关键提示）不播放；?hints=old 恢复，?mock=b 换成一闪而过的地面痕迹。 */
 const RANGE_STYLES=new Set(['control','pure_control','fire_gate','pure_bulwark']);
 export const VFX_STYLES=['combo','critical','skirmish','flame','charge','control','command','bulwark','pure_combo','pure_critical','pure_skirmish','pure_flame','pure_charge','pure_control','pure_command','pure_bulwark','fire_gate','peerless','roaming_break','iron_army'] as const;
 interface Slot{image:Phaser.GameObjects.Image;start:number;end:number;row:number;core:boolean;alpha:number;}

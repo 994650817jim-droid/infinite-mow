@@ -55,15 +55,15 @@ for (const [layout, viewport] of Object.entries(LAYOUTS)) for (const [hero, h] o
     ck(`${tag}：受击积满 5 层拒敌 → 谁敢杀我（飘字、减伤 ×0.7）`, r.got.includes(5) && r.shout && Math.abs(r.guard - .7) < 1e-6 && r.triggers >= 1, r);
     await sleep(150);
   } else {
-    // 1) 布雷：敌人定身在远处，火雷布在来路上并累积
+    // 1) 落雷：敌人定身在远处，火雷定时落在庞统脚下并累积（2026-11-16 重做：脚下落雷、边走边留雷链）
     const lay = await p.evaluate(async G0 => {
       const s = eval(G0), pl = s.player, foes = [];
       for (let i = 0; i < 3; i++) { const e = s.spawnEnemy('infantry', pl.x + 250, pl.y - 30 + i * 30, 1); if (e) { e.hp = e.maxHp = 99999; e.stunUntil = 1e12; foes.push(e); } }
       const mines = () => s.children.list.filter(o => o.name === 'pangtong-mine' && o.active);
       const t0 = performance.now(); while (performance.now() - t0 < 9000 && mines().length < 4) await new Promise(r => setTimeout(r, 50));
-      const m = mines(); return { mines: m.length, between: m.every(o => o.x > pl.x + 60 && o.x < pl.x + 220) };
+      const m = mines(); return { mines: m.length, atFeet: m.every(o => Math.hypot(o.x - pl.x, o.y - pl.y) <= 50) };
     }, G);
-    ck(`${tag}：火雷布在自己与敌人之间并累积（≥4 枚）`, lay.mines >= 4 && lay.between, lay);
+    ck(`${tag}：火雷定时落在脚下并累积（≥4 枚）`, lay.mines >= 4 && lay.atFeet, lay);
     // 2) 连环：一名敌人踩上雷群 → 连锁 ≥3 枚 → 积 1 层计策
     const chain = await p.evaluate(async G0 => {
       const s = eval(G0), pl = s.player, sn0 = pl.passive.snapshot(s.combatNow), m = s.children.list.find(o => o.name === 'pangtong-mine' && o.active);

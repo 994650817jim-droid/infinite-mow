@@ -118,22 +118,23 @@ export function zhenbeiBehavior(host: WeaponHost, weapon: WeaponState, dt: numbe
 
 // ───────────────────────── 庞统 · 凤雏连环令 ─────────────────────────
 
-/** 每次布雷枚数：Lv1–2 一枚、Lv3–4 两枚、Lv5 三枚。 */
-export const lianhuanMinesPerCast = (level: number): number => (level >= 5 ? 3 : level >= 3 ? 2 : 1);
+/** 每次落雷枚数：Lv1–4 一枚（脚下）、Lv5 两枚（脚下 + 身旁一侧，雷链加宽）。 */
+export const lianhuanMinesPerCast = (level: number): number => (level >= 5 ? 2 : 1);
 export const LIANHUAN_DEF = {
   id: 'lianhuan_mines' as const, name: '凤雏连环令', maxLevel: 5,
   damage: (level: number, stats: PlayerStats) => 26 * (1 + .18 * (level - 1)) * stats.damageMul * stats.fireMul,
-  cooldown: (level: number, stats: PlayerStats) => (1.4 * stats.cooldownMul) / (1 + .05 * (level - 1)),
-  desc: '挥令旗在敌人来路布下火雷，踩中引爆，附近火雷连环引爆',
+  // 2026-11-16 重做（用户批准）：改为定时在脚下落雷、边走边留下雷链；Lv3 起落雷间隔缩短
+  cooldown: (level: number, stats: PlayerStats) => ((level >= 3 ? R.mineDropFastSec : R.mineDropSec) * stats.cooldownMul) / (1 + .03 * (level - 1)),
+  desc: '每隔片刻在脚下落一枚火雷，边走边留下雷链；敌人踩中引爆，附近火雷连环引爆',
 };
 const mineRadius = (level: number) => R.mineRadius * (1 + .05 * (level - 1));
 
 interface Mine { x: number; y: number; armAt: number; until: number; body: Phaser.GameObjects.Container; lit: boolean; ring?: RingGroup; }
 interface RingGroup { x: number; y: number; fuseAt: number; mines: Mine[]; links: Phaser.GameObjects.Container; fired: boolean; }
 interface Chain { count: number; awarded: boolean; }
-interface MineState { mines: Mine[]; rings: RingGroup[]; fengpoReadyAt: number; }
+interface MineState { mines: Mine[]; rings: RingGroup[]; fengpoReadyAt: number; side: number; }
 const STATE = new WeakMap<Player, MineState>();
-const stateOf = (p: Player): MineState => { let s = STATE.get(p); if (!s) { s = { mines: [], rings: [], fengpoReadyAt: 0 }; STATE.set(p, s); } return s; };
+const stateOf = (p: Player): MineState => { let s = STATE.get(p); if (!s) { s = { mines: [], rings: [], fengpoReadyAt: 0, side: 1 }; STATE.set(p, s); } return s; };
 
 const texOk = (host: WeaponHost, key: string): boolean => (host.add as unknown as { scene: Phaser.Scene }).scene.textures.exists(key);
 /** 火雷：正式贴图（青铜雷壳）+ 叠加混合的跳动红芯；缺图时退回程序化雷壳。 */
@@ -208,6 +209,7 @@ export function lianhuanBehavior(host: WeaponHost, weapon: WeaponState, dt: numb
   for (const m of [...s.mines]) {
     if (m.lit || m.ring || time < m.armAt) continue;
     const stepped = time >= m.until || host.grid.query(m.x, m.y, R.mineTrigger + 30).some(e => e.active && !e.isSupplySlot && Math.hypot(e.x - m.x, e.y - m.y) <= R.mineTrigger + e.radius);
+    if (time >= m.until) { explode(host, s, m, damage, radius, null, 0, false, time); continue; }
     if (stepped) explode(host, s, m, damage, radius, { count: 0, awarded: false }, chainRange, false, time);
   }
   // 火烧连环：敌人踏入圈内或 2 秒后整圈齐爆
@@ -230,24 +232,24 @@ export function lianhuanBehavior(host: WeaponHost, weapon: WeaponState, dt: numb
   if (!foes.length) return; // 没有敌人不布雷、不耗冷却
   const priority = host.priorityTarget?.(320) ?? null; if (priority) { foes.splice(foes.indexOf(priority), 1); foes.unshift(priority); }
   const cast = pl.passive.beginCast('lianhuan_mines');
-  pl.faceDirection(foes[0].x < pl.x ? 'left' : 'right', 200);
-  host.spawnFlagSwingFx(Math.sign(foes[0].x - pl.x) || 1, 0);
-  host.sfx.play('flameSwing');
   if (cast.formation) {
     // 火烧连环：身边一圈 6 枚火雷，以锁链连成环
+    pl.faceDirection(foes[0].x < pl.x ? 'left' : 'right', 200);
+    host.spawnFlagSwingFx(Math.sign(foes[0].x - pl.x) || 1, 0);
+    host.sfx.play('flameSwing');
     pl.playAction('skill', foes[0].x < pl.x ? 'left' : 'right');
     const g: RingGroup = { x: pl.x, y: pl.y, fuseAt: time + R.ringFuseMs, mines: [], links: host.add.container(0, 0).setDepth(19.5).setName('pangtong-ring'), fired: false };
     for (let k = 0; k < R.ringMines; k++) { const a = k * Math.PI * 2 / R.ringMines; g.mines.push(placeMine(host, s, pl.x + Math.cos(a) * R.ringRadius, pl.y + Math.sin(a) * R.ringRadius, time, R.ringFuseMs + 500, g)); }
     for (let k = 0; k < R.ringMines; k++) linkFx(host, g.mines[k], g.mines[(k + 1) % R.ringMines], g.links);
     s.rings.push(g);
   } else {
-    pl.playAction('attack', foes[0].x < pl.x ? 'left' : 'right');
-    // 布在敌人来路上：自己与目标之间约 60% 处；多枚时分给不同的近敌
+    // 脚下落雷：边走边留下雷链，追兵踩中即连环引爆。Lv5 另在身旁一侧（与最近敌人方向垂直，左右交替）多落一枚
     const n = lianhuanMinesPerCast(level);
+    const dx = foes[0].x - pl.x, dy = foes[0].y - pl.y, d = Math.hypot(dx, dy) || 1;
+    s.side = -s.side || 1;
     for (let k = 0; k < n; k++) {
-      const t = foes[k % foes.length], spread = k >= foes.length ? (k % 2 ? 1 : -1) * 28 : 0;
-      const x = pl.x + (t.x - pl.x) * .6 + spread, y = pl.y + (t.y - pl.y) * .6 + spread;
-      while (s.mines.filter(m => !m.ring).length >= max) { const old = s.mines.find(m => !m.ring && !m.lit); if (!old) break; explode(host, s, old, damage, radius, { count: 0, awarded: false }, chainRange, false, time); }
+      const off = k === 0 ? 0 : R.mineSideOffset * s.side, x = pl.x - dy / d * off, y = pl.y + dx / d * off;
+      while (s.mines.filter(m => !m.ring).length >= max) { const old = s.mines.find(m => !m.ring && !m.lit); if (!old) break; explode(host, s, old, damage, radius, null, 0, false, time); }
       placeMine(host, s, x, y, time, life);
     }
   }

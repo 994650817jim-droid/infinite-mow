@@ -14,7 +14,7 @@ export const WEAPON_META: Record<WeaponId, { name: string; desc: string }> = {
   crossbow: { name: '连弩齐射', desc: '自动射向最近敌人，命中后弹射；每级多射 1 支分射其他敌人' },
   flame_banner: { name: '烈焰战旗', desc: '前方爆发烈焰，范围灼烧' },
   zhenbei_blade: { name: '镇北环首刀', desc: '朝敌群重劈，地面裂开直线冲击波，穿透全部敌人；贴身伤害更高' },
-  lianhuan_mines: { name: '凤雏连环令', desc: '挥令旗在敌人来路布下火雷，踩中引爆，附近火雷连环引爆' },
+  lianhuan_mines: { name: '凤雏连环令', desc: '每隔片刻在脚下落一枚火雷，边走边留下雷链；敌人踩中引爆，附近火雷连环引爆' },
   sun_knives: { name: '弓腰姬飞刀', desc: '身边环绕飞刀割伤近敌，并不断掷出飞刀穿透远敌；移动中掷得更快' },
   baodiao_bow: { name: '宝雕弓', desc: '向远处最强的敌人射出重箭，单体重创并击退；首领、精锐优先' },
   dangyang_roar: { name: '丈八蛇矛·当阳喝断', desc: '朝前大喝，越推越宽的弧形声浪向前推进，伤害并一路推后敌人' },
@@ -68,7 +68,8 @@ function weaponUpgrade(weapon: WeaponState, player: Player): UpgradeOption {
 枪长 ${SPEAR_PIERCE[weapon.level - 1].len} → ${SPEAR_PIERCE[next - 1].len}`;
   if (weapon.id === 'crossbow') desc += `\n每轮 ${1 + crossbowExtraArrows(weapon.level)} → ${1 + crossbowExtraArrows(next)} 支箭（多出的箭分射其他敌人，70%伤害）`;
   if (weapon.id === 'zhenbei_blade' && [1, 3, 5].includes(next) && next !== weapon.level) desc += `\n裂波 ${zhenbeiCracks(weapon.level)} → ${zhenbeiCracks(next)} 道`;
-  if (weapon.id === 'lianhuan_mines' && lianhuanMinesPerCast(next) !== lianhuanMinesPerCast(weapon.level)) desc += `\n每次布雷 ${lianhuanMinesPerCast(weapon.level)} → ${lianhuanMinesPerCast(next)} 枚`;
+  if (weapon.id === 'lianhuan_mines' && lianhuanMinesPerCast(next) !== lianhuanMinesPerCast(weapon.level)) desc += `\n每次落雷 ${lianhuanMinesPerCast(weapon.level)} → ${lianhuanMinesPerCast(next)} 枚（身旁多落一枚，雷链加宽）`;
+  if (weapon.id === 'lianhuan_mines' && next === 3) desc += '\n落雷间隔缩短';
   if (weapon.id === 'sun_knives' && sunOrbitKnives(next) !== sunOrbitKnives(weapon.level)) desc += `\n环绕飞刀 ${sunOrbitKnives(weapon.level)} → ${sunOrbitKnives(next)} 把`;
   if (weapon.id === 'diaochan_fans' && diaochanFanCount(next) !== diaochanFanCount(weapon.level)) desc += `\n每次掷扇 ${diaochanFanCount(weapon.level)} → ${diaochanFanCount(next)} 柄`;
   if (weapon.id === 'guandao') desc += `\n范围${GUANDAO_TABLE[weapon.level - 1].radius} → ${GUANDAO_TABLE[next - 1].radius}${weapon.level < 3 && next >= 3 ? '，解锁二段刀气' : ''}`;

@@ -22,10 +22,12 @@ export const PASSIVE_RULES = {
    *  满层「谁敢杀我」：6 向裂波各 80%，并 3 秒受伤 -30%。 */
   crackLen: 200, crackWidth: 56, crackCloseRange: 60, crackCloseMul: 1.3, guardStepMs: 500,
   whoDaresDirs: 6, whoDaresDamageMul: .8, whoDaresGuardMs: 3000, whoDaresGuardMul: .7,
-  /** 庞统·凤雏连环令：火雷（上限 / 存在 / 布雷后待发 / 触发半径 / 爆炸半径 / 连锁距离 / 连锁间隔）；
+  /** 庞统·凤雏连环令：定时在脚下落雷（间隔 / 身旁偏移）；火雷（上限 / 存在 / 落雷后待发 / 触发半径 / 爆炸半径 / 连锁距离 / 连锁间隔）；到期或超上限只原地炸开、不连锁；
    *  连环计：一次连锁引爆 ≥3 枚积 1 层计策，满层「火烧连环」：身边 6 枚环形火雷，踏入或 2 秒后齐爆并留火 2 秒；
    *  落凤坡：生命 <30% 时脚下布 4 枚火雷（每 30 秒最多一次）。 */
-  mineMax: 6, mineLifeMs: 8000, mineArmMs: 350, mineTrigger: 26, mineRadius: 70, mineChainRange: 130, mineChainDelayMs: 150, mineChainStack: 3,
+  // 2026-11-16 重做（用户批准）：脚下定时落雷（0.7 秒；Lv3 起 0.6 秒），生效 0.35 → 0.5 秒，连锁距离 130 → 150（移速加成时雷链仍连得上）
+  mineDropSec: .7, mineDropFastSec: .6, mineSideOffset: 45,
+  mineMax: 6, mineLifeMs: 8000, mineArmMs: 500, mineTrigger: 26, mineRadius: 70, mineChainRange: 150, mineChainDelayMs: 150, mineChainStack: 3,
   ringMines: 6, ringRadius: 110, ringFuseMs: 2000, ringFireMs: 2000, fengpoHp: .3, fengpoCooldownMs: 30000, fengpoMines: 4,
   liubeiDamageMul: 1.15, liubeiHeal: .08, liubeiRally: .35,
   cavalryIntervalMs: 300, dashLength: 150, dashWidth: 56, dashDamageMul: 1.6, dashMs: 200,

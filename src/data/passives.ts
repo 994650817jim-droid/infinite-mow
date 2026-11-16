@@ -4,7 +4,7 @@ export const CHARACTER_PASSIVES: Record<CharacterId, { name: string; maxStacks: 
   guanyu: { name: '势如破竹', maxStacks: 3 },
   huangzhong: { name: '老当益壮', maxStacks: 0 },
   zhuge: { name: '运筹帷幄', maxStacks: 3 },
-  zhangfei: { name: '燕人咆哮', maxStacks: 5 },
+  zhangfei: { name: '据水断桥', maxStacks: 5 },
   huangyueying: { name: '机关连弩', maxStacks: 8 },
   pangtong: { name: '连环计', maxStacks: 3 },
   liubei: { name: '仁德聚义', maxStacks: 4 },
@@ -40,5 +40,14 @@ export const PASSIVE_RULES = {
   fanRange: 230, fanSpeed: 520, charmNeed: 3, turnMs: 3000, turnVulnerability: 1.2, charmVulnerability: 1.25, turnSeek: 260, turnHitMs: 500, charmDecayMs: 4000,
   /** 貂蝉·闭月：舞带环身 2 秒，半径 160，每 0.4 秒 50% 伤害，圈内敌人倒戈。 */
   moonMs: 2000, moonRadius: 160, moonTickMs: 400, moonDamageMul: .5,
+  /** 黄忠·宝雕弓：重箭（速度 / 射程 / 击退）；神射时命中处小范围爆裂（半径 / 伤害倍率）。 */
+  heavyArrowSpeed: 900, heavyArrowRange: 600, heavyArrowKnock: 40, heavyBurstRadius: 60, heavyBurstMul: .5,
+  /** 张飞·当阳喝断：声浪推进速度 / 推后力度；据水断桥：断桥区半径与持续。震慑与 140% 伤害沿用 roarRadius / roarStunMs / roarDamageMul。 */
+  roarWaveSpeed: 480, roarWavePush: 2.5, bridgeRadius: 150, bridgeMs: 3000,
+  /** 马超·湛金枪：骑枪（长 / 宽 / 同一敌人间隔 / 移动倍率 / 站定补刺倍率 / 参考速度）；西凉铁骑：移动每 0.4 秒积 1 层，满层召骑兵（数量 / 速度 / 冲锋距离 / 宽 / 伤害倍率）。 */
+  lanceLen: 90, lanceWidth: 30, lanceHitMs: 300, lanceMoveMul: 1.3, lanceStandMul: .4, lanceRefSpeed: 190,
+  cavalryMoveMs: 400, riderCount: 3, riderSpeed: 520, riderRun: 520, riderWidth: 50, riderDamageMul: 1.2,
+  /** 刘备·双股剑：出手距离、「×」斩溅射半径与倍率；一剑砍两人积 1 层仁德。 */
+  swordsRange: 120, crossSplash: 30, crossSplashMul: .6,
   fireRadiusMul: 1.25, burnMs: 2000, burnTickMs: 1000, burnDamageFraction: .10,
 } as const;

@@ -11,8 +11,9 @@ export const MARTIALS = {
   cloud_pierce: {character:'zhaoyun',name:'游龙穿云',desc:'每级枪长 +10%、穿透 +1'},
   dragon_charge: {character:'guanyu',name:'青龙蓄势',desc:'四次基础挥砍后重斩 140%/165%/190%；三级击退'},
   dragging_blade: {character:'guanyu',name:'拖刀斩',desc:'移动约5/4/3个身位蓄刀气；三级回旋'},
-  steady_aim: {character:'huangzhong',name:'百步穿杨',desc:'静止最多5秒，每秒暴击 +3/4/5%；移动衰减'},
-  pearl_volley: {character:'huangzhong',name:'连珠齐射',desc:'每 5/4/3 次基础射击追加70%伤害箭'},
+  // 2026-11-16：黄忠改用宝雕弓，连弩武学归黄月英
+  steady_aim: {character:'huangyueying',name:'百步穿杨',desc:'静止最多5秒，每秒暴击 +3/4/5%；移动衰减'},
+  pearl_volley: {character:'huangyueying',name:'连珠齐射',desc:'每 5/4/3 次基础射击追加70%伤害箭'},
   wildfire: {character:'zhuge',name:'烽火燎原',desc:'爆发留火 1/1.8/2.5秒，每0.5秒20%伤害'},
   eight_trigrams: {character:'zhuge',name:'八阵困军',desc:'每三次施法聚敌、减速后引爆；间隔10秒'},
   kaishan: {character:'weiyan',name:'开山',desc:'每劈 4 刀一次重劈：裂波加宽 50%，伤害 150%/170%/190%'},
@@ -23,6 +24,14 @@ export const MARTIALS = {
   baibi: {character:'sunshangxiang',name:'百婢',desc:'每级侍婢上限 +1、存在时间 +2 秒'},
   nichang: {character:'diaochan',name:'霓裳',desc:'每级飞扇距离 +15%；3 级时多掷 1 柄'},
   meirenji: {character:'diaochan',name:'美人计',desc:'每级倒戈时间 +0.5 秒；3 级时 2 层魅惑即可离间'},
+  chuanyang: {character:'huangzhong',name:'穿杨',desc:'每级重箭伤害 +12%；3 级时重箭再穿透 1 人'},
+  laoji: {character:'huangzhong',name:'老骥伏枥',desc:'生命低于一半时射速 +15%/25%/35%'},
+  wanrendi: {character:'zhangfei',name:'万人敌',desc:'每级声浪推进距离 +12%'},
+  dahe: {character:'zhangfei',name:'大喝',desc:'每级断桥区多 0.5 秒、震慑多 0.2 秒'},
+  jinma: {character:'machao',name:'锦马',desc:'每级骑枪长度 +15%；3 级时骑枪加宽 50%'},
+  tieqi: {character:'machao',name:'铁骑',desc:'每级多召 1 名西凉骑兵'},
+  taoyuan: {character:'liubei',name:'桃园',desc:'每级交叉斩溅射范围 +10；3 级时三剑分击三人'},
+  xiemin: {character:'liubei',name:'携民',desc:'每级仁德回复量 +25%'},
 } as const;
 export type MasteryId = keyof typeof MARTIALS;
 export type PotionId = 'rejuvenation' | 'berserk';
@@ -50,7 +59,7 @@ export class RunGrowth {
   revivalUsed=false;
   awakenRescueUsed=false;
   readonly attributes: Record<AttributeId, number> = { might: 0, quickness: 0, critical: 0, constitution: 0, agility: 0 };
-  readonly masteries: Record<MasteryId, number> = { dragon_gallop: 0, cloud_pierce: 0, dragon_charge:0, dragging_blade:0, steady_aim:0, pearl_volley:0, wildfire:0, eight_trigrams:0, kaishan:0, gujun:0, fulei:0, lianying:0, huishen:0, baibi:0, nichang:0, meirenji:0 };
+  readonly masteries: Record<MasteryId, number> = { dragon_gallop: 0, cloud_pierce: 0, dragon_charge:0, dragging_blade:0, steady_aim:0, pearl_volley:0, wildfire:0, eight_trigrams:0, kaishan:0, gujun:0, fulei:0, lianying:0, huishen:0, baibi:0, nichang:0, meirenji:0, chuanyang:0, laoji:0, wanrendi:0, dahe:0, jinma:0, tieqi:0, taoyuan:0, xiemin:0 };
   readonly trinkets: TrinketId[] = [];
   unallocated = 0;
   /** 兵装加成（局外道具，开局按武将读入，见 ItemEffects.gearFor）。 */
@@ -82,7 +91,7 @@ export class RunGrowth {
   get weaponMasteryLevel(): number { return this.masteries.dragon_gallop; }
   get spearPierceLevel(): number { return this.masteries.cloud_pierce; }
   /** 张飞同用长枪，与赵云共用两项枪术专精。 */
-  owns(id: MasteryId): boolean { const c = MARTIALS[id].character as string; return c === this.character || this.character === 'zhangfei' && c === 'zhaoyun' || this.character === 'huangyueying' && c === 'huangzhong'  || this.character === 'liubei' && c === 'guanyu'  || this.character === 'machao' && c === 'zhaoyun'; }
+  owns(id: MasteryId): boolean { const c = MARTIALS[id].character as string; return c === this.character; } // 2026-11-16 起每位武将只用自己的专属武学
   canLearn(id: MasteryId): boolean { return this.owns(id) && this.masteries[id] < 3; }
 
   addAttributePoints(amount = 2): void { this.unallocated = Math.min(Object.values(this.attributes).reduce((n,level)=>n+ATTRIBUTE_MAX-level,0),this.unallocated+Math.max(0, Math.floor(amount))); }

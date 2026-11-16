@@ -71,3 +71,4 @@ assets/raw/*
 !/tools/phase19-progression.mjs
 !/tools/rest-flow-smoke.mjs
 !/tools/prepare-troop-portraits.mjs
+!/tools/test-weapons-batch2.mjs

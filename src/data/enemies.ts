@@ -9,8 +9,8 @@ export interface EnemyDef {
   walkVisual?: { texture: string; scale: number; groundY: number; matched?: boolean };
   attackVisual?: string;
   behavior?: "spear" | "shaman" | "halberd" | "thunder" | "wall" | "supply";
-  /** 章节专属兵种（不走第一章 behavior 逻辑）：feixiong = 第二章飞熊军（XiliangBattle）。 */
-  variant?: "feixiong";
+  /** 章节专属兵种（不走第一章 behavior 逻辑）：feixiong = 第二章飞熊军（XiliangBattle）；hubao = 第五章虎豹骑（HubaoBattle）。 */
+  variant?: "feixiong" | "hubao";
   hp: number;
   speed: number;
   damage: number;

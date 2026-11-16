@@ -66,7 +66,9 @@ import { WEAPON_BEHAVIORS, WEAPON_DEFS, type WeaponHost, type WeaponBolt as Bolt
 import type { RunEndReason, RunStats, UpgradeOption, WeaponState } from '../types';
 import {ItemDrops} from '../systems/ItemDrops';
 import {gearFor} from '../systems/ItemEffects';
-import {depositRunLoot} from '../systems/ItemStore';
+import {depositRunLoot,loadout} from '../systems/ItemStore';
+import {HeroMount} from '../systems/HeroMount';
+import {itemName} from '../data/items';
 import {ItemBagUI} from '../ui/ItemBagUI';
 
 interface Gem {
@@ -124,6 +126,8 @@ export class GameScene extends Phaser.Scene {
   protected yellow:YellowBattle|null=null;
   /** 第二章主线（汜水关 / 荥阳 / 虎牢关）西凉军战法：铁骑突阵、飞熊军。攻守城与军情战斗（encounter）不启用。 */
   protected xiliang:XiliangBattle|null=null;
+  /** 骑马（行囊坐骑槽有马时）。 */
+  protected mount:HeroMount|null=null;
   protected supplies:BattlefieldSupplies|null=null;
   /** 道具掉落与本局缴获（局外兵装，结算带回行囊）。 */
   protected itemDrops:ItemDrops|null=null;
@@ -375,6 +379,7 @@ export class GameScene extends Phaser.Scene {
     this.supplies=new BattlefieldSupplies(this,this.player,this.enemies,()=>this.combatNow,()=>{this.sfx.play('pickup');this.artEffects.show(5,this.player.x,this.player.y-12,35,this.combatNow,280);});
     // 兵装：开局读入该武将穿戴的道具加成（生命上限增加的部分补满）
     {const oldMax=this.player.maxHp;this.player.growth.gear=gearFor(this.runConfig.character);this.player.heal(this.player.maxHp-oldMax);}
+    {const horse=loadout(this.runConfig.character).mount;this.mount=horse?new HeroMount({scene:this,player:this.player,enemies:this.enemies,hit:(e,d,now)=>this.hitEnemy(e,d,now,'melee',false,false),notice:t=>this.showGrowthNotice(t)},{base:horse.base,name:itemName(horse)},this.runConfig.character):null;this.player.mountGuard=this.mount?(n,now)=>this.mount?.guard(n,now)??n:undefined;this.events.once('shutdown',()=>{this.mount?.clear();this.mount=null;});}
     this.itemDrops=new ItemDrops(this,this.player,this.itemTier(),()=>this.elapsed,()=>this.isFinalBoss(),()=>this.sfx.play('pickup'));
     // 酒罐 / 药篓不生成在房屋、城墙等障碍里（第三/四章、攻城在 create 之后才设置障碍，故调用时读取）
     this.supplies.healBlocked=(x,y,r)=>!!this.sishuiObstacles?.footprints.some(b=>x>b.left-r&&x<b.right+r&&y>b.top-r&&y<b.bottom+r);
@@ -650,7 +655,7 @@ export class GameScene extends Phaser.Scene {
     const driven=Math.hypot(move.x,move.y)>.1;
     this.player.move(dt, driven?move.x:0, driven?move.y:0);
 
-    this.player.update(time, dt);
+    this.player.update(time, dt);this.mount?.update(dt,this.combatNow);
 
     if(!this.over)this.itemDrops?.update();
     this.supplies?.update(dt,time,this.battlefieldDetails.props,(enemy,damage)=>this.hitEnemy(enemy,damage,time,'fire',false,false),this.allies,(ally,damage,now)=>this.legion.hurt(ally,damage,now));

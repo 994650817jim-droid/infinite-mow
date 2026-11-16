@@ -49,6 +49,10 @@ export class Player {
   invulnUntil = 0;
   damageImmune = false;
   damageGuard?: (damage:number,now:number)=>number;
+  /** 骑马（HeroMount）：受伤先经马挡、移速倍率、骑者抬高的像素。 */
+  mountGuard?: (damage:number,now:number)=>number;
+  mountSpeedMul = 1;
+  riseY = 0;
 
   stats: PlayerStats = {
     damageMul: 1,
@@ -130,7 +134,7 @@ export class Player {
   }
 
   get speed(): number {
-    return BALANCE.player.speed * Math.min(1.6, this.stats.moveMul * this.growth.movementMultiplier()*(this.growth.build.tags().skirmish>=2?1.04:1));
+    return BALANCE.player.speed * Math.min(1.6, this.stats.moveMul * this.growth.movementMultiplier()*(this.growth.build.tags().skirmish>=2?1.04:1)) * this.mountSpeedMul;
   }
 
   knockUp(now: number, duration: number, dx: number, dy: number): void {
@@ -314,7 +318,8 @@ export class Player {
     if (!this.alive || this.damageImmune || now < this.invulnUntil) return false;
     const afterArmor = Math.max(1, raw - this.stats.armor);
     const unguarded = Math.max(1, Math.round(afterArmor * this.stats.damageTakenMul * this.armyDamageTakenMul * this.growth.incomingDamageMultiplier() * this.passive.damageTakenMultiplier(now)));
-    const dmg=Math.max(1,this.damageGuard?.(unguarded,now)??unguarded);
+    const ridden=this.mountGuard?this.mountGuard(unguarded,now):unguarded;if(ridden<=0)return false;
+    const dmg=Math.max(1,this.damageGuard?.(ridden,now)??ridden);
     (this.scene as unknown as {sfx?:{play(k:string):void}}).sfx?.play('playerHurt');
     const ironRescue=this.hp<=dmg&&this.growth.build.tags().bulwark>=4&&!this.growth.awakenRescueUsed;
     if(ironRescue)this.growth.awakenRescueUsed=true;
@@ -377,12 +382,12 @@ export class Player {
   update(now: number, dt: number): void {
     this.commandGlow.setPosition(this.x,this.y+21).setVisible(this.alive).setAlpha(.75+.15*Math.sin(now/420));
     this.drawCommandRing(now);
-    this.marker.setPosition(this.x,this.y-38).setVisible(this.alive);
-    this.markerLabel.setPosition(this.x,this.y-45).setVisible(this.alive);
+    this.marker.setPosition(this.x,this.y-38-this.riseY).setVisible(this.alive);
+    this.markerLabel.setPosition(this.x,this.y-45-this.riseY).setVisible(this.alive);
     const t = now < this.knockedUntil ? (now - this.knockedAt) / (this.knockedUntil - this.knockedAt) : 1;
     const lift = t < 1 ? Math.sin(Math.PI * Math.max(0, t)) * 42 : 0;
     // 被挑飞时的抬升按当前帧的实际显示高度换算（动作帧 128 格与行走帧 96 格不同）
-    this.sprite.setOrigin(.5, this.baseOriginY + lift / Math.max(1, this.sprite.displayHeight));
+    this.sprite.setOrigin(.5, this.baseOriginY + (lift + this.riseY) / Math.max(1, this.sprite.displayHeight));
     const regen = this.stats.regen + this.growth.gear.regen;
     if (regen > 0) this.heal(regen * dt);
     this.growth.lowHp = this.hp < this.maxHp * .35;

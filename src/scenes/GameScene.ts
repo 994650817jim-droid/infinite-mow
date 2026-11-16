@@ -1018,7 +1018,8 @@ export class GameScene extends Phaser.Scene {
       if (!enemy.active) continue;
       enemy.shadow.setPosition(enemy.x,enemy.isSupplySlot?enemy.y+2:enemy.y + enemy.radius * .72);
       if (enemy.kind !== 'boss') enemy.sprite.setDepth(actorDepth(enemy.isSupplySlot?enemy.y:enemy.y + enemy.radius * .72));
-      if((this.huaxiong||this.xurong)&&enemy===this.boss){enemy.shadow.setPosition(enemy.x,enemy.y+1).setDisplaySize(74,20);continue;}
+      // 华雄 / 徐荣由专属控制器出帧；前线推进后成为追兵首领时也不再套通用走路帧（xurong 图集没有 down_0 等帧，会持续报 no frame）
+      if(((this.huaxiong||this.xurong)&&enemy===this.boss)||(enemy.kind==='boss'&&this.chasingBosses.some(t=>t.enemy===enemy&&t.life===enemy.spawnId&&(t.huaxiong||t.xurong)))){enemy.shadow.setPosition(enemy.x,enemy.y+1).setDisplaySize(74,20);continue;}
       if (!enemy.walkSheet) continue;
       const onScreen =
         enemy.x > view.x - margin &&
@@ -2088,7 +2089,7 @@ export class GameScene extends Phaser.Scene {
     const start = performance.now(), T = { hold: 900, sweep: 650, show: 1100, fade: 600 };
     const total = T.hold + T.sweep + T.show + T.fade;
     let revealed = false, done = false;
-    const reveal = (): void => { if (revealed) return; revealed = true; for (const o of hidden) (o as unknown as { setVisible(v: boolean): void }).setVisible(true); };
+    const reveal = (): void => { if (revealed) return; revealed = true; for (const o of hidden) (o as unknown as { setVisible(v: boolean): void }).setVisible(true); (this.children.getByName('chapter1-volunteers') as Phaser.GameObjects.Container | null)?.setVisible(true); };
     const ease = (x: number): number => 1 - Math.pow(1 - Math.max(0, Math.min(1, x)), 3);
     const finish = (): void => {
       if (done) return; done = true; reveal();
@@ -2269,6 +2270,8 @@ export class GameScene extends Phaser.Scene {
           lines:toMap?['将军威名远扬，四方义士前来投靠。','天下大势初现：于地图上按史事逐章出征。']:['将军威名远扬，四方义士前来投靠。','且回军营整顿兵马，再赴讨董征途。'],
           route:toMap?['黄巾告捷','天下地图','讨伐董卓']:['整顿兵马','补充援兵','汜水讨董'],confirm:toMap?'确认 · 展开天下地图':'确认 · 进入军营',background:'rest_camp',
           onConfirm:()=>{notice.destroy();if(toMap){this.resting=false;this.registry.remove('campaignTransfer');this.registry.set('worldReveal',true);this.registry.set('mapFocusNode','hulao');this.scene.start('WorldMapScene');return;}this.legionUI.panel.setVisible(true);}});
+        // 入营水墨过场在 setMode('rest') 时已开始，告捷弹窗晚于它创建：过场期间先隐藏，墨迹揭开时再显示（reveal 里处理）。
+        if(this.children.getByName('rest-intro'))notice.setVisible(false);
       }
     }
   }

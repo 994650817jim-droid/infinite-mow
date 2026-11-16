@@ -30,6 +30,7 @@ export class HuaxiongBoss {
   private fxOn():boolean{return !TELEGRAPH_CLASSIC&&HINT_MOCK==='c';}
   private strip(from:number,to:number,width:number,color:number,alpha:number):void {const c=Math.cos(this.angle),n=Math.sin(this.angle),w=width/2;
     // 低调预警（默认）：不画填色长条与描边，改为沿刀路的地裂纹（预警时随蓄力加深，落下 / 冲击波时到头）
+    if(!TELEGRAPH_CLASSIC&&!this.state.endsWith('Warn')&&this.slamArt)return;// 斩下后（含二阶段冲击波）由裂地命中图表现，不再逐帧画
     if(!TELEGRAPH_CLASSIC){const warn=this.state.endsWith('Warn'),p=warn?Math.min(1,Math.max(0,(this.now-this.started)/Math.max(1,this.until-this.started))):1;laneCracks(this.gfx,this.x+c*from,this.y+n*from,this.angle,to-from,width,p,!warn);return;}this.gfx.fillStyle(color,alpha).lineStyle(2,0xf3c778,.9).beginPath().moveTo(this.x+c*from-n*w,this.y+n*from+c*w).lineTo(this.x+c*to-n*w,this.y+n*to+c*w).lineTo(this.x+c*to+n*w,this.y+n*to-c*w).lineTo(this.x+c*from+n*w,this.y+n*from-c*w).closePath().fillPath().strokePath();}
   private lineHit(from:number,to:number,width:number,damage:number,now:number,seen:Set<string>):void {const c=Math.cos(this.angle),n=Math.sin(this.angle);const inside=(x:number,y:number,r:number)=>{const dx=x-this.x,dy=y-this.y,a=dx*c+dy*n;return a>=from-r&&a<=to+r&&Math.abs(-dx*n+dy*c)<=width/2+r;};const p=this.h.player;if(!seen.has('p')&&inside(p.x,p.y,p.radius)){seen.add('p');p.takeDamage(damage,now);}for(const a of this.h.army.units){const k=a.id+':'+a.lifeId;if(a.active&&!seen.has(k)&&inside(a.x,a.y,a.radius)){seen.add(k);this.h.army.hurtByBoss(a,damage,now);}}}
   update(dt:number,now:number):void{

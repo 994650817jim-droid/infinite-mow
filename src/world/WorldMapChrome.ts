@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import {FONT, HEADING_FONT} from '../config';
-import {FACTIONS, factionStrength, type FactionId} from './WorldCities';
+import {FACTIONS, factionStrength, type FactionId, type EraId} from './WorldCities';
 import {BANNER_CHAR} from './WorldMapLayers';
 import type {TerritoryLabel} from './WorldTerritory';
 
@@ -40,7 +40,7 @@ export function resourceBar(scene: Phaser.Scene, x: number, y: number, items: Ar
 }
 
 /** 势力排行条：按城池数排序的势力色块 + 名 + 城数（不含地方豪强），放在地图底边。 */
-export function factionStrip(scene: Phaser.Scene, x: number, y: number, maxW: number, era: 1 | 2 | 3, owned: readonly string[], desk: boolean): Phaser.GameObjects.Container {
+export function factionStrip(scene: Phaser.Scene, x: number, y: number, maxW: number, era: EraId, owned: readonly string[], desk: boolean): Phaser.GameObjects.Container {
   const root = scene.add.container(0, 0).setName('world-faction-strip'), size = desk ? 13 : 14;
   const counts = new Map<FactionId, number>(factionStrength(era, owned));
   if (owned.length) counts.set('player', owned.length);

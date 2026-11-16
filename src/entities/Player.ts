@@ -21,7 +21,7 @@ import type { PlayerStats, WeaponState } from '../types';
  * 均分时放箭帧到 130ms 才出现，箭已飞出约 70 像素。
  */
 const ATTACK_WEIGHTS: Partial<Record<CharacterId, readonly number[]>> = (() => { const w = [.12, .14, .42, .32] as const, blade = [.06, .16, .44, .34] as const, release = [.04, .08, .50, .38] as const;
-  return {zhaoyun: w, machao: w, zhangfei: w, guanyu: blade, weiyan: blade, liubei: blade, huangzhong: release, huangyueying: release, zhuge: release, pangtong: release}; })();
+  return {zhaoyun: w, machao: w, zhangfei: w, guanyu: blade, weiyan: blade, liubei: blade, huangzhong: release, huangyueying: release, zhuge: release, pangtong: release, sunshangxiang: release, diaochan: release}; })();
 function weightedIndex(t: number, n: number, weights?: readonly number[]): number {
   if (!weights) return Math.min(n - 1, Math.floor(t * n));
   let acc = 0; for (let i = 0; i < n; i++) { acc += weights[i]; if (t < acc) return i; }
@@ -158,6 +158,7 @@ export class Player {
       this.direction = forced ?? (Math.abs(nx) > Math.abs(ny) ? (nx < 0 ? 'left' : 'right') : ny < 0 ? 'up' : 'down');
       this.faceLeft = this.direction === 'left';
       this.walkPhase += dt * 9;
+      this.passive.onMove(now); // 孙尚香：移动积疾步
     }
     // 行走表本身已经分方向，不能再翻转，否则向左会变成向右
     const directional = this.scene.textures.exists('hero_walk_sheet') || this.scene.textures.exists(`hero_walk_${this.direction}_0`);

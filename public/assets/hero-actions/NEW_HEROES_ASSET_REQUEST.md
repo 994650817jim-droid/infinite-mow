@@ -1,0 +1,21 @@
+# 新女将素材：孙尚香（吴）、貂蝉（群雄）
+
+## 已到位（2026-11-15，ChatGPT「三国开发讨论」生成，用户授权）
+
+| 用途 | 运行时文件 | 原图（洋红底） |
+| --- | --- | --- |
+| 立绘 512×512 | `public/assets/processed/<id>_portrait.png` | `originals/<id>_portrait.png` |
+| 行走图 4×4、192 帧（768×768） | `public/assets/processed/<id>_walk_sheet.png` | `originals/<id>_walk.png` |
+| 动作图 4×7、256 帧（1024×1792） | `public/assets/hero-actions/<id>.png` | `originals/<id>_actions.png` |
+
+处理方式（`tools/` 不入库）：
+- **行走图 / 动作图**：同 `export-hero-hd.mjs`，即 `reslice-magenta-sheet.mjs <原图> <输出> 4 4 192 184` 和 `4 7 256 228`。按连通区域切出人物，统一缩放，脚底对齐脚线；显示比例与锚点规范和九将高清化一致。
+- **貂蝉**：衣裙本身是粉紫色，普通洋红抠图会把裙子抠成半透明。所以改用 `reslice-magenta-strict.mjs`：只把接近纯 #FF00FF 的像素当背景，只给与背景相邻的边缘像素去色溢。
+- **立绘**：`prepare-heroine-portrait.mjs`，用严格抠图，人物外框缩到 480 内、居中、脚底贴 y=500。
+
+已知小瑕疵：孙尚香动作图第 4 行（背面射箭）和第 7 行（倒地）的弓形略像弩。原尺寸看得出，战斗里人物约 80 像素高，不明显；需要时可单独重画这两行。
+
+## 仍是过渡方案
+
+- **招牌技特效**：程序化绘制，孙尚香是赤色双环外扩，貂蝉是粉紫花瓣环（`src/weapons/registry.ts`）。如需序列帧：`public/assets/hero-fx/fx_c.png`，6 列 × 4 行、每格 256×256、黑底叠加；第 0 行孙尚香「环身连射」，八向箭光环；第 1 行貂蝉「倾城」，粉紫花瓣旋涡。
+- **主页大幅立绘（epic-home）与水墨立轴（ink-scroll）**：暂未生成，选将卡用立绘墨化显示。到位后放进 `public/assets/epic-home/<id>.webp` 和 `public/assets/ink-scroll/<id>.webp`，并把两人加进 `HOME_ART_HEROES`。

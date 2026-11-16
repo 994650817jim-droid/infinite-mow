@@ -103,7 +103,7 @@ export const YELLOW_STAGES = [
 ];
 export const DONGZHUO_STAGES=[{stage:1 as const,name:'汜水关',boss:'华雄'},{stage:2 as const,name:'荥阳',boss:'徐荣'},{stage:3 as const,name:'虎牢关',boss:'吕布'}];
 export function getBattleChapter(id?:string, stage:YellowStage=1,westStage:YellowStage=3):ChapterDef {
- const base=getChapter(id);if(base.id==='hulao'){const n=DONGZHUO_STAGES.find(s=>s.stage===westStage)?.stage??3;return n===1?{...getSishuiEncounter(),westStage:1,victoryText:'汜水关告捷 · 荥阳之战已解锁'}:n===2?{...getXingyangEncounter(),westStage:2,victoryText:'荥阳破围 · 虎牢关已解锁'}:{...base,westStage:3,name:'2-3 虎牢关',label:'讨伐董卓 · 虎牢关',victoryText:'吕布败退 · 讨伐董卓告捷 · 三国天下开启'};}
+ const base=getChapter(id);if(base.id==='hulao'){const n=DONGZHUO_STAGES.find(s=>s.stage===westStage)?.stage??3;return n===1?{...getSishuiEncounter(),westStage:1,victoryText:'汜水关告捷 · 荥阳之战已解锁'}:n===2?{...getXingyangEncounter(),westStage:2,victoryText:'荥阳破围 · 虎牢关已解锁'}:{...base,westStage:3,name:'2-3 虎牢关',label:'讨伐董卓 · 虎牢关',victoryText:'吕布败退 · 讨伐董卓告捷 · 群雄并起'};}
  const info=YELLOW_STAGES[stage-1]??YELLOW_STAGES[0];stage=info.stage;
  if(stage===3)return {...base,stage,name:'1-3 广宗决战',ground:'yellow_ground_3',victoryTitle:'黄巾平定',victoryText:'雷云消散 · 讨伐董卓已解锁'};
  const boss=stage===1?'zhangliang':'zhangbao';

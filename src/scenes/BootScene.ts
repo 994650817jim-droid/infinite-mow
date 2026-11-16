@@ -97,6 +97,8 @@ export class BootScene extends Phaser.Scene {
     this.load.spritesheet('liubei_walk_sheet', 'assets/processed/liubei_walk_sheet.png', { frameWidth: 96, frameHeight: 96 });
     this.load.spritesheet('pangtong_walk_sheet', 'assets/processed/pangtong_walk_sheet.png', { frameWidth: 96, frameHeight: 96 });
     this.load.spritesheet('huangyueying_walk_sheet', 'assets/processed/huangyueying_walk_sheet.png', { frameWidth: 96, frameHeight: 96 });
+    this.load.spritesheet('sunshangxiang_walk_sheet', 'assets/processed/sunshangxiang_walk_sheet.png', { frameWidth: 96, frameHeight: 96 });
+    this.load.spritesheet('diaochan_walk_sheet', 'assets/processed/diaochan_walk_sheet.png', { frameWidth: 96, frameHeight: 96 });
     this.load.spritesheet('zhangfei_walk_sheet', 'assets/processed/zhangfei_walk_sheet.png', { frameWidth: 96, frameHeight: 96 });
     this.load.spritesheet('huangzhong_walk_sheet', 'assets/processed/huangzhong_walk_sheet.png', { frameWidth: 96, frameHeight: 96 });
     this.load.spritesheet('enemy_infantry_walk_sheet', 'assets/processed/enemy_infantry_walk_sheet.png', { frameWidth: 96, frameHeight: 96 });
@@ -136,6 +138,8 @@ export class BootScene extends Phaser.Scene {
     this.load.image('liubei_portrait', 'assets/processed/liubei_portrait.png');
     this.load.image('pangtong_portrait', 'assets/processed/pangtong_portrait.png');
     this.load.image('huangyueying_portrait', 'assets/processed/huangyueying_portrait.png');
+    this.load.image('sunshangxiang_portrait', 'assets/processed/sunshangxiang_portrait.png');
+    this.load.image('diaochan_portrait', 'assets/processed/diaochan_portrait.png');
     this.load.image('zhangfei_portrait', 'assets/processed/zhangfei_portrait.png');
     this.load.image('item_drum', 'assets/processed/item_drum.png');
     this.load.image('item_whetstone', 'assets/processed/item_whetstone.png');

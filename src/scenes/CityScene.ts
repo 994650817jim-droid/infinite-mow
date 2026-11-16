@@ -50,7 +50,7 @@ export class CityScene extends Phaser.Scene {
   for(const lv of CITY_ART_LEVELS)for(const id of ids)if(lv<=(TOWN_BUILDINGS[id].maxLevel??3))worldAssets(this,`city_${id}_${lv}`,`assets/city/${id}_${lv}.webp`);
   // 旧小镇像素画作为缺图时的退路（府衙没有旧图）
   if(!CITY_ART_LEVELS.length)for(const lv of TOWN_ART_LEVELS)for(const id of ids)if(id!=='hall')worldAssets(this,`town_${id}_${lv}`,`assets/town/${id}_${lv}.webp`);}
- create(){playMenuMusic(this);
+ create(){playMenuMusic(this);this.registry.remove('hardChapter');
   if(!worldUnlocked()&&!isChapterTestRun()){this.registry.set('loadBattle',true);this.scene.start(this.registry.get('battleReady')?'MenuScene':'BootScene');return;}
   // 战斗图集在下次出征重新加载，不与战略界面美术同时常驻
   const keys=this.registry.get('battleTextureKeys') as string[]|undefined;

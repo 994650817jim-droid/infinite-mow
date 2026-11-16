@@ -1,7 +1,7 @@
 import type { ChapterId } from './chapters';
 import type { WeaponId } from '../types';
 
-export type CharacterId = 'zhaoyun' | 'guanyu' | 'huangzhong' | 'zhuge' | 'zhangfei' | 'machao' | 'weiyan' | 'liubei' | 'pangtong' | 'huangyueying';
+export type CharacterId = 'zhaoyun' | 'guanyu' | 'huangzhong' | 'zhuge' | 'zhangfei' | 'machao' | 'weiyan' | 'liubei' | 'pangtong' | 'huangyueying' | 'sunshangxiang' | 'diaochan';
 
 export interface CharacterDef {
   id: CharacterId;
@@ -17,6 +17,8 @@ export interface CharacterDef {
   portrait: string;
   /** 武将专属初始武器（开局固定，不再选择）。 */
   startWeapon: WeaponId;
+  /** 选将卡上的势力印（缺省为蜀）。 */
+  faction?: '蜀' | '吴' | '魏' | '群';
 }
 
 export interface RunConfig {
@@ -35,9 +37,10 @@ export const CHARACTERS: CharacterDef[] = [
     id: 'zhaoyun',
     name: '赵云',
     desc: '均衡 · 移速与输出稳定',
-    hpMul: 1,
+    // 2026-11-15 平衡（用户批准）：生命 1 → 1.1、伤害 1 → 1.05（测量中承伤最高、DPS 中下）
+    hpMul: 1.1,
     speedMul: 1,
-    damageMul: 1,
+    damageMul: 1.05,
     portrait: 'hero_zhaoyun',
     startWeapon: 'spear_orbit',
   },
@@ -48,7 +51,8 @@ export const CHARACTERS: CharacterDef[] = [
     battleTint: 0x9be0a8,
     hpMul: 1.25,
     speedMul: 0.92,
-    damageMul: 1.15,
+    // 2026-11-15 平衡（用户批准）：伤害 1.15 → 1.08（约 −6%，三关首领战输出领先）
+    damageMul: 1.08,
     portrait: 'guanyu_portrait',
     startWeapon: 'guandao',
   },
@@ -67,7 +71,8 @@ export const CHARACTERS: CharacterDef[] = [
     id: 'zhuge',
     name: '诸葛亮',
     desc: '军师 · 火焰范围爆发，生命较低',
-    hpMul: 0.86,
+    // 2026-11-15 平衡（用户批准）：生命 0.86 → 0.95（测量中阵亡次数最多）
+    hpMul: 0.95,
     speedMul: 1.04,
     damageMul: 1.0,
     portrait: 'portrait_zhuge',
@@ -133,6 +138,28 @@ export const CHARACTERS: CharacterDef[] = [
     portrait: 'huangyueying_portrait',
     startWeapon: 'crossbow',
   },
+  {
+    id: 'sunshangxiang',
+    name: '孙尚香',
+    desc: '弓腰姬 · 移速快，边走边射，环身连射',
+    hpMul: 0.9,
+    speedMul: 1.08,
+    damageMul: 1,
+    portrait: 'sunshangxiang_portrait',
+    startWeapon: 'crossbow',
+    faction: '吴',
+  },
+  {
+    id: 'diaochan',
+    name: '貂蝉',
+    desc: '舞姬 · 生命低，花扇范围，倾城易伤',
+    hpMul: 0.85,
+    speedMul: 1.06,
+    damageMul: 0.98,
+    portrait: 'diaochan_portrait',
+    startWeapon: 'flame_banner',
+    faction: '群',
+  },
 ];
 
 /** 有主页大幅立绘（epic-home）与水墨立轴（ink-scroll）的武将；其余用 portrait。 */
@@ -151,6 +178,6 @@ export function getCharacter(id: CharacterId): CharacterDef {
 }
 
 /** 新武将普攻的专属色调（枪芒 / 刀光 / 火爆 / 弩箭），老四将保持原色。 */
-export const HERO_TINT: Partial<Record<CharacterId, number>> = { zhangfei: 0xff9c7a, machao: 0xb8dcff, weiyan: 0xff6a55, liubei: 0xffd890, pangtong: 0xff8fd0, huangyueying: 0x8fe8c0 };
+export const HERO_TINT: Partial<Record<CharacterId, number>> = { zhangfei: 0xff9c7a, machao: 0xb8dcff, weiyan: 0xff6a55, liubei: 0xffd890, pangtong: 0xff8fd0, huangyueying: 0x8fe8c0, sunshangxiang: 0xff9a8a, diaochan: 0xf0b4ff };
 /** 招牌技序列帧（public/assets/hero-fx/fx_<sheet>.png，6 列 × 4 行、256×256，黑底叠加混合）。 */
 export const HERO_FX: Record<string, { sheet: 'a' | 'b'; row: number }> = { roar: { sheet: 'a', row: 0 }, dash: { sheet: 'a', row: 1 }, bloodslash: { sheet: 'a', row: 2 }, rally: { sheet: 'a', row: 3 }, phoenix: { sheet: 'b', row: 0 }, gears: { sheet: 'b', row: 1 }, liubeiSlash: { sheet: 'b', row: 2 }, weiyanSlash: { sheet: 'b', row: 3 } };

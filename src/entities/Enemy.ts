@@ -226,7 +226,10 @@ export class Enemy {
   /** 盾破：换成无盾造型（同章步兵行走表），保留生命、位置与编号；keepLook 时只去掉盾值（飞熊军等专属造型）。 */
   dropShield(look: EnemyDef | null): void {
     this.shieldHp = 0;
-    if (!look) return;
+    if (look) this.reskin(look);
+  }
+  /** 换造型（行走表 / 攻击表 / 色调），保留生命、位置与编号：碎盾换步兵、董卓正式图加载完成后换图。 */
+  reskin(look: EnemyDef): void {
     const sheet = look.walkVisual?.texture ?? 'enemy_infantry_walk_sheet';
     this.def = {...this.def, texture: look.texture, walkVisual: look.walkVisual, attackVisual: look.attackVisual, tint: look.tint};
     this.baseTint = look.tint ?? 0xffffff; this.sprite.clearTint(); if (this.baseTint !== 0xffffff) this.sprite.setTint(this.baseTint);

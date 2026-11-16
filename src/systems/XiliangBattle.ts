@@ -57,7 +57,7 @@ export class XiliangBattle {
   /** 2-3 火烧洛阳：董卓首领控制。 */
   dongzhuo: DongzhuoBoss | null = null;
   protected readonly raid: RaidParams;
-  constructor(protected h: Host, protected o: TacticsOptions = {}) { this.raid = o.raid ?? R; this.nextRaidAt = o.first ?? R.first; if (o.feixiong !== false) ensureTroopArt(h.scene, ['feixiong_walk', 'feixiong_attack']); }
+  constructor(protected h: Host, protected o: TacticsOptions = {}) { this.raid = o.raid ?? R; this.nextRaidAt = o.first ?? R.first; if (o.feixiong !== false) ensureTroopArt(h.scene, ['feixiong_walk', 'feixiong_attack', 'dongzhuo_walk', 'dongzhuo_attack']); }
   private intervalFor(stage: 1 | 2 | 3): number | null { return this.o.interval ? this.o.interval(stage) : R.interval[stage - 1]; }
   /** 子类（虎豹骑护驾）接管普通敌兵移动的钩子。 */
   protected guardStep(_e: Enemy, _dt: number, _now: number): boolean { return false; }

@@ -179,7 +179,7 @@ try {
     await startBattle(p);
     await p.evaluate(() => { const s = window.__game.scene.getScene('GameScene'); if (!s.boss) s.spawnBoss(); });
     await p.waitForFunction(() => !!window.__game.scene.getScene('GameScene').boss?.active, null, { timeout: 15000 });
-    const hard = await p.evaluate(() => { const s = window.__game.scene.getScene('GameScene'); return { hard: s.hardMode, stage: s.chapter.westStage, ratio: s.boss.maxHp / s.chapter.enemies.boss.hp, dmg: s.boss.def.damage / s.chapter.enemies.boss.damage }; });
+    const hard = await p.evaluate(() => { const s = window.__game.scene.getScene('GameScene'); return { hard: s.hardMode, stage: s.chapter.westStage, ratio: s.boss.maxHp / (s.chapter.enemies.boss.hp * (s.chapter.growth?.bossHp ?? 1)) /* 与「正常难度的首领生命」比：正常难度已乘 stageTuning 的首领倍率 */, dmg: s.boss.def.damage / s.chapter.enemies.boss.damage }; });
     ck('乱世 battle: boss HP ×1.8, damage ×1.25', hard.hard && hard.stage === 3 && Math.abs(hard.ratio - 1.8) < .03 && Math.abs(hard.dmg - 1.25) < .01, hard);
     const before = await p.evaluate(() => JSON.parse(localStorage.getItem("im_world_v1")).provisions);
     await p.evaluate(() => { const s = window.__game.scene.getScene('GameScene'); s.hitEnemy(s.boss, 1e8, s.combatNow, 'melee'); });

@@ -91,8 +91,10 @@ export function siegeGameSceneClass(Base: typeof GameScene) {
     protected customBossStep(enemy: Enemy, dt: number, now: number) {
       if (enemy !== this.boss) return false;
       if (this.controller) { this.controller.update(dt, now); return true; }
-      const dx = this.player.x - enemy.x, dy = this.player.y - enemy.y, d = Math.hypot(dx, dy) || 1;
-      this.advanceEnemy(enemy, d > 48 ? dx / d : 0, d > 48 ? dy / d : 0, dt); return true;
+      const dx = this.player.x - enemy.x, dy = this.player.y - enemy.y, d = Math.hypot(dx, dy) || 1, nx = d > 48 ? dx / d : 0, ny = d > 48 ? dy / d : 0;
+      // crowdSteering 下 advanceEnemy 用 moveVx/moveVy，而 EnemyMovement 对首领一律置 0（首领通常由控制器驱动）——中小城守将没有控制器，须自己给速度，否则原地不动
+      enemy.moveVx = nx * enemy.def.speed; enemy.moveVy = ny * enemy.def.speed;
+      this.advanceEnemy(enemy, nx, ny, dt); return true;
     }
     protected hitEnemy(enemy: Enemy, raw: number, now: number, source: 'melee' | 'arrow' | 'fire' = 'melee', ally = false, weaponHit = true) { if (enemy === this.boss && this.controller) { raw *= this.controller.incoming(ally); this.controller.hit(now); } return super.hitEnemy(enemy, raw, now, source, ally, weaponHit); }
     protected killEnemy(enemy: Enemy) {

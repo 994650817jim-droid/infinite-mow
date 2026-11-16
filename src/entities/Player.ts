@@ -8,6 +8,7 @@ import { RunGrowth, attributePointsBetween } from '../systems/RunGrowth';
 import { BALANCE, DEPTH, FONT, actorDepth } from '../config';
 import { applySetBonus, RELIC_BY_ID, type RelicSchool } from '../data/relics';
 import type { PlayerStats, WeaponState } from '../types';
+import { WalkGait } from '../systems/WalkGait';
 
 /**
  * 枪将普攻节奏（260ms）：蓄力 31ms → 刺出 36ms → 刺到底 109ms → 收枪 84ms。
@@ -85,6 +86,12 @@ export class Player {
   private forcedDir: 'down' | 'up' | 'left' | 'right' | null = null;
   private forcedUntil = 0;
   private walkPhase = 0;
+  /** 画面朝向（选行走帧用）：斜向移动优先侧面帧；direction 仍按主轴，供武器 / 坐骑等玩法逻辑使用。 */
+  private facing: 'down' | 'up' | 'left' | 'right' = 'down';
+  /** 步态（步频随移速、起伏、前倾、阴影、扬尘，src/systems/WalkGait.ts）。 */
+  readonly gait: WalkGait;
+  private gaitHero = '';
+  private gaitLift = 0;
   private readonly targetHeight = 66;
   /** 当前帧的纵向锚点（行走帧 0.5；动作帧按脚线换算，使站姿脚底与行走时同一位置）。 */
   private baseOriginY = .5;
@@ -103,6 +110,8 @@ export class Player {
 
   constructor(scene: Phaser.Scene, x: number, y: number) {
     this.scene = scene;
+    this.gait = new WalkGait(scene);
+    scene.events.once('shutdown', () => this.gait.destroy());
     this.shadow = scene.add.image(x, y + 16, 'shadow').setDisplaySize(48, 20).setDepth(DEPTH.enemy - 1).setAlpha(0.8);
     this.sprite = scene.add.image(x, y, 'hero_zhaoyun').setDepth(actorDepth(y + 26));
     this.commandRing=scene.add.graphics().setDepth(DEPTH.enemy-.7);
@@ -147,7 +156,7 @@ export class Player {
     const now = (this.scene as Phaser.Scene & { combatNow?: number }).combatNow ?? this.scene.time.now;
     if (now < this.knockedUntil) {
       this.sprite.x += this.knockVx * dt; this.sprite.y += this.knockVy * dt;
-      this.applyWalkVisual(false); this.shadow.setPosition(this.x, this.y + 26); return;
+      this.applyWalkVisual(this.stepGait(dt, false)); this.applyGaitPose(dt); return;
     }
     const len = Math.hypot(vx, vy);
     let moving = false;
@@ -160,23 +169,50 @@ export class Player {
       // 四方向朝向：左右翻转，上下使用不同行走帧（有素材时）或占位步态
       const forced = this.forcedDir && ((this.scene as Phaser.Scene & { combatNow?: number }).combatNow ?? this.scene.time.now) < this.forcedUntil ? this.forcedDir : null;
       this.direction = forced ?? (Math.abs(nx) > Math.abs(ny) ? (nx < 0 ? 'left' : 'right') : ny < 0 ? 'up' : 'down');
-      this.faceLeft = this.direction === 'left';
-      this.walkPhase += dt * 9;
+      // 骑马时马匹按 direction 出帧，骑者保持一致
+      this.facing = forced ?? (this.riseY > 0 ? this.direction : this.sideFacing(nx, ny));
+      this.faceLeft = this.facing === 'left';
       this.passive.onMove(now); // 孙尚香：移动积疾步
     }
     // 行走表本身已经分方向，不能再翻转，否则向左会变成向右
     const directional = this.scene.textures.exists('hero_walk_sheet') || this.scene.textures.exists(`hero_walk_${this.direction}_0`);
     this.sprite.setFlipX(directional ? false : this.faceLeft);
-    this.applyWalkVisual(moving);
-    this.sprite.setRotation(0);
-    this.shadow.setPosition(this.sprite.x, this.sprite.y + 26);
+    this.applyWalkVisual(this.stepGait(dt, moving));
+    this.applyGaitPose(dt);
+  }
+
+  /** 斜向优先用侧面帧（侧面帧腿部动作最明显）；带回滞，摇杆在 45° 附近不来回跳行。 */
+  private sideFacing(nx: number, ny: number): 'down' | 'up' | 'left' | 'right' {
+    const side = this.facing === 'left' || this.facing === 'right';
+    return Math.abs(nx) >= Math.abs(ny) * (side ? .45 : .65) ? (nx < 0 ? 'left' : 'right') : ny < 0 ? 'up' : 'down';
+  }
+
+  /** 推进步态：步频按当前实际移速换算；返回本帧是否仍在行走。 */
+  private stepGait(dt: number, moving: boolean): boolean {
+    const hero = this.growth.character;
+    if (hero !== this.gaitHero) { this.gaitHero = hero; this.gait.setHero(hero); }
+    const steps = this.gait.steps;
+    this.gait.advance(dt, moving ? this.speed : 0);
+    this.walkPhase = this.gait.phase;
+    // 落脚扬尘（骑马时由马蹄负责，不出）
+    if (moving && this.gait.steps > steps && this.riseY <= 0) this.gait.puff(this.x, this.y + 25, this.facing === 'left' ? -1 : this.facing === 'right' ? 1 : 0);
+    return moving;
+  }
+
+  /** 把步态叠到当前帧（行走帧或攻击等动作帧）上：缩放、前倾、起伏（在 update 里并入锚点）、阴影。 */
+  private applyGaitPose(dt: number): void {
+    const pose = this.gait.pose(this.facing, this.riseY > 0);
+    this.gaitLift = pose.lift;
+    this.sprite.setScale(this.sprite.scaleX * pose.scaleX, this.sprite.scaleY * pose.scaleY).setRotation(pose.rotation);
+    this.shadow.setPosition(this.sprite.x, this.sprite.y + 26).setDisplaySize(pose.shadowW, pose.shadowH).setAlpha(pose.shadowAlpha);
+    this.gait.updateDust(dt);
   }
 
   /** 攻击时短暂面向目标方向，结束后恢复移动面向。 */
   faceDirection(dir: 'down' | 'up' | 'left' | 'right', ms = 130): void {
     this.forcedDir = dir;
     this.forcedUntil = ((this.scene as Phaser.Scene & { combatNow?: number }).combatNow ?? this.scene.time.now) + ms;
-    this.direction = dir;
+    this.direction = dir; this.facing = dir;
     this.faceLeft = dir === 'left';
     if (this.playAction('attack', dir)) return;
     if (this.scene.textures.exists(this.walkSheet) && this.scene.textures.get(this.walkSheet).has(`${dir}_0`)) {
@@ -225,9 +261,9 @@ export class Player {
       if (a) {
         // 动作结束：站着不动时行走层不会换帧，须主动切回当前朝向的站立帧
         this.action = null;
-        if (this.scene.textures.exists(this.walkSheet)) { this.sprite.setTexture(visualTextureKey(this.scene, this.walkSheet), `${this.direction}_0`).setFlipX(false); this.applyTextureScale(moving); }
+        if (this.scene.textures.exists(this.walkSheet)) { this.sprite.setTexture(visualTextureKey(this.scene, this.walkSheet), `${this.facing}_0`).setFlipX(false); this.applyTextureScale(moving); }
       }
-      if (moving || !set.idle?.length || this.direction !== 'down') return false;
+      if (moving || !set.idle?.length || this.facing !== 'down') return false;
       frame = set.idle[Math.floor(now / IDLE_FRAME_MS) % set.idle.length];
     }
     const key = visualTextureKey(this.scene, set.texture);
@@ -284,17 +320,21 @@ export class Player {
   private applyWalkVisual(moving: boolean): void {
     if (this.renderAction(moving)) return;
     const sheet = this.scene.textures.exists(this.walkSheet);
-    const dirKey = `hero_walk_${this.direction}`;
+    const dirKey = `hero_walk_${this.facing}`;
     const hasFrames = this.scene.textures.exists(`${dirKey}_0`) || sheet;
     if (hasFrames && moving) {
       const frame = Math.floor(this.walkPhase) % 4;
       if (sheet) {
-        const name = `${this.direction}_${frame}`;
-        if (this.sprite.frame.name !== name) this.sprite.setTexture(visualTextureKey(this.scene,this.walkSheet), name);
+        const name = `${this.facing}_${frame}`;
+        if (this.sprite.frame.name !== name || this.sprite.texture.key !== visualTextureKey(this.scene, this.walkSheet)) this.sprite.setTexture(visualTextureKey(this.scene,this.walkSheet), name);
       } else {
         const key = `${dirKey}_${frame}`;
         if (this.sprite.texture.key !== key) this.sprite.setTexture(visualTextureKey(this.scene,key));
       }
+    } else if (sheet) {
+      // 停下：四个方向都回到站立帧（以前左 / 右 / 上会停在跨步帧上）
+      const key = visualTextureKey(this.scene, this.walkSheet), name = `${this.facing}_0`;
+      if (this.sprite.texture.key !== key || this.sprite.frame.name !== name) this.sprite.setTexture(key, name);
     } else if (!hasFrames && this.sprite.texture.key !== this.charTexture) {
       this.sprite.setTexture(this.charTexture);
     }
@@ -307,7 +347,7 @@ export class Player {
     const source = this.sprite.texture.getSourceImage() as { height?: number };
     const texH = frameH || (source && source.height ? source.height : 128);
     const base = this.targetHeight / texH;
-    const bob = moving && !this.scene.textures.exists(this.walkSheet) && !this.scene.textures.exists(`hero_walk_${this.direction}_0`)
+    const bob = moving && !this.scene.textures.exists(this.walkSheet) && !this.scene.textures.exists(`hero_walk_${this.facing}_0`)
       ? 1 + Math.sin(this.walkPhase * 2) * 0.02
       : 1;
     this.sprite.setScale(base, base * bob);
@@ -384,10 +424,12 @@ export class Player {
     this.drawCommandRing(now);
     this.marker.setPosition(this.x,this.y-38-this.riseY).setVisible(this.alive);
     this.markerLabel.setPosition(this.x,this.y-45-this.riseY).setVisible(this.alive);
+    // 胜利 / 倒地在结算后播放，move 已不再调用：清掉残留的步伐起伏与前倾
+    if (this.action?.hold && (this.gaitLift || this.sprite.rotation)) { this.gaitLift = 0; this.sprite.setRotation(0); }
     const t = now < this.knockedUntil ? (now - this.knockedAt) / (this.knockedUntil - this.knockedAt) : 1;
     const lift = t < 1 ? Math.sin(Math.PI * Math.max(0, t)) * 42 : 0;
     // 被挑飞时的抬升按当前帧的实际显示高度换算（动作帧 128 格与行走帧 96 格不同）
-    this.sprite.setOrigin(.5, this.baseOriginY + (lift + this.riseY) / Math.max(1, this.sprite.displayHeight));
+    this.sprite.setOrigin(.5, this.baseOriginY + (lift + this.riseY + this.gaitLift) / Math.max(1, this.sprite.displayHeight));
     const regen = this.stats.regen + this.growth.gear.regen;
     if (regen > 0) this.heal(regen * dt);
     this.growth.lowHp = this.hp < this.maxHp * .35;

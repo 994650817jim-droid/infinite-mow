@@ -72,3 +72,6 @@ assets/raw/*
 !/tools/rest-flow-smoke.mjs
 !/tools/prepare-troop-portraits.mjs
 !/tools/test-weapons-batch2.mjs
+# 主将步态（walk-anim）
+!/tools/test-walk-anim.mjs
+!/tools/walk-anim-record.mjs

@@ -37,5 +37,14 @@ fx_c 四行依次为：
 ## 仍是过渡方案
 
 - **普通攻击**：孙尚香普攻沿用连弩弩箭。貂蝉普攻的花瓣爆发是程序化的，满层倾城用 fx_c 序列帧。
-- **主页大幅立绘（epic-home）与水墨立轴（ink-scroll）**：孙尚香、貂蝉暂未生成，选将卡用立绘墨化显示。
+- 主页大幅立绘与水墨立轴：2026-11-15 已补齐，见下节。
+
+## 孙尚香 / 貂蝉主页立绘与水墨立轴（第三批）
+
+| 内容 | 运行时文件 | 原图 |
+| --- | --- | --- |
+| 主页立绘（写实厚涂，洋红底抠图） | `public/assets/epic-home/<id>.png` + `.webp`（600×900） | `originals/<id>_epic.png` |
+| 水墨立轴（白底水墨淡彩） | `public/assets/ink-scroll/<id>.webp`（600×900） | `originals/<id>_ink.png` |
+
+处理：`node tools/prepare-heroine-home-art.mjs sunshangxiang diaochan`。两人已加入 `HOME_ART_HEROES`。
 - **魏延「谁敢杀我」的六道裂缝**：仍是程序化地裂纹，叠在怒吼冲击波序列帧下面。改成程序化，是为了避免 6 张叠加混合的裂波把画面冲成白色。

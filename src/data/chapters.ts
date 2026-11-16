@@ -124,11 +124,11 @@ function rawBattleChapter(id?:string, stage:YellowStage=1,westStage:YellowStage=
  const info=YELLOW_STAGES[stage-1]??YELLOW_STAGES[0];stage=info.stage;
  if(stage===3)return {...base,stage,name:'1-3 广宗决战',waves:['黄巾先锋','黄巾大军','张角决战'].map((name,i)=>({name,start:i*45})),recruitWaves:[1,2],ground:'yellow_ground_3',victoryTitle:'黄巾平定',victoryText:'雷云消散 · 讨伐董卓已解锁'};
  const boss=stage===1?'zhangliang':'zhangbao';
- const names=stage===1?['外围哨兵','长枪阻路','张梁迎战']:['营寨前锋','焚毁祭坛','张宝祭阵'];
+ const names=stage===1?['外围哨兵','长枪阻路','张梁迎战']:['营寨前锋','弓盾合击','张宝祭阵'];
  return {...base,stage,name:`1-${stage} ${info.name}`,ground:`yellow_ground_${stage}`,bossName:info.boss,bossStyle:boss,
  waves:names.map((name,i)=>({name,start:i*45})),recruitWaves:[1,2],
- // 关卡目标：1-1 歼敌 80 → 张梁；1-2 焚毁祭坛 3 座 → 张宝
- objective:stage===1?{kind:'kills',count:80,label:'歼灭黄巾 80 人',limit:200}:{kind:'destroy',count:3,target:'黄巾祭坛',label:'焚毁黄巾祭坛 3 座',limit:220},
+ // 关卡目标：1-1 歼敌 80 → 张梁；1-2 按用户反馈改回普通推波（打完 3 波张宝登场）。摧毁目标的代码保留在 StageObjectives，供以后别的关复用
+ objective:stage===1?{kind:'kills',count:80,label:'歼灭黄巾 80 人',limit:200}:undefined,
  enemies:{...ENEMY_DEFS,boss:{...ENEMY_DEFS.boss,texture:`yellow_${boss}_walk`,walkVisual:{texture:`yellow_${boss}_walk`,scale:1.35,groundY:91/96},attackVisual:`yellow_${boss}_${stage===1?'attack':'cast'}`,hp:stage===1?1100:1700,speed:stage===1?54:35,damage:stage===1?12:14}},
  hpScale:t=>1+t/600,spawnInterval:t=>t<60?.8:.6,spawnBurst:t=>t<60?1:2,
  pickEnemy:t=>{

@@ -388,11 +388,12 @@ export class Enemy {
       this.applyFrame(visualTextureKey(this.scene,this.walkSheet), key);
       this.appliedFrame = key;
     }
-    // 行走帧本身腿部变化很小（尤其正对/背对镜头）：叠加每步约 2.5px 的上下起伏、伸缩与左右摆动，
-    // 缩到 50px 左右也能一眼看出在走。
-    const step = this.walking ? Math.sin(Math.PI * this.stepPhase) : 0;
+    // 步伐感：4 帧一个循环 = 两步，每步一次轻微的身体伸缩与左右重心摆动（左脚 / 右脚方向相反）。
+    // 以前按“每帧一次”起伏（一循环跳 4 下）、整个人抬离地面 2.5px、摆 0.06 弧度，看起来一跳一跳（v1 / v2 都一样）。
+    // 现在锚点在脚底不动（脚踏实地），只让上身随步伐伸缩约 2.5%（头顶约 1.2px）、摆约 0.015 弧度。
+    const step = this.walking ? Math.sin(Math.PI * this.stepPhase / 2) : 0;
     this.stepStretch = Math.abs(step);
-    this.sprite.setRotation(step * (this.direction === 'left' || this.direction === 'right' ? .06 : .05));
+    this.sprite.setRotation(step * .015);
     this.applyScale();
   }
 
@@ -415,9 +416,9 @@ export class Enemy {
   private applyScale(): void {
     if (!this.walkSheet) return;
     const k = this.baseScaleY * this.frameScale;
-    this.sprite.setScale(k * (1 - .025 * this.stepStretch), k * (1 + .05 * this.stepStretch));
-    // 起伏：抬高原点即整体上移（脚底阴影不动），每步最高约 2.5 像素。
-    this.sprite.setOrigin(this.sprite.originX, this.baseOriginY + 2.5 * this.stepStretch / Math.max(1, this.sprite.frame.height * k));
+    this.sprite.setScale(k * (1 - .012 * this.stepStretch), k * (1 + .026 * this.stepStretch));
+    // 不再抬高原点：脚底始终贴着阴影（以前每步整体上移 2.5px，像在跳）。
+    this.sprite.setOrigin(this.sprite.originX, this.baseOriginY);
   }
 
   flash(now: number): void {

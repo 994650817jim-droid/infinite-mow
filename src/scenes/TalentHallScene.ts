@@ -54,7 +54,7 @@ export class TalentHallScene extends Phaser.Scene {
     const tabY = D ? 112 : 124;
     this.small(D ? 90 : 90, tabY, 140, `人才（${s.offers.length + s.captives.length}）`, () => { this.tab = 'offers'; this.page = 0; this.render(); }, 'talent-tab-offers', true, this.tab === 'offers');
     this.small(D ? 240 : 240, tabY, 140, `麾下（${s.owned.length}）`, () => { this.tab = 'roster'; this.page = 0; this.render(); }, 'talent-tab-roster', true, this.tab === 'roster');
-    if (!hallInTown() && s.hall < 3) { const c = RECRUIT.hallUpgrade[s.hall - 1]; this.small(W - (D ? 130 : 110), tabY, D ? 220 : 180, `升级招贤馆（${c.provisions} 军粮）`, () => { this.message = upgradeHall().message; this.render(); }, 'talent-hall-up'); }
+    if (hall < 3) { const c = RECRUIT.hallUpgrade[Math.max(1, hall) - 1]; this.small(W - (D ? 130 : 110), tabY, D ? 220 : 180, `升级招贤馆（${c.provisions} 军粮）`, () => { this.message = upgradeHall().message; this.render(); }, 'talent-hall-up'); }
     const top = tabY + (D ? 26 : 34), bottom = H - (D ? 64 : 104) - 30, rowH = D ? 74 : this.tab === 'roster' ? 118 : 104;
     const per = Math.max(1, Math.floor((bottom - top) / rowH));
     const rows: Array<() => void> = [];

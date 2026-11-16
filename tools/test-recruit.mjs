@@ -88,18 +88,16 @@ const R = (p, fn, arg) => p.evaluate(async ([src, a]) => { const r = await impor
   ck('招来的武将能穿兵装，存档只认可玩武将与 r_ 编号', g.equip && g.worn.join() === 'armor' && g.kept === r.zhId && !g.keys.includes('hacker') && !g.keys.includes('r_x'), g);
   ck('招来的武将不能骑马；行囊武将列表 = 麾下（含招来的人）', g.horse === false && g.owners.includes(r.zhId) && g.owners.includes('zhaoyun') && g.owners.length < 12 && g.name === '张郃', g);
   ck('遣散时兵装卸回行囊', g.dismiss.ok && g.after === null && g.inBag, g);
-  // 招贤馆做成营寨建筑后（建筑表里有 talent）：等级读营寨；0 级不能招募 / 刷新；升级改在营寨
+  // 招贤馆是营寨建筑时（主城会话 e960199 起）：等级与 WorldStore.talentLevel() 一致，升级转调营寨 townUpgrade('talent')，只有一套等级
   const h = await p.evaluate(async () => {
-    const T = await import('/src/town/TownData.ts'), R = await import('/src/systems/RosterStore.ts'), o = {};
-    const setLv = n => { const raw = JSON.parse(localStorage.getItem('im_world_v1')); raw.town.levels = { ...(raw.town.levels ?? {}), talent: n }; localStorage.setItem('im_world_v1', JSON.stringify(raw)); };
-    o.before = R.hallInTown(); const had = 'talent' in T.TOWN_BUILDINGS; if (!had) T.TOWN_BUILDINGS.talent = { name: '招贤馆' };
-    setLv(0); o.lv0 = R.hallLevel(); o.rec0 = R.recruit(0).message; o.ref0 = R.manualRefresh().message;
-    o.legacy = R.legacyHallLevel(); o.cap0 = R.followerCap(); o.up = R.upgradeHall().message;
-    // 注：营寨读档只认模块加载时建筑表里的建筑，运行时临时加的 talent 等级读回来总是 0；1–3 级要等营寨正式加入招贤馆后再测
-    if (!had) delete T.TOWN_BUILDINGS.talent; o.after = R.hallInTown();
-    return o;
+    const T = await import('/src/town/TownData.ts'), R = await import('/src/systems/RosterStore.ts'), W = await import('/src/world/WorldStore.ts'), o = {};
+    o.inTown = 'talent' in T.TOWN_BUILDINGS; if (!o.inTown) return o;
+    o.lv = R.hallLevel(); o.tl = W.talentLevel(); const p0 = W.loadWorld().provisions;
+    o.up = R.upgradeHall(); o.cost = p0 - W.loadWorld().provisions; o.lv2 = R.hallLevel(); o.tl2 = W.talentLevel(); o.cap = R.followerCap(); o.rank = R.rankCap();
+    o.max = R.upgradeHall(); return o;
   });
-  ck('招贤馆进营寨后：等级改读营寨（旧存档 2 级不再生效），0 级不能招募 / 刷新，随行仍可带 1 人，升级改在营寨', h.lv0 === 0 && h.legacy === 2 && /营寨建造/.test(h.rec0) && /营寨建造/.test(h.ref0) && h.cap0 === 1 && /营寨/.test(h.up) && !h.before && !h.after, h);
+  if (h.inTown) ck('招贤馆是营寨建筑：等级与营寨一致，升 3 级扣 1800 军粮，随行 3 人，满级不能再升', h.lv === 2 && h.tl === 2 && h.up.ok && h.cost === 1800 && h.lv2 === 3 && h.tl2 === 3 && h.cap === 3 && h.rank === 10 && !h.max.ok, h);
+  else ck('招贤馆尚未进营寨：沿用招募存档里的等级', !h.inTown, h);
   ck('将阶：兵器线 +6% 伤害；主公不能遣散', r.rank.ok && Math.abs(r.bonus.damage - .06) < 1e-9 && !r.lordDismiss.ok, r);
   await p.close();
 }

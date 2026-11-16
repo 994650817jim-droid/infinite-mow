@@ -3,7 +3,7 @@ import { QUALITY_ORDER, type ItemQuality } from '../data/items';
 import { FOLLOW, HERO_TEMPLATE, RANK, RECRUIT, TEMPLATE_ORDER, commonName, type FollowerTemplate, type RecruitKind } from '../data/recruits';
 import { BOUNTY_GENERALS, seasonIndex } from '../world/WorldIntel';
 import { MAJOR_FACTIONS, type FactionId } from '../world/WorldCities';
-import { loadWorld, spendWorld, worldUnlocked } from '../world/WorldStore';
+import { loadWorld, spendWorld, townUpgrade, worldUnlocked } from '../world/WorldStore';
 import { TOWN_BUILDINGS, levelOf, type TownBuildingId } from '../town/TownData';
 import { loadItems, loadout, resetItemCache, unequipSlot, type GearOwner } from './ItemStore';
 import { isChapterTestRun } from './ChapterProgress';
@@ -145,7 +145,8 @@ function townHall(): number | null {
   try { if (!('talent' in TOWN_BUILDINGS)) return null; return levelOf(loadWorld().town, 'talent' as string as TownBuildingId); } catch { return null; }
 }
 export function hallInTown(): boolean { return townHall() !== null; }
-export function hallLevel(s: RosterSave = loadRoster()): number { const t = townHall(); return t === null ? s.hall : Math.max(0, Math.min(RECRUIT.seats.length, t)); }
+/** 营寨有招贤馆时与 WorldStore.talentLevel() 一致：限制在 1–3（营寨起就有、Lv1 免费，老存档由营寨读档时从 im_roster_v1.hall 读入一次）。 */
+export function hallLevel(s: RosterSave = loadRoster()): number { const t = townHall(); return t === null ? s.hall : Math.max(1, Math.min(RECRUIT.seats.length, t)); }
 /** 各表的下标（0 级按 1 级算，用于随行上限等不该归零的项）。 */
 const hallIdx = (s: RosterSave): number => Math.max(1, hallLevel(s)) - 1;
 /** 旧存档里在招贤馆界面升过的等级（给营寨迁移用：talent 设为 max(1, 它)）。 */
@@ -258,7 +259,8 @@ export function followersFor(lead: CharacterId): Recruit[] {
 // ———— 招贤馆升级与将阶 ————
 
 export function upgradeHall(): RosterResult {
-  if (hallInTown()) return { ok: false, message: '招贤馆在营寨建造面板里升级' };
+  // 营寨建筑：转调营寨升级（扣军粮，价目即 RECRUIT.hallUpgrade），只有一套等级
+  if (hallInTown()) { if (hallLevel() >= 3) return { ok: false, message: '招贤馆已满级' }; return townUpgrade('talent' as string as TownBuildingId); }
   const s = loadRoster(); if (s.hall >= 3) return { ok: false, message: '招贤馆已满级' };
   const c = RECRUIT.hallUpgrade[s.hall - 1];
   if (!spendWorld({ provisions: c.provisions })) return { ok: false, message: `军粮不足：升级需要 ${c.provisions}` };

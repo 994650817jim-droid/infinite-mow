@@ -27,8 +27,8 @@ export class ItemDrops {
 
   onKill(enemy: KilledEnemy): void {
     if (enemy.kind === 'boss') {
-      const n = this.finalBoss() ? 2 : 1;
-      for (let i = 0; i < n; i++) this.collect(rollItem(rollQuality('boss', this.tier, this.rng), this.rng));
+      const final = this.finalBoss(), n = final ? 2 : 1;
+      for (let i = 0; i < n; i++) this.collect(rollItem(rollQuality(final ? 'bossFinal' : 'boss', this.tier, this.rng), this.rng));
       return;
     }
     const elite = enemy.kind === 'elite';

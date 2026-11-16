@@ -154,25 +154,30 @@ export function itemName(item: ItemInstance): string { return itemDef(item.base)
 
 // —— 掉落 ——
 /** 掉落来源。tier = 章节进度档（0 黄巾 / 1 讨董 / 2 群雄·攻守城 / 3 官渡·赤壁），越高品质整体上浮。 */
-export type DropSource = 'normal' | 'elite' | 'boss' | 'chest' | 'merchant';
+export type DropSource = 'normal' | 'elite' | 'boss' | 'bossFinal' | 'chest' | 'merchant';
 export const DROP_CHANCE: Record<'normal' | 'elite', number> = { normal: .004, elite: .06 };
 /** 品质权重（%）：白 绿 蓝 紫 橙。 */
-const WEIGHTS: Record<DropSource, readonly number[]> = {
-  normal: [62, 27, 9, 1.8, .2],
-  elite: [0, 70, 24, 5, 1],
-  chest: [0, 62, 30, 7, 1],
-  boss: [0, 0, 70, 25, 5],
-  merchant: [0, 65, 35, 0, 0],
+/**
+ * 品级权重（白 / 绿 / 蓝 / 紫 / 橙），按掉落档位 0–4 分表（2026-11-16 平衡，用户批准；取代原来「每档把白绿各 6% 挪走」的算法）。
+ * 档位：第一章 0、第二章 1、第三章与攻城 2、第四章 3、第五章 4（GameScene.itemTier）。
+ * 按每关件数（首领 1 / 章末 2、宝箱 2、小兵与精锐 1–3）估算，一遍通关约 85 件：白约 4、绿约 17、蓝约 29、紫约 27、橙约 8；
+ * 第一、二章以白绿蓝为主，第四、五章以紫为主；第一件橙通常在第三章。
+ * 第一章首领必蓝以上；第二章章末首领必紫以上（bossFinal）。保底（15 件出紫、40 件出橙）等道具改版的新存档再加。
+ */
+const WEIGHTS: Record<Exclude<DropSource, 'merchant'>, readonly (readonly number[])[]> = {
+  normal: [[55, 35, 9, 1, 0], [25, 45, 25, 4.5, .5], [8, 32, 42, 15, 3], [0, 18, 45, 30, 7], [0, 8, 40, 40, 12]],
+  elite: [[0, 70, 25, 4.5, .5], [0, 45, 40, 13, 2], [0, 20, 48, 25, 7], [0, 5, 40, 42, 13], [0, 0, 30, 50, 20]],
+  chest: [[0, 70, 25, 4.5, .5], [0, 45, 40, 13, 2], [0, 20, 48, 25, 7], [0, 5, 40, 42, 13], [0, 0, 30, 50, 20]],
+  boss: [[0, 0, 85, 14, 1], [0, 0, 45, 50, 5], [0, 0, 25, 60, 15], [0, 0, 10, 65, 25], [0, 0, 0, 70, 30]],
+  bossFinal: [[0, 0, 85, 14, 1], [0, 0, 0, 90, 10], [0, 0, 25, 60, 15], [0, 0, 10, 65, 25], [0, 0, 0, 70, 30]],
 };
-export const CHESTS_PER_STAGE: readonly number[] = [45, 110]; // 每关开打后第 45 / 110 秒各刷一个宝箱
+const MERCHANT_WEIGHTS: readonly number[] = [0, 65, 35, 0, 0];
+export const MAX_ITEM_TIER = 4;
+// 2026-11-16 每关缩短（stageTuning）：宝箱 45 / 110 秒 → 30 / 70 秒
+export const CHESTS_PER_STAGE: readonly number[] = [30, 70]; // 每关开打后第 30 / 70 秒各刷一个宝箱
 
 export function rollQuality(source: DropSource, tier: number, rng: () => number = Math.random): ItemQuality {
-  const w = [...WEIGHTS[source]];
-  // 每高一档：把白 / 绿各 6% 的权重挪到蓝 / 紫 / 橙（商人不变）
-  if (source !== 'merchant') for (let t = 0; t < Math.max(0, Math.min(3, tier)); t++) {
-    const take = Math.min(w[0], 6) + Math.min(w[1], 6); w[0] = Math.max(0, w[0] - 6); w[1] = Math.max(0, w[1] - 6);
-    w[2] += take * .6; w[3] += take * .3; w[4] += take * .1;
-  }
+  const w = source === 'merchant' ? MERCHANT_WEIGHTS : WEIGHTS[source][Math.max(0, Math.min(MAX_ITEM_TIER, Math.floor(tier)))];
   const total = w.reduce((a, b) => a + b, 0); let r = rng() * total;
   for (let i = 0; i < w.length; i++) { r -= w[i]; if (r < 0) return QUALITY_ORDER[i]; }
   return QUALITY_ORDER[w.length - 1];

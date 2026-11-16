@@ -31,18 +31,19 @@ try {
     const tint = await page.evaluate(() => { const s = window.__game.scene.getScene('GameScene'); s.setMode('pause'); const e = s.spawnEnemy('infantry', 100, 0, 1); const start = e.sprite.tintTopLeft; e.flash(s.combatNow); e.updateVisual(s.combatNow + 100); return { start, after: e.sprite.tintTopLeft, ground: s.ground.displayTexture.key, texture: e.sprite.texture.key }; });
     check('chapter_faction_and_ground', tint.start === tint.after && tint.start === 0xffffff && tint.texture === 'xiliang_infantry_walk' && tint.ground.includes('hulao'), tint);
   });
-  await scenario('eight_wave_flow', async page => {
+  // 2026-11-16 平衡（用户批准，stageTuning）：2-3 虎牢关 8 波 × 45 秒 → 5 波 × 35 秒、招兵 4 次、吕布生命 ×0.5
+  await scenario('five_wave_flow', async page => {
     await page.evaluate(() => window.__IM.god()); const seen = []; let recruitCount = 0, bossBeforeFinal;
-    for (let i = 1; i < 8; i++) {
-      await page.evaluate(i => window.__IM.setTime(i * 45 + .1), i);
+    for (let i = 1; i < 5; i++) {
+      await page.evaluate(i => window.__IM.setTime(i * 35 + .1), i);
       await page.waitForFunction(i => window.__IM.waveInfo().index === i, i);
       const state = await page.evaluate(() => ({ mode: window.__IM.mode, boss: window.__IM.bossActive }));
       seen.push({ i, ...state });
-      if (state.mode === 'recruit') { recruitCount++; if (i === 7) bossBeforeFinal = state.boss; await page.evaluate(() => window.__IM.chooseRecruit(0)); }
+      if (state.mode === 'recruit') { recruitCount++; if (i === 4) bossBeforeFinal = state.boss; await page.evaluate(() => window.__IM.chooseRecruit(0)); }
     }
     await page.waitForFunction(() => window.__IM.bossActive);
     const final = await page.evaluate(() => { const s = window.__game.scene.getScene('GameScene'); return { info: window.__IM.bossInfo(), tex: s.boss.sprite.texture.key, allies: s.allies.length, wave: window.__IM.waveInfo() }; });
-    check('chapter2_five_recruits_before_lubu', recruitCount === 5 && bossBeforeFinal === false && final.allies === 5 && final.info.maxHp === 3200 && final.tex === 'boss_lubu' && final.wave.count === 8, { seen, recruitCount, final });
+    check('chapter2_four_recruits_before_lubu', recruitCount === 4 && bossBeforeFinal === false && final.allies === 4 && final.info.maxHp === 1600 && final.tex === 'boss_lubu' && final.wave.count === 5, { seen, recruitCount, final });
     const cap = await page.evaluate(() => {
       const s = window.__game.scene.getScene('GameScene');
       for (let i = 0; i < 220; i++) s.spawnEnemy('elite', 1000, 1000, 1, true);
@@ -102,7 +103,7 @@ try {
     const r = await page.evaluate(() => {
       const s = window.__game.scene.getScene('GameScene'); s.spawnBoss(); s.setMode('pause'); const l = s.lubu;
       let count = 0; const phase = l.host.onPhase2; l.host.onPhase2 = () => { count++; phase(); };
-      s.boss.hp = 1599; l.update(0, s.combatNow); l.update(0, s.combatNow + 1);
+      s.boss.hp = Math.floor(s.boss.maxHp / 2) - 1; l.update(0, s.combatNow); l.update(0, s.combatNow + 1);
       return { count, phase2: s.bossPhase2, shield: s.bossShield, bullets: s.bullets.length, ult: s.bossUltPhase };
     });
     check('lubu_enrage_once_without_zhangjiao_spells', r.count === 1 && r.phase2 && !r.shield && !r.bullets && r.ult === 'none', r);
@@ -193,7 +194,7 @@ try {
       await page.evaluate(()=>{const s=window.__game.scene.getScene('MenuScene');s.chapterButtons.find(x=>x.id==='huangjin').bg.emit('pointerdown');s.startButton.emit('pointerdown');});
       await page.waitForFunction(() => window.__IM?.chapterInfo().id === 'huangjin');
       const first = await page.evaluate(() => { const s = window.__game.scene.getScene('GameScene'); s.spawnBoss(); return { tex: s.boss.sprite.texture.key, hp: s.boss.maxHp, lubu: window.__IM.lubuInfo() }; });
-      check(`chapter_switch_back_isolates_state_${width}`, first.hp === 2400 && first.tex === 'boss_zhangjiao' && first.lubu === null && !errors.length, { first, errors });
+      check(`chapter_switch_back_isolates_state_${width}`, first.hp === 1200 && first.tex === 'boss_zhangjiao' && first.lubu === null && !errors.length, { first, errors });
     } catch (error) { check(`chapter_ui_${width}`, false, String(error)); }
     finally { await context.close(); }
   }

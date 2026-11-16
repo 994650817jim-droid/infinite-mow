@@ -31,20 +31,25 @@ for (const [layout, viewport] of Object.entries(LAYOUTS)) for (const [hero, h] o
   ck(`${tag}：本命武器 ${h.weapon}、专属被动、动作图`, st.weapon === h.weapon && st.passive === hero && st.actions, st);
 
   if (hero === 'weiyan') {
-    // 1) 劈地裂波：正前方一列敌人（超出关刀扇形宽度的直线远端也要命中）
+    // 1) 劈地裂波：正前方一列敌人（超出关刀扇形宽度的直线远端也要命中）。
+    //    比较贴身 / 远端伤害时关掉暴击（基础 5%）：远端那一刀暴击会到 ×1.8，曾让断言随机失败（41 vs 57）。
     const crack = await p.evaluate(async G0 => {
-      const s = eval(G0), pl = s.player, foes = [];
+      const s = eval(G0), pl = s.player, foes = [], crit0 = pl.stats.critChance; pl.stats.critChance = -1;
       for (let i = 0; i < 5; i++) { const e = s.spawnEnemy('infantry', pl.x + 40 + i * 38, pl.y, 1); if (e) { e.hp = e.maxHp = 99999; e.stunUntil = 1e12; foes.push(e); } }
       const t0 = performance.now(); while (performance.now() - t0 < 5000 && !foes.every(e => e.hp < e.maxHp)) await new Promise(r => setTimeout(r, 40));
+      pl.stats.critChance = crit0;
       const far = foes[foes.length - 1]; return { hit: foes.filter(e => e.hp < e.maxHp).length, farDist: Math.round(far.x - pl.x), nearLoss: foes[0].maxHp - foes[0].hp, farLoss: far.maxHp - far.hp };
     }, G);
     ck(`${tag}：裂波直线穿透一列 5 敌（最远 ${crack.farDist}px），贴身伤害更高`, crack.hit === 5 && crack.nearLoss > crack.farLoss, crack);
     // 2) 镇守汉中：受击积拒敌，满 5 层后「谁敢杀我」
     const r = await p.evaluate(async G0 => {
       const s = eval(G0), pl = s.player; pl.damageImmune = false; const got = [];
-      for (let i = 0; i < 8 && pl.passive.snapshot(s.combatNow).stacks < 5; i++) { pl.invulnUntil = 0; pl.takeDamage(1, s.combatNow); pl.hp = pl.maxHp; got.push(pl.passive.snapshot(s.combatNow).stacks); await new Promise(r => setTimeout(r, 560)); }
-      pl.damageImmune = true; const t0 = performance.now(); let shout = false, guard = 1;
-      while (performance.now() - t0 < 6000) { await new Promise(r => setTimeout(r, 30)); if (s.children.getByName('weiyan-whodares')) { shout = true; guard = pl.passive.damageTakenMultiplier(s.combatNow); break; } }
+      // 前一步的敌人还在刀下，满 5 层后随时可能在积层循环里就放出「谁敢杀我」，所以从一开始就盯飘字（飘字约 1.1 秒后消失）
+      let shout = false, guard = 1; const watch = setInterval(() => { if (!shout && s.children.getByName('weiyan-whodares')) { shout = true; guard = pl.passive.damageTakenMultiplier(s.combatNow); } }, 20);
+      for (let i = 0; i < 8 && !shout && pl.passive.snapshot(s.combatNow).stacks < 5; i++) { pl.invulnUntil = 0; pl.takeDamage(1, s.combatNow); pl.hp = pl.maxHp; got.push(pl.passive.snapshot(s.combatNow).stacks); await new Promise(r => setTimeout(r, 560)); }
+      pl.damageImmune = true; const t0 = performance.now();
+      while (!shout && performance.now() - t0 < 6000) await new Promise(r => setTimeout(r, 30));
+      clearInterval(watch);
       return { got, shout, guard, triggers: pl.passive.snapshot(s.combatNow).triggers };
     }, G);
     ck(`${tag}：受击积满 5 层拒敌 → 谁敢杀我（飘字、减伤 ×0.7）`, r.got.includes(5) && r.shout && Math.abs(r.guard - .7) < 1e-6 && r.triggers >= 1, r);

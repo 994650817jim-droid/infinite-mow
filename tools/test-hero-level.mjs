@@ -74,6 +74,9 @@ const store = await p.evaluate(async () => {
   out.fc = [hp.claimFirstClear('huangjin-1'), hp.claimFirstClear('huangjin-1'), hp.claimFirstClear('hulao-2'), hp.claimFirstClear('third-1'), hp.claimFirstClear('guandu-3'), hp.claimFirstClear('chibi-3'), hp.claimFirstClear('lubu'), hp.claimFirstClear(null)];
   hp.resetHeroCache(); out.fcKept = [hp.claimFirstClear('huangjin-1'), hp.claimFirstClear('huangjin-2')];
   const s = window.__game.scene.getScene('GameScene'); out.rate = s.heroXpRate(); out.key = s.stableRewardKey();
+  // 各章场景的首通 / 赠马关卡键：第 3–5 章由 ThirdGameScene（群雄、赤壁）与 GuanduGameScene 覆盖；攻城、军情、三英战吕布没有键（不发首通经验）
+  const sm = window.__game.scene, keyOf = n => { const sc = sm.getScene(n); if (!sc) return 'missing'; const probe = Object.assign(Object.create(sc), { runConfig: { encounter: 'qunxiong' }, chapter: { id: 'hulao', westStage: 3 } }); return [sc.stableRewardKey.call(probe), sc.heroXpRate.call(probe)]; };
+  out.keys = Object.fromEntries(['ThirdGameScene', 'GuanduGameScene', 'ChibiGameScene', 'SiegeGameScene', 'IntelGameScene', 'LubuGameScene'].map(n => [n, keyOf(n)]));
   return out;
 });
 ck('经验表与原来一致（16 / 16 / 36 / 52 / 88 / 188）', JSON.stringify(store.table) === '[16,16,36,52,88,188]' && store.slot, store);
@@ -84,6 +87,7 @@ ck('开第二章：上限 15，暂存经验补升；新武将从 Lv10（上限 �
 ck('单项属性最多 5 点', JSON.stringify(store.maxOne) === '[5,false]', store.maxOne);
 ck('老档迁移：打赢过仗的武将补到当前上限的一半（≥ 起始等级），只迁移一次', store.migr[0] === 10 && store.migr[1] === 10 && store.migr[2] === true, store.migr);
 ck('主线关按 100% 折算', store.rate === 1, store.rate);
+ck('第 3–5 章场景有首通键（third-1 / guandu-1 / chibi-1，100% 折算）；攻城、军情、三英战吕布没有键、按 50% 折算', JSON.stringify(store.keys) === JSON.stringify({ ThirdGameScene: ['third-1', 1], GuanduGameScene: ['guandu-1', 1], ChibiGameScene: ['chibi-1', 1], SiegeGameScene: [null, .5], IntelGameScene: [null, .5], LubuGameScene: [null, .5] }), store.keys);
 ck('首次通关经验：一章 120、二章 250、三章 380、四章 510、五章 640；每关只给一次，存档保留；挑战关不给', JSON.stringify(store.fc) === '[120,0,250,380,510,640,0,0]' && JSON.stringify(store.fcKept) === '[0,120]' && store.key === 'huangjin-1', { fc: store.fc, fcKept: store.fcKept, key: store.key });
 
 ck('控制台无报错', errors.length === 0, errors.slice(0, 6));

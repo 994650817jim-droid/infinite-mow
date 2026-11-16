@@ -5,6 +5,7 @@
  * 首领战（intensity=1）：太鼓改为八分音符推进、加堂鼓与琵琶轮指，每 8 小节一记锣。
  */
 import { type BossProfile, bossMotif, composeBossMelody, profileScale } from '../data/bossMusic';
+import { BATTLE_V2_BPM, EpicBgm, bgmVersion } from './EpicBgm';
 const midi = (n: number): number => 440 * Math.pow(2, (n - 69) / 12);
 /** 旋律音级：D4 F4 G4 A4 C5 D5 F5 G5 A5 */
 const SCALE = [62, 65, 67, 69, 72, 74, 77, 79, 81];
@@ -41,7 +42,10 @@ const MENU_ROOTS = [50, 50, 55, 55, 53, 57, 48, 50];
 export type MusicTheme = 'battle' | 'menu';
 
 export class Music {
-  private ctx: AudioContext | null = null;
+  private ctx: BaseAudioContext | null = null;
+  /** BGM v2（EpicBgm.ts）：仅战斗曲与首领曲；界面曲仍为原版。 */
+  readonly v2: boolean;
+  private epic: EpicBgm | null = null;
   private master: GainNode | null = null;
   private dry: GainNode | null = null;
   private wet: GainNode | null = null;
@@ -61,8 +65,9 @@ export class Music {
   /** 首领专属主题（data/bossMusic.ts）：出场锣鼓后切入，首领离场（intensity 回 0）即回到战斗曲。 */
   private boss: { p: BossProfile; scale: number[]; melody: Array<[number, number] | null>; stepDur: number; step: number; startAt: number } | null = null;
 
-  constructor(readonly theme: MusicTheme = 'battle') {
-    this.bpm = theme === 'menu' ? 72 : 92;
+  constructor(readonly theme: MusicTheme = 'battle', version = bgmVersion()) {
+    this.v2 = theme === 'battle' && version === 'v2';
+    this.bpm = theme === 'menu' ? 72 : this.v2 ? BATTLE_V2_BPM : 92;
     this.stepDur = 60 / this.bpm / 4;
     const form = theme === 'menu' ? MENU_FORM : FORM, phrases = theme === 'menu' ? MENU_PHRASES : PHRASES;
     form.forEach((name, slot) => {
@@ -94,7 +99,22 @@ export class Music {
     if (!this.ctx) {
       const Ctor = window.AudioContext || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
       if (!Ctor) return;
-      const ctx = this.ctx = new Ctor();
+      this.buildGraph(new Ctor());
+    }
+    void (this.ctx as AudioContext).resume();
+    if (this.fadeTimer !== null) { window.clearTimeout(this.fadeTimer); this.fadeTimer = null; }
+    // 界面曲淡入；战斗曲直接到位。
+    if (this.theme === 'menu') { this.applyGain(0); this.applyGain(this.level(), .9); } else this.applyGain(this.level());
+    this.playing = true;
+    this.step = 0;
+    this.nextTime = this.ctx!.currentTime + 0.12;
+    this.timer = window.setInterval(() => this.schedule(), 50);
+    this.schedule();
+  }
+
+  private buildGraph(ctx: BaseAudioContext): void {
+    {
+      this.ctx = ctx;
       this.master = ctx.createGain(); this.master.gain.value = this.level(); this.master.connect(ctx.destination);
       // 卷积混响：程序生成 2.4 秒衰减噪声脉冲，给拨弦和笛声空间感。
       const ir = ctx.createBuffer(2, Math.floor(ctx.sampleRate * 2.4), ctx.sampleRate);
@@ -104,16 +124,26 @@ export class Music {
       this.dry = ctx.createGain(); this.dry.gain.value = .85; this.dry.connect(this.master);
       this.noise = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate);
       const n = this.noise.getChannelData(0); for (let i = 0; i < n.length; i++) n[i] = Math.random() * 2 - 1;
+      if (this.v2) this.epic = new EpicBgm(ctx, this.master);
     }
-    void this.ctx.resume();
-    if (this.fadeTimer !== null) { window.clearTimeout(this.fadeTimer); this.fadeTimer = null; }
-    // 界面曲淡入；战斗曲直接到位。
-    if (this.theme === 'menu') { this.applyGain(0); this.applyGain(this.level(), .9); } else this.applyGain(this.level());
-    this.playing = true;
-    this.step = 0;
-    this.nextTime = this.ctx.currentTime + 0.12;
-    this.timer = window.setInterval(() => this.schedule(), 50);
-    this.schedule();
+  }
+
+  /**
+   * 离线渲染（试听样品 / 测试用）：在 OfflineAudioContext 上从头排好 seconds 秒，
+   * bossAt 秒时首领出场（null 不出场）。音量固定 0.4，不读静音设置。
+   */
+  async renderOffline(seconds: number, bossProfile: BossProfile | null, bossAt = 0, sampleRate = 44100): Promise<AudioBuffer> {
+    const ctx = new OfflineAudioContext(2, Math.ceil(seconds * sampleRate), sampleRate);
+    this.muted = false; this.volume = .4; this.duck = 1;
+    this.buildGraph(ctx);
+    this.playing = true; this.step = 0; this.nextTime = .05;
+    let bossSet = bossProfile === null;
+    while (this.nextTime < seconds) {
+      if (!bossSet && this.nextTime >= bossAt) { bossSet = true; this.intensity = 1; this.setBoss(bossProfile, this.nextTime); }
+      this.scheduleUntil(Math.min(seconds, this.nextTime + .5));
+    }
+    this.playing = false;
+    return ctx.startRendering();
   }
 
   stop(): void {
@@ -133,7 +163,7 @@ export class Music {
   /** 淡出途中又回到界面：取消停止并淡回原音量。 */
   cancelFade(): void { if (this.fadeTimer === null) return; window.clearTimeout(this.fadeTimer); this.fadeTimer = null; this.applyGain(this.level(), .3); }
   /** 浏览器要求用户手势后才能出声：在手势回调里调用以恢复音频。 */
-  unlock(): void { void this.ctx?.resume(); }
+  unlock(): void { if (this.ctx instanceof AudioContext) void this.ctx.resume(); }
 
   toggle(): boolean {
     this.muted = !this.muted;
@@ -160,25 +190,32 @@ export class Music {
 
   private schedule(): void {
     if (!this.ctx || !this.playing) return;
-    while (this.nextTime < this.ctx.currentTime + 0.35) {
+    this.scheduleUntil(this.ctx.currentTime + 0.35);
+  }
+
+  private scheduleUntil(horizon: number): void {
+    while (this.nextTime < horizon) {
       const b = this.intensity === 1 ? this.boss : null;
       if (b) {
-        if (this.nextTime >= b.startAt) { this.scheduleBossStep(b, b.step, this.nextTime); b.step = (b.step + 1) % 256; }
+        if (this.nextTime >= b.startAt) {
+          if (this.epic) { this.epic.bossStep(b.p, b.step, this.nextTime, b.stepDur); b.step++; }
+          else { this.scheduleBossStep(b, b.step, this.nextTime); b.step = (b.step + 1) % 256; }
+        }
         this.nextTime += b.stepDur;
         continue;
       }
-      this.scheduleStep(this.step, this.nextTime);
-      this.step = (this.step + 1) % 512;
+      if (this.epic) { this.epic.battleStep(this.step, this.nextTime, this.stepDur, this.intensity === 1); this.step++; }
+      else { this.scheduleStep(this.step, this.nextTime); this.step = (this.step + 1) % 512; }
       this.nextTime += this.stepDur;
     }
   }
 
   /** 首领出场：奏出场锣鼓（约 2.4 秒），之后切入该首领主题。传 null 清除。 */
-  setBoss(p: BossProfile | null): void {
+  setBoss(p: BossProfile | null, at?: number): void {
     if (!p) { this.boss = null; return; }
-    const stepDur = 60 / p.bpm / 4, now = this.ctx?.currentTime ?? 0;
+    const stepDur = 60 / p.bpm / 4, now = at ?? this.ctx?.currentTime ?? 0;
     this.boss = { p, scale: profileScale(p), melody: composeBossMelody(p), stepDur, step: 0, startAt: now + 2.45 };
-    if (this.ctx && this.playing) this.stinger(p, now + .05);
+    if (this.ctx && this.playing) { if (this.epic) this.epic.bossStinger(p, now + .05); else this.stinger(p, now + .05); }
   }
   get bossName(): string | null { return this.boss?.p.name ?? null; }
 
@@ -419,8 +456,8 @@ export class Music {
 
   dispose(): void {
     this.stop();
-    void this.ctx?.close();
-    this.ctx = null; this.master = null; this.dry = null; this.wet = null; this.noise = null;
+    if (this.ctx instanceof AudioContext) void this.ctx.close();
+    this.ctx = null; this.epic = null; this.master = null; this.dry = null; this.wet = null; this.noise = null;
   }
 }
 

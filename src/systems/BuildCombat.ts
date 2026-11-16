@@ -13,6 +13,10 @@ export class BuildCombat {
  private hits=0;private kills=0;private killUntil=0;private distances={windstep:0,flank:0,horse:0};private moving=false;private procAt=0;private slayerAt=0;
  constructor(private state:BuildState,private nearby:(x:number,y:number,r:number)=>Enemy[],private deal:(e:Enemy,n:number,fire:boolean)=>void,private fx:(e:Enemy,fire:boolean)=>void){}
  charged():boolean{return this.idle>=2000;}
+ /** 迂回袭蓄力（表现层 FlankFx 用，只读）：等级与进度 0–1。 */
+ flankCharge():{level:number;ratio:number}{const l=this.lv('flank');return{level:l,ratio:l?Math.min(1,this.distances.flank/[200,170,140][l-1]):0};}
+ /** 迂回袭触发时通知表现层被波及的敌人（只管画面）。 */
+ onFlank?:(targets:Enemy[])=>void;
  naturalBurn(e:Enemy,now:number):boolean{const b=this.burns.get(e.spawnId);return !!b&&b.enemy===e&&b.until>=now&&!b.spread;}
  igniteDerived(e:Enemy,damage:number,now:number):void{this.burn(e,damage,now,true);}
  private lv(id:TacticId):number{return this.state.level(id);}
@@ -47,7 +51,7 @@ export class BuildCombat {
  if(now>=this.procAt&&(pursuit||bell||flank||horse||jade)){
  this.procAt=now+400;const area=flank||horse||jade,ratio=Math.max(pursuit?[.25,.35,.45][level-1]:0,bell?.4:0,flank?[.35,.45,.55][this.lv('flank')-1]:0,horse?.25:0,jade?.35:0);
  if(flank)this.distances.flank=0;if(horse)this.distances.horse=0;
- const targets=this.targets(e,area?70:160);for(let i=0;i<Math.min(area?3:1,targets.length);i++){this.fx(targets[i],false);this.deal(targets[i],raw*ratio,false);}
+ const targets=this.targets(e,area?70:160);if(flank)this.onFlank?.(targets.slice(0,3));for(let i=0;i<Math.min(area?3:1,targets.length);i++){this.fx(targets[i],false);this.deal(targets[i],raw*ratio,false);}
  }
  if(crit&&this.has('slayer_tally')&&(e.kind==='elite'||e.kind==='boss')&&now>=this.slayerAt&&e.active){this.slayerAt=now+500;this.fx(e,false);this.deal(e,raw*.25,false);}
  }

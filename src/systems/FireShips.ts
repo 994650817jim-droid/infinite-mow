@@ -25,9 +25,12 @@ export class FireShips {
   private sparks: Phaser.GameObjects.Particles.ParticleEmitter | null = null;
   /** 统计（测试用）：已发动次数、烧到的敌军数。 */
   readonly metrics = {waves: 0, burned: 0};
-  constructor(private h: FireShipHost, now: number) {
+  /** opts：间隔与首次时间（遗珍「楼船令旗」用 12 秒间隔复用火船）。 */
+  private readonly interval: number;
+  constructor(private h: FireShipHost, now: number, opts: {interval?: number; first?: number} = {}) {
+    this.interval = opts.interval ?? FIRE_SHIP.interval;
     this.gfx = h.scene.add.graphics().setDepth(23);
-    this.next = now + FIRE_SHIP.first;
+    this.next = now + (opts.first ?? FIRE_SHIP.first);
     if (!h.scene.textures.exists('fireship_spark')) { const g = h.scene.make.graphics({x: 0, y: 0}, false); g.fillStyle(0xffd27a, 1).fillCircle(4, 4, 4); g.generateTexture('fireship_spark', 8, 8); g.destroy(); }
     this.sparks = h.scene.add.particles(0, 0, 'fireship_spark', {lifespan: 650, speedY: {min: -90, max: -30}, speedX: {min: -40, max: 40}, scale: {start: 1.1, end: 0}, alpha: {start: .95, end: 0}, tint: [0xffe08a, 0xff9a3c, 0xe04a1c], blendMode: 'ADD', emitting: false, maxAliveParticles: 90}).setDepth(24);
   }
@@ -53,7 +56,7 @@ export class FireShips {
       return;
     }
     const sweep = (age - FIRE_SHIP.warnMs) / FIRE_SHIP.sweepMs;
-    if (sweep >= 1.4) { this.lane = null; this.next = now + FIRE_SHIP.interval; return; }
+    if (sweep >= 1.4) { this.lane = null; this.next = now + this.interval; return; }
     // 火墙前沿从上风处推到下风处，身后留一段渐熄的火带
     const span = right - left, front = L.dir > 0 ? left + span * Math.min(1, sweep) : right - span * Math.min(1, sweep), tail = 260;
     const x0 = L.dir > 0 ? Math.max(left, front - tail) : front, x1 = L.dir > 0 ? front : Math.min(right, front + tail);

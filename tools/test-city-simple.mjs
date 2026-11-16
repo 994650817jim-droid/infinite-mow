@@ -77,6 +77,16 @@ const base8 = { version: 8, yellowStages: 3, dongzhuoStages: 0, warlordStages: 0
   await p.close();
 }
 
+// —— 2c. 军营练兵：价格 80+40n、上限随已开放章节、乘法叠加 ——
+{
+  const p = await page({ ...base8, provisions: 5000 });
+  const r = await store(p, (w, t) => { const o = { d0: w.drillInfo() }; const ups = []; for (let i = 0; i < 20; i++) { const x = w.trainTroops(); if (!x.ok) { o.stop = x.message; break; } ups.push(x.ok); } o.n = ups.length; o.d1 = w.drillInfo(); o.grain = w.loadWorld().provisions; o.eff = w.permanentEffects().troopDrill; o.c12 = t.drillCost(12); o.cap5 = t.drillCap(5); return o; });
+  const spent = Array.from({ length: r.n }, (_, i) => 80 + 40 * (i + 1)).reduce((a, b) => a + b, 0);
+  ck('练兵：从 0 级起，1 级 120 军粮，12 级 560，五章全开上限 12', r.d0.level === 0 && r.d0.cost === 120 && r.c12 === 560 && r.cap5 === 12, r);
+  ck('练兵：升到章节上限即停（提示开放新章节），扣费正确，倍率 1.15^n', r.n === r.d0.cap && r.n >= 2 && r.d1.level === r.n && r.stop.includes('上限') && r.grain === 5000 - spent && Math.abs(r.eff - Math.pow(1.15, r.n)) < 1e-9, { ...r, spent });
+  await p.close();
+}
+
 // —— 3. 结算只给军粮；招募折扣；道具分解折军粮 ——
 {
   const p = await page({ ...base8, provisions: 1000, cleared: { huangjin: true, hulao: true }, dongzhuoStages: 3, reserve: { swordsman: 4 } });
@@ -122,6 +132,23 @@ for (const layout of ['mobile', 'desktop']) {
   await p.close();
 }
 
+// —— 4b. 军营面板练兵（电脑布局）——
+{
+  const p = await page({ ...base8, provisions: 500 }, 'desktop');
+  await p.evaluate(() => window.__game.scene.getScenes(true).forEach(s => s.scene.start('CityScene')));
+  await p.waitForFunction(() => window.__game.scene.isActive('CityScene'), null, { timeout: 30000 }); await p.waitForTimeout(1200);
+  await p.evaluate(() => { const c = window.__game.scene.getScene('CityScene'); const h = c.hits.find(h => h.name === 'bld-barracks'); h.emit('pointerdown'); h.emit('pointerup'); });
+  await p.waitForTimeout(300);
+  const before = await p.evaluate(() => { const card = window.__game.scene.getScene('CityScene').children.getByName('town-card'); const t = card.getByName('town-card-drill'), b = card.getByName('town-drill'), up = card.getByName('town-upgrade'); return { text: t?.text, drill: b?.getBounds(), up: up?.getBounds() }; });
+  await p.screenshot({ path: `${out}/drill-card-desktop.png` });
+  await p.evaluate(() => window.__game.scene.getScene('CityScene').children.getByName('town-card').getByName('town-drill').emit('pointerdown'));
+  await p.waitForTimeout(400);
+  const after = await store(p, w => ({ lv: w.drillInfo().level, grain: w.loadWorld().provisions }));
+  const overlap = (a, c) => a && c && a.x < c.x + c.width && c.x < a.x + a.width && a.y < c.y + c.height && c.y < a.y + a.height;
+  ck('军营面板：显示练兵等级，按钮不与「升级」相叠，点一下升 1 级扣 120', before.text?.startsWith('练兵 0 /') && !overlap(before.drill, before.up) && after.lv === 1 && after.grain === 380, { before, after });
+  await p.close();
+}
+
 // —— 5. 第一章后：天下地图营寨提示，进营一次后消失 ——
 {
   const p = await page({ ...base8, provisions: 50 });
@@ -140,13 +167,14 @@ for (const layout of ['mobile', 'desktop']) {
 
 // —— 6. 战斗开局：回血药进药囊、刀盾 / 长枪开局 Lv2 ——
 {
-  const save = { ...base8, version: 9, provisions: 100, town: { year: 185, season: 1, levels: { hall: 1, barracks: 2, farm: 1, academy: 1, stable: 0, granary: 0, pavilion: 0 }, focus: {}, report: null, tech: ['potion', 'drill_melee'] } };
+  const save = { ...base8, version: 9, provisions: 100, town: { year: 185, season: 1, levels: { hall: 1, barracks: 2, farm: 1, academy: 1, stable: 0, granary: 0, pavilion: 0 }, focus: {}, report: null, tech: ['potion', 'drill_melee'], drill: 2 } };
   const p = await page(save);
   await p.evaluate(async () => { const { getCharacter } = await import('/src/data/characters.ts'); const m = window.__game.scene.getScene('MenuScene'); m.registry.set('worldCampaign', true); m.registry.remove('campaignTransfer'); m.registry.set('runConfig', { chapter: 'huangjin', stage: 1, character: 'zhaoyun', weapon: getCharacter('zhaoyun').startWeapon }); m.scene.start('GameScene'); });
   await p.waitForFunction(() => { const g = window.__game.scene.getScene('GameScene'); return window.__game.scene.isActive('GameScene') && g.player && g.legion; }, null, { timeout: 120000 }); await p.waitForTimeout(1500);
-  const r = await p.evaluate(() => { const g = window.__game.scene.getScene('GameScene'); return { pouch: g.supplies?.pouch.map(x => x.amount), maxHp: g.player.maxHp, lv: { ...g.legion.levels }, units: g.legion.units.filter(u => u.active).map(u => [u.kind, u.level]) }; });
+  const r = await p.evaluate(() => { const g = window.__game.scene.getScene('GameScene'); return { pouch: g.supplies?.pouch.map(x => x.amount), maxHp: g.player.maxHp, lv: { ...g.legion.levels }, units: g.legion.units.filter(u => u.active).map(u => [u.kind, u.level, u.maxHp]), drill: g.legion.drillMultiplier }; });
   ck('开局药囊 2 份回血药（每份 30% 生命）', r.pouch?.length === 2 && r.pouch.every(a => a === Math.round(r.maxHp * .3)), r);
   ck('刀盾 / 长枪开局 Lv2，军营增援兵按 Lv2 入列', r.lv.swordsman === 2 && r.lv.spearman === 2 && r.lv.archer === 1 && r.units.length >= 1 && r.units.every(([k, l]) => !['swordsman', 'spearman'].includes(k) || l === 2), r);
+  ck('练兵 2 级：部曲倍率 1.3225，刀盾兵生命 = 85 × 1.3（Lv2）× 1.3225', Math.abs(r.drill - 1.3225) < 1e-9 && r.units.filter(([k]) => k === 'swordsman').every(([, , hp]) => hp === Math.round(85 * 1.3 * 1.3225)), r);
   await p.screenshot({ path: `${out}/battle-potions.png` });
   await p.close();
 }

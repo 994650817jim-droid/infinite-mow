@@ -31,7 +31,8 @@ export class YellowBattle {
   h.scene.events.once('shutdown',()=>{for(const clip of this.clips)clip.destroy();});
  }
  variant(base:EnemyDef,elapsed=0):EnemyDef {
-  if(this.stage===1&&base.kind!=='infantry')return base;
+  // 1-1 也用黄巾刀盾兵造型（第 2 波起出刀盾兵）；弓手等其余兵种仍用原图
+  if(this.stage===1&&base.kind!=='infantry'&&base.kind!=='shield')return base;
   // 1-2 introduces shield soldiers in its fourth wave (waves start every 60s).
   // 1-3 exposes the complete Yellow Turban roster from the opening wave.
   // Keep the first-pass archer artwork and its matching attack sheet.

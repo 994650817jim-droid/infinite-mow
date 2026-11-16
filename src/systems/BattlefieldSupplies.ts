@@ -49,7 +49,7 @@ export class BattlefieldSupplies {
  private devId=0;
  private pushX=0;private pushY=0;
  private readonly coals:Phaser.GameObjects.Graphics;
- constructor(private scene:Phaser.Scene,private player:Player,private enemies:Enemy[],private now:()=>number,private onPickup:()=>void){
+ constructor(private scene:Phaser.Scene,private player:Player,private enemies:Enemy[],private now:()=>number,private onPickup:(kind?:'wine'|'other')=>void){
   this.coals=scene.add.graphics().setDepth(DEPTH.fx);
   if(!scene.textures.exists('healing_potion')){
    const g=scene.make.graphics({x:0,y:0});
@@ -169,7 +169,7 @@ export class BattlefieldSupplies {
   }
   if(this.healRemaining>0&&this.player.alive){const n=Math.min(this.healRemaining,this.healRate*dt);this.player.heal(n);this.healRemaining=Math.max(0,this.healRemaining-n);}
   for(const p of this.potions){if(!p.active)continue;if(now>=p.until){p.active=false;p.image.setVisible(false);continue;}
-   if(this.player.alive&&this.pouch.length<POUCH_MAX&&Math.hypot(p.image.x-this.player.x,p.image.y-this.player.y)<30){p.active=false;p.image.setVisible(false);const heal=p.image.texture.key==='heal_props';this.pouch.push({amount:p.amount,texture:p.image.texture.key,frame:heal?Number(p.image.frame.name):undefined,name:heal?(Number(p.image.frame.name)===2?'酒葫芦':'草药包'):'疗伤药'});this.onPickup();}
+   if(this.player.alive&&this.pouch.length<POUCH_MAX&&Math.hypot(p.image.x-this.player.x,p.image.y-this.player.y)<30){p.active=false;p.image.setVisible(false);const heal=p.image.texture.key==='heal_props';this.pouch.push({amount:p.amount,texture:p.image.texture.key,frame:heal?Number(p.image.frame.name):undefined,name:heal?(Number(p.image.frame.name)===2?'酒葫芦':'草药包'):'疗伤药'});this.onPickup(heal&&[0,2].includes(Number(p.image.frame.name))?'wine':'other');}
   }
   for(const c of this.crates)if(c.enemy.active&&!c.cell?.startsWith('fixed-')&&Math.hypot(c.enemy.x-this.player.x,c.enemy.y-this.player.y)>1400){c.enemy.deactivate();c.shadow.setVisible(false);c.cell=null;}
   this.generateHealProps();

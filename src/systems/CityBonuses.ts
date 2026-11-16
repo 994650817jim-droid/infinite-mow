@@ -11,6 +11,8 @@ import {POUCH_MAX, type BattlefieldSupplies} from './BattlefieldSupplies';
  */
 export function applyCitySpecialties(player: Player, effects: ReturnType<typeof permanentEffects>, firstStage: boolean, extra?: {legion?: Legion; supplies?: BattlefieldSupplies | null}): void {
   player.growth.permanentDamage = effects.damageBonus;
+  // 军营练兵：每关都设（跨关恢复军团后也生效）
+  extra?.legion?.setDrill(effects.troopDrill ?? 1);
   if (firstStage) {
     if (extra?.legion) for (const [kind, level] of Object.entries(effects.troopLevels) as Array<[keyof Legion['levels'], number]>) extra.legion.levels[kind] = Math.max(extra.legion.levels[kind] ?? 1, level);
     if (effects.maxHpBonus !== 0) { player.stats.maxHpBonus += Math.round(player.maxHp * effects.maxHpBonus); player.hp = player.maxHp; }

@@ -2605,8 +2605,8 @@ export class GameScene extends Phaser.Scene {
     resume.on('pointerdown',()=>this.togglePause());
     this.attributePauseText=this.add.text(cx,top+157,'分配属性点 · 0',warText(15,'#e8cf91')).setOrigin(.5).setPadding(12,5).setInteractive({useHandCursor:true}).setName('pause-attributes');
     this.attributePauseText.on('pointerdown',()=>{this.attributeReturn='pause';this.renderAttributePanel();this.setMode('attributes');});
-    const bgmRow=this.createVolumeRow('战场音乐',top+191,this.music.getVolume(),v=>this.music.setVolume(v));
-    const sfxRow=this.createVolumeRow('战斗音效',top+263,this.sfx.getVolume(),v=>this.sfx.setVolume(v));
+    const bgmRow=this.createVolumeRow('战场音乐',top+205,this.music.getVolume(),v=>this.music.setVolume(v));
+    const sfxRow=this.createVolumeRow('战斗音效',top+277,this.sfx.getVolume(),v=>this.sfx.setVolume(v));
     const buildLink=this.add.text(cx,top+ph-112,'战法与宝物 · 查看构筑',warText(15,'#e6cc90')).setOrigin(.5).setPadding(14,6).setInteractive({useHandCursor:true}).setName('pause-build');
     buildLink.on('pointerdown',()=>this.openBuildPanel());this.pausePanel.add(buildLink);
     // 行囊：查看本局缴获与当前武将兵装（战斗中只读，出征前在主页行囊穿戴）

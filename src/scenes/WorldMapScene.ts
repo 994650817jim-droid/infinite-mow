@@ -14,6 +14,7 @@ import {FOCUS_INCOME,FOCUS_NAME,costText,type CityFocus} from '../town/TownData'
 import {chapterUnlocked} from '../systems/ChapterProgress';
 import {CITIES,CITY_LINKS,CITY_INCOME,FACTIONS,HOME,SPECIALTIES,TIER_NAME,cityAttackable,cityById,cityOwner,eraDef,eraIndexFor,territorySummary,type CityDef,type EraId} from '../world/WorldCities';
 import {cityMarker,factionLegend,markAlert,paintSelection,MARKER_FILES,type CityMarker} from '../world/WorldMapLayers';
+import {MARKERS_V2,cityMarkerV2,intelGlyphPos,intelPennant,nodeMarkerV2,paintSelectionV2,sealGraphics} from '../world/WorldMarkers';
 import {buildTerritory} from '../world/WorldTerritory';
 import {factionStrip,lacquerPlate,ownerSeal,realmLabels,resourceBar,sealGlyph} from '../world/WorldMapChrome';
 import {advanceEra,takeLostNotice,takeNewChapters,type CityAlert,type EraAdvance} from '../world/WorldStore';
@@ -72,18 +73,21 @@ export class WorldMapScene extends Phaser.Scene {
   this.layer.setMask(mask.createGeometryMask());this.events.once('shutdown',()=>mask.destroy());this.mapMask=mask;
   // 选中城池时显示其道路相邻（屏幕坐标）
   this.links=this.add.graphics();this.links.setMask(mask.createGeometryMask());
-  for(const city of CITIES){const m=cityMarker(this,city,cityOwner(city.id,this.era,this.owned));m.hit.on('pointerup',(pointer:Phaser.Input.Pointer)=>{if(pointer.getDistance()>10*RENDER_SCALE||this.pinching)return;this.selected={kind:'city',city};this.refresh();});if(this.alertFor(city.id))markAlert(this,m);this.cityMarkers.push(m);}
+  for(const city of CITIES){const m=(MARKERS_V2?cityMarkerV2:cityMarker)(this,city,cityOwner(city.id,this.era,this.owned));m.hit.on('pointerup',(pointer:Phaser.Input.Pointer)=>{if(pointer.getDistance()>10*RENDER_SCALE||this.pinching)return;this.selected={kind:'city',city};this.refresh();});if(this.alertFor(city.id))markAlert(this,m);this.cityMarkers.push(m);}
   // 纸雾下的城池：不显示、不可点（已占 / 告急城池始终可见）
   for(const m of this.cityMarkers){const fogged=!this.revealedAt(m.city.x,m.city.y)&&!this.owned.includes(m.city.id)&&!this.alertFor(m.city.id);m.root.setData('fogged',fogged);if(fogged)m.hit.disableInteractive();}
   const current=currentChapter(s).id;
   for(const node of WORLD_NODES){const st=this.nodeState(node),active=st!=='locked',info=this.chapterOf(node),color=st==='home'?0x88c5a4:st==='cleared'?0x9fd18a:active?0xe5c47d:0x747a6f;
    const marker=this.add.container(0,0);
    // 当前该打的一章：金色脉冲圈
-   if(st==='open'&&info?.id===current){const ring=this.add.circle(0,0,18).setStrokeStyle(3,0xffd27a,.9).setName(`node-pulse-${node.id}`);marker.add(ring);this.tweens.add({targets:ring,scale:1.8,alpha:0,duration:1300,repeat:-1,ease:'Sine.easeOut'});}
-   const circle=this.add.circle(0,0,18,st==='cleared'?0x3a2a12:0x16271e,.94).setStrokeStyle(2,color).setInteractive({useHandCursor:true}).setName(`node-${node.id}`).setData('state',st);
-   const icon=worldText(this,0,0,st==='home'?'营':st==='cleared'?'捷':active?'战':'锁',13,st==='cleared'?'#ffe7a8':active?'#f5dc9e':'#a4aa9c').setOrigin(.5);
-   const label=worldText(this,0,25,info?`${info.numeral} · ${node.name}`:node.name,13,active?'#fff0cd':'#b6b8aa').setOrigin(.5).setStroke('#142016',3);
-   circle.on('pointerup',(pointer:Phaser.Input.Pointer)=>{if(pointer.getDistance()>10*RENDER_SCALE||this.pinching)return;this.selected={kind:'node',node};this.refresh();});marker.add([circle,icon,label]);this.markers.push({node,root:marker});
+   if(st==='open'&&info?.id===current){const ring=(MARKERS_V2?this.add.ellipse(0,6,40,14):this.add.circle(0,0,18)).setStrokeStyle(3,0xffd27a,.9).setName(`node-pulse-${node.id}`);marker.add(ring);this.tweens.add({targets:ring,scale:1.8,alpha:0,duration:1300,repeat:-1,ease:'Sine.easeOut'});}
+   const glyphText=st==='home'?'营':st==='cleared'?'捷':active?'战':'锁',labelText=info?`${info.numeral} · ${node.name}`:node.name;
+   // v2：牙旗 / 营帐 + 名牌；命中区沿用 node-<id>
+   const v2=MARKERS_V2?nodeMarkerV2(this,st,glyphText,labelText,active):null;
+   const circle=(v2?v2.hit:this.add.circle(0,0,18,st==='cleared'?0x3a2a12:0x16271e,.94).setStrokeStyle(2,color)).setInteractive({useHandCursor:true}).setName(`node-${node.id}`).setData('state',st);
+   const icon=v2?null:worldText(this,0,0,glyphText,13,st==='cleared'?'#ffe7a8':active?'#f5dc9e':'#a4aa9c').setOrigin(.5);
+   const label=v2?null:worldText(this,0,25,labelText,13,active?'#fff0cd':'#b6b8aa').setOrigin(.5).setStroke('#142016',3);
+   circle.on('pointerup',(pointer:Phaser.Input.Pointer)=>{if(pointer.getDistance()>10*RENDER_SCALE||this.pinching)return;this.selected={kind:'node',node};this.refresh();});marker.add(v2?[...v2.parts,circle]:[circle,icon!,label!]);if(v2)marker.setData('label',v2.label).setData('plate',v2.plate).setData('icon',v2.icon);this.markers.push({node,root:marker});
   }
   for(const event of this.intel){const city=cityById(event.city);if(city)this.intelMarkers.push(this.intelMarker(event,city));}
   this.minZoom=Math.max(this.area.w/this.mapW,this.area.h/this.mapH);this.zoom=this.minZoom*1.2;
@@ -199,15 +203,46 @@ export class WorldMapScene extends Phaser.Scene {
  private toScreen(mx:number,my:number){return{x:this.layer.x+mx*this.zoom,y:this.layer.y+my*this.zoom};}
  private clampMap(){const a=this.area;this.layer.x=Phaser.Math.Clamp(this.layer.x,a.x+a.w-this.mapW*this.zoom,a.x);this.layer.y=Phaser.Math.Clamp(this.layer.y,a.y+a.h-this.mapH*this.zoom,a.y);
   const visible=(x:number,y:number)=>x>a.x+14&&x<a.x+a.w-14&&y>a.y+14&&y<a.y+a.h-30;
-  for(const m of this.markers){const x=this.layer.x+m.node.x*this.mapW*this.zoom,y=this.layer.y+m.node.y*this.mapH*this.zoom;m.root.setPosition(x,y).setVisible(visible(x,y)&&!(this.routeChapter&&this.chapterOf(m.node)?.id===this.routeChapter));}
+  for(const m of this.markers){const x=this.layer.x+m.node.x*this.mapW*this.zoom,q=this.liftOffCity(x,this.layer.y+m.node.y*this.mapH*this.zoom);m.root.setPosition(q.x,q.y).setVisible(visible(q.x,q.y)&&!(this.routeChapter&&this.chapterOf(m.node)?.id===this.routeChapter));}
   // 小城名字在放大后才显示，避免默认视图拥挤
   const showSmall=this.zoom>=this.minZoom*1.65;
   // 军旗高出徽框，靠近地图上沿时整个标记隐藏，免得旗子伸出地图框
-  for(const m of this.cityMarkers){const p=this.toScreen(m.city.x,m.city.y),flag=m.root.getData('banner')?m.outer+40:m.top;m.root.setPosition(p.x,p.y).setVisible(visible(p.x,p.y)&&p.y-flag>a.y&&!m.root.getData('fogged'));m.label.setVisible(m.city.tier!=='small'||showSmall||this.isSelected(m.city));}
+  for(const m of this.cityMarkers){const p=this.toScreen(m.city.x,m.city.y),flag=m.root.getData('banner')?m.outer+40:m.top;m.root.setPosition(p.x,p.y).setVisible(visible(p.x,p.y)&&p.y-flag>a.y&&!m.root.getData('fogged'));m.label.setVisible(m.city.tier!=='small'||showSmall||this.isSelected(m.city));(m.root.getData('plate') as Phaser.GameObjects.Graphics|undefined)?.setVisible(m.label.visible);}
   this.layoutRoute(visible);
+  if(MARKERS_V2)this.declutterLabels();
   for(const m of this.intelMarkers){const p=this.toScreen(m.city.x,m.city.y),x=p.x+20,y=p.y-30;m.root.setPosition(x,y).setVisible(visible(x,y)&&y-16>a.y&&this.revealedAt(m.city.x,m.city.y));}
   this.drawLinks();
  }
+ /** v2：章节牙旗 / 关卡印落在城郭上时挪开：依次试城上方、右侧、左侧、名牌下方，取第一个不压到别的城的位置。 */
+ private liftOffCity(x:number,y:number):{x:number;y:number}{if(!MARKERS_V2)return{x,y};
+  const cities=this.cityMarkers.filter(m=>!m.root.getData('fogged')).map(m=>({m,p:this.toScreen(m.city.x,m.city.y)}));
+  const hitAt=(px:number,py:number,skip?:CityMarker)=>cities.find(c=>c.m!==skip&&Math.abs(c.p.x-px)<c.m.outer+16&&py>c.p.y-c.m.top-6&&py<c.p.y+30);
+  const under=hitAt(x,y);if(!under)return{x,y};
+  const {m,p}=under,side=m.outer+30;
+  for(const c of [{x,y:p.y-m.top-26},{x:p.x+side,y:p.y},{x:p.x-side,y:p.y},{x,y:p.y+62}])if(!hitAt(c.x,c.y,m))return c;
+  return{x,y:p.y-m.top-26};}
+ /** v2：名牌按优先级避让（选中城 > 关卡印 > 章节牙旗 > 大城 > 中城 > 小城）。图标（城郭、牙旗、关卡印）也算障碍：
+  * 关卡标签被挡时翻到印的上方；城名牌与已摆好的名牌或别家图标重叠时本轮隐藏。地图缩放 / 拖动后重算。 */
+ private declutterLabels(){const placed:Phaser.Geom.Rectangle[]=[],pad=2,inter=Phaser.Geom.Intersects.RectangleToRectangle;
+  const icons:Array<{r:Phaser.Geom.Rectangle;owner:Phaser.GameObjects.Container}>=[];
+  const addIcon=(o:unknown,owner:Phaser.GameObjects.Container)=>{const g=o as Phaser.GameObjects.Components.GetBounds|undefined;if(!g||!owner.visible)return;const r=g.getBounds();r.setTo(r.x+4,r.y+10,Math.max(0,r.width-8),Math.max(0,r.height-14));icons.push({r,owner});};
+  for(const p of this.pins)addIcon(p.root.getData('icon'),p.root);
+  for(const m of this.markers)addIcon(m.root.getData('icon'),m.root);
+  for(const m of this.cityMarkers)addIcon(m.root.getData('icon'),m.root);
+  const box=(t:Phaser.GameObjects.Text)=>{const b=t.getBounds();b.setTo(b.x-6-pad,b.y-pad,b.width+12+pad*2,b.height+pad*2);return b;};
+  const clash=(b:Phaser.Geom.Rectangle,owner:Phaser.GameObjects.Container)=>placed.some(r=>inter(r,b))||icons.some(i=>i.owner!==owner&&inter(i.r,b));
+  const take=(t:Phaser.GameObjects.Text|undefined,owner:Phaser.GameObjects.Container,plate?:Phaser.GameObjects.Graphics,must=false)=>{if(!t||!t.visible)return;let b=box(t);
+   if(clash(b,owner)&&!must){t.setVisible(false);plate?.setVisible(false);return;}plate?.setVisible(true);placed.push(b);};
+  const shown=(c:Phaser.GameObjects.Container)=>c.visible;
+  {const sel=this.cityMarkers.find(m=>this.isSelected(m.city));if(sel&&shown(sel.root))take(sel.label,sel.root,sel.root.getData('plate'),true);}
+  // 关卡标签：默认在印下方，被挡就翻到印上方；两处都挡仍显示（关卡名不能丢）
+  for(const p of this.pins)if(shown(p.root)){const t=p.root.getData('label') as Phaser.GameObjects.Text|undefined;if(!t)continue;t.setVisible(true).setPosition(0,24);
+   // 依次试：印下方、印上方（不出地图框）、印右侧、印左侧；都挡就留在下方
+   const a=this.area,inside=()=>{const b=t.getBounds();return b.y>a.y+4&&b.x>a.x+4&&b.right<a.x+a.w-4;},hw=t.width/2+22;
+   const spots=[[0,24],[0,-26],[hw,0],[-hw,0]];let ok=false;for(const [sx,sy] of spots){t.setPosition(sx,sy);if(inside()&&!clash(box(t),p.root)){ok=true;break;}}if(!ok)t.setPosition(0,24);
+   take(t,p.root,undefined,true);}
+  for(const m of this.markers)if(shown(m.root)){const t=m.root.getData('label') as Phaser.GameObjects.Text|undefined;t?.setVisible(true);take(t,m.root,m.root.getData('plate'),true);}
+  for(const tier of ['large','medium','small'] as const)for(const m of this.cityMarkers)if(m.city.tier===tier&&shown(m.root)&&!this.isSelected(m.city))take(m.label,m.root,m.root.getData('plate'));}
  private isSelected(city:CityDef){return this.selected.kind==='city'&&this.selected.city.id===city.id;}
  private drawLinks(){
   this.links.clear();if(this.selected.kind!=='city')return;
@@ -227,7 +262,7 @@ export class WorldMapScene extends Phaser.Scene {
  }
  private refresh(){
   const sel=this.selected,routeId=sel.kind==='stage'?sel.chapter:sel.kind==='node'?this.chapterOf(sel.node)?.id:undefined;this.showRoute(routeId);
-  for(const m of this.cityMarkers)paintSelection(m,this.isSelected(m.city));this.clampMap();this.paintChips();
+  for(const m of this.cityMarkers)(MARKERS_V2?paintSelectionV2:paintSelection)(m,this.isSelected(m.city));this.clampMap();this.paintChips();
   for(const m of this.intelMarkers)m.ring.setStrokeStyle(this.selected.kind==='intel'&&this.selected.event.id===m.event.id?3:0,0xfff0c0,1);
   if(this.selected.kind==='intel'){this.intelDetail(this.selected.event);return;}
   if(this.selected.kind==='city'){
@@ -314,15 +349,15 @@ export class WorldMapScene extends Phaser.Scene {
   STAGE_POINTS[id].forEach((pt,i)=>{const n=i+1,d=stages[i];if(!d)return;const isDone=n<=done,open=stageOpen(id,n,save)||isChapterTestRun(),next=open&&!isDone;
    const root=this.add.container(0,0).setDepth(3).setName(`stage-pin-root-${id}-${n}`),g=this.add.graphics(),r=15;
    if(next){const ring=this.add.circle(0,0,r).setStrokeStyle(3,0xffd27a,.9);root.add(ring);this.tweens.add({targets:ring,scale:1.9,alpha:0,duration:1200,repeat:-1,ease:'Sine.easeOut'});}
-   const pts=[{x:0,y:-r},{x:r,y:0},{x:0,y:r},{x:-r,y:0}];g.fillStyle(isDone?0x3a2a12:open?0x5a1a12:0x2a2d28,.95).fillPoints(pts,true).lineStyle(2,isDone?0x9fd18a:open?0xffd27a:0x747a6f,1).strokePoints(pts,true,true);
+   const pts=[{x:0,y:-r},{x:r,y:0},{x:0,y:r},{x:-r,y:0}];if(MARKERS_V2){g.destroy();}else g.fillStyle(isDone?0x3a2a12:open?0x5a1a12:0x2a2d28,.95).fillPoints(pts,true).lineStyle(2,isDone?0x9fd18a:open?0xffd27a:0x747a6f,1).strokePoints(pts,true,true);
    const glyph=worldText(this,0,0,isDone?'捷':open?d.seal:'锁',12,isDone?'#ffe7a8':open?'#ffe2a0':'#a4aa9c').setOrigin(.5);
    const label=worldText(this,0,24,`${d.code} ${d.name}`,12,open?'#fff0cd':'#b6b8aa').setOrigin(.5).setStroke('#142016',3);
    const hit=this.add.circle(0,0,r+6,0x000000,.001).setInteractive({useHandCursor:true}).setName(`stage-pin-${id}-${n}`).setData('state',isDone?'cleared':open?'open':'locked');
    hit.on('pointerup',(pointer:Phaser.Input.Pointer)=>{if(pointer.getDistance()>10*RENDER_SCALE||this.pinching)return;this.selected={kind:'stage',chapter:id,stage:n};this.refresh();});
-   root.add([g,glyph,label,hit]);this.pins.push({stage:n,x:pt.x,y:pt.y,root});});}
+   root.add([MARKERS_V2?sealGraphics(this,isDone?'cleared':open?'open':'locked',r):g,glyph,label,hit]);root.setData('label',label).setData('icon',hit);this.pins.push({stage:n,x:pt.x,y:pt.y,root});});}
  /** 路线重排：关卡标记跟随地图；关卡之间画虚线与箭头。 */
  private layoutRoute(visible:(x:number,y:number)=>boolean){if(!this.route)return;this.route.clear();const sel=this.selected;
-  const pts=this.pins.map(p=>{const s=this.toScreen(p.x,p.y);p.root.setPosition(s.x,s.y).setVisible(visible(s.x,s.y));const on=sel.kind==='stage'&&sel.chapter===this.routeChapter&&sel.stage===p.stage;p.root.setScale(on?1.25:1);return s;});
+  const pts=this.pins.map(p=>{const s0=this.toScreen(p.x,p.y),s=this.liftOffCity(s0.x,s0.y);p.root.setPosition(s.x,s.y).setVisible(visible(s.x,s.y));const on=sel.kind==='stage'&&sel.chapter===this.routeChapter&&sel.stage===p.stage;p.root.setScale(on?1.25:1);return s;});
   for(let i=1;i<pts.length;i++){const a=pts[i-1],b=pts[i],len=Math.hypot(b.x-a.x,b.y-a.y),ux=(b.x-a.x)/len,uy=(b.y-a.y)/len;if(len<40)continue;
    this.route.lineStyle(3,0x1b120b,.55);for(let t=20;t<len-20;t+=14)this.route.lineBetween(a.x+ux*t,a.y+uy*t,a.x+ux*Math.min(t+8,len-20),a.y+uy*Math.min(t+8,len-20));
    this.route.lineStyle(2,0xffd27a,.95);for(let t=20;t<len-20;t+=14)this.route.lineBetween(a.x+ux*t,a.y+uy*t,a.x+ux*Math.min(t+8,len-20),a.y+uy*Math.min(t+8,len-20));
@@ -353,10 +388,11 @@ export class WorldMapScene extends Phaser.Scene {
  private intelMarker(event:IntelEvent,city:CityDef):IntelMarker{const info=INTEL_INFO[event.kind],root=this.add.container(0,0).setName('intel-'+event.id);
   const pulse=this.add.circle(0,0,15).setStrokeStyle(2,info.color,.9);this.tweens.add({targets:pulse,scale:1.9,alpha:0,duration:1500,repeat:-1,ease:'Sine.easeOut'});
   const ring=this.add.circle(0,0,17).setStrokeStyle(0,0xfff0c0,1);
-  const body=this.add.circle(0,0,14,info.color,.95).setStrokeStyle(2,0x1a120b,.9).setInteractive({useHandCursor:true}).setName('intel-hit-'+event.id);
-  const glyph=worldText(this,0,0,info.glyph,14,'#fff6dc').setOrigin(.5).setStroke('#2a160c',3);
+  const body=(MARKERS_V2?this.add.circle(2,-12,18,0,.001):this.add.circle(0,0,14,info.color,.95).setStrokeStyle(2,0x1a120b,.9)).setInteractive({useHandCursor:true}).setName('intel-hit-'+event.id);
+  const glyph=worldText(this,MARKERS_V2?intelGlyphPos.x:0,MARKERS_V2?intelGlyphPos.y:0,info.glyph,MARKERS_V2?12:14,'#fff6dc').setOrigin(.5).setStroke('#2a160c',3);
+  if(MARKERS_V2){pulse.setPosition(0,12).setScale(1,.35);}
   body.on('pointerup',(pointer:Phaser.Input.Pointer)=>{if(pointer.getDistance()>10*RENDER_SCALE||this.pinching)return;this.selected={kind:'intel',event};this.refresh();});
-  root.add([pulse,ring,body,glyph]);root.setDepth(5);return{event,city,root,ring};}
+  root.add(MARKERS_V2?[pulse,ring,intelPennant(this,info.color),glyph,body]:[pulse,ring,body,glyph]);root.setDepth(5);return{event,city,root,ring};}
  /** 军情匾：依次选中下一件军情并居中。 */
  private nextIntel(){if(!this.intel.length)return;const i=this.selected.kind==='intel'?this.intel.findIndex(e=>e.id===(this.selected as {event:IntelEvent}).event.id):-1,event=this.intel[(i+1)%this.intel.length];this.selected={kind:'intel',event};const c=cityById(event.city);if(c)this.centerOnCity(c);this.refresh();}
  private centerOnCity(c:CityDef){this.layer.setPosition(this.area.x+this.area.w/2-c.x*this.zoom,this.area.y+this.area.h/2-c.y*this.zoom);this.clampMap();}

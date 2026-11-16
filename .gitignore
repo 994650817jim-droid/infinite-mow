@@ -75,3 +75,6 @@ assets/raw/*
 # 主将步态（walk-anim）
 !/tools/test-walk-anim.mjs
 !/tools/walk-anim-record.mjs
+!/tools/test-hubao.mjs
+!/tools/test-mount.mjs
+!/tools/test-shield.mjs

@@ -68,6 +68,7 @@ import {ItemDrops} from '../systems/ItemDrops';
 import {gearFor} from '../systems/ItemEffects';
 import {depositRunLoot,loadout} from '../systems/ItemStore';
 import {HeroMount} from '../systems/HeroMount';
+import {armShield,absorbShield,ShieldBars} from '../systems/ShieldGuard';
 import {itemName} from '../data/items';
 import {ItemBagUI} from '../ui/ItemBagUI';
 
@@ -128,6 +129,8 @@ export class GameScene extends Phaser.Scene {
   protected xiliang:XiliangBattle|null=null;
   /** 骑马（行囊坐骑槽有马时）。 */
   protected mount:HeroMount|null=null;
+  /** 盾牌兵两段血：盾条与碎盾效果（data/shields.ts）。 */
+  private shieldBars:ShieldBars|null=null;
   protected supplies:BattlefieldSupplies|null=null;
   /** 道具掉落与本局缴获（局外兵装，结算带回行囊）。 */
   protected itemDrops:ItemDrops|null=null;
@@ -379,6 +382,7 @@ export class GameScene extends Phaser.Scene {
     this.supplies=new BattlefieldSupplies(this,this.player,this.enemies,()=>this.combatNow,()=>{this.sfx.play('pickup');this.artEffects.show(5,this.player.x,this.player.y-12,35,this.combatNow,280);});
     // 兵装：开局读入该武将穿戴的道具加成（生命上限增加的部分补满）
     {const oldMax=this.player.maxHp;this.player.growth.gear=gearFor(this.runConfig.character);this.player.heal(this.player.maxHp-oldMax);}
+    this.shieldBars=new ShieldBars(this);this.events.once('shutdown',()=>{this.shieldBars?.clear();this.shieldBars=null;});
     {const horse=loadout(this.runConfig.character).mount;this.mount=horse?new HeroMount({scene:this,player:this.player,enemies:this.enemies,hit:(e,d,now)=>this.hitEnemy(e,d,now,'melee',false,false),notice:t=>this.showGrowthNotice(t)},{base:horse.base,name:itemName(horse)},this.runConfig.character):null;this.player.mountGuard=this.mount?(n,now)=>this.mount?.guard(n,now)??n:undefined;this.events.once('shutdown',()=>{this.mount?.clear();this.mount=null;});}
     this.itemDrops=new ItemDrops(this,this.player,this.itemTier(),()=>this.elapsed,()=>this.isFinalBoss(),()=>this.sfx.play('pickup'));
     // 酒罐 / 药篓不生成在房屋、城墙等障碍里（第三/四章、攻城在 create 之后才设置障碍，故调用时读取）
@@ -660,7 +664,7 @@ export class GameScene extends Phaser.Scene {
     if(!this.over)this.itemDrops?.update();
     this.supplies?.update(dt,time,this.battlefieldDetails.props,(enemy,damage)=>this.hitEnemy(enemy,damage,time,'fire',false,false),this.allies,(ally,damage,now)=>this.legion.hurt(ally,damage,now));
     this.updateEnemies(dt, time);
-    this.yellow?.update(dt,time);this.xiliang?.update(dt,this.combatNow);
+    this.yellow?.update(dt,time);this.xiliang?.update(dt,this.combatNow);this.shieldBars?.draw(this.enemies);
     for(const t of this.chasingBosses){if(t.enemy.active&&t.enemy.spawnId===t.life){t.battle?.update(dt,time);t.label.setPosition(t.enemy.x,t.enemy.y-100).setText(t.name+" · 追兵 "+Math.ceil(Math.max(0,t.enemy.hp)/t.enemy.maxHp*100)+"%");}}
     this.rebuildGrid();
     if(time>=this.navigationAt){this.navigationAt=time+250;const boxes=[...(this.sishuiObstacles?.footprints??[])];this.supplies?.appendNavigationBoxes(boxes);this.legion.navigation.setBoxes(boxes);}
@@ -780,8 +784,16 @@ export class GameScene extends Phaser.Scene {
     }
     const base=override??this.chapter.enemies[kind];
     const def=!override&&this.yellow&&kind!=='boss'?this.yellow.variant(base,this.elapsed):base;
-    enemy.spawn(x,y,this.hardMode?{...def,damage:def.damage*HARD_MODE.damage}:def,this.hardMode?hpScale*(kind==='boss'?HARD_MODE.bossHp:HARD_MODE.enemyHp):hpScale,this.combatNow);
+    enemy.spawn(x,y,this.hardMode?{...def,damage:def.damage*HARD_MODE.damage}:def,this.hardMode?hpScale*(kind==='boss'?HARD_MODE.bossHp:HARD_MODE.enemyHp):hpScale,this.combatNow);armShield(enemy);
     return enemy;
+  }
+
+  /** 盾碎：碎片效果，换成同章步兵造型（飞熊军等专属造型保留原样）。 */
+  protected breakShield(enemy: Enemy): void {
+    this.shieldBars?.shatter(enemy.x, enemy.y); this.sfx.play('hitHeavy');
+    if (enemy.def.variant) { enemy.dropShield(null); return; }
+    const base = this.chapter.enemies.infantry, look = this.yellow ? this.yellow.variant(base, this.elapsed) : base;
+    enemy.dropShield(enemy.def.walkVisual && !look.walkVisual ? null : look);
   }
 
   protected spawnAroundPlayer(kind: EnemyDef['kind'], force = false): Enemy | null {
@@ -1349,7 +1361,7 @@ export class GameScene extends Phaser.Scene {
     if(enemy.isSupplySlot){enemy.hp-=Math.max(1,Math.round(rawDamage));enemy.flash(time);this.sfx.play('hitHeavy');if(enemy.hp<=0)this.killEnemy(enemy);return false;}
     if (enemy === this.boss) this.ensureBossPhase2();
     if (this.xiliang) rawDamage *= this.xiliang.incoming(enemy, source);
-    if(this.yellow&&enemy.kind==='shield'&&enemy.def.behavior!=='wall'&&!fromAlly&&source!=='fire'){const angle=enemy.direction==='left'?Math.PI:enemy.direction==='right'?0:enemy.direction==='up'?-Math.PI/2:Math.PI/2;if(Math.cos(Math.atan2(this.player.y-enemy.y,this.player.x-enemy.x)-angle)>.25)rawDamage*=.65;}
+    if(this.yellow&&enemy.kind==='shield'&&enemy.shieldMax===0&&enemy.def.behavior!=='wall'&&!fromAlly&&source!=='fire'){const angle=enemy.direction==='left'?Math.PI:enemy.direction==='right'?0:enemy.direction==='up'?-Math.PI/2:Math.PI/2;if(Math.cos(Math.atan2(this.player.y-enemy.y,this.player.x-enemy.x)-angle)>.25)rawDamage*=.65;}
     if (source === 'arrow') this.sfx.play('hitArrow');
     else if (source === 'fire') this.sfx.play('hitFire');
     else this.sfx.play('hitLight');
@@ -1375,6 +1387,16 @@ export class GameScene extends Phaser.Scene {
         this.spawnDamageText(enemy.x, enemy.y - enemy.radius, absorbed, crit, !fromAlly||enemy.kind==='boss');
         return true;
       }
+    }
+    // 盾牌兵：伤害先打盾，盾没破时本体只吃一成；盾碎后丢盾换成步兵造型
+    if (enemy.shieldHp > 0) {
+      const shown = damage, r = absorbShield(enemy, damage, source);
+      if (r.broke) this.breakShield(enemy);
+      this.spawnDamageText(enemy.x, enemy.y - enemy.radius, shown, crit, !fromAlly);
+      if (r.body <= 0) return true;
+      damage = r.body; enemy.hp -= damage; this.damageDealt += damage; credit(damage);
+      if (enemy.hp <= 0) this.killEnemy(enemy);
+      return true;
     }
     enemy.hp -= damage;
     this.damageDealt += damage;

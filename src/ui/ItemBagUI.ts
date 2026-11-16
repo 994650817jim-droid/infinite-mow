@@ -164,7 +164,7 @@ export class ItemBagUI {
     const unlocked = stableUnlocked();
     if (horse) { const ic = horseIcon(this.scene, horse.id), k = ic.art ? .84 : .72; mountTile.add(this.scene.add.image(0, 0, ic.key, ic.frame).setDisplaySize(size * k, size * k).setTint(ic.art ? 0xffffff : mountStyle(horse.id).tint)); }
     else mountTile.add(this.scene.add.image(0, 0, itemIconKey('mount')).setDisplaySize(size * .72, size * .72).setAlpha(.22));
-    if (!unlocked || !this.canChangeHorse) mountTile.add(this.scene.add.text(size / 2 - 3, size / 2 - 3, '锁', { fontFamily: FONT, fontSize: '12px', color: '#1c140a', backgroundColor: '#b9a57a', resolution: 2 }).setOrigin(1, 1).setPadding(2, 0));
+    if (!unlocked || !this.canChangeHorse || this.hero.startsWith('r_')) mountTile.add(this.scene.add.text(size / 2 - 3, size / 2 - 3, '锁', { fontFamily: FONT, fontSize: '12px', color: '#1c140a', backgroundColor: '#b9a57a', resolution: 2 }).setOrigin(1, 1).setPadding(2, 0));
     mountTile.setName('item-slot-mount').setSize(size, size).setInteractive({ useHandCursor: true }).on('pointerup', () => this.select('stable'));
     this.text(lx, my + size / 2 + 10, !unlocked ? '坐骑 · 一章通关开放' : horse ? horse.name : '坐骑', 12, horse ? '#f3c37a' : '#8d7d60').setOrigin(.5).setName('item-slot-label-mount');
     // 本局宝物 2 格
@@ -349,8 +349,9 @@ export class ItemBagUI {
     const { card, x, y, g } = this.card(cw, est), heroName = ownerName(this.hero);
     this.plainFrame(g, x, y, cw, est);
     this.text(x + 26, y + 18, '马厩', 24, '#f2ddae', true, card).setName('item-detail-name');
+    const recruitOnly = this.hero.startsWith('r_');
     const sub = !unlocked ? '第一章「黄巾之乱」通关后开放，并赠驽马一匹。之后的马靠各章首领首次击杀获得。'
-      : !this.canChangeHorse ? '战斗中不可换马 · 在行营休整或主页行囊里换马' : `为 ${heroName} 选马 · 一匹马同时只归一名武将${this.battle ? ' · 下一关出征生效' : ''}`;
+      : recruitOnly ? `${heroName}是招募的武将，暂不骑马` : !this.canChangeHorse ? '战斗中不可换马 · 在行营休整或主页行囊里换马' : `为 ${heroName} 选马 · 一匹马同时只归一名武将${this.battle ? ' · 下一关出征生效' : ''}`;
     this.text(x + 26, y + 54, sub, 13, '#b9a57a', false, card).setWordWrapWidth(cw - 90).setName('stable-hint');
     this.button(x + cw - 30, y + 28, '×', 'item-detail-close', () => this.closeDetail(), { parent: card, size: 16 });
     const cur = heroHorse(this.hero, s);
@@ -364,7 +365,7 @@ export class ItemBagUI {
       this.text(nameX, cy + 4, (h.legend ? '★ ' : '') + h.name + (rider ? ` · ${CHARACTERS.find(c => c.id === rider)?.name ?? ''}骑乘` : ''), D ? 15 : 14, owned ? (h.legend ? '#f2a24e' : '#ecd49a') : '#6f6250', false, card).setName('stable-name-' + h.id);
       const style = mountStyle(h.id).ride;
       this.text(nameX, cy + (D ? 26 : 23), owned ? horseBonusText(h) + (style ? ' · ' + style.replace(/^[^：]+：/, '') : '') : '未获得 · ' + h.lore, 11, owned ? '#d8ccb0' : '#6f6250', false, card).setWordWrapWidth(cwid - isz - 110).setMaxLines(D ? 2 : 1);
-      if (owned && unlocked && this.canChangeHorse) this.button(cx + cwid - 46, cy + (rowH - 6) / 2, mine ? '下马' : '骑乘', mine ? 'stable-dismount' : 'stable-ride-' + h.id, () => {
+      if (owned && unlocked && this.canChangeHorse && !recruitOnly) this.button(cx + cwid - 46, cy + (rowH - 6) / 2, mine ? '下马' : '骑乘', mine ? 'stable-dismount' : 'stable-ride-' + h.id, () => {
         rideHorse(this.hero, mine ? null : h.id); this.notice = mine ? `${heroName} 已下马` : `${heroName} 骑乘 ${h.name}${this.battle ? ' · 下一关出征生效' : ''}`; this.o.onGearChange?.(); this.render();
       }, { parent: card, size: 14, active: !mine, w: 50 });
     });

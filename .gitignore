@@ -62,6 +62,7 @@ assets/raw/*
 !/tools/test-worldmap-chapters.mjs
 !/tools/test-intel.mjs
 !/tools/test-recruit.mjs
+!/tools/prepare-recruit-faces.mjs
 !/tools/test-xiliang.mjs
 !/tools/test-new-heroes.mjs
 !/tools/test-weiyan-pangtong.mjs

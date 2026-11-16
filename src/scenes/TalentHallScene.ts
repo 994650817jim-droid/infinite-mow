@@ -10,7 +10,7 @@ import { loadWorld, worldUnlocked } from '../world/WorldStore';
 import { FACTIONS } from '../world/WorldCities';
 import { QUALITIES } from '../data/items';
 import { CHARACTERS, getCharacter } from '../data/characters';
-import { RANK, RECRUIT, TEMPLATES } from '../data/recruits';
+import { RANK, RECRUIT, TEMPLATES, TEMPLATE_ORDER, type FollowerTemplate } from '../data/recruits';
 import { hallInTown, hallLevel, dismiss, followerCap, loadRoster, manualRefresh, rankBonus, rankCap, rankUp, recruit, refreshCost, toggleFollower, upgradeHall, type Offer, type Recruit } from '../systems/RosterStore';
 
 type Tab = 'offers' | 'roster';
@@ -22,6 +22,8 @@ export class TalentHallScene extends Phaser.Scene {
   preload() {
     const added: string[] = [];
     for (const c of CHARACTERS) if (!this.textures.exists(c.portrait)) { this.load.image(c.portrait, `assets/processed/${c.portrait}.png`); added.push(c.portrait); }
+    // 史事名将 / 大众脸的模板头像（ChatGPT 正式图，tools/prepare-recruit-faces.mjs；帧顺序 枪 / 刀 / 弓 / 谋）。缺图时退回印章字
+    if (!this.textures.exists('recruit_faces')) this.load.spritesheet('recruit_faces', 'assets/recruits/recruit_faces.png', { frameWidth: 128, frameHeight: 128 });
     this.events.once('shutdown', () => { for (const k of added) if (this.textures.exists(k)) this.textures.remove(k); });
   }
   create() {
@@ -39,11 +41,12 @@ export class TalentHallScene extends Phaser.Scene {
     if (enabled) bg.setInteractive({ useHandCursor: true }).on('pointerup', () => fn());
     this.content!.add([bg, t]); return bg;
   }
-  private seal(x: number, y: number, size: number, quality: keyof typeof QUALITIES, glyph: string, portrait?: string) {
+  private seal(x: number, y: number, size: number, quality: keyof typeof QUALITIES, glyph: string, portrait?: string, template?: FollowerTemplate) {
     const q = QUALITIES[quality];
     const ring = this.add.rectangle(x, y, size, size, q.dark, 1).setStrokeStyle(2, q.color);
     this.content!.add(ring);
     if (portrait && this.textures.exists(portrait)) { const img = this.add.image(x, y, portrait); img.setScale(Math.min((size - 6) / img.width, (size - 6) / img.height)); this.content!.add(img); }
+    else if (template && this.textures.exists('recruit_faces')) { const img = this.add.image(x, y, 'recruit_faces', TEMPLATE_ORDER.indexOf(template)).setName('talent-face'); img.setScale((size - 6) / 128); this.content!.add(img); }
     else this.content!.add(worldText(this, x, y, glyph, Math.round(size * .5), q.css).setOrigin(.5));
   }
   private render() {
@@ -83,7 +86,7 @@ export class TalentHallScene extends Phaser.Scene {
   private offerRow(o: Offer, i: number, captive: boolean, y: number, h: number) {
     const D = W > 600, x0 = 16, w = W - 32, q = QUALITIES[o.quality];
     this.content!.add(panel(this, W / 2, y, w, h));
-    const size = h - 16; this.seal(x0 + 12 + size / 2, y, size, o.quality, TEMPLATES[o.template].name, o.hero ? getCharacter(o.hero).portrait : undefined);
+    const size = h - 16; this.seal(x0 + 12 + size / 2, y, size, o.quality, TEMPLATES[o.template].name, o.hero ? getCharacter(o.hero).portrait : undefined, o.template);
     const tx = x0 + 24 + size, kind = o.kind === 'hero' ? '可玩名将 · 能当主将' : o.kind === 'named' ? `史事名将${o.faction ? ' · ' + FACTIONS[o.faction].name : ''}` : '大众脸';
     this.content!.add(worldText(this, tx, y - h / 2 + 8, `${captive ? '【降将】' : ''}${o.name}`, D ? 17 : 18, q.css).setName('talent-offer-name'));
     this.content!.add(worldText(this, tx, y - h / 2 + (D ? 32 : 36), `${q.label} · ${kind}\n${TEMPLATES[o.template].name}：${TEMPLATES[o.template].desc}${captive && o.expires !== undefined ? ' · 两季内可招降' : ''}`, 12, '#cdbf9f').setWordWrapWidth(w - size - 150));
@@ -93,14 +96,14 @@ export class TalentHallScene extends Phaser.Scene {
   private rosterRow(r: Recruit, lord: boolean, following: boolean, y: number, h: number, cap: number) {
     const D = W > 600, x0 = 16, w = W - 32, q = QUALITIES[r.quality];
     this.content!.add(panel(this, W / 2, y, w, h));
-    const size = h - 16; this.seal(x0 + 12 + size / 2, y, size, r.quality, TEMPLATES[r.template].name, r.hero ? getCharacter(r.hero).portrait : undefined);
+    const size = h - 16; this.seal(x0 + 12 + size / 2, y, size, r.quality, TEMPLATES[r.template].name, r.hero ? getCharacter(r.hero).portrait : undefined, r.template);
     const tx = x0 + 24 + size, b = rankBonus(r);
     this.content!.add(worldText(this, tx, y - h / 2 + 8, `${r.name}${lord ? ' · 主公' : ''}${following ? ' · 随行' : ''}`, D ? 17 : 18, q.css).setName('talent-roster-name'));
     const c = RANK.cost(r.rank + 1), canRank = r.rank < cap;
     const line = `将阶 ${r.rank}/${cap}${canRank ? ` · 下一阶 ${c.provisions} 军粮` : r.rank >= RANK.max ? ' · 已满' : ' · 升级招贤馆可继续'}
 兵器 +${Math.round(b.damage * 100)}% · 生命 +${Math.round(b.hp * 100)}%${r.hero ? ` · 当主将开局 +${Math.round(b.lead * 100)}%` : ' · 只能随行'}`;
     this.content!.add(worldText(this, tx, y - h / 2 + (D ? 30 : 34), line, 12, '#cdbf9f').setWordWrapWidth(D ? w - size - 330 : w - size - 40));
-    const bx = D ? W - 16 - 300 : tx + 50, by = D ? y : y + h / 2 - 24;
+    const bx = D ? W - 16 - 320 : tx + 50, by = D ? y : y + h / 2 - 24;
     this.small(bx, by, D ? 96 : 92, '升·兵器', () => { this.message = rankUp(r.id, 'weapon').message; this.render(); }, `talent-rank-weapon-${r.id}`, canRank);
     this.small(bx + (D ? 102 : 98), by, D ? 96 : 92, '升·被动', () => { this.message = rankUp(r.id, 'passive').message; this.render(); }, `talent-rank-passive-${r.id}`, canRank);
     this.small(bx + (D ? 204 : 196), by, D ? 82 : 82, following ? '留守' : '随行', () => { this.message = toggleFollower(r.id).message; this.render(); }, `talent-follow-${r.id}`, true, following);

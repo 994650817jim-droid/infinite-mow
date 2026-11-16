@@ -42,8 +42,8 @@ try {
       if (state.mode === 'recruit') { recruitCount++; if (i === 7) bossBeforeFinal = state.boss; await page.evaluate(() => window.__IM.chooseRecruit(0)); }
     }
     await page.waitForFunction(() => window.__IM.bossActive);
-    const final = await page.evaluate(() => { const s = window.__game.scene.getScene('GameScene'); return { info: window.__IM.bossInfo(), tex: s.boss.sprite.texture.key, allies: s.allies.length, wave: window.__IM.waveInfo() }; });
-    check('chapter2_five_recruits_before_lubu', recruitCount === 5 && bossBeforeFinal === false && final.allies === 5 && final.info.maxHp === 3200 && final.tex === 'boss_lubu' && final.wave.count === 8, { seen, recruitCount, final });
+    const final = await page.evaluate(() => { const s = window.__game.scene.getScene('GameScene'); return { info: window.__IM.bossInfo(), tex: s.boss.sprite.texture.key, allies: s.allies.length, perWave: s.legion.freeRecruitCount, wave: window.__IM.waveInfo() }; });
+    check('chapter2_five_recruits_before_lubu', recruitCount === 5 && bossBeforeFinal === false && final.allies === 5 * final.perWave /* 免费招兵每波人数随章节（FREE_RECRUIT_BY_TIER） */ && final.info.maxHp === 3200 && final.tex === 'boss_lubu' && final.wave.count === 8, { seen, recruitCount, final });
     const cap = await page.evaluate(() => {
       const s = window.__game.scene.getScene('GameScene');
       for (let i = 0; i < 220; i++) s.spawnEnemy('elite', 1000, 1000, 1, true);

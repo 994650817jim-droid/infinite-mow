@@ -68,7 +68,7 @@ for (const [layout, viewport] of Object.entries(LAYOUTS)) for (const [hero, h] o
     const r = await p.evaluate(async ([G0, MK]) => {
       const s = eval(G0), pl = s.player; const mk = eval(MK);
       const t = mk(pl.x + 100, pl.y, false), side = mk(pl.x + 140, pl.y + 20); const y0 = t.sprite.y; let lifted = 0, land = false; const t0 = performance.now();
-      while (performance.now() - t0 < 4000) { await new Promise(r => setTimeout(r, 20)); lifted = Math.max(lifted, y0 - t.sprite.y); land = land || !!s.children.getByName('machao-land'); if (land && side.hp < side.maxHp) break; }
+      while (performance.now() - t0 < 4000) { await new Promise(r => setTimeout(r, 20)); lifted = Math.max(lifted, y0 - t.sprite.y); land = land || (lifted >= 20 && side.hp < side.maxHp); if (land) break; } // 落地按「挑飞后旁边的敌人掉血」判定（方案 C 起不再画 machao-land 落地圈）
       return { lifted: Math.round(lifted), land, targetHurt: t.maxHp - t.hp, sideHurt: side.maxHp - side.hp };
     }, [G, mk]);
     ck(`${tag}：一枪挑飞目标，落地砸出范围伤害`, r.lifted >= 20 && r.land && r.targetHurt > 0 && r.sideHurt > 0, r);

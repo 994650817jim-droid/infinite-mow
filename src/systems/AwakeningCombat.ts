@@ -1,4 +1,5 @@
 import {buildVfx} from './BuildVfx';
+import {SHOW_RANGE_RINGS} from '../ui/RangeRings';
 import Phaser from 'phaser';import type {Enemy} from '../entities/Enemy';import type {Ally} from '../entities/Ally';import type {Player} from '../entities/Player';import {activeAwakenings} from '../data/awakenings';
 interface Hit{enemy:Enemy;spawn:number;damage:number;fire:boolean;}
 /** Only original weapon hits enter this dispatcher; derived damage is queued and non-recursive. */
@@ -34,7 +35,7 @@ export class AwakeningCombat{
  this.gfx.clear();for(const f of this.fields)buildVfx(this.scene).emit('fire_gate',f.x,f.y,now,210,0,250);
  for(let i=this.flashes.length-1;i>=0;i--){const f=this.flashes[i],t=(f.until-now)/260;if(t<=0){this.flashes.splice(i,1);continue;}// Trigger-specific atlas sprites replace the former generic flash circles.
 }
- for(const[u,g]of this.guards)if(!u.active||u.lifeId!==g.life||now>=g.until)this.guards.delete(u);else this.gfx.lineStyle(2,0xc3c9aa,.7).strokeCircle(u.x,u.y-8,17);
+ for(const[u,g]of this.guards)if(!u.active||u.lifeId!==g.life||now>=g.until)this.guards.delete(u);else if(SHOW_RANGE_RINGS)this.gfx.lineStyle(2,0xc3c9aa,.7).strokeCircle(u.x,u.y-8,17);else this.gfx.fillStyle(0xd8e0c0,.14).fillEllipse(u.x,u.y+12,34,11); // 护卫：默认脚下淡光
  }
  clear(){this.cds.clear();this.pending=[];this.fields=[];this.guards.clear();this.flashes=[];this.distance=this.hits=this.clock=0;this.known.clear();this.rescued=false;this.gfx.clear();}
 }

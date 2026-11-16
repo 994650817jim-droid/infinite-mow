@@ -1,4 +1,5 @@
 import {buildVfx} from './BuildVfx';
+import {SHOW_RANGE_RINGS} from '../ui/RangeRings';
 import Phaser from 'phaser';import type {Player} from '../entities/Player';import type {Ally} from '../entities/Ally';import type {Enemy} from '../entities/Enemy';import type {BuildState} from '../data/builds';
 /** One-shot guards and bounded retaliation; all deadlines use the combat clock. */
 export class BulwarkBuild {
@@ -23,7 +24,8 @@ export class BulwarkBuild {
  }
  update(now:number):void{
   const hits=this.pending;this.pending=[];for(const h of hits)if(h.enemy.active&&h.enemy.spawnId===h.spawn)this.deal(h.enemy,h.damage);
-  this.gfx.clear();if(now<this.pulseUntil)this.gfx.lineStyle(2,0xd6c398,(this.pulseUntil-now)/300*.8).strokeCircle(this.player.x,this.player.y-8,this.radius);
+  // 护阵脉冲：默认只在脚下泛一圈淡金光（不画范围圈）；?rings=1 时恢复旧的范围圈
+  this.gfx.clear();if(now<this.pulseUntil){const k=(this.pulseUntil-now)/300;if(SHOW_RANGE_RINGS)this.gfx.lineStyle(2,0xd6c398,k*.8).strokeCircle(this.player.x,this.player.y-8,this.radius);else this.gfx.fillStyle(0xf0dca0,k*.16).fillEllipse(this.player.x,this.player.y+14,this.radius*.9,this.radius*.32);}
   for(const[u,m]of this.guards){if(!u.active||u.lifeId!==m.life||now>=m.until){this.guards.delete(u);continue;}this.gfx.lineStyle(2,0xc3c9aa,.8).beginPath().arc(u.x,u.y-10,20,-Math.PI*.9,-Math.PI*.1).strokePath();}
  }
  clear():void{this.readyAt=this.counterAt=this.watchAt=this.pulseUntil=0;this.guards.clear();this.pending=[];this.gfx.clear();}

@@ -4,6 +4,7 @@ import type { Player } from '../entities/Player';
 import type { PlayerStats, WeaponState } from '../types';
 import { PASSIVE_RULES as R } from '../data/passives';
 import type { WeaponHost } from './registry';
+import { SHOW_RANGE_RINGS } from '../ui/RangeRings';
 
 /**
  * 第二批专属本命武器（2026-11-16，用户确认）：黄忠「宝雕弓」、张飞「当阳喝断」、马超「虎头湛金枪」、刘备「双股剑」。
@@ -184,7 +185,8 @@ export function dangyangBehavior(host: WeaponHost, weapon: WeaponState, dt: numb
     }
     host.heroFx?.('roar', pl.x, pl.y - 10, R.roarRadius * 2.6);
     const bg = host.add.graphics().setDepth(18.8).setName('zhangfei-bridge');
-    bg.fillStyle(0xff8a3c, .12).fillCircle(pl.x, pl.y, R.bridgeRadius).lineStyle(4, 0xffb060, .8).strokeCircle(pl.x, pl.y, R.bridgeRadius);
+    bg.fillStyle(0xff8a3c, .12).fillCircle(pl.x, pl.y, R.bridgeRadius); // 断桥区：默认只铺淡淡一层，?rings=1 时加描边范围圈
+    if (SHOW_RANGE_RINGS) bg.lineStyle(4, 0xffb060, .8).strokeCircle(pl.x, pl.y, R.bridgeRadius);
     st.bridges.push({ x: pl.x, y: pl.y, until: time + R.bridgeMs + 500 * g.masteries.dahe, g: bg });
     host.cameras.main.shake(140, .005);
   } else pl.playAction('attack', Math.cos(a) < 0 ? 'left' : 'right');

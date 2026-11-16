@@ -11,6 +11,7 @@ import {buildVfx} from '../systems/BuildVfx';
 import {AwakeningCombat} from '../systems/AwakeningCombat';
 import {BulwarkBuild} from '../systems/BulwarkBuild';
 import {ControlBuild} from '../systems/ControlBuild';
+import { SHOW_RANGE_RINGS } from '../ui/RangeRings';
 import {terrainSurface,architecturalSurface} from '../systems/SceneSurfaces';
 import {upgradeIcon} from '../ui/GrowthIcons';
 import {BuffHud} from '../ui/BuffHud';
@@ -200,10 +201,20 @@ export class GameScene extends Phaser.Scene {
    * 只在满势时脚下泛起一圈很淡的金光（叠加混合、缓慢明暗）。旧画法见 git 历史，需要时可直接恢复。
    */
   private drawAimIndicator():void{
+    if(SHOW_RANGE_RINGS){this.drawAimRing();return;}
     const g=this.aimIndicator,sec=this.player.growth.stationarySeconds,full=this.player.growth.masteries.steady_aim>0&&sec>=4.99&&this.player.alive;
     g.clear().setVisible(full);if(!full)return;
     const x=this.player.x,y=this.player.y+19,pulse=.14+.08*Math.sin(this.combatNow/260);
     g.setBlendMode(Phaser.BlendModes.ADD).fillStyle(0xffd66b,pulse).fillEllipse(x,y,70,24).fillStyle(0xfff2c0,pulse*.9).fillEllipse(x,y,38,13);
+  }
+  /** 旧的 5 段站立蓄势环（?rings=1 对比用）。 */
+  private drawAimRing():void{
+    const g=this.aimIndicator,sec=this.player.growth.stationarySeconds,on=this.player.growth.masteries.steady_aim>0&&sec>.05&&this.player.alive;
+    g.clear().setVisible(on);if(!on)return;
+    const x=this.player.x,y=this.player.y+19,rx=30,ry=11,full=sec>=4.99,arc=(a0:number,a1:number)=>{g.beginPath();for(let a=a0;a<=a1+.001;a+=Math.PI/36){const px=x+Math.cos(a)*rx,py=y+Math.sin(a)*ry;if(a===a0)g.moveTo(px,py);else g.lineTo(px,py);}g.strokePath();};
+    const seg=Math.PI*2/5,gap=.12;
+    for(let i=0;i<5;i++){const a0=-Math.PI/2+i*seg+gap/2,fill=Phaser.Math.Clamp(sec-i,0,1);g.lineStyle(3,0x18251e,.45);arc(a0,a0+seg-gap);if(fill>0){g.lineStyle(full?3.5:2.5,full?0xffe08a:0xe0c070,full?1:.55+.4*fill);arc(a0,a0+(seg-gap)*fill);}}
+    if(full){const pulse=.35+.3*Math.sin(this.combatNow/160);g.lineStyle(5,0xffd66b,pulse);g.strokeEllipse(x,y,rx*2+10,ry*2+6);}
   }
   private bloodJadeHeal(damage:number,time:number):void{
     if(this.bloodWindow<0||time<this.bloodWindow||time-this.bloodWindow>=1000){this.bloodWindow=time;this.bloodHealed=0;}

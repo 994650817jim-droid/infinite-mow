@@ -19,6 +19,7 @@ assets/raw/*
 !/tools/regression.mjs
 !/tools/audit-regression.mjs
 !/tools/chapter-regression.mjs
+!/tools/render-bgm.mjs
 !/tools/mobile-smoke.mjs
 !/tools/perf-smoke.mjs
 !/tools/phase8_realboss.mjs

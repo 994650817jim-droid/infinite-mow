@@ -7,7 +7,7 @@ const base = process.env.BASE ?? 'http://127.0.0.1:5173/', out = 'assets/review/
 mkdirSync(out, { recursive: true });
 let pass = 0, fail = 0; const errors = [];
 const ck = (n, ok, d) => { ok ? pass++ : fail++; console.log((ok ? 'PASS ' : 'FAIL ') + n + (d !== undefined ? ' · ' + JSON.stringify(d).slice(0, 400) : '')); };
-const HEROES = { machao: { name: '马超', weapon: 'spear_orbit' }, weiyan: { name: '魏延', weapon: 'zhenbei_blade' }, liubei: { name: '刘备', weapon: 'guandao' }, pangtong: { name: '庞统', weapon: 'lianhuan_mines' }, huangyueying: { name: '黄月英', weapon: 'crossbow' } };
+const HEROES = { machao: { name: '马超', weapon: 'zhanjin_lance' }, weiyan: { name: '魏延', weapon: 'zhenbei_blade' }, liubei: { name: '刘备', weapon: 'shuanggu_swords' }, pangtong: { name: '庞统', weapon: 'lianhuan_mines' }, huangyueying: { name: '黄月英', weapon: 'crossbow' } };
 const only = process.argv.slice(2), list = only.length ? only : Object.keys(HEROES);
 const b = await chromium.launch({ channel: 'chrome', headless: true });
 const G = "window.__game.scene.getScene('GameScene')";
@@ -31,19 +31,21 @@ for (const hero of list) {
     // 2026-11-15 重做：魏延靠受伤积拒敌、庞统靠火雷连锁积计策，这里直接给满层，只验证满层后的招牌技会触发；
     // 自然积层（受击 / 踩雷连锁）由 tools/test-weiyan-pangtong.mjs 覆盖。
     if (id === 'weiyan') pl.passive.stacks = 5;
+    // 2026-11-16 重做：马超靠移动积铁骑，原地测试直接给满层，验证西凉铁骑冲阵
+    if (id === 'machao') pl.passive.stacks = 6;
     if (id === 'pangtong') { pl.hp = pl.maxHp; pl.passive.stacks = 3; }
-    const fxSeen = new Set(); const fxWatch = setInterval(() => { for (const o of s.children.list) if (/^hero-fx-|^pangtong-ring$/.test(o.name)) fxSeen.add(o.name); }, 30);
+    const fxSeen = new Set(); const fxWatch = setInterval(() => { for (const o of s.children.list) if (/^hero-fx-|^pangtong-ring$|^machao-rider$/.test(o.name)) fxSeen.add(o.name); }, 30);
     const x0 = pl.x, y0 = pl.y, hp0 = pl.hp, ally0 = s.allies.filter(u => u.active).reduce((n, u) => n + u.hp, 0);
     const t0 = performance.now(); let triggered = 0, moved = 0;
     while (performance.now() - t0 < 20000) { await new Promise(r => setTimeout(r, 40)); const sn = pl.passive.snapshot(s.combatNow); moved = Math.max(moved, Math.hypot(pl.x - x0, pl.y - y0)); if (sn.triggers > triggered) { triggered = sn.triggers; await new Promise(r => setTimeout(r, 750)); moved = Math.max(moved, Math.hypot(pl.x - x0, pl.y - y0)); break; } }
     const fx = s.children.list.filter(o => /^hero-fx-/.test(o.name)).map(o => o.name); clearInterval(fxWatch);
     return { fx, fxSeen: [...fxSeen], triggered, moved: Math.round(moved), healed: Math.round(pl.hp - hp0), allyHealed: Math.round(s.allies.filter(u => u.active).reduce((n, u) => n + u.hp, 0) - ally0), allies: s.allies.filter(u => u.active).length };
   }, [G, hero]);
-  if (hero === 'machao') ck('马超：铁骑积满后出枪化为冲锋，主将向前突进 ≥100 像素', r.triggered >= 1 && r.moved >= 100, r);
+  if (hero === 'machao') ck('马超：西凉铁骑满层，召骑兵冲阵', r.triggered >= 1 && r.fxSeen.includes('machao-rider'), r);
   if (hero === 'weiyan') ck('魏延：拒敌满层后「谁敢杀我」（怒吼冲击波特效、3 秒减伤）', r.triggered >= 1 && r.fxSeen.includes('hero-fx-whoDares'), r);
   if (hero === 'pangtong') ck('庞统：计策满层后「火烧连环」（锁链火雷环、齐爆火凤）', r.triggered >= 1 && r.fxSeen.includes('pangtong-ring') && r.fxSeen.includes('hero-fx-phoenix'), r);
   if (hero === 'huangyueying') ck('黄月英：机括积满后扇形齐射（齿轮特效）', r.triggered >= 1, r);
-  if (hero === 'liubei') ck('刘备：仁德积满后回复自身与部曲生命', r.triggered >= 1 && r.healed > 0 && (r.allies === 0 || r.allyHealed > 0), r);
+  if (hero === 'liubei') ck('刘备：双股剑分击攒满仁德后回复自身与部曲生命', r.triggered >= 1 && r.healed > 0 && (r.allies === 0 || r.allyHealed > 0), r);
   await p.screenshot({ path: `${out}/${hero}-battle.png` });
   await p.close();
 }

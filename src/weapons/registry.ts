@@ -6,6 +6,7 @@ import type { Sfx } from '../systems/Sfx';
 import type { PlayerStats, WeaponId, WeaponState } from '../types';
 import { PASSIVE_RULES } from '../data/passives';
 import { HERO_TINT } from '../data/characters';
+import { BAODIAO_DEF, DANGYANG_DEF, ZHANJIN_DEF, SHUANGGU_DEF, baodiaoBehavior, dangyangBehavior, zhanjinBehavior, shuangguBehavior } from './heroWeapons2';
 import { ZHENBEI_DEF, LIANHUAN_DEF, SUN_KNIVES_DEF, DIAOCHAN_FANS_DEF, zhenbeiBehavior, lianhuanBehavior, sunKnivesBehavior, diaochanFansBehavior } from './heroWeapons';
 export { zhenbeiCracks, lianhuanMinesPerCast, sunOrbitKnives, diaochanFanCount } from './heroWeapons';
 
@@ -102,6 +103,10 @@ export const WEAPON_DEFS: Record<WeaponId, WeaponDef> = {
   lianhuan_mines: LIANHUAN_DEF,
   sun_knives: SUN_KNIVES_DEF,
   diaochan_fans: DIAOCHAN_FANS_DEF,
+  baodiao_bow: BAODIAO_DEF,
+  dangyang_roar: DANGYANG_DEF,
+  zhanjin_lance: ZHANJIN_DEF,
+  shuanggu_swords: SHUANGGU_DEF,
 };
 
 export const WEAPON_ORDER: WeaponId[] = ['spear_orbit', 'crossbow', 'flame_banner', 'guandao'];
@@ -484,5 +489,9 @@ export const WEAPON_BEHAVIORS: Record<WeaponId, (host: WeaponHost, weapon: Weapo
   lianhuan_mines: lianhuanBehavior,
   sun_knives: sunKnivesBehavior,
   diaochan_fans: diaochanFansBehavior,
+  baodiao_bow: baodiaoBehavior,
+  dangyang_roar: dangyangBehavior,
+  zhanjin_lance: zhanjinBehavior,
+  shuanggu_swords: shuangguBehavior,
 };
 

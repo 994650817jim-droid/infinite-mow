@@ -60,7 +60,7 @@ export const PASSIVE_RULES = {
    *  3 级「宝刀未老」：神射中每射杀一名精锐 / 首领，回复 laojiHealMul 最大生命，且 laojiGuardMs 内受伤不退出神射。 */
   jingxinStepMs: 500, fanSpreadRad: .22, fanMul: .7,
   /** 静心每级的神射重箭伤害加成（2026-11-16 平衡会话：去掉「百步」后 1-1 打不动首领，补回前期单体）。 */
-  jingxinSharpMul: [.12, .18, .25],
+  jingxinSharpMul: [.2, .18, .25], // 2026-11-16 用户批准：1 级 12% → 20%（平衡会话复测 1-1 后），2、3 级不变
   laojiKillsPerStack: 10, laojiPerStack: .025, laojiCap: [.15, .2, .25], laojiHealMul: .04, laojiGuardMs: 2000,
   /** 张飞·当阳喝断：声浪推进速度 / 推后力度；据水断桥：断桥区半径与持续。震慑与 140% 伤害沿用 roarRadius / roarStunMs / roarDamageMul。 */
   roarWaveSpeed: 480, roarWavePush: 2.5, bridgeRadius: 150, bridgeMs: 3000,

@@ -139,7 +139,7 @@ export function baodiaoBehavior(host: WeaponHost, weapon: WeaponState, dt: numbe
   const level = weapon.level;
   const ux = target.x - pl.x, uy = target.y - pl.y, d = Math.hypot(ux, uy) || 1;
   const sharp = pl.passive.isSharpshooter(time);
-  // 静心：神射中重箭伤害 +12/18/25%（补回去掉「百步」后的前期单体）
+  // 静心：神射中重箭伤害 +20/18/25%（补回去掉「百步」后的前期单体）
   const damage = BAODIAO_DEF.damage(level, pl.stats) * g.damageMultiplier(time) * (sharp && g.masteries.jingxin ? 1 + R.jingxinSharpMul[g.masteries.jingxin - 1] : 1);
   pl.faceDirection(cardinal(ux, uy), 200);
   if (sharp && time >= pl.nextSkillAction && pl.playAction('skill', ux < 0 ? 'left' : 'right')) pl.nextSkillAction = time + 4000; else pl.playAction('attack', ux < 0 ? 'left' : 'right');

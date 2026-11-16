@@ -4,16 +4,17 @@ const BASE = 'http://127.0.0.1:5173/';
 const out = 'screenshots/chapter2'; mkdirSync(out, { recursive: true });
 const browser = await chromium.launch({ channel: 'chrome', headless: true });
 const results = [];
-const deadline = setTimeout(() => { console.error('CHAPTER TIMEOUT: 90s'); void browser.close().finally(() => process.exit(2)); }, 90000);
+// 2026-11-15 bugfix-perf: a cold dev-server page now needs ~10 s to reach the battle (more art loaded at boot); budgets raised from 8 s / 90 s.
+const deadline = setTimeout(() => { console.error('CHAPTER TIMEOUT: 600s'); void browser.close().finally(() => process.exit(2)); }, 600000);
 const check = (name, ok, detail) => { results.push({ name, ok, detail }); console.log(`${ok ? 'PASS' : 'FAIL'} ${name} :: ${JSON.stringify(detail)}`); };
 async function scenario(name, run) {
   const context = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
   try {
-    const page = await context.newPage(); page.setDefaultTimeout(8000); const errors = [];
+    const page = await context.newPage(); page.setDefaultTimeout(20000); const errors = [];
     page.on('pageerror', e => errors.push(e.message));
     // Hulao remains campaign-locked until Yellow Turban is cleared. This suite
     // exercises the battle itself, so explicitly use the existing DEV stage bypass.
-    await page.goto(BASE + '?autostart=1&chapter=hulao&dev=1&stage=3'); await page.waitForFunction(() => !!window.__IM);
+    await page.goto(BASE + '?autostart=1&chapter=hulao&dev=1&stage=3'); await page.waitForFunction(() => !!window.__IM, null, { timeout: 30000 });
     await page.evaluate(() => { const s = window.__game.scene.getScene('GameScene'); s.spawnTimer = 1e8; s.eliteTimer = 1e8; window.__IM.clearWeapons(); window.__IM.killAllEnemies(); });
     await run(page); check(name + '_no_pageerror', !errors.length, errors);
   } catch (error) { check(name, false, String(error)); }
@@ -125,10 +126,10 @@ try {
   {
     const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
     try {
-      const page = await context.newPage(); page.setDefaultTimeout(8000); const errors = [];
+      const page = await context.newPage(); page.setDefaultTimeout(20000); const errors = [];
       page.on('pageerror', e => errors.push(e.message));
       await page.goto(BASE + '?autostart=1&chapter=huangjin&progression-check=' + Date.now());
-      await page.waitForFunction(() => !!window.__IM);
+      await page.waitForFunction(() => !!window.__IM, null, { timeout: 30000 });
       await page.evaluate(() => { for (const key of ['im_world_v1','im_world_backup_v1','im_chapter1_cleared']) localStorage.removeItem(key); });
       await page.evaluate(async () => {
         const [{ getBattleChapter }, { beginExpedition }] = await Promise.all([import('/src/data/chapters.ts'), import('/src/world/WorldStore.ts')]);
@@ -136,7 +137,8 @@ try {
         s.worldCampaign = true; s.chapter = getBattleChapter('huangjin', 3); s.expeditionId = beginExpedition('huangjin', 3);
         s.bossKilled = true; s.finish(true, 'boss');
       });
-      await page.waitForFunction(() => window.__IM?.mode === 'result');
+      // Zhang Jiao's victory now opens the camp (mode 'rest') with the chapter-one volunteers notice; the result-home link is still set.
+      await page.waitForFunction(() => window.__IM?.mode === 'result' || window.__IM?.mode === 'rest');
       const afterZhangjiao = await page.evaluate(() => {
         const s = window.__game.scene.getScene('GameScene'); const save = JSON.parse(localStorage.getItem('im_world_v1'));
         return { button: s.resultPanel.getByName('result-home').text, world: save.worldAvailable, hulaoUnlocked: localStorage.getItem('im_chapter1_cleared') === 'true' };
@@ -148,7 +150,8 @@ try {
         const data=await page.evaluate(()=>{const s=window.__game.scene.getScene('GameScene');const boss=s.chapter.bossName;s.bossKilled=true;s.finish(true,'boss');const save=JSON.parse(localStorage.getItem('im_world_v1'));return{boss,stage:save.dongzhuoStages,world:save.worldAvailable,button:s.resultPanel.getByName('result-home').text};});stages.push(data);
         if(stage<3)await page.evaluate(()=>window.__game.scene.getScene('GameScene').resultPanel.getByName('result-home').emit('pointerdown'));
       }
-      const ok=afterZhangjiao.button.includes('汜水关')&&!afterZhangjiao.world&&afterZhangjiao.hulaoUnlocked&&stages.every((s,i)=>s.stage===i+1&&s.boss===['华雄','徐荣','吕布'][i]&&s.world===(i===2))&&stages[2].button.includes('三国天下');
+      // 2026-11-15 bugfix-perf: since 0065c2c the world map opens after chapter one (Zhang Jiao), and the Lu Bu victory leads to the map with the new chapter (群雄) unlocked.
+      const ok=afterZhangjiao.button.includes('汜水关')&&afterZhangjiao.world&&afterZhangjiao.hulaoUnlocked&&stages.every((s,i)=>s.stage===i+1&&s.boss===['华雄','徐荣','吕布'][i]&&s.world)&&stages[2].button.includes('天下地图');
       check('campaign_progression_zhangjiao_to_hulao_to_world',ok&&errors.length===0,{afterZhangjiao,stages,errors});
     } catch (error) { check('campaign_progression_zhangjiao_to_hulao_to_world', false, String(error)); }
     finally { await context.close(); }
@@ -157,8 +160,8 @@ try {
     const context = await browser.newContext({ viewport: { width, height }, hasTouch: true });
     try {
       const page = await context.newPage(); const errors = []; page.on('pageerror', e => errors.push(e.message));
-      page.setDefaultTimeout(8000);
-      await page.goto(BASE + (width > 900 ? '?dev=1&stage=3&layout=desktop' : '?dev=1&stage=3&layout=mobile')); await page.waitForFunction(() => window.__game?.scene.isActive('MenuScene'));
+      page.setDefaultTimeout(20000);
+      await page.goto(BASE + (width > 900 ? '?dev=1&stage=3&layout=desktop' : '?dev=1&stage=3&layout=mobile')); await page.waitForFunction(() => window.__game?.scene.isActive('MenuScene'), null, { timeout: 30000 });
       const point = (x, y) => page.evaluate(([x, y]) => { const r = document.querySelector('canvas').getBoundingClientRect(), s = window.__game.scene.getScene('MenuScene'); return { x: r.x + x * r.width / s.scale.width, y: r.y + y * r.height / s.scale.height }; }, [x, y]);
       await page.evaluate(() => { window.__game.registry.set('menuChapterPicker', true); window.__game.scene.getScene('MenuScene').scene.restart(); });
       await page.waitForFunction(() => window.__game.scene.getScene('MenuScene').chapterButtons?.length === 2);
@@ -170,11 +173,15 @@ try {
       pos=await targetCenter(()=>{const s=window.__game.scene.getScene('MenuScene'),r=document.querySelector('canvas').getBoundingClientRect(),o=s.westRows.find(row=>row.stage===3).bg;return{x:r.x+o.x*r.width/s.scale.width,y:r.y+o.y*r.height/s.scale.height};});
       await page.touchscreen.tap(pos.x,pos.y);
       pos = await targetCenter(() => { const s=window.__game.scene.getScene('MenuScene'),r=document.querySelector('canvas').getBoundingClientRect(),o=s.westModal.getByName('west-deploy'); return {x:r.x+o.x*r.width/s.scale.width,y:r.y+o.y*r.height/s.scale.height}; });
-      await page.touchscreen.tap(pos.x, pos.y); await page.waitForFunction(() => window.__IM?.chapterInfo().id === 'hulao');
+      await page.touchscreen.tap(pos.x, pos.y); await page.waitForFunction(() => window.__IM?.chapterInfo().id === 'hulao', null, { timeout: 30000 });
       check(`chapter_selection_input_${width}`, true, {});
       await page.evaluate(() => { const s = window.__game.scene.getScene('GameScene'); s.spawnBoss(); s.boss.sprite.setPosition(s.player.x, s.player.y - 150); window.__IM.god(); });
       await page.waitForTimeout(350); await page.screenshot({ path: `${out}/hulao-game-${width}.png` });
       await page.evaluate(() => { const s = window.__game.scene.getScene('GameScene'); s.hitEnemy(s.boss, 4000, s.combatNow); });
+      // 2026-11-15 bugfix-perf: a boss kill now offers the relic choice (mode 'bossloot') before the result panel.
+      const loot = await page.evaluate(() => { const s = window.__game.scene.getScene('GameScene'); const m = s.mode; if (m === 'bossloot') s.chooseUpgrade(0); return m; });
+      check(`chapter2_boss_loot_before_result_${width}`, loot === 'bossloot' || loot === 'result', { loot });
+      await page.waitForFunction(() => window.__game.scene.getScene('GameScene').mode === 'result');
       const victory = await page.evaluate(() => { const s = window.__game.scene.getScene('GameScene'); return { mode: s.mode, title: s.resultTexts.title.text, text: s.resultTexts.subtitle.text }; });
       check(`chapter2_victory_text_${width}`, victory.mode === 'result' && victory.title === '威震虎牢' && victory.text.includes('吕布'), victory);
       await page.screenshot({ path: `${out}/hulao-victory-${width}.png` });

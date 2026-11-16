@@ -4,7 +4,7 @@ import { FOLLOW, HERO_TEMPLATE, RANK, RECRUIT, TEMPLATE_ORDER, commonName, type 
 import { BOUNTY_GENERALS, seasonIndex } from '../world/WorldIntel';
 import { MAJOR_FACTIONS, type FactionId } from '../world/WorldCities';
 import { loadWorld, spendWorld, worldUnlocked } from '../world/WorldStore';
-import { loadItems } from './ItemStore';
+import { loadItems, loadout, unequipSlot, type GearOwner } from './ItemStore';
 import { isChapterTestRun } from './ChapterProgress';
 
 /**
@@ -121,6 +121,16 @@ export function defaultHero(saved: string | null | undefined): CharacterId {
   const s = rosterEnforced() ? loadRoster() : null; return s?.lord && owned.includes(s.lord) ? s.lord : owned[0] ?? 'zhaoyun';
 }
 export const LOCKED_HINT = '招贤馆可招';
+/** 行囊里可以换装的人：天下开放前为全部可玩武将；之后为麾下所有武将（含招来的 r_ 编号）。 */
+export function gearOwners(): Array<{ id: GearOwner; name: string }> {
+  if (!rosterEnforced()) return CHARACTERS.map(c => ({ id: c.id, name: c.name }));
+  return loadRoster().owned.map(r => ({ id: (r.hero ?? r.id) as GearOwner, name: r.name.replace(/（.*）/, '') }));
+}
+/** 武将显示名（含招来的人）。 */
+export function ownerName(id: string | undefined): string {
+  if (!id) return ''; const c = CHARACTERS.find(x => x.id === id); if (c) return c.name;
+  const r = read()?.owned.find(x => x.id === id); return r ? r.name.replace(/（.*）/, '') : '';
+}
 
 // ———— 招贤馆 ————
 
@@ -182,7 +192,10 @@ export function recruit(index: number, captive = false): RosterResult {
 export function dismiss(id: string): RosterResult {
   const s = loadRoster(), i = s.owned.findIndex(r => r.id === id); if (i < 0) return { ok: false, message: '不在麾下' };
   if (s.owned[i].hero && s.owned[i].hero === s.lord) return { ok: false, message: '主公不能遣散' };
-  const name = s.owned[i].name; s.owned.splice(i, 1); s.followers = s.followers.filter(f => f !== id); write(s); return { ok: true, message: `${name}辞去` };
+  const name = s.owned[i].name, gear = s.owned[i].hero ?? s.owned[i].id;
+  // 身上的兵装卸回行囊（道具会话约定用 unequipSlot）
+  try { for (const slot of Object.keys(loadout(gear as GearOwner))) unequipSlot(gear as GearOwner, slot as never); } catch { /* 行囊不可用 */ }
+  s.owned.splice(i, 1); s.followers = s.followers.filter(f => f !== id); write(s); return { ok: true, message: `${name}辞去${gear.startsWith('r_') ? '，兵装已卸回行囊' : ''}` };
 }
 
 // ———— 招降 ————

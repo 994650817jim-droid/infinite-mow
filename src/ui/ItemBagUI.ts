@@ -1,10 +1,11 @@
 import Phaser from 'phaser';
+import { gearOwners, ownerName } from '../systems/RosterStore';
 import { DEPTH, FONT, GAME_HEIGHT, GAME_WIDTH, HEADING_FONT, IS_DESKTOP } from '../config';
 import { CHARACTERS, type CharacterId } from '../data/characters';
 import { AFFIXES, BAG_CAPACITY, LEGENDS, QUALITIES, QUALITY_ORDER, SLOTS, SLOT_ORDER, SPECIALS, formatAffix, itemDef, itemName, itemSlot, type AffixId, type ItemInstance, type ItemSlot } from '../data/items';
 import { HORSES, mountStyle } from '../data/mounts';
 import { gearFromItems, gearSummary, horseBonusText } from '../systems/ItemEffects';
-import { equipItem, equippedBy, heroHorse, horseRider, legacyValue, loadItems, salvageLegacy, loadout, looseCount, markBagSeen, rideHorse, salvageItems, salvageUpTo, setAutoSalvageWhite, stableUnlocked, takeItemNotice, takeStableAnnouncement, unequipSlot } from '../systems/ItemStore';
+import { type GearOwner, equipItem, equippedBy, heroHorse, horseRider, legacyValue, loadItems, salvageLegacy, loadout, looseCount, markBagSeen, rideHorse, salvageItems, salvageUpTo, setAutoSalvageWhite, stableUnlocked, takeItemNotice, takeStableAnnouncement, unequipSlot } from '../systems/ItemStore';
 import { drawQualityFrame, ensureItemTextures, horseIcon, itemIconKey, itemTile } from './ItemQuality';
 import { lqHitBox, lqPanel, lqSkin } from './LacquerKit';
 import { padNavigator } from './PadNavigator';
@@ -44,7 +45,7 @@ export function openStable(scene: Phaser.Scene, hero: CharacterId, onClose?: () 
 export class ItemBagUI {
   readonly root: Phaser.GameObjects.Container;
   private body!: Phaser.GameObjects.Container;
-  private hero: CharacterId;
+  private hero: GearOwner;
   private tab: 'bag' | 'loot';
   private filter: ItemSlot | 'all' = 'all';
   private page = 0;
@@ -106,7 +107,7 @@ export class ItemBagUI {
   private wear(item: ItemInstance): boolean {
     const inBag = loadItems().bag.some(i => i.uid === item.uid);
     const ok = inBag ? equipItem(this.hero, item.uid) : !!this.o.claimLoot?.(item);
-    if (ok) { this.notice = `${CHARACTERS.find(c => c.id === this.hero)?.name ?? ''} 穿戴 ${itemName(item)}${inBag ? '' : ' · 已收入行囊'}`; this.o.onGearChange?.(); }
+    if (ok) { this.notice = `${ownerName(this.hero)} 穿戴 ${itemName(item)}${inBag ? '' : ' · 已收入行囊'}`; this.o.onGearChange?.(); }
     return ok;
   }
   private takeOff(slot: ItemSlot): void { if (unequipSlot(this.hero, slot)) { this.notice = '已卸下'; this.o.onGearChange?.(); } }
@@ -133,10 +134,10 @@ export class ItemBagUI {
 
     // 武将切换（战斗中只看出征的武将）
     const heroY = y0 + (D ? 70 : 90);
-    const heroRows = Math.ceil(CHARACTERS.length / (D ? 10 : 5));
+    const owners = gearOwners(), heroRows = Math.ceil(Math.max(1, owners.length) / (D ? 10 : 5));
     if (!this.battle) {
       const per = D ? 10 : 5, chipW = D ? 80 : 92, gap = 8, rowW = per * chipW + (per - 1) * gap, sx = W / 2 - rowW / 2 + chipW / 2;
-      CHARACTERS.forEach((c, i) => {
+      owners.forEach((c, i) => {
         const col = i % per, row = Math.floor(i / per), worn = Object.keys(loadout(c.id, s)).length;
         this.button(sx + col * (chipW + gap), heroY + row * 42, c.name + (worn ? ' ·' + worn : ''), 'item-hero-' + c.id, () => { this.hero = c.id; if (this.selected !== 'stable') this.selected = null; this.render(); }, { size: D ? 14 : 15, active: c.id === this.hero, w: chipW - 24 });
       });
@@ -211,7 +212,7 @@ export class ItemBagUI {
       tile.setName('item-cell-' + i).setData('uid', item.uid).setSize(cell, cell).setInteractive({ useHandCursor: true });
       this.tapOrDrag(tile, () => this.select(item.uid), canWearLoot ? { item } : undefined);
       const owner = this.tab === 'bag' ? equippedBy(s, item.uid) : undefined;
-      if (owner) this.text(ix - cell / 2 + 3, iy + cell / 2 - 3, CHARACTERS.find(c => c.id === owner)?.name.slice(0, 1) ?? '装', 11, '#1c140a').setOrigin(0, 1).setBackgroundColor('#d7b46a').setPadding(2, 0);
+      if (owner) this.text(ix - cell / 2 + 3, iy + cell / 2 - 3, (ownerName(owner).slice(0, 1) || '装'), 11, '#1c140a').setOrigin(0, 1).setBackgroundColor('#d7b46a').setPadding(2, 0);
     });
     if (!list.length) this.text(gx + gw / 2, gridTop + 60, this.tab === 'loot' ? '本局尚未缴获兵装\n击败精锐、首领或打开宝箱可得' : '行囊空空\n战斗中击败精锐、首领、打开宝箱可得兵装', 15, '#9c8c6c').setOrigin(.5).setAlign('center');
     const pageY = y0 + ph - (D ? 36 : 44);
@@ -240,7 +241,7 @@ export class ItemBagUI {
       const img = this.add(this.scene.add.image(cx, top + h - 4, key).setOrigin(.5, 1)), src = img.texture.getSourceImage() as { width: number; height: number };
       img.setScale(Math.min((w - 8) / src.width, (h - 8) / src.height)).setName('item-portrait');
     }
-    this.text(cx, top + h - 6, c?.name ?? '', 15, '#f2ddae', true).setOrigin(.5, 1).setStroke('#140d07', 4);
+    this.text(cx, top + h - 6, c?.name ?? ownerName(this.hero), 15, '#f2ddae', true).setOrigin(.5, 1).setStroke('#140d07', 4);
   }
 
   /**
@@ -345,7 +346,7 @@ export class ItemBagUI {
   private renderStable(): void {
     const D = IS_DESKTOP, s = loadItems(), unlocked = stableUnlocked(), cols = D ? 2 : 1, rowH = D ? 60 : 44;
     const cw = D ? 860 : 500, rows = Math.ceil(HORSES.length / cols), est = 96 + rows * rowH + 40;
-    const { card, x, y, g } = this.card(cw, est), heroName = CHARACTERS.find(c => c.id === this.hero)?.name ?? '';
+    const { card, x, y, g } = this.card(cw, est), heroName = ownerName(this.hero);
     this.plainFrame(g, x, y, cw, est);
     this.text(x + 26, y + 18, '马厩', 24, '#f2ddae', true, card).setName('item-detail-name');
     const sub = !unlocked ? '第一章「黄巾之乱」通关后开放，并赠驽马一匹。之后的马靠各章首领首次击杀获得。'
@@ -387,7 +388,7 @@ export class ItemBagUI {
     const g = this.add(this.scene.add.graphics(), card);
     card.add(itemTile(this.scene, x + 50, y + 52, 64, item).setScrollFactor(0));
     this.text(x + 92, y + 22, itemName(item), 22, q.css, true, card).setName('item-detail-name');
-    this.text(x + 92, y + 56, `${q.name} · ${SLOTS[slot].name}${owner ? ' · ' + (CHARACTERS.find(c => c.id === owner)?.name ?? '') + '已穿戴' : ''}`, 13, '#b9a57a', false, card).setName('item-detail-quality');
+    this.text(x + 92, y + 56, `${q.name} · ${SLOTS[slot].name}${owner ? ' · ' + ownerName(owner) + '已穿戴' : ''}`, 13, '#b9a57a', false, card).setName('item-detail-quality');
     let ty = y + 96;
     this.text(x + 26, ty, lines.join('\n'), 15, '#e9dcbc', false, card).setLineSpacing(6).setName('item-detail-affixes'); ty += lines.length * 25 + 6;
     if (item.special) { this.text(x + 26, ty, `★ ${SPECIALS[item.special].name}：${SPECIALS[item.special].desc}`, 14, '#f3c37a', false, card).setWordWrapWidth(cw - 52); ty += 44; }

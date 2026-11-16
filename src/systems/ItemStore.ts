@@ -1,4 +1,8 @@
-import type { CharacterId } from '../data/characters';
+import { CHARACTERS, type CharacterId } from '../data/characters';
+/** 穿装备的人：可玩武将（CharacterId）或招贤馆招来的武将（r_<数字>，RosterStore）。 */
+export type GearOwner = CharacterId | `r_${number}`;
+export const isGearOwner = (k: unknown): k is GearOwner => typeof k === 'string' && (/^r_\d{1,9}$/.test(k) || CHARACTERS.some(c => c.id === k));
+const isHeroId = (k: GearOwner): k is CharacterId => !k.startsWith('r_');
 import { AFFIXES, BAG_CAPACITY, BAG_OVERFLOW, LEGACY_MOUNT_BASES, LEGACY_WEAPON_BASES, QUALITIES, QUALITY_ORDER, SLOT_ORDER, itemDef, itemSlot, type ItemInstance, type ItemQuality, type ItemSlot, type PityState } from '../data/items';
 import { HORSES, STARTER_HORSE, horseDef, type HorseDef } from '../data/mounts';
 import { addTownMoney } from '../world/WorldStore';
@@ -15,7 +19,7 @@ export const ITEMS_KEY = 'im_items_v2';
 export const LEGACY_ITEMS_KEY = 'im_items_v1';
 export interface StableSave { owned: string[]; riders: Partial<Record<CharacterId, string>>; announced: boolean }
 export interface ItemSave {
-  version: 2; bag: ItemInstance[]; loadouts: Partial<Record<CharacterId, Partial<Record<ItemSlot, string>>>>; salvaged: number;
+  version: 2; bag: ItemInstance[]; loadouts: Partial<Record<GearOwner, Partial<Record<ItemSlot, string>>>>; salvaged: number;
   stable: StableSave; pity: PityState; autoSalvageWhite: boolean;
   /** 上次打开行囊后新收入的件数（主页行囊角标）。 */
   unseen: number;
@@ -43,12 +47,13 @@ function sanitize(v: Record<string, unknown>): ItemSave {
   s.bag = bag.filter((i: unknown) => valid(i) && !seen.has((i as ItemInstance).uid) && !!seen.add((i as ItemInstance).uid)).slice(0, 400) as ItemInstance[];
   const owned = new Map(s.bag.map(i => [i.uid, i])), used = new Set<string>();
   for (const [hero, slots] of Object.entries((v.loadouts ?? {}) as Record<string, unknown>)) {
+    if (!isGearOwner(hero)) continue;
     const out: Partial<Record<ItemSlot, string>> = {};
     for (const slot of SLOT_ORDER) {
       const uid = (slots as Record<string, unknown>)?.[slot], item = typeof uid === 'string' && !used.has(uid) ? owned.get(uid) : undefined;
       if (item && itemSlot(item) === slot) { out[slot] = item.uid; used.add(item.uid); }
     }
-    if (Object.keys(out).length) s.loadouts[hero as CharacterId] = out;
+    if (Object.keys(out).length) s.loadouts[hero] = out;
   }
   s.salvaged = count(v.salvaged, 1e9);
   const st = (v.stable ?? {}) as Partial<StableSave>;
@@ -135,11 +140,11 @@ export function resetItemCache(): void { memory = null; }
 /** 旧档迁移提示：取一次后清掉。 */
 export function takeItemNotice(): string | undefined { const s = loadItems(); if (!s.notice) return undefined; const n = s.notice; delete s.notice; commit(s); return n; }
 
-export function equippedBy(s: ItemSave, uid: string): CharacterId | undefined {
-  for (const [hero, slots] of Object.entries(s.loadouts)) if (slots && Object.values(slots).includes(uid)) return hero as CharacterId;
+export function equippedBy(s: ItemSave, uid: string): GearOwner | undefined {
+  for (const [hero, slots] of Object.entries(s.loadouts)) if (slots && Object.values(slots).includes(uid)) return hero as GearOwner;
   return undefined;
 }
-export function loadout(hero: CharacterId, s: ItemSave = loadItems()): Partial<Record<ItemSlot, ItemInstance>> {
+export function loadout(hero: GearOwner, s: ItemSave = loadItems()): Partial<Record<ItemSlot, ItemInstance>> {
   const out: Partial<Record<ItemSlot, ItemInstance>> = {}, slots = s.loadouts[hero] ?? {};
   for (const slot of SLOT_ORDER) { const item = slots[slot] ? s.bag.find(i => i.uid === slots[slot]) : undefined; if (item) out[slot] = item; }
   return out;
@@ -186,19 +191,19 @@ export function loadPity(): PityState { return { ...loadItems().pity }; }
 
 export function addItems(items: ItemInstance[]): void { const s = loadItems(); addToBag(s, items); commit(s); }
 
-export function equipItem(hero: CharacterId, uid: string): boolean {
+export function equipItem(hero: GearOwner, uid: string): boolean {
   const s = loadItems(), item = s.bag.find(i => i.uid === uid); if (!item) return false;
   for (const slots of Object.values(s.loadouts)) if (slots) for (const slot of SLOT_ORDER) if (slots[slot] === uid) delete slots[slot];
   (s.loadouts[hero] ??= {})[itemSlot(item)] = uid; commit(s); return true;
 }
 /** 战斗中穿上本局缴获：立刻收入行囊并穿上（算作已带回，败退不丢）。调用方负责把它从 runLoot 移除。 */
-export function claimRunLoot(hero: CharacterId, item: ItemInstance): boolean {
+export function claimRunLoot(hero: GearOwner, item: ItemInstance): boolean {
   if (!valid(item)) return false;
   const s = loadItems();
   if (!s.bag.some(i => i.uid === item.uid)) s.bag.push(structuredClone(item));
   commit(s); return equipItem(hero, item.uid);
 }
-export function unequipSlot(hero: CharacterId, slot: ItemSlot): boolean {
+export function unequipSlot(hero: GearOwner, slot: ItemSlot): boolean {
   const s = loadItems(), slots = s.loadouts[hero]; if (!slots?.[slot]) return false;
   delete slots[slot]; commit(s); return true;
 }
@@ -235,13 +240,14 @@ export function takeStableAnnouncement(): boolean {
 }
 export function ownedHorses(s: ItemSave = loadItems()): HorseDef[] { return HORSES.filter(h => s.stable.owned.includes(h.id)); }
 /** 该武将出征骑的马（马厩未开放或没分配时为空）。 */
-export function heroHorse(hero: CharacterId, s: ItemSave = loadItems()): HorseDef | undefined {
-  if (!stableUnlocked()) return undefined;
+export function heroHorse(hero: GearOwner, s: ItemSave = loadItems()): HorseDef | undefined {
+  if (!stableUnlocked() || !isHeroId(hero)) return undefined;
   const id = s.stable.riders[hero]; return id && s.stable.owned.includes(id) ? horseDef(id) : undefined;
 }
 export function horseRider(id: string, s: ItemSave = loadItems()): CharacterId | undefined { return (Object.entries(s.stable.riders) as [CharacterId, string][]).find(([, h]) => h === id)?.[0]; }
 /** 给武将换马（null = 下马）。一匹马同一时间只归一名武将，换给别人时原骑者自动下马。只应在休整时调用（界面负责限制）。 */
-export function rideHorse(hero: CharacterId, id: string | null): boolean {
+export function rideHorse(hero: GearOwner, id: string | null): boolean {
+  if (!isHeroId(hero)) return false; // 招来的 r_ 武将暂不骑马（道具会话约定）
   const s = loadItems();
   if (id && !s.stable.owned.includes(id)) return false;
   for (const [h, x] of Object.entries(s.stable.riders)) if (x === id) delete s.stable.riders[h as CharacterId];

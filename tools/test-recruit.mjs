@@ -8,7 +8,7 @@ let pass = 0, fail = 0; const errors = [];
 const ck = (n, ok, d) => { ok ? pass++ : fail++; console.log((ok ? 'PASS ' : 'FAIL ') + n + (d !== undefined && !ok ? ' · ' + JSON.stringify(d) : '')); };
 const world = (o = {}) => ({ version: 7, yellowStages: 3, dongzhuoStages: 3, warlordStages: 3, guanduStages: 0, worldAvailable: true, cleared: { huangjin: true, hulao: true }, merits: 5000, provisions: 100000, buildings: { barracks: 1, farm: 1, clinic: 1 }, reserve: {}, receipts: [], nodes: ['home', 'huangjin', 'hulao', 'qunxiong', 'guandu'], ownedCities: ['xuchang', 'runan', 'guandu'], eraSeen: 2, capturedEver: ['xuchang', 'runan', 'guandu'], alerts: [], lastLost: [], chapterSeen: 4, ...o });
 // 老存档：关羽穿过一件兵装（应随迁移保留）
-const items = { version: 1, bag: [{ uid: 't1', base: 'blade_ring', quality: 'white', affixes: [] }], loadouts: { guanyu: { weapon: 't1' } }, salvaged: 0 };
+const items = { version: 1, bag: [{ uid: 't1', base: 'lamellar', quality: 'white', affixes: [] }], loadouts: { guanyu: { armor: 't1' } }, salvaged: 0 };
 const b = await chromium.launch({ channel: 'chrome', headless: true });
 const page = async (layout = 'mobile', query = '', extra = {}) => {
   const p = await b.newPage({ viewport: layout === 'mobile' ? { width: 390, height: 844 } : { width: 1280, height: 720 }, deviceScaleFactor: layout === 'mobile' ? 2 : 1 });
@@ -63,6 +63,7 @@ const R = (p, fn, arg) => p.evaluate(async ([src, a]) => { const r = await impor
     o.full = r.toggleFollower(zh.id); w.addTownMoney(1000); o.hall = r.upgradeHall(); o.add = r.toggleFollower(zh.id); o.cap2 = r.followerCap();
     o.rank = r.rankUp(zh.id, 'weapon'); o.bonus = r.rankBonus(r.loadRoster().owned.find(x => x.id === zh.id));
     o.lordDismiss = r.dismiss('zhaoyun');
+    o.zhId = zh.id;
     r.setRosterRandom(); return o;
   });
   ck('手动刷新：第一次 30 军粮，之后 60', r.c1 === 30 && r.c2 === 60 && r.spent === 30, r);
@@ -71,6 +72,20 @@ const R = (p, fn, arg) => p.evaluate(async ([src, a]) => { const r = await impor
   ck('击败敌将俘获进降将栏，不重复', r.cap === '张郃' && r.capAgain === null, r);
   ck('招降六折（300 军粮）', r.capRec.ok && r.capCost === 300, r);
   ck('随行上限 1；升级招贤馆后可带 2 人', !r.full.ok && r.hall.ok && r.add.ok && r.cap2 === 2, r);
+  // 随行装备：招来的 r_ 武将可以穿戴，存档校验接受 r_ 键、丢掉非法键；行囊只列麾下；遣散时卸回行囊
+  const g = await p.evaluate(async id => {
+    const I = await import('/src/systems/ItemStore.ts'), R = await import('/src/systems/RosterStore.ts'), o = {};
+    I.addItems([{ uid: 'g1', base: 'lamellar', quality: 'blue', affixes: [{ id: 'damage', value: .05 }] }]);
+    o.equip = I.equipItem(id, 'g1'); o.worn = Object.keys(I.loadout(id));
+    const raw = JSON.parse(localStorage.getItem('im_items_v2')); raw.loadouts.hacker = { armor: 'g1' }; raw.loadouts.r_x = { armor: 'g1' }; localStorage.setItem('im_items_v2', JSON.stringify(raw)); I.resetItemCache();
+    const s = I.loadItems(); o.keys = Object.keys(s.loadouts).sort(); o.kept = I.equippedBy(s, 'g1');
+    o.horse = I.rideHorse(id, null); o.owners = R.gearOwners().map(x => x.id); o.name = R.ownerName(id);
+    o.dismiss = R.dismiss(id); o.after = I.equippedBy(I.loadItems(), 'g1') ?? null; o.inBag = I.loadItems().bag.some(i => i.uid === 'g1');
+    return o;
+  }, r.zhId);
+  ck('招来的武将能穿兵装，存档只认可玩武将与 r_ 编号', g.equip && g.worn.join() === 'armor' && g.kept === r.zhId && !g.keys.includes('hacker') && !g.keys.includes('r_x'), g);
+  ck('招来的武将不能骑马；行囊武将列表 = 麾下（含招来的人）', g.horse === false && g.owners.includes(r.zhId) && g.owners.includes('zhaoyun') && g.owners.length < 12 && g.name === '张郃', g);
+  ck('遣散时兵装卸回行囊', g.dismiss.ok && g.after === null && g.inBag, g);
   ck('将阶：兵器线 +6% 伤害；主公不能遣散', r.rank.ok && Math.abs(r.bonus.damage - .06) < 1e-9 && !r.lordDismiss.ok, r);
   await p.close();
 }

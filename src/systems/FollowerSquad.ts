@@ -7,6 +7,9 @@ import type { Enemy } from '../entities/Enemy';
 import type { Player } from '../entities/Player';
 import { visualTextureKey } from './ReadableTextures';
 import { rankBonus, type Recruit } from './RosterStore';
+import { loadout, type GearOwner } from './ItemStore';
+import { emptyGear, gearFromItems, type GearStats } from './ItemEffects';
+import type { ItemInstance } from '../data/items';
 
 /**
  * 随行武将（RECRUIT_PLAN.md §4，参考《战锤：幸存者》的随从）：贴着主将站位，自动打主将附近的敌人。
@@ -28,15 +31,19 @@ export class Follower {
   hp = 1; maxHp = 1; cooldown = 0; restUntil = 0; target: Enemy | null = null; nextQuery = 0; nextContact = 0;
   slot = 0; dir: 'down' | 'up' | 'left' | 'right' = 'down'; walk = 0; stuckAt = 0; lastX = 0; lastY = 0; hurtUntil = 0; downs = 0; kills = 0; hits = 0;
   readonly sprite: Phaser.GameObjects.Image; readonly shadow: Phaser.GameObjects.Ellipse; readonly label: Phaser.GameObjects.Text; readonly bar: Phaser.GameObjects.Graphics;
-  readonly sheet: string; readonly template: FollowerTemplate; readonly damage: number; readonly speedMul: number;
+  readonly sheet: string; readonly template: FollowerTemplate; readonly damage: number; readonly speedMul: number; readonly haste: number; readonly gear: GearStats;
   constructor(readonly scene: Phaser.Scene, readonly recruit: Recruit, x: number, y: number, leaderLevelHp: number) {
     this.template = recruit.template;
     const t = TEMPLATES[this.template], b = rankBonus(recruit), hero = recruit.hero ? getCharacter(recruit.hero) : null, q = QUALITY_POWER[recruit.quality];
     const own = hero ? heroSheet(hero.id) : '';
     this.sheet = own && scene.textures.exists(own) ? own : scene.textures.exists(TROOP_SHEET[this.template]) ? TROOP_SHEET[this.template] : 'hero_walk_sheet';
-    this.damage = t.damage * q * (hero?.damageMul ?? 1) * (1 + b.damage);
-    this.maxHp = Math.round(t.hp * q * (hero?.hpMul ?? 1) * (1 + b.hp) * leaderLevelHp); this.hp = this.maxHp;
-    this.speedMul = t.speed * (hero?.speedMul ?? 1);
+    // 自己身上的兵装（行囊里给这名武将穿的，不叠到主将身上；招来的 r_ 武将不骑马）
+    let g = emptyGear(); try { g = gearFromItems(Object.values(loadout((recruit.hero ?? recruit.id) as GearOwner)).filter((i): i is ItemInstance => !!i)); } catch { /* 行囊不可用 */ }
+    this.gear = g;
+    this.damage = t.damage * q * (hero?.damageMul ?? 1) * (1 + b.damage) * (1 + g.damage) * (1 + g.crit);
+    this.maxHp = Math.round(t.hp * q * (hero?.hpMul ?? 1) * (1 + b.hp) * (1 + g.hp) * leaderLevelHp); this.hp = this.maxHp;
+    this.speedMul = t.speed * (hero?.speedMul ?? 1) * (1 + g.move);
+    this.haste = (1 + b.haste) * (1 + g.attackSpeed);
     this.cooldown = .3 + Math.random() * .4;
     this.shadow = scene.add.ellipse(x, y + 2, 34, 12, 0x000000, .28).setDepth(DEPTH.player - 2);
     this.sprite = scene.add.image(x, y, visualTextureKey(scene, this.sheet), 'down_0').setOrigin(.5, .86).setDepth(DEPTH.player - 1);
@@ -99,7 +106,8 @@ export class FollowerSquad {
       this.move(f, gx, gy, dt, speed, now);
       // 攻击
       f.cooldown -= dt;
-      if (f.target && f.cooldown <= 0 && Math.hypot(f.target.x - f.x, f.target.y - f.y) <= t.range) { f.cooldown = t.cooldown / 1000; this.attack(f, f.target, now, f.damage * dmgShare); }
+      if (f.target && f.cooldown <= 0 && Math.hypot(f.target.x - f.x, f.target.y - f.y) <= t.range) { f.cooldown = t.cooldown / 1000 / f.haste; this.attack(f, f.target, now, f.damage * dmgShare); }
+      if (f.gear.regen > 0) f.hp = Math.min(f.maxHp, f.hp + f.gear.regen * dt);
       // 接触伤害
       if (now >= f.nextContact) {
         f.nextContact = now + 400; let dmg = 0;
@@ -114,7 +122,7 @@ export class FollowerSquad {
   /** 外部伤害（首领技能等）。 */
   hurt(f: Follower, damage: number, now: number): void {
     if (f.resting) return;
-    f.hp -= damage; f.hurtUntil = now + 140;
+    f.hp -= damage * Math.max(0, 1 - f.gear.reduce); f.hurtUntil = now + 140;
     if (f.hp <= 0) { f.hp = 0; f.restUntil = now + FOLLOW.restMs; f.downs++; this.stats.downs++; f.target = null; f.setVisible(false); this.puff(f.x, f.y, now); }
   }
   private nearest(cx: number, cy: number, r: number, fx: number, fy: number): Enemy | null {

@@ -44,12 +44,13 @@ export interface WeaponHost {
   heroFx?(id: string, x: number, y: number, size: number, rotation?: number): void;
 }
 
+// 2026-11-16 平衡（试玩反馈「关羽攻击范围太大」，夜间按推荐方案执行）：半径 125/150/175/200/225 → 120/135/150/165/180（满级 −20%），弧长同比
 export const GUANDAO_TABLE = [
-  { radius: 125, angle: 120, damage: 32, cooldown: 1.45, arc: 181.25 },
-  { radius: 150, angle: 120, damage: 38, cooldown: 1.45, arc: 217.5 },
-  { radius: 175, angle: 125, damage: 43, cooldown: 1.45, arc: 253.75 },
-  { radius: 200, angle: 130, damage: 49, cooldown: 1.3, arc: 290.0 },
-  { radius: 225, angle: 135, damage: 56, cooldown: 1.25, arc: 326.25 },
+  { radius: 120, angle: 120, damage: 32, cooldown: 1.45, arc: 174 },
+  { radius: 135, angle: 120, damage: 38, cooldown: 1.45, arc: 195.75 },
+  { radius: 150, angle: 125, damage: 43, cooldown: 1.45, arc: 217.5 },
+  { radius: 165, angle: 130, damage: 49, cooldown: 1.3, arc: 239.25 },
+  { radius: 180, angle: 135, damage: 56, cooldown: 1.25, arc: 261 },
 ];
 const levelIndex = (level: number): number => Math.max(0, Math.min(4, Math.floor(level) - 1));
 /** 黄忠连弩每级额外箭数（Lv1 0 支 … Lv5 4 支，共 5 支）。 */

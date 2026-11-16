@@ -15,7 +15,8 @@ export const CHARACTER_PASSIVES: Record<CharacterId, { name: string; maxStacks: 
 };
 export const PASSIVE_RULES = {
   dragonIntervalMs: 150, spearLengthMul: 1.25,
-  coneThreshold: 3, guandaoRangePerStack: .06, guandaoDamageMul: 1.25,
+  // 2026-11-16 平衡：势如破竹每层范围 +6% → +4%（关羽范围削弱）
+  coneThreshold: 3, guandaoRangePerStack: .04, guandaoDamageMul: 1.25,
   calmMs: 3000, critBonus: .10,
   mechIntervalMs: 250, mechBolts: 6, mechDamageMul: .6,
   /** 魏延·镇北环首刀：直线裂波（长 / 总宽 / 贴身距离与加成）；镇守汉中：受击积拒敌（每 0.5 秒最多 1 层）；
@@ -37,7 +38,8 @@ export const PASSIVE_RULES = {
   /** 孙尚香·弓腰姬飞刀：环绕刀（半径 / 每名敌人割伤间隔）、掷刀（射程 / 速度 / 穿透 / 补刀时间 / 移动中间隔倍率）。 */
   knifeOrbitR: 55, knifeOrbitHitMs: 500, knifeRange: 380, knifeSpeed: 650, knifePierce: 2, knifeRegenMs: 1200, knifeMovingCdMul: .7,
   /** 貂蝉·双花扇：回旋飞扇（距离 / 速度）；离间：魅惑 3 层倒戈 3 秒（精锐减半），倒戈者受伤 +20%、冲向 260 内最近同伴每 0.5 秒撞一次；首领改为 3 秒受伤 +25%；4 秒没扇中魅惑消散。 */
-  fanRange: 230, fanSpeed: 520, charmNeed: 3, turnMs: 3000, turnVulnerability: 1.2, charmVulnerability: 1.25, turnSeek: 260, turnHitMs: 500, charmDecayMs: 4000,
+  // 2026-11-16 平衡（12 将基线：1-1 整关放不出大招）：倒戈所需扇中次数 3 → 2
+  fanRange: 230, fanSpeed: 520, charmNeed: 2, turnMs: 3000, turnVulnerability: 1.2, charmVulnerability: 1.25, turnSeek: 260, turnHitMs: 500, charmDecayMs: 4000,
   /** 貂蝉·闭月：舞带环身 2 秒，半径 160，每 0.4 秒 50% 伤害，圈内敌人倒戈。 */
   moonMs: 2000, moonRadius: 160, moonTickMs: 400, moonDamageMul: .5,
   /** 黄忠·宝雕弓：重箭（速度 / 射程 / 击退）；神射时命中处小范围爆裂（半径 / 伤害倍率）。 */

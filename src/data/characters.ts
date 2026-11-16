@@ -72,7 +72,8 @@ export const CHARACTERS: CharacterDef[] = [
     name: '诸葛亮',
     desc: '军师 · 火焰范围爆发，生命较低',
     // 2026-11-15 平衡（用户批准）：生命 0.86 → 0.95（测量中阵亡次数最多）
-    hpMul: 0.95,
+    // 2026-11-16 平衡（12 将基线：承伤最高、综合分 0.70）：生命 0.95 → 1.05
+    hpMul: 1.05,
     speedMul: 1.04,
     damageMul: 1.0,
     portrait: 'portrait_zhuge',
@@ -114,7 +115,8 @@ export const CHARACTERS: CharacterDef[] = [
     desc: '仁君 · 双股剑分击两敌，仁德聚义',
     hpMul: 1.05,
     speedMul: 1,
-    damageMul: 1,
+    // 2026-11-16 平衡（12 将基线：三关 DPS 最低、综合分 0.63）：伤害 1 → 1.2
+    damageMul: 1.2,
     portrait: 'liubei_portrait',
     startWeapon: 'shuanggu_swords',
   },
@@ -122,7 +124,8 @@ export const CHARACTERS: CharacterDef[] = [
     id: 'pangtong',
     name: '庞统',
     desc: '军师 · 布雷设伏，连环引爆',
-    hpMul: 0.95,
+    // 2026-11-16 平衡（12 将基线：1-3 / 虎牢关阵亡 10–13 次）：生命 0.95 → 1.05
+    hpMul: 1.05,
     speedMul: 1,
     damageMul: 1.05,
     portrait: 'pangtong_portrait',
@@ -134,7 +137,8 @@ export const CHARACTERS: CharacterDef[] = [
     desc: '巧匠 · 机关连弩，远程压制',
     hpMul: 0.88,
     speedMul: 1.04,
-    damageMul: 1,
+    // 2026-11-16 平衡（12 将基线：三关第一、综合分 1.66）：伤害 1 → 0.9
+    damageMul: 0.9,
     portrait: 'huangyueying_portrait',
     startWeapon: 'crossbow',
   },
@@ -153,7 +157,8 @@ export const CHARACTERS: CharacterDef[] = [
     id: 'diaochan',
     name: '貂蝉',
     desc: '舞姬 · 回旋双扇，离间敌军自相攻杀',
-    hpMul: 0.85,
+    // 2026-11-16 平衡（用户批准；12 将基线：承伤高、综合分 0.75）：生命 0.85 → 0.95
+    hpMul: 0.95,
     speedMul: 1.06,
     damageMul: 0.98,
     portrait: 'diaochan_portrait',

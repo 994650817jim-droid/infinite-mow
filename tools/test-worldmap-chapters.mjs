@@ -171,7 +171,7 @@ try {
     await pin(p, 'hulao', 3); await p.waitForTimeout(150);
     const m = await mapState(p);
     const hardBtn = await p.evaluate(() => { const b = window.__game.scene.getScene('WorldMapScene').children.getByName('map-hard'); return { visible: b.visible, on: !!b.input?.enabled }; });
-    ck('cleared chapter offers 乱世难度 beside 重打', hardBtn.visible && hardBtn.on && m.action.includes('重打') && m.detail.includes('吕布'), { hardBtn, m });
+    ck('cleared chapter offers 乱世难度 beside 重打', hardBtn.visible && hardBtn.on && m.action.includes('重打') && m.detail.includes('董卓'), { hardBtn, m });
     await p.screenshot({ path: `${out}/desktop-3-hard-offer.png` });
     await p.evaluate(() => window.__game.scene.getScene('WorldMapScene').children.getByName('map-hard').emit('pointerup'));
     await p.waitForFunction(() => window.__game.scene.isActive('MenuScene'), null, { timeout: 20000 });

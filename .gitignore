@@ -79,3 +79,4 @@ assets/raw/*
 !/tools/test-mount.mjs
 !/tools/test-shield.mjs
 !/tools/test-objectives.mjs
+!/tools/test-dongzhuo.mjs

@@ -85,6 +85,7 @@ assets/raw/*
 !/tools/artv2-enemies.mjs
 !/tools/walk-anim-record.mjs
 !/tools/test-dragging-blade.mjs
+!/tools/test-iff.mjs
 !/tools/test-hubao.mjs
 !/tools/test-mount.mjs
 !/tools/test-shield.mjs

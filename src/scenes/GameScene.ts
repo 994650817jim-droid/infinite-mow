@@ -76,6 +76,7 @@ import {claimRunLoot,depositRunLoot,grantHorse,heroHorse} from '../systems/ItemS
 import {horseForReward} from '../data/mounts';
 import {HeroMount} from '../systems/HeroMount';
 import { DraggingBladeFx } from '../systems/DraggingBladeFx';
+import { IffOverlay, readIffMode, type IffUnit } from '../systems/IffOverlay';
 import type {ItemInstance} from '../data/items';
 import {armShield,absorbShield,ShieldBars} from '../systems/ShieldGuard';
 import {StageObjectives} from '../systems/StageObjectives';
@@ -141,6 +142,14 @@ export class GameScene extends Phaser.Scene {
   protected mount:HeroMount|null=null;
   /** 关羽拖刀斩表现（拿到修习后首次用到时创建，场景重启时清空）。 */
   protected dragFx?: DraggingBladeFx;
+  /** 敌我区分样品（?iff=a/b/c，可组合；无参数时为 null）。 */
+  iff: IffOverlay | null = null;
+  /** 敌我区分叠加层要处理的单位：敌军、部曲（仅已在屏上的）、随行武将。 */
+  protected *iffUnits(): Generator<IffUnit> {
+    for (const e of this.enemies) if (e.active && !e.isSupplySlot && e.def.behavior !== 'wall') yield { sprite: e.sprite, foot: e.shadow, side: 'enemy', rank: e.kind === 'boss' ? 'boss' : e.kind === 'elite' ? 'elite' : 'normal', visible: e.sprite.visible };
+    for (const a of this.allies) if (a.active && a.view) yield { sprite: a.view.sprite, foot: a.view.shadow, side: 'ally', rank: 'normal', visible: a.view.sprite.visible };
+    for (const m of this.followers?.members ?? []) yield { sprite: m.sprite, foot: m.shadow, side: 'ally', rank: 'elite', visible: m.sprite.visible };
+  }
   dragBladeFx(): DraggingBladeFx { if (!this.dragFx) { this.dragFx = new DraggingBladeFx(this, this.player, this.sfx); this.events.once('shutdown', () => { this.dragFx?.destroy(); this.dragFx = undefined; }); } return this.dragFx; }
   /** 随行武将（招贤馆，RECRUIT_PLAN.md §4）。 */
   followers:FollowerSquad|null=null;
@@ -414,6 +423,7 @@ export class GameScene extends Phaser.Scene {
     // 兵装：开局读入该武将穿戴的道具加成（生命上限增加的部分补满）
     {const oldMax=this.player.maxHp;this.player.growth.gear=gearFor(this.runConfig.character);this.player.heal(this.player.maxHp-oldMax);}
     this.followers=null;{const allow=worldUnlocked()&&(!isChapterTestRun()||new URLSearchParams(location.search).get('followers')==='1');const list=allow?followersFor(this.runConfig.character):[];if(list.length)this.followers=new FollowerSquad(this,this.player,list,(x,y,r)=>this.grid.query(x,y,r),(e,d,fire)=>this.hitEnemy(e,d,this.combatNow,fire?'fire':'melee',true,false),()=>this.player.growth.damageMultiplier(this.combatNow));}
+    { const mode = readIffMode(); this.iff = mode ? new IffOverlay(this, mode, () => this.iffUnits(), ({ huangjin: 48 } as Record<string, number>)[this.runConfig.chapter ?? ''] ?? 355) : null; }
     this.shieldBars=new ShieldBars(this);this.events.once('shutdown',()=>{this.shieldBars?.clear();this.shieldBars=null;this.objective?.clear();this.objective=null;this.objectiveText=undefined;});
     this.setupObjective();
     // 坐骑：马厩里给该武将分配的马（第一章通关后马厩开放；换马只在休整时，下一关出征生效）

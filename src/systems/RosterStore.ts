@@ -4,6 +4,7 @@ import { FOLLOW, HERO_TEMPLATE, RANK, RECRUIT, TEMPLATE_ORDER, commonName, type 
 import { BOUNTY_GENERALS, seasonIndex } from '../world/WorldIntel';
 import { MAJOR_FACTIONS, type FactionId } from '../world/WorldCities';
 import { loadWorld, spendWorld, worldUnlocked } from '../world/WorldStore';
+import { TOWN_BUILDINGS, levelOf, type TownBuildingId } from '../town/TownData';
 import { loadItems, loadout, resetItemCache, unequipSlot, type GearOwner } from './ItemStore';
 import { isChapterTestRun } from './ChapterProgress';
 
@@ -136,6 +137,20 @@ export function ownerName(id: string | undefined): string {
 
 // ———— 招贤馆 ————
 
+/**
+ * 招贤馆等级：营寨建筑表里有 'talent'（主城与经济会话）时读营寨等级，0 = 还没建；
+ * 没有时用旧的 RosterSave.hall（1–3，在招贤馆界面里花军粮升级）。
+ */
+function townHall(): number | null {
+  try { if (!('talent' in TOWN_BUILDINGS)) return null; return levelOf(loadWorld().town, 'talent' as string as TownBuildingId); } catch { return null; }
+}
+export function hallInTown(): boolean { return townHall() !== null; }
+export function hallLevel(s: RosterSave = loadRoster()): number { const t = townHall(); return t === null ? s.hall : Math.max(0, Math.min(RECRUIT.seats.length, t)); }
+/** 各表的下标（0 级按 1 级算，用于随行上限等不该归零的项）。 */
+const hallIdx = (s: RosterSave): number => Math.max(1, hallLevel(s)) - 1;
+/** 旧存档里在招贤馆界面升过的等级（给营寨迁移用：talent 设为 max(1, 它)）。 */
+export function legacyHallLevel(): number { return read()?.hall ?? 1; }
+
 function unownedHeroes(s: RosterSave): CharacterId[] { return CHARACTERS.map(c => c.id).filter(id => !s.owned.some(r => r.hero === id) && !s.offers.some(o => o.hero === id) && !s.captives.some(o => o.hero === id)); }
 function commonOffer(): Offer {
   const w = RECRUIT.commonQuality, total = Object.values(w).reduce((a, b) => a + (b ?? 0), 0); let r = rand() * total, q: ItemQuality = 'white';
@@ -155,7 +170,8 @@ function heroOffer(s: RosterSave): Offer | null { const left = unownedHeroes(s);
 /** 刷新全部席位（自动换季与手动刷新共用），处理保底。 */
 function rollOffers(s: RosterSave): void {
   s.offers = [];
-  const seats = RECRUIT.seats[s.hall - 1], rates = RECRUIT.rates[s.hall - 1];
+  if (hallLevel(s) <= 0) return; // 营寨还没建招贤馆：席位空着
+  const seats = RECRUIT.seats[hallIdx(s)], rates = RECRUIT.rates[hallIdx(s)];
   for (let i = 0; i < seats; i++) {
     const r = rand(); let o: Offer | null = null;
     if (r < rates.hero) o = heroOffer(s); else if (r < rates.hero + rates.named) o = namedOffer(s);
@@ -170,16 +186,19 @@ function rollOffers(s: RosterSave): void {
 }
 
 export interface RosterResult { ok: boolean; message: string }
+const NO_HALL: RosterResult = { ok: false, message: '先在营寨建造招贤馆' };
 export function refreshCost(s: RosterSave = loadRoster()): number { return RECRUIT.refreshBase + RECRUIT.refreshStep * s.manual; }
 export function manualRefresh(): RosterResult {
   if (!worldUnlocked()) return { ok: false, message: '天下开放后才有招贤馆' };
   const s = loadRoster(), cost = refreshCost(s);
+  if (hallLevel(s) <= 0) return NO_HALL;
   if (!spendWorld({ provisions: cost })) return { ok: false, message: `军粮不足：刷新需要 ${cost}` };
   s.manual++; rollOffers(s); write(s); return { ok: true, message: `花 ${cost} 军粮，换了一批人才` };
 }
 export function recruit(index: number, captive = false): RosterResult {
   if (!worldUnlocked()) return { ok: false, message: '天下开放后才有招贤馆' };
   const s = loadRoster(), list = captive ? s.captives : s.offers, o = list[index];
+  if (hallLevel(s) <= 0) return NO_HALL;
   if (!o) return { ok: false, message: '这个席位已经空了' };
   if (s.owned.length >= RECRUIT.maxOwned) return { ok: false, message: `麾下已满 ${RECRUIT.maxOwned} 人，先遣散一些` };
   if (o.kind === 'hero' && s.owned.some(r => r.hero === o.hero)) { list.splice(index, 1); write(s); return { ok: false, message: '已在麾下' }; }
@@ -219,7 +238,7 @@ export function tryCapture(source: keyof typeof RECRUIT.capture, name: string, f
 
 // ———— 随行 ————
 
-export function followerCap(s: RosterSave = loadRoster()): number { return RECRUIT.followerCap[s.hall - 1]; }
+export function followerCap(s: RosterSave = loadRoster()): number { return RECRUIT.followerCap[hallIdx(s)]; }
 /** 设置随行（不含出战主将，按上限截断）。 */
 export function setFollowers(ids: string[]): void {
   const s = loadRoster(); s.followers = [...new Set(ids)].filter(id => s.owned.some(r => r.id === id)).slice(0, followerCap(s)); write(s);
@@ -239,12 +258,13 @@ export function followersFor(lead: CharacterId): Recruit[] {
 // ———— 招贤馆升级与将阶 ————
 
 export function upgradeHall(): RosterResult {
+  if (hallInTown()) return { ok: false, message: '招贤馆在营寨建造面板里升级' };
   const s = loadRoster(); if (s.hall >= 3) return { ok: false, message: '招贤馆已满级' };
   const c = RECRUIT.hallUpgrade[s.hall - 1];
   if (!spendWorld({ provisions: c.provisions })) return { ok: false, message: `军粮不足：升级需要 ${c.provisions}` };
   s.hall++; write(s); return { ok: true, message: `招贤馆升到 ${s.hall} 级：席位 ${RECRUIT.seats[s.hall - 1]}，随行 ${RECRUIT.followerCap[s.hall - 1]} 人` };
 }
-export function rankCap(s: RosterSave = loadRoster()): number { return RANK.capByHall[s.hall - 1]; }
+export function rankCap(s: RosterSave = loadRoster()): number { return RANK.capByHall[hallIdx(s)]; }
 export function rankUp(id: string, line: RankLine): RosterResult {
   const s = loadRoster(), r = s.owned.find(x => x.id === id); if (!r) return { ok: false, message: '不在麾下' };
   if (r.rank >= rankCap(s)) return { ok: false, message: r.rank >= RANK.max ? '将阶已满' : '将阶已到招贤馆上限，升级招贤馆后可继续' };

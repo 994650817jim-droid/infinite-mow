@@ -11,7 +11,7 @@ import { FACTIONS } from '../world/WorldCities';
 import { QUALITIES } from '../data/items';
 import { CHARACTERS, getCharacter } from '../data/characters';
 import { RANK, RECRUIT, TEMPLATES } from '../data/recruits';
-import { dismiss, followerCap, loadRoster, manualRefresh, rankBonus, rankCap, rankUp, recruit, refreshCost, toggleFollower, upgradeHall, type Offer, type Recruit } from '../systems/RosterStore';
+import { hallInTown, hallLevel, dismiss, followerCap, loadRoster, manualRefresh, rankBonus, rankCap, rankUp, recruit, refreshCost, toggleFollower, upgradeHall, type Offer, type Recruit } from '../systems/RosterStore';
 
 type Tab = 'offers' | 'roster';
 export class TalentHallScene extends Phaser.Scene {
@@ -48,13 +48,13 @@ export class TalentHallScene extends Phaser.Scene {
   }
   private render() {
     this.content?.destroy(true); this.content = this.add.container(0, 0);
-    const s = loadRoster(), w = loadWorld(), D = W > 600, cap = followerCap(s);
-    this.status.setText(`军粮 ${w.provisions}\n招贤馆 ${s.hall} 级 · 席位 ${RECRUIT.seats[s.hall - 1]} · 随行 ${s.followers.length}/${cap} · 将阶上限 ${rankCap(s)}`);
+    const s = loadRoster(), w = loadWorld(), D = W > 600, cap = followerCap(s), hall = hallLevel(s);
+    this.status.setText(`军粮 ${w.provisions}\n${hall > 0 ? `招贤馆 ${hall} 级 · 席位 ${RECRUIT.seats[hall - 1]}` : '营寨尚未建造招贤馆 · 暂不能招募'} · 随行 ${s.followers.length}/${cap} · 将阶上限 ${rankCap(s)}`);
     // 页签
     const tabY = D ? 112 : 124;
     this.small(D ? 90 : 90, tabY, 140, `人才（${s.offers.length + s.captives.length}）`, () => { this.tab = 'offers'; this.page = 0; this.render(); }, 'talent-tab-offers', true, this.tab === 'offers');
     this.small(D ? 240 : 240, tabY, 140, `麾下（${s.owned.length}）`, () => { this.tab = 'roster'; this.page = 0; this.render(); }, 'talent-tab-roster', true, this.tab === 'roster');
-    if (s.hall < 3) { const c = RECRUIT.hallUpgrade[s.hall - 1]; this.small(W - (D ? 130 : 110), tabY, D ? 220 : 180, `升级招贤馆（${c.provisions} 军粮）`, () => { this.message = upgradeHall().message; this.render(); }, 'talent-hall-up'); }
+    if (!hallInTown() && s.hall < 3) { const c = RECRUIT.hallUpgrade[s.hall - 1]; this.small(W - (D ? 130 : 110), tabY, D ? 220 : 180, `升级招贤馆（${c.provisions} 军粮）`, () => { this.message = upgradeHall().message; this.render(); }, 'talent-hall-up'); }
     const top = tabY + (D ? 26 : 34), bottom = H - (D ? 64 : 104) - 30, rowH = D ? 74 : this.tab === 'roster' ? 118 : 104;
     const per = Math.max(1, Math.floor((bottom - top) / rowH));
     const rows: Array<() => void> = [];

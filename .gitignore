@@ -81,6 +81,7 @@ assets/raw/*
 !/tools/artv2-compare.mjs
 !/tools/artv2-prompts.mjs
 !/tools/artv2-boss-check.mjs
+!/tools/artv2-recolor.mjs
 !/tools/artv2-troops.mjs
 !/tools/artv2-enemies.mjs
 !/tools/artv2-portraits.mjs

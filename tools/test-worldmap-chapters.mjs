@@ -14,6 +14,8 @@ const startBattle = async p => { await p.evaluate(() => window.__game.scene.getS
 const ck = (name, ok, data) => { checks.push({ name, ok: !!ok, data }); console.log(ok ? 'PASS' : 'FAIL', name, data === undefined ? '' : JSON.stringify(data)); };
 const b = await chromium.launch({ channel: 'chrome', headless: true });
 const watch = p => { p.on('pageerror', e => errors.push(e.message)); p.on('console', m => { if (m.type() === 'error') errors.push(m.text()); }); };
+// evaluate 回调不要把 scene.start() 的返回值（ScenePlugin，牵连整个纹理管理器）交回 Node：Playwright 会尝试序列化，
+// 有大 CanvasTexture（像素数组）时消息超过 512MB，报 ERR_STRING_TOO_LONG。场景切换一律写成 { ...; }。
 const mapState = p => p.evaluate(() => {
   const s = window.__game.scene.getScene('WorldMapScene'), node = id => s.children.getByName('node-' + id)?.getData('state') ?? s.markers.find(m => m.node.id === id)?.root.list.find(o => o.name === 'node-' + id)?.getData('state');
   const chip = id => s.children.getByName('chapter-chip-' + id)?.getData('state');
@@ -119,7 +121,7 @@ try {
     ck('出征 from stage pin goes to hero select for 讨伐董卓 2-1', await p.evaluate(() => { const m = window.__game.scene.getScene('MenuScene'); return m.selectedChapter === 'hulao' && m.selectedWestStage === 1 && window.__game.registry.get('worldCampaign') === true && !window.__game.registry.get('hardChapter'); }));
     await p.waitForTimeout(500); await p.screenshot({ path: `${out}/mobile-4-hulao-hero-select.png` });
     // 再次进图：新篇提示不重复
-    await p.evaluate(() => window.__game.scene.getScene('MenuScene').scene.start('WorldMapScene')); await p.waitForFunction(() => window.__game.scene.isActive('WorldMapScene')); await p.waitForTimeout(300);
+    await p.evaluate(() => { window.__game.scene.getScene('MenuScene').scene.start('WorldMapScene'); }); await p.waitForFunction(() => window.__game.scene.isActive('WorldMapScene')); await p.waitForTimeout(300);
     ck('banner not repeated on revisit', !(await mapState(p)).banner);
     await p.close();
   }
@@ -162,7 +164,7 @@ try {
     const save = { version: 8, yellowStages: 3, dongzhuoStages: 3, warlordStages: 3, guanduStages: 3, chibiStages: 3, worldAvailable: true, chapterSeen: 5, eraSeen: 3, cleared: { huangjin: true, hulao: true }, merits: 1000, provisions: 1000, buildings: { barracks: 1, farm: 1, clinic: 1 }, reserve: {}, receipts: [], nodes: ['home', 'huangjin', 'hulao'] };
     await p.addInitScript(sv => { if (!sessionStorage.getItem('seeded')) { localStorage.clear(); localStorage.setItem('im_world_v1', JSON.stringify(sv)); sessionStorage.setItem('seeded', '1'); } }, save);
     await p.goto(base + '?layout=desktop'); await p.waitForFunction(() => window.__game?.scene.isActive('MenuScene'), null, { timeout: 30000 });
-    await p.evaluate(() => window.__game.scene.getScene('MenuScene').scene.start('WorldMapScene')); await p.waitForFunction(() => window.__game.scene.isActive('WorldMapScene')); await p.waitForTimeout(700);
+    await p.evaluate(() => { window.__game.scene.getScene('MenuScene').scene.start('WorldMapScene'); }); await p.waitForFunction(() => window.__game.scene.isActive('WorldMapScene')); await p.waitForTimeout(700);
     await p.evaluate(() => { const ok = window.__game.scene.getScene('WorldMapScene').children.getByName('era-modal')?.getByName?.('era-ok'); if (ok) ok.emit('pointerup'); });
     ck('all chapters open → no fog', await p.evaluate(() => !window.__game.scene.getScene('WorldMapScene').layer.list.some(o => o.name === 'world-fog')));
     await p.evaluate(() => window.__game.scene.getScene('WorldMapScene').children.getByName('chapter-chip-hulao').emit('pointerup')); await p.waitForTimeout(150);
@@ -186,7 +188,7 @@ try {
     const res = await p.evaluate(() => { const s = window.__game.scene.getScene('GameScene'), w = JSON.parse(localStorage.getItem('im_world_v1')); return { body: s.resultTexts.body.text, hardCleared: w.hardCleared, merits: w.merits }; });
     ck('乱世 first clear: title + one-time reward recorded', res.hardCleared?.includes('hulao') && res.body.includes('乱世首通') && res.body.includes('虎牢扬威') && res.merits - before >= 200, { ...res, before });
     await p.screenshot({ path: `${out}/desktop-4-hard-result.png` });
-    await p.evaluate(() => window.__game.scene.getScene('GameScene').scene.start('WorldMapScene')); await p.waitForFunction(() => window.__game.scene.isActive('WorldMapScene')); await p.waitForTimeout(400);
+    await p.evaluate(() => { window.__game.scene.getScene('GameScene').scene.start('WorldMapScene'); }); await p.waitForFunction(() => window.__game.scene.isActive('WorldMapScene')); await p.waitForTimeout(400);
     ck('timeline marks 乱世 cleared', (await p.evaluate(() => window.__game.scene.getScene('WorldMapScene').children.getByName('chapter-chip-status-hulao').text)).includes('乱世'));
     await p.close();
   }

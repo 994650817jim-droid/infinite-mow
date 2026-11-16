@@ -33,7 +33,7 @@ export class Legion {
   readonly levels = Object.fromEntries(TROOP_KINDS.map(k => [k, 1])) as Record<TroopKind, number>;
   readonly squads = new Map<TroopKind, Ally[][]>();
   healingMultiplier = 1;
-  /** 营寨军营「练兵」：全体部曲生命、伤害倍率（setDrill 设置，开局与每关都设）。 */
+  /** 营寨军营「练兵」：全体部曲生命、伤害、军医治疗量倍率（setDrill 设置，开局与每关都设）。 */
   drillMultiplier = 1;
   /** 设置练兵倍率，并按新倍率重算在场部曲的生命上限（保持血量比例）。 */
   setDrill(multiplier: number): void { this.drillMultiplier = Math.max(1, multiplier); for (const u of this.units) if (u.active) u.applyCampaignHp(this.hpMultiplier()); }
@@ -182,7 +182,7 @@ export class Legion {
         const range = u.def.range * (u.def.ranged ? stats.range : u.kind === 'halberdier' && u.level === 3 ? 1.25 : 1);
         if (u.kind === 'medic') {
           const wounded = this.grid.query(u.x, u.y, range, this.friends).filter(a => a.active && a.hp < a.maxHp && Math.hypot(a.x - u.x, a.y - u.y) <= range).sort((a, b) => a.hp / a.maxHp - b.hp / b.maxHp);
-          for (const friend of wounded.slice(0, u.level === 3 ? 3 : 1)) { u.act(friend.x, friend.y, now, 480); this.heals.push({ owner: u, life: u.lifeId, target: friend, targetLife: friend.lifeId, amount: u.def.damage * (1 + .35 * (u.level - 1)) * this.healingMultiplier, due: now + 240 }); }
+          for (const friend of wounded.slice(0, u.level === 3 ? 3 : 1)) { u.act(friend.x, friend.y, now, 480); this.heals.push({ owner: u, life: u.lifeId, target: friend, targetLife: friend.lifeId, amount: u.def.damage * (1 + .35 * (u.level - 1)) * this.healingMultiplier * this.drillMultiplier, due: now + 240 }); }
           if (wounded.length) u.cooldown = u.def.cooldown * (1 - .1 * (u.level - 1)) / stats.attackSpeed;
           continue;
         }

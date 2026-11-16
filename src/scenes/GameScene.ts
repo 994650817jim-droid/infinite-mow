@@ -1440,8 +1440,8 @@ export class GameScene extends Phaser.Scene {
     if (fromPlayer) bolt.img.setScale(1);
     else if (textureKey === 'orb') bolt.img.setDisplaySize(22, 22);
     else bolt.img.setDisplaySize(30, 7);
-  }
     { const tint = fromPlayer ? HERO_TINT[this.runConfig.character] : undefined; if (tint) bolt.img.setTint(tint); else bolt.img.clearTint(); }
+  }
 
   protected updateBolts(dt: number, time: number): void {
     for (const bolt of this.bolts) {

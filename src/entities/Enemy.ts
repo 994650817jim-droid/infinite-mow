@@ -262,7 +262,7 @@ export class Enemy {
     this.chargeHit = false;
     this.direction = dir;
     // 冲锋表现复用奔跑表（v1 charge 表切图有边缘/朝向问题，暂不使用）；v2 冲锋表干净，直接用：勒马蓄势帧
-    if (isV2Texture(this.chargeSheet)) { this.applyFrame(this.chargeSheet, `${dir}_0`); this.chargeFrame = `${dir}_0`; this.sprite.setTint(0xff8888); return; }
+    if (this.v2ChargeSheet) { this.applyFrame(this.chargeSheet, `${dir}_0`); this.chargeFrame = `${dir}_0`; this.sprite.setTint(0xff8888); return; }
     if (this.walkSheet) this.applyFrame(this.walkSheet, `${dir}_${this.def.walkVisual ? 0 : 1}`);
     this.chargeFrame = this.walkSheet ? `${dir}_${this.def.walkVisual ? 0 : 1}` : '';
     this.sprite.setTint(0xff8888);
@@ -283,20 +283,37 @@ export class Enemy {
       this.chargeFrame = '';
     }
     if (this.chargeState === 'none') return;
-    if (isV2Texture(this.chargeSheet)) {
+    if (this.v2ChargeSheet) {
       // v2 冲锋表 4 帧：0 勒马蓄势 / 1~2 冲刺交替 / 3 收缰
       const col = this.chargeState === 'warn' ? 0 : this.chargeState === 'charge' ? 1 + Math.floor(now / 110) % 2 : 3, key = `${this.direction}_${col}`;
       if (key !== this.chargeFrame) { this.applyFrame(this.chargeSheet, key); this.chargeFrame = key; }
       return;
     }
     if (!this.walkSheet) return;
-    const frame = this.def.walkVisual ? (this.chargeState === 'charge' ? Math.floor(now / 90) % 4 : 0) : this.chargeState === 'charge' ? 2 : 1;
+    const v2Walk = isV2Texture(this.walkSheet);
+    // 章节专属骑兵（西凉铁骑 / 虎豹骑…）没有自己的冲锋表：沿用本身的奔跑表加快播放；v2 再加前倾与尘土拖影
+    const frame = this.def.walkVisual ? (this.chargeState === 'charge' ? Math.floor(now / (v2Walk ? 70 : 90)) % 4 : 0) : this.chargeState === 'charge' ? 2 : 1;
     const key = `${this.direction}_${frame}`;
     if (key !== this.chargeFrame) {
       this.applyFrame(visualTextureKey(this.scene,this.walkSheet), key);
       this.chargeFrame = key;
     }
+    if (!v2Walk) return;
+    const side = this.direction === 'right' ? 1 : this.direction === 'left' ? -1 : 0;
+    this.sprite.setRotation(this.chargeState === 'charge' ? side * .1 : this.chargeState === 'warn' ? -side * .04 : 0);
+    if (this.chargeState === 'charge' && now >= this.nextDustAt) { this.nextDustAt = now + 55; this.kickDust(); }
   }
+
+  /** 冲锋尘土：马蹄后方一团淡黄褐烟尘，0.35 秒散开。 */
+  private nextDustAt = 0;
+  private kickDust(): void {
+    const dx = this.direction === 'right' ? -1 : this.direction === 'left' ? 1 : 0, dy = this.direction === 'down' ? -1 : this.direction === 'up' ? 1 : 0;
+    const x = this.x + dx * (this.radius + 6) + (Math.random() - .5) * 10, y = this.y + this.radius * .7 + dy * 8 + (Math.random() - .5) * 4;
+    const puff = this.scene.add.ellipse(x, y, 16 + Math.random() * 8, 8 + Math.random() * 4, 0xb89a6a, .55).setDepth(this.sprite.depth - .5);
+    this.scene.tweens.add({targets: puff, scaleX: 2.2, scaleY: 1.8, alpha: 0, y: y - 6, duration: 350, ease: 'Quad.easeOut', onComplete: () => puff.destroy()});
+  }
+  /** 只有通用敌骑（没有专属行走图）才用 v2 通用冲锋表；专属骑兵换成通用冲锋表，冲锋时会变成另一个人。 */
+  private get v2ChargeSheet(): boolean { return !this.def.walkVisual && isV2Texture(this.chargeSheet); }
 
   startAttack(now: number, dir: 'down' | 'up' | 'left' | 'right'): void {
     if (!this.attackSheet && !this.def.walkVisual) return;

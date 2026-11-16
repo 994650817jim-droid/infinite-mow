@@ -1,0 +1,12 @@
+{
+  "source": "ChatGPT「生成武将头像」2026-11-16，originals/dsh_recruit_faces.png（不入库）",
+  "texture": "recruit_faces",
+  "frameWidth": 128,
+  "frameHeight": 128,
+  "frames": [
+    "spear",
+    "blade",
+    "bow",
+    "strategist"
+  ]
+}

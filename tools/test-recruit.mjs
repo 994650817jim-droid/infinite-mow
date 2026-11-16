@@ -119,7 +119,7 @@ for (const layout of ['mobile', 'desktop']) {
   const u = await p.evaluate(() => { const s = window.__game.scene.getScene('TalentHallScene'), c = s.children.list.find(x => x.type === 'Container'); const names = c.list.map(x => x.name).filter(Boolean); const btn = c.getByName('talent-offer-0'); btn.emit('pointerup'); return { names }; });
   await p.waitForTimeout(200);
   const msg = await p.evaluate(() => { const s = window.__game.scene.getScene('TalentHallScene'), c = s.children.list.find(x => x.type === 'Container'); return c.getByName('talent-message')?.text; });
-  ck(`${layout} 人才页：席位、降将、刷新按钮；点招募有提示`, u.names.includes('talent-offer-0') && u.names.includes('talent-captive-0') && u.names.includes('talent-refresh') && /应募|不足|已满/.test(msg ?? ''), { names: u.names.slice(0, 12), msg });
+  ck(`${layout} 人才页：席位、降将、刷新按钮；点招募有提示`, u.names.includes('talent-offer-0') && u.names.includes('talent-captive-0') && u.names.includes('talent-face') && u.names.includes('talent-refresh') && /应募|不足|已满/.test(msg ?? ''), { names: u.names.slice(0, 12), msg });
   await p.evaluate(() => { const s = window.__game.scene.getScene('TalentHallScene'), c = s.children.list.find(x => x.type === 'Container'); c.getByName('talent-tab-roster').emit('pointerup'); });
   await p.waitForTimeout(300);
   await p.screenshot({ path: `${out}/hall-roster-${layout}.png` });

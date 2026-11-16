@@ -1,5 +1,7 @@
 # 招贤馆与随行武将素材需求
 
+> **2026-11-16 第 1 项已交付**：ChatGPT 新对话「生成武将头像」出了 1 张 2×2 洋红底拼图，原图在 `originals/dsh_recruit_faces.png`（不入库）。`tools/prepare-recruit-faces.mjs` 抠底、按象限切图后生成 `recruit_faces.png`（512×128，4 帧：枪 / 刀 / 弓 / 谋，每帧 128×128）；TalentHallScene 以 spritesheet `recruit_faces` 加载，史事名将与大众脸的方印里显示对应模板头像，外框按品质上色。第 2、3 项（谋士行走图、史事名将头像）未做。
+
 现状（程序化过渡，见 `src/scenes/TalentHallScene.ts`、`src/systems/FollowerSquad.ts`）：
 - 招贤馆里，可玩名将用现有头像（`assets/processed/<portrait>.png`）；史事名将与大众脸只有一块品质色方印，印里写模板字（枪 / 刀 / 弓 / 谋）。
 - 战场上，史事名将和大众脸用蜀军兵种行走图（枪兵 / 刀盾兵 / 弓兵）。「谋」模板暂借弓兵图，头顶加品质色名牌。

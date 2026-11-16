@@ -99,7 +99,7 @@ for (const layout of ['mobile', 'desktop']) {
   ck(`${layout}：右上招募按钮不与军粮文字相叠`, !overlap(ui.recruit, ui.grainBox), [ui.recruit, ui.grainBox]);
   await p.screenshot({ path: `${out}/city-${layout}.png` });
   // 建讲武堂 → 打开科技面板 → 研究回血药
-  await p.evaluate(() => { const c = window.__game.scene.getScene('CityScene'); c.hits.find(h => h.name === 'bld-academy').emit('pointerup'); });
+  await p.evaluate(() => { const c = window.__game.scene.getScene('CityScene'); const h = c.hits.find(h => h.name === 'bld-academy'); h.emit('pointerdown'); h.emit('pointerup'); });
   await p.waitForTimeout(200);
   await p.evaluate(() => window.__game.scene.getScene('CityScene').children.getByName('town-card').getByName('town-upgrade').emit('pointerdown'));
   await p.waitForTimeout(600);

@@ -110,7 +110,7 @@ for (const layout of ['mobile', 'desktop']) {
   await p.evaluate(M0 => eval(M0).children.getByName('intel-modal').getByName('intel-cancel').emit('pointerup'), M);
   if (layout === 'desktop') {
     // 名将悬赏：出征 → 击败名将 → 紫 / 橙兵装入行囊，事件移除
-    const bagBefore = await p.evaluate(() => JSON.parse(localStorage.getItem('im_items_v1') ?? '{"bag":[]}').bag.length);
+    const bagBefore = await p.evaluate(() => JSON.parse(localStorage.getItem('im_items_v2') ?? '{"bag":[]}').bag.length);
     const before = await store(p, w => w.loadWorld().provisions);
     await launch(p, 'h1');
     const g = await p.evaluate(G0 => { const s = eval(G0); return { name: s.chapter.name, waves: s.chapter.waves.map(w => w.name), boss: s.chapter.bossName, active: s.registry.get('runConfig')?.encounter }; }, G);
@@ -120,7 +120,7 @@ for (const layout of ['mobile', 'desktop']) {
     await p.screenshot({ path: `${out}/${layout}-bounty-battle.png` });
     await winBoss(p);
     const res = await p.evaluate(G0 => { const s = eval(G0); return { over: s.over, victory: s.victory, body: s.resultTexts.body.text, sub: s.resultTexts.subtitle.text }; }, G);
-    const bag = await p.evaluate(() => JSON.parse(localStorage.getItem('im_items_v1') ?? '{"bag":[]}').bag);
+    const bag = await p.evaluate(() => JSON.parse(localStorage.getItem('im_items_v2') ?? '{"bag":[]}').bag);
     const after = await store(p, w => ({ grain: w.loadWorld().provisions, has: w.intelEvents().some(e => e.id === 'h1') }));
     const got = bag.length - bagBefore, top = bag.filter(x => x.quality === 'purple' || x.quality === 'orange').length;
     ck('击败许褚：胜利，结算显示悬赏兵装并入行囊（紫 / 橙）', res.victory && res.body.includes('入行囊') && got >= 1 && top >= 1, { res, got, top });

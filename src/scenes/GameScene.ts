@@ -1881,7 +1881,8 @@ export class GameScene extends Phaser.Scene {
     if (this.textures.exists('flame_burst')) {
       const size = radius * 2.5, burst = this.add.image(x, y, 'flame_burst', 0).setOrigin(0.5, 0.82).setDisplaySize(size, size).setDepth(actorDepth(y) + 0.5).setName('flame-burst');
       { const tint = HERO_TINT[this.runConfig.character]; if (tint) burst.setTint(tint); }
-      if (!SHOW_OWN_RANGE_FX && this.textures.exists('build_vfx')) { // 默认（只保留关键提示）：原序列帧自带八卦地纹，改用像素火焰爆发（战法特效图集「烈焰」行，无地纹）
+      // 诸葛亮等仍用原来的 flame_burst 序列帧（八卦地纹是图本身的一部分，用户 2026-11-16「换回之前那个」）；只有庞统连环地雷保持像素火焰
+      if (!SHOW_OWN_RANGE_FX && this.runConfig.character === 'pangtong' && this.textures.exists('build_vfx')) { // 庞统：像素火焰爆发（战法特效图集「烈焰」行，无地纹）
         burst.destroy(); const fire = this.add.image(x, y, 'build_vfx', 18).setOrigin(.5, .72).setDisplaySize(radius * 1.9, radius * 1.9).setDepth(actorDepth(y) + .5).setName('flame-burst');
         { const tint = HERO_TINT[this.runConfig.character]; if (tint) fire.setTint(tint); }
         this.tweens.addCounter({ from: 18, to: 23.99, duration: 380, onUpdate: t => fire.setFrame(Math.floor(t.getValue() ?? 18)), onComplete: () => fire.destroy() });

@@ -15,7 +15,13 @@ export const HEROES_KEY = 'im_heroes_v1';
 export const LEVEL_CAPS: readonly number[] = [10, 15, 20, 25, 30];
 export type HeroKey = CharacterId | `r_${number}`;
 export interface HeroRecord { level: number; xp: number; attributes: Record<AttributeId, number> }
-interface HeroSave { version: 1; heroes: Record<string, HeroRecord>; migrated: boolean }
+interface HeroSave { version: 1; heroes: Record<string, HeroRecord>; migrated: boolean; clearXp?: string[] }
+
+/**
+ * 主线关首次通关的额外武将经验（2026-11-16 平衡，用户批准）：武将经验原本只来自击杀，黄忠这类击杀少的武将第二章末只有 Lv6（上限 15）。
+ * 每个存档每关只发一次，给打通这关的主将；清兵快的武将本来就接近上限，多出的经验被上限挡住。
+ */
+export const CLEAR_XP: Readonly<Record<string, number>> = { huangjin: 120, hulao: 250, qunxiong: 380, guandu: 510, chibi: 640 };
 
 const ATTRS: readonly AttributeId[] = ['might', 'quickness', 'critical', 'constitution', 'agility'];
 const zeroAttrs = (): Record<AttributeId, number> => ({ might: 0, quickness: 0, critical: 0, constitution: 0, agility: 0 });
@@ -40,6 +46,7 @@ function read(): HeroSave {
     const v = JSON.parse(localStorage.getItem(HEROES_KEY) ?? 'null');
     if (v && v.version === 1 && v.heroes && typeof v.heroes === 'object') {
       s.migrated = v.migrated === true;
+      if (Array.isArray(v.clearXp)) s.clearXp = v.clearXp.filter((k: unknown): k is string => typeof k === 'string' && k.length < 40).slice(0, 200);
       for (const [k, r] of Object.entries(v.heroes as Record<string, Partial<HeroRecord>>)) {
         if (!isKey(k) || !r) continue;
         const attributes = zeroAttrs(); for (const a of ATTRS) attributes[a] = int(r.attributes?.[a], ATTRIBUTE_MAX);
@@ -94,6 +101,13 @@ export function allocateHeroAttr(id: HeroKey, attr: AttributeId): boolean {
   if (heroFreePoints(id) <= 0) return false;
   const r = record(id, true); if (r.attributes[attr] >= ATTRIBUTE_MAX) return false;
   r.attributes[attr]++; commit(); return true;
+}
+/** 领取某关的首次通关经验（chapter-stage，如 hulao-2）：没领过返回经验值并记下，领过或不是主线返回 0。 */
+export function claimClearXp(chapter: string, stage: number): number {
+  const xp = CLEAR_XP[chapter]; if (!xp) return 0;
+  const s = read(), key = chapter + '-' + stage; s.clearXp ??= [];
+  if (s.clearXp.includes(key)) return 0;
+  s.clearXp.push(key); commit(); return xp;
 }
 export interface XpResult { from: number; to: number; gained: number; capped: boolean; cap: number }
 /** 结算记经验（已按来源折算好的数值）。到上限后经验存着。 */

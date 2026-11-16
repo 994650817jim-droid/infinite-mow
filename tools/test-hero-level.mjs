@@ -83,6 +83,16 @@ ck('单项属性最多 5 点', JSON.stringify(store.maxOne) === '[5,false]', sto
 ck('老档迁移：打赢过仗的武将补到当前上限的一半（≥ 起始等级），只迁移一次', store.migr[0] === 10 && store.migr[1] === 10 && store.migr[2] === true, store.migr);
 ck('主线关按 100% 折算', store.rate === 1, store.rate);
 
+// 首次通关经验（2026-11-16 平衡，用户批准）：每个存档每关只发一次、重读存档后仍记得、非主线不给
+const clear = await p.evaluate(async () => {
+  const url = performance.getEntriesByType('resource').map(e => e.name).find(x => x.includes('/src/systems/HeroProgress.ts')) ?? '/src/systems/HeroProgress.ts';
+  const m = await import(url);
+  const a = m.claimClearXp('hulao', 2), again = m.claimClearXp('hulao', 2), other = m.claimClearXp('siege', 1), ch1 = m.claimClearXp('huangjin', 3);
+  m.resetHeroCache();
+  return [a, again, other, ch1, m.claimClearXp('hulao', 2)];
+});
+ck('首次通关经验：2-2 首次 +250、再打 0、非主线 0、1-3 +120；重读存档仍记得已领', JSON.stringify(clear) === '[250,0,0,120,0]', clear);
+
 ck('控制台无报错', errors.length === 0, errors.slice(0, 6));
 console.log(`\n${pass} passed, ${fail} failed`);
 await b.close();

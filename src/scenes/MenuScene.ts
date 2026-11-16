@@ -8,6 +8,7 @@ import {attachHomeVideo} from '../ui/HomeVideo';
 import {homeCommand,warPanelTexture} from '../ui/HomeCommand';
 import {SaveSlotsUI} from '../ui/SaveSlotsUI';
 import {AchievementsUI} from '../ui/AchievementsUI';
+import {homePlaque} from '../ui/HomePlaque';
 import {checkWorld,ACHIEVEMENTS,unlockedMap} from '../systems/Achievements';
 import {HomeHeroPicker} from '../ui/HomeHeroPicker';
 import {dongzhuoStageUnlocked,nextDongzhuoStage,yellowStageUnlocked,loadWorld,worldUnlocked,alertLossWarning} from '../world/WorldStore';
@@ -192,11 +193,9 @@ export class MenuScene extends Phaser.Scene {
     text(navX(1),navRowY,'图鉴',D?18:20,'#e5ccb0').setLetterSpacing(4).setOrigin(.5,.5).setPadding(12,16).setInteractive({useHandCursor:true}).setName('home-codex').on('pointerdown',()=>{if(this.children.getByName('game-codex'))return;this.ensureHomeArt(true);new GameCodex(this,index=>{this.selectedChar=index;this.registry.set('heroConfirmed',true);try{localStorage.setItem('im_last_hero',CHARACTERS[index].id);}catch{}this.renderSelection();});});
     // 成就入口（右上角；天下已开时排在主城 / 天下地图左侧）
     try{checkWorld(save);}catch{/* 存档不可用 */}
-    {const got=Object.keys(unlockedMap()).filter(id=>ACHIEVEMENTS.some(a=>a.id===id)).length;text(worldUnlocked()?W-218:W-28,D?34:54,`成就 ${got}/${ACHIEVEMENTS.length}`,16).setOrigin(1,.5).setPadding(16,8).setBackgroundColor('rgba(22,14,9,0.72)').setInteractive({useHandCursor:true}).setName('home-achievements').on('pointerdown',()=>{if(!this.children.getByName('achievements-panel'))new AchievementsUI(this);});}
-    if(worldUnlocked()){
-      text(W-28,D?34:54,'主城',16).setOrigin(1,.5).setPadding(16,8).setBackgroundColor('rgba(22,14,9,0.72)').setInteractive({useHandCursor:true}).setName('home-city').on('pointerdown',()=>this.scene.start('CityScene'));
-      text(W-104,D?34:54,'天下地图',16).setOrigin(1,.5).setPadding(16,8).setBackgroundColor('rgba(22,14,9,0.72)').setInteractive({useHandCursor:true}).setName('home-world').on('pointerdown',()=>this.scene.start('WorldMapScene'));
-    }
+    {const got=Object.keys(unlockedMap()).filter(id=>ACHIEVEMENTS.some(a=>a.id===id)).length,py=D?34:54;let rx=W-24;
+     if(worldUnlocked()){rx-=homePlaque(this,rx,py,{label:'主城',name:'home-city',glyph:'城',onClick:()=>this.scene.start('CityScene')},D)+8;rx-=homePlaque(this,rx,py,{label:'天下地图',name:'home-world',glyph:'图',onClick:()=>this.scene.start('WorldMapScene')},D)+8;}
+     homePlaque(this,rx,py,{label:'成就',name:'home-achievements',icon:'ach_first_win',progress:[got,ACHIEVEMENTS.length],onClick:()=>{if(!this.children.getByName('achievements-panel'))new AchievementsUI(this);}},D);}
     if(west&&!save.dongzhuoStages){const reveal=text(W/2,D?157:228+this.padY,'新篇揭晓 · 讨伐董卓',15,'#f0c389').setAlpha(0);this.tweens.add({targets:reveal,alpha:1,duration:700});}
     const closeHeroes=()=>{this.heroModal?.setVisible(false);this.heroEntryPaint?.();};
     this.heroPicker=new HomeHeroPicker(this,index=>{this.selectedChar=index;this.registry.set('heroConfirmed',true);try{localStorage.setItem('im_last_hero',CHARACTERS[index].id);}catch{}closeHeroes();this.renderSelection();},closeHeroes);

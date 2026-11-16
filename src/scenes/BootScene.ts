@@ -32,7 +32,7 @@ export class BootScene extends Phaser.Scene {
     const homeSave=loadWorld(),homeChapter=homeSave.yellowStages>=3||homeSave.cleared.huangjin||homeSave.legacyHulaoAccess?'dongzhuo':'huangjin';
     const homeLayout=GAME_WIDTH>600?'desktop':'mobile';
     this.load.image('epic_bg_'+homeChapter+'_'+homeLayout,'assets/epic-home/'+homeChapter+'-'+homeLayout+'.webp');
-    let homeHero='zhaoyun';try{const id=localStorage.getItem('im_last_hero');if(id&&['zhaoyun','guanyu','huangzhong','zhuge','zhangfei','liubei','weiyan','machao'].includes(id))homeHero=id;}catch{}
+    let homeHero='zhaoyun';try{const id=localStorage.getItem('im_last_hero');if(id&&['zhaoyun','guanyu','huangzhong','zhuge','zhangfei','huangyueying','pangtong','liubei','weiyan','machao'].includes(id))homeHero=id;}catch{}
     if(HOME_ART_HEROES.includes(homeHero))this.load.image('epic_hero_'+homeHero,'assets/epic-home/'+homeHero+'.webp');
     // 武将卡立轴（生成美术）：外框、宣纸与当前武将的水墨立绘
     this.load.image('ink_frame','assets/ink-scroll/frame.webp');this.load.image('ink_paper','assets/ink-scroll/paper.webp');
@@ -45,6 +45,8 @@ export class BootScene extends Phaser.Scene {
     this.load.image('huaxiong_portrait','assets/phase17/huaxiong/portrait.png');
     this.load.spritesheet('sishui_props','assets/phase17/huaxiong/props.png',{frameWidth:256,frameHeight:256});
     for(const key of ['zhangliang_walk','zhangliang_attack','zhangbao_walk','zhangbao_cast','spear_walk','spear_attack','archer_walk','archer_attack','shield_walk','shield_attack','shaman_walk','shaman_cast'])this.load.spritesheet(`yellow_${key}`,`assets/processed/yellow/${key==='spear_walk'?'spear-walk-v2':key==='spear_attack'?'spear-attack-v2':key}.png`,{frameWidth:96,frameHeight:96});
+    // 黄巾长枪兵 v5：128 帧、行走 / 刺击同一比例（tools/prepare-yellow-spear.mjs）
+    for(const key of ['spear-walk-v5','spear-attack-v5'])this.load.spritesheet(`yellow_${key}`,`assets/processed/yellow/${key}.png`,{frameWidth:128,frameHeight:128});
     for(const key of ['swordsman-walk-v4','swordsman-attack-v4','shield-walk-v4','shield-attack-v4','spear-walk-v2'])this.load.spritesheet(`yellow_${key}`,`assets/processed/yellow/${key}.png`,{frameWidth:96,frameHeight:96});
     for(const [key,file] of [['brazier_burning','brazier_burning-v4.png'],['brazier_breaking','brazier_breaking-v4.png'],['ground_fire','ground_fire-v4.png']] as const)this.load.spritesheet(key,`assets/processed/yellow/${file}`,{frameWidth:444,frameHeight:444});
     for(let i=1;i<=3;i++)this.load.image(`yellow_ground_${i}`,`assets/processed/yellow/ground-${i}.png`);
@@ -92,6 +94,8 @@ export class BootScene extends Phaser.Scene {
     this.load.spritesheet('machao_walk_sheet', 'assets/processed/machao_walk_sheet.png', { frameWidth: 96, frameHeight: 96 });
     this.load.spritesheet('weiyan_walk_sheet', 'assets/processed/weiyan_walk_sheet.png', { frameWidth: 96, frameHeight: 96 });
     this.load.spritesheet('liubei_walk_sheet', 'assets/processed/liubei_walk_sheet.png', { frameWidth: 96, frameHeight: 96 });
+    this.load.spritesheet('pangtong_walk_sheet', 'assets/processed/pangtong_walk_sheet.png', { frameWidth: 96, frameHeight: 96 });
+    this.load.spritesheet('huangyueying_walk_sheet', 'assets/processed/huangyueying_walk_sheet.png', { frameWidth: 96, frameHeight: 96 });
     this.load.spritesheet('zhangfei_walk_sheet', 'assets/processed/zhangfei_walk_sheet.png', { frameWidth: 96, frameHeight: 96 });
     this.load.spritesheet('huangzhong_walk_sheet', 'assets/processed/huangzhong_walk_sheet.png', { frameWidth: 96, frameHeight: 96 });
     this.load.spritesheet('enemy_infantry_walk_sheet', 'assets/processed/enemy_infantry_walk_sheet.png', { frameWidth: 96, frameHeight: 96 });
@@ -119,6 +123,7 @@ export class BootScene extends Phaser.Scene {
     // 诸葛亮「烈焰战旗」：战旗、八卦火阵预警地纹、6 帧爆炸（tools/prepare-flame-banner-art.mjs）
     this.load.image('zhuge_banner', 'assets/flame-banner/zhuge_banner.png');
     this.load.image('fire_sigil', 'assets/flame-banner/fire_sigil.png');
+    for (const sheet of ['a', 'b']) this.load.spritesheet('hero_fx_' + sheet, 'assets/hero-fx/fx_' + sheet + '.png', { frameWidth: 256, frameHeight: 256 });
     this.load.spritesheet('flame_burst', 'assets/flame-banner/flame_burst.png', { frameWidth: 256, frameHeight: 256 });
     this.load.image('portrait_zhuge', 'assets/processed/portrait_zhuge.png');
     this.load.image('spear_thrust', 'assets/processed/spear_thrust.png');
@@ -128,6 +133,8 @@ export class BootScene extends Phaser.Scene {
     this.load.image('machao_portrait', 'assets/processed/machao_portrait.png');
     this.load.image('weiyan_portrait', 'assets/processed/weiyan_portrait.png');
     this.load.image('liubei_portrait', 'assets/processed/liubei_portrait.png');
+    this.load.image('pangtong_portrait', 'assets/processed/pangtong_portrait.png');
+    this.load.image('huangyueying_portrait', 'assets/processed/huangyueying_portrait.png');
     this.load.image('zhangfei_portrait', 'assets/processed/zhangfei_portrait.png');
     this.load.image('item_drum', 'assets/processed/item_drum.png');
     this.load.image('item_whetstone', 'assets/processed/item_whetstone.png');
@@ -154,6 +161,7 @@ export class BootScene extends Phaser.Scene {
     for(const key of ['swordsman-walk-v4','swordsman-attack-v4','shield-walk-v4','shield-attack-v4','spear-walk-v2']){
       const tex=this.textures.get(`yellow_${key}`);['down','left','right','up'].forEach((dir,row)=>{for(let col=0;col<4;col++)tex.add(`${dir}_${col}`,0,col*96,row*96,96,96);});
     }
+    for(const key of ['spear-walk-v5','spear-attack-v5']){const tex=this.textures.get(`yellow_${key}`);['down','left','right','up'].forEach((dir,row)=>{for(let col=0;col<4;col++)tex.add(`${dir}_${col}`,0,col*128,row*128,128,128);});}
     createGameTextures(this);
     const halberd=this.textures.get('legion_halberdier_action');
     ['down','left','right','up'].forEach((dir,row)=>{for(let col=0;col<4;col++)halberd.add(`${dir}_${col}`,0,col*128,row*112,128,112);});

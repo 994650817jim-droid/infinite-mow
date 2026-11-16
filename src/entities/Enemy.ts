@@ -170,9 +170,10 @@ export class Enemy {
       const displayH = displayHeights[this.kind] ?? 66;
       // 普通兵按人物实际像素身高统一：不同章节/批次的素材留白不同，按格子缩放会一高一矮。
       const figureTarget: Partial<Record<EnemyKind, number>> = { infantry: 48, archer: 46, shield: 50 };
-      const median = figureTarget[this.kind] ? sheetFigureHeight(this.scene, sheetKey) : undefined;
+      const median = figureTarget[this.kind] && !def.walkVisual?.matched ? sheetFigureHeight(this.scene, sheetKey) : undefined;
       this.sprite.setScale(median ? figureTarget[this.kind]! / median : def.walkVisual?.scale ?? displayH / 96);
-      this.sprite.setOrigin(.5, (def.walkVisual?.groundY ?? 94 / 96) - def.radius * .72 / (96 * this.sprite.scaleY));
+      const frameH = this.scene.textures.getFrame(sheetKey, 'down_0')?.height ?? 96;
+      this.sprite.setOrigin(.5, (def.walkVisual?.groundY ?? 94 / 96) - def.radius * .72 / (frameH * this.sprite.scaleY));
       this.baseScaleY = this.sprite.scaleY;
       this.baseOriginY = this.sprite.originY;
       this.frameScale = 1;
@@ -366,7 +367,7 @@ export class Enemy {
   /** 设置帧并按素材比例校正缩放；非行走调用会清除步伐摆动。 */
   private applyFrame(key: string, frame: string): void {
     this.sprite.setTexture(key, frame);
-    this.frameScale = this.walkSheet && this.kind !== 'boss' ? figureCorrection(this.scene, this.walkSheet, key, frame) : 1;
+    this.frameScale = this.walkSheet && this.kind !== 'boss' && !this.def.walkVisual?.matched ? figureCorrection(this.scene, this.walkSheet, key, frame) : 1;
     this.stepStretch = 0;
     this.sprite.setRotation(0);
     this.applyScale();

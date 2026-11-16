@@ -4,10 +4,10 @@ import {MARTIALS} from '../systems/RunGrowth';
 import {WEAPON_META,weaponName} from '../data/upgrades';
 import {CHARACTER_PASSIVES} from '../data/passives';
 import {FONT,HEADING_FONT,TITLE_FONT,RENDER_SCALE,IS_DESKTOP} from '../config';
-const titles=['游龙先锋','重甲武圣','百步神射','卧龙军师','燕人猛将','西凉锦马','镇北悍将','仁德之主'];const roles=['突进','近战','远程','法术','猛攻','突骑','血战','统御'];
+const titles=['游龙先锋','重甲武圣','百步神射','卧龙军师','燕人猛将','西凉锦马','镇北悍将','仁德之主','凤雏军师','巧思机关'];const roles=['突进','近战','远程','法术','猛攻','突骑','血战','统御','火计','机关'];
 /** 闲章与题句（原创短句，取材常见三国典故）。 */
-const leisure=['常胜','忠义','神射','卧龙','万夫','锦马','子午','仁德'];
-const verses=['长坂单骑护幼主','千里单骑寻故主','定军山下斩夏侯','隆中一对定三分','据水断桥喝曹军','渭水横枪战孟德','子午奇谋出秦川','携民渡江不弃众'];
+const leisure=['常胜','忠义','神射','卧龙','万夫','锦马','子午','仁德','凤雏','巧思'];
+const verses=['长坂单骑护幼主','千里单骑寻故主','定军山下斩夏侯','隆中一对定三分','据水断桥喝曹军','渭水横枪战孟德','子午奇谋出秦川','携民渡江不弃众','连环一计破曹军','木牛流马运千里'];
 type FrameState='normal'|'hover'|'selected'|'pressed';
 
 /** 立轴形制尺寸：木轴、天头（上）、地头（下）、两侧绫边；画心为宣纸。 */

@@ -60,7 +60,7 @@ export class RunGrowth {
   get weaponMasteryLevel(): number { return this.masteries.dragon_gallop; }
   get spearPierceLevel(): number { return this.masteries.cloud_pierce; }
   /** 张飞同用长枪，与赵云共用两项枪术专精。 */
-  owns(id: MasteryId): boolean { const c = MARTIALS[id].character as string; return c === this.character || this.character === 'zhangfei' && c === 'zhaoyun' || this.character === 'liubei' && c === 'guanyu' || this.character === 'weiyan' && c === 'guanyu' || this.character === 'machao' && c === 'zhaoyun'; }
+  owns(id: MasteryId): boolean { const c = MARTIALS[id].character as string; return c === this.character || this.character === 'zhangfei' && c === 'zhaoyun' || this.character === 'huangyueying' && c === 'huangzhong' || this.character === 'pangtong' && c === 'zhuge' || this.character === 'liubei' && c === 'guanyu' || this.character === 'weiyan' && c === 'guanyu' || this.character === 'machao' && c === 'zhaoyun'; }
   canLearn(id: MasteryId): boolean { return this.owns(id) && this.masteries[id] < 3; }
 
   addAttributePoints(amount = 2): void { this.unallocated = Math.min(Object.values(this.attributes).reduce((n,level)=>n+ATTRIBUTE_MAX-level,0),this.unallocated+Math.max(0, Math.floor(amount))); }

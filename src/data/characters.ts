@@ -1,7 +1,7 @@
 import type { ChapterId } from './chapters';
 import type { WeaponId } from '../types';
 
-export type CharacterId = 'zhaoyun' | 'guanyu' | 'huangzhong' | 'zhuge' | 'zhangfei' | 'machao' | 'weiyan' | 'liubei';
+export type CharacterId = 'zhaoyun' | 'guanyu' | 'huangzhong' | 'zhuge' | 'zhangfei' | 'machao' | 'weiyan' | 'liubei' | 'pangtong' | 'huangyueying';
 
 export interface CharacterDef {
   id: CharacterId;
@@ -113,10 +113,30 @@ export const CHARACTERS: CharacterDef[] = [
     portrait: 'liubei_portrait',
     startWeapon: 'guandao',
   },
+  {
+    id: 'pangtong',
+    name: '庞统',
+    desc: '军师 · 火计连环，范围爆发',
+    hpMul: 0.9,
+    speedMul: 1,
+    damageMul: 1.05,
+    portrait: 'pangtong_portrait',
+    startWeapon: 'flame_banner',
+  },
+  {
+    id: 'huangyueying',
+    name: '黄月英',
+    desc: '巧匠 · 机关连弩，远程压制',
+    hpMul: 0.88,
+    speedMul: 1.04,
+    damageMul: 1,
+    portrait: 'huangyueying_portrait',
+    startWeapon: 'crossbow',
+  },
 ];
 
 /** 有主页大幅立绘（epic-home）与水墨立轴（ink-scroll）的武将；其余用 portrait。 */
-export const HOME_ART_HEROES: readonly string[] = ['zhaoyun', 'guanyu', 'huangzhong', 'zhuge', 'zhangfei', 'machao', 'weiyan', 'liubei'];
+export const HOME_ART_HEROES: readonly string[] = ['zhaoyun', 'guanyu', 'huangzhong', 'zhuge', 'zhangfei', 'machao', 'weiyan', 'liubei', 'pangtong', 'huangyueying'];
 
 export const STARTING_WEAPONS: Array<{ id: WeaponId; name: string; icon: string; desc: string }> = [
   { id: 'spear_orbit', name: '枪影旋舞', icon: 'icon_1', desc: '环绕枪刃，近身持续伤害' },
@@ -129,3 +149,8 @@ export const DEFAULT_RUN_CONFIG: RunConfig = { character: 'zhaoyun', weapon: 'sp
 export function getCharacter(id: CharacterId): CharacterDef {
   return CHARACTERS.find((c) => c.id === id) ?? CHARACTERS[0];
 }
+
+/** 新武将普攻的专属色调（枪芒 / 刀光 / 火爆 / 弩箭），老四将保持原色。 */
+export const HERO_TINT: Partial<Record<CharacterId, number>> = { zhangfei: 0xff9c7a, machao: 0xb8dcff, weiyan: 0xff6a55, liubei: 0xffd890, pangtong: 0xff8fd0, huangyueying: 0x8fe8c0 };
+/** 招牌技序列帧（public/assets/hero-fx/fx_<sheet>.png，6 列 × 4 行、256×256，黑底叠加混合）。 */
+export const HERO_FX: Record<string, { sheet: 'a' | 'b'; row: number }> = { roar: { sheet: 'a', row: 0 }, dash: { sheet: 'a', row: 1 }, bloodslash: { sheet: 'a', row: 2 }, rally: { sheet: 'a', row: 3 }, phoenix: { sheet: 'b', row: 0 }, gears: { sheet: 'b', row: 1 }, liubeiSlash: { sheet: 'b', row: 2 }, weiyanSlash: { sheet: 'b', row: 3 } };

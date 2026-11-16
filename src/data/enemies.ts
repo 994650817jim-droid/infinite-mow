@@ -5,7 +5,8 @@ export interface EnemyDef {
   texture: string;
   tint?: number;
   /** Chapter-specific walk art; presentation only. */
-  walkVisual?: { texture: string; scale: number; groundY: number };
+  /** matched：行走 / 攻击表已按同一比例绘制与对齐（如黄巾长枪兵 v5），直接用 scale，不做逐帧身高校正。 */
+  walkVisual?: { texture: string; scale: number; groundY: number; matched?: boolean };
   attackVisual?: string;
   behavior?: "spear" | "shaman" | "halberd" | "thunder" | "wall" | "supply";
   hp: number;

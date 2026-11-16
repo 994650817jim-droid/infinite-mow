@@ -15,7 +15,7 @@ export const WEAPON_META: Record<WeaponId, { name: string; desc: string }> = {
   flame_banner: { name: '烈焰战旗', desc: '前方爆发烈焰，范围灼烧' },
 };
 /** 武器显示名：张飞用同一套长枪，叫丈八蛇矛。 */
-export function weaponName(id: WeaponId, character?: string): string { return character === 'zhangfei' && id === 'spear_orbit' ? '丈八蛇矛' : character === 'liubei' ? '双股剑' : character === 'weiyan' ? '镇北大刀' : character === 'machao' ? '虎头湛金枪' : WEAPON_META[id].name; }
+export function weaponName(id: WeaponId, character?: string): string { return character === 'zhangfei' && id === 'spear_orbit' ? '丈八蛇矛' : character === 'huangyueying' ? '机关连弩' : character === 'pangtong' ? '凤雏火令' : character === 'liubei' ? '双股剑' : character === 'weiyan' ? '镇北大刀' : character === 'machao' ? '虎头湛金枪' : WEAPON_META[id].name; }
 
 const WEAPON_IDS: WeaponId[] = ['spear_orbit', 'crossbow', 'flame_banner', 'guandao'];
 

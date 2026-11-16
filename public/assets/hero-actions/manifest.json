@@ -143,5 +143,63 @@
   "detected": true,
   "rowBands": 7,
   "edgeFrames": []
+ },
+ "pangtong": {
+  "width": 948,
+  "height": 1659,
+  "transparent": 0,
+  "removed": 937958,
+  "frames": 28,
+  "output": "512x896",
+  "scale": 0.4726,
+  "empty": [],
+  "detected": false,
+  "rowBands": 6,
+  "edgeFrames": [
+   4,
+   6,
+   7,
+   8,
+   9,
+   10,
+   11,
+   12,
+   13,
+   14,
+   15,
+   16,
+   17,
+   18,
+   19,
+   20,
+   21,
+   22,
+   23,
+   24,
+   25,
+   26,
+   27
+  ]
+ },
+ "huangyueying": {
+  "width": 948,
+  "height": 1659,
+  "transparent": 0,
+  "removed": 1048597,
+  "frames": 28,
+  "output": "512x896",
+  "scale": 0.4726,
+  "empty": [],
+  "detected": false,
+  "rowBands": 6,
+  "edgeFrames": [
+   7,
+   11,
+   15,
+   16,
+   17,
+   18,
+   19
+  ]
  }
 }

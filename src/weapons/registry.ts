@@ -5,6 +5,7 @@ import type { SpatialGrid } from '../systems/SpatialGrid';
 import type { Sfx } from '../systems/Sfx';
 import type { PlayerStats, WeaponId, WeaponState } from '../types';
 import { PASSIVE_RULES } from '../data/passives';
+import { HERO_TINT } from '../data/characters';
 
 export interface WeaponBolt {
   img: Phaser.GameObjects.Image; vx: number; vy: number; life: number;
@@ -36,6 +37,8 @@ export interface WeaponHost {
   spawnFlameFx(x: number, y: number, radius: number): void;
   /** 为身边部曲回复最大生命的比例（刘备仁德）。 */
   rallyAllies?(fraction: number): void;
+  /** 武将招牌技序列帧特效（缺图时什么都不做）。 */
+  heroFx?(id: string, x: number, y: number, size: number, rotation?: number): void;
 }
 
 export const GUANDAO_TABLE = [
@@ -151,7 +154,6 @@ export const WEAPON_BEHAVIORS: Record<WeaponId, (host: WeaponHost, weapon: Weapo
         .setVisible(true)
         .setPosition(shot.sx + shot.dirX * (handOffset + curLen / 2), shot.sy + shot.dirY * (handOffset + curLen / 2))
         .setDisplaySize(curLen, shot.width * (1 + .12 * (1 - retract)))
-        .clearTint()
         .setAlpha(alpha);
       if (!shot.done && t >= 0.45) {
         shot.done = true;
@@ -215,6 +217,7 @@ export const WEAPON_BEHAVIORS: Record<WeaponId, (host: WeaponHost, weapon: Weapo
         if (host.hitEnemy(e, damage * R.dashDamageMul, now, 'melee')) host.player.passive.recordHit(passiveCast, e, now);
       }
       host.player.knockUp(now, R.dashMs, ux * R.dashLength, uy * R.dashLength);
+      host.heroFx?.('dash', px + ux * R.dashLength / 2, py - 6 + uy * R.dashLength / 2, R.dashLength + 110, Math.atan2(uy, ux));
       const trail = host.add.image(px + ux * R.dashLength / 2, py - 6 + uy * R.dashLength / 2, 'spear_thrust', 'tight').setRotation(Math.atan2(uy, ux)).setDisplaySize(R.dashLength + 40, 34).setTint(0xbfe0ff).setAlpha(.85).setDepth(41);
       trail.scene.tweens.add({ targets: trail, alpha: 0, scaleY: trail.scaleY * 1.8, duration: 320, onComplete: () => trail.destroy() });
       host.sfx.play('allySpear');
@@ -227,6 +230,7 @@ export const WEAPON_BEHAVIORS: Record<WeaponId, (host: WeaponHost, weapon: Weapo
         if (host.hitEnemy(e, damage * R.roarDamageMul, now, 'melee')) host.player.passive.recordHit(passiveCast, e, now);
         if (!e.controlImmune) e.stunUntil = Math.max(e.stunUntil, now + R.roarStunMs);
       }
+      host.heroFx?.('roar', px, py - 10, R.roarRadius * 2.6);
       for (let k = 0; k < 2; k++) { const ring = host.add.circle(px, py - 6, 30, 0xffd27a, 0).setStrokeStyle(6 - k * 2, k ? 0xff8a3c : 0xffe2a0, .9).setDepth(41); ring.scene.tweens.add({ targets: ring, radius: R.roarRadius, alpha: 0, delay: k * 90, duration: 420, onComplete: () => ring.destroy() }); }
       host.cameras.main.shake(160, .006); host.sfx.play('waveDrum');
     }
@@ -259,6 +263,7 @@ export const WEAPON_BEHAVIORS: Record<WeaponId, (host: WeaponHost, weapon: Weapo
         .setDisplaySize(spearLength, pierce.width)
         .setDepth(40)
         .setVisible(false);
+      { const tint = HERO_TINT[host.player.passive.characterId]; if (tint) img.setTint(tint); }
       host.spearShots.push({
         // 指向营寨优先目标或首领/精锐的那一枪，命中判定先结算该目标，避免单枪上限被沿途小兵占满
         img, sx, sy, dirX, dirY,priority:target===priority||target===focus?target:undefined,priorityLife:target.spawnId,
@@ -283,6 +288,10 @@ export const WEAPON_BEHAVIORS: Record<WeaponId, (host: WeaponHost, weapon: Weapo
       const g = host.player.growth, full = g.masteries.steady_aim > 0 && g.stationarySeconds >= 4.99;
       if ((full || host.player.passive.isSharpshooter(time)) && time >= host.player.nextSkillAction && host.player.playAction('skill', ax < 0 ? 'left' : 'right')) host.player.nextSkillAction = time + 4000; }
     host.fireBolt(host.bolts, host.player.x, host.player.y, target.x, target.y, damage, bounce, true, 560);
+    // 黄月英满层：机关连弩——朝目标方向扇形齐射 6 支（60% 伤害，弹射 +1）
+    { const pc = host.player.passive.beginCast('crossbow'); if (pc.fan) { const px = host.player.x, py = host.player.y, a0 = Math.atan2(target.y - py, target.x - px), n = PASSIVE_RULES.mechBolts;
+      host.player.playAction('skill', target.x < px ? 'left' : 'right'); host.heroFx?.('gears', px, py - 10, 240, a0);
+      for (let k = 0; k < n; k++) { const a = a0 + (k - (n - 1) / 2) * .16; host.fireBolt(host.bolts, px, py, px + Math.cos(a) * 420, py + Math.sin(a) * 420, damage * PASSIVE_RULES.mechDamageMul, Math.min(5, bounce + 1), true, 600); } } }
     // 每升一级多射 1 支（Lv5 共 5 支）：额外的箭优先分射附近其他敌人，70% 伤害；不够目标时散射同一目标
     const extra = crossbowExtraArrows(level);
     if (extra > 0) {
@@ -371,7 +380,8 @@ export const WEAPON_BEHAVIORS: Record<WeaponId, (host: WeaponHost, weapon: Weapo
     const castDamage = damage * passiveCast.damageMul * (heavy?[1.4,1.65,1.9][charge-1]:1);
     // 魏延 / 刘备满层：回复（刘备连同部曲）
     if (passiveCast.heal) host.player.heal(host.player.maxHp * passiveCast.heal);
-    if (passiveCast.rally) host.rallyAllies?.(passiveCast.rally);
+    if (passiveCast.rally) { host.rallyAllies?.(passiveCast.rally); host.heroFx?.('rally', host.player.x, host.player.y - 20, 260); }
+    else if (passiveCast.heal) host.heroFx?.('bloodslash', host.player.x + Math.cos(angle) * 60, host.player.y + Math.sin(angle) * 60, 280, angle);
     const strike = (enemy: Enemy, amount: number, at: number): void => {
       if (host.hitEnemy(enemy, amount, at, 'melee')) host.player.passive.recordHit(passiveCast, enemy, at);
     };
@@ -461,6 +471,13 @@ export const WEAPON_BEHAVIORS: Record<WeaponId, (host: WeaponHost, weapon: Weapo
         const dist = Math.hypot(enemy.x - cx, enemy.y - cy);
         if (dist <= radius + enemy.radius && host.hitEnemy(enemy, damage, host.combatNow, 'fire')) host.player.passive.recordHit(passiveCast, enemy, host.combatNow, damage);
       }
+      // 庞统满层：连环计——稍后在同一处再次引爆（范围更大、伤害 75%）
+      if (passiveCast.chain) host.time.delayedCall(PASSIVE_RULES.chainDelayMs, () => {
+        if (host.over) return;
+        const r2 = radius * PASSIVE_RULES.chainRadiusMul, d2 = damage * PASSIVE_RULES.chainDamageMul;
+        host.spawnFlameFx(cx, cy, r2); host.heroFx?.('phoenix', cx, cy - r2 * .3, r2 * 2.6); host.sfx.play('flameBoom');
+        for (const enemy of host.grid.query(cx, cy, r2 + 30)) if (enemy.active && Math.hypot(enemy.x - cx, enemy.y - cy) <= r2 + enemy.radius) host.hitEnemy(enemy, d2, host.combatNow, 'fire');
+      });
     });
     weapon.cooldownLeft = Math.max(.25, def.cooldown(level, host.player.stats) / host.player.growth.attackSpeedMultiplier(host.combatNow));
   },

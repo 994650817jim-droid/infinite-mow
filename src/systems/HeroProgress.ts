@@ -15,7 +15,7 @@ export const HEROES_KEY = 'im_heroes_v1';
 export const LEVEL_CAPS: readonly number[] = [10, 15, 20, 25, 30];
 export type HeroKey = CharacterId | `r_${number}`;
 export interface HeroRecord { level: number; xp: number; attributes: Record<AttributeId, number> }
-interface HeroSave { version: 1; heroes: Record<string, HeroRecord>; migrated: boolean }
+interface HeroSave { version: 1; heroes: Record<string, HeroRecord>; migrated: boolean; firstClears: string[] }
 
 const ATTRS: readonly AttributeId[] = ['might', 'quickness', 'critical', 'constitution', 'agility'];
 const zeroAttrs = (): Record<AttributeId, number> => ({ might: 0, quickness: 0, critical: 0, constitution: 0, agility: 0 });
@@ -35,18 +35,19 @@ export function pointsAt(level: number): number { return Math.floor(level / ATTR
 let memory: HeroSave | null = null;
 function read(): HeroSave {
   if (memory) return memory;
-  let s: HeroSave = { version: 1, heroes: {}, migrated: false };
+  let s: HeroSave = { version: 1, heroes: {}, migrated: false, firstClears: [] };
   try {
     const v = JSON.parse(localStorage.getItem(HEROES_KEY) ?? 'null');
     if (v && v.version === 1 && v.heroes && typeof v.heroes === 'object') {
       s.migrated = v.migrated === true;
+      s.firstClears = Array.isArray(v.firstClears) ? [...new Set((v.firstClears as unknown[]).filter((k): k is string => typeof k === 'string' && /^[a-z]+-\d$/.test(k)))].slice(0, 60) : [];
       for (const [k, r] of Object.entries(v.heroes as Record<string, Partial<HeroRecord>>)) {
         if (!isKey(k) || !r) continue;
         const attributes = zeroAttrs(); for (const a of ATTRS) attributes[a] = int(r.attributes?.[a], ATTRIBUTE_MAX);
         s.heroes[k] = { level: int(r.level, LEVEL_CAPS[LEVEL_CAPS.length - 1], 1), xp: int(r.xp, 1e8), attributes };
       }
     }
-  } catch { s = { version: 1, heroes: {}, migrated: false }; }
+  } catch { s = { version: 1, heroes: {}, migrated: false, firstClears: [] }; }
   memory = s;
   if (!s.migrated) migrate(s);
   return s;
@@ -94,6 +95,17 @@ export function allocateHeroAttr(id: HeroKey, attr: AttributeId): boolean {
   if (heroFreePoints(id) <= 0) return false;
   const r = record(id, true); if (r.attributes[attr] >= ATTRIBUTE_MAX) return false;
   r.attributes[attr]++; commit(); return true;
+}
+/**
+ * 主线关首次通关经验（平衡会话实测后提议、用户批准）：一章每关 120、二章 250，之后每章 +130（380 / 510 / 640）。
+ * 关卡键同马厩赠马：huangjin-N / hulao-N / third-N / guandu-N / chibi-N。每个存档每关只给一次（任何武将打通都算）。
+ */
+export const FIRST_CLEAR_XP: Record<string, number> = { huangjin: 120, hulao: 250, third: 380, guandu: 510, chibi: 640 };
+export function claimFirstClear(stageKey: string | null): number {
+  const chapter = stageKey?.match(/^([a-z]+)-\d$/)?.[1], xp = chapter ? FIRST_CLEAR_XP[chapter] ?? 0 : 0;
+  if (!xp || !stageKey) return 0;
+  const s = read(); if (s.firstClears.includes(stageKey)) return 0;
+  s.firstClears.push(stageKey); commit(); return xp;
 }
 export interface XpResult { from: number; to: number; gained: number; capped: boolean; cap: number }
 /** 结算记经验（已按来源折算好的数值）。到上限后经验存着。 */

@@ -58,7 +58,7 @@ import { LegionUI } from '../ui/LegionUI';
 import { Reinforcements } from '../systems/Reinforcements';
 import { MartialFields } from '../systems/MartialFields';
 import { RunGrowth, ATTRIBUTE_INFO, ATTRIBUTE_MAX, type AttributeId } from '../systems/RunGrowth';
-import { allocateHeroAttr, creditHeroXp, enlistHero, heroFreePoints, heroLevel, type HeroKey } from '../systems/HeroProgress';
+import { allocateHeroAttr, claimFirstClear, creditHeroXp, enlistHero, heroFreePoints, heroLevel, type HeroKey } from '../systems/HeroProgress';
 import { packCampaign, restoreCampaign, type CampaignTransfer } from '../systems/Campaign';
 import { TROOP_KINDS, INITIAL_TROOPS, LEGION, type TroopKind } from '../data/legion';
 import { DEFAULT_RUN_CONFIG, getCharacter, type RunConfig , HERO_TINT, HERO_FX } from '../data/characters';
@@ -2416,6 +2416,8 @@ export class GameScene extends Phaser.Scene {
       debug: isChapterTestRun() || this.debugModified || this.debugJumped || this.player.damageImmune });
     // 武将等级：本场经验折进武将经验（测试 / 调试战斗不记）
     {const debug=isChapterTestRun()||this.debugModified||this.debugJumped||!!this.player.damageImmune;
+     // 主线关首次通关经验（每关一次），并进本场经验一起折算，随行也按一半分到
+     const firstClear=!debug&&victory&&this.bossKilled?claimFirstClear(this.stableRewardKey()):0;if(firstClear){this.player.runXp+=firstClear;this.resultTexts.body.setText(this.resultTexts.body.text+'\n首次通关  经验 +'+firstClear);}
      if(!debug&&this.player.runXp>0){const name=getCharacter(this.runConfig.character).name,r=creditHeroXp(this.runConfig.character,this.player.runXp*this.heroXpRate());
       this.resultTexts.body.setText(this.resultTexts.body.text+'\n武将等级  '+name+(r.to>r.from?' Lv.'+r.from+' → Lv.'+r.to:' Lv.'+r.to)+' · 经验 +'+r.gained+(r.capped?' · 已到本章上限 Lv.'+r.cap+'，经验暂存':''));
       // 随行武将：每人拿主公折算后经验的一半（hero-level-proposal 方案 A，用户批准）

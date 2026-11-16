@@ -911,14 +911,16 @@ export class GameScene extends Phaser.Scene {
     this.announceBoss(profile.title, this.chapter.bossName);
   }
 
-  /** 首领名号标题：一道浓墨横贯画面上部，墨上名号小字 + 名字大字，约 2.6 秒淡出；不拦截点击、不暂停。 */
+  /** 首领名号标题：画面上部一道短墨痕，墨上名号小字 + 名字，约 2.6 秒淡出；不拦截点击、不暂停。
+   *  2026-11-16 试玩反馈「boss 出来那个预警 UI 太大了」：墨痕从横贯全屏缩成约 6 成宽、高度减半，字号降约 4 成，
+   *  放在顶部 HUD 与主将之间的空地，不压 HUD、不挡主将。 */
   protected announceBoss(title: string, name: string): void {
     this.children.getByName('boss-announce')?.destroy();
-    const W = GAME_WIDTH, D = IS_DESKTOP, y = GAME_HEIGHT * (D ? .3 : .27);
+    const W = GAME_WIDTH, D = IS_DESKTOP, y = GAME_HEIGHT * (D ? .25 : .2), bw = D ? 500 : Math.min(W * .78, 400), bh = D ? 70 : 72;
     const root = this.add.container(0, 0).setScrollFactor(0).setDepth(DEPTH.overlay - 8).setName('boss-announce').setVisible(this.mode === 'none');
-    const ink = this.textures.exists('btn_ink_secondary_normal') ? this.add.image(W / 2, y, 'btn_ink_secondary_normal').setDisplaySize(Math.min(W * 1.15, 900), D ? 150 : 140).setTint(0x2a2420) : this.add.rectangle(W / 2, y, W, 110, 0x120d0a, .85);
-    const t1 = this.add.text(W / 2, y - (D ? 26 : 24), title, { fontFamily: HEADING_FONT, fontSize: '17px', color: '#d9b26a', resolution: 2 }).setOrigin(.5).setLetterSpacing(8);
-    const t2 = this.add.text(W / 2, y + (D ? 12 : 12), name, { fontFamily: TITLE_FONT, fontSize: (D ? 50 : 46) + 'px', color: '#e2412b', resolution: 2 }).setOrigin(.5).setLetterSpacing(14).setShadow(0, 2, '#000', 6, true, true);
+    const ink = this.textures.exists('btn_ink_secondary_normal') ? this.add.image(W / 2, y, 'btn_ink_secondary_normal').setDisplaySize(bw, bh).setTint(0x2a2420).setAlpha(.92) : this.add.rectangle(W / 2, y, bw, bh * .7, 0x120d0a, .8);
+    const t1 = this.add.text(W / 2, y - 14, title, { fontFamily: HEADING_FONT, fontSize: '12px', color: '#d9b26a', resolution: 2 }).setOrigin(.5).setLetterSpacing(5);
+    const t2 = this.add.text(W / 2, y + 7, name, { fontFamily: TITLE_FONT, fontSize: '28px', color: '#e2412b', resolution: 2 }).setOrigin(.5).setLetterSpacing(8).setShadow(0, 2, '#000', 4, true, true);
     root.add([ink, t1, t2]);
     for (const o of root.list) (o as unknown as Phaser.GameObjects.Components.ScrollFactor).setScrollFactor(0);
     root.setAlpha(0);
@@ -927,7 +929,7 @@ export class GameScene extends Phaser.Scene {
     const tick = (): void => {
       const t = performance.now() - start, a = t < 250 ? t / 250 : t > 2300 ? Math.max(0, 1 - (t - 2300) / 400) : 1;
       root.setAlpha(a).setVisible(this.mode === 'none');
-      t2.setScale(1.25 - .25 * Math.min(1, t / 300));
+      t2.setScale(1.12 - .12 * Math.min(1, t / 300));
       if (t >= 2700 || !root.active) { this.events.off(Phaser.Scenes.Events.POST_UPDATE, tick); root.destroy(); }
     };
     this.events.on(Phaser.Scenes.Events.POST_UPDATE, tick);

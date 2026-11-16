@@ -20,7 +20,7 @@ import { CHARACTER_PASSIVES } from '../data/passives';
 import { WEAPON_META,weaponName } from '../data/upgrades';
 import { chapterOneCleared, chapterUnlocked, isChapterTestRun } from '../systems/ChapterProgress';
 import { FONT, TITLE_FONT, HEADING_FONT, GAME_HEIGHT as H, GAME_WIDTH as W, IS_DESKTOP as D, switchLayout } from '../config';
-import { lqDivider, lqPanel, lqSkin } from '../ui/LacquerKit';
+import { lqDivider, lqHitBox, lqPanel, lqSkin } from '../ui/LacquerKit';
 import { ItemBagUI } from '../ui/ItemBagUI';
 
 const ROLES = ['游龙先锋 · 灵动突刺', '重甲武圣 · 横扫千军', '百步神射 · 远程压制', '卧龙军师 · 火阵爆发'];
@@ -291,7 +291,7 @@ export class MenuScene extends Phaser.Scene {
       const plate=this.add.graphics();plate.fillStyle(0x3a2616,.45).fillRoundedRect(W/2-(desk?140:112),y-(desk?20:24),desk?280:224,desk?40:48,6).lineStyle(1,0xc9a35e,.35).strokeRoundedRect(W/2-(desk?140:112),y-(desk?20:24),desk?280:224,desk?40:48,6);modal.add([plate,value]);
       for(const dir of [-1,1]){const b=label(W/2+dir*(desk?172:146),y,dir<0?arrows[0]:arrows[1],desk?22:26).setInteractive({useHandCursor:true}).setName(`settings-row-${i}-${dir<0?'dec':'inc'}`);
         b.setData('padAdjust',(d:number)=>{step(d);value.setText(name+'  '+get());}).on('pointerdown',()=>{step(dir);value.setText(name+'  '+get());});
-        const bw=desk?44:52,bh=desk?40:48,sk=lqSkin(this,b,b,()=>({w:bw,h:bh}));b.input?.hitArea.setTo((b.width-bw)/2,(b.height-bh)/2,bw,bh);modal.add([sk.gfx,b]);}
+        const bw=desk?44:52,bh=desk?40:48,sk=lqSkin(this,b,b,()=>({w:bw,h:bh}));lqHitBox(b,bw,bh);modal.add([sk.gfx,b]);}
       return value;
     };
     ['音乐','音效'].forEach((name,i)=>{const key=i?'im_sfx_vol':'im_bgm_vol';let volume= i?90:40;try{volume=Number(localStorage.getItem(key)??volume);}catch{}
@@ -309,11 +309,11 @@ export class MenuScene extends Phaser.Scene {
       const vsNote=()=>{const d=disp();vsyncNote.setText(d&&d.vsync!==d.vsyncActive?'重启游戏后生效':'');};vsNote();void vs;
       const quit=label(W/2,rowY(5)+6,'退出游戏',18).setColor('#e7b68e').setInteractive({useHandCursor:true}).setName('settings-quit');
       quit.on('pointerdown',()=>{if(quit.getData('confirm'))app.quit();else quit.setData('confirm',true).setText('确认退出？再点一次');});
-      const qs=lqSkin(this,quit,quit,()=>({w:220,h:38}),{tone:'quiet'});quit.input?.hitArea.setTo((quit.width-220)/2,(quit.height-38)/2,220,38);
+      const qs=lqSkin(this,quit,quit,()=>({w:220,h:38}),{tone:'quiet'});lqHitBox(quit,220,38);
       modal.add([qs.gfx,quit]);
     }
     const close=label(W/2,desk?rowY(6)+8:H/2+120,'返回',20).setFontFamily(HEADING_FONT).setInteractive({useHandCursor:true}).setName('settings-close').setData('padDefault',true).on('pointerdown',()=>modal.destroy());
-    const cs=lqSkin(this,close,close,()=>({w:200,h:desk?44:52}),{tone:'cinnabar'});close.input?.hitArea.setTo((close.width-200)/2,(close.height-(desk?44:52))/2,200,desk?44:52);
+    const cs=lqSkin(this,close,close,()=>({w:200,h:desk?44:52}),{tone:'cinnabar'});lqHitBox(close,200,desk?44:52);
     modal.add([cs.gfx,close]);
   }
   private corners(g: Phaser.GameObjects.Graphics, bg: Phaser.GameObjects.Rectangle, selected: boolean): void {

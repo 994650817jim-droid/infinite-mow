@@ -27,7 +27,14 @@ export const PASSIVE_RULES = {
    *  连环计：一次连锁引爆 ≥3 枚积 1 层计策，满层「火烧连环」：身边 6 枚环形火雷，踏入或 2 秒后齐爆并留火 2 秒；
    *  落凤坡：生命 <30% 时脚下布 4 枚火雷（每 30 秒最多一次）。 */
   // 2026-11-16 重做（用户批准）：脚下定时落雷（0.7 秒；Lv3 起 0.6 秒），生效 0.35 → 0.5 秒，连锁距离 130 → 150（移速加成时雷链仍连得上）
-  mineDropSec: .7, mineDropFastSec: .6, mineSideOffset: 45,
+  mineDropSec: .7, mineDropFastSec: .6,
+  /** 2026-11-16 方案 A「铁索连环」（用户选定，初值待平衡）：铁索最长 / 判定宽 / 减速 / Lv2 灼伤倍率与间隔 / Lv3 火走铁索倍率 / Lv4 火雷上限加成；
+   *  Lv5 铁索连舟：新雷挨近至少 loopBackSteps 枚之前的旧雷即首尾相接，围出面积 ≥ loopMinArea 时圈内地火 loopMs（每 loopTickMs 灼伤 loopMul、减速 loopSlow），之后整圈齐爆。 */
+  tetherLen: 150, tetherWidth: 16, tetherSlow: .25, tetherBurnMul: .2, tetherTickMs: 500, fireRunMul: .6, mineMaxLv4Bonus: 2,
+  loopBackSteps: 3, loopMinArea: 9000, loopMs: 3000, loopTickMs: 500, loopMul: .25, loopSlow: .4,
+  /** 2026-11-16 用户：「地雷触发太快了，炸不到人」→ 敌人踩雷后先烧引信 mineFuseMs 再爆（雷芯由慢到快闪红示警），期间再有人踩不重新计时，让后面的敌人也走进爆炸范围；
+   *  火烧连环圈被踏入时同样改为引信。连锁（mineChainDelayMs）与到期自爆维持原速。 */
+  mineFuseMs: 1000,
   mineMax: 6, mineLifeMs: 8000, mineArmMs: 500, mineTrigger: 26, mineRadius: 70, mineChainRange: 150, mineChainDelayMs: 150, mineChainStack: 3,
   ringMines: 6, ringRadius: 110, ringFuseMs: 2000, ringFireMs: 2000, fengpoHp: .3, fengpoCooldownMs: 30000, fengpoMines: 4,
   liubeiDamageMul: 1.15, liubeiHeal: .08, liubeiRally: .35,

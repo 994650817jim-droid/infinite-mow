@@ -132,6 +132,8 @@ export class BootScene extends Phaser.Scene {
     for (const sheet of ['a', 'b', 'c', 'd']) this.load.spritesheet('hero_fx_' + sheet, 'assets/hero-fx/fx_' + sheet + '.png', { frameWidth: 256, frameHeight: 256 });
     // 庞统火雷与连环铁链贴图（ChatGPT 生成，tools/prepare-weiyan-pangtong-icons.mjs 切出）
     this.load.image('pangtong_mine', 'assets/hero-fx/pangtong_mine.png'); this.load.image('pangtong_chain', 'assets/hero-fx/pangtong_chain.png');
+    // 庞统铁索连环像素特效（6×4，每帧 256，黑底叠加）：烧红铁索 / 沿索火苗 / 地火 / 雷芯闪；缺图时武器代码退回程序化过渡
+    this.load.spritesheet('pangtong_fx', 'assets/hero-fx/pangtong_fx.png', { frameWidth: 256, frameHeight: 256 });
     // 2026-11-16 专属武器贴图（tools/prepare-hero-icon-sheet.mjs 切出）与执刀侍婢行走图
     for (const k of ['sun_knife', 'diaochan_fan', 'huangzhong_arrow', 'charm_heart', 'charm_broken', 'zhangfei_spear']) this.load.image(k, 'assets/hero-fx/' + k + '.png');
     this.load.spritesheet('sun_maid_walk', 'assets/hero-fx/sun_maid_walk.png', { frameWidth: 96, frameHeight: 96 });

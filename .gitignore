@@ -90,6 +90,7 @@ assets/raw/*
 !/tools/test-dragging-blade.mjs
 !/tools/test-iff.mjs
 !/tools/test-enemy-walk.mjs
+!/tools/test-flank.mjs
 !/tools/test-hubao.mjs
 !/tools/test-mount.mjs
 !/tools/test-shield.mjs

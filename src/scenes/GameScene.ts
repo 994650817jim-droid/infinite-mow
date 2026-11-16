@@ -80,6 +80,7 @@ import {claimRunLoot,depositRunLoot,grantHorse,heroHorse} from '../systems/ItemS
 import {horseForReward} from '../data/mounts';
 import {HeroMount} from '../systems/HeroMount';
 import { DraggingBladeFx } from '../systems/DraggingBladeFx';
+import { FlankFx } from '../systems/FlankFx';
 import { IffOverlay, readIffMode, type IffUnit } from '../systems/IffOverlay';
 import type {ItemInstance} from '../data/items';
 import {armShield,absorbShield,ShieldBars} from '../systems/ShieldGuard';
@@ -146,6 +147,9 @@ export class GameScene extends Phaser.Scene {
   protected mount:HeroMount|null=null;
   /** 关羽拖刀斩表现（拿到修习后首次用到时创建，场景重启时清空）。 */
   protected dragFx?: DraggingBladeFx;
+  /** 战法迂回袭表现（拥有该战法后首次用到时创建，场景重启时清空）。 */
+  protected flankFx?: FlankFx;
+  flankBladeFx(): FlankFx { if (!this.flankFx) { this.flankFx = new FlankFx(this, this.player, this.sfx); this.events.once('shutdown', () => { this.flankFx?.destroy(); this.flankFx = undefined; }); } return this.flankFx; }
   /** 敌我区分叠加层（默认阵营色；设置开启描边；?iff=0 关闭）。 */
   iff: IffOverlay | null = null;
   /** 敌我区分叠加层要处理的单位：敌军、部曲（仅已在屏上的）、随行武将。 */
@@ -412,7 +416,7 @@ export class GameScene extends Phaser.Scene {
 
 
     this.player = new Player(this, 0, 0);
-    this.dragFx = undefined;
+    this.dragFx = undefined; this.flankFx = undefined;
     this.applyRunConfig(this.runConfig);
     this.worldCampaign=!preview&&!isChapterTestRun()&&this.registry.get('worldCampaign')===true;
     this.hardMode=!preview&&this.registry.get('hardChapter')===this.hardKey()&&(chapterState(this.hardKey() as TimelineChapterId,loadWorldState())==='cleared'||isChapterTestRun());
@@ -465,6 +469,7 @@ export class GameScene extends Phaser.Scene {
     this.legion.awakeningDefense={incoming:(u,n)=>this.awakeningCombat?.allyIncoming(u,n)??1,onAllyHurt:(u,n)=>this.awakeningCombat?.onAllyHurt(u,n)};
     this.events.once('shutdown',()=>{this.awakeningCombat?.clear();this.awakeningCombat=undefined;});
     this.buildCombat.setOrigin(()=>({x:this.player.x,y:this.player.y}));
+    this.buildCombat.onFlank=targets=>this.flankBladeFx().strike(targets);
     const cam = this.cameras.main;
     cam.setRoundPixels(false);
     cam.setScroll(this.player.x - GAME_WIDTH / 2, this.player.y - GAME_HEIGHT / 2);
@@ -751,6 +756,7 @@ export class GameScene extends Phaser.Scene {
     if (this.over) return;
     this.martialFields.update(dt);
     this.buildCombat.update(this.combatNow);
+    {const fc=this.buildCombat.flankCharge();if(fc.level||this.flankFx)this.flankBladeFx().update(dt,fc.level,fc.ratio);}
     this.controlBuild?.update(this.combatNow);
     this.bulwarkBuild?.update(this.combatNow);
     this.awakeningCombat?.update(this.combatNow);

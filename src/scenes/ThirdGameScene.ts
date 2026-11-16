@@ -1,5 +1,6 @@
 import {ThirdSpearWarnings,THIRD_SPEAR,type SpearWindup} from '../systems/ThirdSpearWarnings';
 import {EnemyCamps} from '../systems/EnemyCamps';
+import {HubaoBattle} from '../systems/HubaoBattle';
 import {FireShips} from '../systems/FireShips';
 import {applyCitySpecialties} from '../systems/CityBonuses';
 import {cityIncomeLine,beginArcExpedition,settleArcExpedition,arcStageUnlocked,type WarlordArc} from '../world/WorldStore';
@@ -25,6 +26,8 @@ export function thirdGameSceneClass(Base:typeof GameScene,cfg:ArcSceneConfig=THI
  protected padTargets(){return this.enemyCamps?.padTargets()??[];}
  protected padClearTargets(){this.enemyCamps?.cancel();}
  private enemyCamps?:EnemyCamps;private fireShips?:FireShips;
+ /** 第五章虎豹骑（突阵 + 5-1 护驾曹纯）。 */
+ private hubao?:HubaoBattle;
  private thirdStage:ThirdStage=1;private controller?:ThirdBoss;private thirdReceipt='';private thirdTest=false;private spear=new WeakMap<Enemy,SpearWindup>();private spearWarnings?:ThirdSpearWarnings;
  /** 本关首领招式组与地貌组（第三章即关序号）。 */
  private get behavior():ThirdStage{return cfg.stages[this.thirdStage-1]?.behavior??this.thirdStage;}
@@ -36,6 +39,7 @@ export function thirdGameSceneClass(Base:typeof GameScene,cfg:ArcSceneConfig=THI
   const saved=this.registry.get('runConfig')as RunConfig|undefined,transfer=this.registry.get(cfg.transferKey)as CampaignTransfer|undefined;this.registry.remove(cfg.transferKey);this.registry.remove('campaignTransfer');if(transfer&&transfer.character===saved?.character)this.registry.set('campaignTransfer',transfer);
   this.registry.set('runConfig',{...saved,character:saved?.character??'zhaoyun',chapter:'hulao',westStage:3,encounter:'qunxiong'});super.create();
   this.controller=undefined;this.spear=new WeakMap();this.chapter=cfg.battle(this.thirdStage);this.runConfig={...this.runConfig,thirdStage:this.thirdStage,encounter:'qunxiong'};
+  this.hubao=cfg.arc==='chibi'?new HubaoBattle({scene:this,player:this.player,army:this.legion,enemies:this.enemies,spawn:(kind,x,y,def)=>this.spawnEnemy(kind,x,y,undefined,true,def),stage:()=>this.thirdStage,elapsed:()=>this.elapsed,def:k=>this.chapter.enemies[k],banner:(t,c)=>this.showWaveBanner(t,true,c||undefined),sfx:k=>this.sfx.play(k),move:(e,nx,ny,dt)=>this.advanceEnemy(e,nx,ny,dt),boss:()=>this.boss}):undefined;this.xiliang=this.hubao??null;
   this.thirdReceipt=this.thirdTest?'':beginArcExpedition(cfg.arc,this.thirdStage,this.allies.filter(u=>u.active&&u.reserveSoldier).map(u=>u.kind));const effect=permanentEffects();this.legion.healingMultiplier=effect.healMultiplier;applyCitySpecialties(this.player,effect,!transfer);if(!transfer){for(let i=0;i<effect.reinforcements;i++)this.legion.recruit(i===0?'swordsman':'spearman',1,true);if(!this.thirdTest)for(const kind of takeExpeditionReserve(effect.reserveSlots)){this.legion.recruit(kind,1,true);this.allies[this.allies.length-1].reserveSoldier=true;}}
   this.spearWarnings=new ThirdSpearWarnings(this);
   this.battlefieldDetails.useStructuredLayout();if(this.supplies)this.supplies.randomGeneration=false;
@@ -51,7 +55,7 @@ export function thirdGameSceneClass(Base:typeof GameScene,cfg:ArcSceneConfig=THI
  protected priorityWeaponTarget(range:number,bodyRadius=true){return this.enemyCamps?.target(range,bodyRadius)??null;}
  protected tryCustomBossSkill(){if(!this.controller||!this.boss?.active)return false;this.controller.forceSkill(this.combatNow);return true;}
  protected customChapter(){return cfg.battle(this.thirdStage);}
- protected spawnBoss(){super.spawnBoss();const d=cfg.stages[this.thirdStage-1];if(this.boss)this.controller=new ThirdBoss({scene:this,boss:this.boss,player:this.player,army:this.legion,spawn:(kind,x,y)=>this.spawnEnemy(kind,x,y,1,true)},this.behavior,this.combatNow,cfg===THIRD_CONFIG?undefined:{texture:cfg.texture(d.id),name:d.boss,skills:d.skills,signature:d.signature?{id:d.id as 'caochun'|'caimao'|'caoren',name:d.signature}:undefined});}
+ protected spawnBoss(){const had=this.boss?.active;super.spawnBoss();if(this.boss&&!had)this.hubao?.onBoss(this.combatNow);const d=cfg.stages[this.thirdStage-1];if(this.boss)this.controller=new ThirdBoss({scene:this,boss:this.boss,player:this.player,army:this.legion,spawn:(kind,x,y)=>this.spawnEnemy(kind,x,y,1,true)},this.behavior,this.combatNow,cfg===THIRD_CONFIG?undefined:{texture:cfg.texture(d.id),name:d.boss,skills:d.skills,signature:d.signature?{id:d.id as 'caochun'|'caimao'|'caoren',name:d.signature}:undefined});}
  protected customBossStep(enemy:Enemy,dt:number,now:number){if(enemy!==this.boss||!this.controller)return false;this.controller.update(dt,now);return true;}
 
  protected customEnemyStep(enemy:Enemy,dt:number,now:number,target:{x:number;y:number}){

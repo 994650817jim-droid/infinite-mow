@@ -7,7 +7,22 @@ import type {EnemyKind} from '../types';
 import {warnLane} from '../ui/Telegraph';
 import {XILIANG_RAID as R, FEIXIONG as F} from '../data/xiliang';
 
-interface Host {
+/** 铁骑突阵参数（西凉铁骑见 XILIANG_RAID；虎豹骑见 data/hubao.ts）。 */
+export type RaidParams = {readonly riders: number; readonly spacing: number; readonly lead: number; readonly aimJitter: number; readonly distance: number; readonly speed: number; readonly warnMs: number; readonly damage: number; readonly knockback: number; readonly troopRadius: number; readonly troopDamage: number};
+export interface TacticsOptions {
+  raid?: RaidParams;
+  /** 首次突阵秒数、各关间隔（返回 null 表示该关不突阵）。 */
+  first?: number; interval?: (stage: 1 | 2 | 3) => number | null;
+  /** 突阵骑兵定义（默认当前关骑兵）。 */
+  riderDef?: () => EnemyDef;
+  /** 首次突阵提示。 */
+  banner?: [string, string];
+  /** 是否出飞熊军（只有第二章）。 */
+  feixiong?: boolean;
+  /** 冲锋道图形名（测试用）。 */
+  laneName?: string;
+}
+export interface Host {
   scene: Phaser.Scene; player: Player; army: Legion; enemies: Enemy[];
   spawn: (kind: EnemyKind, x: number, y: number, override?: EnemyDef) => Enemy | null;
   /** 当前关（2-1 汜水关 / 2-2 荥阳 / 2-3 虎牢关）与本关已过秒数。 */
@@ -16,7 +31,7 @@ interface Host {
   def: (kind: 'cavalry' | 'shield') => EnemyDef;
   banner: (text: string, caption: string) => void; sfx: (key: 'chargeWarn' | 'hitHeavy') => void;
 }
-interface Raid {id: number; x: number; y: number; dx: number; dy: number; warnUntil: number; riders: Array<{e: Enemy; life: number; ox: number; oy: number; hit: boolean; hurtAt: number}>; g: Phaser.GameObjects.Graphics; traveled: number}
+export interface Raid {id: number; x: number; y: number; dx: number; dy: number; warnUntil: number; riders: Array<{e: Enemy; life: number; ox: number; oy: number; hit: boolean; hurtAt: number}>; g: Phaser.GameObjects.Graphics; traveled: number}
 interface Bash {e: Enemy; life: number; state: 'windup' | 'lunge'; until: number; dx: number; dy: number; hit: boolean; g: Phaser.GameObjects.Graphics}
 
 /**
@@ -26,9 +41,13 @@ interface Bash {e: Enemy; life: number; state: 'windup' | 'lunge'; until: number
  * 飞熊军为过渡造型：西凉刀盾兵放大并染铁青色（无独立美术）。
  */
 export class XiliangBattle {
-  private raids: Raid[] = []; private bashes: Bash[] = []; private nextRaidAt: number = R.first; private nextFeixiongAt: number = F.first; private raidSeq = 0; private lastT = 0; private announced = false; private feixiongAnnounced = false;
+  protected raids: Raid[] = []; private bashes: Bash[] = []; private nextRaidAt: number; private nextFeixiongAt: number = F.first; private raidSeq = 0; private lastT = 0; private announced = false; private feixiongAnnounced = false;
   private readonly bashCd = new WeakMap<Enemy, number>();
-  constructor(private h: Host) {}
+  protected readonly raid: RaidParams;
+  constructor(protected h: Host, protected o: TacticsOptions = {}) { this.raid = o.raid ?? R; this.nextRaidAt = o.first ?? R.first; }
+  private intervalFor(stage: 1 | 2 | 3): number | null { return this.o.interval ? this.o.interval(stage) : R.interval[stage - 1]; }
+  /** 子类（虎豹骑护驾）接管普通敌兵移动的钩子。 */
+  protected guardStep(_e: Enemy, _dt: number, _now: number): boolean { return false; }
   /** 飞熊军定义（测试也用）。 */
   feixiongDef(): EnemyDef {
     const base = this.h.def('shield'), wv = base.walkVisual;
@@ -40,6 +59,7 @@ export class XiliangBattle {
   /** 本帧是否由西凉战法接管该敌兵的移动。 */
   handleEnemy(e: Enemy, dt: number, now: number): boolean {
     for (const r of this.raids) if (r.riders.some(x => x.e === e && x.e.spawnId === x.life)) return true;
+    if (this.guardStep(e, dt, now)) return true;
     if (!this.isFeixiong(e)) return false;
     const b = this.bashes.find(x => x.e === e && x.e.spawnId === x.life);
     if (b) return this.stepBash(b, dt, now);
@@ -75,54 +95,54 @@ export class XiliangBattle {
   update(dt: number, now: number): void {
     const t = this.h.elapsed(), stage = this.h.stage();
     // 战线推进到下一关时本关计时归零：战法排期随之重置
-    if (t < this.lastT) { this.nextRaidAt = R.first; this.nextFeixiongAt = F.first; }
+    if (t < this.lastT) { this.nextRaidAt = this.o.first ?? R.first; this.nextFeixiongAt = F.first; }
     this.lastT = t;
     // 失效的突阵 / 盾击（敌兵已死或被回收）
     for (const b of [...this.bashes]) if (!b.e.active || b.e.spawnId !== b.life) { b.g.destroy(); this.bashes.splice(this.bashes.indexOf(b), 1); }
-    if (t >= this.nextRaidAt) { this.nextRaidAt = t + R.interval[stage - 1]; this.startRaid(now); }
-    if (stage >= 2 && t >= this.nextFeixiongAt) { this.nextFeixiongAt = t + F.interval[stage - 1]; this.spawnFeixiong(); }
+    if (t >= this.nextRaidAt) { const iv = this.intervalFor(stage); this.nextRaidAt = iv === null ? Infinity : t + iv; if (iv !== null) this.startRaid(now); }
+    if (this.o.feixiong !== false && stage >= 2 && t >= this.nextFeixiongAt) { this.nextFeixiongAt = t + F.interval[stage - 1]; this.spawnFeixiong(); }
     for (const r of [...this.raids]) this.stepRaid(r, dt, now);
   }
   /** 立即发起一次铁骑突阵（测试与调试用）；返回突阵编号。 */
   startRaid(now: number): number {
-    const p = this.h.player, a = Math.random() * Math.PI * 2, dx = Math.cos(a), dy = Math.sin(a), side = (Math.random() - .5) * 2 * R.aimJitter;
-    const x = p.x - dx * R.lead - dy * side, y = p.y - dy * R.lead + dx * side;
-    const riders: Raid['riders'] = [], def = this.h.def('cavalry'), dir = Math.abs(dx) > Math.abs(dy) ? (dx < 0 ? 'left' : 'right') : dy < 0 ? 'up' : 'down';
-    for (let i = 0; i < R.riders; i++) {
-      const off = (i - (R.riders - 1) / 2) * R.spacing, ox = -dy * off, oy = dx * off, e = this.h.spawn('cavalry', x + ox, y + oy, def);
+    const p = this.h.player, a = Math.random() * Math.PI * 2, dx = Math.cos(a), dy = Math.sin(a), side = (Math.random() - .5) * 2 * this.raid.aimJitter;
+    const x = p.x - dx * this.raid.lead - dy * side, y = p.y - dy * this.raid.lead + dx * side;
+    const riders: Raid['riders'] = [], def = this.o.riderDef?.() ?? this.h.def('cavalry'), dir = Math.abs(dx) > Math.abs(dy) ? (dx < 0 ? 'left' : 'right') : dy < 0 ? 'up' : 'down';
+    for (let i = 0; i < this.raid.riders; i++) {
+      const off = (i - (this.raid.riders - 1) / 2) * this.raid.spacing, ox = -dy * off, oy = dx * off, e = this.h.spawn('cavalry', x + ox, y + oy, def);
       if (!e) continue;
       e.startCharge(now, dir); e.chargeAt = now + 1e7; e.moveVx = e.moveVy = 0;
       riders.push({e, life: e.spawnId, ox, oy, hit: false, hurtAt: 0});
     }
     if (!riders.length) return -1;
-    const raid: Raid = {id: ++this.raidSeq, x, y, dx, dy, warnUntil: now + R.warnMs, riders, g: this.h.scene.add.graphics().setDepth(3).setName('xiliang-raid-lane'), traveled: 0};
+    const raid: Raid = {id: ++this.raidSeq, x, y, dx, dy, warnUntil: now + this.raid.warnMs, riders, g: this.h.scene.add.graphics().setDepth(3).setName(this.o.laneName ?? 'xiliang-raid-lane'), traveled: 0};
     this.raids.push(raid); this.h.sfx('chargeWarn');
-    if (!this.announced) { this.announced = true; this.h.banner('西凉铁骑 · 突阵！', '看准冲锋道，侧身闪开'); }
+    if (!this.announced) { this.announced = true; this.h.banner(...(this.o.banner ?? ['西凉铁骑 · 突阵！', '看准冲锋道，侧身闪开'])); }
     return raid.id;
   }
-  private stepRaid(r: Raid, dt: number, now: number): void {
+  protected stepRaid(r: Raid, dt: number, now: number): void {
     const live = r.riders.filter(x => x.e.active && x.e.spawnId === x.life);
-    const width = R.spacing * (R.riders - 1) + 56, angle = Math.atan2(r.dy, r.dx);
+    const width = this.raid.spacing * (this.raid.riders - 1) + 56, angle = Math.atan2(r.dy, r.dx);
     if (now < r.warnUntil) {
-      const t = 1 - (r.warnUntil - now) / R.warnMs;
-      r.g.clear(); warnLane(r.g, r.x, r.y, angle, R.distance, width, t);
+      const t = 1 - (r.warnUntil - now) / this.raid.warnMs;
+      r.g.clear(); warnLane(r.g, r.x, r.y, angle, this.raid.distance, width, t);
       for (const x of live) { x.e.sprite.x = r.x + x.ox; x.e.sprite.y = r.y + x.oy; x.e.moveVx = x.e.moveVy = 0; }
       return;
     }
     r.g.clear();
-    const step = R.speed * dt; r.traveled += step;
+    const step = this.raid.speed * dt; r.traveled += step;
     const p = this.h.player;
     for (const x of live) {
-      const e = x.e; e.chargeState = 'charge'; e.sprite.x += r.dx * step; e.sprite.y += r.dy * step; e.moveVx = r.dx * R.speed; e.moveVy = r.dy * R.speed;
+      const e = x.e; e.chargeState = 'charge'; e.sprite.x += r.dx * step; e.sprite.y += r.dy * step; e.moveVx = r.dx * this.raid.speed; e.moveVy = r.dy * this.raid.speed;
       if (!x.hit && Math.hypot(p.x - e.x, p.y - e.y) < p.radius + e.radius + 8) {
-        x.hit = true; if (p.takeDamage(R.damage, now)) this.h.scene.cameras.main.flash(120, 180, 40, 40, false);
+        x.hit = true; if (p.takeDamage(this.raid.damage, now)) this.h.scene.cameras.main.flash(120, 180, 40, 40, false);
         // 横向撞开（离开冲锋道）
         const cross = (p.x - e.x) * -r.dy + (p.y - e.y) * r.dx, s = cross >= 0 ? 1 : -1;
-        p.sprite.x += -r.dy * s * R.knockback + r.dx * 18; p.sprite.y += r.dx * s * R.knockback + r.dy * 18;
+        p.sprite.x += -r.dy * s * this.raid.knockback + r.dx * 18; p.sprite.y += r.dx * s * this.raid.knockback + r.dy * 18;
       }
-      if (now >= x.hurtAt) { x.hurtAt = now + 250; this.h.army.hurtArea(e.x, e.y, R.troopRadius, R.troopDamage, now); }
+      if (now >= x.hurtAt) { x.hurtAt = now + 250; this.h.army.hurtArea(e.x, e.y, this.raid.troopRadius, this.raid.troopDamage, now); }
     }
-    if (r.traveled >= R.distance || !live.length) {
+    if (r.traveled >= this.raid.distance || !live.length) {
       // 冲过之后归入普通骑兵
       for (const x of live) { x.e.chargeState = 'recover'; x.e.chargeAt = now + 350; x.e.dashCd = 4; }
       r.g.destroy(); this.raids.splice(this.raids.indexOf(r), 1);

@@ -84,7 +84,7 @@ for (const [layout, viewport] of Object.entries(LAYOUTS)) for (const [hero, h] o
     const r = await p.evaluate(async ([G0, MK]) => {
       const s = eval(G0), pl = s.player; const mk = eval(MK);
       const l = mk(pl.x - 80, pl.y), rr = mk(pl.x + 80, pl.y); let cross = false; const t0 = performance.now();
-      while (performance.now() - t0 < 4000) { await new Promise(r => setTimeout(r, 20)); cross = cross || !!s.children.getByName('liubei-cross'); if (l.hp < l.maxHp && rr.hp < rr.maxHp) break; }
+      while (performance.now() - t0 < 4000) { await new Promise(r => setTimeout(r, 20)); cross = cross || !!s.children.getByName('liubei-cross') || !!s.children.getByName('hero-fx-crossSlash'); if (l.hp < l.maxHp && rr.hp < rr.maxHp) break; }
       return { left: l.maxHp - l.hp, right: rr.maxHp - rr.hp, cross, stacks: pl.passive.snapshot(s.combatNow).stacks };
     }, [G, mk]);
     ck(`${tag}：双剑同时斩中左右两名敌人（「×」交叉斩），积仁德`, r.left > 0 && r.right > 0 && r.cross && r.stacks >= 1, r);

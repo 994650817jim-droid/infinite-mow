@@ -61,3 +61,13 @@ fx_c 四行依次为：
 | 刘备 | 双股剑 | 一青一金「×」交叉斩 | 「×」剑光序列帧 1 行 |
 
 另需 12 个武学图标：回身飞刀、百婢、霓裳、美人计、穿杨、老骥伏枥、万人敌、大喝、锦马、铁骑、桃园、携民。还需 6 个武器图标（现在借用连弩、长枪、战旗、偃月刀的图标）。要图需用户在 heroes 会话同意，并按 chrome-lock.md 排队。
+
+## 2026-11-16 正式图到位（新聊天「生成特效序列帧图集」）
+- `hero-fx/fx_d.png`：6×4、256 帧、黑底叠加，四行依次为貂蝉闭月、黄忠重箭命中、张飞当阳声浪、刘备交叉斩。
+- 武艺图标 12 个：回身飞刀、百婢、霓裳、美人计、百步、老骥伏枥、万人敌、大喝、锦马、铁骑、桃园、携民。
+- 武器图标 6 个：weapon_sunknives / fans / baodiao / shemao / zhanjin / shuanggu。
+- 战场贴图（`hero-fx/`）：sun_knife、diaochan_fan、huangzhong_arrow、charm_heart、charm_broken、zhangfei_spear。
+- 执刀侍婢行走图：`hero-fx/sun_maid_walk.png`（4×4、96 帧）。
+- 切图脚本：`tools/prepare-hero-icon-sheet.mjs`（KEY=strict 用于粉紫物件）、`reslice-magenta-sheet.mjs`。
+- 原图在 `originals/`：fx_d、heroes_icons2、heroes_sprites、sun_maid_walk。
+- 缺图时各处仍退回程序化特效。马超改为枪挑破阵后不再需要西凉骑兵图。

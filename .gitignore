@@ -86,3 +86,5 @@ assets/raw/*
 !/tools/test-siege-goals.mjs
 !/tools/test-city-simple.mjs
 !/tools/pad-harness.mjs
+!/tools/test-chibi.mjs
+!/tools/test-items.mjs

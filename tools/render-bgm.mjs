@@ -9,7 +9,7 @@ import { join } from 'node:path';
 
 const outDir = process.argv[2] || 'screenshots/bgm';
 const SCALE = Number(process.argv[3] || 1);
-const ONLY = process.argv[4] || ''; // 'v2' / 'old'：只渲染一版（调音时用），跳过响度对比
+const ONLY = process.argv[4] || ''; // 'v2' / 'old' / 某段名（如 battle-chibi）：只渲染这些（调音时用），跳过响度对比
 mkdirSync(outDir, { recursive: true });
 
 const bundle = await build({
@@ -32,8 +32,9 @@ const bundle = await build({
         const rms = Math.sqrt(sum / Math.max(1, n));
         return { rmsDb: +(20 * Math.log10(rms + 1e-9)).toFixed(1), peakDb: +(20 * Math.log10(peak + 1e-9)).toFixed(1), nan };
       }
-      window.__renderBgm = async (version, boss, seconds, bossAt) => {
+      window.__renderBgm = async (version, boss, seconds, bossAt, theme) => {
         const m = new Music('battle', version);
+        if (theme) m.setBattleTheme(theme);
         const buf = await m.renderOffline(seconds, boss ? bossProfile(boss) : null, bossAt);
         const bytes = wav(buf); let s = ''; for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
         return { b64: btoa(s), stats: stats(buf) };
@@ -53,10 +54,14 @@ const jobs = [
   ['old', null, 'battle-huangjin', 80], ['v2', null, 'battle-huangjin', 80],
   ['old', '张角', 'boss-zhangjiao', 90], ['v2', '张角', 'boss-zhangjiao', 90],
   ['old', '吕布', 'boss-lubu', 70], ['v2', '吕布', 'boss-lubu', 70],
+  // 各章战斗曲（只有新版；响度与旧版战斗曲对比）
+  ['v2', null, 'battle-hulao', 67, 'hulao'], ['v2', null, 'battle-qunxiong', 74, 'qunxiong'],
+  ['v2', null, 'battle-guandu', 80, 'guandu'], ['v2', null, 'battle-chibi', 72, 'chibi'],
+  ['v2', '袁术', 'boss-yuanshu', 40], ['v2', '曹纯', 'boss-caochun', 40],
 ];
 const results = []; let fail = 0;
-for (const [ver, boss, name, secs] of jobs.filter(j => !ONLY || j[0] === ONLY)) {
-  const r = await page.evaluate(([v, b, s]) => window.__renderBgm(v, b, s, 0), [ver, boss, secs * SCALE]);
+for (const [ver, boss, name, secs, theme] of jobs.filter(j => !ONLY || j[0] === ONLY || j[2] === ONLY)) {
+  const r = await page.evaluate(([v, b, s, th]) => window.__renderBgm(v, b, s, 0, th), [ver, boss, secs * SCALE, theme ?? null]);
   const file = join(outDir, `${ver === 'v2' ? 'new' : 'old'}-${name}.wav`);
   writeFileSync(file, Buffer.from(r.b64, 'base64'));
   results.push({ ver, name, ...r.stats });
@@ -69,6 +74,12 @@ for (const name of ONLY ? [] : ['battle-huangjin', 'boss-zhangjiao', 'boss-lubu'
   const diff = +(n.rmsDb - o.rmsDb).toFixed(1), ok = Math.abs(diff) <= 4;
   if (!ok) fail++;
   console.log(`${ok ? 'PASS' : 'FAIL'} loudness_match ${name} :: new-old ${diff} dB`);
+}
+const oldBattle = results.find(r => r.ver === 'old' && r.name === 'battle-huangjin');
+for (const n of oldBattle ? results.filter(r => r.ver === 'v2' && /battle-(hulao|qunxiong|guandu|chibi)/.test(r.name)) : []) {
+  const diff = +(n.rmsDb - oldBattle.rmsDb).toFixed(1), ok = Math.abs(diff) <= 4;
+  if (!ok) fail++;
+  console.log(`${ok ? 'PASS' : 'FAIL'} loudness_match ${n.name} :: new-oldBattle ${diff} dB`);
 }
 await browser.close();
 console.log(fail ? `RENDER-BGM FAIL ${fail}` : 'RENDER-BGM OK');

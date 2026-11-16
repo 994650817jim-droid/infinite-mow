@@ -6,15 +6,16 @@
  * - 新乐器：战鼓（次低频 + 鼓身 + 皮面三层）、小堂鼓、钹、大锣（可做渐强“涌”）、铜管号角（滤波包络）、
  *   共振峰合唱（男声“啊 / 哦”长音铺底）、弦乐顿弓低音跑动、二胡（滑音 + 渐深揉弦）、改良唢呐、竹笛、琵琶轮指。
  * - 结构：段落推进。首领曲：前奏 4 小节 → 循环 32 小节（蓄势 8 → 主题 8 → 高潮前 8 → 高潮 6 → 转回 2）。
- *   黄巾战斗曲《黄天当立》：前奏 4 小节 → 循环 28 小节（主题 8 → 主题加笛 8 → 副歌 8 → 鼓段 4），D 小调 100 BPM。
+ *   各章战斗曲（BATTLE_THEMES）：前奏 4 小节 → 循环 28 小节（主题 8 → 主题加副奏 8 → 副歌 8 → 鼓段 4）。
+ *   黄巾《黄天当立》、讨董《关东烽火》、群雄《群雄逐鹿》、官渡《官渡对垒》、赤壁《赤壁东风》；界面曲见 Music.ts。
  *
- * 版本切换：`?bgm=old` 回到 v1，`?bgm=new` 用 v2；也可写 localStorage `im_bgm_ver`。默认见 DEFAULT_BGM。
+ * 版本切换：`?bgm=old` 回到 v1，`?bgm=new` 用 v2；也可写 localStorage `im_bgm_ver`。默认见 DEFAULT_BGM（现为 v2）。
  */
 import { type BossProfile, bossMotif, composeBossMelody, profileScale } from '../data/bossMusic';
 
 export type BgmVersion = 'old' | 'v2';
-/** 用户选定前默认仍为旧版；选定后改这里即可全面切换。 */
-export const DEFAULT_BGM: BgmVersion = 'old';
+/** 2026-11-16 用户试听后选定新版（「bgm同意」）；?bgm=old 可切回旧版。 */
+export const DEFAULT_BGM: BgmVersion = 'v2';
 
 export function bgmVersion(): BgmVersion {
   try {
@@ -29,9 +30,9 @@ export function bgmVersion(): BgmVersion {
 
 const mtof = (n: number): number => 440 * Math.pow(2, (n - 69) / 12);
 
-// ---------------------------------------------------------------- 黄巾战斗曲《黄天当立》
-export const BATTLE_V2_BPM = 100;
+// ---------------------------------------------------------------- 各章战斗曲（同一套音色，不同调性 / 速度 / 主奏 / 鼓型 / 旋律）
 type Chord = { bass: number; pad: number[] };
+/** 和弦以 D 小调为基准书写，各曲再整体移调（tr）。 */
 const CH: Record<string, Chord> = {
   Dm: { bass: 38, pad: [50, 57, 62, 65] },
   Gm: { bass: 43, pad: [55, 58, 62, 67] },
@@ -39,34 +40,128 @@ const CH: Record<string, Chord> = {
   Bb: { bass: 46, pad: [50, 53, 58, 62] },
   C: { bass: 48, pad: [52, 55, 60, 64] },
   A: { bass: 45, pad: [52, 57, 61, 64] },
+  Am: { bass: 45, pad: [52, 57, 60, 64] },
 };
-const INTRO_CH = ['Dm', 'Dm', 'Bb', 'A'];
-const A_CH = ['Dm', 'Dm', 'Gm', 'F', 'Dm', 'Bb', 'Gm', 'A'];
-const B_CH = ['Bb', 'C', 'Dm', 'Dm', 'Bb', 'C', 'Gm', 'A'];
-const BR_CH = ['Dm', 'Dm', 'Bb', 'A'];
-type Line = Array<[number, number]>; // [MIDI(-1 休止), 八分音符时值]
-/** 主题：每 2 小节一句，共 4 句。 */
-const THEME_A: Line[] = [
-  [[69, 3], [67, 1], [69, 2], [72, 2], [74, 4], [72, 2], [69, 2]],
-  [[67, 2], [69, 1], [67, 1], [65, 2], [62, 2], [65, 3], [67, 1], [69, 4]],
-  [[69, 3], [67, 1], [69, 2], [72, 2], [74, 2], [77, 2], [74, 2], [72, 2]],
-  [[72, 3], [69, 1], [67, 2], [65, 2], [64, 2], [65, 1], [64, 1], [62, 4]],
-];
-/** 副歌：音区升高，号角与二胡齐奏。 */
-const THEME_B: Line[] = [
-  [[77, 2], [77, 1], [79, 1], [81, 4], [79, 2], [77, 1], [76, 1], [72, 4]],
-  [[74, 2], [76, 2], [77, 2], [81, 2], [81, 6], [79, 2]],
-  [[77, 2], [77, 1], [79, 1], [81, 4], [84, 2], [81, 2], [79, 4]],
-  [[77, 2], [76, 2], [74, 2], [72, 1], [74, 1], [76, 8]],
-];
+type Line = Array<[number, number]>; // [MIDI(-1 休止), 八分音符时值]；每句 2 小节 = 16 个八分
+type Voice = 'erhu' | 'dizi' | 'suona' | 'horn' | 'pipa';
+type BattleDrums = 'march' | 'gallop' | 'heavy' | 'tense';
+export type BattleThemeKey = 'huangjin' | 'hulao' | 'qunxiong' | 'guandu' | 'chibi';
+interface BattleTheme {
+  title: string; bpm: number; tr: number;
+  intro: string[]; a: string[]; b: string[]; br: string[];
+  melA: Line[]; melB: Line[];
+  /** A 段主奏；A2 段在主奏之上加的副奏；B 段主奏 + 低八度托底。 */
+  leadA: Voice; counterA2: Voice; leadB: Voice; supportB: Voice;
+  drums: BattleDrums; fire?: boolean;
+}
+export const BATTLE_THEMES: Record<BattleThemeKey, BattleTheme> = {
+  /** 第一章《黄天当立》：D 小调 100 BPM，二胡主奏，副歌二胡 + 号角齐奏。 */
+  huangjin: {
+    title: '黄天当立', bpm: 100, tr: 0,
+    intro: ['Dm', 'Dm', 'Bb', 'A'], a: ['Dm', 'Dm', 'Gm', 'F', 'Dm', 'Bb', 'Gm', 'A'], b: ['Bb', 'C', 'Dm', 'Dm', 'Bb', 'C', 'Gm', 'A'], br: ['Dm', 'Dm', 'Bb', 'A'],
+    melA: [
+      [[69, 3], [67, 1], [69, 2], [72, 2], [74, 4], [72, 2], [69, 2]],
+      [[67, 2], [69, 1], [67, 1], [65, 2], [62, 2], [65, 3], [67, 1], [69, 4]],
+      [[69, 3], [67, 1], [69, 2], [72, 2], [74, 2], [77, 2], [74, 2], [72, 2]],
+      [[72, 3], [69, 1], [67, 2], [65, 2], [64, 2], [65, 1], [64, 1], [62, 4]],
+    ],
+    melB: [
+      [[77, 2], [77, 1], [79, 1], [81, 4], [79, 2], [77, 1], [76, 1], [72, 4]],
+      [[74, 2], [76, 2], [77, 2], [81, 2], [81, 6], [79, 2]],
+      [[77, 2], [77, 1], [79, 1], [81, 4], [84, 2], [81, 2], [79, 4]],
+      [[77, 2], [76, 2], [74, 2], [72, 1], [74, 1], [76, 8]],
+    ],
+    leadA: 'erhu', counterA2: 'dizi', leadB: 'erhu', supportB: 'horn', drums: 'march',
+  },
+  /** 第二章《关东烽火》：E 小调 116 BPM，奔马鼓型；号角主奏，副歌二胡；下行四级进行。 */
+  hulao: {
+    title: '关东烽火', bpm: 116, tr: 2,
+    intro: ['Dm', 'C', 'Bb', 'A'], a: ['Dm', 'C', 'Bb', 'A', 'Dm', 'C', 'Bb', 'A'], b: ['F', 'C', 'Dm', 'Bb', 'F', 'C', 'A', 'A'], br: ['Dm', 'C', 'Bb', 'A'],
+    melA: [
+      [[62, 1], [62, 1], [69, 2], [69, 1], [67, 1], [69, 2], [72, 2], [70, 1], [69, 1], [67, 4]],
+      [[65, 2], [67, 1], [69, 1], [70, 4], [69, 6], [-1, 2]],
+      [[74, 1], [74, 1], [81, 2], [81, 1], [79, 1], [77, 2], [76, 2], [77, 1], [76, 1], [72, 4]],
+      [[74, 2], [72, 1], [70, 1], [69, 2], [67, 2], [64, 2], [69, 6]],
+    ],
+    melB: [
+      [[77, 3], [76, 1], [74, 2], [72, 2], [72, 2], [74, 1], [76, 1], [79, 4]],
+      [[81, 3], [79, 1], [77, 2], [74, 2], [74, 2], [77, 2], [74, 4]],
+      [[77, 3], [76, 1], [77, 2], [81, 2], [84, 2], [81, 1], [79, 1], [76, 4]],
+      [[76, 2], [77, 1], [76, 1], [73, 4], [69, 8]],
+    ],
+    leadA: 'horn', counterA2: 'suona', leadB: 'erhu', supportB: 'horn', drums: 'gallop',
+  },
+  /** 第三章《群雄逐鹿》：A 小调 104 BPM，竹笛主奏、二胡副歌，行进鼓。 */
+  qunxiong: {
+    title: '群雄逐鹿', bpm: 104, tr: -5,
+    intro: ['Dm', 'Bb', 'Gm', 'A'], a: ['Dm', 'Bb', 'F', 'C', 'Dm', 'Bb', 'Gm', 'A'], b: ['Gm', 'Dm', 'Bb', 'F', 'Gm', 'Dm', 'A', 'A'], br: ['Dm', 'Bb', 'Gm', 'A'],
+    melA: [
+      [[74, 4], [72, 2], [69, 2], [70, 3], [69, 1], [65, 4]],
+      [[65, 2], [67, 2], [69, 2], [72, 2], [67, 6], [-1, 2]],
+      [[74, 4], [77, 2], [76, 2], [74, 3], [72, 1], [70, 4]],
+      [[67, 2], [70, 2], [69, 2], [67, 2], [64, 4], [69, 4]],
+    ],
+    melB: [
+      [[79, 4], [77, 2], [74, 2], [77, 3], [76, 1], [74, 4]],
+      [[74, 2], [77, 2], [81, 2], [79, 2], [77, 6], [-1, 2]],
+      [[79, 3], [81, 1], [82, 2], [81, 2], [77, 2], [74, 2], [81, 4]],
+      [[76, 3], [74, 1], [73, 2], [76, 2], [69, 8]],
+    ],
+    leadA: 'dizi', counterA2: 'pipa', leadB: 'erhu', supportB: 'horn', drums: 'march',
+  },
+  /** 第四章《官渡对垒》：C 小调 96 BPM，重鼓；号角奏宽广主题，副歌唢呐高起。 */
+  guandu: {
+    title: '官渡对垒', bpm: 96, tr: -2,
+    intro: ['Dm', 'Dm', 'Bb', 'A'], a: ['Dm', 'Dm', 'Bb', 'Bb', 'Gm', 'Gm', 'A', 'A'], b: ['Dm', 'F', 'Gm', 'A', 'Bb', 'Gm', 'A', 'A'], br: ['Dm', 'Bb', 'Gm', 'A'],
+    melA: [
+      [[62, 4], [69, 4], [67, 2], [65, 2], [69, 4]],
+      [[70, 4], [69, 2], [65, 2], [62, 6], [-1, 2]],
+      [[67, 4], [70, 4], [74, 2], [72, 2], [70, 4]],
+      [[69, 4], [73, 2], [76, 2], [69, 6], [-1, 2]],
+    ],
+    melB: [
+      [[81, 3], [79, 1], [77, 2], [76, 2], [77, 4], [72, 4]],
+      [[74, 2], [77, 2], [79, 4], [76, 6], [-1, 2]],
+      [[77, 3], [79, 1], [81, 2], [82, 2], [79, 4], [74, 4]],
+      [[76, 2], [77, 2], [76, 2], [73, 2], [69, 8]],
+    ],
+    leadA: 'horn', counterA2: 'erhu', leadB: 'suona', supportB: 'horn', drums: 'heavy',
+  },
+  /** 第五章《赤壁东风》：F 小调 108 BPM，竹笛如江风、二胡副歌，紧张鼓型 + 火星噼啪。 */
+  chibi: {
+    title: '赤壁东风', bpm: 108, tr: 3,
+    intro: ['Dm', 'Am', 'Bb', 'A'], a: ['Dm', 'Am', 'Bb', 'F', 'Gm', 'Dm', 'A', 'A'], b: ['Bb', 'C', 'Am', 'Dm', 'Gm', 'C', 'A', 'A'], br: ['Dm', 'Am', 'Bb', 'A'],
+    melA: [
+      [[69, 2], [74, 2], [72, 1], [69, 1], [67, 2], [69, 4], [64, 4]],
+      [[65, 2], [67, 1], [69, 1], [70, 2], [69, 2], [65, 6], [-1, 2]],
+      [[67, 2], [70, 2], [74, 2], [72, 2], [74, 2], [77, 2], [74, 4]],
+      [[73, 3], [76, 1], [74, 2], [73, 2], [69, 8]],
+    ],
+    melB: [
+      [[77, 3], [74, 1], [77, 2], [79, 2], [79, 4], [76, 4]],
+      [[76, 2], [77, 2], [76, 2], [72, 2], [74, 6], [-1, 2]],
+      [[79, 3], [77, 1], [79, 2], [82, 2], [81, 2], [79, 2], [76, 4]],
+      [[76, 2], [73, 2], [76, 2], [79, 2], [81, 8]],
+    ],
+    leadA: 'dizi', counterA2: 'pipa', leadB: 'erhu', supportB: 'horn', drums: 'tense', fire: true,
+  },
+};
+/** 按战斗场景挑战斗曲：群雄 / 官渡 / 赤壁各一首；攻城用官渡；吕布挑战关与第二章同曲；其余按章节。 */
+export function battleThemeFor(sceneKey: string, chapterId: string): BattleThemeKey {
+  if (sceneKey === 'ChibiGameScene') return 'chibi';
+  if (sceneKey === 'ThirdGameScene') return 'qunxiong';
+  if (sceneKey === 'GuanduGameScene' || sceneKey === 'SiegeGameScene') return 'guandu';
+  if (sceneKey === 'LubuGameScene' || chapterId === 'hulao') return 'hulao';
+  return 'huangjin';
+}
 function expand(lines: Line[]): Array<[number, number] | null> {
   const out: Array<[number, number] | null> = new Array(lines.length * 32).fill(null);
   lines.forEach((ln, i) => { let pos = i * 32; for (const [m, len] of ln) { if (m >= 0) out[pos] = [m, len * 2]; pos += len * 2; } });
   return out;
 }
-const MEL_A = expand(THEME_A), MEL_B = expand(THEME_B);
-/** 低音顿弓跑动音型（相对根音的半音，十六分；null = 空）：经典“哒哒咚”推进。 */
+/** 低音顿弓跑动音型（相对根音的半音，十六分）：经典“哒哒咚”推进；奔马曲用更密的八度跳。 */
 const OSTI = [0, 0, 12, 0, 0, 12, 0, 7, 0, 0, 12, 0, 0, 12, 10, 7];
+const OSTI_GALLOP = [0, 0, 12, 0, 0, 12, 0, 12, 0, 0, 12, 0, 7, 12, 7, 12];
 
 // ---------------------------------------------------------------- 引擎
 type Ctx = BaseAudioContext;
@@ -97,47 +192,63 @@ export class EpicBgm {
     const d = this.noise.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
   }
 
-  // ============================================================ 黄巾战斗曲
+  // ============================================================ 战斗曲
+  private theme: BattleTheme = BATTLE_THEMES.huangjin;
+  private melA = expand(BATTLE_THEMES.huangjin.melA);
+  private melB = expand(BATTLE_THEMES.huangjin.melB);
+  setBattleTheme(key: BattleThemeKey): void { const th = BATTLE_THEMES[key]; this.theme = th; this.melA = expand(th.melA); this.melB = expand(th.melB); }
+
+  private voice(kind: Voice, midi: number, t: number, dur: number, v: number): void {
+    const f = mtof(midi);
+    if (kind === 'erhu') this.erhu(f, t, dur, v);
+    else if (kind === 'dizi') this.dizi(f, t, dur * .95, v * .85);
+    else if (kind === 'suona') this.suona(f, t, dur * .95, v * .8);
+    else if (kind === 'horn') this.horn(mtof(midi - 12), t, dur * .95, v * .9);
+    else this.pipaTrem(f, t, dur, v * .7);
+  }
+
   /** step：自开始起的十六分步（不回绕）；heavy：场上有追击首领等，打击乐加重。 */
   battleStep(step: number, t: number, sd: number, heavy: boolean): void {
-    const gb = Math.floor(step / 16), pos = step % 16;
+    const th = this.theme, tr = th.tr, gb = Math.floor(step / 16), pos = step % 16;
     let sec: 'intro' | 'A' | 'A2' | 'B' | 'BR', bar: number;
     if (gb < 4) { sec = 'intro'; bar = gb; } else {
       const lb = (gb - 4) % 28;
       if (lb < 8) { sec = 'A'; bar = lb; } else if (lb < 16) { sec = 'A2'; bar = lb - 8; } else if (lb < 24) { sec = 'B'; bar = lb - 16; } else { sec = 'BR'; bar = lb - 24; }
     }
-    const chName = sec === 'intro' ? INTRO_CH[bar] : sec === 'B' ? B_CH[bar] : sec === 'BR' ? BR_CH[bar] : A_CH[bar];
-    const ch = CH[chName], bar16 = sd * 16;
+    const chName = sec === 'intro' ? th.intro[bar] : sec === 'B' ? th.b[bar] : sec === 'BR' ? th.br[bar] : th.a[bar];
+    const ch = CH[chName], bass = ch.bass + tr, bar16 = sd * 16;
     const lvl = sec === 'intro' ? .55 + bar * .12 : sec === 'A' ? .8 : sec === 'A2' ? .9 : 1;
 
     // 低音长音 + 合唱铺底
     if (pos === 0) {
-      this.bassDrone(mtof(ch.bass), t, bar16 * 1.05, .085 * lvl);
+      this.bassDrone(mtof(bass), t, bar16 * 1.05, .085 * lvl);
       const vowel = sec === 'B' ? 'a' : 'o', cv = sec === 'B' ? .05 : sec === 'intro' ? .028 : sec === 'BR' ? .045 : .03;
-      this.choir(sec === 'B' ? ch.pad.map(n => n + 12).slice(1) : ch.pad, t, bar16 * 1.02, cv, vowel);
+      this.choir((sec === 'B' ? ch.pad.map(n => n + 12).slice(1) : ch.pad).map(n => n + tr), t, bar16 * 1.02, cv, vowel);
     }
     // 弦乐顿弓（前奏第 2 小节起）
     if (sec !== 'intro' || bar >= 2) {
-      const r = OSTI[pos], acc = pos === 0 || pos === 8 ? 1 : pos % 4 === 0 ? .8 : .6;
-      if (!(sec === 'BR' && bar === 3 && pos >= 8)) this.ostinato(mtof(ch.bass + 12 + r), t, sd * .9, .05 * acc * lvl);
+      const r = (th.drums === 'gallop' ? OSTI_GALLOP : OSTI)[pos], acc = pos === 0 || pos === 8 ? 1 : pos % 4 === 0 ? .8 : .6;
+      if (!(sec === 'BR' && bar === 3 && pos >= 8)) this.ostinato(mtof(bass + 12 + r), t, sd * .9, .05 * acc * lvl);
     }
     // 主旋律
     if (sec === 'A' || sec === 'A2') {
-      const n = MEL_A[bar * 16 + pos];
+      const n = this.melA[bar * 16 + pos];
       if (n) {
-        this.erhu(mtof(n[0]), t, n[1] * sd, .07);
-        if (sec === 'A2') this.dizi(mtof(n[0] + 12), t, n[1] * sd * .95, .03);
-        if (sec === 'A2' && n[1] >= 8) this.pipaTrem(mtof(n[0] - 12), t, n[1] * sd, .028);
+        const m = n[0] + tr;
+        this.voice(th.leadA, m, t, n[1] * sd, .07);
+        if (sec === 'A2') this.voice(th.counterA2, th.counterA2 === 'pipa' || th.counterA2 === 'erhu' ? m : m + 12, t, n[1] * sd, .032);
+        if (sec === 'A2' && n[1] >= 8 && th.counterA2 !== 'pipa') this.pipaTrem(mtof(m - 12), t, n[1] * sd, .028);
       }
     } else if (sec === 'B') {
-      const n = MEL_B[bar * 16 + pos];
-      if (n) { this.erhu(mtof(n[0]), t, n[1] * sd, .065); this.horn(mtof(n[0] - 12), t, n[1] * sd * .95, .03); }
-      if ((pos === 0 || pos === 10) && bar % 2 === 1) this.hornChord(ch.bass + 12, t, sd * 3, .035);
+      const n = this.melB[bar * 16 + pos];
+      if (n) { const m = n[0] + tr; this.voice(th.leadB, m, t, n[1] * sd, .065); this.voice(th.supportB, m - 12, t, n[1] * sd, .034); }
+      if ((pos === 0 || pos === 10) && bar % 2 === 1) this.hornChord(bass + 12, t, sd * 3, .035);
     } else if (sec === 'intro' && bar === 0 && pos === 0) {
-      this.horn(mtof(50), t, bar16 * 1.6, .05); this.horn(mtof(57), t + sd * 2, bar16 * 1.4, .035);
+      this.horn(mtof(50 + tr), t, bar16 * 1.6, .05); this.horn(mtof(57 + tr), t + sd * 2, bar16 * 1.4, .035);
     } else if (sec === 'BR' && pos % 8 === 0 && bar < 3) {
-      this.hornChord(ch.bass + 12, t, sd * (pos === 0 ? 6 : 3), .045);
+      this.hornChord(bass + 12, t, sd * (pos === 0 ? 6 : 3), .045);
     }
+    if (th.fire && (sec === 'B' || sec === 'BR') && Math.random() < .15) this.noiseHit(t + Math.random() * sd, .02 + Math.random() * .03, 'highpass', 2500 + Math.random() * 3000, .03, this.bus(0, .2));
 
     // 打击乐
     const H = heavy ? 1.15 : 1;
@@ -154,14 +265,17 @@ export class EpicBgm {
       if (pos === 0 && bar === 0) this.cymbal(t, .14);
       if (bar === 3 && pos === 0) this.gongSwell(t, bar16, .2);
     } else {
-      const big = sec === 'A' ? [0, 6, 8] : [0, 6, 8, 10];
-      if (big.includes(pos)) this.warDrum(t, (pos === 0 ? .85 : .55) * H);
+      const lite = sec === 'A';
+      const big = th.drums === 'gallop' ? [0, 3, 6, 8, 11, 14] : th.drums === 'heavy' ? (lite ? [0, 8] : [0, 8, 10]) : th.drums === 'tense' ? (lite ? [0, 7, 10] : [0, 7, 10, 14]) : (lite ? [0, 6, 8] : [0, 6, 8, 10]);
+      if (big.includes(pos)) this.warDrum(t, (pos === 0 ? .85 : th.drums === 'gallop' ? .45 : .55) * H);
       if (pos === 4 || pos === 12) this.smallDrum(t, .42 * H);
-      if (sec !== 'A' && pos % 2 === 1) this.smallDrum(t, .1 + (pos === 15 ? .1 : 0));
-      if (sec === 'A' && pos === 14 && bar % 2 === 1) this.smallDrum(t, .22);
+      if (!lite && pos % 2 === 1) this.smallDrum(t, .1 + (pos === 15 ? .1 : 0));
+      if (lite && pos === 14 && bar % 2 === 1) this.smallDrum(t, .22);
+      if (th.drums === 'tense' && lite && pos % 4 === 2) this.clapper(t);
       if (heavy && pos % 2 === 1) this.smallDrum(t, .12);
       if (pos === 0 && bar === 0) { this.cymbal(t, sec === 'B' ? .16 : .1); if (sec === 'B') this.gong(t, .2); }
-      if (pos === 0 && bar === 4 && sec !== 'A') this.cymbal(t, .1);
+      if (pos === 0 && bar === 4 && !lite) this.cymbal(t, .1);
+      if (th.drums === 'heavy' && pos === 0 && bar % 4 === 0 && sec !== 'B') this.gong(t, .12);
       if (pos === 8 && bar === 7) this.cymbalSwell(t, sd * 8, .08);
     }
   }

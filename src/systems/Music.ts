@@ -5,7 +5,7 @@
  * 首领战（intensity=1）：太鼓改为八分音符推进、加堂鼓与琵琶轮指，每 8 小节一记锣。
  */
 import { type BossProfile, bossMotif, composeBossMelody, profileScale } from '../data/bossMusic';
-import { BATTLE_V2_BPM, EpicBgm, bgmVersion } from './EpicBgm';
+import { BATTLE_THEMES, type BattleThemeKey, EpicBgm, bgmVersion } from './EpicBgm';
 const midi = (n: number): number => 440 * Math.pow(2, (n - 69) / 12);
 /** 旋律音级：D4 F4 G4 A4 C5 D5 F5 G5 A5 */
 const SCALE = [62, 65, 67, 69, 72, 74, 77, 79, 81];
@@ -58,8 +58,9 @@ export class Music {
   private volume = 0.4;
   private duck = 1;
   muted = false;
-  private readonly bpm: number;
-  private readonly stepDur: number; // 十六分音符
+  private bpm: number;
+  private stepDur: number; // 十六分音符
+  private battleTheme: BattleThemeKey = 'huangjin';
   /** 预先展开的旋律：每个十六分步上的 [MIDI, 持续步数] 或 null。 */
   private readonly melodyAt: Array<[number, number] | null> = new Array(32 * 16).fill(null);
   /** 首领专属主题（data/bossMusic.ts）：出场锣鼓后切入，首领离场（intensity 回 0）即回到战斗曲。 */
@@ -67,7 +68,7 @@ export class Music {
 
   constructor(readonly theme: MusicTheme = 'battle', version = bgmVersion()) {
     this.v2 = theme === 'battle' && version === 'v2';
-    this.bpm = theme === 'menu' ? 72 : this.v2 ? BATTLE_V2_BPM : 92;
+    this.bpm = theme === 'menu' ? 72 : this.v2 ? BATTLE_THEMES.huangjin.bpm : 92;
     this.stepDur = 60 / this.bpm / 4;
     const form = theme === 'menu' ? MENU_FORM : FORM, phrases = theme === 'menu' ? MENU_PHRASES : PHRASES;
     form.forEach((name, slot) => {
@@ -124,7 +125,7 @@ export class Music {
       this.dry = ctx.createGain(); this.dry.gain.value = .85; this.dry.connect(this.master);
       this.noise = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate);
       const n = this.noise.getChannelData(0); for (let i = 0; i < n.length; i++) n[i] = Math.random() * 2 - 1;
-      if (this.v2) this.epic = new EpicBgm(ctx, this.master);
+      if (this.v2) { this.epic = new EpicBgm(ctx, this.master); this.epic.setBattleTheme(this.battleTheme); }
     }
   }
 
@@ -184,6 +185,13 @@ export class Music {
     this.applyGain(this.level(), .08);
   }
   setIntensity(value: 0 | 1): void { this.intensity = value; }
+  /** 各章战斗曲（仅 v2；旧版只有一首）。应在 start() 前调用。 */
+  setBattleTheme(key: BattleThemeKey): void {
+    if (!this.v2) return;
+    this.battleTheme = key; this.bpm = BATTLE_THEMES[key].bpm; this.stepDur = 60 / this.bpm / 4;
+    this.epic?.setBattleTheme(key);
+  }
+  get battleThemeKey(): BattleThemeKey | null { return this.v2 ? this.battleTheme : null; }
   get playingState(): boolean { return this.playing; }
   get mutedState(): boolean { return this.muted; }
   get currentStep(): number { return this.step; }

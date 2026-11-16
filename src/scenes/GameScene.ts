@@ -66,6 +66,7 @@ import { packCampaign, restoreCampaign, type CampaignTransfer } from '../systems
 import { TROOP_KINDS, INITIAL_TROOPS, LEGION, FREE_RECRUIT_BY_TIER, type TroopKind } from '../data/legion';
 import { DEFAULT_RUN_CONFIG, getCharacter, type RunConfig , HERO_TINT, HERO_FX } from '../data/characters';
 import { Music } from '../systems/Music';
+import { battleThemeFor } from '../systems/EpicBgm';
 import { Sfx } from '../systems/Sfx';
 import { SpatialGrid } from '../systems/SpatialGrid';
 import { Ally, type AllyKind } from '../entities/Ally';
@@ -375,6 +376,7 @@ export class GameScene extends Phaser.Scene {
     this.chapter=this.customChapter()??this.chapter;
     this.runConfig = { ...DEFAULT_RUN_CONFIG, ...registryConfig, chapter: this.chapter.id, stage:this.chapter.stage,westStage:this.chapter.westStage };
     if(preview)this.runConfig.encounter=encounter as 'sishui'|'xingyang'|'qunxiong';
+    this.music.setBattleTheme(battleThemeFor(this.scene.key,this.chapter.id)); // BGM v2：各章战斗曲
     this.frontlineNextSettlement=this.battleStage();this.frontlineStarts.set(this.battleStage(),this.combatNow);
     const scenery=this.chapter.bossStyle==='huaxiong'?'sishui':this.chapter.bossStyle==='xurong'?'xingyang':null;
     this.cameras.main.setBackgroundColor(COLORS.bg);

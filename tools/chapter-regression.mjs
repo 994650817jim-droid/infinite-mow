@@ -1,6 +1,6 @@
 import { chromium } from 'playwright';
 import { mkdirSync, writeFileSync } from 'node:fs';
-const BASE = 'http://127.0.0.1:5173/';
+const BASE = process.env.BASE || 'http://127.0.0.1:5173/';
 const out = 'screenshots/chapter2'; mkdirSync(out, { recursive: true });
 const browser = await chromium.launch({ channel: 'chrome', headless: true });
 const results = [];

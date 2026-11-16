@@ -40,7 +40,7 @@ export class CityScene extends Phaser.Scene {
  private pano!:Phaser.GameObjects.Container;private top!:Phaser.GameObjects.Text;private season!:Phaser.GameObjects.Text;private sizeText!:Phaser.GameObjects.Text;
  private vr={x:0,y:0,w:0,h:0};private k=1;private sx=0;private sy=0;
  private hits:Phaser.GameObjects.Rectangle[]=[];
- private drag:{x:number;y:number;sx:number;sy:number;moved:boolean}|null=null;
+ private drag:{x:number;y:number;sx:number;sy:number;moved:boolean}|null=null;private pressedSlot:string|null=null;
  private popId:TownBuildingId|null=null;
  constructor(){super('CityScene');}
  init(){D=W>600;this.vr=D?{x:12,y:62,w:W-24,h:H-62-58}:{x:0,y:104,w:W,h:H-104-160};this.k=Math.max(this.vr.w/PANO_W,this.vr.h/PANO_H);this.hits=[];this.drag=null;}
@@ -169,7 +169,9 @@ export class CityScene extends Phaser.Scene {
    if(st==='ready'){const by=y-h-(lv>0?4:0),badge=this.add.container(x+w*.32,Math.max(14,by+10));badge.add(this.add.circle(0,0,11,0x2f7a3a).setStrokeStyle(2,0xd8f0b8));badge.add(txt(this,0,0,'↑',14,'#ffffff',HEADING_FONT).setOrigin(.5));badge.setName('ready-'+id);this.pano.add(badge);this.tweens.add({targets:badge,y:badge.y-4,yoyo:true,repeat:-1,duration:700,ease:'Sine.easeInOut'});}
    // 点击区
    const hit=this.add.rectangle(x,y-h/2,Math.max(w*.8,60),Math.max(h,50),0xffffff,.001).setName('bld-'+id).setInteractive({useHandCursor:true});
-   hit.on('pointerup',()=>{if(this.drag?.moved)return;this.openCard(id);});
+   // 按下和抬起都落在这块地上才算点建筑：弹窗「返回」按下时就关闭了，抬起不会再穿透到下面的城墙等地块（手柄也是先发按下再发抬起）
+   hit.on('pointerdown',()=>{this.pressedSlot=id;});
+   hit.on('pointerup',()=>{const own=this.pressedSlot===id;this.pressedSlot=null;if(!own||this.drag?.moved)return;this.openCard(id);});
    hit.on('pointerover',()=>tag.setColor('#ffe08a')).on('pointerout',()=>tag.setColor(lv>0?'#fff1cf':st==='locked'?'#b3a78f':'#f6e2ae'));
    if(id==='hall')hit.setData('padDefault',true);
    this.pano.add(hit);this.hits.push(hit);

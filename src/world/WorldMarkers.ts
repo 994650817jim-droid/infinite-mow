@@ -189,7 +189,7 @@ export function nodeBannerTexture(scene: Phaser.Scene, st: NodeState): string {
 }
 
 /** v2 章节节点：返回要放进节点容器的物件（命中区沿用旧名 node-<id>）。 */
-export function nodeMarkerV2(scene: Phaser.Scene, st: NodeState, glyph: string, label: string, active: boolean): {parts: Phaser.GameObjects.GameObject[]; hit: Phaser.GameObjects.Arc} {
+export function nodeMarkerV2(scene: Phaser.Scene, st: NodeState, glyph: string, label: string, active: boolean): {parts: Phaser.GameObjects.GameObject[]; hit: Phaser.GameObjects.Arc; label: Phaser.GameObjects.Text; plate: Phaser.GameObjects.Graphics} {
   const img = scene.add.image(0, 8, nodeBannerTexture(scene, st)).setOrigin(.32, 1).setDisplaySize(34, 50);
   const parts: Phaser.GameObjects.GameObject[] = [img];
   if (st !== 'home') parts.push(scene.add.text(34 * (.55 - .32), 8 - 50 * .55, glyph, {fontFamily: HEADING_FONT, fontSize: '15px', color: st === 'locked' ? '#d8d8cc' : '#fff1cc', resolution: 2 * RENDER_SCALE}).setOrigin(.5).setStroke('#1a0e08', 3));
@@ -202,7 +202,7 @@ export function nodeMarkerV2(scene: Phaser.Scene, st: NodeState, glyph: string, 
   g.lineStyle(1, 0xc9a35e, .8).strokeRect(-pw / 2, 12, pw, ph);
   parts.push(g, t);
   const hit = scene.add.circle(0, -12, 22, 0, .001);
-  return {parts, hit};
+  return {parts, hit, label: t, plate: g};
 }
 
 /** 朱砂方印（关卡）：已捷为青绿印、未开为灰石印。 */

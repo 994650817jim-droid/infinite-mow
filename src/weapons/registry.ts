@@ -197,8 +197,10 @@ export const WEAPON_BEHAVIORS: Record<WeaponId, (host: WeaponHost, weapon: Weapo
     if (weapon.cooldownLeft > 0) return;
     const priority=host.priorityTarget?.(pierce.len*host.player.growth.spearLengthMultiplier()-6)??null;
     // 只锁定这一枪真正刺得到的敌人（与下方线段命中判定同一出枪点与枪长），
-    // 否则 176~234px 的敌人会被锁定后刺空，白白消耗冷却。被动强化只会更长，不影响此下限。
-    const reachBase = pierce.len * host.player.growth.spearLengthMultiplier() + pierce.width / 2;
+    // 否则 176~234px 的敌人会被锁定后刺空，白白消耗冷却。
+    // 赵云「七进七出」蓄满时这一枪会长 25%：选靶也按加长后的枪长算，否则只有加长枪够得着的敌人永远不会被瞄准（2026-11-16 修）。
+    const longSpear = host.player.passive.characterId === 'zhaoyun' && host.player.passive.snapshot(time).ready ? PASSIVE_RULES.spearLengthMul : 1;
+    const reachBase = pierce.len * host.player.growth.spearLengthMultiplier() * longSpear + pierce.width / 2;
     const ox = host.player.x, oy = host.player.y - 6;
     const targets = host.grid.query(host.player.x, host.player.y, Math.min(220, reachBase) + 60)
       .filter((e) => e.active && Math.hypot(e.x - ox, e.y - oy) <= Math.min(220, reachBase) + e.radius)

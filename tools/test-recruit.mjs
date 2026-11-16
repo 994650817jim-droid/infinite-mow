@@ -8,7 +8,7 @@ let pass = 0, fail = 0; const errors = [];
 const ck = (n, ok, d) => { ok ? pass++ : fail++; console.log((ok ? 'PASS ' : 'FAIL ') + n + (d !== undefined && !ok ? ' · ' + JSON.stringify(d) : '')); };
 const world = (o = {}) => ({ version: 7, yellowStages: 3, dongzhuoStages: 3, warlordStages: 3, guanduStages: 0, worldAvailable: true, cleared: { huangjin: true, hulao: true }, merits: 5000, provisions: 100000, buildings: { barracks: 1, farm: 1, clinic: 1 }, reserve: {}, receipts: [], nodes: ['home', 'huangjin', 'hulao', 'qunxiong', 'guandu'], ownedCities: ['xuchang', 'runan', 'guandu'], eraSeen: 2, capturedEver: ['xuchang', 'runan', 'guandu'], alerts: [], lastLost: [], chapterSeen: 4, ...o });
 // 老存档：关羽穿过一件兵装（应随迁移保留）
-const items = { version: 1, bag: [{ uid: 't1', base: 'lamellar', quality: 'white', affixes: [] }], loadouts: { guanyu: { armor: 't1' } }, salvaged: 0 };
+const items = { version: 1, bag: [{ uid: 't1', base: 'blade_ring', quality: 'white', affixes: [] }], loadouts: { guanyu: { weapon: 't1' } }, salvaged: 0 };
 const b = await chromium.launch({ channel: 'chrome', headless: true });
 const page = async (layout = 'mobile', query = '', extra = {}) => {
   const p = await b.newPage({ viewport: layout === 'mobile' ? { width: 390, height: 844 } : { width: 1280, height: 720 }, deviceScaleFactor: layout === 'mobile' ? 2 : 1 });

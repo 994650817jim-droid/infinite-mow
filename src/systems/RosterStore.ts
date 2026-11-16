@@ -86,6 +86,8 @@ function migrate(): RosterSave {
   const s = empty(); s.lord = lastHero(); s.owned = [heroRecruit(s.lord)];
   const keep = new Set<CharacterId>();
   try { const items = loadItems(); for (const [hero, slots] of Object.entries(items.loadouts)) if (isHero(hero) && slots && Object.keys(slots).length) keep.add(hero); } catch { /* 行囊不可读 */ }
+  // 旧版行囊（im_items_v1，迁移后仍留在本地）：只穿过兵刃 / 坐骑的武将，兵刃转成旧物后新行囊里已看不出来
+  try { const old = JSON.parse(localStorage.getItem('im_items_v1') ?? 'null'); for (const [hero, slots] of Object.entries((old?.loadouts ?? {}) as Record<string, unknown>)) if (isHero(hero) && slots && typeof slots === 'object' && Object.keys(slots).length) keep.add(hero); } catch { /* 旧行囊不可读 */ }
   // 用过的武将不收回：成就存档记着每位打赢过一场的武将（im_achievements.heroes）
   try { const a = JSON.parse(localStorage.getItem('im_achievements') ?? 'null'); if (Array.isArray(a?.heroes)) for (const h of a.heroes) if (isHero(h)) keep.add(h); } catch { /* 成就不可读 */ }
   for (const h of CHARACTERS.map(c => c.id)) if (h !== s.lord && keep.has(h)) s.owned.push(heroRecruit(h));

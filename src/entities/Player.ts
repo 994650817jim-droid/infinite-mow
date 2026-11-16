@@ -14,7 +14,11 @@ import type { PlayerStats, WeaponState } from '../types';
  * 枪芒在出手后约 18–72ms 伸出、72ms 起逐枪结算伤害（多枪每枪晚 25ms），
  * 让“刺到底”帧从 68ms 停到约 176ms，命中判定都落在这一帧上。均分时它要到 130ms 才出现，比伤害晚一拍。
  */
-const SPEAR_ATTACK_WEIGHTS: Partial<Record<CharacterId, readonly number[]>> = (() => { const w = [.12, .14, .42, .32] as const; return {zhaoyun: w, machao: w, zhangfei: w}; })();
+/**
+ * 刀将（偃月刀，出手当帧即结算伤害）：举刀只留 16ms，下劈 42ms，砍到底帧 57–172ms，收刀 88ms。
+ * 均分时砍到底要到 130ms 才出现，刀光与掉血明显早于挥刀动作。
+ */
+const ATTACK_WEIGHTS: Partial<Record<CharacterId, readonly number[]>> = (() => { const w = [.12, .14, .42, .32] as const, blade = [.06, .16, .44, .34] as const; return {zhaoyun: w, machao: w, zhangfei: w, guanyu: blade, weiyan: blade, liubei: blade}; })();
 function weightedIndex(t: number, n: number, weights?: readonly number[]): number {
   if (!weights) return Math.min(n - 1, Math.floor(t * n));
   let acc = 0; for (let i = 0; i < n; i++) { acc += weights[i]; if (t < acc) return i; }
@@ -87,7 +91,7 @@ export class Player {
   /** 招牌技动作的节流（战斗时间，黄忠用）。 */
   nextSkillAction = 0;
   private action: {kind: HeroActionKind; frames: ActionFrame[]; mirror: boolean; start: number; until: number; hold: boolean; weights?: readonly number[]} | null = null;
-  /** 当前武将普攻四帧的时长占比（枪将：蓄力 / 刺出 / 刺到底 / 收枪）；未设置时四帧均分。 */
+  /** 当前武将普攻四帧的时长占比（蓄力 / 出手 / 命中 / 收势）；未设置时四帧均分。 */
   private attackWeights?: readonly number[];
 
   constructor(scene: Phaser.Scene, x: number, y: number) {
@@ -173,7 +177,7 @@ export class Player {
   }
 
   /** 按武将设置动作素材；没有素材的武将保持原样（只有行走）。 */
-  setActionSet(id: CharacterId): void { this.attackWeights = SPEAR_ATTACK_WEIGHTS[id]; let set = HERO_ACTIONS[id]; if (id === 'zhuge' && set && !this.scene.textures.exists(set.texture)) set = ZHUGE_FALLBACK; this.actionSet = set && this.scene.textures.exists(set.texture) ? set : undefined; this.action = null; }
+  setActionSet(id: CharacterId): void { this.attackWeights = ATTACK_WEIGHTS[id]; let set = HERO_ACTIONS[id]; if (id === 'zhuge' && set && !this.scene.textures.exists(set.texture)) set = ZHUGE_FALLBACK; this.actionSet = set && this.scene.textures.exists(set.texture) ? set : undefined; this.action = null; }
   get hasActions(): boolean { return !!this.actionSet; }
   /** 当前动作（测试与调试用）。 */
   get currentAction(): HeroActionKind | null { return this.action && (this.action.hold || this.clock() < this.action.until) ? this.action.kind : null; }

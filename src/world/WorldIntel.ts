@@ -75,7 +75,7 @@ function nearPlayer(owned: readonly string[]): Set<string> {
  * 新一季刷出的事件：已有 3 个时不刷；先刷 1 个，再 50% 刷第 2 个。
  * 同一城池同时只有一个事件；流寇只出现在未告急的我方城池；商队去我方城池（没有则营寨相邻城池）。
  */
-export function rollIntel(ctx: {era: 1 | 2 | 3; owned: readonly string[]; alerts: readonly string[]; existing: readonly IntelEvent[]; season: number; seq: number; random: () => number; noBandit?: boolean}): IntelEvent[] {
+export function rollIntel(ctx: {era: 1 | 2 | 3; owned: readonly string[]; alerts: readonly string[]; existing: readonly IntelEvent[]; season: number; seq: number; random: () => number; noBandit?: boolean; bountyOpen?: (cityId: string) => boolean}): IntelEvent[] {
   const out: IntelEvent[] = [], all = () => [...ctx.existing, ...out], busy = (id: string) => all().some(e => e.city === id);
   let seq = ctx.seq;
   const want = Math.min(3 - ctx.existing.length, 1 + (ctx.random() < .5 ? 1 : 0));
@@ -83,7 +83,7 @@ export function rollIntel(ctx: {era: 1 | 2 | 3; owned: readonly string[]; alerts
     const banditCities = ctx.owned.filter(id => !ctx.alerts.includes(id) && !busy(id));
     const escortCities = (ctx.owned.length ? ctx.owned : [...(CITY_LINKS.get(HOME.id) ?? [])]).filter(id => !busy(id) && !!cityById(id));
     const near = nearPlayer(ctx.owned);
-    const hostile = CITIES.filter(c => !busy(c.id) && !ctx.owned.includes(c.id) && MAJOR_FACTIONS.includes(cityOwner(c.id, ctx.era, ctx.owned)));
+    const hostile = CITIES.filter(c => !busy(c.id) && !ctx.owned.includes(c.id) && (ctx.bountyOpen?.(c.id) ?? true) && MAJOR_FACTIONS.includes(cityOwner(c.id, ctx.era, ctx.owned)));
     const bountyCities = hostile.filter(c => near.has(c.id)).length ? hostile.filter(c => near.has(c.id)) : hostile;
     const kinds: Array<[IntelKind, number]> = [['bounty', bountyCities.length ? .4 : 0], ['bandit', !ctx.noBandit && banditCities.length && !all().some(e => e.kind === 'bandit') ? .35 : 0], ['escort', escortCities.length && !all().some(e => e.kind === 'escort') ? .25 : 0]];
     const total = kinds.reduce((n, [, w]) => n + w, 0); if (total <= 0) break;

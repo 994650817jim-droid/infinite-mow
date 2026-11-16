@@ -90,7 +90,8 @@ const R = (p, fn, arg) => p.evaluate(async ([src, a]) => { const r = await impor
   ck('遣散时兵装卸回行囊', g.dismiss.ok && g.after === null && g.inBag, g);
   // 招贤馆是营寨建筑时（主城会话 e960199 起）：等级与 WorldStore.talentLevel() 一致，升级转调营寨 townUpgrade('talent')，只有一套等级
   const h = await p.evaluate(async () => {
-    const T = await import('/src/town/TownData.ts'), R = await import('/src/systems/RosterStore.ts'), W = await import('/src/world/WorldStore.ts'), o = {};
+    // 不往建筑表里注入东西（常开 dev server 热更新后，测试与 RosterStore 拿到的可能是不同模块实例）；营寨与世界存档故意用另一个实例导入，只经 localStorage 交互
+    const T = await import('/src/town/TownData.ts?inst=test'), R = await import('/src/systems/RosterStore.ts'), W = await import('/src/world/WorldStore.ts?inst=test'), o = {};
     o.inTown = 'talent' in T.TOWN_BUILDINGS; if (!o.inTown) return o;
     o.lv = R.hallLevel(); o.tl = W.talentLevel(); const p0 = W.loadWorld().provisions;
     o.up = R.upgradeHall(); o.cost = p0 - W.loadWorld().provisions; o.lv2 = R.hallLevel(); o.tl2 = W.talentLevel(); o.cap = R.followerCap(); o.rank = R.rankCap();

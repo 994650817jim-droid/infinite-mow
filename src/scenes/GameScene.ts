@@ -195,14 +195,15 @@ export class GameScene extends Phaser.Scene {
   }
   /** 饮血佩：本命命中回复伤害 5%，每秒（战斗时间）最多回复最大生命 3%。 */
   private bloodWindow=-1;private bloodHealed=0;
-  /** 站立蓄势环：每站稳 1 秒点亮一段（共 5 段），满势时外圈脉动；移动时逐渐熄灭，未蓄势时隐藏。 */
+  /**
+   * 站立蓄势提示（百步穿杨）。2026-11-16 试玩反馈「技能范围提示太丑」：不再画 5 段蓄势环，
+   * 只在满势时脚下泛起一圈很淡的金光（叠加混合、缓慢明暗）。旧画法见 git 历史，需要时可直接恢复。
+   */
   private drawAimIndicator():void{
-    const g=this.aimIndicator,sec=this.player.growth.stationarySeconds,on=this.player.growth.masteries.steady_aim>0&&sec>.05&&this.player.alive;
-    g.clear().setVisible(on);if(!on)return;
-    const x=this.player.x,y=this.player.y+19,rx=30,ry=11,full=sec>=4.99,arc=(a0:number,a1:number)=>{g.beginPath();for(let a=a0;a<=a1+.001;a+=Math.PI/36){const px=x+Math.cos(a)*rx,py=y+Math.sin(a)*ry;if(a===a0)g.moveTo(px,py);else g.lineTo(px,py);}g.strokePath();};
-    const seg=Math.PI*2/5,gap=.12;
-    for(let i=0;i<5;i++){const a0=-Math.PI/2+i*seg+gap/2,fill=Phaser.Math.Clamp(sec-i,0,1);g.lineStyle(3,0x18251e,.45);arc(a0,a0+seg-gap);if(fill>0){g.lineStyle(full?3.5:2.5,full?0xffe08a:0xe0c070,full?1:.55+.4*fill);arc(a0,a0+(seg-gap)*fill);}}
-    if(full){const pulse=.35+.3*Math.sin(this.combatNow/160);g.lineStyle(5,0xffd66b,pulse);g.strokeEllipse(x,y,rx*2+10,ry*2+6);}
+    const g=this.aimIndicator,sec=this.player.growth.stationarySeconds,full=this.player.growth.masteries.steady_aim>0&&sec>=4.99&&this.player.alive;
+    g.clear().setVisible(full);if(!full)return;
+    const x=this.player.x,y=this.player.y+19,pulse=.14+.08*Math.sin(this.combatNow/260);
+    g.setBlendMode(Phaser.BlendModes.ADD).fillStyle(0xffd66b,pulse).fillEllipse(x,y,70,24).fillStyle(0xfff2c0,pulse*.9).fillEllipse(x,y,38,13);
   }
   private bloodJadeHeal(damage:number,time:number):void{
     if(this.bloodWindow<0||time<this.bloodWindow||time-this.bloodWindow>=1000){this.bloodWindow=time;this.bloodHealed=0;}

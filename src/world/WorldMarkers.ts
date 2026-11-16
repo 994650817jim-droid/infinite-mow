@@ -69,7 +69,16 @@ function tower(ctx: CanvasRenderingContext2D, cx: number, bottom: number, w: num
 
 const CITADEL = {large: {w: 56, h: 46}, medium: {w: 44, h: 36}, small: {w: 32, h: 26}} as const;
 /** 城郭正式图（ChatGPT 生成，2026-11-15，见 public/assets/world/markers-v2/ASSET_REQUEST.md W2-1/2/3）；缺图时退回程序画。 */
-export const CITY_ART_FILES = {wm2_city_large: 'assets/world/markers-v2/W2-1_city_large.png', wm2_city_medium: 'assets/world/markers-v2/W2-2_city_medium.png', wm2_city_small: 'assets/world/markers-v2/W2-3_city_small.png'} as const;
+const MK = 'assets/world/markers-v2/';
+/** 其余标记正式图（同一对话，2026-11-15）：W2-4 告急城郭、W2-5 军旗（杆 + 可染色旗面）、W2-6 牙旗、W2-7 营寨、W2-8 方印、W2-9 令旗（杆 + 可染色旗面）、W2-10 名牌底。 */
+export const CITY_ART_FILES = {wm2_city_large: MK + 'W2-1_city_large.png', wm2_city_medium: MK + 'W2-2_city_medium.png', wm2_city_small: MK + 'W2-3_city_small.png',
+  wm2_city_large_siege: MK + 'W2-4_city_large_siege.png', wm2_city_medium_siege: MK + 'W2-4_city_medium_siege.png', wm2_city_small_siege: MK + 'W2-4_city_small_siege.png',
+  wm2_flag_pole: MK + 'W2-5_flag_pole.png', wm2_flag_cloth: MK + 'W2-5_flag_cloth.png',
+  wm2_banner_open: MK + 'W2-6_banner_open.png', wm2_banner_cleared: MK + 'W2-6_banner_cleared.png', wm2_banner_locked: MK + 'W2-6_banner_locked.png',
+  wm2_camp: MK + 'W2-7_camp.png', wm2_seal_open: MK + 'W2-8_seal_open.png', wm2_seal_cleared: MK + 'W2-8_seal_cleared.png', wm2_seal_locked: MK + 'W2-8_seal_locked.png',
+  wm2_pennant_pole: MK + 'W2-9_pennant_pole.png', wm2_pennant_cloth: MK + 'W2-9_pennant_cloth.png',
+  wm2_plate: MK + 'W2-10_plate.png', wm2_plate_player: MK + 'W2-10_plate_player.png'} as const;
+const has = (scene: Phaser.Scene, ...keys: string[]) => keys.every(k => scene.textures.exists(k));
 /** 正式图在地图上的显示宽度（设计像素）。 */
 const CITY_ART_W = {large: 78, medium: 62, small: 50} as const;
 
@@ -113,17 +122,35 @@ function namePlate(scene: Phaser.Scene, y: number, name: string, owner: FactionI
   const color = FACTIONS[owner].color, player = owner === 'player';
   const t = scene.add.text(0, y, name, {fontFamily: HEADING_FONT, fontSize: size + 'px', color: player ? '#fff1c4' : '#f4e6c6', resolution: 2 * RENDER_SCALE}).setOrigin(.5, 0);
   const w = t.width + 14, h = t.height + 2, g = scene.add.graphics();
+  const key = player ? 'wm2_plate_player' : 'wm2_plate';
+  if (has(scene, key)) {
+    // 匾底按原图高度 42 画九宫格再整体缩小，两端花饰不变形；顶边白条盖一道势力色
+    const k = 42 / (h + 4), wrap = scene.add.container(0, 0);
+    const ns = scene.add.nineslice(0, y - 2, key, undefined, (w + 14) * k, 42, 22, 22, 0, 0).setOrigin(.5, 0).setScale(1 / k);
+    g.fillStyle(mix(color, 0xffffff, .1), 1).fillRect(-w / 2 - 2, y - 1.6, w + 4, 1.8);
+    wrap.add([ns, g]);
+    return {t, g: wrap, h};
+  }
   g.fillStyle(0x000000, .35).fillRoundedRect(-w / 2 + 1, y + 1.5, w, h, 3);
   g.fillStyle(0x1b120b, .9).fillRoundedRect(-w / 2, y, w, h, 3);
   g.fillStyle(mix(color, 0xffffff, .15), 1).fillRect(-w / 2 + 2, y, w - 4, 2.2);
   g.lineStyle(1, player ? 0xf3d48a : mix(color, 0x000000, .2), player ? 1 : .9).strokeRoundedRect(-w / 2, y, w, h, 3);
   g.fillStyle(player ? 0xf3d48a : 0xc9a35e, 1);
   for (const sx of [-1, 1]) g.fillTriangle(sx * w / 2, y + h / 2 - 2.5, sx * (w / 2 + 2.5), y + h / 2, sx * w / 2, y + h / 2 + 2.5);
-  return {t, g, h};
+  return {t, g: g as Phaser.GameObjects.Graphics | Phaser.GameObjects.Container, h};
 }
 
 /** 方旗（燕尾）：杆 + 势力色旗面 + 姓氏；纯程序化。 */
 function flag(scene: Phaser.Scene, x: number, bottom: number, height: number, color: number, glyph?: string): Phaser.GameObjects.GameObject[] {
+  if (has(scene, 'wm2_flag_pole', 'wm2_flag_cloth')) {
+    // 正式图：杆原色，旗面按势力染色；姓氏写在燕尾旗面中央
+    const fr = scene.textures.getFrame('wm2_flag_pole'), w = height * fr.width / fr.height, ox = .22;
+    const pole = scene.add.image(x, bottom, 'wm2_flag_pole').setOrigin(ox, 1).setDisplaySize(w, height);
+    const cloth = scene.add.image(x, bottom, 'wm2_flag_cloth').setOrigin(ox, 1).setDisplaySize(w, height).setTint(color);
+    const out: Phaser.GameObjects.GameObject[] = [cloth, pole];
+    if (glyph) out.push(scene.add.text(x + (.6 - ox) * w, bottom - height * (1 - .31), glyph.length > 1 ? glyph[0] : glyph, {fontFamily: HEADING_FONT, fontSize: Math.round(height * .27) + 'px', color: '#fff6e0', resolution: 2 * RENDER_SCALE}).setOrigin(.5).setStroke('#1a120a', 2));
+    return out;
+  }
   const g = scene.add.graphics(), fw = height * .5, fh = height * .5, top = bottom - height;
   g.lineStyle(1.6, 0x3a2614, 1).lineBetween(x, bottom, x, top - 2);
   g.fillStyle(0xe2c27a, 1).fillCircle(x, top - 3, 1.6);
@@ -199,9 +226,15 @@ export function nodeBannerTexture(scene: Phaser.Scene, st: NodeState): string {
 
 /** v2 章节节点：返回要放进节点容器的物件（命中区沿用旧名 node-<id>）。 */
 export function nodeMarkerV2(scene: Phaser.Scene, st: NodeState, glyph: string, label: string, active: boolean): {parts: Phaser.GameObjects.GameObject[]; hit: Phaser.GameObjects.Arc; label: Phaser.GameObjects.Text; plate: Phaser.GameObjects.Graphics; icon: Phaser.GameObjects.Image} {
-  const img = scene.add.image(0, 8, nodeBannerTexture(scene, st)).setOrigin(.32, 1).setDisplaySize(34, 50);
+  const artKey = st === 'home' ? 'wm2_camp' : 'wm2_banner_' + st, art = has(scene, artKey);
+  let img: Phaser.GameObjects.Image, gx = 34 * (.55 - .32), gy = 8 - 50 * .55;
+  if (art) {
+    const fr = scene.textures.getFrame(artKey);
+    if (st === 'home') img = scene.add.image(0, 10, artKey).setOrigin(.5, 1).setDisplaySize(48, 48 * fr.height / fr.width);
+    else { const H = 56, W = H * fr.width / fr.height; img = scene.add.image(0, 8, artKey).setOrigin(.3, 1).setDisplaySize(W, H); gx = (.56 - .3) * W; gy = 8 - H * (1 - .47); }
+  } else img = scene.add.image(0, 8, nodeBannerTexture(scene, st)).setOrigin(.32, 1).setDisplaySize(34, 50);
   const parts: Phaser.GameObjects.GameObject[] = [img];
-  if (st !== 'home') parts.push(scene.add.text(34 * (.55 - .32), 8 - 50 * .55, glyph, {fontFamily: HEADING_FONT, fontSize: '15px', color: st === 'locked' ? '#d8d8cc' : '#fff1cc', resolution: 2 * RENDER_SCALE}).setOrigin(.5).setStroke('#1a0e08', 3));
+  if (st !== 'home') parts.push(scene.add.text(gx, gy, glyph, {fontFamily: HEADING_FONT, fontSize: '15px', color: st === 'locked' ? '#d8d8cc' : '#fff1cc', resolution: 2 * RENDER_SCALE}).setOrigin(.5).setStroke('#1a0e08', 3));
   const t = scene.add.text(0, 12, label, {fontFamily: HEADING_FONT, fontSize: '12px', color: active ? '#fff0cd' : '#c9c7b8', resolution: 2 * RENDER_SCALE}).setOrigin(.5, 0);
   const pw = t.width + 16, ph = t.height + 2, g = scene.add.graphics();
   const edge = st === 'open' ? 0xb0321f : st === 'cleared' ? 0x5f9a5a : st === 'home' ? 0x88c5a4 : 0x6a6d64;
@@ -215,7 +248,8 @@ export function nodeMarkerV2(scene: Phaser.Scene, st: NodeState, glyph: string, 
 }
 
 /** 朱砂方印（关卡）：已捷为青绿印、未开为灰石印。 */
-export function sealGraphics(scene: Phaser.Scene, state: 'cleared' | 'open' | 'locked', r: number): Phaser.GameObjects.Graphics {
+export function sealGraphics(scene: Phaser.Scene, state: 'cleared' | 'open' | 'locked', r: number): Phaser.GameObjects.Graphics | Phaser.GameObjects.Image {
+  if (has(scene, 'wm2_seal_' + state)) { const s = r * 2; return scene.add.image(0, 0, 'wm2_seal_' + state).setDisplaySize(s, s); }
   const g = scene.add.graphics(), s = r * 1.7, fill = state === 'cleared' ? 0x2c5a3a : state === 'open' ? 0x9a2a1c : 0x4a4d46, line = state === 'cleared' ? 0xe6c77a : state === 'open' ? 0xf0c9a0 : 0x9a9c92;
   g.fillStyle(0x000000, .4).fillRoundedRect(-s / 2 + 2, -s / 2 + 3, s, s, 4);
   g.fillStyle(fill, 1).fillRoundedRect(-s / 2, -s / 2, s, s, 4);
@@ -224,7 +258,12 @@ export function sealGraphics(scene: Phaser.Scene, state: 'cleared' | 'open' | 'l
 }
 
 /** 三角令旗（军情）：杆 + 势力 / 军情色三角旗面。返回物件，旗面中心约在 (8,-14)。 */
-export function intelPennant(scene: Phaser.Scene, color: number): Phaser.GameObjects.Graphics {
+export function intelPennant(scene: Phaser.Scene, color: number): Phaser.GameObjects.Graphics | Phaser.GameObjects.Container {
+  if (has(scene, 'wm2_pennant_pole', 'wm2_pennant_cloth')) {
+    const fr = scene.textures.getFrame('wm2_pennant_pole'), H = 40, W = H * fr.width / fr.height, c = scene.add.container(0, 0);
+    c.add([scene.add.image(-6, 12, 'wm2_pennant_cloth').setOrigin(.2, 1).setDisplaySize(W, H).setTint(color), scene.add.image(-6, 12, 'wm2_pennant_pole').setOrigin(.2, 1).setDisplaySize(W, H)]);
+    return c;
+  }
   const g = scene.add.graphics();
   g.fillStyle(0x000000, .35).fillEllipse(0, 12, 14, 4);
   g.lineStyle(1.8, 0x3a2614, 1).lineBetween(-6, 12, -6, -26);
@@ -236,4 +275,13 @@ export function intelPennant(scene: Phaser.Scene, color: number): Phaser.GameObj
   return g;
 }
 
-export const intelGlyphPos = {x: 3, y: -14};
+/** 令旗上字的位置：正式图旗面中心 / 程序画旗面中心。 */
+export const intelGlyphPos = (scene: Phaser.Scene) => has(scene, 'wm2_pennant_pole', 'wm2_pennant_cloth') ? {x: 3, y: -13} : {x: 3, y: -14};
+
+/** 告急城池换成冒烟起火的城郭（W2-4），宽度不变。 */
+export function siegeArtV2(scene: Phaser.Scene, m: CityMarker): void {
+  const icon = m.root.getData('icon') as Phaser.GameObjects.Image | undefined, key = 'wm2_city_' + m.city.tier + '_siege';
+  if (!icon || !has(scene, key)) return;
+  const w = icon.displayWidth, fr = scene.textures.getFrame(key);
+  icon.setTexture(key).setDisplaySize(w, w * fr.height / fr.width);
+}

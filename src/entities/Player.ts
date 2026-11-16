@@ -313,7 +313,7 @@ export class Player {
   takeDamage(raw: number, now: number): boolean {
     if (!this.alive || this.damageImmune || now < this.invulnUntil) return false;
     const afterArmor = Math.max(1, raw - this.stats.armor);
-    const unguarded = Math.max(1, Math.round(afterArmor * this.stats.damageTakenMul * this.armyDamageTakenMul * this.growth.incomingDamageMultiplier()));
+    const unguarded = Math.max(1, Math.round(afterArmor * this.stats.damageTakenMul * this.armyDamageTakenMul * this.growth.incomingDamageMultiplier() * this.passive.damageTakenMultiplier(now)));
     const dmg=Math.max(1,this.damageGuard?.(unguarded,now)??unguarded);
     (this.scene as unknown as {sfx?:{play(k:string):void}}).sfx?.play('playerHurt');
     const ironRescue=this.hp<=dmg&&this.growth.build.tags().bulwark>=4&&!this.growth.awakenRescueUsed;

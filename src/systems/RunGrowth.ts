@@ -2,6 +2,7 @@ import {BuildState} from '../data/builds';
 import { BALANCE } from '../config';
 import type { CharacterId } from '../data/characters';
 import type { Player } from '../entities/Player';
+import { emptyGear, type GearStats } from './ItemEffects';
 
 export type AttributeId = 'might' | 'quickness' | 'critical' | 'constitution' | 'agility';
 export type ZhaoMasteryId = 'dragon_gallop' | 'cloud_pierce';
@@ -20,6 +21,12 @@ export type PotionId = 'rejuvenation' | 'berserk';
 export type TrinketId = 'tiger_tally' | 'heart_mirror' | 'wind_boots';
 
 export const ATTRIBUTE_MAX = 5;
+/** 每升几级发放 1 个属性点（Lv.2、4、6…）。升级三选一仍每级一次。 */
+export const ATTRIBUTE_POINT_EVERY = 2;
+/** 从 from 级升到 to 级途中到达的「加点等级」数。 */
+export function attributePointsBetween(from: number, to: number): number { return Math.max(0, Math.floor(to / ATTRIBUTE_POINT_EVERY) - Math.floor(from / ATTRIBUTE_POINT_EVERY)); }
+/** 当前等级再升几级可获得下一个属性点（1 或 2）。 */
+export function levelsToNextAttributePoint(level: number): number { return ATTRIBUTE_POINT_EVERY - (level % ATTRIBUTE_POINT_EVERY); }
 export const TRINKET_SLOTS = 2;
 export const ATTRIBUTE_INFO: Record<AttributeId, { name: string; effect: string }> = {
   might: { name: '武力', effect: '本命武器伤害 +5% / 点' },
@@ -38,6 +45,13 @@ export class RunGrowth {
   readonly masteries: Record<MasteryId, number> = { dragon_gallop: 0, cloud_pierce: 0, dragon_charge:0, dragging_blade:0, steady_aim:0, pearl_volley:0, wildfire:0, eight_trigrams:0 };
   readonly trinkets: TrinketId[] = [];
   unallocated = 0;
+  /** 兵装加成（局外道具，开局按武将读入，见 ItemEffects.gearFor）。 */
+  gear: GearStats = emptyGear();
+  /** 生命低于 35%（由 Player.update 每帧更新），供名器「背水 / 踏风」判断。 */
+  lowHp = false;
+  private xpCarry = 0;
+  /** 名器「饮血」下次可触发的时刻。 */
+  killHealAt = 0;
   /** W3 大城特产（洛阳）：本命武器伤害加成，开局由 applyCitySpecialties 设置。 */
   permanentDamage = 0;
   berserkUntil = 0;
@@ -99,22 +113,28 @@ export class RunGrowth {
 
   damageMultiplier(now: number): number {
     const might = 1 + 0.05 * this.attributes.might;
-    return Math.min(2, might * (now < this.berserkUntil ? 1.25 : 1) * (1 + this.permanentDamage));
+    const fury = this.lowHp && this.gear.specials.includes('fury') ? 1.25 : 1;
+    return Math.min(2, might * (now < this.berserkUntil ? 1.25 : 1) * (1 + this.permanentDamage) * (1 + this.gear.damage)) * fury;
   }
 
   attackSpeedMultiplier(now: number): number {
     const quickness = 1 + 0.04 * this.attributes.quickness;
-    return Math.min(1.8, quickness * (now < this.berserkUntil ? 1.2 : 1));
+    return Math.min(1.8, quickness * (now < this.berserkUntil ? 1.2 : 1) * (1 + this.gear.attackSpeed));
   }
 
   movementMultiplier(): number {
-    return Math.min(1.45, (1 + [0,.03,.05,.07][this.build.level('swift')]) * (1 + 0.03 * this.attributes.agility) * (this.trinkets.includes('wind_boots') ? 1.1 : 1));
+    const windrider = this.lowHp && this.gear.specials.includes('windrider') ? 1.2 : 1;
+    return Math.min(1.45, (1 + [0,.03,.05,.07][this.build.level('swift')]) * (1 + 0.03 * this.attributes.agility) * (this.trinkets.includes('wind_boots') ? 1.1 : 1) * (1 + this.gear.move)) * windrider;
   }
 
-  criticalBonus(): number { return Math.min(0.1, 0.02 * this.attributes.critical); }
-  bonusMaxHp(): number { return Math.round(BALANCE.player.maxHp * 0.1 * this.attributes.constitution); }
-  incomingDamageMultiplier(): number { return (this.trinkets.includes('heart_mirror') ? 0.85 : 1)*(this.build.tags().bulwark>=2?.95:1); }
-  allyDamageMultiplier(): number { return (this.trinkets.includes('tiger_tally') ? 1.2 : 1)*(this.build.tags().command>=2?1.05:1); }
+  criticalBonus(): number { return Math.min(0.1, 0.02 * this.attributes.critical) + this.gear.crit; }
+  bonusMaxHp(): number { return Math.round(BALANCE.player.maxHp * (0.1 * this.attributes.constitution + this.gear.hp)); }
+  incomingDamageMultiplier(): number { return (this.trinkets.includes('heart_mirror') ? 0.85 : 1)*(this.build.tags().bulwark>=2?.95:1)*Math.max(.6, 1 - this.gear.reduce); }
+  allyDamageMultiplier(): number { return (this.trinkets.includes('tiger_tally') ? 1.2 : 1)*(this.build.tags().command>=2?1.05:1)*(1 + this.gear.ally); }
+  /** 兵装「对精锐 / 首领伤害」与名器「斩将」：只作用于武将本人的命中。 */
+  gearHitMultiplier(kind: string): number { return kind === 'boss' ? 1 + this.gear.elite + this.gear.boss : kind === 'elite' ? 1 + this.gear.elite : 1; }
+  /** 兵装「经验获取」：小数部分累计，不丢失。 */
+  scaleXp(value: number): number { const v = value * (1 + this.gear.xp) + this.xpCarry, n = Math.floor(v); this.xpCarry = v - n; return n; }
   spearLengthMultiplier(): number { return 1 + 0.1 * this.masteries.cloud_pierce; }
   spearTargetBonus(): number { return this.masteries.cloud_pierce; }
 }

@@ -1,0 +1,219 @@
+/**
+ * 道具（兵装）数据：品质、槽位、词条、48 种基础道具、18 件橙色名器、掉率。
+ * 局外持久：战斗中掉落 → 结算带回行囊 → 每位武将各穿一套（6 槽），下一场出征生效。
+ * 只放数据与纯函数；存取见 systems/ItemStore.ts，战场掉落见 systems/ItemDrops.ts。
+ */
+
+export type ItemQuality = 'white' | 'green' | 'blue' | 'purple' | 'orange';
+export type ItemSlot = 'weapon' | 'armor' | 'helm' | 'boots' | 'mount' | 'token';
+export type AffixId = 'damage' | 'attackSpeed' | 'crit' | 'hp' | 'move' | 'reduce' | 'pickup' | 'xp' | 'ally' | 'regen' | 'elite';
+export type SpecialId = 'fury' | 'windrider' | 'bloodthirst' | 'slayer' | 'scholar' | 'rally' | 'ironwall' | 'swift';
+
+export const QUALITY_ORDER: readonly ItemQuality[] = ['white', 'green', 'blue', 'purple', 'orange'];
+
+/** 品质：颜色（数字给 Graphics，css 给文字）、词条数、数值倍率、分解所得钱。边框画法见 ui/ItemQuality.ts。 */
+export const QUALITIES: Record<ItemQuality, { name: string; label: string; color: number; css: string; dark: number; affixes: number; minor: boolean; mult: number; salvage: number }> = {
+  white: { name: '普通', label: '白', color: 0xd8d2c4, css: '#d8d2c4', dark: 0x2a2722, affixes: 1, minor: false, mult: 1, salvage: 2 },
+  green: { name: '优秀', label: '绿', color: 0x5fbf6a, css: '#6fd07a', dark: 0x16301a, affixes: 2, minor: false, mult: 1.3, salvage: 5 },
+  blue: { name: '精良', label: '蓝', color: 0x4a90e2, css: '#6aa8f0', dark: 0x132a45, affixes: 2, minor: true, mult: 1.7, salvage: 12 },
+  purple: { name: '传奇', label: '紫', color: 0xa35fd6, css: '#c08af0', dark: 0x2c1640, affixes: 3, minor: true, mult: 2.2, salvage: 30 },
+  orange: { name: '史诗', label: '橙', color: 0xe8892e, css: '#f2a24e', dark: 0x3d220c, affixes: 3, minor: true, mult: 2.8, salvage: 80 },
+};
+
+export const SLOTS: Record<ItemSlot, { name: string; affixes: readonly AffixId[] }> = {
+  weapon: { name: '兵刃', affixes: ['damage', 'attackSpeed', 'crit', 'elite'] },
+  armor: { name: '甲胄', affixes: ['hp', 'reduce', 'regen'] },
+  helm: { name: '头盔', affixes: ['hp', 'reduce', 'crit', 'xp'] },
+  boots: { name: '战靴', affixes: ['move', 'attackSpeed', 'pickup'] },
+  mount: { name: '坐骑', affixes: ['move', 'ally', 'pickup', 'damage'] },
+  token: { name: '信物', affixes: ['ally', 'xp', 'regen', 'elite'] },
+};
+export const SLOT_ORDER: readonly ItemSlot[] = ['weapon', 'armor', 'helm', 'boots', 'mount', 'token'];
+
+/** 词条：白色品质的基础值；percent 表示按百分比显示。gearCap 为全身 6 件叠加的上限。 */
+export const AFFIXES: Record<AffixId, { name: string; base: number; percent: boolean; gearCap: number }> = {
+  damage: { name: '武器伤害', base: .03, percent: true, gearCap: .4 },
+  attackSpeed: { name: '攻击速度', base: .02, percent: true, gearCap: .25 },
+  crit: { name: '暴击率', base: .01, percent: true, gearCap: .12 },
+  hp: { name: '生命上限', base: .04, percent: true, gearCap: .6 },
+  move: { name: '移动速度', base: .015, percent: true, gearCap: .15 },
+  reduce: { name: '受到伤害', base: .02, percent: true, gearCap: .25 },
+  pickup: { name: '拾取范围', base: .06, percent: true, gearCap: .6 },
+  xp: { name: '经验获取', base: .03, percent: true, gearCap: .4 },
+  ally: { name: '友军伤害', base: .03, percent: true, gearCap: .4 },
+  regen: { name: '每秒回血', base: .3, percent: false, gearCap: 3 },
+  elite: { name: '对精锐 / 首领伤害', base: .04, percent: true, gearCap: .4 },
+};
+export const AFFIX_IDS = Object.keys(AFFIXES) as AffixId[];
+
+export const SPECIALS: Record<SpecialId, { name: string; desc: string }> = {
+  fury: { name: '背水', desc: '生命低于 35% 时，伤害 +25%' },
+  windrider: { name: '踏风', desc: '生命低于 35% 时，移动速度 +20%' },
+  bloodthirst: { name: '饮血', desc: '击杀回复 1% 最大生命（每 0.5 秒一次）' },
+  slayer: { name: '斩将', desc: '对首领伤害额外 +25%' },
+  scholar: { name: '博闻', desc: '经验获取额外 +15%' },
+  rally: { name: '振旅', desc: '友军伤害额外 +15%' },
+  ironwall: { name: '金汤', desc: '受到伤害额外 −10%' },
+  swift: { name: '迅雷', desc: '攻击速度额外 +10%' },
+};
+
+export interface BaseItemDef { id: string; slot: ItemSlot; name: string; primary: AffixId }
+/** 6 槽 × 8 种 = 48 种基础道具；第一条词条固定为 primary，其余随机。 */
+export const BASE_ITEMS: readonly BaseItemDef[] = [
+  // 兵刃（挂饰）
+  { id: 'sword_tassel', slot: 'weapon', name: '剑穗', primary: 'attackSpeed' },
+  { id: 'blade_ring', slot: 'weapon', name: '刀环', primary: 'damage' },
+  { id: 'spear_tassel', slot: 'weapon', name: '枪缨', primary: 'crit' },
+  { id: 'bow_tip', slot: 'weapon', name: '弓弭', primary: 'attackSpeed' },
+  { id: 'whet_charm', slot: 'weapon', name: '砺石佩', primary: 'damage' },
+  { id: 'bronze_guard', slot: 'weapon', name: '青铜剑格', primary: 'elite' },
+  { id: 'iron_pommel', slot: 'weapon', name: '铁首环', primary: 'damage' },
+  { id: 'jade_hilt', slot: 'weapon', name: '玉具剑璏', primary: 'crit' },
+  // 甲胄
+  { id: 'leather_armor', slot: 'armor', name: '皮甲', primary: 'hp' },
+  { id: 'lamellar', slot: 'armor', name: '札甲', primary: 'reduce' },
+  { id: 'fish_scale', slot: 'armor', name: '鱼鳞甲', primary: 'reduce' },
+  { id: 'chain_armor', slot: 'armor', name: '锁子甲', primary: 'hp' },
+  { id: 'rhino_armor', slot: 'armor', name: '犀皮甲', primary: 'reduce' },
+  { id: 'cloth_armor', slot: 'armor', name: '絮衣', primary: 'regen' },
+  { id: 'bright_plate', slot: 'armor', name: '明光铠', primary: 'hp' },
+  { id: 'bamboo_armor', slot: 'armor', name: '竹札甲', primary: 'regen' },
+  // 头盔
+  { id: 'head_wrap', slot: 'helm', name: '武弁', primary: 'xp' },
+  { id: 'iron_helm', slot: 'helm', name: '铁胄', primary: 'reduce' },
+  { id: 'plume_helm', slot: 'helm', name: '鹖冠', primary: 'crit' },
+  { id: 'leather_cap', slot: 'helm', name: '皮弁', primary: 'hp' },
+  { id: 'bronze_helm', slot: 'helm', name: '青铜盔', primary: 'reduce' },
+  { id: 'scholar_cap', slot: 'helm', name: '进贤冠', primary: 'xp' },
+  { id: 'horn_helm', slot: 'helm', name: '兜鍪', primary: 'hp' },
+  { id: 'red_band', slot: 'helm', name: '绛帻', primary: 'crit' },
+  // 战靴
+  { id: 'straw_sandal', slot: 'boots', name: '草履', primary: 'move' },
+  { id: 'leather_boot', slot: 'boots', name: '皮靴', primary: 'move' },
+  { id: 'cloud_boot', slot: 'boots', name: '云头履', primary: 'attackSpeed' },
+  { id: 'iron_greave', slot: 'boots', name: '铁护胫', primary: 'move' },
+  { id: 'hunter_boot', slot: 'boots', name: '猎靴', primary: 'pickup' },
+  { id: 'felt_boot', slot: 'boots', name: '毡靴', primary: 'pickup' },
+  { id: 'march_boot', slot: 'boots', name: '行縢', primary: 'move' },
+  { id: 'tiger_boot', slot: 'boots', name: '虎头靴', primary: 'attackSpeed' },
+  // 坐骑
+  { id: 'nag', slot: 'mount', name: '驽马', primary: 'move' },
+  { id: 'grey_horse', slot: 'mount', name: '青骢', primary: 'move' },
+  { id: 'yellow_horse', slot: 'mount', name: '黄骠马', primary: 'pickup' },
+  { id: 'black_horse', slot: 'mount', name: '乌骓', primary: 'damage' },
+  { id: 'white_horse', slot: 'mount', name: '白马', primary: 'ally' },
+  { id: 'red_horse', slot: 'mount', name: '骅骝', primary: 'damage' },
+  { id: 'west_horse', slot: 'mount', name: '大宛马', primary: 'move' },
+  { id: 'mule', slot: 'mount', name: '骡车', primary: 'ally' },
+  // 信物
+  { id: 'jade_pendant', slot: 'token', name: '玉佩', primary: 'regen' },
+  { id: 'tiger_seal', slot: 'token', name: '虎钮印', primary: 'ally' },
+  { id: 'bamboo_slip', slot: 'token', name: '兵书竹简', primary: 'xp' },
+  { id: 'war_flag', slot: 'token', name: '牙旗', primary: 'ally' },
+  { id: 'bronze_mirror', slot: 'token', name: '铜镜', primary: 'elite' },
+  { id: 'incense', slot: 'token', name: '香囊', primary: 'regen' },
+  { id: 'arrow_token', slot: 'token', name: '令箭', primary: 'elite' },
+  { id: 'gold_seal', slot: 'token', name: '金印', primary: 'xp' },
+];
+
+export interface LegendDef { id: string; slot: ItemSlot; name: string; affixes: readonly AffixId[]; special: SpecialId; lore: string }
+/** 18 件橙色名器：词条固定（数值仍按橙色倍率），外加一条专属特效。只在橙色品质掉落。 */
+export const LEGENDS: readonly LegendDef[] = [
+  { id: 'qinggang', slot: 'weapon', name: '青釭剑', affixes: ['damage', 'crit', 'elite'], special: 'slayer', lore: '削铁如泥，曹操佩剑' },
+  { id: 'yitian', slot: 'weapon', name: '倚天剑', affixes: ['damage', 'attackSpeed', 'crit'], special: 'fury', lore: '与青釭并称双剑' },
+  { id: 'gudingdao', slot: 'weapon', name: '古锭刀', affixes: ['damage', 'elite', 'attackSpeed'], special: 'swift', lore: '江东猛将所用' },
+  { id: 'beast_armor', slot: 'armor', name: '兽面吞头铠', affixes: ['hp', 'reduce', 'regen'], special: 'ironwall', lore: '护心兽首，刀枪难入' },
+  { id: 'silver_armor', slot: 'armor', name: '亮银甲', affixes: ['hp', 'reduce', 'crit'], special: 'bloodthirst', lore: '白袍银甲，七进七出' },
+  { id: 'rattan_armor', slot: 'armor', name: '藤甲', affixes: ['reduce', 'regen', 'move'], special: 'windrider', lore: '浸油晒干，轻而坚' },
+  { id: 'purple_crown', slot: 'helm', name: '紫金冠', affixes: ['crit', 'hp', 'damage'], special: 'fury', lore: '束发三叉，威风凛凛' },
+  { id: 'phoenix_helm', slot: 'helm', name: '凤翅盔', affixes: ['hp', 'reduce', 'xp'], special: 'ironwall', lore: '双翅高耸' },
+  { id: 'kerchief', slot: 'helm', name: '纶巾', affixes: ['xp', 'crit', 'regen'], special: 'scholar', lore: '羽扇纶巾，谈笑间' },
+  { id: 'cloud_boots', slot: 'boots', name: '踏云靴', affixes: ['move', 'attackSpeed', 'pickup'], special: 'windrider', lore: '行如流云' },
+  { id: 'tiger_boots', slot: 'boots', name: '虎皮战靴', affixes: ['move', 'attackSpeed', 'damage'], special: 'swift', lore: '踏阵如虎' },
+  { id: 'fleet_boots', slot: 'boots', name: '神行履', affixes: ['move', 'pickup', 'xp'], special: 'scholar', lore: '日行三百里' },
+  { id: 'chitu', slot: 'mount', name: '赤兔', affixes: ['move', 'damage', 'elite'], special: 'slayer', lore: '人中吕布，马中赤兔' },
+  { id: 'dilu', slot: 'mount', name: '的卢', affixes: ['move', 'pickup', 'hp'], special: 'windrider', lore: '一跃三丈过檀溪' },
+  { id: 'jueying', slot: 'mount', name: '绝影', affixes: ['move', 'ally', 'attackSpeed'], special: 'rally', lore: '宛城舍身救主' },
+  { id: 'taiping', slot: 'token', name: '太平要术残卷', affixes: ['xp', 'regen', 'elite'], special: 'scholar', lore: '南华老仙所授' },
+  { id: 'imperial_seal', slot: 'token', name: '传国玉玺', affixes: ['ally', 'xp', 'hp'], special: 'rally', lore: '受命于天，既寿永昌' },
+  { id: 'bagua_mirror', slot: 'token', name: '八卦镜', affixes: ['reduce', 'regen', 'elite'], special: 'bloodthirst', lore: '奇门遁甲，八阵之枢' },
+];
+
+export interface ItemAffix { id: AffixId; value: number; minor?: boolean }
+/** 一件道具实例（存档里的样子）。 */
+export interface ItemInstance { uid: string; base: string; quality: ItemQuality; affixes: ItemAffix[]; special?: SpecialId }
+
+const BASE_BY_ID = new Map(BASE_ITEMS.map(b => [b.id, b]));
+const LEGEND_BY_ID = new Map(LEGENDS.map(l => [l.id, l]));
+export function itemDef(base: string): { slot: ItemSlot; name: string; legend?: LegendDef } | undefined {
+  const l = LEGEND_BY_ID.get(base); if (l) return { slot: l.slot, name: l.name, legend: l };
+  const b = BASE_BY_ID.get(base); return b && { slot: b.slot, name: b.name };
+}
+export function itemSlot(item: ItemInstance): ItemSlot { return itemDef(item.base)?.slot ?? 'token'; }
+export function itemName(item: ItemInstance): string { return itemDef(item.base)?.name ?? '无名之物'; }
+
+// —— 掉落 ——
+/** 掉落来源。tier = 章节进度档（0 黄巾 / 1 讨董 / 2 群雄·攻守城 / 3 官渡·赤壁），越高品质整体上浮。 */
+export type DropSource = 'normal' | 'elite' | 'boss' | 'chest' | 'merchant';
+export const DROP_CHANCE: Record<'normal' | 'elite', number> = { normal: .004, elite: .06 };
+/** 品质权重（%）：白 绿 蓝 紫 橙。 */
+const WEIGHTS: Record<DropSource, readonly number[]> = {
+  normal: [62, 27, 9, 1.8, .2],
+  elite: [0, 70, 24, 5, 1],
+  chest: [0, 62, 30, 7, 1],
+  boss: [0, 0, 70, 25, 5],
+  merchant: [0, 65, 35, 0, 0],
+};
+export const CHESTS_PER_STAGE: readonly number[] = [45, 110]; // 每关开打后第 45 / 110 秒各刷一个宝箱
+
+export function rollQuality(source: DropSource, tier: number, rng: () => number = Math.random): ItemQuality {
+  const w = [...WEIGHTS[source]];
+  // 每高一档：把白 / 绿各 6% 的权重挪到蓝 / 紫 / 橙（商人不变）
+  if (source !== 'merchant') for (let t = 0; t < Math.max(0, Math.min(3, tier)); t++) {
+    const take = Math.min(w[0], 6) + Math.min(w[1], 6); w[0] = Math.max(0, w[0] - 6); w[1] = Math.max(0, w[1] - 6);
+    w[2] += take * .6; w[3] += take * .3; w[4] += take * .1;
+  }
+  const total = w.reduce((a, b) => a + b, 0); let r = rng() * total;
+  for (let i = 0; i < w.length; i++) { r -= w[i]; if (r < 0) return QUALITY_ORDER[i]; }
+  return QUALITY_ORDER[w.length - 1];
+}
+
+function pick<T>(list: readonly T[], rng: () => number): T { return list[Math.floor(rng() * list.length) % list.length]; }
+const round3 = (v: number) => Math.round(v * 1000) / 1000;
+/** 词条数值：基础值 × 品质倍率 × 0.85–1.15 浮动；小词条减半。 */
+export function affixValue(id: AffixId, quality: ItemQuality, rng: () => number, minor = false): number {
+  return round3(AFFIXES[id].base * QUALITIES[quality].mult * (.85 + rng() * .3) * (minor ? .5 : 1));
+}
+
+let uidSeq = 0;
+export function newItemUid(): string { uidSeq = (uidSeq + 1) % 1e6; return Date.now().toString(36) + '-' + uidSeq.toString(36) + '-' + Math.floor(Math.random() * 1e6).toString(36); }
+
+/** 生成一件道具。橙色优先出名器（同槽位随机一件），slot 可指定。 */
+export function rollItem(quality: ItemQuality, rng: () => number = Math.random, slot?: ItemSlot): ItemInstance {
+  if (quality === 'orange') {
+    const pool = LEGENDS.filter(l => !slot || l.slot === slot), l = pick(pool, rng);
+    const affixes: ItemAffix[] = l.affixes.map(id => ({ id, value: affixValue(id, quality, rng) }));
+    const extra = AFFIX_IDS.filter(id => !l.affixes.includes(id));
+    const m = pick(extra, rng); affixes.push({ id: m, value: affixValue(m, quality, rng, true), minor: true });
+    return { uid: newItemUid(), base: l.id, quality, affixes, special: l.special };
+  }
+  const base = pick(BASE_ITEMS.filter(b => !slot || b.slot === slot), rng), q = QUALITIES[quality];
+  const ids: AffixId[] = [base.primary];
+  const pool = SLOTS[base.slot].affixes.filter(id => id !== base.primary), rest = AFFIX_IDS.filter(id => id !== base.primary);
+  while (ids.length < q.affixes) { const from = pool.filter(id => !ids.includes(id)).length ? pool.filter(id => !ids.includes(id)) : rest.filter(id => !ids.includes(id)); ids.push(pick(from, rng)); }
+  const affixes: ItemAffix[] = ids.map(id => ({ id, value: affixValue(id, quality, rng) }));
+  if (q.minor) { const m = pick(rest.filter(id => !ids.includes(id)), rng); affixes.push({ id: m, value: affixValue(m, quality, rng, true), minor: true }); }
+  return { uid: newItemUid(), base: base.id, quality, affixes };
+}
+
+export function formatAffix(a: { id: AffixId; value: number }): string {
+  const d = AFFIXES[a.id];
+  if (!d.percent) return `${d.name} +${a.value.toFixed(1)}`;
+  const pct = Math.round(a.value * 1000) / 10;
+  return a.id === 'reduce' ? `${d.name} −${pct}%` : `${d.name} +${pct}%`;
+}
+
+/** 行囊上限；超出时自动分解最低品质的未穿戴道具。 */
+export const BAG_CAPACITY = 80;
+/** 行营军需商人道具货架价格（粮草）。 */
+export const MERCHANT_PRICE: Partial<Record<ItemQuality, number>> = { green: 60, blue: 120 };

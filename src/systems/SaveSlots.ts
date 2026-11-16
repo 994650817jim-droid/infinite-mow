@@ -17,7 +17,7 @@ export const SLOT_TOUCH_KEY = 'im_slot_touched';
 const META_KEY = 'im_save_slots';
 const slotKey = (i: number): string => `im_slot_${i}`;
 /** 属于“一个存档”的键；其余 im_ 键（音量、布局等）是全局设置。 */
-export const PROGRESS_KEYS = [WORLD_KEY, BACKUP_KEY, CHAPTER_CLEAR_KEY, 'im_last_hero', SLOT_TOUCH_KEY];
+export const PROGRESS_KEYS = [WORLD_KEY, BACKUP_KEY, CHAPTER_CLEAR_KEY, 'im_last_hero', SLOT_TOUCH_KEY, 'im_items_v1'];
 
 export interface SlotSummary {
   index: number;

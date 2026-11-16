@@ -20,6 +20,7 @@ import { CHARACTER_PASSIVES } from '../data/passives';
 import { WEAPON_META,weaponName } from '../data/upgrades';
 import { chapterOneCleared, chapterUnlocked, isChapterTestRun } from '../systems/ChapterProgress';
 import { FONT, TITLE_FONT, HEADING_FONT, GAME_HEIGHT as H, GAME_WIDTH as W, IS_DESKTOP as D, switchLayout } from '../config';
+import { ItemBagUI } from '../ui/ItemBagUI';
 
 const ROLES = ['游龙先锋 · 灵动突刺', '重甲武圣 · 横扫千军', '百步神射 · 远程压制', '卧龙军师 · 火阵爆发'];
 const PASSIVE_HINTS = [
@@ -195,7 +196,9 @@ export class MenuScene extends Phaser.Scene {
     try{checkWorld(save);}catch{/* 存档不可用 */}
     {const got=Object.keys(unlockedMap()).filter(id=>ACHIEVEMENTS.some(a=>a.id===id)).length,py=D?34:54;let rx=W-24;
      if(worldUnlocked()){rx-=homePlaque(this,rx,py,{label:'主城',name:'home-city',glyph:'城',onClick:()=>this.scene.start('CityScene')},D)+8;rx-=homePlaque(this,rx,py,{label:'天下地图',name:'home-world',glyph:'图',onClick:()=>this.scene.start('WorldMapScene')},D)+8;}
-     homePlaque(this,rx,py,{label:'成就',name:'home-achievements',icon:'ach_first_win',progress:[got,ACHIEVEMENTS.length],onClick:()=>{if(!this.children.getByName('achievements-panel'))new AchievementsUI(this);}},D);}
+     rx-=homePlaque(this,rx,py,{label:'成就',name:'home-achievements',icon:'ach_first_win',progress:[got,ACHIEVEMENTS.length],onClick:()=>{if(!this.children.getByName('achievements-panel'))new AchievementsUI(this);}},D)+8;
+     // 行囊（兵装）：每位武将各一套，默认打开当前选中的武将
+     homePlaque(this,rx,py,{label:'行囊',name:'home-bag',glyph:'囊',onClick:()=>{if(!this.children.getByName('item-bag'))new ItemBagUI(this,{hero:CHARACTERS[this.selectedChar]?.id??'zhaoyun'});}},D);}
     if(west&&!save.dongzhuoStages){const reveal=text(W/2,D?157:228+this.padY,'新篇揭晓 · 讨伐董卓',15,'#f0c389').setAlpha(0);this.tweens.add({targets:reveal,alpha:1,duration:700});}
     const closeHeroes=()=>{this.heroModal?.setVisible(false);this.heroEntryPaint?.();};
     this.heroPicker=new HomeHeroPicker(this,index=>{this.selectedChar=index;this.registry.set('heroConfirmed',true);try{localStorage.setItem('im_last_hero',CHARACTERS[index].id);}catch{}closeHeroes();this.renderSelection();},closeHeroes);

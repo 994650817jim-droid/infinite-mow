@@ -224,3 +224,5 @@ export function beginThirdExpedition(stage:number,deployed:TroopKind[]=[]):strin
 export function settleThirdExpedition(id:string,result:{victory:boolean;bossKilled:boolean;kills:number;elapsed:number;debug:boolean;returned?:TroopKind[]}):ReturnType<typeof settleArcExpedition>{return settleArcExpedition('qunxiong',id,result);}
 /** W4：有告急城池时，出征别处前的警示语（无告急为空串）。 */
 export function alertLossWarning():string{const names=loadWorld().alerts.map(a=>cityById(a.city)?.name).filter(Boolean);return names.length?`⚠ ${names.join('、')}告急：此时出征别处，${names.length>1?'这些城池':'该城'}将失守`:'';}
+/** 道具分解所得的钱记入主城（ItemStore 调用）。 */
+export function addTownMoney(amount:number):void{const n=Math.floor(amount);if(!(n>0))return;const s=loadWorld();s.town.money=Math.min(9999999,s.town.money+n);commit(s);}

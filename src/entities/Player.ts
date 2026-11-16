@@ -4,7 +4,7 @@ import {ACTION_MS, HERO_ACTIONS, IDLE_FRAME_MS, ZHUGE_FALLBACK, type ActionFrame
 import type {CharacterId} from '../data/characters';
 import Phaser from 'phaser';
 import { CharacterPassives } from '../systems/CharacterPassives';
-import { RunGrowth } from '../systems/RunGrowth';
+import { RunGrowth, attributePointsBetween } from '../systems/RunGrowth';
 import { BALANCE, DEPTH, FONT, actorDepth } from '../config';
 import { applySetBonus, RELIC_BY_ID, type RelicSchool } from '../data/relics';
 import type { PlayerStats, WeaponState } from '../types';
@@ -362,8 +362,8 @@ export class Player {
       gained += 1;
       this.xpNext = this.level <= 4 ? [16, 36, 52, 68][this.level - 2] ?? 68 : 68 + (this.level - 4) * 20;
     }
-    // 每升一级自动获得 1 个属性点（取代三选一「通脉修习」卡；属性全满后不再累积）
-    if (gained > 0) this.growth.addAttributePoints(gained);
+    // 每升 2 级（Lv.2、4、6…）自动获得 1 个属性点；三选一仍每级一次（属性全满后不再累积）
+    if (gained > 0) this.growth.addAttributePoints(attributePointsBetween(this.level - gained, this.level));
     return gained;
   }
 
@@ -382,7 +382,9 @@ export class Player {
     const lift = t < 1 ? Math.sin(Math.PI * Math.max(0, t)) * 42 : 0;
     // 被挑飞时的抬升按当前帧的实际显示高度换算（动作帧 128 格与行走帧 96 格不同）
     this.sprite.setOrigin(.5, this.baseOriginY + lift / Math.max(1, this.sprite.displayHeight));
-    if (this.stats.regen > 0) this.heal(this.stats.regen * dt);
+    const regen = this.stats.regen + this.growth.gear.regen;
+    if (regen > 0) this.heal(regen * dt);
+    this.growth.lowHp = this.hp < this.maxHp * .35;
     const blinking = now < this.invulnUntil;
     this.sprite.setAlpha(blinking ? (Math.floor(now / 80) % 2 === 0 ? 0.35 : 1) : 1);
     if (this.action?.hold) this.renderAction(false);

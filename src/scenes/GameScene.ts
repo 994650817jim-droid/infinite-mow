@@ -49,7 +49,7 @@ import { Legion } from '../systems/Legion';
 import { LegionUI } from '../ui/LegionUI';
 import { Reinforcements } from '../systems/Reinforcements';
 import { MartialFields } from '../systems/MartialFields';
-import { RunGrowth, ATTRIBUTE_INFO, ATTRIBUTE_MAX, type AttributeId } from '../systems/RunGrowth';
+import { RunGrowth, ATTRIBUTE_INFO, ATTRIBUTE_MAX, levelsToNextAttributePoint, type AttributeId } from '../systems/RunGrowth';
 import { packCampaign, restoreCampaign, type CampaignTransfer } from '../systems/Campaign';
 import { TROOP_KINDS, INITIAL_TROOPS, LEGION, type TroopKind } from '../data/legion';
 import { DEFAULT_RUN_CONFIG, getCharacter, type RunConfig , HERO_TINT, HERO_FX } from '../data/characters';
@@ -59,6 +59,10 @@ import { SpatialGrid } from '../systems/SpatialGrid';
 import { Ally, type AllyKind } from '../entities/Ally';
 import { WEAPON_BEHAVIORS, WEAPON_DEFS, type WeaponHost, type WeaponBolt as Bolt, type SpearShot } from '../weapons/registry';
 import type { RunEndReason, RunStats, UpgradeOption, WeaponState } from '../types';
+import {ItemDrops} from '../systems/ItemDrops';
+import {gearFor} from '../systems/ItemEffects';
+import {depositRunLoot} from '../systems/ItemStore';
+import {ItemBagUI} from '../ui/ItemBagUI';
 
 interface Gem {
   img: Phaser.GameObjects.Image;
@@ -112,6 +116,8 @@ export class GameScene extends Phaser.Scene {
   protected lubu: LubuBoss | null = null;
   protected yellow:YellowBattle|null=null;
   protected supplies:BattlefieldSupplies|null=null;
+  /** 道具掉落与本局缴获（局外兵装，结算带回行囊）。 */
+  protected itemDrops:ItemDrops|null=null;
   private yellowAltar:Phaser.GameObjects.Image|null=null;
   private finaleFadeMs=0;
   protected sfx!: Sfx;
@@ -351,6 +357,9 @@ export class GameScene extends Phaser.Scene {
     this.legion = new Legion(this, this.allies, this.player);
     this.yellow=this.chapter.stage?new YellowBattle({scene:this,player:this.player,army:this.legion,enemies:this.enemies,move:(e,nx,ny,dt)=>this.advanceEnemy(e,nx,ny,dt),spawn:(def,x,y)=>this.spawnEnemy(def.kind,x,y,1,true,def)},this.chapter.stage):null;
     this.supplies=new BattlefieldSupplies(this,this.player,this.enemies,()=>this.combatNow,()=>{this.sfx.play('pickup');this.artEffects.show(5,this.player.x,this.player.y-12,35,this.combatNow,280);});
+    // 兵装：开局读入该武将穿戴的道具加成（生命上限增加的部分补满）
+    {const oldMax=this.player.maxHp;this.player.growth.gear=gearFor(this.runConfig.character);this.player.heal(this.player.maxHp-oldMax);}
+    this.itemDrops=new ItemDrops(this,this.player,this.itemTier(),()=>this.elapsed,()=>this.isFinalBoss(),()=>this.sfx.play('pickup'));
     // 酒罐 / 药篓不生成在房屋、城墙等障碍里（第三/四章、攻城在 create 之后才设置障碍，故调用时读取）
     this.supplies.healBlocked=(x,y,r)=>!!this.sishuiObstacles?.footprints.some(b=>x>b.left-r&&x<b.right+r&&y>b.top-r&&y<b.bottom+r);
     if(scenery){if(scenery==='sishui')this.sishuiObstacles=new SishuiObstacles();this.supplies.spawnSishui(3,-330,180,116);this.supplies.spawnSishui(5,-310,350,105);this.supplies.spawnSishui(7,230,-50,100);this.supplies.spawnSishui(4,290,210,104);this.supplies.spawnSishui(6,300,370,110);}
@@ -396,6 +405,7 @@ export class GameScene extends Phaser.Scene {
       else if (this.mode === 'recruit') { this.recruitedWaves.add(this.waveIndex); this.freeRecruit = false; this.resumePendingChoices(); }
     });
     this.campUI=new CampRestUI(this,this.player,this.legion,()=>this.continueCampaign());
+    this.campUI.onBuyItem=item=>this.itemDrops?.runLoot.push(item);
     this.reinforcements = new Reinforcements(this, this.runConfig.character, this.player, id => {
       if (this.mode !== 'aid' || !this.reinforcements.start(id, this.combatNow, this.enemies)) return;
       this.resumePendingChoices();
@@ -530,7 +540,7 @@ export class GameScene extends Phaser.Scene {
       this.music.dispose();
       this.sfx.dispose();
       this.disposeDevelopment();
-      this.legion.stop(); this.reinforcements.clear();this.yellow?.clear();this.clearChasingBosses();this.supplies?.clear();
+      this.legion.stop(); this.reinforcements.clear();this.yellow?.clear();this.clearChasingBosses();this.supplies?.clear();this.itemDrops?.clear();
     });
     this.input.on('pointermove', (pointer: Phaser.Input.Pointer) => this.joystick.handleMove(pointer));
     this.input.on('pointerup', (pointer: Phaser.Input.Pointer) => this.joystick.handleUp(pointer));
@@ -626,6 +636,7 @@ export class GameScene extends Phaser.Scene {
 
     this.player.update(time, dt);
 
+    if(!this.over)this.itemDrops?.update();
     this.supplies?.update(dt,time,this.battlefieldDetails.props,(enemy,damage)=>this.hitEnemy(enemy,damage,time,'fire',false,false),this.allies,(ally,damage,now)=>this.legion.hurt(ally,damage,now));
     this.updateEnemies(dt, time);
     this.yellow?.update(dt,time);
@@ -1317,6 +1328,7 @@ export class GameScene extends Phaser.Scene {
     if (enemy === this.boss && this.lubu) rawDamage *= this.lubu.incomingDamageMultiplier(source, time);
     const crit = weaponHit && Math.random() < Math.min(0.65, this.player.stats.critChance + this.player.growth.criticalBonus() + (!fromAlly ? this.player.passive.critBonus(time) + this.player.growth.aimCriticalBonus() + this.buildCombat.criticalBonus() : 0));
     if(!fromAlly&&weaponHit)rawDamage=this.buildCombat.damage(enemy,rawDamage,crit,time);
+    if(!fromAlly)rawDamage*=this.player.growth.gearHitMultiplier(enemy.kind);
     let damage = Math.max(1, Math.round(rawDamage * (crit ? BALANCE.critMultiplier : 1)));
     enemy.flash(time);
     if(!fromAlly&&source==='arrow')this.artEffects.show(3,enemy.x,enemy.y-8,32,time,120);
@@ -1364,6 +1376,8 @@ export class GameScene extends Phaser.Scene {
     this.buildCombat.onKill(enemy,this.combatNow);
     this.controlBuild?.onKill(enemy,this.combatNow);
     this.legion.onKill(enemy);
+    this.itemDrops?.onKill(enemy);
+    if(this.player.growth.gear.specials.includes('bloodthirst')&&this.combatNow>=this.player.growth.killHealAt){this.player.growth.killHealAt=this.combatNow+500;this.player.heal(this.player.maxHp*.01);}
     if(this.player.relics.includes('army_jade')&&this.combatNow>=this.relicHealAt){this.relicHealAt=this.combatNow+1000;this.player.heal(1);this.artEffects.show(5,this.player.x,this.player.y-12,35,this.combatNow,260);for(const u of this.allies.filter(u=>u.active&&u.hp<u.maxHp).slice(0,2)){u.hp=Math.min(u.maxHp,u.hp+2);this.artEffects.show(5,u.x,u.y-10,30,this.combatNow,260);}}
     this.sfx.play('enemyDie');
     if (kind === 'boss') {
@@ -1581,7 +1595,7 @@ export class GameScene extends Phaser.Scene {
   /** “搜集辎重”：此时刻之前全场宝石无视距离飞向主将。 */
   gemMagnetUntil = 0;
   protected updateGems(dt: number): void {
-    const radius = this.combatNow < this.gemMagnetUntil ? 1e9 : this.player.stats.pickupRadius;
+    const radius = this.combatNow < this.gemMagnetUntil ? 1e9 : this.player.stats.pickupRadius * (1 + this.player.growth.gear.pickup);
     for (const gem of this.gems) {
       if (!gem.active) continue;
       const dx = this.player.x - gem.img.x;
@@ -1591,7 +1605,7 @@ export class GameScene extends Phaser.Scene {
         gem.active = false;
         gem.img.setVisible(false);
         // 拾取军功宝石不再播放音效（用户要求；战场补给拾取仍有音效）
-        const gained = this.player.gainXp(gem.value);
+        const gained = this.player.gainXp(this.player.growth.scaleXp(gem.value));
         if (gained > 0) {
           this.pendingLevels += gained;
           if (this.mode === 'none') this.openUpgrade();
@@ -1711,7 +1725,7 @@ export class GameScene extends Phaser.Scene {
   protected setMode(mode: Mode): void {
     // 所有战斗 Timer / Tween 一起冻结；绝对期限使用 combatNow。
     this.mode = mode;
-    if(mode!=='pause')this.children.getByName('build-panel')?.destroy();
+    if(mode!=='pause')this.children.getByName('build-panel')?.destroy();if(mode!=='pause')this.children.getByName('item-bag')?.destroy();
     const canPlay = mode === 'none' && !this.over;
     this.time.paused = !canPlay;
     if (canPlay) this.tweens.resumeAll();
@@ -1742,6 +1756,8 @@ export class GameScene extends Phaser.Scene {
     if (this.over || this.pendingLevels <= 0) return;
     this.sfx.level();
     (this.levelPanel.getByName('upgrade-title') as Phaser.GameObjects.Text)?.setText('选择本次强化');
+    { const lv = this.player.level, n = this.player.growth.unallocated;
+      (this.levelPanel.getByName('upgrade-points-hint') as Phaser.GameObjects.Text)?.setVisible(true).setText(`Lv.${lv} · ${levelsToNextAttributePoint(lv) === 2 ? '获得属性点 +1' : '再升 1 级可加点'}${n > 0 ? ` · 待分配 ${n} 点` : ''}`); }
     this.rerolls=0;
     this.upgradeOptions = buildUpgradeOptions(this.player, this.player.weapons, this.player.growth);
     this.renderCards();
@@ -2118,7 +2134,7 @@ export class GameScene extends Phaser.Scene {
     const pool=special.length?special:RELICS.filter(r=>!this.player.relics.includes(r.id)).slice(0,3);
     if(!pool.length){this.legion.food+=15;done();return;}
     this.lootContinue=done;this.upgradeOptions=pool.map(r=>({id:'boss_'+r.id,name:r.name,desc:r.desc,kind:'relic',categoryLabel:'Boss战利品 · 本局永久',icon:r.icon,apply:p=>{p.addRelic(r.id);}}));
-    (this.levelPanel.getByName('upgrade-title') as Phaser.GameObjects.Text)?.setText('强敌败退 · 选择一件遗物');this.renderCards();this.setMode('bossloot');
+    (this.levelPanel.getByName('upgrade-title') as Phaser.GameObjects.Text)?.setText('强敌败退 · 选择一件遗物');(this.levelPanel.getByName('upgrade-points-hint') as Phaser.GameObjects.Text)?.setVisible(false);this.renderCards();this.setMode('bossloot');
   }
   private battleStage():number{return this.chapter.stage??this.chapter.westStage??3;}
   private recordFrontlineVictory(stage:number):void{
@@ -2155,6 +2171,14 @@ export class GameScene extends Phaser.Scene {
     if (!this.bossSpawned && this.elapsed >= chapterBossTime(this.chapter) + 60) this.finish(false, 'timeout');
   }
 
+  /** 道具掉落的章节档：0 黄巾 / 1 讨董 / 2 群雄·攻守城 / 3 官渡·赤壁。 */
+  protected itemTier(): number {
+    const key = this.scene.key, arc = (this.runConfig as { arc?: string }).arc;
+    return key === 'GuanduGameScene' || arc === 'chibi' ? 3 : key === 'ThirdGameScene' || key === 'SiegeGameScene' ? 2 : this.chapter.id === 'hulao' ? 1 : 0;
+  }
+  /** 本关首领是否为章节最终首领（必掉 2 件）。 */
+  protected isFinalBoss(): boolean { return this.chapter.stage === 3 || (this.chapter.id === 'hulao' && (this.chapter.westStage ?? 3) === 3); }
+
   protected finish(victory: boolean, reason: RunEndReason = 'death'): void {
     if (this.over) return;
     this.over = true;
@@ -2169,7 +2193,7 @@ export class GameScene extends Phaser.Scene {
     this.reinforcements.clear();
     this.victory = victory;
     this.music.stop();
-    this.lubu?.clear();this.huaxiong?.clear();this.xurong?.clear();this.yellow?.clear();this.clearChasingBosses();this.supplies?.clear();
+    this.lubu?.clear();this.huaxiong?.clear();this.xurong?.clear();this.yellow?.clear();this.clearChasingBosses();this.supplies?.clear();if(victory)this.itemDrops?.collectAll();this.itemDrops?.clear();
     if(victory&&this.chapter.stage===3)this.finaleFadeMs=800;
     this.feedback.clearAttacks();
     if (victory) this.sfx.win();
@@ -2204,6 +2228,9 @@ export class GameScene extends Phaser.Scene {
         row('结局', victory ? '讨伐成功' : reason === 'timeout' ? '超时' : '阵亡'),
       ].join('\n'),
     );
+    // 兵装缴获：胜利或坚持 60 秒带回全部，速败只带回一半；测试 / 调试战斗不入行囊
+    {const loot=this.itemDrops?.runLoot??[],debug=isChapterTestRun()||this.debugModified||this.debugJumped||!!this.player.damageImmune||!!this.runConfig.encounter,dep=depositRunLoot(loot,{victory,elapsed:this.elapsed,debug});
+     if(loot.length)this.resultTexts.body.setText(this.resultTexts.body.text+'\n缴获兵装  '+loot.length+' 件（'+this.itemDrops!.summary()+'）'+(debug?' · 测试战斗不入行囊':dep.lost?' · 败退遗失 '+dep.lost+' 件':' · 已收入行囊'));}
     if(this.worldCampaign){const reward=settleExpedition(this.expeditionId,{...stats,kills:Math.max(0,stats.kills-this.settledFrontlineKills),chapter:this.chapter.id,returned:this.allies.filter(a=>a.active&&a.reserveSoldier).map(a=>a.kind),debug:isChapterTestRun()||this.debugModified||this.debugJumped||this.player.damageImmune});
       this.resultTexts.body.setFontSize(IS_DESKTOP?14:16).setLineSpacing(IS_DESKTOP?5:8).setText(this.resultTexts.body.text+`\n永久奖励  军功 +${reward.merits} · 粮草 +${reward.provisions}`+cityIncomeLine(reward));
       this.resultTexts.subtitle.setText(victory&&this.chapter.id==='huangjin'&&this.chapter.stage===3&&worldUnlocked()?'黄巾平定 · 三国天下开启':victory?this.chapter.victoryText:reward.message);
@@ -2416,7 +2443,7 @@ export class GameScene extends Phaser.Scene {
     const weapon = this.player.weapons[0];
     const mastery = '\n'+this.player.growth.masteryLabel();
     const trinkets = `\n饰品 ${this.player.growth.trinkets.length}/2`;
-    this.hudTexts.gear.setText(`${weapon ? `${weaponName(weapon.id,this.runConfig.character)} Lv.${weapon.level}` : '本命武器'}${mastery}${trinkets}\n属性点 ${this.player.growth.unallocated} · ${this.passiveHud.description}`);
+    this.hudTexts.gear.setText(`${weapon ? `${weaponName(weapon.id,this.runConfig.character)} Lv.${weapon.level}` : '本命武器'}${mastery}${trinkets}\n属性点 ${this.player.growth.unallocated}${this.player.growth.unallocated>0?'':` · 再升 ${levelsToNextAttributePoint(this.player.level)} 级可加点`} · ${this.passiveHud.description}`);
     const relicList = this.player.relics;
     const schoolParts: string[] = [];
     for (const sc of ['wushuang', 'shenshe', 'lieyan', 'tiebi'] as RelicSchool[]) {
@@ -2480,6 +2507,8 @@ export class GameScene extends Phaser.Scene {
       .text(GAME_WIDTH / 2, d ? 52 : 120 + Math.max(0, Math.round((GAME_HEIGHT - 960) / 2)), '将星精进 · 择一强化', { fontFamily: HEADING_FONT, fontSize: d ? '28px' : '30px', color: '#f0d79e', resolution: 2 })
       .setOrigin(0.5).setLetterSpacing(4).setShadow(0, 2, '#0a0603', 4, true, true);
     title.setName('upgrade-title');this.levelPanel.add([dim, title]);
+    // 加点节奏提示：每升 2 级获得 1 个属性点，三选一仍每级一次
+    this.levelPanel.add(this.add.text(GAME_WIDTH / 2, title.y + (d ? 60 : 66), '', { fontFamily: FONT, fontSize: '15px', color: '#cdb98a', resolution: 2 }).setOrigin(0.5).setShadow(0, 1, '#0a0603', 3, true, true).setName('upgrade-points-hint'));
     this.rerollButton=this.add.text(GAME_WIDTH-(d?28:32),d?24:42,'',{fontFamily:FONT,fontSize:'16px',color:'#e8cf91',resolution:2}).setOrigin(1,0).setPadding(16,10).setBackgroundColor('rgba(52,38,24,0.92)').setShadow(0,1,'#0a0603',2,true,true).setName('upgrade-reroll').setInteractive({useHandCursor:true}).on('pointerdown',()=>this.rerollUpgrades());this.levelPanel.add(this.rerollButton);
 
 
@@ -2530,6 +2559,9 @@ export class GameScene extends Phaser.Scene {
     const sfxRow=this.createVolumeRow('战斗音效',top+263,this.sfx.getVolume(),v=>this.sfx.setVolume(v));
     const buildLink=this.add.text(cx,top+ph-98,'战法与宝物 · 查看构筑',warText(15,'#e6cc90')).setOrigin(.5).setPadding(14,6).setInteractive({useHandCursor:true}).setName('pause-build');
     buildLink.on('pointerdown',()=>this.openBuildPanel());this.pausePanel.add(buildLink);
+    // 行囊：查看本局缴获与当前武将兵装（战斗中只读，出征前在主页行囊穿戴）
+    const bagLink=this.add.text(cx,top+ph-128,'行囊 · 本局缴获',warText(15,'#e6cc90')).setOrigin(.5).setPadding(14,6).setInteractive({useHandCursor:true}).setName('pause-bag');
+    bagLink.on('pointerdown',()=>{if(this.mode!=='pause'||this.children.getByName('item-bag'))return;new ItemBagUI(this,{hero:this.runConfig.character,runLoot:this.itemDrops?.runLoot??[],readOnly:true});});this.pausePanel.add(bagLink);
     const exit=this.add.text(cx,top+ph-65,'返回选将',warText(16,'#b5c4b2')).setOrigin(.5).setPadding(24,12).setInteractive({useHandCursor:true}).setName('pause-exit');
     exit.on('pointerdown',()=>{
       if(exit.getData('confirm')){this.abandonRun();this.registry.remove('campaignTransfer');this.scene.start(this.worldCampaign&&worldUnlocked()?'CityScene':'MenuScene');}
@@ -2651,7 +2683,7 @@ export class GameScene extends Phaser.Scene {
     if (!this.player || !this.attributePointsText) return;
     const growth=this.player.growth;
     (this.attributePanel.getByName('attributes-close') as Phaser.GameObjects.Text)?.setText(this.attributeReturn==='none'?'继续战斗':'返回暂停菜单');
-    this.attributePointsText.setText(growth.unallocated>0?`可分配属性点 ${growth.unallocated}`:'属性点已用完 · 每次升级获得 1 点').setColor(growth.unallocated>0?'#1c160c':'#91ab98').setBackgroundColor(growth.unallocated>0?'#e2bd6a':'#00000000');
+    this.attributePointsText.setText(growth.unallocated>0?`可分配属性点 ${growth.unallocated}`:`属性点已用完 · 每升 2 级获得 1 点 · 再升 ${levelsToNextAttributePoint(this.player.level)} 级可加点`).setColor(growth.unallocated>0?'#1c160c':'#91ab98').setBackgroundColor(growth.unallocated>0?'#e2bd6a':'#00000000');
     this.attributePauseText?.setText(`分配属性点 · ${growth.unallocated}`);
     const weapon=this.player.weapons[0];
     this.attributeWeaponText?.setText((weapon?weaponName(weapon.id,this.runConfig.character):'')+' · '+growth.masteryLabel());

@@ -1,4 +1,4 @@
-import Phaser from 'phaser';import {GAME_WIDTH as W,GAME_HEIGHT as H,IS_DESKTOP as D,FONT,HEADING_FONT,DEPTH,screenPoint} from '../config';import type {Player} from '../entities/Player';import type {Legion} from '../systems/Legion';import {CampMarket,campOption} from '../systems/CampMarket';import {CAMP_TRAINING,type CampTrainingId,type CampGroup} from '../data/camp';import {INITIAL_TROOPS,TROOPS,type TroopKind} from '../data/legion';import {TACTICS,TREASURES,TAG_NAMES,tacticDescription,type TacticId,type TreasureId,type BuildTag} from '../data/builds';import {AWAKENINGS,activeAwakenings} from '../data/awakenings';import {getCharacter} from '../data/characters';import {WEAPON_META} from '../data/upgrades';import {ATTRIBUTE_INFO,MARTIALS,type AttributeId,type MasteryId} from '../systems/RunGrowth';
+import Phaser from 'phaser';import {GAME_WIDTH as W,GAME_HEIGHT as H,IS_DESKTOP as D,FONT,HEADING_FONT,DEPTH,screenPoint} from '../config';import type {Player} from '../entities/Player';import type {Legion} from '../systems/Legion';import {CampMarket,campOption} from '../systems/CampMarket';import {CAMP_TRAINING,type CampTrainingId,type CampGroup} from '../data/camp';import {INITIAL_TROOPS,TROOPS,type TroopKind} from '../data/legion';import {TACTICS,TREASURES,TAG_NAMES,tacticDescription,type TacticId,type TreasureId,type BuildTag} from '../data/builds';import {AWAKENINGS,activeAwakenings} from '../data/awakenings';import {getCharacter} from '../data/characters';import {WEAPON_META} from '../data/upgrades';import {ATTRIBUTE_INFO,MARTIALS,type AttributeId,type MasteryId} from '../systems/RunGrowth';import {MERCHANT_PRICE,QUALITIES,formatAffix,itemName,rollItem,rollQuality,SLOTS,itemSlot,SPECIALS,type ItemInstance} from '../data/items';
 import {homeCommand,warPanelTexture} from './HomeCommand';
 import {visualTextureKey} from '../systems/ReadableTextures';
 export class CampRestUI {
@@ -11,6 +11,8 @@ export class CampRestUI {
  private tabs:Phaser.GameObjects.Text[]=[];
  private tabFrames:Phaser.GameObjects.Image[]=[];
  private buildSection=0;private buildOffset=0;private modal?:Phaser.GameObjects.Container;
+ /** 兵装货架：每次入营一件（绿 / 蓝），买下记入本局缴获，结算带回行囊。onBuyItem 由 GameScene 设置。 */
+ itemOffer:ItemInstance|null=null;itemSold=false;onBuyItem?:(item:ItemInstance)=>void;
  private market?:CampMarket;private visit='';private tab=0;private page=0;private destination='';private notice='';
  constructor(private scene:Phaser.Scene,private player:Player,private army:Legion,depart:()=>void){
   this.root=scene.add.container(0,0).setScrollFactor(0).setDepth(DEPTH.overlay+2).setVisible(false).setName('camp-rest');
@@ -42,7 +44,7 @@ export class CampRestUI {
   return c.hit;
  }
 
- open(key:string,destination:string){if(this.visit!==key){this.visit=key;this.market=new CampMarket(this.player);this.page=this.tab=0;this.buildSection=this.buildOffset=0;this.notice='';}this.destination=destination;this.render();}
+ open(key:string,destination:string){if(this.visit!==key){this.visit=key;this.market=new CampMarket(this.player);this.page=this.tab=0;this.itemOffer=rollItem(rollQuality('merchant',0));this.itemSold=false;this.buildSection=this.buildOffset=0;this.notice='';}this.destination=destination;this.render();}
  setVisible(visible:boolean){this.root.setVisible(visible);if(!visible){this.modal?.destroy();this.modal=undefined;}}
  private plate(x:number,y:number,w:number,h:number,accent=false){
   const img=this.scene.add.image(x+w/2,y+h/2,warPanelTexture(this.scene,w,h,accent)).setDisplaySize(Math.round(w)+16,Math.round(h)+16).setScrollFactor(0);
@@ -86,7 +88,19 @@ export class CampRestUI {
   const desc=option?.desc??'当前条件已变化，无法购买';const brief=desc.split('\n')[0].split(/[。；]/)[0],summary=brief.length>34?brief.slice(0,34)+'…':brief;const description=this.text(x+16,y+(D?85:72),summary,15).setWordWrapWidth(w-(D?32:177),true).setMaxLines(D?5:2).setName('camp-description-'+i);this.body.add(description);
   const inspect=this.scene.add.rectangle(x+8,y+8,w-16,62,0,0.001).setOrigin(0).setScrollFactor(0).setInteractive({useHandCursor:true}).on('pointerdown',()=>this.showDetails(title,desc+(o.kind==='treasure'?'\n\n'+this.replacementImpact(o.id as TreasureId):'')));this.body.add(inspect);
   this.body.add(this.button(x+(D?17:w-160),y+h-55,o.sold?'已售罄':!option?'不可购买':this.army.food<o.price?'军粮不足':'购入 · '+o.price+'粮',()=>{if(o.kind==='treasure'&&option?.desc.includes('替换：')){this.showDetails('确认宝物替换',option.desc+'\n\n'+this.replacementImpact(o.id as TreasureId),()=>{const ok=!!this.market?.buy(i,this.player,this.army);if(ok)this.sound('purchase');this.notice=ok?'已替换 · 构筑已更新':'无法购买';this.render();});return;}const ok=!!this.market?.buy(i,this.player,this.army);if(ok)this.sound('purchase');this.notice=ok?'已购入 · 构筑已更新':'无法购买';this.render();},D?w-34:146,!o.sold&&!!option&&this.army.food>=o.price).setName('camp-goods-'+i));
- });if(!this.notice)this.detail.setText('点击商品标题查看完整效果。库存固定；宝物满两格时需确认替换及流派变化。');}
+ });if(!this.notice)this.detail.setText('点击商品标题查看完整效果。库存固定；宝物满两格时需确认替换及流派变化。');this.renderItemShelf();}
+ /** 兵装货架（一格）：电脑在说明文字右侧，手机在第三张商品卡下方。左端小块可点开看词条。 */
+ private renderItemShelf(){
+  const item=this.itemOffer;if(!item)return;
+  const q=QUALITIES[item.quality],price=MERCHANT_PRICE[item.quality]??120,w=D?330:W-48,x=D?W-40-w:24,y=D?H-112:229+2*174+161+2;
+  const can=!this.itemSold&&this.army.food>=price;
+  const label='兵装 · '+q.label+' · '+itemName(item)+'　'+(this.itemSold?'已售罄':this.army.food<price?'军粮不足 · '+price+'粮':'购入 · '+price+'粮');
+  const b=this.button(x,y,label,()=>{if(this.itemSold||this.army.food<price)return;this.army.food-=price;this.itemSold=true;this.onBuyItem?.(item);this.sound('purchase');this.notice='已购入 '+itemName(item)+' · 结算后收入行囊';this.render();},w,can).setName('camp-item-goods');
+  this.body.add(b);
+  const info=this.scene.add.text(x+8,y+22,'详',{fontFamily:FONT,fontSize:'13px',color:q.css,resolution:2}).setOrigin(0,.5).setPadding(6,6).setBackgroundColor('rgba(20,14,8,.9)').setScrollFactor(0).setInteractive({useHandCursor:true}).setName('camp-item-info')
+   .on('pointerdown',()=>this.showDetails(q.name+' · '+SLOTS[itemSlot(item)].name+' · '+itemName(item),item.affixes.map(a=>formatAffix(a)).join('\n')+(item.special?'\n★ '+SPECIALS[item.special].name+'：'+SPECIALS[item.special].desc:'')+'\n\n局外兵装：结算后收入行囊，出征前在主页「行囊」穿戴。'));
+  this.body.add(info);
+ }
 
  private replacementImpact(id:TreasureId){
   const g=this.player.growth,b=g.build,before=b.tags(),after={...before},old=b.treasures[0];

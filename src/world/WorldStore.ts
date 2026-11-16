@@ -38,7 +38,7 @@ function parse(raw:string|null):WorldSave|null {try{if(!raw)return null;const v=
  // v7：天下地图城池；旧档无城池，eraSeen=0（之后按当前时代处理）
  s.ownedCities=v.version>=7&&Array.isArray(v.ownedCities)?[...new Set(v.ownedCities.filter((c:unknown)=>typeof c==='string'&&c.length<=32))].slice(0,64) as string[]:[];s.eraSeen=v.version>=7?integer(v.eraSeen,3):0;s.capturedEver=v.version>=7&&Array.isArray(v.capturedEver)?[...new Set(v.capturedEver.filter((c:unknown)=>typeof c==='string'&&c.length<=32))].slice(0,64) as string[]:[];s.alerts=v.version>=7&&Array.isArray(v.alerts)?v.alerts.filter((a:CityAlert)=>a&&typeof a.city==='string'&&s.ownedCities.includes(a.city)&&typeof a.attacker==='string'&&a.attacker.length<=16).slice(0,16).map((a:CityAlert)=>({city:a.city,attacker:a.attacker,cause:a.cause==='era'?'era':'retaliation'})):[];s.lastLost=v.version>=7&&Array.isArray(v.lastLost)?v.lastLost.filter((c:unknown)=>typeof c==='string'&&c.length<=32).slice(0,16):[];s.yellowStages=integer(v.yellowStages,3);s.revision=integer(v.revision);s.provisions=integer(v.provisions);for(const id of ['barracks','farm','clinic'] as BuildingId[])s.buildings[id]=Math.max(1,integer(v.buildings[id],3));
  // v9：统一军粮。旧档的军功、钱（含在途商队）与已删建筑的退还一并折成军粮；v9 存档 merits 恒为 0。
- {const pt=parseTown(v.version>=8?v.town:null,s.buildings);s.town=pt.town;s.provisions=Math.min(1_000_000,s.provisions+Math.round(integer(v.merits)*MERIT_TO_GRAIN)+Math.round(pt.money*MONEY_TO_GRAIN)+pt.refund);s.merits=0;}s.buildings=legacyLevels(s.town);for(const id of ['huangjin','hulao'] as ChapterId[]){s.cleared[id]=v.cleared[id]===true;s.failureBest[id]=integer(v.failureBest?.[id],20);}if(s.cleared.huangjin||s.cleared.hulao)s.yellowStages=3;
+ {const pt=parseTown(v.version>=8?v.town:null,s.buildings);s.town=pt.town;s.provisions=Math.min(1_000_000,s.provisions+Math.round(integer(v.merits)*MERIT_TO_GRAIN)+Math.round(pt.money*MONEY_TO_GRAIN)+pt.refund);s.merits=0;}if(!(v.town?.levels&&typeof v.town.levels==='object'&&'talent' in v.town.levels)){try{const r=JSON.parse(localStorage.getItem('im_roster_v1')??'null');s.town.levels.talent=Math.max(1,Math.min(3,integer(r?.hall,3)));}catch{s.town.levels.talent=1;}}s.buildings=legacyLevels(s.town);for(const id of ['huangjin','hulao'] as ChapterId[]){s.cleared[id]=v.cleared[id]===true;s.failureBest[id]=integer(v.failureBest?.[id],20);}if(s.cleared.huangjin||s.cleared.hulao)s.yellowStages=3;
  // v1/v2 builds opened the map directly after Zhangjiao. Keep that access for existing saves;
  // v3–v8 builds opened it only after Hulao; since the chapter timeline it opens after Zhangjiao (see below).
  s.worldAvailable=v.version<3?(s.yellowStages===3||s.cleared.huangjin||s.cleared.hulao):v.worldAvailable===true;
@@ -87,6 +87,8 @@ export function researchTech(id:TechId):TownResult{const s=loadWorld(),t=s.town,
 /** 已研究科技的合计效果。 */
 export function techEffects(){return techTotals(loadWorld().town.tech);}
 /** 马厩等级（0 = 未建）与可养马数，供坐骑 / 马厩界面使用。 */
+/** 招贤馆等级（1–3），招募系统读它代替 RosterSave.hall；升级走 townUpgrade('talent')（花军粮，价目即 RECRUIT.hallUpgrade）。 */
+export function talentLevel():number{return Math.max(1,Math.min(3,levelOf(loadWorld().town,'talent')));}
 export function stableLevel():number{return levelOf(loadWorld().town,'stable');}
 export function stableCapacity():number{return STABLE_HORSES[stableLevel()]??0;}
 /** 占领城池的发展方向（州府开放）：从“均衡”首次选择免费，之后按城池档次花军粮。 */

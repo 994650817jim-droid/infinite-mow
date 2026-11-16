@@ -27,7 +27,7 @@ let D=false;
 /** 占位建筑：屋顶颜色与牌匾字。 */
 const LOOK:Record<TownBuildingId,{roof:number;wall:number;mark:string}>={
  hall:{roof:0x5b2a22,wall:0xb69a6c,mark:'帐'},barracks:{roof:0x7a2f24,wall:0x8b7356,mark:'营'},farm:{roof:0x6f8a3a,wall:0x9a8456,mark:'田'},
- academy:{roof:0x3f5a6f,wall:0xb9a882,mark:'武'},stable:{roof:0x6a4a2a,wall:0xa99a7c,mark:'马'},granary:{roof:0x9b7a3a,wall:0xb59a6a,mark:'仓'},
+ academy:{roof:0x3f5a6f,wall:0xb9a882,mark:'武'},talent:{roof:0x7a4a5a,wall:0xb69e7a,mark:'贤'},stable:{roof:0x6a4a2a,wall:0xa99a7c,mark:'马'},granary:{roof:0x9b7a3a,wall:0xb59a6a,mark:'仓'},
  pavilion:{roof:0xb08a2c,wall:0xd9c9a0,mark:'麟'},
 };
 const txt=(s:Phaser.Scene,x:number,y:number,v:string,size=15,color='#ede3c9',font=FONT)=>s.add.text(x,y,v,{fontFamily:font,fontSize:size+'px',color,resolution:2});
@@ -228,6 +228,7 @@ export class CityScene extends Phaser.Scene {
   const funcs:Partial<Record<TownBuildingId,[string,()=>void]>>={
    barracks:['招募后备',()=>this.scene.start('CityRecruitScene')],
    academy:['研究科技',()=>{m.root.destroy();this.openTech();}],
+   talent:['进入招贤馆',()=>this.scene.start('TalentHallScene')],
    stable:['进入马厩',()=>this.openStable(msg)],
    granary:['开仓募兵',()=>{const res=granaryLevy();if(!res.ok){msg.setText(res.message);return;}m.root.destroy();this.refresh();this.toast(res.message);}],
   },fn=lv>0?funcs[id]:undefined,bw=fn?Math.min(200,(m.w-80)/2):Math.min(240,m.w-60),ux=fn?W/2+bw/2+8:W/2;

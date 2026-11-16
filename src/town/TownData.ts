@@ -8,8 +8,9 @@
  */
 import type { CityTier } from '../world/WorldCities';
 import { TECH_IDS, type TechId } from '../data/tech';
+import { RECRUIT } from '../data/recruits';
 
-export type TownBuildingId = 'hall' | 'barracks' | 'farm' | 'academy' | 'stable' | 'granary' | 'pavilion';
+export type TownBuildingId = 'hall' | 'barracks' | 'farm' | 'academy' | 'talent' | 'stable' | 'granary' | 'pavilion';
 /** 占领城池的发展方向：均衡（默认）/ 重农（多产军粮）/ 重军（少产粮，每场送后备兵）。 */
 export type CityFocus = 'balanced' | 'farm' | 'military';
 /** 花费：一律是军粮。 */
@@ -47,6 +48,8 @@ export interface BuildingDef {
   effect: (level: number) => string;
   /** 建造需要的营寨规模（主帐等级），默认 1。 */
   minHall?: number;
+  /** 等级不受主帐限制（招贤馆：沿用招募系统原来的升级节奏）。 */
+  noHallCap?: boolean;
   /** 最高等级（默认 3；奇观只有 1 级）。 */
   maxLevel?: number;
   /** 升级价（Lv1→2、Lv2→3）。 */
@@ -63,6 +66,7 @@ export const TOWN_BUILDINGS: Record<TownBuildingId, BuildingDef> = {
   academy: { name: '讲武堂', build: 100, upgrade: [260, 600], blurb: '研习兵法、改良军械：研究科技。', effect: l => `可研究第 ${l} 层科技（军需 / 兵略 / 武备）` },
   stable: { name: '马厩', build: 200, upgrade: [360, 700], minHall: 2, blurb: '养马换马之所；只能在营中休整时换马。', effect: l => `可养马 ${STABLE_HORSES[l]} 匹；在此更换坐骑` },
   granary: { name: '粮仓', build: 160, upgrade: [320, 640], minHall: 2, blurb: '广积粮：后备兵吃得少，荒时可开仓募兵。', effect: l => `后备兵口粮 −${GRANARY_CUT[l] * 100}%；每季可开仓募兵 ${LEVY_SOLDIERS[l]} 人` },
+  talent: { name: '招贤馆', build: 0, upgrade: [RECRUIT.hallUpgrade[0].provisions, RECRUIT.hallUpgrade[1].provisions], noHallCap: true, blurb: '延揽四方英才：招募武将、随行出征（招募会话的招贤馆）。', effect: l => `席位 ${RECRUIT.seats[l - 1]} · 随行 ${RECRUIT.followerCap[l - 1]} 人` },
   pavilion: { name: '麒麟阁', build: 2000, maxLevel: 1, minHall: 3, blurb: '奇观：图画功臣、表彰忠义，天下英雄慕名来投。', effect: () => '出征时伤害 +6%、主将生命 +6%、开局属性点 +1' },
 };
 /** 主帐扩建：花费与章节前提。 */
@@ -85,7 +89,7 @@ export function buildBlockers(t: TownState, id: TownBuildingId, p: TownProgress)
   if (id === 'hall') { const u = HALL_UPGRADE[l]; if (u && !u.ok(p)) out.push(u.needs); return out; }
   const minHall = TOWN_BUILDINGS[id].minHall ?? 1;
   if (l === 0 && hall < minHall) out.push(`扩建为${CITY_SIZE[minHall]}`);
-  else if (l + 1 > hall) out.push(`扩建为${CITY_SIZE[l + 1]}`);
+  else if (l + 1 > hall && !TOWN_BUILDINGS[id].noHallCap) out.push(`扩建为${CITY_SIZE[l + 1]}`);
   return out;
 }
 /** 建筑是否已在当前规模开放（未开放的不在营中显示）。 */
@@ -106,7 +110,7 @@ export function incomeText(i: { grain: number; troops: number }): string { retur
 export const FOCUS_CHANGE_COST: Record<CityTier, number> = { small: 30, medium: 60, large: 120 };
 
 export function emptyLevels(): Record<TownBuildingId, number> {
-  return { hall: 1, barracks: 1, farm: 1, academy: 0, stable: 0, granary: 0, pavilion: 0 };
+  return { hall: 1, barracks: 1, farm: 1, academy: 0, talent: 1, stable: 0, granary: 0, pavilion: 0 };
 }
 export function emptyTown(): TownState {
   return { year: START_YEAR, season: 0, levels: emptyLevels(), focus: {}, report: null, tech: [] };

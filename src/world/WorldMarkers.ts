@@ -225,7 +225,7 @@ export function nodeBannerTexture(scene: Phaser.Scene, st: NodeState): string {
 }
 
 /** v2 章节节点：返回要放进节点容器的物件（命中区沿用旧名 node-<id>）。 */
-export function nodeMarkerV2(scene: Phaser.Scene, st: NodeState, glyph: string, label: string, active: boolean): {parts: Phaser.GameObjects.GameObject[]; hit: Phaser.GameObjects.Arc; label: Phaser.GameObjects.Text; plate: Phaser.GameObjects.Graphics; icon: Phaser.GameObjects.Image} {
+export function nodeMarkerV2(scene: Phaser.Scene, st: NodeState, glyph: string, label: string, active: boolean): {parts: Phaser.GameObjects.GameObject[]; hit: Phaser.GameObjects.Arc; label: Phaser.GameObjects.Text; plate: Phaser.GameObjects.Graphics | Phaser.GameObjects.Container; icon: Phaser.GameObjects.Image} {
   const artKey = st === 'home' ? 'wm2_camp' : 'wm2_banner_' + st, art = has(scene, artKey);
   let img: Phaser.GameObjects.Image, gx = 34 * (.55 - .32), gy = 8 - 50 * .55;
   if (art) {
@@ -238,6 +238,15 @@ export function nodeMarkerV2(scene: Phaser.Scene, st: NodeState, glyph: string, 
   const t = scene.add.text(0, 12, label, {fontFamily: HEADING_FONT, fontSize: '12px', color: active ? '#fff0cd' : '#c9c7b8', resolution: 2 * RENDER_SCALE}).setOrigin(.5, 0);
   const pw = t.width + 16, ph = t.height + 2, g = scene.add.graphics();
   const edge = st === 'open' ? 0xb0321f : st === 'cleared' ? 0x5f9a5a : st === 'home' ? 0x88c5a4 : 0x6a6d64;
+  if (has(scene, 'wm2_plate')) {
+    // 与城名牌同一块漆木匾；顶边色条按章节状态（朱 = 可出征、绿 = 已平定、灰 = 未开）
+    const k = 42 / (ph + 4), wrap = scene.add.container(0, 0);
+    const ns = scene.add.nineslice(0, 10, 'wm2_plate', undefined, (pw + 14) * k, 42, 22, 22, 0, 0).setOrigin(.5, 0).setScale(1 / k);
+    g.fillStyle(edge, 1).fillRect(-pw / 2 - 2, 10.4, pw + 4, 1.8);
+    wrap.add([ns, g]); parts.push(wrap, t);
+    const hit = scene.add.circle(0, -12, 22, 0, .001);
+    return {parts, hit, label: t, plate: wrap, icon: img};
+  }
   g.fillStyle(0x000000, .35).fillRect(-pw / 2 + 1, 13.5, pw, ph);
   g.fillStyle(0x1b120b, .9).fillRect(-pw / 2, 12, pw, ph);
   g.fillStyle(edge, 1).fillRect(-pw / 2, 12, 3, ph).fillRect(pw / 2 - 3, 12, 3, ph);

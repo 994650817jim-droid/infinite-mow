@@ -23,6 +23,7 @@ export class AchievementsUI {
       const next = homeCommand(scene, D ? W / 2 + 100 : W / 2, D ? H - 34 : H - 124, 160, 42, '下一页');
       next.hit.setName('achievements-next').on('pointerdown', () => { this.page = (this.page + 1) % pages; this.render(); });
       this.root.add([next.g, next.hit, next.caption]);
+      this.pageCaption = next.caption; this.pages = pages;
     }
     this.render();
     // 成就图标（public/assets/achievements/<id>.webp）按需加载，加载完成后重绘
@@ -30,8 +31,12 @@ export class AchievementsUI {
     if (missing.length) { for (const a of missing) scene.load.image('ach_' + a.id, `assets/achievements/${a.id}.webp`); scene.load.once('complete', () => { if (this.root.active) this.render(); }); scene.load.start(); }
   }
   private get perPage(): number { return IS_DESKTOP ? 24 : 12; }
+  private pageCaption?: Phaser.GameObjects.Text;
+  private pages = 1;
   private render(): void {
     this.body?.destroy();
+    // 翻页按钮带页码，玩家知道一共几页、现在在第几页
+    this.pageCaption?.setText(`下一页 · ${this.page + 1}/${this.pages}`).setLetterSpacing(1);
     const s = this.scene, W = GAME_WIDTH, D = IS_DESKTOP, got = unlockedMap();
     this.body = s.add.container(0, 0); this.root.add(this.body);
     const list = ACHIEVEMENTS.slice(this.page * this.perPage, this.page * this.perPage + this.perPage);

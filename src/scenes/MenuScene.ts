@@ -20,6 +20,7 @@ import { CHARACTER_PASSIVES } from '../data/passives';
 import { WEAPON_META,weaponName } from '../data/upgrades';
 import { chapterOneCleared, chapterUnlocked, isChapterTestRun } from '../systems/ChapterProgress';
 import { FONT, TITLE_FONT, HEADING_FONT, GAME_HEIGHT as H, GAME_WIDTH as W, IS_DESKTOP as D, switchLayout } from '../config';
+import { lqDivider, lqPanel, lqSkin } from '../ui/LacquerKit';
 import { ItemBagUI } from '../ui/ItemBagUI';
 
 const ROLES = ['游龙先锋 · 灵动突刺', '重甲武圣 · 横扫千军', '百步神射 · 远程压制', '卧龙军师 · 火阵爆发'];
@@ -279,12 +280,18 @@ export class MenuScene extends Phaser.Scene {
     const app=desktop,desk=IS_DESKTOP_APP&&!!app;
     // 桌面版行距收紧，放下显示设置（分辨率 / 全屏 / 垂直同步）
     const rowY=(i:number)=>desk?H/2-150+i*54:H/2-40+i*76;
-    modal.add(this.add.rectangle(W/2,H/2,W,H,0x130d09,.97).setInteractive());modal.add(label(W/2,desk?H/2-205:H/2-130,'军中设置',28));
+    // 漆底描金面板（与图鉴、结算卷同系）；每行左右是漆金小方钮，返回为漆金按钮
+    modal.add(this.add.rectangle(W/2,H/2,W,H,0x0c0805,.9).setInteractive());
+    {const pw=desk?560:Math.min(W-40,460),top=desk?H/2-240:H/2-190,bottom=desk?rowY(6)+44:H/2+180,g=this.add.graphics();lqPanel(g,W/2-pw/2,top,pw,bottom-top);modal.add(g);
+     const t=label(W/2,desk?H/2-205:H/2-130,'军中设置',28).setFontFamily(HEADING_FONT).setColor('#f6dc9a').setStroke('#2a170b',4);modal.add(t);
+     const div=this.add.graphics();lqDivider(div,W/2,t.y+30,desk?160:130);modal.add(div);}
     /** 一行“名称  数值”，左右 －/＋（或 ‹ ›）调节；手柄焦点在行上时左右键也能调。 */
     const row=(i:number,name:string,get:()=>string,step:(dir:number)=>void,arrows:[string,string]=['－','＋'])=>{
-      const y=rowY(i),value=label(W/2,y,name+'  '+get(),desk?18:20).setName('settings-row-'+i);modal.add(value);
-      for(const dir of [-1,1]){const b=label(W/2+dir*(desk?170:140),y,dir<0?arrows[0]:arrows[1],desk?24:28).setPadding(16,desk?8:12).setInteractive({useHandCursor:true}).setName(`settings-row-${i}-${dir<0?'dec':'inc'}`);
-        b.setData('padAdjust',(d:number)=>{step(d);value.setText(name+'  '+get());}).on('pointerdown',()=>{step(dir);value.setText(name+'  '+get());});modal.add(b);}
+      const y=rowY(i),value=label(W/2,y,name+'  '+get(),desk?18:20).setName('settings-row-'+i);
+      const plate=this.add.graphics();plate.fillStyle(0x3a2616,.45).fillRoundedRect(W/2-(desk?140:112),y-(desk?20:24),desk?280:224,desk?40:48,6).lineStyle(1,0xc9a35e,.35).strokeRoundedRect(W/2-(desk?140:112),y-(desk?20:24),desk?280:224,desk?40:48,6);modal.add([plate,value]);
+      for(const dir of [-1,1]){const b=label(W/2+dir*(desk?172:146),y,dir<0?arrows[0]:arrows[1],desk?22:26).setInteractive({useHandCursor:true}).setName(`settings-row-${i}-${dir<0?'dec':'inc'}`);
+        b.setData('padAdjust',(d:number)=>{step(d);value.setText(name+'  '+get());}).on('pointerdown',()=>{step(dir);value.setText(name+'  '+get());});
+        const bw=desk?44:52,bh=desk?40:48,sk=lqSkin(this,b,b,()=>({w:bw,h:bh}));b.input?.hitArea.setTo((b.width-bw)/2,(b.height-bh)/2,bw,bh);modal.add([sk.gfx,b]);}
       return value;
     };
     ['音乐','音效'].forEach((name,i)=>{const key=i?'im_sfx_vol':'im_bgm_vol';let volume= i?90:40;try{volume=Number(localStorage.getItem(key)??volume);}catch{}
@@ -300,11 +307,14 @@ export class MenuScene extends Phaser.Scene {
       const vs=row(4,'垂直同步',()=>{const d=disp();return d?(d.vsync?'开':'关'):'—';},()=>{const d=disp();if(d&&app.display)app.display.set({vsync:!d.vsync});vsNote();},['‹','›']).setName('settings-vsync');
       const vsyncNote=label(W/2,rowY(4)+22,'',11).setColor('#9d8f78');modal.add(vsyncNote);
       const vsNote=()=>{const d=disp();vsyncNote.setText(d&&d.vsync!==d.vsyncActive?'重启游戏后生效':'');};vsNote();void vs;
-      const quit=label(W/2,rowY(5)+6,'退出游戏',18).setColor('#e7b68e').setPadding(24,10).setInteractive({useHandCursor:true}).setName('settings-quit');
+      const quit=label(W/2,rowY(5)+6,'退出游戏',18).setColor('#e7b68e').setInteractive({useHandCursor:true}).setName('settings-quit');
       quit.on('pointerdown',()=>{if(quit.getData('confirm'))app.quit();else quit.setData('confirm',true).setText('确认退出？再点一次');});
-      modal.add(quit);
+      const qs=lqSkin(this,quit,quit,()=>({w:220,h:38}),{tone:'quiet'});quit.input?.hitArea.setTo((quit.width-220)/2,(quit.height-38)/2,220,38);
+      modal.add([qs.gfx,quit]);
     }
-    modal.add(label(W/2,desk?rowY(6)+8:H/2+135,'返回',20).setPadding(40,desk?12:16).setInteractive({useHandCursor:true}).setName('settings-close').setData('padDefault',true).on('pointerdown',()=>modal.destroy()));
+    const close=label(W/2,desk?rowY(6)+8:H/2+120,'返回',20).setFontFamily(HEADING_FONT).setInteractive({useHandCursor:true}).setName('settings-close').setData('padDefault',true).on('pointerdown',()=>modal.destroy());
+    const cs=lqSkin(this,close,close,()=>({w:200,h:desk?44:52}),{tone:'cinnabar'});close.input?.hitArea.setTo((close.width-200)/2,(close.height-(desk?44:52))/2,200,desk?44:52);
+    modal.add([cs.gfx,close]);
   }
   private corners(g: Phaser.GameObjects.Graphics, bg: Phaser.GameObjects.Rectangle, selected: boolean): void {
     g.clear();

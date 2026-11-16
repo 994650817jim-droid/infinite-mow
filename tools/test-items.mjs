@@ -33,7 +33,7 @@ const battle = async (p, layout) => {
 const p = await page('mobile', { width: 390, height: 844 });
 await battle(p, 'mobile');
 
-// 1) 加点节奏
+// 1) 局内升级 = 战功（2026-11-16 起属性点改由武将等级给，见 test-hero-level）
 const pace = await p.evaluate(G0 => {
   const s = eval(G0), pl = s.player, g = pl.growth, out = {};
   pl.level = 1; pl.xp = 0; pl.xpNext = 16; g.unallocated = 0; for (const k in g.attributes) g.attributes[k] = 0;
@@ -45,10 +45,7 @@ const pace = await p.evaluate(G0 => {
   const big = pl.xpNext + 200 + 300; const gained = pl.gainXp(big); out.jump = [gained, pl.level, g.unallocated];
   return out;
 }, G);
-ck('Lv.2 获得 1 点', pace.lv2[0] === 2 && pace.lv2[1] === 1, pace);
-ck('Lv.3 不获得属性点', pace.lv3[0] === 3 && pace.lv3[1] === 1, pace);
-ck('Lv.4 再获得 1 点', pace.lv4[0] === 4 && pace.lv4[1] === 2, pace);
-ck('连升多级按到达的偶数等级发点', pace.jump[2] === 2 + Math.floor(pace.jump[1] / 2) - 2, pace);
+ck('战功升级仍按原经验表，局内升级不再给属性点', pace.lv2[0] === 2 && pace.lv3[0] === 3 && pace.lv4[0] === 4 && pace.lv4[1] === 0 && pace.jump[2] === 0, pace);
 // 升级面板提示与三选一仍每级一次
 const hint = await p.evaluate(async G0 => {
   const s = eval(G0), pl = s.player, out = {};
@@ -56,7 +53,7 @@ const hint = await p.evaluate(async G0 => {
   out.odd = s.levelPanel.getByName('upgrade-points-hint')?.text; out.cards = s.upgradeOptions.length; out.mode = s.mode;
   return out;
 }, G);
-ck('升级三选一仍出现（3 张卡），Lv.3 面板提示「再升 1 级可加点」', hint.mode === 'levelup' && hint.cards === 3 && /Lv\.3 · 再升 1 级可加点/.test(hint.odd), hint);
+ck('升级三选一仍出现（3 张卡），面板提示「战功 3」', hint.mode === 'levelup' && hint.cards === 3 && /^战功 3/.test(hint.odd), hint);
 await p.screenshot({ path: `${out}/mobile-levelup-hint.png` });
 const hint2 = await p.evaluate(async G0 => {
   const s = eval(G0), pl = s.player, out = {};
@@ -66,8 +63,8 @@ const hint2 = await p.evaluate(async G0 => {
   pl.growth.unallocated = 0; pl.level = 5; s.attributeReturn = 'none'; s.renderAttributePanel(); out.panel = s.attributePointsText.text;
   return out;
 }, G);
-ck('Lv.4 面板提示「获得属性点 +1」', /Lv\.4 · 获得属性点 \+1/.test(hint2.even), hint2);
-ck('属性面板：点数用完时显示「再升 1 级可加点」', /每升 2 级获得 1 点 · 再升 1 级可加点/.test(hint2.panel), hint2);
+ck('战功 4 面板提示', /^战功 4/.test(hint2.even), hint2);
+ck('属性面板：点数用完时提示「武将每升 2 级获得 1 点」', /武将每升 2 级获得 1 点/.test(hint2.panel), hint2);
 
 // 2) 掉落与拾取
 const drops = await p.evaluate(async G0 => {
@@ -244,7 +241,7 @@ await d.evaluate(async G0 => { const s = eval(G0), ui = s.campUI; s.legion.food 
 await d.screenshot({ path: `${out}/desktop-camp-shelf.png` });
 await d.evaluate(G0 => eval(G0).campUI.setVisible(false), G);
 await d.evaluate(async G0 => { const s = eval(G0); s.player.level = 5; s.pendingLevels = 1; s.openUpgrade(); await new Promise(r => setTimeout(r, 200)); }, G);
-ck('电脑布局升级面板提示', /Lv\.5 · 再升 1 级可加点/.test(await d.evaluate(G0 => eval(G0).levelPanel.getByName('upgrade-points-hint')?.text, G)));
+ck('电脑布局升级面板提示', /^战功 5/.test(await d.evaluate(G0 => eval(G0).levelPanel.getByName('upgrade-points-hint')?.text, G)));
 await d.screenshot({ path: `${out}/desktop-levelup-hint.png` });
 await d.evaluate(async G0 => { const s = eval(G0); s.pendingLevels = 0; s.setMode('none'); const items = await window.__mod('/src/data/items.ts'); s.itemDrops.runLoot.push(items.rollItem('purple'), items.rollItem('blue'));
   s.togglePause(); await new Promise(r => setTimeout(r, 150)); }, G);

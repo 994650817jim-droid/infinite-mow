@@ -44,6 +44,8 @@ export const ATTRIBUTE_POINT_EVERY = 2;
 export function attributePointsBetween(from: number, to: number): number { return Math.max(0, Math.floor(to / ATTRIBUTE_POINT_EVERY) - Math.floor(from / ATTRIBUTE_POINT_EVERY)); }
 /** 当前等级再升几级可获得下一个属性点（1 或 2）。 */
 export function levelsToNextAttributePoint(level: number): number { return ATTRIBUTE_POINT_EVERY - (level % ATTRIBUTE_POINT_EVERY); }
+/** 局内「战功」与武将等级共用的经验表：从 level 升到 level+1 所需经验。 */
+export function xpToNext(level: number): number { return level <= 1 ? 16 : level <= 4 ? [16, 36, 52][level - 2] : 68 + (level - 4) * 20; }
 export const TRINKET_SLOTS = 2;
 export const ATTRIBUTE_INFO: Record<AttributeId, { name: string; effect: string }> = {
   might: { name: '武力', effect: '本命武器伤害 +5% / 点' },
@@ -62,6 +64,8 @@ export class RunGrowth {
   readonly masteries: Record<MasteryId, number> = { dragon_gallop: 0, cloud_pierce: 0, dragon_charge:0, dragging_blade:0, steady_aim:0, pearl_volley:0, wildfire:0, eight_trigrams:0, kaishan:0, gujun:0, fulei:0, lianying:0, huishen:0, baibi:0, nichang:0, meirenji:0, baibu:0, laoji:0, wanrendi:0, dahe:0, jinma:0, tieqi:0, taoyuan:0, xiemin:0 };
   readonly trinkets: TrinketId[] = [];
   unallocated = 0;
+  /** unallocated 里属于武将永久属性点的部分（加点时写回 HeroProgress）；其余是本局额外点（如城池加成）。 */
+  heroFree = 0;
   /** 兵装加成（局外道具，开局按武将读入，见 ItemEffects.gearFor）。 */
   gear: GearStats = emptyGear();
   /** 生命低于 35%（由 Player.update 每帧更新），供名器「背水 / 踏风」判断。 */

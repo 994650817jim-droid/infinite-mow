@@ -71,6 +71,7 @@ assets/raw/*
 !/tools/test-attr-crossbow.mjs
 !/tools/test-gamepad.mjs
 !/tools/test-gear-revamp.mjs
+!/tools/test-hero-level.mjs
 !/tools/phase19-progression.mjs
 !/tools/rest-flow-smoke.mjs
 !/tools/prepare-troop-portraits.mjs

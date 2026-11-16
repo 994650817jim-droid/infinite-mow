@@ -4,7 +4,7 @@ import {ACTION_MS, HERO_ACTIONS, IDLE_FRAME_MS, ZHUGE_FALLBACK, type ActionFrame
 import type {CharacterId} from '../data/characters';
 import Phaser from 'phaser';
 import { CharacterPassives } from '../systems/CharacterPassives';
-import { RunGrowth, attributePointsBetween } from '../systems/RunGrowth';
+import { RunGrowth, xpToNext } from '../systems/RunGrowth';
 import { BALANCE, DEPTH, FONT, actorDepth } from '../config';
 import { applySetBonus, RELIC_BY_ID, type RelicSchool } from '../data/relics';
 import type { PlayerStats, WeaponState } from '../types';
@@ -45,6 +45,8 @@ export class Player {
   hp: number = BALANCE.player.maxHp;
   level = 1;
   xp = 0;
+  /** 本场累计获得的经验（结算时折进武将经验）。 */
+  runXp = 0;
   xpNext = 16;
   alive = true;
   invulnUntil = 0;
@@ -400,16 +402,15 @@ export class Player {
 
   /** 返回本次获得的等级数。 */
   gainXp(amount: number): number {
-    this.xp += amount;
+    this.xp += amount; this.runXp += amount;
     let gained = 0;
     while (this.xp >= this.xpNext) {
       this.xp -= this.xpNext;
       this.level += 1;
       gained += 1;
-      this.xpNext = this.level <= 4 ? [16, 36, 52, 68][this.level - 2] ?? 68 : 68 + (this.level - 4) * 20;
+      this.xpNext = xpToNext(this.level);
     }
-    // 每升 2 级（Lv.2、4、6…）自动获得 1 个属性点；三选一仍每级一次（属性全满后不再累积）
-    if (gained > 0) this.growth.addAttributePoints(attributePointsBetween(this.level - gained, this.level));
+    // 2026-11-16：局内等级即「战功」，每级一次三选一；属性点改由武将等级（HeroProgress，跨战斗永久）给
     return gained;
   }
 

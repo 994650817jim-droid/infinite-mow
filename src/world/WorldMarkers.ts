@@ -9,8 +9,9 @@ import {BANNER_CHAR, type CityMarker} from './WorldMapLayers';
  * 城池 = 立体城郭小图标 + 势力军旗 + 势力色描边的名牌；章节节点 = 牙旗（战 / 捷 / 锁）与营帐；
  * 关卡 = 朱砂方印；军情 = 三角令旗。参照《三国志》系列的城郭图标与《全面战争：三国》的名牌横幅。
  * 贴图按渲染倍率在 Canvas 上绘制并缓存；命中区与旧版同名，测试与手柄导航沿用。
+ * 默认启用（2026-11-16 用户批准）；地址加 ?markers=v1 可回到旧版圆形徽框。
  */
-export const MARKERS_V2 = (() => { try { return new URLSearchParams(location.search).get('markers') === 'v2'; } catch { return false; } })();
+export const MARKERS_V2 = (() => { try { return new URLSearchParams(location.search).get('markers') !== 'v1'; } catch { return true; } })();
 
 const S = () => Math.max(2, Math.min(4, RENDER_SCALE * 2));
 const mix = (n: number, m: number, k: number) => { const f = (s: number) => Math.round(((n >> s) & 255) * (1 - k) + ((m >> s) & 255) * k); return (f(16) << 16) | (f(8) << 8) | f(0); };
@@ -143,7 +144,7 @@ export function cityMarkerV2(scene: Phaser.Scene, city: CityDef, owner: FactionI
   const plate = namePlate(scene, 9, city.name, owner, city.tier === 'large' ? 13 : city.tier === 'medium' ? 12 : 11);
   const hit = scene.add.circle(0, -h * .3, Math.max(w * .5, 16), 0, .001).setInteractive({useHandCursor: true}).setName('city-' + city.id);
   root.add([...parts, plate.g, plate.t, hit]);
-  root.setData('banner', ch ?? null).setData('v2', true).setData('plate', plate.g);
+  root.setData('banner', ch ?? null).setData('v2', true).setData('plate', plate.g).setData('icon', icon);
   // 选中光环、告急外环以 outer 为半径，top 为图标顶到城址的高度
   return {city, root, label: plate.t, ring, hit, outer: w * .5, top: h + (owner !== 'han' ? 10 : 0)};
 }
@@ -189,7 +190,7 @@ export function nodeBannerTexture(scene: Phaser.Scene, st: NodeState): string {
 }
 
 /** v2 章节节点：返回要放进节点容器的物件（命中区沿用旧名 node-<id>）。 */
-export function nodeMarkerV2(scene: Phaser.Scene, st: NodeState, glyph: string, label: string, active: boolean): {parts: Phaser.GameObjects.GameObject[]; hit: Phaser.GameObjects.Arc; label: Phaser.GameObjects.Text; plate: Phaser.GameObjects.Graphics} {
+export function nodeMarkerV2(scene: Phaser.Scene, st: NodeState, glyph: string, label: string, active: boolean): {parts: Phaser.GameObjects.GameObject[]; hit: Phaser.GameObjects.Arc; label: Phaser.GameObjects.Text; plate: Phaser.GameObjects.Graphics; icon: Phaser.GameObjects.Image} {
   const img = scene.add.image(0, 8, nodeBannerTexture(scene, st)).setOrigin(.32, 1).setDisplaySize(34, 50);
   const parts: Phaser.GameObjects.GameObject[] = [img];
   if (st !== 'home') parts.push(scene.add.text(34 * (.55 - .32), 8 - 50 * .55, glyph, {fontFamily: HEADING_FONT, fontSize: '15px', color: st === 'locked' ? '#d8d8cc' : '#fff1cc', resolution: 2 * RENDER_SCALE}).setOrigin(.5).setStroke('#1a0e08', 3));
@@ -202,7 +203,7 @@ export function nodeMarkerV2(scene: Phaser.Scene, st: NodeState, glyph: string, 
   g.lineStyle(1, 0xc9a35e, .8).strokeRect(-pw / 2, 12, pw, ph);
   parts.push(g, t);
   const hit = scene.add.circle(0, -12, 22, 0, .001);
-  return {parts, hit, label: t, plate: g};
+  return {parts, hit, label: t, plate: g, icon: img};
 }
 
 /** 朱砂方印（关卡）：已捷为青绿印、未开为灰石印。 */

@@ -1,8 +1,8 @@
 import Phaser from 'phaser';
 import { actorDepth, FONT } from '../config';
-import { CHESTS_PER_STAGE, DROP_CHANCE, QUALITIES, itemName, itemSlot, rollItem, rollQuality, type ItemInstance, type ItemQuality } from '../data/items';
+import { CHESTS_PER_STAGE, DROP_CHANCE, QUALITIES, itemName, rollItem, rollQuality, type ItemInstance, type ItemQuality } from '../data/items';
 import type { Player } from '../entities/Player';
-import { ensureItemTextures, itemIconKey } from '../ui/ItemQuality';
+import { ensureItemTextures, itemIcon } from '../ui/ItemQuality';
 
 interface GroundItem { item: ItemInstance; root: Phaser.GameObjects.Container; x: number; y: number }
 interface Chest { img: Phaser.GameObjects.Image; glow: Phaser.GameObjects.Ellipse; x: number; y: number }
@@ -44,7 +44,7 @@ export class ItemDrops {
     const glow = s.add.ellipse(0, 4, 40, 14, q.color, .45);
     const beam = s.add.rectangle(0, -beamH / 2 + 4, 6, beamH, q.color, .55);
     const frame = s.add.graphics(); frame.fillStyle(0x1b120b, .9).fillRoundedRect(-14, -26, 28, 28, 5); frame.lineStyle(2, q.color, 1).strokeRoundedRect(-14, -26, 28, 28, 5);
-    const icon = s.add.image(0, -12, itemIconKey(itemSlot(item))).setDisplaySize(22, 22);
+    const ic = itemIcon(s, item), icon = s.add.image(0, -12, ic.key, ic.frame).setDisplaySize(ic.art ? 25 : 22, ic.art ? 25 : 22);
     root.add([glow, beam, frame, icon]);
     s.tweens.add({ targets: [frame, icon], y: '-=4', duration: 700, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
     const g = { item, root, x, y }; this.ground.push(g); return g;
@@ -52,14 +52,20 @@ export class ItemDrops {
 
   spawnChest(x: number, y: number): Chest {
     const s = this.scene, glow = s.add.ellipse(x, y + 10, 70, 22, 0xf3d48a, .3).setDepth(actorDepth(y) - .1).setBlendMode(Phaser.BlendModes.ADD).setName('item-chest-glow');
-    const img = s.add.image(x, y, 'item_chest').setDisplaySize(48, 39).setDepth(actorDepth(y)).setName('item-chest');
+    const img = s.add.image(x, y, 'item_chest', 0).setDisplaySize(48, 40).setDepth(actorDepth(y)).setName('item-chest');
     s.tweens.add({ targets: glow, alpha: .12, duration: 650, yoyo: true, repeat: -1 });
     const c = { img, glow, x, y }; this.chests.push(c); return c;
   }
 
   openChest(c: Chest): void {
     const i = this.chests.indexOf(c); if (i < 0) return; this.chests.splice(i, 1);
-    c.img.destroy(); c.glow.destroy();
+    // 正式宝箱图（3 帧：关 / 开 / 空）播一下开箱；程序化宝箱直接消失
+    c.glow.destroy();
+    if (c.img.texture.has('1')) {
+      c.img.setFrame(1).setDisplaySize(48, 40);
+      this.scene.time.delayedCall(260, () => { if (c.img.active && c.img.texture.has('2')) c.img.setFrame(2).setDisplaySize(48, 40); });
+      this.scene.tweens.add({ targets: c.img, alpha: 0, delay: 900, duration: 500, onComplete: () => c.img.destroy() });
+    } else c.img.destroy();
     const n = this.rng() < .4 ? 2 : 1;
     for (let k = 0; k < n; k++) this.drop(rollItem(rollQuality('chest', this.tier, this.rng), this.rng), c.x + (k ? 26 : -10), c.y + 18);
   }

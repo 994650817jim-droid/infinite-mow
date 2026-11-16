@@ -39,11 +39,19 @@ export function drawQualityFrame(g: Phaser.GameObjects.Graphics, x: number, y: n
 }
 
 export const itemIconKey = (slot: ItemSlot) => 'item_icon_' + slot;
-export const iconFor = (item: ItemInstance) => itemIconKey(itemSlot(item));
+/** 正式图标图集（BootScene 加载 public/assets/items/item-icons.webp + .json，帧名 = 道具 id）。 */
+export const ITEM_ATLAS = 'item_icons';
 
-/** 程序化图标：每个槽位一张 64×64 剪影（暖白描墨），以及战场宝箱 item_chest。场景首次用到时生成。 */
+/** 道具图标贴图：有正式图标用图集帧，缺图回退到程序化槽位剪影。 */
+export function itemIcon(scene: Phaser.Scene, item: ItemInstance): { key: string; frame?: string; art: boolean } {
+  const t = scene.textures.exists(ITEM_ATLAS) ? scene.textures.get(ITEM_ATLAS) : null;
+  if (t?.has(item.base)) return { key: ITEM_ATLAS, frame: item.base, art: true };
+  return { key: itemIconKey(itemSlot(item)), art: false };
+}
+
+/** 程序化图标：每个槽位一张 64×64 剪影（暖白描墨），以及战场宝箱 item_chest（正式宝箱图已加载时不生成）。场景首次用到时生成。 */
 export function ensureItemTextures(scene: Phaser.Scene): void {
-  if (scene.textures.exists('item_chest')) return;
+  if (scene.textures.exists(itemIconKey('token'))) return;
   const ink = 0x1c140c, light = 0xf1e4c4, mid = 0xc8b48a;
   const g = scene.make.graphics({ x: 0, y: 0 }, false);
   const draw = (slot: ItemSlot) => {
@@ -75,6 +83,7 @@ export function ensureItemTextures(scene: Phaser.Scene): void {
   };
   for (const slot of SLOT_ORDER) draw(slot);
   // 宝箱：漆木 + 铜包角
+  if (scene.textures.exists('item_chest')) { g.destroy(); return; }
   g.clear(); g.fillStyle(0x6a3a1c, 1).fillRoundedRect(4, 14, 56, 34, 4); g.fillStyle(0x8a4d24, 1).fillRoundedRect(4, 6, 56, 14, { tl: 8, tr: 8, bl: 0, br: 0 });
   g.lineStyle(3, LACQUER, 1).strokeRoundedRect(4, 6, 56, 42, 5); g.fillStyle(GOLD, 1).fillRect(28, 16, 8, 12); g.fillRect(4, 18, 56, 3);
   for (const [px, py] of [[8, 10], [56, 10], [8, 44], [56, 44]]) g.fillCircle(px, py, 3);
@@ -88,7 +97,8 @@ export function itemTile(scene: Phaser.Scene, x: number, y: number, size: number
   const c = scene.add.container(x, y), g = scene.add.graphics();
   drawQualityFrame(g, -size / 2, -size / 2, size, size, item?.quality ?? null, o); c.add(g);
   const slot = item ? itemSlot(item) : slotHint;
-  if (slot) c.add(scene.add.image(0, 0, itemIconKey(slot)).setDisplaySize(size * .72, size * .72).setAlpha(item ? 1 : .22));
+  if (item) { const ic = itemIcon(scene, item), k = ic.art ? .84 : .72; c.add(scene.add.image(0, 0, ic.key, ic.frame).setDisplaySize(size * k, size * k).setName('item-icon').setData('art', ic.art)); }
+  else if (slot) c.add(scene.add.image(0, 0, itemIconKey(slot)).setDisplaySize(size * .72, size * .72).setAlpha(.22));
   if (item?.special) c.add(scene.add.text(size / 2 - 4, -size / 2 + 2, '★', { fontFamily: 'serif', fontSize: Math.round(size * .26) + 'px', color: '#ffd27a', resolution: 2 }).setOrigin(1, 0));
   return c;
 }

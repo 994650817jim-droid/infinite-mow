@@ -6,6 +6,7 @@ import { gearFromItems, gearSummary } from '../systems/ItemEffects';
 import { equipItem, equippedBy, loadItems, loadout, salvageItems, salvageUpTo, unequipSlot } from '../systems/ItemStore';
 import { drawQualityFrame, ensureItemTextures, itemTile } from './ItemQuality';
 import { lqDivider, lqPanel, lqSkin } from './LacquerKit';
+import { padNavigator } from './PadNavigator';
 
 export interface ItemBagOptions { hero: CharacterId; runLoot?: ItemInstance[]; readOnly?: boolean; onClose?: () => void }
 
@@ -27,6 +28,9 @@ export class ItemBagUI {
   private page = 0;
   private selected: string | null = null;
   private notice = '';
+  /** 详情卡关掉后手柄焦点回到这件道具的格子。 */
+  private lastUid: string | null = null;
+  private lastFrom: string | null = null;
 
   constructor(private readonly scene: Phaser.Scene, private readonly o: ItemBagOptions) {
     ensureItemTextures(scene);
@@ -62,6 +66,8 @@ export class ItemBagUI {
   }
 
   render(): void {
+    // 手柄：重绘前记住焦点对象的名字，重绘后把同名对象设为默认焦点（PadNavigator 会在旧对象销毁后取默认）
+    const prev = padNavigator()?.focused, prevName = prev && prev.name.startsWith('item-') ? prev.name : null;
     this.body?.destroy();
     this.body = this.scene.add.container(0, 0).setScrollFactor(0); this.root.add(this.body);
     const W = GAME_WIDTH, H = GAME_HEIGHT, D = IS_DESKTOP, s = loadItems();
@@ -79,6 +85,8 @@ export class ItemBagUI {
 
     // 武将切换
     const heroY = y0 + (D ? 70 : 90);
+    // 武将多于原设计的行数（电脑 1 行 10 人、手机 2 行 5 人）时，装备槽与行囊网格整体下移
+    const heroRows = Math.ceil(CHARACTERS.length / (D ? 10 : 5)), extra = this.o.readOnly ? 0 : Math.max(0, heroRows - (D ? 1 : 2)) * 42;
     if (this.o.readOnly) this.text(x0 + 28, heroY - 10, '武将 · ' + (CHARACTERS.find(c => c.id === this.hero)?.name ?? ''), 15, '#ecd49a');
     else {
       const per = D ? 10 : 5, chipW = D ? 80 : 92, gap = D ? 8 : 8, rowW = per * chipW + (per - 1) * gap, sx = W / 2 - rowW / 2 + chipW / 2;
@@ -90,11 +98,11 @@ export class ItemBagUI {
 
     // 装备槽 + 加成
     const worn = loadout(this.hero, s), gear = gearFromItems(Object.values(worn).filter((i): i is ItemInstance => !!i));
-    const slotSize = D ? 74 : 70, slotTop = D ? y0 + 112 : heroY + (this.o.readOnly ? 30 : 90);
+    const slotSize = D ? 74 : 70, slotTop = (D ? y0 + 112 : heroY + (this.o.readOnly ? 30 : 90)) + extra;
     SLOT_ORDER.forEach((slot, i) => {
       const cx = D ? x0 + 70 + (i % 3) * 108 : W / 2 + (i - 2.5) * (slotSize + 12), cy = D ? slotTop + 40 + Math.floor(i / 3) * 104 : slotTop + slotSize / 2;
       const item = worn[slot] ?? null, tile = this.add(itemTile(this.scene, cx, cy, slotSize, item, slot, { selected: !!item && item.uid === this.selected }));
-      tile.setName('item-slot-' + slot).setSize(slotSize, slotSize).setInteractive({ useHandCursor: true }).on('pointerdown', () => { if (item) this.select(item.uid); });
+      tile.setName('item-slot-' + slot).setData('uid', item?.uid ?? null).setSize(slotSize, slotSize).setInteractive({ useHandCursor: true }).on('pointerdown', () => { if (item) this.select(item.uid); });
       this.text(cx, cy + slotSize / 2 + 12, item ? itemName(item) : SLOTS[slot].name, 12, item ? QUALITIES[item.quality].css : '#8d7d60').setOrigin(.5).setName('item-slot-label-' + slot);
     });
     const sumX = x0 + 28, sumY = D ? slotTop + 222 : slotTop + slotSize + 34;
@@ -110,7 +118,7 @@ export class ItemBagUI {
 
     // 行囊网格
     const gx = D ? x0 + 372 : x0 + 22, gw = D ? pw - 372 - 24 : pw - 44;
-    let fy = D ? y0 + 112 : sumBottom + 28;
+    let fy = D ? y0 + 112 + extra : sumBottom + 28;
     if (this.o.runLoot) {
       this.button(gx + 60, fy, '本局缴获 ' + this.o.runLoot.length, 'item-tab-loot', () => { this.tab = 'loot'; this.page = 0; this.selected = null; this.render(); }, { active: this.tab === 'loot', size: 14 });
       this.button(gx + 170, fy, '行囊', 'item-tab-bag', () => { this.tab = 'bag'; this.page = 0; this.selected = null; this.render(); }, { active: this.tab === 'bag', size: 14 });
@@ -138,9 +146,33 @@ export class ItemBagUI {
     if (this.notice) { const n = this.text(W / 2, pageY - (D ? 34 : 40), this.notice, 14, '#f3d48a').setOrigin(.5).setName('item-notice'); this.notice = ''; this.scene.time.delayedCall(1800, () => n.active && n.setVisible(false)); }
 
     if (this.selected) this.renderDetail(this.selected);
+    this.markPadDefault(prevName);
   }
 
-  private select(uid: string): void { this.selected = this.selected === uid ? null : uid; this.render(); }
+  /** 手柄默认焦点：详情卡 → 穿戴 / 卸下 / 关闭；否则回到刚看过的道具，再否则沿用重绘前的焦点、第一格、关闭。 */
+  private markPadDefault(prevName: string | null): void {
+    const find = (root: Phaser.GameObjects.Container, pred: (o: Phaser.GameObjects.GameObject) => boolean): Phaser.GameObjects.GameObject | null => {
+      for (const o of root.list) { if (o.input?.enabled && pred(o)) return o; if (o instanceof Phaser.GameObjects.Container) { const r = find(o, pred); if (r) return r; } }
+      return null;
+    };
+    const card = this.body.getByName('item-detail') as Phaser.GameObjects.Container | null, byName = (n: string) => (o: Phaser.GameObjects.GameObject) => o.name === n;
+    let target: Phaser.GameObjects.GameObject | null = null;
+    if (card) target = find(card, byName('item-equip')) ?? find(card, byName('item-unequip')) ?? find(card, byName('item-detail-close'));
+    else {
+      if (this.lastUid) {
+        // 同一件道具可能同时在装备槽和行囊格里：先回到打开详情时所在的那个，再找行囊格，最后装备槽
+        const uid = this.lastUid, from = this.lastFrom, mine = (o: Phaser.GameObjects.GameObject) => o.getData('uid') === uid;
+        target = (from ? find(this.body, o => mine(o) && o.name === from) : null) ?? find(this.body, o => mine(o) && o.name.startsWith('item-cell-')) ?? find(this.body, o => mine(o) && o.name.startsWith('item-slot-'));
+        this.lastUid = null;
+      }
+      if (!target && prevName) target = find(this.body, byName(prevName));
+      target ??= find(this.body, byName('item-cell-0')) ?? find(this.body, byName('item-bag-close'));
+    }
+    target?.setData('padDefault', true);
+  }
+
+  private select(uid: string): void { this.lastUid = uid; this.lastFrom = padNavigator()?.focused?.name ?? null; this.selected = this.selected === uid ? null : uid; this.render(); }
+  private closeDetail(): void { this.lastUid = this.selected; this.selected = null; this.render(); }
 
   private renderDetail(uid: string): void {
     const s = loadItems(), item = s.bag.find(i => i.uid === uid) ?? this.o.runLoot?.find(i => i.uid === uid);
@@ -148,7 +180,7 @@ export class ItemBagUI {
     const W = GAME_WIDTH, H = GAME_HEIGHT, D = IS_DESKTOP, q = QUALITIES[item.quality], slot = itemSlot(item), def = itemDef(item.base);
     const card = this.scene.add.container(0, 0).setScrollFactor(0).setName('item-detail'); this.body.add(card);
     const shade = this.add(this.scene.add.rectangle(0, 0, W, H, 0x000000, .45).setOrigin(0).setInteractive(), card);
-    shade.on('pointerdown', () => { this.selected = null; this.render(); });
+    shade.on('pointerdown', () => this.closeDetail());
     const cw = D ? 380 : 460, inBag = s.bag.some(i => i.uid === uid), owner = inBag ? equippedBy(s, uid) : undefined;
     const current = loadout(this.hero, s)[slot];
     const lines = item.affixes.map(a => (a.minor ? '· ' : '') + formatAffix(a));
@@ -170,11 +202,13 @@ export class ItemBagUI {
     drawQualityFrame(g, x, y, cw, ch, item.quality, { hover: true });
     g.fillStyle(LACQUER, .9).fillRoundedRect(x + 6, y + 6, cw - 12, ch - 12, 6);
     g.lineStyle(1, q.color, .5).strokeRoundedRect(x + 6, y + 6, cw - 12, ch - 12, 6);
+    // 关闭（手柄 Ⓑ 也走这里）
+    this.button(x + cw - 30, y + 28, '×', 'item-detail-close', () => this.closeDetail(), { parent: card, size: 16 });
     if (this.o.readOnly || !inBag) { this.text(x + cw / 2, by, this.o.readOnly ? '战斗中不可更换 · 出征前在主页「行囊」穿戴' : '结算后收入行囊', 13, '#9c8c6c', false, card).setOrigin(.5); return; }
     const wornHere = current?.uid === item.uid;
     this.button(x + cw * .3, by, wornHere ? '卸下' : '穿戴', wornHere ? 'item-unequip' : 'item-equip', () => {
       if (wornHere) unequipSlot(this.hero, slot); else equipItem(this.hero, item.uid);
-      this.notice = wornHere ? '已卸下' : `${CHARACTERS.find(c => c.id === this.hero)?.name ?? ''} 穿戴 ${itemName(item)}`; this.selected = null; this.render();
+      this.notice = wornHere ? '已卸下' : `${CHARACTERS.find(c => c.id === this.hero)?.name ?? ''} 穿戴 ${itemName(item)}`; this.lastUid = item.uid; this.selected = null; this.render();
     }, { parent: card, size: 16 });
     this.button(x + cw * .7, by, owner ? '已穿戴不可分解' : `分解 · 钱 +${q.salvage}`, 'item-salvage', () => { const m = salvageItems([item.uid]); this.notice = `分解 ${itemName(item)} · 钱 +${m}`; this.selected = null; this.render(); }, { parent: card, size: 14, disabled: !!owner });
   }

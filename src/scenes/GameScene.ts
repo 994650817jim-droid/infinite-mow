@@ -11,6 +11,7 @@ import {buildVfx} from '../systems/BuildVfx';
 import {AwakeningCombat} from '../systems/AwakeningCombat';
 import {BulwarkBuild} from '../systems/BulwarkBuild';
 import {ControlBuild} from '../systems/ControlBuild';
+import { SHOW_RANGE_RINGS } from '../ui/RangeRings';
 import {terrainSurface,architecturalSurface} from '../systems/SceneSurfaces';
 import {upgradeIcon} from '../ui/GrowthIcons';
 import {BuffHud} from '../ui/BuffHud';
@@ -196,8 +197,19 @@ export class GameScene extends Phaser.Scene {
   }
   /** 饮血佩：本命命中回复伤害 5%，每秒（战斗时间）最多回复最大生命 3%。 */
   private bloodWindow=-1;private bloodHealed=0;
-  /** 站立蓄势环：每站稳 1 秒点亮一段（共 5 段），满势时外圈脉动；移动时逐渐熄灭，未蓄势时隐藏。 */
+  /**
+   * 站立蓄势提示（百步穿杨）。2026-11-16 试玩反馈「技能范围提示太丑」：不再画 5 段蓄势环，
+   * 只在满势时脚下泛起一圈很淡的金光（叠加混合、缓慢明暗）。旧画法见 git 历史，需要时可直接恢复。
+   */
   private drawAimIndicator():void{
+    if(SHOW_RANGE_RINGS){this.drawAimRing();return;}
+    const g=this.aimIndicator,sec=this.player.growth.stationarySeconds,full=this.player.growth.masteries.steady_aim>0&&sec>=4.99&&this.player.alive;
+    g.clear().setVisible(full);if(!full)return;
+    const x=this.player.x,y=this.player.y+19,pulse=.14+.08*Math.sin(this.combatNow/260);
+    g.setBlendMode(Phaser.BlendModes.ADD).fillStyle(0xffd66b,pulse).fillEllipse(x,y,70,24).fillStyle(0xfff2c0,pulse*.9).fillEllipse(x,y,38,13);
+  }
+  /** 旧的 5 段站立蓄势环（?rings=1 对比用）。 */
+  private drawAimRing():void{
     const g=this.aimIndicator,sec=this.player.growth.stationarySeconds,on=this.player.growth.masteries.steady_aim>0&&sec>.05&&this.player.alive;
     g.clear().setVisible(on);if(!on)return;
     const x=this.player.x,y=this.player.y+19,rx=30,ry=11,full=sec>=4.99,arc=(a0:number,a1:number)=>{g.beginPath();for(let a=a0;a<=a1+.001;a+=Math.PI/36){const px=x+Math.cos(a)*rx,py=y+Math.sin(a)*ry;if(a===a0)g.moveTo(px,py);else g.lineTo(px,py);}g.strokePath();};
@@ -1863,7 +1875,7 @@ export class GameScene extends Phaser.Scene {
       const style=categoryStyle[option.kind];
       view.tag.setBackgroundColor(style.bg).setColor(style.color);
       const iconKey = option.kind === 'potion' ? 'icon_rare' : option.kind === 'weapon' ? ({
-        spear_orbit:'icon_1',crossbow:'icon_2',flame_banner:'icon_3',guandao:'icon_guandao',zhenbei_blade:'icon_zhenbei',lianhuan_mines:'icon_lianhuan',sun_knives:'icon_2',diaochan_fans:'icon_3',baodiao_bow:'icon_2',dangyang_roar:'icon_1',zhanjin_lance:'icon_1',shuanggu_swords:'icon_guandao',
+        spear_orbit:'icon_1',crossbow:'icon_2',flame_banner:'icon_3',guandao:'icon_guandao',zhenbei_blade:'icon_zhenbei',lianhuan_mines:'icon_lianhuan',sun_knives:'icon_sunknives',diaochan_fans:'icon_fans',baodiao_bow:'icon_baodiao',dangyang_roar:'icon_shemao',zhanjin_lance:'icon_zhanjin',shuanggu_swords:'icon_shuanggu',
       } as const)[option.weaponId!] : option.weaponId === 'spear_orbit'
         ? 'icon_1'
         : option.weaponId === 'crossbow'

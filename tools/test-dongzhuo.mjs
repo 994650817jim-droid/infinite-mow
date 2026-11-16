@@ -29,8 +29,9 @@ for (const layout of ['mobile', 'desktop']) {
   await start(p, 'GameScene', { chapter: 'hulao', westStage: 3 }); await quiet(p, G);
   const a = await p.evaluate(G0 => { const s = eval(G0); return { name: s.chapter.name, boss: s.chapter.bossName, style: s.chapter.bossStyle, waves: s.chapter.waves.map(w => w.name) }; }, G);
   ck(`[${layout}] 2-3 改为「火烧洛阳」：首领董卓、3 波`, a.name === '2-3 火烧洛阳' && a.boss === '董卓' && a.style === 'dongzhuo' && a.waves.length === 3, a);
-  const sp = await p.evaluate(async G0 => { const s = eval(G0); s.player.damageImmune = false; s.player.invulnUntil = 0; s.spawnBoss(); await new Promise(r => setTimeout(r, 600)); const dz = s.xiliang.dongzhuo; return { ctrl: !!dz, guards: s.enemies.filter(e => e.active && e.def.variant === 'feixiong').length }; }, G);
+  const sp = await p.evaluate(async G0 => { const s = eval(G0); s.player.damageImmune = false; s.player.invulnUntil = 0; s.spawnBoss(); await new Promise(r => setTimeout(r, 600)); const dz = s.xiliang.dongzhuo; return { ctrl: !!dz, guards: s.enemies.filter(e => e.active && e.def.variant === 'feixiong').length, sheet: s.boss.walkSheet, atk: s.boss.attackSheet }; }, G);
   ck(`[${layout}] 董卓出场：飞熊军三人护驾`, sp.ctrl && sp.guards >= 3, sp);
+  ck(`[${layout}] 董卓换上正式图（行走 + 纵火号令动作）`, sp.sheet === 'dongzhuo_walk' && sp.atk === 'dongzhuo_attack', sp);
   const fire = await p.evaluate(async G0 => { const s = eval(G0), dz = s.xiliang.dongzhuo; dz.nextFire = s.combatNow; await new Promise(r => setTimeout(r, 400)); const n = dz.state.fires; const hp0 = s.player.hp; s.player.invulnUntil = 0; await new Promise(r => setTimeout(r, 2200)); return { n, hp0, hp1: s.player.hp }; }, G);
   ck(`[${layout}] 纵火：主将周围 3 处火（预警后燃烧，站在火里掉血）`, fire.n === 3 && fire.hp1 < fire.hp0, fire);
   await p.screenshot({ path: `${out}/${layout}-dongzhuo-fire.png` });

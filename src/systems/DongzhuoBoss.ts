@@ -4,6 +4,7 @@ import type {Player} from '../entities/Player';
 import type {Legion} from './Legion';
 import {warnCircle} from '../ui/Telegraph';
 import {DONGZHUO_BOSS as D} from '../data/dongzhuo';
+import {troopArtReady} from './TroopArt';
 
 interface Host {
   scene: Phaser.Scene; player: Player; army: Legion;
@@ -22,6 +23,8 @@ export class DongzhuoBoss {
   private fires: Fire[] = []; private nextFire: number; private nextRaid: number; private retreated = false; private retreatUntil = 0; private rx = 0; private ry = 0;
   constructor(private h: Host, readonly boss: Enemy, now: number) {
     this.nextFire = now + 3000; this.nextRaid = now + D.raidEvery * 1000 * .6;
+    // 正式图（ChatGPT 生成的董卓行走 / 攻击图）已加载时换掉占位造型
+    if (troopArtReady(h.scene, 'dongzhuo_walk')) boss.reskin({...boss.def, texture: 'dongzhuo_walk', walkVisual: {texture: 'dongzhuo_walk', scale: D.artScale, groundY: D.artGroundY, matched: true}, attackVisual: troopArtReady(h.scene, 'dongzhuo_attack') ? 'dongzhuo_attack' : undefined, tint: undefined});
     h.guards(D.guards, boss.x, boss.y); h.banner('董卓 · 火烧洛阳', '躲开火圈 · 飞熊军护驾');
   }
   get label(): string { return this.retreated ? '迁都 · 纵火加剧' : '纵火 · 铁骑 · 飞熊军'; }
@@ -47,6 +50,7 @@ export class DongzhuoBoss {
     const p = this.h.player;
     if (now >= this.nextFire) {
       this.nextFire = now + (this.retreated ? D.fireEveryEnraged : D.fireEvery) * 1000;
+      { const b = this.boss, dx = p.x - b.x, dy = p.y - b.y; b.startAttack(now, Math.abs(dx) > Math.abs(dy) ? (dx < 0 ? 'left' : 'right') : dy < 0 ? 'up' : 'down'); }
       for (let i = 0; i < D.fireCount; i++) { const a = Math.random() * Math.PI * 2, r = i === 0 ? 0 : 90 + Math.random() * 60; this.fires.push({x: p.x + Math.cos(a) * r, y: p.y + Math.sin(a) * r, warnUntil: now + D.fireWarnMs, burnUntil: now + D.fireWarnMs + D.fireBurnMs, tickAt: 0, g: this.h.scene.add.graphics().setDepth(2).setName('dongzhuo-fire')}); }
     }
     if (now >= this.nextRaid) { this.nextRaid = now + D.raidEvery * 1000; this.h.raid(now); }

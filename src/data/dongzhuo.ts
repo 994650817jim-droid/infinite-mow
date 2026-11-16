@@ -9,6 +9,8 @@ import {getSishuiEncounter} from './sishui';
  */
 export const DONGZHUO_BOSS = {
   hp: 3000, speed: 34, damage: 16, scale: 1.7, tint: 0xe2b98a,
+  /** 正式图（每格 128，同华雄版式）的显示比例与脚线。 */
+  artScale: 1.25, artGroundY: 114 / 128,
   /** 纵火：每 fireEvery 秒在主将周围点 3 处火，预警后燃烧；迁都后间隔缩短。 */
   fireEvery: 7, fireEveryEnraged: 5, fireCount: 3, fireRadius: 70, fireWarnMs: 1200, fireBurnMs: 4000, fireTickMs: 500, fireDamage: 6,
   /** 号令西凉铁骑（复用铁骑突阵）、飞熊军护驾。 */

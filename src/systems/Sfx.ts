@@ -46,6 +46,10 @@ const CONFIG: Record<string, SfxConfig> = {
   gong: { freq: 0, dur: 2.6, type: 'sine', gain: 0, throttleMs: 600, max: 1, priority: 2 },
   playerHurt: { freq: 0, dur: .2, type: 'sine', gain: 0, throttleMs: 160, max: 1, priority: 2 },
   passiveFull: { freq: 0, dur: .4, type: 'sine', gain: 0, throttleMs: 1000, max: 1, priority: 2 },
+  // 关羽拖刀斩：蓄满轻响 / 半月刀气 / 回旋刀气
+  bladeReady: { freq: 0, dur: .35, type: 'sine', gain: 0, throttleMs: 300, max: 1, priority: 2 },
+  bladeWave: { freq: 0, dur: .3, type: 'sine', gain: 0, throttleMs: 120, max: 2, priority: 1 },
+  bladeSpin: { freq: 0, dur: .32, type: 'sine', gain: 0, throttleMs: 120, max: 2, priority: 1 },
 };
 
 const GLOBAL_MAX = 14;
@@ -101,6 +105,9 @@ const RECIPES: Record<string, (v: Voice, t: number, p: number) => number> = {
   waveDrum: (v, t) => { v.drum(t, 115, 46, .26, .4); v.drum(t + .2, 115, 46, .22, .35); v.drum(t + .4, 120, 44, .32, .5); return .9; },
   gong: (v, t) => { v.metal(t, 98, .08, 2.6); v.noise(t, .25, 'bandpass', 2200, .04, 1400); return 2.6; },
   /** 被动满层：两声轻鼓 + 一点金属余音，不抢战斗音。 */
+  bladeReady: (v, t) => { v.metal(t, 1760, .012, .32); v.tone(t + .03, .2, 'sine', 2640, .012, 2700); v.noise(t, .12, 'highpass', 5200, .015); return .35; },
+  bladeWave: (v, t, p) => { v.noise(t, .26, 'bandpass', 900 * p, .09, 2600, 1.2); v.metal(t + .02, 1180 * p, .01, .18); return .3; },
+  bladeSpin: (v, t, p) => { v.noise(t, .3, 'bandpass', 2400 * p, .06, 700, 2.4); v.metal(t + .04, 880 * p, .008, .2); return .32; },
   passiveFull: (v, t) => { v.drum(t, 140, 60, .12, .22); v.drum(t + .12, 150, 62, .15, .26); v.metal(t + .12, 1320, .008, .3); return .4; },
   playerHurt: (v, t, p) => { v.noise(t, .12, 'lowpass', 1400 * p, .09, 300); v.tone(t, .16, 'sine', 230 * p, .06, 110); return .17; },
 };

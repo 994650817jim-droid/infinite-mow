@@ -16,7 +16,7 @@ import {stableUnlocked} from '../systems/ItemStore';
 import {CHARACTERS,type CharacterId} from '../data/characters';
 import {uiSfx} from '../systems/Sfx';
 import {checkWorld} from '../systems/Achievements';
-import {loadWorld,saveWorld,worldUnlocked,storageUnavailable,incompatibleSave,townUpgrade,granaryLevy,setCityFocus,researchTech,townProgress,stableCapacity} from '../world/WorldStore';
+import {loadWorld,saveWorld,worldUnlocked,storageUnavailable,incompatibleSave,townUpgrade,granaryLevy,setCityFocus,researchTech,townProgress,stableCapacity,drillInfo,trainTroops} from '../world/WorldStore';
 import {TOWN_BUILDINGS,FOCUS_NAME,FOCUS_INCOME,FOCUS_CHANGE_COST,CITY_SIZE,CITY_TITLE,HALL_UPGRADE,nextCost,buildBlockers,buildingOpen,citySize,focusOpen,levelOf,costText,incomeText,townArtLevel,type TownBuildingId,type TownState,type CityFocus,type TownProgress} from '../town/TownData';
 import {TECHS,TECH_IDS,BRANCH_NAME,BRANCH_ORDER,techBlockers,techTotals,type TechBranch} from '../data/tech';
 import {PANO_W,PANO_H,CITY_SLOTS,LEVEL_SCALE,CITY_BG_SIZES,CITY_ART_LEVELS,ART_ALIAS} from '../town/CityLayout';
@@ -113,7 +113,7 @@ export class CityScene extends Phaser.Scene {
   this.sizeText.setText(`${CITY_TITLE[size]}`);
   this.hint.setText(this.nextHint(s));
   const tech=techTotals(t.tech),pav=levelOf(t,'pavilion')>0?1:0,pts=tech.attributePoints+pav,dmg=Math.round((tech.damage+pav*.06)*100),hp=Math.round((tech.maxHp+pav*.06)*100);
-  this.boonText?.destroy();const parts=[tech.potions?`回血药 ${tech.potions.count}`:'',pts?`属性点 +${pts}`:'',dmg?`伤害 +${dmg}%`:'',hp?`生命 +${hp}%`:''].filter(Boolean);
+  this.boonText?.destroy();const drill=drillInfo(s),parts=[drill.level?`部曲 ×${drill.multiplier.toFixed(2)}`:'',tech.potions?`回血药 ${tech.potions.count}`:'',pts?`属性点 +${pts}`:'',dmg?`伤害 +${dmg}%`:'',hp?`生命 +${hp}%`:''].filter(Boolean);
   if(parts.length)this.boonText=txt(this,W-24,D?54:72,'出征加成 · '+parts.join(' · '),12,'#b9d2a8').setOrigin(1,.5).setName('city-boon');
   this.drawPano();
  }
@@ -223,6 +223,9 @@ export class CityScene extends Phaser.Scene {
   else line('已达最高等级',14,'#b9a98a');
   if(id==='hall'&&cost!==null)line(`扩建为${CITY_TITLE[lv+1]}：${lv===1?'开放马厩、粮仓，建筑可升到 Lv2':'开放城池发展、奇观麒麟阁，建筑可升到 Lv3'}`,13,'#b9d2a8');
   if(id==='stable'&&lv)line('只能在营中休整时换马。',12,'#b9c9b2');
+  // 军营「练兵」：全体部曲生命、伤害每级 +15%，上限随已开放章节
+  if(id==='barracks'){const d=drillInfo(s);line(`练兵 ${d.level} / ${d.cap} 级：全体部曲生命、伤害 ×${d.multiplier.toFixed(2)}${d.cost!==null?`；下一级 ×${(d.multiplier*1.15).toFixed(2)}`:d.level<12?'；开放新章节后可继续练':''}`,13,'#cfe0c8','town-card-drill');
+   const db=homeCommand(this,tx+Math.min(220,tw)/2,y+20,Math.min(220,tw),38,d.cost!==null?`练兵 · 军粮 ${d.cost}`:'练兵已达上限',true,d.cost!==null&&s.provisions>=d.cost,14);db.hit.setName('town-drill').on('pointerdown',()=>{const res=trainTroops();if(!res.ok){(m.root.getByName('town-card-msg') as Phaser.GameObjects.Text|null)?.setText(res.message);return;}uiSfx().play('uiClick');this.toast(res.message);this.openCard('barracks');this.refresh();});m.root.add([db.g,db.hit,db.caption]);y+=50;}
   if(block.length&&cost!==null)line('需要：'+block.join('、'),14,'#e59a83','town-card-block');
   const msg=txt(this,W/2,m.y+h-(D?118:132),'',13,'#e8c98a').setOrigin(.5).setName('town-card-msg');m.root.add(msg);
   const funcs:Partial<Record<TownBuildingId,[string,()=>void]>>={

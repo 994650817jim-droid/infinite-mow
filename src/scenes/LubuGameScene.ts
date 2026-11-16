@@ -34,6 +34,8 @@ export function lubuGameSceneClass(Base: typeof GameScene) {
       this.hudTexts.chapter.setText(this.chapter.name);
     }
     protected customChapter() { return lubuChallengeChapter(getChapter('hulao')); }
+    /** 首领遗珍：吕布挑战关掉「辕门戟影」。 */
+    protected bossRelicKey(): string | null { return 'lubu'; }
     protected abandonRun() { if (!this.over) abandonExpedition(this.receipt, this.allies.filter(u => u.active && u.reserveSoldier).map(u => u.kind)); }
     protected finish(victory: boolean, reason: RunEndReason = 'death') {
       if (this.over) return; super.finish(victory, reason);

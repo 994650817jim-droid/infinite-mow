@@ -6,6 +6,8 @@ import type { Legion } from './Legion';
 import { ENEMY_DEFS, type EnemyDef } from '../data/enemies';
 import type { YellowStage } from '../data/chapters';
 import { TELEGRAPH_CLASSIC, groundCracks, laneCracks, windupFlash } from '../ui/Telegraph';
+import { HINT_MOCK } from '../ui/HintStyle';
+import { WARN_FX_ON } from '../ui/WarnFx';
 
 interface Host { scene:Phaser.Scene; player:Player; army:Legion; enemies:Enemy[]; move:(enemy:Enemy,nx:number,ny:number,dt:number)=>void; spawn:(def:EnemyDef,x:number,y:number)=>Enemy|null; }
 interface Hazard { owner:Enemy; life:number; x:number;y:number; radius:number; angle:number; arc:number; inner:number; from:number; at:number; end:number; damage:number; fired:boolean; kind:string; }
@@ -29,7 +31,8 @@ export class YellowBattle {
   h.scene.events.once('shutdown',()=>{for(const clip of this.clips)clip.destroy();});
  }
  variant(base:EnemyDef,elapsed=0):EnemyDef {
-  if(this.stage===1&&base.kind!=='infantry')return base;
+  // 1-1 也用黄巾刀盾兵造型（第 2 波起出刀盾兵）；弓手等其余兵种仍用原图
+  if(this.stage===1&&base.kind!=='infantry'&&base.kind!=='shield')return base;
   // 1-2 introduces shield soldiers in its fourth wave (waves start every 60s).
   // 1-3 exposes the complete Yellow Turban roster from the opening wave.
   // Keep the first-pass archer artwork and its matching attack sheet.
@@ -72,7 +75,9 @@ export class YellowBattle {
   if(this.bossCd<=0&&!this.dash){this.bossCd=enraged?2200:3300;const n=this.cycle++%3;
    if(this.stage===1){
     if(n===1){const length=Math.min(d+80,320),delay=850;this.warn(boss,boss.x,boss.y,length,delay,0,'charge',angle,.22);this.dash={owner:boss,life:boss.spawnId,x:boss.x,y:boss.y,vx:Math.cos(angle)*570,vy:Math.sin(angle)*570,start:now+delay,end:now+delay+length/570*1000,hit:false};}
-    else this.warn(boss,boss.x,boss.y,145,enraged?550:750,16,'sweep',angle,Math.PI*.8);
+    else{const delay=enraged?550:750;this.warn(boss,boss.x,boss.y,145,delay,16,'sweep',angle,Math.PI*.8);
+     // 张梁砍击（特效型警示，默认）：站定抬刀蓄力，刀落下后再走（原来蓄力时还在往前走，看不出要砍）
+     if(!TELEGRAPH_CLASSIC&&HINT_MOCK==='c'&&WARN_FX_ON){const dir=Math.abs(Math.cos(angle))>Math.abs(Math.sin(angle))?(Math.cos(angle)<0?'left':'right'):(Math.sin(angle)<0?'up':'down');boss.startAttack(now,dir);boss.attackUntil=now+delay+220;boss.windupCol=1;}}
    }else if(n===0){for(let i=-1;i<=1;i++)this.warn(boss,p.x+i*78,p.y,55,1000,17,'rift');}
    else if(n===1){this.warn(boss,boss.x,boss.y,230,1050,18,'ring',0,Math.PI*2,115);}
    else this.castEarthWall(boss,now);
@@ -89,7 +94,7 @@ export class YellowBattle {
   this.gfx.clear();for(const image of this.visuals)image.setVisible(false);
   let index=0;
   for(let i=this.hazards.length-1;i>=0;i--){const z=this.hazards[i];if(!z.owner.active||z.owner.spawnId!==z.life||now>=z.end){this.hazards.splice(i,1);continue;}
-   if(now>=z.at&&!z.fired){z.fired=true;this.metrics.impacts++;const p=this.h.player,dx=p.x-z.x,dy=p.y-z.y,d=Math.hypot(dx,dy),inside=d<=z.radius+p.radius&&d>=z.inner-p.radius&&(z.arc>=Math.PI*2||Math.cos(Math.atan2(dy,dx)-z.angle)>=Math.cos(z.arc/2));if(inside&&z.damage)p.takeDamage(z.damage,now);if(z.damage)for(const u of this.h.army.units){if(!u.active)continue;const dx=u.x-z.x,dy=u.y-z.y,d=Math.hypot(dx,dy);if(d<=z.radius+u.radius&&d>=z.inner-u.radius&&(z.arc>=Math.PI*2||Math.cos(Math.atan2(dy,dx)-z.angle)>=Math.cos(z.arc/2)))(z.owner.kind==='boss'?this.h.army.hurtByBoss(u,z.damage,now):this.h.army.hurt(u,z.damage,now));}z.owner.startAttack(now-180,z.owner.direction);}
+   if(now>=z.at&&!z.fired){z.fired=true;this.metrics.impacts++;if(z.kind==='sweep'&&!TELEGRAPH_CLASSIC&&HINT_MOCK==='c'&&WARN_FX_ON)this.h.scene.cameras.main.shake(110,.004);/* 张梁砍下：轻微震屏 */const p=this.h.player,dx=p.x-z.x,dy=p.y-z.y,d=Math.hypot(dx,dy),inside=d<=z.radius+p.radius&&d>=z.inner-p.radius&&(z.arc>=Math.PI*2||Math.cos(Math.atan2(dy,dx)-z.angle)>=Math.cos(z.arc/2));if(inside&&z.damage)p.takeDamage(z.damage,now);if(z.damage)for(const u of this.h.army.units){if(!u.active)continue;const dx=u.x-z.x,dy=u.y-z.y,d=Math.hypot(dx,dy);if(d<=z.radius+u.radius&&d>=z.inner-u.radius&&(z.arc>=Math.PI*2||Math.cos(Math.atan2(dy,dx)-z.angle)>=Math.cos(z.arc/2)))(z.owner.kind==='boss'?this.h.army.hurtByBoss(u,z.damage,now):this.h.army.hurt(u,z.damage,now));}z.owner.startAttack(now-180,z.owner.direction);}
    const key=z.kind==='sweep'?'zhangliang_slash':z.kind==='charge'?'zhangliang_charge_warning':z.kind==='ring'?'zhangbao_earth_shockwave':z.kind==='ritual'?'zhangbao_ritual_circle':z.kind==='rift'?'zhangbao_earth_rift_warning_and_burst':z.kind==='stab'?'yellow_shield_short_stab':'yellow_shaman_ground_sigil_warning';
    const image=this.visuals[index],clip=this.clips[index++],progress=Phaser.Math.Clamp((now-z.from)/Math.max(1,z.at-z.from),0,1);
    if(clip){clip.clear().fillStyle(0xffffff,1);this.area(clip,z);}
@@ -100,6 +105,8 @@ export class YellowBattle {
     // 预警类图样（法阵符圈、冲锋预警、祭坛圈）本身就是“大圆环 + 花纹”，不显示；斩击 / 地刺 / 冲击波等命中图样保留但调淡
     if(image)image.setAlpha(.45).setVisible(z.fired&&!/warning(?!_and_burst)|ritual|sigil/.test(key));
     if(!z.fired)windupFlash(z.owner,now);
+    // 张梁砍击：蓄力时刀光虚影沿砍击方向由短到长伸出去（刀光图前 4 帧，半透明）；砍下时刀光全亮
+    if(z.kind==='sweep'&&HINT_MOCK==='c'&&WARN_FX_ON&&image){if(z.fired)image.setAlpha(.95);else image.setTexture(key,Math.min(3,Math.floor(progress*4))).setAlpha(.3+.45*progress).setVisible(true);continue;}
     if(z.kind==='charge')laneCracks(this.gfx,z.x,z.y,z.angle,z.radius,72,progress,z.fired);
     else groundCracks(this.gfx,z.x,z.y,z.radius,progress,z.angle,z.arc,z.inner,z.fired);
     continue;

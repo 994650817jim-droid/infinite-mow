@@ -82,6 +82,8 @@ export class RunGrowth {
   /** W3 大城特产（洛阳）：本命武器伤害加成，开局由 applyCitySpecialties 设置。 */
   permanentDamage = 0;
   berserkUntil = 0;
+  /** 遗珍「乌巢酒葫」豪饮结束时刻（战斗时钟）。 */
+  wineUntil = 0;
   stationarySeconds = 0;
   travel = 0;
   slashCount = 0;
@@ -141,7 +143,8 @@ export class RunGrowth {
   damageMultiplier(now: number): number {
     const might = 1 + ATTRIBUTE_STEP.might * this.attributes.might;
     const fury = this.lowHp && this.gear.specials.includes('fury') ? 1.25 : 1;
-    return Math.min(2, might * (now < this.berserkUntil ? 1.25 : 1) * (1 + this.permanentDamage) * (1 + this.gear.damage)) * fury;
+    const wine = now < this.wineUntil && this.gear.specials.includes('jiuhu') ? 1.4 : 1; // 遗珍「乌巢酒葫」（BossRelics.RELIC.jiuhuDamage）
+    return Math.min(2, might * (now < this.berserkUntil ? 1.25 : 1) * (1 + this.permanentDamage) * (1 + this.gear.damage)) * fury * wine;
   }
 
   attackSpeedMultiplier(now: number): number {
@@ -156,7 +159,7 @@ export class RunGrowth {
 
   criticalBonus(): number { return Math.min(0.1, ATTRIBUTE_STEP.critical * this.attributes.critical) + this.gear.crit; }
   bonusMaxHp(): number { return Math.round(BALANCE.player.maxHp * (ATTRIBUTE_STEP.constitution * this.attributes.constitution + this.gear.hp)); }
-  incomingDamageMultiplier(): number { return (this.trinkets.includes('heart_mirror') ? 0.85 : 1)*(this.build.tags().bulwark>=2?.95:1)*Math.max(.6, 1 - this.gear.reduce); }
+  incomingDamageMultiplier(): number { return (this.gear.specials.includes('weixi') ? 1.15 : 1)*(this.trinkets.includes('heart_mirror') ? 0.85 : 1)*(this.build.tags().bulwark>=2?.95:1)*Math.max(.6, 1 - this.gear.reduce); }
   allyDamageMultiplier(): number { return (this.trinkets.includes('tiger_tally') ? 1.2 : 1)*(this.build.tags().command>=2?1.05:1)*(1 + this.gear.ally)*(1 + ATTRIBUTE_STEP.command * this.attributes.command); }
   /** 兵装「对精锐 / 首领伤害」与名器「斩将」：只作用于武将本人的命中。 */
   gearHitMultiplier(kind: string): number { return kind === 'boss' ? 1 + this.gear.elite + this.gear.boss : kind === 'elite' ? 1 + this.gear.elite : 1; }

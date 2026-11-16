@@ -8,7 +8,9 @@
 export type ItemQuality = 'white' | 'green' | 'blue' | 'purple' | 'orange';
 export type ItemSlot = 'armor' | 'helm' | 'boots' | 'token';
 export type AffixId = 'damage' | 'attackSpeed' | 'crit' | 'hp' | 'move' | 'reduce' | 'pickup' | 'xp' | 'ally' | 'regen' | 'elite';
-export type SpecialId = 'fury' | 'windrider' | 'bloodthirst' | 'slayer' | 'scholar' | 'rally' | 'ironwall' | 'swift';
+export type SpecialId = 'fury' | 'windrider' | 'bloodthirst' | 'slayer' | 'scholar' | 'rally' | 'ironwall' | 'swift'
+  // 首领遗珍专属机制（2026-11-16，boss-drops-proposal.md 首批 10 件；战斗实现见 systems/BossRelics.ts）
+  | 'fushui' | 'jiujie' | 'zhanjiang' | 'xiangguo' | 'jiying' | 'bainiao' | 'weixi' | 'jiuhu' | 'hubao' | 'louchuan';
 
 export const QUALITY_ORDER: readonly ItemQuality[] = ['white', 'green', 'blue', 'purple', 'orange'];
 
@@ -55,6 +57,16 @@ export const SPECIALS: Record<SpecialId, { name: string; desc: string }> = {
   rally: { name: '振旅', desc: '友军伤害额外 +15%' },
   ironwall: { name: '金汤', desc: '受到伤害额外 −10%' },
   swift: { name: '迅雷', desc: '攻击速度额外 +10%' },
+  fushui: { name: '人公符水', desc: '每拾取 40 颗军功宝石，召出 1 名黄巾力士助战 20 秒（最多 3 名）' },
+  jiujie: { name: '天公落雷', desc: '每 15 秒落雷劈周围生命最多的 3 名敌人；本局每击杀 50 人落雷伤害 +10%（最多 +100%）' },
+  zhanjiang: { name: '斩将', desc: '对每个精锐 / 首领的第一击必定暴击，且这一击伤害再翻倍' },
+  xiangguo: { name: '相国征敛', desc: '本局每击杀 120 人，下一次升级可连选两张卡，并免费换一批 1 次' },
+  jiying: { name: '辕门戟影', desc: '本命武器每第 8 次命中，甩出一道贯穿直线的戟影（150% 伤害，穿透所有敌人）' },
+  bainiao: { name: '百鸟朝凤', desc: '连续命中同一目标 5 次后，扇形刺出 6 道枪芒（每道 60% 伤害，冷却 4 秒）' },
+  weixi: { name: '伪帝玺', desc: '出征开局直接获得 2 件随机宝物；代价：受到伤害 +15%' },
+  jiuhu: { name: '乌巢豪饮', desc: '拾取酒罐 / 酒葫芦后 8 秒内伤害 +40%，但走路踉跄（方向随机偏转）' },
+  hubao: { name: '虎豹骑', desc: '骑马时践踏伤害 ×2；落马后 6 秒即可重新上马（原 15 秒）' },
+  louchuan: { name: '楼船火攻', desc: '每 12 秒放出一列火船，横扫主将附近的航道' },
 };
 
 export interface BaseItemDef { id: string; slot: ItemSlot; name: string; primary: AffixId }
@@ -123,8 +135,31 @@ export interface ItemAffix { id: AffixId; value: number; minor?: boolean }
 export interface ItemInstance { uid: string; base: string; quality: ItemQuality; affixes: ItemAffix[]; special?: SpecialId }
 
 const BASE_BY_ID = new Map(BASE_ITEMS.map(b => [b.id, b]));
+/**
+ * 首领遗珍（2026-11-16 用户批准 boss-drops-proposal.md 首批 10 件）：首领专属，固定词条 + 专属机制，永不分解。
+ * stage = 首领所在关的关卡键（同马厩赠马；吕布挑战关为 lubu）。第一章紫色，第二章起橙色。数值为初值，交平衡会话测。
+ */
+export interface RelicDef { id: string; slot: ItemSlot; name: string; quality: 'purple' | 'orange'; affixes: readonly AffixId[]; special: SpecialId; boss: string; stage: string; lore: string }
+export const BOSS_RELICS: readonly RelicDef[] = [
+  { id: 'relic_fushui', slot: 'token', name: '人公符水', quality: 'purple', affixes: ['ally', 'xp'], special: 'fushui', boss: '张梁', stage: 'huangjin-1', lore: '符水治病，聚众千万' },
+  { id: 'relic_jiujie', slot: 'token', name: '九节杖', quality: 'purple', affixes: ['damage', 'elite'], special: 'jiujie', boss: '张角', stage: 'huangjin-3', lore: '天公将军手持九节杖' },
+  { id: 'relic_chize', slot: 'helm', name: '斩将赤帻', quality: 'orange', affixes: ['crit', 'hp'], special: 'zhanjiang', boss: '华雄', stage: 'hulao-1', lore: '汜水关前连斩数将' },
+  { id: 'relic_xiangguo', slot: 'token', name: '相国印', quality: 'orange', affixes: ['xp', 'ally'], special: 'xiangguo', boss: '董卓', stage: 'hulao-3', lore: '挟天子，擅朝政' },
+  { id: 'relic_jiying', slot: 'token', name: '辕门戟影', quality: 'orange', affixes: ['damage', 'crit'], special: 'jiying', boss: '吕布', stage: 'lubu', lore: '辕门射戟，一箭解围' },
+  { id: 'relic_bainiao', slot: 'helm', name: '百鸟朝凤缨', quality: 'orange', affixes: ['crit', 'reduce'], special: 'bainiao', boss: '张绣', stage: 'third-2', lore: '北地枪王，百鸟朝凤' },
+  { id: 'relic_weixi', slot: 'token', name: '传国玉玺（伪）', quality: 'orange', affixes: ['elite', 'xp'], special: 'weixi', boss: '袁术', stage: 'third-3', lore: '仲家伪帝私刻之玺' },
+  { id: 'relic_jiuhu', slot: 'token', name: '乌巢酒葫', quality: 'orange', affixes: ['regen', 'hp'], special: 'jiuhu', boss: '淳于琼', stage: 'guandu-3', lore: '乌巢醉卧，粮尽兵溃' },
+  { id: 'relic_hubao', slot: 'helm', name: '虎豹铁面', quality: 'orange', affixes: ['reduce', 'move'], special: 'hubao', boss: '曹纯', stage: 'chibi-1', lore: '虎豹骑统领之铁面' },
+  { id: 'relic_louchuan', slot: 'token', name: '楼船令旗', quality: 'orange', affixes: ['ally', 'damage'], special: 'louchuan', boss: '蔡瑁', stage: 'chibi-2', lore: '荆州水军都督令旗' },
+];
+const RELIC_BY_ID = new Map(BOSS_RELICS.map(r => [r.id, r]));
+export function relicDef(base: string): RelicDef | undefined { return RELIC_BY_ID.get(base); }
+export function isRelic(item: { base: string }): boolean { return RELIC_BY_ID.has(item.base); }
+export function relicsForStage(stage: string | null | undefined): RelicDef[] { return stage ? BOSS_RELICS.filter(r => r.stage === stage) : []; }
+
 const LEGEND_BY_ID = new Map(LEGENDS.map(l => [l.id, l]));
-export function itemDef(base: string): { slot: ItemSlot; name: string; legend?: LegendDef } | undefined {
+export function itemDef(base: string): { slot: ItemSlot; name: string; legend?: LegendDef; relic?: RelicDef } | undefined {
+  const r = RELIC_BY_ID.get(base); if (r) return { slot: r.slot, name: r.name, relic: r };
   const l = LEGEND_BY_ID.get(base); if (l) return { slot: l.slot, name: l.name, legend: l };
   const b = BASE_BY_ID.get(base); return b && { slot: b.slot, name: b.name };
 }
@@ -200,6 +235,14 @@ export function rollItem(quality: ItemQuality, rng: () => number = Math.random, 
   const affixes: ItemAffix[] = ids.map(id => ({ id, value: affixValue(id, quality, rng) }));
   if (q.minor) { const m = pick(rest.filter(id => !ids.includes(id)), rng); affixes.push({ id: m, value: affixValue(m, quality, rng, true), minor: true }); }
   return { uid: newItemUid(), base: base.id, quality, affixes };
+}
+
+/** 生成一件首领遗珍：固定词条按其品质取值，外加一条随机小词条（重复获得时可挑词条）。 */
+export function rollRelic(id: string, rng: () => number = Math.random): ItemInstance | null {
+  const r = RELIC_BY_ID.get(id); if (!r) return null;
+  const affixes: ItemAffix[] = r.affixes.map(a => ({ id: a, value: affixValue(a, r.quality, rng) }));
+  const m = pick(AFFIX_IDS.filter(a => !r.affixes.includes(a)), rng); affixes.push({ id: m, value: affixValue(m, r.quality, rng, true), minor: true });
+  return { uid: newItemUid(), base: r.id, quality: r.quality, affixes, special: r.special };
 }
 
 export function formatAffix(a: { id: AffixId; value: number }): string {

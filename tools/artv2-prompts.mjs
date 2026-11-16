@@ -47,6 +47,22 @@ export const ENEMIES = {
   yellow_shaman: { name: '黄巾符水道士', desc: '披黄色兜帽长袍的太平道道士，手持挂黄符和铜铃的法杖', atk: '举起法杖 → 向前挥出施法 → 法杖指向前方 → 收回（不要画法术特效）' },
   enemy_archer: { name: '黄巾弓兵', desc: '背箭壶、持一张简陋木弓的弓手', atk: '抽箭搭弦 → 拉成满弓 → 放箭 → 收弓' },
 };
-export const enemyWalkPrompt = e => `【${e.name} · 新画风 · 行走图】这是一个三国题材割草游戏里的敌军小兵，要换成新画风。请只生成 1 张图。${STYLE}兵种身份参考第 3 张（${e.name}现在的 Q 版行走图）：${YELLOW_COMMON}；${e.desc}。比例改成写实成年人。要求：行走动画精灵表。${WALKFMT}`;
+export const enemyWalkPrompt = e => `【${e.name} · 新画风 · 行走图】这是一个三国题材割草游戏里的敌军小兵，要换成新画风。请只生成 1 张图。${STYLE}兵种身份参考第 3 张（${e.name}现在的 Q 版行走图）：${enemyCommon(e)}；${e.desc}。比例改成写实成年人。要求：行走动画精灵表。${WALKFMT}`;
 export const enemyAtkPrompt = e => `很好。下一张：同一个${e.name}（和刚才行走图完全同一个人、同样的服装配色、同样大小比例和同样的像素画风），画「攻击动作精灵表」，只生成 1 张图。正方形画布 1024×1024，纯洋红 #FF00FF 平涂背景，无地面、无阴影、无文字、无网格线、不要画任何特效（箭矢、刀光、法术光效都不要）。4 行 × 4 列等分，每格一个完整人物，身高约占格高 75%，与行走图同样大小，脚底都在格子约 92% 高度的同一水平线上，人物居中，任何部分不越出自己的格子。第 1 行朝下（面向镜头）、第 2 行朝左、第 3 行朝右、第 4 行朝上（背对镜头）；每行 4 帧：${e.atk}。`;
-if (process.argv[2] && ENEMIES[process.argv[2]]) { const e = ENEMIES[process.argv[2]]; console.log(process.argv[3] === 'act' ? enemyAtkPrompt(e) : enemyWalkPrompt(e)); }
+
+// ── 第 3 批（二）：通用敌军（各章通用，黄巾装束）+ 西凉军（第 2 章，只有行走图）。
+const XILIANG_COMMON = '西凉军（董卓麾下的边军）：暗红与黑色的铁札甲，铁盔插红缨，红色战巾，皮革护具，神情凶悍';
+Object.assign(ENEMIES, {
+  enemy_infantry: { name: '黄巾步卒', desc: '手持短刀的步兵', atk: null },
+  enemy_shield: { name: '黄巾大盾兵', desc: '身材粗壮，左手巨大的木制圆盾（盾面写一个「太」字），右手短刀', atk: null },
+  enemy_officer: { name: '黄巾将校', desc: '身材魁梧的头目，穿旧铁札甲配黄色战袍和黄头巾，手持长柄大刀', atk: null },
+  enemy_cavalry: { name: '黄巾骑兵', desc: '骑一匹棕色马的轻骑，手持短刀，人和马一起画，马头朝向行进方向', atk: '冲锋：勒马蓄势（马前蹄微抬）→ 向前猛冲 → 全速冲刺 → 收缰', mounted: true },
+  xiliang_infantry: { name: '西凉步卒', desc: '轻甲、头扎红战巾、手持环首刀的步兵', atk: null, faction: 'xiliang' },
+  xiliang_shield: { name: '西凉重盾兵', desc: '重甲铁盔，左手长方形大铁盾（盾面有兽首纹），右手短刀', atk: null, faction: 'xiliang' },
+  xiliang_archer: { name: '西凉弩手', desc: '轻甲、端着一把木弩的弩手，腰挂箭袋', atk: null, faction: 'xiliang' },
+  xiliang_cavalry: { name: '西凉铁骑', desc: '骑黑色战马的重骑兵，手持长矛，人和马一起画，马头朝向行进方向', atk: null, mounted: true, faction: 'xiliang' },
+  xiliang_elite: { name: '西凉精锐', desc: '重甲配暗红短披风、头盔红缨高耸，手持长柄战斧', atk: null, faction: 'xiliang' },
+});
+export const enemyCommon = e => e.faction === 'xiliang' ? XILIANG_COMMON : YELLOW_COMMON;
+export const mountedWalkPrompt = e => `【${e.name} · 新画风 · 行走图】这是一个三国题材割草游戏里的敌军骑兵，要换成新画风。请只生成 1 张图。${STYLE}兵种身份参考第 3 张（${e.name}现在的 Q 版行走图）：${enemyCommon(e)}；${e.desc}，马和人都是写实比例。要求：骑兵行进动画精灵表。正方形画布 1024×1024，纯洋红 #FF00FF 平涂背景，无地面、无阴影、无文字、无边框、无网格线；4 行 × 4 列等分，每格一组完整的人和马，居中，人马总高约占格高 80%，马蹄最低点都在格子约 92% 高度的同一水平线上，任何部分不越出自己的格子；第 1 行朝下（马头朝镜头）、第 2 行朝左、第 3 行朝右、第 4 行朝上（马尾朝镜头）；每行 4 帧是完整的小跑循环，马腿交替明显。16 帧里人马配色、大小完全一致。`;
+if (process.argv[2] && ENEMIES[process.argv[2]]) { const e = ENEMIES[process.argv[2]]; console.log(process.argv[3] === 'act' ? enemyAtkPrompt(e) : e.mounted ? mountedWalkPrompt(e) : enemyWalkPrompt(e)); }

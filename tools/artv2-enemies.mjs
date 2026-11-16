@@ -6,13 +6,29 @@ import { chromium } from 'playwright';
 import { mkdirSync } from 'node:fs';
 const base = process.env.BASE ?? 'http://127.0.0.1:5173/', outDir = process.env.OUTDIR ?? 'assets/review/artv2';
 mkdirSync(outDir, { recursive: true });
-const TYPES = {
-  swordsman: { walk: 'yellow_swordsman-walk-v4', atk: 'yellow_swordsman-attack-v4' },
-  shield: { walk: 'yellow_shield-walk-v4', atk: 'yellow_shield-attack-v4' },
-  spear: { walk: 'yellow_spear-walk-v5', atk: 'yellow_spear-attack-v5' },
-  shaman: { walk: 'yellow_shaman_walk', atk: 'yellow_shaman_cast' },
-  archer: { walk: 'enemy_archer_walk_sheet', atk: 'enemy_archer_attack_sheet' },
+// SET=yellow（默认，黄巾章）| army（通用敌军 + 西凉军，含骑兵冲锋）
+const SET = process.env.SET ?? 'yellow';
+const SETS = {
+  yellow: {
+    swordsman: { kind: 'infantry', walk: 'yellow_swordsman-walk-v4', atk: 'yellow_swordsman-attack-v4', look: 'yellow' },
+    shield: { kind: 'shield', walk: 'yellow_shield-walk-v4', atk: 'yellow_shield-attack-v4', look: 'yellow' },
+    spear: { kind: 'infantry', walk: 'yellow_spear-walk-v5', atk: 'yellow_spear-attack-v5', look: 'yellow', behavior: 'spear', matched: true },
+    shaman: { kind: 'infantry', walk: 'yellow_shaman_walk', atk: 'yellow_shaman_cast', look: 'yellow', behavior: 'shaman' },
+    archer: { kind: 'archer', walk: 'enemy_archer_walk_sheet', atk: 'enemy_archer_attack_sheet', look: 'generic' },
+  },
+  army: {
+    g_infantry: { kind: 'infantry', walk: 'enemy_infantry_walk_sheet', atk: null, look: 'generic' },
+    g_shield: { kind: 'shield', walk: 'enemy_shield_walk_sheet', atk: null, look: 'generic' },
+    g_officer: { kind: 'elite', walk: 'enemy_officer_walk_sheet', atk: null, look: 'generic' },
+    g_cavalry: { kind: 'cavalry', walk: 'enemy_cavalry_run_sheet', atk: null, look: 'generic' },
+    x_infantry: { kind: 'infantry', walk: 'xiliang_infantry_walk', atk: null, look: 'west' },
+    x_shield: { kind: 'shield', walk: 'xiliang_shield_walk', atk: null, look: 'west' },
+    x_archer: { kind: 'archer', walk: 'xiliang_archer_walk', atk: null, look: 'west' },
+    x_cavalry: { kind: 'cavalry', walk: 'xiliang_cavalry_walk', atk: null, look: 'west' },
+    x_elite: { kind: 'elite', walk: 'xiliang_elite_walk', atk: null, look: 'west' },
+  },
 };
+const TYPES = SETS[SET];
 let pass = 0, fail = 0; const errors = [];
 const ck = (n, ok, d) => { ok ? pass++ : fail++; console.log((ok ? 'PASS ' : 'FAIL ') + n + (d !== undefined ? ' · ' + JSON.stringify(d).slice(0, 400) : '')); };
 const G = "window.__game.scene.getScene('GameScene')";
@@ -30,13 +46,9 @@ for (const art of ['v1', 'v2']) {
     s.spawnTimer = s.eliteTimer = 1e9; for (const e of s.enemies) if (e.active && !e.isSupplySlot) e.hp = 0;
     window.__step = n => { for (let i = 0; i < n; i++) { for (const w of s.player.weapons) w.cooldownLeft = 99; T += 1000 / 60; g.step(T, 1000 / 60); } };
     window.__step(5);
-    const inf = s.chapter.enemies.infantry, defs = {
-      swordsman: { ...inf, walkVisual: { texture: types.swordsman.walk, scale: .62, groundY: 88 / 96 }, attackVisual: types.swordsman.atk },
-      shield: { ...s.chapter.enemies.shield, walkVisual: { texture: types.shield.walk, scale: .62, groundY: 88 / 96 }, attackVisual: types.shield.atk },
-      spear: { ...inf, behavior: 'spear', walkVisual: { texture: types.spear.walk, scale: .57, groundY: 123 / 128, matched: true }, attackVisual: types.spear.atk },
-      shaman: { ...inf, behavior: 'shaman', walkVisual: { texture: types.shaman.walk, scale: .72, groundY: 91 / 96 }, attackVisual: types.shaman.atk },
-      archer: { ...s.chapter.enemies.archer, walkVisual: undefined, attackVisual: undefined },
-    };
+    // 与游戏里的配法一致：黄巾章走 walkVisual + attackVisual；通用敌军不带 walkVisual（按兵种取 enemy_* 表）；西凉走 walkVisual（scale .73、groundY .875）
+    const defs = Object.fromEntries(Object.entries(types).map(([name, t]) => { const base = { ...s.chapter.enemies[t.kind], behavior: t.behavior };
+      return [name, t.look === 'generic' ? { ...base, walkVisual: undefined, attackVisual: undefined } : t.look === 'west' ? { ...base, walkVisual: { texture: t.walk, scale: .73, groundY: .875 }, attackVisual: undefined } : { ...base, walkVisual: { texture: t.walk, scale: .62, groundY: 88 / 96, matched: t.matched }, attackVisual: t.atk }]; }));
     const tag = new Map(); let i = 0;
     for (const [name, def] of Object.entries(defs)) for (let k = 0; k < 2; k++) {
       const e = s.spawnEnemy(def.kind, s.player.x + 230 + k * 70, s.player.y - 160 + i * 70, 1, true, def);
@@ -49,7 +61,7 @@ for (const art of ['v1', 'v2']) {
   }, [G, TYPES]);
   const shot = async (name, i) => {
     const cx = (i.px - i.cam.x) * 2, cy = (i.py - i.cam.y) * 2, canvas = await p.$('canvas'), bb = await canvas.boundingBox(), k = bb.width / 1920;
-    await p.screenshot({ path: `${outDir}/yellow-${art}-${name}.png`, clip: { x: bb.x + Math.max(0, cx - 300) * k, y: bb.y + Math.max(0, cy - 380) * k, width: 1000 * k, height: 640 * k } });
+    await p.screenshot({ path: `${outDir}/${SET}-${art}-${name}.png`, clip: { x: bb.x + Math.max(0, cx - 300) * k, y: bb.y + Math.max(0, cy - 380) * k, width: 1000 * k, height: 640 * k } });
   };
   await shot('march', info);
   const atk = await p.evaluate(G0 => {
@@ -58,7 +70,15 @@ for (const art of ['v1', 'v2']) {
     return { seen: Object.fromEntries(Object.entries(seen).map(([k, v]) => [k, [...v]])), px: s.player.x, py: s.player.y, cam: s.cameras.main.worldView };
   }, G);
   await shot('attack', atk);
-  res[art] = { ...info, seen: atk.seen };
+  // 骑兵冲锋：v2 用冲锋表（勒马 → 冲刺两帧交替），v1 仍复用奔跑表
+  let charge = null;
+  if (SET === 'army') charge = await p.evaluate(G0 => {
+    const s = eval(G0); const e = [...window.__tag].find(([, n]) => n === 'g_cavalry')?.[0]; if (!e?.active) return null;
+    e.startCharge(s.combatNow, 'right'); const seen = [];
+    for (let i = 0; i < 60; i++) { window.__step(1); e.updateChargeVisual(s.combatNow); seen.push(e.sprite.texture.key + ':' + e.sprite.frame.name); }
+    return [...new Set(seen)];
+  }, G);
+  res[art] = { ...info, seen: atk.seen, charge };
   await p.close();
 }
 const v2 = res.v2;
@@ -70,10 +90,11 @@ for (const [name, t] of Object.entries(TYPES)) {
   ck(`v2 ${name}：脚底锚点在单位脚下（偏差 ≤4px，含步伐起伏）`, rw.length > 0 && rw.every(x => Math.abs(off(x)) <= 4), rw.map(x => +off(x).toFixed(1)));
   // 旧画风下同一场景也没出手（如黄巾刀兵只在贴身接触时挥刀）就跳过，不算美术问题
   const v1Atk = (res.v1.seen[name] ?? []).some(k => k.replace(/^readable_/, '') === t.atk);
-  if (!v1Atk && !(v2.seen[name] ?? []).includes(t.atk)) console.log(`SKIP ${name}：旧画风同场景也未出手，跳过出手图检查`);
-  else ck(`v2 ${name}：出手用 v2 攻击图 ${t.atk}`, (v2.seen[name] ?? []).includes(t.atk), v2.seen[name] ?? []);
+  if (!t.atk) {} else if (!v1Atk && !(v2.seen[name] ?? []).includes(t.atk)) console.log(`SKIP ${name}：旧画风同场景也未出手，跳过出手图检查`);
+  else if (t.atk) ck(`v2 ${name}：出手用 v2 攻击图 ${t.atk}`, (v2.seen[name] ?? []).includes(t.atk), v2.seen[name] ?? []);
 }
+if (SET === 'army') ck('v2 黄巾骑兵冲锋用 v2 冲锋表（勒马 + 冲刺帧）', (v2.charge ?? []).some(x => x.startsWith('enemy_cavalry_charge_sheet:right_0')) && (v2.charge ?? []).some(x => /enemy_cavalry_charge_sheet:right_[12]/.test(x)), v2.charge);
 ck('无页面报错', errors.length === 0, errors.slice(0, 5));
 await b.close();
-console.log(`\n${pass} passed, ${fail} failed · 截图 ${outDir}/yellow-{v1,v2}-{march,attack}.png`);
+console.log(`\n${pass} passed, ${fail} failed · 截图 ${outDir}/${SET}-{v1,v2}-{march,attack}.png`);
 process.exit(fail ? 1 : 0);

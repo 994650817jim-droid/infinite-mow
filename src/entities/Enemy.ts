@@ -259,7 +259,8 @@ export class Enemy {
     this.chargeAt = now + 450;
     this.chargeHit = false;
     this.direction = dir;
-    // 冲锋表现复用奔跑表（charge 表切图有边缘/朝向问题，暂不使用）
+    // 冲锋表现复用奔跑表（v1 charge 表切图有边缘/朝向问题，暂不使用）；v2 冲锋表干净，直接用：勒马蓄势帧
+    if (isV2Texture(this.chargeSheet)) { this.applyFrame(this.chargeSheet, `${dir}_0`); this.chargeFrame = `${dir}_0`; this.sprite.setTint(0xff8888); return; }
     if (this.walkSheet) this.applyFrame(this.walkSheet, `${dir}_${this.def.walkVisual ? 0 : 1}`);
     this.chargeFrame = this.walkSheet ? `${dir}_${this.def.walkVisual ? 0 : 1}` : '';
     this.sprite.setTint(0xff8888);
@@ -280,6 +281,12 @@ export class Enemy {
       this.chargeFrame = '';
     }
     if (this.chargeState === 'none') return;
+    if (isV2Texture(this.chargeSheet)) {
+      // v2 冲锋表 4 帧：0 勒马蓄势 / 1~2 冲刺交替 / 3 收缰
+      const col = this.chargeState === 'warn' ? 0 : this.chargeState === 'charge' ? 1 + Math.floor(now / 110) % 2 : 3, key = `${this.direction}_${col}`;
+      if (key !== this.chargeFrame) { this.applyFrame(this.chargeSheet, key); this.chargeFrame = key; }
+      return;
+    }
     if (!this.walkSheet) return;
     const frame = this.def.walkVisual ? (this.chargeState === 'charge' ? Math.floor(now / 90) % 4 : 0) : this.chargeState === 'charge' ? 2 : 1;
     const key = `${this.direction}_${frame}`;

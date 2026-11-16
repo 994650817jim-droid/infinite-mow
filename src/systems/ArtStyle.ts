@@ -61,6 +61,17 @@ export const ART_V2_FILES: Readonly<Record<string, string>> = {
   yellow_shaman_cast: 'assets/processed-v2/enemies/yellow_shaman_attack.png',
   enemy_archer_walk_sheet: 'assets/processed-v2/enemies/enemy_archer_walk.png',
   enemy_archer_attack_sheet: 'assets/processed-v2/enemies/enemy_archer_attack.png',
+  // 第 3 批（二）：通用敌军（黄巾装束，各章通用）+ 西凉军（第 2 章，只有行走图）
+  enemy_infantry_walk_sheet: 'assets/processed-v2/enemies/enemy_infantry_walk.png',
+  enemy_shield_walk_sheet: 'assets/processed-v2/enemies/enemy_shield_walk.png',
+  enemy_officer_walk_sheet: 'assets/processed-v2/enemies/enemy_officer_walk.png',
+  enemy_cavalry_run_sheet: 'assets/processed-v2/enemies/enemy_cavalry_walk.png',
+  enemy_cavalry_charge_sheet: 'assets/processed-v2/enemies/enemy_cavalry_charge.png',
+  xiliang_infantry_walk: 'assets/processed-v2/enemies/xiliang_infantry_walk.png',
+  xiliang_shield_walk: 'assets/processed-v2/enemies/xiliang_shield_walk.png',
+  xiliang_archer_walk: 'assets/processed-v2/enemies/xiliang_archer_walk.png',
+  xiliang_cavalry_walk: 'assets/processed-v2/enemies/xiliang_cavalry_walk.png',
+  xiliang_elite_walk: 'assets/processed-v2/enemies/xiliang_elite_walk.png',
 };
 /** v2 主将行走整格的显示高度（逻辑像素）：原生格 176 → 88，即 1080p 全屏（渲染 2 倍）下 1 美术像素 = 1 屏幕像素。
  * 人物约 76 逻辑像素高（用户要求比 v1 大一些）。 */
@@ -122,6 +133,8 @@ export const V2_TROOP_KEYS: readonly string[] = [
   'yellow_swordsman-walk-v4', 'yellow_swordsman-attack-v4', 'yellow_shield-walk-v4', 'yellow_shield-attack-v4',
   'yellow_spear-walk-v5', 'yellow_spear-attack-v5', 'yellow_shaman_walk', 'yellow_shaman_cast',
   'enemy_archer_walk_sheet', 'enemy_archer_attack_sheet',
+  'enemy_infantry_walk_sheet', 'enemy_shield_walk_sheet', 'enemy_officer_walk_sheet', 'enemy_cavalry_run_sheet', 'enemy_cavalry_charge_sheet',
+  'xiliang_infantry_walk', 'xiliang_shield_walk', 'xiliang_archer_walk', 'xiliang_cavalry_walk', 'xiliang_elite_walk',
 ];
 /** v2 兵种显示倍率：原生像素 → 逻辑像素 0.5，即 1080p 全屏（渲染 2 倍）下像素 1:1。 */
 export const V2_TROOP_SCALE = .5;
@@ -144,6 +157,8 @@ export function applyV2TroopFrames(scene: Phaser.Scene): string[] {
     dirs.forEach((dir, row) => {
       for (let col = 0; col < 4; col++) t.add(`${dir}_${col}`, 0, col * cell, row * cell, cell, cell);
       for (let i = 0; i < 2; i++) t.add(`atk_${dir}_${i}`, 0, (i + 1) * cell, row * cell, cell, cell);
+      // 骑兵冲锋表旧命名 chg_<方向>_0（预警）/ _1（冲锋）→ 第 1、3 列
+      t.add(`chg_${dir}_0`, 0, 0, row * cell, cell, cell); t.add(`chg_${dir}_1`, 0, 2 * cell, row * cell, cell, cell);
     });
     t.setFilter(v2Filter(RENDER_SCALE));
     done.push(key);

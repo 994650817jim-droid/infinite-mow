@@ -179,6 +179,8 @@ export function regridV2(scene: Phaser.Scene, key: string): boolean {
     // 骑兵冲锋表旧命名 chg_<方向>_0（预警）/ _1（冲锋）→ 第 1、3 列
     t.add(`chg_${dir}_0`, 0, 0, row * cell, cell, cell); t.add(`chg_${dir}_1`, 0, 2 * cell, row * cell, cell, cell);
   });
+  // 旧切帧删掉后 firstFrame 仍指向已不存在的 "0"：不带帧名的 setTexture(key)（如 Enemy.spawn 用 def.texture）会取到 undefined 帧而崩溃
+  t.firstFrame = 'down_0';
   t.setFilter(v2Filter(RENDER_SCALE));
   return true;
 }

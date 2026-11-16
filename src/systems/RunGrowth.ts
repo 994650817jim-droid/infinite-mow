@@ -25,7 +25,7 @@ export const MARTIALS = {
   nichang: {character:'diaochan',name:'霓裳',desc:'每级飞扇距离 +15%；3 级时多掷 1 柄'},
   meirenji: {character:'diaochan',name:'美人计',desc:'每级倒戈时间 +0.5 秒；3 级时 2 层魅惑即可离间'},
   // 2026-11-16 方案 C「老当益壮」（用户选定）：「百步」去掉（和黄月英「百步穿杨」撞名），换成「静心」
-  jingxin: {character:'huangzhong',name:'静心',desc:'进入神射只需不受伤 4.5/4/3.5 秒；3 级时神射第一箭化为扇形三连重箭'},
+  jingxin: {character:'huangzhong',name:'静心',desc:'进入神射只需不受伤 4.5/4/3.5 秒，神射重箭伤害 +12%/18%/25%；3 级时神射第一箭化为扇形三连重箭'},
   // 2026-11-16 用户：「不靠残血触发」→ 改为越战越勇
   laoji: {character:'huangzhong',name:'老骥伏枥',desc:'本关每击杀 10 名敌人射速 +2.5%（上限 15%/20%/25%）；3 级时神射中射杀精锐回血、神射更稳'},
   wanrendi: {character:'zhangfei',name:'万人敌',desc:'每级声浪推进距离 +12%'},

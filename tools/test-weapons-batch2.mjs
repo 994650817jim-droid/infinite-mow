@@ -99,23 +99,35 @@ for (const [layout, viewport] of Object.entries(LAYOUTS)) for (const [hero, h] o
     // 枪挑：目标被挑飞（定身 + 上浮），落地砸出范围伤害波及旁边
     const r = await p.evaluate(async ([G0, MK]) => {
       const s = eval(G0), pl = s.player; const mk = eval(MK);
-      const t = mk(pl.x + 100, pl.y, false), side = mk(pl.x + 140, pl.y + 20); const y0 = t.sprite.y; let lifted = 0, land = false; const t0 = performance.now();
-      while (performance.now() - t0 < 4000) { await new Promise(r => setTimeout(r, 20)); lifted = Math.max(lifted, y0 - t.sprite.y); land = land || !!s.children.getByName('machao-land'); if (land && side.hp < side.maxHp) break; }
-      return { lifted: Math.round(lifted), land, targetHurt: t.maxHp - t.hp, sideHurt: side.maxHp - side.hp };
+      const t = mk(pl.x + 100, pl.y, false), side = mk(pl.x + 140, pl.y + 20); const y0 = t.sprite.y; let lifted = 0, land = false, arc = false; const t0 = performance.now();
+      while (performance.now() - t0 < 4000) { await new Promise(r => setTimeout(r, 20)); lifted = Math.max(lifted, y0 - t.sprite.y); land = land || !!s.children.getByName('machao-land-fx'); arc = arc || !!s.children.getByName('machao-lift-fx') || !!s.children.getByName('machao-lift'); if (land && side.hp < side.maxHp) break; }
+      return { lifted: Math.round(lifted), land, arc, fx: s.textures.exists('machao_fx'), targetHurt: t.maxHp - t.hp, sideHurt: side.maxHp - side.hp };
     }, [G, mk]);
-    // 落地范围圈（machao-land）在技能提示方案 c 下不画了（只留首领大招提示），所以只看伤害
-    ck(`${tag}：一枪挑飞目标，落地砸出范围伤害`, r.lifted >= 20 && r.targetHurt > 0 && r.sideHurt > 0, r);
-    // 西凉铁骑满层：下一枪化为向前冲锋（主将突进）
+    // 挑飞 / 落地改为像素特效（machao-lift-fx / machao-land-fx），不画程序圈
+    ck(`${tag}：一枪挑飞目标（上挑弧光），落地砸出范围伤害与扬尘特效`, r.lifted >= 20 && r.land && r.arc && r.targetHurt > 0 && r.sideHurt > 0, r);
+    // 西凉铁骑满层：下一枪朝头前冲锋（2026-11-16 用户：「马超被动是朝着头前冲锋」）。键盘先按 D 往右走，敌人放在身后（左边）
+    await p.mouse.click(viewport.width / 2, 40).catch(() => {});
+    await p.keyboard.down('KeyD'); await sleep(300); await p.keyboard.up('KeyD'); await sleep(100);
     const c = await p.evaluate(async ([G0, MK]) => {
       const s = eval(G0), pl = s.player; const mk = eval(MK); for (const e of s.enemies) if (e.active && !e.isSupplySlot) e.hp = 0;
-      await new Promise(r => setTimeout(r, 1500)); mk(pl.x + 120, pl.y); const x0 = pl.x, shout0 = s.passiveShout.count; pl.passive.stacks = 6; let charge = false, moved = 0, shoutText = '', glow = false, ring = false, bigText = 0, wave = false; const t0 = performance.now();
-      while (performance.now() - t0 < 4000) { await new Promise(r => setTimeout(r, 20)); charge = charge || !!s.children.getByName('machao-charge'); moved = Math.max(moved, pl.x - x0); shoutText = shoutText || (s.children.getByName('passive-shout') ? s.passiveShout.lastLine : ''); bigText = bigText || (s.children.getByName('passive-shout')?.list?.length ?? 0); wave = wave || !!s.children.getByName('warcry-wave'); glow = glow || !!s.children.getByName('passive-shout-glow'); ring = ring || !!s.children.getByName('passive-shout-ring'); if (charge && moved >= 120) break; }
+      await new Promise(r => setTimeout(r, 1500)); mk(pl.x - 120, pl.y); const x0 = pl.x, shout0 = s.passiveShout.count; pl.passive.stacks = 6; let charge = false, moved = 0, shoutText = '', glow = false, ring = false, bigText = 0, wave = false; const t0 = performance.now();
+      while (performance.now() - t0 < 4000) { await new Promise(r => setTimeout(r, 20)); charge = charge || !!s.children.getByName('machao-charge'); moved = Math.max(moved, pl.x - x0); shoutText = shoutText || (s.children.getByName('passive-shout') ? s.passiveShout.lastLine : ''); bigText = bigText || (s.children.getByName('passive-shout')?.list?.[0]?.list?.length ?? 0); wave = wave || !!s.children.getByName('warcry-wave'); glow = glow || !!s.children.getByName('passive-shout-glow'); ring = ring || !!s.children.getByName('passive-shout-ring'); if (charge && moved >= 120) break; }
       const shouts = s.passiveShout.count - shout0;
       // 紧接着再攒满一次：马超不设冷却，应再喊一次
       pl.passive.stacks = 6; await new Promise(r => setTimeout(r, 1200));
       return { charge, moved: Math.round(moved), triggers: pl.passive.snapshot(s.combatNow).triggers, shouts, shoutText, bigText, wave, waveTex: s.textures.exists('warcry_fx'), glow, ring, shoutsAfterRefill: s.passiveShout.count - shout0 };
     }, [G, mk]);
-    ck(`${tag}：铁骑满层，下一枪化为锦马冲锋（向前突进 ≥120 像素）`, c.charge && c.moved >= 120 && c.triggers >= 1, c);
+    ck(`${tag}：铁骑满层，下一枪朝头前冲锋（键盘往右走、敌人在左：仍向右突进 ≥120 像素）`, c.charge && c.moved >= 120 && c.triggers >= 1, c);
+    // 手柄：模拟左摇杆向上推 0.3 秒，再满层 → 向上冲锋；带尘土拖影与枪尖破风
+    const pad = await p.evaluate(async ([G0, MK]) => {
+      const s = eval(G0), pl = s.player, mk = eval(MK); for (const e of s.enemies) if (e.active && !e.isSupplySlot) e.deactivate();
+      const real = navigator.getGamepads.bind(navigator), fake = { connected: true, id: 'test-pad', index: 0, mapping: 'standard', axes: [0, -1, 0, 0], buttons: Array.from({ length: 17 }, () => ({ pressed: false, value: 0 })) };
+      navigator.getGamepads = () => [fake]; await new Promise(r => setTimeout(r, 300)); fake.axes = [0, 0, 0, 0]; await new Promise(r => setTimeout(r, 100)); navigator.getGamepads = real;
+      const heading = { ...pl.heading }; mk(pl.x + 120, pl.y + 30); const y0 = pl.y; pl.weapons[0].cooldownLeft = 0; pl.passive.stacks = 6; let up = 0, dust = false, wind = false; const t0 = performance.now();
+      while (performance.now() - t0 < 3000) { await new Promise(r => setTimeout(r, 20)); up = Math.max(up, y0 - pl.y); dust = dust || !!s.children.getByName('machao-charge-dust'); wind = wind || !!s.children.getByName('machao-charge-wind'); if (up >= 120 && dust) break; }
+      return { heading: { x: +heading.x.toFixed(2), y: +heading.y.toFixed(2) }, up: Math.round(up), dust, wind, fx: s.textures.exists('machao_fx') };
+    }, [G, mk]);
+    ck(`${tag}：手柄左摇杆向上 → 满层冲锋也向上（≥120 像素），带尘土拖影与枪尖破风`, pad.heading.y < -.9 && pad.up >= 120 && (!pad.fx || (pad.dust && pad.wind)), pad);
     // 喊话冷却按武将配置：孙尚香走默认 60 秒（冷却内再攒满不喊，过后再满照喊；被动本身照常），马超为 0
     const cd = await p.evaluate(async () => {
       const { PassiveShout, PASSIVE_SHOUT_COOLDOWN_MS: CD, PASSIVE_FULL_SHOUTS } = await import('/src/ui/PassiveShout.ts'); const { CharacterPassives } = await import('/src/systems/CharacterPassives.ts');

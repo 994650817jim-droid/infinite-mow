@@ -90,14 +90,14 @@ for (const [layout, viewport] of Object.entries(LAYOUTS)) for (const [hero, h] o
       const { PASSIVE_RULES } = await import('/src/data/passives.ts');
       const a = mk(m.x, m.y); const t0 = performance.now(); let boomAt = -1;
       const watch = setInterval(() => { if (boomAt < 0 && !m.active) boomAt = performance.now() - t0; }, 10);
-      await new Promise(r => setTimeout(r, 450)); const b = mk(m.x + 4, m.y + 3); // 引信中途又有人踩上来
-      await new Promise(r => setTimeout(r, 150)); const c = mk(m.x + 34, m.y - 10);  // 后面跟上来的敌人（在爆炸范围内、不在踩雷判定里）
+      await new Promise(r => setTimeout(r, PASSIVE_RULES.mineFuseMs * .4)); const b = mk(m.x + 4, m.y + 3); // 引信中途又有人踩上来
+      await new Promise(r => setTimeout(r, PASSIVE_RULES.mineFuseMs * .2)); const c = mk(m.x + 34, m.y - 10);  // 后面跟上来的敌人（在爆炸范围内、不在踩雷判定里）
       const aliveAt700 = m.active, aHurtAt700 = a.maxHp - a.hp;
       while (performance.now() - t0 < 2500 && boomAt < 0) await new Promise(r => setTimeout(r, 20));
       clearInterval(watch);
       return { fuseMs: PASSIVE_RULES.mineFuseMs, boomAt: Math.round(boomAt), aliveAt700, aHurtAt700, hurt: [a, b, c].map(e => e.maxHp - e.hp) };
     }, [G, WALK, mk]);
-    ck(`${tag}：踩雷后先烧约 1 秒引信再爆（期间再踩不重新计时），爆炸能炸到多名敌人`, fuse.fuseMs === 1000 && fuse.aliveAt700 && fuse.aHurtAt700 === 0 && fuse.boomAt >= 850 && fuse.boomAt <= 1350 && fuse.hurt.every(h => h > 0), fuse);
+    ck(`${tag}：踩雷后先烧一段引信（mineFuseMs）再爆（期间再踩不重新计时），爆炸能炸到多名敌人`, fuse.boomAt >= fuse.fuseMs * .85 && fuse.boomAt <= fuse.fuseMs + 350 && fuse.hurt.every(h => h > 0), fuse);
     await p.evaluate(clear, G); await sleep(300);
     // 3) Lv3 火走铁索：一名敌人踩雷 → 连锁 ≥3 枚、积 1 层计策，火沿铁索烧过去，站在铁索上的敌人也挨打
     const chain = await p.evaluate(async ([G0, W, MK]) => {

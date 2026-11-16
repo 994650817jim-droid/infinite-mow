@@ -138,8 +138,9 @@ export function baodiaoBehavior(host: WeaponHost, weapon: WeaponState, dt: numbe
   if (!target) return;
   const level = weapon.level;
   const ux = target.x - pl.x, uy = target.y - pl.y, d = Math.hypot(ux, uy) || 1;
-  const damage = BAODIAO_DEF.damage(level, pl.stats) * g.damageMultiplier(time);
   const sharp = pl.passive.isSharpshooter(time);
+  // 静心：神射中重箭伤害 +12/18/25%（补回去掉「百步」后的前期单体）
+  const damage = BAODIAO_DEF.damage(level, pl.stats) * g.damageMultiplier(time) * (sharp && g.masteries.jingxin ? 1 + R.jingxinSharpMul[g.masteries.jingxin - 1] : 1);
   pl.faceDirection(cardinal(ux, uy), 200);
   if (sharp && time >= pl.nextSkillAction && pl.playAction('skill', ux < 0 ? 'left' : 'right')) pl.nextSkillAction = time + 4000; else pl.playAction('attack', ux < 0 ? 'left' : 'right');
   // 神射箭带金色拖光（像素帧）
@@ -266,12 +267,24 @@ export const ZHANJIN_DEF = {
   desc: '一枪把敌人挑飞，落地时砸出范围伤害；铁骑满层后向前冲锋破阵',
 };
 export const zhanjinLandRadius = (level: number, jinma: number): number => R.landRadius * (1 + (level >= 3 ? .1 : 0) + .15 * jinma);
+/** 马超像素特效图集 machao_fx（6×4，每帧 256，透明底）：0–5 上挑弧光、6–11 落地砸地、12–17 冲锋尘土拖影、18–23 枪尖破风。 */
+const MCFX = { lift: 0, land: 6, dust: 12, wind: 18 } as const;
+function mcFx(host: WeaponHost, row: number, x: number, y: number, w: number, h: number, fps: number, name: string, rot = 0, loops = 1, depth = 41): Phaser.GameObjects.Sprite | null {
+  const scene = sceneOf(host); if (!scene.textures.exists('machao_fx')) return null;
+  const s = scene.add.sprite(x, y, 'machao_fx', row).setDisplaySize(w, h).setRotation(rot).setDepth(depth).setName(name);
+  const st = { t: 0 };
+  scene.tweens.add({ targets: st, t: 6 * loops - .01, duration: 6 * loops / fps * 1000, onUpdate: () => { if (s.active) s.setFrame(row + (Math.floor(st.t) % 6)); }, onComplete: () => s.destroy() });
+  return s;
+}
 function landSlam(host: WeaponHost, x: number, y: number, radius: number, damage: number, time: number, echo: boolean): void {
   for (const e of host.grid.query(x, y, radius + 30)) if (alive(e) && Math.hypot(e.x - x, e.y - y) <= radius + e.radius) host.hitEnemy(e, damage, time, 'melee');
+  // 落地：像素砸地扬尘 + 碎石（铺满落地范围，名字 machao-land-fx 供测试检查），轻微震屏；缺图时退回程序化尘点
+  const landFx = mcFx(host, MCFX.land, x, y - 6, radius * 2.6, radius * 2.6, 16, 'machao-land-fx', 0, 1, 40);
+  host.cameras.main.shake(90, .0025);
   if (!HINT_MOCK) { const ring = host.add.circle(x, y, 10, 0xffe08a, 0).setStrokeStyle(5, 0xffd27a, .9).setDepth(41).setName('machao-land');
   ring.scene.tweens.add({ targets: ring, radius, alpha: 0, duration: 260, onComplete: () => ring.destroy() }); }
   else if (HINT_MOCK === 'b') groundScar(host.player.sprite.scene, x, y, radius, 'crack');
-  for (let k = 0; k < 6; k++) { const a = k * Math.PI / 3 + Math.random() * .4, dust = host.add.circle(x, y, 4, 0xb89a6a, .8).setDepth(40);
+  if (!landFx) for (let k = 0; k < 6; k++) { const a = k * Math.PI / 3 + Math.random() * .4, dust = host.add.circle(x, y, 4, 0xb89a6a, .8).setDepth(40).setName('machao-land-fx');
     dust.scene.tweens.add({ targets: dust, x: x + Math.cos(a) * radius * .8, y: y + Math.sin(a) * radius * .5, alpha: 0, duration: 360, onComplete: () => dust.destroy() }); }
   if (echo) host.time.delayedCall(260, () => { if (!host.over) landSlam(host, x, y, radius * 1.2, damage * .5, host.combatNow, false); });
 }
@@ -281,13 +294,15 @@ export function zhanjinBehavior(host: WeaponHost, weapon: WeaponState, dt: numbe
   const pl = host.player, g = pl.growth, level = weapon.level;
   const target = smartTarget(host, R.liftRange);
   if (!target) return;
-  const damage = ZHANJIN_DEF.damage(level, pl.stats) * g.damageMultiplier(time), ux0 = target.x - pl.x, uy0 = target.y - pl.y, d0 = Math.hypot(ux0, uy0) || 1, ux = ux0 / d0, uy = uy0 / d0;
+  const damage = ZHANJIN_DEF.damage(level, pl.stats) * g.damageMultiplier(time), tx0 = target.x - pl.x, ty0 = target.y - pl.y, d0 = Math.hypot(tx0, ty0) || 1;
+  const cast = pl.passive.beginCast('zhanjin_lance');
+  // 2026-11-16 用户：「马超被动是朝着头前冲锋」→ 冲锋朝最近一次移动的方向（键盘 / 手柄一样），挑飞仍朝目标
+  const hd = Math.hypot(pl.heading.x, pl.heading.y) || 1, ux = cast.charge ? pl.heading.x / hd : tx0 / d0, uy = cast.charge ? pl.heading.y / hd : ty0 / d0;
   pl.faceDirection(cardinal(ux, uy), 200);
   host.sfx.play('allySpear');
-  const cast = pl.passive.beginCast('zhanjin_lance');
   if (cast.charge) {
-    // 锦马冲锋：朝目标方向突进，沿途重创并把敌人撞向两侧（借用受击位移平滑移动主将）
-    pl.playAction('skill', ux < 0 ? 'left' : 'right');
+    // 锦马冲锋：朝头前突进，沿途重创并把敌人撞向两侧（借用受击位移平滑移动主将）
+    pl.playAction('skill', ux < 0 ? 'left' : ux > 0 ? 'right' : uy < 0 ? 'up' : 'down');
     const len = R.chargeLen * (1 + .2 * g.masteries.tieqi), px = pl.x, py = pl.y, hit = damage * R.chargeDamageMul * (1 + .1 * g.masteries.tieqi);
     for (const e of host.grid.query(px + ux * len / 2, py + uy * len / 2, len / 2 + R.chargeWidth)) {
       if (!alive(e)) continue;
@@ -300,19 +315,38 @@ export function zhanjinBehavior(host: WeaponHost, weapon: WeaponState, dt: numbe
     const trail = host.add.image(px + ux * len / 2, py - 6 + uy * len / 2, 'spear_thrust', 'tight').setRotation(Math.atan2(uy, ux)).setDisplaySize(len + 40, 34).setTint(0xffe08a).setAlpha(.85).setDepth(41).setName('machao-charge');
     trail.scene.tweens.add({ targets: trail, alpha: 0, duration: 320, onComplete: () => trail.destroy() });
     host.cameras.main.shake(110, .004);
+    // 冲锋像素特效：身后一道贴地尘土拖影 + 枪尖破风（都朝冲锋方向），跟着主将走
+    const rot = Math.atan2(uy, ux);
+    const dust = mcFx(host, MCFX.dust, px, py + 18, 200, 100, 22, 'machao-charge-dust', rot, 2, 39);
+    const wind = mcFx(host, MCFX.wind, px + ux * 40, py - 8 + uy * 40, 120, 80, 24, 'machao-charge-wind', rot, 2, 42);
+    if (dust || wind) { const fx0 = { t: 0 }; sceneOf(host).tweens.add({ targets: fx0, t: 1, duration: R.chargeMs + 120, onUpdate: () => {
+      dust?.active && dust.setPosition(pl.x - ux * 70, pl.y + 18 - uy * 70); wind?.active && wind.setPosition(pl.x + ux * 46, pl.y - 8 + uy * 46); } }); }
   } else {
     // 枪挑：先一枪挑起（liftHitMul），0.6 秒后落地砸出范围伤害
     pl.playAction('attack', ux < 0 ? 'left' : 'right');
     host.hitEnemy(target, damage * R.liftHitMul, time, 'melee');
     const tx = target.x, ty = target.y, spawn = target.spawnId, liftable = target.kind !== 'boss' && !target.controlImmune;
-    const s = host.add.image(pl.x + ux * 40, pl.y - 10 + uy * 40, 'spear_thrust', 'tight').setRotation(Math.atan2(uy, ux) - .5).setDisplaySize(90, 20).setTint(0xffe08a).setDepth(41);
-    s.scene.tweens.add({ targets: s, rotation: Math.atan2(uy, ux) - 1.2, alpha: 0, duration: 220, onComplete: () => s.destroy() });
+    // 挑：枪尖上挑的银金弧光（像素帧，左右按目标方向翻转）；缺图时退回枪影
+    const arc = mcFx(host, MCFX.lift, tx - ux * 10, ty - 30, 120, 120, 26, 'machao-lift-fx', 0, 1, 42);
+    if (arc) arc.setFlipX(ux < 0);
+    else { const s = host.add.image(pl.x + ux * 40, pl.y - 10 + uy * 40, 'spear_thrust', 'tight').setRotation(Math.atan2(uy, ux) - .5).setDisplaySize(90, 20).setTint(0xffe08a).setDepth(41);
+      s.scene.tweens.add({ targets: s, rotation: Math.atan2(uy, ux) - 1.2, alpha: 0, duration: 220, onComplete: () => s.destroy() }); }
+    // 脚下扬起一小团尘土（落地帧的前段，缩小）
+    mcFx(host, MCFX.land, tx, ty + 4, 70, 70, 20, 'machao-lift-dust', 0, 1, 40);
     if (liftable) {
       target.stunUntil = Math.max(target.stunUntil, time + R.liftMs);
-      const y0 = target.sprite.y;
-      target.sprite.scene.tweens.add({ targets: target.sprite, y: y0 - 44, duration: R.liftMs / 2, yoyo: true, ease: 'Quad.easeOut' });
-      const glow = host.add.circle(tx, ty - 20, 16, 0xffe08a, .35).setBlendMode(1).setDepth(42).setName('machao-lift');
-      glow.scene.tweens.add({ targets: glow, y: ty - 60, alpha: 0, duration: R.liftMs, onComplete: () => glow.destroy() });
+      const sp = target.sprite, y0 = sp.y, rot0 = sp.rotation, spin = (ux < 0 ? -1 : 1) * .5;
+      // 被挑的敌人：身上一闪（白色剪影）、腾空时带一点旋转和两道残影，落下时摆正
+      const flash = host.add.image(sp.x, sp.y, sp.texture.key, sp.frame.name).setOrigin(sp.originX, sp.originY).setDisplaySize(sp.displayWidth, sp.displayHeight).setFlipX(sp.flipX)
+        .setTintFill(0xffffff).setBlendMode(1).setAlpha(.9).setDepth(sp.depth + .01).setName('machao-lift');
+      flash.scene.tweens.add({ targets: flash, alpha: 0, duration: 180, onComplete: () => flash.destroy() });
+      sp.scene.tweens.add({ targets: sp, y: y0 - 44, rotation: rot0 + spin, duration: R.liftMs / 2, yoyo: true, ease: 'Quad.easeOut', onComplete: () => { if (target.active) sp.setRotation(rot0); } });
+      for (const k of [1, 2]) host.time.delayedCall(k * 90, () => {
+        if (!target.active || target.spawnId !== spawn) return;
+        const ghost = host.add.image(sp.x, sp.y, sp.texture.key, sp.frame.name).setOrigin(sp.originX, sp.originY).setDisplaySize(sp.displayWidth, sp.displayHeight).setFlipX(sp.flipX).setRotation(sp.rotation)
+          .setTint(0xffe8b0).setAlpha(.35).setDepth(sp.depth - .01).setName('machao-lift-ghost');
+        ghost.scene.tweens.add({ targets: ghost, alpha: 0, duration: 220, onComplete: () => ghost.destroy() });
+      });
     }
     host.time.delayedCall(R.liftMs, () => {
       if (host.over) return;

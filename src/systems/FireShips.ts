@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import type {Enemy} from '../entities/Enemy';
+import { TELEGRAPH_CLASSIC } from '../ui/Telegraph';
 
 /**
  * 赤壁鏖兵 · 东风火船：每隔一段战斗时间，东南风起，一列火船自画面一侧顺风冲过主将附近的一条横向航道。
@@ -45,9 +46,10 @@ export class FireShips {
     if (age < FIRE_SHIP.warnMs) {
       // 预警：航道底色闪烁 + 顺风箭头
       const k = age / FIRE_SHIP.warnMs, a = .12 + .1 * Math.abs(Math.sin(age / 120));
-      g.fillStyle(0xe0742c, a).fillRect(left, top, right - left, FIRE_SHIP.laneH);
-      g.lineStyle(2, 0xffc46a, .85).strokeRect(left, top, right - left, FIRE_SHIP.laneH);
-      for (let x = left + ((age / 6) % 90) * L.dir + (L.dir < 0 ? 90 : 0); x < right; x += 90) { const cx = x, cy = L.y, d = L.dir * 16; g.lineStyle(3, 0xfff0c8, .5 + k * .4).lineBetween(cx - d, cy - 12, cx + d, cy).lineBetween(cx + d, cy, cx - d, cy + 12); }
+      // 低调预警（默认）：不画整条填色航道与边框，只留淡淡的顺风箭头（?telegraph=1 恢复旧样式）
+      if (TELEGRAPH_CLASSIC) { g.fillStyle(0xe0742c, a).fillRect(left, top, right - left, FIRE_SHIP.laneH);
+      g.lineStyle(2, 0xffc46a, .85).strokeRect(left, top, right - left, FIRE_SHIP.laneH); }
+      for (let x = left + ((age / 6) % 90) * L.dir + (L.dir < 0 ? 90 : 0); x < right; x += 90) { const cx = x, cy = L.y, d = L.dir * 16; g.lineStyle(TELEGRAPH_CLASSIC ? 3 : 2, 0xfff0c8, TELEGRAPH_CLASSIC ? .5 + k * .4 : .18 + k * .3).lineBetween(cx - d, cy - 12, cx + d, cy).lineBetween(cx + d, cy, cx - d, cy + 12); }
       return;
     }
     const sweep = (age - FIRE_SHIP.warnMs) / FIRE_SHIP.sweepMs;

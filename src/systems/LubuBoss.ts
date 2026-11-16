@@ -4,6 +4,7 @@ import type { Enemy } from '../entities/Enemy';
 import type { Player } from '../entities/Player';
 import { LUBU_COMBAT as C } from '../data/chapters';
 import { DEPTH } from '../config';
+import { TELEGRAPH_CLASSIC, groundCracks, laneCracks, windupFlash } from '../ui/Telegraph';
 
 export type LubuState = 'approach' | 'sweepWindup' | 'sweep' | 'dashWindup' | 'dash' | 'recover' | 'ultTakeoff' | 'ultAirborne' | 'ultLanding';
 interface LubuHost {
@@ -90,6 +91,7 @@ export class LubuBoss {
     }
     if (this.state === 'sweepWindup') {
       this.drawSweep(0xffb347, .06 + this.telegraphProgress * .08);
+      if (!TELEGRAPH_CLASSIC) windupFlash(boss, now);
       if (now >= this.until) {
         this.state = 'sweep'; this.until = now + C.sweepFlashMs;
         this.host.hurtTroops?.(this.ox, this.oy, C.sweepRadius, C.sweepDamage, now, this.angle, C.sweepAngle * Math.PI / 180);
@@ -105,10 +107,12 @@ export class LubuBoss {
       if (now >= this.until) this.recover(now);
     } else if (this.state === 'dashWindup') {
       const ex = this.ox + Math.cos(this.angle) * C.dashLength, ey = this.oy + Math.sin(this.angle) * C.dashLength;
-      this.gfx.lineStyle(C.dashHalfWidth * 2, 0xff5f46, .18 + this.telegraphProgress * .15);
-      this.gfx.lineBetween(this.ox, this.oy, ex, ey);
-      this.gfx.fillStyle(0xff5f46, .22); this.gfx.fillCircle(this.ox, this.oy, C.dashHalfWidth); this.gfx.fillCircle(ex, ey, C.dashHalfWidth);
-      this.gfx.lineStyle(2, 0xffb347, .9); this.gfx.lineBetween(this.ox, this.oy, ex, ey);
+      if (TELEGRAPH_CLASSIC) {
+        this.gfx.lineStyle(C.dashHalfWidth * 2, 0xff5f46, .18 + this.telegraphProgress * .15);
+        this.gfx.lineBetween(this.ox, this.oy, ex, ey);
+        this.gfx.fillStyle(0xff5f46, .22); this.gfx.fillCircle(this.ox, this.oy, C.dashHalfWidth); this.gfx.fillCircle(ex, ey, C.dashHalfWidth);
+        this.gfx.lineStyle(2, 0xffb347, .9); this.gfx.lineBetween(this.ox, this.oy, ex, ey);
+      } else { laneCracks(this.gfx, this.ox, this.oy, this.angle, C.dashLength, C.dashHalfWidth * 2, this.telegraphProgress); windupFlash(boss, now); }
       if (now >= this.until) { this.state = 'dash'; this.travelled = 0; this.host.playSfx('chargeWarn'); }
     } else if (this.state === 'dash') {
       const ax = boss.x, ay = boss.y, step = Math.min(C.dashLength - this.travelled, C.dashSpeed * dt);
@@ -124,7 +128,7 @@ export class LubuBoss {
       this.state = 'approach';
     }
     this.updateArt(dt, now, boss.x - previousX, boss.y - previousY);
-    if (this.phase2) { this.gfx.lineStyle(2, 0xff5f46, .6); this.gfx.strokeCircle(boss.x, boss.y, boss.radius + 8); }
+    if (this.phase2 && TELEGRAPH_CLASSIC) { this.gfx.lineStyle(2, 0xff5f46, .6); this.gfx.strokeCircle(boss.x, boss.y, boss.radius + 8); }
   }
 
   tryUltimate(now: number): boolean {
@@ -176,6 +180,7 @@ export class LubuBoss {
   }
   private drawSweep(color: number, alpha: number): void {
     const half = C.sweepAngle * Math.PI / 360;
+    if (!TELEGRAPH_CLASSIC) { groundCracks(this.gfx, this.ox, this.oy, C.sweepRadius, this.telegraphProgress, this.angle, half * 2, 0, this.state === 'sweep'); return; }
     this.fillCone(this.gfx, color, alpha);
     this.gfx.lineStyle(2, color, .78);
     this.gfx.beginPath(); this.gfx.moveTo(this.ox, this.oy);

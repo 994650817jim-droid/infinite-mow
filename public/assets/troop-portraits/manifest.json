@@ -1,0 +1,32 @@
+{
+  "note": "兵种胸像立绘清单：由 tools/prepare-troop-portraits.mjs 生成。portraits 为空时游戏使用行走帧半身裁切过渡。",
+  "portraits": [
+    {
+      "kind": "swordsman",
+      "file": "swordsman_portrait.webp",
+      "png": "swordsman_portrait.png",
+      "headY": 0.215,
+      "source": "originals/swordsman_portrait_original.png",
+      "keyedBackground": true,
+      "date": "2026-11-16"
+    },
+    {
+      "kind": "spearman",
+      "file": "spearman_portrait.webp",
+      "png": "spearman_portrait.png",
+      "headY": 0.234,
+      "source": "originals/spearman_portrait_original.png",
+      "keyedBackground": true,
+      "date": "2026-11-16"
+    },
+    {
+      "kind": "archer",
+      "file": "archer_portrait.webp",
+      "png": "archer_portrait.png",
+      "headY": 0.248,
+      "source": "originals/archer_portrait_original.png",
+      "keyedBackground": true,
+      "date": "2026-11-16"
+    }
+  ]
+}

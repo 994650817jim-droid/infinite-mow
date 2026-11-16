@@ -3,6 +3,7 @@ import { warnCircle } from '../ui/Telegraph';
 import {applyCitySpecialties} from '../systems/CityBonuses';
 import {cityIncomeLine} from '../world/WorldStore';
 import {CampRestUI} from '../ui/CampRestUI';
+import {chapterVictoryNotice} from '../ui/ChapterVictoryNotice';
 import {buildVfx} from '../systems/BuildVfx';
 import {AwakeningCombat} from '../systems/AwakeningCombat';
 import {BulwarkBuild} from '../systems/BulwarkBuild';
@@ -2232,19 +2233,10 @@ export class GameScene extends Phaser.Scene {
       this.player.hp = this.player.maxHp; this.legion.recover(); this.renderRecruit(); this.legionUI.setCampDestination(this.chapter.id==='hulao'?((this.chapter.westStage??1)===1?'荥阳之战':'虎牢关决战'):this.chapter.stage===3?'第二章 · 汜水关':this.chapter.stage===1?'下曲阳破阵':'广宗决战',this.chapter.id==='hulao'?'讨董军营 · 战后休整':'黄巾败退 · 战后休整'); this.setMode('rest');
       if(this.chapter.stage===3){
         this.legionUI.panel.setVisible(false);
-        const notice=this.add.container(0,0).setScrollFactor(0).setDepth(DEPTH.overlay+10).setName('chapter1-volunteers');
-        const label=(y:number,value:string,size:number)=>this.add.text(GAME_WIDTH/2,y,value,{fontFamily:FONT,fontSize:size+'px',color:'#f0ddba',align:'center',resolution:2}).setOrigin(.5).setScrollFactor(0);
-        notice.add(this.add.rectangle(GAME_WIDTH/2,GAME_HEIGHT/2,GAME_WIDTH,GAME_HEIGHT,0x100c08,.8).setScrollFactor(0).setInteractive());
-        const cy=GAME_HEIGHT/2,cw=Math.min(640,GAME_WIDTH-48);
-        notice.add(this.add.image(GAME_WIDTH/2,cy,'rest_camp').setDisplaySize(cw,340).setScrollFactor(0));
-        notice.add(this.add.rectangle(GAME_WIDTH/2,cy,cw,340,0x1a110b,.72).setStrokeStyle(1,0xb3935b).setScrollFactor(0));
-        const trim=this.add.graphics().setScrollFactor(0);trim.lineStyle(1,0xc5a165,.7).strokeRect((GAME_WIDTH-cw)/2+8,cy-162,cw-16,324).lineBetween(GAME_WIDTH/2-90,cy-42,GAME_WIDTH/2+90,cy-42);notice.add(trim);
-        notice.add(label(cy-133,'第一章 · 黄巾之乱 告捷',14).setColor('#c6ae80'));
-        notice.add(label(cy+40,'整顿兵马  →  补充援兵  →  汜水讨董',13).setColor('#c6ae80'));
-        notice.add(label(GAME_HEIGHT/2-84,'黄巾平定 · 义士来投',26));
-        notice.add(label(GAME_HEIGHT/2-12,'将军威名远扬，四方义士前来投靠。\n且回军营整顿兵马，再赴讨董征途。',16).setLineSpacing(12));
-        const confirm=label(GAME_HEIGHT/2+104,'确认 · 进入军营',20).setPadding(28,14).setInteractive({useHandCursor:true}).setName('volunteers-confirm').setBackgroundColor('#59452d').on('pointerover',()=>confirm.setColor('#ffe7ae')).on('pointerout',()=>confirm.setColor('#f0ddba'));
-        confirm.on('pointerdown',()=>{notice.destroy();this.legionUI.panel.setVisible(true);});notice.add(confirm);
+        const notice:Phaser.GameObjects.Container=chapterVictoryNotice(this,GAME_WIDTH,GAME_HEIGHT,IS_DESKTOP,{name:'chapter1-volunteers',confirmName:'volunteers-confirm',
+          kicker:'第一章 · 黄巾之乱 告捷',title:'黄巾平定 · 义士来投',lines:['将军威名远扬，四方义士前来投靠。','且回军营整顿兵马，再赴讨董征途。'],
+          route:['整顿兵马','补充援兵','汜水讨董'],confirm:'确认 · 进入军营',background:'rest_camp',
+          onConfirm:()=>{notice.destroy();this.legionUI.panel.setVisible(true);}});
       }
     }
   }

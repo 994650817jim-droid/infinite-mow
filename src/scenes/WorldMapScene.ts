@@ -13,7 +13,9 @@ import {loadWorld} from '../world/WorldStore';
 import {FOCUS_INCOME,FOCUS_NAME,costText,type CityFocus} from '../town/TownData';
 import {chapterUnlocked} from '../systems/ChapterProgress';
 import {CITIES,CITY_LINKS,CITY_INCOME,FACTIONS,HOME,SPECIALTIES,TIER_NAME,cityAttackable,cityById,cityOwner,eraDef,eraIndexFor,territorySummary,type CityDef} from '../world/WorldCities';
-import {cityMarker,factionLegend,markAlert,paintSelection,territoryTexture,MARKER_FILES,type CityMarker} from '../world/WorldMapLayers';
+import {cityMarker,factionLegend,markAlert,paintSelection,MARKER_FILES,type CityMarker} from '../world/WorldMapLayers';
+import {buildTerritory} from '../world/WorldTerritory';
+import {factionStrip,lacquerPlate,ownerSeal,realmLabels,resourceBar,sealGlyph} from '../world/WorldMapChrome';
 import {advanceEra,takeLostNotice,type CityAlert,type EraAdvance} from '../world/WorldStore';
 import {defenseBossName} from '../data/siege';
 import {SIEGE,FIRST_CAPTURE_BONUS,siegeBossName} from '../data/siege';
@@ -26,7 +28,7 @@ type Selection={kind:'node';node:WorldNode}|{kind:'city';city:CityDef};
  * W1：城池可查看归属、时代、相邻与可攻打状态；攻城战在 W2 开放。
  */
 export class WorldMapScene extends Phaser.Scene {
- private layer!:Phaser.GameObjects.Container;private selected:Selection={kind:'node',node:WORLD_NODES[0]};private detail!:Phaser.GameObjects.Text;private action!:ReturnType<typeof worldButton>;
+ private layer!:Phaser.GameObjects.Container;private selected:Selection={kind:'node',node:WORLD_NODES[0]};private detail!:Phaser.GameObjects.Text;private detailTitle!:Phaser.GameObjects.Text;private detailRule!:Phaser.GameObjects.Graphics;private seal!:ReturnType<typeof ownerSeal>;private detailBox={x:0,y:0,w:0};private action!:ReturnType<typeof worldButton>;
  private markers:Array<{node:WorldNode;root:Phaser.GameObjects.Container}>=[];private cityMarkers:CityMarker[]=[];private links!:Phaser.GameObjects.Graphics;private legend?:Phaser.GameObjects.Container;
  private era:1|2|3=1;private owned:string[]=[];private capturedEver:string[]=[];private siegeModal?:Phaser.GameObjects.Container;private territory?:Phaser.GameObjects.Container;private alerts:CityAlert[]=[];private notice?:Phaser.GameObjects.Container;
  private area={x:20,y:110,w:W-40,h:H-360};private minZoom=1;private zoom=1;private pointerX=0;private pointerY=0;private pinch=0;private pinching=false;private readonly mapW=1536;private readonly mapH=1024;
@@ -38,13 +40,15 @@ export class WorldMapScene extends Phaser.Scene {
  create(){playMenuMusic(this);try{checkWorld(loadWorld());}catch{/* 存档不可用 */}
   if(!worldUnlocked()&&!isChapterTestRun()){this.registry.set('loadBattle',true);this.scene.start(this.registry.get('battleReady')?'MenuScene':'BootScene');return;}worldShell(this,this.registry.get('worldReveal')?'三国天下开启':'三国天下');if(this.registry.get('worldReveal')){this.registry.remove('worldReveal');this.cameras.main.fadeIn(900,0,0,0);}releaseWorldArt(this,'strategy_art');this.markers=[];this.cityMarkers=[];this.legend=undefined;
   this.siegeModal=undefined;this.territory=undefined;this.notice=undefined;const advance=isChapterTestRun()?null:advanceEra(),lost=isChapterTestRun()?[]:takeLostNotice();const s=loadWorld();this.owned=s.ownedCities;this.alerts=s.alerts;this.capturedEver=s.capturedEver;this.era=eraIndexFor({hulaoCleared:s.cleared.hulao,warlordStages:s.warlordStages,guanduStages:s.guanduStages});
-  worldText(this,24,64,`军功 ${s.merits}    粮草 ${s.provisions}`,15,'#bdcdb6');
-  worldButton(this,W-105,43,'返回主城',()=>this.scene.start('CityScene'),150);
-  const desktop=W>600;this.area={x:20,y:105,w:W-40,h:desktop?H-250:H-360};
+  const desktop=W>600;
+  // 顶部资源栏（军功 / 粮草 / 城池），漆底描金
+  resourceBar(this,desktop?190:24,desktop?40:88,[{glyph:'功',label:'军功',value:s.merits,tint:0x8e2a1e},{glyph:'粮',label:'粮草',value:s.provisions,tint:0x7a5a22},{glyph:'城',label:'城池',value:this.owned.length,tint:0x2f6b45}],desktop);
+  worldButton(this,W-105,desktop?40:43,'返回主城',()=>this.scene.start('CityScene'),150);
+  this.area=desktop?{x:20,y:72,w:W-40,h:H-72-152}:{x:20,y:118,w:W-40,h:H-118-318};
   this.layer=this.add.container(0,0);this.layer.add(this.add.image(0,0,'strategy_art').setOrigin(0).setDisplaySize(this.mapW,this.mapH));
-  // 势力领地染色（随地图缩放）
-  const territory=territoryTexture(this,this.era,this.owned);this.layer.add(this.add.image(0,0,territory).setOrigin(0).setDisplaySize(this.mapW,this.mapH));
-  this.events.once('shutdown',()=>{if(this.textures.exists(territory))this.textures.remove(territory);});
+  // 势力范围：加权分区疆域 + 国界 / 郡界 + 疆域大字（随地图缩放）
+  const realm=buildTerritory(this,this.era,this.owned);this.layer.add(this.add.image(0,0,realm.key).setOrigin(0).setDisplaySize(this.mapW,this.mapH).setName('world-realm'));
+  this.layer.add(realmLabels(this,realm.labels));
   const mask=this.make.graphics({x:0,y:0}).fillStyle(0xffffff).fillRect(this.area.x,this.area.y,this.area.w,this.area.h);
   this.layer.setMask(mask.createGeometryMask());this.events.once('shutdown',()=>mask.destroy());
   // 选中城池时显示其道路相邻（屏幕坐标）
@@ -62,18 +66,29 @@ export class WorldMapScene extends Phaser.Scene {
   this.input.on('pointerdown',(q:Phaser.Input.Pointer)=>{const p=screenPoint(q);this.pointerX=p.x;this.pointerY=p.y;this.pinch=0;this.pinching=false;});
   this.input.on('pointermove',(q:Phaser.Input.Pointer)=>{if(!q.isDown||!inside(q))return;const p=screenPoint(q),a=this.input.manager.pointers.filter(o=>o.isDown&&inside(o)).map(screenPoint);if(a.length>=2){this.pinching=true;const distance=Phaser.Math.Distance.Between(a[0].x,a[0].y,a[1].x,a[1].y);if(this.pinch>0)this.setZoom(this.zoom*distance/this.pinch,(a[0].x+a[1].x)/2,(a[0].y+a[1].y)/2);this.pinch=distance;}else{this.pinch=0;this.layer.x+=p.x-this.pointerX;this.layer.y+=p.y-this.pointerY;this.clampMap();}this.pointerX=p.x;this.pointerY=p.y;});
   this.input.on('wheel',(q:Phaser.Input.Pointer,_objs:unknown,_dx:number,dy:number)=>{const p=screenPoint(q);if(inside(q))this.setZoom(this.zoom*(dy>0?.9:1.1),p.x,p.y);});
-  const py=desktop?H-76:H-140,ph=desktop?132:200;panel(this,W/2,py,W-40,ph);
-  this.detail=worldText(this,40,py-ph/2+14,'',desktop?14:16).setWordWrapWidth(desktop?W-300:W-80).setLineSpacing(3);
-  this.action=worldButton(this,desktop?W-140:W/2,desktop?py:H-80,'进入主城',()=>{if(this.selected.kind==='city')this.openSiege(this.selected.city,!!this.alertFor(this.selected.city.id));else this.enterNode();},desktop?190:W-100);this.action.image.setName('map-action');
+  // 地图外框：描金细线
+  const frame=this.add.graphics();frame.lineStyle(2,0xc9a35e,.9).strokeRect(this.area.x-1,this.area.y-1,this.area.w+2,this.area.h+2).lineStyle(1,0x000000,.6).strokeRect(this.area.x-4,this.area.y-4,this.area.w+8,this.area.h+8);
+  // 详情面板：漆底描金 + 势力旗印 + 标题 / 势力色分隔线 / 正文
+  const ph=desktop?138:262,py=desktop?H-8-ph/2:H-42-ph/2,top=py-ph/2;
+  const plate=this.add.graphics();lacquerPlate(plate,20,top,W-40,ph,.94);
+  const sealSize=desktop?54:58;this.seal=ownerSeal(this,desktop?52+sealSize/2-8:W-40-sealSize/2-14,desktop?py-14:top+sealSize/2+14,sealSize);
+  const tx=desktop?52+sealSize+8:40;this.detailBox={x:tx,y:top,w:desktop?W-tx-260:W-80-sealSize-16};
+  this.detailTitle=worldText(this,tx,top+12,'',desktop?20:22,'#f6dc9a').setName('world-detail-title');
+  this.detailRule=this.add.graphics();
+  this.detail=worldText(this,tx,top+(desktop?44:50),'',desktop?13:15,'#e4dcc4').setWordWrapWidth(desktop?W-tx-250:W-80).setLineSpacing(desktop?2:4);
+  this.action=worldButton(this,desktop?W-140:W/2,desktop?py:H-42-40,'进入主城',()=>{if(this.selected.kind==='city')this.openSiege(this.selected.city,!!this.alertFor(this.selected.city.id));else this.enterNode();},desktop?190:W-100);this.action.image.setName('map-action');
   worldButton(this,W-55,this.area.y+35,'＋',()=>this.setZoom(this.zoom*1.2,W/2,this.area.y+this.area.h/2),48);
   worldButton(this,W-55,this.area.y+107,'－',()=>this.setZoom(this.zoom/1.2,W/2,this.area.y+this.area.h/2),48);
   // 年号与时代：点击展开势力图例
-  const era=eraDef(this.era),chip=worldText(this,this.area.x+12,this.area.y+12,`公元${era.year}年 · ${era.name}  ▾`,desktop?15:16,'#fff0cd').setBackgroundColor('#0f1c15e6').setPadding(10,6).setInteractive({useHandCursor:true}).setName('world-era');
+  const era=eraDef(this.era),chipG=this.add.graphics(),chip=worldText(this,this.area.x+12,this.area.y+12,`公元${era.year}年 · ${era.name}  ▾`,desktop?15:16,'#f6dc9a').setPadding(12,7).setInteractive({useHandCursor:true}).setName('world-era');
   chip.on('pointerup',()=>this.toggleLegend());
   // 领地：城池数、每次出征产出、生效特产
-  const land=worldText(this,chip.x+chip.width+8,chip.y,`领地 ${this.owned.length}  ▾`,desktop?15:16,'#bff0c8').setBackgroundColor('#0f1c15e6').setPadding(10,6).setInteractive({useHandCursor:true}).setName('world-territory');
+  const land=worldText(this,chip.x+chip.width+8,chip.y,`领地 ${this.owned.length}  ▾`,desktop?15:16,'#bff0c8').setPadding(12,7).setInteractive({useHandCursor:true}).setName('world-territory');
   land.on('pointerup',()=>this.toggleTerritory());
-  worldText(this,30,this.area.y+this.area.h-25,'拖动查看 · 滚轮/双指缩放 · 点城池查看',11,'#fff0cf').setStroke('#15261c',3);
+  lacquerPlate(chipG,chip.x,chip.y,chip.width,chip.height,.9);lacquerPlate(chipG,land.x,land.y,land.width,land.height,.9,0x7fc48f);chipG.setDepth(chip.depth);chip.setDepth(1);land.setDepth(1);
+  // 底边：势力排行（按城池数）+ 操作提示
+  factionStrip(this,this.area.x+10,this.area.y+this.area.h-(desktop?24:26),Math.min(this.area.w-20,desktop?620:this.area.w-20),this.era,this.owned,desktop);
+  worldText(this,desktop?this.area.x+this.area.w-12:this.area.x+14,this.area.y+this.area.h-(desktop?24:54),'拖动查看 · 滚轮/双指缩放 · 点城池查看',11,'#fff0cf').setOrigin(desktop?1:0,.5).setStroke('#15261c',3);
   // 攻城归来：选中并居中该城
   const focus=cityById(String(this.registry.get('mapFocusCity')??''));this.registry.remove('mapFocusCity');
   if(focus){this.selected={kind:'city',city:focus};this.layer.setPosition(this.area.x+this.area.w/2-focus.x*this.zoom,this.area.y+this.area.h/2-focus.y*this.zoom);this.clampMap();}
@@ -130,7 +145,8 @@ export class WorldMapScene extends Phaser.Scene {
   for(const m of this.markers){const x=this.layer.x+m.node.x*this.mapW*this.zoom,y=this.layer.y+m.node.y*this.mapH*this.zoom;m.root.setPosition(x,y).setVisible(visible(x,y));}
   // 小城名字在放大后才显示，避免默认视图拥挤
   const showSmall=this.zoom>=this.minZoom*1.65;
-  for(const m of this.cityMarkers){const p=this.toScreen(m.city.x,m.city.y);m.root.setPosition(p.x,p.y).setVisible(visible(p.x,p.y));m.label.setVisible(m.city.tier!=='small'||showSmall||this.isSelected(m.city));}
+  // 军旗高出徽框，靠近地图上沿时整个标记隐藏，免得旗子伸出地图框
+  for(const m of this.cityMarkers){const p=this.toScreen(m.city.x,m.city.y),flag=m.root.getData('banner')?m.outer+40:m.top;m.root.setPosition(p.x,p.y).setVisible(visible(p.x,p.y)&&p.y-flag>a.y);m.label.setVisible(m.city.tier!=='small'||showSmall||this.isSelected(m.city));}
   this.drawLinks();
  }
  private isSelected(city:CityDef){return this.selected.kind==='city'&&this.selected.city.id===city.id;}
@@ -143,6 +159,13 @@ export class WorldMapScene extends Phaser.Scene {
    for(let i=0;i<n;i+=2){const t0=i/n,t1=Math.min(1,(i+1)/n);this.links.lineBetween(p.x+(q.x-p.x)*t0,p.y+(q.y-p.y)*t0,p.x+(q.x-p.x)*t1,p.y+(q.y-p.y)*t1);}
   }
  }
+ /** 详情面板：标题 + 势力色分隔线 + 正文 + 旗印。 */
+ private setDetail(title:string,color:number,glyph:string,body:string){
+  this.detailTitle.setText(title);this.seal.set(color,glyph);
+  const y=this.detailTitle.y+this.detailTitle.height+4,w=Math.min(this.detailBox.w,Math.max(this.detailTitle.width+60,300));
+  this.detailRule.clear().fillStyle(color,1).fillRect(this.detailTitle.x,y,w*.35,2).fillStyle(0xc9a35e,.55).fillRect(this.detailTitle.x+w*.35,y+.5,w*.65,1);
+  this.detail.setText(body);
+ }
  private refresh(){
   for(const m of this.cityMarkers)paintSelection(m,this.isSelected(m.city));this.clampMap();
   if(this.selected.kind==='city'){
@@ -150,11 +173,11 @@ export class WorldMapScene extends Phaser.Scene {
    const neighbors=[...(CITY_LINKS.get(c.id)??[])].map(id=>id===HOME.id?'义军营寨':cityById(id)!.name).join('、');
    const focus=(loadWorld().town.focus[c.id]??'balanced') as CityFocus,inc=FOCUS_INCOME[c.tier][owner==='player'?focus:'balanced'],sp=SPECIALTIES[c.id],yieldText=`${owner==='player'?`产出（${FOCUS_NAME[focus]}，主城「城池发展」可改）`:'占领后产出'}：每季 ${costText(inc)}${sp?` · 特产「${sp.title}」${sp.text}`:''}`;
    const alert=this.alertFor(c.id),usable=attack||!!alert,warn=attack?this.lossWarning():'';
-   this.detail.setText(`${c.name} · ${TIER_NAME[c.tier]} · ${c.region}\n归属：${FACTIONS[owner].name}（公元${era.year}年 · ${era.name}）\n${alert?`告急：${FACTIONS[alert.attacker].name}来犯！守住可解除；出征别处则此城失守`:owner==='player'?'你的城池':attack?warn||'与你的领地相邻，可以攻打':'尚不相邻：先攻下相邻城池'}\n${yieldText}\n相邻：${neighbors}`);
+   this.setDetail(`${c.name} · ${TIER_NAME[c.tier]} · ${c.region}`,FACTIONS[owner].color,sealGlyph(owner),`归属：${FACTIONS[owner].name}（公元${era.year}年 · ${era.name}）\n${alert?`告急：${FACTIONS[alert.attacker].name}来犯！守住可解除；出征别处则此城失守`:owner==='player'?'你的城池':attack?warn||'与你的领地相邻，可以攻打':'尚不相邻：先攻下相邻城池'}\n${yieldText}\n相邻：${neighbors}`);
    this.action.text.setText(alert?'守城 · 选择武将':owner==='player'?'我方城池':attack?'攻城 · 选择武将':'尚不可攻打');this.action.image.setAlpha(usable?1:.45);if(usable)this.action.image.setInteractive({useHandCursor:true});else this.action.image.disableInteractive();
    return;
   }
-  const n=this.selected.node,locked=n.kind==='future'||(n.campaign?!CAMPAIGNS[n.campaign].open()&&!isChapterTestRun():!!n.chapter&&!chapterUnlocked(n.chapter));this.detail.setText(`${n.name}\n${n.region} · ${n.kind==='home'?'玩家领地':n.kind==='future'?'地区开发中':locked?n.campaign?CAMPAIGNS[n.campaign].hint:'通关黄巾之乱后解锁':'战役已开放'}\n${n.kind==='battle'||n.campaign?this.lossWarning()||'战斗军粮为单局资源，战后另结算永久资源。':'从义军营寨出发，建设后再次出征。'}`);this.action.text.setText(locked?'尚未开放':n.kind==='home'?'进入主城':'选择武将 · 出征');this.action.image.setAlpha(locked?.45:1);if(locked)this.action.image.disableInteractive();else this.action.image.setInteractive({useHandCursor:true});}
+  const n=this.selected.node,locked=n.kind==='future'||(n.campaign?!CAMPAIGNS[n.campaign].open()&&!isChapterTestRun():!!n.chapter&&!chapterUnlocked(n.chapter));this.setDetail(n.name,n.kind==='home'?FACTIONS.player.color:locked?0x4a4f46:0x8e2a1e,n.kind==='home'?'营':locked?'锁':'战',`${n.region} · ${n.kind==='home'?'玩家领地':n.kind==='future'?'地区开发中':locked?n.campaign?CAMPAIGNS[n.campaign].hint:'通关黄巾之乱后解锁':'战役已开放'}\n${n.kind==='battle'||n.campaign?this.lossWarning()||'战斗军粮为单局资源，战后另结算永久资源。':'从义军营寨出发，建设后再次出征。'}`);this.action.text.setText(locked?'尚未开放':n.kind==='home'?'进入主城':'选择武将 · 出征');this.action.image.setAlpha(locked?.45:1);if(locked)this.action.image.disableInteractive();else this.action.image.setInteractive({useHandCursor:true});}
 /** 攻城出征面板：守军、时长、胜利条件、奖励，选择武将后出征。 */
  private openSiege(city:CityDef,defense=false){
   const alert=defense?this.alertFor(city.id):undefined;

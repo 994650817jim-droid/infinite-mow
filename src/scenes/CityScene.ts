@@ -324,7 +324,7 @@ export class CityScene extends Phaser.Scene {
  private introSeen():boolean{try{return localStorage.getItem('im_town_intro2')==='1';}catch{return true;}}
  /** 首次进入主城的简短引导（看过一次后不再弹出）。 */
  private openIntro(){
-  const m=this.modal('town-intro','义军主城 · 经营指南',D?400:600);
+  const m=this.modal('town-intro','义军主城 · 经营指南',D?400:470);
   const lines=[
    '◆点城中的建筑或空地即可建造、升级；「建造总览」一览全部建筑。拖动画面可查看全城。',
    '◆府衙决定城池规模：小城 → 中城 → 大城。扩城需要城墙、民居、市集等前提；其它建筑的等级不能高于府衙。',

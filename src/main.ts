@@ -11,9 +11,11 @@ import { CityScene } from './scenes/CityScene';
 import { WorldMapScene } from './scenes/WorldMapScene';
 import { MenuScene } from './scenes/MenuScene';
 import { installGamepad } from './ui/PadNavigator';
+import { installCjkWrap } from './ui/CjkWrap';
 import { installAchievements } from './systems/Achievements';
 
 initLayout();
+installCjkWrap();
 
 // 高清渲染：画布放大 RENDER_SCALE 倍，每个相机以左上角为原点同倍缩放，
 // 所有场景继续使用 540×960 / 960×540 的设计坐标；文字内部画布同倍率绘制以免发糊。

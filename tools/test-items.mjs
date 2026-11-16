@@ -150,21 +150,20 @@ ck('一件兵装同时只属于一位武将', gear.guanAfter === 0 && JSON.strin
 ck('开局加成进战斗属性：伤害、暴击、对首领伤害提高', gear.dmg[1] > gear.dmg[0] && gear.crit[1] > gear.crit[0] && gear.boss[1] > gear.boss[0], gear);
 ck('已穿戴的兵装不能分解', gear.salvageWorn === 0, gear);
 
-// 6) 暂停 → 行囊（只读，本局缴获）
+// 6) 暂停 → 行囊（本局缴获并在行囊网格最前，角上标「新」；不再有单独分页）
 const pauseBag = await p.evaluate(async G0 => {
   const s = eval(G0); s.itemDrops.runLoot.length = 0;
   const items = await window.__mod('/src/data/items.ts'); for (const q of ['orange', 'purple', 'blue', 'green', 'white']) s.itemDrops.runLoot.push(items.rollItem(q));
   s.togglePause(); await new Promise(r => setTimeout(r, 200));
   s.pausePanel.getByName('pause-bag').emit('pointerdown'); await new Promise(r => setTimeout(r, 200));
-  window.__tap(window.__find(s.children.getByName('item-bag'), 'item-tab-loot')); await new Promise(r => setTimeout(r, 150));
   const bag = s.children.getByName('item-bag'), out = { open: !!bag };
-  out.cells = [0, 1, 2, 3, 4].map(i => !!window.__find(bag, 'item-cell-' + i)); out.loot = window.__find(bag, 'item-tab-loot')?.text;
+  out.cells = [0, 1, 2, 3, 4].map(i => !!window.__find(bag, 'item-cell-' + i)); out.lootCells = [0, 1, 2, 3, 4].filter(i => window.__find(bag, 'item-cell-' + i)?.getData('loot') && window.__find(window.__find(bag, 'item-cell-' + i), 'item-new-badge')).length; out.noTab = !window.__find(bag, 'item-tab-loot') && !window.__find(bag, 'item-tab-bag'); out.first = s.itemDrops.runLoot.find(i => i.uid === window.__find(bag, 'item-cell-0').getData('uid'))?.quality;
   out.noHero = !window.__find(bag, 'item-hero-guanyu');
   window.__tap(window.__find(bag, 'item-cell-0')); await new Promise(r => setTimeout(r, 150));
   const bag2 = s.children.getByName('item-bag'); out.detail = window.__find(bag2, 'item-detail-name')?.text; out.noEquip = !window.__find(bag2, 'item-equip');
   return out;
 }, G);
-ck('暂停菜单「行囊」可切到本局缴获（5 件，品质排序），战斗中不显示武将切换', pauseBag.open && pauseBag.cells.every(Boolean) && /本局缴获 5/.test(pauseBag.loot) && pauseBag.noHero, pauseBag);
+ck('暂停菜单「行囊」：没有缴获分页，5 件缴获排在网格最前（橙色第一）并标「新」，战斗中不显示武将切换', pauseBag.open && pauseBag.cells.every(Boolean) && pauseBag.noTab && pauseBag.lootCells === 5 && pauseBag.first === 'orange' && pauseBag.noHero, pauseBag);
 ck('点缴获弹详情卡；测试战斗的缴获不能穿（不入行囊）', !!pauseBag.detail && pauseBag.noEquip, pauseBag);
 await p.screenshot({ path: `${out}/mobile-pause-bag-detail.png` });
 await p.evaluate(G0 => { const s = eval(G0), bag = s.children.getByName('item-bag'); window.__find(bag, 'item-detail-name') && s.children.getByName('item-bag'); }, G);

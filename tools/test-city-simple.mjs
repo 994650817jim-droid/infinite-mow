@@ -57,7 +57,7 @@ const base8 = { version: 8, yellowStages: 3, dongzhuoStages: 0, warlordStages: 0
     return o;
   });
   ck('新档：营寨起步 主帐 / 军营 / 农田 Lv1，其余未建', r.start.hall === 1 && r.start.barracks === 1 && r.start.farm === 1 && !r.start.academy && !r.start.stable, r.start);
-  ck('营寨阶段只开放主帐、军营、农田、讲武堂', r.open.hall && r.open.barracks && r.open.farm && r.open.academy && !r.open.stable && !r.open.granary && !r.open.pavilion, r.open);
+  ck('营寨阶段只开放主帐、军营、农田、讲武堂、招贤馆', r.open.hall && r.open.barracks && r.open.farm && r.open.academy && r.open.talent && !r.open.stable && !r.open.granary && !r.open.pavilion, r.open);
   ck('马厩需县城；主帐扩建需第二章通关', !r.stable.ok && r.stable.message.includes('县城') && !r.hallBlocked.ok && r.hallBlocked.message.includes('第二章'), [r.stable, r.hallBlocked]);
   ck('讲武堂未建不能研究；建成后研究回血药扣军粮；不能重复研究', !r.potionNoAcademy.ok && r.academy.ok && r.potion.ok && !r.potionAgain.ok, [r.potionNoAcademy, r.potion, r.potionAgain]);
   ck('前置与层数限制（弓弩操练需刀枪操练；第二层需讲武堂 Lv2）', !r.rangedNeeds.ok && !r.tier2.ok && r.tier2.message.includes('Lv2'), [r.rangedNeeds, r.tier2]);
@@ -65,6 +65,15 @@ const base8 = { version: 8, yellowStages: 3, dongzhuoStages: 0, warlordStages: 0
   ck('出征效果：回血药 2 份 30%、刀盾 / 长枪开局 Lv2、伤害 +4%', r.eff.potions?.count === 2 && r.eff.potions.ratio === .3 && r.eff.troopLevels.swordsman === 2 && r.eff.troopLevels.spearman === 2 && Math.abs(r.eff.damageBonus - .04) < 1e-9, r.eff);
   ck('第二章后扩建县城、建马厩（接口：等级 1、可养 2 匹）', r.hall.ok && r.stable2.ok && r.lvl === 1 && r.cap === 2, [r.hall, r.stable2, r.cap]);
   ck('城池发展在州府前不开放', !r.focusLocked.ok && r.focusLocked.message.includes('州府'), r.focusLocked);
+  await p.close();
+}
+
+// —— 2b. 招贤馆建筑：从招募存档读入旧等级；升级花军粮、不受主帐等级限制 ——
+{
+  const p = await page({ ...base8, provisions: 5000 }, 'mobile', { im_roster_v1: JSON.stringify({ version: 1, hall: 2 }) });
+  const r = await store(p, (w, t) => { const o = { lv0: w.talentLevel() }; w.saveWorld(); localStorage.setItem('im_roster_v1', JSON.stringify({ version: 1, hall: 1 })); o.lv1 = w.talentLevel(); o.up = w.townUpgrade('talent'); o.lv2 = w.talentLevel(); o.max = w.townUpgrade('talent'); o.cost = t.nextCost(w.loadWorld().town, 'talent'); o.grain = w.loadWorld().provisions; return o; });
+  ck('招贤馆：读入旧招募存档的 2 级，写盘后不再重读', r.lv0 === 2 && r.lv1 === 2, r);
+  ck('招贤馆：营寨（主帐 Lv1）也能升到 3 级，花军粮 1800（招募会话的价目）', r.up.ok && r.lv2 === 3 && !r.max.ok && r.cost === null && r.grain === 5000 - 1800, r);
   await p.close();
 }
 
@@ -94,7 +103,7 @@ for (const layout of ['mobile', 'desktop']) {
       blds: c.hits.map(h => h.name), recruit: b('city-recruit'), grainBox: b('city-grain'), boon: b('city-boon'), mapBtn: b('city-map') }; });
   ck(`${layout}：底栏只有 天下地图 / 讲武堂 / 出征（营寨无城池、税率、商贸、季报）`, ui.nav.join() === 'true,true,false,true,false,false,false,false', ui.nav);
   ck(`${layout}：顶部显示军粮与扩建提示`, ui.grain === '军粮 800' && ui.hint.includes('第二章'), [ui.grain, ui.hint]);
-  ck(`${layout}：全景只画营寨阶段的建筑`, ui.blds.sort().join() === 'bld-academy,bld-barracks,bld-farm,bld-hall', ui.blds);
+  ck(`${layout}：全景只画营寨阶段的建筑`, ui.blds.sort().join() === 'bld-academy,bld-barracks,bld-farm,bld-hall,bld-talent', ui.blds);
   const overlap = (a, c) => a && c && a.x < c.x + c.width && c.x < a.x + a.width && a.y < c.y + c.height && c.y < a.y + a.height;
   ck(`${layout}：右上招募按钮不与军粮文字相叠`, !overlap(ui.recruit, ui.grainBox), [ui.recruit, ui.grainBox]);
   await p.screenshot({ path: `${out}/city-${layout}.png` });

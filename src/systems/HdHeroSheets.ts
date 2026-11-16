@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { isV2Texture } from './ArtStyle';
 
 /**
  * 高清武将图集：行走表固定 4×4 帧、动作表固定 4×7 帧，帧边长按图片实际宽度 / 4 推算。
@@ -23,7 +24,8 @@ export function applyHdHeroSheets(scene: Phaser.Scene, walkKeys: string[], actio
       const t = scene.textures.get(k), w = (t.getSourceImage() as { width?: number }).width ?? 0;
       if (w <= base) continue;
       regrid(t, w / 4, names);
-      t.setFilter(Phaser.Textures.FilterMode.LINEAR);
+      // v2 像素画风保持最近邻，像素格清晰；v1 高清绘画缩小显示用线性。
+      t.setFilter(isV2Texture(k) ? Phaser.Textures.FilterMode.NEAREST : Phaser.Textures.FilterMode.LINEAR);
       done.push(k);
     }
   };

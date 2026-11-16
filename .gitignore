@@ -77,6 +77,8 @@ assets/raw/*
 !/tools/test-weapons-batch2.mjs
 # 主将步态（walk-anim）
 !/tools/test-walk-anim.mjs
+!/tools/prepare-artv2.mjs
+!/tools/artv2-compare.mjs
 !/tools/walk-anim-record.mjs
 !/tools/test-hubao.mjs
 !/tools/test-mount.mjs

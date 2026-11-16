@@ -8,6 +8,7 @@ import { GAME_WIDTH } from '../config';
 import { createGameTextures, createWalkPlaceholders, registerWalkSheet } from '../systems/TextureFactory';
 import { HERO_ACTION_FILES } from '../data/heroActions';
 import { applyHdHeroSheets } from '../systems/HdHeroSheets';
+import { applyArtStyleUrls } from '../systems/ArtStyle';
 
 export class BootScene extends Phaser.Scene {
   private shellOnly=false;
@@ -164,6 +165,8 @@ export class BootScene extends Phaser.Scene {
     this.load.image('ui_button', 'assets/processed/ui_button.png');
     // 本命武器 / 通用被动 / 稀有：新厚涂图标（程序化 icon_* 在已存在时不会再生成）
     for(const [key,id] of [['icon_1','weapon_spear'],['icon_2','weapon_crossbow'],['icon_3','weapon_flame'],['icon_guandao','weapon_guandao'],['icon_zhenbei','weapon_zhenbei'],['icon_lianhuan','weapon_lianhuan'],['icon_sunknives','weapon_sunknives'],['icon_fans','weapon_fans'],['icon_baodiao','weapon_baodiao'],['icon_shemao','weapon_shemao'],['icon_zhanjin','weapon_zhanjin'],['icon_shuanggu','weapon_shuanggu'],['icon_passive','passive'],['icon_rare','rare']] as const)this.load.image(key,'assets/upgrade-icons/'+id+'.webp');
+    // 人物画风 v2（?art=v2）：有新图的图集换成 v2 文件，键名不变
+    applyArtStyleUrls(this.load);
   }
 
   create(): void {

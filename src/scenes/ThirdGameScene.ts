@@ -31,6 +31,8 @@ export function thirdGameSceneClass(Base:typeof GameScene,cfg:ArcSceneConfig=THI
  private thirdStage:ThirdStage=1;private controller?:ThirdBoss;private thirdReceipt='';private thirdTest=false;private spear=new WeakMap<Enemy,SpearWindup>();private spearWarnings?:ThirdSpearWarnings;
  /** 本关首领招式组与地貌组（第三章即关序号）。 */
  private get behavior():ThirdStage{return cfg.stages[this.thirdStage-1]?.behavior??this.thirdStage;}
+ /** 马厩赠马键：群雄为 third-N，其余用篇章名（如 chibi-3）。 */
+ protected stableRewardKey():string|null{return (cfg.arc==='qunxiong'?'third':cfg.arc)+'-'+this.thirdStage;}
  private get sceneryStage():SceneryStage{return cfg.stages[this.thirdStage-1]?.scenery??this.thirdStage;}
  constructor(){super(cfg.key);}
  preload(){for(const d of cfg.stages)if(!this.textures.exists(cfg.texture(d.id)))this.load.spritesheet(cfg.texture(d.id),cfg.sheet(d.id),{frameWidth:128,frameHeight:128});}

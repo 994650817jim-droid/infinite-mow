@@ -13,6 +13,8 @@ export class CampRestUI {
  private buildSection=0;private buildOffset=0;private modal?:Phaser.GameObjects.Container;
  /** 兵装货架：每次入营一件（绿 / 蓝），买下记入本局缴获，结算带回行囊。onBuyItem 由 GameScene 设置。 */
  itemOffer:ItemInstance|null=null;itemSold=false;onBuyItem?:(item:ItemInstance)=>void;
+ /** 行囊（休整时可换装、换马）。由 GameScene 设置。 */
+ onOpenBag?:()=>void;
  private market?:CampMarket;private visit='';private tab=0;private page=0;private destination='';private notice='';
  constructor(private scene:Phaser.Scene,private player:Player,private army:Legion,depart:()=>void){
   this.root=scene.add.container(0,0).setScrollFactor(0).setDepth(DEPTH.overlay+2).setVisible(false).setName('camp-rest');
@@ -23,6 +25,7 @@ export class CampRestUI {
   this.resources=this.text(D?40:28,D?57:78,'',D?17:19).setColor('#e6c894');
   this.next=this.text(D?W-40:28,D?30:110,'',D?16:17).setColor('#d2c3a6');if(D)this.next.setOrigin(1,0);
   this.root.add([this.header,this.resources,this.next]);
+  const bagBtn=this.text(D?W-40:W-28,D?62:34,'行囊 · 换装换马',D?15:16).setOrigin(1,0).setPadding(12,6,12,6).setBackgroundColor('#7a2a1c').setColor('#ffe9bd').setInteractive({useHandCursor:true}).setName('camp-bag');bagBtn.on('pointerdown',()=>this.onOpenBag?.());this.root.add(bagBtn);
   const labels=['招兵营','练兵营','军需商人','将帅帐'],icons=['icon_shu_swordsman','growth_icon_might','build_icon_return_drum','growth_icon_points'];
   const tabW=D?172:(W-48)/4,tabY=D?96:155;
   labels.forEach((label,i)=>{const x=D?40+i*180:24+i*tabW;const frame=scene.add.image(x+(tabW-6)/2,tabY+23,warPanelTexture(scene,tabW-6,46)).setScrollFactor(0);this.tabFrames.push(frame);this.root.add(frame);

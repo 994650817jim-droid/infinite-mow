@@ -17,8 +17,8 @@ export interface PassiveCast {
   whoDares: boolean; formation: boolean;
   /** 孙尚香满层：召执刀侍婢护身；貂蝉满层：闭月（舞带环身旋舞，圈内敌人离间）。 */
   maids: boolean; moonDance: boolean;
-  /** 张飞满层：据水断桥（360° 喝断 + 断桥区）；马超满层：西凉铁骑冲阵。 */
-  bridge: boolean; cavalry: boolean;
+  /** 张飞满层：据水断桥（360° 喝断 + 断桥区）；马超满层：锦马冲锋（向前突进）。 */
+  bridge: boolean; charge: boolean;
   hits: Set<number>; awarded: boolean;
 }
 /** 貂蝉离间：魅惑层数（4 秒没被扇中就消散）、倒戈截止、首领易伤截止。 */
@@ -60,15 +60,15 @@ export class CharacterPassives {
     this.stacks++; this.gains++;
   }
   onWeaponHit(now: number): void {
-    const interval = this.character === 'zhaoyun' ? R.dragonIntervalMs : this.character === 'zhangfei' ? R.roarIntervalMs : this.character === 'huangyueying' ? R.mechIntervalMs : -1;
+    const interval = this.character === 'zhaoyun' ? R.dragonIntervalMs : this.character === 'zhangfei' ? R.roarIntervalMs : this.character === 'machao' ? R.cavalryIntervalMs : this.character === 'huangyueying' ? R.mechIntervalMs : -1;
     if (this.stopped || interval < 0 || this.stacks >= this.maxStacks || now - this.lastGain + 1e-6 < interval) return;
     this.lastGain = now; this.stacks++; this.gains++;
   }
   /** 孙尚香：移动中积疾步（每 0.5 秒最多 1 层，停下不掉层）。 */
   onMove(now: number): void {
     this.lastMoveAt = now;
-    // 孙尚香疾步（0.5 秒 1 层）/ 马超西凉铁骑（0.4 秒 1 层）：移动中积层
-    const interval = this.character === 'sunshangxiang' ? R.stepIntervalMs : this.character === 'machao' ? R.cavalryMoveMs : -1;
+    // 孙尚香疾步：移动中每 0.5 秒积 1 层（马超已改回命中积铁骑）
+    const interval = this.character === 'sunshangxiang' ? R.stepIntervalMs : -1;
     if (this.stopped || interval < 0 || this.stacks >= this.maxStacks || now - this.lastGain + 1e-6 < interval) return;
     this.lastGain = now; this.stacks++; this.gains++;
   }
@@ -134,7 +134,7 @@ export class CharacterPassives {
     return !this.stopped && this.character === 'guanyu' && weapon === 'guandao' ? 1 + this.stacks * R.guandaoRangePerStack : 1;
   }
   beginCast(weapon: WeaponId): PassiveCast {
-    const c: PassiveCast = { owner: this.character, generation: this.generation, weapon, empowered: false, radiusMul: this.rangeMultiplier(weapon), damageMul: 1, extraSpear: false, spearLengthMul: 1, roar: false, dash: false, heal: 0, rally: 0, fan: false, whoDares: false, formation: false, maids: false, moonDance: false, bridge: false, cavalry: false, hits: new Set(), awarded: false };
+    const c: PassiveCast = { owner: this.character, generation: this.generation, weapon, empowered: false, radiusMul: this.rangeMultiplier(weapon), damageMul: 1, extraSpear: false, spearLengthMul: 1, roar: false, dash: false, heal: 0, rally: 0, fan: false, whoDares: false, formation: false, maids: false, moonDance: false, bridge: false, charge: false, hits: new Set(), awarded: false };
     if (this.stopped) return c;
     if (this.character === 'zhaoyun' && weapon === 'spear_orbit' && this.stacks === this.maxStacks) {
       c.empowered = c.extraSpear = true; c.spearLengthMul = R.spearLengthMul;
@@ -151,7 +151,7 @@ export class CharacterPassives {
     } else if (this.character === 'liubei' && weapon === 'shuanggu_swords' && this.stacks === this.maxStacks) {
       c.empowered = true; c.damageMul = R.liubeiDamageMul; c.heal = R.liubeiHeal; c.rally = R.liubeiRally;
     } else if (this.character === 'machao' && weapon === 'zhanjin_lance' && this.stacks === this.maxStacks) {
-      c.empowered = c.cavalry = true;
+      c.empowered = c.charge = true;
     } else if (this.character === 'zhangfei' && weapon === 'dangyang_roar' && this.stacks === this.maxStacks) {
       c.empowered = c.bridge = true;
     } else if (this.character === 'guanyu' && weapon === 'guandao' && this.stacks === this.maxStacks) {
@@ -204,7 +204,7 @@ export class CharacterPassives {
   }
   label(now: number): string {
     const name = CHARACTER_PASSIVES[this.character].name;
-    if (this.character === 'huangzhong') return this.isSharpshooter(now) ? `${name} · 神射：暴击+10% / 重箭爆裂` : `${name} · 蓄势 ${Math.min(3, Math.max(0, (now - this.lastDamage) / 1000)).toFixed(1)}/3秒`;
+    if (this.character === 'huangzhong') return this.isSharpshooter(now) ? `${name} · 神射：暴击+10% / 重箭爆裂` : `${name} · 蓄势 ${Math.min(R.calmMs / 1000, Math.max(0, (now - this.lastDamage) / 1000)).toFixed(1)}/${R.calmMs / 1000}秒`;
     return `${name} · ${this.character === 'zhaoyun' ? '龙胆' : this.character === 'guanyu' ? '武势' : this.character === 'zhangfei' ? '怒气' : this.character === 'huangyueying' ? '机括' : this.character === 'pangtong' ? '计策' : this.character === 'liubei' ? '仁德' : this.character === 'weiyan' ? '拒敌' : this.character === 'machao' ? '铁骑' : this.character === 'sunshangxiang' ? '疾步' : this.character === 'diaochan' ? '舞势' : '谋略'} ${this.stacks}/${CHARACTER_PASSIVES[this.character].maxStacks}${this.snapshot(now).ready ? ' · 下次强化' : ''}${this.character === 'zhuge' && this.burns.size ? ` · 灼烧${this.burns.size}` : ''}${this.character === 'diaochan' && this.snapshot(now).turned ? ` · 离间${this.snapshot(now).turned}` : ''}${this.character === 'weiyan' && this.damageTakenMultiplier(now) < 1 ? ' · 谁敢杀我' : ''}`;
   }
 }

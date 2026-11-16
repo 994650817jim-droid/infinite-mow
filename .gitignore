@@ -69,6 +69,7 @@ assets/raw/*
 !/tools/test-campaign-growth-transfer.mjs
 !/tools/test-attr-crossbow.mjs
 !/tools/test-gamepad.mjs
+!/tools/test-gear-revamp.mjs
 !/tools/phase19-progression.mjs
 !/tools/rest-flow-smoke.mjs
 !/tools/prepare-troop-portraits.mjs
@@ -76,3 +77,7 @@ assets/raw/*
 # 主将步态（walk-anim）
 !/tools/test-walk-anim.mjs
 !/tools/walk-anim-record.mjs
+!/tools/test-hubao.mjs
+!/tools/test-mount.mjs
+!/tools/test-shield.mjs
+!/tools/test-objectives.mjs

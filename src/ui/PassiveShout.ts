@@ -6,14 +6,18 @@ import type { CharacterPassives } from '../systems/CharacterPassives';
 /**
  * 被动满层台词：被动刚攒满（下一击要强化）的那一刻，在武将头顶飘一句台词，人物身上闪一下金光，配一声短鼓。
  * 2026-11-16 技能提示方案 C：除首领大招外地上不画圈，所以不画脚下光圈。
- * 只在「未满 → 满」的那一帧触发；同一武将两次之间至少隔 minGapMs，避免连续攒满时刷屏。
+ * 只在「未满 → 满」的那一帧触发；同一武将喊过后 cooldownMs（默认 PASSIVE_SHOUT_COOLDOWN_MS）内再攒满不喊（被动效果照常触发），避免刷屏。
  * 想给别的武将配台词，往 PASSIVE_FULL_SHOUTS 里加一行即可（不配就不喊）。
  */
-export interface PassiveFullShout { lines: readonly string[]; color: string; minGapMs: number; }
+/** 默认：同一武将两次喊话的最短间隔（2026-11-16 用户：台词不要太频繁 → 60 秒）。单个武将可用 cooldownMs 覆盖。 */
+export const PASSIVE_SHOUT_COOLDOWN_MS = 60000;
+export interface PassiveFullShout { lines: readonly string[]; color: string; cooldownMs?: number; }
 export const PASSIVE_FULL_SHOUTS: Partial<Record<CharacterId, PassiveFullShout>> = {
-  // 2026-11-16 用户选定台词：马超「西凉铁骑」满 6 层、下一枪要冲锋时喊一句，三句轮流
-  machao: { lines: ['吾乃西凉马孟起！', '铁骑踏阵，片甲不留！', '锦马超在此，谁敢一战！'], color: '#ffd77a', minGapMs: 15000 },
-  // 孙尚香：用户定为不需要台词（2026-11-16），不配
+  // 2026-11-16 用户选定台词：马超「西凉铁骑」满 6 层、下一枪要冲锋时喊一句，三句轮流；
+  // 用户：「马超可以被动好了就出发台词」→ 不设冷却，每次攒满都喊
+  machao: { lines: ['吾乃西凉马孟起！', '铁骑踏阵，片甲不留！', '锦马超在此，谁敢一战！'], color: '#ffd77a', cooldownMs: 0 },
+  // 2026-11-16 用户定稿台词：孙尚香「侍婢执刀」疾步满 6 层、下一次掷刀召侍婢时喊一句，三句轮流
+  sunshangxiang: { lines: ['侍婢何在，随我执刀！', '弓腰姬在此，谁敢近前！', '江东孙尚香，岂输男儿！'], color: '#ffb8a0' },
 };
 
 export class PassiveShout {
@@ -31,7 +35,7 @@ export class PassiveShout {
     const ready = snap.ready, rose = (ready && !this.wasReady) || (snap.triggers > this.triggers && !this.wasReady);
     this.wasReady = ready; this.triggers = snap.triggers;
     const cfg = PASSIVE_FULL_SHOUTS[id];
-    if (!rose || !cfg || !visible || now - this.lastAt < cfg.minGapMs) return;
+    if (!rose || !cfg || !visible || now - this.lastAt < (cfg.cooldownMs ?? PASSIVE_SHOUT_COOLDOWN_MS)) return;
     this.lastAt = now;
     this.shout(cfg.lines[this.next++ % cfg.lines.length], cfg.color, x, y, body);
   }

@@ -54,7 +54,7 @@ for (const [layout, viewport] of Object.entries(LAYOUTS)) for (const [hero, h] o
       return { stacksAfterWalk: sn0.stacks, gains: pl.passive.snapshot(s.combatNow).gains, triggers: pl.passive.snapshot(s.combatNow).triggers, maids, slash, slashTex: s.textures.exists('sun_maid_slash'), shouts: s.passiveShout.count, shout: s.passiveShout.lastLine };
     }, G);
     ck(`${tag}：移动积满 6 层疾步，召出 2 名执刀侍婢`, m.gains >= 6 && m.triggers >= 1 && m.maids >= 2, m);
-    ck(`${tag}：侍婢挥刀播正式刀光；疾步攒满时不喊台词（用户定为不需要）`, m.slash && m.slashTex && m.shouts === 0, m);
+    ck(`${tag}：侍婢挥刀播正式刀光；疾步攒满时头顶喊一句台词`, m.slash && m.slashTex && m.shouts === 1 && ['侍婢何在，随我执刀！', '弓腰姬在此，谁敢近前！', '江东孙尚香，岂输男儿！'].includes(m.shout), m);
     // 成长：Lv5 一次掷出 3 把（飞向不同敌人）
     const lv5 = await p.evaluate(async G0 => {
       const s = eval(G0), pl = s.player; for (const e of s.enemies) if (e.active && !e.isSupplySlot) e.hp = 0;

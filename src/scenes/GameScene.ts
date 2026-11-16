@@ -3,6 +3,7 @@ import {FollowerSquad} from '../systems/FollowerSquad';
 import {followersFor} from '../systems/RosterStore';
 import { warnCircle, TELEGRAPH_CLASSIC, groundCracks, windupFlash } from '../ui/Telegraph';
 import { HINT_MOCK, SHOW_OWN_RANGE_FX, groundScar, keyOutline } from '../ui/HintStyle';
+import { warnFx } from '../ui/WarnFx';
 import {applyCitySpecialties} from '../systems/CityBonuses';
 import {cityIncomeLine} from '../world/WorldStore';
 import {CampRestUI} from '../ui/CampRestUI';
@@ -1314,6 +1315,8 @@ export class GameScene extends Phaser.Scene {
       gfx.clear();
       const pulse = 1 + Math.sin(now / 70) * 0.06;
       for (const pt of this.bossUltPoints) {
+        // 特效型警示（默认）：落点上空乌云聚拢、地上符光渐亮；缺图时退回细虚线
+        if (!TELEGRAPH_CLASSIC && HINT_MOCK === 'c' && warnFx(this).warn('zj' + Math.round(pt.x) + ',' + Math.round(pt.y), 'lightning', pt.x, pt.y, 72, 1 - Math.max(0, this.bossUltAt - now) / 800, now)) continue;
         if (HINT_MOCK === 'c' && !TELEGRAPH_CLASSIC) keyOutline(gfx, pt.x, pt.y, 72, 1 - Math.max(0, this.bossUltAt - now) / 800, now); else
         warnCircle(gfx, pt.x, pt.y, 72 * pulse, 1 - Math.max(0, this.bossUltAt - now) / 800, 0x7a3cff, 0xd9c2ff, false, now);
       }
@@ -1324,8 +1327,9 @@ export class GameScene extends Phaser.Scene {
         gfx.clear();
         let hit = false;
         for (const pt of this.bossUltPoints) {
-          // 多道雷电
-          for (let k = -1; k <= 1; k += 1) {
+          // 多道雷电（有雷劈序列帧时用图，不再画线）
+          const boltArt = !TELEGRAPH_CLASSIC && HINT_MOCK === 'c' && warnFx(this).impact('lightning', pt.x, pt.y, 72);
+          if (!boltArt) for (let k = -1; k <= 1; k += 1) {
             const ox = pt.x + k * 16;
             gfx.lineStyle(k === 0 ? 6 : 3, 0xfff2a8, 1);
             gfx.beginPath();

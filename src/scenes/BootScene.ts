@@ -1,3 +1,4 @@
+import {WARN_FX_FILES} from '../ui/WarnFx';
 import {HOME_ART_HEROES} from '../data/characters';
 import {GROWTH_ICON_IDS} from '../ui/GrowthIcons';
 import {TACTICS,TREASURES} from '../data/builds';
@@ -17,6 +18,8 @@ export class BootScene extends Phaser.Scene {
 
   preload(): void {
     this.load.spritesheet('build_vfx','assets/build-vfx/styles-ai-v1.png',{frameWidth:64,frameHeight:64});
+    // 特效型警示序列帧（src/ui/WarnFx.ts；缺图时首领招式退回细虚线 / 无提示）
+    for(const f of Object.values(WARN_FX_FILES))this.load.spritesheet(f.key,f.file,{frameWidth:f.w,frameHeight:f.h});
     this.load.spritesheet('refined_spear','assets/combat-refined/spear-sequence.png',{frameWidth:384,frameHeight:64});
     this.load.spritesheet('refined_impact','assets/combat-refined/impact-sequence.png',{frameWidth:64,frameHeight:64});
     // 三选一 / 增益栏图标：2026-11-14 起使用 ChatGPT 生成的厚涂图标（assets/upgrade-icons，tools/build-upgrade-icons.mjs 切图）；

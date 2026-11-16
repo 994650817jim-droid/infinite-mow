@@ -47,7 +47,6 @@ export class ItemBagUI {
   readonly root: Phaser.GameObjects.Container;
   private body!: Phaser.GameObjects.Container;
   private hero: GearOwner;
-  private tab: 'bag' | 'loot';
   private filter: ItemSlot | 'all' = 'all';
   private page = 0;
   /** 选中：道具 uid、'treasure:N'、'stable'、'legacy'。 */
@@ -65,7 +64,6 @@ export class ItemBagUI {
   constructor(private readonly scene: Phaser.Scene, private readonly o: ItemBagOptions) {
     ensureItemTextures(scene);
     this.hero = o.hero;
-    this.tab = 'bag';
     if (o.stable) this.selected = 'stable';
     this.root = scene.add.container(0, 0).setDepth(DEPTH.overlay + 20).setScrollFactor(0).setName('item-bag').setData('ui', this);
     // 拖拽：移动超过 8px 才算拖，轻点仍是选中（手柄 Ⓐ 走点击）
@@ -98,10 +96,13 @@ export class ItemBagUI {
     return t;
   }
 
+  /** 是否本局缴获（战斗中拾取、尚未收入行囊）。 */
+  private isLoot(uid: string): boolean { return !!this.o.runLoot?.some(i => i.uid === uid); }
+  /** 行囊网格：战斗中把本局缴获并进来排在最前（角上标「新」），其余按品质排序。 */
   private items(): ItemInstance[] {
-    const list = this.tab === 'loot' ? [...(this.o.runLoot ?? [])] : loadItems().bag;
-    return list.filter(i => this.filter === 'all' || itemSlot(i) === this.filter)
-      .sort((a, b) => qIndex(b) - qIndex(a) || SLOT_ORDER.indexOf(itemSlot(a)) - SLOT_ORDER.indexOf(itemSlot(b)) || itemName(a).localeCompare(itemName(b)));
+    const byQuality = (a: ItemInstance, b: ItemInstance) => qIndex(b) - qIndex(a) || SLOT_ORDER.indexOf(itemSlot(a)) - SLOT_ORDER.indexOf(itemSlot(b)) || itemName(a).localeCompare(itemName(b));
+    const pick = (l: ItemInstance[]) => l.filter(i => this.filter === 'all' || itemSlot(i) === this.filter).sort(byQuality);
+    return [...pick([...(this.o.runLoot ?? [])]), ...pick(loadItems().bag)];
   }
 
   /** 穿戴（行囊里的）或穿上缴获（战斗中）。返回是否成功。 */
@@ -195,32 +196,30 @@ export class ItemBagUI {
     // 行囊网格
     const gx = D ? x0 + 372 : x0 + 22, gw = D ? pw - 372 - 24 : pw - 44;
     let fy = D ? dollTop + 10 : sumBottom + 22;
-    if (this.battle && this.o.runLoot) {
-      this.button(gx + 60, fy, '行囊', 'item-tab-bag', () => { this.tab = 'bag'; this.page = 0; this.selected = null; this.render(); }, { active: this.tab === 'bag', size: 14 });
-      this.button(gx + 170, fy, '本局缴获 ' + this.o.runLoot.length, 'item-tab-loot', () => { this.tab = 'loot'; this.page = 0; this.selected = null; this.render(); }, { active: this.tab === 'loot', size: 14 });
-      fy += 40;
-    }
     const filters: Array<ItemSlot | 'all'> = ['all', ...SLOT_ORDER], fw = (gw - 4 * 6) / 5;
     filters.forEach((f, i) => this.button(gx + fw / 2 + i * (fw + 6), fy, f === 'all' ? '全部' : SLOTS[f].name, 'item-filter-' + f, () => { this.filter = f; this.page = 0; this.render(); }, { active: this.filter === f, size: 13, w: fw - 24 }));
     const cell = D ? 60 : 72, gap = D ? 8 : 10, gcols = Math.max(1, Math.floor((gw + gap) / (cell + gap)));
     const gridTop = fy + 30, bottom = y0 + ph - (D ? 62 : 74), rows = Math.max(1, Math.floor((bottom - gridTop + gap) / (cell + gap))), per = gcols * rows;
     this.gridRect = { x: gx, y: gridTop - 8, w: gw, h: bottom - gridTop + 16 };
     const list = this.items(), pages = Math.max(1, Math.ceil(list.length / per)); this.page = Math.min(this.page, pages - 1);
-    const offX = gx + (gw - (gcols * cell + (gcols - 1) * gap)) / 2, canWearLoot = this.tab === 'bag' || !!this.o.claimLoot;
+    const offX = gx + (gw - (gcols * cell + (gcols - 1) * gap)) / 2;
     list.slice(this.page * per, this.page * per + per).forEach((item, i) => {
       const ix = offX + cell / 2 + (i % gcols) * (cell + gap), iy = gridTop + cell / 2 + Math.floor(i / gcols) * (cell + gap);
       const tile = this.add(itemTile(this.scene, ix, iy, cell, item, undefined, { selected: item.uid === this.selected }));
       tile.setName('item-cell-' + i).setData('uid', item.uid).setSize(cell, cell).setInteractive({ useHandCursor: true });
-      this.tapOrDrag(tile, () => this.select(item.uid), canWearLoot ? { item } : undefined);
-      const owner = this.tab === 'bag' ? equippedBy(s, item.uid) : undefined;
+      const loot = this.isLoot(item.uid);
+      this.tapOrDrag(tile, () => this.select(item.uid), !loot || this.o.claimLoot ? { item } : undefined);
+      // 本局缴获：左上角淡金「新」字（穿上即收入行囊；没穿的结算时按原规则带回）
+      if (loot) tile.setData('loot', true).add(this.scene.add.text(-cell / 2 + 3, -cell / 2 + 2, '新', { fontFamily: HEADING_FONT, fontSize: '12px', color: '#2a1a08', backgroundColor: '#f3d48acc', resolution: 2 }).setPadding(3, 0).setName('item-new-badge'));
+      const owner = loot ? undefined : equippedBy(s, item.uid);
       if (owner) this.text(ix - cell / 2 + 3, iy + cell / 2 - 3, (ownerName(owner).slice(0, 1) || '装'), 11, '#1c140a').setOrigin(0, 1).setBackgroundColor('#d7b46a').setPadding(2, 0);
     });
-    if (!list.length) this.text(gx + gw / 2, gridTop + 60, this.tab === 'loot' ? '本局尚未缴获兵装\n击败精锐、首领或打开宝箱可得' : '行囊空空\n战斗中击败精锐、首领、打开宝箱可得兵装', 15, '#9c8c6c').setOrigin(.5).setAlign('center');
+    if (!list.length) this.text(gx + gw / 2, gridTop + 60, '行囊空空\n战斗中击败精锐、首领、打开宝箱可得兵装', 15, '#9c8c6c').setOrigin(.5).setAlign('center');
     const pageY = y0 + ph - (D ? 36 : 44);
     this.button(gx + 30, pageY, '‹', 'item-page-prev', () => { this.page = Math.max(0, this.page - 1); this.render(); }, { disabled: this.page === 0, size: 16 });
     this.text(gx + 82, pageY, `${this.page + 1} / ${pages}`, 14, '#cdb98a').setOrigin(.5).setName('item-page');
     this.button(gx + 134, pageY, '›', 'item-page-next', () => { this.page = Math.min(pages - 1, this.page + 1); this.render(); }, { disabled: this.page >= pages - 1, size: 16 });
-    if (this.tab === 'bag') {
+    {
       this.button(gx + gw - (D ? 196 : 208), pageY, `自动分解白：${s.autoSalvageWhite ? '开' : '关'}`, 'item-auto-white', () => { setAutoSalvageWhite(!s.autoSalvageWhite); this.notice = s.autoSalvageWhite ? '已关闭：白色兵装照常收入行囊' : '已开启：之后的白色兵装收入时直接折成军粮'; this.render(); }, { size: 13, active: s.autoSalvageWhite });
       this.button(gx + gw - 62, pageY, '分解白 / 绿', 'item-salvage-low', () => { const m = salvageUpTo('green'); this.notice = m ? `分解完成 · 军粮 +${rewardGrain(0, 0, m)}` : '没有可分解的白 / 绿兵装（已穿戴的不会分解）'; this.selected = null; this.render(); }, { size: 13 });
     }

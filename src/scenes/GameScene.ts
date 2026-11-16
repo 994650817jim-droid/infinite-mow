@@ -23,6 +23,7 @@ import {XurongBoss} from '../systems/XurongBoss';
 import {getSishuiEncounter} from '../data/sishui';
 import {BattlefieldSupplies,MAX_PROP_SLOTS} from '../systems/BattlefieldSupplies';
 import {YellowBattle} from '../systems/YellowBattle';
+import {XiliangBattle} from '../systems/XiliangBattle';
 import {dongzhuoStageUnlocked,yellowStageUnlocked} from '../world/WorldStore';
 import {abandonExpedition,beginExpedition,settleExpedition,permanentEffects,worldUnlocked,worldChapterCleared,takeExpeditionReserve} from '../world/WorldStore';
 import Phaser from 'phaser';
@@ -121,6 +122,8 @@ export class GameScene extends Phaser.Scene {
   protected chapter: ChapterDef = getChapter();
   protected lubu: LubuBoss | null = null;
   protected yellow:YellowBattle|null=null;
+  /** 第二章主线（汜水关 / 荥阳 / 虎牢关）西凉军战法：铁骑突阵、飞熊军。攻守城与军情战斗（encounter）不启用。 */
+  protected xiliang:XiliangBattle|null=null;
   protected supplies:BattlefieldSupplies|null=null;
   /** 道具掉落与本局缴获（局外兵装，结算带回行囊）。 */
   protected itemDrops:ItemDrops|null=null;
@@ -368,6 +371,7 @@ export class GameScene extends Phaser.Scene {
     this.allies = [];
     this.legion = new Legion(this, this.allies, this.player);
     this.yellow=this.chapter.stage?new YellowBattle({scene:this,player:this.player,army:this.legion,enemies:this.enemies,move:(e,nx,ny,dt)=>this.advanceEnemy(e,nx,ny,dt),spawn:(def,x,y)=>this.spawnEnemy(def.kind,x,y,1,true,def)},this.chapter.stage):null;
+    this.xiliang=this.chapter.id==='hulao'&&!this.runConfig.encounter&&!this.customChapter()?new XiliangBattle({scene:this,player:this.player,army:this.legion,enemies:this.enemies,spawn:(kind,x,y,def)=>this.spawnEnemy(kind,x,y,undefined,true,def),stage:()=>(this.chapter.westStage??3) as 1|2|3,elapsed:()=>this.elapsed,def:k=>this.chapter.enemies[k],banner:(t,c)=>this.showWaveBanner(t,true,c),sfx:k=>this.sfx.play(k)}):null;
     this.supplies=new BattlefieldSupplies(this,this.player,this.enemies,()=>this.combatNow,()=>{this.sfx.play('pickup');this.artEffects.show(5,this.player.x,this.player.y-12,35,this.combatNow,280);});
     // 兵装：开局读入该武将穿戴的道具加成（生命上限增加的部分补满）
     {const oldMax=this.player.maxHp;this.player.growth.gear=gearFor(this.runConfig.character);this.player.heal(this.player.maxHp-oldMax);}
@@ -503,7 +507,7 @@ export class GameScene extends Phaser.Scene {
     this.spawnTimer = 0.5;
     this.eliteTimer = BALANCE.eliteFirst;
     this.boss = null;
-    this.sishuiObstacles=null;this.huaxiong=null;this.xurong=null;this.lubu = null; this.yellow=null; this.supplies=null; this.yellowAltar=null;this.finaleFadeMs=0;
+    this.sishuiObstacles=null;this.huaxiong=null;this.xurong=null;this.lubu = null; this.yellow=null; this.xiliang=null; this.supplies=null; this.yellowAltar=null;this.finaleFadeMs=0;
     this.bossSpawned = false;
     this.bossCastCd = 3;
     this.bossSummonCd = 6;
@@ -552,7 +556,7 @@ export class GameScene extends Phaser.Scene {
       this.music.dispose();
       this.sfx.dispose();
       this.disposeDevelopment();
-      this.legion.stop(); this.reinforcements.clear();this.yellow?.clear();this.clearChasingBosses();this.supplies?.clear();this.itemDrops?.clear();
+      this.legion.stop(); this.reinforcements.clear();this.yellow?.clear();this.xiliang?.clear();this.clearChasingBosses();this.supplies?.clear();this.itemDrops?.clear();
     });
     this.input.on('pointermove', (pointer: Phaser.Input.Pointer) => this.joystick.handleMove(pointer));
     this.input.on('pointerup', (pointer: Phaser.Input.Pointer) => this.joystick.handleUp(pointer));
@@ -651,7 +655,7 @@ export class GameScene extends Phaser.Scene {
     if(!this.over)this.itemDrops?.update();
     this.supplies?.update(dt,time,this.battlefieldDetails.props,(enemy,damage)=>this.hitEnemy(enemy,damage,time,'fire',false,false),this.allies,(ally,damage,now)=>this.legion.hurt(ally,damage,now));
     this.updateEnemies(dt, time);
-    this.yellow?.update(dt,time);
+    this.yellow?.update(dt,time);this.xiliang?.update(dt,this.combatNow);
     for(const t of this.chasingBosses){if(t.enemy.active&&t.enemy.spawnId===t.life){t.battle?.update(dt,time);t.label.setPosition(t.enemy.x,t.enemy.y-100).setText(t.name+" · 追兵 "+Math.ceil(Math.max(0,t.enemy.hp)/t.enemy.maxHp*100)+"%");}}
     this.rebuildGrid();
     if(time>=this.navigationAt){this.navigationAt=time+250;const boxes=[...(this.sishuiObstacles?.footprints??[])];this.supplies?.appendNavigationBoxes(boxes);this.legion.navigation.setBoxes(boxes);}
@@ -894,6 +898,7 @@ export class GameScene extends Phaser.Scene {
       const ny = dy / dist;
 
       if(this.customEnemyStep(enemy,dt,this.combatNow,target)){}
+      else if (this.xiliang?.handleEnemy(enemy,dt,this.combatNow)) {}
       else if (this.yellow?.handleEnemy(enemy,dt,this.combatNow,target)) {
         // Stage-specific spear, earth caster, shield and temporary elite behaviors.
       } else if (enemy.kind === 'archer') {
@@ -1335,6 +1340,7 @@ export class GameScene extends Phaser.Scene {
     if (!enemy.active || this.over || enemy.invulnerable) return false;
     if(enemy.isSupplySlot){enemy.hp-=Math.max(1,Math.round(rawDamage));enemy.flash(time);this.sfx.play('hitHeavy');if(enemy.hp<=0)this.killEnemy(enemy);return false;}
     if (enemy === this.boss) this.ensureBossPhase2();
+    if (this.xiliang) rawDamage *= this.xiliang.incoming(enemy, source);
     if(this.yellow&&enemy.kind==='shield'&&enemy.def.behavior!=='wall'&&!fromAlly&&source!=='fire'){const angle=enemy.direction==='left'?Math.PI:enemy.direction==='right'?0:enemy.direction==='up'?-Math.PI/2:Math.PI/2;if(Math.cos(Math.atan2(this.player.y-enemy.y,this.player.x-enemy.x)-angle)>.25)rawDamage*=.65;}
     if (source === 'arrow') this.sfx.play('hitArrow');
     else if (source === 'fire') this.sfx.play('hitFire');
@@ -2210,7 +2216,7 @@ export class GameScene extends Phaser.Scene {
     this.reinforcements.clear();
     this.victory = victory;
     this.music.stop();
-    this.lubu?.clear();this.huaxiong?.clear();this.xurong?.clear();this.yellow?.clear();this.clearChasingBosses();this.supplies?.clear();if(victory)this.itemDrops?.collectAll();this.itemDrops?.clear();
+    this.lubu?.clear();this.huaxiong?.clear();this.xurong?.clear();this.yellow?.clear();this.xiliang?.clear();this.clearChasingBosses();this.supplies?.clear();if(victory)this.itemDrops?.collectAll();this.itemDrops?.clear();
     if(victory&&this.chapter.stage===3)this.finaleFadeMs=800;
     this.feedback.clearAttacks();
     if (victory) this.sfx.win();

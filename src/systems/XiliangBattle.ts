@@ -34,6 +34,13 @@ export interface Host {
   banner: (text: string, caption: string) => void; sfx: (key: 'chargeWarn' | 'hitHeavy') => void;
   /** 2-3 董卓（DongzhuoBoss）：当前首领、首领招式组、敌兵寻路移动。 */
   boss?: () => Enemy | null; bossStyle?: () => string; move?: (e: Enemy, nx: number, ny: number, dt: number) => void;
+  /** 战场上的建筑碰撞框（城墙、城门等）：突阵选道时避开，免得骑兵从墙后起冲被挡住。 */
+  obstacles?: () => ReadonlyArray<{left: number; right: number; top: number; bottom: number}>;
+}
+/** 线段（加宽 r）是否穿过任一碰撞框。 */
+function laneBlocked(x0: number, y0: number, x1: number, y1: number, r: number, boxes: ReadonlyArray<{left: number; right: number; top: number; bottom: number}>): boolean {
+  for (let i = 0; i <= 24; i++) { const t = i / 24, x = x0 + (x1 - x0) * t, y = y0 + (y1 - y0) * t; if (boxes.some(b => x > b.left - r && x < b.right + r && y > b.top - r && y < b.bottom + r)) return true; }
+  return false;
 }
 export interface Raid {id: number; x: number; y: number; dx: number; dy: number; warnUntil: number; riders: Array<{e: Enemy; life: number; ox: number; oy: number; hit: boolean; hurtAt: number}>; g: Phaser.GameObjects.Graphics; traveled: number}
 interface Bash {e: Enemy; life: number; state: 'windup' | 'lunge'; until: number; dx: number; dy: number; hit: boolean; anim?: boolean; g: Phaser.GameObjects.Graphics}
@@ -130,7 +137,11 @@ export class XiliangBattle {
   }
   /** 立即发起一次铁骑突阵（测试与调试用）；返回突阵编号。 */
   startRaid(now: number): number {
-    const p = this.h.player, a = Math.random() * Math.PI * 2, dx = Math.cos(a), dy = Math.sin(a), side = (Math.random() - .5) * 2 * this.raid.aimJitter;
+    // 选一条从起点到主将之间没有建筑挡路的冲锋道（最多试 12 次，都不行就用最后一次）
+    const p = this.h.player, boxes = this.h.obstacles?.() ?? [];
+    let a = Math.random() * Math.PI * 2;
+    for (let k = 0; k < 12 && boxes.length; k++) { const sx = p.x - Math.cos(a) * this.raid.lead, sy = p.y - Math.sin(a) * this.raid.lead; if (!laneBlocked(sx, sy, p.x + Math.cos(a) * 120, p.y + Math.sin(a) * 120, (this.raid.riders - 1) / 2 * this.raid.spacing + 20, boxes)) break; a = Math.random() * Math.PI * 2; }
+    const dx = Math.cos(a), dy = Math.sin(a), side = (Math.random() - .5) * 2 * this.raid.aimJitter;
     const x = p.x - dx * this.raid.lead - dy * side, y = p.y - dy * this.raid.lead + dx * side;
     const riders: Raid['riders'] = [], def = this.o.riderDef?.() ?? this.h.def('cavalry'), dir = Math.abs(dx) > Math.abs(dy) ? (dx < 0 ? 'left' : 'right') : dy < 0 ? 'up' : 'down';
     for (let i = 0; i < this.raid.riders; i++) {

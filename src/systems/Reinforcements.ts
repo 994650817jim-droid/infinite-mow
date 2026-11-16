@@ -6,6 +6,7 @@ import { DEPTH, FONT, GAME_HEIGHT, GAME_WIDTH } from '../config';
 import type { Enemy } from '../entities/Enemy';
 import type { Player } from '../entities/Player';
 import { COMBOS as PAIRS } from '../data/reinforcements';
+import { HINT_MOCK } from '../ui/HintStyle';
 
 interface Burn { enemy: Enemy; spawn: number; until: number; next: number; }
 export class Reinforcements {
@@ -100,9 +101,10 @@ export class Reinforcements {
     }
     const g = this.gfx, fade = Math.max(0, 1 - t / 1800);
     const fire = ['firePath', 'burnSweep', 'fireVolley'].includes(kind);
+    if (HINT_MOCK) g.clear(); else {
     g.lineStyle(5, fire ? 0xff873e : 0x9bdde0, fade);
     if (kind === 'markedVolley') { for (const m of this.marks) if (m.enemy.active && m.enemy.spawnId === m.spawn) { g.strokeCircle(m.enemy.x, m.enemy.y, 22); if (t > 700) g.lineBetween(this.helper.x, this.helper.y, m.enemy.x, m.enemy.y); } }
-    else { if (t < 850 && kind !== 'arrowCircle') g.lineBetween(this.ox, this.oy, this.tx, this.ty); if (t > 700 || kind === 'arrowCircle' || kind === 'burnSweep' || kind === 'fireVolley') { g.strokeCircle(this.tx, this.ty, kind === 'burnSweep' ? 200 : kind === 'fireVolley' ? 160 : 170); g.fillStyle(fire ? 0xff6528 : 0x73bc9d, fade * .1).fillCircle(this.tx, this.ty, 170); } }
+    else { if (t < 850 && kind !== 'arrowCircle') g.lineBetween(this.ox, this.oy, this.tx, this.ty); if (t > 700 || kind === 'arrowCircle' || kind === 'burnSweep' || kind === 'fireVolley') { g.strokeCircle(this.tx, this.ty, kind === 'burnSweep' ? 200 : kind === 'fireVolley' ? 160 : 170); g.fillStyle(fire ? 0xff6528 : 0x73bc9d, fade * .1).fillCircle(this.tx, this.ty, 170); } } }
     this.helper.setAlpha(fade);
     if (t > 1800) { this.started = -1; this.helper.setVisible(false); this.text.setVisible(false); this.spear.setVisible(false); this.slash.setVisible(false); this.flame.setVisible(false); g.clear(); }
   }

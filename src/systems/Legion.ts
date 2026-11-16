@@ -13,6 +13,7 @@ import { SpatialGrid } from './SpatialGrid';
 import { LEGION, TROOPS, TROOP_KINDS, type Order, type TroopKind, BOSS_VS_TROOPS, RECRUIT_PRICE } from '../data/legion';
 import { DEPTH } from '../config';
 import { AllyCorpses } from './AllyCorpses';
+import { HINT_MOCK, groundScar } from '../ui/HintStyle';
 export interface LegionState { training?:CampTraining;groups?:Partial<Record<TroopKind,CampGroup>>; food: number; dead: number; recruited: number; levels: Record<TroopKind, number>; soldiers: Array<{ kind: TroopKind; hp: number;reserveSoldier?:boolean }> }
 
 export class Legion {
@@ -130,6 +131,7 @@ export class Legion {
   }
   /** 首领横扫提示：一圈淡金刀光，0.25 秒散去（不震屏）。 */
   private bossSweepFx(x: number, y: number, r: number): void {
+    if (HINT_MOCK) { if (HINT_MOCK === 'b') groundScar(this.scene, x, y, r * .8, 'crack'); return; }
     const ring = this.scene.add.circle(x, y, r * .6, 0xffd27a, 0).setStrokeStyle(4, 0xffe0a0, .75).setDepth(DEPTH.fx);
     this.scene.tweens.add({ targets: ring, radius: r, alpha: 0, duration: 250, onComplete: () => ring.destroy() });
   }

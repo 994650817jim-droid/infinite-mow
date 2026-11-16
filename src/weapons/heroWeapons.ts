@@ -5,6 +5,7 @@ import type { PlayerStats, WeaponState } from '../types';
 import { PASSIVE_RULES as R } from '../data/passives';
 import type { WeaponHost } from './registry';
 import { smartTarget } from './heroWeapons2';
+import { SHOW_OWN_RANGE_FX } from '../ui/HintStyle';
 
 /**
  * 魏延「镇北环首刀」与庞统「凤雏连环令」两把专属本命武器（2026-11-15 重做，不再沿用关羽偃月刀 / 诸葛亮战旗）。
@@ -318,8 +319,8 @@ function summonMaids(host: WeaponHost, s: SunState, time: number, count: number,
     img.setScale(46 / Math.max(1, img.height)).setDepth(39).setName('sun-maid');
     s.maids.push({ img, until: time + ms, angle, nextSlash: time + 200 });
     // 召唤刀光（过渡）
-    const ring = host.add.circle(x, y, 8, 0xff6a5a, 0).setStrokeStyle(3, 0xffc0a0, .9).setDepth(41);
-    ring.scene.tweens.add({ targets: ring, radius: 40, alpha: 0, duration: 320, onComplete: () => ring.destroy() });
+    if (SHOW_OWN_RANGE_FX) { const ring = host.add.circle(x, y, 8, 0xff6a5a, 0).setStrokeStyle(3, 0xffc0a0, .9).setDepth(41);
+    ring.scene.tweens.add({ targets: ring, radius: 40, alpha: 0, duration: 320, onComplete: () => ring.destroy() }); }
   }
 }
 
@@ -510,8 +511,8 @@ export function diaochanFansBehavior(host: WeaponHost, weapon: WeaponState, dt: 
   }
   // 闭月：舞带环身旋舞
   if (time < s.danceUntil) {
-    if (s.ribbon) { s.ribbon.clear(); const a0 = time / 180; s.ribbon.setPosition(pl.x, pl.y - 6);
-      for (let k = 0; k < 3; k++) { const a = a0 + k * Math.PI * 2 / 3; s.ribbon.lineStyle(6 - k, k % 2 ? 0xe9a6ff : 0xffc6ec, .85).beginPath().arc(0, 0, R.moonRadius * (.55 + .15 * k), a, a + 1.6).strokePath(); } }
+    if (s.ribbon) { s.ribbon.clear(); if (SHOW_OWN_RANGE_FX) { const a0 = time / 180; s.ribbon.setPosition(pl.x, pl.y - 6);
+      for (let k = 0; k < 3; k++) { const a = a0 + k * Math.PI * 2 / 3; s.ribbon.lineStyle(6 - k, k % 2 ? 0xe9a6ff : 0xffc6ec, .85).beginPath().arc(0, 0, R.moonRadius * (.55 + .15 * k), a, a + 1.6).strokePath(); } } }
     if (time >= s.nextTick) {
       s.nextTick = time + R.moonTickMs;
       const turnMs = R.turnMs + 500 * growth.masteries.meirenji;

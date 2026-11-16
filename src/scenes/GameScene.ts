@@ -2,6 +2,7 @@ import { stopMenuMusic } from '../systems/Music';
 import {FollowerSquad} from '../systems/FollowerSquad';
 import {followersFor} from '../systems/RosterStore';
 import { warnCircle, TELEGRAPH_CLASSIC, groundCracks, windupFlash } from '../ui/Telegraph';
+import { HINT_MOCK, SHOW_OWN_RANGE_FX, groundScar, keyOutline } from '../ui/HintStyle';
 import {applyCitySpecialties} from '../systems/CityBonuses';
 import {cityIncomeLine} from '../world/WorldStore';
 import {CampRestUI} from '../ui/CampRestUI';
@@ -1168,7 +1169,7 @@ export class GameScene extends Phaser.Scene {
     this.sfx.play(kind === 'volley' ? 'bossVolley' : 'bossSummon');
     const b = this.boss;
     if (kind === 'volley') {
-      const ring = this.add.circle(b.x, b.y + 18, 14).setStrokeStyle(3, 0xffd166, 0.95).setDepth(DEPTH.fx);
+      const ring = this.add.circle(b.x, b.y + 18, 14).setStrokeStyle(3, 0xffd166, 0.95).setDepth(DEPTH.fx).setVisible(!HINT_MOCK);
       this.tweens.add({ targets: ring, scale: 2.6, alpha: 0, duration: 300, onComplete: () => ring.destroy() });
       const glow = this.add.circle(b.x, b.y - 26, 9, 0xffe9a8, 0.95).setDepth(DEPTH.fx);
       this.tweens.add({ targets: glow, scale: 2.2, alpha: 0, duration: 300, onComplete: () => glow.destroy() });
@@ -1313,6 +1314,7 @@ export class GameScene extends Phaser.Scene {
       gfx.clear();
       const pulse = 1 + Math.sin(now / 70) * 0.06;
       for (const pt of this.bossUltPoints) {
+        if (HINT_MOCK === 'c' && !TELEGRAPH_CLASSIC) keyOutline(gfx, pt.x, pt.y, 72, 1 - Math.max(0, this.bossUltAt - now) / 800, now); else
         warnCircle(gfx, pt.x, pt.y, 72 * pulse, 1 - Math.max(0, this.bossUltAt - now) / 800, 0x7a3cff, 0xd9c2ff, false, now);
       }
       if (now >= this.bossUltAt) {
@@ -1803,7 +1805,8 @@ export class GameScene extends Phaser.Scene {
 
   /** 爆炸预警：地面亮起八卦火阵（扁椭圆、半透明），几点火星向中心聚拢；缺图时退回橙色圆圈。 */
   protected spawnFlameGatherFx(x: number, y: number, radius: number): void {
-    if (this.textures.exists('fire_sigil')) {
+    if (!SHOW_OWN_RANGE_FX) { /* 默认（只保留关键提示）：不铺八卦火阵，只留火星向中心聚拢 */ }
+    else if (this.textures.exists('fire_sigil')) {
       const w = radius * 2.1, sigil = this.add.image(x, y, 'fire_sigil').setDisplaySize(w * 0.8, w * 0.8 * 0.5).setDepth(DEPTH.ground + 4).setAlpha(0).setBlendMode(Phaser.BlendModes.ADD).setName('fire-sigil');
       this.tweens.add({ targets: sigil, alpha: 0.85, displayWidth: w, displayHeight: w * 0.5, duration: 150, ease: 'Quad.Out', onComplete: () => this.tweens.add({ targets: sigil, alpha: 0, duration: 260, delay: 60, onComplete: () => sigil.destroy() }) });
     } else {
@@ -1819,9 +1822,16 @@ export class GameScene extends Phaser.Scene {
 
   /** 爆炸：6 帧火焰爆发序列（八卦亮起→火球→烈焰→贴地火环→余烬→淡烟），按爆炸半径缩放、以地面为中心；缺图时退回放大火球。 */
   protected spawnFlameFx(x: number, y: number, radius: number): void {
+    if (HINT_MOCK === 'b') groundScar(this, x, y, radius, 'fire');
     if (this.textures.exists('flame_burst')) {
       const size = radius * 2.5, burst = this.add.image(x, y, 'flame_burst', 0).setOrigin(0.5, 0.82).setDisplaySize(size, size).setDepth(actorDepth(y) + 0.5).setName('flame-burst');
       { const tint = HERO_TINT[this.runConfig.character]; if (tint) burst.setTint(tint); }
+      if (!SHOW_OWN_RANGE_FX && this.textures.exists('build_vfx')) { // 默认（只保留关键提示）：原序列帧自带八卦地纹，改用像素火焰爆发（战法特效图集「烈焰」行，无地纹）
+        burst.destroy(); const fire = this.add.image(x, y, 'build_vfx', 18).setOrigin(.5, .72).setDisplaySize(radius * 1.9, radius * 1.9).setDepth(actorDepth(y) + .5).setName('flame-burst');
+        { const tint = HERO_TINT[this.runConfig.character]; if (tint) fire.setTint(tint); }
+        this.tweens.addCounter({ from: 18, to: 23.99, duration: 380, onUpdate: t => fire.setFrame(Math.floor(t.getValue() ?? 18)), onComplete: () => fire.destroy() });
+        return;
+      }
       this.tweens.addCounter({ from: 0, to: 5.99, duration: 420, onUpdate: t => burst.setFrame(Math.floor(t.getValue() ?? 0)), onComplete: () => this.tweens.add({ targets: burst, alpha: 0, duration: 120, onComplete: () => burst.destroy() }) });
       return;
     }
@@ -2256,7 +2266,7 @@ export class GameScene extends Phaser.Scene {
 
   private updateRelicWaves():void{
     if(!this.relicWaveGfx)return;const g=this.relicWaveGfx;g.clear();
-    for(let i=this.relicWaves.length-1;i>=0;i--){const r=this.relicWaves[i],p=(this.combatNow-r.at)/240;if(p>=1||this.over){this.relicWaves.splice(i,1);continue;}g.lineStyle(2,0xe9ca83,(1-p)*.8).strokeCircle(r.x,r.y,110).lineStyle(1,0xffe5b0,(1-p)*.65).strokeCircle(r.x,r.y,110*(.35+.65*p));}
+    for(let i=this.relicWaves.length-1;i>=0;i--){const r=this.relicWaves[i],p=(this.combatNow-r.at)/240;if(p>=1||this.over){this.relicWaves.splice(i,1);continue;}if(HINT_MOCK)continue;g.lineStyle(2,0xe9ca83,(1-p)*.8).strokeCircle(r.x,r.y,110).lineStyle(1,0xffe5b0,(1-p)*.65).strokeCircle(r.x,r.y,110*(.35+.65*p));}
   }
   private offerBossLoot(done:()=>void):void{
     if(!this.player.alive){this.finish(false);return;}

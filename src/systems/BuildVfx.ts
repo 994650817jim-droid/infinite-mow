@@ -1,4 +1,7 @@
 import Phaser from 'phaser';
+import {HINT_MOCK,groundScar} from '../ui/HintStyle';
+/** 阵纹 / 火门 / 石环这类「画出范围」的样式；默认（只保留关键提示）不播放；?hints=old 恢复，?mock=b 换成一闪而过的地面痕迹。 */
+const RANGE_STYLES=new Set(['control','pure_control','fire_gate','pure_bulwark']);
 export const VFX_STYLES=['combo','critical','skirmish','flame','charge','control','command','bulwark','pure_combo','pure_critical','pure_skirmish','pure_flame','pure_charge','pure_control','pure_command','pure_bulwark','fire_gate','peerless','roaming_break','iron_army'] as const;
 interface Slot{image:Phaser.GameObjects.Image;start:number;end:number;row:number;core:boolean;alpha:number;}
 export function buildVfx(scene:Phaser.Scene):BuildVfx{const host=scene as Phaser.Scene&{buildVfxPool?:BuildVfx};if(!host.buildVfxPool){const pool=new BuildVfx(scene);host.buildVfxPool=pool;scene.events.once('shutdown',()=>{pool.clear();delete host.buildVfxPool;});}return host.buildVfxPool;}
@@ -7,6 +10,7 @@ export class BuildVfx{
  readonly slots:Slot[]=[];private gate=new Map<string,number>();density=0;emitted=0;dropped=0;
  constructor(private scene:Phaser.Scene){}
  emit(style:string,x:number,y:number,now:number,size=64,angle=0,duration=300,core=false):void{
+  if(HINT_MOCK&&RANGE_STYLES.has(style)){if(HINT_MOCK==='b'&&(style==='pure_bulwark'||style==='pure_control')&&now>=(this.gate.get(style)??0)){this.gate.set(style,now+400);groundScar(this.scene,x,y+8,size*.5,'crack');}return;}
   const row=VFX_STYLES.indexOf(style as typeof VFX_STYLES[number]);if(row<0||!this.scene.textures.exists('build_vfx')||!this.scene.cameras.main.worldView.contains(x,y))return;
   if(!core&&now<(this.gate.get(style)??0))return;
   const active=this.slots.filter(s=>s.end>now).length;

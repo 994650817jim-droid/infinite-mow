@@ -291,7 +291,13 @@ export const WEAPON_BEHAVIORS: Record<WeaponId, (host: WeaponHost, weapon: Weapo
     // 黄月英满层：机关连弩——朝目标方向扇形齐射 6 支（60% 伤害，弹射 +1）
     { const pc = host.player.passive.beginCast('crossbow'); if (pc.fan) { const px = host.player.x, py = host.player.y, a0 = Math.atan2(target.y - py, target.x - px), n = PASSIVE_RULES.mechBolts;
       host.player.playAction('skill', target.x < px ? 'left' : 'right'); host.heroFx?.('gears', px, py - 10, 240, a0);
-      for (let k = 0; k < n; k++) { const a = a0 + (k - (n - 1) / 2) * .16; host.fireBolt(host.bolts, px, py, px + Math.cos(a) * 420, py + Math.sin(a) * 420, damage * PASSIVE_RULES.mechDamageMul, Math.min(5, bounce + 1), true, 600); } } }
+      for (let k = 0; k < n; k++) { const a = a0 + (k - (n - 1) / 2) * .16; host.fireBolt(host.bolts, px, py, px + Math.cos(a) * 420, py + Math.sin(a) * 420, damage * PASSIVE_RULES.mechDamageMul, Math.min(5, bounce + 1), true, 600); } }
+      // 孙尚香满层：环身连射——以自身为中心朝 8 个方向各射一箭（60% 伤害，弹射不变）
+      else if (pc.ring) { const px = host.player.x, py = host.player.y, n = PASSIVE_RULES.ringBolts, a0 = Math.atan2(target.y - py, target.x - px);
+        host.player.playAction('skill', target.x < px ? 'left' : 'right'); host.sfx.play('allySpear');
+        // 过渡特效（程序化）：赤色双环外扩，正式「环身连射」序列帧到位后替换
+        for (let k = 0; k < 2; k++) { const ring = host.add.circle(px, py - 6, 24, 0xff9a8a, 0).setStrokeStyle(5 - k * 2, k ? 0xffd2a0 : 0xff7a6a, .9).setDepth(41); ring.scene.tweens.add({ targets: ring, radius: 150, alpha: 0, delay: k * 80, duration: 360, onComplete: () => ring.destroy() }); }
+        for (let k = 0; k < n; k++) { const a = a0 + k * Math.PI * 2 / n; host.fireBolt(host.bolts, px, py, px + Math.cos(a) * 420, py + Math.sin(a) * 420, damage * PASSIVE_RULES.ringDamageMul, bounce, true, 620); } } }
     // 每升一级多射 1 支（Lv5 共 5 支）：额外的箭优先分射附近其他敌人，70% 伤害；不够目标时散射同一目标
     const extra = crossbowExtraArrows(level);
     if (extra > 0) {
@@ -470,6 +476,14 @@ export const WEAPON_BEHAVIORS: Record<WeaponId, (host: WeaponHost, weapon: Weapo
         if (!enemy.active) continue;
         const dist = Math.hypot(enemy.x - cx, enemy.y - cy);
         if (dist <= radius + enemy.radius && host.hitEnemy(enemy, damage, host.combatNow, 'fire')) host.player.passive.recordHit(passiveCast, enemy, host.combatNow, damage);
+      }
+      // 貂蝉满层：倾城——命中的敌人已在 recordHit 里挂上易伤与减速；这里只放表现。
+      // 过渡特效（程序化）：粉紫花瓣环与飘散花瓣，正式「倾城」序列帧到位后替换
+      if (passiveCast.charm) {
+        const ring = host.add.circle(cx, cy, radius * .3, 0xf0b4ff, .18).setStrokeStyle(4, 0xffd6f4, .9).setDepth(41);
+        ring.scene.tweens.add({ targets: ring, radius: radius * 1.05, alpha: 0, duration: 520, onComplete: () => ring.destroy() });
+        for (let k = 0; k < 10; k++) { const a = k * Math.PI / 5 + Math.random() * .4, petal = host.add.ellipse(cx, cy, 12, 7, k % 2 ? 0xffc6ec : 0xe9a6ff, .95).setRotation(a).setDepth(42);
+          petal.scene.tweens.add({ targets: petal, x: cx + Math.cos(a) * radius * .9, y: cy + Math.sin(a) * radius * .9 - 18, rotation: a + 2.4, alpha: 0, duration: 700, ease: 'Sine.easeOut', onComplete: () => petal.destroy() }); }
       }
       // 庞统满层：连环计——稍后在同一处再次引爆（范围更大、伤害 75%）
       if (passiveCast.chain) host.time.delayedCall(PASSIVE_RULES.chainDelayMs, () => {

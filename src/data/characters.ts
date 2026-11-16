@@ -1,7 +1,7 @@
 import type { ChapterId } from './chapters';
 import type { WeaponId } from '../types';
 
-export type CharacterId = 'zhaoyun' | 'guanyu' | 'huangzhong' | 'zhuge' | 'zhangfei' | 'machao' | 'weiyan' | 'liubei' | 'pangtong' | 'huangyueying';
+export type CharacterId = 'zhaoyun' | 'guanyu' | 'huangzhong' | 'zhuge' | 'zhangfei' | 'machao' | 'weiyan' | 'liubei' | 'pangtong' | 'huangyueying' | 'sunshangxiang' | 'diaochan';
 
 export interface CharacterDef {
   id: CharacterId;
@@ -133,6 +133,26 @@ export const CHARACTERS: CharacterDef[] = [
     portrait: 'huangyueying_portrait',
     startWeapon: 'crossbow',
   },
+  {
+    id: 'sunshangxiang',
+    name: '孙尚香',
+    desc: '弓腰姬 · 移速快，边走边射，环身连射',
+    hpMul: 0.9,
+    speedMul: 1.08,
+    damageMul: 1,
+    portrait: 'sunshangxiang_portrait',
+    startWeapon: 'crossbow',
+  },
+  {
+    id: 'diaochan',
+    name: '貂蝉',
+    desc: '舞姬 · 生命低，花扇范围，倾城易伤',
+    hpMul: 0.85,
+    speedMul: 1.06,
+    damageMul: 0.98,
+    portrait: 'diaochan_portrait',
+    startWeapon: 'flame_banner',
+  },
 ];
 
 /** 有主页大幅立绘（epic-home）与水墨立轴（ink-scroll）的武将；其余用 portrait。 */
@@ -151,6 +171,6 @@ export function getCharacter(id: CharacterId): CharacterDef {
 }
 
 /** 新武将普攻的专属色调（枪芒 / 刀光 / 火爆 / 弩箭），老四将保持原色。 */
-export const HERO_TINT: Partial<Record<CharacterId, number>> = { zhangfei: 0xff9c7a, machao: 0xb8dcff, weiyan: 0xff6a55, liubei: 0xffd890, pangtong: 0xff8fd0, huangyueying: 0x8fe8c0 };
+export const HERO_TINT: Partial<Record<CharacterId, number>> = { zhangfei: 0xff9c7a, machao: 0xb8dcff, weiyan: 0xff6a55, liubei: 0xffd890, pangtong: 0xff8fd0, huangyueying: 0x8fe8c0, sunshangxiang: 0xff9a8a, diaochan: 0xf0b4ff };
 /** 招牌技序列帧（public/assets/hero-fx/fx_<sheet>.png，6 列 × 4 行、256×256，黑底叠加混合）。 */
 export const HERO_FX: Record<string, { sheet: 'a' | 'b'; row: number }> = { roar: { sheet: 'a', row: 0 }, dash: { sheet: 'a', row: 1 }, bloodslash: { sheet: 'a', row: 2 }, rally: { sheet: 'a', row: 3 }, phoenix: { sheet: 'b', row: 0 }, gears: { sheet: 'b', row: 1 }, liubeiSlash: { sheet: 'b', row: 2 }, weiyanSlash: { sheet: 'b', row: 3 } };

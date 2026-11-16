@@ -4,7 +4,7 @@ export function visualTextureKey(scene:Phaser.Scene,key:string):string {return s
 export function createReadableTextures(scene:Phaser.Scene):void {
   const groups=[
     {keys:['shu_swordsman_walk_sheet','shu_swordsman_attack_sheet','shu_spearman_walk_sheet','shu_spearman_attack_sheet','shu_archer_walk_sheet','shu_archer_attack_sheet'],green:true,hero:false},
-    {keys:['hero_walk_sheet','guanyu_walk_sheet','huangzhong_walk_sheet','zhuge_walk_sheet','zhangfei_walk_sheet','huangyueying_walk_sheet','pangtong_walk_sheet','liubei_walk_sheet','weiyan_walk_sheet','machao_walk_sheet'],green:false,hero:true},
+    {keys:['hero_walk_sheet','guanyu_walk_sheet','huangzhong_walk_sheet','zhuge_walk_sheet','zhangfei_walk_sheet','huangyueying_walk_sheet','pangtong_walk_sheet','liubei_walk_sheet','weiyan_walk_sheet','machao_walk_sheet','sunshangxiang_walk_sheet','diaochan_walk_sheet'],green:false,hero:true},
     {keys:['enemy_infantry_walk_sheet','enemy_shield_walk_sheet','enemy_archer_walk_sheet','enemy_cavalry_run_sheet','enemy_officer_walk_sheet','enemy_archer_attack_sheet'],green:false,hero:false},
   ];
   for(const group of groups)for(const key of group.keys){

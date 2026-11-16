@@ -35,6 +35,9 @@ export const HERO_ACTIONS: Partial<Record<CharacterId, HeroActionSet>> = {
   liubei: fullSet('liubei_actions'),
   weiyan: fullSet('weiyan_actions'),
   machao: fullSet('machao_actions'),
+  // 孙尚香 / 貂蝉：过渡素材——运行时由黄月英动作图换色生成（systems/PlaceholderHeroArt.ts），正式图到位后替换
+  sunshangxiang: fullSet('sunshangxiang_actions'),
+  diaochan: fullSet('diaochan_actions'),
 };
 /** 诸葛亮旧攻击图（过渡素材，正式图集缺失时退回）。 */
 export const ZHUGE_FALLBACK: HeroActionSet = {texture: 'zhuge_attack_sheet', attack: {down: [0, 1], right: [4, 5], up: [6, 7]}};

@@ -321,12 +321,12 @@ export class WorldMapScene extends Phaser.Scene {
   root.add(panel(this,W/2,H/2,pw,ph));
   const t=(x:number,y:number,s:string,size=16,color='#ede3c9')=>{const o=worldText(this,x,y,s,size,color);root.add(o);return o;};
   t(px+24,py+20,`${alert?'守卫':'攻打'} ${city.name}`,24,'#f0d79e');t(px+24,py+54,`${TIER_NAME[city.tier]} · ${city.region} · ${alert?'来犯':'守军'}：${FACTIONS[owner].name}`,14,FACTIONS[owner].css);
-  const how=city.tier==='small'?'清剿守军两波，击败县尉（约 2 分钟）':city.tier==='medium'?'三波守军后击败守将（约 3 分钟）':'四波守军；先破城门（限时），再战大将（约 4 分钟）';
+  const how=city.tier==='small'?'拔掉帅旗，再占领府衙（限 2 分 30 秒）':city.tier==='medium'?'摧毁两座箭楼（会放箭），再占领府衙（限 3 分 30 秒）':'破城门、毁两座箭楼、击败大将，再占领府衙（限 5 分 30 秒）';
   const body=alert?`胜利条件：击退${city.tier==='small'?'两':city.tier==='medium'?'三':'四'}波来犯之敌，击败敌将（无城门）
 敌将：${defenseBossName(city,owner)}
 守城奖励：军功 +${Math.round(T.reward.merits/2)} · 粮草 +${Math.round(T.reward.provisions/2)}，告急解除
 失败城池仍在，可再守；改去别处出征则此城失守。`:`胜利条件：${how}
-守将：${siegeBossName(city,owner)}
+${city.tier==='large'?'守城大将：'+siegeBossName(city,owner):'守军：'+FACTIONS[owner].name+' · 占领府衙即破城'}
 占领奖励：军功 +${Math.round(T.reward.merits*k)} · 粮草 +${Math.round(T.reward.provisions*k)}${first?'（首次攻占 +50%）':''}
 失败不损失城池与资源，可再次攻打。`;
   const info=t(px+24,py+86,body,14,'#d6cdb4').setLineSpacing(6).setWordWrapWidth(pw-48);

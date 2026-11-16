@@ -364,7 +364,7 @@ export function lianhuanBehavior(host: WeaponHost, weapon: WeaponState, dt: numb
     if (level < 5 && g.fuseAt - time <= R.mineFuseMs * .4) for (const m of g.mines) warnMine(m, true); // 满级这一圈先化作地火，示警留给地火收尾
     if (time >= g.fuseAt) fireRing(host, s, g, damage, radius, time, level);
   }
-  const max = R.mineMax + 2 * growth.masteries.fulei + (level >= 4 ? R.mineMaxLv4Bonus : 0), life = R.mineLifeMs + 2000 * growth.masteries.fulei;
+  const max = R.mineMax + 2 * growth.masteries.fulei + (level >= 4 ? R.mineMaxLv4Bonus : 0) + (level >= 5 ? R.mineMaxLv5Bonus : 0), life = R.mineLifeMs + 2000 * growth.masteries.fulei;
   // 落凤坡伏兵：生命 <30% 时脚下布 4 枚火雷，以铁索连成方阵护身（每 30 秒最多一次）
   if (pl.alive && pl.hp < pl.maxHp * R.fengpoHp && time >= s.fengpoReadyAt) {
     s.fengpoReadyAt = time + R.fengpoCooldownMs;

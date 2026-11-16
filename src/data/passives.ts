@@ -30,11 +30,12 @@ export const PASSIVE_RULES = {
   mineDropSec: .7, mineDropFastSec: .6,
   /** 2026-11-16 方案 A「铁索连环」（用户选定，初值待平衡）：铁索最长 / 判定宽 / 减速 / Lv2 灼伤倍率与间隔 / Lv3 火走铁索倍率 / Lv4 火雷上限加成；
    *  Lv5 铁索连舟：新雷挨近至少 loopBackSteps 枚之前的旧雷即首尾相接，围出面积 ≥ loopMinArea 时圈内地火 loopMs（每 loopTickMs 灼伤 loopMul、减速 loopSlow），之后整圈齐爆。 */
-  tetherLen: 150, tetherWidth: 16, tetherSlow: .25, tetherBurnMul: .2, tetherTickMs: 500, fireRunMul: .6, mineMaxLv4Bonus: 2,
-  loopBackSteps: 3, loopMinArea: 9000, loopMs: 3000, loopTickMs: 500, loopMul: .25, loopSlow: .4,
+  // 2026-11-16 平衡会话复测（后期 DPS −42%）后调整，用户已批准：灼伤 .2 → .3、地火 .25 → .4、Lv5 再 +2 火雷上限、引信 1000 → 600
+  tetherLen: 150, tetherWidth: 16, tetherSlow: .25, tetherBurnMul: .3, tetherTickMs: 500, fireRunMul: .6, mineMaxLv4Bonus: 2, mineMaxLv5Bonus: 2,
+  loopBackSteps: 3, loopMinArea: 9000, loopMs: 3000, loopTickMs: 500, loopMul: .4, loopSlow: .4,
   /** 2026-11-16 用户：「地雷触发太快了，炸不到人」→ 敌人踩雷后先烧引信 mineFuseMs 再爆（雷芯由慢到快闪红示警），期间再有人踩不重新计时，让后面的敌人也走进爆炸范围；
    *  火烧连环圈被踏入时同样改为引信。连锁（mineChainDelayMs）与到期自爆维持原速。 */
-  mineFuseMs: 1000,
+  mineFuseMs: 600,
   mineMax: 6, mineLifeMs: 8000, mineArmMs: 500, mineTrigger: 26, mineRadius: 70, mineChainRange: 150, mineChainDelayMs: 150, mineChainStack: 3,
   ringMines: 6, ringRadius: 110, ringFuseMs: 2000, ringFireMs: 2000, fengpoHp: .3, fengpoCooldownMs: 30000, fengpoMines: 4,
   liubeiDamageMul: 1.15, liubeiHeal: .08, liubeiRally: .35,
@@ -54,6 +55,13 @@ export const PASSIVE_RULES = {
   moonMs: 2000, moonRadius: 160, moonTickMs: 400, moonDamageMul: .5,
   /** 黄忠·宝雕弓：重箭（速度 / 射程 / 击退）；神射时命中处小范围爆裂（半径 / 伤害倍率）。 */
   heavyArrowSpeed: 900, heavyArrowRange: 600, heavyArrowKnock: 40, heavyBurstRadius: 60, heavyBurstMul: .5,
+  /** 2026-11-16 方案 C「老当益壮」（用户选定，初值待平衡）：静心每级缩短进入神射时间 jingxinStepMs；3 级神射第一箭扇形三连（夹角 fanSpreadRad、每支 fanMul）；
+   *  老骥伏枥（2026-11-16 用户：「不靠残血触发」→ 越战越勇）：本关每击杀 laojiKillsPerStack 名敌人射速 +laojiPerStack，上限 laojiCap（Lv1–3）；
+   *  3 级「宝刀未老」：神射中每射杀一名精锐 / 首领，回复 laojiHealMul 最大生命，且 laojiGuardMs 内受伤不退出神射。 */
+  jingxinStepMs: 500, fanSpreadRad: .22, fanMul: .7,
+  /** 静心每级的神射重箭伤害加成（2026-11-16 平衡会话：去掉「百步」后 1-1 打不动首领，补回前期单体）。 */
+  jingxinSharpMul: [.12, .18, .25],
+  laojiKillsPerStack: 10, laojiPerStack: .025, laojiCap: [.15, .2, .25], laojiHealMul: .04, laojiGuardMs: 2000,
   /** 张飞·当阳喝断：声浪推进速度 / 推后力度；据水断桥：断桥区半径与持续。震慑与 140% 伤害沿用 roarRadius / roarStunMs / roarDamageMul。 */
   roarWaveSpeed: 480, roarWavePush: 2.5, bridgeRadius: 150, bridgeMs: 3000,
   /** 马超·枪挑破阵：挑飞（索敌距离 / 腾空时长 / 挑起伤害倍率）、落地范围半径；西凉铁骑满层冲锋（距离 / 宽 / 伤害倍率 / 突进时长）。命中积层间隔沿用 cavalryIntervalMs。 */

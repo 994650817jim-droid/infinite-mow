@@ -91,6 +91,8 @@ export class Player {
   private walkPhase = 0;
   /** 画面朝向（选行走帧用）：斜向移动优先侧面帧；direction 仍按主轴，供武器 / 坐骑等玩法逻辑使用。 */
   private facing: 'down' | 'up' | 'left' | 'right' = 'down';
+  /** 最近一次移动的方向（单位向量，键盘 / 手柄都经 move 进来；站定时保持上一次）。马超冲锋按它「朝头前冲」。 */
+  heading = { x: 0, y: 1 };
   /** 步态（步频随移速、起伏、前倾、阴影、扬尘，src/systems/WalkGait.ts）。 */
   readonly gait: WalkGait;
   private gaitHero = '';
@@ -174,6 +176,7 @@ export class Player {
       const nx = vx / len;
       const ny = vy / len;
       moving = true;
+      this.heading.x = nx; this.heading.y = ny;
       this.sprite.x += nx * this.speed * dt;
       this.sprite.y += ny * this.speed * dt;
       // 四方向朝向：左右翻转，上下使用不同行走帧（有素材时）或占位步态

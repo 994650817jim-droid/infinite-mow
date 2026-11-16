@@ -48,8 +48,22 @@ export const BAODIAO_DEF = {
   cooldown: (level: number, stats: PlayerStats) => [2.2, 2.1, 2.0, 1.9, 1.8][lv(level)] * stats.cooldownMul,
   desc: '向远处最强的敌人射出重箭，单体重创并击退；首领、精锐优先',
 };
-interface HeavyArrow { img: Phaser.GameObjects.Image; target: Enemy; spawn: number; damage: number; burst: boolean; pierce: number; hit: Set<number>; ux: number; uy: number; left: number; }
+interface HeavyArrow { img: Phaser.GameObjects.Image; target: Enemy; spawn: number; damage: number; burst: boolean; pierce: number; hit: Set<number>; ux: number; uy: number; left: number; trail?: Phaser.GameObjects.Sprite; }
 const ARROWS = new WeakMap<Player, HeavyArrow[]>();
+/** 黄忠每关状态：上一帧是否神射、静心 3 级的三连重箭是否待发、宝刀未老是否已用（每关一次：每关新建 Player）。 */
+const HZ = new WeakMap<Player, { wasSharp: boolean; fanReady: boolean; eliteSeen: number }>();
+/** 黄忠像素特效图集 huangzhong_fx（6×4，每帧 256，黑底叠加）：0–5 神射爆裂、6–11 进入神射金光、12–17 神射箭金色拖光、18–23 宝刀未老红金火焰。 */
+const HZFX = { burst: 0, enter: 6, trail: 12, laoji: 18 } as const;
+function hzFx(host: WeaponHost, row: number, x: number, y: number, size: number, fps: number, name: string, loopMs = 0, follow?: Player): Phaser.GameObjects.Sprite | null {
+  const scene = sceneOf(host); if (!scene.textures.exists('huangzhong_fx')) return null;
+  // 进入神射的光柱、宝刀未老的火焰在图里贴着格子下部（约 0.88 处），跟随人物时把这一点放在脚底
+  const s = scene.add.sprite(x, y, 'huangzhong_fx', row).setOrigin(.5, follow ? .88 : .5).setDisplaySize(size, size).setBlendMode('ADD').setDepth(43).setName(name);
+  const st = { t: 0 }, frames = loopMs ? Math.max(6, Math.round(loopMs / 1000 * fps)) : 6;
+  scene.tweens.add({ targets: st, t: frames - .01, duration: frames / fps * 1000,
+    onUpdate: () => { if (!s.active) return; s.setFrame(row + (Math.floor(st.t) % 6)); if (follow) s.setPosition(follow.x, follow.y + 4); },
+    onComplete: () => { if (s.active) scene.tweens.add({ targets: s, alpha: 0, duration: 160, onComplete: () => s.destroy() }); } });
+  return s;
+}
 function arrowTexture(host: WeaponHost): string {
   if (sceneOf(host).textures.exists('huangzhong_arrow')) return 'huangzhong_arrow'; // 正式重箭贴图
   const key = 'huangzhong_heavy_arrow', scene = sceneOf(host);
@@ -75,11 +89,29 @@ export function sniperTarget(host: WeaponHost, range: number): Enemy | null {
 }
 export function baodiaoBehavior(host: WeaponHost, weapon: WeaponState, dt: number, time: number): void {
   const pl = host.player, list = ARROWS.get(pl) ?? []; ARROWS.set(pl, list);
+  const g = pl.growth, st = HZ.get(pl) ?? { wasSharp: false, fanReady: false, eliteSeen: pl.passive.sharpEliteKillCount }; HZ.set(pl, st);
+  // 静心：进入神射所需不受伤时间 5 → 4.5 / 4 / 3.5 秒
+  pl.passive.setCalmMs(R.calmMs - R.jingxinStepMs * g.masteries.jingxin);
+  // 老骥伏枥 3 级「宝刀未老」：神射中每射杀一名精锐 / 首领，回复少量生命，且一小段时间内受伤不退出神射
+  const eliteKills = pl.passive.sharpEliteKillCount;
+  if (eliteKills > st.eliteSeen && g.masteries.laoji >= 3 && pl.alive) {
+    pl.heal(pl.maxHp * R.laojiHealMul * (eliteKills - st.eliteSeen)); pl.passive.grantSharp(time, R.laojiGuardMs);
+    hzFx(host, HZFX.laoji, pl.x, pl.y + 4, 120, 12, 'huangzhong-laoji', R.laojiGuardMs, pl);
+    const t = host.add.text(pl.x, pl.y - 70, '宝刀未老', { fontFamily: 'serif', fontSize: '20px', color: '#ffe0a0', stroke: '#5a1a10', strokeThickness: 5 }).setOrigin(.5).setDepth(60).setName('huangzhong-laoji-text');
+    t.scene.tweens.add({ targets: t, y: pl.y - 100, alpha: 0, delay: 600, duration: 600, onComplete: () => t.destroy() });
+  }
+  st.eliteSeen = eliteKills;
+  // 进入神射：人物身上一道金光（像素帧）；静心 3 级时神射第一箭待发三连
+  const sharpNow = pl.passive.isSharpshooter(time);
+  if (sharpNow && !st.wasSharp) { hzFx(host, HZFX.enter, pl.x, pl.y + 4, 150, 14, 'huangzhong-sharp-enter', 0, pl); if (g.masteries.jingxin >= 3) st.fanReady = true; }
+  if (!sharpNow) st.fanReady = false;
+  st.wasSharp = sharpNow;
   // 飞行中的重箭：追向目标，命中单体（穿杨 3 级再穿 1 人）
   for (let i = list.length - 1; i >= 0; i--) {
     const a = list[i];
     if (a.target.active && a.target.spawnId === a.spawn && !a.hit.has(a.spawn)) { const d = Math.hypot(a.target.x - a.img.x, a.target.y - a.img.y) || 1; a.ux = (a.target.x - a.img.x) / d; a.uy = (a.target.y - a.img.y) / d; }
     const step = R.heavyArrowSpeed * dt; a.img.x += a.ux * step; a.img.y += a.uy * step; a.left -= step; a.img.setRotation(Math.atan2(a.uy, a.ux));
+    a.trail?.setPosition(a.img.x - a.ux * 26, a.img.y - a.uy * 26).setRotation(Math.atan2(a.uy, a.ux));
     // 狙击：先只撞锁定的目标（途中的敌人不挡箭）；目标中箭或已死后，穿杨的余力才会打到路上的敌人
     const locked = a.target.active && a.target.spawnId === a.spawn && !a.hit.has(a.spawn);
     for (const e of host.grid.query(a.img.x, a.img.y, 50)) {
@@ -91,31 +123,44 @@ export function baodiaoBehavior(host: WeaponHost, weapon: WeaponState, dt: numbe
         flash.scene.tweens.add({ targets: flash, radius: 34, alpha: 0, duration: 240, onComplete: () => flash.destroy() }); }
       if (a.burst) { // 神射：命中处小范围爆裂
         for (const o of host.grid.query(ex, ey, R.heavyBurstRadius + 30)) if (alive(o) && o !== e && Math.hypot(o.x - ex, o.y - ey) <= R.heavyBurstRadius + o.radius) host.hitEnemy(o, a.damage * R.heavyBurstMul, time, 'arrow');
-        if (!HINT_MOCK) { const ring = host.add.circle(ex, ey - 6, 12, 0xffd27a, 0).setStrokeStyle(4, 0xffe6a0, .9).setDepth(42);
+        // 神射爆裂：像素爆裂帧是命中特效（不是范围提示），各种提示方案下都播；缺图时旧方案（?hints=old）退回程序化光圈，b 方案留地面裂痕
+        if (HINT_MOCK === 'b') groundScar(e.sprite.scene, ex, ey, R.heavyBurstRadius, 'crack');
+        else if (!hzFx(host, HZFX.burst, ex, ey - 6, R.heavyBurstRadius * 2.6, 22, 'huangzhong-burst') && !HINT_MOCK) { const ring = host.add.circle(ex, ey - 6, 12, 0xffd27a, 0).setStrokeStyle(4, 0xffe6a0, .9).setDepth(42);
         ring.scene.tweens.add({ targets: ring, radius: R.heavyBurstRadius, alpha: 0, duration: 300, onComplete: () => ring.destroy() }); }
-        else if (HINT_MOCK === 'b') groundScar(e.sprite.scene, ex, ey, R.heavyBurstRadius, 'crack');
       }
       if (a.pierce-- <= 0) { a.left = 0; break; }
     }
-    if (a.left <= 0 || host.over) { a.img.destroy(); list.splice(i, 1); }
+    if (a.left <= 0 || host.over) { a.img.destroy(); a.trail?.destroy(); list.splice(i, 1); }
   }
   weapon.cooldownLeft -= dt;
   if (weapon.cooldownLeft > 0) return;
   const target = smartTarget(host, R.heavyArrowRange);
   if (!target) return;
-  const g = pl.growth, level = weapon.level;
+  const level = weapon.level;
   const ux = target.x - pl.x, uy = target.y - pl.y, d = Math.hypot(ux, uy) || 1;
-  // 百步：150 像素以外每远 100 像素伤害 +6/9/12%
-  const baibu = g.masteries.baibu ? 1 + Math.max(0, (d - 150) / 100) * [.06, .09, .12][g.masteries.baibu - 1] : 1;
-  const damage = BAODIAO_DEF.damage(level, pl.stats) * g.damageMultiplier(time) * baibu;
   const sharp = pl.passive.isSharpshooter(time);
+  // 静心：神射中重箭伤害 +12/18/25%（补回去掉「百步」后的前期单体）
+  const damage = BAODIAO_DEF.damage(level, pl.stats) * g.damageMultiplier(time) * (sharp && g.masteries.jingxin ? 1 + R.jingxinSharpMul[g.masteries.jingxin - 1] : 1);
   pl.faceDirection(cardinal(ux, uy), 200);
   if (sharp && time >= pl.nextSkillAction && pl.playAction('skill', ux < 0 ? 'left' : 'right')) pl.nextSkillAction = time + 4000; else pl.playAction('attack', ux < 0 ? 'left' : 'right');
+  // 神射箭带金色拖光（像素帧）
+  const trail = (): Phaser.GameObjects.Sprite | undefined => { const t = sharp ? hzFx(host, HZFX.trail, pl.x, pl.y - 10, 90, 18, 'huangzhong-trail', 1500) : null; return t?.setDisplaySize(96, 40) ?? undefined; };
   list.push({ img: host.add.image(pl.x, pl.y - 10, arrowTexture(host)).setDisplaySize(58, 15).setDepth(41).setName('huangzhong-heavy-arrow').setBlendMode(sharp ? 1 : 0),
-    target, spawn: target.spawnId, damage, burst: sharp, pierce: 0, hit: new Set(), ux: ux / d, uy: uy / d, left: R.heavyArrowRange + 120 });
+    target, spawn: target.spawnId, damage, burst: sharp, pierce: 0, hit: new Set(), ux: ux / d, uy: uy / d, left: R.heavyArrowRange + 120, trail: trail() });
+  // 静心 3 级：进入神射后的第一箭化为扇形三连重箭（两侧各一支，每支 70%、都带爆裂；两侧箭不追踪，打路上的敌人）
+  if (sharp && st.fanReady) {
+    st.fanReady = false;
+    const a0 = Math.atan2(uy, ux);
+    for (const side of [-1, 1]) {
+      const a = a0 + side * R.fanSpreadRad;
+      list.push({ img: host.add.image(pl.x, pl.y - 10, arrowTexture(host)).setDisplaySize(58, 15).setDepth(41).setName('huangzhong-heavy-arrow').setBlendMode(1),
+        target, spawn: -1, damage: damage * R.fanMul, burst: true, pierce: 0, hit: new Set(), ux: Math.cos(a), uy: Math.sin(a), left: R.heavyArrowRange + 120, trail: trail() });
+    }
+    list[list.length - 3].damage = damage * R.fanMul;
+  }
   host.sfx.play('allySpear');
-  // 老骥伏枥：生命低于一半时射速提高
-  const laoji = g.masteries.laoji && pl.hp < pl.maxHp * .5 ? 1 + [.15, .25, .35][g.masteries.laoji - 1] : 1;
+  // 老骥伏枥：越战越勇——本关每击杀 10 名敌人射速 +2.5%，上限 15/20/25%
+  const laoji = g.masteries.laoji ? 1 + Math.min(R.laojiCap[g.masteries.laoji - 1], Math.floor(pl.passive.kills / R.laojiKillsPerStack) * R.laojiPerStack) : 1;
   weapon.cooldownLeft = Math.max(.4, BAODIAO_DEF.cooldown(level, pl.stats) / g.attackSpeedMultiplier(time) / laoji);
 }
 
@@ -222,12 +267,24 @@ export const ZHANJIN_DEF = {
   desc: '一枪把敌人挑飞，落地时砸出范围伤害；铁骑满层后向前冲锋破阵',
 };
 export const zhanjinLandRadius = (level: number, jinma: number): number => R.landRadius * (1 + (level >= 3 ? .1 : 0) + .15 * jinma);
+/** 马超像素特效图集 machao_fx（6×4，每帧 256，透明底）：0–5 上挑弧光、6–11 落地砸地、12–17 冲锋尘土拖影、18–23 枪尖破风。 */
+const MCFX = { lift: 0, land: 6, dust: 12, wind: 18 } as const;
+function mcFx(host: WeaponHost, row: number, x: number, y: number, w: number, h: number, fps: number, name: string, rot = 0, loops = 1, depth = 41): Phaser.GameObjects.Sprite | null {
+  const scene = sceneOf(host); if (!scene.textures.exists('machao_fx')) return null;
+  const s = scene.add.sprite(x, y, 'machao_fx', row).setDisplaySize(w, h).setRotation(rot).setDepth(depth).setName(name);
+  const st = { t: 0 };
+  scene.tweens.add({ targets: st, t: 6 * loops - .01, duration: 6 * loops / fps * 1000, onUpdate: () => { if (s.active) s.setFrame(row + (Math.floor(st.t) % 6)); }, onComplete: () => s.destroy() });
+  return s;
+}
 function landSlam(host: WeaponHost, x: number, y: number, radius: number, damage: number, time: number, echo: boolean): void {
   for (const e of host.grid.query(x, y, radius + 30)) if (alive(e) && Math.hypot(e.x - x, e.y - y) <= radius + e.radius) host.hitEnemy(e, damage, time, 'melee');
+  // 落地：像素砸地扬尘 + 碎石（铺满落地范围，名字 machao-land-fx 供测试检查），轻微震屏；缺图时退回程序化尘点
+  const landFx = mcFx(host, MCFX.land, x, y - 6, radius * 2.6, radius * 2.6, 16, 'machao-land-fx', 0, 1, 40);
+  host.cameras.main.shake(90, .0025);
   if (!HINT_MOCK) { const ring = host.add.circle(x, y, 10, 0xffe08a, 0).setStrokeStyle(5, 0xffd27a, .9).setDepth(41).setName('machao-land');
   ring.scene.tweens.add({ targets: ring, radius, alpha: 0, duration: 260, onComplete: () => ring.destroy() }); }
   else if (HINT_MOCK === 'b') groundScar(host.player.sprite.scene, x, y, radius, 'crack');
-  for (let k = 0; k < 6; k++) { const a = k * Math.PI / 3 + Math.random() * .4, dust = host.add.circle(x, y, 4, 0xb89a6a, .8).setDepth(40);
+  if (!landFx) for (let k = 0; k < 6; k++) { const a = k * Math.PI / 3 + Math.random() * .4, dust = host.add.circle(x, y, 4, 0xb89a6a, .8).setDepth(40).setName('machao-land-fx');
     dust.scene.tweens.add({ targets: dust, x: x + Math.cos(a) * radius * .8, y: y + Math.sin(a) * radius * .5, alpha: 0, duration: 360, onComplete: () => dust.destroy() }); }
   if (echo) host.time.delayedCall(260, () => { if (!host.over) landSlam(host, x, y, radius * 1.2, damage * .5, host.combatNow, false); });
 }
@@ -237,13 +294,15 @@ export function zhanjinBehavior(host: WeaponHost, weapon: WeaponState, dt: numbe
   const pl = host.player, g = pl.growth, level = weapon.level;
   const target = smartTarget(host, R.liftRange);
   if (!target) return;
-  const damage = ZHANJIN_DEF.damage(level, pl.stats) * g.damageMultiplier(time), ux0 = target.x - pl.x, uy0 = target.y - pl.y, d0 = Math.hypot(ux0, uy0) || 1, ux = ux0 / d0, uy = uy0 / d0;
+  const damage = ZHANJIN_DEF.damage(level, pl.stats) * g.damageMultiplier(time), tx0 = target.x - pl.x, ty0 = target.y - pl.y, d0 = Math.hypot(tx0, ty0) || 1;
+  const cast = pl.passive.beginCast('zhanjin_lance');
+  // 2026-11-16 用户：「马超被动是朝着头前冲锋」→ 冲锋朝最近一次移动的方向（键盘 / 手柄一样），挑飞仍朝目标
+  const hd = Math.hypot(pl.heading.x, pl.heading.y) || 1, ux = cast.charge ? pl.heading.x / hd : tx0 / d0, uy = cast.charge ? pl.heading.y / hd : ty0 / d0;
   pl.faceDirection(cardinal(ux, uy), 200);
   host.sfx.play('allySpear');
-  const cast = pl.passive.beginCast('zhanjin_lance');
   if (cast.charge) {
-    // 锦马冲锋：朝目标方向突进，沿途重创并把敌人撞向两侧（借用受击位移平滑移动主将）
-    pl.playAction('skill', ux < 0 ? 'left' : 'right');
+    // 锦马冲锋：朝头前突进，沿途重创并把敌人撞向两侧（借用受击位移平滑移动主将）
+    pl.playAction('skill', ux < 0 ? 'left' : ux > 0 ? 'right' : uy < 0 ? 'up' : 'down');
     const len = R.chargeLen * (1 + .2 * g.masteries.tieqi), px = pl.x, py = pl.y, hit = damage * R.chargeDamageMul * (1 + .1 * g.masteries.tieqi);
     for (const e of host.grid.query(px + ux * len / 2, py + uy * len / 2, len / 2 + R.chargeWidth)) {
       if (!alive(e)) continue;
@@ -256,19 +315,38 @@ export function zhanjinBehavior(host: WeaponHost, weapon: WeaponState, dt: numbe
     const trail = host.add.image(px + ux * len / 2, py - 6 + uy * len / 2, 'spear_thrust', 'tight').setRotation(Math.atan2(uy, ux)).setDisplaySize(len + 40, 34).setTint(0xffe08a).setAlpha(.85).setDepth(41).setName('machao-charge');
     trail.scene.tweens.add({ targets: trail, alpha: 0, duration: 320, onComplete: () => trail.destroy() });
     host.cameras.main.shake(110, .004);
+    // 冲锋像素特效：身后一道贴地尘土拖影 + 枪尖破风（都朝冲锋方向），跟着主将走
+    const rot = Math.atan2(uy, ux);
+    const dust = mcFx(host, MCFX.dust, px, py + 18, 200, 100, 22, 'machao-charge-dust', rot, 2, 39);
+    const wind = mcFx(host, MCFX.wind, px + ux * 40, py - 8 + uy * 40, 120, 80, 24, 'machao-charge-wind', rot, 2, 42);
+    if (dust || wind) { const fx0 = { t: 0 }; sceneOf(host).tweens.add({ targets: fx0, t: 1, duration: R.chargeMs + 120, onUpdate: () => {
+      dust?.active && dust.setPosition(pl.x - ux * 70, pl.y + 18 - uy * 70); wind?.active && wind.setPosition(pl.x + ux * 46, pl.y - 8 + uy * 46); } }); }
   } else {
     // 枪挑：先一枪挑起（liftHitMul），0.6 秒后落地砸出范围伤害
     pl.playAction('attack', ux < 0 ? 'left' : 'right');
     host.hitEnemy(target, damage * R.liftHitMul, time, 'melee');
     const tx = target.x, ty = target.y, spawn = target.spawnId, liftable = target.kind !== 'boss' && !target.controlImmune;
-    const s = host.add.image(pl.x + ux * 40, pl.y - 10 + uy * 40, 'spear_thrust', 'tight').setRotation(Math.atan2(uy, ux) - .5).setDisplaySize(90, 20).setTint(0xffe08a).setDepth(41);
-    s.scene.tweens.add({ targets: s, rotation: Math.atan2(uy, ux) - 1.2, alpha: 0, duration: 220, onComplete: () => s.destroy() });
+    // 挑：枪尖上挑的银金弧光（像素帧，左右按目标方向翻转）；缺图时退回枪影
+    const arc = mcFx(host, MCFX.lift, tx - ux * 10, ty - 30, 120, 120, 26, 'machao-lift-fx', 0, 1, 42);
+    if (arc) arc.setFlipX(ux < 0);
+    else { const s = host.add.image(pl.x + ux * 40, pl.y - 10 + uy * 40, 'spear_thrust', 'tight').setRotation(Math.atan2(uy, ux) - .5).setDisplaySize(90, 20).setTint(0xffe08a).setDepth(41);
+      s.scene.tweens.add({ targets: s, rotation: Math.atan2(uy, ux) - 1.2, alpha: 0, duration: 220, onComplete: () => s.destroy() }); }
+    // 脚下扬起一小团尘土（落地帧的前段，缩小）
+    mcFx(host, MCFX.land, tx, ty + 4, 70, 70, 20, 'machao-lift-dust', 0, 1, 40);
     if (liftable) {
       target.stunUntil = Math.max(target.stunUntil, time + R.liftMs);
-      const y0 = target.sprite.y;
-      target.sprite.scene.tweens.add({ targets: target.sprite, y: y0 - 44, duration: R.liftMs / 2, yoyo: true, ease: 'Quad.easeOut' });
-      const glow = host.add.circle(tx, ty - 20, 16, 0xffe08a, .35).setBlendMode(1).setDepth(42).setName('machao-lift');
-      glow.scene.tweens.add({ targets: glow, y: ty - 60, alpha: 0, duration: R.liftMs, onComplete: () => glow.destroy() });
+      const sp = target.sprite, y0 = sp.y, rot0 = sp.rotation, spin = (ux < 0 ? -1 : 1) * .5;
+      // 被挑的敌人：身上一闪（白色剪影）、腾空时带一点旋转和两道残影，落下时摆正
+      const flash = host.add.image(sp.x, sp.y, sp.texture.key, sp.frame.name).setOrigin(sp.originX, sp.originY).setDisplaySize(sp.displayWidth, sp.displayHeight).setFlipX(sp.flipX)
+        .setTintFill(0xffffff).setBlendMode(1).setAlpha(.9).setDepth(sp.depth + .01).setName('machao-lift');
+      flash.scene.tweens.add({ targets: flash, alpha: 0, duration: 180, onComplete: () => flash.destroy() });
+      sp.scene.tweens.add({ targets: sp, y: y0 - 44, rotation: rot0 + spin, duration: R.liftMs / 2, yoyo: true, ease: 'Quad.easeOut', onComplete: () => { if (target.active) sp.setRotation(rot0); } });
+      for (const k of [1, 2]) host.time.delayedCall(k * 90, () => {
+        if (!target.active || target.spawnId !== spawn) return;
+        const ghost = host.add.image(sp.x, sp.y, sp.texture.key, sp.frame.name).setOrigin(sp.originX, sp.originY).setDisplaySize(sp.displayWidth, sp.displayHeight).setFlipX(sp.flipX).setRotation(sp.rotation)
+          .setTint(0xffe8b0).setAlpha(.35).setDepth(sp.depth - .01).setName('machao-lift-ghost');
+        ghost.scene.tweens.add({ targets: ghost, alpha: 0, duration: 220, onComplete: () => ghost.destroy() });
+      });
     }
     host.time.delayedCall(R.liftMs, () => {
       if (host.over) return;

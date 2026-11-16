@@ -78,8 +78,8 @@ const winBoss = async p => { await p.evaluate(G0 => { const s = eval(G0); s.spaw
   // 平定流寇后：不减产
   const now2 = await season(p);
   await setIntel(p, [{ id: 'b2', kind: 'bandit', city: 'xuchang', faction: 'yellow', expires: now2 }]);
-  const r2 = await store(p, w => { w.setWorldRandom(() => .99); const before = w.loadWorld(); const id = w.beginIntel('b2'); const res = w.settleIntel(id, { success: true, victory: true, debug: false, elapsed: 120 }); const after = w.loadWorld(); w.setWorldRandom(); return { res: { merits: res.merits, provisions: res.provisions, resolved: res.resolved, raided: res.season?.raided ?? null, cityMerits: res.cityMerits }, gain: after.merits - before.merits, gone: !after.intel.some(e => e.id === 'b2'), again: w.settleIntel(id, { success: true, victory: true, debug: false, elapsed: 120 }).merits }; });
-  ck('平定流寇：奖励入账（中城军功 30 + 城池产出）、不减产、事件移除、不可重复结算', r2.res.resolved && r2.res.raided === null && r2.res.merits === 30 + r2.res.cityMerits && r2.gain === r2.res.merits && r2.gone && r2.again === 0, r2);
+  const r2 = await store(p, w => { w.setWorldRandom(() => .99); const before = w.loadWorld(); const id = w.beginIntel('b2'); const res = w.settleIntel(id, { success: true, victory: true, debug: false, elapsed: 120 }); const after = w.loadWorld(); w.setWorldRandom(); return { res: { merits: res.merits, provisions: res.provisions, resolved: res.resolved, raided: res.season?.raided ?? null, cityMerits: res.cityMerits }, gain: after.provisions - before.provisions, gone: !after.intel.some(e => e.id === 'b2'), again: w.settleIntel(id, { success: true, victory: true, debug: false, elapsed: 120 }).provisions }; });
+  ck('平定流寇：奖励只进军粮（中城 军粮 60 + 军功 30 折 45，含营寨收成）、不减产、事件移除、不可重复结算', r2.res.resolved && r2.res.raided === null && r2.res.merits === 0 && r2.gain === r2.res.provisions && r2.res.provisions >= 105 - 50 && r2.gone && r2.again === 0, r2);
   // 商队被劫 → 事件移除；悬赏失败 → 保留
   const now3 = await season(p);
   await setIntel(p, [{ id: 'e1', kind: 'escort', city: 'runan', faction: 'han', expires: now3 }, { id: 'h2', kind: 'bounty', city: 'luoyang', faction: 'caocao', general: '典韦', expires: now3 + 1 }]);
@@ -111,7 +111,7 @@ for (const layout of ['mobile', 'desktop']) {
   if (layout === 'desktop') {
     // 名将悬赏：出征 → 击败名将 → 紫 / 橙兵装入行囊，事件移除
     const bagBefore = await p.evaluate(() => JSON.parse(localStorage.getItem('im_items_v1') ?? '{"bag":[]}').bag.length);
-    const before = await store(p, w => w.loadWorld().merits);
+    const before = await store(p, w => w.loadWorld().provisions);
     await launch(p, 'h1');
     const g = await p.evaluate(G0 => { const s = eval(G0); return { name: s.chapter.name, waves: s.chapter.waves.map(w => w.name), boss: s.chapter.bossName, active: s.registry.get('runConfig')?.encounter }; }, G);
     ck('悬赏战：三波（第三波为名将出阵），首领为许褚', g.name === '悬赏 · 许褚' && g.waves.length === 3 && g.waves[2] === '许褚出阵' && g.boss === '许褚', g);
@@ -121,10 +121,10 @@ for (const layout of ['mobile', 'desktop']) {
     await winBoss(p);
     const res = await p.evaluate(G0 => { const s = eval(G0); return { over: s.over, victory: s.victory, body: s.resultTexts.body.text, sub: s.resultTexts.subtitle.text }; }, G);
     const bag = await p.evaluate(() => JSON.parse(localStorage.getItem('im_items_v1') ?? '{"bag":[]}').bag);
-    const after = await store(p, w => ({ merits: w.loadWorld().merits, has: w.intelEvents().some(e => e.id === 'h1') }));
+    const after = await store(p, w => ({ grain: w.loadWorld().provisions, has: w.intelEvents().some(e => e.id === 'h1') }));
     const got = bag.length - bagBefore, top = bag.filter(x => x.quality === 'purple' || x.quality === 'orange').length;
     ck('击败许褚：胜利，结算显示悬赏兵装并入行囊（紫 / 橙）', res.victory && res.body.includes('入行囊') && got >= 1 && top >= 1, { res, got, top });
-    ck('悬赏奖励军功入账、事件移除', after.merits - before >= 60 && !after.has, { before, after });
+    ck('悬赏奖励军粮入账、事件移除', after.grain - before >= 80 && !after.has, { before, after });
     await p.screenshot({ path: `${out}/${layout}-bounty-result.png` });
     await p.evaluate(G0 => eval(G0).resultPanel.getByName('result-home').emit('pointerdown'), G);
     await p.waitForFunction(() => window.__game.scene.isActive('WorldMapScene')); await p.waitForTimeout(400);
@@ -142,11 +142,11 @@ for (const layout of ['mobile', 'desktop']) {
   const g = await p.evaluate(G0 => { const s = eval(G0); return { waves: s.chapter.waves.map(w => w.name), boss: s.chapter.bossName }; }, G);
   ck('流寇战：两波（流寇袭扰 → 寇首现身），首领流寇寇首', g.waves.join() === '流寇袭扰,寇首现身' && g.boss === '流寇寇首', g);
   await p.waitForTimeout(1500); await p.screenshot({ path: `${out}/mobile-bandit-battle.png` });
-  const before = await store(p, w => w.loadWorld().merits);
+  const before = await store(p, w => w.loadWorld().provisions);
   await winBoss(p);
-  const after = await store(p, w => ({ merits: w.loadWorld().merits, has: w.intelEvents().some(e => e.id === 'b1') }));
+  const after = await store(p, w => ({ grain: w.loadWorld().provisions, has: w.intelEvents().some(e => e.id === 'b1') }));
   const body = await p.evaluate(G0 => eval(G0).resultTexts.body.text, G);
-  ck('平定流寇：胜利、军功入账、事件移除、季报无减产', after.merits - before >= 20 && !after.has && body.includes('军情 · 军功') && !body.includes('流寇未平'), { before, after, body });
+  ck('平定流寇：胜利、军粮入账、事件移除、季报无减产', after.grain - before >= 20 && !after.has && body.includes('军情 · 军粮') && !body.includes('流寇未平'), { before, after, body });
   await p.close();
 }
 
@@ -178,11 +178,11 @@ for (const layout of ['mobile', 'desktop']) {
     ck('商车被毁：失败、商队被劫、事件移除', !r.victory && r.sub.includes('商车被劫') && !(await store(p, w => w.intelEvents().length)), r);
   } else {
     // 抵达 → 胜利、得钱
-    const money = await store(p, w => w.loadWorld().town.money);
+    const money = await store(p, w => w.loadWorld().provisions);
     await p.evaluate(G0 => { const s = eval(G0); s.player.sprite.setPosition(s.cart.x, s.cart.y - 1480); s.cart.y -= 1490; }, G); await waitOver(p);
     const r = await p.evaluate(G0 => { const s = eval(G0); return { victory: s.victory, body: s.resultTexts.body.text, title: s.resultTexts.title.text }; }, G);
-    const after = await store(p, w => ({ money: w.loadWorld().town.money, has: w.intelEvents().some(e => e.id === 'e1') }));
-    ck('商车抵达：胜利、结算显示钱、钱入主城（≥ 商队 120）、事件移除', r.victory && r.title === '商队抵达' && r.body.includes('钱 +120') && after.money - money >= 120 && !after.has, { r, money, after });
+    const after = await store(p, w => ({ money: w.loadWorld().provisions, has: w.intelEvents().some(e => e.id === 'e1') }));
+    ck('商车抵达：胜利、商队钱 120 折成军粮入营（≥ 180）、事件移除', r.victory && r.title === '商队抵达' && r.body.includes('军情 · 军粮 +') && after.money - money >= 180 && !after.has, { r, money, after });
     await p.screenshot({ path: `${out}/${layout}-escort-result.png` });
   }
   await p.close();

@@ -55,7 +55,7 @@ export class CampRestUI {
  private row(y:number,title:string,description:string,icon?:string,compact=false){const x=D?40:24,w=W-(D?80:48),h=D?66:92;this.plate(x,y,w,h);if(icon)this.icon(x+28,y+27,icon,35);const offset=icon?54:16;this.body.add(this.text(x+offset,y+9,title,D?17:19).setWordWrapWidth(w-offset-16,true));this.body.add(this.text(x+16,y+(D?36:43),compact&&description.length>(D?80:44)?description.slice(0,D?80:44)+'…':description,D?12:14).setWordWrapWidth(w-32,true));return{x,y,w,h};}
  private render(){
   this.body.removeAll(true);this.tabs.forEach((t,i)=>{t.setColor(i===this.tab?'#f6dfb0':'#bcae93');const w=t.width;this.tabFrames[i].setTexture(warPanelTexture(this.scene,w,46,i===this.tab)).setDisplaySize(w+16,46+16).setAlpha(i===this.tab?1:.82);});
-  this.resources.setText('军粮 '+this.army.food+'   /   当前兵力：'+this.army.count);this.next.setText('下一关 · '+this.destination);this.detail.setText(this.notice);
+  this.resources.setText('随军粮 '+this.army.food+'   /   当前兵力：'+this.army.count);this.next.setText('下一关 · '+this.destination);this.detail.setText(this.notice);
   if(this.tab===0)this.renderRecruit();if(this.tab===1)this.renderTraining();if(this.tab===2)this.renderMarket();if(this.tab===3)this.renderBuild(D?154:229);
  }
  private renderRecruit(){
@@ -69,7 +69,7 @@ export class CampRestUI {
    const badge=this.text(x+w-16,y+(D?16:20),'在编 '+count,D?14:15).setOrigin(1,0).setColor('#e4c588').setBackgroundColor('rgba(14,10,6,0.7)').setPadding(8,3);this.body.add(badge);
    const role=this.text(D?x+w/2:x+112,y+(D?160:56),roles[i],D?14:15).setColor('#c9b38a');if(D)role.setOrigin(.5,0);this.body.add(role);
    const cost=this.army.recruitCost(kind),poor=this.army.food<cost,bw=D?w-36:w-130;
-   const buy=this.button(D?x+18:x+112,y+h-(D?60:58),poor?'军粮不足 · '+cost+'粮':'招募 · '+cost+'粮',()=>{const ok=this.army.recruit(kind,1);if(ok)this.sound('recruit');this.notice=ok?TROOPS[kind].name+'入队 · 下一名招募价 '+this.army.recruitCost(kind)+'粮':'无法招募';this.render();},bw,!poor).setName('camp-recruit-'+kind);this.body.add(buy);
+   const buy=this.button(D?x+18:x+112,y+h-(D?60:58),poor?'随军粮不足 · '+cost+'粮':'招募 · '+cost+'粮',()=>{const ok=this.army.recruit(kind,1);if(ok)this.sound('recruit');this.notice=ok?TROOPS[kind].name+'入队 · 下一名招募价 '+this.army.recruitCost(kind)+'粮':'无法招募';this.render();},bw,!poor).setName('camp-recruit-'+kind);this.body.add(buy);
   });if(!this.notice)this.detail.setText('兵力越多，招募越贵：每名在编士兵使招募价 +20%（当前在编 '+this.army.count+' 人）。');
  }
  private renderTraining(){
@@ -79,7 +79,7 @@ export class CampRestUI {
    const sign=id==='armor'?'−':'+';this.body.add(this.text(x+(D?17:96),y+(D?118:76),effects[i]+' '+sign+Math.round(d.perLevel*lv*100)+'%',D?17:18));
    this.body.add(this.text(x+(D?17:96),y+(D?149:101),lv<3?'下一级 '+sign+Math.round(d.perLevel*(lv+1)*100)+'%':'已完成全部训练',D?14:15).setColor('#b8bb9d'));
    if(D)this.body.add(this.text(x+17,y+174,notes[i],12));
-   this.body.add(this.button(x+(D?17:w-168),y+h-55,lv>=3?'已满级':this.army.food<cost?'军粮不足':'训练 · '+cost+'粮',()=>{const ok=this.army.purchaseCampTraining(id);if(ok)this.sound('purchase');this.notice=ok?'训练完成 · 本战役持续生效':'无法训练';this.render();},D?w-34:154,lv<3&&this.army.food>=cost).setName('camp-training-'+id));
+   this.body.add(this.button(x+(D?17:w-168),y+h-55,lv>=3?'已满级':this.army.food<cost?'随军粮不足':'训练 · '+cost+'粮',()=>{const ok=this.army.purchaseCampTraining(id);if(ok)this.sound('purchase');this.notice=ok?'训练完成 · 本战役持续生效':'无法训练';this.render();},D?w-34:154,lv<3&&this.army.food>=cost).setName('camp-training-'+id));
   });if(!this.notice)this.detail.setText('军团训练仅在本次连续战役内保留。体魄训练按原生命比例调整，不免费回满。');
  }
  private renderMarket(){this.market?.offers.forEach((o,i)=>{const option=campOption(o,this.player),d=o.kind==='tactic'?TACTICS[o.id as TacticId]:TREASURES[o.id as TreasureId],{x,y,w,h}=this.card(i);this.plate(x,y,w,h);this.icon(x+38,y+38,'build_icon_'+o.id,47);
@@ -87,14 +87,14 @@ export class CampRestUI {
   const title=(option?.name??d.name);this.body.add(this.text(x+71,y+39,title,D?16:18).setWordWrapWidth(w-84,true));
   const desc=option?.desc??'当前条件已变化，无法购买';const brief=desc.split('\n')[0].split(/[。；]/)[0],summary=brief.length>34?brief.slice(0,34)+'…':brief;const description=this.text(x+16,y+(D?85:72),summary,15).setWordWrapWidth(w-(D?32:177),true).setMaxLines(D?5:2).setName('camp-description-'+i);this.body.add(description);
   const inspect=this.scene.add.rectangle(x+8,y+8,w-16,62,0,0.001).setOrigin(0).setScrollFactor(0).setInteractive({useHandCursor:true}).on('pointerdown',()=>this.showDetails(title,desc+(o.kind==='treasure'?'\n\n'+this.replacementImpact(o.id as TreasureId):'')));this.body.add(inspect);
-  this.body.add(this.button(x+(D?17:w-160),y+h-55,o.sold?'已售罄':!option?'不可购买':this.army.food<o.price?'军粮不足':'购入 · '+o.price+'粮',()=>{if(o.kind==='treasure'&&option?.desc.includes('替换：')){this.showDetails('确认宝物替换',option.desc+'\n\n'+this.replacementImpact(o.id as TreasureId),()=>{const ok=!!this.market?.buy(i,this.player,this.army);if(ok)this.sound('purchase');this.notice=ok?'已替换 · 构筑已更新':'无法购买';this.render();});return;}const ok=!!this.market?.buy(i,this.player,this.army);if(ok)this.sound('purchase');this.notice=ok?'已购入 · 构筑已更新':'无法购买';this.render();},D?w-34:146,!o.sold&&!!option&&this.army.food>=o.price).setName('camp-goods-'+i));
+  this.body.add(this.button(x+(D?17:w-160),y+h-55,o.sold?'已售罄':!option?'不可购买':this.army.food<o.price?'随军粮不足':'购入 · '+o.price+'粮',()=>{if(o.kind==='treasure'&&option?.desc.includes('替换：')){this.showDetails('确认宝物替换',option.desc+'\n\n'+this.replacementImpact(o.id as TreasureId),()=>{const ok=!!this.market?.buy(i,this.player,this.army);if(ok)this.sound('purchase');this.notice=ok?'已替换 · 构筑已更新':'无法购买';this.render();});return;}const ok=!!this.market?.buy(i,this.player,this.army);if(ok)this.sound('purchase');this.notice=ok?'已购入 · 构筑已更新':'无法购买';this.render();},D?w-34:146,!o.sold&&!!option&&this.army.food>=o.price).setName('camp-goods-'+i));
  });if(!this.notice)this.detail.setText('点击商品标题查看完整效果。库存固定；宝物满两格时需确认替换及流派变化。');this.renderItemShelf();}
  /** 兵装货架（一格）：电脑在说明文字右侧，手机在第三张商品卡下方。左端小块可点开看词条。 */
  private renderItemShelf(){
   const item=this.itemOffer;if(!item)return;
   const q=QUALITIES[item.quality],price=MERCHANT_PRICE[item.quality]??120,w=D?330:W-48,x=D?W-40-w:24,y=D?H-112:229+2*174+161+2;
   const can=!this.itemSold&&this.army.food>=price;
-  const label='兵装 · '+q.label+' · '+itemName(item)+'　'+(this.itemSold?'已售罄':this.army.food<price?'军粮不足 · '+price+'粮':'购入 · '+price+'粮');
+  const label='兵装 · '+q.label+' · '+itemName(item)+'　'+(this.itemSold?'已售罄':this.army.food<price?'随军粮不足 · '+price+'粮':'购入 · '+price+'粮');
   const b=this.button(x,y,label,()=>{if(this.itemSold||this.army.food<price)return;this.army.food-=price;this.itemSold=true;this.onBuyItem?.(item);this.sound('purchase');this.notice='已购入 '+itemName(item)+' · 结算后收入行囊';this.render();},w,can).setName('camp-item-goods');
   this.body.add(b);
   const info=this.scene.add.text(x+8,y+22,'详',{fontFamily:FONT,fontSize:'13px',color:q.css,resolution:2}).setOrigin(0,.5).setPadding(6,6).setBackgroundColor('rgba(20,14,8,.9)').setScrollFactor(0).setInteractive({useHandCursor:true}).setName('camp-item-info')

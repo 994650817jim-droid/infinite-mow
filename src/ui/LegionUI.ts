@@ -153,7 +153,7 @@ export class LegionUI {
     this.flourish.clear();
     if (wave) { const fy = waveTop - (D ? 56 : 74), fx = W / 2; this.flourish.lineStyle(1, WAR.gold, .7).lineBetween(fx - 130, fy, fx - 10, fy).lineBetween(fx + 10, fy, fx + 130, fy).fillStyle(0xf3d48a, 1).fillTriangle(fx - 5, fy, fx, fy - 5, fx + 5, fy).fillTriangle(fx - 5, fy, fx, fy + 5, fx + 5, fy); }
     this.heading.setText(wave ? '战地招募'  : '黄巾已破 · 战后休整');
-    this.summary.setText(wave ? `免费招募 1 人 · 点选兵种卡入队　当前兵力 ${army.count}` : `军粮 ${army.food}　当前兵力：${army.count}　阵亡 ${army.dead}\n仅开放刀盾、长枪、弓箭兵 · 使用本局军粮`).setAlign('center');
+    this.summary.setText(wave ? `免费招募 1 人 · 点选兵种卡入队　当前兵力 ${army.count}` : `随军粮 ${army.food}　当前兵力：${army.count}　阵亡 ${army.dead}\n仅开放刀盾、长枪、弓箭兵 · 使用本局军粮`).setAlign('center');
     this.close.setText(wave ? '跳过本次 · 继续战斗' : '率军出征 · 虎牢关');
     if (wave) this.close.setBackgroundColor('rgba(27,18,11,0.88)').setColor('#d9c79f').setFontSize(D ? 16 : 18).setPadding(26, 12).setY(D ? waveTop + waveCardH + 34 : Math.min(H - 103, waveTop + waveCardH * 3 + waveGap * 2 + 40));
     else this.close.setY(H - (D ? 54 : 103));
@@ -166,8 +166,8 @@ export class LegionUI {
         const count=army.units.filter(u=>u.active&&u.kind===row.kind).length;
         row.title.setText(`${TROOPS[row.kind].name} · Lv${army.levels[row.kind]}`).setPosition(D?width/2:118,18).setOrigin(D?.5:0,0).setFontSize(19).setColor('#eee2c1');row.detail.setFontSize(13).setColor('#b9cdbb');row.buy.setFontSize(15).setColor('#eee4ca');
         row.icon.setScale(94/Math.max(row.icon.frame.width,row.icon.frame.height)).setPosition(D?width/2:55,D?98:76);
-        row.detail.setText(`${ROLES[row.kind]}\n已编入 ${count} 人 · ${army.recruitCost(row.kind)}军粮/人`).setPosition(D?width/2:118,D?153:53).setOrigin(D?.5:0,0).setAlign(D?'center':'left').setWordWrapWidth(D?width-24:width-128);
-        row.buy.setText(`招募 1 人 · ${army.recruitCost(row.kind)}军粮`).setPosition(D?14:118,D?207:105).setFixedSize(D?width-28:width-136,0).setAlign('center');
+        row.detail.setText(`${ROLES[row.kind]}\n已编入 ${count} 人 · ${army.recruitCost(row.kind)}随军粮/人`).setPosition(D?width/2:118,D?153:53).setOrigin(D?.5:0,0).setAlign(D?'center':'left').setWordWrapWidth(D?width-24:width-128);
+        row.buy.setText(`招募 1 人 · ${army.recruitCost(row.kind)}随军粮`).setPosition(D?14:118,D?207:105).setFixedSize(D?width-28:width-136,0).setAlign('center');
         const canBuy=army.food>=army.recruitCost(row.kind);row.buy.setAlpha(canBuy?1:.45);if(canBuy)row.buy.setInteractive({useHandCursor:true});else row.buy.disableInteractive();row.train.setVisible(false);
       }
       return;
@@ -202,7 +202,7 @@ export class LegionUI {
     }
     this.prev.setVisible(!wave && !D).setAlpha(this.page === 0 ? .4 : 1); this.next.setVisible(!wave && !D).setAlpha(this.page === 1 ? .4 : 1); this.pageText.setVisible(!wave && !D).setText(`${this.page + 1} / 2`);
   }
-  update(army: Legion, visible: boolean): void { this.hud.setVisible(visible); if (!visible) return; this.status.setText(`军粮 ${army.food} · 当前兵力：${army.count}${army.dead ? ` · 阵亡 ${army.dead}` : ''}`); this.paintOrder(army); }
+  update(army: Legion, visible: boolean): void { this.hud.setVisible(visible); if (!visible) return; this.status.setText(`随军粮 ${army.food} · 当前兵力：${army.count}${army.dead ? ` · 阵亡 ${army.dead}` : ''}`); this.paintOrder(army); }
   private paintOrder(army: Legion): void {
     if (this.orderState === army.order) return;
     this.orderState = army.order;

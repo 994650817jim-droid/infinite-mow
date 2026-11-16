@@ -51,7 +51,7 @@ export function siegeGameSceneClass(Base: typeof GameScene) {
       super.create();
       this.chapter = this.battleDef(); this.runConfig = {...this.runConfig, encounter: 'qunxiong'};
       this.receipt = this.test ? '' : this.defense ? beginDefense(city.id) : beginSiege(city.id, true);
-      const effect = permanentEffects(); this.legion.healingMultiplier = effect.healMultiplier; applyCitySpecialties(this.player, effect, true);
+      const effect = permanentEffects(); this.legion.healingMultiplier = effect.healMultiplier; applyCitySpecialties(this.player, effect, true, {legion: this.legion, supplies: this.supplies});
       for (let i = 0; i < effect.reinforcements; i++) this.legion.recruit(i === 0 ? 'swordsman' : 'spearman', 1, true);
       if (!this.test) for (const kind of takeExpeditionReserve(effect.reserveSlots)) { this.legion.recruit(kind, 1, true); this.allies[this.allies.length - 1].reserveSoldier = true; }
       this.battlefieldDetails.useStructuredLayout(); if (this.supplies) this.supplies.randomGeneration = false;
@@ -117,14 +117,14 @@ export function siegeGameSceneClass(Base: typeof GameScene) {
       const reward = settleSiege(this.receipt, {victory, bossKilled: this.bossKilled, debug: this.test || this.debugModified || this.debugJumped || this.player.damageImmune, elapsed: this.elapsed, reward: T.reward, firstBonus: FIRST_CAPTURE_BONUS, returned: this.allies.filter(u => u.active && u.reserveSoldier).map(u => u.kind)});
       this.controller?.clear();
       this.resultTexts.subtitle.setText(victory ? `${this.city.name}归入义军版图${reward.first ? ' · 首次攻占' : ''}` : (reason === 'timeout' && this.gateAlive ? '城门未破 · 攻城失利' : '攻城失利 · 整军再战'));
-      this.resultTexts.body.setText(this.resultTexts.body.text + '\n永久奖励 · 军功 +' + reward.merits + ' / 粮草 +' + reward.provisions + cityIncomeLine(reward) + (reward.alert ? `\n${FACTIONS[reward.alert.attacker].name}不甘失地，${this.city.name}告急！` : ''));
+      this.resultTexts.body.setText(this.resultTexts.body.text + '\n永久奖励 · 军粮 +' + reward.provisions + cityIncomeLine(reward) + (reward.alert ? `\n${FACTIONS[reward.alert.attacker].name}不甘失地，${this.city.name}告急！` : ''));
       this.mapButtons(victory);
     }
     private finishDefense(victory: boolean, base: {merits: number; provisions: number}) {
       const reward = settleDefense(this.receipt, {victory, bossKilled: this.bossKilled, debug: this.test || this.debugModified || this.debugJumped || this.player.damageImmune, elapsed: this.elapsed, reward: base, returned: this.allies.filter(u => u.active && u.reserveSoldier).map(u => u.kind)});
       this.controller?.clear();
       this.resultTexts.subtitle.setText(victory ? `${this.city.name}守住了 · 告急解除` : `守城失利 · ${this.city.name}仍在告急`);
-      this.resultTexts.body.setText(this.resultTexts.body.text + '\n永久奖励 · 军功 +' + reward.merits + ' / 粮草 +' + reward.provisions + cityIncomeLine(reward) + (victory ? '' : '\n城池尚在；若改去别处出征，此城将失守'));
+      this.resultTexts.body.setText(this.resultTexts.body.text + '\n永久奖励 · 军粮 +' + reward.provisions + cityIncomeLine(reward) + (victory ? '' : '\n城池尚在；若改去别处出征，此城将失守'));
       this.mapButtons(victory);
     }
     private mapButtons(victory: boolean) {

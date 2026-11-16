@@ -48,7 +48,7 @@ export function guanduGameSceneClass(Base: typeof GameScene) {
       super.create();
       this.controller = undefined; this.chapter = guanduBattle(this.guanduStage); this.runConfig = {...this.runConfig, encounter: 'qunxiong'};
       this.receipt = this.test ? '' : beginArcExpedition('guandu', this.guanduStage, this.allies.filter(u => u.active && u.reserveSoldier).map(u => u.kind));
-      const effect = permanentEffects(); this.legion.healingMultiplier = effect.healMultiplier; applyCitySpecialties(this.player, effect, !transfer);
+      const effect = permanentEffects(); this.legion.healingMultiplier = effect.healMultiplier; applyCitySpecialties(this.player, effect, !transfer, {legion: this.legion, supplies: this.supplies});
       if (!transfer) {
         for (let i = 0; i < effect.reinforcements; i++) this.legion.recruit(i === 0 ? 'swordsman' : 'spearman', 1, true);
         if (!this.test) for (const kind of takeExpeditionReserve(effect.reserveSlots)) { this.legion.recruit(kind, 1, true); this.allies[this.allies.length - 1].reserveSoldier = true; }
@@ -103,7 +103,7 @@ export function guanduGameSceneClass(Base: typeof GameScene) {
       const reward = settleArcExpedition('guandu', this.receipt, {victory, bossKilled: this.bossKilled, kills: this.kills, elapsed: this.elapsed, debug: this.test || this.debugModified || this.debugJumped || this.player.damageImmune, returned: !victory || lastLeg ? this.allies.filter(u => u.active && u.reserveSoldier).map(u => u.kind) : []});
       this.controller?.clear();
       this.resultTexts.subtitle.setText(victory ? this.chapter.victoryText : '率部退守，整军再战');
-      this.resultTexts.body.setText(this.resultTexts.body.text + '\n永久奖励 · 军功 +' + reward.merits + ' / 粮草 +' + reward.provisions + cityIncomeLine(reward));
+      this.resultTexts.body.setText(this.resultTexts.body.text + '\n永久奖励 · 军粮 +' + reward.provisions + cityIncomeLine(reward));
       const home = this.resultPanel.getByName('result-home') as Phaser.GameObjects.Text;
       home?.setText(victory ? '返回天下地图' : '返回主菜单').removeAllListeners('pointerdown').on('pointerdown', () => { this.registry.remove('campaignTransfer'); this.registry.remove('guanduTransfer'); this.scene.start(victory ? 'WorldMapScene' : 'MenuScene'); });
       const restart = this.resultPanel.getByName('result-restart') as Phaser.GameObjects.Image;

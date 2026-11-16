@@ -27,13 +27,13 @@ export const ACHIEVEMENTS: AchievementDef[] = [
   A('luoyang', '天子旧都', '占领洛阳', '天下'),
   A('defense', '固若金汤', '守住一座告急的城池', '天下'),
   A('focus', '因地制宜', '为一座城池选定发展方向', '天下'),
-  A('town_build', '安营扎寨', '在主城建起第一座新建筑', '城镇'),
-  A('town_all', '百业兴旺', '11 种建筑全部建成', '城镇'),
+  A('town_build', '安营扎寨', '在营寨建起第一座新建筑', '城镇'),
+  A('town_all', '百业兴旺', '营寨建筑全部建成（麒麟阁除外）', '城镇'),
   A('town_lv3', '雕梁画栋', '任一建筑升到 3 级', '城镇'),
-  A('money_500', '富甲一方', '同时持有 500 钱', '城镇'),
-  A('caravan', '商路初开', '一支商队平安归来', '城镇'),
-  A('events_10', '运筹帷幄', '处理 10 个季度事件', '城镇'),
-  A('year_190', '春秋几度', '主城进入 190 年', '城镇'),
+  A('money_500', '富甲一方', '同时持有 1000 军粮', '城镇'),
+  A('caravan', '格物致知', '在讲武堂研究第一项科技', '城镇'),
+  A('events_10', '运筹帷幄', '在讲武堂研究 10 项科技', '城镇'),
+  A('year_190', '春秋几度', '营寨结算满 24 次', '城镇'),
   A('potions_10', '妙手回春', '累计使用 10 次药囊', '军务'),
   A('reserve_20', '兵强马壮', '后备兵达到 20 人', '军务'),
 ];
@@ -99,8 +99,9 @@ export function checkWorld(w: WorldSave): void {
   if (Object.entries(lv).some(([id, l]) => l > 0 && !['hall', 'barracks', 'farm', 'clinic'].includes(id))) unlock('town_build');
   if (Object.keys(TOWN_BUILDINGS).filter(id => id !== 'pavilion').every(id => (lv[id] ?? 0) > 0)) unlock('town_all');
   if (Object.entries(lv).some(([id, l]) => id !== 'hall' && l >= 3)) unlock('town_lv3');
-  if (w.town.money >= 500) unlock('money_500');
-  if ((w.town.report?.caravanMoney ?? 0) > 0) unlock('caravan');
+  if (w.provisions >= 1000) unlock('money_500');
+  if (w.town.tech.length > 0) unlock('caravan');
+  if (w.town.tech.length >= 10) unlock('events_10');
   if (w.town.year >= 190) unlock('year_190');
   if (Object.values(w.reserve).reduce((n, v) => n + (v || 0), 0) >= 20) unlock('reserve_20');
 }

@@ -3,6 +3,7 @@ import { DEPTH, FONT, GAME_HEIGHT, GAME_WIDTH, HEADING_FONT, IS_DESKTOP } from '
 import { CHARACTERS, type CharacterId } from '../data/characters';
 import { AFFIXES, BAG_CAPACITY, LEGENDS, QUALITIES, QUALITY_ORDER, SLOTS, SLOT_ORDER, SPECIALS, formatAffix, itemDef, itemName, itemSlot, type AffixId, type ItemInstance, type ItemSlot } from '../data/items';
 import { gearFromItems, gearSummary } from '../systems/ItemEffects';
+import { rewardGrain } from '../world/WorldStore';
 import { equipItem, equippedBy, loadItems, loadout, salvageItems, salvageUpTo, unequipSlot } from '../systems/ItemStore';
 import { drawQualityFrame, ensureItemTextures, itemTile } from './ItemQuality';
 import { lqDivider, lqHitBox, lqPanel, lqSkin } from './LacquerKit';
@@ -142,7 +143,7 @@ export class ItemBagUI {
     this.button(gx + 30, pageY, '‹', 'item-page-prev', () => { this.page = Math.max(0, this.page - 1); this.render(); }, { disabled: this.page === 0, size: 16 });
     this.text(gx + 82, pageY, `${this.page + 1} / ${pages}`, 14, '#cdb98a').setOrigin(.5).setName('item-page');
     this.button(gx + 134, pageY, '›', 'item-page-next', () => { this.page = Math.min(pages - 1, this.page + 1); this.render(); }, { disabled: this.page >= pages - 1, size: 16 });
-    if (!this.o.readOnly && this.tab === 'bag') this.button(gx + gw - 70, pageY, '分解白 / 绿', 'item-salvage-low', () => { const m = salvageUpTo('green'); this.notice = m ? `分解完成 · 钱 +${m}` : '没有可分解的白 / 绿兵装（已穿戴的不会分解）'; this.selected = null; this.render(); }, { size: 14 });
+    if (!this.o.readOnly && this.tab === 'bag') this.button(gx + gw - 70, pageY, '分解白 / 绿', 'item-salvage-low', () => { const m = salvageUpTo('green'); this.notice = m ? `分解完成 · 军粮 +${rewardGrain(0, 0, m)}` : '没有可分解的白 / 绿兵装（已穿戴的不会分解）'; this.selected = null; this.render(); }, { size: 14 });
     if (this.notice) { const n = this.text(W / 2, pageY - (D ? 34 : 40), this.notice, 14, '#f3d48a').setOrigin(.5).setName('item-notice'); this.notice = ''; this.scene.time.delayedCall(1800, () => n.active && n.setVisible(false)); }
 
     if (this.selected) this.renderDetail(this.selected);
@@ -210,7 +211,7 @@ export class ItemBagUI {
       if (wornHere) unequipSlot(this.hero, slot); else equipItem(this.hero, item.uid);
       this.notice = wornHere ? '已卸下' : `${CHARACTERS.find(c => c.id === this.hero)?.name ?? ''} 穿戴 ${itemName(item)}`; this.lastUid = item.uid; this.selected = null; this.render();
     }, { parent: card, size: 16 });
-    this.button(x + cw * .7, by, owner ? '已穿戴不可分解' : `分解 · 钱 +${q.salvage}`, 'item-salvage', () => { const m = salvageItems([item.uid]); this.notice = `分解 ${itemName(item)} · 钱 +${m}`; this.selected = null; this.render(); }, { parent: card, size: 14, disabled: !!owner });
+    this.button(x + cw * .7, by, owner ? '已穿戴不可分解' : `分解 · 军粮 +${rewardGrain(0, 0, q.salvage)}`, 'item-salvage', () => { const m = salvageItems([item.uid]); this.notice = `分解 ${itemName(item)} · 军粮 +${rewardGrain(0, 0, m)}`; this.selected = null; this.render(); }, { parent: card, size: 14, disabled: !!owner });
   }
 
   /** 与当前同槽装备的词条差，如「武器伤害 +2.1%」「暴击率 −1.0%」。 */

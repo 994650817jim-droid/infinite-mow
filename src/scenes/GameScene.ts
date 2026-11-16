@@ -5,7 +5,7 @@ import {cityIncomeLine} from '../world/WorldStore';
 import {CampRestUI} from '../ui/CampRestUI';
 import {chapterVictoryNotice} from '../ui/ChapterVictoryNotice';
 import {HARD_MODE,HARD_TITLES} from '../data/hardMode';
-import {recordHardClear} from '../world/WorldStore';
+import {recordHardClear,rewardGrain} from "../world/WorldStore";
 import {chapterState,openChapterCount,type TimelineChapterId} from '../world/ChapterTimeline';
 import {buildVfx} from '../systems/BuildVfx';
 import {AwakeningCombat} from '../systems/AwakeningCombat';
@@ -392,7 +392,7 @@ export class GameScene extends Phaser.Scene {
       const ownLevel=this.player.weapons.find(weapon=>weapon.id===ownId)?.level??1;
       this.player.weapons=[{id:ownId,level:ownLevel,cooldownLeft:0}];
     }
-    if(this.worldCampaign&&worldUnlocked()){const effects=permanentEffects();this.legion.healingMultiplier=effects.healMultiplier;applyCitySpecialties(this.player,effects,!transfer);if(!transfer){for(let i=0;i<effects.reinforcements;i++)this.legion.recruit(i===0?'swordsman':'spearman',1,true);}if(!transfer&&!isChapterTestRun())for(const kind of takeExpeditionReserve(effects.reserveSlots)){this.legion.recruit(kind,1,true);this.allies[this.allies.length-1].reserveSoldier=true;}}
+    if(this.worldCampaign&&worldUnlocked()){const effects=permanentEffects();this.legion.healingMultiplier=effects.healMultiplier;applyCitySpecialties(this.player,effects,!transfer,{legion:this.legion,supplies:this.supplies});if(!transfer){for(let i=0;i<effects.reinforcements;i++)this.legion.recruit(i===0?'swordsman':'spearman',1,true);}if(!transfer&&!isChapterTestRun())for(const kind of takeExpeditionReserve(effects.reserveSlots)){this.legion.recruit(kind,1,true);this.allies[this.allies.length-1].reserveSoldier=true;}}
     this.buildCombat=new BuildCombat(this.player.growth.build,(x,y,r)=>this.grid.query(x,y,r),(e,n,fire)=>this.hitEnemy(e,n,this.combatNow,fire?'fire':'melee',false,false),(e,fire)=>{this.artEffects.show(fire?5:3,e.x,e.y-8,32,this.combatNow,160);buildVfx(this).emit(fire?'flame':'combo',e.x,e.y-8,this.combatNow,fire?42:38);});
     this.bulwarkBuild=new BulwarkBuild(this,this.player.growth.build,this.player,this.allies,(x,y,r)=>this.grid.query(x,y,r),(e,n)=>this.hitEnemy(e,n,this.combatNow,'melee',false,false));
     this.player.damageGuard=(n,now)=>this.bulwarkBuild?.guard(n,now)??n;this.legion.defense=this.bulwarkBuild;
@@ -2263,7 +2263,7 @@ export class GameScene extends Phaser.Scene {
     {const loot=this.itemDrops?.runLoot??[],debug=isChapterTestRun()||this.debugModified||this.debugJumped||!!this.player.damageImmune||!!this.runConfig.encounter,dep=depositRunLoot(loot,{victory,elapsed:this.elapsed,debug});
      if(loot.length)this.resultTexts.body.setText(this.resultTexts.body.text+'\n缴获兵装  '+loot.length+' 件（'+this.itemDrops!.summary()+'）'+(debug?' · 测试战斗不入行囊':dep.lost?' · 败退遗失 '+dep.lost+' 件':' · 已收入行囊'));}
     if(this.worldCampaign){const reward=settleExpedition(this.expeditionId,{...stats,kills:Math.max(0,stats.kills-this.settledFrontlineKills),chapter:this.chapter.id,returned:this.allies.filter(a=>a.active&&a.reserveSoldier).map(a=>a.kind),debug:isChapterTestRun()||this.debugModified||this.debugJumped||this.player.damageImmune});
-      this.resultTexts.body.setFontSize(IS_DESKTOP?14:16).setLineSpacing(IS_DESKTOP?5:8).setText(this.resultTexts.body.text+`\n永久奖励  军功 +${reward.merits} · 粮草 +${reward.provisions}`+cityIncomeLine(reward));
+      this.resultTexts.body.setFontSize(IS_DESKTOP?14:16).setLineSpacing(IS_DESKTOP?5:8).setText(this.resultTexts.body.text+`\n永久奖励  军粮 +${reward.provisions}`+cityIncomeLine(reward));
       this.resultTexts.subtitle.setText(victory&&this.chapter.id==='huangjin'&&this.chapter.stage===3&&worldUnlocked()?'黄巾平定 · 三国天下开启':victory?this.chapter.victoryText:reward.message);
     }
     // 讨董告捷：回天下地图并聚焦新解锁的「群雄割据」（地图自第一章起已开放，不再重复「天下开启」揭幕）
@@ -2275,7 +2275,7 @@ export class GameScene extends Phaser.Scene {
     const openedMap=victory&&this.worldCampaign&&this.chapter.id==='hulao'&&(this.chapter.westStage??3)===3&&worldUnlocked();
     const homeLink=this.resultPanel.getByName('result-home') as Phaser.GameObjects.Text|null;
     this.resultPanel.getByName('result-restart')?.setActive(victory);(this.resultPanel.getByName('result-restart') as Phaser.GameObjects.Image)?.setVisible(victory);(this.resultPanel.getByName('result-restart-text') as Phaser.GameObjects.Text)?.setVisible(victory);
-    homeLink?.setText(!victory?'返回主菜单':canAdvance?`下一关 · ${nextWest===1?'汜水关':nextWest===2?'荥阳':'虎牢关'}`:openedMap?(openChapterCount(loadWorldState())>loadWorldState().chapterSeen?'天下地图 · 新篇解锁':'返回天下地图'):this.worldCampaign&&worldUnlocked()?'返回主城':'返回选关');
+    homeLink?.setText(!victory?'返回主菜单':canAdvance?`下一关 · ${nextWest===1?'汜水关':nextWest===2?'荥阳':'虎牢关'}`:openedMap?(openChapterCount(loadWorldState())>loadWorldState().chapterSeen?'天下地图 · 新篇解锁':'返回天下地图'):this.worldCampaign&&worldUnlocked()?"返回营寨":'返回选关');
     homeLink?.removeAllListeners('pointerdown').on('pointerdown',()=>{
       if(!victory){this.registry.remove('campaignTransfer');this.registry.remove('menuChapterPicker');this.scene.start('MenuScene');return;}
       if(canAdvance){this.registry.remove('campaignTransfer');const {encounter:_preview,...config}=this.runConfig;this.registry.set('runConfig',{...config,chapter:'hulao',stage:undefined,westStage:nextWest});this.scene.restart();return;}
@@ -2287,9 +2287,9 @@ export class GameScene extends Phaser.Scene {
     // 成就：战斗结果与天下 / 城镇状态（测试战斗、调试改动过的战斗不计）
     onBattleEnd({victory,debug:isChapterTestRun()||this.debugModified||this.debugJumped||!!this.player.damageImmune||!!this.runConfig.encounter,kills:this.kills,level:this.player.level,hero:this.runConfig.character,chapter:this.chapter.id,stage:this.chapter.stage,westStage:this.chapter.westStage,arc:this.achievementArc(),bossKilled:this.bossKilled});
     try{checkWorld(loadWorldState());}catch{/* 存档不可用 */}
-    // 乱世难度首通（该章第三关击败首领）：一次性军功 / 粮草与称号
+    // 乱世难度首通（该章第三关击败首领）：一次性军粮与称号
     if(victory&&this.hardMode&&this.bossKilled&&this.hardStage()===3&&!isChapterTestRun()&&!this.debugModified&&!this.debugJumped&&!this.player.damageImmune){const key=this.hardKey() as TimelineChapterId;if(recordHardClear(key,HARD_MODE.reward))this.resultTexts.body.setText(this.resultTexts.body.text+`
-乱世首通 · 称号「${HARD_TITLES[key]}」 · 军功 +${HARD_MODE.reward.merits} · 粮草 +${HARD_MODE.reward.provisions}`);}
+乱世首通 · 称号「${HARD_TITLES[key]}」 · 军粮 +${rewardGrain(HARD_MODE.reward.merits,HARD_MODE.reward.provisions)}`);}
     if (victory && !this.runConfig.encounter && (this.chapter.id==='huangjin'||(this.chapter.westStage??3)<3)) {
       this.cameras.main.flashEffect.reset(); this.cameras.main.shakeEffect.reset();
       this.pendingRecruit = false; this.pendingLevels = 0; this.freeRecruit = false; this.resting = true;
@@ -2709,7 +2709,7 @@ export class GameScene extends Phaser.Scene {
       .setOrigin(0.5).setStroke('#2a170b', 3);
     btn.setName('result-restart');btnText.setName('result-restart-text');
     btn.on('pointerdown', () => {if(this.victory)this.scene.restart();});
-    const selectChapter = this.add.text(pcx, rby, this.worldCampaign&&worldUnlocked()?this.chapter.stage===3&&this.victory?'三国天下开启':'返回主城':'返回选关', { fontFamily: HEADING_FONT, fontSize: d ? '19px' : '21px', color: '#ffe9bd' })
+    const selectChapter = this.add.text(pcx, rby, this.worldCampaign&&worldUnlocked()?this.chapter.stage===3&&this.victory?'三国天下开启':"返回营寨":'返回选关', { fontFamily: HEADING_FONT, fontSize: d ? '19px' : '21px', color: '#ffe9bd' })
       .setOrigin(.5).setStroke('#2a170b', 3).setInteractive({ useHandCursor: true });
     selectChapter.setName('result-home').on('pointerdown', () => this.scene.start(this.worldCampaign&&worldUnlocked()?(this.registry.get('worldReveal')?'WorldMapScene':'CityScene'):'MenuScene'));
     if(this.worldCampaign)btnText.setText('再次出征');

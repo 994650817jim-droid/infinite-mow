@@ -1,4 +1,5 @@
 import {playMenuMusic} from '../systems/Music';
+import {defaultHero,heroOwned,LOCKED_HINT} from '../systems/RosterStore';
 import {checkWorld} from '../systems/Achievements';
 import {RENDER_SCALE,screenPoint} from '../config';
 import {thirdChapterUnlocked,arcUnlocked} from '../world/WorldStore';
@@ -308,7 +309,7 @@ export class WorldMapScene extends Phaser.Scene {
   if(this.siegeModal||(defense?!alert:!cityAttackable(city.id,this.owned)||(!citySiegeOpen(city.id,loadWorld())&&!isChapterTestRun())))return;
   const warn=alert?'':this.lossWarning(),dy=warn?(W>600?36:54):0;
   const owner=alert?alert.attacker:cityOwner(city.id,this.era,this.owned),T=SIEGE[city.tier],first=!this.capturedEver.includes(city.id),k=first?1+FIRST_CAPTURE_BONUS:1,desk=W>600;
-  let hero:CharacterId='zhaoyun';try{const saved=localStorage.getItem('im_last_hero');if(CHARACTERS.some(c=>c.id===saved))hero=saved as CharacterId;}catch{/* storage unavailable */}
+  let hero:CharacterId=defaultHero(null);try{hero=defaultHero(localStorage.getItem('im_last_hero'));}catch{/* storage unavailable */}
   const root=this.add.container(0,0).setDepth(60).setName('siege-modal');this.siegeModal=root;
   const pw=Math.min(W-40,520),ph=(desk?400:560)+dy,px=W/2-pw/2,py=H/2-ph/2;
   root.add(this.add.rectangle(W/2,H/2,W,H,0x07100b,.72).setInteractive());
@@ -327,8 +328,8 @@ export class WorldMapScene extends Phaser.Scene {
   if(warn)t(px+24,info.y+info.height+4,warn,13,'#ff8a70').setWordWrapWidth(pw-48).setName('siege-warning');
   t(px+24,py+dy+(desk?214:236),'出战武将',13,'#b6a07b');
   const btns:Phaser.GameObjects.Rectangle[]=[];const bw=(pw-48-6*(CHARACTERS.length-1))/CHARACTERS.length,by=py+dy+(desk?256:282);
-  const paint=()=>btns.forEach((b,i)=>b.setFillStyle(CHARACTERS[i].id===hero?0x51402b:0x241e1a).setStrokeStyle(1,CHARACTERS[i].id===hero?0xd7b778:0x70604b));
-  CHARACTERS.forEach((c,i)=>{const x=px+24+i*(bw+6)+bw/2;const b=this.add.rectangle(x,by,bw,desk?42:54,0x241e1a,.96).setInteractive({useHandCursor:true}).setName('siege-hero-'+c.id);b.on('pointerup',()=>{hero=c.id;paint();});btns.push(b);root.add(b);const l=worldText(this,x,by,c.name,16,'#d1c2a7').setOrigin(.5);root.add(l);});paint();
+  const paint=()=>btns.forEach((b,i)=>b.setFillStyle(CHARACTERS[i].id===hero?0x51402b:0x241e1a).setStrokeStyle(1,CHARACTERS[i].id===hero?0xd7b778:0x70604b).setAlpha(b.getData('locked')?.35:1));
+  CHARACTERS.forEach((c,i)=>{const x=px+24+i*(bw+6)+bw/2;const b=this.add.rectangle(x,by,bw,desk?42:54,0x241e1a,.96).setInteractive({useHandCursor:true}).setName('siege-hero-'+c.id);b.on('pointerup',()=>{if(!heroOwned(c.id))return;hero=c.id;paint();});btns.push(b);root.add(b);const l=worldText(this,x,by,c.name,16,'#d1c2a7').setOrigin(.5);root.add(l);if(!heroOwned(c.id)){b.setData('locked',LOCKED_HINT);l.setAlpha(.35);}});paint();
   const close=()=>{root.destroy();this.siegeModal=undefined;};
   const cancel=worldButton(this,px+pw*.27,py+ph-(desk?48:58),'返回',close,pw*.38);cancel.image.setName('siege-cancel');root.add([cancel.image,cancel.text]);
   const go=worldButton(this,px+pw*.73,py+ph-(desk?48:58),alert?'出征守城':'出征攻城',()=>this.launchSiege(city,hero,!!alert),pw*.38);go.image.setName('siege-go');root.add([go.image,go.text]);
@@ -425,7 +426,7 @@ ${intelBrief(event,f)}
  /** 军情出征面板：说明、奖励、期限，选择武将后出征。 */
  private openIntel(event:IntelEvent){
   if(this.siegeModal)return;const info=INTEL_INFO[event.kind],desk=W>600,warn=this.lossWarning(),dy=warn?(desk?36:54):0;
-  let hero:CharacterId='zhaoyun';try{const saved=localStorage.getItem('im_last_hero');if(CHARACTERS.some(c=>c.id===saved))hero=saved as CharacterId;}catch{/* storage unavailable */}
+  let hero:CharacterId=defaultHero(null);try{hero=defaultHero(localStorage.getItem('im_last_hero'));}catch{/* storage unavailable */}
   const root=this.add.container(0,0).setDepth(60).setName('intel-modal');this.siegeModal=root;
   const pw=Math.min(W-40,520),ph=(desk?400:560)+dy,px=W/2-pw/2,py=H/2-ph/2;
   root.add(this.add.rectangle(W/2,H/2,W,H,0x07100b,.72).setInteractive());root.add(panel(this,W/2,H/2,pw,ph));
@@ -440,8 +441,8 @@ ${fail}`;
   if(warn)t(px+24,infoText.y+infoText.height+4,warn,13,'#ff8a70').setWordWrapWidth(pw-48).setName('intel-warning');
   t(px+24,py+dy+(desk?214:236),'出战武将',13,'#b6a07b');
   const btns:Phaser.GameObjects.Rectangle[]=[];const per=desk?CHARACTERS.length:Math.ceil(CHARACTERS.length/2),bw=(pw-48-6*(per-1))/per,by=py+dy+(desk?256:296);
-  const paint=()=>btns.forEach((b,i)=>b.setFillStyle(CHARACTERS[i].id===hero?0x51402b:0x241e1a).setStrokeStyle(1,CHARACTERS[i].id===hero?0xd7b778:0x70604b));
-  CHARACTERS.forEach((c,i)=>{const x=px+24+(i%per)*(bw+6)+bw/2,y=by+Math.floor(i/per)*62;const b=this.add.rectangle(x,y,bw,desk?42:54,0x241e1a,.96).setInteractive({useHandCursor:true}).setName('intel-hero-'+c.id);b.on('pointerup',()=>{hero=c.id;paint();});btns.push(b);root.add(b);root.add(worldText(this,x,y,c.name,16,'#d1c2a7').setOrigin(.5));});paint();
+  const paint=()=>btns.forEach((b,i)=>b.setFillStyle(CHARACTERS[i].id===hero?0x51402b:0x241e1a).setStrokeStyle(1,CHARACTERS[i].id===hero?0xd7b778:0x70604b).setAlpha(b.getData('locked')?.35:1));
+  CHARACTERS.forEach((c,i)=>{const x=px+24+(i%per)*(bw+6)+bw/2,y=by+Math.floor(i/per)*62;const b=this.add.rectangle(x,y,bw,desk?42:54,0x241e1a,.96).setInteractive({useHandCursor:true}).setName('intel-hero-'+c.id);b.on('pointerup',()=>{if(!heroOwned(c.id))return;hero=c.id;paint();});if(!heroOwned(c.id))b.setData('locked',LOCKED_HINT);btns.push(b);root.add(b);root.add(worldText(this,x,y,c.name,16,'#d1c2a7').setOrigin(.5));});paint();
   const close=()=>{root.destroy();this.siegeModal=undefined;};
   const cancel=worldButton(this,px+pw*.27,py+ph-(desk?48:58),'返回',close,pw*.38);cancel.image.setName('intel-cancel');root.add([cancel.image,cancel.text]);
   const go=worldButton(this,px+pw*.73,py+ph-(desk?48:58),'出征',()=>this.launchIntel(event,hero),pw*.38);go.image.setName('intel-go');root.add([go.image,go.text]);

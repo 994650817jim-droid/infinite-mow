@@ -1,4 +1,5 @@
 import { IS_DESKTOP_APP, desktop } from '../platform/desktop';
+import { defaultHero, heroOwned } from '../systems/RosterStore';
 import {playMenuMusic,menuMusic} from '../systems/Music';
 import {uiSfx} from '../systems/Sfx';
 import {GameCodex} from '../ui/GameCodex';
@@ -81,7 +82,7 @@ export class MenuScene extends Phaser.Scene {
     this.selectedChapter = chapterUnlocked(requested)||isChapterTestRun() ? requested : 'huangjin';
     if(fromWorld&&this.selectedChapter==='huangjin'&&[1,2,3].includes(worldStage)&&(yellowStageUnlocked(worldStage)||isChapterTestRun()))this.selectedStage=worldStage as YellowStage;
     let lastHero=saved?.character;try{lastHero=localStorage.getItem('im_last_hero') as RunConfig['character']||lastHero;}catch{}
-    this.selectedChar = params.has('autostart') || params.has('perf') ? 0 : Math.max(0, CHARACTERS.findIndex(c => c.id === lastHero));
+    this.selectedChar = params.has('autostart') || params.has('perf') ? 0 : Math.max(0, CHARACTERS.findIndex(c => c.id === defaultHero(lastHero)));
     if(this.compactHome){if(!(isChapterTestRun()&&params.has('chapter')))this.selectedChapter=chapterOneCleared()||loadWorld().legacyHulaoAccess?'hulao':'huangjin';this.createLanding(params);return;}
     this.cameras.main.resetFX(); this.cameras.main.setBackgroundColor('#101813');
     const text = (x: number, y: number, value: string, size: number, color = '#ede4cc') => this.add.text(x, y, value, { fontFamily: size>=18?HEADING_FONT:FONT, fontSize: `${size}px`, color, resolution: 2 });
@@ -132,7 +133,8 @@ export class MenuScene extends Phaser.Scene {
       text(x, y + 39, c.name, D ? 22 : 23, '#f0e5c6').setOrigin(.5);
       text(x, y + 64, ROLES[i], D ? 11 : 14, '#9cb7a7').setOrigin(.5);
       const badge = text(x + cardW / 2 - 10, y - cardH / 2 + 9, '出战', 11, '#f3d89a').setOrigin(1, 0).setPadding(5,3).setBackgroundColor('#16352a');
-      bg.on('pointerdown', () => { this.selectedChar = i; this.renderSelection(); });
+      if (!heroOwned(c.id)) icon.setAlpha(.35);
+      bg.on('pointerdown', () => { if (!heroOwned(c.id)) return; this.selectedChar = i; this.renderSelection(); });
       bg.on('pointerover', () => { if (this.selectedChar !== i) bg.setFillStyle(0x253b2e).setStrokeStyle(1, 0xa7b995); });
       bg.on('pointerout', () => this.renderSelection());
       this.charCards.push({ bg, icon, badge, decor });
@@ -423,6 +425,7 @@ export class MenuScene extends Phaser.Scene {
     if (this.heroModal?.visible||this.westModal?.visible||this.children.getByName('home-settings-panel')||this.children.getByName('game-codex')) return;
     if(this.selectedChapter==='hulao'&&!dongzhuoStageUnlocked(this.selectedWestStage)&&!isChapterTestRun())return;
     if (this.started || (!chapterUnlocked(this.selectedChapter)&&!isChapterTestRun()) || !CHARACTERS[this.selectedChar]) return;
+    if (!heroOwned(CHARACTERS[this.selectedChar].id)) this.selectedChar = Math.max(0, CHARACTERS.findIndex(c => c.id === defaultHero(null)));
     this.started = true; this.renderSelection();
     if(!isChapterTestRun())this.registry.set('worldCampaign',true);
     const c = CHARACTERS[this.selectedChar];

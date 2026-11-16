@@ -7,6 +7,7 @@
 //   SRC=public/assets/hero-actions-v2/originals/artv2_zhaoyun_walk.png OUT=public/assets/processed-v2/zhaoyun_walk_sheet.png ROWS=4 node tools/prepare-artv2.mjs
 //   SRC=... OUT=public/assets/hero-actions-v2/zhaoyun.png ROWS=7 CELL=232 FOOT=216 REF=0 node tools/prepare-artv2.mjs
 // 可选：COLS（默认 4）、CELL（原生格，默认 176）、FOOT（脚底行，默认 CELL-8）、FIG（人物身高，默认 152）、
+//      KEYHARD / KEYSOFT（洋红抠图阈值 min(R,B)-G，默认 110 / 40；人物本身有粉紫色时调高，如貂蝉 160 / 130）、
 //      DEMAGENTA（去洋红偏色强度，默认 .7）、GAMMA（中间调，默认 .85，<1 提亮）、SAT（饱和度，默认 1.12）、
 //      MINBLOB（小于此像素数的碎块丢弃，默认 40）、REF（参与定身高的行，逗号分隔，默认全部）、PAL（调色板色数，默认 160）、UP（放大倍数，默认 1）、
 //      ORDER（输出行取自原图哪一行，逗号分隔，默认 0..ROWS-1；用于 ChatGPT 行序与规范不同时重排）、
@@ -21,6 +22,7 @@ const SRC = env.SRC, OUT = env.OUT;
 if (!SRC || !OUT) { console.error('需要 SRC 和 OUT'); process.exit(2); }
 const COLS = +(env.COLS ?? 4), ROWS = +(env.ROWS ?? 4), CELL = +(env.CELL ?? 176), FOOT = +(env.FOOT ?? CELL - 8);
 const FIG = +(env.FIG ?? 152), PAL = +(env.PAL ?? 160), UP = +(env.UP ?? 1), MINBLOB = +(env.MINBLOB ?? 40);
+const KEYHARD = +(env.KEYHARD ?? 110), KEYSOFT = +(env.KEYSOFT ?? 40);
 const DEMAGENTA = +(env.DEMAGENTA ?? .7), GAMMA = +(env.GAMMA ?? .85), SAT = +(env.SAT ?? 1.12);
 const SRC_ROWS = +(env.SRC_ROWS ?? ROWS);
 const ORDER = env.ORDER ? env.ORDER.split(',').map(Number) : Array.from({ length: ROWS }, (_, i) => i);
@@ -32,7 +34,7 @@ const browser = await chromium.launch({ channel: 'chrome', headless: true });
 try {
   const page = await browser.newPage();
   const src = 'data:image/png;base64,' + readFileSync(SRC).toString('base64');
-  const res = await page.evaluate(async ({ src, COLS, ROWS, SRC_ROWS, CELL, FOOT, FIG, PAL, UP, ORDER, MIRROR, REF, OUTLINE, MINBLOB, DEMAGENTA, GAMMA, SAT }) => {
+  const res = await page.evaluate(async ({ src, COLS, ROWS, SRC_ROWS, CELL, FOOT, FIG, PAL, UP, ORDER, MIRROR, REF, OUTLINE, MINBLOB, DEMAGENTA, GAMMA, SAT, KEYHARD, KEYSOFT }) => {
     const im = new Image(); im.src = src; await im.decode();
     const W = im.width, H = im.height;
     const c = document.createElement('canvas'); c.width = W; c.height = H;
@@ -41,8 +43,8 @@ try {
     // 1) 抠洋红（含边缘溢色）
     for (let i = 0; i < d.length; i += 4) {
       const R = d[i], G = d[i + 1], B = d[i + 2], m = Math.min(R, B) - G;
-      if (m > 110 && R > 160 && B > 160) { d[i + 3] = 0; continue; }
-      if (m > 40) { const k = Math.min(1, (m - 40) / 70); d[i + 3] = Math.round(d[i + 3] * (1 - k)); const cap = G + 30; d[i] = Math.min(R, cap); d[i + 2] = Math.min(B, cap); }
+      if (m > KEYHARD && R > 160 && B > 160) { d[i + 3] = 0; continue; }
+      if (m > KEYSOFT) { const k = Math.min(1, (m - KEYSOFT) / Math.max(10, KEYHARD - KEYSOFT)); d[i + 3] = Math.round(d[i + 3] * (1 - k)); const cap = G + 30; d[i] = Math.min(R, cap); d[i + 2] = Math.min(B, cap); }
       // 去洋红偏色：ChatGPT 在洋红底上画的人物整体偏品红（R、B 同时高于 G），银甲发紫。只削 R、B 共同高出 G 的部分，蓝披风（B 高 R 低）不受影响
       const r0 = d[i], g0 = d[i + 1], b0 = d[i + 2], ex = Math.min(r0, b0) - g0;
       let r = r0, gg = g0, bb = b0; if (ex > 0) { r -= ex * DEMAGENTA; bb -= ex * DEMAGENTA; }
@@ -150,7 +152,7 @@ try {
     const o4 = document.createElement('canvas'); o4.width = OW * UP; o4.height = OH * UP;
     const g4 = o4.getContext('2d'); g4.imageSmoothingEnabled = false; g4.drawImage(o1, 0, 0, OW * UP, OH * UP);
     return { scale: s, medH, palette: centers.length, stats, one: o1.toDataURL('image/png'), big: o4.toDataURL('image/png'), size: [OW * UP, OH * UP] };
-  }, { src, COLS, ROWS, SRC_ROWS, CELL, FOOT, FIG, PAL, UP, ORDER, MIRROR, REF, OUTLINE, MINBLOB, DEMAGENTA, GAMMA, SAT });
+  }, { src, COLS, ROWS, SRC_ROWS, CELL, FOOT, FIG, PAL, UP, ORDER, MIRROR, REF, OUTLINE, MINBLOB, DEMAGENTA, GAMMA, SAT, KEYHARD, KEYSOFT });
   if (res.error) { console.error(res.error); process.exit(1); }
   mkdirSync(dirname(OUT), { recursive: true });
   writeFileSync(OUT, Buffer.from(res.big.split(',')[1], 'base64'));

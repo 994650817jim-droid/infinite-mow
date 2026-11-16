@@ -79,6 +79,7 @@ assets/raw/*
 !/tools/test-walk-anim.mjs
 !/tools/prepare-artv2.mjs
 !/tools/artv2-compare.mjs
+!/tools/artv2-prompts.mjs
 !/tools/walk-anim-record.mjs
 !/tools/test-hubao.mjs
 !/tools/test-mount.mjs

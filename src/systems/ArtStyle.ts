@@ -22,6 +22,18 @@ export const ART_V2_FILES: Readonly<Record<string, string>> = {
   machao_actions: 'assets/hero-actions-v2/machao.png',
   huangzhong_walk_sheet: 'assets/processed-v2/huangzhong_walk_sheet.png',
   huangzhong_actions: 'assets/hero-actions-v2/huangzhong.png',
+  zhuge_walk_sheet: 'assets/processed-v2/zhuge_walk_sheet.png',
+  zhuge_actions: 'assets/hero-actions-v2/zhuge.png',
+  weiyan_walk_sheet: 'assets/processed-v2/weiyan_walk_sheet.png',
+  weiyan_actions: 'assets/hero-actions-v2/weiyan.png',
+  liubei_walk_sheet: 'assets/processed-v2/liubei_walk_sheet.png',
+  liubei_actions: 'assets/hero-actions-v2/liubei.png',
+  pangtong_walk_sheet: 'assets/processed-v2/pangtong_walk_sheet.png',
+  pangtong_actions: 'assets/hero-actions-v2/pangtong.png',
+  huangyueying_walk_sheet: 'assets/processed-v2/huangyueying_walk_sheet.png',
+  huangyueying_actions: 'assets/hero-actions-v2/huangyueying.png',
+  diaochan_walk_sheet: 'assets/processed-v2/diaochan_walk_sheet.png',
+  diaochan_actions: 'assets/hero-actions-v2/diaochan.png',
 };
 /** v2 主将行走整格的显示高度（逻辑像素）：原生格 176 → 88，即 1080p 全屏（渲染 2 倍）下 1 美术像素 = 1 屏幕像素。
  * 人物约 76 逻辑像素高（用户要求比 v1 大一些）。 */

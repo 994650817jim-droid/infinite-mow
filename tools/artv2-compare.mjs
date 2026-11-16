@@ -29,7 +29,9 @@ for (const art of ['v1', 'v2']) {
     const g = window.__game, s = eval(G0); g.loop.sleep(); let T = performance.now();
     s.spawnTimer = s.eliteTimer = 1e9; for (const e of s.enemies) if (e.active && !e.isSupplySlot) e.hp = 0;
     const v = new Phaser.Math.Vector2(1, 0); s.readMove = () => v.clone(); window.__v = v;
-    window.__step = n => { for (let i = 0; i < n; i++) { T += 1000 / 60; g.step(T, 1000 / 60); } };
+    // 行走取样时压住武器冷却（__hold），避免连弩等边走边射把行走帧换成动作帧
+    window.__hold = false;
+    window.__step = n => { for (let i = 0; i < n; i++) { if (window.__hold) for (const w of s.player.weapons) w.cooldownLeft = 99; T += 1000 / 60; g.step(T, 1000 / 60); } };
     const sp = s.player.sprite;
     window.__foot = () => { // v2 图集脚底行固定（行走格 176 第 168 行 / 动作格 232 第 216 行），换算成相对精灵中心的世界像素
       const fh = sp.frame.height, row = fh === 176 ? 168 : fh === 232 ? 216 : NaN;
@@ -43,11 +45,11 @@ for (const art of ['v1', 'v2']) {
   };
   // 1) 空场向右走：行走帧、显示尺寸、过滤方式、脚底
   const walk = await p.evaluate(G0 => {
-    const g = window.__game, s = eval(G0), sp = s.player.sprite; window.__step(50);
+    const g = window.__game, s = eval(G0), sp = s.player.sprite; window.__hold = true; window.__step(50);
     const gl = g.renderer.gl, src = sp.texture.source[0]; gl.bindTexture(gl.TEXTURE_2D, src.glTexture?.webGLTexture ?? src.glTexture);
     const filter = gl.getTexParameter(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER) === gl.NEAREST ? 'nearest' : 'linear';
     const walkFoot = []; for (let i = 0; i < 20; i++) { window.__step(1); if (!s.player.currentAction) walkFoot.push(window.__foot()); }
-    window.__step(3);
+    window.__step(3); window.__hold = false;
     return { tex: sp.texture.key, frame: sp.frame.name, filter, walkH: sp.displayHeight, walkFoot, tinted: sp.isTinted, px: s.player.x, py: s.player.y, cam: s.cameras.main.worldView };
   }, G);
   await p.screenshot({ path: `${outDir}/${hero}-${art}-full.png` });
@@ -71,9 +73,13 @@ const spread = a => a.length ? Math.max(...a) - Math.min(...a) : 0;
 ck(`${hero}：v1 仍用旧图集（线性过滤）`, (v1.tex === 'readable_' + walkKey || v1.tex === walkKey) && v1.filter === 'linear', { tex: v1.tex, filter: v1.filter });
 ck(`${hero}：v2 行走用 ${walkKey} 且最近邻过滤（不再套浅色描边派生图）`, v2.tex === walkKey && v2.filter === 'nearest', { tex: v2.tex, filter: v2.filter });
 ck(hero + '：v2 行走整格显示 88 逻辑像素（原生 176，全屏像素 1:1）', Math.abs(v2.walkH - 88) < 3.5, { walkH: v2.walkH });
-ck(`${hero}：v2 普攻用 ${hero}_actions 动作图集`, v2.actTex === hero + '_actions', { actTex: v2.actTex, n: v2.actFoot.length });
-const walkMed = [...v2.walkFoot].sort((a, b) => a - b)[v2.walkFoot.length >> 1] ?? 0;
-ck(hero + '：v2 出手时脚底与行走脚底同一高度（偏差 ≤4px）', v2.actFoot.length > 0 && v2.actFoot.every(f => Math.abs(f - walkMed) <= 4), { walkMed, act: [Math.min(...v2.actFoot), Math.max(...v2.actFoot)], walkSpread: spread(v2.walkFoot) });
+// 庞统连环令等布雷类武器开火不播普攻动作：两种画风都没有动作帧时跳过，不算失败
+if (!v1.actFoot.length && !v2.actFoot.length) console.log(`SKIP ${hero}：该武器开火不播普攻动作（v1 / v2 都没有），跳过动作图集与脚底检查`);
+else {
+  ck(`${hero}：v2 普攻用 ${hero}_actions 动作图集`, v2.actTex === hero + '_actions', { actTex: v2.actTex, n: v2.actFoot.length });
+  const walkMed = [...v2.walkFoot].sort((a, b) => a - b)[v2.walkFoot.length >> 1] ?? 0;
+  ck(hero + '：v2 出手时脚底与行走脚底同一高度（偏差 ≤4px）', v2.actFoot.length > 0 && v2.actFoot.every(f => Math.abs(f - walkMed) <= 4), { walkMed, act: [Math.min(...v2.actFoot), Math.max(...v2.actFoot)], walkSpread: spread(v2.walkFoot) });
+}
 }
 ck('无页面报错', errors.length === 0, errors.slice(0, 5));
 await b.close();

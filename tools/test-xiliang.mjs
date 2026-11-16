@@ -35,7 +35,7 @@ for (const layout of ['mobile', 'desktop']) {
   await p.waitForTimeout(500);
   if (layout === 'mobile') await p.screenshot({ path: `${out}/${layout}-xiliang-raid-warn.png` }); else await p.screenshot({ path: `${out}/${layout}-xiliang-raid-warn.png` });
   const r1 = await p.evaluate(G0 => { const s = eval(G0); return s.enemies.filter(e => e.active && e.kind === 'cavalry').map(e => [Math.round(e.x), Math.round(e.y)]); }, G);
-  ck(`[${layout}] 预警期间骑兵原地待发`, JSON.stringify(r1.slice(0, 3)) === JSON.stringify(r0.pos.slice(0, 3)), { r0: r0.pos, r1 });
+  ck(`[${layout}] 预警期间骑兵原地待发（被其他兵挤动不超过 12 像素）`, r1.slice(0, 3).every((q, i) => Math.hypot(q[0] - r0.pos[i][0], q[1] - r0.pos[i][1]) <= 12), { r0: r0.pos, r1 });
   // 预警结束后冲锋：车道穿过主将附近，主将被撞（站着不动）
   let hit = null;
   for (let i = 0; i < 60; i++) { await p.waitForTimeout(100); hit = await p.evaluate(G0 => { const s = eval(G0); return { hp: s.player.hp, raids: s.xiliang.activeRaids, moved: s.enemies.filter(e => e.active && e.kind === 'cavalry').map(e => [Math.round(e.x), Math.round(e.y)]) }; }, G); if (hit.raids === 0) break; }
@@ -43,8 +43,8 @@ for (const layout of ['mobile', 'desktop']) {
   if (layout === 'desktop') await p.screenshot({ path: `${out}/${layout}-xiliang-raid-charge.png` });
   ck(`[${layout}] 冲过后归入普通骑兵（突阵结束）`, hit.raids === 0, hit);
   // 飞熊军：重甲（弓弩减半）、近身盾击
-  const f = await p.evaluate(G0 => { const s = eval(G0), x = s.xiliang, d = x.feixiongDef(), e = s.spawnEnemy('shield', s.player.x + 300, s.player.y, undefined, true, d); return { ok: !!e, hp: e?.hp, def: { hp: d.hp, variant: d.variant, tint: d.tint }, arrow: x.incoming(e, 'arrow'), melee: x.incoming(e, 'melee') }; }, G);
-  ck(`[${layout}] 飞熊军：生命 140、铁青色、弓弩伤害 ×0.5、近战 ×1`, f.ok && f.def.variant === 'feixiong' && f.def.hp === 140 && f.arrow === .5 && f.melee === 1, f);
+  const f = await p.evaluate(G0 => { const s = eval(G0), x = s.xiliang, d = x.feixiongDef(), e = s.spawnEnemy('shield', s.player.x + 300, s.player.y, undefined, true, d); return { ok: !!e, hp: e?.hp, def: { hp: d.hp, variant: d.variant, tint: d.tint, tex: d.walkVisual?.texture, atk: d.attackVisual }, arrow: x.incoming(e, 'arrow'), melee: x.incoming(e, 'melee') }; }, G);
+  ck(`[${layout}] 飞熊军：生命 140、正式行走 / 盾击图、弓弩伤害 ×0.5、近战 ×1`, f.ok && f.def.variant === 'feixiong' && f.def.hp === 140 && f.arrow === .5 && f.melee === 1 && f.def.tex === 'feixiong_walk' && f.def.atk === 'feixiong_attack', f);
   const fa = await p.evaluate(G0 => { const s = eval(G0), e = s.enemies.find(x => x.active && x.def.variant === 'feixiong'); const h0 = e.hp; s.hitEnemy(e, 20, s.combatNow, 'arrow', false, false); const h1 = e.hp; s.hitEnemy(e, 20, s.combatNow, 'melee', false, false); return { h0, h1, h2: e.hp }; }, G);
   ck(`[${layout}] 实际受击：箭伤约为刀伤一半`, fa.h0 - fa.h1 > 0 && (fa.h1 - fa.h2) > (fa.h0 - fa.h1) * 1.5, fa);
   const bash = await p.evaluate(async G0 => { const s = eval(G0), e = s.enemies.find(x => x.active && x.def.variant === 'feixiong'); e.sprite.setPosition(s.player.x + 60, s.player.y); s.player.invulnUntil = 0; const hp0 = s.player.hp, x0 = s.player.x; await new Promise(r => setTimeout(r, 1200)); return { hp0, hp1: s.player.hp, dx: s.player.x - x0 }; }, G);

@@ -35,24 +35,26 @@ const mig = await p.evaluate(async () => {
     it('h1', 'chitu', 'orange'), it('h2', 'chitu', 'purple'), it('h3', 'nag', 'white'), it('a1', 'lamellar', 'green'), { uid: 'bad', base: 'nope', quality: 'blue', affixes: [] }],
     loadouts: { zhaoyun: { weapon: 'q1', armor: 'a1', mount: 'h2' }, guanyu: { weapon: 'y1', token: 't1', mount: 'h1' }, machao: { weapon: 'w2', mount: 'h3' } } };
   const m = st.migrateV1(v1), s = m.save;
-  return { money: m.money, weapons: m.weapons, horses: m.horses, bag: s.bag.map(i => i.uid).sort(), zhao: s.loadouts.zhaoyun, guan: s.loadouts.guanyu, ma: s.loadouts.machao ?? null,
+  return { legacyN: m.legacy, legacy: s.legacy.map(i => i.uid).sort(), weapons: m.weapons, horses: m.horses, bag: s.bag.map(i => i.uid).sort(), zhao: s.loadouts.zhaoyun, guan: s.loadouts.guanyu, ma: s.loadouts.machao ?? null,
     owned: s.stable.owned, riders: s.stable.riders, salvaged: s.salvaged, notice: s.notice };
 });
-ck('迁移：普通兵刃按双倍分解价折钱（白 2×2 + 紫 30×2），重复的赤兔按分解价折钱', mig.weapons === 2 && mig.money === 4 + 60 + 30 && mig.salvaged === 5 + 94, mig);
+ck('迁移无损：普通兵刃和重复的赤兔原样收进「旧物」，不折钱', mig.weapons === 2 && mig.legacyN === 3 && JSON.stringify(mig.legacy) === '["h2","w1","w2"]' || JSON.stringify(mig.legacy) === '["h1","w1","w2"]', mig);
 ck('迁移：青釭剑转到赵云信物槽；关羽信物已有，倚天剑退回行囊', mig.zhao?.token === 'q1' && mig.zhao?.armor === 'a1' && mig.guan?.token === 't1' && mig.bag.includes('y1') && !mig.bag.includes('w1') && !mig.bag.includes('bad'), mig);
 ck('迁移：坐骑转入马厩（同种一匹），原骑者继续骑', JSON.stringify(mig.owned) === '["chitu","nag"]' && mig.riders.zhaoyun === 'chitu' && mig.riders.machao === 'nag' && !mig.riders.guanyu && mig.ma === null, mig);
-ck('迁移：生成一次性提示', /旧兵刃 2 件/.test(mig.notice ?? '') && /2 匹马已转入马厩/.test(mig.notice ?? ''), mig.notice);
+ck('迁移：生成一次性提示', /旧兵刃 2 件收进「旧物」/.test(mig.notice ?? '') && /2 匹马已转入马厩/.test(mig.notice ?? ''), mig.notice);
 const mig2 = await p.evaluate(async () => {
   const st = await window.__mod('/src/systems/ItemStore.ts'), ws = await window.__mod('/src/world/WorldStore.ts');
   localStorage.setItem('im_items_v1', JSON.stringify({ version: 1, bag: [{ uid: 'w9', base: 'jade_hilt', quality: 'blue', affixes: [] }, { uid: 'a9', base: 'lamellar', quality: 'green', affixes: [] }], loadouts: {}, salvaged: 0 }));
   localStorage.removeItem('im_items_v2'); localStorage.removeItem('im_chapter1_cleared'); st.resetItemCache();
   const money0 = ws.loadWorld().town.money, s = st.loadItems();
   const v2 = JSON.parse(localStorage.getItem('im_items_v2') ?? 'null'), v1 = JSON.parse(localStorage.getItem('im_items_v1') ?? 'null');
-  const notice = st.takeItemNotice(), again = st.takeItemNotice();
-  return { bag: s.bag.length, v2: v2?.version, v1kept: v1?.bag?.length, moneyDelta: ws.loadWorld().town.money - money0, notice, again: again ?? null };
+  const notice = st.takeItemNotice(), again = st.takeItemNotice(), noMoney = ws.loadWorld().town.money - money0, legacy = st.loadItems().legacy.length, value = st.legacyValue();
+  const got = st.salvageLegacy();
+  return { bag: s.bag.length, v2: v2?.version, v1kept: v1?.bag?.length, noMoney, legacy, value, got, moneyDelta: ws.loadWorld().town.money - money0, after: st.loadItems().legacy.length, notice, again: again ?? null };
 });
 ck('读档：只有 v1 时自动迁移写入 im_items_v2，v1 原样保留', mig2.bag === 1 && mig2.v2 === 2 && mig2.v1kept === 2, mig2);
 ck('读档迁移的提示只给一次', !!mig2.notice && mig2.again === null, mig2);
+ck('旧物由玩家决定分解：迁移时不加钱，分解时按双倍价（蓝 12×2）', mig2.noMoney === 0 && mig2.legacy === 1 && mig2.value === 24 && mig2.got === 24 && mig2.moneyDelta === 24 && mig2.after === 0, mig2);
 
 // 2) 背包容量、自动分解白色
 const cap = await p.evaluate(async () => {
@@ -149,7 +151,8 @@ await p.waitForTimeout(150);
 await p.screenshot({ path: `${out}/mobile-battle-hud-bag.png` });
 
 // 6) 主页：角标、纸娃娃、拖拽
-await p.evaluate(async () => { const st = await window.__mod('/src/systems/ItemStore.ts'), items = await window.__mod('/src/data/items.ts'); st.setAutoSalvageWhite(false); st.addItems(['blue', 'purple', 'green', 'orange'].map((q, i) => items.rollItem(q, Math.random, ['helm', 'boots', 'token', 'armor'][i]))); });
+await p.evaluate(async () => { const st = await window.__mod('/src/systems/ItemStore.ts'), items = await window.__mod('/src/data/items.ts'); st.setAutoSalvageWhite(false);
+  { const raw = JSON.parse(localStorage.getItem('im_items_v2')); raw.legacy = [{ uid: 'old-1', base: 'sword_tassel', quality: 'green', affixes: [{ id: 'attackSpeed', value: .02 }] }]; localStorage.setItem('im_items_v2', JSON.stringify(raw)); st.resetItemCache(); } st.addItems(['blue', 'purple', 'green', 'orange'].map((q, i) => items.rollItem(q, Math.random, ['helm', 'boots', 'token', 'armor'][i]))); });
 await p.goto(base + '?layout=mobile');
 await p.waitForFunction(() => window.__game?.scene.getScene('MenuScene')?.sys.isActive() && window.__game.scene.getScene('MenuScene').children.getByName('home-bag-plaque'), null, { timeout: 60000 });
 await p.waitForTimeout(800);
@@ -160,6 +163,8 @@ const drag = await p.evaluate(async M0 => {
   const m = eval(M0), st = await window.__mod('/src/systems/ItemStore.ts'), items = await window.__mod('/src/data/items.ts'), out = {};
   const plaque = m.children.getByName('home-bag-plaque'), hit = m.children.getByName('home-bag') ?? window.__find(plaque, 'home-bag'); hit.emit('pointerdown'); await new Promise(r => setTimeout(r, 300));
   out.badgeGone = !m.children.getByName('home-bag-badge')?.active; out.badgeCount = st.bagBadgeCount();
+  { let bg = m.children.getByName('item-bag'); out.legacyBtn = window.__find(bg, 'item-legacy')?.text; window.__find(bg, 'item-legacy')?.emit('pointerdown'); await new Promise(r => setTimeout(r, 120)); bg = m.children.getByName('item-bag');
+    out.legacyList = window.__find(bg, 'item-legacy-list')?.text; await window.__shot?.(); window.__find(bg, 'item-legacy-salvage')?.emit('pointerdown'); await new Promise(r => setTimeout(r, 120)); out.legacySalvaged = st.loadItems().legacy.length === 0 && !window.__find(m.children.getByName('item-bag'), 'item-legacy'); }
   let bag = m.children.getByName('item-bag'); out.portrait = !!window.__find(bag, 'item-portrait');
   st.unequipSlot('zhaoyun', 'helm'); window.__tap(window.__find(bag, 'item-filter-helm')); await new Promise(r => setTimeout(r, 100)); bag = m.children.getByName('item-bag');
   window.__find(bag, 'item-filter-helm').emit('pointerdown'); await new Promise(r => setTimeout(r, 100)); bag = m.children.getByName('item-bag');
@@ -178,6 +183,7 @@ const drag = await p.evaluate(async M0 => {
   return out;
 }, M);
 ck('打开行囊后角标清零', drag.badgeGone && drag.badgeCount === 0, drag);
+ck('有旧物时行囊顶部有「旧物」按钮，卡片列出旧兵刃并可全部分解', drag.legacyBtn === '旧物 1' && /剑穗/.test(drag.legacyList ?? '') && drag.legacySalvaged, drag);
 ck('拖到不对应的槽：弹回并提示', drag.wrong === null && /只能放进头盔槽/.test(drag.wrongNotice ?? ''), drag);
 ck('从行囊拖到头盔槽：穿上', drag.worn, drag);
 ck('从装备槽拖回行囊：卸下', drag.off, drag);
@@ -204,6 +210,19 @@ ck('电脑纸娃娃：关羽骑赤兔，宝物栏写「出征后获得」', dk.m
 await d.screenshot({ path: `${out}/desktop-home-doll.png` });
 await d.evaluate(async M0 => { const bag = eval(M0).children.getByName('item-bag'); window.__tap(window.__find(bag, 'item-slot-mount')); await new Promise(r => setTimeout(r, 150)); }, M);
 await d.screenshot({ path: `${out}/desktop-home-stable.png` });
+await d.evaluate(M0 => { const bag = eval(M0).children.getByName('item-bag'); window.__find(bag, 'item-bag-close')?.emit('pointerdown'); }, M);
+// 主城临时「马厩」入口（全景右上角，不挡页眉 / 返回）
+await d.evaluate(() => { const w = JSON.parse(localStorage.getItem('im_world_v1') ?? 'null'); return !!w; });
+await d.goto(base + '?layout=desktop&dev=1');
+await d.waitForFunction(() => window.__game?.scene.getScene('MenuScene')?.sys.isActive() || window.__game?.scene.getScene('CityScene')?.sys.isActive(), null, { timeout: 60000 });
+const city = await d.evaluate(async () => { const g = window.__game; g.scene.getScenes(true).forEach(s => s.scene.key !== 'CityScene' && s.scene.stop()); g.scene.start('CityScene'); await new Promise(r => setTimeout(r, 2500));
+  const c = g.scene.getScene('CityScene'); for (let i = 0; i < 3; i++) { const close = c.children.list.flatMap(o => [o, ...(o.list ?? [])]).find(o => /-close$/.test(o.name ?? '') && o.input?.enabled); if (!close) break; close.emit('pointerdown'); await new Promise(r => setTimeout(r, 300)); }
+  const btn = c.children.getByName('city-stable'); if (!btn) return { btn: false };
+  const b = btn.getBounds(), others = c.children.list.filter(o => o !== btn && o.input?.enabled && o.name && o.getBounds && o.depth < 600).map(o => [o.name, o.getBounds()]).filter(([, r]) => !(r.right < b.left || r.left > b.right || r.bottom < b.top || r.top > b.bottom)).map(([n]) => n);
+  window.__tap(btn); await new Promise(r => setTimeout(r, 300)); const bag = c.children.getByName('item-bag');
+  return { btn: true, overlap: others, open: !!bag, stable: !!(bag && window.__find(bag, 'stable-hint')) }; });
+ck('主城右上「马厩」入口：不与其他按钮重叠，点开直接是马厩', city.btn && city.open && city.stable && !city.overlap?.length, city);
+await d.screenshot({ path: `${out}/desktop-city-stable.png` });
 await d.close();
 
 ck('控制台无报错', errors.length === 0, errors.slice(0, 8));

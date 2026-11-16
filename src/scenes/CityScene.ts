@@ -10,6 +10,9 @@ import Phaser from 'phaser';
 import {W,H,worldShell,worldAssets} from '../world/WorldUI';
 import {FONT,HEADING_FONT} from '../config';
 import {homeCommand,warPanelTexture} from '../ui/HomeCommand';
+import {openStable} from '../ui/ItemBagUI';
+import {stableUnlocked} from '../systems/ItemStore';
+import {CHARACTERS,type CharacterId} from '../data/characters';
 import {uiSfx} from '../systems/Sfx';
 import {checkWorld,addCounter} from '../systems/Achievements';
 import {loadWorld,saveWorld,worldUnlocked,storageUnavailable,incompatibleSave,townUpgrade,granaryLevy,setTaxRate,setCityFocus,resolveTownEvent,tradeGrain,sendCaravan} from '../world/WorldStore';
@@ -69,6 +72,11 @@ export class CityScene extends Phaser.Scene {
   if(!D)this.top.setPosition(24,90).setOrigin(0,.5);
   // 城池规模牌（全景左上角）
   this.sizeText=txt(this,this.vr.x+12,this.vr.y+10,'',D?15:14,'#f6e2ae',HEADING_FONT).setDepth(5).setShadow(0,1,'#000',4,true,true).setBackgroundColor('#1a120bcc').setPadding(8,4,8,4);
+  // 马厩（临时入口，2026-11-16）：全景右上角，不占页眉和返回位。马厩建筑由「主城与经济」会话接手后改为点建筑打开（接口见 ui/ItemBagUI.ts openStable）
+  {const st=homeCommand(this,this.vr.x+this.vr.w-(D?70:62),this.vr.y+(D?24:26),D?120:110,D?34:36,stableUnlocked()?'马厩 · 换马':'马厩 · 未开放',false,true,D?14:14);[st.g,st.caption,st.hit].forEach(o=>o.setDepth(5));
+   st.hit.setName('city-stable').on('pointerdown',()=>{if(this.anyModal()||this.children.getByName('item-bag'))return;let hero='zhaoyun';try{hero=localStorage.getItem('im_last_hero')||hero;}catch{/* 存储不可用 */}const open=()=>openStable(this,(CHARACTERS.some(c=>c.id===hero)?hero:'zhaoyun') as CharacterId);
+    // 道具图集随战斗图集在进城时释放：用到时再按需加载（马匹图标）
+    if(this.textures.exists('item_icons'))open();else{this.load.atlas('item_icons','assets/items/item-icons.webp','assets/items/item-icons.json');this.load.once('complete',open);this.load.start();}});}
   // 底部导航：电脑一行 7 个；手机 4 + 3
   const items:Array<[string,string,()=>void,boolean]>=[
    ['天下地图','city-map',()=>this.scene.start('WorldMapScene'),false],

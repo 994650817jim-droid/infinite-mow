@@ -19,12 +19,14 @@ export interface ItemSave {
   stable: StableSave; pity: PityState; autoSalvageWhite: boolean;
   /** 上次打开行囊后新收入的件数（主页行囊角标）。 */
   unseen: number;
+  /** 旧物：旧档里已下架的兵刃挂饰、重复的马，原样保留（不能穿），玩家自己决定何时按双倍分解价折钱。不占行囊格。 */
+  legacy: ItemInstance[];
   /** 旧档迁移后待显示一次的提示（如「旧兵刃 7 件已折算为 136 钱」）。 */
   notice?: string;
 }
 
 let memory: ItemSave | null = null;
-const empty = (): ItemSave => ({ version: 2, bag: [], loadouts: {}, salvaged: 0, stable: { owned: [], riders: {}, announced: false }, pity: { sincePurple: 0, sinceOrange: 0 }, autoSalvageWhite: true, unseen: 0 });
+const empty = (): ItemSave => ({ version: 2, bag: [], loadouts: {}, salvaged: 0, stable: { owned: [], riders: {}, announced: false }, pity: { sincePurple: 0, sinceOrange: 0 }, autoSalvageWhite: true, unseen: 0, legacy: [] });
 const count = (v: unknown, max = 1e6) => Number.isSafeInteger(v) && (v as number) >= 0 ? Math.min(max, v as number) : 0;
 
 function shapeOk(item: unknown): item is ItemInstance {
@@ -58,28 +60,30 @@ function sanitize(v: Record<string, unknown>): ItemSave {
   s.pity = { sincePurple: count(p.sincePurple, 999), sinceOrange: count(p.sinceOrange, 999) };
   s.autoSalvageWhite = v.autoSalvageWhite !== false;
   s.unseen = count(v.unseen, 999);
+  const lseen = new Set<string>();
+  s.legacy = (Array.isArray(v.legacy) ? v.legacy : []).filter((i: unknown) => shapeOk(i) && (LEGACY_WEAPON_BASES.includes((i as ItemInstance).base) || LEGACY_MOUNT_BASES.includes((i as ItemInstance).base)) && !lseen.has((i as ItemInstance).uid) && !!lseen.add((i as ItemInstance).uid)).slice(0, 200) as ItemInstance[];
   if (typeof v.notice === 'string' && v.notice.length < 200) s.notice = v.notice;
   return s;
 }
 
 /**
- * 旧档 v1 → v2（纯函数，测试直接调用）。规则（用户批准）：
- * - 8 种普通兵刃挂饰按双倍分解价折成钱；
+ * 旧档 v1 → v2（纯函数，测试直接调用）。规则（用户批准；兵刃要无损迁移）：
+ * - 8 种普通兵刃挂饰原样收进「旧物」（不能穿，玩家可随时按双倍分解价折钱）；
  * - 三把名剑 / 名刀（青釭、倚天、古锭刀）原样转为信物：穿着的转到信物槽，信物槽已有东西就退回行囊；
- * - 坐骑道具转为马厩里的马（同种只留一匹，多余的按分解价折钱），原来穿着的继续由该武将骑；
+ * - 坐骑道具转为马厩里的马（同种只留一匹，多余的也收进「旧物」），原来穿着的继续由该武将骑；
  * - 其余道具、穿戴、计数原样保留。
  */
-export function migrateV1(raw: unknown): { save: ItemSave; money: number; weapons: number; horses: number } {
+export function migrateV1(raw: unknown): { save: ItemSave; weapons: number; horses: number; legacy: number } {
   const v = (raw ?? {}) as { bag?: unknown; loadouts?: Record<string, Record<string, unknown>>; salvaged?: unknown };
   const bag: ItemInstance[] = [], byUid = new Map<string, ItemInstance>(), horseOfUid = new Map<string, string>(), owned: string[] = [];
-  let money = 0, weapons = 0, extraHorses = 0;
+  const legacy: ItemInstance[] = []; let weapons = 0, extraHorses = 0;
   for (const i of Array.isArray(v.bag) ? v.bag : []) {
     if (!shapeOk(i) || byUid.has(i.uid)) continue;
     byUid.set(i.uid, i);
-    if (LEGACY_WEAPON_BASES.includes(i.base)) { money += QUALITIES[i.quality].salvage * 2; weapons++; continue; }
+    if (LEGACY_WEAPON_BASES.includes(i.base)) { legacy.push(i); weapons++; continue; }
     if (LEGACY_MOUNT_BASES.includes(i.base)) {
       horseOfUid.set(i.uid, i.base);
-      if (owned.includes(i.base)) { money += QUALITIES[i.quality].salvage; extraHorses++; } else owned.push(i.base);
+      if (owned.includes(i.base)) { legacy.push(i); extraHorses++; } else owned.push(i.base);
       continue;
     }
     if (itemDef(i.base)) bag.push(i);
@@ -94,12 +98,13 @@ export function migrateV1(raw: unknown): { save: ItemSave; money: number; weapon
     if (horse && !ridden.has(horse)) { riders[hero] = horse; ridden.add(horse); }
     if (Object.keys(out).length) loadouts[hero] = out;
   }
-  const save = sanitize({ bag, loadouts, salvaged: count(v.salvaged, 1e9) + money, stable: { owned, riders, announced: false } });
+  const save = sanitize({ bag, loadouts, salvaged: count(v.salvaged, 1e9), stable: { owned, riders, announced: false }, legacy });
   const parts: string[] = [];
-  if (weapons) parts.push(`旧兵刃 ${weapons} 件已按双倍分解价折算`);
-  if (owned.length) parts.push(`${owned.length} 匹马已转入马厩` + (extraHorses ? `（重复 ${extraHorses} 匹已折算）` : ''));
-  if (parts.length) save.notice = '兵装改版 · ' + parts.join('，') + (money ? `，共得钱 ${money}` : '');
-  return { save, money, weapons, horses: owned.length };
+  if (weapons) parts.push(`旧兵刃 ${weapons} 件收进「旧物」`);
+  if (owned.length) parts.push(`${owned.length} 匹马已转入马厩` + (extraHorses ? `（重复的 ${extraHorses} 匹也在「旧物」）` : ''));
+  if (legacy.length) parts.push('「旧物」可随时按双倍价分解');
+  if (parts.length) save.notice = '兵装改版 · ' + parts.join('，');
+  return { save, weapons, horses: owned.length, legacy: legacy.length };
 }
 
 export function loadItems(): ItemSave {
@@ -110,7 +115,7 @@ export function loadItems(): ItemSave {
       if (v && v.version === 2) s = sanitize(v);
       else {
         const old = localStorage.getItem(LEGACY_ITEMS_KEY), ov = old ? JSON.parse(old) : null;
-        if (ov && ov.version === 1) { const m = migrateV1(ov); s = m.save; if (m.money) addTownMoney(m.money); memory = s; commit(s); }
+        if (ov && ov.version === 1) { s = migrateV1(ov).save; memory = s; commit(s); }
       }
     } catch { s = empty(); }
     memory = s;
@@ -203,6 +208,12 @@ export function salvageItems(uids: string[]): number {
   for (const uid of uids) { const i = s.bag.findIndex(x => x.uid === uid); if (i < 0 || equippedBy(s, uid)) continue; money += QUALITIES[s.bag[i].quality].salvage; s.bag.splice(i, 1); }
   if (money) { s.salvaged += money; commit(s); addTownMoney(money); }
   return money;
+}
+/** 旧物（旧兵刃、重复的马）全部按双倍分解价折钱。 */
+export function legacyValue(s: ItemSave = loadItems()): number { return s.legacy.reduce((n, i) => n + QUALITIES[i.quality].salvage * 2, 0); }
+export function salvageLegacy(): number {
+  const s = loadItems(), money = legacyValue(s); if (!money) return 0;
+  s.legacy = []; s.salvaged += money; commit(s); addTownMoney(money); return money;
 }
 /** 一键分解：品质不高于 maxQuality 的未穿戴道具。 */
 export function salvageUpTo(maxQuality: ItemQuality): number {

@@ -4,7 +4,7 @@ import { CHARACTERS, type CharacterId } from '../data/characters';
 import { AFFIXES, BAG_CAPACITY, LEGENDS, QUALITIES, QUALITY_ORDER, SLOTS, SLOT_ORDER, SPECIALS, formatAffix, itemDef, itemName, itemSlot, type AffixId, type ItemInstance, type ItemSlot } from '../data/items';
 import { HORSES, mountStyle } from '../data/mounts';
 import { gearFromItems, gearSummary, horseBonusText } from '../systems/ItemEffects';
-import { equipItem, equippedBy, heroHorse, horseRider, loadItems, loadout, looseCount, markBagSeen, rideHorse, salvageItems, salvageUpTo, setAutoSalvageWhite, stableUnlocked, takeItemNotice, takeStableAnnouncement, unequipSlot } from '../systems/ItemStore';
+import { equipItem, equippedBy, heroHorse, horseRider, legacyValue, loadItems, salvageLegacy, loadout, looseCount, markBagSeen, rideHorse, salvageItems, salvageUpTo, setAutoSalvageWhite, stableUnlocked, takeItemNotice, takeStableAnnouncement, unequipSlot } from '../systems/ItemStore';
 import { drawQualityFrame, ensureItemTextures, horseIcon, itemIconKey, itemTile } from './ItemQuality';
 import { lqHitBox, lqPanel, lqSkin } from './LacquerKit';
 import { padNavigator } from './PadNavigator';
@@ -48,7 +48,7 @@ export class ItemBagUI {
   private tab: 'bag' | 'loot';
   private filter: ItemSlot | 'all' = 'all';
   private page = 0;
-  /** 选中：道具 uid、'treasure:N'、'stable'。 */
+  /** 选中：道具 uid、'treasure:N'、'stable'、'legacy'。 */
   private selected: string | null = null;
   private notice = '';
   /** 详情卡关掉后手柄焦点回到这件道具的格子。 */
@@ -128,6 +128,8 @@ export class ItemBagUI {
     const loose = looseCount(s), over = loose > BAG_CAPACITY;
     this.text(x0 + (D ? 100 : 108), y0 + (D ? 28 : 34), `未穿戴 ${loose} / ${BAG_CAPACITY}${over ? ' · 已超出，请分解' : ''}${this.battle ? (this.o.atRest ? ' · 休整中' : ' · 战斗中可换装') : ''}`, 13, over ? '#f08a6a' : '#b9a57a').setName('item-bag-count');
     this.button(x0 + pw - (D ? 52 : 56), y0 + (D ? 32 : 40), '关闭', 'item-bag-close', () => this.close(), { size: D ? 15 : 17 });
+    // 旧物（旧档的兵刃挂饰、重复的马）：原样保留，点开可按双倍价分解
+    if (s.legacy.length) this.button(x0 + pw - (D ? 170 : 176), y0 + (D ? 32 : 40), `旧物 ${s.legacy.length}`, 'item-legacy', () => this.select('legacy'), { size: D ? 14 : 15 });
 
     // 武将切换（战斗中只看出征的武将）
     const heroY = y0 + (D ? 70 : 90);
@@ -223,6 +225,7 @@ export class ItemBagUI {
     if (this.notice) { const n = this.text(W / 2, pageY - (D ? 34 : 40), this.notice, 14, '#f3d48a').setOrigin(.5, 1).setAlign('center').setBackgroundColor('#1b120bcc').setPadding(10, 4).setName('item-notice'); this.notice = ''; this.scene.time.delayedCall(2600, () => n.active && n.setVisible(false)); }
 
     if (this.selected === 'stable') this.renderStable();
+    else if (this.selected === 'legacy') this.renderLegacy();
     else if (this.selected?.startsWith('treasure:')) this.renderTreasure(Number(this.selected.slice(9)));
     else if (this.selected) this.renderDetail(this.selected);
     this.markPadDefault(prevName);
@@ -322,6 +325,19 @@ export class ItemBagUI {
     this.text(x + 26, y + 56, t ? '宝物 · 本局有效' : '宝物位', 13, '#b9a57a', false, card);
     const txt = this.text(x + 26, y + 86, body, 15, '#e9dcbc', false, card).setWordWrapWidth(cw - 52).setLineSpacing(5);
     this.plainFrame(g, x, y, cw, txt.y + txt.height - y + 30);
+    this.button(x + cw - 30, y + 28, '×', 'item-detail-close', () => this.closeDetail(), { parent: card, size: 16 });
+  }
+
+  /** 旧物：旧档里已下架的兵刃挂饰和重复的马，原样保留；可一键按双倍分解价折钱。 */
+  private renderLegacy(): void {
+    const s = loadItems(), cw = IS_DESKTOP ? 460 : 480, names = s.legacy.map(i => `${QUALITIES[i.quality].label} · ${({ sword_tassel: '剑穗', blade_ring: '刀环', spear_tassel: '枪缨', bow_tip: '弓弭', whet_charm: '砺石佩', bronze_guard: '青铜剑格', iron_pommel: '铁首环', jade_hilt: '玉具剑璏' } as Record<string, string>)[i.base] ?? HORSES.find(h => h.id === i.base)?.name ?? i.base}`);
+    const { card, x, y, g } = this.card(cw, 220);
+    this.text(x + 26, y + 20, '旧物', 22, '#f2ddae', true, card).setName('item-detail-name');
+    this.text(x + 26, y + 54, '兵装改版前的兵刃挂饰和重复的马，已原样保留（不能穿戴）。', 13, '#b9a57a', false, card).setWordWrapWidth(cw - 90);
+    const list = this.text(x + 26, y + 84, names.join('　'), 14, '#e9dcbc', false, card).setWordWrapWidth(cw - 52).setLineSpacing(4).setName('item-legacy-list');
+    const by = list.y + list.height + 34, money = legacyValue(s);
+    this.plainFrame(g, x, y, cw, by - y + 30);
+    this.button(x + cw / 2, by, `全部分解 · 钱 +${money}`, 'item-legacy-salvage', () => { const m = salvageLegacy(); this.notice = `旧物已分解 · 钱 +${m}`; this.selected = null; this.render(); }, { parent: card, size: 15 });
     this.button(x + cw - 30, y + 28, '×', 'item-detail-close', () => this.closeDetail(), { parent: card, size: 16 });
   }
 

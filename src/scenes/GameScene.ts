@@ -1,7 +1,7 @@
 import { stopMenuMusic } from '../systems/Music';
 import {FollowerSquad} from '../systems/FollowerSquad';
 import {followersFor,leadRankBonus} from '../systems/RosterStore';
-import { warnCircle } from '../ui/Telegraph';
+import { warnCircle, TELEGRAPH_CLASSIC, groundCracks, windupFlash } from '../ui/Telegraph';
 import {applyCitySpecialties} from '../systems/CityBonuses';
 import {cityIncomeLine} from '../world/WorldStore';
 import {CampRestUI} from '../ui/CampRestUI';
@@ -1290,10 +1290,13 @@ export class GameScene extends Phaser.Scene {
       gfx.clear();
       // 蓄雷：紫色雷环聚集
       const t = 1 - Math.max(0, this.bossUltAt - now) / 800;
+      // 低调预警（默认）：蓄雷不画同心圆，改为首领身上闪光（?telegraph=1 恢复）
+      if (TELEGRAPH_CLASSIC) {
       gfx.lineStyle(3, 0xcc88ff, 0.5 + t * 0.4);
       gfx.strokeCircle(this.boss.x, this.boss.y, 20 + t * 46);
       gfx.lineStyle(2, 0xfff2a8, 0.7);
       gfx.strokeCircle(this.boss.x, this.boss.y, 12 + t * 26);
+      } else windupFlash(this.boss, now);
       if (now >= this.bossUltAt) this.beginBossUltRound(now);
       return;
     }
@@ -1321,12 +1324,11 @@ export class GameScene extends Phaser.Scene {
             gfx.lineTo(ox, pt.y);
             gfx.strokePath();
           }
-          gfx.lineStyle(4, 0xcc88ff, 0.9);
-          gfx.strokeCircle(pt.x, pt.y, 72);
+          if (TELEGRAPH_CLASSIC) { gfx.lineStyle(4, 0xcc88ff, 0.9); gfx.strokeCircle(pt.x, pt.y, 72); } else groundCracks(gfx, pt.x, pt.y, 72, 1, 0, Math.PI * 2, 0, true);
           this.legion.hurtArea(pt.x, pt.y, 72, 16, now);
-          // 冲击波
-          const ring = this.add.circle(pt.x, pt.y, 20).setStrokeStyle(4, 0xd8b8ff, 0.95).setDepth(DEPTH.fx + 2);
-          this.tweens.add({ targets: ring, scale: 4.2, alpha: 0, duration: 420, onComplete: () => ring.destroy() });
+          // 冲击波（旧样式）；新样式只在落点扬尘裂纹
+          if (TELEGRAPH_CLASSIC) { const ring = this.add.circle(pt.x, pt.y, 20).setStrokeStyle(4, 0xd8b8ff, 0.95).setDepth(DEPTH.fx + 2);
+          this.tweens.add({ targets: ring, scale: 4.2, alpha: 0, duration: 420, onComplete: () => ring.destroy() }); }
           if (Math.hypot(this.player.x - pt.x, this.player.y - pt.y) < 72) hit = true;
         }
         if (hit && this.bossUltHits < 2) {

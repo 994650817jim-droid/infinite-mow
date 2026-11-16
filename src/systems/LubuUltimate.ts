@@ -1,4 +1,4 @@
-import { warnCircle } from '../ui/Telegraph';
+import { warnCircle, TELEGRAPH_CLASSIC, groundCracks } from '../ui/Telegraph';
 import Phaser from 'phaser';
 import type { Enemy } from '../entities/Enemy';
 import type { Player } from '../entities/Player';
@@ -63,7 +63,7 @@ export class LubuUltimate {
     if (this.phase === 'takeoff') {
       const t = Math.min(1, (now - this.started) / C.ultTakeoffMs);
       this.body('takeoff', Math.min(7, Math.floor(t * 8)), 150 * t * t);
-      this.gfx.lineStyle(3, 0xffd28b, .8).strokeCircle(this.boss.x, this.boss.y, 32 + t * 28);
+      if (TELEGRAPH_CLASSIC) this.gfx.lineStyle(3, 0xffd28b, .8).strokeCircle(this.boss.x, this.boss.y, 32 + t * 28);
     } else if (this.phase === 'airborne') {
       const t = Math.min(1, (now - this.started) / C.ultAirborneMs);
       const travel = Math.min(1, t / .65);
@@ -96,6 +96,9 @@ export class LubuUltimate {
   private warning(t: number): void {
     this.warningArt.setVisible(true).setFrame(Math.min(7, Math.floor(t * 8))).setPosition(this.targetX, this.targetY);
     const r = C.ultRadius;
+    // 首领大招预警保留但弱化（默认）：预警图从 0.3 调到 0.2，去掉实心外圈 / 进度圈 / 十字准星，改为落点地裂纹（?telegraph=1 恢复）
+    if (!TELEGRAPH_CLASSIC) this.warningArt.setAlpha(.2);
+    if (!TELEGRAPH_CLASSIC) { groundCracks(this.gfx, this.targetX, this.targetY, r, t); return; }
     // Fixed boundary markers distinguish the true hit area from the expanding countdown.
     for(let i=0;i<8;i++) {
       const a=i*Math.PI/4,x=this.targetX+Math.cos(a)*r,y=this.targetY+Math.sin(a)*r;

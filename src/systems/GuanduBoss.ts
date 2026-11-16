@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { warnCircle, warnLane } from '../ui/Telegraph';
+import { warnCircle, warnLane, TELEGRAPH_CLASSIC, groundCracks, windupFlash } from '../ui/Telegraph';
 import type {Enemy} from '../entities/Enemy';
 import type {Player} from '../entities/Player';
 import type {Legion} from './Legion';
@@ -172,8 +172,10 @@ export class GuanduBoss {
   }
   private draw(z: Zone, alpha: number) {
     const g = this.gfx; g.lineStyle(2, 0xe4ba78, .9).fillStyle(this.kit === 'wenchou' ? 0xa8603a : 0xb8502f, alpha);
+    if (!TELEGRAPH_CLASSIC && alpha < .3) windupFlash(this.h.boss, this.at);
     if (z.radius) {
-      if (z.inner > 0) { g.lineStyle(z.radius - z.inner, 0xb8502f, alpha * .55).strokeCircle(z.x, z.y, (z.radius + z.inner) / 2); g.lineStyle(1.4, 0xe4ba78, .5).strokeCircle(z.x, z.y, z.radius).strokeCircle(z.x, z.y, z.inner); }
+      if (z.inner > 0 && !TELEGRAPH_CLASSIC) groundCracks(g, z.x, z.y, z.radius, alpha >= .3 ? 1 : .45, 0, Math.PI * 2, z.inner, alpha >= .3);
+      else if (z.inner > 0) { g.lineStyle(z.radius - z.inner, 0xb8502f, alpha * .55).strokeCircle(z.x, z.y, (z.radius + z.inner) / 2); g.lineStyle(1.4, 0xe4ba78, .5).strokeCircle(z.x, z.y, z.radius).strokeCircle(z.x, z.y, z.inner); }
       else warnCircle(g, z.x, z.y, z.radius, alpha >= .3 ? 1 : .45, this.kit === 'wenchou' ? 0xa8603a : 0xb8502f, 0xe4ba78, alpha >= .3, this.at);
     } else {
       warnLane(g, z.x, z.y, z.angle, z.length, z.width, alpha >= .3 ? 1 : .45, this.kit === 'wenchou' ? 0xa8603a : 0xb8502f, 0xe4ba78, alpha >= .3);
@@ -193,7 +195,7 @@ export class GuanduBoss {
     if (!b.active || this.state === 'dead') return;
     this.gfx.clear(); this.at = now;
     if (!this.phase2 && b.hp <= b.maxHp * .5) { this.phase2 = true; this.metrics.rage++; this.state = 'rage'; this.until = now + 650; }
-    if (this.state === 'rage') { this.pose(25); this.gfx.lineStyle(2, 0xe1bd77, .7).strokeCircle(b.x, b.y, 40); if (now >= this.until) { this.state = 'approach'; this.next = now + 150; } return; }
+    if (this.state === 'rage') { this.pose(25); if (TELEGRAPH_CLASSIC) this.gfx.lineStyle(2, 0xe1bd77, .7).strokeCircle(b.x, b.y, 40); else windupFlash(b, now); if (now >= this.until) { this.state = 'approach'; this.next = now + 150; } return; }
     if (this.state === 'approach') {
       const dx = p.x - b.x, dy = p.y - b.y, d = Math.hypot(dx, dy) || 1, dir = Math.abs(dx) > Math.abs(dy) ? dx < 0 ? 1 : 2 : dy < 0 ? 3 : 0;
       if (d > 115) { b.sprite.x += dx / d * b.def.speed * dt; b.sprite.y += dy / d * b.def.speed * dt; }
@@ -268,7 +270,7 @@ export class GuanduBoss {
   }
   private burst(z: Zone) {
     this.draw(z, .4);
-    for (let n = 0; n < 6; n++) { const a = n * Math.PI / 3, r0 = Math.max(10, z.inner); this.gfx.lineStyle(2, 0xffdb99, .6).lineBetween(z.x + Math.cos(a) * r0, z.y + Math.sin(a) * r0, z.x + Math.cos(a) * z.radius, z.y + Math.sin(a) * z.radius); }
+    if (TELEGRAPH_CLASSIC) for (let n = 0; n < 6; n++) { const a = n * Math.PI / 3, r0 = Math.max(10, z.inner); this.gfx.lineStyle(2, 0xffdb99, .6).lineBetween(z.x + Math.cos(a) * r0, z.y + Math.sin(a) * r0, z.x + Math.cos(a) * z.radius, z.y + Math.sin(a) * z.radius); }
   }
   defeat() { this.state = 'dead'; this.gfx.clear(); const b = this.h.boss; this.corpse = this.h.scene.add.image(b.x, b.y, this.info.atlas, 28).setDisplaySize(144, 144).setOrigin(.5, 114 / 128).setDepth(28); }
   updateDeath(delta: number) { if (this.corpse) { this.deathMs += delta; this.corpse.setFrame(28 + Math.min(3, Math.floor(this.deathMs / 180))); } }

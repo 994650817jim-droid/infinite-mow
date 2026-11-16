@@ -5,6 +5,7 @@ import type { Player } from '../entities/Player';
 import type { Legion } from './Legion';
 import { ENEMY_DEFS, type EnemyDef } from '../data/enemies';
 import type { YellowStage } from '../data/chapters';
+import { TELEGRAPH_CLASSIC, groundCracks, laneCracks, windupFlash } from '../ui/Telegraph';
 
 interface Host { scene:Phaser.Scene; player:Player; army:Legion; enemies:Enemy[]; move:(enemy:Enemy,nx:number,ny:number,dt:number)=>void; spawn:(def:EnemyDef,x:number,y:number)=>Enemy|null; }
 interface Hazard { owner:Enemy; life:number; x:number;y:number; radius:number; angle:number; arc:number; inner:number; from:number; at:number; end:number; damage:number; fired:boolean; kind:string; }
@@ -94,6 +95,15 @@ export class YellowBattle {
    if(clip){clip.clear().fillStyle(0xffffff,1);this.area(clip,z);}
    if(image)image.setTexture(key,Math.min(7,4+Math.max(0,Math.floor((now-z.at)/55))))/* 命中前 now<z.at 会算出负帧号（图此时隐藏，但每帧报 no frame 警告） */.setPosition(z.x,z.y).setDisplaySize(z.radius*2,z.radius*2).setAlpha(.7).setRotation(z.arc<Math.PI*2?z.angle:0).setVisible(z.fired);
    if(image&&z.kind==='charge')image.setPosition(z.x+Math.cos(z.angle)*z.radius/2,z.y+Math.sin(z.angle)*z.radius/2).setDisplaySize(z.radius,72);
+   // 低调预警（默认）：不画填色扇形 / 圆圈与描边，落点地裂纹随蓄力加深、出招者身上闪光；命中图样调淡（?telegraph=1 恢复旧样式）
+   if(!TELEGRAPH_CLASSIC){
+    // 预警类图样（法阵符圈、冲锋预警、祭坛圈）本身就是“大圆环 + 花纹”，不显示；斩击 / 地刺 / 冲击波等命中图样保留但调淡
+    if(image)image.setAlpha(.45).setVisible(z.fired&&!/warning(?!_and_burst)|ritual|sigil/.test(key));
+    if(!z.fired)windupFlash(z.owner,now);
+    if(z.kind==='charge')laneCracks(this.gfx,z.x,z.y,z.angle,z.radius,72,progress,z.fired);
+    else groundCracks(this.gfx,z.x,z.y,z.radius,progress,z.angle,z.arc,z.inner,z.fired);
+    continue;
+   }
    this.gfx.fillStyle(z.fired?0xe0a064:0x8e241b,z.fired?.12:.12+progress*.16);this.area(this.gfx,z);
    this.gfx.lineStyle(z.fired?2:2,z.fired?0xffd29b:0xe87752,z.fired?.7:.85);
    if(z.kind==='charge'){const nx=Math.cos(z.angle),ny=Math.sin(z.angle);for(const side of [-1,1])this.gfx.lineBetween(z.x-ny*side*36,z.y+nx*side*36,z.x+nx*z.radius-ny*side*36,z.y+ny*z.radius+nx*side*36);}
@@ -124,7 +134,7 @@ export class YellowBattle {
   const g=this.wallGfx??=this.h.scene.add.graphics().setDepth(DEPTH_WALL_WARN);g.clear();
   for(let i=this.wallPlans.length-1;i>=0;i--){const plan=this.wallPlans[i];
    if(!plan.owner.active||plan.owner.spawnId!==plan.life){this.wallPlans.splice(i,1);continue;}
-   if(now<plan.rise){const k=1-(plan.rise-now)/700;g.fillStyle(0x3a2412,.18+.25*k).fillEllipse(plan.x,plan.y+10,56,18).lineStyle(2,0xd99a48,.35+.5*k).strokeEllipse(plan.x,plan.y+10,56*(.6+.4*k),18*(.6+.4*k));
+   if(now<plan.rise){const k=1-(plan.rise-now)/700;g.fillStyle(0x3a2412,.18+.25*k).fillEllipse(plan.x,plan.y+10,56,18);if(TELEGRAPH_CLASSIC)g.lineStyle(2,0xd99a48,.35+.5*k).strokeEllipse(plan.x,plan.y+10,56*(.6+.4*k),18*(.6+.4*k));
     g.lineStyle(1,0x2a1a0c,.6*k).lineBetween(plan.x-18,plan.y+8,plan.x-4,plan.y+13).lineBetween(plan.x-4,plan.y+13,plan.x+9,plan.y+6).lineBetween(plan.x+9,plan.y+6,plan.x+20,plan.y+12);continue;}
    this.wallPlans.splice(i,1);
    const w=this.h.spawn({...ENEMY_DEFS.shield,behavior:'wall',texture:'enemy_shield',walkVisual:undefined,hp:65,speed:0,damage:0,xp:0,radius:24},plan.x,plan.y);

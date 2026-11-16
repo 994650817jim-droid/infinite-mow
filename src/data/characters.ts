@@ -101,12 +101,12 @@ export const CHARACTERS: CharacterDef[] = [
   {
     id: 'weiyan',
     name: '魏延',
-    desc: '悍将 · 生命高，血战越战越勇',
-    hpMul: 1.2,
+    desc: '悍将 · 劈地裂波，越挨打越勇',
+    hpMul: 1.15,
     speedMul: 0.97,
-    damageMul: 1.12,
+    damageMul: 1.05,
     portrait: 'weiyan_portrait',
-    startWeapon: 'guandao',
+    startWeapon: 'zhenbei_blade',
   },
   {
     id: 'liubei',
@@ -121,12 +121,12 @@ export const CHARACTERS: CharacterDef[] = [
   {
     id: 'pangtong',
     name: '庞统',
-    desc: '军师 · 火计连环，范围爆发',
-    hpMul: 0.9,
+    desc: '军师 · 布雷设伏，连环引爆',
+    hpMul: 0.95,
     speedMul: 1,
     damageMul: 1.05,
     portrait: 'pangtong_portrait',
-    startWeapon: 'flame_banner',
+    startWeapon: 'lianhuan_mines',
   },
   {
     id: 'huangyueying',
@@ -179,5 +179,5 @@ export function getCharacter(id: CharacterId): CharacterDef {
 
 /** 新武将普攻的专属色调（枪芒 / 刀光 / 火爆 / 弩箭），老四将保持原色。 */
 export const HERO_TINT: Partial<Record<CharacterId, number>> = { zhangfei: 0xff9c7a, machao: 0xb8dcff, weiyan: 0xff6a55, liubei: 0xffd890, pangtong: 0xff8fd0, huangyueying: 0x8fe8c0, sunshangxiang: 0xff9a8a, diaochan: 0xf0b4ff };
-/** 招牌技序列帧（public/assets/hero-fx/fx_<sheet>.png，6 列 × 4 行、256×256，黑底叠加混合）。 */
-export const HERO_FX: Record<string, { sheet: 'a' | 'b'; row: number }> = { roar: { sheet: 'a', row: 0 }, dash: { sheet: 'a', row: 1 }, bloodslash: { sheet: 'a', row: 2 }, rally: { sheet: 'a', row: 3 }, phoenix: { sheet: 'b', row: 0 }, gears: { sheet: 'b', row: 1 }, liubeiSlash: { sheet: 'b', row: 2 }, weiyanSlash: { sheet: 'b', row: 3 } };
+/** 招牌技序列帧（public/assets/hero-fx/fx_<sheet>.png，6 列 × 4 行、256×256，黑底叠加混合）。fx_c：孙尚香环身连射 / 貂蝉倾城 / 魏延谁敢杀我 / 魏延劈地裂波（朝右）。 */
+export const HERO_FX: Record<string, { sheet: 'a' | 'b' | 'c'; row: number }> = { ringVolley: { sheet: 'c', row: 0 }, charm: { sheet: 'c', row: 1 }, whoDares: { sheet: 'c', row: 2 }, crack: { sheet: 'c', row: 3 }, roar: { sheet: 'a', row: 0 }, dash: { sheet: 'a', row: 1 }, bloodslash: { sheet: 'a', row: 2 }, rally: { sheet: 'a', row: 3 }, phoenix: { sheet: 'b', row: 0 }, gears: { sheet: 'b', row: 1 }, liubeiSlash: { sheet: 'b', row: 2 }, weiyanSlash: { sheet: 'b', row: 3 } };

@@ -92,7 +92,7 @@ export class YellowBattle {
    const key=z.kind==='sweep'?'zhangliang_slash':z.kind==='charge'?'zhangliang_charge_warning':z.kind==='ring'?'zhangbao_earth_shockwave':z.kind==='ritual'?'zhangbao_ritual_circle':z.kind==='rift'?'zhangbao_earth_rift_warning_and_burst':z.kind==='stab'?'yellow_shield_short_stab':'yellow_shaman_ground_sigil_warning';
    const image=this.visuals[index],clip=this.clips[index++],progress=Phaser.Math.Clamp((now-z.from)/Math.max(1,z.at-z.from),0,1);
    if(clip){clip.clear().fillStyle(0xffffff,1);this.area(clip,z);}
-   if(image)image.setTexture(key,Math.min(7,4+Math.floor((now-z.at)/55))).setPosition(z.x,z.y).setDisplaySize(z.radius*2,z.radius*2).setAlpha(.7).setRotation(z.arc<Math.PI*2?z.angle:0).setVisible(z.fired);
+   if(image)image.setTexture(key,Math.min(7,4+Math.max(0,Math.floor((now-z.at)/55))))/* 命中前 now<z.at 会算出负帧号（图此时隐藏，但每帧报 no frame 警告） */.setPosition(z.x,z.y).setDisplaySize(z.radius*2,z.radius*2).setAlpha(.7).setRotation(z.arc<Math.PI*2?z.angle:0).setVisible(z.fired);
    if(image&&z.kind==='charge')image.setPosition(z.x+Math.cos(z.angle)*z.radius/2,z.y+Math.sin(z.angle)*z.radius/2).setDisplaySize(z.radius,72);
    this.gfx.fillStyle(z.fired?0xe0a064:0x8e241b,z.fired?.12:.12+progress*.16);this.area(this.gfx,z);
    this.gfx.lineStyle(z.fired?2:2,z.fired?0xffd29b:0xe87752,z.fired?.7:.85);

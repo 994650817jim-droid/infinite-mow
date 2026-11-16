@@ -3,7 +3,7 @@ import {AWAKENINGS} from './awakenings';
 import { BALANCE } from '../config';
 import type { Player } from '../entities/Player';
 import { RELICS, relicChanceForLevel } from './relics';
-import { WEAPON_DEFS, SPEAR_PIERCE, GUANDAO_TABLE, crossbowExtraArrows } from '../weapons/registry';
+import { WEAPON_DEFS, SPEAR_PIERCE, GUANDAO_TABLE, crossbowExtraArrows, zhenbeiCracks, lianhuanMinesPerCast } from '../weapons/registry';
 import type { UpgradeOption, WeaponId, WeaponState } from '../types';
 import { getCharacter } from './characters';
 import { ATTRIBUTE_INFO, type AttributeId, type PotionId, type RunGrowth, type TrinketId, MARTIALS, type MasteryId } from '../systems/RunGrowth';
@@ -13,9 +13,11 @@ export const WEAPON_META: Record<WeaponId, { name: string; desc: string }> = {
   guandao: { name: '青龙偃月斩', desc: '前方 120° 扇形劈砍，最多命中 8 人' },
   crossbow: { name: '连弩齐射', desc: '自动射向最近敌人，命中后弹射；每级多射 1 支分射其他敌人' },
   flame_banner: { name: '烈焰战旗', desc: '前方爆发烈焰，范围灼烧' },
+  zhenbei_blade: { name: '镇北环首刀', desc: '朝敌群重劈，地面裂开直线冲击波，穿透全部敌人；贴身伤害更高' },
+  lianhuan_mines: { name: '凤雏连环令', desc: '挥令旗在敌人来路布下火雷，踩中引爆，附近火雷连环引爆' },
 };
 /** 武器显示名：张飞用同一套长枪，叫丈八蛇矛。 */
-export function weaponName(id: WeaponId, character?: string): string { return character === 'zhangfei' && id === 'spear_orbit' ? '丈八蛇矛' : character === 'huangyueying' ? '机关连弩' : character === 'pangtong' ? '凤雏火令' : character === 'liubei' ? '双股剑' : character === 'weiyan' ? '镇北大刀' : character === 'machao' ? '虎头湛金枪' : character === 'sunshangxiang' ? '弓腰姬长弓' : character === 'diaochan' ? '闭月花扇' : WEAPON_META[id].name; }
+export function weaponName(id: WeaponId, character?: string): string { return character === 'zhangfei' && id === 'spear_orbit' ? '丈八蛇矛' : character === 'huangyueying' ? '机关连弩' : character === 'pangtong' && id === 'lianhuan_mines' ? '凤雏连环令' : character === 'liubei' ? '双股剑' : character === 'weiyan' && id === 'zhenbei_blade' ? '镇北环首刀' : character === 'machao' ? '虎头湛金枪' : character === 'sunshangxiang' ? '弓腰姬长弓' : character === 'diaochan' ? '闭月花扇' : WEAPON_META[id].name; }
 
 const WEAPON_IDS: WeaponId[] = ['spear_orbit', 'crossbow', 'flame_banner', 'guandao'];
 
@@ -59,6 +61,8 @@ function weaponUpgrade(weapon: WeaponState, player: Player): UpgradeOption {
   if (weapon.id === 'spear_orbit') desc += `\n枪数 ${weapon.level} → ${next}，每枪穿透${SPEAR_PIERCE[weapon.level - 1].cap === SPEAR_PIERCE[next - 1].cap ? SPEAR_PIERCE[next - 1].cap : SPEAR_PIERCE[weapon.level - 1].cap + '→' + SPEAR_PIERCE[next - 1].cap}人
 枪长 ${SPEAR_PIERCE[weapon.level - 1].len} → ${SPEAR_PIERCE[next - 1].len}`;
   if (weapon.id === 'crossbow') desc += `\n每轮 ${1 + crossbowExtraArrows(weapon.level)} → ${1 + crossbowExtraArrows(next)} 支箭（多出的箭分射其他敌人，70%伤害）`;
+  if (weapon.id === 'zhenbei_blade' && [1, 3, 5].includes(next) && next !== weapon.level) desc += `\n裂波 ${zhenbeiCracks(weapon.level)} → ${zhenbeiCracks(next)} 道`;
+  if (weapon.id === 'lianhuan_mines' && lianhuanMinesPerCast(next) !== lianhuanMinesPerCast(weapon.level)) desc += `\n每次布雷 ${lianhuanMinesPerCast(weapon.level)} → ${lianhuanMinesPerCast(next)} 枚`;
   if (weapon.id === 'guandao') desc += `\n范围${GUANDAO_TABLE[weapon.level - 1].radius} → ${GUANDAO_TABLE[next - 1].radius}${weapon.level < 3 && next >= 3 ? '，解锁二段刀气' : ''}`;
   return {
     id: `signature_weapon_${weapon.id}`,
@@ -135,6 +139,10 @@ export function martialDescription(id:MasteryId,level:number):string {
  pearl_volley:'每射击'+[5,4,3][i]+'次，自动多射一发70%伤害的箭。'+(n===3?'\n追加箭可再弹射一次。':''),
  wildfire:'战旗爆炸后，留下'+[1,1.8,2.5][i]+'秒残火。\n每半秒烧伤一次。'+(n===3?'燃烧范围也变大。':''),
  eight_trigrams:'每施放3次战旗，生成减速法阵，随后爆炸。\n减速'+[35,45,50][i]+'%。'+(n>=2?'敌人会向阵心聚集。':'')+(n===3?'爆炸再扩散一次。':''),
+ kaishan:'每劈4刀，下一刀为重劈：裂波加宽50%，伤害'+[150,170,190][i]+'%。',
+ gujun:'身边160像素内每有1名敌人，伤害提高'+[1.5,2,2.5][i]+'%（最多算15名）。\n越是陷入重围越勇。',
+ fulei:'火雷同时存在上限 +'+(2*n)+'，每枚多存在'+(2*n)+'秒。',
+ lianying:'火雷连锁引爆的距离增加'+(15*n)+'%。'+(n===3?'\n被连锁引爆的火雷伤害再 +20%。':''),
  };
  return descriptions[id];
 }

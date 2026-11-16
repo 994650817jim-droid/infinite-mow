@@ -15,7 +15,27 @@
 
 已知小瑕疵：孙尚香动作图第 4 行（背面射箭）和第 7 行（倒地）的弓形略像弩。原尺寸看得出，战斗里人物约 80 像素高，不明显；需要时可单独重画这两行。
 
+## 特效与图标（2026-11-15 第二批，ChatGPT「三国开发讨论」生成，用户授权）
+
+| 内容 | 运行时文件 | 原图 |
+| --- | --- | --- |
+| 招牌技序列帧 fx_c（6×4、256 帧、黑底叠加） | `public/assets/hero-fx/fx_c.png` | `originals/fx_c.png` |
+| 武学图标：开山、孤军深入、伏雷、连营 | `public/assets/upgrade-icons/{kaishan,gujun,fulei,lianying}.webp` | `originals/weiyan_pangtong_icons.png` |
+| 武器图标：镇北环首刀、凤雏连环令 | `public/assets/upgrade-icons/weapon_{zhenbei,lianhuan}.webp` | 同上 |
+| 庞统火雷与铁链贴图 | `public/assets/hero-fx/pangtong_{mine,chain}.png` | 同上 |
+
+fx_c 四行依次为：
+1. 孙尚香「环身连射」。
+2. 貂蝉「倾城」。
+3. 魏延「谁敢杀我」。
+4. 魏延「劈地裂波」：朝右，运行时按方向旋转。
+
+图标和道具由 `tools/prepare-weiyan-pangtong-icons.mjs` 切出。
+
+缺图时，以上每一处都会自动退回原来的程序化特效。
+
 ## 仍是过渡方案
 
-- **招牌技特效**：程序化绘制，孙尚香是赤色双环外扩，貂蝉是粉紫花瓣环（`src/weapons/registry.ts`）。如需序列帧：`public/assets/hero-fx/fx_c.png`，6 列 × 4 行、每格 256×256、黑底叠加；第 0 行孙尚香「环身连射」，八向箭光环；第 1 行貂蝉「倾城」，粉紫花瓣旋涡。
-- **主页大幅立绘（epic-home）与水墨立轴（ink-scroll）**：暂未生成，选将卡用立绘墨化显示。到位后放进 `public/assets/epic-home/<id>.webp` 和 `public/assets/ink-scroll/<id>.webp`，并把两人加进 `HOME_ART_HEROES`。
+- **普通攻击**：孙尚香普攻沿用连弩弩箭。貂蝉普攻的花瓣爆发是程序化的，满层倾城用 fx_c 序列帧。
+- **主页大幅立绘（epic-home）与水墨立轴（ink-scroll）**：孙尚香、貂蝉暂未生成，选将卡用立绘墨化显示。
+- **魏延「谁敢杀我」的六道裂缝**：仍是程序化地裂纹，叠在怒吼冲击波序列帧下面。改成程序化，是为了避免 6 张叠加混合的裂波把画面冲成白色。

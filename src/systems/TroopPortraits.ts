@@ -13,17 +13,29 @@ export const portraitHeadY = (kind: TroopKind): number => headY.get(kind) ?? .36
 
 interface Manifest { portraits?: Array<{ kind: TroopKind; file: string; headY?: number }> }
 
+/** 正在某个场景加载器里排队 / 下载的立绘键（纹理是全局的：场景重启或多场景同时请求时不重复加载，否则 Phaser 报 key already in use）。 */
+const inFlight = new Set<string>();
+
 /** 后台加载立绘；有新图加载完成时回调 onReady（用于重绘卡片）。 */
 export function loadTroopPortraits(scene: Phaser.Scene, onReady: () => void): void {
+  const mine: string[] = [];
+  const release = (key: string) => { inFlight.delete(key); };
   const queue = (): boolean => {
     const m = scene.cache.json.get(MANIFEST) as Manifest | undefined;
     let added = false;
     for (const p of m?.portraits ?? []) {
       if (typeof p.headY === 'number') headY.set(p.kind, p.headY);
-      if (!scene.textures.exists(portraitKey(p.kind))) { scene.load.image(portraitKey(p.kind), BASE + p.file); added = true; }
+      const key = portraitKey(p.kind);
+      if (scene.textures.exists(key) || inFlight.has(key)) continue;
+      inFlight.add(key); mine.push(key);
+      scene.load.once('filecomplete-image-' + key, () => release(key));
+      scene.load.image(key, BASE + p.file); added = true;
     }
     return added;
   };
+  // 加载失败或场景中途关闭（加载器被重置）时放开占位，下次可重新请求
+  scene.load.on('loaderror', (file: Phaser.Loader.File) => release(file.key));
+  scene.events.once('shutdown', () => { for (const key of mine) if (!scene.textures.exists(key)) release(key); });
   if (scene.cache.json.exists(MANIFEST)) {
     if (!queue()) return;
   } else {

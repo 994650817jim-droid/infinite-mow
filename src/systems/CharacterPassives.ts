@@ -11,8 +11,10 @@ export interface PassiveCast {
   dash: boolean;
   /** 魏延 / 刘备满层：回复自身最大生命的比例；刘备另为部曲回复（比例）。 */
   heal: number; rally: number;
-  /** 庞统满层：爆炸后再连环引爆一次；黄月英满层：额外扇形机关弩。 */
-  chain: boolean; fan: boolean;
+  /** 黄月英满层：额外扇形机关弩。 */
+  fan: boolean;
+  /** 魏延满层：谁敢杀我（6 向裂波 + 减伤）；庞统满层：火烧连环（身边环形火雷）。 */
+  whoDares: boolean; formation: boolean;
   /** 孙尚香满层：环身 8 向连射；貂蝉满层：命中敌人陷入倾城（易伤 + 减速）。 */
   ring: boolean; charm: boolean;
   hits: Set<number>; awarded: boolean;
@@ -27,15 +29,30 @@ export class CharacterPassives {
   private gains = 0; private triggers = 0;
   private readonly burns = new Map<number, Burn>();
   private readonly charms = new Map<number, Charm>();
+  /** 魏延「谁敢杀我」减伤截止时间。 */
+  private guardUntil = -Infinity;
   constructor(character: CharacterId = 'zhaoyun', now = 0) { this.reset(character, now); }
   reset(character: CharacterId, now: number): void {
     this.character = character; this.stacks = 0; this.lastGain = -Infinity; this.lastDamage = now;
-    this.generation++; this.stopped = false; this.gains = 0; this.triggers = 0; this.burns.clear(); this.charms.clear();
+    this.generation++; this.stopped = false; this.gains = 0; this.triggers = 0; this.burns.clear(); this.charms.clear(); this.guardUntil = -Infinity;
   }
   get characterId(): CharacterId { return this.character; }
   stop(): void { this.stopped = true; this.stacks = 0; this.generation++; this.burns.clear(); this.charms.clear(); }
   private get maxStacks(): number { return CHARACTER_PASSIVES[this.character].maxStacks; }
-  onDamage(now: number): void { if (!this.stopped) this.lastDamage = now; }
+  onDamage(now: number): void {
+    if (this.stopped) return;
+    this.lastDamage = now;
+    // 魏延·镇守汉中：每次受伤积 1 层拒敌（每 0.5 秒最多 1 层）
+    if (this.character === 'weiyan' && this.stacks < this.maxStacks && now - this.lastGain + 1e-6 >= R.guardStepMs) { this.lastGain = now; this.stacks++; this.gains++; }
+  }
+  /** 魏延「谁敢杀我」期间受到伤害的倍率。 */
+  damageTakenMultiplier(now: number): number { return !this.stopped && now < this.guardUntil ? R.whoDaresGuardMul : 1; }
+  startGuard(now: number): void { if (!this.stopped) this.guardUntil = now + R.whoDaresGuardMs; }
+  /** 庞统·连环计：一次连锁引爆的火雷数达到门槛时积 1 层。 */
+  onMineChain(count: number): void {
+    if (this.stopped || this.character !== 'pangtong' || count < R.mineChainStack || this.stacks >= this.maxStacks) return;
+    this.stacks++; this.gains++;
+  }
   onWeaponHit(now: number): void {
     const interval = this.character === 'zhaoyun' ? R.dragonIntervalMs : this.character === 'zhangfei' ? R.roarIntervalMs : this.character === 'machao' ? R.cavalryIntervalMs : this.character === 'huangyueying' ? R.mechIntervalMs : -1;
     if (this.stopped || interval < 0 || this.stacks >= this.maxStacks || now - this.lastGain + 1e-6 < interval) return;
@@ -58,20 +75,20 @@ export class CharacterPassives {
     return !this.stopped && this.character === 'guanyu' && weapon === 'guandao' ? 1 + this.stacks * R.guandaoRangePerStack : 1;
   }
   beginCast(weapon: WeaponId): PassiveCast {
-    const c: PassiveCast = { owner: this.character, generation: this.generation, weapon, empowered: false, radiusMul: this.rangeMultiplier(weapon), damageMul: 1, extraSpear: false, spearLengthMul: 1, roar: false, dash: false, heal: 0, rally: 0, chain: false, fan: false, ring: false, charm: false, hits: new Set(), awarded: false };
+    const c: PassiveCast = { owner: this.character, generation: this.generation, weapon, empowered: false, radiusMul: this.rangeMultiplier(weapon), damageMul: 1, extraSpear: false, spearLengthMul: 1, roar: false, dash: false, heal: 0, rally: 0, fan: false, whoDares: false, formation: false, ring: false, charm: false, hits: new Set(), awarded: false };
     if (this.stopped) return c;
     if (this.character === 'zhaoyun' && weapon === 'spear_orbit' && this.stacks === this.maxStacks) {
       c.empowered = c.extraSpear = true; c.spearLengthMul = R.spearLengthMul;
-    } else if (this.character === 'pangtong' && weapon === 'flame_banner' && this.stacks === this.maxStacks) {
-      c.empowered = c.chain = true;
+    } else if (this.character === 'pangtong' && weapon === 'lianhuan_mines' && this.stacks === this.maxStacks) {
+      c.empowered = c.formation = true;
     } else if (this.character === 'huangyueying' && weapon === 'crossbow' && this.stacks === this.maxStacks) {
       c.empowered = c.fan = true;
     } else if (this.character === 'sunshangxiang' && weapon === 'crossbow' && this.stacks === this.maxStacks) {
       c.empowered = c.ring = true;
     } else if (this.character === 'diaochan' && weapon === 'flame_banner' && this.stacks === this.maxStacks) {
       c.empowered = c.charm = true;
-    } else if (this.character === 'weiyan' && weapon === 'guandao' && this.stacks === this.maxStacks) {
-      c.empowered = true; c.damageMul = R.weiyanDamageMul; c.heal = R.weiyanHeal;
+    } else if (this.character === 'weiyan' && weapon === 'zhenbei_blade' && this.stacks === this.maxStacks) {
+      c.empowered = c.whoDares = true;
     } else if (this.character === 'liubei' && weapon === 'guandao' && this.stacks === this.maxStacks) {
       c.empowered = true; c.damageMul = R.liubeiDamageMul; c.heal = R.liubeiHeal; c.rally = R.liubeiRally;
     } else if (this.character === 'machao' && weapon === 'spear_orbit' && this.stacks === this.maxStacks) {
@@ -91,7 +108,7 @@ export class CharacterPassives {
     cast.hits.add(enemy.spawnId);
     if (this.character === 'zhuge' && cast.weapon === 'flame_banner' && cast.empowered && enemy.active) this.refreshBurn(enemy, explosionDamage, now);
     if (cast.charm && enemy.active) this.applyCharm(enemy, now);
-    const qualifying = (this.character === 'guanyu' || this.character === 'weiyan' || this.character === 'liubei') && cast.weapon === 'guandao' || (this.character === 'zhuge' || this.character === 'pangtong' || this.character === 'diaochan') && cast.weapon === 'flame_banner';
+    const qualifying = (this.character === 'guanyu' || this.character === 'liubei') && cast.weapon === 'guandao' || (this.character === 'zhuge' || this.character === 'diaochan') && cast.weapon === 'flame_banner';
     if (qualifying && !cast.empowered && !cast.awarded && cast.hits.size >= R.coneThreshold) {
       cast.awarded = true; this.stacks = Math.min(this.maxStacks, this.stacks + 1); this.gains++;
     }
@@ -135,6 +152,6 @@ export class CharacterPassives {
   label(now: number): string {
     const name = CHARACTER_PASSIVES[this.character].name;
     if (this.character === 'huangzhong') return this.isSharpshooter(now) ? `${name} · 神射：暴击+10% / 连弩+1` : `${name} · 蓄势 ${Math.min(3, Math.max(0, (now - this.lastDamage) / 1000)).toFixed(1)}/3秒`;
-    return `${name} · ${this.character === 'zhaoyun' ? '龙胆' : this.character === 'guanyu' ? '武势' : this.character === 'zhangfei' ? '怒气' : this.character === 'huangyueying' ? '机括' : this.character === 'pangtong' ? '计策' : this.character === 'liubei' ? '仁德' : this.character === 'weiyan' ? '战意' : this.character === 'machao' ? '铁骑' : this.character === 'sunshangxiang' ? '疾步' : this.character === 'diaochan' ? '舞势' : '谋略'} ${this.stacks}/${CHARACTER_PASSIVES[this.character].maxStacks}${this.snapshot(now).ready ? ' · 下次强化' : ''}${this.character === 'zhuge' && this.burns.size ? ` · 灼烧${this.burns.size}` : ''}${this.character === 'diaochan' && this.charms.size ? ` · 倾城${this.charms.size}` : ''}`;
+    return `${name} · ${this.character === 'zhaoyun' ? '龙胆' : this.character === 'guanyu' ? '武势' : this.character === 'zhangfei' ? '怒气' : this.character === 'huangyueying' ? '机括' : this.character === 'pangtong' ? '计策' : this.character === 'liubei' ? '仁德' : this.character === 'weiyan' ? '拒敌' : this.character === 'machao' ? '铁骑' : this.character === 'sunshangxiang' ? '疾步' : this.character === 'diaochan' ? '舞势' : '谋略'} ${this.stacks}/${CHARACTER_PASSIVES[this.character].maxStacks}${this.snapshot(now).ready ? ' · 下次强化' : ''}${this.character === 'zhuge' && this.burns.size ? ` · 灼烧${this.burns.size}` : ''}${this.character === 'diaochan' && this.charms.size ? ` · 倾城${this.charms.size}` : ''}${this.character === 'weiyan' && this.damageTakenMultiplier(now) < 1 ? ' · 谁敢杀我' : ''}`;
   }
 }

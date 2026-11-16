@@ -288,7 +288,7 @@ export class Enemy {
     if (this.def.walkVisual && !this.def.attackVisual) return;
     const remain = this.attackUntil - now;
     const col = remain > 180 ? 0 : 1;
-    const key = this.def.attackVisual ? `${this.direction}_${Math.min(3,Math.floor((360-remain)/90))}` : `atk_${this.direction}_${col}`;
+    const key = this.def.attackVisual ? `${this.direction}_${Math.min(3,Math.max(0,Math.floor((360-remain)/90)))}`/* 出手时长 >360ms 时开头会算出 -1 帧 */ : `atk_${this.direction}_${col}`;
     if (key !== this.attackFrame) {
       this.applyFrame(visualTextureKey(this.scene,this.attackSheet), key);
       this.attackFrame = key;

@@ -6,7 +6,7 @@ import type { Sfx } from '../systems/Sfx';
 import type { PlayerStats, WeaponId, WeaponState } from '../types';
 import { PASSIVE_RULES } from '../data/passives';
 import { HERO_TINT } from '../data/characters';
-import { ZHENBEI_DEF, LIANHUAN_DEF, zhenbeiBehavior, lianhuanBehavior } from './heroWeapons';
+import { ZHENBEI_DEF, LIANHUAN_DEF, zhenbeiBehavior, lianhuanBehavior, hasFxSheet } from './heroWeapons';
 export { zhenbeiCracks, lianhuanMinesPerCast } from './heroWeapons';
 
 export interface WeaponBolt {
@@ -127,7 +127,8 @@ function distPointToSegment(px: number, py: number, ax: number, ay: number, bx: 
 function petalBurst(host: WeaponHost, cx: number, cy: number, radius: number, strong = false): void {
   const flash = host.add.circle(cx, cy, radius * .35, 0xf6c2ff, .32).setDepth(41);
   flash.scene.tweens.add({ targets: flash, radius: radius * .95, alpha: 0, duration: 380, ease: 'Quad.easeOut', onComplete: () => flash.destroy() });
-  if (strong) { const ring = host.add.circle(cx, cy, radius * .3, 0xf0b4ff, .18).setStrokeStyle(4, 0xffd6f4, .9).setDepth(41); ring.scene.tweens.add({ targets: ring, radius: radius * 1.05, alpha: 0, duration: 520, onComplete: () => ring.destroy() }); }
+  if (strong) host.heroFx?.('charm', cx, cy - 6, radius * 2.4);
+  if (strong && !hasFxSheet(host, 'c')) { const ring = host.add.circle(cx, cy, radius * .3, 0xf0b4ff, .18).setStrokeStyle(4, 0xffd6f4, .9).setDepth(41); ring.scene.tweens.add({ targets: ring, radius: radius * 1.05, alpha: 0, duration: 520, onComplete: () => ring.destroy() }); }
   const n = strong ? 18 : 12;
   for (let k = 0; k < n; k++) { const a = k * Math.PI * 2 / n + Math.random() * .35, d = radius * (.55 + Math.random() * .4), petal = host.add.ellipse(cx, cy, strong ? 13 : 11, strong ? 7 : 6, k % 3 === 0 ? 0xffe4f6 : k % 2 ? 0xffb6e6 : 0xd99cff, .95).setRotation(a).setDepth(42);
     petal.scene.tweens.add({ targets: petal, x: cx + Math.cos(a) * d, y: cy + Math.sin(a) * d - 14, rotation: a + 2.6, alpha: 0, duration: strong ? 720 : 560, ease: 'Sine.easeOut', onComplete: () => petal.destroy() }); }
@@ -312,8 +313,8 @@ export const WEAPON_BEHAVIORS: Record<WeaponId, (host: WeaponHost, weapon: Weapo
       // 孙尚香满层：环身连射——以自身为中心朝 8 个方向各射一箭（60% 伤害，弹射不变）
       else if (pc.ring) { const px = host.player.x, py = host.player.y, n = PASSIVE_RULES.ringBolts, a0 = Math.atan2(target.y - py, target.x - px);
         host.player.playAction('skill', target.x < px ? 'left' : 'right'); host.sfx.play('allySpear');
-        // 过渡特效（程序化）：赤色双环外扩，正式「环身连射」序列帧到位后替换
-        for (let k = 0; k < 2; k++) { const ring = host.add.circle(px, py - 6, 24, 0xff9a8a, 0).setStrokeStyle(5 - k * 2, k ? 0xffd2a0 : 0xff7a6a, .9).setDepth(41); ring.scene.tweens.add({ targets: ring, radius: 150, alpha: 0, delay: k * 80, duration: 360, onComplete: () => ring.destroy() }); }
+        host.heroFx?.('ringVolley', px, py - 8, 320);
+        if (!hasFxSheet(host, 'c')) for (let k = 0; k < 2; k++) { const ring = host.add.circle(px, py - 6, 24, 0xff9a8a, 0).setStrokeStyle(5 - k * 2, k ? 0xffd2a0 : 0xff7a6a, .9).setDepth(41); ring.scene.tweens.add({ targets: ring, radius: 150, alpha: 0, delay: k * 80, duration: 360, onComplete: () => ring.destroy() }); }
         for (let k = 0; k < n; k++) { const a = a0 + k * Math.PI * 2 / n; host.fireBolt(host.bolts, px, py, px + Math.cos(a) * 420, py + Math.sin(a) * 420, damage * PASSIVE_RULES.ringDamageMul, bounce, true, 620); } } }
     // 每升一级多射 1 支（Lv5 共 5 支）：额外的箭优先分射附近其他敌人，70% 伤害；不够目标时散射同一目标
     const extra = crossbowExtraArrows(level);

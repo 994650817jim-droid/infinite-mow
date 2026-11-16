@@ -9,6 +9,8 @@ import type { WeaponHost } from './registry';
  * 魏延「镇北环首刀」与庞统「凤雏连环令」两把专属本命武器（2026-11-15 重做，不再沿用关羽偃月刀 / 诸葛亮战旗）。
  * 特效均为程序化过渡方案（地裂纹、碎石、火雷、锁链）；魏延劈下瞬间沿用他已有的劈地序列帧，庞统火烧连环沿用火凤序列帧。
  */
+/** 正式序列帧图集是否已加载（缺图时退回程序化特效）。 */
+export const hasFxSheet = (host: WeaponHost, sheet: string): boolean => (host.add as unknown as { scene: Phaser.Scene }).scene.textures.exists('hero_fx_' + sheet);
 const lv = (level: number): number => Math.max(0, Math.min(4, Math.floor(level) - 1));
 
 // ───────────────────────── 魏延 · 镇北环首刀 ─────────────────────────
@@ -46,7 +48,8 @@ function crackFx(host: WeaponHost, x: number, y: number, angle: number, len: num
 }
 
 /** 一次劈砍朝各方向放出的裂波；同一次出刀里每名敌人只吃一次伤害。 */
-function releaseCracks(host: WeaponHost, angles: number[], damage: number, len: number, width: number, now: number, hot: boolean): number {
+/** sprite=false：只画程序化地裂纹（谁敢杀我时由整张怒吼冲击波序列帧负责光效，避免 6 张叠加混合裂波把画面冲成白色）。 */
+function releaseCracks(host: WeaponHost, angles: number[], damage: number, len: number, width: number, now: number, hot: boolean, sprite = true): number {
   const px = host.player.x, py = host.player.y, hit = new Set<number>(); let n = 0;
   for (const a of angles) {
     const ux = Math.cos(a), uy = Math.sin(a);
@@ -57,7 +60,9 @@ function releaseCracks(host: WeaponHost, angles: number[], damage: number, len: 
       hit.add(e.spawnId);
       if (host.hitEnemy(e, damage * (along <= R.crackCloseRange ? R.crackCloseMul : 1), now, 'melee')) n++;
     }
-    crackFx(host, px + ux * 14, py + 10 + uy * 14, a, len, width, hot);
+    // 正式「劈地裂波」序列帧（朝右，按方向旋转、按长度放大）；缺图时退回程序化地裂纹
+    if (sprite && hasFxSheet(host, 'c')) host.heroFx?.('crack', px + ux * (len / 2 + 10), py + 8 + uy * (len / 2 + 10), len * 1.25, a);
+    else crackFx(host, px + ux * 14, py + 10 + uy * 14, a, len, width, hot);
   }
   return n;
 }
@@ -92,9 +97,10 @@ export function zhenbeiBehavior(host: WeaponHost, weapon: WeaponState, dt: numbe
     pl.playAction('skill', ux < 0 ? 'left' : 'right');
     pl.passive.startGuard(time);
     const angles = Array.from({ length: R.whoDaresDirs }, (_, k) => best + k * Math.PI * 2 / R.whoDaresDirs);
-    releaseCracks(host, angles, damage * R.whoDaresDamageMul, len * 1.1, width, time, true);
-    const ring = host.add.circle(pl.x, pl.y - 6, 30, 0xff5a3c, 0).setStrokeStyle(6, 0xff6a4a, .9).setDepth(41);
-    ring.scene.tweens.add({ targets: ring, radius: len, alpha: 0, duration: 460, onComplete: () => ring.destroy() });
+    releaseCracks(host, angles, damage * R.whoDaresDamageMul, len * 1.1, width, time, true, false);
+    host.heroFx?.('whoDares', pl.x, pl.y - 4, len * 1.6);
+    if (!hasFxSheet(host, 'c')) { const ring = host.add.circle(pl.x, pl.y - 6, 30, 0xff5a3c, 0).setStrokeStyle(6, 0xff6a4a, .9).setDepth(41);
+      ring.scene.tweens.add({ targets: ring, radius: len, alpha: 0, duration: 460, onComplete: () => ring.destroy() }); }
     const shout = host.add.text(pl.x, pl.y - 70, '谁敢杀我！', { fontFamily: 'serif', fontSize: '26px', color: '#ffe0b0', stroke: '#7a1a10', strokeThickness: 6 }).setOrigin(.5).setDepth(60).setName('weiyan-whodares');
     shout.scene.tweens.add({ targets: shout, y: pl.y - 104, alpha: 0, delay: 500, duration: 600, onComplete: () => shout.destroy() });
     host.cameras.main.shake(140, .005);
@@ -123,14 +129,21 @@ export const LIANHUAN_DEF = {
 const mineRadius = (level: number) => R.mineRadius * (1 + .05 * (level - 1));
 
 interface Mine { x: number; y: number; armAt: number; until: number; body: Phaser.GameObjects.Container; lit: boolean; ring?: RingGroup; }
-interface RingGroup { x: number; y: number; fuseAt: number; mines: Mine[]; links: Phaser.GameObjects.Graphics; fired: boolean; }
+interface RingGroup { x: number; y: number; fuseAt: number; mines: Mine[]; links: Phaser.GameObjects.Container; fired: boolean; }
 interface Chain { count: number; awarded: boolean; }
 interface MineState { mines: Mine[]; rings: RingGroup[]; fengpoReadyAt: number; }
 const STATE = new WeakMap<Player, MineState>();
 const stateOf = (p: Player): MineState => { let s = STATE.get(p); if (!s) { s = { mines: [], rings: [], fengpoReadyAt: 0 }; STATE.set(p, s); } return s; };
 
-/** 程序化火雷：青铜雷壳 + 跳动红芯（过渡特效）。 */
+const texOk = (host: WeaponHost, key: string): boolean => (host.add as unknown as { scene: Phaser.Scene }).scene.textures.exists(key);
+/** 火雷：正式贴图（青铜雷壳）+ 叠加混合的跳动红芯；缺图时退回程序化雷壳。 */
 function mineBody(host: WeaponHost, x: number, y: number): Phaser.GameObjects.Container {
+  if (texOk(host, 'pangtong_mine')) {
+    const shell = host.add.image(0, 0, 'pangtong_mine').setDisplaySize(30, 30);
+    const glow = host.add.circle(0, -1, 5, 0xff5a2a, .8).setBlendMode(1);
+    glow.scene.tweens.add({ targets: glow, scale: 1.8, alpha: .35, yoyo: true, repeat: -1, duration: 260 });
+    return host.add.container(x, y, [shell, glow]).setDepth(19).setName('pangtong-mine');
+  }
   const shell = host.add.circle(0, 0, 11, 0x6a4a24).setStrokeStyle(2, 0xc8a050, 1);
   const rim = host.add.circle(0, 0, 7, 0x3a2614);
   const core = host.add.circle(0, 0, 4, 0xff4a2a);
@@ -138,13 +151,21 @@ function mineBody(host: WeaponHost, x: number, y: number): Phaser.GameObjects.Co
   return host.add.container(x, y, [shell, rim, core]).setDepth(19).setName('pangtong-mine');
 }
 
-/** 两枚火雷间的锁链（连环）：铁链底线 + 交替金色链环。画进 into（火烧连环常驻）或新建后闪一下淡出。 */
-function linkFx(host: WeaponHost, a: { x: number; y: number }, b: { x: number; y: number }, into?: Phaser.GameObjects.Graphics): void {
-  const g = into ?? host.add.graphics().setDepth(19.5).setName('pangtong-link');
-  const n = Math.max(2, Math.round(Math.hypot(b.x - a.x, b.y - a.y) / 12));
-  g.lineStyle(3, 0x5a4630, .9).lineBetween(a.x, a.y, b.x, b.y);
-  for (let i = 0; i <= n; i++) { const t = i / n; g.lineStyle(2, i % 2 ? 0xe8c070 : 0xb08a48, 1).strokeCircle(a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t, 3); }
-  if (!into) g.scene.tweens.add({ targets: g, alpha: 0, duration: 320, onComplete: () => g.destroy() });
+/** 两枚火雷间的锁链（连环）：正式铁链贴图平铺；缺图时画程序化链环。放进 into（火烧连环常驻）或闪一下淡出。 */
+function linkFx(host: WeaponHost, a: { x: number; y: number }, b: { x: number; y: number }, into?: Phaser.GameObjects.Container): void {
+  const d = Math.hypot(b.x - a.x, b.y - a.y);
+  let obj: Phaser.GameObjects.TileSprite | Phaser.GameObjects.Graphics;
+  if (texOk(host, 'pangtong_chain')) {
+    const t = host.add.tileSprite((a.x + b.x) / 2, (a.y + b.y) / 2, d, 12, 'pangtong_chain').setRotation(Math.atan2(b.y - a.y, b.x - a.x)).setDepth(19.5);
+    t.setTileScale(12 / 24, 12 / 24); obj = t;
+  } else {
+    const g = host.add.graphics().setDepth(19.5), n = Math.max(2, Math.round(d / 12));
+    g.lineStyle(3, 0x5a4630, .9).lineBetween(a.x, a.y, b.x, b.y);
+    for (let i = 0; i <= n; i++) { const t = i / n; g.lineStyle(2, i % 2 ? 0xe8c070 : 0xb08a48, 1).strokeCircle(a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t, 3); }
+    obj = g;
+  }
+  if (into) into.add(obj);
+  else { obj.setName('pangtong-link'); obj.scene.tweens.add({ targets: obj, alpha: 0, duration: 320, onComplete: () => obj.destroy() }); }
 }
 
 function placeMine(host: WeaponHost, s: MineState, x: number, y: number, now: number, life: number, ring?: RingGroup): Mine {
@@ -215,7 +236,7 @@ export function lianhuanBehavior(host: WeaponHost, weapon: WeaponState, dt: numb
   if (cast.formation) {
     // 火烧连环：身边一圈 6 枚火雷，以锁链连成环
     pl.playAction('skill', foes[0].x < pl.x ? 'left' : 'right');
-    const g: RingGroup = { x: pl.x, y: pl.y, fuseAt: time + R.ringFuseMs, mines: [], links: host.add.graphics().setDepth(19.5).setName('pangtong-ring'), fired: false };
+    const g: RingGroup = { x: pl.x, y: pl.y, fuseAt: time + R.ringFuseMs, mines: [], links: host.add.container(0, 0).setDepth(19.5).setName('pangtong-ring'), fired: false };
     for (let k = 0; k < R.ringMines; k++) { const a = k * Math.PI * 2 / R.ringMines; g.mines.push(placeMine(host, s, pl.x + Math.cos(a) * R.ringRadius, pl.y + Math.sin(a) * R.ringRadius, time, R.ringFuseMs + 500, g)); }
     for (let k = 0; k < R.ringMines; k++) linkFx(host, g.mines[k], g.mines[(k + 1) % R.ringMines], g.links);
     s.rings.push(g);

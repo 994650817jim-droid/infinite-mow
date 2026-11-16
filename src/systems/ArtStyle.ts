@@ -4,11 +4,11 @@ import { RENDER_SCALE } from '../config';
 /**
  * 人物画风开关（共享笔记 art-style-v2-spec.md）。
  * v1：现有 Q 版高清绘画图集；v2：「营火写实像素」——写实比例、真像素、深色描边、厚涂。
- * 选择顺序：URL ?art=v1|v2 → localStorage im_art_style → 默认（试作阶段为 v1）。
+ * 选择顺序：URL ?art=v1|v2 → localStorage im_art_style → 默认 v2（用户认可新画风后改为默认；?art=v1 或设置「人物画风：旧版」切回）。
  * v2 只替换 ART_V2_FILES 里列出的图集，其余单位自动沿用 v1。
  */
 export type ArtStyle = 'v1' | 'v2';
-export const DEFAULT_ART_STYLE: ArtStyle = 'v1';
+export const DEFAULT_ART_STYLE: ArtStyle = 'v2';
 const STORE_KEY = 'im_art_style';
 
 /** v2 图集：纹理键 → 文件（行走 4×4、动作 4×7，原生格 176 / 232，人物约 152 美术像素高，160 色）。 */
@@ -35,6 +35,9 @@ export const ART_V2_FILES: Readonly<Record<string, string>> = {
   huangyueying_actions: 'assets/hero-actions-v2/huangyueying.png',
   diaochan_walk_sheet: 'assets/processed-v2/diaochan_walk_sheet.png',
   diaochan_actions: 'assets/hero-actions-v2/diaochan.png',
+  // 孙尚香：新增可玩武将会话出图（分支 claude/new-heroes-46a60c 提交 24916eb，两边合并后文件才齐；缺文件时加载失败自动沿用 v1）
+  sunshangxiang_walk_sheet: 'assets/processed-v2/sunshangxiang_walk_sheet.png',
+  sunshangxiang_actions: 'assets/hero-actions-v2/sunshangxiang.png',
   // 第 2 批：我方兵种（4×4，见 V2_TROOP_KEYS / applyV2TroopFrames）
   shu_swordsman_walk_sheet: 'assets/processed-v2/troops/swordsman_walk.png',
   shu_swordsman_attack_sheet: 'assets/processed-v2/troops/swordsman_attack.png',
@@ -72,6 +75,10 @@ export const ART_V2_FILES: Readonly<Record<string, string>> = {
   xiliang_archer_walk: 'assets/processed-v2/enemies/xiliang_archer_walk.png',
   xiliang_cavalry_walk: 'assets/processed-v2/enemies/xiliang_cavalry_walk.png',
   xiliang_elite_walk: 'assets/processed-v2/enemies/xiliang_elite_walk.png',
+  // 第 3 批（三）：飞熊军、虎豹骑（战斗开始时由 TroopArt 按需加载）
+  feixiong_walk: 'assets/processed-v2/enemies/feixiong_walk.png',
+  feixiong_attack: 'assets/processed-v2/enemies/feixiong_attack.png',
+  hubao_walk: 'assets/processed-v2/enemies/hubao_walk.png',
 };
 /** v2 主将行走整格的显示高度（逻辑像素）：原生格 176 → 88，即 1080p 全屏（渲染 2 倍）下 1 美术像素 = 1 屏幕像素。
  * 人物约 76 逻辑像素高（用户要求比 v1 大一些）。 */
@@ -97,26 +104,33 @@ export function artStyle(): ArtStyle {
   cached = v === 'v1' || v === 'v2' ? v : DEFAULT_ART_STYLE;
   return cached;
 }
-/** 设置界面切换用；重新进入战斗（BootScene 重新加载图集）后生效。 */
+/** 设置界面切换用：只写入偏好，刷新页面 / 重启游戏后生效（已加载的图集不变，避免 v1 图按 v2 规则缩放）。 */
 export function setArtStyle(style: ArtStyle): void {
-  cached = style;
   try { localStorage.setItem(STORE_KEY, style); } catch { /* ignore */ }
 }
 
 /** 该纹理（或其 readable_ 派生）当前是否使用 v2 图集。 */
 export function isV2Texture(key: string): boolean {
-  return artStyle() === 'v2' && Object.prototype.hasOwnProperty.call(ART_V2_FILES, key.replace(/^readable_/, ''));
+  const k = key.replace(/^readable_/, '');
+  return artStyle() === 'v2' && Object.prototype.hasOwnProperty.call(ART_V2_FILES, k) && !V2_FAILED.has(k);
 }
 
 /** 把加载队列里有 v2 版本的图集换成 v2 文件（在 preload 末尾调用；键名不变，其余代码无感）。 */
+/** 加载失败的 v2 图集（例如别的分支的图还没合进来）：退回 v1，isV2Texture 对它返回 false。 */
+const V2_FAILED = new Set<string>();
 export function applyArtStyleUrls(load: Phaser.Loader.LoaderPlugin): string[] {
   if (artStyle() !== 'v2') return [];
-  const swapped: string[] = [];
+  const swapped: string[] = [], original = new Map<string, { url: string; type: string; config: unknown }>();
   const files = (load as unknown as { list: Phaser.Structs.Set<Phaser.Loader.File> }).list;
   for (const file of files.getArray()) {
     const url = ART_V2_FILES[file.key];
-    if (url && (file.type === 'spritesheet' || file.type === 'image')) { file.url = url; swapped.push(file.key); }
+    if (url && (file.type === 'spritesheet' || file.type === 'image')) { original.set(file.key, { url: String(file.url), type: file.type, config: file.config }); file.url = url; swapped.push(file.key); }
   }
+  if (original.size) load.on(Phaser.Loader.Events.FILE_LOAD_ERROR, (file: Phaser.Loader.File) => {
+    const o = original.get(file.key); if (!o || V2_FAILED.has(file.key)) return;
+    V2_FAILED.add(file.key); console.warn('[ArtStyle] v2 图集缺失，退回 v1：' + file.key);
+    if (o.type === 'image') load.image(file.key, o.url); else load.spritesheet(file.key, o.url, o.config as Phaser.Types.Loader.FileTypes.ImageFrameConfig);
+  });
   return swapped;
 }
 
@@ -146,22 +160,21 @@ export function v2TroopGround(frameHeight: number): number { return (frameHeight
  * 指到第 2、3 列（出手、最远），旧代码按 atk_ 取帧时也能用 v2 四帧攻击表。须在 registerWalkSheet / 各处旧切帧之后调用。
  */
 export function applyV2TroopFrames(scene: Phaser.Scene): string[] {
-  const done: string[] = [];
-  if (artStyle() !== 'v2') return done;
-  const dirs = ['down', 'left', 'right', 'up'];
-  for (const key of V2_TROOP_KEYS) {
-    if (!isV2Texture(key) || !scene.textures.exists(key)) continue;
-    const t = scene.textures.get(key), w = (t.getSourceImage() as { width?: number }).width ?? 0, cell = w / 4;
-    if (!cell) continue;
-    for (const name of t.getFrameNames()) t.remove(name);
-    dirs.forEach((dir, row) => {
-      for (let col = 0; col < 4; col++) t.add(`${dir}_${col}`, 0, col * cell, row * cell, cell, cell);
-      for (let i = 0; i < 2; i++) t.add(`atk_${dir}_${i}`, 0, (i + 1) * cell, row * cell, cell, cell);
-      // 骑兵冲锋表旧命名 chg_<方向>_0（预警）/ _1（冲锋）→ 第 1、3 列
-      t.add(`chg_${dir}_0`, 0, 0, row * cell, cell, cell); t.add(`chg_${dir}_1`, 0, 2 * cell, row * cell, cell, cell);
-    });
-    t.setFilter(v2Filter(RENDER_SCALE));
-    done.push(key);
-  }
-  return done;
+  if (artStyle() !== 'v2') return [];
+  return V2_TROOP_KEYS.filter(key => regridV2(scene, key));
+}
+/** 把一张 v2 4×4 图集按 宽/4 重切帧（down_0…up_3 + atk_ / chg_ 别名）并设采样；不是 v2 或尚未加载时返回 false。按需加载的图（TroopArt）也用它。 */
+export function regridV2(scene: Phaser.Scene, key: string): boolean {
+  if (!isV2Texture(key) || !scene.textures.exists(key)) return false;
+  const t = scene.textures.get(key), w = (t.getSourceImage() as { width?: number }).width ?? 0, cell = w / 4;
+  if (!cell) return false;
+  for (const name of t.getFrameNames()) t.remove(name);
+  ['down', 'left', 'right', 'up'].forEach((dir, row) => {
+    for (let col = 0; col < 4; col++) t.add(`${dir}_${col}`, 0, col * cell, row * cell, cell, cell);
+    for (let i = 0; i < 2; i++) t.add(`atk_${dir}_${i}`, 0, (i + 1) * cell, row * cell, cell, cell);
+    // 骑兵冲锋表旧命名 chg_<方向>_0（预警）/ _1（冲锋）→ 第 1、3 列
+    t.add(`chg_${dir}_0`, 0, 0, row * cell, cell, cell); t.add(`chg_${dir}_1`, 0, 2 * cell, row * cell, cell, cell);
+  });
+  t.setFilter(v2Filter(RENDER_SCALE));
+  return true;
 }

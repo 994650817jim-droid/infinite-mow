@@ -1,11 +1,12 @@
 /**
- * 道具（兵装）数据：品质、槽位、词条、48 种基础道具、18 件橙色名器、掉率。
- * 局外持久：战斗中掉落 → 结算带回行囊 → 每位武将各穿一套（6 槽），下一场出征生效。
+ * 道具（兵装）数据：品质、槽位、词条、32 种基础道具、15 件橙色名器、掉率与保底。
+ * 局外持久：战斗中掉落 → 结算带回行囊 → 每位武将各穿一套（4 槽：甲胄、头盔、战靴、信物），战斗中也可换装。
+ * 2026-11-16 改版（用户批准 gear-revamp-proposal.md）：去掉兵刃槽；坐骑改为马厩收藏（data/mounts.ts HORSES），不再随机掉落。
  * 只放数据与纯函数；存取见 systems/ItemStore.ts，战场掉落见 systems/ItemDrops.ts。
  */
 
 export type ItemQuality = 'white' | 'green' | 'blue' | 'purple' | 'orange';
-export type ItemSlot = 'weapon' | 'armor' | 'helm' | 'boots' | 'mount' | 'token';
+export type ItemSlot = 'armor' | 'helm' | 'boots' | 'token';
 export type AffixId = 'damage' | 'attackSpeed' | 'crit' | 'hp' | 'move' | 'reduce' | 'pickup' | 'xp' | 'ally' | 'regen' | 'elite';
 export type SpecialId = 'fury' | 'windrider' | 'bloodthirst' | 'slayer' | 'scholar' | 'rally' | 'ironwall' | 'swift';
 
@@ -20,17 +21,16 @@ export const QUALITIES: Record<ItemQuality, { name: string; label: string; color
   orange: { name: '史诗', label: '橙', color: 0xe8892e, css: '#f2a24e', dark: 0x3d220c, affixes: 3, minor: true, mult: 2.8, salvage: 80 },
 };
 
+/** 兵刃槽去掉后，「武器伤害」「对精锐」并入信物，攻速在战靴、暴击在头盔（数值交平衡会话复核）。 */
 export const SLOTS: Record<ItemSlot, { name: string; affixes: readonly AffixId[] }> = {
-  weapon: { name: '兵刃', affixes: ['damage', 'attackSpeed', 'crit', 'elite'] },
   armor: { name: '甲胄', affixes: ['hp', 'reduce', 'regen'] },
   helm: { name: '头盔', affixes: ['hp', 'reduce', 'crit', 'xp'] },
   boots: { name: '战靴', affixes: ['move', 'attackSpeed', 'pickup'] },
-  mount: { name: '坐骑', affixes: ['move', 'ally', 'pickup', 'damage'] },
-  token: { name: '信物', affixes: ['ally', 'xp', 'regen', 'elite'] },
+  token: { name: '信物', affixes: ['ally', 'xp', 'regen', 'elite', 'damage'] },
 };
-export const SLOT_ORDER: readonly ItemSlot[] = ['weapon', 'armor', 'helm', 'boots', 'mount', 'token'];
+export const SLOT_ORDER: readonly ItemSlot[] = ['armor', 'helm', 'boots', 'token'];
 
-/** 词条：白色品质的基础值；percent 表示按百分比显示。gearCap 为全身 6 件叠加的上限。 */
+/** 词条：白色品质的基础值；percent 表示按百分比显示。gearCap 为全身兵装（含坐骑）叠加的上限。 */
 export const AFFIXES: Record<AffixId, { name: string; base: number; percent: boolean; gearCap: number }> = {
   damage: { name: '武器伤害', base: .03, percent: true, gearCap: .4 },
   attackSpeed: { name: '攻击速度', base: .02, percent: true, gearCap: .25 },
@@ -58,17 +58,8 @@ export const SPECIALS: Record<SpecialId, { name: string; desc: string }> = {
 };
 
 export interface BaseItemDef { id: string; slot: ItemSlot; name: string; primary: AffixId }
-/** 6 槽 × 8 种 = 48 种基础道具；第一条词条固定为 primary，其余随机。 */
+/** 4 槽 × 8 种 = 32 种基础道具；第一条词条固定为 primary，其余随机。旧兵刃 / 坐骑道具见 LEGACY_*（只用于旧档迁移）。 */
 export const BASE_ITEMS: readonly BaseItemDef[] = [
-  // 兵刃（挂饰）
-  { id: 'sword_tassel', slot: 'weapon', name: '剑穗', primary: 'attackSpeed' },
-  { id: 'blade_ring', slot: 'weapon', name: '刀环', primary: 'damage' },
-  { id: 'spear_tassel', slot: 'weapon', name: '枪缨', primary: 'crit' },
-  { id: 'bow_tip', slot: 'weapon', name: '弓弭', primary: 'attackSpeed' },
-  { id: 'whet_charm', slot: 'weapon', name: '砺石佩', primary: 'damage' },
-  { id: 'bronze_guard', slot: 'weapon', name: '青铜剑格', primary: 'elite' },
-  { id: 'iron_pommel', slot: 'weapon', name: '铁首环', primary: 'damage' },
-  { id: 'jade_hilt', slot: 'weapon', name: '玉具剑璏', primary: 'crit' },
   // 甲胄
   { id: 'leather_armor', slot: 'armor', name: '皮甲', primary: 'hp' },
   { id: 'lamellar', slot: 'armor', name: '札甲', primary: 'reduce' },
@@ -96,15 +87,6 @@ export const BASE_ITEMS: readonly BaseItemDef[] = [
   { id: 'felt_boot', slot: 'boots', name: '毡靴', primary: 'pickup' },
   { id: 'march_boot', slot: 'boots', name: '行縢', primary: 'move' },
   { id: 'tiger_boot', slot: 'boots', name: '虎头靴', primary: 'attackSpeed' },
-  // 坐骑
-  { id: 'nag', slot: 'mount', name: '驽马', primary: 'move' },
-  { id: 'grey_horse', slot: 'mount', name: '青骢', primary: 'move' },
-  { id: 'yellow_horse', slot: 'mount', name: '黄骠马', primary: 'pickup' },
-  { id: 'black_horse', slot: 'mount', name: '乌骓', primary: 'damage' },
-  { id: 'white_horse', slot: 'mount', name: '白马', primary: 'ally' },
-  { id: 'red_horse', slot: 'mount', name: '骅骝', primary: 'damage' },
-  { id: 'west_horse', slot: 'mount', name: '大宛马', primary: 'move' },
-  { id: 'mule', slot: 'mount', name: '骡车', primary: 'ally' },
   // 信物
   { id: 'jade_pendant', slot: 'token', name: '玉佩', primary: 'regen' },
   { id: 'tiger_seal', slot: 'token', name: '虎钮印', primary: 'ally' },
@@ -117,11 +99,11 @@ export const BASE_ITEMS: readonly BaseItemDef[] = [
 ];
 
 export interface LegendDef { id: string; slot: ItemSlot; name: string; affixes: readonly AffixId[]; special: SpecialId; lore: string }
-/** 18 件橙色名器：词条固定（数值仍按橙色倍率），外加一条专属特效。只在橙色品质掉落。 */
+/** 15 件橙色名器：词条固定（数值仍按橙色倍率），外加一条专属特效。只在橙色品质掉落。三把名剑 / 名刀改为信物「佩剑」；名驹赤兔、的卢、绝影移入马厩。 */
 export const LEGENDS: readonly LegendDef[] = [
-  { id: 'qinggang', slot: 'weapon', name: '青釭剑', affixes: ['damage', 'crit', 'elite'], special: 'slayer', lore: '削铁如泥，曹操佩剑' },
-  { id: 'yitian', slot: 'weapon', name: '倚天剑', affixes: ['damage', 'attackSpeed', 'crit'], special: 'fury', lore: '与青釭并称双剑' },
-  { id: 'gudingdao', slot: 'weapon', name: '古锭刀', affixes: ['damage', 'elite', 'attackSpeed'], special: 'swift', lore: '江东猛将所用' },
+  { id: 'qinggang', slot: 'token', name: '青釭剑', affixes: ['damage', 'crit', 'elite'], special: 'slayer', lore: '削铁如泥，曹操佩剑' },
+  { id: 'yitian', slot: 'token', name: '倚天剑', affixes: ['damage', 'attackSpeed', 'crit'], special: 'fury', lore: '与青釭并称双剑' },
+  { id: 'gudingdao', slot: 'token', name: '古锭刀', affixes: ['damage', 'elite', 'attackSpeed'], special: 'swift', lore: '江东猛将所用' },
   { id: 'beast_armor', slot: 'armor', name: '兽面吞头铠', affixes: ['hp', 'reduce', 'regen'], special: 'ironwall', lore: '护心兽首，刀枪难入' },
   { id: 'silver_armor', slot: 'armor', name: '亮银甲', affixes: ['hp', 'reduce', 'crit'], special: 'bloodthirst', lore: '白袍银甲，七进七出' },
   { id: 'rattan_armor', slot: 'armor', name: '藤甲', affixes: ['reduce', 'regen', 'move'], special: 'windrider', lore: '浸油晒干，轻而坚' },
@@ -131,9 +113,6 @@ export const LEGENDS: readonly LegendDef[] = [
   { id: 'cloud_boots', slot: 'boots', name: '踏云靴', affixes: ['move', 'attackSpeed', 'pickup'], special: 'windrider', lore: '行如流云' },
   { id: 'tiger_boots', slot: 'boots', name: '虎皮战靴', affixes: ['move', 'attackSpeed', 'damage'], special: 'swift', lore: '踏阵如虎' },
   { id: 'fleet_boots', slot: 'boots', name: '神行履', affixes: ['move', 'pickup', 'xp'], special: 'scholar', lore: '日行三百里' },
-  { id: 'chitu', slot: 'mount', name: '赤兔', affixes: ['move', 'damage', 'elite'], special: 'slayer', lore: '人中吕布，马中赤兔' },
-  { id: 'dilu', slot: 'mount', name: '的卢', affixes: ['move', 'pickup', 'hp'], special: 'windrider', lore: '一跃三丈过檀溪' },
-  { id: 'jueying', slot: 'mount', name: '绝影', affixes: ['move', 'ally', 'attackSpeed'], special: 'rally', lore: '宛城舍身救主' },
   { id: 'taiping', slot: 'token', name: '太平要术残卷', affixes: ['xp', 'regen', 'elite'], special: 'scholar', lore: '南华老仙所授' },
   { id: 'imperial_seal', slot: 'token', name: '传国玉玺', affixes: ['ally', 'xp', 'hp'], special: 'rally', lore: '受命于天，既寿永昌' },
   { id: 'bagua_mirror', slot: 'token', name: '八卦镜', affixes: ['reduce', 'regen', 'elite'], special: 'bloodthirst', lore: '奇门遁甲，八阵之枢' },
@@ -150,37 +129,49 @@ export function itemDef(base: string): { slot: ItemSlot; name: string; legend?: 
   const b = BASE_BY_ID.get(base); return b && { slot: b.slot, name: b.name };
 }
 export function itemSlot(item: ItemInstance): ItemSlot { return itemDef(item.base)?.slot ?? 'token'; }
+
+/** 旧档（im_items_v1）里已经下架的道具 id：普通兵刃按双倍分解价折钱；坐骑转入马厩（见 ItemStore.migrateV1）。 */
+export const LEGACY_WEAPON_BASES: readonly string[] = ['sword_tassel', 'blade_ring', 'spear_tassel', 'bow_tip', 'whet_charm', 'bronze_guard', 'iron_pommel', 'jade_hilt'];
+export const LEGACY_MOUNT_BASES: readonly string[] = ['nag', 'grey_horse', 'yellow_horse', 'black_horse', 'white_horse', 'red_horse', 'west_horse', 'mule', 'chitu', 'dilu', 'jueying'];
 export function itemName(item: ItemInstance): string { return itemDef(item.base)?.name ?? '无名之物'; }
 
 // —— 掉落 ——
-/** 掉落来源。tier = 章节进度档（0 黄巾 / 1 讨董 / 2 群雄·攻守城 / 3 官渡·赤壁），越高品质整体上浮。 */
-export type DropSource = 'normal' | 'elite' | 'boss' | 'bossFinal' | 'chest' | 'merchant';
-export const DROP_CHANCE: Record<'normal' | 'elite', number> = { normal: .004, elite: .06 };
-/** 品质权重（%）：白 绿 蓝 紫 橙。 */
 /**
- * 品级权重（白 / 绿 / 蓝 / 紫 / 橙），按掉落档位 0–4 分表（2026-11-16 平衡，用户批准；取代原来「每档把白绿各 6% 挪走」的算法）。
- * 档位：第一章 0、第二章 1、第三章与攻城 2、第四章 3、第五章 4（GameScene.itemTier）。
- * 按每关件数（首领 1 / 章末 2、宝箱 2、小兵与精锐 1–3）估算，一遍通关约 85 件：白约 4、绿约 17、蓝约 29、紫约 27、橙约 8；
- * 第一、二章以白绿蓝为主，第四、五章以紫为主；第一件橙通常在第三章。
- * 第一章首领必蓝以上；第二章章末首领必紫以上（bossFinal）。保底（15 件出紫、40 件出橙）等道具改版的新存档再加。
+ * 掉落来源与档位（平衡会话 balance-feedback-proposal.md「4 补充」，用户已批准）：
+ * 档位 0 黄巾 / 1 讨董 / 2 群雄·攻守城 / 3 官渡 / 4 赤壁。finalBoss = 章末首领（掉 2 件）。
  */
+export type DropSource = 'normal' | 'elite' | 'boss' | 'finalBoss' | 'chest' | 'merchant';
+export const DROP_CHANCE: Record<'normal' | 'elite', number> = { normal: .004, elite: .06 };
+export const MAX_TIER = 4;
+/** 品质权重（%）：白 绿 蓝 紫 橙；每档一行。宝箱与精锐同表；首领表第一档必蓝，章末首领第二档必紫。 */
 const WEIGHTS: Record<Exclude<DropSource, 'merchant'>, readonly (readonly number[])[]> = {
   normal: [[55, 35, 9, 1, 0], [25, 45, 25, 4.5, .5], [8, 32, 42, 15, 3], [0, 18, 45, 30, 7], [0, 8, 40, 40, 12]],
   elite: [[0, 70, 25, 4.5, .5], [0, 45, 40, 13, 2], [0, 20, 48, 25, 7], [0, 5, 40, 42, 13], [0, 0, 30, 50, 20]],
   chest: [[0, 70, 25, 4.5, .5], [0, 45, 40, 13, 2], [0, 20, 48, 25, 7], [0, 5, 40, 42, 13], [0, 0, 30, 50, 20]],
   boss: [[0, 0, 85, 14, 1], [0, 0, 45, 50, 5], [0, 0, 25, 60, 15], [0, 0, 10, 65, 25], [0, 0, 0, 70, 30]],
-  bossFinal: [[0, 0, 85, 14, 1], [0, 0, 0, 90, 10], [0, 0, 25, 60, 15], [0, 0, 10, 65, 25], [0, 0, 0, 70, 30]],
+  finalBoss: [[0, 0, 85, 14, 1], [0, 0, 0, 90, 10], [0, 0, 25, 60, 15], [0, 0, 10, 65, 25], [0, 0, 0, 70, 30]],
 };
-const MERCHANT_WEIGHTS: readonly number[] = [0, 65, 35, 0, 0];
-export const MAX_ITEM_TIER = 4;
-// 2026-11-16 每关缩短（stageTuning）：宝箱 45 / 110 秒 → 30 / 70 秒
-export const CHESTS_PER_STAGE: readonly number[] = [30, 70]; // 每关开打后第 30 / 70 秒各刷一个宝箱
+const MERCHANT_WEIGHTS = [0, 65, 35, 0, 0];
+export const CHESTS_PER_STAGE: readonly number[] = [45, 110]; // 每关开打后第 45 / 110 秒各刷一个宝箱
+/** 保底（按掉落件数计，跨局累计、分存档位，计数存在 ItemStore 的 pity）：连续 15 件没出紫 → 下一件必紫；连续 40 件没出橙 → 下一件必橙。 */
+export const PITY = { purple: 15, orange: 40 } as const;
+export interface PityState { sincePurple: number; sinceOrange: number }
 
 export function rollQuality(source: DropSource, tier: number, rng: () => number = Math.random): ItemQuality {
-  const w = source === 'merchant' ? MERCHANT_WEIGHTS : WEIGHTS[source][Math.max(0, Math.min(MAX_ITEM_TIER, Math.floor(tier)))];
+  const w = source === 'merchant' ? MERCHANT_WEIGHTS : WEIGHTS[source][Math.max(0, Math.min(MAX_TIER, Math.floor(tier)))];
   const total = w.reduce((a, b) => a + b, 0); let r = rng() * total;
   for (let i = 0; i < w.length; i++) { r -= w[i]; if (r < 0) return QUALITY_ORDER[i]; }
   return QUALITY_ORDER[w.length - 1];
+}
+/** 掉落品质 + 保底：先按权重抽，再看保底计数，最后更新计数（会改 pity）。商人货架不走这里。 */
+export function rollDropQuality(source: Exclude<DropSource, 'merchant'>, tier: number, pity: PityState, rng: () => number = Math.random): ItemQuality {
+  let q = rollQuality(source, tier, rng);
+  const at = (x: ItemQuality) => QUALITY_ORDER.indexOf(x);
+  if (pity.sinceOrange + 1 >= PITY.orange) q = 'orange';
+  else if (pity.sincePurple + 1 >= PITY.purple && at(q) < at('purple')) q = 'purple';
+  pity.sincePurple = at(q) >= at('purple') ? 0 : pity.sincePurple + 1;
+  pity.sinceOrange = q === 'orange' ? 0 : pity.sinceOrange + 1;
+  return q;
 }
 
 function pick<T>(list: readonly T[], rng: () => number): T { return list[Math.floor(rng() * list.length) % list.length]; }
@@ -218,7 +209,11 @@ export function formatAffix(a: { id: AffixId; value: number }): string {
   return a.id === 'reduce' ? `${d.name} −${pct}%` : `${d.name} +${pct}%`;
 }
 
-/** 行囊上限；超出时自动分解最低品质的未穿戴道具。 */
-export const BAG_CAPACITY = 80;
+/**
+ * 行囊上限：只算未穿戴的道具（穿着的不占格）。超出时自动分解最低品质的白 / 绿 / 蓝；
+ * 紫 / 橙永不自动分解，可超出上限最多 BAG_OVERFLOW 格（计数标红，提示手动分解）。
+ */
+export const BAG_CAPACITY = 60;
+export const BAG_OVERFLOW = 20;
 /** 行营军需商人道具货架价格（粮草）。 */
 export const MERCHANT_PRICE: Partial<Record<ItemQuality, number>> = { green: 60, blue: 120 };

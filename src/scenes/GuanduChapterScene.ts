@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import {defaultHero,heroOwned,LOCKED_HINT} from '../systems/RosterStore';
 import {playMenuMusic} from '../systems/Music';
 import {GUANDU_STAGES, GUANDU_PLAYABLE, GUANDU_ATLAS_FILES, type GuanduStage} from '../data/guanduChapter';
 import {arcUnlocked, arcStageUnlocked, arcStages, alertLossWarning} from '../world/WorldStore';
@@ -19,7 +20,7 @@ export class GuanduChapterScene extends Phaser.Scene {
   private action(x: number, y: number, w: number, h: number, label: string, fn: () => void, primary = false) {
     const bg = this.add.rectangle(x, y, w, h, primary ? 0x744530 : 0x241e1a, .96).setStrokeStyle(1, primary ? 0xc39b61 : 0x70604b).setInteractive({useHandCursor: true});
     const t = this.text(x, y, label, primary ? 22 : 17, primary ? '#ffdf9d' : '#d1c2a7').setOrigin(.5);
-    bg.on('pointerover', () => bg.setFillStyle(primary ? 0x8b5438 : 0x3a2c23)).on('pointerout', () => bg.setFillStyle(primary ? 0x744530 : 0x241e1a)).on('pointerdown', () => bg.setAlpha(.7)).on('pointerup', () => { bg.setAlpha(1); fn(); });
+    bg.on('pointerover', () => bg.setFillStyle(primary ? 0x8b5438 : 0x3a2c23)).on('pointerout', () => bg.setFillStyle(primary ? 0x744530 : 0x241e1a)).on('pointerdown', () => bg.setAlpha(bg.getData('locked') ? .3 : .7)).on('pointerup', () => { bg.setAlpha(bg.getData('locked') ? .35 : 1); fn(); });
     return {bg, t};
   }
   /** 已实装且已解锁（试炼模式下只要已实装）。 */
@@ -31,7 +32,7 @@ export class GuanduChapterScene extends Phaser.Scene {
     const desk = W > 600;
     this.selected = Math.min(GUANDU_PLAYABLE, arcStages('guandu') + 1) as GuanduStage;
     { const pick = Number(this.registry.get('worldStagePick')); this.registry.remove('worldStagePick'); if ([1, 2, 3].includes(pick) && pick <= GUANDU_PLAYABLE && this.open(pick)) this.selected = pick as GuanduStage; }
-    try { const saved = localStorage.getItem('im_last_hero'); if (CHARACTERS.some(c => c.id === saved)) this.hero = saved as CharacterId; } catch { /* storage unavailable */ }
+    try { this.hero = defaultHero(localStorage.getItem('im_last_hero')); } catch { this.hero = defaultHero(null); }
     this.cameras.main.setBackgroundColor('#1a1813');
     const g = this.add.graphics(); g.fillStyle(0x2b2619, .6);
     for (let i = 0; i < 8; i++) g.fillTriangle(i * W / 6 - 140, H * .62, i * W / 6 + 80, H * .26 + (i % 3) * 40, i * W / 6 + 290, H * .62);
@@ -59,7 +60,7 @@ export class GuanduChapterScene extends Phaser.Scene {
     });
     const hy = desk ? 431 : 787;
     this.text(30, desk ? 397 : 735, '出战武将', 13, '#b6a07b'); this.text(W - 30, desk ? 397 : 735, '点击更换 · 不影响征程进度', 11, '#8f8473').setOrigin(1, 0);
-    CHARACTERS.forEach((c, i) => { const w = (W - 50 - 5 * CHARACTERS.length) / CHARACTERS.length, x = 28 + i * (w + 5), a = this.action(x + w / 2, hy, w, desk ? 42 : 55, c.name, () => { this.hero = c.id; this.refresh(); }); a.bg.setName('guandu-hero-' + c.id); this.heroButtons.push(a.bg); });
+    CHARACTERS.forEach((c, i) => { const w = (W - 50 - 5 * CHARACTERS.length) / CHARACTERS.length, x = 28 + i * (w + 5), a = this.action(x + w / 2, hy, w, desk ? 42 : 55, c.name, () => { if (!heroOwned(c.id)) return; this.hero = c.id; this.refresh(); }); a.bg.setName('guandu-hero-' + c.id); if (!heroOwned(c.id)) { a.bg.setAlpha(.35).setData('locked', LOCKED_HINT); a.t.setAlpha(.35); } this.heroButtons.push(a.bg); });
     g.lineStyle(1, 0x8b704a, .45).lineBetween(28, desk ? 466 : 838, W - 28, desk ? 466 : 838);
     const a = this.action(desk ? W - 178 : W / 2, desk ? 503 : 885, desk ? 300 : W - 56, desk ? 50 : 62, '', () => this.depart(), true);
     this.deployBg = a.bg.setName('guandu-deploy'); this.deployText = a.t;
@@ -82,7 +83,7 @@ export class GuanduChapterScene extends Phaser.Scene {
       c.bg.setFillStyle(chosen ? 0x413020 : 0x29231d).setStrokeStyle(chosen ? 2 : 1, chosen ? 0xd7b778 : 0x65543f); c.strip.setVisible(chosen);
       c.status.setText(cleared >= stage ? '✓ 已告捷' : !built ? '筹备中' : !open ? !arcUnlocked('guandu') ? '锁定 · 平定群雄割据' : '锁定 · 完成前关' : chosen ? '◆ 当前出征' : '可出征').setColor(chosen ? '#f0ce8f' : '#a99c86');
     });
-    this.heroButtons.forEach((h, i) => h.setFillStyle(CHARACTERS[i].id === this.hero ? 0x51402b : 0x241e1a).setStrokeStyle(1, CHARACTERS[i].id === this.hero ? 0xd7b778 : 0x70604b));
+    this.heroButtons.forEach((h, i) => h.setFillStyle(CHARACTERS[i].id === this.hero ? 0x51402b : 0x241e1a).setStrokeStyle(1, CHARACTERS[i].id === this.hero ? 0xd7b778 : 0x70604b).setAlpha(h.getData('locked') ? .35 : 1));
     this.deployText.setText('出征  ·  ' + GUANDU_STAGES[this.selected - 1].name);
   }
 }

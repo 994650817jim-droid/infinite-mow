@@ -1,8 +1,9 @@
 import type { CharacterId } from '../data/characters';
 import { AFFIXES, AFFIX_IDS, type AffixId, type ItemInstance, type SpecialId } from '../data/items';
-import { loadout } from './ItemStore';
+import type { HorseDef } from '../data/mounts';
+import { heroHorse, loadout } from './ItemStore';
 
-/** 一位武将全身兵装折算后的加成（RunGrowth.gear）。数值词条受 AFFIXES.gearCap 约束；名器专属特效另计、不受上限。 */
+/** 一位武将全身兵装（含马厩坐骑的固定加成）折算后的加成（RunGrowth.gear）。数值词条受 AFFIXES.gearCap 约束；名器专属特效另计、不受上限。 */
 export type GearStats = Record<AffixId, number> & { boss: number; specials: SpecialId[] };
 
 export function emptyGear(): GearStats {
@@ -11,9 +12,10 @@ export function emptyGear(): GearStats {
   return g;
 }
 
-export function gearFromItems(items: ItemInstance[]): GearStats {
+export function gearFromItems(items: ItemInstance[], horse?: HorseDef): GearStats {
   const g = emptyGear();
   for (const item of items) for (const a of item.affixes) g[a.id] += a.value;
+  if (horse) for (const [id, v] of Object.entries(horse.bonus) as [AffixId, number][]) g[id] += v;
   for (const id of AFFIX_IDS) g[id] = Math.round(Math.min(AFFIXES[id].gearCap, g[id]) * 1000) / 1000;
   for (const item of items) if (item.special && !g.specials.includes(item.special)) g.specials.push(item.special);
   // 静态专属特效直接折进数值
@@ -25,9 +27,14 @@ export function gearFromItems(items: ItemInstance[]): GearStats {
   return g;
 }
 
-/** 出征开局：读该武将穿戴的兵装。存档不可用时返回空加成。 */
+/** 马的固定加成文字，如「移动速度 +2.6%」。 */
+export function horseBonusText(horse: HorseDef): string {
+  return (Object.entries(horse.bonus) as [AffixId, number][]).map(([id, v]) => { const d = AFFIXES[id]; return d.percent ? `${d.name} +${Math.round(v * 1000) / 10}%` : `${d.name} +${v.toFixed(1)}`; }).join(' · ');
+}
+
+/** 出征开局 / 战斗中换装后：读该武将穿戴的兵装和坐骑。存档不可用时返回空加成。 */
 export function gearFor(hero: CharacterId): GearStats {
-  try { return gearFromItems(Object.values(loadout(hero)).filter((i): i is ItemInstance => !!i)); } catch { return emptyGear(); }
+  try { return gearFromItems(Object.values(loadout(hero)).filter((i): i is ItemInstance => !!i), heroHorse(hero)); } catch { return emptyGear(); }
 }
 
 /** 面板用的加成汇总（只列非零项）。 */

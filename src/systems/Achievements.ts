@@ -81,7 +81,8 @@ export function onBattleEnd(r: { victory: boolean; debug: boolean; kills: number
   if (!r.victory) return;
   unlock('first_win');
   if (r.chapter === 'huangjin' && (r.stage ?? 3) === 3 && r.bossKilled && !r.arc) unlock('zhangjiao');
-  if (r.chapter === 'hulao' && (r.westStage ?? 3) === 3 && r.bossKilled && !r.arc) unlock('lubu');
+  // 2-3 改为董卓后，「虎牢扬威」改由天下地图挑战关击败吕布获得
+  if (r.chapter === 'hulao' && r.bossKilled && r.arc === 'lubu') unlock('lubu');
   if (r.arc === 'defense') unlock('defense');
   const s = load(); if (!s.heroes.includes(r.hero)) { s.heroes.push(r.hero); save(s); }
   if (['zhaoyun', 'guanyu', 'huangzhong', 'zhuge'].every(h => load().heroes.includes(h))) unlock('all_heroes');

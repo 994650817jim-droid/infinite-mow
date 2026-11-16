@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { actorDepth, FONT } from '../config';
-import { CHESTS_PER_STAGE, DROP_CHANCE, QUALITIES, itemName, rollItem, rollQuality, type ItemInstance, type ItemQuality } from '../data/items';
+import { CHESTS_PER_STAGE, DROP_CHANCE, QUALITIES, itemName, rollDropQuality, rollItem, type ItemInstance, type ItemQuality, type PityState } from '../data/items';
+import { loadPity } from './ItemStore';
 import type { Player } from '../entities/Player';
 import { ensureItemTextures, itemIcon } from '../ui/ItemQuality';
 
@@ -9,7 +10,7 @@ interface Chest { img: Phaser.GameObjects.Image; glow: Phaser.GameObjects.Ellips
 interface KilledEnemy { kind: string; x: number; y: number }
 
 /**
- * 战场道具掉落：普通敌 0.4%、精锐 6%（至少绿）、首领必掉（至少蓝，终章首领 2 件，直接收入）、
+ * 战场道具掉落：普通敌 0.4%、精锐 6%、首领必掉（章末首领 2 件，直接收入），品质按章节档位表 + 保底（data/items.ts）；
  * 每关两个宝箱（打开得 1–2 件，至少绿）。地上的道具带品质光柱，走近自动拾取，收进本局缴获 runLoot；
  * 结算时由 GameScene.finish 交给 ItemStore.depositRunLoot。
  */
@@ -20,6 +21,8 @@ export class ItemDrops {
   private chestIndex = 0;
   private lastElapsed = 0;
   rng: () => number = Math.random;
+  /** 保底计数：开局从存档读入，结算时随 depositRunLoot 写回（测试战斗不写）。 */
+  readonly pity: PityState = loadPity();
 
   constructor(private readonly scene: Phaser.Scene, private readonly player: Player, private readonly tier: number, private readonly elapsed: () => number, private readonly finalBoss: () => boolean, private readonly onPickup?: (item: ItemInstance) => void) {
     ensureItemTextures(scene);
@@ -27,13 +30,13 @@ export class ItemDrops {
 
   onKill(enemy: KilledEnemy): void {
     if (enemy.kind === 'boss') {
-      const final = this.finalBoss(), n = final ? 2 : 1;
-      for (let i = 0; i < n; i++) this.collect(rollItem(rollQuality(final ? 'bossFinal' : 'boss', this.tier, this.rng), this.rng));
+      const n = this.finalBoss() ? 2 : 1;
+      for (let i = 0; i < n; i++) this.collect(rollItem(rollDropQuality(n > 1 ? 'finalBoss' : 'boss', this.tier, this.pity, this.rng), this.rng));
       return;
     }
     const elite = enemy.kind === 'elite';
     if (this.rng() >= DROP_CHANCE[elite ? 'elite' : 'normal']) return;
-    this.drop(rollItem(rollQuality(elite ? 'elite' : 'normal', this.tier, this.rng), this.rng), enemy.x, enemy.y);
+    this.drop(rollItem(rollDropQuality(elite ? 'elite' : 'normal', this.tier, this.pity, this.rng), this.rng), enemy.x, enemy.y);
   }
 
   /** 在地上放一件道具（品质光柱 + 图标，轻微浮动）。 */
@@ -67,7 +70,7 @@ export class ItemDrops {
       this.scene.tweens.add({ targets: c.img, alpha: 0, delay: 900, duration: 500, onComplete: () => c.img.destroy() });
     } else c.img.destroy();
     const n = this.rng() < .4 ? 2 : 1;
-    for (let k = 0; k < n; k++) this.drop(rollItem(rollQuality('chest', this.tier, this.rng), this.rng), c.x + (k ? 26 : -10), c.y + 18);
+    for (let k = 0; k < n; k++) this.drop(rollItem(rollDropQuality('chest', this.tier, this.pity, this.rng), this.rng), c.x + (k ? 26 : -10), c.y + 18);
   }
 
   private collect(item: ItemInstance): void {
@@ -96,6 +99,9 @@ export class ItemDrops {
     }
     for (const c of [...this.chests]) if (Math.hypot(c.x - px, c.y - py) < 40) this.openChest(c);
   }
+
+  /** 战斗中穿上的缴获已收入行囊：从本局缴获里拿掉。 */
+  takeLoot(uid: string): void { const i = this.runLoot.findIndex(x => x.uid === uid); if (i >= 0) this.runLoot.splice(i, 1); }
 
   /** 胜利结算：地上没捡的一并收入。 */
   collectAll(): void { for (const g of this.ground.splice(0)) { g.root.destroy(); this.runLoot.push(g.item); } }

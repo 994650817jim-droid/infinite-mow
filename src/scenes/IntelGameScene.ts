@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import {captureLine, tryCapture} from '../systems/RosterStore';
 import {EnemyCamps} from '../systems/EnemyCamps';
 import {GameScene} from './GameScene';
 import {GuanduBoss} from '../systems/GuanduBoss';
@@ -161,7 +162,7 @@ export function intelGameSceneClass(Base: typeof GameScene) {
       let loot = '';
       if (r.item && !debug) { const q = Math.random() < r.item.orangeChance ? 'orange' : r.item.quality, it = rollItem(q); addItems([it]); loot = ` · 兵装 ${QUALITIES[q].label}「${itemName(it)}」入行囊`; }
       this.resultTexts.subtitle.setText(success ? this.chapter.victoryText : lost ? '商车被劫 · 此事作罢' : `${INTEL_INFO[e.kind].name}未成 · 期限内可再战`);
-      this.resultTexts.body.setText(this.resultTexts.body.text + '\n军情 · 军功 +' + r.merits + ' / 粮草 +' + r.provisions + (r.money ? ' / 钱 +' + r.money : '') + loot + cityIncomeLine(r) + (debug ? '\n' + r.message : ''));
+      this.resultTexts.body.setText(this.resultTexts.body.text + '\n军情 · 军功 +' + r.merits + ' / 粮草 +' + r.provisions + (r.money ? ' / 钱 +' + r.money : '') + loot + cityIncomeLine(r) + captureLine(success && e.kind === 'bounty' && (!debug || (this.test && !this.debugModified && !this.debugJumped && !this.player.damageImmune && new URLSearchParams(location.search).get('roster') === '1')) ? tryCapture('bounty', e.general ?? '', e.faction) : null) + (debug ? '\n' + r.message : ''));
       const home = this.resultPanel.getByName('result-home') as Phaser.GameObjects.Text;
       home?.setText('返回天下地图').removeAllListeners('pointerdown').on('pointerdown', () => { this.registry.set('mapFocusCity', this.city.id); this.scene.start('WorldMapScene'); });
       const restart = this.resultPanel.getByName('result-restart') as Phaser.GameObjects.Image;

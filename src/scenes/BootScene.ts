@@ -129,9 +129,12 @@ export class BootScene extends Phaser.Scene {
     // 诸葛亮「烈焰战旗」：战旗、八卦火阵预警地纹、6 帧爆炸（tools/prepare-flame-banner-art.mjs）
     this.load.image('zhuge_banner', 'assets/flame-banner/zhuge_banner.png');
     this.load.image('fire_sigil', 'assets/flame-banner/fire_sigil.png');
-    for (const sheet of ['a', 'b', 'c']) this.load.spritesheet('hero_fx_' + sheet, 'assets/hero-fx/fx_' + sheet + '.png', { frameWidth: 256, frameHeight: 256 });
+    for (const sheet of ['a', 'b', 'c', 'd']) this.load.spritesheet('hero_fx_' + sheet, 'assets/hero-fx/fx_' + sheet + '.png', { frameWidth: 256, frameHeight: 256 });
     // 庞统火雷与连环铁链贴图（ChatGPT 生成，tools/prepare-weiyan-pangtong-icons.mjs 切出）
     this.load.image('pangtong_mine', 'assets/hero-fx/pangtong_mine.png'); this.load.image('pangtong_chain', 'assets/hero-fx/pangtong_chain.png');
+    // 2026-11-16 专属武器贴图（tools/prepare-hero-icon-sheet.mjs 切出）与执刀侍婢行走图
+    for (const k of ['sun_knife', 'diaochan_fan', 'huangzhong_arrow', 'charm_heart', 'charm_broken', 'zhangfei_spear']) this.load.image(k, 'assets/hero-fx/' + k + '.png');
+    this.load.spritesheet('sun_maid_walk', 'assets/hero-fx/sun_maid_walk.png', { frameWidth: 96, frameHeight: 96 });
     this.load.spritesheet('flame_burst', 'assets/flame-banner/flame_burst.png', { frameWidth: 256, frameHeight: 256 });
     this.load.image('portrait_zhuge', 'assets/processed/portrait_zhuge.png');
     this.load.image('spear_thrust', 'assets/processed/spear_thrust.png');
@@ -160,7 +163,7 @@ export class BootScene extends Phaser.Scene {
     this.load.image('ui_panel', 'assets/processed/ui_panel.png');
     this.load.image('ui_button', 'assets/processed/ui_button.png');
     // 本命武器 / 通用被动 / 稀有：新厚涂图标（程序化 icon_* 在已存在时不会再生成）
-    for(const [key,id] of [['icon_1','weapon_spear'],['icon_2','weapon_crossbow'],['icon_3','weapon_flame'],['icon_guandao','weapon_guandao'],['icon_zhenbei','weapon_zhenbei'],['icon_lianhuan','weapon_lianhuan'],['icon_passive','passive'],['icon_rare','rare']] as const)this.load.image(key,'assets/upgrade-icons/'+id+'.webp');
+    for(const [key,id] of [['icon_1','weapon_spear'],['icon_2','weapon_crossbow'],['icon_3','weapon_flame'],['icon_guandao','weapon_guandao'],['icon_zhenbei','weapon_zhenbei'],['icon_lianhuan','weapon_lianhuan'],['icon_sunknives','weapon_sunknives'],['icon_fans','weapon_fans'],['icon_baodiao','weapon_baodiao'],['icon_shemao','weapon_shemao'],['icon_zhanjin','weapon_zhanjin'],['icon_shuanggu','weapon_shuanggu'],['icon_passive','passive'],['icon_rare','rare']] as const)this.load.image(key,'assets/upgrade-icons/'+id+'.webp');
   }
 
   create(): void {

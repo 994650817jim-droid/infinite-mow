@@ -66,9 +66,10 @@ import { WEAPON_BEHAVIORS, WEAPON_DEFS, type WeaponHost, type WeaponBolt as Bolt
 import type { RunEndReason, RunStats, UpgradeOption, WeaponState } from '../types';
 import {ItemDrops} from '../systems/ItemDrops';
 import {gearFor} from '../systems/ItemEffects';
-import {depositRunLoot,loadout} from '../systems/ItemStore';
+import {claimRunLoot,depositRunLoot,grantHorse,heroHorse} from '../systems/ItemStore';
+import {horseForReward} from '../data/mounts';
 import {HeroMount} from '../systems/HeroMount';
-import {itemName} from '../data/items';
+import type {ItemInstance} from '../data/items';
 import {ItemBagUI} from '../ui/ItemBagUI';
 
 interface Gem {
@@ -172,7 +173,7 @@ export class GameScene extends Phaser.Scene {
   protected ground!: Phaser.GameObjects.TileSprite;
   protected hudGfx!: Phaser.GameObjects.Graphics;
   /** 右上角暂停 / 音效 / 音乐的漆金底板状态（悬停 / 按下），随 HUD 每帧重绘。 */
-  private hudChipState: Record<'pause' | 'mute' | 'music', LqState> = { pause: 'idle', mute: 'idle', music: 'idle' };
+  private hudChipState: Record<'pause' | 'mute' | 'music' | 'bag', LqState> = { pause: 'idle', mute: 'idle', music: 'idle', bag: 'idle' };
   private readonly hudChipRect = new Phaser.Geom.Rectangle();
   protected hudTexts!: Record<string, Phaser.GameObjects.Text>;
   protected passiveHud!: PassiveHud;
@@ -379,7 +380,8 @@ export class GameScene extends Phaser.Scene {
     this.supplies=new BattlefieldSupplies(this,this.player,this.enemies,()=>this.combatNow,()=>{this.sfx.play('pickup');this.artEffects.show(5,this.player.x,this.player.y-12,35,this.combatNow,280);});
     // 兵装：开局读入该武将穿戴的道具加成（生命上限增加的部分补满）
     {const oldMax=this.player.maxHp;this.player.growth.gear=gearFor(this.runConfig.character);this.player.heal(this.player.maxHp-oldMax);}
-    {const horse=loadout(this.runConfig.character).mount;this.mount=horse?new HeroMount({scene:this,player:this.player,enemies:this.enemies,hit:(e,d,now)=>this.hitEnemy(e,d,now,'melee',false,false),notice:t=>this.showGrowthNotice(t)},{base:horse.base,name:itemName(horse)},this.runConfig.character):null;this.player.mountGuard=this.mount?(n,now)=>this.mount?.guard(n,now)??n:undefined;this.events.once('shutdown',()=>{this.mount?.clear();this.mount=null;});}
+    // 坐骑：马厩里给该武将分配的马（第一章通关后马厩开放；换马只在休整时，下一关出征生效）
+    {const horse=heroHorse(this.runConfig.character);this.mount=horse?new HeroMount({scene:this,player:this.player,enemies:this.enemies,hit:(e,d,now)=>this.hitEnemy(e,d,now,'melee',false,false),notice:t=>this.showGrowthNotice(t)},{base:horse.id,name:horse.name},this.runConfig.character):null;this.player.mountGuard=this.mount?(n,now)=>this.mount?.guard(n,now)??n:undefined;this.events.once('shutdown',()=>{this.mount?.clear();this.mount=null;});}
     this.itemDrops=new ItemDrops(this,this.player,this.itemTier(),()=>this.elapsed,()=>this.isFinalBoss(),()=>this.sfx.play('pickup'));
     // 酒罐 / 药篓不生成在房屋、城墙等障碍里（第三/四章、攻城在 create 之后才设置障碍，故调用时读取）
     this.supplies.healBlocked=(x,y,r)=>!!this.sishuiObstacles?.footprints.some(b=>x>b.left-r&&x<b.right+r&&y>b.top-r&&y<b.bottom+r);
@@ -427,6 +429,7 @@ export class GameScene extends Phaser.Scene {
     });
     this.campUI=new CampRestUI(this,this.player,this.legion,()=>this.continueCampaign());
     this.campUI.onBuyItem=item=>this.itemDrops?.runLoot.push(item);
+    this.campUI.onOpenBag=()=>this.openBattleBag(true);
     this.reinforcements = new Reinforcements(this, this.runConfig.character, this.player, id => {
       if (this.mode !== 'aid' || !this.reinforcements.start(id, this.combatNow, this.enemies)) return;
       this.resumePendingChoices();
@@ -2055,10 +2058,11 @@ export class GameScene extends Phaser.Scene {
   // —— 手柄（STEAM_PLAN.md · S2；导航见 ui/PadNavigator.ts）——
   /** 战斗进行中：摇杆用于移动，不做界面导航。 */
   padCapture(): boolean { return this.mode === 'none' && !this.over; }
-  /** ☰ 暂停 / 继续，Ⓧ 用药，Ⓨ 护阵 / 出击；暂停中 Ⓑ 继续战斗。 */
+  /** ☰ 暂停 / 继续，⧉ 行囊，Ⓧ 用药，Ⓨ 护阵 / 出击；暂停中 Ⓑ 继续战斗。 */
   padButton(button: number): boolean {
     if (this.restIntroSkip && (button === PAD.A || button === PAD.B || button === PAD.START)) { this.restIntroSkip(); return true; }
     if (button === PAD.START && ((this.mode === 'none' && !this.over) || this.mode === 'pause')) { this.togglePause(); return true; }
+    if (button === PAD.BACK && this.mode === 'none' && !this.over) { this.openBattleBag(); return true; }
     if (this.mode === 'none' && !this.over) {
       if (button === PAD.X) { this.usePotion(); return true; }
       if (button === PAD.Y) { this.legion.cycleOrder(); return true; }
@@ -2154,6 +2158,8 @@ export class GameScene extends Phaser.Scene {
   }
 
   protected togglePause(): void {
+    // 行囊开着时 Esc / ☰ 先关行囊（关掉时会按需恢复战斗）
+    const bag = this.children.getByName('item-bag'); if (bag) { (bag.getData('ui') as { close?: () => void } | undefined)?.close?.(); return; }
     if (this.mode === 'none' && !this.over) {
       this.setMode('pause');
     } else if (this.mode === 'pause') {
@@ -2208,10 +2214,40 @@ export class GameScene extends Phaser.Scene {
     if (!this.bossSpawned && this.elapsed >= chapterBossTime(this.chapter) + 60) this.finish(false, 'timeout');
   }
 
-  /** 道具掉落的章节档：0 黄巾 / 1 讨董 / 2 群雄·攻守城 / 3 官渡·赤壁。 */
+  /** 道具掉落的章节档：0 黄巾 / 1 讨董 / 2 群雄·攻守城 / 3 官渡 / 4 赤壁。 */
   protected itemTier(): number {
     const key = this.scene.key, arc = (this.runConfig as { arc?: string }).arc;
-    return key === 'GuanduGameScene' || arc === 'chibi' ? 3 : key === 'ThirdGameScene' || key === 'SiegeGameScene' ? 2 : this.chapter.id === 'hulao' ? 1 : 0;
+    return key === 'ChibiGameScene' || arc === 'chibi' ? 4 : key === 'GuanduGameScene' ? 3 : key === 'ThirdGameScene' || key === 'SiegeGameScene' ? 2 : this.chapter.id === 'hulao' ? 1 : 0;
+  }
+  /** 马厩赠马用的关卡键（见 data/mounts.ts HORSES.reward）；章节场景覆盖，攻城 / 军情为空。 */
+  protected stableRewardKey(): string | null {
+    if (this.runConfig.encounter || this.customChapter()) return null;
+    return this.chapter.id === 'huangjin' ? 'huangjin-' + (this.chapter.stage ?? 3) : this.chapter.id === 'hulao' ? 'hulao-' + (this.chapter.westStage ?? 3) : null;
+  }
+  /** 本局宝物（升级 / 行营购得，最多 2 格），在行囊里显示。 */
+  protected treasureEntries(): { name: string; desc: string; icon: string }[] {
+    const trinkets: Record<string, { name: string; desc: string }> = { tiger_tally: { name: '虎符', desc: '友军伤害提高20%。' }, heart_mirror: { name: '护心镜', desc: '武将受到伤害减少15%。' }, wind_boots: { name: '疾风靴', desc: '移动速度提高10%。' } };
+    return [...this.player.growth.build.treasures.map(id => ({ name: TREASURES[id].name, desc: TREASURES[id].desc, icon: 'build_icon_' + id })),
+      ...this.player.growth.trinkets.map(id => ({ ...trinkets[id], icon: 'growth_icon_' + id }))];
+  }
+  /** 换装后重算兵装加成：生命按原比例换算，不因换装回满血。 */
+  protected refreshGear(): void {
+    const ratio = this.player.maxHp > 0 ? this.player.hp / this.player.maxHp : 1;
+    this.player.growth.gear = gearFor(this.runConfig.character);
+    this.player.hp = Math.max(1, Math.min(this.player.maxHp, Math.round(this.player.maxHp * ratio)));
+  }
+  /** 战斗中打开行囊：自动暂停，关掉后恢复（从暂停菜单进来则回到暂停菜单）。atRest = 行营休整中，可换马。 */
+  protected openBattleBag(atRest = false): void {
+    if (this.over || this.children.getByName('item-bag')) return;
+    const fromPlay = this.mode === 'none';
+    if (fromPlay) this.togglePause();
+    const debug = isChapterTestRun() || this.debugModified || this.debugJumped || !!this.player.damageImmune || !!this.runConfig.encounter;
+    new ItemBagUI(this, {
+      hero: this.runConfig.character, battle: true, atRest, runLoot: this.itemDrops?.runLoot ?? [], treasures: this.treasureEntries(),
+      claimLoot: debug ? undefined : (item: ItemInstance) => { if (!claimRunLoot(this.runConfig.character, item)) return false; this.itemDrops?.takeLoot(item.uid); return true; },
+      onGearChange: () => this.refreshGear(),
+      onClose: () => { if (fromPlay && this.mode === 'pause') this.togglePause(); },
+    });
   }
   /** 本关首领是否为章节最终首领（必掉 2 件）。 */
   protected isFinalBoss(): boolean { return this.chapter.stage === 3 || (this.chapter.id === 'hulao' && (this.chapter.westStage ?? 3) === 3); }
@@ -2266,7 +2302,7 @@ export class GameScene extends Phaser.Scene {
       ].join('\n'),
     );
     // 兵装缴获：胜利或坚持 60 秒带回全部，速败只带回一半；测试 / 调试战斗不入行囊
-    {const loot=this.itemDrops?.runLoot??[],debug=isChapterTestRun()||this.debugModified||this.debugJumped||!!this.player.damageImmune||!!this.runConfig.encounter,dep=depositRunLoot(loot,{victory,elapsed:this.elapsed,debug});
+    {const loot=this.itemDrops?.runLoot??[],debug=isChapterTestRun()||this.debugModified||this.debugJumped||!!this.player.damageImmune||!!this.runConfig.encounter,dep=depositRunLoot(loot,{victory,elapsed:this.elapsed,debug,pity:this.itemDrops?.pity});
      if(loot.length)this.resultTexts.body.setText(this.resultTexts.body.text+'\n缴获兵装  '+loot.length+' 件（'+this.itemDrops!.summary()+'）'+(debug?' · 测试战斗不入行囊':dep.lost?' · 败退遗失 '+dep.lost+' 件':' · 已收入行囊'));}
     if(this.worldCampaign){const reward=settleExpedition(this.expeditionId,{...stats,kills:Math.max(0,stats.kills-this.settledFrontlineKills),chapter:this.chapter.id,returned:this.allies.filter(a=>a.active&&a.reserveSoldier).map(a=>a.kind),debug:isChapterTestRun()||this.debugModified||this.debugJumped||this.player.damageImmune});
       this.resultTexts.body.setFontSize(IS_DESKTOP?14:16).setLineSpacing(IS_DESKTOP?5:8).setText(this.resultTexts.body.text+`\n永久奖励  军功 +${reward.merits} · 粮草 +${reward.provisions}`+cityIncomeLine(reward));
@@ -2276,6 +2312,9 @@ export class GameScene extends Phaser.Scene {
     if(victory&&!this.runConfig.encounter&&this.chapter.id==='hulao'&&this.chapter.westStage===3&&worldUnlocked())this.registry.set('mapFocusNode','qunxiong');
     if(!this.runConfig.encounter)recordChapterVictory({ stage:this.chapter.stage,chapter: this.chapter.id, victory, reason, bossKilled: this.bossKilled,
       debug: isChapterTestRun() || this.debugModified || this.debugJumped || this.player.damageImmune });
+    // 马厩：各章首领首次击杀赠马（第一章通关送驽马由 ItemStore 读档时补发）
+    {const key=victory&&this.bossKilled&&!(isChapterTestRun()||this.debugModified||this.debugJumped||this.player.damageImmune)?this.stableRewardKey():null,horse=key?horseForReward(key):undefined;
+     if(horse&&grantHorse(horse.id))this.resultTexts.body.setText(this.resultTexts.body.text+'\n获得坐骑  '+horse.name+' · 已入马厩（休整时可换马）');}
     const nextWest=victory&&this.worldCampaign&&!this.runConfig.encounter&&((this.chapter.id==='huangjin'&&this.chapter.stage===3)?1:(this.chapter.id==='hulao'&&(this.chapter.westStage??3)<3)?(this.chapter.westStage??1)+1:0);
     const canAdvance=!!nextWest&&dongzhuoStageUnlocked(nextWest);
     const openedMap=victory&&this.worldCampaign&&this.chapter.id==='hulao'&&(this.chapter.westStage??3)===3&&worldUnlocked();
@@ -2370,6 +2409,16 @@ export class GameScene extends Phaser.Scene {
           const muted = this.music.toggle();
           this.hudTexts.music.setText(muted ? '音乐:关' : '音乐:开');
         }),
+      bag: this.add
+        // 2026-11-16：行囊常驻右上（用户反馈「背包需要放出来」），点开即暂停，可换装
+        .text(GAME_WIDTH - 24, 166, '行囊', style(15, '#ffe9bd'))
+        .setOrigin(1, 0).setFixedSize(66, 30).setAlign('center')
+        .setScrollFactor(0)
+        .setDepth(DEPTH.hud + 1)
+        .setPadding(4, 5, 4, 3)
+        .setName('hud-bag')
+        .setInteractive({ useHandCursor: true })
+        .on('pointerdown', () => { if ((this.mode === 'none' && !this.over) || this.mode === 'pause') this.openBattleBag(); }),
       pause: this.add
         .text(GAME_WIDTH - 24, 20, '暂停', style(17, '#ead39b')).setFixedSize(76,62).setAlign('center').setStroke('#10180f',2)
         .setOrigin(1, 0)
@@ -2384,7 +2433,7 @@ export class GameScene extends Phaser.Scene {
       .setVisible(false); // 「战况」下拉已取消（用户反馈不需要）；音效 / 音乐开关改为常驻
     this.hudTexts.gear = this.add.text(32, 236, '', {...style(12,'#dfd5bc'),wordWrap:{width:GAME_WIDTH>600?370:GAME_WIDTH-72},lineSpacing:4})
       .setScrollFactor(0).setDepth(DEPTH.hud+1);
-    for (const k of ['pause', 'mute', 'music'] as const) this.hudTexts[k]
+    for (const k of ['pause', 'mute', 'music', 'bag'] as const) this.hudTexts[k]
       .on('pointerover', () => { this.hudChipState[k] = 'hover'; }).on('pointerout', () => { this.hudChipState[k] = 'idle'; })
       .on('pointerdown', () => { this.hudChipState[k] = 'down'; }).on('pointerup', () => { this.hudChipState[k] = 'hover'; });
     this.passiveHud = new PassiveHud(this);
@@ -2478,10 +2527,10 @@ export class GameScene extends Phaser.Scene {
     g.fillStyle(0x07120d,.9).fillRect(27,66,180,6);
     g.fillStyle(WAR.jade,.95).fillRect(28,67,Math.round(178*xpRatio),4);
     // 右上角按钮的漆金底板：暂停为金漆，音效 / 音乐为暗漆小牌（原先是无底纹的纯文字，手机上不像按钮）
-    if (this.hudTexts) for (const k of ['pause', 'mute', 'music'] as const) {
-      const t = this.hudTexts[k]; if (!t.visible) continue;
+    if (this.hudTexts) for (const k of ['pause', 'mute', 'music', 'bag'] as const) {
+      const t = this.hudTexts[k]; if (!t?.visible) continue;
       const b = t.getBounds(this.hudChipRect), pause = k === 'pause';
-      lqButton(g, b.centerX, pause ? b.y + 28 : b.centerY, pause ? Math.max(66, t.width - 6) : b.width, pause ? 36 : 24, this.hudChipState[k], pause ? 'gold' : 'quiet');
+      lqButton(g, b.centerX, pause ? b.y + 28 : b.centerY, pause ? Math.max(66, t.width - 6) : b.width, pause ? 36 : k === 'bag' ? 30 : 24, this.hudChipState[k], pause ? 'gold' : k === 'bag' ? 'cinnabar' : 'quiet');
     }
 
     if (!this.hudTexts) return;
@@ -2618,9 +2667,9 @@ export class GameScene extends Phaser.Scene {
     const sfxRow=this.createVolumeRow('战斗音效',top+277,this.sfx.getVolume(),v=>this.sfx.setVolume(v));
     const buildLink=this.add.text(cx,top+ph-112,'战法与宝物 · 查看构筑',warText(15,'#e6cc90')).setOrigin(.5).setPadding(14,6).setInteractive({useHandCursor:true}).setName('pause-build');
     buildLink.on('pointerdown',()=>this.openBuildPanel());this.pausePanel.add(buildLink);
-    // 行囊：查看本局缴获与当前武将兵装（战斗中只读，出征前在主页行囊穿戴）
-    const bagLink=this.add.text(cx,top+ph-154,'行囊 · 本局缴获',warText(15,'#e6cc90')).setOrigin(.5).setPadding(14,6).setInteractive({useHandCursor:true}).setName('pause-bag');
-    bagLink.on('pointerdown',()=>{if(this.mode!=='pause'||this.children.getByName('item-bag'))return;new ItemBagUI(this,{hero:this.runConfig.character,runLoot:this.itemDrops?.runLoot??[],readOnly:true});});this.pausePanel.add(bagLink);
+    // 行囊：战斗中也可换装（坐骑除外，休整时才能换马）
+    const bagLink=this.add.text(cx,top+ph-154,'行囊 · 换装',warText(15,'#e6cc90')).setOrigin(.5).setPadding(14,6).setInteractive({useHandCursor:true}).setName('pause-bag');
+    bagLink.on('pointerdown',()=>{if(this.mode==='pause')this.openBattleBag();});this.pausePanel.add(bagLink);
     const exit=this.add.text(cx,top+ph-66,'返回选将',warText(16,'#b5c4b2')).setOrigin(.5).setPadding(24,10).setInteractive({useHandCursor:true}).setName('pause-exit');
     exit.on('pointerdown',()=>{
       if(exit.getData('confirm')){this.abandonRun();this.registry.remove('campaignTransfer');this.scene.start(this.worldCampaign&&worldUnlocked()?'CityScene':'MenuScene');}

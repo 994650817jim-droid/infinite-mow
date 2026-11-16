@@ -33,6 +33,8 @@ export function guanduGameSceneClass(Base: typeof GameScene) {
     /** 焚粮目标（粮垛 / 辎重车）。 */
     private depots?: GrainDepots;
     private guanduStage: GuanduStage = 1; private controller?: GuanduBoss; private receipt = ''; private test = false;
+    /** 马厩赠马键（见 data/mounts.ts HORSES.reward）。 */
+    protected stableRewardKey(): string | null { return 'guandu-' + this.guanduStage; }
     constructor() { super('GuanduGameScene'); }
     preload() { for (const [key, url] of Object.entries(GUANDU_ATLAS_FILES)) if (!this.textures.exists(key)) this.load.spritesheet(key, url, {frameWidth: 128, frameHeight: 128}); }
     create() {

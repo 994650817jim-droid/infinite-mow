@@ -2,6 +2,7 @@ import type {Enemy} from '../entities/Enemy';
 import type {EnemyDef} from '../data/enemies';
 import {XiliangBattle, type Host} from './XiliangBattle';
 import {HUBAO, HUBAO_RAID} from '../data/hubao';
+import {ensureTroopArt, troopArtReady} from './TroopArt';
 
 interface HubaoHost extends Host {
   /** 敌兵寻路移动（GameScene.advanceEnemy）。 */
@@ -12,7 +13,7 @@ interface HubaoHost extends Host {
 /**
  * 第五章 · 虎豹骑（曹纯统领的曹军精骑）：复用第二章「铁骑突阵」，四骑一队、冲锋更重；
  * 5-1 长坂突围首领曹纯出场时虎豹骑护驾（守在首领身边，主将靠近才出击），护卫折损后号令补员。
- * 过渡造型：本关骑兵放大 1.08 倍、染铁青色（无独立美术，提示词见共享笔记）。
+ * 造型：ChatGPT 生成的虎豹骑奔跑图（public/assets/xiliang/hubao-walk.png，战斗开始时加载）；加载完成前为本关骑兵放大并染铁青色。
  */
 export class HubaoBattle extends XiliangBattle {
   private guards: Array<{e: Enemy; life: number; slot: number}> = []; private regroupAt = 0; private guarding = false;
@@ -21,6 +22,7 @@ export class HubaoBattle extends XiliangBattle {
       raid: HUBAO_RAID, first: HUBAO.first[hh.stage() - 1], interval: s => HUBAO.interval[s - 1],
       riderDef: () => hubaoDefFor(hh), banner: ['虎豹骑 · 突阵！', '曹军精骑四骑一队，看准冲锋道闪开'], feixiong: false, laneName: 'hubao-raid-lane',
     });
+    ensureTroopArt(hh.scene, ['hubao_walk']);
   }
   /** 虎豹骑定义（测试也用）：以本关骑兵为底。 */
   hubaoDef(): EnemyDef { return hubaoDefFor(this.hh); }
@@ -62,7 +64,10 @@ export class HubaoBattle extends XiliangBattle {
 }
 
 /** 虎豹骑定义：以本关骑兵为底，生命 ×1.4、接触伤害 +2、放大并染铁青色。 */
-export function hubaoDefFor(h: Pick<Host, 'def'>): EnemyDef {
+export function hubaoDefFor(h: Pick<Host, 'def' | 'scene'>): EnemyDef {
   const base = h.def('cavalry'), wv = base.walkVisual;
-  return {...base, variant: 'hubao', hp: Math.round(base.hp * HUBAO.hpMul), damage: base.damage + HUBAO.damageAdd, tint: HUBAO.tint, walkVisual: wv ? {...wv, scale: wv.scale * HUBAO.scale} : undefined};
+  const def: EnemyDef = {...base, variant: 'hubao', hp: Math.round(base.hp * HUBAO.hpMul), damage: base.damage + HUBAO.damageAdd, tint: HUBAO.tint, walkVisual: wv ? {...wv, scale: wv.scale * HUBAO.scale} : undefined};
+  // 正式美术（ChatGPT 奔跑图）就绪后不再染色；以西凉骑兵奔跑表的比例为基准
+  if (troopArtReady(h.scene, 'hubao_walk')) { def.tint = undefined; def.walkVisual = {texture: 'hubao_walk', scale: (wv?.scale ?? HUBAO.baseScale) * HUBAO.scale, groundY: wv?.groundY ?? .875}; }
+  return def;
 }

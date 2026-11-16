@@ -31,6 +31,8 @@ export interface TownState {
   report: SeasonReport | null;
   /** 讲武堂已研究的科技。 */
   tech: TechId[];
+  /** 军营「练兵」等级（0–12，永久）：全体部曲生命、伤害各 ×DRILL_STEP^等级。 */
+  drill: number;
   /** 粮仓「开仓募兵」上次使用的季（年-季），每季一次。 */
   levied?: string;
 }
@@ -57,6 +59,14 @@ export interface BuildingDef {
   upgrade?: [Cost, Cost];
 }
 /** 农田每场产粮；粮仓减口粮；马厩可养马数；开仓募兵人数。 */
+/**
+ * 军营「练兵」（部曲改版，用户 2026-11-16 在平衡会话批准，数值归平衡会话）：每级全体部曲生命、伤害各 +15%（乘法叠加）；
+ * 上限随已开放的章节数（1–5 章 → 2 / 4 / 7 / 10 / 12 级）；第 n 级价格 = 80 + 40n 军粮。老存档从 0 级开始。
+ */
+export const DRILL_STEP = 1.15, DRILL_CAP_BY_CHAPTERS = [0, 2, 4, 7, 10, 12], DRILL_MAX = 12;
+export const drillCost = (level: number): Cost => 80 + 40 * level;
+export const drillMultiplier = (level: number): number => Math.pow(DRILL_STEP, Math.max(0, Math.min(DRILL_MAX, level)));
+export const drillCap = (openChapters: number): number => DRILL_CAP_BY_CHAPTERS[Math.max(0, Math.min(DRILL_CAP_BY_CHAPTERS.length - 1, openChapters))];
 export const FARM_GRAIN = [0, 20, 45, 80], GRANARY_CUT = [0, .2, .35, .5], STABLE_HORSES = [0, 2, 4, 6], LEVY_SOLDIERS = [0, 2, 3, 4];
 export const LEVY_COST = { base: 100, perSoldier: 25 };
 export function levyCost(level: number): Cost { return LEVY_COST.base + LEVY_COST.perSoldier * LEVY_SOLDIERS[level]; }
@@ -114,7 +124,7 @@ export function emptyLevels(): Record<TownBuildingId, number> {
   return { hall: 1, barracks: 1, farm: 1, academy: 0, talent: 1, stable: 0, granary: 0, pavilion: 0 };
 }
 export function emptyTown(): TownState {
-  return { year: START_YEAR, season: 0, levels: emptyLevels(), focus: {}, report: null, tech: [] };
+  return { year: START_YEAR, season: 0, levels: emptyLevels(), focus: {}, report: null, tech: [], drill: 0 };
 }
 /** 很早的旧存档（只有军营 / 农田 / 医馆）：保留军营、农田等级，医馆 Lv2+ 换成科技「医术」。 */
 export function migrateTown(levels: { barracks: number; farm: number; clinic: number }): TownState {
@@ -168,6 +178,7 @@ export function parseTown(v: unknown, legacy: { barracks: number; farm: number; 
   t.report = r && typeof r === 'object' && typeof r.grain === 'number' && typeof r.cityGrain === 'number' ? r : null;
   t.levied = typeof o.levied === 'string' && o.levied.length <= 16 ? o.levied : undefined;
   let money = 0, refund = 0;
+  t.drill = int(o.drill, DRILL_MAX);
   if (Array.isArray(o.tech)) t.tech = [...new Set(o.tech.filter((x): x is TechId => TECH_IDS.includes(x as TechId)))];
   else {
     // v8 及更早：旧加成建筑 → 科技（免费点亮），删掉的建筑按等级退军粮，旧钱与在途商队折算。

@@ -96,6 +96,8 @@ export class Player {
   /** 行走帧整格的显示高度（逻辑像素）。v2 整格 88（原生 176，全屏 1080p 下像素 1:1），v1 为 66。 */
   private get targetHeight(): number { return isV2Texture(this.walkSheet) ? V2_WALK_DISPLAY : 66; }
   /** 行走帧纵向锚点：v1 居中；v2 让脚底仍落在中心下方 31 像素。 */
+  /** 停步帧：v2 行走图有 <方向>_stand（双脚并拢的站立帧，见 ArtStyle.rotateV2StandFrames），否则用 <方向>_0。 */
+  private standFrame(key: string, dir: string): string { const t = this.scene.textures.get(key); return t.has(`${dir}_stand`) ? `${dir}_stand` : `${dir}_0`; }
   private get walkOriginY(): number { return isV2Texture(this.walkSheet) ? V2_WALK_ORIGIN_Y : .5; }
   /** 「主将」标记离精灵中心的高度。 */
   private get markerLift(): number { return isV2Texture(this.walkSheet) ? V2_MARKER_LIFT : 38; }
@@ -222,7 +224,7 @@ export class Player {
     this.faceLeft = dir === 'left';
     if (this.playAction('attack', dir)) return;
     if (this.scene.textures.exists(this.walkSheet) && this.scene.textures.get(this.walkSheet).has(`${dir}_0`)) {
-      this.sprite.setTexture(visualTextureKey(this.scene,this.walkSheet), `${dir}_0`);
+      const key = visualTextureKey(this.scene,this.walkSheet); this.sprite.setTexture(key, this.standFrame(key, dir));
     }
   }
 
@@ -267,7 +269,7 @@ export class Player {
       if (a) {
         // 动作结束：站着不动时行走层不会换帧，须主动切回当前朝向的站立帧
         this.action = null;
-        if (this.scene.textures.exists(this.walkSheet)) { this.sprite.setTexture(visualTextureKey(this.scene, this.walkSheet), `${this.facing}_0`).setFlipX(false); this.applyTextureScale(moving); }
+        if (this.scene.textures.exists(this.walkSheet)) { const key = visualTextureKey(this.scene, this.walkSheet); this.sprite.setTexture(key, this.standFrame(key, this.facing)).setFlipX(false); this.applyTextureScale(moving); }
       }
       if (moving || !set.idle?.length || this.facing !== 'down') return false;
       frame = set.idle[Math.floor(now / IDLE_FRAME_MS) % set.idle.length];
@@ -314,7 +316,7 @@ export class Player {
     // 立刻切到该武将的待机帧，避免进战斗先闪一下赵云
     try {
       if (this.scene.textures.get(key).has('down_0')) {
-        this.sprite.setTexture(visualTextureKey(this.scene,key), 'down_0');
+        this.sprite.setTexture(visualTextureKey(this.scene,key), this.standFrame(visualTextureKey(this.scene,key), 'down'));
         this.applyTextureScale();
       }
     } catch {
@@ -339,7 +341,7 @@ export class Player {
       }
     } else if (sheet) {
       // 停下：四个方向都回到站立帧（以前左 / 右 / 上会停在跨步帧上）
-      const key = visualTextureKey(this.scene, this.walkSheet), name = `${this.facing}_0`;
+      const key = visualTextureKey(this.scene, this.walkSheet), name = this.standFrame(key, this.facing);
       if (this.sprite.texture.key !== key || this.sprite.frame.name !== name) this.sprite.setTexture(key, name);
     } else if (!hasFrames && this.sprite.texture.key !== this.charTexture) {
       this.sprite.setTexture(this.charTexture);

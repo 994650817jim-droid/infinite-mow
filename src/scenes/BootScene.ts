@@ -8,7 +8,7 @@ import { GAME_WIDTH } from '../config';
 import { createGameTextures, createWalkPlaceholders, registerWalkSheet } from '../systems/TextureFactory';
 import { HERO_ACTION_FILES } from '../data/heroActions';
 import { applyHdHeroSheets } from '../systems/HdHeroSheets';
-import { applyArtStyleUrls, applyV2TroopFrames, isV2Texture } from '../systems/ArtStyle';
+import { applyArtStyleUrls, applyV2TroopFrames, isV2Texture, rotateV2StandFrames } from '../systems/ArtStyle';
 
 export class BootScene extends Phaser.Scene {
   private shellOnly=false;
@@ -229,6 +229,8 @@ export class BootScene extends Phaser.Scene {
     for(const key of ['huaxiong_walk','huaxiong_attack']){if(!this.textures.exists(key))continue;const t=this.textures.get(key);['down','left','right','up'].forEach((dir,row)=>{for(let col=0;col<4;col++)if(!t.has(dir+'_'+col))t.add(dir+'_'+col,0,col*128,row*128,128,128);});}
     createReadableTextures(this);
     applyHdHeroSheets(this, ['hero_walk_sheet', ...Object.keys(HERO_ACTION_FILES).map(k => k.replace(/_actions$/, '_walk_sheet'))], Object.keys(HERO_ACTION_FILES));
+    // 人物画风 v2：武将行走图的停步帧换成双脚并拢的那一帧（见 rotateV2StandFrames）
+    for (const key of ['hero_walk_sheet', ...Object.keys(HERO_ACTION_FILES).map(k => k.replace(/_actions$/, '_walk_sheet'))]) rotateV2StandFrames(this, key);
     // 人物画风 v2：兵种图集按 v2 格子重切帧（旧的 96 / 128×112 切法会切错）
     applyV2TroopFrames(this);
     const hint = document.getElementById('boot-hint');

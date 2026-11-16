@@ -95,6 +95,7 @@ assets/raw/*
 !/tools/test-shield.mjs
 !/tools/test-objectives.mjs
 !/tools/test-recruit-potion.mjs
+!/tools/ui-round7-buff-progress.mjs
 !/tools/test-dongzhuo.mjs
 !/tools/test-siege-goals.mjs
 !/tools/test-city-simple.mjs

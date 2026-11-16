@@ -30,6 +30,8 @@ for (const layout of ['mobile', 'desktop']) {
   const info = await p.evaluate(G0 => { const s = eval(G0); return { name: s.chapter.name, cav: s.chapter.enemies.cavalry, x: !!s.xiliang }; }, G);
   ck(`[${layout}] 2-2 荥阳启用西凉战法；骑兵 生命 42 / 速度 92 / 伤害 9`, info.x && info.name.includes('荥阳') && info.cav.hp === 42 && info.cav.speed === 92 && info.cav.damage === 9, info);
   // 铁骑突阵：预警期间不动，之后沿道冲锋
+  // 先清场：小兵按章节成长后（stageTuning，2-2 生命 ×2.3）开局刷的兵不再秒死，会挤在冲锋道上干扰本项
+  await quiet(p);
   const r0 = await p.evaluate(G0 => { const s = eval(G0); s.player.invulnUntil = 0; const id = s.xiliang.startRaid(s.combatNow); const riders = s.enemies.filter(e => e.active && e.kind === 'cavalry'); return { id, n: riders.length, pos: riders.map(e => [Math.round(e.x), Math.round(e.y)]), lane: !!s.children.getByName('xiliang-raid-lane'), hp: s.player.hp }; }, G);
   ck(`[${layout}] 突阵：三骑并排就位并亮出冲锋道`, r0.id > 0 && r0.n >= 3 && r0.lane, r0);
   await p.waitForTimeout(500);

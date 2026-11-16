@@ -2,6 +2,7 @@ import {getSishuiEncounter} from './sishui';
 import type {ChapterDef} from './chapters';
 import type {EnemyDef} from './enemies';
 import {yuanKey} from '../systems/YuanPalette';
+import {tuneStage} from './stageTuning';
 
 /** 第四章 · 官渡之战（公元200年）。见 CHAPTER4_PLAN.md。 */
 export type GuanduStage = 1 | 2 | 3;
@@ -22,7 +23,9 @@ export const GUANDU_ATLAS_FILES: Record<string, string> = { guandu_yanliang: 'as
 /** 河北袁军：沿用西凉兵动作图，红色军服换成袁军土黄（YuanPalette 生成 yuan_* 贴图；动作与造型仍为复用，非独立原画）。 */
 export function guanduYuanSourceKeys(): string[] { return [...new Set(Object.values(getSishuiEncounter().enemies).map(d => d.walkVisual?.texture).filter((k): k is string => !!k))]; }
 
-export function guanduBattle(stage: GuanduStage): ChapterDef {
+/** 第四章关卡（已套用 stageTuning 的节奏与小怪成长）。 */
+export function guanduBattle(stage: GuanduStage): ChapterDef { return tuneStage(rawGuanduBattle(stage), 'guandu', stage); }
+function rawGuanduBattle(stage: GuanduStage): ChapterDef {
   const base = getSishuiEncounter(), d = GUANDU_STAGES[stage - 1];
   const tinted = Object.fromEntries(Object.entries(base.enemies).map(([k, def]) => [k, k === 'boss' || !def.walkVisual ? def : { ...def, walkVisual: { ...def.walkVisual, texture: yuanKey(def.walkVisual.texture) } }])) as Record<string, EnemyDef>;
   const last = stage >= GUANDU_PLAYABLE;

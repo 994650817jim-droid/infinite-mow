@@ -809,7 +809,12 @@ export class GameScene extends Phaser.Scene {
       this.enemies.push(enemy);
     }
     const base=override??this.chapter.enemies[kind];
-    const def=!override&&this.yellow&&kind!=='boss'?this.yellow.variant(base,this.elapsed):base;
+    const variant=!override&&this.yellow&&kind!=='boss'?this.yellow.variant(base,this.elapsed):base;
+    // 小怪按章节 / 关序成长（stageTuning.growth；首领不受影响）
+    const growth=kind!=='boss'?this.chapter.growth:undefined;
+    const def=growth?{...variant,damage:variant.damage*growth.damage}:variant;
+    if(growth)hpScale*=growth.hp;
+    else if(kind==='boss'&&this.chapter.growth?.bossHp)hpScale*=this.chapter.growth.bossHp;
     enemy.spawn(x,y,this.hardMode?{...def,damage:def.damage*HARD_MODE.damage}:def,this.hardMode?hpScale*(kind==='boss'?HARD_MODE.bossHp:HARD_MODE.enemyHp):hpScale,this.combatNow);armShield(enemy);
     return enemy;
   }
@@ -843,16 +848,19 @@ export class GameScene extends Phaser.Scene {
     this.spawnTimer -= dt;
     const cap = BALANCE.enemyCap;
     if (this.spawnTimer <= 0 && this.activeEnemyCount() < cap) {
-      this.spawnTimer = this.chapter.spawnInterval(this.elapsed);
-      const burst = this.chapter.spawnBurst(this.elapsed);
+      // 刷怪时间轴按关卡节奏加速（stageTuning.pace）：原来第 N 波的刷怪强度在新的第 N 波出现
+      const paced = this.elapsed * (this.chapter.pace ?? 1);
+      this.spawnTimer = this.chapter.spawnInterval(paced);
+      const burst = this.chapter.spawnBurst(paced);
       for (let i = 0; i < burst; i += 1) {
         if (this.activeEnemyCount() >= cap) break;
-        if (!this.spawnAroundPlayer(this.chapter.pickEnemy(this.elapsed))) break;
+        if (!this.spawnAroundPlayer(this.chapter.pickEnemy(paced))) break;
       }
     }
 
-    if ((!this.chapter.stage||this.chapter.stage===3) && this.elapsed >= BALANCE.eliteFirst) {
-      this.eliteTimer -= dt;
+    const pace = this.chapter.pace ?? 1;
+    if ((!this.chapter.stage||this.chapter.stage===3) && this.elapsed * pace >= BALANCE.eliteFirst) {
+      this.eliteTimer -= dt * pace;
       if (this.eliteTimer <= 0) {
         this.eliteTimer = BALANCE.eliteInterval;
         this.spawnAroundPlayer('elite', true);

@@ -84,7 +84,9 @@ for (const [layout, viewport] of Object.entries(LAYOUTS)) for (const [hero, h] o
     ck(`${tag}：火烧连环——6 枚环形火雷以锁链相连，2 秒内齐爆`, ring.seen && ring.ringMines === 6 && ring.gone && ring.triggers >= 1, ring);
     // 4) 落凤坡伏兵
     const fp = await p.evaluate(async G0 => {
-      const s = eval(G0), pl = s.player, n0 = s.children.list.filter(o => o.name === 'pangtong-mine' && o.active).length; pl.hp = Math.round(pl.maxHp * .2);
+      // 先清掉小兵：刷怪变密后（stageTuning），刚布下的雷可能被路过的小兵立刻踩掉，计数会少
+      const s = eval(G0), pl = s.player; for (const e of s.enemies) if (e.active && e.kind !== 'boss') e.deactivate();
+      const n0 = s.children.list.filter(o => o.name === 'pangtong-mine' && o.active).length; pl.hp = Math.round(pl.maxHp * .2);
       const t0 = performance.now(); let text = false; while (performance.now() - t0 < 2000) { await new Promise(r => setTimeout(r, 30)); if (s.children.getByName('pangtong-fengpo')) { text = true; break; } }
       return { text, added: s.children.list.filter(o => o.name === 'pangtong-mine' && o.active).length - n0 };
     }, G);

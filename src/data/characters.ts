@@ -98,12 +98,12 @@ export const CHARACTERS: CharacterDef[] = [
   {
     id: 'weiyan',
     name: '魏延',
-    desc: '悍将 · 生命高，血战越战越勇',
-    hpMul: 1.2,
+    desc: '悍将 · 劈地裂波，越挨打越勇',
+    hpMul: 1.15,
     speedMul: 0.97,
-    damageMul: 1.12,
+    damageMul: 1.05,
     portrait: 'weiyan_portrait',
-    startWeapon: 'guandao',
+    startWeapon: 'zhenbei_blade',
   },
   {
     id: 'liubei',
@@ -118,12 +118,12 @@ export const CHARACTERS: CharacterDef[] = [
   {
     id: 'pangtong',
     name: '庞统',
-    desc: '军师 · 火计连环，范围爆发',
-    hpMul: 0.9,
+    desc: '军师 · 布雷设伏，连环引爆',
+    hpMul: 0.95,
     speedMul: 1,
     damageMul: 1.05,
     portrait: 'pangtong_portrait',
-    startWeapon: 'flame_banner',
+    startWeapon: 'lianhuan_mines',
   },
   {
     id: 'huangyueying',

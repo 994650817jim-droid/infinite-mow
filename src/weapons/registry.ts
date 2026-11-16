@@ -6,6 +6,8 @@ import type { Sfx } from '../systems/Sfx';
 import type { PlayerStats, WeaponId, WeaponState } from '../types';
 import { PASSIVE_RULES } from '../data/passives';
 import { HERO_TINT } from '../data/characters';
+import { ZHENBEI_DEF, LIANHUAN_DEF, zhenbeiBehavior, lianhuanBehavior } from './heroWeapons';
+export { zhenbeiCracks, lianhuanMinesPerCast } from './heroWeapons';
 
 export interface WeaponBolt {
   img: Phaser.GameObjects.Image; vx: number; vy: number; life: number;
@@ -96,6 +98,8 @@ export const WEAPON_DEFS: Record<WeaponId, WeaponDef> = {
     cooldown: (level, stats) => (3.2 * stats.cooldownMul) / (1 + 0.05 * (level - 1)),
     desc: '挥旗后引爆火焰范围',
   },
+  zhenbei_blade: ZHENBEI_DEF,
+  lianhuan_mines: LIANHUAN_DEF,
 };
 
 export const WEAPON_ORDER: WeaponId[] = ['spear_orbit', 'crossbow', 'flame_banner', 'guandao'];
@@ -492,15 +496,10 @@ export const WEAPON_BEHAVIORS: Record<WeaponId, (host: WeaponHost, weapon: Weapo
         if (dist <= radius + enemy.radius && host.hitEnemy(enemy, damage, host.combatNow, 'fire')) host.player.passive.recordHit(passiveCast, enemy, host.combatNow, damage);
       }
       // 貂蝉满层：倾城——命中的敌人已在 recordHit 里挂上易伤与减速；表现在上面 petalBurst(strong) 里。
-      // 庞统满层：连环计——稍后在同一处再次引爆（范围更大、伤害 75%）
-      if (passiveCast.chain) host.time.delayedCall(PASSIVE_RULES.chainDelayMs, () => {
-        if (host.over) return;
-        const r2 = radius * PASSIVE_RULES.chainRadiusMul, d2 = damage * PASSIVE_RULES.chainDamageMul;
-        host.spawnFlameFx(cx, cy, r2); host.heroFx?.('phoenix', cx, cy - r2 * .3, r2 * 2.6); host.sfx.play('flameBoom');
-        for (const enemy of host.grid.query(cx, cy, r2 + 30)) if (enemy.active && Math.hypot(enemy.x - cx, enemy.y - cy) <= r2 + enemy.radius) host.hitEnemy(enemy, d2, host.combatNow, 'fire');
-      });
     });
     weapon.cooldownLeft = Math.max(.25, def.cooldown(level, host.player.stats) / host.player.growth.attackSpeedMultiplier(host.combatNow));
   },
+  zhenbei_blade: zhenbeiBehavior,
+  lianhuan_mines: lianhuanBehavior,
 };
 

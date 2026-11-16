@@ -18,6 +18,8 @@ export interface SeasonReport {
   cityMerits: number; cityProvisions: number; cityMoney: number;
   /** T3：商队带回的钱、被劫的商队数、本季抽到的事件 id。 */
   caravanMoney?: number; caravanLost?: number; event?: string | null;
+  /** 军情：本季流寇未平、产出减半的城池名。 */
+  raided?: string[];
 }
 export interface TownState {
   money: number; year: number; season: number; tax: TaxRate;
@@ -182,7 +184,7 @@ export function costText(c: Cost): string { return [c.merits ? `军功 ${c.merit
  * troops：后备兵总数（用于军粮开销）；cities：已占城池（档次与发展方向）；provisionsHave：开销前可用粮草。
  * 返回本季报告；调用方把 grain + cityProvisions − upkeep 计入粮草、cityMerits 计入军功、tax + cityMoney 计入钱。
  */
-export function settleSeason(t: TownState, input: { troops: number; cities: Array<{ tier: CityTier; focus: CityFocus }>; provisionsHave: number; provisionsMultiplier?: number; rng?: () => number }): SeasonReport {
+export function settleSeason(t: TownState, input: { troops: number; cities: Array<{ tier: CityTier; focus: CityFocus; mult?: number }>; provisionsHave: number; provisionsMultiplier?: number; rng?: () => number }): SeasonReport {
   const s = t.season, rng = input.rng ?? Math.random, mods = t.mods ?? noMods();
   const farm = levelOf(t, 'farm'), grain = Math.round((farm ? FARM_GRAIN[farm - 1] : 0) * SEASON_GRAIN[s] * mods.grainMul);
   const hh = households(t), market = levelOf(t, 'market');
@@ -196,7 +198,7 @@ export function settleSeason(t: TownState, input: { troops: number; cities: Arra
   if (event) t.pendingEvent = event.id;
   t.mods = noMods();
   let cityMerits = 0, cityProvisions = 0, cityMoney = 0;
-  for (const c of input.cities) { const inc = FOCUS_INCOME[c.tier][c.focus]; cityMerits += inc.merits; cityProvisions += inc.provisions; cityMoney += inc.money; }
+  for (const c of input.cities) { const inc = FOCUS_INCOME[c.tier][c.focus], m = c.mult ?? 1; cityMerits += Math.round(inc.merits * m); cityProvisions += Math.round(inc.provisions * m); cityMoney += Math.round(inc.money * m); }
   cityProvisions = Math.round(cityProvisions * (input.provisionsMultiplier ?? 1));
   const need = Math.round(Math.max(0, input.troops) * SEASON_UPKEEP[s] * (1 - (GRANARY_CUT[levelOf(t, 'granary') - 1] ?? 0)));
   const available = input.provisionsHave + grain + cityProvisions, upkeep = Math.min(need, available), shortage = need - upkeep;

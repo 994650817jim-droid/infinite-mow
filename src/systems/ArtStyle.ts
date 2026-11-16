@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { RENDER_SCALE } from '../config';
 
 /**
  * 人物画风开关（共享笔记 art-style-v2-spec.md）。
@@ -34,6 +35,21 @@ export const ART_V2_FILES: Readonly<Record<string, string>> = {
   huangyueying_actions: 'assets/hero-actions-v2/huangyueying.png',
   diaochan_walk_sheet: 'assets/processed-v2/diaochan_walk_sheet.png',
   diaochan_actions: 'assets/hero-actions-v2/diaochan.png',
+  // 第 2 批：我方兵种（4×4，见 V2_TROOP_KEYS / applyV2TroopFrames）
+  shu_swordsman_walk_sheet: 'assets/processed-v2/troops/swordsman_walk.png',
+  shu_swordsman_attack_sheet: 'assets/processed-v2/troops/swordsman_attack.png',
+  shu_spearman_walk_sheet: 'assets/processed-v2/troops/spearman_walk.png',
+  shu_spearman_attack_sheet: 'assets/processed-v2/troops/spearman_attack.png',
+  shu_archer_walk_sheet: 'assets/processed-v2/troops/archer_walk.png',
+  shu_archer_attack_sheet: 'assets/processed-v2/troops/archer_attack.png',
+  legion_crossbowman_walk: 'assets/processed-v2/troops/crossbowman_walk.png',
+  legion_crossbowman_action: 'assets/processed-v2/troops/crossbowman_attack.png',
+  legion_guardian_walk: 'assets/processed-v2/troops/guardian_walk.png',
+  legion_rider_walk: 'assets/processed-v2/troops/rider_walk.png',
+  legion_halberdier_walk: 'assets/processed-v2/troops/halberdier_walk.png',
+  legion_halberdier_action: 'assets/processed-v2/troops/halberdier_attack.png',
+  legion_medic_walk: 'assets/processed-v2/troops/medic_walk.png',
+  legion_medic_action: 'assets/processed-v2/troops/medic_attack.png',
 };
 /** v2 主将行走整格的显示高度（逻辑像素）：原生格 176 → 88，即 1080p 全屏（渲染 2 倍）下 1 美术像素 = 1 屏幕像素。
  * 人物约 76 逻辑像素高（用户要求比 v1 大一些）。 */
@@ -77,7 +93,45 @@ export function applyArtStyleUrls(load: Phaser.Loader.LoaderPlugin): string[] {
   const files = (load as unknown as { list: Phaser.Structs.Set<Phaser.Loader.File> }).list;
   for (const file of files.getArray()) {
     const url = ART_V2_FILES[file.key];
-    if (url && file.type === 'spritesheet') { file.url = url; swapped.push(file.key); }
+    if (url && (file.type === 'spritesheet' || file.type === 'image')) { file.url = url; swapped.push(file.key); }
   }
   return swapped;
+}
+
+/**
+ * v2 兵种图集（我方兵种 / 小兵）：统一 4×4，行 = 下 / 左 / 右 / 上；行走表列 = 步伐 0~3，攻击表列 = 蓄力 / 出手 / 最远 / 收回。
+ * 格边长 = 图宽 / 4，脚底在格底往上 8 像素（与 tools/prepare-artv2.mjs 的 FOOT = CELL-8 一致）。
+ */
+export const V2_TROOP_KEYS: readonly string[] = [
+  'shu_swordsman_walk_sheet', 'shu_swordsman_attack_sheet', 'shu_spearman_walk_sheet', 'shu_spearman_attack_sheet',
+  'shu_archer_walk_sheet', 'shu_archer_attack_sheet', 'legion_crossbowman_walk', 'legion_crossbowman_action',
+  'legion_guardian_walk', 'legion_rider_walk', 'legion_halberdier_walk', 'legion_halberdier_action',
+  'legion_medic_walk', 'legion_medic_action',
+];
+/** v2 兵种显示倍率：原生像素 → 逻辑像素 0.5，即 1080p 全屏（渲染 2 倍）下像素 1:1。 */
+export const V2_TROOP_SCALE = .5;
+/** v2 兵种帧的脚底位置（占帧高的比例），用作纵向锚点。 */
+export function v2TroopGround(frameHeight: number): number { return (frameHeight - 7) / frameHeight; }
+
+/**
+ * 按 v2 规格给兵种图集重切帧：down_0…up_3（行走 / 动作），并给旧攻击表的命名 atk_<方向>_0 / _1
+ * 指到第 2、3 列（出手、最远），旧代码按 atk_ 取帧时也能用 v2 四帧攻击表。须在 registerWalkSheet / 各处旧切帧之后调用。
+ */
+export function applyV2TroopFrames(scene: Phaser.Scene): string[] {
+  const done: string[] = [];
+  if (artStyle() !== 'v2') return done;
+  const dirs = ['down', 'left', 'right', 'up'];
+  for (const key of V2_TROOP_KEYS) {
+    if (!isV2Texture(key) || !scene.textures.exists(key)) continue;
+    const t = scene.textures.get(key), w = (t.getSourceImage() as { width?: number }).width ?? 0, cell = w / 4;
+    if (!cell) continue;
+    for (const name of t.getFrameNames()) t.remove(name);
+    dirs.forEach((dir, row) => {
+      for (let col = 0; col < 4; col++) t.add(`${dir}_${col}`, 0, col * cell, row * cell, cell, cell);
+      for (let i = 0; i < 2; i++) t.add(`atk_${dir}_${i}`, 0, (i + 1) * cell, row * cell, cell, cell);
+    });
+    t.setFilter(v2Filter(RENDER_SCALE));
+    done.push(key);
+  }
+  return done;
 }

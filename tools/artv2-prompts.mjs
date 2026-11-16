@@ -19,4 +19,21 @@ export const HEROES = {
 };
 export const walkPrompt = h => `【${h.name} · 新画风 · 行走图】这是一个三国题材割草游戏，要把人物换成新画风。请只生成 1 张图。${STYLE}人物身份参考第 3 张（${h.name}现在的 Q 版行走图）和第 4 张（现在的 Q 版动作图）：${h.desc}；保留这些配色、标志物和兵器，但比例改成写实英武的成年人。要求：行走动画精灵表。${WALKFMT}`;
 export const actPrompt = h => `很好。下一张：同一个${h.name}（和刚才行走图完全同一个人、同样的服装配色、同样大小比例和同样的像素画风），画「动作精灵表」，只生成 1 张图。${ACTFMT}各行内容：第 1 行 待机呼吸 4 帧（面向镜头站立，胸口和衣袍轻微起伏）；第 2 行 朝下（面向镜头）攻击 4 帧：${h.atk}；第 3 行 朝右攻击 4 帧：同样的攻击，侧身向右；第 4 行 朝上（背对镜头）攻击 4 帧：向画面上方出手；第 5 行 技能 4 帧：${h.skill}；第 6 行 前 2 帧受伤（被击后仰、单手护身），后 2 帧胜利（举起兵器、昂首）；第 7 行 倒地 4 帧：踉跄 → 单膝跪地 → 侧身倒下 → 平躺地上（兵器落在身旁）。`;
-if (process.argv[2]) { const h = HEROES[process.argv[2]]; console.log(process.argv[3] === 'act' ? actPrompt(h) : walkPrompt(h)); }
+if (process.argv[2] && HEROES[process.argv[2]]) { const h = HEROES[process.argv[2]]; console.log(process.argv[3] === 'act' ? actPrompt(h) : walkPrompt(h)); }
+
+// ── 第 2 批：我方兵种（蜀军；游戏里统一墨绿 + 银甲，旧图的红色会被代码染绿，新图直接画绿）。
+// 上传：style-reference-camp.png、赵云 v2 定稿行走原图、本兵种 v1 行走图（有攻击图也传）。行走 4×4；攻击 4×4（行 = 下 / 左 / 右 / 上，列 = 蓄力 → 出手 → 最远 → 收回）。
+const TROOP_COMMON = '蜀汉普通士兵（不是武将，装束比武将朴素、没有披风和华丽装饰），统一军服配色：墨绿色战袍和头巾 / 盔缨，银灰铁甲片，深褐皮带和靴子';
+export const TROOPS = {
+  swordsman: { name: '刀盾兵', desc: '手持环首刀和小圆盾的步兵', atk: '举刀蓄力 → 向前横砍 → 砍到最远 → 收刀护盾' },
+  spearman: { name: '长枪兵', desc: '双手持长枪的步兵，头扎墨绿头巾', atk: '后拉蓄力 → 向前突刺 → 刺到最远 → 收枪' },
+  archer: { name: '弓箭兵', desc: '持长弓、背箭壶的步兵', atk: '抽箭搭弦 → 拉成满弓 → 放箭 → 收弓' },
+  crossbowman: { name: '连弩兵', desc: '端着木制连弩、穿皮甲的步兵', atk: '端弩瞄准 → 扣机发射 → 后坐 → 收弩' },
+  guardian: { name: '重盾兵', desc: '身材厚实、穿重甲戴铁盔（绿盔缨），左手巨大方形绿漆铁盾（盾面有兽纹），右手短刀', atk: null },
+  rider: { name: '轻骑兵', desc: '骑棕色战马的轻装骑兵，手持长枪；人和马一起画，马头朝向行进方向', atk: null },
+  halberdier: { name: '精锐戟兵', desc: '精锐步兵，银甲配墨绿战袍、头盔插绿缨，双手持长戟（戟头有月牙刃）', atk: '举戟蓄力 → 横扫劈出 → 扫到最远 → 收戟' },
+  medic: { name: '军医', desc: '背药箱（药箱上有绿十字纹样）、手持药草杖的随军医者，穿轻便布衣', atk: '举起药草杖施治：抬杖 → 向前伸出 → 杖头指向队友 → 收回' },
+};
+export const troopWalkPrompt = t => `【蜀军${t.name} · 新画风 · 行走图】这是一个三国题材割草游戏，要把人物换成新画风。请只生成 1 张图。${STYLE}兵种身份参考第 3 张（${t.name}现在的 Q 版行走图）：${TROOP_COMMON}；${t.desc}。比例改成写实成年士兵。要求：行走动画精灵表。${WALKFMT}`;
+export const troopAtkPrompt = t => `很好。下一张：同一个蜀军${t.name}（和刚才行走图完全同一个人、同样的服装配色、同样大小比例和同样的像素画风），画「攻击动作精灵表」，只生成 1 张图。正方形画布 1024×1024，纯洋红 #FF00FF 平涂背景，无地面、无阴影、无文字、无网格线、不要画任何特效（箭矢、刀光、光效都不要）。4 行 × 4 列等分，每格一个完整人物，身高约占格高 75%，与行走图同样大小，脚底都在格子约 92% 高度的同一水平线上，人物居中，任何部分不越出自己的格子。第 1 行朝下（面向镜头）、第 2 行朝左、第 3 行朝右、第 4 行朝上（背对镜头）；每行 4 帧：${t.atk}。`;
+if (process.argv[2] && TROOPS[process.argv[2]]) { const t = TROOPS[process.argv[2]]; console.log(process.argv[3] === 'act' ? troopAtkPrompt(t) : troopWalkPrompt(t)); }

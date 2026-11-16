@@ -7,6 +7,7 @@
 //   SRC=public/assets/hero-actions-v2/originals/artv2_zhaoyun_walk.png OUT=public/assets/processed-v2/zhaoyun_walk_sheet.png ROWS=4 node tools/prepare-artv2.mjs
 //   SRC=... OUT=public/assets/hero-actions-v2/zhaoyun.png ROWS=7 CELL=232 FOOT=216 REF=0 node tools/prepare-artv2.mjs
 // 可选：COLS（默认 4）、CELL（原生格，默认 176）、FOOT（脚底行，默认 CELL-8）、FIG（人物身高，默认 152）、
+//      SCALE（直接指定缩放，不按身高推算；兵种攻击表用同一兵种行走表的缩放，保证两张一样大）、
 //      KEYHARD / KEYSOFT（洋红抠图阈值 min(R,B)-G，默认 110 / 40；人物本身有粉紫色时调高，如貂蝉 160 / 130）、
 //      DEMAGENTA（去洋红偏色强度，默认 .7）、GAMMA（中间调，默认 .85，<1 提亮）、SAT（饱和度，默认 1.12）、
 //      MINBLOB（小于此像素数的碎块丢弃，默认 40）、REF（参与定身高的行，逗号分隔，默认全部）、PAL（调色板色数，默认 160）、UP（放大倍数，默认 1）、
@@ -22,6 +23,7 @@ const SRC = env.SRC, OUT = env.OUT;
 if (!SRC || !OUT) { console.error('需要 SRC 和 OUT'); process.exit(2); }
 const COLS = +(env.COLS ?? 4), ROWS = +(env.ROWS ?? 4), CELL = +(env.CELL ?? 176), FOOT = +(env.FOOT ?? CELL - 8);
 const FIG = +(env.FIG ?? 152), PAL = +(env.PAL ?? 160), UP = +(env.UP ?? 1), MINBLOB = +(env.MINBLOB ?? 40);
+const SCALE = env.SCALE ? +env.SCALE : 0;
 const KEYHARD = +(env.KEYHARD ?? 110), KEYSOFT = +(env.KEYSOFT ?? 40);
 const DEMAGENTA = +(env.DEMAGENTA ?? .7), GAMMA = +(env.GAMMA ?? .85), SAT = +(env.SAT ?? 1.12);
 const SRC_ROWS = +(env.SRC_ROWS ?? ROWS);
@@ -34,7 +36,7 @@ const browser = await chromium.launch({ channel: 'chrome', headless: true });
 try {
   const page = await browser.newPage();
   const src = 'data:image/png;base64,' + readFileSync(SRC).toString('base64');
-  const res = await page.evaluate(async ({ src, COLS, ROWS, SRC_ROWS, CELL, FOOT, FIG, PAL, UP, ORDER, MIRROR, REF, OUTLINE, MINBLOB, DEMAGENTA, GAMMA, SAT, KEYHARD, KEYSOFT }) => {
+  const res = await page.evaluate(async ({ src, COLS, ROWS, SRC_ROWS, CELL, FOOT, FIG, PAL, UP, ORDER, MIRROR, REF, OUTLINE, MINBLOB, DEMAGENTA, GAMMA, SAT, KEYHARD, KEYSOFT, SCALE }) => {
     const im = new Image(); im.src = src; await im.decode();
     const W = im.width, H = im.height;
     const c = document.createElement('canvas'); c.width = W; c.height = H;
@@ -84,7 +86,7 @@ try {
     // 3) 全表统一缩放
     const refH = REF.flatMap(r => boxes.slice(r * COLS, r * COLS + COLS)).filter(Boolean).map(b => b.h).sort((a, b) => a - b);
     if (!refH.length) return { error: '参照行没有人物' };
-    const medH = refH[Math.floor(refH.length / 2)], s = FIG / medH;
+    const medH = refH[Math.floor(refH.length / 2)], s = SCALE || FIG / medH;
     // 4) 面积平均降采样（预乘 alpha），alpha ≥ .5 视为不透明
     const frames = boxes.map(b => {
       if (!b) return null;
@@ -152,7 +154,7 @@ try {
     const o4 = document.createElement('canvas'); o4.width = OW * UP; o4.height = OH * UP;
     const g4 = o4.getContext('2d'); g4.imageSmoothingEnabled = false; g4.drawImage(o1, 0, 0, OW * UP, OH * UP);
     return { scale: s, medH, palette: centers.length, stats, one: o1.toDataURL('image/png'), big: o4.toDataURL('image/png'), size: [OW * UP, OH * UP] };
-  }, { src, COLS, ROWS, SRC_ROWS, CELL, FOOT, FIG, PAL, UP, ORDER, MIRROR, REF, OUTLINE, MINBLOB, DEMAGENTA, GAMMA, SAT, KEYHARD, KEYSOFT });
+  }, { src, COLS, ROWS, SRC_ROWS, CELL, FOOT, FIG, PAL, UP, ORDER, MIRROR, REF, OUTLINE, MINBLOB, DEMAGENTA, GAMMA, SAT, KEYHARD, KEYSOFT, SCALE });
   if (res.error) { console.error(res.error); process.exit(1); }
   mkdirSync(dirname(OUT), { recursive: true });
   writeFileSync(OUT, Buffer.from(res.big.split(',')[1], 'base64'));

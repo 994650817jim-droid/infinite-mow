@@ -315,7 +315,7 @@ export class WorldMapScene extends Phaser.Scene {
  private challengeDetail(n:WorldNode,st:'home'|ChapterState){const locked=st==='locked',wins=lubuClears(),r=LUBU_CHALLENGE.reward,rr=LUBU_CHALLENGE.repeatReward;
   this.setDetail(`挑战 · ${n.region} · ${n.name}`,locked?0x4a4f46:0x8c2a2a,locked?'锁':'布',`${locked?'未解锁：讨伐董卓第二关「荥阳」告捷后开放':wins?`已胜 ${wins} 场 · 可反复挑战`:'可选挑战 · 不影响讨董进度'}
 吕布横扫与蓄力冲锋 · 三波后吕布出阵
-奖励：${wins?`军粮 +${rewardGrain(rr.merits,rr.provisions)}`:`首胜得名马「赤兔」（橙）· 军粮 +${rewardGrain(r.merits,r.provisions)}`}${this.lossWarning()?'\n'+this.lossWarning():''}`);
+奖励：${wins?`军粮 +${rewardGrain(rr.merits,rr.provisions)}`:`首胜得名马「赤兔」（入马厩）· 军粮 +${rewardGrain(r.merits,r.provisions)}`}${this.lossWarning()?'\n'+this.lossWarning():''}`);
   this.action.text.setText(locked?'尚未解锁':'挑战吕布');this.action.image.setAlpha(locked?.45:1);if(locked)this.action.image.disableInteractive();else this.action.image.setInteractive({useHandCursor:true});this.layoutActions(false);}
  private launchChallenge(){let hero:CharacterId='zhaoyun';try{const saved=localStorage.getItem('im_last_hero');if(CHARACTERS.some(c=>c.id===saved))hero=saved as CharacterId;}catch{/* storage unavailable */}
   this.registry.remove('campaignTransfer');this.registry.set('runConfig',{character:hero});

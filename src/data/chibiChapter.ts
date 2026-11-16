@@ -1,5 +1,6 @@
 import type {ChapterDef} from './chapters';
 import {thirdBattle,type ThirdStage} from './thirdChapter';
+import {stageTuning} from './stageTuning';
 
 /**
  * 第五章 · 赤壁之战（官渡之后，建安十三年）。三关沿用第三章的战场框架与首领招式框架：
@@ -28,6 +29,7 @@ export function chibiBattle(stage: ChibiStage): ChapterDef {
     waves: base.waves.map((w, i) => ({ ...w, name: WAVE_NAMES[stage - 1][i] ?? w.name })),
     name: `5-${stage} ${d.name}`, label: `第五章 · 赤壁之战 · ${d.name}`, description: d.story, bossName: d.boss, bossStyle: d.id,
     enemies: { ...base.enemies, boss: { ...base.enemies.boss, texture: 'chibi_' + d.id, hp: [2300, 2500, 2800][stage - 1], speed: [64, 40, 42][stage - 1], damage: [15, 14, 15][stage - 1] } },
+    growth: { hp: stageTuning('chibi', stage).hp, damage: stageTuning('chibi', stage).damage, bossHp: stageTuning('chibi', stage).bossHp }, // 第五章小怪成长（波次节奏沿用第三章底关）
     victoryTitle: d.boss + '败退', victoryText: stage === 3 ? '江陵易帜 · 赤壁之战告捷 · 三分天下之势已成' : d.name + '告捷 · 进入军营休整',
   };
 }

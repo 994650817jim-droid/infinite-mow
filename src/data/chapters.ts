@@ -6,6 +6,7 @@ import type {StageObjective} from './objectives';
 import { ENEMY_DEFS, enemyHpScale, pickEnemyKind, spawnBurst, spawnInterval, type EnemyDef } from './enemies';
 import { WAVES, type WaveDef } from './waves';
 import type { EnemyKind } from '../types';
+import { tuneStage } from './stageTuning';
 
 export type ChapterId = 'huangjin' | 'hulao';
 export interface ChapterDef {
@@ -25,6 +26,10 @@ export interface ChapterDef {
   spawnInterval(elapsed: number): number;
   spawnBurst(elapsed: number): number;
   pickEnemy(elapsed: number): EnemyKind;
+  /** 刷怪时间轴加速倍率（见 stageTuning.ts；不填 = 1）。 */
+  pace?: number;
+  /** 小怪（不含首领）生命 / 伤害倍率（见 stageTuning.ts；不填 = 1）。 */
+  growth?: { hp: number; damage: number; bossHp?: number };
   victoryTitle: string;
   victoryText: string;
   /** 关卡目标（data/objectives.ts）：完成后首领出阵；没有时按最后一波的时间出首领。 */
@@ -109,7 +114,12 @@ export const YELLOW_STAGES = [
 export const DONGZHUO_STAGES=[{stage:1 as const,name:'汜水关',boss:'华雄'},{stage:2 as const,name:'荥阳',boss:'徐荣'},{stage:3 as const,name:'洛阳',boss:'董卓'}];
 /** 第二章主线三关：西凉骑兵加强（XILIANG_CAVALRY）；攻守城沿用 getSishuiEncounter 原值。 */
 function xiliangCavalry(c:ChapterDef):ChapterDef{return {...c,enemies:{...c.enemies,cavalry:{...c.enemies.cavalry,...XILIANG_CAVALRY}}};}
+/** 主线第一、二章的关卡（已套用 stageTuning 的节奏与小怪成长）。 */
 export function getBattleChapter(id?:string, stage:YellowStage=1,westStage:YellowStage=3):ChapterDef {
+ const c=rawBattleChapter(id,stage,westStage);
+ return c.id==='hulao'?tuneStage(c,'hulao',c.westStage??3):tuneStage(c,'huangjin',c.stage??3);
+}
+function rawBattleChapter(id?:string, stage:YellowStage=1,westStage:YellowStage=3):ChapterDef {
  const base=getChapter(id);if(base.id==='hulao'){const n=DONGZHUO_STAGES.find(s=>s.stage===westStage)?.stage??3;return xiliangCavalry(n===1?{...getSishuiEncounter(),westStage:1,victoryText:'汜水关告捷 · 荥阳之战已解锁'}:n===2?{...getXingyangEncounter(),westStage:2,victoryText:'荥阳破围 · 虎牢关已解锁'}:{...getLuoyangChapter(),westStage:3});}
  const info=YELLOW_STAGES[stage-1]??YELLOW_STAGES[0];stage=info.stage;
  if(stage===3)return {...base,stage,name:'1-3 广宗决战',waves:['黄巾先锋','黄巾大军','张角决战'].map((name,i)=>({name,start:i*45})),recruitWaves:[1,2],ground:'yellow_ground_3',victoryTitle:'黄巾平定',victoryText:'雷云消散 · 讨伐董卓已解锁'};

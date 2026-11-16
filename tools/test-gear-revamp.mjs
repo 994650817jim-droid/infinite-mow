@@ -97,14 +97,14 @@ const stable = await p.evaluate(async () => {
   out.owned = st.loadItems().stable.owned; out.horse = st.heroHorse('guanyu')?.id; out.gear = fx.gearFor('guanyu'); out.badge = st.bagBadgeCount();
   out.announce = [st.takeStableAnnouncement(), st.takeStableAnnouncement()];
   st.rideHorse('zhaoyun', 'chitu'); out.moved = [st.heroHorse('zhaoyun')?.id, st.heroHorse('guanyu')?.id ?? null];
-  out.again = st.grantHorse('chitu'); out.reward = ['huangjin-3', 'hulao-1', 'hulao-3', 'third-3', 'guandu-3', 'chibi-3'].map(k => mo.horseForReward(k)?.id);
+  out.again = st.grantHorse('chitu'); out.reward = ['huangjin-3', 'hulao-1', 'lubu', 'third-3', 'guandu-3', 'chibi-3'].map(k => mo.horseForReward(k)?.id);
   out.all = new Set(mo.HORSES.map(h => h.reward)).size === mo.HORSES.length && mo.HORSES.length === 11;
   return out;
 });
 ck('马厩：第一章通关前不开放（有马也不骑），无公告', stable.lockedOwned === 0 && !stable.locked && !stable.lockedHorse && !stable.announceLocked, stable);
 ck('第一章通关：送驽马、马的固定加成计入兵装、角标提示一次', JSON.stringify(stable.owned) === '["nag","chitu"]' && stable.horse === 'chitu' && stable.gear.move > 0 && stable.gear.damage > 0 && stable.badge >= 1 && stable.announce[0] && !stable.announce[1], stable);
 ck('一匹马同时只归一名武将；已有的马不重复赠送', stable.moved[0] === 'chitu' && stable.moved[1] === null && stable.again === false, stable);
-ck('11 匹马各对应一个首领首次击杀（一章送驽马、虎牢吕布送赤兔……）', stable.all && JSON.stringify(stable.reward) === '["nag","grey_horse","chitu","white_horse","jueying","dilu"]', stable);
+ck('11 匹马各对应一个首领首次击杀（一章送驽马、挑战关三英战吕布送赤兔……）', stable.all && JSON.stringify(stable.reward) === '["nag","grey_horse","chitu","white_horse","jueying","dilu"]', stable);
 
 // 5) 战斗中：HUD 行囊、宝物栏、穿上缴获、换马限制
 const hud = await p.evaluate(async G0 => {

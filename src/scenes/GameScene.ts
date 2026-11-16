@@ -456,6 +456,8 @@ export class GameScene extends Phaser.Scene {
     this.campUI=new CampRestUI(this,this.player,this.legion,()=>this.continueCampaign());
     this.campUI.onBuyItem=item=>this.itemDrops?.runLoot.push(item);
     this.campUI.onOpenBag=()=>this.openBattleBag(true);
+    // 从营寨 / 天下地图出征的战役：关与关之间的休整可直接回营寨（本场奖励已在胜利时入库）
+    if(this.worldCampaign&&worldUnlocked())this.campUI.onReturnHome=()=>{this.resting=false;this.registry.remove('campaignTransfer');this.scene.start('CityScene');};
     this.reinforcements = new Reinforcements(this, this.runConfig.character, this.player, id => {
       if (this.mode !== 'aid' || !this.reinforcements.start(id, this.combatNow, this.enemies)) return;
       this.resumePendingChoices();

@@ -10,8 +10,8 @@ import type { CharacterPassives } from '../systems/CharacterPassives';
  */
 export interface PassiveFullShout { lines: readonly string[]; color: string; minGapMs: number; }
 export const PASSIVE_FULL_SHOUTS: Partial<Record<CharacterId, PassiveFullShout>> = {
-  // 2026-11-16 用户要求：马超「西凉铁骑」满 6 层、下一枪要冲锋时喊一句（轮流用）
-  machao: { lines: ['西凉铁骑，随我冲阵！', '锦马超在此！', '谁敢挡我铁骑！'], color: '#ffd77a', minGapMs: 15000 },
+  // 2026-11-16 用户选定台词：马超「西凉铁骑」满 6 层、下一枪要冲锋时喊一句，三句轮流
+  machao: { lines: ['吾乃西凉马孟起！', '铁骑踏阵，片甲不留！', '锦马超在此，谁敢一战！'], color: '#ffd77a', minGapMs: 15000 },
 };
 
 export class PassiveShout {

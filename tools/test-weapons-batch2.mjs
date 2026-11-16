@@ -83,7 +83,7 @@ for (const [layout, viewport] of Object.entries(LAYOUTS)) for (const [hero, h] o
       return { charge, moved: Math.round(moved), triggers: pl.passive.snapshot(s.combatNow).triggers, shouts, shoutText, shoutsAfterRefill: s.passiveShout.count - shout0 };
     }, [G, mk]);
     ck(`${tag}：铁骑满层，下一枪化为锦马冲锋（向前突进 ≥120 像素）`, c.charge && c.moved >= 120 && c.triggers >= 1, c);
-    ck(`${tag}：铁骑攒满时头顶喊一句台词（只喊一次，15 秒内再满不重复）`, c.shouts === 1 && c.shoutText.length > 0 && c.shoutsAfterRefill === 1, c);
+    ck(`${tag}：铁骑攒满时头顶喊一句台词（只喊一次，15 秒内再满不重复）`, c.shouts === 1 && ['吾乃西凉马孟起！', '铁骑踏阵，片甲不留！', '锦马超在此，谁敢一战！'].includes(c.shoutText) && c.shoutsAfterRefill === 1, c);
   } else {
     const r = await p.evaluate(async ([G0, MK]) => {
       const s = eval(G0), pl = s.player; const mk = eval(MK);

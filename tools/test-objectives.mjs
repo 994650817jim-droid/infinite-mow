@@ -1,4 +1,4 @@
-// 关卡目标：每关 3 波；1-1 歼敌 → 张梁、1-2 焚毁祭坛 → 张宝、2-2 护送伤兵车 → 徐荣；超时判失败；HUD 目标行。需要开发服务器。
+// 关卡目标：每关 3 波；1-1 歼敌 → 张梁、1-2 普通推波 → 张宝、2-2 护送伤兵车 → 徐荣；超时判失败；HUD 目标行。需要开发服务器。
 // 用法：BASE=http://127.0.0.1:5188/ node tools/test-objectives.mjs
 import { chromium } from 'playwright';
 import { mkdirSync } from 'node:fs';
@@ -32,16 +32,15 @@ const info = p => p.evaluate(G0 => { const s = eval(G0); return { name: s.chapte
   ck('1-1：目标未完成时首领不按时间出场；歼敌满 80 后张梁出阵', !b1.early && b1.done && b1.boss && /目标达成/.test(b1.text), b1);
   await p.close();
 }
-// 1-2 焚毁祭坛 3 座 → 张宝
-for (const layout of ['mobile', 'desktop']) {
-  const p = await open(layout, { chapter: 'huangjin', stage: 2 });
+// 1-2 下曲阳：用户反馈「1-2 就正常推波数进，不需要黄巾祭坛」→ 普通推波，打完 3 波张宝登场（只在电脑布局验收）
+{
+  const p = await open('desktop', { chapter: 'huangjin', stage: 2 });
   const a = await info(p);
-  const alt = await p.evaluate(G0 => { const s = eval(G0); return s.objective.targets.length; }, G);
-  ck(`[${layout}] 1-2：3 波、目标焚毁黄巾祭坛 3 座（场上 3 座）`, a.waves === 3 && a.obj === 'destroy' && alt === 3 && /黄巾祭坛 0\/3/.test(a.text), { a, alt });
-  await p.evaluate(G0 => { const s = eval(G0), t = s.objective.targets[0].e; s.player.sprite.setPosition(t.x, t.y + 160); }, G); await p.waitForTimeout(600);
-  await p.screenshot({ path: `${out}/${layout}-objective-altar.png` });
-  const d = await p.evaluate(async G0 => { const s = eval(G0); for (const t of [...s.objective.targets]) s.hitEnemy(t.e, 99999, s.combatNow, 'melee', false, false); await new Promise(r => setTimeout(r, 600)); return { st: s.objective.state, boss: !!s.boss, name: s.chapter.bossName }; }, G);
-  ck(`[${layout}] 1-2：三座祭坛被毁 → 目标达成、张宝出阵`, d.st.destroyed === 3 && d.st.done && d.boss && d.name === '张宝', d);
+  const props = await p.evaluate(G0 => { const s = eval(G0); return { altars: s.children.list.filter(o => o.type === 'Text' && /黄巾祭坛/.test(o.text)).length, textVisible: !!s.children.getByName('objective-text')?.visible }; }, G);
+  ck('[desktop] 1-2：3 波、无关卡目标、场上没有黄巾祭坛', a.waves === 3 && a.obj === null && props.altars === 0 && !props.textVisible, { a, props });
+  const r = await p.evaluate(async G0 => { const s = eval(G0); for (let i = 0; i <= s.chapter.waves.length; i++) s.recruitedWaves.add(i); s.pendingRecruit = false; const t = s.chapter.waves[s.chapter.waves.length - 1].start; s.elapsed = Math.max(0, t - 2); await new Promise(r => setTimeout(r, 300)); const early = !!s.boss; s.elapsed = t + .5; await new Promise(r => setTimeout(r, 700)); return { early, boss: !!s.boss, name: s.chapter.bossName, t }; }, G);
+  ck('[desktop] 1-2：打完波次（最后一波开始）张宝登场，之前不出', !r.early && r.boss && r.name === '张宝', r);
+  await p.screenshot({ path: `${out}/desktop-1-2-waves.png` });
   await p.close();
 }
 // 2-2 护送伤兵车 → 徐荣；车被毁 → 失败

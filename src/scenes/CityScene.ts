@@ -64,8 +64,9 @@ export class CityScene extends Phaser.Scene {
   head.lineStyle(2,0xb3935b,.85).strokeRect(this.vr.x,this.vr.y,this.vr.w,this.vr.h);
   worldShell(this,'义军主城');
   this.season=txt(this,D?190:24,D?28:58,'',D?16:14,'#e7c98a',HEADING_FONT).setOrigin(0,D?.5:0);
-  this.top=txt(this,D?W-200:W-24,D?28:30,'',D?14:13,'#cfdcc6').setOrigin(1,.5);
+  this.top=txt(this,D?W-292:W-24,D?28:30,'',D?14:13,'#cfdcc6').setOrigin(1,.5);
   const recruit=homeCommand(this,W-80,D?28:30,130,34,'招募后备',false,true,14);recruit.hit.setName('city-recruit').on('pointerdown',()=>this.scene.start('CityRecruitScene'));
+  const talent=homeCommand(this,D?W-218:W-218,D?28:30,130,34,'招贤馆',false,true,14);talent.hit.setName('city-talent').on('pointerdown',()=>this.scene.start('TalentHallScene'));
   if(!D)this.top.setPosition(24,90).setOrigin(0,.5);
   // 城池规模牌（全景左上角）
   this.sizeText=txt(this,this.vr.x+12,this.vr.y+10,'',D?15:14,'#f6e2ae',HEADING_FONT).setDepth(5).setShadow(0,1,'#000',4,true,true).setBackgroundColor('#1a120bcc').setPadding(8,4,8,4);

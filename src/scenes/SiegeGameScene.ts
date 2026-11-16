@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import {captureLine, factionGeneral, tryCapture} from '../systems/RosterStore';
 import {EnemyCamps} from '../systems/EnemyCamps';
 import {GameScene} from './GameScene';
 import {GuanduBoss} from '../systems/GuanduBoss';
@@ -117,15 +118,19 @@ export function siegeGameSceneClass(Base: typeof GameScene) {
       const reward = settleSiege(this.receipt, {victory, bossKilled: this.bossKilled, debug: this.test || this.debugModified || this.debugJumped || this.player.damageImmune, elapsed: this.elapsed, reward: T.reward, firstBonus: FIRST_CAPTURE_BONUS, returned: this.allies.filter(u => u.active && u.reserveSoldier).map(u => u.kind)});
       this.controller?.clear();
       this.resultTexts.subtitle.setText(victory ? `${this.city.name}归入义军版图${reward.first ? ' · 首次攻占' : ''}` : (reason === 'timeout' && this.gateAlive ? '城门未破 · 攻城失利' : '攻城失利 · 整军再战'));
-      this.resultTexts.body.setText(this.resultTexts.body.text + '\n永久奖励 · 军功 +' + reward.merits + ' / 粮草 +' + reward.provisions + cityIncomeLine(reward) + (reward.alert ? `\n${FACTIONS[reward.alert.attacker].name}不甘失地，${this.city.name}告急！` : ''));
+      const caught = victory && this.bossKilled && !this.capturesBlocked() ? tryCapture('siege', factionGeneral(this.owner) ?? '', this.owner) : null;
+      this.resultTexts.body.setText(this.resultTexts.body.text + '\n永久奖励 · 军功 +' + reward.merits + ' / 粮草 +' + reward.provisions + cityIncomeLine(reward) + captureLine(caught) + (reward.alert ? `\n${FACTIONS[reward.alert.attacker].name}不甘失地，${this.city.name}告急！` : ''));
       this.mapButtons(victory);
     }
     private finishDefense(victory: boolean, base: {merits: number; provisions: number}) {
       const reward = settleDefense(this.receipt, {victory, bossKilled: this.bossKilled, debug: this.test || this.debugModified || this.debugJumped || this.player.damageImmune, elapsed: this.elapsed, reward: base, returned: this.allies.filter(u => u.active && u.reserveSoldier).map(u => u.kind)});
       this.controller?.clear();
       this.resultTexts.subtitle.setText(victory ? `${this.city.name}守住了 · 告急解除` : `守城失利 · ${this.city.name}仍在告急`);
-      this.resultTexts.body.setText(this.resultTexts.body.text + '\n永久奖励 · 军功 +' + reward.merits + ' / 粮草 +' + reward.provisions + cityIncomeLine(reward) + (victory ? '' : '\n城池尚在；若改去别处出征，此城将失守'));
+      this.resultTexts.body.setText(this.resultTexts.body.text + '\n永久奖励 · 军功 +' + reward.merits + ' / 粮草 +' + reward.provisions + cityIncomeLine(reward) + captureLine(victory && this.bossKilled && !this.capturesBlocked() ? tryCapture('defense', factionGeneral(this.owner) ?? '', this.owner) : null) + (victory ? '' : '\n城池尚在；若改去别处出征，此城将失守'));
       this.mapButtons(victory);
+    }
+    /** 测试 / 调试战斗不触发招降（?roster=1 时测试照常）。 */
+    private capturesBlocked() { return (this.test && new URLSearchParams(location.search).get('roster') !== '1') || this.debugModified || this.debugJumped || this.player.damageImmune;
     }
     private mapButtons(victory: boolean) {
       const home = this.resultPanel.getByName('result-home') as Phaser.GameObjects.Text;

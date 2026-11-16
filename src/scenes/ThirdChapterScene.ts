@@ -1,4 +1,5 @@
 import {playMenuMusic,menuMusic} from '../systems/Music';
+import {defaultHero,heroOwned,LOCKED_HINT} from '../systems/RosterStore';
 import Phaser from 'phaser';
 import {THIRD_STAGES,type ThirdStage} from '../data/thirdChapter';
 import {thirdChapterUnlocked,thirdStageUnlocked,loadWorld,alertLossWarning} from '../world/WorldStore';
@@ -12,11 +13,11 @@ export class ThirdChapterScene extends Phaser.Scene {
  constructor(){super('ThirdChapterScene');}
  preload(){for(const d of THIRD_STAGES)if(!this.textures.exists('third_'+d.id))this.load.spritesheet('third_'+d.id,'assets/phase23/'+d.id+'.png',{frameWidth:128,frameHeight:128});}
  private text(x:number,y:number,s:string,size=16,color='#ded2b9'){return worldText(this,x,y,s,size,color);}
- private action(x:number,y:number,w:number,h:number,label:string,fn:()=>void,primary=false){const bg=this.add.rectangle(x,y,w,h,primary?0x744530:0x241e1a,.96).setStrokeStyle(1,primary?0xc39b61:0x70604b).setInteractive({useHandCursor:true});const t=this.text(x,y,label,primary?22:17,primary?'#ffdf9d':'#d1c2a7').setOrigin(.5);bg.on('pointerover',()=>bg.setFillStyle(primary?0x8b5438:0x3a2c23)).on('pointerout',()=>bg.setFillStyle(primary?0x744530:0x241e1a)).on('pointerdown',()=>bg.setAlpha(.7)).on('pointerup',()=>{bg.setAlpha(1);fn();});return{bg,t};}
+ private action(x:number,y:number,w:number,h:number,label:string,fn:()=>void,primary=false){const bg=this.add.rectangle(x,y,w,h,primary?0x744530:0x241e1a,.96).setStrokeStyle(1,primary?0xc39b61:0x70604b).setInteractive({useHandCursor:true});const t=this.text(x,y,label,primary?22:17,primary?'#ffdf9d':'#d1c2a7').setOrigin(.5);bg.on('pointerover',()=>bg.setFillStyle(primary?0x8b5438:0x3a2c23)).on('pointerout',()=>bg.setFillStyle(primary?0x744530:0x241e1a)).on('pointerdown',()=>bg.setAlpha(bg.getData('locked')?.3:.7)).on('pointerup',()=>{bg.setAlpha(bg.getData('locked')?.35:1);fn();});return{bg,t};}
  create(){playMenuMusic(this);
   if(!this.registry.get('battleReady')){this.registry.set('pendingThird',true);this.registry.set('loadBattle',true);this.scene.start('BootScene');return;}
   this.cards=[];this.heroButtons=[];const desk=W>600,state=loadWorld(),test=isChapterTestRun();this.selected=Math.min(3,state.warlordStages+1)as ThirdStage;{const pick=Number(this.registry.get('worldStagePick'));this.registry.remove('worldStagePick');if([1,2,3].includes(pick)&&(thirdStageUnlocked(pick)||test))this.selected=pick as ThirdStage;}const params=new URLSearchParams(location.search);if(test&&['1','2','3'].includes(params.get('thirdStage')??''))this.selected=Number(params.get('thirdStage'))as ThirdStage;
-  try{const saved=localStorage.getItem('im_last_hero');if(CHARACTERS.some(c=>c.id===saved))this.hero=saved as CharacterId;}catch{}
+  try{this.hero=defaultHero(localStorage.getItem('im_last_hero'));}catch{this.hero=defaultHero(null);}
   this.cameras.main.setBackgroundColor('#191815');
   // Quiet campaign-map lines and mountain silhouettes, all behind interactive content.
   const g=this.add.graphics();g.fillStyle(0x29261f,.6);for(let i=0;i<8;i++)g.fillTriangle(i*W/6-140,H*.62,i*W/6+80,H*.2+(i%3)*44,i*W/6+290,H*.62);
@@ -42,7 +43,7 @@ export class ThirdChapterScene extends Phaser.Scene {
   });
   const hy=desk?431:787;
   this.text(30,desk?397:735,'出战武将',13,'#b6a07b');this.text(W-30,desk?397:735,'点击更换 · 不影响征程进度',11,'#8f8473').setOrigin(1,0);
-  CHARACTERS.forEach((c,i)=>{const w=(W-50-5*CHARACTERS.length)/CHARACTERS.length,x=28+i*(w+5),a=this.action(x+w/2,hy,w,desk?42:55,c.name,()=>{this.hero=c.id;this.refresh();});a.bg.setName('third-hero-'+c.id);this.heroButtons.push(a.bg);});
+  CHARACTERS.forEach((c,i)=>{const w=(W-50-5*CHARACTERS.length)/CHARACTERS.length,x=28+i*(w+5),a=this.action(x+w/2,hy,w,desk?42:55,c.name,()=>{if(!heroOwned(c.id))return;this.hero=c.id;this.refresh();});a.bg.setName('third-hero-'+c.id);if(!heroOwned(c.id)){a.bg.setAlpha(.35).setData('locked',LOCKED_HINT);a.t.setAlpha(.35);}this.heroButtons.push(a.bg);});
   g.lineStyle(1,0x8b704a,.45).lineBetween(28,desk?466:838,W-28,desk?466:838);
   const a=this.action(desk?W-178:W/2,desk?503:885,desk?300:W-56,desk?50:62,'',()=>this.depart(),true);this.deployBg=a.bg.setName('third-deploy');this.deployText=a.t;
   {const warn=isChapterTestRun()?'':alertLossWarning();if(warn)this.text(desk?W-178:W/2,desk?459:826,warn,desk?11:12,'#ff8a70').setOrigin(.5).setName('chapter-alert-warning');}
@@ -50,5 +51,5 @@ export class ThirdChapterScene extends Phaser.Scene {
   this.text(desk?30:W/2,desk?512:934,'关间可休整 · 成长与部队随军继承',11,'#8f8473').setOrigin(desk?0:.5,0);this.refresh();
  }
  private depart(){if(!thirdStageUnlocked(this.selected)&&!isChapterTestRun())return;if(!isChapterTestRun())try{localStorage.setItem('im_last_hero',this.hero);}catch{}this.registry.remove('campaignTransfer');this.registry.remove('thirdTransfer');this.registry.set('thirdStage',this.selected);this.registry.set('runConfig',{character:this.hero,thirdStage:this.selected});this.scene.start('ThirdGameScene');}
- private refresh(){const save=loadWorld(),test=isChapterTestRun();this.cards.forEach((c,i)=>{const open=thirdStageUnlocked(i+1)||test,chosen=this.selected===i+1;c.bg.setFillStyle(chosen?0x413020:0x29231d).setStrokeStyle(chosen?2:1,chosen?0xd7b778:0x65543f);c.strip.setVisible(chosen);c.status.setText(save.warlordStages>=i+1?'✓ 已告捷':!open?!thirdChapterUnlocked()?'锁定 · 通关虎牢关':'锁定 · 完成前关':chosen?'◆ 当前出征':'可出征').setColor(chosen?'#f0ce8f':'#a99c86');});this.heroButtons.forEach((h,i)=>h.setFillStyle(CHARACTERS[i].id===this.hero?0x51402b:0x241e1a).setStrokeStyle(1,CHARACTERS[i].id===this.hero?0xd7b778:0x70604b));this.deployText.setText('出征  ·  '+THIRD_STAGES[this.selected-1].name);}
+ private refresh(){const save=loadWorld(),test=isChapterTestRun();this.cards.forEach((c,i)=>{const open=thirdStageUnlocked(i+1)||test,chosen=this.selected===i+1;c.bg.setFillStyle(chosen?0x413020:0x29231d).setStrokeStyle(chosen?2:1,chosen?0xd7b778:0x65543f);c.strip.setVisible(chosen);c.status.setText(save.warlordStages>=i+1?'✓ 已告捷':!open?!thirdChapterUnlocked()?'锁定 · 通关虎牢关':'锁定 · 完成前关':chosen?'◆ 当前出征':'可出征').setColor(chosen?'#f0ce8f':'#a99c86');});this.heroButtons.forEach((h,i)=>h.setFillStyle(CHARACTERS[i].id===this.hero?0x51402b:0x241e1a).setStrokeStyle(1,CHARACTERS[i].id===this.hero?0xd7b778:0x70604b).setAlpha(h.getData('locked')?.35:1));this.deployText.setText('出征  ·  '+THIRD_STAGES[this.selected-1].name);}
 }

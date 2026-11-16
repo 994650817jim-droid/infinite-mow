@@ -1,4 +1,6 @@
 import { stopMenuMusic } from '../systems/Music';
+import {FollowerSquad} from '../systems/FollowerSquad';
+import {followersFor} from '../systems/RosterStore';
 import { warnCircle } from '../ui/Telegraph';
 import {applyCitySpecialties} from '../systems/CityBonuses';
 import {cityIncomeLine} from '../world/WorldStore';
@@ -128,6 +130,8 @@ export class GameScene extends Phaser.Scene {
   protected xiliang:XiliangBattle|null=null;
   /** 骑马（行囊坐骑槽有马时）。 */
   protected mount:HeroMount|null=null;
+  /** 随行武将（招贤馆，RECRUIT_PLAN.md §4）。 */
+  followers:FollowerSquad|null=null;
   protected supplies:BattlefieldSupplies|null=null;
   /** 道具掉落与本局缴获（局外兵装，结算带回行囊）。 */
   protected itemDrops:ItemDrops|null=null;
@@ -379,6 +383,7 @@ export class GameScene extends Phaser.Scene {
     this.supplies=new BattlefieldSupplies(this,this.player,this.enemies,()=>this.combatNow,()=>{this.sfx.play('pickup');this.artEffects.show(5,this.player.x,this.player.y-12,35,this.combatNow,280);});
     // 兵装：开局读入该武将穿戴的道具加成（生命上限增加的部分补满）
     {const oldMax=this.player.maxHp;this.player.growth.gear=gearFor(this.runConfig.character);this.player.heal(this.player.maxHp-oldMax);}
+    this.followers=null;{const allow=worldUnlocked()&&(!isChapterTestRun()||new URLSearchParams(location.search).get('followers')==='1');const list=allow?followersFor(this.runConfig.character):[];if(list.length)this.followers=new FollowerSquad(this,this.player,list,(x,y,r)=>this.grid.query(x,y,r),(e,d,fire)=>this.hitEnemy(e,d,this.combatNow,fire?'fire':'melee',true,false),()=>this.player.growth.damageMultiplier(this.combatNow));}
     {const horse=loadout(this.runConfig.character).mount;this.mount=horse?new HeroMount({scene:this,player:this.player,enemies:this.enemies,hit:(e,d,now)=>this.hitEnemy(e,d,now,'melee',false,false),notice:t=>this.showGrowthNotice(t)},{base:horse.base,name:itemName(horse)},this.runConfig.character):null;this.player.mountGuard=this.mount?(n,now)=>this.mount?.guard(n,now)??n:undefined;this.events.once('shutdown',()=>{this.mount?.clear();this.mount=null;});}
     this.itemDrops=new ItemDrops(this,this.player,this.itemTier(),()=>this.elapsed,()=>this.isFinalBoss(),()=>this.sfx.play('pickup'));
     // 酒罐 / 药篓不生成在房屋、城墙等障碍里（第三/四章、攻城在 create 之后才设置障碍，故调用时读取）
@@ -561,7 +566,7 @@ export class GameScene extends Phaser.Scene {
       this.music.dispose();
       this.sfx.dispose();
       this.disposeDevelopment();
-      this.legion.stop(); this.reinforcements.clear();this.yellow?.clear();this.xiliang?.clear();this.clearChasingBosses();this.supplies?.clear();this.itemDrops?.clear();
+      this.followers?.clear();this.followers=null;this.legion.stop(); this.reinforcements.clear();this.yellow?.clear();this.xiliang?.clear();this.clearChasingBosses();this.supplies?.clear();this.itemDrops?.clear();
     });
     this.input.on('pointermove', (pointer: Phaser.Input.Pointer) => this.joystick.handleMove(pointer));
     this.input.on('pointerup', (pointer: Phaser.Input.Pointer) => this.joystick.handleUp(pointer));
@@ -665,6 +670,7 @@ export class GameScene extends Phaser.Scene {
     this.rebuildGrid();
     if(time>=this.navigationAt){this.navigationAt=time+250;const boxes=[...(this.sishuiObstacles?.footprints??[])];this.supplies?.appendNavigationBoxes(boxes);this.legion.navigation.setBoxes(boxes);}
     this.legion.update(dt, time, this.enemies, this.grid, (enemy, amount) => this.hitEnemy(enemy, amount, this.combatNow, 'melee', true));
+    this.followers?.update(dt, this.combatNow);
     if (this.over) return;
     this.rebuildGrid();
     this.separateEnemies();

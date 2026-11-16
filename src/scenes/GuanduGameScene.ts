@@ -16,6 +16,7 @@ import {guanduYuanSourceKeys} from '../data/guanduChapter';
 import type {Enemy} from '../entities/Enemy';
 import type {RunEndReason} from '../types';
 import type {RunConfig} from '../data/characters';
+import { loadBossSheet } from '../systems/ArtStyle';
 
 /** 第四章已开放的最后一关（P1 为 4-1）；打完它即返回天下地图。 */
 const LAST_PLAYABLE = Math.min(3, GUANDU_PLAYABLE) as GuanduStage;
@@ -36,7 +37,7 @@ export function guanduGameSceneClass(Base: typeof GameScene) {
     /** 马厩赠马键（见 data/mounts.ts HORSES.reward）。 */
     protected stableRewardKey(): string | null { return 'guandu-' + this.guanduStage; }
     constructor() { super('GuanduGameScene'); }
-    preload() { for (const [key, url] of Object.entries(GUANDU_ATLAS_FILES)) if (!this.textures.exists(key)) this.load.spritesheet(key, url, {frameWidth: 128, frameHeight: 128}); }
+    preload() { for (const [key, url] of Object.entries(GUANDU_ATLAS_FILES)) if (!this.textures.exists(key)) loadBossSheet(this.load, key, url); }
     create() {
       this.guanduStage = (this.registry.get('guanduStage') ?? 1) as GuanduStage; this.test = isChapterTestRun();
       // 袁军配色贴图须在任何敌兵生成前就绪

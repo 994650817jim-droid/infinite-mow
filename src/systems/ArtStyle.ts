@@ -14,6 +14,14 @@ const STORE_KEY = 'im_art_style';
 export const ART_V2_FILES: Readonly<Record<string, string>> = {
   hero_walk_sheet: 'assets/processed-v2/zhaoyun_walk_sheet.png',
   zhaoyun_actions: 'assets/hero-actions-v2/zhaoyun.png',
+  guanyu_walk_sheet: 'assets/processed-v2/guanyu_walk_sheet.png',
+  guanyu_actions: 'assets/hero-actions-v2/guanyu.png',
+  zhangfei_walk_sheet: 'assets/processed-v2/zhangfei_walk_sheet.png',
+  zhangfei_actions: 'assets/hero-actions-v2/zhangfei.png',
+  machao_walk_sheet: 'assets/processed-v2/machao_walk_sheet.png',
+  machao_actions: 'assets/hero-actions-v2/machao.png',
+  huangzhong_walk_sheet: 'assets/processed-v2/huangzhong_walk_sheet.png',
+  huangzhong_actions: 'assets/hero-actions-v2/huangzhong.png',
 };
 /** v2 主将行走整格的显示高度（逻辑像素）：原生格 176 → 88，即 1080p 全屏（渲染 2 倍）下 1 美术像素 = 1 屏幕像素。
  * 人物约 76 逻辑像素高（用户要求比 v1 大一些）。 */

@@ -59,7 +59,7 @@ export class CityScene extends Phaser.Scene {
   const head=this.add.graphics().setDepth(-1);head.fillStyle(0x102019,1).fillRect(0,0,W,this.vr.y).fillRect(0,this.vr.y+this.vr.h,W,H-this.vr.y-this.vr.h);
   head.lineStyle(2,0xb3935b,.85).strokeRect(this.vr.x,this.vr.y,this.vr.w,this.vr.h);
   worldShell(this,'义军营寨');
-  this.top=txt(this,D?W-170:24,D?28:72,'',D?15:14,'#efe0b4',HEADING_FONT).setOrigin(D?1:0,.5).setName('city-grain');
+  this.top=txt(this,D?W-300:24,D?28:72,'',D?15:14,'#efe0b4',HEADING_FONT).setOrigin(D?1:0,.5).setName('city-grain');
   const recruit=homeCommand(this,W-80,D?28:30,130,34,'招募后备',false,true,14);recruit.hit.setName('city-recruit').on('pointerdown',()=>this.scene.start('CityRecruitScene'));
   // 规模牌（全景左上角）与下一步提示（全景底边）
   this.sizeText=txt(this,this.vr.x+12,this.vr.y+10,'',D?15:14,'#f6e2ae',HEADING_FONT).setDepth(5).setShadow(0,1,'#000',4,true,true).setBackgroundColor('#1a120bcc').setPadding(8,4,8,4);

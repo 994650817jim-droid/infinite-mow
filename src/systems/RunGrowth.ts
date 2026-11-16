@@ -24,12 +24,12 @@ export const MARTIALS = {
   baibi: {character:'sunshangxiang',name:'百婢',desc:'每级侍婢上限 +1、存在时间 +2 秒'},
   nichang: {character:'diaochan',name:'霓裳',desc:'每级飞扇距离 +15%；3 级时多掷 1 柄'},
   meirenji: {character:'diaochan',name:'美人计',desc:'每级倒戈时间 +0.5 秒；3 级时 2 层魅惑即可离间'},
-  chuanyang: {character:'huangzhong',name:'穿杨',desc:'每级重箭伤害 +12%；3 级时重箭再穿透 1 人'},
+  baibu: {character:'huangzhong',name:'百步',desc:'射得越远伤害越高：150 像素外每远 100 像素 +6%/9%/12%'},
   laoji: {character:'huangzhong',name:'老骥伏枥',desc:'生命低于一半时射速 +15%/25%/35%'},
   wanrendi: {character:'zhangfei',name:'万人敌',desc:'每级声浪推进距离 +12%'},
   dahe: {character:'zhangfei',name:'大喝',desc:'每级断桥区多 0.5 秒、震慑多 0.2 秒'},
-  jinma: {character:'machao',name:'锦马',desc:'每级骑枪长度 +15%；3 级时骑枪加宽 50%'},
-  tieqi: {character:'machao',name:'铁骑',desc:'每级多召 1 名西凉骑兵'},
+  jinma: {character:'machao',name:'锦马',desc:'每级落地范围 +15%；3 级时落地后再震一次'},
+  tieqi: {character:'machao',name:'铁骑',desc:'每级冲锋距离 +20%、伤害 +10%'},
   taoyuan: {character:'liubei',name:'桃园',desc:'每级交叉斩溅射范围 +10；3 级时三剑分击三人'},
   xiemin: {character:'liubei',name:'携民',desc:'每级仁德回复量 +25%'},
 } as const;
@@ -59,7 +59,7 @@ export class RunGrowth {
   revivalUsed=false;
   awakenRescueUsed=false;
   readonly attributes: Record<AttributeId, number> = { might: 0, quickness: 0, critical: 0, constitution: 0, agility: 0 };
-  readonly masteries: Record<MasteryId, number> = { dragon_gallop: 0, cloud_pierce: 0, dragon_charge:0, dragging_blade:0, steady_aim:0, pearl_volley:0, wildfire:0, eight_trigrams:0, kaishan:0, gujun:0, fulei:0, lianying:0, huishen:0, baibi:0, nichang:0, meirenji:0, chuanyang:0, laoji:0, wanrendi:0, dahe:0, jinma:0, tieqi:0, taoyuan:0, xiemin:0 };
+  readonly masteries: Record<MasteryId, number> = { dragon_gallop: 0, cloud_pierce: 0, dragon_charge:0, dragging_blade:0, steady_aim:0, pearl_volley:0, wildfire:0, eight_trigrams:0, kaishan:0, gujun:0, fulei:0, lianying:0, huishen:0, baibi:0, nichang:0, meirenji:0, baibu:0, laoji:0, wanrendi:0, dahe:0, jinma:0, tieqi:0, taoyuan:0, xiemin:0 };
   readonly trinkets: TrinketId[] = [];
   unallocated = 0;
   /** 兵装加成（局外道具，开局按武将读入，见 ItemEffects.gearFor）。 */

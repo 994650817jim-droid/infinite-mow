@@ -6,7 +6,7 @@ import type { Sfx } from '../systems/Sfx';
 import type { PlayerStats, WeaponId, WeaponState } from '../types';
 import { PASSIVE_RULES } from '../data/passives';
 import { HERO_TINT } from '../data/characters';
-import { BAODIAO_DEF, DANGYANG_DEF, ZHANJIN_DEF, SHUANGGU_DEF, baodiaoBehavior, dangyangBehavior, zhanjinBehavior, shuangguBehavior } from './heroWeapons2';
+import { BAODIAO_DEF, DANGYANG_DEF, ZHANJIN_DEF, SHUANGGU_DEF, baodiaoBehavior, dangyangBehavior, zhanjinBehavior, shuangguBehavior, smartTarget } from './heroWeapons2';
 import { ZHENBEI_DEF, LIANHUAN_DEF, SUN_KNIVES_DEF, DIAOCHAN_FANS_DEF, zhenbeiBehavior, lianhuanBehavior, sunKnivesBehavior, diaochanFansBehavior } from './heroWeapons';
 export { zhenbeiCracks, lianhuanMinesPerCast, sunOrbitKnives, diaochanFanCount } from './heroWeapons';
 
@@ -288,7 +288,7 @@ export const WEAPON_BEHAVIORS: Record<WeaponId, (host: WeaponHost, weapon: Weapo
   crossbow: (host, weapon, dt, time) => {
     weapon.cooldownLeft -= dt;
     if (weapon.cooldownLeft > 0) return;
-    const target = host.priorityTarget?.(500,false) ?? host.nearestEnemy(host.player.x, host.player.y, 500);
+    const target = smartTarget(host, 500); // 统一索敌：首领 > 精锐 > 群怪 > 最近
     if (!target) return;
     const level = weapon.level;
     const def = WEAPON_DEFS.crossbow;

@@ -16,7 +16,7 @@ export const CHARACTER_PASSIVES: Record<CharacterId, { name: string; maxStacks: 
 export const PASSIVE_RULES = {
   dragonIntervalMs: 150, spearLengthMul: 1.25,
   coneThreshold: 3, guandaoRangePerStack: .06, guandaoDamageMul: 1.25,
-  calmMs: 3000, critBonus: .10,
+  calmMs: 5000, critBonus: .10, // 2026-11-16 用户要求：黄忠神射蓄势 3 → 5 秒
   mechIntervalMs: 250, mechBolts: 6, mechDamageMul: .6,
   /** 魏延·镇北环首刀：直线裂波（长 / 总宽 / 贴身距离与加成）；镇守汉中：受击积拒敌（每 0.5 秒最多 1 层）；
    *  满层「谁敢杀我」：6 向裂波各 80%，并 3 秒受伤 -30%。 */
@@ -44,10 +44,9 @@ export const PASSIVE_RULES = {
   heavyArrowSpeed: 900, heavyArrowRange: 600, heavyArrowKnock: 40, heavyBurstRadius: 60, heavyBurstMul: .5,
   /** 张飞·当阳喝断：声浪推进速度 / 推后力度；据水断桥：断桥区半径与持续。震慑与 140% 伤害沿用 roarRadius / roarStunMs / roarDamageMul。 */
   roarWaveSpeed: 480, roarWavePush: 2.5, bridgeRadius: 150, bridgeMs: 3000,
-  /** 马超·湛金枪：骑枪（长 / 宽 / 同一敌人间隔 / 移动倍率 / 站定补刺倍率 / 参考速度）；西凉铁骑：移动每 0.4 秒积 1 层，满层召骑兵（数量 / 速度 / 冲锋距离 / 宽 / 伤害倍率）。 */
-  lanceLen: 90, lanceWidth: 30, lanceHitMs: 300, lanceMoveMul: 1.3, lanceStandMul: .4, lanceRefSpeed: 190,
-  cavalryMoveMs: 400, riderCount: 3, riderSpeed: 520, riderRun: 520, riderWidth: 50, riderDamageMul: 1.2,
+  /** 马超·枪挑破阵：挑飞（索敌距离 / 腾空时长 / 挑起伤害倍率）、落地范围半径；西凉铁骑满层冲锋（距离 / 宽 / 伤害倍率 / 突进时长）。命中积层间隔沿用 cavalryIntervalMs。 */
+  liftRange: 150, liftMs: 600, liftHitMul: .6, landRadius: 70, chargeLen: 180, chargeWidth: 56, chargeDamageMul: 1.6, chargeMs: 220,
   /** 刘备·双股剑：出手距离、「×」斩溅射半径与倍率；一剑砍两人积 1 层仁德。 */
-  swordsRange: 120, crossSplash: 30, crossSplashMul: .6,
+  swordsRange: 120, crossSplash: 30, crossSplashMul: .6, liubeiHaste: .3, liubeiHasteMs: 4000,
   fireRadiusMul: 1.25, burnMs: 2000, burnTickMs: 1000, burnDamageFraction: .10,
 } as const;

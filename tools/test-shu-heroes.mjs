@@ -31,7 +31,7 @@ for (const hero of list) {
     // 2026-11-15 重做：魏延靠受伤积拒敌、庞统靠火雷连锁积计策，这里直接给满层，只验证满层后的招牌技会触发；
     // 自然积层（受击 / 踩雷连锁）由 tools/test-weiyan-pangtong.mjs 覆盖。
     if (id === 'weiyan') pl.passive.stacks = 5;
-    // 2026-11-16 重做：马超靠移动积铁骑，原地测试直接给满层，验证西凉铁骑冲阵
+    // 2026-11-16 马超改为枪挑 + 铁骑满层冲锋：直接给满层，验证冲锋
     if (id === 'machao') pl.passive.stacks = 6;
     if (id === 'pangtong') { pl.hp = pl.maxHp; pl.passive.stacks = 3; }
     const fxSeen = new Set(); const fxWatch = setInterval(() => { for (const o of s.children.list) if (/^hero-fx-|^pangtong-ring$|^machao-rider$/.test(o.name)) fxSeen.add(o.name); }, 30);
@@ -41,7 +41,7 @@ for (const hero of list) {
     const fx = s.children.list.filter(o => /^hero-fx-/.test(o.name)).map(o => o.name); clearInterval(fxWatch);
     return { fx, fxSeen: [...fxSeen], triggered, moved: Math.round(moved), healed: Math.round(pl.hp - hp0), allyHealed: Math.round(s.allies.filter(u => u.active).reduce((n, u) => n + u.hp, 0) - ally0), allies: s.allies.filter(u => u.active).length };
   }, [G, hero]);
-  if (hero === 'machao') ck('马超：西凉铁骑满层，召骑兵冲阵', r.triggered >= 1 && r.fxSeen.includes('machao-rider'), r);
+  if (hero === 'machao') ck('马超：西凉铁骑满层，下一枪锦马冲锋', r.triggered >= 1 && r.fxSeen.includes('hero-fx-dash'), r);
   if (hero === 'weiyan') ck('魏延：拒敌满层后「谁敢杀我」（怒吼冲击波特效、3 秒减伤）', r.triggered >= 1 && r.fxSeen.includes('hero-fx-whoDares'), r);
   if (hero === 'pangtong') ck('庞统：计策满层后「火烧连环」（锁链火雷环、齐爆火凤）', r.triggered >= 1 && r.fxSeen.includes('pangtong-ring') && r.fxSeen.includes('hero-fx-phoenix'), r);
   if (hero === 'huangyueying') ck('黄月英：机括积满后扇形齐射（齿轮特效）', r.triggered >= 1, r);

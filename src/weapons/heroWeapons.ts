@@ -4,6 +4,7 @@ import type { Player } from '../entities/Player';
 import type { PlayerStats, WeaponState } from '../types';
 import { PASSIVE_RULES as R } from '../data/passives';
 import type { WeaponHost } from './registry';
+import { smartTarget } from './heroWeapons2';
 
 /**
  * 魏延「镇北环首刀」与庞统「凤雏连环令」两把专属本命武器（2026-11-15 重做，不再沿用关羽偃月刀 / 诸葛亮战旗）。
@@ -370,9 +371,8 @@ export function sunKnivesBehavior(host: WeaponHost, weapon: WeaponState, dt: num
   if (weapon.cooldownLeft > 0) return;
   // 掷刀优先打环绕刀够不着的敌人（环外最近者），环内的交给环绕刀；环外没有敌人时才打最近的
   const outer = R.knifeOrbitR + 30;
-  let farTarget: Enemy | null = null, fd: number = R.knifeRange;
-  for (const e of host.grid.query(pl.x, pl.y, R.knifeRange)) { if (!e.active || e.isSupplySlot) continue; const d = Math.hypot(e.x - pl.x, e.y - pl.y); if (d > outer && d < fd) { fd = d; farTarget = e; } }
-  const target = host.priorityTarget?.(R.knifeRange, false) ?? farTarget ?? host.nearestEnemy(pl.x, pl.y, R.knifeRange);
+  // 统一索敌：环外（首领 > 精锐 > 群怪 > 最近），环外没有敌人时才打环内
+  const target = smartTarget(host, R.knifeRange, outer) ?? smartTarget(host, R.knifeRange);
   if (!target) return;
   const knife = s.orbit.find(k => time >= k.readyAt);
   if (!knife) { weapon.cooldownLeft = .1; return; }
@@ -490,7 +490,7 @@ export function diaochanFansBehavior(host: WeaponHost, weapon: WeaponState, dt: 
   weapon.cooldownLeft -= dt;
   if (weapon.cooldownLeft > 0) return;
   const range = R.fanRange * (1 + .15 * growth.masteries.nichang);
-  const target = host.priorityTarget?.(range + 60, false) ?? host.nearestEnemy(pl.x, pl.y, range + 60);
+  const target = smartTarget(host, range + 60);
   if (!target) return;
   const cast = pl.passive.beginCast('diaochan_fans');
   pl.faceDirection(target.x < pl.x ? 'left' : 'right', 200);

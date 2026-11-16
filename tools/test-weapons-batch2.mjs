@@ -32,27 +32,30 @@ for (const [layout, viewport] of Object.entries(LAYOUTS)) for (const [hero, h] o
   const mk = "(x, y, stun = true) => { const e = s.spawnEnemy('infantry', x, y, 1); if (e) { e.hp = e.maxHp = 99999; if (stun) e.stunUntil = 1e12; } return e; }";
 
   if (hero === 'huangzhong') {
+    // 统一索敌：近处落单的敌人不打，先打远处的敌群（首领 > 精锐 > 群怪 > 最近）；重箭单体、击退；神射（5 秒不受伤）时命中处爆裂波及同群
     const r = await p.evaluate(async ([G0, MK]) => {
       const s = eval(G0), pl = s.player; const mk = eval(MK);
-      const near = mk(pl.x + 140, pl.y), far = mk(pl.x + 470, pl.y), side = mk(pl.x + 440, pl.y + 30);
-      const x0 = far.x, y0 = far.y; const t0 = performance.now(); let first = null, pin = 0;
-      while (performance.now() - t0 < 9000) {
+      const near = mk(pl.x + 140, pl.y), group = [mk(pl.x + 450, pl.y), mk(pl.x + 430, pl.y + 34), mk(pl.x + 430, pl.y - 34)];
+      const pos = group.map(e => [e.x, e.y]); const t0 = performance.now(); let first = null, pins = [];
+      while (performance.now() - t0 < 10000) {
         await new Promise(r => setTimeout(r, 30));
-        if (!first && (near.hp < near.maxHp || far.hp < far.maxHp)) { first = { near: near.maxHp - near.hp, far: far.maxHp - far.hp, pushed: Math.round(far.x - x0) }; pin = setInterval(() => { far.sprite.x = x0; far.sprite.y = y0; }, 10); } // 量完击退后把目标钉回原位，好验证神射爆裂
-        if (side.hp < side.maxHp) break;
+        const hit = group.findIndex(e => e.hp < e.maxHp);
+        if (!first && (hit >= 0 || near.hp < near.maxHp)) { const e = group[hit]; first = { near: near.maxHp - near.hp, group: hit >= 0 ? e.maxHp - e.hp : 0, pushed: hit >= 0 ? Math.round(Math.hypot(e.x - pos[hit][0], e.y - pos[hit][1])) : 0 };
+          pins = group.map((e, i) => setInterval(() => { e.sprite.x = pos[i][0]; e.sprite.y = pos[i][1]; }, 10)); } // 量完击退后钉回原位，验证神射爆裂
+        if (group.filter(e => e.hp < e.maxHp).length >= 2) break;
       }
-      clearInterval(pin);
-      return { first, sideHurt: side.maxHp - side.hp, sharp: pl.passive.isSharpshooter(s.combatNow) };
+      pins.forEach(clearInterval);
+      return { first, groupHurt: group.filter(e => e.hp < e.maxHp).length, sharp: pl.passive.isSharpshooter(s.combatNow) };
     }, [G, mk]);
-    ck(`${tag}：重箭先打最远的敌人（单体、击退），神射时命中处爆裂波及旁边`, r.first && r.first.far > 0 && r.first.near === 0 && r.first.pushed >= 20 && r.sideHurt > 0, r);
+    ck(`${tag}：重箭先打远处敌群而不是近处落单的（单体、击退），神射时爆裂波及同群`, r.first && r.first.near === 0 && r.first.group > 0 && r.first.pushed >= 20 && r.groupHurt >= 2, r);
   } else if (hero === 'zhangfei') {
     const r = await p.evaluate(async ([G0, MK]) => {
       const s = eval(G0), pl = s.player; const mk = eval(MK);
-      const a = mk(pl.x + 110, pl.y), d0 = Math.hypot(a.x - pl.x, a.y - pl.y); let wave = false; const t0 = performance.now();
-      while (performance.now() - t0 < 4000) { await new Promise(r => setTimeout(r, 30)); wave = wave || !!s.children.getByName('zhangfei-wave'); if (a.hp < a.maxHp) { await new Promise(r => setTimeout(r, 400)); break; } }
-      return { wave, hurt: a.maxHp - a.hp, pushed: Math.round(Math.hypot(a.x - pl.x, a.y - pl.y) - d0) };
+      const a = mk(pl.x + 110, pl.y), d0 = Math.hypot(a.x - pl.x, a.y - pl.y); let wave = false, spear = false; const t0 = performance.now();
+      while (performance.now() - t0 < 4000) { await new Promise(r => setTimeout(r, 30)); wave = wave || !!s.children.getByName('zhangfei-wave'); spear = spear || !!s.children.getByName('zhangfei-spear'); if (a.hp < a.maxHp) { await new Promise(r => setTimeout(r, 400)); break; } }
+      return { wave, spear, hurt: a.maxHp - a.hp, pushed: Math.round(Math.hypot(a.x - pl.x, a.y - pl.y) - d0) };
     }, [G, mk]);
-    ck(`${tag}：声浪向前推进，伤害并把敌人推后`, r.wave && r.hurt > 0 && r.pushed >= 15, r);
+    ck(`${tag}：挥蛇矛（矛影）打出声浪，向前推进、伤害并把敌人推后`, r.wave && r.spear && r.hurt > 0 && r.pushed >= 15, r);
     const br = await p.evaluate(async ([G0, MK]) => {
       const s = eval(G0), pl = s.player; const mk = eval(MK);
       const ins = mk(pl.x - 60, pl.y + 20, false), far = mk(pl.x + 130, pl.y); pl.passive.stacks = 5; let bridge = false; const t0 = performance.now();
@@ -61,16 +64,22 @@ for (const [layout, viewport] of Object.entries(LAYOUTS)) for (const [hero, h] o
     }, [G, mk]);
     ck(`${tag}：怒气满层「据水断桥」——震慑周围，断桥区把敌人挡在外面`, br.bridge && br.stunned && br.insideDist >= 140 && br.triggers >= 1, br);
   } else if (hero === 'machao') {
-    await p.evaluate(([G0, MK]) => { const s = eval(G0), pl = s.player; const mk = eval(MK); window.__line = []; for (let i = 0; i < 6; i++) window.__line.push(mk(pl.x + 90 + i * 70, pl.y)); }, [G, mk]);
-    await p.mouse.click(viewport.width / 2, 40).catch(() => {});
-    await p.keyboard.down('KeyD'); await sleep(2900);
-    const r = await p.evaluate(async G0 => { const s = eval(G0), pl = s.player; let riders = 0; const t0 = performance.now();
-      while (performance.now() - t0 < 1500) { await new Promise(r => setTimeout(r, 30)); riders = Math.max(riders, s.children.list.filter(o => o.name === 'machao-rider').length); if (riders >= 3) break; }
-      return { hurt: window.__line.filter(e => e.hp < e.maxHp).length, riders, gains: pl.passive.snapshot(s.combatNow).gains, triggers: pl.passive.snapshot(s.combatNow).triggers }; }, G);
-    await p.keyboard.up('KeyD');
-    ck(`${tag}：边跑边用骑枪刺中沿路敌人；移动积满铁骑，召 3 名西凉骑兵冲阵`, r.hurt >= 3 && r.riders >= 3 && r.triggers >= 1, r);
-    const stand = await p.evaluate(async ([G0, MK]) => { const s = eval(G0), pl = s.player; const mk = eval(MK); const e = mk(pl.x, pl.y + 70); const t0 = performance.now(); while (performance.now() - t0 < 3000 && e.hp === e.maxHp) await new Promise(r => setTimeout(r, 30)); return { hurt: e.maxHp - e.hp }; }, [G, mk]);
-    ck(`${tag}：站定时向身边的敌人补一记短刺`, stand.hurt > 0, stand);
+    // 枪挑：目标被挑飞（定身 + 上浮），落地砸出范围伤害波及旁边
+    const r = await p.evaluate(async ([G0, MK]) => {
+      const s = eval(G0), pl = s.player; const mk = eval(MK);
+      const t = mk(pl.x + 100, pl.y, false), side = mk(pl.x + 140, pl.y + 20); const y0 = t.sprite.y; let lifted = 0, land = false; const t0 = performance.now();
+      while (performance.now() - t0 < 4000) { await new Promise(r => setTimeout(r, 20)); lifted = Math.max(lifted, y0 - t.sprite.y); land = land || !!s.children.getByName('machao-land'); if (land && side.hp < side.maxHp) break; }
+      return { lifted: Math.round(lifted), land, targetHurt: t.maxHp - t.hp, sideHurt: side.maxHp - side.hp };
+    }, [G, mk]);
+    ck(`${tag}：一枪挑飞目标，落地砸出范围伤害`, r.lifted >= 20 && r.land && r.targetHurt > 0 && r.sideHurt > 0, r);
+    // 西凉铁骑满层：下一枪化为向前冲锋（主将突进）
+    const c = await p.evaluate(async ([G0, MK]) => {
+      const s = eval(G0), pl = s.player; const mk = eval(MK); for (const e of s.enemies) if (e.active && !e.isSupplySlot) e.hp = 0;
+      await new Promise(r => setTimeout(r, 1500)); mk(pl.x + 120, pl.y); const x0 = pl.x; pl.passive.stacks = 6; let charge = false, moved = 0; const t0 = performance.now();
+      while (performance.now() - t0 < 4000) { await new Promise(r => setTimeout(r, 20)); charge = charge || !!s.children.getByName('machao-charge'); moved = Math.max(moved, pl.x - x0); if (charge && moved >= 120) break; }
+      return { charge, moved: Math.round(moved), triggers: pl.passive.snapshot(s.combatNow).triggers };
+    }, [G, mk]);
+    ck(`${tag}：铁骑满层，下一枪化为锦马冲锋（向前突进 ≥120 像素）`, c.charge && c.moved >= 120 && c.triggers >= 1, c);
   } else {
     const r = await p.evaluate(async ([G0, MK]) => {
       const s = eval(G0), pl = s.player; const mk = eval(MK);
@@ -79,8 +88,8 @@ for (const [layout, viewport] of Object.entries(LAYOUTS)) for (const [hero, h] o
       return { left: l.maxHp - l.hp, right: rr.maxHp - rr.hp, cross, stacks: pl.passive.snapshot(s.combatNow).stacks };
     }, [G, mk]);
     ck(`${tag}：双剑同时斩中左右两名敌人（「×」交叉斩），积仁德`, r.left > 0 && r.right > 0 && r.cross && r.stacks >= 1, r);
-    const heal = await p.evaluate(async G0 => { const s = eval(G0), pl = s.player; pl.hp = Math.round(pl.maxHp * .5); const h0 = pl.hp; pl.passive.stacks = 4; const t0 = performance.now(); while (performance.now() - t0 < 3000 && pl.hp <= h0 + 1) await new Promise(r => setTimeout(r, 30)); return { healed: Math.round(pl.hp - h0), triggers: pl.passive.snapshot(s.combatNow).triggers }; }, G);
-    ck(`${tag}：仁德满层，出剑时回复自身生命`, heal.healed > 0 && heal.triggers >= 1, heal);
+    const heal = await p.evaluate(async G0 => { const s = eval(G0), pl = s.player; pl.hp = Math.round(pl.maxHp * .5); const h0 = pl.hp; pl.passive.stacks = 4; let haste = false; const t0 = performance.now(); while (performance.now() - t0 < 3000 && pl.hp <= h0 + 1) await new Promise(r => setTimeout(r, 20)); await new Promise(r => setTimeout(r, 30)); haste = !!s.children.getByName('liubei-haste'); const cd = pl.weapons[0].cooldownLeft; return { healed: Math.round(pl.hp - h0), triggers: pl.passive.snapshot(s.combatNow).triggers, haste, cd: +cd.toFixed(2) }; }, G);
+    ck(`${tag}：仁德满层，出剑时回复自身并攻速 +30%（间隔 ≤0.8 秒）`, heal.healed > 0 && heal.triggers >= 1 && heal.haste && heal.cd <= .8, heal);
   }
   await sleep(120);
   await p.screenshot({ path: `${out}/${hero}-battle-${layout}.png` });

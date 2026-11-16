@@ -1312,7 +1312,13 @@ export class GameScene extends Phaser.Scene {
   /** 暂停菜单主动离开：本场作废，仍存活的后备兵归还主城。 */
   protected abandonRun():void{if(this.worldCampaign&&!this.over)abandonExpedition(this.expeditionId,this.allies.filter(a=>a.active&&a.reserveSoldier).map(a=>a.kind));}
   protected handleBattlePointer(_pointer:Phaser.Input.Pointer):boolean{return false;}
-  protected priorityWeaponTarget(_range:number,_bodyRadius=true):Enemy|null{return null;}
+  /** 武器优先目标（统一索敌，2026-11-16）：射程内首领 > 精锐，各取最近；都没有时返回 null，由武器自己找群怪 / 最近。关卡场景可覆盖（先打敌营）。 */
+  protected priorityWeaponTarget(range:number,bodyRadius=true):Enemy|null{
+    const px=this.player.x,py=this.player.y;let boss:Enemy|null=null,elite:Enemy|null=null,bd=Infinity,ed=Infinity;
+    for(const e of this.grid.query(px,py,range+60)){if(!e.active||e.isSupplySlot)continue;const d=Math.hypot(e.x-px,e.y-py)-(bodyRadius?e.radius:0);if(d>range)continue;
+      if(e.kind==='boss'&&d<bd){bd=d;boss=e;}else if(e.kind==='elite'&&d<ed){ed=d;elite=e;}}
+    return boss??elite;
+  }
   protected createWeaponHost(): WeaponHost {
     const scene = this;
     return {

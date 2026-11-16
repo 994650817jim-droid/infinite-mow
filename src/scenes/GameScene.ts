@@ -2208,7 +2208,8 @@ export class GameScene extends Phaser.Scene {
       this.resultTexts.body.setFontSize(IS_DESKTOP?14:16).setLineSpacing(IS_DESKTOP?5:8).setText(this.resultTexts.body.text+`\n永久奖励  军功 +${reward.merits} · 粮草 +${reward.provisions}`+cityIncomeLine(reward));
       this.resultTexts.subtitle.setText(victory&&this.chapter.id==='huangjin'&&this.chapter.stage===3&&worldUnlocked()?'黄巾平定 · 三国天下开启':victory?this.chapter.victoryText:reward.message);
     }
-    if(victory&&!this.runConfig.encounter&&this.chapter.id==='hulao'&&this.chapter.westStage===3&&worldUnlocked())this.registry.set('worldReveal',true);
+    // 讨董告捷：回天下地图并聚焦新解锁的「群雄割据」（地图自第一章起已开放，不再重复「天下开启」揭幕）
+    if(victory&&!this.runConfig.encounter&&this.chapter.id==='hulao'&&this.chapter.westStage===3&&worldUnlocked())this.registry.set('mapFocusNode','qunxiong');
     if(!this.runConfig.encounter)recordChapterVictory({ stage:this.chapter.stage,chapter: this.chapter.id, victory, reason, bossKilled: this.bossKilled,
       debug: isChapterTestRun() || this.debugModified || this.debugJumped || this.player.damageImmune });
     const nextWest=victory&&this.worldCampaign&&!this.runConfig.encounter&&((this.chapter.id==='huangjin'&&this.chapter.stage===3)?1:(this.chapter.id==='hulao'&&(this.chapter.westStage??3)<3)?(this.chapter.westStage??1)+1:0);
@@ -2216,11 +2217,11 @@ export class GameScene extends Phaser.Scene {
     const openedMap=victory&&this.worldCampaign&&this.chapter.id==='hulao'&&(this.chapter.westStage??3)===3&&worldUnlocked();
     const homeLink=this.resultPanel.getByName('result-home') as Phaser.GameObjects.Text|null;
     this.resultPanel.getByName('result-restart')?.setActive(victory);(this.resultPanel.getByName('result-restart') as Phaser.GameObjects.Image)?.setVisible(victory);(this.resultPanel.getByName('result-restart-text') as Phaser.GameObjects.Text)?.setVisible(victory);
-    homeLink?.setText(!victory?'返回主菜单':canAdvance?`下一关 · ${nextWest===1?'汜水关':nextWest===2?'荥阳':'虎牢关'}`:openedMap?'三国天下开启':this.worldCampaign&&worldUnlocked()?'返回主城':'返回选关');
+    homeLink?.setText(!victory?'返回主菜单':canAdvance?`下一关 · ${nextWest===1?'汜水关':nextWest===2?'荥阳':'虎牢关'}`:openedMap?'天下地图 · 新篇解锁':this.worldCampaign&&worldUnlocked()?'返回主城':'返回选关');
     homeLink?.removeAllListeners('pointerdown').on('pointerdown',()=>{
       if(!victory){this.registry.remove('campaignTransfer');this.registry.remove('menuChapterPicker');this.scene.start('MenuScene');return;}
       if(canAdvance){this.registry.remove('campaignTransfer');const {encounter:_preview,...config}=this.runConfig;this.registry.set('runConfig',{...config,chapter:'hulao',stage:undefined,westStage:nextWest});this.scene.restart();return;}
-      if(this.worldCampaign&&worldUnlocked())this.scene.start(this.registry.get('worldReveal')?'WorldMapScene':'CityScene');
+      if(this.worldCampaign&&worldUnlocked())this.scene.start(openedMap||this.registry.get('worldReveal')?'WorldMapScene':'CityScene');
       else {this.registry.set('menuChapterPicker',true);this.scene.start('MenuScene');}
     });
     this.onRunFinished(stats);
@@ -2233,10 +2234,14 @@ export class GameScene extends Phaser.Scene {
       this.player.hp = this.player.maxHp; this.legion.recover(); this.renderRecruit(); this.legionUI.setCampDestination(this.chapter.id==='hulao'?((this.chapter.westStage??1)===1?'荥阳之战':'虎牢关决战'):this.chapter.stage===3?'第二章 · 汜水关':this.chapter.stage===1?'下曲阳破阵':'广宗决战',this.chapter.id==='hulao'?'讨董军营 · 战后休整':'黄巾败退 · 战后休整'); this.setMode('rest');
       if(this.chapter.stage===3){
         this.legionUI.panel.setVisible(false);
+        // 第一章通关即开启天下地图：告捷后进入地图，按史事时序选章出征（讨董起逐章解锁）。
+        // 未记入进度的调试 / 测试战斗（地图未开）仍走旧流程：进军营整顿后直赴汜水关。
+        const toMap=this.chapter.id==='huangjin'&&worldUnlocked();
         const notice:Phaser.GameObjects.Container=chapterVictoryNotice(this,GAME_WIDTH,GAME_HEIGHT,IS_DESKTOP,{name:'chapter1-volunteers',confirmName:'volunteers-confirm',
-          kicker:'第一章 · 黄巾之乱 告捷',title:'黄巾平定 · 义士来投',lines:['将军威名远扬，四方义士前来投靠。','且回军营整顿兵马，再赴讨董征途。'],
-          route:['整顿兵马','补充援兵','汜水讨董'],confirm:'确认 · 进入军营',background:'rest_camp',
-          onConfirm:()=>{notice.destroy();this.legionUI.panel.setVisible(true);}});
+          kicker:'第一章 · 黄巾之乱 告捷',title:toMap?'黄巾平定 · 天下地图开启':'黄巾平定 · 义士来投',
+          lines:toMap?['将军威名远扬，四方义士前来投靠。','天下大势初现：于地图上按史事逐章出征。']:['将军威名远扬，四方义士前来投靠。','且回军营整顿兵马，再赴讨董征途。'],
+          route:toMap?['黄巾告捷','天下地图','讨伐董卓']:['整顿兵马','补充援兵','汜水讨董'],confirm:toMap?'确认 · 展开天下地图':'确认 · 进入军营',background:'rest_camp',
+          onConfirm:()=>{notice.destroy();if(toMap){this.resting=false;this.registry.remove('campaignTransfer');this.registry.set('worldReveal',true);this.registry.set('mapFocusNode','hulao');this.scene.start('WorldMapScene');return;}this.legionUI.panel.setVisible(true);}});
       }
     }
   }

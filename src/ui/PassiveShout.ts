@@ -13,8 +13,7 @@ export interface PassiveFullShout { lines: readonly string[]; color: string; min
 export const PASSIVE_FULL_SHOUTS: Partial<Record<CharacterId, PassiveFullShout>> = {
   // 2026-11-16 用户选定台词：马超「西凉铁骑」满 6 层、下一枪要冲锋时喊一句，三句轮流
   machao: { lines: ['吾乃西凉马孟起！', '铁骑踏阵，片甲不留！', '锦马超在此，谁敢一战！'], color: '#ffd77a', minGapMs: 15000 },
-  // 2026-11-16 用户定稿台词：孙尚香「侍婢执刀」疾步满 6 层、下一次掷刀召侍婢时喊一句，三句轮流
-  sunshangxiang: { lines: ['侍婢何在，随我执刀！', '弓腰姬在此，谁敢近前！', '江东孙尚香，岂输男儿！'], color: '#ffb8a0', minGapMs: 15000 },
+  // 孙尚香：用户定为不需要台词（2026-11-16），不配
 };
 
 export class PassiveShout {

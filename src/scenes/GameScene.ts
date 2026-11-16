@@ -2058,7 +2058,7 @@ export class GameScene extends Phaser.Scene {
       if (button === PAD.LB) { this.padClearTargets(); return true; }
       return false;
     }
-    if (button === PAD.B && this.mode === 'pause' && !this.children.getByName('build-panel')) { this.togglePause(); return true; }
+    if (button === PAD.B && this.mode === 'pause' && !this.children.getByName('build-panel') && !this.children.getByName('item-bag')) { this.togglePause(); return true; }
     return false;
   }
   /** 面板打开时只在面板（overlay 层）里导航，不跳到 HUD 按钮。 */

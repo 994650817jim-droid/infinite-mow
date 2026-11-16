@@ -71,3 +71,6 @@ assets/raw/*
 !/tools/phase19-progression.mjs
 !/tools/rest-flow-smoke.mjs
 !/tools/prepare-troop-portraits.mjs
+# 主将步态（walk-anim）
+!/tools/test-walk-anim.mjs
+!/tools/walk-anim-record.mjs

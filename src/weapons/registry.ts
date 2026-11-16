@@ -116,6 +116,19 @@ function distPointToSegment(px: number, py: number, ax: number, ay: number, bx: 
   return Math.hypot(px - cx, py - cy);
 }
 
+/**
+ * 貂蝉花扇：把火令爆发换成粉紫花瓣（程序化过渡特效，判定与伤害不变）。
+ * strong = 倾城（满层）时加一圈更大的光环。正式序列帧到位后替换。
+ */
+function petalBurst(host: WeaponHost, cx: number, cy: number, radius: number, strong = false): void {
+  const flash = host.add.circle(cx, cy, radius * .35, 0xf6c2ff, .32).setDepth(41);
+  flash.scene.tweens.add({ targets: flash, radius: radius * .95, alpha: 0, duration: 380, ease: 'Quad.easeOut', onComplete: () => flash.destroy() });
+  if (strong) { const ring = host.add.circle(cx, cy, radius * .3, 0xf0b4ff, .18).setStrokeStyle(4, 0xffd6f4, .9).setDepth(41); ring.scene.tweens.add({ targets: ring, radius: radius * 1.05, alpha: 0, duration: 520, onComplete: () => ring.destroy() }); }
+  const n = strong ? 18 : 12;
+  for (let k = 0; k < n; k++) { const a = k * Math.PI * 2 / n + Math.random() * .35, d = radius * (.55 + Math.random() * .4), petal = host.add.ellipse(cx, cy, strong ? 13 : 11, strong ? 7 : 6, k % 3 === 0 ? 0xffe4f6 : k % 2 ? 0xffb6e6 : 0xd99cff, .95).setRotation(a).setDepth(42);
+    petal.scene.tweens.add({ targets: petal, x: cx + Math.cos(a) * d, y: cy + Math.sin(a) * d - 14, rotation: a + 2.6, alpha: 0, duration: strong ? 720 : 560, ease: 'Sine.easeOut', onComplete: () => petal.destroy() }); }
+}
+
 /** 七探盘龙枪穿透参数：穿透长度 / 判定宽度(总宽) / 单枪命中上限。 */
 export const SPEAR_PIERCE = [
   // 2026-11-14 平衡：单枪命中上限各级 +1（原 2/2/3/3/4），补赵云前中期清群；伤害、枪数、冷却不变。
@@ -456,17 +469,18 @@ export const WEAPON_BEHAVIORS: Record<WeaponId, (host: WeaponHost, weapon: Weapo
       for(const e of candidates.slice(0,32)){const n=host.grid.query(e.x,e.y,140).filter(t=>t.active&&!t.isSupplySlot&&Math.hypot(t.x-e.x,t.y-e.y)<=140).length;if(n>score){score=n;center=e;}}
       if(center){host.martialField(center.x,center.y,[105,125,140][formation-1],damage,1600,formation,true);host.player.playAction('skill',center.x<host.player.x?'left':'right');}
     }
+    const petals = host.player.passive.characterId === 'diaochan'; // 貂蝉：花扇花瓣代替火焰表现
     const cx = host.player.x + dirX * radius * 0.45;
     const cy = host.player.y + dirY * radius * 0.45;
     host.sfx.play('flameSwing');
     host.spawnFlagSwingFx(dirX, dirY);
     host.time.delayedCall(250, () => {
       if (host.over) return;
-      host.spawnFlameGatherFx(cx, cy, radius);
+      if (!petals) host.spawnFlameGatherFx(cx, cy, radius);
     });
     host.time.delayedCall(400, () => {
       if (host.over) return;
-      host.spawnFlameFx(cx, cy, radius);
+      if (petals) petalBurst(host, cx, cy, radius, passiveCast.charm); else host.spawnFlameFx(cx, cy, radius);
       const burn=growth.masteries.wildfire;
       if(burn)host.martialField(cx,cy,radius*(burn===3?1.1:1),damage,[1000,1800,2500][burn-1],burn);
       host.sfx.play('flameBoom');
@@ -477,14 +491,7 @@ export const WEAPON_BEHAVIORS: Record<WeaponId, (host: WeaponHost, weapon: Weapo
         const dist = Math.hypot(enemy.x - cx, enemy.y - cy);
         if (dist <= radius + enemy.radius && host.hitEnemy(enemy, damage, host.combatNow, 'fire')) host.player.passive.recordHit(passiveCast, enemy, host.combatNow, damage);
       }
-      // 貂蝉满层：倾城——命中的敌人已在 recordHit 里挂上易伤与减速；这里只放表现。
-      // 过渡特效（程序化）：粉紫花瓣环与飘散花瓣，正式「倾城」序列帧到位后替换
-      if (passiveCast.charm) {
-        const ring = host.add.circle(cx, cy, radius * .3, 0xf0b4ff, .18).setStrokeStyle(4, 0xffd6f4, .9).setDepth(41);
-        ring.scene.tweens.add({ targets: ring, radius: radius * 1.05, alpha: 0, duration: 520, onComplete: () => ring.destroy() });
-        for (let k = 0; k < 10; k++) { const a = k * Math.PI / 5 + Math.random() * .4, petal = host.add.ellipse(cx, cy, 12, 7, k % 2 ? 0xffc6ec : 0xe9a6ff, .95).setRotation(a).setDepth(42);
-          petal.scene.tweens.add({ targets: petal, x: cx + Math.cos(a) * radius * .9, y: cy + Math.sin(a) * radius * .9 - 18, rotation: a + 2.4, alpha: 0, duration: 700, ease: 'Sine.easeOut', onComplete: () => petal.destroy() }); }
-      }
+      // 貂蝉满层：倾城——命中的敌人已在 recordHit 里挂上易伤与减速；表现在上面 petalBurst(strong) 里。
       // 庞统满层：连环计——稍后在同一处再次引爆（范围更大、伤害 75%）
       if (passiveCast.chain) host.time.delayedCall(PASSIVE_RULES.chainDelayMs, () => {
         if (host.over) return;

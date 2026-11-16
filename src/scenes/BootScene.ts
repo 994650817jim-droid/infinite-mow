@@ -8,7 +8,6 @@ import { GAME_WIDTH } from '../config';
 import { createGameTextures, createWalkPlaceholders, registerWalkSheet } from '../systems/TextureFactory';
 import { HERO_ACTION_FILES } from '../data/heroActions';
 import { applyHdHeroSheets } from '../systems/HdHeroSheets';
-import { createPlaceholderHeroArt, PLACEHOLDER_WALK_KEYS, PLACEHOLDER_ACTION_KEYS } from '../systems/PlaceholderHeroArt';
 
 export class BootScene extends Phaser.Scene {
   private shellOnly=false;
@@ -98,6 +97,8 @@ export class BootScene extends Phaser.Scene {
     this.load.spritesheet('liubei_walk_sheet', 'assets/processed/liubei_walk_sheet.png', { frameWidth: 96, frameHeight: 96 });
     this.load.spritesheet('pangtong_walk_sheet', 'assets/processed/pangtong_walk_sheet.png', { frameWidth: 96, frameHeight: 96 });
     this.load.spritesheet('huangyueying_walk_sheet', 'assets/processed/huangyueying_walk_sheet.png', { frameWidth: 96, frameHeight: 96 });
+    this.load.spritesheet('sunshangxiang_walk_sheet', 'assets/processed/sunshangxiang_walk_sheet.png', { frameWidth: 96, frameHeight: 96 });
+    this.load.spritesheet('diaochan_walk_sheet', 'assets/processed/diaochan_walk_sheet.png', { frameWidth: 96, frameHeight: 96 });
     this.load.spritesheet('zhangfei_walk_sheet', 'assets/processed/zhangfei_walk_sheet.png', { frameWidth: 96, frameHeight: 96 });
     this.load.spritesheet('huangzhong_walk_sheet', 'assets/processed/huangzhong_walk_sheet.png', { frameWidth: 96, frameHeight: 96 });
     this.load.spritesheet('enemy_infantry_walk_sheet', 'assets/processed/enemy_infantry_walk_sheet.png', { frameWidth: 96, frameHeight: 96 });
@@ -137,6 +138,8 @@ export class BootScene extends Phaser.Scene {
     this.load.image('liubei_portrait', 'assets/processed/liubei_portrait.png');
     this.load.image('pangtong_portrait', 'assets/processed/pangtong_portrait.png');
     this.load.image('huangyueying_portrait', 'assets/processed/huangyueying_portrait.png');
+    this.load.image('sunshangxiang_portrait', 'assets/processed/sunshangxiang_portrait.png');
+    this.load.image('diaochan_portrait', 'assets/processed/diaochan_portrait.png');
     this.load.image('zhangfei_portrait', 'assets/processed/zhangfei_portrait.png');
     this.load.image('item_drum', 'assets/processed/item_drum.png');
     this.load.image('item_whetstone', 'assets/processed/item_whetstone.png');
@@ -172,7 +175,6 @@ export class BootScene extends Phaser.Scene {
     const props=this.textures.get('art_props'), image=props.getSourceImage();
     for(let row=0;row<2;row++)for(let col=0;col<4;col++){const x=Math.round(col*image.width/4),y=Math.round(row*image.height/2);props.add(String(row*4+col),0,x,y,Math.round((col+1)*image.width/4)-x,Math.round((row+1)*image.height/2)-y);}
     createWalkPlaceholders(this);
-    createPlaceholderHeroArt(this); // 孙尚香 / 貂蝉过渡素材（黄月英换色），须在切帧与高清处理之前
     registerWalkSheet(this);
     for (const kind of ['medic', 'crossbowman']) {
       const texture = this.textures.get(`legion_${kind}_action`);
@@ -215,7 +217,7 @@ export class BootScene extends Phaser.Scene {
     }
     for(const key of ['huaxiong_walk','huaxiong_attack']){if(!this.textures.exists(key))continue;const t=this.textures.get(key);['down','left','right','up'].forEach((dir,row)=>{for(let col=0;col<4;col++)if(!t.has(dir+'_'+col))t.add(dir+'_'+col,0,col*128,row*128,128,128);});}
     createReadableTextures(this);
-    applyHdHeroSheets(this, ['hero_walk_sheet', ...Object.keys(HERO_ACTION_FILES).map(k => k.replace(/_actions$/, '_walk_sheet')), ...PLACEHOLDER_WALK_KEYS], [...Object.keys(HERO_ACTION_FILES), ...PLACEHOLDER_ACTION_KEYS]);
+    applyHdHeroSheets(this, ['hero_walk_sheet', ...Object.keys(HERO_ACTION_FILES).map(k => k.replace(/_actions$/, '_walk_sheet'))], Object.keys(HERO_ACTION_FILES));
     const hint = document.getElementById('boot-hint');
     if (hint) hint.style.display = 'none';
     this.registry.set('battleReady',true);

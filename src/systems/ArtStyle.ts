@@ -10,13 +10,17 @@ export type ArtStyle = 'v1' | 'v2';
 export const DEFAULT_ART_STYLE: ArtStyle = 'v1';
 const STORE_KEY = 'im_art_style';
 
-/** v2 图集：纹理键 → 文件（行走 4×4、动作 4×7，原生格 72 / 96，最近邻放大 4 倍入库）。 */
+/** v2 图集：纹理键 → 文件（行走 4×4、动作 4×7，原生格 144 / 192，人物约 124 美术像素高，160 色）。 */
 export const ART_V2_FILES: Readonly<Record<string, string>> = {
   hero_walk_sheet: 'assets/processed-v2/zhaoyun_walk_sheet.png',
   zhaoyun_actions: 'assets/hero-actions-v2/zhaoyun.png',
 };
-/** v2 行走格原生边长（美术像素）；主将按「1 美术像素 = 1 逻辑像素」显示。 */
-export const V2_WALK_CELL = 72;
+/** v2 主将行走整格的显示高度（逻辑像素）：原生格 144 → 72，即 1080p 全屏（渲染 2 倍）下 1 美术像素 = 1 屏幕像素。 */
+export const V2_WALK_DISPLAY = 72;
+/** v2 图集的采样：渲染倍率 ≥2 时像素 1:1 对屏幕，用最近邻保持清晰；低于 2 倍要缩小显示，用线性避免丢像素。 */
+export function v2Filter(renderScale: number): Phaser.Textures.FilterMode {
+  return renderScale >= 2 ? Phaser.Textures.FilterMode.NEAREST : Phaser.Textures.FilterMode.LINEAR;
+}
 
 let cached: ArtStyle | undefined;
 export function artStyle(): ArtStyle {

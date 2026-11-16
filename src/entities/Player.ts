@@ -9,7 +9,7 @@ import { BALANCE, DEPTH, FONT, actorDepth } from '../config';
 import { applySetBonus, RELIC_BY_ID, type RelicSchool } from '../data/relics';
 import type { PlayerStats, WeaponState } from '../types';
 import { WalkGait } from '../systems/WalkGait';
-import { isV2Texture, V2_WALK_CELL } from '../systems/ArtStyle';
+import { isV2Texture, V2_WALK_DISPLAY } from '../systems/ArtStyle';
 
 /**
  * 枪将普攻节奏（260ms）：蓄力 31ms → 刺出 36ms → 刺到底 109ms → 收枪 84ms。
@@ -93,8 +93,8 @@ export class Player {
   readonly gait: WalkGait;
   private gaitHero = '';
   private gaitLift = 0;
-  /** 行走帧整格的显示高度（逻辑像素）。v2 像素画风按 1 美术像素 = 1 逻辑像素（整格 72），v1 为 66。 */
-  private get targetHeight(): number { return isV2Texture(this.walkSheet) ? V2_WALK_CELL : 66; }
+  /** 行走帧整格的显示高度（逻辑像素）。v2 整格 72（原生 144，全屏 1080p 下像素 1:1），v1 为 66。 */
+  private get targetHeight(): number { return isV2Texture(this.walkSheet) ? V2_WALK_DISPLAY : 66; }
   /** 当前帧的纵向锚点（行走帧 0.5；动作帧按脚线换算，使站姿脚底与行走时同一位置）。 */
   private baseOriginY = .5;
   /** 每套动作图集相对行走表的统一缩放与锚点（按待机站姿测量，一次计算后缓存）。 */

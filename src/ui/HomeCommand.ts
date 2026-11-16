@@ -66,6 +66,8 @@ export function homeCommand(scene:Phaser.Scene,x:number,y:number,width:number,he
  const hit=scene.add.rectangle(x,y,width,height,0,0.001);if(enabled)hit.setInteractive({useHandCursor:true});
  const size=fontSize??(primary?Math.min(24,Math.round(height*.4)):Math.min(18,Math.round(height*.34)));
  const caption=scene.add.text(x,y,label,{fontFamily:HEADING_FONT,fontSize:size+'px',fontStyle:'bold',color:!enabled?(art?'#3a332a':'#8e8576'):primary?'#f8e6bf':'#e8d3a6',resolution:2}).setOrigin(.5).setLetterSpacing(primary?6:label.length>4?1:3).setShadow(0,1,'#120a05',3,true,true);
+ // 水墨底的浅灰笔触上，米色字对比不足（主城底栏 15px 尤甚）：加一圈深墨描边
+ if(art&&enabled)caption.setStroke(primary?'#2a0c06':'#16100a',primary?3:4);
  let current:CommandState='normal';
  const paint=(state:string='normal')=>{
   if(!enabled)return;

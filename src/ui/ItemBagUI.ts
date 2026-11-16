@@ -5,6 +5,7 @@ import { AFFIXES, BAG_CAPACITY, LEGENDS, QUALITIES, QUALITY_ORDER, SLOTS, SLOT_O
 import { gearFromItems, gearSummary } from '../systems/ItemEffects';
 import { equipItem, equippedBy, loadItems, loadout, salvageItems, salvageUpTo, unequipSlot } from '../systems/ItemStore';
 import { drawQualityFrame, ensureItemTextures, itemTile } from './ItemQuality';
+import { lqDivider, lqPanel, lqSkin } from './LacquerKit';
 
 export interface ItemBagOptions { hero: CharacterId; runLoot?: ItemInstance[]; readOnly?: boolean; onClose?: () => void }
 
@@ -42,10 +43,15 @@ export class ItemBagUI {
     return this.add(this.scene.add.text(x, y, value, { fontFamily: heading ? HEADING_FONT : FONT, fontSize: size + 'px', color, resolution: 2 }), parent);
   }
   private button(x: number, y: number, label: string, name: string, onClick: () => void, o: { size?: number; active?: boolean; disabled?: boolean; parent?: Phaser.GameObjects.Container; w?: number } = {}): Phaser.GameObjects.Text {
-    const t = this.text(x, y, label, o.size ?? 15, o.disabled ? '#7c7060' : o.active ? '#1c140a' : '#ecd49a', false, o.parent).setOrigin(.5).setPadding(12, 7)
-      .setBackgroundColor(o.active ? '#d7b46a' : o.disabled ? 'rgba(40,30,20,.7)' : 'rgba(58,38,22,.95)').setName(name);
-    if (o.w) t.setFixedSize(o.w, 0).setAlign('center');
+    // 漆金按钮：选中为朱漆，禁用为暗底；文字过长时整体缩小，不再溢出底框。命名的文字对象仍是命中区。
+    const parent = o.parent ?? this.body;
+    const t = this.text(x, y, label, o.size ?? 15, '#ffe9bd', o.size !== undefined && o.size >= 16, parent).setOrigin(.5).setPadding(12, 7).setName(name);
+    const bw = o.w ? o.w + 24 : Math.max(t.width, 44), bh = Math.max(30, t.height);
+    if (t.width > bw - 6) t.setScale((bw - 6) / t.width);
     if (!o.disabled) t.setInteractive({ useHandCursor: true }).on('pointerdown', (_p: unknown, _x: unknown, _y: unknown, e?: Phaser.Types.Input.EventData) => { e?.stopPropagation?.(); onClick(); });
+    t.input?.hitArea.setTo((t.width - bw) / 2, (t.height - bh) / 2, bw, bh);
+    const skin = lqSkin(this.scene, t, t, () => ({ w: bw, h: bh }), { tone: o.active ? 'cinnabar' : 'quiet', on: () => !!o.active, enabled: () => !o.disabled });
+    skin.gfx.setScrollFactor(0); parent.addAt(skin.gfx, parent.getIndex(t));
     return t;
   }
 
@@ -63,10 +69,7 @@ export class ItemBagUI {
     dim.on('pointerdown', (_p: unknown, _x: unknown, _y: unknown, e?: Phaser.Types.Input.EventData) => e?.stopPropagation?.());
     const x0 = D ? 18 : 10, y0 = D ? 12 : 14, pw = W - x0 * 2, ph = H - y0 * 2;
     const g = this.add(this.scene.add.graphics());
-    g.fillStyle(0x000000, .4).fillRoundedRect(x0 + 3, y0 + 5, pw, ph, 10);
-    g.fillStyle(LACQUER, .98).fillRoundedRect(x0, y0, pw, ph, 10);
-    g.lineStyle(2, GOLD, 1).strokeRoundedRect(x0 + 4, y0 + 4, pw - 8, ph - 8, 8);
-    g.lineStyle(1, GOLD, .45).strokeRoundedRect(x0 + 9, y0 + 9, pw - 18, ph - 18, 6);
+    lqPanel(g, x0, y0, pw, ph);
 
     // 标题 + 计数 + 关闭
     this.text(x0 + 28, y0 + (D ? 18 : 22), '行囊', D ? 26 : 30, '#f2ddae', true);
@@ -87,7 +90,7 @@ export class ItemBagUI {
 
     // 装备槽 + 加成
     const worn = loadout(this.hero, s), gear = gearFromItems(Object.values(worn).filter((i): i is ItemInstance => !!i));
-    const slotSize = D ? 74 : 70, slotTop = D ? y0 + 112 : heroY + (this.o.readOnly ? 30 : 104);
+    const slotSize = D ? 74 : 70, slotTop = D ? y0 + 112 : heroY + (this.o.readOnly ? 30 : 90);
     SLOT_ORDER.forEach((slot, i) => {
       const cx = D ? x0 + 70 + (i % 3) * 108 : W / 2 + (i - 2.5) * (slotSize + 12), cy = D ? slotTop + 40 + Math.floor(i / 3) * 104 : slotTop + slotSize / 2;
       const item = worn[slot] ?? null, tile = this.add(itemTile(this.scene, cx, cy, slotSize, item, slot, { selected: !!item && item.uid === this.selected }));

@@ -97,7 +97,9 @@ export class WorldMapScene extends Phaser.Scene {
   lacquerPlate(chipG,chip.x,chip.y,chip.width,chip.height,.9);lacquerPlate(chipG,land.x,land.y,land.width,land.height,.9,0x7fc48f);chipG.setDepth(chip.depth);chip.setDepth(1);land.setDepth(1);
   // 底边：势力排行（按城池数）+ 操作提示
   factionStrip(this,this.area.x+10,this.area.y+this.area.h-(desktop?24:26),Math.min(this.area.w-20,desktop?620:this.area.w-20),this.era,this.owned,desktop);
-  worldText(this,desktop?this.area.x+this.area.w-12:this.area.x+14,this.area.y+this.area.h-(desktop?24:54),'拖动查看 · 滚轮/双指缩放 · 点城池查看',11,'#fff0cf').setOrigin(desktop?1:0,.5).setStroke('#15261c',3);
+  // 操作提示垫一块漆底小牌：地图拖到哪里，提示都不会和城名 / 章节标签叠在一起难以辨认
+  {const hint=worldText(this,desktop?this.area.x+this.area.w-18:this.area.x+20,this.area.y+this.area.h-(desktop?24:58),'拖动查看 · 滚轮/双指缩放 · 点城池查看',desktop?11:12,'#f2e3c0').setOrigin(desktop?1:0,.5).setPadding(10,5).setName('world-hint');
+   const hb=hint.getBounds(),hg=this.add.graphics().setName('world-hint-plate');lacquerPlate(hg,hb.x,hb.y,hb.width,hb.height,.86);hint.setDepth(1);}
   // 攻城归来：选中并居中该城
   const focus=cityById(String(this.registry.get('mapFocusCity')??''));this.registry.remove('mapFocusCity');
   if(focus){this.selected={kind:'city',city:focus};this.layer.setPosition(this.area.x+this.area.w/2-focus.x*this.zoom,this.area.y+this.area.h/2-focus.y*this.zoom);this.clampMap();}

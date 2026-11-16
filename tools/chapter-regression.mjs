@@ -15,7 +15,8 @@ async function scenario(name, run) {
     // Hulao remains campaign-locked until Yellow Turban is cleared. This suite
     // exercises the battle itself, so explicitly use the existing DEV stage bypass.
     await page.goto(BASE + '?autostart=1&chapter=hulao&dev=1&stage=3'); await page.waitForFunction(() => !!window.__IM, null, { timeout: 30000 });
-    await page.evaluate(() => { const s = window.__game.scene.getScene('GameScene'); s.spawnTimer = 1e8; s.eliteTimer = 1e8; window.__IM.clearWeapons(); window.__IM.killAllEnemies(); });
+    // 2026-11-16：2-3 改为董卓（火烧洛阳），吕布移到天下地图挑战关；本套吕布机制检查改用原虎牢关吕布章节定义（getChapter('hulao')）。
+    await page.evaluate(async () => { const { getChapter } = await import('/src/data/chapters.ts'); const s = window.__game.scene.getScene('GameScene'); s.chapter = getChapter('hulao'); s.spawnTimer = 1e8; s.eliteTimer = 1e8; window.__IM.clearWeapons(); window.__IM.killAllEnemies(); });
     await run(page); check(name + '_no_pageerror', !errors.length, errors);
   } catch (error) { check(name, false, String(error)); }
   finally { await context.close(); }
@@ -151,7 +152,7 @@ try {
         if(stage<3)await page.evaluate(()=>window.__game.scene.getScene('GameScene').resultPanel.getByName('result-home').emit('pointerdown'));
       }
       // 2026-11-15 bugfix-perf: since 0065c2c the world map opens after chapter one (Zhang Jiao), and the Lu Bu victory leads to the map with the new chapter (群雄) unlocked.
-      const ok=afterZhangjiao.button.includes('汜水关')&&afterZhangjiao.world&&afterZhangjiao.hulaoUnlocked&&stages.every((s,i)=>s.stage===i+1&&s.boss===['华雄','徐荣','吕布'][i]&&s.world)&&stages[2].button.includes('天下地图');
+      const ok=afterZhangjiao.button.includes('汜水关')&&afterZhangjiao.world&&afterZhangjiao.hulaoUnlocked&&stages.every((s,i)=>s.stage===i+1&&s.boss===['华雄','徐荣','董卓'][i]&&s.world)&&stages[2].button.includes('天下地图');
       check('campaign_progression_zhangjiao_to_hulao_to_world',ok&&errors.length===0,{afterZhangjiao,stages,errors});
     } catch (error) { check('campaign_progression_zhangjiao_to_hulao_to_world', false, String(error)); }
     finally { await context.close(); }
@@ -183,7 +184,7 @@ try {
       check(`chapter2_boss_loot_before_result_${width}`, loot === 'bossloot' || loot === 'result', { loot });
       await page.waitForFunction(() => window.__game.scene.getScene('GameScene').mode === 'result');
       const victory = await page.evaluate(() => { const s = window.__game.scene.getScene('GameScene'); return { mode: s.mode, title: s.resultTexts.title.text, text: s.resultTexts.subtitle.text }; });
-      check(`chapter2_victory_text_${width}`, victory.mode === 'result' && victory.title === '威震虎牢' && victory.text.includes('吕布'), victory);
+      check(`chapter2_victory_text_${width}`, victory.mode === 'result' && victory.title === '董卓西走' && victory.text.includes('董卓'), victory);
       await page.screenshot({ path: `${out}/hulao-victory-${width}.png` });
       // Actual result-panel input returns to the menu, then actual chapter-tab input switches back.
       await page.evaluate(() => window.__game.scene.getScene('GameScene').resultPanel.getByName('result-home').emit('pointerdown'));

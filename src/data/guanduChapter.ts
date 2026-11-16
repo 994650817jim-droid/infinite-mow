@@ -30,8 +30,8 @@ export function guanduBattle(stage: GuanduStage): ChapterDef {
     ...base,
     name: `4-${stage} ${d.name}`, label: `第四章 · 官渡之战 · ${d.name}`, description: d.story, bossName: d.boss,
     bossStyle: d.id as ChapterDef['bossStyle'], westStage: 3,
-    waves: (stage === 1 ? ['袁军前锋', '攻城云梯', '白马围城', '颜良出阵'] : stage === 2 ? ['辎重疑兵', '骑兵掠阵', '争抢辎重', '文丑出阵'] : ['乌巢外营', '守粮弓阵', '焚仓', '淳于琼出阵']).map((name, i) => ({ name, start: i * 45 })),
-    recruitWaves: [1, 2, 3],
+    waves: (stage === 1 ? ['袁军前锋', '白马围城', '颜良出阵'] : stage === 2 ? ['辎重疑兵', '争抢辎重', '文丑出阵'] : ['乌巢外营', '焚仓', '淳于琼出阵']).map((name, i) => ({ name, start: i * 45 })),
+    recruitWaves: [1, 2],
     enemies: { ...base.enemies, ...tinted, boss: { ...base.enemies.boss, texture: d.atlas, walkVisual: undefined, attackVisual: undefined, hp: [2000, 2000, 2400][stage - 1], speed: [52, 60, 34][stage - 1], damage: [14, 13, 13][stage - 1] } } as ChapterDef['enemies'],
     // 4-1 攻城步兵与刀盾为主，少量弓骑
     pickEnemy: t => { const r = Math.random(); return stage === 1 ? (t < 30 ? 'infantry' : r < .42 ? 'infantry' : r < .64 ? 'shield' : r < .84 ? 'archer' : 'cavalry') : stage === 2 ? (r < .4 ? 'cavalry' : r < .7 ? 'infantry' : r < .9 ? 'archer' : 'elite') : (r < .3 ? 'shield' : r < .65 ? 'archer' : r < .88 ? 'infantry' : 'elite'); },

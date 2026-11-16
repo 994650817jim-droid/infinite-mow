@@ -38,7 +38,9 @@ export function drawQualityFrame(g: Phaser.GameObjects.Graphics, x: number, y: n
   if (o.selected) g.lineStyle(2, 0xfff1c4, .95).strokeRoundedRect(x - 2, y - 2, w + 4, h + 4, r + 2);
 }
 
-export const itemIconKey = (slot: ItemSlot) => 'item_icon_' + slot;
+/** 程序化剪影的键：4 个兵装槽 + 马厩坐骑。 */
+export type IconSlot = ItemSlot | 'mount';
+export const itemIconKey = (slot: IconSlot) => 'item_icon_' + slot;
 /** 正式图标图集（BootScene 加载 public/assets/items/item-icons.webp + .json，帧名 = 道具 id）。 */
 export const ITEM_ATLAS = 'item_icons';
 
@@ -48,19 +50,21 @@ export function itemIcon(scene: Phaser.Scene, item: ItemInstance): { key: string
   if (t?.has(item.base)) return { key: ITEM_ATLAS, frame: item.base, art: true };
   return { key: itemIconKey(itemSlot(item)), art: false };
 }
+/** 马厩里一匹马的图标：图集里有同名帧（马的 id 沿用旧坐骑道具 id）就用，缺图回退马首剪影。 */
+export function horseIcon(scene: Phaser.Scene, id: string): { key: string; frame?: string; art: boolean } {
+  const t = scene.textures.exists(ITEM_ATLAS) ? scene.textures.get(ITEM_ATLAS) : null;
+  if (t?.has(id)) return { key: ITEM_ATLAS, frame: id, art: true };
+  return { key: itemIconKey('mount'), art: false };
+}
 
 /** 程序化图标：每个槽位一张 64×64 剪影（暖白描墨），以及战场宝箱 item_chest（正式宝箱图已加载时不生成）。场景首次用到时生成。 */
 export function ensureItemTextures(scene: Phaser.Scene): void {
-  if (scene.textures.exists(itemIconKey('token'))) return;
+  if (scene.textures.exists(itemIconKey('mount'))) return;
   const ink = 0x1c140c, light = 0xf1e4c4, mid = 0xc8b48a;
   const g = scene.make.graphics({ x: 0, y: 0 }, false);
-  const draw = (slot: ItemSlot) => {
+  const draw = (slot: IconSlot) => {
     g.clear(); g.lineStyle(3, ink, 1); g.fillStyle(light, 1);
-    if (slot === 'weapon') { // 斜剑 + 剑穗
-      g.fillPoints([{ x: 46, y: 8 }, { x: 54, y: 10 }, { x: 24, y: 40 }, { x: 20, y: 36 }], true); g.strokePoints([{ x: 46, y: 8 }, { x: 54, y: 10 }, { x: 24, y: 40 }, { x: 20, y: 36 }], true);
-      g.fillStyle(mid, 1).fillRect(14, 34, 18, 6).strokeRect(14, 34, 18, 6);
-      g.lineStyle(5, ink, 1).lineBetween(18, 42, 10, 52); g.fillStyle(0xb8402e, 1).fillCircle(10, 55, 5); g.lineStyle(2, ink, 1).strokeCircle(10, 55, 5);
-    } else if (slot === 'armor') { // 札甲
+    if (slot === 'armor') { // 札甲
       const pts = [{ x: 14, y: 12 }, { x: 26, y: 8 }, { x: 32, y: 14 }, { x: 38, y: 8 }, { x: 50, y: 12 }, { x: 52, y: 54 }, { x: 12, y: 54 }];
       g.fillPoints(pts, true); g.strokePoints(pts, true);
       g.lineStyle(1.5, ink, .7); for (let yy = 22; yy < 54; yy += 8) g.lineBetween(14, yy, 50, yy); for (let xx = 20; xx < 50; xx += 8) g.lineBetween(xx, 20, xx, 54);
@@ -81,7 +85,7 @@ export function ensureItemTextures(scene: Phaser.Scene): void {
     }
     g.generateTexture(itemIconKey(slot), 64, 64);
   };
-  for (const slot of SLOT_ORDER) draw(slot);
+  for (const slot of [...SLOT_ORDER, 'mount'] as const) draw(slot);
   // 宝箱：漆木 + 铜包角
   if (scene.textures.exists('item_chest')) { g.destroy(); return; }
   g.clear(); g.fillStyle(0x6a3a1c, 1).fillRoundedRect(4, 14, 56, 34, 4); g.fillStyle(0x8a4d24, 1).fillRoundedRect(4, 6, 56, 14, { tl: 8, tr: 8, bl: 0, br: 0 });
@@ -92,7 +96,7 @@ export function ensureItemTextures(scene: Phaser.Scene): void {
 }
 
 /** 道具小图块（品质框 + 图标 + 名器星），返回容器；size 为边长。 */
-export function itemTile(scene: Phaser.Scene, x: number, y: number, size: number, item: ItemInstance | null, slotHint?: ItemSlot, o: { hover?: boolean; selected?: boolean } = {}): Phaser.GameObjects.Container {
+export function itemTile(scene: Phaser.Scene, x: number, y: number, size: number, item: ItemInstance | null, slotHint?: IconSlot, o: { hover?: boolean; selected?: boolean } = {}): Phaser.GameObjects.Container {
   ensureItemTextures(scene);
   const c = scene.add.container(x, y), g = scene.add.graphics();
   drawQualityFrame(g, -size / 2, -size / 2, size, size, item?.quality ?? null, o); c.add(g);

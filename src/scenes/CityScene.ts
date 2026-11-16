@@ -11,6 +11,9 @@ import Phaser from 'phaser';
 import {W,H,worldShell,worldAssets} from '../world/WorldUI';
 import {FONT,HEADING_FONT} from '../config';
 import {homeCommand,warPanelTexture} from '../ui/HomeCommand';
+import {openStable} from '../ui/ItemBagUI';
+import {stableUnlocked} from '../systems/ItemStore';
+import {CHARACTERS,type CharacterId} from '../data/characters';
 import {uiSfx} from '../systems/Sfx';
 import {checkWorld} from '../systems/Achievements';
 import {loadWorld,saveWorld,worldUnlocked,storageUnavailable,incompatibleSave,townUpgrade,granaryLevy,setCityFocus,researchTech,townProgress,stableCapacity} from '../world/WorldStore';
@@ -36,7 +39,7 @@ export class CityScene extends Phaser.Scene {
  private pano!:Phaser.GameObjects.Container;private top!:Phaser.GameObjects.Text;private hint!:Phaser.GameObjects.Text;private sizeText!:Phaser.GameObjects.Text;
  private vr={x:0,y:0,w:0,h:0};private k=1;private sx=0;private sy=0;
  private hits:Phaser.GameObjects.Rectangle[]=[];
- private drag:{x:number;y:number;sx:number;sy:number;moved:boolean}|null=null;
+ private drag:{x:number;y:number;sx:number;sy:number;moved:boolean}|null=null;private pressedSlot:string|null=null;
  private popId:TownBuildingId|null=null;
  private techTab:TechBranch='supply';
  constructor(){super('CityScene');}
@@ -61,6 +64,7 @@ export class CityScene extends Phaser.Scene {
   worldShell(this,'义军营寨');
   this.top=txt(this,D?W-300:24,D?28:72,'',D?15:14,'#efe0b4',HEADING_FONT).setOrigin(D?1:0,.5).setName('city-grain');
   const recruit=homeCommand(this,W-80,D?28:30,130,34,'招募后备',false,true,14);recruit.hit.setName('city-recruit').on('pointerdown',()=>this.scene.start('CityRecruitScene'));
+  const talent=homeCommand(this,D?W-218:W-218,D?28:30,130,34,'招贤馆',false,true,14);talent.hit.setName('city-talent').on('pointerdown',()=>this.scene.start('TalentHallScene'));
   // 规模牌（全景左上角）与下一步提示（全景底边）
   this.sizeText=txt(this,this.vr.x+12,this.vr.y+10,'',D?15:14,'#f6e2ae',HEADING_FONT).setDepth(5).setShadow(0,1,'#000',4,true,true).setBackgroundColor('#1a120bcc').setPadding(8,4,8,4);
   this.hint=txt(this,D?190:24,D?28:94,'',D?13:12,'#b9d2a8').setOrigin(0,.5).setName('city-hint');
@@ -147,7 +151,9 @@ export class CityScene extends Phaser.Scene {
    this.pano.add(tag);
    if(st==='ready'){const by=y-h-(lv>0?4:0),badge=this.add.container(x+w*.32,Math.max(14,by+10));badge.add(this.add.circle(0,0,11,0x2f7a3a).setStrokeStyle(2,0xd8f0b8));badge.add(txt(this,0,0,'↑',14,'#ffffff',HEADING_FONT).setOrigin(.5));badge.setName('ready-'+id);this.pano.add(badge);this.tweens.add({targets:badge,y:badge.y-4,yoyo:true,repeat:-1,duration:600,ease:'Sine.easeInOut'});}
    const hit=this.add.rectangle(x,y-h/2,Math.max(w*.8,60),Math.max(h,50),0xffffff,.001).setName('bld-'+id).setInteractive({useHandCursor:true});
-   hit.on('pointerup',()=>{if(this.drag?.moved)return;this.openCard(id);});
+   // 按下和抬起都落在这块地上才算点建筑：弹窗「返回」按下时就关闭了，抬起不会再穿透到下面的城墙等地块（手柄也是先发按下再发抬起）
+   hit.on('pointerdown',()=>{this.pressedSlot=id;});
+   hit.on('pointerup',()=>{const own=this.pressedSlot===id;this.pressedSlot=null;if(!own||this.drag?.moved)return;this.openCard(id);});
    hit.on('pointerover',()=>tag.setColor('#ffe08a')).on('pointerout',()=>tag.setColor(lv>0?'#fff1cf':'#f6e2ae'));
    if(id==='hall')hit.setData('padDefault',true);
    this.pano.add(hit);this.hits.push(hit);
@@ -233,10 +239,16 @@ export class CityScene extends Phaser.Scene {
   m.root.add([up.g,up.hit,up.caption]);
   (m.root.getByName('town-card-close') as Phaser.GameObjects.GameObject|null)?.setData('padDefault',false);
  }
- /** 马厩：换马界面由坐骑系统（道具会话）提供场景 StableScene；尚未接入时给出提示。 */
+ /**
+  * 马厩：打开道具会话的换马界面 openStable（ui/ItemBagUI.ts，接口见共享笔记 stable-interface.md），代替原来全景右上角的临时入口。
+  * 换马给上次出征的武将（行囊里可切换）。道具图集随战斗图集在进城时释放，打开前按需重新加载（马匹图标）。
+  */
  private openStable(msg:Phaser.GameObjects.Text){
-  if(this.scene.manager.keys['StableScene']){this.scene.start('StableScene',{capacity:stableCapacity(),from:'CityScene'});return;}
-  msg.setText(`马厩可养马 ${stableCapacity()} 匹 · 换马界面即将开放`);
+  if(!stableUnlocked()){msg.setText('第一章通关后才有坐骑');return;}
+  this.children.getByName('town-card')?.destroy();
+  let hero='zhaoyun';try{hero=localStorage.getItem('im_last_hero')||hero;}catch{/* 存储不可用 */}
+  const open=()=>openStable(this,(CHARACTERS.some(c=>c.id===hero)?hero:'zhaoyun') as CharacterId,()=>this.refresh());
+  if(this.textures.exists('item_icons'))open();else{this.load.atlas('item_icons','assets/items/item-icons.webp','assets/items/item-icons.json');this.load.once('complete',open);this.load.start();}
  }
  /** 把全景平移到某座建筑。 */
  private focusOn(id:TownBuildingId){const sl=CITY_SLOTS[citySize(loadWorld().town) as 1|2|3][id];this.scrollTo(sl.x*this.k-this.vr.w/2,sl.y*this.k-this.vr.h*.62);}

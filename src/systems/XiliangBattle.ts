@@ -7,6 +7,7 @@ import type {EnemyKind} from '../types';
 import {warnLane} from '../ui/Telegraph';
 import {XILIANG_RAID as R, FEIXIONG as F} from '../data/xiliang';
 import {ensureTroopArt, troopArtReady} from './TroopArt';
+import {DongzhuoBoss} from './DongzhuoBoss';
 
 /** 铁骑突阵参数（西凉铁骑见 XILIANG_RAID；虎豹骑见 data/hubao.ts）。 */
 export type RaidParams = {readonly riders: number; readonly spacing: number; readonly lead: number; readonly aimJitter: number; readonly distance: number; readonly speed: number; readonly warnMs: number; readonly damage: number; readonly knockback: number; readonly troopRadius: number; readonly troopDamage: number};
@@ -31,6 +32,15 @@ export interface Host {
   /** 当前关的西凉骑兵 / 刀盾兵定义（飞熊军以刀盾兵为底）。 */
   def: (kind: 'cavalry' | 'shield') => EnemyDef;
   banner: (text: string, caption: string) => void; sfx: (key: 'chargeWarn' | 'hitHeavy') => void;
+  /** 2-3 董卓（DongzhuoBoss）：当前首领、首领招式组、敌兵寻路移动。 */
+  boss?: () => Enemy | null; bossStyle?: () => string; move?: (e: Enemy, nx: number, ny: number, dt: number) => void;
+  /** 战场上的建筑碰撞框（城墙、城门等）：突阵选道时避开，免得骑兵从墙后起冲被挡住。 */
+  obstacles?: () => ReadonlyArray<{left: number; right: number; top: number; bottom: number}>;
+}
+/** 线段（加宽 r）是否穿过任一碰撞框。 */
+function laneBlocked(x0: number, y0: number, x1: number, y1: number, r: number, boxes: ReadonlyArray<{left: number; right: number; top: number; bottom: number}>): boolean {
+  for (let i = 0; i <= 24; i++) { const t = i / 24, x = x0 + (x1 - x0) * t, y = y0 + (y1 - y0) * t; if (boxes.some(b => x > b.left - r && x < b.right + r && y > b.top - r && y < b.bottom + r)) return true; }
+  return false;
 }
 export interface Raid {id: number; x: number; y: number; dx: number; dy: number; warnUntil: number; riders: Array<{e: Enemy; life: number; ox: number; oy: number; hit: boolean; hurtAt: number}>; g: Phaser.GameObjects.Graphics; traveled: number}
 interface Bash {e: Enemy; life: number; state: 'windup' | 'lunge'; until: number; dx: number; dy: number; hit: boolean; anim?: boolean; g: Phaser.GameObjects.Graphics}
@@ -44,6 +54,8 @@ interface Bash {e: Enemy; life: number; state: 'windup' | 'lunge'; until: number
 export class XiliangBattle {
   protected raids: Raid[] = []; private bashes: Bash[] = []; private nextRaidAt: number; private nextFeixiongAt: number = F.first; private raidSeq = 0; private lastT = 0; private announced = false; private feixiongAnnounced = false;
   private readonly bashCd = new WeakMap<Enemy, number>();
+  /** 2-3 火烧洛阳：董卓首领控制。 */
+  dongzhuo: DongzhuoBoss | null = null;
   protected readonly raid: RaidParams;
   constructor(protected h: Host, protected o: TacticsOptions = {}) { this.raid = o.raid ?? R; this.nextRaidAt = o.first ?? R.first; if (o.feixiong !== false) ensureTroopArt(h.scene, ['feixiong_walk', 'feixiong_attack']); }
   private intervalFor(stage: 1 | 2 | 3): number | null { return this.o.interval ? this.o.interval(stage) : R.interval[stage - 1]; }
@@ -62,6 +74,7 @@ export class XiliangBattle {
   incoming(e: Enemy, source: 'melee' | 'arrow' | 'fire'): number { return this.isFeixiong(e) && source === 'arrow' ? F.arrowMul : 1; }
   /** 本帧是否由西凉战法接管该敌兵的移动。 */
   handleEnemy(e: Enemy, dt: number, now: number): boolean {
+    if (this.dongzhuo && e === this.dongzhuo.boss) { if (e.active) this.dongzhuo.step(dt, now); return true; }
     for (const r of this.raids) if (r.riders.some(x => x.e === e && x.e.spawnId === x.life)) return true;
     if (this.guardStep(e, dt, now)) return true;
     if (!this.isFeixiong(e)) return false;
@@ -108,10 +121,27 @@ export class XiliangBattle {
     if (t >= this.nextRaidAt) { const iv = this.intervalFor(stage); this.nextRaidAt = iv === null ? Infinity : t + iv; if (iv !== null) this.startRaid(now); }
     if (this.o.feixiong !== false && stage >= 2 && t >= this.nextFeixiongAt) { this.nextFeixiongAt = t + F.interval[stage - 1]; this.spawnFeixiong(); }
     for (const r of [...this.raids]) this.stepRaid(r, dt, now);
+    this.updateDongzhuo(now);
+  }
+  private updateDongzhuo(now: number): void {
+    const b = this.h.boss?.();
+    if (this.dongzhuo && (!this.dongzhuo.boss.active || this.dongzhuo.boss !== b)) { this.dongzhuo.clear(); this.dongzhuo = null; }
+    if (!this.dongzhuo && b?.active && this.h.bossStyle?.() === 'dongzhuo' && this.h.move) {
+      const move = this.h.move;
+      this.dongzhuo = new DongzhuoBoss({scene: this.h.scene, player: this.h.player, army: this.h.army, move, raid: t => this.startRaid(t),
+        guards: (n, x, y) => { for (let i = 0; i < n; i++) { const a = i / n * Math.PI * 2; this.h.spawn('shield', x + Math.cos(a) * 90, y + Math.sin(a) * 90, this.feixiongDef()); } },
+        spawn: (k, x, y) => { this.h.spawn(k, x, y); },
+        banner: (t, c) => this.h.banner(t, c ?? '')}, b, now);
+    }
+    this.dongzhuo?.update(now);
   }
   /** 立即发起一次铁骑突阵（测试与调试用）；返回突阵编号。 */
   startRaid(now: number): number {
-    const p = this.h.player, a = Math.random() * Math.PI * 2, dx = Math.cos(a), dy = Math.sin(a), side = (Math.random() - .5) * 2 * this.raid.aimJitter;
+    // 选一条从起点到主将之间没有建筑挡路的冲锋道（最多试 12 次，都不行就用最后一次）
+    const p = this.h.player, boxes = this.h.obstacles?.() ?? [];
+    let a = Math.random() * Math.PI * 2;
+    for (let k = 0; k < 12 && boxes.length; k++) { const sx = p.x - Math.cos(a) * this.raid.lead, sy = p.y - Math.sin(a) * this.raid.lead; if (!laneBlocked(sx, sy, p.x + Math.cos(a) * 120, p.y + Math.sin(a) * 120, (this.raid.riders - 1) / 2 * this.raid.spacing + 20, boxes)) break; a = Math.random() * Math.PI * 2; }
+    const dx = Math.cos(a), dy = Math.sin(a), side = (Math.random() - .5) * 2 * this.raid.aimJitter;
     const x = p.x - dx * this.raid.lead - dy * side, y = p.y - dy * this.raid.lead + dx * side;
     const riders: Raid['riders'] = [], def = this.o.riderDef?.() ?? this.h.def('cavalry'), dir = Math.abs(dx) > Math.abs(dy) ? (dx < 0 ? 'left' : 'right') : dy < 0 ? 'up' : 'down';
     for (let i = 0; i < this.raid.riders; i++) {
@@ -163,5 +193,5 @@ export class XiliangBattle {
   }
   /** 当前进行中的突阵数（测试用）。 */
   get activeRaids(): number { return this.raids.length; }
-  clear(): void { for (const r of this.raids) r.g.destroy(); for (const b of this.bashes) b.g.destroy(); this.raids = []; this.bashes = []; }
+  clear(): void { this.dongzhuo?.clear(); this.dongzhuo = null; for (const r of this.raids) r.g.destroy(); for (const b of this.bashes) b.g.destroy(); this.raids = []; this.bashes = []; }
 }

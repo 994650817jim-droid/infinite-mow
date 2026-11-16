@@ -1,4 +1,5 @@
 import { IS_DESKTOP_APP, desktop } from '../platform/desktop';
+import { defaultHero, heroOwned } from '../systems/RosterStore';
 import {playMenuMusic,menuMusic} from '../systems/Music';
 import {uiSfx} from '../systems/Sfx';
 import {GameCodex} from '../ui/GameCodex';
@@ -22,6 +23,7 @@ import { chapterOneCleared, chapterUnlocked, isChapterTestRun } from '../systems
 import { FONT, TITLE_FONT, HEADING_FONT, GAME_HEIGHT as H, GAME_WIDTH as W, IS_DESKTOP as D, switchLayout } from '../config';
 import { lqDivider, lqHitBox, lqPanel, lqSkin } from '../ui/LacquerKit';
 import { ItemBagUI } from '../ui/ItemBagUI';
+import { bagBadgeCount } from '../systems/ItemStore';
 
 const ROLES = ['游龙先锋 · 灵动突刺', '重甲武圣 · 横扫千军', '百步神射 · 远程压制', '卧龙军师 · 火阵爆发'];
 const PASSIVE_HINTS = [
@@ -80,7 +82,7 @@ export class MenuScene extends Phaser.Scene {
     this.selectedChapter = chapterUnlocked(requested)||isChapterTestRun() ? requested : 'huangjin';
     if(fromWorld&&this.selectedChapter==='huangjin'&&[1,2,3].includes(worldStage)&&(yellowStageUnlocked(worldStage)||isChapterTestRun()))this.selectedStage=worldStage as YellowStage;
     let lastHero=saved?.character;try{lastHero=localStorage.getItem('im_last_hero') as RunConfig['character']||lastHero;}catch{}
-    this.selectedChar = params.has('autostart') || params.has('perf') ? 0 : Math.max(0, CHARACTERS.findIndex(c => c.id === lastHero));
+    this.selectedChar = params.has('autostart') || params.has('perf') ? 0 : Math.max(0, CHARACTERS.findIndex(c => c.id === defaultHero(lastHero)));
     if(this.compactHome){if(!(isChapterTestRun()&&params.has('chapter')))this.selectedChapter=chapterOneCleared()||loadWorld().legacyHulaoAccess?'hulao':'huangjin';this.createLanding(params);return;}
     this.cameras.main.resetFX(); this.cameras.main.setBackgroundColor('#101813');
     const text = (x: number, y: number, value: string, size: number, color = '#ede4cc') => this.add.text(x, y, value, { fontFamily: size>=18?HEADING_FONT:FONT, fontSize: `${size}px`, color, resolution: 2 });
@@ -131,7 +133,8 @@ export class MenuScene extends Phaser.Scene {
       text(x, y + 39, c.name, D ? 22 : 23, '#f0e5c6').setOrigin(.5);
       text(x, y + 64, ROLES[i], D ? 11 : 14, '#9cb7a7').setOrigin(.5);
       const badge = text(x + cardW / 2 - 10, y - cardH / 2 + 9, '出战', 11, '#f3d89a').setOrigin(1, 0).setPadding(5,3).setBackgroundColor('#16352a');
-      bg.on('pointerdown', () => { this.selectedChar = i; this.renderSelection(); });
+      if (!heroOwned(c.id)) icon.setAlpha(.35);
+      bg.on('pointerdown', () => { if (!heroOwned(c.id)) return; this.selectedChar = i; this.renderSelection(); });
       bg.on('pointerover', () => { if (this.selectedChar !== i) bg.setFillStyle(0x253b2e).setStrokeStyle(1, 0xa7b995); });
       bg.on('pointerout', () => this.renderSelection());
       this.charCards.push({ bg, icon, badge, decor });
@@ -203,7 +206,9 @@ export class MenuScene extends Phaser.Scene {
      rx-=homePlaque(this,rx,py,{label:'成就',name:'home-achievements',icon:'ach_first_win',progress:[got,ACHIEVEMENTS.length],onClick:()=>{if(!this.children.getByName('achievements-panel'))new AchievementsUI(this);}},D)+8;
      // 行囊（兵装）：每位武将各一套，默认打开当前选中的武将
      // 手机且天下已开（四块匾）时排不下，放到第二行右侧
-     const bagRow2=!D&&worldUnlocked();homePlaque(this,bagRow2?W-24:rx,bagRow2?py+54:py,{label:'行囊',name:'home-bag',glyph:'囊',onClick:()=>{if(!this.children.getByName('item-bag'))new ItemBagUI(this,{hero:CHARACTERS[this.selectedChar]?.id??'zhaoyun'});}},D);}
+     const bagRow2=!D&&worldUnlocked(),bagX=bagRow2?W-24:rx,bagY=bagRow2?py+54:py;homePlaque(this,bagX,bagY,{label:'行囊',name:'home-bag',glyph:'囊',onClick:()=>{if(this.children.getByName('item-bag'))return;badge?.destroy();new ItemBagUI(this,{hero:CHARACTERS[this.selectedChar]?.id??'zhaoyun'});}},D);
+     // 行囊角标：新收入的兵装件数 / 改版、马厩提示（打开行囊后清零）
+     const unseen=bagBadgeCount(),badge=unseen?this.add.text(bagX+4,bagY-(D?26:28),unseen>99?'99+':String(unseen),{fontFamily:'sans-serif',fontSize:'13px',color:'#fff',backgroundColor:'#c0392b',resolution:2}).setOrigin(1,0).setPadding(6,2).setDepth(21).setName('home-bag-badge'):null;}
     if(west&&!save.dongzhuoStages){const reveal=text(W/2,D?157:228+this.padY,'新篇揭晓 · 讨伐董卓',15,'#f0c389').setAlpha(0);this.tweens.add({targets:reveal,alpha:1,duration:700});}
     const closeHeroes=()=>{this.heroModal?.setVisible(false);this.heroEntryPaint?.();};
     this.heroPicker=new HomeHeroPicker(this,index=>{this.selectedChar=index;this.registry.set('heroConfirmed',true);try{localStorage.setItem('im_last_hero',CHARACTERS[index].id);}catch{}closeHeroes();this.renderSelection();},closeHeroes);
@@ -420,6 +425,7 @@ export class MenuScene extends Phaser.Scene {
     if (this.heroModal?.visible||this.westModal?.visible||this.children.getByName('home-settings-panel')||this.children.getByName('game-codex')) return;
     if(this.selectedChapter==='hulao'&&!dongzhuoStageUnlocked(this.selectedWestStage)&&!isChapterTestRun())return;
     if (this.started || (!chapterUnlocked(this.selectedChapter)&&!isChapterTestRun()) || !CHARACTERS[this.selectedChar]) return;
+    if (!heroOwned(CHARACTERS[this.selectedChar].id)) this.selectedChar = Math.max(0, CHARACTERS.findIndex(c => c.id === defaultHero(null)));
     this.started = true; this.renderSelection();
     if(!isChapterTestRun())this.registry.set('worldCampaign',true);
     const c = CHARACTERS[this.selectedChar];

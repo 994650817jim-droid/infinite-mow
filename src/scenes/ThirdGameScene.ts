@@ -31,6 +31,8 @@ export function thirdGameSceneClass(Base:typeof GameScene,cfg:ArcSceneConfig=THI
  private thirdStage:ThirdStage=1;private controller?:ThirdBoss;private thirdReceipt='';private thirdTest=false;private spear=new WeakMap<Enemy,SpearWindup>();private spearWarnings?:ThirdSpearWarnings;
  /** 本关首领招式组与地貌组（第三章即关序号）。 */
  private get behavior():ThirdStage{return cfg.stages[this.thirdStage-1]?.behavior??this.thirdStage;}
+ /** 马厩赠马键：群雄为 third-N，其余用篇章名（如 chibi-3）。 */
+ protected stableRewardKey():string|null{return (cfg.arc==='qunxiong'?'third':cfg.arc)+'-'+this.thirdStage;}
  private get sceneryStage():SceneryStage{return cfg.stages[this.thirdStage-1]?.scenery??this.thirdStage;}
  constructor(){super(cfg.key);}
  preload(){for(const d of cfg.stages)if(!this.textures.exists(cfg.texture(d.id)))this.load.spritesheet(cfg.texture(d.id),cfg.sheet(d.id),{frameWidth:128,frameHeight:128});}
@@ -39,7 +41,7 @@ export function thirdGameSceneClass(Base:typeof GameScene,cfg:ArcSceneConfig=THI
   const saved=this.registry.get('runConfig')as RunConfig|undefined,transfer=this.registry.get(cfg.transferKey)as CampaignTransfer|undefined;this.registry.remove(cfg.transferKey);this.registry.remove('campaignTransfer');if(transfer&&transfer.character===saved?.character)this.registry.set('campaignTransfer',transfer);
   this.registry.set('runConfig',{...saved,character:saved?.character??'zhaoyun',chapter:'hulao',westStage:3,encounter:'qunxiong'});super.create();
   this.controller=undefined;this.spear=new WeakMap();this.chapter=cfg.battle(this.thirdStage);this.runConfig={...this.runConfig,thirdStage:this.thirdStage,encounter:'qunxiong'};
-  this.hubao=cfg.arc==='chibi'?new HubaoBattle({scene:this,player:this.player,army:this.legion,enemies:this.enemies,spawn:(kind,x,y,def)=>this.spawnEnemy(kind,x,y,undefined,true,def),stage:()=>this.thirdStage,elapsed:()=>this.elapsed,def:k=>this.chapter.enemies[k],banner:(t,c)=>this.showWaveBanner(t,true,c||undefined),sfx:k=>this.sfx.play(k),move:(e,nx,ny,dt)=>this.advanceEnemy(e,nx,ny,dt),boss:()=>this.boss}):undefined;this.xiliang=this.hubao??null;
+  this.hubao=cfg.arc==='chibi'?new HubaoBattle({scene:this,player:this.player,army:this.legion,enemies:this.enemies,spawn:(kind,x,y,def)=>this.spawnEnemy(kind,x,y,undefined,true,def),stage:()=>this.thirdStage,elapsed:()=>this.elapsed,def:k=>this.chapter.enemies[k],banner:(t,c)=>this.showWaveBanner(t,true,c||undefined),sfx:k=>this.sfx.play(k),move:(e,nx,ny,dt)=>this.advanceEnemy(e,nx,ny,dt),boss:()=>this.boss,obstacles:()=>this.sishuiObstacles?.footprints??[]}):undefined;this.xiliang=this.hubao??null;
   this.thirdReceipt=this.thirdTest?'':beginArcExpedition(cfg.arc,this.thirdStage,this.allies.filter(u=>u.active&&u.reserveSoldier).map(u=>u.kind));const effect=permanentEffects();this.legion.healingMultiplier=effect.healMultiplier;applyCitySpecialties(this.player,effect,!transfer,{legion:this.legion,supplies:this.supplies});if(!transfer){for(let i=0;i<effect.reinforcements;i++)this.legion.recruit(i===0?'swordsman':'spearman',1,true);if(!this.thirdTest)for(const kind of takeExpeditionReserve(effect.reserveSlots)){this.legion.recruit(kind,1,true);this.allies[this.allies.length-1].reserveSoldier=true;}}
   this.spearWarnings=new ThirdSpearWarnings(this);
   this.battlefieldDetails.useStructuredLayout();if(this.supplies)this.supplies.randomGeneration=false;

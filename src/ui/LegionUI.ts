@@ -15,6 +15,8 @@ const ROLE_TINT: Record<TroopKind, number> = {
   swordsman: 0x7a3b22, guardian: 0x6b4a22, halberdier: 0x7a2f2f, spearman: 0x2d4f6e,
   rider: 0x4d3a72, archer: 0x2f5a42, crossbowman: 0x3a5a2a, medic: 0x2f6466,
 };
+/** 2026-11-16 用户反馈「战场支援 3 个兵也加一个可以选个血药，变成 4 个」：用户 2026-11-16 批准，默认开启；?recruit=v1 回到 3 张。回复量为临时值（GameScene.RECRUIT_POTION_HEAL）。 */
+export const RECRUIT_V2 = (() => { try { return new URLSearchParams(location.search).get('recruit') !== 'v1'; } catch { return true; } })();
 /** 半身裁切：立绘帧内人物大小不一，按兵种微调取景中心与高度（帧高比例）。 */
 const PORTRAIT_CROP: Partial<Record<TroopKind, { cy: number; h: number }>> = { rider: { cy: .4, h: .42 }, halberdier: { cy: .42, h: .44 } };
 export class LegionUI {
@@ -46,7 +48,8 @@ export class LegionUI {
   private readonly rows: Array<{ kind: TroopKind; root: Phaser.GameObjects.Container; bg: Phaser.GameObjects.Rectangle; plate: Phaser.GameObjects.Graphics; skin: Phaser.GameObjects.Image; icon: Phaser.GameObjects.Image; title: Phaser.GameObjects.Text; detail: Phaser.GameObjects.Text; buy: Phaser.GameObjects.Text; train: Phaser.GameObjects.Text; tag: Phaser.GameObjects.Text; seal: Phaser.GameObjects.Text; mask: Phaser.GameObjects.Graphics; walk: string; w: number; h: number; hover: boolean }> = [];
   private readonly backdrop: Phaser.GameObjects.Rectangle;
   private readonly flourish: Phaser.GameObjects.Graphics;
-  constructor(scene: Phaser.Scene, order: () => void, buy: (kind: TroopKind, train: boolean) => void, close: () => void) {
+  constructor(scene: Phaser.Scene, order: () => void, buy: (kind: TroopKind, train: boolean) => void, close: () => void, takePotion?: () => void, potionOk?: () => boolean) {
+    this.potionOk = potionOk;
     const text = (x: number, y: number, s: string, size = 16) => scene.add.text(x, y, s, { fontFamily: FONT, fontSize: `${size}px`, color: '#eee2c1', resolution: 2, stroke: '#101910', strokeThickness: 1, shadow: { offsetX: 0, offsetY: 2, color: '#080d09', blur: 3, fill: true } }).setScrollFactor(0);
     const button = (s: string, fn: () => void) => text(0, 0, s, 15).setPadding(10, 10).setBackgroundColor('rgba(57,83,62,0.96)').setInteractive({ useHandCursor: true }).on('pointerover', function(this: Phaser.GameObjects.Text) { this.setTint(0xffe4a1); }).on('pointerout', function(this: Phaser.GameObjects.Text) { this.clearTint(); }).on('pointerdown', fn);
     this.hud = scene.add.container(0, 0).setScrollFactor(0).setDepth(DEPTH.hud + 3);
@@ -101,6 +104,47 @@ export class LegionUI {
     this.panel.add([this.prev, this.next, this.pageText, this.close]);
     // 兵种胸像立绘（清单里有才加载）；到位后战地招募卡改用立绘
     loadTroopPortraits(scene, () => { if (this.panel.visible && this.mode === 'wave') this.repaint(); });
+    // 血药卡（效果图）：与兵种卡同一套漆底描金卡面，徽章里是药囊
+    {const root = scene.add.container(0, 0).setScrollFactor(0).setVisible(false).setName('recruit-potion-card'), g = scene.add.graphics().setScrollFactor(0);
+     const icon = scene.add.image(0, 0, scene.textures.exists('healing_potion') ? 'healing_potion' : 'icon_1').setScrollFactor(0);
+     const title = text(0, 0, '血药 · 回春', 21).setColor('#f6dc9a'), detail = text(0, 0, '', 14).setColor('#d9c79f'), buy = text(0, 0, '＋ 领取血药', 16).setColor('#ffe6b5').setPadding(10, 10);
+     const tag = text(0, 0, '补给', 14).setColor('#f6e6c2').setOrigin(.5);
+     // 整张卡可点（命中区名 recruit-potion），悬停描金变亮
+     const hit = scene.add.rectangle(0, 0, 10, 10, 0, .001).setOrigin(0).setScrollFactor(0).setName('recruit-potion').setInteractive({ useHandCursor: true });
+     hit.on('pointerover', () => { this.potionHover = true; this.layoutPotionCard(root.x, root.y, this.potionW, this.potionH); }).on('pointerout', () => { this.potionHover = false; this.layoutPotionCard(root.x, root.y, this.potionW, this.potionH); })
+       .on('pointerdown', () => { if (this.potionOk?.() ?? true) takePotion?.(); });
+     root.add([g, icon, title, tag, detail, buy, hit]); this.panel.add(root); this.potion = {root, g, icon, title, detail, buy, tag, hit};}
+  }
+  private potion!: {root: Phaser.GameObjects.Container; g: Phaser.GameObjects.Graphics; icon: Phaser.GameObjects.Image; title: Phaser.GameObjects.Text; detail: Phaser.GameObjects.Text; buy: Phaser.GameObjects.Text; tag: Phaser.GameObjects.Text; hit: Phaser.GameObjects.Rectangle};
+  private potionHover = false; private potionW = 0; private potionH = 0;
+  /** 主将满血时血药卡灰掉、不可点（判定同 canOfferRejuvenation，由 GameScene 传入）。 */
+  private potionOk?: () => boolean;
+  /** 血药卡排版：版式与兵种卡相同（电脑竖卡居中、手机横卡左徽章右文字）。 */
+  private layoutPotionCard(x: number, y: number, w: number, h: number): void {
+    const p = this.potion, g = p.g, mx = D ? w / 2 : 66, my = D ? 100 : h / 2 - 2, mr = 52, red = 0x7a2a22, ok = this.potionOk?.() ?? true, hover = this.potionHover && ok, gold = hover ? 0xf3d48a : ok ? WAR.gold : 0x8a8170;
+    this.potionW = w; this.potionH = h; p.hit.setSize(w, h); if (p.hit.input) p.hit.input.hitArea.setTo(0, 0, w, h);
+    p.root.setVisible(true).setPosition(x, y).setAlpha(ok ? 1 : .55);
+    if (p.hit.input) p.hit.input.cursor = ok ? 'pointer' : 'default';
+    g.clear(); g.fillStyle(0x10221b, .96).fillRect(0, 0, w, h); warFrame(g, 0, 0, w, h, gold, false);
+    if (hover) g.lineStyle(2, 0xf3d48a, .9).strokeRect(1, 1, w - 2, h - 2);
+    g.fillStyle(0x1b120b, .42).fillRect(2, 2, w - 4, h - 4);
+    g.fillStyle(0x0c0906, .6).fillCircle(mx, my, mr).fillStyle(red, .7).fillCircle(mx, my, mr - 3).fillStyle(0xffe2a0, .07).fillCircle(mx - mr * .25, my - mr * .3, mr * .6)
+      .lineStyle(3, WAR.gold, .85).strokeCircle(mx, my, mr).lineStyle(1, WAR.gold, .35).strokeCircle(mx, my, mr + 4);
+    const f = p.icon.frame, s = (mr * 1.3) / Math.max(f.width, f.height); p.icon.setScale(s).setPosition(mx, my);
+    p.title.setPosition(D ? w / 2 : 134, 16).setOrigin(D ? .5 : 0, 0).setFontSize(D ? 21 : 23);
+    p.tag.setPosition(D ? w / 2 : 134 + p.tag.width / 2 + 9, D ? 172 : 66);
+    const tw = p.tag.width + 18, th = p.tag.height + 6; g.fillStyle(red, .95).fillRoundedRect(p.tag.x - tw / 2, p.tag.y - th / 2, tw, th, 4).lineStyle(1, WAR.gold, .6).strokeRoundedRect(p.tag.x - tw / 2, p.tag.y - th / 2, tw, th, 4);
+    // 数值来自「平衡与数值」会话：回复最大生命的 30%
+    p.detail.setText('回复 30% 生命').setVisible(true).setAlign('center').setFontSize(D ? 14 : 16);
+    if (D) p.detail.setPosition(w / 2, 190).setOrigin(.5, 0); else p.detail.setPosition(p.tag.x + tw / 2 + 12, p.tag.y).setOrigin(0, .5);
+    p.buy.setText(ok ? '＋ 领取血药' : '主将满血');
+    p.buy.setPosition(D ? 14 : 134, D ? 212 : h - 54).setFixedSize(D ? w - 28 : w - 152, 0).setAlign('center').setFontSize(D ? 16 : 18);
+    // 按钮底板与兵种卡「招募入队」同尺寸同画法（文字自带 10px 内边距）
+    const bx = p.buy.x, by = p.buy.y, bw = p.buy.width, bh = p.buy.height;
+    g.fillStyle(0x000000, .35).fillRoundedRect(bx + 1, by + 3, bw, bh, 6).fillStyle(ok ? hover ? 0x9a6a2c : 0x6e4a22 : 0x4a443b, 1).fillRoundedRect(bx, by, bw, bh, 6)
+      .fillStyle(0xffe2a0, hover ? .2 : .1).fillRoundedRect(bx + 2, by + 2, bw - 4, bh * .45, { tl: 5, tr: 5, bl: 0, br: 0 }).lineStyle(1, gold, 1).strokeRoundedRect(bx + 3, by + 3, bw - 6, bh - 6, 4);
+    p.buy.setColor(hover ? '#fff3d6' : '#ffe6b5');
+    this.panel.bringToTop(p.root);
   }
   setCampDestination(name:string,title='黄巾败退 · 战后休整'):void {this.heading.setText(title);this.close.setText(`出征 · ${name}`).setBackgroundColor('#59452d').setColor('#ffe5b3').setPadding(30,14);}
   /** 战地招募卡面：漆底描金、兵种徽章、金色招募按钮；悬停时描金加亮、按钮转亮金。 */
@@ -144,9 +188,12 @@ export class LegionUI {
   private repaint(): void {
     const army = this.army; if (!army) return;
     const wave = this.mode === 'wave';
+    this.potion.root.setVisible(false); // 休整界面不显示血药卡（只在战地招募里出现）
     this.campBackground.setVisible(!wave);
     // 战地招募：压暗战场，卡片竖向居中（手机长屏不再上挤下空）
-    const waveCardH = D ? 262 : 176, waveGap = D ? 16 : 22, waveTop = D ? 150 : Math.max(196, Math.round((H - (waveCardH * 3 + waveGap * 2)) / 2) + 6);
+    // 效果图（?recruit=v2）：三张兵种卡旁再加一张「血药」卡，共 4 张
+    const cards = wave && RECRUIT_V2 ? 4 : 3, cardGapX = cards === 4 ? 12 : 16;
+    const waveCardH = D ? 262 : cards === 4 ? 150 : 176, waveGap = D ? 16 : cards === 4 ? 16 : 22, waveTop = D ? 150 : Math.max(196, Math.round((H - (waveCardH * cards + waveGap * (cards - 1))) / 2) + 6);
     this.backdrop.setFillStyle(0x0c0906, wave ? .62 : 0);
     this.heading.setY(wave ? waveTop - (D ? 100 : 124) : D ? 22 : 62).setColor(wave ? '#f6dc9a' : '#eee2c1');
     this.summary.setY(wave ? waveTop - (D ? 46 : 62) : D ? 61 : 112).setColor(wave ? '#d9c79f' : '#eee2c1');
@@ -155,7 +202,7 @@ export class LegionUI {
     this.heading.setText(wave ? '战地招募'  : '黄巾已破 · 战后休整');
     this.summary.setText(wave ? `免费招募 1 人 · 点选兵种卡入队　当前兵力 ${army.count}` : `随军粮 ${army.food}　当前兵力：${army.count}　阵亡 ${army.dead}\n仅开放刀盾、长枪、弓箭兵 · 使用本局军粮`).setAlign('center');
     this.close.setText(wave ? '跳过本次 · 继续战斗' : '率军出征 · 虎牢关');
-    if (wave) this.close.setBackgroundColor('rgba(27,18,11,0.88)').setColor('#d9c79f').setFontSize(D ? 16 : 18).setPadding(26, 12).setY(D ? waveTop + waveCardH + 34 : Math.min(H - 103, waveTop + waveCardH * 3 + waveGap * 2 + 40));
+    if (wave) this.close.setBackgroundColor('rgba(27,18,11,0.88)').setColor('#d9c79f').setFontSize(D ? 16 : 18).setPadding(26, 12).setY(D ? waveTop + waveCardH + 34 : Math.min(H - 103, waveTop + waveCardH * cards + waveGap * (cards - 1) + 40));
     else this.close.setY(H - (D ? 54 : 103));
     for (const row of this.rows) { row.hover = false; row.tag.setVisible(wave); if (!wave) { row.seal.setVisible(false); row.icon.clearMask(); if (row.icon.texture.key !== row.walk) row.icon.setTexture(row.walk, 'down_0'); } row.buy.setBackgroundColor(wave ? 'rgba(0,0,0,0)' : 'rgba(57,83,62,0.96)'); if (wave) row.bg.setInteractive({ useHandCursor: true }); else row.bg.disableInteractive(); }
     if(!wave){
@@ -176,9 +223,9 @@ export class LegionUI {
     for (const row of this.rows) {
       const index = visible.indexOf(row.kind); row.root.setVisible(index >= 0); if (index < 0) continue;
       const level = army.levels[row.kind], count = army.units.filter(u => u.active && u.kind === row.kind).length;
-      const width = wave ? D ? 232 : W - 72 : D ? (W - 70) / 4 : (W - 54) / 2;
+      const width = wave ? D ? (cards === 4 ? 208 : 232) : W - 72 : D ? (W - 70) / 4 : (W - 54) / 2;
       const height = wave ? waveCardH : D ? 166 : 245;
-      const x = wave ? D ? (W - (width * 3 + 32)) / 2 + index * (width + 16) : 36 : D ? 20 + index % 4 * (width + 10) : 18 + index % 2 * (width + 18);
+      const x = wave ? D ? (W - (width * cards + cardGapX * (cards - 1))) / 2 + index * (width + cardGapX) : 36 : D ? 20 + index % 4 * (width + 10) : 18 + index % 2 * (width + 18);
       const y = wave ? waveTop + (D ? 0 : index * (height + waveGap)) : (D ? 108 : 180) + Math.floor(index / (D ? 4 : 2)) * (height + 18);
       row.root.setPosition(x, y); row.bg.setSize(width, height); row.skin.setDisplaySize(width,height);
       row.plate.clear(); warFrame(row.plate,0,0,width,height,WAR.gold,false);
@@ -192,7 +239,9 @@ export class LegionUI {
         .setPosition(wave ? D ? width / 2 : 134 : D ? 85 : 98, wave ? D ? 190 : 84 : D ? 47 : 59)
         .setOrigin(wave && D ? .5 : 0, 0).setAlign(wave && D ? 'center' : 'left').setLineSpacing(5)
         .setWordWrapWidth(wave ? D ? width - 24 : width - 148 : width - (D ? 92 : 110)).setFontSize(wave ? D ? 14 : 16 : 13).setColor(wave ? '#d9c79f' : '#b9cdbb');
-      row.buy.setText(wave ? '＋ 招募入队' : `招募 1 人 · ${army.recruitCost(row.kind)}粮`).setFontSize(wave ? D ? 16 : 18 : 15).setPosition(wave && !D ? 134 : 14, wave ? D ? 212 : height - 62 : D ? 84 : 140).setFixedSize(wave && !D ? width - 152 : width - 28, 0).setAlign('center');
+      // 手机 4 张卡时卡片变矮：省掉说明行，招募按钮下移，避免压字
+      const compact = wave && !D && cards === 4; row.detail.setVisible(!compact);
+      row.buy.setText(wave ? '＋ 招募入队' : `招募 1 人 · ${army.recruitCost(row.kind)}粮`).setFontSize(wave ? D ? 16 : 18 : 15).setPosition(wave && !D ? 134 : 14, wave ? D ? 212 : height - (compact ? 54 : 62) : D ? 84 : 140).setFixedSize(wave && !D ? width - 152 : width - 28, 0).setAlign('center');
       row.w = width; row.h = height;
       row.train.setVisible(!wave).setText(level === 3 ? '训练已满级' : `训练至Lv${level + 1}　${LEGION.trainCost[level]}粮`).setPosition(10, D ? 124 : 193).setFixedSize(width - 20, 0).setAlign('center');
       const canBuy = (wave || army.food >= army.recruitCost(row.kind)), canTrain = !wave && level < 3 && army.food >= LEGION.trainCost[level];
@@ -200,6 +249,11 @@ export class LegionUI {
       row.train.setAlpha(canTrain ? 1 : .45).setColor(canTrain ? '#d9c28a' : '#98a393'); if (canTrain) row.train.setInteractive({ useHandCursor: true }); else row.train.disableInteractive();
       if (wave) this.paintWaveCard(row);
     }
+    // 第 4 张：血药卡（效果图）
+    if (wave && cards === 4) {
+      const w = D ? 208 : W - 72, i = 3;
+      this.layoutPotionCard(D ? (W - (w * 4 + cardGapX * 3)) / 2 + i * (w + cardGapX) : 36, waveTop + (D ? 0 : i * (waveCardH + waveGap)), w, waveCardH);
+    } else this.potion.root.setVisible(false);
     this.prev.setVisible(!wave && !D).setAlpha(this.page === 0 ? .4 : 1); this.next.setVisible(!wave && !D).setAlpha(this.page === 1 ? .4 : 1); this.pageText.setVisible(!wave && !D).setText(`${this.page + 1} / 2`);
   }
   update(army: Legion, visible: boolean): void { this.hud.setVisible(visible); if (!visible) return; this.status.setText(`随军粮 ${army.food} · 当前兵力：${army.count}${army.dead ? ` · 阵亡 ${army.dead}` : ''}`); this.paintOrder(army); }

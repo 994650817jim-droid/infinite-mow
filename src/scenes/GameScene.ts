@@ -62,7 +62,7 @@ import { MartialFields } from '../systems/MartialFields';
 import { RunGrowth, ATTRIBUTE_INFO, ATTRIBUTE_MAX, attributeIcon, type AttributeId } from '../systems/RunGrowth';
 import { allocateHeroAttr, claimFirstClear, creditHeroXp, enlistHero, heroFreePoints, heroLevel, type HeroKey } from '../systems/HeroProgress';
 import { packCampaign, restoreCampaign, type CampaignTransfer } from '../systems/Campaign';
-import { TROOP_KINDS, INITIAL_TROOPS, LEGION, type TroopKind } from '../data/legion';
+import { TROOP_KINDS, INITIAL_TROOPS, LEGION, FREE_RECRUIT_BY_TIER, type TroopKind } from '../data/legion';
 import { DEFAULT_RUN_CONFIG, getCharacter, type RunConfig , HERO_TINT, HERO_FX } from '../data/characters';
 import { Music } from '../systems/Music';
 import { Sfx } from '../systems/Sfx';
@@ -401,6 +401,8 @@ export class GameScene extends Phaser.Scene {
     // 新存档开局无兵，第一波后招募；已开放主城的出征另应用军营与后备。
     this.allies = [];
     this.legion = new Legion(this, this.allies, this.player);
+    // 战地免费招兵每波人数随章节增加（档位与掉落一致：一章 0 … 五章 4）
+    this.legion.freeRecruitCount = FREE_RECRUIT_BY_TIER[Math.max(0, Math.min(FREE_RECRUIT_BY_TIER.length - 1, this.itemTier()))];
     this.yellow=this.chapter.stage?new YellowBattle({scene:this,player:this.player,army:this.legion,enemies:this.enemies,move:(e,nx,ny,dt)=>this.advanceEnemy(e,nx,ny,dt),spawn:(def,x,y)=>this.spawnEnemy(def.kind,x,y,1,true,def)},this.chapter.stage):null;
     this.xiliang=this.chapter.id==='hulao'&&!this.runConfig.encounter&&!this.customChapter()?new XiliangBattle({scene:this,player:this.player,army:this.legion,enemies:this.enemies,spawn:(kind,x,y,def)=>this.spawnEnemy(kind,x,y,undefined,true,def),stage:()=>(this.chapter.westStage??3) as 1|2|3,elapsed:()=>this.elapsed,def:k=>this.chapter.enemies[k],banner:(t,c)=>this.showWaveBanner(t,true,c),sfx:k=>this.sfx.play(k),boss:()=>this.boss,bossStyle:()=>this.chapter.bossStyle,move:(e,nx,ny,dt)=>this.advanceEnemy(e,nx,ny,dt),obstacles:()=>this.sishuiObstacles?.footprints??[]}):null;
     this.supplies=new BattlefieldSupplies(this,this.player,this.enemies,()=>this.combatNow,()=>{this.sfx.play('pickup');this.artEffects.show(5,this.player.x,this.player.y-12,35,this.combatNow,280);});
@@ -2117,7 +2119,7 @@ export class GameScene extends Phaser.Scene {
       return;
     }
     if (this.mode !== 'recruit' || !this.freeRecruit || train || this.recruitedWaves.has(this.waveIndex) || !this.recruitOptions.some(o => o.kind === kind)) return;
-    if (this.legion.recruit(kind, 1, true)) {
+    if (this.legion.recruit(kind, this.legion.freeRecruitCount, true)) {
       if(this.waveIndex%2===0){const id=this.player.hp<this.player.maxHp?'rejuvenation':'berserk';this.player.growth.usePotion(id,this.player,this.combatNow);this.showGrowthNotice(id==='rejuvenation'?'整军奖励 · 回春丹':'整军奖励 · 狂战丹');}
       this.recruitedWaves.add(this.waveIndex); this.freeRecruit = false; this.recruitOptions = [];
       this.resumePendingChoices();

@@ -17,6 +17,8 @@ export const ORDERS: Record<Order, string> = { guard: '护阵', sortie: '出击'
 export const LEGION = { startingFood: 0, waveFood: 0, trainCost: [0, 40, 80], squadSize: 12, nearStep: .1, farStep: .5 } as const;
 
 export const INITIAL_TROOPS:readonly TroopKind[]=['swordsman','spearman','archer'];
+/** 战地免费招兵每波人数，按章节档位 0–4（第一到第五章；攻城与第三章同档）。2026-11-16 平衡（用户批准）：原来每波 1 人、每关 3 波，场上平均不到 1 个兵。 */
+export const FREE_RECRUIT_BY_TIER: readonly number[] = [2, 3, 3, 4, 4];
 
 /** Living soldiers, including starting reinforcements and reserves. */
 /** Compatibility helper; barracks upgrades no longer restrict army size. */

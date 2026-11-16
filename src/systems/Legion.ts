@@ -26,6 +26,8 @@ export class Legion {
   private visualAt=0;
   /** Legacy callers may still inspect capacity; recruitment has no gameplay cap. */
   readonly capacity=Infinity;
+  /** 本场战地免费招兵每波人数（GameScene 开局按章节设定，LegionUI 显示用）。 */
+  freeRecruitCount=1;
   private groupSignature='';
   awakeningDefense?:{incoming:(u:Ally,now:number)=>number;onAllyHurt:(u:Ally,now:number)=>void};
   defense?:{incoming:(u:Ally,now:number)=>number;onAllyHurt:(u:Ally,now:number)=>void};

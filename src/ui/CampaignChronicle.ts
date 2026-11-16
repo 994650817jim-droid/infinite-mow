@@ -44,6 +44,8 @@ export class CampaignChronicle{
    const frame=this.scene.add.image(x,tabY,warPanelTexture(this.scene,tabW,42,active)).setDisplaySize(tabW+16,58).setAlpha(info.open?1:.55);
    const name=CHRONICLE[i].title.split(' · ')[1];
    const label=this.text(x,tabY,info.open?name+(n>3&&!D?' ':'  ')+info.cleared+'/3':name+(n>3&&!D?'':' · ')+(n>3&&!D?'':'未开'),D?16:n>3?14:15,active?'#fff0cc':info.open?'#d8c39a':'#857a68',HEADING_FONT).setOrigin(.5);
+   // 手机五个页签较窄：字比页签宽时整体缩小，不再顶到描金边
+   if(label.width>tabW-26)label.setScale((tabW-26)/label.width);
    const hit=this.scene.add.rectangle(x,tabY,tabW,42,0,.001).setInteractive({useHandCursor:true}).setName('chronicle-tab-'+i).on('pointerdown',()=>{this.chapter=i;this.render();});
    this.body.add([frame,label,hit]);
   });

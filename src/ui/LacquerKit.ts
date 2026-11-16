@@ -53,7 +53,7 @@ export function lqLabelColor(state: LqState): string {
  * target 必须已 setInteractive，以 target 的 x / y 为按钮中心；label 为按钮文字（原点 .5，可就是 target 本身，此时按下不下沉）。
  * 返回 repaint，可在外部改变尺寸 / 位置 / 可用状态后调用。
  */
-export function lqSkin(scene: Phaser.Scene, target: Phaser.GameObjects.GameObject & { x: number; y: number; visible: boolean }, label: Phaser.GameObjects.Text, size: () => { w: number; h: number }, opts: { tone?: LqTone; on?: () => boolean; enabled?: () => boolean } = {}): { gfx: Phaser.GameObjects.Graphics; repaint: (s?: LqState) => void } {
+export function lqSkin(scene: Phaser.Scene, target: Phaser.GameObjects.GameObject & { x: number; y: number; visible: boolean }, label: Phaser.GameObjects.Text, size: () => { w: number; h: number }, opts: { tone?: LqTone | 'auto'; on?: () => boolean; enabled?: () => boolean } = {}): { gfx: Phaser.GameObjects.Graphics; repaint: (s?: LqState) => void } {
   const gfx = scene.add.graphics();
   let cur: LqState = 'idle';
   const repaint = (s?: LqState) => {
@@ -64,7 +64,7 @@ export function lqSkin(scene: Phaser.Scene, target: Phaser.GameObjects.GameObjec
     const st: LqState = !enabled ? 'off' : opts.on?.() && cur === 'idle' ? 'on' : cur;
     const { w, h } = size();
     gfx.clear().setVisible(target.visible);
-    const d = lqButton(gfx, target.x, target.y, w, h, st, opts.tone);
+    const d = lqButton(gfx, target.x, target.y, w, h, st, opts.tone === 'auto' ? (st === 'on' ? 'cinnabar' : 'quiet') : opts.tone);
     label.setColor(lqLabelColor(st));
     if (label !== (target as unknown)) label.setPosition(target.x, target.y + d).setVisible(target.visible);
   };

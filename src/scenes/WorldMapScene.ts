@@ -219,7 +219,8 @@ export class WorldMapScene extends Phaser.Scene {
   const cities=this.cityMarkers.filter(m=>!m.root.getData('fogged')).map(m=>({m,p:this.toScreen(m.city.x,m.city.y)}));
   // 牙旗 / 关卡印占据锚点上方约 44、下方约 26（名牌）；城占据城郭顶到名牌底
   const hitAt=(px:number,py:number,skip?:CityMarker)=>cities.find(c=>c.m!==skip&&Math.abs(c.p.x-px)<c.m.outer+18&&py-44<c.p.y+30&&py+26>c.p.y-c.m.top-6);
-  const under=hitAt(x,y);if(!under)return{x,y};
+  // 同时压到几座城时，以最近的那座为准（否则可能按地图框外的城去挪）
+  const under=cities.filter(c=>hitAt(x,y)&&Math.abs(c.p.x-x)<c.m.outer+18&&y-44<c.p.y+30&&y+26>c.p.y-c.m.top-6).sort((a,b)=>Math.hypot(a.p.x-x,a.p.y-y)-Math.hypot(b.p.x-x,b.p.y-y))[0];if(!under)return{x,y};
   const {m,p}=under,side=m.outer+30;
   const a=this.area,inMap=(c:{x:number;y:number})=>c.x>a.x+20&&c.x<a.x+a.w-20&&c.y-44>a.y&&c.y+26<a.y+a.h;
   // 关卡印必须留在史实位置附近：只允许抬到城郭正上方（且不出地图框），否则不动
@@ -227,7 +228,8 @@ export class WorldMapScene extends Phaser.Scene {
   // 章节牙旗：计分 = 压到几座城（含原城）；取分最低的位置，挪不出地图边框；全都更差就留在原处
   const cost=(c:{x:number;y:number})=>cities.filter(q=>Math.abs(q.p.x-c.x)<q.m.outer+18&&c.y-44<q.p.y+30&&c.y+26>q.p.y-q.m.top-6).length;
   let best={x,y},bestCost=cost(best);
-  for(const c of [{x,y:p.y-m.top-26},{x:p.x+side,y:p.y},{x:p.x-side,y:p.y},{x,y:p.y+62}]){if(!inMap(c))continue;const k=cost(c);if(k<bestCost){best=c;bestCost=k;if(!k)break;}}
+  // 电脑布局地图区很矮（约 266），城上方常出框：再试名牌下方（+80，避开本城名牌）与更远的左右
+  for(const c of [{x,y:p.y-m.top-26},{x:p.x+side,y:p.y},{x:p.x-side,y:p.y},{x,y:p.y+80},{x:p.x+side+40,y:p.y},{x:p.x-side-40,y:p.y},{x:p.x-side,y:p.y+60},{x:p.x+side,y:p.y+60}]){if(!inMap(c))continue;const k=cost(c);if(k<bestCost){best=c;bestCost=k;if(!k)break;}}
   return best;}
  /** v2：名牌按优先级避让（选中城 > 关卡印 > 章节牙旗 > 大城 > 中城 > 小城）。图标（城郭、牙旗、关卡印）也算障碍：
   * 关卡标签被挡时翻到印的上方；城名牌与已摆好的名牌或别家图标重叠时本轮隐藏。地图缩放 / 拖动后重算。 */

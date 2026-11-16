@@ -2,3 +2,5 @@ IMWarTitle: subset derived from Ma Shan Zheng, Google Fonts / googlefonts/mashan
 IMWarHeading: subset/static weight600 derived from Noto Serif SC, Adobe/Google.
 Both are SIL Open Font License 1.1; see accompanying licenses.
 Families renamed for modified subsets. Original sources: https://github.com/google/fonts/tree/main/ofl/mashanzheng and https://github.com/google/fonts/tree/main/ofl/notoserifsc
+
+Subsets regenerated 2026-11-15 to cover every character used in src/ (tools/subset-fonts.py, fontTools; IMWarHeading instanced at wght 600).

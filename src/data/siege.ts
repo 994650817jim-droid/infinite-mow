@@ -68,3 +68,15 @@ export function defenseBattle(city: CityDef, attacker: FactionId): ChapterDef {
     victoryTitle: `${city.name}守住了`, victoryText: `击退${FACTIONS[attacker].name}，${city.name}转危为安`,
   };
 }
+
+/**
+ * 攻城目标（用户 2026-11-16：「攻城战需要摧毁一些城市地标、首府或者占领」）：试玩初值，交平衡会话测。
+ * 小城：拔掉帅旗 → 占领府衙；中城：摧毁两座箭楼（会放箭）→ 占领府衙；大城：破城门、摧毁箭楼、击败大将 → 占领府衙。
+ * 占领：主将站进府衙圈内，进度涨满即破城；圈内有敌兵时进度变慢。守城战不变。
+ */
+export const SIEGE_GOALS = {
+  flagHp: 220, towerHp: 320, towerShotMs: 2400, towerRange: 380, towerDamage: 7, towerArrowSpeed: 230,
+  /** 府衙位置：小城在帅旗处，中大城在城门之后。 */
+  capture: {x: 0, y: -720, smallY: -330, radius: 90, seconds: 6, contestedMul: .35},
+  limit: {small: 150, medium: 210, large: 330} as Record<CityTier, number>,
+} as const;

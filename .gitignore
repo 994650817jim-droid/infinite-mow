@@ -82,3 +82,5 @@ assets/raw/*
 !/tools/test-shield.mjs
 !/tools/test-objectives.mjs
 !/tools/test-recruit-potion.mjs
+!/tools/test-dongzhuo.mjs
+!/tools/test-siege-goals.mjs

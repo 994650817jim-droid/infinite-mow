@@ -33,6 +33,7 @@ export const BOSS_PROFILES: Record<string, BossProfile> = {
   华雄: P('华雄', '西凉骁将', 104, 62, SHANG, [0, 0, 3, 3, 1, 1, 4, 0], 'pipa', 'march', ['horn', 'gong']),
   徐荣: P('徐荣', '伏兵之将', 112, 64, JUE, [0, 2, 0, 3, 0, 2, 4, 3], 'flute', 'tense', []),
   吕布: P('吕布', '人中吕布', 132, 62, YU, [0, 0, 3, 3, 4, 4, 2, 1], 'pipa', 'gallop', ['gong', 'horn']),
+  董卓: P('董卓', '相国', 92, 58, SHANG, [0, 0, 4, 4, 3, 3, 0, 1], 'suona', 'heavy', ['fire', 'gong']),
   李傕: P('李傕', '西凉余部', 116, 61, YU, [0, 3, 0, 4, 0, 3, 2, 1], 'suona', 'gallop', ['horn']),
   张绣: P('张绣', '北地枪王', 120, 64, SHANG, [0, 0, 2, 3, 0, 0, 4, 2], 'pipa', 'gallop', []),
   袁术: P('袁术', '仲家伪帝', 84, 60, GONG, [0, 0, 4, 4, 3, 3, 1, 0], 'suona', 'ceremony', ['bells', 'gong']),

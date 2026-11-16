@@ -9,7 +9,8 @@ import {SIEGE} from '../data/siege';
  * 小城：一座守军营。中城：城门（装饰、不可破）与两座箭楼、两座营。大城：箭楼与两座营，城门由场景生成为可破坏物件。
  */
 export const SIEGE_GATE = {x: 0, y: -280, size: 300} as const;
-export function siegeScenery(scene: Phaser.Scene, city: CityDef, spawnProp?: (frame: number, x: number, y: number, size: number) => void) {
+/** opts.liveTowers：攻城时两座箭楼改由战斗场景生成为可摧毁目标，这里不放装饰箭楼与碰撞框。 */
+export function siegeScenery(scene: Phaser.Scene, city: CityDef, spawnProp?: (frame: number, x: number, y: number, size: number) => void, opts: {liveTowers?: boolean} = {}) {
   const south = city.y > 600, key = 'siege_ground_' + (south ? 's' : 'n');
   if (!scene.textures.exists(key)) {
     const tex = scene.textures.createCanvas(key, 512, 512)!; const g = tex.context; g.imageSmoothingEnabled = false;
@@ -32,7 +33,7 @@ export function siegeScenery(scene: Phaser.Scene, city: CityDef, spawnProp?: (fr
   const camps = all.slice(0, SIEGE[city.tier].camps);
   for (const c of camps) { place(4, c.x + 113, c.y - 8, 92); place(3, c.x - 110, c.y + 42, 90); place(6, c.x - 98, c.y - 74, 86); }
   const boxes: Array<{left: number; right: number; top: number; bottom: number}> = [];
-  if (city.tier !== 'small') {
+  if (city.tier !== 'small' && !opts.liveTowers) {
     for (const x of [-250, 250]) place(1, x, -265, 126);
     boxes.push(...[-250, 250].map(x => ({left: x - 34, right: x + 34, top: -300, bottom: -265})));
   }

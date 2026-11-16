@@ -8,7 +8,7 @@ import { GAME_WIDTH } from '../config';
 import { createGameTextures, createWalkPlaceholders, registerWalkSheet } from '../systems/TextureFactory';
 import { HERO_ACTION_FILES } from '../data/heroActions';
 import { applyHdHeroSheets } from '../systems/HdHeroSheets';
-import { applyArtStyleUrls, applyV2TroopFrames } from '../systems/ArtStyle';
+import { applyArtStyleUrls, applyV2TroopFrames, isV2Texture } from '../systems/ArtStyle';
 
 export class BootScene extends Phaser.Scene {
   private shellOnly=false;
@@ -224,7 +224,7 @@ export class BootScene extends Phaser.Scene {
       this.textures.get(key).setFilter((key.startsWith('ground') && !key.startsWith('ground_overhaul')) || key === 'shadow'
         ||key.startsWith('epic_')
         // 厚涂图标（128px 缩到约 52px 显示）用线性过滤，避免锯齿
-        ||key.startsWith('growth_icon_')||key.startsWith('build_icon_')||/^icon_(1|2|3|guandao|passive|rare)$/.test(key) ? Phaser.Textures.FilterMode.LINEAR : Phaser.Textures.FilterMode.NEAREST);
+        ||key.startsWith('growth_icon_')||key.startsWith('build_icon_')||(key.startsWith('icon_shu_')&&isV2Texture(key))||/^icon_(1|2|3|guandao|passive|rare)$/.test(key) ? Phaser.Textures.FilterMode.LINEAR : Phaser.Textures.FilterMode.NEAREST);
     }
     for(const key of ['huaxiong_walk','huaxiong_attack']){if(!this.textures.exists(key))continue;const t=this.textures.get(key);['down','left','right','up'].forEach((dir,row)=>{for(let col=0;col<4;col++)if(!t.has(dir+'_'+col))t.add(dir+'_'+col,0,col*128,row*128,128,128);});}
     createReadableTextures(this);

@@ -79,6 +79,10 @@ export const ART_V2_FILES: Readonly<Record<string, string>> = {
   feixiong_walk: 'assets/processed-v2/enemies/feixiong_walk.png',
   feixiong_attack: 'assets/processed-v2/enemies/feixiong_attack.png',
   hubao_walk: 'assets/processed-v2/enemies/hubao_walk.png',
+  // 兵种小图标（营地「招兵营」页签等）：从 v2 胸像裁出的头肩像
+  icon_shu_swordsman: 'assets/troop-portraits-v2/icon_swordsman.png',
+  icon_shu_spearman: 'assets/troop-portraits-v2/icon_spearman.png',
+  icon_shu_archer: 'assets/troop-portraits-v2/icon_archer.png',
 };
 /** v2 主将行走整格的显示高度（逻辑像素）：原生格 176 → 88，即 1080p 全屏（渲染 2 倍）下 1 美术像素 = 1 屏幕像素。
  * 人物约 76 逻辑像素高（用户要求比 v1 大一些）。 */

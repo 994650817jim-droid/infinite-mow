@@ -1,10 +1,10 @@
 // 兵种胸像立绘导入：public/assets/troop-portraits/originals/<kind>_portrait_original.png（ChatGPT 生成，原图不改动）
 // → 去底（四角为纯色底时从边缘泛洪抠掉）→ 按不透明区域裁边 → 方形留白 → <kind>_portrait.png（512）+ <kind>_portrait.webp（256）
 // → 写 manifest.json（headY：头部中心在输出图中的高度比例，按不透明区域顶部 + 头部估算）。
-// 用法：开发服务器 5173 运行时 node tools/prepare-troop-portraits.mjs
+// 用法：开发服务器 5173 运行时 node tools/prepare-troop-portraits.mjs（人物画风 v2：DIR=public/assets/troop-portraits-v2 BASE=…）
 import { chromium } from 'playwright';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
-const DIR = 'public/assets/troop-portraits', KINDS = ['swordsman', 'spearman', 'archer', 'crossbowman', 'guardian', 'rider', 'halberdier', 'medic'];
+const DIR = process.env.DIR ?? 'public/assets/troop-portraits', KINDS = ['swordsman', 'spearman', 'archer', 'crossbowman', 'guardian', 'rider', 'halberdier', 'medic'];
 const found = KINDS.filter(k => existsSync(`${DIR}/originals/${k}_portrait_original.png`));
 if (!found.length) { console.log('originals/ 下没有 <kind>_portrait_original.png，未做任何改动。'); process.exit(0); }
 const b = await chromium.launch({ channel: 'chrome', headless: true });

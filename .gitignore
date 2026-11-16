@@ -55,3 +55,19 @@ assets/raw/*
 
 !/tools/fonts-spear-supplies-smoke.mjs
 /release/
+
+# 2026-11 parallel-session regression suites and asset import (UI, world map, intel, Xiliang, heroes, items).
+!/tools/test-ui-polish.mjs
+!/tools/test-worldmap-ui.mjs
+!/tools/test-worldmap-chapters.mjs
+!/tools/test-intel.mjs
+!/tools/test-xiliang.mjs
+!/tools/test-new-heroes.mjs
+!/tools/test-weiyan-pangtong.mjs
+!/tools/test-shu-heroes.mjs
+!/tools/test-campaign-growth-transfer.mjs
+!/tools/test-attr-crossbow.mjs
+!/tools/test-gamepad.mjs
+!/tools/phase19-progression.mjs
+!/tools/rest-flow-smoke.mjs
+!/tools/prepare-troop-portraits.mjs

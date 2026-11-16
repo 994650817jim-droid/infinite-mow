@@ -1,0 +1,51 @@
+import { chromium } from 'playwright';
+import { mkdirSync, writeFileSync } from 'node:fs';
+const out = 'assets/review/rest-flow'; mkdirSync(out, { recursive: true });
+const b = await chromium.launch({ channel: 'chrome', headless: true }), results = [], errors = [], warnings = [];
+const check = (name, ok, detail) => { results.push({ name, ok, detail }); console.log(ok ? 'PASS' : 'FAIL', name, JSON.stringify(detail)); };
+try {
+ const ctx = await b.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true }), p = await ctx.newPage();
+ p.on('pageerror', e => errors.push(e.message)); p.on('console', m => { if (m.type() === 'warning' && /texture|frame/i.test(m.text())) warnings.push(m.text()); });
+ await p.goto('http://127.0.0.1:5173/?autostart=1'); await p.waitForFunction(() => window.__IM && window.__game.scene.getScene('GameScene').mode === 'recruit');
+ await p.screenshot({ path: `${out}/wave-mobile.png` });
+ const tap = async (selector, kind = '') => {
+  const pos = await p.evaluate(({ selector, kind }) => { const s = window.__game.scene.getScene('GameScene'), ui = s.legionUI, row = ui.rows.find(r => r.kind === kind); const obj = selector === 'buy' ? row.buy : selector === 'train' ? row.train : selector === 'next' ? ui.next : ui.close; const r = obj.getBounds(), c = document.querySelector('canvas').getBoundingClientRect(); return { x: c.x + r.centerX / s.scale.width * c.width, y: c.y + r.centerY / s.scale.height * c.height }; }, { selector, kind });
+  await p.touchscreen.tap(pos.x, pos.y); await p.waitForTimeout(40);
+ };
+ await tap('buy', 'swordsman');
+ check('one_free_soldier_and_zero_starting_food', await p.evaluate(() => { const s = window.__game.scene.getScene('GameScene'); return s.mode === 'none' && s.legion.count === 1 && s.legion.food === 0; }));
+ const wave = await p.evaluate(() => { const s = window.__game.scene.getScene('GameScene'); s.chooseRecruit(0); s.openRecruit(); s.buyTroops('swordsman', false); return { n: s.legion.count, mode: s.mode }; });
+ check('same_wave_cannot_recruit_twice', wave.n === 1 && wave.mode === 'none', wave);
+ const slots = await p.evaluate(() => { const s = window.__game.scene.getScene('GameScene'); const before = s.legion.count; s.buyTroops('rider', false); s.buyTroops('swordsman', true); return { before, after: s.legion.count, level: s.legion.levels.swordsman, buttons: s.legionUI.hud.list.filter(o => o.input).map(o => o.text) }; });
+ check('no_battle_purchase_training_or_formation_button', slots.before === slots.after && slots.level === 1 && slots.buttons.length === 1 && !slots.buttons.join('').includes('军营'), slots);
+ await p.keyboard.press('q'); await p.waitForTimeout(25); check('q_has_no_formation_effect', await p.evaluate(() => { const s = window.__game.scene.getScene('GameScene'); return s.input.keyboard.listenerCount('keydown-Q') === 0 && s.player.armyDamageTakenMul === 1; }));
+ const rest = await p.evaluate(() => { const s = window.__game.scene.getScene('GameScene'); window.__IM.killAllEnemies(); window.__IM.clearWeapons(); s.player.weapons.push({ id: 'crossbow', level: 3, cooldownLeft: 5 }); s.player.addRelic('whetstone'); s.player.level = 7; const e = s.spawnEnemy('infantry', 200, 0, 1, true); const food = s.legion.food; s.killEnemy(e); const grain = s.legion.food - food; s.player.hp = 10; s.allies[0].hp = 5; s.legion.food = 300; s.spawnBoss(); s.killEnemy(s.boss); return { grain, mode: s.mode, stopped: s.over, food: s.legion.food, recovered: s.player.hp === s.player.maxHp && s.allies[0].hp === s.allies[0].maxHp }; });
+ check('kills_provide_food', rest.grain === 1); check('zhangjiao_opens_rest_and_recovers_survivors', rest.mode === 'rest' && rest.stopped && rest.recovered, rest);
+ await tap('buy', 'swordsman'); await tap('train', 'swordsman'); await tap('next'); await tap('buy', 'medic');
+ const bought = await p.evaluate(() => { const s = window.__game.scene.getScene('GameScene'); return { food: s.legion.food, count: s.legion.count, level: s.legion.levels.swordsman, trained: s.allies.filter(u => u.active && u.kind === 'swordsman').every(u => u.level === 2) }; });
+ check('rest_touch_purchase_train_and_page', bought.food === 250 && bought.count === 3 && bought.level === 2 && bought.trained, bought);
+ await p.screenshot({ path: `${out}/rest-mobile.png` });
+ await tap('close'); await p.waitForFunction(() => window.__game.scene.getScene('GameScene').chapter.id === 'hulao'); await p.waitForTimeout(100);
+ const carried = await p.evaluate(() => { const s = window.__game.scene.getScene('GameScene'); return { chapter: s.chapter.id, food: s.legion.food, count: s.legion.count, level: s.player.level, trained: s.legion.levels.swordsman, weapons: s.player.weapons.map(w => [w.id, w.level]), relics: s.player.relics, transferConsumed: !s.registry.has('campaignTransfer') }; });
+ check('continue_hulao_preserves_army_food_training', carried.chapter === 'hulao' && carried.food === 250 && carried.count === 3 && carried.trained === 2, carried);
+ check('continue_preserves_player_build_once', carried.level === 7 && carried.weapons.some(w => w[0] === 'crossbow' && w[1] === 3) && carried.relics.includes('whetstone') && carried.transferConsumed, carried);
+ await tap('buy', 'swordsman'); check('chapter_two_wave_still_one', await p.evaluate(() => { const s = window.__game.scene.getScene('GameScene'); return s.legion.count === 4 && s.mode === 'none' && s.legion.food === 250; }));
+ const art = await p.evaluate(() => { const s = window.__game.scene.getScene('GameScene'); s.scene.pause(); s.legion.recruit('crossbowman', 1, true); s.legion.update(.25, s.combatNow, [], s.grid, () => {}); const checks = []; for (const k of ['medic', 'crossbowman']) { const u = s.allies.find(u => u.active && u.kind === k); u.act(u.x + 10, u.y, 1000, 400); for (const dir of ['down', 'left', 'right', 'up']) for (let f = 0; f < 4; f++) { u.dir = dir; u.render(1000 + f * 100); checks.push(u.sprite.texture.key === `legion_${k}_action` && u.sprite.frame.name === `${dir}_${f}` && !u.view.label.visible && u.sprite.scaleX === u.sprite.scaleY); } } return checks; });
+ check('32_action_frames_no_labels_no_stretch', art.length === 32 && art.every(Boolean));
+ const arrows = await p.evaluate(() => { const s = window.__game.scene.getScene('GameScene'); window.__IM.killAllEnemies(); s.legion.clear(); s.legion.recruit('crossbowman', 1, true); const u = s.allies.find(u => u.active); u.setPosition(0, 0); u.cooldown=0; const e = s.spawnEnemy('infantry', 200, 0, 1, true); e.hp = 1000; s.rebuildGrid(); const a = s.legion; a.order = 'hold'; a.holdX = a.holdY = 0; a.update(.1, 1000, s.enemies, s.grid, (e,n) => e.hp -= n); const initial = e.hp; a.update(0, 1209, s.enemies, s.grid, (e,n) => e.hp -= n); const delayed = e.hp; a.update(.05, 1210, s.enemies, s.grid, (e,n) => e.hp -= n); const inFlight = a.projectiles.count; for (let i=1;i<=12;i++) a.update(.05,1210+i*50,s.enemies,s.grid,(e,n)=>e.hp-=n); return { initial, delayed, inFlight, final: e.hp }; });
+ check('arrows_windup_flight_then_hit', arrows.initial === 1000 && arrows.delayed === 1000 && arrows.inFlight > 0 && arrows.final < 1000, arrows);
+ const reuse = await p.evaluate(() => { const s=window.__game.scene.getScene('GameScene'),a=s.legion,u=s.allies.find(u=>u.active);window.__IM.killAllEnemies();const e=s.spawnEnemy('infantry',300,0,1,true);e.hp=1000;a.projectiles.fire(u,e,99,1000);const id=e.spawnId;e.deactivate();e.spawn(300,0,s.chapter.enemies.infantry,100,1000);const hp=e.hp;s.rebuildGrid();a.projectiles.update(.1,1500,s.grid,(t,n)=>t.hp-=n);return {fresh:e.spawnId!==id,unchanged:hp===e.hp}; });
+ check('queued_arrow_rejects_reused_enemy', reuse.fresh && reuse.unchanged, reuse);
+ const heal = await p.evaluate(() => { const s=window.__game.scene.getScene('GameScene'),a=s.legion;window.__IM.killAllEnemies();a.clear();a.recruit('medic',1,true);a.recruit('guardian',1,true);const m=s.allies[0],u=s.allies[1];m.setPosition(0,0);u.setPosition(20,0);u.hp=10;m.cooldown=0;a.update(.1,2000,[],s.grid,()=>{});const before=u.hp;m.render(2240);const frame=m.sprite.frame.name;a.update(0,2240,[],s.grid,()=>{});return{before,after:u.hp,frame}; });
+ check('medical_heal_on_cast_release', heal.before === 10 && heal.after > 10 && heal.frame.endsWith('_2'), heal);
+ await p.evaluate(() => { const s=window.__game.scene.getScene('GameScene');s.setMode('none');s.scene.resume();s.player.invulnUntil=1e12;s.spawnTimer=s.eliteTimer=1e8; });await p.waitForTimeout(80);
+ const frozen=await p.evaluate(()=>{const s=window.__game.scene.getScene('GameScene');s.setMode('pause');return{s:s.combatNow,shots:s.legion.projectiles.count,hp:s.allies.map(u=>u.hp)};});await p.waitForTimeout(120);
+ check('pause_freezes_actions_and_arrows',await p.evaluate(v=>{const s=window.__game.scene.getScene('GameScene');return JSON.stringify(v)===JSON.stringify({s:s.combatNow,shots:s.legion.projectiles.count,hp:s.allies.map(u=>u.hp)});},frozen));
+ await p.evaluate(()=>window.__IM.restart());await p.waitForTimeout(120);check('restart_does_not_replay_transfer',await p.evaluate(()=>{const s=window.__game.scene.getScene('GameScene');return s.legion.count===0&&s.legion.food===0&&s.player.level===1;}));
+ // Desktop layout uses the same controls and stays within the viewport.
+ const desktop=await b.newPage({viewport:{width:1280,height:720}});desktop.on('pageerror',e=>errors.push(e.message));await desktop.goto('http://127.0.0.1:5173/?autostart=1&layout=desktop');await desktop.waitForFunction(()=>window.__IM);await desktop.evaluate(()=>{const s=window.__game.scene.getScene('GameScene');s.setMode('none');s.legion.food=200;s.spawnBoss();s.killEnemy(s.boss);});await desktop.waitForTimeout(100);await desktop.screenshot({path:`${out}/rest-desktop.png`});
+ check('desktop_rest_buttons_inside_canvas',await desktop.evaluate(()=>{const s=window.__game.scene.getScene('GameScene');const ui=s.legionUI;return ui.rows.every(r=>{const b=r.train.getBounds();return b.top>=0&&b.bottom<s.scale.height;})&&ui.close.getBounds().bottom<s.scale.height;}));
+ check('no_frame_warnings',!warnings.length,warnings);check('no_page_errors',!errors.length,errors);
+}finally{await b.close();writeFileSync(`${out}/results.json`,JSON.stringify(results,null,2));}
+console.log(`SUMMARY ${results.filter(r=>r.ok).length}/${results.length}`);if(results.some(r=>!r.ok))process.exitCode=1;
+

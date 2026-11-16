@@ -154,14 +154,15 @@ await p.screenshot({ path: `${out}/mobile-battle-hud-bag.png` });
 await p.evaluate(async () => { const st = await window.__mod('/src/systems/ItemStore.ts'), items = await window.__mod('/src/data/items.ts'); st.setAutoSalvageWhite(false);
   { const raw = JSON.parse(localStorage.getItem('im_items_v2')); raw.legacy = [{ uid: 'old-1', base: 'sword_tassel', quality: 'green', affixes: [{ id: 'attackSpeed', value: .02 }] }]; localStorage.setItem('im_items_v2', JSON.stringify(raw)); st.resetItemCache(); } st.addItems(['blue', 'purple', 'green', 'orange'].map((q, i) => items.rollItem(q, Math.random, ['helm', 'boots', 'token', 'armor'][i]))); });
 await p.goto(base + '?layout=mobile');
-await p.waitForFunction(() => window.__game?.scene.getScene('MenuScene')?.sys.isActive() && window.__game.scene.getScene('MenuScene').children.getByName('home-bag-plaque'), null, { timeout: 60000 });
+await p.waitForFunction(() => window.__game?.scene.getScene('MenuScene')?.sys.isActive() && window.__game.scene.getScene('MenuScene').children.getByName('home-achievements-plaque'), null, { timeout: 60000 });
 await p.waitForTimeout(800);
-const badge = await p.evaluate(M0 => eval(M0).children.getByName('home-bag-badge')?.text, M);
-ck('主页行囊角标显示新收入件数', Number(badge) >= 4, badge);
+// 2026-11-16：主页不再放行囊匾和角标；新收入件数仍计在存档里，打开行囊后清零（见下）
+const badge = await p.evaluate(async M0 => ({ plaque: !!eval(M0).children.getByName('home-bag-plaque'), badge: !!eval(M0).children.getByName('home-bag-badge'), unseen: (await window.__mod('/src/systems/ItemStore.ts')).bagBadgeCount() }), M);
+ck('主页不再显示行囊匾与角标（新收入件数仍记着）', !badge.plaque && !badge.badge && badge.unseen >= 4, badge);
 await p.screenshot({ path: `${out}/mobile-home-badge.png` });
 const drag = await p.evaluate(async M0 => {
   const m = eval(M0), st = await window.__mod('/src/systems/ItemStore.ts'), items = await window.__mod('/src/data/items.ts'), out = {};
-  const plaque = m.children.getByName('home-bag-plaque'), hit = m.children.getByName('home-bag') ?? window.__find(plaque, 'home-bag'); hit.emit('pointerdown'); await new Promise(r => setTimeout(r, 300));
+  /* 2026-11-16：主页已不放行囊匾（用户「界面的行囊可以不要」），行囊界面本身照旧，这里直接打开 */ if (m.children.getByName('home-bag-plaque')) throw new Error('主页仍有行囊匾'); { const UI = await window.__mod('/src/ui/ItemBagUI.ts'); new UI.ItemBagUI(m, { hero: 'zhaoyun' }); } await new Promise(r => setTimeout(r, 300));
   out.badgeGone = !m.children.getByName('home-bag-badge')?.active; out.badgeCount = st.bagBadgeCount();
   { let bg = m.children.getByName('item-bag'); out.legacyBtn = window.__find(bg, 'item-legacy')?.text; window.__find(bg, 'item-legacy')?.emit('pointerdown'); await new Promise(r => setTimeout(r, 120)); bg = m.children.getByName('item-bag');
     out.legacyList = window.__find(bg, 'item-legacy-list')?.text; await window.__shot?.(); window.__find(bg, 'item-legacy-salvage')?.emit('pointerdown'); await new Promise(r => setTimeout(r, 120)); out.legacySalvaged = st.loadItems().legacy.length === 0 && !window.__find(m.children.getByName('item-bag'), 'item-legacy'); }
@@ -211,13 +212,13 @@ await p.close();
 // 电脑
 const d = await page('desktop', { width: 1280, height: 720 });
 await d.goto(base + '?layout=desktop');
-await d.waitForFunction(() => window.__game?.scene.getScene('MenuScene')?.sys.isActive() && window.__game.scene.getScene('MenuScene').children.getByName('home-bag-plaque'), null, { timeout: 60000 });
+await d.waitForFunction(() => window.__game?.scene.getScene('MenuScene')?.sys.isActive() && window.__game.scene.getScene('MenuScene').children.getByName('home-achievements-plaque'), null, { timeout: 60000 });
 await d.waitForTimeout(800);
 await d.evaluate(async M0 => { const m = eval(M0), st = await window.__mod('/src/systems/ItemStore.ts'), items = await window.__mod('/src/data/items.ts');
   localStorage.setItem('im_chapter1_cleared', 'true'); st.resetItemCache(); st.setAutoSalvageWhite(false); st.grantHorse('chitu'); st.grantHorse('white_horse'); st.rideHorse('guanyu', 'chitu');
   st.addItems(Array.from({ length: 24 }, (_, i) => items.rollItem(['green', 'blue', 'purple', 'orange'][i % 4])));
   for (const slot of items.SLOT_ORDER) { const it = st.loadItems().bag.find(x => items.itemSlot(x) === slot); if (it) st.equipItem('guanyu', it.uid); }
-  const plaque = m.children.getByName('home-bag-plaque'), hit = m.children.getByName('home-bag') ?? window.__find(plaque, 'home-bag'); hit.emit('pointerdown'); await new Promise(r => setTimeout(r, 300));
+  /* 2026-11-16：主页已不放行囊匾（用户「界面的行囊可以不要」），行囊界面本身照旧，这里直接打开 */ if (m.children.getByName('home-bag-plaque')) throw new Error('主页仍有行囊匾'); { const UI = await window.__mod('/src/ui/ItemBagUI.ts'); new UI.ItemBagUI(m, { hero: 'zhaoyun' }); } await new Promise(r => setTimeout(r, 300));
   window.__find(m.children.getByName('item-bag'), 'item-hero-guanyu').emit('pointerdown'); await new Promise(r => setTimeout(r, 200)); }, M);
 const dk = await d.evaluate(M0 => { const bag = eval(M0).children.getByName('item-bag'); return { mount: window.__find(bag, 'item-slot-label-mount')?.text, t0: window.__find(bag, 'item-treasure-label-0')?.text }; }, M);
 ck('电脑纸娃娃：关羽骑赤兔，宝物栏写「出征后获得」', dk.mount === '赤兔' && dk.t0 === '出征后获得', dk);

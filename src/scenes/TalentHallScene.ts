@@ -88,7 +88,7 @@ export class TalentHallScene extends Phaser.Scene {
     const D = W > 600, x0 = 16, w = W - 32, q = QUALITIES[o.quality];
     this.content!.add(panel(this, W / 2, y, w, h));
     const size = h - 16; this.seal(x0 + 12 + size / 2, y, size, o.quality, TEMPLATES[o.template].name, o.hero ? getCharacter(o.hero).portrait : undefined, o.template);
-    const tx = x0 + 24 + size, kind = o.kind === 'hero' ? '可玩名将 · 能当主将' : o.kind === 'named' ? `史事名将${o.faction ? ' · ' + FACTIONS[o.faction].name : ''}` : '大众脸';
+    const tx = x0 + 24 + size, kind = o.kind === 'hero' ? '可玩名将 · 随行' : o.kind === 'named' ? `史事名将${o.faction ? ' · ' + FACTIONS[o.faction].name : ''}` : '大众脸';
     this.content!.add(worldText(this, tx, y - h / 2 + 8, `${captive ? '【降将】' : ''}${o.name}`, D ? 17 : 18, q.css).setName('talent-offer-name'));
     this.content!.add(worldText(this, tx, y - h / 2 + (D ? 32 : 36), `${q.label} · ${kind}\n${TEMPLATES[o.template].name}：${TEMPLATES[o.template].desc}${captive && o.expires !== undefined ? ' · 两季内可招降' : ''}`, 12, '#cdbf9f').setWordWrapWidth(w - size - 150));
     const cost = captive ? Math.ceil(o.cost * RECRUIT.captiveDiscount) : o.cost;

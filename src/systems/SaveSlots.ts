@@ -17,7 +17,7 @@ export const SLOT_TOUCH_KEY = 'im_slot_touched';
 const META_KEY = 'im_save_slots';
 const slotKey = (i: number): string => `im_slot_${i}`;
 /** 属于“一个存档”的键；其余 im_ 键（音量、布局等）是全局设置。 */
-export const PROGRESS_KEYS = [WORLD_KEY, BACKUP_KEY, CHAPTER_CLEAR_KEY, 'im_last_hero', SLOT_TOUCH_KEY, 'im_items_v1'];
+export const PROGRESS_KEYS = [WORLD_KEY, BACKUP_KEY, CHAPTER_CLEAR_KEY, 'im_last_hero', SLOT_TOUCH_KEY, 'im_items_v1', 'im_items_v2', 'im_roster_v1'];
 
 export interface SlotSummary {
   index: number;
@@ -26,7 +26,7 @@ export interface SlotSummary {
   hero?: string;
   /** 例如“第二章 · 讨伐董卓 2/3”。 */
   progress?: string;
-  /** 例如“城池 3 · 军功 120 · 粮草 80”。 */
+  /** 例如“城池 3 · 军粮 80”。 */
   detail?: string;
   savedAt?: number;
 }
@@ -75,12 +75,8 @@ export function summarize(i: number): SlotSummary {
   const [num, name, done, total] = chapters[cur];
   const parts: string[] = [];
   if (w.ownedCities?.length) parts.push(`城池 ${w.ownedCities.length}`);
-  if (w.merits !== undefined) parts.push(`军功 ${w.merits}`);
-  if (w.provisions !== undefined) parts.push(`粮草 ${w.provisions}`);
-  // v8 城镇：钱与当前季节
-  const town = (w as { town?: { money?: number; year?: number; season?: number } }).town;
-  if (town && typeof town.money === 'number') parts.push(`钱 ${town.money}`);
-  if (town && typeof town.year === 'number' && typeof town.season === 'number') parts.push(`${town.year} 年${'春夏秋冬'[town.season] ?? ''}`);
+  // v9 只剩军粮（旧存档在读入时折算，这里只显示存档里的数）
+  if (w.provisions !== undefined) parts.push(`军粮 ${w.provisions}`);
   let hero: string | undefined;
   try { hero = d!.im_last_hero ? getCharacter(d!.im_last_hero as never).name : undefined; } catch { hero = undefined; }
   const at = Number(d![SLOT_TOUCH_KEY]);

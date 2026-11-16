@@ -30,11 +30,13 @@ for (const layout of ['mobile', 'desktop']) {
   const info = await p.evaluate(G0 => { const s = eval(G0); return { name: s.chapter.name, cav: s.chapter.enemies.cavalry, x: !!s.xiliang }; }, G);
   ck(`[${layout}] 2-2 荥阳启用西凉战法；骑兵 生命 42 / 速度 92 / 伤害 9`, info.x && info.name.includes('荥阳') && info.cav.hp === 42 && info.cav.speed === 92 && info.cav.damage === 9, info);
   // 铁骑突阵：预警期间不动，之后沿道冲锋
+  // 先清场：小兵按章节成长后（stageTuning，2-2 生命 ×2.3）开局刷的兵不再秒死，会挤在冲锋道上干扰本项
+  await quiet(p);
   const r0 = await p.evaluate(G0 => { const s = eval(G0); s.player.invulnUntil = 0; const id = s.xiliang.startRaid(s.combatNow); const riders = s.enemies.filter(e => e.active && e.kind === 'cavalry'); return { id, n: riders.length, pos: riders.map(e => [Math.round(e.x), Math.round(e.y)]), lane: !!s.children.getByName('xiliang-raid-lane'), hp: s.player.hp }; }, G);
   ck(`[${layout}] 突阵：三骑并排就位并亮出冲锋道`, r0.id > 0 && r0.n >= 3 && r0.lane, r0);
   await p.waitForTimeout(500);
-  if (layout === 'mobile') await p.screenshot({ path: `${out}/${layout}-xiliang-raid-warn.png` }); else await p.screenshot({ path: `${out}/${layout}-xiliang-raid-warn.png` });
   const r1 = await p.evaluate(G0 => { const s = eval(G0); return s.enemies.filter(e => e.active && e.kind === 'cavalry').map(e => [Math.round(e.x), Math.round(e.y)]); }, G);
+  await p.screenshot({ path: `${out}/${layout}-xiliang-raid-warn.png` });
   ck(`[${layout}] 预警期间骑兵原地待发（被其他兵挤动不超过 12 像素）`, r1.slice(0, 3).every((q, i) => Math.hypot(q[0] - r0.pos[i][0], q[1] - r0.pos[i][1]) <= 12), { r0: r0.pos, r1 });
   // 预警结束后冲锋：车道穿过主将附近，主将被撞（站着不动）
   let hit = null;

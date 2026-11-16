@@ -40,7 +40,7 @@ try {
       reset(); { const id = w.beginExpedition('huangjin', 3); w.settleExpedition(id, { ...win, debug: true }); out.debugWorld = w.worldUnlocked(); }
       // 旧存档：v7 已通关黄巾但未开图 → 开图，资源不丢，不补弹新篇提示
       reset(); localStorage.setItem(w.WORLD_KEY, JSON.stringify({ version: 7, yellowStages: 3, dongzhuoStages: 1, worldAvailable: false, cleared: { huangjin: true, hulao: false }, merits: 321, provisions: 654, buildings: { barracks: 2, farm: 1, clinic: 1 }, reserve: {}, receipts: [], nodes: ['huangjin'] }));
-      out.v7 = { world: w.worldUnlocked(), merits: w.loadWorld().merits, seen: w.loadWorld().chapterSeen, fresh: w.takeNewChapters(), states: states() };
+      out.v7 = { world: w.worldUnlocked(), merits: w.loadWorld().merits, grain: w.loadWorld().provisions, seen: w.loadWorld().chapterSeen, fresh: w.takeNewChapters(), states: states() };
       // 旧存档：已通讨董 → 群雄开放，官渡锁
       reset(); localStorage.setItem(w.WORLD_KEY, JSON.stringify({ version: 8, yellowStages: 3, dongzhuoStages: 3, worldAvailable: true, cleared: { huangjin: true, hulao: true }, merits: 1, provisions: 1, buildings: { barracks: 1, farm: 1, clinic: 1 }, reserve: {}, receipts: [], nodes: [] }));
       out.hulao = states();
@@ -56,7 +56,7 @@ try {
     ck('after ch1: huangjin cleared, hulao open, rest locked', r.ch1.states.huangjin === 'cleared' && r.ch1.states.hulao === 'open' && ['qunxiong', 'guandu', 'chibi'].every(k => r.ch1.states[k] === 'locked'), r.ch1.states);
     ck('new-chapter notice fires once', r.ch1.fresh1 === 1 && r.ch1.fresh2 === 0, r.ch1);
     ck('debug battle does not open map', !r.debugWorld);
-    ck('old v7 save (ch1 cleared) gains map, keeps resources, no retro banner', r.v7.world && r.v7.merits === 321 && r.v7.seen === 2 && r.v7.fresh === 0 && r.v7.states.hulao === 'open', r.v7);
+    ck('old v7 save (ch1 cleared) gains map, resources folded into 军粮, no retro banner', r.v7.world && r.v7.merits === 0 && r.v7.grain === 654 + Math.round(321 * 1.5) && r.v7.seen === 2 && r.v7.fresh === 0 && r.v7.states.hulao === 'open', r.v7);
     ck('hulao cleared → qunxiong open, guandu locked', r.hulao.hulao === 'cleared' && r.hulao.qunxiong === 'open' && r.hulao.guandu === 'locked', r.hulao);
     ck('qunxiong 3/3 → guandu open; guandu 3/3 → chibi open', r.qx.guandu === 'open' && r.qx.chibi === 'locked' && r.gd.chibi === 'open', { qx: r.qx, gd: r.gd });
     ck('legacy flag save still opens map and hulao', r.legacy.world && r.legacy.states.hulao === 'open', r.legacy);
@@ -171,7 +171,7 @@ try {
     await pin(p, 'hulao', 3); await p.waitForTimeout(150);
     const m = await mapState(p);
     const hardBtn = await p.evaluate(() => { const b = window.__game.scene.getScene('WorldMapScene').children.getByName('map-hard'); return { visible: b.visible, on: !!b.input?.enabled }; });
-    ck('cleared chapter offers 乱世难度 beside 重打', hardBtn.visible && hardBtn.on && m.action.includes('重打') && m.detail.includes('吕布'), { hardBtn, m });
+    ck('cleared chapter offers 乱世难度 beside 重打', hardBtn.visible && hardBtn.on && m.action.includes('重打') && m.detail.includes('董卓'), { hardBtn, m });
     await p.screenshot({ path: `${out}/desktop-3-hard-offer.png` });
     await p.evaluate(() => window.__game.scene.getScene('WorldMapScene').children.getByName('map-hard').emit('pointerup'));
     await p.waitForFunction(() => window.__game.scene.isActive('MenuScene'), null, { timeout: 20000 });
@@ -179,14 +179,14 @@ try {
     await startBattle(p);
     await p.evaluate(() => { const s = window.__game.scene.getScene('GameScene'); if (!s.boss) s.spawnBoss(); });
     await p.waitForFunction(() => !!window.__game.scene.getScene('GameScene').boss?.active, null, { timeout: 15000 });
-    const hard = await p.evaluate(() => { const s = window.__game.scene.getScene('GameScene'); return { hard: s.hardMode, stage: s.chapter.westStage, ratio: s.boss.maxHp / s.chapter.enemies.boss.hp, dmg: s.boss.def.damage / s.chapter.enemies.boss.damage }; });
+    const hard = await p.evaluate(() => { const s = window.__game.scene.getScene('GameScene'); return { hard: s.hardMode, stage: s.chapter.westStage, ratio: s.boss.maxHp / (s.chapter.enemies.boss.hp * (s.chapter.growth?.bossHp ?? 1)) /* 与「正常难度的首领生命」比：正常难度已乘 stageTuning 的首领倍率 */, dmg: s.boss.def.damage / s.chapter.enemies.boss.damage }; });
     ck('乱世 battle: boss HP ×1.8, damage ×1.25', hard.hard && hard.stage === 3 && Math.abs(hard.ratio - 1.8) < .03 && Math.abs(hard.dmg - 1.25) < .01, hard);
-    const before = await p.evaluate(() => JSON.parse(localStorage.getItem('im_world_v1')).merits);
+    const before = await p.evaluate(() => JSON.parse(localStorage.getItem("im_world_v1")).provisions);
     await p.evaluate(() => { const s = window.__game.scene.getScene('GameScene'); s.hitEnemy(s.boss, 1e8, s.combatNow, 'melee'); });
     for (let i = 0; i < 20; i++) { const mode = await p.evaluate(() => { const s = window.__game.scene.getScene('GameScene'); if (s.mode === 'bossloot' || s.mode === 'levelup') s.chooseUpgrade(0); return s.mode; }); if (mode === 'result') break; await p.waitForTimeout(250); }
     await p.waitForTimeout(1200);
-    const res = await p.evaluate(() => { const s = window.__game.scene.getScene('GameScene'), w = JSON.parse(localStorage.getItem('im_world_v1')); return { body: s.resultTexts.body.text, hardCleared: w.hardCleared, merits: w.merits }; });
-    ck('乱世 first clear: title + one-time reward recorded', res.hardCleared?.includes('hulao') && res.body.includes('乱世首通') && res.body.includes('虎牢扬威') && res.merits - before >= 200, { ...res, before });
+    const res = await p.evaluate(() => { const s = window.__game.scene.getScene('GameScene'), w = JSON.parse(localStorage.getItem('im_world_v1')); return { body: s.resultTexts.body.text, hardCleared: w.hardCleared, merits: w.merits, provisions: w.provisions }; });
+    ck('乱世 first clear: title + one-time reward recorded', res.hardCleared?.includes('hulao') && res.body.includes('乱世首通') && res.body.includes('虎牢扬威') && res.merits === 0 && res.provisions - before >= 600, { ...res, before });
     await p.screenshot({ path: `${out}/desktop-4-hard-result.png` });
     await p.evaluate(() => { window.__game.scene.getScene('GameScene').scene.start('WorldMapScene'); }); await p.waitForFunction(() => window.__game.scene.isActive('WorldMapScene')); await p.waitForTimeout(400);
     ck('timeline marks 乱世 cleared', (await p.evaluate(() => window.__game.scene.getScene('WorldMapScene').children.getByName('chapter-chip-status-hulao').text)).includes('乱世'));

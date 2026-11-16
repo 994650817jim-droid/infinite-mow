@@ -62,6 +62,9 @@ export class Enemy {
   private walkTimer = 0;
   private appliedFrame = '';
   def: EnemyDef = ENEMY_DEFS.infantry;
+  /** 盾牌兵两段血（data/shields.ts）：当前盾值与上限，0 表示没有盾。 */
+  shieldHp = 0;
+  shieldMax = 0;
   hp = 1;
   maxHp = 1;
   active = false;
@@ -105,6 +108,7 @@ export class Enemy {
     this.martialSlow=1;this.martialSlowUntil=0;
     this.spawnId = (Enemy.spawnSeq += 1);
     this.hp = Math.round(def.hp * hpScale);
+    this.shieldHp = this.shieldMax = 0;
     this.maxHp = this.hp;
     this.active = true;
     this.invulnerable = false;
@@ -217,6 +221,26 @@ export class Enemy {
       .setDisplaySize(shadowSize.w, shadowSize.h)
       .setRotation(0);
     void now;
+  }
+
+  /** 盾破：换成无盾造型（同章步兵行走表），保留生命、位置与编号；keepLook 时只去掉盾值（飞熊军等专属造型）。 */
+  dropShield(look: EnemyDef | null): void {
+    this.shieldHp = 0;
+    if (look) this.reskin(look);
+  }
+  /** 换造型（行走表 / 攻击表 / 色调），保留生命、位置与编号：碎盾换步兵、董卓正式图加载完成后换图。 */
+  reskin(look: EnemyDef): void {
+    const sheet = look.walkVisual?.texture ?? 'enemy_infantry_walk_sheet';
+    this.def = {...this.def, texture: look.texture, walkVisual: look.walkVisual, attackVisual: look.attackVisual, tint: look.tint};
+    this.baseTint = look.tint ?? 0xffffff; this.sprite.clearTint(); if (this.baseTint !== 0xffffff) this.sprite.setTint(this.baseTint);
+    if (!Enemy.walkEnabled || !this.scene.textures.exists(sheet)) return;
+    this.walkSheet = sheet; this.attackSheet = look.attackVisual && this.scene.textures.exists(look.attackVisual) ? look.attackVisual : '';
+    const median = !look.walkVisual?.matched ? sheetFigureHeight(this.scene, sheet) : undefined;
+    this.sprite.setScale(median ? 48 / median : look.walkVisual?.scale ?? 46 / 96);
+    const frameH = this.scene.textures.getFrame(sheet, 'down_0')?.height ?? 96;
+    this.sprite.setOrigin(.5, (look.walkVisual?.groundY ?? 94 / 96) - this.def.radius * .72 / (frameH * this.sprite.scaleY));
+    this.baseScaleY = this.sprite.scaleY; this.baseOriginY = this.sprite.originY;
+    this.appliedFrame = ''; this.applyFrame(this.walkSheet, `${this.direction}_0`); this.appliedFrame = `${this.direction}_0`;
   }
 
   deactivate(): void {

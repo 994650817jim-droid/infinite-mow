@@ -40,7 +40,8 @@ export const CHARACTERS: CharacterDef[] = [
     // 2026-11-15 平衡（用户批准）：生命 1 → 1.1、伤害 1 → 1.05（测量中承伤最高、DPS 中下）
     hpMul: 1.1,
     speedMul: 1,
-    damageMul: 1.05,
+    // 2026-11-16 平衡（用户批准；基线 v2 综合分 0.89，1-1 首领只掉 46%）：伤害 1.05 → 1.12
+    damageMul: 1.12,
     portrait: 'hero_zhaoyun',
     startWeapon: 'spear_orbit',
   },
@@ -63,7 +64,8 @@ export const CHARACTERS: CharacterDef[] = [
     battleTint: 0xffcf7a,
     hpMul: 0.9,
     speedMul: 1.06,
-    damageMul: 0.95,
+    // 2026-11-16 平衡（用户批准；基线 v2 综合分 0.83，1-1 击杀太少只升到 2 级）：伤害 0.95 → 1.05
+    damageMul: 1.05,
     portrait: 'huangzhong_portrait',
     startWeapon: 'baodiao_bow',
   },
@@ -72,9 +74,11 @@ export const CHARACTERS: CharacterDef[] = [
     name: '诸葛亮',
     desc: '军师 · 火焰范围爆发，生命较低',
     // 2026-11-15 平衡（用户批准）：生命 0.86 → 0.95（测量中阵亡次数最多）
-    hpMul: 0.95,
+    // 2026-11-16 平衡（12 将基线：承伤最高、综合分 0.70）：生命 0.95 → 1.05
+    hpMul: 1.05,
     speedMul: 1.04,
-    damageMul: 1.0,
+    // 2026-11-16 平衡（用户批准；基线 v2 综合分 0.80，三关都在最后几名）：伤害 1.0 → 1.1
+    damageMul: 1.1,
     portrait: 'portrait_zhuge',
     startWeapon: 'flame_banner',
   },
@@ -114,7 +118,8 @@ export const CHARACTERS: CharacterDef[] = [
     desc: '仁君 · 双股剑分击两敌，仁德聚义',
     hpMul: 1.05,
     speedMul: 1,
-    damageMul: 1,
+    // 2026-11-16 平衡（12 将基线：三关 DPS 最低、综合分 0.63）：伤害 1 → 1.2
+    damageMul: 1.2,
     portrait: 'liubei_portrait',
     startWeapon: 'shuanggu_swords',
   },
@@ -122,7 +127,8 @@ export const CHARACTERS: CharacterDef[] = [
     id: 'pangtong',
     name: '庞统',
     desc: '军师 · 布雷设伏，连环引爆',
-    hpMul: 0.95,
+    // 2026-11-16 平衡（12 将基线：1-3 / 虎牢关阵亡 10–13 次）：生命 0.95 → 1.05
+    hpMul: 1.05,
     speedMul: 1,
     damageMul: 1.05,
     portrait: 'pangtong_portrait',
@@ -134,7 +140,9 @@ export const CHARACTERS: CharacterDef[] = [
     desc: '巧匠 · 机关连弩，远程压制',
     hpMul: 0.88,
     speedMul: 1.04,
-    damageMul: 1,
+    // 2026-11-16 平衡（12 将基线：三关第一、综合分 1.66）：伤害 1 → 0.9
+    // 2026-11-16 平衡（用户批准；基线 v2 仍第一 1.26）：伤害 0.9 → 0.85
+    damageMul: 0.85,
     portrait: 'huangyueying_portrait',
     startWeapon: 'crossbow',
   },
@@ -153,7 +161,8 @@ export const CHARACTERS: CharacterDef[] = [
     id: 'diaochan',
     name: '貂蝉',
     desc: '舞姬 · 回旋双扇，离间敌军自相攻杀',
-    hpMul: 0.85,
+    // 2026-11-16 平衡（用户批准；12 将基线：承伤高、综合分 0.75）：生命 0.85 → 0.95
+    hpMul: 0.95,
     speedMul: 1.06,
     damageMul: 0.98,
     portrait: 'diaochan_portrait',
@@ -180,4 +189,4 @@ export function getCharacter(id: CharacterId): CharacterDef {
 /** 新武将普攻的专属色调（枪芒 / 刀光 / 火爆 / 弩箭），老四将保持原色。 */
 export const HERO_TINT: Partial<Record<CharacterId, number>> = { zhangfei: 0xff9c7a, machao: 0xb8dcff, weiyan: 0xff6a55, liubei: 0xffd890, pangtong: 0xff8fd0, huangyueying: 0x8fe8c0, sunshangxiang: 0xff9a8a, diaochan: 0xf0b4ff };
 /** 招牌技序列帧（public/assets/hero-fx/fx_<sheet>.png，6 列 × 4 行、256×256，黑底叠加混合）。fx_c：孙尚香环身连射 / 貂蝉倾城 / 魏延谁敢杀我 / 魏延劈地裂波（朝右）。 */
-export const HERO_FX: Record<string, { sheet: 'a' | 'b' | 'c'; row: number }> = { ringVolley: { sheet: 'c', row: 0 }, charm: { sheet: 'c', row: 1 }, whoDares: { sheet: 'c', row: 2 }, crack: { sheet: 'c', row: 3 }, roar: { sheet: 'a', row: 0 }, dash: { sheet: 'a', row: 1 }, bloodslash: { sheet: 'a', row: 2 }, rally: { sheet: 'a', row: 3 }, phoenix: { sheet: 'b', row: 0 }, gears: { sheet: 'b', row: 1 }, liubeiSlash: { sheet: 'b', row: 2 }, weiyanSlash: { sheet: 'b', row: 3 } };
+export const HERO_FX: Record<string, { sheet: 'a' | 'b' | 'c' | 'd'; row: number }> = { moonDance: { sheet: 'd', row: 0 }, heavyHit: { sheet: 'd', row: 1 }, roarWave: { sheet: 'd', row: 2 }, crossSlash: { sheet: 'd', row: 3 }, ringVolley: { sheet: 'c', row: 0 }, charm: { sheet: 'c', row: 1 }, whoDares: { sheet: 'c', row: 2 }, crack: { sheet: 'c', row: 3 }, roar: { sheet: 'a', row: 0 }, dash: { sheet: 'a', row: 1 }, bloodslash: { sheet: 'a', row: 2 }, rally: { sheet: 'a', row: 3 }, phoenix: { sheet: 'b', row: 0 }, gears: { sheet: 'b', row: 1 }, liubeiSlash: { sheet: 'b', row: 2 }, weiyanSlash: { sheet: 'b', row: 3 } };

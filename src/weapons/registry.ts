@@ -6,9 +6,9 @@ import type { Sfx } from '../systems/Sfx';
 import type { PlayerStats, WeaponId, WeaponState } from '../types';
 import { PASSIVE_RULES } from '../data/passives';
 import { HERO_TINT } from '../data/characters';
-import { BAODIAO_DEF, DANGYANG_DEF, ZHANJIN_DEF, SHUANGGU_DEF, baodiaoBehavior, dangyangBehavior, zhanjinBehavior, shuangguBehavior } from './heroWeapons2';
+import { BAODIAO_DEF, DANGYANG_DEF, ZHANJIN_DEF, SHUANGGU_DEF, baodiaoBehavior, dangyangBehavior, zhanjinBehavior, shuangguBehavior, smartTarget } from './heroWeapons2';
 import { ZHENBEI_DEF, LIANHUAN_DEF, SUN_KNIVES_DEF, DIAOCHAN_FANS_DEF, zhenbeiBehavior, lianhuanBehavior, sunKnivesBehavior, diaochanFansBehavior } from './heroWeapons';
-export { zhenbeiCracks, lianhuanMinesPerCast, sunOrbitKnives, diaochanFanCount } from './heroWeapons';
+export { zhenbeiCracks, lianhuanMinesPerCast, sunOrbitKnives, sunThrowCount, sunThrowPierce, diaochanFanCount } from './heroWeapons';
 
 export interface WeaponBolt {
   img: Phaser.GameObjects.Image; vx: number; vy: number; life: number;
@@ -44,12 +44,13 @@ export interface WeaponHost {
   heroFx?(id: string, x: number, y: number, size: number, rotation?: number): void;
 }
 
+// 2026-11-16 平衡（试玩反馈「关羽攻击范围太大」，夜间按推荐方案执行）：半径 125/150/175/200/225 → 120/135/150/165/180（满级 −20%），弧长同比
 export const GUANDAO_TABLE = [
-  { radius: 125, angle: 120, damage: 32, cooldown: 1.45, arc: 181.25 },
-  { radius: 150, angle: 120, damage: 38, cooldown: 1.45, arc: 217.5 },
-  { radius: 175, angle: 125, damage: 43, cooldown: 1.45, arc: 253.75 },
-  { radius: 200, angle: 130, damage: 49, cooldown: 1.3, arc: 290.0 },
-  { radius: 225, angle: 135, damage: 56, cooldown: 1.25, arc: 326.25 },
+  { radius: 120, angle: 120, damage: 32, cooldown: 1.45, arc: 174 },
+  { radius: 135, angle: 120, damage: 38, cooldown: 1.45, arc: 195.75 },
+  { radius: 150, angle: 125, damage: 43, cooldown: 1.45, arc: 217.5 },
+  { radius: 165, angle: 130, damage: 49, cooldown: 1.3, arc: 239.25 },
+  { radius: 180, angle: 135, damage: 56, cooldown: 1.25, arc: 261 },
 ];
 const levelIndex = (level: number): number => Math.max(0, Math.min(4, Math.floor(level) - 1));
 /** 黄忠连弩每级额外箭数（Lv1 0 支 … Lv5 4 支，共 5 支）。 */
@@ -196,8 +197,10 @@ export const WEAPON_BEHAVIORS: Record<WeaponId, (host: WeaponHost, weapon: Weapo
     if (weapon.cooldownLeft > 0) return;
     const priority=host.priorityTarget?.(pierce.len*host.player.growth.spearLengthMultiplier()-6)??null;
     // 只锁定这一枪真正刺得到的敌人（与下方线段命中判定同一出枪点与枪长），
-    // 否则 176~234px 的敌人会被锁定后刺空，白白消耗冷却。被动强化只会更长，不影响此下限。
-    const reachBase = pierce.len * host.player.growth.spearLengthMultiplier() + pierce.width / 2;
+    // 否则 176~234px 的敌人会被锁定后刺空，白白消耗冷却。
+    // 赵云「七进七出」蓄满时这一枪会长 25%：选靶也按加长后的枪长算，否则只有加长枪够得着的敌人永远不会被瞄准（2026-11-16 修）。
+    const longSpear = host.player.passive.characterId === 'zhaoyun' && host.player.passive.snapshot(time).ready ? PASSIVE_RULES.spearLengthMul : 1;
+    const reachBase = pierce.len * host.player.growth.spearLengthMultiplier() * longSpear + pierce.width / 2;
     const ox = host.player.x, oy = host.player.y - 6;
     const targets = host.grid.query(host.player.x, host.player.y, Math.min(220, reachBase) + 60)
       .filter((e) => e.active && Math.hypot(e.x - ox, e.y - oy) <= Math.min(220, reachBase) + e.radius)
@@ -288,7 +291,7 @@ export const WEAPON_BEHAVIORS: Record<WeaponId, (host: WeaponHost, weapon: Weapo
   crossbow: (host, weapon, dt, time) => {
     weapon.cooldownLeft -= dt;
     if (weapon.cooldownLeft > 0) return;
-    const target = host.priorityTarget?.(500,false) ?? host.nearestEnemy(host.player.x, host.player.y, 500);
+    const target = smartTarget(host, 500); // 统一索敌：首领 > 精锐 > 群怪 > 最近
     if (!target) return;
     const level = weapon.level;
     const def = WEAPON_DEFS.crossbow;

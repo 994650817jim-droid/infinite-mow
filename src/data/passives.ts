@@ -15,8 +15,9 @@ export const CHARACTER_PASSIVES: Record<CharacterId, { name: string; maxStacks: 
 };
 export const PASSIVE_RULES = {
   dragonIntervalMs: 150, spearLengthMul: 1.25,
-  coneThreshold: 3, guandaoRangePerStack: .06, guandaoDamageMul: 1.25,
-  calmMs: 3000, critBonus: .10,
+  // 2026-11-16 平衡：势如破竹每层范围 +6% → +4%（关羽范围削弱）
+  coneThreshold: 3, guandaoRangePerStack: .04, guandaoDamageMul: 1.25,
+  calmMs: 5000, critBonus: .10, // 2026-11-16 用户要求：黄忠神射蓄势 3 → 5 秒
   mechIntervalMs: 250, mechBolts: 6, mechDamageMul: .6,
   /** 魏延·镇北环首刀：直线裂波（长 / 总宽 / 贴身距离与加成）；镇守汉中：受击积拒敌（每 0.5 秒最多 1 层）；
    *  满层「谁敢杀我」：6 向裂波各 80%，并 3 秒受伤 -30%。 */
@@ -33,21 +34,24 @@ export const PASSIVE_RULES = {
   cavalryIntervalMs: 300, dashLength: 150, dashWidth: 56, dashDamageMul: 1.6, dashMs: 200,
   roarIntervalMs: 350, roarRadius: 175, roarStunMs: 1200, roarDamageMul: 1.4,
   /** 孙尚香·侍婢执刀：移动中每 0.5 秒积 1 层疾步（满 6）；满层召 2 名执刀侍婢护身 8 秒（上限 4 名），绕身 70 像素内每 0.5 秒挥刀 60% 伤害。 */
-  stepIntervalMs: 500, maidSummon: 2, maidMax: 4, maidMs: 8000, maidRange: 70, maidSlashMs: 500, maidDamageMul: .6,
+  // 2026-11-16 成长曲线调整（用户批准，平衡会话核对）：疾步 0.5 → 0.8 秒、侍婢上限 4 → 3、持续 8 → 6 秒；侍婢伤害随武器等级 50% → 70%（原固定 60%）
+  stepIntervalMs: 800, maidSummon: 2, maidMax: 3, maidMs: 6000, maidRange: 70, maidSlashMs: 500, maidDamageByLevel: [.5, .55, .6, .65, .7],
   /** 孙尚香·弓腰姬飞刀：环绕刀（半径 / 每名敌人割伤间隔）、掷刀（射程 / 速度 / 穿透 / 补刀时间 / 移动中间隔倍率）。 */
-  knifeOrbitR: 55, knifeOrbitHitMs: 500, knifeRange: 380, knifeSpeed: 650, knifePierce: 2, knifeRegenMs: 1200, knifeMovingCdMul: .7,
+  knifeOrbitR: 55, knifeOrbitHitMs: 500, knifeRange: 380, knifeSpeed: 650, knifeRegenMs: 1200, knifeMovingCdMul: .7,
+  /** 每次掷几把（多出的飞向别的敌人、伤害 knifeExtraMul）与每把穿透人数，按武器等级 Lv1–Lv5。 */
+  knifeCountByLevel: [1, 1, 2, 2, 3], knifePierceByLevel: [2, 2, 3, 3, 4], knifeExtraMul: .6,
   /** 貂蝉·双花扇：回旋飞扇（距离 / 速度）；离间：魅惑 3 层倒戈 3 秒（精锐减半），倒戈者受伤 +20%、冲向 260 内最近同伴每 0.5 秒撞一次；首领改为 3 秒受伤 +25%；4 秒没扇中魅惑消散。 */
-  fanRange: 230, fanSpeed: 520, charmNeed: 3, turnMs: 3000, turnVulnerability: 1.2, charmVulnerability: 1.25, turnSeek: 260, turnHitMs: 500, charmDecayMs: 4000,
+  // 2026-11-16 平衡（12 将基线：1-1 整关放不出大招）：倒戈所需扇中次数 3 → 2
+  fanRange: 230, fanSpeed: 520, charmNeed: 2, turnMs: 3000, turnVulnerability: 1.2, charmVulnerability: 1.25, turnSeek: 260, turnHitMs: 500, charmDecayMs: 4000,
   /** 貂蝉·闭月：舞带环身 2 秒，半径 160，每 0.4 秒 50% 伤害，圈内敌人倒戈。 */
   moonMs: 2000, moonRadius: 160, moonTickMs: 400, moonDamageMul: .5,
   /** 黄忠·宝雕弓：重箭（速度 / 射程 / 击退）；神射时命中处小范围爆裂（半径 / 伤害倍率）。 */
   heavyArrowSpeed: 900, heavyArrowRange: 600, heavyArrowKnock: 40, heavyBurstRadius: 60, heavyBurstMul: .5,
   /** 张飞·当阳喝断：声浪推进速度 / 推后力度；据水断桥：断桥区半径与持续。震慑与 140% 伤害沿用 roarRadius / roarStunMs / roarDamageMul。 */
   roarWaveSpeed: 480, roarWavePush: 2.5, bridgeRadius: 150, bridgeMs: 3000,
-  /** 马超·湛金枪：骑枪（长 / 宽 / 同一敌人间隔 / 移动倍率 / 站定补刺倍率 / 参考速度）；西凉铁骑：移动每 0.4 秒积 1 层，满层召骑兵（数量 / 速度 / 冲锋距离 / 宽 / 伤害倍率）。 */
-  lanceLen: 90, lanceWidth: 30, lanceHitMs: 300, lanceMoveMul: 1.3, lanceStandMul: .4, lanceRefSpeed: 190,
-  cavalryMoveMs: 400, riderCount: 3, riderSpeed: 520, riderRun: 520, riderWidth: 50, riderDamageMul: 1.2,
+  /** 马超·枪挑破阵：挑飞（索敌距离 / 腾空时长 / 挑起伤害倍率）、落地范围半径；西凉铁骑满层冲锋（距离 / 宽 / 伤害倍率 / 突进时长）。命中积层间隔沿用 cavalryIntervalMs。 */
+  liftRange: 150, liftMs: 600, liftHitMul: .6, landRadius: 70, chargeLen: 180, chargeWidth: 56, chargeDamageMul: 1.6, chargeMs: 220,
   /** 刘备·双股剑：出手距离、「×」斩溅射半径与倍率；一剑砍两人积 1 层仁德。 */
-  swordsRange: 120, crossSplash: 30, crossSplashMul: .6,
+  swordsRange: 120, crossSplash: 30, crossSplashMul: .6, liubeiHaste: .3, liubeiHasteMs: 4000,
   fireRadiusMul: 1.25, burnMs: 2000, burnTickMs: 1000, burnDamageFraction: .10,
 } as const;

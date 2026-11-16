@@ -3,7 +3,7 @@ import {AWAKENINGS} from './awakenings';
 import { BALANCE } from '../config';
 import type { Player } from '../entities/Player';
 import { RELICS, relicChanceForLevel } from './relics';
-import { WEAPON_DEFS, SPEAR_PIERCE, GUANDAO_TABLE, crossbowExtraArrows, zhenbeiCracks, lianhuanMinesPerCast, sunOrbitKnives, diaochanFanCount } from '../weapons/registry';
+import { WEAPON_DEFS, SPEAR_PIERCE, GUANDAO_TABLE, crossbowExtraArrows, zhenbeiCracks, lianhuanMinesPerCast, sunOrbitKnives, sunThrowCount, sunThrowPierce, diaochanFanCount } from '../weapons/registry';
 import type { UpgradeOption, WeaponId, WeaponState } from '../types';
 import { getCharacter } from './characters';
 import { ATTRIBUTE_INFO, type AttributeId, type PotionId, type RunGrowth, type TrinketId, MARTIALS, type MasteryId } from '../systems/RunGrowth';
@@ -18,8 +18,8 @@ export const WEAPON_META: Record<WeaponId, { name: string; desc: string }> = {
   sun_knives: { name: '弓腰姬飞刀', desc: '身边环绕飞刀割伤近敌，并不断掷出飞刀穿透远敌；移动中掷得更快' },
   baodiao_bow: { name: '宝雕弓', desc: '向远处最强的敌人射出重箭，单体重创并击退；首领、精锐优先' },
   dangyang_roar: { name: '丈八蛇矛·当阳喝断', desc: '朝前大喝，越推越宽的弧形声浪向前推进，伤害并一路推后敌人' },
-  zhanjin_lance: { name: '虎头湛金枪', desc: '移动时枪尖在前持续刺中敌人，跑得越快伤害越高；站定时补一记短刺' },
-  shuanggu_swords: { name: '双股剑', desc: '双剑同时出手，分别在最近的两个敌人身上斩出「×」形交叉斩' },
+  zhanjin_lance: { name: '虎头湛金枪', desc: '一枪把敌人挑飞，落地时砸出范围伤害；铁骑满层后向前冲锋破阵' },
+  shuanggu_swords: { name: '双股剑', desc: '双剑同时出手，分别在两名敌人身上斩出「×」形交叉斩；仁德满层时攻速提高' },
   diaochan_fans: { name: '双花扇', desc: '掷出回旋团扇，去回各打一次；命中积魅惑，满层的敌人倒戈攻击同伴' },
 };
 /** 武器显示名：张飞用同一套长枪，叫丈八蛇矛。 */
@@ -71,6 +71,8 @@ function weaponUpgrade(weapon: WeaponState, player: Player): UpgradeOption {
   if (weapon.id === 'lianhuan_mines' && lianhuanMinesPerCast(next) !== lianhuanMinesPerCast(weapon.level)) desc += `\n每次落雷 ${lianhuanMinesPerCast(weapon.level)} → ${lianhuanMinesPerCast(next)} 枚（身旁多落一枚，雷链加宽）`;
   if (weapon.id === 'lianhuan_mines' && next === 3) desc += '\n落雷间隔缩短';
   if (weapon.id === 'sun_knives' && sunOrbitKnives(next) !== sunOrbitKnives(weapon.level)) desc += `\n环绕飞刀 ${sunOrbitKnives(weapon.level)} → ${sunOrbitKnives(next)} 把`;
+  if (weapon.id === 'sun_knives' && sunThrowCount(next) !== sunThrowCount(weapon.level)) desc += `\n每次掷出 ${sunThrowCount(weapon.level)} → ${sunThrowCount(next)} 把（多出的飞向其他敌人，60%）`;
+  if (weapon.id === 'sun_knives' && sunThrowPierce(next) !== sunThrowPierce(weapon.level)) desc += `\n每把穿透 ${sunThrowPierce(weapon.level)} → ${sunThrowPierce(next)} 人`;
   if (weapon.id === 'diaochan_fans' && diaochanFanCount(next) !== diaochanFanCount(weapon.level)) desc += `\n每次掷扇 ${diaochanFanCount(weapon.level)} → ${diaochanFanCount(next)} 柄`;
   if (weapon.id === 'guandao') desc += `\n范围${GUANDAO_TABLE[weapon.level - 1].radius} → ${GUANDAO_TABLE[next - 1].radius}${weapon.level < 3 && next >= 3 ? '，解锁二段刀气' : ''}`;
   return {
@@ -156,12 +158,12 @@ export function martialDescription(id:MasteryId,level:number):string {
  baibi:'执刀侍婢上限 +'+n+'，每名多护卫'+(2*n)+'秒。',
  nichang:'飞扇飞行距离增加'+(15*n)+'%。'+(n===3?'\n每次多掷 1 柄团扇。':''),
  meirenji:'被离间的敌人多倒戈'+(0.5*n)+'秒。'+(n===3?'\n只需 2 层魅惑即可离间。':''),
- chuanyang:'重箭伤害提高'+(12*n)+'%。'+(n===3?'\n重箭命中后还能再穿透 1 名敌人。':''),
+ baibu:'射得越远伤害越高：150 像素以外，每远 100 像素伤害 +'+[6,9,12][i]+'%。\n百步穿杨，远射更狠。',
  laoji:'生命低于一半时，射速提高'+[15,25,35][i]+'%。\n老当益壮，越险越勇。',
  wanrendi:'声浪推进距离增加'+(12*n)+'%。',
  dahe:'据水断桥的断桥区多持续'+(0.5*n)+'秒，震慑多'+(0.2*n).toFixed(1)+'秒。',
- jinma:'骑枪长度增加'+(15*n)+'%。'+(n===3?'\n骑枪判定加宽 50%。':''),
- tieqi:'西凉铁骑每次多召'+n+'名骑兵。',
+ jinma:'挑飞落地的范围增加'+(15*n)+'%。'+(n===3?'\n落地后再震一次（50% 伤害）。':''),
+ tieqi:'锦马冲锋距离增加'+(20*n)+'%，冲锋伤害增加'+(10*n)+'%。',
  taoyuan:'交叉斩的溅射范围增加'+(10*n)+'。'+(n===3?'\n三剑分击，同时斩三名敌人。':''),
  xiemin:'仁德回复量（自身与部曲）提高'+(25*n)+'%。',
  };

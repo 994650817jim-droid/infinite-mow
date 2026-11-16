@@ -15,6 +15,8 @@ const STEP = 3; // 地图像素 / 网格
 const REACH = {large: 250, medium: 190, small: 140} as const;
 const WEIGHT = {large: 1.3, medium: 1.08, small: .9} as const;
 const labelCache = new Map<string, TerritoryLabel[]>();
+/** 2026-11-16 用户反馈「想更清楚看到我的派系范围」：我方疆域底色更实、疆界加金色柔光描边、疆域名改金字。用户 2026-11-16 批准，默认开启；?realm=v1 回到旧版。 */
+export const REALM_V2 = (() => { try { return new URLSearchParams(location.search).get('realm') !== 'v1'; } catch { return true; } })();
 
 /** 低频值噪声（确定性），让疆界不是直线。 */
 function noise(x: number, y: number): number {
@@ -65,7 +67,7 @@ export function buildTerritory(scene: Phaser.Scene, era: EraId, owned: readonly 
   }
   // 着色
   const c = document.createElement('canvas'); c.width = gw; c.height = gh;
-  const g = c.getContext('2d')!, img = g.createImageData(gw, gh), d = img.data;
+  const g = c.getContext('2d')!, img = g.createImageData(gw, gh), d = img.data, pimg = g.createImageData(gw, gh), pd = pimg.data;
   const rgb = factionIds.map(f => [FACTIONS[f].color >> 16 & 255, FACTIONS[f].color >> 8 & 255, FACTIONS[f].color & 255]);
   for (let y = 0; y < gh; y++) for (let x = 0; x < gw; x++) {
     const i = y * gw + x, f = fac[i]; if (!f) continue;
@@ -81,10 +83,19 @@ export function buildTerritory(scene: Phaser.Scene, era: EraId, owned: readonly 
     else if (border === 1) { a = .7; k = .8; }        // 疆域外缘（荒地 / 海岸）
     else if (inner) { a = .82; k = 1.15; }            // 国界内侧亮色带
     else if (province) { a = .38; k = 1.25; }         // 郡界
-    else a = player ? .34 : .26;                      // 疆域底色
+    else a = player ? (REALM_V2 ? .46 : .34) : .26;   // 疆域底色（v2：我方更实）
     const o = i * 4; d[o] = Math.min(255, r * k); d[o + 1] = Math.min(255, gg * k); d[o + 2] = Math.min(255, b * k); d[o + 3] = a * 255;
+    // 我方疆界另画一层金色描边（v2，见下方 playerKey）
+    if (player && border) { const p = i * 4; pd[p] = 255; pd[p + 1] = 222; pd[p + 2] = 130; pd[p + 3] = 255; }
   }
   g.putImageData(img, 0, 0);
+  // 我方疆界金边层：稍粗、带柔光，叠在疆域图上（ADD 混合），远看也能一眼认出自家地盘
+  {const pc = document.createElement('canvas'); pc.width = gw; pc.height = gh; pc.getContext('2d')!.putImageData(pimg, 0, 0);
+   const po = document.createElement('canvas'); po.width = gw * 2; po.height = gh * 2; const pg = po.getContext('2d')!;
+   pg.imageSmoothingEnabled = true; pg.filter = 'blur(3px)'; pg.globalAlpha = .9; pg.drawImage(pc, 0, 0, po.width, po.height);
+   pg.filter = 'blur(.8px)'; pg.globalAlpha = 1; pg.drawImage(pc, 0, 0, po.width, po.height);
+   if (scene.textures.exists(key + '_player')) scene.textures.remove(key + '_player');
+   scene.textures.addCanvas(key + '_player', po); scene.textures.get(key + '_player').setFilter(Phaser.Textures.FilterMode.LINEAR);}
   // 2 倍放大 + 轻微模糊：放大地图时疆界不出现台阶状锯齿
   const out = document.createElement('canvas'); out.width = gw * 2; out.height = gh * 2;
   const og = out.getContext('2d')!; og.imageSmoothingEnabled = true; og.imageSmoothingQuality = 'high'; og.filter = 'blur(1.1px)'; og.drawImage(c, 0, 0, out.width, out.height);

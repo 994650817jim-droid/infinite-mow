@@ -3,7 +3,7 @@
  * 讨董之后（诸侯分立）每过一季，地图上刷出 1–2 个事件点，最多同时 3 个：
  *   名将悬赏 bounty —— 敌方势力部将率游骑出没，击败必得紫色兵装（25% 橙色），持续两季；
  *   流寇袭扰 bandit —— 我方城池附近流寇作乱，两波短战；本季内不平定，该城本季产出减半；
- *   商队护送 escort —— 商队自营寨前往某城，护车撑到抵达（约 90 秒）得钱；车毁则商队被劫、事件消失。
+ *   商队护送 escort —— 商队自营寨前往某城，护车撑到抵达（约 90 秒）得军粮；车毁则商队被劫、事件消失。
  * 季度序号 seasonIndex = 年 × 4 + 季；事件在 expires 这一季之内有效。
  */
 import {CITIES, CITY_LINKS, HOME, MAJOR_FACTIONS, cityById, cityOwner, type CityTier, type FactionId} from './WorldCities';
@@ -16,7 +16,7 @@ export interface IntelReward {merits: number; provisions: number; money: number;
 export const INTEL_INFO: Record<IntelKind, {name: string; glyph: string; color: number; css: string; seasons: number; brief: string}> = {
   bounty: {name: '名将悬赏', glyph: '赏', color: 0xb8442c, css: '#ff9a72', seasons: 2, brief: '敌将率游骑出没，击败必得紫色以上兵装'},
   bandit: {name: '流寇袭扰', glyph: '寇', color: 0xc9a032, css: '#f2cf6a', seasons: 1, brief: '流寇侵扰我方城池；本季不平定，该城本季产出减半'},
-  escort: {name: '商队护送', glyph: '商', color: 0x3f8f6a, css: '#8fe0b4', seasons: 1, brief: '护送商车抵达城池得钱；车毁则商队被劫'},
+  escort: {name: '商队护送', glyph: '商', color: 0x3f8f6a, css: '#8fe0b4', seasons: 1, brief: '护送商车抵达城池得军粮；车毁则商队被劫'},
 };
 
 /** 悬赏名将：按势力（史事人物；与可玩武将、章节首领不重复）。 */

@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import {heroOwned,LOCKED_HINT} from '../systems/RosterStore';
 import {HEADING_FONT,GAME_WIDTH as W,GAME_HEIGHT as H,IS_DESKTOP as D} from '../config';
 import {HeroWarCard} from './HeroWarCard';
 import {CHARACTERS} from '../data/characters';
@@ -6,7 +7,7 @@ import {homeCommand} from './HomeCommand';
 /** 每页 4 名武将（电脑一行 4 张、手机 2×2），武将多于 4 名时用 ‹ › 翻页。 */
 const PER=4;
 export class HomeHeroPicker{
- readonly root:Phaser.GameObjects.Container;private candidate=0;private page=0;private cards:HeroWarCard[]=[];private pageText?:Phaser.GameObjects.Text;
+ readonly root:Phaser.GameObjects.Container;private candidate=0;private page=0;private cards:HeroWarCard[]=[];private pageText?:Phaser.GameObjects.Text;private hint?:Phaser.GameObjects.Text;
  get preview():Phaser.GameObjects.Image{return this.cards[this.candidate].art;}
  private get pages(){return Math.ceil(CHARACTERS.length/PER);}
  constructor(private s:Phaser.Scene,private confirm:(index:number)=>void,private close:()=>void){
@@ -25,12 +26,14 @@ export class HomeHeroPicker{
   this.pageText=text(W/2,D?H-86:H-142,'',13);this.root.add(this.pageText);
  }
  const back=homeCommand(s,D?W/2-140:128,D?H-43:H-82,D?160:160,60,'返回');back.hit.setName('hero-picker-close').on('pointerdown',()=>this.close());this.root.add([back.g,back.hit,back.caption]);
- const ok=homeCommand(s,D?W/2+105:356,D?H-43:H-82,D?260:248,64,'确认出战',true);ok.hit.setName('hero-confirm').setData('padDefault',true).on('pointerdown',()=>this.confirm(this.candidate));this.root.add([ok.g,ok.hit,ok.caption]);
+ const ok=homeCommand(s,D?W/2+105:356,D?H-43:H-82,D?260:248,64,'确认出战',true);ok.hit.setName('hero-confirm').setData('padDefault',true).on('pointerdown',()=>{if(!heroOwned(CHARACTERS[this.candidate].id)){this.hint?.setText(`${CHARACTERS[this.candidate].name}尚未归附 · ${LOCKED_HINT}`);return;}this.confirm(this.candidate);});
+ this.hint=text(W/2,D?H-86-22:H-142-24,'',14).setColor('#ff9a72').setName('hero-locked-hint');this.root.add(this.hint);this.root.add([ok.g,ok.hit,ok.caption]);
  }
  private turn(dir:number){this.page=(this.page+dir+this.pages)%this.pages;this.refreshArt();}
  open(index:number):void{this.candidate=index;this.page=Math.floor(index/PER);this.root.setVisible(true);this.refreshArt();}
  refreshArt(_animate=false):void{
-  this.cards.forEach((c,i)=>{const on=Math.floor(i/PER)===this.page;c.root.setVisible(on);c.hit.setVisible(on);if(c.hit.input)c.hit.input.enabled=on;if(on){c.setHero(i);c.setSelected(i===this.candidate);}});
+  this.cards.forEach((c,i)=>{const on=Math.floor(i/PER)===this.page;c.root.setVisible(on);c.hit.setVisible(on);if(c.hit.input)c.hit.input.enabled=on;if(on){c.setHero(i);c.setSelected(i===this.candidate);c.root.setAlpha(heroOwned(CHARACTERS[i].id)?1:.4);}});
+  const lock=!heroOwned(CHARACTERS[this.candidate]?.id??'zhaoyun');this.hint?.setText(lock?`${CHARACTERS[this.candidate].name}尚未归附 · ${LOCKED_HINT}`:'');
   this.pageText?.setText(`第 ${this.page+1} / ${this.pages} 页 · 共 ${CHARACTERS.length} 将`);
  }
 }

@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import {captureLine, tryCapture} from '../systems/RosterStore';
 import {EnemyCamps} from '../systems/EnemyCamps';
 import {GameScene} from './GameScene';
 import {GuanduBoss} from '../systems/GuanduBoss';
@@ -58,7 +59,7 @@ export function intelGameSceneClass(Base: typeof GameScene) {
       super.create();
       this.chapter = intelBattle(e, city); this.runConfig = {...this.runConfig, encounter: 'qunxiong'};
       this.receipt = this.test ? '' : beginIntel(e.id);
-      const effect = permanentEffects(); this.legion.healingMultiplier = effect.healMultiplier; applyCitySpecialties(this.player, effect, true);
+      const effect = permanentEffects(); this.legion.healingMultiplier = effect.healMultiplier; applyCitySpecialties(this.player, effect, true, {legion: this.legion, supplies: this.supplies});
       for (let i = 0; i < effect.reinforcements; i++) this.legion.recruit(i === 0 ? 'swordsman' : 'spearman', 1, true);
       if (!this.test) for (const kind of takeExpeditionReserve(effect.reserveSlots)) { this.legion.recruit(kind, 1, true); this.allies[this.allies.length - 1].reserveSoldier = true; }
       this.battlefieldDetails.useStructuredLayout(); if (this.supplies) this.supplies.randomGeneration = false;
@@ -161,7 +162,7 @@ export function intelGameSceneClass(Base: typeof GameScene) {
       let loot = '';
       if (r.item && !debug) { const q = Math.random() < r.item.orangeChance ? 'orange' : r.item.quality, it = rollItem(q); addItems([it]); loot = ` · 兵装 ${QUALITIES[q].label}「${itemName(it)}」入行囊`; }
       this.resultTexts.subtitle.setText(success ? this.chapter.victoryText : lost ? '商车被劫 · 此事作罢' : `${INTEL_INFO[e.kind].name}未成 · 期限内可再战`);
-      this.resultTexts.body.setText(this.resultTexts.body.text + '\n军情 · 军功 +' + r.merits + ' / 粮草 +' + r.provisions + (r.money ? ' / 钱 +' + r.money : '') + loot + cityIncomeLine(r) + (debug ? '\n' + r.message : ''));
+      this.resultTexts.body.setText(this.resultTexts.body.text + '\n军情 · 军粮 +' + r.provisions + loot + cityIncomeLine(r) + captureLine(success && e.kind === 'bounty' && (!debug || (this.test && !this.debugModified && !this.debugJumped && !this.player.damageImmune && new URLSearchParams(location.search).get('roster') === '1')) ? tryCapture('bounty', e.general ?? '', e.faction) : null) + (debug ? '\n' + r.message : ''));
       const home = this.resultPanel.getByName('result-home') as Phaser.GameObjects.Text;
       home?.setText('返回天下地图').removeAllListeners('pointerdown').on('pointerdown', () => { this.registry.set('mapFocusCity', this.city.id); this.scene.start('WorldMapScene'); });
       const restart = this.resultPanel.getByName('result-restart') as Phaser.GameObjects.Image;

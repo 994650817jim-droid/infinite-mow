@@ -41,3 +41,28 @@ export const MOUNT_STYLES: Record<string, MountStyle> = {
   jueying: {tint: 0x2e2c34, stamina: 50, ride: '绝影：耐力 +50'},
 };
 export function mountStyle(base: string): MountStyle { return MOUNT_STYLES[base] ?? {tint: 0xc8b090}; }
+
+// —— 马厩（2026-11-16 改版，用户批准 gear-revamp-proposal.md）——
+/**
+ * 坐骑不再是随机掉落的道具，改为马厩收藏：每匹马只有一份、不带随机词条，骑乘特色见 MOUNT_STYLES，
+ * 另有一组固定小加成（并入兵装加成，受 gearCap 约束；初值按蓝色品质，交平衡会话复核）。
+ * 第一章通关后马厩开放并送驽马；之后的马靠各章首领首次击杀获得（reward = 关卡键，见 GameScene.stableRewardKey）。
+ * 换马只在休整时：主页马厩、行营休整；战斗中不可换。
+ */
+export interface HorseDef { id: string; name: string; legend?: boolean; bonus: Partial<Record<'move' | 'damage' | 'pickup' | 'ally' | 'hp' | 'elite' | 'attackSpeed', number>>; reward: string; lore: string }
+export const HORSES: readonly HorseDef[] = [
+  {id: 'nag', name: '驽马', bonus: {move: .026}, reward: 'huangjin-3', lore: '第一章通关时赠送'},
+  {id: 'grey_horse', name: '青骢', bonus: {move: .026}, reward: 'hulao-1', lore: '汜水关击败华雄'},
+  {id: 'yellow_horse', name: '黄骠马', bonus: {pickup: .1}, reward: 'hulao-2', lore: '荥阳击败徐荣'},
+  {id: 'chitu', name: '赤兔', legend: true, bonus: {move: .04, damage: .08}, reward: 'lubu', lore: '人中吕布，马中赤兔 · 天下地图挑战关「三英战吕布」首胜'},
+  {id: 'black_horse', name: '乌骓', bonus: {damage: .05}, reward: 'third-1', lore: '群雄割据第一关首领'},
+  {id: 'mule', name: '骡车', bonus: {ally: .05}, reward: 'third-2', lore: '群雄割据第二关首领'},
+  {id: 'white_horse', name: '白马', bonus: {ally: .05}, reward: 'third-3', lore: '群雄割据章末首领'},
+  {id: 'red_horse', name: '骅骝', bonus: {damage: .05}, reward: 'guandu-1', lore: '官渡第一关首领'},
+  {id: 'jueying', name: '绝影', legend: true, bonus: {move: .04, ally: .08}, reward: 'guandu-3', lore: '宛城舍身救主 · 官渡章末首领'},
+  {id: 'west_horse', name: '大宛马', bonus: {move: .026}, reward: 'chibi-1', lore: '赤壁第一关首领'},
+  {id: 'dilu', name: '的卢', legend: true, bonus: {move: .04, hp: .1}, reward: 'chibi-3', lore: '一跃三丈过檀溪 · 赤壁章末首领'},
+];
+export const STARTER_HORSE = 'nag';
+export function horseDef(id: string | undefined): HorseDef | undefined { return id ? HORSES.find(h => h.id === id) : undefined; }
+export function horseForReward(key: string): HorseDef | undefined { return HORSES.find(h => h.reward === key); }

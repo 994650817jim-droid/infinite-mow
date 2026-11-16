@@ -46,6 +46,7 @@ const CONFIG: Record<string, SfxConfig> = {
   gong: { freq: 0, dur: 2.6, type: 'sine', gain: 0, throttleMs: 600, max: 1, priority: 2 },
   playerHurt: { freq: 0, dur: .2, type: 'sine', gain: 0, throttleMs: 160, max: 1, priority: 2 },
   passiveFull: { freq: 0, dur: .4, type: 'sine', gain: 0, throttleMs: 1000, max: 1, priority: 2 },
+  warCry: { freq: 0, dur: 1.2, type: 'sine', gain: 0, throttleMs: 600, max: 1, priority: 2 },
 };
 
 const GLOBAL_MAX = 14;
@@ -68,6 +69,16 @@ class Voice {
   pluck(t: number, freq: number, gain: number, dur = .5): void { this.tone(t, dur, 'sine', freq, gain); this.tone(t, dur * .5, 'sine', freq * 2, gain * .4); this.tone(t, dur * .25, 'sine', freq * 3, gain * .2); }
   metal(t: number, base: number, gain: number, dur: number): void { for (const [r, a] of [[1, 1], [1.48, .6], [2.13, .4], [2.76, .25]] as const) this.tone(t, dur, 'sine', base * r, gain * a, base * r * .99); }
   drum(t: number, from: number, to: number, gain: number, dur: number): void { this.tone(t, dur, 'sine', from, gain, to); this.noise(t, .05, 'lowpass', 1100, gain * .45); }
+  /** 合成人声「喝——」：两支略失谐的锯齿波（音高先扬后落、带颤音）经三个元音共振峰带通（约「啊」），模拟武将吼声。 */
+  vox(t: number, dur: number, f0: number, f1: number, gain: number): void {
+    const c = this.ctx, mix = c.createGain(), env = c.createGain(), lfo = c.createOscillator(), lg = c.createGain();
+    const oscs = [1, 1.012].map(k => { const o = c.createOscillator(); o.type = 'sawtooth'; o.frequency.setValueAtTime(f0 * k, t); o.frequency.linearRampToValueAtTime(f1 * k, t + dur * .3); o.frequency.linearRampToValueAtTime(f1 * k * .88, t + dur); o.connect(mix); return o; });
+    lfo.frequency.value = 6; lg.gain.value = f0 * .025; lfo.connect(lg); for (const o of oscs) lg.connect(o.frequency);
+    env.gain.setValueAtTime(0, t); env.gain.linearRampToValueAtTime(gain, t + .05); env.gain.setValueAtTime(gain * .85, t + dur * .65); env.gain.exponentialRampToValueAtTime(.0001, t + dur);
+    for (const [f, q, g] of [[760, 5, 1], [1180, 7, .55], [2550, 9, .22]] as const) { const bp = c.createBiquadFilter(), gg = c.createGain(); bp.type = 'bandpass'; bp.frequency.value = f; bp.Q.value = q; gg.gain.value = g; mix.connect(bp); bp.connect(gg); gg.connect(env); }
+    env.connect(this.out);
+    for (const o of [...oscs, lfo]) { o.start(t); o.stop(t + dur + .05); }
+  }
 }
 const D5 = 587.33, F5 = 698.46, A5 = 880, C6 = 1046.5, D6 = 1174.66;
 /** 分层音效配方（返回时长秒）；未列出的沿用 CONFIG 单振荡器。 */
@@ -100,6 +111,8 @@ const RECIPES: Record<string, (v: Voice, t: number, p: number) => number> = {
   wallRise: (v, t) => { v.noise(t, .55, 'lowpass', 260, .16, 120); v.tone(t, .45, 'sine', 70, .1, 38); v.noise(t + .08, .2, 'bandpass', 900, .05, 500, 1.2); return .56; },
   waveDrum: (v, t) => { v.drum(t, 115, 46, .26, .4); v.drum(t + .2, 115, 46, .22, .35); v.drum(t + .4, 120, 44, .32, .5); return .9; },
   gong: (v, t) => { v.metal(t, 98, .08, 2.6); v.noise(t, .25, 'bandpass', 2200, .04, 1400); return 2.6; },
+  /** 武将满层战吼：重鼓开声，合成人声「喝——」（两层八度）叠低沉号角与喘息噪声，尾音再一声鼓；响度压过 BGM。 */
+  warCry: (v, t) => { v.drum(t, 92, 38, .4, .55); v.vox(t + .04, 1.05, 128, 168, 1.6); v.vox(t + .04, 1.05, 256, 336, .45); v.tone(t + .08, .95, 'sawtooth', 98, .05, 104, .09); v.tone(t + .08, .95, 'sawtooth', 147, .035, 156, .12); v.noise(t + .03, .7, 'bandpass', 1500, .06, 900, 1.4); v.drum(t + .5, 112, 44, .32, .45); return 1.15; },
   /** 被动满层：两声轻鼓 + 一点金属余音，不抢战斗音。 */
   passiveFull: (v, t) => { v.drum(t, 140, 60, .12, .22); v.drum(t + .12, 150, 62, .15, .26); v.metal(t + .12, 1320, .008, .3); return .4; },
   playerHurt: (v, t, p) => { v.noise(t, .12, 'lowpass', 1400 * p, .09, 300); v.tone(t, .16, 'sine', 230 * p, .06, 110); return .17; },

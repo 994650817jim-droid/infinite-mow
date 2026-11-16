@@ -108,12 +108,12 @@ for (const [layout, viewport] of Object.entries(LAYOUTS)) for (const [hero, h] o
     // 西凉铁骑满层：下一枪化为向前冲锋（主将突进）
     const c = await p.evaluate(async ([G0, MK]) => {
       const s = eval(G0), pl = s.player; const mk = eval(MK); for (const e of s.enemies) if (e.active && !e.isSupplySlot) e.hp = 0;
-      await new Promise(r => setTimeout(r, 1500)); mk(pl.x + 120, pl.y); const x0 = pl.x, shout0 = s.passiveShout.count; pl.passive.stacks = 6; let charge = false, moved = 0, shoutText = '', glow = false, ring = false; const t0 = performance.now();
-      while (performance.now() - t0 < 4000) { await new Promise(r => setTimeout(r, 20)); charge = charge || !!s.children.getByName('machao-charge'); moved = Math.max(moved, pl.x - x0); shoutText = shoutText || s.children.getByName('passive-shout')?.text || ''; glow = glow || !!s.children.getByName('passive-shout-glow'); ring = ring || !!s.children.getByName('passive-shout-ring'); if (charge && moved >= 120) break; }
+      await new Promise(r => setTimeout(r, 1500)); mk(pl.x + 120, pl.y); const x0 = pl.x, shout0 = s.passiveShout.count; pl.passive.stacks = 6; let charge = false, moved = 0, shoutText = '', glow = false, ring = false, bigText = 0, wave = false; const t0 = performance.now();
+      while (performance.now() - t0 < 4000) { await new Promise(r => setTimeout(r, 20)); charge = charge || !!s.children.getByName('machao-charge'); moved = Math.max(moved, pl.x - x0); shoutText = shoutText || (s.children.getByName('passive-shout') ? s.passiveShout.lastLine : ''); bigText = bigText || (s.children.getByName('passive-shout')?.list?.length ?? 0); wave = wave || !!s.children.getByName('warcry-wave'); glow = glow || !!s.children.getByName('passive-shout-glow'); ring = ring || !!s.children.getByName('passive-shout-ring'); if (charge && moved >= 120) break; }
       const shouts = s.passiveShout.count - shout0;
       // 紧接着再攒满一次：马超不设冷却，应再喊一次
       pl.passive.stacks = 6; await new Promise(r => setTimeout(r, 1200));
-      return { charge, moved: Math.round(moved), triggers: pl.passive.snapshot(s.combatNow).triggers, shouts, shoutText, glow, ring, shoutsAfterRefill: s.passiveShout.count - shout0 };
+      return { charge, moved: Math.round(moved), triggers: pl.passive.snapshot(s.combatNow).triggers, shouts, shoutText, bigText, wave, waveTex: s.textures.exists('warcry_fx'), glow, ring, shoutsAfterRefill: s.passiveShout.count - shout0 };
     }, [G, mk]);
     ck(`${tag}：铁骑满层，下一枪化为锦马冲锋（向前突进 ≥120 像素）`, c.charge && c.moved >= 120 && c.triggers >= 1, c);
     // 喊话冷却按武将配置：孙尚香走默认 60 秒（冷却内再攒满不喊，过后再满照喊；被动本身照常），马超为 0
@@ -124,7 +124,7 @@ for (const [layout, viewport] of Object.entries(LAYOUTS)) for (const [hero, h] o
       return { CD, first: fill(0), mid: fill(30000), justBefore: fill(CD - 10), after: fill(CD + 100), readyDuringCd: (pa.stacks = 6, pa.snapshot(30000).ready), sunCd: PASSIVE_FULL_SHOUTS.sunshangxiang?.cooldownMs ?? CD, machaoCd: PASSIVE_FULL_SHOUTS.machao?.cooldownMs ?? CD };
     });
     ck(`${tag}：喊话冷却按武将——孙尚香 60 秒（冷却内再攒满不喊，过了再满才喊，被动照常就绪），马超 0`, cd.CD === 60000 && cd.sunCd === 60000 && cd.machaoCd === 0 && cd.first === 1 && cd.mid === 1 && cd.justBefore === 1 && cd.after === 2 && cd.readyDuringCd, cd);
-    ck(`${tag}：铁骑攒满时头顶喊一句台词、身上闪金光、地上不画圈（马超不设冷却：紧接着再攒满也再喊一次）`, c.glow && !c.ring && c.shouts === 1 && c.shoutsAfterRefill === 2 && ['吾乃西凉马孟起！', '铁骑踏阵，片甲不留！', '锦马超在此，谁敢一战！'].includes(c.shoutText) , c);
+    ck(`${tag}：铁骑攒满时头顶喊一句台词、逐字砸出大字、像素声浪、身上闪金光、地上不画圈（马超不设冷却：紧接着再攒满也再喊一次）`, c.glow && !c.ring && c.bigText === [...c.shoutText].length && (!c.waveTex || c.wave) && c.shouts === 1 && c.shoutsAfterRefill === 2 && ['吾乃西凉马孟起！', '铁骑踏阵，片甲不留！', '锦马超在此，谁敢一战！'].includes(c.shoutText) , c);
   } else {
     const r = await p.evaluate(async ([G0, MK]) => {
       const s = eval(G0), pl = s.player; const mk = eval(MK);

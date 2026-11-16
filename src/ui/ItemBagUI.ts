@@ -10,6 +10,7 @@ import { type GearOwner, equipItem, equippedBy, heroHorse, horseRider, legacyVal
 import { drawQualityFrame, ensureItemTextures, horseIcon, itemIconKey, itemTile } from './ItemQuality';
 import { lqHitBox, lqPanel, lqSkin } from './LacquerKit';
 import { padNavigator } from './PadNavigator';
+import { ItemTooltip, compareLines } from './ItemTooltip';
 
 /** 本局宝物（战法宝物 / 饰品）的显示条目，由 GameScene 提供。 */
 export interface TreasureEntry { name: string; desc: string; icon: string }
@@ -30,7 +31,6 @@ export interface ItemBagOptions {
 }
 
 const qIndex = (i: ItemInstance) => QUALITY_ORDER.indexOf(i.quality);
-interface SlotRect { slot: ItemSlot; x: number; y: number; size: number }
 
 /** 马厩入口（主城马厩建筑、主页等调用）：打开行囊并直接显示马厩。 */
 export function openStable(scene: Phaser.Scene, hero: CharacterId, onClose?: () => void): ItemBagUI { return new ItemBagUI(scene, { hero, stable: true, onClose }); }
@@ -39,7 +39,7 @@ export function openStable(scene: Phaser.Scene, hero: CharacterId, onClose?: () 
  * 行囊面板（2026-11-16 改版，RPG 纸娃娃）：
  * - 左 / 上：武将立绘，四周 4 个兵装槽（头盔、甲胄、战靴、信物）+ 坐骑位 + 本局宝物 2 格，下方加成汇总；
  * - 右 / 下：行囊网格（槽位筛选、翻页；战斗中可切「本局缴获」）。
- * 点道具弹详情卡（穿戴 / 卸下 / 分解 / 对比）；也可把道具从行囊拖到装备槽穿上、从槽拖回行囊卸下（拖到已有装备的槽即互换）。
+ * 点道具弹详情卡（穿戴 / 卸下 / 分解 / 对比）；鼠标悬停显示属性提示框（含与当前穿戴的对比）；2026-11-16 起去掉拖拽穿戴。
  * 坐骑位打开马厩：第一章通关后开放，只在休整时（主页、行营休整）可换马。
  * 电脑 960×540 左右分栏，手机 540×H 上下排列。命名的命中区供测试与手柄使用。
  */
@@ -55,26 +55,22 @@ export class ItemBagUI {
   /** 详情卡关掉后手柄焦点回到这件道具的格子。 */
   private lastUid: string | null = null;
   private lastFrom: string | null = null;
-  private slotRects: SlotRect[] = [];
-  private gridRect = { x: 0, y: 0, w: 0, h: 0 };
-  private dragHints?: Phaser.GameObjects.Graphics;
-  private dragTip?: Phaser.GameObjects.Text;
-  private readonly prevDragDistance: number;
+  /** 悬停属性提示框（电脑鼠标；手柄焦点也会触发）。 */
+  private readonly tip: ItemTooltip;
 
   constructor(private readonly scene: Phaser.Scene, private readonly o: ItemBagOptions) {
     ensureItemTextures(scene);
     this.hero = o.hero;
     if (o.stable) this.selected = 'stable';
     this.root = scene.add.container(0, 0).setDepth(DEPTH.overlay + 20).setScrollFactor(0).setName('item-bag').setData('ui', this);
-    // 拖拽：移动超过 8px 才算拖，轻点仍是选中（手柄 Ⓐ 走点击）
-    this.prevDragDistance = scene.input.dragDistanceThreshold; scene.input.dragDistanceThreshold = 8;
     const notes = [takeItemNotice(), takeStableAnnouncement() ? '马厩已开放 · 获赠驽马（点坐骑位换马）' : undefined].filter(Boolean);
     this.notice = notes.join('\n');
     markBagSeen();
+    this.tip = new ItemTooltip(scene, DEPTH.overlay + 30);
     this.render();
   }
 
-  close(): void { this.scene.input.dragDistanceThreshold = this.prevDragDistance; this.root.destroy(); this.o.onClose?.(); }
+  close(): void { this.tip.destroy(); this.root.destroy(); this.o.onClose?.(); }
 
   private get battle(): boolean { return !!this.o.battle; }
   private get canChangeHorse(): boolean { return !this.battle || !!this.o.atRest; }
@@ -117,9 +113,9 @@ export class ItemBagUI {
   render(): void {
     // 手柄：重绘前记住焦点对象的名字，重绘后把同名对象设为默认焦点（PadNavigator 会在旧对象销毁后取默认）
     const prev = padNavigator()?.focused, prevName = prev && (prev.name.startsWith('item-') || prev.name.startsWith('stable-')) ? prev.name : null;
+    this.tip?.hide();
     this.body?.destroy();
     this.body = this.scene.add.container(0, 0).setScrollFactor(0); this.root.add(this.body);
-    this.slotRects = [];
     const W = GAME_WIDTH, H = GAME_HEIGHT, D = IS_DESKTOP, s = loadItems();
     const dim = this.add(this.scene.add.rectangle(0, 0, W, H, 0x0b0805, .86).setOrigin(0).setInteractive());
     dim.on('pointerdown', (_p: unknown, _x: unknown, _y: unknown, e?: Phaser.Types.Input.EventData) => e?.stopPropagation?.());
@@ -156,9 +152,9 @@ export class ItemBagUI {
       const [sx, sy] = place[slot], item = worn[slot] ?? null;
       const tile = this.add(itemTile(this.scene, sx, sy, size, item, slot, { selected: !!item && item.uid === this.selected }));
       tile.setName('item-slot-' + slot).setData('uid', item?.uid ?? null).setSize(size, size).setInteractive({ useHandCursor: true });
-      this.tapOrDrag(tile, () => { if (item) this.select(item.uid); else { this.filter = slot; this.page = 0; this.notice = `行囊已筛选 · ${SLOTS[slot].name}（点道具或拖到槽位穿戴）`; this.render(); } }, item ? { item, fromSlot: slot } : undefined);
+      this.onTap(tile, () => { if (item) this.select(item.uid); else { this.filter = slot; this.page = 0; this.notice = `行囊已筛选 · ${SLOTS[slot].name}（点道具或拖到槽位穿戴）`; this.render(); } });
+      if (item) this.tip.attach(tile, () => item, () => item);
       this.text(sx, sy + size / 2 + 10, item ? itemName(item) : SLOTS[slot].name, 12, item ? QUALITIES[item.quality].css : '#8d7d60').setOrigin(.5).setName('item-slot-label-' + slot);
-      this.slotRects.push({ slot, x: sx, y: sy, size });
     }
     // 坐骑位
     const my = rowY(2), mountTile = this.add(this.scene.add.container(lx, my));
@@ -200,7 +196,6 @@ export class ItemBagUI {
     filters.forEach((f, i) => this.button(gx + fw / 2 + i * (fw + 6), fy, f === 'all' ? '全部' : SLOTS[f].name, 'item-filter-' + f, () => { this.filter = f; this.page = 0; this.render(); }, { active: this.filter === f, size: 13, w: fw - 24 }));
     const cell = D ? 60 : 72, gap = D ? 8 : 10, gcols = Math.max(1, Math.floor((gw + gap) / (cell + gap)));
     const gridTop = fy + 30, bottom = y0 + ph - (D ? 62 : 74), rows = Math.max(1, Math.floor((bottom - gridTop + gap) / (cell + gap))), per = gcols * rows;
-    this.gridRect = { x: gx, y: gridTop - 8, w: gw, h: bottom - gridTop + 16 };
     const list = this.items(), pages = Math.max(1, Math.ceil(list.length / per)); this.page = Math.min(this.page, pages - 1);
     const offX = gx + (gw - (gcols * cell + (gcols - 1) * gap)) / 2;
     list.slice(this.page * per, this.page * per + per).forEach((item, i) => {
@@ -208,7 +203,8 @@ export class ItemBagUI {
       const tile = this.add(itemTile(this.scene, ix, iy, cell, item, undefined, { selected: item.uid === this.selected }));
       tile.setName('item-cell-' + i).setData('uid', item.uid).setSize(cell, cell).setInteractive({ useHandCursor: true });
       const loot = this.isLoot(item.uid);
-      this.tapOrDrag(tile, () => this.select(item.uid), !loot || this.o.claimLoot ? { item } : undefined);
+      this.onTap(tile, () => this.select(item.uid));
+      this.tip.attach(tile, () => item, () => loadout(this.hero)[itemSlot(item)]);
       // 本局缴获：左上角淡金「新」字（穿上即收入行囊；没穿的结算时按原规则带回）
       if (loot) tile.setData('loot', true).add(this.scene.add.text(-cell / 2 + 3, -cell / 2 + 2, '新', { fontFamily: HEADING_FONT, fontSize: '12px', color: '#2a1a08', backgroundColor: '#f3d48acc', resolution: 2 }).setPadding(3, 0).setName('item-new-badge'));
       const owner = loot ? undefined : equippedBy(s, item.uid);
@@ -244,43 +240,8 @@ export class ItemBagUI {
     this.text(cx, top + h - 6, c?.name ?? ownerName(this.hero), 15, '#f2ddae', true).setOrigin(.5, 1).setStroke('#140d07', 4);
   }
 
-  /**
-   * 轻点 = onTap；拖动（drag 给出道具）= 拖到装备槽穿戴 / 从槽拖回行囊卸下。
-   * 轻点用 pointerup 触发（手柄 Ⓐ 依次发 pointerdown + pointerup）；拖过的那次 pointerup 忽略。
-   */
-  private tapOrDrag(tile: Phaser.GameObjects.Container, onTap: () => void, drag?: { item: ItemInstance; fromSlot?: ItemSlot }): void {
-    tile.on('pointerup', () => { if (tile.getData('dragged')) { tile.setData('dragged', false); return; } onTap(); });
-    if (!drag) return;
-    this.scene.input.setDraggable(tile);
-    const home = { x: tile.x, y: tile.y }, slotOf = drag.fromSlot ?? itemSlot(drag.item);
-    tile.on('dragstart', () => { tile.setData('dragged', true); this.body.bringToTop(tile); tile.setScale(1.08); this.showDragHints(slotOf, !!drag.fromSlot); });
-    tile.on('drag', (_p: Phaser.Input.Pointer, dx: number, dy: number) => {
-      tile.setPosition(dx, dy);
-      const hit = this.slotAt(dx, dy), cur = hit && hit.slot === slotOf && !drag.fromSlot ? loadout(this.hero)[slotOf] : undefined;
-      const tip = cur && cur.uid !== drag.item.uid ? this.compare(drag.item, cur) : hit && hit.slot === slotOf && !drag.fromSlot ? '放下穿戴' : drag.fromSlot && this.inGrid(dx, dy) ? '放下卸下' : '';
-      this.dragTip?.setText(tip).setPosition(dx + 40, dy - 30).setVisible(!!tip);
-    });
-    tile.on('dragend', () => {
-      this.dragHints?.destroy(); this.dragTip?.destroy(); this.dragHints = this.dragTip = undefined;
-      const hit = this.slotAt(tile.x, tile.y);
-      if (!drag.fromSlot && hit?.slot === slotOf) { if (this.wear(drag.item)) { this.selected = null; this.render(); return; } }
-      else if (drag.fromSlot && this.inGrid(tile.x, tile.y)) { this.takeOff(drag.fromSlot); this.selected = null; this.render(); return; }
-      else if (hit && hit.slot !== slotOf) this.notice = `${itemName(drag.item)} 是${SLOTS[slotOf].name}，只能放进${SLOTS[slotOf].name}槽`;
-      this.scene.tweens.add({ targets: tile, x: home.x, y: home.y, scale: 1, duration: 140, onComplete: () => { if (this.notice) this.render(); } });
-    });
-  }
-  private slotAt(x: number, y: number): SlotRect | undefined { return this.slotRects.find(r => Math.abs(x - r.x) <= r.size / 2 + 8 && Math.abs(y - r.y) <= r.size / 2 + 8); }
-  private inGrid(x: number, y: number): boolean { const g = this.gridRect; return x >= g.x && x <= g.x + g.w && y >= g.y && y <= g.y + g.h; }
-  /** 拖动中：能放的槽发金光，不能放的压暗；从槽拖出时行囊区发光。 */
-  private showDragHints(slot: ItemSlot, fromSlot: boolean): void {
-    const g = this.dragHints = this.add(this.scene.add.graphics()); this.body.sendToBack(g); this.body.moveUp(g);
-    for (const r of this.slotRects) {
-      if (!fromSlot && r.slot === slot) g.lineStyle(3, 0xf3d48a, 1).strokeRoundedRect(r.x - r.size / 2 - 5, r.y - r.size / 2 - 5, r.size + 10, r.size + 10, 9).fillStyle(0xf3d48a, .18).fillRoundedRect(r.x - r.size / 2 - 5, r.y - r.size / 2 - 5, r.size + 10, r.size + 10, 9);
-      else if (!fromSlot) g.fillStyle(0x000000, .5).fillRoundedRect(r.x - r.size / 2, r.y - r.size / 2, r.size, r.size, 7);
-    }
-    if (fromSlot) { const b = this.gridRect; g.lineStyle(2, 0xf3d48a, .8).strokeRoundedRect(b.x, b.y, b.w, b.h, 8).fillStyle(0xf3d48a, .06).fillRoundedRect(b.x, b.y, b.w, b.h, 8); }
-    this.dragTip = this.text(0, 0, '', 13, '#ffe9bd').setBackgroundColor('#1b120bee').setPadding(8, 4).setLineSpacing(2).setVisible(false).setName('item-drag-tip');
-  }
+  /** 点击：pointerup 触发（手柄 Ⓐ 依次发 pointerdown + pointerup）。2026-11-16 用户要求去掉拖拽穿戴，只保留点击。 */
+  private onTap(tile: Phaser.GameObjects.Container, onTap: () => void): void { tile.on('pointerup', onTap); }
 
   /** 手柄默认焦点：卡片 → 穿戴 / 卸下 / 骑乘 / 关闭；否则回到刚看过的道具，再否则沿用重绘前的焦点、第一格、关闭。 */
   private markPadDefault(prevName: string | null): void {
@@ -415,11 +376,5 @@ export class ItemBagUI {
   }
 
   /** 与当前同槽装备的词条差，如「▲ 生命上限 +2.1%」「▼ 暴击率 −1.0%」。 */
-  private compare(item: ItemInstance, current?: ItemInstance): string {
-    if (!current) return '';
-    const sum = (i: ItemInstance) => { const m = new Map<AffixId, number>(); for (const a of i.affixes) m.set(a.id, (m.get(a.id) ?? 0) + a.value); return m; };
-    const a = sum(item), b = sum(current), ids = [...new Set([...a.keys(), ...b.keys()])];
-    return ids.map(id => { const d = (a.get(id) ?? 0) - (b.get(id) ?? 0); if (Math.abs(d) < 1e-4) return ''; const f = AFFIXES[id], v = f.percent ? `${Math.round(Math.abs(d) * 1000) / 10}%` : Math.abs(d).toFixed(1);
-      return `${d > 0 ? '▲' : '▼'} ${f.name} ${d > 0 ? '+' : '−'}${v}`; }).filter(Boolean).join('\n');
-  }
+  private compare(item: ItemInstance, current?: ItemInstance): string { return compareLines(item, current).map(c => c.text).join('\n'); }
 }

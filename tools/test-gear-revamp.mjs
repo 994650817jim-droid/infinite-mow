@@ -1,5 +1,5 @@
 // 兵装改版（2026-11-16，gear-revamp-proposal.md）：旧档迁移、背包容量、保底、马厩（解锁 / 赠马 / 换马限制）、
-// 战斗中换装（HUD 行囊、穿上缴获、生命按比例）、宝物栏、拖拽穿戴 / 卸下、主页角标。手机 390×844 与电脑 1280×720 截图。
+// 战斗中换装（HUD 行囊、穿上缴获、生命按比例）、宝物栏、点击穿戴 / 卸下与悬停属性提示框（2026-11-16 去掉拖拽）、主页角标。手机 390×844 与电脑 1280×720 截图。
 // 需要开发服务器 5173。用法：node tools/test-gear-revamp.mjs
 import { chromium } from 'playwright';
 import { mkdirSync } from 'node:fs';
@@ -150,7 +150,7 @@ await p.evaluate(G0 => { const s = eval(G0); window.__find(s.children.getByName(
 await p.waitForTimeout(150);
 await p.screenshot({ path: `${out}/mobile-battle-hud-bag.png` });
 
-// 6) 主页：角标、纸娃娃、拖拽
+// 6) 主页：角标、纸娃娃、点击穿戴、悬停提示框
 await p.evaluate(async () => { const st = await window.__mod('/src/systems/ItemStore.ts'), items = await window.__mod('/src/data/items.ts'); st.setAutoSalvageWhite(false);
   { const raw = JSON.parse(localStorage.getItem('im_items_v2')); raw.legacy = [{ uid: 'old-1', base: 'sword_tassel', quality: 'green', affixes: [{ id: 'attackSpeed', value: .02 }] }]; localStorage.setItem('im_items_v2', JSON.stringify(raw)); st.resetItemCache(); } st.addItems(['blue', 'purple', 'green', 'orange'].map((q, i) => items.rollItem(q, Math.random, ['helm', 'boots', 'token', 'armor'][i]))); });
 await p.goto(base + '?layout=mobile');
@@ -168,14 +168,26 @@ const drag = await p.evaluate(async M0 => {
   let bag = m.children.getByName('item-bag'); out.portrait = !!window.__find(bag, 'item-portrait');
   st.unequipSlot('zhaoyun', 'helm'); window.__tap(window.__find(bag, 'item-filter-helm')); await new Promise(r => setTimeout(r, 100)); bag = m.children.getByName('item-bag');
   window.__find(bag, 'item-filter-helm').emit('pointerdown'); await new Promise(r => setTimeout(r, 100)); bag = m.children.getByName('item-bag');
-  const cell = window.__find(bag, 'item-cell-0'), uid = cell.getData('uid'), slot = window.__find(bag, 'item-slot-helm'), boots = window.__find(bag, 'item-slot-boots');
-  const dragTo = (o, x, y) => { o.emit('dragstart', {}, o.x, o.y); o.emit('drag', {}, x, y); const tip = window.__find(m.children.getByName('item-bag'), 'item-drag-tip'); out.tip = out.tip ?? (tip?.visible ? tip.text : ''); o.emit('dragend', {}, x, y, true); };
-  dragTo(cell, boots.x, boots.y); await new Promise(r => setTimeout(r, 250)); out.wrong = st.loadout('zhaoyun').helm?.uid ?? null;
-  bag = m.children.getByName('item-bag'); out.wrongNotice = window.__find(bag, 'item-notice')?.text;
-  const cell2 = window.__find(bag, 'item-cell-0'); out.tip = undefined; dragTo(cell2, slot.x, slot.y); await new Promise(r => setTimeout(r, 200));
+  // 再放一件头盔，便于对比（重绘后才出现在网格里）
+  st.addItems([items.rollItem('purple', Math.random, 'helm')]); window.__find(bag, 'item-filter-helm').emit('pointerdown'); await new Promise(r => setTimeout(r, 100)); bag = m.children.getByName('item-bag');
+  const cam = eval(M0).cameras.main, rs = cam.zoom, W = cam.width / rs, H = cam.height / rs, tipOf = () => m.children.getByName('item-tooltip');
+  const cell = window.__find(bag, 'item-cell-0'), uid = cell.getData('uid');
+  out.noDrag = !cell.input?.draggable && !window.__find(bag, 'item-slot-helm').input?.draggable;
+  cell.emit('pointerover', { x: 300 * rs, y: 300 * rs }); out.tipEmpty = { shown: tipOf()?.visible, name: window.__find(tipOf(), 'item-tooltip-name')?.text, text: tipOf()?.list.filter(o => o.type === 'Text').map(o => o.text).join('|') };
+  cell.emit('pointerout'); out.tipHidden = !tipOf()?.visible;
+  // 点击穿戴
+  window.__tap(cell); await new Promise(r => setTimeout(r, 120)); bag = m.children.getByName('item-bag'); window.__find(bag, 'item-equip')?.emit('pointerdown'); await new Promise(r => setTimeout(r, 150));
   out.worn = st.loadout('zhaoyun').helm?.uid === uid;
-  bag = m.children.getByName('item-bag'); const slot2 = window.__find(bag, 'item-slot-helm'), grid = window.__find(bag, 'item-cell-0') ?? window.__find(bag, 'item-page');
-  dragTo(slot2, grid.x, grid.y); await new Promise(r => setTimeout(r, 200)); out.off = !st.loadout('zhaoyun').helm;
+  // 悬停另一件头盔：对比当前（涨绿降红）；鼠标在右下角时提示框翻到左上、不出屏
+  bag = m.children.getByName('item-bag'); const other = [0, 1, 2, 3].map(k => window.__find(bag, 'item-cell-' + k)).find(c => c && c.getData('uid') !== uid);
+  other.emit('pointerover', { x: (W - 5) * rs, y: (H - 5) * rs }); const t = tipOf();
+  out.cmp = { shown: t.visible, title: t.list.filter(o => o.type === 'Text').map(o => o.text).find(x => /^对比当前/.test(x)), up: t.list.filter(o => o.name === 'item-tooltip-up').length, down: t.list.filter(o => o.name === 'item-tooltip-down').length,
+    upColor: t.list.find(o => o.name === 'item-tooltip-up')?.style.color, downColor: t.list.find(o => o.name === 'item-tooltip-down')?.style.color,
+    inside: t.x >= 0 && t.y >= 0 && t.x + t.getData('w') <= W && t.y + t.getData('h') <= H };
+  other.emit('pointermove', { x: 40 * rs, y: 40 * rs }); out.follow = tipOf().x > 40 && tipOf().y > 40; other.emit('pointerout');
+  // 点击卸下
+  window.__tap(window.__find(bag, 'item-slot-helm')); await new Promise(r => setTimeout(r, 120)); bag = m.children.getByName('item-bag'); window.__find(bag, 'item-unequip')?.emit('pointerdown'); await new Promise(r => setTimeout(r, 150));
+  out.off = !st.loadout('zhaoyun').helm;
   bag = m.children.getByName('item-bag'); window.__tap(window.__find(bag, 'item-filter-all'));
   window.__find(m.children.getByName('item-bag'), 'item-filter-all').emit('pointerdown'); await new Promise(r => setTimeout(r, 100));
   bag = m.children.getByName('item-bag'); window.__tap(window.__find(bag, 'item-slot-mount')); await new Promise(r => setTimeout(r, 150));
@@ -184,9 +196,11 @@ const drag = await p.evaluate(async M0 => {
 }, M);
 ck('打开行囊后角标清零', drag.badgeGone && drag.badgeCount === 0, drag);
 ck('有旧物时行囊顶部有「旧物」按钮，卡片列出旧兵刃并可全部分解', drag.legacyBtn === '旧物 1' && /剑穗/.test(drag.legacyList ?? '') && drag.legacySalvaged, drag);
-ck('拖到不对应的槽：弹回并提示', drag.wrong === null && /只能放进头盔槽/.test(drag.wrongNotice ?? ''), drag);
-ck('从行囊拖到头盔槽：穿上', drag.worn, drag);
-ck('从装备槽拖回行囊：卸下', drag.off, drag);
+ck('不能拖拽：行囊格和装备槽都不可拖', drag.noDrag, drag);
+ck('悬停行囊格弹出属性提示框（名称、栏位、词条；未穿戴时写明），移开隐藏', drag.tipEmpty.shown && !!drag.tipEmpty.name && /头盔/.test(drag.tipEmpty.text) && /该栏位尚未穿戴/.test(drag.tipEmpty.text) && drag.tipHidden, drag.tipEmpty);
+ck('点击 → 详情 → 穿戴：穿上头盔', drag.worn, drag);
+ck('悬停另一件头盔：显示「对比当前」，涨的绿、降的红；鼠标在右下角时提示框不出屏，并跟随鼠标', drag.cmp.shown && /^对比当前/.test(drag.cmp.title ?? '') && drag.cmp.up + drag.cmp.down > 0 && (!drag.cmp.up || drag.cmp.upColor === '#7fd88a') && (!drag.cmp.down || drag.cmp.downColor === '#f08a6a') && drag.cmp.inside && drag.follow, drag.cmp);
+ck('点击已穿戴的头盔 → 卸下', drag.off, drag);
 ck('主页（休整）可在马厩换马', drag.homeRide, drag);
 await p.screenshot({ path: `${out}/mobile-home-stable.png` });
 await p.evaluate(M0 => { const bag = eval(M0).children.getByName('item-bag'); window.__find(bag, 'item-detail-close').emit('pointerdown'); }, M);

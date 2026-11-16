@@ -174,11 +174,13 @@ const camp = await p.evaluate(async G0 => {
   const s = eval(G0), ui = s.campUI, out = {}; if (!ui) return { none: true };
   s.legion.food = 500; ui.open('test-camp-' + Date.now(), '测试'); ui.setVisible(true); ui.tab = 2; ui.render?.(); await new Promise(r => setTimeout(r, 150));
   const label = () => ui.root.list.flatMap(o => o.list ?? [o]).find(o => o.type === 'Text' && /^兵装 · /.test(o.text))?.text; const btn = window.__find(ui.root, 'camp-item-goods'); out.label = label(); out.quality = ui.itemOffer?.quality;
+  const rs = s.cameras.main.zoom; btn?.emit('pointerover', { x: 120 * rs, y: 120 * rs }); const tip = s.children.getByName('item-tooltip'); out.tip = !!tip?.visible && tip.list.some(o => o.name === 'item-tooltip-name' && o.text.length > 0); btn?.emit('pointerout'); out.tipHidden = !tip?.visible;
   const before = s.itemDrops.runLoot.length, food = s.legion.food; btn?.emit('pointerdown'); await new Promise(r => setTimeout(r, 100));
   out.bought = s.itemDrops.runLoot.length - before; out.cost = food - s.legion.food; out.sold = label();
   return out;
 }, G);
 ck('行营军需商人有一格兵装（绿 / 蓝），花粮草买下记入本局缴获', !camp.none && ['green', 'blue'].includes(camp.quality) && camp.bought === 1 && (camp.cost === 60 || camp.cost === 120) && /购入 · [0-9]+粮/.test(camp.label ?? '') && /已售罄/.test(camp.sold ?? ''), camp);
+ck('行营商店的兵装：悬停弹出属性提示框，移开隐藏', camp.tip && camp.tipHidden, camp);
 await p.screenshot({ path: `${out}/mobile-camp-shelf.png` });
 await p.evaluate(G0 => eval(G0).campUI.setVisible(false), G);
 

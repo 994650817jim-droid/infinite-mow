@@ -85,3 +85,4 @@ assets/raw/*
 !/tools/test-dongzhuo.mjs
 !/tools/test-siege-goals.mjs
 !/tools/test-city-simple.mjs
+!/tools/prepare-camp-art.mjs

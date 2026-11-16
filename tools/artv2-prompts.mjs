@@ -37,3 +37,16 @@ export const TROOPS = {
 export const troopWalkPrompt = t => `【蜀军${t.name} · 新画风 · 行走图】这是一个三国题材割草游戏，要把人物换成新画风。请只生成 1 张图。${STYLE}兵种身份参考第 3 张（${t.name}现在的 Q 版行走图）：${TROOP_COMMON}；${t.desc}。比例改成写实成年士兵。要求：行走动画精灵表。${WALKFMT}`;
 export const troopAtkPrompt = t => `很好。下一张：同一个蜀军${t.name}（和刚才行走图完全同一个人、同样的服装配色、同样大小比例和同样的像素画风），画「攻击动作精灵表」，只生成 1 张图。正方形画布 1024×1024，纯洋红 #FF00FF 平涂背景，无地面、无阴影、无文字、无网格线、不要画任何特效（箭矢、刀光、光效都不要）。4 行 × 4 列等分，每格一个完整人物，身高约占格高 75%，与行走图同样大小，脚底都在格子约 92% 高度的同一水平线上，人物居中，任何部分不越出自己的格子。第 1 行朝下（面向镜头）、第 2 行朝左、第 3 行朝右、第 4 行朝上（背对镜头）；每行 4 帧：${t.atk}。`;
 if (process.argv[2] && TROOPS[process.argv[2]]) { const t = TROOPS[process.argv[2]]; console.log(process.argv[3] === 'act' ? troopAtkPrompt(t) : troopWalkPrompt(t)); }
+
+// ── 第 3 批：敌军小兵。黄巾章（第 1 章）+ 通用弓兵。上传：style-reference-camp.png、赵云 v2 定稿行走原图、本兵种 v1 行走图。
+const YELLOW_COMMON = '黄巾军乱兵（农民起义军，不是正规军）：额头和头上缠破旧的黄色头巾，粗麻布短衣、草鞋或破布靴，身上几乎没有铠甲（最多几块皮护具），衣服土黄、灰褐、旧棕色，显得贫苦、凶悍';
+export const ENEMIES = {
+  yellow_swordsman: { name: '黄巾刀兵', desc: '手持一把短柴刀 / 环首刀的步兵', atk: '举刀蓄力 → 向前猛砍 → 砍到最远 → 收刀' },
+  yellow_shield: { name: '黄巾盾兵', desc: '左手破旧的木制圆盾（铁钉加固），右手短刀', atk: '举盾前顶 → 从盾后刺出短刀 → 刺到最远 → 收回护盾' },
+  yellow_spear: { name: '黄巾枪兵', desc: '身形精瘦，双手握一支简陋木杆长矛（矛尖下挂红布）', atk: '后拉蓄力 → 向前突刺 → 刺到最远 → 收矛' },
+  yellow_shaman: { name: '黄巾符水道士', desc: '披黄色兜帽长袍的太平道道士，手持挂黄符和铜铃的法杖', atk: '举起法杖 → 向前挥出施法 → 法杖指向前方 → 收回（不要画法术特效）' },
+  enemy_archer: { name: '黄巾弓兵', desc: '背箭壶、持一张简陋木弓的弓手', atk: '抽箭搭弦 → 拉成满弓 → 放箭 → 收弓' },
+};
+export const enemyWalkPrompt = e => `【${e.name} · 新画风 · 行走图】这是一个三国题材割草游戏里的敌军小兵，要换成新画风。请只生成 1 张图。${STYLE}兵种身份参考第 3 张（${e.name}现在的 Q 版行走图）：${YELLOW_COMMON}；${e.desc}。比例改成写实成年人。要求：行走动画精灵表。${WALKFMT}`;
+export const enemyAtkPrompt = e => `很好。下一张：同一个${e.name}（和刚才行走图完全同一个人、同样的服装配色、同样大小比例和同样的像素画风），画「攻击动作精灵表」，只生成 1 张图。正方形画布 1024×1024，纯洋红 #FF00FF 平涂背景，无地面、无阴影、无文字、无网格线、不要画任何特效（箭矢、刀光、法术光效都不要）。4 行 × 4 列等分，每格一个完整人物，身高约占格高 75%，与行走图同样大小，脚底都在格子约 92% 高度的同一水平线上，人物居中，任何部分不越出自己的格子。第 1 行朝下（面向镜头）、第 2 行朝左、第 3 行朝右、第 4 行朝上（背对镜头）；每行 4 帧：${e.atk}。`;
+if (process.argv[2] && ENEMIES[process.argv[2]]) { const e = ENEMIES[process.argv[2]]; console.log(process.argv[3] === 'act' ? enemyAtkPrompt(e) : enemyWalkPrompt(e)); }

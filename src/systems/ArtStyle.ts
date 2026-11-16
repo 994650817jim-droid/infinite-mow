@@ -50,6 +50,17 @@ export const ART_V2_FILES: Readonly<Record<string, string>> = {
   legion_halberdier_action: 'assets/processed-v2/troops/halberdier_attack.png',
   legion_medic_walk: 'assets/processed-v2/troops/medic_walk.png',
   legion_medic_action: 'assets/processed-v2/troops/medic_attack.png',
+  // 第 3 批（一）：黄巾章小兵 + 通用弓兵
+  'yellow_swordsman-walk-v4': 'assets/processed-v2/enemies/yellow_swordsman_walk.png',
+  'yellow_swordsman-attack-v4': 'assets/processed-v2/enemies/yellow_swordsman_attack.png',
+  'yellow_shield-walk-v4': 'assets/processed-v2/enemies/yellow_shield_walk.png',
+  'yellow_shield-attack-v4': 'assets/processed-v2/enemies/yellow_shield_attack.png',
+  'yellow_spear-walk-v5': 'assets/processed-v2/enemies/yellow_spear_walk.png',
+  'yellow_spear-attack-v5': 'assets/processed-v2/enemies/yellow_spear_attack.png',
+  yellow_shaman_walk: 'assets/processed-v2/enemies/yellow_shaman_walk.png',
+  yellow_shaman_cast: 'assets/processed-v2/enemies/yellow_shaman_attack.png',
+  enemy_archer_walk_sheet: 'assets/processed-v2/enemies/enemy_archer_walk.png',
+  enemy_archer_attack_sheet: 'assets/processed-v2/enemies/enemy_archer_attack.png',
 };
 /** v2 主将行走整格的显示高度（逻辑像素）：原生格 176 → 88，即 1080p 全屏（渲染 2 倍）下 1 美术像素 = 1 屏幕像素。
  * 人物约 76 逻辑像素高（用户要求比 v1 大一些）。 */
@@ -107,6 +118,10 @@ export const V2_TROOP_KEYS: readonly string[] = [
   'shu_archer_walk_sheet', 'shu_archer_attack_sheet', 'legion_crossbowman_walk', 'legion_crossbowman_action',
   'legion_guardian_walk', 'legion_rider_walk', 'legion_halberdier_walk', 'legion_halberdier_action',
   'legion_medic_walk', 'legion_medic_action',
+  // 第 3 批：敌军小兵（黄巾章 + 通用弓兵），Enemy.applyFrame 里按 v2 规则定缩放与脚底
+  'yellow_swordsman-walk-v4', 'yellow_swordsman-attack-v4', 'yellow_shield-walk-v4', 'yellow_shield-attack-v4',
+  'yellow_spear-walk-v5', 'yellow_spear-attack-v5', 'yellow_shaman_walk', 'yellow_shaman_cast',
+  'enemy_archer_walk_sheet', 'enemy_archer_attack_sheet',
 ];
 /** v2 兵种显示倍率：原生像素 → 逻辑像素 0.5，即 1080p 全屏（渲染 2 倍）下像素 1:1。 */
 export const V2_TROOP_SCALE = .5;

@@ -1,4 +1,4 @@
-import Phaser from 'phaser';import {GAME_WIDTH as W,GAME_HEIGHT as H,IS_DESKTOP as D,FONT,HEADING_FONT,DEPTH,screenPoint} from '../config';import type {Player} from '../entities/Player';import type {Legion} from '../systems/Legion';import {CampMarket,campOption} from '../systems/CampMarket';import {CAMP_TRAINING,type CampTrainingId,type CampGroup} from '../data/camp';import {INITIAL_TROOPS,TROOPS,type TroopKind} from '../data/legion';import {TACTICS,TREASURES,TAG_NAMES,tacticDescription,type TacticId,type TreasureId,type BuildTag} from '../data/builds';import {AWAKENINGS,activeAwakenings} from '../data/awakenings';import {getCharacter} from '../data/characters';import {WEAPON_META} from '../data/upgrades';import {ATTRIBUTE_INFO,MARTIALS,type AttributeId,type MasteryId} from '../systems/RunGrowth';import {MERCHANT_PRICE,QUALITIES,formatAffix,itemName,rollItem,rollQuality,SLOTS,itemSlot,SPECIALS,type ItemInstance} from '../data/items';
+import Phaser from 'phaser';import {ItemTooltip} from './ItemTooltip';import {loadout} from '../systems/ItemStore';import {GAME_WIDTH as W,GAME_HEIGHT as H,IS_DESKTOP as D,FONT,HEADING_FONT,DEPTH,screenPoint} from '../config';import type {Player} from '../entities/Player';import type {Legion} from '../systems/Legion';import {CampMarket,campOption} from '../systems/CampMarket';import {CAMP_TRAINING,type CampTrainingId,type CampGroup} from '../data/camp';import {INITIAL_TROOPS,TROOPS,type TroopKind} from '../data/legion';import {TACTICS,TREASURES,TAG_NAMES,tacticDescription,type TacticId,type TreasureId,type BuildTag} from '../data/builds';import {AWAKENINGS,activeAwakenings} from '../data/awakenings';import {getCharacter} from '../data/characters';import {WEAPON_META} from '../data/upgrades';import {ATTRIBUTE_INFO,MARTIALS,type AttributeId,type MasteryId} from '../systems/RunGrowth';import {MERCHANT_PRICE,QUALITIES,formatAffix,itemName,rollItem,rollQuality,SLOTS,itemSlot,SPECIALS,type ItemInstance} from '../data/items';
 import {homeCommand,warPanelTexture} from './HomeCommand';
 import {visualTextureKey} from '../systems/ReadableTextures';
 export class CampRestUI {
@@ -12,7 +12,7 @@ export class CampRestUI {
  private tabFrames:Phaser.GameObjects.Image[]=[];
  private buildSection=0;private buildOffset=0;private modal?:Phaser.GameObjects.Container;
  /** 兵装货架：每次入营一件（绿 / 蓝），买下记入本局缴获，结算带回行囊。onBuyItem 由 GameScene 设置。 */
- itemOffer:ItemInstance|null=null;itemSold=false;onBuyItem?:(item:ItemInstance)=>void;
+ itemOffer:ItemInstance|null=null;itemSold=false;onBuyItem?:(item:ItemInstance)=>void;private itemTip?:ItemTooltip;
  /** 行囊（休整时可换装、换马）。由 GameScene 设置。 */
  onOpenBag?:()=>void;
  /** 天下地图出征（营寨开放后）：休整时可回营寨。设置后显示「回营寨」按钮，点两次确认（本局成长不保留）。 */
@@ -106,6 +106,8 @@ export class CampRestUI {
   const label='兵装 · '+q.label+' · '+itemName(item)+'　'+(this.itemSold?'已售罄':this.army.food<price?'随军粮不足 · '+price+'粮':'购入 · '+price+'粮');
   const b=this.button(x,y,label,()=>{if(this.itemSold||this.army.food<price)return;this.army.food-=price;this.itemSold=true;this.onBuyItem?.(item);this.sound('purchase');this.notice='已购入 '+itemName(item)+' · 结算后收入行囊';this.render();},w,can).setName('camp-item-goods');
   this.body.add(b);
+  // 悬停显示兵装属性与对比（电脑鼠标）
+  this.itemTip??=new ItemTooltip(this.scene,DEPTH.overlay+40);this.itemTip.attach(b,()=>item,()=>loadout(this.player.growth.character)[itemSlot(item)]);
   const info=this.scene.add.text(x+8,y+22,'详',{fontFamily:FONT,fontSize:'13px',color:q.css,resolution:2}).setOrigin(0,.5).setPadding(6,6).setBackgroundColor('rgba(20,14,8,.9)').setScrollFactor(0).setInteractive({useHandCursor:true}).setName('camp-item-info')
    .on('pointerdown',()=>this.showDetails(q.name+' · '+SLOTS[itemSlot(item)].name+' · '+itemName(item),item.affixes.map(a=>formatAffix(a)).join('\n')+(item.special?'\n★ '+SPECIALS[item.special].name+'：'+SPECIALS[item.special].desc:'')+'\n\n局外兵装：结算后收入行囊，出征前在主页「行囊」穿戴。'));
   this.body.add(info);

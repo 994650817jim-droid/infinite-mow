@@ -1,4 +1,4 @@
-// 关卡目标：每关 3 波；1-1 歼敌 → 张梁、1-2 普通推波 → 张宝、2-2 护送伤兵车 → 徐荣；超时判失败；HUD 目标行。需要开发服务器。
+// 关卡目标：每关 3 波；1-1 / 1-2 普通推波（3 波后首领登场）、2-2 护送伤兵车 → 徐荣；超时判失败；HUD 目标行。需要开发服务器。
 // 用法：BASE=http://127.0.0.1:5188/ node tools/test-objectives.mjs
 import { chromium } from 'playwright';
 import { mkdirSync } from 'node:fs';
@@ -23,13 +23,19 @@ const open = async (layout, cfg) => {
 };
 const info = p => p.evaluate(G0 => { const s = eval(G0); return { name: s.chapter.name, waves: s.chapter.waves.length, obj: s.objective?.o.kind ?? null, text: s.children.getByName('objective-text')?.text, boss: !!s.boss, bossName: s.chapter.bossName, state: s.objective?.state }; }, G);
 
-// 1-1 歼敌 80 → 张梁
+// 1-1 新手关：用户 2026-11-16「1-1 就 3 波，不需要设计歼敌」→ 普通推波，打完 3 波张梁登场（只在电脑布局验收）
 {
-  const p = await open('mobile', { chapter: 'huangjin', stage: 1 });
+  const p = await open('desktop', { chapter: 'huangjin', stage: 1 });
   const a = await info(p);
-  ck('1-1：3 波、目标「歼灭黄巾 80 人」、HUD 显示进度', a.waves === 3 && a.obj === 'kills' && /歼敌 \d+\/80/.test(a.text), a);
-  const b1 = await p.evaluate(async G0 => { const s = eval(G0); for (let i = 0; i <= s.chapter.waves.length; i++) s.recruitedWaves.add(i); s.pendingRecruit = false; s.elapsed = 150; await new Promise(r => setTimeout(r, 300)); const early = !!s.boss; s.kills += 80; await new Promise(r => setTimeout(r, 600)); return { early, boss: !!s.boss, done: s.objective.done, text: s.children.getByName('objective-text').text }; }, G);
-  ck('1-1：目标未完成时首领不按时间出场；歼敌满 80 后张梁出阵', !b1.early && b1.done && b1.boss && /目标达成/.test(b1.text), b1);
+  const vis = await p.evaluate(G0 => !!eval(G0).children.getByName('objective-text')?.visible, G);
+  ck('[desktop] 1-1：3 波（外围哨兵 / 刀盾阻路 / 张梁迎战）、无歼敌目标、无目标行', a.waves === 3 && a.obj === null && !vis, { a, vis });
+  const mix = await p.evaluate(G0 => { const s = eval(G0), c = s.chapter, tally = t => { const n = {}; for (let i = 0; i < 2000; i++) { const k = c.pickEnemy(t); n[k] = (n[k] ?? 0) + 1; } return n; }; return { w1: tally(20), w2: tally(90), w3: tally(150), names: c.waves.map(w => w.name) }; }, G);
+  ck('[desktop] 1-1 波次构成：第 1 波全刀兵；第 2 波约 15% 刀盾兵；第 3 波加入约 10% 弓手', Object.keys(mix.w1).join() === 'infantry' && mix.w2.shield > 200 && mix.w2.shield < 420 && !mix.w2.archer && mix.w3.archer > 120 && mix.w3.archer < 300 && mix.names.join() === '外围哨兵,刀盾阻路,张梁迎战', mix);
+  const sh = await p.evaluate(G0 => { const s = eval(G0), e = s.spawnEnemy('shield', s.player.x + 300, s.player.y, 1, true); return { sheet: e.walkSheet, shield: e.shieldMax }; }, G);
+  ck('[desktop] 1-1 刀盾兵用黄巾刀盾兵造型、带盾', /yellow_shield/.test(sh.sheet) && sh.shield > 0, sh);
+  const r = await p.evaluate(async G0 => { const s = eval(G0); for (let i = 0; i <= s.chapter.waves.length; i++) s.recruitedWaves.add(i); s.pendingRecruit = false; const t = s.chapter.waves[s.chapter.waves.length - 1].start; s.elapsed = Math.max(0, t - 2); await new Promise(r => setTimeout(r, 300)); const early = !!s.boss; s.elapsed = t + .5; await new Promise(r => setTimeout(r, 700)); return { early, boss: !!s.boss, name: s.chapter.bossName }; }, G);
+  ck('[desktop] 1-1：最后一波开始张梁登场，之前不出', !r.early && r.boss && r.name === '张梁', r);
+  await p.screenshot({ path: `${out}/desktop-1-1-waves.png` });
   await p.close();
 }
 // 1-2 下曲阳：用户反馈「1-2 就正常推波数进，不需要黄巾祭坛」→ 普通推波，打完 3 波张宝登场（只在电脑布局验收）
@@ -61,12 +67,11 @@ for (const layout of ['mobile', 'desktop']) {
   }
   await p.close();
 }
-// 超时：1-1 歼敌未满，超过 200 秒 → 时间耗尽
+// 超时：2-2 护送未完成，超过 240 秒 → 时间耗尽、不出首领
 {
-  const p = await open('desktop', { chapter: 'huangjin', stage: 1 });
-  const t = await p.evaluate(async G0 => { const s = eval(G0); for (let i = 0; i <= s.chapter.waves.length; i++) s.recruitedWaves.add(i); s.pendingRecruit = false; s.elapsed = 205; await new Promise(r => setTimeout(r, 600)); return { over: s.over, victory: s.victory, boss: !!s.boss }; }, G);
-  ck('1-1：200 秒内没完成目标 → 时间耗尽、不出首领', t.over && t.victory === false && !t.boss, t);
-  // 无目标的关：2-1 汜水关 3 波，90 秒出华雄
+  const p = await open('desktop', { chapter: 'hulao', westStage: 2 });
+  const t = await p.evaluate(async G0 => { const s = eval(G0); for (let i = 0; i <= s.chapter.waves.length; i++) s.recruitedWaves.add(i); s.pendingRecruit = false; s.elapsed = 245; await new Promise(r => setTimeout(r, 600)); return { over: s.over, victory: s.victory, boss: !!s.boss }; }, G);
+  ck('2-2：240 秒内没护送到 → 时间耗尽、不出首领', t.over && t.victory === false && !t.boss, t);
   await p.close();
 }
 {

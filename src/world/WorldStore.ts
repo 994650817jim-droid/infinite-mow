@@ -5,7 +5,7 @@ import {LUBU_CHALLENGE} from '../data/dongzhuo';
 import {INTEL_INFO,intelReward,parseIntel,rollIntel,seasonIndex,type IntelEvent,type IntelReward} from './WorldIntel';
 import {openChapterCount,citySiegeOpen} from './ChapterTimeline';
 import {territorySummary,cityAttacker,cityById,eraChanges,eraIndexFor,type FactionId} from './WorldCities';
-import {type TownState,type TownBuildingId,type CityFocus,type SeasonReport,type TownProgress,TOWN_BUILDINGS,FOCUS_CHANGE_COST,FOCUS_NAME,migrateTown,parseTown,legacyLevels,settleSeason,nextCost,buildBlockers,CITY_SIZE,CITY_TITLE,levyCost,LEVY_SOLDIERS,costText,buildingBattleEffects,levelOf,focusOpen,MERIT_TO_GRAIN,MONEY_TO_GRAIN,STABLE_HORSES} from '../town/TownData';
+import {type TownState,type TownBuildingId,type CityFocus,type SeasonReport,type TownProgress,TOWN_BUILDINGS,FOCUS_CHANGE_COST,FOCUS_NAME,migrateTown,parseTown,legacyLevels,settleSeason,nextCost,buildBlockers,CITY_SIZE,CITY_TITLE,levyCost,LEVY_SOLDIERS,costText,buildingBattleEffects,levelOf,focusOpen,MERIT_TO_GRAIN,MONEY_TO_GRAIN,STABLE_HORSES,drillCap,drillCost,drillMultiplier,DRILL_MAX} from '../town/TownData';
 import {TECHS,techTotals,techBlockers,type TechId} from '../data/tech';
 /** W4 告急：某座玩家城池正被来犯；cause 为时代更替或攻城后反扑。 */
 export interface CityAlert{city:string;attacker:FactionId;cause:'era'|'retaliation';}
@@ -89,6 +89,10 @@ export function techEffects(){return techTotals(loadWorld().town.tech);}
 /** 马厩等级（0 = 未建）与可养马数，供坐骑 / 马厩界面使用。 */
 /** 招贤馆等级（1–3），招募系统读它代替 RosterSave.hall；升级走 townUpgrade('talent')（花军粮，价目即 RECRUIT.hallUpgrade）。 */
 export function talentLevel():number{return Math.max(1,Math.min(3,levelOf(loadWorld().town,'talent')));}
+/** 军营「练兵」：当前等级、上限（随已开放章节）、下一级价格（满了为 null）。 */
+export function drillInfo(s:WorldSave=loadWorld()):{level:number;cap:number;cost:number|null;multiplier:number}{const level=s.town.drill??0,cap=drillCap(openChapterCount(s));return{level,cap,cost:level<cap?drillCost(level+1):null,multiplier:drillMultiplier(level)};}
+/** 练兵升一级：花军粮，受章节上限限制。 */
+export function trainTroops():TownResult{const s=loadWorld(),d=drillInfo(s);if(d.cost===null)return{ok:false,message:d.level>=DRILL_MAX?'练兵已满级':`练兵上限 ${d.cap} 级，开放新章节后提高`};if(s.provisions<d.cost)return{ok:false,message:'军粮不足：需要 '+d.cost};s.provisions-=d.cost;s.town.drill=d.level+1;return townCommit(s,`练兵升至 ${d.level+1} 级：部曲生命、伤害 ×${drillMultiplier(d.level+1).toFixed(2)}`);}
 export function stableLevel():number{return levelOf(loadWorld().town,'stable');}
 export function stableCapacity():number{return STABLE_HORSES[stableLevel()]??0;}
 /** 占领城池的发展方向（州府开放）：从“均衡”首次选择免费，之后按城池档次花军粮。 */
@@ -105,7 +109,9 @@ export function permanentEffects(){const s=loadWorld(),b=s.buildings,be=building
  return{armyCapacity:armyCapacity(b.barracks),reinforcements:b.barracks-1+sum('reinforcements'),healMultiplier:1+tech.heal,provisionsMultiplier:1+(b.farm-1)*.08,
   damageBonus:sum('damage')+be.damage+tech.damage,maxHpBonus:Math.max(-.2,sum('maxHp')+be.maxHp+tech.maxHp),reserveSlots:2+sum('reserveSlots'),attributePoints:sum('attributePoints')+be.attributePoints+tech.attributePoints,provisionsBonus:sum('provisions'),
   /** 讲武堂：开局药囊里的回血药、开局即升级的兵种。 */
-  potions:tech.potions,troopLevels:tech.troopLevels};}
+  potions:tech.potions,troopLevels:tech.troopLevels,
+  /** 军营练兵：全体部曲生命、伤害倍率。 */
+  troopDrill:drillMultiplier(s.town.drill??0)};}
 /** 军功 / 钱折成军粮（奖励表仍按旧字段给出）。 */
 const grainOf=(merits:number,money=0)=>Math.round(merits*MERIT_TO_GRAIN+money*MONEY_TO_GRAIN);
 /** 奖励表（军功 / 粮草 / 钱）折成的军粮总数，界面显示用。 */

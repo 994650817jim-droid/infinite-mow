@@ -1,5 +1,6 @@
 import {visualTextureKey} from '../systems/ReadableTextures';
 import {figureCorrection,sheetFigureHeight} from '../systems/SpriteMetrics';
+import {isV2Texture, V2_TROOP_SCALE, v2TroopGround} from '../systems/ArtStyle';
 import Phaser from 'phaser';
 import { DEPTH } from '../config';
 import { ENEMY_DEFS, type EnemyDef } from '../data/enemies';
@@ -258,7 +259,8 @@ export class Enemy {
     this.chargeAt = now + 450;
     this.chargeHit = false;
     this.direction = dir;
-    // 冲锋表现复用奔跑表（charge 表切图有边缘/朝向问题，暂不使用）
+    // 冲锋表现复用奔跑表（v1 charge 表切图有边缘/朝向问题，暂不使用）；v2 冲锋表干净，直接用：勒马蓄势帧
+    if (isV2Texture(this.chargeSheet)) { this.applyFrame(this.chargeSheet, `${dir}_0`); this.chargeFrame = `${dir}_0`; this.sprite.setTint(0xff8888); return; }
     if (this.walkSheet) this.applyFrame(this.walkSheet, `${dir}_${this.def.walkVisual ? 0 : 1}`);
     this.chargeFrame = this.walkSheet ? `${dir}_${this.def.walkVisual ? 0 : 1}` : '';
     this.sprite.setTint(0xff8888);
@@ -279,6 +281,12 @@ export class Enemy {
       this.chargeFrame = '';
     }
     if (this.chargeState === 'none') return;
+    if (isV2Texture(this.chargeSheet)) {
+      // v2 冲锋表 4 帧：0 勒马蓄势 / 1~2 冲刺交替 / 3 收缰
+      const col = this.chargeState === 'warn' ? 0 : this.chargeState === 'charge' ? 1 + Math.floor(now / 110) % 2 : 3, key = `${this.direction}_${col}`;
+      if (key !== this.chargeFrame) { this.applyFrame(this.chargeSheet, key); this.chargeFrame = key; }
+      return;
+    }
     if (!this.walkSheet) return;
     const frame = this.def.walkVisual ? (this.chargeState === 'charge' ? Math.floor(now / 90) % 4 : 0) : this.chargeState === 'charge' ? 2 : 1;
     const key = `${this.direction}_${frame}`;
@@ -391,6 +399,13 @@ export class Enemy {
   /** 设置帧并按素材比例校正缩放；非行走调用会清除步伐摆动。 */
   private applyFrame(key: string, frame: string): void {
     this.sprite.setTexture(key, frame);
+    if (isV2Texture(key)) {
+      // 人物画风 v2：0.5 倍（1080p 像素 1:1），脚底 = 帧高-7；行走 / 攻击格子大小可以不同，按当前帧重算锚点
+      const fh = this.sprite.frame.height || 96;
+      this.baseScaleY = V2_TROOP_SCALE;
+      this.baseOriginY = v2TroopGround(fh) - this.def.radius * .72 / (fh * V2_TROOP_SCALE);
+      this.frameScale = 1;
+    } else
     this.frameScale = this.walkSheet && this.kind !== 'boss' && !this.def.walkVisual?.matched ? figureCorrection(this.scene, this.walkSheet, key, frame) : 1;
     this.stepStretch = 0;
     this.sprite.setRotation(0);

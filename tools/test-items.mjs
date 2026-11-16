@@ -174,22 +174,24 @@ const camp = await p.evaluate(async G0 => {
   const s = eval(G0), ui = s.campUI, out = {}; if (!ui) return { none: true };
   s.legion.food = 500; ui.open('test-camp-' + Date.now(), '测试'); ui.setVisible(true); ui.tab = 2; ui.render?.(); await new Promise(r => setTimeout(r, 150));
   const label = () => ui.root.list.flatMap(o => o.list ?? [o]).find(o => o.type === 'Text' && /^兵装 · /.test(o.text))?.text; const btn = window.__find(ui.root, 'camp-item-goods'); out.label = label(); out.quality = ui.itemOffer?.quality;
+  const rs = s.cameras.main.zoom; btn?.emit('pointerover', { x: 120 * rs, y: 120 * rs }); const tip = s.children.getByName('item-tooltip'); out.tip = !!tip?.visible && tip.list.some(o => o.name === 'item-tooltip-name' && o.text.length > 0); btn?.emit('pointerout'); out.tipHidden = !tip?.visible;
   const before = s.itemDrops.runLoot.length, food = s.legion.food; btn?.emit('pointerdown'); await new Promise(r => setTimeout(r, 100));
   out.bought = s.itemDrops.runLoot.length - before; out.cost = food - s.legion.food; out.sold = label();
   return out;
 }, G);
 ck('行营军需商人有一格兵装（绿 / 蓝），花粮草买下记入本局缴获', !camp.none && ['green', 'blue'].includes(camp.quality) && camp.bought === 1 && (camp.cost === 60 || camp.cost === 120) && /购入 · [0-9]+粮/.test(camp.label ?? '') && /已售罄/.test(camp.sold ?? ''), camp);
+ck('行营商店的兵装：悬停弹出属性提示框，移开隐藏', camp.tip && camp.tipHidden, camp);
 await p.screenshot({ path: `${out}/mobile-camp-shelf.png` });
 await p.evaluate(G0 => eval(G0).campUI.setVisible(false), G);
 
 // 8) 主页行囊（可穿戴）
 await p.goto(base + '?layout=mobile');
-await p.waitForFunction(() => window.__game?.scene.getScene('MenuScene')?.sys.isActive() && window.__game.scene.getScene('MenuScene').children.getByName('home-bag-plaque'), null, { timeout: 30000 });
+await p.waitForFunction(() => window.__game?.scene.getScene('MenuScene')?.sys.isActive() && window.__game.scene.getScene('MenuScene').children.getByName('home-achievements-plaque'), null, { timeout: 30000 });
 await p.waitForTimeout(800);
 const homeBag = await p.evaluate(async M0 => {
   const m = eval(M0), out = {}, st = await window.__mod('/src/systems/ItemStore.ts'), items = await window.__mod('/src/data/items.ts');
   const add = []; for (let i = 0; i < 14; i++) add.push(items.rollItem(['white', 'green', 'blue', 'purple', 'orange'][i % 5])); st.addItems(add);
-  const plaque = m.children.getByName('home-bag-plaque'), hit = m.children.getByName('home-bag') ?? window.__find(plaque, 'home-bag'); hit.emit('pointerdown'); await new Promise(r => setTimeout(r, 300));
+  /* 2026-11-16：主页已不放行囊匾（用户「界面的行囊可以不要」），行囊界面本身照旧，这里直接打开 */ if (m.children.getByName('home-bag-plaque')) throw new Error('主页仍有行囊匾'); { const UI = await window.__mod('/src/ui/ItemBagUI.ts'); new UI.ItemBagUI(m, { hero: 'zhaoyun' }); } await new Promise(r => setTimeout(r, 300));
   let bag = m.children.getByName('item-bag'); out.open = !!bag; if (!bag) return out;
   out.count = window.__find(bag, 'item-bag-count')?.text; out.heroes = ['zhaoyun', 'guanyu', 'huangyueying'].map(id => !!window.__find(bag, 'item-hero-' + id));
   const cell = window.__find(bag, 'item-cell-0'), uid = cell.getData('uid'); window.__tap(cell); await new Promise(r => setTimeout(r, 150));
@@ -219,12 +221,12 @@ await p.close();
 // ———————————— 电脑 1280×720 ————————————
 const d = await page('desktop', { width: 1280, height: 720 });
 await d.goto(base + '?layout=desktop');
-await d.waitForFunction(() => window.__game?.scene.getScene('MenuScene')?.sys.isActive() && window.__game.scene.getScene('MenuScene').children.getByName('home-bag-plaque'), null, { timeout: 30000 });
+await d.waitForFunction(() => window.__game?.scene.getScene('MenuScene')?.sys.isActive() && window.__game.scene.getScene('MenuScene').children.getByName('home-achievements-plaque'), null, { timeout: 30000 });
 await d.waitForTimeout(800);
 await d.evaluate(async M0 => { const m = eval(M0), st = await window.__mod('/src/systems/ItemStore.ts'), items = await window.__mod('/src/data/items.ts');
   const add = []; for (let i = 0; i < 30; i++) add.push(items.rollItem(['white', 'green', 'blue', 'purple', 'orange'][i % 5])); st.addItems(add);
   for (const slot of items.SLOT_ORDER) { const it = st.loadItems().bag.find(x => items.itemSlot(x) === slot && x.quality !== 'white'); if (it) st.equipItem('guanyu', it.uid); }
-  const plaque = m.children.getByName('home-bag-plaque'), hit = m.children.getByName('home-bag') ?? window.__find(plaque, 'home-bag'); hit.emit('pointerdown'); await new Promise(r => setTimeout(r, 300));
+  /* 2026-11-16：主页已不放行囊匾（用户「界面的行囊可以不要」），行囊界面本身照旧，这里直接打开 */ if (m.children.getByName('home-bag-plaque')) throw new Error('主页仍有行囊匾'); { const UI = await window.__mod('/src/ui/ItemBagUI.ts'); new UI.ItemBagUI(m, { hero: 'zhaoyun' }); } await new Promise(r => setTimeout(r, 300));
   window.__find(m.children.getByName('item-bag'), 'item-hero-guanyu').emit('pointerdown'); await new Promise(r => setTimeout(r, 200)); }, M);
 const dk = await d.evaluate(M0 => { const bag = eval(M0).children.getByName('item-bag'); return { open: !!bag, slots: ['armor', 'helm', 'boots', 'token'].filter(s => window.__find(bag, 'item-slot-label-' + s)?.text !== { armor: '甲胄', helm: '头盔', boots: '战靴', token: '信物' }[s]).length, summary: window.__find(bag, 'item-gear-summary')?.text }; }, M);
 ck('电脑布局：行囊左右分栏，关羽 4 槽穿满并显示加成', dk.open && dk.slots === 4 && !!dk.summary, dk);

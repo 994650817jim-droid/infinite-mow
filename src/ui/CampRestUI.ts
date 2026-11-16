@@ -15,6 +15,9 @@ export class CampRestUI {
  itemOffer:ItemInstance|null=null;itemSold=false;onBuyItem?:(item:ItemInstance)=>void;
  /** 行囊（休整时可换装、换马）。由 GameScene 设置。 */
  onOpenBag?:()=>void;
+ /** 天下地图出征（营寨开放后）：休整时可回营寨。设置后显示「回营寨」按钮，点两次确认（本局成长不保留）。 */
+ onReturnHome?:()=>void;
+ private homeBtn!:Phaser.GameObjects.Text;private homeArmed=false;
  private market?:CampMarket;private visit='';private tab=0;private page=0;private destination='';private notice='';
  constructor(private scene:Phaser.Scene,private player:Player,private army:Legion,depart:()=>void){
   this.root=scene.add.container(0,0).setScrollFactor(0).setDepth(DEPTH.overlay+2).setVisible(false).setName('camp-rest');
@@ -26,6 +29,9 @@ export class CampRestUI {
   this.next=this.text(D?W-40:28,D?30:110,'',D?16:17).setColor('#d2c3a6');if(D)this.next.setOrigin(1,0);
   this.root.add([this.header,this.resources,this.next]);
   const bagBtn=this.text(D?W-40:W-28,D?62:34,'行囊 · 换装换马',D?15:16).setOrigin(1,0).setPadding(12,6,12,6).setBackgroundColor('#7a2a1c').setColor('#ffe9bd').setInteractive({useHandCursor:true}).setName('camp-bag');bagBtn.on('pointerdown',()=>this.onOpenBag?.());this.root.add(bagBtn);
+  // 回营寨：电脑在「行囊」左侧，手机在它下方
+  this.homeBtn=this.text(D?bagBtn.x-bagBtn.width-12:W-28,D?62:76,'回营寨',D?15:16).setOrigin(1,0).setPadding(12,6,12,6).setBackgroundColor('#3d4a33').setColor('#f0f3dc').setInteractive({useHandCursor:true}).setName('camp-home').setVisible(false);
+  this.homeBtn.on('pointerdown',()=>{if(!this.onReturnHome)return;if(!this.homeArmed){this.homeArmed=true;this.homeBtn.setText('确认回营寨？本局等级与战法不保留').setBackgroundColor('#7a2a1c');return;}this.onReturnHome();});this.root.add(this.homeBtn);
   const labels=['招兵营','练兵营','军需商人','将帅帐'],icons=['icon_shu_swordsman','growth_icon_might','build_icon_return_drum','growth_icon_points'];
   const tabW=D?172:(W-48)/4,tabY=D?96:155;
   labels.forEach((label,i)=>{const x=D?40+i*180:24+i*tabW;const frame=scene.add.image(x+(tabW-6)/2,tabY+23,warPanelTexture(scene,tabW-6,46)).setScrollFactor(0);this.tabFrames.push(frame);this.root.add(frame);
@@ -47,7 +53,7 @@ export class CampRestUI {
   return c.hit;
  }
 
- open(key:string,destination:string){if(this.visit!==key){this.visit=key;this.market=new CampMarket(this.player);this.page=this.tab=0;this.itemOffer=rollItem(rollQuality('merchant',0));this.itemSold=false;this.buildSection=this.buildOffset=0;this.notice='';}this.destination=destination;this.render();}
+ open(key:string,destination:string){if(this.visit!==key){this.visit=key;this.market=new CampMarket(this.player);this.page=this.tab=0;this.itemOffer=rollItem(rollQuality('merchant',0));this.itemSold=false;this.buildSection=this.buildOffset=0;this.notice='';}this.destination=destination;this.homeArmed=false;this.homeBtn.setText('回营寨').setBackgroundColor('#3d4a33').setVisible(!!this.onReturnHome);this.render();}
  setVisible(visible:boolean){this.root.setVisible(visible);if(!visible){this.modal?.destroy();this.modal=undefined;}}
  private plate(x:number,y:number,w:number,h:number,accent=false){
   const img=this.scene.add.image(x+w/2,y+h/2,warPanelTexture(this.scene,w,h,accent)).setDisplaySize(Math.round(w)+16,Math.round(h)+16).setScrollFactor(0);

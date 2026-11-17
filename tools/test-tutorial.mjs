@@ -26,6 +26,17 @@ try {
   let t = await tut();
   await shot('1-move');
   ck('① 首次进 1-1：引导出现，第一步「移动」+ WASD 按键图标', t?.step === 'move' && t.line === '移动' && await ev(s => s.children.list.some(o => o.name === 'tutorial-overlay' && o.list.filter(c => c.name === 'tutorial-key').length === 4)), t);
+  // 面板打开（行囊）时收起，关上恢复
+  await ev(s => s.openBattleBag());
+  await p.waitForTimeout(400);
+  const vb = await ev(s => ({ vis: s.tutorial.overlay.visible, bag: !!s.children.getByName('item-bag'), mode: s.mode }));
+  await shot('1b-bag-hides');
+  ck('打开行囊时引导墨迹条与箭头收起（不挡物品说明）', vb.bag && !vb.vis, vb);
+  await ev(s => { const bag = s.children.getByName('item-bag'); bag?.getData('ui')?.close?.(); if (s.mode === 'pause') s.togglePause(); });
+  await p.waitForTimeout(400);
+  const vc = await ev(s => ({ vis: s.tutorial.overlay.visible, bag: !!s.children.getByName('item-bag'), mode: s.mode }));
+  ck('关上行囊后引导恢复', !vc.bag && vc.vis, vc);
+  ck('引导层压在面板之下（行囊层级更高）', await ev(s => s.tutorial.overlay.root.depth < 1500), null);
   ck('引导在时旧的「WASD / 方向键移动」提示隐藏', await ev(s => s.hintText && !s.hintText.visible), null);
   ck('开局 30 秒刷兵放缓', await ev(s => s.tutorial.easy(5).interval > 1 && s.tutorial.easy(31).interval === 1), null);
   // 走 2.5 秒
@@ -63,6 +74,11 @@ try {
   t = await until(v => v.step === 'boss' && v.shown, 30000, s => { (s.mode === 'levelup' ? s.chooseUpgrade(0) : s.mode === 'recruit' ? (s.recruitedWaves.add(s.waveIndex), s.freeRecruit = false, s.pendingRecruit = false, s.resumePendingChoices()) : 0); s.player.damageImmune = true; });
   await p.waitForTimeout(2500); await shot('7-boss');
   ck('⑦ 首领出阵 →「首领出阵，击败他」', t?.shown && t.line.includes('首领'), t);
+  // 提示型步骤 4 秒后自动淡出（不一直挂着）
+  for (let i = 0; i < 12; i++) { await ev(s => { if (s.mode === 'levelup') s.chooseUpgrade(0); }); await p.waitForTimeout(250); }
+  const fade = await ev(s => ({ vis: s.tutorial.overlay.visible, step: s.tutorial.step, mode: s.mode, boss: !!s.boss?.active }));
+  await shot('7-boss-faded');
+  ck('⑦「首领出阵」提示 4 秒后自动淡出', fade.step === 'boss' && !fade.vis && fade.boss, fade);
   t = await until(v => v.step === 'chest' && v.shown, 30000, s => { (s.mode === 'levelup' ? s.chooseUpgrade(0) : s.mode === 'recruit' ? (s.recruitedWaves.add(s.waveIndex), s.freeRecruit = false, s.pendingRecruit = false, s.resumePendingChoices()) : 0); if (s.boss?.active) { s.boss.hp -= s.boss.maxHp * .05; if (s.boss.hp <= 0) s.hitEnemy(s.boss, 10, s.combatNow, 'melee', false, false); } });
   await p.waitForTimeout(400); await shot('7-chest'); console.log('chest-arrow', JSON.stringify((await tut()).arrow), JSON.stringify(await ev(s => s.bossChests.map(c => ({ x: Math.round(c.x), y: Math.round(c.y), r: c.ready, d: c.done, px: Math.round(s.player.x), py: Math.round(s.player.y), wv: [Math.round(s.cameras.main.worldView.x), Math.round(s.cameras.main.worldView.y), s.cameras.main.zoom] })))));
   ck('⑦ 首领倒地 →「走过去捡宝箱」+ 指向宝箱', t?.step === 'chest' && t.line.includes('宝箱') && await ev(s => s.children.list.some(o => o.name === 'tutorial-overlay' && o.list.some(c => c.name === 'tutorial-arrow' && c.visible))), t);

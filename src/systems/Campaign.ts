@@ -23,3 +23,22 @@ export function restoreCampaign(state: CampaignTransfer, player: Player, army: L
   player.weapons = state.player.weapons.map(w => ({ ...w, cooldownLeft: 0 })); player.hp = player.maxHp;
   army.restore(state.army);
 }
+
+/**
+ * 征程构筑（2026-11-17 用户批准 skill-carryover-proposal.md）：每位武将存一份，存进存档（im_campaign_v1），
+ * 主线每赢一关（首次通关那一关）就更新，相当于「关卡存档点」。从天下地图 / 营寨 / 章节选关 / 结算「下一关」出征、
+ * 关游戏重开时都从这里恢复；重打已通关的旧关、攻城、军情、挑战用空构筑，不读也不改它。失败 / 放弃不保存（退回开打前）。
+ * 本局遗物不继承（存档时去掉），血量每关回满。
+ */
+export const CAMPAIGN_KEY = 'im_campaign_v1';
+function readBuilds(): Record<string, CampaignTransfer> {
+  try { const v = JSON.parse(localStorage.getItem(CAMPAIGN_KEY) ?? 'null'); return v && v.version === 1 && v.heroes && typeof v.heroes === 'object' ? v.heroes : {}; } catch { return {}; }
+}
+export function saveCampaignBuild(hero: CharacterId, state: CampaignTransfer): void {
+  const heroes = readBuilds(); heroes[hero] = { ...structuredClone(state), character: hero, player: { ...structuredClone(state.player), relics: [] } };
+  try { localStorage.setItem(CAMPAIGN_KEY, JSON.stringify({ version: 1, heroes })); localStorage.setItem('im_slot_touched', String(Date.now())); } catch { /* 存储不可用：本次不保存 */ }
+}
+export function loadCampaignBuild(hero: CharacterId): CampaignTransfer | undefined {
+  const s = readBuilds()[hero];
+  return s && s.player && Array.isArray(s.player.weapons) && s.army ? { ...s, character: hero } : undefined;
+}

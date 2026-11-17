@@ -76,6 +76,7 @@ assets/raw/*
 !/tools/test-gear-revamp.mjs
 !/tools/test-hero-level.mjs
 !/tools/test-boss-relics.mjs
+!/tools/test-campaign-build.mjs
 !/tools/test-hero-codex.mjs
 !/tools/phase19-progression.mjs
 !/tools/rest-flow-smoke.mjs

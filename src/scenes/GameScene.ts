@@ -102,6 +102,7 @@ import { EnvInteractions } from '../systems/EnvInteractions';
 import { envConfigFor } from '../data/envInteractions';
 import { Terrain } from '../systems/Terrain';
 import { terrainConfigFor } from '../data/terrain';
+import { Tutorial } from '../systems/Tutorial';
 import { IffOverlay, readIffMode, type IffUnit } from '../systems/IffOverlay';
 import type {ItemInstance} from '../data/items';
 import {armShield,absorbShield,ShieldBars} from '../systems/ShieldGuard';
@@ -180,6 +181,8 @@ export class GameScene extends Phaser.Scene {
   protected windFx?: WindstepFx;
   /** 场地环境互动（火油桶 / 军旗 / 营帐）；首次更新时按场景与章节创建，场景重启时清空。 */
   env: EnvInteractions | null = null;
+  /** 新手引导（第一次进 1-1 时情境式教学，见 systems/Tutorial.ts）。 */
+  tutorial?: Tutorial;
   private envInit = false;
   /** 战场地形层（树 / 树林、河、桥；data/terrain.ts 按篇章与关配置） */
   protected terrain: Terrain | null = null; private terrainInit = false; private terrainNav: Array<{left:number;right:number;top:number;bottom:number}> = [];
@@ -590,6 +593,7 @@ export class GameScene extends Phaser.Scene {
       .setOrigin(0.5)
       .setScrollFactor(0)
       .setDepth(DEPTH.hud);
+    this.tutorial = Tutorial.maybeStart(this);
   }
 
   /** 把开局选择（武将/初始武器）应用到本局。 */
@@ -977,8 +981,9 @@ export class GameScene extends Phaser.Scene {
     if (this.spawnTimer <= 0 && this.activeEnemyCount() < cap) {
       // 刷怪时间轴按关卡节奏加速（stageTuning.pace）：原来第 N 波的刷怪强度在新的第 N 波出现
       const paced = this.elapsed * (this.chapter.pace ?? 1);
-      this.spawnTimer = this.chapter.spawnInterval(paced);
-      const burst = this.chapter.spawnBurst(paced);
+      const easy = this.tutorial?.easy(this.elapsed); // 新手引导：开局 30 秒刷兵放缓
+      this.spawnTimer = this.chapter.spawnInterval(paced) * (easy?.interval ?? 1);
+      const rawBurst = this.chapter.spawnBurst(paced), burst = easy && easy.burstDiv > 1 ? Math.max(1, Math.ceil(rawBurst / easy.burstDiv)) : rawBurst;
       for (let i = 0; i < burst; i += 1) {
         if (this.activeEnemyCount() >= cap) break;
         if (!this.spawnAroundPlayer(this.chapter.pickEnemy(paced))) break;

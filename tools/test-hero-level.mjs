@@ -50,13 +50,14 @@ const fx = await p.evaluate(() => { const s = window.__game.scene.getScene('Game
   for (const k in g.attributes) g.attributes[k] = 0; const ally0 = g.allyDamageMultiplier(), hp0 = g.bonusMaxHp(), crit0 = g.criticalBonus();
   const dm0 = g.damageMultiplier(0), sk0 = g.skillDamageMultiplier();
   g.attributes.command = 2; g.attributes.strength = 2; g.attributes.agility = 4; g.attributes.intellect = 2; out.ally = Math.round(g.allyDamageMultiplier() / ally0 * 1000) / 1000; out.hp = g.bonusMaxHp() - hp0; out.crit = Math.round((g.criticalBonus() - crit0) * 1000) / 1000;
-  // 赵云主属性 = 敏捷：敏捷 4 点 → 全伤害 +4%；力量 2 → 伤害 +3%；智力 2 → 技艺 +6%、范围 +3%
+  // 赵云主属性 = 敏捷：敏捷 4 点 → 全伤害 +4%；力量 2 → 伤害 +3%；智力 2 → 法术 +5%、范围 +1.6%（2026-11-17 智力改为法术）
   out.primary = Math.round(g.primaryBonus() * 1000) / 1000; out.dm = Math.round(g.damageMultiplier(0) / dm0 * 10000) / 10000; out.skill = Math.round(g.skillDamageMultiplier() / sk0 * 10000) / 10000; out.area = Math.round(g.areaMultiplier() * 1000) / 1000; out.allyHp = Math.round(g.allyHpMultiplier() * 1000) / 1000;
   out.label = s.attributePanel.list.filter(o => o.type === 'Text').map(o => o.text).find(t => /主属性/.test(t));
-  out.rows = s.attributeRows.length; Object.assign(g.attributes, saved);
+  out.rows = s.attributeRows.length; out.spell = [g.spellWeaponMultiplier('flame_banner'), g.spellWeaponMultiplier('crossbow'), g.spellWeaponMultiplier('spear_orbit'), g.spellWeaponMultiplier('guandao')].map(v => Math.round(v * 1000) / 1000); Object.assign(g.attributes, saved);
   const runXp = s.player.runXp; s.player.runXp = 100; s.heroXpBonus = 120; out.lord = s.lordHeroXp(); s.player.runXp = runXp; s.heroXpBonus = 0; return out; });
 ck('四项属性：力量 2 = 生命 +6%；敏捷 4 = 暴击 +2%；统御 2 = 部曲伤害 ×1.06、部曲生命 ×1.06；面板 4 行', fx.ally === 1.06 && fx.allyHp === 1.06 && fx.hp === 6 && fx.crit === .02 && fx.rows === 4, fx);
-ck('主属性（赵云 = 敏捷）：敏捷 4 点 → 全伤害 +4%；伤害 ×1.03×1.04；智力 2 → 技艺伤害 ×1.06×1.04、范围 ×1.03；面板标「主属性」', fx.primary === .04 && fx.dm === 1.0712 && fx.skill === 1.1024 && fx.area === 1.03 && /敏捷 · 主属性/.test(fx.label ?? ''), fx);
+ck('主属性（赵云 = 敏捷）：敏捷 4 点 → 全伤害 +4%；伤害 ×1.03×1.04；智力 2 → 法术伤害 ×1.05×1.04、范围 ×1.016；面板标「主属性」', fx.primary === .04 && fx.dm === 1.0712 && fx.skill === 1.092 && fx.area === 1.016 && /敏捷 · 主属性/.test(fx.label ?? ''), fx);
+ck('智力 2：法术武器（火旗 / 连弩）的武器命中 ×1.05，物理武器（枪 / 刀）不乘', JSON.stringify(fx.spell) === '[1.05,1.05,1,1]', fx.spell);
 ck('结算经验 = 本场经验（已乘倍率）+ 首次通关经验（不打折）', Math.round(fx.lord) === 220, fx.lord);
 
 // 3) 同章连打：保留本局额外点（城池加成），永久点按存档

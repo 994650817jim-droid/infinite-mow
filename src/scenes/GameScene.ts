@@ -1611,7 +1611,8 @@ export class GameScene extends Phaser.Scene {
     const crit = firstStrike || weaponHit && Math.random() < Math.min(0.65, this.player.stats.critChance + this.player.growth.criticalBonus() + (!fromAlly ? this.player.passive.critBonus(time) + this.player.growth.aimCriticalBonus() + this.buildCombat.criticalBonus() : 0));
     if(!fromAlly&&weaponHit)rawDamage=this.buildCombat.damage(enemy,rawDamage,crit,time);
     if(!fromAlly)rawDamage*=this.player.growth.gearHitMultiplier(enemy.kind);
-    if(!fromAlly&&!weaponHit)rawDamage*=this.player.growth.skillDamageMultiplier(); // 智力：技艺伤害（非普攻）、含主属性
+    // 智力：非武器伤害（技艺、灼烧等）按法术系数 × 智力、含主属性；法术武器（火旗 / 火雷 / 连弩 / 团扇）的武器命中再乘法术系数
+    if(!fromAlly&&!weaponHit)rawDamage*=this.player.growth.skillDamageMultiplier();else if(!fromAlly)rawDamage*=this.player.growth.spellWeaponMultiplier(this.player.weapons[0]?.id);
     let damage = Math.max(1, Math.round(rawDamage * (crit ? BALANCE.critMultiplier : 1) * (firstStrike ? RELIC.zhanjiangMul : 1)));
     enemy.flash(time);
     if(!fromAlly&&source==='arrow')this.artEffects.show(3,enemy.x,enemy.y-8,32,time,120);

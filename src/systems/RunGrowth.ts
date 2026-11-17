@@ -6,7 +6,7 @@ import type { CharacterId } from '../data/characters';
 import type { Player } from '../entities/Player';
 import { emptyGear, type GearStats } from './ItemEffects';
 
-import { ATTRIBUTE_EFFECT, ATTRIBUTE_IDS, ATTRIBUTE_INFO, ATTRIBUTE_MAX, ATTRIBUTE_POINT_EVERY, PRIMARY_BONUS, primaryAttribute, type AttributeId } from '../data/attributes';
+import { ATTRIBUTE_EFFECT, SPELL_WEAPONS, ATTRIBUTE_IDS, ATTRIBUTE_INFO, ATTRIBUTE_MAX, ATTRIBUTE_POINT_EVERY, PRIMARY_BONUS, primaryAttribute, type AttributeId } from '../data/attributes';
 export { ATTRIBUTE_IDS, ATTRIBUTE_INFO, ATTRIBUTE_MAX, ATTRIBUTE_POINT_EVERY, type AttributeId };
 export type ZhaoMasteryId = 'dragon_gallop' | 'cloud_pierce';
 /**
@@ -158,6 +158,8 @@ export class RunGrowth {
   /** 主属性：每点额外全伤害 +1%（最多 10 点）。 */
   primaryBonus(): number { const p = primaryAttribute(this.character); return p ? Math.min(PRIMARY_BONUS.maxPoints, this.attributes[p]) * PRIMARY_BONUS.perPoint : 0; }
   /** 智力：非普攻伤害（技艺、灼烧、遗珍等）倍率，含主属性加成。 */
+  /** 智力：法术武器的武器命中 × (1 + 法术系数 × 智力)。主属性加成已在 damageMultiplier 里，这里不再乘。 */
+  spellWeaponMultiplier(id: string | undefined): number { return id && SPELL_WEAPONS.has(id) ? 1 + ATTRIBUTE_EFFECT.intellect.skill * this.attributes.intellect : 1; }
   skillDamageMultiplier(): number { return (1 + ATTRIBUTE_EFFECT.intellect.skill * this.attributes.intellect) * (1 + this.primaryBonus()); }
   /** 智力：范围倍率（经 CharacterPassives.rangeMultiplier 作用到武器）。 */
   areaMultiplier(): number { return 1 + ATTRIBUTE_EFFECT.intellect.area * this.attributes.intellect; }

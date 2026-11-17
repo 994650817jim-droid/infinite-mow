@@ -1,12 +1,11 @@
-import {TACTICS,TREASURES,TAG_NAMES,tacticDescription,type TacticId,type TreasureId,type BuildTag} from './builds';
+import {TACTICS,TAG_NAMES,tacticDescription,type TacticId,type BuildTag} from './builds';
 import {AWAKENINGS} from './awakenings';
 import { BALANCE } from '../config';
 import type { Player } from '../entities/Player';
-import { RELICS, relicChanceForLevel } from './relics';
 import { WEAPON_DEFS, SPEAR_PIERCE, GUANDAO_TABLE, crossbowExtraArrows, zhenbeiCracks, lianhuanLinksPerMine, sunOrbitKnives, sunThrowCount, sunThrowPierce, diaochanFanCount } from '../weapons/registry';
 import type { UpgradeOption, WeaponId, WeaponState } from '../types';
 import { getCharacter } from './characters';
-import { ATTRIBUTE_INFO, dragBodyLengths, type AttributeId, type PotionId, type RunGrowth, type TrinketId, MARTIALS, type MasteryId } from '../systems/RunGrowth';
+import { ATTRIBUTE_INFO, dragBodyLengths, type AttributeId, type PotionId, type RunGrowth, MARTIALS, type MasteryId } from '../systems/RunGrowth';
 
 export const WEAPON_META: Record<WeaponId, { name: string; desc: string }> = {
   spear_orbit: { name: '七探盘龙枪', desc: '银枪自动索敌，向不同敌人突刺' },
@@ -114,31 +113,10 @@ function shuffle<T>(arr: T[]): T[] {
   return out;
 }
 
-function relicOption(def: (typeof RELICS)[number]): UpgradeOption {
-  return {
-    id: `relic_${def.id}`,
-    name: def.name,
-    desc: def.desc,
-    kind: 'relic',
-    relicId: def.id,
-    school: def.school,
-    icon: def.icon,
-    apply: (p) => {
-      p.addRelic(def.id);
-    },
-  };
-}
-
 const POTIONS: Record<PotionId, { name: string; desc: string }> = {
   rejuvenation: { name: '回春丹', desc: '立即恢复最大生命值的 30%' },
   berserk: { name: '狂战丹', desc: '10 秒内武器伤害 +25%，攻速 +20%' },
 };
-const TRINKETS: Record<TrinketId, { name: string; desc: string }> = {
-  tiger_tally: { name: '虎符', desc: '全体蜀军造成的伤害 +20%' },
-  heart_mirror: { name: '护心镜', desc: '武将受到的伤害 -15%' },
-  wind_boots: { name: '疾风靴', desc: '移动速度 +10%' },
-};
-
 export function martialDescription(id:MasteryId,level:number):string {
  const n=Math.max(1,Math.min(3,level)),i=n-1;
  const descriptions:Record<MasteryId,string>={
@@ -185,15 +163,6 @@ export function canOfferRejuvenation(player: Player): boolean {
   return Math.min(player.maxHp, player.hp + amount) > player.hp;
 }
 
-function trinketOption(id: TrinketId, growth: RunGrowth, replace?: TrinketId): UpgradeOption {
-  const detail = TRINKETS[id];
-  const old = replace ? TRINKETS[replace].name : '';
-  return { id: replace ? `trinket_replace_${replace}_${id}` : `trinket_${id}`,
-    name: detail.name, desc: replace ? `${detail.desc} · 替换${old}` : detail.desc,
-    kind: 'trinket', categoryLabel: replace ? '替换饰品' : '通用饰品',
-    apply: (_player, _weapons, current) => current?.equipTrinket(id, replace) };
-}
-
 /** 保底选项：原数值（+5生命/+5%拾取/+0.1回复）几乎无感，提高到可感知并各附带一个即时效果。 */
 export function foundationOptions():UpgradeOption[]{
   return [
@@ -231,19 +200,6 @@ export function buildUpgradeOptions(player: Player, weapons: WeaponState[], grow
   for(const id of Object.keys(TACTICS)as TacticId[])if(b.canLearn(id)){
     const d=TACTICS[id],n=b.level(id)+1;
     pool.push({id:'tactic_'+id,name:d.name+' · Lv.'+n,desc:tacticDescription(id,n),kind:'tactic',icon:'build_icon_'+id,categoryLabel:schoolLabel(d.tag,tags,!!b.level(id)),apply:(_p,_w,g)=>{g?.build.learn(id);}});
-  }
-  // Treasures are rare, and share two slots with the existing trinkets.
-  if(Math.random()<.18)for(const id of Object.keys(TREASURES)as TreasureId[])if(!b.treasures.includes(id)){
-    const old=b.treasures[0],legacy=growth.trinkets[0],full=b.treasures.length+growth.trinkets.length>=2,d=TREASURES[id];
-    const replaced=full?(old?TREASURES[old].name:TRINKETS[legacy].name):'';
-    pool.push({id:'treasure_'+id,name:d.name,desc:d.desc+(replaced?' · 替换'+replaced:''),kind:'treasure',icon:'build_icon_'+id,categoryLabel:TAG_NAMES[d.tag]+'宝物 · 稀有',apply:(_p,_w,g)=>{
-      if(!g||g.build.treasures.includes(id))return;
-      if(g.build.treasures.length+g.trinkets.length>=2){
-        if(old&&g.build.treasures.includes(old))g.build.treasures.splice(g.build.treasures.indexOf(old),1);
-        else if(legacy&&g.trinkets.includes(legacy))g.trinkets.splice(g.trinkets.indexOf(legacy),1);else return;
-      }
-      g.build.treasures.push(id);
-    }});
   }
   // Potions leave the normal pool. Valid, non-healing fallback choices avoid exhausted-pool deadlocks.
   const foundations=foundationOptions();

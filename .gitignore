@@ -79,6 +79,8 @@ assets/raw/*
 !/tools/test-hero-level.mjs
 !/tools/test-boss-relics.mjs
 !/tools/test-campaign-build.mjs
+!/tools/test-charms.mjs
+!/tools/test-token-slots.mjs
 !/tools/test-hero-codex.mjs
 !/tools/phase19-progression.mjs
 !/tools/rest-flow-smoke.mjs
@@ -138,4 +140,5 @@ assets/raw/*
 !/tools/test-props-v2.mjs
 !/tools/test-boss-chest.mjs
 !/tools/record-boss-chest-gif.mjs
+!/tools/test-xingyang-full.mjs
 !/tools/test-city-build.mjs

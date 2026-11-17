@@ -25,19 +25,19 @@ await battle(1);
 const saved = await p.evaluate(async () => {
   const s = window.__game.scene.getScene('GameScene'), c = await window.__mod('/src/systems/Campaign.ts'), st = await window.__mod('/src/systems/ItemStore.ts'), it = await window.__mod('/src/data/items.ts'), g = s.player.growth, out = {};
   st.setAutoSalvageWhite(false); const armor = it.rollItem('purple', Math.random, 'armor'); st.addItems([armor]); st.equipItem('zhaoyun', armor.uid);
-  g.build.learn('pursuit'); g.build.learn('pursuit'); g.build.learn('ember'); g.learn('dragon_gallop'); s.player.weapons[0].level = 3; s.player.level = 7; s.player.addRelic?.('drum');
+  g.build.learn('pursuit'); g.build.learn('pursuit'); g.build.learn('ember'); g.learn('dragon_gallop'); s.player.weapons[0].level = 3; s.player.level = 7;
   c.saveCampaignBuild('zhaoyun', c.packCampaign('zhaoyun', s.player, s.legion));
-  const raw = JSON.parse(localStorage.getItem('im_campaign_v1')); out.key = !!raw?.heroes?.zhaoyun; out.relics = raw.heroes.zhaoyun.player.relics; out.slot = (await window.__mod('/src/systems/SaveSlots.ts')).PROGRESS_KEYS.includes('im_campaign_v1');
+  const raw = JSON.parse(localStorage.getItem('im_campaign_v1')); out.key = !!raw?.heroes?.zhaoyun; out.relics = raw.heroes.zhaoyun.player.relics; out.treasures = raw.heroes.zhaoyun.player.build?.treasures; out.slot = (await window.__mod('/src/systems/SaveSlots.ts')).PROGRESS_KEYS.includes('im_campaign_v1');
   out.replay11 = s.campaignReplay; return out;
 });
-ck('存档：征程构筑写进 im_campaign_v1（随存档位），本局遗物不继承', saved.key && Array.isArray(saved.relics) && saved.relics.length === 0 && saved.slot, saved);
+ck('存档：征程构筑写进 im_campaign_v1（随存档位），不存遗物 / 宝物字段（2026-11-17 并入信物库）', saved.key && saved.relics === undefined && saved.treasures === undefined && saved.slot, saved);
 
 // 2) 新开一场进 1-2（没有内存里的 transfer，相当于从地图 / 营寨 / 选关 / 重开游戏进入）：恢复构筑
 await battle(2);
 const loaded = await p.evaluate(() => { const s = window.__game.scene.getScene('GameScene'), g = s.player.growth;
-  return { loaded: s.campaignLoaded, replay: s.campaignReplay, pursuit: g.build.level('pursuit'), ember: g.build.level('ember'), gallop: g.masteries.dragon_gallop, weapon: s.player.weapons[0].level, level: s.player.level, gearHp: g.gear.hp > 0, full: s.player.hp === s.player.maxHp, relics: s.player.relics.length }; });
+  return { loaded: s.campaignLoaded, replay: s.campaignReplay, pursuit: g.build.level('pursuit'), ember: g.build.level('ember'), gallop: g.masteries.dragon_gallop, weapon: s.player.weapons[0].level, level: s.player.level, gearHp: g.gear.hp > 0, full: s.player.hp === s.player.maxHp, relicsField: 'relics' in s.player }; });
 ck('新开一场进未通关的主线关（1-2）：战法、技艺、武器等级、局内等级都恢复', loaded.loaded && !loaded.replay && loaded.pursuit === 2 && loaded.ember === 1 && loaded.gallop === 1 && loaded.weapon === 3 && loaded.level === 7, loaded);
-ck('恢复后兵装加成仍在（以前同章连打会丢）、血量回满、本局遗物不带', loaded.gearHp && loaded.full && loaded.relics === 0, loaded);
+ck('恢复后兵装加成仍在（以前同章连打会丢）、血量回满、没有本局遗物', loaded.gearHp && loaded.full && !loaded.relicsField, loaded);
 
 // 3) 已通关的旧关（重打）：空构筑，也不改存档里的构筑
 await p.evaluate(async () => { const hp = await window.__mod('/src/systems/HeroProgress.ts'); hp.claimFirstClear('huangjin-2'); });

@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { charmText } from '../data/charms';
 import { gearOwners, ownerName } from '../systems/RosterStore';
 import { DEPTH, FONT, GAME_HEIGHT, GAME_WIDTH, HEADING_FONT, IS_DESKTOP } from '../config';
 import { CHARACTERS, type CharacterId } from '../data/characters';
@@ -6,21 +7,19 @@ import { AFFIXES, BAG_CAPACITY, LEGENDS, QUALITIES, QUALITY_ORDER, SLOTS, SLOT_O
 import { rewardGrain } from '../world/WorldStore';
 import { HORSES, horseQuality, mountStyle } from '../data/mounts';
 import { gearFromItems, gearSummary, horseBonusText } from '../systems/ItemEffects';
-import { type GearOwner, equipItem, equippedBy, heroHorse, horseRider, legacyValue, loadItems, salvageLegacy, loadout, looseCount, markBagSeen, rideHorse, salvageItems, salvageUpTo, setAutoSalvageWhite, stableUnlocked, takeItemNotice, takeStableAnnouncement, unequipSlot } from '../systems/ItemStore';
+import { type GearOwner, type LoadoutKey, LOADOUT_KEYS, equipTarget, keySlot, tokenSlots, equipItem, equippedBy, heroHorse, horseRider, legacyValue, loadItems, salvageLegacy, loadout, looseCount, markBagSeen, rideHorse, salvageItems, salvageUpTo, setAutoSalvageWhite, stableUnlocked, takeItemNotice, takeStableAnnouncement, unequipSlot } from '../systems/ItemStore';
 import { drawQualityFrame, ensureItemTextures, horseIcon, itemIconKey, itemTile } from './ItemQuality';
 import { lqHitBox, lqPanel, lqSkin } from './LacquerKit';
 import { padNavigator } from './PadNavigator';
 import { ItemTooltip, compareLines } from './ItemTooltip';
 
 /** 本局宝物（战法宝物 / 饰品）的显示条目，由 GameScene 提供。 */
-export interface TreasureEntry { name: string; desc: string; icon: string }
 export interface ItemBagOptions {
   hero: CharacterId;
   /** 本局缴获（战斗中）。 */
   runLoot?: ItemInstance[];
   /** 战斗中打开：只看当前武将；可换装，坐骑除外（atRest = 行营休整，可换马）。 */
   battle?: boolean; atRest?: boolean;
-  treasures?: TreasureEntry[];
   /** 战斗中穿上缴获（收入行囊并穿上）；测试战斗不提供。 */
   claimLoot?: (item: ItemInstance) => boolean;
   /** 换装 / 换马后通知战斗场景重算加成。 */
@@ -49,7 +48,7 @@ export class ItemBagUI {
   private hero: GearOwner;
   private filter: ItemSlot | 'all' = 'all';
   private page = 0;
-  /** 选中：道具 uid、'treasure:N'、'stable'、'legacy'。 */
+  /** 选中：道具 uid、'stable'、'legacy'。 */
   private selected: string | null = null;
   private notice = '';
   /** 详情卡关掉后手柄焦点回到这件道具的格子。 */
@@ -108,7 +107,7 @@ export class ItemBagUI {
     if (ok) { this.notice = `${ownerName(this.hero)} 穿戴 ${itemName(item)}${inBag ? '' : ' · 已收入行囊'}`; this.o.onGearChange?.(); }
     return ok;
   }
-  private takeOff(slot: ItemSlot): void { if (unequipSlot(this.hero, slot)) { this.notice = '已卸下'; this.o.onGearChange?.(); } }
+  private takeOff(slot: LoadoutKey): void { if (unequipSlot(this.hero, slot)) { this.notice = '已卸下'; this.o.onGearChange?.(); } }
 
   render(): void {
     // 手柄：重绘前记住焦点对象的名字，重绘后把同名对象设为默认焦点（PadNavigator 会在旧对象销毁后取默认）
@@ -147,14 +146,18 @@ export class ItemBagUI {
     const size = D ? 58 : 64, pitch = D ? 78 : 88, lx = D ? x0 + 62 : x0 + 64, rx = D ? x0 + 300 : x0 + pw - 64, cx = (lx + rx) / 2;
     const rowY = (r: number) => dollTop + size / 2 + r * pitch;
     this.portrait(cx, dollTop, (rx - lx) - size - 24, pitch * 2 - 28);
-    const place: Record<ItemSlot, [number, number]> = { helm: [lx, rowY(0)], armor: [lx, rowY(1)], boots: [rx, rowY(0)], token: [rx, rowY(1)], relic: [rx, rowY(2)] }; // Boss遗物：右下，与左下坐骑位对称
-    for (const slot of SLOT_ORDER) {
-      const [sx, sy] = place[slot], item = worn[slot] ?? null;
-      const tile = this.add(itemTile(this.scene, sx, sy, size, item, slot, { selected: !!item && item.uid === this.selected }));
+    // Boss遗物：右下，与左下坐骑位对称；第二信物：下排正中（原「本局宝物」位，2026-11-17 本局宝物改为信物）
+    const place: Record<LoadoutKey, [number, number]> = { helm: [lx, rowY(0)], armor: [lx, rowY(1)], boots: [rx, rowY(0)], token: [rx, rowY(1)], relic: [rx, rowY(2)], token2: [cx, rowY(2)] };
+    const twoTokens = tokenSlots() > 1;
+    for (const slot of LOADOUT_KEYS) {
+      const [sx, sy] = place[slot], item = worn[slot] ?? null, locked = slot === 'token2' && !twoTokens, base = keySlot(slot);
+      const tile = this.add(itemTile(this.scene, sx, sy, size, item, base, { selected: !!item && item.uid === this.selected }));
+      if (locked) tile.add(this.scene.add.text(size / 2 - 3, size / 2 - 3, '锁', { fontFamily: FONT, fontSize: '12px', color: '#1c140a', backgroundColor: '#b9a57a', resolution: 2 }).setOrigin(1, 1).setPadding(2, 0)).setAlpha(.7);
       tile.setName('item-slot-' + slot).setData('uid', item?.uid ?? null).setSize(size, size).setInteractive({ useHandCursor: true });
-      this.onTap(tile, () => { if (item) this.select(item.uid); else { this.filter = slot; this.page = 0; this.notice = `行囊已筛选 · ${SLOTS[slot].name}（点道具穿戴）`; this.render(); } });
+      this.onTap(tile, () => { if (item) this.select(item.uid); else if (locked) { this.notice = '第二信物位：第二章通关后开放'; this.render(); } else { this.filter = base; this.page = 0; this.notice = `行囊已筛选 · ${SLOTS[base].name}（点道具穿戴）`; this.render(); } });
       if (item) this.tip.attach(tile, () => item, () => item);
-      this.text(sx, sy + size / 2 + 10, item ? itemName(item) : SLOTS[slot].name, 12, item ? QUALITIES[item.quality].css : '#8d7d60').setOrigin(.5).setName('item-slot-label-' + slot);
+      const name = slot === 'token2' ? (locked ? '信物·二 · 二章通关开放' : '信物·二') : SLOTS[slot].name;
+      this.text(sx, sy + size / 2 + 10, item ? itemName(item) : name, 12, item ? QUALITIES[item.quality].css : '#8d7d60').setOrigin(.5).setName('item-slot-label-' + slot);
     }
     // 坐骑位
     const my = rowY(2), mountTile = this.add(this.scene.add.container(lx, my));
@@ -165,18 +168,6 @@ export class ItemBagUI {
     if (!unlocked || !this.canChangeHorse || this.hero.startsWith('r_')) mountTile.add(this.scene.add.text(size / 2 - 3, size / 2 - 3, '锁', { fontFamily: FONT, fontSize: '12px', color: '#1c140a', backgroundColor: '#b9a57a', resolution: 2 }).setOrigin(1, 1).setPadding(2, 0));
     mountTile.setName('item-slot-mount').setSize(size, size).setInteractive({ useHandCursor: true }); this.onTap(mountTile, () => this.select('stable'));
     this.text(lx, my + size / 2 + 10, !unlocked ? '坐骑 · 一章通关开放' : horse ? horse.name : '坐骑', 12, horse ? '#f3c37a' : '#8d7d60').setOrigin(.5).setName('item-slot-label-mount');
-    // 本局宝物 2 格
-    const tre = this.o.treasures ?? [], tdx = D ? 46 : 60;
-    this.text(cx, my - size / 2 - 12, '本局宝物', 12, '#b9a57a').setOrigin(.5);
-    for (let i = 0; i < 2; i++) {
-      const tx = cx + (i ? tdx : -tdx), t = tre[i], c = this.add(this.scene.add.container(tx, my));
-      const g = this.scene.add.graphics(); g.fillStyle(0x1b120b, .8).fillRoundedRect(-size / 2, -size / 2, size, size, 7); g.lineStyle(t ? 2 : 1, t ? 0xc9a35e : 0x6b5a40, t ? 1 : .55).strokeRoundedRect(-size / 2, -size / 2, size, size, 7); c.add(g);
-      if (t && this.scene.textures.exists(t.icon)) c.add(this.scene.add.image(0, 0, t.icon).setDisplaySize(size * .78, size * .78));
-      else c.add(this.scene.add.text(0, 0, '宝', { fontFamily: HEADING_FONT, fontSize: Math.round(size * .42) + 'px', color: t ? '#f3d48a' : '#5d5040', resolution: 2 }).setOrigin(.5));
-      c.setName('item-treasure-' + i).setSize(size, size).setInteractive({ useHandCursor: true }); this.onTap(c, () => this.select('treasure:' + i));
-      this.text(tx, my + size / 2 + 10, t ? t.name : this.battle ? '空' : '出征后获得', 12, t ? '#f3d48a' : '#6f6250').setOrigin(.5).setName('item-treasure-label-' + i);
-    }
-
     // 加成汇总
     const gear = gearFromItems(Object.values(worn).filter((i): i is ItemInstance => !!i), horse);
     const sumX = x0 + 28, sumY = my + size / 2 + (D ? 26 : 30), lines = gearSummary(gear);
@@ -204,7 +195,7 @@ export class ItemBagUI {
       tile.setName('item-cell-' + i).setData('uid', item.uid).setSize(cell, cell).setInteractive({ useHandCursor: true });
       const loot = this.isLoot(item.uid);
       this.onTap(tile, () => this.select(item.uid));
-      this.tip.attach(tile, () => item, () => loadout(this.hero)[itemSlot(item)]);
+      this.tip.attach(tile, () => item, () => loadout(this.hero)[equipTarget(this.hero, item)]);
       // 本局缴获：左上角淡金「新」字（穿上即收入行囊；没穿的结算时按原规则带回）
       if (loot) tile.setData('loot', true).add(this.scene.add.text(-cell / 2 + 3, -cell / 2 + 2, '新', { fontFamily: HEADING_FONT, fontSize: '12px', color: '#2a1a08', backgroundColor: '#f3d48acc', resolution: 2 }).setPadding(3, 0).setName('item-new-badge'));
       const owner = loot ? undefined : equippedBy(s, item.uid);
@@ -223,7 +214,6 @@ export class ItemBagUI {
 
     if (this.selected === 'stable') this.renderStable();
     else if (this.selected === 'legacy') this.renderLegacy();
-    else if (this.selected?.startsWith('treasure:')) this.renderTreasure(Number(this.selected.slice(9)));
     else if (this.selected) this.renderDetail(this.selected);
     this.markPadDefault(prevName);
   }
@@ -286,15 +276,6 @@ export class ItemBagUI {
     g.fillStyle(0x1b120b, .97).fillRoundedRect(x, y, w, h, 10); g.lineStyle(2, 0xc9a35e, .9).strokeRoundedRect(x, y, w, h, 10);
   }
 
-  private renderTreasure(i: number): void {
-    const t = this.o.treasures?.[i], cw = IS_DESKTOP ? 380 : 460, { card, x, y, g } = this.card(cw, 200);
-    const body = t ? t.desc : this.battle ? '这一格还空着。升级三选一里的「宝物」或行营军需商人可得，最多 2 件。' : '宝物只在本局有效：出征后在升级三选一或行营军需商人处获得，最多 2 件，结算后不保留。';
-    this.text(x + 26, y + 22, t ? t.name : '本局宝物', 22, '#f3d48a', true, card).setName('item-detail-name');
-    this.text(x + 26, y + 56, t ? '宝物 · 本局有效' : '宝物位', 13, '#b9a57a', false, card);
-    const txt = this.text(x + 26, y + 86, body, 15, '#e9dcbc', false, card).setWordWrapWidth(cw - 52).setLineSpacing(5);
-    this.plainFrame(g, x, y, cw, txt.y + txt.height - y + 30);
-    this.button(x + cw - 30, y + 28, '×', 'item-detail-close', () => this.closeDetail(), { parent: card, size: 16 });
-  }
 
   /** 旧物：旧档里已下架的兵刃挂饰和重复的马，原样保留；可一键按双倍分解价折钱。 */
   private renderLegacy(): void {
@@ -346,12 +327,12 @@ export class ItemBagUI {
     const shade = this.add(this.scene.add.rectangle(0, 0, W, H, 0x000000, .45).setOrigin(0).setInteractive(), card);
     shade.on('pointerdown', () => this.closeDetail());
     const cw = D ? 380 : 460, inBag = s.bag.some(i => i.uid === uid), owner = inBag ? equippedBy(s, uid) : undefined;
-    const current = loadout(this.hero, s)[slot];
+    const target = equipTarget(this.hero, item, s), current = loadout(this.hero, s)[target];
     const lines = item.affixes.map(a => (a.minor ? '· ' : '') + formatAffix(a));
     const compare = this.compare(item, current && current.uid !== item.uid ? current : undefined);
     const legend = def?.legend ?? LEGENDS.find(l => l.id === item.base) ?? def?.relic;
     // 先估算高度定位，排完文字后按实际高度画底
-    const est = 96 + lines.length * 25 + (item.special ? 44 : 0) + (legend ? 22 : 0) + (compare ? 22 + compare.split('\n').length * 18 : 0) + 64;
+    const est = 96 + lines.length * 25 + (item.special ? 44 : 0) + (charmText(item) ? 52 : 0) + (legend ? 22 : 0) + (compare ? 22 + compare.split('\n').length * 18 : 0) + 64;
     const x = (W - cw) / 2, y = Math.max(20, (H - est) / 2);
     const g = this.add(this.scene.add.graphics(), card);
     card.add(itemTile(this.scene, x + 50, y + 52, 64, item).setScrollFactor(0));
@@ -360,6 +341,7 @@ export class ItemBagUI {
     let ty = y + 96;
     this.text(x + 26, ty, lines.join('\n'), 15, '#e9dcbc', false, card).setLineSpacing(6).setName('item-detail-affixes'); ty += lines.length * 25 + 6;
     if (item.special) { this.text(x + 26, ty, `★ ${SPECIALS[item.special].name}：${SPECIALS[item.special].desc}`, 14, '#f3c37a', false, card).setWordWrapWidth(cw - 52); ty += 44; }
+    const ct = charmText(item); if (ct) { const c = this.text(x + 26, ty, ct, 14, '#f3c37a', false, card).setWordWrapWidth(cw - 52).setName('item-detail-charm'); ty += c.height + 8; }
     if (legend) { this.text(x + 26, ty, '「' + legend.lore + '」', 13, '#9c8c6c', false, card); ty += 22; }
     if (compare) { this.text(x + 26, ty, `对比当前（${itemName(current!)}）`, 13, '#b9a57a', false, card); this.text(x + 26, ty + 20, compare, 13, '#d8ccb0', false, card).setLineSpacing(2).setName('item-detail-compare'); ty += 22 + compare.split('\n').length * 18; }
     const ch = ty - y + 58, by = y + ch - 32;
@@ -375,7 +357,7 @@ export class ItemBagUI {
     }
     const wornHere = current?.uid === item.uid;
     this.button(x + cw * .3, by, wornHere ? '卸下' : '穿戴', wornHere ? 'item-unequip' : 'item-equip', () => {
-      if (wornHere) this.takeOff(slot); else this.wear(item);
+      if (wornHere) this.takeOff(target); else this.wear(item);
       this.lastUid = item.uid; this.selected = null; this.render();
     }, { parent: card, size: 16 });
     this.button(x + cw * .7, by, def?.relic ? '遗珍不可分解' : owner ? '已穿戴不可分解' : `分解 · 军粮 +${rewardGrain(0, 0, q.salvage)}`, 'item-salvage', () => { const m = salvageItems([item.uid]); this.notice = `分解 ${itemName(item)} · 军粮 +${rewardGrain(0, 0, m)}`; this.selected = null; this.render(); }, { parent: card, size: 14, disabled: !!owner || !!def?.relic });

@@ -103,9 +103,9 @@ const mech = await p.evaluate(async () => {
   out.xiangguo = { hint: s.levelPanel.getByName('upgrade-points-hint')?.text, reroll: s.rerollButton?.text, food0: s.legion.food };
   s.rerollUpgrades(); out.xiangguo.foodAfter = s.legion.food; out.xiangguo.rerollAfter = s.rerollButton?.text;
   s.chooseUpgrade(0); out.xiangguo.after1 = [s.mode, s.upgradeOptions.length]; s.chooseUpgrade(0); out.xiangguo.after2 = [s.mode, s.pendingLevels];
-  // 传国玉玺（伪）：受伤 +15%，开局送宝物
+  // 传国玉玺（伪）：受伤 +15%，开局送 1 张随机战法（2026-11-17 宝物并入信物库后由送宝物改来）
   const in0 = pl.growth.incomingDamageMultiplier(); wear('relic_weixi'); out.weixi = { taken: Math.round(pl.growth.incomingDamageMultiplier() / in0 * 100) / 100 };
-  pl.growth.build.treasures.length = 0; pl.growth.trinkets.length = 0; s.grantWeixiTreasures(); out.weixi.treasures = pl.growth.build.treasures.length;
+  pl.growth.build.tactics = {}; s.grantWeixiTreasures(); out.weixi.tactics = Object.values(pl.growth.build.tactics);
   // 乌巢酒葫：酒后伤害 +40%、走路踉跄
   wear('relic_jiuhu'); const dm0 = pl.growth.damageMultiplier(now()); s.relics.onWine(now()); const dm1 = pl.growth.damageMultiplier(now());
   const v = new Phaser.Math.Vector2(1, 0); s.relics.jitterAt = 0; s.relics.sway(v, now()); out.jiuhu = { ratio: Math.round(dm1 / dm0 * 100) / 100, angle: Math.round(Math.abs(v.angle() > Math.PI ? v.angle() - 2 * Math.PI : v.angle()) * 1000) / 1000 };
@@ -124,7 +124,7 @@ ck('百鸟朝凤缨：同一目标连击 5 次扇形刺出，打前方扇区、�
 ck('九节杖：落雷劈中生命最多的敌人', mech.jiujie.bolts === 1 && mech.jiujie.big > 0, mech.jiujie);
 ck('人公符水：拾取 40 颗宝石召出黄巾力士', mech.fushui.n === 1 && mech.fushui.img, mech.fushui);
 ck('相国印：120 杀后升级提示「连选两张」、换一批免费；选第一张后还能再选一张，第二张后结束', /相国印/.test(mech.xiangguo.hint ?? '') && /免费/.test(mech.xiangguo.reroll ?? '') && mech.xiangguo.foodAfter === mech.xiangguo.food0 && mech.xiangguo.after1[0] === 'levelup' && mech.xiangguo.after1[1] === 2 && mech.xiangguo.after2[1] === 0, mech.xiangguo);
-ck('传国玉玺（伪）：受到伤害 ×1.15，开局补满 2 件宝物', mech.weixi.taken === 1.15 && mech.weixi.treasures === 2, mech.weixi);
+ck('传国玉玺（伪）：受到伤害 ×1.15，开局送 1 张随机战法 Lv1', mech.weixi.taken === 1.15 && mech.weixi.tactics.length === 1 && mech.weixi.tactics[0] === 1, mech.weixi);
 ck('乌巢酒葫：拾取酒后伤害 ×1.4，移动方向被随机偏转', mech.jiuhu.ratio === 1.4 && mech.jiuhu.angle > 0 && mech.jiuhu.angle <= Math.PI / 12 + .001, mech.jiuhu);
 ck('楼船令旗：穿上即开 12 秒一列的火船，脱下停止', mech.louchuan.on && mech.louchuan.interval === 12000 && mech.louchuan.off, mech.louchuan);
 ck('虎豹铁面：践踏伤害 ×2，上马间隔 6 秒（原 15 秒）', mech.hubao.t === 2 && JSON.stringify(mech.hubao.r) === '[6000,15000]', mech.hubao);

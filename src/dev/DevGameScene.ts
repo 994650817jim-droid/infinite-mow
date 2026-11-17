@@ -1,6 +1,11 @@
 import { BALANCE, DEPTH, FONT, GAME_HEIGHT, GAME_WIDTH, IS_DESKTOP, switchLayout } from '../config';
+import { applyCharms, charmState, wornTokens } from '../systems/CharmEffects';
+import { rollCharm, type ItemInstance } from '../data/items';
+/** 调试给的信物（不写存档，每场战斗各自一份）。 */
+const devCharmMap = new WeakMap<object, ItemInstance[]>();
+const devCharmsOf = (p: object): ItemInstance[] => { let l = devCharmMap.get(p); if (!l) devCharmMap.set(p, l = []); return l; };
 import type { EnemyDef } from '../data/enemies';
-import type { RelicSchool } from '../data/relics';
+import type { CharmSchool as RelicSchool } from '../data/charms';
 import { Enemy } from '../entities/Enemy';
 import { Ally, type AllyKind } from '../entities/Ally';
 import Phaser from 'phaser';
@@ -674,20 +679,24 @@ export class DevGameScene extends GameScene {
       gemsInfo(): Array<{ x: number; y: number; vx: number; vy: number; restMs: number; active: boolean }> {
         return scene.gems.filter((gem) => gem.active).map((gem) => ({ x: gem.img.x, y: gem.img.y, vx: gem.vx, vy: gem.vy, restMs: gem.restMs, active: gem.active }));
       },
+      /** 2026-11-17 本局遗物并入信物库：按旧遗物 id 给一件橙色信物（只本局生效，不写存档；酒壶已删除返回 false）。 */
       giveRelic(id: string): boolean {
-        return scene.player.addRelic(id);
+        const map: Record<string, string> = { whetstone: 'charm_whetstone', drum: 'charm_drum', ring: 'charm_ring', quiver: 'charm_quiver', oil: 'charm_oil', torch: 'charm_oil', armor: 'charm_guard', human_seal: 'charm_human_seal', heaven_ember: 'charm_heaven_ember', army_jade: 'charm_army_jade' };
+        const devCharms = devCharmsOf(scene.player), base = map[id] ?? (id.startsWith('charm_') ? id : ''); if (!base || devCharms.some(c => c.base === base)) return false;
+        const c = rollCharm('orange', Math.random, base); if (!c) return false; devCharms.push(c);
+        applyCharms(scene.player, [...wornTokens(scene.runConfig.character), ...devCharms]); return true;
       },
       relicsInfo(): { relics: string[]; stats: Record<string, number>; schools: Record<string, number> } {
-        const p = scene.player;
+        const p = scene.player, devCharms = devCharmsOf(p), st = charmState([...wornTokens(scene.runConfig.character), ...devCharms]);
         return {
-          relics: [...p.relics],
+          relics: devCharms.map(c => c.base),
           stats: {
             damageMul: p.stats.damageMul, meleeMul: p.stats.meleeMul, arrowMul: p.stats.arrowMul, fireMul: p.stats.fireMul,
             fireAreaMul: p.stats.fireAreaMul, damageTakenMul: p.stats.damageTakenMul,
             cooldownMul: p.stats.cooldownMul, critChance: p.stats.critChance, maxHpBonus: p.stats.maxHpBonus,
             armor: p.stats.armor, regen: p.stats.regen,
           },
-          schools: { wushuang: p.schoolCount('wushuang'), shenshe: p.schoolCount('shenshe'), lieyan: p.schoolCount('lieyan'), tiebi: p.schoolCount('tiebi') },
+          schools: { ...st.schools },
         };
       },
       upgradeOptions(): Array<{ kind: string; id: string; name: string; relicId?: string; school?: string }> {

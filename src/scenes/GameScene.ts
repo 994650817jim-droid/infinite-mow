@@ -25,6 +25,8 @@ import {BuffHud} from '../ui/BuffHud';
 import { type BuffProgress, countProgress, timerProgress } from '../ui/BuffProgress';
 import {BuildCombat} from '../systems/BuildCombat';
 import {TACTICS,TREASURES,TAG_NAMES,type TacticId} from '../data/builds';
+import { applyCharms, wornTokens, type CharmState } from '../systems/CharmEffects';
+import { CHARM_LEGEND, CHARM_SCHOOL_NAMES, CHARM_SET_DESC, charmDef, type CharmSchool } from '../data/charms';
 import {SishuiObstacles} from '../systems/SishuiObstacles';
 import {HuaxiongBoss} from '../systems/HuaxiongBoss';
 import {getXingyangEncounter} from '../data/xingyang';
@@ -48,7 +50,6 @@ import { chapterUnlocked, isChapterTestRun, recordChapterVictory } from '../syst
 import { BALANCE, COLORS, DEPTH, FONT, GAME_HEIGHT, GAME_WIDTH, HEADING_FONT, IS_DESKTOP, TITLE_FONT, actorDepth, screenPoint } from '../config';
 import { upgradeCardTexture } from '../ui/HomeCommand';
 import type { EnemyDef } from '../data/enemies';
-import { RELICS, SCHOOL_NAMES, type RelicSchool } from '../data/relics';
 import { WEAPON_META, weaponName, buildUpgradeOptions, canOfferRejuvenation } from '../data/upgrades';
 import { waveIndexAt } from '../data/waves';
 import { getChapter, getBattleChapter, chapterBossTime, type ChapterDef } from '../data/chapters';
@@ -261,7 +262,7 @@ export class GameScene extends Phaser.Scene {
   private buffProgress(id:string,now:number):BuffProgress|null{
     if(id.startsWith('awakening_'))return this.awakeningCombat?.progress(id.slice(10),now)??null;
     if(id==='tactic_warfeed'){const l=this.player.growth.build.level('warfeed');if(!l)return null;const n=[12,10,8][Math.min(3,l)-1];return countProgress(this.warfeedCount,n,'再击杀 1 名回血','名');}
-    if(id==='relic_heaven_ember')return timerProgress(this.relicFireAt,5000,now,'下一击留残火','冷却');
+    if(id==='relic_heaven_ember')return timerProgress(this.relicFireAt,CHARM_LEGEND.charm_heaven_ember.cd[this.player.growth.charmLegend.heaven_ember??1],now,'下一击留残火','冷却');
     return this.buildCombat?.progress(id,now)??this.legion?.command.progress(id,now)??null;
   }
   private warfeedKill():void{
@@ -295,7 +296,7 @@ export class GameScene extends Phaser.Scene {
   }
   private bloodJadeHeal(damage:number,time:number):void{
     if(this.bloodWindow<0||time<this.bloodWindow||time-this.bloodWindow>=1000){this.bloodWindow=time;this.bloodHealed=0;}
-    const amount=Math.min(damage*.05,this.player.maxHp*.03-this.bloodHealed);
+    const amount=Math.min(damage*.05*this.player.growth.build.power('blood_jade'),this.player.maxHp*.03-this.bloodHealed);
     if(amount<=0||this.player.hp>=this.player.maxHp)return;
     this.bloodHealed+=amount;this.player.heal(amount);
   }
@@ -373,7 +374,11 @@ export class GameScene extends Phaser.Scene {
   private get trailingBoss():ChasingBoss|null{return this.chasingBosses[0]??null;}
   /** 首领倒地后掉的宝箱（捡起遗物才进下一阶段）。 */
   protected bossChests:BossChest[]=[];
+  /** 刚倒下的首领朝向（用了倒地 4 帧时 ±1）：宝箱往前偏开尸体。 */
+  private bossFallDir=0;
   private lootContinue:(()=>void)|null=null;private relicHits=0;private relicFireAt=0;private relicHealAt=0;
+  /** 穿着的信物库新信物（开局 / 换装后由 applyCharms 算出）。 */
+  protected charmInfo:CharmState|null=null;
   private attributeReturn:'pause'|'none'='pause';private rerolls=0;private rerollButton?:Phaser.GameObjects.Text;private pointsButton?:Phaser.GameObjects.Container;private pointsBadge?:Phaser.GameObjects.Text;
   /** 用药按钮（药囊）：拾取的药收起，手动使用。 */
   private potionButton?:Phaser.GameObjects.Container;private potionBadge?:Phaser.GameObjects.Text;private potionIcon?:Phaser.GameObjects.Image;private potionGlow?:Phaser.GameObjects.Arc;
@@ -457,7 +462,6 @@ export class GameScene extends Phaser.Scene {
     this.battlefieldDetails = new BattlefieldDetails(this, this.chapter.id, this.chapter.id==='huangjin'?this.chapter.stage:undefined,groundKey);
     this.artEffects = new ArtEffects(this);
 
-
     this.player = new Player(this, 0, 0);
     this.dragFx = undefined; this.flankFx = undefined; this.windFx = undefined; this.env = null; this.envInit = false;
     this.applyRunConfig(this.runConfig);
@@ -505,6 +509,8 @@ export class GameScene extends Phaser.Scene {
       // restoreCampaign 换了新的 RunGrowth：兵装加成、遗珍效果要重新读入（以前同章连打会丢）
       this.player.growth.gear=gearFor(this.runConfig.character);this.relics?.setSpecials(this.player.growth.gear.specials,this.combatNow);this.syncRelicShips();
     }
+    // 信物库（2026-11-17）：穿着的信物开局生效（属性、套装、机制类注入构筑宝物）
+    this.charmInfo=applyCharms(this.player,wornTokens(this.runConfig.character));
     this.campaignLoaded = !!carriedState && !chained;
     this.applyHeroLevel(!!carriedState);
     if(this.campaignLoaded)this.player.hp=this.player.maxHp; // 征程构筑：新开一场，血量回满
@@ -1634,8 +1640,8 @@ export class GameScene extends Phaser.Scene {
     if (!fromAlly && weaponHit && this.player.growth.build.treasures.includes('blood_jade')) this.bloodJadeHeal(damage, time);
     if (!fromAlly && weaponHit) this.relics?.onWeaponHit(enemy, rawDamage, time);
     if(!fromAlly&&weaponHit){const tags=this.player.growth.build.tags();const vfx=buildVfx(this);const a=Math.atan2(enemy.y-this.player.y,enemy.x-this.player.x);if(tags.combo)vfx.emit('combo',enemy.x,enemy.y-8,time,42,a);if(crit&&tags.critical)vfx.emit('critical',enemy.x,enemy.y-8,time,48);if(tags.charge&&this.buildCombat.charged())vfx.emit('pure_charge',enemy.x,enemy.y-8,time,70,a);this.legion.command.onHit(enemy,time);this.controlBuild?.onHit(enemy,time);this.awakeningCombat?.onHit(enemy,rawDamage,crit,time,this.buildCombat.charged());this.buildCombat.onHit(enemy,rawDamage,crit,time);this.relicHits++;
-      if(this.player.relics.includes('human_seal')&&this.relicHits%12===0){if(this.relicWaves.length>=4)this.relicWaves.shift();this.relicWaves.push({x:enemy.x,y:enemy.y,at:time});for(const e of this.grid.query(enemy.x,enemy.y,110).filter(e=>e.active&&!e.isSupplySlot&&Math.hypot(e.x-enemy.x,e.y-enemy.y)<=110).slice(0,4))this.hitEnemy(e,rawDamage*.35,time,'melee',false,false);}
-      if(this.player.relics.includes('heaven_ember')&&time>=this.relicFireAt){this.relicFireAt=time+5000;this.martialFields.add(enemy.x,enemy.y,65,rawDamage,1500,1);this.spawnFlameFx(enemy.x,enemy.y,65);}
+      const lg=this.player.growth.charmLegend,seal=lg.human_seal;if(seal!==undefined&&this.relicHits%CHARM_LEGEND.charm_human_seal.every[seal]===0){if(this.relicWaves.length>=4)this.relicWaves.shift();this.relicWaves.push({x:enemy.x,y:enemy.y,at:time});for(const e of this.grid.query(enemy.x,enemy.y,110).filter(e=>e.active&&!e.isSupplySlot&&Math.hypot(e.x-enemy.x,e.y-enemy.y)<=110).slice(0,CHARM_LEGEND.charm_human_seal.targets[seal]))this.hitEnemy(e,rawDamage*.35,time,'melee',false,false);}
+      if(lg.heaven_ember!==undefined&&time>=this.relicFireAt){this.relicFireAt=time+CHARM_LEGEND.charm_heaven_ember.cd[lg.heaven_ember];this.martialFields.add(enemy.x,enemy.y,65,rawDamage,1500,1);this.spawnFlameFx(enemy.x,enemy.y,65);}
     }
     if(enemy===this.boss){this.huaxiong?.hit(time);this.xurong?.hit(time);}else{const old=this.chasingBosses.find(t=>t.enemy===enemy&&t.life===enemy.spawnId);old?.huaxiong?.hit(time);old?.xurong?.hit(time);}
     if (enemy.hp <= 0) this.killEnemy(enemy);
@@ -1650,7 +1656,7 @@ export class GameScene extends Phaser.Scene {
     // 吕布倒地改由 playBossFall（倒地 4 帧）播，不再叠旧的通用死亡闪影
     if(kind==='boss'){const old=this.chasingBosses.find(t=>t.enemy===enemy&&t.life===enemy.spawnId),h=old?old.huaxiong:this.huaxiong,x=old?old.xurong:this.xurong;h?.defeat();x?.defeat();if(old){if(h)this.deadBossControllers.push(h);if(x)this.deadBossControllers.push(x);}
       // 倒地：控制器自己有倒地帧的（华雄 / 徐荣 / 子类首领）沿用；其余首领播通用倒地（受伤帧 + 倒下 + 手绘扬尘 + 下沉淡出）
-      if(!(h||x||this.bossHasDeathArt()))playBossFall(this,enemy,this.zhangjiao?'zhangjiao_moves':this.lubu?'lubu_moves':undefined,old?undefined:this.chapter.bossStyle);}
+      this.bossFallDir=0;if(!(h||x||this.bossHasDeathArt()))this.bossFallDir=playBossFall(this,enemy,this.zhangjiao?'zhangjiao_moves':this.lubu?'lubu_moves':undefined,old?undefined:this.chapter.bossStyle);}
     enemy.deactivate();
     if(enemy.isSupplySlot){this.sfx.play('propBreak');this.supplies?.onBroken(enemy);return;}
     this.warfeedKill();
@@ -1664,7 +1670,7 @@ export class GameScene extends Phaser.Scene {
     this.itemDrops?.onKill(enemy);
     this.relics?.onKill();
     if(this.player.growth.gear.specials.includes('bloodthirst')&&this.combatNow>=this.player.growth.killHealAt){this.player.growth.killHealAt=this.combatNow+500;this.player.heal(this.player.maxHp*.01);}
-    if(this.player.relics.includes('army_jade')&&this.combatNow>=this.relicHealAt){this.relicHealAt=this.combatNow+1000;this.player.heal(1);this.artEffects.show(5,this.player.x,this.player.y-12,35,this.combatNow,260);for(const u of this.allies.filter(u=>u.active&&u.hp<u.maxHp).slice(0,2)){u.hp=Math.min(u.maxHp,u.hp+2);this.artEffects.show(5,u.x,u.y-10,30,this.combatNow,260);}}
+    const jade=this.player.growth.charmLegend.army_jade;if(jade!==undefined&&this.combatNow>=this.relicHealAt){const k=CHARM_LEGEND.charm_army_jade.heal[jade];this.relicHealAt=this.combatNow+1000;this.player.heal(k);this.artEffects.show(5,this.player.x,this.player.y-12,35,this.combatNow,260);for(const u of this.allies.filter(u=>u.active&&u.hp<u.maxHp).slice(0,2)){u.hp=Math.min(u.maxHp,u.hp+2*k);this.artEffects.show(5,u.x,u.y-10,30,this.combatNow,260);}}
     this.sfx.play('enemyDie');
     if (kind === 'boss') {
       const index=this.chasingBosses.findIndex(t=>t.enemy===enemy&&t.life===enemy.spawnId);
@@ -2115,9 +2121,7 @@ export class GameScene extends Phaser.Scene {
       let tagText = '被动';
       if (option.categoryLabel) tagText = option.categoryLabel;
       else if (option.kind === 'rare') tagText = '稀有';
-      else if (option.kind === 'relic') {
-        tagText = `${SCHOOL_NAMES[(option.school ?? 'wushuang') as RelicSchool]} 遗物`;
-      } else if (option.kind === 'weapon') {
+      else if (option.kind === 'weapon') {
         const owned = option.weaponId ? this.player.weapons.find((w) => w.id === option.weaponId) : undefined;
         tagText = owned ? `武器 Lv.${owned.level} → ${owned.level + 1}` : '新武器';
       }
@@ -2179,7 +2183,6 @@ export class GameScene extends Phaser.Scene {
     if (this.mode !== 'levelup' || this.pendingLevels <= 0) return;
     const option = this.upgradeOptions[index];
     if (!option) return;
-    const beforeSet = option.school ? this.player.schoolCount(option.school as RelicSchool) : 0;
     let growthNotice = '';
     if (option.kind === 'potion') {
       growthNotice = option.id === 'potion_rejuvenation'
@@ -2189,9 +2192,6 @@ export class GameScene extends Phaser.Scene {
     const remaining = this.upgradeOptions.filter((_o, k) => k !== index);
     this.upgradeOptions = []; // 先消费选项，防止重复点击旧卡。
     option.apply(this.player, this.player.weapons, this.player.growth);
-    if (option.kind === 'relic' && option.school && beforeSet === 1 && this.player.schoolCount(option.school as RelicSchool) === 2) {
-      this.showSetToast(option.school as RelicSchool);
-    }
     // 相国印：这次升级还能再选一张（剩下的卡里挑）
     if (this.relicExtraPicks > 0 && remaining.length) { this.relicExtraPicks--; this.upgradeOptions = remaining; this.renderCards(); (this.levelPanel.getByName('upgrade-points-hint') as Phaser.GameObjects.Text)?.setText('相国印 · 再选一张'); if (growthNotice) this.pendingGrowthNotices.push(growthNotice); return; }
     this.relicExtraPicks = 0; this.relicFreeRerolls = 0;
@@ -2218,9 +2218,9 @@ export class GameScene extends Phaser.Scene {
     else if (this.pendingRecruit) this.openRecruit();
   }
 
-  protected showSetToast(school: RelicSchool): void {
+  protected showSetToast(school: CharmSchool): void {
     const text = this.add
-      .text(GAME_WIDTH / 2, GAME_HEIGHT * 0.28, `${SCHOOL_NAMES[school]}套装激活！`, {
+      .text(GAME_WIDTH / 2, GAME_HEIGHT * 0.28, `${CHARM_SCHOOL_NAMES[school]}套装激活！`, {
         fontFamily: FONT,
         fontSize: IS_DESKTOP ? '22px' : '24px',
         color: '#ffd166',
@@ -2466,14 +2466,13 @@ export class GameScene extends Phaser.Scene {
   /** 首领宝箱：倒地点掉落，主将碰到打开。 */
   protected spawnBossChest(x:number,y:number,done:()=>void):void{
     if(!this.player.alive){this.finish(false);return;}
-    this.bossChests.push(new BossChest({scene:this,player:this.player,grant:()=>this.grantBossChest(),done,sfx:k=>this.sfx.play(k)},x,y,this.combatNow));
+    // 落点避开尸体（画风会话量的躺倒身体范围）：倒地 4 帧往朝向前方偏 80，其余往下偏 30
+    const ox=this.bossFallDir*80,oy=30;
+    this.bossChests.push(new BossChest({scene:this,player:this.player,grant:()=>this.grantBossChest(),done,sfx:k=>this.sfx.play(k)},x+ox,y+oy,this.combatNow));
   }
-  /** 宝箱里的东西：一件本局遗物（原三选一卡的池子，随机一件）+ 首领遗珍（道具系统发放，见 ItemDrops.claimBossRelic）。 */
+  /** 宝箱里只有首领遗珍（用户 2026-11-17「首领宝箱只给首领遗珍」；道具系统发放，见 ItemDrops.claimBossRelic）。 */
   protected grantBossChest():ChestLoot[]{
     const out:ChestLoot[]=[];
-    const special=RELICS.filter(r=>['human_seal','heaven_ember','army_jade'].includes(r.id)&&!this.player.relics.includes(r.id)),pool=special.length?special:RELICS.filter(r=>!this.player.relics.includes(r.id));
-    if(pool.length){const r=pool[Math.floor(Math.random()*pool.length)];this.player.addRelic(r.id);out.push({name:r.name,desc:r.desc,tag:'本局遗物'});}
-    else{this.legion.food+=15;out.push({name:'军粮 +15',desc:'本局遗物已集齐，改发军粮',tag:''});}
     const item=this.itemDrops?.claimBossRelic();
     if(item){const rd=relicDef(item.base),sp=rd?.special?SPECIALS[rd.special as keyof typeof SPECIALS]:undefined;out.push({name:itemName(item),desc:sp?sp.name+'：'+sp.desc:(rd?.lore??'额外兵装 · 结算后入行囊'),tag:rd?'首领遗珍 · 结算后入行囊':'兵装'});}
     this.artEffects.show(5,this.player.x,this.player.y-10,80,this.combatNow,450);
@@ -2481,14 +2480,6 @@ export class GameScene extends Phaser.Scene {
   }
   /** 测试 / 调试：直接打开所有等待中的首领宝箱。 */
   collectBossChests():void{for(const c of [...this.bossChests])c.collectNow();}
-  private offerBossLoot(done:()=>void):void{
-    if(!this.player.alive){this.finish(false);return;}
-    const special=RELICS.filter(r=>['human_seal','heaven_ember','army_jade'].includes(r.id)&&!this.player.relics.includes(r.id));
-    const pool=special.length?special:RELICS.filter(r=>!this.player.relics.includes(r.id)).slice(0,3);
-    if(!pool.length){this.legion.food+=15;done();return;}
-    this.lootContinue=done;this.upgradeOptions=pool.map(r=>({id:'boss_'+r.id,name:r.name,desc:r.desc,kind:'relic',categoryLabel:'Boss战利品 · 本局永久',icon:r.icon,apply:p=>{p.addRelic(r.id);}}));
-    (this.levelPanel.getByName('upgrade-title') as Phaser.GameObjects.Text)?.setText('强敌败退 · 选择一件遗物');(this.levelPanel.getByName('upgrade-points-hint') as Phaser.GameObjects.Text)?.setVisible(false);this.renderCards();this.setMode('bossloot');
-  }
   private battleStage():number{return this.chapter.stage??this.chapter.westStage??3;}
   private recordFrontlineVictory(stage:number):void{
     this.frontlineVictories.set(stage,{elapsed:Math.max(0,(this.combatNow-(this.frontlineStarts.get(stage)??0))/1000)});
@@ -2542,17 +2533,11 @@ export class GameScene extends Phaser.Scene {
     if (on && !this.relicShips) this.relicShips = new FireShips({scene:this,enemies:()=>this.enemies,player:()=>this.player,boss:()=>this.boss??undefined,burn:(e,dmg,now)=>{this.hitEnemy(e,dmg,now,'fire',true,false);},announce:t=>this.showGrowthNotice('楼船令旗 · '+t)},this.combatNow,{interval:RELIC.louchuanMs,first:RELIC.louchuanFirst});
     else if (!on && this.relicShips) { this.relicShips.clear(); this.relicShips = null; }
   }
-  /** 伪帝玺：新开一场时直接送随机宝物，补满宝物位。 */
+  /** 伪帝玺：新开一场时直接送 1 张随机战法（Lv1，计流派件数）。2026-11-17 宝物并入信物库后由「送宝物」改来。 */
   protected grantWeixiTreasures(): void {
-    const g = this.player.growth; if (!g.gear.specials.includes('weixi')) return;
-    const pool = (Object.keys(TREASURES) as (keyof typeof TREASURES)[]).filter(id => !g.build.treasures.includes(id));
-    for (let n = 0; n < RELIC.weixiTreasures && g.build.treasures.length + g.trinkets.length < 2 && pool.length; n++) g.build.treasures.push(pool.splice(Math.floor(Math.random() * pool.length), 1)[0]);
-  }
-  /** 本局宝物（升级 / 行营购得，最多 2 格），在行囊里显示。 */
-  protected treasureEntries(): { name: string; desc: string; icon: string }[] {
-    const trinkets: Record<string, { name: string; desc: string }> = { tiger_tally: { name: '虎符', desc: '友军伤害提高20%。' }, heart_mirror: { name: '护心镜', desc: '武将受到伤害减少15%。' }, wind_boots: { name: '疾风靴', desc: '移动速度提高10%。' } };
-    return [...this.player.growth.build.treasures.map(id => ({ name: TREASURES[id].name, desc: TREASURES[id].desc, icon: 'build_icon_' + id })),
-      ...this.player.growth.trinkets.map(id => ({ ...trinkets[id], icon: 'growth_icon_' + id }))];
+    const b = this.player.growth.build; if (!this.player.growth.gear.specials.includes('weixi')) return;
+    const pool = (Object.keys(TACTICS) as TacticId[]).filter(id => b.level(id) === 0 && b.canLearn(id));
+    if (pool.length) b.learn(pool[Math.floor(Math.random() * pool.length)]);
   }
   /**
    * 武将等级（跨战斗永久，HeroProgress）：开局读入永久属性点。同章连打（transfer）时保留本局额外加的点（如城池加成），
@@ -2586,6 +2571,7 @@ export class GameScene extends Phaser.Scene {
     const ratio = this.player.maxHp > 0 ? this.player.hp / this.player.maxHp : 1;
     this.player.growth.gear = gearFor(this.runConfig.character);
     this.relics?.setSpecials(this.player.growth.gear.specials, this.combatNow); this.syncRelicShips();
+    this.charmInfo = applyCharms(this.player, wornTokens(this.runConfig.character));
     this.player.hp = Math.max(1, Math.min(this.player.maxHp, Math.round(this.player.maxHp * ratio)));
   }
   /** 战斗中打开行囊：自动暂停，关掉后恢复（从暂停菜单进来则回到暂停菜单）。atRest = 行营休整中，可换马。 */
@@ -2596,7 +2582,7 @@ export class GameScene extends Phaser.Scene {
     if (fromPlay) this.togglePause();
     const debug = isChapterTestRun() || this.debugModified || this.debugJumped || !!this.player.damageImmune || !!this.runConfig.encounter;
     new ItemBagUI(this, {
-      hero: this.runConfig.character, battle: true, atRest, runLoot: this.over ? [] : this.itemDrops?.runLoot ?? [], treasures: this.treasureEntries(),
+      hero: this.runConfig.character, battle: true, atRest, runLoot: this.over ? [] : this.itemDrops?.runLoot ?? [],
       // 已结算时缴获都收进行囊了，不再单列「本局缴获」
       claimLoot: debug || this.over ? undefined : (item: ItemInstance) => { if (!claimRunLoot(this.runConfig.character, item)) return false; this.itemDrops?.takeLoot(item.uid); return true; },
       onGearChange: () => this.refreshGear(),
@@ -2855,15 +2841,6 @@ export class GameScene extends Phaser.Scene {
       this.potionButton=root;this.potionIcon=icon;this.potionGlow=glow;
     }
     this.relicIcons = [];
-    for (let i = 0; i < 8; i += 1) {
-      const icon = this.add
-        .image(42 + i * 30, 350, 'item_drum')
-        .setDisplaySize(30, 30)
-        .setScrollFactor(0)
-        .setDepth(DEPTH.hud + 1)
-        .setVisible(false);
-      this.relicIcons.push(icon);
-    }
   }
 
   protected updateHud(): void {
@@ -2924,22 +2901,10 @@ export class GameScene extends Phaser.Scene {
     this.hudTexts.details.setVisible(false);
     const weapon = this.player.weapons[0];
     const mastery = '\n'+this.player.growth.masteryLabel();
-    const trinkets = `\n饰品 ${this.player.growth.trinkets.length}/2`;
-    this.hudTexts.gear.setText(`${weapon ? `${weaponName(weapon.id,this.runConfig.character)} Lv.${weapon.level}` : '本命武器'}${mastery}${trinkets}\n属性点 ${this.player.growth.unallocated}${this.player.growth.unallocated>0?'':` · 武将 Lv.${this.heroLv}`} · ${this.passiveHud.description}`);
-    const relicList = this.player.relics;
-    const schoolParts: string[] = [];
-    for (const sc of ['wushuang', 'shenshe', 'lieyan', 'tiebi'] as RelicSchool[]) {
-      const count = this.player.schoolCount(sc);
-      if (count > 0) schoolParts.push(`${SCHOOL_NAMES[sc]} ${count}/2`);
-    }
-    this.hudTexts.relics.setText(relicList.length ? !IS_DESKTOP && !this.relicExpanded ? `遗物 ${relicList.length}/8  · 点按展开` : `遗物 ${relicList.length}/8  ${schoolParts.join('  ')}` : '');
-    const showIcons = relicList.length > 0 && this.relicExpanded;
-    for (let i = 0; i < this.relicIcons.length; i += 1) {
-      const icon = this.relicIcons[i];
-      const id = relicList[i];
-      if (!showIcons || !id) { icon.setVisible(false); continue; }
-      icon.setTexture(RELICS.find(r=>r.id===id)?.icon??'item_drum').setVisible(true);
-    }
+    this.hudTexts.gear.setText(`${weapon ? `${weaponName(weapon.id,this.runConfig.character)} Lv.${weapon.level}` : '本命武器'}${mastery}\n属性点 ${this.player.growth.unallocated}${this.player.growth.unallocated>0?'':` · 武将 Lv.${this.heroLv}`} · ${this.passiveHud.description}`);
+    // 信物（2026-11-17 本局遗物并入信物库）：穿着的信物 + 已激活的同流派套装
+    const tokens = wornTokens(this.runConfig.character), sets = this.charmInfo ? (Object.keys(this.charmInfo.schools) as CharmSchool[]).filter(sc => this.charmInfo!.schools[sc] >= 2) : [];
+    this.hudTexts.relics.setText(tokens.length ? !IS_DESKTOP && !this.relicExpanded ? `信物 ${tokens.length}  · 点按展开` : `信物 ${tokens.map(t => charmDef(t.base)?.name ?? itemName(t)).join(' · ')}${sets.map(sc => `  ${CHARM_SCHOOL_NAMES[sc]}套装 ${CHARM_SET_DESC[sc]}`).join('')}` : '');
 
     // 本关首领未击败、战线已推进时，追兵首领的血条继续显示（用户反馈血条不应消失）
     const chaser = this.boss?.active ? null : this.chasingBosses.find(t => t.enemy.active && t.enemy.spawnId === t.life) ?? null;
@@ -2992,7 +2957,6 @@ export class GameScene extends Phaser.Scene {
     // 战功提示：局内每升一级一次三选一；属性点来自武将等级（跨战斗）
     this.levelPanel.add(this.add.text(GAME_WIDTH / 2, title.y + (d ? 60 : 66), '', { fontFamily: FONT, fontSize: '15px', color: '#cdb98a', resolution: 2 }).setOrigin(0.5).setShadow(0, 1, '#0a0603', 3, true, true).setName('upgrade-points-hint'));
     this.rerollButton=this.add.text(GAME_WIDTH-(d?28:32),d?24:42,'',{fontFamily:FONT,fontSize:'16px',color:'#e8cf91',resolution:2}).setOrigin(1,0).setPadding(16,10).setBackgroundColor('rgba(52,38,24,0.92)').setShadow(0,1,'#0a0603',2,true,true).setName('upgrade-reroll').setInteractive({useHandCursor:true}).on('pointerdown',()=>this.rerollUpgrades());this.levelPanel.add(this.rerollButton);
-
 
 
     if(!this.textures.exists('ui_upgrade_bronze')){
@@ -3179,11 +3143,11 @@ export class GameScene extends Phaser.Scene {
     const root=this.add.container(0,0).setDepth(DEPTH.overlay+4).setScrollFactor(0).setName('build-panel'),b=this.player.growth.build;
     const text=(x:number,y:number,value:string,size=16)=>this.add.text(x,y,value,{fontFamily:FONT,fontSize:size+'px',color:'#ecd9b5',resolution:2,wordWrap:{width:GAME_WIDTH-90}}).setScrollFactor(0);
     root.add(this.add.rectangle(GAME_WIDTH/2,GAME_HEIGHT/2,GAME_WIDTH,GAME_HEIGHT,0x17130e,.98).setScrollFactor(0).setInteractive());
-    root.add(text(36,24,'本局构筑 · 战法 '+Object.keys(b.tactics).length+'/6 · 宝物 '+(b.treasures.length+this.player.growth.trinkets.length)+'/2',22));
+    root.add(text(36,24,'本局构筑 · 战法 '+Object.keys(b.tactics).length+'/6 · 信物宝物 '+b.treasures.length,22));
     let y=66;for(const id of Object.keys(b.tactics) as TacticId[]){root.add(this.add.image(48,y+16,'build_icon_'+id).setDisplaySize(26,26).setScrollFactor(0));root.add(text(70,y,TACTICS[id].name+' Lv.'+b.level(id)+'  ['+TAG_NAMES[TACTICS[id].tag]+']',17));root.add(text(36,y+23,TACTICS[id].desc,13));y+=IS_DESKTOP?45:68;}
     if(!Object.keys(b.tactics).length){root.add(text(36,y,'升级时选择战法，构筑你的战斗风格。'));y+=42;}
     for(const id of b.treasures){root.add(this.add.image(48,y+10,'build_icon_'+id).setDisplaySize(24,24).setScrollFactor(0));root.add(text(70,y,TREASURES[id].name+' · '+TREASURES[id].desc,14));y+=IS_DESKTOP?29:48;}
-    if(this.player.growth.trinkets.length)root.add(text(36,y,'既有饰品：'+this.player.growth.trinkets.map(id=>({tiger_tally:'虎符',heart_mirror:'护心镜',wind_boots:'疾风靴'})[id]).join(' · '),14));
+
     root.add(text(36,GAME_HEIGHT-106,Object.entries(b.tags()).map(([id,n])=>TAG_NAMES[id as keyof typeof TAG_NAMES]+' '+n+'件').join('  '),14));
     root.add(text(36,GAME_HEIGHT-78,'标签仅记录进度；2件加成 / 4件觉醒将在后续阶段开放。',12));
     root.add(text(GAME_WIDTH/2-70,GAME_HEIGHT-46,'返回暂停菜单',17).setPadding(12,8).setInteractive({useHandCursor:true}).on('pointerdown',()=>root.destroy()));

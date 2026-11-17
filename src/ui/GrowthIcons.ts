@@ -6,7 +6,6 @@ export function upgradeIcon(option:UpgradeOption):string|undefined {
  if(option.kind==='martial'){const id=GROWTH_ICON_IDS.find(id=>option.id.startsWith('martial_'+id+'_'));if(id)return 'growth_icon_'+id;}
  if(option.kind==='attribute')return 'growth_icon_points';
  if(option.kind==='potion')return 'growth_icon_'+option.id.replace('potion_','');
- if(option.kind==='trinket'){const id=['tiger_tally','heart_mirror','wind_boots'].find(id=>option.id.endsWith(id));if(id)return 'growth_icon_'+id;}
  if(option.kind==='foundation')return 'growth_icon_'+option.id.replace('foundation_','');
  return undefined;
 }

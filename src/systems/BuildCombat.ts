@@ -46,17 +46,17 @@ export class BuildCombat {
  const charged=this.idle>=2000;this.idle=0;
  if(charged&&this.lv('heavy_break')&&now>=this.heavyAt){this.heavyAt=now+3000;for(const t of this.targets(e,75).slice(0,1+this.lv('heavy_break'))){this.fx(t,false);this.deal(t,raw*[0,.2,.3,.4][this.lv('heavy_break')],false);}}
  if(this.still>=1500&&this.lv('concentration')&&now>=this.focusAt){this.still=0;this.focusAt=now+2000;const origin=this.position(),dx=e.x-origin.x,dy=e.y-origin.y,len=Math.hypot(dx,dy)||1;const targets=this.targets(e,160).filter(t=>{const x=t.x-e.x,y=t.y-e.y,along=(x*dx+y*dy)/len,side=Math.abs(x*dy-y*dx)/len;return along>=0&&along<=160&&side<=18+t.radius;}).sort((a,b)=>Math.hypot(a.x-e.x,a.y-e.y)-Math.hypot(b.x-e.x,b.y-e.y));for(const t of targets.slice(0,this.lv('concentration'))){this.fx(t,false);this.deal(t,raw*[0,.25,.35,.45][this.lv('concentration')],false);}}
- if(charged&&this.has('stored_jade')&&now>=this.jadeAt){this.jadeAt=now+4000;for(const t of this.targets(e,75).slice(0,3)){this.fx(t,false);this.deal(t,raw*.15,false);}this.pendingEcho={x:e.x,y:e.y,at:now+250,damage:raw*.15};}
+ if(charged&&this.has('stored_jade')&&now>=this.jadeAt){this.jadeAt=now+4000;const jr=.15*this.state.power('stored_jade');for(const t of this.targets(e,75).slice(0,3)){this.fx(t,false);this.deal(t,raw*jr,false);}this.pendingEcho={x:e.x,y:e.y,at:now+250,damage:raw*jr};}
  this.hits++;const old=this.marks.get(e);this.marks.set(e,{spawn:e.spawnId,chain:old?.spawn===e.spawnId&&now-old.last<1500?Math.min(5,old.chain+1):1,last:now,vulnerable:crit&&this.lv('sunder')?now+3000:old?.spawn===e.spawnId?old.vulnerable:0});
- if(this.lv('ember')&&Math.random()<[.15,.22,.3][this.lv('ember')-1]||this.has('wildfire_lamp'))this.burn(e,raw*(this.lv('ember')?.1:.06),now);
+ if(this.lv('ember')&&Math.random()<[.15,.22,.3][this.lv('ember')-1]||this.has('wildfire_lamp'))this.burn(e,raw*(this.lv('ember')?.1:.06*this.state.power('wildfire_lamp')),now);
  const level=this.lv('pursuit'),pursuit=level&&this.hits%[6,5,4][level-1]===0,bell=this.has('soul_bell')&&this.hits%8===0;
  const flank=this.lv('flank')&&this.distances.flank>=[200,170,140][this.lv('flank')-1],horse=this.has('horse_order')&&this.distances.horse>=150,jade=this.has('breaker_jade')&&this.hits%10===0;
  if(now>=this.procAt&&(pursuit||bell||flank||horse||jade)){
- this.procAt=now+400;const area=flank||horse||jade,ratio=Math.max(pursuit?[.25,.35,.45][level-1]:0,bell?.4:0,flank?[.35,.45,.55][this.lv('flank')-1]:0,horse?.25:0,jade?.35:0);
+ this.procAt=now+400;const area=flank||horse||jade,ratio=Math.max(pursuit?[.25,.35,.45][level-1]:0,bell?.4*this.state.power('soul_bell'):0,flank?[.35,.45,.55][this.lv('flank')-1]:0,horse?.25*this.state.power('horse_order'):0,jade?.35*this.state.power('breaker_jade'):0);
  if(flank)this.distances.flank=0;if(horse)this.distances.horse=0;
  const targets=this.targets(e,area?70:160);if(flank)this.onFlank?.(targets.slice(0,3));for(let i=0;i<Math.min(area?3:1,targets.length);i++){this.fx(targets[i],false);this.deal(targets[i],raw*ratio,false);}
  }
- if(crit&&this.has('slayer_tally')&&(e.kind==='elite'||e.kind==='boss')&&now>=this.slayerAt&&e.active){this.slayerAt=now+500;this.fx(e,false);this.deal(e,raw*.25,false);}
+ if(crit&&this.has('slayer_tally')&&(e.kind==='elite'||e.kind==='boss')&&now>=this.slayerAt&&e.active){this.slayerAt=now+500;this.fx(e,false);this.deal(e,raw*.25*this.state.power('slayer_tally'),false);}
  }
  /** 增益图标的触发进度（只读，供 BuffHud 显示「还差多少」；不改任何触发规则）。id 同 BuffHud 条目 id。 */
  progress(id:string,now:number):BuffProgress|null{

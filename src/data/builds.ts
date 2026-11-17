@@ -46,15 +46,23 @@ export const TREASURES={
  blood_jade:{name:'饮血佩',tag:'bulwark',desc:'本命武器命中时，回复造成伤害的5%生命；每秒最多回复最大生命的3%'},
 } as const;
 export type TreasureId=keyof typeof TREASURES;
-export interface BuildSnapshot {tactics:Partial<Record<TacticId,number>>;treasures:TreasureId[];}
+/** 构筑存档：只存战法（2026-11-17 宝物并入信物库，开局由穿着的信物注入；旧档里的 treasures 读档时迁移成信物，见 Campaign.ts）。 */
+export interface BuildSnapshot {tactics:Partial<Record<TacticId,number>>;treasures?:TreasureId[];}
 export class BuildState {
- tactics:Partial<Record<TacticId,number>>={};treasures:TreasureId[]=[];
+ tactics:Partial<Record<TacticId,number>>={};
+ /** 本局生效的宝物 = 穿着的机制类信物（CharmEffects 注入），不再从升级 / 商人获得。 */
+ treasures:TreasureId[]=[];
+ /** 宝物强度（信物品质：蓝 0.8 / 紫 0.9 / 橙 1.0），没写为 1。 */
+ treasurePower:Partial<Record<TreasureId,number>>={};
+ /** 额外计入的构筑标签（护心镜计铁壁、虎钮印计统御）。 */
+ extraTags:BuildTag[]=[];
+ power(id:TreasureId):number{return this.treasurePower[id]??1;}
  level(id:TacticId):number{return this.tactics[id]??0;}
  canLearn(id:TacticId):boolean{return this.level(id)<3&&(this.level(id)>0||Object.keys(this.tactics).length<6);}
  learn(id:TacticId):boolean{if(!this.canLearn(id))return false;this.tactics[id]=this.level(id)+1;return true;}
- tags():Record<BuildTag,number>{const out={combo:0,critical:0,skirmish:0,flame:0,charge:0,control:0,command:0,bulwark:0};for(const id of Object.keys(this.tactics)as TacticId[])if(TACTICS[id]&&this.level(id)>0)out[TACTICS[id].tag]++;for(const id of new Set(this.treasures))if(TREASURES[id])out[TREASURES[id].tag]++;return out;}
- snapshot():BuildSnapshot{return{tactics:{...this.tactics},treasures:[...this.treasures]};}
- restore(data?:BuildSnapshot):void{this.tactics={...data?.tactics};this.treasures=[...(data?.treasures??[])];}
+ tags():Record<BuildTag,number>{const out={combo:0,critical:0,skirmish:0,flame:0,charge:0,control:0,command:0,bulwark:0};for(const id of Object.keys(this.tactics)as TacticId[])if(TACTICS[id]&&this.level(id)>0)out[TACTICS[id].tag]++;for(const id of new Set(this.treasures))if(TREASURES[id])out[TREASURES[id].tag]++;for(const t of this.extraTags)if(t in out)out[t]++;return out;}
+ snapshot():BuildSnapshot{return{tactics:{...this.tactics}};}
+ restore(data?:BuildSnapshot):void{this.tactics={...data?.tactics};}
  label():string{return `战法 ${Object.keys(this.tactics).length}/6  宝物 ${this.treasures.length}/2\n`+(Object.keys(this.tactics)as TacticId[]).map(id=>TACTICS[id].name+' Lv'+this.level(id)).join(' · ')+'\n'+this.treasures.map(id=>TREASURES[id].name).join(' · ')+'\n'+Object.entries(this.tags()).map(([k,n])=>TAG_NAMES[k as BuildTag]+' '+n+'/2 /4').join('  ')+'\n'+awakeningProgress(this.tags())+'\n2来源基础加成：连击伤害+5%、暴击率+3点、游击移速+4%、烈焰对燃烧目标伤害+5%、满蓄势伤害+10%、控场减速+5点、军令友军伤害+5%、铁壁受伤-5%' ;}
 }
 /** Player-facing descriptions show only the level being offered. */

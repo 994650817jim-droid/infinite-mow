@@ -6,7 +6,7 @@ const isHeroId = (k: GearOwner): k is CharacterId => !k.startsWith('r_');
 import { isRelic } from '../data/items';
 import { AFFIXES, BAG_CAPACITY, BAG_OVERFLOW, LEGACY_MOUNT_BASES, LEGACY_WEAPON_BASES, QUALITIES, QUALITY_ORDER, SLOT_ORDER, itemDef, itemSlot, type ItemInstance, type ItemQuality, type ItemSlot, type PityState } from '../data/items';
 import { HORSES, STARTER_HORSE, horseDef, type HorseDef } from '../data/mounts';
-import { addTownMoney } from '../world/WorldStore';
+import { addTownMoney, worldChapterCleared } from '../world/WorldStore';
 import { chapterOneCleared } from './ChapterProgress';
 
 /**
@@ -17,10 +17,17 @@ import { chapterOneCleared } from './ChapterProgress';
  * 旧档 im_items_v1 第一次读取时按 migrateV1 转换写入 v2，v1 原样保留作回退备份。
  */
 export const ITEMS_KEY = 'im_items_v2';
+/** 穿戴位：5 个装备槽 + 第二信物位 token2（2026-11-17 用户：每位武将可带 2 个信物，第二章通关后开放）。 */
+export type LoadoutKey = ItemSlot | 'token2';
+export const LOADOUT_KEYS: readonly LoadoutKey[] = [...SLOT_ORDER, 'token2'];
+/** 穿戴位放哪一栏的道具（token2 放信物）。 */
+export const keySlot = (k: LoadoutKey): ItemSlot => k === 'token2' ? 'token' : k;
+/** 每位武将可带的信物数：第二章（讨董）通关后 2 个，否则 1 个。 */
+export function tokenSlots(): 1 | 2 { try { return worldChapterCleared('hulao') ? 2 : 1; } catch { return 1; } }
 export const LEGACY_ITEMS_KEY = 'im_items_v1';
 export interface StableSave { owned: string[]; riders: Partial<Record<CharacterId, string>>; announced: boolean }
 export interface ItemSave {
-  version: 2; bag: ItemInstance[]; loadouts: Partial<Record<GearOwner, Partial<Record<ItemSlot, string>>>>; salvaged: number;
+  version: 2; bag: ItemInstance[]; loadouts: Partial<Record<GearOwner, Partial<Record<LoadoutKey, string>>>>; salvaged: number;
   stable: StableSave; pity: PityState; autoSalvageWhite: boolean;
   /** 上次打开行囊后新收入的件数（主页行囊角标）。 */
   unseen: number;
@@ -49,10 +56,10 @@ function sanitize(v: Record<string, unknown>): ItemSave {
   const owned = new Map(s.bag.map(i => [i.uid, i])), used = new Set<string>();
   for (const [hero, slots] of Object.entries((v.loadouts ?? {}) as Record<string, unknown>)) {
     if (!isGearOwner(hero)) continue;
-    const out: Partial<Record<ItemSlot, string>> = {};
-    for (const slot of SLOT_ORDER) {
+    const out: Partial<Record<LoadoutKey, string>> = {};
+    for (const slot of LOADOUT_KEYS) {
       const uid = (slots as Record<string, unknown>)?.[slot], item = typeof uid === 'string' && !used.has(uid) ? owned.get(uid) : undefined;
-      if (item && itemSlot(item) === slot) { out[slot] = item.uid; used.add(item.uid); }
+      if (item && itemSlot(item) === keySlot(slot)) { out[slot] = item.uid; used.add(item.uid); }
     }
     // 2026-11-17「Boss遗物」槽：旧档穿在头盔 / 信物槽的遗珍挪进遗物槽（只能 1 件，留品质高的，另一件留在行囊）
     if (!out.relic) {
@@ -145,16 +152,37 @@ function commit(s: ItemSave): void {
 export function resetItemCache(): void { memory = null; }
 
 /** 旧档迁移提示：取一次后清掉。 */
+/** 追加一条行囊提示（下次打开行囊显示一次）。 */
+export function pushItemNotice(text: string): void { const s = loadItems(); s.notice = (s.notice ? s.notice + '；' : '') + text; if (s.notice.length > 190) s.notice = s.notice.slice(0, 190); commit(s); }
 export function takeItemNotice(): string | undefined { const s = loadItems(); if (!s.notice) return undefined; const n = s.notice; delete s.notice; commit(s); return n; }
 
 export function equippedBy(s: ItemSave, uid: string): GearOwner | undefined {
   for (const [hero, slots] of Object.entries(s.loadouts)) if (slots && Object.values(slots).includes(uid)) return hero as GearOwner;
   return undefined;
 }
-export function loadout(hero: GearOwner, s: ItemSave = loadItems()): Partial<Record<ItemSlot, ItemInstance>> {
-  const out: Partial<Record<ItemSlot, ItemInstance>> = {}, slots = s.loadouts[hero] ?? {};
-  for (const slot of SLOT_ORDER) { const item = slots[slot] ? s.bag.find(i => i.uid === slots[slot]) : undefined; if (item) out[slot] = item; }
+/** 武将正穿着的道具（第二信物位未开放时不算，存档里照旧保留）。 */
+export function loadout(hero: GearOwner, s: ItemSave = loadItems()): Partial<Record<LoadoutKey, ItemInstance>> {
+  const out: Partial<Record<LoadoutKey, ItemInstance>> = {}, slots = s.loadouts[hero] ?? {}, two = tokenSlots() > 1;
+  for (const slot of LOADOUT_KEYS) { if (slot === 'token2' && !two) continue; const item = slots[slot] ? s.bag.find(i => i.uid === slots[slot]) : undefined; if (item) out[slot] = item; }
   return out;
+}
+/** 这件道具在该武将身上穿在哪个位（没穿为 undefined）。 */
+export function wornKey(hero: GearOwner, uid: string, s: ItemSave = loadItems()): LoadoutKey | undefined {
+  const l = loadout(hero, s); return LOADOUT_KEYS.find(k => l[k]?.uid === uid);
+}
+/**
+ * 穿上这件道具会放到哪个位：信物先放空着的位；两位都满时换掉同名的那件，否则换第一位。
+ * 已穿在身上的返回它所在的位。
+ */
+export function equipTarget(hero: GearOwner, item: ItemInstance, s: ItemSave = loadItems()): LoadoutKey {
+  const slot = itemSlot(item); if (slot !== 'token') return slot;
+  const here = wornKey(hero, item.uid, s); if (here) return here;
+  if (tokenSlots() < 2) return 'token';
+  const l = loadout(hero, s);
+  if (l.token && l.token2) return l.token2.base === item.base && l.token.base !== item.base ? 'token2' : 'token';
+  if (l.token) return l.token.base === item.base ? 'token' : 'token2';
+  if (l.token2) return l.token2.base === item.base ? 'token2' : 'token';
+  return 'token';
 }
 /** 未穿戴的道具数（行囊上限只算这些）。 */
 export function looseCount(s: ItemSave = loadItems()): number { const worn = new Set(Object.values(s.loadouts).flatMap(l => Object.values(l ?? {}))); return s.bag.filter(i => !worn.has(i.uid)).length; }
@@ -201,8 +229,10 @@ export function addItems(items: ItemInstance[]): void { const s = loadItems(); a
 
 export function equipItem(hero: GearOwner, uid: string): boolean {
   const s = loadItems(), item = s.bag.find(i => i.uid === uid); if (!item) return false;
-  for (const slots of Object.values(s.loadouts)) if (slots) for (const slot of SLOT_ORDER) if (slots[slot] === uid) delete slots[slot];
-  (s.loadouts[hero] ??= {})[itemSlot(item)] = uid; commit(s); return true;
+  if (wornKey(hero, uid, s)) return true;
+  const target = equipTarget(hero, item, s);
+  for (const slots of Object.values(s.loadouts)) if (slots) for (const slot of LOADOUT_KEYS) if (slots[slot] === uid) delete slots[slot];
+  (s.loadouts[hero] ??= {})[target] = uid; commit(s); return true;
 }
 /** 战斗中穿上本局缴获：立刻收入行囊并穿上（算作已带回，败退不丢）。调用方负责把它从 runLoot 移除。 */
 export function claimRunLoot(hero: GearOwner, item: ItemInstance): boolean {
@@ -211,7 +241,7 @@ export function claimRunLoot(hero: GearOwner, item: ItemInstance): boolean {
   if (!s.bag.some(i => i.uid === item.uid)) s.bag.push(structuredClone(item));
   commit(s); return equipItem(hero, item.uid);
 }
-export function unequipSlot(hero: GearOwner, slot: ItemSlot): boolean {
+export function unequipSlot(hero: GearOwner, slot: LoadoutKey): boolean {
   const s = loadItems(), slots = s.loadouts[hero]; if (!slots?.[slot]) return false;
   delete slots[slot]; commit(s); return true;
 }

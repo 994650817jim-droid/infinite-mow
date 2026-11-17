@@ -112,7 +112,7 @@ for (const [layout, viewport] of Object.entries(LAYOUTS)) for (const [hero, h] o
       const s = eval(G0), pl = s.player; const mk = eval(MK);
       const t = mk(pl.x + 100, pl.y, false), side = mk(pl.x + 140, pl.y + 20); const y0 = t.sprite.y; let lifted = 0, land = false, arc = false; const t0 = performance.now();
       while (performance.now() - t0 < 4000) { await new Promise(r => setTimeout(r, 20)); lifted = Math.max(lifted, y0 - t.sprite.y); land = land || !!s.children.getByName('machao-land-fx'); arc = arc || !!s.children.getByName('machao-lift-fx') || !!s.children.getByName('machao-lift'); if (land && side.hp < side.maxHp) break; }
-      return { lifted: Math.round(lifted), land, arc, fx: s.textures.exists('machao_fx'), targetHurt: t.maxHp - t.hp, sideHurt: side.maxHp - side.hp };
+      return { lifted: Math.round(lifted), land, arc, fx: s.textures.exists('machao_paint'), targetHurt: t.maxHp - t.hp, sideHurt: side.maxHp - side.hp };
     }, [G, mk]);
     // 挑飞 / 落地改为像素特效（machao-lift-fx / machao-land-fx），不画程序圈
     ck(`${tag}：一枪挑飞目标（上挑弧光），落地砸出范围伤害与扬尘特效`, r.lifted >= 20 && r.land && r.arc && r.targetHurt > 0 && r.sideHurt > 0, r);
@@ -162,7 +162,7 @@ for (const [layout, viewport] of Object.entries(LAYOUTS)) for (const [hero, h] o
       navigator.getGamepads = () => [fake]; await new Promise(r => setTimeout(r, 300)); fake.axes = [0, 0, 0, 0]; await new Promise(r => setTimeout(r, 100)); navigator.getGamepads = real;
       const heading = { ...pl.heading }; mk(pl.x + 120, pl.y + 30); mk(pl.x + 10, pl.y - 150); const y0 = pl.y; pl.weapons[0].cooldownLeft = 0; pl.passive.stacks = 6; let up = 0, dust = false, wind = false; const t0 = performance.now();
       while (performance.now() - t0 < 3000) { await new Promise(r => setTimeout(r, 20)); up = Math.max(up, y0 - pl.y); dust = dust || !!s.children.getByName('machao-charge-dust'); wind = wind || !!s.children.getByName('machao-charge-wind'); if (up >= 120 && dust) break; }
-      return { heading: { x: +heading.x.toFixed(2), y: +heading.y.toFixed(2) }, up: Math.round(up), dust, wind, fx: s.textures.exists('machao_fx') };
+      return { heading: { x: +heading.x.toFixed(2), y: +heading.y.toFixed(2) }, up: Math.round(up), dust, wind, fx: s.textures.exists('machao_paint') };
     }, [G, mk]);
     ck(`${tag}：手柄左摇杆向上、上方有敌 → 满层冲锋也向上（≥120 像素），带尘土拖影与枪尖破风`, pad.heading.y < -.9 && pad.up >= 120 && (!pad.fx || (pad.dust && pad.wind)), pad);
     // 喊话冷却按武将配置：孙尚香走默认 60 秒（冷却内再攒满不喊，过后再满照喊；被动本身照常），马超为 0

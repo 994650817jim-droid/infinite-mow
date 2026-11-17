@@ -1,4 +1,4 @@
-// 攻城目标：小城拔帅旗、中城毁两座箭楼（会放箭）、大城破门毁楼败大将，最后占领府衙；限时；守城不变。需要开发服务器。
+// 攻城目标：小城拔帅旗、中城三段推进（攻城战重做样板）、大城破门毁楼败大将，最后占领府衙；限时；守城不变。需要开发服务器。
 // 用法：BASE=http://127.0.0.1:5187/ node tools/test-siege-goals.mjs
 import { chromium } from 'playwright';
 import { mkdirSync } from 'node:fs';
@@ -46,25 +46,28 @@ const owned = (p, id) => p.evaluate(async id => (await import('/src/world/WorldS
   ck('小城：站进府衙圈、进度满 → 破城占领', c.over && c.victory && await owned(p, city), c);
   await p.close();
 }
-// 中城：两座箭楼（会放箭）→ 占领府衙
+// 中城（攻城战重做样板，SiegeMidCity）：城外箭楼 2 座 + 箭雨 + 冲车撞门 → 巷战 2 据点 → 府衙守将 → 插旗占领（细项见 test-siege-medium.mjs）
 for (const layout of ['mobile', 'desktop']) {
   const { p, city } = await open(layout, 'medium');
   const g0 = await goals(p);
-  ck(`[${layout}] 中城（${city}）：两座箭楼、目标行「毁箭楼 0/2」`, g0.towers === 2 && /毁箭楼 0\/2/.test(g0.text), g0);
-  const shot = await p.evaluate(async G0 => { const s = eval(G0); s.player.sprite.setPosition(-250, -150); const n0 = s.bullets.filter(b => b.active).length; await new Promise(r => setTimeout(r, 3200)); return { n0, n1: s.bullets.filter(b => b.active).length + s.bullets.filter(b => !b.active).length }; }, G);
-  ck(`[${layout}] 箭楼放箭`, shot.n1 > shot.n0, shot);
-  await p.screenshot({ path: `${out}/${layout}-siege-towers.png` });
-  await p.evaluate(G0 => { const s = eval(G0); for (const t of [...s.towers]) s.hitEnemy(t.e, 1e6, s.combatNow, 'melee', false, false); }, G); await p.waitForTimeout(500);
-  const g1 = await goals(p);
-  ck(`[${layout}] 箭楼尽毁 → 占领府衙`, g1.towers === 0 && g1.capturing, g1);
+  ck(`[${layout}] 中城（${city}）：三段推进的城外段，两座箭楼、目标行「城外 · 冲车撞门」`, g0.towers === 2 && g0.mid?.phase === 'outside' && /城外/.test(g0.text), g0);
+  const shot = await p.evaluate(async G0 => { const s = eval(G0); await new Promise(r => setTimeout(r, 3600)); return s.siegeGoals.mid.stats; }, G);
+  ck(`[${layout}] 城头箭雨（有落点预警）`, shot.volleys >= 1 && shot.zones >= 1, shot);
+  await p.screenshot({ path: `${out}/${layout}-siege-mid-outside.png` });
   if (layout === 'desktop') {
-    await p.evaluate(G0 => { const s = eval(G0); s.player.sprite.setPosition(s.capturePoint.x, s.capturePoint.y); }, G); await p.waitForTimeout(1500);
-    await p.screenshot({ path: `${out}/${layout}-siege-capture.png` });
-    const c = await capture(p);
-    ck('中城：占领府衙 → 破城', c.over && c.victory && await owned(p, city), c);
+    const r = await p.evaluate(async G0 => {
+      const s = eval(G0), m = s.siegeMid, wait = async ms => { for (let t = 0; t < ms; t += 150) await new Promise(r => setTimeout(r, 150)); };
+      m.hitGate(1e6); await wait(2600); const street = m.phase;
+      for (const pt of m.points) pt.state = 'secured'; await wait(2600); const hall = m.phase;
+      for (let i = 0; i < 20 && !s.boss?.active; i++) await wait(150);
+      const boss = !!s.boss?.active; s.player.damageImmune = false; s.player.hp = s.player.maxHp; s.player.invulnUntil = s.combatNow + 60000; /* 结算不按调试局算 */ s.hitEnemy(s.boss, 1e8, s.combatNow, 'melee', false, false);
+      for (let i = 0; i < 60 && !s.over; i++) { await wait(150); s.collectBossChests?.(); }
+      return { street, hall, boss, over: s.over, victory: s.victory };
+    }, G);
+    ck('中城：破门 → 巷战 → 府衙 → 击败守将插旗 → 破城', r.street === 'street' && r.hall === 'hall' && r.boss && r.over && r.victory && await owned(p, city), r);
   } else {
-    const t = await p.evaluate(async G0 => { const s = eval(G0); s.elapsed = 211; await new Promise(r => setTimeout(r, 500)); return { over: s.over, victory: s.victory }; }, G);
-    ck('中城：限时 210 秒未破城 → 失败', t.over && t.victory === false, t);
+    const t = await p.evaluate(async G0 => { const s = eval(G0); s.elapsed = 481; await new Promise(r => setTimeout(r, 500)); return { over: s.over, victory: s.victory }; }, G);
+    ck('中城：限时 480 秒未破城 → 失败', t.over && t.victory === false, t);
   }
   await p.close();
 }

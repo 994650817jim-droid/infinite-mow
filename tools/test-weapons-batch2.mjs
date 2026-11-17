@@ -61,6 +61,17 @@ for (const [layout, viewport] of Object.entries(LAYOUTS)) for (const [hero, h] o
       return { calm, most, burst, enter, fx: s.textures.exists('huangzhong_fx') };
     }, [G, mk]);
     ck(`${tag}：静心——进入神射 5 → 4.5/4/3.5 秒；3 级神射第一箭扇形三连重箭，带像素爆裂与进入神射金光`, jx.calm.join() === '5000,4500,4000,3500' && jx.most >= 3 && (!jx.fx || (jx.burst && jx.enter)), jx);
+    // 静心的神射重箭加成 20/22/25%（用户批准，逐级递增）：关掉暴击，比较神射时静心 0 级与 2 级的单箭伤害
+    const jd = await p.evaluate(async ([G0, MK]) => {
+      const s = eval(G0), pl = s.player, mk = eval(MK), w = pl.weapons[0], crit0 = pl.stats.critChance; pl.stats.critChance = -1;
+      const { PASSIVE_RULES: R } = await import('/src/data/passives.ts');
+      const shot = async lvl => { for (const e of s.enemies) if (e.active && !e.isSupplySlot) e.deactivate(); pl.growth.masteries.jingxin = lvl; await new Promise(r => setTimeout(r, 60));
+        const e = mk(pl.x + 260, pl.y); pl.passive.grantSharp(s.combatNow, 0); w.cooldownLeft = 0; const t0 = performance.now();
+        while (performance.now() - t0 < 2000 && e.hp === e.maxHp) await new Promise(r => setTimeout(r, 15)); return e.maxHp - e.hp; };
+      const base = await shot(0), lv2 = await shot(2); pl.stats.critChance = crit0; pl.growth.masteries.jingxin = 0;
+      return { mul: R.jingxinSharpMul, base, lv2, ratio: +(lv2 / base).toFixed(3) };
+    }, [G, mk]);
+    ck(`${tag}：静心神射加成 20/22/25% 逐级递增，2 级神射单箭伤害 ×1.22`, jd.mul.join() === '0.2,0.22,0.25' && Math.abs(jd.ratio - 1.22) < .03, jd);
     // 老骥伏枥（用户：「不靠残血触发」）：越战越勇——本关每击杀 10 名敌人射速 +2.5%（上限 15/20/25%）；残血不再加速。
     // 3 级「宝刀未老」：神射中射杀精锐 / 首领回复 4% 生命，2 秒内受伤不退出神射
     const lj = await p.evaluate(async ([G0, MK]) => {

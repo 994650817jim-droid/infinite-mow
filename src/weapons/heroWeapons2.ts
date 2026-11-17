@@ -139,7 +139,7 @@ export function baodiaoBehavior(host: WeaponHost, weapon: WeaponState, dt: numbe
   const level = weapon.level;
   const ux = target.x - pl.x, uy = target.y - pl.y, d = Math.hypot(ux, uy) || 1;
   const sharp = pl.passive.isSharpshooter(time);
-  // 静心：神射中重箭伤害 +12/18/25%（补回去掉「百步」后的前期单体）
+  // 静心：神射中重箭伤害 +20/22/25%（补回去掉「百步」后的前期单体）
   const damage = BAODIAO_DEF.damage(level, pl.stats) * g.damageMultiplier(time) * (sharp && g.masteries.jingxin ? 1 + R.jingxinSharpMul[g.masteries.jingxin - 1] : 1);
   pl.faceDirection(cardinal(ux, uy), 200);
   if (sharp && time >= pl.nextSkillAction && pl.playAction('skill', ux < 0 ? 'left' : 'right')) pl.nextSkillAction = time + 4000; else pl.playAction('attack', ux < 0 ? 'left' : 'right');
@@ -278,9 +278,9 @@ function mcFx(host: WeaponHost, row: number, x: number, y: number, w: number, h:
 }
 function landSlam(host: WeaponHost, x: number, y: number, radius: number, damage: number, time: number, echo: boolean): void {
   for (const e of host.grid.query(x, y, radius + 30)) if (alive(e) && Math.hypot(e.x - x, e.y - y) <= radius + e.radius) host.hitEnemy(e, damage, time, 'melee');
-  // 落地：像素砸地扬尘 + 碎石（铺满落地范围，名字 machao-land-fx 供测试检查），轻微震屏；缺图时退回程序化尘点
-  const landFx = mcFx(host, MCFX.land, x, y - 6, radius * 2.6, radius * 2.6, 16, 'machao-land-fx', 0, 1, 40);
-  host.cameras.main.shake(90, .0025);
+  // 落地：一小团像素扬尘碎石（2026-11-16 用户：「砸下来的特效太夸张了」→ 尺寸减半、0.25 秒播完、半透明、不震屏）；名字 machao-land-fx 供测试检查；缺图时退回程序化尘点
+  const landFx = mcFx(host, MCFX.land, x, y - 4, radius * 1.3, radius * 1.3, 24, 'machao-land-fx', 0, 1, 40);
+  landFx?.setAlpha(.8);
   if (!HINT_MOCK) { const ring = host.add.circle(x, y, 10, 0xffe08a, 0).setStrokeStyle(5, 0xffd27a, .9).setDepth(41).setName('machao-land');
   ring.scene.tweens.add({ targets: ring, radius, alpha: 0, duration: 260, onComplete: () => ring.destroy() }); }
   else if (HINT_MOCK === 'b') groundScar(host.player.sprite.scene, x, y, radius, 'crack');

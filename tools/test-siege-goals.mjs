@@ -26,7 +26,7 @@ const open = async (layout, tier, mode) => {
   }, [tier, mode]);
   await p.waitForFunction(() => window.__game.scene.isActive('SiegeGameScene') && window.__game.scene.getScene('SiegeGameScene').player, null, { timeout: 90000 });
   await p.waitForTimeout(1200);
-  await p.evaluate(G0 => { const s = eval(G0); s.spawnTimer = s.eliteTimer = 1e9; s.player.damageImmune = true; for (const e of s.enemies) if (e.active && e.kind !== 'boss' && !e.isSupplySlot) e.deactivate(); for (let i = 0; i <= s.chapter.waves.length; i++) s.recruitedWaves.add(i); s.pendingRecruit = false; }, G);
+  await p.evaluate(G0 => { const s = eval(G0); s.spawnTimer = s.eliteTimer = 1e9; s.player.damageImmune = true; for (const e of s.enemies) if (e.active && e.kind !== 'boss' && !e.isSupplySlot) e.deactivate(); for (let i = 0; i <= s.chapter.waves.length; i++) s.recruitedWaves.add(i); s.pendingRecruit = false; /* 等级合并后的保底三选一（5f89729）：跳时间时会弹出，自动点掉 */ setInterval(() => { if (s.mode === 'levelup') s.chooseUpgrade(0); }, 50); }, G);
   return { p, city };
 };
 const goals = p => p.evaluate(G0 => ({ ...eval(G0).siegeGoals, text: eval(G0).children.getByName('siege-goal')?.text, boss: !!eval(G0).boss?.active, over: eval(G0).over, victory: eval(G0).victory }), G);

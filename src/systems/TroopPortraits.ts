@@ -7,7 +7,8 @@ import { artStyle } from './ArtStyle';
  * 只加载清单里列出的图：素材未到位时清单为空，不会产生 404；缺图的兵种继续用行走帧半身裁切过渡。
  */
 // 人物画风 v2：用 troop-portraits-v2/ 的写实厚涂像素胸像（8 个兵种齐全）；v1 用原目录（3 张 Q 版）
-const V2 = artStyle() === 'v2';
+// 2026-11-17 用户：「图标还是换成之前那个图标」——战地招募卡胸像换回原 Q 版胸像（v2 胸像文件保留，?portrait=v2 可对比）
+const V2 = artStyle() === 'v2' && typeof location !== 'undefined' && new URLSearchParams(location.search).get('portrait') === 'v2';
 const MANIFEST = V2 ? 'troop_portraits_manifest_v2' : 'troop_portraits_manifest', BASE = V2 ? 'assets/troop-portraits-v2/' : 'assets/troop-portraits/';
 const headY = new Map<TroopKind, number>();
 export const portraitKey = (kind: TroopKind): string => 'troop_portrait_' + kind;

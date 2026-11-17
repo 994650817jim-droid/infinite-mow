@@ -15,7 +15,7 @@ for (const art of ['v1', 'v2']) {
   const p = await b.newPage({ viewport: { width: 1920, height: 1080 } });
   const reqs = []; p.on('request', r => reqs.push(r.url()));
   p.on('pageerror', e => errors.push(art + ' ' + e.message)); p.on('console', m => { if (m.type() === 'error') errors.push(art + ' ' + m.text()); });
-  await p.goto(base + `?dev=1&autostart=1&stage=1&layout=desktop&hd=2&art=${art}`);
+  await p.goto(base + `?dev=1&autostart=1&stage=1&layout=desktop&hd=2&art=${art}&portrait=v2`);
   await p.waitForFunction(() => window.__game?.scene.getScene('GameScene')?.player && window.__game.scene.getScene('GameScene').__DEV_ACTIONS, null, { timeout: 120000 });
   await p.waitForTimeout(1500);
   // 战地招募卡：两组各 3 种（卡片一次 3 张）

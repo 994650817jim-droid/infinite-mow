@@ -6,6 +6,7 @@ import { loadItems, loadPity } from './ItemStore';
 import { SCROLL } from './MasteryStore';
 import type { Player } from '../entities/Player';
 import { ensureItemTextures, itemIcon } from '../ui/ItemQuality';
+import { ensureLootBeam, lootBeam } from './LootBeam';
 
 interface GroundItem { item: ItemInstance; root: Phaser.GameObjects.Container; x: number; y: number }
 interface Chest { img: Phaser.GameObjects.Image; glow: Phaser.GameObjects.Ellipse; x: number; y: number }
@@ -32,6 +33,7 @@ export class ItemDrops {
 
   constructor(private readonly scene: Phaser.Scene, private readonly player: Player, private readonly tier: number, private readonly elapsed: () => number, private readonly finalBoss: () => boolean, private readonly onPickup?: (item: ItemInstance) => void, private readonly relicStage: () => string | null = () => null) {
     ensureItemTextures(scene);
+    ensureLootBeam(scene); // 手绘品质光柱（LootBeam.ts；未载入时 drop() 仍画旧光柱）
   }
 
   /** 获得残卷：记数并在主将头上飘字。 */
@@ -84,7 +86,9 @@ export class ItemDrops {
     const beam = s.add.rectangle(0, -beamH / 2 + 4, 6, beamH, q.color, .55);
     const frame = s.add.graphics(); frame.fillStyle(0x1b120b, .9).fillRoundedRect(-14, -26, 28, 28, 5); frame.lineStyle(2, q.color, 1).strokeRoundedRect(-14, -26, 28, 28, 5);
     const ic = itemIcon(s, item), icon = s.add.image(0, -12, ic.key, ic.frame).setDisplaySize(ic.art ? 25 : 22, ic.art ? 25 : 22);
-    root.add([glow, beam, frame, icon]);
+    // 品质光柱：手绘序列帧就绪时替换程序画的光圈 + 光柱（LootBeam.ts），否则沿用旧的
+    const painted = lootBeam(s, item.quality, q.color);
+    if (painted) { glow.destroy(); beam.destroy(); root.add([painted, frame, icon]); } else root.add([glow, beam, frame, icon]);
     s.tweens.add({ targets: [frame, icon], y: '-=4', duration: 700, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
     const g = { item, root, x, y }; this.ground.push(g); return g;
   }

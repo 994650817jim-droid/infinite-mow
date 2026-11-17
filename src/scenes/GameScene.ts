@@ -83,7 +83,10 @@ import {ItemDrops} from '../systems/ItemDrops';
 import {BossRelics, RELIC} from '../systems/BossRelics';
 import {FireShips} from '../systems/FireShips';
 import {gearFor} from '../systems/ItemEffects';
-import {claimRunLoot,depositRunLoot,grantHorse,heroHorse} from '../systems/ItemStore';
+import {claimRunLoot,depositRunLoot,grantHorse,heroHorse,ownedHorses} from '../systems/ItemStore';
+import {STARTER_HORSE} from '../data/mounts';
+import {storyScroll} from '../ui/StoryScroll';
+import {MERCHANT_HORSE_REWARD,markMerchantStorySeen,merchantHorseLines,merchantStorySeen} from '../data/storyMerchantHorse';
 import {horseForReward} from '../data/mounts';
 import {HeroMount} from '../systems/HeroMount';
 import { DraggingBladeFx } from '../systems/DraggingBladeFx';
@@ -396,8 +399,11 @@ export class GameScene extends Phaser.Scene {
     super(key);
   }
 
+  /** 本场开打时是否已有驽马（第一章通关剧情「中山商旅 · 献马」只给还没有马的存档播；老存档已有驽马不补弹）。 */
+  protected hadStarterHorse = true;
   create(): void {
     stopMenuMusic();
+    this.hadStarterHorse = ownedHorses().some(h => h.id === STARTER_HORSE);
     this.resetState();
     ensureWarTextures(this);
     this.hudAcc = 1; this.lastHudMode = '';
@@ -2609,7 +2615,7 @@ export class GameScene extends Phaser.Scene {
     // 武将谱：本局武学残卷收入（测试 / 调试战斗不收）
     {const n=this.itemDrops?.scrolls??0,debug=isChapterTestRun()||this.debugModified||this.debugJumped||!!this.player.damageImmune;if(n>0&&!debug){const total=addScrolls(n);this.resultTexts.body.setText(this.resultTexts.body.text+'\n武学残卷  +'+n+'（共 '+total+'）');}}
     // 马厩：各章首领首次击杀赠马（第一章通关送驽马由 ItemStore 读档时补发）
-    {const key=victory&&this.bossKilled&&!(isChapterTestRun()||this.debugModified||this.debugJumped||this.player.damageImmune)?this.stableRewardKey():null,horse=key?horseForReward(key):undefined;
+    {const key=victory&&this.bossKilled&&!(isChapterTestRun()||this.debugModified||this.debugJumped||this.player.damageImmune)?this.stableRewardKey():null,horse=key&&!(key==='huangjin-3'&&this.merchantStoryDue())?horseForReward(key):undefined; // 第一章首通：驽马改由告捷后的献马剧情送出
      if(horse&&grantHorse(horse.id))this.resultTexts.body.setText(this.resultTexts.body.text+'\n获得坐骑  '+horse.name+' · 已入马厩（休整时可换马）');}
     const nextWest=victory&&this.worldCampaign&&!this.runConfig.encounter&&((this.chapter.id==='huangjin'&&this.chapter.stage===3)?1:(this.chapter.id==='hulao'&&(this.chapter.westStage??3)<3)?(this.chapter.westStage??1)+1:0);
     const canAdvance=!!nextWest&&dongzhuoStageUnlocked(nextWest);
@@ -2644,13 +2650,23 @@ export class GameScene extends Phaser.Scene {
           kicker:'第一章 · 黄巾之乱 告捷',title:toMap?'黄巾平定 · 天下地图开启':'黄巾平定 · 义士来投',
           lines:toMap?['将军威名远扬，四方义士前来投靠。','天下大势初现：于地图上按史事逐章出征。']:['将军威名远扬，四方义士前来投靠。','且回军营整顿兵马，再赴讨董征途。'],
           route:toMap?['黄巾告捷','天下地图','讨伐董卓']:['整顿兵马','补充援兵','汜水讨董'],confirm:toMap?'确认 · 展开天下地图':'确认 · 进入军营',background:'rest_camp',
-          onConfirm:()=>{notice.destroy();if(toMap){this.resting=false;this.registry.remove('campaignTransfer');this.registry.set('worldReveal',true);this.registry.set('mapFocusNode','hulao');this.scene.start('WorldMapScene');return;}this.legionUI.panel.setVisible(true);}});
+          onConfirm:()=>{notice.destroy();if(toMap&&this.merchantStoryDue()){this.showMerchantHorseStory(()=>this.showChapter1MapAfterStory());return;}if(toMap){this.resting=false;this.registry.remove('campaignTransfer');this.registry.set('worldReveal',true);this.registry.set('mapFocusNode','hulao');this.scene.start('WorldMapScene');return;}this.legionUI.panel.setVisible(true);}});
         // 入营水墨过场在 setMode('rest') 时已开始，告捷弹窗晚于它创建：过场期间先隐藏，墨迹揭开时再显示（reveal 里处理）。
         if(this.children.getByName('rest-intro'))notice.setVisible(false);
       }
     }
   }
 
+  /** 第一章首次通关剧情是否该播：本场开打时还没有驽马、剧情没看过、不是调试 / 测试战斗。 */
+  protected merchantStoryDue(): boolean { return !this.hadStarterHorse && !merchantStorySeen() && !(isChapterTestRun() || this.debugModified || this.debugJumped || this.player.damageImmune); }
+  /** 「中山商旅 · 献马」：张世平、苏双献驽马，马厩开放（只送一次；读档补发驽马的兜底仍在 ItemStore）。 */
+  showMerchantHorseStory(onDone: () => void): Phaser.GameObjects.Container {
+    const c = getCharacter(this.runConfig.character);
+    return storyScroll(this, GAME_WIDTH, GAME_HEIGHT, IS_DESKTOP, { name: 'story-merchant-horse', confirmName: 'story-merchant-confirm', kicker: '第一章 · 黄巾之乱 · 战后', title: '中山商旅 · 献马',
+      lines: merchantHorseLines(c.name, c.id === 'liubei'), reward: MERCHANT_HORSE_REWARD, confirm: '收下 · 展开天下地图', background: 'rest_camp',
+      onDone: () => { markMerchantStorySeen(); grantHorse(STARTER_HORSE); onDone(); } });
+  }
+  private showChapter1MapAfterStory(): void { this.resting = false; this.registry.remove('campaignTransfer'); this.registry.set('worldReveal', true); this.registry.set('mapFocusNode', 'hulao'); this.scene.start('WorldMapScene'); }
   /** 乱世难度用：本场所属章节（黄巾 / 讨董取 chapter.id，群雄 / 官渡 / 赤壁取战线）。 */
   protected hardKey(): string { return this.achievementArc() ?? this.chapter.id; }
   /** 乱世难度用：本场是该章第几关。 */

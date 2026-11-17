@@ -6,11 +6,19 @@ import { emptyGear, type GearStats } from './ItemEffects';
 
 export type AttributeId = 'might' | 'quickness' | 'critical' | 'constitution' | 'agility' | 'command';
 export type ZhaoMasteryId = 'dragon_gallop' | 'cloud_pierce';
+/**
+ * 关羽「拖刀斩」（2026-11-16 用户：「拖刀斩不要这么容易触发」）：触发所需移动距离约翻倍 200/160/130 → 400/340/280（约 10/8.5/7 个身位），
+ * 单次刀气加强 0.5/0.65/0.75 → 0.8/1/1.2、三级回旋 0.4 → 0.6，触发少了但每次更有分量（总收益约为原来 80%）。
+ * 武器逻辑、增益图标进度（BuffHud）、技艺说明都读这里。
+ */
+export const DRAG_TRAVEL: readonly number[] = [400, 340, 280], DRAG_WAVE_MUL: readonly number[] = [.8, 1, 1.2], DRAG_SPIN_MUL = .6;
+/** 拖刀斩触发距离折合身位（约 40 像素一个身位），说明文字用。 */
+export const dragBodyLengths = (lv: number): string => String(Math.round(DRAG_TRAVEL[lv - 1] / 40 * 2) / 2);
 export const MARTIALS = {
   dragon_gallop: {character:'zhaoyun',name:'龙胆连刺',desc:'每级连刺效率 +8%'},
   cloud_pierce: {character:'zhaoyun',name:'游龙穿云',desc:'每级枪长 +10%、穿透 +1'},
   dragon_charge: {character:'guanyu',name:'青龙蓄势',desc:'四次基础挥砍后重斩 140%/165%/190%；三级击退'},
-  dragging_blade: {character:'guanyu',name:'拖刀斩',desc:'移动约5/4/3个身位蓄刀气；三级回旋'},
+  dragging_blade: {character:'guanyu',name:'拖刀斩',desc:'移动约10/8.5/7个身位蓄刀气；三级回旋'},
   // 2026-11-16：黄忠改用宝雕弓，连弩武学归黄月英
   steady_aim: {character:'huangyueying',name:'百步穿杨',desc:'静止最多5秒，每秒暴击 +3/4/5%；移动衰减'},
   pearl_volley: {character:'huangyueying',name:'连珠齐射',desc:'每 5/4/3 次基础射击追加70%伤害箭'},
@@ -93,7 +101,7 @@ export class RunGrowth {
   flagCount = 0;
   formationReadyAt = 0;
   recordMovement(distance: number, dt: number): void {
-    if(this.masteries.dragging_blade) this.travel=Math.min(200,this.travel+Math.max(0,distance));
+    if(this.masteries.dragging_blade) this.travel=Math.min(DRAG_TRAVEL[0],this.travel+Math.max(0,distance));
     this.stationarySeconds=distance>.5?Math.max(0,this.stationarySeconds-dt*2):Math.min(5,this.stationarySeconds+dt);
   }
   aimCriticalBonus(): number { return this.masteries.steady_aim ? this.stationarySeconds*(.02+.01*this.masteries.steady_aim) : 0; }

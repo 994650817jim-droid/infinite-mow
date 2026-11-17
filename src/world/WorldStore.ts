@@ -279,6 +279,8 @@ export function alertLossWarning():string{const names=loadWorld().alerts.map(a=>
 /** 道具分解所得（旧称“钱”）折成军粮记入营寨（ItemStore 调用）。 */
 /** 招贤馆等花费：一律扣军粮。旧参数 merits / money 按折算系数并入军粮（招贤馆已只传 provisions）；不够返回 false 且不扣。 */
 export function spendWorld(c:{provisions?:number;merits?:number;money?:number}):boolean{const need=Math.max(0,Math.floor(c.provisions??0))+grainOf(Math.max(0,Math.floor(c.merits??0)),Math.max(0,Math.floor(c.money??0)));const s=loadWorld();if(s.provisions<need)return false;s.provisions-=need;commit(s);return true;}
+/** 直接发军粮（如武将经验满级折军粮）。返回发放数。 */
+export function addProvisions(amount:number):number{const n=Math.floor(amount);if(!(n>0))return 0;const s=loadWorld();bank(s,0,n);commit(s);return n;}
 export function addTownMoney(amount:number):void{const n=Math.floor(amount);if(!(n>0))return;const s=loadWorld();bank(s,0,0,n);commit(s);}
 
 /* —— 天下地图 · 军情事件（WorldIntel.ts）—— */

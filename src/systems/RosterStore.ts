@@ -280,6 +280,19 @@ export function tryCapture(source: keyof typeof RECRUIT.capture, name: string, f
   s.captives = s.captives.slice(-6); write(s); return name;
 }
 
+/**
+ * 第六章「劝降」：敌将当场归降，直接入招贤馆（不花军粮、不占降将栏）；hero = 以可玩武将身份加入（黄忠）。
+ * 麾下已满时不加，返回提示。新增内容会话 2026-11-17。
+ */
+export function joinByPersuasion(name: string, hero?: CharacterId): RosterResult {
+  const s = loadRoster();
+  if (hero ? s.owned.some(r => r.hero === hero) : s.owned.some(r => r.name === name)) return { ok: true, message: `${name}已在麾下` };
+  if (s.owned.length >= RECRUIT.maxOwned) return { ok: false, message: `麾下已满 ${RECRUIT.maxOwned} 人，${name}暂回乡里（遣散一些后再来）` };
+  const r: Recruit = hero ? heroRecruit(hero) : { id: 'r_' + (++s.seq), kind: 'named', name, template: pick(TEMPLATE_ORDER), quality: 'purple', rank: 1, picks: [] };
+  s.owned.push(r); const cap = followerCap(s); if (s.followers.length < cap) s.followers.push(r.id);
+  write(s); return { ok: true, message: `${name}归降 · 已入招贤馆` };
+}
+
 // ———— 随行 ————
 
 export function followerCap(s: RosterSave = loadRoster()): number { return RECRUIT.followerCap[hallIdx(s)]; }

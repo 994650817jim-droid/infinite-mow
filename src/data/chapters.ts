@@ -16,7 +16,7 @@ export interface ChapterDef {
   label: string;
   description: string;
   bossName: string;
-  bossStyle: 'zhangjiao' | 'lubu' | 'zhangliang' | 'zhangbao' | 'huaxiong' | 'xurong' | 'lijue' | 'zhangxiu' | 'yuanshu' | 'yanliang' | 'wenchou' | 'chunyuqiong' | 'caochun' | 'caimao' | 'caoren' | 'siege' | 'dongzhuo';
+  bossStyle: 'zhangjiao' | 'lubu' | 'zhangliang' | 'zhangbao' | 'huaxiong' | 'xurong' | 'lijue' | 'zhangxiu' | 'yuanshu' | 'yanliang' | 'wenchou' | 'chunyuqiong' | 'caochun' | 'caimao' | 'caoren' | 'siege' | 'dongzhuo' | 'zhaofan' | 'liudu' | 'hanxuan' | 'huangzhong';
   stage?: 1 | 2 | 3;
   westStage?: 1 | 2 | 3;
   waves: readonly WaveDef[];

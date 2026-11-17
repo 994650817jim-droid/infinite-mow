@@ -15,6 +15,7 @@ import { YELLOW_STAGES, DONGZHUO_STAGES } from '../data/chapters';
 import { THIRD_STAGES } from '../data/thirdChapter';
 import { GUANDU_STAGES } from '../data/guanduChapter';
 import { CHIBI_STAGES } from '../data/chibiChapter';
+import { JINGNAN_STAGES } from '../data/jingnanChapter';
 import { CITIES } from '../world/WorldCities';
 import { BOUNTY_GENERALS, type IntelKind } from '../world/WorldIntel';
 import { lordHero, setLord, type Recruit } from '../systems/RosterStore';
@@ -83,7 +84,7 @@ export class DevGameScene extends GameScene {
     const waves = scene.chapter.waves;
     // ---- 选将 / 选关（2026-11-16 用户：「dev测试模式也需要适应」）----
     const hero = (): CharacterId => scene.runConfig.character as CharacterId;
-    const clearTransfers = (): void => { for (const k of ['campaignTransfer', 'thirdTransfer', 'guanduTransfer', 'chibiTransfer', 'siegeMode']) scene.registry.remove(k); };
+    const clearTransfers = (): void => { for (const k of ['campaignTransfer', 'thirdTransfer', 'guanduTransfer', 'chibiTransfer', 'jingnanTransfer', 'siegeMode']) scene.registry.remove(k); };
     /** 任意关卡直接出战（测试模式下各章节本来就不检查解锁）。 */
     const go = (key: string, config: Record<string, unknown> = {}, registry: Record<string, unknown> = {}): void => {
       clearTransfers();
@@ -152,6 +153,7 @@ export class DevGameScene extends GameScene {
       ...Object.fromEntries(THIRD_STAGES.map(st => ['stage_3_' + st.stage, () => go('ThirdGameScene', { thirdStage: st.stage }, { thirdStage: st.stage })])),
       ...Object.fromEntries(GUANDU_STAGES.map(st => ['stage_4_' + st.stage, () => go('GuanduGameScene', {}, { guanduStage: st.stage })])),
       ...Object.fromEntries(CHIBI_STAGES.map(st => ['stage_5_' + st.stage, () => go('ChibiGameScene', { thirdStage: st.stage }, { chibiStage: st.stage })])),
+      ...Object.fromEntries(JINGNAN_STAGES.map(st => ['stage_6_' + st.stage, () => go('JingnanGameScene', { thirdStage: st.stage }, { jingnanStage: st.stage })])),
       ...Object.fromEntries(siegeCities.map(c => ['siege_' + c.id, () => go('SiegeGameScene', {}, { siegeCity: c.id })])),
       intelBounty: () => intel('bounty'), intelBandit: () => intel('bandit'), intelEscort: () => intel('escort'),
       lubuChallenge: () => go('LubuGameScene'),

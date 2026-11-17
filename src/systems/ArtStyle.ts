@@ -100,6 +100,11 @@ export const ART_V2_FILES: Readonly<Record<string, string>> = {
   yellow_zhangbao_walk: 'assets/bosses-v2/yellow_zhangbao_walk.png',
   yellow_zhangbao_cast: 'assets/bosses-v2/yellow_zhangbao_cast.png',
   chibi_caoren: 'assets/bosses-v2/chibi_caoren.png',
+  // 第六章 平定荆南首领：正式 v2 图到之前借用现有首领 v2 图过渡（jingnanChapter.JINGNAN_SHEETS 同步改）
+  jingnan_zhaofan: 'assets/bosses-v2/third_yuanshu.png',
+  jingnan_liudu: 'assets/bosses-v2/guandu_chunyuqiong.png',
+  jingnan_hanxuan: 'assets/bosses-v2/third_lijue.png',
+  jingnan_huangzhong: 'assets/bosses-v2/guandu_yanliang.png',
   huaxiong_walk: 'assets/bosses-v2/huaxiong_walk.png',
   huaxiong_attack: 'assets/bosses-v2/huaxiong_attack.png',
   huaxiong_actions: 'assets/bosses-v2/huaxiong_actions.png',

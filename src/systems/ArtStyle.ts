@@ -57,6 +57,8 @@ export const ART_V2_FILES: Readonly<Record<string, string>> = {
   // 第六章荆南新兵：山越弓手、藤牌兵（行走 512 / 攻击 640，4×4）
   // 第八章汉中新兵：青州兵、魏军强弩手（同上规格）
   hanzhong_qingzhou_walk_sheet: 'assets/processed-v2/enemies/hanzhong_qingzhou_walk.png',
+  yiling_jiefan_walk_sheet: 'assets/processed-v2/enemies/yiling_jiefan_walk.png',
+  yiling_jiefan_attack_sheet: 'assets/processed-v2/enemies/yiling_jiefan_attack.png',
   hanzhong_qingzhou_attack_sheet: 'assets/processed-v2/enemies/hanzhong_qingzhou_attack.png',
   hanzhong_wei_crossbow_walk_sheet: 'assets/processed-v2/enemies/hanzhong_wei_crossbow_walk.png',
   hanzhong_wei_crossbow_attack_sheet: 'assets/processed-v2/enemies/hanzhong_wei_crossbow_attack.png',
@@ -128,7 +130,7 @@ export const ART_V2_FILES: Readonly<Record<string, string>> = {
   // 第十章 夷陵之战首领：正式 v2 图到之前借用现有首领 v2 图过渡（yilingChapter.YILING_SHEETS 是 v1 回退）
   yiling_sunhuan: 'assets/bosses-v2/third_zhangxiu.png',
   yiling_zhuran: 'assets/bosses-v2/jingnan_hanxuan.png',
-  yiling_luxun: 'assets/bosses-v2/jingnan_zhaofan.png',
+  yiling_luxun: 'assets/bosses-v2/yiling_luxun.png', // 正式图（Gemini 出图，art-style ebfcb2b）
   // 第十二章 北伐首领：正式 v2 图到之前借用现有首领 v2 图过渡（beifaChapter.BEIFA_SHEETS 是 v1 回退）
   beifa_zhanghe: 'assets/bosses-v2/hanzhong_zhanghe.png',
   beifa_haozhao: 'assets/bosses-v2/jingnan_liudu.png',
@@ -264,6 +266,8 @@ export const V2_TROOP_KEYS: readonly string[] = [
   // 第六章荆南新兵（JingnanGameScene.preload 按需加载）
   'jingnan_shanyue_archer_walk_sheet', 'jingnan_shanyue_archer_attack_sheet', 'jingnan_rattan_shield_walk_sheet', 'jingnan_rattan_shield_attack_sheet',
   'hanzhong_qingzhou_walk_sheet', 'hanzhong_qingzhou_attack_sheet', 'hanzhong_wei_crossbow_walk_sheet', 'hanzhong_wei_crossbow_attack_sheet',
+  // 第十章夷陵新兵（YilingGameScene.preload 按需加载；江东弓弩手图到了再加）
+  'yiling_jiefan_walk_sheet', 'yiling_jiefan_attack_sheet',
 ];
 /** 章节新兵：v2 时挂行走 / 攻击图集（4×4，行走格 128）并去掉换色；v1 保持换色过渡。图集由各章 GameScene.preload 用 loadV2TroopSheets 按需加载。 */
 export function withV2Sheets<D extends { tint?: number }>(def: D, [walk, atk]: readonly [string, string]): D { return isV2Texture(walk) ? { ...def, tint: 0xffffff, walkVisual: { texture: walk, scale: .5, groundY: 121 / 128 }, attackVisual: atk } : def; }

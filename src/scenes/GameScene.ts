@@ -159,7 +159,9 @@ export class GameScene extends Phaser.Scene {
   iff: IffOverlay | null = null;
   /** 敌我区分叠加层要处理的单位：敌军、部曲（仅已在屏上的）、随行武将。 */
   protected *iffUnits(): Generator<IffUnit> {
-    for (const e of this.enemies) if (e.active && !e.isSupplySlot && e.def.behavior !== 'wall') yield { sprite: e.sprite, foot: e.shadow, side: 'enemy', rank: e.kind === 'boss' ? 'boss' : e.kind === 'elite' ? 'elite' : 'normal', visible: e.sprite.visible };
+    // 第一章全是黄巾军：通用敌兵图（弓手 / 盾兵 / 骑兵 / 将校）也按黄巾染黄，不按图集名染红
+    const yellow = this.chapter.id === 'huangjin';
+    for (const e of this.enemies) if (e.active && !e.isSupplySlot && e.def.behavior !== 'wall') yield { sprite: e.sprite, foot: e.shadow, side: 'enemy', rank: e.kind === 'boss' ? 'boss' : e.kind === 'elite' ? 'elite' : 'normal', visible: e.sprite.visible, yellow };
     for (const a of this.allies) if (a.active && a.view) yield { sprite: a.view.sprite, foot: a.view.shadow, side: 'ally', rank: 'normal', visible: a.view.sprite.visible };
     for (const m of this.followers?.members ?? []) yield { sprite: m.sprite, foot: m.shadow, side: 'ally', rank: 'elite', visible: m.sprite.visible, keepColors: true };
   }

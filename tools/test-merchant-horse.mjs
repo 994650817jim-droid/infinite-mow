@@ -21,6 +21,9 @@ try {
   // 测试战斗（dev）不自动播：这里直接调用剧情，验证表现与收下逻辑
   const lines = await p.evaluate(G0 => { const s = eval(G0); s.setMode?.('pause'); s.runConfig = { ...s.runConfig, character: 'liubei' }; window.__done = 0; s.showMerchantHorseStory(() => { window.__done++; }); return s.children.getByName('story-merchant-horse') ? 1 : 0; }, G);
   ck('剧情卷轴弹出', lines === 1);
+  // 2026-11-17 献马剧情专属插画：横幅换成插画（缺图时退回 rest_camp），卷轴加高后台词与按钮仍在面板内、不被插画挡住
+  const art = await p.evaluate(G0 => { const s = eval(G0), root = s.children.getByName('story-merchant-horse'), ill = root.list.find(o => o.name === 'story-merchant-horse-illustration'), btn = root.list.find(o => o.name === 'story-merchant-horse-next'), say = root.list.filter(o => o.type === 'Text').map(o => ({ t: o.text, y: o.y })).find(o => o.t.includes('广宗告捷')); const c = ill?._crop, top = ill ? ill.y - ill.height * ill.scaleY / 2 + c.y * ill.scaleY : null; /* getBounds 不算裁剪，按裁剪窗口算可见上下沿 */ return { tex: s.textures.exists('story_merchant_horse'), ill: !!ill, bannerTop: top === null ? null : Math.round(top), bannerBottom: top === null ? null : Math.round(top + c.height * ill.scaleY), sayY: say ? Math.round(say.y) : null, btnY: btn ? Math.round(btn.y) : null, H: s.scale.height }; }, G);
+  ck('献马剧情横幅换成专属插画，台词在插画下方、按钮在画面内', art.tex && art.ill && art.sayY > art.bannerBottom && art.btnY < art.H - 20, art);
   await p.waitForTimeout(300); await p.screenshot({ path: OUT + '/story-page1.png' });
   const pages = [];
   for (let i = 0; i < 10; i++) {

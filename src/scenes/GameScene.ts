@@ -2671,7 +2671,7 @@ export class GameScene extends Phaser.Scene {
   showMerchantHorseStory(onDone: () => void): Phaser.GameObjects.Container {
     const c = getCharacter(this.runConfig.character);
     return storyScroll(this, GAME_WIDTH, GAME_HEIGHT, IS_DESKTOP, { name: 'story-merchant-horse', confirmName: 'story-merchant-confirm', kicker: '第一章 · 黄巾之乱 · 战后', title: '中山商旅 · 献马',
-      lines: merchantHorseLines(c.name, c.id === 'liubei'), reward: MERCHANT_HORSE_REWARD, confirm: '收下 · 展开天下地图', background: 'rest_camp',
+      lines: merchantHorseLines(c.name, c.id === 'liubei'), reward: MERCHANT_HORSE_REWARD, confirm: '收下 · 展开天下地图', background: 'rest_camp', illustration: 'story_merchant_horse',
       onDone: () => { markMerchantStorySeen(); grantHorse(STARTER_HORSE); onDone(); } });
   }
   private showChapter1MapAfterStory(): void { this.resting = false; this.registry.remove('campaignTransfer'); this.registry.set('worldReveal', true); this.registry.set('mapFocusNode', 'hulao'); this.scene.start('WorldMapScene'); }

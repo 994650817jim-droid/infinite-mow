@@ -124,7 +124,8 @@ export function setArtStyle(style: ArtStyle): void {
 
 /** 该纹理（或其 readable_ 派生）当前是否使用 v2 图集。 */
 export function isV2Texture(key: string): boolean {
-  const k = key.replace(/^readable_/, '');
+  // 派生贴图（readable_ 描边版、第四章袁军换色 yuan_、攻城 / 情报势力换色 f_<势力>_）沿用源图集的规格
+  const k = key.replace(/^readable_/, '').replace(/^(yuan_|f_[a-z]+_)/, '');
   return artStyle() === 'v2' && Object.prototype.hasOwnProperty.call(ART_V2_FILES, k) && !V2_FAILED.has(k);
 }
 

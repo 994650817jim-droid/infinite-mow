@@ -122,3 +122,5 @@ assets/raw/*
 !/tools/unmix-magenta.mjs
 !/tools/prepare-warn-fx-handpainted.sh
 !/tools/measure-fx-cells.mjs
+!/tools/record-warnfx-showcase.mjs
+!/tools/boost-alpha.mjs

@@ -18,22 +18,50 @@ import { DEPTH } from '../config';
  */
 export type WarnKind = 'lightning' | 'lubu' | 'rift' | ShapeKind;
 export type ShapeKind = 'charge' | 'sweep' | 'fire' | 'arrows' | 'slam';
-export const WARN_FX_FILES: Record<WarnKind, { key: string; file: string; w: number; h: number }> = {
-  lightning: { key: 'warnfx_lightning', file: 'assets/warn-fx/lightning.png', w: 256, h: 256 },
-  lubu: { key: 'warnfx_lubu', file: 'assets/warn-fx/lubu.png', w: 256, h: 256 },
-  rift: { key: 'warnfx_rift', file: 'assets/warn-fx/rift.png', w: 1024, h: 160 },
-  charge: { key: 'warnfx_charge', file: 'assets/warn-fx/charge.png', w: 1024, h: 160 },
-  sweep: { key: 'warnfx_sweep', file: 'assets/warn-fx/sweep.png', w: 256, h: 340 },
-  fire: { key: 'warnfx_fire', file: 'assets/warn-fx/fire.png', w: 256, h: 256 },
-  arrows: { key: 'warnfx_arrows', file: 'assets/warn-fx/arrows.png', w: 256, h: 256 },
-  slam: { key: 'warnfx_slam', file: 'assets/warn-fx/slam.png', w: 256, h: 256 },
+/**
+ * 手绘版（用户 2026-11-16「整套换手绘」）：public/assets/warn-fx/handpainted/，版式同像素版，ChatGPT 洋红底原图 → tools/prepare-warn-fx-handpainted.sh。
+ * 默认用手绘；?warnfx=pixel 回到像素版（对比用）。某张手绘图载入失败时该种类自动退回像素版（loadWarnFx）。
+ */
+export const WARN_FX_HP: boolean = (() => { try { return new URLSearchParams(globalThis.location?.search ?? '').get('warnfx') !== 'pixel'; } catch { return true; } })();
+export const WARN_FX_FILES: Record<WarnKind, { key: string; file: string; pixel: string; w: number; h: number }> = {
+  lightning: { key: 'warnfx_lightning', file: (WARN_FX_HP ? 'assets/warn-fx/handpainted/' : 'assets/warn-fx/') + 'lightning.png', pixel: 'assets/warn-fx/lightning.png', w: 256, h: 256 },
+  lubu: { key: 'warnfx_lubu', file: (WARN_FX_HP ? 'assets/warn-fx/handpainted/' : 'assets/warn-fx/') + 'lubu.png', pixel: 'assets/warn-fx/lubu.png', w: 256, h: 256 },
+  rift: { key: 'warnfx_rift', file: (WARN_FX_HP ? 'assets/warn-fx/handpainted/' : 'assets/warn-fx/') + 'rift.png', pixel: 'assets/warn-fx/rift.png', w: 1024, h: 160 },
+  charge: { key: 'warnfx_charge', file: (WARN_FX_HP ? 'assets/warn-fx/handpainted/' : 'assets/warn-fx/') + 'charge.png', pixel: 'assets/warn-fx/charge.png', w: 1024, h: 160 },
+  sweep: { key: 'warnfx_sweep', file: (WARN_FX_HP ? 'assets/warn-fx/handpainted/' : 'assets/warn-fx/') + 'sweep.png', pixel: 'assets/warn-fx/sweep.png', w: 256, h: 340 },
+  fire: { key: 'warnfx_fire', file: (WARN_FX_HP ? 'assets/warn-fx/handpainted/' : 'assets/warn-fx/') + 'fire.png', pixel: 'assets/warn-fx/fire.png', w: 256, h: 256 },
+  arrows: { key: 'warnfx_arrows', file: (WARN_FX_HP ? 'assets/warn-fx/handpainted/' : 'assets/warn-fx/') + 'arrows.png', pixel: 'assets/warn-fx/arrows.png', w: 256, h: 256 },
+  slam: { key: 'warnfx_slam', file: (WARN_FX_HP ? 'assets/warn-fx/handpainted/' : 'assets/warn-fx/') + 'slam.png', pixel: 'assets/warn-fx/slam.png', w: 256, h: 256 },
 };
 /** 圆形图里那圈在格子中的直径占比（按实际切出的图量，tools 里量），显示时按此换算让外缘 = 命中范围。 */
-const RING_FRAC: Partial<Record<WarnKind, number>> = { fire: .78, arrows: .78, slam: .72 };
+const RING_FRAC_PX: Partial<Record<WarnKind, number>> = { fire: .78, arrows: .78, slam: .72 };
+/** 手绘版（tools/measure-fx-cells.mjs 量）：圈小一圈，而且画成透视椭圆、圈心偏下（格高 .57~.6）。 */
+const RING_FRAC_HP: Partial<Record<WarnKind, number>> = { fire: .64, arrows: .55, slam: .64 };
+const RING_OY_HP: Partial<Record<WarnKind, number>> = { fire: .6, arrows: .58, slam: .57, lightning: .6, lubu: .45 };
+/** 这一种是否真的用上了手绘图（手绘图载入失败退回像素版时为 false）。 */
+const fellBack = new Set<WarnKind>();
+const isHp = (k: WarnKind): boolean => WARN_FX_HP && !fellBack.has(k);
+const ringFrac = (k: WarnKind): number => (isHp(k) ? RING_FRAC_HP[k] : RING_FRAC_PX[k]) ?? .72;
+const ringOy = (k: WarnKind): number => (isHp(k) ? RING_OY_HP[k] : undefined) ?? .5;
+/** 天雷符环 / 吕布杀气圈：手绘圈比像素版小，显示时放大。 */
+const groundRingMul = (k: 'lightning' | 'lubu'): number => isHp(k) ? (k === 'lightning' ? 1.1 : 1.2) : 1;
+
+/** 载入特效图：手绘图载入失败的种类改载像素版（BootScene 调用）。 */
+export function loadWarnFx(load: Phaser.Loader.LoaderPlugin): void {
+  const byKey = new Map((Object.entries(WARN_FX_FILES) as [WarnKind, typeof WARN_FX_FILES[WarnKind]][]).map(([k, f]) => [f.key, k]));
+  if (WARN_FX_HP) load.on(Phaser.Loader.Events.FILE_LOAD_ERROR, (file: Phaser.Loader.File) => {
+    const k = byKey.get(file.key); if (!k || fellBack.has(k)) return;
+    fellBack.add(k); const f = WARN_FX_FILES[k]; load.spritesheet(f.key, f.pixel, { frameWidth: f.w, frameHeight: f.h });
+  });
+  for (const f of Object.values(WARN_FX_FILES)) load.spritesheet(f.key, f.file, { frameWidth: f.w, frameHeight: f.h });
+}
 /** 横扫图（等分格切出）：扇形圆心在格宽 28.5% 处、垂直居中，半径约 0.59 格宽（按实际图量）。 */
-const SWEEP_CX = .285, SWEEP_R = .59;
+const SWEEP_CX = .285, SWEEP_R_PX = .59, SWEEP_R_HP = .62;
+const sweepR = (): number => isHp('sweep') ? SWEEP_R_HP : SWEEP_R_PX;
 /** 长条图里内容在格子中的高度占比：显示高度 = 宽度 / 占比。 */
 const LANE_FRAC: Partial<Record<WarnKind, number>> = { charge: .57, rift: .5 };
+/** 裂地横条的显示高度（占长度）：手绘版内容更高，压低一点。 */
+const riftH = (): number => isHp('rift') ? .44 : .5;
 /** 关闭特效警示（只看方案 C 的样子）：?warnfx=0。 */
 export const WARN_FX_ON: boolean = (() => { try { return new URLSearchParams(globalThis.location?.search ?? '').get('warnfx') !== '0'; } catch { return true; } })();
 
@@ -58,14 +86,14 @@ export class WarnFx {
     if (kind === 'lightning') {
       // 天上乌云：在落点正上方聚拢，越来越浓；地上符光由暗变亮
       a.setFrame(step6(p)).setPosition(x, y - size * 1.25 - 30).setDisplaySize(size * 2.4, size * 2.4).setAlpha(.55 + .45 * p).setDepth(DEPTH.fx + 1);
-      b.setFrame(6 + step6(p)).setPosition(x, y).setDisplaySize(size * 2.74, size * 2.74).setAlpha(.22 + .43 * p).setDepth(DEPTH.ground + 4);
+      b.setFrame(6 + step6(p)).setOrigin(.5, ringOy('lightning')).setPosition(x, y).setDisplaySize(size * 2.74 * groundRingMul('lightning'), size * 2.74 * groundRingMul('lightning')).setAlpha(.22 + .43 * p).setDepth(DEPTH.ground + 4);
     } else if (kind === 'lubu') {
       // 方天戟虚影从上方缓缓压下；地上一圈红色杀气火舌绕圈（循环），范围靠火舌外缘读出来
       a.setFrame(step6(p)).setPosition(x, y - size * .55 - 70 * (1 - p)).setDisplaySize(size * 1.5, size * 1.5).setAlpha(.35 + .5 * p).setDepth(DEPTH.fx + 1);
-      b.setFrame(8 + Math.floor(now / 90) % 4).setPosition(x, y).setDisplaySize(size * 2.8, size * 2.8).setAlpha(.35 + .35 * p).setDepth(DEPTH.ground + 4);
+      b.setFrame(8 + Math.floor(now / 90) % 4).setOrigin(.5, ringOy('lubu')).setPosition(x, y).setDisplaySize(size * 2.8 * groundRingMul('lubu'), size * 2.8 * groundRingMul('lubu')).setAlpha(.35 + .35 * p).setDepth(DEPTH.ground + 4);
     } else {
       // 裂地：沿刀路一条横条，碎石跳动、地缝透光，按进度换 4 帧
-      a.setFrame(Math.min(3, Math.floor(p * 4))).setOrigin(0, .5).setPosition(x, y).setRotation(angle).setDisplaySize(size, size * .5).setAlpha(.6 + .4 * p).setTint(0xffc890).setDepth(DEPTH.ground + 4);
+      a.setFrame(Math.min(3, Math.floor(p * 4))).setOrigin(0, .5).setPosition(x, y).setRotation(angle).setDisplaySize(size, size * riftH()).setAlpha(.6 + .4 * p).setTint(0xffc890).setDepth(DEPTH.ground + 4);
     }
     return true;
   }
@@ -74,7 +102,7 @@ export class WarnFx {
   ring(id: string, kind: 'lubu', x: number, y: number, size: number, now: number, alpha = .5): boolean {
     if (!this.has(kind)) return false;
     const e = this.get(id, 1, WARN_FX_FILES[kind].key, now);
-    e.imgs[0].setFrame(8 + Math.floor(now / 90) % 4).setPosition(x, y).setDisplaySize(size * 2.8, size * 2.8).setAlpha(alpha).setDepth(DEPTH.ground + 4);
+    e.imgs[0].setFrame(8 + Math.floor(now / 90) % 4).setOrigin(.5, ringOy('lubu')).setPosition(x, y).setDisplaySize(size * 2.8 * groundRingMul('lubu'), size * 2.8 * groundRingMul('lubu')).setAlpha(alpha).setDepth(DEPTH.ground + 4);
     return true;
   }
 
@@ -84,9 +112,9 @@ export class WarnFx {
     const key = WARN_FX_FILES[kind].key;
     const first = kind === 'rift' ? 4 : 12, count = kind === 'rift' ? 2 : 6;
     const img = this.scene.add.image(x, y, key, first).setDepth(kind === 'rift' ? DEPTH.ground + 5 : DEPTH.fx);
-    if (kind === 'rift') img.setTint(0xffc890).setOrigin(0, .5).setRotation(angle).setDisplaySize(size, size * .5);
-    else if (kind === 'lightning') img.setOrigin(.5, .88).setDisplaySize(size * 2.6, size * 2.6);
-    else img.setDisplaySize(size * 1.9, size * 1.9).setAlpha(.85); // 吕布落地冲击：缩小，别盖过吕布本人
+    if (kind === 'rift') img.setTint(0xffc890).setOrigin(0, .5).setRotation(angle).setDisplaySize(size, size * riftH());
+    else if (kind === 'lightning') img.setOrigin(.5, isHp('lightning') ? .7 : .88).setDisplaySize(size * 2.6, size * 2.6); // 手绘雷落地点在格高 .7
+    else img.setOrigin(.5, ringOy(kind)).setDisplaySize(size * 1.9, size * 1.9).setAlpha(.85); // 吕布落地冲击：缩小，别盖过吕布本人
     this.scene.tweens.addCounter({ from: 0, to: count - .01, duration: kind === 'rift' ? 360 : 340, onUpdate: t => img.setFrame(first + Math.floor(t.getValue() ?? 0)),
       onComplete: () => this.scene.tweens.add({ targets: img, alpha: 0, duration: 140, onComplete: () => img.destroy() }) });
     return true;
@@ -98,8 +126,8 @@ export class WarnFx {
   /** 圆 / 环形落点蓄力：第 1 行按进度换帧，外缘 = r。 */
   circle(id: string, kind: 'fire' | 'arrows' | 'slam', x: number, y: number, r: number, progress: number, now: number): boolean {
     if (!this.has(kind)) return false;
-    const p = clamp01(progress), d = r * 2 / (RING_FRAC[kind] ?? .72);
-    this.get(id, 1, WARN_FX_FILES[kind].key, now).imgs[0].setFrame(step6(p)).setOrigin(.5).setRotation(0).setPosition(x, y).setDisplaySize(d, d).setAlpha(.3 + .4 * p).setDepth(DEPTH.ground + 4);
+    const p = clamp01(progress), d = r * 2 / ringFrac(kind);
+    this.get(id, 1, WARN_FX_FILES[kind].key, now).imgs[0].setFrame(step6(p)).setOrigin(.5, ringOy(kind)).setRotation(0).setPosition(x, y).setDisplaySize(d, d).setAlpha(.3 + .4 * p).setDepth(DEPTH.ground + 4);
     return true;
   }
   /** 长条（冲锋道）蓄力：从 (x,y) 沿 angle 伸出 length，宽 width。 */
@@ -112,7 +140,7 @@ export class WarnFx {
   /** 扇形（横扫）蓄力：圆心 (x,y)、半径 r、朝 angle。图里扇形张开约 140°，不随 arc 变形。 */
   sector(id: string, x: number, y: number, r: number, angle: number, progress: number, now: number): boolean {
     if (!this.has('sweep')) return false;
-    const p = clamp01(progress), w = r / SWEEP_R, f = WARN_FX_FILES.sweep;
+    const p = clamp01(progress), w = r / sweepR(), f = WARN_FX_FILES.sweep;
     this.get(id, 1, f.key, now).imgs[0].setFrame(step6(p)).setOrigin(SWEEP_CX, .5).setPosition(x, y).setRotation(angle).setDisplaySize(w, w * f.h / f.w).setAlpha(.35 + .4 * p).setDepth(DEPTH.ground + 4);
     return true;
   }
@@ -126,8 +154,8 @@ export class WarnFx {
     const f = WARN_FX_FILES[kind], lane = kind === 'charge', first = lane ? 4 : 6, count = lane ? 2 : 6;
     const img = this.scene.add.image(x, y, f.key, first).setDepth(lane ? DEPTH.ground + 5 : DEPTH.ground + 6).setAlpha(lane ? .75 : .6);
     if (lane) img.setOrigin(0, .5).setRotation(angle).setDisplaySize(size, width / (LANE_FRAC[kind] ?? .5));
-    else if (kind === 'sweep') { const w = size * .75 / SWEEP_R; img.setOrigin(SWEEP_CX, .5).setRotation(angle).setDisplaySize(w, w * f.h / f.w); }
-    else { const d = size * 2 * .7 / (RING_FRAC[kind] ?? .72); img.setDisplaySize(d, d); }
+    else if (kind === 'sweep') { const w = size * .75 / sweepR(); img.setOrigin(SWEEP_CX, .5).setRotation(angle).setDisplaySize(w, w * f.h / f.w); }
+    else { const d = size * 2 * .7 / ringFrac(kind); img.setOrigin(.5, ringOy(kind)).setDisplaySize(d, d); } // 原点与蓄力圈一致，落下不错位
     this.scene.tweens.addCounter({ from: 0, to: count - .01, duration: lane ? 320 : 350, onUpdate: t => img.setFrame(first + Math.floor(t.getValue() ?? 0)),
       onComplete: () => this.scene.tweens.add({ targets: img, alpha: 0, duration: 140, onComplete: () => img.destroy() }) });
     return true;

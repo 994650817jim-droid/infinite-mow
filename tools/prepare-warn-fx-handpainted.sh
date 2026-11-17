@@ -19,3 +19,12 @@ node tools/prepare-warn-fx.mjs "$T/lightning.png" "$W/handpainted/lightning.png"
 ffmpeg -y -loglevel error -i "$O/rift.png" -vf crop=1400:1024:62:0 "$T/rift_c.png"; ffmpeg -y -loglevel error -i "$O/charge.png" -vf crop=1440:1024:40:0 "$T/charge_c.png"  # 去掉左右留白，让长条贯穿整格
 for k in rift charge; do un "$T/${k}_c.png" "$T/$k.png" 0.7; node tools/prepare-warn-fx.mjs "$T/$k.png" "$W/handpainted/$k.png" 1 1024x160 6 grid >/dev/null; done
 ls -la "$W/handpainted"
+# 预警（蓄力）行加强不透明度：手绘图本身偏淡，再叠上游戏里蓄力透明度 .3~.7 会读不出范围
+W2=public/assets/warn-fx/handpainted
+node tools/boost-alpha.mjs "$W2/fire.png" 256 1 2.2 >/dev/null
+node tools/boost-alpha.mjs "$W2/slam.png" 256 1 3 >/dev/null
+node tools/boost-alpha.mjs "$W2/arrows.png" 256 1 3.2 >/dev/null; node tools/boost-alpha.mjs "$W2/arrows.png" 256 2,3 1.7 >/dev/null  # 箭影稀疏，落下也加强
+node tools/boost-alpha.mjs "$W2/sweep.png" 340 1 1.8 >/dev/null
+node tools/boost-alpha.mjs "$W2/lightning.png" 256 1,2 1.6 >/dev/null
+node tools/boost-alpha.mjs "$W2/lubu.png" 256 1,2 1.8 >/dev/null
+for k in charge rift; do node tools/boost-alpha.mjs "$W2/$k.png" 160 1,2,3,4 2.2 >/dev/null; done

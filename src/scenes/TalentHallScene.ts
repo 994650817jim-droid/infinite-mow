@@ -1,6 +1,6 @@
 /**
  * 招贤馆（RECRUIT_PLAN.md · R2）：人才席位（换季自动刷新、花军粮手动刷新、保底）、降将栏、麾下名册（随行、将阶、遣散）。
- * 史事名将与大众脸暂无立绘：用品质色印章 + 模板字（枪 / 刀 / 弓 / 谋）作程序化过渡；可玩名将用现有头像。
+ * 史事名将与无名之辈暂无立绘：用品质色印章 + 模板字（枪 / 刀 / 弓 / 谋）作程序化过渡；可玩名将用现有头像。
  */
 import Phaser from 'phaser';
 import { heroLevel, type HeroKey } from '../systems/HeroProgress';
@@ -14,6 +14,8 @@ import { CHARACTERS, getCharacter } from '../data/characters';
 import { RANK, RECRUIT, TEMPLATES, TEMPLATE_ORDER, type FollowerTemplate } from '../data/recruits';
 import { hallInTown, hallLevel, dismiss, followerCap, loadRoster, manualRefresh, rankBonus, rankCap, rankUp, recruit, refreshCost, toggleFollower, upgradeHall, type Offer, type Recruit } from '../systems/RosterStore';
 
+/** 普通招募武将（内部 kind = 'common'）对玩家显示的称呼（用户 2026-11-17：不叫「大众脸」，改三国风；候选 无名之辈 / 偏裨之将 / 庸碌之将，待用户定）。 */
+export const COMMON_LABEL = '无名之辈';
 type Tab = 'offers' | 'roster';
 export class TalentHallScene extends Phaser.Scene {
   private tab: Tab = 'offers'; private page = 0; private message = ''; private content?: Phaser.GameObjects.Container; private status!: Phaser.GameObjects.Text;
@@ -23,7 +25,7 @@ export class TalentHallScene extends Phaser.Scene {
   preload() {
     const added: string[] = [];
     for (const c of CHARACTERS) if (!this.textures.exists(c.portrait)) { this.load.image(c.portrait, `assets/processed/${c.portrait}.png`); added.push(c.portrait); }
-    // 史事名将 / 大众脸的模板头像（ChatGPT 正式图，tools/prepare-recruit-faces.mjs；帧顺序 枪 / 刀 / 弓 / 谋）。缺图时退回印章字
+    // 史事名将 / 无名之辈的模板头像（ChatGPT 正式图，tools/prepare-recruit-faces.mjs；帧顺序 枪 / 刀 / 弓 / 谋）。缺图时退回印章字
     if (!this.textures.exists('recruit_faces')) this.load.spritesheet('recruit_faces', 'assets/recruits/recruit_faces.png', { frameWidth: 128, frameHeight: 128 });
     this.events.once('shutdown', () => { for (const k of added) if (this.textures.exists(k)) this.textures.remove(k); });
   }
@@ -88,7 +90,7 @@ export class TalentHallScene extends Phaser.Scene {
     const D = W > 600, x0 = 16, w = W - 32, q = QUALITIES[o.quality];
     this.content!.add(panel(this, W / 2, y, w, h));
     const size = h - 16; this.seal(x0 + 12 + size / 2, y, size, o.quality, TEMPLATES[o.template].name, o.hero ? getCharacter(o.hero).portrait : undefined, o.template);
-    const tx = x0 + 24 + size, kind = o.kind === 'hero' ? '可玩名将 · 随行' : o.kind === 'named' ? `史事名将${o.faction ? ' · ' + FACTIONS[o.faction].name : ''}` : '大众脸';
+    const tx = x0 + 24 + size, kind = o.kind === 'hero' ? '可玩名将 · 随行' : o.kind === 'named' ? `史事名将${o.faction ? ' · ' + FACTIONS[o.faction].name : ''}` : COMMON_LABEL;
     this.content!.add(worldText(this, tx, y - h / 2 + 8, `${captive ? '【降将】' : ''}${o.name}`, D ? 17 : 18, q.css).setName('talent-offer-name'));
     this.content!.add(worldText(this, tx, y - h / 2 + (D ? 32 : 36), `${q.label} · ${kind}\n${TEMPLATES[o.template].name}：${TEMPLATES[o.template].desc}${captive && o.expires !== undefined ? ' · 两季内可招降' : ''}`, 12, '#cdbf9f').setWordWrapWidth(w - size - 150));
     const cost = captive ? Math.ceil(o.cost * RECRUIT.captiveDiscount) : o.cost;

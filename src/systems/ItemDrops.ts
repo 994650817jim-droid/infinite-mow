@@ -27,6 +27,8 @@ export class ItemDrops {
   readonly pity: PityState = loadPity();
   /** 武将谱：本局获得的武学残卷（首领 3、精锐 5% 掉 1、宝箱 20% 掉 1；结算时收入，测试战斗不收）。 */
   scrolls = 0;
+  /** 首领遗珍改由「首领宝箱」发放时设为 true：击杀首领不再自动发，由宝箱拾取时调用 claimBossRelic()。 */
+  deferBossRelic = false;
 
   constructor(private readonly scene: Phaser.Scene, private readonly player: Player, private readonly tier: number, private readonly elapsed: () => number, private readonly finalBoss: () => boolean, private readonly onPickup?: (item: ItemInstance) => void, private readonly relicStage: () => string | null = () => null) {
     ensureItemTextures(scene);
@@ -45,7 +47,7 @@ export class ItemDrops {
     if (enemy.kind === 'boss') {
       const n = this.finalBoss() ? 2 : 1;
       for (let i = 0; i < n; i++) this.collect(rollItem(rollDropQuality(n > 1 ? 'finalBoss' : 'boss', this.tier, this.pity, this.rng), this.rng));
-      const extra = this.bossRelicDrop(); if (extra) this.collect(extra);
+      if (!this.deferBossRelic) this.claimBossRelic();
       return;
     }
     const elite = enemy.kind === 'elite';
@@ -57,6 +59,12 @@ export class ItemDrops {
    * 首领遗珍（用户批准的掉落规则）：该关首领的核心遗珍还没拥有（行囊或本局缴获里都没有）→ 必掉；
    * 还有没拿到的可选件 → 15% 掉一件；全部拥有 → 改为多掉一件本章档位、至少紫色的兵装。没有遗珍的关返回 null。
    */
+  /**
+   * 发放本关首领遗珍（规则同 bossRelicDrop）：收进本局缴获（结算带回行囊），返回发出的道具，没有则 null。
+   * 名字 / 说明：itemName(item)、relicDef(item.base)（data/items.ts）。供首领宝箱等调用。
+   */
+  claimBossRelic(): ItemInstance | null { const r = this.bossRelicDrop(); if (r) this.collect(r); return r; }
+
   bossRelicDrop(): ItemInstance | null {
     const defs = relicsForStage(this.relicStage()); if (!defs.length) return null;
     let owned: Set<string>; try { owned = new Set([...loadItems().bag, ...this.runLoot].map(i => i.base)); } catch { owned = new Set(this.runLoot.map(i => i.base)); }

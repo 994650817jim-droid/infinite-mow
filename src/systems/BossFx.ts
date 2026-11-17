@@ -9,7 +9,7 @@ export const BOSS_FX = ['zj_pillar', 'zj_talisman', 'lb_whirl', 'ys_coin', 'cr_b
 export type BossFxKey = typeof BOSS_FX[number];
 const texKey = (k: BossFxKey): string => 'bossfx_' + k;
 /** 已有图的键（图到一张登记一张，避免请求不存在的文件）。 */
-export const BOSS_FX_READY: readonly BossFxKey[] = [];
+export const BOSS_FX_READY: readonly BossFxKey[] = ['zj_pillar', 'zj_talisman', 'lb_whirl', 'ys_coin', 'cr_bagua', 'kit_shift'];
 
 /** 确保这些特效图在加载（已加载 / 没有图的跳过）。 */
 export function ensureBossFx(scene: Phaser.Scene, keys: readonly BossFxKey[]): void {

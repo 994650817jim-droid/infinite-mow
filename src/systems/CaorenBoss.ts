@@ -9,6 +9,8 @@ type Move = 'wall' | 'hold';
 type Gate = 'live' | 'dead' | 'none';
 /** 八门：休 生 伤 杜 景 死 惊 开（按顺时针排在八个方位）。 */
 const GATE_NAMES = ['休', '生', '伤', '杜', '景', '死', '惊', '开'] as const;
+/** 扇区起始偏 22.5°：阵盘图的卦位居中在正北，分界在 ±22.5°，让八门分界对上图里的辐条。 */
+export const GATE_OFFSET = Math.PI / 8;
 
 /**
  * 5-3 曹仁「八门金锁」（重设计样板）：应对方式 = 场地机制。
@@ -41,7 +43,7 @@ export class CaorenBoss extends ArcBossV2<Move> {
     out[idx[0]] = 'live'; for (let i = 1; i <= dead; i++) out[idx[i]] = 'dead';
     return out;
   }
-  private sectorOf(x: number, y: number): number { const a = Math.atan2(y - this.cy, x - this.cx); return ((Math.floor((a + Math.PI) / (Math.PI / 4)) % 8) + 8) % 8; }
+  private sectorOf(x: number, y: number): number { const a = Math.atan2((y - this.cy) / .8, x - this.cx) - GATE_OFFSET; return ((Math.floor((a + Math.PI) / (Math.PI / 4)) % 8) + 8) % 8; }
   private inArena(x: number, y: number): boolean { return Math.hypot(x - this.cx, (y - this.cy) / .8) <= CR.gates.radius; }
   get playerGate(): Gate { const p = this.h.player; return this.inArena(p.x, p.y) ? this.gates[this.sectorOf(p.x, p.y)] : 'none'; }
   /** 举盾时，主将在盾面正前方 → 几乎免伤；站生门 → +20%。 */
@@ -116,9 +118,9 @@ export class CaorenBoss extends ArcBossV2<Move> {
     const g = this.arena, R = CR.gates.radius, step = Math.PI / 4; g.clear();
     // 手绘阵盘（图到后）：浮现 0–1 → 发光循环 2–4；扇区的生 / 死只用淡色铺底 + 门名
     if (!this.disc) this.disc = bossFxImage(this.h.scene, 'cr_bagua', DEPTH.ground + 2);
-    if (this.disc) this.disc.setPosition(this.cx, this.cy).setDisplaySize(R * 2.3, R * 2.3 * .8).setFrame(2 + Math.floor(now / 200) % 3).setAlpha(.85);
+    if (this.disc) this.disc.setPosition(this.cx, this.cy).setDisplaySize(R * 2.3, R * 2.3 * .8).setFrame(2 + Math.floor(now / 200) % 3).setAlpha(.36);
     for (let i = 0; i < 8; i++) {
-      const a0 = -Math.PI + i * step, a1 = a0 + step, kind = this.gates[i], nk = this.nextGates[i];
+      const a0 = -Math.PI + i * step + GATE_OFFSET, a1 = a0 + step, kind = this.gates[i], nk = this.nextGates[i];
       const blink = warning && Math.floor(now / 160) % 2 === 0, show = blink ? nk : kind;
       if (show !== 'none') {
         const col = show === 'live' ? 0x5fae5a : 0xb8382a, al = show === 'live' ? .2 : .22;

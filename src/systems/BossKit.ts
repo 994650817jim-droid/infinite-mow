@@ -63,7 +63,7 @@ export class BossKit {
     scene.cameras.main.flash(260, (tint >> 16) & 255, (tint >> 8) & 255, tint & 255, false);
     this.h.banner(line, caption); this.h.sfx?.('gong');
     // 手绘气浪（图到后）：以首领为中心向外冲，按首领换色
-    playBossFx(scene, 'kit_shift', boss.x, boss.y - 20, 460, DEPTH.fx + 1, 0, 5, 700, tint === 0x300808 ? 0xff7a5a : tint === 0x3a2a05 ? 0xffd77a : undefined);
+    playBossFx(scene, 'kit_shift', boss.x, boss.y - 20, 460, DEPTH.fx + 1, 0, 5, 700, tint === 0x300808 ? 0xff7a5a : tint === 0x3a2a05 ? 0xffd77a : 0xffe2b0);
     this.overlay?.destroy();
     this.overlay = scene.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH * 1.2, GAME_HEIGHT * 1.2, tint, 0).setScrollFactor(0).setDepth(DEPTH.fx + 6).setName('boss-phase-filter');
     scene.tweens.add({ targets: this.overlay, fillAlpha: alpha, duration: 900 });

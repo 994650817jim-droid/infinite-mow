@@ -18,7 +18,9 @@ const open = async (layout, cfg) => {
   await p.evaluate(cfg => { const g = window.__game; g.registry.set('runConfig', { character: 'zhaoyun', ...cfg }); for (const s of g.scene.getScenes(true)) s.scene.stop(); if (g.registry.get('battleReady')) g.scene.start('GameScene'); else { g.registry.set('loadBattle', true); g.scene.start('BootScene'); } }, cfg);
   await p.waitForFunction(() => window.__game.scene.isActive('GameScene') && window.__game.scene.getScene('GameScene').player, null, { timeout: 90000 });
   await p.waitForTimeout(1200);
-  await p.evaluate(G0 => { const s = eval(G0); s.player.damageImmune = true; }, G);
+  await p.evaluate(G0 => { const s = eval(G0); s.player.damageImmune = true;
+    // 等级合并（f4ea0ab / 5f89729）后：跳过波次 / 开首领宝箱会补保底三选一，弹窗暂停战斗时钟（首领不登场、宝箱不落地）。等待期间自动点掉
+    window.__waitPick = async ms => { const end = performance.now() + ms; for (;;) { while (s.mode === 'levelup') s.chooseUpgrade(0); if (performance.now() >= end) break; await new Promise(r => setTimeout(r, 50)); } }; }, G);
   return p;
 };
 const info = p => p.evaluate(G0 => { const s = eval(G0); return { name: s.chapter.name, waves: s.chapter.waves.length, obj: s.objective?.o.kind ?? null, text: s.children.getByName('objective-text')?.text, boss: !!s.boss, bossName: s.chapter.bossName, state: s.objective?.state }; }, G);
@@ -33,7 +35,7 @@ const info = p => p.evaluate(G0 => { const s = eval(G0); return { name: s.chapte
   ck('[desktop] 1-1 波次构成：第 1 波全刀兵；第 2 波约 15% 刀盾兵；第 3 波加入约 10% 弓手', Object.keys(mix.w1).join() === 'infantry' && mix.w2.shield > 200 && mix.w2.shield < 420 && !mix.w2.archer && mix.w3.archer > 120 && mix.w3.archer < 300 && mix.names.join() === '外围哨兵,刀盾阻路,张梁迎战', mix);
   const sh = await p.evaluate(G0 => { const s = eval(G0), e = s.spawnEnemy('shield', s.player.x + 300, s.player.y, 1, true); return { sheet: e.walkSheet, shield: e.shieldMax }; }, G);
   ck('[desktop] 1-1 刀盾兵用黄巾刀盾兵造型、带盾', /yellow_shield/.test(sh.sheet) && sh.shield > 0, sh);
-  const r = await p.evaluate(async G0 => { const s = eval(G0); for (let i = 0; i <= s.chapter.waves.length; i++) s.recruitedWaves.add(i); s.pendingRecruit = false; const t = s.chapter.waves[s.chapter.waves.length - 1].start; s.elapsed = Math.max(0, t - 2); await new Promise(r => setTimeout(r, 300)); const early = !!s.boss; s.elapsed = t + .5; await new Promise(r => setTimeout(r, 700)); return { early, boss: !!s.boss, name: s.chapter.bossName }; }, G);
+  const r = await p.evaluate(async G0 => { const s = eval(G0); for (let i = 0; i <= s.chapter.waves.length; i++) s.recruitedWaves.add(i); s.pendingRecruit = false; const t = s.chapter.waves[s.chapter.waves.length - 1].start; s.elapsed = Math.max(0, t - 2); await window.__waitPick(300); const early = !!s.boss; s.elapsed = t + .5; await window.__waitPick(700); return { early, boss: !!s.boss, name: s.chapter.bossName }; }, G);
   ck('[desktop] 1-1：最后一波开始张梁登场，之前不出', !r.early && r.boss && r.name === '张梁', r);
   await p.screenshot({ path: `${out}/desktop-1-1-waves.png` });
   await p.close();
@@ -44,7 +46,7 @@ const info = p => p.evaluate(G0 => { const s = eval(G0); return { name: s.chapte
   const a = await info(p);
   const props = await p.evaluate(G0 => { const s = eval(G0); return { altars: s.children.list.filter(o => o.type === 'Text' && /黄巾祭坛/.test(o.text)).length, textVisible: !!s.children.getByName('objective-text')?.visible }; }, G);
   ck('[desktop] 1-2：3 波、无关卡目标、场上没有黄巾祭坛', a.waves === 3 && a.obj === null && props.altars === 0 && !props.textVisible, { a, props });
-  const r = await p.evaluate(async G0 => { const s = eval(G0); for (let i = 0; i <= s.chapter.waves.length; i++) s.recruitedWaves.add(i); s.pendingRecruit = false; const t = s.chapter.waves[s.chapter.waves.length - 1].start; s.elapsed = Math.max(0, t - 2); await new Promise(r => setTimeout(r, 300)); const early = !!s.boss; s.elapsed = t + .5; await new Promise(r => setTimeout(r, 700)); return { early, boss: !!s.boss, name: s.chapter.bossName, t }; }, G);
+  const r = await p.evaluate(async G0 => { const s = eval(G0); for (let i = 0; i <= s.chapter.waves.length; i++) s.recruitedWaves.add(i); s.pendingRecruit = false; const t = s.chapter.waves[s.chapter.waves.length - 1].start; s.elapsed = Math.max(0, t - 2); await window.__waitPick(300); const early = !!s.boss; s.elapsed = t + .5; await window.__waitPick(700); return { early, boss: !!s.boss, name: s.chapter.bossName, t }; }, G);
   ck('[desktop] 1-2：打完波次（最后一波开始）张宝登场，之前不出', !r.early && r.boss && r.name === '张宝', r);
   await p.screenshot({ path: `${out}/desktop-1-2-waves.png` });
   await p.close();
@@ -57,9 +59,9 @@ for (const layout of ['mobile', 'desktop']) {
   ck(`[${layout}] 2-2：3 波、没有关卡目标（无伤兵车、无护送提示）`, a.waves === 3 && !a.obj && !ui.obj && !ui.hud && !ui.cart, { a, ui });
   await p.screenshot({ path: `${out}/${layout}-xingyang-no-escort.png` });
   if (layout === 'desktop') {
-    const r = await p.evaluate(async G0 => { const s = eval(G0); for (let i = 0; i <= s.chapter.waves.length; i++) s.recruitedWaves.add(i); s.pendingRecruit = false; s.elapsed = 250; await new Promise(r => setTimeout(r, 900)); return { over: s.over, boss: !!s.boss, name: s.chapter.bossName }; }, G);
+    const r = await p.evaluate(async G0 => { const s = eval(G0); for (let i = 0; i <= s.chapter.waves.length; i++) s.recruitedWaves.add(i); s.pendingRecruit = false; s.elapsed = 250; await window.__waitPick(900); return { over: s.over, boss: !!s.boss, name: s.chapter.bossName }; }, G);
     ck('2-2：不会因时间耗尽失败，按时出首领徐荣', !r.over && r.boss && r.name === '徐荣', r);
-    const w = await p.evaluate(async G0 => { const s = eval(G0); s.player.damageImmune = true; s.hitEnemy(s.boss, 1e7, s.combatNow, 'melee', false, false); for (let i = 0; i < 40 && !s.over && s.mode !== 'rest'; i++) { await new Promise(r => setTimeout(r, 150)); s.collectBossChests?.(); } return { over: s.over, victory: s.victory, mode: s.mode }; }, G);
+    const w = await p.evaluate(async G0 => { const s = eval(G0); s.player.damageImmune = true; s.hitEnemy(s.boss, 1e7, s.combatNow, 'melee', false, false); for (let i = 0; i < 40 && !s.over && s.mode !== 'rest'; i++) { await window.__waitPick(150); s.collectBossChests?.(); } return { over: s.over, victory: s.victory, mode: s.mode }; }, G);
     ck('2-2：击败徐荣、捡起宝箱后通关', (w.over && w.victory) || w.mode === 'rest', w);
   }
   await p.close();
@@ -67,7 +69,7 @@ for (const layout of ['mobile', 'desktop']) {
 {
   const p = await open('mobile', { chapter: 'hulao', westStage: 1 });
   const a = await info(p);
-  const r = await p.evaluate(async G0 => { const s = eval(G0); for (let i = 0; i <= s.chapter.waves.length; i++) s.recruitedWaves.add(i); s.pendingRecruit = false; s.elapsed = 91; await new Promise(r => setTimeout(r, 600)); return { boss: !!s.boss, text: s.children.getByName('objective-text')?.visible ?? false }; }, G);
+  const r = await p.evaluate(async G0 => { const s = eval(G0); for (let i = 0; i <= s.chapter.waves.length; i++) s.recruitedWaves.add(i); s.pendingRecruit = false; s.elapsed = 91; await window.__waitPick(600); return { boss: !!s.boss, text: s.children.getByName('objective-text')?.visible ?? false }; }, G);
   ck('2-1 汜水关：3 波、无目标行，90 秒华雄出阵', a.waves === 3 && a.obj === null && r.boss && !r.text, { a, r });
   await p.close();
 }

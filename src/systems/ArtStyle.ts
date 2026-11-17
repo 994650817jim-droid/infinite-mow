@@ -56,6 +56,9 @@ export const ART_V2_FILES: Readonly<Record<string, string>> = {
   // 第 3 批（一）：黄巾章小兵 + 通用弓兵
   // 第六章荆南新兵：山越弓手、藤牌兵（行走 512 / 攻击 640，4×4）
   // 第八章汉中新兵：青州兵、魏军强弩手（同上规格）
+  // 第十章夷陵新兵：解烦兵（画风会话 ebfcb2b）；江东弓弩手图未到，沿用换色
+  yiling_jiefan_walk_sheet: 'assets/processed-v2/enemies/yiling_jiefan_walk.png',
+  yiling_jiefan_attack_sheet: 'assets/processed-v2/enemies/yiling_jiefan_attack.png',
   hanzhong_qingzhou_walk_sheet: 'assets/processed-v2/enemies/hanzhong_qingzhou_walk.png',
   hanzhong_qingzhou_attack_sheet: 'assets/processed-v2/enemies/hanzhong_qingzhou_attack.png',
   hanzhong_wei_crossbow_walk_sheet: 'assets/processed-v2/enemies/hanzhong_wei_crossbow_walk.png',
@@ -125,7 +128,7 @@ export const ART_V2_FILES: Readonly<Record<string, string>> = {
   // 第十章 夷陵之战首领：正式 v2 图到之前借用现有首领 v2 图过渡（yilingChapter.YILING_SHEETS 是 v1 回退）
   yiling_sunhuan: 'assets/bosses-v2/third_zhangxiu.png',
   yiling_zhuran: 'assets/bosses-v2/jingnan_hanxuan.png',
-  yiling_luxun: 'assets/bosses-v2/jingnan_zhaofan.png',
+  yiling_luxun: 'assets/bosses-v2/yiling_luxun.png', // 正式 v2（画风会话 ebfcb2b，Gemini 出图）
   // 第十二章 北伐首领：正式 v2 图到之前借用现有首领 v2 图过渡（beifaChapter.BEIFA_SHEETS 是 v1 回退）
   beifa_zhanghe: 'assets/bosses-v2/hanzhong_zhanghe.png',
   beifa_haozhao: 'assets/bosses-v2/jingnan_liudu.png',
@@ -260,6 +263,7 @@ export const V2_TROOP_KEYS: readonly string[] = [
   'yellow_zhangliang_walk', 'yellow_zhangliang_attack', 'yellow_zhangbao_walk', 'yellow_zhangbao_cast', 'zhangjiao_walk', 'zhangjiao_cast',
   // 第六章荆南新兵（JingnanGameScene.preload 按需加载）
   'jingnan_shanyue_archer_walk_sheet', 'jingnan_shanyue_archer_attack_sheet', 'jingnan_rattan_shield_walk_sheet', 'jingnan_rattan_shield_attack_sheet',
+  'yiling_jiefan_walk_sheet', 'yiling_jiefan_attack_sheet',
   'hanzhong_qingzhou_walk_sheet', 'hanzhong_qingzhou_attack_sheet', 'hanzhong_wei_crossbow_walk_sheet', 'hanzhong_wei_crossbow_attack_sheet',
 ];
 /** 章节新兵：v2 时挂行走 / 攻击图集（4×4，行走格 128）并去掉换色；v1 保持换色过渡。图集由各章 GameScene.preload 用 loadV2TroopSheets 按需加载。 */

@@ -161,3 +161,4 @@ assets/raw/*
 !/tools/test-hanzhong-art.mjs
 !/tools/test-yiling-full.mjs
 !/tools/test-beifa-full.mjs
+!/tools/test-yiling-art.mjs

@@ -7,6 +7,8 @@ import { FOLLOW, TEMPLATES, type FollowerTemplate } from '../data/recruits';
 import type { Enemy } from '../entities/Enemy';
 import type { Player } from '../entities/Player';
 import { visualTextureKey } from './ReadableTextures';
+import { framesFigure, sheetFigureHeight } from './SpriteMetrics';
+import { ACTION_MS, HERO_ACTIONS, type ActionFrame } from '../data/heroActions';
 import { HINT_MOCK, groundScar } from '../ui/HintStyle';
 import { rankBonus, type Recruit } from './RosterStore';
 import { loadout, type GearOwner } from './ItemStore';
@@ -18,20 +20,35 @@ import type { ItemInstance } from '../data/items';
  * - 阵位：主公身后固定阵位（1 人正后；2 人左后 / 右后；3 人左后 / 右后 / 正后），离主公约 56 像素，随主公移动方向平滑转动；
  *   用指数平滑追阵位（几乎同步，不抖、不滑步），不做碰撞，不会被敌人卡住；偏离超过 160 像素直接归位。
  * - 攻击：只打自己射程内的敌人；近战（枪 / 刀）出手时朝目标前出 22 像素，随后自动回位。四种模板（枪扫一圈 / 刀前方扇形 / 弓单发远射 / 谋延迟火点）。可玩名将暂用与其兵器相近的模板（专属武器跟随版待做，见计划）。
- * - 受伤：每 0.4 秒结算贴身敌人的接触伤害（首领 ×3）；倒下撤下休整 20 秒后在主将身边归队，不会本局阵亡。
+ * - 受伤：每 0.4 秒结算贴身敌人的接触伤害（首领 ×3）。血量打空就倒在原地（播倒地 / 受伤动作），不攻击、不再受伤；
+ *   主将走到身边 60 像素内站满 5 秒救起（离开时进度每秒回退 1 秒），带 40% 生命归队。主将头顶环形读条 +「救援」，倒地者头上「救」字，屏幕外给方向箭头。
+ * - 动作：名将用 HERO_ACTIONS 自己的攻击 / 倒地帧；无名之辈与史事名将复用蜀军兵种 v2 攻击帧（枪 = 长枪兵、刀 = 刀盾兵、弓 = 弓兵）和军医施术动作（谋），
+ *   兵种没有倒地帧，倒地时复用站立帧侧倒 + 下沉 + 变暗。
  * - 不进后备兵编制，不占同屏敌人名额；目标查找走空间网格，每人每 0.15 秒最多查一次。
- * 美术：可玩名将用自己的行走图；史事名将 / 大众脸用蜀军兵种行走图（程序化过渡）+ 头顶品质色名牌。
+ * 美术：可玩名将用自己的行走图；史事名将 / 无名之辈用蜀军兵种行走图（谋士复用军医长袍形象）+ 头顶品质色名牌。
  */
 type Query = (x: number, y: number, r: number) => Enemy[];
 type Hit = (enemy: Enemy, damage: number, fire: boolean) => void;
 interface Fx { kind: FollowerTemplate | 'arrow'; x: number; y: number; tx: number; ty: number; angle: number; at: number; until: number; hitAt?: number; damage?: number; owner?: Follower; scar?: boolean }
 
 const QUALITY_POWER: Record<ItemQuality, number> = { white: 1, green: 1.15, blue: 1.3, purple: 1.5, orange: 1.6 };
-const TROOP_SHEET: Record<FollowerTemplate, string> = { spear: 'shu_spearman_walk_sheet', blade: 'shu_swordsman_walk_sheet', bow: 'shu_archer_walk_sheet', strategist: 'shu_archer_walk_sheet' };
+const TROOP_SHEET: Record<FollowerTemplate, string> = { spear: 'shu_spearman_walk_sheet', blade: 'shu_swordsman_walk_sheet', bow: 'shu_archer_walk_sheet', strategist: 'legion_medic_walk' };
+/** 无名之辈 / 史事名将的出手动作：复用兵种攻击图（v2 切帧后帧名 atk_方向_0/1；军医施术图帧名 方向_0..3）。弓兵攻击表各行都朝右拉弓，朝左时镜像（同后备兵）。 */
+const TROOP_ATTACK: Record<FollowerTemplate, string> = { spear: 'shu_spearman_attack_sheet', blade: 'shu_swordsman_attack_sheet', bow: 'shu_archer_attack_sheet', strategist: 'legion_medic_action' };
+type Dir = 'down' | 'up' | 'left' | 'right';
+export type FollowerAct = 'attack' | 'skill' | 'hurt' | 'die';
+interface ActState { key: string; frames: ActionFrame[]; mirror: boolean; start: number; until: number; hold: boolean }
 const heroSheet = (id: string) => id === 'zhaoyun' ? 'hero_walk_sheet' : `${id}_walk_sheet`;
 
 export class Follower {
-  hp = 1; maxHp = 1; cooldown = 0; restUntil = 0; target: Enemy | null = null; nextQuery = 0; nextContact = 0;
+  hp = 1; maxHp = 1; cooldown = 0; target: Enemy | null = null; nextQuery = 0; nextContact = 0;
+  /** 倒地（等主将来救）与救援进度（秒）；救起次数。 */
+  downed = false; reviveProgress = 0; revives = 0;
+  /** 正在播的动作（攻击 / 受伤 / 倒地），播完回到行走帧；倒地动作定格在最后一帧。 */
+  act: ActState | null = null;
+  private readonly fits = new Map<string, { k: number; originY: number }>();
+  /** 倒地标记与屏幕外箭头的文字（用到才建）。 */
+  mark?: Phaser.GameObjects.Text; arrowText?: Phaser.GameObjects.Text;
   slot = 0; dir: 'down' | 'up' | 'left' | 'right' = 'down'; walk = 0; lastX = 0; lastY = 0; hurtUntil = 0; downs = 0; kills = 0; hits = 0;
   /** 近战前出的偏移（出手时设、之后衰减回 0）与面向目标的时限。 */
   lx = 0; ly = 0; faceUntil = 0;
@@ -71,10 +88,49 @@ export class Follower {
     this.lastX = x; this.lastY = y;
   }
   get x() { return this.sprite.x; } get y() { return this.sprite.y; }
-  get resting() { return this.restUntil > 0; }
+  /** 倒地期间不行动（本命武器执行器也按这个判断）。 */
+  get resting() { return this.downed; }
   setVisible(on: boolean) { this.sprite.setVisible(on); this.shadow.setVisible(on); this.label.setVisible(on); this.bar.setVisible(on); }
   place(x: number, y: number) { this.sprite.setPosition(x, y); this.lastX = x; this.lastY = y; }
-  destroy() { this.sprite.destroy(); this.shadow.destroy(); this.label.destroy(); this.bar.destroy(); }
+  destroy() { this.sprite.destroy(); this.shadow.destroy(); this.label.destroy(); this.bar.destroy(); this.mark?.destroy(); this.arrowText?.destroy(); }
+  /** 行走帧缩放（人物约 70 像素高）。 */
+  get walkScale(): number { const k = visualTextureKey(this.scene, this.sheet), fh = this.scene.textures.getFrame(k, 'down_0')?.height || 96; return 70 / fh; }
+  /**
+   * 播动作。名将：HERO_ACTIONS 的攻击（四向，朝左镜像朝右）/ 招牌 / 受伤 / 倒地帧；
+   * 无名之辈与史事名将：只有攻击动作，复用兵种攻击图。返回是否播出（没有对应帧时 false）。
+   */
+  play(kind: FollowerAct, dir: Dir, now: number): boolean {
+    if (this.downed && kind !== 'die' && kind !== 'hurt') return false;
+    const hero = this.recruit.hero, set = hero ? HERO_ACTIONS[hero] : undefined;
+    let key = '', frames: ActionFrame[] | undefined, mirror = false;
+    if (set && this.scene.textures.exists(set.texture)) {
+      key = set.texture;
+      if (kind === 'attack' || (kind === 'skill' && !set.skill?.length)) { if (dir === 'left') { frames = set.attack.left ?? set.attack.right; mirror = !set.attack.left; } else frames = set.attack[dir]; }
+      else { frames = set[kind]; mirror = dir === 'left'; }
+    } else if (!hero && kind === 'attack') {
+      key = TROOP_ATTACK[this.template]; if (!this.scene.textures.exists(key)) return false;
+      if (this.template === 'strategist') frames = [0, 1, 2, 3].map(i => `${dir}_${i}`);
+      else if (this.template === 'bow') { frames = ['atk_right_0', 'atk_right_1']; mirror = dir === 'left'; }
+      else frames = [`atk_${dir}_0`, `atk_${dir}_1`];
+    }
+    if (!key || !frames?.length || !frames.every(fr => this.scene.textures.get(key).has(String(fr)))) return false;
+    const hold = kind === 'die';
+    this.act = { key, frames, mirror, start: now, until: now + (ACTION_MS[kind] ?? 260), hold };
+    return true;
+  }
+  /** 动作帧 → 缩放与脚底锚点（同主将的做法：按「站姿人物高度」之比统一缩放，脚线对齐行走帧，切换时人物不忽大忽小、脚不上下跳）。 */
+  fitFor(key: string, ref: ActionFrame[]): { k: number; originY: number } {
+    const hit = this.fits.get(key); if (hit) return hit;
+    const walkKey = visualTextureKey(this.scene, this.sheet), walkFrameH = this.scene.textures.getFrame(walkKey, 'down_0')?.height || 96, actFrameH = this.scene.textures.getFrame(key, ref[0])?.height || 96;
+    const walkRef = framesFigure(this.scene, walkKey, (['down', 'left', 'right', 'up'] as const).flatMap(d => [0, 1, 2, 3].map(i => `${d}_${i}`)));
+    const actRef = framesFigure(this.scene, key, ref);
+    const walkH = walkRef?.height ?? sheetFigureHeight(this.scene, walkKey) ?? 90, actH = actRef?.height ?? sheetFigureHeight(this.scene, key) ?? 90;
+    const kw = 70 / walkFrameH, k = kw * walkH / actH;
+    const walkFoot = ((walkRef?.bottom ?? walkFrameH * .96) + 1 - walkFrameH * .86) * kw;
+    const fit = { k, originY: Phaser.Math.Clamp(((actRef?.bottom ?? actFrameH * .89) + 1 - walkFoot / k) / actFrameH, .3, .95) };
+    if (walkRef && actRef) this.fits.set(key, fit);
+    return fit;
+  }
 }
 
 export class FollowerSquad {
@@ -83,7 +139,9 @@ export class FollowerSquad {
   private readonly gfx: Phaser.GameObjects.Graphics;
   private readonly buf: Enemy[] = [];
   /** 统计（测试 / 平衡用）。 */
-  readonly stats = { damage: 0, hits: 0, teleports: 0, downs: 0, maxDist: 0 };
+  readonly stats = { damage: 0, hits: 0, teleports: 0, downs: 0, revives: 0, maxDist: 0 };
+  /** 救援界面：主将头顶环形读条与「救援」字样、屏幕外方向箭头（都在世界坐标里画，箭头贴可见范围边缘）。 */
+  private readonly rescueGfx: Phaser.GameObjects.Graphics; private readonly rescueText: Phaser.GameObjects.Text; private readonly hud: Phaser.GameObjects.Graphics;
   /** 当前吃主将全局伤害加成的倍率（本命武器结算时用）。 */
   share = 1;
   /** 本命武器命中时记账（测试 / 平衡用）。 */
@@ -96,6 +154,9 @@ export class FollowerSquad {
   private vx = 0; private vy = 0;
   constructor(private readonly scene: Phaser.Scene, private readonly player: Player, recruits: Recruit[], private readonly query: Query, private readonly hit: Hit, private readonly leaderDamage: () => number) {
     this.gfx = scene.add.graphics().setDepth(DEPTH.fx);
+    this.rescueGfx = scene.add.graphics().setDepth(DEPTH.player + 3).setName('follower-rescue-ring');
+    this.rescueText = scene.add.text(0, 0, '', { fontFamily: FONT, fontSize: '14px', color: '#ffe3a0', resolution: 2 }).setOrigin(.5).setDepth(DEPTH.player + 3).setStroke('#2a1408', 4).setVisible(false).setName('follower-rescue-text');
+    this.hud = scene.add.graphics().setDepth(DEPTH.player + 40).setName('follower-rescue-arrows');
     const n = recruits.length;
     recruits.forEach((r, i) => { const s = this.slotPos(i, n), f = new Follower(scene, r, s.x, s.y, 1); f.slot = i; this.members.push(f); });
     // 可玩名将用本命武器（场景支持时）；测试面板与正式出征共用这里
@@ -113,10 +174,7 @@ export class FollowerSquad {
     const p = this.player, n = this.members.length, dmgShare = 1 + FOLLOW.shareLeaderDamage * (Math.max(.2, this.leaderDamage()) - 1); this.share = dmgShare;
     this.gfx.clear();
     for (const f of this.members) {
-      if (f.resting) {
-        if (now < f.restUntil) continue;
-        f.restUntil = 0; f.hp = f.maxHp; const s = this.slotPos(f.slot, n); f.place(s.x, s.y); f.lx = f.ly = 0; f.setVisible(true); f.sprite.setAlpha(0); this.scene.tweens.add({ targets: f.sprite, alpha: 1, duration: 300 });
-      }
+      if (f.downed) { this.updateDowned(f, dt, now); this.render(f, now); continue; }
       // 阵位 + 近战前出偏移（指数衰减回位）
       const decay = Math.exp(-8 * dt); f.lx *= decay; f.ly *= decay;
       const s = this.slotPos(f.slot, n), lead = 1 / FOLLOW.followK, gx = s.x + f.lx + this.vx * lead, gy = s.y + f.ly + this.vy * lead;
@@ -146,6 +204,7 @@ export class FollowerSquad {
       this.render(f, now);
       this.stats.maxDist = Math.max(this.stats.maxDist, Math.hypot(f.x - p.x, f.y - p.y));
     }
+    this.drawRescue(now);
     // 阵位朝向：跟主公的移动方向平滑转动（停下时保持）
     if (Number.isFinite(this.px) && dt > 0) { const mx = p.x - this.px, my = p.y - this.py, kv = 1 - Math.exp(-10 * dt), jump = Math.hypot(mx, my) > 60; this.vx = jump ? 0 : this.vx + (mx / dt - this.vx) * kv; this.vy = jump ? 0 : this.vy + (my / dt - this.vy) * kv; if (Math.hypot(mx, my) > .4) { const to = Math.atan2(my, mx), d = Phaser.Math.Angle.Wrap(to - this.heading); this.heading += d * (1 - Math.exp(-FOLLOW.turnRate * dt)); } }
     this.px = p.x; this.py = p.y;
@@ -153,9 +212,57 @@ export class FollowerSquad {
   }
   /** 外部伤害（首领技能等）。 */
   hurt(f: Follower, damage: number, now: number): void {
-    if (f.resting) return;
+    if (f.downed) return; // 倒地期间不被追打补刀
     f.hp -= damage * Math.max(0, 1 - f.gear.reduce); f.hurtUntil = now + 140;
-    if (f.hp <= 0) { f.hp = 0; f.restUntil = now + FOLLOW.restMs; f.downs++; this.stats.downs++; f.target = null; f.setVisible(false); this.puff(f.x, f.y, now); }
+    if (f.hp <= 0) this.down(f, now); else if (!f.act || now >= f.act.until) f.play('hurt', f.dir, now);
+  }
+  /** 倒在原地：名将播倒地动作并定格；兵种复用站立帧侧倒 + 下沉 + 变暗。 */
+  down(f: Follower, now: number): void {
+    f.hp = 0; f.downed = true; f.reviveProgress = 0; f.downs++; this.stats.downs++; f.target = null; f.lx = f.ly = 0; f.walk = 0;
+    if (!f.play('die', f.dir, now)) f.act = null;
+  }
+  /** 救起：带 FOLLOW.reviveHp 生命，回到阵位继续战斗。 */
+  revive(f: Follower, now: number): void {
+    f.downed = false; f.reviveProgress = 0; f.revives++; this.stats.revives++; f.act = null; f.hp = Math.max(1, Math.round(f.maxHp * FOLLOW.reviveHp));
+    f.sprite.setAngle(0).clearTint().setAlpha(1); f.cooldown = .3; f.nextContact = now + 600; f.mark?.setVisible(false); f.arrowText?.setVisible(false);
+    this.puff(f.x, f.y, now);
+  }
+  /** 主将在半径内：每秒 +1 秒进度；离开：每秒回退 FOLLOW.reviveDecay 秒（缓慢回退，不清零）。 */
+  private updateDowned(f: Follower, dt: number, now: number): void {
+    const d = Math.hypot(this.player.x - f.x, this.player.y - f.y);
+    f.reviveProgress = d <= FOLLOW.reviveRadius ? f.reviveProgress + dt : Math.max(0, f.reviveProgress - dt * FOLLOW.reviveDecay);
+    if (f.reviveProgress >= FOLLOW.reviveSec) this.revive(f, now);
+  }
+  /** 救援界面：主将头顶环形读条 +「救援」、倒地者头上「救」字、屏幕外方向箭头。 */
+  private drawRescue(now: number): void {
+    const g = this.rescueGfx, hud = this.hud, p = this.player; g.clear(); hud.clear();
+    let best: Follower | null = null;
+    for (const f of this.members) {
+      if (!f.downed) continue;
+      if (Math.hypot(p.x - f.x, p.y - f.y) <= FOLLOW.reviveRadius && (!best || f.reviveProgress > best.reviveProgress)) best = f;
+      // 倒地者头上「救」字（脉动）
+      if (!f.mark) f.mark = this.scene.add.text(0, 0, '救', { fontFamily: FONT, fontSize: '16px', color: '#fff2c8', backgroundColor: '#b8322a', padding: { x: 4, y: 1 }, resolution: 2 }).setOrigin(.5).setDepth(DEPTH.player + 2).setName('follower-down-mark');
+      f.mark.setVisible(true).setPosition(f.x, f.y - 88 + Math.sin(now / 180) * 3).setScale(1 + .08 * Math.sin(now / 160));
+      // 屏幕外：屏幕边缘方向箭头
+      const cam = this.scene.cameras.main, v = cam.worldView;
+      if (!v.contains(f.x, f.y - 20)) {
+        // 箭头画在世界坐标里、贴着当前可见范围的边缘（随镜头每帧重画），不受镜头缩放影响
+        const cx = v.x + v.width / 2, cy = v.y + v.height / 2, a = Math.atan2(f.y - cy, f.x - cx);
+        const m = 34, tx = Math.cos(a), ty = Math.sin(a), s = Math.min((v.width / 2 - m) / Math.max(1e-6, Math.abs(tx)), (v.height / 2 - m) / Math.max(1e-6, Math.abs(ty)));
+        const ax = cx + tx * s, ay = cy + ty * s;
+        hud.fillStyle(0xb8322a, .95).fillCircle(ax, ay, 15).lineStyle(2, 0xffe3a0, 1).strokeCircle(ax, ay, 15);
+        hud.fillStyle(0xffe3a0, 1).fillTriangle(ax + tx * 26, ay + ty * 26, ax + tx * 14 - ty * 9, ay + ty * 14 + tx * 9, ax + tx * 14 + ty * 9, ay + ty * 14 - tx * 9);
+        if (!f.arrowText) f.arrowText = this.scene.add.text(0, 0, '救', { fontFamily: FONT, fontSize: '14px', color: '#fff2c8', resolution: 2 }).setOrigin(.5).setDepth(DEPTH.player + 41).setName('follower-down-arrow');
+        f.arrowText.setVisible(true).setPosition(ax, ay);
+      } else f.arrowText?.setVisible(false);
+    }
+    if (best) {
+      const x = p.x, y = p.y - 100, r = 17, k = Math.min(1, best.reviveProgress / FOLLOW.reviveSec);
+      g.fillStyle(0x140c06, .7).fillCircle(x, y, r + 4);
+      g.lineStyle(5, 0x3a2a1c, 1).strokeCircle(x, y, r);
+      g.lineStyle(5, 0xffcf5a, 1).beginPath(); g.arc(x, y, r, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * k); g.strokePath();
+      this.rescueText.setVisible(true).setPosition(x, y - r - 16).setText(`救援 ${best.recruit.name.replace(/（.*）/, '')}`);
+    } else this.rescueText.setVisible(false);
   }
   private nearest(cx: number, cy: number, r: number, fx: number, fy: number): Enemy | null {
     this.buf.length = 0; let best: Enemy | null = null, bd = Infinity;
@@ -175,6 +282,7 @@ export class FollowerSquad {
   private attack(f: Follower, e: Enemy, now: number, damage: number) {
     const a = Math.atan2(e.y - f.y, e.x - f.x);
     f.dir = Math.abs(Math.cos(a)) > Math.abs(Math.sin(a)) ? Math.cos(a) < 0 ? 'left' : 'right' : Math.sin(a) < 0 ? 'up' : 'down';
+    f.play('attack', f.dir, now);
     const deal = (x: Enemy, n: number, fire = false) => { this.hit(x, n, fire); this.stats.damage += n; this.stats.hits++; f.hits++; };
     if (f.template === 'spear') {
       let k = 0; for (const x of this.query(f.x, f.y, TEMPLATES.spear.range)) { if (k >= 6) break; if (x.active && Math.hypot(x.x - f.x, x.y - f.y) <= TEMPLATES.spear.range) { deal(x, damage); k++; } }
@@ -207,13 +315,25 @@ export class FollowerSquad {
   }
   private puff(x: number, y: number, now: number) { this.fx.push({ kind: 'spear', x, y, tx: 0, ty: 0, angle: 0, at: now, until: now + 300 }); }
   private render(f: Follower, now: number) {
-    const moving = f.walk > 0, frame = moving ? Math.floor(f.walk / 14) % 4 : 0, key = visualTextureKey(this.scene, f.sheet), name = `${f.dir}_${frame}`;
-    if (this.scene.textures.get(key).has(name) && (f.sprite.frame.name !== name || f.sprite.texture.key !== key)) f.sprite.setTexture(key, name);
-    if (now < f.hurtUntil) f.sprite.setTintFill(0xffd0c0); else if (f.sprite.tintFill) { f.sprite.clearTint(); if (!f.recruit.hero && f.sheet === 'hero_walk_sheet') f.sprite.setTint(QUALITIES[f.recruit.quality].color); }
+    const a = f.act;
+    if (a && (a.hold || now < a.until)) {
+      const t = Math.min(.999, Math.max(0, (now - a.start) / Math.max(1, a.until - a.start))), fr = a.frames[a.hold && now >= a.until ? a.frames.length - 1 : Math.floor(t * a.frames.length)];
+      const key = visualTextureKey(this.scene, a.key), fit = f.fitFor(key, a.frames);
+      if (f.sprite.texture.key !== key || f.sprite.frame.name !== String(fr)) f.sprite.setTexture(key, fr);
+      f.sprite.setFlipX(a.mirror).setScale(fit.k).setOrigin(.5, fit.originY);
+    } else {
+      if (a) f.act = null;
+      const moving = !f.downed && f.walk > 0, frame = moving ? Math.floor(f.walk / 14) % 4 : 0, key = visualTextureKey(this.scene, f.sheet), name = `${f.dir}_${frame}`;
+      if (this.scene.textures.get(key).has(name) && (f.sprite.frame.name !== name || f.sprite.texture.key !== key)) f.sprite.setTexture(key, name);
+      f.sprite.setFlipX(false).setScale(f.walkScale).setOrigin(.5, .86);
+    }
+    // 倒地：没有倒地帧的（兵种）复用站立帧侧倒 + 下沉；都变暗
+    if (f.downed) { if (!f.act) f.sprite.setAngle(f.dir === 'left' ? -84 : 84).setOrigin(.5, .7); f.sprite.setTint(0x8a7a6a); f.sprite.setAlpha(.92); }
+    else if (now < f.hurtUntil) f.sprite.setTintFill(0xffd0c0); else if (f.sprite.tintFill || f.sprite.isTinted) { f.sprite.clearTint(); if (!f.recruit.hero && f.sheet === 'hero_walk_sheet') f.sprite.setTint(QUALITIES[f.recruit.quality].color); }
     f.shadow.setPosition(f.x, f.y + 2); f.label.setPosition(f.x, f.y - 66);
     f.sprite.setDepth(DEPTH.player - 1 + f.y / 100000);
     const w = 36, r = Math.max(0, f.hp / f.maxHp); f.bar.clear();
     if (r < 1) { f.bar.fillStyle(0x1a0f08, .8).fillRect(f.x - w / 2, f.y - 58, w, 4); f.bar.fillStyle(r > .4 ? 0x6fd06a : 0xe0603a, 1).fillRect(f.x - w / 2, f.y - 58, w * r, 4); }
   }
-  clear(): void { for (const f of this.members) f.destroy(); this.members.length = 0; this.fx.length = 0; this.gfx.destroy(); }
+  clear(): void { for (const f of this.members) f.destroy(); this.members.length = 0; this.fx.length = 0; this.gfx.destroy(); this.rescueGfx.destroy(); this.rescueText.destroy(); this.hud.destroy(); }
 }

@@ -1,5 +1,5 @@
 // 人物画风 v2：通用敌兵图（第一章黄巾军共用）调色——洋红串色 / 灰褐布衣 → 黄褐布衣，头巾 / 腰带 → 明黄；肤色、木弓、马匹基本不动。
-// 用法：node tools/artv2-recolor.mjs <in.png> [out.png]（省略 out 则覆盖原文件）
+// 用法：[STRONG=1] node tools/artv2-recolor.mjs <in.png> [out.png]（省略 out 则覆盖原文件）
 import { chromium } from 'playwright';
 import { readFileSync, writeFileSync } from 'node:fs';
 const [src, out = src] = process.argv.slice(2);
@@ -7,7 +7,7 @@ const b = await chromium.launch({ channel: 'chrome', headless: true });
 try {
   const p = await b.newPage();
   const url = 'data:image/png;base64,' + readFileSync(src).toString('base64');
-  const res = await p.evaluate(async url => {
+  const res = await p.evaluate(async ([url, strong]) => {
     const img = new Image(); img.src = url; await img.decode();
     const c = document.createElement('canvas'); c.width = img.width; c.height = img.height;
     const g = c.getContext('2d'); g.drawImage(img, 0, 0);
@@ -20,7 +20,8 @@ try {
       let [h, s, l] = rgb2hsl(a[i], a[i + 1], a[i + 2]);
       if (l < .12) continue; // 描边 / 最暗阴影不动
       let nh = h, ns = s;
-      if (h >= 290 || h < 16) { nh = 36; ns = Math.min(s, .32) * .9 + .06; }             // 洋红串色、偏粉红的布：拉回黄褐
+      if (strong && h >= 8 && h < 30 && s < .55 && l > .5) { nh = 34; ns = s * .85; }       // STRONG=1：浅粉米色布（弓手）也拉成黄褐（肤色会略偏黄）
+      else if (h >= 290 || h < 16) { nh = 36; ns = Math.min(s, .32) * .9 + .06; }             // 洋红串色、偏粉红的布：拉回黄褐
       else if (h < 52 && s < .34) { nh = 36 + (h - 30) * .15; ns = s * 1.15 + .07; }      // 灰褐布衣：黄褐 / 土黄
       else if (h >= 30 && h < 56 && s >= .34) { nh = 46; ns = Math.min(1, s * 1.15 + .05); l = Math.min(.82, l * 1.05); } // 头巾 / 腰带：明黄
       else continue;
@@ -28,7 +29,7 @@ try {
     }
     g.putImageData(d, 0, 0);
     return { n, data: c.toDataURL('image/png') };
-  }, url);
+  }, [url, process.env.STRONG === "1"]);
   writeFileSync(out, Buffer.from(res.data.split(',')[1], 'base64'));
   console.log(out, '改色像素', res.n);
 } finally { await b.close(); }

@@ -102,6 +102,7 @@ import {armShield,absorbShield,ShieldBars} from '../systems/ShieldGuard';
 import {StageObjectives} from '../systems/StageObjectives';
 import {itemName,relicDef,SPECIALS} from '../data/items';
 import {BossChest,playBossFall,type ChestLoot} from '../systems/BossChest';
+import {preloadBossDeath} from '../systems/BossDeathArt';
 import {ItemBagUI} from '../ui/ItemBagUI';
 
 interface Gem {
@@ -984,6 +985,7 @@ export class GameScene extends Phaser.Scene {
       return;
     }
     this.boss = boss;
+    preloadBossDeath(this, this.chapter.bossStyle); // 倒地帧（张角 / 张梁 / 张宝 / 董卓 / 吕布）提前载好
     this.firstBossAt=this.combatNow;
     if(this.chapter.stage&&this.chapter.stage>=2){this.yellowAltar=this.add.image(x,y+10,this.chapter.stage===2?'zhang_bao_altar':'zhang_jiao_altar').setDepth(DEPTH.ground+2).setDisplaySize(245,200).setAlpha(.75);}
 
@@ -1632,10 +1634,10 @@ export class GameScene extends Phaser.Scene {
     if (!enemy.active) return;
     this.objective?.onKill(enemy);
     const kind = enemy.kind;
-    if (enemy.def.texture === 'boss_lubu') this.feedback.death(enemy);
+    // 吕布倒地改由 playBossFall（倒地 4 帧）播，不再叠旧的通用死亡闪影
     if(kind==='boss'){const old=this.chasingBosses.find(t=>t.enemy===enemy&&t.life===enemy.spawnId),h=old?old.huaxiong:this.huaxiong,x=old?old.xurong:this.xurong;h?.defeat();x?.defeat();if(old){if(h)this.deadBossControllers.push(h);if(x)this.deadBossControllers.push(x);}
       // 倒地：控制器自己有倒地帧的（华雄 / 徐荣 / 子类首领）沿用；其余首领播通用倒地（受伤帧 + 倒下 + 手绘扬尘 + 下沉淡出）
-      if(!(h||x||this.bossHasDeathArt()))playBossFall(this,enemy,this.zhangjiao?'zhangjiao_moves':this.lubu?'lubu_moves':undefined);}
+      if(!(h||x||this.bossHasDeathArt()))playBossFall(this,enemy,this.zhangjiao?'zhangjiao_moves':this.lubu?'lubu_moves':undefined,old?undefined:this.chapter.bossStyle);}
     enemy.deactivate();
     if(enemy.isSupplySlot){this.sfx.play('propBreak');this.supplies?.onBroken(enemy);return;}
     this.warfeedKill();

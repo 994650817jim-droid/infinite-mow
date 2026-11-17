@@ -26,8 +26,10 @@ const walk = (p, dx, dy, ms) => p.evaluate(async ([G0, dx, dy, ms]) => { const s
 
 for (const layout of ['mobile', 'desktop']) {
   const p = await open(layout, 'chitu');
-  const m = await p.evaluate(G0 => { const s = eval(G0), m = s.mount, pl = s.player; return { has: !!m, mounted: m?.mounted, name: m?.name, mul: pl.mountSpeedMul, rise: pl.riseY, horse: !!s.children.getByName('hero-mount'), tint: s.children.getByName('hero-mount')?.tintTopLeft, crop: pl.sprite.isCropped }; }, G);
-  ck(`[${layout}] 穿赤兔出征：骑在马上（移速 ×1.45、骑者抬高、下半身裁掉、马染赤色）`, m.has && m.mounted && m.name === '赤兔' && m.mul === 1.45 && m.rise === 36 && m.horse && m.crop && m.tint === 0xe0462e, m);
+  const m = await p.evaluate(G0 => { const s = eval(G0), m = s.mount, pl = s.player; return { has: !!m, mounted: m?.mounted, name: m?.name, mul: pl.mountSpeedMul, rise: pl.riseY, horse: !!s.children.getByName('hero-mount'), tint: s.children.getByName('hero-mount')?.tintTopLeft, tex: s.children.getByName('hero-mount')?.texture.key, crop: pl.sprite.isCropped }; }, G);
+  // 人物画风 v2：赤兔是专门画的红马（不染色、骑者抬高 40）；v1 / 缺图时是通用马染赤色（抬高 36）
+  const v2Horse = m.tex === 'horse_v2_chitu_walk';
+  ck(`[${layout}] 穿赤兔出征：骑在马上（移速 ×1.45、骑者抬高、下半身裁掉、v2 赤兔图（朝镜头多抬一点）/ 旧马染赤色）`, m.has && m.mounted && m.name === '赤兔' && m.mul === 1.45 && m.horse && m.crop && (v2Horse ? m.rise >= 40 && m.tint === 0xffffff : m.rise === 36 && m.tint === 0xe0462e), m);
   for (const [dx, dy, dir] of [[1, 0, 'right'], [0, 1, 'down'], [-1, 0, 'left'], [0, -1, 'up']]) {
     await walk(p, dx, dy, 450);
     const f = await p.evaluate(G0 => { const s = eval(G0); return { dir: s.player.direction, frame: s.children.getByName('hero-mount').frame.name }; }, G);

@@ -108,6 +108,14 @@ export const ART_V2_FILES: Readonly<Record<string, string>> = {
   lubu_attack: 'assets/bosses-v2/lubu_attack.png',
   dongzhuo_walk: 'assets/bosses-v2/dongzhuo_walk.png',
   dongzhuo_attack: 'assets/bosses-v2/dongzhuo_attack.png',
+  // 坐骑 v2 战马（HeroMount 按需载入；鞍辔画在马上，通用马按毛色乘色）
+  horse_v2_chitu_walk: 'assets/horses-v2/chitu_walk.png',
+  horse_v2_dilu_walk: 'assets/horses-v2/dilu_walk.png',
+  horse_v2_wuzhui_walk: 'assets/horses-v2/wuzhui_walk.png',
+  horse_v2_jueying_walk: 'assets/horses-v2/jueying_walk.png',
+  horse_v2_dawan_walk: 'assets/horses-v2/dawan_walk.png',
+  horse_v2_generic_walk: 'assets/horses-v2/generic_walk.png',
+  horse_v2_mule_walk: 'assets/horses-v2/mule_walk.png',
 };
 /** v2 主将行走整格的显示高度（逻辑像素）：原生格 176 → 88，即 1080p 全屏（渲染 2 倍）下 1 美术像素 = 1 屏幕像素。
  * 人物约 76 逻辑像素高（用户要求比 v1 大一些）。 */

@@ -48,7 +48,7 @@ const R = (p, fn, arg) => p.evaluate(async ([src, a]) => { const r = await impor
 {
   // 老存档（有进度、没主公）：按最近出战的武将自动定主公，进主页弹一次提示；「就用」保持，「改选」可换一次
   const p = await page('desktop');
-  await p.waitForFunction(() => window.__game.scene.isActive('MenuScene') && window.__game.scene.getScene('MenuScene').heroPicker, null, { timeout: 90000 }); await p.waitForTimeout(600);
+  await p.waitForFunction(() => window.__game?.scene.isActive('MenuScene') && window.__game.scene.getScene('MenuScene').heroPicker, null, { timeout: 90000 }); await p.waitForTimeout(600);
   await p.screenshot({ path: `${out}/lord-notice-desktop.png` });
   const k = await p.evaluate(async () => {
     const R = await import('/src/systems/RosterStore.ts'), M = window.__game.scene.getScene('MenuScene'), o = {};
@@ -62,7 +62,7 @@ const R = (p, fn, arg) => p.evaluate(async ([src, a]) => { const r = await impor
   ck('老存档：自动以最近出战的赵云为主公，弹一次提示，入口显示「改选主公」', k.lord === 'zhaoyun' && !k.final0 && k.notice && k.entry0, k);
   ck('老存档改选一次（关羽）后锁定，不能再改', k.pickerOpen && k.lord2 === 'guanyu' && k.final2 && !k.again, k);
   const kp = await page('desktop', '', {});
-  await kp.waitForFunction(() => window.__game.scene.isActive('MenuScene') && window.__game.scene.getScene('MenuScene').heroPicker, null, { timeout: 90000 }); await kp.waitForTimeout(400);
+  await kp.waitForFunction(() => window.__game?.scene.isActive('MenuScene') && window.__game.scene.getScene('MenuScene').heroPicker, null, { timeout: 90000 }); await kp.waitForTimeout(400);
   const keep = await kp.evaluate(async () => { const R = await import('/src/systems/RosterStore.ts'), M = window.__game.scene.getScene('MenuScene'); M.children.getByName('lord-notice').getByName('lord-keep').emit('pointerdown'); return { lord: R.lordHero(), final: R.lordFinal(), entry: M.children.list.some(x => x.text === '主公 · 赵云') }; });
   ck('老存档选「就用赵云」：主公锁定为赵云', keep.lord === 'zhaoyun' && keep.final && keep.entry, keep);
   await kp.close();
@@ -77,7 +77,7 @@ const R = (p, fn, arg) => p.evaluate(async ([src, a]) => { const r = await impor
 // —— 1. 存档：老档迁移、天下首开只送主公、选将锁定 ——
 {
   const p = await page('mobile', '', { im_achievements: JSON.stringify({ unlocked: {}, counters: {}, heroes: ['huangzhong', 'zhaoyun'] }) });
-  await p.waitForFunction(() => window.__game.scene.isActive('MenuScene'), null, { timeout: 90000 });
+  await p.waitForFunction(() => window.__game?.scene.isActive('MenuScene'), null, { timeout: 90000 });
   const r = await R(p, (r) => { const s = r.loadRoster(); return { lord: s.lord, owned: s.owned.map(x => x.hero).filter(Boolean), zf: r.heroOwned('zhangfei'), def: r.defaultHero('zhangfei'), offers: s.offers.length, enforced: r.rosterEnforced(), raw: !!localStorage.getItem('im_roster_v1') }; });
   ck('老存档迁移：主公赵云 + 穿过兵装的关羽 + 打赢过仗的黄忠', r.lord === 'zhaoyun' && r.owned.join() === 'zhaoyun,guanyu,huangzhong', r);
   ck('未招募的张飞不可出战，默认回主公', !r.zf && r.def === 'zhaoyun' && r.enforced, r);
@@ -88,7 +88,7 @@ const R = (p, fn, arg) => p.evaluate(async ([src, a]) => { const r = await impor
   ck('人才库随存档位切换（PROGRESS_KEYS）', slots);
   // 选将：第三章选将面板锁定未拥有的武将
   await p.evaluate(() => { localStorage.setItem('im_last_hero', 'zhangfei'); const g = window.__game; for (const s of g.scene.getScenes(true)) s.scene.stop(); g.scene.start('ThirdChapterScene'); });
-  await p.waitForFunction(() => window.__game.scene.isActive('ThirdChapterScene'), null, { timeout: 120000 }); await p.waitForTimeout(600);
+  await p.waitForFunction(() => window.__game?.scene.isActive('ThirdChapterScene'), null, { timeout: 120000 }); await p.waitForTimeout(600);
   const t = await p.evaluate(() => { const s = window.__game.scene.getScene('ThirdChapterScene'); const before = s.hero; const zf = s.children.getByName('third-hero-zhangfei'); zf.emit('pointerdown'); zf.emit('pointerup'); return { before, after: s.hero, locked: zf.getData('locked'), alpha: zf.alpha, mc: s.children.getByName('third-hero-machao').getData('locked') }; });
   ck('第三章选将：张飞锁定（灰显、点了不换），默认主公马超', t.before === 'machao' && t.after === 'machao' && t.locked && t.alpha < .5 && !t.mc, t);
   await p.close();
@@ -97,7 +97,7 @@ const R = (p, fn, arg) => p.evaluate(async ([src, a]) => { const r = await impor
 // —— 2. 招贤馆规则：刷新费用、保底、招募扣粮、招降、随行上限、将阶 ——
 {
   const p = await page('mobile');
-  await p.waitForFunction(() => window.__game.scene.isActive('MenuScene'), null, { timeout: 90000 });
+  await p.waitForFunction(() => window.__game?.scene.isActive('MenuScene'), null, { timeout: 90000 });
   const r = await R(p, (r, w) => {
     const o = {}; r.setRosterRandom(() => .99); // 全部出大众脸（不出名将）
     const p0 = w.loadWorld().provisions; r.loadRoster();
@@ -159,18 +159,20 @@ const R = (p, fn, arg) => p.evaluate(async ([src, a]) => { const r = await impor
 // —— 3. 招贤馆界面（手机 / 电脑截图）——
 for (const layout of ['mobile', 'desktop']) {
   const p = await page(layout);
-  await p.waitForFunction(() => window.__game.scene.isActive('MenuScene'), null, { timeout: 90000 });
+  await p.waitForFunction(() => window.__game?.scene.isActive('MenuScene'), null, { timeout: 90000 });
   await R(p, (r) => { r.setRosterRandom(() => 0); r.tryCapture('bounty', '许褚', 'caocao'); r.setRosterRandom(); });
   await p.evaluate(() => { const g = window.__game; for (const s of g.scene.getScenes(true)) s.scene.stop(); g.scene.start('CityScene'); });
-  await p.waitForFunction(() => window.__game.scene.isActive('CityScene'), null, { timeout: 60000 }); await p.waitForTimeout(800);
+  await p.waitForFunction(() => window.__game?.scene.isActive('CityScene'), null, { timeout: 60000 }); await p.waitForTimeout(800);
   // 2026-11-17 营寨只留「天下地图」按钮：招贤馆从营寨里的招贤馆建筑进入
+  // 营寨全景与建筑点击区在美术加载后才建好：等招贤馆建筑出现再点（慢机器上场景激活后 0.8 秒可能还没有）
+  await p.waitForFunction(() => window.__game?.scene.getScene('CityScene')?.hits?.some(h => h.name === 'bld-talent'), null, { timeout: 60000 });
   await p.evaluate(() => { const c = window.__game.scene.getScene('CityScene'); const h = c.hits.find(h => h.name === 'bld-talent'); h.emit('pointerdown'); h.emit('pointerup'); });
   await p.waitForTimeout(200);
   const hasBtn = await p.evaluate(() => window.__game.scene.getScene('CityScene').children.getByName('town-card')?.list.some(o => o.text === '进入招贤馆'));
   ck(`${layout} 营寨招贤馆建筑有「进入招贤馆」入口`, hasBtn);
   await p.screenshot({ path: `${out}/city-${layout}.png` });
   await p.evaluate(() => window.__game.scene.getScene('CityScene').children.getByName('town-card').getByName('town-card-func').emit('pointerdown'));
-  await p.waitForFunction(() => window.__game.scene.isActive('TalentHallScene'), null, { timeout: 30000 }); await p.waitForTimeout(500);
+  await p.waitForFunction(() => window.__game?.scene.isActive('TalentHallScene'), null, { timeout: 30000 }); await p.waitForTimeout(500);
   await p.screenshot({ path: `${out}/hall-offers-${layout}.png` });
   const u = await p.evaluate(() => { const s = window.__game.scene.getScene('TalentHallScene'), c = s.children.list.find(x => x.type === 'Container'); const names = c.list.map(x => x.name).filter(Boolean); const btn = c.getByName('talent-offer-0'); btn.emit('pointerup'); return { names }; });
   await p.waitForTimeout(200);

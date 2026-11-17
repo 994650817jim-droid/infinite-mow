@@ -1,13 +1,18 @@
 /**
- * 战功换武学残卷（2026-11-17 用户：「战功变成可以换残卷」）。数值待复核（平衡会话定）。
- * 战功 = 局内等级，跨关继承（征程构筑）。每关打赢结算时，只按本关新涨的等级换残卷：
- * 每跨过一个「每 levelsPerScroll 级」的门槛给 1 张（Lv.1→4 给 1 张，Lv.4→7 再给 1 张……），
- * 所以零头会留到下一关接着算，同一段等级不会换两次。失败 / 放弃不给（构筑退回开打前，等级会重打）。
+ * 战功（2026-11-17 用户：「战功获得是击杀精英怪和 boss 获得」「残卷是需要去建筑换而不是自动换」）。
+ * 战功是存档里的货币（MasteryStore，跨关累计），只靠击杀精英 / 首领获得；在营寨讲武堂手动兑换武学残卷。
+ * 数值待平衡会话复核。测试 / 调试战斗不计。
  */
-export const MERIT_SCROLL = { levelsPerScroll: 3 } as const;
+export const MERIT = {
+  /** 击杀一名精英。 */
+  elite: 1,
+  /** 击败一名首领（含追兵首领、守将）。 */
+  boss: 10,
+  /** 讲武堂：多少战功换 1 张武学残卷。 */
+  perScroll: 10,
+} as const;
 
-/** 从 startLevel 升到 endLevel 换得的残卷张数。 */
-export function meritScrolls(startLevel: number, endLevel: number): number {
-  const k = MERIT_SCROLL.levelsPerScroll, a = Math.max(1, Math.floor(startLevel)), b = Math.max(a, Math.floor(endLevel));
-  return Math.floor((b - 1) / k) - Math.floor((a - 1) / k);
+/** 本场击杀换算的战功。 */
+export function meritFromKills(elites: number, bosses: number): number {
+  return Math.max(0, Math.floor(elites)) * MERIT.elite + Math.max(0, Math.floor(bosses)) * MERIT.boss;
 }

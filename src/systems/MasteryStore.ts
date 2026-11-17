@@ -1,4 +1,5 @@
 import { TACTICS, type TacticId } from '../data/builds';
+import { MERIT } from '../data/merit';
 import { loadWorld, spendWorld } from '../world/WorldStore';
 import { chaptersOpen, heroLevel, resetHeroAttrs, type HeroKey } from './HeroProgress';
 
@@ -18,7 +19,7 @@ export const TACTIC_UNLOCK_SCROLLS = 6;
 export const RESPEC_GRAIN_PER_LEVEL = 100;
 export const XINDE_SLOTS = 2;
 
-interface MasterySave { version: 1; scrolls: number; temper: Record<string, number>; xinde: Record<string, TacticId[]>; tactics: TacticId[]; respecFree: Record<string, number>; migrated: boolean }
+interface MasterySave { version: 1; scrolls: number; /** 战功（击杀精英 / 首领获得，讲武堂换残卷）。 */ merit: number; temper: Record<string, number>; xinde: Record<string, TacticId[]>; tactics: TacticId[]; respecFree: Record<string, number>; migrated: boolean }
 const TACTIC_IDS = Object.keys(TACTICS) as TacticId[];
 /** 起始解锁：每个流派在 TACTICS 里排第一个的战法。 */
 export const STARTER_TACTICS: readonly TacticId[] = (() => { const seen = new Set<string>(), out: TacticId[] = []; for (const id of TACTIC_IDS) { const t = TACTICS[id].tag; if (!seen.has(t)) { seen.add(t); out.push(id); } } return out; })();
@@ -28,11 +29,11 @@ const isHeroKey = (k: string) => /^r_\d{1,9}$/.test(k) || /^[a-z]{2,20}$/.test(k
 let memory: MasterySave | null = null;
 function read(): MasterySave {
   if (memory) return memory;
-  let s: MasterySave = { version: 1, scrolls: 0, temper: {}, xinde: {}, tactics: [...STARTER_TACTICS], respecFree: {}, migrated: false };
+  let s: MasterySave = { version: 1, scrolls: 0, merit: 0, temper: {}, xinde: {}, tactics: [...STARTER_TACTICS], respecFree: {}, migrated: false };
   try {
     const v = JSON.parse(localStorage.getItem(MASTERY_KEY) ?? 'null');
     if (v && v.version === 1) {
-      s.scrolls = int(v.scrolls, 1e6); s.migrated = v.migrated === true;
+      s.scrolls = int(v.scrolls, 1e6); s.merit = int(v.merit, 1e7); s.migrated = v.migrated === true;
       for (const [k, n] of Object.entries(v.temper ?? {})) if (isHeroKey(k)) s.temper[k] = int(n, TEMPER.max);
       s.tactics = [...new Set([...STARTER_TACTICS, ...(Array.isArray(v.tactics) ? v.tactics : []).filter((t: unknown): t is TacticId => typeof t === 'string' && t in TACTICS)])];
       for (const [k, ids] of Object.entries(v.xinde ?? {})) if (isHeroKey(k) && Array.isArray(ids)) s.xinde[k] = [...new Set(ids.filter((t: unknown): t is TacticId => typeof t === 'string' && s.tactics.includes(t as TacticId)))].slice(0, XINDE_SLOTS);
@@ -48,6 +49,18 @@ export function resetMasteryCache(): void { memory = null; }
 
 export interface Result { ok: boolean; message: string }
 export function scrolls(): number { return read().scrolls; }
+/** 战功（存档货币）。 */
+export function merit(): number { return read().merit; }
+/** 战斗结算收入战功（测试战斗不调用）。返回现有战功。 */
+export function addMerit(n: number): number { const s = read(); const k = Math.max(0, Math.floor(n)); if (k) { s.merit = Math.min(1e7, s.merit + k); commit(); } return s.merit; }
+/** 讲武堂：用战功换 count 张武学残卷（每张 MERIT.perScroll 战功）。 */
+export function exchangeMerit(count: number): Result {
+  const s = read(), n = Math.max(0, Math.floor(count)), cost = n * MERIT.perScroll;
+  if (!n) return { ok: false, message: '请选择兑换数量' };
+  if (s.merit < cost) return { ok: false, message: `战功不足：需要 ${cost}，现有 ${s.merit}` };
+  s.merit -= cost; s.scrolls = Math.min(1e6, s.scrolls + n); commit();
+  return { ok: true, message: `兑换武学残卷 ×${n}（战功 −${cost}）` };
+}
 /** 战斗结算收入残卷（测试战斗不调用）。 */
 export function addScrolls(n: number): number { const s = read(); const k = Math.max(0, Math.floor(n)); if (k) { s.scrolls = Math.min(1e6, s.scrolls + k); commit(); } return s.scrolls; }
 export function grain(): number { try { return loadWorld().provisions; } catch { return 0; } }

@@ -26,6 +26,7 @@ try {
   let t = await tut();
   await shot('1-move');
   ck('① 首次进 1-1：引导出现，第一步「移动」+ WASD 按键图标', t?.step === 'move' && t.line === '移动' && await ev(s => s.children.list.some(o => o.name === 'tutorial-overlay' && o.list.filter(c => c.name === 'tutorial-key').length === 4)), t);
+  ck('引导在时旧的「WASD / 方向键移动」提示隐藏', await ev(s => s.hintText && !s.hintText.visible), null);
   ck('开局 30 秒刷兵放缓', await ev(s => s.tutorial.easy(5).interval > 1 && s.tutorial.easy(31).interval === 1), null);
   // 走 2.5 秒
   t = await until(v => v.step === 'attack' && v.shown, 8000, s => { s.player.damageImmune = true; s.player.sprite.x += 6; });
@@ -98,6 +99,8 @@ try {
   t = await tut();
   const flag3 = await p.evaluate(async () => (await import('/src/world/WorldStore.ts')).tutorialSeen());
   ck('「跳过引导」→ 收起、记标记、刷兵恢复正常', t?.finished && t.skipped && flag3 === true && await ev(s => s.tutorial.easy(5).interval === 1), { t, flag3 });
+  await p.waitForTimeout(300);
+  ck('引导关掉后旧操作提示照常显示（开局 8 秒内）', await ev(s => s.elapsed < 8 ? s.hintText.visible : true), await ev(s => ({ el: s.elapsed, vis: s.hintText.visible })));
   ck('无页面报错', !errs.length, errs.slice(0, 3));
 } finally { await b.close(); }
 const bad = rows.filter(x => !x).length; console.log(bad ? `FAIL ${bad}/${rows.length}` : `PASS ${rows.length}/${rows.length}`); if (bad) process.exit(1);

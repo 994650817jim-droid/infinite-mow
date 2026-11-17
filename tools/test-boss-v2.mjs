@@ -109,8 +109,8 @@ try {
     await ev(s => { for (const fl of s.controller.flags) s.killEnemy(fl.e); }); await wait(p, 200);
     ck('袁术·玉玺号令：打掉旗子就没了', await ev(s => s.controller.snapshot().flags === 0));
     await wait(p, 1500);
-    const hp0 = await ev(s => { for (const e of s.enemies) if (e.active && !e.isSupplySlot && e.kind !== 'boss') e.deactivate(); s.player.hp = s.player.maxHp = 9999; s.player.invulnUntil = 0; s.bossDebug().force(1, s.combatNow); return s.player.hp; });
-    await wait(p, 1200); await p.screenshot({ path: OUT + '/yuanshu-coins.png' }); await p.waitForFunction(() => { const c = window.__game.scene.getScene('ThirdGameScene').controller.snapshot(); return c.metrics.coins >= 1 && c.coins === 0; }, null, { timeout: 8000 }).catch(() => {}); await wait(p, 100);
+    const hp0 = await ev(s => { for (const e of s.enemies) if (e.active && !e.isSupplySlot && e.kind !== 'boss') e.deactivate(); s.player.mountGuard = undefined; s.player.hp = s.player.maxHp = 9999; s.player.invulnUntil = 0; s.bossDebug().force(1, s.combatNow); return s.player.hp; });
+    await wait(p, 1200); await ev(s => { s.player.invulnUntil = 0; s.player.mountGuard = undefined; }); await p.screenshot({ path: OUT + '/yuanshu-coins.png' }); await p.waitForFunction(() => { const c = window.__game.scene.getScene('ThirdGameScene').controller.snapshot(); return c.metrics.coins >= 1 && c.coins === 0; }, null, { timeout: 8000 }).catch(() => {}); await wait(p, 100);
     const co = await ev(s => ({ hp: s.player.hp, snap: s.controller.snapshot() }));
     ck('袁术·金钱开路：金币闪完炸开，站着不动会被炸', co.snap.coins === 0 && co.hp < hp0 && co.snap.metrics.coinHits >= 1, co);
     await wait(p, 900);

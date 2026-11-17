@@ -118,3 +118,4 @@ assets/raw/*
 !/tools/test-merchant-horse.mjs
 !/tools/unmix-magenta.mjs
 !/tools/prepare-warn-fx-handpainted.sh
+!/tools/measure-fx-cells.mjs

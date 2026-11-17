@@ -10,6 +10,7 @@
 //      SCALE（直接指定缩放，不按身高推算；兵种攻击表用同一兵种行走表的缩放，保证两张一样大）、
 //      KEYHARD / KEYSOFT（洋红抠图阈值 min(R,B)-G，默认 110 / 40；人物本身有粉紫色时调高，如貂蝉 160 / 130）、
 //      DEMAGENTA（去洋红偏色强度，默认 .7）、GAMMA（中间调，默认 .85，<1 提亮）、SAT（饱和度，默认 1.12）、
+//      FIT=1（兵器伸出格子时把该帧水平挪进格子，避免刀尖被切；身体会略偏离格中心）、
 //      MINBLOB（小于此像素数的碎块丢弃，默认 40）、REF（参与定身高的行，逗号分隔，默认全部）、PAL（调色板色数，默认 160）、UP（放大倍数，默认 1）、
 //      ORDER（输出行取自原图哪一行，逗号分隔，默认 0..ROWS-1；用于 ChatGPT 行序与规范不同时重排）、
 //      MIRROR（这些输出行用前一参数里的源行水平镜像，如 MIRROR=1 表示第 1 行镜像自 ORDER[1]）。
@@ -24,6 +25,7 @@ if (!SRC || !OUT) { console.error('需要 SRC 和 OUT'); process.exit(2); }
 const COLS = +(env.COLS ?? 4), ROWS = +(env.ROWS ?? 4), CELL = +(env.CELL ?? 176), FOOT = +(env.FOOT ?? CELL - 8);
 const FIG = +(env.FIG ?? 152), PAL = +(env.PAL ?? 160), UP = +(env.UP ?? 1), MINBLOB = +(env.MINBLOB ?? 40);
 const SCALE = env.SCALE ? +env.SCALE : 0;
+const FIT = env.FIT === "1";
 const KEYHARD = +(env.KEYHARD ?? 110), KEYSOFT = +(env.KEYSOFT ?? 40);
 const DEMAGENTA = +(env.DEMAGENTA ?? .7), GAMMA = +(env.GAMMA ?? .85), SAT = +(env.SAT ?? 1.12);
 const SRC_ROWS = +(env.SRC_ROWS ?? ROWS);
@@ -36,7 +38,7 @@ const browser = await chromium.launch({ channel: 'chrome', headless: true });
 try {
   const page = await browser.newPage();
   const src = 'data:image/png;base64,' + readFileSync(SRC).toString('base64');
-  const res = await page.evaluate(async ({ src, COLS, ROWS, SRC_ROWS, CELL, FOOT, FIG, PAL, UP, ORDER, MIRROR, REF, OUTLINE, MINBLOB, DEMAGENTA, GAMMA, SAT, KEYHARD, KEYSOFT, SCALE }) => {
+  const res = await page.evaluate(async ({ src, COLS, ROWS, SRC_ROWS, CELL, FOOT, FIG, PAL, UP, ORDER, MIRROR, REF, OUTLINE, MINBLOB, DEMAGENTA, GAMMA, SAT, KEYHARD, KEYSOFT, SCALE, FIT }) => {
     const im = new Image(); im.src = src; await im.decode();
     const W = im.width, H = im.height;
     const c = document.createElement('canvas'); c.width = W; c.height = H;
@@ -136,7 +138,9 @@ try {
       let bottom = -1; for (let y = h - 1; y >= 0 && bottom < 0; y--) for (let x = 0; x < w; x++) if (on(x, y)) { bottom = y; break; }
       let sx = 0, n = 0; for (let y = Math.floor(bottom - (bottom + 1) * .35); y <= bottom; y++) for (let x = 0; x < w; x++) if (on(x, y)) { sx += x; n++; }
       const cx = n ? sx / n : w / 2;
-      const ox = col * CELL + Math.round(CELL / 2 - (mirror ? w - 1 - cx : cx) - .5), oy = r * CELL + (FOOT - 1 - bottom);
+      let ox = col * CELL + Math.round(CELL / 2 - (mirror ? w - 1 - cx : cx) - .5); const oy = r * CELL + (FOOT - 1 - bottom);
+      // FIT：兵器伸出格子时，若整帧（含描边）比格子窄，就水平挪进格子里，不切掉刀尖（只挪越界的帧）
+      if (FIT && w + 2 <= CELL) ox = Math.min(Math.max(ox, col * CELL + 1), (col + 1) * CELL - w - 1);
       let clipped = 0;
       const put = (x, y, rgb) => {
         const X = ox + (mirror ? w - 1 - x : x), Y = oy + y;
@@ -154,7 +158,7 @@ try {
     const o4 = document.createElement('canvas'); o4.width = OW * UP; o4.height = OH * UP;
     const g4 = o4.getContext('2d'); g4.imageSmoothingEnabled = false; g4.drawImage(o1, 0, 0, OW * UP, OH * UP);
     return { scale: s, medH, palette: centers.length, stats, one: o1.toDataURL('image/png'), big: o4.toDataURL('image/png'), size: [OW * UP, OH * UP] };
-  }, { src, COLS, ROWS, SRC_ROWS, CELL, FOOT, FIG, PAL, UP, ORDER, MIRROR, REF, OUTLINE, MINBLOB, DEMAGENTA, GAMMA, SAT, KEYHARD, KEYSOFT, SCALE });
+  }, { src, COLS, ROWS, SRC_ROWS, CELL, FOOT, FIG, PAL, UP, ORDER, MIRROR, REF, OUTLINE, MINBLOB, DEMAGENTA, GAMMA, SAT, KEYHARD, KEYSOFT, SCALE, FIT });
   if (res.error) { console.error(res.error); process.exit(1); }
   mkdirSync(dirname(OUT), { recursive: true });
   writeFileSync(OUT, Buffer.from(res.big.split(',')[1], 'base64'));

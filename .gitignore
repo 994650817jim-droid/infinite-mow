@@ -127,3 +127,5 @@ assets/raw/*
 !/tools/measure-fx-cells.mjs
 !/tools/record-warnfx-showcase.mjs
 !/tools/boost-alpha.mjs
+!/tools/test-boss-chest.mjs
+!/tools/record-boss-chest-gif.mjs

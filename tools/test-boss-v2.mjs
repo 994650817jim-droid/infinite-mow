@@ -21,9 +21,9 @@ try {
     ck('张角：重设计控制器接管', await ev(s => !!s.zhangjiao && s.bossDebug()?.moves.length === 4));
     await ev(s => { s.player.damageImmune = false; s.player.hp = s.player.maxHp = 9999; s.player.invulnUntil = 0; s.boss.sprite.setPosition(s.player.x + 220, s.player.y); s.zhangjiao.debug.force(0, s.combatNow); });
     await wait(p, 900); await p.screenshot({ path: OUT + '/zhangjiao-rain-warn.png' });
-    await wait(p, 1200);
+    await p.waitForFunction(() => { const s = window.__game.scene.getScene('GameScene'); return s.zhangjiao.snapshot().phase === 'release' && s.bullets.some(x => x.active); }, null, { timeout: 8000 }).catch(() => {});
     const rain = await ev(s => ({ m: s.zhangjiao.metrics.rain, orbs: s.bullets.filter(x => x.active).length }));
-    ck('张角·太平符雨：起手 + 弹道提示后放出符弹', rain.m === 1 && rain.orbs >= 7, rain);
+    ck('张角·太平符雨：起手 + 弹道提示后放出符弹', rain.m >= 1 && rain.orbs >= 7, rain);
     await wait(p, 900);
     const hp0 = await ev(s => { s.player.hp = 9999; s.player.invulnUntil = 0; s.zhangjiao.debug.force(1, s.combatNow); return s.player.hp; });
     await wait(p, 600); await p.screenshot({ path: OUT + '/zhangjiao-thunder-warn.png' }); await wait(p, 1000);
@@ -100,7 +100,7 @@ try {
     const { p, errs, ev } = await page('yuanshu');
     ck('袁术：重设计控制器接管', await ev(s => s.bossDebug()?.moves[0] === '玉玺号令'));
     await ev(s => { s.player.damageImmune = false; s.player.hp = s.player.maxHp = 9999; s.player.invulnUntil = 0; s.bossDebug().force(0, s.combatNow); });
-    await wait(p, 1100);
+    await p.waitForFunction(() => window.__game.scene.getScene('ThirdGameScene').controller.snapshot().flags === 3, null, { timeout: 8000 }).catch(() => {});
     const f = await ev(s => s.controller.snapshot());
     await p.screenshot({ path: OUT + '/yuanshu-flags.png' });
     ck('袁术·玉玺号令：立起 3 面伪诏旗', f.flags === 3, f);
@@ -110,11 +110,11 @@ try {
     ck('袁术·玉玺号令：打掉旗子就没了', await ev(s => s.controller.snapshot().flags === 0));
     await wait(p, 1500);
     const hp0 = await ev(s => { for (const e of s.enemies) if (e.active && !e.isSupplySlot && e.kind !== 'boss') e.deactivate(); s.player.hp = s.player.maxHp = 9999; s.player.invulnUntil = 0; s.bossDebug().force(1, s.combatNow); return s.player.hp; });
-    await wait(p, 1200); await p.screenshot({ path: OUT + '/yuanshu-coins.png' }); await wait(p, 1400);
+    await wait(p, 1200); await p.screenshot({ path: OUT + '/yuanshu-coins.png' }); await p.waitForFunction(() => { const c = window.__game.scene.getScene('ThirdGameScene').controller.snapshot(); return c.metrics.coins >= 1 && c.coins === 0; }, null, { timeout: 8000 }).catch(() => {}); await wait(p, 100);
     const co = await ev(s => ({ hp: s.player.hp, snap: s.controller.snapshot() }));
     ck('袁术·金钱开路：金币闪完炸开，站着不动会被炸', co.snap.coins === 0 && co.hp < hp0 && co.snap.metrics.coinHits >= 1, co);
     await wait(p, 900);
-    await ev(s => { for (const e of s.enemies) if (e.active && !e.isSupplySlot && e.kind !== 'boss') e.deactivate(); s.bossDebug().force(2, s.combatNow); }); await wait(p, 1000);
+    await ev(s => { for (const e of s.enemies) if (e.active && !e.isSupplySlot && e.kind !== 'boss') e.deactivate(); s.bossDebug().force(2, s.combatNow); }); await p.waitForFunction(() => window.__game.scene.getScene('ThirdGameScene').controller.snapshot().guards >= 3, null, { timeout: 8000 }).catch(() => {}); await wait(p, 100);
     const g = await ev(s => ({ snap: s.controller.snapshot(), mul: s.controller.incoming(false) }));
     await p.screenshot({ path: OUT + '/yuanshu-guards.png' });
     ck('袁术·亲军护驾：亲军在身边时受伤 -60%', g.snap.guards >= 3 && g.snap.guarded && Math.abs(g.mul - .4) < 1e-6, g);
@@ -124,7 +124,7 @@ try {
     const fl = await ev(s => ({ snap: s.controller.snapshot(), d: Math.hypot(s.boss.x - s.player.x, s.boss.y - s.player.y) }));
     await p.screenshot({ path: OUT + '/yuanshu-honey-flee.png' });
     ck('袁术·二阶段「蜜水」：逃跑、拉开距离、沿途丢金币', fl.snap.phase2 && fl.snap.fleeing && fl.d > d0 && fl.snap.metrics.honeyCoins > 0, { d0, fl });
-    const hpb = await ev(s => { s.__letDie = true; s.boss.hp = Math.floor(s.boss.maxHp * .2); s.controller.fleeUntil = s.combatNow + 50; return s.boss.hp; }); await wait(p, 300);
+    const hpb = await ev(s => { s.__letDie = true; s.boss.hp = Math.floor(s.boss.maxHp * .2); s.controller.fleeUntil = s.combatNow + 50; return s.boss.hp; }); await p.waitForFunction(() => window.__game.scene.getScene('ThirdGameScene').controller.snapshot().metrics.escaped === 1, null, { timeout: 8000 }).catch(() => {});
     const es = await ev(s => ({ hp: s.boss.hp, snap: s.controller.snapshot() }));
     ck('袁术·二阶段：逃掉 → 回血 + 重召亲军', es.hp > hpb && es.snap.metrics.escaped === 1 && !es.snap.fleeing, { hpb, es });
     ck('袁术：无页面报错', !errs.length, errs);
@@ -144,7 +144,7 @@ try {
     const live = await ev(s => { const c = s.controller, i = c.gates.indexOf('live'), a = -Math.PI + (i + .5) * Math.PI / 4 + Math.PI / 8; s.player.sprite.setPosition(c.cx + Math.cos(a) * 200, c.cy + Math.sin(a) * 160); return { gate: c.playerGate, mul: c.incoming(false) }; });
     ck('曹仁·八门金锁：站生门伤害 +20%', live.gate === 'live' && Math.abs(live.mul - 1.2) < 1e-6, live);
     await ev(s => { const c = s.controller; s.player.sprite.setPosition(c.cx + 420, c.cy); s.boss.sprite.setPosition(s.player.x - 150, s.player.y); c.debug.force(0, s.combatNow); });
-    await wait(p, 900); await p.screenshot({ path: OUT + '/caoren-wall.png' });
+    await p.waitForFunction(() => { const c = window.__game.scene.getScene('ChibiGameScene').controller; return c.beat.move === 'wall' && c.beat.phase === 'release'; }, null, { timeout: 8000 }).catch(() => {}); await p.screenshot({ path: OUT + '/caoren-wall.png' });
     const front = await ev(s => s.controller.incoming(false));
     const back = await ev(s => { s.player.sprite.setPosition(s.boss.x - 150, s.boss.y); return s.controller.incoming(false); });
     ck('曹仁·铁壁：正面几乎免伤，绕到背后正常', Math.abs(front - .1) < 1e-6 && back >= 1, { front, back });

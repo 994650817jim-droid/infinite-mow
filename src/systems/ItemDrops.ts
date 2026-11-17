@@ -45,7 +45,7 @@ export class ItemDrops {
     if (enemy.kind === 'boss') {
       const n = this.finalBoss() ? 2 : 1;
       for (let i = 0; i < n; i++) this.collect(rollItem(rollDropQuality(n > 1 ? 'finalBoss' : 'boss', this.tier, this.pity, this.rng), this.rng));
-      const extra = this.bossRelicDrop(); if (extra) this.collect(extra);
+      // 首领遗珍不在击杀瞬间发：首领倒地掉宝箱，主将捡起时由 takeBossRelic() 发（BossChest，用户 2026-11-17）
       return;
     }
     const elite = enemy.kind === 'elite';
@@ -57,6 +57,8 @@ export class ItemDrops {
    * 首领遗珍（用户批准的掉落规则）：该关首领的核心遗珍还没拥有（行囊或本局缴获里都没有）→ 必掉；
    * 还有没拿到的可选件 → 15% 掉一件；全部拥有 → 改为多掉一件本章档位、至少紫色的兵装。没有遗珍的关返回 null。
    */
+  /** 打开首领宝箱时发首领遗珍（并入本局缴获，结算时入行囊）；返回发出的那件，没有则 null。 */
+  takeBossRelic(): ItemInstance | null { const it = this.bossRelicDrop(); if (it) this.collect(it); return it; }
   bossRelicDrop(): ItemInstance | null {
     const defs = relicsForStage(this.relicStage()); if (!defs.length) return null;
     let owned: Set<string>; try { owned = new Set([...loadItems().bag, ...this.runLoot].map(i => i.base)); } catch { owned = new Set(this.runLoot.map(i => i.base)); }

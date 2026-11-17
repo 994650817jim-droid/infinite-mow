@@ -171,6 +171,7 @@ export function siegeGameSceneClass(Base: typeof GameScene) {
       this.advanceEnemy(enemy, nx, ny, dt); return true;
     }
     protected hitEnemy(enemy: Enemy, raw: number, now: number, source: 'melee' | 'arrow' | 'fire' = 'melee', ally = false, weaponHit = true) { if (enemy === this.boss && this.controller) { raw *= this.controller.incoming(ally); this.controller.hit(now); } return super.hitEnemy(enemy, raw, now, source, ally, weaponHit); }
+    protected bossHasDeathArt() { return !!this.controller; }
     protected killEnemy(enemy: Enemy) {
       if (this.flag && enemy === this.flag.e && enemy.spawnId === this.flag.life) { this.flag.art.destroy(); this.flag = null; this.showWaveBanner('帅旗已拔', true, '占领府衙！'); }
       const tower = this.towers.find(t => t.e === enemy && t.e.spawnId === t.life); if (tower) { tower.label.destroy(); this.towers.splice(this.towers.indexOf(tower), 1); this.showWaveBanner(this.towers.length ? '箭楼已毁 · 还剩 ' + this.towers.length + ' 座' : '箭楼尽毁', true); }
@@ -179,7 +180,7 @@ export function siegeGameSceneClass(Base: typeof GameScene) {
     }
     update(time: number, delta: number) {
       const before = this.combatNow; super.update(time, delta);
-      if (this.combatNow > before && !this.over && this.mode === 'none') { this.enemyCamps?.update(this.combatNow); if (!this.defense) this.updateGoals((this.combatNow - before) / 1000); }
+      if (this.combatNow > before && !this.over && this.mode === 'none') { if (!this.awaitingChest) this.enemyCamps?.update(this.combatNow); if (!this.defense) this.updateGoals((this.combatNow - before) / 1000); }
       this.controller?.updateDeath(delta);
       if (this.gateLabel && this.gateAlive) {
         const left = this.chapter.waves[this.chapter.waves.length - 1].start + 60 - this.elapsed;

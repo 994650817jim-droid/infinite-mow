@@ -29,7 +29,7 @@ const launch = async (p, id) => {
   await p.evaluate(M0 => eval(M0).children.getByName('intel-modal').getByName('intel-go').emit('pointerup'), M);
   await p.waitForFunction(() => window.__game.scene.isActive('IntelGameScene') && window.__game.scene.getScene('IntelGameScene').player, null, { timeout: 30000 }); await p.waitForTimeout(1200);
 };
-const waitOver = async p => { for (let i = 0; i < 40; i++) { await p.waitForTimeout(150); if (await p.evaluate(G0 => { const s = eval(G0); if (s.mode === 'bossloot') s.chooseUpgrade(0); return s.over; }, G)) break; } await p.waitForTimeout(400); };
+const waitOver = async p => { for (let i = 0; i < 40; i++) { await p.waitForTimeout(150); if (await p.evaluate(G0 => { const s = eval(G0); s.collectBossChests?.(); return s.over; }, G)) break; } await p.waitForTimeout(400); };
 const winBoss = async p => { await p.evaluate(G0 => { const s = eval(G0); s.spawnTimer = s.eliteTimer = 1e9; s.spawnBoss(); s.hitEnemy(s.boss, 1e7, s.combatNow, 'melee', false, false); }, G); await waitOver(p); };
 
 // —— 1. 存档与刷新规则 ——

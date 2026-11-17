@@ -179,9 +179,10 @@ try {
       await page.evaluate(() => { const s = window.__game.scene.getScene('GameScene'); s.spawnBoss(); s.boss.sprite.setPosition(s.player.x, s.player.y - 150); window.__IM.god(); });
       await page.waitForTimeout(350); await page.screenshot({ path: `${out}/hulao-game-${width}.png` });
       await page.evaluate(() => { const s = window.__game.scene.getScene('GameScene'); s.hitEnemy(s.boss, 4000, s.combatNow); });
-      // 2026-11-15 bugfix-perf: a boss kill now offers the relic choice (mode 'bossloot') before the result panel.
-      const loot = await page.evaluate(() => { const s = window.__game.scene.getScene('GameScene'); const m = s.mode; if (m === 'bossloot') s.chooseUpgrade(0); return m; });
-      check(`chapter2_boss_loot_before_result_${width}`, loot === 'bossloot' || loot === 'result', { loot });
+      // 2026-11-17：首领倒地后掉宝箱，主将捡起遗物才进结算（原来的遗物三选一卡改成宝箱）。
+      await page.waitForTimeout(1300);
+      const loot = await page.evaluate(() => { const s = window.__game.scene.getScene('GameScene'); const r = { mode: s.mode, chests: s.bossChests.length, ready: s.bossChests[0]?.ready }; s.collectBossChests(); return r; });
+      check(`chapter2_boss_chest_before_result_${width}`, loot.mode !== 'result' && loot.chests === 1 && loot.ready, { loot });
       await page.waitForFunction(() => window.__game.scene.getScene('GameScene').mode === 'result');
       const victory = await page.evaluate(() => { const s = window.__game.scene.getScene('GameScene'); return { mode: s.mode, title: s.resultTexts.title.text, text: s.resultTexts.subtitle.text }; });
       check(`chapter2_victory_text_${width}`, victory.mode === 'result' && victory.title === '董卓西走' && victory.text.includes('董卓'), victory);

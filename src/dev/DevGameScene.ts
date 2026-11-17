@@ -197,7 +197,9 @@ export class DevGameScene extends GameScene {
       bossMove4: () => { if (!scene.boss?.active) ensureBoss(); scene.bossDebug()?.force(4, scene.combatNow); mark(); },
       bossPhase2: () => { if (!scene.boss?.active) ensureBoss(); scene.bossDebug()?.phase2(scene.combatNow); mark(); },
       killBoss: () => { if (!scene.boss?.active) ensureBoss(); if (scene.boss) scene.killEnemy(scene.boss); mark(); },
-      winNow: () => { actions.killBoss(); },
+      // 首领宝箱：直接打开（不用走过去）
+      bossChest: () => { scene.collectBossChests(); mark(); },
+      winNow: () => { actions.killBoss(); scene.collectBossChests(); },
       loseNow: () => { scene.player.damageImmune = false; scene.finish(false, 'death'); },
       allySword: () => { scene.devSpawnAlly('swordsman'); },
       allyArcher: () => { scene.devSpawnAlly('archer'); },

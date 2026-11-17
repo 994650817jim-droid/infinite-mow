@@ -56,7 +56,7 @@ export class DongzhuoBoss {
     if (now >= this.nextRaid) { this.nextRaid = now + D.raidEvery * 1000; this.h.raid(now); }
     for (const f of [...this.fires]) {
       f.g.clear();
-      if (now < f.warnUntil) { warnCircle(f.g, f.x, f.y, D.fireRadius, 1 - (f.warnUntil - now) / D.fireWarnMs, 0xd2573a, 0xf2c27a, false, now); continue; }
+      if (now < f.warnUntil) { warnCircle(f.g, f.x, f.y, D.fireRadius, 1 - (f.warnUntil - now) / D.fireWarnMs, 0xd2573a, 0xf2c27a, false, now, 'fire'); continue; }
       if (now >= f.burnUntil) { f.g.destroy(); this.fires.splice(this.fires.indexOf(f), 1); continue; }
       // 燃烧：橙红火焰（程序绘制，忽明忽暗）
       const flick = .55 + .2 * Math.sin(now / 60 + f.x);

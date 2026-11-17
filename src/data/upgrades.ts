@@ -69,7 +69,7 @@ function weaponUpgrade(weapon: WeaponState, player: Player): UpgradeOption {
   if (weapon.id === 'crossbow') desc += `\n每轮 ${1 + crossbowExtraArrows(weapon.level)} → ${1 + crossbowExtraArrows(next)} 支箭（多出的箭分射其他敌人，70%伤害）`;
   if (weapon.id === 'zhenbei_blade' && [1, 3, 5].includes(next) && next !== weapon.level) desc += `\n裂波 ${zhenbeiCracks(weapon.level)} → ${zhenbeiCracks(next)} 道`;
   // 庞统·铁索连环：每级一项新能力（数值见 PASSIVE_RULES.tether* / loop*）
-  if (weapon.id === 'lianhuan_mines') desc += ['', '', '\n铁索灼伤：碰到铁索的敌人每 0.5 秒受 20% 伤害', '\n火走铁索：雷炸时火沿铁索烧向相连的雷，链上敌人受 60% 伤害；落雷间隔缩短', `\n双链：每枚新雷连 ${lianhuanLinksPerMine(next)} 条铁索；火雷上限 +2`, '\n铁索连舟：绕一圈让铁索首尾相接，圈内地面起火 3 秒后整圈齐爆'][next] ?? '';
+  if (weapon.id === 'lianhuan_mines') desc += ['', '', '\n铁索灼伤：碰到铁索的敌人每 0.5 秒受 30% 伤害', '\n火走铁索：雷炸时火沿铁索烧向相连的雷，链上敌人受 60% 伤害；落雷间隔缩短', `\n双链：每枚新雷连 ${lianhuanLinksPerMine(next)} 条铁索；火雷上限 +2`, '\n铁索连舟：绕一圈让铁索首尾相接，圈内地面起火 3 秒后整圈齐爆；火雷上限再 +2'][next] ?? '';
   if (weapon.id === 'sun_knives' && sunOrbitKnives(next) !== sunOrbitKnives(weapon.level)) desc += `\n环绕飞刀 ${sunOrbitKnives(weapon.level)} → ${sunOrbitKnives(next)} 把`;
   if (weapon.id === 'sun_knives' && sunThrowCount(next) !== sunThrowCount(weapon.level)) desc += `\n每次掷出 ${sunThrowCount(weapon.level)} → ${sunThrowCount(next)} 把（多出的飞向其他敌人，60%）`;
   if (weapon.id === 'sun_knives' && sunThrowPierce(next) !== sunThrowPierce(weapon.level)) desc += `\n每把穿透 ${sunThrowPierce(weapon.level)} → ${sunThrowPierce(next)} 人`;
@@ -158,8 +158,8 @@ export function martialDescription(id:MasteryId,level:number):string {
  baibi:'执刀侍婢上限 +'+n+'，每名多护卫'+(2*n)+'秒。',
  nichang:'飞扇飞行距离增加'+(15*n)+'%。'+(n===3?'\n每次多掷 1 柄团扇。':''),
  meirenji:'被离间的敌人多倒戈'+(0.5*n)+'秒。'+(n===3?'\n只需 2 层魅惑即可离间。':''),
- baibu:'射得越远伤害越高：150 像素以外，每远 100 像素伤害 +'+[6,9,12][i]+'%。\n百步穿杨，远射更狠。',
- laoji:'生命低于一半时，射速提高'+[15,25,35][i]+'%。\n老当益壮，越险越勇。',
+ jingxin:'连续不受伤 '+[4.5,4,3.5][i]+' 秒即进入神射（原 5 秒），神射中重箭伤害 +'+[20,22,25][i]+'%。'+(n===3?'\n进入神射后的第一箭化为扇形三连重箭，每支都带爆裂。':'\n心静则箭稳。'),
+ laoji:'越战越勇：本关每击杀 10 名敌人，射速 +2.5%，最多 +'+[15,20,25][i]+'%。'+(n===3?'\n「宝刀未老」：神射中每射杀一名精锐或首领，回复 4% 生命，且 2 秒内受伤不退出神射。':'\n老当益壮，越战越勇。'),
  wanrendi:'声浪推进距离增加'+(12*n)+'%。',
  dahe:'据水断桥的断桥区多持续'+(0.5*n)+'秒，震慑多'+(0.2*n).toFixed(1)+'秒。',
  jinma:'挑飞落地的范围增加'+(15*n)+'%。'+(n===3?'\n落地后再震一次（50% 伤害）。':''),

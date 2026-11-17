@@ -107,6 +107,8 @@ export class YellowBattle {
     if(!z.fired)windupFlash(z.owner,now);
     // 张梁砍击：蓄力时刀光虚影沿砍击方向由短到长伸出去（刀光图前 4 帧，半透明）；砍下时刀光全亮
     if(z.kind==='sweep'&&HINT_MOCK==='c'&&WARN_FX_ON&&image){if(z.fired)image.setAlpha(.95);else image.setTexture(key,Math.min(3,Math.floor(progress*4))).setAlpha(.3+.45*progress).setVisible(true);continue;}
+    // 特效型警示（默认）：黄巾章本来就画好了预警图（术士符阵、张梁冲锋、张宝地裂，前 4 帧是蓄力），按进度播放；召唤仪式没有伤害，不提示
+    if(HINT_MOCK==='c'&&WARN_FX_ON){if(z.kind==='ritual'||!z.damage)continue;if(image&&(z.kind==='sigil'||z.kind==='charge'||z.kind==='rift')){if(!z.fired)image.setTexture(key,Math.min(3,Math.floor(progress*4))).setAlpha(.35+.45*progress).setVisible(true);else if(z.kind==='sigil')image.setAlpha(.8).setVisible(true);continue;}}
     if(z.kind==='charge')laneCracks(this.gfx,z.x,z.y,z.angle,z.radius,72,progress,z.fired);
     else groundCracks(this.gfx,z.x,z.y,z.radius,progress,z.angle,z.arc,z.inner,z.fired);
     continue;

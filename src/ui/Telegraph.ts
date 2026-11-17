@@ -1,13 +1,25 @@
 import type Phaser from 'phaser';
 import { HINT_MOCK, impactDust } from './HintStyle';
+import { WARN_FX_ON, warnFx, type ShapeKind } from './WarnFx';
+
+/** 特效型警示（默认）：按形状和招式类型用像素序列帧；返回 true 表示已画（缺图时 false，调用方退回方案 C 的「不画」）。 */
+function fxShape(g: Phaser.GameObjects.Graphics, kind: ShapeKind, x: number, y: number, size: number, angle: number, progress: number, impact: boolean, width = 0): boolean {
+  const scene = g.scene; if (!scene || !WARN_FX_ON || HINT_MOCK !== 'c') return false;
+  const now = (scene as unknown as { combatNow?: number }).combatNow ?? scene.time.now, fx = warnFx(scene);
+  const id = kind + ':' + Math.round(x) + ',' + Math.round(y) + ',' + Math.round(size) + ',' + Math.round(angle * 100);
+  if (impact) return fx.shapeImpact(id, kind, x, y, size, angle, now, width);
+  if (kind === 'charge') return fx.lane(id, kind, x, y, angle, size, width, progress, now);
+  if (kind === 'sweep') return fx.sector(id, x, y, size, angle, progress, now);
+  return fx.circle(id, kind, x, y, size, progress, now);
+}
 
 /**
  * 统一的地面预警圈（首领范围技、落雷、箭雨等）：
  * 柔和的淡色光晕 + 细虚线外沿（缓慢旋转）+ 由中心向外扩张的进度盘（扩满即落下），不画粗实线外框和十字准星。
  * progress：0~1 预警进度；impact=true 时为命中瞬间的一次亮闪。
  */
-export function warnCircle(g: Phaser.GameObjects.Graphics, x: number, y: number, r: number, progress = 0, color = 0xd2573a, accent = 0xf2c27a, impact = false, now = 0): void {
-  if (!TELEGRAPH_CLASSIC) { groundCracks(g, x, y, r, progress, 0, Math.PI * 2, 0, impact); return; }
+export function warnCircle(g: Phaser.GameObjects.Graphics, x: number, y: number, r: number, progress = 0, color = 0xd2573a, accent = 0xf2c27a, impact = false, now = 0, fx?: ShapeKind): void {
+  if (!TELEGRAPH_CLASSIC) { groundCracks(g, x, y, r, progress, 0, Math.PI * 2, 0, impact, fx); return; }
   if (impact) {
     g.fillStyle(accent, .22).fillCircle(x, y, r);
     g.fillStyle(color, .28).fillCircle(x, y, r * .8);
@@ -55,8 +67,9 @@ const jit = (seed: number, i: number): number => { const v = Math.sin(seed * 12.
  * 落点地裂纹：在扇形 / 圆（arc = 2π）/ 环（inner > 0）范围内，从内向外几道折线裂纹 + 少量尘点。
  * progress 0~1 随蓄力加深；impact 为落下瞬间：尘点更亮、裂纹到头。只用线段与小方块，不做多边形填充。
  */
-export function groundCracks(g: Phaser.GameObjects.Graphics, x: number, y: number, r: number, progress = 0, angle = 0, arc = Math.PI * 2, inner = 0, impact = false): void {
-  if (HINT_MOCK === 'a' || HINT_MOCK === 'c') { if (impact && HINT_MOCK === 'a') impactDust(g, x, y, r * .6); return; }
+export function groundCracks(g: Phaser.GameObjects.Graphics, x: number, y: number, r: number, progress = 0, angle = 0, arc = Math.PI * 2, inner = 0, impact = false, fx?: ShapeKind): void {
+  if (HINT_MOCK === 'c') { fxShape(g, fx ?? (arc < Math.PI * 1.99 ? 'sweep' : 'slam'), x, y, r, angle, progress, impact); return; }
+  if (HINT_MOCK === 'a') { if (impact && HINT_MOCK === 'a') impactDust(g, x, y, r * .6); return; }
   const p = impact ? 1 : Math.max(0, Math.min(1, progress)), full = arc >= Math.PI * 1.99;
   const n = full ? 7 : Math.max(3, Math.round(arc * 2.2)), seed = Math.round(x * .37 + y * .61 + r);
   const a0 = .22 + p * .4, reach = .45 + p * .5, pts: number[] = [];
@@ -83,7 +96,8 @@ export function groundCracks(g: Phaser.GameObjects.Graphics, x: number, y: numbe
 
 /** 长条落点（冲锋道、枪阵、火船道）：沿方向一道断续裂纹 + 两侧尘点，随进度向前延伸。 */
 export function laneCracks(g: Phaser.GameObjects.Graphics, x: number, y: number, angle: number, length: number, width: number, progress = 0, impact = false): void {
-  if (HINT_MOCK === 'a' || HINT_MOCK === 'c') { if (impact && HINT_MOCK === 'a') for (let k = 1; k <= 3; k++) impactDust(g, x + Math.cos(angle) * length * k / 4, y + Math.sin(angle) * length * k / 4, width); return; }
+  if (HINT_MOCK === 'c') { fxShape(g, 'charge', x, y, length, angle, progress, impact, width); return; }
+  if (HINT_MOCK === 'a') { if (impact && HINT_MOCK === 'a') for (let k = 1; k <= 3; k++) impactDust(g, x + Math.cos(angle) * length * k / 4, y + Math.sin(angle) * length * k / 4, width); return; }
   const p = impact ? 1 : Math.max(0, Math.min(1, progress)), c = Math.cos(angle), s = Math.sin(angle), seed = Math.round(x * .37 + y * .61 + length);
   const len = length * (.35 + .65 * p), steps = Math.max(4, Math.round(len / 38));
   const a0 = .22 + p * .4;

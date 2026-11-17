@@ -82,6 +82,7 @@ import {horseForReward} from '../data/mounts';
 import {HeroMount} from '../systems/HeroMount';
 import { DraggingBladeFx } from '../systems/DraggingBladeFx';
 import { FlankFx } from '../systems/FlankFx';
+import { WindstepFx } from '../systems/WindstepFx';
 import { IffOverlay, readIffMode, type IffUnit } from '../systems/IffOverlay';
 import type {ItemInstance} from '../data/items';
 import {armShield,absorbShield,ShieldBars} from '../systems/ShieldGuard';
@@ -150,6 +151,9 @@ export class GameScene extends Phaser.Scene {
   protected dragFx?: DraggingBladeFx;
   /** 战法迂回袭表现（拥有该战法后首次用到时创建，场景重启时清空）。 */
   protected flankFx?: FlankFx;
+  /** 战法踏风步表现（同上，拥有后首次用到时创建）。 */
+  protected windFx?: WindstepFx;
+  windstepFx(): WindstepFx { if (!this.windFx) { this.windFx = new WindstepFx(this, this.player, this.sfx); this.events.once('shutdown', () => { this.windFx?.destroy(); this.windFx = undefined; }); } return this.windFx; }
   flankBladeFx(): FlankFx { if (!this.flankFx) { this.flankFx = new FlankFx(this, this.player, this.sfx); this.events.once('shutdown', () => { this.flankFx?.destroy(); this.flankFx = undefined; }); } return this.flankFx; }
   /** 敌我区分叠加层（默认阵营色；设置开启描边；?iff=0 关闭）。 */
   iff: IffOverlay | null = null;
@@ -424,7 +428,7 @@ export class GameScene extends Phaser.Scene {
 
 
     this.player = new Player(this, 0, 0);
-    this.dragFx = undefined; this.flankFx = undefined;
+    this.dragFx = undefined; this.flankFx = undefined; this.windFx = undefined;
     this.applyRunConfig(this.runConfig);
     this.worldCampaign=!preview&&!isChapterTestRun()&&this.registry.get('worldCampaign')===true;
     this.hardMode=!preview&&this.registry.get('hardChapter')===this.hardKey()&&(chapterState(this.hardKey() as TimelineChapterId,loadWorldState())==='cleared'||isChapterTestRun());
@@ -478,6 +482,7 @@ export class GameScene extends Phaser.Scene {
     this.events.once('shutdown',()=>{this.awakeningCombat?.clear();this.awakeningCombat=undefined;});
     this.buildCombat.setOrigin(()=>({x:this.player.x,y:this.player.y}));
     this.buildCombat.onFlank=targets=>this.flankBladeFx().strike(targets);
+    this.buildCombat.onWindstep=e=>this.windstepFx().burst(e.x,e.y);
     const cam = this.cameras.main;
     cam.setRoundPixels(false);
     cam.setScroll(this.player.x - GAME_WIDTH / 2, this.player.y - GAME_HEIGHT / 2);
@@ -765,6 +770,7 @@ export class GameScene extends Phaser.Scene {
     this.martialFields.update(dt);
     this.buildCombat.update(this.combatNow);
     {const fc=this.buildCombat.flankCharge();if(fc.level||this.flankFx)this.flankBladeFx().update(dt,fc.level,fc.ratio);}
+    {const wc=this.buildCombat.windstepCharge();if(wc.level||this.windFx)this.windstepFx().update(dt,wc.level,wc.ratio);}
     this.controlBuild?.update(this.combatNow);
     this.bulwarkBuild?.update(this.combatNow);
     this.awakeningCombat?.update(this.combatNow);
@@ -1538,6 +1544,7 @@ export class GameScene extends Phaser.Scene {
     this.warfeedKill();
     if(enemy.def.behavior==='wall')return;
     this.kills += 1;
+    this.player.passive.onKill(kind, this.combatNow);
     this.awakeningCombat?.onKill(enemy,this.combatNow);
     this.buildCombat.onKill(enemy,this.combatNow);
     this.controlBuild?.onKill(enemy,this.combatNow);
@@ -1880,7 +1887,8 @@ export class GameScene extends Phaser.Scene {
     if (this.textures.exists('flame_burst')) {
       const size = radius * 2.5, burst = this.add.image(x, y, 'flame_burst', 0).setOrigin(0.5, 0.82).setDisplaySize(size, size).setDepth(actorDepth(y) + 0.5).setName('flame-burst');
       { const tint = HERO_TINT[this.runConfig.character]; if (tint) burst.setTint(tint); }
-      if (!SHOW_OWN_RANGE_FX && this.textures.exists('build_vfx')) { // 默认（只保留关键提示）：原序列帧自带八卦地纹，改用像素火焰爆发（战法特效图集「烈焰」行，无地纹）
+      // 诸葛亮等仍用原来的 flame_burst 序列帧（八卦地纹是图本身的一部分，用户 2026-11-16「换回之前那个」）；只有庞统连环地雷保持像素火焰
+      if (!SHOW_OWN_RANGE_FX && this.runConfig.character === 'pangtong' && this.textures.exists('build_vfx')) { // 庞统：像素火焰爆发（战法特效图集「烈焰」行，无地纹）
         burst.destroy(); const fire = this.add.image(x, y, 'build_vfx', 18).setOrigin(.5, .72).setDisplaySize(radius * 1.9, radius * 1.9).setDepth(actorDepth(y) + .5).setName('flame-burst');
         { const tint = HERO_TINT[this.runConfig.character]; if (tint) fire.setTint(tint); }
         this.tweens.addCounter({ from: 18, to: 23.99, duration: 380, onUpdate: t => fire.setFrame(Math.floor(t.getValue() ?? 18)), onComplete: () => fire.destroy() });
@@ -2638,7 +2646,7 @@ export class GameScene extends Phaser.Scene {
     for (const k of ['pause', 'mute', 'music', 'bag'] as const) this.hudTexts[k]
       .on('pointerover', () => { this.hudChipState[k] = 'hover'; }).on('pointerout', () => { this.hudChipState[k] = 'idle'; })
       .on('pointerdown', () => { this.hudChipState[k] = 'down'; }).on('pointerup', () => { this.hudChipState[k] = 'hover'; });
-    this.passiveHud = new PassiveHud(this); this.passiveShout = new PassiveShout(this, () => this.sfx.play('passiveFull'));
+    this.passiveHud = new PassiveHud(this); this.passiveShout = new PassiveShout(this, { sfx: () => this.sfx.play('passiveFull'), nearby: (x, y, r) => this.grid.query(x, y, r).filter(e => Math.hypot(e.x - x, e.y - y) <= r) });
     this.buffHud=new BuffHud(this);
     this.muteText = this.hudTexts.mute;
     this.muteText.setText(this.sfx.muted ? '音效:关' : '音效:开');
@@ -2651,7 +2659,8 @@ export class GameScene extends Phaser.Scene {
       .setInteractive({ useHandCursor: true })
       .on('pointerdown', () => { this.relicExpanded = !this.relicExpanded; });
     {
-      const bx=GAME_WIDTH-58,by=GAME_HEIGHT-240,root=this.add.container(bx,by).setScrollFactor(0).setDepth(DEPTH.hud+4).setName('attribute-plus').setVisible(false);
+      // 电脑布局右列自上而下：暂停 20–82、音效 100、音乐 132、行囊 166–196、用药 218–301、加点 316–399、护阵 / 出击 412（2026-11-16 修「用药和行囊叠在一起」）
+      const bx=GAME_WIDTH-58,by=IS_DESKTOP?GAME_HEIGHT-190:GAME_HEIGHT-240,root=this.add.container(bx,by).setScrollFactor(0).setDepth(DEPTH.hud+4).setName('attribute-plus').setVisible(false);
       const glow=this.add.circle(0,0,33,0xffd27a,0).setStrokeStyle(3,0xffd27a,.55);
       const disc=this.add.circle(0,0,29,0x1b241b,.94).setStrokeStyle(2,0xd8b56a,1);
       const icon=this.add.image(0,-1,this.textures.exists('growth_icon_points')?'growth_icon_points':'icon_passive').setDisplaySize(40,40);
@@ -2666,7 +2675,7 @@ export class GameScene extends Phaser.Scene {
     }
     {
       // 用药按钮：在加点按钮上方；药囊有药时显示，满血或上一份药未回完时变暗
-      const root=this.add.container(GAME_WIDTH-58,GAME_HEIGHT-340).setScrollFactor(0).setDepth(DEPTH.hud+4).setName('potion-button').setVisible(false);
+      const root=this.add.container(GAME_WIDTH-58,IS_DESKTOP?GAME_HEIGHT-288:GAME_HEIGHT-340).setScrollFactor(0).setDepth(DEPTH.hud+4).setName('potion-button').setVisible(false);
       const glow=this.add.circle(0,0,33,0xff7a4a,0).setStrokeStyle(3,0xff8a5a,.6);
       const disc=this.add.circle(0,0,29,0x2a1a14,.94).setStrokeStyle(2,0xd8b56a,1);
       const icon=this.add.image(0,-1,'healing_potion').setDisplaySize(30,36);

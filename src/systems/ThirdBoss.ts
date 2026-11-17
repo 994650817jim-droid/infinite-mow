@@ -1,4 +1,4 @@
-import Phaser from 'phaser';import{HINT_MOCK,keyOutline,keyLane}from'../ui/HintStyle';import type{Enemy}from'../entities/Enemy';import type{Player}from'../entities/Player';import type{Legion}from'./Legion';import type{EnemyKind}from'../types';import{THIRD_STAGES,type ThirdStage}from'../data/thirdChapter';import{warnCircle,warnLane,TELEGRAPH_CLASSIC,windupFlash}from'../ui/Telegraph';
+import Phaser from 'phaser';import{HINT_MOCK,keyOutline,keyLane}from'../ui/HintStyle';import{WARN_FX_ON}from'../ui/WarnFx';import type{Enemy}from'../entities/Enemy';import type{Player}from'../entities/Player';import type{Legion}from'./Legion';import type{EnemyKind}from'../types';import{THIRD_STAGES,type ThirdStage}from'../data/thirdChapter';import{warnCircle,warnLane,TELEGRAPH_CLASSIC,windupFlash}from'../ui/Telegraph';
 interface Host{scene:Phaser.Scene;boss:Enemy;player:Player;army:Legion;spawn:(kind:EnemyKind,x:number,y:number)=>Enemy|null;}
 interface Zone{x:number;y:number;angle:number;length:number;width:number;radius:number;due:number;done:boolean;}
 /** New commanders use existing units, collision and HP. All skill deadlines are combat-clock milliseconds. */
@@ -32,6 +32,8 @@ export class ThirdBoss{
  private impact(z:Zone,now:number,damage:number,key:string){const p=this.h.player;const hit=(id:string,x:number,y:number,r:number,fn:()=>void)=>{const k=key+':'+id;if(!this.seen.has(k)&&this.inside(z,x,y,r)){this.seen.add(k);fn();this.metrics.damage++;}};hit('p',p.x,p.y,p.radius,()=>p.takeDamage(damage,now));for(const u of this.h.army.grid.query(z.x+Math.cos(z.angle)*z.length/2,z.y+Math.sin(z.angle)*z.length/2,z.radius||z.length/2+z.width))if(u.active)hit(u.id+':'+u.lifeId,u.x,u.y,u.radius,()=>this.h.army.hurtByBoss(u,damage,now));}
  private draw(z:Zone,alpha:number,p=.5){const g=this.gfx,col=this.stage===2?0xad6f52:0xb44d36,hit=alpha>=.3;
   // 只保留关键提示（默认）：只有绝技（skill 3）蓄力时画细虚线外沿，其余招式地上不提示、只靠首领身上闪光
+  // 特效型警示（默认）：所有招都用像素特效（蔡瑁绝技箭雨 = 箭雨，其余圆形 = 地动，长条 = 冲锋道）；缺图时退回只给绝技画细虚线
+  if(HINT_MOCK==='c'&&WARN_FX_ON&&this.h.scene.textures.exists('warnfx_slam')){if(!hit)windupFlash(this.h.boss,this.at);if(z.radius)warnCircle(g,z.x,z.y,z.radius,p,col,0xe4ba78,hit,this.at,this.skill===3&&this.look?.signature?.id==='caimao'?'arrows':'slam');else warnLane(g,z.x,z.y,z.angle,z.length,z.width,p,col,0xe4ba78,hit);return;}
   if(HINT_MOCK==='c'){if(!hit)windupFlash(this.h.boss,this.at);if(!hit&&this.skill===3){if(z.radius)keyOutline(g,z.x,z.y,z.radius,p,this.at);else keyLane(g,z.x,z.y,z.angle,z.length,z.width,p);}return;}
  if(!TELEGRAPH_CLASSIC&&!hit)windupFlash(this.h.boss,this.at);if(z.radius)warnCircle(g,z.x,z.y,z.radius,p,col,0xe4ba78,hit,this.at);else warnLane(g,z.x,z.y,z.angle,z.length,z.width,p,col,0xe4ba78,hit);}
  update(dt:number,now:number){const b=this.h.boss,p=this.h.player;if(!b.active||this.state==='dead')return;this.gfx.clear();this.at=now;

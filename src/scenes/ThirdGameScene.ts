@@ -5,6 +5,7 @@ import {FireShips} from '../systems/FireShips';
 import {applyCitySpecialties} from '../systems/CityBonuses';
 import {cityIncomeLine,beginArcExpedition,settleArcExpedition,arcStageUnlocked,type WarlordArc} from '../world/WorldStore';
 import Phaser from 'phaser';import{GameScene}from'./GameScene';import{ThirdBoss}from'../systems/ThirdBoss';import{thirdBattle,THIRD_STAGES,type ThirdStage}from'../data/thirdChapter';import{isChapterTestRun}from'../systems/ChapterProgress';import{abandonExpedition,permanentEffects,takeExpeditionReserve}from'../world/WorldStore';import{packCampaign,type CampaignTransfer}from'../systems/Campaign';import{thirdScenery,type SceneryStage}from'../systems/ThirdScenery';import{SishuiObstacles}from'../systems/SishuiObstacles';import type{Enemy}from'../entities/Enemy';import type{RunEndReason}from'../types';import type{RunConfig}from'../data/characters';import type{ChapterDef}from'../data/chapters';
+import { loadBossSheet } from '../systems/ArtStyle';
 
 /** 第三章式三关篇章的配置（第三章群雄割据、第五章赤壁之战共用同一套战场与首领招式框架）。 */
 export interface ArcSceneConfig{
@@ -35,7 +36,7 @@ export function thirdGameSceneClass(Base:typeof GameScene,cfg:ArcSceneConfig=THI
  protected stableRewardKey():string|null{return (cfg.arc==='qunxiong'?'third':cfg.arc)+'-'+this.thirdStage;}
  private get sceneryStage():SceneryStage{return cfg.stages[this.thirdStage-1]?.scenery??this.thirdStage;}
  constructor(){super(cfg.key);}
- preload(){for(const d of cfg.stages)if(!this.textures.exists(cfg.texture(d.id)))this.load.spritesheet(cfg.texture(d.id),cfg.sheet(d.id),{frameWidth:128,frameHeight:128});}
+ preload(){for(const d of cfg.stages)if(!this.textures.exists(cfg.texture(d.id)))loadBossSheet(this.load,cfg.texture(d.id),cfg.sheet(d.id));}
  create(){
   this.thirdStage=(this.registry.get(cfg.stageKey)??1)as ThirdStage;this.thirdTest=isChapterTestRun();if(!cfg.stages[this.thirdStage-1]||!this.thirdTest&&!arcStageUnlocked(cfg.arc,this.thirdStage)){this.scene.start('WorldMapScene');return;}
   const saved=this.registry.get('runConfig')as RunConfig|undefined,transfer=this.registry.get(cfg.transferKey)as CampaignTransfer|undefined;this.registry.remove(cfg.transferKey);this.registry.remove('campaignTransfer');if(transfer&&transfer.character===saved?.character)this.registry.set('campaignTransfer',transfer);

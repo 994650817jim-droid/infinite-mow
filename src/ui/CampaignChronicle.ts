@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import {FONT,HEADING_FONT,TITLE_FONT,GAME_WIDTH as W,GAME_HEIGHT as H,IS_DESKTOP as D} from '../config';
 import {CHRONICLE,type ChronicleArc} from '../data/chronicle';
-import {loadWorld,shuPrereqCleared} from '../world/WorldStore';
+import {loadWorld,shuPrereqCleared,nanzhengPrereq} from '../world/WorldStore';
 import {GUANDU_PLAYABLE} from '../data/guanduChapter';
 import {homeCommand,warPanelTexture} from './HomeCommand';
 
@@ -11,7 +11,7 @@ export function chronicleProgress():Record<ChronicleArc,{cleared:number;open:boo
  const s=loadWorld();
  const yellow=s.cleared.huangjin||s.legacyHulaoAccess?3:Math.max(0,Math.min(3,s.yellowStages));
  const dong=s.cleared.hulao?3:Math.max(0,Math.min(3,s.dongzhuoStages));
- return{huangjin:{cleared:yellow,open:true},dongzhuo:{cleared:dong,open:yellow>=3||s.legacyHulaoAccess},qunxiong:{cleared:Math.max(0,Math.min(3,s.warlordStages)),open:s.cleared.hulao},guandu:{cleared:Math.max(0,Math.min(3,s.guanduStages)),open:s.cleared.hulao&&s.warlordStages>=3},chibi:{cleared:Math.max(0,Math.min(3,s.chibiStages)),open:s.cleared.hulao&&s.guanduStages>=3},xiangfan:{cleared:Math.max(0,Math.min(3,s.xiangfanStages)),open:s.cleared.hulao&&s.hanzhongStages>=3},yiling:{cleared:Math.max(0,Math.min(3,s.yilingStages??0)),open:s.cleared.hulao&&s.xiangfanStages>=3},beifa:{cleared:Math.max(0,Math.min(3,s.beifaStages??0)),open:s.cleared.hulao&&(((s as unknown as {nanzhengStages?:number}).nanzhengStages??s.yilingStages??0)>=3)},shu:{cleared:Math.max(0,Math.min(3,s.shuStages)),open:shuPrereqCleared(s)},jingnan:{cleared:Math.max(0,Math.min(3,s.jingnanStages??0)),open:s.cleared.hulao&&s.chibiStages>=3},hanzhong:{cleared:Math.max(0,Math.min(3,s.hanzhongStages??0)),open:s.cleared.hulao&&(((s as unknown as {shuStages?:number}).shuStages??s.jingnanStages)>=3)}};
+ return{huangjin:{cleared:yellow,open:true},dongzhuo:{cleared:dong,open:yellow>=3||s.legacyHulaoAccess},qunxiong:{cleared:Math.max(0,Math.min(3,s.warlordStages)),open:s.cleared.hulao},guandu:{cleared:Math.max(0,Math.min(3,s.guanduStages)),open:s.cleared.hulao&&s.warlordStages>=3},chibi:{cleared:Math.max(0,Math.min(3,s.chibiStages)),open:s.cleared.hulao&&s.guanduStages>=3},yiling:{cleared:Math.max(0,Math.min(3,s.yilingStages??0)),open:s.cleared.hulao&&s.xiangfanStages>=3},nanzheng:{cleared:Math.max(0,Math.min(3,s.nanzhengStages)),open:s.cleared.hulao&&nanzhengPrereq(s)},beifa:{cleared:Math.max(0,Math.min(3,s.beifaStages??0)),open:s.cleared.hulao&&s.nanzhengStages>=3},xiangfan:{cleared:Math.max(0,Math.min(3,s.xiangfanStages)),open:s.cleared.hulao&&s.hanzhongStages>=3},shu:{cleared:Math.max(0,Math.min(3,s.shuStages)),open:shuPrereqCleared(s)},jingnan:{cleared:Math.max(0,Math.min(3,s.jingnanStages??0)),open:s.cleared.hulao&&s.chibiStages>=3},hanzhong:{cleared:Math.max(0,Math.min(3,s.hanzhongStages??0)),open:s.cleared.hulao&&(((s as unknown as {shuStages?:number}).shuStages??s.jingnanStages)>=3)}};
 }
 
 /**

@@ -30,6 +30,8 @@ export function siegeScenery(scene: Phaser.Scene, city: CityDef, spawnProp?: (fr
   scene.add.tileSprite(0, 0, roadWidth, 8192, roadKey).setDepth(1);
   const place = (frame: number, x: number, y: number, size: number) => { if (frame >= 3 && spawnProp) { spawnProp(frame, x, y, size); return; } scene.add.image(x, y, 'sishui_props_refined', frame).setOrigin(.5, 1).setDisplaySize(size, size).setDepth(actorDepth(y)); };
   const all: CampPoint[] = [{x: -340, y: 220, kind: 'shield', name: '城外守军营'}, {x: 360, y: -420, kind: 'archer', name: '城头弓营'}];
+  // 大城（攻城战重做）：城墙前是护城河，城头弓营往南挪到河岸以外
+  if (opts.mid && city.tier === 'large') all[1] = {...all[1], x: 400, y: -250};
   const camps = all.slice(0, SIEGE[city.tier].camps);
   for (const c of camps) { place(4, c.x + 113, c.y - 8, 92); place(3, c.x - 110, c.y + 42, 90); place(6, c.x - 98, c.y - 74, 86); }
   const boxes: Array<{left: number; right: number; top: number; bottom: number}> = [];

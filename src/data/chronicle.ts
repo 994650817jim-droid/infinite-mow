@@ -2,7 +2,7 @@
  * 战役回顾 · 乱世编年：九关的史事摘要（原创撰写，据《后汉书》《三国志》等常见史载概括；
  * 演义情节明确标注为“演义”）。只做展示，不影响玩法。
  */
-export type ChronicleArc = 'huangjin' | 'dongzhuo' | 'qunxiong' | 'guandu' | 'chibi' | 'jingnan' | 'shu' | 'hanzhong' | 'xiangfan' | 'yiling' | 'beifa';
+export type ChronicleArc = 'huangjin' | 'dongzhuo' | 'qunxiong' | 'guandu' | 'chibi' | 'jingnan' | 'shu' | 'hanzhong' | 'xiangfan' | 'yiling' | 'nanzheng' | 'beifa';
 export interface ChronicleStage { code: string; name: string; boss: string; bossTitle: string; seal: string; year: string; story: string; legacy: string }
 export interface ChronicleChapter { arc: ChronicleArc; title: string; years: string; intro: string; stages: ChronicleStage[] }
 
@@ -155,6 +155,21 @@ export const CHRONICLE: ChronicleChapter[] = [
       { code: '10-3', name: '火烧连营', boss: '陆逊', bossTitle: '大都督', seal: '逊', year: '章武二年 · 222',
         story: '陆逊令各持一把茅，以火攻拔之，一尔势成，通率诸军同时俱攻，斩张南、冯习，破其四十余营。先主夜遁，退守白帝。',
         legacy: '蜀汉元气大伤，刘备托孤白帝城。' },
+    ],
+  },
+  {
+    arc: 'nanzheng', title: '第十一章 · 南征', years: '公元225年',
+    intro: '南中诸郡叛乱。诸葛亮五月渡泸，深入不毛，火烧藤甲，七擒七纵孟获，南人心服，蜀汉后方遂安。',
+    stages: [
+      { code: '11-1', name: '泸水', boss: '忙牙长', bossTitle: '蛮将', seal: '泸', year: '建兴三年 · 225',
+        story: '五月渡泸，深入不毛。泸水瘴气蒸腾，毒泉遍地，军士多有中毒者。',
+        legacy: '蜀军渡过泸水，直抵蛮境。' },
+      { code: '11-2', name: '藤甲兵', boss: '兀突骨', bossTitle: '乌戈国主', seal: '藤', year: '建兴三年 · 225',
+        story: '乌戈国藤甲兵刀箭不入。诸葛亮诱之入盘蛇谷，以火攻之，藤甲尽焚。',
+        legacy: '乌戈国兵尽没，孟获势孤。' },
+      { code: '11-3', name: '七擒孟获', boss: '孟获', bossTitle: '南蛮王', seal: '获', year: '建兴三年 · 225',
+        story: '孟获屡擒屡纵，至第七次，垂泪曰：「丞相天威，南人不复反矣。」',
+        legacy: '南中平定，蜀汉得以全力北伐。' },
     ],
   },
   {

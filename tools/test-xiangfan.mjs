@@ -53,9 +53,9 @@ const killBoss = async p => {
   await p.goto(base + '?dev=1&layout=desktop'); await p.waitForFunction(() => window.__game?.scene.isActive('MenuScene'), null, { timeout: 90000 });
   await p.evaluate(() => { const g = window.__game; for (const sc of g.scene.getScenes(true)) sc.scene.stop(); g.scene.start('XiangfanChapterScene'); });
   await p.waitForFunction(() => window.__game.scene.isActive('XiangfanChapterScene'), null, { timeout: 60000 }); await p.waitForTimeout(800);
-  const r = await p.evaluate(async () => { const s = window.__game.scene.getScene('XiangfanChapterScene'), w = await import('/src/world/WorldStore.ts'), t = await import('/src/world/ChapterTimeline.ts'); const ids = t.CHAPTER_TIMELINE.map(c => c.id); return { cards: [1, 2, 3].map(i => !!s.children.getByName('xiangfan-stage-' + i)), deploy: !!s.children.getByName('xiangfan-deploy'), open: w.arcUnlocked('xiangfan'), order: ids.slice(-4) }; });
+  const r = await p.evaluate(async () => { const s = window.__game.scene.getScene('XiangfanChapterScene'), w = await import('/src/world/WorldStore.ts'), t = await import('/src/world/ChapterTimeline.ts'); const ids = t.CHAPTER_TIMELINE.map(c => c.id); return { cards: [1, 2, 3].map(i => !!s.children.getByName('xiangfan-stage-' + i)), deploy: !!s.children.getByName('xiangfan-deploy'), open: w.arcUnlocked('xiangfan'), order: ['jingnan', 'shu', 'hanzhong', 'xiangfan'].map(k => ids.indexOf(k)) }; });
   await shot(p, '0-select');
-  ck('选关：第九章三关卡片、出征按钮；汉中通关后襄樊开放；时间线 …入蜀 → 汉中 → 襄樊', r.cards.every(Boolean) && r.deploy && r.open && r.order.join().includes('shu,hanzhong,xiangfan'), r);
+  ck('选关：第九章三关卡片、出征按钮；汉中通关后襄樊开放；时间线 …入蜀 → 汉中 → 襄樊', r.cards.every(Boolean) && r.deploy && r.open && r.order.every((v, i, o) => v >= 0 && (i === 0 || v > o[i - 1])), r);
   await p.close();
 }
 

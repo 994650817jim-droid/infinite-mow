@@ -75,4 +75,51 @@ export function ramStats(level = 0): RamStats {
   return { hp: Math.round(R.hp * b.hpMul), hitEveryMs: Math.round(R.hitEveryMs / b.hitSpeedMul), gateDamage: Math.round(R.gateDamage * b.gateDamageMul), respawnMs: Math.round(R.respawnMs * b.respawnMul), spare: b.spare, level: lv };
 }
 
-export type MidSiegePhase = 'outside' | 'street' | 'hall' | 'done';
+export type MidSiegePhase = 'outside' | 'barbican' | 'street' | 'hall' | 'done';
+
+/**
+ * 攻城战重做 · 扩展到三档城（siege-redesign-plan.md 推荐顺序第二步）。中城样板的控制器 SiegeMidCity 按档位读这里的配置：
+ * - 小城：城外 + 府衙（去掉巷战）。土墙木门、1 座箭楼；没有冲车，木门主将直接砍；守将是县尉（只有横扫，不进二阶段），亲卫少。
+ * - 中城：城外 + 巷战 + 府衙（样板，数值见 MID_SIEGE）。
+ * - 大城：城外（护城河 + 吊桥：砍断两根吊桥绳索放下吊桥，或守军到时自己放桥出城）→ 瓮城（四面城墙放箭、滚木礌石，砍破瓮城内门）→ 巷战 → 内城（势力名将两阶段，用第四章首领招式组）。
+ * 数值全部 **待平衡会话复核**。
+ */
+export type SiegePhaseName = 'outside' | 'barbican' | 'street' | 'hall';
+export interface SiegeProfile {
+  phases: readonly SiegePhaseName[];
+  towers: ReadonlyArray<{ x: number }>;
+  gateHp: number;
+  /** 有冲车（中城 / 大城）；没有冲车时城门是可砍的木门（小城） */
+  ram: boolean;
+  /** 箭雨每轮落点数倍率（按档） */
+  volleyMul: number;
+  hall: { name: string; guardsEveryMs: number; guardCount: number; phase2: boolean; bossName?: string };
+  limitSeconds: number;
+  /** 府衙一段的守将血量倍率（相对 siege.ts 档位守将） */
+  bossHpMul: number;
+}
+export const SIEGE_PROFILES: Record<'small' | 'medium' | 'large', SiegeProfile> = {
+  small: { phases: ['outside', 'hall'], towers: [{ x: 300 }], gateHp: 520, ram: false, volleyMul: .6, hall: { name: '县衙', guardsEveryMs: 20000, guardCount: 2, phase2: false }, limitSeconds: 240, bossHpMul: 1.4 },
+  medium: { phases: ['outside', 'street', 'hall'], towers: MID_SIEGE.outside.towers, gateHp: MID_SIEGE.outside.gate.hp, ram: true, volleyMul: 1, hall: { name: '府衙', guardsEveryMs: MID_SIEGE.hall.guardsEveryMs, guardCount: MID_SIEGE.hall.guardCount, phase2: true }, limitSeconds: MID_SIEGE.limitSeconds, bossHpMul: 1 },
+  large: { phases: ['outside', 'barbican', 'street', 'hall'], towers: [{ x: -440 }, { x: -250 }, { x: 330 }], gateHp: 2100, ram: true, volleyMul: 1.35, hall: { name: '内城', guardsEveryMs: 13000, guardCount: 4, phase2: true }, limitSeconds: 600, bossHpMul: 1.25 },
+};
+
+/** 大城：护城河、吊桥、瓮城（待平衡会话复核）。 */
+export const LARGE_SIEGE = {
+  moat: {
+    top: MID_SIEGE.outside.wallY + 70, bottom: MID_SIEGE.outside.wallY + 160, // 护城河南北边（城墙以南）
+    bridgeHalfW: 80,
+    ropes: [{ x: -150 }, { x: 150 }], ropeHp: 240, // 吊桥两根绳索（绞索桩在我方这一岸，主将去砍）
+    autoLowerSeconds: 120, // 一直不砍：守军到时自己放桥出城（同时多出一波出城兵）
+    sally: 6,
+  },
+  barbican: {
+    // 瓮城：单独一块场地（转场过去，坐标在 x≈3000 一带，和城外 / 巷战 / 府衙互不相邻）
+    cx: 3000, arena: { left: 2620, right: 3380, top: -520, bottom: 300 },
+    start: { x: 3000, y: 200 },
+    innerGate: { x: 3000, y: -500, hp: 1300 },
+    doors: [{ x: 2640, y: -150 }, { x: 3360, y: -150 }, { x: 2640, y: 120 }, { x: 3360, y: 120 }], // 两侧藏兵洞
+    volley: { everyMs: 3400, zones: 3, warnMs: 1000, radius: 64, damage: 10, allyDamage: 6 },
+    logs: { everyMs: 5200, warnMs: 1100, speed: 560, width: 90, damage: 20, enemyDamage: 140, count: 2 }, // 滚木礌石：从城头沿南北向滚下
+  },
+} as const;

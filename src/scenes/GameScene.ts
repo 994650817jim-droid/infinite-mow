@@ -49,7 +49,7 @@ import { WAR, warText, ensureWarTextures } from '../ui/WarStyle';
 import { LQ, lqButton, lqDivider, lqHitBox, lqImageButton, lqPanel, lqSkin, type LqState } from '../ui/LacquerKit';
 import { chapterUnlocked, isChapterTestRun, recordChapterVictory } from '../systems/ChapterProgress';
 import { BALANCE, COLORS, DEPTH, FONT, GAME_HEIGHT, GAME_WIDTH, HEADING_FONT, IS_DESKTOP, TITLE_FONT, actorDepth, screenPoint } from '../config';
-import { upgradeCardTexture } from '../ui/HomeCommand';
+import {upgradeCardTexture,inkUpgradeCardTexture,inkPlate} from '../ui/HomeCommand';
 import type { EnemyDef } from '../data/enemies';
 import { WEAPON_META, weaponName, buildUpgradeOptions, canOfferRejuvenation } from '../data/upgrades';
 import { waveIndexAt } from '../data/waves';
@@ -2183,7 +2183,8 @@ export class GameScene extends Phaser.Scene {
         relic:{bg:'#5c4920',color:'#ffd166'},rare:{bg:'#64352e',color:'#ffd0c0'},passive:{bg:'#293e34',color:'#d8ffe9'},
       };
       const style=categoryStyle[option.kind];
-      view.tag.setBackgroundColor(style.bg).setColor(style.color);
+      // 水墨预览：标签统一朱砂底（类别色只在现版用）
+      if (GameScene.INK_LEVELUP) view.tag.setBackgroundColor('#8a2a1c').setColor('#fff0d6'); else view.tag.setBackgroundColor(style.bg).setColor(style.color);
       const iconKey = option.kind === 'potion' ? 'icon_rare' : option.kind === 'weapon' ? ({
         spear_orbit:'icon_1',crossbow:'icon_2',flame_banner:'icon_3',guandao:'icon_guandao',zhenbei_blade:'icon_zhenbei',lianhuan_mines:'icon_lianhuan',sun_knives:'icon_sunknives',diaochan_fans:'icon_fans',baodiao_bow:'icon_baodiao',dangyang_roar:'icon_shemao',zhanjin_lance:'icon_zhanjin',shuanggu_swords:'icon_shuanggu',
       } as const)[option.weaponId!] : option.weaponId === 'spear_orbit'
@@ -2206,8 +2207,10 @@ export class GameScene extends Phaser.Scene {
   }
 
   /** 卡面贴图按类别色/悬停/稀有切换。 */
+  /** 三选一 · 水墨预览（?levelup=ink，2026-11-17 用户「水墨风我看看再决定」；默认不启用）。 */
+  private static get INK_LEVELUP(): boolean { try { return IS_DESKTOP && new URLSearchParams(location.search).get('levelup') === 'ink'; } catch { return false; } } // 用时再算：IS_DESKTOP 在 main.ts initLayout() 之后才定
   private paintUpgradeCard(view: CardView): void {
-    view.bg.setTexture(upgradeCardTexture(this, view.w, view.h, view.accent, view.medal, view.hover, view.rare)).setDisplaySize(view.w + 32, view.h + 32);
+    view.bg.setTexture(GameScene.INK_LEVELUP ? inkUpgradeCardTexture(this, view.w, view.h, view.medal, view.hover, view.rare) : upgradeCardTexture(this, view.w, view.h, view.accent, view.medal, view.hover, view.rare)).setDisplaySize(view.w + 32, view.h + 32);
     (view.bg.getData('fitHit') as (() => void) | undefined)?.();
   }
 
@@ -3056,10 +3059,16 @@ export class GameScene extends Phaser.Scene {
     const title = this.add
       .text(GAME_WIDTH / 2, d ? 52 : 120 + Math.max(0, Math.round((GAME_HEIGHT - 960) / 2)), '将星精进 · 择一强化', { fontFamily: HEADING_FONT, fontSize: d ? '28px' : '30px', color: '#f0d79e', resolution: 2 })
       .setOrigin(0.5).setLetterSpacing(4).setShadow(0, 2, '#0a0603', 4, true, true);
-    title.setName('upgrade-title');this.levelPanel.add([dim, title]);
+    title.setName('upgrade-title');
+    // 2026-11-17 用户「统一书法字体」：电脑版标题与主页「乱世千军」、点将页同字体同金色；正文象牙白、描边统一
+    const INK = GameScene.INK_LEVELUP, GOLD = '#efd399', IVORY = '#e8d8b2', STROKE = '#120904';
+    if (d) title.setFontFamily(TITLE_FONT).setFontSize(34).setColor(INK ? '#f4e6c4' : GOLD).setLetterSpacing(3).setShadow(0, 3, '#130a05', 2, true, true);
+    const titleInk = d && INK ? inkPlate(this, null, GAME_WIDTH / 2, title.y + 2, 470, 46, false, 'normal') : null;
+    if (titleInk) dim.setFillStyle(0x16110c, .9);
+    this.levelPanel.add(titleInk ? [dim, titleInk.setScrollFactor(0), title] : [dim, title]);
     // 战功提示：局内每升一级一次三选一；属性点来自武将等级（跨战斗）
-    this.levelPanel.add(this.add.text(GAME_WIDTH / 2, title.y + (d ? 60 : 66), '', { fontFamily: FONT, fontSize: '15px', color: '#cdb98a', resolution: 2 }).setOrigin(0.5).setShadow(0, 1, '#0a0603', 3, true, true).setName('upgrade-points-hint'));
-    this.rerollButton=this.add.text(GAME_WIDTH-(d?28:32),d?24:42,'',{fontFamily:FONT,fontSize:'16px',color:'#e8cf91',resolution:2}).setOrigin(1,0).setPadding(16,10).setBackgroundColor('rgba(52,38,24,0.92)').setShadow(0,1,'#0a0603',2,true,true).setName('upgrade-reroll').setInteractive({useHandCursor:true}).on('pointerdown',()=>this.rerollUpgrades());this.levelPanel.add(this.rerollButton);
+    this.levelPanel.add(this.add.text(GAME_WIDTH / 2, title.y + (d ? 44 : 66), '', { fontFamily: FONT, fontSize: '15px', color: d ? IVORY : '#cdb98a', resolution: 2 }).setOrigin(0.5).setShadow(0, 1, '#0a0603', 3, true, true).setStroke(STROKE, d ? 3 : 0).setName('upgrade-points-hint'));
+    this.rerollButton=this.add.text(GAME_WIDTH-(d?28:32),d?24:42,'',{fontFamily:d?HEADING_FONT:FONT,fontSize:'16px',color:d?'#e8d3a6':'#e8cf91',resolution:2}).setOrigin(1,0).setPadding(16,10).setBackgroundColor(d?'rgba(0,0,0,0)':'rgba(52,38,24,0.92)').setStroke(STROKE,d?4:0).setShadow(0,1,'#0a0603',2,true,true).setName('upgrade-reroll').setInteractive({useHandCursor:true}).on('pointerdown',()=>this.rerollUpgrades());this.levelPanel.add(this.rerollButton);
 
 
     if(!this.textures.exists('ui_upgrade_bronze')){
@@ -3069,6 +3078,7 @@ export class GameScene extends Phaser.Scene {
     }
     const sub=this.add.text(GAME_WIDTH/2,d?88:160+Math.max(0,Math.round((GAME_HEIGHT-960)/2)),'三择其一 · 点击卡片获得强化',warText(14,'#c6b99e')).setOrigin(.5).setName('upgrade-subtitle');
     const subRule=this.add.graphics().lineStyle(1,0xc9a96a,.45).lineBetween(GAME_WIDTH/2-170,sub.y,GAME_WIDTH/2-110,sub.y).lineBetween(GAME_WIDTH/2+110,sub.y,GAME_WIDTH/2+170,sub.y);
+    if (d) { sub.setVisible(false); subRule.setVisible(false); } // 电脑版去掉「三择其一 · 点击卡片获得强化」（少字）
     this.levelPanel.add([sub,subRule]);
     // 三选一卡片：每张卡是一个容器（入场滑入、悬停上浮），卡面按类别着色。电脑横排、手机竖排。
     const pad=d?0:Math.max(0,Math.round((GAME_HEIGHT-960)/2));
@@ -3085,6 +3095,12 @@ export class GameScene extends Phaser.Scene {
       const desc=this.add.text(d?0:104-w/2,d?204-h/2:88-h/2,'',{...warText(d?16:17,'#dacfba'),align:d?'center':'left',lineSpacing:5,wordWrap:{width:d?w-40:w-122,useAdvancedWrap:true}}).setOrigin(d?.5:0,0);
       const rule=this.add.graphics();
       const hint=this.add.text(d?0:w/2-16,d?h/2-22:h/2-14,d?'按 '+(i+1)+' 选择':'点击选择',warText(11,'#9d8f78')).setOrigin(d?.5:1,1).setAlpha(.85);
+      if(d){ // 统一字体：卡名 / 标签 / 提示用标题字，正文用正文字；水墨版换深墨色 + 朱砂标签
+        name.setFontFamily(HEADING_FONT).setColor(INK?'#1f1710':GOLD).setStroke(INK?'#efe4c9':STROKE,3);
+        desc.setFontFamily(FONT).setColor(INK?'#33281d':IVORY).setStroke(INK?'#efe4c9':STROKE,INK?2:2);
+        tag.setFontFamily(HEADING_FONT).setColor(INK?'#fff0d6':'#f6e6c2');if(INK)tag.setBackgroundColor('#8a2a1c');
+        hint.setFontFamily(HEADING_FONT).setFontSize(12).setColor(INK?'#5b4630':'#b9a57a').setStroke(INK?'#efe4c9':STROKE,2).setAlpha(1);
+      }
       // 子元素也必须固定在屏幕上，否则命中检测按相机滚动偏移（点不中卡片）。
       for(const o of [bg,rule,icon,tag,name,desc,hint])o.setScrollFactor(0);root.add([bg,rule,icon,tag,name,desc,hint]);root.setScrollFactor(0);this.levelPanel.add(root);
       const view:CardView={bg,icon,name,desc,tag,root,rule,hint,w,h,baseY:y,medal,accent:UPGRADE_ACCENT.passive,rare:false,hover:false,lift:0};

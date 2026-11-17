@@ -32,9 +32,11 @@ export function drawQualityFrame(g: Phaser.GameObjects.Graphics, x: number, y: n
   else if (q === 'blue') { line(1, 1.5, d.color, hi ? 1 : .9); line(4, 1, d.color, .45); }
   else if (q === 'purple') { line(1, 2, d.color, hi ? 1 : .9); line(4.5, 1, d.color, .5); }
   else { line(1, 2, hi ? GOLD_HI : GOLD, 1); line(4.5, 1, d.color, .85); }
-  if (q === 'purple' || q === 'orange') {
-    g.fillStyle(q === 'orange' ? (hi ? GOLD_HI : GOLD) : d.color, 1);
-    for (const [px, py] of [[x + 1, y + 1], [x + w - 1, y + 1], [x + 1, y + h - 1], [x + w - 1, y + h - 1]]) diamond(g, px, py, 3.5);
+  // 四角镶宝石：绿 / 蓝两角小石，紫 / 橙四角（2026-11-17 行囊美术重设计；厚涂边框素材到位后换图）
+  if (q !== 'white') {
+    const corners = q === 'green' || q === 'blue' ? [[x + 1, y + 1], [x + w - 1, y + h - 1]] : [[x + 1, y + 1], [x + w - 1, y + 1], [x + 1, y + h - 1], [x + w - 1, y + h - 1]];
+    const gem = q === 'orange' ? (hi ? GOLD_HI : GOLD) : d.color, r = q === 'green' || q === 'blue' ? 3 : 3.5;
+    for (const [px, py] of corners) { g.fillStyle(0x000000, .5); diamond(g, px + .6, py + .8, r + .8); g.fillStyle(gem, 1); diamond(g, px, py, r); g.fillStyle(0xffffff, .55); diamond(g, px - r * .3, py - r * .3, r * .35); }
   }
   if (o.selected) g.lineStyle(2, 0xfff1c4, .95).strokeRoundedRect(x - 2, y - 2, w + 4, h + 4, r + 2);
 }
@@ -97,14 +99,36 @@ export function ensureItemTextures(scene: Phaser.Scene): void {
   g.destroy();
 }
 
+/** 行囊厚涂素材（美术风格会话 2026-11-17，public/assets/bag/README.md）：贴图键 = 'bag_' + 文件名。 */
+export const BAG_ART = ['panel_bg', 'doll_paper', 'tray_bg', 'slot_frame', 'slot_frame_hover', 'slot_frame_selected', 'q_white', 'q_green', 'q_blue', 'q_purple', 'q_orange',
+  'sil_helm', 'sil_armor', 'sil_boots', 'sil_token', 'sil_mount', 'sil_relic', 'slot_tag', 'lock_tag', 'medal_frame', 'medal_frame_selected', 'tab', 'tab_selected',
+  'tab_icon_all', 'tab_icon_armor', 'tab_icon_helm', 'tab_icon_boots', 'tab_icon_token', 'tab_icon_relic', 'tooltip_card'] as const;
+export const bagArt = (scene: Phaser.Scene, name: string): string | null => scene.textures.exists('bag_' + name) ? 'bag_' + name : null;
+/** 按需加载行囊素材（只缺的才排队）；全部到位回调 onReady。返回是否已齐。 */
+export function loadBagArt(scene: Phaser.Scene, onReady: () => void): boolean {
+  const miss = BAG_ART.filter(n => !scene.textures.exists('bag_' + n));
+  if (!miss.length) return true;
+  for (const n of miss) scene.load.image('bag_' + n, 'assets/bag/' + n + '.webp');
+  scene.load.once(Phaser.Loader.Events.COMPLETE, onReady); scene.load.start();
+  return false;
+}
+/** 厚涂格子：槽框（空格 / 选中）+ 品质边框（四角宝石已含）；素材没加载时返回 false。 */
+export function drawQualityArt(scene: Phaser.Scene, c: Phaser.GameObjects.Container, size: number, q: ItemQuality | null, o: { selected?: boolean } = {}): boolean {
+  const frame = bagArt(scene, o.selected ? 'slot_frame_selected' : 'slot_frame'); if (!frame) return false;
+  c.add(scene.add.image(0, 0, frame).setDisplaySize(size, size));
+  const qa = q && bagArt(scene, 'q_' + q); if (qa) c.add(scene.add.image(0, 0, qa).setDisplaySize(size, size).setName('item-quality-frame'));
+  return true;
+}
+
 /** 道具小图块（品质框 + 图标 + 名器星），返回容器；size 为边长。 */
 export function itemTile(scene: Phaser.Scene, x: number, y: number, size: number, item: ItemInstance | null, slotHint?: IconSlot, o: { hover?: boolean; selected?: boolean } = {}): Phaser.GameObjects.Container {
   ensureItemTextures(scene);
-  const c = scene.add.container(x, y), g = scene.add.graphics();
-  drawQualityFrame(g, -size / 2, -size / 2, size, size, item?.quality ?? null, o); c.add(g);
+  const c = scene.add.container(x, y), art = drawQualityArt(scene, c, size, item?.quality ?? null, o);
+  if (!art) { const g = scene.add.graphics(); drawQualityFrame(g, -size / 2, -size / 2, size, size, item?.quality ?? null, o); c.add(g); }
   const slot = item ? itemSlot(item) : slotHint;
-  if (item) { const ic = itemIcon(scene, item), k = ic.art ? .84 : .72; c.add(scene.add.image(0, 0, ic.key, ic.frame).setDisplaySize(size * k, size * k).setName('item-icon').setData('art', ic.art)); }
-  else if (slot) c.add(scene.add.image(0, 0, itemIconKey(slot)).setDisplaySize(size * .72, size * .72).setAlpha(.22));
+  // 厚涂框边较宽，图标缩到框内（.7）；程序框沿用原比例
+  if (item) { const ic = itemIcon(scene, item), k = art ? (ic.art ? .7 : .6) : ic.art ? .84 : .72; const img = scene.add.image(0, 0, ic.key, ic.frame).setDisplaySize(size * k, size * k).setName('item-icon').setData('art', ic.art); if (art) c.addAt(img, 1); else c.add(img); }
+  else if (slot) { const sil = art && bagArt(scene, 'sil_' + slot); c.add(sil ? scene.add.image(0, 0, sil).setDisplaySize(size * .62, size * .62).setAlpha(.42) : scene.add.image(0, 0, itemIconKey(slot)).setDisplaySize(size * .72, size * .72).setAlpha(.22)); }
   // 首领遗珍：右下角「珍」字
   if (item && relicDef(item.base)) c.add(scene.add.text(size / 2 - 3, size / 2 - 3, '珍', { fontFamily: 'serif', fontSize: Math.max(10, Math.round(size * .2)) + 'px', color: '#2a1606', backgroundColor: '#f3c66acc', resolution: 2 }).setOrigin(1, 1).setPadding(2, 0).setName('item-relic-badge'));
   if (item?.special) c.add(scene.add.text(size / 2 - 4, -size / 2 + 2, '★', { fontFamily: 'serif', fontSize: Math.round(size * .26) + 'px', color: '#ffd27a', resolution: 2 }).setOrigin(1, 0));

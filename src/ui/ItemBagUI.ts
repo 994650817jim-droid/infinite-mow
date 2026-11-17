@@ -2,13 +2,13 @@ import Phaser from 'phaser';
 import { charmText } from '../data/charms';
 import { gearOwners, ownerName } from '../systems/RosterStore';
 import { DEPTH, FONT, GAME_HEIGHT, GAME_WIDTH, HEADING_FONT, IS_DESKTOP } from '../config';
-import { CHARACTERS, type CharacterId } from '../data/characters';
+import { CHARACTERS, HOME_ART_HEROES, type CharacterId } from '../data/characters';
 import { AFFIXES, BAG_CAPACITY, LEGENDS, QUALITIES, QUALITY_ORDER, SLOTS, SLOT_ORDER, SPECIALS, formatAffix, itemDef, itemName, itemSlot, type AffixId, type ItemInstance, type ItemSlot } from '../data/items';
 import { rewardGrain } from '../world/WorldStore';
 import { HORSES, horseQuality, mountStyle } from '../data/mounts';
 import { gearFromItems, gearSummary, horseBonusText } from '../systems/ItemEffects';
 import { type GearOwner, type LoadoutKey, LOADOUT_KEYS, equipTarget, keySlot, tokenSlots, equipItem, equippedBy, heroHorse, horseRider, legacyValue, loadItems, salvageLegacy, loadout, looseCount, markBagSeen, rideHorse, salvageItems, salvageUpTo, setAutoSalvageWhite, stableUnlocked, takeItemNotice, takeStableAnnouncement, unequipSlot } from '../systems/ItemStore';
-import { drawQualityFrame, ensureItemTextures, horseIcon, itemIconKey, itemTile } from './ItemQuality';
+import { bagArt, drawQualityArt, drawQualityFrame, ensureItemTextures, horseIcon, itemIconKey, itemTile, loadBagArt, type IconSlot } from './ItemQuality';
 import { lqHitBox, lqPanel, lqSkin } from './LacquerKit';
 import { padNavigator } from './PadNavigator';
 import { ItemTooltip, compareLines } from './ItemTooltip';
@@ -120,6 +120,7 @@ export class ItemBagUI {
     dim.on('pointerdown', (_p: unknown, _x: unknown, _y: unknown, e?: Phaser.Types.Input.EventData) => e?.stopPropagation?.());
     const x0 = D ? 18 : 10, y0 = D ? 12 : 14, pw = W - x0 * 2, ph = H - y0 * 2;
     lqPanel(this.add(this.scene.add.graphics()), x0, y0, pw, ph);
+    { const bg = D && bagArt(this.scene, 'panel_bg'); if (bg) this.add(this.scene.add.image(x0 + pw / 2, y0 + ph / 2, bg).setDisplaySize(pw + 8, ph + 8)); }
 
     // 标题 + 计数（只算未穿戴的）+ 关闭
     this.text(x0 + 28, y0 + (D ? 18 : 22), '行囊', D ? 26 : 30, '#f2ddae', true);
@@ -129,6 +130,18 @@ export class ItemBagUI {
     // 旧物（旧档的兵刃挂饰、重复的马）：原样保留，点开可按双倍价分解
     if (s.legacy.length) this.button(x0 + pw - (D ? 170 : 176), y0 + (D ? 32 : 40), `旧物 ${s.legacy.length}`, 'item-legacy', () => this.select('legacy'), { size: D ? 14 : 15 });
 
+    const pageY = D ? this.renderDesk(s, x0, y0, pw, ph) : this.renderMobile(s, x0, y0, pw, ph);
+    if (this.notice) { const n = this.text(W / 2, pageY - (D ? 34 : 40), this.notice, 14, '#f3d48a').setOrigin(.5, 1).setAlign('center').setBackgroundColor('#1b120bcc').setPadding(10, 4).setName('item-notice'); this.notice = ''; this.scene.time.delayedCall(2600, () => n.active && n.setVisible(false)); }
+
+    if (this.selected === 'stable') this.renderStable();
+    else if (this.selected === 'legacy') this.renderLegacy();
+    else if (this.selected) this.renderDetail(this.selected);
+    this.markPadDefault(prevName);
+  }
+
+  /** 手机布局（原版，未改）。返回底部按钮行的 y。 */
+  private renderMobile(s: ReturnType<typeof loadItems>, x0: number, y0: number, pw: number, ph: number): number {
+    const W = GAME_WIDTH, D = IS_DESKTOP;
     // 武将切换（战斗中只看出征的武将）
     const heroY = y0 + (D ? 70 : 90);
     const owners = gearOwners(), heroRows = Math.ceil(Math.max(1, owners.length) / (D ? 10 : 5));
@@ -210,12 +223,193 @@ export class ItemBagUI {
       this.button(gx + gw - (D ? 196 : 208), pageY, `自动分解白：${s.autoSalvageWhite ? '开' : '关'}`, 'item-auto-white', () => { setAutoSalvageWhite(!s.autoSalvageWhite); this.notice = s.autoSalvageWhite ? '已关闭：白色兵装照常收入行囊' : '已开启：之后的白色兵装收入时直接折成军粮'; this.render(); }, { size: 13, active: s.autoSalvageWhite });
       this.button(gx + gw - 62, pageY, '分解白 / 绿', 'item-salvage-low', () => { const m = salvageUpTo('green'); this.notice = m ? `分解完成 · 军粮 +${rewardGrain(0, 0, m)}` : '没有可分解的白 / 绿兵装（已穿戴的不会分解）'; this.selected = null; this.render(); }, { size: 13 });
     }
-    if (this.notice) { const n = this.text(W / 2, pageY - (D ? 34 : 40), this.notice, 14, '#f3d48a').setOrigin(.5, 1).setAlign('center').setBackgroundColor('#1b120bcc').setPadding(10, 4).setName('item-notice'); this.notice = ''; this.scene.time.delayedCall(2600, () => n.active && n.setVisible(false)); }
+    return pageY;
+  }
 
-    if (this.selected === 'stable') this.renderStable();
-    else if (this.selected === 'legacy') this.renderLegacy();
-    else if (this.selected) this.renderDetail(this.selected);
-    this.markPadDefault(prevName);
+  // ———— 电脑布局（2026-11-17 美术重设计，用户批准「按效果图做」，见 assets/review/ui-round11/PROPOSAL.md）————
+  // 立绘居中站在卷轴纸上，槽位围着身体（左 头盔 / 甲胄 / 信物 / 坐骑，右 遗珍 / 信物二 / 战靴），细金虚线引到身体部位；
+  // 顶部圆形将印切换武将；右侧漆木行囊盘（带图标的筛选页签）；立绘下方兵装加成横幅。
+  // 厚涂素材（bag/*.webp，画风会话在要）到位前用现有美术 + 代码描边过渡；只改表现，穿脱 / 对比 / 筛选逻辑与命名命中区不变。
+
+  /** 现有美术按需加载（全身立绘、水墨立轴头像、卷轴纸），到了就重绘。 */
+  private artQueued = false;
+  private ensureBagArt(): void {
+    const sc = this.scene, want: [string, string][] = [];
+    if (!sc.textures.exists('ink_paper')) want.push(['ink_paper', 'assets/ink-scroll/paper.webp']);
+    for (const id of new Set<string>([this.hero, ...gearOwners().map(o => o.id)])) {
+      if (!(HOME_ART_HEROES as readonly string[]).includes(id)) continue;
+      if (id === this.hero && !sc.textures.exists('epic_hero_' + id)) want.push(['epic_hero_' + id, 'assets/epic-home/' + id + '.webp']);
+      if (!sc.textures.exists('ink_hero_' + id)) want.push(['ink_hero_' + id, 'assets/ink-scroll/' + id + '.webp']);
+    }
+    // 只排一次队：行囊厚涂素材 + 缺的立绘 / 头像 / 卷轴纸一起加载，全部到了重绘一次
+    if (this.artQueued) return;
+    const bagReady = loadBagArt(sc, () => undefined);
+    if (bagReady && !want.length) return;
+    this.artQueued = true;
+    for (const [k, p] of want) sc.load.image(k, p);
+    sc.load.once(Phaser.Loader.Events.COMPLETE, () => { this.artQueued = false; if (this.root.active) this.render(); });
+    sc.load.start();
+  }
+  /** 圆形将印贴图：水墨立轴头像裁成圆（canvas 生成一次，缓存）。 */
+  private medalKey(id: string): string | null {
+    const key = 'bag_medal_' + id, sc = this.scene;
+    if (sc.textures.exists(key)) return key;
+    if (!sc.textures.exists('ink_hero_' + id)) return null;
+    const src = sc.textures.get('ink_hero_' + id).getSourceImage() as HTMLImageElement, S = 96, c = document.createElement('canvas'); c.width = c.height = S;
+    const g = c.getContext('2d')!; g.beginPath(); g.arc(S / 2, S / 2, S / 2, 0, Math.PI * 2); g.clip();
+    const w = src.width, side = w * .62; g.drawImage(src, (w - side) / 2, src.height * .1, side, side, 0, 0, S, S);
+    sc.textures.addCanvas(key, c); return key;
+  }
+  /** 细金虚线（Graphics 没有虚线，逐段画）。 */
+  private dashed(g: Phaser.GameObjects.Graphics, pts: [number, number][]): void {
+    for (let i = 0; i < pts.length - 1; i++) {
+      const [x1, y1] = pts[i], [x2, y2] = pts[i + 1], len = Math.hypot(x2 - x1, y2 - y1), n = Math.max(1, Math.floor(len / 6));
+      for (let k = 0; k < n; k += 2) { const t1 = k / n, t2 = Math.min(1, (k + 1) / n); g.lineBetween(x1 + (x2 - x1) * t1, y1 + (y2 - y1) * t1, x1 + (x2 - x1) * t2, y1 + (y2 - y1) * t2); }
+    }
+  }
+  /** 槽名竖排朱红小牌。 */
+  private slotTag(x: number, y: number, label: string): void {
+    const t = this.text(x, y, [...label.replace(/[·\s]/g, '')].slice(0, 2).join('\n'), 11, '#ffe2a0', true).setOrigin(.5).setLineSpacing(-1);
+    const w = 18, h = t.height + 10, tagArt = bagArt(this.scene, 'slot_tag');
+    if (tagArt) this.add(this.scene.add.image(x, y, tagArt).setDisplaySize(w, h));
+    else { const g = this.add(this.scene.add.graphics()); g.fillStyle(0x7a2a1c, 1).fillRoundedRect(x - w / 2, y - h / 2, w, h, 2).lineStyle(1, 0xd8a868, .9).strokeRoundedRect(x - w / 2 + .5, y - h / 2 + .5, w - 1, h - 1, 2); }
+    this.body.bringToTop(t);
+  }
+
+  private renderDesk(s: ReturnType<typeof loadItems>, x0: number, y0: number, pw: number, ph: number): number {
+    this.ensureBagArt();
+    const sc = this.scene;
+    // 将印：一排圆形头像（战斗中只看出征的武将，不显示）
+    if (!this.battle) {
+      const owners = gearOwners(), r = 19, gap = 46, hy = y0 + 76, sx = x0 + 46;
+      owners.forEach((c, i) => {
+        const x = sx + i * gap, on = c.id === this.hero, worn = Object.keys(loadout(c.id, s)).length, g = this.add(sc.add.graphics());
+        if (on) g.fillStyle(0xf3d48a, .25).fillCircle(x, hy, r + 7);
+        g.fillStyle(0x1b120b, 1).fillCircle(x, hy, r + 3).lineStyle(on ? 2.5 : 1.5, on ? 0xf3d48a : 0x9a7a46, 1).strokeCircle(x, hy, r + 2.5);
+        const key = this.medalKey(c.id);
+        if (key) this.add(sc.add.image(x, hy, key).setDisplaySize(r * 2, r * 2)).setAlpha(on ? 1 : .78);
+        else this.text(x, hy, c.name.replace(/（.*）/, '').slice(0, 1), 17, on ? '#fff3d6' : '#cdb98a', true).setOrigin(.5);
+        if (on) g.lineStyle(1, 0x7a2a1c, 1).strokeCircle(x, hy, r + .5);
+        const ring = bagArt(sc, on ? 'medal_frame_selected' : 'medal_frame'); if (ring) { g.clear(); this.add(sc.add.image(x, hy, ring).setDisplaySize(r * 2 * 120 / 80, r * 2 * 120 / 80)); }
+        this.text(x, hy + r + 9, c.name.replace(/（.*）/, '') + (worn ? '·' + worn : ''), 11, on ? '#f3d48a' : '#b9a57a').setOrigin(.5);
+        const hit = this.add(sc.add.circle(x, hy, r + 4, 0, .001)).setName('item-hero-' + c.id).setInteractive({ useHandCursor: true });
+        hit.on('pointerdown', (_p: unknown, _x: unknown, _y: unknown, e?: Phaser.Types.Input.EventData) => { e?.stopPropagation?.(); this.hero = c.id; if (this.selected !== 'stable') this.selected = null; this.render(); });
+      });
+      this.text(x0 + pw - 30, y0 + 70, '点道具看详情 · 悬停看属性和对比', 11, '#8f8070').setOrigin(1, .5);
+    }
+    // 版面：左装束图 + 加成横幅，右行囊盘
+    const dx = x0 + 22, dy = this.battle ? y0 + 58 : y0 + 112, dw = 430, sumH = 82, bottom = y0 + ph - 14, dh = bottom - sumH - 8 - dy;
+    const tx = dx + dw + 14, ty = dy, tw = x0 + pw - 22 - tx, th = bottom - ty;
+    // —— 装束图底：卷轴纸（缺图时暖色纸底）+ 暗角 + 铜边
+    const paper = this.add(sc.add.graphics()); paper.fillStyle(0xcdb48a, 1).fillRoundedRect(dx, dy, dw, dh, 6);
+    const paperKey = bagArt(sc, 'doll_paper') ?? (sc.textures.exists('ink_paper') ? 'ink_paper' : null);
+    if (paperKey) { const img = this.add(sc.add.image(dx + dw / 2, dy + dh / 2, paperKey)); img.setScale(Math.max(dw / img.width, dh / img.height)); img.setCrop((img.width - dw / img.scaleX) / 2, (img.height - dh / img.scaleY) / 2, dw / img.scaleX, dh / img.scaleY); }
+    const vig = this.add(sc.add.graphics());
+    for (let i = 0; i < 10; i++) vig.lineStyle(6, 0x2a160a, .05 + i * .012).strokeRoundedRect(dx + 3 + i * 3, dy + 3 + i * 3, dw - 6 - i * 6, dh - 6 - i * 6, 6);
+    vig.lineStyle(2, 0x8a6a3a, 1).strokeRoundedRect(dx + 1, dy + 1, dw - 2, dh - 2, 6).lineStyle(1, 0x2a1a0e, 1).strokeRoundedRect(dx + 3.5, dy + 3.5, dw - 7, dh - 7, 5);
+    // —— 立绘：全身厚涂居中（缺图回退旧立绘框）
+    const c = CHARACTERS.find(x => x.id === this.hero), epic = c && sc.textures.exists('epic_hero_' + c.id) ? 'epic_hero_' + c.id : null;
+    let body = { x: dx + dw / 2 - 90, y: dy + 10, w: 180, h: dh - 16 };
+    if (epic) {
+      this.add(sc.add.ellipse(dx + dw / 2, dy + dh - 10, 190, 20, 0x2a160a, .35));
+      const img = this.add(sc.add.image(dx + dw / 2 + 6, dy + dh - 4, epic).setOrigin(.5, 1)).setName('item-portrait');
+      img.setScale((dh - 6) / img.height);
+      body = { x: img.x - img.displayWidth / 2, y: img.y - img.displayHeight, w: img.displayWidth, h: img.displayHeight };
+    } else this.portrait(dx + dw / 2, dy + 24, 200, dh - 48);
+    const at = (fx: number, fy: number): [number, number] => [body.x + body.w * fx, body.y + body.h * fy];
+    // —— 槽位：左 4、右 3（坐骑在左下，战靴在右下靠脚）
+    const worn = loadout(this.hero, s), horse = heroHorse(this.hero, s), size = 54, lx = dx + 46, rx = dx + dw - 46;
+    const rowY = (r: number) => dy + 34 + r * ((dh - 78) / 3); // 槽 54 + 名字 11px：行距约 74，名字不碰下一格
+    const place: Record<LoadoutKey, [number, number]> = { helm: [lx, rowY(0)], armor: [lx, rowY(1)], token: [lx, rowY(2)], relic: [rx, rowY(0)], token2: [rx, rowY(1)], boots: [rx, rowY(3)] };
+    const anchor: Partial<Record<LoadoutKey | 'mount', [number, number]>> = { helm: at(.47, .12), armor: at(.45, .32), token: at(.37, .56), token2: at(.55, .42), boots: at(.6, .95), mount: at(.32, .97) };
+    const lines = this.add(sc.add.graphics()); lines.lineStyle(1.2, 0x7a5626, .9);
+    const lead = (sx: number, sy: number, key: LoadoutKey | 'mount'): void => {
+      const a = anchor[key]; if (!a) return; const side = sx < dx + dw / 2 ? 1 : -1, ex = sx + side * (size / 2 + 4), mid = ex + side * Math.max(12, Math.abs(a[0] - ex) * .55);
+      this.dashed(lines, [[ex, sy], [mid, sy], [a[0], a[1]]]); lines.fillStyle(0xc9a45c, 1).fillCircle(a[0], a[1], 2.6);
+    };
+    const twoTokens = tokenSlots() > 1;
+    for (const slot of LOADOUT_KEYS) {
+      const [sx, sy] = place[slot], item = worn[slot] ?? null, locked = slot === 'token2' && !twoTokens, base = keySlot(slot);
+      lead(sx, sy, slot);
+      const tile = this.add(itemTile(sc, sx, sy, size, item, base, { selected: !!item && item.uid === this.selected }));
+      if (locked) { const lk = bagArt(sc, 'lock_tag'); tile.add(lk ? sc.add.image(size / 2 - 9, size / 2 - 9, lk).setDisplaySize(20, 20) : sc.add.text(size / 2 - 3, size / 2 - 3, '锁', { fontFamily: FONT, fontSize: '12px', color: '#1c140a', backgroundColor: '#b9a57a', resolution: 2 }).setOrigin(1, 1).setPadding(2, 0)); tile.setAlpha(.8); }
+      tile.setName('item-slot-' + slot).setData('uid', item?.uid ?? null).setSize(size, size).setInteractive({ useHandCursor: true });
+      this.onTap(tile, () => { if (item) this.select(item.uid); else if (locked) { this.notice = '第二信物位：第二章通关后开放'; this.render(); } else { this.filter = base; this.page = 0; this.notice = `行囊已筛选 · ${SLOTS[base].name}（点道具穿戴）`; this.render(); } });
+      if (item) this.tip.attach(tile, () => item, () => item);
+      const name = slot === 'token2' ? (locked ? '信物·二 · 二章通关开放' : '信物·二') : SLOTS[slot].name;
+      this.slotTag(sx < dx + dw / 2 ? sx - size / 2 - 12 : sx + size / 2 + 12, sy, slot === 'relic' ? '遗珍' : slot === 'token2' ? '信物' : SLOTS[slot].name);
+      this.text(sx, sy + size / 2 + 8, item ? itemName(item) : name, 11, item ? QUALITIES[item.quality].css : '#6b5a40').setOrigin(.5).setName('item-slot-label-' + slot).setStroke(item ? '#140d07' : '#e8d9b8', item ? 3 : 2);
+    }
+    // 坐骑位（左下）
+    const my = rowY(3), mountTile = this.add(sc.add.container(lx, my));
+    lead(lx, my, 'mount');
+    const hq = horse ? horseQuality(HORSES.find(h => h.id === horse.id)) : null, mArt = drawQualityArt(sc, mountTile, size, hq);
+    if (!mArt) { const mg = sc.add.graphics(); drawQualityFrame(mg, -size / 2, -size / 2, size, size, hq); mountTile.add(mg); }
+    const unlocked = stableUnlocked();
+    if (horse) { const ic = horseIcon(sc, horse.id), k = mArt ? .7 : ic.art ? .84 : .72; mountTile.add(sc.add.image(0, 0, ic.key, ic.frame).setDisplaySize(size * k, size * k).setTint(ic.art ? 0xffffff : mountStyle(horse.id).tint)); }
+    else { const sil = mArt && bagArt(sc, 'sil_mount'); mountTile.add(sil ? sc.add.image(0, 0, sil).setDisplaySize(size * .62, size * .62).setAlpha(.42) : sc.add.image(0, 0, itemIconKey('mount')).setDisplaySize(size * .72, size * .72).setAlpha(.22)); }
+    if (!unlocked || !this.canChangeHorse || this.hero.startsWith('r_')) { const lk = bagArt(sc, 'lock_tag'); mountTile.add(lk ? sc.add.image(size / 2 - 9, size / 2 - 9, lk).setDisplaySize(20, 20) : sc.add.text(size / 2 - 3, size / 2 - 3, '锁', { fontFamily: FONT, fontSize: '12px', color: '#1c140a', backgroundColor: '#b9a57a', resolution: 2 }).setOrigin(1, 1).setPadding(2, 0)); }
+    mountTile.setName('item-slot-mount').setSize(size, size).setInteractive({ useHandCursor: true }); this.onTap(mountTile, () => this.select('stable'));
+    this.slotTag(lx - size / 2 - 12, my, '坐骑');
+    this.text(lx, my + size / 2 + 8, !unlocked ? '坐骑 · 一章通关开放' : horse ? horse.name : '坐骑', 11, horse ? '#f3c37a' : '#6b5a40').setOrigin(.5).setName('item-slot-label-mount').setStroke(horse ? '#140d07' : '#e8d9b8', horse ? 3 : 2);
+    // —— 兵装加成横幅（三列词条 + 右上 ★ 特效）
+    const gear = gearFromItems(Object.values(worn).filter((i): i is ItemInstance => !!i), horse), sy0 = dy + dh + 8, list = gearSummary(gear);
+    const band = this.add(sc.add.graphics()); band.fillStyle(0x140d08, .9).fillRoundedRect(dx, sy0, dw, bottom - sy0, 6).lineStyle(1, 0x6b5a40, 1).strokeRoundedRect(dx + .5, sy0 + .5, dw - 1, bottom - sy0 - 1, 6);
+    this.text(dx + 14, sy0 + 8, '兵装加成', 15, '#ecd49a', true);
+    if (gear.specials.length) this.text(dx + dw - 14, sy0 + 10, '★ ' + gear.specials.map(id => SPECIALS[id].name).join(' · ★ ') + '（点道具看详情）', 11, '#f3c37a').setOrigin(1, 0).setName('item-gear-specials');
+    if (!list.length) this.text(dx + 14, sy0 + 32, '尚未穿戴兵装 · 点行囊中的道具穿戴', 12, '#9c8c6c').setName('item-gear-summary');
+    else {
+      const cols = 3, per = Math.ceil(list.length / cols), cw = (dw - 28) / cols;
+      for (let k = 0; k < cols; k++) { const part = list.slice(k * per, k * per + per); if (part.length) this.text(dx + 14 + k * cw, sy0 + 30, part.join('\n'), 12, '#d8ccb0').setLineSpacing(2).setName(k ? 'item-gear-summary-' + (k + 1) : 'item-gear-summary'); }
+    }
+    // —— 行囊盘：漆木托盘 + 带图标的筛选页签 + 网格
+    const trayArt = bagArt(sc, 'tray_bg');
+    if (trayArt) this.add(sc.add.nineslice(tx, ty, trayArt, undefined, tw * 2, th * 2, 60, 60, 60, 60).setOrigin(0).setScale(.5));
+    const tray = this.add(sc.add.graphics());
+    if (!trayArt) tray.fillStyle(0x1c120b, 1).fillRoundedRect(tx, ty, tw, th, 6).fillStyle(0x2a1a10, .5).fillRoundedRect(tx + 4, ty + 4, tw - 8, 40, { tl: 4, tr: 4, bl: 0, br: 0 });
+    if (!trayArt) for (let yy = ty + 50; yy < ty + th - 50; yy += 9) tray.lineStyle(1, 0x24170e, .55).lineBetween(tx + 8, yy, tx + tw - 8, yy); // 木纹
+    if (!trayArt) tray.lineStyle(1, 0x6b5a40, 1).strokeRoundedRect(tx + .5, ty + .5, tw - 1, th - 1, 6).lineStyle(1, 0x000000, .6).strokeRoundedRect(tx + 3.5, ty + 3.5, tw - 7, th - 7, 4);
+    const filters: Array<ItemSlot | 'all'> = ['all', ...SLOT_ORDER], fgap = 6, fw = (tw - 20 - (filters.length - 1) * fgap) / filters.length, fy = ty + 24;
+    filters.forEach((fl, i) => {
+      const x = tx + 10 + fw / 2 + i * (fw + fgap), label = fl === 'all' ? '全部' : fl === 'relic' ? '遗珍' : SLOTS[fl].name;
+      const on = this.filter === fl, tabArt = bagArt(sc, on ? 'tab_selected' : 'tab'), iconArt = bagArt(sc, 'tab_icon_' + fl);
+      if (tabArt) {
+        this.add(sc.add.nineslice(x, fy, tabArt, undefined, fw * 2, 60, 32, 32, 0, 0).setScale(.5));
+        if (iconArt) this.add(sc.add.image(x - fw / 2 + 15, fy, iconArt).setDisplaySize(20, 20)).setAlpha(on ? 1 : .8);
+        const t = this.text(x + (iconArt ? 8 : 0), fy, label, 13, on ? '#fff3d6' : '#e9dcbc').setOrigin(.5).setName('item-filter-' + fl);
+        lqHitBox(t, fw, 28); t.setInteractive({ useHandCursor: true }).on('pointerdown', (_p: unknown, _x: unknown, _y: unknown, e?: Phaser.Types.Input.EventData) => { e?.stopPropagation?.(); this.filter = fl; this.page = 0; this.render(); });
+      } else {
+        this.button(x + (fl === 'all' ? 0 : 7), fy, label, 'item-filter-' + fl, () => { this.filter = fl; this.page = 0; this.render(); }, { active: on, size: 13, w: fw - (fl === 'all' ? 24 : 38) });
+        if (fl !== 'all') { const icon = this.add(sc.add.image(x - fw / 2 + 13, fy, itemIconKey(fl as IconSlot)).setDisplaySize(18, 18)).setAlpha(on ? 1 : .75); this.body.bringToTop(icon); }
+      }
+    });
+    const cell = 52, gap = 6, gcols = Math.max(1, Math.floor((tw - 20 + gap) / (cell + gap)));
+    const pageY = ty + th - 22, gridTop = fy + 30, rows = Math.max(1, Math.floor((pageY - 22 - gridTop + gap) / (cell + gap))), per = gcols * rows;
+    const items = this.items(), pages = Math.max(1, Math.ceil(items.length / per)); this.page = Math.min(this.page, pages - 1);
+    const offX = tx + (tw - (gcols * cell + (gcols - 1) * gap)) / 2;
+    // 空凹格：整页铺满，物品放在上面
+    const wells = this.add(sc.add.graphics());
+    const wellArt = bagArt(sc, 'slot_frame');
+    for (let i = 0; i < per; i++) { const ix = offX + (i % gcols) * (cell + gap), iy = gridTop + Math.floor(i / gcols) * (cell + gap); if (wellArt) { this.add(sc.add.image(ix + cell / 2, iy + cell / 2, wellArt).setDisplaySize(cell, cell).setAlpha(.45)); continue; } wells.fillStyle(0x000000, .28).fillRoundedRect(ix, iy, cell, cell, 5).lineStyle(1, 0xc9a45c, .14).strokeRoundedRect(ix + .5, iy + .5, cell - 1, cell - 1, 5); }
+    items.slice(this.page * per, this.page * per + per).forEach((item, i) => {
+      const ix = offX + cell / 2 + (i % gcols) * (cell + gap), iy = gridTop + cell / 2 + Math.floor(i / gcols) * (cell + gap);
+      const tile = this.add(itemTile(sc, ix, iy, cell, item, undefined, { selected: item.uid === this.selected }));
+      tile.setName('item-cell-' + i).setData('uid', item.uid).setSize(cell, cell).setInteractive({ useHandCursor: true });
+      const loot = this.isLoot(item.uid);
+      this.onTap(tile, () => this.select(item.uid));
+      this.tip.attach(tile, () => item, () => loadout(this.hero)[equipTarget(this.hero, item)]);
+      tile.on('pointerover', () => tile.setY(iy - 2)).on('pointerout', () => tile.setY(iy));
+      if (loot) tile.setData('loot', true).add(sc.add.text(-cell / 2 + 3, -cell / 2 + 2, '新', { fontFamily: HEADING_FONT, fontSize: '11px', color: '#2a1a08', backgroundColor: '#f3d48acc', resolution: 2 }).setPadding(3, 0).setName('item-new-badge'));
+      const owner = loot ? undefined : equippedBy(s, item.uid);
+      if (owner) tile.add(sc.add.text(-cell / 2 + 3, cell / 2 - 3, (ownerName(owner).slice(0, 1) || '装'), { fontFamily: FONT, fontSize: '11px', color: '#1c140a', backgroundColor: '#d7b46a', resolution: 2 }).setOrigin(0, 1).setPadding(2, 0));
+    });
+    if (!items.length) this.text(tx + tw / 2, gridTop + 90, '行囊空空\n战斗中击败精锐、首领、打开宝箱可得兵装', 15, '#9c8c6c').setOrigin(.5).setAlign('center');
+    this.button(tx + 30, pageY, '‹', 'item-page-prev', () => { this.page = Math.max(0, this.page - 1); this.render(); }, { disabled: this.page === 0, size: 16 });
+    this.text(tx + 80, pageY, `${this.page + 1} / ${pages}`, 14, '#cdb98a').setOrigin(.5).setName('item-page');
+    this.button(tx + 130, pageY, '›', 'item-page-next', () => { this.page = Math.min(pages - 1, this.page + 1); this.render(); }, { disabled: this.page >= pages - 1, size: 16 });
+    this.button(tx + tw - 182, pageY, `自动分解白：${s.autoSalvageWhite ? '开' : '关'}`, 'item-auto-white', () => { setAutoSalvageWhite(!s.autoSalvageWhite); this.notice = s.autoSalvageWhite ? '已关闭：白色兵装照常收入行囊' : '已开启：之后的白色兵装收入时直接折成军粮'; this.render(); }, { size: 13, active: s.autoSalvageWhite });
+    this.button(tx + tw - 56, pageY, '分解白 / 绿', 'item-salvage-low', () => { const m = salvageUpTo('green'); this.notice = m ? `分解完成 · 军粮 +${rewardGrain(0, 0, m)}` : '没有可分解的白 / 绿兵装（已穿戴的不会分解）'; this.selected = null; this.render(); }, { size: 13 });
+    return pageY;
   }
 
   /** 武将立绘（缺图时只写名字）。 */

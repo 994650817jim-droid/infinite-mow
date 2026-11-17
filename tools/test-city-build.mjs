@@ -1,4 +1,4 @@
-// 城池建设第一批（city-build-proposal.md；用户要求精简，只有府衙 / 屯田 / 募兵所）：v9→v10 迁移、建造规则、结算产出、失守保留、天下地图 → 进入城池（电脑布局）。需要开发服务器。
+// 城池建设第一批（city-build-proposal.md；用户要求精简，只有府衙 / 屯田 / 募兵所；屯田按场结算、结算画面列明细）：v9→v10 迁移、建造规则、结算产出、失守保留、天下地图 → 进入城池（电脑布局）。需要开发服务器。
 // 用法：BASE=http://127.0.0.1:5190/ node tools/test-city-build.mjs
 import { chromium } from 'playwright';
 import { mkdirSync } from 'node:fs';
@@ -50,13 +50,14 @@ const OLD = { small: { balanced: [10, 0], farm: [16, 0], military: [5, 1] }, med
     o.lv = w.cityLevels('guandu'); o.grain = w.loadWorld().provisions;
     // 结算：各城产出合计、募兵所送兵
     const before = w.loadWorld(), id = w.beginExpedition('hulao', 1), res = w.settleExpedition(id, { chapter: 'hulao', victory: true, bossKilled: true, elapsed: 300, kills: 300, reason: 'boss', debug: false });
-    o.cityGrain = res.season?.cityGrain; o.cityTroops = res.season?.cityTroops; o.reserveGain = Object.values(w.loadWorld().reserve).reduce((a, b) => a + b, 0) - Object.values(before.reserve).reduce((a, b) => a + b, 0);
+    o.cityGrain = res.season?.cityGrain; o.cityTroops = res.season?.cityTroops; o.farms = res.season?.farms; o.line = w.cityIncomeLine(res); o.reserveGain = Object.values(w.loadWorld().reserve).reduce((a, b) => a + b, 0) - Object.values(before.reserve).reduce((a, b) => a + b, 0);
     o.lost = w.loadWorld().cities.sishui;
     return o; });
   ck('小城：屯田 1 级 80；2 级要府衙 Lv2；募兵所小城最高 1 级', r.t1.ok && !r.t2.ok && r.t2.message.includes('府衙 Lv2') && r.m1.ok && !r.m2.ok, r);
   ck('小城：府衙升 2 级后屯田可升 2 级；府衙小城最高 2 级；不是我方城池不能建', r.o2.ok && !r.o3.ok && r.t2b.ok && r.lv.office === 2 && r.lv.tuntian === 2 && r.lv.muster === 1 && !r.notMine.ok, r);
   ck('价格按档次放大：中城屯田 1 级 120，大城府衙 2 级 400', r.mediumCost === 120 && r.largeCost === 400, r);
   ck('结算：各城军粮与募兵所后备兵按建筑计入（只有官渡募兵所 1 级 → 1 人）', r.cityGrain > 0 && r.cityTroops === 1 && r.reserveGain === 1, r);
+  ck('屯田按场结算、自动入账：结算明细「屯田供粮：官渡 +20」（小城 2 级 × 10）', JSON.stringify(r.farms) === JSON.stringify([{ city: '官渡', grain: 20 }]) && r.line.includes('屯田供粮：官渡 +20'), { farms: r.farms, line: r.line });
   ck('失守 / 未占领的城建筑等级保留在存档里', r.lost?.office === 2 && r.lost?.tuntian === 1, r.lost);
   await p.close();
 }

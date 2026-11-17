@@ -25,7 +25,7 @@ export const TIER_COST: Record<CityTier, number> = { small: 1, medium: 1.5, larg
 export const CITY_BASE_GRAIN: Record<CityTier, number> = { small: 10, medium: 28, large: 55 };
 /** 府衙每级（1 级以上）基础产粮 +25%。 */
 export const OFFICE_BONUS = 0.25;
-/** 屯田每级每战产粮。 */
+/** 屯田每级每战产粮（用户 2026-11-17：屯田「随着时间推进」指游戏里打完一关结算，按场自动入账，不做手动收粮）。待平衡会话复核。 */
 export const TUNTIAN_GRAIN: Record<CityTier, number> = { small: 10, medium: 15, large: 25 };
 /** 募兵所每级每战送后备兵人数（大城每级 2 人，保证原「重军」大城不吃亏）。 */
 export const MUSTER_TROOPS: Record<CityTier, number> = { small: 1, medium: 1, large: 2 };
@@ -54,10 +54,10 @@ export function cityBuildBlockers(id: CityBuildingId, tier: CityTier, levels: Ci
   if (id !== 'office' && l + 1 > (levels.office ?? 1)) return [`府衙 Lv${l + 1}`];
   return [];
 }
-/** 一座城每战的产出：军粮 = 基础 × (1 + 府衙加成) + 屯田；后备兵 = 募兵所。 */
-export function cityIncome(tier: CityTier, levels: CityLevels): { grain: number; troops: number } {
+/** 一座城每战的产出：军粮 = 基础 × (1 + 府衙加成) + 屯田（farm 为其中屯田那部分，结算画面单列）；后备兵 = 募兵所。 */
+export function cityIncome(tier: CityTier, levels: CityLevels): { grain: number; troops: number; farm: number } {
   const office = Math.max(1, levels.office ?? 1);
-  return { grain: Math.round(CITY_BASE_GRAIN[tier] * (1 + OFFICE_BONUS * (office - 1)) + TUNTIAN_GRAIN[tier] * (levels.tuntian ?? 0)), troops: MUSTER_TROOPS[tier] * (levels.muster ?? 0) };
+  return { farm: TUNTIAN_GRAIN[tier] * (levels.tuntian ?? 0), grain: Math.round(CITY_BASE_GRAIN[tier] * (1 + OFFICE_BONUS * (office - 1)) + TUNTIAN_GRAIN[tier] * (levels.tuntian ?? 0)), troops: MUSTER_TROOPS[tier] * (levels.muster ?? 0) };
 }
 
 /** 读档清洗：非法等级夹紧到该档上限；府衙至少 1 级；其它建筑不高于府衙。 */

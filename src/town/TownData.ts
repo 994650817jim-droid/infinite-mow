@@ -23,6 +23,8 @@ export interface SeasonReport {
   grain: number; cityGrain: number; cityTroops: number; upkeep: number; shortage: number;
   /** 军情：本次流寇未平、产出减半的城池名。 */
   raided?: string[];
+  /** 城池建设：本场各城屯田供粮明细（已计入 cityGrain；被袭扰的城减半）。 */
+  farms?: Array<{ city: string; grain: number }>;
 }
 export interface TownState {
   /** 内部计数：每场出征结算推进一“季”，军情事件按它过期；界面不再显示年份季节。 */

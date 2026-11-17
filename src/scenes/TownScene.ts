@@ -2,7 +2,7 @@
  * 城池建设（城镇全景）：天下地图点我方城池 →「进入城池」。一整张城池全景，建好的建筑出现在固定位置，
  * 没建的是地基；点建筑弹出建造 / 升级面板（效果、花费、前提）。用户 2026-11-17 批准，方案见 city-build-proposal.md。
  * 第一批：府衙、屯田、募兵所（用户：城池不需要太多建筑，城墙箭楼不做）。小 / 中 / 大城各用一张全景。
- * 美术：正式图到位前借营寨的全景（bg_1/2/3）与建筑图（主帐 / 农田 / 军营 / 城墙）过渡；TOWN_ART_READY 打开后改用 assets/town-city/。
+ * 美术：assets/town-city/（画风会话 2026-11-17 出图，tools/prepare-town-city-art.mjs 切图）。TOWN_ART_READY=false 时退回借营寨图。
  */
 import Phaser from 'phaser';
 import {playMenuMusic} from '../systems/Music';
@@ -18,12 +18,20 @@ import {incomeText} from '../town/TownData';
 import {PANO_W,PANO_H,LEVEL_SCALE} from '../town/CityLayout';
 
 /** 城池正式美术是否已导入（assets/town-city/bg_<档>.webp、<建筑>_<级>.webp）。未导入时借营寨图。 */
-export const TOWN_ART_READY = false;
+export const TOWN_ART_READY = true;
 const BORROW_BG: Record<CityTier, number> = {small: 1, medium: 2, large: 3};
 const BORROW_BUILDING: Record<CityBuildingId, string> = {office: 'hall', tuntian: 'farm', muster: 'barracks'};
 interface Slot {x: number; y: number; w: number}
-/** 建筑位置（全景像素，建筑底边中心）。借用的营寨底图：小 / 中城共用一套，大城一套。 */
+/** 建筑位置（全景像素，建筑底边中心，落在底图画好的地基上）。借营寨图时用 BORROW_SLOTS。多出来的地基留作空地。 */
 const SLOTS: Record<CityTier, Record<CityBuildingId, Slot>> = {
+ // 小城：4 处地基——正中靠后放府衙，左前放屯田，右中放募兵所，左后空着
+ small: {office: {x: 772, y: 474, w: 300}, tuntian: {x: 352, y: 760, w: 400}, muster: {x: 1275, y: 570, w: 330}},
+ // 中城：6 处地基——左中府衙，左下屯田，右下募兵所
+ medium: {office: {x: 418, y: 516, w: 330}, tuntian: {x: 292, y: 842, w: 430}, muster: {x: 1300, y: 842, w: 440}},
+ // 大城：6 处地基——右上第二块府衙，左下大地基屯田，右下大地基募兵所
+ large: {office: {x: 1265, y: 482, w: 390}, tuntian: {x: 392, y: 784, w: 400}, muster: {x: 1292, y: 784, w: 460}},
+};
+const BORROW_SLOTS: Record<CityTier, Record<CityBuildingId, Slot>> = {
  small: {office: {x: 950, y: 720, w: 360}, tuntian: {x: 170, y: 930, w: 290}, muster: {x: 1090, y: 1010, w: 280}},
  medium: {office: {x: 950, y: 720, w: 380}, tuntian: {x: 170, y: 930, w: 290}, muster: {x: 1090, y: 1010, w: 290}},
  large: {office: {x: 768, y: 475, w: 400}, tuntian: {x: 180, y: 960, w: 280}, muster: {x: 1240, y: 1010, w: 280}},
@@ -45,6 +53,7 @@ export class TownScene extends Phaser.Scene {
   this.vr = D ? {x: 12, y: 74, w: W - 24, h: H - 74 - 58} : {x: 0, y: 116, w: W, h: H - 116 - 104}; this.k = Math.max(this.vr.w / PANO_W, this.vr.h / PANO_H); this.hits = []; this.drag = null;
  }
  private tier(): CityTier { return cityById(this.cityId)?.tier ?? 'small'; }
+ private slots(): Record<CityBuildingId, Slot> { return (TOWN_ART_READY ? SLOTS : BORROW_SLOTS)[this.tier()]; }
  private bgKey(): string { return TOWN_ART_READY ? `town_bg_${this.tier()}` : `city_bg_${BORROW_BG[this.tier()]}`; }
  private artKey(id: CityBuildingId, level: number): string { const lv = Math.min(3, Math.max(1, level)); return TOWN_ART_READY ? `town_${id}_${lv}` : `city_${BORROW_BUILDING[id]}_${lv}`; }
  preload() {
@@ -73,7 +82,8 @@ export class TownScene extends Phaser.Scene {
   this.input.on('pointerup', () => { this.time.delayedCall(0, () => { this.drag = null; }); });
   this.input.on('wheel', (_p: Phaser.Input.Pointer, _o: unknown, dx: number, dy: number) => { if (this.anyModal()) return; this.scrollTo(this.sx + (dx || dy) * .6, this.sy + dy * .3); });
   // 初始视角：横向对准府衙；大城府衙在城内深处，纵向也对准它，小 / 中城贴底
-  const office = SLOTS[this.tier()].office; this.scrollTo(office.x * this.k - this.vr.w / 2, this.tier() === 'large' ? office.y * this.k - this.vr.h * .45 : PANO_H * this.k - this.vr.h, false);
+  // 初始视角：横向居中，纵向对准三座建筑的中间（城门与远景在上方，可往上拖着看）
+  const sl = Object.values(this.slots()), cy = sl.reduce((n, s) => n + s.y, 0) / sl.length - 80; this.scrollTo((PANO_W * this.k - this.vr.w) / 2, cy * this.k - this.vr.h / 2, false);
   this.refresh();
  }
  private anyModal() { return this.children.list.some(o => (o as unknown as {depth: number}).depth >= 600); }
@@ -92,7 +102,7 @@ export class TownScene extends Phaser.Scene {
  }
  private drawPano() {
   this.pano.removeAll(true); this.hits = [];
-  const s = loadWorld(), t = this.tier(), lv = cityLevels(this.cityId, s), k = this.k, slots = SLOTS[t];
+  const s = loadWorld(), t = this.tier(), lv = cityLevels(this.cityId, s), k = this.k, slots = this.slots();
   if (this.textures.exists(this.bgKey())) this.pano.add(this.add.image(0, 0, this.bgKey()).setOrigin(0).setDisplaySize(PANO_W * k, PANO_H * k));
   else { const g = this.add.graphics(); g.fillStyle(0x7a6544, 1).fillRect(0, 0, PANO_W * k, PANO_H * k); this.pano.add(g); }
   const ids = CITY_BUILDING_IDS.filter(id => CITY_BUILDINGS[id].max[t] > 0).sort((a, b) => slots[a].y - slots[b].y);
@@ -103,9 +113,11 @@ export class TownScene extends Phaser.Scene {
     glow = this.add.ellipse(x, y - w * .06, w * 1.02, w * .34, 0xffe39a, 0).setName('glow-' + id); this.pano.add(glow);
     art = this.add.image(x, y, this.artKey(id, l)).setOrigin(.5, 1); art.setScale(w / art.width); h = art.displayHeight; this.pano.add(art);
    } else {
+    // 正式全景里地基已经画好：只放名牌，不再画地基圈
+    if (TOWN_ART_READY) { h = w * .5; } else {
     const g = this.add.graphics(), fw = w * .8; g.fillStyle(0x3a2c1c, .38).fillEllipse(x, y - fw * .12, fw, fw * .32); g.lineStyle(2, block.length ? 0x8c8270 : 0xe8cf8f, .85);
     for (let a = 0; a < 20; a += 2) { const a0 = a / 20 * Math.PI * 2, a1 = (a + 1) / 20 * Math.PI * 2; g.beginPath(); g.moveTo(x + Math.cos(a0) * fw / 2, y - fw * .12 + Math.sin(a0) * fw * .16); g.lineTo(x + Math.cos(a1) * fw / 2, y - fw * .12 + Math.sin(a1) * fw * .16); g.strokePath(); }
-    this.pano.add(g); h = fw * .5;
+    this.pano.add(g); h = fw * .5; }
    }
    const name = CITY_BUILDINGS[id].name, label = l > 0 ? `${name} Lv${l}` : block.length ? `${name} · 需${block[0]}` : `＋ ${name}`;
    const tag = txt(this, x, y - (l > 0 ? 4 : h * .24), label, D ? 12 : 13, l > 0 ? '#fff1cf' : block.length ? '#b3a78f' : '#f6e2ae').setOrigin(.5, 1).setBackgroundColor(l > 0 ? '#20150dcc' : '#20150d99').setPadding(6, 2, 6, 2).setName('tag-' + id);

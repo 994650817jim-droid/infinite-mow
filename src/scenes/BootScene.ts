@@ -50,7 +50,7 @@ export class BootScene extends Phaser.Scene {
     let homeHero='zhaoyun';try{const id=localStorage.getItem('im_last_hero');if(id&&['zhaoyun','guanyu','huangzhong','zhuge','zhangfei','huangyueying','pangtong','liubei','weiyan','machao','sunshangxiang','diaochan'].includes(id))homeHero=id;}catch{}
     if(HOME_ART_HEROES.includes(homeHero))this.load.image('epic_hero_'+homeHero,'assets/epic-home/'+homeHero+'.webp');
     // 武将卡立轴（生成美术）：外框、宣纸与当前武将的水墨立绘
-    this.load.image('ink_frame','assets/ink-scroll/frame.webp');this.load.image('ink_paper','assets/ink-scroll/paper.webp');
+    this.load.image('title_wordmark','assets/ui/title_wordmark.webp');this.load.image('ink_frame','assets/ink-scroll/frame.webp');this.load.image('ink_paper','assets/ink-scroll/paper.webp');
     if(HOME_ART_HEROES.includes(homeHero))this.load.image('ink_hero_'+homeHero,'assets/ink-scroll/'+homeHero+'.webp');
     // Menu fallback and rest screens share the rest_camp texture allocation.
     // Both formal west stages can be selected after this boot; preload their existing atlases once.

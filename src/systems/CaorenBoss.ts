@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import { DEPTH } from '../config';
 import { CR } from '../data/bossRedesign';
 import { ArcBossV2, type ArcHost } from './ArcBossV2';
-import type { BossDebug } from './BossKit';
+import { ensureMoves, type BossDebug } from './BossKit';
 import { bossFxImage, ensureBossFx } from './BossFx';
 
 type Move = 'wall' | 'hold';
@@ -33,7 +33,7 @@ export class CaorenBoss extends ArcBossV2<Move> {
   constructor(h: ArcHost, tex: string, now: number) {
     super(h, tex, '曹仁', now);
     this.arena = h.scene.add.graphics().setDepth(DEPTH.ground + 3).setName('caoren-gates');
-    ensureBossFx(h.scene, ['cr_bagua', 'kit_shift', 'kit_recover']);
+    ensureBossFx(h.scene, ['cr_bagua', 'kit_shift', 'kit_recover']); ensureMoves(h.scene, 'caoren_moves');
     for (let i = 0; i < 8; i++) this.texts.push(h.scene.add.text(0, 0, '', { fontFamily: 'serif', fontSize: '20px', color: '#ffe7a8', stroke: '#1a1310', strokeThickness: 4 }).setOrigin(.5).setDepth(DEPTH.ground + 4));
     this.cx = h.boss.x; this.cy = h.boss.y; this.gates = this.roll(); this.nextGates = this.roll(); this.rotateAt = now + CR.gates.rotateMs; this.tickAt = now;
     this.next = now + 2500; h.banner('八门金锁', '站生门（绿）打曹仁，别站死门（红）');
@@ -61,7 +61,7 @@ export class CaorenBoss extends ArcBossV2<Move> {
 
   update(dt: number, now: number): void {
     const b = this.h.boss; if (this.gone || !b.active || this.state === 'dead') return;
-    this.kit.update(now); this.gfx.clear();
+    this.kit.update(now); this.gfx.clear(); this.art(now);
     if (!this.phase2 && b.hp <= b.maxHp * CR.phase2At) this.enterPhase2(now);
     this.updateGates(now);
     if (this.kit.inShift) { this.pose(25, now); return; }
@@ -77,7 +77,7 @@ export class CaorenBoss extends ArcBossV2<Move> {
       if (B.move === 'wall') {
         // 盾面慢慢转向主将
         let d = Math.atan2(Math.sin(want - this.facing), Math.cos(want - this.facing)); const turn = CR.wall.turnPerSec * dt; d = Math.max(-turn, Math.min(turn, d)); this.facing += d; this.angle = this.facing;
-        this.pose(17, now); this.kit.pose('crouch', .6); this.drawShield(now);
+        this.pose(17, now); this.kit.pose('crouch', .6); if (!this.h.scene.textures.exists('caoren_moves')) this.drawShield(now); // 招式图集里已经举着盾，不再叠像素盾
         if (B.done(now)) this.toRecover(now, CR.wall.recoverMs);
       } else { this.pose([18, 19, 20, 22, 23][Math.min(4, Math.floor(B.age(now) / 120))], now); if (B.done(now)) this.toRecover(now, CR.hold.recoverMs); }
       return;
@@ -93,6 +93,18 @@ export class CaorenBoss extends ArcBossV2<Move> {
     const b = this.h.boss, p = this.h.player, a = Math.atan2(p.y - b.y, p.x - b.x), H = CR.hold, mx = b.x + Math.cos(a) * H.ahead, my = b.y + Math.sin(a) * H.ahead;
     for (let i = 0; i < H.count; i++) { const o = (i - (H.count - 1) / 2) * H.spacing; this.h.spawn('shield', mx - Math.sin(a) * o, my + Math.cos(a) * o); }
     this.beat.set('hold', 'release', now, 600);
+  }
+
+  /** 招式图集帧。 */
+  private art(now: number): void {
+    const B = this.beat, p = this.h.player, b = this.h.boss, dir = p.x < b.x ? -1 : 1, K = 'caoren_moves', prog = B.progress(now);
+    let f = -1;
+    // 起手：举盾 0–2 / 举刀令旗 3；出手：盾墙 4–5 / 挥刀 6–7；收招 8–11；破阵转场 12–13
+    if (this.kit.inShift) f = (12 + Math.floor(now / 180) % 2);
+    else if (B.phase === 'windup') f = B.move === 'wall' ? Math.min(2, Math.floor(prog * 3)) : 3;
+    else if (B.phase === 'release') f = B.move === 'wall' ? (B.age(now) < 160 ? 4 : 5) : 6 + Math.min(1, Math.floor(prog * 2));
+    else if (B.phase === 'recover') f = 8 + Math.min(3, Math.floor(prog * 4));
+    if (f >= 0) this.kit.move(K, f, dir);
   }
 
   // ---------- 八门 ----------

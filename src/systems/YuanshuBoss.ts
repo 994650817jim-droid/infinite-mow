@@ -3,7 +3,7 @@ import type { Enemy } from '../entities/Enemy';
 import { DEPTH } from '../config';
 import { YS } from '../data/bossRedesign';
 import { ArcBossV2, type ArcHost } from './ArcBossV2';
-import type { BossDebug } from './BossKit';
+import { ensureMoves, type BossDebug } from './BossKit';
 import { groundCracks } from '../ui/Telegraph';
 import { bossFxImage, ensureBossFx, fxFrame, playBossFx } from './BossFx';
 
@@ -31,6 +31,7 @@ export class YuanshuBoss extends ArcBossV2<Move> {
   constructor(h: ArcHost, tex: string, now: number) {
     super(h, tex, '袁术', now);
     this.propGfx = h.scene.add.graphics().setDepth(DEPTH.enemy + 1).setName('yuanshu-props');
+    ensureMoves(h.scene, 'yuanshu_moves');
     ensureBossFx(h.scene, ['ys_coin', 'ys_flag', 'kit_shift', 'kit_recover']);
   }
   get guarded(): boolean { const b = this.h.boss; return this.aliveGuards().filter(g => Math.hypot(g.e.x - b.x, g.e.y - b.y) <= YS.guards.shieldRange).length >= YS.guards.minGuards; }
@@ -47,7 +48,7 @@ export class YuanshuBoss extends ArcBossV2<Move> {
 
   update(dt: number, now: number): void {
     const b = this.h.boss; if (this.gone || !b.active || this.state === 'dead') return;
-    this.kit.update(now); this.gfx.clear(); this.updateProps(now);
+    this.kit.update(now); this.gfx.clear(); this.updateProps(now); this.art(now);
     if (!this.fleeDone && !this.phase2 && b.hp <= b.maxHp * YS.honey.at) this.enterHoney(now);
     if (this.kit.inShift) { this.pose(25, now); return; }
     if (this.fleeUntil > now) { this.flee(dt, now); return; }
@@ -108,6 +109,19 @@ export class YuanshuBoss extends ArcBossV2<Move> {
     for (let i = 0; i < YS.guards.count; i++) { const a = i * Math.PI * 2 / YS.guards.count, e = this.h.spawn('shield', b.x + Math.cos(a) * YS.guards.ring, b.y + Math.sin(a) * YS.guards.ring); if (e) this.guards.push({ e, life: e.spawnId }); }
   }
   private aliveGuards(): { e: Enemy; life: number }[] { return this.guards.filter(g => g.e.active && g.e.spawnId === g.life); }
+
+  /** 招式图集帧。 */
+  private art(now: number): void {
+    const B = this.beat, p = this.h.player, b = this.h.boss, dir = p.x < b.x ? -1 : 1, K = 'yuanshu_moves', prog = B.progress(now);
+    let f = -1;
+    // 起手：玉玺 0–1 / 甩袖 2–3；出手：撒钱 4–5 / 指挥 6–7；收招 8–11；蜜水：瘫坐 12、逃跑 13
+    if (this.kit.inShift) f = 12;
+    else if (this.fleeUntil > now) f = 13;
+    else if (B.phase === 'windup') f = B.move === 'coins' ? 2 + Math.min(1, Math.floor(prog * 2)) : Math.min(1, Math.floor(prog * 2));
+    else if (B.phase === 'release') f = B.move === 'coins' ? 4 + Math.min(1, Math.floor(prog * 2)) : 6 + Math.min(1, Math.floor(prog * 2));
+    else if (B.phase === 'recover') f = 8 + Math.min(3, Math.floor(prog * 4));
+    if (f >= 0) this.kit.move(K, f, dir);
+  }
 
   // ---------- 二阶段：蜜水 ----------
   private enterHoney(now: number): void {

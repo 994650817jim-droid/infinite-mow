@@ -12,7 +12,7 @@ const CELL=640,MAX_CRATES=3,HEAL_TOTAL=10,HEAL_RATE=2;
 // These loose materials and braziers already read cleanly against the ground;
 // keep the original art unobstructed instead of adding a contact-shadow overlay.
 const NO_PROP_SHADOW=new Set([16,27,28,29,30,31,35]);
-interface Crate {enemy:Enemy;shadow:Phaser.GameObjects.Image;cell:string|null;life:number;frame:number;halfW:number;halfH:number;offsetX:number;offsetY?:number;spiked?:boolean;/** 回血道具：酒罐 / 药篓，打碎掉落对应补给。 */heal?:HealProp;}
+interface Crate {enemy:Enemy;shadow:Phaser.GameObjects.Image;cell:string|null;life:number;frame:number;halfW:number;halfH:number;offsetX:number;offsetY?:number;spiked?:boolean;/** 回血道具：酒罐 / 药篓，打碎掉落对应补给。 */heal?:HealProp;/** 场地环境互动物件（火油桶 / 军旗 / 营帐，EnvInteractions 管）。 */env?:string;}
 export type HealProp='wine'|'herb';
 /** 回血道具（heal_props 图集帧：0 酒罐 / 1 药篓 / 2 酒葫芦 / 3 草药包）；回复量按最大生命比例，2.5 秒内回完。 */
 export const HEAL_PROPS:Record<HealProp,{name:string;frame:number;drop:number;ratio:number;size:number}>={wine:{name:'酒罐',frame:0,drop:2,ratio:.08,size:70},herb:{name:'药篓',frame:1,drop:3,ratio:.12,size:66}};
@@ -26,6 +26,8 @@ export class BattlefieldSupplies {
  randomGeneration=true;
  /** 关闭随机物件的关卡（第三/四章、攻城）仍会稀疏生成酒罐/药篓。 */
  healGeneration=true;
+ /** 场地环境互动物件被打破时的回调（EnvInteractions）：交出物件与类型，默认碎裂表现不再播放。 */
+ onEnvBroken?:(enemy:Enemy,env:string)=>void;
  /** 场景障碍（房屋、城墙等）；回血道具不放进去。 */
  healBlocked?:(x:number,y:number,r:number)=>boolean;
  private healRate=HEAL_RATE;
@@ -69,7 +71,7 @@ export class BattlefieldSupplies {
  private hash(x:number,y:number):number {let h=Math.imul(x,73856093)^Math.imul(y,19349663)^0x65df03;h=Math.imul(h^(h>>>16),0x45d9f3b);return(h^(h>>>16))>>>0;}
  private place(slot:Crate,cell:string,x:number,y:number,frame=18,size=92,flip=false):void {
   flip=flip&&mayMirrorProp(frame);
-  slot.spiked=false;slot.offsetY=undefined;slot.heal=undefined;
+  slot.spiked=false;slot.offsetY=undefined;slot.heal=undefined;slot.env=undefined;
   slot.enemy.spawn(x,y,{...ENEMY_DEFS.shield,behavior:'supply',texture:'yellow_props',hp:frame===18?24:frame<4?80:frame<10?18:frame<14?45:frame>=24&&frame<=28?50:36,speed:0,damage:0,xp:0,radius:Math.max(14,size*.32)},1,this.now());
   slot.enemy.walkSheet='';slot.enemy.attackSheet='';slot.enemy.sprite.setTexture(frame===35?'brazier_burning':'yellow_props',frame===35?0:frame).setOrigin(.5,.9375).setDisplaySize(size,size).setFlipX(flip);
   slot.enemy.shadow.setVisible(false);
@@ -129,9 +131,39 @@ export class BattlefieldSupplies {
   slot.halfW=size*.33;slot.halfH=size*.1;slot.offsetY=-size*.06;slot.shadow.setVisible(false);
   return slot.enemy;
  }
+ /**
+  * 场地环境互动物件（EnvInteractions）：与补给箱同一套武器命中、碰撞框与寻路避让；贴图、血量、碰撞框由调用方给。
+  * cell 用于“打破后这一处不再生成”；离主将太远会自动回收（未打破的回来后重新生成）。
+  */
+ spawnEnvProp(env:string,cell:string,x:number,y:number,o:{texture:string;frame:number;size:number;hp:number;radius:number;halfW:number;halfH:number;offsetY?:number;originY?:number}):Enemy|null {
+  if(this.broken.has(cell)||this.crates.some(c=>c.enemy.active&&c.cell===cell))return null;
+  const slot=this.freeSlot();if(!slot)return null;
+  this.place(slot,cell,x,y,18,o.size);slot.env=env;
+  slot.enemy.sprite.setTexture(o.texture,o.frame).setOrigin(.5,o.originY??.9).setDisplaySize(o.size,o.size).setDepth(actorDepth(y)).setFlipX(false);
+  slot.enemy.hp=slot.enemy.maxHp=o.hp;slot.enemy.def={...slot.enemy.def,hp:o.hp,radius:o.radius};
+  slot.halfW=o.halfW;slot.halfH=o.halfH;slot.offsetY=o.offsetY;slot.shadow.setVisible(false);
+  return slot.enemy;
+ }
+ /** 该处能否放物件：不压别的物件，也不压场景障碍。 */
+ envClear(x:number,y:number,size:number):boolean{return this.placementClear(x,y,size)&&!this.healBlocked?.(x,y,size*.4);}
+ /** 某类环境物件当前在场的个数。 */
+ envCount(env:string):number{return this.crates.filter(c=>c.enemy.active&&c.env===env).length;}
+ /** 环境物件（含已在场的）列表：物件本身与类型。 */
+ envProps():{enemy:Enemy;env:string}[]{return this.crates.filter(c=>c.enemy.active&&c.env).map(c=>({enemy:c.enemy,env:c.env!}));}
+ /** 直接打破一个环境物件（连锁引爆等）：与被武器打破同一流程。 */
+ breakEnv(enemy:Enemy):void{if(!enemy.active)return;enemy.deactivate();this.onBroken(enemy);}
+ /** 在指定位置掉一份回血补给（营帐掉落用）。 */
+ dropHeal(x:number,y:number,kind:HealProp='herb'):void{
+  let potion=this.potions.find(p=>!p.active);
+  if(!potion){if(this.potions.length>=12)return;potion={image:this.scene.add.image(0,0,'healing_potion').setDepth(DEPTH.gem+1),until:0,active:false};this.potions.push(potion);}
+  potion.active=true;potion.until=this.now()+60000;
+  if(this.healArt){const heal=HEAL_PROPS[kind];potion.amount=this.player.maxHp*heal.ratio;potion.image.setTexture('heal_props',heal.drop).setPosition(x,y).setDisplaySize(34,34).setAlpha(1).setVisible(true);}
+  else{potion.amount=undefined;potion.image.setTexture('healing_potion').setPosition(x,y).setDisplaySize(24,29).setAlpha(1).setVisible(true);}
+ }
  onBroken(enemy:Enemy):void {
   const crate=this.crates.find(c=>c.enemy===enemy&&c.life===enemy.spawnId);if(!crate||!crate.cell||this.broken.has(crate.cell))return;
   this.broken.add(crate.cell);crate.cell=null;crate.shadow.setVisible(false);
+  if(crate.env){const env=crate.env;crate.env=undefined;this.onEnvBroken?.(enemy,env);return;}
   const material=crate.heal==='herb'?0:crate.frame===18?1:crate.frame===29||crate.frame===30||crate.frame===32||crate.frame===33?2:crate.frame<10||crate.frame===34?3:0;
   if(crate.frame===35){const index=this.fires.findIndex(f=>!f.active);if(index>=0){const fire=this.fires[index];fire.x=enemy.x;fire.y=enemy.y;fire.started=this.now();fire.nextHit=this.now()+640;fire.active=true;fire.tripod=enemy.sprite.texture.key.startsWith('sishui_props');
     if(fire.tripod){this.remains.push({x:enemy.x,y:enemy.y,size:enemy.sprite.displayWidth*.8,row:2,at:this.now()+440});this.nextDebrisCheck=0;const fx=this.breakFx.find(f=>!f.active);if(fx){fx.active=true;fx.start=this.now();fx.row=2;fx.image.setTexture('prop_break_fx',12).setPosition(enemy.x,enemy.y).setOrigin(.5,.85).setDisplaySize(85,85).setAlpha(1).setVisible(true);}this.brazierBreak[index].setVisible(false);}

@@ -26,7 +26,7 @@ for (const style of ['sheets']) {
   }, G);
   const step = (n, hold = true) => p.evaluate(([a, h]) => window.__step(a, h), [n, hold]);
   const shot = async (name, w = 330, h = 220, dx = 0) => { const r = await p.evaluate(() => window.__clip()); await p.screenshot({ path: `${out}/${name}.png`, clip: { x: Math.max(0, r.x + dx * r.k - w * r.k / 2), y: Math.max(0, r.y - h * r.k * .55), width: w * r.k, height: h * r.k } }); };
-  const fx = () => p.evaluate(G0 => { const s = eval(G0), f = s.flankFx, c = s.buildCombat.flankCharge(); return { ...c, ratio: +c.ratio.toFixed(2), ...(f ? { ...f.stats, ready: f.isReady, visible: s.children.list.filter(o => o.name === 'flank-streak' || o.name === 'flank-ready-glint').length } : {}) }; }, G);
+  const fx = () => p.evaluate(G0 => { const s = eval(G0), f = s.flankFx, c = s.buildCombat.flankCharge(); return { ...c, ratio: +c.ratio.toFixed(2), ...(f ? { ...f.stats, ready: f.isReady, visible: s.children.list.filter(o => o.name === "flank-streak" || o.name === "flank-ready-glint").length, vis: s.children.list.filter(o => o.name === "flank-streak" || o.name === "flank-ready-glint").map(o => o.name + "@" + Math.round(o.x - s.player.x) + "," + Math.round(o.y - s.player.y)) } : {}) }; }, G);
 
   for (const lv of [1, 3]) {
     await p.evaluate(([G0, l]) => { const s = eval(G0); s.player.growth.build.tactics = { flank: l }; window.__sfx.length = 0; }, [G, lv]);
@@ -48,10 +48,12 @@ for (const style of ['sheets']) {
     }, G);
     let struck = -1;
     for (let i = 0; i < 30; i++) { await step(1, false); const f = await fx(); if (struck < 0 && f.strikes > res.strikes) struck = i; if (lv === 3 && i < 24) await shot(`frames/strike-${String(i).padStart(2, '0')}`, 300, 200, 50); if (lv === 3 && struck >= 0 && i === struck + 5) await shot('strike', 300, 200, 50); }
+    // 序列帧由 Phaser 补间驱动，补间按真实时间走（不跟手动步进），等 0.4 秒真实时间让它播完
+    await p.waitForTimeout(400); await step(2, false);
     const after = await fx(), sfx2 = await p.evaluate(() => [...new Set(window.__sfx)]);
     // 触发后 30 帧（0.5 秒）内应已全部消失；扫 / 插的道数 ≤2
     const sweeps = after.sweeps - res.sweeps, hits = after.hits - res.hits;
-    ck(`${style} Lv${lv}：触发——一道月白侧袭弧光、被波及的 1–3 人各一个星芒，0.5 秒内清干净`, after.strikes === res.strikes + 1 && sweeps === 1 && hits >= 1 && hits <= 3 && after.visible === 0 && !after.ready && sfx2.includes('flankStrike'), { sweeps, hits, visible: after.visible, struckAtFrame: struck });
+    ck(`${style} Lv${lv}：触发——一道月白侧袭弧光、被波及的 1–3 人各一个星芒，0.5 秒内清干净`, after.strikes === res.strikes + 1 && sweeps === 1 && hits >= 1 && hits <= 3 && after.visible === 0 && !after.ready && sfx2.includes('flankStrike'), { sweeps, hits, visible: after.visible, vis: after.vis, ready: after.ready, ratio: after.ratio, struckAtFrame: struck });
     const hitsDmg = await p.evaluate(() => window.__hits), derived = hitsDmg.filter(h => !h.weapon), main = hitsDmg.filter(h => h.weapon);
     const ratio = derived.length && main.length ? +(Math.max(...derived.map(h => h.dmg)) / Math.min(...main.map(h => h.dmg))).toFixed(2) : 0;
     ck(`${style} Lv${lv}：追击伤害仍为 ${[35, 45, 55][lv - 1]}%`, derived.length >= 1 && Math.abs(ratio - [.35, .45, .55][lv - 1]) < .06, { derived: derived.length, ratio });

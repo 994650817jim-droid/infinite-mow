@@ -191,6 +191,8 @@ export class BootScene extends Phaser.Scene {
     if (artStyle() === 'v2') for (const [key, file] of Object.entries(DRAG_ART_FILES)) this.load.image(key, file);
     // 技艺 / 战法手绘特效序列帧（拖刀斩、迂回袭、踏风步；public/assets/skill-fx/）
     loadSkillFx(this.load);
+    // 场地环境互动 v2 道具（火油桶 / 四势力军旗 / 营帐 / 塌营帐，4×4、256 格）
+    this.load.spritesheet('env_props', 'assets/env-v2/props.png', { frameWidth: 256, frameHeight: 256 });
   }
 
   create(): void {

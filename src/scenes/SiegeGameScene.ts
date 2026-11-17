@@ -148,7 +148,8 @@ export function siegeGameSceneClass(Base: typeof GameScene) {
     protected priorityWeaponTarget(range: number, bodyRadius = true) {
       const camp = this.enemyCamps?.target(range, bodyRadius); if (camp) return camp;
       if (this.gateAlive && this.bossTimeReached && Math.hypot(this.gate!.x - this.player.x, this.gate!.y - this.player.y) <= range + (bodyRadius ? this.gate!.radius : 0)) return this.gate;
-      return null;
+      // 2026-11-16 修：原来营寨 / 城门不在射程时返回 null，首领 / 精锐优先被整个吃掉（黄忠宝雕弓对首领 0 伤害），改为退回基类的首领 > 精锐
+      return super.priorityWeaponTarget(range, bodyRadius);
     }
     private get bossTimeReached() { return this.elapsed >= this.chapter.waves[this.chapter.waves.length - 1].start; }
     protected tryCustomBossSkill() { if (!this.controller || !this.boss?.active) return false; this.controller.forceSkill(this.combatNow); return true; }

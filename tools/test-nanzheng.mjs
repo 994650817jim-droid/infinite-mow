@@ -11,7 +11,7 @@ const base = process.env.BASE ?? 'http://127.0.0.1:5173/', OUT = 'assets/review/
 mkdirSync(OUT, { recursive: true });
 let pass = 0, fail = 0; const errors = [];
 const ck = (n, ok, d) => { ok ? pass++ : fail++; console.log((ok ? 'PASS ' : 'FAIL ') + n + (d !== undefined ? ' · ' + JSON.stringify(d).slice(0, 480) : '')); };
-const save = { version: 10, yellowStages: 3, dongzhuoStages: 3, warlordStages: 3, guanduStages: 3, chibiStages: 3, jingnanStages: 3, shuStages: 3, hanzhongStages: 3, xiangfanStages: 3, nanzhengStages: 0, worldAvailable: true, cleared: { huangjin: true, hulao: true }, merits: 0, provisions: 0, buildings: { barracks: 1, farm: 1, clinic: 1 }, reserve: {}, receipts: [], nodes: ['home', 'huangjin', 'hulao'], ownedCities: ['xuchang'], eraSeen: 3, capturedEver: [], alerts: [], lastLost: [], chapterSeen: 11, intelSeq: 1 };
+const save = { version: 10, yellowStages: 3, dongzhuoStages: 3, warlordStages: 3, guanduStages: 3, chibiStages: 3, jingnanStages: 3, shuStages: 3, hanzhongStages: 3, xiangfanStages: 3, yilingStages: 3, nanzhengStages: 0, worldAvailable: true, cleared: { huangjin: true, hulao: true }, merits: 0, provisions: 0, buildings: { barracks: 1, farm: 1, clinic: 1 }, reserve: {}, receipts: [], nodes: ['home', 'huangjin', 'hulao'], ownedCities: ['xuchang'], eraSeen: 3, capturedEver: [], alerts: [], lastLost: [], chapterSeen: 11, intelSeq: 1 };
 const S = "window.__game.scene.getScene('NanzhengGameScene')";
 const b = await chromium.launch({ channel: 'chrome', headless: true, args: ['--mute-audio'] });
 
@@ -60,7 +60,7 @@ const killBoss = async p => {
   await p.waitForFunction(() => window.__game.scene.isActive('NanzhengChapterScene'), null, { timeout: 60000 }); await p.waitForTimeout(800);
   const r = await p.evaluate(async () => { const s = window.__game.scene.getScene('NanzhengChapterScene'), w = await import('/src/world/WorldStore.ts'), t = await import('/src/world/ChapterTimeline.ts'); const ids = t.CHAPTER_TIMELINE.map(c => c.id); return { cards: [1, 2, 3].map(i => !!s.children.getByName('nanzheng-stage-' + i)), deploy: !!s.children.getByName('nanzheng-deploy'), open: w.arcUnlocked('nanzheng'), after: ids.indexOf('nanzheng') > ids.indexOf('xiangfan'), last: ids.slice(-3) }; });
   await shot(p, '0-select');
-  ck('选关：第十一章三关卡片、出征按钮；襄樊通关后南征开放（夷陵字段预留）；时间线在襄樊之后', r.cards.every(Boolean) && r.deploy && r.open && r.after, r);
+  ck('选关：第十一章三关卡片、出征按钮；夷陵通关后南征开放；时间线在襄樊之后', r.cards.every(Boolean) && r.deploy && r.open && r.after, r);
   await p.close();
 }
 

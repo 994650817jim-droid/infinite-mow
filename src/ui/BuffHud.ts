@@ -4,7 +4,7 @@ import type {Player} from '../entities/Player';
 import {TACTICS,TREASURES,tacticDescription,type TacticId} from '../data/builds';
 import {RELICS} from '../data/relics';
 import {WEAPON_META,martialDescription} from '../data/upgrades';
-import {MARTIALS,ATTRIBUTE_INFO,attributeIcon,type MasteryId,type AttributeId,type RunGrowth} from '../systems/RunGrowth';
+import {MARTIALS,DRAG_TRAVEL,ATTRIBUTE_INFO,attributeIcon,type MasteryId,type AttributeId,type RunGrowth} from '../systems/RunGrowth';
 import {FONT,DEPTH,IS_DESKTOP as D} from '../config';
 import {type BuffProgress,countProgress,distanceProgress,chargeProgress,timerProgress} from './BuffProgress';
 interface BuffEntry {id:string;icon:string;name:string;desc:string;/** 类别与生效方式（说明首行）。 */kind:string;badge:string;mark?:string;rare?:boolean;remaining?:number;/** 「每 N 次 / 每 N 秒 / 攒满」类的触发进度。 */progress?:BuffProgress|null;}
@@ -18,7 +18,7 @@ function masteryProgress(id:MasteryId,lv:number,g:RunGrowth,now:number):BuffProg
  switch(id){
   case 'dragon_charge':return countProgress(g.slashCount,4,'下一刀青龙重斩','刀',true);
   case 'kaishan':return countProgress(g.slashCount,4,'下一刀重劈','刀',true);
-  case 'dragging_blade':return distanceProgress(g.travel,[200,160,130][lv-1],'下一刀拖刀斩');
+  case 'dragging_blade':return distanceProgress(g.travel,DRAG_TRAVEL[lv-1],'下一刀拖刀斩');
   case 'steady_aim':return chargeProgress(g.stationarySeconds*1000,5000,'满蓄：暴击 +'+5*(2+lv)+'%','静止');
   case 'pearl_volley':{const n=[5,4,3][lv-1];return countProgress(g.shotCount,n,'下一箭连珠齐射','箭');}
   case 'eight_trigrams':return g.flagCount>=2&&now<g.formationReadyAt?timerProgress(g.formationReadyAt,10000,now,'','阵法冷却'):countProgress(g.flagCount,3,'下次施法布八阵');

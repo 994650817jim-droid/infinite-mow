@@ -2659,7 +2659,8 @@ export class GameScene extends Phaser.Scene {
       .setInteractive({ useHandCursor: true })
       .on('pointerdown', () => { this.relicExpanded = !this.relicExpanded; });
     {
-      const bx=GAME_WIDTH-58,by=GAME_HEIGHT-240,root=this.add.container(bx,by).setScrollFactor(0).setDepth(DEPTH.hud+4).setName('attribute-plus').setVisible(false);
+      // 电脑布局右列自上而下：暂停 20–82、音效 100、音乐 132、行囊 166–196、用药 218–301、加点 316–399、护阵 / 出击 412（2026-11-16 修「用药和行囊叠在一起」）
+      const bx=GAME_WIDTH-58,by=IS_DESKTOP?GAME_HEIGHT-190:GAME_HEIGHT-240,root=this.add.container(bx,by).setScrollFactor(0).setDepth(DEPTH.hud+4).setName('attribute-plus').setVisible(false);
       const glow=this.add.circle(0,0,33,0xffd27a,0).setStrokeStyle(3,0xffd27a,.55);
       const disc=this.add.circle(0,0,29,0x1b241b,.94).setStrokeStyle(2,0xd8b56a,1);
       const icon=this.add.image(0,-1,this.textures.exists('growth_icon_points')?'growth_icon_points':'icon_passive').setDisplaySize(40,40);
@@ -2674,7 +2675,7 @@ export class GameScene extends Phaser.Scene {
     }
     {
       // 用药按钮：在加点按钮上方；药囊有药时显示，满血或上一份药未回完时变暗
-      const root=this.add.container(GAME_WIDTH-58,GAME_HEIGHT-340).setScrollFactor(0).setDepth(DEPTH.hud+4).setName('potion-button').setVisible(false);
+      const root=this.add.container(GAME_WIDTH-58,IS_DESKTOP?GAME_HEIGHT-288:GAME_HEIGHT-340).setScrollFactor(0).setDepth(DEPTH.hud+4).setName('potion-button').setVisible(false);
       const glow=this.add.circle(0,0,33,0xff7a4a,0).setStrokeStyle(3,0xff8a5a,.6);
       const disc=this.add.circle(0,0,29,0x2a1a14,.94).setStrokeStyle(2,0xd8b56a,1);
       const icon=this.add.image(0,-1,'healing_potion').setDisplaySize(30,36);

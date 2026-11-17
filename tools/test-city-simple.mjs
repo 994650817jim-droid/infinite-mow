@@ -149,6 +149,23 @@ for (const layout of ['mobile', 'desktop']) {
   await p.close();
 }
 
+// —— 4c. 主帐面板「武将谱」打开道具 / 成长会话的 HeroCodexUI（电脑布局）——
+{
+  const p = await page({ ...base8, provisions: 500 }, 'desktop');
+  await p.evaluate(() => window.__game.scene.getScenes(true).forEach(s => s.scene.start('CityScene')));
+  await p.waitForFunction(() => window.__game.scene.isActive('CityScene'), null, { timeout: 30000 }); await p.waitForTimeout(1200);
+  await p.evaluate(() => { const c = window.__game.scene.getScene('CityScene'); const h = c.hits.find(h => h.name === 'bld-hall'); h.emit('pointerdown'); h.emit('pointerup'); });
+  await p.waitForTimeout(300);
+  const label = await p.evaluate(() => window.__game.scene.getScene('CityScene').children.getByName('town-card')?.list.find(o => o.text === '武将谱')?.text);
+  await p.evaluate(() => window.__game.scene.getScene('CityScene').children.getByName('town-card').getByName('town-card-func').emit('pointerdown'));
+  await p.waitForFunction(() => !!window.__game.scene.getScene('CityScene').children.getByName('hero-codex'), null, { timeout: 15000 }).catch(() => {});
+  await p.waitForTimeout(500);
+  const r = await p.evaluate(() => { const c = window.__game.scene.getScene('CityScene'), cx = c.children.getByName('hero-codex'); return { open: !!cx, card: !!c.children.getByName('town-card'), icons: c.textures.exists('growth_icon_might') }; });
+  await p.screenshot({ path: `${out}/codex-from-hall-desktop.png` });
+  ck('主帐面板「武将谱」打开武将谱（主帐面板关闭，属性图标已按需加载）', label === '武将谱' && r.open && !r.card && r.icons, { label, ...r });
+  await p.close();
+}
+
 // —— 5. 第一章后：天下地图营寨提示，进营一次后消失 ——
 {
   const p = await page({ ...base8, provisions: 50 });

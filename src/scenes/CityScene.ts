@@ -12,6 +12,8 @@ import {W,H,worldShell,worldAssets} from '../world/WorldUI';
 import {FONT,HEADING_FONT} from '../config';
 import {homeCommand,warPanelTexture} from '../ui/HomeCommand';
 import {openStable} from '../ui/ItemBagUI';
+import {openHeroCodex} from '../ui/HeroCodexUI';
+import {GROWTH_ICON_IDS} from '../ui/GrowthIcons';
 import {stableUnlocked} from '../systems/ItemStore';
 import {CHARACTERS,type CharacterId} from '../data/characters';
 import {uiSfx} from '../systems/Sfx';
@@ -233,6 +235,7 @@ export class CityScene extends Phaser.Scene {
    academy:['研究科技',()=>{m.root.destroy();this.openTech();}],
    talent:['进入招贤馆',()=>this.scene.start('TalentHallScene')],
    stable:['进入马厩',()=>this.openStable(msg)],
+   hall:['武将谱',()=>this.openCodex()],
    granary:['开仓募兵',()=>{const res=granaryLevy();if(!res.ok){msg.setText(res.message);return;}m.root.destroy();this.refresh();this.toast(res.message);}],
   },fn=lv>0?funcs[id]:undefined,bw=fn?Math.min(200,(m.w-80)/2):Math.min(240,m.w-60),ux=fn?W/2+bw/2+8:W/2;
   if(fn){const f=homeCommand(this,W/2-bw/2-8,m.y+h-(D?84:94),bw,42,fn[0],false,true,15);f.hit.setName('town-card-func').on('pointerdown',fn[1]);m.root.add([f.g,f.hit,f.caption]);}
@@ -247,6 +250,18 @@ export class CityScene extends Phaser.Scene {
   * 马厩：打开道具会话的换马界面 openStable（ui/ItemBagUI.ts，接口见共享笔记 stable-interface.md），代替原来全景右上角的临时入口。
   * 换马给上次出征的武将（行囊里可切换）。道具图集随战斗图集在进城时释放，打开前按需重新加载（马匹图标）。
   */
+ /**
+  * 武将谱（道具 / 成长会话的 openHeroCodex，ui/HeroCodexUI.ts）：从主帐面板「武将谱」进入，默认显示主公。
+  * 属性图标 growth_icon_* 只在战斗加载时载入，进营寨时可能不在：缺的先按需加载，再打开（加载失败也照常打开，只缺图标）。
+  */
+ private openCodex(){
+  this.children.getByName('town-card')?.destroy();
+  const open=()=>{openHeroCodex(this,undefined,()=>this.refresh());};
+  const miss=GROWTH_ICON_IDS.filter(id=>!this.textures.exists('growth_icon_'+id));
+  if(!miss.length){open();return;}
+  for(const id of miss)this.load.image('growth_icon_'+id,'assets/upgrade-icons/'+id+'.webp');
+  this.load.once('complete',open);this.load.start();
+ }
  private openStable(msg:Phaser.GameObjects.Text){
   if(!stableUnlocked()){msg.setText('第一章通关后才有坐骑');return;}
   this.children.getByName('town-card')?.destroy();

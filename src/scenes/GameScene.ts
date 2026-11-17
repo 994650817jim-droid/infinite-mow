@@ -1527,6 +1527,14 @@ export class GameScene extends Phaser.Scene {
     };
   }
 
+  /** 随行命中的受击特效 / 命中火花（主将原版的 refined_impact 与 art_fx；伤害按友军结算时原本会跳过）。每帧限额 FOLLOW.hitFxPerFrame。 */
+  private followerHitBudget = { at: -1, n: 0 };
+  followerHitFx(enemy: Enemy, fromX: number, fromY: number, time: number, source: 'melee' | 'arrow' | 'fire'): void {
+    if (this.followerHitBudget.at !== time) { this.followerHitBudget.at = time; this.followerHitBudget.n = 0; }
+    if (this.followerHitBudget.n >= FOLLOW.hitFxPerFrame) return; this.followerHitBudget.n++;
+    if (source === 'arrow') this.artEffects.show(3, enemy.x, enemy.y - 8, 32, time, 120);
+    this.feedback.hit(enemy.x, enemy.y, Math.atan2(enemy.y - fromY, enemy.x - fromX), time, source);
+  }
   /** 随行出手当帧新建的特效放进这个半透明图层，和主将的攻击区分开（FOLLOW.fxAlpha）。 */
   private followerFxLayer?: Phaser.GameObjects.Layer;
   /**
@@ -1555,7 +1563,7 @@ export class GameScene extends Phaser.Scene {
       get player() { return puppet; }, get enemies() { return scene.enemies; }, get grid() { return scene.grid; }, get add() { return scene.add; }, get time() { return scene.time; },
       get combatNow() { return scene.combatNow; }, get cameras() { return scene.cameras; }, get sfx() { return scene.sfx; }, get over() { return scene.over; },
       get spearShots() { return shots; }, get bolts() { return scene.bolts; },
-      hitEnemy: (e, d, now, src) => { const n = d * squad.share, live = e.active && !e.invulnerable; const ok = scene.hitEnemy(e, n, now, src, true, false); if (live) squad.credit(f, n); return ok; },
+      hitEnemy: (e, d, now, src) => { const n = d * squad.share, live = e.active && !e.invulnerable; const ok = scene.hitEnemy(e, n, now, src, true, false); if (live) { squad.credit(f, n); scene.followerHitFx(e, f.x, f.y, now, src); } return ok; },
       nearestEnemy: (x, y, r) => scene.nearestEnemy(x, y, r),
       fireBolt: (pool, x, y, tx, ty, damage, bounce, fromPlayer, speed) => { scene.boltAlly = ally; try { scene.fireBolt(pool, x, y, tx, ty, damage * squad.share, bounce, fromPlayer, speed); } finally { scene.boltAlly = undefined; } },
       spawnGuandaoSlash: (angle, alpha, size, duration) => scene.spawnGuandaoSlashAt(f.x, f.y, hero, angle, alpha * FOLLOW.fxAlpha, size, duration, FOLLOW.fxAlpha),
@@ -1778,7 +1786,7 @@ export class GameScene extends Phaser.Scene {
         }
       }
       if (target) {
-        if (bolt.ally) { const live = target.active; this.hitEnemy(target, bolt.damage, time, 'arrow', true, false); if (live) bolt.ally.credit(bolt.damage); }
+        if (bolt.ally) { const live = target.active; this.hitEnemy(target, bolt.damage, time, 'arrow', true, false); if (live) { bolt.ally.credit(bolt.damage); this.followerHitFx(target, target.x - bolt.vx, target.y - bolt.vy, time, 'arrow'); } }
         else this.hitEnemy(target, bolt.damage, time, 'arrow');
         bolt.hitIds.add(target.spawnId);
         if (bolt.bounce > 0) {

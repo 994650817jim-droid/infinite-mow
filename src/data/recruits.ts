@@ -57,7 +57,9 @@ export const FOLLOW = {
   reviveRadius: 60, reviveSec: 5, reviveDecay: 1, reviveHp: .4,
   /** 可玩名将随行用本命武器（用户 2026-11-16「随行武将要用他们自己的攻击」）：武将等级 ≥ 这些值时武器为 Lv1–5；
    *  效果范围倍率（体量小一点）；随行出手当帧新建的特效放进半透明图层的不透明度（与主将区分）。初值，交平衡会话。 */
-  weaponLevelAt: [1, 8, 15, 22, 30], heroAreaMul: .85, fxAlpha: .72,
+  weaponLevelAt: [1, 8, 15, 22, 30], heroAreaMul: .85, fxAlpha: .85,
+  /** 随行命中的受击特效 / 命中火花（同主将原版，用户 2026-11-17「也要有自己原本的攻击特效」）：每帧最多补这么多个，3 名随行同时出手也不挤占主将的特效。 */
+  hitFxPerFrame: 4,
   /** 可玩名将跟随时专属武器的倍率；吃主将全局伤害加成的比例。 */
   heroDamageMul: .45, heroCooldownMul: 1.3, shareLeaderDamage: .5,
   /** 首领打跟随武将的倍率（同后备兵）。 */

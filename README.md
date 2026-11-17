@@ -1,4 +1,4 @@
-# 无限割草：乱世千军
+# 乱世千军
 
 三国题材、手机竖屏 H5 Roguelike 割草游戏，使用 TypeScript、Phaser 3 和 Vite。
 

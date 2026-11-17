@@ -1,3 +1,5 @@
+// 测试模式（开发构建 + ?dev=1）的测试存档隔离：必须在任何模块读写存档之前装好；正式构建里是空模块
+import './dev/TestSave';
 // 桌面版（Steam）平台层必须最先执行：替换 localStorage 为存档文件
 import { TalentHallScene } from './scenes/TalentHallScene';
 import './platform/desktop';

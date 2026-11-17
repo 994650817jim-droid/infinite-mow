@@ -5,7 +5,19 @@ import { Enemy } from '../entities/Enemy';
 import { Ally, type AllyKind } from '../entities/Ally';
 import Phaser from 'phaser';
 import { createDevPanel, type DevSection } from './DevPanel';
-import { getCharacter } from '../data/characters';
+import { CHARACTERS, getCharacter, type CharacterId } from '../data/characters';
+import { YELLOW_STAGES, DONGZHUO_STAGES } from '../data/chapters';
+import { THIRD_STAGES } from '../data/thirdChapter';
+import { GUANDU_STAGES } from '../data/guanduChapter';
+import { CHIBI_STAGES } from '../data/chibiChapter';
+import { CITIES } from '../world/WorldCities';
+import { BOUNTY_GENERALS, type IntelKind } from '../world/WorldIntel';
+import { lordHero, setLord, type Recruit } from '../systems/RosterStore';
+import { FollowerSquad } from '../systems/FollowerSquad';
+import { HERO_TEMPLATE, TEMPLATES, TEMPLATE_ORDER } from '../data/recruits';
+import { HEROES_KEY, heroLevel, resetHeroCache, type HeroKey } from '../systems/HeroProgress';
+import { MAJOR_FACTIONS } from '../world/WorldCities';
+import { testSaveApi } from './TestSave';
 import { TROOPS } from '../data/legion';
 import { TACTICS, TAG_NAMES, type TacticId } from '../data/builds';
 import { chapterBossTime } from '../data/chapters';
@@ -64,7 +76,80 @@ export class DevGameScene extends GameScene {
     const nativeWeapon = (): string => getCharacter(scene.player.growth.character).startWeapon;
     const kinds: AllyKind[] = ['swordsman', 'spearman', 'archer', 'crossbowman', 'guardian', 'rider', 'halberdier', 'medic'];
     const waves = scene.chapter.waves;
+    // ---- 选将 / 选关（2026-11-16 用户：「dev测试模式也需要适应」）----
+    const hero = (): CharacterId => scene.runConfig.character as CharacterId;
+    const clearTransfers = (): void => { for (const k of ['campaignTransfer', 'thirdTransfer', 'guanduTransfer', 'chibiTransfer', 'siegeMode']) scene.registry.remove(k); };
+    /** 任意关卡直接出战（测试模式下各章节本来就不检查解锁）。 */
+    const go = (key: string, config: Record<string, unknown> = {}, registry: Record<string, unknown> = {}): void => {
+      clearTransfers();
+      for (const [k, v] of Object.entries(registry)) scene.registry.set(k, v);
+      scene.registry.set('runConfig', { character: hero(), ...config });
+      scene.scene.start(key);
+    };
+    const firstBounty = Object.entries(BOUNTY_GENERALS)[0] as [string, readonly string[]] | undefined;
+    const intel = (kind: IntelKind): void => {
+      const id = 'dev-intel-' + kind, city = kind === 'escort' ? 'xiangyang' : 'luoyang';
+      const event = { id, kind, city, faction: kind === 'bounty' ? firstBounty?.[0] ?? 'han' : kind === 'bandit' ? 'yellow' : 'han', general: kind === 'bounty' ? firstBounty?.[1][0] ?? '敌将' : undefined, expires: 9999 };
+      go('IntelGameScene', {}, { intelEvent: id, intelPreview: event });
+    };
+    const siegeCities = [CITIES.find(c => c.tier === 'large'), CITIES.find(c => c.tier === 'medium'), CITIES.find(c => c.tier === 'small')].filter((c): c is (typeof CITIES)[number] => !!c);
+    let lordToo = false;
+    const pickHero = (id: CharacterId): void => {
+      if (lordToo) setLord(id);
+      scene.registry.set('runConfig', { ...scene.runConfig, character: id, weapon: getCharacter(id).startWeapon });
+      scene.scene.restart();
+    };
+    // ---- 随行（2026-11-16 用户：「我想dev也加入可以选择随从，我想试一试随从系统」）----
+    // 候选：12 名可玩武将 + 人才库样例（各势力名将 4 人、四种兵种的招募兵各 1 人）；测试模式不受主公 / 人才库 / 随行上限限制
+    const pool: Recruit[] = [
+      ...CHARACTERS.map(c => ({ id: c.id, kind: 'hero' as const, hero: c.id, name: c.name, template: HERO_TEMPLATE[c.id], quality: 'orange' as const, rank: 1, picks: [] })),
+      ...MAJOR_FACTIONS.map(fa => [fa, BOUNTY_GENERALS[fa]?.[0]] as const).filter((x): x is readonly [typeof x[0], string] => !!x[1]).slice(0, 4)
+        .map(([fa, name], i) => ({ id: 'r_' + (9001 + i), kind: 'named' as const, name, faction: fa, template: TEMPLATE_ORDER[i % 4], quality: 'purple' as const, rank: 1, picks: [] })),
+      ...TEMPLATE_ORDER.map((t, i) => ({ id: 'r_' + (9011 + i), kind: 'common' as const, name: '招募·' + TEMPLATES[t].name, template: t, quality: 'blue' as const, rank: 1, picks: [] })),
+    ];
+    const squad = (): FollowerSquad | null => (scene as unknown as { followers: FollowerSquad | null }).followers;
+    const current = (): Recruit[] => (squad()?.members ?? []).map(m => m.recruit);
+    /** 当场重建随行（加入 / 替换 / 清空都走这里），不用重开本关。 */
+    const setSquad = (list: Recruit[]): void => {
+      const host = scene as unknown as { followers: FollowerSquad | null };
+      host.followers?.clear(); host.followers = null;
+      const lead = scene.player.growth.character, picked = list.filter(r => r.hero !== lead).slice(0, 3);
+      // 选择记在本浏览器会话里（不是存档），选将 / 选关 / 重开后自动带上
+      try { sessionStorage.setItem('im_dev_followers', JSON.stringify(list.map(r => r.id))); } catch { /* ignore */ }
+      if (picked.length) host.followers = new FollowerSquad(scene, scene.player, picked, (x, y, r) => scene.grid.query(x, y, r), (e, d, fire) => scene.hitEnemy(e, d, scene.combatNow, fire ? 'fire' : 'melee', true, false), () => scene.player.growth.damageMultiplier(scene.combatNow));
+      mark();
+    };
+    const toggleFollower = (r: Recruit): void => { const now = current(); setSquad(now.some(x => x.id === r.id) ? now.filter(x => x.id !== r.id) : [...now, r].slice(-3)); };
+    /** 随行等级：写测试存档里的武将等级（只影响测试存档），重建后生效。招来的武将按等级成长；名将的强度来自加点。 */
+    const followerLevel = (level: number): void => {
+      try {
+        const raw = JSON.parse(localStorage.getItem(HEROES_KEY) ?? 'null') ?? { version: 1, heroes: {}, migrated: true, firstClears: [], attrScale: 2 };
+        raw.heroes ??= {};
+        for (const r of current()) { const k = r.hero ?? r.id; raw.heroes[k] = { ...(raw.heroes[k] ?? { attributes: {} }), level, xp: 0 }; }
+        localStorage.setItem(HEROES_KEY, JSON.stringify(raw)); resetHeroCache();
+      } catch (e) { console.error('[DEV] 随行等级', e); }
+      setSquad(current());
+    };
+    // 上一次在测试面板里选的随行：新开的一局自动带上（场景刚建好，延后一帧再放人）
+    try { const ids = JSON.parse(sessionStorage.getItem('im_dev_followers') ?? 'null') as string[] | null; if (ids?.length) { const list = ids.map(id => pool.find(r => r.id === id)).filter((r): r is Recruit => !!r); scene.time.delayedCall(0, () => { if (scene.player?.alive) setSquad(list); }); } } catch { /* ignore */ }
     const actions: Record<string, () => void> = {
+      ...Object.fromEntries(pool.map(r => ['follow_' + r.id, () => toggleFollower(r)])),
+      followClear: () => setSquad([]),
+      followThree: () => setSquad(pool.filter(r => r.hero && r.hero !== scene.player.growth.character).slice(0, 3)),
+      followLv1: () => followerLevel(1), followLv10: () => followerLevel(10), followLv20: () => followerLevel(20), followLv30: () => followerLevel(30),
+      testSaveClear: () => { if (window.confirm('清空测试存档？\n测试存档变成全新空档（音量、布局等设置保留），正式存档不受影响。')) testSaveApi()?.clear(); },
+      testSaveReal: () => { if (window.confirm('丢掉测试存档里的改动，重新从正式存档复制？\n正式存档不受影响。')) testSaveApi()?.resetToReal(); },
+      lordToggle: () => { lordToo = !lordToo; },
+      lordNow: () => { setLord(hero()); },
+      ...Object.fromEntries(CHARACTERS.map(c => ['hero_' + c.id, () => pickHero(c.id)])),
+      ...Object.fromEntries(YELLOW_STAGES.map(st => ['stage_1_' + st.stage, () => go('GameScene', { chapter: 'huangjin', stage: st.stage })])),
+      ...Object.fromEntries(DONGZHUO_STAGES.map(st => ['stage_2_' + st.stage, () => go('GameScene', { chapter: 'hulao', westStage: st.stage })])),
+      ...Object.fromEntries(THIRD_STAGES.map(st => ['stage_3_' + st.stage, () => go('ThirdGameScene', { thirdStage: st.stage }, { thirdStage: st.stage })])),
+      ...Object.fromEntries(GUANDU_STAGES.map(st => ['stage_4_' + st.stage, () => go('GuanduGameScene', {}, { guanduStage: st.stage })])),
+      ...Object.fromEntries(CHIBI_STAGES.map(st => ['stage_5_' + st.stage, () => go('ChibiGameScene', { thirdStage: st.stage }, { chibiStage: st.stage })])),
+      ...Object.fromEntries(siegeCities.map(c => ['siege_' + c.id, () => go('SiegeGameScene', {}, { siegeCity: c.id })])),
+      intelBounty: () => intel('bounty'), intelBandit: () => intel('bandit'), intelEscort: () => intel('escort'),
+      lubuChallenge: () => go('LubuGameScene'),
       worldMap: () => { scene.registry.remove('campaignTransfer'); scene.scene.start('WorldMapScene'); },
       homeCity: () => { scene.registry.remove('campaignTransfer'); scene.scene.start('CityScene'); },
       chapter1: () => { scene.registry.remove('campaignTransfer'); scene.registry.remove('thirdTransfer'); scene.registry.set('runConfig', { character: scene.runConfig.character, chapter: 'huangjin', stage: 1 }); scene.scene.start('GameScene'); },
@@ -141,10 +226,34 @@ export class DevGameScene extends GameScene {
     waves.forEach((w, i) => { actions['wave' + (i + 1)] = () => { scene.devSetTime(w.start + .1); mark(); }; });
     for (const k of kinds) actions['ally_' + k] = () => { scene.devSpawnAlly(k); };
     const speed = (v: number) => () => scene.devTimeScale === v;
+    const save = testSaveApi(), stageItem = (key: string, code: string, name: string, boss: string) => ({ key, label: code + ' ' + name, hint: '首领：' + boss });
     const sections: DevSection[] = [
+      { title: '测试存档', open: true, note: () => { const n = save?.changed().length ?? 0; return save ? (n ? '已改 ' + n + ' 项 · 正式存档不动' : '与正式存档相同') : '未启用'; }, items: [
+        { key: 'testSaveClear', label: '清空测试存档', hint: '测试存档变成全新空档；正式存档（三个存档位）不受影响' },
+        { key: 'testSaveReal', label: '回到正式存档副本', hint: '丢掉测试改动，重新从当前正式存档复制' },
+      ] },
+      { title: '选将（任意武将直接出战）', open: true, note: () => '主公 ' + (getCharacter((lordHero() ?? hero()) as CharacterId).name), items: [
+        ...CHARACTERS.map(c => ({ key: 'hero_' + c.id, label: c.name, active: () => hero() === c.id, hint: '用' + c.name + '重开本关（测试模式不受主公锁定）' })),
+        { key: 'lordToggle', label: '同时设为主公', active: () => lordToo, hint: '开启后，点武将出战时顺便把他设为本测试存档的主公' },
+        { key: 'lordNow', label: '当前武将设为主公', hint: '只写测试存档' },
+      ] },
+      { title: '随行（0–3 人，当场生效）', open: true, note: () => { const m = squad()?.members ?? []; return m.length ? m.map(x => x.recruit.name.replace(/（.*）/, '') + ' Lv' + heroLevel((x.recruit.hero ?? x.recruit.id) as HeroKey)).join(' · ') : '无随行'; }, items: [
+        ...pool.map(r => ({ key: 'follow_' + r.id, label: r.kind === 'hero' ? r.name : r.name + (r.kind === 'named' ? '·' + TEMPLATES[r.template].name : ''), active: () => current().some(x => x.id === r.id), hint: r.kind === 'hero' ? '可玩武将' : r.kind === 'named' ? '人才库名将（紫）' : '人才库招募兵（蓝）' })),
+        { key: 'followThree', label: '一键带 3 名武将' }, { key: 'followClear', label: '清空随行' },
+        { key: 'followLv1', label: '随行Lv1' }, { key: 'followLv10', label: 'Lv10' }, { key: 'followLv20', label: 'Lv20' }, { key: 'followLv30', label: 'Lv30' },
+      ] },
+      { title: '选关（用当前武将直接进）', open: true, items: [
+        ...YELLOW_STAGES.map(st => stageItem('stage_1_' + st.stage, '1-' + st.stage, st.name, st.boss)),
+        ...DONGZHUO_STAGES.map(st => stageItem('stage_2_' + st.stage, '2-' + st.stage, st.name, st.boss)),
+        ...THIRD_STAGES.map(st => stageItem('stage_3_' + st.stage, '3-' + st.stage, st.name, st.boss)),
+        ...GUANDU_STAGES.map(st => stageItem('stage_4_' + st.stage, '4-' + st.stage, st.name, st.boss)),
+        ...CHIBI_STAGES.map(st => stageItem('stage_5_' + st.stage, '5-' + st.stage, st.name, st.boss)),
+        ...siegeCities.map(c => ({ key: 'siege_' + c.id, label: '攻城·' + c.name, hint: c.region + ' · ' + ({ large: '大城', medium: '中城', small: '小城' } as Record<string, string>)[c.tier] })),
+        { key: 'intelBounty', label: '军情·悬赏' }, { key: 'intelBandit', label: '军情·流寇' }, { key: 'intelEscort', label: '军情·商队' },
+        { key: 'lubuChallenge', label: '吕布挑战' },
+      ] },
       { title: '跳转（离开当前测试局）', items: [
-        { key: 'chapter1', label: '从第一章开始' }, { key: 'chapter2', label: '从第二章开始' }, { key: 'chapter3', label: '第三章选关' }, { key: 'chapter4', label: '第四章选关' },
-        { key: 'worldMap', label: '天下地图' }, { key: 'homeCity', label: '义军营寨' }, { key: 'selectStart', label: '返回选将' }, { key: 'reset', label: '重开本关' },
+        { key: 'worldMap', label: '天下地图' }, { key: 'homeCity', label: '义军营寨' }, { key: 'selectStart', label: '回主页' }, { key: 'reset', label: '重开本关' },
         { key: 'layoutMobile', label: '手机布局', active: () => !IS_DESKTOP }, { key: 'layoutDesktop', label: '电脑布局', active: () => IS_DESKTOP },
       ] },
       { title: '时间 / 速度', items: [
@@ -182,7 +291,7 @@ export class DevGameScene extends GameScene {
       const tagText = (Object.keys(tags) as Array<keyof typeof tags>).filter(k => tags[k] > 0).map(k => TAG_NAMES[k] + tags[k]).join(' ') || '无';
       const waveNo = Math.max(1, waveIndexAt(scene.elapsed, waves) + 1);
       return [
-        `FPS ${Math.round(scene.game.loop.actualFps)} · ${scene.chapter.name}`,
+        `FPS ${Math.round(scene.game.loop.actualFps)} · ${scene.chapter.name}${save ? ' · 测试存档' : ''}`,
         `${getCharacter(p.growth.character).name} Lv${p.level} · 武器Lv${w?.level ?? 0} · HP ${Math.ceil(p.hp)}/${p.maxHp}`,
         `${scene.elapsed.toFixed(1)}s · 第${waveNo}/${waves.length}波 · Boss ${chapterBossTime(scene.chapter)}s · ${scene.devTimeScale}×`,
         `敌 ${scene.activeEnemyCount()} · 蜀军 ${scene.legion.count} · 军粮 ${scene.legion.food}`,
@@ -191,7 +300,7 @@ export class DevGameScene extends GameScene {
       ].join('\n');
     };
     this.disposePanel?.();
-    this.disposePanel = createDevPanel({ sections, actions, info });
+    this.disposePanel = createDevPanel({ sections, actions, info, tag: save ? '测试存档' : undefined });
     (window as unknown as { __DEV_INFO?: () => string }).__DEV_INFO = info;
     (this as unknown as { __DEV_ACTIONS?: Record<string, () => void> }).__DEV_ACTIONS = actions;
   }

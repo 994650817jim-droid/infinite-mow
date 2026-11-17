@@ -179,6 +179,8 @@ export class GameScene extends Phaser.Scene {
   protected flankFx?: FlankFx;
   /** 战法踏风步表现（同上，拥有后首次用到时创建）。 */
   protected windFx?: WindstepFx;
+  /** 游击战法移动风痕下次可出现的时间（combatNow）。 */
+  private skirmishPuffAt = 0;
   /** 场地环境互动（火油桶 / 军旗 / 营帐）；首次更新时按场景与章节创建，场景重启时清空。 */
   env: EnvInteractions | null = null;
   /** 新手引导（第一次进 1-1 时情境式教学，见 systems/Tutorial.ts）。 */
@@ -478,7 +480,7 @@ export class GameScene extends Phaser.Scene {
     this.artEffects = new ArtEffects(this);
 
     this.player = new Player(this, 0, 0);
-    this.dragFx = undefined; this.flankFx = undefined; this.windFx = undefined; this.env = null; this.envInit = false; this.terrain?.clear(); this.terrain = null; this.terrainInit = false; this.terrainNav = []; Ally.terrainMul = null; this.player && (this.player.terrainSpeedMul = 1);
+    this.dragFx = undefined; this.flankFx = undefined; this.windFx = undefined; this.skirmishPuffAt = 0; this.env = null; this.envInit = false; this.terrain?.clear(); this.terrain = null; this.terrainInit = false; this.terrainNav = []; Ally.terrainMul = null; this.player && (this.player.terrainSpeedMul = 1);
     this.applyRunConfig(this.runConfig);
     this.worldCampaign=!preview&&!isChapterTestRun()&&this.registry.get('worldCampaign')===true;
     this.hardMode=!preview&&this.registry.get('hardChapter')===this.hardKey()&&(chapterState(this.hardKey() as TimelineChapterId,loadWorldState())==='cleared'||isChapterTestRun());
@@ -844,7 +846,8 @@ export class GameScene extends Phaser.Scene {
     this.awakeningCombat?.update(this.combatNow);
     const vfx=buildVfx(this);vfx.update(this.combatNow);
     if(this.buildCombat.charged()&&this.player.growth.build.tags().charge>0)vfx.emit('charge',this.player.x+14,this.player.y-14,this.combatNow,34);
-    if(Math.hypot(move.x,move.y)>.1&&this.player.growth.build.tags().skirmish>0)vfx.emit('skirmish',this.player.x-move.x*12,this.player.y-move.y*12,this.combatNow,40,Math.atan2(move.y,move.x));
+    // 游击类战法（疾行印等）的移动风痕：用户反馈「疾行」特效一直挂在身后太显眼 → 改为脚边一小团、每 1.5 秒最多一次
+    if(Math.hypot(move.x,move.y)>.1&&this.player.growth.build.tags().skirmish>0&&this.combatNow>=this.skirmishPuffAt){this.skirmishPuffAt=this.combatNow+1500;vfx.emit('skirmish',this.player.x-move.x*16,this.player.y+16-move.y*10,this.combatNow,26,Math.atan2(move.y,move.x),260);}
     this.updateWeapons(dt, time);
     this.reinforcements.update(time, this.enemies, (enemy, amount, fire) => this.hitEnemy(enemy, amount, time, fire ? 'fire' : 'melee', true, false));
     if (this.over) return;

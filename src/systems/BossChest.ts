@@ -25,7 +25,8 @@ export interface ChestHost {
 export const CHEST = { dropDelayMs: 1000, reach: 52, popupMs: 3200, arrowFrom: 150 } as const;
 
 /** 没有倒地帧的首领：受伤帧（v2 招式图集 14）→ 绕脚底向一侧倒下 → 扬尘 → 下沉淡出。返回倒地点。 */
-export function playBossFall(scene: Phaser.Scene, boss: Enemy, movesKey?: string, deathId?: string): void {
+/** 返回：用了倒地 4 帧时为朝向（1 右 / -1 左，宝箱据此往前偏开尸体），否则 0。 */
+export function playBossFall(scene: Phaser.Scene, boss: Enemy, movesKey?: string, deathId?: string): number {
   const sp = boss.sprite, dir = sp.flipX ? -1 : 1;
   const img = scene.add.image(sp.x, sp.y, sp.texture.key, sp.frame.name).setOrigin(sp.originX, sp.originY).setScale(sp.scaleX, sp.scaleY).setFlipX(sp.flipX).setDepth(sp.depth).setName('boss-fall');
   // 画风会话补的倒地 4 帧（张角 / 张梁 / 张宝 / 董卓 / 吕布）：受击后仰 → 倒地 → 躺倒 → 静止，每帧 160ms；倒地那一下扬尘，停一会儿再下沉淡出
@@ -35,7 +36,7 @@ export function playBossFall(scene: Phaser.Scene, boss: Enemy, movesKey?: string
     [1, 2, 3].forEach((f, i) => scene.time.delayedCall(160 * (i + 1), () => { if (!img.active) return; img.setFrame(f);
       if (f === 2) { playSheet(scene, 'fx_collapse_dust', img.x, img.y - 6, { size: 190, ms: 650, depth: img.depth + .1, alpha: .85, originY: .62 }); scene.cameras.main.shake(140, .004); } }));
     scene.tweens.add({ targets: img, y: img.y + 8, alpha: 0, delay: 160 * 3 + 900, duration: 700, onComplete: () => img.destroy() });
-    return;
+    return dir;
   }
   if (movesKey && scene.textures.exists(movesKey)) { const h = Math.abs(sp.displayHeight); img.setTexture(movesKey, 14).setOrigin(.5, 256 / 288).setScale(h / 288).setFlipX(dir < 0); }
   img.setTint(0xffd8c8);
@@ -44,6 +45,7 @@ export function playBossFall(scene: Phaser.Scene, boss: Enemy, movesKey?: string
     scene.cameras.main.shake(140, .004);
     scene.tweens.add({ targets: img, y: img.y + 10, alpha: 0, delay: 650, duration: 700, onComplete: () => img.destroy() });
   } });
+  return 0;
 }
 
 export class BossChest {
@@ -100,7 +102,7 @@ export class BossChest {
       .lineStyle(2, 0xc9a35e, .95).strokeRoundedRect(x0 + 4, y0 + 4, w - 8, hgt - 8, 8);
     root.add(g);
     root.add(s.add.text(W / 2, y0 + 24, '获得遗物', { fontFamily: HEADING_FONT, fontSize: '22px', color: '#f6dc9a', resolution: 2 }).setOrigin(.5).setScrollFactor(0));
-    (loot.length ? loot : [{ name: '军粮 +15', desc: '遗物已集齐，改发军粮', tag: '' }]).forEach((l, i) => {
+    (loot.length ? loot : [{ name: '无遗珍', desc: '这一战的首领没有留下遗珍', tag: '' }]).forEach((l, i) => {
       const y = y0 + 56 + i * lineH;
       root.add(s.add.text(x0 + 24, y, (l.tag ? `【${l.tag}】` : '') + l.name, { fontFamily: FONT, fontSize: '17px', color: '#f0b48a', resolution: 2 }).setScrollFactor(0).setName('boss-chest-loot-' + i));
       root.add(s.add.text(x0 + 24, y + 21, l.desc, { fontFamily: FONT, fontSize: '13px', color: '#eadcbd', resolution: 2 }).setScrollFactor(0).setWordWrapWidth(w - 48));

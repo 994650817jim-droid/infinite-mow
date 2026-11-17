@@ -25,6 +25,8 @@ import { WEAPON_META,weaponName } from '../data/upgrades';
 import { chapterOneCleared, chapterUnlocked, isChapterTestRun } from '../systems/ChapterProgress';
 import { FONT, TITLE_FONT, HEADING_FONT, GAME_HEIGHT as H, GAME_WIDTH as W, IS_DESKTOP as D, switchLayout } from '../config';
 import { lqDivider, lqHitBox, lqPanel, lqSkin } from '../ui/LacquerKit';
+import { CHAPTER_SCENES, openChapterSelect } from '../ui/ChapterSelect';
+import type { TimelineChapterId } from '../world/ChapterTimeline';
 
 const ROLES = ['游龙先锋 · 灵动突刺', '重甲武圣 · 横扫千军', '百步神射 · 远程压制', '卧龙军师 · 火阵爆发'];
 const PASSIVE_HINTS = [
@@ -176,13 +178,15 @@ export class MenuScene extends Phaser.Scene {
     text(D?230:W/2,D?22:84+this.padY,'三  国',D?26:20,'#e6c88c').setFontFamily(TITLE_FONT).setLetterSpacing(10).setShadow(0,2,'#130a05',2,true,true);
     text(D?230:W/2,D?58:112+this.padY,'乱世千军',D?52:36,'#efd399').setFontFamily(TITLE_FONT).setLetterSpacing(4).setShadow(0,3,'#130a05',2,true,true);
     const west=this.selectedChapter==='hulao',save=loadWorld(),info=west?DONGZHUO_STAGES[this.selectedWestStage-1]:YELLOW_STAGES[this.selectedStage-1];
-    text(D?230:W/2,D?98:148+this.padY,west?'汉末烽烟 · 诸侯并起，挥师讨董':'苍天已乱 · 黄巾四起，义军初兴',D?15:16,'#d0bea1').setShadow(0,1,'#0b0604',4,true,true);
+    // 2026-11-17 用户「不需要太多字」：电脑版去掉标题下题词、右侧章名 / 关名 / 简介（点「匡扶汉室」进章节选择看进度）
+    if(!D)text(W/2,148+this.padY,west?'汉末烽烟 · 诸侯并起，挥师讨董':'苍天已乱 · 黄巾四起，义军初兴',16,'#d0bea1').setShadow(0,1,'#0b0604',4,true,true);
     const cx=D?W*.73:W/2;
-    const readingShade=this.add.graphics();for(let i=0;i<48;i++){const t=i/48;readingShade.fillStyle(0x0f0c09,.018+t*.01).fillEllipse(cx,D?160:758+this.padY,(D?440:W-12)*(1-t*.85),(D?230:176)*(1-t*.85));}if(D){readingShade.lineStyle(1,0xc9a66a,.45).lineBetween(cx-110,178,cx-12,178).lineBetween(cx+12,178,cx+110,178).fillStyle(0xd8b676,.8).fillRect(cx-4,174,8,8);}
+    if(!D){const readingShade=this.add.graphics();for(let i=0;i<48;i++){const t=i/48;readingShade.fillStyle(0x0f0c09,.018+t*.01).fillEllipse(cx,D?160:758+this.padY,(D?440:W-12)*(1-t*.85),(D?230:176)*(1-t*.85));}if(D){readingShade.lineStyle(1,0xc9a66a,.45).lineBetween(cx-110,178,cx-12,178).lineBetween(cx+12,178,cx+110,178).fillStyle(0xd8b676,.8).fillRect(cx-4,174,8,8);}
     text(cx,D?104:26+this.padY,west?'第二章 · 讨伐董卓':'第一章 · 黄巾之乱',15,'#e4c38d');
     text(cx,D?142:63+this.padY,isChapterTestRun()?`${west?'2':'1'}-${west?this.selectedWestStage:this.selectedStage}  ${info.name}`:info.name,D?31:33,'#f4dfb5').setShadow(0,2,'#0b0604',4,true,true);
-    text(cx,D?210:758+this.padY,save.cleared.hulao?'天下已开。重整兵马，再赴征途。':west?'群雄会盟，关隘烽烟。挥师西进，问鼎中原。':'黄巾四起，烽火蔓延。整备义军，踏上征途。',14,'#e2d4bd').setShadow(0,1,'#0b0604',4,true,true).setWordWrapWidth(D?310:W-96).setAlign('center');
-    this.homeCard=new HeroWarCard(this,D?80:104,D?127:180+this.padY,D?300:332,D?321:410);this.homeCard.setSelected(true);this.homeCard.root.setName('current-hero-card');
+    }
+    if(!D)text(cx,D?210:758+this.padY,save.cleared.hulao?'天下已开。重整兵马，再赴征途。':west?'群雄会盟，关隘烽烟。挥师西进，问鼎中原。':'黄巾四起，烽火蔓延。整备义军，踏上征途。',14,'#e2d4bd').setShadow(0,1,'#0b0604',4,true,true).setWordWrapWidth(D?310:W-96).setAlign('center');
+    this.homeCard=new HeroWarCard(this,D?80:104,D?127:180+this.padY,D?300:332,D?321:410);this.homeCard.setSelected(true);if(D)this.homeCard.setCompact(true);this.homeCard.root.setName('current-hero-card');
     // 点击武将卷轴直接打开“更换武将”（原为折叠卡片，卷轴折叠态显示破碎，已取消）。
     // 点击卷轴：收起/展开（状态保留到返回首页）；更换武将只走下方按钮
     const startFolded=this.registry.get('heroCardFolded')===true;if(startFolded)this.homeCard.setFolded(true);
@@ -212,7 +216,7 @@ export class MenuScene extends Phaser.Scene {
      homePlaque(this,rx,py,{label:'成就',name:'home-achievements',icon:'ach_first_win',progress:[got,ACHIEVEMENTS.length],onClick:()=>{if(!this.children.getByName('achievements-panel'))new AchievementsUI(this);}},D);
      // 2026-11-16 用户：「界面的行囊可以不要」——主页不再放行囊匾；行囊仍可在战斗 HUD、暂停菜单、行营休整（换装换马）里打开。
     }
-    if(west&&!save.dongzhuoStages){const reveal=text(W/2,D?157:228+this.padY,'新篇揭晓 · 讨伐董卓',15,'#f0c389').setAlpha(0);this.tweens.add({targets:reveal,alpha:1,duration:700});}
+    if(!D&&west&&!save.dongzhuoStages){const reveal=text(W/2,D?157:228+this.padY,'新篇揭晓 · 讨伐董卓',15,'#f0c389').setAlpha(0);this.tweens.add({targets:reveal,alpha:1,duration:700});}
     const closeHeroes=()=>{this.heroModal?.setVisible(false);this.heroEntryPaint?.();};
     this.heroPicker=new HomeHeroPicker(this,index=>{if(lordRules()&&!setLord(CHARACTERS[index].id).ok)return;paintLord();this.selectedChar=index;this.registry.set('heroConfirmed',true);try{localStorage.setItem('im_last_hero',CHARACTERS[index].id);}catch{}closeHeroes();this.renderSelection();},closeHeroes);
     this.heroModal=this.heroPicker.root;const modal=this.heroModal;
@@ -222,13 +226,29 @@ export class MenuScene extends Phaser.Scene {
     const primary=homeCommand(this,D?W*.73:W/2,startY,startW,startH,'匡扶汉室',true);this.startButton=primary.hit.setName('start-campaign').setData('padDefault',true);this.startLabel=primary.caption;
     // W4：有城池告急时提示“出征将失守”
     const lossWarn=isChapterTestRun()?'':alertLossWarning();if(lossWarn)text(D?W*.73:W/2,startY-startH/2-(D?14:16),lossWarn,D?12:13,'#ff8a70').setStroke('#1a0e08',3).setName('home-alert-warning');
-    this.startButton.on('pointerdown',()=>{let chosen=!!this.registry.get('heroConfirmed');try{chosen=chosen||!!localStorage.getItem('im_last_hero');}catch{}if(!chosen&&!params.has('autostart')&&!params.has('perf')){openHeroes();return;}this.startGame();});
+    this.startButton.on('pointerdown',()=>{let chosen=!!this.registry.get('heroConfirmed');try{chosen=chosen||!!localStorage.getItem('im_last_hero');}catch{}if(!chosen&&!params.has('autostart')&&!params.has('perf')){openHeroes();return;}if(this.children.getByName('chapter-select'))return;this.openChapters();});
     for(let k=0;k<navItems-1;k++)text((navX(k)+navX(k+1))/2,navRowY,'·',D?18:20,'#a68a57');
     if(isChapterTestRun())text(W/2,D?529:955+this.padY,'测试战斗不记录正式进度',10,'#8c806f');
     if(isChapterTestRun())text(W-34,24,'测试选关 ›',14,'#dcc399').setOrigin(1,.5).setPadding(12,10).setInteractive({useHandCursor:true}).setName('dev-stage-picker').on('pointerdown',()=>this.openTestStages());
     const keys=this.input.keyboard,enter=()=>{if(modal.visible)modal.getByName('hero-confirm')?.emit('pointerdown');else this.startButton.emit('pointerdown');},escape=()=>closeHeroes();
     keys?.on('keydown-ENTER',enter);keys?.on('keydown-ESC',escape);this.events.once('shutdown',()=>{keys?.off('keydown-ENTER',enter);keys?.off('keydown-ESC',escape);});
     this.renderSelection();if(params.has('autostart')||params.has('perf'))this.time.delayedCall(80,()=>this.startGame());
+  }
+  /** 章节选择（2026-11-17）：已打到的章可进，没打到的锁住；第一、二章由主页直接出征，第三章起进各章选关场景。 */
+  private openChapters():void{
+    if(this.started||this.heroModal?.visible)return;
+    openChapterSelect(this,{onPick:(id,stage)=>this.pickChapter(id,stage)});
+  }
+  private pickChapter(id:TimelineChapterId,stage?:number):void{
+    const s=loadWorld();
+    if(id==='huangjin'||id==='hulao'){
+      const done=id==='huangjin'?s.yellowStages:s.dongzhuoStages,st=(stage??(done>=3?1:done+1)) as YellowStage;
+      this.selectedChapter=id;if(id==='huangjin')this.selectedStage=st;else this.selectedWestStage=st;
+      this.startGame();return;
+    }
+    const key=CHAPTER_SCENES[id];if(!key)return;
+    this.registry.remove('campaignTransfer');if(stage)this.registry.set('worldStagePick',stage);
+    this.cameras.main.fadeOut(150,0,0,0);this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE,()=>this.scene.start(key));
   }
   /** DEV-only direct entry; campaign unlocks and persistent progress stay untouched. */
   private openTestStages():void {

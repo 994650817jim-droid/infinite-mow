@@ -192,6 +192,10 @@ export class HeroWarCard{
  readonly root:Phaser.GameObjects.Container;readonly art:Phaser.GameObjects.Image;readonly name:Phaser.GameObjects.Text;readonly weapon:Phaser.GameObjects.Text;readonly hit:Phaser.GameObjects.Rectangle;
  private scroll:Phaser.GameObjects.Image;private paper:Phaser.GameObjects.Image;private glow:Phaser.GameObjects.Image;private nameV:Phaser.GameObjects.Text;private brush:Phaser.GameObjects.Image;private title:Phaser.GameObjects.Text;private seal:Phaser.GameObjects.Image;private roleSeal:Phaser.GameObjects.Image;private role:Phaser.GameObjects.Text;private verse:Phaser.GameObjects.Text;private leisureSeal:Phaser.GameObjects.Image;private skills:Phaser.GameObjects.Text;private passive:Phaser.GameObjects.Text;private rules:Phaser.GameObjects.Graphics;
  private roll?:Phaser.GameObjects.Image;private foldName?:Phaser.GameObjects.Text;private rollH=0;private prog=1;private rollTween?:Phaser.Tweens.Tween;
+ /** 精简：主页电脑版只留名字、阵营印、定位印、兵器（2026-11-17 用户「不需要太多字」）。 */
+ private compact=false;
+ private get trimmed():Phaser.GameObjects.GameObject[]{return this.compact?[this.title,this.verse,this.passive,this.skills]:[];}
+ setCompact(on:boolean):void{this.compact=on;for(const o of [this.title,this.verse,this.passive,this.skills])o.setVisible(!on&&!this.folded&&!(o===this.verse&&this.L.small&&!IS_DESKTOP));}
  private folded=false;private index=-1;private artKey='';private chosen=false;private readonly L:ScrollLayout;private readonly painted:boolean;private readonly colX:number;private readonly nameTop:number;
  constructor(private s:Phaser.Scene,x:number,y:number,readonly width:number,readonly height:number){
   const w=width,h=height;this.painted=s.textures.exists(INK_FRAME_KEY)&&s.textures.exists(INK_PAPER_KEY);
@@ -251,7 +255,7 @@ export class HeroWarCard{
   for(const im of [this.paper,this.art]){const k=Phaser.Math.Clamp((rollTop-im.y)/Math.max(1,im.displayHeight),0,1);if(open)im.setCrop();else im.setCrop(0,0,im.frame.width,k*im.frame.height);im.setVisible(k>0);}
   const a=Phaser.Math.Clamp((p-.45)/.55,0,1),hideVerse=this.L.small&&!IS_DESKTOP;
   for(const item of [this.brush,this.nameV,this.title,this.seal,this.roleSeal,this.verse,this.rules,this.weapon,this.passive,this.skills,this.leisureSeal]){
-   item.setAlpha(a*(item===this.verse?.86:item===this.leisureSeal?.92:1)).setVisible(a>0&&!(item===this.verse&&hideVerse));
+   item.setAlpha(a*(item===this.verse?.86:item===this.leisureSeal?.92:1)).setVisible(a>0&&!(item===this.verse&&hideVerse)&&!this.trimmed.includes(item));
   }
   const fa=Phaser.Math.Clamp(1-p*2.2,0,1);this.foldName!.setAlpha(fa).setVisible(fa>0).setY(rollTop+(ROLL_NAME-ROLL_BOT)*I.bv);
   this.glow.setVisible(p<=0||open);
@@ -267,7 +271,7 @@ export class HeroWarCard{
    const from=this.prog;this.rollTween=this.s.tweens.addCounter({from:0,to:1,duration:Math.round(380*Math.abs(to-from)),ease:'Cubic.easeInOut',onUpdate:tw=>this.applyRoll(from+(to-from)*(tw.getValue()??0)),onComplete:()=>{this.applyRoll(to);this.paint();}});
    return;
   }
-  this.folded=value;for(const item of this.detail)item.setVisible(!value&&(item!==this.paper||this.painted)&&!(item===this.verse&&this.painted&&this.L.small&&!IS_DESKTOP));
+  this.folded=value;for(const item of this.detail)item.setVisible(!value&&(item!==this.paper||this.painted)&&!(item===this.verse&&this.painted&&this.L.small&&!IS_DESKTOP)&&!this.trimmed.includes(item));
   const hh=value?this.foldedHeight:this.height;
   if(this.painted){const hang=INK.rod*inkScale(this.width,hh).bv*HANG_K;this.scroll.setTexture(inkFrameTexture(this.s,this.width,hh)).setPosition(0,-hang).setDisplaySize(this.width,hh+hang);}
   else this.scroll.setTexture(scrollTexture(this.s,this.width,hh)).setDisplaySize(this.width,hh+HANG);

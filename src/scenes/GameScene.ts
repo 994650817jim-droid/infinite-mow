@@ -437,7 +437,7 @@ export class GameScene extends Phaser.Scene {
     // 第二章（汜水关 / 洛阳）：地面 v2 关中黄土碎石（环境互动第一批 ④），缺图退回原来的红褐地面
     const terrainKey = scenery==='xingyang'?'xingyang_ground':this.chapter.stage ? this.chapter.ground : this.textures.exists('ground_v2_guanzhong') ? 'ground_v2_guanzhong' : 'ground_overhaul_hulao';
     const groundKey = this.textures.exists(terrainKey) ? terrainKey : this.textures.exists('ground_ai') ? 'ground_ai' : 'ground';
-    architecturalSurface(this);
+    architecturalSurface(this,envConfigFor(this.scene.key,this.chapter.id)?.faction??1);
     const surface=terrainSurface(this,groundKey,groundKey.startsWith('ground_overhaul')||groundKey.startsWith('yellow_ground')?1:.5);
     this.ground = this.add
       .tileSprite(0, 0, GAME_WIDTH + 512, GAME_HEIGHT + 512, surface.key)
@@ -446,7 +446,7 @@ export class GameScene extends Phaser.Scene {
       .setDepth(DEPTH.ground);
     this.ground.setTileScale(surface.scale);
     if(scenery==='sishui'){for(const [frame,x,y,size]of [[0,0,-220,250],[1,-230,-220,150],[1,230,-220,150],[2,-250,-110,160],[2,260,-130,160]])this.add.image(x,y,'sishui_props_refined',frame).setOrigin(.5,1).setDisplaySize(size,size).setDepth(actorDepth(y));}
-    if(scenery==='xingyang'){for(const [frame,x,y,size]of [[2,-260,-180,130],[2,300,230,140],[6,-310,170,100],[4,270,-160,100]])this.add.image(x,y,'sishui_props',frame).setOrigin(.5,1).setDisplaySize(size,size).setDepth(actorDepth(y));}
+    if(scenery==='xingyang'){for(const [frame,x,y,size]of [[2,-260,-180,130],[2,300,230,140],[6,-310,170,100],[4,270,-160,100]])this.add.image(x,y,'sishui_props_refined',frame).setOrigin(.5,1).setDisplaySize(size,size).setDepth(actorDepth(y));}
     this.battlefieldDetails = new BattlefieldDetails(this, this.chapter.id, this.chapter.id==='huangjin'?this.chapter.stage:undefined,groundKey);
     this.artEffects = new ArtEffects(this);
 

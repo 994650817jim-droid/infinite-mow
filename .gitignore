@@ -128,3 +128,6 @@ assets/raw/*
 !/tools/measure-fx-cells.mjs
 !/tools/record-warnfx-showcase.mjs
 !/tools/boost-alpha.mjs
+!/tools/prepare-props.mjs
+!/tools/crop-sheet.mjs
+!/tools/test-props-v2.mjs

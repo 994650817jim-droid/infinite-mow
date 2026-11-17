@@ -100,7 +100,7 @@ export class BattlefieldSupplies {
  spawnSishui(frame:3|4|5|6|7,x:number,y:number,size:number):boolean {
   const slot=this.freeSlot();if(!slot)return false;
   this.place(slot,`fixed-sishui-${frame}-${x},${y}`,x,y,frame===7?35:frame===3?10:frame===4?14:frame===6?4:19,size);
-  slot.enemy.sprite.setTexture('sishui_props_refined',frame).setOrigin(.5,1).setDepth(actorDepth(y));
+  slot.enemy.sprite.setTexture('sishui_props_refined',frame).setOrigin(.5,1).setDisplaySize(size,size).setDepth(actorDepth(y));
   slot.spiked=frame===3;
   slot.enemy.def={...slot.enemy.def,radius:size*(frame===3?.4:.3)};
   slot.halfW=size*(frame===6?.09:frame===3?.4:.30);slot.halfH=size*(frame===6?.07:.12);slot.shadow.setVisible(false);
@@ -110,7 +110,7 @@ export class BattlefieldSupplies {
  spawnCamp(x:number,y:number,hp:number):Enemy|null {
   const slot=this.freeSlot();if(!slot)return null;
   this.place(slot,`fixed-camp-${x},${y}`,x,y,2,190);
-  slot.enemy.sprite.setTexture('sishui_props_refined',2).setOrigin(.5,1).setDepth(actorDepth(y));
+  slot.enemy.sprite.setTexture('sishui_props_refined',2).setOrigin(.5,1).setDisplaySize(190,190).setDepth(actorDepth(y));
   slot.enemy.hp=slot.enemy.maxHp=hp;slot.enemy.def={...slot.enemy.def,hp,radius:65};
   slot.halfW=58;slot.halfH=22;slot.offsetY=-20;slot.shadow.setVisible(false);
   return slot.enemy;
@@ -126,7 +126,7 @@ export class BattlefieldSupplies {
  spawnGate(x:number,y:number,hp:number,size:number):Enemy|null {
   const slot=this.freeSlot();if(!slot)return null;
   this.place(slot,`fixed-gate-${x},${y}`,x,y,2,size);
-  slot.enemy.sprite.setTexture('sishui_props_refined',0).setOrigin(.5,1).setDepth(actorDepth(y));
+  slot.enemy.sprite.setTexture('sishui_props_refined',0).setOrigin(.5,1).setDisplaySize(size,size).setDepth(actorDepth(y));
   slot.enemy.hp=slot.enemy.maxHp=hp;slot.enemy.def={...slot.enemy.def,hp,radius:size*.32};
   slot.halfW=size*.33;slot.halfH=size*.1;slot.offsetY=-size*.06;slot.shadow.setVisible(false);
   return slot.enemy;

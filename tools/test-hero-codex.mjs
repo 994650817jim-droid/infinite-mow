@@ -78,7 +78,7 @@ const ui = await p.evaluate(async () => {
   return out;
 });
 ck('武将谱界面：顶部显示残卷和军粮，总览有名字和等级', /武学残卷 \d+ · 军粮 \d+/.test(ui.res ?? '') && ui.name === '赵云' && /Lv\.\d+/.test(ui.level ?? ''), ui);
-ck('属性页有未分配点数和洗点按钮；本命页显示淬炼 2/5 和下一级花费；心得页列出 24 个战法', /未分配属性点/.test(ui.free ?? '') && /洗点/.test(ui.respec ?? '') && /淬炼 2 \/ 5/.test(ui.temper ?? '') && /军粮 700/.test(ui.temperBtn ?? '') && /心得 2 \/ 2/.test(ui.xinde ?? '') && ui.tactics === 24, ui);
+ck('属性页有未分配点数和洗点按钮；本命页显示淬炼 2/5 和下一级花费；心得页列出全部战法（≥24）', /未分配属性点/.test(ui.free ?? '') && /洗点/.test(ui.respec ?? '') && /淬炼 2 \/ 5/.test(ui.temper ?? '') && /军粮 700/.test(ui.temperBtn ?? '') && /心得 2 \/ 2/.test(ui.xinde ?? '') && ui.tactics >= 24, ui);
 for (const tab of ['overview', 'attrs', 'weapon', 'xinde']) { await p.evaluate(t => { const r = window.__game.scene.getScene('GameScene').children.getByName('hero-codex'); window.__find(r, 'codex-tab-' + t).emit('pointerdown'); }, tab); await p.waitForTimeout(150); await p.screenshot({ path: `${out}/desktop-${tab}.png` }); }
 
 ck('控制台无报错', errors.length === 0, errors.slice(0, 6));

@@ -163,10 +163,13 @@ for (const layout of ['mobile', 'desktop']) {
   await R(p, (r) => { r.setRosterRandom(() => 0); r.tryCapture('bounty', '许褚', 'caocao'); r.setRosterRandom(); });
   await p.evaluate(() => { const g = window.__game; for (const s of g.scene.getScenes(true)) s.scene.stop(); g.scene.start('CityScene'); });
   await p.waitForFunction(() => window.__game.scene.isActive('CityScene'), null, { timeout: 60000 }); await p.waitForTimeout(800);
-  const hasBtn = await p.evaluate(() => !!window.__game.scene.getScene('CityScene').children.getByName('city-talent'));
-  ck(`${layout} 主城有「招贤馆」入口`, hasBtn);
+  // 2026-11-17 营寨只留「天下地图」按钮：招贤馆从营寨里的招贤馆建筑进入
+  await p.evaluate(() => { const c = window.__game.scene.getScene('CityScene'); const h = c.hits.find(h => h.name === 'bld-talent'); h.emit('pointerdown'); h.emit('pointerup'); });
+  await p.waitForTimeout(200);
+  const hasBtn = await p.evaluate(() => window.__game.scene.getScene('CityScene').children.getByName('town-card')?.list.some(o => o.text === '进入招贤馆'));
+  ck(`${layout} 营寨招贤馆建筑有「进入招贤馆」入口`, hasBtn);
   await p.screenshot({ path: `${out}/city-${layout}.png` });
-  await p.evaluate(() => window.__game.scene.getScene('CityScene').children.getByName('city-talent').emit('pointerdown'));
+  await p.evaluate(() => window.__game.scene.getScene('CityScene').children.getByName('town-card').getByName('town-card-func').emit('pointerdown'));
   await p.waitForFunction(() => window.__game.scene.isActive('TalentHallScene'), null, { timeout: 30000 }); await p.waitForTimeout(500);
   await p.screenshot({ path: `${out}/hall-offers-${layout}.png` });
   const u = await p.evaluate(() => { const s = window.__game.scene.getScene('TalentHallScene'), c = s.children.list.find(x => x.type === 'Container'); const names = c.list.map(x => x.name).filter(Boolean); const btn = c.getByName('talent-offer-0'); btn.emit('pointerup'); return { names }; });

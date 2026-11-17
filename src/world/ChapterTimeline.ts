@@ -4,7 +4,7 @@
  *   黄巾之乱（始终开放）→ 讨伐董卓（通关黄巾）→ 群雄割据（通关讨董）→ 官渡之战（群雄三关）→ 赤壁之战（官渡三关）。
  */
 import { CHRONICLE, type ChronicleStage } from '../data/chronicle';
-export type TimelineChapterId = 'huangjin' | 'hulao' | 'qunxiong' | 'guandu' | 'chibi' | 'jingnan' | 'shu' | 'hanzhong';
+export type TimelineChapterId = 'huangjin' | 'hulao' | 'qunxiong' | 'guandu' | 'chibi' | 'jingnan' | 'shu' | 'hanzhong' | 'xiangfan';
 export type ChapterState = 'cleared' | 'open' | 'locked';
 
 export interface TimelineChapter {
@@ -22,11 +22,12 @@ export const CHAPTER_TIMELINE: readonly TimelineChapter[] = [
   { id: 'jingnan', numeral: '陆', title: '平定荆南', short: '荆南', year: 209, era: '建安十四年', hint: '通关第五章「赤壁之战」后解锁' },
   { id: 'shu', numeral: '柒', title: '入蜀', short: '入蜀', year: 211, era: '建安十六年', hint: '通关第六章「平定荆南」后解锁' },
   { id: 'hanzhong', numeral: '捌', title: '汉中之战', short: '汉中', year: 219, era: '建安二十四年', hint: '通关第七章「入蜀」后解锁' },
+  { id: 'xiangfan', numeral: '玖', title: '襄樊之战', short: '襄樊', year: 219, era: '建安二十四年', hint: '通关第八章「汉中之战」后解锁' },
 ];
 
 /** 计算章节状态所需的存档字段（WorldSave 的子集，便于单测与迁移时调用）。 */
 export interface TimelineProgress {
-  yellowStages: number; dongzhuoStages: number; warlordStages: number; guanduStages: number; chibiStages: number; jingnanStages?: number; shuStages?: number; hanzhongStages?: number;
+  yellowStages: number; dongzhuoStages: number; warlordStages: number; guanduStages: number; chibiStages: number; jingnanStages?: number; shuStages?: number; hanzhongStages?: number; xiangfanStages?: number;
   cleared: { huangjin: boolean; hulao: boolean }; legacyHulaoAccess: boolean;
 }
 
@@ -34,7 +35,7 @@ export interface TimelineProgress {
 export function chapterStagesDone(id: TimelineChapterId, s: TimelineProgress): number {
   const v = id === 'huangjin' ? (s.cleared.huangjin || s.legacyHulaoAccess ? 3 : s.yellowStages)
     : id === 'hulao' ? (s.cleared.hulao ? 3 : s.dongzhuoStages)
-    : id === 'qunxiong' ? s.warlordStages : id === 'guandu' ? s.guanduStages : id === 'jingnan' ? (s.jingnanStages ?? 0) : id === 'shu' ? (s.shuStages ?? 0) : id === 'hanzhong' ? (s.hanzhongStages ?? 0) : s.chibiStages;
+    : id === 'qunxiong' ? s.warlordStages : id === 'guandu' ? s.guanduStages : id === 'jingnan' ? (s.jingnanStages ?? 0) : id === 'shu' ? (s.shuStages ?? 0) : id === 'hanzhong' ? (s.hanzhongStages ?? 0) : id === 'xiangfan' ? (s.xiangfanStages ?? 0) : s.chibiStages;
   return Math.max(0, Math.min(3, v | 0));
 }
 
@@ -58,7 +59,7 @@ export function currentChapter(s: TimelineProgress): TimelineChapter {
 }
 
 // ———— 三关路线（地图像素坐标，strategy-map 1536×1024）与史事 ————
-const ARC_OF: Record<TimelineChapterId, string> = { huangjin: 'huangjin', hulao: 'dongzhuo', qunxiong: 'qunxiong', guandu: 'guandu', chibi: 'chibi', jingnan: 'jingnan', shu: 'shu', hanzhong: 'hanzhong' };
+const ARC_OF: Record<TimelineChapterId, string> = { huangjin: 'huangjin', hulao: 'dongzhuo', qunxiong: 'qunxiong', guandu: 'guandu', chibi: 'chibi', jingnan: 'jingnan', shu: 'shu', hanzhong: 'hanzhong', xiangfan: 'xiangfan' };
 /** 各章三关在地图上的位置（按史事地名大致方位，避开城池徽标）。 */
 export const STAGE_POINTS: Record<TimelineChapterId, ReadonlyArray<{ x: number; y: number }>> = {
   huangjin: [{ x: 822, y: 212 }, { x: 738, y: 158 }, { x: 905, y: 262 }],   // 广宗外围 · 下曲阳 · 广宗决战
@@ -68,6 +69,7 @@ export const STAGE_POINTS: Record<TimelineChapterId, ReadonlyArray<{ x: number; 
   chibi: [{ x: 420, y: 598 }, { x: 800, y: 790 }, { x: 360, y: 742 }],      // 长坂 · 赤壁 · 江陵
   jingnan: [{ x: 760, y: 960 }, { x: 520, y: 950 }, { x: 650, y: 880 }],    // 桂阳 · 零陵武陵 · 长沙
   shu: [{ x: 170, y: 540 }, { x: 140, y: 600 }, { x: 105, y: 650 }],        // 葭萌关 · 落凤坡 · 成都
+  xiangfan: [{ x: 520, y: 600 }, { x: 560, y: 640 }, { x: 420, y: 700 }],        // 樊城 · 水淹七军 · 麦城
   hanzhong: [{ x: 250, y: 440 }, { x: 300, y: 470 }, { x: 330, y: 430 }],    // 阳平关 · 定军山 · 汉水
 };
 export function chapterStages(id: TimelineChapterId): readonly ChronicleStage[] {
@@ -94,6 +96,7 @@ export const CHAPTER_REGIONS: Record<TimelineChapterId, ReadonlyArray<{ x: numbe
   jingnan: [{ x: 640, y: 930, r: 260 }],
   shu: [{ x: 130, y: 600, r: 240 }],
   hanzhong: [{ x: 290, y: 450, r: 200 }],
+  xiangfan: [{ x: 500, y: 650, r: 220 }],
 };
 
 // ———— 攻城分区：某城在其所属章节通关后才可攻打 ————

@@ -10,7 +10,7 @@ const base = process.env.BASE ?? 'http://127.0.0.1:5173/', OUT = 'assets/review/
 mkdirSync(OUT, { recursive: true });
 let pass = 0, fail = 0; const errors = [];
 const ck = (n, ok, d) => { ok ? pass++ : fail++; console.log((ok ? 'PASS ' : 'FAIL ') + n + (d !== undefined ? ' · ' + JSON.stringify(d).slice(0, 480) : '')); };
-const save = { version: 10, yellowStages: 3, dongzhuoStages: 3, warlordStages: 3, guanduStages: 3, chibiStages: 3, shuStages: 0, worldAvailable: true, cleared: { huangjin: true, hulao: true }, merits: 0, provisions: 0, buildings: { barracks: 1, farm: 1, clinic: 1 }, reserve: {}, receipts: [], nodes: ['home', 'huangjin', 'hulao', 'qunxiong', 'guandu', 'chibi', 'shu'], ownedCities: ['xuchang'], eraSeen: 3, capturedEver: [], alerts: [], lastLost: [], chapterSeen: 7, intelSeq: 1 };
+const save = { version: 10, yellowStages: 3, dongzhuoStages: 3, warlordStages: 3, guanduStages: 3, chibiStages: 3, jingnanStages: 3, shuStages: 0, worldAvailable: true, cleared: { huangjin: true, hulao: true }, merits: 0, provisions: 0, buildings: { barracks: 1, farm: 1, clinic: 1 }, reserve: {}, receipts: [], nodes: ['home', 'huangjin', 'hulao', 'qunxiong', 'guandu', 'chibi', 'shu'], ownedCities: ['xuchang'], eraSeen: 3, capturedEver: [], alerts: [], lastLost: [], chapterSeen: 7, intelSeq: 1 };
 const S = "window.__game.scene.getScene('ShuGameScene')";
 const b = await chromium.launch({ channel: 'chrome', headless: true, args: ['--mute-audio'] });
 
@@ -55,7 +55,7 @@ const killBoss = async p => {
   await p.waitForFunction(() => window.__game.scene.isActive('ShuChapterScene'), null, { timeout: 60000 }); await p.waitForTimeout(800);
   const r = await p.evaluate(async () => { const s = window.__game.scene.getScene('ShuChapterScene'), w = await import('/src/world/WorldStore.ts'), t = await import('/src/world/ChapterTimeline.ts'); return { cards: [1, 2, 3].map(i => !!s.children.getByName('shu-stage-' + i)), deploy: !!s.children.getByName('shu-deploy'), open: w.arcUnlocked('shu'), timeline: t.CHAPTER_TIMELINE.map(c => c.id).includes('shu') }; });
   await shot(p, '0-select');
-  ck('选关：第七章三关卡片、出征按钮；赤壁通关后入蜀开放；天下地图时间线有第七章', r.cards.every(Boolean) && r.deploy && r.open && r.timeline, r);
+  ck('选关：第七章三关卡片、出征按钮；第六章荆南通关后入蜀开放；天下地图时间线有第七章', r.cards.every(Boolean) && r.deploy && r.open && r.timeline, r);
   await p.close();
 }
 
@@ -75,9 +75,9 @@ const killBoss = async p => {
   ck('7-1：山坡伏兵——预警后从两侧坡上冲下', amb.ambushes >= 1 && amb.n >= 2 && amb.edge >= 2, amb);
   await shot(p, '1-ambush');
   // 滚石：放几个木桩敌兵在滚石线上
-  const bo = await p.evaluate(() => { const s = window.__S, m = s.shuPass, pl = s.player; window.__clear(); m.boulderAt = s.combatNow; m.ambushAt = s.combatNow + 1e6; window.__step(2); const b0 = m.boulders[0]; const dummies = [-150, 0, 150].map(x => { const e = s.spawnEnemy('infantry', x, b0.y, 1, true); if (e) { e.def = { ...e.def, speed: 0 }; } return e; }).filter(Boolean); pl.sprite.setPosition(80, b0.y); pl.damageImmune = false; pl.invulnUntil = 0; pl.hp = pl.maxHp; const hp0 = pl.hp; return { lane: !!b0, y: Math.round(b0.y), dummies: dummies.length, hp0 }; });
-  for (let i = 0; i < 24; i++) { await step(p, 8); if (i === 12) await shot(p, '1-boulder'); }
-  const bo2 = await p.evaluate(() => { const s = window.__S, m = s.shuPass; s.player.damageImmune = true; return { hits: m.stats.boulderHits, kills: m.stats.boulderKills, hp: Math.round(s.player.hp), max: Math.round(s.player.maxHp), left: m.boulders.length }; });
+  const bo = await p.evaluate(() => { const s = window.__S, m = s.shuPass, pl = s.player; window.__clear(); m.boulderAt = s.combatNow; m.ambushAt = s.combatNow + 1e6; window.__step(2); const b0 = m.boulders[0]; const dummies = [-150, 0, 150].map(x => { const e = s.spawnEnemy('infantry', x, b0.y, 1, true); if (e) { e.def = { ...e.def, speed: 0 }; e.hp = e.maxHp = 1e5; } return e; }).filter(Boolean); window.__bd = dummies.map(e => [e, e.x, b0.y]); pl.sprite.setPosition(80, b0.y); pl.damageImmune = false; pl.invulnUntil = 0; pl.hp = pl.maxHp; const hp0 = pl.hp; return { lane: !!b0, y: Math.round(b0.y), dummies: dummies.length, hp0 }; });
+  for (let i = 0; i < 24; i++) { await p.evaluate(() => { for (const [e, x, y] of window.__bd) if (e.active) e.sprite.setPosition(x, y); window.__step(8); }); if (i === 12) await shot(p, '1-boulder'); }
+  const bo2 = await p.evaluate(() => { const s = window.__S, m = s.shuPass; s.player.damageImmune = true; return { hits: m.stats.boulderHits, kills: m.stats.boulderKills, hp: Math.round(s.player.hp), max: Math.round(s.player.maxHp), left: m.boulders.length, dummies: window.__bd.map(([e]) => [e.active, Math.round(e.maxHp - e.hp)]) }; });
   ck('7-1：滚石——先铺预警箭道，再从坡上滚过，碾伤山道上的敌兵与主将', bo.lane && bo2.hits >= 2 && bo2.hp < bo2.max && bo2.left === 0, { bo, bo2 });
   const bk = await killBoss(p);
   const end1 = await p.evaluate(() => ({ over: window.__S.over, victory: window.__S.victory, mode: window.__S.mode }));

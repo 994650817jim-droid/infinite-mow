@@ -24,7 +24,7 @@ export const SHU_STAGES: readonly ShuStageInfo[] = [
 export const SHU_SHEETS: Record<string, string> = { shu_yanghuai: 'assets/bosses-v2/shu_yanghuai.png', shu_zhangren: 'assets/bosses-v2/shu_zhangren.png', shu_liuzhang: 'assets/bosses-v2/shu_liuzhang.png' };
 export const SHU_BOSS_FALLBACK: Record<string, string> = { shu_yanghuai: 'third_lijue', shu_zhangren: 'third_zhangxiu', shu_liuzhang: 'third_yuanshu' };
 /** 已到的第七章图（只载这些，缺的用过渡图，避免 404）。 */
-export const SHU_ART_READY: ReadonlySet<string> = new Set<string>(['shu_zhangren', 'shu_liuzhang', 'shu_nushou_walk', 'shu_pass']);
+export const SHU_ART_READY: ReadonlySet<string> = new Set<string>(['shu_yanghuai', 'shu_zhangren', 'shu_liuzhang', 'shu_nushou_walk', 'shu_pass']);
 /** 第七章新图只有 v2 版：v1 画风时一律用过渡图。 */
 export const shuArt = (key: string): boolean => SHU_ART_READY.has(key) && artStyle() === 'v2';
 /** 本关首领纹理键与图集路径（缺图时取过渡首领）。 */

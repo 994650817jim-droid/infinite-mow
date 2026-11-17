@@ -155,8 +155,10 @@ export class Player {
     return BALANCE.player.radius;
   }
 
+  /** 地形减速（第九章洪水涉水等），场景每帧设置，默认 1。 */
+  envSpeedMul = 1;
   get speed(): number {
-    return BALANCE.player.speed * Math.min(1.6, this.stats.moveMul * this.growth.movementMultiplier()*(this.growth.build.tags().skirmish>=2?1.04:1)) * this.mountSpeedMul;
+    return BALANCE.player.speed * Math.min(1.6, this.stats.moveMul * this.growth.movementMultiplier()*(this.growth.build.tags().skirmish>=2?1.04:1)) * this.mountSpeedMul * this.envSpeedMul;
   }
 
   /** 被外力击退 / 挑起；self 为自己的突进（冲锋、龙胆突刺）。马超冲锋无敌中不被外力击退。 */

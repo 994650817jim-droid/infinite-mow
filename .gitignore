@@ -116,3 +116,5 @@ assets/raw/*
 !/tools/boss-v2-open.mjs
 !/tools/despill-fx.mjs
 !/tools/test-merchant-horse.mjs
+!/tools/unmix-magenta.mjs
+!/tools/prepare-warn-fx-handpainted.sh

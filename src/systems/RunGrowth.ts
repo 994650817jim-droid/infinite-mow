@@ -1,4 +1,4 @@
-import {BuildState} from '../data/builds';
+import {BuildState,type TacticId} from '../data/builds';
 import { BALANCE } from '../config';
 import type { CharacterId } from '../data/characters';
 import type { Player } from '../entities/Player';
@@ -92,6 +92,10 @@ export class RunGrowth {
   /** W3 大城特产（洛阳）：本命武器伤害加成，开局由 applyCitySpecialties 设置。 */
   permanentDamage = 0;
   berserkUntil = 0;
+  /** 武将谱：本命淬炼给的本命伤害加成（开局读入）。 */
+  temperDamage = 0;
+  /** 武将谱：战法心得（局内出现概率 ×2），xindeFirst = 开局第一次升级保证出一张。 */
+  xinde: TacticId[] = []; xindeFirst = false;
   /** 遗珍「乌巢酒葫」豪饮结束时刻（战斗时钟）。 */
   wineUntil = 0;
   stationarySeconds = 0;
@@ -154,7 +158,7 @@ export class RunGrowth {
     const might = 1 + ATTRIBUTE_STEP.might * this.attributes.might;
     const fury = this.lowHp && this.gear.specials.includes('fury') ? 1.25 : 1;
     const wine = now < this.wineUntil && this.gear.specials.includes('jiuhu') ? 1.4 : 1; // 遗珍「乌巢酒葫」（BossRelics.RELIC.jiuhuDamage）
-    return Math.min(2, might * (now < this.berserkUntil ? 1.25 : 1) * (1 + this.permanentDamage) * (1 + this.gear.damage)) * fury * wine;
+    return Math.min(2, might * (now < this.berserkUntil ? 1.25 : 1) * (1 + this.permanentDamage) * (1 + this.gear.damage) * (1 + this.temperDamage)) * fury * wine;
   }
 
   attackSpeedMultiplier(now: number): number {

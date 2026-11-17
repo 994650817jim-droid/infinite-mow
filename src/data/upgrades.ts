@@ -249,8 +249,11 @@ export function buildUpgradeOptions(player: Player, weapons: WeaponState[], grow
   const foundations=foundationOptions();
   if(!core)pool.push(foundations[0]);
   const guaranteed=core??foundations[0];
-  const weight=(option:UpgradeOption):number=>{const id=option.id.replace('tactic_','')as TacticId;return option.kind==='tactic'?1+Math.min(2,tags[TACTICS[id].tag]*.5):1;};
+  // 武将谱「战法心得」：心得战法权重 ×2；开局第一次升级保证出一张心得卡（xindeFirst）
+  const isXinde=(option:UpgradeOption)=>option.kind==='tactic'&&growth.xinde.includes(option.id.replace('tactic_','')as TacticId);
+  const weight=(option:UpgradeOption):number=>{const id=option.id.replace('tactic_','')as TacticId;return option.kind==='tactic'?(1+Math.min(2,tags[TACTICS[id].tag]*.5))*(isXinde(option)?2:1):1;};
   const rest=pool.filter(o=>o.id!==guaranteed.id).map(o=>({o,key:Math.pow(Math.random(),1/weight(o))})).sort((a,b)=>b.key-a.key).map(v=>v.o);
+  if(growth.xindeFirst){const k=rest.findIndex(isXinde);if(k>=0||isXinde(guaranteed)){growth.xindeFirst=false;if(k>0)rest.unshift(...rest.splice(k,1));}}
   for(const f of foundations)if(rest.length<2&&f.id!==guaranteed.id&&!rest.some(o=>o.id===f.id))rest.push(f);
   return shuffle([guaranteed,...rest.slice(0,2)]);
 }

@@ -3,6 +3,7 @@ import { actorDepth, FONT } from '../config';
 import { QUALITY_ORDER, relicsForStage, rollRelic } from '../data/items';
 import { CHESTS_PER_STAGE, DROP_CHANCE, QUALITIES, itemName, rollDropQuality, rollItem, type ItemInstance, type ItemQuality, type PityState } from '../data/items';
 import { loadItems, loadPity } from './ItemStore';
+import { SCROLL } from './MasteryStore';
 import type { Player } from '../entities/Player';
 import { ensureItemTextures, itemIcon } from '../ui/ItemQuality';
 
@@ -24,12 +25,23 @@ export class ItemDrops {
   rng: () => number = Math.random;
   /** 保底计数：开局从存档读入，结算时随 depositRunLoot 写回（测试战斗不写）。 */
   readonly pity: PityState = loadPity();
+  /** 武将谱：本局获得的武学残卷（首领 3、精锐 5% 掉 1、宝箱 20% 掉 1；结算时收入，测试战斗不收）。 */
+  scrolls = 0;
 
   constructor(private readonly scene: Phaser.Scene, private readonly player: Player, private readonly tier: number, private readonly elapsed: () => number, private readonly finalBoss: () => boolean, private readonly onPickup?: (item: ItemInstance) => void, private readonly relicStage: () => string | null = () => null) {
     ensureItemTextures(scene);
   }
 
+  /** 获得残卷：记数并在主将头上飘字。 */
+  gainScrolls(n: number): void {
+    this.scrolls += n; const s = this.scene;
+    const t = s.add.text(this.player.x, this.player.y - 84, `武学残卷 +${n}`, { fontFamily: FONT, fontSize: '15px', color: '#e8d6a4', fontStyle: 'bold', stroke: '#140d07', strokeThickness: 4, resolution: 2 }).setOrigin(.5).setDepth(actorDepth(this.player.y) + 50).setName('scroll-pickup-text');
+    s.tweens.add({ targets: t, y: t.y - 26, alpha: 0, delay: 800, duration: 600, onComplete: () => t.destroy() });
+  }
+
   onKill(enemy: KilledEnemy): void {
+    if (enemy.kind === 'boss') this.gainScrolls(SCROLL.boss);
+    else if (enemy.kind === 'elite' && this.rng() < SCROLL.eliteChance) this.gainScrolls(1);
     if (enemy.kind === 'boss') {
       const n = this.finalBoss() ? 2 : 1;
       for (let i = 0; i < n; i++) this.collect(rollItem(rollDropQuality(n > 1 ? 'finalBoss' : 'boss', this.tier, this.pity, this.rng), this.rng));
@@ -86,6 +98,7 @@ export class ItemDrops {
       this.scene.tweens.add({ targets: c.img, alpha: 0, delay: 900, duration: 500, onComplete: () => c.img.destroy() });
     } else c.img.destroy();
     const n = this.rng() < .4 ? 2 : 1;
+    if (this.rng() < SCROLL.chestChance) this.gainScrolls(1);
     for (let k = 0; k < n; k++) this.drop(rollItem(rollDropQuality('chest', this.tier, this.pity, this.rng), this.rng), c.x + (k ? 26 : -10), c.y + 18);
   }
 

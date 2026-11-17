@@ -84,6 +84,8 @@ function record(id: HeroKey, persist: boolean): HeroRecord {
 }
 
 export function heroLevel(id: HeroKey): number { return record(id, false).level; }
+/** 武将谱显示用：等级、当前经验、升下一级所需、本章上限（不写存档）。 */
+export function heroInfo(id: HeroKey): { level: number; xp: number; next: number; cap: number } { const r = record(id, false), cap = levelCap(); return { level: r.level, xp: r.xp, next: xpToNext(r.level), cap }; }
 /** 已加的属性点（副本）。 */
 export function heroAttrs(id: HeroKey): Record<AttributeId, number> { return { ...record(id, false).attributes }; }
 /** 还没分配的永久属性点（受每项 5 点上限约束）。 */
@@ -94,6 +96,8 @@ export function heroFreePoints(id: HeroKey): number {
 /** 出战时调用：确保有记录（第一次出战即写入），返回记录副本。 */
 export function enlistHero(id: HeroKey): HeroRecord { const r = record(id, true); return { level: r.level, xp: r.xp, attributes: { ...r.attributes } }; }
 /** 永久加 1 点属性。 */
+/** 洗点：已加的属性点全部退回（等级、经验不变）。花费由武将谱（MasteryStore.respec）处理。 */
+export function resetHeroAttrs(id: HeroKey): void { const r = record(id, true); r.attributes = zeroAttrs(); commit(); }
 export function allocateHeroAttr(id: HeroKey, attr: AttributeId): boolean {
   if (heroFreePoints(id) <= 0) return false;
   const r = record(id, true); if (r.attributes[attr] >= ATTRIBUTE_MAX) return false;

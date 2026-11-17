@@ -16,7 +16,8 @@ export interface ArcSceneConfig{
  key:string;arc:WarlordArc;
  /** registry 键：当前关、关间继承。 */
  stageKey:string;transferKey:string;
- stages:readonly{id:string;name:string;boss:string;behavior?:ThirdStage;scenery?:SceneryStage;skills?:[string,string,string];signature?:string}[];
+ stages:readonly{id:string;name:string;boss:string;behavior?:ThirdStage;scenery?:SceneryStage;skills?:[string,string,string];signature?:string;
+  /** 绝技套用哪一位的招式（第八章曹操借曹纯的虎豹围猎）；默认同 id。 */ signatureId?:'caochun'|'caimao'|'caoren'}[];
  texture:(id:string)=>string;sheet:(id:string)=>string;
  battle:(stage:ThirdStage)=>ChapterDef;
  /** 军营休整界面的键前缀。 */
@@ -71,7 +72,7 @@ export function thirdGameSceneClass(Base:typeof GameScene,cfg:ArcSceneConfig=THI
  protected customChapter(){return cfg.battle(this.thirdStage);}
  bossDebug(){return (this.controller as ArcController|undefined)?.debug??null;}
  protected spawnBoss(){const had=this.boss?.active;super.spawnBoss();if(this.boss&&!had)this.hubao?.onBoss(this.combatNow);const d=this.stageInfo();if(this.boss&&!BOSS_OLD&&(cfg.arc==='qunxiong'&&d.id==='yuanshu'||cfg.arc==='chibi'&&d.id==='caoren')){const host:ArcHost={scene:this,boss:this.boss,player:this.player,army:this.legion,spawn:(kind,x,y,def)=>this.spawnEnemy(kind,x,y,1,true,def),def:k=>this.chapter.enemies[k],banner:(t,c)=>this.showWaveBanner(t,true,c),sfx:k=>this.sfx.play(k)};this.controller=d.id==='yuanshu'?new YuanshuBoss(host,cfg.texture(d.id),this.combatNow):new CaorenBoss(host,cfg.texture(d.id),this.combatNow);return;}
-  if(this.boss)this.controller=new ThirdBoss({scene:this,boss:this.boss,player:this.player,army:this.legion,spawn:(kind,x,y)=>this.spawnEnemy(kind,x,y,1,true)},this.behavior,this.combatNow,cfg===THIRD_CONFIG?undefined:{texture:cfg.texture(d.id),name:d.boss,skills:d.skills,signature:d.signature?{id:d.id as 'caochun'|'caimao'|'caoren',name:d.signature}:undefined});}
+  if(this.boss)this.controller=new ThirdBoss({scene:this,boss:this.boss,player:this.player,army:this.legion,spawn:(kind,x,y)=>this.spawnEnemy(kind,x,y,1,true)},this.behavior,this.combatNow,cfg===THIRD_CONFIG?undefined:{texture:cfg.texture(d.id),name:d.boss,skills:d.skills,signature:d.signature?{id:(d.signatureId??d.id) as 'caochun'|'caimao'|'caoren',name:d.signature}:undefined});}
  protected customBossStep(enemy:Enemy,dt:number,now:number){if(enemy!==this.boss||!this.controller)return false;this.controller.update(dt,now);return true;}
 
  protected customEnemyStep(enemy:Enemy,dt:number,now:number,target:{x:number;y:number}){

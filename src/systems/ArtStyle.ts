@@ -105,6 +105,10 @@ export const ART_V2_FILES: Readonly<Record<string, string>> = {
   jingnan_liudu: 'assets/bosses-v2/guandu_chunyuqiong.png',
   jingnan_hanxuan: 'assets/bosses-v2/third_lijue.png',
   jingnan_huangzhong: 'assets/bosses-v2/guandu_yanliang.png',
+  // 第八章 汉中之战首领：正式 v2 图到之前借用现有首领 v2 图过渡（hanzhongChapter.HANZHONG_SHEETS 同步改）
+  hanzhong_zhanghe: 'assets/bosses-v2/third_zhangxiu.png',
+  hanzhong_xiahouyuan: 'assets/bosses-v2/guandu_wenchou.png',
+  hanzhong_caocao: 'assets/bosses-v2/chibi_caoren.png',
   huaxiong_walk: 'assets/bosses-v2/huaxiong_walk.png',
   huaxiong_attack: 'assets/bosses-v2/huaxiong_attack.png',
   huaxiong_actions: 'assets/bosses-v2/huaxiong_actions.png',

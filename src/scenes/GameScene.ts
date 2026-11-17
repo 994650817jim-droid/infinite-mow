@@ -2746,7 +2746,7 @@ export class GameScene extends Phaser.Scene {
   /** 乱世难度用：本场所属章节（黄巾 / 讨董取 chapter.id，群雄 / 官渡 / 赤壁取战线）。 */
   protected hardKey(): string { return this.achievementArc() ?? this.chapter.id; }
   /** 乱世难度用：本场是该章第几关。 */
-  protected hardStage(): number { const k = this.hardKey(), key = k === 'qunxiong' ? 'thirdStage' : k === 'guandu' ? 'guanduStage' : k === 'chibi' ? 'chibiStage' : k === 'jingnan' ? 'jingnanStage' : ''; return key ? Number(this.registry.get(key) ?? 1) : this.battleStage(); }
+  protected hardStage(): number { const k = this.hardKey(), key = k === 'qunxiong' ? 'thirdStage' : k === 'guandu' ? 'guanduStage' : k === 'chibi' ? 'chibiStage' : k === 'jingnan' ? 'jingnanStage' : k === 'hanzhong' ? 'hanzhongStage' : ''; return key ? Number(this.registry.get(key) ?? 1) : this.battleStage(); }
   /** 成就用：本场属于哪条战线（攻城 / 守城 / 群雄 / 官渡由子类返回）。 */
   protected achievementArc(): string | undefined { return undefined; }
   /** 手柄锁定目标：子类（有敌营 / 粮草的战场）返回可锁定列表。 */

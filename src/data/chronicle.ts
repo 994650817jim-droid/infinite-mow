@@ -2,7 +2,7 @@
  * 战役回顾 · 乱世编年：九关的史事摘要（原创撰写，据《后汉书》《三国志》等常见史载概括；
  * 演义情节明确标注为“演义”）。只做展示，不影响玩法。
  */
-export type ChronicleArc = 'huangjin' | 'dongzhuo' | 'qunxiong' | 'guandu' | 'chibi' | 'jingnan';
+export type ChronicleArc = 'huangjin' | 'dongzhuo' | 'qunxiong' | 'guandu' | 'chibi' | 'jingnan' | 'hanzhong';
 export interface ChronicleStage { code: string; name: string; boss: string; bossTitle: string; seal: string; year: string; story: string; legacy: string }
 export interface ChronicleChapter { arc: ChronicleArc; title: string; years: string; intro: string; stages: ChronicleStage[] }
 
@@ -95,6 +95,21 @@ export const CHRONICLE: ChronicleChapter[] = [
       { code: '6-3', name: '长沙会战', boss: '韩玄', bossTitle: '长沙太守', seal: '玄', year: '建安十四年 · 209',
         story: '关羽进攻长沙，老将黄忠出战，两军相持。韩玄疑黄忠通敌，欲斩之，魏延起兵杀韩玄，以长沙献降，黄忠由是归附。',
         legacy: '荆南四郡尽归，刘备兵精粮足，始有西图益州之意。' },
+    ],
+  },
+  {
+    arc: 'hanzhong', title: '第八章 · 汉中之战', years: '公元218—219年',
+    intro: '刘备得益州后北争汉中，与曹操相持经年。定军山黄忠斩夏侯渊，曹操亲至无功，以「鸡肋」为令退兵，刘备进位汉中王。',
+    stages: [
+      { code: '8-1', name: '阳平关', boss: '张郃', bossTitle: '荡寇将军', seal: '郃', year: '建安二十三年 · 218',
+        story: '刘备进军阳平关，与夏侯渊、张郃相拒。张郃屯广石，刘备以精兵万余分为十部夜急攻之，不能下。',
+        legacy: '两军相持经年，刘备急书益州发兵。' },
+      { code: '8-2', name: '定军山', boss: '夏侯渊', bossTitle: '征西将军', seal: '渊', year: '建安二十四年 · 219',
+        story: '刘备自阳平南渡沔水，缘山稍前，于定军山势作营。夏侯渊将兵来争其地，法正曰「可击矣」，黄忠乘高鼓噪攻之，一战斩夏侯渊。',
+        legacy: '曹军丧帅，汉中震动。' },
+      { code: '8-3', name: '汉水', boss: '曹操', bossTitle: '魏王', seal: '操', year: '建安二十四年 · 219',
+        story: '曹操自长安举众南征，刘备敛众拒险，终不交锋。积月不拔，亡者日多，曹操以「鸡肋」为令，引军还长安。',
+        legacy: '刘备遂有汉中，进位汉中王。' },
     ],
   },
 ];

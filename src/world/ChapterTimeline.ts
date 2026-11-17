@@ -4,7 +4,7 @@
  *   黄巾之乱（始终开放）→ 讨伐董卓（通关黄巾）→ 群雄割据（通关讨董）→ 官渡之战（群雄三关）→ 赤壁之战（官渡三关）。
  */
 import { CHRONICLE, type ChronicleStage } from '../data/chronicle';
-export type TimelineChapterId = 'huangjin' | 'hulao' | 'qunxiong' | 'guandu' | 'chibi' | 'jingnan';
+export type TimelineChapterId = 'huangjin' | 'hulao' | 'qunxiong' | 'guandu' | 'chibi' | 'jingnan' | 'hanzhong';
 export type ChapterState = 'cleared' | 'open' | 'locked';
 
 export interface TimelineChapter {
@@ -20,11 +20,13 @@ export const CHAPTER_TIMELINE: readonly TimelineChapter[] = [
   { id: 'guandu', numeral: '肆', title: '官渡之战', short: '官渡', year: 200, era: '建安五年', hint: '通关第三章「群雄割据」后解锁' },
   { id: 'chibi', numeral: '伍', title: '赤壁之战', short: '赤壁', year: 208, era: '建安十三年', hint: '通关第四章「官渡之战」后解锁' },
   { id: 'jingnan', numeral: '陆', title: '平定荆南', short: '荆南', year: 209, era: '建安十四年', hint: '通关第五章「赤壁之战」后解锁' },
+  // 第七章「入蜀」由走路动画会话做，合并后插在这里
+  { id: 'hanzhong', numeral: '捌', title: '汉中之战', short: '汉中', year: 219, era: '建安二十四年', hint: '通关第七章「入蜀」后解锁' },
 ];
 
 /** 计算章节状态所需的存档字段（WorldSave 的子集，便于单测与迁移时调用）。 */
 export interface TimelineProgress {
-  yellowStages: number; dongzhuoStages: number; warlordStages: number; guanduStages: number; chibiStages: number; jingnanStages?: number;
+  yellowStages: number; dongzhuoStages: number; warlordStages: number; guanduStages: number; chibiStages: number; jingnanStages?: number; hanzhongStages?: number;
   cleared: { huangjin: boolean; hulao: boolean }; legacyHulaoAccess: boolean;
 }
 
@@ -32,7 +34,7 @@ export interface TimelineProgress {
 export function chapterStagesDone(id: TimelineChapterId, s: TimelineProgress): number {
   const v = id === 'huangjin' ? (s.cleared.huangjin || s.legacyHulaoAccess ? 3 : s.yellowStages)
     : id === 'hulao' ? (s.cleared.hulao ? 3 : s.dongzhuoStages)
-    : id === 'qunxiong' ? s.warlordStages : id === 'guandu' ? s.guanduStages : id === 'jingnan' ? (s.jingnanStages ?? 0) : s.chibiStages;
+    : id === 'qunxiong' ? s.warlordStages : id === 'guandu' ? s.guanduStages : id === 'jingnan' ? (s.jingnanStages ?? 0) : id === 'hanzhong' ? (s.hanzhongStages ?? 0) : s.chibiStages;
   return Math.max(0, Math.min(3, v | 0));
 }
 
@@ -56,7 +58,7 @@ export function currentChapter(s: TimelineProgress): TimelineChapter {
 }
 
 // ———— 三关路线（地图像素坐标，strategy-map 1536×1024）与史事 ————
-const ARC_OF: Record<TimelineChapterId, string> = { huangjin: 'huangjin', hulao: 'dongzhuo', qunxiong: 'qunxiong', guandu: 'guandu', chibi: 'chibi', jingnan: 'jingnan' };
+const ARC_OF: Record<TimelineChapterId, string> = { huangjin: 'huangjin', hulao: 'dongzhuo', qunxiong: 'qunxiong', guandu: 'guandu', chibi: 'chibi', jingnan: 'jingnan', hanzhong: 'hanzhong' };
 /** 各章三关在地图上的位置（按史事地名大致方位，避开城池徽标）。 */
 export const STAGE_POINTS: Record<TimelineChapterId, ReadonlyArray<{ x: number; y: number }>> = {
   huangjin: [{ x: 822, y: 212 }, { x: 738, y: 158 }, { x: 905, y: 262 }],   // 广宗外围 · 下曲阳 · 广宗决战
@@ -65,6 +67,7 @@ export const STAGE_POINTS: Record<TimelineChapterId, ReadonlyArray<{ x: number; 
   guandu: [{ x: 975, y: 200 }, { x: 1010, y: 300 }, { x: 1052, y: 400 }],  // 白马 · 延津 · 乌巢
   chibi: [{ x: 420, y: 598 }, { x: 800, y: 790 }, { x: 360, y: 742 }],      // 长坂 · 赤壁 · 江陵
   jingnan: [{ x: 760, y: 960 }, { x: 520, y: 950 }, { x: 650, y: 880 }],    // 桂阳 · 零陵武陵 · 长沙
+  hanzhong: [{ x: 250, y: 440 }, { x: 300, y: 470 }, { x: 330, y: 430 }],    // 阳平关 · 定军山 · 汉水
 };
 export function chapterStages(id: TimelineChapterId): readonly ChronicleStage[] {
   return CHRONICLE.find(c => c.arc === ARC_OF[id])?.stages ?? [];
@@ -88,6 +91,7 @@ export const CHAPTER_REGIONS: Record<TimelineChapterId, ReadonlyArray<{ x: numbe
   guandu: [{ x: 960, y: 200, r: 260 }, { x: 470, y: 130, r: 220 }, { x: 1200, y: 90, r: 230 }, { x: 1300, y: 400, r: 200 }],
   chibi: [{ x: 460, y: 700, r: 260 }, { x: 950, y: 820, r: 260 }, { x: 1340, y: 690, r: 230 }, { x: 150, y: 520, r: 200 }],
   jingnan: [{ x: 640, y: 930, r: 260 }],
+  hanzhong: [{ x: 290, y: 450, r: 200 }],
 };
 
 // ———— 攻城分区：某城在其所属章节通关后才可攻打 ————

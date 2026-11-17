@@ -147,3 +147,4 @@ assets/raw/*
 !/tools/test-siege-medium.mjs
 !/tools/prepare-town-city-art.mjs
 !/tools/test-jingnan-full.mjs
+!/tools/test-hanzhong-full.mjs

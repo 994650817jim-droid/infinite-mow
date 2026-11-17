@@ -11,7 +11,7 @@ export function chronicleProgress():Record<ChronicleArc,{cleared:number;open:boo
  const s=loadWorld();
  const yellow=s.cleared.huangjin||s.legacyHulaoAccess?3:Math.max(0,Math.min(3,s.yellowStages));
  const dong=s.cleared.hulao?3:Math.max(0,Math.min(3,s.dongzhuoStages));
- return{huangjin:{cleared:yellow,open:true},dongzhuo:{cleared:dong,open:yellow>=3||s.legacyHulaoAccess},qunxiong:{cleared:Math.max(0,Math.min(3,s.warlordStages)),open:s.cleared.hulao},guandu:{cleared:Math.max(0,Math.min(3,s.guanduStages)),open:s.cleared.hulao&&s.warlordStages>=3},chibi:{cleared:Math.max(0,Math.min(3,s.chibiStages)),open:s.cleared.hulao&&s.guanduStages>=3},jingnan:{cleared:Math.max(0,Math.min(3,s.jingnanStages??0)),open:s.cleared.hulao&&s.chibiStages>=3}};
+ return{huangjin:{cleared:yellow,open:true},dongzhuo:{cleared:dong,open:yellow>=3||s.legacyHulaoAccess},qunxiong:{cleared:Math.max(0,Math.min(3,s.warlordStages)),open:s.cleared.hulao},guandu:{cleared:Math.max(0,Math.min(3,s.guanduStages)),open:s.cleared.hulao&&s.warlordStages>=3},chibi:{cleared:Math.max(0,Math.min(3,s.chibiStages)),open:s.cleared.hulao&&s.guanduStages>=3},jingnan:{cleared:Math.max(0,Math.min(3,s.jingnanStages??0)),open:s.cleared.hulao&&s.chibiStages>=3},hanzhong:{cleared:Math.max(0,Math.min(3,s.hanzhongStages??0)),open:s.cleared.hulao&&s.jingnanStages>=3}};
 }
 
 /**

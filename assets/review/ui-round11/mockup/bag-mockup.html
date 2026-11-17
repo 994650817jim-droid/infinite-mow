@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8">
+<title>行囊重设计 · 效果图（概念稿）</title>
+<style>
+  /* 概念效果图：用游戏现有美术（关羽立绘、道具图集、卷轴纸、漆金按钮）+ CSS 示意质感；正式实现换成清单里向 ChatGPT 要的厚涂底图。 */
+  :root { --gold:#c9a45c; --gold2:#f3d48a; --ink:#140d07; --lac:#2a1a10; }
+  html,body { margin:0; background:#0b0805; }
+  .stage { position:relative; width:1280px; height:720px; overflow:hidden; font-family:"Microsoft YaHei","Noto Sans SC",sans-serif; color:#e9dcbc;
+    background: radial-gradient(ellipse at 30% 40%, #3a2416 0%, #1a100a 60%, #0b0805 100%); }
+  /* 大底：漆木面板 + 金色包角（正式版换 bag_panel_bg 厚涂底图） */
+  .panel { position:absolute; inset:14px; border-radius:8px;
+    background: linear-gradient(180deg, rgba(58,34,20,.92), rgba(26,16,10,.96)), repeating-linear-gradient(90deg, rgba(255,255,255,.015) 0 2px, transparent 2px 7px);
+    box-shadow: inset 0 0 0 2px #6b4a24, inset 0 0 0 4px #1a0f08, inset 0 0 0 5px var(--gold), inset 0 0 40px rgba(0,0,0,.6), 0 10px 40px rgba(0,0,0,.7); }
+  .corner { position:absolute; width:46px; height:46px; border:3px solid var(--gold2); }
+  .corner.tl { left:8px; top:8px; border-right:none; border-bottom:none; } .corner.tr { right:8px; top:8px; border-left:none; border-bottom:none; }
+  .corner.bl { left:8px; bottom:8px; border-right:none; border-top:none; } .corner.br { right:8px; bottom:8px; border-left:none; border-top:none; }
+  .title { position:absolute; left:52px; top:24px; font:700 34px/1 "STKaiti","KaiTi",serif; color:#f2ddae; letter-spacing:6px; text-shadow:0 2px 0 #000; }
+  .seal { position:absolute; left:152px; top:24px; width:30px; height:30px; background:#9a2a1c; color:#ffe2a0; font:700 15px/30px "STKaiti",serif; text-align:center; border-radius:3px; box-shadow:0 0 0 1px #e0a868 inset; }
+  .count { position:absolute; left:196px; top:34px; font-size:15px; color:#b9a57a; }
+  .close { position:absolute; right:44px; top:26px; width:92px; height:38px; background:url(../../../../public/assets/ui-buttons/secondary-normal.webp) center/100% 100%; color:#ffe9bd; font:600 16px/38px serif; text-align:center; }
+  /* 武将：圆形将印（立绘头像）一排 */
+  .heroes { position:absolute; left:52px; top:76px; display:flex; gap:10px; }
+  .medal { width:44px; height:44px; border-radius:50%; background-size:cover; background-position:center 18%; box-shadow:0 0 0 2px #6b4a24, 0 0 0 3px #b09056, 0 2px 6px #000; filter:saturate(.85) brightness(.85); position:relative; }
+  .medal.on { box-shadow:0 0 0 2px #7a2a1c, 0 0 0 4px var(--gold2), 0 0 14px rgba(243,212,138,.6); filter:none; }
+  .medal b { position:absolute; left:50%; bottom:-17px; transform:translateX(-50%); font:500 11px/1 sans-serif; color:#cdb98a; white-space:nowrap; }
+  .medal.on b { color:#f3d48a; }
+  /* 装束图：卷轴纸背景 + 立绘居中 */
+  .doll { position:absolute; left:40px; top:140px; width:600px; height:440px; border-radius:6px; overflow:hidden;
+    background: url(../../../../public/assets/ink-scroll/paper.webp) center/cover; box-shadow: inset 0 0 0 2px #8a6a3a, inset 0 0 60px rgba(60,30,10,.55); }
+  .doll::after { content:""; position:absolute; inset:0; background: radial-gradient(ellipse at 50% 55%, transparent 40%, rgba(40,22,10,.45) 100%); pointer-events:none; }
+  .doll img.hero { position:absolute; left:180px; top:-6px; height:462px; filter: drop-shadow(0 6px 10px rgba(0,0,0,.45)); }
+  .ink { position:absolute; left:206px; bottom:8px; width:200px; height:26px; border-radius:50%; background: radial-gradient(ellipse, rgba(30,18,8,.45), transparent 70%); }
+  svg.leaders { position:absolute; left:40px; top:140px; width:600px; height:440px; pointer-events:none; }
+  /* 槽位：铜框（正式版 slot_frame）+ 空槽墨线剪影 + 竖排小牌 */
+  .slot { position:absolute; width:76px; height:76px; border-radius:6px;
+    background: radial-gradient(circle at 50% 40%, #3b2a1a, #1d130b 75%);
+    box-shadow: inset 0 0 0 2px #2a1a0e, inset 0 0 0 3px #9a7a46, inset 0 0 0 5px #3a2814, 0 0 0 1px #000, 0 4px 10px rgba(0,0,0,.6); }
+  .slot .ic { position:absolute; left:6px; top:6px; width:64px; height:64px; background:url(../../../../public/assets/items/item-icons.webp) no-repeat; background-size:704px 448px; }
+  .slot .tag { position:absolute; top:6px; width:18px; padding:4px 0; background:#7a2a1c; color:#ffe2a0; font:600 12px/1.15 "STKaiti",serif; text-align:center; border-radius:2px; box-shadow:0 0 0 1px #d8a868 inset, 0 2px 4px #000; writing-mode:vertical-rl; letter-spacing:1px; }
+  .slot.l .tag { left:-24px; } .slot.r .tag { right:-24px; }
+  .slot .nm { position:absolute; left:50%; top:80px; transform:translateX(-50%); white-space:nowrap; font:600 12px/1 sans-serif; text-shadow:0 1px 0 #000, 0 0 4px #000; }
+  .empty .ic { opacity:.28; filter: grayscale(1) brightness(.6) contrast(1.4); }
+  .lock { position:absolute; right:4px; bottom:4px; width:18px; height:18px; border-radius:3px; background:#b9a57a; color:#1c140a; font:700 12px/18px sans-serif; text-align:center; }
+  /* 品质框：铜 / 青玉 / 青金 / 紫晶 / 鎏金（正式版 quality_frame_*；四角宝石） */
+  .q { position:absolute; inset:0; border-radius:6px; pointer-events:none; }
+  .q::before, .q::after { content:""; position:absolute; width:9px; height:9px; transform:rotate(45deg); }
+  .q::before { left:-3px; top:-3px; } .q::after { right:-3px; bottom:-3px; }
+  .qw { box-shadow: inset 0 0 0 2px #cfc6b2, inset 0 0 0 3px #4a4034; } .qw::before,.qw::after { background:#e8e2d4; }
+  .qg { box-shadow: inset 0 0 0 2px #5fb57a, inset 0 0 0 3px #1a3a24, inset 0 0 14px rgba(95,181,122,.35); } .qg::before,.qg::after { background:#7fdc9a; box-shadow:0 0 6px #5fb57a; }
+  .qb { box-shadow: inset 0 0 0 2px #4f8fd8, inset 0 0 0 3px #13284a, inset 0 0 16px rgba(79,143,216,.4); } .qb::before,.qb::after { background:#8fc4ff; box-shadow:0 0 6px #4f8fd8; }
+  .qp { box-shadow: inset 0 0 0 2px #b46ae0, inset 0 0 0 3px #2e1440, inset 0 0 18px rgba(180,106,224,.45); } .qp::before,.qp::after { background:#e0a8ff; box-shadow:0 0 8px #b46ae0; }
+  .qo { box-shadow: inset 0 0 0 2px #f2a24e, inset 0 0 0 3px #4a2408, inset 0 0 22px rgba(242,162,78,.55), 0 0 12px rgba(242,162,78,.35); } .qo::before,.qo::after { background:#ffd27a; box-shadow:0 0 10px #ffb24e; }
+  /* 兵装加成：卷轴横条 */
+  .sum { position:absolute; left:40px; top:592px; width:600px; height:96px; border-radius:6px; background: linear-gradient(180deg, rgba(20,13,8,.85), rgba(30,20,12,.85)); box-shadow: inset 0 0 0 1px #6b5a40; }
+  .sum h4 { margin:0; position:absolute; left:16px; top:10px; font:700 16px/1 "STKaiti",serif; color:#ecd49a; letter-spacing:2px; }
+  .sum .cols { position:absolute; left:16px; top:36px; right:16px; display:grid; grid-template-columns:repeat(4,1fr); gap:6px 14px; font-size:13px; color:#d8ccb0; }
+  .sum .cols b { color:#f3d48a; font-weight:600; }
+  .sum .sp { position:absolute; right:16px; top:10px; font-size:12px; color:#f3c37a; }
+  /* 右：筛选 + 行囊格（漆盘） */
+  .tray { position:absolute; left:660px; top:140px; width:580px; height:548px; border-radius:6px; background: linear-gradient(180deg, #1c120b, #140d08); box-shadow: inset 0 0 0 1px #6b5a40, inset 0 0 30px rgba(0,0,0,.6); }
+  .filters { position:absolute; left:14px; top:12px; display:flex; gap:6px; }
+  .ft { height:32px; padding:0 12px 0 32px; position:relative; border-radius:16px 4px 16px 4px; background:linear-gradient(180deg,#3a2818,#24170d); box-shadow: inset 0 0 0 1px #8a6a3a; color:#e9dcbc; font:500 14px/32px sans-serif; }
+  .ft i { position:absolute; left:6px; top:4px; width:24px; height:24px; background:url(../../../../public/assets/items/item-icons.webp) no-repeat; background-size:264px 168px; opacity:.85; }
+  .ft.on { background:linear-gradient(180deg,#9a3a22,#6e2414); box-shadow: inset 0 0 0 1px var(--gold2), 0 0 10px rgba(243,212,138,.35); color:#fff3d6; }
+  .grid { position:absolute; left:16px; top:58px; display:grid; grid-template-columns:repeat(7,72px); gap:8px; }
+  .cell { position:relative; width:72px; height:72px; border-radius:6px; background: radial-gradient(circle at 50% 40%, #33241a, #1a110b 80%); box-shadow: 0 3px 6px rgba(0,0,0,.6); }
+  .cell .ic { position:absolute; left:6px; top:6px; width:60px; height:60px; background:url(../../../../public/assets/items/item-icons.webp) no-repeat; background-size:660px 420px; }
+  .cell .who { position:absolute; left:3px; bottom:3px; padding:0 3px; background:#d7b46a; color:#1c140a; font:600 11px/15px sans-serif; border-radius:2px; }
+  .cell .new { position:absolute; left:3px; top:3px; padding:0 3px; background:rgba(243,212,138,.9); color:#2a1a08; font:600 11px/15px serif; border-radius:2px; }
+  .cell.empty { background: rgba(255,255,255,.02); box-shadow: inset 0 0 0 1px rgba(201,164,92,.18); }
+  .cell.hover { transform: translateY(-2px); box-shadow: 0 0 0 2px var(--gold2), 0 6px 14px rgba(0,0,0,.7); }
+  .bottom { position:absolute; left:16px; right:16px; bottom:12px; height:34px; display:flex; align-items:center; gap:10px; font-size:14px; color:#cdb98a; }
+  .btn { height:34px; padding:0 16px; background:url(../../../../public/assets/ui-buttons/secondary-normal.webp) center/100% 100%; color:#ffe9bd; font:600 14px/34px sans-serif; }
+  .btn.ghost { opacity:.55; }
+  /* 悬停卡：漆金卡 + 品质色顶带 + 对比 */
+  .tip { position:absolute; left:820px; top:250px; width:286px; border-radius:6px; background: linear-gradient(180deg, #23160d, #170e08); box-shadow: inset 0 0 0 1px #000, inset 0 0 0 2px #c08a3e, 0 10px 30px rgba(0,0,0,.8); padding:0 0 12px; }
+  .tip .band { height:58px; border-radius:6px 6px 0 0; background: linear-gradient(90deg, rgba(180,106,224,.55), rgba(180,106,224,.08)); position:relative; }
+  .tip .band .ic { position:absolute; left:10px; top:6px; width:46px; height:46px; background:url(../../../../public/assets/items/item-icons.webp) no-repeat; background-size:506px 322px; border-radius:4px; box-shadow: inset 0 0 0 2px #b46ae0; }
+  .tip .band h3 { margin:0; position:absolute; left:66px; top:9px; font:700 18px/1 "STKaiti",serif; color:#e0a8ff; }
+  .tip .band p { margin:0; position:absolute; left:66px; top:34px; font-size:12px; color:#c9b3e6; }
+  .tip ul { list-style:none; margin:10px 14px 0; padding:0; font-size:13px; line-height:1.75; color:#e9dcbc; }
+  .tip .cmp { margin:8px 14px 0; padding-top:8px; border-top:1px dashed rgba(201,164,92,.4); font-size:12px; line-height:1.7; }
+  .up { color:#8fe0a0; } .dn { color:#f08a6a; } .cur { color:#b9a57a; }
+  .note { position:absolute; right:48px; top:104px; font-size:12px; color:#8f8070; }
+  .stamp { position:absolute; right:24px; bottom:18px; font:12px sans-serif; color:#6f6250; }
+</style></head>
+<body><div class="stage">
+  <div class="panel"></div>
+  <div class="corner tl"></div><div class="corner tr"></div><div class="corner bl"></div><div class="corner br"></div>
+  <div class="title">行囊</div><div class="seal">关</div>
+  <div class="count">关羽 · 已穿 6 件 · 未穿戴 20 / 60</div>
+  <div class="close">关闭</div>
+  <div class="heroes" id="heroes"></div>
+  <div class="note">点道具看详情 · 悬停看属性和对比</div>
+
+  <div class="doll"><img class="hero" src="../../../../public/assets/epic-home/guanyu.png"><div class="ink"></div></div>
+  <svg class="leaders" viewBox="0 0 600 440">
+    <g stroke="#7a5626" stroke-width="1.4" fill="none" stroke-dasharray="3 3" opacity=".9">
+      <path d="M118 58 L218 58 L250 82"/>       <!-- 头盔 → 头 -->
+      <path d="M118 160 L200 160 L240 184"/>    <!-- 甲胄 → 胸 -->
+      <path d="M118 262 L196 262 L224 304"/>
+      <path d="M118 364 L170 364 L196 420"/>    <!-- 信物 → 玉佩 -->
+      <path d="M482 196 L372 196 L326 204"/>    <!-- 信物二 → 腰带 -->
+      <path d="M482 362 L392 362 L366 418"/>    <!-- 战靴 → 足 -->
+    </g>
+    <g fill="#c9a45c"><circle cx="250" cy="82" r="3"/><circle cx="240" cy="184" r="3"/><circle cx="224" cy="304" r="3"/><circle cx="196" cy="420" r="3"/><circle cx="326" cy="204" r="3"/><circle cx="366" cy="418" r="3"/></g>
+  </svg>
+  <div id="slots"></div>
+
+  <div class="sum"><h4>兵装加成</h4><div class="sp">★ 博闻 · ★ 骁勇</div>
+    <div class="cols"><span>武器伤害 <b>+8%</b></span><span>生命上限 <b>+9.4%</b></span><span>移动速度 <b>+9.8%</b></span><span>受到伤害 <b>−3.3%</b></span>
+    <span>拾取范围 <b>+17.2%</b></span><span>经验获取 <b>+26.7%</b></span><span>友军伤害 <b>+2.2%</b></span><span>每秒回血 <b>+0.6</b></span></div></div>
+
+  <div class="tray">
+    <div class="filters" id="filters"></div>
+    <div class="grid" id="grid"></div>
+    <div class="bottom"><span class="btn ghost">‹</span><span>1 / 1</span><span class="btn ghost">›</span><span style="flex:1"></span><span class="btn">自动分解白：关</span><span class="btn">分解白 / 绿</span></div>
+  </div>
+
+  <div class="tip">
+    <div class="band"><div class="ic" id="tipic"></div><h3>凤翅紫金冠</h3><p>紫 · 头盔 · 悬停中</p></div>
+    <ul><li>生命上限 +6.2%</li><li>受到伤害 −4.0%</li><li>· 拾取范围 +8%</li></ul>
+    <div class="cmp"><div class="cur">对比当前（皮弁）</div><div class="up">▲ 生命上限 +3.8%</div><div class="up">▲ 受到伤害 −4.0%</div><div class="dn">▼ 移动速度 −2.0%</div></div>
+  </div>
+  <div class="stamp">概念效果图 · 用现有美术 + CSS 示意质感；正式版换清单里的厚涂素材</div>
+</div>
+<script>
+  const at = (k, s = 1) => ({ bright_plate:[384,128],phoenix_helm:[0,640],cloud_boots:[256,640],jade_pendant:[896,384],tiger_seal:[1024,384],relic_fushui:[0,768],chitu:[640,640],lamellar:[1152,0],fish_scale:[1280,0],plume_helm:[896,128],iron_helm:[768,128],leather_boot:[384,256],tiger_boots:[384,640],bagua_mirror:[1280,640],war_flag:[1280,384],bronze_mirror:[0,512],silver_armor:[1024,512],scholar_cap:[1280,128],felt_boot:[896,256],gold_seal:[384,512],incense:[128,512],chain_armor:[0,128],horn_helm:[0,256],imperial_seal:[1152,640],leather_cap:[1152,128] })[k].map(v => -v * s + 'px').join(' ');
+  // 武将将印
+  const H = ['zhaoyun','guanyu','huangzhong','zhuge','zhangfei','machao','weiyan','liubei','pangtong','huangyueying','sunshangxiang','diaochan'], N = ['赵云','关羽','黄忠','诸葛亮','张飞','马超','魏延','刘备','庞统','黄月英','孙尚香','貂蝉'];
+  document.getElementById('tipic').style.backgroundPosition = at('phoenix_helm', 46 / 128);
+  document.getElementById('heroes').innerHTML = H.map((h, i) => `<div class="medal${h === 'guanyu' ? ' on' : ''}" style="background-image:url(../../../../public/assets/ink-scroll/${h}.webp)"><b>${N[i]}</b></div>`).join('');
+  // 槽位（围着身体）：左 头盔 / 甲胄 / 信物；右 遗珍 / 信物二 / 战靴；左下 坐骑
+  const S = [
+    { x: 42, y: 20, side: 'l', tag: '头盔', ic: 'leather_cap', q: 'qg', nm: '皮弁', c: '#7fdc9a' },
+    { x: 42, y: 122, side: 'l', tag: '甲胄', ic: 'fish_scale', q: 'qb', nm: '鱼鳞甲', c: '#8fc4ff' },
+    { x: 42, y: 224, side: 'l', tag: '信物', ic: 'jade_pendant', q: 'qg', nm: '鹰眼扳指', c: '#7fdc9a' },
+    { x: 482, y: 36, side: 'r', tag: '遗珍', ic: 'relic_fushui', q: '', nm: 'Boss遗珍', c: '#8d7d60', empty: true },
+    { x: 482, y: 158, side: 'r', tag: '信物', ic: 'tiger_seal', q: '', nm: '二章通关开放', c: '#8d7d60', empty: true, lock: true },
+    { x: 482, y: 324, side: 'r', tag: '战靴', ic: 'cloud_boots', q: 'qo', nm: '神行履', c: '#f2a24e' },
+    { x: 42, y: 326, side: 'l', tag: '坐骑', ic: 'chitu', q: 'qo', nm: '赤兔', c: '#f2a24e', small: true },
+  ];
+  document.getElementById('slots').innerHTML = S.map(s => `<div class="slot ${s.side}${s.empty ? ' empty' : ''}" style="left:${40 + s.x - 38}px;top:${140 + s.y - 0}px"><div class="ic" style="background-position:${at(s.ic, .5)}"></div>${s.q ? `<div class="q ${s.q}"></div>` : ''}<div class="tag">${s.tag}</div>${s.lock ? '<div class="lock">锁</div>' : ''}<div class="nm" style="color:${s.c}">${s.nm}</div></div>`).join('');
+  // 筛选（带小图标）
+  const F = [['全部', null], ['甲胄', 'lamellar'], ['头盔', 'plume_helm'], ['战靴', 'leather_boot'], ['信物', 'jade_pendant'], ['遗珍', 'relic_fushui']];
+  document.getElementById('filters').innerHTML = F.map(([n, k], i) => `<div class="ft${i === 0 ? ' on' : ''}" style="${k ? '' : 'padding-left:14px'}">${k ? `<i style="background-position:${at(k, 24 / 128)}"></i>` : ''}${n}</div>`).join('');
+  // 行囊格
+  const G = [['silver_armor','qo','',1],['bright_plate','qo','',0],['phoenix_helm','qp','',0],['tiger_boots','qo','',0],['imperial_seal','qo','关',0],['bagua_mirror','qo','',0],['chain_armor','qp','',0],
+    ['felt_boot','qp','',0],['cloud_boots','qp','',0],['bronze_mirror','qp','',0],['war_flag','qp','',0],['gold_seal','qp','',0],['lamellar','qb','',0],['fish_scale','qb','关',0],
+    ['plume_helm','qb','',0],['horn_helm','qb','',0],['leather_boot','qb','',0],['incense','qb','',0],['iron_helm','qg','',0],['scholar_cap','qg','关',0],['leather_cap','qw','',0],
+    ['felt_boot','qw','',0],['jade_pendant','qg','关',0]];
+  document.getElementById('grid').innerHTML = G.map(([k, q, who, nw], i) => `<div class="cell${i === 2 ? ' hover' : ''}"><div class="ic" style="background-position:${at(k, 60 / 128)}"></div><div class="q ${q}"></div>${who ? `<div class="who">${who}</div>` : ''}${nw ? '<div class="new">新</div>' : ''}</div>`).join('') + Array.from({ length: 5 }, () => '<div class="cell empty"></div>').join('');
+</script>
+</body></html>

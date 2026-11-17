@@ -53,15 +53,15 @@ ck('同名信物不能两格叠：换掉同名的那件', r2.same, r2);
 ck('两个信物的词条都算进兵装加成', r2.regen && r2.ally, r2);
 ck('第二位可卸下，存档读回保留；存档没通关时第二位不生效但不丢', r2.unequip && r2.reload && r2.relock, r2);
 
-// 行囊界面：人像下排正中是「信物·二」，原「本局宝物」格已撤
+// 行囊界面：「信物·二」在人像右列、Boss遗物与战靴之间（2026-11-17 行囊美术重设计，用户批准「按效果图做」：槽位围着身体），原「本局宝物」格已撤
 const r3 = await p.evaluate(async () => {
   const UI = await window.__mod('/src/ui/ItemBagUI.ts'), m = window.__game.scene.getScene('MenuScene'); const ui = new UI.ItemBagUI(m, { hero: 'zhaoyun' });
   await new Promise(r => setTimeout(r, 300));
-  const root = ui.root, t2 = window.__find(root, 'item-slot-token2'), t1 = window.__find(root, 'item-slot-token'), relic = window.__find(root, 'item-slot-relic'), mount = window.__find(root, 'item-slot-mount');
-  const out = { t2: !!t2, label: window.__find(root, 'item-slot-label-token2')?.text, treasure: !!window.__find(root, 'item-treasure-0'), y: t2 && relic ? Math.abs(t2.y - relic.y) : -1, between: t2 && relic && mount ? t2.x > mount.x && t2.x < relic.x : false, t1: !!t1 };
+  const root = ui.root, t2 = window.__find(root, 'item-slot-token2'), t1 = window.__find(root, 'item-slot-token'), relic = window.__find(root, 'item-slot-relic'), boots = window.__find(root, 'item-slot-boots');
+  const out = { t2: !!t2, label: window.__find(root, 'item-slot-label-token2')?.text, treasure: !!window.__find(root, 'item-treasure-0'), x: t2 && relic ? Math.abs(t2.x - relic.x) : -1, between: t2 && relic && boots ? t2.y > relic.y && t2.y < boots.y : false, t1: !!t1 };
   return out;
 });
-ck('行囊：「信物·二」在人像下排正中（坐骑与 Boss遗物之间），本局宝物格已撤', r3.t2 && r3.t1 && r3.y < 2 && r3.between && !r3.treasure && /虎钮印|玉佩/.test(r3.label ?? ''), r3);
+ck('行囊：「信物·二」在人像右列（Boss遗物与战靴之间），本局宝物格已撤', r3.t2 && r3.t1 && r3.x < 2 && r3.between && !r3.treasure && /虎钮印|玉佩/.test(r3.label ?? ''), r3);
 await p.screenshot({ path: 'assets/review/token-slots-bag-1280x720.png' });
 
 ck('控制台无报错', errors.length === 0, errors.slice(0, 6));

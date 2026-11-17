@@ -423,7 +423,7 @@ export class MenuScene extends Phaser.Scene {
   }
 
   /** 战役回顾“再战/出征”：以当前武将直接出征指定关（只允许已解锁的关；通关进度只增不减）。 */
-  private replayStage(arc:'huangjin'|'dongzhuo'|'qunxiong'|'guandu'|'chibi'|'shu',stage:number):void{
+  private replayStage(arc:'huangjin'|'dongzhuo'|'qunxiong'|'guandu'|'chibi'|'jingnan'|'shu'|'hanzhong',stage:number):void{
     if((arc!=='huangjin'&&arc!=='dongzhuo')||![1,2,3].includes(stage))return;
     if(arc==='huangjin'){if(!yellowStageUnlocked(stage)&&!isChapterTestRun())return;this.selectedChapter='huangjin';this.selectedStage=stage as YellowStage;}
     else{if(!dongzhuoStageUnlocked(stage)&&!isChapterTestRun())return;this.selectedChapter='hulao';this.selectedWestStage=stage as YellowStage;}

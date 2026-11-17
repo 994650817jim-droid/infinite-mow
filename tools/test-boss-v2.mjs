@@ -50,8 +50,9 @@ try {
     await wait(p, 1600);
     const sh2 = await ev(s => ({ inv: s.boss.invulnerable }));
     ck('张角·二阶段转场：无敌 1.5 秒 + 色调滤镜，之后解除', sh.inv && sh.p2 && sh.filter && !sh2.inv, { sh, sh2 });
-    await ev(s => { s.zhangjiao.debug.force(3, s.combatNow); }); await wait(p, 1000); await p.screenshot({ path: OUT + '/zhangjiao-grid.png' }); await wait(p, 3200);
-    ck('张角·雷阵：三波亮格落雷放完', await ev(s => s.zhangjiao.metrics.grid === 1 && !s.zhangjiao.snapshot().grid));
+    const g0 = await ev(s => { const g = s.zhangjiao.metrics.grid; s.zhangjiao.debug.force(3, s.combatNow); return g; }); await wait(p, 1000); await p.screenshot({ path: OUT + '/zhangjiao-grid.png' });
+    const gridDone = await p.waitForFunction(g => { const z = window.__game.scene.getScene('GameScene').zhangjiao; return z.metrics.grid === g + 1 && !z.snapshot().grid; }, g0, { timeout: 15000 }).then(() => true, () => false);
+    ck('张角·雷阵：三波亮格落雷放完', gridDone);
     ck('张角：无页面报错', !errs.length, errs);
     await p.close();
     const old = await page('zhangjiao', '&boss=old');
@@ -77,9 +78,9 @@ try {
     ck('吕布·辕门射戟：站着不动被一箭贯穿', sh.m === 1 && sh.hp < hp2, sh);
     await wait(p, 900);
     // 躲射戟：锁定前 0.1 秒侧移
-    const hp3 = await ev(s => { s.player.hp = 9999; s.player.invulnUntil = 0; s.boss.sprite.setPosition(s.player.x + 320, s.player.y); s.lubu.debug.force(2, s.combatNow); return s.player.hp; });
-    await wait(p, 300 + 1000); await ev(s => { s.player.sprite.y += 90; }); await wait(p, 600);
-    ck('吕布·辕门射戟：锁定后侧移可以躲开', await ev((s, h) => s.player.hp === h, hp3), {});
+    const hp3 = await ev(s => { s.player.hp = 9999; s.player.invulnUntil = 0; s.boss.sprite.setPosition(s.player.x + 320, s.player.y); s.lubu.debug.force(2, s.combatNow); return s.lubu.v2Metrics.hits; });
+    await p.waitForFunction(() => { const s = window.__game.scene.getScene('LubuGameScene'); return s.lubu.state === 'aim' && s.lubu.until - s.combatNow < 200; }, null, { timeout: 10000 }); await ev(s => { s.player.sprite.y += 90; }); await wait(p, 800);
+    ck('吕布·辕门射戟：锁定后侧移可以躲开', await ev((s, h) => s.lubu.v2Metrics.hits === h && s.lubu.v2Metrics.shot === 2, hp3), {});
     await wait(p, 900);
     await ev(s => s.lubu.debug.phase2(s.combatNow)); await wait(p, 200);
     const ph = await ev(s => ({ p2: s.lubu.phase2, inv: s.boss.invulnerable, filter: !!s.children.getByName('boss-phase-filter') }));
@@ -108,7 +109,7 @@ try {
     await ev(s => { for (const fl of s.controller.flags) s.killEnemy(fl.e); }); await wait(p, 200);
     ck('袁术·玉玺号令：打掉旗子就没了', await ev(s => s.controller.snapshot().flags === 0));
     await wait(p, 1500);
-    const hp0 = await ev(s => { s.player.hp = 9999; s.player.invulnUntil = 0; s.bossDebug().force(1, s.combatNow); return s.player.hp; });
+    const hp0 = await ev(s => { for (const e of s.enemies) if (e.active && !e.isSupplySlot && e.kind !== 'boss') e.deactivate(); s.player.hp = s.player.maxHp = 9999; s.player.invulnUntil = 0; s.bossDebug().force(1, s.combatNow); return s.player.hp; });
     await wait(p, 1200); await p.screenshot({ path: OUT + '/yuanshu-coins.png' }); await wait(p, 1400);
     const co = await ev(s => ({ hp: s.player.hp, snap: s.controller.snapshot() }));
     ck('袁术·金钱开路：金币闪完炸开，站着不动会被炸', co.snap.coins === 0 && co.hp < hp0 && co.snap.metrics.coinHits >= 1, co);
@@ -122,8 +123,8 @@ try {
     await wait(p, 200); await p.screenshot({ path: OUT + '/yuanshu-honey-shift.png' }); await wait(p, 3000);
     const fl = await ev(s => ({ snap: s.controller.snapshot(), d: Math.hypot(s.boss.x - s.player.x, s.boss.y - s.player.y) }));
     await p.screenshot({ path: OUT + '/yuanshu-honey-flee.png' });
-    ck('袁术·二阶段「蜜水」：逃跑、拉开距离、沿途丢金币', fl.snap.phase2 && fl.snap.fleeing && fl.d > d0 && fl.snap.coins > 0, { d0, fl });
-    const hpb = await ev(s => { s.controller.fleeUntil = s.combatNow + 50; return s.boss.hp; }); await wait(p, 300);
+    ck('袁术·二阶段「蜜水」：逃跑、拉开距离、沿途丢金币', fl.snap.phase2 && fl.snap.fleeing && fl.d > d0 && fl.snap.metrics.honeyCoins > 0, { d0, fl });
+    const hpb = await ev(s => { s.__letDie = true; s.boss.hp = Math.floor(s.boss.maxHp * .2); s.controller.fleeUntil = s.combatNow + 50; return s.boss.hp; }); await wait(p, 300);
     const es = await ev(s => ({ hp: s.boss.hp, snap: s.controller.snapshot() }));
     ck('袁术·二阶段：逃掉 → 回血 + 重召亲军', es.hp > hpb && es.snap.metrics.escaped === 1 && !es.snap.fleeing, { hpb, es });
     ck('袁术：无页面报错', !errs.length, errs);
@@ -132,7 +133,7 @@ try {
   if (want('caoren')) {
     const { p, errs, ev } = await page('caoren');
     ck('曹仁：重设计控制器接管', await ev(s => s.bossDebug()?.moves[0] === '铁壁'));
-    const g = await ev(s => s.controller.snapshot());
+    const g = await ev(s => { s.controller.next = s.combatNow + 1e9; return s.controller.snapshot(); });
     ck('曹仁·八门金锁：1 个生门 + 3 个死门', g.gates.filter(x => x === 'live').length === 1 && g.gates.filter(x => x === 'dead').length === 3, g);
     await wait(p, 300); await p.screenshot({ path: OUT + '/caoren-gates.png' });
     // 主将放进死门

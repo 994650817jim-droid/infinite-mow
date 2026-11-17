@@ -1304,7 +1304,7 @@ export class GameScene extends Phaser.Scene {
 
   protected ensureBossPhase2(): void {
     if (this.chapter.bossStyle !== 'zhangjiao') return;
-    if (this.zhangjiao) { if (this.boss?.active) this.zhangjiao.debug.phase2(this.combatNow); return; }
+    if (this.zhangjiao) return; // 重设计版自己按血量进二阶段（每次挨打都会走到这里，不能在这里强制）
     if (!this.boss?.active) return;
     if (!this.bossPhase2 && this.boss.hp / this.boss.maxHp <= 0.5) {
       this.bossPhase2 = true;

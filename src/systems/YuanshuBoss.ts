@@ -21,7 +21,7 @@ export class YuanshuBoss extends ArcBossV2<Move> {
   private flags: Flag[] = []; private coins: Coin[] = []; private guards: { e: Enemy; life: number }[] = [];
   private order = 0; private fleeUntil = 0; private fleeDone = false; private coinAt = 0;
   private propGfx: Phaser.GameObjects.Graphics;
-  readonly metrics = { flags: 0, coins: 0, guards: 0, coinHits: 0, fled: 0, escaped: 0, flagSummons: 0 };
+  readonly metrics = { flags: 0, coins: 0, guards: 0, coinHits: 0, fled: 0, escaped: 0, flagSummons: 0, honeyCoins: 0 };
   readonly debug: BossDebug = {
     moves: ['玉玺号令', '金钱开路', '亲军护驾'],
     force: (i, now) => { this.beat.set(null, 'idle', now, 0); this.start((['flags', 'coins', 'guards'] as const)[i] ?? 'flags', now); },
@@ -121,7 +121,7 @@ export class YuanshuBoss extends ArcBossV2<Move> {
     b.sprite.x += (dx / d * away + tx * (1 - away * .4)) * sp; b.sprite.y += (dy / d * away + ty * (1 - away * .4)) * sp;
     this.angle = Math.atan2(dy, dx); this.state = 'approach';
     const dir = Math.abs(dx) > Math.abs(dy) ? (dx < 0 ? 1 : 2) : dy < 0 ? 3 : 0; this.pose(dir * 4 + Math.floor(now / 90) % 4, now); this.kit.pose('lean', .6, dx < 0 ? -1 : 1);
-    if (now >= this.coinAt) { this.coinAt = now + YS.honey.coinEveryMs; this.coins.push({ x: b.x, y: b.y, at: now, due: now + YS.coins.fuseMs }); }
+    if (now >= this.coinAt) { this.coinAt = now + YS.honey.coinEveryMs; this.metrics.honeyCoins++; this.coins.push({ x: b.x, y: b.y, at: now, due: now + YS.coins.fuseMs }); }
   }
   private escape(now: number): void {
     const b = this.h.boss; this.fleeDone = true; this.fleeUntil = 0; this.metrics.escaped++;

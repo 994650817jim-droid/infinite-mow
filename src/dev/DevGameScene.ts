@@ -109,6 +109,7 @@ export class DevGameScene extends GameScene {
       bossMove1: () => { if (!scene.boss?.active) ensureBoss(); scene.bossDebug()?.force(1, scene.combatNow); mark(); },
       bossMove2: () => { if (!scene.boss?.active) ensureBoss(); scene.bossDebug()?.force(2, scene.combatNow); mark(); },
       bossMove3: () => { if (!scene.boss?.active) ensureBoss(); scene.bossDebug()?.force(3, scene.combatNow); mark(); },
+      bossMove4: () => { if (!scene.boss?.active) ensureBoss(); scene.bossDebug()?.force(4, scene.combatNow); mark(); },
       bossPhase2: () => { if (!scene.boss?.active) ensureBoss(); scene.bossDebug()?.phase2(scene.combatNow); mark(); },
       killBoss: () => { if (!scene.boss?.active) ensureBoss(); if (scene.boss) scene.killEnemy(scene.boss); mark(); },
       winNow: () => { actions.killBoss(); },

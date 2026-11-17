@@ -2,13 +2,17 @@
 // boss：zhangjiao | lubu | yuanshu | caoren；extra：额外查询参数（如 '&boss=old'）。返回 { scene: 场景键 }。
 export const BOSS_SCENES = {
   zhangjiao: { url: '?dev=1&autostart=1&stage=3&layout=desktop', game: 'GameScene' },
-  lubu: { url: '?dev=1&autostart=1&chapter=hulao&stage=3&layout=desktop', game: 'GameScene' },
+  lubu: { url: '?dev=1&layout=desktop', direct: 'LubuGameScene', game: 'LubuGameScene' },
   yuanshu: { url: '?dev=1&thirdStage=3&layout=desktop', chap: 'ThirdChapterScene', deploy: 'third-deploy', game: 'ThirdGameScene' },
   caoren: { url: '?dev=1&chibiStage=3&layout=desktop', chap: 'ChibiChapterScene', deploy: 'chibi-deploy', game: 'ChibiGameScene', stage: 3 },
 };
 export async function openBoss(page, base, boss, extra = '') {
   const c = BOSS_SCENES[boss];
   await page.goto(base + c.url + extra);
+  if (c.direct) {
+    await page.waitForFunction(() => window.__game?.scene.isActive('MenuScene'), null, { timeout: 90000 });
+    await page.evaluate(k => window.__game.scene.getScene('MenuScene').scene.start(k), c.direct);
+  }
   if (c.chap) {
     if (boss !== 'yuanshu') {
       await page.waitForFunction(() => window.__game?.scene.isActive('MenuScene'), null, { timeout: 90000 });
@@ -25,6 +29,10 @@ export async function openBoss(page, base, boss, extra = '') {
     s.__DEV_ACTIONS?.closePopup?.(); if (s.mode !== 'none') s.setMode?.('none');
     s.spawnTimer = s.eliteTimer = 1e9; for (const e of s.enemies) if (e.active && !e.isSupplySlot && e.kind !== 'boss') e.deactivate();
     s.spawnBoss(); s.boss.sprite.setPosition(s.player.x + 200, s.player.y - 30);
+    // 测试用：主将武器会一直打首领 → 血量低于 8 成就补满，免得自己掉进二阶段（二阶段由 bossDebug().phase2 触发）
+    // 升级 / 招兵弹窗会冻结战斗时钟 → 自动选第一项关掉
+    const keep = () => { if (s.boss?.active && s.boss.hp < s.boss.maxHp * .95 && !s.__letDie) s.boss.hp = s.boss.maxHp; if (s.mode === 'levelup' || s.mode === 'recruit') s.__DEV_ACTIONS?.closePopup?.(); if (s.player.hp < s.player.maxHp * .4) s.player.hp = s.player.maxHp; };
+    s.events.on('preupdate', keep); s.events.on('postupdate', keep);
     document.querySelectorAll('[data-dev-panel],.dev-panel').forEach(x => { x.style.display = 'none'; });
   }, c.game);
   return { scene: c.game };

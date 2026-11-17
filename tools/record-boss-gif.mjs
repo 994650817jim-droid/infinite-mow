@@ -7,7 +7,7 @@ import { openBoss } from './boss-v2-open.mjs';
 const BASE = process.env.BASE ?? 'http://127.0.0.1:5173/', boss = process.argv[2] ?? 'zhangjiao', out = process.argv[3] ?? 'assets/review/boss-v2', vid = out + '/video-' + boss;
 /** 每个首领的演示脚本：[招式序号 | 'p2', 等待毫秒]。 */
 const PLAN = {
-  zhangjiao: [[0, 2600], [1, 2300], [2, 3200], ['break', 4200], ['p2', 2200], [3, 4200], [0, 2600]],
+  zhangjiao: [[0, 2600], [1, 2300], [2, 1600], ['break', 3600], ['p2', 2200], [3, 4200], [0, 2600]],
   lubu: [[0, 3000], [1, 2800], [2, 2600], ['p2', 2200], [4, 3400], [0, 3400]],
   yuanshu: [[0, 4200], ['killFlags', 600], [1, 2800], [2, 2600], ['p2', 5200]],
   caoren: [['wait', 3000], [0, 5400], [1, 2200], ['rotate', 2500], ['p2', 2400], ['wait', 5200]],
@@ -39,6 +39,6 @@ await p.close(); await ctx.close(); await b.close();
 const webm = readdirSync(vid).filter(x => x.endsWith('.webm')).map(x => vid + '/' + x).pop();
 const dur = Number(execFileSync('ffprobe', ['-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', webm]).toString().trim());
 const ss = Math.max(0, dur - elapsed - .2).toFixed(2), gif = `${out}/${boss}.gif`;
-execFileSync('ffmpeg', ['-y', '-ss', ss, '-i', webm, '-vf', 'fps=12,scale=800:-1:flags=lanczos,split[a][c];[a]palettegen=max_colors=128[pl];[c][pl]paletteuse=dither=bayer:bayer_scale=4', gif], { stdio: 'ignore' });
+execFileSync('ffmpeg', ['-y', '-ss', ss, '-i', webm, '-vf', 'fps=8,scale=520:-1:flags=lanczos,split[a][c];[a]palettegen=max_colors=64:stats_mode=diff[pl];[c][pl]paletteuse=dither=none:diff_mode=rectangle', gif], { stdio: 'ignore' });
 renameSync(webm, `${out}/${boss}.webm`); rmSync(vid, { recursive: true, force: true });
 console.log('gif', gif, 'seconds', elapsed.toFixed(1), errs.length ? 'ERRORS ' + errs.join(' | ') : 'no page errors');

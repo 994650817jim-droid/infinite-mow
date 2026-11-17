@@ -1519,8 +1519,9 @@ export class GameScene extends Phaser.Scene {
       get alive() { return !f.resting; }, get hp() { return f.hp; }, get maxHp() { return f.maxHp; }, heal(n: number) { f.hp = Math.min(f.maxHp, f.hp + Math.max(0, n)); },
       get direction() { return f.dir; }, get heading() { const a = squad.facing; return { x: Math.cos(a), y: Math.sin(a) }; },
       nextSkillAction: 0, knockedUntil: 0, relics: [] as string[], weapons: [] as WeaponState[],
-      faceDirection(dir: 'down' | 'up' | 'left' | 'right') { f.dir = dir; f.faceUntil = scene.combatNow + 220; },
-      playAction() { return false; },
+      // 名将随行的出手 / 招牌动作：由随行自己播 HERO_ACTIONS 的动作帧（同主将的 faceDirection → 攻击动作）
+      faceDirection(dir: 'down' | 'up' | 'left' | 'right') { f.dir = dir; f.faceUntil = scene.combatNow + 220; f.play('attack', dir, scene.combatNow); },
+      playAction(kind: string, dir: 'down' | 'up' | 'left' | 'right' = f.dir) { return kind === 'attack' || kind === 'skill' ? f.play(kind, dir, scene.combatNow) : false; },
       knockUp(_now: number, _ms: number, dx: number, dy: number) { f.lx += dx * .25; f.ly += dy * .25; },
     } as unknown as Player;
     const state: WeaponState = { id, level: f.weaponLevel, cooldownLeft: .4 + Math.random() * .4 };

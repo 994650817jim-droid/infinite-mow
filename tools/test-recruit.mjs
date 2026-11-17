@@ -184,7 +184,7 @@ for (const layout of ['mobile', 'desktop']) {
   await p.close();
 }
 
-// —— 4. 战斗：随行贴身跟随、出手、瞬移、倒下休整 ——
+// —— 4. 战斗：随行贴身跟随、出手、瞬移、倒地（救援细节见 test-follower-revive）——
 {
   const roster = { version: 1, lord: 'zhaoyun', owned: [{ id: 'zhaoyun', kind: 'hero', hero: 'zhaoyun', name: '赵云', template: 'spear', quality: 'orange', rank: 1, picks: [] }, { id: 'zhangfei', kind: 'hero', hero: 'zhangfei', name: '张飞', template: 'spear', quality: 'orange', rank: 1, picks: [] }, { id: 'r_1', kind: 'common', name: '王勇', template: 'bow', quality: 'green', rank: 1, picks: [] }, { id: 'r_2', kind: 'named', name: '张郃', template: 'strategist', quality: 'purple', rank: 1, picks: [] }], followers: ['zhangfei', 'r_1', 'r_2'], offers: [], captives: [], season: -1, manual: 0, dry: 0, seq: 2, hall: 3 };
   // 武将等级（HeroProgress）：张飞 Lv.5 加过力量 2（2026-11-17 属性改版：力量每点伤害 +1.5%、生命 +3%）；王勇（r_1）Lv.11；张郃（r_2）没有记录，用起始等级
@@ -219,11 +219,11 @@ for (const layout of ['mobile', 'desktop']) {
   // 主将瞬间远离：随行瞬移回身边
   const t = await p.evaluate(async G0 => { const s = eval(G0); for (const e of s.enemies) if (e.active && !e.isSupplySlot) e.hp = 0; const before = s.followers.stats.teleports; s.player.sprite.setPosition(s.player.x + 700, s.player.y); await new Promise(r => setTimeout(r, 800)); return { tp: s.followers.stats.teleports - before, d: s.followers.members.map(m => Math.round(Math.hypot(m.x - s.player.x, m.y - s.player.y))) }; }, G);
   ck('主将远离 480 像素以上时随行瞬移回来', t.tp >= 3 && t.d.every(d => d < 200), t);
-  // 倒下休整 20 秒
-  const d = await p.evaluate(G0 => { const s = eval(G0), f = s.followers, m = f.members[1]; f.hurt(m, 1e6, s.combatNow); return { resting: m.resting, vis: m.sprite.visible, left: Math.round((m.restUntil - s.combatNow) / 1000) }; }, G);
-  ck('随行被打倒：撤下休整 20 秒，不会本局阵亡', d.resting && !d.vis && d.left === 20, d);
-  const back = await p.evaluate(async G0 => { const s = eval(G0), m = s.followers.members[1]; m.restUntil = s.combatNow + 50; await new Promise(r => setTimeout(r, 500)); return { resting: m.resting, vis: m.sprite.visible, hp: m.hp === m.maxHp }; }, G);
-  ck('休整结束满血归队', !back.resting && back.vis && back.hp, back);
+  // 倒地救援（用户 2026-11-17）：倒在原地、不消失；主将不在身边时不会自己起来
+  const d = await p.evaluate(async G0 => { const s = eval(G0), f = s.followers, m = f.members[1]; f.hurt(m, 1e6, s.combatNow); s.player.sprite.setPosition(m.x + 400, m.y); const x = m.x, y = m.y; await new Promise(r => setTimeout(r, 1500)); return { downed: m.downed, vis: m.sprite.visible, still: Math.hypot(m.x - x, m.y - y) < 1, hp: m.hp }; }, G);
+  ck('随行被打倒：倒在原地不消失，主将不来救就一直倒着', d.downed && d.vis && d.still && d.hp === 0, d);
+  const back = await p.evaluate(async G0 => { const s = eval(G0), m = s.followers.members[1]; s.player.sprite.setPosition(m.x + 20, m.y); m.reviveProgress = 4.8; await new Promise(r => setTimeout(r, 600)); return { downed: m.downed, vis: m.sprite.visible, hp: Math.round(m.hp / m.maxHp * 100) }; }, G);
+  ck('主将站在身边救起：带 40% 生命归队', !back.downed && back.vis && back.hp === 40, back);
   await p.close();
 }
 

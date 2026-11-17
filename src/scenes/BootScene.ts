@@ -12,6 +12,7 @@ import { applyHdHeroSheets } from '../systems/HdHeroSheets';
 import { warmIffTextures } from '../systems/IffOverlay';
 import { DRAG_ART_FILES } from '../data/dragArt';
 import { loadSkillFx } from '../systems/SkillFxSheets';
+import { loadEnvGround } from '../systems/EnvGround';
 import { RENDER_SCALE } from '../config';
 import { artStyle, v2Filter } from '../systems/ArtStyle';
 import { applyArtStyleUrls, applyV2TroopFrames, isV2Texture, rotateV2StandFrames } from '../systems/ArtStyle';
@@ -193,6 +194,8 @@ export class BootScene extends Phaser.Scene {
     loadSkillFx(this.load);
     // 场地环境互动 v2 道具（火油桶 / 四势力军旗 / 营帐 / 塌营帐，4×4、256 格）
     this.load.spritesheet('env_props', 'assets/env-v2/props.png', { frameWidth: 256, frameHeight: 256 });
+    // 地面与道路 v2（第二～五章）
+    loadEnvGround(this.load);
   }
 
   create(): void {

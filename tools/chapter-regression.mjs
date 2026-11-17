@@ -30,7 +30,7 @@ try {
     });
       check('chapter_definitions_and_boundaries', data.chapters[0].waves === 6 && data.chapters[0].hp === 2400 && data.chapters[1].waves === 8 && data.chapters[1].hp === 3200 && data.chapters.every(c => c.boundaries && c.recruits === 5) && data.active === 'hulao' && data.fallback === 'huangjin', data);
     const tint = await page.evaluate(() => { const s = window.__game.scene.getScene('GameScene'); s.setMode('pause'); const e = s.spawnEnemy('infantry', 100, 0, 1); const start = e.sprite.tintTopLeft; e.flash(s.combatNow); e.updateVisual(s.combatNow + 100); return { start, after: e.sprite.tintTopLeft, ground: s.ground.displayTexture.key, texture: e.sprite.texture.key }; });
-    check('chapter_faction_and_ground', tint.start === tint.after && tint.start === 0xffffff && tint.texture === 'xiliang_infantry_walk' && tint.ground.includes('hulao'), tint);
+    check('chapter_faction_and_ground', tint.start === tint.after && tint.start === 0xffffff && tint.texture === 'xiliang_infantry_walk' && (tint.ground.includes('hulao') || tint.ground.includes('ground_v2_guanzhong')), tint); // 地面 v2（环境互动 ④）：第二章改用关中黄土地面，缺图时退回 hulao 地面
   });
   await scenario('eight_wave_flow', async page => {
     await page.evaluate(() => window.__IM.god()); const seen = []; let recruitCount = 0, bossBeforeFinal;

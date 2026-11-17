@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import {actorDepth} from '../config';
+import {paintV2Ground, paintV2Road} from './EnvGround';
 import type {GuanduStage} from '../data/guanduChapter';
 import type {CampPoint} from './EnemyCamps';
 import type {DepotPoint} from './GrainDepots';
@@ -12,6 +13,8 @@ import type {DepotPoint} from './GrainDepots';
  */
 export function guanduScenery(scene: Phaser.Scene, stage: GuanduStage, spawnProp?: (frame: number, x: number, y: number, size: number) => void) {
   const key = 'guandu_ground_' + stage;
+  // 地面 / 路面 v2（环境互动第一批 ④）：河北平原 + 夯土车辙路（乌巢营地用木板道）；缺图退回下面的程序调色版
+  paintV2Ground(scene, key, 'ground_v2_hebei', stage === 3 ? 'rgba(10,16,30,.42)' : undefined);
   if (!scene.textures.exists(key)) {
     const tex = scene.textures.createCanvas(key, 512, 512)!; const g = tex.context; g.imageSmoothingEnabled = false;
     g.drawImage(scene.textures.get(stage === 1 ? 'ground_hulao' : 'ground_ai2').getSourceImage() as HTMLImageElement, 0, 0, 512, 512);
@@ -22,6 +25,7 @@ export function guanduScenery(scene: Phaser.Scene, stage: GuanduStage, spawnProp
     tex.refresh(); tex.setFilter(Phaser.Textures.FilterMode.NEAREST);
   }
   const roadKey = 'guandu_road_' + stage, roadWidth = 168;
+  paintV2Road(scene, roadKey, stage === 3 ? 'road_v2_plank' : 'road_v2_dirt', roadWidth, true, stage === 3 ? 'rgba(10,16,30,.35)' : undefined);
   if (!scene.textures.exists(roadKey)) {
     const road = scene.textures.createCanvas(roadKey, roadWidth, 512)!; const ctx = road.context; ctx.imageSmoothingEnabled = false;
     ctx.fillStyle = '#7d6a4c'; ctx.fillRect(0, 0, roadWidth, 512);

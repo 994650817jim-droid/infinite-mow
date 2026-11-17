@@ -13,9 +13,10 @@ function recolor(ctx: CanvasRenderingContext2D, w: number, h: number) {
   for (let i = 0; i < d.length; i += 4) {
     if (d[i + 3] < 8) continue;
     const r = d[i] / 255, g = d[i + 1] / 255, b = d[i + 2] / 255, max = Math.max(r, g, b), min = Math.min(r, g, b), v = max, delta = max - min, s = max ? delta / max : 0;
-    if (s < .32 || v < .14 || max !== r) continue;
+    if (s < .2 || v < .14 || max !== r) continue;
     let hue = 60 * (((g - b) / delta) % 6); if (hue < 0) hue += 360;
     if (hue > 18 && hue < 330) continue; // 只动红色系（肤色、铜金等偏橙黄的不动）
+    if (s < .32 && hue > 10 && hue < 330) continue; // v2 图的暗红 / 绛红饱和度低（.2~.32）：只收正红到洋红一段，棕色皮革不动
     // 红 → 土黄：保持明度，略降饱和
     const s2 = s * .82, c = v * s2, x = c * (1 - Math.abs((YUAN_HUE / 60) % 2 - 1)), m = v - c;
     const [r1, g1, b1] = YUAN_HUE < 60 ? [c, x, 0] : [x, c, 0];

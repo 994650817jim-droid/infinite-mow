@@ -3,6 +3,7 @@ import type { Enemy } from '../entities/Enemy';
 import type { Player } from '../entities/Player';
 import { DEPTH, FONT, GAME_HEIGHT, GAME_WIDTH, HEADING_FONT, actorDepth } from '../config';
 import { playSheet } from './SkillFxSheets';
+import { bossDeathKey } from './BossDeathArt';
 
 /**
  * 首领倒地 → 掉宝箱 → 主将走过去捡起遗物 → 才进下一阶段（用户 2026-11-17：「每次boss死亡后做个倒地动画，然后掉落宝箱，走过去会捡起遗物。然后才下一阶段」）。
@@ -24,9 +25,18 @@ export interface ChestHost {
 export const CHEST = { dropDelayMs: 1000, reach: 52, popupMs: 3200, arrowFrom: 150 } as const;
 
 /** 没有倒地帧的首领：受伤帧（v2 招式图集 14）→ 绕脚底向一侧倒下 → 扬尘 → 下沉淡出。返回倒地点。 */
-export function playBossFall(scene: Phaser.Scene, boss: Enemy, movesKey?: string): void {
+export function playBossFall(scene: Phaser.Scene, boss: Enemy, movesKey?: string, deathId?: string): void {
   const sp = boss.sprite, dir = sp.flipX ? -1 : 1;
   const img = scene.add.image(sp.x, sp.y, sp.texture.key, sp.frame.name).setOrigin(sp.originX, sp.originY).setScale(sp.scaleX, sp.scaleY).setFlipX(sp.flipX).setDepth(sp.depth).setName('boss-fall');
+  // 画风会话补的倒地 4 帧（张角 / 张梁 / 张宝 / 董卓 / 吕布）：受击后仰 → 倒地 → 躺倒 → 静止，每帧 160ms；倒地那一下扬尘，停一会儿再下沉淡出
+  const death = bossDeathKey(scene, deathId);
+  if (death) {
+    const h = Math.abs(sp.displayHeight); img.setTexture(death, 0).setOrigin(.5, 256 / 288).setScale(h / 288).setFlipX(dir < 0).setName('boss-fall-frames');
+    [1, 2, 3].forEach((f, i) => scene.time.delayedCall(160 * (i + 1), () => { if (!img.active) return; img.setFrame(f);
+      if (f === 2) { playSheet(scene, 'fx_collapse_dust', img.x, img.y - 6, { size: 190, ms: 650, depth: img.depth + .1, alpha: .85, originY: .62 }); scene.cameras.main.shake(140, .004); } }));
+    scene.tweens.add({ targets: img, y: img.y + 8, alpha: 0, delay: 160 * 3 + 900, duration: 700, onComplete: () => img.destroy() });
+    return;
+  }
   if (movesKey && scene.textures.exists(movesKey)) { const h = Math.abs(sp.displayHeight); img.setTexture(movesKey, 14).setOrigin(.5, 256 / 288).setScale(h / 288).setFlipX(dir < 0); }
   img.setTint(0xffd8c8);
   scene.tweens.add({ targets: img, rotation: dir * -1.35, y: img.y + 6, duration: 420, ease: 'Quad.easeIn', onComplete: () => {

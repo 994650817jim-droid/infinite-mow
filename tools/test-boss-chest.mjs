@@ -12,10 +12,11 @@ try {
     const p = await b.newPage({ viewport: { width: 1280, height: 720 } }); const errs = []; p.on('pageerror', e => errs.push(String(e)));
     const { scene } = await openBoss(p, BASE, boss);
     const ev = (fn, arg) => p.evaluate(([g, f, a]) => { const s = window.__game.scene.getScene(g); return new Function('s', 'a', 'return (' + f + ')(s,a)')(s, a); }, [scene, fn.toString(), arg]);
+    if (boss !== 'yuanshu') await p.waitForFunction(id => window.__game.scene.getScenes(true).some(s => s.textures?.exists('boss_death_' + id)), boss, { timeout: 8000 }).catch(() => {});
     const k = await ev(s => { s.__letDie = true; s.player.damageImmune = true; s.boss.sprite.setPosition(s.player.x + 260, s.player.y - 40); const relics = s.player.relics.length, loot = s.itemDrops?.runLoot.length ?? 0; s.killEnemy(s.boss);
-      return { relics, loot, chests: s.bossChests.length, fall: !!s.children.getByName('boss-fall'), mode: s.mode, over: s.over }; });
+      return { relics, loot, chests: s.bossChests.length, fall: !!s.children.getByName('boss-fall') || !!s.children.getByName('boss-fall-frames'), frames: !!s.children.getByName('boss-fall-frames'), mode: s.mode, over: s.over }; });
     ck(`${boss}：首领倒地后掉一个宝箱，没有直接结算`, k.chests === 1 && !k.over && k.mode !== 'result', k);
-    ck(`${boss}：倒地动画（${boss === 'yuanshu' ? '控制器自带倒地帧，不叠通用倒地' : '通用倒地：受伤帧倒下'}）`, boss === 'yuanshu' ? !k.fall : k.fall, k);
+    ck(`${boss}：倒地动画（${boss === 'yuanshu' ? '控制器自带倒地帧，不叠通用倒地' : '画风会话补的 4 帧倒地'}）`, boss === 'yuanshu' ? !k.fall : k.frames, k);
     await p.waitForTimeout(450); await p.screenshot({ path: `${OUT}/${boss}-fall.png` });
     await p.waitForTimeout(1100);
     const w = await ev(s => { const c = s.bossChests[0]; s.player.sprite.setPosition(c.x - 360, c.y + 120); const n = s.enemies.filter(e => e.active && !e.isSupplySlot).length; return { ready: c.ready, n, over: s.over }; });

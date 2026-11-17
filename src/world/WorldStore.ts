@@ -145,12 +145,13 @@ function applyIncome(s:WorldSave,eligible:boolean,merits:number,provisions:numbe
  if(!eligible)return{merits:0,provisions:battle,cityMerits:0,cityProvisions:0,season:null};
  const cities=s.ownedCities.map(id=>cityById(id)).filter((c):c is NonNullable<typeof c>=>!!c).map(c=>({...cityIncome(c.tier,s.cities[c.id]??emptyCityLevels()),mult:raidedNow(s).includes(c.id)?.5:1}));
  const troops=Object.values(s.reserve).reduce((n,v)=>n+(v||0),0),raided=raidedNow(s).map(id=>cityById(id)?.name??id);
- const r=settleSeason(s.town,{troops,cities,provisionsHave:s.provisions+battle,provisionsMultiplier:bonus});if(raided.length)r.raided=raided;refreshIntel(s);
+ const farmList=s.ownedCities.map(id=>{const c=cityById(id);if(!c)return null;const f=cityIncome(c.tier,s.cities[id]??emptyCityLevels()).farm;return f?{city:c.name,grain:Math.round(f*(raidedNow(s).includes(id)?.5:1)*bonus)}:null;}).filter((x):x is {city:string;grain:number}=>!!x);
+ const r=settleSeason(s.town,{troops,cities,provisionsHave:s.provisions+battle,provisionsMultiplier:bonus});if(raided.length)r.raided=raided;if(farmList.length)r.farms=farmList;refreshIntel(s);
  for(let i=0;i<r.cityTroops;i++){const k=i%2?'spearman':'swordsman';s.reserve[k]=Math.min(999,(s.reserve[k]??0)+1);}
  return{merits:0,provisions:battle+r.grain+r.cityGrain-r.upkeep,cityMerits:0,cityProvisions:r.cityGrain,season:r};}
 /** 结算面板上的营寨收成一行（无结算时为空）。 */
 export function cityIncomeLine(r:{cityProvisions?:number;season?:SeasonReport|null}):string{const q=r.season;if(!q)return r.cityProvisions?`\n城池产出 · 军粮 +${r.cityProvisions}`:'';
- return `\n营寨 · 农田 +${q.grain}${q.cityGrain?` · 城池 +${q.cityGrain}`:''}${q.cityTroops?` · 后备兵 +${q.cityTroops}`:''} · 口粮 −${q.upkeep}${q.shortage?`（缺 ${q.shortage}）`:''}${q.raided?.length?`\n流寇未平 · ${q.raided.join('、')}本次产出减半`:''}`;}
+ return `\n营寨 · 农田 +${q.grain}${q.cityGrain?` · 城池 +${q.cityGrain}`:''}${q.cityTroops?` · 后备兵 +${q.cityTroops}`:''} · 口粮 −${q.upkeep}${q.shortage?`（缺 ${q.shortage}）`:''}${q.farms?.length?`\n屯田供粮：${q.farms.map(f=>`${f.city} +${f.grain}`).join('、')}`:''}${q.raided?.length?`\n流寇未平 · ${q.raided.join('、')}本次产出减半`:''}`;}
 let expeditionSequence=0;
 /** LAN HTTP may omit randomUUID. IDs are local receipt keys, not authentication tokens. */
 export function createExpeditionId():string {

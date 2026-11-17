@@ -12,6 +12,10 @@ export const SKILL_FX: Readonly<Record<string, { file: string; cell: number; fra
   fx_flank_streak: { file: 'assets/skill-fx/flank_streak.png', cell: 256, frames: 6 },
   fx_strike_glint: { file: 'assets/skill-fx/strike_glint.png', cell: 128, frames: 6 },
   fx_windstep_burst: { file: 'assets/skill-fx/windstep_burst.png', cell: 192, frames: 6 },
+  // 场地环境互动（火油桶爆炸 / 地火循环 / 倒塌扬尘）
+  fx_explosion: { file: 'assets/skill-fx/explosion.png', cell: 256, frames: 6 },
+  fx_ground_fire: { file: 'assets/skill-fx/ground_fire.png', cell: 192, frames: 6 },
+  fx_collapse_dust: { file: 'assets/skill-fx/collapse_dust.png', cell: 256, frames: 6 },
 };
 
 export function loadSkillFx(load: Phaser.Loader.LoaderPlugin): void {

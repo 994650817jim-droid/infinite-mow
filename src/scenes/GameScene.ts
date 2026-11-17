@@ -92,6 +92,8 @@ import {HeroMount} from '../systems/HeroMount';
 import { DraggingBladeFx } from '../systems/DraggingBladeFx';
 import { FlankFx } from '../systems/FlankFx';
 import { WindstepFx } from '../systems/WindstepFx';
+import { EnvInteractions } from '../systems/EnvInteractions';
+import { envConfigFor } from '../data/envInteractions';
 import { IffOverlay, readIffMode, type IffUnit } from '../systems/IffOverlay';
 import type {ItemInstance} from '../data/items';
 import {armShield,absorbShield,ShieldBars} from '../systems/ShieldGuard';
@@ -164,6 +166,9 @@ export class GameScene extends Phaser.Scene {
   protected flankFx?: FlankFx;
   /** 战法踏风步表现（同上，拥有后首次用到时创建）。 */
   protected windFx?: WindstepFx;
+  /** 场地环境互动（火油桶 / 军旗 / 营帐）；首次更新时按场景与章节创建，场景重启时清空。 */
+  env: EnvInteractions | null = null;
+  private envInit = false;
   windstepFx(): WindstepFx { if (!this.windFx) { this.windFx = new WindstepFx(this, this.player, this.sfx); this.events.once('shutdown', () => { this.windFx?.destroy(); this.windFx = undefined; }); } return this.windFx; }
   flankBladeFx(): FlankFx { if (!this.flankFx) { this.flankFx = new FlankFx(this, this.player, this.sfx); this.events.once('shutdown', () => { this.flankFx?.destroy(); this.flankFx = undefined; }); } return this.flankFx; }
   /** 敌我区分叠加层（默认阵营色；设置开启描边；?iff=0 关闭）。 */
@@ -444,7 +449,7 @@ export class GameScene extends Phaser.Scene {
 
 
     this.player = new Player(this, 0, 0);
-    this.dragFx = undefined; this.flankFx = undefined; this.windFx = undefined;
+    this.dragFx = undefined; this.flankFx = undefined; this.windFx = undefined; this.env = null; this.envInit = false;
     this.applyRunConfig(this.runConfig);
     this.worldCampaign=!preview&&!isChapterTestRun()&&this.registry.get('worldCampaign')===true;
     this.hardMode=!preview&&this.registry.get('hardChapter')===this.hardKey()&&(chapterState(this.hardKey() as TimelineChapterId,loadWorldState())==='cleared'||isChapterTestRun());
@@ -761,6 +766,8 @@ export class GameScene extends Phaser.Scene {
 
     if(!this.over){this.itemDrops?.update();this.relics?.update(this.combatNow);this.relicShips?.update(this.combatNow);}
     this.supplies?.update(dt,time,this.battlefieldDetails.props,(enemy,damage)=>this.hitEnemy(enemy,damage,time,'fire',false,false),this.allies,(ally,damage,now)=>this.legion.hurt(ally,damage,now));
+    if(!this.envInit&&this.supplies){this.envInit=true;const cfg=envConfigFor(this.scene.key,this.chapter.id,(this as unknown as {guanduStage?:number}).guanduStage);if(cfg){const sup=this.supplies;this.env=new EnvInteractions({scene:this,player:this.player,supplies:sup,enemies:()=>this.enemies,allies:()=>this.allies,hitEnemy:(e,d)=>{this.hitEnemy(e,d,this.combatNow,'fire',false,false);},hurtAlly:(a,d)=>{this.legion.hurt(a,d,this.combatNow);},spawnEnemy:(x,y)=>this.spawnEnemy('infantry',x,y,undefined,true),spawnGem:(x,y,v)=>this.spawnGem(x,y,v),spawnChest:(x,y)=>{this.itemDrops?.spawnChest(x,y);},now:()=>this.combatNow,sfx:k=>this.sfx.play(k)},cfg);this.events.once('shutdown',()=>{this.env?.destroy();this.env=null;});}}
+    this.env?.update(dt);
     this.updateEnemies(dt, time);
     this.yellow?.update(dt,time);this.xiliang?.update(dt,this.combatNow);this.shieldBars?.draw(this.enemies);if(this.objective){this.objective.update(dt);this.objectiveText?.setText(this.objective.text);}
     for(const t of this.chasingBosses){if(t.enemy.active&&t.enemy.spawnId===t.life){t.battle?.update(dt,time);t.label.setPosition(t.enemy.x,t.enemy.y-100).setText(t.name+" · 追兵 "+Math.ceil(Math.max(0,t.enemy.hp)/t.enemy.maxHp*100)+"%");}}
@@ -1071,7 +1078,7 @@ export class GameScene extends Phaser.Scene {
             if (!enemy.active || enemy.spawnId !== spawnId || this.over) return;
             const p = enemy.targetAlly?.active && enemy.targetAlly.lifeId === enemy.targetLife ? enemy.targetAlly : this.player;
             this.sfx.play('enemyArrow');
-            this.fireBolt(this.bullets, enemy.x, enemy.y, p.x, p.y, enemy.def.damage, 0, false, 210);
+            this.fireBolt(this.bullets, enemy.x, enemy.y, p.x, p.y, enemy.def.damage*(this.env?.damageMul(enemy)??1), 0, false, 210);
           });
         }
       } else if (enemy.kind === 'cavalry') {
@@ -1144,7 +1151,7 @@ export class GameScene extends Phaser.Scene {
     // 出手（拉弓放箭、挥砍）期间原地站定，避免攻击帧边播边平移；首领与骑兵冲锋有各自的位移逻辑。
     if (enemy.kind !== 'boss' && enemy.kind !== 'cavalry' && enemy.attackUntil > this.combatNow) { enemy.moveVx = enemy.moveVy = 0; return; }
     const controlSpeed=this.controlBuild?.motion(enemy,this.combatNow,dt)??1;
-    const martialSpeed=controlSpeed*(enemy.kind!=='boss'&&this.combatNow<enemy.martialSlowUntil?enemy.martialSlow:1);
+    const martialSpeed=controlSpeed*(enemy.kind!=='boss'&&this.combatNow<enemy.martialSlowUntil?enemy.martialSlow:1)*(this.env?.speedMul(enemy)??1);
     enemy.sprite.x += (this.crowdSteering ? enemy.moveVx : nx * enemy.def.speed) * dt * martialSpeed;
     enemy.sprite.y += (this.crowdSteering ? enemy.moveVy : ny * enemy.def.speed) * dt * martialSpeed;
   }
@@ -1208,7 +1215,7 @@ export class GameScene extends Phaser.Scene {
       if (dist < player.radius + enemy.radius + 2) {
         enemy.contactCd = 1.0;
         this.feedback.attack(enemy, Math.atan2(player.y - enemy.y, player.x - enemy.x), this.combatNow);
-        if (player.takeDamage(enemy.def.damage, this.combatNow)) {
+        if (player.takeDamage(enemy.def.damage*(this.env?.damageMul(enemy)??1), this.combatNow)) {
           this.cameras.main.flash(90, 180, 40, 40, false);
         }
       }

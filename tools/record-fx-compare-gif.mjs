@@ -5,7 +5,7 @@ import { mkdirSync, readdirSync, rmSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 const base = process.env.BASE ?? 'http://127.0.0.1:5173/', out = 'assets/review/recruit', vid = out + '/video-fxcmp';
 const HEROES = (process.env.HEROES ?? 'guanyu,zhuge,huangyueying,sunshangxiang,machao,diaochan').split(',');
-const SEG = 2600;
+const SEG = Number(process.env.SEG ?? 2600), OUTNAME = process.env.NAME ?? 'fx-compare';
 rmSync(vid, { recursive: true, force: true }); mkdirSync(vid, { recursive: true });
 const rec = id => ({ id, kind: 'hero', hero: id, name: id, template: 'spear', quality: 'orange', rank: 1, picks: [] });
 const world = { version: 7, yellowStages: 3, dongzhuoStages: 3, warlordStages: 3, guanduStages: 0, worldAvailable: true, cleared: { huangjin: true, hulao: true }, merits: 0, provisions: 1000, buildings: { barracks: 1, farm: 1, clinic: 1 }, reserve: {}, receipts: [], nodes: ['home'], ownedCities: [], eraSeen: 2, capturedEver: [], alerts: [], lastLost: [], chapterSeen: 4 };
@@ -42,6 +42,6 @@ segs.forEach((s, i) => { ins.push('-ss', s.start.toFixed(2), '-t', (s.end - s.st
 const pairs = HEROES.map((_, k) => `[v${2 * k}][v${2 * k + 1}]hstack=inputs=2[h${k}]`);
 const concat = HEROES.map((_, k) => `[h${k}]`).join('') + `concat=n=${HEROES.length}:v=1:a=0[all]`;
 const pal = '[all]split[a][b];[a]palettegen=max_colors=96[pl];[b][pl]paletteuse=dither=bayer:bayer_scale=5[o]';
-execFileSync('ffmpeg', ['-y', ...ins, '-filter_complex', [...filt, ...pairs, concat, pal].join(';'), '-map', '[o]', out + '/fx-compare.gif'], { stdio: 'ignore' });
+execFileSync('ffmpeg', ['-y', ...ins, '-filter_complex', [...filt, ...pairs, concat, pal].join(';'), '-map', '[o]', out + '/' + OUTNAME + '.gif'], { stdio: 'ignore' });
 rmSync(vid, { recursive: true, force: true });
 console.log('gif ok', JSON.stringify(segs.map(s => [s.label, s.start.toFixed(1)])));

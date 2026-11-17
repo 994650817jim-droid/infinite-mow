@@ -69,6 +69,8 @@ assets/raw/*
 !/tools/test-follower-revive.mjs
 !/tools/record-revive-gif.mjs
 !/tools/record-fx-compare-gif.mjs
+!/tools/test-follower-sortie.mjs
+!/tools/record-sortie-gif.mjs
 !/tools/test-xiliang.mjs
 !/tools/test-new-heroes.mjs
 !/tools/test-weiyan-pangtong.mjs

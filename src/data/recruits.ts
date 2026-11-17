@@ -50,7 +50,14 @@ export const FOLLOW = {
   /** 紧贴跟随（用户 2026-11-16「一直紧紧跟随，像战锤幸存者那样」）：每人在主公身后有固定阵位，阵位随主公移动方向平滑转动。
    *  slotRadius 阵位离主公的距离；followK 追阵位的平滑系数（越大越紧，14 ≈ 跑动时只落后十来像素）；turnRate 阵位转向速度；
    *  lunge 近战出手时朝目标前出的距离（之后自动回位）；snap 离阵位超过这个距离直接归位（换图、复活等）。 */
-  slotRadius: 56, followK: 14, turnRate: 6, lunge: 22, snap: 160,
+  slotRadius: 56, followK: 14, turnRate: 6, lunge: 22, snap: 600,
+  /** 出击（用户 2026-11-17「如果按下出击，武将也会出击」，部曲 HUD 的 护阵 / 出击，快捷键 E）：随行离开阵位，
+   *  在主将 sortieSeek 像素内找敌人（首领 > 精锐 > 最近），以 sortieSpeed 冲过去；离主将最远 sortieLeash，超出沿方向收回；
+   *  攻击范围 ×sortieRangeMul（模板射程直接放大；名将经替身被动的范围倍率放大武器范围）。切回护阵即回阵位紧密跟随。 */
+  sortieSeek: 360, sortieLeash: 400, sortieSpeed: 260, sortieRangeMul: 1.3,
+  /** 随行带天赋被动（统筹按用户授权决定）：被动给的数值加成按 passiveScale 折算（待平衡会话复核）；
+   *  以主将为中心的群体效果（刘备仁德鼓舞）改为以随行为中心、半径 rallyRadius；被动 / 招牌特效每帧最多 heroFxPerFrame 个。 */
+  passiveScale: .5, rallyRadius: 240, heroFxPerFrame: 3,
   /** 倒地救援（用户 2026-11-17「跟随武将倒下要有受伤动作，需要你过去在倒下武将身边站着 5 秒，救起来才可以继续战斗」）：
    *  主将在 reviveRadius 像素内每秒 +1 秒进度，离开时每秒退 reviveDecay 秒（缓慢回退，不清零），满 reviveSec 秒救起，带 reviveHp 生命（待平衡会话复核）。
    *  取代原来的「撤下休整 20 秒、满血归队」。关卡结束还倒着的：下一场出征重新满血上阵（战后自动救起，不罚）。 */

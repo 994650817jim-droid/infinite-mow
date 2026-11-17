@@ -485,7 +485,7 @@ export class GameScene extends Phaser.Scene {
     this.supplies=new BattlefieldSupplies(this,this.player,this.enemies,()=>this.combatNow,kind=>{this.sfx.play('pickup');this.artEffects.show(5,this.player.x,this.player.y-12,35,this.combatNow,280);if(kind==='wine')this.relics?.onWine(this.combatNow);});
     // 兵装：开局读入该武将穿戴的道具加成（生命上限增加的部分补满）
     {const oldMax=this.player.maxHp;this.player.growth.gear=gearFor(this.runConfig.character);this.player.heal(this.player.maxHp-oldMax);}
-    this.followers=null;{const allow=worldUnlocked()&&(!isChapterTestRun()||new URLSearchParams(location.search).get('followers')==='1');const list=allow?followersFor(this.runConfig.character):[];if(list.length)this.followers=new FollowerSquad(this,this.player,list,(x,y,r)=>this.grid.query(x,y,r),(e,d,fire)=>this.hitEnemy(e,d,this.combatNow,fire?'fire':'melee',true,false),()=>this.player.growth.damageMultiplier(this.combatNow));}
+    this.followers=null;this.followerPassives=[];{const allow=worldUnlocked()&&(!isChapterTestRun()||new URLSearchParams(location.search).get('followers')==='1');const list=allow?followersFor(this.runConfig.character):[];if(list.length)this.followers=new FollowerSquad(this,this.player,list,(x,y,r)=>this.grid.query(x,y,r),(e,d,fire)=>this.hitEnemy(e,d,this.combatNow,fire?'fire':'melee',true,false),()=>this.player.growth.damageMultiplier(this.combatNow));}
     { const mode = readIffMode(); this.iff = mode ? new IffOverlay(this, mode, () => this.iffUnits()) : null; }
     this.shieldBars=new ShieldBars(this);this.events.once('shutdown',()=>{this.shieldBars?.clear();this.shieldBars=null;this.objective?.clear();this.objective=null;this.objectiveText=undefined;});
     this.setupObjective();
@@ -1070,7 +1070,7 @@ export class GameScene extends Phaser.Scene {
       enemy.frameStartY = enemy.y;
       if (!enemy.controlImmune && enemy.stunUntil > time) { enemy.moveVx = enemy.moveVy = enemy.intentDx = enemy.intentDy = 0; continue; }
       // 貂蝉「离间」：倒戈中的敌人不追主将，转身冲撞最近的同伴（逻辑在 CharacterPassives.driveTurned）
-      if (player.passive.driveTurned(enemy, dt, this.combatNow, (x, y, r) => this.grid.query(x, y, r), (t, n) => this.hitEnemy(t, n, this.combatNow, 'melee', true, false))) { enemy.contactCd = Math.max(0, enemy.contactCd - dt); continue; }
+      if (player.passive.driveTurned(enemy, dt, this.combatNow, (x, y, r) => this.grid.query(x, y, r), (t, n) => this.hitEnemy(t, n, this.combatNow, 'melee', true, false)) || this.followerPassives.some(fp => fp.driveTurned(enemy, dt, this.combatNow, (x, y, r) => this.grid.query(x, y, r), (t, n) => this.hitEnemy(t, n, this.combatNow, 'melee', true, false)))) { enemy.contactCd = Math.max(0, enemy.contactCd - dt); continue; }
       enemy.contactCd = Math.max(0, enemy.contactCd - dt);
       enemy.shootCd -= dt;
       enemy.dashCd -= dt;
@@ -1241,7 +1241,7 @@ export class GameScene extends Phaser.Scene {
     for (const enemy of this.enemies) {
       if (!enemy.active || (enemy.def.behavior==='wall'||enemy.isSupplySlot) || enemy.contactCd > 0) continue;
       if (enemy === this.boss && this.lubu && this.lubu.state !== 'approach') continue;
-      if (player.passive.isTurned(enemy, this.combatNow)) continue; // 倒戈中的敌人不撞主将
+      if (player.passive.isTurned(enemy, this.combatNow) || this.followerPassives.some(fp => fp.isTurned(enemy, this.combatNow))) continue; // 倒戈中的敌人不撞主将（含随行貂蝉魅惑的）
       const dist = Math.hypot(player.x - enemy.x, player.y - enemy.y);
       if (dist < player.radius + enemy.radius + 2) {
         enemy.contactCd = 1.0;
@@ -1538,6 +1538,11 @@ export class GameScene extends Phaser.Scene {
     if (source === 'arrow') this.artEffects.show(3, enemy.x, enemy.y - 8, 32, time, 120);
     this.feedback.hit(enemy.x, enemy.y, Math.atan2(enemy.y - fromY, enemy.x - fromX), time, source);
   }
+  /** 随行带的天赋被动（敌人倒戈 / 易伤由场景统一驱动）；每场重建。 */
+  followerPassives: CharacterPassives[] = [];
+  /** 随行招牌 / 被动特效（hero_fx）每帧限额 FOLLOW.heroFxPerFrame。 */
+  private followerHeroFx = { at: -1, n: 0 };
+  followerFxBudget(): boolean { if (this.followerHeroFx.at !== this.combatNow) { this.followerHeroFx.at = this.combatNow; this.followerHeroFx.n = 0; } return this.followerHeroFx.n++ < FOLLOW.heroFxPerFrame; }
   /** 随行出手当帧新建的特效放进这个半透明图层，和主将的攻击区分开（FOLLOW.fxAlpha）。 */
   private followerFxLayer?: Phaser.GameObjects.Layer;
   /**
@@ -1548,7 +1553,12 @@ export class GameScene extends Phaser.Scene {
   createFollowerWeapon(f: Follower, squad: FollowerSquad): ((dt: number, now: number) => void) | null {
     const hero = f.recruit.hero; if (!hero) return null;
     const id = getCharacter(hero).startWeapon, behave = WEAPON_BEHAVIORS[id]; if (!behave) return null;
-    const scene = this, passive = new CharacterPassives(hero, this.combatNow); passive.stop();
+    // 随行带自己的天赋被动（统筹按用户授权决定，2026-11-17）：被动给的数值加成按 FOLLOW.passiveScale 折算（待平衡会话复核）
+    const scene = this, passive = new CharacterPassives(hero, this.combatNow), h = FOLLOW.passiveScale;
+    { const cast = passive.beginCast.bind(passive), range = passive.rangeMultiplier.bind(passive);
+      passive.beginCast = w => { const c = cast(w); c.damageMul = 1 + (c.damageMul - 1) * h; if (c.empowered && c.radiusMul !== passive.rangeMultiplier(w)) c.radiusMul = (1 + (c.radiusMul - 1) * h) * passive.areaMul; /* 招牌技改写的范围才折算（叠层范围已在 rangeMultiplier 里折过） */ c.spearLengthMul = 1 + (c.spearLengthMul - 1) * h; c.heal *= h; c.rally *= h; return c; };
+      passive.rangeMultiplier = w => { const a = passive.areaMul; passive.areaMul = 1; const v = range(w); passive.areaMul = a; return (1 + (v - 1) * h) * a; }; }
+    f.passive = passive; this.followerPassives.push(passive);
     const stats: PlayerStats = { damageMul: f.weaponDamageMul, cooldownMul: f.weaponCooldownMul, moveMul: 1, critChance: 0, regen: 0, pickupRadius: 0, armor: 0, maxHpBonus: 0, meleeMul: 1, arrowMul: 1, fireMul: 1, fireAreaMul: FOLLOW.heroAreaMul, damageTakenMul: 1 };
     const puppet = {
       get x() { return f.x; }, get y() { return f.y; }, get sprite() { return f.sprite; }, stats, growth: new RunGrowth(hero), passive,
@@ -1566,14 +1576,16 @@ export class GameScene extends Phaser.Scene {
       get player() { return puppet; }, get enemies() { return scene.enemies; }, get grid() { return scene.grid; }, get add() { return scene.add; }, get time() { return scene.time; },
       get combatNow() { return scene.combatNow; }, get cameras() { return scene.cameras; }, get sfx() { return scene.sfx; }, get over() { return scene.over; },
       get spearShots() { return shots; }, get bolts() { return scene.bolts; },
-      hitEnemy: (e, d, now, src) => { const n = d * squad.share, live = e.active && !e.invulnerable; const ok = scene.hitEnemy(e, n, now, src, true, false); if (live) { squad.credit(f, n); scene.followerHitFx(e, f.x, f.y, now, src); } return ok; },
+      hitEnemy: (e, d, now, src) => { const n = d * squad.share, live = e.active && !e.invulnerable; const ok = scene.hitEnemy(e, n, now, src, true, false); if (live) { squad.credit(f, n); scene.followerHitFx(e, f.x, f.y, now, src); passive.onWeaponHit(now); if (!e.active) passive.onKill(e.kind, now); } return ok; },
+      // 刘备仁德鼓舞：以随行自己为中心、半径 FOLLOW.rallyRadius（主将版是全军）；部曲与其他随行都算
+      rallyAllies: (fraction: number) => { const r = FOLLOW.rallyRadius; for (const u of scene.allies) if (u.active && Math.hypot(u.x - f.x, u.y - f.y) <= r) u.hp = Math.min(u.maxHp, u.hp + u.maxHp * fraction); for (const m of squad.members) if (!m.downed && Math.hypot(m.x - f.x, m.y - f.y) <= r) m.hp = Math.min(m.maxHp, m.hp + m.maxHp * fraction); },
       nearestEnemy: (x, y, r) => scene.nearestEnemy(x, y, r),
       fireBolt: (pool, x, y, tx, ty, damage, bounce, fromPlayer, speed) => { scene.boltAlly = ally; try { scene.fireBolt(pool, x, y, tx, ty, damage * squad.share, bounce, fromPlayer, speed); } finally { scene.boltAlly = undefined; } },
       spawnGuandaoSlash: (angle, alpha, size, duration) => scene.spawnGuandaoSlashAt(f.x, f.y, hero, angle, alpha * FOLLOW.fxAlpha, size, duration, FOLLOW.fxAlpha),
       spawnFlagSwingFx: (dx, dy) => scene.spawnFlagSwingFxAt(f.x, f.y, dx, dy),
       spawnFlameGatherFx: (...args) => scene.spawnFlameGatherFx(...args),
       spawnFlameFx: (...args) => scene.spawnFlameFx(...args),
-      heroFx: (fid: string, x: number, y: number, size: number, rotation = 0) => scene.playHeroFx(fid, x, y, size * FOLLOW.heroAreaMul, rotation),
+      heroFx: (fid: string, x: number, y: number, size: number, rotation = 0) => { if (scene.followerFxBudget()) scene.playHeroFx(fid, x, y, size * FOLLOW.heroAreaMul, rotation); },
       // 场地火（诸葛亮烧地、庞统火环）：每名随行自己一套，伤害记到随行名下；数量由 MartialFields 自身上限约束
       martialField: (...args) => fields.add(...args),
     };
@@ -1583,6 +1595,8 @@ export class GameScene extends Phaser.Scene {
     return (dt, now) => {
       if (!this.over) fields.update(dt);
       if (f.resting || this.over) return;
+      // 被动的每帧结算（诸葛亮灼烧等），伤害记到随行名下
+      if (this.mode === 'none') passive.update(now, (e, amount) => host.hitEnemy(e, amount, now, 'fire'));
       const list = this.children.list, before = list.length;
       behave(host, state, dt, now);
       // 当帧新建的特效挪进半透明图层（共用的箭矢对象池除外）
@@ -1610,7 +1624,7 @@ export class GameScene extends Phaser.Scene {
     else this.sfx.play('hitLight');
     if (enemy === this.boss && this.lubu) rawDamage *= this.lubu.incomingDamageMultiplier(source, time);
     if (enemy === this.boss && this.zhangjiao) rawDamage *= this.zhangjiao.takenMul;
-    rawDamage *= this.player.passive.vulnerability(enemy, time); // 貂蝉倾城：易伤（部曲伤害同样吃加成）
+    { let v = this.player.passive.vulnerability(enemy, time); for (const fp of this.followerPassives) v = Math.max(v, 1 + (fp.vulnerability(enemy, time) - 1) * FOLLOW.passiveScale); rawDamage *= v; } // 貂蝉倾城：易伤（部曲伤害同样吃加成；随行貂蝉的按随行系数折算）
     const firstStrike = !fromAlly && weaponHit && !!this.relics?.firstStrike(enemy);
     const crit = firstStrike || weaponHit && Math.random() < Math.min(0.65, this.player.stats.critChance + this.player.growth.criticalBonus() + (!fromAlly ? this.player.passive.critBonus(time) + this.player.growth.aimCriticalBonus() + this.buildCombat.criticalBonus() : 0));
     if(!fromAlly&&weaponHit)rawDamage=this.buildCombat.damage(enemy,rawDamage,crit,time);

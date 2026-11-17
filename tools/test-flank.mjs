@@ -1,6 +1,6 @@
-// 战法「迂回袭」表现（src/systems/FlankFx.ts 第二版：克制、细长侧袭，?flankfx=a 月白弧光 / b 侧袭残影）：
-// 蓄力只在过半后脚跟留细微提示；蓄满身侧一粒星点慢闪 + 轻响；触发至多 2 道细长侧袭，被波及的敌人各一个小闪点，
-// 0.35 秒内清干净；伤害判定不变（追击 35/45/55%）。电脑布局 1280×720，逐帧 game.step。截图存 assets/review/flank/<a|b>/。
+// 战法「迂回袭」表现（src/systems/FlankFx.ts 第三版：手绘序列帧 flank_streak / strike_glint）：蓄力不提示；蓄满身侧小星芒慢闪 + 轻响；
+// 触发一道月白侧袭弧光、被波及的敌人各一个星芒，0.5 秒内清干净；伤害判定不变（追击 35/45/55%）。
+// 电脑布局 1280×720，逐帧 game.step。截图存 assets/review/flank/sheets/。
 // 需要开发服务器。用法：BASE=http://127.0.0.1:5197/ node tools/test-flank.mjs
 import { chromium } from 'playwright';
 import { mkdirSync } from 'node:fs';
@@ -9,11 +9,11 @@ let pass = 0, fail = 0; const errors = [];
 const ck = (n, ok, d) => { ok ? pass++ : fail++; console.log((ok ? 'PASS ' : 'FAIL ') + n + (d !== undefined ? ' · ' + JSON.stringify(d).slice(0, 400) : '')); };
 const G = "window.__game.scene.getScene('GameScene')";
 const b = await chromium.launch({ channel: 'chrome', headless: true });
-for (const style of (process.env.STYLES ?? 'a,b').split(',')) {
+for (const style of ['sheets']) {
   const out = `assets/review/flank/${style}`; mkdirSync(`${out}/frames`, { recursive: true });
   const p = await b.newPage({ viewport: { width: 1280, height: 720 } });
   p.on('pageerror', e => errors.push(style + ' ' + e.message)); p.on('console', m => { if (m.type() === 'error') errors.push(style + ' ' + m.text()); });
-  await p.goto(base + `?dev=1&autostart=1&stage=1&layout=desktop&flankfx=${style}`);
+  await p.goto(base + `?dev=1&autostart=1&stage=1&layout=desktop`);
   await p.waitForFunction(() => window.__game?.scene.getScene('GameScene')?.player && window.__game.scene.getScene('GameScene').__DEV_ACTIONS, null, { timeout: 90000 });
   await p.waitForTimeout(1500);
   await p.evaluate(G0 => {
@@ -26,18 +26,18 @@ for (const style of (process.env.STYLES ?? 'a,b').split(',')) {
   }, G);
   const step = (n, hold = true) => p.evaluate(([a, h]) => window.__step(a, h), [n, hold]);
   const shot = async (name, w = 330, h = 220, dx = 0) => { const r = await p.evaluate(() => window.__clip()); await p.screenshot({ path: `${out}/${name}.png`, clip: { x: Math.max(0, r.x + dx * r.k - w * r.k / 2), y: Math.max(0, r.y - h * r.k * .55), width: w * r.k, height: h * r.k } }); };
-  const fx = () => p.evaluate(G0 => { const s = eval(G0), f = s.flankFx, c = s.buildCombat.flankCharge(); return { ...c, ratio: +c.ratio.toFixed(2), ...(f ? { ...f.stats, style: f.style, ready: f.isReady, glint: !!s.children.getByName('flank-ready-glint')?.visible, visible: f.visibleCount } : {}) }; }, G);
+  const fx = () => p.evaluate(G0 => { const s = eval(G0), f = s.flankFx, c = s.buildCombat.flankCharge(); return { ...c, ratio: +c.ratio.toFixed(2), ...(f ? { ...f.stats, ready: f.isReady, visible: s.children.list.filter(o => o.name === 'flank-streak' || o.name === 'flank-ready-glint').length } : {}) }; }, G);
 
   for (const lv of [1, 3]) {
     await p.evaluate(([G0, l]) => { const s = eval(G0); s.player.growth.build.tactics = { flank: l }; window.__sfx.length = 0; }, [G, lv]);
     await p.evaluate(() => window.__v.set(1, 0));
     await step(20);
     const early = await fx();
-    ck(`${style} Lv${lv}：蓄力前半没有任何提示（克制）`, early.style === style && early.ratio < .5 && !early.ready && !early.glint && early.visible === 0, early);
+    ck(`${style} Lv${lv}：蓄力时没有任何提示（克制）`, early.ratio < 1 && !early.ready && early.visible === 0, early);
     if (lv === 3) for (let i = 0; i < 6; i++) { await step(4); await shot(`frames/charge-${String(i).padStart(2, '0')}`); }
     await step(80);
     const full = await fx(), sfx = await p.evaluate(() => [...new Set(window.__sfx)]);
-    ck(`${style} Lv${lv}：蓄满——过半后脚跟有细微提示，蓄满身侧一粒星点 + 轻响`, full.ratio === 1 && full.ready && full.glint && full.motes > 0 && sfx.includes('flankReady'), { full, sfx });
+    ck(`${style} Lv${lv}：蓄满——身侧小星芒慢闪 + 轻响`, full.ratio === 1 && full.ready && full.blinks > 0 && sfx.includes('flankReady'), { full, sfx });
     await p.evaluate(() => window.__v.set(0, 0)); await step(12);
     if (lv === 3) await shot('ready');
     const res = await p.evaluate(G0 => {
@@ -51,7 +51,7 @@ for (const style of (process.env.STYLES ?? 'a,b').split(',')) {
     const after = await fx(), sfx2 = await p.evaluate(() => [...new Set(window.__sfx)]);
     // 触发后 30 帧（0.5 秒）内应已全部消失；扫 / 插的道数 ≤2
     const sweeps = after.sweeps - res.sweeps, hits = after.hits - res.hits;
-    ck(`${style} Lv${lv}：触发——至多 2 道细长侧袭、被波及的 1–3 人各一个闪点，0.5 秒内清干净；星点收起`, after.strikes === res.strikes + 1 && sweeps >= 1 && sweeps <= 2 && hits >= 1 && hits <= 3 && after.visible === 0 && !after.glint && sfx2.includes('flankStrike'), { sweeps, hits, visible: after.visible, struckAtFrame: struck });
+    ck(`${style} Lv${lv}：触发——一道月白侧袭弧光、被波及的 1–3 人各一个星芒，0.5 秒内清干净`, after.strikes === res.strikes + 1 && sweeps === 1 && hits >= 1 && hits <= 3 && after.visible === 0 && !after.ready && sfx2.includes('flankStrike'), { sweeps, hits, visible: after.visible, struckAtFrame: struck });
     const hitsDmg = await p.evaluate(() => window.__hits), derived = hitsDmg.filter(h => !h.weapon), main = hitsDmg.filter(h => h.weapon);
     const ratio = derived.length && main.length ? +(Math.max(...derived.map(h => h.dmg)) / Math.min(...main.map(h => h.dmg))).toFixed(2) : 0;
     ck(`${style} Lv${lv}：追击伤害仍为 ${[35, 45, 55][lv - 1]}%`, derived.length >= 1 && Math.abs(ratio - [.35, .45, .55][lv - 1]) < .06, { derived: derived.length, ratio });

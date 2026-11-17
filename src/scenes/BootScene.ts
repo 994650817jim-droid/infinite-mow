@@ -11,6 +11,7 @@ import { HERO_ACTION_FILES } from '../data/heroActions';
 import { applyHdHeroSheets } from '../systems/HdHeroSheets';
 import { warmIffTextures } from '../systems/IffOverlay';
 import { DRAG_ART_FILES } from '../data/dragArt';
+import { loadSkillFx } from '../systems/SkillFxSheets';
 import { RENDER_SCALE } from '../config';
 import { artStyle, v2Filter } from '../systems/ArtStyle';
 import { applyArtStyleUrls, applyV2TroopFrames, isV2Texture, rotateV2StandFrames } from '../systems/ArtStyle';
@@ -186,6 +187,8 @@ export class BootScene extends Phaser.Scene {
     applyArtStyleUrls(this.load);
     // 关羽拖刀斩专属图（拖刀行走 / 拖刀上撩，src/data/dragArt.ts）：只在 v2 画风、且已登记文件时加载
     if (artStyle() === 'v2') for (const [key, file] of Object.entries(DRAG_ART_FILES)) this.load.image(key, file);
+    // 技艺 / 战法手绘特效序列帧（拖刀斩、迂回袭、踏风步；public/assets/skill-fx/）
+    loadSkillFx(this.load);
   }
 
   create(): void {

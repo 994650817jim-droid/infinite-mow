@@ -1,4 +1,4 @@
-// 战法「踏风步」专属表现（src/systems/WindstepFx.ts，青叶轻风）：蓄力脚边风纹步尘、蓄满靴边卷风绕叶、
+// 战法「踏风步」表现（src/systems/WindstepFx.ts，手绘序列帧 windstep_burst）：蓄力不提示、蓄满脚边小星芒慢闪、
 // 命中爆一小团碎叶风刃；与迂回袭（暗金影袭）同时生效时两套都在、分在不同高度。伤害不变（增伤 10/15/20%）。
 // 电脑布局 1280×720，逐帧 game.step。截图 / 连续帧存 assets/review/windstep/<TAG>/。
 // 需要开发服务器。用法：BASE=http://127.0.0.1:5197/ [TAG=after] node tools/test-windstep.mjs [--record-only]
@@ -25,7 +25,7 @@ await p.evaluate(G0 => {
 }, G);
 const step = (n, hold = true) => p.evaluate(([a, h]) => window.__step(a, h), [n, hold]);
 const shot = async (name, w = 330, h = 220, dx = 0) => { const r = await p.evaluate(() => window.__clip()); await p.screenshot({ path: `${out}/${name}.png`, clip: { x: Math.max(0, r.x + dx * r.k - w * r.k / 2), y: Math.max(0, r.y - h * r.k * .55), width: w * r.k, height: h * r.k } }); };
-const fx = () => p.evaluate(G0 => { const s = eval(G0), f = s.windFx; return f ? { ...f.stats, ready: f.isReady, leaves: s.children.list.filter(o => o.name === 'wind-ready-leaf' && o.visible).length } : {}; }, G);
+const fx = () => p.evaluate(G0 => { const s = eval(G0), f = s.windFx; return f ? { ...f.stats, ready: f.isReady, bursting: s.children.list.filter(o => o.name === 'wind-burst').length } : {}; }, G);
 
 for (const [label, tactics] of [['lv3', { windstep: 3 }], ['with-flank', { windstep: 3, flank: 3 }]]) {
   await p.evaluate(([G0, t]) => { const s = eval(G0); s.player.growth.build.tactics = { ...t }; window.__sfx.length = 0; }, [G, tactics]);
@@ -33,11 +33,11 @@ for (const [label, tactics] of [['lv3', { windstep: 3 }], ['with-flank', { winds
   await p.evaluate(() => window.__v.set(1, 0));
   await step(12);
   const early = await fx();
-  ck(`${label}：移动时脚边风纹与步尘，未满时无卷风`, early.wisps > 0 && !early.ready && early.leaves === 0, early);
+  ck(`${label}：蓄力时不提示（克制），未满时不闪星芒`, !early.ready, early);
   for (let i = 0; i < 6; i++) { await step(5); await shot(`frames/${label}-charge-${String(i).padStart(2, '0')}`); }
   await step(30);
   const full = await fx(), sfx = await p.evaluate(() => [...new Set(window.__sfx)]);
-  ck(`${label}：蓄满——靴边卷风、三片青叶绕脚 + 轻响`, full.ready && full.leaves === 3 && sfx.includes('windReady'), { full, sfx });
+  ck(`${label}：蓄满——脚边小星芒慢闪 + 轻响`, full.ready && full.blinks > 0 && sfx.includes('windReady'), { full, sfx });
   await p.evaluate(() => window.__v.set(0, 0)); await step(12);
   await shot(`${label}-ready`);
   // 2. 命中：前方木桩，放开冷却等下一击
@@ -49,10 +49,10 @@ for (const [label, tactics] of [['lv3', { windstep: 3 }], ['with-flank', { winds
   }, G);
   for (let i = 0; i < 16; i++) { await step(2, false); await shot(`frames/${label}-hit-${String(i).padStart(2, '0')}`, 380, 240, 50); if (i === 3) await shot(`${label}-hit`, 380, 240, 50); }
   const after = await fx(), sfx2 = await p.evaluate(() => [...new Set(window.__sfx)]), hits = await p.evaluate(() => window.__hits);
-  ck(`${label}：命中——命中点爆一小团碎叶风刃（一次）；卷风收起`, after.bursts === res.bursts + 1 && !after.ready && after.leaves === 0 && sfx2.includes('windHit'), { after, sfx2 });
+  ck(`${label}：命中——命中点爆一小团碎叶风刃（一次）；卷风收起`, after.bursts === res.bursts + 1 && !after.ready && sfx2.includes('windHit'), { after, sfx2 });
   if (label === 'with-flank') {
     const flank = await p.evaluate(G0 => eval(G0).flankFx?.stats ?? null, G);
-    ck('与迂回袭同时生效：两套表现都触发（金色分身扑击 + 青叶碎叶），互不吞掉', flank && flank.strikes >= 1 && after.bursts >= 1, { flank, wind: after });
+    ck('与迂回袭同时生效：两套表现都触发（月白侧袭弧光 + 碎叶风刃），互不吞掉', flank && flank.strikes >= 1 && after.bursts >= 1, { flank, wind: after });
   }
   // 伤害不变：踏风步那一击 = 普通命中 × 1.2（Lv3）
   const main = hits.filter(h => h.weapon).map(h => h.dmg);

@@ -46,10 +46,10 @@ await p.evaluate(G0 => {
 await p.evaluate(() => window.__v.set(1, 0));
 rows = await step(30);
 const tip = await p.evaluate(G0 => { const s = eval(G0), t = s.dragFx.tip(); return { dx: Math.round(t.x - s.player.x), dy: Math.round(t.y - s.player.y) }; }, G);
-ck('有拖刀图：移动时换拖刀行走，火星位置改到拖刀图的刀尖（右行 DRAG_TIP.right）', rows.slice(2).every(r => r.drag && r.tex === 'guanyu_drag_walk_sheet') && tip.dx === -34 && tip.dy === 24, { texs: texs(rows), tip });
+ck('有拖刀图：移动时换拖刀行走，火星位置改到拖刀图的刀尖（右行 DRAG_TIP.right）', rows.slice(2).every(r => r.drag && r.tex === 'guanyu_drag_walk_sheet') && tip.dx === -42 && tip.dy === 27, { texs: texs(rows), tip });
 await p.evaluate(() => window.__v.set(-1, 0)); rows = await step(20);
 const tipL = await p.evaluate(G0 => { const s = eval(G0), t = s.dragFx.tip(); return { dx: Math.round(t.x - s.player.x), dy: Math.round(t.y - s.player.y), frame: s.player.sprite.frame.name }; }, G);
-ck('拖刀行走朝左：用左行帧，刀尖在身后右侧', rows.slice(4).every(r => r.drag && r.frame.startsWith('left_')) && tipL.dx === 34, tipL);
+ck('拖刀行走朝左：用左行帧，刀尖在身后右侧', rows.slice(4).every(r => r.drag && r.frame.startsWith('left_')) && tipL.dx === 38, tipL);
 // 4. 停下：恢复普通行走图站立帧
 await p.evaluate(() => window.__v.set(0, 0)); rows = await step(10);
 ck('停下：恢复普通行走图（站立帧）', rows.slice(1).every(r => !r.drag && /guanyu_walk_sheet/.test(r.tex)), rows.slice(-1));

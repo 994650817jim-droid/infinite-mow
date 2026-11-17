@@ -9,8 +9,8 @@ import type { CharacterId } from './characters';
  * 只在人物画风 v2 下使用（v1 Q 版配不上写实拖刀图）。
  */
 export const DRAG_ART_FILES: Readonly<Record<string, string>> = {
-  // guanyu_drag_walk_sheet: 'assets/processed-v2/guanyu_drag_walk_sheet.png',
-  // guanyu_drag_slash: 'assets/processed-v2/guanyu_drag_slash.png',
+  guanyu_drag_walk_sheet: 'assets/processed-v2/guanyu_drag_walk_sheet.png',
+  guanyu_drag_slash: 'assets/processed-v2/guanyu_drag_slash.png',
 };
 
 /** 拖刀行走图（按武将）。 */
@@ -23,8 +23,8 @@ export const DRAG_SLASH_WEIGHTS = [.18, .16, .4, .26] as const;
 
 /**
  * 拖刀行走时刀尖着地点（相对主将位置的世界像素，按画面朝向）。
- * 按拖刀行走图实测刀尖位置填写；图到位前先用估计值（右行时刀尖在身后约 34px、脚底高度）。
+ * 按拖刀行走图（guanyu_drag_walk_sheet，ChatGPT 2026-11-16 21:24 出图）实测 4 帧刀尖着地点的平均值：格内坐标 → 世界（0.5 倍、锚点在格第 107 行）。
  */
 export const DRAG_TIP: Record<'down' | 'up' | 'left' | 'right', readonly [number, number]> = {
-  right: [-34, 24], left: [34, 24], down: [22, 26], up: [-22, 22],
+  right: [-42, 27], left: [38, 27], down: [-40, 28], up: [37, 29],
 };

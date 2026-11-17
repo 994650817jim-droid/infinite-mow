@@ -491,7 +491,9 @@ export const WEAPON_BEHAVIORS: Record<WeaponId, (host: WeaponHost, weapon: Weapo
       for (const enemy of candidates) {
         if (!enemy.active) continue;
         const dist = Math.hypot(enemy.x - cx, enemy.y - cy);
-        if (dist <= radius + enemy.radius && host.hitEnemy(enemy, damage, host.combatNow, 'fire')) host.player.passive.recordHit(passiveCast, enemy, host.combatNow, damage);
+        // 火攻焚将：首领 / 精锐 ×1.8（灼烧仍按基础爆炸伤害算，不跟着翻倍）
+        const hit = enemy.kind === 'boss' || enemy.kind === 'elite' ? damage * PASSIVE_RULES.flameEliteMul : damage;
+        if (dist <= radius + enemy.radius && host.hitEnemy(enemy, hit, host.combatNow, 'fire')) host.player.passive.recordHit(passiveCast, enemy, host.combatNow, damage);
       }
     });
     weapon.cooldownLeft = Math.max(.25, def.cooldown(level, host.player.stats) / host.player.growth.attackSpeedMultiplier(host.combatNow));

@@ -89,3 +89,7 @@ fx_c 四行依次为：
 
 ## 2026-11-16 马超虎头湛金枪像素特效（用户：「马超挑起也要一点特效」「朝着头前冲锋」）
 - hero-fx/machao_fx.png：6×4，每帧 256，透明底（洋红底抠图，淡出帧的洋红溢色拉回土黄）。第 1 行枪尖上挑弧光、第 2 行落地砸地扬尘碎石、第 3 行冲锋尘土拖影、第 4 行枪尖破风。原图 originals/machao_fx_raw.png（ChatGPT「生成游戏特效精灵表」）。缺图时退回旧的枪影 / 程序尘点。
+
+## 2026-11-16 貂蝉 v2 新模型（更美）+ 孙尚香写实立绘（用户要求）
+- 貂蝉：ChatGPT 新出行走 / 动作原图 processed-v2/originals/artv2_diaochan_walk_v2b.png、hero-actions-v2/originals/artv2_diaochan_actions_v2b.png，按 prepare-artv2（KEYHARD=160 KEYSOFT=130）出 processed-v2/diaochan_walk_sheet.png、hero-actions-v2/diaochan.png。旧版留在 processed-v2/originals/diaochan_walk_sheet_v2a.png、hero-actions-v2/originals/diaochan_v2a.png；旧原图 artv2_diaochan_*.png 不动。主页立绘没换（和新模型差别不大）。
+- 孙尚香：主页立绘改回写实厚涂（originals/sunshangxiang_epic.png 新；上一版像素风改名 sunshangxiang_epic_v2a.png；最早的弓箭版 sunshangxiang_epic_v1.png），重出 epic-home/sunshangxiang.png/.webp 与选将头像 processed/sunshangxiang_portrait.png。

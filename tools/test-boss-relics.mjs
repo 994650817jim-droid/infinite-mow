@@ -30,7 +30,7 @@ const data = await p.evaluate(async () => {
   out.noDup = it.BOSS_RELICS.every(x => !it.BASE_ITEMS.some(b => b.id === x.id) && !it.LEGENDS.some(l => l.id === x.id));
   return out;
 });
-ck('首批 10 件遗珍：第一章紫、其余橙；都在 4 个兵装槽里；不与现有 66 件重名', data.n === 10 && data.q.slice(0, 2).every(q => q === 'purple') && data.q.slice(2).every(q => q === 'orange') && JSON.stringify(data.slots) === '["helm","token"]' && data.noDup, data);
+ck('首批 10 件遗珍：第一章紫、其余橙；都放「Boss遗物」槽；不与现有 66 件重名', data.n === 10 && data.q.slice(0, 2).every(q => q === 'purple') && data.q.slice(2).every(q => q === 'orange') && JSON.stringify(data.slots) === '["relic"]' && data.noDup, data);
 ck('关卡键覆盖张梁、张角、华雄、董卓、吕布挑战、张绣、袁术、淳于琼、曹纯、蔡瑁', JSON.stringify(data.stages) === JSON.stringify(['huangjin-1', 'huangjin-3', 'hulao-1', 'hulao-3', 'lubu', 'third-2', 'third-3', 'guandu-3', 'chibi-1', 'chibi-2']), data.stages);
 ck('生成遗珍：固定 2 条词条 + 1 条随机小词条 + 专属机制', data.roll.base === 'relic_jiujie' && data.roll.q === 'purple' && data.roll.special === 'jiujie' && data.roll.affixes === 3 && data.roll.name === '九节杖', data.roll);
 
@@ -47,6 +47,23 @@ const drop = await p.evaluate(async () => {
 ck('首杀必掉核心遗珍（张角 → 九节杖）', drop.first === 'relic_jiujie', drop);
 ck('已拥有后再击败：改为多掉一件至少紫色的兵装', drop.again[0] !== 'relic_jiujie' && ['purple', 'orange'].includes(drop.again[1]), drop.again);
 ck('没有遗珍的关（徐荣）不额外掉；击杀张梁时普通掉落之外多一件人公符水；吕布挑战关键为 lubu', drop.none === null && drop.bossKill.includes('relic_fushui') && drop.bossKill.length >= 2 && drop.lubuKey === 'lubu', drop);
+
+// 2b) Boss遗物槽：只能装 1 件；旧档穿在头盔 / 信物槽的遗珍迁移进来
+const slot = await p.evaluate(async () => {
+  const st = await window.__mod('/src/systems/ItemStore.ts'), it = await window.__mod('/src/data/items.ts'), out = {};
+  const a = it.rollRelic('relic_chize'), b2 = it.rollRelic('relic_xiangguo'); st.addItems([a, b2]);
+  st.equipItem('guanyu', a.uid); out.first = st.loadout('guanyu').relic?.uid === a.uid; st.equipItem('guanyu', b2.uid);
+  out.swap = [st.loadout('guanyu').relic?.uid === b2.uid, Object.values(st.loadout('guanyu')).filter(i => it.isRelic(i)).length];
+  out.name = it.SLOTS.relic.name;
+  // 旧档：赵云头盔穿斩将赤帻、信物穿相国印（改版前的位置）；关羽信物穿传国玉玺（伪）
+  const raw = JSON.parse(localStorage.getItem('im_items_v2')); const r1 = it.rollRelic('relic_chize'), r2 = it.rollRelic('relic_fushui'), r3 = it.rollRelic('relic_weixi');
+  raw.bag.push(r1, r2, r3); raw.loadouts = { ...raw.loadouts, zhaoyun: { helm: r1.uid, token: r2.uid }, guanyu: { token: r3.uid } }; localStorage.setItem('im_items_v2', JSON.stringify(raw)); st.resetItemCache();
+  const z = st.loadout('zhaoyun'), g = st.loadout('guanyu'), bag = st.loadItems().bag.map(i => i.uid);
+  out.migr = { zRelic: z.relic?.uid === r1.uid, zHelm: z.helm?.uid ?? null, zToken: z.token?.uid ?? null, gRelic: g.relic?.uid === r3.uid, kept: [r1, r2, r3].every(r => bag.includes(r.uid)) };
+  return out;
+});
+ck('「Boss遗物」槽：遗珍穿上进遗物槽；再穿另一件会替换（只能装 1 件）', slot.first && slot.swap[0] && slot.swap[1] === 1 && slot.name === 'Boss遗物', slot);
+ck('旧档迁移：穿在头盔 / 信物槽的遗珍挪进遗物槽；一人两件留品质高的（紫的退回行囊），一件不丢', slot.migr.zRelic && slot.migr.zHelm === null && slot.migr.zToken === null && slot.migr.gRelic && slot.migr.kept, slot.migr);
 
 // 3) 永不分解
 const keep = await p.evaluate(async () => {
@@ -67,14 +84,14 @@ const mech = await p.evaluate(async () => {
   // 斩将赤帻
   wear('relic_chize'); clearFoes(); const el = foe('elite', 80, 0); s.player.stats.critChance = 0;
   const h0 = el.hp; s.hitEnemy(el, 10, now(), 'melee', false, true); const d1 = h0 - el.hp; const h1 = el.hp; s.hitEnemy(el, 10, now(), 'melee', false, true); const d2 = h1 - el.hp;
-  out.zhanjiang = { d1, d2, first: s.relics.metrics.firstStrikes }; take('helm');
+  out.zhanjiang = { d1, d2, first: s.relics.metrics.firstStrikes }; take('relic');
   // 辕门戟影：第 8 次命中贯穿直线
   wear('relic_jiying'); clearFoes(); const t = foe('infantry', 60, 0), behind = foe('infantry', 300, 4), off = foe('infantry', 200, 150);
   const hb = behind.hp, ho = off.hp; for (let i = 0; i < 8; i++) s.relics.onWeaponHit(t, 20, now());
   out.jiying = { n: s.relics.metrics.jiying, behind: hb - behind.hp, off: ho - off.hp };
   // 百鸟朝凤缨：同一目标连击 5 次
   wear('relic_bainiao'); clearFoes(); const tt = foe('infantry', 50, 0), side = foe('infantry', 90, 30), back = foe('infantry', -90, 0); const hs = side.hp, hbk = back.hp;
-  for (let i = 0; i < 5; i++) s.relics.onWeaponHit(tt, 20, now()); out.bainiao = { n: s.relics.metrics.bainiao, side: hs - side.hp, back: hbk - back.hp }; take('helm');
+  for (let i = 0; i < 5; i++) s.relics.onWeaponHit(tt, 20, now()); out.bainiao = { n: s.relics.metrics.bainiao, side: hs - side.hp, back: hbk - back.hp }; take('relic');
   // 九节杖：落雷劈生命最多的敌人
   wear('relic_jiujie'); clearFoes(); const big = foe('infantry', 100, 0, 5000), small = foe('infantry', 120, 0, 200); const hbig = big.hp;
   s.relics.nextBolt = now(); s.relics.update(now()); out.jiujie = { bolts: s.relics.metrics.bolts, big: hbig - big.hp };
@@ -93,12 +110,12 @@ const mech = await p.evaluate(async () => {
   wear('relic_jiuhu'); const dm0 = pl.growth.damageMultiplier(now()); s.relics.onWine(now()); const dm1 = pl.growth.damageMultiplier(now());
   const v = new Phaser.Math.Vector2(1, 0); s.relics.jitterAt = 0; s.relics.sway(v, now()); out.jiuhu = { ratio: Math.round(dm1 / dm0 * 100) / 100, angle: Math.round(Math.abs(v.angle() > Math.PI ? v.angle() - 2 * Math.PI : v.angle()) * 1000) / 1000 };
   // 楼船令旗：穿上开火船，脱下停
-  wear('relic_louchuan'); out.louchuan = { on: !!s.relicShips, interval: s.relicShips?.interval }; take('token'); out.louchuan.off = !s.relicShips;
+  wear('relic_louchuan'); out.louchuan = { on: !!s.relicShips, interval: s.relicShips?.interval }; take('relic'); out.louchuan.off = !s.relicShips;
   // 虎豹铁面：坐骑践踏 ×2、6 秒上马
   const m1 = new HM({ scene: s, player: pl, enemies: s.enemies, hit: () => {}, notice: () => {} }, { base: 'nag', name: '驽马' }, 'liubei', { trampleMul: R.hubaoTrample, remountMs: R.hubaoRemountMs });
   const m0 = new HM({ scene: s, player: pl, enemies: s.enemies, hit: () => {}, notice: () => {} }, { base: 'nag', name: '驽马' }, 'liubei');
   out.hubao = { t: m1.trampleMul / m0.trampleMul, r: [m1.remountMs, m0.remountMs] }; m1.clear(); m0.clear(); pl.mountSpeedMul = 1; pl.riseY = 0;
-  st.unequipSlot('zhaoyun', 'token'); st.unequipSlot('zhaoyun', 'helm'); s.refreshGear(); clearFoes(); s.setMode('none');
+  st.unequipSlot('zhaoyun', 'relic'); s.refreshGear(); clearFoes(); s.setMode('none');
   return out;
 });
 ck('斩将赤帻：对精锐的第一击必暴击并再 ×2，第二击恢复正常', mech.zhanjiang.first === 1 && mech.zhanjiang.d1 >= mech.zhanjiang.d2 * 3, mech.zhanjiang);

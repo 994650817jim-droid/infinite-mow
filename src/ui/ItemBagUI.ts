@@ -147,7 +147,7 @@ export class ItemBagUI {
     const size = D ? 58 : 64, pitch = D ? 78 : 88, lx = D ? x0 + 62 : x0 + 64, rx = D ? x0 + 300 : x0 + pw - 64, cx = (lx + rx) / 2;
     const rowY = (r: number) => dollTop + size / 2 + r * pitch;
     this.portrait(cx, dollTop, (rx - lx) - size - 24, pitch * 2 - 28);
-    const place: Record<ItemSlot, [number, number]> = { helm: [lx, rowY(0)], armor: [lx, rowY(1)], boots: [rx, rowY(0)], token: [rx, rowY(1)] };
+    const place: Record<ItemSlot, [number, number]> = { helm: [lx, rowY(0)], armor: [lx, rowY(1)], boots: [rx, rowY(0)], token: [rx, rowY(1)], relic: [rx, rowY(2)] }; // Boss遗物：右下，与左下坐骑位对称
     for (const slot of SLOT_ORDER) {
       const [sx, sy] = place[slot], item = worn[slot] ?? null;
       const tile = this.add(itemTile(this.scene, sx, sy, size, item, slot, { selected: !!item && item.uid === this.selected }));
@@ -192,7 +192,7 @@ export class ItemBagUI {
     // 行囊网格
     const gx = D ? x0 + 372 : x0 + 22, gw = D ? pw - 372 - 24 : pw - 44;
     let fy = D ? dollTop + 10 : sumBottom + 22;
-    const filters: Array<ItemSlot | 'all'> = ['all', ...SLOT_ORDER], fw = (gw - 4 * 6) / 5;
+    const filters: Array<ItemSlot | 'all'> = ['all', ...SLOT_ORDER], fw = (gw - (filters.length - 1) * 6) / filters.length;
     filters.forEach((f, i) => this.button(gx + fw / 2 + i * (fw + 6), fy, f === 'all' ? '全部' : SLOTS[f].name, 'item-filter-' + f, () => { this.filter = f; this.page = 0; this.render(); }, { active: this.filter === f, size: 13, w: fw - 24 }));
     const cell = D ? 60 : 72, gap = D ? 8 : 10, gcols = Math.max(1, Math.floor((gw + gap) / (cell + gap)));
     const gridTop = fy + 30, bottom = y0 + ph - (D ? 62 : 74), rows = Math.max(1, Math.floor((bottom - gridTop + gap) / (cell + gap))), per = gcols * rows;

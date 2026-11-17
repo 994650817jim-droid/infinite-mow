@@ -6,7 +6,8 @@
  */
 
 export type ItemQuality = 'white' | 'green' | 'blue' | 'purple' | 'orange';
-export type ItemSlot = 'armor' | 'helm' | 'boots' | 'token';
+/** 'relic' = 「Boss遗物」槽（2026-11-17 用户批准：首领遗珍统一放这里，只能装 1 件）。普通掉落 / 商人只出 GEAR_SLOTS 四槽。 */
+export type ItemSlot = 'armor' | 'helm' | 'boots' | 'token' | 'relic';
 export type AffixId = 'damage' | 'attackSpeed' | 'crit' | 'hp' | 'move' | 'reduce' | 'pickup' | 'xp' | 'ally' | 'regen' | 'elite';
 export type SpecialId = 'fury' | 'windrider' | 'bloodthirst' | 'slayer' | 'scholar' | 'rally' | 'ironwall' | 'swift'
   // 首领遗珍专属机制（2026-11-16，boss-drops-proposal.md 首批 10 件；战斗实现见 systems/BossRelics.ts）
@@ -29,8 +30,11 @@ export const SLOTS: Record<ItemSlot, { name: string; affixes: readonly AffixId[]
   helm: { name: '头盔', affixes: ['hp', 'reduce', 'crit', 'xp'] },
   boots: { name: '战靴', affixes: ['move', 'attackSpeed', 'pickup'] },
   token: { name: '信物', affixes: ['ally', 'xp', 'regen', 'elite', 'damage'] },
+  relic: { name: 'Boss遗物', affixes: [] },
 };
-export const SLOT_ORDER: readonly ItemSlot[] = ['armor', 'helm', 'boots', 'token'];
+export const SLOT_ORDER: readonly ItemSlot[] = ['armor', 'helm', 'boots', 'token', 'relic'];
+/** 普通兵装四槽（掉落、商人货架用）。 */
+export const GEAR_SLOTS: readonly ItemSlot[] = ['armor', 'helm', 'boots', 'token'];
 
 /** 词条：白色品质的基础值；percent 表示按百分比显示。gearCap 为全身兵装（含坐骑）叠加的上限。 */
 export const AFFIXES: Record<AffixId, { name: string; base: number; percent: boolean; gearCap: number }> = {
@@ -141,16 +145,16 @@ const BASE_BY_ID = new Map(BASE_ITEMS.map(b => [b.id, b]));
  */
 export interface RelicDef { id: string; slot: ItemSlot; name: string; quality: 'purple' | 'orange'; affixes: readonly AffixId[]; special: SpecialId; boss: string; stage: string; lore: string }
 export const BOSS_RELICS: readonly RelicDef[] = [
-  { id: 'relic_fushui', slot: 'token', name: '人公符水', quality: 'purple', affixes: ['ally', 'xp'], special: 'fushui', boss: '张梁', stage: 'huangjin-1', lore: '符水治病，聚众千万' },
-  { id: 'relic_jiujie', slot: 'token', name: '九节杖', quality: 'purple', affixes: ['damage', 'elite'], special: 'jiujie', boss: '张角', stage: 'huangjin-3', lore: '天公将军手持九节杖' },
-  { id: 'relic_chize', slot: 'helm', name: '斩将赤帻', quality: 'orange', affixes: ['crit', 'hp'], special: 'zhanjiang', boss: '华雄', stage: 'hulao-1', lore: '汜水关前连斩数将' },
-  { id: 'relic_xiangguo', slot: 'token', name: '相国印', quality: 'orange', affixes: ['xp', 'ally'], special: 'xiangguo', boss: '董卓', stage: 'hulao-3', lore: '挟天子，擅朝政' },
-  { id: 'relic_jiying', slot: 'token', name: '辕门戟影', quality: 'orange', affixes: ['damage', 'crit'], special: 'jiying', boss: '吕布', stage: 'lubu', lore: '辕门射戟，一箭解围' },
-  { id: 'relic_bainiao', slot: 'helm', name: '百鸟朝凤缨', quality: 'orange', affixes: ['crit', 'reduce'], special: 'bainiao', boss: '张绣', stage: 'third-2', lore: '北地枪王，百鸟朝凤' },
-  { id: 'relic_weixi', slot: 'token', name: '传国玉玺（伪）', quality: 'orange', affixes: ['elite', 'xp'], special: 'weixi', boss: '袁术', stage: 'third-3', lore: '仲家伪帝私刻之玺' },
-  { id: 'relic_jiuhu', slot: 'token', name: '乌巢酒葫', quality: 'orange', affixes: ['regen', 'hp'], special: 'jiuhu', boss: '淳于琼', stage: 'guandu-3', lore: '乌巢醉卧，粮尽兵溃' },
-  { id: 'relic_hubao', slot: 'helm', name: '虎豹铁面', quality: 'orange', affixes: ['reduce', 'move'], special: 'hubao', boss: '曹纯', stage: 'chibi-1', lore: '虎豹骑统领之铁面' },
-  { id: 'relic_louchuan', slot: 'token', name: '楼船令旗', quality: 'orange', affixes: ['ally', 'damage'], special: 'louchuan', boss: '蔡瑁', stage: 'chibi-2', lore: '荆州水军都督令旗' },
+  { id: 'relic_fushui', slot: 'relic', name: '人公符水', quality: 'purple', affixes: ['ally', 'xp'], special: 'fushui', boss: '张梁', stage: 'huangjin-1', lore: '符水治病，聚众千万' },
+  { id: 'relic_jiujie', slot: 'relic', name: '九节杖', quality: 'purple', affixes: ['damage', 'elite'], special: 'jiujie', boss: '张角', stage: 'huangjin-3', lore: '天公将军手持九节杖' },
+  { id: 'relic_chize', slot: 'relic', name: '斩将赤帻', quality: 'orange', affixes: ['crit', 'hp'], special: 'zhanjiang', boss: '华雄', stage: 'hulao-1', lore: '汜水关前连斩数将' },
+  { id: 'relic_xiangguo', slot: 'relic', name: '相国印', quality: 'orange', affixes: ['xp', 'ally'], special: 'xiangguo', boss: '董卓', stage: 'hulao-3', lore: '挟天子，擅朝政' },
+  { id: 'relic_jiying', slot: 'relic', name: '辕门戟影', quality: 'orange', affixes: ['damage', 'crit'], special: 'jiying', boss: '吕布', stage: 'lubu', lore: '辕门射戟，一箭解围' },
+  { id: 'relic_bainiao', slot: 'relic', name: '百鸟朝凤缨', quality: 'orange', affixes: ['crit', 'reduce'], special: 'bainiao', boss: '张绣', stage: 'third-2', lore: '北地枪王，百鸟朝凤' },
+  { id: 'relic_weixi', slot: 'relic', name: '传国玉玺（伪）', quality: 'orange', affixes: ['elite', 'xp'], special: 'weixi', boss: '袁术', stage: 'third-3', lore: '仲家伪帝私刻之玺' },
+  { id: 'relic_jiuhu', slot: 'relic', name: '乌巢酒葫', quality: 'orange', affixes: ['regen', 'hp'], special: 'jiuhu', boss: '淳于琼', stage: 'guandu-3', lore: '乌巢醉卧，粮尽兵溃' },
+  { id: 'relic_hubao', slot: 'relic', name: '虎豹铁面', quality: 'orange', affixes: ['reduce', 'move'], special: 'hubao', boss: '曹纯', stage: 'chibi-1', lore: '虎豹骑统领之铁面' },
+  { id: 'relic_louchuan', slot: 'relic', name: '楼船令旗', quality: 'orange', affixes: ['ally', 'damage'], special: 'louchuan', boss: '蔡瑁', stage: 'chibi-2', lore: '荆州水军都督令旗' },
 ];
 const RELIC_BY_ID = new Map(BOSS_RELICS.map(r => [r.id, r]));
 export function relicDef(base: string): RelicDef | undefined { return RELIC_BY_ID.get(base); }
@@ -259,4 +263,13 @@ export function formatAffix(a: { id: AffixId; value: number }): string {
 export const BAG_CAPACITY = 60;
 export const BAG_OVERFLOW = 20;
 /** 行营军需商人道具货架价格（粮草）。 */
-export const MERCHANT_PRICE: Partial<Record<ItemQuality, number>> = { green: 60, blue: 120 };
+export const MERCHANT_PRICE: Partial<Record<ItemQuality, number>> = { green: 60, blue: 120, purple: 260 };
+/**
+ * 行营军需商人（2026-11-17 用户：「军需商人只可以买装备」）：每次进营 4 件兵装，甲胄 / 头盔 / 战靴 / 信物各 1 件。
+ * 品质按章节档位：一章绿 / 蓝，二章蓝为主偶尔紫，三章起蓝 / 紫（白 绿 蓝 紫 橙 权重，初值交平衡会话）。
+ */
+const MERCHANT_TIER_WEIGHTS: readonly (readonly number[])[] = [[0, 65, 35, 0, 0], [0, 20, 65, 15, 0], [0, 0, 55, 45, 0]];
+export function rollMerchantGear(tier: number, rng: () => number = Math.random): ItemInstance[] {
+  const w = MERCHANT_TIER_WEIGHTS[Math.max(0, Math.min(MERCHANT_TIER_WEIGHTS.length - 1, Math.floor(tier)))], total = w.reduce((a, b) => a + b, 0);
+  return GEAR_SLOTS.map(slot => { let r = rng() * total, q: ItemQuality = 'blue'; for (let i = 0; i < w.length; i++) { r -= w[i]; if (r < 0) { q = QUALITY_ORDER[i]; break; } } return rollItem(q, rng, slot); });
+}

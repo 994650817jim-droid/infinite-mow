@@ -104,7 +104,7 @@ const data = await p.evaluate(async () => {
   const items = ['white', 'green', 'blue', 'purple', 'orange'].map(q => m.rollItem(q)); out.affixCounts = items.map(i => i.affixes.length); out.orangeSpecial = !!items[4].special;
   return out;
 });
-ck('32 种基础道具 + 15 件橙色名器、4 个槽位（无兵刃、坐骑）', data.base === 32 && data.legends === 15 && data.slots === 4, data);
+ck('32 种基础道具 + 15 件橙色名器、4 个兵装槽 + 「Boss遗物」槽（无兵刃、坐骑）', data.base === 32 && data.legends === 15 && data.slots === 5, data);
 ck('第一章普通敌品质约 白55 / 绿35 / 蓝9 / 紫1 / 橙0%', Math.abs(data.normal0.white / 40000 - .55) < .02 && Math.abs(data.normal0.blue / 40000 - .09) < .01 && data.normal0.orange === 0, data.normal0);
 ck('后期章节品质上浮（橙 / 紫更多）', data.normal3.purple > data.normal0.purple * 1.5 && data.normal3.white < data.normal0.white, data.normal3);
 ck('首领只出蓝及以上', data.boss.white === 0 && data.boss.green === 0, data.boss);
@@ -170,17 +170,20 @@ await p.waitForTimeout(150);
 await p.screenshot({ path: `${out}/mobile-pause-bag.png` });
 ck('Esc 先关行囊，再按一次继续战斗', await p.evaluate(async G0 => { const s = eval(G0); s.togglePause(); await new Promise(r => setTimeout(r, 100)); if (s.children.getByName('item-bag') || s.mode !== 'pause') return false; s.togglePause(); await new Promise(r => setTimeout(r, 150)); return !s.children.getByName('item-bag') && s.mode === 'none'; }, G));
 
-// 7) 行营兵装货架
+// 7) 行营军需商人（2026-11-17 起只卖兵装：4 件，各槽 1 件）
 const camp = await p.evaluate(async G0 => {
   const s = eval(G0), ui = s.campUI, out = {}; if (!ui) return { none: true };
   s.legion.food = 500; ui.open('test-camp-' + Date.now(), '测试'); ui.setVisible(true); ui.tab = 2; ui.render?.(); await new Promise(r => setTimeout(r, 150));
-  const label = () => ui.root.list.flatMap(o => o.list ?? [o]).find(o => o.type === 'Text' && /^兵装 · /.test(o.text))?.text; const btn = window.__find(ui.root, 'camp-item-goods'); out.label = label(); out.quality = ui.itemOffer?.quality;
-  const rs = s.cameras.main.zoom; btn?.emit('pointerover', { x: 120 * rs, y: 120 * rs }); const tip = s.children.getByName('item-tooltip'); out.tip = !!tip?.visible && tip.list.some(o => o.name === 'item-tooltip-name' && o.text.length > 0); btn?.emit('pointerout'); out.tipHidden = !tip?.visible;
+  const items = await window.__mod('/src/data/items.ts'); out.slots = ui.itemOffers.map(i => items.itemSlot(i)); out.qualities = ui.itemOffers.map(i => i.quality);
+  out.tactics = !!window.__find(ui.root, 'camp-description-0'); // 旧的战法 / 宝物卡不该再出现
+  const label = () => window.__find(ui.root, 'camp-item-price-0')?.text; const btn = window.__find(ui.root, 'camp-item-goods-0'); out.label = label(); out.quality = ui.itemOffers[0]?.quality;
+  const card = window.__find(ui.root, 'camp-item-card-0'), rs = s.cameras.main.zoom; card?.emit('pointerover', { x: 120 * rs, y: 120 * rs }); const tip = s.children.getByName('item-tooltip'); out.tip = !!tip?.visible && tip.list.some(o => o.name === 'item-tooltip-name' && o.text.length > 0); card?.emit('pointerout'); out.tipHidden = !tip?.visible;
   const before = s.itemDrops.runLoot.length, food = s.legion.food; btn?.emit('pointerdown'); await new Promise(r => setTimeout(r, 100));
-  out.bought = s.itemDrops.runLoot.length - before; out.cost = food - s.legion.food; out.sold = label();
+  out.bought = s.itemDrops.runLoot.length - before; out.cost = food - s.legion.food; out.sold = window.__find(ui.root, 'camp-item-price-0')?.text;
   return out;
 }, G);
-ck('行营军需商人有一格兵装（绿 / 蓝），花粮草买下记入本局缴获', !camp.none && ['green', 'blue'].includes(camp.quality) && camp.bought === 1 && (camp.cost === 60 || camp.cost === 120) && /购入 · [0-9]+粮/.test(camp.label ?? '') && /已售罄/.test(camp.sold ?? ''), camp);
+ck('行营军需商人只卖兵装：4 件，甲胄 / 头盔 / 战靴 / 信物各一，第一章绿 / 蓝；不再有战法和宝物', !camp.none && JSON.stringify(camp.slots) === '["armor","helm","boots","token"]' && camp.qualities.every(q => q === 'green' || q === 'blue') && !camp.tactics, camp);
+ck('花随军粮买下一件，记入本局缴获，按钮变「已售罄」', camp.bought === 1 && (camp.cost === 60 || camp.cost === 120) && /购入 · [0-9]+粮/.test(camp.label ?? '') && /已售罄/.test(camp.sold ?? ''), camp);
 ck('行营商店的兵装：悬停弹出属性提示框，移开隐藏', camp.tip && camp.tipHidden, camp);
 await p.screenshot({ path: `${out}/mobile-camp-shelf.png` });
 await p.evaluate(G0 => eval(G0).campUI.setVisible(false), G);

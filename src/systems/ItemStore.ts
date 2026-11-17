@@ -54,6 +54,12 @@ function sanitize(v: Record<string, unknown>): ItemSave {
       const uid = (slots as Record<string, unknown>)?.[slot], item = typeof uid === 'string' && !used.has(uid) ? owned.get(uid) : undefined;
       if (item && itemSlot(item) === slot) { out[slot] = item.uid; used.add(item.uid); }
     }
+    // 2026-11-17「Boss遗物」槽：旧档穿在头盔 / 信物槽的遗珍挪进遗物槽（只能 1 件，留品质高的，另一件留在行囊）
+    if (!out.relic) {
+      const old = ['helm', 'token'].map(k => (slots as Record<string, unknown>)?.[k]).map(u => typeof u === 'string' && !used.has(u) ? owned.get(u) : undefined)
+        .filter((i): i is ItemInstance => !!i && itemSlot(i) === 'relic').sort((a, b) => QUALITY_ORDER.indexOf(b.quality) - QUALITY_ORDER.indexOf(a.quality));
+      if (old[0]) { out.relic = old[0].uid; used.add(old[0].uid); }
+    }
     if (Object.keys(out).length) s.loadouts[hero] = out;
   }
   s.salvaged = count(v.salvaged, 1e9);

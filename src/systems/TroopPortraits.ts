@@ -10,8 +10,19 @@ import { artStyle } from './ArtStyle';
 // 2026-11-17 用户：「图标还是换成之前那个图标」——战地招募卡胸像换回原 Q 版胸像（v2 胸像文件保留，?portrait=v2 可对比）
 const V2 = artStyle() === 'v2' && typeof location !== 'undefined' && new URLSearchParams(location.search).get('portrait') === 'v2';
 const MANIFEST = V2 ? 'troop_portraits_manifest_v2' : 'troop_portraits_manifest', BASE = V2 ? 'assets/troop-portraits-v2/' : 'assets/troop-portraits/';
+const FB_MANIFEST = 'troop_portraits_manifest_v2', FB_BASE = 'assets/troop-portraits-v2/';
 const headY = new Map<TroopKind, number>();
 export const portraitKey = (kind: TroopKind): string => 'troop_portrait_' + kind;
+/** Q 版缺图兵种的过渡胸像（v2 写实厚涂，单独的纹理键，不影响战地招募卡）。 */
+export const portraitFallbackKey = (kind: TroopKind): string => 'troop_portrait_fb_' + kind;
+/** 有 Q 版用 Q 版，否则用 v2 过渡胸像；都没有返回 undefined。 */
+export function badgePortraitKey(scene: Phaser.Scene, kind: TroopKind): string | undefined {
+  for (const k of [portraitKey(kind), portraitFallbackKey(kind)]) if (scene.textures.exists(k)) return k;
+  return undefined;
+}
+const fbHeadY = new Map<TroopKind, number>();
+/** 当前徽章用的那张图的头部高度比例。 */
+export const badgeHeadY = (scene: Phaser.Scene, kind: TroopKind): number => scene.textures.exists(portraitKey(kind)) ? portraitHeadY(kind) : fbHeadY.get(kind) ?? .3;
 /** 头部中心在立绘中的高度比例（清单提供；缺省 0.36）。 */
 export const portraitHeadY = (kind: TroopKind): number => headY.get(kind) ?? .36;
 
@@ -20,8 +31,11 @@ interface Manifest { portraits?: Array<{ kind: TroopKind; file: string; headY?: 
 /** 正在某个场景加载器里排队 / 下载的立绘键（纹理是全局的：场景重启或多场景同时请求时不重复加载，否则 Phaser 报 key already in use）。 */
 const inFlight = new Set<string>();
 
-/** 后台加载立绘；有新图加载完成时回调 onReady（用于重绘卡片）。 */
-export function loadTroopPortraits(scene: Phaser.Scene, onReady: () => void): void {
+/**
+ * 后台加载立绘；有新图加载完成时回调 onReady（用于重绘卡片）。
+ * fallback：Q 版清单里没有的兵种，再从 troop-portraits-v2 加载过渡胸像（键 portraitFallbackKey；营寨招募 / 招兵营用，2026-11-17）。
+ */
+export function loadTroopPortraits(scene: Phaser.Scene, onReady: () => void, fallback = false): void {
   const mine: string[] = [];
   const release = (key: string) => { inFlight.delete(key); };
   const queue = (): boolean => {
@@ -34,6 +48,16 @@ export function loadTroopPortraits(scene: Phaser.Scene, onReady: () => void): vo
       inFlight.add(key); mine.push(key);
       scene.load.once('filecomplete-image-' + key, () => release(key));
       scene.load.image(key, BASE + p.file); added = true;
+    }
+    if (fallback && !V2) {
+      const have = new Set((m?.portraits ?? []).map(p => p.kind));
+      const fb = () => { const m2 = scene.cache.json.get(FB_MANIFEST) as Manifest | undefined; let more = false;
+        for (const p of m2?.portraits ?? []) { if (have.has(p.kind)) continue; if (typeof p.headY === 'number') fbHeadY.set(p.kind, p.headY);
+          const key = portraitFallbackKey(p.kind); if (scene.textures.exists(key) || inFlight.has(key)) continue;
+          inFlight.add(key); mine.push(key); scene.load.once('filecomplete-image-' + key, () => release(key)); scene.load.image(key, FB_BASE + p.file); more = true; }
+        return more; };
+      if (scene.cache.json.exists(FB_MANIFEST)) added = fb() || added;
+      else { scene.load.json(FB_MANIFEST, FB_BASE + 'manifest.json'); scene.load.once('filecomplete-json-' + FB_MANIFEST, () => { fb(); }); added = true; }
     }
     return added;
   };

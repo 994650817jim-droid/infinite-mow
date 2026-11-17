@@ -94,6 +94,35 @@ for (const vp of [{ width: 960, height: 540 }, { width: 1280, height: 720 }, { w
   }
   await p.close();
 }
+// ---------- 4) 随行 ----------
+{
+  const p = await b.newPage({ viewport: { width: 1280, height: 720 } }); watch(p);
+  await battle(p);
+  const A = act => p.evaluate(k => window.__game.scene.getScene('GameScene').__DEV_ACTIONS[k](), act);
+  const team = () => p.evaluate(() => { const s = window.__game.scene.getScene('GameScene'); return (s.followers?.members ?? []).map(m => ({ id: m.recruit.id, lv: m.level, on: m.sprite.active && m.sprite.visible })); });
+  await A('follow_guanyu'); await A('follow_huangzhong'); await p.waitForTimeout(300);
+  const t1 = await team();
+  ck('随行：不用重开，当场加入关羽、黄忠', t1.length === 2 && t1[0].id === 'guanyu' && t1[1].id === 'huangzhong' && t1.every(x => x.on), t1);
+  await A('follow_r_9011'); await A('follow_r_9001'); await p.waitForTimeout(300);
+  const t2 = await team();
+  ck('随行最多 3 人，再加就替换最早的一位；人才库人物也能带', t2.length === 3 && !t2.some(x => x.id === 'guanyu') && t2.some(x => x.id === 'r_9011') && t2.some(x => x.id === 'r_9001'), t2);
+  await A('followLv20'); await p.waitForTimeout(700); /* 分组小字每 0.5 秒刷新 */
+  const t3 = await team(), note = await p.evaluate(() => [...document.querySelectorAll('#dev-panel span')].map(e => e.textContent).find(t => /Lv20/.test(t ?? '')));
+  ck('随行等级设为 20，面板显示当前随行和等级', t3.every(x => x.lv === 20) && !!note, { t3, note });
+  // 主将换成随行里的人：自动去掉同名随行；选将 / 重开后随行自动带上
+  await A('hero_huangzhong');
+  await p.waitForFunction(() => { const s = window.__game.scene.getScene('GameScene'); return s?.runConfig?.character === 'huangzhong' && s.player && s.__DEV_ACTIONS; }, null, { timeout: 30000 }); await p.waitForTimeout(500);
+  const t4 = await team();
+  ck('换主将后随行保留（同名的自动让出）', t4.length === 2 && !t4.some(x => x.id === 'huangzhong'), t4);
+  await p.evaluate(() => { const s = window.__game.scene.getScene('GameScene'); s.player.damageImmune = true; for (let i = 0; i < 10; i++) { const a = i * Math.PI / 5, e = s.spawnEnemy('infantry', s.player.x + Math.cos(a) * 90, s.player.y + Math.sin(a) * 90, 1); if (e) { e.hp = e.maxHp = 99999; e.speed = 0; } } }); await p.waitForTimeout(4000);
+  const fought = await p.evaluate(() => window.__game.scene.getScene('GameScene').followers?.stats.hits ?? 0);
+  ck('随行会自动作战', fought > 0, fought);
+  await p.click('#dev-panel > div'); await p.waitForTimeout(300);
+  await p.screenshot({ path: `${out}/${tag}-followers-1280x720.png` });
+  await A('followClear'); await p.waitForTimeout(200);
+  ck('清空随行', (await team()).length === 0);
+  await p.close();
+}
 await b.close();
 ck('无控制台 / 页面错误', errors.length === 0, errors.slice(0, 4));
 process.exit(fail ? 1 : 0);

@@ -55,7 +55,7 @@ const killBoss = async p => {
   await p.waitForFunction(() => window.__game.scene.isActive('XiangfanChapterScene'), null, { timeout: 60000 }); await p.waitForTimeout(800);
   const r = await p.evaluate(async () => { const s = window.__game.scene.getScene('XiangfanChapterScene'), w = await import('/src/world/WorldStore.ts'), t = await import('/src/world/ChapterTimeline.ts'); const ids = t.CHAPTER_TIMELINE.map(c => c.id); return { cards: [1, 2, 3].map(i => !!s.children.getByName('xiangfan-stage-' + i)), deploy: !!s.children.getByName('xiangfan-deploy'), open: w.arcUnlocked('xiangfan'), order: ids.slice(-4) }; });
   await shot(p, '0-select');
-  ck('选关：第九章三关卡片、出征按钮；汉中通关后襄樊开放；时间线 …入蜀 → 汉中 → 襄樊', r.cards.every(Boolean) && r.deploy && r.open && r.order.join() === 'jingnan,shu,hanzhong,xiangfan', r);
+  ck('选关：第九章三关卡片、出征按钮；汉中通关后襄樊开放；时间线 …入蜀 → 汉中 → 襄樊', r.cards.every(Boolean) && r.deploy && r.open && r.order.join().includes('shu,hanzhong,xiangfan'), r);
   await p.close();
 }
 

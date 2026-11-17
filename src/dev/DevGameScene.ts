@@ -580,7 +580,7 @@ export class DevGameScene extends GameScene {
     const buckets = this.bucketStats();
     const mem = (performance as unknown as { memory?: { usedJSHeapSize: number } }).memory;
     const report = [
-      '《无限割草：乱世千军》手机测试报告',
+      '《三国：乱世千军》手机测试报告',
       `UA: ${navigator.userAgent}`,
       `屏幕: ${window.screen.width}x${window.screen.height} DPR=${window.devicePixelRatio}`,
       `运行类型: ${this.debugJumped ? '调试(设过时间)' : '正常'}`,

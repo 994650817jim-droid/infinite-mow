@@ -35,7 +35,15 @@ function sideDistance(e: Enemy, x: number, y: number, ux: number, uy: number, le
 
 /** 程序化地裂纹：主裂缝折线 + 两侧细纹 + 碎石，暗红余烬后淡出（过渡特效）。 */
 function crackFx(host: WeaponHost, x: number, y: number, angle: number, len: number, width: number, hot = false): void {
-  const g = host.add.graphics().setDepth(19), ux = Math.cos(angle), uy = Math.sin(angle), nx = -uy, ny = ux;
+  // 2026-11-17：换成手绘透明序列帧 weiyan_crack（Gemini 出图，6 帧 1024×256：裂开 → 熔光最亮、土块掀起 → 余烬 → 淡去）。
+  // 帧内冲击点在 x≈90、裂缝末端在 x≈940；朝左时上下翻转，保证扬尘、土块始终朝画面上方。缺图时退回下面的程序化地裂纹。
+  if (sceneOf(host).textures.exists('weiyan_crack')) {
+    const s = len / 850, left = Math.cos(angle) < 0;
+    const fx = host.add.sprite(x, y, 'weiyan_crack', 0).setOrigin(90 / 1024, .5).setScale(s * (hot ? 1.05 : 1)).setRotation(angle).setFlipY(left).setDepth(19).setName('weiyan-crack-fx');
+    fx.scene.tweens.addCounter({ from: 0, to: 5.99, duration: 680, onUpdate: t => { if (fx.active) fx.setFrame(Math.floor(t.getValue() ?? 0)); }, onComplete: () => fx.destroy() });
+    return;
+  }
+  const g =host.add.graphics().setDepth(19), ux = Math.cos(angle), uy = Math.sin(angle), nx = -uy, ny = ux;
   const pts: Array<[number, number]> = []; const steps = 9;
   for (let i = 0; i <= steps; i++) { const t = i / steps, j = i === 0 ? 0 : (Math.random() - .5) * width * .35; pts.push([x + ux * len * t + nx * j, y + uy * len * t + ny * j]); }
   const stroke = (w: number, color: number, a: number) => { g.lineStyle(w, color, a); g.beginPath(); g.moveTo(pts[0][0], pts[0][1]); for (const p of pts.slice(1)) g.lineTo(p[0], p[1]); g.strokePath(); };

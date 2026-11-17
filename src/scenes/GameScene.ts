@@ -426,6 +426,8 @@ export class GameScene extends Phaser.Scene {
 
   /** 本场开打时是否已有驽马（第一章通关剧情「中山商旅 · 献马」只给还没有马的存档播；老存档已有驽马不补弹）。 */
   protected hadStarterHorse = true;
+  /** 游戏实际在用的马厩读写（测试走这里：常开的 dev server 热更新后，测试自己 import 的 ItemStore 可能是另一个模块实例，内存缓存不同步）。 */
+  readonly stable = { ownedHorses, grantHorse };
   create(): void {
     stopMenuMusic();
     this.hadStarterHorse = ownedHorses().some(h => h.id === STARTER_HORSE);

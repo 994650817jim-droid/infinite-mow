@@ -173,6 +173,7 @@ export class MenuScene extends Phaser.Scene {
     const bg=this.add.image(W/2,H/2,this.textures.exists(epicBackground)?epicBackground:'rest_camp');bg.setScale(Math.max(W/bg.width,H/bg.height));this.homeBackground=bg;bg.setDepth(-2);this.ensureHomeArt();if(this.selectedChapter==='huangjin')attachHomeVideo(this,W,H);
     const shade=this.add.graphics();shade.fillStyle(0x100b08,.14).fillRect(0,0,W,H);for(let y=0;y<H;y+=8){const a=y<H*.24?.36*(1-y/(H*.24)):y>H*.55?.82*(y-H*.55)/(H*.45):0;if(a>0)shade.fillStyle(0x100b08,a).fillRect(0,y,W,8);}
     if(D){const titleShade=this.add.graphics();for(let i=0;i<40;i++){const k=i/40;titleShade.fillStyle(0x0f0a06,.02+k*.012).fillEllipse(230,92,430*(1-k*.8),150*(1-k*.8));}}
+    text(D?230:W/2,D?22:84+this.padY,'三  国',D?26:20,'#e6c88c').setFontFamily(TITLE_FONT).setLetterSpacing(10).setShadow(0,2,'#130a05',2,true,true);
     text(D?230:W/2,D?58:112+this.padY,'乱世千军',D?52:36,'#efd399').setFontFamily(TITLE_FONT).setLetterSpacing(4).setShadow(0,3,'#130a05',2,true,true);
     const west=this.selectedChapter==='hulao',save=loadWorld(),info=west?DONGZHUO_STAGES[this.selectedWestStage-1]:YELLOW_STAGES[this.selectedStage-1];
     text(D?230:W/2,D?98:148+this.padY,west?'汉末烽烟 · 诸侯并起，挥师讨董':'苍天已乱 · 黄巾四起，义军初兴',D?15:16,'#d0bea1').setShadow(0,1,'#0b0604',4,true,true);

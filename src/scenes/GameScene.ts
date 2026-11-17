@@ -2538,13 +2538,15 @@ export class GameScene extends Phaser.Scene {
   }
   /** 战斗中打开行囊：自动暂停，关掉后恢复（从暂停菜单进来则回到暂停菜单）。atRest = 行营休整中，可换马。 */
   protected openBattleBag(atRest = false): void {
-    if (this.over || this.children.getByName('item-bag')) return;
+    // 行营休整发生在本关结算之后（this.over 已为真）：休整时照样能开行囊（2026-11-17 用户报「休整时行囊点不了」）
+    if ((this.over && !atRest) || this.children.getByName('item-bag')) return;
     const fromPlay = this.mode === 'none';
     if (fromPlay) this.togglePause();
     const debug = isChapterTestRun() || this.debugModified || this.debugJumped || !!this.player.damageImmune || !!this.runConfig.encounter;
     new ItemBagUI(this, {
-      hero: this.runConfig.character, battle: true, atRest, runLoot: this.itemDrops?.runLoot ?? [], treasures: this.treasureEntries(),
-      claimLoot: debug ? undefined : (item: ItemInstance) => { if (!claimRunLoot(this.runConfig.character, item)) return false; this.itemDrops?.takeLoot(item.uid); return true; },
+      hero: this.runConfig.character, battle: true, atRest, runLoot: this.over ? [] : this.itemDrops?.runLoot ?? [], treasures: this.treasureEntries(),
+      // 已结算时缴获都收进行囊了，不再单列「本局缴获」
+      claimLoot: debug || this.over ? undefined : (item: ItemInstance) => { if (!claimRunLoot(this.runConfig.character, item)) return false; this.itemDrops?.takeLoot(item.uid); return true; },
       onGearChange: () => this.refreshGear(),
       onClose: () => { if (fromPlay && this.mode === 'pause') this.togglePause(); },
     });

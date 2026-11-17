@@ -153,7 +153,7 @@ await p.screenshot({ path: `${out}/mobile-battle-hud-bag.png` });
 // 6) 主页：角标、纸娃娃、点击穿戴、悬停提示框
 await p.evaluate(async () => { const st = await window.__mod('/src/systems/ItemStore.ts'), items = await window.__mod('/src/data/items.ts'); st.setAutoSalvageWhite(false);
   { const raw = JSON.parse(localStorage.getItem('im_items_v2')); raw.legacy = [{ uid: 'old-1', base: 'sword_tassel', quality: 'green', affixes: [{ id: 'attackSpeed', value: .02 }] }]; localStorage.setItem('im_items_v2', JSON.stringify(raw)); st.resetItemCache(); } st.addItems(['blue', 'purple', 'green', 'orange'].map((q, i) => items.rollItem(q, Math.random, ['helm', 'boots', 'token', 'armor'][i]))); });
-await p.goto(base + '?layout=mobile');
+await p.goto(base + '?dev=1&layout=mobile');
 await p.waitForFunction(() => window.__game?.scene.getScene('MenuScene')?.sys.isActive() && window.__game.scene.getScene('MenuScene').children.getByName('home-achievements-plaque'), null, { timeout: 60000 });
 await p.waitForTimeout(800);
 // 2026-11-16：主页不再放行囊匾和角标；新收入件数仍计在存档里，打开行囊后清零（见下）
@@ -211,7 +211,7 @@ await p.close();
 
 // 电脑
 const d = await page('desktop', { width: 1280, height: 720 });
-await d.goto(base + '?layout=desktop');
+await d.goto(base + '?dev=1&layout=desktop');
 await d.waitForFunction(() => window.__game?.scene.getScene('MenuScene')?.sys.isActive() && window.__game.scene.getScene('MenuScene').children.getByName('home-achievements-plaque'), null, { timeout: 60000 });
 await d.waitForTimeout(800);
 await d.evaluate(async M0 => { const m = eval(M0), st = await window.__mod('/src/systems/ItemStore.ts'), items = await window.__mod('/src/data/items.ts');
@@ -253,6 +253,18 @@ const city = await d.evaluate(async () => { const g = window.__game; g.scene.get
   return { temp, note, open: !!bag, stable: !!(bag && window.__find(bag, 'stable-hint')) }; });
 ck('营寨马厩建筑入口点开直接是马厩（临时按钮已移除）', !city.temp && city.open && city.stable, city);
 await d.screenshot({ path: `${out}/desktop-city-stable.png` });
+// 行营休整里点「行囊」（真实流程：打赢 1-1 → 选首领战利品 → 进营；真实鼠标点击）。2026-11-17 用户报「休整时行囊点不了」：结算后 over 为真，打开被拦下
+await d.goto(base + '?dev=1&autostart=1&stage=1&layout=desktop');
+await d.waitForFunction(() => window.__game?.scene.getScene('GameScene')?.player && window.__game.scene.getScene('GameScene').__DEV_ACTIONS, null, { timeout: 120000 });
+await d.evaluate(() => { const s = window.__game.scene.getScene('GameScene'); s.__DEV_ACTIONS.closePopup?.(); s.__DEV_ACTIONS.winNow(); });
+for (let i = 0; i < 40; i++) { const mode = await d.evaluate(() => { const s = window.__game.scene.getScene('GameScene'); if (s.mode === 'bossloot') s.chooseUpgrade(0); return s.mode; }); if (mode === 'rest') break; await d.waitForTimeout(1000); }
+await d.waitForFunction(() => { const s = window.__game.scene.getScene('GameScene'); return s.mode === 'rest' && s.campUI?.root.visible && !s.children.getByName('rest-intro'); }, null, { timeout: 60000 }).catch(() => {});
+await d.waitForTimeout(1200);
+const restAt = await d.evaluate(() => { const s = window.__game.scene.getScene('GameScene'), btn = s.campUI.root.list.find(o => o.name === 'camp-bag'), bb = btn.getBounds(), r = window.__game.canvas.getBoundingClientRect(), cam = s.cameras.main, k = r.width / cam.width * cam.zoom; return { x: r.left + bb.centerX * k, y: r.top + bb.centerY * k, mode: s.mode, over: s.over }; });
+await d.mouse.click(restAt.x, restAt.y); await d.waitForTimeout(500);
+const restBag = await d.evaluate(() => { const s = window.__game.scene.getScene('GameScene'), bag = s.children.getByName('item-bag'); return { open: !!bag, rest: /休整中/.test(window.__find(bag, 'item-bag-count')?.text ?? ''), loot: !!window.__find(bag, 'item-tab-loot') }; });
+ck('行营休整（本关已结算）点「行囊」能打开，标「休整中」', restAt.mode === 'rest' && restAt.over && restBag.open && restBag.rest, { restAt, restBag });
+await d.screenshot({ path: `${out}/desktop-rest-bag.png` });
 await d.close();
 
 ck('控制台无报错', errors.length === 0, errors.slice(0, 8));

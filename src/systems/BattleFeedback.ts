@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import type { Enemy } from '../entities/Enemy';
 import { DEPTH } from '../config';
+import { enemyArrowTexture } from './ArrowPalette';
 interface Slot { image: Phaser.GameObjects.Image; enemy: Enemy | null; spawnId: number; start: number; duration: number; angle: number; kind: string; active: boolean; death: boolean; elapsed: number; }
 /** Reuses supplied art for procedural transitions; not independent hand-drawn attack frames. */
 export class BattleFeedback {
@@ -26,7 +27,8 @@ export class BattleFeedback {
     const slot = this.acquire(); if (!slot) return;
     slot.enemy = enemy; slot.spawnId = enemy.spawnId; slot.start = now; slot.duration = duration;
     slot.angle = angle; slot.kind = enemy.kind; slot.death = false; slot.active = true;
-    const texture = enemy.kind === 'archer' ? 'arrow' : enemy.kind === 'cavalry' ? 'spear_thrust' : 'blade';
+    // 弓兵拉弓那支箭也跟阵营色（与射出的箭一致）
+    const texture = enemy.kind === 'archer' ? enemyArrowTexture(enemy.sprite.scene, enemy.sprite.texture.key) : enemy.kind === 'cavalry' ? 'spear_thrust' : 'blade';
     slot.image.setTexture(texture, texture === 'spear_thrust' ? 'tight' : undefined).setOrigin(.5).setAlpha(.85).setRotation(angle).setVisible(true);
     this.draw(slot, now);
   }

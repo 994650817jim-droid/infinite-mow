@@ -10,7 +10,8 @@ import {warText} from '../ui/WarStyle';
 import {isChapterTestRun} from '../systems/ChapterProgress';
 import {beginSiege, beginDefense, loadWorld, permanentEffects, settleSiege, settleDefense, takeExpeditionReserve, abandonExpedition} from '../world/WorldStore';
 import {cityAttackable, cityAttacker, cityById, cityOwner, eraIndexFor, FACTIONS, TIER_NAME, type CityDef, type FactionId} from '../world/WorldCities';
-import {ensureFactionTextures} from '../systems/FactionPalette';
+import {ensureFactionTextures, factionKey} from '../systems/FactionPalette';
+import {enemyArrowTexture} from '../systems/ArrowPalette';
 import {applyCitySpecialties} from '../systems/CityBonuses';
 import {cityIncomeLine} from '../world/WorldStore';
 import {siegeScenery, SIEGE_GATE} from '../systems/SiegeScenery';
@@ -110,7 +111,7 @@ export function siegeGameSceneClass(Base: typeof GameScene) {
       // 箭楼放箭
       for (const t of this.towers) {
         if (!t.e.active || t.e.spawnId !== t.life) continue;
-        if (now >= t.shotAt && Math.hypot(p.x - t.e.x, p.y - (t.e.y - 70)) <= SG.towerRange) { t.shotAt = now + SG.towerShotMs; this.fireBolt(this.bullets, t.e.x, t.e.y - 80, p.x, p.y, SG.towerDamage, 0, false, SG.towerArrowSpeed); }
+        if (now >= t.shotAt && Math.hypot(p.x - t.e.x, p.y - (t.e.y - 70)) <= SG.towerRange) { t.shotAt = now + SG.towerShotMs; this.fireBolt(this.bullets, t.e.x, t.e.y - 80, p.x, p.y, SG.towerDamage, 0, false, SG.towerArrowSpeed, enemyArrowTexture(this, factionKey(this.owner, 'xiliang_archer_walk'))); /* 箭塔箭矢用守城势力色 */ }
       }
       if (!this.capturing && this.goalsCleared && (this.city.tier !== 'large' || !this.boss?.active)) this.startCapture();
       if (this.capturing && this.captureG) {

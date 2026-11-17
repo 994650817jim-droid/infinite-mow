@@ -156,6 +156,7 @@ assets/raw/*
 !/tools/test-xiangfan.mjs
 !/tools/test-nanzheng.mjs
 !/tools/test-siege-tiers.mjs
+!/tools/white-to-magenta.mjs
 !/tools/test-jingnan-art.mjs
 !/tools/test-hanzhong-art.mjs
 !/tools/test-yiling-full.mjs

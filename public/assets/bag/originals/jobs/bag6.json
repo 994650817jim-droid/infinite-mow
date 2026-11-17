@@ -1,0 +1,4 @@
+[{"src":"public/assets/bag/originals/dsh_bag_tabs_card.png","mode":"cells","pad":0,"outs":[
+ {"name":"tab.webp","w":240,"h":64,"fit":"stretch","warm":true,"rect":[20,55,750,205]},
+ {"name":"tab_selected.webp","w":240,"h":64,"fit":"stretch","warm":true,"rect":[770,45,766,230]},
+ {"name":"tooltip_card.webp","w":600,"h":400,"fit":"stretch","warm":true,"rect":[200,280,1140,700]}]}]

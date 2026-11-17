@@ -1,0 +1,3 @@
+[{"src":"public/assets/bag/originals/dsh_bag_tab_icons.png","mode":"cells","cols":3,"rows":2,"pad":0.03,"outs":[
+ {"name":"tab_icon_all.webp","w":64,"h":64,"warm":true},{"name":"tab_icon_armor.webp","w":64,"h":64,"warm":true},{"name":"tab_icon_helm.webp","w":64,"h":64,"warm":true},
+ {"name":"tab_icon_boots.webp","w":64,"h":64,"warm":true},{"name":"tab_icon_token.webp","w":64,"h":64},{"name":"tab_icon_relic.webp","w":64,"h":64,"warm":true}]}]

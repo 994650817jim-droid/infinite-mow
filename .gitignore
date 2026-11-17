@@ -81,6 +81,7 @@ assets/raw/*
 !/tools/test-campaign-build.mjs
 !/tools/test-charms.mjs
 !/tools/test-token-slots.mjs
+!/tools/test-merit.mjs
 !/tools/test-hero-codex.mjs
 !/tools/phase19-progression.mjs
 !/tools/rest-flow-smoke.mjs
@@ -98,6 +99,7 @@ assets/raw/*
 !/tools/artv2-shift-back.mjs
 !/tools/prepare-painted-icon.mjs
 !/tools/prepare-fx-sheet.mjs
+!/tools/prepare-ui-sheet.mjs
 !/tools/artv2-troops.mjs
 !/tools/artv2-enemies.mjs
 !/tools/artv2-portraits.mjs

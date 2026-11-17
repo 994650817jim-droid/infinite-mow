@@ -5,6 +5,8 @@
  * 顶部军粮与下一步提示，底部 天下地图 / 讲武堂 /（州府）城池 / 出征备战。
  * 美术：assets/city（全景与建筑，CityLayout；讲武堂、马厩暂复用校场、驿站图）；缺图时退回旧小镇像素画与程序画。
  */
+import {MERIT} from '../data/merit';
+import {exchangeMerit,merit,scrolls} from '../systems/MasteryStore';
 import {playMenuMusic} from '../systems/Music';
 import {isChapterTestRun} from '../systems/ChapterProgress';
 import Phaser from 'phaser';
@@ -228,7 +230,7 @@ export class CityScene extends Phaser.Scene {
   type Fn=[string,()=>void];
   const funcs:Partial<Record<TownBuildingId,Fn[]>>={
    barracks:[['招募后备',()=>this.scene.start('CityRecruitScene')]],
-   academy:[['研究科技',()=>{m.root.destroy();this.openTech();}]],
+   academy:[['研究科技',()=>{m.root.destroy();this.openTech();}],['战功换残卷',()=>{m.root.destroy();this.openMeritExchange();}]],
    talent:[['进入招贤馆',()=>this.scene.start('TalentHallScene')]],
    stable:[['进入马厩',()=>this.openStable(msg)]],
    // 城池发展已改为各城自己的建筑（天下地图 → 进入城池）
@@ -270,6 +272,23 @@ export class CityScene extends Phaser.Scene {
  private focusOn(id:TownBuildingId){const sl=CITY_SLOTS[citySize(loadWorld().town) as 1|2|3][id];this.scrollTo(sl.x*this.k-this.vr.w/2,sl.y*this.k-this.vr.h*.62);}
 
  /** 讲武堂：三条分支分页，每页列出该分支的科技（已研究 / 可研究 / 缺军粮 / 未解锁）。 */
+ /** 讲武堂 · 战功换武学残卷（2026-11-17 用户：残卷去建筑手动换）：每 MERIT.perScroll 战功换 1 张，可选数量。 */
+ private meritQty=1;
+ private openMeritExchange(notice=''){
+  const h=D?360:460,m=this.modal('town-merit','讲武堂 · 战功换武学残卷',h),have=merit(),max=Math.floor(have/MERIT.perScroll);
+  this.meritQty=Math.max(1,Math.min(this.meritQty,Math.max(1,max)));
+  const line=(y:number,v:string,size:number,color:string,name:string)=>m.root.add(txt(this,W/2,y,v,size,color).setOrigin(.5).setName(name));
+  line(m.y+76,`战功 ${have}　·　武学残卷 ${scrolls()}`,18,'#f3d48a','merit-have');
+  line(m.y+108,`每 ${MERIT.perScroll} 战功换 1 张武学残卷（数值待复核）。战功来自击杀精英（+${MERIT.elite}）与首领（+${MERIT.boss}）。`,13,'#b9a98a','merit-rule');
+  const qy=m.y+164,q=this.meritQty;
+  const step=(label:string,dx:number,name:string,fn:()=>void,w=56)=>{const b=homeCommand(this,W/2+dx,qy,w,40,label,false,true,16);b.hit.setName(name).on('pointerdown',fn);m.root.add([b.g,b.hit,b.caption]);};
+  step('−',-130,'merit-minus',()=>{this.meritQty=Math.max(1,q-1);this.openMeritExchange();});
+  line(qy,`× ${q}　（战功 ${q*MERIT.perScroll}）`,18,max>=q?'#ede3c9':'#e59a83','merit-qty');
+  step('+',130,'merit-plus',()=>{this.meritQty=Math.min(Math.max(1,max),q+1);this.openMeritExchange();});
+  step('最多',214,'merit-max',()=>{this.meritQty=Math.max(1,max);this.openMeritExchange();},76);
+  const go=homeCommand(this,W/2,qy+58,220,42,`兑换 ${q} 张`,true,max>=q,16);go.hit.setName('merit-exchange').setData('padDefault',max>=q).on('pointerdown',()=>{const r=exchangeMerit(this.meritQty);this.meritQty=1;this.openMeritExchange(r.message);});m.root.add([go.g,go.hit,go.caption]);
+  line(qy+104,notice||(max?`现有战功最多可换 ${max} 张`:'战功不足：去战场击杀精英、首领获得战功'),13,notice?'#9fd38a':'#b9a98a','merit-msg');
+ }
  private openTech(){
   const s=loadWorld(),t=s.town,acad=levelOf(t,'academy'),h=D?Math.min(H-24,520):Math.min(H-40,780),m=this.modal('town-tech',acad?`讲武堂 Lv${acad} · 军粮 ${s.provisions}`:'讲武堂（未建）',h);
   if(!acad)m.root.add(txt(this,W/2,m.y+66,'先在营中建讲武堂（军粮 '+TOWN_BUILDINGS.academy.build+'），即可研究科技。',13,'#e59a83').setOrigin(.5).setWordWrapWidth(m.w-60,true).setAlign('center').setName('town-tech-need'));

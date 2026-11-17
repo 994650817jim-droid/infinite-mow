@@ -15,7 +15,7 @@ ChatGPT 聊天「绘制界面底板」/c/6afc422b…，原图在 originals/dsh_b
 | sil_*_ink.webp | 128×128 | 同上的深墨版，放在宣纸等浅底上用 |
 | slot_tag.webp | 48×120 | 竖排朱红小牌底（字由代码写） |
 | lock_tag.webp | 48×48 | 小锁牌 |
-| medal_frame / medal_frame_selected.webp | 120×120 | 圆形将印外框（环内透明放头像，内径约 72%）；选中版外圈金光 |
+| medal_frame / medal_frame_selected.webp | 120×120 | 圆形将印外框（环内透明放头像，内径约 80px）；选中版外圈金光 |
 | tab / tab_selected.webp | 240×64 | 筛选页签底，两端圆角；九宫格左右各留约 32px |
 | tab_icon_all / armor / helm / boots / token / relic.webp | 64×64 | 页签小图标（全部=行囊、甲胄、头盔、战靴、信物=玉佩、遗珍=宝匣），显示 32~40 像素 |
 | tooltip_card.webp | 600×400 | 悬停卡 / 详情卡底，漆底金边四角花；九宫格边约 40px，顶部品质色带由代码叠 |

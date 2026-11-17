@@ -74,7 +74,7 @@ export function zhenbeiBehavior(host: WeaponHost, weapon: WeaponState, dt: numbe
   if (weapon.cooldownLeft > 0) return;
   const pl = host.player, growth = pl.growth, level = weapon.level;
   const kaishan = growth.masteries.kaishan, heavy = kaishan > 0 && growth.slashCount >= 4;
-  const len = R.crackLen, width = R.crackWidth * (heavy ? 1.5 : 1);
+  const am = host.player.passive.rangeMultiplier('zhenbei_blade'), len = R.crackLen * am, width = R.crackWidth * (heavy ? 1.5 : 1) * am; // 智力范围加成
   // 选裂波方向：16 个候选方向里，直线带内敌人最多（精锐 / 首领加权）的一个；有优先目标时直指目标
   const near = host.grid.query(pl.x, pl.y, len + 40).filter(e => e.active && !e.isSupplySlot && Math.hypot(e.x - pl.x, e.y - pl.y) <= len + e.radius);
   if (!near.length) return; // 没有敌人不出刀、不耗冷却
@@ -309,7 +309,7 @@ function fireRing(host: WeaponHost, s: MineState, g: RingGroup, damage: number, 
 
 export function lianhuanBehavior(host: WeaponHost, weapon: WeaponState, dt: number, time: number): void {
   const pl = host.player, s = stateOf(pl), growth = pl.growth, level = weapon.level;
-  const damage = LIANHUAN_DEF.damage(level, pl.stats) * growth.damageMultiplier(time), radius = mineRadius(level);
+  const damage = LIANHUAN_DEF.damage(level, pl.stats) * growth.damageMultiplier(time), radius = mineRadius(level) * host.player.passive.rangeMultiplier('lianhuan_mines'); // 智力范围加成
   const chainRange = R.mineChainRange * (1 + .15 * growth.masteries.lianying), len = tetherLen(pl);
   // 火雷：被踩后先烧引信（mineFuseMs，期间再有人踩不重新计时）再爆并带出连锁；到期无人踩则原地自爆。铁索连舟中的雷由地火统一引爆
   for (const m of [...s.mines]) {
@@ -470,7 +470,7 @@ function summonMaids(host: WeaponHost, s: SunState, time: number, count: number,
   const pl = host.player, scene = sceneOf(host);
   for (let k = 0; k < count; k++) {
     if (s.maids.length >= cap) { const old = s.maids.shift()!; old.img.destroy(); }
-    const angle = Math.random() * Math.PI * 2, x = pl.x + Math.cos(angle) * R.maidRange, y = pl.y + Math.sin(angle) * R.maidRange;
+    const angle = Math.random() * Math.PI * 2, x = pl.x + Math.cos(angle) * (R.maidRange * host.player.passive.rangeMultiplier('sun_knives')), y = pl.y + Math.sin(angle) * (R.maidRange * host.player.passive.rangeMultiplier('sun_knives'));
     // 正式执刀侍婢行走图（sun_maid_walk）；缺图时借蜀军刀兵染红过渡
     const img = scene.textures.exists('sun_maid_walk') ? host.add.image(x, y, 'sun_maid_walk', 'down_0')
       : scene.textures.exists('shu_swordsman_walk_sheet') ? host.add.image(x, y, 'shu_swordsman_walk_sheet', 'down_0').setTint(0xff9a8a)
@@ -491,7 +491,7 @@ export function sunKnivesBehavior(host: WeaponHost, weapon: WeaponState, dt: num
   s.spin += dt * 3.2;
   const orbitDamage = sunOrbitDamage(level, pl.stats) * growth.damageMultiplier(time);
   s.orbit.forEach((k, i) => {
-    const a = s.spin + i * Math.PI * 2 / s.orbit.length, x = pl.x + Math.cos(a) * R.knifeOrbitR, y = pl.y - 6 + Math.sin(a) * R.knifeOrbitR * .8;
+    const a = s.spin + i * Math.PI * 2 / s.orbit.length, x = pl.x + Math.cos(a) * (R.knifeOrbitR * host.player.passive.rangeMultiplier('sun_knives')), y = pl.y - 6 + Math.sin(a) * (R.knifeOrbitR * host.player.passive.rangeMultiplier('sun_knives')) * .8;
     const ready = time >= k.readyAt;
     k.img.setPosition(x, y).setRotation(a + Math.PI / 2).setVisible(pl.alive).setAlpha(ready ? 1 : Math.max(.15, 1 - (k.readyAt - time) / R.knifeRegenMs));
     if (!pl.alive) return;
@@ -522,12 +522,12 @@ export function sunKnivesBehavior(host: WeaponHost, weapon: WeaponState, dt: num
     const m = s.maids[i];
     if (time >= m.until || host.over) { m.img.scene.tweens.add({ targets: m.img, alpha: 0, duration: 200, onComplete: () => m.img.destroy() }); s.maids.splice(i, 1); continue; }
     m.angle += dt * 1.6;
-    const tx = pl.x + Math.cos(m.angle) * R.maidRange, ty = pl.y + Math.sin(m.angle) * R.maidRange * .8;
+    const tx = pl.x + Math.cos(m.angle) * (R.maidRange * host.player.passive.rangeMultiplier('sun_knives')), ty = pl.y + Math.sin(m.angle) * (R.maidRange * host.player.passive.rangeMultiplier('sun_knives')) * .8;
     const mvx = (tx - m.img.x) * Math.min(1, dt * 6), mvy = (ty - m.img.y) * Math.min(1, dt * 6); m.img.x += mvx; m.img.y += mvy;
     if (m.img.texture.key === 'sun_maid_walk') { const dir = Math.abs(mvx) > Math.abs(mvy) ? (mvx < 0 ? 'left' : 'right') : (mvy < 0 ? 'up' : 'down'); m.img.setFrame(`${dir}_${Math.floor(time / 140) % 4}`); }
     if (time < m.nextSlash) continue;
-    let best: Enemy | null = null, bd: number = R.maidRange;
-    for (const e of host.grid.query(m.img.x, m.img.y, R.maidRange)) { if (!e.active || e.isSupplySlot) continue; const d = Math.hypot(e.x - m.img.x, e.y - m.img.y); if (d < bd) { bd = d; best = e; } }
+    let best: Enemy | null = null, bd: number = (R.maidRange * host.player.passive.rangeMultiplier('sun_knives'));
+    for (const e of host.grid.query(m.img.x, m.img.y, (R.maidRange * host.player.passive.rangeMultiplier('sun_knives')))) { if (!e.active || e.isSupplySlot) continue; const d = Math.hypot(e.x - m.img.x, e.y - m.img.y); if (d < bd) { bd = d; best = e; } }
     if (!best) continue;
     m.nextSlash = time + R.maidSlashMs; m.img.setFlipX(best.x < m.img.x);
     host.hitEnemy(best, maidDamage, time, 'melee');
@@ -548,9 +548,9 @@ export function sunKnivesBehavior(host: WeaponHost, weapon: WeaponState, dt: num
   weapon.cooldownLeft -= dt;
   if (weapon.cooldownLeft > 0) return;
   // 掷刀优先打环绕刀够不着的敌人（环外最近者），环内的交给环绕刀；环外没有敌人时才打最近的
-  const outer = R.knifeOrbitR + 30;
+  const outer = (R.knifeOrbitR * host.player.passive.rangeMultiplier('sun_knives')) + 30;
   // 统一索敌：环外（首领 > 精锐 > 群怪 > 最近），环外没有敌人时才打环内
-  const target = smartTarget(host, R.knifeRange, outer) ?? smartTarget(host, R.knifeRange);
+  const target = smartTarget(host, (R.knifeRange * host.player.passive.rangeMultiplier('sun_knives')), outer) ?? smartTarget(host, (R.knifeRange * host.player.passive.rangeMultiplier('sun_knives')));
   if (!target) return;
   const ready = s.orbit.filter(k => time >= k.readyAt);
   if (!ready.length) { weapon.cooldownLeft = .1; return; }
@@ -563,7 +563,7 @@ export function sunKnivesBehavior(host: WeaponHost, weapon: WeaponState, dt: num
   // 每次掷几把随等级 1/1/2/2/3：第一把打主目标，其余飞向主目标以外的近敌（伤害 60%）；没有别的敌人时散射在主目标两侧
   const base = SUN_KNIVES_DEF.damage(level, pl.stats) * growth.damageMultiplier(time), pierce = R.knifePierceByLevel[lv(level)] + (moving ? growth.masteries.huishen : 0);
   const count = Math.min(ready.length, R.knifeCountByLevel[lv(level)]);
-  const others = host.grid.query(pl.x, pl.y, R.knifeRange).filter(e => e.active && !e.isSupplySlot && e !== target && Math.hypot(e.x - pl.x, e.y - pl.y) <= R.knifeRange)
+  const others = host.grid.query(pl.x, pl.y, (R.knifeRange * host.player.passive.rangeMultiplier('sun_knives'))).filter(e => e.active && !e.isSupplySlot && e !== target && Math.hypot(e.x - pl.x, e.y - pl.y) <= (R.knifeRange * host.player.passive.rangeMultiplier('sun_knives')))
     .sort((a, b) => Math.hypot(a.x - pl.x, a.y - pl.y) - Math.hypot(b.x - pl.x, b.y - pl.y));
   for (let k = 0; k < count; k++) {
     const knife = ready[k], sx = knife.img.x, sy = knife.img.y, t = k === 0 ? target : others[k - 1];
@@ -572,7 +572,7 @@ export function sunKnivesBehavior(host: WeaponHost, weapon: WeaponState, dt: num
     const d = Math.hypot(ax, ay) || 1;
     knife.readyAt = time + R.knifeRegenMs;
     s.thrown.push({ img: host.add.image(sx, sy, tex).setDisplaySize(32, 15).setDepth(41).setRotation(Math.atan2(ay, ax)).setName('sun-thrown-knife'),
-      vx: ax / d * R.knifeSpeed, vy: ay / d * R.knifeSpeed, left: R.knifeRange + 40,
+      vx: ax / d * R.knifeSpeed, vy: ay / d * R.knifeSpeed, left: (R.knifeRange * host.player.passive.rangeMultiplier('sun_knives')) + 40,
       pierce, hit: new Set(), damage: base * (k === 0 ? 1 : R.knifeExtraMul) });
   }
   host.sfx.play('allySpear');
@@ -671,12 +671,12 @@ export function diaochanFansBehavior(host: WeaponHost, weapon: WeaponState, dt: 
   // 闭月：舞带环身旋舞
   if (time < s.danceUntil) {
     if (s.ribbon) { s.ribbon.clear(); if (SHOW_OWN_RANGE_FX) { const a0 = time / 180; s.ribbon.setPosition(pl.x, pl.y - 6);
-      for (let k = 0; k < 3; k++) { const a = a0 + k * Math.PI * 2 / 3; s.ribbon.lineStyle(6 - k, k % 2 ? 0xe9a6ff : 0xffc6ec, .85).beginPath().arc(0, 0, R.moonRadius * (.55 + .15 * k), a, a + 1.6).strokePath(); } } }
+      for (let k = 0; k < 3; k++) { const a = a0 + k * Math.PI * 2 / 3; s.ribbon.lineStyle(6 - k, k % 2 ? 0xe9a6ff : 0xffc6ec, .85).beginPath().arc(0, 0, (R.moonRadius * host.player.passive.rangeMultiplier('diaochan_fans')) * (.55 + .15 * k), a, a + 1.6).strokePath(); } } }
     if (time >= s.nextTick) {
       s.nextTick = time + R.moonTickMs;
       const turnMs = R.turnMs + 500 * growth.masteries.meirenji;
-      for (const e of host.grid.query(pl.x, pl.y, R.moonRadius + 30)) {
-        if (!e.active || e.isSupplySlot || Math.hypot(e.x - pl.x, e.y - pl.y) > R.moonRadius + e.radius) continue;
+      for (const e of host.grid.query(pl.x, pl.y, (R.moonRadius * host.player.passive.rangeMultiplier('diaochan_fans')) + 30)) {
+        if (!e.active || e.isSupplySlot || Math.hypot(e.x - pl.x, e.y - pl.y) > (R.moonRadius * host.player.passive.rangeMultiplier('diaochan_fans')) + e.radius) continue;
         host.hitEnemy(e, damage * R.moonDamageMul, time, 'arrow'); pl.passive.forceTurn(e, time, turnMs);
       }
     }
@@ -685,7 +685,7 @@ export function diaochanFansBehavior(host: WeaponHost, weapon: WeaponState, dt: 
   if (s.ribbon) { s.ribbon.destroy(); s.ribbon = undefined; }
   weapon.cooldownLeft -= dt;
   if (weapon.cooldownLeft > 0) return;
-  const range = R.fanRange * (1 + .15 * growth.masteries.nichang);
+  const range = R.fanRange * (1 + .15 * growth.masteries.nichang) * host.player.passive.rangeMultiplier('diaochan_fans'); // 智力范围加成
   const target = smartTarget(host, range + 60);
   if (!target) return;
   const cast = pl.passive.beginCast('diaochan_fans');
@@ -694,7 +694,7 @@ export function diaochanFansBehavior(host: WeaponHost, weapon: WeaponState, dt: 
     pl.playAction('skill', target.x < pl.x ? 'left' : 'right');
     s.danceUntil = time + R.moonMs; s.nextTick = time;
     s.ribbon = host.add.graphics().setDepth(41).setName('diaochan-moon');
-    host.heroFx?.(sceneOf(host).textures.exists('hero_fx_d') ? 'moonDance' : 'charm', pl.x, pl.y - 6, R.moonRadius * 2.4); // 闭月正式序列帧（fx_d 第 1 行），缺图用倾城花瓣旋涡
+    host.heroFx?.(sceneOf(host).textures.exists('hero_fx_d') ? 'moonDance' : 'charm', pl.x, pl.y - 6, (R.moonRadius * host.player.passive.rangeMultiplier('diaochan_fans')) * 2.4); // 闭月正式序列帧（fx_d 第 1 行），缺图用倾城花瓣旋涡
     weapon.cooldownLeft = R.moonMs / 1000;
     return;
   }

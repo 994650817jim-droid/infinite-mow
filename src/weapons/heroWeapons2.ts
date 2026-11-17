@@ -122,11 +122,11 @@ export function baodiaoBehavior(host: WeaponHost, weapon: WeaponState, dt: numbe
       else { const flash = host.add.circle(ex, ey - 8, 10, 0xffe6a0, .8).setDepth(42).setBlendMode(1);
         flash.scene.tweens.add({ targets: flash, radius: 34, alpha: 0, duration: 240, onComplete: () => flash.destroy() }); }
       if (a.burst) { // 神射：命中处小范围爆裂
-        for (const o of host.grid.query(ex, ey, R.heavyBurstRadius + 30)) if (alive(o) && o !== e && Math.hypot(o.x - ex, o.y - ey) <= R.heavyBurstRadius + o.radius) host.hitEnemy(o, a.damage * R.heavyBurstMul, time, 'arrow');
+        for (const o of host.grid.query(ex, ey, (R.heavyBurstRadius * host.player.passive.rangeMultiplier('baodiao_bow')) + 30)) if (alive(o) && o !== e && Math.hypot(o.x - ex, o.y - ey) <= (R.heavyBurstRadius * host.player.passive.rangeMultiplier('baodiao_bow')) + o.radius) host.hitEnemy(o, a.damage * R.heavyBurstMul, time, 'arrow');
         // 神射爆裂：像素爆裂帧是命中特效（不是范围提示），各种提示方案下都播；缺图时旧方案（?hints=old）退回程序化光圈，b 方案留地面裂痕
-        if (HINT_MOCK === 'b') groundScar(e.sprite.scene, ex, ey, R.heavyBurstRadius, 'crack');
-        else if (!hzFx(host, HZFX.burst, ex, ey - 6, R.heavyBurstRadius * 2.6, 22, 'huangzhong-burst') && !HINT_MOCK) { const ring = host.add.circle(ex, ey - 6, 12, 0xffd27a, 0).setStrokeStyle(4, 0xffe6a0, .9).setDepth(42);
-        ring.scene.tweens.add({ targets: ring, radius: R.heavyBurstRadius, alpha: 0, duration: 300, onComplete: () => ring.destroy() }); }
+        if (HINT_MOCK === 'b') groundScar(e.sprite.scene, ex, ey, (R.heavyBurstRadius * host.player.passive.rangeMultiplier('baodiao_bow')), 'crack');
+        else if (!hzFx(host, HZFX.burst, ex, ey - 6, (R.heavyBurstRadius * host.player.passive.rangeMultiplier('baodiao_bow')) * 2.6, 22, 'huangzhong-burst') && !HINT_MOCK) { const ring = host.add.circle(ex, ey - 6, 12, 0xffd27a, 0).setStrokeStyle(4, 0xffe6a0, .9).setDepth(42);
+        ring.scene.tweens.add({ targets: ring, radius: (R.heavyBurstRadius * host.player.passive.rangeMultiplier('baodiao_bow')), alpha: 0, duration: 300, onComplete: () => ring.destroy() }); }
       }
       if (a.pierce-- <= 0) { a.left = 0; break; }
     }
@@ -218,15 +218,15 @@ export function dangyangBehavior(host: WeaponHost, weapon: WeaponState, dt: numb
     const b = st.bridges[i];
     if (time >= b.until || host.over) { b.g.destroy(); st.bridges.splice(i, 1); continue; }
     b.g.setAlpha(.5 + .3 * Math.sin(time / 120));
-    for (const e of host.grid.query(b.x, b.y, R.bridgeRadius + 30)) {
+    for (const e of host.grid.query(b.x, b.y, (R.bridgeRadius * host.player.passive.rangeMultiplier('dangyang_roar')) + 30)) {
       if (!alive(e) || e.kind === 'boss' || e.controlImmune) continue;
-      const dx = e.x - b.x, dy = e.y - b.y, d = Math.hypot(dx, dy) || 1, edge = R.bridgeRadius + e.radius;
+      const dx = e.x - b.x, dy = e.y - b.y, d = Math.hypot(dx, dy) || 1, edge = (R.bridgeRadius * host.player.passive.rangeMultiplier('dangyang_roar')) + e.radius;
       if (d < edge) { e.sprite.x = b.x + dx / d * edge; e.sprite.y = b.y + dy / d * edge; }
     }
   }
   weapon.cooldownLeft -= dt;
   if (weapon.cooldownLeft > 0) return;
-  const g = pl.growth, level = weapon.level, max = (level >= 5 ? 260 : 220) * (1 + .12 * g.masteries.wanrendi);
+  const g = pl.growth, level = weapon.level, max = (level >= 5 ? 260 : 220) * (1 + .12 * g.masteries.wanrendi) * host.player.passive.rangeMultiplier('dangyang_roar'); // 智力范围加成
   const target = smartTarget(host, max);
   if (!target) return;
   const cast = pl.passive.beginCast('dangyang_roar');
@@ -237,16 +237,16 @@ export function dangyangBehavior(host: WeaponHost, weapon: WeaponState, dt: numb
     // 据水断桥：360° 喝断，震慑周围（首领只受伤），并留下 3 秒敌人进不来的断桥区
     pl.playAction('skill', Math.cos(a) < 0 ? 'left' : 'right');
     const stun = R.roarStunMs + 200 * g.masteries.dahe;
-    for (const e of host.grid.query(pl.x, pl.y, R.roarRadius + 40)) {
-      if (!alive(e) || Math.hypot(e.x - pl.x, e.y - pl.y) > R.roarRadius + e.radius) continue;
+    for (const e of host.grid.query(pl.x, pl.y, (R.roarRadius * host.player.passive.rangeMultiplier('dangyang_roar')) + 40)) {
+      if (!alive(e) || Math.hypot(e.x - pl.x, e.y - pl.y) > (R.roarRadius * host.player.passive.rangeMultiplier('dangyang_roar')) + e.radius) continue;
       host.hitEnemy(e, damage * R.roarDamageMul, time, 'melee');
       if (!e.controlImmune && e.kind !== 'boss') e.stunUntil = Math.max(e.stunUntil, time + stun);
     }
-    host.heroFx?.('roar', pl.x, pl.y - 10, R.roarRadius * 2.6);
+    host.heroFx?.('roar', pl.x, pl.y - 10, (R.roarRadius * host.player.passive.rangeMultiplier('dangyang_roar')) * 2.6);
     const bg = host.add.graphics().setDepth(18.8).setName('zhangfei-bridge');
-    if (SHOW_OWN_RANGE_FX) bg.fillStyle(0xff8a3c, .12).fillCircle(pl.x, pl.y, R.bridgeRadius);
-    if (HINT_MOCK === 'b') groundScar(bg.scene, pl.x, pl.y, R.bridgeRadius, 'crack', 0, 360); // 断桥区：默认只铺淡淡一层，?rings=1 时加描边范围圈
-    if (SHOW_RANGE_RINGS) bg.lineStyle(4, 0xffb060, .8).strokeCircle(pl.x, pl.y, R.bridgeRadius);
+    if (SHOW_OWN_RANGE_FX) bg.fillStyle(0xff8a3c, .12).fillCircle(pl.x, pl.y, (R.bridgeRadius * host.player.passive.rangeMultiplier('dangyang_roar')));
+    if (HINT_MOCK === 'b') groundScar(bg.scene, pl.x, pl.y, (R.bridgeRadius * host.player.passive.rangeMultiplier('dangyang_roar')), 'crack', 0, 360); // 断桥区：默认只铺淡淡一层，?rings=1 时加描边范围圈
+    if (SHOW_RANGE_RINGS) bg.lineStyle(4, 0xffb060, .8).strokeCircle(pl.x, pl.y, (R.bridgeRadius * host.player.passive.rangeMultiplier('dangyang_roar')));
     st.bridges.push({ x: pl.x, y: pl.y, until: time + R.bridgeMs + 500 * g.masteries.dahe, g: bg });
     host.cameras.main.shake(140, .005);
   } else pl.playAction('attack', Math.cos(a) < 0 ? 'left' : 'right');
@@ -375,7 +375,7 @@ export function zhanjinBehavior(host: WeaponHost, weapon: WeaponState, dt: numbe
     host.time.delayedCall(R.liftMs, () => {
       if (host.over) return;
       const lx = target.active && target.spawnId === spawn ? target.x : tx, ly = target.active && target.spawnId === spawn ? target.y : ty;
-      landSlam(host, lx, ly, zhanjinLandRadius(level, g.masteries.jinma), damage, host.combatNow, g.masteries.jinma >= 3);
+      landSlam(host, lx, ly, zhanjinLandRadius(level, g.masteries.jinma) * host.player.passive.rangeMultiplier('zhanjin_lance'), damage, host.combatNow, g.masteries.jinma >= 3);
     });
   }
   weapon.cooldownLeft = Math.max(.3, ZHANJIN_DEF.cooldown(level, pl.stats) / g.attackSpeedMultiplier(time));
@@ -408,7 +408,7 @@ export function shuangguBehavior(host: WeaponHost, weapon: WeaponState, dt: numb
   if (!foes.length) return;
   const first = smartTarget(host, range); if (first && foes.includes(first)) { foes.splice(foes.indexOf(first), 1); foes.unshift(first); }
   const cast = pl.passive.beginCast('shuanggu_swords');
-  const damage = SHUANGGU_DEF.damage(level, pl.stats) * g.damageMultiplier(time) * cast.damageMul, splash = shuangguSplash(level, g.masteries.taoyuan);
+  const damage = SHUANGGU_DEF.damage(level, pl.stats) * g.damageMultiplier(time) * cast.damageMul, splash = shuangguSplash(level, g.masteries.taoyuan) * host.player.passive.rangeMultiplier('shuanggu_swords'); // 智力范围加成
   const targets = foes.slice(0, g.masteries.taoyuan >= 3 ? 3 : 2), colors = [0x8fe0c0, 0xffd27a, 0xffffff];
   if (cast.heal) pl.heal(pl.maxHp * cast.heal * (1 + .25 * g.masteries.xiemin));
   if (cast.empowered) { LIUBEI_HASTE.set(pl, time + R.liubeiHasteMs); const aura = host.add.circle(pl.x, pl.y - 10, 30, 0xffd890, .25).setBlendMode(1).setDepth(41).setName('liubei-haste'); aura.scene.tweens.add({ targets: aura, radius: 70, alpha: 0, duration: 500, onComplete: () => aura.destroy() }); }

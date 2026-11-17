@@ -3040,7 +3040,7 @@ export class GameScene extends Phaser.Scene {
       g.fillStyle(WAR.gold, 0.95);
       g.fillRect(left, barY + 18, Math.max(0, barW * (energy / 100)), 7);}
     } else {
-      this.hintText?.setVisible(this.elapsed < 8 || this.relicExpanded);
+      this.hintText?.setVisible((this.elapsed < 8 || this.relicExpanded) && !this.tutorial?.active); // 新手引导在时不叠旧操作提示
       this.hudTexts.boss.setVisible(false);
       this.hudTexts.bossHp.setVisible(false);
       this.hudTexts.bossEnergy.setVisible(false);

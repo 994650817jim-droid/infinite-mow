@@ -163,10 +163,13 @@ for (const layout of ['mobile', 'desktop']) {
   await R(p, (r) => { r.setRosterRandom(() => 0); r.tryCapture('bounty', '许褚', 'caocao'); r.setRosterRandom(); });
   await p.evaluate(() => { const g = window.__game; for (const s of g.scene.getScenes(true)) s.scene.stop(); g.scene.start('CityScene'); });
   await p.waitForFunction(() => window.__game.scene.isActive('CityScene'), null, { timeout: 60000 }); await p.waitForTimeout(800);
-  const hasBtn = await p.evaluate(() => !!window.__game.scene.getScene('CityScene').children.getByName('city-talent'));
-  ck(`${layout} 主城有「招贤馆」入口`, hasBtn);
+  // 2026-11-17 营寨只留「天下地图」按钮：招贤馆从营寨里的招贤馆建筑进入
+  await p.evaluate(() => { const c = window.__game.scene.getScene('CityScene'); const h = c.hits.find(h => h.name === 'bld-talent'); h.emit('pointerdown'); h.emit('pointerup'); });
+  await p.waitForTimeout(200);
+  const hasBtn = await p.evaluate(() => window.__game.scene.getScene('CityScene').children.getByName('town-card')?.list.some(o => o.text === '进入招贤馆'));
+  ck(`${layout} 营寨招贤馆建筑有「进入招贤馆」入口`, hasBtn);
   await p.screenshot({ path: `${out}/city-${layout}.png` });
-  await p.evaluate(() => window.__game.scene.getScene('CityScene').children.getByName('city-talent').emit('pointerdown'));
+  await p.evaluate(() => window.__game.scene.getScene('CityScene').children.getByName('town-card').getByName('town-card-func').emit('pointerdown'));
   await p.waitForFunction(() => window.__game.scene.isActive('TalentHallScene'), null, { timeout: 30000 }); await p.waitForTimeout(500);
   await p.screenshot({ path: `${out}/hall-offers-${layout}.png` });
   const u = await p.evaluate(() => { const s = window.__game.scene.getScene('TalentHallScene'), c = s.children.list.find(x => x.type === 'Container'); const names = c.list.map(x => x.name).filter(Boolean); const btn = c.getByName('talent-offer-0'); btn.emit('pointerup'); return { names }; });
@@ -184,17 +187,17 @@ for (const layout of ['mobile', 'desktop']) {
 // —— 4. 战斗：随行贴身跟随、出手、瞬移、倒下休整 ——
 {
   const roster = { version: 1, lord: 'zhaoyun', owned: [{ id: 'zhaoyun', kind: 'hero', hero: 'zhaoyun', name: '赵云', template: 'spear', quality: 'orange', rank: 1, picks: [] }, { id: 'zhangfei', kind: 'hero', hero: 'zhangfei', name: '张飞', template: 'spear', quality: 'orange', rank: 1, picks: [] }, { id: 'r_1', kind: 'common', name: '王勇', template: 'bow', quality: 'green', rank: 1, picks: [] }, { id: 'r_2', kind: 'named', name: '张郃', template: 'strategist', quality: 'purple', rank: 1, picks: [] }], followers: ['zhangfei', 'r_1', 'r_2'], offers: [], captives: [], season: -1, manual: 0, dry: 0, seq: 2, hall: 3 };
-  // 武将等级（HeroProgress）：张飞 Lv.5 加过武力 2、体魄 1；王勇（r_1）Lv.11；张郃（r_2）没有记录，用起始等级
-  const zero = { might: 0, quickness: 0, critical: 0, constitution: 0, agility: 0 };
-  const heroes = { version: 1, migrated: true, heroes: { zhangfei: { level: 5, xp: 0, attributes: { ...zero, might: 2, constitution: 1 } }, r_1: { level: 11, xp: 0, attributes: zero } } };
+  // 武将等级（HeroProgress）：张飞 Lv.5 加过力量 2（2026-11-17 属性改版：力量每点伤害 +1.5%、生命 +3%）；王勇（r_1）Lv.11；张郃（r_2）没有记录，用起始等级
+  const zero = { strength: 0, agility: 0, intellect: 0, command: 0 };
+  const heroes = { version: 1, migrated: true, attrSet: 3, heroes: { zhangfei: { level: 5, xp: 0, attributes: { ...zero, strength: 2 } }, r_1: { level: 11, xp: 0, attributes: zero } } };
   const p = await page('mobile', '&dev=1&autostart=1&stage=1&followers=1', { im_roster_v1: JSON.stringify(roster), im_heroes_v1: JSON.stringify(heroes) });
   const G = "window.__game.scene.getScene('GameScene')";
   await p.waitForFunction(() => window.__game?.scene.getScene('GameScene')?.player && window.__game.scene.getScene('GameScene').__DEV_ACTIONS, null, { timeout: 90000 });
   await p.waitForTimeout(1500);
   const a = await p.evaluate(G0 => { const s = eval(G0); s.player.damageImmune = true; s.__DEV_ACTIONS.closePopup?.(); s.spawnTimer = s.eliteTimer = 1e9; for (const e of s.enemies) if (e.active && !e.isSupplySlot) e.hp = 0; const f = s.followers; return { n: f?.members.length, names: f?.members.map(m => m.recruit.name), sheets: f?.members.map(m => m.sheet), dmg: f?.members.map(m => +m.damage.toFixed(2)), hp: f?.members.map(m => m.maxHp), lv: f?.members.map(m => m.level) }; }, G);
-  // 期望值：张飞 枪 16 × 橙 1.6 × 伤害倍率 1.2 × (1 + 5%×2) = 33.79，生命 220 × 1.6 × 1.1 × (1 + 10%×1) = 426；
+  // 期望值：张飞 枪 16 × 橙 1.6 × 伤害倍率 1.2 × (1 + 1.5%×2) = 31.64，生命 220 × 1.6 × 1.1 × (1 + 3%×2) = 410；
   // 王勇 弓 18 × 绿 1.15 × (1 + 3%×10) = 26.91，生命 160 × 1.15 × (1 + 4%×10) = 258
-  ck('随行按武将等级成长：可玩名将用自己的属性点，招来的人按等级', a.dmg?.[0] === 33.79 && a.hp?.[0] === 426 && a.dmg?.[1] === 26.91 && a.hp?.[1] === 258 && a.lv?.[1] === 11, a);
+  ck('随行按武将等级成长：可玩名将用自己的属性点，招来的人按等级', a.dmg?.[0] === 31.64 && a.hp?.[0] === 410 && a.dmg?.[1] === 26.91 && a.hp?.[1] === 258 && a.lv?.[1] === 11, a);
   ck('三名随行进入战斗（张飞用自己的行走图，大众脸用兵种图）', a.n === 3 && a.sheets[0] === 'zhangfei_walk_sheet' && a.sheets[1] === 'shu_archer_walk_sheet', a);
   // 敌人围上来：随行出手
   await p.evaluate(G0 => { const s = eval(G0), pl = s.player; for (let i = 0; i < 24; i++) { const ang = i / 24 * Math.PI * 2; s.spawnEnemy('infantry', pl.x + Math.cos(ang) * 170, pl.y + Math.sin(ang) * 170, 3); } }, G);

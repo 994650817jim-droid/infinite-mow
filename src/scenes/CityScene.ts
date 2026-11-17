@@ -64,22 +64,14 @@ export class CityScene extends Phaser.Scene {
   const head=this.add.graphics().setDepth(-1);head.fillStyle(0x102019,1).fillRect(0,0,W,this.vr.y).fillRect(0,this.vr.y+this.vr.h,W,H-this.vr.y-this.vr.h);
   head.lineStyle(2,0xb3935b,.85).strokeRect(this.vr.x,this.vr.y,this.vr.w,this.vr.h);
   worldShell(this,'义军营寨');
-  this.top=txt(this,D?W-300:24,D?28:72,'',D?15:14,'#efe0b4',HEADING_FONT).setOrigin(D?1:0,.5).setName('city-grain');
-  const recruit=homeCommand(this,W-80,D?28:30,130,34,'招募后备',false,true,14);recruit.hit.setName('city-recruit').on('pointerdown',()=>this.scene.start('CityRecruitScene'));
-  const talent=homeCommand(this,D?W-218:W-218,D?28:30,130,34,'招贤馆',false,true,14);talent.hit.setName('city-talent').on('pointerdown',()=>this.scene.start('TalentHallScene'));
+  // 2026-11-17 用户：「只留下天下地图，其他按钮不需要，玩家想要什么就去点击建筑物」——招贤馆、招募后备、讲武堂、出征备战都改为点建筑 / 从天下地图出征
+  this.top=txt(this,D?W-24:24,D?28:72,'',D?15:14,'#efe0b4',HEADING_FONT).setOrigin(D?1:0,.5).setName('city-grain');
   // 规模牌（全景左上角）与下一步提示（全景底边）
   this.sizeText=txt(this,this.vr.x+12,this.vr.y+10,'',D?15:14,'#f6e2ae',HEADING_FONT).setDepth(5).setShadow(0,1,'#000',4,true,true).setBackgroundColor('#1a120bcc').setPadding(8,4,8,4);
   this.hint=txt(this,D?190:24,D?28:94,'',D?13:12,'#b9d2a8').setOrigin(0,.5).setName('city-hint');
-  // 底部导航：天下地图 / 讲武堂 /（州府）城池 / 出征备战
-  const items:Array<[string,string,()=>void,boolean]>=[
-   ['天下地图','city-map',()=>this.scene.start('WorldMapScene'),false],
-   ['讲武堂','city-academy',()=>this.openTech(),false],
-   ...(focusOpen(loadWorld().town)?[['城池','city-focus',()=>this.openFocus(),false] as [string,string,()=>void,boolean]]:[]),
-   ['出征备战','city-expedition',()=>{this.registry.set('worldCampaign',true);this.registry.set('selectedWorldChapter','huangjin');this.openPreparation();},true],
-  ];
-  const gap=8,cols=items.length,navW=(W-(D?24:28)-gap*(cols-1))/cols;
-  items.forEach(([label,name,fn,primary],i)=>{const x=(D?12:14)+navW/2+i*(navW+gap),y=D?H-28:H-72;
-   const btn=homeCommand(this,x,y,navW,D?40:52,label,primary,true,D?15:16);btn.hit.setName(name).on('pointerdown',fn);});
+  // 底栏：只有「天下地图」（出征也从天下地图选章节）；功能都在建筑里
+  const mapBtn=homeCommand(this,W/2,D?H-28:H-72,D?260:W-60,D?40:52,'天下地图 · 出征',true,true,D?16:17);mapBtn.hit.setName('city-map').on('pointerdown',()=>this.scene.start('WorldMapScene'));
+  if(D)txt(this,24,H-28,'点建筑进入：军营招兵 · 讲武堂科技 · 招贤馆 · 主帐武将谱',12,'#a9b9a2').setOrigin(0,.5).setName('city-tip');
   // 拖动 / 滚轮平移全景
   this.input.on('pointerdown',(p:Phaser.Input.Pointer)=>{if(this.anyModal()||!this.inView(p.x,p.y))return;this.drag={x:p.x,y:p.y,sx:this.sx,sy:this.sy,moved:false};});
   this.input.on('pointermove',(p:Phaser.Input.Pointer)=>{const d=this.drag;if(!d||!p.isDown)return;const dx=p.x-d.x,dy=p.y-d.y;if(!d.moved&&Math.hypot(dx,dy)<8)return;d.moved=true;this.scrollTo(d.sx-dx,d.sy-dy);});
@@ -137,11 +129,12 @@ export class CityScene extends Phaser.Scene {
   const ids=(Object.keys(slots) as TownBuildingId[]).filter(id=>buildingOpen(t,id)).sort((a,b)=>slots[a].y-slots[b].y);
   for(const id of ids){
    const sl=slots[id],lv=levelOf(t,id),x=sl.x*k,y=sl.y*k,st=statusOf(t,id,s.provisions,p);
-   let w=sl.w*k*(LEVEL_SCALE[Math.max(1,lv)]),h=w*.72;
+   let w=sl.w*k*(LEVEL_SCALE[Math.max(1,lv)]),h=w*.72,art:Phaser.GameObjects.Image|Phaser.GameObjects.Container|undefined,glow:Phaser.GameObjects.Ellipse|undefined;
    if(lv>0){
     const key=this.artKey(id,lv);
-    if(key){const img=this.add.image(x,y,key).setOrigin(.5,1);img.setScale(w/img.width);h=img.displayHeight;this.pano.add(img);if(this.popId===id)this.playPop(img,x,y);}
-    else{const g=this.drawPlaceholder(id,lv,x,y,w);h=w*.7;if(this.popId===id)this.playPop(g,x,y);}
+    glow=this.add.ellipse(x,y-w*.06,w*1.02,w*.34,0xffe39a,0).setName('glow-'+id);this.pano.add(glow);
+    if(key){const img=this.add.image(x,y,key).setOrigin(.5,1);img.setScale(w/img.width);h=img.displayHeight;this.pano.add(img);art=img;if(this.popId===id)this.playPop(img,x,y);}
+    else{const g=this.drawPlaceholder(id,lv,x,y,w);h=w*.7;art=g;if(this.popId===id)this.playPop(g,x,y);}
    }else{
     // 未建：地基虚线圈
     const g=this.add.graphics(),fw=w*.8;g.fillStyle(0x3a2c1c,.38).fillEllipse(x,y-fw*.12,fw,fw*.32);g.lineStyle(2,0xe8cf8f,.85);
@@ -156,7 +149,9 @@ export class CityScene extends Phaser.Scene {
    // 按下和抬起都落在这块地上才算点建筑：弹窗「返回」按下时就关闭了，抬起不会再穿透到下面的城墙等地块（手柄也是先发按下再发抬起）
    hit.on('pointerdown',()=>{this.pressedSlot=id;});
    hit.on('pointerup',()=>{const own=this.pressedSlot===id;this.pressedSlot=null;if(!own||this.drag?.moved)return;this.openCard(id);});
-   hit.on('pointerover',()=>tag.setColor('#ffe08a')).on('pointerout',()=>tag.setColor(lv>0?'#fff1cf':'#f6e2ae'));
+   const base=art?{x:art.scaleX,y:art.scaleY}:null;
+   hit.on('pointerover',()=>{tag.setColor('#ffe08a').setScale(1.18);glow?.setFillStyle(0xffe39a,.5);if(art&&base&&this.popId!==id)art.setScale(base.x*1.04,base.y*1.04);})
+    .on('pointerout',()=>{tag.setColor(lv>0?'#fff1cf':'#f6e2ae').setScale(1);glow?.setFillStyle(0xffe39a,0);if(art&&base)art.setScale(base.x,base.y);});
    if(id==='hall')hit.setData('padDefault',true);
    this.pano.add(hit);this.hits.push(hit);
   }
@@ -230,16 +225,17 @@ export class CityScene extends Phaser.Scene {
    const db=homeCommand(this,tx+Math.min(220,tw)/2,y+20,Math.min(220,tw),38,d.cost!==null?`练兵 · 军粮 ${d.cost}`:'练兵已达上限',true,d.cost!==null&&s.provisions>=d.cost,14);db.hit.setName('town-drill').on('pointerdown',()=>{const res=trainTroops();if(!res.ok){(m.root.getByName('town-card-msg') as Phaser.GameObjects.Text|null)?.setText(res.message);return;}uiSfx().play('uiClick');this.toast(res.message);this.openCard('barracks');this.refresh();});m.root.add([db.g,db.hit,db.caption]);y+=50;}
   if(block.length&&cost!==null)line('需要：'+block.join('、'),14,'#e59a83','town-card-block');
   const msg=txt(this,W/2,m.y+h-(D?118:132),'',13,'#e8c98a').setOrigin(.5).setName('town-card-msg');m.root.add(msg);
-  const funcs:Partial<Record<TownBuildingId,[string,()=>void]>>={
-   barracks:['招募后备',()=>this.scene.start('CityRecruitScene')],
-   academy:['研究科技',()=>{m.root.destroy();this.openTech();}],
-   talent:['进入招贤馆',()=>this.scene.start('TalentHallScene')],
-   stable:['进入马厩',()=>this.openStable(msg)],
-   hall:['武将谱',()=>this.openCodex()],
-   granary:['开仓募兵',()=>{const res=granaryLevy();if(!res.ok){msg.setText(res.message);return;}m.root.destroy();this.refresh();this.toast(res.message);}],
-  },fn=lv>0?funcs[id]:undefined,bw=fn?Math.min(200,(m.w-80)/2):Math.min(240,m.w-60),ux=fn?W/2+bw/2+8:W/2;
-  if(fn){const f=homeCommand(this,W/2-bw/2-8,m.y+h-(D?84:94),bw,42,fn[0],false,true,15);f.hit.setName('town-card-func').on('pointerdown',fn[1]);m.root.add([f.g,f.hit,f.caption]);}
-  const up=homeCommand(this,ux,m.y+h-(D?84:94),bw,42,cost!==null?(lv?(id==='hall'?'扩建':`升级到 Lv${lv+1}`):'建造'):'已满级',true,ok,16);
+  type Fn=[string,()=>void];
+  const funcs:Partial<Record<TownBuildingId,Fn[]>>={
+   barracks:[['招募后备',()=>this.scene.start('CityRecruitScene')]],
+   academy:[['研究科技',()=>{m.root.destroy();this.openTech();}]],
+   talent:[['进入招贤馆',()=>this.scene.start('TalentHallScene')]],
+   stable:[['进入马厩',()=>this.openStable(msg)]],
+   hall:[['武将谱',()=>this.openCodex()],...(focusOpen(t)?[['城池发展',()=>{m.root.destroy();this.openFocus();}] as Fn]:[])],
+   granary:[['开仓募兵',()=>{const res=granaryLevy();if(!res.ok){msg.setText(res.message);return;}m.root.destroy();this.refresh();this.toast(res.message);}]],
+  },fns=lv>0?funcs[id]??[]:[],n=fns.length+1,bgap=12,bw=Math.min(n>1?200:240,(m.w-60-bgap*(n-1))/n),bx=(i:number)=>W/2-((n-1)*(bw+bgap))/2+i*(bw+bgap),by=m.y+h-(D?84:94);
+  fns.forEach(([label,fn],i)=>{const f=homeCommand(this,bx(i),by,bw,42,label,false,true,15);f.hit.setName(i?'town-card-func'+(i+1):'town-card-func').on('pointerdown',fn);m.root.add([f.g,f.hit,f.caption]);});
+  const up=homeCommand(this,bx(n-1),by,bw,42,cost!==null?(lv?(id==='hall'?'扩建':`升级到 Lv${lv+1}`):'建造'):'已满级',true,ok,16);
   up.hit.setName('town-upgrade').setData('padDefault',true).on('pointerdown',()=>{if(!ok){msg.setText(cost!==null?(block.length?'需要 '+block.join('、'):'军粮不足：需要 '+cost):'已达最高等级');return;}
    const res=townUpgrade(id);if(!res.ok){msg.setText(res.message);return;}
    m.root.destroy();if(id==='hall'){this.scene.restart();return;}this.popId=id;this.focusOn(id);this.refresh();this.toast(res.message);});

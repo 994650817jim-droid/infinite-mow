@@ -7,7 +7,7 @@ import { ENEMY_DEFS, type EnemyDef } from '../data/enemies';
 import type { YellowStage } from '../data/chapters';
 import { TELEGRAPH_CLASSIC, groundCracks, laneCracks, windupFlash } from '../ui/Telegraph';
 import { HINT_MOCK } from '../ui/HintStyle';
-import { WARN_FX_ON } from '../ui/WarnFx';
+import { WARN_FX_ON, warnFx } from '../ui/WarnFx';
 
 interface Host { scene:Phaser.Scene; player:Player; army:Legion; enemies:Enemy[]; move:(enemy:Enemy,nx:number,ny:number,dt:number)=>void; spawn:(def:EnemyDef,x:number,y:number)=>Enemy|null; }
 interface Hazard { owner:Enemy; life:number; x:number;y:number; radius:number; angle:number; arc:number; inner:number; from:number; at:number; end:number; damage:number; fired:boolean; kind:string; }
@@ -106,7 +106,11 @@ export class YellowBattle {
     if(image)image.setAlpha(.45).setVisible(z.fired&&!/warning(?!_and_burst)|ritual|sigil/.test(key));
     if(!z.fired)windupFlash(z.owner,now);
     // 张梁砍击：蓄力时刀光虚影沿砍击方向由短到长伸出去（刀光图前 4 帧，半透明）；砍下时刀光全亮
-    if(z.kind==='sweep'&&HINT_MOCK==='c'&&WARN_FX_ON&&image){if(z.fired)image.setAlpha(.95);else image.setTexture(key,Math.min(3,Math.floor(progress*4))).setAlpha(.3+.45*progress).setVisible(true);continue;}
+    // 加强（用户「张梁特效攻击需要优化一下，可以明显一点」）：蓄力时地上铺手绘刀气扇形，按真实砍击距离和方向由短到长伸出去；
+    // 砍下时叠一道手绘新月刀光（按真实半径、0.9 透明度，首领招牌招不套公共收敛倍数），原有刀光照旧
+    if(z.kind==='sweep'&&HINT_MOCK==='c'&&WARN_FX_ON&&image){const fx=warnFx(this.h.scene),sid='zl-sweep:'+Math.round(z.x)+','+Math.round(z.y)+','+Math.round(z.at);
+     if(z.fired){image.setAlpha(.95);fx.shapeImpact(sid,'sweep',z.x,z.y,z.radius,z.angle,now,0,{scale:1,alpha:.9,ms:300});}
+     else{fx.sector(sid,z.x,z.y,z.radius,z.angle,progress,now);image.setTexture(key,Math.min(3,Math.floor(progress*4))).setAlpha(.2+.35*progress).setVisible(true);}continue;}
     // 黄巾小兵（刀盾 / 长枪 / 戟兵 / 术士 / 符水道士）：小、短、低调，不抢首领的戏（用户 2026-11-16「需要符合，太浮夸了」）。
     // 不用 WarnFx 的像素横扫 / 裂地圆；近战蓄力只留身上暖光，刺出时原手绘盾刺图缩小调淡；术士 / 道士用原手绘符阵图，调淡
     if(HINT_MOCK==='c'&&WARN_FX_ON&&z.owner.kind!=='boss'){

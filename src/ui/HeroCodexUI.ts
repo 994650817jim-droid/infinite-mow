@@ -4,7 +4,8 @@ import { CHARACTERS, type CharacterId } from '../data/characters';
 import { TACTICS, TAG_NAMES, type BuildTag, type TacticId } from '../data/builds';
 import { WEAPON_DEFS } from '../weapons/registry';
 import { ATTRIBUTE_INFO, ATTRIBUTE_MAX, attributeIcon, type AttributeId } from '../systems/RunGrowth';
-import { allocateHeroAttr, heroAttrs, heroFreePoints, heroInfo, type HeroKey } from '../systems/HeroProgress';
+import { allocateHeroAttr, heroAttrs, heroFreePoints, heroInfo, takeAttrNotice, type HeroKey } from '../systems/HeroProgress';
+import { primaryAttribute } from '../data/attributes';
 import { gearFor, gearSummary } from '../systems/ItemEffects';
 import { gearOwners, ownerName } from '../systems/RosterStore';
 import { TACTIC_UNLOCK_SCROLLS, TEMPER, XINDE_SLOTS, getXinde, grain, respec, respecCost, scrolls, tacticUnlocked, temperCost, temperLevel, temperUp, toggleXinde, unlockTactic } from '../systems/MasteryStore';
@@ -33,6 +34,7 @@ export class HeroCodexUI {
     const list = gearOwners();
     this.hero = (hero && list.some(o => o.id === hero) ? hero : list[0]?.id ?? 'zhaoyun') as HeroKey;
     this.root = scene.add.container(0, 0).setDepth(DEPTH.overlay + 20).setScrollFactor(0).setName('hero-codex').setData('ui', this);
+    if (takeAttrNotice()) this.notice = '属性已改版：点数已全部返还，请在「属性」页重新分配';
     this.render();
   }
   close(): void { this.root.destroy(); this.onClose?.(); }
@@ -77,15 +79,17 @@ export class HeroCodexUI {
     if (this.tab === 'overview') this.renderOverview(rx, cy, rw);
     else if (this.tab === 'attrs') this.renderAttrs(rx, cy, rw);
     else if (this.tab === 'weapon') this.renderWeapon(rx, cy, rw);
+    else if (D) this.renderXindeDesk(rx, cy, rw, y0 + ph - 14);
     else this.renderXinde(rx, cy, rw, y0 + ph - 50);
-    if (this.notice) { this.text(W / 2, y0 + ph - 24, this.notice, 14, '#f3d48a').setOrigin(.5).setBackgroundColor('#1b120bcc').setPadding(10, 4).setName('codex-notice'); this.notice = ''; }
+    // 电脑「战法心得」页：提示放进底部说明栏（见 renderXindeDesk），这里不再叠一条
+    if (this.notice && !(D && this.tab === 'xinde')) { this.text(W / 2, y0 + ph - 24, this.notice, 14, '#f3d48a').setOrigin(.5).setBackgroundColor('#1b120bcc').setPadding(10, 4).setName('codex-notice'); this.notice = ''; }
   }
 
   private renderOverview(x: number, y: number, w: number): void {
     const info = heroInfo(this.hero), name = ownerName(this.hero), c = this.playable;
     this.text(x, y, name, 24, '#f2ddae', true).setName('codex-name');
     this.text(x, y + 36, `等级 Lv.${info.level}（本章上限 Lv.${info.cap}）· 经验 ${info.xp} / ${info.next}${info.level >= info.cap ? '（已到上限，经验暂存）' : ''}`, 14, '#d8ccb0').setName('codex-level');
-    const a = heroAttrs(this.hero), attrs = (Object.keys(ATTRIBUTE_INFO) as AttributeId[]).map(id => `${ATTRIBUTE_INFO[id].name} ${a[id]}`).join('　');
+    const a = heroAttrs(this.hero), attrs = (Object.keys(ATTRIBUTE_INFO) as AttributeId[]).map(id => `${ATTRIBUTE_INFO[id].name}${primaryAttribute(this.hero) === id ? '（主）' : ''} ${a[id]}`).join('　');
     this.text(x, y + 64, `属性：${attrs}　· 未分配 ${heroFreePoints(this.hero)} 点`, 14, '#d8ccb0').setWordWrapWidth(w);
     if (!c) { this.text(x, y + 100, '招募武将：随行时按等级成长（每级生命、伤害提高），将阶请到招贤馆提升。', 13, '#9c8c6c').setWordWrapWidth(w); return; }
     const weapon = WEAPON_DEFS[CHARACTERS.find(h => h.id === c)!.startWeapon];
@@ -103,12 +107,13 @@ export class HeroCodexUI {
     (Object.keys(ATTRIBUTE_INFO) as AttributeId[]).forEach((id, i) => {
       const ry = y + 40 + i * 44;
       if (this.scene.textures.exists(attributeIcon(id))) this.add(this.scene.add.image(x + 16, ry + 12, attributeIcon(id)).setDisplaySize(28, 28));
-      this.text(x + 40, ry, ATTRIBUTE_INFO[id].name, 16, '#f0dfb4');
-      this.text(x + 100, ry + 3, ATTRIBUTE_INFO[id].effect, 12, '#a9b9a3');
+      const primary = primaryAttribute(this.hero) === id;
+      this.text(x + 40, ry, ATTRIBUTE_INFO[id].name + (primary ? ' · 主属性' : ''), 16, primary ? '#ffd27a' : '#f0dfb4').setName('codex-attr-name-' + id);
+      this.text(x + (primary ? 150 : 100), ry + 3, ATTRIBUTE_INFO[id].effect + (primary ? '；主属性每点再 +1% 全伤害' : ''), 12, primary ? '#e8d6a4' : '#a9b9a3');
       this.text(x + w - 110, ry + 2, `${a[id]} / ${ATTRIBUTE_MAX}`, 14, '#e5d4ab').setOrigin(1, 0).setName('codex-attr-' + id);
       this.button(x + w - 50, ry + 12, '+', 'codex-add-' + id, () => this.act(allocateHeroAttr(this.hero, id) ? { ok: true, message: `${ATTRIBUTE_INFO[id].name} +1` } : { ok: false, message: '没有可分配的点，或这一项已满' }), { disabled: free <= 0 || a[id] >= ATTRIBUTE_MAX, size: 18 });
     });
-    const by = y + 40 + 6 * 44 + 10;
+    const by = y + 40 + Object.keys(ATTRIBUTE_INFO).length * 44 + 10;
     this.button(x + 110, by, cost ? `洗点 · 军粮 ${cost}` : '洗点 · 本章首次免费', 'codex-respec', () => this.act(respec(this.hero)), { disabled: spent === 0, size: 14 });
     this.text(x + 230, by - 8, '洗点：已加的属性点全部退回，等级不变。', 12, '#9c8c6c');
   }
@@ -123,6 +128,58 @@ export class HeroCodexUI {
     for (let i = 0; i < TEMPER.max; i++) g.fillStyle(i < lv ? 0xe2bd6a : 0x2a3328, 1).fillRect(x + i * 34, y + 66, 28, 12).lineStyle(1, 0x8a7550, .9).strokeRect(x + i * 34 + .5, y + 66.5, 27, 11);
     this.button(x + 100, y + 112, cost === null ? '已满级' : `淬炼 · 军粮 ${cost}`, 'codex-temper-up', () => this.act(temperUp(c)), { disabled: cost === null, size: 15 });
     this.text(x, y + 150, '淬炼满 5 级后，局内本命武器将开放第 6 级「突破」（第三批上线）。', 12, '#9c8c6c').setWordWrapWidth(w);
+  }
+
+  /**
+   * 战法心得 · 电脑布局（2026-11-17 用户「这里ui很乱」）：每个分类一行（8 行占满面板高度），分类名在左列，
+   * 战法卡统一宽度（放得下最长的「破阵重击」+ 锁 + 残卷价）、统一字号；三种状态一眼可分：
+   * 已选心得 = 朱红底 + 金边 + ✓；已解锁 = 漆底金边；未解锁 = 暗底灰边 + 锁 + 「6 残卷」。
+   * 悬停描边变亮，底部说明栏显示战法效果与当前状态。解锁 / 选心得的逻辑不动（同 renderXinde）。
+   */
+  private renderXindeDesk(x: number, y: number, w: number, bottom: number): void {
+    const c = this.playable;
+    if (!c) { this.text(x, y, '招募武将的随行心得由招贤馆管理。', 14, '#9c8c6c'); return; }
+    const xd = getXinde(c), all = Object.keys(TACTICS) as TacticId[];
+    this.text(x, y, `心得 ${xd.length} / ${XINDE_SLOTS}：${xd.map(t => TACTICS[t].name).join('、') || '未选'}　· 局内出现概率 ×2，开局第一次升级必出一张`, 13, '#f3d48a').setWordWrapWidth(w).setName('codex-xinde');
+    this.text(x, y + 22, `点已解锁的战法选为 / 取消心得；未解锁的花 ${TACTIC_UNLOCK_SCROLLS} 武学残卷解锁（局内照样会出，只是不能选为心得）。`, 12, '#9c8c6c').setWordWrapWidth(w);
+    const tags = [...new Set(all.map(t => TACTICS[t].tag))] as BuildTag[];
+    const labelW = 64, gap = 8, cols = Math.max(...tags.map(tag => all.filter(t => TACTICS[t].tag === tag).length));
+    const tileW = Math.floor((w - labelW - (cols - 1) * gap) / cols), tileH = 30, descH = 46;
+    const top = y + 48, rowH = Math.min(40, Math.floor((bottom - descH - 10 - top) / tags.length));
+    // 底部说明栏：悬停战法时显示效果
+    const dy = top + rowH * tags.length + 6, descG = this.add(this.scene.add.graphics());
+    descG.fillStyle(0x0d0a07, .7).fillRoundedRect(x, dy, w, descH, 4).lineStyle(1, 0x7d6640, .7).strokeRoundedRect(x + .5, dy + .5, w - 1, descH - 1, 4);
+    // 刚解锁 / 选择后的结果（如「残卷不足」）先显示在说明栏里，悬停别的战法时换成说明
+    const hint = '把鼠标移到战法上查看效果。', first = this.notice; this.notice = '';
+    const desc = this.text(x + 12, dy + 7, first || hint, 13, first ? '#f3d48a' : '#bfae8a').setWordWrapWidth(w - 24).setLineSpacing(2).setName('codex-tactic-desc');
+    tags.forEach((tag, ti) => {
+      const gy = top + ti * rowH, list = all.filter(t => TACTICS[t].tag === tag), got = list.filter(t => tacticUnlocked(t)).length;
+      this.text(x, gy + tileH / 2, TAG_NAMES[tag], 15, '#ecd49a', true).setOrigin(0, .5);
+      this.text(x + labelW - 10, gy + tileH / 2, `${got}/${list.length}`, 11, '#8d7d60').setOrigin(1, .5);
+      list.forEach((t, k) => {
+        const unlocked = tacticUnlocked(t), on = xd.includes(t), tx = x + labelW + k * (tileW + gap);
+        const g = this.add(this.scene.add.graphics());
+        const paint = (hover: boolean): void => {
+          g.clear();
+          const fill = on ? 0x7a2a1c : unlocked ? 0x2a2116 : 0x15110c, edge = on ? 0xf3d48a : unlocked ? (hover ? 0xf3d48a : 0xb09056) : (hover ? 0x9c8a66 : 0x4f4434);
+          g.fillStyle(fill, on || unlocked ? .96 : .9).fillRoundedRect(tx, gy, tileW, tileH, 4).lineStyle(on || hover ? 2 : 1, edge, 1).strokeRoundedRect(tx + .5, gy + .5, tileW - 1, tileH - 1, 4);
+          if (on) g.fillStyle(0xffe2a0, .12).fillRoundedRect(tx + 2, gy + 2, tileW - 4, tileH * .45, { tl: 3, tr: 3, bl: 0, br: 0 });
+          if (!unlocked) { // 锁：锁身 + 锁梁
+            const lx = tx + 14, ly = gy + tileH / 2 + 1;
+            g.fillStyle(0x8d7d60, 1).fillRoundedRect(lx - 5, ly - 2, 10, 8, 1.5).lineStyle(1.6, 0x8d7d60, 1).beginPath().arc(lx, ly - 2, 3.4, Math.PI, 0).strokePath();
+          }
+        };
+        paint(false);
+        const label = this.text(unlocked ? tx + tileW / 2 : tx + 26, gy + tileH / 2, (on ? '✓ ' : '') + TACTICS[t].name, 14, on ? '#fff3d0' : unlocked ? '#f0e2c8' : '#8d7d60').setOrigin(unlocked ? .5 : 0, .5);
+        if (!unlocked) this.text(tx + tileW - 10, gy + tileH / 2, `${TACTIC_UNLOCK_SCROLLS} 残卷`, 12, scrolls() >= TACTIC_UNLOCK_SCROLLS ? '#e0bf78' : '#8a5a4a').setOrigin(1, .5);
+        const state = on ? '已选为心得 · 再点一下取消' : unlocked ? (xd.length >= XINDE_SLOTS ? '已解锁 · 心得已满，先取消一个' : '已解锁 · 点击选为心得') : `未解锁 · 花 ${TACTIC_UNLOCK_SCROLLS} 武学残卷解锁（现有 ${scrolls()}）`;
+        const hit = this.add(this.scene.add.rectangle(tx, gy, tileW, tileH, 0, .001).setOrigin(0)).setName('codex-tactic-' + t).setInteractive({ useHandCursor: true });
+        hit.on('pointerover', () => { paint(true); desc.setText(`${TACTICS[t].name}（${TAG_NAMES[tag]}）：${TACTICS[t].desc}\n${state}`).setColor('#e9dcbc'); })
+          .on('pointerout', () => { paint(false); desc.setText(hint).setColor('#bfae8a'); })
+          .on('pointerdown', (_p: unknown, _x: unknown, _y: unknown, e?: Phaser.Types.Input.EventData) => { e?.stopPropagation?.(); this.act(unlocked ? toggleXinde(c, t) : unlockTactic(t)); });
+        void label;
+      });
+    });
   }
 
   private renderXinde(x: number, y: number, w: number, bottom: number): void {

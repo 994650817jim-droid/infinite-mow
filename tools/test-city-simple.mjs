@@ -109,20 +109,22 @@ for (const layout of ['mobile', 'desktop']) {
   await p.evaluate(() => window.__game.scene.getScenes(true).forEach(s => s.scene.start('CityScene')));
   await p.waitForFunction(() => window.__game.scene.isActive('CityScene'), null, { timeout: 30000 }); await p.waitForTimeout(1200);
   const ui = await p.evaluate(() => { const c = window.__game.scene.getScene('CityScene'), n = x => !!c.children.getByName(x); const b = name => { const o = c.children.getByName(name); return o ? o.getBounds() : null; };
-    return { nav: ['city-map', 'city-academy', 'city-focus', 'city-expedition', 'city-tax', 'city-trade', 'city-report', 'city-build'].map(n), grain: c.children.getByName('city-grain')?.text, hint: c.children.getByName('city-hint')?.text,
+    return { nav: ['city-map', 'city-academy', 'city-focus', 'city-expedition', 'city-recruit', 'city-talent', 'city-tax', 'city-trade'].map(n), grain: c.children.getByName('city-grain')?.text, hint: c.children.getByName('city-hint')?.text,
       blds: c.hits.map(h => h.name), recruit: b('city-recruit'), grainBox: b('city-grain'), boon: b('city-boon'), mapBtn: b('city-map') }; });
-  ck(`${layout}：底栏只有 天下地图 / 讲武堂 / 出征（营寨无城池、税率、商贸、季报）`, ui.nav.join() === 'true,true,false,true,false,false,false,false', ui.nav);
+  ck(`${layout}：营寨只剩「天下地图」一个按钮（讲武堂 / 出征 / 招募 / 招贤馆都改为点建筑或走天下地图）`, ui.nav.join() === 'true,false,false,false,false,false,false,false', ui.nav);
   ck(`${layout}：顶部显示军粮与扩建提示`, ui.grain === '军粮 800' && ui.hint.includes('第二章'), [ui.grain, ui.hint]);
   ck(`${layout}：全景只画营寨阶段的建筑`, ui.blds.sort().join() === 'bld-academy,bld-barracks,bld-farm,bld-hall,bld-talent', ui.blds);
   const overlap = (a, c) => a && c && a.x < c.x + c.width && c.x < a.x + a.width && a.y < c.y + c.height && c.y < a.y + a.height;
-  ck(`${layout}：右上招募按钮不与军粮文字相叠`, !overlap(ui.recruit, ui.grainBox), [ui.recruit, ui.grainBox]);
+  ck(`${layout}：「天下地图」按钮不与军粮文字相叠`, !overlap(ui.mapBtn, ui.grainBox), [ui.mapBtn, ui.grainBox]);
   await p.screenshot({ path: `${out}/city-${layout}.png` });
   // 建讲武堂 → 打开科技面板 → 研究回血药
   await p.evaluate(() => { const c = window.__game.scene.getScene('CityScene'); const h = c.hits.find(h => h.name === 'bld-academy'); h.emit('pointerdown'); h.emit('pointerup'); });
   await p.waitForTimeout(200);
   await p.evaluate(() => window.__game.scene.getScene('CityScene').children.getByName('town-card').getByName('town-upgrade').emit('pointerdown'));
   await p.waitForTimeout(600);
-  await p.evaluate(() => window.__game.scene.getScene('CityScene').children.getByName('city-academy').emit('pointerdown'));
+  await p.evaluate(() => { const c = window.__game.scene.getScene('CityScene'); const h = c.hits.find(h => h.name === 'bld-academy'); h.emit('pointerdown'); h.emit('pointerup'); });
+  await p.waitForTimeout(200);
+  await p.evaluate(() => window.__game.scene.getScene('CityScene').children.getByName('town-card').getByName('town-card-func').emit('pointerdown'));
   await p.waitForTimeout(300);
   await p.screenshot({ path: `${out}/tech-${layout}.png` });
   await p.evaluate(() => window.__game.scene.getScene('CityScene').children.getByName('town-tech').getByName('tech-potion').emit('pointerdown'));

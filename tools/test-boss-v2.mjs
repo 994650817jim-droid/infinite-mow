@@ -110,7 +110,9 @@ try {
     ck('袁术·玉玺号令：打掉旗子就没了', await ev(s => s.controller.snapshot().flags === 0));
     await wait(p, 1500);
     const hp0 = await ev(s => { for (const e of s.enemies) if (e.active && !e.isSupplySlot && e.kind !== 'boss') e.deactivate(); s.player.hp = s.player.maxHp = 9999; s.player.invulnUntil = 0; s.bossDebug().force(1, s.combatNow); return s.player.hp; });
-    await wait(p, 1200); await p.screenshot({ path: OUT + '/yuanshu-coins.png' }); await wait(p, 1400);
+    await wait(p, 1200); await p.screenshot({ path: OUT + '/yuanshu-coins.png' });
+    // 最后一枚金币约在出招后 2.4 秒才炸（起手 0.6 + 引信 1.5 + 逐个错开 0.3），原来固定等 2.6 秒、中间还截图，偶尔会差一枚没炸 → 改成等到金币炸完（最多 5 秒）
+    for (let t = 0; t < 50 && (await ev(s => s.controller.snapshot().coins)) > 0; t++) await wait(p, 100);
     const co = await ev(s => ({ hp: s.player.hp, snap: s.controller.snapshot() }));
     ck('袁术·金钱开路：金币闪完炸开，站着不动会被炸', co.snap.coins === 0 && co.hp < hp0 && co.snap.metrics.coinHits >= 1, co);
     await wait(p, 900);

@@ -59,8 +59,8 @@ export const FOLLOW = {
   /** 首领打跟随武将的倍率（同后备兵）。 */
   bossMul: 3,
   /** 武将等级（HeroProgress，用户批准方案 A）：招来的 r_ 武将按等级成长，每级生命 +4%、伤害 +3%；
-   *  可玩名将当随行时用自己加过的属性点：might 每点 +2.5% 伤害、constitution 每点 +5% 生命（与主将同值；2026-11-16 属性点改版每点减半）。 */
-  levelHp: .04, levelDamage: .03, mightDamage: .025, constitutionHp: .05,
+   *  可玩名将当随行时用自己加过的属性点：力量（strength）每点 +1.5% 伤害、+3% 生命（与主将同值；2026-11-17 属性改版）。 */
+  levelHp: .04, levelDamage: .03, mightDamage: .015, constitutionHp: .03,
 } as const;
 
 /** 将阶（技能升级）：1–10 级；招贤馆等级决定上限；每级花军粮与军功。 */

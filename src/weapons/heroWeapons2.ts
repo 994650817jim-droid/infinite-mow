@@ -267,6 +267,27 @@ export const ZHANJIN_DEF = {
   desc: '一枪把敌人挑飞，落地时砸出范围伤害；铁骑满层后向前冲锋破阵',
 };
 export const zhanjinLandRadius = (level: number, jinma: number): number => R.landRadius * (1 + (level >= 3 ? .1 : 0) + .15 * jinma);
+/** 冲锋无敌：身后几道淡金残影；之后「铁骑余威」：身上一层很淡的金色护体微光（随人物、轻轻明灭），快结束时闪一下。不画地面圈。 */
+function chargeGuardFx(host: WeaponHost, pl: Player): void {
+  const scene = sceneOf(host), body = pl.sprite;
+  for (let k = 0; k < 4; k++) host.time.delayedCall(k * 55, () => {
+    if (!body.active) return;
+    const g = scene.add.image(body.x, body.y, body.texture.key, body.frame.name).setOrigin(body.originX, body.originY).setDisplaySize(body.displayWidth, body.displayHeight).setFlipX(body.flipX)
+      .setTintFill(0xffe6a0).setBlendMode(1).setAlpha(.45).setDepth(body.depth - .01).setName('machao-invuln-ghost');
+    scene.tweens.add({ targets: g, alpha: 0, duration: 260, onComplete: () => g.destroy() });
+  });
+  host.time.delayedCall(R.chargeMs + 60, () => {
+    if (!body.active) return;
+    const glow = scene.add.image(body.x, body.y, body.texture.key, body.frame.name).setOrigin(body.originX, body.originY).setDisplaySize(body.displayWidth, body.displayHeight)
+      .setTintFill(0xffd77a).setBlendMode(1).setAlpha(.18).setDepth(body.depth + .001).setName('machao-guard-glow');
+    const st = { t: 0 }, total = R.chargeGuardMs;
+    scene.tweens.add({ targets: st, t: 1, duration: total,
+      onUpdate: () => { if (!body.active || !glow.active) return; const left = total * (1 - st.t);
+        glow.setPosition(body.x, body.y).setTexture(body.texture.key, body.frame.name).setDisplaySize(body.displayWidth, body.displayHeight).setFlipX(body.flipX).setDepth(body.depth + .001)
+          .setAlpha(left < 350 ? (Math.floor(left / 70) % 2 ? .45 : .1) : .14 + .06 * Math.sin(st.t * Math.PI * 8)); },
+      onComplete: () => glow.destroy() });
+  });
+}
 /** 马超像素特效图集 machao_fx（6×4，每帧 256，透明底）：0–5 上挑弧光、6–11 落地砸地、12–17 冲锋尘土拖影、18–23 枪尖破风。 */
 const MCFX = { lift: 0, land: 6, dust: 12, wind: 18 } as const;
 function mcFx(host: WeaponHost, row: number, x: number, y: number, w: number, h: number, fps: number, name: string, rot = 0, loops = 1, depth = 41): Phaser.GameObjects.Sprite | null {
@@ -310,7 +331,10 @@ export function zhanjinBehavior(host: WeaponHost, weapon: WeaponState, dt: numbe
       if (along < -e.radius || along > len + e.radius || Math.abs(side) > R.chargeWidth / 2 + e.radius) continue;
       host.hitEnemy(e, hit, time, 'melee'); shove(e, -uy * Math.sign(side || 1), ux * Math.sign(side || 1), 28);
     }
-    pl.knockUp(time, R.chargeMs, ux * len, uy * len);
+    pl.knockUp(time, R.chargeMs, ux * len, uy * len, true);
+    // 冲锋全程无敌，之后 2 秒「铁骑余威」减伤（用户定）
+    pl.passive.startChargeGuard(time, R.chargeMs + 60, R.chargeGuardMs);
+    chargeGuardFx(host, pl);
     host.heroFx?.('dash', px + ux * len / 2, py - 6 + uy * len / 2, len + 110, Math.atan2(uy, ux));
     const trail = host.add.image(px + ux * len / 2, py - 6 + uy * len / 2, 'spear_thrust', 'tight').setRotation(Math.atan2(uy, ux)).setDisplaySize(len + 40, 34).setTint(0xffe08a).setAlpha(.85).setDepth(41).setName('machao-charge');
     trail.scene.tweens.add({ targets: trail, alpha: 0, duration: 320, onComplete: () => trail.destroy() });

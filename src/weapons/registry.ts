@@ -231,7 +231,7 @@ export const WEAPON_BEHAVIORS: Record<WeaponId, (host: WeaponHost, weapon: Weapo
         if (along < -e.radius || along > R.dashLength + e.radius || side > R.dashWidth / 2 + e.radius) continue;
         if (host.hitEnemy(e, damage * R.dashDamageMul, now, 'melee')) host.player.passive.recordHit(passiveCast, e, now);
       }
-      host.player.knockUp(now, R.dashMs, ux * R.dashLength, uy * R.dashLength);
+      host.player.knockUp(now, R.dashMs, ux * R.dashLength, uy * R.dashLength, true);
       host.heroFx?.('dash', px + ux * R.dashLength / 2, py - 6 + uy * R.dashLength / 2, R.dashLength + 110, Math.atan2(uy, ux));
       const trail = host.add.image(px + ux * R.dashLength / 2, py - 6 + uy * R.dashLength / 2, 'spear_thrust', 'tight').setRotation(Math.atan2(uy, ux)).setDisplaySize(R.dashLength + 40, 34).setTint(0xbfe0ff).setAlpha(.85).setDepth(41);
       trail.scene.tweens.add({ targets: trail, alpha: 0, scaleY: trail.scaleY * 1.8, duration: 320, onComplete: () => trail.destroy() });

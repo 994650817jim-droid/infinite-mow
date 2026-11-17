@@ -54,21 +54,22 @@ export class PassiveShout {
     this.count++; this.lastLine = line;
     const sc = this.scene, tw = sc.tweens;
     // 1) 字：大号书法体逐字砸下（放大 → 回弹），金字深墨边；落定后一抖，停留后上浮淡出
-    const chars = [...line], size = 34, gap = size * .96, w = (chars.length - 1) * gap;
+    // 2026-11-16 用户：「马超喊话太大了字」→ 字号 34 → 20（约 59%），贴着头顶；砸字放大与停顿一起收小
+    const chars = [...line], size = 20, gap = size * .98, w = (chars.length - 1) * gap, stagger = 35, pop = 120;
     // 外层跟着武将走（马超喊完马上冲锋，字不能留在原地），内层 box 负责砸字、抖动、上浮
     const holder = sc.add.container(x, y).setDepth(DEPTH.dmgText + 3).setName('passive-shout');
-    if (body) { const st = { t: 0 }; tw.add({ targets: st, t: 1, duration: chars.length * 45 + 150 + WAR_CRY_HOLD_MS + 300, onUpdate: () => { if (body.active && holder.active) holder.setPosition(body.x, body.y); } }); }
-    const box = sc.add.container(0, -104).setName('passive-shout-text'); holder.add(box);
+    if (body) { const st = { t: 0 }; tw.add({ targets: st, t: 1, duration: chars.length * stagger + pop + WAR_CRY_HOLD_MS + 300, onUpdate: () => { if (body.active && holder.active) holder.setPosition(body.x, body.y); } }); }
+    const box = sc.add.container(0, -78).setName('passive-shout-text'); holder.add(box);
     x = 0; y = 0; // 下面 box 的抖动 / 上浮都按 holder 内的本地坐标
     chars.forEach((ch, i) => {
-      const t = sc.add.text(-w / 2 + i * gap, 0, ch, { fontFamily: HEADING_FONT, fontSize: `${size}px`, color, stroke: '#2a1206', strokeThickness: 6, resolution: 2 })
-        .setOrigin(.5, .5).setShadow(0, 2, '#000000', 4, true, true).setAlpha(0).setScale(2.6);
+      const t = sc.add.text(-w / 2 + i * gap, 0, ch, { fontFamily: HEADING_FONT, fontSize: `${size}px`, color, stroke: '#2a1206', strokeThickness: 4, resolution: 2 })
+        .setOrigin(.5, .5).setShadow(0, 1, '#000000', 3, true, true).setAlpha(0).setScale(1.7);
       box.add(t);
-      tw.add({ targets: t, alpha: 1, scale: 1, duration: 150, delay: i * 45, ease: 'Back.Out' });
+      tw.add({ targets: t, alpha: 1, scale: 1, duration: pop, delay: i * stagger, ease: 'Back.Out' });
     });
-    const landed = chars.length * 45 + 150;
-    tw.add({ targets: box, x: { from: x - 3, to: x + 3 }, duration: 40, yoyo: true, repeat: 3, delay: landed, onComplete: () => box.setX(x) });
-    tw.add({ targets: box, y: y - 122, alpha: 0, delay: landed + WAR_CRY_HOLD_MS - 150, duration: 380, ease: 'Sine.In', onComplete: () => holder.destroy() });
+    const landed = chars.length * stagger + pop;
+    tw.add({ targets: box, x: { from: x - 1.5, to: x + 1.5 }, duration: 40, yoyo: true, repeat: 2, delay: landed, onComplete: () => box.setX(x) });
+    tw.add({ targets: box, y: y - 90, alpha: 0, delay: landed + WAR_CRY_HOLD_MS - 150, duration: 380, ease: 'Sine.In', onComplete: () => holder.destroy() });
     x = holder.x; y = holder.y; // 恢复世界坐标给下面的声浪 / 气势用
     // 2) 像素声浪冲击（脚下压扁的气浪）+ 身上迸发的气势（图集 warcry_fx：2 行 × 6 帧，每帧 256×512，黑底叠加）
     if (sc.textures.exists('warcry_fx')) {
@@ -77,11 +78,11 @@ export class PassiveShout {
         const st = { t: 0 };
         tw.add({ targets: st, t: 5.99, duration: 6000 / fps, onUpdate: () => { if (s.active) s.setFrame(row * 6 + Math.floor(st.t)); }, onComplete: () => s.destroy() });
       };
-      play(0, .45, 360, 720, 16, 'warcry-wave'); // 图里声浪椭圆中心在格子约 0.45 高处
-      play(1, .63, 170, 340, 14, 'warcry-aura'); // 气势的底在格子约 0.63 高处，贴脚底
+      play(0, .45, 230, 460, 16, 'warcry-wave'); // 图里声浪椭圆中心在格子约 0.45 高处
+      play(1, .63, 120, 240, 14, 'warcry-aura'); // 气势的底在格子约 0.63 高处，贴脚底
     }
     // 3) 轻微震屏
-    sc.cameras.main.shake(180, .0035);
+    sc.cameras.main.shake(140, .0022);
     // 4) 附近敌人被吓得一缩（只做表现：缩一下再弹回，不改位置）
     for (const e of this.opts.nearby?.(x, y, 170) ?? []) {
       if (!e.active || e.isSupplySlot) continue;

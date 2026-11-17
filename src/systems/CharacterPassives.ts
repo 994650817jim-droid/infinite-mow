@@ -39,15 +39,17 @@ export class CharacterPassives {
   private readonly charms = new Map<number, Charm>();
   /** 魏延「谁敢杀我」减伤截止时间。 */
   private guardUntil = -Infinity;
+  /** 马超锦马冲锋：冲锋中无敌截止、冲锋后「铁骑余威」减伤截止。 */
+  private chargeInvulnUntil = -Infinity; chargeGuardUntil = -Infinity;
   /** 孙尚香最近一次移动的时间（移动中掷刀更快）。 */
   private lastMoveAt = -Infinity;
   constructor(character: CharacterId = 'zhaoyun', now = 0) { this.reset(character, now); }
   reset(character: CharacterId, now: number): void {
     this.character = character; this.stacks = 0; this.lastGain = -Infinity; this.lastDamage = now; this.calmMs = R.calmMs; this.sharpGuardUntil = -Infinity; this.stageKills = 0; this.sharpEliteKills = 0;
-    this.generation++; this.stopped = false; this.gains = 0; this.triggers = 0; this.burns.clear(); this.charms.clear(); this.guardUntil = -Infinity;
+    this.generation++; this.stopped = false; this.gains = 0; this.triggers = 0; this.burns.clear(); this.charms.clear(); this.guardUntil = -Infinity; this.chargeInvulnUntil = this.chargeGuardUntil = -Infinity;
   }
   get characterId(): CharacterId { return this.character; }
-  stop(): void { this.stopped = true; this.stacks = 0; this.generation++; this.burns.clear(); this.charms.clear(); }
+  stop(): void { this.stopped = true; this.stacks = 0; this.generation++; this.burns.clear(); this.charms.clear(); this.chargeInvulnUntil = this.chargeGuardUntil = -Infinity; }
   private get maxStacks(): number { return CHARACTER_PASSIVES[this.character].maxStacks; }
   onDamage(now: number): void {
     if (this.stopped) return;
@@ -57,7 +59,13 @@ export class CharacterPassives {
     if (this.character === 'weiyan' && this.stacks < this.maxStacks && now - this.lastGain + 1e-6 >= R.guardStepMs) { this.lastGain = now; this.stacks++; this.gains++; }
   }
   /** 魏延「谁敢杀我」期间受到伤害的倍率。 */
-  damageTakenMultiplier(now: number): number { return !this.stopped && now < this.guardUntil ? R.whoDaresGuardMul : 1; }
+  damageTakenMultiplier(now: number): number { if (this.stopped) return 1; return (now < this.guardUntil ? R.whoDaresGuardMul : 1) * (now < this.chargeGuardUntil && now >= this.chargeInvulnUntil ? R.chargeGuardMul : 1); }
+  /** 马超锦马冲锋：invulnMs 内无敌（不吃伤害、不被外力击退），之后 guardMs 内受伤减免。 */
+  startChargeGuard(now: number, invulnMs: number, guardMs: number): void { if (this.stopped) return; this.chargeInvulnUntil = now + invulnMs; this.chargeGuardUntil = now + invulnMs + guardMs; }
+  /** 冲锋无敌中。 */
+  isInvulnerable(now: number): boolean { return !this.stopped && now < this.chargeInvulnUntil; }
+  /** 「铁骑余威」减伤中（冲锋结束后）。 */
+  chargeGuardLeft(now: number): number { return !this.stopped && now >= this.chargeInvulnUntil && now < this.chargeGuardUntil ? this.chargeGuardUntil - now : 0; }
   startGuard(now: number): void { if (!this.stopped) this.guardUntil = now + R.whoDaresGuardMs; }
   /** 庞统·连环计：一次连锁引爆的火雷数达到门槛时积 1 层。 */
   onMineChain(count: number): void {

@@ -150,7 +150,9 @@ export class Player {
     return BALANCE.player.speed * Math.min(1.6, this.stats.moveMul * this.growth.movementMultiplier()*(this.growth.build.tags().skirmish>=2?1.04:1)) * this.mountSpeedMul;
   }
 
-  knockUp(now: number, duration: number, dx: number, dy: number): void {
+  /** 被外力击退 / 挑起；self 为自己的突进（冲锋、龙胆突刺）。马超冲锋无敌中不被外力击退。 */
+  knockUp(now: number, duration: number, dx: number, dy: number, self = false): void {
+    if (!self && this.passive.isInvulnerable(now)) return;
     this.knockedAt = now; this.knockedUntil = now + duration;
     this.knockVx = dx / (duration / 1000); this.knockVy = dy / (duration / 1000);
   }
@@ -360,7 +362,7 @@ export class Player {
   }
 
   takeDamage(raw: number, now: number): boolean {
-    if (!this.alive || this.damageImmune || now < this.invulnUntil) return false;
+    if (!this.alive || this.damageImmune || now < this.invulnUntil || this.passive.isInvulnerable(now)) return false; // 马超锦马冲锋中无敌
     const afterArmor = Math.max(1, raw - this.stats.armor);
     const unguarded = Math.max(1, Math.round(afterArmor * this.stats.damageTakenMul * this.armyDamageTakenMul * this.growth.incomingDamageMultiplier() * this.passive.damageTakenMultiplier(now)));
     const ridden=this.mountGuard?this.mountGuard(unguarded,now):unguarded;if(ridden<=0)return false;

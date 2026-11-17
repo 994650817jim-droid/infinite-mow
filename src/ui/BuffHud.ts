@@ -3,6 +3,7 @@ import Phaser from 'phaser';
 import type {Player} from '../entities/Player';
 import {TACTICS,TREASURES,tacticDescription,type TacticId} from '../data/builds';
 import {RELICS} from '../data/relics';
+import {PASSIVE_RULES} from '../data/passives';
 import {WEAPON_META,martialDescription} from '../data/upgrades';
 import {MARTIALS,ATTRIBUTE_INFO,attributeIcon,type MasteryId,type AttributeId} from '../systems/RunGrowth';
 import {FONT,DEPTH,IS_DESKTOP as D} from '../config';
@@ -38,6 +39,7 @@ export class BuffHud {
   const g=player.growth,entries:BuffEntry[]=[];
   for(const a of activeAwakenings(g.build.tags()))entries.push({id:'awakening_'+a.id,icon:a.icon,name:a.name,desc:a.desc,kind:'觉醒 · 常驻',badge:'醒',rare:true});
   if(g.berserkUntil>now)entries.push({id:'berserk',icon:'growth_icon_berserk',name:'狂战丹',desc:'武器伤害提高25%，攻击速度提高20%。限时效果，进入新关卡会清除。',kind:'丹药 · 限时 '+Math.ceil((g.berserkUntil-now)/1000)+' 秒',badge:Math.ceil((g.berserkUntil-now)/1000)+'s',mark:'药',remaining:Math.min(1,(g.berserkUntil-now)/10000)});
+  {const left=player.passive.chargeGuardLeft(now);if(left>0)entries.push({id:'tieqi_guard',icon:'icon_zhanjin',name:'铁骑余威',desc:'锦马冲锋之后，受到的伤害减少'+Math.round((1-PASSIVE_RULES.chargeGuardMul)*100)+'%。',kind:'被动 · 限时 '+(left/1000).toFixed(1)+' 秒',badge:Math.ceil(left/1000)+'s',remaining:left/PASSIVE_RULES.chargeGuardMs,rare:true});}
   for(const id of g.build.treasures){const d=TREASURES[id];entries.push({id:'treasure_'+id,icon:'build_icon_'+id,name:d.name,desc:d.desc,kind:'宝物',badge:'宝',rare:true});}
   for(const id of Object.keys(g.masteries)as MasteryId[])if(g.masteries[id]>0){const d=MARTIALS[id];entries.push({id:'mastery_'+id,icon:'growth_icon_'+id,name:d.name+' Lv.'+g.masteries[id],desc:martialDescription(id,g.masteries[id]),kind:'武学 · 本命武器修习',badge:String(g.masteries[id]),mark:d.name.slice(0,2)});}
   for(const id of Object.keys(g.build.tactics)as TacticId[]){const level=g.build.level(id),d=TACTICS[id];if(level)entries.push({id:'tactic_'+id,icon:'build_icon_'+id,name:d.name+' Lv.'+level,desc:tacticDescription(id,level),kind:'战法',badge:String(level)});}

@@ -66,6 +66,8 @@ export const PASSIVE_RULES = {
   roarWaveSpeed: 480, roarWavePush: 2.5, bridgeRadius: 150, bridgeMs: 3000,
   /** 马超·枪挑破阵：挑飞（索敌距离 / 腾空时长 / 挑起伤害倍率）、落地范围半径；西凉铁骑满层冲锋（距离 / 宽 / 伤害倍率 / 突进时长）。命中积层间隔沿用 cavalryIntervalMs。 */
   liftRange: 150, liftMs: 600, liftHitMul: .6, landRadius: 70, chargeLen: 180, chargeWidth: 56, chargeDamageMul: 1.6, chargeMs: 220,
+  /** 2026-11-16 用户：「马超冲锋的时候要有无敌帧数，和冲锋完有2秒减伤」：冲锋全程无敌（不吃伤害、不被击退）；结束后 chargeGuardMs 内受伤 ×chargeGuardMul（30% 为初值，待平衡）。 */
+  chargeGuardMs: 2000, chargeGuardMul: .7,
   /** 刘备·双股剑：出手距离、「×」斩溅射半径与倍率；一剑砍两人积 1 层仁德。 */
   swordsRange: 120, crossSplash: 30, crossSplashMul: .6, liubeiHaste: .3, liubeiHasteMs: 4000,
   fireRadiusMul: 1.25, burnMs: 2000, burnTickMs: 1000, burnDamageFraction: .10,

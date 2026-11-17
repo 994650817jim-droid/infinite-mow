@@ -121,7 +121,7 @@ for (const [layout, viewport] of Object.entries(LAYOUTS)) for (const [hero, h] o
     await p.keyboard.down('KeyD'); await sleep(300); await p.keyboard.up('KeyD'); await sleep(100);
     const c = await p.evaluate(async ([G0, MK]) => {
       const s = eval(G0), pl = s.player; const mk = eval(MK); for (const e of s.enemies) if (e.active && !e.isSupplySlot) e.hp = 0;
-      await new Promise(r => setTimeout(r, 1500)); mk(pl.x - 120, pl.y); const x0 = pl.x, shout0 = s.passiveShout.count; pl.passive.stacks = 6; let charge = false, moved = 0, shoutText = '', glow = false, ring = false, bigText = 0, wave = false; const t0 = performance.now();
+      await new Promise(r => setTimeout(r, 1500)); mk(pl.x - 120, pl.y); pl.passive.stacks = 0; await new Promise(r => setTimeout(r, 100)); const x0 = pl.x, shout0 = s.passiveShout.count; pl.passive.stacks = 6; let charge = false, moved = 0, shoutText = '', glow = false, ring = false, bigText = 0, wave = false; const t0 = performance.now();
       while (performance.now() - t0 < 4000) { await new Promise(r => setTimeout(r, 20)); charge = charge || !!s.children.getByName('machao-charge'); moved = Math.max(moved, pl.x - x0); shoutText = shoutText || (s.children.getByName('passive-shout') ? s.passiveShout.lastLine : ''); bigText = bigText || (s.children.getByName('passive-shout')?.list?.[0]?.list?.length ?? 0); wave = wave || !!s.children.getByName('warcry-wave'); glow = glow || !!s.children.getByName('passive-shout-glow'); ring = ring || !!s.children.getByName('passive-shout-ring'); if (charge && moved >= 120) break; }
       const shouts = s.passiveShout.count - shout0;
       // 紧接着再攒满一次：马超不设冷却，应再喊一次
@@ -129,6 +129,24 @@ for (const [layout, viewport] of Object.entries(LAYOUTS)) for (const [hero, h] o
       return { charge, moved: Math.round(moved), triggers: pl.passive.snapshot(s.combatNow).triggers, shouts, shoutText, bigText, wave, waveTex: s.textures.exists('warcry_fx'), glow, ring, shoutsAfterRefill: s.passiveShout.count - shout0 };
     }, [G, mk]);
     ck(`${tag}：铁骑满层，下一枪朝头前冲锋（键盘往右走、敌人在左：仍向右突进 ≥120 像素）`, c.charge && c.moved >= 120 && c.triggers >= 1, c);
+    // 冲锋无敌 + 冲锋后 2 秒「铁骑余威」减伤 30%（用户定）：冲锋中受击 0 伤害；之后 2 秒内伤害 ×0.7；过后恢复；增益栏有「铁骑余威」
+    const iv = await p.evaluate(async ([G0, MK]) => {
+      const s = eval(G0), pl = s.player, mk = eval(MK); for (const e of s.enemies) if (e.active && !e.isSupplySlot) e.deactivate();
+      const { PASSIVE_RULES: R } = await import('/src/data/passives.ts');
+      pl.damageImmune = false; pl.hp = pl.maxHp; // 每下 40（马超生命 100，不能一下打死）
+      const hit = raw => { pl.invulnUntil = 0; const h0 = pl.hp; pl.takeDamage(raw, s.combatNow); const d = h0 - pl.hp; pl.hp = pl.maxHp; return d; };
+      while (pl.passive.isInvulnerable(s.combatNow) || pl.passive.chargeGuardLeft(s.combatNow) > 0) await new Promise(r => setTimeout(r, 20)); // 等上一段冲锋的无敌和余威都结束
+      const normal0 = hit(40);
+      pl.heading.x = 1; pl.heading.y = 0; mk(pl.x - 100, pl.y); pl.weapons[0].cooldownLeft = 0; pl.passive.stacks = 6;
+      const t0 = performance.now(); while (performance.now() - t0 < 2000 && !pl.passive.isInvulnerable(s.combatNow)) await new Promise(r => setTimeout(r, 5));
+      const inCharge = hit(40); let ghost = false; const tg = performance.now(); while (performance.now() - tg < 300 && !ghost) { await new Promise(r => setTimeout(r, 10)); ghost = !!s.children.getByName('machao-invuln-ghost'); }
+      while (pl.passive.isInvulnerable(s.combatNow)) await new Promise(r => setTimeout(r, 10));
+      await new Promise(r => setTimeout(r, 300)); const guarded = hit(40), buff = s.buffHud?.slots?.some(sl => sl.root.visible && sl.entry?.id === 'tieqi_guard') ?? null, glow = !!s.children.getByName('machao-guard-glow');
+      await new Promise(r => setTimeout(r, R.chargeGuardMs)); const after = hit(40);
+      pl.damageImmune = true;
+      return { normal0, inCharge, guarded, after, ratio: +(guarded / after).toFixed(2), ghost, glow, buff };
+    }, [G, mk]);
+    ck(`${tag}：冲锋中无敌（受击 0）、冲锋后 2 秒「铁骑余威」伤害 ×0.7、之后恢复；残影 / 护体微光 / 增益栏图标`, iv.inCharge === 0 && Math.abs(iv.ratio - .7) < .04 && iv.after === iv.normal0 && iv.ghost && iv.glow && iv.buff, iv);
     // 手柄：模拟左摇杆向上推 0.3 秒，再满层 → 向上冲锋；带尘土拖影与枪尖破风
     const pad = await p.evaluate(async ([G0, MK]) => {
       const s = eval(G0), pl = s.player, mk = eval(MK); for (const e of s.enemies) if (e.active && !e.isSupplySlot) e.deactivate();

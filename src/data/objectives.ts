@@ -6,11 +6,8 @@
 export type StageObjective =
   | {kind: 'kills'; count: number; label: string; limit: number}
   | {kind: 'destroy'; count: number; target: string; label: string; limit: number}
-  | {kind: 'escort'; label: string; goal: string; limit: number}
   | {kind: 'hold'; seconds: number; label: string; limit: number};
 
-/** 护送车（与天下地图军情「商队护送」同一套规则，数值单独定）。 */
-export const STAGE_ESCORT = {hp: 120, distance: 1300, speed: 17, near: 220, raidRadius: 72, raidDps: 1.4, raidCap: 8} as const;
 /** 坚守军旗：旗有耐久，旗旁 70px 内每个敌兵持续扣耐久；守满秒数即完成。 */
 export const STAGE_HOLD = {hp: 100, radius: 70, dps: 1.2, cap: 8} as const;
 /** 摧毁目标的耐久（受关卡生命成长影响前的基础值）。 */

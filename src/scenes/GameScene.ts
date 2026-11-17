@@ -374,6 +374,8 @@ export class GameScene extends Phaser.Scene {
   private get trailingBoss():ChasingBoss|null{return this.chasingBosses[0]??null;}
   /** 首领倒地后掉的宝箱（捡起遗物才进下一阶段）。 */
   protected bossChests:BossChest[]=[];
+  /** 刚倒下的首领朝向（用了倒地 4 帧时 ±1）：宝箱往前偏开尸体。 */
+  private bossFallDir=0;
   private lootContinue:(()=>void)|null=null;private relicHits=0;private relicFireAt=0;private relicHealAt=0;
   /** 穿着的信物库新信物（开局 / 换装后由 applyCharms 算出）。 */
   protected charmInfo:CharmState|null=null;
@@ -1654,7 +1656,7 @@ export class GameScene extends Phaser.Scene {
     // 吕布倒地改由 playBossFall（倒地 4 帧）播，不再叠旧的通用死亡闪影
     if(kind==='boss'){const old=this.chasingBosses.find(t=>t.enemy===enemy&&t.life===enemy.spawnId),h=old?old.huaxiong:this.huaxiong,x=old?old.xurong:this.xurong;h?.defeat();x?.defeat();if(old){if(h)this.deadBossControllers.push(h);if(x)this.deadBossControllers.push(x);}
       // 倒地：控制器自己有倒地帧的（华雄 / 徐荣 / 子类首领）沿用；其余首领播通用倒地（受伤帧 + 倒下 + 手绘扬尘 + 下沉淡出）
-      if(!(h||x||this.bossHasDeathArt()))playBossFall(this,enemy,this.zhangjiao?'zhangjiao_moves':this.lubu?'lubu_moves':undefined,old?undefined:this.chapter.bossStyle);}
+      this.bossFallDir=0;if(!(h||x||this.bossHasDeathArt()))this.bossFallDir=playBossFall(this,enemy,this.zhangjiao?'zhangjiao_moves':this.lubu?'lubu_moves':undefined,old?undefined:this.chapter.bossStyle);}
     enemy.deactivate();
     if(enemy.isSupplySlot){this.sfx.play('propBreak');this.supplies?.onBroken(enemy);return;}
     this.warfeedKill();
@@ -2464,9 +2466,11 @@ export class GameScene extends Phaser.Scene {
   /** 首领宝箱：倒地点掉落，主将碰到打开。 */
   protected spawnBossChest(x:number,y:number,done:()=>void):void{
     if(!this.player.alive){this.finish(false);return;}
-    this.bossChests.push(new BossChest({scene:this,player:this.player,grant:()=>this.grantBossChest(),done,sfx:k=>this.sfx.play(k)},x,y,this.combatNow));
+    // 落点避开尸体（画风会话量的躺倒身体范围）：倒地 4 帧往朝向前方偏 80，其余往下偏 30
+    const ox=this.bossFallDir*80,oy=30;
+    this.bossChests.push(new BossChest({scene:this,player:this.player,grant:()=>this.grantBossChest(),done,sfx:k=>this.sfx.play(k)},x+ox,y+oy,this.combatNow));
   }
-  /** 宝箱里的东西：首领遗珍（道具系统发放，见 ItemDrops.claimBossRelic）。2026-11-17 本局遗物撤掉、并入信物库。 */
+  /** 宝箱里只有首领遗珍（用户 2026-11-17「首领宝箱只给首领遗珍」；道具系统发放，见 ItemDrops.claimBossRelic）。 */
   protected grantBossChest():ChestLoot[]{
     const out:ChestLoot[]=[];
     const item=this.itemDrops?.claimBossRelic();

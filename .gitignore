@@ -140,3 +140,4 @@ assets/raw/*
 !/tools/test-props-v2.mjs
 !/tools/test-boss-chest.mjs
 !/tools/record-boss-chest-gif.mjs
+!/tools/test-xingyang-full.mjs

@@ -122,6 +122,10 @@ export const ART_V2_FILES: Readonly<Record<string, string>> = {
   hanzhong_zhanghe: 'assets/bosses-v2/hanzhong_zhanghe.png',
   hanzhong_xiahouyuan: 'assets/bosses-v2/hanzhong_xiahouyuan.png',
   hanzhong_caocao: 'assets/bosses-v2/hanzhong_caocao.png',
+  // 第十章 夷陵之战首领：正式 v2 图到之前借用现有首领 v2 图过渡（yilingChapter.YILING_SHEETS 是 v1 回退）
+  yiling_sunhuan: 'assets/bosses-v2/third_zhangxiu.png',
+  yiling_zhuran: 'assets/bosses-v2/jingnan_hanxuan.png',
+  yiling_luxun: 'assets/bosses-v2/jingnan_zhaofan.png',
   huaxiong_walk: 'assets/bosses-v2/huaxiong_walk.png',
   huaxiong_attack: 'assets/bosses-v2/huaxiong_attack.png',
   huaxiong_actions: 'assets/bosses-v2/huaxiong_actions.png',

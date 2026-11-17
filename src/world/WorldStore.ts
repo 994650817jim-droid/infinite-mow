@@ -25,14 +25,14 @@ function parseCities(s:WorldSave,v:{version?:number;cities?:unknown}):void{
 export interface CityAlert{city:string;attacker:FactionId;cause:'era'|'retaliation';}
 export type BuildingId='barracks'|'farm'|'clinic';
 /** 第三章起的群雄篇章：各自独立的关卡进度与失败最佳成绩。 */
-export type WarlordArc='qunxiong'|'guandu'|'chibi'|'jingnan'|'shu'|'hanzhong';
+export type WarlordArc='qunxiong'|'guandu'|'chibi'|'jingnan'|'shu'|'hanzhong'|'yiling';
 export interface WorldSave {version:10;
  /** v10 城池建设（city-build-proposal.md）：各占领城池的建筑等级，键为城池 id；失守的城也保留，夺回后原样恢复。 */
  cities:Record<string,CityLevels>;
  /** v9 营寨简化（city-simplify-proposal.md）：只剩军粮（provisions），merits 恒为 0（旧档军功与钱读入时折成军粮）；town 含建筑、科技、城池发展方向。buildings 供旧的战斗加成使用。 */
  town:TownState; yellowStages:number; warlordStages:number;thirdFailureBest:number; guanduStages:number; guanduFailureBest:number; chibiStages:number; chibiFailureBest:number; jingnanStages:number; jingnanFailureBest:number;
  /** 第七章 入蜀（葭萌关 → 落凤坡 → 成都）进度；开发期不做旧档迁移。 */
- shuStages:number; shuFailureBest:number; hanzhongStages:number; hanzhongFailureBest:number;
+ shuStages:number; shuFailureBest:number; hanzhongStages:number; hanzhongFailureBest:number; yilingStages:number; yilingFailureBest:number;
  /** v7 天下地图：玩家已占城池 id；已看过的时代（W4 时局变化用）。 */
  ownedCities:string[]; eraSeen:number; capturedEver:string[]; alerts:CityAlert[]; lastLost:string[]; dongzhuoStages:number; legacyHulaoAccess:boolean; worldAvailable:boolean;
  /** 天下地图上已见过的开放章节数（新篇解锁提示用）；旧存档按当前开放数迁移，不补弹提示。 */
@@ -49,10 +49,10 @@ let memory:WorldSave|undefined;
 export let storageUnavailable=false;
 export let incompatibleSave=false;
 const integer=(v:unknown,max=1_000_000)=>typeof v==='number'&&Number.isFinite(v)?Math.max(0,Math.min(max,Math.floor(v))):0;
-const defaults=():WorldSave=>({version:10,cities:{},town:migrateTown({barracks:1,farm:1,clinic:1}),ownedCities:[],eraSeen:0,capturedEver:[],alerts:[],lastLost:[],yellowStages:0,warlordStages:0,thirdFailureBest:0,guanduStages:0,guanduFailureBest:0,chibiStages:0,jingnanStages:0,jingnanFailureBest:0,shuStages:0,shuFailureBest:0,hanzhongStages:0,hanzhongFailureBest:0,chibiFailureBest:0,dongzhuoStages:0,legacyHulaoAccess:false,worldAvailable:false,chapterSeen:1,hardCleared:[],intel:[],intelSeq:0,lubuClears:0,revision:0,merits:0,provisions:0,buildings:{barracks:1,farm:1,clinic:1},cleared:{huangjin:false,hulao:false},failureBest:{huangjin:0,hulao:0},nodes:['huangjin'],reserve:{},armyPlan:{capacity:2,garrison:0},active:null,receipts:[]});
+const defaults=():WorldSave=>({version:10,cities:{},town:migrateTown({barracks:1,farm:1,clinic:1}),ownedCities:[],eraSeen:0,capturedEver:[],alerts:[],lastLost:[],yellowStages:0,warlordStages:0,thirdFailureBest:0,guanduStages:0,guanduFailureBest:0,chibiStages:0,jingnanStages:0,jingnanFailureBest:0,shuStages:0,shuFailureBest:0,hanzhongStages:0,hanzhongFailureBest:0,yilingStages:0,yilingFailureBest:0,chibiFailureBest:0,dongzhuoStages:0,legacyHulaoAccess:false,worldAvailable:false,chapterSeen:1,hardCleared:[],intel:[],intelSeq:0,lubuClears:0,revision:0,merits:0,provisions:0,buildings:{barracks:1,farm:1,clinic:1},cleared:{huangjin:false,hulao:false},failureBest:{huangjin:0,hulao:0},nodes:['huangjin'],reserve:{},armyPlan:{capacity:2,garrison:0},active:null,receipts:[]});
 function parse(raw:string|null):WorldSave|null {try{if(!raw)return null;const v=JSON.parse(raw);if(![1,2,3,4,5,6,7,8,9,10].includes(v.version)||!v.buildings||!v.cleared)return null;const s=defaults();s.warlordStages=integer(v.warlordStages,3);s.thirdFailureBest=integer(v.thirdFailureBest,20);
  // v6：第四章（官渡）进度；旧档默认为 0，第三章全通后开放。
- s.guanduStages=v.version>=6?integer(v.guanduStages,3):0;s.chibiStages=integer(v.chibiStages,3);s.jingnanStages=integer(v.jingnanStages,3);s.jingnanFailureBest=integer(v.jingnanFailureBest,20);s.shuStages=integer(v.shuStages,3);s.shuFailureBest=integer(v.shuFailureBest,20);s.hanzhongStages=integer(v.hanzhongStages,3);s.hanzhongFailureBest=integer(v.hanzhongFailureBest,20);s.chibiFailureBest=integer(v.chibiFailureBest,20);s.guanduFailureBest=v.version>=6?integer(v.guanduFailureBest,20):0;
+ s.guanduStages=v.version>=6?integer(v.guanduStages,3):0;s.chibiStages=integer(v.chibiStages,3);s.jingnanStages=integer(v.jingnanStages,3);s.jingnanFailureBest=integer(v.jingnanFailureBest,20);s.shuStages=integer(v.shuStages,3);s.shuFailureBest=integer(v.shuFailureBest,20);s.hanzhongStages=integer(v.hanzhongStages,3);s.hanzhongFailureBest=integer(v.hanzhongFailureBest,20);s.yilingStages=integer(v.yilingStages,3);s.yilingFailureBest=integer(v.yilingFailureBest,20);s.chibiFailureBest=integer(v.chibiFailureBest,20);s.guanduFailureBest=v.version>=6?integer(v.guanduFailureBest,20):0;
  // v7：天下地图城池；旧档无城池，eraSeen=0（之后按当前时代处理）
  s.ownedCities=v.version>=7&&Array.isArray(v.ownedCities)?[...new Set(v.ownedCities.filter((c:unknown)=>typeof c==='string'&&c.length<=32))].slice(0,64) as string[]:[];s.eraSeen=v.version>=7?integer(v.eraSeen,3):0;s.capturedEver=v.version>=7&&Array.isArray(v.capturedEver)?[...new Set(v.capturedEver.filter((c:unknown)=>typeof c==='string'&&c.length<=32))].slice(0,64) as string[]:[];s.alerts=v.version>=7&&Array.isArray(v.alerts)?v.alerts.filter((a:CityAlert)=>a&&typeof a.city==='string'&&s.ownedCities.includes(a.city)&&typeof a.attacker==='string'&&a.attacker.length<=16).slice(0,16).map((a:CityAlert)=>({city:a.city,attacker:a.attacker,cause:a.cause==='era'?'era':'retaliation'})):[];s.lastLost=v.version>=7&&Array.isArray(v.lastLost)?v.lastLost.filter((c:unknown)=>typeof c==='string'&&c.length<=32).slice(0,16):[];s.yellowStages=integer(v.yellowStages,3);s.revision=integer(v.revision);s.provisions=integer(v.provisions);for(const id of ['barracks','farm','clinic'] as BuildingId[])s.buildings[id]=Math.max(1,integer(v.buildings[id],3));
  // v9：统一军粮。旧档的军功、钱（含在途商队）与已删建筑的退还一并折成军粮；v9 存档 merits 恒为 0。
@@ -257,15 +257,17 @@ export function dongzhuoStageUnlocked(stage:number):boolean{const s=loadWorld();
 export function nextDongzhuoStage():1|2|3{return Math.min(3,loadWorld().dongzhuoStages+1) as 1|2|3;}
 
 /** 群雄篇章（第三章 qunxiong、第四章 guandu）用显式 arc 键结算，不会结算旧的虎牢出征。 */
-const ARC_FIELDS:Record<WarlordArc,{stages:'warlordStages'|'guanduStages'|'chibiStages'|'jingnanStages'|'shuStages'|'hanzhongStages';best:'thirdFailureBest'|'guanduFailureBest'|'chibiFailureBest'|'jingnanFailureBest'|'shuFailureBest'|'hanzhongFailureBest'}>={qunxiong:{stages:'warlordStages',best:'thirdFailureBest'},guandu:{stages:'guanduStages',best:'guanduFailureBest'},chibi:{stages:'chibiStages',best:'chibiFailureBest'},jingnan:{stages:'jingnanStages',best:'jingnanFailureBest'},shu:{stages:'shuStages',best:'shuFailureBest'},hanzhong:{stages:'hanzhongStages',best:'hanzhongFailureBest'}};
+const ARC_FIELDS:Record<WarlordArc,{stages:'warlordStages'|'guanduStages'|'chibiStages'|'jingnanStages'|'shuStages'|'hanzhongStages'|'yilingStages';best:'thirdFailureBest'|'guanduFailureBest'|'chibiFailureBest'|'jingnanFailureBest'|'shuFailureBest'|'hanzhongFailureBest'|'yilingFailureBest'}>={qunxiong:{stages:'warlordStages',best:'thirdFailureBest'},guandu:{stages:'guanduStages',best:'guanduFailureBest'},chibi:{stages:'chibiStages',best:'chibiFailureBest'},jingnan:{stages:'jingnanStages',best:'jingnanFailureBest'},shu:{stages:'shuStages',best:'shuFailureBest'},hanzhong:{stages:'hanzhongStages',best:'hanzhongFailureBest'},yiling:{stages:'yilingStages',best:'yilingFailureBest'}};
 /** 篇章剧情直接占城（第七章成都）：加入我方城池，返回是否新占。 */
 export function grantCity(cityId:string):boolean{const s=loadWorld();if(s.ownedCities.includes(cityId))return false;s.ownedCities=[...s.ownedCities,cityId];if(!s.capturedEver.includes(cityId))s.capturedEver=[...s.capturedEver,cityId];commit(s);return true;}
 /** 第七章入蜀接在第六章平定荆南之后。 */
 export function shuPrereqCleared(s:WorldSave):boolean{return s.cleared.hulao&&s.jingnanStages>=3;}
 export function arcStages(arc:WarlordArc):number{return loadWorld()[ARC_FIELDS[arc].stages];}
 /** 第八章接在第七章「入蜀」（arc 'shu'，走路动画会话）之后：存档里有 shuStages 就要求它 ≥3；入蜀还没合进来时退回要求第六章荆南三关。 */
+/** 第十章接在第九章「襄樊」之后；襄樊未合并时退回第八章。 */
+function yilingPrereq(s:WorldSave):boolean{const xf=(s as unknown as {xiangfanStages?:number}).xiangfanStages;return xf===undefined?s.hanzhongStages>=3:xf>=3;}
 function hanzhongPrereq(s:WorldSave):boolean{const shu=(s as unknown as {shuStages?:number}).shuStages;return shu===undefined?s.jingnanStages>=3:shu>=3;}
-export function arcUnlocked(arc:WarlordArc):boolean{const s=loadWorld();return arc==='qunxiong'?s.cleared.hulao:arc==='guandu'?s.cleared.hulao&&s.warlordStages>=3:arc==='jingnan'?s.cleared.hulao&&s.chibiStages>=3:arc==='shu'?shuPrereqCleared(s):arc==='hanzhong'?s.cleared.hulao&&hanzhongPrereq(s):s.cleared.hulao&&s.guanduStages>=3;}
+export function arcUnlocked(arc:WarlordArc):boolean{const s=loadWorld();return arc==='qunxiong'?s.cleared.hulao:arc==='guandu'?s.cleared.hulao&&s.warlordStages>=3:arc==='jingnan'?s.cleared.hulao&&s.chibiStages>=3:arc==='shu'?shuPrereqCleared(s):arc==='hanzhong'?s.cleared.hulao&&hanzhongPrereq(s):arc==='yiling'?s.cleared.hulao&&yilingPrereq(s):s.cleared.hulao&&s.guanduStages>=3;}
 export function arcStageUnlocked(arc:WarlordArc,stage:number):boolean{return Number.isInteger(stage)&&stage>=1&&stage<=3&&arcUnlocked(arc)&&stage<=arcStages(arc)+1;}
 export function beginArcExpedition(arc:WarlordArc,stage:number,deployed:TroopKind[]=[]):string{if(!arcStageUnlocked(arc,stage))return '';const s=loadWorld(),id=createExpeditionId();refundStaleExpedition(s);loseAlerted(s);s.active={id,chapter:'hulao',arc,stage,state:'active',farm:s.buildings.farm,deployed:[...deployed]};commit(s);return id;}
 export function settleArcExpedition(arc:WarlordArc,id:string,result:{victory:boolean;bossKilled:boolean;kills:number;elapsed:number;debug:boolean;returned?:TroopKind[]}):{merits:number;provisions:number;cityMerits?:number;cityProvisions?:number;season?:SeasonReport|null;message:string}{

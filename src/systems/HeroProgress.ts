@@ -115,7 +115,7 @@ export function allocateHeroAttr(id: HeroKey, attr: AttributeId): boolean {
  * 主线关首次通关经验（平衡会话实测后提议、用户批准）：一章每关 120、二章 250，之后每章 +130（380 / 510 / 640）。
  * 关卡键同马厩赠马：huangjin-N / hulao-N / third-N / guandu-N / chibi-N。每个存档每关只给一次（任何武将打通都算）。
  */
-export const FIRST_CLEAR_XP: Record<string, number> = { huangjin: 120, hulao: 250, third: 380, guandu: 510, chibi: 640, jingnan: 770, hanzhong: 1030 };
+export const FIRST_CLEAR_XP: Record<string, number> = { huangjin: 120, hulao: 250, third: 380, guandu: 510, chibi: 640, jingnan: 770, hanzhong: 1030, yiling: 1290 };
 /** 这一关是否已首次通关过（征程构筑：重打旧关用空构筑）。 */
 export function stageCleared(stageKey: string | null): boolean { return !!stageKey && read().firstClears.includes(stageKey); }
 export function claimFirstClear(stageKey: string | null): number {

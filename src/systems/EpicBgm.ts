@@ -151,6 +151,7 @@ export const BATTLE_THEMES: Record<BattleThemeKey, BattleTheme> = {
 export function battleThemeFor(sceneKey: string, chapterId: string): BattleThemeKey {
   if (sceneKey === 'ChibiGameScene' || sceneKey === 'JingnanGameScene') return 'chibi'; // 第六章暂借赤壁曲
   if (sceneKey === 'HanzhongGameScene') return 'guandu'; // 第八章暂借官渡曲
+  if (sceneKey === 'YilingGameScene') return 'chibi'; // 第十章（火攻）暂借赤壁曲
   if (sceneKey === 'ThirdGameScene') return 'qunxiong';
   if (sceneKey === 'GuanduGameScene' || sceneKey === 'SiegeGameScene') return 'guandu';
   if (sceneKey === 'LubuGameScene' || chapterId === 'hulao') return 'hulao';

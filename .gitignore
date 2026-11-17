@@ -155,3 +155,4 @@ assets/raw/*
 !/tools/test-shu.mjs
 !/tools/test-jingnan-art.mjs
 !/tools/test-hanzhong-art.mjs
+!/tools/test-yiling-full.mjs

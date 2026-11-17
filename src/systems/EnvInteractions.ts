@@ -198,6 +198,16 @@ export class EnvInteractions {
   }
   get activeFires(): number { return this.fires.filter(f => f.active).length; }
 
+  /** 章节玩法摆固定营帐（第十章连营 / 火烧连营）：世界坐标、唯一 id、生命；faction 缺省用本场势力。 */
+  placeTent(x: number, y: number, id: string, hp: number = ENV_TENT.hp, faction: number = this.cfg.faction): Enemy | null {
+    const t = this.tex('tent', F.tent + faction);
+    const e = this.h.supplies.spawnEnvProp('tent', id, x, y, { ...t, size: this.hasArt ? 176 : 150, hp, radius: 60, halfW: 56, halfH: 20, offsetY: -18, originY: .9 });
+    if (e) this.stats.tents++;
+    return e;
+  }
+  /** 场上还立着的营帐。 */
+  tents(): Enemy[] { return this.h.supplies.envProps().filter(p => p.env === 'tent').map(p => p.enemy); }
+
   /** DEV / 测试：在主将附近放一个环境物件。 */
   spawnForTest(env: 'barrel' | 'banner' | 'tent', dx: number, dy: number): Enemy | null {
     const p = this.h.player, x = p.x + dx, y = p.y + dy, k = env === 'barrel' ? 'barrel' : env === 'banner' ? 'banner' : 'tent';

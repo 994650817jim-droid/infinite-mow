@@ -3,7 +3,7 @@ import './dev/TestSave';
 // 桌面版（Steam）平台层必须最先执行：替换 localStorage 为存档文件
 import { TalentHallScene } from './scenes/TalentHallScene';
 import './platform/desktop';
-import {ShuChapterScene} from './scenes/ShuChapterScene';import {shuGameSceneClass} from './scenes/ShuGameScene';import {ThirdChapterScene} from './scenes/ThirdChapterScene';import {ChibiChapterScene} from './scenes/ChibiChapterScene';import {CHIBI_STAGES,chibiBattle} from './data/chibiChapter';import {JINGNAN_STAGES,JINGNAN_SHEETS,jingnanBattle,jingnanTexture} from './data/jingnanChapter';import {JingnanChapterScene} from './scenes/JingnanChapterScene';import {jingnanGameSceneClass} from './scenes/JingnanGameScene';import {HANZHONG_STAGES,HANZHONG_SHEETS,hanzhongBattle,hanzhongTexture} from './data/hanzhongChapter';import {HanzhongChapterScene} from './scenes/HanzhongChapterScene';import {hanzhongGameSceneClass} from './scenes/HanzhongGameScene';import {thirdGameSceneClass} from './scenes/ThirdGameScene';import {GuanduChapterScene} from './scenes/GuanduChapterScene';import {guanduGameSceneClass} from './scenes/GuanduGameScene';import {siegeGameSceneClass} from './scenes/SiegeGameScene';import {intelGameSceneClass} from './scenes/IntelGameScene';import {lubuGameSceneClass} from './scenes/LubuGameScene';
+import {ShuChapterScene} from './scenes/ShuChapterScene';import {shuGameSceneClass} from './scenes/ShuGameScene';import {ThirdChapterScene} from './scenes/ThirdChapterScene';import {ChibiChapterScene} from './scenes/ChibiChapterScene';import {CHIBI_STAGES,chibiBattle} from './data/chibiChapter';import {JINGNAN_STAGES,JINGNAN_SHEETS,jingnanBattle,jingnanTexture} from './data/jingnanChapter';import {JingnanChapterScene} from './scenes/JingnanChapterScene';import {jingnanGameSceneClass} from './scenes/JingnanGameScene';import {HANZHONG_STAGES,HANZHONG_SHEETS,hanzhongBattle,hanzhongTexture} from './data/hanzhongChapter';import {HanzhongChapterScene} from './scenes/HanzhongChapterScene';import {hanzhongGameSceneClass} from './scenes/HanzhongGameScene';import {YILING_STAGES,YILING_SHEETS,yilingBattle,yilingTexture} from './data/yilingChapter';import {YilingChapterScene} from './scenes/YilingChapterScene';import {yilingGameSceneClass} from './scenes/YilingGameScene';import {thirdGameSceneClass} from './scenes/ThirdGameScene';import {GuanduChapterScene} from './scenes/GuanduChapterScene';import {guanduGameSceneClass} from './scenes/GuanduGameScene';import {siegeGameSceneClass} from './scenes/SiegeGameScene';import {intelGameSceneClass} from './scenes/IntelGameScene';import {lubuGameSceneClass} from './scenes/LubuGameScene';
 import {loadGameFonts} from './ui/GameFonts';
 import Phaser from 'phaser';
 import { GAME_HEIGHT, GAME_WIDTH, IS_DESKTOP, RENDER_SCALE, initLayout, switchLayout } from './config';
@@ -64,6 +64,7 @@ async function startGame(): Promise<void> {
   const JingnanBattleScene=jingnanGameSceneClass(BattleScene,{key:'JingnanGameScene',arc:'jingnan',stageKey:'jingnanStage',transferKey:'jingnanTransfer',stages:JINGNAN_STAGES,texture:jingnanTexture,sheet:id=>JINGNAN_SHEETS[jingnanTexture(id)],battle:s=>jingnanBattle(s),campPrefix:'jingnan-'});
   const ShuBattleScene=shuGameSceneClass(BattleScene);
   const HanzhongBattleScene=hanzhongGameSceneClass(BattleScene,{key:'HanzhongGameScene',arc:'hanzhong',stageKey:'hanzhongStage',transferKey:'hanzhongTransfer',stages:HANZHONG_STAGES,texture:hanzhongTexture,sheet:id=>HANZHONG_SHEETS[hanzhongTexture(id)],battle:s=>hanzhongBattle(s),campPrefix:'hanzhong-'});
+  const YilingBattleScene=yilingGameSceneClass(BattleScene,{key:'YilingGameScene',arc:'yiling',stageKey:'yilingStage',transferKey:'yilingTransfer',stages:YILING_STAGES,texture:yilingTexture,sheet:id=>YILING_SHEETS[yilingTexture(id)],battle:s=>yilingBattle(s),campPrefix:'yiling-'});
   const SiegeBattleScene=siegeGameSceneClass(BattleScene);
   const IntelBattleScene=intelGameSceneClass(BattleScene);
   const LubuBattleScene=lubuGameSceneClass(BattleScene);
@@ -84,7 +85,7 @@ async function startGame(): Promise<void> {
     input: {
       activePointers: 3,
     },
-    scene: [BootScene, CityScene, CityRecruitScene, TownScene, TalentHallScene, WorldMapScene, MenuScene, BattleScene, ThirdChapterScene, ThirdBattleScene, GuanduChapterScene, GuanduBattleScene, ChibiChapterScene, ChibiBattleScene, JingnanChapterScene, JingnanBattleScene, ShuChapterScene, ShuBattleScene, HanzhongChapterScene, HanzhongBattleScene, SiegeBattleScene, IntelBattleScene, LubuBattleScene],
+    scene: [BootScene, CityScene, CityRecruitScene, TownScene, TalentHallScene, WorldMapScene, MenuScene, BattleScene, ThirdChapterScene, ThirdBattleScene, GuanduChapterScene, GuanduBattleScene, ChibiChapterScene, ChibiBattleScene, JingnanChapterScene, JingnanBattleScene, ShuChapterScene, ShuBattleScene, HanzhongChapterScene, HanzhongBattleScene, YilingChapterScene, YilingBattleScene, SiegeBattleScene, IntelBattleScene, LubuBattleScene],
   });
 
   // 手柄：每帧轮询 + 界面焦点导航（STEAM_PLAN.md · S2）

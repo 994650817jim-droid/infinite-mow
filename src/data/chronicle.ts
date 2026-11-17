@@ -2,7 +2,7 @@
  * 战役回顾 · 乱世编年：九关的史事摘要（原创撰写，据《后汉书》《三国志》等常见史载概括；
  * 演义情节明确标注为“演义”）。只做展示，不影响玩法。
  */
-export type ChronicleArc = 'huangjin' | 'dongzhuo' | 'qunxiong' | 'guandu' | 'chibi' | 'jingnan' | 'shu' | 'hanzhong';
+export type ChronicleArc = 'huangjin' | 'dongzhuo' | 'qunxiong' | 'guandu' | 'chibi' | 'jingnan' | 'shu' | 'hanzhong' | 'yiling';
 export interface ChronicleStage { code: string; name: string; boss: string; bossTitle: string; seal: string; year: string; story: string; legacy: string }
 export interface ChronicleChapter { arc: ChronicleArc; title: string; years: string; intro: string; stages: ChronicleStage[] }
 
@@ -125,6 +125,21 @@ export const CHRONICLE: ChronicleChapter[] = [
       { code: '8-3', name: '汉水', boss: '曹操', bossTitle: '魏王', seal: '操', year: '建安二十四年 · 219',
         story: '曹操自长安举众南征，刘备敛众拒险，终不交锋。积月不拔，亡者日多，曹操以「鸡肋」为令，引军还长安。',
         legacy: '刘备遂有汉中，进位汉中王。' },
+    ],
+  },
+  {
+    arc: 'yiling', title: '第十章 · 夷陵之战', years: '公元221—222年',
+    intro: '关羽败亡、荆州失守，刘备称帝后亲征东吴。吴将陆逊坚守不战，待蜀军连营林中、暑热疲敝，顺风纵火，连破四十余营。刘备退守白帝城。',
+    stages: [
+      { code: '10-1', name: '猇亭', boss: '孙桓', bossTitle: '安东中郎将', seal: '桓', year: '章武元年 · 221',
+        story: '先主率诸军伐吴，吴将陆议、李异、刘阿等屯巫、秭归。将军吴班、冯习自巫攻破异等，军次秭归，进至猇亭。',
+        legacy: '蜀军连战连捷，兵锋直抵夷陵。' },
+      { code: '10-2', name: '连营', boss: '朱然', bossTitle: '昭武将军', seal: '然', year: '章武二年 · 222',
+        story: '自佷山通武陵，先主树栅连营，自巫峡、建平至夷陵界七百余里。吴军坚壁不出，两军相持数月。',
+        legacy: '时值盛暑，蜀军移营林中，正中陆逊之计。' },
+      { code: '10-3', name: '火烧连营', boss: '陆逊', bossTitle: '大都督', seal: '逊', year: '章武二年 · 222',
+        story: '陆逊令各持一把茅，以火攻拔之，一尔势成，通率诸军同时俱攻，斩张南、冯习，破其四十余营。先主夜遁，退守白帝。',
+        legacy: '蜀汉元气大伤，刘备托孤白帝城。' },
     ],
   },
 ];

@@ -3,8 +3,8 @@ import type { GameScene } from './GameScene';
 import { thirdGameSceneClass, type ArcSceneConfig } from './ThirdGameScene';
 import type { Enemy } from '../entities/Enemy';
 import { DEPTH, FONT, GAME_HEIGHT, GAME_WIDTH, HEADING_FONT, IS_DESKTOP } from '../config';
-import { JINGNAN_BOSSES, JINGNAN_SHEETS, JINGNAN_STAGES, jingnanTexture, type JingnanBossId } from '../data/jingnanChapter';
-import { loadBossSheet } from '../systems/ArtStyle';
+import { JINGNAN_BOSSES, JINGNAN_SHEETS, JINGNAN_STAGES, JINGNAN_TROOP_SHEETS, jingnanTexture, type JingnanBossId } from '../data/jingnanChapter';
+import { ART_V2_FILES, isV2Texture, loadBossSheet, regridV2 } from '../systems/ArtStyle';
 import { joinByPersuasion } from '../systems/RosterStore';
 import { gainProvisions } from '../world/WorldStore';
 import { isChapterTestRun } from '../systems/ChapterProgress';
@@ -35,7 +35,11 @@ export function jingnanGameSceneClass(Base: typeof GameScene, cfg: ArcSceneConfi
     private persuaded: string[] = []; private executed: string[] = [];
     readonly jnMetrics = { parley: 0, persuaded: 0, executed: 0 };
 
-    preload(): void { super.preload(); const k = jingnanTexture('huangzhong'); if (!this.textures.exists(k)) loadBossSheet(this.load, k, JINGNAN_SHEETS[k]); }
+    preload(): void {
+      super.preload(); const k = jingnanTexture('huangzhong'); if (!this.textures.exists(k)) loadBossSheet(this.load, k, JINGNAN_SHEETS[k]);
+      // 山越弓手 / 藤牌兵 v2 图集：整张载入后按 宽/4 切帧（v1 没有，敌兵沿用换色）
+      for (const key of [...JINGNAN_TROOP_SHEETS.archer, ...JINGNAN_TROOP_SHEETS.shield]) if (isV2Texture(key) && !this.textures.exists(key)) { this.load.once(`filecomplete-image-${key}`, () => regridV2(this, key)); this.load.image(key, ART_V2_FILES[key]); }
+    }
     create(): void { this.changshaPhase = 'huangzhong'; this.parleyState = 'none'; this.parleyPanel = undefined; this.persuaded = []; this.executed = []; super.create(); }
 
     /** 当前出阵首领：长沙先黄忠后韩玄。 */

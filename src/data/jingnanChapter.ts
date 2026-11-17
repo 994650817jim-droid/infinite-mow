@@ -1,4 +1,5 @@
 import type {ChapterDef} from './chapters';
+import {isV2Texture} from '../systems/ArtStyle';
 import {thirdBattle,type ThirdStage} from './thirdChapter';
 
 /**
@@ -30,8 +31,7 @@ export const JINGNAN_STAGES: readonly JingnanStageInfo[] = [
   { stage: 3, name: '长沙会战', boss: '韩玄', id: 'hanxuan', tag: '老将黄忠', feature: '先战黄忠（可劝降）· 再破韩玄', story: '长沙太守韩玄性急寡恩，老将黄忠守城。先与黄忠交锋，再取长沙。', behavior: 2, scenery: 4, skills: ['连环枪击', '突刺追击', '伏兵包围'] },
 ];
 /**
- * 首领图：v2 本体（4×8，每格 288）。正式图到之前先借用现有首领 v2 图过渡（ArtStyle.ART_V2_FILES 里 jingnan_* 指向的文件），v1 回退图同理。
- * 换正式图时只改 ArtStyle 的路径与这里的 v1 路径。
+ * 首领图：v2 正式图在 ArtStyle.ART_V2_FILES 的 jingnan_* 键（4×8，每格 288）；这里是 v1 回退（v1 无专属图，借用旧首领图）。
  */
 export const JINGNAN_SHEETS: Record<string, string> = {
   jingnan_zhaofan: 'assets/phase23/yuanshu.png', jingnan_liudu: 'assets/guandu/chunyuqiong.png',
@@ -44,7 +44,11 @@ const WAVE_NAMES: string[][] = [
   ['武陵山道', '山越伏林', '刘度督战'],
   ['长沙城下', '老将黄忠', '韩玄出阵'],
 ];
-/** 荆南新兵种（v2 图到之前用换色过渡）：山越弓手（射得远、伤害高、血薄）、藤牌兵（藤牌护身，先破盾）。 */
+/** 荆南新兵种 v2 图集（4×4 下左右上；JingnanGameScene.preload 按需加载）。 */
+export const JINGNAN_TROOP_SHEETS = { archer: ['jingnan_shanyue_archer_walk_sheet', 'jingnan_shanyue_archer_attack_sheet'], shield: ['jingnan_rattan_shield_walk_sheet', 'jingnan_rattan_shield_attack_sheet'] } as const;
+/** v2：给小兵挂行走 / 攻击图集并去掉换色；v1 保持换色过渡。 */
+function withSheets<D extends { tint?: number }>(def: D, [walk, atk]: readonly [string, string]): D { return isV2Texture(walk) ? { ...def, tint: 0xffffff, walkVisual: { texture: walk, scale: .5, groundY: 121 / 128 }, attackVisual: atk } : def; }
+/** 荆南新兵种（v1 用换色过渡）：山越弓手（射得远、伤害高、血薄）、藤牌兵（藤牌护身，先破盾）。 */
 export const JINGNAN_TROOPS = {
   shanyueArcher: { hp: 14, speed: 66, damage: 7, tint: 0x9fc27a },
   tengpai: { hp: 46, speed: 58, damage: 8, tint: 0xd8b070 },
@@ -53,8 +57,8 @@ export const JINGNAN_TROOPS = {
 /** 第六章战斗：以对应招式组的第三章战斗为底，换首领、名称、兵种与数值（比第五章再强一点）。 */
 export function jingnanBattle(stage: JingnanStage): ChapterDef {
   const d = JINGNAN_STAGES[stage - 1], base = thirdBattle(d.behavior), T = JINGNAN_TROOPS;
-  const archer = { ...base.enemies.archer, hp: T.shanyueArcher.hp, speed: T.shanyueArcher.speed, damage: T.shanyueArcher.damage, tint: T.shanyueArcher.tint };
-  const shield = { ...base.enemies.shield, hp: T.tengpai.hp, speed: T.tengpai.speed, damage: T.tengpai.damage, tint: T.tengpai.tint };
+  const archer = withSheets({ ...base.enemies.archer, hp: T.shanyueArcher.hp, speed: T.shanyueArcher.speed, damage: T.shanyueArcher.damage, tint: T.shanyueArcher.tint }, JINGNAN_TROOP_SHEETS.archer);
+  const shield = withSheets({ ...base.enemies.shield, hp: T.tengpai.hp, speed: T.tengpai.speed, damage: T.tengpai.damage, tint: T.tengpai.tint }, JINGNAN_TROOP_SHEETS.shield);
   return {
     ...base,
     waves: base.waves.map((w, i) => ({ ...w, name: WAVE_NAMES[stage - 1][i] ?? w.name })),

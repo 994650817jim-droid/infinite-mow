@@ -2046,11 +2046,11 @@ export class GameScene extends Phaser.Scene {
     if (this.textures.exists('flame_burst')) {
       const size = radius * 2.5, burst = this.add.image(x, y, 'flame_burst', 0).setOrigin(0.5, 0.82).setDisplaySize(size, size).setDepth(actorDepth(y) + 0.5).setName('flame-burst');
       { const tint = HERO_TINT[this.runConfig.character]; if (tint) burst.setTint(tint); }
-      // 诸葛亮等仍用原来的 flame_burst 序列帧（八卦地纹是图本身的一部分，用户 2026-11-16「换回之前那个」）；只有庞统连环地雷保持像素火焰
-      if (!SHOW_OWN_RANGE_FX && this.runConfig.character === 'pangtong' && this.textures.exists('build_vfx')) { // 庞统：像素火焰爆发（战法特效图集「烈焰」行，无地纹）
-        burst.destroy(); const fire = this.add.image(x, y, 'build_vfx', 18).setOrigin(.5, .72).setDisplaySize(radius * 1.9, radius * 1.9).setDepth(actorDepth(y) + .5).setName('flame-burst');
-        { const tint = HERO_TINT[this.runConfig.character]; if (tint) fire.setTint(tint); }
-        this.tweens.addCounter({ from: 18, to: 23.99, duration: 380, onUpdate: t => fire.setFrame(Math.floor(t.getValue() ?? 18)), onComplete: () => fire.destroy() });
+      // 诸葛亮等仍用原来的 flame_burst 序列帧（八卦地纹是图本身的一部分，用户 2026-11-16「换回之前那个」）。
+      // 庞统火雷：2026-11-17 用户「庞统的攻击特效还是像素，要改」→ 手绘火雷爆炸帧（pangtong_paint 第 1 行，无地纹），不再用战法图集的像素火焰
+      if (this.runConfig.character === 'pangtong' && this.textures.exists('pangtong_paint')) {
+        burst.destroy(); const fire = this.add.image(x, y, 'pangtong_paint', 0).setOrigin(.5, .74).setDisplaySize(radius * 2.3, radius * 2.3).setDepth(actorDepth(y) + .5).setName('flame-burst');
+        this.tweens.addCounter({ from: 0, to: 5.99, duration: 460, onUpdate: t => fire.setFrame(Math.floor(t.getValue() ?? 0)), onComplete: () => fire.destroy() });
         return;
       }
       this.tweens.addCounter({ from: 0, to: 5.99, duration: 420, onUpdate: t => burst.setFrame(Math.floor(t.getValue() ?? 0)), onComplete: () => this.tweens.add({ targets: burst, alpha: 0, duration: 120, onComplete: () => burst.destroy() }) });

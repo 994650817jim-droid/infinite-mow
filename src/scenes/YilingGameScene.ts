@@ -43,7 +43,7 @@ export function yilingGameSceneClass(Base: typeof GameScene, cfg: ArcSceneConfig
       const s = this as unknown as Host;
       if (!s.player) return;
       if (this.arcStage === 3) {
-        this.fire = new YilingFire({ scene: this, player: s.player, enemies: () => s.enemies, allies: () => s.allies, hitEnemy: (e, d) => { s.hitEnemy(e, d, s.combatNow, 'fire', false, false); }, hurtAlly: (a, d) => s.legion.hurt(a, d, s.combatNow),
+        this.fire = new YilingFire({ scene: this, player: s.player, enemies: () => s.enemies, allies: () => s.allies, hitEnemy: (e, d) => { s.hitEnemy(e, d, s.combatNow, 'fire', false, false); }, hurtAlly: (a, d) => s.legion.hurt(a, d, s.combatNow), burnTrees: (x0, y0, size, now) => (s as unknown as { terrain?: { burnTreesIn: (a: number, b: number, c: number, d: number) => { x: number; y: number }[] } | null }).terrain?.burnTreesIn(x0, y0, size, now) ?? [],
           tents: () => s.env?.tents() ?? [], breakTent: e => s.supplies?.breakEnv(e), banner: (t, c) => s.showWaveBanner(t, false, c), sfx: k => s.sfx.play(k) }, s.combatNow);
         this.events.once('shutdown', () => { this.fire?.clear(); this.fire = undefined; });
       }

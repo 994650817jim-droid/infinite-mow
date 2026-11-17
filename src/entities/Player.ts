@@ -157,8 +157,10 @@ export class Player {
 
   /** 地形减速（第九章洪水涉水等），场景每帧设置，默认 1。 */
   envSpeedMul = 1;
+  /** 地形（河水）移动倍率：GameScene 每帧按所站位置设，水里 0.6（data/terrain.ts） */
+  terrainSpeedMul = 1;
   get speed(): number {
-    return BALANCE.player.speed * Math.min(1.6, this.stats.moveMul * this.growth.movementMultiplier()*(this.growth.build.tags().skirmish>=2?1.04:1)) * this.mountSpeedMul * this.envSpeedMul;
+    return BALANCE.player.speed * Math.min(1.6, this.stats.moveMul * this.growth.movementMultiplier()*(this.growth.build.tags().skirmish>=2?1.04:1)) * this.mountSpeedMul * this.envSpeedMul * this.terrainSpeedMul;
   }
 
   /** 被外力击退 / 挑起；self 为自己的突进（冲锋、龙胆突刺）。马超冲锋无敌中不被外力击退。 */
@@ -172,7 +174,7 @@ export class Player {
     this.sprite.setDepth(actorDepth(this.y + 26) + .002);
     const now = (this.scene as Phaser.Scene & { combatNow?: number }).combatNow ?? this.scene.time.now;
     if (now < this.knockedUntil) {
-      this.sprite.x += this.knockVx * dt; this.sprite.y += this.knockVy * dt;
+      this.sprite.x += this.knockVx * dt * this.terrainSpeedMul; this.sprite.y += this.knockVy * dt * this.terrainSpeedMul; // 河里被击退 / 马超锦马冲锋也减速
       this.applyWalkVisual(this.stepGait(dt, false)); this.applyGaitPose(dt); return;
     }
     const len = Math.hypot(vx, vy);

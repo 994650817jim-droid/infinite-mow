@@ -14,6 +14,8 @@ export interface FireHost {
   /** 当前场上的营帐（可破坏物）：火烧到就塌。 */
   tents: () => readonly Enemy[]; breakTent: (e: Enemy) => void;
   banner: (text: string, caption?: string) => void; sfx: (key: string) => void;
+  /** 地形层的树（systems/Terrain.ts）：着火格子把里面的树点着，返回点着的树——树往四周八格窜火（火烧连营林中更猛）。 */
+  burnTrees?: (x0: number, y0: number, size: number, now: number) => { x: number; y: number }[];
 }
 interface Cell { cx: number; cy: number; gen: number; lit: number; until: number; nextSpread: number; nextTick: number; img: Phaser.GameObjects.Image | null }
 interface Pending { at: number; points: { x: number; y: number }[]; wind: number; id: number }
@@ -117,6 +119,7 @@ export class YilingFire {
         if (p.alive && inside(p.x, p.y, p.radius * .4)) { p.takeDamage(Math.max(2, p.maxHp * FIRE.playerRatio), now); this.metrics.playerTicks++; }
         for (const a of this.h.allies()) if (a.active && inside(a.x, a.y, a.radius * .4)) this.h.hurtAlly(a, Math.max(2, a.maxHp * FIRE.playerRatio));
         for (const t of this.h.tents()) if (t.active && inside(t.x, t.y, 40)) this.burnTent(t, now);
+        for (const tr of this.h.burnTrees?.(x0, y0, C, now) ?? []) { const tx = Math.floor(tr.x / C), ty = Math.floor(tr.y / C); for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) if (dx || dy) this.ignite(tx + dx, ty + dy, c.gen, now); }
       }
     }
   }

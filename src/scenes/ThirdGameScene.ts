@@ -6,6 +6,10 @@ import {applyCitySpecialties} from '../systems/CityBonuses';
 import {cityIncomeLine,beginArcExpedition,settleArcExpedition,arcStageUnlocked,type WarlordArc} from '../world/WorldStore';
 import Phaser from 'phaser';import{GameScene}from'./GameScene';import{ThirdBoss}from'../systems/ThirdBoss';import{thirdBattle,THIRD_STAGES,type ThirdStage}from'../data/thirdChapter';import{isChapterTestRun}from'../systems/ChapterProgress';import{abandonExpedition,permanentEffects,takeExpeditionReserve}from'../world/WorldStore';import{packCampaign,type CampaignTransfer}from'../systems/Campaign';import{thirdScenery,type SceneryStage}from'../systems/ThirdScenery';import{SishuiObstacles}from'../systems/SishuiObstacles';import type{Enemy}from'../entities/Enemy';import type{RunEndReason}from'../types';import type{RunConfig}from'../data/characters';import type{ChapterDef}from'../data/chapters';
 import { loadBossSheet } from '../systems/ArtStyle';
+import { BOSS_OLD } from '../systems/BossKit';
+import type { ArcController, ArcHost } from '../systems/ArcBossV2';
+import { YuanshuBoss } from '../systems/YuanshuBoss';
+import { CaorenBoss } from '../systems/CaorenBoss';
 
 /** 第三章式三关篇章的配置（第三章群雄割据、第五章赤壁之战共用同一套战场与首领招式框架）。 */
 export interface ArcSceneConfig{
@@ -29,7 +33,7 @@ export function thirdGameSceneClass(Base:typeof GameScene,cfg:ArcSceneConfig=THI
  private enemyCamps?:EnemyCamps;private fireShips?:FireShips;
  /** 第五章虎豹骑（突阵 + 5-1 护驾曹纯）。 */
  private hubao?:HubaoBattle;
- private thirdStage:ThirdStage=1;private controller?:ThirdBoss;private thirdReceipt='';private thirdTest=false;private spear=new WeakMap<Enemy,SpearWindup>();private spearWarnings?:ThirdSpearWarnings;
+ private thirdStage:ThirdStage=1;private controller?:ThirdBoss|ArcController;private thirdReceipt='';private thirdTest=false;private spear=new WeakMap<Enemy,SpearWindup>();private spearWarnings?:ThirdSpearWarnings;
  /** 本关首领招式组与地貌组（第三章即关序号）。 */
  private get behavior():ThirdStage{return cfg.stages[this.thirdStage-1]?.behavior??this.thirdStage;}
  /** 马厩赠马键：群雄为 third-N，其余用篇章名（如 chibi-3）。 */
@@ -58,7 +62,9 @@ export function thirdGameSceneClass(Base:typeof GameScene,cfg:ArcSceneConfig=THI
  protected priorityWeaponTarget(range:number,bodyRadius=true){return this.enemyCamps?.target(range,bodyRadius)??null;}
  protected tryCustomBossSkill(){if(!this.controller||!this.boss?.active)return false;this.controller.forceSkill(this.combatNow);return true;}
  protected customChapter(){return cfg.battle(this.thirdStage);}
- protected spawnBoss(){const had=this.boss?.active;super.spawnBoss();if(this.boss&&!had)this.hubao?.onBoss(this.combatNow);const d=cfg.stages[this.thirdStage-1];if(this.boss)this.controller=new ThirdBoss({scene:this,boss:this.boss,player:this.player,army:this.legion,spawn:(kind,x,y)=>this.spawnEnemy(kind,x,y,1,true)},this.behavior,this.combatNow,cfg===THIRD_CONFIG?undefined:{texture:cfg.texture(d.id),name:d.boss,skills:d.skills,signature:d.signature?{id:d.id as 'caochun'|'caimao'|'caoren',name:d.signature}:undefined});}
+ bossDebug(){return (this.controller as ArcController|undefined)?.debug??null;}
+ protected spawnBoss(){const had=this.boss?.active;super.spawnBoss();if(this.boss&&!had)this.hubao?.onBoss(this.combatNow);const d=cfg.stages[this.thirdStage-1];if(this.boss&&!BOSS_OLD&&(cfg.arc==='qunxiong'&&d.id==='yuanshu'||cfg.arc==='chibi'&&d.id==='caoren')){const host:ArcHost={scene:this,boss:this.boss,player:this.player,army:this.legion,spawn:(kind,x,y,def)=>this.spawnEnemy(kind,x,y,1,true,def),def:k=>this.chapter.enemies[k],banner:(t,c)=>this.showWaveBanner(t,true,c),sfx:k=>this.sfx.play(k)};this.controller=d.id==='yuanshu'?new YuanshuBoss(host,cfg.texture(d.id),this.combatNow):new CaorenBoss(host,cfg.texture(d.id),this.combatNow);return;}
+  if(this.boss)this.controller=new ThirdBoss({scene:this,boss:this.boss,player:this.player,army:this.legion,spawn:(kind,x,y)=>this.spawnEnemy(kind,x,y,1,true)},this.behavior,this.combatNow,cfg===THIRD_CONFIG?undefined:{texture:cfg.texture(d.id),name:d.boss,skills:d.skills,signature:d.signature?{id:d.id as 'caochun'|'caimao'|'caoren',name:d.signature}:undefined});}
  protected customBossStep(enemy:Enemy,dt:number,now:number){if(enemy!==this.boss||!this.controller)return false;this.controller.update(dt,now);return true;}
 
  protected customEnemyStep(enemy:Enemy,dt:number,now:number,target:{x:number;y:number}){

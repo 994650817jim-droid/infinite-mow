@@ -51,6 +51,8 @@ import { waveIndexAt } from '../data/waves';
 import { getChapter, getBattleChapter, chapterBossTime, type ChapterDef } from '../data/chapters';
 import { BattleFeedback } from '../systems/BattleFeedback';
 import { LubuBoss } from '../systems/LubuBoss';
+import { ZhangjiaoBoss } from '../systems/ZhangjiaoBoss';
+import { BOSS_OLD, type BossDebug } from '../systems/BossKit';
 import { Enemy } from '../entities/Enemy';
 import { Player } from '../entities/Player';
 import { Joystick } from '../ui/Joystick';
@@ -142,6 +144,8 @@ export class GameScene extends Phaser.Scene {
   protected runConfig: RunConfig = DEFAULT_RUN_CONFIG;
   protected chapter: ChapterDef = getChapter();
   protected lubu: LubuBoss | null = null;
+  /** 张角重设计样板（?boss=old 回到旧版）。 */
+  protected zhangjiao: ZhangjiaoBoss | null = null;
   protected yellow:YellowBattle|null=null;
   /** 第二章主线（汜水关 / 荥阳 / 虎牢关）西凉军战法：铁骑突阵、飞熊军。攻守城与军情战斗（encounter）不启用。 */
   protected xiliang:XiliangBattle|null=null;
@@ -597,7 +601,7 @@ export class GameScene extends Phaser.Scene {
     this.spawnTimer = 0.5;
     this.eliteTimer = BALANCE.eliteFirst;
     this.boss = null;
-    this.sishuiObstacles=null;this.huaxiong=null;this.xurong=null;this.lubu = null; this.yellow=null; this.xiliang=null; this.supplies=null; this.yellowAltar=null;this.finaleFadeMs=0;
+    this.sishuiObstacles=null;this.huaxiong=null;this.xurong=null;this.lubu = null; this.zhangjiao?.clear(); this.zhangjiao = null; this.yellow=null; this.xiliang=null; this.supplies=null; this.yellowAltar=null;this.finaleFadeMs=0;
     this.bossSpawned = false;
     this.bossCastCd = 3;
     this.bossSummonCd = 6;
@@ -936,7 +940,9 @@ export class GameScene extends Phaser.Scene {
   }
 
   protected spawnSceneProp(frame:number,x:number,y:number,size:number):void{if(Number.isInteger(frame)&&frame>=3&&frame<=7)this.supplies?.spawnSishui(frame as 3|4|5|6|7,x,y,size);}
-  protected tryCustomBossSkill():boolean{return false;}
+  protected tryCustomBossSkill():boolean{if(this.zhangjiao&&this.boss?.active){this.zhangjiao.debug.force(2,this.combatNow);return true;}return false;}
+  /** 测试模式「首领 → 指定招式 / 二阶段」：重设计的首领返回招式表。 */
+  bossDebug():BossDebug|null{return this.zhangjiao?.debug??this.lubu?.debug??null;}
   protected customChapter():ChapterDef|null{return null;}
   protected customEnemyStep(_enemy:Enemy,_dt:number,_now:number,_target:{x:number;y:number}):boolean{return false;}
   protected customBossStep(_enemy:Enemy,_dt:number,_now:number):boolean{return false;}
@@ -958,11 +964,18 @@ export class GameScene extends Phaser.Scene {
 
     if(this.chapter.bossStyle==='xurong')this.xurong=new XurongBoss({scene:this,boss,player:this.player,army:this.legion,spawn:(kind,x,y)=>this.spawnEnemy(kind,x,y,1),sfx:()=>this.sfx.play('allySlash')},this.combatNow);
     if(this.chapter.bossStyle==='huaxiong'){this.huaxiong=new HuaxiongBoss({scene:this,boss,player:this.player,army:this.legion,hurtTroops:(x,y,r,d,n,a,arc)=>this.legion.hurtArea(x,y,r,d,n,a,arc),sfx:()=>this.sfx.play('allySlash')},this.combatNow);}
+    if (this.chapter.bossStyle === 'zhangjiao' && !BOSS_OLD) {
+      this.zhangjiao = new ZhangjiaoBoss({ scene: this, boss, player: this.player, army: this.legion,
+        fireBolt: (x, y, tx, ty, d, sp) => this.fireBolt(this.bullets, x, y, tx, ty, d, 0, false, sp, 'orb'),
+        spawn: (kind, x, y, def) => this.spawnEnemy(kind, x, y, 1, true, def), infantryDef: () => this.chapter.enemies.infantry,
+        banner: (t, c) => this.showWaveBanner(t, true, c), sfx: (k) => this.sfx.play(k) }, this.combatNow);
+    }
     if (this.chapter.bossStyle === 'lubu') {
       this.lubu = new LubuBoss({ scene: this, boss, player: this.player,
         hurtTroops: (x, y, radius, damage, now, angle, arc) => this.legion.hurtArea(x, y, radius, damage, now, angle, arc),
         playSfx: (kind) => this.sfx.play(kind),
-        onPhase2: () => { this.bossPhase2 = true; this.showWaveBanner('吕布震怒！注意预警后反击', true); },
+        onPhase2: () => { this.bossPhase2 = true; if (BOSS_OLD) this.showWaveBanner('吕布震怒！注意预警后反击', true); },
+        banner: (t, c) => this.showWaveBanner(t, true, c),
       });
     }
     this.sfx.boss();
@@ -1100,6 +1113,7 @@ export class GameScene extends Phaser.Scene {
         else if(this.huaxiong)this.huaxiong.update(dt,this.combatNow);
         else if(this.xurong)this.xurong.update(dt,this.combatNow);
         else if (this.lubu) this.lubu.update(dt, this.combatNow);
+        else if (this.zhangjiao) { this.zhangjiao.update(dt, this.combatNow); this.bossEnergy = this.zhangjiao.energy; }
         else {
           enemy.sprite.x += nx * enemy.def.speed * dt;
           enemy.sprite.y += ny * enemy.def.speed * dt;
@@ -1290,6 +1304,7 @@ export class GameScene extends Phaser.Scene {
 
   protected ensureBossPhase2(): void {
     if (this.chapter.bossStyle !== 'zhangjiao') return;
+    if (this.zhangjiao) return; // 重设计版自己按血量进二阶段（每次挨打都会走到这里，不能在这里强制）
     if (!this.boss?.active) return;
     if (!this.bossPhase2 && this.boss.hp / this.boss.maxHp <= 0.5) {
       this.bossPhase2 = true;
@@ -1486,6 +1501,7 @@ export class GameScene extends Phaser.Scene {
     else if (source === 'fire') this.sfx.play('hitFire');
     else this.sfx.play('hitLight');
     if (enemy === this.boss && this.lubu) rawDamage *= this.lubu.incomingDamageMultiplier(source, time);
+    if (enemy === this.boss && this.zhangjiao) rawDamage *= this.zhangjiao.takenMul;
     rawDamage *= this.player.passive.vulnerability(enemy, time); // 貂蝉倾城：易伤（部曲伤害同样吃加成）
     const firstStrike = !fromAlly && weaponHit && !!this.relics?.firstStrike(enemy);
     const crit = firstStrike || weaponHit && Math.random() < Math.min(0.65, this.player.stats.critChance + this.player.growth.criticalBonus() + (!fromAlly ? this.player.passive.critBonus(time) + this.player.growth.aimCriticalBonus() + this.buildCombat.criticalBonus() : 0));
@@ -2362,7 +2378,7 @@ export class GameScene extends Phaser.Scene {
     this.chasingBosses.push({enemy:boss,life:boss.spawnId,stage,name,battle:this.yellow,huaxiong:this.huaxiong,xurong:this.xurong,label});
     const next=(stage+1) as 2|3,west=this.chapter.id==='hulao';
     this.chapter=getBattleChapter(this.chapter.id,west?undefined:next,west?next:undefined);this.runConfig={...this.runConfig,stage:west?undefined:next,westStage:west?next:undefined};
-    this.frontlineStarts.set(next,this.combatNow);this.setupObjective();this.elapsed=0;this.waveIndex=0;this.boss=null;this.bossSpawned=false;this.bossWarned=false;this.bossKilled=false;this.firstBossAt=-1;this.bossShield=0;this.bossPhase2=false;this.bossEnergy=0;this.recruitedWaves.clear();this.spawnTimer=.2;this.huaxiong=null;this.xurong=null;
+    this.frontlineStarts.set(next,this.combatNow);this.setupObjective();this.elapsed=0;this.waveIndex=0;this.boss=null;this.bossSpawned=false;this.bossWarned=false;this.bossKilled=false;this.firstBossAt=-1;this.bossShield=0;this.bossPhase2=false;this.bossEnergy=0;this.recruitedWaves.clear();this.spawnTimer=.2;this.huaxiong=null;this.xurong=null;this.zhangjiao?.clear();this.zhangjiao=null;
     this.yellow=west?null:new YellowBattle({scene:this,player:this.player,army:this.legion,enemies:this.enemies,move:(e,nx,ny,dt)=>this.advanceEnemy(e,nx,ny,dt),spawn:(def,x,y)=>this.spawnEnemy(def.kind,x,y,1,true,def)},next);
     // 战线推进与新一关第 1 波合成一条提示（原先“战线推进”下一帧就被第 1 波提示顶掉）
     const waves=this.chapter.waves,first=waves[0];
@@ -2469,7 +2485,7 @@ export class GameScene extends Phaser.Scene {
     this.reinforcements.clear();
     this.victory = victory;
     const jingle = this.music.endBattle(victory); // BGM v2：胜利 / 败退短曲接在战斗曲后
-    this.lubu?.clear();this.huaxiong?.clear();this.xurong?.clear();this.yellow?.clear();this.xiliang?.clear();this.clearChasingBosses();this.supplies?.clear();if(victory)this.itemDrops?.collectAll();this.itemDrops?.clear();
+    this.lubu?.clear();this.zhangjiao?.clear();this.zhangjiao=null;this.huaxiong?.clear();this.xurong?.clear();this.yellow?.clear();this.xiliang?.clear();this.clearChasingBosses();this.supplies?.clear();if(victory)this.itemDrops?.collectAll();this.itemDrops?.clear();
     if(victory&&this.chapter.stage===3)this.finaleFadeMs=800;
     this.feedback.clearAttacks();
     if (!jingle) { if (victory) this.sfx.win(); else this.sfx.lose(); }
@@ -2791,7 +2807,7 @@ export class GameScene extends Phaser.Scene {
       const stageBoss=!!chaser||!!this.xurong||!!this.huaxiong||!!this.chapter.stage&&this.chapter.stage<3;
       const energy = this.lubu ? this.lubu.energy : this.bossEnergy;
       this.hudTexts.bossEnergy.setVisible(!chaser).setPosition(left + barW, barY + 31)
-        .setText(this.xurong?this.xurong.label+' · 推进 '+Math.max(0,Math.ceil(90-(this.combatNow-this.firstBossAt)/1000))+'秒':this.huaxiong?this.huaxiong.label+' · 推进 '+Math.max(0,Math.ceil(90-(this.combatNow-this.firstBossAt)/1000))+'秒':this.lubu ? `${this.lubu.phase2 ? `魔神 ${Math.floor(energy)}%` : '半血解锁大招'} · ${this.lubu.statusLabel}` : stageBoss?`${boss.hp<=boss.maxHp*.5?'半血强化 · ':''}${this.battleStage()<3?'战线推进倒计时 '+Math.max(0,Math.ceil(90-(this.combatNow-this.firstBossAt)/1000))+'秒':'注意地裂与环形预警'}`:`⚡ ${Math.floor(energy)}%`);
+        .setText(this.zhangjiao?this.zhangjiao.label:this.xurong?this.xurong.label+' · 推进 '+Math.max(0,Math.ceil(90-(this.combatNow-this.firstBossAt)/1000))+'秒':this.huaxiong?this.huaxiong.label+' · 推进 '+Math.max(0,Math.ceil(90-(this.combatNow-this.firstBossAt)/1000))+'秒':this.lubu ? `${this.lubu.phase2 ? `魔神 ${Math.floor(energy)}%` : '半血解锁大招'} · ${this.lubu.statusLabel}` : stageBoss?`${boss.hp<=boss.maxHp*.5?'半血强化 · ':''}${this.battleStage()<3?'战线推进倒计时 '+Math.max(0,Math.ceil(90-(this.combatNow-this.firstBossAt)/1000))+'秒':'注意地裂与环形预警'}`:`⚡ ${Math.floor(energy)}%`);
       g.fillStyle(0x000000, 0.72);
       g.fillRect(left, barY, barW, 12);
       g.fillStyle(COLORS.red, 0.95);

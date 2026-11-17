@@ -132,3 +132,4 @@ assets/raw/*
 !/tools/boost-alpha.mjs
 !/tools/test-boss-chest.mjs
 !/tools/record-boss-chest-gif.mjs
+!/tools/test-xingyang-full.mjs

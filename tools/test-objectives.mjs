@@ -49,29 +49,19 @@ const info = p => p.evaluate(G0 => { const s = eval(G0); return { name: s.chapte
   await p.screenshot({ path: `${out}/desktop-1-2-waves.png` });
   await p.close();
 }
-// 2-2 护送伤兵车 → 徐荣；车被毁 → 失败
+// 2-2 荥阳（2026-11-17 用户：伤病车玩法不要了）：普通 3 波 → 按时出首领徐荣 → 倒地掉宝箱 → 捡起 → 胜利
 for (const layout of ['mobile', 'desktop']) {
   const p = await open(layout, { chapter: 'hulao', westStage: 2 });
   const a = await info(p);
-  ck(`[${layout}] 2-2：3 波、目标护送伤兵车`, a.waves === 3 && a.obj === 'escort' && /护送/.test(a.text), a);
-  const s0 = await p.evaluate(G0 => eval(G0).objective.state, G); await p.waitForTimeout(1500);
-  const s1 = await p.evaluate(G0 => eval(G0).objective.state, G);
-  ck(`[${layout}] 2-2：主将在旁时伤兵车前进`, s1.cartY < s0.cartY && !s1.stopped, { s0, s1 });
-  await p.screenshot({ path: `${out}/${layout}-objective-escort.png` });
-  if (layout === 'mobile') {
-    const f = await p.evaluate(async G0 => { const s = eval(G0); s.objective.hp = 0; await new Promise(r => setTimeout(r, 600)); return { failed: s.objective.failed, over: s.over, victory: s.victory, title: s.resultTexts?.title.text }; }, G);
-    ck('2-2：伤兵车被毁 → 判失败（时间耗尽结局）', f.failed && f.over && f.victory === false, f);
-  } else {
-    const d = await p.evaluate(async G0 => { const s = eval(G0); s.player.sprite.setPosition(s.objective.cart.x, s.objective.cart.y - 1300); s.objective.forceArrive(); await new Promise(r => setTimeout(r, 700)); return { done: s.objective.done, boss: !!s.boss, name: s.chapter.bossName }; }, G);
-    ck('2-2：伤兵车抵达 → 徐荣截击出阵', d.done && d.boss && d.name === '徐荣', d);
+  const ui = await p.evaluate(G0 => { const s = eval(G0); return { obj: !!s.objective, hud: s.children.getByName('objective-text')?.visible ?? false, cart: !!s.children.getByName('stage-escort-cart') }; }, G);
+  ck(`[${layout}] 2-2：3 波、没有关卡目标（无伤兵车、无护送提示）`, a.waves === 3 && !a.obj && !ui.obj && !ui.hud && !ui.cart, { a, ui });
+  await p.screenshot({ path: `${out}/${layout}-xingyang-no-escort.png` });
+  if (layout === 'desktop') {
+    const r = await p.evaluate(async G0 => { const s = eval(G0); for (let i = 0; i <= s.chapter.waves.length; i++) s.recruitedWaves.add(i); s.pendingRecruit = false; s.elapsed = 250; await new Promise(r => setTimeout(r, 900)); return { over: s.over, boss: !!s.boss, name: s.chapter.bossName }; }, G);
+    ck('2-2：不会因时间耗尽失败，按时出首领徐荣', !r.over && r.boss && r.name === '徐荣', r);
+    const w = await p.evaluate(async G0 => { const s = eval(G0); s.player.damageImmune = true; s.hitEnemy(s.boss, 1e7, s.combatNow, 'melee', false, false); for (let i = 0; i < 40 && !s.over && s.mode !== 'rest'; i++) { await new Promise(r => setTimeout(r, 150)); s.collectBossChests?.(); } return { over: s.over, victory: s.victory, mode: s.mode }; }, G);
+    ck('2-2：击败徐荣、捡起宝箱后通关', (w.over && w.victory) || w.mode === 'rest', w);
   }
-  await p.close();
-}
-// 超时：2-2 护送未完成，超过 240 秒 → 时间耗尽、不出首领
-{
-  const p = await open('desktop', { chapter: 'hulao', westStage: 2 });
-  const t = await p.evaluate(async G0 => { const s = eval(G0); for (let i = 0; i <= s.chapter.waves.length; i++) s.recruitedWaves.add(i); s.pendingRecruit = false; s.elapsed = 245; await new Promise(r => setTimeout(r, 600)); return { over: s.over, victory: s.victory, boss: !!s.boss }; }, G);
-  ck('2-2：240 秒内没护送到 → 时间耗尽、不出首领', t.over && t.victory === false && !t.boss, t);
   await p.close();
 }
 {

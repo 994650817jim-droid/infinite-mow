@@ -101,7 +101,7 @@ export class BossChest {
     g.fillStyle(0x000000, .4).fillRoundedRect(x0 + 3, y0 + 5, w, hgt, 10).fillStyle(0x1b120b, .96).fillRoundedRect(x0, y0, w, hgt, 10)
       .lineStyle(2, 0xc9a35e, .95).strokeRoundedRect(x0 + 4, y0 + 4, w - 8, hgt - 8, 8);
     root.add(g);
-    root.add(s.add.text(W / 2, y0 + 24, '获得遗物', { fontFamily: HEADING_FONT, fontSize: '22px', color: '#f6dc9a', resolution: 2 }).setOrigin(.5).setScrollFactor(0));
+    root.add(s.add.text(W / 2, y0 + 24, loot.length ? '获得遗物' : '首领宝箱', { fontFamily: HEADING_FONT, fontSize: '22px', color: '#f6dc9a', resolution: 2 }).setOrigin(.5).setScrollFactor(0));
     (loot.length ? loot : [{ name: '无遗珍', desc: '这一战的首领没有留下遗珍', tag: '' }]).forEach((l, i) => {
       const y = y0 + 56 + i * lineH;
       root.add(s.add.text(x0 + 24, y, (l.tag ? `【${l.tag}】` : '') + l.name, { fontFamily: FONT, fontSize: '17px', color: '#f0b48a', resolution: 2 }).setScrollFactor(0).setName('boss-chest-loot-' + i));

@@ -31,7 +31,7 @@ export interface TownState {
   report: SeasonReport | null;
   /** 讲武堂已研究的科技。 */
   tech: TechId[];
-  /** 军营「练兵」等级（0–12，永久）：全体部曲生命、伤害各 ×DRILL_STEP^等级。 */
+  /** 军营「练兵」等级（0–12，永久）：全体部曲生命、伤害各 ×(1 + DRILL_STEP × 等级)。 */
   drill: number;
   /** 粮仓「开仓募兵」上次使用的季（年-季），每季一次。 */
   levied?: string;
@@ -60,12 +60,12 @@ export interface BuildingDef {
 }
 /** 农田每场产粮；粮仓减口粮；马厩可养马数；开仓募兵人数。 */
 /**
- * 军营「练兵」（部曲改版，用户 2026-11-16 在平衡会话批准，数值归平衡会话）：每级全体部曲生命、伤害各 +15%（乘法叠加）；
+ * 军营「练兵」（部曲改版，用户 2026-11-16 在平衡会话批准，数值归平衡会话）：每级全体部曲生命、伤害各 +15%（加法：倍率 = 1 + 0.15 × 等级，4 级 ×1.6、12 级 ×2.8）；
  * 上限随已开放的章节数（1–5 章 → 2 / 4 / 7 / 10 / 12 级）；第 n 级价格 = 80 + 40n 军粮。老存档从 0 级开始。
  */
-export const DRILL_STEP = 1.15, DRILL_CAP_BY_CHAPTERS = [0, 2, 4, 7, 10, 12], DRILL_MAX = 12;
+export const DRILL_STEP = 0.15, DRILL_CAP_BY_CHAPTERS = [0, 2, 4, 7, 10, 12], DRILL_MAX = 12;
 export const drillCost = (level: number): Cost => 80 + 40 * level;
-export const drillMultiplier = (level: number): number => Math.pow(DRILL_STEP, Math.max(0, Math.min(DRILL_MAX, level)));
+export const drillMultiplier = (level: number): number => 1 + DRILL_STEP * Math.max(0, Math.min(DRILL_MAX, level));
 export const drillCap = (openChapters: number): number => DRILL_CAP_BY_CHAPTERS[Math.max(0, Math.min(DRILL_CAP_BY_CHAPTERS.length - 1, openChapters))];
 export const FARM_GRAIN = [0, 20, 45, 80], GRANARY_CUT = [0, .2, .35, .5], STABLE_HORSES = [0, 2, 4, 6], LEVY_SOLDIERS = [0, 2, 3, 4];
 export const LEVY_COST = { base: 100, perSoldier: 25 };

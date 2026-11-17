@@ -83,6 +83,15 @@ export const ART_V2_FILES: Readonly<Record<string, string>> = {
   icon_shu_swordsman: 'assets/troop-portraits-v2/icon_swordsman.png',
   icon_shu_spearman: 'assets/troop-portraits-v2/icon_spearman.png',
   icon_shu_archer: 'assets/troop-portraits-v2/icon_archer.png',
+  // 第 4 批：第 3~5 章首领（4×8 动作图集，每格 288；由 loadBossSheet 在章节场景 preload 里载入）
+  third_lijue: 'assets/bosses-v2/third_lijue.png',
+  third_yuanshu: 'assets/bosses-v2/third_yuanshu.png',
+  third_zhangxiu: 'assets/bosses-v2/third_zhangxiu.png',
+  guandu_yanliang: 'assets/bosses-v2/guandu_yanliang.png',
+  guandu_wenchou: 'assets/bosses-v2/guandu_wenchou.png',
+  guandu_chunyuqiong: 'assets/bosses-v2/guandu_chunyuqiong.png',
+  chibi_caimao: 'assets/bosses-v2/chibi_caimao.png',
+  chibi_caochun: 'assets/bosses-v2/chibi_caochun.png',
 };
 /** v2 主将行走整格的显示高度（逻辑像素）：原生格 176 → 88，即 1080p 全屏（渲染 2 倍）下 1 美术像素 = 1 屏幕像素。
  * 人物约 76 逻辑像素高（用户要求比 v1 大一些）。 */
@@ -138,6 +147,22 @@ export function applyArtStyleUrls(load: Phaser.Loader.LoaderPlugin): string[] {
   return swapped;
 }
 
+/** v2 首领图集格边长：脚底 256 / 288 ≈ 旧版 114 / 128，首领控制器按 setDisplaySize(144) 显示，正好 1080p 下像素 1:1。 */
+export const V2_BOSS_CELL = 288;
+/** 章节首领图集（4×8，数字帧 0~31）：v2 时载 288 格新图，失败退回旧图；v1 照旧按 cell 载入。 */
+export function loadBossSheet(load: Phaser.Loader.LoaderPlugin, key: string, url: string, cell = 128): void {
+  if (!isV2Texture(key)) { load.spritesheet(key, url, {frameWidth: cell, frameHeight: cell}); return; }
+  const onError = (file: Phaser.Loader.File): void => {
+    if (file.key !== key) return;
+    load.off(Phaser.Loader.Events.FILE_LOAD_ERROR, onError);
+    V2_FAILED.add(key); console.warn('[ArtStyle] v2 首领图缺失，退回 v1：' + key);
+    load.spritesheet(key, url, {frameWidth: cell, frameHeight: cell});
+  };
+  load.on(Phaser.Loader.Events.FILE_LOAD_ERROR, onError);
+  load.once(`filecomplete-spritesheet-${key}`, () => { load.off(Phaser.Loader.Events.FILE_LOAD_ERROR, onError); if (isV2Texture(key)) load.textureManager.get(key).setFilter(v2Filter(RENDER_SCALE)); });
+  load.spritesheet(key, ART_V2_FILES[key], {frameWidth: V2_BOSS_CELL, frameHeight: V2_BOSS_CELL});
+}
+
 /**
  * v2 兵种图集（我方兵种 / 小兵）：统一 4×4，行 = 下 / 左 / 右 / 上；行走表列 = 步伐 0~3，攻击表列 = 蓄力 / 出手 / 最远 / 收回。
  * 格边长 = 图宽 / 4，脚底在格底往上 8 像素（与 tools/prepare-artv2.mjs 的 FOOT = CELL-8 一致）。
@@ -181,6 +206,41 @@ export function regridV2(scene: Phaser.Scene, key: string): boolean {
   });
   // 旧切帧删掉后 firstFrame 仍指向已不存在的 "0"：不带帧名的 setTexture(key)（如 Enemy.spawn 用 def.texture）会取到 undefined 帧而崩溃
   t.firstFrame = 'down_0';
+  if (/walk|run/.test(key)) rotateV2StandFrames(scene, key);
   t.setFilter(v2Filter(RENDER_SCALE));
   return true;
+}
+
+/**
+ * v2 行走图的站立帧：ChatGPT 画的走路循环第 0 帧是迈步帧，停下时冻在它上面会「侧着站、两脚还分开」。
+ * 全游戏停步都用 <方向>_0，这里按每个方向找脚底一带（脚底线往上 8% 格高）横向跨度最小的那一帧（双脚并拢），
+ * 把该行的帧名循环平移，让它成为 _0；走路循环顺序不变。只用于行走 / 奔跑表，攻击表不动。
+ */
+export function rotateV2StandFrames(scene: Phaser.Scene, key: string): number[] {
+  if (!isV2Texture(key) || !scene.textures.exists(key)) return [];
+  const t = scene.textures.get(key), src = t.getSourceImage() as HTMLImageElement | HTMLCanvasElement;
+  const w = src.width, h = src.height, cell = w / 4, foot = cell - 8, band = Math.max(4, Math.round(cell * .08));
+  if (!cell || h < cell * 4) return [];
+  // 帧宽按 宽/4，行数可以是 4（只有走路）或 5（第 5 行是站立图）
+  let data: Uint8ClampedArray;
+  try {
+    const c = document.createElement('canvas'); c.width = w; c.height = h;
+    const g = c.getContext('2d', { willReadFrequently: true })!; g.drawImage(src, 0, 0); data = g.getImageData(0, 0, w, h).data;
+  } catch { return []; }
+  const span = (row: number, col: number): number => {
+    let lo = Infinity, hi = -Infinity;
+    for (let y = row * cell + foot - band; y <= row * cell + foot; y++) for (let x = col * cell; x < (col + 1) * cell; x++) if (data[(y * w + x) * 4 + 3] > 24) { if (x < lo) lo = x; if (x > hi) hi = x; }
+    return hi >= lo ? hi - lo : Infinity;
+  };
+  const shifts: number[] = [];
+  ['down', 'left', 'right', 'up'].forEach((dir, row) => {
+    let best = 0, min = Infinity;
+    for (let col = 0; col < 4; col++) { const s = span(row, col); if (s < min - 1) { min = s; best = col; } }
+    shifts.push(best);
+    for (let i = 0; i < 4; i++) { const name = `${dir}_${i}`; if (t.has(name)) t.remove(name); t.add(name, 0, ((i + best) % 4) * cell, row * cell, cell, cell); }
+    // <方向>_stand：图集有第 5 行（专门画的站立图，列 = 下 / 左 / 右 / 上）就用它，否则用选出的最并拢帧
+    const stand = `${dir}_stand`; if (t.has(stand)) t.remove(stand);
+    if (h >= cell * 5) t.add(stand, 0, row * cell, 4 * cell, cell, cell); else t.add(stand, 0, best * cell, row * cell, cell, cell);
+  });
+  return shifts;
 }

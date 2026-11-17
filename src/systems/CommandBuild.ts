@@ -1,6 +1,7 @@
 import {buildVfx} from './BuildVfx';
 import {SHOW_RANGE_RINGS} from '../ui/RangeRings';
 import {HINT_MOCK} from '../ui/HintStyle';
+import {type BuffProgress,timerProgress} from '../ui/BuffProgress';
 import Phaser from 'phaser';
 import type {Ally} from '../entities/Ally';import type {Enemy} from '../entities/Enemy';import type {Player} from '../entities/Player';import type {BuildState} from '../data/builds';
 /** Orders augment the existing Legion AI; no separate soldiers, projectiles or timers. */
@@ -14,6 +15,12 @@ export class CommandBuild {
  onHit(e:Enemy,now:number):void{const n=this.state.level('coordination'),t=this.has('general_tally');if((!n&&!t)||!e.active||e.isSupplySlot||now<this.markAt)return;
  const selected=this.units.filter(u=>u.active&&u.kind!=='medic'&&Math.hypot(u.x-this.player.x,u.y-this.player.y)<=220&&Math.hypot(u.x-e.x,u.y-e.y)<=260).sort((a,b)=>Math.hypot(a.x-e.x,a.y-e.y)-Math.hypot(b.x-e.x,b.y-e.y)).slice(0,(n?[2,3,4][n-1]:2)+(t?1:0));if(!selected.length)return;
  buildVfx(this.player.scene).emit('command',e.x,e.y-24,now,42,0,500);this.markAt=now+(n?[4000,3500,3000][n-1]:4000);for(const u of selected){this.focus.set(u,{life:u.lifeId,enemy:e,spawn:e.spawnId,until:now+(n?[2000,2500,3000][n-1]:2000)+(t?1000:0)});u.ai.nextThink=0;}}
+ /** 增益图标的触发进度（只读，供 BuffHud 显示）。 */
+ progress(id:string,now:number):BuffProgress|null{
+ if(id==='tactic_rally'||id==='treasure_return_drum'){const h=this.state.level('rally');return timerProgress(this.healAt,h?[6000,5000,4000][h-1]:6000,now,'即将治疗');}
+ if(id==='tactic_coordination'||id==='treasure_general_tally'){const n=this.state.level('coordination');return now<this.markAt?timerProgress(this.markAt,n?[4000,3500,3000][n-1]:4000,now,'','冷却'):{cur:1,max:1,seg:0,ready:true,text:'下一击指挥集火'};}
+ return null;
+ }
  target(u:Ally):Enemy|null{const m=this.focus.get(u);return m&&u.active&&u.lifeId===m.life&&this.clock<m.until&&m.enemy.active&&m.enemy.spawnId===m.spawn&&!m.enemy.invulnerable?m.enemy:null;}
  incoming(u:Ally,now:number):number{const g=this.guards.get(u);return g&&u.lifeId===g.life&&now<g.until?.8:1;}
  update(now:number,nearby:(x:number,y:number,r:number)=>Enemy[]):void{

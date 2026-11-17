@@ -1,5 +1,6 @@
 import type {Enemy} from '../entities/Enemy';
 import type {BuildState,TacticId} from '../data/builds';
+import {type BuffProgress,countProgress,distanceProgress,chargeProgress,timerProgress} from '../ui/BuffProgress';
 interface Mark {chain:number;last:number;vulnerable:number;}
 interface Burn {enemy:Enemy;spawn:number;until:number;next:number;damage:number;spread:boolean;}
 /** One bounded proc dispatcher. Generated damage never re-enters onHit. */
@@ -12,6 +13,13 @@ export class BuildCombat {
  private hits=0;private kills=0;private killUntil=0;private distances={windstep:0,flank:0,horse:0};private moving=false;private procAt=0;private slayerAt=0;
  constructor(private state:BuildState,private nearby:(x:number,y:number,r:number)=>Enemy[],private deal:(e:Enemy,n:number,fire:boolean)=>void,private fx:(e:Enemy,fire:boolean)=>void){}
  charged():boolean{return this.idle>=2000;}
+ /** 迂回袭蓄力（表现层 FlankFx 用，只读）：等级与进度 0–1。 */
+ flankCharge():{level:number;ratio:number}{const l=this.lv('flank');return{level:l,ratio:l?Math.min(1,this.distances.flank/[200,170,140][l-1]):0};}
+ /** 迂回袭触发时通知表现层被波及的敌人（只管画面）。 */
+ onFlank?:(targets:Enemy[])=>void;
+ /** 踏风步蓄力（表现层 WindstepFx 用，只读）与触发通知（只管画面）。 */
+ windstepCharge():{level:number;ratio:number}{const l=this.lv('windstep');return{level:l,ratio:l?Math.min(1,this.distances.windstep/120):0};}
+ onWindstep?:(e:Enemy)=>void;
  naturalBurn(e:Enemy,now:number):boolean{const b=this.burns.get(e.spawnId);return !!b&&b.enemy===e&&b.until>=now&&!b.spread;}
  igniteDerived(e:Enemy,damage:number,now:number):void{this.burn(e,damage,now,true);}
  private lv(id:TacticId):number{return this.state.level(id);}
@@ -25,7 +33,7 @@ export class BuildCombat {
  if(now<this.killUntil)bonus+=this.kills*.01*(2+this.lv('momentum'))*(this.lv('momentum')?1:0);
  if(this.burns.has(e.spawnId))bonus+=[0,.1,.15,.2][this.lv('hotwind')];
  if(crit&&(e.kind==='elite'||e.kind==='boss'))bonus+=[0,.1,.15,.2][this.lv('reap')];
- if(this.lv('windstep')&&this.distances.windstep>=120){bonus+=[0,.1,.15,.2][this.lv('windstep')];this.distances.windstep=0;}
+ if(this.lv('windstep')&&this.distances.windstep>=120){bonus+=[0,.1,.15,.2][this.lv('windstep')];this.distances.windstep=0;this.onWindstep?.(e);}
  if(this.idle>=2000)bonus+=[0,.2,.35,.5][this.lv('stored_edge')];
  return raw*(1+Math.min(1.5,bonus));
  }
@@ -46,9 +54,25 @@ export class BuildCombat {
  if(now>=this.procAt&&(pursuit||bell||flank||horse||jade)){
  this.procAt=now+400;const area=flank||horse||jade,ratio=Math.max(pursuit?[.25,.35,.45][level-1]:0,bell?.4:0,flank?[.35,.45,.55][this.lv('flank')-1]:0,horse?.25:0,jade?.35:0);
  if(flank)this.distances.flank=0;if(horse)this.distances.horse=0;
- const targets=this.targets(e,area?70:160);for(let i=0;i<Math.min(area?3:1,targets.length);i++){this.fx(targets[i],false);this.deal(targets[i],raw*ratio,false);}
+ const targets=this.targets(e,area?70:160);if(flank)this.onFlank?.(targets.slice(0,3));for(let i=0;i<Math.min(area?3:1,targets.length);i++){this.fx(targets[i],false);this.deal(targets[i],raw*ratio,false);}
  }
  if(crit&&this.has('slayer_tally')&&(e.kind==='elite'||e.kind==='boss')&&now>=this.slayerAt&&e.active){this.slayerAt=now+500;this.fx(e,false);this.deal(e,raw*.25,false);}
+ }
+ /** 增益图标的触发进度（只读，供 BuffHud 显示「还差多少」；不改任何触发规则）。id 同 BuffHud 条目 id。 */
+ progress(id:string,now:number):BuffProgress|null{
+ switch(id){
+ case 'tactic_pursuit':{const l=this.lv('pursuit');if(!l)return null;const n=[6,5,4][l-1];return countProgress(this.hits%n,n,'下一击追击');}
+ case 'treasure_soul_bell':return countProgress(this.hits%8,8,'下一击追魂');
+ case 'treasure_breaker_jade':return countProgress(this.hits%10,10,'下一击震击');
+ case 'tactic_windstep':return distanceProgress(this.distances.windstep,120,'下一击增伤');
+ case 'tactic_flank':{const l=this.lv('flank');return l?distanceProgress(this.distances.flank,[200,170,140][l-1],'下一击范围追击'):null;}
+ case 'treasure_horse_order':return distanceProgress(this.distances.horse,150,'下一击追加伤害');
+ case 'tactic_stored_edge':return chargeProgress(this.idle,2000,'下一击增伤');
+ case 'tactic_heavy_break':return now<this.heavyAt?timerProgress(this.heavyAt,3000,now,'','冷却'):chargeProgress(this.idle,2000,'下一击冲击');
+ case 'treasure_stored_jade':return now<this.jadeAt?timerProgress(this.jadeAt,4000,now,'','冷却'):chargeProgress(this.idle,2000,'下一击释放冲击');
+ case 'tactic_concentration':return now<this.focusAt?timerProgress(this.focusAt,2000,now,'','冷却'):chargeProgress(this.still,1500,'下一击贯穿','静止');
+ }
+ return null;
  }
  onKill(e:Enemy,now:number):void{
  this.kills=Math.min(5,now<this.killUntil?this.kills+1:1);this.killUntil=now+3000;

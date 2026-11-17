@@ -71,7 +71,7 @@ for (const c of CASES) {
     await run(v[0], v[1], 23);
     const st = await run(0, 0, 40);
     const first = st[1], last = st.at(-1);
-    const standing = r => r.f === `${dir}_0` || (dir === 'down' && r.tex.endsWith('_actions'));
+    const standing = r => r.f === `${dir}_0` || r.f === `${dir}_stand` || (dir === 'down' && r.tex.endsWith('_actions'));
     stops[dir] = { first: first.f, last: last.f, amount: +last.amount.toFixed(2), sy: +last.sy.toFixed(4), rot: last.rot, dust: last.dust, lift: +((st[15].oy - .5) * st[15].dh).toFixed(2) };
     stops[dir].ok = standing(first) && standing(last) && last.amount === 0 && last.rot === 0 && last.dust === 0;
   }

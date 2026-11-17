@@ -3,6 +3,7 @@ import {FollowerSquad} from '../systems/FollowerSquad';
 import {followersFor} from '../systems/RosterStore';
 import { warnCircle, TELEGRAPH_CLASSIC, groundCracks, windupFlash } from '../ui/Telegraph';
 import { HINT_MOCK, SHOW_OWN_RANGE_FX, groundScar, keyOutline } from '../ui/HintStyle';
+import { warnFx } from '../ui/WarnFx';
 import {applyCitySpecialties} from '../systems/CityBonuses';
 import {cityIncomeLine} from '../world/WorldStore';
 import {CampRestUI} from '../ui/CampRestUI';
@@ -18,6 +19,7 @@ import { SHOW_RANGE_RINGS } from '../ui/RangeRings';
 import {terrainSurface,architecturalSurface} from '../systems/SceneSurfaces';
 import {upgradeIcon} from '../ui/GrowthIcons';
 import {BuffHud} from '../ui/BuffHud';
+import { type BuffProgress, countProgress, timerProgress } from '../ui/BuffProgress';
 import {BuildCombat} from '../systems/BuildCombat';
 import {TACTICS,TREASURES,TAG_NAMES,type TacticId} from '../data/builds';
 import {SishuiObstacles} from '../systems/SishuiObstacles';
@@ -65,6 +67,7 @@ import { packCampaign, restoreCampaign, type CampaignTransfer } from '../systems
 import { TROOP_KINDS, INITIAL_TROOPS, LEGION, FREE_RECRUIT_BY_TIER, type TroopKind } from '../data/legion';
 import { DEFAULT_RUN_CONFIG, getCharacter, type RunConfig , HERO_TINT, HERO_FX } from '../data/characters';
 import { Music } from '../systems/Music';
+import { battleThemeFor } from '../systems/EpicBgm';
 import { Sfx } from '../systems/Sfx';
 import { SpatialGrid } from '../systems/SpatialGrid';
 import { Ally, type AllyKind } from '../entities/Ally';
@@ -77,6 +80,10 @@ import {gearFor} from '../systems/ItemEffects';
 import {claimRunLoot,depositRunLoot,grantHorse,heroHorse} from '../systems/ItemStore';
 import {horseForReward} from '../data/mounts';
 import {HeroMount} from '../systems/HeroMount';
+import { DraggingBladeFx } from '../systems/DraggingBladeFx';
+import { FlankFx } from '../systems/FlankFx';
+import { WindstepFx } from '../systems/WindstepFx';
+import { IffOverlay, readIffMode, type IffUnit } from '../systems/IffOverlay';
 import type {ItemInstance} from '../data/items';
 import {armShield,absorbShield,ShieldBars} from '../systems/ShieldGuard';
 import {StageObjectives} from '../systems/StageObjectives';
@@ -140,6 +147,23 @@ export class GameScene extends Phaser.Scene {
   protected xiliang:XiliangBattle|null=null;
   /** 骑马（行囊坐骑槽有马时）。 */
   protected mount:HeroMount|null=null;
+  /** 关羽拖刀斩表现（拿到修习后首次用到时创建，场景重启时清空）。 */
+  protected dragFx?: DraggingBladeFx;
+  /** 战法迂回袭表现（拥有该战法后首次用到时创建，场景重启时清空）。 */
+  protected flankFx?: FlankFx;
+  /** 战法踏风步表现（同上，拥有后首次用到时创建）。 */
+  protected windFx?: WindstepFx;
+  windstepFx(): WindstepFx { if (!this.windFx) { this.windFx = new WindstepFx(this, this.player, this.sfx); this.events.once('shutdown', () => { this.windFx?.destroy(); this.windFx = undefined; }); } return this.windFx; }
+  flankBladeFx(): FlankFx { if (!this.flankFx) { this.flankFx = new FlankFx(this, this.player, this.sfx); this.events.once('shutdown', () => { this.flankFx?.destroy(); this.flankFx = undefined; }); } return this.flankFx; }
+  /** 敌我区分叠加层（默认阵营色；设置开启描边；?iff=0 关闭）。 */
+  iff: IffOverlay | null = null;
+  /** 敌我区分叠加层要处理的单位：敌军、部曲（仅已在屏上的）、随行武将。 */
+  protected *iffUnits(): Generator<IffUnit> {
+    for (const e of this.enemies) if (e.active && !e.isSupplySlot && e.def.behavior !== 'wall') yield { sprite: e.sprite, foot: e.shadow, side: 'enemy', rank: e.kind === 'boss' ? 'boss' : e.kind === 'elite' ? 'elite' : 'normal', visible: e.sprite.visible };
+    for (const a of this.allies) if (a.active && a.view) yield { sprite: a.view.sprite, foot: a.view.shadow, side: 'ally', rank: 'normal', visible: a.view.sprite.visible };
+    for (const m of this.followers?.members ?? []) yield { sprite: m.sprite, foot: m.shadow, side: 'ally', rank: 'elite', visible: m.sprite.visible, keepColors: true };
+  }
+  dragBladeFx(): DraggingBladeFx { if (!this.dragFx) { this.dragFx = new DraggingBladeFx(this, this.player, this.sfx); this.events.once('shutdown', () => { this.dragFx?.destroy(); this.dragFx = undefined; }); } return this.dragFx; }
   /** 随行武将（招贤馆，RECRUIT_PLAN.md §4）。 */
   followers:FollowerSquad|null=null;
   /** 盾牌兵两段血：盾条与碎盾效果（data/shields.ts）。 */
@@ -208,6 +232,13 @@ export class GameScene extends Phaser.Scene {
   }
   /** 战法「以战养战」：每击杀 12/10/8 名敌人（含部下击杀）回复最大生命 2/2.5/3%。 */
   private warfeedCount=0;
+  /** 增益图标的触发进度（BuffHud 读，见 ui/BuffProgress）：战法 / 宝物 / 觉醒 / 遗物里的「每 N 次 / 每 N 秒 / 攒满」计数。 */
+  private buffProgress(id:string,now:number):BuffProgress|null{
+    if(id.startsWith('awakening_'))return this.awakeningCombat?.progress(id.slice(10),now)??null;
+    if(id==='tactic_warfeed'){const l=this.player.growth.build.level('warfeed');if(!l)return null;const n=[12,10,8][Math.min(3,l)-1];return countProgress(this.warfeedCount,n,'再击杀 1 名回血','名');}
+    if(id==='relic_heaven_ember')return timerProgress(this.relicFireAt,5000,now,'下一击留残火','冷却');
+    return this.buildCombat?.progress(id,now)??this.legion?.command.progress(id,now)??null;
+  }
   private warfeedKill():void{
     const level=this.player.growth.build.level('warfeed');if(!level||!this.player.alive)return;
     const i=Math.min(3,level)-1;if(++this.warfeedCount<[12,10,8][i])return;
@@ -370,6 +401,7 @@ export class GameScene extends Phaser.Scene {
     this.chapter=this.customChapter()??this.chapter;
     this.runConfig = { ...DEFAULT_RUN_CONFIG, ...registryConfig, chapter: this.chapter.id, stage:this.chapter.stage,westStage:this.chapter.westStage };
     if(preview)this.runConfig.encounter=encounter as 'sishui'|'xingyang'|'qunxiong';
+    this.music.setBattleTheme(battleThemeFor(this.scene.key,this.chapter.id)); // BGM v2：各章战斗曲
     this.frontlineNextSettlement=this.battleStage();this.frontlineStarts.set(this.battleStage(),this.combatNow);
     const scenery=this.chapter.bossStyle==='huaxiong'?'sishui':this.chapter.bossStyle==='xurong'?'xingyang':null;
     this.cameras.main.setBackgroundColor(COLORS.bg);
@@ -396,6 +428,7 @@ export class GameScene extends Phaser.Scene {
 
 
     this.player = new Player(this, 0, 0);
+    this.dragFx = undefined; this.flankFx = undefined; this.windFx = undefined;
     this.applyRunConfig(this.runConfig);
     this.worldCampaign=!preview&&!isChapterTestRun()&&this.registry.get('worldCampaign')===true;
     this.hardMode=!preview&&this.registry.get('hardChapter')===this.hardKey()&&(chapterState(this.hardKey() as TimelineChapterId,loadWorldState())==='cleared'||isChapterTestRun());
@@ -415,6 +448,7 @@ export class GameScene extends Phaser.Scene {
     // 兵装：开局读入该武将穿戴的道具加成（生命上限增加的部分补满）
     {const oldMax=this.player.maxHp;this.player.growth.gear=gearFor(this.runConfig.character);this.player.heal(this.player.maxHp-oldMax);}
     this.followers=null;{const allow=worldUnlocked()&&(!isChapterTestRun()||new URLSearchParams(location.search).get('followers')==='1');const list=allow?followersFor(this.runConfig.character):[];if(list.length)this.followers=new FollowerSquad(this,this.player,list,(x,y,r)=>this.grid.query(x,y,r),(e,d,fire)=>this.hitEnemy(e,d,this.combatNow,fire?'fire':'melee',true,false),()=>this.player.growth.damageMultiplier(this.combatNow));}
+    { const mode = readIffMode(); this.iff = mode ? new IffOverlay(this, mode, () => this.iffUnits()) : null; }
     this.shieldBars=new ShieldBars(this);this.events.once('shutdown',()=>{this.shieldBars?.clear();this.shieldBars=null;this.objective?.clear();this.objective=null;this.objectiveText=undefined;});
     this.setupObjective();
     // 坐骑：马厩里给该武将分配的马（第一章通关后马厩开放；换马只在休整时，下一关出征生效）
@@ -447,6 +481,8 @@ export class GameScene extends Phaser.Scene {
     this.legion.awakeningDefense={incoming:(u,n)=>this.awakeningCombat?.allyIncoming(u,n)??1,onAllyHurt:(u,n)=>this.awakeningCombat?.onAllyHurt(u,n)};
     this.events.once('shutdown',()=>{this.awakeningCombat?.clear();this.awakeningCombat=undefined;});
     this.buildCombat.setOrigin(()=>({x:this.player.x,y:this.player.y}));
+    this.buildCombat.onFlank=targets=>this.flankBladeFx().strike(targets);
+    this.buildCombat.onWindstep=e=>this.windstepFx().burst(e.x,e.y);
     const cam = this.cameras.main;
     cam.setRoundPixels(false);
     cam.setScroll(this.player.x - GAME_WIDTH / 2, this.player.y - GAME_HEIGHT / 2);
@@ -723,6 +759,7 @@ export class GameScene extends Phaser.Scene {
     this.supplies?.resolveBodies(this.allies,(a,d,n)=>this.legion.hurt(a,d,n),(e,d,n)=>this.hitEnemy(e,d,n,'melee',false,false));
     this.sishuiObstacles?.resolve(this.player,this.allies,this.enemies);
     this.player.growth.recordMovement(Math.hypot(move.x,move.y)>.1&&time>=this.player.knockedUntil?Math.hypot(this.player.x-moveX,this.player.y-moveY):0,dt);
+    if(this.player.growth.masteries.dragging_blade||this.dragFx)this.dragBladeFx().update(dt,Math.hypot(move.x,move.y)>.1&&time>=this.player.knockedUntil?Math.hypot(this.player.x-moveX,this.player.y-moveY):0);
     this.awakeningCombat?.movement(Math.hypot(move.x,move.y)>.1&&time>=this.player.knockedUntil?Math.hypot(this.player.x-moveX,this.player.y-moveY):0);
     this.buildCombat.movement(Math.hypot(move.x,move.y)>.1&&time>=this.player.knockedUntil?Math.hypot(this.player.x-moveX,this.player.y-moveY):0);
     this.drawAimIndicator();
@@ -732,6 +769,8 @@ export class GameScene extends Phaser.Scene {
     if (this.over) return;
     this.martialFields.update(dt);
     this.buildCombat.update(this.combatNow);
+    {const fc=this.buildCombat.flankCharge();if(fc.level||this.flankFx)this.flankBladeFx().update(dt,fc.level,fc.ratio);}
+    {const wc=this.buildCombat.windstepCharge();if(wc.level||this.windFx)this.windstepFx().update(dt,wc.level,wc.ratio);}
     this.controlBuild?.update(this.combatNow);
     this.bulwarkBuild?.update(this.combatNow);
     this.awakeningCombat?.update(this.combatNow);
@@ -1327,6 +1366,8 @@ export class GameScene extends Phaser.Scene {
       gfx.clear();
       const pulse = 1 + Math.sin(now / 70) * 0.06;
       for (const pt of this.bossUltPoints) {
+        // 特效型警示（默认）：落点上空乌云聚拢、地上符光渐亮；缺图时退回细虚线
+        if (!TELEGRAPH_CLASSIC && HINT_MOCK === 'c' && warnFx(this).warn('zj' + Math.round(pt.x) + ',' + Math.round(pt.y), 'lightning', pt.x, pt.y, 72, 1 - Math.max(0, this.bossUltAt - now) / 800, now)) continue;
         if (HINT_MOCK === 'c' && !TELEGRAPH_CLASSIC) keyOutline(gfx, pt.x, pt.y, 72, 1 - Math.max(0, this.bossUltAt - now) / 800, now); else
         warnCircle(gfx, pt.x, pt.y, 72 * pulse, 1 - Math.max(0, this.bossUltAt - now) / 800, 0x7a3cff, 0xd9c2ff, false, now);
       }
@@ -1337,8 +1378,9 @@ export class GameScene extends Phaser.Scene {
         gfx.clear();
         let hit = false;
         for (const pt of this.bossUltPoints) {
-          // 多道雷电
-          for (let k = -1; k <= 1; k += 1) {
+          // 多道雷电（有雷劈序列帧时用图，不再画线）
+          const boltArt = !TELEGRAPH_CLASSIC && HINT_MOCK === 'c' && warnFx(this).impact('lightning', pt.x, pt.y, 72);
+          if (!boltArt) for (let k = -1; k <= 1; k += 1) {
             const ox = pt.x + k * 16;
             gfx.lineStyle(k === 0 ? 6 : 3, 0xfff2a8, 1);
             gfx.beginPath();
@@ -1417,6 +1459,7 @@ export class GameScene extends Phaser.Scene {
       spawnFlameGatherFx: (...args) => scene.spawnFlameGatherFx(...args),
       spawnFlameFx: (...args) => scene.spawnFlameFx(...args),
       heroFx: (id: string, x: number, y: number, size: number, rotation = 0) => scene.playHeroFx(id, x, y, size, rotation),
+      draggingBladeWave: (angle, size, kind, hits) => scene.dragBladeFx().release(angle, size, kind, hits),
       rallyAllies: (fraction: number) => { for (const u of scene.allies) if (u.active) u.hp = Math.min(u.maxHp, u.hp + u.maxHp * fraction); },
       martialField: (...args) => scene.martialFields.add(...args),
     };
@@ -1501,6 +1544,7 @@ export class GameScene extends Phaser.Scene {
     this.warfeedKill();
     if(enemy.def.behavior==='wall')return;
     this.kills += 1;
+    this.player.passive.onKill(kind, this.combatNow);
     this.awakeningCombat?.onKill(enemy,this.combatNow);
     this.buildCombat.onKill(enemy,this.combatNow);
     this.controlBuild?.onKill(enemy,this.combatNow);
@@ -1843,7 +1887,8 @@ export class GameScene extends Phaser.Scene {
     if (this.textures.exists('flame_burst')) {
       const size = radius * 2.5, burst = this.add.image(x, y, 'flame_burst', 0).setOrigin(0.5, 0.82).setDisplaySize(size, size).setDepth(actorDepth(y) + 0.5).setName('flame-burst');
       { const tint = HERO_TINT[this.runConfig.character]; if (tint) burst.setTint(tint); }
-      if (!SHOW_OWN_RANGE_FX && this.textures.exists('build_vfx')) { // 默认（只保留关键提示）：原序列帧自带八卦地纹，改用像素火焰爆发（战法特效图集「烈焰」行，无地纹）
+      // 诸葛亮等仍用原来的 flame_burst 序列帧（八卦地纹是图本身的一部分，用户 2026-11-16「换回之前那个」）；只有庞统连环地雷保持像素火焰
+      if (!SHOW_OWN_RANGE_FX && this.runConfig.character === 'pangtong' && this.textures.exists('build_vfx')) { // 庞统：像素火焰爆发（战法特效图集「烈焰」行，无地纹）
         burst.destroy(); const fire = this.add.image(x, y, 'build_vfx', 18).setOrigin(.5, .72).setDisplaySize(radius * 1.9, radius * 1.9).setDepth(actorDepth(y) + .5).setName('flame-burst');
         { const tint = HERO_TINT[this.runConfig.character]; if (tint) fire.setTint(tint); }
         this.tweens.addCounter({ from: 18, to: 23.99, duration: 380, onUpdate: t => fire.setFrame(Math.floor(t.getValue() ?? 18)), onComplete: () => fire.destroy() });
@@ -2601,7 +2646,7 @@ export class GameScene extends Phaser.Scene {
     for (const k of ['pause', 'mute', 'music', 'bag'] as const) this.hudTexts[k]
       .on('pointerover', () => { this.hudChipState[k] = 'hover'; }).on('pointerout', () => { this.hudChipState[k] = 'idle'; })
       .on('pointerdown', () => { this.hudChipState[k] = 'down'; }).on('pointerup', () => { this.hudChipState[k] = 'hover'; });
-    this.passiveHud = new PassiveHud(this); this.passiveShout = new PassiveShout(this, () => this.sfx.play('passiveFull'));
+    this.passiveHud = new PassiveHud(this); this.passiveShout = new PassiveShout(this, { sfx: () => this.sfx.play('passiveFull'), nearby: (x, y, r) => this.grid.query(x, y, r).filter(e => Math.hypot(e.x - x, e.y - y) <= r) });
     this.buffHud=new BuffHud(this);
     this.muteText = this.hudTexts.mute;
     this.muteText.setText(this.sfx.muted ? '音效:关' : '音效:开');
@@ -2614,7 +2659,8 @@ export class GameScene extends Phaser.Scene {
       .setInteractive({ useHandCursor: true })
       .on('pointerdown', () => { this.relicExpanded = !this.relicExpanded; });
     {
-      const bx=GAME_WIDTH-58,by=GAME_HEIGHT-240,root=this.add.container(bx,by).setScrollFactor(0).setDepth(DEPTH.hud+4).setName('attribute-plus').setVisible(false);
+      // 电脑布局右列自上而下：暂停 20–82、音效 100、音乐 132、行囊 166–196、用药 218–301、加点 316–399、护阵 / 出击 412（2026-11-16 修「用药和行囊叠在一起」）
+      const bx=GAME_WIDTH-58,by=IS_DESKTOP?GAME_HEIGHT-190:GAME_HEIGHT-240,root=this.add.container(bx,by).setScrollFactor(0).setDepth(DEPTH.hud+4).setName('attribute-plus').setVisible(false);
       const glow=this.add.circle(0,0,33,0xffd27a,0).setStrokeStyle(3,0xffd27a,.55);
       const disc=this.add.circle(0,0,29,0x1b241b,.94).setStrokeStyle(2,0xd8b56a,1);
       const icon=this.add.image(0,-1,this.textures.exists('growth_icon_points')?'growth_icon_points':'icon_passive').setDisplaySize(40,40);
@@ -2629,7 +2675,7 @@ export class GameScene extends Phaser.Scene {
     }
     {
       // 用药按钮：在加点按钮上方；药囊有药时显示，满血或上一份药未回完时变暗
-      const root=this.add.container(GAME_WIDTH-58,GAME_HEIGHT-340).setScrollFactor(0).setDepth(DEPTH.hud+4).setName('potion-button').setVisible(false);
+      const root=this.add.container(GAME_WIDTH-58,IS_DESKTOP?GAME_HEIGHT-288:GAME_HEIGHT-340).setScrollFactor(0).setDepth(DEPTH.hud+4).setName('potion-button').setVisible(false);
       const glow=this.add.circle(0,0,33,0xff7a4a,0).setStrokeStyle(3,0xff8a5a,.6);
       const disc=this.add.circle(0,0,29,0x2a1a14,.94).setStrokeStyle(2,0xd8b56a,1);
       const icon=this.add.image(0,-1,'healing_potion').setDisplaySize(30,36);
@@ -2669,7 +2715,7 @@ export class GameScene extends Phaser.Scene {
     this.legionUI?.update(this.legion, !overlay && !this.over);
     this.passiveHud.update(this.player.passive, this.combatNow, !overlay);
     buildVfx(this).density=this.enemies.filter(e=>e.active&&!e.isSupplySlot).length+this.legion.count;
-    this.buffHud.update(this.player,this.combatNow,!overlay&&!this.over&&!this.relicExpanded);
+    this.buffHud.update(this.player,this.combatNow,!overlay&&!this.over&&!this.relicExpanded,(id,now)=>this.buffProgress(id,now));
     this.hudGfx.setVisible(!overlay);
     if (this.hudTexts) for (const t of Object.values(this.hudTexts)) t.setVisible(!overlay);
     for (const icon of this.relicIcons) icon.setVisible(!overlay && icon.visible);

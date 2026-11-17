@@ -8,12 +8,13 @@ import {isChapterTestRun} from '../systems/ChapterProgress';
 import {CHARACTERS,type CharacterId} from '../data/characters';
 import {worldText,W,H} from '../world/WorldUI';
 import {TITLE_FONT} from '../config';
+import { loadBossSheet } from '../systems/ArtStyle';
 type StageCard={bg:Phaser.GameObjects.Rectangle;strip:Phaser.GameObjects.Rectangle;status:Phaser.GameObjects.Text;art:Phaser.GameObjects.Image};
 /** 第五章 · 赤壁之战 选关（与第三章选关同一布局）。 */
 export class ChibiChapterScene extends Phaser.Scene {
  private selected:ChibiStage=1;private hero:CharacterId='zhaoyun';private cards:StageCard[]=[];private heroButtons:Phaser.GameObjects.Rectangle[]=[];private deployText!:Phaser.GameObjects.Text;private deployBg!:Phaser.GameObjects.Rectangle;
  constructor(){super('ChibiChapterScene');}
- preload(){for(const [key,url] of Object.entries(CHIBI_SHEETS))if(!this.textures.exists(key))this.load.spritesheet(key,url,{frameWidth:128,frameHeight:128});}
+ preload(){for(const [key,url] of Object.entries(CHIBI_SHEETS))if(!this.textures.exists(key))loadBossSheet(this.load,key,url);}
  private text(x:number,y:number,s:string,size=16,color='#ded2b9'){return worldText(this,x,y,s,size,color);}
  private action(x:number,y:number,w:number,h:number,label:string,fn:()=>void,primary=false){const bg=this.add.rectangle(x,y,w,h,primary?0x744530:0x241e1a,.96).setStrokeStyle(1,primary?0xc39b61:0x70604b).setInteractive({useHandCursor:true});const t=this.text(x,y,label,primary?22:17,primary?'#ffdf9d':'#d1c2a7').setOrigin(.5);bg.on('pointerover',()=>bg.setFillStyle(primary?0x8b5438:0x3a2c23)).on('pointerout',()=>bg.setFillStyle(primary?0x744530:0x241e1a)).on('pointerdown',()=>bg.setAlpha(bg.getData('locked')?.3:.7)).on('pointerup',()=>{bg.setAlpha(bg.getData('locked')?.35:1);fn();});return{bg,t};}
  create(){playMenuMusic(this);

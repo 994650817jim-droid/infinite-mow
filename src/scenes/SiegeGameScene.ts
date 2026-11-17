@@ -19,6 +19,7 @@ import {worldText} from '../world/WorldUI';
 import type {Enemy} from '../entities/Enemy';
 import type {RunEndReason} from '../types';
 import type {RunConfig} from '../data/characters';
+import { loadBossSheet } from '../systems/ArtStyle';
 
 /**
  * 攻城战（WORLD_MAP_PLAN.md · W2）：按城市档位的短战。胜利（击败守将 / 大将）即占领该城。
@@ -38,7 +39,7 @@ export function siegeGameSceneClass(Base: typeof GameScene) {
     private towers: Array<{e: Enemy; life: number; shotAt: number; label: Phaser.GameObjects.Text}> = [];
     private capturing = false; private captured = false; private captureProgress = 0; private captureG?: Phaser.GameObjects.Graphics; private captureLabel?: Phaser.GameObjects.Text; private goalText?: Phaser.GameObjects.Text;
     constructor() { super('SiegeGameScene'); }
-    preload() { for (const [key, url] of Object.entries(GUANDU_ATLAS_FILES)) if (!this.textures.exists(key)) this.load.spritesheet(key, url, {frameWidth: 128, frameHeight: 128}); }
+    preload() { for (const [key, url] of Object.entries(GUANDU_ATLAS_FILES)) if (!this.textures.exists(key)) loadBossSheet(this.load, key, url); }
     get gateAlive() { return !!this.gate && this.gate.active && this.gate.spawnId === this.gateLife; }
     create() {
       this.test = isChapterTestRun();

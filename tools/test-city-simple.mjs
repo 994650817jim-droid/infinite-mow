@@ -83,7 +83,7 @@ const base8 = { version: 8, yellowStages: 3, dongzhuoStages: 0, warlordStages: 0
   const r = await store(p, (w, t) => { const o = { d0: w.drillInfo() }; const ups = []; for (let i = 0; i < 20; i++) { const x = w.trainTroops(); if (!x.ok) { o.stop = x.message; break; } ups.push(x.ok); } o.n = ups.length; o.d1 = w.drillInfo(); o.grain = w.loadWorld().provisions; o.eff = w.permanentEffects().troopDrill; o.c12 = t.drillCost(12); o.cap5 = t.drillCap(5); return o; });
   const spent = Array.from({ length: r.n }, (_, i) => 80 + 40 * (i + 1)).reduce((a, b) => a + b, 0);
   ck('练兵：从 0 级起，1 级 120 军粮，12 级 560，五章全开上限 12', r.d0.level === 0 && r.d0.cost === 120 && r.c12 === 560 && r.cap5 === 12, r);
-  ck('练兵：升到章节上限即停（提示开放新章节），扣费正确，倍率 1.15^n', r.n === r.d0.cap && r.n >= 2 && r.d1.level === r.n && r.stop.includes('上限') && r.grain === 5000 - spent && Math.abs(r.eff - Math.pow(1.15, r.n)) < 1e-9, { ...r, spent });
+  ck('练兵：升到章节上限即停（提示开放新章节），扣费正确，倍率 1 + 0.15n', r.n === r.d0.cap && r.n >= 2 && r.d1.level === r.n && r.stop.includes('上限') && r.grain === 5000 - spent && Math.abs(r.eff - (1 + .15 * r.n)) < 1e-9, { ...r, spent });
   await p.close();
 }
 
@@ -174,7 +174,7 @@ for (const layout of ['mobile', 'desktop']) {
   const r = await p.evaluate(() => { const g = window.__game.scene.getScene('GameScene'); return { pouch: g.supplies?.pouch.map(x => x.amount), maxHp: g.player.maxHp, lv: { ...g.legion.levels }, units: g.legion.units.filter(u => u.active).map(u => [u.kind, u.level, u.maxHp]), drill: g.legion.drillMultiplier }; });
   ck('开局药囊 2 份回血药（每份 30% 生命）', r.pouch?.length === 2 && r.pouch.every(a => a === Math.round(r.maxHp * .3)), r);
   ck('刀盾 / 长枪开局 Lv2，军营增援兵按 Lv2 入列', r.lv.swordsman === 2 && r.lv.spearman === 2 && r.lv.archer === 1 && r.units.length >= 1 && r.units.every(([k, l]) => !['swordsman', 'spearman'].includes(k) || l === 2), r);
-  ck('练兵 2 级：部曲倍率 1.3225，刀盾兵生命 = 85 × 1.3（Lv2）× 1.3225', Math.abs(r.drill - 1.3225) < 1e-9 && r.units.filter(([k]) => k === 'swordsman').every(([, , hp]) => hp === Math.round(85 * 1.3 * 1.3225)), r);
+  ck('练兵 2 级：部曲倍率 1.3（加法），刀盾兵生命 = 85 × 1.3（Lv2）× 1.3', Math.abs(r.drill - 1.3) < 1e-9 && r.units.filter(([k]) => k === 'swordsman').every(([, , hp]) => hp === Math.round(85 * 1.3 * 1.3)), r);
   await p.screenshot({ path: `${out}/battle-potions.png` });
   await p.close();
 }

@@ -1,3 +1,4 @@
+import {WARN_FX_FILES} from '../ui/WarnFx';
 import {HOME_ART_HEROES} from '../data/characters';
 import {GROWTH_ICON_IDS} from '../ui/GrowthIcons';
 import {TACTICS,TREASURES} from '../data/builds';
@@ -8,7 +9,8 @@ import { GAME_WIDTH } from '../config';
 import { createGameTextures, createWalkPlaceholders, registerWalkSheet } from '../systems/TextureFactory';
 import { HERO_ACTION_FILES } from '../data/heroActions';
 import { applyHdHeroSheets } from '../systems/HdHeroSheets';
-import { applyArtStyleUrls, applyV2TroopFrames, isV2Texture } from '../systems/ArtStyle';
+import { warmIffTextures } from '../systems/IffOverlay';
+import { applyArtStyleUrls, applyV2TroopFrames, isV2Texture, rotateV2StandFrames } from '../systems/ArtStyle';
 
 export class BootScene extends Phaser.Scene {
   private shellOnly=false;
@@ -18,6 +20,8 @@ export class BootScene extends Phaser.Scene {
 
   preload(): void {
     this.load.spritesheet('build_vfx','assets/build-vfx/styles-ai-v1.png',{frameWidth:64,frameHeight:64});
+    // 特效型警示序列帧（src/ui/WarnFx.ts；缺图时首领招式退回细虚线 / 无提示）
+    for(const f of Object.values(WARN_FX_FILES))this.load.spritesheet(f.key,f.file,{frameWidth:f.w,frameHeight:f.h});
     this.load.spritesheet('refined_spear','assets/combat-refined/spear-sequence.png',{frameWidth:384,frameHeight:64});
     this.load.spritesheet('refined_impact','assets/combat-refined/impact-sequence.png',{frameWidth:64,frameHeight:64});
     // 三选一 / 增益栏图标：2026-11-14 起使用 ChatGPT 生成的厚涂图标（assets/upgrade-icons，tools/build-upgrade-icons.mjs 切图）；
@@ -135,6 +139,12 @@ export class BootScene extends Phaser.Scene {
     this.load.image('pangtong_mine', 'assets/hero-fx/pangtong_mine.png'); this.load.image('pangtong_chain', 'assets/hero-fx/pangtong_chain.png');
     // 庞统铁索连环像素特效（6×4，每帧 256，黑底叠加）：烧红铁索 / 沿索火苗 / 地火 / 雷芯闪；缺图时武器代码退回程序化过渡
     this.load.spritesheet('pangtong_fx', 'assets/hero-fx/pangtong_fx.png', { frameWidth: 256, frameHeight: 256 });
+    // 黄忠神射像素特效（6×4，每帧 256，黑底叠加）：神射爆裂 / 进入神射金光 / 神射箭拖光 / 宝刀未老；缺图时退回程序化过渡
+    this.load.spritesheet('huangzhong_fx', 'assets/hero-fx/huangzhong_fx.png', { frameWidth: 256, frameHeight: 256 });
+    // 被动满层战吼像素特效（2 行 × 6 帧，每帧 256×512，黑底叠加）：脚下声浪冲击 / 身上迸发的气势
+    this.load.spritesheet('warcry_fx', 'assets/hero-fx/warcry_fx.png', { frameWidth: 256, frameHeight: 512 });
+    // 马超虎头湛金枪像素特效（6×4，每帧 256，透明底）：上挑弧光 / 落地砸地 / 冲锋尘土拖影 / 枪尖破风
+    this.load.spritesheet('machao_fx', 'assets/hero-fx/machao_fx.png', { frameWidth: 256, frameHeight: 256 });
     // 2026-11-16 专属武器贴图（tools/prepare-hero-icon-sheet.mjs 切出）与执刀侍婢行走图
     for (const k of ['sun_knife', 'diaochan_fan', 'huangzhong_arrow', 'charm_heart', 'charm_broken', 'zhangfei_spear']) this.load.image(k, 'assets/hero-fx/' + k + '.png');
     this.load.spritesheet('sun_maid_walk', 'assets/hero-fx/sun_maid_walk.png', { frameWidth: 96, frameHeight: 96 });
@@ -233,11 +243,15 @@ export class BootScene extends Phaser.Scene {
     for(const key of ['huaxiong_walk','huaxiong_attack']){if(!this.textures.exists(key))continue;const t=this.textures.get(key);['down','left','right','up'].forEach((dir,row)=>{for(let col=0;col<4;col++)if(!t.has(dir+'_'+col))t.add(dir+'_'+col,0,col*128,row*128,128,128);});}
     createReadableTextures(this);
     applyHdHeroSheets(this, ['hero_walk_sheet', ...Object.keys(HERO_ACTION_FILES).map(k => k.replace(/_actions$/, '_walk_sheet'))], Object.keys(HERO_ACTION_FILES));
+    // 人物画风 v2：武将行走图的停步帧换成双脚并拢的那一帧（见 rotateV2StandFrames）
+    for (const key of ['hero_walk_sheet', ...Object.keys(HERO_ACTION_FILES).map(k => k.replace(/_actions$/, '_walk_sheet'))]) rotateV2StandFrames(this, key);
     // 人物画风 v2：兵种图集按 v2 格子重切帧（旧的 96 / 128×112 切法会切错）
     applyV2TroopFrames(this);
     const hint = document.getElementById('boot-hint');
     if (hint) hint.style.display = 'none';
     this.registry.set('battleReady',true);
+    // 敌我区分：部曲 / 敌军换色（与描边）贴图在浏览器空闲时逐张预生成，进战斗时不再卡顿
+    warmIffTextures(this.game);
     // 界面通用贴图（水墨按钮、小镇美术）常驻，不随战斗图集卸载
     this.registry.set('battleTextureKeys',this.textures.getTextureKeys().filter(k=>!k.startsWith('__')&&!k.startsWith('ui_war_')&&!k.startsWith('btn_ink_')&&!k.startsWith('town_')&&!k.startsWith('ach_')&&k!=='art_panel'&&k!=='icon_guandao'));
     if(import.meta.env.DEV&&new URLSearchParams(location.search).get('dev')==='1'&&new URLSearchParams(location.search).has('thirdStage')){this.scene.start('ThirdChapterScene');}else if(this.registry.get('pendingThird')){this.registry.remove('pendingThird');this.scene.start('ThirdChapterScene');}else if(this.registry.get('pendingWarlord')){const key=String(this.registry.get('pendingWarlord'));this.registry.remove('pendingWarlord');this.scene.start(key);}else this.scene.start('MenuScene');

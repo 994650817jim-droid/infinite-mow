@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "description": "乱世千军 — mobile-first portrait roguelike survivor game",
+  "description": "三国：乱世千军 — mobile-first portrait roguelike survivor game",
   "scripts": {
     "dev": "vite --host 0.0.0.0",
     "build": "node tools/build.mjs",
@@ -38,7 +38,7 @@
   "build": {
     "appId": "com.infinitemow.game",
     "productName": "InfiniteMow",
-    "copyright": "乱世千军",
+    "copyright": "三国：乱世千军",
     "directories": {
       "output": "release"
     },

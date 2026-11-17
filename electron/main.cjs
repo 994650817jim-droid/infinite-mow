@@ -1,4 +1,4 @@
-// 《乱世千军》桌面版（Steam）主进程。STEAM_PLAN.md · S1。
+// 《三国：乱世千军》桌面版（Steam）主进程。STEAM_PLAN.md · S1。
 // - 用私有 app:// 协议加载 dist/（避免 file:// 下的跨域与路径问题）
 // - 默认全屏 16:9；F11 / Alt+Enter 切换窗口模式；隐藏菜单栏；打包后禁用开发者工具
 // - 显示设置（分辨率 / 全屏 / 垂直同步）存 display.json（S2）
@@ -97,7 +97,7 @@ function createWindow() {
   win = new BrowserWindow({
     width: display.width, height: display.height, minWidth: 960, minHeight: 540, useContentSize: true,
     fullscreen: process.env.IM_WINDOWED === '1' ? false : display.fullscreen !== false, backgroundColor: '#0b0907', autoHideMenuBar: true, show: false,
-    title: '乱世千军', icon: path.join(__dirname, 'icon.png'),
+    title: '三国：乱世千军', icon: path.join(__dirname, 'icon.png'),
     webPreferences: { preload: path.join(__dirname, 'preload.cjs'), contextIsolation: true, sandbox: false, nodeIntegration: false, devTools: devMode },
   });
   win.removeMenu();

@@ -46,7 +46,10 @@ export class Ally {
   push(dx: number, dy: number): void { this.setPosition(this.x + dx, this.y + dy); }
   setPosition(x: number, y: number): void { this.px = x; this.py = y; this.view?.sprite.setPosition(x, y); }
   beginStep(): void { this.moving = false; }
+  /** 地形（河水）移动倍率：有地形层的战场由 GameScene 设置，水里 0.6 */
+  static terrainMul: ((x: number, y: number) => number) | null = null;
   moveTo(x: number, y: number, dt: number, speed: number, preserveFacing = false): void {
+    if (Ally.terrainMul) speed *= Ally.terrainMul(this.x, this.y);
     const dx = x - this.x, dy = y - this.y, distance = Math.hypot(dx, dy);
     if (distance <= 2 || dt <= 0) return;
     // Arrive without overshoot; no inertial coasting after the target stops.

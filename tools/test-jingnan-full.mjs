@@ -20,16 +20,16 @@ try {
   // 三关：1 劝降赵范，2 斩杀刘度，3 劝降黄忠 → 斩杀韩玄
   const plan = { 1: ['persuade'], 2: ['execute'], 3: ['persuade', 'execute'] };
   for (const stage of [1, 2, 3]) {
-    await p.evaluate(st => { const g = window.__game; for (const s of g.scene.getScenes(true)) s.scene.stop(); g.registry.set('jingnanStage', st); g.registry.set('runConfig', { character: 'zhaoyun', thirdStage: st }); g.scene.start('JingnanGameScene'); }, stage);
+    await p.evaluate(st => { const g = window.__game; g.registry.set('jingnanStage', st); g.registry.set('runConfig', { character: 'zhaoyun', thirdStage: st }); g.registry.remove('jingnanTransfer'); const cur = g.scene.getScene('JingnanGameScene'); if (cur && g.scene.isActive('JingnanGameScene')) cur.scene.restart(); else { for (const s of g.scene.getScenes(true)) s.scene.stop(); g.scene.start('JingnanGameScene'); } }, stage); await p.waitForTimeout(500);
     await p.waitForFunction(S0 => { const s = eval(S0); return s?.player && s.scene.isActive(); }, S, { timeout: 90000 }); await p.waitForTimeout(1200);
     const info = await p.evaluate(S0 => { const s = eval(S0); s.devTimeScale = 4; s.player.damageImmune = true; return { name: s.chapter.name, boss: s.chapter.bossName }; }, S);
     ck(`6-${stage}：进入 ${info.name}`, info.name.startsWith('6-' + stage), info);
-    const choices = [...plan[stage]]; let parleys = 0, chest = false, end = null, sawBosses = [];
+    const choices = [...plan[stage]]; let sawEnd = false, parleys = 0, chest = false, end = null, sawBosses = [];
     for (let t = 0; t < 900 && !end; t++) {
       const st = await p.evaluate(S0 => {
         const s = eval(S0); if (!s) return { gone: true };
         if (s.mode === 'levelup' || s.mode === 'recruit') s.__DEV_ACTIONS?.closePopup?.();
-        const end = s.children.getByName('story-jingnan-end'); if (end) { const btn = end.list.find(o => o.name === 'story-jingnan-end-next' || o.name === 'story-jingnan-end-confirm'); btn?.emit('pointerup'); }
+        const end = s.children.getByName('story-jingnan-end'); if (end && s.__endShot) { const btn = end.list.find(o => o.name === 'story-jingnan-end-next' || o.name === 'story-jingnan-end-confirm'); btn?.emit('pointerup'); }
         const c = s.bossChests?.find(c => !c.done && c.ready);
         if (c) { const dx = c.x - s.player.x, dy = c.y - s.player.y, d = Math.hypot(dx, dy) || 1; s.player.sprite.x += dx / d * Math.min(d, 18); s.player.sprite.y += dy / d * Math.min(d, 18); }
         else if (s.boss?.active) { const dx = s.boss.x - s.player.x, dy = s.boss.y - s.player.y, d = Math.hypot(dx, dy) || 1; if (d > 120) { s.player.sprite.x += dx / d * 10; s.player.sprite.y += dy / d * 10; } s.boss.hp -= s.boss.maxHp * .01; if (s.boss.hp <= 0) s.hitEnemy(s.boss, 10, s.combatNow, 'melee', false, false); }
@@ -40,7 +40,7 @@ try {
       if (st.boss && !sawBosses.includes(st.boss)) sawBosses.push(st.boss);
       if (st.panel) { parleys++; await p.screenshot({ path: `${OUT}/stage${stage}-parley${parleys}.png` }); const c = choices.shift() ?? 'execute'; await p.evaluate(([S0, c]) => eval(S0).choose(c), [S, c]); }
       if (st.chests && !chest) { chest = true; }
-      if (st.endStory) await p.screenshot({ path: `${OUT}/chapter-end.png` });
+      if (st.endStory && !sawEnd) { sawEnd = true; await p.screenshot({ path: `${OUT}/chapter-end-story.png` }); await p.evaluate(S0 => { eval(S0).__endShot = true; }, S); }
       if (st.over || st.rest) end = st;
       await p.waitForTimeout(200);
     }
@@ -49,7 +49,7 @@ try {
     if (stage === 2) ck('6-2：刘度选斩杀 → 倒地掉宝箱 → 捡完告捷', parleys === 1 && j.executed?.includes('刘度') && chest && (end.victory || end.rest), { parleys, chest, end });
     if (stage === 3) {
       ck('6-3：先战黄忠（劝降）→ 韩玄出阵', sawBosses.includes('黄忠') && sawBosses.includes('韩玄') && j.persuaded?.includes('黄忠'), { sawBosses, j });
-      ck('6-3：韩玄不可劝降（只弹一次，为黄忠）、斩杀后宝箱 → 章末剧情 → 平定荆南告捷', parleys === 1 && chest && end?.victory === true, { parleys, chest, end });
+      ck('6-3：韩玄不可劝降（只弹一次，为黄忠）、斩杀后宝箱 → 章末剧情 → 平定荆南告捷', parleys === 1 && chest && sawEnd && end?.victory === true, { parleys, chest, sawEnd, end });
     }
     await p.screenshot({ path: `${OUT}/stage${stage}-end.png` });
   }

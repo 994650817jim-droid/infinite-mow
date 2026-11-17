@@ -162,10 +162,12 @@ export class XiliangBattle {
     if (now < r.warnUntil) {
       const t = 1 - (r.warnUntil - now) / this.raid.warnMs;
       r.g.clear(); warnLane(r.g, r.x, r.y, angle, this.raid.distance, width, t);
-      for (const x of live) { x.e.sprite.x = r.x + x.ox; x.e.sprite.y = r.y + x.oy; x.e.moveVx = x.e.moveVy = 0; }
+      // 动作协调：刷出后 0.25 秒淡入（不凭空出现）；预警最后 25% 勒马后收约 10 像素蓄势，再冲出去
+      const age = this.raid.warnMs - (r.warnUntil - now), back = t > .75 ? Math.sin((t - .75) / .25 * Math.PI / 2) * 10 : 0;
+      for (const x of live) { x.e.sprite.x = r.x + x.ox - r.dx * back; x.e.sprite.y = r.y + x.oy - r.dy * back; x.e.moveVx = x.e.moveVy = 0; x.e.sprite.setAlpha(Math.min(1, age / 250)); }
       return;
     }
-    r.g.clear();
+    r.g.clear(); for (const x of live) x.e.sprite.setAlpha(1);
     const step = this.raid.speed * dt; r.traveled += step;
     const p = this.h.player;
     for (const x of live) {

@@ -132,11 +132,43 @@ export class WarnFx {
     return true;
   }
 
+  // ---------- 徐荣（荥阳伏兵）：伏兵旗影、乱箭、疾影。只用项目里现成的手绘贴图（军旗、箭矢、骑兵本身），不画程序图形、不用像素特效
+  // （用户 2026-11-16「不要再做像素特效了」；尘土等新特效等手绘序列帧图，见共享笔记 warn-fx-design.md 的需求清单） ----------
+  hasXurong(): boolean { return WARN_FX_ON && this.scene.textures.exists('arrow') && this.scene.textures.exists('zhuge_banner'); }
+  /** 伏兵起：一面暗色军旗剪影从草里竖起一闪后淡去（约 0.65 秒）。 */
+  ambush(x: number, y: number, size: number): boolean {
+    if (!this.hasXurong()) return false;
+    const sc = this.scene;
+    // 旗影：军旗染成深褐红剪影
+    const flag = sc.add.image(x + size * .12, y + 4, 'zhuge_banner').setOrigin(.32, 1).setTintFill(0x3a1a14).setAlpha(0).setDepth(DEPTH.enemy + y / 10000);
+    flag.setScale(size * 1.05 / flag.height); const fy = flag.scaleY; flag.setScale(flag.scaleX, fy * .15);
+    sc.tweens.add({ targets: flag, alpha: .82, scaleY: fy, duration: 150, ease: 'Back.Out', onComplete: () => sc.tweens.add({ targets: flag, alpha: 0, duration: 380, delay: 120, onComplete: () => flag.destroy() }) });
+    return true;
+  }
+  /** 乱箭斜落：一簇箭从左上斜着飞向落点 (x,y)，progress 0→1 时正好落到。 */
+  volley(id: string, x: number, y: number, size: number, progress: number, now: number): boolean {
+    if (!this.hasXurong()) return false;
+    const p = clamp01(progress), dx = 300, dy = 340, ang = Math.atan2(dy, dx), e = this.get(id, 8, 'arrow', now, true);
+    e.imgs.forEach((img, i) => { const ox = ((i * 37) % 7 - 3) * size * .22, oy = ((i * 53) % 5 - 2) * size * .22, lag = (i % 3) * .07, q = Math.min(1, p + lag);
+      img.setPosition(x + ox - dx * (1 - q), y + oy - dy * (1 - q)).setRotation(ang).setDisplaySize(34, 9).setTint(0xb48a5e).setAlpha(q < .02 ? 0 : .95).setDepth(DEPTH.fx); }); // 箭杆压暗成木褐色，配徐荣偏暗的色调
+    return true;
+  }
+  /** 疾影：骑兵身后三道渐隐的暗色残影（用骑兵当前帧），跟着骑兵每帧更新。 */
+  streak(id: string, x: number, y: number, angle: number, now: number, src?: Phaser.GameObjects.Image): boolean {
+    if (!this.hasXurong() || !src) return false;
+    const c = Math.cos(angle), n = Math.sin(angle), e = this.get(id, 3, src.texture.key, now, true);
+    e.imgs.forEach((img, i) => {
+      const d = 22 * (i + 1); img.setTexture(src.texture.key, src.frame.name).setOrigin(src.originX, src.originY).setDisplaySize(src.displayWidth, src.displayHeight).setFlipX(src.flipX)
+        .setPosition(x - c * d, y - n * d).setTintFill(0x2b2420).setAlpha(.42 - i * .12).setRotation(0).setDepth(DEPTH.enemy - .5);
+    });
+    return true;
+  }
+
   clear(): void { for (const e of this.live.values()) for (const i of e.imgs) i.destroy(); this.live.clear(); this.impacted.clear(); }
 
-  private get(id: string, n: number, key: string, now: number): Live {
+  private get(id: string, n: number, key: string, now: number, plain = false): Live {
     let e = this.live.get(id);
-    if (!e) { e = { imgs: Array.from({ length: n }, () => this.scene.add.image(0, 0, key, 0)), at: now }; this.live.set(id, e); }
+    if (!e) { e = { imgs: Array.from({ length: n }, () => plain ? this.scene.add.image(0, 0, key) : this.scene.add.image(0, 0, key, 0)), at: now }; this.live.set(id, e); }
     e.at = now; for (const i of e.imgs) i.setVisible(true);
     return e;
   }

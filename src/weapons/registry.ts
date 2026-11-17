@@ -201,12 +201,13 @@ export const WEAPON_BEHAVIORS: Record<WeaponId, (host: WeaponHost, weapon: Weapo
     }
     weapon.cooldownLeft -= dt;
     if (weapon.cooldownLeft > 0) return;
-    const priority=host.priorityTarget?.(pierce.len*host.player.growth.spearLengthMultiplier()-6)??null;
+    const spearAm = host.player.passive.rangeMultiplier('spear_orbit'); // 智力范围加成：枪长
+    const priority=host.priorityTarget?.(pierce.len*host.player.growth.spearLengthMultiplier()*spearAm-6)??null;
     // 只锁定这一枪真正刺得到的敌人（与下方线段命中判定同一出枪点与枪长），
     // 否则 176~234px 的敌人会被锁定后刺空，白白消耗冷却。
     // 赵云「七进七出」蓄满时这一枪会长 25%：选靶也按加长后的枪长算，否则只有加长枪够得着的敌人永远不会被瞄准（2026-11-16 修）。
     const longSpear = host.player.passive.characterId === 'zhaoyun' && host.player.passive.snapshot(time).ready ? PASSIVE_RULES.spearLengthMul : 1;
-    const reachBase = pierce.len * host.player.growth.spearLengthMultiplier() * longSpear + pierce.width / 2;
+    const reachBase = pierce.len * host.player.growth.spearLengthMultiplier() * longSpear * spearAm + pierce.width / 2;
     const ox = host.player.x, oy = host.player.y - 6;
     const targets = host.grid.query(host.player.x, host.player.y, Math.min(220, reachBase) + 60)
       .filter((e) => e.active && Math.hypot(e.x - ox, e.y - oy) <= Math.min(220, reachBase) + e.radius)
@@ -255,7 +256,7 @@ export const WEAPON_BEHAVIORS: Record<WeaponId, (host: WeaponHost, weapon: Weapo
       if (!HINT_MOCK) for (let k = 0; k < 2; k++) { const ring = host.add.circle(px, py - 6, 30, 0xffd27a, 0).setStrokeStyle(6 - k * 2, k ? 0xff8a3c : 0xffe2a0, .9).setDepth(41); ring.scene.tweens.add({ targets: ring, radius: R.roarRadius, alpha: 0, delay: k * 90, duration: 420, onComplete: () => ring.destroy() }); }
       host.cameras.main.shake(160, .006); host.sfx.play('waveDrum');
     }
-    const spearLength = pierce.len * passiveCast.spearLengthMul * host.player.growth.spearLengthMultiplier();
+    const spearLength = pierce.len * passiveCast.spearLengthMul * host.player.growth.spearLengthMultiplier() * spearAm;
     const count = level;
     const used = new Map<number, number>();
     const chosen: Enemy[] = [];
@@ -298,7 +299,8 @@ export const WEAPON_BEHAVIORS: Record<WeaponId, (host: WeaponHost, weapon: Weapo
   crossbow: (host, weapon, dt, time) => {
     weapon.cooldownLeft -= dt;
     if (weapon.cooldownLeft > 0) return;
-    const target = smartTarget(host, 500); // 统一索敌：首领 > 精锐 > 群怪 > 最近
+    const xbAm = host.player.passive.rangeMultiplier('crossbow'); // 智力范围加成：射程 / 分射 / 扇射距离
+    const target = smartTarget(host, 500 * xbAm); // 统一索敌：首领 > 精锐 > 群怪 > 最近
     if (!target) return;
     const level = weapon.level;
     const def = WEAPON_DEFS.crossbow;
@@ -312,13 +314,13 @@ export const WEAPON_BEHAVIORS: Record<WeaponId, (host: WeaponHost, weapon: Weapo
     // 黄月英满层：机关连弩——朝目标方向扇形齐射 6 支（60% 伤害，弹射 +1）
     { const pc = host.player.passive.beginCast('crossbow'); if (pc.fan) { const px = host.player.x, py = host.player.y, a0 = Math.atan2(target.y - py, target.x - px), n = PASSIVE_RULES.mechBolts;
       host.player.playAction('skill', target.x < px ? 'left' : 'right'); host.heroFx?.('gears', px, py - 10, 240, a0);
-      for (let k = 0; k < n; k++) { const a = a0 + (k - (n - 1) / 2) * .16; host.fireBolt(host.bolts, px, py, px + Math.cos(a) * 420, py + Math.sin(a) * 420, damage * PASSIVE_RULES.mechDamageMul, Math.min(5, bounce + 1), true, 600); } } }
+      for (let k = 0; k < n; k++) { const a = a0 + (k - (n - 1) / 2) * .16; host.fireBolt(host.bolts, px, py, px + Math.cos(a) * 420 * xbAm, py + Math.sin(a) * 420 * xbAm, damage * PASSIVE_RULES.mechDamageMul, Math.min(5, bounce + 1), true, 600); } } }
     // 每升一级多射 1 支（Lv5 共 5 支）：额外的箭优先分射附近其他敌人，70% 伤害；不够目标时散射同一目标
     const extra = crossbowExtraArrows(level);
     if (extra > 0) {
       const px = host.player.x, py = host.player.y;
-      const others = host.grid.query(px, py, 500).filter(e => e.active && !e.isSupplySlot && e !== target && e.hp > 0)
-        .map(e => ({ e, d: Math.hypot(e.x - px, e.y - py) })).filter(o => o.d <= 500).sort((a, b) => a.d - b.d).slice(0, extra);
+      const others = host.grid.query(px, py, 500 * xbAm).filter(e => e.active && !e.isSupplySlot && e !== target && e.hp > 0)
+        .map(e => ({ e, d: Math.hypot(e.x - px, e.y - py) })).filter(o => o.d <= 500 * xbAm).sort((a, b) => a.d - b.d).slice(0, extra);
       for (let k = 0; k < extra; k += 1) {
         const t = others[k]?.e;
         if (t) host.fireBolt(host.bolts, px, py, t.x, t.y, damage * .7, bounce, true, 560);

@@ -63,6 +63,11 @@ const g1 = await p.evaluate(async () => {
 ck('第 1 波清完：补 1 次「军略」三选一（标题写军略，不给属性点）', g1.wave >= 1 && g1.given1 === g1.wave && /军略/.test(g1.title ?? '') && /不给属性点/.test(g1.hint ?? '') && g1.un1 === g1.un0 && g1.military1 === 0, g1);
 ck('已够数不重复补；开首领宝箱补到 4 次；保底最多 4 次', g1.again === Math.max(2, g1.given1) && g1.chest === 4 && g1.capped === 4, g1);
 
+// 3b) 第 3 波之后直接是首领（波次不再推进）：首领登场时补到 3 次
+await battle('?dev=1&autostart=1&stage=3&layout=desktop');
+const g3 = await p.evaluate(() => { const s = window.__game.scene.getScene('GameScene'), before = s.picksGiven; s.spawnBoss(); return { before, after: s.picksGiven, boss: !!s.boss?.active }; });
+ck('首领登场时保底补到 3 次（平衡会话实测发现第 3 次原来不触发）', g3.before === 0 && g3.after === 3 && g3.boss, g3);
+
 // 4) 上限：到章节上限后最多再存 1 级经验，其余折军粮
 const cap = await p.evaluate(async () => {
   const s = window.__game.scene.getScene('GameScene'), pl = s.player, h = await window.__mod('/src/data/heroLevels.ts');

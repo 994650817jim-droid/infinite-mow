@@ -37,9 +37,12 @@ try {
     for (let i = 1; i < 8; i++) {
       await page.evaluate(i => window.__IM.setTime(i * 45 + .1), i);
       await page.waitForFunction(i => window.__IM.waveInfo().index === i, i);
-      const state = await page.evaluate(() => ({ mode: window.__IM.mode, boss: window.__IM.bossActive }));
+      // 等级合并（f4ea0ab）后每关保底：第 1/2/3 波清完补三选一，会和免费招兵前后排队；这里两种弹窗都点掉，招兵计数
+      const state = await page.evaluate(() => { const s = window.__game.scene.getScene('GameScene'), out = { mode: s.mode, boss: window.__IM.bossActive, recruits: 0, levelups: 0 };
+        for (let g = 0; g < 40; g++) { if (s.mode === 'levelup') { out.levelups++; s.chooseUpgrade(0); } else if (s.mode === 'recruit') { out.recruits++; window.__IM.chooseRecruit(0); } else break; }
+        return out; });
       seen.push({ i, ...state });
-      if (state.mode === 'recruit') { recruitCount++; if (i === 7) bossBeforeFinal = state.boss; await page.evaluate(() => window.__IM.chooseRecruit(0)); }
+      if (state.recruits) { recruitCount += state.recruits; if (i === 7) bossBeforeFinal = state.boss; }
     }
     await page.waitForFunction(() => window.__IM.bossActive);
     const final = await page.evaluate(() => { const s = window.__game.scene.getScene('GameScene'); return { info: window.__IM.bossInfo(), tex: s.boss.sprite.texture.key, allies: s.allies.length, perWave: s.legion.freeRecruitCount, wave: window.__IM.waveInfo() }; });

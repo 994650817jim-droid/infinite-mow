@@ -1001,6 +1001,7 @@ export class GameScene extends Phaser.Scene {
     if(this.boss?.active)return;this.yellowAltar?.destroy();this.yellowAltar=null;
     if (this.bossSpawned) return;
     this.bossSpawned = true;
+    this.ensurePicks(PICK_GUARANTEE.waves[PICK_GUARANTEE.waves.length - 1]); // 保底：第 3 波后直接是首领、波次不再推进，首领登场时补到 3 次
     const angle = -Math.PI / 2;
     const x = this.player.x + Math.cos(angle) * 430;
     const y = this.player.y + Math.sin(angle) * 430;
@@ -2045,11 +2046,11 @@ export class GameScene extends Phaser.Scene {
     if (this.textures.exists('flame_burst')) {
       const size = radius * 2.5, burst = this.add.image(x, y, 'flame_burst', 0).setOrigin(0.5, 0.82).setDisplaySize(size, size).setDepth(actorDepth(y) + 0.5).setName('flame-burst');
       { const tint = HERO_TINT[this.runConfig.character]; if (tint) burst.setTint(tint); }
-      // 诸葛亮等仍用原来的 flame_burst 序列帧（八卦地纹是图本身的一部分，用户 2026-11-16「换回之前那个」）；只有庞统连环地雷保持像素火焰
-      if (!SHOW_OWN_RANGE_FX && this.runConfig.character === 'pangtong' && this.textures.exists('build_vfx')) { // 庞统：像素火焰爆发（战法特效图集「烈焰」行，无地纹）
-        burst.destroy(); const fire = this.add.image(x, y, 'build_vfx', 18).setOrigin(.5, .72).setDisplaySize(radius * 1.9, radius * 1.9).setDepth(actorDepth(y) + .5).setName('flame-burst');
-        { const tint = HERO_TINT[this.runConfig.character]; if (tint) fire.setTint(tint); }
-        this.tweens.addCounter({ from: 18, to: 23.99, duration: 380, onUpdate: t => fire.setFrame(Math.floor(t.getValue() ?? 18)), onComplete: () => fire.destroy() });
+      // 诸葛亮等仍用原来的 flame_burst 序列帧（八卦地纹是图本身的一部分，用户 2026-11-16「换回之前那个」）。
+      // 庞统火雷：2026-11-17 用户「庞统的攻击特效还是像素，要改」→ 手绘火雷爆炸帧（pangtong_paint 第 1 行，无地纹），不再用战法图集的像素火焰
+      if (this.runConfig.character === 'pangtong' && this.textures.exists('pangtong_paint')) {
+        burst.destroy(); const fire = this.add.image(x, y, 'pangtong_paint', 0).setOrigin(.5, .74).setDisplaySize(radius * 2.3, radius * 2.3).setDepth(actorDepth(y) + .5).setName('flame-burst');
+        this.tweens.addCounter({ from: 0, to: 5.99, duration: 460, onUpdate: t => fire.setFrame(Math.floor(t.getValue() ?? 0)), onComplete: () => fire.destroy() });
         return;
       }
       this.tweens.addCounter({ from: 0, to: 5.99, duration: 420, onUpdate: t => burst.setFrame(Math.floor(t.getValue() ?? 0)), onComplete: () => this.tweens.add({ targets: burst, alpha: 0, duration: 120, onComplete: () => burst.destroy() }) });
@@ -2547,7 +2548,8 @@ export class GameScene extends Phaser.Scene {
     this.chasingBosses.push({enemy:boss,life:boss.spawnId,stage,name,battle:this.yellow,huaxiong:this.huaxiong,xurong:this.xurong,label});
     const next=(stage+1) as 2|3,west=this.chapter.id==='hulao';
     this.chapter=getBattleChapter(this.chapter.id,west?undefined:next,west?next:undefined);this.runConfig={...this.runConfig,stage:west?undefined:next,westStage:west?next:undefined};
-    this.picksGiven=0;this.militaryPending=0;this.frontlineStarts.set(next,this.combatNow);this.setupObjective();this.elapsed=0;this.waveIndex=0;this.boss=null;this.bossSpawned=false;this.bossWarned=false;this.bossKilled=false;this.firstBossAt=-1;this.bossShield=0;this.bossPhase2=false;this.bossEnergy=0;this.recruitedWaves.clear();this.spawnTimer=.2;this.huaxiong=null;this.xurong=null;this.zhangjiao?.clear();this.zhangjiao=null;
+    // 首领追击转下一关：先把本关没补完的保底补上（军略留在队列里），再给下一关重新计数
+    this.ensurePicks(this.campaignReplay?PICK_GUARANTEE.side:PICK_GUARANTEE.main);this.picksGiven=0;this.frontlineStarts.set(next,this.combatNow);this.setupObjective();this.elapsed=0;this.waveIndex=0;this.boss=null;this.bossSpawned=false;this.bossWarned=false;this.bossKilled=false;this.firstBossAt=-1;this.bossShield=0;this.bossPhase2=false;this.bossEnergy=0;this.recruitedWaves.clear();this.spawnTimer=.2;this.huaxiong=null;this.xurong=null;this.zhangjiao?.clear();this.zhangjiao=null;
     this.yellow=west?null:new YellowBattle({scene:this,player:this.player,army:this.legion,enemies:this.enemies,move:(e,nx,ny,dt)=>this.advanceEnemy(e,nx,ny,dt),spawn:(def,x,y)=>this.spawnEnemy(def.kind,x,y,1,true,def)},next);
     // 战线推进与新一关第 1 波合成一条提示（原先“战线推进”下一帧就被第 1 波提示顶掉）
     const waves=this.chapter.waves,first=waves[0];

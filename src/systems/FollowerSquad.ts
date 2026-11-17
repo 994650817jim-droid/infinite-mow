@@ -151,6 +151,8 @@ export class FollowerSquad {
   share = 1;
   /** 当前是否出击（读部曲指令）。 */
   sortie = false;
+  /** 随行实际在用的规则（FOLLOW）。测试改参数要改这一份：常开的 dev server 热更新后，测试自己 import 的 recruits.ts 可能是另一个模块实例。 */
+  readonly rules = FOLLOW;
   /** 本命武器命中时记账（测试 / 平衡用）。 */
   credit(f: Follower, damage: number): void { this.stats.damage += damage; this.stats.hits++; f.hits++; }
   /** 阵位朝向（给本命武器的 heading 用）。 */

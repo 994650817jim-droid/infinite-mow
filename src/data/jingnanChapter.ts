@@ -1,5 +1,5 @@
 import type {ChapterDef} from './chapters';
-import {isV2Texture} from '../systems/ArtStyle';
+import {withV2Sheets as withSheets} from '../systems/ArtStyle';
 import {thirdBattle,type ThirdStage} from './thirdChapter';
 
 /**
@@ -46,8 +46,6 @@ const WAVE_NAMES: string[][] = [
 ];
 /** 荆南新兵种 v2 图集（4×4 下左右上；JingnanGameScene.preload 按需加载）。 */
 export const JINGNAN_TROOP_SHEETS = { archer: ['jingnan_shanyue_archer_walk_sheet', 'jingnan_shanyue_archer_attack_sheet'], shield: ['jingnan_rattan_shield_walk_sheet', 'jingnan_rattan_shield_attack_sheet'] } as const;
-/** v2：给小兵挂行走 / 攻击图集并去掉换色；v1 保持换色过渡。 */
-function withSheets<D extends { tint?: number }>(def: D, [walk, atk]: readonly [string, string]): D { return isV2Texture(walk) ? { ...def, tint: 0xffffff, walkVisual: { texture: walk, scale: .5, groundY: 121 / 128 }, attackVisual: atk } : def; }
 /** 荆南新兵种（v1 用换色过渡）：山越弓手（射得远、伤害高、血薄）、藤牌兵（藤牌护身，先破盾）。 */
 export const JINGNAN_TROOPS = {
   shanyueArcher: { hp: 14, speed: 66, damage: 7, tint: 0x9fc27a },

@@ -36,7 +36,7 @@ const so = await p.evaluate(async G0 => {
   s.legion.cycleOrder(); o.order = s.legion.order; const h0 = sq.stats.hits; let outMax = 0; { const c = s.combatNow; while (s.combatNow - c < 2200) { for (const [e, x, y] of pins) if (e.active) e.sprite?.setPosition?.(x, y); await new Promise(r => setTimeout(r, 30)); outMax = Math.max(outMax, ...dists()); } } o.outMax = outMax;
   o.sortieDist = dists(); o.targets = sq.members.map(m => m.sortieTarget?.kind ?? null); o.sortieHits = sq.stats.hits - h0;
   // 拴绳：临时把出击最远距离调到 150、敌人按在 330 处，随行应追到约 150 处停住（地图边界会把太远的刷怪位置拉回，所以不用 700 外的敌人测）
-  const RC = await import('/src/data/recruits.ts'), leash0 = RC.FOLLOW.sortieLeash; RC.FOLLOW.sortieLeash = 150;
+  const RC = { FOLLOW: sq.rules }, leash0 = RC.FOLLOW.sortieLeash; RC.FOLLOW.sortieLeash = 150; // 改随行实际在用的那份规则（自己 import 的可能是热更新后的另一个实例）
   for (const e of s.enemies) if (e.active && !e.isSupplySlot) e.hp = 0; await wait(200);
   s.spawnEnemy('elite', pl.x + 330, pl.y, 400); let leashMax = 0; { const c = s.combatNow; while (s.combatNow - c < 2000) { for (const e of s.enemies) if (e.active && e.kind === 'elite') e.sprite?.setPosition?.(pl.x + 330, pl.y); await new Promise(r => setTimeout(r, 30)); leashMax = Math.max(leashMax, ...dists()); } }
   RC.FOLLOW.sortieLeash = leash0; o.leashMax = leashMax;

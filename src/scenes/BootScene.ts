@@ -74,6 +74,8 @@ export class BootScene extends Phaser.Scene {
     this.load.spritesheet('prop_break_fx','assets/processed/yellow/prop-break-fx.png',{frameWidth:96,frameHeight:96});
     this.load.image('yellow_arrow','assets/processed/yellow/arrow-tight.png');
     this.load.image('rest_camp','assets/world/rest-camp.webp');
+    // 第一章通关剧情「中山商旅 · 献马」专属插画（缺图时剧情卷轴退回 rest_camp 横幅）
+    this.load.image('story_merchant_horse','assets/story/merchant_horse.webp');
     this.load.image('legion_halberdier_action','assets/processed/legion/halberdier-attack-v1.png');
     this.load.image('art_fx','assets/processed/overhaul/combat-fx-mobile.png');
     this.load.image('art_props', 'assets/processed/overhaul/battlefield-props-mobile.png');

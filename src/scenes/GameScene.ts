@@ -103,6 +103,7 @@ import {StageObjectives} from '../systems/StageObjectives';
 import {itemName,relicDef,SPECIALS} from '../data/items';
 import {BossChest,playBossFall,type ChestLoot} from '../systems/BossChest';
 import {ItemBagUI} from '../ui/ItemBagUI';
+import { enemyArrowTexture } from '../systems/ArrowPalette';
 
 interface Gem {
   img: Phaser.GameObjects.Image;
@@ -1096,7 +1097,8 @@ export class GameScene extends Phaser.Scene {
             if (!enemy.active || enemy.spawnId !== spawnId || this.over) return;
             const p = enemy.targetAlly?.active && enemy.targetAlly.lifeId === enemy.targetLife ? enemy.targetAlly : this.player;
             this.sfx.play('enemyArrow');
-            this.fireBolt(this.bullets, enemy.x, enemy.y, p.x, p.y, enemy.def.damage*(this.env?.damageMul(enemy)??1), 0, false, 210);
+            // 箭矢颜色跟射箭的人穿的阵营色走（第二章西凉暗红、袁军土黄、各势力色；黄巾原样），只换颜色
+            this.fireBolt(this.bullets, enemy.x, enemy.y, p.x, p.y, enemy.def.damage*(this.env?.damageMul(enemy)??1), 0, false, 210, enemyArrowTexture(this, enemy.sprite.texture.key));
           });
         }
       } else if (enemy.kind === 'cavalry') {
@@ -1799,7 +1801,7 @@ export class GameScene extends Phaser.Scene {
       bullet.img.y += bullet.vy * dt;
       bullet.life -= dt;
       const soldier = this.legion.grid.query(bullet.img.x, bullet.img.y, 26, this.legionBulletScratch).find(u => u.active && Math.hypot(u.x - bullet.img.x, u.y - bullet.img.y) < u.radius + 8);
-      if (soldier) { this.legion.hurt(soldier, bullet.damage, this.combatNow, { x: bullet.img.x - bullet.vx * .1, y: bullet.img.y - bullet.vy * .1, normal: bullet.img.texture.key === 'arrow'||bullet.img.texture.key === 'yellow_arrow' }); bullet.active = false; bullet.img.setVisible(false); continue; }
+      if (soldier) { this.legion.hurt(soldier, bullet.damage, this.combatNow, { x: bullet.img.x - bullet.vx * .1, y: bullet.img.y - bullet.vy * .1, normal: bullet.img.texture.key.startsWith('arrow')||bullet.img.texture.key === 'yellow_arrow' }); bullet.active = false; bullet.img.setVisible(false); continue; }
       if (Math.hypot(this.player.x - bullet.img.x, this.player.y - bullet.img.y) < this.player.radius + 8) {
         bullet.active = false;
         bullet.img.setVisible(false);

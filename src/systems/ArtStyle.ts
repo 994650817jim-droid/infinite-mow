@@ -121,6 +121,14 @@ export const ART_V2_FILES: Readonly<Record<string, string>> = {
   ride_v2_guanyu: 'assets/ride-v2/guanyu_ride.png',
   ride_v2_zhangfei: 'assets/ride-v2/zhangfei_ride.png',
   ride_v2_machao: 'assets/ride-v2/machao_ride.png',
+  ride_v2_liubei: 'assets/ride-v2/liubei_ride.png',
+  ride_v2_huangzhong: 'assets/ride-v2/huangzhong_ride.png',
+  ride_v2_zhuge: 'assets/ride-v2/zhuge_ride.png',
+  ride_v2_weiyan: 'assets/ride-v2/weiyan_ride.png',
+  ride_v2_pangtong: 'assets/ride-v2/pangtong_ride.png',
+  ride_v2_huangyueying: 'assets/ride-v2/huangyueying_ride.png',
+  ride_v2_sunshangxiang: 'assets/ride-v2/sunshangxiang_ride.png',
+  ride_v2_diaochan: 'assets/ride-v2/diaochan_ride.png',
 };
 /** v2 主将行走整格的显示高度（逻辑像素）：原生格 176 → 88，即 1080p 全屏（渲染 2 倍）下 1 美术像素 = 1 屏幕像素。
  * 人物约 76 逻辑像素高（用户要求比 v1 大一些）。 */

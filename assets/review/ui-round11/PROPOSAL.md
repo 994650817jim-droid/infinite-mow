@@ -59,3 +59,20 @@
 1. 版式：立绘居中、槽位围身体（左 头盔 / 甲胄 / 信物 / 坐骑，右 遗珍 / 信物二 / 战靴）可以吗？
 2. 将印用圆形头像（代替文字按钮）可以吗？
 3. 美术清单交画风会话要，还是我自己按 chrome-lock.md 要？
+
+---
+
+## 实现（2026-11-17，用户批准「按效果图做」）
+- 美术：画风会话 532e249 + 79687a0（public/assets/bag/，按清单 12 项），cherry-pick 进本分支；行囊第一次打开时按需加载，没加载时回落到程序描边。
+- 电脑布局（`ItemBagUI.renderDesk`）：panel_bg 大底；12 枚圆形将印（水墨立轴头像 + medal_frame 铜环，选中金光）；doll_paper 宣纸上全身厚涂立绘居中，7 个槽围着身体（左 头盔 / 甲胄 / 信物 / 坐骑，右 遗珍 / 信物·二 / 战靴），细金虚线引到头、胸、玉佩、腰带、脚、马镫，竖排 slot_tag 小牌，锁 lock_tag；tray_bg 漆木托盘（九宫格）+ tab / tab_selected 页签带 tab_icon_*；空格 slot_frame；兵装加成横幅三列。
+- 全局道具格（`ItemQuality.itemTile`）：slot_frame + q_* 品质框（四角宝石），空槽 sil_* 剪影；悬停卡（`ItemTooltip`）tooltip_card 九宫格 + 品质色顶带 + 图标 + 虚线下对比。
+- 手机布局原样（`renderMobile`）。穿脱 / 对比 / 筛选逻辑与命名命中区不变。
+- test-token-slots 的「信物·二」位置断言改成新版式（右列、Boss遗物与战靴之间）。
+
+## 检查
+- `tools/ui-round11-bag.mjs`：将印 12 枚、7 个槽、筛选、行囊格互不重叠且在屏幕内；全身立绘；悬停卡；无控制台错误 —— 全部通过。
+- test-gear-revamp 38/38、test-boss-relics 22/22、test-token-slots 7/7；test-items 34/35（唯一失败「词条数」统计在 main 上同样失败，main 上 test-items 共 4 项失败，与本轮无关）。
+- `npx tsc --noEmit`、`npm run build` 通过。
+
+## 截图
+`after-desktop-bag.png`（关羽穿戴）、`after-desktop-bag-hover.png`（悬停卡 + 对比）、`after-desktop-bag-detail.png`（详情卡）、`after-desktop-bag-zhaoyun.png`（将印切换）、`after-desktop-battle-bag.png`（战斗中，空槽剪影）；改前 `before-desktop-bag.png`；效果图 `mockup-bag-desktop.png`。

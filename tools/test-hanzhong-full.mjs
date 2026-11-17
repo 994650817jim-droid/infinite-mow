@@ -47,13 +47,13 @@ try {
       if (st.gone) { end = { gone: true }; break; }
       if (st.boss) bossSeen = true;
       if (st.chests) chest = true;
-      if (hz === null && st.boss && stage === 2) hz = await p.evaluate(S0 => { const s = eval(S0), hp = s.boss.hp; s.hitEnemy(s.boss, 100, s.combatNow, 'melee', false, false); return { team: s.huangzhongInTeam, lost: hp - s.boss.hp }; }, S);
+      if (hz === null && st.boss && stage === 2) hz = await p.evaluate(S0 => { const s = eval(S0), hit = () => { const hp = s.boss.hp; s.hitEnemy(s.boss, 100, s.combatNow, 'melee', false, false); return hp - s.boss.hp; }; const team = s.huangzhongInTeam, on = hit(); Object.defineProperty(s, 'huangzhongInTeam', { value: false, configurable: true }); const off = hit(); delete s.huangzhongInTeam; return { team, on, off, ratio: +(on / off).toFixed(2) }; }, S);
       if (st.endStory && !sawEnd) { sawEnd = true; await p.screenshot({ path: `${OUT}/chapter-end-story.png` }); await p.evaluate(S0 => { eval(S0).__endShot = true; }, S); }
       if (st.over || st.rest) end = st;
       await p.waitForTimeout(200);
     }
     ck(`8-${stage}：首领出阵 → 倒地掉宝箱 → 捡完告捷`, bossSeen && chest && end && (end.victory || end.rest), { bossSeen, chest, end });
-    if (stage === 2) ck('8-2：黄忠在队，夏侯渊受到的伤害提高（×1.5）', hz && hz.team && hz.lost > 100 * 1.3, hz);
+    if (stage === 2) ck('8-2：黄忠在队，夏侯渊受到的伤害提高（×1.5）', hz && hz.team && hz.ratio > 1.4 && hz.ratio < 1.6, hz);
     if (stage === 3) ck('8-3：曹操半血「鸡肋」转场、章末剧情 → 汉中之战告捷', end?.j?.jilei && sawEnd && end?.victory === true, { end, sawEnd });
     await p.screenshot({ path: `${OUT}/stage${stage}-end.png` });
   }

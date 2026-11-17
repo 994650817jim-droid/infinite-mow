@@ -148,3 +148,4 @@ assets/raw/*
 !/tools/prepare-town-city-art.mjs
 !/tools/test-jingnan-full.mjs
 !/tools/test-hanzhong-full.mjs
+!/tools/test-jingnan-art.mjs

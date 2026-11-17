@@ -79,7 +79,8 @@ export function intelGameSceneClass(Base: typeof GameScene) {
     protected customChapter() { return this.event && this.city ? intelBattle(this.event, this.city) : null; }
     protected abandonRun() { if (!this.over) abandonExpedition(this.receipt, this.allies.filter(u => u.active && u.reserveSoldier).map(u => u.kind)); }
     protected handleBattlePointer(pointer: Phaser.Input.Pointer) { return this.mode === 'none' && !this.over ? (this.enemyCamps?.pointer(pointer) ?? false) : false; }
-    protected priorityWeaponTarget(range: number, bodyRadius = true) { return this.enemyCamps?.target(range, bodyRadius) ?? null; }
+    // 2026-11-16 修：原来营寨 / 粮仓不在射程时返回 null，首领 / 精锐优先被整个吃掉（黄忠宝雕弓在 3-3、5-3 对首领 0 伤害），改为退回基类的首领 > 精锐
+    protected priorityWeaponTarget(range: number, bodyRadius = true) { return this.enemyCamps?.target(range, bodyRadius) ?? super.priorityWeaponTarget(range, bodyRadius); }
     protected tryCustomBossSkill() { if (!this.controller || !this.boss?.active) return false; this.controller.forceSkill(this.combatNow); return true; }
     protected spawnBoss() {
       if (this.escort) return; // 商队护送不出首领

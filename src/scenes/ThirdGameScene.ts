@@ -55,7 +55,8 @@ export function thirdGameSceneClass(Base:typeof GameScene,cfg:ArcSceneConfig=THI
  }
  protected abandonRun(){if(!this.over)abandonExpedition(this.thirdReceipt,this.allies.filter(u=>u.active&&u.reserveSoldier).map(u=>u.kind));}
  protected handleBattlePointer(pointer:Phaser.Input.Pointer){return this.mode==='none'&&!this.over?(this.enemyCamps?.pointer(pointer)??false):false;}
- protected priorityWeaponTarget(range:number,bodyRadius=true){return this.enemyCamps?.target(range,bodyRadius)??null;}
+ // 2026-11-16 修：原来营寨 / 粮仓不在射程时返回 null，首领 / 精锐优先被整个吃掉（黄忠宝雕弓在 3-3、5-3 对首领 0 伤害），改为退回基类的首领 > 精锐
+ protected priorityWeaponTarget(range:number,bodyRadius=true){return this.enemyCamps?.target(range,bodyRadius)??super.priorityWeaponTarget(range,bodyRadius);}
  protected tryCustomBossSkill(){if(!this.controller||!this.boss?.active)return false;this.controller.forceSkill(this.combatNow);return true;}
  protected customChapter(){return cfg.battle(this.thirdStage);}
  protected spawnBoss(){const had=this.boss?.active;super.spawnBoss();if(this.boss&&!had)this.hubao?.onBoss(this.combatNow);const d=cfg.stages[this.thirdStage-1];if(this.boss)this.controller=new ThirdBoss({scene:this,boss:this.boss,player:this.player,army:this.legion,spawn:(kind,x,y)=>this.spawnEnemy(kind,x,y,1,true)},this.behavior,this.combatNow,cfg===THIRD_CONFIG?undefined:{texture:cfg.texture(d.id),name:d.boss,skills:d.skills,signature:d.signature?{id:d.id as 'caochun'|'caimao'|'caoren',name:d.signature}:undefined});}

@@ -2,7 +2,7 @@
  * 战役回顾 · 乱世编年：九关的史事摘要（原创撰写，据《后汉书》《三国志》等常见史载概括；
  * 演义情节明确标注为“演义”）。只做展示，不影响玩法。
  */
-export type ChronicleArc = 'huangjin' | 'dongzhuo' | 'qunxiong' | 'guandu' | 'chibi';
+export type ChronicleArc = 'huangjin' | 'dongzhuo' | 'qunxiong' | 'guandu' | 'chibi' | 'jingnan' | 'hanzhong';
 export interface ChronicleStage { code: string; name: string; boss: string; bossTitle: string; seal: string; year: string; story: string; legacy: string }
 export interface ChronicleChapter { arc: ChronicleArc; title: string; years: string; intro: string; stages: ChronicleStage[] }
 
@@ -80,6 +80,36 @@ export const CHRONICLE: ChronicleChapter[] = [
       { code: '5-3', name: '江陵夺城', boss: '曹仁', bossTitle: '征南将军', seal: '仁', year: '建安十四年 · 209',
         story: '曹操北归，留曹仁守江陵。周瑜率军围攻经年，曹仁坚守不下，亲率数十骑出城救出被围部将，军中称其为天人。终因孤城难守，曹仁弃城北撤。',
         legacy: '孙刘分据荆州，三分天下之势已成。' },
+    ],
+  },
+  {
+    arc: 'jingnan', title: '第六章 · 平定荆南', years: '公元209年',
+    intro: '赤壁战后，刘备表刘琦为荆州刺史，南征长沙、桂阳、零陵、武陵四郡，四郡太守或降或死，荆南尽归。',
+    stages: [
+      { code: '6-1', name: '桂阳受降', boss: '赵范', bossTitle: '桂阳太守', seal: '范', year: '建安十四年 · 209',
+        story: '赵云领兵取桂阳。太守赵范见大势已去，举城归降，欲以寡嫂樊氏许配赵云，赵云正色辞之。',
+        legacy: '桂阳归附，赵云领桂阳太守。' },
+      { code: '6-2', name: '零陵武陵', boss: '刘度', bossTitle: '零陵太守', seal: '度', year: '建安十四年 · 209',
+        story: '零陵刘度、武陵金旋据守山郡。刘度见势降附；金旋拒战，兵败身死。',
+        legacy: '零陵、武陵既定，荆南只余长沙。' },
+      { code: '6-3', name: '长沙会战', boss: '韩玄', bossTitle: '长沙太守', seal: '玄', year: '建安十四年 · 209',
+        story: '关羽进攻长沙，老将黄忠出战，两军相持。韩玄疑黄忠通敌，欲斩之，魏延起兵杀韩玄，以长沙献降，黄忠由是归附。',
+        legacy: '荆南四郡尽归，刘备兵精粮足，始有西图益州之意。' },
+    ],
+  },
+  {
+    arc: 'hanzhong', title: '第八章 · 汉中之战', years: '公元218—219年',
+    intro: '刘备得益州后北争汉中，与曹操相持经年。定军山黄忠斩夏侯渊，曹操亲至无功，以「鸡肋」为令退兵，刘备进位汉中王。',
+    stages: [
+      { code: '8-1', name: '阳平关', boss: '张郃', bossTitle: '荡寇将军', seal: '郃', year: '建安二十三年 · 218',
+        story: '刘备进军阳平关，与夏侯渊、张郃相拒。张郃屯广石，刘备以精兵万余分为十部夜急攻之，不能下。',
+        legacy: '两军相持经年，刘备急书益州发兵。' },
+      { code: '8-2', name: '定军山', boss: '夏侯渊', bossTitle: '征西将军', seal: '渊', year: '建安二十四年 · 219',
+        story: '刘备自阳平南渡沔水，缘山稍前，于定军山势作营。夏侯渊将兵来争其地，法正曰「可击矣」，黄忠乘高鼓噪攻之，一战斩夏侯渊。',
+        legacy: '曹军丧帅，汉中震动。' },
+      { code: '8-3', name: '汉水', boss: '曹操', bossTitle: '魏王', seal: '操', year: '建安二十四年 · 219',
+        story: '曹操自长安举众南征，刘备敛众拒险，终不交锋。积月不拔，亡者日多，曹操以「鸡肋」为令，引军还长安。',
+        legacy: '刘备遂有汉中，进位汉中王。' },
     ],
   },
 ];

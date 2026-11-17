@@ -54,6 +54,11 @@ export const ART_V2_FILES: Readonly<Record<string, string>> = {
   legion_medic_walk: 'assets/processed-v2/troops/medic_walk.png',
   legion_medic_action: 'assets/processed-v2/troops/medic_attack.png',
   // 第 3 批（一）：黄巾章小兵 + 通用弓兵
+  // 第六章荆南新兵：山越弓手、藤牌兵（行走 512 / 攻击 640，4×4）
+  jingnan_shanyue_archer_walk_sheet: 'assets/processed-v2/enemies/jingnan_shanyue_archer_walk.png',
+  jingnan_shanyue_archer_attack_sheet: 'assets/processed-v2/enemies/jingnan_shanyue_archer_attack.png',
+  jingnan_rattan_shield_walk_sheet: 'assets/processed-v2/enemies/jingnan_rattan_shield_walk.png',
+  jingnan_rattan_shield_attack_sheet: 'assets/processed-v2/enemies/jingnan_rattan_shield_attack.png',
   'yellow_swordsman-walk-v4': 'assets/processed-v2/enemies/yellow_swordsman_walk.png',
   'yellow_swordsman-attack-v4': 'assets/processed-v2/enemies/yellow_swordsman_attack.png',
   'yellow_shield-walk-v4': 'assets/processed-v2/enemies/yellow_shield_walk.png',
@@ -100,6 +105,15 @@ export const ART_V2_FILES: Readonly<Record<string, string>> = {
   yellow_zhangbao_walk: 'assets/bosses-v2/yellow_zhangbao_walk.png',
   yellow_zhangbao_cast: 'assets/bosses-v2/yellow_zhangbao_cast.png',
   chibi_caoren: 'assets/bosses-v2/chibi_caoren.png',
+  // 第六章 平定荆南首领：v2 正式图（画风会话 c4460d9）；v1 无专属图，沿用 jingnanChapter.JINGNAN_SHEETS 的借用图
+  jingnan_zhaofan: 'assets/bosses-v2/jingnan_zhaofan.png',
+  jingnan_liudu: 'assets/bosses-v2/jingnan_liudu.png',
+  jingnan_hanxuan: 'assets/bosses-v2/jingnan_hanxuan.png',
+  jingnan_huangzhong: 'assets/bosses-v2/jingnan_huangzhong.png',
+  // 第八章 汉中之战首领：正式 v2 图到之前借用现有首领 v2 图过渡（hanzhongChapter.HANZHONG_SHEETS 同步改）
+  hanzhong_zhanghe: 'assets/bosses-v2/third_zhangxiu.png',
+  hanzhong_xiahouyuan: 'assets/bosses-v2/guandu_wenchou.png',
+  hanzhong_caocao: 'assets/bosses-v2/chibi_caoren.png',
   huaxiong_walk: 'assets/bosses-v2/huaxiong_walk.png',
   huaxiong_attack: 'assets/bosses-v2/huaxiong_attack.png',
   huaxiong_actions: 'assets/bosses-v2/huaxiong_actions.png',
@@ -228,6 +242,8 @@ export const V2_TROOP_KEYS: readonly string[] = [
   'xiliang_infantry_walk', 'xiliang_shield_walk', 'xiliang_archer_walk', 'xiliang_cavalry_walk', 'xiliang_elite_walk',
   // 第 4 批（二）：第一章首领张梁 / 张宝 / 张角（走 Enemy 的 walkVisual 通路，4×4 方向表）
   'yellow_zhangliang_walk', 'yellow_zhangliang_attack', 'yellow_zhangbao_walk', 'yellow_zhangbao_cast', 'zhangjiao_walk', 'zhangjiao_cast',
+  // 第六章荆南新兵（JingnanGameScene.preload 按需加载）
+  'jingnan_shanyue_archer_walk_sheet', 'jingnan_shanyue_archer_attack_sheet', 'jingnan_rattan_shield_walk_sheet', 'jingnan_rattan_shield_attack_sheet',
 ];
 /** v2 兵种显示倍率：原生像素 → 逻辑像素 0.5，即 1080p 全屏（渲染 2 倍）下像素 1:1。 */
 export const V2_TROOP_SCALE = .5;

@@ -17,3 +17,6 @@
 
 ## 2026-11-15 新增（张飞 / 马超 / 魏延 / 刘备）
 先以 epic-home/zhaoyun.webp 为画风参考、各自像素立绘为造型参考生成写实厚涂主页立绘（epic-home/originals/<id>.png，透明底），再参照 originals/guanyu.png 的水墨风格重绘为 originals/<id>.png（白底 1024×1536）。处理：node tools/epic-home-assets.mjs <id...>；node tools/build-ink-scroll-assets.mjs <id...>。
+
+## 2026-11-17 孙尚香重画（飞刀版）
+用户：「刚刚那个孙尚香立绘拿着弓箭不对 应该新的立绘拿着飞刀的」。以 epic-home/sunshangxiang.png（飞刀投掷、短弓背在背上、腰挂刀带、红金）为造型参考，originals/zhaoyun.png、guanyu.png 为画风参考，在 ChatGPT「生成孙尚香水墨立绘」聊天重绘为 originals/sunshangxiang.png（白底 1024×1536，人物略偏左、右侧留白给竖排题字）。处理：node tools/build-ink-scroll-assets.mjs sunshangxiang（只取 sunshangxiang.webp，frame / paper 不变）。

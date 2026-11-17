@@ -86,7 +86,7 @@ export class WarnFx {
     const img = this.scene.add.image(x, y, key, first).setDepth(kind === 'rift' ? DEPTH.ground + 5 : DEPTH.fx);
     if (kind === 'rift') img.setTint(0xffc890).setOrigin(0, .5).setRotation(angle).setDisplaySize(size, size * .5);
     else if (kind === 'lightning') img.setOrigin(.5, .88).setDisplaySize(size * 2.6, size * 2.6);
-    else img.setDisplaySize(size * 2.4, size * 2.4);
+    else img.setDisplaySize(size * 1.9, size * 1.9).setAlpha(.85); // 吕布落地冲击：缩小，别盖过吕布本人
     this.scene.tweens.addCounter({ from: 0, to: count - .01, duration: kind === 'rift' ? 360 : 340, onUpdate: t => img.setFrame(first + Math.floor(t.getValue() ?? 0)),
       onComplete: () => this.scene.tweens.add({ targets: img, alpha: 0, duration: 140, onComplete: () => img.destroy() }) });
     return true;
@@ -99,7 +99,7 @@ export class WarnFx {
   circle(id: string, kind: 'fire' | 'arrows' | 'slam', x: number, y: number, r: number, progress: number, now: number): boolean {
     if (!this.has(kind)) return false;
     const p = clamp01(progress), d = r * 2 / (RING_FRAC[kind] ?? .72);
-    this.get(id, 1, WARN_FX_FILES[kind].key, now).imgs[0].setFrame(step6(p)).setOrigin(.5).setRotation(0).setPosition(x, y).setDisplaySize(d, d).setAlpha(.4 + .5 * p).setDepth(DEPTH.ground + 4);
+    this.get(id, 1, WARN_FX_FILES[kind].key, now).imgs[0].setFrame(step6(p)).setOrigin(.5).setRotation(0).setPosition(x, y).setDisplaySize(d, d).setAlpha(.3 + .4 * p).setDepth(DEPTH.ground + 4);
     return true;
   }
   /** 长条（冲锋道）蓄力：从 (x,y) 沿 angle 伸出 length，宽 width。 */
@@ -113,7 +113,7 @@ export class WarnFx {
   sector(id: string, x: number, y: number, r: number, angle: number, progress: number, now: number): boolean {
     if (!this.has('sweep')) return false;
     const p = clamp01(progress), w = r / SWEEP_R, f = WARN_FX_FILES.sweep;
-    this.get(id, 1, f.key, now).imgs[0].setFrame(step6(p)).setOrigin(SWEEP_CX, .5).setPosition(x, y).setRotation(angle).setDisplaySize(w, w * f.h / f.w).setAlpha(.45 + .5 * p).setDepth(DEPTH.ground + 4);
+    this.get(id, 1, f.key, now).imgs[0].setFrame(step6(p)).setOrigin(SWEEP_CX, .5).setPosition(x, y).setRotation(angle).setDisplaySize(w, w * f.h / f.w).setAlpha(.35 + .4 * p).setDepth(DEPTH.ground + 4);
     return true;
   }
   /** 通用形状的落下：同一个 id 只播一次（调用方在命中窗口里每帧都会调）。 */
@@ -122,12 +122,13 @@ export class WarnFx {
     if ((this.impacted.get(id) ?? -1) > now) return true;
     this.impacted.set(id, now + 1500);
     if (this.impacted.size > 64) for (const [k, t] of this.impacted) if (t < now) this.impacted.delete(k);
-    const f = WARN_FX_FILES[kind], lane = kind === 'charge', first = lane ? 4 : 6, count = lane ? 2 : 12;
-    const img = this.scene.add.image(x, y, f.key, first).setDepth(lane ? DEPTH.ground + 5 : DEPTH.fx - 1);
+    // 收敛（用户「首领的攻击特效也需要兼容适应」）：只播「炸开」那一行（不再接余尘行），圆形缩到 0.7 倍、0.35 秒、半透明，不抢首领本身的动作
+    const f = WARN_FX_FILES[kind], lane = kind === 'charge', first = lane ? 4 : 6, count = lane ? 2 : 6;
+    const img = this.scene.add.image(x, y, f.key, first).setDepth(lane ? DEPTH.ground + 5 : DEPTH.ground + 6).setAlpha(lane ? .75 : .6);
     if (lane) img.setOrigin(0, .5).setRotation(angle).setDisplaySize(size, width / (LANE_FRAC[kind] ?? .5));
-    else if (kind === 'sweep') { const w = size / SWEEP_R; img.setOrigin(SWEEP_CX, .5).setRotation(angle).setDisplaySize(w, w * f.h / f.w); }
-    else { const d = size * 2 / (RING_FRAC[kind] ?? .72); img.setDisplaySize(d, d); }
-    this.scene.tweens.addCounter({ from: 0, to: count - .01, duration: lane ? 360 : 620, onUpdate: t => img.setFrame(first + Math.floor(t.getValue() ?? 0)),
+    else if (kind === 'sweep') { const w = size * .75 / SWEEP_R; img.setOrigin(SWEEP_CX, .5).setRotation(angle).setDisplaySize(w, w * f.h / f.w); }
+    else { const d = size * 2 * .7 / (RING_FRAC[kind] ?? .72); img.setDisplaySize(d, d); }
+    this.scene.tweens.addCounter({ from: 0, to: count - .01, duration: lane ? 320 : 350, onUpdate: t => img.setFrame(first + Math.floor(t.getValue() ?? 0)),
       onComplete: () => this.scene.tweens.add({ targets: img, alpha: 0, duration: 140, onComplete: () => img.destroy() }) });
     return true;
   }

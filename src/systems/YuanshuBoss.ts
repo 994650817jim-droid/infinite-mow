@@ -163,12 +163,14 @@ export class YuanshuBoss extends ArcBossV2<Move> {
       if (now >= c.due) {
         c.img?.destroy();
         // 手绘金币：炸开 3–5；没图时用通用地动
-        if (!playBossFx(this.h.scene, 'ys_coin', c.x, c.y, YS.coins.radius * 3, DEPTH.fx - 1, 3, 5, 380)) groundCracks(this.gfx, c.x, c.y, YS.coins.radius, 1, 0, Math.PI * 2, 0, true, 'slam');
+        // 收敛（用户「首领的攻击特效也需要兼容适应」）：炸开从 3 倍半径缩到 2.4 倍、0.32 秒
+        if (!playBossFx(this.h.scene, 'ys_coin', c.x, c.y, YS.coins.radius * 2.4, DEPTH.ground + 6, 3, 5, 320)) groundCracks(this.gfx, c.x, c.y, YS.coins.radius, 1, 0, Math.PI * 2, 0, true, 'slam');
         if (Math.hypot(p.x - c.x, p.y - c.y) <= YS.coins.radius + p.radius && p.takeDamage(YS.coins.damage, now)) this.metrics.coinHits++;
         this.h.army.hurtArea(c.x, c.y, YS.coins.radius, YS.coins.troopDamage, now);
         this.coins.splice(this.coins.indexOf(c), 1); continue;
       }
-      if (c.img === undefined) c.img = bossFxImage(this.h.scene, 'ys_coin', DEPTH.enemy)?.setPosition(c.x, c.y).setDisplaySize(YS.coins.radius * 3, YS.coins.radius * 3) ?? null;
+      // 金币是埋在地上的雷：贴地（原来和人物同层会盖住人）、缩到 2.2 倍半径、略调淡
+      if (c.img === undefined) c.img = bossFxImage(this.h.scene, 'ys_coin', DEPTH.ground + 5)?.setPosition(c.x, c.y).setDisplaySize(YS.coins.radius * 2.2, YS.coins.radius * 2.2).setAlpha(.85) ?? null;
       // 手绘金币：地上闪烁 0–2，越接近爆炸闪得越快
       if (c.img) { c.img.setFrame(prog < .6 ? Math.floor(now / 220) % 2 : 2 - Math.floor(now / 90) % 2); continue; }
       groundCracks(this.gfx, c.x, c.y, YS.coins.radius, prog, 0, Math.PI * 2, 0, false, 'slam');

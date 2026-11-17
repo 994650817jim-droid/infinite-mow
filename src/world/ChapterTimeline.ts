@@ -20,7 +20,7 @@ export const CHAPTER_TIMELINE: readonly TimelineChapter[] = [
   { id: 'guandu', numeral: '肆', title: '官渡之战', short: '官渡', year: 200, era: '建安五年', hint: '通关第三章「群雄割据」后解锁' },
   { id: 'chibi', numeral: '伍', title: '赤壁之战', short: '赤壁', year: 208, era: '建安十三年', hint: '通关第四章「官渡之战」后解锁' },
   { id: 'jingnan', numeral: '陆', title: '平定荆南', short: '荆南', year: 209, era: '建安十四年', hint: '通关第五章「赤壁之战」后解锁' },
-  // 第七章「入蜀」由走路动画会话做，合并后插在这里
+  // 第七章「入蜀」（id 'shu'，走路动画会话）合并后插在这里；本章状态按前一章判断，插入后自动接在入蜀之后
   { id: 'hanzhong', numeral: '捌', title: '汉中之战', short: '汉中', year: 219, era: '建安二十四年', hint: '通关第七章「入蜀」后解锁' },
 ];
 

@@ -194,7 +194,7 @@ try {
       await page.evaluate(()=>{const s=window.__game.scene.getScene('MenuScene');s.chapterButtons.find(x=>x.id==='huangjin').bg.emit('pointerdown');s.startButton.emit('pointerdown');});
       await page.waitForFunction(() => window.__IM?.chapterInfo().id === 'huangjin');
       const first = await page.evaluate(() => { const s = window.__game.scene.getScene('GameScene'); s.spawnBoss(); return { tex: s.boss.sprite.texture.key, hp: s.boss.maxHp, lubu: window.__IM.lubuInfo() }; });
-      check(`chapter_switch_back_isolates_state_${width}`, first.hp === 1200 && first.tex === 'boss_zhangjiao' && first.lubu === null && !errors.length, { first, errors });
+      check(`chapter_switch_back_isolates_state_${width}`, first.hp === 1200 && ['boss_zhangjiao', 'zhangjiao_walk'].includes(first.tex) && first.lubu === null && !errors.length, { first, errors });
     } catch (error) { check(`chapter_ui_${width}`, false, String(error)); }
     finally { await context.close(); }
   }

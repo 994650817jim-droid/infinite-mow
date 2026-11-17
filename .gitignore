@@ -104,6 +104,7 @@ assets/raw/*
 !/tools/prepare-painted-icon.mjs
 !/tools/prepare-fx-sheet.mjs
 !/tools/prepare-ui-sheet.mjs
+!/tools/artv2-stack.mjs
 !/tools/artv2-troops.mjs
 !/tools/artv2-enemies.mjs
 !/tools/artv2-portraits.mjs

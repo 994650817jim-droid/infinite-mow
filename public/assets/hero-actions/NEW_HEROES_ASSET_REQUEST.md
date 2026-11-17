@@ -93,3 +93,8 @@ fx_c 四行依次为：
 ## 2026-11-16 貂蝉 v2 新模型（更美）+ 孙尚香写实立绘（用户要求）
 - 貂蝉：ChatGPT 新出行走 / 动作原图 processed-v2/originals/artv2_diaochan_walk_v2b.png、hero-actions-v2/originals/artv2_diaochan_actions_v2b.png，按 prepare-artv2（KEYHARD=160 KEYSOFT=130）出 processed-v2/diaochan_walk_sheet.png、hero-actions-v2/diaochan.png。旧版留在 processed-v2/originals/diaochan_walk_sheet_v2a.png、hero-actions-v2/originals/diaochan_v2a.png；旧原图 artv2_diaochan_*.png 不动。主页立绘没换（和新模型差别不大）。
 - 孙尚香：主页立绘改回写实厚涂（originals/sunshangxiang_epic.png 新；上一版像素风改名 sunshangxiang_epic_v2a.png；最早的弓箭版 sunshangxiang_epic_v1.png），重出 epic-home/sunshangxiang.png/.webp 与选将头像 processed/sunshangxiang_portrait.png。
+
+## 2026-11-17 庞统特效改手绘（用户：「庞统的攻击特效还是像素，要改」）
+- hero-fx/pangtong_paint.png：6×4 每帧 256 透明底（prepare-fx WARM=1 SMOKE=.62 去洋红）：火雷爆炸 / 沿索火苗 / 地火 / 雷芯闪。原图 originals/pangtong_paint_a_raw.png。
+- hero-fx/pangtong_chain_hot.png：烧红铁索 6 帧，每帧 1024×130（颜色转透明 + 自动找链心 + 去紫回铜色），平铺使用。原图 originals/pangtong_paint_chain_raw.png。
+- 原像素图集 hero-fx/pangtong_fx.png 保留但不再加载；爆炸不再用战法图集 build_vfx 的像素火焰。

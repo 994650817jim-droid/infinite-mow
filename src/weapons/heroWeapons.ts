@@ -122,7 +122,9 @@ export function zhenbeiBehavior(host: WeaponHost, weapon: WeaponState, dt: numbe
 // 2026-11-16 方案 A「铁索连环」（用户选定）：边走边在脚下落火雷，雷与雷之间拉起烧红的铁索。
 //  Lv1 新雷连上一枚雷，铁索上的敌人减速；Lv2 铁索灼伤；Lv3 雷炸时火沿铁索烧向相连的雷（链上敌人挨打）、落雷更快；
 //  Lv4 双链（再连最近的另一枚）、火雷上限 +2；Lv5「铁索连舟」：绕回来让铁索首尾相接，圈内地面起火 3 秒后整圈齐爆。
-//  特效：像素图集 pangtong_fx（6×4，每帧 256，黑底叠加：烧红铁索 / 沿索火苗 / 地火 / 雷芯闪）；缺图时退回程序化过渡，不画地面圈。
+//  特效（2026-11-17 用户：「庞统的攻击特效还是像素，要改」→ 全部换成手绘厚涂透明序列帧，参照诸葛亮 flame_burst）：
+//   pangtong_paint（6×4，每帧 256，透明底）：0–5 火雷爆炸、6–11 沿索火苗、12–17 地火、18–23 雷芯闪；
+//   pangtong_chain_hot（6 帧，每帧 1024×130，透明底）：烧红铁索（平铺）。缺图时退回程序化过渡，不画地面圈。
 
 /** 每枚新雷连几条铁索：Lv1–3 一条（连上一枚雷），Lv4 起两条（再连最近的另一枚）。 */
 export const lianhuanLinksPerMine = (level: number): number => (level >= 4 ? 2 : 1);
@@ -146,15 +148,18 @@ const STATE = new WeakMap<Player, MineState>();
 const stateOf = (p: Player): MineState => { let s = STATE.get(p); if (!s) { s = { mines: [], rings: [], tethers: [], loops: [], burnAt: new Map(), fengpoReadyAt: 0, seq: 0, lastTrail: null }; STATE.set(p, s); } return s; };
 
 const texOk = (host: WeaponHost, key: string): boolean => (host.add as unknown as { scene: Phaser.Scene }).scene.textures.exists(key);
-/** 像素特效图集 pangtong_fx 的帧段：0–5 烧红铁索、6–11 沿索火苗、12–17 地火、18–23 雷芯闪。 */
-const PT = { hot: 0, run: 6, ground: 12, core: 18 } as const;
-const ptFx = (host: WeaponHost): boolean => texOk(host, 'pangtong_fx');
-/** 播放 pangtong_fx 的一段帧（不依赖全局动画表）：loop 时循环，否则播完停在最后一帧。 */
+/** 手绘特效图集 pangtong_paint 的帧段：0–5 火雷爆炸、6–11 沿索火苗、12–17 地火、18–23 雷芯闪。 */
+const PT = { burst: 0, run: 6, ground: 12, core: 18 } as const;
+const ptFx = (host: WeaponHost): boolean => texOk(host, 'pangtong_paint');
+/** 播放 pangtong_paint 的一段帧（不依赖全局动画表）：loop 时循环，否则播完停在最后一帧。 */
+/** 无限循环补间：宿主对象销毁时一并移除（否则补间永远留在 TweenManager 里，火雷多、打得久时越积越多）。 */
+function loopTween(owner: Phaser.GameObjects.GameObject, tw: Phaser.Tweens.Tween): Phaser.Tweens.Tween { owner.once('destroy', () => tw.remove()); return tw; }
 function playPt(sprite: Phaser.GameObjects.Sprite, start: number, fps: number, loop: boolean, offset = 0): void {
   const st = { t: offset };
   sprite.setFrame(start + (offset % 6));
-  sprite.scene.tweens.add({ targets: st, t: offset + 6, duration: 6000 / fps, repeat: loop ? -1 : 0,
+  const tw = sprite.scene.tweens.add({ targets: st, t: offset + 6, duration: 6000 / fps, repeat: loop ? -1 : 0,
     onUpdate: () => { if (sprite.active) sprite.setFrame(start + (Math.floor(st.t) % 6)); } });
+  if (loop) loopTween(sprite, tw);
 }
 const tetherLen = (p: Player): number => R.tetherLen * (1 + .15 * p.growth.masteries.lianying);
 /** 点到线段的距离。 */
@@ -180,12 +185,12 @@ function mineBody(host: WeaponHost, x: number, y: number): { body: Phaser.GameOb
   let core: Phaser.GameObjects.Sprite | undefined;
   if (ptFx(host)) {
     // 雷芯：平时在 18–20 帧间慢慢明灭（暗红），将爆时快速闪到亮白
-    core = host.add.sprite(0, -1, 'pangtong_fx', PT.core).setDisplaySize(32, 32).setBlendMode('ADD');
-    const st = { t: 0 }; core.scene.tweens.add({ targets: st, t: 3, duration: 780, yoyo: true, repeat: -1, onUpdate: () => { if (core?.active && !core.getData('warn')) core.setFrame(PT.core + Math.min(2, Math.floor(st.t))); } });
+    core = host.add.sprite(0, -2, 'pangtong_paint', PT.core).setDisplaySize(30, 30).setBlendMode('ADD');
+    const st = { t: 0 }, c0 = core; loopTween(c0, core.scene.tweens.add({ targets: st, t: 3, duration: 780, yoyo: true, repeat: -1, onUpdate: () => { if (core?.active && !core.getData('warn')) core.setFrame(PT.core + Math.min(2, Math.floor(st.t))); } }));
     parts.push(core);
   } else {
     const glow = host.add.circle(0, -1, 5, 0xff5a2a, .8).setBlendMode(1);
-    glow.scene.tweens.add({ targets: glow, scale: 1.8, alpha: .35, yoyo: true, repeat: -1, duration: 260 });
+    loopTween(glow, glow.scene.tweens.add({ targets: glow, scale: 1.8, alpha: .35, yoyo: true, repeat: -1, duration: 260 }));
     parts.push(glow);
   }
   return { body: host.add.container(x, y, parts).setDepth(19).setName('pangtong-mine'), core };
@@ -196,7 +201,7 @@ function warnMine(m: Mine, fast = false): void {
   if ((m.warned ?? 0) >= lvl || !m.body.active) return; m.warned = lvl;
   m.body.scene.tweens.killTweensOf(m.body); m.body.setScale(1);
   if (m.core) { m.core.scene.tweens.killTweensOf(m.core); m.core.setData('warn', true); playPt(m.core, PT.core, fast ? 26 : 11, true, 2); }
-  m.body.scene.tweens.add({ targets: m.body, scale: fast ? 1.22 : 1.12, yoyo: true, repeat: -1, duration: fast ? 70 : 160 });
+  loopTween(m.body, m.body.scene.tweens.add({ targets: m.body, scale: fast ? 1.22 : 1.12, yoyo: true, repeat: -1, duration: fast ? 70 : 160 }));
 }
 
 /** 两雷之间的锁链：正式铁链贴图平铺；缺图时画程序化链环。放进 into（常驻）或闪一下淡出。 */
@@ -220,12 +225,15 @@ function linkFx(host: WeaponHost, a: { x: number; y: number }, b: { x: number; y
 function tie(host: WeaponHost, s: MineState, a: Mine, b: Mine): void {
   if (a === b || s.tethers.some(t => (t.a === a && t.b === b) || (t.a === b && t.b === a))) return;
   const body = host.add.container(0, 0).setDepth(19.5).setName('pangtong-tether');
-  linkFx(host, a, b, body);
-  if (ptFx(host)) {
-    const d = Math.hypot(b.x - a.x, b.y - a.y), hot = host.add.sprite((a.x + b.x) / 2, (a.y + b.y) / 2, 'pangtong_fx', PT.hot)
-      .setDisplaySize(d + 10, 72).setRotation(Math.atan2(b.y - a.y, b.x - a.x)).setBlendMode('ADD').setAlpha(.85); // 图里铁索只占帧高中间约 1/4
-    playPt(hot, PT.hot, 9, true, Math.floor(Math.random() * 6)); body.add(hot);
+  if (texOk(host, 'pangtong_chain_hot')) {
+    // 手绘烧红铁索：每帧 1024×130，铁链中心线在帧内 85 处；按 34 像素高平铺，6 帧循环闪动
+    const d = Math.hypot(b.x - a.x, b.y - a.y), hgt = 34, ts = hgt / 130;
+    const t = host.add.tileSprite((a.x + b.x) / 2, (a.y + b.y) / 2, Math.max(8, d + 6) / ts, 130, 'pangtong_chain_hot', Math.floor(Math.random() * 6))
+      .setOrigin(.5, 85 / 130).setScale(ts).setRotation(Math.atan2(b.y - a.y, b.x - a.x));
+    const st = { t: Math.random() * 6 }; loopTween(t, t.scene.tweens.add({ targets: st, t: st.t + 6, duration: 900, repeat: -1, onUpdate: () => { if (t.active) t.setFrame(Math.floor(st.t) % 6); } }));
+    body.add(t); s.tethers.push({ a, b, body }); return;
   }
+  linkFx(host, a, b, body);
   s.tethers.push({ a, b, body });
 }
 const tethered = (s: MineState, a: Mine, b: Mine): boolean => s.tethers.some(t => (t.a === a && t.b === b) || (t.a === b && t.b === a));
@@ -244,7 +252,7 @@ function fireRun(host: WeaponHost, a: Mine, b: Mine, damage: number, now: number
   for (const e of host.grid.query((a.x + b.x) / 2, (a.y + b.y) / 2, Math.hypot(b.x - a.x, b.y - a.y) / 2 + 40))
     if (e.active && !e.isSupplySlot && segDist(e.x, e.y, a, b) <= R.tetherWidth / 2 + e.radius + 6) host.hitEnemy(e, damage, now, 'fire');
   if (ptFx(host)) {
-    const f = host.add.sprite(a.x, a.y, 'pangtong_fx', PT.run).setDisplaySize(52, 52).setRotation(Math.atan2(b.y - a.y, b.x - a.x)).setBlendMode('ADD').setDepth(41).setName('pangtong-firerun');
+    const f = host.add.sprite(a.x, a.y, 'pangtong_paint', PT.run).setDisplaySize(56, 56).setRotation(Math.atan2(b.y - a.y, b.x - a.x)).setDepth(41).setName('pangtong-firerun');
     playPt(f, PT.run, 40, true);
     f.scene.tweens.add({ targets: f, x: b.x, y: b.y, duration: R.mineChainDelayMs, onComplete: () => f.destroy() });
   } else linkFx(host, a, b);
@@ -284,8 +292,8 @@ function startLoop(host: WeaponHost, s: MineState, mines: Mine[], now: number, o
   for (let y = box[1] + 17; y < box[3]; y += 34) for (let x = box[0] + 17; x < box[2]; x += 34) if (inPoly(x, y, poly)) pts.push({ x: x + (Math.random() - .5) * 10, y: y + (Math.random() - .5) * 10 });
   if (!pts.length) pts.push({ x: xs.reduce((a, b) => a + b, 0) / xs.length, y: ys.reduce((a, b) => a + b, 0) / ys.length });
   for (const p of pts.slice(0, 48)) {
-    if (ptFx(host)) { const g = host.add.sprite(p.x, p.y, 'pangtong_fx', PT.ground).setDisplaySize(52, 52).setBlendMode('ADD').setAlpha(.9); playPt(g, PT.ground, 10, true, Math.floor(Math.random() * 6)); fx.add(g); }
-    else if (texOk(host, 'wf_flame')) { const g = host.add.image(p.x, p.y, 'wf_flame').setDisplaySize(30, 30).setBlendMode('ADD').setAlpha(.8); g.scene.tweens.add({ targets: g, scaleY: g.scaleY * 1.3, alpha: .5, yoyo: true, repeat: -1, duration: 200 + Math.random() * 120 }); fx.add(g); }
+    if (ptFx(host)) { const g = host.add.sprite(p.x, p.y, 'pangtong_paint', PT.ground).setOrigin(.5, .7).setDisplaySize(54, 54).setAlpha(.95); playPt(g, PT.ground, 10, true, Math.floor(Math.random() * 6)); fx.add(g); }
+    else if (texOk(host, 'wf_flame')) { const g = host.add.image(p.x, p.y, 'wf_flame').setDisplaySize(30, 30).setBlendMode('ADD').setAlpha(.8); loopTween(g, g.scene.tweens.add({ targets: g, scaleY: g.scaleY * 1.3, alpha: .5, yoyo: true, repeat: -1, duration: 200 + Math.random() * 120 })); fx.add(g); }
   }
   fx.setAlpha(0); fx.scene.tweens.add({ targets: fx, alpha: 1, duration: 200 });
   const loop: LoopFire = { poly, mines, until: now + R.loopMs, nextTick: now, fx, box, onEnd };

@@ -131,3 +131,5 @@ assets/raw/*
 !/tools/prepare-props.mjs
 !/tools/crop-sheet.mjs
 !/tools/test-props-v2.mjs
+!/tools/test-boss-chest.mjs
+!/tools/record-boss-chest-gif.mjs

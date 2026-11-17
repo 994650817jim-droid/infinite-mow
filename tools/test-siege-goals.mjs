@@ -73,7 +73,7 @@ for (const layout of ['mobile', 'desktop']) {
   const { p, city } = await open('desktop', 'large');
   const g0 = await goals(p);
   ck(`大城（${city}）：箭楼 2、城门在、目标行含破城门 / 败大将`, g0.towers === 2 && /破城门/.test(g0.text) && /败大将/.test(g0.text), g0);
-  const r = await p.evaluate(async G0 => { const s = eval(G0); for (const t of [...s.towers]) s.hitEnemy(t.e, 1e6, s.combatNow, 'melee', false, false); s.hitEnemy(s.gate, 1e7, s.combatNow, 'melee', false, false); s.elapsed = s.chapter.waves[s.chapter.waves.length - 1].start + 1; await new Promise(r => setTimeout(r, 500)); s.spawnBoss(); const boss = !!s.boss?.active; s.hitEnemy(s.boss, 1e8, s.combatNow, 'melee', false, false); for (let i = 0; i < 30; i++) { await new Promise(r => setTimeout(r, 150)); if (s.mode === 'bossloot') s.chooseUpgrade(0); if (s.siegeGoals.capturing) break; } return { boss, over: s.over, goals: s.siegeGoals, mode: s.mode }; }, G);
+  const r = await p.evaluate(async G0 => { const s = eval(G0); for (const t of [...s.towers]) s.hitEnemy(t.e, 1e6, s.combatNow, 'melee', false, false); s.hitEnemy(s.gate, 1e7, s.combatNow, 'melee', false, false); s.elapsed = s.chapter.waves[s.chapter.waves.length - 1].start + 1; await new Promise(r => setTimeout(r, 500)); s.spawnBoss(); const boss = !!s.boss?.active; s.hitEnemy(s.boss, 1e8, s.combatNow, 'melee', false, false); for (let i = 0; i < 30; i++) { await new Promise(r => setTimeout(r, 150)); s.collectBossChests?.(); if (s.siegeGoals.capturing) break; } return { boss, over: s.over, goals: s.siegeGoals, mode: s.mode }; }, G);
   ck('大城：破门毁楼、击败大将 → 不立即结算，进入占领府衙', r.boss && !r.over && r.goals.capturing && r.mode === 'none', r);
   const c = await capture(p);
   ck('大城：占领府衙 → 破城', c.over && c.victory && await owned(p, city), c);

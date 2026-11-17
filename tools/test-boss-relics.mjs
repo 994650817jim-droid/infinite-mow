@@ -40,13 +40,13 @@ const drop = await p.evaluate(async () => {
   d.relicStage = () => 'huangjin-3'; const first = d.bossRelicDrop(); out.first = first?.base;
   d.runLoot.push(first); const again = d.bossRelicDrop(); out.again = [again?.base, again?.quality];
   d.relicStage = () => 'hulao-2'; out.none = d.bossRelicDrop();
-  d.relicStage = () => 'huangjin-1'; d.runLoot.length = 0; const before = d.runLoot.length; d.onKill({ kind: 'boss', x: s.player.x, y: s.player.y }); out.bossKill = d.runLoot.slice(before).map(i => i.base);
+  d.relicStage = () => 'huangjin-1'; d.runLoot.length = 0; const before = d.runLoot.length; d.onKill({ kind: 'boss', x: s.player.x, y: s.player.y }); out.killOnly = d.runLoot.slice(before).map(i => i.base); d.claimBossRelic(); out.bossKill = d.runLoot.slice(before).map(i => i.base);
   out.lubuKey = window.__game.scene.getScene('LubuGameScene')?.bossRelicKey?.call({}) ?? 'missing';
   d.rng = Math.random; d.relicStage = () => s.bossRelicKey(); return out;
 });
 ck('首杀必掉核心遗珍（张角 → 九节杖）', drop.first === 'relic_jiujie', drop);
 ck('已拥有后再击败：改为多掉一件至少紫色的兵装', drop.again[0] !== 'relic_jiujie' && ['purple', 'orange'].includes(drop.again[1]), drop.again);
-ck('没有遗珍的关（徐荣）不额外掉；击杀张梁时普通掉落之外多一件人公符水；吕布挑战关键为 lubu', drop.none === null && drop.bossKill.includes('relic_fushui') && drop.bossKill.length >= 2 && drop.lubuKey === 'lubu', drop);
+ck('没有遗珍的关（徐荣）不额外掉；张梁的人公符水不在击杀瞬间给、捡首领宝箱时才给（2026-11-17 宝箱流程）；吕布挑战关键为 lubu', drop.none === null && !drop.killOnly.includes('relic_fushui') && drop.bossKill.includes('relic_fushui') && drop.bossKill.length >= 2 && drop.lubuKey === 'lubu', drop);
 
 // 2b) Boss遗物槽：只能装 1 件；旧档穿在头盔 / 信物槽的遗珍迁移进来
 const slot = await p.evaluate(async () => {

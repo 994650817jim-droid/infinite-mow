@@ -94,6 +94,7 @@ export function intelGameSceneClass(Base: typeof GameScene) {
       this.advanceEnemy(enemy, d > 48 ? dx / d : 0, d > 48 ? dy / d : 0, dt); return true;
     }
     protected hitEnemy(enemy: Enemy, raw: number, now: number, source: 'melee' | 'arrow' | 'fire' = 'melee', ally = false, weaponHit = true) { if (enemy === this.boss && this.controller) { raw *= this.controller.incoming(ally); this.controller.hit(now); } return super.hitEnemy(enemy, raw, now, source, ally, weaponHit); }
+    protected bossHasDeathArt() { return !!this.controller; }
     protected killEnemy(enemy: Enemy) { this.enemyCamps?.onDestroyed(enemy, this.combatNow); if (enemy === this.boss) this.controller?.defeat(); super.killEnemy(enemy); }
     protected checkEnd() {
       if (!this.escort) { super.checkEnd(); return; }
@@ -151,7 +152,7 @@ export function intelGameSceneClass(Base: typeof GameScene) {
     update(time: number, delta: number) {
       const before = this.combatNow; super.update(time, delta);
       const dt = (this.combatNow - before) / 1000;
-      if (dt > 0 && !this.over && this.mode === 'none') { this.enemyCamps?.update(this.combatNow); if (this.escort) this.updateCart(dt); }
+      if (dt > 0 && !this.over && this.mode === 'none') { if (!this.awaitingChest) this.enemyCamps?.update(this.combatNow); if (this.escort) this.updateCart(dt); }
       this.controller?.updateDeath(delta);
       if (this.boss?.active && this.controller) this.hudTexts.bossEnergy.setText(this.controller.label);
     }

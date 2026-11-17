@@ -90,8 +90,10 @@ export function thirdGameSceneClass(Base:typeof GameScene,cfg:ArcSceneConfig=THI
   return true;
  }
  protected hitEnemy(enemy:Enemy,raw:number,now:number,source:'melee'|'arrow'|'fire'='melee',ally=false,weaponHit=true){if(enemy===this.boss&&this.controller){raw*=this.controller.incoming(ally);this.controller.hit(now);}return super.hitEnemy(enemy,raw,now,source,ally,weaponHit);}
+ /** 第三 / 五章首领控制器自己播倒地帧（4×8 图集 28~31）。 */
+ protected bossHasDeathArt(){return !!this.controller;}
  protected killEnemy(enemy:Enemy){this.enemyCamps?.onDestroyed(enemy,this.combatNow);if(enemy===this.boss)this.controller?.defeat();super.killEnemy(enemy);}
- update(time:number,delta:number){const before=this.combatNow;super.update(time,delta);if(this.combatNow>before&&!this.over&&this.mode==='none'){this.enemyCamps?.update(this.combatNow);this.fireShips?.update(this.combatNow);}this.spearWarnings?.draw(this.enemies,this.spear,this.combatNow,this.player,!this.over);this.controller?.updateDeath(delta);if(this.boss?.active&&this.controller)this.hudTexts.bossEnergy.setText(this.controller.label+(this.legion.count>12?' · 军势护阵':''));}
+ update(time:number,delta:number){const before=this.combatNow;super.update(time,delta);if(this.combatNow>before&&!this.over&&this.mode==='none'){if(!this.awaitingChest)this.enemyCamps?.update(this.combatNow);this.fireShips?.update(this.combatNow);}this.spearWarnings?.draw(this.enemies,this.spear,this.combatNow,this.player,!this.over);this.controller?.updateDeath(delta);if(this.boss?.active&&this.controller)this.hudTexts.bossEnergy.setText(this.controller.label+(this.legion.count>12?' · 军势护阵':''));}
  protected renderRecruit(){if(this.resting){this.campUI?.open(cfg.campPrefix+this.thirdStage,cfg.stages[this.thirdStage]?.name??'返回天下地图');return;}super.renderRecruit();}
  protected continueCampaign(){if(!this.resting||this.mode!=='rest'||this.thirdStage>=3)return;const next=(this.thirdStage+1)as ThirdStage;if(!this.thirdTest&&!arcStageUnlocked(cfg.arc,next))return;const transfer=packCampaign(this.runConfig.character,this.player,this.legion);transfer.chapter='hulao';this.registry.set(cfg.transferKey,transfer);this.registry.set(cfg.stageKey,next);this.registry.set('runConfig',{...this.runConfig,thirdStage:next});this.resting=false;this.scene.restart();}
  protected finish(victory:boolean,reason:RunEndReason='death'){

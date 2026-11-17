@@ -21,7 +21,7 @@ const battle = async (p, q = '') => { await p.goto(`${base}?dev=1&autostart=1&st
   // 测试模式：打一局（升级 + 杀首领），面板跳主城，再回主页
   await battle(p);
   await p.evaluate(() => { const s = window.__game.scene.getScene('GameScene'); s.__DEV_ACTIONS.autoLevel5(); s.spawnBoss(); s.hitEnemy(s.boss, 1e7, s.combatNow, 'melee'); }); await p.waitForTimeout(1500);
-  await p.evaluate(() => { const s = window.__game.scene.getScene('GameScene'); if (s.mode === 'bossloot') s.chooseUpgrade(0); }); await p.waitForTimeout(600);
+  await p.evaluate(() => { const s = window.__game.scene.getScene('GameScene'); s.collectBossChests?.(); }); await p.waitForTimeout(600);
   const inDev = await p.evaluate(() => ({ badge: document.getElementById('dev-test-save')?.textContent, changed: window.__testSave?.changed() }));
   await p.evaluate(() => window.__game.scene.getScene('GameScene').__DEV_ACTIONS.homeCity()); await p.waitForTimeout(2500);
   await p.goto(base + '?dev=1&layout=desktop'); await p.waitForFunction(() => window.__game?.scene.isActive('MenuScene'), null, { timeout: 90000 }); await p.waitForTimeout(1000);

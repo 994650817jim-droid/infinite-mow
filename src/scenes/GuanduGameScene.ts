@@ -87,10 +87,12 @@ export function guanduGameSceneClass(Base: typeof GameScene) {
     }
     protected customBossStep(enemy: Enemy, dt: number, now: number) { if (enemy !== this.boss || !this.controller) return false; this.controller.update(dt, now); return true; }
     protected hitEnemy(enemy: Enemy, raw: number, now: number, source: 'melee' | 'arrow' | 'fire' = 'melee', ally = false, weaponHit = true) { if (enemy === this.boss && this.controller) { raw *= this.controller.incoming(ally); this.controller.hit(now); } return super.hitEnemy(enemy, raw, now, source, ally, weaponHit); }
+    /** 官渡首领控制器自己播倒地帧。 */
+    protected bossHasDeathArt() { return !!this.controller; }
     protected killEnemy(enemy: Enemy) { if (this.depots?.onDestroyed(enemy, this.combatNow) && this.boss?.active && this.guanduStage === 3) this.controller?.shaken(this.combatNow); this.enemyCamps?.onDestroyed(enemy, this.combatNow); if (enemy === this.boss) this.controller?.defeat(); super.killEnemy(enemy); }
     update(time: number, delta: number) {
       const before = this.combatNow; super.update(time, delta);
-      if (this.combatNow > before && !this.over && this.mode === 'none') { this.enemyCamps?.update(this.combatNow); this.depots?.update(this.combatNow); }
+      if (this.combatNow > before && !this.over && this.mode === 'none') { if (!this.awaitingChest) this.enemyCamps?.update(this.combatNow); this.depots?.update(this.combatNow); }
       this.controller?.updateDeath(delta);
       if (this.boss?.active && this.controller) this.hudTexts.bossEnergy.setText(this.controller.label + (this.legion.count > 12 ? ' · 军势护阵' : ''));
     }

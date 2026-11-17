@@ -78,7 +78,7 @@ try {
       await p.waitForFunction(() => !!window.__game.scene.getScene('GameScene').boss?.active, null, { timeout: 15000 });
       await p.evaluate(() => { const s = window.__game.scene.getScene('GameScene'); s.hitEnemy(s.boss, 1e6, s.combatNow, 'melee'); });
       // 首领遗物 / 升级三选一：逐个选第一项直到进入军营或结算
-      for (let i = 0; i < 20; i++) { const mode = await p.evaluate(() => { const s = window.__game.scene.getScene('GameScene'); if (s.mode === 'bossloot' || s.mode === 'levelup') s.chooseUpgrade(0); return s.mode; }); if (mode === 'rest' || mode === 'result') break; await p.waitForTimeout(250); }
+      for (let i = 0; i < 20; i++) { const mode = await p.evaluate(() => { const s = window.__game.scene.getScene('GameScene'); s.collectBossChests?.(); if (s.mode === 'levelup') s.chooseUpgrade(0); return s.mode; }); if (mode === 'rest' || mode === 'result') break; await p.waitForTimeout(250); }
       await p.waitForTimeout(150);
       if (stage < 3) { await p.evaluate(() => window.__game.scene.getScene('GameScene').continueCampaign()); await p.waitForTimeout(400); }
     }
@@ -183,7 +183,7 @@ try {
     ck('乱世 battle: boss HP ×1.8, damage ×1.25', hard.hard && hard.stage === 3 && Math.abs(hard.ratio - 1.8) < .03 && Math.abs(hard.dmg - 1.25) < .01, hard);
     const before = await p.evaluate(() => JSON.parse(localStorage.getItem("im_world_v1")).provisions);
     await p.evaluate(() => { const s = window.__game.scene.getScene('GameScene'); s.hitEnemy(s.boss, 1e8, s.combatNow, 'melee'); });
-    for (let i = 0; i < 20; i++) { const mode = await p.evaluate(() => { const s = window.__game.scene.getScene('GameScene'); if (s.mode === 'bossloot' || s.mode === 'levelup') s.chooseUpgrade(0); return s.mode; }); if (mode === 'result') break; await p.waitForTimeout(250); }
+    for (let i = 0; i < 20; i++) { const mode = await p.evaluate(() => { const s = window.__game.scene.getScene('GameScene'); s.collectBossChests?.(); if (s.mode === 'levelup') s.chooseUpgrade(0); return s.mode; }); if (mode === 'result') break; await p.waitForTimeout(250); }
     await p.waitForTimeout(1200);
     const res = await p.evaluate(() => { const s = window.__game.scene.getScene('GameScene'), w = JSON.parse(localStorage.getItem('im_world_v1')); return { body: s.resultTexts.body.text, hardCleared: w.hardCleared, merits: w.merits, provisions: w.provisions }; });
     ck('乱世 first clear: title + one-time reward recorded', res.hardCleared?.includes('hulao') && res.body.includes('乱世首通') && res.body.includes('虎牢扬威') && res.merits === 0 && res.provisions - before >= 600, { ...res, before });

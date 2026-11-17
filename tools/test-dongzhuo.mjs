@@ -38,7 +38,7 @@ for (const layout of ['mobile', 'desktop']) {
   const rt = await p.evaluate(async G0 => { const s = eval(G0), b = s.boss; const n0 = s.enemies.filter(e => e.active).length; b.hp = Math.floor(b.maxHp * .49); await new Promise(r => setTimeout(r, 400)); const st = s.xiliang.dongzhuo.state; return { st, more: s.enemies.filter(e => e.active).length - n0 }; }, G);
   ck(`[${layout}] 半血迁都：短暂无敌后撤、召一波西凉兵`, rt.st.retreated && rt.st.invulnerable && rt.more >= 8, rt);
   if (layout === 'desktop') {
-    const v = await p.evaluate(async G0 => { const s = eval(G0); await new Promise(r => setTimeout(r, 2800)); s.boss.invulnerable = false; s.hitEnemy(s.boss, 1e7, s.combatNow, 'melee', false, false); for (let i = 0; i < 30 && !s.over; i++) { await new Promise(r => setTimeout(r, 150)); if (s.mode === 'bossloot') s.chooseUpgrade(0); } return { over: s.over, victory: s.victory, sub: s.resultTexts.subtitle.text }; }, G);
+    const v = await p.evaluate(async G0 => { const s = eval(G0); await new Promise(r => setTimeout(r, 2800)); s.boss.invulnerable = false; s.hitEnemy(s.boss, 1e7, s.combatNow, 'melee', false, false); for (let i = 0; i < 30 && !s.over; i++) { await new Promise(r => setTimeout(r, 150)); s.collectBossChests?.(); } return { over: s.over, victory: s.victory, sub: s.resultTexts.subtitle.text }; }, G);
     ck('击败董卓：讨伐董卓告捷', v.victory && /董卓败退/.test(v.sub), v);
     const owned = await p.evaluate(() => (JSON.parse(localStorage.getItem('im_items_v2') ?? '{}').stable ?? { owned: [] }).owned);
     ck('击败董卓不送赤兔（赤兔只在三英战吕布首胜获得）', !owned.includes('chitu'), owned);
@@ -64,7 +64,7 @@ for (const layout of ['mobile', 'desktop']) {
     await quiet(p, L);
     const c = await p.evaluate(L0 => { const s = eval(L0); return { name: s.chapter.name, style: s.chapter.bossStyle, waves: s.chapter.waves.length }; }, L);
     ck('挑战关：虎牢关 · 三英战吕布、吕布招式、3 波', c.name === '虎牢关 · 三英战吕布' && c.style === 'lubu' && c.waves === 3, c);
-    const win = async () => p.evaluate(async L0 => { const s = eval(L0); s.spawnTimer = s.eliteTimer = 1e9; s.spawnBoss(); s.hitEnemy(s.boss, 1e7, s.combatNow, 'melee', false, false); for (let i = 0; i < 30 && !s.over; i++) { await new Promise(r => setTimeout(r, 150)); if (s.mode === 'bossloot') s.chooseUpgrade(0); } const st = JSON.parse(localStorage.getItem('im_items_v2') ?? '{}').stable ?? { owned: [] }; return { victory: s.victory, body: s.resultTexts.body.text, chitu: st.owned.filter(h => h === 'chitu').length, clears: JSON.parse(localStorage.getItem('im_world_v1')).lubuClears }; }, L);
+    const win = async () => p.evaluate(async L0 => { const s = eval(L0); s.spawnTimer = s.eliteTimer = 1e9; s.spawnBoss(); s.hitEnemy(s.boss, 1e7, s.combatNow, 'melee', false, false); for (let i = 0; i < 30 && !s.over; i++) { await new Promise(r => setTimeout(r, 150)); s.collectBossChests?.(); } const st = JSON.parse(localStorage.getItem('im_items_v2') ?? '{}').stable ?? { owned: [] }; return { victory: s.victory, body: s.resultTexts.body.text, chitu: st.owned.filter(h => h === 'chitu').length, clears: JSON.parse(localStorage.getItem('im_world_v1')).lubuClears }; }, L);
     const w1 = await win();
     ck('首次击败吕布：赤兔入马厩、胜场 1', w1.victory && w1.chitu === 1 && w1.clears === 1 && /赤兔/.test(w1.body), w1);
     await p.screenshot({ path: `${out}/${layout}-lubu-result.png` });

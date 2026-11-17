@@ -100,7 +100,8 @@ import { IffOverlay, readIffMode, type IffUnit } from '../systems/IffOverlay';
 import type {ItemInstance} from '../data/items';
 import {armShield,absorbShield,ShieldBars} from '../systems/ShieldGuard';
 import {StageObjectives} from '../systems/StageObjectives';
-import {itemName} from '../data/items';
+import {itemName,relicDef,SPECIALS} from '../data/items';
+import {BossChest,playBossFall,type ChestLoot} from '../systems/BossChest';
 import {ItemBagUI} from '../ui/ItemBagUI';
 
 interface Gem {
@@ -366,6 +367,8 @@ export class GameScene extends Phaser.Scene {
   private frontlineVictories=new Map<number,{elapsed:number}>();private frontlineStarts=new Map<number,number>();
   private chasingBosses:ChasingBoss[]=[];private deadBossControllers:Array<HuaxiongBoss|XurongBoss>=[];
   private get trailingBoss():ChasingBoss|null{return this.chasingBosses[0]??null;}
+  /** 首领倒地后掉的宝箱（捡起遗物才进下一阶段）。 */
+  protected bossChests:BossChest[]=[];
   private lootContinue:(()=>void)|null=null;private relicHits=0;private relicFireAt=0;private relicHealAt=0;
   private attributeReturn:'pause'|'none'='pause';private rerolls=0;private rerollButton?:Phaser.GameObjects.Text;private pointsButton?:Phaser.GameObjects.Container;private pointsBadge?:Phaser.GameObjects.Text;
   /** 用药按钮（药囊）：拾取的药收起，手动使用。 */
@@ -477,7 +480,7 @@ export class GameScene extends Phaser.Scene {
     this.setupObjective();
     // 坐骑：马厩里给该武将分配的马（第一章通关后马厩开放；换马只在休整时，下一关出征生效）
     {const horse=heroHorse(this.runConfig.character);this.mount=horse?new HeroMount({scene:this,player:this.player,enemies:this.enemies,hit:(e,d,now)=>this.hitEnemy(e,d,now,'melee',false,false),notice:t=>this.showGrowthNotice(t)},{base:horse.id,name:horse.name},this.runConfig.character,this.player.growth.gear.specials.includes('hubao')?{trampleMul:RELIC.hubaoTrample,remountMs:RELIC.hubaoRemountMs}:{}):null;this.player.mountGuard=this.mount?(n,now)=>this.mount?.guard(n,now)??n:undefined;this.events.once('shutdown',()=>{this.mount?.clear();this.mount=null;});}
-    this.itemDrops=new ItemDrops(this,this.player,this.itemTier(),()=>this.elapsed,()=>this.isFinalBoss(),()=>this.sfx.play('pickup'),()=>this.bossRelicKey());
+    this.itemDrops=new ItemDrops(this,this.player,this.itemTier(),()=>this.elapsed,()=>this.isFinalBoss(),()=>this.sfx.play('pickup'),()=>this.bossRelicKey());this.itemDrops.deferBossRelic=true; // 首领遗珍由首领宝箱发（BossChest）
     this.relics=new BossRelics({scene:this,player:this.player,enemies:()=>this.enemies,hit:(e,d,now)=>{this.hitEnemy(e,d,now,'melee',false,false);},notice:t=>this.showGrowthNotice(t)},this.player.growth.gear.specials,this.combatNow);
     this.syncRelicShips();
     this.events.once('shutdown',()=>{this.relics?.clear();this.relics=null;this.relicShips?.clear();this.relicShips=null;});
@@ -577,7 +580,7 @@ export class GameScene extends Phaser.Scene {
 
   protected resetState(): void {
     this.relicWaves=[];
-    this.firstBossAt=-1;this.settledFrontlineKills=0;this.frontlineNextSettlement=1;this.frontlineVictories.clear();this.frontlineStarts.clear();this.chasingBosses=[];this.deadBossControllers=[];this.lootContinue=null;this.relicHits=0;this.relicFireAt=0;this.relicHealAt=0;
+    this.firstBossAt=-1;this.settledFrontlineKills=0;this.frontlineNextSettlement=1;this.frontlineVictories.clear();this.frontlineStarts.clear();this.chasingBosses=[];this.deadBossControllers=[];for(const c of this.bossChests)c.clear();this.bossChests=[];this.lootContinue=null;this.relicHits=0;this.relicFireAt=0;this.relicHealAt=0;
     this.rerolls=0;this.warfeedCount=0;this.pointsButton=undefined;this.pointsBadge=undefined;this.potionButton=undefined;this.potionBadge=undefined;this.potionIcon=undefined;this.potionGlow=undefined;this.rerollButton=undefined;
     this.crowdSteering = true; this.freeRecruit = false; this.resting = false; this.restIntroPlayed = false; this.restIntroSkip = undefined; this.recruitedWaves.clear();
     this.pendingGrowthNotices.length = 0;
@@ -767,7 +770,7 @@ export class GameScene extends Phaser.Scene {
 
     this.player.update(time, dt);this.mount?.update(dt,this.combatNow);
 
-    if(!this.over){this.itemDrops?.update();this.relics?.update(this.combatNow);this.relicShips?.update(this.combatNow);}
+    if(!this.over){for(const c of this.bossChests)c.update(this.combatNow);this.itemDrops?.update();this.relics?.update(this.combatNow);this.relicShips?.update(this.combatNow);}
     this.supplies?.update(dt,time,this.battlefieldDetails.props,(enemy,damage)=>this.hitEnemy(enemy,damage,time,'fire',false,false),this.allies,(ally,damage,now)=>this.legion.hurt(ally,damage,now));
     if(!this.envInit&&this.supplies){this.envInit=true;const cfg=envConfigFor(this.scene.key,this.chapter.id,(this as unknown as {guanduStage?:number}).guanduStage);if(cfg){const sup=this.supplies;this.env=new EnvInteractions({scene:this,player:this.player,supplies:sup,enemies:()=>this.enemies,allies:()=>this.allies,hitEnemy:(e,d)=>{this.hitEnemy(e,d,this.combatNow,'fire',false,false);},hurtAlly:(a,d)=>{this.legion.hurt(a,d,this.combatNow);},spawnEnemy:(x,y)=>this.spawnEnemy('infantry',x,y,undefined,true),spawnGem:(x,y,v)=>this.spawnGem(x,y,v),spawnChest:(x,y)=>{this.itemDrops?.spawnChest(x,y);},now:()=>this.combatNow,sfx:k=>this.sfx.play(k)},cfg);this.events.once('shutdown',()=>{this.env?.destroy();this.env=null;});}}
     this.env?.update(dt);
@@ -931,6 +934,8 @@ export class GameScene extends Phaser.Scene {
   }
 
   protected updateSpawner(dt: number, time: number): void {
+    // 末位首领倒地后等主将捡宝箱：不再刷兵
+    if (this.awaitingChest) return;
     this.spawnTimer -= dt;
     const cap = BALANCE.enemyCap;
     if (this.spawnTimer <= 0 && this.activeEnemyCount() < cap) {
@@ -1628,7 +1633,9 @@ export class GameScene extends Phaser.Scene {
     this.objective?.onKill(enemy);
     const kind = enemy.kind;
     if (enemy.def.texture === 'boss_lubu') this.feedback.death(enemy);
-    if(kind==='boss'){const old=this.chasingBosses.find(t=>t.enemy===enemy&&t.life===enemy.spawnId),h=old?old.huaxiong:this.huaxiong,x=old?old.xurong:this.xurong;h?.defeat();x?.defeat();if(old){if(h)this.deadBossControllers.push(h);if(x)this.deadBossControllers.push(x);}}
+    if(kind==='boss'){const old=this.chasingBosses.find(t=>t.enemy===enemy&&t.life===enemy.spawnId),h=old?old.huaxiong:this.huaxiong,x=old?old.xurong:this.xurong;h?.defeat();x?.defeat();if(old){if(h)this.deadBossControllers.push(h);if(x)this.deadBossControllers.push(x);}
+      // 倒地：控制器自己有倒地帧的（华雄 / 徐荣 / 子类首领）沿用；其余首领播通用倒地（受伤帧 + 倒下 + 手绘扬尘 + 下沉淡出）
+      if(!(h||x||this.bossHasDeathArt()))playBossFall(this,enemy,this.zhangjiao?'zhangjiao_moves':this.lubu?'lubu_moves':undefined);}
     enemy.deactivate();
     if(enemy.isSupplySlot){this.sfx.play('propBreak');this.supplies?.onBroken(enemy);return;}
     this.warfeedKill();
@@ -1651,7 +1658,8 @@ export class GameScene extends Phaser.Scene {
         const old=this.chasingBosses[index];old.battle?.clear();old.huaxiong?.clear();old.xurong?.clear();old.label.destroy();this.chasingBosses.splice(index,1);
         this.recordFrontlineVictory(old.stage);
       }else{this.bossKilled=true;this.boss=null;this.recordFrontlineVictory(this.battleStage());}
-      this.offerBossLoot(()=>{if(this.bossKilled&&this.chasingBosses.length===0)this.finish(true,'boss');else{this.resumePendingChoices();if(this.bossKilled)this.showGrowthNotice('当前首领已败 · 仍有'+this.chasingBosses.length+'名追击首领');}});return;
+      // 倒地后原地掉宝箱，主将捡起遗物才进下一阶段（原来的三选一遗物卡改成宝箱）
+      this.spawnBossChest(enemy.x,enemy.y,()=>{if(this.bossKilled&&this.chasingBosses.length===0)this.finish(true,'boss');else{this.resumePendingChoices();if(this.bossKilled)this.showGrowthNotice('当前首领已败 · 仍有'+this.chasingBosses.length+'名追击首领');}});return;
     }
     this.spawnGem(enemy.x, enemy.y, enemy.def.xp);
   }
@@ -2436,6 +2444,28 @@ export class GameScene extends Phaser.Scene {
     if(!this.relicWaveGfx)return;const g=this.relicWaveGfx;g.clear();
     for(let i=this.relicWaves.length-1;i>=0;i--){const r=this.relicWaves[i],p=(this.combatNow-r.at)/240;if(p>=1||this.over){this.relicWaves.splice(i,1);continue;}if(HINT_MOCK)continue;g.lineStyle(2,0xe9ca83,(1-p)*.8).strokeCircle(r.x,r.y,110).lineStyle(1,0xffe5b0,(1-p)*.65).strokeCircle(r.x,r.y,110*(.35+.65*p));}
   }
+  /** 末位首领已倒、宝箱还没捡：暂停刷兵 / 敌营出兵。 */
+  protected get awaitingChest():boolean{return this.bossKilled&&this.bossChests.some(c=>!c.done);}
+  /** 子类首领控制器自己会播倒地帧时返回 true（第三~五章、官渡、攻城、情报）。 */
+  protected bossHasDeathArt():boolean{return false;}
+  /** 首领宝箱：倒地点掉落，主将碰到打开。 */
+  protected spawnBossChest(x:number,y:number,done:()=>void):void{
+    if(!this.player.alive){this.finish(false);return;}
+    this.bossChests.push(new BossChest({scene:this,player:this.player,grant:()=>this.grantBossChest(),done,sfx:k=>this.sfx.play(k)},x,y,this.combatNow));
+  }
+  /** 宝箱里的东西：一件本局遗物（原三选一卡的池子，随机一件）+ 首领遗珍（道具系统发放，见 ItemDrops.claimBossRelic）。 */
+  protected grantBossChest():ChestLoot[]{
+    const out:ChestLoot[]=[];
+    const special=RELICS.filter(r=>['human_seal','heaven_ember','army_jade'].includes(r.id)&&!this.player.relics.includes(r.id)),pool=special.length?special:RELICS.filter(r=>!this.player.relics.includes(r.id));
+    if(pool.length){const r=pool[Math.floor(Math.random()*pool.length)];this.player.addRelic(r.id);out.push({name:r.name,desc:r.desc,tag:'本局遗物'});}
+    else{this.legion.food+=15;out.push({name:'军粮 +15',desc:'本局遗物已集齐，改发军粮',tag:''});}
+    const item=this.itemDrops?.claimBossRelic();
+    if(item){const rd=relicDef(item.base),sp=rd?.special?SPECIALS[rd.special as keyof typeof SPECIALS]:undefined;out.push({name:itemName(item),desc:sp?sp.name+'：'+sp.desc:(rd?.lore??'额外兵装 · 结算后入行囊'),tag:rd?'首领遗珍 · 结算后入行囊':'兵装'});}
+    this.artEffects.show(5,this.player.x,this.player.y-10,80,this.combatNow,450);
+    return out;
+  }
+  /** 测试 / 调试：直接打开所有等待中的首领宝箱。 */
+  collectBossChests():void{for(const c of [...this.bossChests])c.collectNow();}
   private offerBossLoot(done:()=>void):void{
     if(!this.player.alive){this.finish(false);return;}
     const special=RELICS.filter(r=>['human_seal','heaven_ember','army_jade'].includes(r.id)&&!this.player.relics.includes(r.id));

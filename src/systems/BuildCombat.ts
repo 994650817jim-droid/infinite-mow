@@ -17,6 +17,9 @@ export class BuildCombat {
  flankCharge():{level:number;ratio:number}{const l=this.lv('flank');return{level:l,ratio:l?Math.min(1,this.distances.flank/[200,170,140][l-1]):0};}
  /** 迂回袭触发时通知表现层被波及的敌人（只管画面）。 */
  onFlank?:(targets:Enemy[])=>void;
+ /** 踏风步蓄力（表现层 WindstepFx 用，只读）与触发通知（只管画面）。 */
+ windstepCharge():{level:number;ratio:number}{const l=this.lv('windstep');return{level:l,ratio:l?Math.min(1,this.distances.windstep/120):0};}
+ onWindstep?:(e:Enemy)=>void;
  naturalBurn(e:Enemy,now:number):boolean{const b=this.burns.get(e.spawnId);return !!b&&b.enemy===e&&b.until>=now&&!b.spread;}
  igniteDerived(e:Enemy,damage:number,now:number):void{this.burn(e,damage,now,true);}
  private lv(id:TacticId):number{return this.state.level(id);}
@@ -30,7 +33,7 @@ export class BuildCombat {
  if(now<this.killUntil)bonus+=this.kills*.01*(2+this.lv('momentum'))*(this.lv('momentum')?1:0);
  if(this.burns.has(e.spawnId))bonus+=[0,.1,.15,.2][this.lv('hotwind')];
  if(crit&&(e.kind==='elite'||e.kind==='boss'))bonus+=[0,.1,.15,.2][this.lv('reap')];
- if(this.lv('windstep')&&this.distances.windstep>=120){bonus+=[0,.1,.15,.2][this.lv('windstep')];this.distances.windstep=0;}
+ if(this.lv('windstep')&&this.distances.windstep>=120){bonus+=[0,.1,.15,.2][this.lv('windstep')];this.distances.windstep=0;this.onWindstep?.(e);}
  if(this.idle>=2000)bonus+=[0,.2,.35,.5][this.lv('stored_edge')];
  return raw*(1+Math.min(1.5,bonus));
  }

@@ -82,6 +82,7 @@ import {horseForReward} from '../data/mounts';
 import {HeroMount} from '../systems/HeroMount';
 import { DraggingBladeFx } from '../systems/DraggingBladeFx';
 import { FlankFx } from '../systems/FlankFx';
+import { WindstepFx } from '../systems/WindstepFx';
 import { IffOverlay, readIffMode, type IffUnit } from '../systems/IffOverlay';
 import type {ItemInstance} from '../data/items';
 import {armShield,absorbShield,ShieldBars} from '../systems/ShieldGuard';
@@ -150,6 +151,9 @@ export class GameScene extends Phaser.Scene {
   protected dragFx?: DraggingBladeFx;
   /** 战法迂回袭表现（拥有该战法后首次用到时创建，场景重启时清空）。 */
   protected flankFx?: FlankFx;
+  /** 战法踏风步表现（同上，拥有后首次用到时创建）。 */
+  protected windFx?: WindstepFx;
+  windstepFx(): WindstepFx { if (!this.windFx) { this.windFx = new WindstepFx(this, this.player, this.sfx); this.events.once('shutdown', () => { this.windFx?.destroy(); this.windFx = undefined; }); } return this.windFx; }
   flankBladeFx(): FlankFx { if (!this.flankFx) { this.flankFx = new FlankFx(this, this.player, this.sfx); this.events.once('shutdown', () => { this.flankFx?.destroy(); this.flankFx = undefined; }); } return this.flankFx; }
   /** 敌我区分叠加层（默认阵营色；设置开启描边；?iff=0 关闭）。 */
   iff: IffOverlay | null = null;
@@ -424,7 +428,7 @@ export class GameScene extends Phaser.Scene {
 
 
     this.player = new Player(this, 0, 0);
-    this.dragFx = undefined; this.flankFx = undefined;
+    this.dragFx = undefined; this.flankFx = undefined; this.windFx = undefined;
     this.applyRunConfig(this.runConfig);
     this.worldCampaign=!preview&&!isChapterTestRun()&&this.registry.get('worldCampaign')===true;
     this.hardMode=!preview&&this.registry.get('hardChapter')===this.hardKey()&&(chapterState(this.hardKey() as TimelineChapterId,loadWorldState())==='cleared'||isChapterTestRun());
@@ -478,6 +482,7 @@ export class GameScene extends Phaser.Scene {
     this.events.once('shutdown',()=>{this.awakeningCombat?.clear();this.awakeningCombat=undefined;});
     this.buildCombat.setOrigin(()=>({x:this.player.x,y:this.player.y}));
     this.buildCombat.onFlank=targets=>this.flankBladeFx().strike(targets);
+    this.buildCombat.onWindstep=e=>this.windstepFx().burst(e.x,e.y);
     const cam = this.cameras.main;
     cam.setRoundPixels(false);
     cam.setScroll(this.player.x - GAME_WIDTH / 2, this.player.y - GAME_HEIGHT / 2);
@@ -765,6 +770,7 @@ export class GameScene extends Phaser.Scene {
     this.martialFields.update(dt);
     this.buildCombat.update(this.combatNow);
     {const fc=this.buildCombat.flankCharge();if(fc.level||this.flankFx)this.flankBladeFx().update(dt,fc.level,fc.ratio);}
+    {const wc=this.buildCombat.windstepCharge();if(wc.level||this.windFx)this.windstepFx().update(dt,wc.level,wc.ratio);}
     this.controlBuild?.update(this.combatNow);
     this.bulwarkBuild?.update(this.combatNow);
     this.awakeningCombat?.update(this.combatNow);

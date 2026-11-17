@@ -5,6 +5,9 @@ import { DEPTH, FONT, HEADING_FONT, GAME_HEIGHT as H, GAME_WIDTH as W, IS_DESKTO
 import { LEGION, ORDERS, TROOPS, TROOP_KINDS, INITIAL_TROOPS, type TroopKind } from '../data/legion';
 import type { Legion } from '../systems/Legion';
 import { loadTroopPortraits, portraitHeadY, portraitKey } from '../systems/TroopPortraits';
+import { artStyle } from '../systems/ArtStyle';
+/** 人物画风 v2：血药卡徽章里的手绘药葫芦（与兵种胸像同一画风）；没加载到就用旧的像素药瓶 healing_potion。 */
+const POTION_ART = 'potion_card_v2', POTION_ART_URL = 'assets/troop-portraits-v2/potion_card.png';
 const ROLES: Record<TroopKind, string> = {
   swordsman: '近战护卫 · 稳守前线', spearman: '长枪突刺 · 克制骑兵', archer: '远程弓箭 · 持续支援',
   crossbowman: '连弩快射 · 高频压制', guardian: '重甲大盾 · 承受伤害', rider: '高速骑兵 · 主动冲击',
@@ -113,7 +116,12 @@ export class LegionUI {
      const hit = scene.add.rectangle(0, 0, 10, 10, 0, .001).setOrigin(0).setScrollFactor(0).setName('recruit-potion').setInteractive({ useHandCursor: true });
      hit.on('pointerover', () => { this.potionHover = true; this.layoutPotionCard(root.x, root.y, this.potionW, this.potionH); }).on('pointerout', () => { this.potionHover = false; this.layoutPotionCard(root.x, root.y, this.potionW, this.potionH); })
        .on('pointerdown', () => { if (this.potionOk?.() ?? true) takePotion?.(); });
-     root.add([g, icon, title, tag, detail, buy, hit]); this.panel.add(root); this.potion = {root, g, icon, title, detail, buy, tag, hit};}
+     root.add([g, icon, title, tag, detail, buy, hit]); this.panel.add(root); this.potion = {root, g, icon, title, detail, buy, tag, hit};
+     if (artStyle() === 'v2' && !scene.textures.exists(POTION_ART)) {
+       scene.load.image(POTION_ART, POTION_ART_URL);
+       scene.load.once('filecomplete-image-' + POTION_ART, () => { if (this.potion.root.visible) this.layoutPotionCard(root.x, root.y, this.potionW, this.potionH); });
+       if (!scene.load.isLoading()) scene.load.start();
+     }}
   }
   private potion!: {root: Phaser.GameObjects.Container; g: Phaser.GameObjects.Graphics; icon: Phaser.GameObjects.Image; title: Phaser.GameObjects.Text; detail: Phaser.GameObjects.Text; buy: Phaser.GameObjects.Text; tag: Phaser.GameObjects.Text; hit: Phaser.GameObjects.Rectangle};
   private potionHover = false; private potionW = 0; private potionH = 0;
@@ -130,7 +138,10 @@ export class LegionUI {
     g.fillStyle(0x1b120b, .42).fillRect(2, 2, w - 4, h - 4);
     g.fillStyle(0x0c0906, .6).fillCircle(mx, my, mr).fillStyle(red, .7).fillCircle(mx, my, mr - 3).fillStyle(0xffe2a0, .07).fillCircle(mx - mr * .25, my - mr * .3, mr * .6)
       .lineStyle(3, WAR.gold, .85).strokeCircle(mx, my, mr).lineStyle(1, WAR.gold, .35).strokeCircle(mx, my, mr + 4);
-    const f = p.icon.frame, s = (mr * 1.3) / Math.max(f.width, f.height); p.icon.setScale(s).setPosition(mx, my);
+    const painted = artStyle() === 'v2' && p.icon.scene.textures.exists(POTION_ART);
+    if (painted && p.icon.texture.key !== POTION_ART) p.icon.setTexture(POTION_ART);
+    // 手绘葫芦占满徽章（和兵种胸像差不多大），旧像素药瓶保持原尺寸
+    const f = p.icon.frame, s = (mr * (painted ? 1.9 : 1.3)) / Math.max(f.width, f.height); p.icon.setScale(s).setPosition(mx, my);
     p.title.setPosition(D ? w / 2 : 134, 16).setOrigin(D ? .5 : 0, 0).setFontSize(D ? 21 : 23);
     p.tag.setPosition(D ? w / 2 : 134 + p.tag.width / 2 + 9, D ? 172 : 66);
     const tw = p.tag.width + 18, th = p.tag.height + 6; g.fillStyle(red, .95).fillRoundedRect(p.tag.x - tw / 2, p.tag.y - th / 2, tw, th, 4).lineStyle(1, WAR.gold, .6).strokeRoundedRect(p.tag.x - tw / 2, p.tag.y - th / 2, tw, th, 4);

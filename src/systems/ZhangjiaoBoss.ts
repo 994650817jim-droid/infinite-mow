@@ -8,6 +8,7 @@ import { ZJ } from '../data/bossRedesign';
 import { BossKit, Beat, faceDir, type BossDebug } from './BossKit';
 import { warnFx } from '../ui/WarnFx';
 import { groundCracks, laneCracks, warnCircle } from '../ui/Telegraph';
+import { bossFxImage, ensureBossFx, fxFrame, hasBossFx, playBossFx } from './BossFx';
 
 interface Host {
   scene: Phaser.Scene; boss: Enemy; player: Player; army: Legion;
@@ -18,7 +19,7 @@ interface Host {
   sfx: (key: string) => void;
 }
 type Move = 'rain' | 'thunder' | 'heaven' | 'grid';
-interface Pillar { e: Enemy; life: number; x: number; y: number; broken: boolean }
+interface Pillar { e: Enemy; life: number; x: number; y: number; broken: boolean; born: number; brokeAt: number; img: Phaser.GameObjects.Image | null }
 
 /**
  * 1-3 张角（重设计样板）：应对方式 = 打断 + 躲弹幕。
@@ -44,6 +45,7 @@ export class ZhangjiaoBoss {
     this.gfx = h.scene.add.graphics().setDepth(DEPTH.fx - 1).setName('zhangjiao-fx');
     this.pillarGfx = h.scene.add.graphics().setDepth(DEPTH.enemy + 1).setName('zhangjiao-pillars');
     this.next = now + 1500; this.summonAt = now + ZJ.summonEveryMs;
+    ensureBossFx(h.scene, ['zj_pillar', 'zj_talisman', 'kit_shift']);
   }
 
   get takenMul(): number { return this.h.scene && this.stunUntil > (this.kit.now) ? ZJ.heaven.stunTakenMul : 1; }
@@ -69,7 +71,7 @@ export class ZhangjiaoBoss {
     const b = this.h.boss, p = this.h.player;
     if (this.gone) return;
     if (!b.active) { this.clear(); return; }
-    this.kit.update(now); this.gfx.clear(); this.drawPillars(now);
+    this.kit.update(now); this.gfx.clear(); this.drawPillars(now); for (const t of this.tal) t.setVisible(false);
     if (!this.phase2 && b.hp <= b.maxHp * ZJ.phase2At) this.enterPhase2(now);
     if (this.kit.inShift) return;
     const dx = p.x - b.x, dy = p.y - b.y, d = Math.hypot(dx, dy) || 1, dir = faceDir(dx);
@@ -190,17 +192,18 @@ export class ZhangjiaoBoss {
     for (let i = 0; i < H.pillars; i++) {
       const a = i * Math.PI * 2 / H.pillars + Math.PI / 4, x = b.x + Math.cos(a) * H.pillarRing, y = b.y + Math.sin(a) * H.pillarRing * .8;
       const e = this.h.spawn('infantry', x, y, def);
-      if (e) { e.controlImmune = true; e.sprite.setAlpha(0); this.pillars.push({ e, life: e.spawnId, x, y, broken: false }); }
+      if (e) { e.controlImmune = true; e.sprite.setAlpha(0); this.pillars.push({ e, life: e.spawnId, x, y, broken: false, born: now, brokeAt: 0, img: bossFxImage(this.h.scene, 'zj_pillar', DEPTH.enemy + 1)?.setOrigin(.5, .82).setPosition(x, y).setDisplaySize(150, 150) ?? null }); }
     }
-    void now;
   }
-  private dropPillars(): void { for (const p of this.pillars) if (!p.broken && p.e.active && p.e.spawnId === p.life) { p.e.hp = 0; p.e.deactivate(); } this.pillars = []; }
+  private dropPillars(): void { for (const p of this.pillars) p.img?.destroy(); for (const p of this.pillars) if (!p.broken && p.e.active && p.e.spawnId === p.life) { p.e.hp = 0; p.e.deactivate(); } this.pillars = []; }
   /** 符柱：像素石柱 + 黄符纸（碎了只剩半截）。招式图集 / 符柱图出来前的占位。 */
   private drawPillars(now: number): void {
     const g = this.pillarGfx; g.clear();
     for (const p of this.pillars) {
-      if (!p.broken && (!p.e.active || p.e.spawnId !== p.life)) { p.broken = true; this.h.scene.cameras.main.shake(80, .003); this.h.sfx('hitHeavy'); }
+      if (!p.broken && (!p.e.active || p.e.spawnId !== p.life)) { p.broken = true; p.brokeAt = now; this.h.scene.cameras.main.shake(80, .003); this.h.sfx('hitHeavy'); }
       if (!p.broken) p.e.sprite.setAlpha(0);
+      // 手绘符柱：升起 0–1 → 发光循环 1–2 → 碎裂 3–4 → 残骸 5
+      if (p.img) { const a = now - p.born, b = now - p.brokeAt; p.img.setFrame(p.broken ? (b < 360 ? fxFrame(b / 360, 3, 4) : 5) : a < 450 ? fxFrame(a / 450, 0, 1) : 1 + Math.floor(now / 150) % 2); continue; }
       const h = p.broken ? 18 : 64, x = Math.round(p.x), y = Math.round(p.y);
       g.fillStyle(0x1a1310, .9).fillRect(x - 12, y - h - 2, 24, h + 4);
       g.fillStyle(0x6d5a48, 1).fillRect(x - 10, y - h, 20, h);
@@ -260,8 +263,15 @@ export class ZhangjiaoBoss {
     this.h.scene.cameras.main.shake(120, .004); this.h.sfx('bossSummon');
   }
   /** 举杖时身边旋转的符纸（像素小方块）。 */
+  private tal: Phaser.GameObjects.Image[] = [];
   private talismans(now: number, p: number): void {
     const b = this.h.boss;
+    // 手绘符纸（图到后）：6 张绕身旋转，朝切线方向飘
+    if (hasBossFx(this.h.scene, 'zj_talisman')) {
+      while (this.tal.length < 6) { const im = bossFxImage(this.h.scene, 'zj_talisman', DEPTH.fx - 1); if (!im) break; this.tal.push(im); }
+      this.tal.forEach((im, i) => { const a = now / 260 + i * 1.047, r = 34 + 14 * p; im.setVisible(true).setPosition(b.x + Math.cos(a) * r, b.y - 40 + Math.sin(a) * r * .5).setRotation(a + Math.PI / 2).setDisplaySize(40, 40).setFrame((Math.floor(now / 90) + i) % 6).setAlpha(.6 + .4 * p); });
+      return;
+    }
     for (let i = 0; i < 6; i++) {
       const a = now / 260 + i * 1.047, r = 30 + 12 * p, x = Math.round(b.x + Math.cos(a) * r), y = Math.round(b.y - 40 + Math.sin(a) * r * .5);
       this.gfx.fillStyle(0x1a1310, .8).fillRect(x - 4, y - 6, 8, 12); this.gfx.fillStyle(0xf2c27a, .95).fillRect(x - 3, y - 5, 6, 10); this.gfx.fillStyle(0xc0392b, .9).fillRect(x - 1, y - 3, 2, 6);
@@ -284,5 +294,5 @@ export class ZhangjiaoBoss {
     this.next = now + 1800;
   }
   snapshot() { return { move: this.beat.move, phase: this.beat.phase, phase2: this.phase2, energy: this.energy, pillars: this.pillars.length, broken: this.pillars.filter(p => p.broken).length, stunned: this.stunUntil > this.kit.now, grid: !!this.grid, metrics: { ...this.metrics } }; }
-  clear(): void { if (this.gone) return; this.gone = true; this.abort(); this.gfx.destroy(); this.pillarGfx.destroy(); this.kit.clear(); }
+  clear(): void { if (this.gone) return; this.gone = true; for (const t of this.tal) t.destroy(); this.tal = []; this.abort(); this.gfx.destroy(); this.pillarGfx.destroy(); this.kit.clear(); }
 }

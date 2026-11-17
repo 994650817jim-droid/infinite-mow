@@ -113,3 +113,4 @@ assets/raw/*
 !/tools/test-boss-v2.mjs
 !/tools/record-boss-gif.mjs
 !/tools/boss-v2-open.mjs
+!/tools/despill-fx.mjs

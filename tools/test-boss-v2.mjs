@@ -137,11 +137,11 @@ try {
     ck('曹仁·八门金锁：1 个生门 + 3 个死门', g.gates.filter(x => x === 'live').length === 1 && g.gates.filter(x => x === 'dead').length === 3, g);
     await wait(p, 300); await p.screenshot({ path: OUT + '/caoren-gates.png' });
     // 主将放进死门
-    const hp0 = await ev(s => { const c = s.controller; s.player.damageImmune = false; s.player.hp = s.player.maxHp = 9999; s.player.invulnUntil = 0; s.boss.sprite.setPosition(c.cx, c.cy); const i = c.gates.indexOf('dead'), a = -Math.PI + (i + .5) * Math.PI / 4; s.player.sprite.setPosition(c.cx + Math.cos(a) * 200, c.cy + Math.sin(a) * 160); c.rotateAt = s.combatNow + 9000; return s.player.hp; });
+    const hp0 = await ev(s => { const c = s.controller; s.player.damageImmune = false; s.player.hp = s.player.maxHp = 9999; s.player.invulnUntil = 0; s.boss.sprite.setPosition(c.cx, c.cy); const i = c.gates.indexOf('dead'), a = -Math.PI + (i + .5) * Math.PI / 4 + Math.PI / 8; s.player.sprite.setPosition(c.cx + Math.cos(a) * 200, c.cy + Math.sin(a) * 160); c.rotateAt = s.combatNow + 9000; return s.player.hp; });
     await wait(p, 2200);
     const dd = await ev(s => ({ hp: s.player.hp, gate: s.controller.playerGate }));
     ck('曹仁·八门金锁：站死门持续掉血', dd.gate === 'dead' && dd.hp < hp0, dd);
-    const live = await ev(s => { const c = s.controller, i = c.gates.indexOf('live'), a = -Math.PI + (i + .5) * Math.PI / 4; s.player.sprite.setPosition(c.cx + Math.cos(a) * 200, c.cy + Math.sin(a) * 160); return { gate: c.playerGate, mul: c.incoming(false) }; });
+    const live = await ev(s => { const c = s.controller, i = c.gates.indexOf('live'), a = -Math.PI + (i + .5) * Math.PI / 4 + Math.PI / 8; s.player.sprite.setPosition(c.cx + Math.cos(a) * 200, c.cy + Math.sin(a) * 160); return { gate: c.playerGate, mul: c.incoming(false) }; });
     ck('曹仁·八门金锁：站生门伤害 +20%', live.gate === 'live' && Math.abs(live.mul - 1.2) < 1e-6, live);
     await ev(s => { const c = s.controller; s.player.sprite.setPosition(c.cx + 420, c.cy); s.boss.sprite.setPosition(s.player.x - 150, s.player.y); c.debug.force(0, s.combatNow); });
     await wait(p, 900); await p.screenshot({ path: OUT + '/caoren-wall.png' });

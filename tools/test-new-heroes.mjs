@@ -95,6 +95,15 @@ for (const [layout, viewport] of Object.entries(LAYOUTS)) for (const [hero, h] o
       return { moon, turned: foes.filter(e => pl.passive.isTurned(e, s.combatNow)).length, triggers: pl.passive.snapshot(s.combatNow).triggers };
     }, G);
     ck(`${tag}：舞势满层「闭月」——舞带环身，圈内敌人倒戈（≥4 名）`, d.moon && d.turned >= 4 && d.triggers >= 1, d);
+    // 3b) 闭月倒戈不叠层：闭月结束后层数没满，继续掷扇（修「满层后一直闭月、不再扔扇子」）
+    const d2 = await p.evaluate(async G0 => {
+      const s = eval(G0), pl = s.player; const t0 = performance.now();
+      while (performance.now() - t0 < 3000 && s.children.getByName('diaochan-moon')) await new Promise(r => setTimeout(r, 30));
+      const stacksAfter = pl.passive.stacks, trig0 = pl.passive.snapshot(s.combatNow).triggers;
+      await new Promise(r => setTimeout(r, 1500));
+      return { stacksAfter, moonAgain: pl.passive.snapshot(s.combatNow).triggers > trig0 || !!s.children.getByName('diaochan-moon') };
+    }, G);
+    ck(`${tag}：闭月造成的倒戈不叠层，闭月后层数 <5、1.5 秒内不再连放闭月`, d2.stacksAfter < 5 && !d2.moonAgain, d2);
     await p.waitForTimeout(100);
   }
   await p.screenshot({ path: `${out}/${hero}-battle-${layout}.png` });

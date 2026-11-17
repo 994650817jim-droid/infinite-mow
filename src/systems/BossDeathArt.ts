@@ -9,7 +9,9 @@ import { artStyle } from './ArtStyle';
  * id 用章节的 bossStyle 名。接入（BossChest.playBossFall）：preloadBossDeath 在首领出场时预载；
  * bossDeathKey 有值就依次播 0→3 帧，没有（未载入 / 载入失败 / ?art=v1）就沿用受伤帧倒下。
  */
-export const BOSS_DEATH_IDS = ['zhangjiao', 'zhangliang', 'zhangbao', 'dongzhuo', 'lubu'] as const;
+export const BOSS_DEATH_IDS = ['zhangjiao', 'zhangliang', 'zhangbao', 'dongzhuo', 'lubu', 'luxun'] as const;
+/** 文件名与 bossStyle 不同的（章节前缀命名）：bossStyle → 文件名（不含 _death.png）。 */
+const DEATH_FILE: Partial<Record<BossDeathId, string>> = { luxun: 'yiling_luxun' };
 export type BossDeathId = typeof BOSS_DEATH_IDS[number];
 export const BOSS_DEATH = { cell: 288, foot: 256, frames: 4 } as const;
 const key = (id: string): string => `boss_death_${id}`;
@@ -20,7 +22,7 @@ const known = (id: string): id is BossDeathId => (BOSS_DEATH_IDS as readonly str
 export function preloadBossDeath(scene: Phaser.Scene, id: string): void {
   if (artStyle() !== 'v2' || !known(id) || failed.has(id)) return;
   const k = key(id); if (scene.textures.exists(k)) return;
-  scene.load.spritesheet(k, `assets/bosses-v2/${id}_death.png`, { frameWidth: BOSS_DEATH.cell, frameHeight: BOSS_DEATH.cell });
+  scene.load.spritesheet(k, `assets/bosses-v2/${DEATH_FILE[id] ?? id}_death.png`, { frameWidth: BOSS_DEATH.cell, frameHeight: BOSS_DEATH.cell });
   scene.load.once(Phaser.Loader.Events.FILE_LOAD_ERROR, (f: Phaser.Loader.File) => { if (f.key === k) failed.add(id); });
   if (!scene.load.isLoading()) scene.load.start();
 }

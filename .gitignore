@@ -142,4 +142,5 @@ assets/raw/*
 !/tools/record-boss-chest-gif.mjs
 !/tools/test-xingyang-full.mjs
 !/tools/test-city-build.mjs
+!/tools/test-siege-medium.mjs
 !/tools/prepare-town-city-art.mjs

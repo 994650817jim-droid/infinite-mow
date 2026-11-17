@@ -121,7 +121,7 @@ const R = (p, fn, arg) => p.evaluate(async ([src, a]) => { const r = await impor
   });
   ck('手动刷新：第一次 30 军粮，之后 60', r.c1 === 30 && r.c2 === 60 && r.spent === 30, r);
   ck('保底：连续未出名将第 7 次刷新必出', r.pityAt <= 6 && r.dry === 0, { pityAt: r.pityAt, dry: r.dry });
-  ck('招募可玩名将扣 900 军粮并可出战、自动随行', r.rec.ok && r.heroOwned && r.cost === 900 && r.followers.length === 1, r);
+  ck('招募可玩名将扣 900 军粮，只能随行、不能当主将出战（主公规则）', r.rec.ok && !r.heroOwned && r.cost === 900 && r.followers.length === 1, r);
   ck('击败敌将俘获进降将栏，不重复', r.cap === '张郃' && r.capAgain === null, r);
   ck('招降六折（300 军粮）', r.capRec.ok && r.capCost === 300, r);
   ck('随行上限 1；升级招贤馆后可带 2 人', !r.full.ok && r.hall.ok && r.add.ok && r.cap2 === 2, r);

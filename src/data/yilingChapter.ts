@@ -29,7 +29,7 @@ const WAVE_NAMES: string[][] = [
   ['夷道营寨', '连营相望', '朱然出营'],
   ['林间连营', '东南风起', '陆逊纵火'],
 ];
-/** 新兵种 v2 图集（YilingGameScene.preload 按需加载）。图到之后再把这 4 个键加进 ArtStyle.ART_V2_FILES / V2_TROOP_KEYS（路径 assets/processed-v2/enemies/yiling_<兵>_<walk|attack>.png）；没加之前 withV2Sheets 不挂图，沿用换色。 */
+/** 新兵种 v2 图集（YilingGameScene.preload 按需加载）。解烦兵已有图（ArtStyle 已登记）；江东弓弩手图到之后再把它的 2 个键加进 ArtStyle.ART_V2_FILES / V2_TROOP_KEYS，没加之前沿用换色。 */
 export const YILING_TROOP_SHEETS = { jiefan: ['yiling_jiefan_walk_sheet', 'yiling_jiefan_attack_sheet'], crossbow: ['yiling_wu_crossbow_walk_sheet', 'yiling_wu_crossbow_attack_sheet'] } as const;
 /** 新兵种（v1 / 图未到时换色过渡）：解烦兵（孙吴精锐重步，耐打）、江东弓弩手（射得远）。 */
 export const YILING_TROOPS = {

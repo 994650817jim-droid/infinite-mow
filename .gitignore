@@ -164,3 +164,4 @@ assets/raw/*
 !/tools/test-yiling-full.mjs
 !/tools/test-yiling-art.mjs
 !/tools/test-beifa-full.mjs
+!/tools/test-yiling-art.mjs

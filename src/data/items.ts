@@ -55,13 +55,13 @@ export const AFFIX_IDS = Object.keys(AFFIXES) as AffixId[];
 
 export const SPECIALS: Record<SpecialId, { name: string; desc: string }> = {
   fury: { name: '背水', desc: '生命低于 35% 时，伤害 +25%' },
-  windrider: { name: '踏风', desc: '生命低于 35% 时，移动速度 +20%' },
+  windrider: { name: '踏风', desc: '生命低于 35% 时，移速 +20%' },
   bloodthirst: { name: '饮血', desc: '击杀回复 1% 最大生命（每 0.5 秒一次）' },
   slayer: { name: '斩将', desc: '对首领伤害额外 +25%' },
   scholar: { name: '博闻', desc: '经验获取额外 +15%' },
   rally: { name: '振旅', desc: '友军伤害额外 +15%' },
   ironwall: { name: '金汤', desc: '受到伤害额外 −10%' },
-  swift: { name: '迅雷', desc: '攻击速度额外 +10%' },
+  swift: { name: '迅雷', desc: '攻速额外 +10%' },
   fushui: { name: '人公符水', desc: '每拾取 40 颗军功宝石，召出 1 名黄巾力士助战 20 秒（最多 3 名）' },
   jiujie: { name: '天公落雷', desc: '每 15 秒落雷劈周围生命最多的 3 名敌人；本局每击杀 50 人落雷伤害 +10%（最多 +100%）' },
   zhanjiang: { name: '斩将', desc: '对每个精锐 / 首领的第一击必定暴击，且这一击伤害再翻倍' },

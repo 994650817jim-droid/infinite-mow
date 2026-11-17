@@ -26,6 +26,7 @@ import { type BuffProgress, countProgress, timerProgress } from '../ui/BuffProgr
 import {BuildCombat} from '../systems/BuildCombat';
 import {TACTICS,TREASURES,TAG_NAMES,type TacticId} from '../data/builds';
 import { applyCharms, wornTokens, type CharmState } from '../systems/CharmEffects';
+import { meritScrolls } from '../data/merit';
 import { CHARM_LEGEND, CHARM_SCHOOL_NAMES, CHARM_SET_DESC, charmDef, type CharmSchool } from '../data/charms';
 import {SishuiObstacles} from '../systems/SishuiObstacles';
 import {HuaxiongBoss} from '../systems/HuaxiongBoss';
@@ -199,6 +200,8 @@ export class GameScene extends Phaser.Scene {
   protected itemDrops:ItemDrops|null=null;
   /** 征程构筑：本关是否为重打 / 非主线（不读不存）；本关是否从存档恢复了构筑。 */
   protected campaignReplay=false;protected campaignLoaded=false;
+  /** 战功换残卷：本关开打时的战功（局内等级），见 data/merit.ts。 */
+  protected meritStartLevel=1;
   /** 首领遗珍的战斗机制（按穿戴的 specials）；楼船令旗复用火船。 */
   protected relics:BossRelics|null=null;protected relicShips:FireShips|null=null;
   /** 相国印：本次升级还能再选几张、免费换一批几次。 */
@@ -514,6 +517,7 @@ export class GameScene extends Phaser.Scene {
     this.campaignLoaded = !!carriedState && !chained;
     this.applyHeroLevel(!!carriedState);
     if(this.campaignLoaded)this.player.hp=this.player.maxHp; // 征程构筑：新开一场，血量回满
+    this.meritStartLevel=this.player.level; // 战功换残卷：只算本关新涨的等级
     if(!(transfer && this.chapter.id === transfer.chapter && this.runConfig.character === transfer.character))this.grantWeixiTreasures();
     if(this.worldCampaign&&worldUnlocked()){const effects=permanentEffects();this.legion.healingMultiplier=effects.healMultiplier;applyCitySpecialties(this.player,effects,!transfer,{legion:this.legion,supplies:this.supplies});if(!transfer){for(let i=0;i<effects.reinforcements;i++)this.legion.recruit(i===0?'swordsman':'spearman',1,true);}if(!transfer&&!isChapterTestRun())for(const kind of takeExpeditionReserve(effects.reserveSlots)){this.legion.recruit(kind,1,true);this.allies[this.allies.length-1].reserveSoldier=true;}}
     this.buildCombat=new BuildCombat(this.player.growth.build,(x,y,r)=>this.grid.query(x,y,r),(e,n,fire)=>this.hitEnemy(e,n,this.combatNow,fire?'fire':'melee',false,false),(e,fire)=>{this.artEffects.show(fire?5:3,e.x,e.y-8,32,this.combatNow,160);buildVfx(this).emit(fire?'flame':'combo',e.x,e.y-8,this.combatNow,fire?42:38);});
@@ -2478,6 +2482,17 @@ export class GameScene extends Phaser.Scene {
     this.artEffects.show(5,this.player.x,this.player.y-10,80,this.combatNow,450);
     return out;
   }
+  /** 战功换残卷：本关新涨的战功（跨过的「每 3 级」门槛）换武学残卷，写进结算画面。只调一次。返回 [新涨等级, 残卷]。 */
+  protected settleMerit():[number,number]{
+    const from=this.meritStartLevel,to=Math.max(from,this.player.level),levels=to-from,n=meritScrolls(from,to);this.meritStartLevel=to;
+    if(levels<=0)return [0,0];
+    const total=n>0?addScrolls(n):0;
+    const line='战功  +'+levels+' 级（Lv.'+from+' → Lv.'+to+'）→ 武学残卷 +'+n+(n>0?'（共 '+total+'）':'');
+    this.resultTexts?.body?.setText(this.resultTexts.body.text+'\n'+line);
+    // 第一章各关、第二章前两关打赢后直接进行营休整（结算文字不显示）：入营水墨过场结束后在画面上方提示一次
+    const show=()=>{if(!this.sys?.isActive())return;const t=this.add.text(GAME_WIDTH/2,GAME_HEIGHT*.42,line,{fontFamily:FONT,fontSize:IS_DESKTOP?'20px':'18px',color:'#f0d28b',fontStyle:'bold',align:'center',resolution:2,stroke:'#211b12',strokeThickness:4,backgroundColor:'#140d07e6',padding:{x:22,y:12}}).setOrigin(.5).setScrollFactor(0).setDepth(DEPTH.overlay+60).setName('merit-toast');window.setTimeout(()=>{if(t.active)t.destroy();},4000);};let tries=0;const wait=()=>{if(this.children.getByName('rest-intro')&&tries++<40)window.setTimeout(wait,250);else show();};window.setTimeout(wait,400); // 休整时场景计时器暂停，用浏览器计时
+    return [levels,n];
+  }
   /** 测试 / 调试：直接打开所有等待中的首领宝箱。 */
   collectBossChests():void{for(const c of [...this.bossChests])c.collectNow();}
   private battleStage():number{return this.chapter.stage??this.chapter.westStage??3;}
@@ -2662,6 +2677,8 @@ export class GameScene extends Phaser.Scene {
       if(lines.length)this.resultTexts.body.setText(this.resultTexts.body.text+'\n随行  '+lines.join(' · ')+' · 各得经验 +'+Math.floor(half));}}
     // 征程构筑：主线首次打赢这一关（首领已破）时存档，作为下一关的起点；重打旧关 / 测试战斗不存
     if(victory&&this.bossKilled&&!this.campaignReplay&&!(isChapterTestRun()||this.debugModified||this.debugJumped||this.player.damageImmune))saveCampaignBuild(this.runConfig.character,packCampaign(this.runConfig.character,this.player,this.legion));
+    // 战功换残卷：打赢这一关时，本关新涨的战功按比例换武学残卷（测试 / 调试战斗不换）
+    if(victory&&!(isChapterTestRun()||this.debugModified||this.debugJumped||this.player.damageImmune))this.settleMerit();
     // 武将谱：本局武学残卷收入（测试 / 调试战斗不收）
     {const n=this.itemDrops?.scrolls??0,debug=isChapterTestRun()||this.debugModified||this.debugJumped||!!this.player.damageImmune;if(n>0&&!debug){const total=addScrolls(n);this.resultTexts.body.setText(this.resultTexts.body.text+'\n武学残卷  +'+n+'（共 '+total+'）');}}
     // 马厩：各章首领首次击杀赠马（第一章通关送驽马由 ItemStore 读档时补发）

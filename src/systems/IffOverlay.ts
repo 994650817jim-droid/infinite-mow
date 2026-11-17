@@ -1,5 +1,7 @@
 import Phaser from 'phaser';
 import { DEPTH } from '../config';
+import { factionTargetOfKey } from './FactionPalette';
+import { YUAN_HUE } from './YuanPalette';
 
 /**
  * 敌我区分叠加层（用户 2026-11-16 选定：方案 a 阵营色为默认；方案 c 描边在「军中设置 · 敌我描边」里开启）。
@@ -30,8 +32,16 @@ export function readIffMode(search = typeof location !== 'undefined' ? location.
 }
 
 const ALLY_HUE = 186;
-/** 敌军势力色：按图集名判断（黄巾图集 → 黄，其余 → 赤红）。 */
-const enemyHue = (key: string): number => /^(readable_)?yellow_/.test(key) ? 48 : 355;
+/** 敌军势力色：按图集名判断（黄巾图集 → 黄；第四章袁军 yuan_ → 土黄；攻城 / 情报势力换色 f_<势力>_ → 该势力色，
+ * 灰白势力返回 null 即不再染色；其余 → 赤红）。 */
+const enemyHue = (key: string): number | null => {
+  const k = key.replace(/^readable_/, '');
+  if (k.startsWith('yellow_')) return 48;
+  if (k.startsWith('yuan_')) return YUAN_HUE;
+  const f = factionTargetOfKey(k);
+  if (f === 'gray') return null;
+  return f ? f.hue : 355;
+};
 const OUTLINE = { ally: 0x63e6ff, enemy: 0xb3241c, elite: 0xff5a24, boss: 0xff2a1a } as const;
 const failed = new Set<string>();
 
@@ -77,7 +87,9 @@ export function buildRecolor(game: Phaser.Game, key: string, side: IffSide, yell
   if (tm.exists(target)) return target;
   if (failed.has(target) || !tm.exists(key) || key.startsWith('__')) return null;
   const px = sourcePixels(tm, key); if (!px) { failed.add(target); return null; }
-  const d = px.data.data, hue = side === 'ally' ? ALLY_HUE : yellow ? 48 : enemyHue(key);
+  const hue = side === 'ally' ? ALLY_HUE : yellow ? 48 : enemyHue(key);
+  if (hue === null) { failed.add(target); return null; } // 灰白势力：保持底图配色
+  const d = px.data.data;
   for (let i = 0; i < d.length; i += 4) {
     if (d[i + 3] < 30) continue;
     const [h, s, v] = rgb2hsv(d[i], d[i + 1], d[i + 2]);

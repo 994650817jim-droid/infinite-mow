@@ -10,10 +10,15 @@ type Target = {hue: number; sat: number} | 'gray' | null;
 const TARGET: Record<FactionId, Target> = {
   player: null, dongzhuo: null,
   yuanshao: {hue: 42, sat: .82}, yellow: {hue: 52, sat: .9}, caocao: {hue: 218, sat: .7}, yuanshu: {hue: 282, sat: .6},
-  liubiao: {hue: 178, sat: .65}, sun: {hue: 22, sat: .95}, mateng: {hue: 32, sat: .55}, liuzhang: {hue: 78, sat: .55},
+  liubiao: {hue: 112, sat: .42}, sun: {hue: 22, sat: .95}, mateng: {hue: 32, sat: .55}, liuzhang: {hue: 78, sat: .55},
   zhanglu: {hue: 228, sat: .35}, taoqian: {hue: 140, sat: .5}, han: 'gray', court: 'gray', gongsun: 'gray',
 };
 export function factionKey(faction: FactionId, key: string): string { return TARGET[faction] ? `f_${faction}_${key}` : key; }
+/** 势力换色贴图（f_<势力>_…）对应的目标色；不是势力贴图返回 undefined。敌我区分阵营色据此保持势力色。 */
+export function factionTargetOfKey(key: string): {hue: number; sat: number} | 'gray' | undefined {
+  const m = /^(?:readable_)?f_([a-z]+)_/.exec(key); if (!m) return undefined;
+  return TARGET[m[1] as FactionId] ?? undefined;
+}
 
 function hsvToRgb(h: number, s: number, v: number): [number, number, number] {
   const c = v * s, x = c * (1 - Math.abs((h / 60) % 2 - 1)), m = v - c, seg = Math.floor(h / 60) % 6;
@@ -25,9 +30,10 @@ function recolor(ctx: CanvasRenderingContext2D, w: number, h: number, target: Ex
   for (let i = 0; i < d.length; i += 4) {
     if (d[i + 3] < 8) continue;
     const r = d[i] / 255, g = d[i + 1] / 255, b = d[i + 2] / 255, max = Math.max(r, g, b), min = Math.min(r, g, b), delta = max - min, s = max ? delta / max : 0;
-    if (s < .32 || max < .14 || max !== r) continue;
+    if (s < .2 || max < .14 || max !== r) continue;
     let hue = 60 * (((g - b) / delta) % 6); if (hue < 0) hue += 360;
     if (hue > 18 && hue < 330) continue; // 只动红色系
+    if (s < .32 && hue > 10 && hue < 330) continue; // v2 图的暗红 / 绛红饱和度低（.2~.32）：只收正红到洋红一段，棕色皮革不动
     const [nr, ng, nb] = target === 'gray' ? hsvToRgb(0, 0, Math.min(1, max * .95)) : hsvToRgb(target.hue, Math.min(1, s * target.sat), max);
     d[i] = nr; d[i + 1] = ng; d[i + 2] = nb;
   }

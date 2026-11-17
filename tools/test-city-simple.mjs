@@ -25,13 +25,13 @@ const base8 = { version: 8, yellowStages: 3, dongzhuoStages: 0, warlordStages: 0
       levels: { hall: 2, barracks: 2, farm: 3, clinic: 3, house: 2, market: 1, post: 1, smithy: 3, drill: 1, granary: 1, wall: 2, tavern: 1, pavilion: 0 } } };
   const p = await page(old);
   const r = await store(p, w => { const s = w.loadWorld(); w.saveWorld(); const raw = JSON.parse(localStorage.getItem('im_world_v1')), bak = JSON.parse(localStorage.getItem('im_world_backup_v1')); return { s, rawVersion: raw.version, bakVersion: bak?.version }; });
-  const s = r.s, t = s.town, refund = 126 + 120 + 200 + 175, expect = 200 + 100 * 2 + Math.round(70 * 1.5) + refund; // 2026-11-16 平衡：军功 → 军粮 ×2（原 ×1.5），退还里的军功部分同步变
+  const s = r.s, t = s.town, refund = 126 + 120 + 200 + 175, expect = 200 + 100 * 2 + Math.round(70 * 1.5) + refund + 60; // +60：汝南（中城）重农迁成屯田时退还一次改方向的军粮（v10 城池建设） // 2026-11-16 平衡：军功 → 军粮 ×2（原 ×1.5），退还里的军功部分同步变
   ck('迁移：军功、钱（含在途商队）折成军粮，民居 / 市集 / 驿站 / 酒肆按原价全额退还', s.provisions === expect && s.merits === 0, { got: s.provisions, expect });
   ck('迁移：旧加成建筑点亮科技（医术、磨砺、百炼、坚甲、操练）', ['medicine', 'forge', 'forge2', 'armor', 'drill_points'].every(id => t.tech.includes(id)) && t.tech.length === 5, t.tech);
   ck('迁移：讲武堂等级不高于主帐，保留主帐 / 军营 / 农田 / 粮仓', t.levels.academy === 2 && t.levels.hall === 2 && t.levels.barracks === 2 && t.levels.farm === 3 && t.levels.granary === 1 && t.levels.stable === 0, t.levels);
   ck('迁移：删掉的建筑与税 / 事件 / 钱字段不再存在', !('house' in t.levels) && !('money' in t) && !('tax' in t) && !('pendingEvent' in t) && !('caravans' in t), Object.keys(t));
-  ck('迁移：“重商”改回均衡，“重农”保留；季度计数保留', !t.focus.xuchang && t.focus.runan === 'farm' && t.year === 186 && t.season === 2, { focus: t.focus, y: t.year, s: t.season });
-  ck('迁移：写盘为 v9，旧档留在备份', r.rawVersion === 9 && r.bakVersion === 8, r);
+  ck('迁移：城池发展转成城池建筑（汝南重农 → 屯田 1 级；「重商」作废），季度计数保留', Object.keys(t.focus).length === 0 && s.cities.runan?.tuntian === 1 && s.cities.xuchang?.tuntian === 0 && t.year === 186 && t.season === 2, { focus: t.focus, cities: s.cities, y: t.year, s: t.season });
+  ck('迁移：写盘为 v10，旧档留在备份', r.rawVersion === 10 && r.bakVersion === 8, r);
   const again = await store(p, w => w.loadWorld().provisions);
   ck('迁移：再次读档不重复折算', again === expect, again);
   await p.close();
@@ -53,7 +53,6 @@ const base8 = { version: 8, yellowStages: 3, dongzhuoStages: 0, warlordStages: 0
     // 第二章通关后可扩建县城，开放马厩
     const raw = JSON.parse(localStorage.getItem('im_world_v1')); raw.cleared.hulao = true; raw.dongzhuoStages = 3; localStorage.setItem('im_world_v1', JSON.stringify(raw)); localStorage.removeItem('im_world_backup_v1');
     o.hall = w.townUpgrade('hall'); o.stable2 = w.townUpgrade('stable'); o.cap = w.stableCapacity(); o.lvl = w.stableLevel();
-    o.focusLocked = w.setCityFocus('xuchang', 'farm');
     return o;
   });
   ck('新档：营寨起步 主帐 / 军营 / 农田 Lv1，其余未建', r.start.hall === 1 && r.start.barracks === 1 && r.start.farm === 1 && !r.start.academy && !r.start.stable, r.start);
@@ -64,7 +63,7 @@ const base8 = { version: 8, yellowStages: 3, dongzhuoStages: 0, warlordStages: 0
   ck('花费正确：讲武堂 150 + 回血药 150 + 刀枪 150 + 磨砺 150', r.after.grain === 3000 - 150 - 150 - 150 - 150 && r.melee.ok && r.forge.ok, r.after);
   ck('出征效果：回血药 2 份 30%、刀盾 / 长枪开局 Lv2、伤害 +4%', r.eff.potions?.count === 2 && r.eff.potions.ratio === .3 && r.eff.troopLevels.swordsman === 2 && r.eff.troopLevels.spearman === 2 && Math.abs(r.eff.damageBonus - .04) < 1e-9, r.eff);
   ck('第二章后扩建县城、建马厩（接口：等级 1、可养 2 匹）', r.hall.ok && r.stable2.ok && r.lvl === 1 && r.cap === 2, [r.hall, r.stable2, r.cap]);
-  ck('城池发展在州府前不开放', !r.focusLocked.ok && r.focusLocked.message.includes('州府'), r.focusLocked);
+  ck('营寨不再有「城池发展」（改为各城建筑）', typeof r.focusLocked === 'undefined', r.focusLocked);
   await p.close();
 }
 

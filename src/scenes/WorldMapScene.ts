@@ -12,7 +12,9 @@ import {W,H,worldText,worldButton,worldShell,panel,worldAssets,releaseWorldArt} 
 import {WORLD_NODES,type WorldNode} from '../world/WorldNodes';
 import {loadWorld,rewardGrain} from '../world/WorldStore';
 import {citySize,CITY_TITLE} from '../town/TownData';
-import {FOCUS_INCOME,FOCUS_NAME,incomeText,focusOpen,type CityFocus} from "../town/TownData";
+import {incomeText} from "../town/TownData";
+import {cityIncome,emptyCityLevels} from "../data/cityBuildings";
+import {cityLevels} from "../world/WorldStore";
 import {chapterUnlocked} from '../systems/ChapterProgress';
 import {CITIES,CITY_LINKS,CITY_INCOME,FACTIONS,HOME,SPECIALTIES,TIER_NAME,cityAttackable,cityById,cityOwner,eraDef,eraIndexFor,territorySummary,type CityDef,type EraId} from '../world/WorldCities';
 import {cityMarker,factionLegend,markAlert,paintSelection,MARKER_FILES,type CityMarker} from '../world/WorldMapLayers';
@@ -120,7 +122,7 @@ export class WorldMapScene extends Phaser.Scene {
   this.detailTitle=worldText(this,tx,top+12,'',desktop?20:22,'#f6dc9a').setName('world-detail-title');
   this.detailRule=this.add.graphics();
   this.detail=worldText(this,tx,top+(desktop?44:50),'',desktop?13:15,'#e4dcc4').setWordWrapWidth(desktop?W-tx-250:W-80-sealSize-16,true).setLineSpacing(desktop?2:4);
-  this.action=worldButton(this,desktop?W-140:W/2,desktop?py:H-36-38,"进入营寨",()=>{if(this.selected.kind==='city')this.openSiege(this.selected.city,!!this.alertFor(this.selected.city.id));else if(this.selected.kind==='intel')this.openIntel(this.selected.event);else this.launch(false);},desktop?190:W-100);this.action.image.setName('map-action');this.actionHome={x:this.action.image.x,y:this.action.image.y,w:desktop?190:W-100};
+  this.action=worldButton(this,desktop?W-140:W/2,desktop?py:H-36-38,"进入营寨",()=>{if(this.selected.kind==='city'){const c=this.selected.city,alert=!!this.alertFor(c.id);if(!alert&&this.owned.includes(c.id)){this.scene.start('TownScene',{city:c.id});return;}this.openSiege(c,alert);}else if(this.selected.kind==='intel')this.openIntel(this.selected.event);else this.launch(false);},desktop?190:W-100);this.action.image.setName('map-action');this.actionHome={x:this.action.image.x,y:this.action.image.y,w:desktop?190:W-100};
   this.hardBtn=worldButton(this,this.actionHome.x,this.actionHome.y,'乱世难度',()=>this.launch(true),this.actionHome.w);this.hardBtn.image.setName('map-hard').setTint(0xd98a6a);this.hardBtn.text.setColor('#2a0d08');
   // 缩放按钮在地图标记之上（关卡印 / 令旗的深度 3–5）
   for(const b of [worldButton(this,W-55,this.area.y+35,'＋',()=>this.setZoom(this.zoom*1.2,W/2,(this.area.y+this.viewBottom)/2),48),worldButton(this,W-55,this.area.y+107,'－',()=>this.setZoom(this.zoom/1.2,W/2,(this.area.y+this.viewBottom)/2),48)]){b.image.setDepth(8);b.text.setDepth(9);}
@@ -206,7 +208,7 @@ export class WorldMapScene extends Phaser.Scene {
   const w=Math.min(this.area.w-24-76,520),sum=territorySummary(this.owned),root=this.add.container(this.area.x+12,this.area.y+52).setDepth(20).setName('territory-panel');
   const lines=this.owned.length?[
    `我方城池 ${this.owned.length} 座 · 大城 ${sum.counts.large} / 中城 ${sum.counts.medium} / 小城 ${sum.counts.small}`,
-   (()=>{const town=loadWorld().town,open=focusOpen(town),t={grain:0,troops:0};for(const id of this.owned){const c=cityById(id);if(!c)continue;const inc=FOCUS_INCOME[c.tier][open?(town.focus[id]??"balanced") as CityFocus:"balanced"];t.grain+=inc.grain;t.troops+=inc.troops;}return `每战产出：${incomeText(t)}`;})(),
+   (()=>{const s=loadWorld(),t={grain:0,troops:0};for(const id of this.owned){const c=cityById(id);if(!c)continue;const inc=cityIncome(c.tier,cityLevels(id,s));t.grain+=inc.grain;t.troops+=inc.troops;}return `每战产出（各城建筑）：${incomeText(t)}`;})(),
    sum.specialties.length?'大城特产：\n'+sum.specialties.map(x=>`· ${x.city.name}「${x.specialty.title}」${x.specialty.text}`).join('\n'):'大城特产：尚无（攻占大城可获得永久加成）',
    '城池：'+this.owned.map(id=>cityById(id)?.name).filter(Boolean).join('、'),
   ]:['尚无城池。','攻下与营寨相邻的城池（许昌、汝南、官渡）后，每次出征结算都会获得城池产出；攻占大城还有永久特产加成。'];
@@ -295,12 +297,13 @@ export class WorldMapScene extends Phaser.Scene {
   if(this.selected.kind==='city'){
    const c=this.selected.city,owner=cityOwner(c.id,this.era,this.owned),era=eraDef(this.era),attack=cityAttackable(c.id,this.owned);
    const neighbors=[...(CITY_LINKS.get(c.id)??[])].map(id=>id===HOME.id?'义军营寨':cityById(id)!.name).join('、');
-   const focus=(loadWorld().town.focus[c.id]??'balanced') as CityFocus,inc=FOCUS_INCOME[c.tier][owner==='player'?focus:'balanced'],sp=SPECIALTIES[c.id],yieldText=`${owner==='player'?`产出（${FOCUS_NAME[focus]}，州府可在营寨「城池」中改）`:'占领后产出'}：每战 ${incomeText(inc)}${sp?` · 特产「${sp.title}」${sp.text}`:''}`;
+   const inc=cityIncome(c.tier,owner==='player'?cityLevels(c.id):emptyCityLevels()),sp=SPECIALTIES[c.id],yieldText=`${owner==='player'?'产出（进入城池可建设）':'占领后产出'}：每战 ${incomeText(inc)}${sp?` · 特产「${sp.title}」${sp.text}`:''}`;
    // 攻城分区：城池所属章节通关后才可攻打（守城不受限）
    const gateChapter=chapterById(CITY_CHAPTER[c.id]??'hulao');
    const alert=this.alertFor(c.id),gate=!citySiegeOpen(c.id,loadWorld())&&!isChapterTestRun()&&!alert&&owner!=='player',usable=(attack||!!alert)&&!gate,warn=attack?this.lossWarning():'';
    this.setDetail(`${c.name} · ${TIER_NAME[c.tier]} · ${c.region}`,FACTIONS[owner].color,sealGlyph(owner),`归属：${FACTIONS[owner].name}（公元${era.year}年 · ${era.name}）\n${alert?`告急：${FACTIONS[alert.attacker].name}来犯！守住可解除；出征别处则此城失守`:owner==='player'?'你的城池':gate?`通关第${gateChapter.numeral}章「${gateChapter.title}」后开放攻城`:attack?warn||'与你的领地相邻，可以攻打':'尚不相邻：先攻下相邻城池'}\n${yieldText}\n相邻：${neighbors}`);
-   this.action.text.setText(alert?'守城 · 选择武将':owner==='player'?'我方城池':gate?`${gateChapter.short}后开放攻城`:attack?'攻城 · 选择武将':'尚不可攻打');this.action.image.setAlpha(usable?1:.45);if(usable)this.action.image.setInteractive({useHandCursor:true});else this.action.image.disableInteractive();
+   const enter=owner==='player'&&!alert;
+   this.action.text.setText(alert?'守城 · 选择武将':enter?'进入城池':gate?`${gateChapter.short}后开放攻城`:attack?'攻城 · 选择武将':'尚不可攻打');this.action.image.setAlpha(usable||enter?1:.45);if(usable||enter)this.action.image.setInteractive({useHandCursor:true});else this.action.image.disableInteractive();
    this.layoutActions(false);return;
   }
   if(this.selected.kind==='stage'){this.refreshStage(this.selected.chapter,this.selected.stage);return;}

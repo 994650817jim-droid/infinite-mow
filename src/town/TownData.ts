@@ -210,10 +210,11 @@ export function costText(c: Cost): string { return c ? `军粮 ${c}` : '免费';
  * 每场出征结算一次（胜利或坚持 60 秒以上）：农田产粮、城池产出、扣后备兵口粮，然后推进内部季度计数。
  * 返回报告；调用方把 grain + cityGrain − upkeep 计入军粮，cityTroops 加进后备兵。
  */
-export function settleSeason(t: TownState, input: { troops: number; cities: Array<{ tier: CityTier; focus: CityFocus; mult?: number }>; provisionsHave: number; provisionsMultiplier?: number }): SeasonReport {
+export function settleSeason(t: TownState, input: { troops: number; cities: Array<{ grain: number; troops: number; mult?: number }>; provisionsHave: number; provisionsMultiplier?: number }): SeasonReport {
   const s = t.season, grain = FARM_GRAIN[Math.max(1, levelOf(t, 'farm'))];
   let cityGrain = 0, cityTroops = 0;
-  for (const c of input.cities) { const inc = FOCUS_INCOME[c.tier][c.focus], m = c.mult ?? 1; cityGrain += Math.round(inc.grain * m); cityTroops += m < 1 ? 0 : inc.troops; }
+  // 各城产出由城池建筑决定（src/data/cityBuildings.ts cityIncome）；流寇未平的城军粮减半、不送兵
+  for (const c of input.cities) { const m = c.mult ?? 1; cityGrain += Math.round(c.grain * m); cityTroops += m < 1 ? 0 : c.troops; }
   cityGrain = Math.round(cityGrain * (input.provisionsMultiplier ?? 1));
   const need = Math.round(Math.max(0, input.troops) * (1 - GRANARY_CUT[levelOf(t, 'granary')]));
   const available = input.provisionsHave + grain + cityGrain, upkeep = Math.min(need, available), shortage = need - upkeep;

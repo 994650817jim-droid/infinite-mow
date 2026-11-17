@@ -10,6 +10,7 @@ import { GAME_HEIGHT, GAME_WIDTH, IS_DESKTOP, RENDER_SCALE, initLayout, switchLa
 import { BootScene } from './scenes/BootScene';
 import { GameScene } from './scenes/GameScene';
 import { CityRecruitScene } from './scenes/CityRecruitScene';
+import { TownScene } from './scenes/TownScene';
 import { CityScene } from './scenes/CityScene';
 import { WorldMapScene } from './scenes/WorldMapScene';
 import { MenuScene } from './scenes/MenuScene';
@@ -80,7 +81,7 @@ async function startGame(): Promise<void> {
     input: {
       activePointers: 3,
     },
-    scene: [BootScene, CityScene, CityRecruitScene, TalentHallScene, WorldMapScene, MenuScene, BattleScene, ThirdChapterScene, ThirdBattleScene, GuanduChapterScene, GuanduBattleScene, ChibiChapterScene, ChibiBattleScene, SiegeBattleScene, IntelBattleScene, LubuBattleScene],
+    scene: [BootScene, CityScene, CityRecruitScene, TownScene, TalentHallScene, WorldMapScene, MenuScene, BattleScene, ThirdChapterScene, ThirdBattleScene, GuanduChapterScene, GuanduBattleScene, ChibiChapterScene, ChibiBattleScene, SiegeBattleScene, IntelBattleScene, LubuBattleScene],
   });
 
   // 手柄：每帧轮询 + 界面焦点导航（STEAM_PLAN.md · S2）

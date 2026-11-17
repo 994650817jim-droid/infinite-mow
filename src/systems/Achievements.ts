@@ -26,7 +26,7 @@ export const ACHIEVEMENTS: AchievementDef[] = [
   A('cities_5', '据地五城', '同时占有 5 座城池', '天下'),
   A('luoyang', '天子旧都', '占领洛阳', '天下'),
   A('defense', '固若金汤', '守住一座告急的城池', '天下'),
-  A('focus', '因地制宜', '为一座城池选定发展方向', '天下'),
+  A('focus', '因地制宜', '在一座城池建起第一座建筑', '天下'),
   A('town_build', '安营扎寨', '在营寨建起第一座新建筑', '城镇'),
   A('town_all', '百业兴旺', '营寨建筑全部建成（麒麟阁除外）', '城镇'),
   A('town_lv3', '雕梁画栋', '任一建筑升到 3 级', '城镇'),
@@ -95,7 +95,7 @@ export function checkWorld(w: WorldSave): void {
   if (w.capturedEver.length > 0) unlock('first_siege');
   if (w.ownedCities.length >= 5) unlock('cities_5');
   if (w.ownedCities.includes('luoyang')) unlock('luoyang');
-  if (Object.values(w.town.focus).some(f => f !== 'balanced')) unlock('focus');
+  if (Object.values(w.cities ?? {}).some(l => l.tuntian > 0 || l.muster > 0 || l.office > 1)) unlock('focus');
   const lv = w.town.levels as Record<string, number>;
   if (Object.entries(lv).some(([id, l]) => l > 0 && !['hall', 'barracks', 'farm', 'clinic'].includes(id))) unlock('town_build');
   if (Object.keys(TOWN_BUILDINGS).filter(id => id !== 'pavilion').every(id => (lv[id] ?? 0) > 0)) unlock('town_all');

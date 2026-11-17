@@ -18,7 +18,7 @@ import {stableUnlocked} from '../systems/ItemStore';
 import {CHARACTERS,type CharacterId} from '../data/characters';
 import {uiSfx} from '../systems/Sfx';
 import {checkWorld} from '../systems/Achievements';
-import {loadWorld,saveWorld,worldUnlocked,storageUnavailable,incompatibleSave,townUpgrade,granaryLevy,setCityFocus,researchTech,townProgress,stableCapacity,drillInfo,trainTroops} from '../world/WorldStore';
+import {loadWorld,saveWorld,worldUnlocked,storageUnavailable,incompatibleSave,townUpgrade,granaryLevy,researchTech,townProgress,stableCapacity,drillInfo,trainTroops} from '../world/WorldStore';
 import {TOWN_BUILDINGS,FOCUS_NAME,FOCUS_INCOME,FOCUS_CHANGE_COST,CITY_SIZE,CITY_TITLE,HALL_UPGRADE,nextCost,buildBlockers,buildingOpen,citySize,focusOpen,levelOf,costText,incomeText,townArtLevel,type TownBuildingId,type TownState,type CityFocus,type TownProgress} from '../town/TownData';
 import {TECHS,TECH_IDS,BRANCH_NAME,BRANCH_ORDER,techBlockers,techTotals,type TechBranch} from '../data/tech';
 import {PANO_W,PANO_H,CITY_SLOTS,LEVEL_SCALE,CITY_BG_SIZES,CITY_ART_LEVELS,ART_ALIAS} from '../town/CityLayout';
@@ -231,7 +231,8 @@ export class CityScene extends Phaser.Scene {
    academy:[['研究科技',()=>{m.root.destroy();this.openTech();}]],
    talent:[['进入招贤馆',()=>this.scene.start('TalentHallScene')]],
    stable:[['进入马厩',()=>this.openStable(msg)]],
-   hall:[['武将谱',()=>this.openCodex()],...(focusOpen(t)?[['城池发展',()=>{m.root.destroy();this.openFocus();}] as Fn]:[])],
+   // 城池发展已改为各城自己的建筑（天下地图 → 进入城池）
+   hall:[['武将谱',()=>this.openCodex()]],
    granary:[['开仓募兵',()=>{const res=granaryLevy();if(!res.ok){msg.setText(res.message);return;}m.root.destroy();this.refresh();this.toast(res.message);}]],
   },fns=lv>0?funcs[id]??[]:[],n=fns.length+1,bgap=12,bw=Math.min(n>1?200:240,(m.w-60-bgap*(n-1))/n),bx=(i:number)=>W/2-((n-1)*(bw+bgap))/2+i*(bw+bgap),by=m.y+h-(D?84:94);
   fns.forEach(([label,fn],i)=>{const f=homeCommand(this,bx(i),by,bw,42,label,false,true,15);f.hit.setName(i?'town-card-func'+(i+1):'town-card-func').on('pointerdown',fn);m.root.add([f.g,f.hit,f.caption]);});
@@ -291,27 +292,6 @@ export class CityScene extends Phaser.Scene {
   if(this.message)m.root.add(txt(this,W/2,m.y+h-72,this.message,13,'#e8c98a').setOrigin(.5).setName('town-tech-message'));
   this.message='';
  }
- /** 城池发展（州府开放）：每座占领城池选「重农」或「重军」。 */
- private openFocus(){
-  const s=loadWorld(),owned=s.ownedCities.map(id=>cityById(id)).filter((c):c is NonNullable<typeof c>=>!!c),rows=Math.max(1,owned.length),page=this.focusPage,per=D?5:6;
-  const m=this.modal('town-focus','城池发展',D?470:Math.min(H-40,640));
-  if(!owned.length){m.root.add(txt(this,W/2,m.y+120,'尚未占领城池。\n在天下地图攻下城池后，可为每座城选择重农（多产军粮）或重军（每战送后备兵）。',15,'#efe2c4').setOrigin(.5).setAlign('center').setLineSpacing(8).setWordWrapWidth(m.w-60,true));return;}
-  const list=owned.slice(page*per,page*per+per);
-  m.root.add(txt(this,W/2,m.y+58,`军粮 ${s.provisions} · 首次选择免费，之后改方向花军粮`,13,'#c9bf99').setOrigin(.5));
-  list.forEach((c,i)=>{
-   const y=m.y+92+i*(D?62:80),cur=(s.town.focus[c.id]??'balanced') as CityFocus,inc=FOCUS_INCOME[c.tier][cur];
-   m.root.add(txt(this,m.x+28,y,`${c.name}（${TIER_NAME[c.tier]}）· ${FOCUS_NAME[cur]}`,15,'#f4d99f'));
-   m.root.add(txt(this,m.x+28,y+22,`每战 ${incomeText(inc)}`,12,'#b9c9b2'));
-   (['farm','military'] as CityFocus[]).forEach((f,k)=>{
-    const bw=D?110:(m.w-56)/2,bx=D?m.x+m.w-28-bw/2-(1-k)*(bw+8):m.x+28+bw/2+k*(bw+4),by=D?y+16:y+56,cost=cur==='balanced'?0:FOCUS_CHANGE_COST[c.tier];
-    const b=homeCommand(this,bx,by,bw,34,FOCUS_NAME[f]+(cur===f?'✓':cost?` ${cost}`:''),cur===f,cur!==f&&s.provisions>=cost,13);b.hit.setName(`focus-${c.id}-${f}`).on('pointerdown',()=>{this.message=setCityFocus(c.id,f).message;this.openFocus();});m.root.add([b.g,b.hit,b.caption]);
-   });
-  });
-  if(rows>per){const pages=Math.ceil(rows/per),nb=homeCommand(this,m.x+m.w-90,m.y+30,120,32,`第${page+1}/${pages}页 ›`,false,true,13);nb.hit.setName('town-focus-next').on('pointerdown',()=>{this.focusPage=(page+1)%pages;this.openFocus();});m.root.add([nb.g,nb.hit,nb.caption]);}
-  if(this.message)m.root.add(txt(this,W/2,m.y+(D?470:Math.min(H-40,640))-74,this.message,12,'#e8c98a').setOrigin(.5));
-  this.message='';
- }
- private focusPage=0;
  private introSeen():boolean{try{return localStorage.getItem('im_town_intro3')==='1';}catch{return true;}}
  /** 首次进入营寨的简短引导（看过一次后不再弹出）。 */
  private openIntro(){

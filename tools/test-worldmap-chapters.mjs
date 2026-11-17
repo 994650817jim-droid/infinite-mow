@@ -56,7 +56,7 @@ try {
     ck('after ch1: huangjin cleared, hulao open, rest locked', r.ch1.states.huangjin === 'cleared' && r.ch1.states.hulao === 'open' && ['qunxiong', 'guandu', 'chibi'].every(k => r.ch1.states[k] === 'locked'), r.ch1.states);
     ck('new-chapter notice fires once', r.ch1.fresh1 === 1 && r.ch1.fresh2 === 0, r.ch1);
     ck('debug battle does not open map', !r.debugWorld);
-    ck('old v7 save (ch1 cleared) gains map, resources folded into 军粮, no retro banner', r.v7.world && r.v7.merits === 0 && r.v7.grain === 654 + Math.round(321 * 1.5) && r.v7.seen === 2 && r.v7.fresh === 0 && r.v7.states.hulao === 'open', r.v7);
+    ck('old v7 save (ch1 cleared) gains map, resources folded into 军粮, no retro banner', r.v7.world && r.v7.merits === 0 && r.v7.grain === 654 + 321 * 2 && r.v7.seen === 2 && r.v7.fresh === 0 && r.v7.states.hulao === 'open', r.v7);
     ck('hulao cleared → qunxiong open, guandu locked', r.hulao.hulao === 'cleared' && r.hulao.qunxiong === 'open' && r.hulao.guandu === 'locked', r.hulao);
     ck('qunxiong 3/3 → guandu open; guandu 3/3 → chibi open', r.qx.guandu === 'open' && r.qx.chibi === 'locked' && r.gd.chibi === 'open', { qx: r.qx, gd: r.gd });
     ck('legacy flag save still opens map and hulao', r.legacy.world && r.legacy.states.hulao === 'open', r.legacy);

@@ -1,5 +1,6 @@
 import { warnCircle, TELEGRAPH_CLASSIC, groundCracks } from '../ui/Telegraph';
 import { HINT_MOCK, keyOutline } from '../ui/HintStyle';
+import { warnFx } from '../ui/WarnFx';
 import Phaser from 'phaser';
 import type { Enemy } from '../entities/Enemy';
 import type { Player } from '../entities/Player';
@@ -47,6 +48,7 @@ export class LubuUltimate {
       this.boss.invulnerable = true; this.boss.controlImmune = true;
     } else if (this.phase === 'airborne' && now >= this.until) {
       this.phase = 'landing'; this.started = now; this.until = now + C.ultLandingMs;
+      if (!TELEGRAPH_CLASSIC && HINT_MOCK === 'c') warnFx(this.scene).impact('lubu', this.targetX, this.targetY, C.ultRadius);
       this.restore(); this.boss.sprite.setPosition(this.targetX, this.targetY);
       this.fieldUntil = now + C.ultFieldMs;
       this.paintMask();
@@ -89,9 +91,11 @@ export class LubuUltimate {
     }
     if (now < this.fieldUntil) {
       this.groundArt.setVisible(true).setFrame(Math.floor((C.ultFieldMs - this.fieldUntil + now) / 160) % 6).setPosition(this.targetX, this.targetY);
-      warnCircle(this.gfx, this.targetX, this.targetY, C.ultRadius, 0, 0xdc5148, 0xffc77d, false, now);
+      // 特效型警示（默认）：火场外缘用红色杀气火舌圈（序列帧）标出，不再画 8 面小旗；缺图时照旧
+      const ringArt = !TELEGRAPH_CLASSIC && HINT_MOCK === 'c' && warnFx(this.scene).ring('lubu-field', 'lubu', this.targetX, this.targetY, C.ultRadius, now, .55);
+      if (!ringArt) warnCircle(this.gfx, this.targetX, this.targetY, C.ultRadius, 0, 0xdc5148, 0xffc77d, false, now);
       // Eight small perimeter standards, no opaque screen-sized glow.
-      for (let i = 0; i < 8; i++) { const a = i * Math.PI / 4, x = this.targetX + Math.cos(a) * C.ultRadius, y = this.targetY + Math.sin(a) * C.ultRadius; this.gfx.lineStyle(2, 0xd8b677, .8).lineBetween(x, y - 9, x, y + 6); this.gfx.fillStyle(0xa42e30, .9).fillTriangle(x, y - 9, x + 9, y - 5, x, y - 1); }
+      if (!ringArt) for (let i = 0; i < 8; i++) { const a = i * Math.PI / 4, x = this.targetX + Math.cos(a) * C.ultRadius, y = this.targetY + Math.sin(a) * C.ultRadius; this.gfx.lineStyle(2, 0xd8b677, .8).lineBetween(x, y - 9, x, y + 6); this.gfx.fillStyle(0xa42e30, .9).fillTriangle(x, y - 9, x + 9, y - 5, x, y - 1); }
     }
   }
   private warning(t: number): void {
@@ -99,6 +103,8 @@ export class LubuUltimate {
     const r = C.ultRadius;
     // 首领大招预警保留但弱化（默认）：预警图从 0.3 调到 0.2，去掉实心外圈 / 进度圈 / 十字准星，改为落点地裂纹（?telegraph=1 恢复）
     if (!TELEGRAPH_CLASSIC) this.warningArt.setAlpha(HINT_MOCK === 'a' || HINT_MOCK === 'c' ? 0 : .2);
+    // 特效型警示（默认）：方天戟虚影压下 + 红色杀气火舌圈；缺图时退回细虚线
+    if (!TELEGRAPH_CLASSIC && HINT_MOCK === 'c' && warnFx(this.scene).warn('lubu-ult', 'lubu', this.targetX, this.targetY, r, t, this.now)) return;
     if (!TELEGRAPH_CLASSIC && HINT_MOCK === 'c') { keyOutline(this.gfx, this.targetX, this.targetY, r, t, this.now); return; }
     if (!TELEGRAPH_CLASSIC) { groundCracks(this.gfx, this.targetX, this.targetY, r, t); return; }
     // Fixed boundary markers distinguish the true hit area from the expanding countdown.

@@ -317,7 +317,7 @@ export class WorldMapScene extends Phaser.Scene {
 吕布横扫与蓄力冲锋 · 三波后吕布出阵
 奖励：${wins?`军粮 +${rewardGrain(rr.merits,rr.provisions)}`:`首胜得名马「赤兔」（入马厩）· 军粮 +${rewardGrain(r.merits,r.provisions)}`}${this.lossWarning()?'\n'+this.lossWarning():''}`);
   this.action.text.setText(locked?'尚未解锁':'挑战吕布');this.action.image.setAlpha(locked?.45:1);if(locked)this.action.image.disableInteractive();else this.action.image.setInteractive({useHandCursor:true});this.layoutActions(false);}
- private launchChallenge(){let hero:CharacterId='zhaoyun';try{const saved=localStorage.getItem('im_last_hero');if(CHARACTERS.some(c=>c.id===saved))hero=saved as CharacterId;}catch{/* storage unavailable */}
+ private launchChallenge(){let hero:CharacterId=defaultHero(null);try{hero=defaultHero(localStorage.getItem('im_last_hero'));}catch{/* storage unavailable */} // 挑战关也只用主公出战（用户规则 2026-11-16）
   this.registry.remove('campaignTransfer');this.registry.set('runConfig',{character:hero});
   if(this.registry.get('battleReady'))this.scene.start('LubuGameScene');else{this.registry.set('pendingWarlord','LubuGameScene');this.registry.set('loadBattle',true);this.scene.start('BootScene');}}
 /** 攻城出征面板：守军、时长、胜利条件、奖励，选择武将后出征。 */

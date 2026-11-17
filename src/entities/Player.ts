@@ -9,6 +9,7 @@ import { BALANCE, DEPTH, FONT, actorDepth } from '../config';
 import { applySetBonus, RELIC_BY_ID, type RelicSchool } from '../data/relics';
 import type { PlayerStats, WeaponState } from '../types';
 import { WalkGait } from '../systems/WalkGait';
+import { isV2Texture, V2_MARKER_LIFT, V2_WALK_DISPLAY, V2_WALK_ORIGIN_Y } from '../systems/ArtStyle';
 
 /**
  * 枪将普攻节奏（260ms）：蓄力 31ms → 刺出 36ms → 刺到底 109ms → 收枪 84ms。
@@ -96,7 +97,14 @@ export class Player {
   readonly gait: WalkGait;
   private gaitHero = '';
   private gaitLift = 0;
-  private readonly targetHeight = 66;
+  /** 行走帧整格的显示高度（逻辑像素）。v2 整格 88（原生 176，全屏 1080p 下像素 1:1），v1 为 66。 */
+  private get targetHeight(): number { return isV2Texture(this.walkSheet) ? V2_WALK_DISPLAY : 66; }
+  /** 行走帧纵向锚点：v1 居中；v2 让脚底仍落在中心下方 31 像素。 */
+  /** 停步帧：v2 行走图有 <方向>_stand（双脚并拢的站立帧，见 ArtStyle.rotateV2StandFrames），否则用 <方向>_0。 */
+  private standFrame(key: string, dir: string): string { const t = this.scene.textures.get(key); return t.has(`${dir}_stand`) ? `${dir}_stand` : `${dir}_0`; }
+  private get walkOriginY(): number { return isV2Texture(this.walkSheet) ? V2_WALK_ORIGIN_Y : .5; }
+  /** 「主将」标记离精灵中心的高度。 */
+  private get markerLift(): number { return isV2Texture(this.walkSheet) ? V2_MARKER_LIFT : 38; }
   /** 当前帧的纵向锚点（行走帧 0.5；动作帧按脚线换算，使站姿脚底与行走时同一位置）。 */
   private baseOriginY = .5;
   /** 每套动作图集相对行走表的统一缩放与锚点（按待机站姿测量，一次计算后缓存）。 */
@@ -223,7 +231,7 @@ export class Player {
     this.faceLeft = dir === 'left';
     if (this.playAction('attack', dir)) return;
     if (this.scene.textures.exists(this.walkSheet) && this.scene.textures.get(this.walkSheet).has(`${dir}_0`)) {
-      this.sprite.setTexture(visualTextureKey(this.scene,this.walkSheet), `${dir}_0`);
+      const key = visualTextureKey(this.scene,this.walkSheet); this.sprite.setTexture(key, this.standFrame(key, dir));
     }
   }
 
@@ -268,7 +276,7 @@ export class Player {
       if (a) {
         // 动作结束：站着不动时行走层不会换帧，须主动切回当前朝向的站立帧
         this.action = null;
-        if (this.scene.textures.exists(this.walkSheet)) { this.sprite.setTexture(visualTextureKey(this.scene, this.walkSheet), `${this.facing}_0`).setFlipX(false); this.applyTextureScale(moving); }
+        if (this.scene.textures.exists(this.walkSheet)) { const key = visualTextureKey(this.scene, this.walkSheet); this.sprite.setTexture(key, this.standFrame(key, this.facing)).setFlipX(false); this.applyTextureScale(moving); }
       }
       if (moving || !set.idle?.length || this.facing !== 'down') return false;
       frame = set.idle[Math.floor(now / IDLE_FRAME_MS) % set.idle.length];
@@ -301,7 +309,7 @@ export class Player {
     const actRef = framesFigure(this.scene, key, set.idle?.length ? set.idle : set.attack.down);
     const walkH = walkRef?.height ?? sheetFigureHeight(this.scene, walkKey) ?? 90, actH = actRef?.height ?? sheetFigureHeight(this.scene, key) ?? 90;
     const kw = this.targetHeight / walkFrameH, k = kw * walkH / actH;
-    const walkFoot = ((walkRef?.bottom ?? walkFrameH * .96) + 1 - walkFrameH / 2) * kw; // 行走脚底相对中心（世界像素）
+    const walkFoot = ((walkRef?.bottom ?? walkFrameH * .96) + 1 - walkFrameH * this.walkOriginY) * kw; // 行走脚底相对中心（世界像素）
     const originY = ((actRef?.bottom ?? actFrameH * .89) + 1 - walkFoot / k) / actFrameH;
     const fit = { k, originY: Phaser.Math.Clamp(originY, .3, .95) };
     // 测量失败（纹理未就绪）时不缓存，下次再算
@@ -315,7 +323,7 @@ export class Player {
     // 立刻切到该武将的待机帧，避免进战斗先闪一下赵云
     try {
       if (this.scene.textures.get(key).has('down_0')) {
-        this.sprite.setTexture(visualTextureKey(this.scene,key), 'down_0');
+        this.sprite.setTexture(visualTextureKey(this.scene,key), this.standFrame(visualTextureKey(this.scene,key), 'down'));
         this.applyTextureScale();
       }
     } catch {
@@ -340,7 +348,7 @@ export class Player {
       }
     } else if (sheet) {
       // 停下：四个方向都回到站立帧（以前左 / 右 / 上会停在跨步帧上）
-      const key = visualTextureKey(this.scene, this.walkSheet), name = `${this.facing}_0`;
+      const key = visualTextureKey(this.scene, this.walkSheet), name = this.standFrame(key, this.facing);
       if (this.sprite.texture.key !== key || this.sprite.frame.name !== name) this.sprite.setTexture(key, name);
     } else if (!hasFrames && this.sprite.texture.key !== this.charTexture) {
       this.sprite.setTexture(this.charTexture);
@@ -358,7 +366,7 @@ export class Player {
       ? 1 + Math.sin(this.walkPhase * 2) * 0.02
       : 1;
     this.sprite.setScale(base, base * bob);
-    this.baseOriginY = .5; this.sprite.setOrigin(.5, .5);
+    this.baseOriginY = this.walkOriginY; this.sprite.setOrigin(.5, this.baseOriginY);
   }
 
   takeDamage(raw: number, now: number): boolean {
@@ -428,8 +436,8 @@ export class Player {
   update(now: number, dt: number): void {
     this.commandGlow.setPosition(this.x,this.y+21).setVisible(this.alive).setAlpha(.75+.15*Math.sin(now/420));
     this.drawCommandRing(now);
-    this.marker.setPosition(this.x,this.y-38-this.riseY).setVisible(this.alive);
-    this.markerLabel.setPosition(this.x,this.y-45-this.riseY).setVisible(this.alive);
+    this.marker.setPosition(this.x,this.y-this.markerLift-this.riseY).setVisible(this.alive);
+    this.markerLabel.setPosition(this.x,this.y-this.markerLift-7-this.riseY).setVisible(this.alive);
     // 胜利 / 倒地在结算后播放，move 已不再调用：清掉残留的步伐起伏与前倾
     if (this.action?.hold && (this.gaitLift || this.sprite.rotation)) { this.gaitLift = 0; this.sprite.setRotation(0); }
     const t = now < this.knockedUntil ? (now - this.knockedAt) / (this.knockedUntil - this.knockedAt) : 1;

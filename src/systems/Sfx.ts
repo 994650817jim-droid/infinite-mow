@@ -46,6 +46,16 @@ const CONFIG: Record<string, SfxConfig> = {
   gong: { freq: 0, dur: 2.6, type: 'sine', gain: 0, throttleMs: 600, max: 1, priority: 2 },
   playerHurt: { freq: 0, dur: .2, type: 'sine', gain: 0, throttleMs: 160, max: 1, priority: 2 },
   passiveFull: { freq: 0, dur: .4, type: 'sine', gain: 0, throttleMs: 1000, max: 1, priority: 2 },
+  // 关羽拖刀斩：蓄满轻响 / 半月刀气 / 回旋刀气
+  bladeReady: { freq: 0, dur: .35, type: 'sine', gain: 0, throttleMs: 300, max: 1, priority: 2 },
+  bladeWave: { freq: 0, dur: .3, type: 'sine', gain: 0, throttleMs: 120, max: 2, priority: 1 },
+  bladeSpin: { freq: 0, dur: .32, type: 'sine', gain: 0, throttleMs: 120, max: 2, priority: 1 },
+  // 战法迂回袭：蓄满 / 影袭
+  flankReady: { freq: 0, dur: .3, type: 'sine', gain: 0, throttleMs: 300, max: 1, priority: 2 },
+  flankStrike: { freq: 0, dur: .24, type: 'sine', gain: 0, throttleMs: 120, max: 2, priority: 1 },
+  // 战法踏风步：蓄满 / 命中（比迂回袭更轻）
+  windReady: { freq: 0, dur: .22, type: 'sine', gain: 0, throttleMs: 300, max: 1, priority: 1 },
+  windHit: { freq: 0, dur: .14, type: 'sine', gain: 0, throttleMs: 100, max: 2, priority: 1 },
   warCry: { freq: 0, dur: 1.2, type: 'sine', gain: 0, throttleMs: 600, max: 1, priority: 2 },
 };
 
@@ -114,6 +124,13 @@ const RECIPES: Record<string, (v: Voice, t: number, p: number) => number> = {
   /** 武将满层战吼：重鼓开声，合成人声「喝——」（两层八度）叠低沉号角与喘息噪声，尾音再一声鼓；响度压过 BGM。 */
   warCry: (v, t) => { v.drum(t, 92, 38, .4, .55); v.vox(t + .04, 1.05, 128, 168, 1.6); v.vox(t + .04, 1.05, 256, 336, .45); v.tone(t + .08, .95, 'sawtooth', 98, .05, 104, .09); v.tone(t + .08, .95, 'sawtooth', 147, .035, 156, .12); v.noise(t + .03, .7, 'bandpass', 1500, .06, 900, 1.4); v.drum(t + .5, 112, 44, .32, .45); return 1.15; },
   /** 被动满层：两声轻鼓 + 一点金属余音，不抢战斗音。 */
+  bladeReady: (v, t) => { v.metal(t, 1760, .012, .32); v.tone(t + .03, .2, 'sine', 2640, .012, 2700); v.noise(t, .12, 'highpass', 5200, .015); return .35; },
+  bladeWave: (v, t, p) => { v.noise(t, .26, 'bandpass', 900 * p, .09, 2600, 1.2); v.metal(t + .02, 1180 * p, .01, .18); return .3; },
+  bladeSpin: (v, t, p) => { v.noise(t, .3, 'bandpass', 2400 * p, .06, 700, 2.4); v.metal(t + .04, 880 * p, .008, .2); return .32; },
+  flankReady: (v, t) => { v.noise(t, .22, 'bandpass', 1800, .05, 4200, 3); v.metal(t + .05, 1480, .009, .22); return .3; },
+  flankStrike: (v, t, p) => { v.noise(t, .12, 'highpass', 3600 * p, .07, 1800); v.noise(t + .05, .14, 'bandpass', 1300 * p, .05, 600, 2); return .24; },
+  windReady: (v, t) => { v.noise(t, .2, 'bandpass', 2600, .03, 5200, 2.5); v.tone(t + .04, .14, 'sine', 1980, .008, 2350); return .22; },
+  windHit: (v, t, p) => { v.noise(t, .11, 'highpass', 4800 * p, .045, 2600); return .14; },
   passiveFull: (v, t) => { v.drum(t, 140, 60, .12, .22); v.drum(t + .12, 150, 62, .15, .26); v.metal(t + .12, 1320, .008, .3); return .4; },
   playerHurt: (v, t, p) => { v.noise(t, .12, 'lowpass', 1400 * p, .09, 300); v.tone(t, .16, 'sine', 230 * p, .06, 110); return .17; },
 };

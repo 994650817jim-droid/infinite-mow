@@ -6,11 +6,19 @@ import { emptyGear, type GearStats } from './ItemEffects';
 
 export type AttributeId = 'might' | 'quickness' | 'critical' | 'constitution' | 'agility' | 'command';
 export type ZhaoMasteryId = 'dragon_gallop' | 'cloud_pierce';
+/**
+ * 关羽「拖刀斩」（2026-11-16 用户：「拖刀斩不要这么容易触发」「还可以再久一点才触发」）：触发所需移动距离 200/160/130 → 560/480/400（约 14/12/10 个身位），
+ * 单次刀气加强 0.5/0.65/0.75 → 1.1/1.5/1.8、三级回旋 0.4 → 1.0，触发少了但每次更有分量（总收益约为原来 78%）。
+ * 武器逻辑、增益图标进度（BuffHud）、技艺说明都读这里。
+ */
+export const DRAG_TRAVEL: readonly number[] = [560, 480, 400], DRAG_WAVE_MUL: readonly number[] = [1.1, 1.5, 1.8], DRAG_SPIN_MUL = 1;
+/** 拖刀斩触发距离折合身位（约 40 像素一个身位），说明文字用。 */
+export const dragBodyLengths = (lv: number): string => String(Math.round(DRAG_TRAVEL[lv - 1] / 40 * 2) / 2);
 export const MARTIALS = {
   dragon_gallop: {character:'zhaoyun',name:'龙胆连刺',desc:'每级连刺效率 +8%'},
   cloud_pierce: {character:'zhaoyun',name:'游龙穿云',desc:'每级枪长 +10%、穿透 +1'},
   dragon_charge: {character:'guanyu',name:'青龙蓄势',desc:'四次基础挥砍后重斩 140%/165%/190%；三级击退'},
-  dragging_blade: {character:'guanyu',name:'拖刀斩',desc:'移动约5/4/3个身位蓄刀气；三级回旋'},
+  dragging_blade: {character:'guanyu',name:'拖刀斩',desc:'移动约14/12/10个身位蓄刀气；三级回旋'},
   // 2026-11-16：黄忠改用宝雕弓，连弩武学归黄月英
   steady_aim: {character:'huangyueying',name:'百步穿杨',desc:'静止最多5秒，每秒暴击 +3/4/5%；移动衰减'},
   pearl_volley: {character:'huangyueying',name:'连珠齐射',desc:'每 5/4/3 次基础射击追加70%伤害箭'},
@@ -84,6 +92,8 @@ export class RunGrowth {
   /** W3 大城特产（洛阳）：本命武器伤害加成，开局由 applyCitySpecialties 设置。 */
   permanentDamage = 0;
   berserkUntil = 0;
+  /** 遗珍「乌巢酒葫」豪饮结束时刻（战斗时钟）。 */
+  wineUntil = 0;
   stationarySeconds = 0;
   travel = 0;
   slashCount = 0;
@@ -91,7 +101,7 @@ export class RunGrowth {
   flagCount = 0;
   formationReadyAt = 0;
   recordMovement(distance: number, dt: number): void {
-    if(this.masteries.dragging_blade) this.travel=Math.min(200,this.travel+Math.max(0,distance));
+    if(this.masteries.dragging_blade) this.travel=Math.min(DRAG_TRAVEL[0],this.travel+Math.max(0,distance));
     this.stationarySeconds=distance>.5?Math.max(0,this.stationarySeconds-dt*2):Math.min(5,this.stationarySeconds+dt);
   }
   aimCriticalBonus(): number { return this.masteries.steady_aim ? this.stationarySeconds*(.02+.01*this.masteries.steady_aim) : 0; }
@@ -143,7 +153,8 @@ export class RunGrowth {
   damageMultiplier(now: number): number {
     const might = 1 + ATTRIBUTE_STEP.might * this.attributes.might;
     const fury = this.lowHp && this.gear.specials.includes('fury') ? 1.25 : 1;
-    return Math.min(2, might * (now < this.berserkUntil ? 1.25 : 1) * (1 + this.permanentDamage) * (1 + this.gear.damage)) * fury;
+    const wine = now < this.wineUntil && this.gear.specials.includes('jiuhu') ? 1.4 : 1; // 遗珍「乌巢酒葫」（BossRelics.RELIC.jiuhuDamage）
+    return Math.min(2, might * (now < this.berserkUntil ? 1.25 : 1) * (1 + this.permanentDamage) * (1 + this.gear.damage)) * fury * wine;
   }
 
   attackSpeedMultiplier(now: number): number {
@@ -158,7 +169,7 @@ export class RunGrowth {
 
   criticalBonus(): number { return Math.min(0.1, ATTRIBUTE_STEP.critical * this.attributes.critical) + this.gear.crit; }
   bonusMaxHp(): number { return Math.round(BALANCE.player.maxHp * (ATTRIBUTE_STEP.constitution * this.attributes.constitution + this.gear.hp)); }
-  incomingDamageMultiplier(): number { return (this.trinkets.includes('heart_mirror') ? 0.85 : 1)*(this.build.tags().bulwark>=2?.95:1)*Math.max(.6, 1 - this.gear.reduce); }
+  incomingDamageMultiplier(): number { return (this.gear.specials.includes('weixi') ? 1.15 : 1)*(this.trinkets.includes('heart_mirror') ? 0.85 : 1)*(this.build.tags().bulwark>=2?.95:1)*Math.max(.6, 1 - this.gear.reduce); }
   allyDamageMultiplier(): number { return (this.trinkets.includes('tiger_tally') ? 1.2 : 1)*(this.build.tags().command>=2?1.05:1)*(1 + this.gear.ally)*(1 + ATTRIBUTE_STEP.command * this.attributes.command); }
   /** 兵装「对精锐 / 首领伤害」与名器「斩将」：只作用于武将本人的命中。 */
   gearHitMultiplier(kind: string): number { return kind === 'boss' ? 1 + this.gear.elite + this.gear.boss : kind === 'elite' ? 1 + this.gear.elite : 1; }

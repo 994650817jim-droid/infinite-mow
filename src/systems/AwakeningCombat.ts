@@ -1,6 +1,6 @@
 import {buildVfx} from './BuildVfx';
 import {SHOW_RANGE_RINGS} from '../ui/RangeRings';
-import Phaser from 'phaser';import type {Enemy} from '../entities/Enemy';import type {Ally} from '../entities/Ally';import type {Player} from '../entities/Player';import {activeAwakenings} from '../data/awakenings';
+import Phaser from 'phaser';import type {Enemy} from '../entities/Enemy';import type {Ally} from '../entities/Ally';import type {Player} from '../entities/Player';import {activeAwakenings} from '../data/awakenings';import {type BuffProgress,countProgress,distanceProgress,timerProgress} from '../ui/BuffProgress';
 interface Hit{enemy:Enemy;spawn:number;damage:number;fire:boolean;}
 /** Only original weapon hits enter this dispatcher; derived damage is queued and non-recursive. */
 export class AwakeningCombat{
@@ -24,6 +24,18 @@ export class AwakeningCombat{
  if(controlled)run('pure_control',2000,()=>this.burst(e.x,e.y,85,4,damage*.3,now));
  }
  onKill(e:Enemy,now:number){if(this.burning(e,now)&&this.ready('pure_flame',now,1000)){for(const t of this.targets(e.x,e.y,100).filter(t=>t!==e).slice(0,4)){this.ignite(t,Math.max(2,e.maxHp*.02),now);buildVfx(this.scene).emit('pure_flame',(e.x+t.x)/2,(e.y+t.y)/2,now,75,Math.atan2(t.y-e.y,t.x-e.x),360,true);};if(this.flashes.length<16)this.flashes.push({x:e.x,y:e.y,r:100,until:now+260,fire:true});}}
+ /** 增益图标的触发进度（只读，供 BuffHud 显示；id 为觉醒 id）。 */
+ progress(id:string,now:number):BuffProgress|null{const cd=this.cds.get(id)??0;
+ switch(id){
+ case 'peerless':return countProgress(this.hits%4,4,'下一击暴击即追击');
+ case 'pure_combo':return countProgress(this.hits%6,6,'下一击追击扩散');
+ case 'roaming_break':return distanceProgress(this.distance,180,'蓄满势后下一击冲阵');
+ case 'pure_skirmish':return distanceProgress(this.distance,200,'下一击破阵');
+ case 'pure_command':return timerProgress(cd,6000,now,'即将发令');
+ }
+ const cycle=({fire_gate:6000,pure_critical:3000,pure_charge:3000,pure_control:2000,iron_army:8000,pure_flame:1000} as Record<string,number>)[id];
+ return cycle&&now<cd?timerProgress(cd,cycle,now,'','冷却'):null;
+ }
  allyIncoming(u:Ally,now:number){const g=this.guards.get(u);return g&&g.life===u.lifeId&&now<g.until?.75:1;}
  onAllyHurt(u:Ally,now:number){if(!this.ready('iron_army',now,8000))return;for(const t of this.units.filter(t=>t.active&&Math.hypot(t.x-u.x,t.y-u.y)<=140).slice(0,3))this.guards.set(t,{life:t.lifeId,until:now+2000});buildVfx(this.scene).emit('iron_army',u.x,u.y-8,now,90,0,500,true);this.push(u.x,u.y,now);}
  private push(x:number,y:number,now:number){for(const e of this.targets(x,y,80).filter(e=>e.kind!=='boss'&&!e.controlImmune&&e.def.behavior!=='wall').slice(0,3)){const dx=e.x-x,dy=e.y-y,d=Math.hypot(dx,dy)||1;e.sprite.x+=dx/d*24;e.sprite.y+=dy/d*24;}if(this.flashes.length<16)this.flashes.push({x,y,r:80,until:now+260,fire:false});}

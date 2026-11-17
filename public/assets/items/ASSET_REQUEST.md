@@ -4,6 +4,7 @@
 > - `item-icons.webp` + `item-icons.json`：66 帧图集（48 基础 + 18 名器，帧名 = 道具 id，每帧 128×128），BootScene 以 `item_icons` 加载；
 > - `item-chest.webp`：宝箱 3 帧（关 / 开 / 空，96×80），以 `item_chest` 加载，开箱时播放。
 > 品质框仍由 `ItemQuality.ts` 程序绘制；某个 id 缺帧或图集没加载时，该道具自动回退为程序化槽位剪影。第 4 项品质光柱未做（仍为程序绘制）。
+> **2026-11-16 补充**：首领遗珍首批 10 个图标（ChatGPT 对话「生成装备图标拼图」，原图 `originals/dsh_items_10_relics.png`，5×2）已并入同一图集，帧名为 relic_* ，图集现为 76 帧（1408×896）。
 > 以下为当初的需求原文。
 
 现状：`src/ui/ItemQuality.ts` 的 `ensureItemTextures` 为 6 个槽位各画一张 64×64 剪影（`item_icon_<槽位>`）和战场宝箱 `item_chest`。品质只靠边框和底色区分，同槽位道具图标相同。素材到位后按下面的贴图键名加载即可替换（缺图时自动用占位图）。

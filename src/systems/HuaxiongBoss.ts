@@ -3,6 +3,7 @@ import type {Enemy} from '../entities/Enemy';
 import type {Player} from '../entities/Player';
 import type {Legion} from './Legion';
 import {TELEGRAPH_CLASSIC,groundCracks,laneCracks,windupFlash} from '../ui/Telegraph';
+import {HINT_MOCK} from '../ui/HintStyle';import {warnFx} from '../ui/WarnFx';
 type State='approach'|'sweepWarn'|'sweep'|'chargeWarn'|'charge'|'recover'|'enrage'|'slamWarn'|'slam'|'dead';
 interface Host {scene:Phaser.Scene;boss:Enemy;player:Player;army:Legion;hurtTroops:(x:number,y:number,r:number,d:number,now:number,a?:number,arc?:number)=>void;sfx:()=>void;}
 /** Combat-clock melee boss, no independent combat timers. */
@@ -25,9 +26,11 @@ export class HuaxiongBoss {
     this.h.hurtTroops(b.x,b.y,r,damage,now,this.angle,arc);this.metrics.impacts++;
   }
   private lockedDir():number{return Math.abs(Math.cos(this.angle))>Math.abs(Math.sin(this.angle))?Math.cos(this.angle)<0?1:2:Math.sin(this.angle)<0?3:0;}
-  private now=0;
+  private now=0;private slamArt=false;
+  private fxOn():boolean{return !TELEGRAPH_CLASSIC&&HINT_MOCK==='c';}
   private strip(from:number,to:number,width:number,color:number,alpha:number):void {const c=Math.cos(this.angle),n=Math.sin(this.angle),w=width/2;
     // 低调预警（默认）：不画填色长条与描边，改为沿刀路的地裂纹（预警时随蓄力加深，落下 / 冲击波时到头）
+    if(!TELEGRAPH_CLASSIC&&!this.state.endsWith('Warn')&&this.slamArt)return;// 斩下后（含二阶段冲击波）由裂地命中图表现，不再逐帧画
     if(!TELEGRAPH_CLASSIC){const warn=this.state.endsWith('Warn'),p=warn?Math.min(1,Math.max(0,(this.now-this.started)/Math.max(1,this.until-this.started))):1;laneCracks(this.gfx,this.x+c*from,this.y+n*from,this.angle,to-from,width,p,!warn);return;}this.gfx.fillStyle(color,alpha).lineStyle(2,0xf3c778,.9).beginPath().moveTo(this.x+c*from-n*w,this.y+n*from+c*w).lineTo(this.x+c*to-n*w,this.y+n*to+c*w).lineTo(this.x+c*to+n*w,this.y+n*to-c*w).lineTo(this.x+c*from+n*w,this.y+n*from-c*w).closePath().fillPath().strokePath();}
   private lineHit(from:number,to:number,width:number,damage:number,now:number,seen:Set<string>):void {const c=Math.cos(this.angle),n=Math.sin(this.angle);const inside=(x:number,y:number,r:number)=>{const dx=x-this.x,dy=y-this.y,a=dx*c+dy*n;return a>=from-r&&a<=to+r&&Math.abs(-dx*n+dy*c)<=width/2+r;};const p=this.h.player;if(!seen.has('p')&&inside(p.x,p.y,p.radius)){seen.add('p');p.takeDamage(damage,now);}for(const a of this.h.army.units){const k=a.id+':'+a.lifeId;if(a.active&&!seen.has(k)&&inside(a.x,a.y,a.radius)){seen.add(k);this.h.army.hurtByBoss(a,damage,now);}}}
   update(dt:number,now:number):void{
@@ -42,13 +45,15 @@ export class HuaxiongBoss {
       else{if(d>85){b.sprite.x+=dx/d*b.def.speed*(this.phase2?1.15:1)*dt;b.sprite.y+=dy/d*b.def.speed*(this.phase2?1.15:1)*dt;}this.pose('huaxiong_walk',dir*4+(d>85?Math.floor(now/110)%4:0));if(now<this.hurtUntil)this.pose('huaxiong_actions',4);}
     }
     if(this.state==='slamWarn'){
-      this.pose('huaxiong_attack',this.lockedDir()*4+(now-this.started>=450?1:0));this.strip(0,220,44,0xe9bd70,.22);if(!TELEGRAPH_CLASSIC)windupFlash(b,now);
-      if(now>=this.until){this.enter('slam',now,this.phase2?1000:400);this.metrics.slams++;this.waveVictims.clear();this.h.sfx();this.lineHit(0,220,44,18,now,new Set());this.applied=true;}
+      this.pose('huaxiong_attack',this.lockedDir()*4+(now-this.started>=450?1:0));
+      // 特效型警示（默认）：刀路上碎石跳动、地缝透光；缺图时照旧
+      if(!(this.fxOn()&&warnFx(this.h.scene).warn('hx-slam','rift',this.x,this.y,220,(now-this.started)/Math.max(1,this.until-this.started),now,this.angle)))this.strip(0,220,44,0xe9bd70,.22);if(!TELEGRAPH_CLASSIC)windupFlash(b,now);
+      if(now>=this.until){this.enter('slam',now,this.phase2?1000:400);this.metrics.slams++;this.slamArt=this.fxOn()&&warnFx(this.h.scene).impact('rift',this.x,this.y,220,this.angle);this.waveVictims.clear();this.h.sfx();this.lineHit(0,220,44,18,now,new Set());this.applied=true;}
     }else if(this.state==='slam'){
       this.pose('huaxiong_attack',this.lockedDir()*4+2);const age=now-this.started;
       this.strip(0,220,44,0x4f3024,.65);
-      if(age<360)for(let i=0;i<8;i++){const t=24+i*25,spread=(i%2?1:-1)*(6+age*.035),px=this.x+Math.cos(this.angle)*t-Math.sin(this.angle)*spread,py=this.y+Math.sin(this.angle)*t+Math.cos(this.angle)*spread;this.gfx.fillStyle(0xb59a74,(1-age/360)*.45).fillCircle(px,py,5+age*.014).fillStyle(0x765b40,1-age/360).fillRect(px-2,py-2-Math.sin(age/360*Math.PI)*12,4,4);}
-      for(let i=1;i<=7;i++){const t=i*29;this.gfx.lineStyle(2,0xd1aa76,.8).lineBetween(this.x+Math.cos(this.angle)*t,this.y+Math.sin(this.angle)*t,this.x+Math.cos(this.angle)*t-Math.sin(this.angle)*(i%2?11:-11),this.y+Math.sin(this.angle)*t+Math.cos(this.angle)*(i%2?11:-11));}
+      if(age<360&&!this.slamArt)for(let i=0;i<8;i++){const t=24+i*25,spread=(i%2?1:-1)*(6+age*.035),px=this.x+Math.cos(this.angle)*t-Math.sin(this.angle)*spread,py=this.y+Math.sin(this.angle)*t+Math.cos(this.angle)*spread;this.gfx.fillStyle(0xb59a74,(1-age/360)*.45).fillCircle(px,py,5+age*.014).fillStyle(0x765b40,1-age/360).fillRect(px-2,py-2-Math.sin(age/360*Math.PI)*12,4,4);}
+      if(!this.slamArt)for(let i=1;i<=7;i++){const t=i*29;this.gfx.lineStyle(2,0xd1aa76,.8).lineBetween(this.x+Math.cos(this.angle)*t,this.y+Math.sin(this.angle)*t,this.x+Math.cos(this.angle)*t-Math.sin(this.angle)*(i%2?11:-11),this.y+Math.sin(this.angle)*t+Math.cos(this.angle)*(i%2?11:-11));}
       if(!this.applied){this.applied=true;this.lineHit(0,220,44,18,now,new Set());}
       if(this.phase2&&age>=200){const front=Math.min(180,(age-200)*.36),back=Math.max(0,front-Math.max(12,dt*360));this.strip(back,front+12,70,0xc59a67,.7);this.lineHit(back,front+12,70,12,now,this.waveVictims);}
       if(now>=this.until){this.nextSlam=now+8000;this.enter('recover',now,450);}

@@ -1,3 +1,4 @@
+import {WARN_FX_FILES} from '../ui/WarnFx';
 import {HOME_ART_HEROES} from '../data/characters';
 import {GROWTH_ICON_IDS} from '../ui/GrowthIcons';
 import {TACTICS,TREASURES} from '../data/builds';
@@ -8,6 +9,8 @@ import { GAME_WIDTH } from '../config';
 import { createGameTextures, createWalkPlaceholders, registerWalkSheet } from '../systems/TextureFactory';
 import { HERO_ACTION_FILES } from '../data/heroActions';
 import { applyHdHeroSheets } from '../systems/HdHeroSheets';
+import { warmIffTextures } from '../systems/IffOverlay';
+import { applyArtStyleUrls, applyV2TroopFrames, isV2Texture, rotateV2StandFrames } from '../systems/ArtStyle';
 
 export class BootScene extends Phaser.Scene {
   private shellOnly=false;
@@ -17,6 +20,8 @@ export class BootScene extends Phaser.Scene {
 
   preload(): void {
     this.load.spritesheet('build_vfx','assets/build-vfx/styles-ai-v1.png',{frameWidth:64,frameHeight:64});
+    // 特效型警示序列帧（src/ui/WarnFx.ts；缺图时首领招式退回细虚线 / 无提示）
+    for(const f of Object.values(WARN_FX_FILES))this.load.spritesheet(f.key,f.file,{frameWidth:f.w,frameHeight:f.h});
     this.load.spritesheet('refined_spear','assets/combat-refined/spear-sequence.png',{frameWidth:384,frameHeight:64});
     this.load.spritesheet('refined_impact','assets/combat-refined/impact-sequence.png',{frameWidth:64,frameHeight:64});
     // 三选一 / 增益栏图标：2026-11-14 起使用 ChatGPT 生成的厚涂图标（assets/upgrade-icons，tools/build-upgrade-icons.mjs 切图）；
@@ -174,6 +179,8 @@ export class BootScene extends Phaser.Scene {
     this.load.image('ui_button', 'assets/processed/ui_button.png');
     // 本命武器 / 通用被动 / 稀有：新厚涂图标（程序化 icon_* 在已存在时不会再生成）
     for(const [key,id] of [['icon_1','weapon_spear'],['icon_2','weapon_crossbow'],['icon_3','weapon_flame'],['icon_guandao','weapon_guandao'],['icon_zhenbei','weapon_zhenbei'],['icon_lianhuan','weapon_lianhuan'],['icon_sunknives','weapon_sunknives'],['icon_fans','weapon_fans'],['icon_baodiao','weapon_baodiao'],['icon_shemao','weapon_shemao'],['icon_zhanjin','weapon_zhanjin'],['icon_shuanggu','weapon_shuanggu'],['icon_passive','passive'],['icon_rare','rare']] as const)this.load.image(key,'assets/upgrade-icons/'+id+'.webp');
+    // 人物画风 v2（?art=v2）：有新图的图集换成 v2 文件，键名不变
+    applyArtStyleUrls(this.load);
   }
 
   create(): void {
@@ -231,14 +238,20 @@ export class BootScene extends Phaser.Scene {
       this.textures.get(key).setFilter((key.startsWith('ground') && !key.startsWith('ground_overhaul')) || key === 'shadow'
         ||key.startsWith('epic_')
         // 厚涂图标（128px 缩到约 52px 显示）用线性过滤，避免锯齿
-        ||key.startsWith('growth_icon_')||key.startsWith('build_icon_')||/^icon_(1|2|3|guandao|passive|rare)$/.test(key) ? Phaser.Textures.FilterMode.LINEAR : Phaser.Textures.FilterMode.NEAREST);
+        ||key.startsWith('growth_icon_')||key.startsWith('build_icon_')||(key.startsWith('icon_shu_')&&isV2Texture(key))||/^icon_(1|2|3|guandao|passive|rare)$/.test(key) ? Phaser.Textures.FilterMode.LINEAR : Phaser.Textures.FilterMode.NEAREST);
     }
     for(const key of ['huaxiong_walk','huaxiong_attack']){if(!this.textures.exists(key))continue;const t=this.textures.get(key);['down','left','right','up'].forEach((dir,row)=>{for(let col=0;col<4;col++)if(!t.has(dir+'_'+col))t.add(dir+'_'+col,0,col*128,row*128,128,128);});}
     createReadableTextures(this);
     applyHdHeroSheets(this, ['hero_walk_sheet', ...Object.keys(HERO_ACTION_FILES).map(k => k.replace(/_actions$/, '_walk_sheet'))], Object.keys(HERO_ACTION_FILES));
+    // 人物画风 v2：武将行走图的停步帧换成双脚并拢的那一帧（见 rotateV2StandFrames）
+    for (const key of ['hero_walk_sheet', ...Object.keys(HERO_ACTION_FILES).map(k => k.replace(/_actions$/, '_walk_sheet'))]) rotateV2StandFrames(this, key);
+    // 人物画风 v2：兵种图集按 v2 格子重切帧（旧的 96 / 128×112 切法会切错）
+    applyV2TroopFrames(this);
     const hint = document.getElementById('boot-hint');
     if (hint) hint.style.display = 'none';
     this.registry.set('battleReady',true);
+    // 敌我区分：部曲 / 敌军换色（与描边）贴图在浏览器空闲时逐张预生成，进战斗时不再卡顿
+    warmIffTextures(this.game);
     // 界面通用贴图（水墨按钮、小镇美术）常驻，不随战斗图集卸载
     this.registry.set('battleTextureKeys',this.textures.getTextureKeys().filter(k=>!k.startsWith('__')&&!k.startsWith('ui_war_')&&!k.startsWith('btn_ink_')&&!k.startsWith('town_')&&!k.startsWith('ach_')&&k!=='art_panel'&&k!=='icon_guandao'));
     if(import.meta.env.DEV&&new URLSearchParams(location.search).get('dev')==='1'&&new URLSearchParams(location.search).has('thirdStage')){this.scene.start('ThirdChapterScene');}else if(this.registry.get('pendingThird')){this.registry.remove('pendingThird');this.scene.start('ThirdChapterScene');}else if(this.registry.get('pendingWarlord')){const key=String(this.registry.get('pendingWarlord'));this.registry.remove('pendingWarlord');this.scene.start(key);}else this.scene.start('MenuScene');

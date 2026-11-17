@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import {isV2Texture} from './ArtStyle';
 /** Cached visual-only derivatives; original atlases and animation frame geometry remain intact. */
 export function visualTextureKey(scene:Phaser.Scene,key:string):string {return scene.textures.exists(`readable_${key}`)?`readable_${key}`:key;}
 export function createReadableTextures(scene:Phaser.Scene):void {
@@ -8,7 +9,8 @@ export function createReadableTextures(scene:Phaser.Scene):void {
     {keys:['enemy_infantry_walk_sheet','enemy_shield_walk_sheet','enemy_archer_walk_sheet','enemy_cavalry_run_sheet','enemy_officer_walk_sheet','enemy_archer_attack_sheet'],green:false,hero:false},
   ];
   for(const group of groups)for(const key of group.keys){
-    const target=`readable_${key}`;if(!scene.textures.exists(key)||scene.textures.exists(target))continue;
+    // v2 画风自带深色描边，不再生成加浅色外描边的派生图
+    const target=`readable_${key}`;if(isV2Texture(key))continue;if(!scene.textures.exists(key)||scene.textures.exists(target))continue;
     const original=scene.textures.get(key),source=original.getSourceImage() as HTMLImageElement;
     const texture=scene.textures.createCanvas(target,source.width,source.height)!;
     const ctx=texture.context;ctx.drawImage(source,0,0);

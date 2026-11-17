@@ -1,0 +1,246 @@
+import Phaser from 'phaser';
+import { RENDER_SCALE } from '../config';
+
+/**
+ * 人物画风开关（共享笔记 art-style-v2-spec.md）。
+ * v1：现有 Q 版高清绘画图集；v2：「营火写实像素」——写实比例、真像素、深色描边、厚涂。
+ * 选择顺序：URL ?art=v1|v2 → localStorage im_art_style → 默认 v2（用户认可新画风后改为默认；?art=v1 或设置「人物画风：旧版」切回）。
+ * v2 只替换 ART_V2_FILES 里列出的图集，其余单位自动沿用 v1。
+ */
+export type ArtStyle = 'v1' | 'v2';
+export const DEFAULT_ART_STYLE: ArtStyle = 'v2';
+const STORE_KEY = 'im_art_style';
+
+/** v2 图集：纹理键 → 文件（行走 4×4、动作 4×7，原生格 176 / 232，人物约 152 美术像素高，160 色）。 */
+export const ART_V2_FILES: Readonly<Record<string, string>> = {
+  hero_walk_sheet: 'assets/processed-v2/zhaoyun_walk_sheet.png',
+  zhaoyun_actions: 'assets/hero-actions-v2/zhaoyun.png',
+  guanyu_walk_sheet: 'assets/processed-v2/guanyu_walk_sheet.png',
+  guanyu_actions: 'assets/hero-actions-v2/guanyu.png',
+  zhangfei_walk_sheet: 'assets/processed-v2/zhangfei_walk_sheet.png',
+  zhangfei_actions: 'assets/hero-actions-v2/zhangfei.png',
+  machao_walk_sheet: 'assets/processed-v2/machao_walk_sheet.png',
+  machao_actions: 'assets/hero-actions-v2/machao.png',
+  huangzhong_walk_sheet: 'assets/processed-v2/huangzhong_walk_sheet.png',
+  huangzhong_actions: 'assets/hero-actions-v2/huangzhong.png',
+  zhuge_walk_sheet: 'assets/processed-v2/zhuge_walk_sheet.png',
+  zhuge_actions: 'assets/hero-actions-v2/zhuge.png',
+  weiyan_walk_sheet: 'assets/processed-v2/weiyan_walk_sheet.png',
+  weiyan_actions: 'assets/hero-actions-v2/weiyan.png',
+  liubei_walk_sheet: 'assets/processed-v2/liubei_walk_sheet.png',
+  liubei_actions: 'assets/hero-actions-v2/liubei.png',
+  pangtong_walk_sheet: 'assets/processed-v2/pangtong_walk_sheet.png',
+  pangtong_actions: 'assets/hero-actions-v2/pangtong.png',
+  huangyueying_walk_sheet: 'assets/processed-v2/huangyueying_walk_sheet.png',
+  huangyueying_actions: 'assets/hero-actions-v2/huangyueying.png',
+  diaochan_walk_sheet: 'assets/processed-v2/diaochan_walk_sheet.png',
+  diaochan_actions: 'assets/hero-actions-v2/diaochan.png',
+  // 孙尚香：新增可玩武将会话出图（分支 claude/new-heroes-46a60c 提交 24916eb，两边合并后文件才齐；缺文件时加载失败自动沿用 v1）
+  sunshangxiang_walk_sheet: 'assets/processed-v2/sunshangxiang_walk_sheet.png',
+  sunshangxiang_actions: 'assets/hero-actions-v2/sunshangxiang.png',
+  // 第 2 批：我方兵种（4×4，见 V2_TROOP_KEYS / applyV2TroopFrames）
+  shu_swordsman_walk_sheet: 'assets/processed-v2/troops/swordsman_walk.png',
+  shu_swordsman_attack_sheet: 'assets/processed-v2/troops/swordsman_attack.png',
+  shu_spearman_walk_sheet: 'assets/processed-v2/troops/spearman_walk.png',
+  shu_spearman_attack_sheet: 'assets/processed-v2/troops/spearman_attack.png',
+  shu_archer_walk_sheet: 'assets/processed-v2/troops/archer_walk.png',
+  shu_archer_attack_sheet: 'assets/processed-v2/troops/archer_attack.png',
+  legion_crossbowman_walk: 'assets/processed-v2/troops/crossbowman_walk.png',
+  legion_crossbowman_action: 'assets/processed-v2/troops/crossbowman_attack.png',
+  legion_guardian_walk: 'assets/processed-v2/troops/guardian_walk.png',
+  legion_rider_walk: 'assets/processed-v2/troops/rider_walk.png',
+  legion_halberdier_walk: 'assets/processed-v2/troops/halberdier_walk.png',
+  legion_halberdier_action: 'assets/processed-v2/troops/halberdier_attack.png',
+  legion_medic_walk: 'assets/processed-v2/troops/medic_walk.png',
+  legion_medic_action: 'assets/processed-v2/troops/medic_attack.png',
+  // 第 3 批（一）：黄巾章小兵 + 通用弓兵
+  'yellow_swordsman-walk-v4': 'assets/processed-v2/enemies/yellow_swordsman_walk.png',
+  'yellow_swordsman-attack-v4': 'assets/processed-v2/enemies/yellow_swordsman_attack.png',
+  'yellow_shield-walk-v4': 'assets/processed-v2/enemies/yellow_shield_walk.png',
+  'yellow_shield-attack-v4': 'assets/processed-v2/enemies/yellow_shield_attack.png',
+  'yellow_spear-walk-v5': 'assets/processed-v2/enemies/yellow_spear_walk.png',
+  'yellow_spear-attack-v5': 'assets/processed-v2/enemies/yellow_spear_attack.png',
+  yellow_shaman_walk: 'assets/processed-v2/enemies/yellow_shaman_walk.png',
+  yellow_shaman_cast: 'assets/processed-v2/enemies/yellow_shaman_attack.png',
+  enemy_archer_walk_sheet: 'assets/processed-v2/enemies/enemy_archer_walk.png',
+  enemy_archer_attack_sheet: 'assets/processed-v2/enemies/enemy_archer_attack.png',
+  // 第 3 批（二）：通用敌军（黄巾装束，各章通用）+ 西凉军（第 2 章，只有行走图）
+  enemy_infantry_walk_sheet: 'assets/processed-v2/enemies/enemy_infantry_walk.png',
+  enemy_shield_walk_sheet: 'assets/processed-v2/enemies/enemy_shield_walk.png',
+  enemy_officer_walk_sheet: 'assets/processed-v2/enemies/enemy_officer_walk.png',
+  enemy_cavalry_run_sheet: 'assets/processed-v2/enemies/enemy_cavalry_walk.png',
+  enemy_cavalry_charge_sheet: 'assets/processed-v2/enemies/enemy_cavalry_charge.png',
+  xiliang_infantry_walk: 'assets/processed-v2/enemies/xiliang_infantry_walk.png',
+  xiliang_shield_walk: 'assets/processed-v2/enemies/xiliang_shield_walk.png',
+  xiliang_archer_walk: 'assets/processed-v2/enemies/xiliang_archer_walk.png',
+  xiliang_cavalry_walk: 'assets/processed-v2/enemies/xiliang_cavalry_walk.png',
+  xiliang_elite_walk: 'assets/processed-v2/enemies/xiliang_elite_walk.png',
+  // 第 3 批（三）：飞熊军、虎豹骑（战斗开始时由 TroopArt 按需加载）
+  feixiong_walk: 'assets/processed-v2/enemies/feixiong_walk.png',
+  feixiong_attack: 'assets/processed-v2/enemies/feixiong_attack.png',
+  hubao_walk: 'assets/processed-v2/enemies/hubao_walk.png',
+  // 兵种小图标（营地「招兵营」页签等）：从 v2 胸像裁出的头肩像
+  icon_shu_swordsman: 'assets/troop-portraits-v2/icon_swordsman.png',
+  icon_shu_spearman: 'assets/troop-portraits-v2/icon_spearman.png',
+  icon_shu_archer: 'assets/troop-portraits-v2/icon_archer.png',
+  // 第 4 批：第 3~5 章首领（4×8 动作图集，每格 288；由 loadBossSheet 在章节场景 preload 里载入）
+  third_lijue: 'assets/bosses-v2/third_lijue.png',
+  third_yuanshu: 'assets/bosses-v2/third_yuanshu.png',
+  third_zhangxiu: 'assets/bosses-v2/third_zhangxiu.png',
+  guandu_yanliang: 'assets/bosses-v2/guandu_yanliang.png',
+  guandu_wenchou: 'assets/bosses-v2/guandu_wenchou.png',
+  guandu_chunyuqiong: 'assets/bosses-v2/guandu_chunyuqiong.png',
+  chibi_caimao: 'assets/bosses-v2/chibi_caimao.png',
+  chibi_caochun: 'assets/bosses-v2/chibi_caochun.png',
+};
+/** v2 主将行走整格的显示高度（逻辑像素）：原生格 176 → 88，即 1080p 全屏（渲染 2 倍）下 1 美术像素 = 1 屏幕像素。
+ * 人物约 76 逻辑像素高（用户要求比 v1 大一些）。 */
+export const V2_WALK_DISPLAY = 88;
+/** v2 行走格的脚底行（描边所在最低行，原生像素）与格高。 */
+export const V2_WALK_FOOT = 168, V2_WALK_CELL = 176;
+/** 行走帧纵向锚点：让脚底落在精灵中心下方 31 逻辑像素，与 v1 一致（阴影、选中光圈、碰撞位置都不用动）。 */
+export const V2_WALK_ORIGIN_Y = (V2_WALK_FOOT + 1) / V2_WALK_CELL - 31 / V2_WALK_DISPLAY;
+/** 「主将」标记离精灵中心的高度：v2 人物更高，标记跟着上移。 */
+export const V2_MARKER_LIFT = 52;
+/** v2 图集的采样：渲染倍率 ≥2 时像素 1:1 对屏幕，用最近邻保持清晰；低于 2 倍要缩小显示，用线性避免丢像素。 */
+export function v2Filter(renderScale: number): Phaser.Textures.FilterMode {
+  return renderScale >= 2 ? Phaser.Textures.FilterMode.NEAREST : Phaser.Textures.FilterMode.LINEAR;
+}
+
+let cached: ArtStyle | undefined;
+export function artStyle(): ArtStyle {
+  if (cached) return cached;
+  let v: string | null = null;
+  try { v = new URLSearchParams(window.location.search).get('art'); } catch { /* ignore */ }
+  if (v === 'v1' || v === 'v2') { try { localStorage.setItem(STORE_KEY, v); } catch { /* ignore */ } }
+  else try { v = localStorage.getItem(STORE_KEY); } catch { v = null; }
+  cached = v === 'v1' || v === 'v2' ? v : DEFAULT_ART_STYLE;
+  return cached;
+}
+/** 设置界面切换用：只写入偏好，刷新页面 / 重启游戏后生效（已加载的图集不变，避免 v1 图按 v2 规则缩放）。 */
+export function setArtStyle(style: ArtStyle): void {
+  try { localStorage.setItem(STORE_KEY, style); } catch { /* ignore */ }
+}
+
+/** 该纹理（或其 readable_ 派生）当前是否使用 v2 图集。 */
+export function isV2Texture(key: string): boolean {
+  const k = key.replace(/^readable_/, '');
+  return artStyle() === 'v2' && Object.prototype.hasOwnProperty.call(ART_V2_FILES, k) && !V2_FAILED.has(k);
+}
+
+/** 把加载队列里有 v2 版本的图集换成 v2 文件（在 preload 末尾调用；键名不变，其余代码无感）。 */
+/** 加载失败的 v2 图集（例如别的分支的图还没合进来）：退回 v1，isV2Texture 对它返回 false。 */
+const V2_FAILED = new Set<string>();
+export function applyArtStyleUrls(load: Phaser.Loader.LoaderPlugin): string[] {
+  if (artStyle() !== 'v2') return [];
+  const swapped: string[] = [], original = new Map<string, { url: string; type: string; config: unknown }>();
+  const files = (load as unknown as { list: Phaser.Structs.Set<Phaser.Loader.File> }).list;
+  for (const file of files.getArray()) {
+    const url = ART_V2_FILES[file.key];
+    if (url && (file.type === 'spritesheet' || file.type === 'image')) { original.set(file.key, { url: String(file.url), type: file.type, config: file.config }); file.url = url; swapped.push(file.key); }
+  }
+  if (original.size) load.on(Phaser.Loader.Events.FILE_LOAD_ERROR, (file: Phaser.Loader.File) => {
+    const o = original.get(file.key); if (!o || V2_FAILED.has(file.key)) return;
+    V2_FAILED.add(file.key); console.warn('[ArtStyle] v2 图集缺失，退回 v1：' + file.key);
+    if (o.type === 'image') load.image(file.key, o.url); else load.spritesheet(file.key, o.url, o.config as Phaser.Types.Loader.FileTypes.ImageFrameConfig);
+  });
+  return swapped;
+}
+
+/** v2 首领图集格边长：脚底 256 / 288 ≈ 旧版 114 / 128，首领控制器按 setDisplaySize(144) 显示，正好 1080p 下像素 1:1。 */
+export const V2_BOSS_CELL = 288;
+/** 章节首领图集（4×8，数字帧 0~31）：v2 时载 288 格新图，失败退回旧图；v1 照旧按 cell 载入。 */
+export function loadBossSheet(load: Phaser.Loader.LoaderPlugin, key: string, url: string, cell = 128): void {
+  if (!isV2Texture(key)) { load.spritesheet(key, url, {frameWidth: cell, frameHeight: cell}); return; }
+  const onError = (file: Phaser.Loader.File): void => {
+    if (file.key !== key) return;
+    load.off(Phaser.Loader.Events.FILE_LOAD_ERROR, onError);
+    V2_FAILED.add(key); console.warn('[ArtStyle] v2 首领图缺失，退回 v1：' + key);
+    load.spritesheet(key, url, {frameWidth: cell, frameHeight: cell});
+  };
+  load.on(Phaser.Loader.Events.FILE_LOAD_ERROR, onError);
+  load.once(`filecomplete-spritesheet-${key}`, () => { load.off(Phaser.Loader.Events.FILE_LOAD_ERROR, onError); if (isV2Texture(key)) load.textureManager.get(key).setFilter(v2Filter(RENDER_SCALE)); });
+  load.spritesheet(key, ART_V2_FILES[key], {frameWidth: V2_BOSS_CELL, frameHeight: V2_BOSS_CELL});
+}
+
+/**
+ * v2 兵种图集（我方兵种 / 小兵）：统一 4×4，行 = 下 / 左 / 右 / 上；行走表列 = 步伐 0~3，攻击表列 = 蓄力 / 出手 / 最远 / 收回。
+ * 格边长 = 图宽 / 4，脚底在格底往上 8 像素（与 tools/prepare-artv2.mjs 的 FOOT = CELL-8 一致）。
+ */
+export const V2_TROOP_KEYS: readonly string[] = [
+  'shu_swordsman_walk_sheet', 'shu_swordsman_attack_sheet', 'shu_spearman_walk_sheet', 'shu_spearman_attack_sheet',
+  'shu_archer_walk_sheet', 'shu_archer_attack_sheet', 'legion_crossbowman_walk', 'legion_crossbowman_action',
+  'legion_guardian_walk', 'legion_rider_walk', 'legion_halberdier_walk', 'legion_halberdier_action',
+  'legion_medic_walk', 'legion_medic_action',
+  // 第 3 批：敌军小兵（黄巾章 + 通用弓兵），Enemy.applyFrame 里按 v2 规则定缩放与脚底
+  'yellow_swordsman-walk-v4', 'yellow_swordsman-attack-v4', 'yellow_shield-walk-v4', 'yellow_shield-attack-v4',
+  'yellow_spear-walk-v5', 'yellow_spear-attack-v5', 'yellow_shaman_walk', 'yellow_shaman_cast',
+  'enemy_archer_walk_sheet', 'enemy_archer_attack_sheet',
+  'enemy_infantry_walk_sheet', 'enemy_shield_walk_sheet', 'enemy_officer_walk_sheet', 'enemy_cavalry_run_sheet', 'enemy_cavalry_charge_sheet',
+  'xiliang_infantry_walk', 'xiliang_shield_walk', 'xiliang_archer_walk', 'xiliang_cavalry_walk', 'xiliang_elite_walk',
+];
+/** v2 兵种显示倍率：原生像素 → 逻辑像素 0.5，即 1080p 全屏（渲染 2 倍）下像素 1:1。 */
+export const V2_TROOP_SCALE = .5;
+/** v2 兵种帧的脚底位置（占帧高的比例），用作纵向锚点。 */
+export function v2TroopGround(frameHeight: number): number { return (frameHeight - 7) / frameHeight; }
+
+/**
+ * 按 v2 规格给兵种图集重切帧：down_0…up_3（行走 / 动作），并给旧攻击表的命名 atk_<方向>_0 / _1
+ * 指到第 2、3 列（出手、最远），旧代码按 atk_ 取帧时也能用 v2 四帧攻击表。须在 registerWalkSheet / 各处旧切帧之后调用。
+ */
+export function applyV2TroopFrames(scene: Phaser.Scene): string[] {
+  if (artStyle() !== 'v2') return [];
+  return V2_TROOP_KEYS.filter(key => regridV2(scene, key));
+}
+/** 把一张 v2 4×4 图集按 宽/4 重切帧（down_0…up_3 + atk_ / chg_ 别名）并设采样；不是 v2 或尚未加载时返回 false。按需加载的图（TroopArt）也用它。 */
+export function regridV2(scene: Phaser.Scene, key: string): boolean {
+  if (!isV2Texture(key) || !scene.textures.exists(key)) return false;
+  const t = scene.textures.get(key), w = (t.getSourceImage() as { width?: number }).width ?? 0, cell = w / 4;
+  if (!cell) return false;
+  for (const name of t.getFrameNames()) t.remove(name);
+  ['down', 'left', 'right', 'up'].forEach((dir, row) => {
+    for (let col = 0; col < 4; col++) t.add(`${dir}_${col}`, 0, col * cell, row * cell, cell, cell);
+    for (let i = 0; i < 2; i++) t.add(`atk_${dir}_${i}`, 0, (i + 1) * cell, row * cell, cell, cell);
+    // 骑兵冲锋表旧命名 chg_<方向>_0（预警）/ _1（冲锋）→ 第 1、3 列
+    t.add(`chg_${dir}_0`, 0, 0, row * cell, cell, cell); t.add(`chg_${dir}_1`, 0, 2 * cell, row * cell, cell, cell);
+  });
+  // 旧切帧删掉后 firstFrame 仍指向已不存在的 "0"：不带帧名的 setTexture(key)（如 Enemy.spawn 用 def.texture）会取到 undefined 帧而崩溃
+  t.firstFrame = 'down_0';
+  if (/walk|run/.test(key)) rotateV2StandFrames(scene, key);
+  t.setFilter(v2Filter(RENDER_SCALE));
+  return true;
+}
+
+/**
+ * v2 行走图的站立帧：ChatGPT 画的走路循环第 0 帧是迈步帧，停下时冻在它上面会「侧着站、两脚还分开」。
+ * 全游戏停步都用 <方向>_0，这里按每个方向找脚底一带（脚底线往上 8% 格高）横向跨度最小的那一帧（双脚并拢），
+ * 把该行的帧名循环平移，让它成为 _0；走路循环顺序不变。只用于行走 / 奔跑表，攻击表不动。
+ */
+export function rotateV2StandFrames(scene: Phaser.Scene, key: string): number[] {
+  if (!isV2Texture(key) || !scene.textures.exists(key)) return [];
+  const t = scene.textures.get(key), src = t.getSourceImage() as HTMLImageElement | HTMLCanvasElement;
+  const w = src.width, h = src.height, cell = w / 4, foot = cell - 8, band = Math.max(4, Math.round(cell * .08));
+  if (!cell || h < cell * 4) return [];
+  // 帧宽按 宽/4，行数可以是 4（只有走路）或 5（第 5 行是站立图）
+  let data: Uint8ClampedArray;
+  try {
+    const c = document.createElement('canvas'); c.width = w; c.height = h;
+    const g = c.getContext('2d', { willReadFrequently: true })!; g.drawImage(src, 0, 0); data = g.getImageData(0, 0, w, h).data;
+  } catch { return []; }
+  const span = (row: number, col: number): number => {
+    let lo = Infinity, hi = -Infinity;
+    for (let y = row * cell + foot - band; y <= row * cell + foot; y++) for (let x = col * cell; x < (col + 1) * cell; x++) if (data[(y * w + x) * 4 + 3] > 24) { if (x < lo) lo = x; if (x > hi) hi = x; }
+    return hi >= lo ? hi - lo : Infinity;
+  };
+  const shifts: number[] = [];
+  ['down', 'left', 'right', 'up'].forEach((dir, row) => {
+    let best = 0, min = Infinity;
+    for (let col = 0; col < 4; col++) { const s = span(row, col); if (s < min - 1) { min = s; best = col; } }
+    shifts.push(best);
+    for (let i = 0; i < 4; i++) { const name = `${dir}_${i}`; if (t.has(name)) t.remove(name); t.add(name, 0, ((i + best) % 4) * cell, row * cell, cell, cell); }
+    // <方向>_stand：图集有第 5 行（专门画的站立图，列 = 下 / 左 / 右 / 上）就用它，否则用选出的最并拢帧
+    const stand = `${dir}_stand`; if (t.has(stand)) t.remove(stand);
+    if (h >= cell * 5) t.add(stand, 0, row * cell, 4 * cell, cell, cell); else t.add(stand, 0, best * cell, row * cell, cell, cell);
+  });
+  return shifts;
+}

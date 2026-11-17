@@ -7,6 +7,7 @@ import {isChapterTestRun} from '../systems/ChapterProgress';
 import {CHARACTERS, type CharacterId} from '../data/characters';
 import {worldText, W, H} from '../world/WorldUI';
 import {TITLE_FONT} from '../config';
+import { loadBossSheet } from '../systems/ArtStyle';
 
 type StageCard = {bg: Phaser.GameObjects.Rectangle; strip: Phaser.GameObjects.Rectangle; status: Phaser.GameObjects.Text; art: Phaser.GameObjects.Image};
 
@@ -15,7 +16,7 @@ export class GuanduChapterScene extends Phaser.Scene {
   private selected: GuanduStage = 1; private hero: CharacterId = 'zhaoyun'; private cards: StageCard[] = []; private heroButtons: Phaser.GameObjects.Rectangle[] = [];
   private deployText!: Phaser.GameObjects.Text; private deployBg!: Phaser.GameObjects.Rectangle;
   constructor() { super('GuanduChapterScene'); }
-  preload() { for (const [key, url] of Object.entries(GUANDU_ATLAS_FILES)) if (!this.textures.exists(key)) this.load.spritesheet(key, url, {frameWidth: 128, frameHeight: 128}); }
+  preload() { for (const [key, url] of Object.entries(GUANDU_ATLAS_FILES)) if (!this.textures.exists(key)) loadBossSheet(this.load, key, url); }
   private text(x: number, y: number, s: string, size = 16, color = '#ded2b9') { return worldText(this, x, y, s, size, color); }
   private action(x: number, y: number, w: number, h: number, label: string, fn: () => void, primary = false) {
     const bg = this.add.rectangle(x, y, w, h, primary ? 0x744530 : 0x241e1a, .96).setStrokeStyle(1, primary ? 0xc39b61 : 0x70604b).setInteractive({useHandCursor: true});

@@ -14,9 +14,10 @@ import { emptyGear, gearFromItems, type GearStats } from './ItemEffects';
 import type { ItemInstance } from '../data/items';
 
 /**
- * 随行武将（RECRUIT_PLAN.md §4，参考《战锤：幸存者》的随从）：贴着主将站位，自动打主将附近的敌人。
- * - 站位：主将周围 70–140 像素环带，按人数均分角度；离开 260 像素放弃目标回来；超过 480 像素或卡住 2 秒瞬移回身边。
- * - 攻击：四种模板（枪扫一圈 / 刀前方扇形 / 弓单发远射 / 谋延迟火点）。可玩名将暂用与其兵器相近的模板（专属武器跟随版待做，见计划）。
+ * 随行武将（RECRUIT_PLAN.md §4，参考《战锤：幸存者》的随从）：一直紧贴主公，不离阵去追敌人。
+ * - 阵位：主公身后固定阵位（1 人正后；2 人左后 / 右后；3 人左后 / 右后 / 正后），离主公约 56 像素，随主公移动方向平滑转动；
+ *   用指数平滑追阵位（几乎同步，不抖、不滑步），不做碰撞，不会被敌人卡住；偏离超过 160 像素直接归位。
+ * - 攻击：只打自己射程内的敌人；近战（枪 / 刀）出手时朝目标前出 22 像素，随后自动回位。四种模板（枪扫一圈 / 刀前方扇形 / 弓单发远射 / 谋延迟火点）。可玩名将暂用与其兵器相近的模板（专属武器跟随版待做，见计划）。
  * - 受伤：每 0.4 秒结算贴身敌人的接触伤害（首领 ×3）；倒下撤下休整 20 秒后在主将身边归队，不会本局阵亡。
  * - 不进后备兵编制，不占同屏敌人名额；目标查找走空间网格，每人每 0.15 秒最多查一次。
  * 美术：可玩名将用自己的行走图；史事名将 / 大众脸用蜀军兵种行走图（程序化过渡）+ 头顶品质色名牌。
@@ -31,7 +32,9 @@ const heroSheet = (id: string) => id === 'zhaoyun' ? 'hero_walk_sheet' : `${id}_
 
 export class Follower {
   hp = 1; maxHp = 1; cooldown = 0; restUntil = 0; target: Enemy | null = null; nextQuery = 0; nextContact = 0;
-  slot = 0; dir: 'down' | 'up' | 'left' | 'right' = 'down'; walk = 0; stuckAt = 0; lastX = 0; lastY = 0; hurtUntil = 0; downs = 0; kills = 0; hits = 0;
+  slot = 0; dir: 'down' | 'up' | 'left' | 'right' = 'down'; walk = 0; lastX = 0; lastY = 0; hurtUntil = 0; downs = 0; kills = 0; hits = 0;
+  /** 近战前出的偏移（出手时设、之后衰减回 0）与面向目标的时限。 */
+  lx = 0; ly = 0; faceUntil = 0;
   readonly sprite: Phaser.GameObjects.Image; readonly shadow: Phaser.GameObjects.Ellipse; readonly label: Phaser.GameObjects.Text; readonly bar: Phaser.GameObjects.Graphics;
   readonly sheet: string; readonly template: FollowerTemplate; readonly damage: number; readonly speedMul: number; readonly haste: number; readonly gear: GearStats; level: number;
   constructor(readonly scene: Phaser.Scene, readonly recruit: Recruit, x: number, y: number, leaderLevelHp: number) {
@@ -74,12 +77,21 @@ export class FollowerSquad {
   private readonly buf: Enemy[] = [];
   /** 统计（测试 / 平衡用）。 */
   readonly stats = { damage: 0, hits: 0, teleports: 0, downs: 0, maxDist: 0 };
+  /** 阵位朝向（主公移动方向，平滑后；起始朝下）。 */
+  private heading = Math.PI / 2; private px = NaN; private py = NaN;
+  /** 主公速度（平滑后）：追阵位时提前量（前馈），匀速跑动时不落后。 */
+  private vx = 0; private vy = 0;
   constructor(private readonly scene: Phaser.Scene, private readonly player: Player, recruits: Recruit[], private readonly query: Query, private readonly hit: Hit, private readonly leaderDamage: () => number) {
     this.gfx = scene.add.graphics().setDepth(DEPTH.fx);
     const n = recruits.length;
-    recruits.forEach((r, i) => { const a = this.slotAngle(i, n), f = new Follower(scene, r, player.x + Math.cos(a) * 100, player.y + Math.sin(a) * 100, 1); f.slot = i; this.members.push(f); });
+    recruits.forEach((r, i) => { const s = this.slotPos(i, n), f = new Follower(scene, r, s.x, s.y, 1); f.slot = i; this.members.push(f); });
   }
-  private slotAngle(i: number, n: number) { return Math.PI / 2 + (i + .5) * Math.PI * 2 / Math.max(1, n) + Math.PI / Math.max(1, n); }
+  /** 阵位相对主公后方的角度偏移：1 人正后；2 人左后 / 右后；3 人左后 / 右后 / 正后。 */
+  private static readonly OFFSETS: readonly (readonly number[])[] = [[0], [0], [-.8, .8], [-1, 1, 0]];
+  private slotPos(i: number, n: number): { x: number; y: number } {
+    const offs = FollowerSquad.OFFSETS[Math.min(3, Math.max(1, n))], a = this.heading + Math.PI + (offs[i] ?? 0), r = FOLLOW.slotRadius * (offs[i] === 0 && n === 3 ? 1.15 : 1);
+    return { x: this.player.x + Math.cos(a) * r, y: this.player.y + Math.sin(a) * r };
+  }
 
   update(dt: number, now: number): void {
     const p = this.player, n = this.members.length, dmgShare = 1 + FOLLOW.shareLeaderDamage * (Math.max(.2, this.leaderDamage()) - 1);
@@ -87,33 +99,23 @@ export class FollowerSquad {
     for (const f of this.members) {
       if (f.resting) {
         if (now < f.restUntil) continue;
-        f.restUntil = 0; f.hp = f.maxHp; const a = this.slotAngle(f.slot, n); f.place(p.x + Math.cos(a) * 90, p.y + Math.sin(a) * 90); f.setVisible(true); f.sprite.setAlpha(0); this.scene.tweens.add({ targets: f.sprite, alpha: 1, duration: 300 });
+        f.restUntil = 0; f.hp = f.maxHp; const s = this.slotPos(f.slot, n); f.place(s.x, s.y); f.lx = f.ly = 0; f.setVisible(true); f.sprite.setAlpha(0); this.scene.tweens.add({ targets: f.sprite, alpha: 1, duration: 300 });
       }
-      const dist = Math.hypot(f.x - p.x, f.y - p.y);
-      // 瞬移：太远或卡住
-      if (dist > FOLLOW.teleport || (f.stuckAt && now - f.stuckAt > FOLLOW.stuckMs)) {
-        const a = this.slotAngle(f.slot, n); f.place(p.x + Math.cos(a) * 100, p.y + Math.sin(a) * 100); f.stuckAt = 0; f.target = null; this.stats.teleports++;
-        f.sprite.setAlpha(.2); this.scene.tweens.add({ targets: f.sprite, alpha: 1, duration: 260 });
-      }
-      // 索敌：以主将为中心
-      if (f.target && (!f.target.active || Math.hypot(f.target.x - p.x, f.target.y - p.y) > FOLLOW.leash)) f.target = null;
-      if (!f.target && now >= f.nextQuery) { f.nextQuery = now + 150; f.target = this.nearest(p.x, p.y, FOLLOW.aggro, f.x, f.y); }
-      const t = TEMPLATES[f.template], speed = Math.max(200, p.speed) * f.speedMul * FOLLOW.chaseMul;
-      let gx: number, gy: number;
-      if (f.target) {
-        const d = Math.hypot(f.target.x - f.x, f.target.y - f.y), want = t.range * .8;
-        if (d > want) { gx = f.target.x - (f.target.x - f.x) / d * want; gy = f.target.y - (f.target.y - f.y) / d * want; } else { gx = f.x; gy = f.y; }
-        // 不离主将超过拉回距离
-        const lx = gx - p.x, ly = gy - p.y, ld = Math.hypot(lx, ly); if (ld > FOLLOW.leash - 20) { gx = p.x + lx / ld * (FOLLOW.leash - 20); gy = p.y + ly / ld * (FOLLOW.leash - 20); }
-      } else {
-        const a = this.slotAngle(f.slot, n) + Math.sin(now / 1800 + f.slot) * .25, r = (FOLLOW.ringMin + FOLLOW.ringMax) / 2;
-        gx = p.x + Math.cos(a) * r; gy = p.y + Math.sin(a) * r;
-        const ringD = Math.hypot(f.x - p.x, f.y - p.y); if (ringD >= FOLLOW.ringMin && ringD <= FOLLOW.ringMax && Math.hypot(gx - f.x, gy - f.y) < 40) { gx = f.x; gy = f.y; }
-      }
-      this.move(f, gx, gy, dt, speed, now);
+      // 阵位 + 近战前出偏移（指数衰减回位）
+      const decay = Math.exp(-8 * dt); f.lx *= decay; f.ly *= decay;
+      const s = this.slotPos(f.slot, n), lead = 1 / FOLLOW.followK, gx = s.x + f.lx + this.vx * lead, gy = s.y + f.ly + this.vy * lead;
+      if (Math.hypot(gx - f.x, gy - f.y) > FOLLOW.snap) { f.place(gx, gy); f.target = null; this.stats.teleports++; f.sprite.setAlpha(.3); this.scene.tweens.add({ targets: f.sprite, alpha: 1, duration: 220 }); }
+      this.move(f, gx, gy, dt, now);
+      // 索敌：只找自己射程内的敌人，不离阵去追
+      const t = TEMPLATES[f.template];
+      if (f.target && (!f.target.active || Math.hypot(f.target.x - f.x, f.target.y - f.y) > t.range)) f.target = null;
+      if (!f.target && now >= f.nextQuery) { f.nextQuery = now + 150; f.target = this.nearest(f.x, f.y, t.range, f.x, f.y); }
       // 攻击
       f.cooldown -= dt;
-      if (f.target && f.cooldown <= 0 && Math.hypot(f.target.x - f.x, f.target.y - f.y) <= t.range) { f.cooldown = t.cooldown / 1000 / f.haste; this.attack(f, f.target, now, f.damage * dmgShare); }
+      if (f.target && f.cooldown <= 0) {
+        f.cooldown = t.cooldown / 1000 / f.haste; this.attack(f, f.target, now, f.damage * dmgShare); f.faceUntil = now + 320;
+        if (f.template === 'spear' || f.template === 'blade') { const a = Math.atan2(f.target.y - f.y, f.target.x - f.x); f.lx = Math.cos(a) * FOLLOW.lunge; f.ly = Math.sin(a) * FOLLOW.lunge; }
+      }
       if (f.gear.regen > 0) f.hp = Math.min(f.maxHp, f.hp + f.gear.regen * dt);
       // 接触伤害
       if (now >= f.nextContact) {
@@ -124,6 +126,9 @@ export class FollowerSquad {
       this.render(f, now);
       this.stats.maxDist = Math.max(this.stats.maxDist, Math.hypot(f.x - p.x, f.y - p.y));
     }
+    // 阵位朝向：跟主公的移动方向平滑转动（停下时保持）
+    if (Number.isFinite(this.px) && dt > 0) { const mx = p.x - this.px, my = p.y - this.py, kv = 1 - Math.exp(-10 * dt), jump = Math.hypot(mx, my) > 60; this.vx = jump ? 0 : this.vx + (mx / dt - this.vx) * kv; this.vy = jump ? 0 : this.vy + (my / dt - this.vy) * kv; if (Math.hypot(mx, my) > .4) { const to = Math.atan2(my, mx), d = Phaser.Math.Angle.Wrap(to - this.heading); this.heading += d * (1 - Math.exp(-FOLLOW.turnRate * dt)); } }
+    this.px = p.x; this.py = p.y;
     this.updateFx(now);
   }
   /** 外部伤害（首领技能等）。 */
@@ -137,15 +142,15 @@ export class FollowerSquad {
     for (const e of this.query(cx, cy, r, )) { if (!e.active || e.invulnerable) continue; const d = (e.x - fx) ** 2 + (e.y - fy) ** 2; if (d < bd) { bd = d; best = e; } }
     return best;
   }
-  private move(f: Follower, gx: number, gy: number, dt: number, speed: number, now: number) {
-    const dx = gx - f.x, dy = gy - f.y, d = Math.hypot(dx, dy);
-    if (d > 3) {
-      const step = Math.min(d - 2, speed * dt);
-      f.sprite.setPosition(f.x + dx / d * step, f.y + dy / d * step); f.walk += step;
-      f.dir = Math.abs(dx) > Math.abs(dy) * 1.1 ? dx < 0 ? 'left' : 'right' : dy < 0 ? 'up' : 'down';
-      // 卡住检测：想走但 2 秒内几乎没动（被障碍挡住等）
-      if (Math.hypot(f.x - f.lastX, f.y - f.lastY) > 6) { f.lastX = f.x; f.lastY = f.y; f.stuckAt = 0; } else if (!f.stuckAt) f.stuckAt = now;
-    } else { f.stuckAt = 0; f.lastX = f.x; f.lastY = f.y; f.walk = 0; }
+  /** 指数平滑追阵位（与帧率无关），走路距离推动行走帧，朝向跟随移动方向（出手后短时间朝向目标）。 */
+  private move(f: Follower, gx: number, gy: number, dt: number, now: number) {
+    const k = 1 - Math.exp(-FOLLOW.followK * dt), dx = (gx - f.x) * k, dy = (gy - f.y) * k, step = Math.hypot(dx, dy);
+    f.sprite.setPosition(f.x + dx, f.y + dy);
+    if (step > .25) {
+      f.walk += step;
+      if (now >= f.faceUntil && step > .6) { const horiz = f.dir === 'left' || f.dir === 'right', useX = horiz ? Math.abs(dx) * 1.2 >= Math.abs(dy) : Math.abs(dx) > Math.abs(dy) * 1.2; f.dir = useX ? dx < 0 ? 'left' : 'right' : dy < 0 ? 'up' : 'down'; }
+    } else f.walk = 0;
+    f.lastX = f.x; f.lastY = f.y;
   }
   private attack(f: Follower, e: Enemy, now: number, damage: number) {
     const a = Math.atan2(e.y - f.y, e.x - f.x);

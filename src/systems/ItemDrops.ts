@@ -1,7 +1,8 @@
 import Phaser from 'phaser';
 import { actorDepth, FONT } from '../config';
+import { QUALITY_ORDER, relicsForStage, rollRelic } from '../data/items';
 import { CHESTS_PER_STAGE, DROP_CHANCE, QUALITIES, itemName, rollDropQuality, rollItem, type ItemInstance, type ItemQuality, type PityState } from '../data/items';
-import { loadPity } from './ItemStore';
+import { loadItems, loadPity } from './ItemStore';
 import type { Player } from '../entities/Player';
 import { ensureItemTextures, itemIcon } from '../ui/ItemQuality';
 
@@ -24,7 +25,7 @@ export class ItemDrops {
   /** 保底计数：开局从存档读入，结算时随 depositRunLoot 写回（测试战斗不写）。 */
   readonly pity: PityState = loadPity();
 
-  constructor(private readonly scene: Phaser.Scene, private readonly player: Player, private readonly tier: number, private readonly elapsed: () => number, private readonly finalBoss: () => boolean, private readonly onPickup?: (item: ItemInstance) => void) {
+  constructor(private readonly scene: Phaser.Scene, private readonly player: Player, private readonly tier: number, private readonly elapsed: () => number, private readonly finalBoss: () => boolean, private readonly onPickup?: (item: ItemInstance) => void, private readonly relicStage: () => string | null = () => null) {
     ensureItemTextures(scene);
   }
 
@@ -32,11 +33,26 @@ export class ItemDrops {
     if (enemy.kind === 'boss') {
       const n = this.finalBoss() ? 2 : 1;
       for (let i = 0; i < n; i++) this.collect(rollItem(rollDropQuality(n > 1 ? 'finalBoss' : 'boss', this.tier, this.pity, this.rng), this.rng));
+      const extra = this.bossRelicDrop(); if (extra) this.collect(extra);
       return;
     }
     const elite = enemy.kind === 'elite';
     if (this.rng() >= DROP_CHANCE[elite ? 'elite' : 'normal']) return;
     this.drop(rollItem(rollDropQuality(elite ? 'elite' : 'normal', this.tier, this.pity, this.rng), this.rng), enemy.x, enemy.y);
+  }
+
+  /**
+   * 首领遗珍（用户批准的掉落规则）：该关首领的核心遗珍还没拥有（行囊或本局缴获里都没有）→ 必掉；
+   * 还有没拿到的可选件 → 15% 掉一件；全部拥有 → 改为多掉一件本章档位、至少紫色的兵装。没有遗珍的关返回 null。
+   */
+  bossRelicDrop(): ItemInstance | null {
+    const defs = relicsForStage(this.relicStage()); if (!defs.length) return null;
+    let owned: Set<string>; try { owned = new Set([...loadItems().bag, ...this.runLoot].map(i => i.base)); } catch { owned = new Set(this.runLoot.map(i => i.base)); }
+    const missing = defs.filter(d => !owned.has(d.id));
+    if (missing.length && missing[0] === defs[0]) return rollRelic(defs[0].id, this.rng);
+    if (missing.length) return this.rng() < .15 ? rollRelic(missing[0].id, this.rng) : null;
+    const q = rollDropQuality('boss', this.tier, this.pity, this.rng);
+    return rollItem(QUALITY_ORDER.indexOf(q) < QUALITY_ORDER.indexOf('purple') ? 'purple' : q, this.rng);
   }
 
   /** 在地上放一件道具（品质光柱 + 图标，轻微浮动）。 */

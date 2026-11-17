@@ -1,5 +1,6 @@
 import {visualTextureKey} from '../systems/ReadableTextures';
 import {figureCorrection,sheetFigureHeight} from '../systems/SpriteMetrics';
+import {isV2Texture, V2_TROOP_SCALE, v2TroopGround} from '../systems/ArtStyle';
 import Phaser from 'phaser';
 import { DEPTH } from '../config';
 import { ENEMY_DEFS, type EnemyDef } from '../data/enemies';
@@ -36,6 +37,8 @@ export class Enemy {
   static walkEnabled = true;
   walkSheet = '';
   attackSheet = '';
+  /** 出手时长超过 360ms 时（蓄力），蓄力段停在攻击图的第几帧（张梁砍击用 1 = 抬刀）。 */
+  windupCol = 0;
   attackUntil = 0;
   poseUntil = 0;
   chargeSheet = '';
@@ -258,7 +261,8 @@ export class Enemy {
     this.chargeAt = now + 450;
     this.chargeHit = false;
     this.direction = dir;
-    // 冲锋表现复用奔跑表（charge 表切图有边缘/朝向问题，暂不使用）
+    // 冲锋表现复用奔跑表（v1 charge 表切图有边缘/朝向问题，暂不使用）；v2 冲锋表干净，直接用：勒马蓄势帧
+    if (this.v2ChargeSheet) { this.applyFrame(this.chargeSheet, `${dir}_0`); this.chargeFrame = `${dir}_0`; this.sprite.setTint(0xff8888); return; }
     if (this.walkSheet) this.applyFrame(this.walkSheet, `${dir}_${this.def.walkVisual ? 0 : 1}`);
     this.chargeFrame = this.walkSheet ? `${dir}_${this.def.walkVisual ? 0 : 1}` : '';
     this.sprite.setTint(0xff8888);
@@ -279,14 +283,37 @@ export class Enemy {
       this.chargeFrame = '';
     }
     if (this.chargeState === 'none') return;
+    if (this.v2ChargeSheet) {
+      // v2 冲锋表 4 帧：0 勒马蓄势 / 1~2 冲刺交替 / 3 收缰
+      const col = this.chargeState === 'warn' ? 0 : this.chargeState === 'charge' ? 1 + Math.floor(now / 110) % 2 : 3, key = `${this.direction}_${col}`;
+      if (key !== this.chargeFrame) { this.applyFrame(this.chargeSheet, key); this.chargeFrame = key; }
+      return;
+    }
     if (!this.walkSheet) return;
-    const frame = this.def.walkVisual ? (this.chargeState === 'charge' ? Math.floor(now / 90) % 4 : 0) : this.chargeState === 'charge' ? 2 : 1;
+    const v2Walk = isV2Texture(this.walkSheet);
+    // 章节专属骑兵（西凉铁骑 / 虎豹骑…）没有自己的冲锋表：沿用本身的奔跑表加快播放；v2 再加前倾与尘土拖影
+    const frame = this.def.walkVisual ? (this.chargeState === 'charge' ? Math.floor(now / (v2Walk ? 70 : 90)) % 4 : 0) : this.chargeState === 'charge' ? 2 : 1;
     const key = `${this.direction}_${frame}`;
     if (key !== this.chargeFrame) {
       this.applyFrame(visualTextureKey(this.scene,this.walkSheet), key);
       this.chargeFrame = key;
     }
+    if (!v2Walk) return;
+    const side = this.direction === 'right' ? 1 : this.direction === 'left' ? -1 : 0;
+    this.sprite.setRotation(this.chargeState === 'charge' ? side * .1 : this.chargeState === 'warn' ? -side * .04 : 0);
+    if (this.chargeState === 'charge' && now >= this.nextDustAt) { this.nextDustAt = now + 55; this.kickDust(); }
   }
+
+  /** 冲锋尘土：马蹄后方一团淡黄褐烟尘，0.35 秒散开。 */
+  private nextDustAt = 0;
+  private kickDust(): void {
+    const dx = this.direction === 'right' ? -1 : this.direction === 'left' ? 1 : 0, dy = this.direction === 'down' ? -1 : this.direction === 'up' ? 1 : 0;
+    const x = this.x + dx * (this.radius + 6) + (Math.random() - .5) * 10, y = this.y + this.radius * .7 + dy * 8 + (Math.random() - .5) * 4;
+    const puff = this.scene.add.ellipse(x, y, 16 + Math.random() * 8, 8 + Math.random() * 4, 0xb89a6a, .55).setDepth(this.sprite.depth - .5);
+    this.scene.tweens.add({targets: puff, scaleX: 2.2, scaleY: 1.8, alpha: 0, y: y - 6, duration: 350, ease: 'Quad.easeOut', onComplete: () => puff.destroy()});
+  }
+  /** 只有通用敌骑（没有专属行走图）才用 v2 通用冲锋表；专属骑兵换成通用冲锋表，冲锋时会变成另一个人。 */
+  private get v2ChargeSheet(): boolean { return !this.def.walkVisual && isV2Texture(this.chargeSheet); }
 
   startAttack(now: number, dir: 'down' | 'up' | 'left' | 'right'): void {
     if (!this.attackSheet && !this.def.walkVisual) return;
@@ -312,7 +339,7 @@ export class Enemy {
     if (this.def.walkVisual && !this.def.attackVisual) return;
     const remain = this.attackUntil - now;
     const col = remain > 180 ? 0 : 1;
-    const key = this.def.attackVisual ? `${this.direction}_${Math.min(3,Math.max(0,Math.floor((360-remain)/90)))}`/* 出手时长 >360ms 时开头会算出 -1 帧 */ : `atk_${this.direction}_${col}`;
+    const key = this.def.attackVisual ? `${this.direction}_${remain > 360 ? this.windupCol : Math.min(3,Math.max(0,Math.floor((360-remain)/90)))}`/* 出手时长 >360ms 时开头会算出 -1 帧 */ : `atk_${this.direction}_${col}`;
     if (key !== this.attackFrame) {
       this.applyFrame(visualTextureKey(this.scene,this.attackSheet), key);
       this.attackFrame = key;
@@ -380,17 +407,25 @@ export class Enemy {
       this.applyFrame(visualTextureKey(this.scene,this.walkSheet), key);
       this.appliedFrame = key;
     }
-    // 行走帧本身腿部变化很小（尤其正对/背对镜头）：叠加每步约 2.5px 的上下起伏、伸缩与左右摆动，
-    // 缩到 50px 左右也能一眼看出在走。
-    const step = this.walking ? Math.sin(Math.PI * this.stepPhase) : 0;
+    // 步伐感：4 帧一个循环 = 两步，每步一次轻微的身体伸缩与左右重心摆动（左脚 / 右脚方向相反）。
+    // 以前按“每帧一次”起伏（一循环跳 4 下）、整个人抬离地面 2.5px、摆 0.06 弧度，看起来一跳一跳（v1 / v2 都一样）。
+    // 现在锚点在脚底不动（脚踏实地），只让上身随步伐伸缩约 2.5%（头顶约 1.2px）、摆约 0.015 弧度。
+    const step = this.walking ? Math.sin(Math.PI * this.stepPhase / 2) : 0;
     this.stepStretch = Math.abs(step);
-    this.sprite.setRotation(step * (this.direction === 'left' || this.direction === 'right' ? .06 : .05));
+    this.sprite.setRotation(step * .015);
     this.applyScale();
   }
 
   /** 设置帧并按素材比例校正缩放；非行走调用会清除步伐摆动。 */
   private applyFrame(key: string, frame: string): void {
     this.sprite.setTexture(key, frame);
+    if (isV2Texture(key)) {
+      // 人物画风 v2：0.5 倍（1080p 像素 1:1），脚底 = 帧高-7；行走 / 攻击格子大小可以不同，按当前帧重算锚点
+      const fh = this.sprite.frame.height || 96;
+      this.baseScaleY = V2_TROOP_SCALE;
+      this.baseOriginY = v2TroopGround(fh) - this.def.radius * .72 / (fh * V2_TROOP_SCALE);
+      this.frameScale = 1;
+    } else
     this.frameScale = this.walkSheet && this.kind !== 'boss' && !this.def.walkVisual?.matched ? figureCorrection(this.scene, this.walkSheet, key, frame) : 1;
     this.stepStretch = 0;
     this.sprite.setRotation(0);
@@ -400,9 +435,9 @@ export class Enemy {
   private applyScale(): void {
     if (!this.walkSheet) return;
     const k = this.baseScaleY * this.frameScale;
-    this.sprite.setScale(k * (1 - .025 * this.stepStretch), k * (1 + .05 * this.stepStretch));
-    // 起伏：抬高原点即整体上移（脚底阴影不动），每步最高约 2.5 像素。
-    this.sprite.setOrigin(this.sprite.originX, this.baseOriginY + 2.5 * this.stepStretch / Math.max(1, this.sprite.frame.height * k));
+    this.sprite.setScale(k * (1 - .012 * this.stepStretch), k * (1 + .026 * this.stepStretch));
+    // 不再抬高原点：脚底始终贴着阴影（以前每步整体上移 2.5px，像在跳）。
+    this.sprite.setOrigin(this.sprite.originX, this.baseOriginY);
   }
 
   flash(now: number): void {

@@ -1,6 +1,9 @@
 import { IS_DESKTOP_APP, desktop } from '../platform/desktop';
-import { defaultHero, heroOwned } from '../systems/RosterStore';
+import { confirmLord, defaultHero, ensureLegacyLord, heroOwned, lordFinal, lordHero, lordRules, setLord } from '../systems/RosterStore';
+import { showLordNotice } from '../ui/LordNotice';
 import {playMenuMusic,menuMusic} from '../systems/Music';
+import {artStyle,setArtStyle} from '../systems/ArtStyle';
+import { iffOutlineEnabled, setIffOutline, warmIffTextures } from '../systems/IffOverlay';
 import {uiSfx} from '../systems/Sfx';
 import {GameCodex} from '../ui/GameCodex';
 import {HeroWarCard} from '../ui/HeroWarCard';
@@ -22,8 +25,6 @@ import { WEAPON_META,weaponName } from '../data/upgrades';
 import { chapterOneCleared, chapterUnlocked, isChapterTestRun } from '../systems/ChapterProgress';
 import { FONT, TITLE_FONT, HEADING_FONT, GAME_HEIGHT as H, GAME_WIDTH as W, IS_DESKTOP as D, switchLayout } from '../config';
 import { lqDivider, lqHitBox, lqPanel, lqSkin } from '../ui/LacquerKit';
-import { ItemBagUI } from '../ui/ItemBagUI';
-import { bagBadgeCount } from '../systems/ItemStore';
 
 const ROLES = ['游龙先锋 · 灵动突刺', '重甲武圣 · 横扫千军', '百步神射 · 远程压制', '卧龙军师 · 火阵爆发'];
 const PASSIVE_HINTS = [
@@ -81,6 +82,8 @@ export class MenuScene extends Phaser.Scene {
     this.registry.remove('selectedWorldChapter');
     this.selectedChapter = chapterUnlocked(requested)||isChapterTestRun() ? requested : 'huangjin';
     if(fromWorld&&this.selectedChapter==='huangjin'&&[1,2,3].includes(worldStage)&&(yellowStageUnlocked(worldStage)||isChapterTestRun()))this.selectedStage=worldStage as YellowStage;
+    // 主公（用户规则 2026-11-16）：主公规则之前的老存档，按最近出战的武将自动定主公（留一次改选机会）
+    ensureLegacyLord();
     let lastHero=saved?.character;try{lastHero=localStorage.getItem('im_last_hero') as RunConfig['character']||lastHero;}catch{}
     this.selectedChar = params.has('autostart') || params.has('perf') ? 0 : Math.max(0, CHARACTERS.findIndex(c => c.id === defaultHero(lastHero)));
     if(this.compactHome){if(!(isChapterTestRun()&&params.has('chapter')))this.selectedChapter=chapterOneCleared()||loadWorld().legacyHulaoAccess?'hulao':'huangjin';this.createLanding(params);return;}
@@ -186,6 +189,8 @@ export class MenuScene extends Phaser.Scene {
     this.passiveName=text(-1000,-1000,'',13).setVisible(false);this.passive=text(-1000,-1000,'',13).setVisible(false);
     const navY=D?484:631+this.padY;
     const heroEntry=homeCommand(this,D?230:W/2,navY,D?220:220,D?46:64,'更换武将');const pick=heroEntry.hit.setName('choose-hero');this.heroEntryPaint=heroEntry.paint;
+    // 主公已定：入口改成「主公 · xx」并锁住；老存档还有一次改选机会时显示「改选主公」
+    const paintLord=()=>{const l=lordRules()?lordHero():null;if(!l)return;const n=CHARACTERS.find(c=>c.id===l)?.name??'';if(lordFinal()){heroEntry.caption.setText('主公 · '+n);pick.disableInteractive();pick.setData('locked',true);}else heroEntry.caption.setText('改选主公');};paintLord();
     // 卷轴收起时，“更换武将”跟着卷轴上移（与卷轴底保持原间距）；展开时回到原位
     const card=this.homeCard,entryY=(folded:boolean)=>navY-(card.height-card.heightWhen(folded));
     if(startFolded)heroEntry.setY(entryY(true));
@@ -198,22 +203,20 @@ export class MenuScene extends Phaser.Scene {
     // 战役回顾：乱世编年（已平定的关显示史录，未打到的锁住）；“前往选关”沿用原入口。
     text(navX(2),navRowY,'战役回顾',D?18:20,'#e5ccb0').setLetterSpacing(D?2:0).setPadding(16,16).setInteractive({useHandCursor:true}).setName('home-review').on('pointerdown',()=>{if(this.children.getByName('campaign-chronicle'))return;new CampaignChronicle(this,arc=>{if(arc==='qunxiong'){this.scene.start('ThirdChapterScene');return;}if(arc==='chibi'){this.scene.start('ChibiChapterScene');return;}if(arc==='guandu'){this.scene.start('GuanduChapterScene');return;}this.registry.set('menuChapterPicker',true);this.scene.restart();},(arc,stage)=>this.replayStage(arc,stage));});
     text(navX(3),navRowY,'设置',D?18:20,'#e5ccb0').setLetterSpacing(4).setPadding(18,16).setInteractive({useHandCursor:true}).setName('home-settings').on('pointerdown',()=>this.openHomeSettings());
-    text(navX(1),navRowY,'图鉴',D?18:20,'#e5ccb0').setLetterSpacing(4).setOrigin(.5,.5).setPadding(12,16).setInteractive({useHandCursor:true}).setName('home-codex').on('pointerdown',()=>{if(this.children.getByName('game-codex'))return;this.ensureHomeArt(true);new GameCodex(this,index=>{this.selectedChar=index;this.registry.set('heroConfirmed',true);try{localStorage.setItem('im_last_hero',CHARACTERS[index].id);}catch{}this.renderSelection();});});
+    text(navX(1),navRowY,'图鉴',D?18:20,'#e5ccb0').setLetterSpacing(4).setOrigin(.5,.5).setPadding(12,16).setInteractive({useHandCursor:true}).setName('home-codex').on('pointerdown',()=>{if(this.children.getByName('game-codex'))return;this.ensureHomeArt(true);new GameCodex(this,index=>{if(!heroOwned(CHARACTERS[index].id))return;this.selectedChar=index;this.registry.set('heroConfirmed',true);try{localStorage.setItem('im_last_hero',CHARACTERS[index].id);}catch{}this.renderSelection();});});
     // 成就入口（右上角；天下已开时排在主城 / 天下地图左侧）
     try{checkWorld(save);}catch{/* 存档不可用 */}
     {const got=Object.keys(unlockedMap()).filter(id=>ACHIEVEMENTS.some(a=>a.id===id)).length,py=D?34:54;let rx=W-24;
      if(worldUnlocked()){rx-=homePlaque(this,rx,py,{label:'营寨',name:'home-city',glyph:'营',onClick:()=>this.scene.start('CityScene')},D)+8;rx-=homePlaque(this,rx,py,{label:'天下地图',name:'home-world',glyph:'图',onClick:()=>this.scene.start('WorldMapScene')},D)+8;}
-     rx-=homePlaque(this,rx,py,{label:'成就',name:'home-achievements',icon:'ach_first_win',progress:[got,ACHIEVEMENTS.length],onClick:()=>{if(!this.children.getByName('achievements-panel'))new AchievementsUI(this);}},D)+8;
-     // 行囊（兵装）：每位武将各一套，默认打开当前选中的武将
-     // 手机且天下已开（四块匾）时排不下，放到第二行右侧
-     const bagRow2=!D&&worldUnlocked(),bagX=bagRow2?W-24:rx,bagY=bagRow2?py+54:py;homePlaque(this,bagX,bagY,{label:'行囊',name:'home-bag',glyph:'囊',onClick:()=>{if(this.children.getByName('item-bag'))return;badge?.destroy();new ItemBagUI(this,{hero:CHARACTERS[this.selectedChar]?.id??'zhaoyun'});}},D);
-     // 行囊角标：新收入的兵装件数 / 改版、马厩提示（打开行囊后清零）
-     const unseen=bagBadgeCount(),badge=unseen?this.add.text(bagX+4,bagY-(D?26:28),unseen>99?'99+':String(unseen),{fontFamily:'sans-serif',fontSize:'13px',color:'#fff',backgroundColor:'#c0392b',resolution:2}).setOrigin(1,0).setPadding(6,2).setDepth(21).setName('home-bag-badge'):null;}
+     homePlaque(this,rx,py,{label:'成就',name:'home-achievements',icon:'ach_first_win',progress:[got,ACHIEVEMENTS.length],onClick:()=>{if(!this.children.getByName('achievements-panel'))new AchievementsUI(this);}},D);
+     // 2026-11-16 用户：「界面的行囊可以不要」——主页不再放行囊匾；行囊仍可在战斗 HUD、暂停菜单、行营休整（换装换马）里打开。
+    }
     if(west&&!save.dongzhuoStages){const reveal=text(W/2,D?157:228+this.padY,'新篇揭晓 · 讨伐董卓',15,'#f0c389').setAlpha(0);this.tweens.add({targets:reveal,alpha:1,duration:700});}
     const closeHeroes=()=>{this.heroModal?.setVisible(false);this.heroEntryPaint?.();};
-    this.heroPicker=new HomeHeroPicker(this,index=>{this.selectedChar=index;this.registry.set('heroConfirmed',true);try{localStorage.setItem('im_last_hero',CHARACTERS[index].id);}catch{}closeHeroes();this.renderSelection();},closeHeroes);
+    this.heroPicker=new HomeHeroPicker(this,index=>{if(lordRules()&&!setLord(CHARACTERS[index].id).ok)return;paintLord();this.selectedChar=index;this.registry.set('heroConfirmed',true);try{localStorage.setItem('im_last_hero',CHARACTERS[index].id);}catch{}closeHeroes();this.renderSelection();},closeHeroes);
     this.heroModal=this.heroPicker.root;const modal=this.heroModal;
     const openHeroes=()=>{this.ensureHomeArt(true);this.heroPicker?.open(this.selectedChar);this.heroEntryPaint?.('selected');};pick.on('pointerdown',openHeroes);
+    {const l=lordRules()?lordHero():null;if(l&&!lordFinal()&&!this.registry.get('lordNoticeShown')){this.registry.set('lordNoticeShown',true);showLordNotice(this,l,()=>{confirmLord();paintLord();},()=>openHeroes());}}
     const startY=D?414:857+this.padY,startW=D?292:W-156,startH=D?56:64;
     const primary=homeCommand(this,D?W*.73:W/2,startY,startW,startH,'匡扶汉室',true);this.startButton=primary.hit.setName('start-campaign').setData('padDefault',true);this.startLabel=primary.caption;
     // W4：有城池告急时提示“出征将失守”
@@ -284,11 +287,11 @@ export class MenuScene extends Phaser.Scene {
     const label=(x:number,y:number,value:string,size=20)=>this.add.text(x,y,value,{fontFamily:FONT,fontSize:size+'px',color:'#e8d0aa',resolution:2}).setOrigin(.5);
     const app=desktop,desk=IS_DESKTOP_APP&&!!app;
     // 桌面版行距收紧，放下显示设置（分辨率 / 全屏 / 垂直同步）
-    const rowY=(i:number)=>desk?H/2-150+i*54:H/2-40+i*76;
+    const rowY=(i:number)=>desk?H/2-166+i*46:H/2-70+i*66;
     // 漆底描金面板（与图鉴、结算卷同系）；每行左右是漆金小方钮，返回为漆金按钮
     modal.add(this.add.rectangle(W/2,H/2,W,H,0x0c0805,.9).setInteractive());
-    {const pw=desk?560:Math.min(W-40,460),top=desk?H/2-240:H/2-190,bottom=desk?rowY(6)+44:H/2+180,g=this.add.graphics();lqPanel(g,W/2-pw/2,top,pw,bottom-top);modal.add(g);
-     const t=label(W/2,desk?H/2-205:H/2-130,'军中设置',28).setFontFamily(HEADING_FONT).setColor('#f6dc9a').setStroke('#2a170b',4);modal.add(t);
+    {const pw=desk?560:Math.min(W-40,460),top=desk?H/2-250:H/2-190,bottom=desk?rowY(8)+40:H/2+246,g=this.add.graphics();lqPanel(g,W/2-pw/2,top,pw,bottom-top);modal.add(g);
+     const t=label(W/2,desk?H/2-218:H/2-130,'军中设置',28).setFontFamily(HEADING_FONT).setColor('#f6dc9a').setStroke('#2a170b',4);modal.add(t);
      const div=this.add.graphics();lqDivider(div,W/2,t.y+30,desk?160:130);modal.add(div);}
     /** 一行“名称  数值”，左右 －/＋（或 ‹ ›）调节；手柄焦点在行上时左右键也能调。 */
     const row=(i:number,name:string,get:()=>string,step:(dir:number)=>void,arrows:[string,string]=['－','＋'])=>{
@@ -312,12 +315,17 @@ export class MenuScene extends Phaser.Scene {
       const vs=row(4,'垂直同步',()=>{const d=disp();return d?(d.vsync?'开':'关'):'—';},()=>{const d=disp();if(d&&app.display)app.display.set({vsync:!d.vsync});vsNote();},['‹','›']).setName('settings-vsync');
       const vsyncNote=label(W/2,rowY(4)+22,'',11).setColor('#9d8f78');modal.add(vsyncNote);
       const vsNote=()=>{const d=disp();vsyncNote.setText(d&&d.vsync!==d.vsyncActive?'重启游戏后生效':'');};vsNote();void vs;
-      const quit=label(W/2,rowY(5)+6,'退出游戏',18).setColor('#e7b68e').setInteractive({useHandCursor:true}).setName('settings-quit');
+      const quit=label(W/2,rowY(7)+6,'退出游戏',18).setColor('#e7b68e').setInteractive({useHandCursor:true}).setName('settings-quit');
       quit.on('pointerdown',()=>{if(quit.getData('confirm'))app.quit();else quit.setData('confirm',true).setText('确认退出？再点一次');});
       const qs=lqSkin(this,quit,quit,()=>({w:220,h:38}),{tone:'quiet'});lqHitBox(quit,220,38);
       modal.add([qs.gfx,quit]);
     }
-    const close=label(W/2,desk?rowY(6)+8:H/2+120,'返回',20).setFontFamily(HEADING_FONT).setInteractive({useHandCursor:true}).setName('settings-close').setData('padDefault',true).on('pointerdown',()=>modal.destroy());
+    // 人物画风（新版 v2 营火写实像素 / 旧版 v1 Q 版）：图集在启动时加载，切换后刷新 / 重启生效
+    {const at=desk?5:2,note=label(W/2,rowY(at)+(desk?22:30),'',11).setColor('#9d8f78');modal.add(note);const start=artStyle();let cur=start;
+     row(at,'人物画风',()=>cur==='v2'?'新版':'旧版',()=>{cur=cur==='v2'?'v1':'v2';setArtStyle(cur);note.setText(cur===start?'':desk?'重启游戏后生效':'刷新页面后生效');},['‹','›']).setName('settings-art-style');}
+    // 敌我描边（用户选定的方案 c，默认关）：部曲青色、敌军暗红的细描边，混战时更好分辨；下一场战斗生效
+    {const at=desk?6:3;let on=iffOutlineEnabled();row(at,'敌我描边',()=>on?'开':'关',()=>{on=!on;setIffOutline(on);if(on)warmIffTextures(this.game);},['‹','›']).setName('settings-iff-outline');}
+    const close=label(W/2,desk?rowY(8)+6:H/2+200,'返回',20).setFontFamily(HEADING_FONT).setInteractive({useHandCursor:true}).setName('settings-close').setData('padDefault',true).on('pointerdown',()=>modal.destroy());
     const cs=lqSkin(this,close,close,()=>({w:200,h:desk?44:52}),{tone:'cinnabar'});lqHitBox(close,200,desk?44:52);
     modal.add([cs.gfx,close]);
   }

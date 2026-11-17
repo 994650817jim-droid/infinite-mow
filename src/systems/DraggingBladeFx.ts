@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { DEPTH, actorDepth } from '../config';
 import type { Player } from '../entities/Player';
+import { DRAG_SLASH_MS, DRAG_SLASH_SHEET, DRAG_SLASH_WEIGHTS, DRAG_TIP } from '../data/dragArt';
 
 /**
  * 关羽本命修习「拖刀斩」专属表现（只管画面与音效，伤害判定仍在 weapons/registry.ts）。
@@ -89,6 +90,8 @@ export class DraggingBladeFx {
   /** 刀尖位置：拖在身后（左右朝向）或身体一侧（上下朝向），贴地。 */
   private tip(): { x: number; y: number; back: number } {
     const p = this.player, d = p.direction as Dir;
+    // 用拖刀行走图时按图上刀尖着地点（DRAG_TIP），否则按普通持刀姿势估计
+    if (p.dragWalking) { const [tx, ty] = DRAG_TIP[d]; return { x: p.x + tx, y: p.y + ty, back: d === 'right' ? -1 : d === 'left' ? 1 : 0 }; }
     const o = { right: [-21, 23, -1], left: [21, 23, 1], down: [17, 21, 0], up: [-17, 24, 0] }[d];
     return { x: p.x + o[0], y: p.y + o[1], back: o[2] };
   }
@@ -165,6 +168,8 @@ export class DraggingBladeFx {
     this.flame?.setVisible(false);
     if (!spin) sc.cameras.main.shake(90, .0028);
     this.sfx?.play(spin ? 'bladeSpin' : 'bladeWave');
+    // 拖刀上撩出刀动作（有图时）：半月刀气那一下，朝刀气方向的左 / 右
+    if (!spin) { const strip = DRAG_SLASH_SHEET[p.growth.character]; if (strip) p.playStrip(strip, ['0', '1', '2', '3'], DRAG_SLASH_MS, Math.cos(angle) < 0, DRAG_SLASH_WEIGHTS); }
     const key = spin ? 'drag-crescent-gold' : 'drag-crescent';
     const h = size * (spin ? .62 : .95), k = h / 52, dist = size * (spin ? .45 : .7), dur = spin ? 440 : 420, speed = dist / (dur / 1000);
     const x0 = p.x + Math.cos(angle) * 18, y0 = p.y + Math.sin(angle) * 18 - 8;

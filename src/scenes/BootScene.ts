@@ -10,6 +10,9 @@ import { createGameTextures, createWalkPlaceholders, registerWalkSheet } from '.
 import { HERO_ACTION_FILES } from '../data/heroActions';
 import { applyHdHeroSheets } from '../systems/HdHeroSheets';
 import { warmIffTextures } from '../systems/IffOverlay';
+import { DRAG_ART_FILES } from '../data/dragArt';
+import { RENDER_SCALE } from '../config';
+import { artStyle, v2Filter } from '../systems/ArtStyle';
 import { applyArtStyleUrls, applyV2TroopFrames, isV2Texture, rotateV2StandFrames } from '../systems/ArtStyle';
 
 export class BootScene extends Phaser.Scene {
@@ -181,6 +184,8 @@ export class BootScene extends Phaser.Scene {
     for(const [key,id] of [['icon_1','weapon_spear'],['icon_2','weapon_crossbow'],['icon_3','weapon_flame'],['icon_guandao','weapon_guandao'],['icon_zhenbei','weapon_zhenbei'],['icon_lianhuan','weapon_lianhuan'],['icon_sunknives','weapon_sunknives'],['icon_fans','weapon_fans'],['icon_baodiao','weapon_baodiao'],['icon_shemao','weapon_shemao'],['icon_zhanjin','weapon_zhanjin'],['icon_shuanggu','weapon_shuanggu'],['icon_passive','passive'],['icon_rare','rare']] as const)this.load.image(key,'assets/upgrade-icons/'+id+'.webp');
     // 人物画风 v2（?art=v2）：有新图的图集换成 v2 文件，键名不变
     applyArtStyleUrls(this.load);
+    // 关羽拖刀斩专属图（拖刀行走 / 拖刀上撩，src/data/dragArt.ts）：只在 v2 画风、且已登记文件时加载
+    if (artStyle() === 'v2') for (const [key, file] of Object.entries(DRAG_ART_FILES)) this.load.image(key, file);
   }
 
   create(): void {
@@ -247,6 +252,14 @@ export class BootScene extends Phaser.Scene {
     for (const key of ['hero_walk_sheet', ...Object.keys(HERO_ACTION_FILES).map(k => k.replace(/_actions$/, '_walk_sheet'))]) rotateV2StandFrames(this, key);
     // 人物画风 v2：兵种图集按 v2 格子重切帧（旧的 96 / 128×112 切法会切错）
     applyV2TroopFrames(this);
+    // 拖刀图切帧：行走 4×4（下 / 左 / 右 / 上），上撩 1 行 4 帧（'0'..'3'）
+    for (const key of Object.keys(DRAG_ART_FILES)) {
+      if (!this.textures.exists(key)) continue;
+      const t = this.textures.get(key), src = t.getSourceImage() as { width: number; height: number }, cell = src.width / 4, walk = key.includes('_walk_');
+      if (walk) ['down', 'left', 'right', 'up'].forEach((d, r) => { for (let c = 0; c < 4; c++) if (!t.has(`${d}_${c}`)) t.add(`${d}_${c}`, 0, c * cell, r * cell, cell, cell); });
+      else for (let c = 0; c < 4; c++) if (!t.has(String(c))) t.add(String(c), 0, c * cell, 0, cell, src.height);
+      t.setFilter(v2Filter(RENDER_SCALE));
+    }
     const hint = document.getElementById('boot-hint');
     if (hint) hint.style.display = 'none';
     this.registry.set('battleReady',true);

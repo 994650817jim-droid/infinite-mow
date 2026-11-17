@@ -5,7 +5,7 @@ import type { Player } from '../entities/Player';
 import { LUBU_COMBAT as C } from '../data/chapters';
 import { DEPTH } from '../config';
 import { TELEGRAPH_CLASSIC, groundCracks, laneCracks, windupFlash } from '../ui/Telegraph';
-import { BossKit, BOSS_OLD, faceDir, type BossDebug } from './BossKit';
+import { BossKit, BOSS_OLD, ensureMoves, faceDir, type BossDebug } from './BossKit';
 import { LB } from '../data/bossRedesign';
 import { bossFxImage, ensureBossFx, hasBossFx } from './BossFx';
 
@@ -58,7 +58,7 @@ export class LubuBoss {
   private readonly kit?: BossKit;
 
   constructor(private readonly host: LubuHost) {
-    if (!BOSS_OLD) ensureBossFx(host.scene, ['lb_whirl', 'lb_arrow', 'kit_shift', 'kit_recover']);
+    if (!BOSS_OLD) { ensureBossFx(host.scene, ['lb_whirl', 'lb_arrow', 'kit_shift', 'kit_recover']); ensureMoves(host.scene, 'lubu_moves'); }
     if (!BOSS_OLD) this.kit = new BossKit({ scene: host.scene, boss: host.boss, banner: (t, c) => host.banner?.(t, c), sfx: host.playSfx });
     this.ultimate = new LubuUltimate(host.scene, host.boss, host.player, host.playSfx, host.hurtTroops);
     this.gfx = host.scene.add.graphics().setDepth(DEPTH.fx - 1);
@@ -207,6 +207,7 @@ export class LubuBoss {
     const { boss, player } = this.host, kit = this.kit!;
     const dx = player.x - boss.x, dy = player.y - boss.y, d = Math.hypot(dx, dy) || 1, dir = faceDir(Math.cos(this.angle));
     this.slash.setVisible(false); this.whirl?.setVisible(false);
+    this.art(now, dir);
     if (kit.inShift) { this.state = 'approach'; return; }
     const prog = this.telegraphProgressV2(now);
     switch (this.state) {
@@ -338,6 +339,22 @@ export class LubuBoss {
       const a = (this.shotFlashUntil - now) / 220, L = this.shotLine;
       this.gfx.lineStyle(3, 0xfff1c4, a).lineBetween(L.x, L.y - 30, L.x + Math.cos(L.a) * LB.shot.length, L.y + Math.sin(L.a) * LB.shot.length - 30);
     }
+  }
+  /** 招式图集帧（起手 0–2 / 拉弓 3 / 刺 4 / 横扫 5 / 下劈 6 / 放箭 7 / 收招 8–11 / 转场 12–13）；乱舞沿用旋转攻击帧。 */
+  private art(now: number, dir: number): void {
+    const K = 'lubu_moves', s = this.state, p = this.telegraphProgressV2(now), kit = this.kit!;
+    let f = -1;
+    if (kit.inShift) f = (12 + Math.floor(now / 160) % 2);
+    else if (s === 'comboWindup') f = this.segs[this.seg]?.kind === 'smash' ? 2 : Math.min(2, Math.floor(p * 3));
+    else if (s === 'combo') f = ({ thrust: 4, sweep: 5, smash: 6 } as const)[this.segs[this.seg]?.kind ?? 'thrust'];
+    else if (s === 'zigWindup') f = 1 + Math.min(1, Math.floor(p * 2));
+    else if (s === 'zig') f = 4;
+    else if (s === 'hop') f = 0;
+    else if (s === 'aim') f = 3;
+    else if (s === 'shot') f = 7;
+    else if (s === 'spinWindup') f = Math.min(2, Math.floor(p * 3));
+    else if (s === 'recover') f = 8 + Math.min(3, Math.floor(p * 4));
+    if (f >= 0) kit.move(K, f, dir);
   }
   private telegraphProgressV2(now: number): number { return Math.max(0, Math.min(1, (now - this.startedAt) / Math.max(1, this.until - this.startedAt))); }
 

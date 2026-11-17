@@ -5,7 +5,7 @@ import type { Legion } from './Legion';
 import type { EnemyDef } from '../data/enemies';
 import { DEPTH } from '../config';
 import { ZJ } from '../data/bossRedesign';
-import { BossKit, Beat, faceDir, type BossDebug } from './BossKit';
+import { BossKit, Beat, ensureMoves, faceDir, type BossDebug } from './BossKit';
 import { warnFx } from '../ui/WarnFx';
 import { groundCracks, laneCracks, warnCircle } from '../ui/Telegraph';
 import { bossFxImage, ensureBossFx, fxFrame, hasBossFx, playBossFx } from './BossFx';
@@ -42,6 +42,7 @@ export class ZhangjiaoBoss {
 
   constructor(private h: Host, now: number) {
     this.kit = new BossKit({ scene: h.scene, boss: h.boss, banner: h.banner, sfx: h.sfx });
+    ensureMoves(h.scene, 'zhangjiao_moves');
     this.gfx = h.scene.add.graphics().setDepth(DEPTH.fx - 1).setName('zhangjiao-fx');
     this.pillarGfx = h.scene.add.graphics().setDepth(DEPTH.enemy + 1).setName('zhangjiao-pillars');
     this.next = now + 1500; this.summonAt = now + ZJ.summonEveryMs;
@@ -71,7 +72,7 @@ export class ZhangjiaoBoss {
     const b = this.h.boss, p = this.h.player;
     if (this.gone) return;
     if (!b.active) { this.clear(); return; }
-    this.kit.update(now); this.gfx.clear(); this.drawPillars(now); for (const t of this.tal) t.setVisible(false);
+    this.kit.update(now); this.gfx.clear(); this.drawPillars(now); for (const t of this.tal) t.setVisible(false); this.art(now);
     if (!this.phase2 && b.hp <= b.maxHp * ZJ.phase2At) this.enterPhase2(now);
     if (this.kit.inShift) return;
     const dx = p.x - b.x, dy = p.y - b.y, d = Math.hypot(dx, dy) || 1, dir = faceDir(dx);
@@ -263,6 +264,17 @@ export class ZhangjiaoBoss {
     this.h.scene.cameras.main.shake(120, .004); this.h.sfx('bossSummon');
   }
   /** 举杖时身边旋转的符纸（像素小方块）。 */
+  /** 招式图集帧（起手 0–3 / 符雨 4–5 / 招雷 6–7 / 收招 8–11 / 转场 12–13 / 眩晕 14–15）。 */
+  private art(now: number): void {
+    const B = this.beat, p = this.h.player, b = this.h.boss, dir = faceDir(p.x - b.x), K = 'zhangjiao_moves', prog = B.progress(now);
+    let f = -1;
+    if (this.kit.inShift) f = (12 + Math.floor(now / 160) % 2);
+    else if (this.stunUntil > now) f = (14 + Math.floor(now / 220) % 2);
+    else if (B.phase === 'windup') f = Math.min(3, Math.floor(prog * 4));
+    else if (B.phase === 'warn' || B.phase === 'release') f = B.move === 'rain' ? (B.phase === 'warn' ? 3 : (4 + Math.floor(now / 160) % 2)) : (6 + Math.floor(now / 200) % 2);
+    else if (B.phase === 'recover') f = B.move === 'heaven' ? (6 + Math.floor(now / 200) % 2) : 8 + Math.min(3, Math.floor(prog * 4));
+    if (f >= 0) this.kit.move(K, f, dir);
+  }
   private tal: Phaser.GameObjects.Image[] = [];
   private talismans(now: number, p: number): void {
     const b = this.h.boss;

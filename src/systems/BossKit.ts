@@ -16,6 +16,16 @@ import { playBossFx } from './BossFx';
 /** 旧版首领（对比 / 回退）：?boss=old。 */
 export const BOSS_OLD: boolean = (() => { try { return new URLSearchParams(globalThis.location?.search ?? '').get('boss') === 'old'; } catch { return false; } })();
 
+/**
+ * 首领招式图集（画风会话出，public/assets/bosses-v2/<id>_moves.png）：4×4、每格 288、脚底 y=256、全部朝右。
+ * 帧 0~3 起手、4~7 出手、8~11 收招、12~13 转场、14~15 受伤。
+ */
+export function ensureMoves(scene: Phaser.Scene, key: string): void {
+  if (scene.textures.exists(key)) return;
+  scene.load.spritesheet(key, `assets/bosses-v2/${key}.png`, { frameWidth: 288, frameHeight: 288 });
+  if (!scene.load.isLoading()) scene.load.start();
+}
+
 export type PoseKind = 'lean' | 'rear' | 'crouch' | 'cast' | 'stagger' | 'spin';
 export type BeatPhase = 'idle' | 'windup' | 'warn' | 'release' | 'recover';
 
@@ -31,6 +41,8 @@ interface KitHost {
 export class BossKit {
   private poseKind: PoseKind | null = null; private poseAmt = 0; private poseDir = 1;
   private saved: { sx: number; sy: number; rot: number } | null = null;
+  private moveKey: string | null = null; private moveFrame = 0; private moveDir = 1;
+  private savedTex: { key: string; frame: string | number; ox: number; oy: number; flip: boolean; sx: number; sy: number } | null = null;
   private recoverUntil = 0; private recoverFrom = 0;
   private sparks: Phaser.GameObjects.Graphics;
   private overlay?: Phaser.GameObjects.Rectangle;
@@ -51,6 +63,12 @@ export class BossKit {
 
   /** 招式名横幅（大招 / 招牌招）。 */
   banner(text: string, caption?: string): void { this.h.banner(text, caption); }
+
+  /** 本帧用招式图集的第 frame 帧（每帧调用；图没载入时返回 false，调用方保持原来的画法）。dir：-1 朝左（图朝右，左边镜像）。 */
+  move(key: string, frame: number, dir = 1): boolean {
+    if (!this.h.scene.textures.exists(key)) return false;
+    this.moveKey = key; this.moveFrame = Math.max(0, Math.min(15, Math.floor(frame))); this.moveDir = dir < 0 ? -1 : 1; return true;
+  }
 
   /** 收招破绽：持续 ms，期间暖色闪光 + 火星。 */
   recover(now: number, ms: number): void { this.recoverFrom = now; this.recoverUntil = now + ms; }
@@ -91,14 +109,21 @@ export class BossKit {
   }
 
   private restore(): void {
-    if (!this.saved) return;
     const sp = this.h.boss.sprite;
-    if (sp.active) { sp.setScale(this.saved.sx, this.saved.sy); sp.setRotation(this.saved.rot); }
-    this.saved = null;
+    if (this.saved) { if (sp.active) { sp.setScale(this.saved.sx, this.saved.sy); sp.setRotation(this.saved.rot); } this.saved = null; }
+    const t = this.savedTex;
+    if (t) { if (sp.active && this.h.scene.textures.exists(t.key)) sp.setTexture(t.key, t.frame).setOrigin(t.ox, t.oy).setFlipX(t.flip).setScale(t.sx, t.sy); this.savedTex = null; }
   }
   private apply(): void {
     const sp = this.h.boss.sprite, k = this.poseKind, a = this.poseAmt, d = this.poseDir;
     this.poseKind = null;
+    // 招式图集：保持当前显示高度换帧（v2 本体格子同为 288、人物等高），脚底对齐 256/288
+    if (this.moveKey && sp.active && this.h.boss.active) {
+      this.savedTex = { key: sp.texture.key, frame: sp.frame.name, ox: sp.originX, oy: sp.originY, flip: sp.flipX, sx: sp.scaleX, sy: sp.scaleY };
+      const s = Math.abs(sp.displayHeight) / 288;
+      sp.setTexture(this.moveKey, this.moveFrame).setOrigin(.5, 256 / 288).setFlipX(this.moveDir < 0).setScale(s);
+    }
+    this.moveKey = null;
     if (!k || !sp.active || !this.h.boss.active) return;
     this.saved = { sx: sp.scaleX, sy: sp.scaleY, rot: sp.rotation };
     let rot = 0, sx = 1, sy = 1;

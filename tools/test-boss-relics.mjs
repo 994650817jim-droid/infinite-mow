@@ -40,7 +40,7 @@ const drop = await p.evaluate(async () => {
   d.relicStage = () => 'huangjin-3'; const first = d.bossRelicDrop(); out.first = first?.base;
   d.runLoot.push(first); const again = d.bossRelicDrop(); out.again = [again?.base, again?.quality];
   d.relicStage = () => 'hulao-2'; out.none = d.bossRelicDrop();
-  d.relicStage = () => 'huangjin-1'; d.runLoot.length = 0; const before = d.runLoot.length; d.onKill({ kind: 'boss', x: s.player.x, y: s.player.y }); out.killOnly = d.runLoot.slice(before).map(i => i.base); d.takeBossRelic(); out.bossKill = d.runLoot.slice(before).map(i => i.base);
+  d.relicStage = () => 'huangjin-1'; d.runLoot.length = 0; const before = d.runLoot.length; d.onKill({ kind: 'boss', x: s.player.x, y: s.player.y }); out.killOnly = d.runLoot.slice(before).map(i => i.base); d.claimBossRelic(); out.bossKill = d.runLoot.slice(before).map(i => i.base);
   out.lubuKey = window.__game.scene.getScene('LubuGameScene')?.bossRelicKey?.call({}) ?? 'missing';
   d.rng = Math.random; d.relicStage = () => s.bossRelicKey(); return out;
 });

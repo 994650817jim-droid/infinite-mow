@@ -68,6 +68,8 @@ import { Reinforcements } from '../systems/Reinforcements';
 import { MartialFields } from '../systems/MartialFields';
 import { RunGrowth, ATTRIBUTE_INFO, ATTRIBUTE_MAX, attributeIcon, type AttributeId } from '../systems/RunGrowth';
 import { addScrolls, getXinde, SCROLL, temperBonus } from '../systems/MasteryStore';
+import { primaryAttribute } from '../data/attributes';
+import { takeAttrNotice } from '../systems/HeroProgress';
 import { allocateHeroAttr, claimFirstClear, creditHeroXp, enlistHero, heroFreePoints, heroLevel, type HeroKey } from '../systems/HeroProgress';
 import { packCampaign, restoreCampaign, type CampaignTransfer } from '../systems/Campaign';
 import { TROOP_KINDS, INITIAL_TROOPS, LEGION, FREE_RECRUIT_BY_TIER, type TroopKind } from '../data/legion';
@@ -478,7 +480,7 @@ export class GameScene extends Phaser.Scene {
     this.setupObjective();
     // 坐骑：马厩里给该武将分配的马（第一章通关后马厩开放；换马只在休整时，下一关出征生效）
     {const horse=heroHorse(this.runConfig.character);this.mount=horse?new HeroMount({scene:this,player:this.player,enemies:this.enemies,hit:(e,d,now)=>this.hitEnemy(e,d,now,'melee',false,false),notice:t=>this.showGrowthNotice(t)},{base:horse.id,name:horse.name},this.runConfig.character,this.player.growth.gear.specials.includes('hubao')?{trampleMul:RELIC.hubaoTrample,remountMs:RELIC.hubaoRemountMs}:{}):null;this.player.mountGuard=this.mount?(n,now)=>this.mount?.guard(n,now)??n:undefined;this.events.once('shutdown',()=>{this.mount?.clear();this.mount=null;});}
-    this.itemDrops=new ItemDrops(this,this.player,this.itemTier(),()=>this.elapsed,()=>this.isFinalBoss(),()=>this.sfx.play('pickup'),()=>this.bossRelicKey());
+    this.itemDrops=new ItemDrops(this,this.player,this.itemTier(),()=>this.elapsed,()=>this.isFinalBoss(),()=>this.sfx.play('pickup'),()=>this.bossRelicKey());this.itemDrops.deferBossRelic=true; // 首领遗珍由首领宝箱发（BossChest）
     this.relics=new BossRelics({scene:this,player:this.player,enemies:()=>this.enemies,hit:(e,d,now)=>{this.hitEnemy(e,d,now,'melee',false,false);},notice:t=>this.showGrowthNotice(t)},this.player.growth.gear.specials,this.combatNow);
     this.syncRelicShips();
     this.events.once('shutdown',()=>{this.relics?.clear();this.relics=null;this.relicShips?.clear();this.relicShips=null;});
@@ -1581,6 +1583,7 @@ export class GameScene extends Phaser.Scene {
     const crit = firstStrike || weaponHit && Math.random() < Math.min(0.65, this.player.stats.critChance + this.player.growth.criticalBonus() + (!fromAlly ? this.player.passive.critBonus(time) + this.player.growth.aimCriticalBonus() + this.buildCombat.criticalBonus() : 0));
     if(!fromAlly&&weaponHit)rawDamage=this.buildCombat.damage(enemy,rawDamage,crit,time);
     if(!fromAlly)rawDamage*=this.player.growth.gearHitMultiplier(enemy.kind);
+    if(!fromAlly&&!weaponHit)rawDamage*=this.player.growth.skillDamageMultiplier(); // 智力：技艺伤害（非普攻）、含主属性
     let damage = Math.max(1, Math.round(rawDamage * (crit ? BALANCE.critMultiplier : 1) * (firstStrike ? RELIC.zhanjiangMul : 1)));
     enemy.flash(time);
     if(!fromAlly&&source==='arrow')this.artEffects.show(3,enemy.x,enemy.y-8,32,time,120);
@@ -2449,13 +2452,13 @@ export class GameScene extends Phaser.Scene {
     if(!this.player.alive){this.finish(false);return;}
     this.bossChests.push(new BossChest({scene:this,player:this.player,grant:()=>this.grantBossChest(),done,sfx:k=>this.sfx.play(k)},x,y,this.combatNow));
   }
-  /** 宝箱里的东西：一件本局遗物（原三选一卡的池子，随机一件）+ 首领遗珍（道具系统发放，见 ItemDrops.takeBossRelic）。 */
+  /** 宝箱里的东西：一件本局遗物（原三选一卡的池子，随机一件）+ 首领遗珍（道具系统发放，见 ItemDrops.claimBossRelic）。 */
   protected grantBossChest():ChestLoot[]{
     const out:ChestLoot[]=[];
     const special=RELICS.filter(r=>['human_seal','heaven_ember','army_jade'].includes(r.id)&&!this.player.relics.includes(r.id)),pool=special.length?special:RELICS.filter(r=>!this.player.relics.includes(r.id));
     if(pool.length){const r=pool[Math.floor(Math.random()*pool.length)];this.player.addRelic(r.id);out.push({name:r.name,desc:r.desc,tag:'本局遗物'});}
     else{this.legion.food+=15;out.push({name:'军粮 +15',desc:'本局遗物已集齐，改发军粮',tag:''});}
-    const item=this.itemDrops?.takeBossRelic();
+    const item=this.itemDrops?.claimBossRelic();
     if(item){const rd=relicDef(item.base),sp=rd?.special?SPECIALS[rd.special as keyof typeof SPECIALS]:undefined;out.push({name:itemName(item),desc:sp?sp.name+'：'+sp.desc:(rd?.lore??'额外兵装 · 结算后入行囊'),tag:rd?'首领遗珍 · 结算后入行囊':'兵装'});}
     this.artEffects.show(5,this.player.x,this.player.y-10,80,this.combatNow,450);
     return out;
@@ -2551,6 +2554,9 @@ export class GameScene extends Phaser.Scene {
     g.unallocated = Math.min(room, g.heroFree + (carried ? bonusLeft : 0));
     // 武将谱：本命淬炼、战法心得（新开一场时开局第一次升级保证出一张心得卡）
     g.temperDamage = temperBonus(id); g.xinde = getXinde(id); if (!carried) g.xindeFirst = g.xinde.length > 0;
+    this.player.passive.areaMul = g.areaMultiplier();
+    // 属性改版（四项）：老存档的点数已全部退回，提示一次
+    if (takeAttrNotice()) this.time.delayedCall(1200, () => this.showGrowthNotice('属性已改版：点数已全部返还，暂停 →「分配属性点」重新分配'));
     this.player.hp = carried ? Math.max(1, Math.min(this.player.maxHp, Math.round(this.player.maxHp * ratio))) : this.player.maxHp;
   }
   /** 结算：本场经验折进武将经验（主线 70%，攻城 / 军情 / 挑战等 35%；2026-11-16 平衡会话改版）。测试战斗不记。 */
@@ -2568,13 +2574,15 @@ export class GameScene extends Phaser.Scene {
   }
   /** 战斗中打开行囊：自动暂停，关掉后恢复（从暂停菜单进来则回到暂停菜单）。atRest = 行营休整中，可换马。 */
   protected openBattleBag(atRest = false): void {
-    if (this.over || this.children.getByName('item-bag')) return;
+    // 行营休整发生在本关结算之后（this.over 已为真）：休整时照样能开行囊（2026-11-17 用户报「休整时行囊点不了」）
+    if ((this.over && !atRest) || this.children.getByName('item-bag')) return;
     const fromPlay = this.mode === 'none';
     if (fromPlay) this.togglePause();
     const debug = isChapterTestRun() || this.debugModified || this.debugJumped || !!this.player.damageImmune || !!this.runConfig.encounter;
     new ItemBagUI(this, {
-      hero: this.runConfig.character, battle: true, atRest, runLoot: this.itemDrops?.runLoot ?? [], treasures: this.treasureEntries(),
-      claimLoot: debug ? undefined : (item: ItemInstance) => { if (!claimRunLoot(this.runConfig.character, item)) return false; this.itemDrops?.takeLoot(item.uid); return true; },
+      hero: this.runConfig.character, battle: true, atRest, runLoot: this.over ? [] : this.itemDrops?.runLoot ?? [], treasures: this.treasureEntries(),
+      // 已结算时缴获都收进行囊了，不再单列「本局缴获」
+      claimLoot: debug || this.over ? undefined : (item: ItemInstance) => { if (!claimRunLoot(this.runConfig.character, item)) return false; this.itemDrops?.takeLoot(item.uid); return true; },
       onGearChange: () => this.refreshGear(),
       onClose: () => { if (fromPlay && this.mode === 'pause') this.togglePause(); },
     });
@@ -3049,15 +3057,16 @@ export class GameScene extends Phaser.Scene {
       const y=firstY+index*rowH,left=attrCx-rowW/2;
       const row=this.add.graphics();row.fillStyle(LQ.lacquerHi,.5).fillRoundedRect(left,y-(rowH-8)/2,rowW,rowH-8,6).lineStyle(1,LQ.gold,.38).strokeRoundedRect(left,y-(rowH-8)/2,rowW,rowH-8,6);
       const attrIconImg=this.add.image(left+30,y,attributeIcon(id)).setDisplaySize(34,34);
-      const label=this.add.text(left+56,y-11,ATTRIBUTE_INFO[id].name,{...warText(17,'#f0dfb4')}).setOrigin(0,.5);
+      const isPrimary=primaryAttribute(this.runConfig.character)===id;
+      const label=this.add.text(left+56,y-11,ATTRIBUTE_INFO[id].name+(isPrimary?' · 主属性':''),{...warText(17,'#f0dfb4')}).setOrigin(0,.5);
       const effect=this.add.text(left+56,y+12,ATTRIBUTE_INFO[id].effect,warText(12,'#a9b9a3')).setOrigin(0,.5);
-      // 等级：8 格，右侧数值
-      const pipX=attrCx+rowW/2-(d?206:192),pipY=y,pips=this.add.graphics();
+      // 等级：10 格，右侧数值
+      const pipX=attrCx+rowW/2-(d?226:212),pipY=y,pips=this.add.graphics();
       const value=this.add.text(attrCx+rowW/2-80,y,`0/${ATTRIBUTE_MAX}`,warText(13,'#b6c3ab')).setOrigin(1,.5);
       const button=this.add.image(attrCx+rowW/2-38,y,'ui_war_button').setDisplaySize(50,44).setInteractive({useHandCursor:true}).setName('attribute-add-'+id);
       const plus=this.add.text(button.x,button.y-1,'+',warText(26,'#ffe9bd')).setOrigin(.5).setStroke('#2a170b',3);
       lqImageButton(this,button,50,44,'gold',plus);
-      button.on('pointerdown',()=>{const g=this.player.growth;if(g.allocate(this.player,id)){if(g.heroFree>0){g.heroFree--;if(!isChapterTestRun())allocateHeroAttr(this.runConfig.character,id);}this.renderAttributePanel();this.updateHud();}});
+      button.on('pointerdown',()=>{const g=this.player.growth;if(g.allocate(this.player,id)){this.player.passive.areaMul=g.areaMultiplier();if(g.heroFree>0){g.heroFree--;if(!isChapterTestRun())allocateHeroAttr(this.runConfig.character,id);}this.renderAttributePanel();this.updateHud();}});
       this.attributePanel.add([row,attrIconImg,label,effect,pips,value,button,plus]);
       this.attributeRows.push({value,button,plus,pips,pipX,pipY});
     });
@@ -3189,7 +3198,7 @@ export class GameScene extends Phaser.Scene {
       const id=ids[i],level=growth.attributes[id],row=this.attributeRows[i];
       if(!row)continue;
       row.value.setText(level>=ATTRIBUTE_MAX?'已满':`${level}/${ATTRIBUTE_MAX}`).setColor(level>=ATTRIBUTE_MAX?'#e2bd6a':'#e5d4ab');
-      row.pips.clear();for(let k=0;k<ATTRIBUTE_MAX;k++){const x=row.pipX+k*12;row.pips.fillStyle(k<level?0xe2bd6a:0x2a3328,1).fillRect(x,row.pipY-5,9,10).lineStyle(1,k<level?0xfff0c0:0x5d6a58,.9).strokeRect(x+.5,row.pipY-4.5,8,9);}
+      row.pips.clear();for(let k=0;k<ATTRIBUTE_MAX;k++){const x=row.pipX+k*11;row.pips.fillStyle(k<level?0xe2bd6a:0x2a3328,1).fillRect(x,row.pipY-5,8,10).lineStyle(1,k<level?0xfff0c0:0x5d6a58,.9).strokeRect(x+.5,row.pipY-4.5,7,9);}
       const can=growth.unallocated>0&&level<ATTRIBUTE_MAX;
       if(can){row.button.setAlpha(1).setInteractive({useHandCursor:true});}
       else row.button.setAlpha(.38).disableInteractive();

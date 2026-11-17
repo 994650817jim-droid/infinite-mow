@@ -39,7 +39,7 @@ export class Legion {
   drillMultiplier = 1;
   /** 设置练兵倍率，并按新倍率重算在场部曲的生命上限（保持血量比例）。 */
   setDrill(multiplier: number): void { this.drillMultiplier = Math.max(1, multiplier); for (const u of this.units) if (u.active) u.applyCampaignHp(this.hpMultiplier()); }
-  private hpMultiplier(): number { return (1 + CAMP_TRAINING.hp.perLevel * this.training.hp) * this.drillMultiplier; }
+  private hpMultiplier(): number { return (1 + CAMP_TRAINING.hp.perLevel * this.training.hp) * this.drillMultiplier * this.player.growth.allyHpMultiplier(); } // 统御：部曲生命
   food: number = LEGION.startingFood; dead = 0; recruited = 0;
   order: Order = 'guard';
   private readonly projectiles: LegionProjectiles;

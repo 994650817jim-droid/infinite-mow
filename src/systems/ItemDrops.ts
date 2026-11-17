@@ -6,6 +6,7 @@ import { loadItems, loadPity } from './ItemStore';
 import { SCROLL } from './MasteryStore';
 import type { Player } from '../entities/Player';
 import { ensureItemTextures, itemIcon } from '../ui/ItemQuality';
+import { ensureLootBeam, lootBeam } from './LootBeam';
 
 interface GroundItem { item: ItemInstance; root: Phaser.GameObjects.Container; x: number; y: number }
 interface Chest { img: Phaser.GameObjects.Image; glow: Phaser.GameObjects.Ellipse; x: number; y: number }
@@ -27,9 +28,12 @@ export class ItemDrops {
   readonly pity: PityState = loadPity();
   /** 武将谱：本局获得的武学残卷（首领 3、精锐 5% 掉 1、宝箱 20% 掉 1；结算时收入，测试战斗不收）。 */
   scrolls = 0;
+  /** 首领遗珍改由「首领宝箱」发放时设为 true：击杀首领不再自动发，由宝箱拾取时调用 claimBossRelic()。 */
+  deferBossRelic = false;
 
   constructor(private readonly scene: Phaser.Scene, private readonly player: Player, private readonly tier: number, private readonly elapsed: () => number, private readonly finalBoss: () => boolean, private readonly onPickup?: (item: ItemInstance) => void, private readonly relicStage: () => string | null = () => null) {
     ensureItemTextures(scene);
+    ensureLootBeam(scene); // 手绘品质光柱（LootBeam.ts；未载入时 drop() 仍画旧光柱）
   }
 
   /** 获得残卷：记数并在主将头上飘字。 */
@@ -45,7 +49,7 @@ export class ItemDrops {
     if (enemy.kind === 'boss') {
       const n = this.finalBoss() ? 2 : 1;
       for (let i = 0; i < n; i++) this.collect(rollItem(rollDropQuality(n > 1 ? 'finalBoss' : 'boss', this.tier, this.pity, this.rng), this.rng));
-      // 首领遗珍不在击杀瞬间发：首领倒地掉宝箱，主将捡起时由 takeBossRelic() 发（BossChest，用户 2026-11-17）
+      if (!this.deferBossRelic) this.claimBossRelic();
       return;
     }
     const elite = enemy.kind === 'elite';
@@ -57,8 +61,12 @@ export class ItemDrops {
    * 首领遗珍（用户批准的掉落规则）：该关首领的核心遗珍还没拥有（行囊或本局缴获里都没有）→ 必掉；
    * 还有没拿到的可选件 → 15% 掉一件；全部拥有 → 改为多掉一件本章档位、至少紫色的兵装。没有遗珍的关返回 null。
    */
-  /** 打开首领宝箱时发首领遗珍（并入本局缴获，结算时入行囊）；返回发出的那件，没有则 null。 */
-  takeBossRelic(): ItemInstance | null { const it = this.bossRelicDrop(); if (it) this.collect(it); return it; }
+  /**
+   * 发放本关首领遗珍（规则同 bossRelicDrop）：收进本局缴获（结算带回行囊），返回发出的道具，没有则 null。
+   * 名字 / 说明：itemName(item)、relicDef(item.base)（data/items.ts）。供首领宝箱等调用。
+   */
+  claimBossRelic(): ItemInstance | null { const r = this.bossRelicDrop(); if (r) this.collect(r); return r; }
+
   bossRelicDrop(): ItemInstance | null {
     const defs = relicsForStage(this.relicStage()); if (!defs.length) return null;
     let owned: Set<string>; try { owned = new Set([...loadItems().bag, ...this.runLoot].map(i => i.base)); } catch { owned = new Set(this.runLoot.map(i => i.base)); }
@@ -78,7 +86,9 @@ export class ItemDrops {
     const beam = s.add.rectangle(0, -beamH / 2 + 4, 6, beamH, q.color, .55);
     const frame = s.add.graphics(); frame.fillStyle(0x1b120b, .9).fillRoundedRect(-14, -26, 28, 28, 5); frame.lineStyle(2, q.color, 1).strokeRoundedRect(-14, -26, 28, 28, 5);
     const ic = itemIcon(s, item), icon = s.add.image(0, -12, ic.key, ic.frame).setDisplaySize(ic.art ? 25 : 22, ic.art ? 25 : 22);
-    root.add([glow, beam, frame, icon]);
+    // 品质光柱：手绘序列帧就绪时替换程序画的光圈 + 光柱（LootBeam.ts），否则沿用旧的
+    const painted = lootBeam(s, item.quality, q.color);
+    if (painted) { glow.destroy(); beam.destroy(); root.add([painted, frame, icon]); } else root.add([glow, beam, frame, icon]);
     s.tweens.add({ targets: [frame, icon], y: '-=4', duration: 700, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
     const g = { item, root, x, y }; this.ground.push(g); return g;
   }

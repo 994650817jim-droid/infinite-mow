@@ -157,8 +157,10 @@ export class CharacterPassives {
   grantSharp(now: number, guardMs: number): void { if (this.stopped) return; this.lastDamage = Math.min(this.lastDamage, now - this.calmMs); this.sharpGuardUntil = now + guardMs; }
   sharpGuarded(now: number): boolean { return now < this.sharpGuardUntil; }
   critBonus(now: number): number { return this.isSharpshooter(now) ? R.critBonus : 0; }
+  /** 智力的范围倍率（GameScene 开局 / 加点后设置，RunGrowth.areaMultiplier）。 */
+  areaMul = 1;
   rangeMultiplier(weapon: WeaponId): number {
-    return !this.stopped && this.character === 'guanyu' && weapon === 'guandao' ? 1 + this.stacks * R.guandaoRangePerStack : 1;
+    return (!this.stopped && this.character === 'guanyu' && weapon === 'guandao' ? 1 + this.stacks * R.guandaoRangePerStack : 1) * this.areaMul;
   }
   beginCast(weapon: WeaponId): PassiveCast {
     const c: PassiveCast = { owner: this.character, generation: this.generation, weapon, empowered: false, radiusMul: this.rangeMultiplier(weapon), damageMul: 1, extraSpear: false, spearLengthMul: 1, roar: false, dash: false, heal: 0, rally: 0, fan: false, whoDares: false, formation: false, maids: false, moonDance: false, bridge: false, charge: false, hits: new Set(), awarded: false };

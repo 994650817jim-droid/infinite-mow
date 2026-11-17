@@ -90,6 +90,7 @@ assets/raw/*
 !/tools/artv2-recolor.mjs
 !/tools/artv2-split.mjs
 !/tools/prepare-painted-icon.mjs
+!/tools/prepare-fx-sheet.mjs
 !/tools/artv2-troops.mjs
 !/tools/artv2-enemies.mjs
 !/tools/artv2-portraits.mjs

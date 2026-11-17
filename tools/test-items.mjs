@@ -1,4 +1,5 @@
 // 加点节奏（每 2 级 1 点）与兵装道具：掉落 / 拾取 / 宝箱 / 首领、结算入行囊（败退一半、测试不入）、
+// 2026-11-17：开发模式（?dev=1）用独立的测试存档、正式模式有主公锁定；主页也用 ?dev=1，和战斗读写同一份测试存档。
 // 穿戴后加成生效、行囊面板（主页与暂停）、行营兵装货架。手机 390×844 与电脑 1280×720 各截图。
 // 需要开发服务器 5173。用法：node tools/test-items.mjs
 import { chromium } from 'playwright';
@@ -185,7 +186,7 @@ await p.screenshot({ path: `${out}/mobile-camp-shelf.png` });
 await p.evaluate(G0 => eval(G0).campUI.setVisible(false), G);
 
 // 8) 主页行囊（可穿戴）
-await p.goto(base + '?layout=mobile');
+await p.goto(base + '?dev=1&layout=mobile');
 await p.waitForFunction(() => window.__game?.scene.getScene('MenuScene')?.sys.isActive() && window.__game.scene.getScene('MenuScene').children.getByName('home-achievements-plaque'), null, { timeout: 30000 });
 await p.waitForTimeout(800);
 const homeBag = await p.evaluate(async M0 => {
@@ -220,7 +221,7 @@ await p.close();
 
 // ———————————— 电脑 1280×720 ————————————
 const d = await page('desktop', { width: 1280, height: 720 });
-await d.goto(base + '?layout=desktop');
+await d.goto(base + '?dev=1&layout=desktop');
 await d.waitForFunction(() => window.__game?.scene.getScene('MenuScene')?.sys.isActive() && window.__game.scene.getScene('MenuScene').children.getByName('home-achievements-plaque'), null, { timeout: 30000 });
 await d.waitForTimeout(800);
 await d.evaluate(async M0 => { const m = eval(M0), st = await window.__mod('/src/systems/ItemStore.ts'), items = await window.__mod('/src/data/items.ts');

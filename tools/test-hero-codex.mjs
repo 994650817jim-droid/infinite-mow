@@ -32,9 +32,9 @@ const store = await p.evaluate(async () => {
   const g0 = ms.grain(); const t1 = ms.temperUp('zhaoyun'); const t2 = ms.temperUp('zhaoyun'); const t3 = ms.temperUp('zhaoyun');
   out.temper = { g0, g1: ms.grain(), lv: ms.temperLevel('zhaoyun'), ok: [t1.ok, t2.ok, t3.ok], bonus: ms.temperBonus('zhaoyun') };
   // 洗点：先加点，再免费洗、第二次收费
-  hp.creditHeroXp('zhaoyun', 2000); hp.allocateHeroAttr('zhaoyun', 'might'); hp.allocateHeroAttr('zhaoyun', 'might');
-  const before = hp.heroAttrs('zhaoyun').might, free = ms.respecCost('zhaoyun'), r1 = ms.respec('zhaoyun'); hp.allocateHeroAttr('zhaoyun', 'agility');
-  const cost = ms.respecCost('zhaoyun'); out.respec = { before, after: hp.heroAttrs('zhaoyun').might, free, r1: r1.ok, cost, level: hp.heroLevel('zhaoyun') };
+  hp.creditHeroXp('zhaoyun', 2000); hp.allocateHeroAttr('zhaoyun', 'strength'); hp.allocateHeroAttr('zhaoyun', 'strength');
+  const before = hp.heroAttrs('zhaoyun').strength, free = ms.respecCost('zhaoyun'), r1 = ms.respec('zhaoyun'); hp.allocateHeroAttr('zhaoyun', 'agility');
+  const cost = ms.respecCost('zhaoyun'); out.respec = { before, after: hp.heroAttrs('zhaoyun').strength, free, r1: r1.ok, cost, level: hp.heroLevel('zhaoyun') };
   // 心得
   const locked = Object.keys((await window.__mod('/src/data/builds.ts')).TACTICS).find(t => !ms.tacticUnlocked(t));
   const sc0 = ms.scrolls(); const lockedPick = ms.toggleXinde('zhaoyun', locked).ok; const u = ms.unlockTactic(locked).ok;

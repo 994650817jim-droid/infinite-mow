@@ -26,6 +26,11 @@ async function layoutCheck(pad, name) {
   ck(`Deck ${name}：可点区域 ${c.length} 个，无出界、无重叠`, c.length > 0 && !outside.length && !overlaps.length, { outside, overlaps });
 }
 const shot = (p, name) => p.screenshot({ path: `${out}/deck-${name}.png` });
+// 老存档（带 im_last_hero、还没定主公）进主页会先弹「主公 · xx」确认窗（主公规则 2026-11-16），手柄焦点都在它上面 → 选「就用 xx」关掉
+async function keepLord(p, pad) {
+  const c = await pad.cands(); if (!c.some(x => x.name === 'lord-keep')) return false;
+  await pad.focusTo(f => f.name === 'lord-keep'); await pad.press('A'); await p.waitForTimeout(400); return true;
+}
 async function newPage(seed) {
   const p = await b.newPage(DECK);
   p.on('pageerror', e => errors.push(e.message));
@@ -52,7 +57,11 @@ async function newPage(seed) {
   await pad.press('B'); await p.waitForTimeout(300);
   const closed = await p.evaluate(() => !window.__game.scene.getScene('MenuScene').heroModal?.visible);
   ck('Ⓑ 关闭选将弹窗', closed);
+  // Ⓐ 重新打开选将 → Ⓐ 第一次「确认出战」（新存档要定主公：只弹「主公选定后不可更改 · 再点一次」提示）→ Ⓐ 第二次才确认（主公规则 2026-11-16）
   await pad.press('A'); await p.waitForTimeout(400); await pad.press('A'); await p.waitForTimeout(400);
+  const armed = await p.evaluate(() => window.__game.scene.getScene('MenuScene').children.getByName?.('hero-locked-hint')?.text ?? [...window.__game.scene.getScene('MenuScene').children.list].flatMap(o => o.list ?? [o]).find(o => o.name === 'hero-locked-hint')?.text ?? '');
+  ck('新存档第一次「确认出战」先提示主公选定后不可更改', /再点一次/.test(armed), armed);
+  await pad.press('A'); await p.waitForTimeout(400);
   const home2 = await pad.focus();
   ck('确认出战后焦点回到「匡扶汉室」', home2?.name === 'start-campaign', home2);
   await layoutCheck(pad, '主页');
@@ -145,6 +154,7 @@ async function newPage(seed) {
   await p.waitForFunction(() => window.__game?.scene.getScene('MenuScene')?.sys.isActive(), null, { timeout: 30000 });
   await p.waitForTimeout(1200);
   const pad = padApi(p);
+  await keepLord(p, pad);
   await pad.press('DOWN');
   const sf = await pad.focusTo(f => f.name === 'home-settings');
   await pad.press('A'); await p.waitForTimeout(300);
@@ -178,6 +188,7 @@ async function newPage(seed) {
   await p.waitForFunction(() => window.__game?.scene.getScene('MenuScene')?.sys.isActive(), null, { timeout: 30000 });
   await p.waitForTimeout(1500);
   const pad = padApi(p);
+  await keepLord(p, pad);
   await pad.press('UP');
   const wf = await pad.focusTo(f => f.name === 'home-world');
   await pad.press('A'); await p.waitForTimeout(1500);
@@ -190,6 +201,7 @@ async function newPage(seed) {
     await shot(p, 'world-map');
   }
   await p.goto(base + '?layout=desktop'); await p.waitForFunction(() => window.__game?.scene.getScene('MenuScene')?.sys.isActive(), null, { timeout: 30000 }); await p.waitForTimeout(1200);
+  await keepLord(p, pad);
   await pad.press('UP');
   const cf = await pad.focusTo(f => f.name === 'home-city');
   await pad.press('A'); await p.waitForTimeout(1500);

@@ -1,5 +1,5 @@
 import type { CharacterId } from '../data/characters';
-import { ATTRIBUTE_MAX, ATTRIBUTE_POINT_EVERY, xpToNext, type AttributeId } from './RunGrowth';
+import { ATTRIBUTE_IDS, ATTRIBUTE_MAX, ATTRIBUTE_POINT_EVERY, xpToNext, type AttributeId } from './RunGrowth';
 import { chapterOneCleared } from './ChapterProgress';
 import { arcUnlocked } from '../world/WorldStore';
 
@@ -15,11 +15,14 @@ export const HEROES_KEY = 'im_heroes_v1';
 export const LEVEL_CAPS: readonly number[] = [10, 15, 20, 25, 30];
 export type HeroKey = CharacterId | `r_${number}`;
 export interface HeroRecord { level: number; xp: number; attributes: Record<AttributeId, number> }
-/** attrScale = 2：属性点已按「每级 1 点、效果减半」换算（旧记录的已加点 ×2）。 */
-interface HeroSave { version: 1; heroes: Record<string, HeroRecord>; migrated: boolean; firstClears: string[]; attrScale?: number }
+/**
+ * attrSet = 3：属性已是 2026-11-17 改版的四项（力量 / 敏捷 / 智力 / 统御）。旧记录（六项）读档时全部退回、不换算，
+ * attrNotice 置位，进游戏提示一次「属性已改版，点数已返还」（takeAttrNotice）。
+ */
+interface HeroSave { version: 1; heroes: Record<string, HeroRecord>; migrated: boolean; firstClears: string[]; attrSet?: number; attrNotice?: boolean }
 
-const ATTRS: readonly AttributeId[] = ['might', 'quickness', 'critical', 'constitution', 'agility', 'command'];
-const zeroAttrs = (): Record<AttributeId, number> => ({ might: 0, quickness: 0, critical: 0, constitution: 0, agility: 0, command: 0 });
+const ATTRS: readonly AttributeId[] = ATTRIBUTE_IDS;
+const zeroAttrs = (): Record<AttributeId, number> => ({ strength: 0, agility: 0, intellect: 0, command: 0 });
 const int = (v: unknown, max: number, min = 0) => Number.isSafeInteger(v) ? Math.max(min, Math.min(max, v as number)) : min;
 const isKey = (k: string) => /^r_\d{1,9}$/.test(k) || /^[a-z]{2,20}$/.test(k);
 
@@ -36,27 +39,31 @@ export function pointsAt(level: number): number { return Math.max(0, Math.floor(
 let memory: HeroSave | null = null;
 function read(): HeroSave {
   if (memory) return memory;
-  let s: HeroSave = { version: 1, heroes: {}, migrated: false, firstClears: [], attrScale: 2 };
+  let s: HeroSave = { version: 1, heroes: {}, migrated: false, firstClears: [], attrSet: 3 };
   try {
     const v = JSON.parse(localStorage.getItem(HEROES_KEY) ?? 'null');
     if (v && v.version === 1 && v.heroes && typeof v.heroes === 'object') {
-      s.migrated = v.migrated === true; s.attrScale = v.attrScale === 2 ? 2 : 1;
+      s.migrated = v.migrated === true; s.attrSet = v.attrSet === 3 ? 3 : 1; s.attrNotice = v.attrNotice === true;
+      // 旧六项：有没有加过点（决定要不要提示）
+      if (s.attrSet !== 3) s.attrNotice = Object.values(v.heroes as Record<string, { attributes?: Record<string, unknown> }>).some(r => Object.values(r?.attributes ?? {}).some(n => Number(n) > 0));
       s.firstClears = Array.isArray(v.firstClears) ? [...new Set((v.firstClears as unknown[]).filter((k): k is string => typeof k === 'string' && /^[a-z]+-\d$/.test(k)))].slice(0, 60) : [];
       for (const [k, r] of Object.entries(v.heroes as Record<string, Partial<HeroRecord>>)) {
         if (!isKey(k) || !r) continue;
-        const attributes = zeroAttrs(); for (const a of ATTRS) attributes[a] = int(r.attributes?.[a], ATTRIBUTE_MAX);
+        const attributes = zeroAttrs(); if (s.attrSet === 3) for (const a of ATTRS) attributes[a] = int(r.attributes?.[a], ATTRIBUTE_MAX);
         s.heroes[k] = { level: int(r.level, LEVEL_CAPS[LEVEL_CAPS.length - 1], 1), xp: int(r.xp, 1e8), attributes };
       }
     }
-  } catch { s = { version: 1, heroes: {}, migrated: false, firstClears: [], attrScale: 2 }; }
+  } catch { s = { version: 1, heroes: {}, migrated: false, firstClears: [], attrSet: 3 }; }
   memory = s;
-  // 属性点改版：旧记录已加的点 ×2（每点效果减半，换算后强度不变），单项最多 8；可用点按新规则（每级 1 点）重算
-  if (s.attrScale !== 2) { for (const r of Object.values(s.heroes)) for (const a of ATTRS) r.attributes[a] = Math.min(ATTRIBUTE_MAX, r.attributes[a] * 2); s.attrScale = 2; commit(); }
+  // 属性改版（四项）：旧记录的点数上面已全部退回（不换算），等级不变，可用点按每级 1 点重算
+  if (s.attrSet !== 3) { s.attrSet = 3; commit(); }
   if (!s.migrated) migrate(s);
   return s;
 }
 function commit(): void { try { if (memory) localStorage.setItem(HEROES_KEY, JSON.stringify(memory)); localStorage.setItem('im_slot_touched', String(Date.now())); } catch { /* 存储不可用：保留在内存 */ } }
 export function resetHeroCache(): void { memory = null; }
+/** 属性改版提示：老存档第一次读到时返回 true 一次。 */
+export function takeAttrNotice(): boolean { const s = read(); if (!s.attrNotice) return false; s.attrNotice = false; commit(); return true; }
 
 /** 老存档：打赢过仗的武将（成就存档 im_achievements.heroes）补到当前上限的一半，其余第一次出战时按 startLevel。 */
 function migrate(s: HeroSave): void {

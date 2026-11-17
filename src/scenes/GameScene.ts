@@ -2466,12 +2466,11 @@ export class GameScene extends Phaser.Scene {
     this.controlBuild?.clear();
     this.reinforcements.clear();
     this.victory = victory;
-    this.music.stop();
+    const jingle = this.music.endBattle(victory); // BGM v2：胜利 / 败退短曲接在战斗曲后
     this.lubu?.clear();this.huaxiong?.clear();this.xurong?.clear();this.yellow?.clear();this.xiliang?.clear();this.clearChasingBosses();this.supplies?.clear();if(victory)this.itemDrops?.collectAll();this.itemDrops?.clear();
     if(victory&&this.chapter.stage===3)this.finaleFadeMs=800;
     this.feedback.clearAttacks();
-    if (victory) this.sfx.win();
-    else this.sfx.lose();
+    if (!jingle) { if (victory) this.sfx.win(); else this.sfx.lose(); }
     this.cameras.main.flashEffect.reset();this.cameras.main.shakeEffect.reset();
     this.setMode('result');
     const stats: RunStats = {

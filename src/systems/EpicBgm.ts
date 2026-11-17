@@ -7,7 +7,8 @@
  *   共振峰合唱（男声“啊 / 哦”长音铺底）、弦乐顿弓低音跑动、二胡（滑音 + 渐深揉弦）、改良唢呐、竹笛、琵琶轮指。
  * - 结构：段落推进。首领曲：前奏 4 小节 → 循环 32 小节（蓄势 8 → 主题 8 → 高潮前 8 → 高潮 6 → 转回 2）。
  *   各章战斗曲（BATTLE_THEMES）：前奏 4 小节 → 循环 28 小节（主题 8 → 主题加副奏 8 → 副歌 8 → 鼓段 4）。
- *   黄巾《黄天当立》、讨董《关东烽火》、群雄《群雄逐鹿》、官渡《官渡对垒》、赤壁《赤壁东风》；界面曲见 Music.ts。
+ *   黄巾《黄天当立》、讨董《关东烽火》、群雄《群雄逐鹿》、官渡《官渡对垒》、赤壁《赤壁东风》。
+ *   界面曲《营火望乡》（旋律同旧版，换新音色）与胜利 / 败退短曲也在这里。
  *
  * 版本切换：`?bgm=old` 回到 v1，`?bgm=new` 用 v2；也可写 localStorage `im_bgm_ver`。默认见 DEFAULT_BGM（现为 v2）。
  */
@@ -278,6 +279,58 @@ export class EpicBgm {
       if (th.drums === 'heavy' && pos === 0 && bar % 4 === 0 && sec !== 'B') this.gong(t, .12);
       if (pos === 8 && bar === 7) this.cymbalSwell(t, sd * 8, .08);
     }
+  }
+
+  // ============================================================ 界面曲《营火望乡》（新版音色）
+  /**
+   * 主城 / 营寨 / 天下地图 / 选将选关共用。旋律与和声沿用旧版（Music.ts 的 MENU_PHRASES / MENU_ROOTS），只换音色：
+   * 古琴低音拨弦（偶带滑音）、竹笛（前半）与二胡（后半）吟唱、男声“哦”长音铺底、远处战鼓与轻锣、风铃，大厅混响更深。
+   */
+  menuStep(step: number, t: number, sd: number, mel: Array<[number, number] | null>, roots: number[], arp: Record<number, number[]>): void {
+    const bar = Math.floor(step / 16) % 32, pos = step % 16, root = roots[bar % 8], notes = arp[root], bar16 = sd * 16;
+    if (pos === 0) {
+      this.bassDrone(mtof(root - 12), t, bar16 * 1.15, .06);
+      if (bar % 2 === 0) this.choir([notes[0], notes[1] + 12, notes[2] + 12].map(n => n - 12), t, bar16 * 2.02, .018, 'o');
+      if (bar % 2 === 0) this.warDrum(t, .16);
+      if (bar % 16 === 0) this.gong(t, .07);
+    }
+    if (pos % 4 === 0) { const i = pos / 4; this.qin(mtof(notes[i] - (i === 0 ? 12 : 0)), t, i === 0 ? .075 : .055, pos === 8 && bar % 4 === 3); }
+    if (pos === 14 && bar % 4 === 1) for (let k = 0; k < 3; k++) this.bell(mtof(notes[(k + 1) % 4] + 24), t + k * .11, .008);
+    const n = mel[(bar * 16 + pos) % mel.length];
+    if (n) { if (bar < 16) this.dizi(mtof(n[0]), t, n[1] * sd * .97, .05); else this.erhu(mtof(n[0]), t, n[1] * sd, .055); }
+  }
+  /** 古琴：较低泛音、长余音，滑音从下方小二度进入。 */
+  private qin(freq: number, t: number, v: number, slide: boolean): void {
+    const out = this.bus(.6);
+    for (const [mul, amp, d] of [[1, 1, 1.6], [2, .4, .8], [3, .18, .4]] as const) {
+      const o = this.osc('sine', freq * mul * (slide ? .944 : 1), t, t + d + .05, this.env(out, t, v * amp, .005, 0, d, true));
+      if (slide) o.frequency.exponentialRampToValueAtTime(freq * mul, t + .12);
+    }
+    this.noiseHit(t, .015, 'bandpass', 2200, v * .3, out, 1.2);
+  }
+
+  // ============================================================ 胜利 / 败退短曲（约 4 秒，接在战斗曲之后）
+  jingle(victory: boolean, t: number): number {
+    if (victory) {
+      this.gong(t, .26); this.cymbal(t, .16);
+      [0, .3, .45, .6, 1.5].forEach((x, i) => this.warDrum(t + x, i === 4 ? 1 : .7));
+      // 号角凯歌：D–A–D 上行后 D 大三和弦长音，合唱“啊”托底，竹笛高音颤奏
+      [[62, 0, .28], [69, .3, .14], [74, .45, .14]].forEach(([m, x, d]) => this.horn(mtof(m), t + x, d, .07));
+      for (const m of [62, 66, 69, 74]) this.horn(mtof(m), t + .6, 2.4, .045);
+      this.choir([62, 66, 69, 74], t + .6, 2.8, .06, 'a');
+      this.bassDrone(mtof(38), t + .6, 3, .1);
+      for (let k = 0; k < 10; k++) this.dizi(mtof(k % 2 ? 90 : 88), t + .62 + k * .07, .08, .02);
+      this.dizi(mtof(86), t + 1.32, 1.6, .03);
+      this.gong(t + 1.5, .2); this.cymbal(t + 1.5, .12);
+      return 4.2;
+    }
+    // 败退：两声沉鼓，号角下行，二胡哀声收于主音，低沉合唱与长锣
+    this.warDrum(t, .9); this.warDrum(t + .9, .6); this.gong(t, .2);
+    [[57, 0, .7], [53, .7, .7], [50, 1.4, 1.8]].forEach(([m, x, d]) => this.horn(mtof(m), t + x, d, .05));
+    this.choir([38, 45, 50, 53], t + .3, 3.4, .05, 'o');
+    this.bassDrone(mtof(38), t + .2, 3.8, .09);
+    [[74, .4, .6], [72, 1, .5], [69, 1.5, .7], [65, 2.2, .6], [62, 2.8, 1.4]].forEach(([m, x, d]) => this.erhu(mtof(m), t + x, d, .045));
+    return 4.4;
   }
 
   // ============================================================ 首领曲

@@ -1,4 +1,5 @@
 import {BuildState,type TacticId} from '../data/builds';
+import type { CharmLegends, CharmStatDelta } from './CharmEffects';
 import { BALANCE } from '../config';
 import type { CharacterId } from '../data/characters';
 import type { Player } from '../entities/Player';
@@ -46,7 +47,6 @@ export const MARTIALS = {
 } as const;
 export type MasteryId = keyof typeof MARTIALS;
 export type PotionId = 'rejuvenation' | 'berserk';
-export type TrinketId = 'tiger_tally' | 'heart_mirror' | 'wind_boots';
 
 /** 2026-11-17 属性改版：力量 / 敏捷 / 智力 + 统御，单项最多 10、每级 1 点，武将主属性（数值见 data/attributes.ts）。 */
 /** 从 from 级升到 to 级途中到达的「加点等级」数。 */
@@ -55,7 +55,6 @@ export function attributePointsBetween(from: number, to: number): number { retur
 export function levelsToNextAttributePoint(level: number): number { return ATTRIBUTE_POINT_EVERY - (level % ATTRIBUTE_POINT_EVERY); }
 /** 局内「战功」与武将等级共用的经验表：从 level 升到 level+1 所需经验。 */
 export function xpToNext(level: number): number { return level <= 1 ? 16 : level <= 4 ? [16, 36, 52][level - 2] : 68 + (level - 4) * 20; }
-export const TRINKET_SLOTS = 2;
 /** 属性图标（智力暂借「属性点」图标、统御暂借「虎符」图标，没有专属图）。 */
 export function attributeIcon(id: AttributeId): string { return ATTRIBUTE_INFO[id].icon; }
 
@@ -66,7 +65,11 @@ export class RunGrowth {
   awakenRescueUsed=false;
   readonly attributes: Record<AttributeId, number> = { strength: 0, agility: 0, intellect: 0, command: 0 };
   readonly masteries: Record<MasteryId, number> = { dragon_gallop: 0, cloud_pierce: 0, dragon_charge:0, dragging_blade:0, steady_aim:0, pearl_volley:0, wildfire:0, eight_trigrams:0, kaishan:0, gujun:0, fulei:0, lianying:0, huishen:0, baibi:0, nichang:0, meirenji:0, jingxin:0, laoji:0, wanrendi:0, dahe:0, jinma:0, tieqi:0, taoyuan:0, xiemin:0 };
-  readonly trinkets: TrinketId[] = [];
+  /** 信物库新信物（CharmEffects）：本局加到 player.stats 上的量、铁壁套装生命、传奇信物档位、回生玉佩无敌时长。 */
+  charmDelta?: CharmStatDelta;
+  charmHp = 0;
+  charmLegend: CharmLegends = {};
+  revivalMs = 1000;
   unallocated = 0;
   /** unallocated 里属于武将永久属性点的部分（加点时写回 HeroProgress）；其余是本局额外点（如城池加成）。 */
   heroFree = 0;
@@ -130,18 +133,6 @@ export class RunGrowth {
     else this.berserkUntil = Math.max(this.berserkUntil, now) + 10000;
   }
 
-  equipTrinket(id: TrinketId, replace?: TrinketId): boolean {
-    if (replace) {
-      const index = this.trinkets.indexOf(replace);
-      if (index < 0 || this.trinkets.includes(id)) return false;
-      this.trinkets[index] = id;
-      return true;
-    }
-    if (this.trinkets.includes(id) || this.trinkets.length + this.build.treasures.length >= TRINKET_SLOTS) return false;
-    this.trinkets.push(id);
-    return true;
-  }
-
   damageMultiplier(now: number): number {
     const might = (1 + ATTRIBUTE_EFFECT.strength.damage * this.attributes.strength) * (1 + this.primaryBonus());
     const fury = this.lowHp && this.gear.specials.includes('fury') ? 1.25 : 1;
@@ -156,13 +147,13 @@ export class RunGrowth {
 
   movementMultiplier(): number {
     const windrider = this.lowHp && this.gear.specials.includes('windrider') ? 1.2 : 1;
-    return Math.min(1.45, (1 + [0,.03,.05,.07][this.build.level('swift')]) * (1 + ATTRIBUTE_EFFECT.agility.move * this.attributes.agility) * (this.trinkets.includes('wind_boots') ? 1.1 : 1) * (1 + this.gear.move)) * windrider;
+    return Math.min(1.45, (1 + [0,.03,.05,.07][this.build.level('swift')]) * (1 + ATTRIBUTE_EFFECT.agility.move * this.attributes.agility) * (1 + this.gear.move)) * windrider;
   }
 
   criticalBonus(): number { return Math.min(0.1, ATTRIBUTE_EFFECT.agility.crit * this.attributes.agility) + this.gear.crit; }
-  bonusMaxHp(): number { return Math.round(BALANCE.player.maxHp * (ATTRIBUTE_EFFECT.strength.hp * this.attributes.strength + this.gear.hp)); }
-  incomingDamageMultiplier(): number { return (this.gear.specials.includes('weixi') ? 1.15 : 1)*(this.trinkets.includes('heart_mirror') ? 0.85 : 1)*(this.build.tags().bulwark>=2?.95:1)*Math.max(.6, 1 - this.gear.reduce); }
-  allyDamageMultiplier(): number { return (this.trinkets.includes('tiger_tally') ? 1.2 : 1)*(this.build.tags().command>=2?1.05:1)*(1 + this.gear.ally)*(1 + ATTRIBUTE_EFFECT.command.allyDamage * this.attributes.command); }
+  bonusMaxHp(): number { return Math.round(BALANCE.player.maxHp * (ATTRIBUTE_EFFECT.strength.hp * this.attributes.strength + this.gear.hp + this.charmHp)); }
+  incomingDamageMultiplier(): number { return (this.gear.specials.includes('weixi') ? 1.15 : 1)*(this.build.tags().bulwark>=2?.95:1)*Math.max(.6, 1 - this.gear.reduce); }
+  allyDamageMultiplier(): number { return (this.build.tags().command>=2?1.05:1)*(1 + this.gear.ally)*(1 + ATTRIBUTE_EFFECT.command.allyDamage * this.attributes.command); }
   /** 主属性：每点额外全伤害 +1%（最多 10 点）。 */
   primaryBonus(): number { const p = primaryAttribute(this.character); return p ? Math.min(PRIMARY_BONUS.maxPoints, this.attributes[p]) * PRIMARY_BONUS.perPoint : 0; }
   /** 智力：非普攻伤害（技艺、灼烧、遗珍等）倍率，含主属性加成。 */

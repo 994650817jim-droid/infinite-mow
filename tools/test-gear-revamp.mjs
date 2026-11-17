@@ -109,19 +109,16 @@ ck('11 匹马各对应一个首领首次击杀（一章送驽马、挑战关三�
 // 5) 战斗中：HUD 行囊、宝物栏、穿上缴获、换马限制
 const hud = await p.evaluate(async G0 => {
   const s = eval(G0), st = await window.__mod('/src/systems/ItemStore.ts'), items = await window.__mod('/src/data/items.ts'), out = {};
-  s.player.growth.build.treasures.push('iron_mirror');
   const btn = s.hudTexts.bag; out.btn = !!btn?.visible && btn.text;
   window.__tap(btn); await new Promise(r => setTimeout(r, 200));
   let bag = s.children.getByName('item-bag'); out.open = !!bag; out.mode = s.mode;
-  out.treasure = window.__find(bag, 'item-treasure-label-0')?.text; out.treasure2 = window.__find(bag, 'item-treasure-label-1')?.text;
-  window.__tap(window.__find(bag, 'item-treasure-0')); await new Promise(r => setTimeout(r, 120)); bag = s.children.getByName('item-bag');
-  out.treasureCard = window.__find(bag, 'item-detail-name')?.text; window.__find(bag, 'item-detail-close').emit('pointerdown'); await new Promise(r => setTimeout(r, 100));
+  out.treasure = !!window.__find(bag, 'item-treasure-0'); out.token2 = !!window.__find(bag, 'item-slot-token2');
   bag = s.children.getByName('item-bag'); window.__tap(window.__find(bag, 'item-slot-mount')); await new Promise(r => setTimeout(r, 120)); bag = s.children.getByName('item-bag');
   out.stableHint = window.__find(bag, 'stable-hint')?.text; out.noRide = !window.__find(bag, 'stable-ride-nag') && !window.__find(bag, 'stable-dismount');
   return out;
 }, G);
 ck('战斗 HUD 右上常驻「行囊」，点开自动暂停', hud.btn === '行囊' && hud.open && hud.mode === 'pause', hud);
-ck('行囊里显示本局宝物（玄铁镜），空格写「空」，点开看效果', hud.treasure === '玄铁镜' && hud.treasure2 === '空' && hud.treasureCard === '玄铁镜', hud);
+ck('行囊「本局宝物」栏已撤（2026-11-17 并入信物库），人像下排是第二信物位', !hud.treasure && hud.token2, hud);
 ck('战斗中点坐骑位：马厩只看不能换', /战斗中不可换马/.test(hud.stableHint ?? '') && hud.noRide, hud);
 await p.screenshot({ path: `${out}/mobile-battle-stable-locked.png` });
 const claim = await p.evaluate(async G0 => {
@@ -220,8 +217,8 @@ await d.evaluate(async M0 => { const m = eval(M0), st = await window.__mod('/src
   for (const slot of items.SLOT_ORDER) { const it = st.loadItems().bag.find(x => items.itemSlot(x) === slot); if (it) st.equipItem('guanyu', it.uid); }
   /* 2026-11-16：主页已不放行囊匾（用户「界面的行囊可以不要」），行囊界面本身照旧，这里直接打开 */ if (m.children.getByName('home-bag-plaque')) throw new Error('主页仍有行囊匾'); { const UI = await window.__mod('/src/ui/ItemBagUI.ts'); new UI.ItemBagUI(m, { hero: 'zhaoyun' }); } await new Promise(r => setTimeout(r, 300));
   window.__find(m.children.getByName('item-bag'), 'item-hero-guanyu').emit('pointerdown'); await new Promise(r => setTimeout(r, 200)); }, M);
-const dk = await d.evaluate(M0 => { const bag = eval(M0).children.getByName('item-bag'); return { mount: window.__find(bag, 'item-slot-label-mount')?.text, t0: window.__find(bag, 'item-treasure-label-0')?.text }; }, M);
-ck('电脑纸娃娃：关羽骑赤兔，宝物栏写「出征后获得」', dk.mount === '赤兔' && dk.t0 === '出征后获得', dk);
+const dk = await d.evaluate(M0 => { const bag = eval(M0).children.getByName('item-bag'); return { mount: window.__find(bag, 'item-slot-label-mount')?.text, t0: !!window.__find(bag, 'item-treasure-label-0'), t2: window.__find(bag, 'item-slot-label-token2')?.text }; }, M);
+ck('电脑纸娃娃：关羽骑赤兔；人像下排是「信物·二」（本局宝物格已撤）', dk.mount === '赤兔' && !dk.t0 && /信物·二/.test(dk.t2 ?? ''), dk);
 await d.screenshot({ path: `${out}/desktop-home-doll.png` });
 // 点详情框的 × 不能穿透到下面的装备格（2026-11-16 用户报 Bug）
 const openDetail = () => d.evaluate(async M0 => { const m = eval(M0), bag = m.children.getByName('item-bag'); window.__tap(window.__find(bag, 'item-cell-0')); await new Promise(r => setTimeout(r, 150)); return !!window.__find(m.children.getByName('item-bag'), 'item-detail'); }, M);

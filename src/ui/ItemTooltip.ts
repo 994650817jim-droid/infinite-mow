@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { charmText } from '../data/charms';
 import { FONT, GAME_HEIGHT, GAME_WIDTH, HEADING_FONT, screenPoint } from '../config';
 import { AFFIXES, QUALITIES, SLOTS, SPECIALS, formatAffix, itemName, itemSlot, relicDef, type AffixId, type ItemInstance } from '../data/items';
 
@@ -38,6 +39,7 @@ export class ItemTooltip {
     txt(pad, y, `${relic ? '首领遗珍（' + relic.boss + '）· ' : ''}${q.name} · ${SLOTS[itemSlot(item)].name}`, 12, relic ? '#f3c66a' : '#b9a57a'); y += 20;
     const aff = txt(pad, y, item.affixes.map(a => (a.minor ? '· ' : '') + formatAffix(a)).join('\n'), 13, '#e9dcbc').setLineSpacing(3).setName('item-tooltip-affixes'); y += aff.height + 4;
     if (item.special) { const sp = txt(pad, y, `★ ${SPECIALS[item.special].name}：${SPECIALS[item.special].desc}`, 12, '#f3c37a'); y += sp.height + 4; }
+    const ct = charmText(item); if (ct) { const c = txt(pad, y, ct, 12, '#f3c37a').setName('item-tooltip-charm'); y += c.height + 4; }
     const cmp = compareLines(item, current);
     if (current && current.uid !== item.uid) {
       y += 2; txt(pad, y, `对比当前（${itemName(current)}）`, 12, '#b9a57a'); y += 18;

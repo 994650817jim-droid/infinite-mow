@@ -6,7 +6,6 @@ import Phaser from 'phaser';
 import { CharacterPassives } from '../systems/CharacterPassives';
 import { RunGrowth, xpToNext } from '../systems/RunGrowth';
 import { BALANCE, DEPTH, FONT, actorDepth } from '../config';
-import { applySetBonus, RELIC_BY_ID, type RelicSchool } from '../data/relics';
 import type { PlayerStats, WeaponState } from '../types';
 import { WalkGait } from '../systems/WalkGait';
 import { DRAG_WALK_SHEET } from '../data/dragArt';
@@ -75,9 +74,6 @@ export class Player {
     damageTakenMul: 1,
   };
 
-  /** 本局已获得的遗物（每件唯一）。 */
-  relics: string[] = [];
-  private setApplied = new Set<RelicSchool>();
 
   weapons: WeaponState[] = [{ id: 'spear_orbit', level: 1, cooldownLeft: 0 }];
 
@@ -407,30 +403,11 @@ export class Player {
     if(rescue)this.growth.revivalUsed=true;
     this.hp = (rescue||ironRescue)?1:Math.max(0, this.hp - dmg);
     this.invulnUntil = now + BALANCE.player.invuln * 1000;
-    if(rescue||ironRescue)this.invulnUntil=Math.max(this.invulnUntil,now+1000);
+    if(rescue||ironRescue)this.invulnUntil=Math.max(this.invulnUntil,now+(rescue?this.growth.revivalMs:1000));
     this.passive.onDamage(now);
     if (this.hp <= 0) { this.alive = false; this.passive.stop(); this.playAction('die'); }
     else this.playAction('hurt');
     return true;
-  }
-
-  /** 获得遗物；每件只生效一次，第二件同流派触发套装。 */
-  addRelic(id: string): boolean {
-    if (this.relics.includes(id)) return false;
-    const def = RELIC_BY_ID.get(id);
-    if (!def) return false;
-    this.relics.push(id);
-    def.apply(this);
-    const count = this.relics.filter((rid) => RELIC_BY_ID.get(rid)?.school === def.school).length;
-    if (count === 2 && !this.setApplied.has(def.school)) {
-      this.setApplied.add(def.school);
-      applySetBonus(this, def.school);
-    }
-    return true;
-  }
-
-  schoolCount(school: RelicSchool): number {
-    return this.relics.filter((id) => RELIC_BY_ID.get(id)?.school === school).length;
   }
 
   heal(amount: number): void {

@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { charmDef } from '../data/charms';
 import { QUALITIES, SLOT_ORDER, itemSlot, relicDef, type ItemInstance, type ItemQuality, type ItemSlot } from '../data/items';
 
 /**
@@ -48,6 +49,7 @@ export const ITEM_ATLAS = 'item_icons';
 export function itemIcon(scene: Phaser.Scene, item: ItemInstance): { key: string; frame?: string; art: boolean } {
   const t = scene.textures.exists(ITEM_ATLAS) ? scene.textures.get(ITEM_ATLAS) : null;
   if (t?.has(item.base)) return { key: ITEM_ATLAS, frame: item.base, art: true };
+  const c = charmDef(item.base); if (c && scene.textures.exists(c.icon)) return { key: c.icon, art: true };
   return { key: itemIconKey(itemSlot(item)), art: false };
 }
 /** 马厩里一匹马的图标：图集里有同名帧（马的 id 沿用旧坐骑道具 id）就用，缺图回退马首剪影。 */

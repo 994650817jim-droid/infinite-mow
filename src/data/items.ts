@@ -5,6 +5,7 @@
  * 只放数据与纯函数；存取见 systems/ItemStore.ts，战场掉落见 systems/ItemDrops.ts。
  */
 
+import { TIGER_SEAL_PRIMARY, charmAllowed, charmDef, charmsFor, type CharmDef } from './charms';
 export type ItemQuality = 'white' | 'green' | 'blue' | 'purple' | 'orange';
 /** 'relic' = 「Boss遗物」槽（2026-11-17 用户批准：首领遗珍统一放这里，只能装 1 件）。普通掉落 / 商人只出 GEAR_SLOTS 四槽。 */
 export type ItemSlot = 'armor' | 'helm' | 'boots' | 'token' | 'relic';
@@ -67,7 +68,7 @@ export const SPECIALS: Record<SpecialId, { name: string; desc: string }> = {
   xiangguo: { name: '相国征敛', desc: '本局每击杀 120 人，下一次升级可连选两张卡，并免费换一批 1 次' },
   jiying: { name: '辕门戟影', desc: '本命武器每第 8 次命中，甩出一道贯穿直线的戟影（150% 伤害，穿透所有敌人）' },
   bainiao: { name: '百鸟朝凤', desc: '连续命中同一目标 5 次后，扇形刺出 6 道枪芒（每道 60% 伤害，冷却 4 秒）' },
-  weixi: { name: '伪帝玺', desc: '出征开局直接获得 2 件随机宝物；代价：受到伤害 +15%' },
+  weixi: { name: '伪帝玺', desc: '出征开局直接获得 1 张随机战法（Lv1，计流派件数）；代价：受到伤害 +15%' },
   jiuhu: { name: '乌巢豪饮', desc: '拾取酒罐 / 酒葫芦后 8 秒内伤害 +40%，但走路踉跄（方向随机偏转）' },
   hubao: { name: '虎豹骑', desc: '骑马时践踏伤害 ×2；落马后 6 秒即可重新上马（原 15 秒）' },
   louchuan: { name: '楼船火攻', desc: '每 12 秒放出一列火船，横扫主将附近的航道' },
@@ -162,8 +163,9 @@ export function isRelic(item: { base: string }): boolean { return RELIC_BY_ID.ha
 export function relicsForStage(stage: string | null | undefined): RelicDef[] { return stage ? BOSS_RELICS.filter(r => r.stage === stage) : []; }
 
 const LEGEND_BY_ID = new Map(LEGENDS.map(l => [l.id, l]));
-export function itemDef(base: string): { slot: ItemSlot; name: string; legend?: LegendDef; relic?: RelicDef } | undefined {
+export function itemDef(base: string): { slot: ItemSlot; name: string; legend?: LegendDef; relic?: RelicDef; charm?: CharmDef } | undefined {
   const r = RELIC_BY_ID.get(base); if (r) return { slot: r.slot, name: r.name, relic: r };
+  const c = charmDef(base); if (c) return { slot: 'token', name: c.name, charm: c };
   const l = LEGEND_BY_ID.get(base); if (l) return { slot: l.slot, name: l.name, legend: l };
   const b = BASE_BY_ID.get(base); return b && { slot: b.slot, name: b.name };
 }
@@ -223,20 +225,41 @@ export function affixValue(id: AffixId, quality: ItemQuality, rng: () => number,
 let uidSeq = 0;
 export function newItemUid(): string { uidSeq = (uidSeq + 1) % 1e6; return Date.now().toString(36) + '-' + uidSeq.toString(36) + '-' + Math.floor(Math.random() * 1e6).toString(36); }
 
-/** 生成一件道具。橙色优先出名器（同槽位随机一件），slot 可指定。 */
+/** 信物里出新信物（原本局遗物 / 宝物）的概率：抽到信物栏时一半出它们。 */
+export const CHARM_SHARE = .5;
+/**
+ * 生成一件信物库新信物（data/charms.ts）：固定效果按品质取值（不存在词条里），外加品质规定条数的随机小词条（白 1 … 橙 3）。
+ * id 不填时从这一品质能出的里随机；品质不够时返回 null。
+ */
+export function rollCharm(quality: ItemQuality, rng: () => number = Math.random, id?: string): ItemInstance | null {
+  const def = id ? charmDef(id) : pick(charmsFor(quality), rng); if (!def || !charmAllowed(def, quality)) return null;
+  const ids: AffixId[] = [], pool = SLOTS.token.affixes;
+  while (ids.length < QUALITIES[quality].affixes) ids.push(pick(pool.filter(a => !ids.includes(a)), rng));
+  return { uid: newItemUid(), base: def.id, quality, affixes: ids.map(a => ({ id: a, value: affixValue(a, quality, rng, true), minor: true })) };
+}
+/** 生成一件道具。橙色优先出名器（同槽位随机一件），slot 可指定。信物栏一半出信物库新信物（CHARM_SHARE）。 */
 export function rollItem(quality: ItemQuality, rng: () => number = Math.random, slot?: ItemSlot): ItemInstance {
   if (quality === 'orange') {
     const pool = LEGENDS.filter(l => !slot || l.slot === slot), l = pick(pool, rng);
+    if (l.slot === 'token' && rng() < CHARM_SHARE) { const c = rollCharm(quality, rng); if (c) return c; }
     const affixes: ItemAffix[] = l.affixes.map(id => ({ id, value: affixValue(id, quality, rng) }));
     const extra = AFFIX_IDS.filter(id => !l.affixes.includes(id));
     const m = pick(extra, rng); affixes.push({ id: m, value: affixValue(m, quality, rng, true), minor: true });
     return { uid: newItemUid(), base: l.id, quality, affixes, special: l.special };
   }
-  const base = pick(BASE_ITEMS.filter(b => !slot || b.slot === slot), rng), q = QUALITIES[quality];
+  const base = pick(BASE_ITEMS.filter(b => !slot || b.slot === slot), rng);
+  if (base.slot === 'token' && rng() < CHARM_SHARE) { const c = rollCharm(quality, rng); if (c) return c; }
+  return rollBase(base, quality, rng);
+}
+/** 按指定的基础道具生成一件（旧档迁移用，如虎符 → 橙色虎钮印）。不是基础道具时返回 null。 */
+export function rollBaseItem(id: string, quality: ItemQuality, rng: () => number = Math.random): ItemInstance | null { const b = BASE_BY_ID.get(id); return b ? rollBase(b, quality, rng) : null; }
+function rollBase(base: BaseItemDef, quality: ItemQuality, rng: () => number): ItemInstance {
+  const q = QUALITIES[quality];
   const ids: AffixId[] = [base.primary];
   const pool = SLOTS[base.slot].affixes.filter(id => id !== base.primary), rest = AFFIX_IDS.filter(id => id !== base.primary);
   while (ids.length < q.affixes) { const from = pool.filter(id => !ids.includes(id)).length ? pool.filter(id => !ids.includes(id)) : rest.filter(id => !ids.includes(id)); ids.push(pick(from, rng)); }
-  const affixes: ItemAffix[] = ids.map(id => ({ id, value: affixValue(id, quality, rng) }));
+  // 虎钮印并入虎符：主词条友军伤害上限提到 +20%（橙）
+  const affixes: ItemAffix[] = ids.map(id => ({ id, value: round3(affixValue(id, quality, rng) * (base.id === 'tiger_seal' && id === base.primary ? TIGER_SEAL_PRIMARY : 1)) }));
   if (q.minor) { const m = pick(rest.filter(id => !ids.includes(id)), rng); affixes.push({ id: m, value: affixValue(m, quality, rng, true), minor: true }); }
   return { uid: newItemUid(), base: base.id, quality, affixes };
 }

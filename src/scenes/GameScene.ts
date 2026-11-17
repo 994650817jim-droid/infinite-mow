@@ -432,7 +432,8 @@ export class GameScene extends Phaser.Scene {
     this.bossShieldGfx = this.add.graphics().setDepth(DEPTH.fx + 2);
     this.cameras.main.setRoundPixels(true);
 
-    const terrainKey = scenery==='xingyang'?'xingyang_ground':this.chapter.stage ? this.chapter.ground : 'ground_overhaul_hulao';
+    // 第二章（汜水关 / 洛阳）：地面 v2 关中黄土碎石（环境互动第一批 ④），缺图退回原来的红褐地面
+    const terrainKey = scenery==='xingyang'?'xingyang_ground':this.chapter.stage ? this.chapter.ground : this.textures.exists('ground_v2_guanzhong') ? 'ground_v2_guanzhong' : 'ground_overhaul_hulao';
     const groundKey = this.textures.exists(terrainKey) ? terrainKey : this.textures.exists('ground_ai') ? 'ground_ai' : 'ground';
     architecturalSurface(this);
     const surface=terrainSurface(this,groundKey,groundKey.startsWith('ground_overhaul')||groundKey.startsWith('yellow_ground')?1:.5);

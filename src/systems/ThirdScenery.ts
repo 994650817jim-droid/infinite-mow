@@ -1,17 +1,22 @@
 import {paintCampRoad} from './CampRoad';
+import {paintV2Ground,paintV2Road} from './EnvGround';
 import Phaser from 'phaser';import {actorDepth}from'../config';import type{ThirdStage}from'../data/thirdChapter';
 /** Existing art, four distinct layouts (4 = 江陵城下：石板广场、城门箭楼、十字大道); no illustrated camp image is tiled. */
 export type SceneryStage=ThirdStage|4;
-export function thirdScenery(scene:Phaser.Scene,stage:SceneryStage,spawnProp?:(frame:number,x:number,y:number,size:number)=>void){
- const key='third_ground_'+stage;if(!scene.textures.exists(key)){const tex=scene.textures.createCanvas(key,512,512)!;const g=tex.context;g.imageSmoothingEnabled=false;const source=scene.textures.get(stage===2?'xingyang_ground':stage===1||stage===4?'ground_hulao':'ground_ai2').getSourceImage()as HTMLImageElement;g.drawImage(source,0,0,512,512);
+export function thirdScenery(scene:Phaser.Scene,stage:SceneryStage,spawnProp?:(frame:number,x:number,y:number,size:number)=>void,arc='third'){
+ const key=(arc==='chibi'?'chibi_ground_':'third_ground_')+stage;
+ // 地面 v2（环境互动第一批 ④）：第三章长安夯土、第五章江岸湿地；各关原来的夜色 / 灰调叠色保留（减淡）；缺图退回下面的程序调色版
+ paintV2Ground(scene,key,arc==='chibi'?'ground_v2_jiang':'ground_v2_changan',stage===2?'rgba(8,18,32,.55)':stage===4?'rgba(72,70,66,.2)':arc==='chibi'?undefined:'rgba(52,38,24,.2)');if(!scene.textures.exists(key)){const tex=scene.textures.createCanvas(key,512,512)!;const g=tex.context;g.imageSmoothingEnabled=false;const source=scene.textures.get(stage===2?'xingyang_ground':stage===1||stage===4?'ground_hulao':'ground_ai2').getSourceImage()as HTMLImageElement;g.drawImage(source,0,0,512,512);
 
  if(stage===2){g.fillStyle='rgba(8,18,32,.66)';g.fillRect(0,0,512,512);}
  if(stage===3){g.fillStyle='rgba(114,96,48,.16)';g.fillRect(0,0,512,512);}
  if(stage===4){g.fillStyle='rgba(72,70,66,.34)';g.fillRect(0,0,512,512);}
  tex.refresh();tex.setFilter(Phaser.Textures.FilterMode.NEAREST);}
  // Roads are world layout strips, not intersections repeated in every ground tile.
- const roadKey='third_road_'+stage;
+ const roadKey=(arc==='chibi'?'chibi_road_':'third_road_')+stage;
  const roadWidth=stage===1||stage===4?172:stage===2?124:164;
+ // 路面 v2：替换程序画的灰色石板路（第 3 关为横向营中木板道，第 2 关夜色土路，其余石板官道）；缺图退回下面的程序版
+ paintV2Road(scene,roadKey,stage===3?'road_v2_plank':stage===2||arc==='chibi'?'road_v2_dirt':'road_v2_stone',stage===3?164:roadWidth,stage!==3,stage===2?'rgba(8,18,32,.5)':undefined);
  if(!scene.textures.exists(roadKey)){
   const road=scene.textures.createCanvas(roadKey,stage===3?512:roadWidth,stage===3?164:512)!;
   const ctx=road.context;ctx.imageSmoothingEnabled=false;

@@ -966,7 +966,7 @@ export class GameScene extends Phaser.Scene {
     if(this.chapter.bossStyle==='huaxiong'){this.huaxiong=new HuaxiongBoss({scene:this,boss,player:this.player,army:this.legion,hurtTroops:(x,y,r,d,n,a,arc)=>this.legion.hurtArea(x,y,r,d,n,a,arc),sfx:()=>this.sfx.play('allySlash')},this.combatNow);}
     if (this.chapter.bossStyle === 'zhangjiao' && !BOSS_OLD) {
       this.zhangjiao = new ZhangjiaoBoss({ scene: this, boss, player: this.player, army: this.legion,
-        fireBolt: (x, y, tx, ty, d, sp) => this.fireBolt(this.bullets, x, y, tx, ty, d, 0, false, sp, 'orb'),
+        fireBolt: (x, y, tx, ty, d, sp) => this.fireBolt(this.bullets, x, y, tx, ty, d, 0, false, sp, this.textures.exists('bossfx_zj_talisman') ? 'bossfx_zj_talisman' : 'orb'),
         spawn: (kind, x, y, def) => this.spawnEnemy(kind, x, y, 1, true, def), infantryDef: () => this.chapter.enemies.infantry,
         banner: (t, c) => this.showWaveBanner(t, true, c), sfx: (k) => this.sfx.play(k) }, this.combatNow);
     }
@@ -1646,6 +1646,7 @@ export class GameScene extends Phaser.Scene {
       .setRotation(Math.atan2(dy, dx));
     if (fromPlayer) bolt.img.setScale(1);
     else if (textureKey === 'orb') bolt.img.setDisplaySize(22, 22);
+    else if (textureKey?.startsWith('bossfx_')) bolt.img.setDisplaySize(46, 46);
     else bolt.img.setDisplaySize(30, 7);
     { const tint = fromPlayer ? HERO_TINT[this.runConfig.character] : undefined; if (tint) bolt.img.setTint(tint); else bolt.img.clearTint(); }
   }

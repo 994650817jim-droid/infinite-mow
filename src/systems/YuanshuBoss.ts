@@ -5,10 +5,11 @@ import { YS } from '../data/bossRedesign';
 import { ArcBossV2, type ArcHost } from './ArcBossV2';
 import type { BossDebug } from './BossKit';
 import { groundCracks } from '../ui/Telegraph';
+import { bossFxImage, ensureBossFx, fxFrame, playBossFx } from './BossFx';
 
 type Move = 'flags' | 'coins' | 'guards';
 interface Flag { e: Enemy; life: number; x: number; y: number; nextSpawn: number; label: Phaser.GameObjects.Text }
-interface Coin { x: number; y: number; at: number; due: number }
+interface Coin { x: number; y: number; at: number; due: number; img?: Phaser.GameObjects.Image | null }
 
 /**
  * 3-3 袁术「仲家天子」（重设计样板）：应对方式 = 清召唤 / 拆物件。
@@ -30,6 +31,7 @@ export class YuanshuBoss extends ArcBossV2<Move> {
   constructor(h: ArcHost, tex: string, now: number) {
     super(h, tex, '袁术', now);
     this.propGfx = h.scene.add.graphics().setDepth(DEPTH.enemy + 1).setName('yuanshu-props');
+    ensureBossFx(h.scene, ['ys_coin', 'ys_flag', 'kit_shift', 'kit_recover']);
   }
   get guarded(): boolean { const b = this.h.boss; return this.aliveGuards().filter(g => Math.hypot(g.e.x - b.x, g.e.y - b.y) <= YS.guards.shieldRange).length >= YS.guards.minGuards; }
   protected takenMul(): number { return this.guarded ? YS.guards.takenMul : 1; }
@@ -145,13 +147,18 @@ export class YuanshuBoss extends ArcBossV2<Move> {
     for (const c of [...this.coins]) {
       const prog = (now - c.at) / Math.max(1, c.due - c.at);
       if (now >= c.due) {
-        groundCracks(this.gfx, c.x, c.y, YS.coins.radius, 1, 0, Math.PI * 2, 0, true, 'slam');
+        c.img?.destroy();
+        // 手绘金币：炸开 3–5；没图时用通用地动
+        if (!playBossFx(this.h.scene, 'ys_coin', c.x, c.y, YS.coins.radius * 3, DEPTH.fx - 1, 3, 5, 380)) groundCracks(this.gfx, c.x, c.y, YS.coins.radius, 1, 0, Math.PI * 2, 0, true, 'slam');
         if (Math.hypot(p.x - c.x, p.y - c.y) <= YS.coins.radius + p.radius && p.takeDamage(YS.coins.damage, now)) this.metrics.coinHits++;
         this.h.army.hurtArea(c.x, c.y, YS.coins.radius, YS.coins.troopDamage, now);
         this.coins.splice(this.coins.indexOf(c), 1); continue;
       }
+      if (c.img === undefined) c.img = bossFxImage(this.h.scene, 'ys_coin', DEPTH.enemy)?.setPosition(c.x, c.y).setDisplaySize(YS.coins.radius * 3, YS.coins.radius * 3) ?? null;
+      // 手绘金币：地上闪烁 0–2，越接近爆炸闪得越快
+      if (c.img) { c.img.setFrame(prog < .6 ? Math.floor(now / 220) % 2 : 2 - Math.floor(now / 90) % 2); continue; }
       groundCracks(this.gfx, c.x, c.y, YS.coins.radius, prog, 0, Math.PI * 2, 0, false, 'slam');
-      // 金币：像素方孔钱，越接近爆炸闪得越快
+      // 占位（图到前）：方孔钱，越接近爆炸闪得越快
       const blink = Math.floor(now / (220 - 170 * prog)) % 2, x = Math.round(c.x), y = Math.round(c.y);
       g.fillStyle(0x1a1310, 1).fillRect(x - 7, y - 7, 14, 14); g.fillStyle(blink ? 0xffe7a8 : 0xf2c27a, 1).fillRect(x - 6, y - 6, 12, 12); g.fillStyle(0x1a1310, 1).fillRect(x - 2, y - 2, 4, 4);
     }
@@ -164,7 +171,7 @@ export class YuanshuBoss extends ArcBossV2<Move> {
   }
   protected onDefeat(): void {
     for (const f of this.flags) { f.label.destroy(); if (f.e.active && f.e.spawnId === f.life) { f.e.hp = 0; f.e.deactivate(); } }
-    this.flags = []; this.coins = []; if (!this.gone) this.propGfx.clear(); else this.propGfx.destroy();
+    this.flags = []; for (const c of this.coins) c.img?.destroy(); this.coins = []; if (!this.gone) this.propGfx.clear(); else this.propGfx.destroy();
   }
   snapshot() { return { move: this.beat.move, phase: this.beat.phase, phase2: this.phase2, fleeing: this.fleeUntil > this.kit.now, flags: this.flags.length, coins: this.coins.length, guards: this.aliveGuards().length, guarded: this.guarded, metrics: { ...this.metrics } }; }
 }

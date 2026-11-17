@@ -7,6 +7,7 @@ import { DEPTH } from '../config';
 import { TELEGRAPH_CLASSIC, groundCracks, laneCracks, windupFlash } from '../ui/Telegraph';
 import { BossKit, BOSS_OLD, faceDir, type BossDebug } from './BossKit';
 import { LB } from '../data/bossRedesign';
+import { bossFxImage, ensureBossFx, hasBossFx } from './BossFx';
 
 export type LubuState = 'approach' | 'sweepWindup' | 'sweep' | 'dashWindup' | 'dash' | 'recover' | 'ultTakeoff' | 'ultAirborne' | 'ultLanding'
   | 'comboWindup' | 'combo' | 'zigWindup' | 'zig' | 'hop' | 'aim' | 'shot' | 'spinWindup' | 'spin';
@@ -57,6 +58,7 @@ export class LubuBoss {
   private readonly kit?: BossKit;
 
   constructor(private readonly host: LubuHost) {
+    if (!BOSS_OLD) ensureBossFx(host.scene, ['lb_whirl', 'lb_arrow', 'kit_shift', 'kit_recover']);
     if (!BOSS_OLD) this.kit = new BossKit({ scene: host.scene, boss: host.boss, banner: (t, c) => host.banner?.(t, c), sfx: host.playSfx });
     this.ultimate = new LubuUltimate(host.scene, host.boss, host.player, host.playSfx, host.hurtTroops);
     this.gfx = host.scene.add.graphics().setDepth(DEPTH.fx - 1);
@@ -165,6 +167,7 @@ export class LubuBoss {
   private segs: { kind: 'thrust' | 'sweep' | 'smash'; x: number; y: number; angle: number }[] = [];
   private seg = 0; private fold = 0; private folds = 0; private foldSign = 1;
   private shotCd = 4; private spinCd = 2; private spinTick = 0; private hopFrom = { x: 0, y: 0 }; private hopTo = { x: 0, y: 0 };
+  private whirl: Phaser.GameObjects.Image | null = null;
   private shotFlashUntil = 0; private shotLine = { x: 0, y: 0, a: 0 };
   readonly v2Metrics = { combo: 0, zig: 0, shot: 0, spin: 0, hits: 0 };
 
@@ -203,7 +206,7 @@ export class LubuBoss {
   private updateV2(dt: number, now: number): void {
     const { boss, player } = this.host, kit = this.kit!;
     const dx = player.x - boss.x, dy = player.y - boss.y, d = Math.hypot(dx, dy) || 1, dir = faceDir(Math.cos(this.angle));
-    this.slash.setVisible(false);
+    this.slash.setVisible(false); this.whirl?.setVisible(false);
     if (kit.inShift) { this.state = 'approach'; return; }
     const prog = this.telegraphProgressV2(now);
     switch (this.state) {
@@ -315,7 +318,9 @@ export class LubuBoss {
         kit.pose('spin', 1, dir); this.angle = now / 90;
         if (d > 40) { boss.sprite.x += dx / d * boss.def.speed * .5 * dt; boss.sprite.y += dy / d * boss.def.speed * .5 * dt; }
         this.sweepMask.clear(); cone(this.sweepMask, boss.x, boss.y, 0, r * 1.1, 360);
-        this.slash.setFrame(Math.floor(now / 40) % 6).setPosition(boss.x, boss.y).setRotation(now / 60).setDisplaySize(r * 2.1, r * 2.1).setVisible(true);
+        // 手绘旋风刀气（图到后）；没图时用原来的方天戟刀光转圈
+        if (hasBossFx(this.host.scene, 'lb_whirl')) { this.whirl ??= bossFxImage(this.host.scene, 'lb_whirl', DEPTH.player - 1); this.whirl?.setPosition(boss.x, boss.y).setFrame(Math.floor(now / 60) % 6).setDisplaySize(r * 2.3, r * 2.3 * .85).setVisible(true); }
+        else this.slash.setFrame(Math.floor(now / 40) % 6).setPosition(boss.x, boss.y).setRotation(now / 60).setDisplaySize(r * 2.1, r * 2.1).setVisible(true);
         if (now >= this.spinTick) {
           this.spinTick = now + P.tickMs; this.hitApplied = false;
           groundCracks(this.gfx, boss.x, boss.y, r, 1, 0, Math.PI * 2, 0, true, 'slam');
@@ -414,7 +419,7 @@ export class LubuBoss {
   private hurt(damage: number, now: number): void {
     if (this.host.player.takeDamage(damage, now)) this.host.scene.cameras.main.flash(90, 180, 40, 40, false);
   }
-  clear(): void { this.kit?.clear(); this.ultimate.clear(); this.state = 'approach'; this.energy = 0; this.gfx.clear(); this.slash.setVisible(false); }
+  clear(): void { this.whirl?.destroy(); this.whirl = null; this.kit?.clear(); this.ultimate.clear(); this.state = 'approach'; this.energy = 0; this.gfx.clear(); this.slash.setVisible(false); }
   snapshot(): { state: LubuState; phase2: boolean; until: number; progress: number; hitApplied: boolean } {
     return { state: this.state, phase2: this.phase2, until: this.until, progress: this.telegraphProgress, hitApplied: this.hitApplied };
   }

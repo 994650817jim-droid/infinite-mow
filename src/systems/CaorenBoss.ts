@@ -3,6 +3,7 @@ import { DEPTH } from '../config';
 import { CR } from '../data/bossRedesign';
 import { ArcBossV2, type ArcHost } from './ArcBossV2';
 import type { BossDebug } from './BossKit';
+import { bossFxImage, ensureBossFx } from './BossFx';
 
 type Move = 'wall' | 'hold';
 type Gate = 'live' | 'dead' | 'none';
@@ -20,7 +21,7 @@ const GATE_NAMES = ['休', '生', '伤', '杜', '景', '死', '惊', '开'] as c
 export class CaorenBoss extends ArcBossV2<Move> {
   private gates: Gate[] = []; private nextGates: Gate[] = []; private cx = 0; private cy = 0; private rotateAt = 0; private tickAt = 0;
   private facing = 0; private order = 0; private lastAt = 0;
-  private texts: Phaser.GameObjects.Text[] = []; private arena: Phaser.GameObjects.Graphics;
+  private texts: Phaser.GameObjects.Text[] = []; private arena: Phaser.GameObjects.Graphics; private disc: Phaser.GameObjects.Image | null | undefined;
   readonly metrics = { rotations: 0, wall: 0, hold: 0, deadTicks: 0, frontBlocks: 0, phase2: 0 };
   readonly debug: BossDebug = {
     moves: ['铁壁', '坚守', '八门轮转'],
@@ -30,6 +31,7 @@ export class CaorenBoss extends ArcBossV2<Move> {
   constructor(h: ArcHost, tex: string, now: number) {
     super(h, tex, '曹仁', now);
     this.arena = h.scene.add.graphics().setDepth(DEPTH.ground + 3).setName('caoren-gates');
+    ensureBossFx(h.scene, ['cr_bagua', 'kit_shift', 'kit_recover']);
     for (let i = 0; i < 8; i++) this.texts.push(h.scene.add.text(0, 0, '', { fontFamily: 'serif', fontSize: '20px', color: '#ffe7a8', stroke: '#1a1310', strokeThickness: 4 }).setOrigin(.5).setDepth(DEPTH.ground + 4));
     this.cx = h.boss.x; this.cy = h.boss.y; this.gates = this.roll(); this.nextGates = this.roll(); this.rotateAt = now + CR.gates.rotateMs; this.tickAt = now;
     this.next = now + 2500; h.banner('八门金锁', '站生门（绿）打曹仁，别站死门（红）');
@@ -112,6 +114,9 @@ export class CaorenBoss extends ArcBossV2<Move> {
   /** 阵图：八条像素分界（方块虚线）+ 生门浅绿、死门暗红底；轮转前 1.5 秒下一轮的门闪烁。八门阵图素材到位后换图。 */
   private drawGates(now: number, warning: boolean): void {
     const g = this.arena, R = CR.gates.radius, step = Math.PI / 4; g.clear();
+    // 手绘阵盘（图到后）：浮现 0–1 → 发光循环 2–4；扇区的生 / 死只用淡色铺底 + 门名
+    if (!this.disc) this.disc = bossFxImage(this.h.scene, 'cr_bagua', DEPTH.ground + 2);
+    if (this.disc) this.disc.setPosition(this.cx, this.cy).setDisplaySize(R * 2.3, R * 2.3 * .8).setFrame(2 + Math.floor(now / 200) % 3).setAlpha(.85);
     for (let i = 0; i < 8; i++) {
       const a0 = -Math.PI + i * step, a1 = a0 + step, kind = this.gates[i], nk = this.nextGates[i];
       const blink = warning && Math.floor(now / 160) % 2 === 0, show = blink ? nk : kind;
@@ -120,10 +125,10 @@ export class CaorenBoss extends ArcBossV2<Move> {
         g.fillStyle(col, al);
         for (let k = 0; k < 6; k++) { const t0 = a0 + step * k / 6, t1 = a0 + step * (k + 1) / 6; g.fillTriangle(this.cx, this.cy, this.cx + Math.cos(t0) * R, this.cy + Math.sin(t0) * R * .8, this.cx + Math.cos(t1) * R, this.cy + Math.sin(t1) * R * .8); }
       }
-      // 分界：每 18px 一个 4px 方块
-      for (let r = 30; r <= R; r += 18) { const x = this.cx + Math.cos(a0) * r, y = this.cy + Math.sin(a0) * r * .8; g.fillStyle(0x1a1310, .55).fillRect(Math.round(x) - 3, Math.round(y) - 3, 6, 6); g.fillStyle(0xf2c27a, .6).fillRect(Math.round(x) - 2, Math.round(y) - 2, 4, 4); }
+      // 占位分界（阵盘图到之前）：每 18px 一个 4px 方块
+      if (!this.disc) for (let r = 30; r <= R; r += 18) { const x = this.cx + Math.cos(a0) * r, y = this.cy + Math.sin(a0) * r * .8; g.fillStyle(0x1a1310, .55).fillRect(Math.round(x) - 3, Math.round(y) - 3, 6, 6); g.fillStyle(0xf2c27a, .6).fillRect(Math.round(x) - 2, Math.round(y) - 2, 4, 4); }
       // 外缘：每 10° 一个方块
-      for (let t = a0; t < a1; t += Math.PI / 18) { const x = this.cx + Math.cos(t) * R, y = this.cy + Math.sin(t) * R * .8; g.fillStyle(0xf2c27a, .45).fillRect(Math.round(x) - 2, Math.round(y) - 2, 4, 4); }
+      if (!this.disc) for (let t = a0; t < a1; t += Math.PI / 18) { const x = this.cx + Math.cos(t) * R, y = this.cy + Math.sin(t) * R * .8; g.fillStyle(0xf2c27a, .45).fillRect(Math.round(x) - 2, Math.round(y) - 2, 4, 4); }
       const mid = a0 + step / 2, tx = this.cx + Math.cos(mid) * R * .78, ty = this.cy + Math.sin(mid) * R * .78 * .8;
       this.texts[i].setPosition(tx, ty).setText(show === 'live' ? '生门' : show === 'dead' ? '死门' : GATE_NAMES[i]).setColor(show === 'live' ? '#c8f0b0' : show === 'dead' ? '#ffb3a0' : '#e8d7b0').setAlpha(show === 'none' ? .45 : 1).setFontSize(show === 'none' ? 15 : 20);
     }
@@ -142,6 +147,6 @@ export class CaorenBoss extends ArcBossV2<Move> {
     this.kit.phaseShift(now, '此阵何人可破！', '二阶段 · 破阵：5 秒一轮转，死门更多', 0x2a1608, .16);
     this.nextGates = this.roll(); this.rotateAt = now + 1500;
   }
-  protected onDefeat(): void { this.arena.clear(); for (const t of this.texts) t.setVisible(false); if (this.gone) { this.arena.destroy(); for (const t of this.texts) t.destroy(); this.texts = []; } }
+  protected onDefeat(): void { this.disc?.destroy(); this.disc = null; this.arena.clear(); for (const t of this.texts) t.setVisible(false); if (this.gone) { this.arena.destroy(); for (const t of this.texts) t.destroy(); this.texts = []; } }
   snapshot() { return { move: this.beat.move, phase: this.beat.phase, phase2: this.phase2, gates: [...this.gates], playerGate: this.playerGate, front: this.front, metrics: { ...this.metrics } }; }
 }

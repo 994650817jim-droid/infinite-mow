@@ -100,6 +100,9 @@ export const ART_V2_FILES: Readonly<Record<string, string>> = {
   yellow_zhangbao_walk: 'assets/bosses-v2/yellow_zhangbao_walk.png',
   yellow_zhangbao_cast: 'assets/bosses-v2/yellow_zhangbao_cast.png',
   chibi_caoren: 'assets/bosses-v2/chibi_caoren.png',
+  // 第七章入蜀：首领与新兵种（只有 v2 版；场景 ShuGameScene 自己载入，键登记在这里是为了按 v2 规格缩放）
+  shu_yanghuai: 'assets/bosses-v2/shu_yanghuai.png', shu_zhangren: 'assets/bosses-v2/shu_zhangren.png', shu_liuzhang: 'assets/bosses-v2/shu_liuzhang.png',
+  shu_dongzhou_walk: 'assets/processed-v2/enemies/shu_dongzhou_walk.png', shu_nushou_walk: 'assets/processed-v2/enemies/shu_nushou_walk.png',
   huaxiong_walk: 'assets/bosses-v2/huaxiong_walk.png',
   huaxiong_attack: 'assets/bosses-v2/huaxiong_attack.png',
   huaxiong_actions: 'assets/bosses-v2/huaxiong_actions.png',

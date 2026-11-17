@@ -3,7 +3,7 @@ import './dev/TestSave';
 // 桌面版（Steam）平台层必须最先执行：替换 localStorage 为存档文件
 import { TalentHallScene } from './scenes/TalentHallScene';
 import './platform/desktop';
-import {ThirdChapterScene} from './scenes/ThirdChapterScene';import {ChibiChapterScene} from './scenes/ChibiChapterScene';import {CHIBI_STAGES,chibiBattle} from './data/chibiChapter';import {thirdGameSceneClass} from './scenes/ThirdGameScene';import {GuanduChapterScene} from './scenes/GuanduChapterScene';import {guanduGameSceneClass} from './scenes/GuanduGameScene';import {siegeGameSceneClass} from './scenes/SiegeGameScene';import {intelGameSceneClass} from './scenes/IntelGameScene';import {lubuGameSceneClass} from './scenes/LubuGameScene';
+import {ShuChapterScene} from './scenes/ShuChapterScene';import {shuGameSceneClass} from './scenes/ShuGameScene';import {ThirdChapterScene} from './scenes/ThirdChapterScene';import {ChibiChapterScene} from './scenes/ChibiChapterScene';import {CHIBI_STAGES,chibiBattle} from './data/chibiChapter';import {thirdGameSceneClass} from './scenes/ThirdGameScene';import {GuanduChapterScene} from './scenes/GuanduChapterScene';import {guanduGameSceneClass} from './scenes/GuanduGameScene';import {siegeGameSceneClass} from './scenes/SiegeGameScene';import {intelGameSceneClass} from './scenes/IntelGameScene';import {lubuGameSceneClass} from './scenes/LubuGameScene';
 import {loadGameFonts} from './ui/GameFonts';
 import Phaser from 'phaser';
 import { GAME_HEIGHT, GAME_WIDTH, IS_DESKTOP, RENDER_SCALE, initLayout, switchLayout } from './config';
@@ -61,6 +61,7 @@ async function startGame(): Promise<void> {
   const ThirdBattleScene=thirdGameSceneClass(BattleScene);
   const GuanduBattleScene=guanduGameSceneClass(BattleScene);
   const ChibiBattleScene=thirdGameSceneClass(BattleScene,{key:'ChibiGameScene',arc:'chibi',stageKey:'chibiStage',transferKey:'chibiTransfer',stages:CHIBI_STAGES,texture:id=>'chibi_'+id,sheet:id=>'assets/chibi/'+id+'.png',battle:s=>chibiBattle(s),campPrefix:'chibi-',fireShips:[2]});
+  const ShuBattleScene=shuGameSceneClass(BattleScene);
   const SiegeBattleScene=siegeGameSceneClass(BattleScene);
   const IntelBattleScene=intelGameSceneClass(BattleScene);
   const LubuBattleScene=lubuGameSceneClass(BattleScene);
@@ -81,7 +82,7 @@ async function startGame(): Promise<void> {
     input: {
       activePointers: 3,
     },
-    scene: [BootScene, CityScene, CityRecruitScene, TownScene, TalentHallScene, WorldMapScene, MenuScene, BattleScene, ThirdChapterScene, ThirdBattleScene, GuanduChapterScene, GuanduBattleScene, ChibiChapterScene, ChibiBattleScene, SiegeBattleScene, IntelBattleScene, LubuBattleScene],
+    scene: [BootScene, CityScene, CityRecruitScene, TownScene, TalentHallScene, WorldMapScene, MenuScene, BattleScene, ThirdChapterScene, ThirdBattleScene, GuanduChapterScene, GuanduBattleScene, ChibiChapterScene, ChibiBattleScene, ShuChapterScene, ShuBattleScene, SiegeBattleScene, IntelBattleScene, LubuBattleScene],
   });
 
   // 手柄：每帧轮询 + 界面焦点导航（STEAM_PLAN.md · S2）

@@ -38,6 +38,8 @@ export interface MidSiegeHost {
   campsAlive: () => [number, number];
   /** 攻城器械等级（讲武堂科技预留，默认 0） */
   engineLevel?: number;
+  /** 复用到别的篇章（第七章成都）：守将由篇章首领控制器驱动（不走 stepBoss）、城门血量与段名覆盖 */
+  opts?: { externalBoss?: boolean; gateHp?: number; hallName?: string; cityName?: string };
 }
 
 type Box = { left: number; right: number; top: number; bottom: number };
@@ -54,7 +56,7 @@ export class SiegeMidCity {
   phase: MidSiegePhase = 'outside';
   readonly stats = { volleys: 0, zones: 0, ramHits: 0, ramsLost: 0, ramsTaken: 1, ambushes: 0, transitions: 0, guardWaves: 0, shieldHits: 0, bossSkills: 0 };
   gateHp: number = M.outside.gate.hp;
-  readonly gateMax: number = M.outside.gate.hp;
+  gateMax: number = M.outside.gate.hp;
   private towers: Array<{ e: Enemy; life: number; x: number }> = [];
   private ram: Ram | null = null; private ramReadyAt = 0; private spareLeft = 0;
   /** 本场冲车属性（按攻城器械等级加成） */
@@ -73,6 +75,7 @@ export class SiegeMidCity {
 
   constructor(private readonly h: MidSiegeHost) {
     const now = h.now();
+    if (h.opts?.gateHp) this.gateHp = this.gateMax = h.opts.gateHp;
     this.ramCfg = ramStats(h.engineLevel ?? 0); this.spareLeft = this.ramCfg.spare;
     this.volleyAt = now + 2500; this.ramReadyAt = now;
     this.buildOutside();
@@ -382,7 +385,7 @@ export class SiegeMidCity {
   // ---------- 第三段：府衙 ----------
   private enterHall() {
     this.guardsAt = this.h.now() + 6000; this.skillAt = this.h.now() + 3500;
-    this.h.banner('府衙 · 决战守将', true, '亲卫在场时守将有护盾，先清亲卫');
+    this.h.banner(`${this.h.opts?.hallName ?? '府衙'} · 决战守将`, true, '亲卫在场时守将有护盾，先清亲卫');
     this.h.scene.time.delayedCall(900, () => this.h.spawnBoss());
   }
   /** 亲卫存活数（护盾判定）。 */
@@ -401,7 +404,7 @@ export class SiegeMidCity {
   }
   /** 守将行动：一阶段追击 + 横扫；二阶段（≤50%）加冲锋。返回 true 表示已接管移动。 */
   stepBoss(boss: Enemy, dt: number, now: number): boolean {
-    if (this.phase !== 'hall') return false;
+    if (this.phase !== 'hall' || this.h.opts?.externalBoss) return false;
     const H = M.hall, p = this.h.player, fx = warnFx(this.h.scene);
     if (!this.bossPhase2 && boss.hp / boss.maxHp <= H.phase2At) {
       this.bossPhase2 = true; boss.sprite.setTint(0xffb08a); this.h.scene.time.delayedCall(240, () => boss.sprite.active && boss.sprite.clearTint());
@@ -453,7 +456,7 @@ export class SiegeMidCity {
     this.finalFlag = this.art(0, y, [ART.ram, 6], ['zhuge_banner', 0], 120, 170);
     const f = this.finalFlag, h0 = f.displayHeight; f.setDisplaySize(f.displayWidth, 4).setAlpha(.6);
     sc.tweens.add({ targets: f, displayHeight: h0, alpha: 1, duration: M.hall.flagMs * .6, ease: 'Back.Out' });
-    this.h.banner('插旗占领府衙', false, '此城归入义军版图'); this.h.sfx('bossSummon');
+    this.h.banner(`插旗占领${this.h.opts?.hallName ?? '府衙'}`, false, `${this.h.opts?.cityName ?? '此城'}归入义军版图`); this.h.sfx('bossSummon');
     this.phase = 'done'; sc.time.delayedCall(M.hall.flagMs, done);
   }
 
@@ -492,7 +495,7 @@ export class SiegeMidCity {
   goalLine(): string {
     if (this.phase === 'outside') return `城外 · 冲车撞门 ${Math.round((1 - this.gateHp / this.gateMax) * 100)}% · 箭楼 ${2 - this.towersAlive}/2${this.ram?.state === 'wreck' ? ' · 冲车已毁，回营地领' : ''}`;
     if (this.phase === 'street') return '巷战 · ' + this.points.map(p => `${p.name}${p.state === 'secured' ? '✓' : p.state === 'held' ? '守' : ''}`).join(' · ');
-    if (this.phase === 'hall') return `府衙 · 击败守将${this.guardsAlive ? ' · 亲卫护盾中' : ''}`;
+    if (this.phase === 'hall') return `${this.h.opts?.hallName ?? '府衙'} · 击败守将${this.guardsAlive ? ' · 亲卫护盾中' : ''}`;
     return '占领完成';
   }
   get transitioningNow() { return this.transitioning; }

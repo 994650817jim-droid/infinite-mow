@@ -1,5 +1,6 @@
 import {ThirdSpearWarnings,THIRD_SPEAR,type SpearWindup} from '../systems/ThirdSpearWarnings';
 import {EnemyCamps} from '../systems/EnemyCamps';
+import type {CampPoint} from '../systems/EnemyCamps';
 import {HubaoBattle} from '../systems/HubaoBattle';
 import {FireShips} from '../systems/FireShips';
 import {applyCitySpecialties} from '../systems/CityBonuses';
@@ -23,6 +24,8 @@ export interface ArcSceneConfig{
  campPrefix:string;
  /** 有「东风火船」的关（赤壁鏖兵）。 */
  fireShips?:number[];
+ /** 自定义战场布置（第七章山道 / 攻城）：返回 null 时用第三章框架的默认战场。 */
+ scenery?:(scene:Phaser.Scene,stage:number)=>{key:string;boxes:Array<{left:number;right:number;top:number;bottom:number}>;camps:CampPoint[]}|null;
 }
 export const THIRD_CONFIG:ArcSceneConfig={key:'ThirdGameScene',arc:'qunxiong',stageKey:'thirdStage',transferKey:'thirdTransfer',stages:THIRD_STAGES,texture:id=>'third_'+id,sheet:id=>'assets/phase23/'+id+'.png',battle:s=>thirdBattle(s),campPrefix:'qunxiong-'};
 
@@ -50,7 +53,7 @@ export function thirdGameSceneClass(Base:typeof GameScene,cfg:ArcSceneConfig=THI
   this.thirdReceipt=this.thirdTest?'':beginArcExpedition(cfg.arc,this.thirdStage,this.allies.filter(u=>u.active&&u.reserveSoldier).map(u=>u.kind));const effect=permanentEffects();this.legion.healingMultiplier=effect.healMultiplier;applyCitySpecialties(this.player,effect,!transfer,{legion:this.legion,supplies:this.supplies});if(!transfer){for(let i=0;i<effect.reinforcements;i++)this.legion.recruit(i===0?'swordsman':'spearman',1,true);if(!this.thirdTest)for(const kind of takeExpeditionReserve(effect.reserveSlots)){this.legion.recruit(kind,1,true);this.allies[this.allies.length-1].reserveSoldier=true;}}
   this.spearWarnings=new ThirdSpearWarnings(this);
   this.battlefieldDetails.useStructuredLayout();if(this.supplies)this.supplies.randomGeneration=false;
-  const art=thirdScenery(this,this.sceneryStage,(frame,x,y,size)=>this.spawnSceneProp(frame,x,y,size),cfg.arc);this.ground.setTexture(art.key).setTileScale(1);this.sishuiObstacles=new SishuiObstacles();this.sishuiObstacles.footprints.splice(0,this.sishuiObstacles.footprints.length,...art.boxes);
+  const art=cfg.scenery?.(this,this.thirdStage)??thirdScenery(this,this.sceneryStage,(frame,x,y,size)=>this.spawnSceneProp(frame,x,y,size),cfg.arc);this.ground.setTexture(art.key).setTileScale(1);this.sishuiObstacles=new SishuiObstacles();this.sishuiObstacles.footprints.splice(0,this.sishuiObstacles.footprints.length,...art.boxes);
   this.enemyCamps=new EnemyCamps({scene:this,player:this.player,create:(x,y,hp)=>this.supplies?.spawnCamp(x,y,hp)??null,spawn:(kind,x,y)=>this.spawnEnemy(kind,x,y,1),support:()=>this.legion.grid.query(this.player.x,this.player.y,260),reward:n=>{this.legion.food+=n;}},art.camps,this.combatNow);
   this.legion.campTarget=u=>this.enemyCamps?.assist(u)??null;
   this.fireShips=cfg.fireShips?.includes(this.thirdStage)?new FireShips({scene:this,enemies:()=>this.enemies,player:()=>this.player,boss:()=>this.boss??undefined,burn:(e,dmg,now)=>{this.hitEnemy(e,dmg,now,'fire',true,false);},announce:t=>this.showWaveBanner(t,false)},this.combatNow):undefined;

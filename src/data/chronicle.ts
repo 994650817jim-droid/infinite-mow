@@ -2,7 +2,7 @@
  * 战役回顾 · 乱世编年：九关的史事摘要（原创撰写，据《后汉书》《三国志》等常见史载概括；
  * 演义情节明确标注为“演义”）。只做展示，不影响玩法。
  */
-export type ChronicleArc = 'huangjin' | 'dongzhuo' | 'qunxiong' | 'guandu' | 'chibi';
+export type ChronicleArc = 'huangjin' | 'dongzhuo' | 'qunxiong' | 'guandu' | 'chibi' | 'shu';
 export interface ChronicleStage { code: string; name: string; boss: string; bossTitle: string; seal: string; year: string; story: string; legacy: string }
 export interface ChronicleChapter { arc: ChronicleArc; title: string; years: string; intro: string; stages: ChronicleStage[] }
 
@@ -80,6 +80,21 @@ export const CHRONICLE: ChronicleChapter[] = [
       { code: '5-3', name: '江陵夺城', boss: '曹仁', bossTitle: '征南将军', seal: '仁', year: '建安十四年 · 209',
         story: '曹操北归，留曹仁守江陵。周瑜率军围攻经年，曹仁坚守不下，亲率数十骑出城救出被围部将，军中称其为天人。终因孤城难守，曹仁弃城北撤。',
         legacy: '孙刘分据荆州，三分天下之势已成。' },
+    ],
+  },
+  {
+    arc: 'shu', title: '第七章 · 入蜀', years: '公元211–214年',
+    intro: '刘璋请刘备入蜀拒张鲁。刘备自葭萌回师南下，庞统殁于落凤坡，诸葛亮、张飞、赵云溯江入川会师，围成都，刘璋出降，益州遂定。',
+    stages: [
+      { code: '7-1', name: '葭萌关', boss: '杨怀', bossTitle: '白水关督', seal: '怀', year: '建安十七年 · 212',
+        story: '刘备驻葭萌，刘璋令白水关督杨怀、高沛守关。刘备用庞统之计，召杨、高二人至帐下斩之，引兵南下，据涪城。',
+        legacy: '刘备与刘璋反目，入蜀之战由此而起。' },
+      { code: '7-2', name: '落凤坡', boss: '张任', bossTitle: '益州名将', seal: '任', year: '建安十八年 · 213',
+        story: '刘备进围雒城，刘璋子刘循与张任据守。张任设伏于雒城外山道，庞统率众攻城，为流矢所中，卒年三十六。后张任兵败被擒，不降而死。',
+        legacy: '凤雏陨落，刘备召诸葛亮、张飞、赵云入川。' },
+      { code: '7-3', name: '成都', boss: '刘璋', bossTitle: '益州牧', seal: '璋', year: '建安十九年 · 214',
+        story: '诸军会围成都数十日，马超来降，城中震怖。刘璋言「父子在州二十余年，无恩德以加百姓」，遂开城出降。刘备领益州牧。',
+        legacy: '刘备据有益州，天下三分之势始成。' },
     ],
   },
 ];

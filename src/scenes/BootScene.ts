@@ -96,6 +96,8 @@ export class BootScene extends Phaser.Scene {
     this.load.image('enemy_cavalry', 'assets/processed/enemy_cavalry.png');
     this.load.image('enemy_elite', 'assets/processed/enemy_elite.png');
     this.load.image('boss_zhangjiao', 'assets/processed/boss_zhangjiao.png');
+    // 人物画风 v2：张角另有行走 / 施法方向表（v1 没有，只有一张静态图）；占位 URL 由 applyArtStyleUrls 换成 v2 文件
+    if (isV2Texture('zhangjiao_walk')) for (const key of ['zhangjiao_walk', 'zhangjiao_cast']) this.load.image(key, 'assets/processed/boss_zhangjiao.png');
     this.load.image('ground_ai', 'assets/processed/ground_ai.png');
     this.load.image('ground_ai2', 'assets/processed/ground_ai2.png');
     this.load.spritesheet('hero_walk_sheet', 'assets/processed/hero_walk_sheet.png', { frameWidth: 96, frameHeight: 96 });
@@ -214,9 +216,9 @@ export class BootScene extends Phaser.Scene {
     // Exclude the original transparent margin without altering the source PNG.
     this.textures.get('spear_thrust').add('tight', 0, 31, 51, 460, 62);
     for (const key of ['boss_lubu', 'lubu_attack']) {
-      const texture = this.textures.get(key);
+      const texture = this.textures.get(key), n = ((texture.getSourceImage() as {width?: number}).width ?? 1024) / 4; // v1 256 格，v2 288 格
       ['down', 'left', 'right', 'up'].forEach((dir, row) => {
-        for (let col = 0; col < 4; col++) texture.add(`${dir}_${col}`, 0, col * 256, row * 256, 256, 256);
+        for (let col = 0; col < 4; col++) texture.add(`${dir}_${col}`, 0, col * n, row * n, n, n);
       });
     }
     for (const kind of ['infantry', 'shield', 'archer', 'cavalry', 'elite']) {
@@ -240,7 +242,7 @@ export class BootScene extends Phaser.Scene {
         // 厚涂图标（128px 缩到约 52px 显示）用线性过滤，避免锯齿
         ||key.startsWith('growth_icon_')||key.startsWith('build_icon_')||(key.startsWith('icon_shu_')&&isV2Texture(key))||/^icon_(1|2|3|guandao|passive|rare)$/.test(key) ? Phaser.Textures.FilterMode.LINEAR : Phaser.Textures.FilterMode.NEAREST);
     }
-    for(const key of ['huaxiong_walk','huaxiong_attack']){if(!this.textures.exists(key))continue;const t=this.textures.get(key);['down','left','right','up'].forEach((dir,row)=>{for(let col=0;col<4;col++)if(!t.has(dir+'_'+col))t.add(dir+'_'+col,0,col*128,row*128,128,128);});}
+    for(const key of ['huaxiong_walk','huaxiong_attack']){if(!this.textures.exists(key))continue;const t=this.textures.get(key),n=((t.getSourceImage() as {width?:number}).width??512)/4;['down','left','right','up'].forEach((dir,row)=>{for(let col=0;col<4;col++)if(!t.has(dir+'_'+col))t.add(dir+'_'+col,0,col*n,row*n,n,n);});}
     createReadableTextures(this);
     applyHdHeroSheets(this, ['hero_walk_sheet', ...Object.keys(HERO_ACTION_FILES).map(k => k.replace(/_actions$/, '_walk_sheet'))], Object.keys(HERO_ACTION_FILES));
     // 人物画风 v2：武将行走图的停步帧换成双脚并拢的那一帧（见 rotateV2StandFrames）

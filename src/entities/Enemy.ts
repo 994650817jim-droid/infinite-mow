@@ -188,7 +188,9 @@ export class Enemy {
       this.appliedFrame = 'down_0';
     }
     if (def.texture === 'boss_lubu' && this.scene.textures.get('boss_lubu').has('down_0')) {
-      this.sprite.setTexture('boss_lubu', 'down_0').setScale(218 / 256).setOrigin(.5, .875 - def.radius * .7 / 218);
+      // v2：288 格 × 0.5（1080p 像素 1:1），脚底 256/288；v1：256 格显示 218
+      if (isV2Texture('boss_lubu')) this.sprite.setTexture('boss_lubu', 'down_0').setScale(V2_TROOP_SCALE).setOrigin(.5, 256 / 288 - def.radius * .7 / 144);
+      else this.sprite.setTexture('boss_lubu', 'down_0').setScale(218 / 256).setOrigin(.5, .875 - def.radius * .7 / 218);
       this.baseScaleY = this.sprite.scaleY;
     }
     this.attackSheet = '';

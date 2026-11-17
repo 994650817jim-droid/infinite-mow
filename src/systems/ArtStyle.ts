@@ -92,6 +92,22 @@ export const ART_V2_FILES: Readonly<Record<string, string>> = {
   guandu_chunyuqiong: 'assets/bosses-v2/guandu_chunyuqiong.png',
   chibi_caimao: 'assets/bosses-v2/chibi_caimao.png',
   chibi_caochun: 'assets/bosses-v2/chibi_caochun.png',
+  // 第 4 批（二）：第 1、2 章首领（保持各控制器原帧语义）
+  zhangjiao_walk: 'assets/bosses-v2/zhangjiao_walk.png',
+  zhangjiao_cast: 'assets/bosses-v2/zhangjiao_cast.png',
+  yellow_zhangliang_walk: 'assets/bosses-v2/yellow_zhangliang_walk.png',
+  yellow_zhangliang_attack: 'assets/bosses-v2/yellow_zhangliang_attack.png',
+  yellow_zhangbao_walk: 'assets/bosses-v2/yellow_zhangbao_walk.png',
+  yellow_zhangbao_cast: 'assets/bosses-v2/yellow_zhangbao_cast.png',
+  chibi_caoren: 'assets/bosses-v2/chibi_caoren.png',
+  huaxiong_walk: 'assets/bosses-v2/huaxiong_walk.png',
+  huaxiong_attack: 'assets/bosses-v2/huaxiong_attack.png',
+  huaxiong_actions: 'assets/bosses-v2/huaxiong_actions.png',
+  xurong: 'assets/bosses-v2/xurong.png',
+  boss_lubu: 'assets/bosses-v2/lubu_walk.png',
+  lubu_attack: 'assets/bosses-v2/lubu_attack.png',
+  dongzhuo_walk: 'assets/bosses-v2/dongzhuo_walk.png',
+  dongzhuo_attack: 'assets/bosses-v2/dongzhuo_attack.png',
 };
 /** v2 主将行走整格的显示高度（逻辑像素）：原生格 176 → 88，即 1080p 全屏（渲染 2 倍）下 1 美术像素 = 1 屏幕像素。
  * 人物约 76 逻辑像素高（用户要求比 v1 大一些）。 */
@@ -138,7 +154,13 @@ export function applyArtStyleUrls(load: Phaser.Loader.LoaderPlugin): string[] {
   const files = (load as unknown as { list: Phaser.Structs.Set<Phaser.Loader.File> }).list;
   for (const file of files.getArray()) {
     const url = ART_V2_FILES[file.key];
-    if (url && (file.type === 'spritesheet' || file.type === 'image')) { original.set(file.key, { url: String(file.url), type: file.type, config: file.config }); file.url = url; swapped.push(file.key); }
+    if (url && (file.type === 'spritesheet' || file.type === 'image')) {
+      original.set(file.key, { url: String(file.url), type: file.type, config: file.config && typeof file.config === 'object' ? { ...(file.config as object) } : file.config });
+      file.url = url; swapped.push(file.key);
+      // 按数字帧取用的首领表（华雄 / 徐荣 / 吕布）：v2 格子更大，切帧尺寸跟着换
+      const cell = V2_SHEET_CELL[file.key];
+      if (cell && file.type === 'spritesheet' && file.config) Object.assign(file.config as object, { frameWidth: cell, frameHeight: cell });
+    }
   }
   if (original.size) load.on(Phaser.Loader.Events.FILE_LOAD_ERROR, (file: Phaser.Loader.File) => {
     const o = original.get(file.key); if (!o || V2_FAILED.has(file.key)) return;
@@ -148,6 +170,10 @@ export function applyArtStyleUrls(load: Phaser.Loader.LoaderPlugin): string[] {
   return swapped;
 }
 
+/** BootScene 里按固定格子载入的首领表，v2 版的格边长（v1 华雄 / 徐荣 128、吕布 256）。 */
+export const V2_SHEET_CELL: Record<string, number> = {
+  huaxiong_walk: 288, huaxiong_attack: 288, huaxiong_actions: 288, xurong: 288, boss_lubu: 288, lubu_attack: 288,
+};
 /** v2 首领图集格边长：脚底 256 / 288 ≈ 旧版 114 / 128，首领控制器按 setDisplaySize(144) 显示，正好 1080p 下像素 1:1。 */
 export const V2_BOSS_CELL = 288;
 /** 章节首领图集（4×8，数字帧 0~31）：v2 时载 288 格新图，失败退回旧图；v1 照旧按 cell 载入。 */
@@ -179,6 +205,8 @@ export const V2_TROOP_KEYS: readonly string[] = [
   'enemy_archer_walk_sheet', 'enemy_archer_attack_sheet',
   'enemy_infantry_walk_sheet', 'enemy_shield_walk_sheet', 'enemy_officer_walk_sheet', 'enemy_cavalry_run_sheet', 'enemy_cavalry_charge_sheet',
   'xiliang_infantry_walk', 'xiliang_shield_walk', 'xiliang_archer_walk', 'xiliang_cavalry_walk', 'xiliang_elite_walk',
+  // 第 4 批（二）：第一章首领张梁 / 张宝 / 张角（走 Enemy 的 walkVisual 通路，4×4 方向表）
+  'yellow_zhangliang_walk', 'yellow_zhangliang_attack', 'yellow_zhangbao_walk', 'yellow_zhangbao_cast', 'zhangjiao_walk', 'zhangjiao_cast',
 ];
 /** v2 兵种显示倍率：原生像素 → 逻辑像素 0.5，即 1080p 全屏（渲染 2 倍）下像素 1:1。 */
 export const V2_TROOP_SCALE = .5;

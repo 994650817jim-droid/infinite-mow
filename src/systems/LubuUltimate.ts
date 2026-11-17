@@ -6,6 +6,7 @@ import type { Enemy } from '../entities/Enemy';
 import type { Player } from '../entities/Player';
 import { LUBU_COMBAT as C } from '../data/chapters';
 import { DEPTH } from '../config';
+import { isV2Texture } from './ArtStyle';
 const HOVER_FRAMES = [0, 1, 4, 5, 6, 7] as const;
 export class LubuUltimate {
   phase: 'idle' | 'takeoff' | 'airborne' | 'landing' = 'idle';
@@ -123,7 +124,9 @@ export class LubuUltimate {
   private body(kind: 'takeoff' | 'hover' | 'landing', frame: number, height: number): void {
     this.boss.sprite.setTexture(`lubu_ult_${kind}`, frame).setAlpha(1);
     // Processed cells share a hand-reviewed ground reference at (128,176).
-    this.boss.sprite.setOrigin(.5, 176 / 256 - this.boss.radius * .7 / 218 + height / 218);
+    // 跃起：原点上移 = 精灵整体抬高。v2 吕布 288 格 × 0.5（显示 144），v1 256 格显示 218
+    const v2 = isV2Texture('boss_lubu'), shown = v2 ? 144 : 218, foot = v2 ? 256 / 288 : .875;
+    this.boss.sprite.setOrigin(.5, foot - 48 / 256 - this.boss.radius * .7 / shown + height / shown);
     this.boss.shadow.setVisible(height <= 0 && this.boss.active);
   }
   private restore(): void { this.boss.invulnerable = false; this.boss.controlImmune = false; this.boss.sprite.setTexture('boss_lubu', 'down_0').setOrigin(.5, this.origin).setAlpha(1); this.boss.shadow.setVisible(this.boss.active); }

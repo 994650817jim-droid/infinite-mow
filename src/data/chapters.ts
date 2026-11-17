@@ -7,6 +7,7 @@ import { ENEMY_DEFS, enemyHpScale, pickEnemyKind, spawnBurst, spawnInterval, typ
 import { WAVES, type WaveDef } from './waves';
 import type { EnemyKind } from '../types';
 import { tuneStage } from './stageTuning';
+import { isV2Texture } from '../systems/ArtStyle';
 
 export type ChapterId = 'huangjin' | 'hulao';
 export interface ChapterDef {
@@ -122,7 +123,9 @@ export function getBattleChapter(id?:string, stage:YellowStage=1,westStage:Yello
 function rawBattleChapter(id?:string, stage:YellowStage=1,westStage:YellowStage=3):ChapterDef {
  const base=getChapter(id);if(base.id==='hulao'){const n=DONGZHUO_STAGES.find(s=>s.stage===westStage)?.stage??3;return xiliangCavalry(n===1?{...getSishuiEncounter(),westStage:1,victoryText:'汜水关告捷 · 荥阳之战已解锁'}:n===2?{...getXingyangEncounter(),westStage:2,victoryText:'荥阳破围 · 虎牢关已解锁'}:{...getLuoyangChapter(),westStage:3});}
  const info=YELLOW_STAGES[stage-1]??YELLOW_STAGES[0];stage=info.stage;
- if(stage===3)return {...base,stage,name:'1-3 广宗决战',waves:['黄巾先锋','黄巾大军','张角决战'].map((name,i)=>({name,start:i*45})),recruitWaves:[1,2],ground:'yellow_ground_3',victoryTitle:'黄巾平定',victoryText:'雷云消散 · 讨伐董卓已解锁'};
+ if(stage===3)return {...base,stage,name:'1-3 广宗决战',waves:['黄巾先锋','黄巾大军','张角决战'].map((name,i)=>({name,start:i*45})),recruitWaves:[1,2],ground:'yellow_ground_3',victoryTitle:'黄巾平定',victoryText:'雷云消散 · 讨伐董卓已解锁',
+  // 人物画风 v2：张角有行走 / 施法方向表时改走 walkVisual 通路（v1 只有一张静态图，靠程序姿态）
+  ...(isV2Texture('zhangjiao_walk')?{enemies:{...base.enemies,boss:{...base.enemies.boss,walkVisual:{texture:'zhangjiao_walk',scale:.5,groundY:.9},attackVisual:'zhangjiao_cast'}}}:{})};
  const boss=stage===1?'zhangliang':'zhangbao';
  const names=stage===1?['外围哨兵','刀盾阻路','张梁迎战']:['营寨前锋','弓盾合击','张宝祭阵'];
  return {...base,stage,name:`1-${stage} ${info.name}`,ground:`yellow_ground_${stage}`,bossName:info.boss,bossStyle:boss,

@@ -50,7 +50,7 @@ export class Follower {
     // 武将等级：可玩名将用自己加过的属性点（武力 / 体魄），招来的 r_ 武将按等级直接成长
     let dmgLv = 1, hpLv = 1; this.level = 1;
     try { const key = (recruit.hero ?? recruit.id) as HeroKey; this.level = heroLevel(key);
-      if (recruit.hero) { const a = heroAttrs(key); dmgLv = 1 + FOLLOW.mightDamage * a.might; hpLv = 1 + FOLLOW.constitutionHp * a.constitution; }
+      if (recruit.hero) { const a = heroAttrs(key); dmgLv = 1 + FOLLOW.mightDamage * a.strength; hpLv = 1 + FOLLOW.constitutionHp * a.strength; }
       else { dmgLv = 1 + FOLLOW.levelDamage * Math.max(0, this.level - 1); hpLv = 1 + FOLLOW.levelHp * Math.max(0, this.level - 1); } } catch { /* 等级存档不可用 */ }
     this.damage = t.damage * q * (hero?.damageMul ?? 1) * (1 + b.damage) * (1 + g.damage) * (1 + g.crit) * dmgLv;
     this.maxHp = Math.round(t.hp * q * (hero?.hpMul ?? 1) * (1 + b.hp) * (1 + g.hp) * hpLv * leaderLevelHp); this.hp = this.maxHp;

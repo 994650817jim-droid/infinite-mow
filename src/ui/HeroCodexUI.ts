@@ -4,7 +4,8 @@ import { CHARACTERS, type CharacterId } from '../data/characters';
 import { TACTICS, TAG_NAMES, type BuildTag, type TacticId } from '../data/builds';
 import { WEAPON_DEFS } from '../weapons/registry';
 import { ATTRIBUTE_INFO, ATTRIBUTE_MAX, attributeIcon, type AttributeId } from '../systems/RunGrowth';
-import { allocateHeroAttr, heroAttrs, heroFreePoints, heroInfo, type HeroKey } from '../systems/HeroProgress';
+import { allocateHeroAttr, heroAttrs, heroFreePoints, heroInfo, takeAttrNotice, type HeroKey } from '../systems/HeroProgress';
+import { primaryAttribute } from '../data/attributes';
 import { gearFor, gearSummary } from '../systems/ItemEffects';
 import { gearOwners, ownerName } from '../systems/RosterStore';
 import { TACTIC_UNLOCK_SCROLLS, TEMPER, XINDE_SLOTS, getXinde, grain, respec, respecCost, scrolls, tacticUnlocked, temperCost, temperLevel, temperUp, toggleXinde, unlockTactic } from '../systems/MasteryStore';
@@ -33,6 +34,7 @@ export class HeroCodexUI {
     const list = gearOwners();
     this.hero = (hero && list.some(o => o.id === hero) ? hero : list[0]?.id ?? 'zhaoyun') as HeroKey;
     this.root = scene.add.container(0, 0).setDepth(DEPTH.overlay + 20).setScrollFactor(0).setName('hero-codex').setData('ui', this);
+    if (takeAttrNotice()) this.notice = '属性已改版：点数已全部返还，请在「属性」页重新分配';
     this.render();
   }
   close(): void { this.root.destroy(); this.onClose?.(); }
@@ -85,7 +87,7 @@ export class HeroCodexUI {
     const info = heroInfo(this.hero), name = ownerName(this.hero), c = this.playable;
     this.text(x, y, name, 24, '#f2ddae', true).setName('codex-name');
     this.text(x, y + 36, `等级 Lv.${info.level}（本章上限 Lv.${info.cap}）· 经验 ${info.xp} / ${info.next}${info.level >= info.cap ? '（已到上限，经验暂存）' : ''}`, 14, '#d8ccb0').setName('codex-level');
-    const a = heroAttrs(this.hero), attrs = (Object.keys(ATTRIBUTE_INFO) as AttributeId[]).map(id => `${ATTRIBUTE_INFO[id].name} ${a[id]}`).join('　');
+    const a = heroAttrs(this.hero), attrs = (Object.keys(ATTRIBUTE_INFO) as AttributeId[]).map(id => `${ATTRIBUTE_INFO[id].name}${primaryAttribute(this.hero) === id ? '（主）' : ''} ${a[id]}`).join('　');
     this.text(x, y + 64, `属性：${attrs}　· 未分配 ${heroFreePoints(this.hero)} 点`, 14, '#d8ccb0').setWordWrapWidth(w);
     if (!c) { this.text(x, y + 100, '招募武将：随行时按等级成长（每级生命、伤害提高），将阶请到招贤馆提升。', 13, '#9c8c6c').setWordWrapWidth(w); return; }
     const weapon = WEAPON_DEFS[CHARACTERS.find(h => h.id === c)!.startWeapon];
@@ -103,12 +105,13 @@ export class HeroCodexUI {
     (Object.keys(ATTRIBUTE_INFO) as AttributeId[]).forEach((id, i) => {
       const ry = y + 40 + i * 44;
       if (this.scene.textures.exists(attributeIcon(id))) this.add(this.scene.add.image(x + 16, ry + 12, attributeIcon(id)).setDisplaySize(28, 28));
-      this.text(x + 40, ry, ATTRIBUTE_INFO[id].name, 16, '#f0dfb4');
-      this.text(x + 100, ry + 3, ATTRIBUTE_INFO[id].effect, 12, '#a9b9a3');
+      const primary = primaryAttribute(this.hero) === id;
+      this.text(x + 40, ry, ATTRIBUTE_INFO[id].name + (primary ? ' · 主属性' : ''), 16, primary ? '#ffd27a' : '#f0dfb4').setName('codex-attr-name-' + id);
+      this.text(x + (primary ? 150 : 100), ry + 3, ATTRIBUTE_INFO[id].effect + (primary ? '；主属性每点再 +1% 全伤害' : ''), 12, primary ? '#e8d6a4' : '#a9b9a3');
       this.text(x + w - 110, ry + 2, `${a[id]} / ${ATTRIBUTE_MAX}`, 14, '#e5d4ab').setOrigin(1, 0).setName('codex-attr-' + id);
       this.button(x + w - 50, ry + 12, '+', 'codex-add-' + id, () => this.act(allocateHeroAttr(this.hero, id) ? { ok: true, message: `${ATTRIBUTE_INFO[id].name} +1` } : { ok: false, message: '没有可分配的点，或这一项已满' }), { disabled: free <= 0 || a[id] >= ATTRIBUTE_MAX, size: 18 });
     });
-    const by = y + 40 + 6 * 44 + 10;
+    const by = y + 40 + Object.keys(ATTRIBUTE_INFO).length * 44 + 10;
     this.button(x + 110, by, cost ? `洗点 · 军粮 ${cost}` : '洗点 · 本章首次免费', 'codex-respec', () => this.act(respec(this.hero)), { disabled: spent === 0, size: 14 });
     this.text(x + 230, by - 8, '洗点：已加的属性点全部退回，等级不变。', 12, '#9c8c6c');
   }

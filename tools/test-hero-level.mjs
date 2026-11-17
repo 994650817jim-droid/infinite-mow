@@ -15,7 +15,7 @@ await p.addInitScript(() => {
   window.__mod = async part => import(performance.getEntriesByType('resource').map(e => e.name).find(n => n.includes(part)) ?? ('/src/' + part.replace(/^\//, '')));
   if (!sessionStorage.getItem('seeded')) {
     localStorage.clear(); localStorage.setItem('im_last_hero', 'zhaoyun');
-    // 赵云已有旧记录（属性点改版前）：Lv6，武力已加 2 点 → 改版后换算为 4 点（Lv6 共 5 点，还剩 1 点）
+    // 赵云已有旧记录（2026-11-17 属性改版前的六项）：Lv6，武力已加 2 点 → 改版后全部退回，Lv6 共 5 点未分配
     localStorage.setItem('im_heroes_v1', JSON.stringify({ version: 1, migrated: true, heroes: { zhaoyun: { level: 6, xp: 0, attributes: { might: 2, quickness: 0, critical: 0, constitution: 0, agility: 0 } } } }));
     sessionStorage.setItem('seeded', '1');
   }
@@ -27,8 +27,8 @@ await p.waitForTimeout(500);
 
 // 1) 开局读入武将等级与永久属性
 const start = await p.evaluate(() => { const s = window.__game.scene.getScene('GameScene'), g = s.player.growth; s.updateHud?.();
-  return { might: g.attributes.might, free: g.heroFree, un: g.unallocated, lv: s.heroLv, battle: s.player.level, hud: s.hudTexts.level.text, full: s.player.hp === s.player.maxHp }; });
-ck('属性点改版换算：旧记录武力 2 → 4；Lv6 共 5 点、剩 1 点；新开一场生命回满', start.might === 4 && start.free === 1 && start.un === 1 && start.lv === 6 && start.battle === 1 && start.full, start);
+  return { might: g.attributes.strength, free: g.heroFree, un: g.unallocated, lv: s.heroLv, battle: s.player.level, hud: s.hudTexts.level.text, full: s.player.hp === s.player.maxHp }; });
+ck('属性改版：旧记录的点数全部退回（不换算），Lv6 共 5 点待分配；新开一场生命回满', start.might === 0 && start.free === 5 && start.un === 5 && start.lv === 6 && start.battle === 1 && start.full, start);
 ck('HUD 显示「赵云 Lv.6 · 战功 1」', start.hud === '赵云 Lv.6 · 战功 1', start.hud);
 await p.screenshot({ path: `${out}/desktop-hud.png`, clip: { x: 0, y: 0, width: 640, height: 200 } });
 
@@ -37,21 +37,26 @@ const alloc = await p.evaluate(async () => {
   const s = window.__game.scene.getScene('GameScene'), g = s.player.growth, hp = await window.__mod('/src/systems/HeroProgress.ts'), out = {};
   s.player.gainXp(500); out.battleLv = s.player.level; out.un = g.unallocated; out.runXp = s.player.runXp;
   s.attributeReturn = 'none'; s.renderAttributePanel(); s.setMode('attributes'); await new Promise(r => setTimeout(r, 150));
-  const btn = s.attributePanel.list.flatMap(o => [o, ...(o.list ?? [])]).find(o => o.name === 'attribute-add-constitution');
+  const btn = s.attributePanel.list.flatMap(o => [o, ...(o.list ?? [])]).find(o => o.name === 'attribute-add-strength');
   out.btn = !!btn; if (btn) btn.emit('pointerdown'); await new Promise(r => setTimeout(r, 100));
-  out.after = [g.attributes.constitution, g.unallocated, g.heroFree]; out.saved = hp.heroAttrs('zhaoyun').constitution;
+  out.after = [g.attributes.strength, g.unallocated, g.heroFree]; out.saved = hp.heroAttrs('zhaoyun').strength;
   s.setMode('none'); return out;
 });
-ck('局内升级（战功）不再给属性点，本场经验累计在 runXp', alloc.battleLv > 5 && alloc.un === 1 && alloc.runXp >= 500, alloc);
-ck('加点消耗永久点；测试战斗（?dev=1）不写回存档', alloc.btn && JSON.stringify(alloc.after) === '[1,0,0]' && alloc.saved === 0, alloc);
+ck('局内升级（战功）不再给属性点，本场经验累计在 runXp', alloc.battleLv > 5 && alloc.un === 5 && alloc.runXp >= 500, alloc);
+ck('加点消耗永久点；测试战斗（?dev=1）不写回存档', alloc.btn && JSON.stringify(alloc.after) === '[1,4,4]' && alloc.saved === 0, alloc);
 
 // 2b) 每点效果与「统御」；首通经验不乘 70%
 const fx = await p.evaluate(() => { const s = window.__game.scene.getScene('GameScene'), g = s.player.growth, saved = { ...g.attributes }, out = {};
   for (const k in g.attributes) g.attributes[k] = 0; const ally0 = g.allyDamageMultiplier(), hp0 = g.bonusMaxHp(), crit0 = g.criticalBonus();
-  g.attributes.command = 2; g.attributes.constitution = 2; g.attributes.critical = 3; out.ally = Math.round(g.allyDamageMultiplier() / ally0 * 1000) / 1000; out.hp = g.bonusMaxHp() - hp0; out.crit = Math.round((g.criticalBonus() - crit0) * 1000) / 1000;
+  const dm0 = g.damageMultiplier(0), sk0 = g.skillDamageMultiplier();
+  g.attributes.command = 2; g.attributes.strength = 2; g.attributes.agility = 4; g.attributes.intellect = 2; out.ally = Math.round(g.allyDamageMultiplier() / ally0 * 1000) / 1000; out.hp = g.bonusMaxHp() - hp0; out.crit = Math.round((g.criticalBonus() - crit0) * 1000) / 1000;
+  // 赵云主属性 = 敏捷：敏捷 4 点 → 全伤害 +4%；力量 2 → 伤害 +3%；智力 2 → 技艺 +6%、范围 +3%
+  out.primary = Math.round(g.primaryBonus() * 1000) / 1000; out.dm = Math.round(g.damageMultiplier(0) / dm0 * 10000) / 10000; out.skill = Math.round(g.skillDamageMultiplier() / sk0 * 10000) / 10000; out.area = Math.round(g.areaMultiplier() * 1000) / 1000; out.allyHp = Math.round(g.allyHpMultiplier() * 1000) / 1000;
+  out.label = s.attributePanel.list.filter(o => o.type === 'Text').map(o => o.text).find(t => /主属性/.test(t));
   out.rows = s.attributeRows.length; Object.assign(g.attributes, saved);
   const runXp = s.player.runXp; s.player.runXp = 100; s.heroXpBonus = 120; out.lord = s.lordHeroXp(); s.player.runXp = runXp; s.heroXpBonus = 0; return out; });
-ck('每点效果减半：体魄 2 点 = 生命 +10%、会心 3 点 = 暴击 +3%；新增统御 2 点 = 部曲伤害 ×1.06；面板 6 行', fx.ally === 1.06 && fx.hp === 10 && fx.crit === .03 && fx.rows === 6, fx);
+ck('四项属性：力量 2 = 生命 +6%；敏捷 4 = 暴击 +2%；统御 2 = 部曲伤害 ×1.06、部曲生命 ×1.06；面板 4 行', fx.ally === 1.06 && fx.allyHp === 1.06 && fx.hp === 6 && fx.crit === .02 && fx.rows === 4, fx);
+ck('主属性（赵云 = 敏捷）：敏捷 4 点 → 全伤害 +4%；伤害 ×1.03×1.04；智力 2 → 技艺伤害 ×1.06×1.04、范围 ×1.03；面板标「主属性」', fx.primary === .04 && fx.dm === 1.0712 && fx.skill === 1.1024 && fx.area === 1.03 && /敏捷 · 主属性/.test(fx.label ?? ''), fx);
 ck('结算经验 = 本场经验 × 70% + 首次通关经验（不打折）', Math.round(fx.lord) === 190, fx.lord);
 
 // 3) 同章连打：保留本局额外点（城池加成），永久点按存档
@@ -59,11 +64,11 @@ const carry = await p.evaluate(() => {
   const s = window.__game.scene.getScene('GameScene'), g = s.player.growth;
   g.attributes.agility = 1; g.unallocated = 2; g.heroFree = 0; s.player.hp = Math.round(s.player.maxHp / 2);
   s.applyHeroLevel(true);
-  const a = { might: g.attributes.might, agility: g.attributes.agility, constitution: g.attributes.constitution, un: g.unallocated, free: g.heroFree, half: Math.round(s.player.hp / s.player.maxHp * 100) };
+  const a = { might: g.attributes.strength, agility: g.attributes.agility, un: g.unallocated, free: g.heroFree, half: Math.round(s.player.hp / s.player.maxHp * 100) };
   s.applyHeroLevel(false); a.fresh = { agility: g.attributes.agility, un: g.unallocated, full: s.player.hp === s.player.maxHp }; return a;
 });
-ck('同章连打：本局额外加的身法 1 点、额外 2 点保留，生命按比例', carry.might === 4 && carry.agility === 1 && carry.un === 3 && carry.free === 1 && carry.half >= 49 && carry.half <= 51, carry);
-ck('新开一场：只剩永久属性，额外点清零，生命回满', carry.fresh.agility === 0 && carry.fresh.un === 1 && carry.fresh.full, carry.fresh);
+ck('同章连打：本局额外加的敏捷 1 点、额外 2 点保留，生命按比例', carry.might === 1 && carry.agility === 1 && carry.un === 7 && carry.free === 5 && carry.half >= 49 && carry.half <= 51, carry);
+ck('新开一场：只剩永久属性，额外点清零，生命回满', carry.fresh.agility === 0 && carry.fresh.un === 5 && carry.fresh.full, carry.fresh);
 
 // 4) 存档层：经验表、上限与暂存、起始等级、迁移、折算比例
 const store = await p.evaluate(async () => {
@@ -73,10 +78,13 @@ const store = await p.evaluate(async () => {
   out.open1 = [hp.chaptersOpen(), hp.levelCap(), hp.startLevel(), hp.heroLevel('guanyu'), hp.heroLevel('r_3')];
   const r1 = hp.creditHeroXp('guanyu', 16); out.lv2 = [r1.from, r1.to];
   const r2 = hp.creditHeroXp('guanyu', 99999); out.capped = [r2.to, r2.capped, r2.cap];
-  out.points = [hp.heroFreePoints('guanyu'), hp.allocateHeroAttr('guanyu', 'might'), hp.heroFreePoints('guanyu'), hp.heroAttrs('guanyu').might];
+  out.points = [hp.heroFreePoints('guanyu'), hp.allocateHeroAttr('guanyu', 'strength'), hp.heroFreePoints('guanyu'), hp.heroAttrs('guanyu').strength];
   localStorage.setItem('im_chapter1_cleared', 'true'); hp.resetHeroCache();
   out.open2 = [hp.chaptersOpen(), hp.levelCap(), hp.startLevel(), hp.heroLevel('guanyu'), hp.heroLevel('huangzhong')];
-  for (let i = 0; i < 7; i++) hp.allocateHeroAttr('guanyu', 'might'); out.maxOne = [hp.heroAttrs('guanyu').might, hp.allocateHeroAttr('guanyu', 'might')];
+  for (let i = 0; i < 9; i++) hp.allocateHeroAttr('guanyu', 'strength'); out.maxOne = [hp.heroAttrs('guanyu').strength, hp.allocateHeroAttr('guanyu', 'strength')];
+  // 属性改版老档：六项记录读到时全部退回、只提示一次
+  localStorage.setItem('im_heroes_v1', JSON.stringify({ version: 1, migrated: true, heroes: { zhangfei: { level: 9, xp: 0, attributes: { might: 3, quickness: 2, critical: 0, constitution: 1, agility: 0, command: 1 } } } })); hp.resetHeroCache();
+  out.refund = { attrs: hp.heroAttrs('zhangfei'), free: hp.heroFreePoints('zhangfei'), notice: [hp.takeAttrNotice(), hp.takeAttrNotice()] };
   // 老档迁移：打赢过仗的武将补到上限的一半
   localStorage.removeItem('im_heroes_v1'); localStorage.setItem('im_achievements', JSON.stringify({ unlocked: {}, counters: {}, heroes: ['machao'] })); hp.resetHeroCache();
   out.migr = [hp.heroLevel('machao'), hp.heroLevel('zhangfei'), JSON.parse(localStorage.getItem('im_heroes_v1')).migrated];
@@ -93,7 +101,8 @@ ck('只开第一章：上限 10，新武将从 Lv1 起步（含招募的 r_）',
 ck('结算记经验：Lv1 + 16 → Lv2；超出上限停在 Lv10，经验暂存', JSON.stringify(store.lv2) === '[1,2]' && JSON.stringify(store.capped) === '[10,true,10]', store);
 ck('每级 1 个永久属性点（Lv10 = 9 点），加点写入存档', JSON.stringify(store.points) === '[9,true,8,1]', store.points);
 ck('开第二章：上限 15，暂存经验补升；新武将从 Lv10（上限 − 5）起步', store.open2[0] === 2 && store.open2[1] === 15 && store.open2[2] === 10 && store.open2[3] > 10 && store.open2[4] === 10, store.open2);
-ck('单项属性最多 8 点', JSON.stringify(store.maxOne) === '[8,false]', store.maxOne);
+ck('单项属性最多 10 点', JSON.stringify(store.maxOne) === '[10,false]', store.maxOne);
+ck('属性改版老档：六项点数全部退回（Lv9 → 8 点待分配），提示只给一次', JSON.stringify(store.refund.attrs) === '{"strength":0,"agility":0,"intellect":0,"command":0}' && store.refund.free === 8 && JSON.stringify(store.refund.notice) === '[true,false]', store.refund);
 ck('老档迁移：打赢过仗的武将补到当前上限的一半（≥ 起始等级），只迁移一次', store.migr[0] === 10 && store.migr[1] === 10 && store.migr[2] === true, store.migr);
 ck('主线关按 70% 折算', store.rate === .7, store.rate);
 ck('第 3–5 章场景有首通键（third-1 / guandu-1 / chibi-1，70% 折算）；攻城、军情、三英战吕布没有键、按 35% 折算', JSON.stringify(store.keys) === JSON.stringify({ ThirdGameScene: ['third-1', .7], GuanduGameScene: ['guandu-1', .7], ChibiGameScene: ['chibi-1', .7], SiegeGameScene: [null, .35], IntelGameScene: [null, .35], LubuGameScene: [null, .35] }), store.keys);

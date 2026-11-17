@@ -40,11 +40,11 @@ for (const layout of ['mobile', 'desktop']) {
     const panel = await p.evaluate(G0 => { const s = eval(G0); const sum = s.attributeSummaryText.getBounds(), firstRow = s.attributeRows[0].button.getBounds(); return { mode: s.mode, points: s.attributePointsText.text, summaryBottom: Math.round(sum.bottom), firstRowTop: Math.round(firstRow.top - 4) }; }, G);
     ck('点按钮打开属性面板，显示“可分配属性点 3”', panel.mode === 'attributes' && panel.points === '可分配属性点 3', panel);
     ck('“实际属性”两行不再被属性行压住', panel.summaryBottom <= panel.firstRowTop, panel);
-    await p.evaluate(G0 => { const s = eval(G0); s.attributePanel.getByName('attribute-add-might').emit('pointerdown'); s.attributePanel.getByName('attribute-add-might').emit('pointerdown'); }, G);
-    const after = await p.evaluate(G0 => { const s = eval(G0); return { might: s.player.growth.attributes.might, left: s.player.growth.unallocated, value: s.attributeRows[0].value.text, points: s.attributePointsText.text }; }, G);
-    ck('加两点武力：2/8，剩 1 点', after.might === 2 && after.left === 1 && after.value === '2/8' && after.points === '可分配属性点 1', after);
+    await p.evaluate(G0 => { const s = eval(G0); s.attributePanel.getByName('attribute-add-strength').emit('pointerdown'); s.attributePanel.getByName('attribute-add-strength').emit('pointerdown'); }, G);
+    const after = await p.evaluate(G0 => { const s = eval(G0); return { might: s.player.growth.attributes.strength, left: s.player.growth.unallocated, value: s.attributeRows[0].value.text, points: s.attributePointsText.text }; }, G);
+    ck('加两点力量：2/10，剩 1 点', after.might === 2 && after.left === 1 && after.value === '2/10' && after.points === '可分配属性点 1', after);
     await p.screenshot({ path: `${out}/mobile-attribute-panel.png` });
-    await p.evaluate(G0 => { const s = eval(G0); s.attributePanel.getByName('attribute-add-quickness').emit('pointerdown'); }, G);
+    await p.evaluate(G0 => { const s = eval(G0); s.attributePanel.getByName('attribute-add-agility').emit('pointerdown'); }, G);
     ck('点数用完后提示“武将每升 1 级获得 1 点”', /武将每升 1 级获得 1 点/.test(await p.evaluate(G0 => eval(G0).attributePointsText.text, G)));
     await p.evaluate(G0 => eval(G0).attributePanel.getByName('attributes-close').emit('pointerdown'), G);
     // 黄忠连弩：各级每轮箭数

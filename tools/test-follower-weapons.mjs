@@ -10,8 +10,8 @@ const batches = [['zhaoyun', ['guanyu', 'huangzhong', 'zhuge']], ['zhaoyun', ['z
 const rec = id => ({ id, kind: 'hero', hero: id, name: id, template: 'spear', quality: 'orange', rank: 1, picks: [] });
 const roster = (lord, fs) => ({ version: 1, lord, lordFinal: true, owned: [rec(lord), ...fs.map(rec)], followers: fs, offers: [], captives: [], season: -1, manual: 0, dry: 0, seq: 0, hall: 3 });
 const world = { version: 7, yellowStages: 3, dongzhuoStages: 3, warlordStages: 3, guanduStages: 0, worldAvailable: true, cleared: { huangjin: true, hulao: true }, merits: 0, provisions: 1000, buildings: { barracks: 1, farm: 1, clinic: 1 }, reserve: {}, receipts: [], nodes: ['home', 'huangjin', 'hulao'], ownedCities: [], eraSeen: 2, capturedEver: [], alerts: [], lastLost: [], chapterSeen: 4 };
-const zero = { might: 0, quickness: 0, critical: 0, constitution: 0, agility: 0 };
-const heroes = { version: 1, migrated: true, heroes: { huangzhong: { level: 15, xp: 0, attributes: zero } } };
+const zero = { strength: 0, agility: 0, intellect: 0, command: 0 };
+const heroes = { version: 1, migrated: true, attrSet: 3, heroes: { huangzhong: { level: 15, xp: 0, attributes: zero } } };
 const b = await chromium.launch({ channel: 'chrome', headless: true });
 const p = await b.newPage({ viewport: { width: 1280, height: 720 } });
 p.on('pageerror', e => errors.push(e.message)); p.on('console', m => { if (m.type() === 'error') errors.push('console ' + m.text()); });

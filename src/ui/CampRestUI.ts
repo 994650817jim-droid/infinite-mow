@@ -33,12 +33,14 @@ export class CampRestUI {
   // 回营寨：电脑在「行囊」左侧，手机在它下方
   this.homeBtn=this.text(D?bagBtn.x-bagBtn.width-12:W-28,D?62:76,'回营寨',D?15:16).setOrigin(1,0).setPadding(12,6,12,6).setBackgroundColor('#3d4a33').setColor('#f0f3dc').setInteractive({useHandCursor:true}).setName('camp-home').setVisible(false);
   this.homeBtn.on('pointerdown',()=>{if(!this.onReturnHome)return;if(!this.homeArmed){this.homeArmed=true;this.homeBtn.setText('确认回营寨？本局等级与战法不保留').setBackgroundColor('#7a2a1c');return;}this.onReturnHome();});this.root.add(this.homeBtn);
-  const labels=['招兵营','练兵营','军需商人','将帅帐'],icons=['icon_shu_swordsman','growth_icon_might','build_icon_return_drum','growth_icon_points'];
-  const tabW=D?172:(W-48)/4,tabY=D?96:155;
-  labels.forEach((label,i)=>{const x=D?40+i*180:24+i*tabW;const frame=scene.add.image(x+(tabW-6)/2,tabY+23,warPanelTexture(scene,tabW-6,46)).setScrollFactor(0);this.tabFrames.push(frame);this.root.add(frame);
-   if(scene.textures.exists(icons[i]))this.root.add(scene.add.image(x+21,tabY+(D?22:21),icons[i]).setDisplaySize(D?29:27,D?29:27).setScrollFactor(0));
+  // 用户 2026-11-17「休整的时候练兵营就不需要了」：去掉「练兵营」页签（本局体魄 / 兵刃 / 甲胄训练）。营寨军营的「练兵」是另一套永久加成，保留。
+  // 其余页签保留原编号（0 招兵营 / 2 军需商人 / 3 将帅帐），对象名 camp-tab-<编号> 不变。
+  const TABS:Array<[number,string,string]>=[[0,'招兵营','icon_shu_swordsman'],[2,'军需商人','build_icon_return_drum'],[3,'将帅帐','growth_icon_points']];
+  const tabW=D?172:(W-48)/TABS.length,tabY=D?96:155;
+  TABS.forEach(([i,label,icon],slot)=>{const x=D?40+slot*180:24+slot*tabW;const frame=scene.add.image(x+(tabW-6)/2,tabY+23,warPanelTexture(scene,tabW-6,46)).setScrollFactor(0);this.tabFrames.push(frame);this.root.add(frame);
+   if(scene.textures.exists(icon))this.root.add(scene.add.image(x+21,tabY+(D?22:21),icon).setDisplaySize(D?29:27,D?29:27).setScrollFactor(0));
    const hit=this.text(x,tabY,label,D?17:16).setPadding(D?43:39,D?12:13,0,0).setFixedSize(tabW-6,46).setInteractive({useHandCursor:true}).setName('camp-tab-'+i);
-   hit.on('pointerdown',()=>{this.tab=i;this.page=0;this.notice='';this.render();}).on('pointerover',()=>hit.setColor('#fff0cd')).on('pointerout',()=>hit.setColor(i===this.tab?'#f6dfb0':'#bcae93'));this.tabs.push(hit);this.root.add(hit);
+   hit.setData('tab',i).on('pointerdown',()=>{this.tab=i;this.page=0;this.notice='';this.render();}).on('pointerover',()=>hit.setColor('#fff0cd')).on('pointerout',()=>hit.setColor(i===this.tab?'#f6dfb0':'#bcae93'));this.tabs.push(hit);this.root.add(hit);
   });
   this.body=scene.add.container(0,0);this.root.add(this.body);
   this.detail=this.text(D?40:28,D?H-103:H-176,'',D?13:15).setWordWrapWidth(W-(D?80:56),true);this.detail.setMaxLines(D?3:5);this.root.add(this.detail);
@@ -64,9 +66,9 @@ export class CampRestUI {
  private icon(x:number,y:number,key:string,size:number){if(this.scene.textures.exists(key))this.body.add(this.scene.add.image(x,y,key).setDisplaySize(size,size).setScrollFactor(0));}
  private row(y:number,title:string,description:string,icon?:string,compact=false){const x=D?40:24,w=W-(D?80:48),h=D?66:92;this.plate(x,y,w,h);if(icon)this.icon(x+28,y+27,icon,35);const offset=icon?54:16;this.body.add(this.text(x+offset,y+9,title,D?17:19).setWordWrapWidth(w-offset-16,true));this.body.add(this.text(x+16,y+(D?36:43),compact&&description.length>(D?80:44)?description.slice(0,D?80:44)+'…':description,D?12:14).setWordWrapWidth(w-32,true));return{x,y,w,h};}
  private render(){
-  this.body.removeAll(true);this.tabs.forEach((t,i)=>{t.setColor(i===this.tab?'#f6dfb0':'#bcae93');const w=t.width;this.tabFrames[i].setTexture(warPanelTexture(this.scene,w,46,i===this.tab)).setDisplaySize(w+16,46+16).setAlpha(i===this.tab?1:.82);});
+  this.body.removeAll(true);this.tabs.forEach((t,k)=>{const on=t.getData('tab')===this.tab;t.setColor(on?'#f6dfb0':'#bcae93');const w=t.width;this.tabFrames[k].setTexture(warPanelTexture(this.scene,w,46,on)).setDisplaySize(w+16,46+16).setAlpha(on?1:.82);});
   this.resources.setText('随军粮 '+this.army.food+'   /   当前兵力：'+this.army.count);this.next.setText('下一关 · '+this.destination);this.detail.setText(this.notice);
-  if(this.tab===0)this.renderRecruit();if(this.tab===1)this.renderTraining();if(this.tab===2)this.renderMarket();if(this.tab===3)this.renderBuild(D?154:229);
+  if(this.tab===0)this.renderRecruit();if(this.tab===2)this.renderMarket();if(this.tab===3)this.renderBuild(D?154:229);
  }
  private renderRecruit(){
   // 只保留“招募”：编组位置沿用默认/既有设定，生命不在此展示。价格随在编兵力递增。
@@ -81,16 +83,6 @@ export class CampRestUI {
    const cost=this.army.recruitCost(kind),poor=this.army.food<cost,bw=D?w-36:w-130;
    const buy=this.button(D?x+18:x+112,y+h-(D?60:58),poor?'随军粮不足 · '+cost+'粮':'招募 · '+cost+'粮',()=>{const ok=this.army.recruit(kind,1);if(ok)this.sound('recruit');this.notice=ok?TROOPS[kind].name+'入队 · 下一名招募价 '+this.army.recruitCost(kind)+'粮':'无法招募';this.render();},bw,!poor).setName('camp-recruit-'+kind);this.body.add(buy);
   });if(!this.notice)this.detail.setText('兵力越多，招募越贵：每名在编士兵使招募价 +20%（当前在编 '+this.army.count+' 人）。');
- }
- private renderTraining(){
-  const icons=['growth_icon_constitution','growth_icon_might','growth_icon_heart_mirror'],effects=['最大生命','基础攻击','受到伤害'],notes=['保留当前生命比例，不额外回血','当前与后续招募士兵均生效','与既有防护按原规则结算'];
-  (Object.keys(CAMP_TRAINING)as CampTrainingId[]).forEach((id,i)=>{const d=CAMP_TRAINING[id],lv=this.army.training[id],cost=d.costs[lv],{x,y,w,h}=this.card(i);this.plate(x,y,w,h);this.icon(x+(D?w/2:48),y+(D?73:63),icons[i],D?65:58);
-   this.body.add(this.text(x+(D?17:96),y+16,d.name,D?22:22).setFontFamily(HEADING_FONT).setColor('#efdbb4'));this.body.add(this.text(x+w-17,y+(D?18:47),'Lv.'+lv+' / 3',D?15:17).setOrigin(1,0).setColor('#d0ad70'));
-   const sign=id==='armor'?'−':'+';this.body.add(this.text(x+(D?17:96),y+(D?118:76),effects[i]+' '+sign+Math.round(d.perLevel*lv*100)+'%',D?17:18));
-   this.body.add(this.text(x+(D?17:96),y+(D?149:101),lv<3?'下一级 '+sign+Math.round(d.perLevel*(lv+1)*100)+'%':'已完成全部训练',D?14:15).setColor('#b8bb9d'));
-   if(D)this.body.add(this.text(x+17,y+174,notes[i],12));
-   this.body.add(this.button(x+(D?17:w-168),y+h-55,lv>=3?'已满级':this.army.food<cost?'随军粮不足':'训练 · '+cost+'粮',()=>{const ok=this.army.purchaseCampTraining(id);if(ok)this.sound('purchase');this.notice=ok?'训练完成 · 本战役持续生效':'无法训练';this.render();},D?w-34:154,lv<3&&this.army.food>=cost).setName('camp-training-'+id));
-  });if(!this.notice)this.detail.setText('军团训练仅在本次连续战役内保留。体魄训练按原生命比例调整，不免费回满。');
  }
  /** 军需商人：4 张兵装卡（品质色名字、词条、价格）。悬停看属性与对比，点「购入」花随军粮，记入本局缴获、结算带回行囊。 */
  private renderMarket(){
@@ -113,17 +105,6 @@ export class CampRestUI {
   if(!this.notice)this.detail.setText('军需商人只卖兵装：每次进营 4 件，甲胄、头盔、战靴、信物各一。鼠标移到卡片上看属性与当前穿戴的对比；买下的结算后收入行囊。');
  }
 
- private replacementImpact(id:TreasureId){
-  const g=this.player.growth,b=g.build,before=b.tags(),after={...before},old=b.treasures[0];
-  const full=b.treasures.length+g.trinkets.length>=2;
-  if(!full)return '尚有宝物空位，不替换现有装备。';
-  if(old)after[TREASURES[old].tag]--;after[TREASURES[id].tag]++;
-  const changes=(Object.keys(TAG_NAMES)as BuildTag[]).filter(t=>before[t]!==after[t]).map(t=>TAG_NAMES[t]+' '+before[t]+' → '+after[t]);
-  const remaining=new Set(activeAwakenings(after).map(a=>a.id)),lost=activeAwakenings(before).filter(a=>!remaining.has(a.id));
-  const bases=(Object.keys(TAG_NAMES)as BuildTag[]).filter(t=>before[t]>=2&&after[t]<2);
-  const oldName=old?TREASURES[old].name:({tiger_tally:'虎符',heart_mirror:'护心镜',wind_boots:'疾风靴'})[g.trinkets[0]];
-  return ['被替换：'+oldName+' → '+TREASURES[id].name,'标签变化：'+(changes.join('；')||'无（同系替换）'),'失去基础加成：'+(bases.map(t=>TAG_NAMES[t]).join('、')||'无'),'失去觉醒：'+(lost.map(a=>a.name).join('、')||'无')].join('\n');
- }
  private showDetails(title:string,description:string,confirm?:()=>void){
   this.modal?.destroy();const modal=this.scene.add.container(0,0).setScrollFactor(0).setName('camp-details');this.modal=modal;this.root.add(modal);
   modal.add(this.scene.add.rectangle(0,0,W,H,0x080604,.8).setOrigin(0).setScrollFactor(0).setInteractive());
@@ -140,20 +121,20 @@ export class CampRestUI {
   const missing=(a:typeof AWAKENINGS[number])=>a.tags.map(t=>({tag:t,n:Math.max(0,(a.tags.length===1?4:2)-tags[t])})).filter(t=>t.n>0);
   const pending=AWAKENINGS.filter(a=>missing(a).length).sort((a,c)=>missing(a).reduce((n,t)=>n+t.n,0)-missing(c).reduce((n,t)=>n+t.n,0));
   const condition=(a:typeof AWAKENINGS[number])=>missing(a).map(t=>TAG_NAMES[t.tag]+'缺'+t.n+'个不同来源').join('；');
-  const names=['武将总览','战法','宝物','流派觉醒'],cw=(W-(D?80:48))/4;
+  const names=['武将总览','战法','信物','流派觉醒'],cw=(W-(D?80:48))/4;
   names.forEach((name,i)=>{const btn=this.button((D?40:24)+i*cw,top,name,()=>{this.buildSection=i;this.buildOffset=0;this.notice='';this.render();},cw-6).setName('camp-build-section-'+i);if(i===this.buildSection)(btn.getData('paint') as (s:string)=>void)('selected');this.body.add(btn);});
   const entries:Array<{name:string;desc:string;icon?:string}>=[];
   if(this.buildSection===0){
    const weapon=this.player.weapons[0],arts=(Object.keys(MARTIALS)as MasteryId[]).filter(id=>MARTIALS[id].character===g.character).map(id=>MARTIALS[id].name+' Lv.'+g.masteries[id]).join(' / ');
    entries.push({name:hero.name+' · '+(weapon?WEAPON_META[weapon.id].name+' Lv.'+weapon.level:''),desc:arts});
-   entries.push({name:'当前构筑 · 战法'+Object.keys(b.tactics).filter(id=>b.level(id as TacticId)>0).length+'/6 · 宝物'+(b.treasures.length+g.trinkets.length)+'/2',desc:(Object.keys(b.tactics)as TacticId[]).filter(id=>b.level(id)>0).map(id=>TACTICS[id].name+' '+b.level(id)).join(' / ')||'尚未获得战法；在升级或军需商人处构筑。'});
+   entries.push({name:'当前构筑 · 战法'+Object.keys(b.tactics).filter(id=>b.level(id as TacticId)>0).length+'/6 · 信物宝物'+b.treasures.length,desc:(Object.keys(b.tactics)as TacticId[]).filter(id=>b.level(id)>0).map(id=>TACTICS[id].name+' '+b.level(id)).join(' / ')||'尚未获得战法；在升级或军需商人处构筑。'});
    entries.push({name:'已激活觉醒 · '+active.length,desc:active.map(a=>a.name).join(' / ')||'暂未觉醒；同系4来源或指定双系各2来源激活。'});
    entries.push({name:pending[0]?'下一目标 · '+pending[0].name:'全部觉醒已满足',desc:pending[0]?condition(pending[0]):'所有觉醒条件已满足'});
    entries.push({name:'属性 · 剩余'+g.unallocated+'点',desc:(Object.keys(ATTRIBUTE_INFO)as AttributeId[]).map(id=>ATTRIBUTE_INFO[id].name+g.attributes[id]).join(' / ')});
    entries.push({name:'军团训练',desc:'体魄'+this.army.training.hp+' / 兵刃'+this.army.training.attack+' / 甲胄'+this.army.training.armor+'；仅本次连续战役有效'});
   }
   if(this.buildSection===1){for(const id of Object.keys(b.tactics)as TacticId[])if(b.level(id)>0)entries.push({name:TACTICS[id].name+' Lv.'+b.level(id)+'/3 · '+TAG_NAMES[TACTICS[id].tag],desc:tacticDescription(id,b.level(id)),icon:'build_icon_'+id});for(const id of Object.keys(MARTIALS)as MasteryId[])if(MARTIALS[id].character===g.character)entries.push({name:'专属 · '+MARTIALS[id].name+' Lv.'+g.masteries[id]+'/3',desc:MARTIALS[id].desc});}
-  if(this.buildSection===2){for(const id of b.treasures)entries.push({name:TREASURES[id].name+' · '+TAG_NAMES[TREASURES[id].tag],desc:TREASURES[id].desc,icon:'build_icon_'+id});for(const id of g.trinkets)entries.push({name:({tiger_tally:'虎符',heart_mirror:'护心镜',wind_boots:'疾风靴'})[id],desc:'占用同一宝物容量。购买新宝物时预览被替换装备和流派变化。',icon:'growth_icon_'+id});if(!entries.length)entries.push({name:'宝物栏 · 0 / 2',desc:'暂无装备，可在军需商人处购买。无免费换装或重置。'});}
+  if(this.buildSection===2){for(const id of b.treasures)entries.push({name:TREASURES[id].name+' · '+TAG_NAMES[TREASURES[id].tag],desc:TREASURES[id].desc,icon:'build_icon_'+id});if(!entries.length)entries.push({name:'信物 · 暂无宝物',desc:'宝物已并入信物库：在行囊里给武将穿上机制类信物（如玄铁镜、点将符），出征开局生效并计入流派件数。'});}
   if(this.buildSection===3){for(const a of [...active,...pending])entries.push({name:(missing(a).length?'未激活 · ':'已激活 · ')+a.name,desc:missing(a).length?condition(a)+'。'+a.desc:a.desc,icon:a.icon});entries.push({name:'八系标签进度',desc:(Object.keys(TAG_NAMES)as BuildTag[]).map(t=>TAG_NAMES[t]+' '+tags[t]+'/4').join(' / ')});}
   const count=D?4:5,step=D?46:80,start=top+(D?50:55);
   this.buildOffset=Math.max(0,Math.min(this.buildOffset,Math.max(0,entries.length-count)));

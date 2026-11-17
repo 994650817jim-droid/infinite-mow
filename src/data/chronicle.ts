@@ -2,7 +2,7 @@
  * 战役回顾 · 乱世编年：九关的史事摘要（原创撰写，据《后汉书》《三国志》等常见史载概括；
  * 演义情节明确标注为“演义”）。只做展示，不影响玩法。
  */
-export type ChronicleArc = 'huangjin' | 'dongzhuo' | 'qunxiong' | 'guandu' | 'chibi' | 'jingnan' | 'shu' | 'hanzhong' | 'xiangfan' | 'yiling';
+export type ChronicleArc = 'huangjin' | 'dongzhuo' | 'qunxiong' | 'guandu' | 'chibi' | 'jingnan' | 'shu' | 'hanzhong' | 'xiangfan' | 'yiling' | 'beifa';
 export interface ChronicleStage { code: string; name: string; boss: string; bossTitle: string; seal: string; year: string; story: string; legacy: string }
 export interface ChronicleChapter { arc: ChronicleArc; title: string; years: string; intro: string; stages: ChronicleStage[] }
 
@@ -155,6 +155,21 @@ export const CHRONICLE: ChronicleChapter[] = [
       { code: '10-3', name: '火烧连营', boss: '陆逊', bossTitle: '大都督', seal: '逊', year: '章武二年 · 222',
         story: '陆逊令各持一把茅，以火攻拔之，一尔势成，通率诸军同时俱攻，斩张南、冯习，破其四十余营。先主夜遁，退守白帝。',
         legacy: '蜀汉元气大伤，刘备托孤白帝城。' },
+    ],
+  },
+  {
+    arc: 'beifa', title: '第十二章 · 北伐', years: '公元228—234年',
+    intro: '南中平定后，诸葛亮上《出师表》，率军北伐。街亭失利、陈仓不克，终与司马懿对峙五丈原。',
+    stages: [
+      { code: '12-1', name: '街亭', boss: '张郃', bossTitle: '征西车骑将军', seal: '郃', year: '建兴六年 · 228',
+        story: '亮使马谡督诸军在前，与魏将张郃战于街亭。谡违亮节度，舍水上山，郃绝其汲道，击，大破之。',
+        legacy: '街亭失守，北伐首战受挫，丞相挥泪斩马谡。' },
+      { code: '12-2', name: '陈仓', boss: '郝昭', bossTitle: '杂号将军', seal: '昭', year: '建兴六年 · 228',
+        story: '亮出散关，围陈仓。郝昭以千余人拒守，亮起云梯冲车，昭以火箭逆射、以绳连石磨压之，昼夜相攻二十余日，不克。',
+        legacy: '陈仓坚城难下，蜀军粮尽而还。' },
+      { code: '12-3', name: '五丈原', boss: '司马懿', bossTitle: '大都督', seal: '懿', year: '建兴十二年 · 234',
+        story: '亮由斜谷出，据武功五丈原，与司马懿对于渭南。懿坚壁不战，亮分兵屯田，为久驻之基。',
+        legacy: '是岁八月，丞相卒于军中，长星坠于营。' },
     ],
   },
 ];

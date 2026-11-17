@@ -18,6 +18,7 @@ import { CHIBI_STAGES } from '../data/chibiChapter';
 import { JINGNAN_STAGES } from '../data/jingnanChapter';
 import { HANZHONG_STAGES } from '../data/hanzhongChapter';
 import { YILING_STAGES } from '../data/yilingChapter';
+import { BEIFA_STAGES } from '../data/beifaChapter';
 import { SHU_STAGES } from '../data/shuChapter';
 import { XIANGFAN_STAGES } from '../data/xiangfanChapter';
 import { CITIES } from '../world/WorldCities';
@@ -88,7 +89,7 @@ export class DevGameScene extends GameScene {
     const waves = scene.chapter.waves;
     // ---- 选将 / 选关（2026-11-16 用户：「dev测试模式也需要适应」）----
     const hero = (): CharacterId => scene.runConfig.character as CharacterId;
-    const clearTransfers = (): void => { for (const k of ['campaignTransfer', 'thirdTransfer', 'guanduTransfer', 'chibiTransfer', 'jingnanTransfer', 'shuTransfer', 'hanzhongTransfer', 'xiangfanTransfer', 'yilingTransfer', 'siegeMode']) scene.registry.remove(k); };
+    const clearTransfers = (): void => { for (const k of ['campaignTransfer', 'thirdTransfer', 'guanduTransfer', 'chibiTransfer', 'jingnanTransfer', 'shuTransfer', 'hanzhongTransfer', 'xiangfanTransfer', 'yilingTransfer', 'beifaTransfer', 'siegeMode']) scene.registry.remove(k); };
     /** 任意关卡直接出战（测试模式下各章节本来就不检查解锁）。 */
     const go = (key: string, config: Record<string, unknown> = {}, registry: Record<string, unknown> = {}): void => {
       clearTransfers();
@@ -162,6 +163,7 @@ export class DevGameScene extends GameScene {
       ...Object.fromEntries(XIANGFAN_STAGES.map(st => ['stage_9_' + st.stage, () => go('XiangfanGameScene', { thirdStage: st.stage }, { xiangfanStage: st.stage })])),
       ...Object.fromEntries(HANZHONG_STAGES.map(st => ['stage_8_' + st.stage, () => go('HanzhongGameScene', { thirdStage: st.stage }, { hanzhongStage: st.stage })])),
       ...Object.fromEntries(YILING_STAGES.map(st => ['stage_10_' + st.stage, () => go('YilingGameScene', { thirdStage: st.stage }, { yilingStage: st.stage })])),
+      ...Object.fromEntries(BEIFA_STAGES.map(st => ['stage_12_' + st.stage, () => go('BeifaGameScene', { thirdStage: st.stage }, { beifaStage: st.stage })])),
       ...Object.fromEntries(siegeCities.map(c => ['siege_' + c.id, () => go('SiegeGameScene', {}, { siegeCity: c.id })])),
       intelBounty: () => intel('bounty'), intelBandit: () => intel('bandit'), intelEscort: () => intel('escort'),
       lubuChallenge: () => go('LubuGameScene'),

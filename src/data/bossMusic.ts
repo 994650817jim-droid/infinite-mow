@@ -51,6 +51,9 @@ export const BOSS_PROFILES: Record<string, BossProfile> = {
   张郃: P('张郃', '巧变之将', 118, 63, SHANG, [0, 0, 2, 3, 0, 0, 4, 2], 'pipa', 'gallop', ['horn']),
   夏侯渊: P('夏侯渊', '疾行之将', 132, 62, YU, [0, 3, 0, 4, 0, 3, 2, 1], 'pipa', 'gallop', ['horn', 'gong']),
   曹操: P('曹操', '魏王', 96, 58, GONG, [0, 0, 4, 4, 3, 3, 0, 1], 'suona', 'heavy', ['gong', 'horn']),
+  // 第十二章 北伐（张郃已在第八章）
+  郝昭: P('郝昭', '陈仓守将', 100, 60, GONG, [0, 0, 2, 2, 3, 3, 1, 0], 'suona', 'heavy', ['gong', 'horn']),
+  司马懿: P('司马懿', '大都督', 92, 57, YU, [0, 0, 4, 3, 0, 2, 4, 1], 'qin', 'tense', ['thunder', 'gong']),
   // 第十章 夷陵之战
   孙桓: P('孙桓', '宗室少将', 120, 63, SHANG, [0, 0, 3, 2, 0, 3, 4, 1], 'pipa', 'gallop', ['horn']),
   朱然: P('朱然', '昭武将军', 104, 61, JUE, [0, 2, 0, 3, 0, 2, 4, 3], 'suona', 'march', ['gong']),

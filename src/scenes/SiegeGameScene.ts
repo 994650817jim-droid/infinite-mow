@@ -21,6 +21,10 @@ import type {Enemy} from '../entities/Enemy';
 import type {RunEndReason} from '../types';
 import type {RunConfig} from '../data/characters';
 import { loadBossSheet } from '../systems/ArtStyle';
+import {SiegeMidCity} from '../systems/SiegeMidCity';
+import {MID_SIEGE} from '../data/siegeMedium';
+import {loadMidSiegeArt} from '../systems/SiegeMidArt';
+import type {EnemyKind} from '../types';
 
 /**
  * 攻城战（WORLD_MAP_PLAN.md · W2）：按城市档位的短战。胜利（击败守将 / 大将）即占领该城。
@@ -38,9 +42,11 @@ export function siegeGameSceneClass(Base: typeof GameScene) {
     /** 攻城目标：帅旗 / 箭楼（可摧毁）→ 占领府衙。 */
     private flag: {e: Enemy; life: number; art: Phaser.GameObjects.Container} | null = null;
     private towers: Array<{e: Enemy; life: number; shotAt: number; label: Phaser.GameObjects.Text}> = [];
+    /** 中城样板（攻城战重做）：三段推进控制器；小城 / 大城 / 守城为 undefined，沿用原玩法。 */
+    private mid?: SiegeMidCity;
     private capturing = false; private captured = false; private captureProgress = 0; private captureG?: Phaser.GameObjects.Graphics; private captureLabel?: Phaser.GameObjects.Text; private goalText?: Phaser.GameObjects.Text;
     constructor() { super('SiegeGameScene'); }
-    preload() { for (const [key, url] of Object.entries(GUANDU_ATLAS_FILES)) if (!this.textures.exists(key)) loadBossSheet(this.load, key, url); }
+    preload() { for (const [key, url] of Object.entries(GUANDU_ATLAS_FILES)) if (!this.textures.exists(key)) loadBossSheet(this.load, key, url); loadMidSiegeArt(this); }
     get gateAlive() { return !!this.gate && this.gate.active && this.gate.spawnId === this.gateLife; }
     create() {
       this.test = isChapterTestRun();
@@ -64,7 +70,8 @@ export function siegeGameSceneClass(Base: typeof GameScene) {
       for (let i = 0; i < effect.reinforcements; i++) this.legion.recruit(i === 0 ? 'swordsman' : 'spearman', 1, true);
       if (!this.test) for (const kind of takeExpeditionReserve(effect.reserveSlots)) { this.legion.recruit(kind, 1, true); this.allies[this.allies.length - 1].reserveSoldier = true; }
       this.battlefieldDetails.useStructuredLayout(); if (this.supplies) this.supplies.randomGeneration = false;
-      const art = siegeScenery(this, city, (frame, x, y, size) => this.spawnSceneProp(frame, x, y, size), {liveTowers: !this.defense});
+      const midCity = city.tier === 'medium' && !this.defense;
+      const art = siegeScenery(this, city, (frame, x, y, size) => this.spawnSceneProp(frame, x, y, size), {liveTowers: !this.defense, mid: midCity});
       this.ground.setTexture(art.key).setTileScale(1);
       this.sishuiObstacles = new SishuiObstacles(); this.sishuiObstacles.footprints.splice(0, this.sishuiObstacles.footprints.length, ...art.boxes);
       this.enemyCamps = new EnemyCamps({scene: this, player: this.player, create: (x, y, hp) => this.supplies?.spawnCamp(x, y, hp) ?? null, spawn: (kind, x, y) => this.spawnEnemy(kind, x, y, 1), support: () => this.legion.grid.query(this.player.x, this.player.y, 260), reward: n => { this.legion.food += n; }}, art.camps, this.combatNow);
@@ -77,8 +84,10 @@ export function siegeGameSceneClass(Base: typeof GameScene) {
       this.registry.set('battleTextureKeys', [...new Set([...keys, ...Object.keys(GUANDU_ATLAS_FILES), art.key, art.roadKey, ...paletteKeys])]);
       this.hudTexts.chapter.setText(`${this.chapter.name} · ${TIER_NAME[city.tier]}`);
       this.flag = null; this.towers = []; this.capturing = false; this.captured = false; this.captureProgress = 0; this.captureG = undefined; this.captureLabel = undefined; this.goalText = undefined;
+      this.mid?.clear(); this.mid = undefined;
+      if (midCity) this.setupMid();
       if (!this.defense) this.setupGoals();
-      this.events.once('shutdown', () => { this.enemyCamps?.clear(); this.enemyCamps = undefined; this.controller?.clear(); this.controller = undefined; this.gateLabel?.destroy(); this.gateLabel = undefined; this.gate = null; });
+      this.events.once('shutdown', () => { this.mid?.clear(); this.mid = undefined; this.enemyCamps?.clear(); this.enemyCamps = undefined; this.controller?.clear(); this.controller = undefined; this.gateLabel?.destroy(); this.gateLabel = undefined; this.gate = null; });
     }
     /** 攻城目标布置：小城帅旗，中大城两座可摧毁箭楼（会放箭）。 */
     private setupGoals() {
@@ -89,13 +98,13 @@ export function siegeGameSceneClass(Base: typeof GameScene) {
           e.sprite.setAlpha(0); const g = this.add.graphics(); g.lineStyle(4, 0x3a2716).lineBetween(0, 0, 0, -96); g.fillStyle(0x8c2a2a).fillRect(0, -96, 46, 32).fillStyle(0xe8c76a).fillRect(4, -92, 38, 3); g.fillStyle(0x000000, .25).fillEllipse(0, 2, 44, 12);
           const art = this.add.container(0, -330, [g, worldText(this, 24, -82, '帅', 18, '#ffe1a0').setOrigin(.5)]).setDepth(actorDepth(-330)).setName('siege-flag'); this.flag = {e, life: e.spawnId, art};
         }
-      } else for (const x of [-250, 250]) {
+      } else if (!this.mid) for (const x of [-250, 250]) {
         const e = this.supplies?.spawnCamp(x, -265, hp(SG.towerHp)) ?? null; if (!e) continue;
         e.sprite.setTexture('sishui_props_refined', 1).setOrigin(.5, 1).setDisplaySize(126, 126).setAlpha(1);
         this.towers.push({e, life: e.spawnId, shotAt: this.combatNow + 1500 + (x > 0 ? 600 : 0), label: worldText(this, x, -265 - 140, '箭楼', 15, '#ffd28a').setOrigin(.5).setStroke('#1a120b', 4).setDepth(36)});
       }
       this.goalText = this.add.text(GAME_WIDTH / 2, 78, '', warText(14, '#ffd98a')).setOrigin(.5, 0).setScrollFactor(0).setDepth(DEPTH.hud + 1).setStroke('#1a120b', 4).setName('siege-goal');
-      this.time.delayedCall(900, () => { if (!this.over) this.showWaveBanner(t === 'small' ? '拔掉帅旗' : '摧毁箭楼', false, t === 'large' ? '破城门、毁箭楼、败大将，再占领府衙' : '然后占领府衙'); });
+      if (!this.mid) this.time.delayedCall(900, () => { if (!this.over) this.showWaveBanner(t === 'small' ? '拔掉帅旗' : '摧毁箭楼', false, t === 'large' ? '破城门、毁箭楼、败大将，再占领府衙' : '然后占领府衙'); });
     }
     /** 府衙位置（小城在帅旗处，中大城在城门之后）。 */
     get capturePoint() { return {x: SG.capture.x, y: this.city.tier === 'small' ? SG.capture.smallY : SG.capture.y}; }
@@ -107,6 +116,7 @@ export function siegeGameSceneClass(Base: typeof GameScene) {
       this.showWaveBanner('城防已破 · 占领府衙', true, '站进府衙圈内，进度满即破城');
     }
     private updateGoals(dt: number) {
+      if (this.mid) { this.mid.update(dt); this.goalText?.setText('目标 · ' + this.mid.goalLine()); return; }
       const now = this.combatNow, p = this.player;
       // 箭楼放箭
       for (const t of this.towers) {
@@ -137,10 +147,43 @@ export function siegeGameSceneClass(Base: typeof GameScene) {
     protected checkEnd() {
       if (this.defense || this.over) { super.checkEnd(); return; }
       if (!this.player.alive) this.finish(false);
-      else if (this.elapsed >= SG.limit[this.city.tier]) this.finish(false, 'timeout');
+      else if (this.elapsed >= (this.mid ? MID_SIEGE.limitSeconds : SG.limit[this.city.tier])) this.finish(false, 'timeout');
     }
     /** 测试用状态。 */
-    get siegeGoals() { return {flag: !!this.flag, towers: this.towers.length, capturing: this.capturing, progress: this.captureProgress, captured: this.captured}; }
+    get siegeGoals() { return {flag: !!this.flag, towers: this.mid ? this.mid.towersAlive : this.towers.length, capturing: this.capturing, progress: this.captureProgress, captured: this.captured, mid: this.mid ? {phase: this.mid.phase, gate: Math.round(this.mid.gateHp), ram: this.mid.ramInfo, points: this.mid.pointsInfo, boss: this.mid.bossInfo, stats: {...this.mid.stats}, zones: this.mid.volleyZones} : null}; }
+    /** 测试用：中城控制器。 */
+    get siegeMid() { return this.mid ?? null; }
+    /** 中城：按段从固定方向刷兵（城门 / 两翼 / 巷口 / 回廊）。 */
+    protected spawnAroundPlayer(kind: EnemyKind, force = false): Enemy | null {
+      if (!this.mid) return super.spawnAroundPlayer(kind, force);
+      const pt = this.mid.spawnPoint(kind); return pt ? this.spawnEnemy(kind, pt.x, pt.y, undefined, force) : null;
+    }
+    /** 中城：一半敌兵在冲车附近时转去打冲车。 */
+    protected customEnemyStep(enemy: Enemy, dt: number, now: number, target: {x: number; y: number}) {
+      if (this.mid?.steer(enemy, dt)) return true;
+      return super.customEnemyStep(enemy, dt, now, target);
+    }
+    private setupMid() {
+      const O = MID_SIEGE.outside; this.player.sprite.setPosition(O.start.x, O.start.y);
+      this.cameras.main.scrollX = O.start.x - this.cameras.main.width / 2; this.cameras.main.scrollY = O.start.y - this.cameras.main.height / 2;
+      this.allies.forEach((a, i) => { if (a.active) a.setPosition(O.start.x + ((i % 5) - 2) * 34, O.start.y + 50 + Math.floor(i / 5) * 30); });
+      const kinds: Array<'swordsman' | 'spearman'> = ['swordsman', 'spearman'];
+      this.mid = new SiegeMidCity({
+        scene: this, player: this.player, allies: () => this.allies, enemies: () => this.enemies, now: () => this.combatNow,
+        footprints: this.sishuiObstacles!.footprints as unknown as Array<{left: number; right: number; top: number; bottom: number}>,
+        spawnEnemy: (kind, x, y, force) => this.spawnEnemy(kind, x, y, 1, force),
+        advance: (e, nx, ny, dt) => this.advanceEnemy(e, nx, ny, dt),
+        spawnTower: (x, y) => { const e = this.supplies?.spawnCamp(x, y, Math.round(SG.towerHp * this.chapter.hpScale(this.elapsed))) ?? null; e?.sprite.setTexture('sishui_props_refined', 1).setOrigin(.5, 1).setDisplaySize(140, 140).setAlpha(1); return e; },
+        spawnBarrel: (x, y) => { this.env?.spawnForTest('barrel', x - this.player.x, y - this.player.y); },
+        hurtTroops: (x, y, r, d) => this.legion.hurtArea(x, y, r, d, this.combatNow),
+        recruit: n => { for (let i = 0; i < n; i++) this.legion.recruit(kinds[i % 2], 1, true); },
+        banner: (t, danger, cap) => this.showWaveBanner(t, !!danger, cap), sfx: k => this.sfx.play(k),
+        spawnBoss: () => this.spawnBoss(), boss: () => this.boss,
+        campsAlive: () => { const c = this.enemyCamps?.camps ?? []; return [c.filter(x => !x.destroyed).length, c.length]; },
+        // 攻城器械等级：讲武堂科技预留（存档字段 siegeEngineLevel，暂无升级入口，默认 0；测试可用 registry siegeEngineLevel 覆盖）
+        engineLevel: Number(this.registry.get('siegeEngineLevel') ?? (loadWorld() as {siegeEngineLevel?: number}).siegeEngineLevel ?? 0),
+      });
+    }
     private battleDef() { return this.defense ? defenseBattle(this.city, this.owner) : siegeBattle(this.city, this.owner); }
     protected customChapter() { return this.city ? this.battleDef() : null; }
     protected abandonRun() { if (!this.over) abandonExpedition(this.receipt, this.allies.filter(u => u.active && u.reserveSoldier).map(u => u.kind)); }
@@ -156,6 +199,7 @@ export function siegeGameSceneClass(Base: typeof GameScene) {
     protected tryCustomBossSkill() { if (!this.controller || !this.boss?.active) return false; this.controller.forceSkill(this.combatNow); return true; }
     protected spawnBoss() {
       // 攻城：中小城不出守将（目标是拔旗 / 毁箭楼后占领府衙）；大城须城门已破
+      if (this.mid) { if (this.mid.phase === 'hall') super.spawnBoss(); return; }
       if (!this.defense && this.city?.tier !== 'large') return;
       // 大城：城门未破，大将不出城
       if (this.city?.tier === 'large' && this.gateAlive) { if (!this.gateWarned) { this.gateWarned = true; this.showWaveBanner('城门紧闭 · 先破城门！', true); } return; }
@@ -165,15 +209,17 @@ export function siegeGameSceneClass(Base: typeof GameScene) {
     /** 中小城守将：近身追击，无特殊技能；大城大将走技能控制器。 */
     protected customBossStep(enemy: Enemy, dt: number, now: number) {
       if (enemy !== this.boss) return false;
+      if (this.mid?.stepBoss(enemy, dt, now)) return true;
       if (this.controller) { this.controller.update(dt, now); return true; }
       const dx = this.player.x - enemy.x, dy = this.player.y - enemy.y, d = Math.hypot(dx, dy) || 1, nx = d > 48 ? dx / d : 0, ny = d > 48 ? dy / d : 0;
       // crowdSteering 下 advanceEnemy 用 moveVx/moveVy，而 EnemyMovement 对首领一律置 0（首领通常由控制器驱动）——中小城守将没有控制器，须自己给速度，否则原地不动
       enemy.moveVx = nx * enemy.def.speed; enemy.moveVy = ny * enemy.def.speed;
       this.advanceEnemy(enemy, nx, ny, dt); return true;
     }
-    protected hitEnemy(enemy: Enemy, raw: number, now: number, source: 'melee' | 'arrow' | 'fire' = 'melee', ally = false, weaponHit = true) { if (enemy === this.boss && this.controller) { raw *= this.controller.incoming(ally); this.controller.hit(now); } return super.hitEnemy(enemy, raw, now, source, ally, weaponHit); }
+    protected hitEnemy(enemy: Enemy, raw: number, now: number, source: 'melee' | 'arrow' | 'fire' = 'melee', ally = false, weaponHit = true) { if (enemy === this.boss && this.controller) { raw *= this.controller.incoming(ally); this.controller.hit(now); } if (enemy === this.boss && this.mid) raw *= this.mid.bossDamageMul(); return super.hitEnemy(enemy, raw, now, source, ally, weaponHit); }
     protected bossHasDeathArt() { return !!this.controller; }
     protected killEnemy(enemy: Enemy) {
+      this.mid?.onKilled(enemy);
       if (this.flag && enemy === this.flag.e && enemy.spawnId === this.flag.life) { this.flag.art.destroy(); this.flag = null; this.showWaveBanner('帅旗已拔', true, '占领府衙！'); }
       const tower = this.towers.find(t => t.e === enemy && t.e.spawnId === t.life); if (tower) { tower.label.destroy(); this.towers.splice(this.towers.indexOf(tower), 1); this.showWaveBanner(this.towers.length ? '箭楼已毁 · 还剩 ' + this.towers.length + ' 座' : '箭楼尽毁', true); }
       if (enemy === this.gate && enemy.spawnId === this.gateLife) { this.gateLabel?.setText('城门已破！'); this.showWaveBanner('城门已破 · 大将出城！', true); this.time.delayedCall(2200, () => this.gateLabel?.setVisible(false)); }
@@ -193,6 +239,7 @@ export function siegeGameSceneClass(Base: typeof GameScene) {
     /** 攻城：大将倒下后不立即结算，进入占领府衙阶段。 */
     protected finish(victory: boolean, reason: RunEndReason = 'death') {
       if (this.over) return;
+      if (this.mid && victory && !this.captured) { if (this.mid.phase !== 'done') { this.setMode('none'); this.mid.plantFinalFlag(() => { this.captured = true; this.bossKilled = true; this.finish(true, 'boss'); }); } return; }
       if (!this.defense && victory && !this.captured) { this.setMode('none'); this.startCapture(); return; }
       super.finish(victory, reason);
       const T = SIEGE[this.city.tier];
@@ -214,9 +261,16 @@ export function siegeGameSceneClass(Base: typeof GameScene) {
     /** 测试 / 调试战斗不触发招降（?roster=1 时测试照常）。 */
     private capturesBlocked() { return (this.test && new URLSearchParams(location.search).get('roster') !== '1') || this.debugModified || this.debugJumped || this.player.damageImmune;
     }
+    /** 城池建设跳转（留给主城会话接）：registry cityBuildTarget = 城 id；场景 CityBuildScene 存在则进入，否则回天下地图聚焦此城。 */
+    private openCityBuild() {
+      this.registry.set('cityBuildTarget', this.city.id); this.registry.set('mapFocusCity', this.city.id);
+      this.scene.start(this.scene.manager.keys['CityBuildScene'] ? 'CityBuildScene' : 'WorldMapScene');
+    }
     private mapButtons(victory: boolean) {
       const home = this.resultPanel.getByName('result-home') as Phaser.GameObjects.Text;
       home?.setText('返回天下地图').removeAllListeners('pointerdown').on('pointerdown', () => { this.registry.set('mapFocusCity', this.city.id); this.scene.start('WorldMapScene'); });
+      // 中城占领后接城池建设（主城会话在做城池界面）：有 CityBuildScene 就直接进，没有先回天下地图并记下要建设的城
+      if (victory && this.mid) home?.setText('建设城池').removeAllListeners('pointerdown').on('pointerdown', () => this.openCityBuild());
       const restart = this.resultPanel.getByName('result-restart') as Phaser.GameObjects.Image;
       restart?.removeAllListeners('pointerdown').on('pointerdown', () => { if (victory) { this.registry.set('mapFocusCity', this.city.id); this.scene.start('WorldMapScene'); } else this.scene.restart(); });
     }

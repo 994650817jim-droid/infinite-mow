@@ -104,6 +104,12 @@ export class DevGameScene extends GameScene {
       bossEnergy: () => { scene.bossEnergy = 100; if (scene.lubu) scene.lubu.energy = 100; mark(); },
       bossUlt: () => { if (scene.tryCustomBossSkill()) { mark(); return; } if (scene.lubu) scene.lubu.tryUltimate(scene.combatNow); if (scene.boss && !scene.lubu) scene.startBossUltimate(scene.combatNow); mark(); },
       bossSkill: () => { if (!scene.boss?.active) ensureBoss(); if (scene.yellow) { scene.yellow.forceNextSkill(); mark(); return; } actions.bossUlt(); },
+      // 首领重设计：测试模式「首领 → 指定招式 / 二阶段」（bossDebug 接口，UI 打磨会话的按钮调用）
+      bossMove0: () => { if (!scene.boss?.active) ensureBoss(); scene.bossDebug()?.force(0, scene.combatNow); mark(); },
+      bossMove1: () => { if (!scene.boss?.active) ensureBoss(); scene.bossDebug()?.force(1, scene.combatNow); mark(); },
+      bossMove2: () => { if (!scene.boss?.active) ensureBoss(); scene.bossDebug()?.force(2, scene.combatNow); mark(); },
+      bossMove3: () => { if (!scene.boss?.active) ensureBoss(); scene.bossDebug()?.force(3, scene.combatNow); mark(); },
+      bossPhase2: () => { if (!scene.boss?.active) ensureBoss(); scene.bossDebug()?.phase2(scene.combatNow); mark(); },
       killBoss: () => { if (!scene.boss?.active) ensureBoss(); if (scene.boss) scene.killEnemy(scene.boss); mark(); },
       winNow: () => { actions.killBoss(); },
       loseNow: () => { scene.player.damageImmune = false; scene.finish(false, 'death'); },

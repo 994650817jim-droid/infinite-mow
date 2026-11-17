@@ -108,3 +108,6 @@ assets/raw/*
 !/tools/test-chibi.mjs
 !/tools/test-items.mjs
 !/tools/prepare-camp-art.mjs
+!/tools/test-boss-v2.mjs
+!/tools/record-boss-gif.mjs
+!/tools/boss-v2-open.mjs

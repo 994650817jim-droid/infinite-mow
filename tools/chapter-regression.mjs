@@ -14,7 +14,7 @@ async function scenario(name, run) {
     page.on('pageerror', e => errors.push(e.message));
     // Hulao remains campaign-locked until Yellow Turban is cleared. This suite
     // exercises the battle itself, so explicitly use the existing DEV stage bypass.
-    await page.goto(BASE + '?autostart=1&chapter=hulao&dev=1&stage=3'); await page.waitForFunction(() => !!window.__IM, null, { timeout: 30000 });
+    await page.goto(BASE + '?autostart=1&chapter=hulao&dev=1&stage=3&boss=old'); // 旧版吕布的回归（重设计版见 test-boss-v2.mjs） await page.waitForFunction(() => !!window.__IM, null, { timeout: 30000 });
     // 2026-11-16：2-3 改为董卓（火烧洛阳），吕布移到天下地图挑战关；本套吕布机制检查改用原虎牢关吕布章节定义（getChapter('hulao')）。
     await page.evaluate(async () => { const { getChapter } = await import('/src/data/chapters.ts'); const s = window.__game.scene.getScene('GameScene'); s.chapter = getChapter('hulao'); s.spawnTimer = 1e8; s.eliteTimer = 1e8; window.__IM.clearWeapons(); window.__IM.killAllEnemies(); });
     await run(page); check(name + '_no_pageerror', !errors.length, errors);

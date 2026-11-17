@@ -1,4 +1,4 @@
-import Phaser from 'phaser';import {ItemTooltip} from './ItemTooltip';import {loadout} from '../systems/ItemStore';import {GAME_WIDTH as W,GAME_HEIGHT as H,IS_DESKTOP as D,FONT,HEADING_FONT,DEPTH,screenPoint} from '../config';import type {Player} from '../entities/Player';import type {Legion} from '../systems/Legion';import {CampMarket,campOption} from '../systems/CampMarket';import {CAMP_TRAINING,type CampTrainingId,type CampGroup} from '../data/camp';import {INITIAL_TROOPS,TROOPS,type TroopKind} from '../data/legion';import {TACTICS,TREASURES,TAG_NAMES,tacticDescription,type TacticId,type TreasureId,type BuildTag} from '../data/builds';import {AWAKENINGS,activeAwakenings} from '../data/awakenings';import {getCharacter} from '../data/characters';import {WEAPON_META} from '../data/upgrades';import {ATTRIBUTE_INFO,MARTIALS,type AttributeId,type MasteryId} from '../systems/RunGrowth';import {MERCHANT_PRICE,QUALITIES,formatAffix,itemName,rollMerchantGear,SLOTS,itemSlot,SPECIALS,type ItemInstance} from '../data/items';import {itemTile} from './ItemQuality';
+import Phaser from 'phaser';import {ItemTooltip} from './ItemTooltip';import {loadout} from '../systems/ItemStore';import {GAME_WIDTH as W,GAME_HEIGHT as H,IS_DESKTOP as D,FONT,HEADING_FONT,DEPTH,screenPoint} from '../config';import type {Player} from '../entities/Player';import type {Legion} from '../systems/Legion';import {CampMarket,campOption} from '../systems/CampMarket';import {CAMP_TRAINING,type CampTrainingId,type CampGroup} from '../data/camp';import {INITIAL_TROOPS,TROOPS,type TroopKind} from '../data/legion';import {TACTICS,TREASURES,TAG_NAMES,tacticDescription,type TacticId,type TreasureId,type BuildTag} from '../data/builds';import {AWAKENINGS,activeAwakenings} from '../data/awakenings';import {getCharacter} from '../data/characters';import {WEAPON_META} from '../data/upgrades';import {ATTRIBUTE_INFO,MARTIALS,type AttributeId,type MasteryId} from '../systems/RunGrowth';import {MERCHANT_PRICE,QUALITIES,formatAffix,itemName,rollMerchantGear,SLOTS,itemSlot,SPECIALS,type ItemInstance} from '../data/items';import {itemTile} from './ItemQuality';import {troopBadge} from './TroopBadge';import {loadTroopPortraits} from '../systems/TroopPortraits';
 import {homeCommand,warPanelTexture} from './HomeCommand';
 import {visualTextureKey} from '../systems/ReadableTextures';
 export class CampRestUI {
@@ -56,7 +56,9 @@ export class CampRestUI {
   return c.hit;
  }
 
- open(key:string,destination:string){if(this.visit!==key){this.visit=key;this.page=this.tab=0;this.itemOffers=rollMerchantGear((this.scene as unknown as {itemTier?:()=>number}).itemTier?.()??0);this.itemSold=this.itemOffers.map(()=>false);this.buildSection=this.buildOffset=0;this.notice='';}this.destination=destination;this.homeArmed=false;this.homeBtn.setText('回营寨').setBackgroundColor('#3d4a33').setVisible(!!this.onReturnHome);this.render();}
+ open(key:string,destination:string){if(this.visit!==key){this.visit=key;this.page=this.tab=0;this.itemOffers=rollMerchantGear((this.scene as unknown as {itemTier?:()=>number}).itemTier?.()??0);this.itemSold=this.itemOffers.map(()=>false);this.buildSection=this.buildOffset=0;this.notice='';}this.destination=destination;this.homeArmed=false;this.homeBtn.setText('回营寨').setBackgroundColor('#3d4a33').setVisible(!!this.onReturnHome);this.render();
+  // 招兵营圆框胸像（Q 版；缺的兵种用 v2 过渡）：加载完若还停在招兵营就重绘
+  loadTroopPortraits(this.scene,()=>{if(this.root.visible&&this.tab===0)this.render();},true);}
  setVisible(visible:boolean){this.root.setVisible(visible);if(!visible){this.modal?.destroy();this.modal=undefined;}}
  private plate(x:number,y:number,w:number,h:number,accent=false){
   const img=this.scene.add.image(x+w/2,y+h/2,warPanelTexture(this.scene,w,h,accent)).setDisplaySize(Math.round(w)+16,Math.round(h)+16).setScrollFactor(0);
@@ -75,8 +77,8 @@ export class CampRestUI {
   const roles=['持盾护卫 · 近身作战','长枪突刺 · 较远近战','远程弓箭 · 后排支援'];
   INITIAL_TROOPS.forEach((kind,i)=>{const count=this.army.units.filter(a=>a.active&&a.kind===kind).length,{x,y,w,h}=this.card(i);this.plate(x,y,w,h);
    const sheet='shu_'+kind+'_walk_sheet',key=visualTextureKey(this.scene,sheet),sx=x+(D?w/2:58),sy=y+(D?98:80);
-   const glow=this.scene.add.ellipse(sx,sy+(D?36:30),D?92:70,D?22:18,0xe6c07a,.16).setScrollFactor(0);this.body.add(glow);
-   if(this.scene.textures.exists(key))this.body.add(this.scene.add.image(sx,sy,key,'down_0').setDisplaySize(D?108:92,D?108:92).setScrollFactor(0));else this.icon(sx,sy,'icon_shu_'+kind,D?80:72);
+   // 圆框胸像（与战地招募卡同款）
+   this.body.add(troopBadge(this.scene,kind,sx,sy+(D?0:4),D?52:40,{fixed:true,walkKey:key}).setScrollFactor(0));
    const name=this.text(D?x+w/2:x+112,y+(D?16:20),TROOPS[kind].name,D?22:22).setFontFamily(HEADING_FONT).setColor('#f1ddb5').setShadow(0,1,'#0a0603',3,true,true);if(D)name.setOrigin(.5,0);this.body.add(name);
    const badge=this.text(x+w-16,y+(D?16:20),'在编 '+count,D?14:15).setOrigin(1,0).setColor('#e4c588').setBackgroundColor('rgba(14,10,6,0.7)').setPadding(8,3);this.body.add(badge);
    const role=this.text(D?x+w/2:x+112,y+(D?160:56),roles[i],D?14:15).setColor('#c9b38a');if(D)role.setOrigin(.5,0);this.body.add(role);

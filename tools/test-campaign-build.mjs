@@ -54,6 +54,19 @@ await battle(3);
 const fresh = await p.evaluate(() => { const s = window.__game.scene.getScene('GameScene'); return { loaded: s.campaignLoaded, level: s.player.level, pursuit: s.player.growth.build.level('pursuit') }; });
 ck('老档没有征程构筑：未通关的主线关从空构筑开局', !fresh.loaded && fresh.level === 1 && fresh.pursuit === 0, fresh);
 
+// 6) 局内等级跨章继承（2026-11-17 战功另改为击杀精英 / 首领得的货币，见 test-merit；这里只验局内等级接续）
+await battle(1);
+// 局内等级跨章继承：1-3 打赢后存的征程构筑，第二章 2-1 接着上次的等级（本关起点也是这个等级）
+await p.evaluate(async () => { const s = window.__game.scene.getScene('GameScene'), c = await window.__mod('/src/systems/Campaign.ts'), hp = await window.__mod('/src/systems/HeroProgress.ts');
+  s.player.level = 11; c.saveCampaignBuild('zhaoyun', c.packCampaign('zhaoyun', s.player, s.legion)); hp.claimFirstClear('huangjin-3'); });
+await p.goto(base + '?dev=1&autostart=1&chapter=hulao&westStage=1&layout=desktop');
+await p.waitForFunction(() => window.__game?.scene.getScene('GameScene')?.player && window.__game.scene.getScene('GameScene').__DEV_ACTIONS, null, { timeout: 120000 });
+const cross = await p.evaluate(() => { const s = window.__game.scene.getScene('GameScene'); return { chapter: s.chapter.id, stage: s.chapter.westStage, loaded: s.campaignLoaded, level: s.player.level, start: 0 }; });
+ck('1-3 → 2-1：局内等级接着上次的等级（Lv.11），不归零', cross.chapter === 'hulao' && cross.loaded && cross.level === 11, cross);
+await battle(3);
+const old = await p.evaluate(() => { const s = window.__game.scene.getScene('GameScene'); return { replay: s.campaignReplay, level: s.player.level, start: 0 }; });
+ck('重打已通关的 1-3：临时空构筑，局内等级从 Lv.1 开始（之前定的规则不变）', old.replay && old.level === 1, old);
+
 ck('控制台无报错', errors.length === 0, errors.slice(0, 6));
 console.log(`\n${pass} passed, ${fail} failed`);
 await b.close();

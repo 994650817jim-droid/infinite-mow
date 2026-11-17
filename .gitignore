@@ -82,6 +82,7 @@ assets/raw/*
 !/tools/test-campaign-build.mjs
 !/tools/test-charms.mjs
 !/tools/test-token-slots.mjs
+!/tools/test-merit.mjs
 !/tools/test-hero-codex.mjs
 !/tools/phase19-progression.mjs
 !/tools/rest-flow-smoke.mjs

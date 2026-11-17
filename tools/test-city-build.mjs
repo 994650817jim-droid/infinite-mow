@@ -75,6 +75,17 @@ const OLD = { small: { balanced: [10, 0], farm: [16, 0], military: [5, 1] }, med
   const ui = await p.evaluate(() => { const t = window.__game.scene.getScene('TownScene'); return { blds: t.hits.map(h => h.name).sort(), header: t.children.getByName('town-header')?.text, income: t.children.getByName('town-income')?.text, grain: t.children.getByName('town-grain')?.text }; });
   ck('进入洛阳：全景里只有府衙、屯田、募兵所（城墙箭楼不做），顶栏写档次与产出', ui.blds.join() === 'bld-muster,bld-office,bld-tuntian' && ui.header.includes('大城') && ui.income.includes('每战产出') && ui.grain === '军粮 800', ui);
   await p.screenshot({ path: `${out}/town-large-desktop.png` });
+  // 民居与居民：纯装饰，不可点、不挡建筑（用户 2026-11-17）
+  const life = await p.evaluate(() => { const t = window.__game.scene.getScene('TownScene'), root = t.children.getByName('town-folk'), folk = root.list.filter(o => o.visible), houses = t.pano.list.filter(o => /^house-/.test(o.name ?? ''));
+    return { folk: folk.length, houses: houses.length, folkInput: folk.some(o => o.input), houseInput: houses.some(o => o.input) }; });
+  ck('洛阳（大城、府衙 1 级）：民居 4 座、居民 10 人，都不接收点击', life.houses === 4 && life.folk === 10 && !life.folkInput && !life.houseInput, life);
+  // 把一个居民挪到府衙正中，用真实鼠标点那里：仍然打开府衙面板
+  const spot = await p.evaluate(() => { const t = window.__game.scene.getScene('TownScene'), h = t.hits.find(h => h.name === 'bld-office'), w = t.folk.walkers[0]; w.pause = 99; const wx = h.x, wy = h.y; w.img.setPosition(wx, wy + h.height * .3); w.img.setScale(w.img.scaleX * 3);
+    const R = window.__game.canvas.getBoundingClientRect(), k = R.width / window.__game.scale.width * t.cameras.main.zoom; return { x: R.left + (wx + t.pano.x) * k, y: R.top + (wy + t.pano.y) * k }; });
+  await p.waitForTimeout(100); await p.mouse.click(spot.x, spot.y); await p.waitForTimeout(400);
+  const blocked = await p.evaluate(() => { const c = window.__game.scene.getScene('TownScene').children.getByName('town-build-card'); const title = c?.getByName('town-build-card-title')?.text; c?.destroy(); return title; });
+  ck('居民挡在府衙上时，点击仍然打开府衙面板（居民不挡建筑）', blocked === '府衙 · Lv1', blocked);
+  await p.evaluate(() => { const t = window.__game.scene.getScene('TownScene'); t.folk.walkers[0].pause = 0; t.folk.walkers[0].img.setScale(t.folk.walkers[0].img.scaleX / 3); });
   await p.evaluate(() => { const t = window.__game.scene.getScene('TownScene'), h = t.hits.find(h => h.name === 'bld-tuntian'); h.emit('pointerdown'); h.emit('pointerup'); });
   await p.waitForTimeout(300);
   const card = await p.evaluate(() => { const c = window.__game.scene.getScene('TownScene').children.getByName('town-build-card'); return { title: c?.getByName('town-build-card-title')?.text, cost: c?.getByName('town-build-cost')?.text }; });
@@ -84,6 +95,15 @@ const OLD = { small: { balanced: [10, 0], farm: [16, 0], military: [5, 1] }, med
   const after = await store(p, w => ({ lv: w.cityLevels('luoyang'), grain: w.loadWorld().provisions }));
   ck('点屯田 → 面板（未建，军粮 160）→ 建造：屯田 1 级、扣 160', card.title === '屯田 · 未建' && card.cost === '花费：军粮 160' && after.lv.tuntian === 1 && after.grain === 640, { card, after });
   await p.screenshot({ path: `${out}/town-after-build-desktop.png` });
+  const before = await p.evaluate(() => { const t = window.__game.scene.getScene('TownScene'); return { h: t.pano.list.filter(o => /^house-/.test(o.name ?? '')).length, f: t.folk.count }; });
+  await store(p, w => { const s = w.loadWorld(); s.provisions += 2000; localStorage.setItem('im_world_v1', JSON.stringify(s)); localStorage.removeItem('im_world_backup_v1'); });
+  await p.evaluate(() => { const t = window.__game.scene.getScene('TownScene'), h = t.hits.find(h => h.name === 'bld-office'); h.emit('pointerdown'); h.emit('pointerup'); });
+  await p.waitForTimeout(300);
+  await p.evaluate(() => window.__game.scene.getScene('TownScene').children.getByName('town-build-card').getByName('town-build-upgrade').emit('pointerdown'));
+  await p.waitForTimeout(600);
+  const grown = await p.evaluate(() => { const t = window.__game.scene.getScene('TownScene'); return { h: t.pano.list.filter(o => /^house-/.test(o.name ?? '')).length, f: t.folk.count }; });
+  ck('府衙升到 2 级：民居、居民都变多（大城 4→6 座、10→12 人）', before.h === 4 && before.f === 10 && grown.h === 6 && grown.f === 12, { before, grown });
+  await p.screenshot({ path: `${out}/town-large-life-desktop.png` });
   // 中城、小城各看一眼
   for (const id of ['xuchang', 'guandu']) {
     await p.evaluate(id => window.__game.scene.getScene('TownScene').scene.start('TownScene', { city: id }), id);

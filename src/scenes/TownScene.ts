@@ -16,6 +16,7 @@ import {cityById,SPECIALTIES,TIER_NAME,type CityTier} from '../world/WorldCities
 import {CITY_BUILDINGS,CITY_BUILDING_IDS,cityBuildCost,cityBuildBlockers,cityIncome,type CityBuildingId} from '../data/cityBuildings';
 import {incomeText} from '../town/TownData';
 import {PANO_W,PANO_H,LEVEL_SCALE} from '../town/CityLayout';
+import {TownFolk,HOUSE_SLOTS,HOUSE_ART,FOLK_SHEETS,houseCount,folkCount} from '../town/TownLife';
 
 /** 城池正式美术是否已导入（assets/town-city/bg_<档>.webp、<建筑>_<级>.webp）。未导入时借营寨图。 */
 export const TOWN_ART_READY = true;
@@ -46,6 +47,7 @@ export class TownScene extends Phaser.Scene {
  private hits: Phaser.GameObjects.Rectangle[] = [];
  private drag: {x: number; y: number; sx: number; sy: number; moved: boolean} | null = null;
  private pressed: string | null = null;
+ private folkRoot?: Phaser.GameObjects.Container; private folk?: TownFolk;
  private header!: Phaser.GameObjects.Text; private grain!: Phaser.GameObjects.Text; private income!: Phaser.GameObjects.Text;
  constructor() { super('TownScene'); }
  init(data: {city?: string}) {
@@ -59,6 +61,9 @@ export class TownScene extends Phaser.Scene {
  preload() {
   if (!worldUnlocked() && !isChapterTestRun()) return;
   const t = this.tier();
+  // 民居（营寨旧图）与居民行走图：纯装饰
+  for (const a of new Set(HOUSE_ART)) for (let l = 1; l <= 3; l++) worldAssets(this, `city_${a}_${l}`, `assets/city/${a}_${l}.webp`);
+  for (const f of FOLK_SHEETS) worldAssets(this, f.key, f.url);
   if (TOWN_ART_READY) { worldAssets(this, `town_bg_${t}`, `assets/town-city/bg_${t}.webp`); for (const id of CITY_BUILDING_IDS) for (let l = 1; l <= 3; l++) worldAssets(this, `town_${id}_${l}`, `assets/town-city/${id}_${l}.webp`); }
   else { const n = BORROW_BG[t]; worldAssets(this, `city_bg_${n}`, `assets/city/bg_${n}.webp`); for (const id of CITY_BUILDING_IDS) for (let l = 1; l <= 3; l++) worldAssets(this, `city_${BORROW_BUILDING[id]}_${l}`, `assets/city/${BORROW_BUILDING[id]}_${l}.webp`); }
  }
@@ -67,7 +72,11 @@ export class TownScene extends Phaser.Scene {
   const c = cityById(this.cityId), s = loadWorld();
   if ((!worldUnlocked() && !isChapterTestRun()) || !c || !s.ownedCities.includes(this.cityId)) { this.scene.start('WorldMapScene'); return; }
   this.pano = this.add.container(0, 0).setDepth(-5);
-  const mask = this.make.graphics({x: 0, y: 0}).fillStyle(0xffffff).fillRect(this.vr.x, this.vr.y, this.vr.w, this.vr.h); this.pano.setMask(mask.createGeometryMask()); this.events.once('shutdown', () => mask.destroy());
+  const mask = this.make.graphics({x: 0, y: 0}).fillStyle(0xffffff).fillRect(this.vr.x, this.vr.y, this.vr.w, this.vr.h); this.pano.setMask(mask.createGeometryMask());
+  // 居民层：在全景之上、跟着全景平移，同一遮罩；精灵不接收点击，不挡建筑
+  this.folkRoot = this.add.container(0, 0).setDepth(-4).setName('town-folk'); this.folkRoot.setMask(mask.createGeometryMask());
+  this.folk = new TownFolk(this, this.folkRoot, this.k, this.tier());
+  const tick = (_t: number, dt: number) => this.folk?.update(dt); this.events.on('update', tick); this.events.once('shutdown', () => { this.events.off('update', tick); this.folk = undefined; this.folkRoot = undefined; }); this.events.once('shutdown', () => mask.destroy());
   const head = this.add.graphics().setDepth(-1); head.fillStyle(0x102019, 1).fillRect(0, 0, W, this.vr.y).fillRect(0, this.vr.y + this.vr.h, W, H - this.vr.y - this.vr.h);
   head.lineStyle(2, 0xb3935b, .85).strokeRect(this.vr.x, this.vr.y, this.vr.w, this.vr.h);
   worldShell(this, c.name);
@@ -90,12 +99,13 @@ export class TownScene extends Phaser.Scene {
  private inView(x: number, y: number) { const r = this.vr; return x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h; }
  private scrollTo(sx: number, sy: number, _remember = true) {
   this.sx = Phaser.Math.Clamp(sx, 0, Math.max(0, PANO_W * this.k - this.vr.w)); this.sy = Phaser.Math.Clamp(sy, 0, Math.max(0, PANO_H * this.k - this.vr.h));
-  this.pano?.setPosition(this.vr.x - this.sx, this.vr.y - this.sy);
+  this.pano?.setPosition(this.vr.x - this.sx, this.vr.y - this.sy); this.folkRoot?.setPosition(this.vr.x - this.sx, this.vr.y - this.sy);
   for (const h of this.hits) { const x = h.x + this.pano.x, y = h.y + this.pano.y; if (h.input) h.input.enabled = this.inView(x, y); }
  }
  private refresh() {
   const s = loadWorld(), c = cityById(this.cityId)!, lv = cityLevels(this.cityId, s), sp = SPECIALTIES[c.id];
   this.header.setText(`${TIER_NAME[c.tier]} · ${c.region} · 府衙 Lv${lv.office}`);
+  this.folk?.setCount(folkCount(c.tier, lv.office));
   this.income.setText(`每战产出：${incomeText(cityIncome(c.tier, lv))}${sp ? `　特产「${sp.title}」${sp.text}` : ''}`);
   this.grain.setText(`军粮 ${s.provisions}`);
   this.drawPano();
@@ -105,6 +115,9 @@ export class TownScene extends Phaser.Scene {
   const s = loadWorld(), t = this.tier(), lv = cityLevels(this.cityId, s), k = this.k, slots = this.slots();
   if (this.textures.exists(this.bgKey())) this.pano.add(this.add.image(0, 0, this.bgKey()).setOrigin(0).setDisplaySize(PANO_W * k, PANO_H * k));
   else { const g = this.add.graphics(); g.fillStyle(0x7a6544, 1).fillRect(0, 0, PANO_W * k, PANO_H * k); this.pano.add(g); }
+  // 民居：先画（在功能建筑后面），数量随档次与府衙等级；只是图片，不接收点击
+  const hl = Math.min(3, Math.max(1, lv.office));
+  HOUSE_SLOTS[t].slice(0, houseCount(t, lv.office)).sort((a, b) => a.y - b.y).forEach((hs, i) => { const key = `city_${HOUSE_ART[i % HOUSE_ART.length]}_${hl}`; if (!this.textures.exists(key)) return; const img = this.add.image(hs.x * k, hs.y * k, key).setOrigin(.5, 1).setName('house-' + i); img.setScale(hs.w * k / img.width); this.pano.add(img); });
   const ids = CITY_BUILDING_IDS.filter(id => CITY_BUILDINGS[id].max[t] > 0).sort((a, b) => slots[a].y - slots[b].y);
   for (const id of ids) {
    const sl = slots[id], l = lv[id], x = sl.x * k, y = sl.y * k, cost = cityBuildCost(id, t, l), block = cityBuildBlockers(id, t, lv), ready = cost !== null && !block.length && s.provisions >= cost;

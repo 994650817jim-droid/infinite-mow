@@ -116,6 +116,11 @@ export const ART_V2_FILES: Readonly<Record<string, string>> = {
   horse_v2_dawan_walk: 'assets/horses-v2/dawan_walk.png',
   horse_v2_generic_walk: 'assets/horses-v2/generic_walk.png',
   horse_v2_mule_walk: 'assets/horses-v2/mule_walk.png',
+  // 骑乘姿态图（只画人，4×8：骑行 + 马上出招；HeroMount 按需载入，没有的武将退回拼接）
+  ride_v2_zhaoyun: 'assets/ride-v2/zhaoyun_ride.png',
+  ride_v2_guanyu: 'assets/ride-v2/guanyu_ride.png',
+  ride_v2_zhangfei: 'assets/ride-v2/zhangfei_ride.png',
+  ride_v2_machao: 'assets/ride-v2/machao_ride.png',
 };
 /** v2 主将行走整格的显示高度（逻辑像素）：原生格 176 → 88，即 1080p 全屏（渲染 2 倍）下 1 美术像素 = 1 屏幕像素。
  * 人物约 76 逻辑像素高（用户要求比 v1 大一些）。 */

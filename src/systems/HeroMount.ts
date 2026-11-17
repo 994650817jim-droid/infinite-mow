@@ -20,6 +20,23 @@ function v2HorseKey(base: string): string { return V2_HORSE[base] ?? V2_GENERIC;
 /** 个别坐骑鞍子更低（骡比马矮），骑者少抬一些。 */
 const V2_RISE: Record<string, number> = {horse_v2_mule_walk: 22};
 const v2Rise = (key: string): number => V2_RISE[key] ?? HORSE_V2.riderRise;
+/**
+ * 骑乘姿态图（只画人：坐姿、两腿跨在鞍两侧、脚踩镫）：4 列 × 8 行，行 1~4 骑行（下 / 左 / 右 / 上），行 5~8 马上出招。
+ * 每格 RIDE.cell、脚底（踩镫处）在 RIDE.foot 行；显示 0.5 倍。脚底对到马的镫高（离地 stirrup 逻辑像素）。
+ * 有姿态图的武将骑马时整个人换成姿态帧；没有的仍用「行走帧上半身拼在鞍上」。
+ */
+export const RIDE = {cell: 256, foot: 240, scale: .5, stirrup: 38} as const;
+/** 朝镜头时骑者整体再抬高（头肩要露在马头上方），背对时略抬；朝镜头时马头马颈（帧高 30%~56%）盖在骑者腿上。 */
+const RIDE_DIR_LIFT: Record<string, number> = {down: 20, up: 6};
+const RIDE_FRONT = {top: .3, cut: .56} as const;
+const RIDE_STIRRUP: Record<string, number> = {horse_v2_mule_walk: 24};
+export const rideKey = (hero: string): string => 'ride_v2_' + hero;
+const DIRS4 = ['down', 'left', 'right', 'up'] as const;
+function nameRideFrames(scene: Phaser.Scene, key: string): void {
+  const t = scene.textures.get(key); if (t.has('ride_down_0')) return;
+  const n = ((t.getSourceImage() as {width?: number}).width ?? 1024) / 4;
+  DIRS4.forEach((dir, row) => { for (let c = 0; c < 4; c++) { t.add(`ride_${dir}_${c}`, 0, c * n, row * n, n, n); t.add(`atk_${dir}_${c}`, 0, c * n, (row + 4) * n, n, n); } });
+}
 
 interface Host {
   scene: Phaser.Scene; player: Player; enemies: Enemy[];
@@ -39,6 +56,8 @@ export class HeroMount {
   private lastX: number; private lastY: number; private phase = 0; private speed = 0;
   /** 正在用的 v2 马图集键（未载入 / v1 时为空，用旧马）。 */
   private v2Key = ''; private readonly tinted: boolean;
+  /** 骑乘姿态图（载入后非空）与马上出招的计时。 */
+  private rideKey = ''; private atkFrom = -1;
   private readonly trampled = new WeakMap<Enemy, number>(); private readonly trampleMul: number;
   /** 本局践踏次数、落马次数（测试与结算用）。 */
   tramples = 0; falls = 0;
@@ -60,13 +79,22 @@ export class HeroMount {
     this.label = h.scene.add.text(h.player.x, h.player.y, '', {fontFamily: FONT, fontSize: '12px', resolution: 2, color: '#ffd9a0', stroke: '#1a120b', strokeThickness: 3}).setOrigin(.5, 0);
     this.lastX = h.player.x; this.lastY = h.player.y;
     this.tinted = !V2_HORSE[item.base];
-    if (artStyle() === 'v2') this.loadV2(v2HorseKey(item.base));
+    if (artStyle() === 'v2') { this.loadV2(v2HorseKey(item.base)); this.loadRide(rideKey(hero)); }
     this.applyRider(true);
   }
   /** v2 马按需载入，到位后换掉旧马（载入失败就一直用旧马）。 */
   private loadV2(key: string): void {
     const scene = this.h.scene;
     const ready = (): void => { if (!isV2Texture(key) || !scene.textures.exists(key) || !this.horse.active) return; if (!scene.textures.get(key).has('down_0') || scene.textures.get(key).get('down_0').width !== HORSE_V2.cell) regridV2(scene, key); this.useV2(key); };
+    if (scene.textures.exists(key)) { ready(); return; }
+    if (!ART_V2_FILES[key]) return;
+    scene.load.image(key, ART_V2_FILES[key]);
+    scene.load.once('filecomplete-image-' + key, ready);
+    if (!scene.load.isLoading()) scene.load.start();
+  }
+  private loadRide(key: string): void {
+    const scene = this.h.scene;
+    const ready = (): void => { if (!isV2Texture(key) || !scene.textures.exists(key)) return; nameRideFrames(scene, key); this.rideKey = key; };
     if (scene.textures.exists(key)) { ready(); return; }
     if (!ART_V2_FILES[key]) return;
     scene.load.image(key, ART_V2_FILES[key]);
@@ -120,22 +148,37 @@ export class HeroMount {
       this.bar.clear(); this.label.setPosition(p.x, p.y + 30).setDepth(actorDepth(p.y + 40)).setText(p.alive ? `${Math.ceil((this.remountAt - now) / 1000)} 秒后上马` : '');
       return;
     }
-    // 骑者：抬到马鞍上，裁掉下半身（腿被马身挡住）
-    const f = p.sprite.frame; if (f) p.sprite.setCrop(0, 0, f.width, f.height * MOUNT.riderCrop);
+    // 骑者：有骑乘姿态图（且已换上 v2 马）就整个人换成坐姿帧；否则抬到马鞍上、裁掉下半身（腿被马身挡住）
+    const posed = !!this.rideKey && !!this.v2Key;
+    if (!posed) { const f = p.sprite.frame; if (f) p.sprite.setCrop(0, 0, f.width, f.height * MOUNT.riderCrop); }
     const running = this.speed > MOUNT.trampleMinSpeed; if (running) this.phase += dt * 10;
     const key = `${p.direction}_${running ? Math.floor(this.phase) % 4 : 0}`;
     for (const img of [this.horse, this.tack, this.front]) { img.setPosition(p.x, p.y + 30); if (img.frame.name !== key) img.setFrame(key); img.setDepth(p.sprite.depth + (img === this.front ? .001 : -.001)); }
     // v2：朝镜头时只把帧上部（马头马颈）盖在骑者前面；其余方向不显示前景层
+    if (posed) this.poseRider(now);
     if (this.v2Key) {
       const down = p.direction === 'down'; this.front.setVisible(down);
-      if (down) this.front.setCrop(0, HORSE_V2.cell * HORSE_V2.frontTop, HORSE_V2.cell, HORSE_V2.cell * (HORSE_V2.frontCut - HORSE_V2.frontTop));
-      p.riseY = v2Rise(this.v2Key) + (down ? HORSE_V2.downRise : 0);
+      const ft = posed ? RIDE_FRONT.top : HORSE_V2.frontTop, fc = posed ? RIDE_FRONT.cut : HORSE_V2.frontCut;
+      if (down) this.front.setCrop(0, HORSE_V2.cell * ft, HORSE_V2.cell, HORSE_V2.cell * (fc - ft));
+      if (!posed) p.riseY = v2Rise(this.v2Key) + (down ? HORSE_V2.downRise : 0);
     }
     this.label.setText('');
     // 耐力条（不满时显示在马蹄下）
     this.bar.clear().setDepth(p.sprite.depth + .001);
     if (this.stamina < this.maxStamina) { const w = 40, r = Math.max(0, this.stamina / this.maxStamina); this.bar.fillStyle(0x140d08, .8).fillRect(p.x - w / 2 - 1, p.y + 34, w + 2, 5).fillStyle(r > .5 ? 0xe2c06a : r > .25 ? 0xe28a3a : 0xd65a3f).fillRect(p.x - w / 2, p.y + 35, w * r, 3); }
     if (running && !this.style.noTrample) this.trample(now);
+  }
+  /** 骑乘姿态帧：骑行行随马步换帧，武将出招时（当前帧不在行走表上）换马上出招行；脚底对到马镫高度。 */
+  private poseRider(now: number): void {
+    const p = this.h.player, dir = p.direction, cur = p.sprite.texture.key;
+    const attacking = !/walk/.test(cur) && cur !== this.rideKey;
+    if (attacking) { if (this.atkFrom < 0) this.atkFrom = now; } else this.atkFrom = -1;
+    const col = attacking ? Math.min(3, Math.floor((now - this.atkFrom) / 90)) : Math.floor(this.phase) % 4;
+    const frame = `${attacking ? 'atk' : 'ride'}_${dir}_${col}`;
+    const stirrup = (RIDE_STIRRUP[this.v2Key] ?? RIDE.stirrup) + (RIDE_DIR_LIFT[dir] ?? 0);
+    p.sprite.setCrop().setTexture(this.rideKey, frame).setFlipX(false).setRotation(0).setScale(RIDE.scale)
+      .setOrigin(.5, (RIDE.foot - (30 - stirrup) / RIDE.scale) / RIDE.cell);
+    p.riseY = stirrup + 24;
   }
   private trample(now: number): void {
     const p = this.h.player, r = MOUNT.trampleRadius;

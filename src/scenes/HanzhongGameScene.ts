@@ -2,7 +2,8 @@ import type { GameScene } from './GameScene';
 import { thirdGameSceneClass, type ArcSceneConfig } from './ThirdGameScene';
 import type { Enemy } from '../entities/Enemy';
 import { GAME_HEIGHT, GAME_WIDTH, IS_DESKTOP } from '../config';
-import { DINGJUN_HUANGZHONG_MUL, HANZHONG_STAGES } from '../data/hanzhongChapter';
+import { DINGJUN_HUANGZHONG_MUL, HANZHONG_STAGES, HANZHONG_TROOP_SHEETS, HILL_ART } from '../data/hanzhongChapter';
+import { artStyle, loadV2TroopSheets } from '../systems/ArtStyle';
 import { HanzhongHills } from '../systems/HanzhongHills';
 import { followersFor } from '../systems/RosterStore';
 import { storyScroll } from '../ui/StoryScroll';
@@ -20,6 +21,12 @@ export function hanzhongGameSceneClass(Base: typeof GameScene, cfg: ArcSceneConf
   return class HanzhongGameScene extends Third {
     hills?: HanzhongHills;
     private jileiShown = false;
+    preload(): void {
+      super.preload();
+      loadV2TroopSheets(this, [...HANZHONG_TROOP_SHEETS.qingzhou, ...HANZHONG_TROOP_SHEETS.crossbow]);
+      // 山头地块：v2 手绘图（v1 沿用程序画的土丘）
+      if (artStyle() === 'v2') for (const h of HILL_ART) if (!this.textures.exists(h.key)) this.load.image(h.key, h.url);
+    }
     create(): void {
       this.jileiShown = false; super.create();
       const s = this as unknown as GameScene & { player: GameScene['player']; legion: GameScene['legion']; enemies: Enemy[]; combatNow: number; spawnEnemy(k: string, x: number, y: number, h?: number, f?: boolean): Enemy | null; showWaveBanner(t: string, d?: boolean, c?: string): void; sfx: { play(k: string): void } };
@@ -40,8 +47,10 @@ export function hanzhongGameSceneClass(Base: typeof GameScene, cfg: ArcSceneConf
       const s = this as unknown as { boss: Enemy | null; showWaveBanner(t: string, d?: boolean, c?: string): void };
       const had = s.boss?.active; super.spawnBoss();
       if (!s.boss || had) return;
-      if (this.arcStage === 2) s.showWaveBanner('夏侯渊来争定军山', true, this.huangzhongInTeam ? '黄忠：老夫今日便斩夏侯渊！（夏侯渊受到伤害提高）' : '居高临下，以逸待劳');
-      if (this.arcStage === 3) s.showWaveBanner('曹操亲至', true, '虎豹骑冲阵 · 半血后断后');
+      // 等首领出场的墨迹名牌过去再出本关横幅，免得两条叠在一起
+      const later = (t: string, c: string) => this.time.delayedCall(2600, () => { if (s.boss?.active) s.showWaveBanner(t, true, c); });
+      if (this.arcStage === 2) later('夏侯渊来争定军山', this.huangzhongInTeam ? '黄忠：老夫今日便斩夏侯渊！（夏侯渊受到伤害提高）' : '居高临下，以逸待劳');
+      if (this.arcStage === 3) later('曹操亲至', '虎豹骑冲阵 · 半血后断后');
     }
     protected hitEnemy(enemy: Enemy, raw: number, now: number, source: 'melee' | 'arrow' | 'fire' = 'melee', ally = false, weaponHit = true): boolean {
       const s = this as unknown as { boss: Enemy | null };

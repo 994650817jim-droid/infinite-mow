@@ -4,7 +4,7 @@ import { DEPTH, FONT, GAME_HEIGHT, GAME_WIDTH, HEADING_FONT, IS_DESKTOP } from '
 import { CHARACTERS, type CharacterId } from '../data/characters';
 import { AFFIXES, BAG_CAPACITY, LEGENDS, QUALITIES, QUALITY_ORDER, SLOTS, SLOT_ORDER, SPECIALS, formatAffix, itemDef, itemName, itemSlot, type AffixId, type ItemInstance, type ItemSlot } from '../data/items';
 import { rewardGrain } from '../world/WorldStore';
-import { HORSES, mountStyle } from '../data/mounts';
+import { HORSES, horseQuality, mountStyle } from '../data/mounts';
 import { gearFromItems, gearSummary, horseBonusText } from '../systems/ItemEffects';
 import { type GearOwner, equipItem, equippedBy, heroHorse, horseRider, legacyValue, loadItems, salvageLegacy, loadout, looseCount, markBagSeen, rideHorse, salvageItems, salvageUpTo, setAutoSalvageWhite, stableUnlocked, takeItemNotice, takeStableAnnouncement, unequipSlot } from '../systems/ItemStore';
 import { drawQualityFrame, ensureItemTextures, horseIcon, itemIconKey, itemTile } from './ItemQuality';
@@ -158,7 +158,7 @@ export class ItemBagUI {
     }
     // 坐骑位
     const my = rowY(2), mountTile = this.add(this.scene.add.container(lx, my));
-    const mg = this.scene.add.graphics(); drawQualityFrame(mg, -size / 2, -size / 2, size, size, horse ? (HORSES.find(h => h.id === horse.id)?.legend ? 'orange' : 'blue') : null); mountTile.add(mg);
+    const mg = this.scene.add.graphics(); drawQualityFrame(mg, -size / 2, -size / 2, size, size, horse ? horseQuality(HORSES.find(h => h.id === horse.id)) : null); mountTile.add(mg);
     const unlocked = stableUnlocked();
     if (horse) { const ic = horseIcon(this.scene, horse.id), k = ic.art ? .84 : .72; mountTile.add(this.scene.add.image(0, 0, ic.key, ic.frame).setDisplaySize(size * k, size * k).setTint(ic.art ? 0xffffff : mountStyle(horse.id).tint)); }
     else mountTile.add(this.scene.add.image(0, 0, itemIconKey('mount')).setDisplaySize(size * .72, size * .72).setAlpha(.22));
@@ -329,7 +329,7 @@ export class ItemBagUI {
       const img = this.add(this.scene.add.image(cx + 6 + isz / 2, cy + (rowH - 6) / 2, ic.key, ic.frame).setDisplaySize(isz, isz), card).setAlpha(owned ? 1 : .3);
       if (!ic.art) img.setTint(mountStyle(h.id).tint);
       const nameX = cx + isz + 16;
-      this.text(nameX, cy + 4, (h.legend ? '★ ' : '') + h.name + (rider ? ` · ${CHARACTERS.find(c => c.id === rider)?.name ?? ''}骑乘` : ''), D ? 15 : 14, owned ? (h.legend ? '#f2a24e' : '#ecd49a') : '#6f6250', false, card).setName('stable-name-' + h.id);
+      this.text(nameX, cy + 4, (h.legend ? '★ ' : '') + h.name + (rider ? ` · ${CHARACTERS.find(c => c.id === rider)?.name ?? ''}骑乘` : ''), D ? 15 : 14, owned ? (h.legend ? '#f2a24e' : horseQuality(h) === 'white' ? '#e6e1d6' : '#ecd49a') : '#6f6250', false, card).setName('stable-name-' + h.id);
       const style = mountStyle(h.id).ride;
       this.text(nameX, cy + (D ? 26 : 23), owned ? horseBonusText(h) + (style ? ' · ' + style.replace(/^[^：]+：/, '') : '') : '未获得 · ' + h.lore, 11, owned ? '#d8ccb0' : '#6f6250', false, card).setWordWrapWidth(cwid - isz - 110).setMaxLines(D ? 2 : 1);
       if (owned && unlocked && this.canChangeHorse && !recruitOnly) this.button(cx + cwid - 46, cy + (rowH - 6) / 2, mine ? '下马' : '骑乘', mine ? 'stable-dismount' : 'stable-ride-' + h.id, () => {

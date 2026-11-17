@@ -49,9 +49,9 @@ export function mountStyle(base: string): MountStyle { return MOUNT_STYLES[base]
  * 第一章通关后马厩开放并送驽马；之后的马靠各章首领首次击杀获得（reward = 关卡键，见 GameScene.stableRewardKey）。
  * 换马只在休整时：主页马厩、行营休整；战斗中不可换。
  */
-export interface HorseDef { id: string; name: string; legend?: boolean; bonus: Partial<Record<'move' | 'damage' | 'pickup' | 'ally' | 'hp' | 'elite' | 'attackSpeed', number>>; reward: string; lore: string }
+export interface HorseDef { id: string; name: string; legend?: boolean; /** 品质框颜色（默认普通马为蓝、传说为橙）。 */ quality?: 'white'; bonus: Partial<Record<'move' | 'damage' | 'pickup' | 'ally' | 'hp' | 'elite' | 'attackSpeed', number>>; reward: string; lore: string }
 export const HORSES: readonly HorseDef[] = [
-  {id: 'nag', name: '驽马', bonus: {move: .026}, reward: 'huangjin-3', lore: '第一章通关时赠送'},
+  {id: 'nag', name: '驽马', quality: 'white', bonus: {move: .026}, reward: 'huangjin-3', lore: '第一章通关后中山商人张世平、苏双所献'},
   {id: 'grey_horse', name: '青骢', bonus: {move: .026}, reward: 'hulao-1', lore: '汜水关击败华雄'},
   {id: 'yellow_horse', name: '黄骠马', bonus: {pickup: .1}, reward: 'hulao-2', lore: '荥阳击败徐荣'},
   {id: 'chitu', name: '赤兔', legend: true, bonus: {move: .04, damage: .08}, reward: 'lubu', lore: '人中吕布，马中赤兔 · 天下地图挑战关「三英战吕布」首胜'},
@@ -64,5 +64,7 @@ export const HORSES: readonly HorseDef[] = [
   {id: 'dilu', name: '的卢', legend: true, bonus: {move: .04, hp: .1}, reward: 'chibi-3', lore: '一跃三丈过檀溪 · 赤壁章末首领'},
 ];
 export const STARTER_HORSE = 'nag';
+/** 马的品质框颜色：传说橙、普通蓝、驽马白。 */
+export function horseQuality(h: HorseDef | undefined): 'white' | 'blue' | 'orange' { return h?.legend ? 'orange' : h?.quality ?? 'blue'; }
 export function horseDef(id: string | undefined): HorseDef | undefined { return id ? HORSES.find(h => h.id === id) : undefined; }
 export function horseForReward(key: string): HorseDef | undefined { return HORSES.find(h => h.reward === key); }

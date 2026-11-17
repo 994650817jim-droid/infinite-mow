@@ -118,3 +118,4 @@ assets/raw/*
 !/tools/record-boss-gif.mjs
 !/tools/boss-v2-open.mjs
 !/tools/despill-fx.mjs
+!/tools/test-merchant-horse.mjs

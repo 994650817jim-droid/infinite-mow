@@ -4,7 +4,7 @@
  *   黄巾之乱（始终开放）→ 讨伐董卓（通关黄巾）→ 群雄割据（通关讨董）→ 官渡之战（群雄三关）→ 赤壁之战（官渡三关）。
  */
 import { CHRONICLE, type ChronicleStage } from '../data/chronicle';
-export type TimelineChapterId = 'huangjin' | 'hulao' | 'qunxiong' | 'guandu' | 'chibi';
+export type TimelineChapterId = 'huangjin' | 'hulao' | 'qunxiong' | 'guandu' | 'chibi' | 'jingnan' | 'shu' | 'hanzhong' | 'xiangfan' | 'yiling' | 'nanzheng' | 'beifa';
 export type ChapterState = 'cleared' | 'open' | 'locked';
 
 export interface TimelineChapter {
@@ -19,11 +19,18 @@ export const CHAPTER_TIMELINE: readonly TimelineChapter[] = [
   { id: 'qunxiong', numeral: '叁', title: '群雄割据', short: '群雄', year: 192, era: '初平三年', hint: '通关第二章「讨伐董卓」后解锁' },
   { id: 'guandu', numeral: '肆', title: '官渡之战', short: '官渡', year: 200, era: '建安五年', hint: '通关第三章「群雄割据」后解锁' },
   { id: 'chibi', numeral: '伍', title: '赤壁之战', short: '赤壁', year: 208, era: '建安十三年', hint: '通关第四章「官渡之战」后解锁' },
+  { id: 'jingnan', numeral: '陆', title: '平定荆南', short: '荆南', year: 209, era: '建安十四年', hint: '通关第五章「赤壁之战」后解锁' },
+  { id: 'shu', numeral: '柒', title: '入蜀', short: '入蜀', year: 211, era: '建安十六年', hint: '通关第六章「平定荆南」后解锁' },
+  { id: 'hanzhong', numeral: '捌', title: '汉中之战', short: '汉中', year: 219, era: '建安二十四年', hint: '通关第七章「入蜀」后解锁' },
+  { id: 'xiangfan', numeral: '玖', title: '襄樊之战', short: '襄樊', year: 219, era: '建安二十四年', hint: '通关第八章「汉中之战」后解锁' },
+  { id: 'yiling', numeral: '拾', title: '夷陵之战', short: '夷陵', year: 222, era: '章武二年', hint: '通关第九章「襄樊之战」后解锁' },
+  { id: 'nanzheng', numeral: '拾壹', title: '南征', short: '南征', year: 225, era: '建兴三年', hint: '通关第十章「夷陵之战」后解锁' },
+  { id: 'beifa', numeral: '拾贰', title: '北伐', short: '北伐', year: 234, era: '建兴十二年', hint: '通关第十一章「南征」后解锁' },
 ];
 
 /** 计算章节状态所需的存档字段（WorldSave 的子集，便于单测与迁移时调用）。 */
 export interface TimelineProgress {
-  yellowStages: number; dongzhuoStages: number; warlordStages: number; guanduStages: number; chibiStages: number;
+  yellowStages: number; dongzhuoStages: number; warlordStages: number; guanduStages: number; chibiStages: number; jingnanStages?: number; shuStages?: number; hanzhongStages?: number; xiangfanStages?: number; yilingStages?: number; nanzhengStages?: number; beifaStages?: number;
   cleared: { huangjin: boolean; hulao: boolean }; legacyHulaoAccess: boolean;
 }
 
@@ -31,7 +38,7 @@ export interface TimelineProgress {
 export function chapterStagesDone(id: TimelineChapterId, s: TimelineProgress): number {
   const v = id === 'huangjin' ? (s.cleared.huangjin || s.legacyHulaoAccess ? 3 : s.yellowStages)
     : id === 'hulao' ? (s.cleared.hulao ? 3 : s.dongzhuoStages)
-    : id === 'qunxiong' ? s.warlordStages : id === 'guandu' ? s.guanduStages : s.chibiStages;
+    : id === 'qunxiong' ? s.warlordStages : id === 'guandu' ? s.guanduStages : id === 'jingnan' ? (s.jingnanStages ?? 0) : id === 'shu' ? (s.shuStages ?? 0) : id === 'hanzhong' ? (s.hanzhongStages ?? 0) : id === 'xiangfan' ? (s.xiangfanStages ?? 0) : id === 'yiling' ? (s.yilingStages ?? 0) : id === 'nanzheng' ? (s.nanzhengStages ?? 0) : id === 'beifa' ? (s.beifaStages ?? 0) : s.chibiStages;
   return Math.max(0, Math.min(3, v | 0));
 }
 
@@ -55,7 +62,7 @@ export function currentChapter(s: TimelineProgress): TimelineChapter {
 }
 
 // ———— 三关路线（地图像素坐标，strategy-map 1536×1024）与史事 ————
-const ARC_OF: Record<TimelineChapterId, string> = { huangjin: 'huangjin', hulao: 'dongzhuo', qunxiong: 'qunxiong', guandu: 'guandu', chibi: 'chibi' };
+const ARC_OF: Record<TimelineChapterId, string> = { huangjin: 'huangjin', hulao: 'dongzhuo', qunxiong: 'qunxiong', guandu: 'guandu', chibi: 'chibi', jingnan: 'jingnan', shu: 'shu', hanzhong: 'hanzhong', xiangfan: 'xiangfan', yiling: 'yiling', nanzheng: 'nanzheng', beifa: 'beifa' };
 /** 各章三关在地图上的位置（按史事地名大致方位，避开城池徽标）。 */
 export const STAGE_POINTS: Record<TimelineChapterId, ReadonlyArray<{ x: number; y: number }>> = {
   huangjin: [{ x: 822, y: 212 }, { x: 738, y: 158 }, { x: 905, y: 262 }],   // 广宗外围 · 下曲阳 · 广宗决战
@@ -63,6 +70,13 @@ export const STAGE_POINTS: Record<TimelineChapterId, ReadonlyArray<{ x: number; 
   qunxiong: [{ x: 305, y: 365 }, { x: 605, y: 525 }, { x: 1022, y: 590 }],  // 长安 · 宛城 · 寿春
   guandu: [{ x: 975, y: 200 }, { x: 1010, y: 300 }, { x: 1052, y: 400 }],  // 白马 · 延津 · 乌巢
   chibi: [{ x: 420, y: 598 }, { x: 800, y: 790 }, { x: 360, y: 742 }],      // 长坂 · 赤壁 · 江陵
+  jingnan: [{ x: 760, y: 960 }, { x: 520, y: 950 }, { x: 650, y: 880 }],    // 桂阳 · 零陵武陵 · 长沙
+  shu: [{ x: 170, y: 540 }, { x: 140, y: 600 }, { x: 105, y: 650 }],        // 葭萌关 · 落凤坡 · 成都
+  yiling: [{ x: 470, y: 560 }, { x: 505, y: 575 }, { x: 540, y: 590 }],    // 猇亭 · 连营 · 火烧连营
+  nanzheng: [{ x: 250, y: 650 }, { x: 290, y: 700 }, { x: 220, y: 740 }],        // 泸水 · 藤甲 · 孟获蛮洞
+  beifa: [{ x: 300, y: 380 }, { x: 330, y: 350 }, { x: 370, y: 360 }],    // 街亭 · 陈仓 · 五丈原
+  xiangfan: [{ x: 520, y: 600 }, { x: 560, y: 640 }, { x: 420, y: 700 }],        // 樊城 · 水淹七军 · 麦城
+  hanzhong: [{ x: 250, y: 440 }, { x: 300, y: 470 }, { x: 330, y: 430 }],    // 阳平关 · 定军山 · 汉水
 };
 export function chapterStages(id: TimelineChapterId): readonly ChronicleStage[] {
   return CHRONICLE.find(c => c.arc === ARC_OF[id])?.stages ?? [];
@@ -85,6 +99,13 @@ export const CHAPTER_REGIONS: Record<TimelineChapterId, ReadonlyArray<{ x: numbe
   qunxiong: [{ x: 290, y: 400, r: 250 }, { x: 560, y: 590, r: 210 }, { x: 1060, y: 620, r: 220 }, { x: 1240, y: 560, r: 180 }],
   guandu: [{ x: 960, y: 200, r: 260 }, { x: 470, y: 130, r: 220 }, { x: 1200, y: 90, r: 230 }, { x: 1300, y: 400, r: 200 }],
   chibi: [{ x: 460, y: 700, r: 260 }, { x: 950, y: 820, r: 260 }, { x: 1340, y: 690, r: 230 }, { x: 150, y: 520, r: 200 }],
+  jingnan: [{ x: 640, y: 930, r: 260 }],
+  shu: [{ x: 130, y: 600, r: 240 }],
+  hanzhong: [{ x: 290, y: 450, r: 200 }],
+  xiangfan: [{ x: 500, y: 650, r: 220 }],
+  yiling: [{ x: 505, y: 575, r: 170 }],
+  nanzheng: [{ x: 250, y: 700, r: 200 }],
+  beifa: [{ x: 335, y: 365, r: 170 }],
 };
 
 // ———— 攻城分区：某城在其所属章节通关后才可攻打 ————
@@ -93,6 +114,7 @@ export const CITY_CHAPTER: Readonly<Record<string, TimelineChapterId>> = {
   changan: 'qunxiong', tianshui: 'qunxiong', wancheng: 'qunxiong', xinye: 'qunxiong', shouchun: 'qunxiong', xiapi: 'qunxiong', lujiang: 'qunxiong', hanzhong: 'qunxiong',
   ye: 'guandu', nanpi: 'guandu', baima: 'guandu', wuchao: 'guandu', jinyang: 'guandu', shangdang: 'guandu', ji: 'guandu', pingyuan: 'guandu', linzi: 'guandu', beihai: 'guandu', donglai: 'guandu',
   xiangyang: 'chibi', jiangxia: 'chibi', wujun: 'chibi',
+  chengdu: 'shu',
 };
 /** 城池所属章节已通关（可攻打）；未列出的城默认随讨董开放。 */
 export function citySiegeOpen(cityId: string, s: TimelineProgress): boolean {

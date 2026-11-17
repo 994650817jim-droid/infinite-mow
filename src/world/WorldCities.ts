@@ -39,6 +39,7 @@ export const CITIES: readonly CityDef[] = [
   {id: 'pingyuan', name: '平原', tier: 'small', x: 1098, y: 78, region: '青州'},
   {id: 'tianshui', name: '天水', tier: 'small', x: 205, y: 288, region: '凉州'},
   {id: 'hanzhong', name: '汉中', tier: 'small', x: 135, y: 488, region: '益州'},
+  {id: 'chengdu', name: '成都', tier: 'large', x: 105, y: 650, region: '益州'},
   {id: 'hangu', name: '函谷关', tier: 'small', x: 520, y: 260, region: '司隶'},
   {id: 'hongnong', name: '弘农', tier: 'small', x: 470, y: 363, region: '司隶'},
   {id: 'sishui', name: '汜水关', tier: 'small', x: 795, y: 333, region: '司隶'},
@@ -74,19 +75,19 @@ export const FACTIONS: Record<FactionId, FactionDef> = {
 export const ERAS: readonly EraDef[] = [
   {id: 1, year: 191, name: '诸侯并起', summary: '董卓挟天子西入长安，关东诸侯各据州郡。',
     owners: {ye: 'yuanshao', nanpi: 'yuanshao', jinyang: 'han', shangdang: 'han', ji: 'gongsun', pingyuan: 'gongsun',
-      luoyang: 'dongzhuo', changan: 'dongzhuo', hangu: 'dongzhuo', hongnong: 'dongzhuo', sishui: 'dongzhuo', tianshui: 'mateng', hanzhong: 'liuzhang',
+      luoyang: 'dongzhuo', changan: 'dongzhuo', hangu: 'dongzhuo', hongnong: 'dongzhuo', sishui: 'dongzhuo', tianshui: 'mateng', hanzhong: 'liuzhang', chengdu: 'liuzhang',
       chenliu: 'caocao', baima: 'caocao', guandu: 'han', wuchao: 'han', xuchang: 'han', runan: 'yuanshu', wancheng: 'yuanshu',
       linzi: 'yellow', beihai: 'han', donglai: 'yellow', xiapi: 'taoqian', shouchun: 'han',
       xiangyang: 'liubiao', xinye: 'liubiao', jiangxia: 'liubiao', lujiang: 'han', wujun: 'han'}},
   {id: 2, year: 198, name: '群雄割据', summary: '曹操迎天子都许，袁绍雄踞河北；李傕、张绣、袁术相继败亡。',
     owners: {ye: 'yuanshao', nanpi: 'yuanshao', jinyang: 'yuanshao', shangdang: 'yuanshao', ji: 'gongsun', pingyuan: 'yuanshao',
-      luoyang: 'caocao', changan: 'caocao', hangu: 'caocao', hongnong: 'caocao', sishui: 'caocao', tianshui: 'mateng', hanzhong: 'zhanglu',
+      luoyang: 'caocao', changan: 'caocao', hangu: 'caocao', hongnong: 'caocao', sishui: 'caocao', tianshui: 'mateng', hanzhong: 'zhanglu', chengdu: 'liuzhang',
       chenliu: 'caocao', baima: 'caocao', guandu: 'caocao', wuchao: 'yuanshao', xuchang: 'caocao', runan: 'han', wancheng: 'caocao',
       linzi: 'yuanshao', beihai: 'yuanshao', donglai: 'yuanshao', xiapi: 'caocao', shouchun: 'caocao',
       xiangyang: 'liubiao', xinye: 'liubiao', jiangxia: 'liubiao', lujiang: 'sun', wujun: 'sun'}},
   {id: 3, year: 201, name: '官渡之后', summary: '袁绍官渡大败，曹操威震北方；孙权继立江东，刘表坐拥荆州。',
     owners: {ye: 'yuanshao', nanpi: 'yuanshao', jinyang: 'yuanshao', shangdang: 'yuanshao', ji: 'yuanshao', pingyuan: 'yuanshao',
-      luoyang: 'caocao', changan: 'caocao', hangu: 'caocao', hongnong: 'caocao', sishui: 'caocao', tianshui: 'mateng', hanzhong: 'zhanglu',
+      luoyang: 'caocao', changan: 'caocao', hangu: 'caocao', hongnong: 'caocao', sishui: 'caocao', tianshui: 'mateng', hanzhong: 'zhanglu', chengdu: 'liuzhang',
       chenliu: 'caocao', baima: 'caocao', guandu: 'caocao', wuchao: 'caocao', xuchang: 'caocao', runan: 'caocao', wancheng: 'caocao',
       linzi: 'yuanshao', beihai: 'yuanshao', donglai: 'yuanshao', xiapi: 'caocao', shouchun: 'caocao',
       xiangyang: 'liubiao', xinye: 'liubiao', jiangxia: 'liubiao', lujiang: 'sun', wujun: 'sun'}},
@@ -100,7 +101,7 @@ export function eraIndexFor(progress: {hulaoCleared: boolean; warlordStages: num
 }
 /** 讨董前夕（黄巾平定后、讨董之前）：州郡仍奉汉廷；董卓据洛阳与关隘，黄巾余党散在青、冀、汝南。 */
 export const ERA_HAN: EraDef = {id: 0, year: 189, name: '讨董前夕', summary: '黄巾虽平，余党散入青、冀；董卓入京废立、专擅朝政，关东州郡仍奉汉廷。',
-  owners: {luoyang: 'dongzhuo', hongnong: 'dongzhuo', hangu: 'dongzhuo', sishui: 'dongzhuo', tianshui: 'mateng', hanzhong: 'liuzhang',
+  owners: {luoyang: 'dongzhuo', hongnong: 'dongzhuo', hangu: 'dongzhuo', sishui: 'dongzhuo', tianshui: 'mateng', hanzhong: 'liuzhang', chengdu: 'liuzhang',
     nanpi: 'yellow', linzi: 'yellow', donglai: 'yellow', runan: 'yellow'}};
 export function eraDef(id: EraId): EraDef { return id === 0 ? ERA_HAN : ERAS[id - 1]; }
 

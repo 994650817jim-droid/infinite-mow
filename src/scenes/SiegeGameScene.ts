@@ -70,13 +70,14 @@ export function siegeGameSceneClass(Base: typeof GameScene) {
       for (let i = 0; i < effect.reinforcements; i++) this.legion.recruit(i === 0 ? 'swordsman' : 'spearman', 1, true);
       if (!this.test) for (const kind of takeExpeditionReserve(effect.reserveSlots)) { this.legion.recruit(kind, 1, true); this.allies[this.allies.length - 1].reserveSoldier = true; }
       this.battlefieldDetails.useStructuredLayout(); if (this.supplies) this.supplies.randomGeneration = false;
-      const midCity = city.tier === 'medium' && !this.defense;
+      // 攻城战重做：小 / 中 / 大城都走分段推进（SiegeMidCity 按档位配置）；守城不变
+      const midCity = !this.defense;
       const art = siegeScenery(this, city, (frame, x, y, size) => this.spawnSceneProp(frame, x, y, size), {liveTowers: !this.defense, mid: midCity});
       this.ground.setTexture(art.key).setTileScale(1);
       this.sishuiObstacles = new SishuiObstacles(); this.sishuiObstacles.footprints.splice(0, this.sishuiObstacles.footprints.length, ...art.boxes);
       this.enemyCamps = new EnemyCamps({scene: this, player: this.player, create: (x, y, hp) => this.supplies?.spawnCamp(x, y, hp) ?? null, spawn: (kind, x, y) => this.spawnEnemy(kind, x, y, 1), support: () => this.legion.grid.query(this.player.x, this.player.y, 260), reward: n => { this.legion.food += n; }}, art.camps, this.combatNow);
       this.legion.campTarget = u => this.enemyCamps?.assist(u) ?? null;
-      if (city.tier === 'large' && !this.defense) {
+      if (city.tier === 'large' && !this.defense && !midCity) {
         this.gate = this.supplies?.spawnGate(SIEGE_GATE.x, SIEGE_GATE.y, SIEGE[city.tier].gateHp, SIEGE_GATE.size) ?? null; this.gateLife = this.gate?.spawnId ?? 0;
         this.gateLabel = worldText(this, SIEGE_GATE.x, SIEGE_GATE.y - SIEGE_GATE.size - 8, '', 15, '#ffe1a0').setOrigin(.5).setDepth(36).setStroke('#1a120b', 3);
       }
@@ -92,7 +93,7 @@ export function siegeGameSceneClass(Base: typeof GameScene) {
     /** 攻城目标布置：小城帅旗，中大城两座可摧毁箭楼（会放箭）。 */
     private setupGoals() {
       const t = this.city.tier, hp = (n: number) => Math.round(n * this.chapter.hpScale(this.elapsed));
-      if (t === 'small') {
+      if (t === 'small' && !this.mid) {
         const e = this.supplies?.spawnCamp(0, -330, hp(SG.flagHp)) ?? null;
         if (e) {
           e.sprite.setAlpha(0); const g = this.add.graphics(); g.lineStyle(4, 0x3a2716).lineBetween(0, 0, 0, -96); g.fillStyle(0x8c2a2a).fillRect(0, -96, 46, 32).fillStyle(0xe8c76a).fillRect(4, -92, 38, 3); g.fillStyle(0x000000, .25).fillEllipse(0, 2, 44, 12);
@@ -147,10 +148,10 @@ export function siegeGameSceneClass(Base: typeof GameScene) {
     protected checkEnd() {
       if (this.defense || this.over) { super.checkEnd(); return; }
       if (!this.player.alive) this.finish(false);
-      else if (this.elapsed >= (this.mid ? MID_SIEGE.limitSeconds : SG.limit[this.city.tier])) this.finish(false, 'timeout');
+      else if (this.elapsed >= (this.mid ? this.mid.prof.limitSeconds : SG.limit[this.city.tier])) this.finish(false, 'timeout');
     }
     /** 测试用状态。 */
-    get siegeGoals() { return {flag: !!this.flag, towers: this.mid ? this.mid.towersAlive : this.towers.length, capturing: this.capturing, progress: this.captureProgress, captured: this.captured, mid: this.mid ? {phase: this.mid.phase, gate: Math.round(this.mid.gateHp), ram: this.mid.ramInfo, points: this.mid.pointsInfo, boss: this.mid.bossInfo, stats: {...this.mid.stats}, zones: this.mid.volleyZones} : null}; }
+    get siegeGoals() { return {flag: !!this.flag, towers: this.mid ? this.mid.towersAlive : this.towers.length, capturing: this.capturing, progress: this.captureProgress, captured: this.captured, mid: this.mid ? {tier: this.mid.tier, bridge: this.mid.bridgeDown, ropes: this.mid.ropesLeft, inner: this.mid.innerGateHp, phase: this.mid.phase, gate: Math.round(this.mid.gateHp), ram: this.mid.ramInfo, points: this.mid.pointsInfo, boss: this.mid.bossInfo, stats: {...this.mid.stats}, zones: this.mid.volleyZones} : null}; }
     /** 测试用：中城控制器。 */
     get siegeMid() { return this.mid ?? null; }
     /** 中城：按段从固定方向刷兵（城门 / 两翼 / 巷口 / 回廊）。 */
@@ -173,6 +174,8 @@ export function siegeGameSceneClass(Base: typeof GameScene) {
         footprints: this.sishuiObstacles!.footprints as unknown as Array<{left: number; right: number; top: number; bottom: number}>,
         spawnEnemy: (kind, x, y, force) => this.spawnEnemy(kind, x, y, 1, force),
         advance: (e, nx, ny, dt) => this.advanceEnemy(e, nx, ny, dt),
+        spawnTarget: (x, y, hp, size, tex, frame) => { const e = this.supplies?.spawnGate(x, y, hp, size) ?? null; e?.sprite.setTexture(tex, frame).setOrigin(.5, 1).setDisplaySize(size, size).setAlpha(1); return e; },
+        opts: {tier: this.city.tier, bossName: this.siegeBossLabel(), externalBoss: this.city.tier === 'large'},
         spawnTower: (x, y) => { const e = this.supplies?.spawnCamp(x, y, Math.round(SG.towerHp * this.chapter.hpScale(this.elapsed))) ?? null; e?.sprite.setTexture('sishui_props_refined', 1).setOrigin(.5, 1).setDisplaySize(140, 140).setAlpha(1); return e; },
         spawnBarrel: (x, y) => { this.env?.spawnForTest('barrel', x - this.player.x, y - this.player.y); },
         hurtTroops: (x, y, r, d) => this.legion.hurtArea(x, y, r, d, this.combatNow),
@@ -184,6 +187,13 @@ export function siegeGameSceneClass(Base: typeof GameScene) {
         engineLevel: Number(this.registry.get('siegeEngineLevel') ?? (loadWorld() as {siegeEngineLevel?: number}).siegeEngineLevel ?? 0),
       });
     }
+    /** 守将称呼：小城县尉、中城守将、大城为势力名将（RosterStore 的势力武将名单里抽一位）。 */
+    private siegeBossLabel(): string | undefined {
+      if (this.city.tier === 'small') return '县尉';
+      if (this.city.tier !== 'large') return undefined;
+      const g = factionGeneral(this.owner); if (g) this.chapter.bossName = `${FACTIONS[this.owner].name}大将 · ${g}`;
+      return g ?? '大将';
+    }
     private battleDef() { return this.defense ? defenseBattle(this.city, this.owner) : siegeBattle(this.city, this.owner); }
     protected customChapter() { return this.city ? this.battleDef() : null; }
     protected abandonRun() { if (!this.over) abandonExpedition(this.receipt, this.allies.filter(u => u.active && u.reserveSoldier).map(u => u.kind)); }
@@ -191,6 +201,7 @@ export function siegeGameSceneClass(Base: typeof GameScene) {
     /** 城门未破时，城门是武器的优先目标（在刺程内时）。 */
     protected priorityWeaponTarget(range: number, bodyRadius = true) {
       const camp = this.enemyCamps?.target(range, bodyRadius); if (camp) return camp;
+      const t = this.mid?.priorityTarget(range); if (t) return t;
       if (this.gateAlive && this.bossTimeReached && Math.hypot(this.gate!.x - this.player.x, this.gate!.y - this.player.y) <= range + (bodyRadius ? this.gate!.radius : 0)) return this.gate;
       // 2026-11-16 修：原来营寨 / 城门不在射程时返回 null，首领 / 精锐优先被整个吃掉（黄忠宝雕弓对首领 0 伤害），改为退回基类的首领 > 精锐
       return super.priorityWeaponTarget(range, bodyRadius);
@@ -199,7 +210,14 @@ export function siegeGameSceneClass(Base: typeof GameScene) {
     protected tryCustomBossSkill() { if (!this.controller || !this.boss?.active) return false; this.controller.forceSkill(this.combatNow); return true; }
     protected spawnBoss() {
       // 攻城：中小城不出守将（目标是拔旗 / 毁箭楼后占领府衙）；大城须城门已破
-      if (this.mid) { if (this.mid.phase === 'hall') super.spawnBoss(); return; }
+      if (this.mid) {
+        if (this.mid.phase !== 'hall' || this.boss?.active) return;
+        super.spawnBoss(); const b = this.boss as Enemy | null; if (!b) return;
+        b.hp = b.maxHp = Math.round(b.maxHp * this.mid.prof.bossHpMul);
+        // 大城：势力名将两阶段（第四章首领招式组：半血进二阶段，专属技能按城轮换）
+        if (this.city.tier === 'large') { const kit = siegeLargeKit(this.city); this.controller = new GuanduBoss({scene: this, boss: b, player: this.player, army: this.legion, spawn: (kind, x, y) => this.spawnEnemy(kind, x, y, 1, true)}, kit.stage, this.combatNow, {atlas: kit.atlas, name: this.chapter.bossName}); }
+        return;
+      }
       if (!this.defense && this.city?.tier !== 'large') return;
       // 大城：城门未破，大将不出城
       if (this.city?.tier === 'large' && this.gateAlive) { if (!this.gateWarned) { this.gateWarned = true; this.showWaveBanner('城门紧闭 · 先破城门！', true); } return; }

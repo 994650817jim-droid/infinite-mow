@@ -37,9 +37,12 @@ try {
     for (let i = 1; i < 8; i++) {
       await page.evaluate(i => window.__IM.setTime(i * 45 + .1), i);
       await page.waitForFunction(i => window.__IM.waveInfo().index === i, i);
-      const state = await page.evaluate(() => ({ mode: window.__IM.mode, boss: window.__IM.bossActive }));
+      // 等级合并（f4ea0ab）后每关保底：第 1/2/3 波清完补三选一，会和免费招兵前后排队；这里两种弹窗都点掉，招兵计数
+      const state = await page.evaluate(() => { const s = window.__game.scene.getScene('GameScene'), out = { mode: s.mode, boss: window.__IM.bossActive, recruits: 0, levelups: 0 };
+        for (let g = 0; g < 40; g++) { if (s.mode === 'levelup') { out.levelups++; s.chooseUpgrade(0); } else if (s.mode === 'recruit') { out.recruits++; window.__IM.chooseRecruit(0); } else break; }
+        return out; });
       seen.push({ i, ...state });
-      if (state.mode === 'recruit') { recruitCount++; if (i === 7) bossBeforeFinal = state.boss; await page.evaluate(() => window.__IM.chooseRecruit(0)); }
+      if (state.recruits) { recruitCount += state.recruits; if (i === 7) bossBeforeFinal = state.boss; }
     }
     await page.waitForFunction(() => window.__IM.bossActive);
     const final = await page.evaluate(() => { const s = window.__game.scene.getScene('GameScene'); return { info: window.__IM.bossInfo(), tex: s.boss.sprite.texture.key, allies: s.allies.length, perWave: s.legion.freeRecruitCount, wave: window.__IM.waveInfo() }; });
@@ -181,9 +184,13 @@ try {
       await page.evaluate(() => { const s = window.__game.scene.getScene('GameScene'); s.hitEnemy(s.boss, 4000, s.combatNow); });
       // 2026-11-17：首领倒地后掉宝箱，主将捡起遗物才进结算（原来的遗物三选一卡改成宝箱）。
       await page.waitForTimeout(1300);
+      // 等级合并（f4ea0ab / 5f89729）后：首领经验可能让武将升级、开箱补保底「军略」，三选一弹窗会暂停战斗时钟（宝箱落地也停）；点掉后流程应照常走到结算
+      await page.evaluate(() => { window.__picks = { beforeChest: 0, afterChest: 0 }; });
+      await page.waitForFunction(() => { const s = window.__game.scene.getScene('GameScene'); while (s.mode === 'levelup') { window.__picks.beforeChest++; s.chooseUpgrade(0); } return s.bossChests[0]?.ready || s.mode === 'result'; }, null, { polling: 100 });
       const loot = await page.evaluate(() => { const s = window.__game.scene.getScene('GameScene'); const r = { mode: s.mode, chests: s.bossChests.length, ready: s.bossChests[0]?.ready }; s.collectBossChests(); return r; });
       check(`chapter2_boss_chest_before_result_${width}`, loot.mode !== 'result' && loot.chests === 1 && loot.ready, { loot });
-      await page.waitForFunction(() => window.__game.scene.getScene('GameScene').mode === 'result');
+      await page.waitForFunction(() => { const s = window.__game.scene.getScene('GameScene'); while (s.mode === 'levelup') { window.__picks.afterChest++; s.chooseUpgrade(0); } return s.mode === 'result'; }, null, { polling: 100 });
+      console.log(`  chapter2 boss picks ${width}:`, JSON.stringify(await page.evaluate(() => window.__picks)));
       const victory = await page.evaluate(() => { const s = window.__game.scene.getScene('GameScene'); return { mode: s.mode, title: s.resultTexts.title.text, text: s.resultTexts.subtitle.text }; });
       check(`chapter2_victory_text_${width}`, victory.mode === 'result' && victory.title === '董卓西走' && victory.text.includes('董卓'), victory);
       await page.screenshot({ path: `${out}/hulao-victory-${width}.png` });

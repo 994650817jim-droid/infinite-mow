@@ -14,7 +14,7 @@ try {
   await p.goto(BASE + '?dev=1&autostart=1&stage=3&layout=desktop&character=liubei');
   await p.waitForFunction(G0 => { const s = eval(G0); return s?.player && s.scene.isActive(); }, G, { timeout: 90000 });
   await p.waitForTimeout(1200);
-  const pre = await p.evaluate(async G0 => { const s = eval(G0), m = await import('/src/data/mounts.ts'), st = await import('/src/systems/ItemStore.ts');
+  const pre = await p.evaluate(async G0 => { const s = eval(G0), m = await import('/src/data/mounts.ts'), st = s.stable; /* 游戏实际在用的那份 ItemStore */
     return { had: s.hadStarterHorse, owned: st.ownedHorses().map(h => h.id), q: m.horseQuality(m.horseDef('nag')), qBlue: m.horseQuality(m.horseDef('grey_horse')), name: m.horseDef('nag').name, bonus: m.horseDef('nag').bonus }; }, G);
   ck('新存档：开打时没有驽马', pre.had === false && !pre.owned.includes('nag'), pre);
   ck('驽马：白品质、名字仍是驽马、加成不变（移速 +2.6%）', pre.q === 'white' && pre.qBlue === 'blue' && pre.name === '驽马' && pre.bonus.move === .026 && Object.keys(pre.bonus).length === 1, pre);
@@ -37,14 +37,14 @@ try {
   const all = pages.map(x => x.texts.join('|')).join('\n');
   ck('逐句翻页：主公刘备时 6 句（含呼应起兵一句），最后一页是收下按钮', pages.length === 6 && pages[5].conf && /刘备：/.test(all) && /老实的驮马/.test(all), { n: pages.length, all });
   ck('最后一页写明获得驽马 · 白', /获得坐骑「驽马」· 白/.test(pages[pages.length - 1]?.texts.join('|') ?? ''), pages[pages.length - 1]);
-  const after = await p.evaluate(async () => { const st = await import('/src/systems/ItemStore.ts'), sm = await import('/src/data/storyMerchantHorse.ts'); return { done: window.__done, owned: st.ownedHorses().map(h => h.id), seen: sm.merchantStorySeen() }; });
+  const after = await p.evaluate(async G0 => { const st = eval(G0).stable, sm = await import('/src/data/storyMerchantHorse.ts'); return { done: window.__done, owned: st.ownedHorses().map(h => h.id), seen: sm.merchantStorySeen() }; }, G);
   ck('收下后：马厩有驽马、剧情记为已看、回调一次', after.done === 1 && after.owned.includes('nag') && after.seen, after);
   const again = await p.evaluate(async G0 => { const s = eval(G0); s.hadStarterHorse = false; s.debugModified = false; s.debugJumped = false; s.player.damageImmune = false; return { due: s.merchantStoryDue() }; }, G);
   ck('只播一次：看过之后不再触发', again.due === false, again);
   // 老存档：开打时已有驽马 → 不补弹（即使没看过剧情）
   const old = await p.evaluate(async G0 => { localStorage.removeItem('im_story_merchant_horse_v1'); const s = eval(G0); s.scene.restart(); return 1; }, G);
   void old; await p.waitForFunction(G0 => { const s = eval(G0); return s?.player && s.scene.isActive(); }, G, { timeout: 90000 }); await p.waitForTimeout(800);
-  const o2 = await p.evaluate(async G0 => { const s = eval(G0), st = await import('/src/systems/ItemStore.ts'), n = st.ownedHorses().filter(h => h.id === 'nag').length; return { had: s.hadStarterHorse, due: s.merchantStoryDue(), regrant: st.grantHorse('nag'), n }; }, G);
+  const o2 = await p.evaluate(async G0 => { const s = eval(G0), st = s.stable, n = st.ownedHorses().filter(h => h.id === 'nag').length; return { had: s.hadStarterHorse, due: s.merchantStoryDue(), regrant: st.grantHorse('nag'), n }; }, G);
   ck('老存档已有驽马：不补弹剧情、不重复送', o2.had === true && o2.due === false && o2.regrant === false && o2.n === 1, o2);
   // 非刘备主公：不出现刘备那句
   const lb = await p.evaluate(async () => { const m = await import('/src/data/storyMerchantHorse.ts'); const a = m.merchantHorseLines('赵云', false); return { n: a.length, liubei: a.some(l => l.who === '刘备'), lord: a.some(l => l.who === '赵云') }; });

@@ -147,8 +147,10 @@ export class BootScene extends Phaser.Scene {
     for (const sheet of ['a', 'b', 'c', 'd']) this.load.spritesheet('hero_fx_' + sheet, 'assets/hero-fx/fx_' + sheet + '.png', { frameWidth: 256, frameHeight: 256 });
     // 庞统火雷与连环铁链贴图（ChatGPT 生成，tools/prepare-weiyan-pangtong-icons.mjs 切出）
     this.load.image('pangtong_mine', 'assets/hero-fx/pangtong_mine.png'); this.load.image('pangtong_chain', 'assets/hero-fx/pangtong_chain.png');
-    // 庞统铁索连环像素特效（6×4，每帧 256，黑底叠加）：烧红铁索 / 沿索火苗 / 地火 / 雷芯闪；缺图时武器代码退回程序化过渡
-    this.load.spritesheet('pangtong_fx', 'assets/hero-fx/pangtong_fx.png', { frameWidth: 256, frameHeight: 256 });
+    // 庞统铁索连环手绘特效（2026-11-17 替换原像素图集 pangtong_fx，旧文件保留不再加载）：
+    //  pangtong_paint 6×4 每帧 256：火雷爆炸 / 沿索火苗 / 地火 / 雷芯闪；pangtong_chain_hot 6 帧每帧 1024×130：烧红铁索平铺
+    this.load.spritesheet('pangtong_paint', 'assets/hero-fx/pangtong_paint.png', { frameWidth: 256, frameHeight: 256 });
+    this.load.spritesheet('pangtong_chain_hot', 'assets/hero-fx/pangtong_chain_hot.png', { frameWidth: 1024, frameHeight: 130 });
     // 黄忠神射像素特效（6×4，每帧 256，黑底叠加）：神射爆裂 / 进入神射金光 / 神射箭拖光 / 宝刀未老；缺图时退回程序化过渡
     this.load.spritesheet('huangzhong_fx', 'assets/hero-fx/huangzhong_fx.png', { frameWidth: 256, frameHeight: 256 });
     // 被动满层战吼像素特效（2 行 × 6 帧，每帧 256×512，黑底叠加）：脚下声浪冲击 / 身上迸发的气势

@@ -68,6 +68,9 @@ assets/raw/*
 !/tools/test-follower-weapons.mjs
 !/tools/test-follower-revive.mjs
 !/tools/record-revive-gif.mjs
+!/tools/record-fx-compare-gif.mjs
+!/tools/test-follower-sortie.mjs
+!/tools/record-sortie-gif.mjs
 !/tools/test-xiliang.mjs
 !/tools/test-new-heroes.mjs
 !/tools/test-weiyan-pangtong.mjs
@@ -81,6 +84,8 @@ assets/raw/*
 !/tools/test-campaign-build.mjs
 !/tools/test-charms.mjs
 !/tools/test-token-slots.mjs
+!/tools/test-merit.mjs
+!/tools/test-level-merge.mjs
 !/tools/test-hero-codex.mjs
 !/tools/phase19-progression.mjs
 !/tools/rest-flow-smoke.mjs
@@ -147,3 +152,13 @@ assets/raw/*
 !/tools/test-city-build.mjs
 !/tools/test-siege-medium.mjs
 !/tools/prepare-town-city-art.mjs
+!/tools/test-jingnan-full.mjs
+!/tools/test-hanzhong-full.mjs
+!/tools/test-shu.mjs
+!/tools/test-xiangfan.mjs
+!/tools/test-nanzheng.mjs
+!/tools/test-siege-tiers.mjs
+!/tools/test-jingnan-art.mjs
+!/tools/test-hanzhong-art.mjs
+!/tools/test-yiling-full.mjs
+!/tools/test-beifa-full.mjs

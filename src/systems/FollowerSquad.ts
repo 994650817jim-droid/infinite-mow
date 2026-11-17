@@ -9,6 +9,7 @@ import type { Player } from '../entities/Player';
 import { visualTextureKey } from './ReadableTextures';
 import { framesFigure, sheetFigureHeight } from './SpriteMetrics';
 import { ACTION_MS, HERO_ACTIONS, type ActionFrame } from '../data/heroActions';
+import type { CharacterPassives } from './CharacterPassives';
 import { HINT_MOCK, groundScar } from '../ui/HintStyle';
 import { rankBonus, type Recruit } from './RosterStore';
 import { loadout, type GearOwner } from './ItemStore';
@@ -42,6 +43,8 @@ const heroSheet = (id: string) => id === 'zhaoyun' ? 'hero_walk_sheet' : `${id}_
 
 export class Follower {
   hp = 1; maxHp = 1; cooldown = 0; target: Enemy | null = null; nextQuery = 0; nextContact = 0;
+  /** 出击时追的目标与重选时间。 */
+  sortieTarget: Enemy | null = null; sortieUntil = 0;
   /** 倒地（等主将来救）与救援进度（秒）；救起次数。 */
   downed = false; reviveProgress = 0; revives = 0;
   /** 正在播的动作（攻击 / 受伤 / 倒地），播完回到行走帧；倒地动作定格在最后一帧。 */
@@ -54,6 +57,8 @@ export class Follower {
   lx = 0; ly = 0; faceUntil = 0;
   /** 可玩名将随行：本命武器执行器（战斗场景 createFollowerWeapon 提供）、武器等级、伤害 / 冷却倍率。没有执行器时用模板攻击。 */
   weaponRun: ((dt: number, now: number) => void) | null = null; weaponLevel = 1; weaponDamageMul = 1; weaponCooldownMul = 1;
+  /** 名将随行自己的天赋被动（战斗场景建本命武器时挂上；按 FOLLOW.passiveScale 折算）。 */
+  passive: CharacterPassives | null = null;
   readonly sprite: Phaser.GameObjects.Image; readonly shadow: Phaser.GameObjects.Ellipse; readonly label: Phaser.GameObjects.Text; readonly bar: Phaser.GameObjects.Graphics;
   readonly sheet: string; readonly template: FollowerTemplate; readonly damage: number; readonly speedMul: number; readonly haste: number; readonly gear: GearStats; level: number;
   constructor(readonly scene: Phaser.Scene, readonly recruit: Recruit, x: number, y: number, leaderLevelHp: number) {
@@ -144,6 +149,10 @@ export class FollowerSquad {
   private readonly rescueGfx: Phaser.GameObjects.Graphics; private readonly rescueText: Phaser.GameObjects.Text; private readonly hud: Phaser.GameObjects.Graphics;
   /** 当前吃主将全局伤害加成的倍率（本命武器结算时用）。 */
   share = 1;
+  /** 当前是否出击（读部曲指令）。 */
+  sortie = false;
+  /** 随行实际在用的规则（FOLLOW）。测试改参数要改这一份：常开的 dev server 热更新后，测试自己 import 的 recruits.ts 可能是另一个模块实例。 */
+  readonly rules = FOLLOW;
   /** 本命武器命中时记账（测试 / 平衡用）。 */
   credit(f: Follower, damage: number): void { this.stats.damage += damage; this.stats.hits++; f.hits++; }
   /** 阵位朝向（给本命武器的 heading 用）。 */
@@ -172,21 +181,29 @@ export class FollowerSquad {
 
   update(dt: number, now: number): void {
     const p = this.player, n = this.members.length, dmgShare = 1 + FOLLOW.shareLeaderDamage * (Math.max(.2, this.leaderDamage()) - 1); this.share = dmgShare;
+    // 部曲 HUD 的「出击」也带上随行（护阵时紧贴主将）
+    const sortie = (this.scene as { legion?: { order?: string } }).legion?.order === 'sortie'; this.sortie = sortie;
     this.gfx.clear();
     for (const f of this.members) {
       if (f.downed) { this.updateDowned(f, dt, now); this.render(f, now); continue; }
       // 阵位 + 近战前出偏移（指数衰减回位）
       const decay = Math.exp(-8 * dt); f.lx *= decay; f.ly *= decay;
+      const sortieTarget = sortie ? this.sortieTarget(f, now) : null;
+      if (f.passive) f.passive.areaMul = sortie ? FOLLOW.sortieRangeMul : 1; // 出击：名将武器范围放大
+      if (sortieTarget) this.chase(f, sortieTarget, dt, now);
+      else {
       const s = this.slotPos(f.slot, n), lead = 1 / FOLLOW.followK, gx = s.x + f.lx + this.vx * lead, gy = s.y + f.ly + this.vy * lead;
       if (Math.hypot(gx - f.x, gy - f.y) > FOLLOW.snap) { f.place(gx, gy); f.target = null; this.stats.teleports++; f.sprite.setAlpha(.3); this.scene.tweens.add({ targets: f.sprite, alpha: 1, duration: 220 }); }
       this.move(f, gx, gy, dt, now);
+      }
       // 可玩名将：本命武器自己找目标、出手（以随行为发射源）
       if (f.weaponRun) { f.weaponRun(dt, now); }
       else {
-      // 索敌：只找自己射程内的敌人，不离阵去追
-      const t = TEMPLATES[f.template];
-      if (f.target && (!f.target.active || Math.hypot(f.target.x - f.x, f.target.y - f.y) > t.range)) f.target = null;
-      if (!f.target && now >= f.nextQuery) { f.nextQuery = now + 150; f.target = this.nearest(f.x, f.y, t.range, f.x, f.y); }
+      // 索敌：护阵时只找自己射程内的敌人（不离阵去追）；出击时射程 ×sortieRangeMul，优先出击目标
+      const t = TEMPLATES[f.template], range = t.range * (sortie ? FOLLOW.sortieRangeMul : 1);
+      if (sortieTarget && Math.hypot(sortieTarget.x - f.x, sortieTarget.y - f.y) <= range) f.target = sortieTarget;
+      if (f.target && (!f.target.active || Math.hypot(f.target.x - f.x, f.target.y - f.y) > range)) f.target = null;
+      if (!f.target && now >= f.nextQuery) { f.nextQuery = now + 150; f.target = this.nearest(f.x, f.y, range, f.x, f.y); }
       // 攻击
       f.cooldown -= dt;
       if (f.target && f.cooldown <= 0) {
@@ -213,6 +230,7 @@ export class FollowerSquad {
   /** 外部伤害（首领技能等）。 */
   hurt(f: Follower, damage: number, now: number): void {
     if (f.downed) return; // 倒地期间不被追打补刀
+    if (f.passive) { if (f.passive.isInvulnerable(now)) return; const m = f.passive.damageTakenMultiplier(now); damage *= 1 - (1 - m) * FOLLOW.passiveScale; f.passive.onDamage(now); }
     f.hp -= damage * Math.max(0, 1 - f.gear.reduce); f.hurtUntil = now + 140;
     if (f.hp <= 0) this.down(f, now); else if (!f.act || now >= f.act.until) f.play('hurt', f.dir, now);
   }
@@ -269,12 +287,37 @@ export class FollowerSquad {
     for (const e of this.query(cx, cy, r, )) { if (!e.active || e.invulnerable) continue; const d = (e.x - fx) ** 2 + (e.y - fy) ** 2; if (d < bd) { bd = d; best = e; } }
     return best;
   }
+  /** 出击目标：主将 sortieSeek 内，首领 > 精锐 > 离随行最近；每 0.2 秒重选一次（目标没了立刻重选）。 */
+  private sortieTarget(f: Follower, now: number): Enemy | null {
+    const cur = f.sortieTarget;
+    if (cur && cur.active && !cur.invulnerable && Math.hypot(cur.x - this.player.x, cur.y - this.player.y) <= FOLLOW.sortieSeek + 40 && now < f.sortieUntil) return cur;
+    let best: Enemy | null = null, score = Infinity;
+    for (const e of this.query(this.player.x, this.player.y, FOLLOW.sortieSeek)) {
+      if (!e.active || e.invulnerable || e.isSupplySlot) continue;
+      const rank = e.kind === 'boss' ? 0 : e.kind === 'elite' ? 1 : 2, d = Math.hypot(e.x - f.x, e.y - f.y), sc = rank * 10000 + d;
+      if (sc < score) { score = sc; best = e; }
+    }
+    f.sortieTarget = best; f.sortieUntil = now + 200; return best;
+  }
+  /** 出击追击：以 sortieSpeed 冲到目标的攻击距离上；离主将最远 sortieLeash，超出沿方向收回。 */
+  private chase(f: Follower, e: Enemy, dt: number, now: number): void {
+    const reach = f.weaponRun ? 70 : TEMPLATES[f.template].range * .7, d = Math.hypot(e.x - f.x, e.y - f.y) || 1;
+    let gx = e.x - (e.x - f.x) / d * reach, gy = e.y - (e.y - f.y) / d * reach;
+    const lx = gx - this.player.x, ly = gy - this.player.y, ld = Math.hypot(lx, ly);
+    if (ld > FOLLOW.sortieLeash) { gx = this.player.x + lx / ld * FOLLOW.sortieLeash; gy = this.player.y + ly / ld * FOLLOW.sortieLeash; }
+    const dx = gx - f.x, dy = gy - f.y, dist = Math.hypot(dx, dy), step = Math.min(dist, FOLLOW.sortieSpeed * f.speedMul * dt);
+    if (step > .25) {
+      f.sprite.setPosition(f.x + dx / dist * step, f.y + dy / dist * step); f.walk += step; f.passive?.onMove(now);
+      if (now >= f.faceUntil) f.dir = Math.abs(dx) > Math.abs(dy) ? dx < 0 ? 'left' : 'right' : dy < 0 ? 'up' : 'down';
+    } else f.walk = 0;
+    f.lastX = f.x; f.lastY = f.y;
+  }
   /** 指数平滑追阵位（与帧率无关），走路距离推动行走帧，朝向跟随移动方向（出手后短时间朝向目标）。 */
   private move(f: Follower, gx: number, gy: number, dt: number, now: number) {
     const k = 1 - Math.exp(-FOLLOW.followK * dt), dx = (gx - f.x) * k, dy = (gy - f.y) * k, step = Math.hypot(dx, dy);
     f.sprite.setPosition(f.x + dx, f.y + dy);
     if (step > .25) {
-      f.walk += step;
+      f.walk += step; f.passive?.onMove(now);
       if (now >= f.faceUntil && step > .6) { const horiz = f.dir === 'left' || f.dir === 'right', useX = horiz ? Math.abs(dx) * 1.2 >= Math.abs(dy) : Math.abs(dx) > Math.abs(dy) * 1.2; f.dir = useX ? dx < 0 ? 'left' : 'right' : dy < 0 ? 'up' : 'down'; }
     } else f.walk = 0;
     f.lastX = f.x; f.lastY = f.y;

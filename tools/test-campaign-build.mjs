@@ -36,15 +36,15 @@ ck('存档：征程构筑写进 im_campaign_v1（随存档位），不存遗物 
 await battle(2);
 const loaded = await p.evaluate(() => { const s = window.__game.scene.getScene('GameScene'), g = s.player.growth;
   return { loaded: s.campaignLoaded, replay: s.campaignReplay, pursuit: g.build.level('pursuit'), ember: g.build.level('ember'), gallop: g.masteries.dragon_gallop, weapon: s.player.weapons[0].level, level: s.player.level, gearHp: g.gear.hp > 0, full: s.player.hp === s.player.maxHp, relicsField: 'relics' in s.player }; });
-ck('新开一场进未通关的主线关（1-2）：战法、技艺、武器等级、局内等级都恢复', loaded.loaded && !loaded.replay && loaded.pursuit === 2 && loaded.ember === 1 && loaded.gallop === 1 && loaded.weapon === 3 && loaded.level === 7, loaded);
+ck('新开一场进未通关的主线关（1-2）：战法、技艺、武器等级都恢复；等级即武将等级（不存局内等级，2026-11-17）', loaded.loaded && !loaded.replay && loaded.pursuit === 2 && loaded.ember === 1 && loaded.gallop === 1 && loaded.weapon === 3 && loaded.level === 1, loaded);
 ck('恢复后兵装加成仍在（以前同章连打会丢）、血量回满、没有本局遗物', loaded.gearHp && loaded.full && !loaded.relicsField, loaded);
 
 // 3) 已通关的旧关（重打）：空构筑，也不改存档里的构筑
 await p.evaluate(async () => { const hp = await window.__mod('/src/systems/HeroProgress.ts'); hp.claimFirstClear('huangjin-2'); });
 await battle(2);
 const replay = await p.evaluate(async () => { const s = window.__game.scene.getScene('GameScene'), g = s.player.growth, c = await window.__mod('/src/systems/Campaign.ts');
-  return { replay: s.campaignReplay, loaded: s.campaignLoaded, pursuit: g.build.level('pursuit'), level: s.player.level, stillSaved: c.loadCampaignBuild('zhaoyun')?.player.level }; });
-ck('重打已通关的关：用空构筑（不读），存档里的征程构筑不变', replay.replay && !replay.loaded && replay.pursuit === 0 && replay.level === 1 && replay.stillSaved === 7, replay);
+  return { replay: s.campaignReplay, loaded: s.campaignLoaded, pursuit: g.build.level('pursuit'), level: s.player.level, stillSaved: c.loadCampaignBuild('zhaoyun')?.player.build?.tactics?.pursuit }; });
+ck('重打已通关的关：用空构筑（不读），存档里的征程构筑不变', replay.replay && !replay.loaded && replay.pursuit === 0 && replay.level === 1 && replay.stillSaved === 2, replay);
 
 // 4) 换武将：各自一份
 const other = await p.evaluate(async () => { const c = await window.__mod('/src/systems/Campaign.ts'); localStorage.setItem('im_campaign_v1', '{bad'); const broken = c.loadCampaignBuild('zhaoyun'); localStorage.removeItem('im_campaign_v1'); return { guanyu: c.loadCampaignBuild('guanyu') ?? null, broken: broken ?? null, empty: c.loadCampaignBuild('zhaoyun') ?? null }; });
@@ -54,30 +54,18 @@ await battle(3);
 const fresh = await p.evaluate(() => { const s = window.__game.scene.getScene('GameScene'); return { loaded: s.campaignLoaded, level: s.player.level, pursuit: s.player.growth.build.level('pursuit') }; });
 ck('老档没有征程构筑：未通关的主线关从空构筑开局', !fresh.loaded && fresh.level === 1 && fresh.pursuit === 0, fresh);
 
-// 6) 战功换残卷（2026-11-17）：按本关新涨的战功、跨过的「每 3 级」门槛给残卷，零头留到下一关，不重复换
+// 6) 武将等级跨章接续（2026-11-17 战功另改为击杀精英 / 首领得的货币，见 test-merit；这里只验局内等级接续）
 await battle(1);
-const merit = await p.evaluate(async () => {
-  const m = await window.__mod('/src/data/merit.ts'), ms = await window.__mod('/src/systems/MasteryStore.ts'), s = window.__game.scene.getScene('GameScene'), out = {};
-  out.k = m.MERIT_SCROLL.levelsPerScroll;
-  out.table = [[1, 3], [1, 4], [4, 6], [6, 7], [3, 10], [7, 7]].map(([a, b]) => m.meritScrolls(a, b));
-  const before = ms.scrolls?.() ?? null;
-  s.meritStartLevel = 2; s.player.level = 8; out.first = s.settleMerit(); out.line = s.resultTexts?.body?.text.split('\n').find(l => l.startsWith('战功')) ?? null;
-  out.again = s.settleMerit(); out.after = ms.scrolls?.() ?? null; out.before = before;
-  return out;
-});
-ck('战功换残卷：每 3 级 1 张（待复核），按跨过的门槛算、零头留到下一关', merit.k === 3 && JSON.stringify(merit.table) === '[0,1,0,1,3,0]', merit);
-ck('结算画面加一行「战功 +X 级 → 武学残卷 +Y」，残卷入库；同一段等级不重复换', JSON.stringify(merit.first) === '[6,2]' && /战功\s+\+6 级.*→ 武学残卷 \+2/.test(merit.line ?? '') && JSON.stringify(merit.again) === '[0,0]' && (merit.before === null || merit.after - merit.before === 2), merit);
-
-// 7) 战功跨章继承：1-3 打赢后存的征程构筑，第二章 2-1 接着上次的等级（本关起点也是这个等级）
+// 局内等级跨章继承：1-3 打赢后存的征程构筑，第二章 2-1 接着上次的等级（本关起点也是这个等级）
 await p.evaluate(async () => { const s = window.__game.scene.getScene('GameScene'), c = await window.__mod('/src/systems/Campaign.ts'), hp = await window.__mod('/src/systems/HeroProgress.ts');
-  s.player.level = 11; c.saveCampaignBuild('zhaoyun', c.packCampaign('zhaoyun', s.player, s.legion)); hp.claimFirstClear('huangjin-3'); });
+  c.saveCampaignBuild('zhaoyun', c.packCampaign('zhaoyun', s.player, s.legion)); hp.setHeroProgress('zhaoyun', 9, 0); hp.claimFirstClear('huangjin-3'); });
 await p.goto(base + '?dev=1&autostart=1&chapter=hulao&westStage=1&layout=desktop');
 await p.waitForFunction(() => window.__game?.scene.getScene('GameScene')?.player && window.__game.scene.getScene('GameScene').__DEV_ACTIONS, null, { timeout: 120000 });
-const cross = await p.evaluate(() => { const s = window.__game.scene.getScene('GameScene'); return { chapter: s.chapter.id, stage: s.chapter.westStage, loaded: s.campaignLoaded, level: s.player.level, start: s.meritStartLevel }; });
-ck('1-3 → 2-1：战功接着上次的等级（Lv.11），不归零；本关战功从 Lv.11 起算', cross.chapter === 'hulao' && cross.loaded && cross.level === 11 && cross.start === 11, cross);
+const cross = await p.evaluate(() => { const s = window.__game.scene.getScene('GameScene'); return { chapter: s.chapter.id, stage: s.chapter.westStage, loaded: s.campaignLoaded, level: s.player.level, start: 0 }; });
+ck('1-3 → 2-1：等级即武将等级，接着上次（Lv.9），不归零', cross.chapter === 'hulao' && cross.loaded && cross.level === 9, cross);
 await battle(3);
-const old = await p.evaluate(() => { const s = window.__game.scene.getScene('GameScene'); return { replay: s.campaignReplay, level: s.player.level, start: s.meritStartLevel }; });
-ck('重打已通关的 1-3：临时空构筑，战功从 Lv.1 开始（之前定的规则不变）', old.replay && old.level === 1 && old.start === 1, old);
+const old = await p.evaluate(() => { const s = window.__game.scene.getScene('GameScene'); return { replay: s.campaignReplay, level: s.player.level, start: 0 }; });
+ck('重打已通关的 1-3：临时空构筑（卡从零开始），等级仍是武将等级 Lv.9（只留武将等级后不再归 1）', old.replay && old.level === 9, old);
 
 ck('控制台无报错', errors.length === 0, errors.slice(0, 6));
 console.log(`\n${pass} passed, ${fail} failed`);

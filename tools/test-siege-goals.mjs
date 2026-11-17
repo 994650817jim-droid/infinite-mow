@@ -26,24 +26,18 @@ const open = async (layout, tier, mode) => {
   }, [tier, mode]);
   await p.waitForFunction(() => window.__game.scene.isActive('SiegeGameScene') && window.__game.scene.getScene('SiegeGameScene').player, null, { timeout: 90000 });
   await p.waitForTimeout(1200);
-  await p.evaluate(G0 => { const s = eval(G0); s.spawnTimer = s.eliteTimer = 1e9; s.player.damageImmune = true; for (const e of s.enemies) if (e.active && e.kind !== 'boss' && !e.isSupplySlot) e.deactivate(); for (let i = 0; i <= s.chapter.waves.length; i++) s.recruitedWaves.add(i); s.pendingRecruit = false; }, G);
+  await p.evaluate(G0 => { const s = eval(G0); s.spawnTimer = s.eliteTimer = 1e9; s.player.damageImmune = true; for (const e of s.enemies) if (e.active && e.kind !== 'boss' && !e.isSupplySlot) e.deactivate(); for (let i = 0; i <= s.chapter.waves.length; i++) s.recruitedWaves.add(i); s.pendingRecruit = false; /* 等级合并后的保底三选一（5f89729）：跳时间时会弹出，自动点掉 */ setInterval(() => { if (s.mode === 'levelup') s.chooseUpgrade(0); }, 50); }, G);
   return { p, city };
 };
 const goals = p => p.evaluate(G0 => ({ ...eval(G0).siegeGoals, text: eval(G0).children.getByName('siege-goal')?.text, boss: !!eval(G0).boss?.active, over: eval(G0).over, victory: eval(G0).victory }), G);
 const capture = p => p.evaluate(async G0 => { const s = eval(G0); for (const e of s.enemies) if (e.active && e.kind !== 'boss' && !e.isSupplySlot) e.deactivate(); s.spawnTimer = 1e9; s.player.damageImmune = false; s.player.hp = s.player.maxHp; s.player.sprite.setPosition(s.capturePoint.x, s.capturePoint.y); for (let i = 0; i < 80 && !s.over; i++) await new Promise(r => setTimeout(r, 150)); return { over: s.over, victory: s.victory, progress: s.siegeGoals.progress, sub: s.resultTexts?.subtitle.text }; }, G);
 const owned = (p, id) => p.evaluate(async id => (await import('/src/world/WorldStore.ts')).loadWorld().ownedCities.includes(id), id);
 
-// 小城：拔帅旗 → 占领府衙
+// 小城（攻城战重做扩展）：城外（木门、1 座箭楼）→ 县衙；细项见 test-siege-tiers.mjs
 {
   const { p, city } = await open('mobile', 'small');
   const g0 = await goals(p);
-  const nb = await p.evaluate(async G0 => { const s = eval(G0); s.elapsed = s.chapter.waves[s.chapter.waves.length - 1].start + 5; await new Promise(r => setTimeout(r, 500)); return !!s.boss; }, G);
-  ck(`小城（${city}）：帅旗在场、目标行「拔帅旗」、到时间也不出守将`, g0.flag && g0.towers === 0 && /拔帅旗/.test(g0.text) && !nb, { g0, nb });
-  await p.evaluate(G0 => { const s = eval(G0); s.hitEnemy(s.flag.e, 1e6, s.combatNow, 'melee', false, false); }, G); await p.waitForTimeout(500);
-  const g1 = await goals(p);
-  ck('小城：拔掉帅旗 → 进入占领府衙', !g1.flag && g1.capturing && /占领府衙/.test(g1.text), g1);
-  const c = await capture(p);
-  ck('小城：站进府衙圈、进度满 → 破城占领', c.over && c.victory && await owned(p, city), c);
+  ck('小城（' + city + '）：分段推进的城外段，1 座箭楼、没有冲车、目标行「砍破木门」', g0.mid?.tier === 'small' && g0.mid.phase === 'outside' && g0.towers === 1 && !g0.mid.ram && /木门/.test(g0.text), { tier: g0.mid?.tier, towers: g0.towers, text: g0.text });
   await p.close();
 }
 // 中城（攻城战重做样板，SiegeMidCity）：城外箭楼 2 座 + 箭雨 + 冲车撞门 → 巷战 2 据点 → 府衙守将 → 插旗占领（细项见 test-siege-medium.mjs）
@@ -71,15 +65,11 @@ for (const layout of ['mobile', 'desktop']) {
   }
   await p.close();
 }
-// 大城：城门 + 箭楼 + 大将 → 占领府衙（击败大将不直接结算）
+// 大城（攻城战重做扩展）：城外（护城河吊桥、3 座箭楼、冲车）→ 瓮城 → 巷战 → 内城名将；细项见 test-siege-tiers.mjs
 {
   const { p, city } = await open('desktop', 'large');
   const g0 = await goals(p);
-  ck(`大城（${city}）：箭楼 2、城门在、目标行含破城门 / 败大将`, g0.towers === 2 && /破城门/.test(g0.text) && /败大将/.test(g0.text), g0);
-  const r = await p.evaluate(async G0 => { const s = eval(G0); for (const t of [...s.towers]) s.hitEnemy(t.e, 1e6, s.combatNow, 'melee', false, false); s.hitEnemy(s.gate, 1e7, s.combatNow, 'melee', false, false); s.elapsed = s.chapter.waves[s.chapter.waves.length - 1].start + 1; await new Promise(r => setTimeout(r, 500)); s.spawnBoss(); const boss = !!s.boss?.active; s.hitEnemy(s.boss, 1e8, s.combatNow, 'melee', false, false); for (let i = 0; i < 30; i++) { await new Promise(r => setTimeout(r, 150)); s.collectBossChests?.(); if (s.siegeGoals.capturing) break; } return { boss, over: s.over, goals: s.siegeGoals, mode: s.mode }; }, G);
-  ck('大城：破门毁楼、击败大将 → 不立即结算，进入占领府衙', r.boss && !r.over && r.goals.capturing && r.mode === 'none', r);
-  const c = await capture(p);
-  ck('大城：占领府衙 → 破城', c.over && c.victory && await owned(p, city), c);
+  ck('大城（' + city + '）：分段推进的城外段，3 座箭楼、吊桥未落、目标行「砍断吊桥绳索」', g0.mid?.tier === 'large' && g0.towers === 3 && !g0.mid.bridge && /吊桥绳索/.test(g0.text), { tier: g0.mid?.tier, towers: g0.towers, text: g0.text });
   await p.close();
 }
 // 守城：不出帅旗 / 箭楼，仍以击败敌将守住

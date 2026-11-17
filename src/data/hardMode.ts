@@ -10,5 +10,5 @@ export const HARD_MODE = {
   /** 首次乱世通关奖励（永久军功 / 粮草）。 */ reward: { merits: 200, provisions: 300 },
 } as const;
 export const HARD_TITLES: Record<TimelineChapterId, string> = {
-  huangjin: '黄天终结', hulao: '虎牢扬威', qunxiong: '逐鹿群雄', guandu: '官渡奇谋', chibi: '赤壁烽火',
+  huangjin: '黄天终结', hulao: '虎牢扬威', qunxiong: '逐鹿群雄', guandu: '官渡奇谋', chibi: '赤壁烽火', jingnan: '荆南归心', shu: '天府归附', hanzhong: '定军斩将', xiangfan: '威震华夏', yiling: '火海突围', nanzheng: '七擒七纵', beifa: '六出祁山',
 };

@@ -149,7 +149,10 @@ export const BATTLE_THEMES: Record<BattleThemeKey, BattleTheme> = {
 };
 /** 按战斗场景挑战斗曲：群雄 / 官渡 / 赤壁各一首；攻城用官渡；吕布挑战关与第二章同曲；其余按章节。 */
 export function battleThemeFor(sceneKey: string, chapterId: string): BattleThemeKey {
-  if (sceneKey === 'ChibiGameScene') return 'chibi';
+  if (sceneKey === 'ChibiGameScene' || sceneKey === 'JingnanGameScene') return 'chibi'; // 第六章暂借赤壁曲
+  if (sceneKey === 'HanzhongGameScene') return 'guandu'; // 第八章暂借官渡曲
+  if (sceneKey === 'YilingGameScene') return 'chibi'; // 第十章（火攻）暂借赤壁曲
+  if (sceneKey === 'BeifaGameScene') return 'guandu'; // 第十二章暂借官渡曲
   if (sceneKey === 'ThirdGameScene') return 'qunxiong';
   if (sceneKey === 'GuanduGameScene' || sceneKey === 'SiegeGameScene') return 'guandu';
   if (sceneKey === 'LubuGameScene' || chapterId === 'hulao') return 'hulao';

@@ -46,8 +46,10 @@ export class Player {
   hp: number = BALANCE.player.maxHp;
   level = 1;
   xp = 0;
-  /** 本场累计获得的经验（结算时折进武将经验）。 */
+  /** 本场累计获得的经验（已乘来源倍率；等级 / 经验即武将等级，见 data/heroLevels.ts）。 */
   runXp = 0;
+  /** 到武将等级上限后多出来的经验（超过「再存 1 级」的部分，结算时每 50 折 1 军粮）。 */
+  overflowXp = 0;
   xpNext = 16;
   alive = true;
   invulnUntil = 0;
@@ -153,8 +155,10 @@ export class Player {
     return BALANCE.player.radius;
   }
 
+  /** 地形减速（第九章洪水涉水等），场景每帧设置，默认 1。 */
+  envSpeedMul = 1;
   get speed(): number {
-    return BALANCE.player.speed * Math.min(1.6, this.stats.moveMul * this.growth.movementMultiplier()*(this.growth.build.tags().skirmish>=2?1.04:1)) * this.mountSpeedMul;
+    return BALANCE.player.speed * Math.min(1.6, this.stats.moveMul * this.growth.movementMultiplier()*(this.growth.build.tags().skirmish>=2?1.04:1)) * this.mountSpeedMul * this.envSpeedMul;
   }
 
   /** 被外力击退 / 挑起；self 为自己的突进（冲锋、龙胆突刺）。马超冲锋无敌中不被外力击退。 */
@@ -415,17 +419,18 @@ export class Player {
     this.hp = Math.min(this.maxHp, this.hp + amount);
   }
 
-  /** 返回本次获得的等级数。 */
-  gainXp(amount: number): number {
+  /** 返回本次获得的等级数。cap = 武将等级上限（到上限后经验最多再存 1 级的量）。 */
+  gainXp(amount: number, cap = Infinity): number {
     this.xp += amount; this.runXp += amount;
     let gained = 0;
-    while (this.xp >= this.xpNext) {
+    while (this.level < cap && this.xp >= this.xpNext) {
       this.xp -= this.xpNext;
       this.level += 1;
       gained += 1;
       this.xpNext = xpToNext(this.level);
     }
-    // 2026-11-16：局内等级即「战功」，每级一次三选一；属性点改由武将等级（HeroProgress，跨战斗永久）给
+    if (this.level >= cap && this.xp > this.xpNext) { this.overflowXp += this.xp - this.xpNext; this.xp = this.xpNext; }
+    // 2026-11-17：等级即武将等级，每升 1 级一次三选一并给 1 个属性点（GameScene.onHeroLevelUp）
     return gained;
   }
 

@@ -114,11 +114,12 @@ export class CharacterPassives {
     if (!c) { if (this.charms.size >= 200) return false; c = { enemy, spawnId: enemy.spawnId, marks: 0, lastMark: now, turnedUntil: 0, vulnUntil: 0 }; this.charms.set(enemy.uid, c); }
     if (enemy.kind === 'boss' || enemy.controlImmune) { c.vulnUntil = now + R.turnMs; return false; }
     if (c.turnedUntil > now) return false;
-    return this.turn(c, now, enemy.kind === 'elite' ? turnMs / 2 : turnMs);
+    // 闭月造成的倒戈不叠「离间」层数：否则一次闭月就把层数叠满，下一次出手又是闭月，循环下去再也不掷扇子
+    return this.turn(c, now, enemy.kind === 'elite' ? turnMs / 2 : turnMs, false);
   }
-  private turn(c: Charm, now: number, ms: number): boolean {
+  private turn(c: Charm, now: number, ms: number, gainStack = true): boolean {
     c.turnedUntil = now + ms; c.marks = 0;
-    if (this.character === 'diaochan' && this.stacks < this.maxStacks) { this.stacks++; this.gains++; }
+    if (gainStack && this.character === 'diaochan' && this.stacks < this.maxStacks) { this.stacks++; this.gains++; }
     return true;
   }
   /**

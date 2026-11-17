@@ -65,6 +65,10 @@ async function newPage(seed) {
   const home2 = await pad.focus();
   ck('确认出战后焦点回到「匡扶汉室」', home2?.name === 'start-campaign', home2);
   await layoutCheck(pad, '主页');
+  // 2026-11-17：「匡扶汉室」先打开章节选择（焦点在当前章），再按 Ⓐ 进章
+  await pad.press('A'); await p.waitForTimeout(500);
+  const chap = await pad.focus();
+  ck('Ⓐ「匡扶汉室」打开章节选择，焦点在当前章', /^chapter-card-/.test(chap?.name ?? ''), chap);
   await pad.press('A');
   await p.waitForFunction(G0 => eval(G0)?.mode === 'none', G, { timeout: 20000 });
   await p.waitForTimeout(600);

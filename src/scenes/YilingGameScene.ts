@@ -8,6 +8,11 @@ import type { EnvInteractions } from '../systems/EnvInteractions';
 import { YilingFire } from '../systems/YilingFire';
 import { storyScroll } from '../ui/StoryScroll';
 import { getCharacter } from '../data/characters';
+import { ensureMoves } from '../systems/BossKit';
+import { bossDeathKey } from '../systems/BossDeathArt';
+
+/** 陆逊招式图集（画风会话出，4×4 每格 288、脚底 256、朝右）：帧 0~3 起手、4~7 出手、8~11 收招、12~13 转场。 */
+const LUXUN_MOVES = 'yiling_luxun_moves';
 
 type Host = GameScene & {
   player: GameScene['player']; legion: GameScene['legion']; enemies: Enemy[]; allies: GameScene['allies']; combatNow: number; over: boolean; mode: string; boss: Enemy | null; bossSpawned: boolean; env: EnvInteractions | null;
@@ -31,14 +36,14 @@ export function yilingGameSceneClass(Base: typeof GameScene, cfg: ArcSceneConfig
     private campsPlaced = false;
     private campsDown = 0;
     private rageShown = false;
-    preload(): void { super.preload(); loadV2TroopSheets(this, [...YILING_TROOP_SHEETS.jiefan, ...YILING_TROOP_SHEETS.crossbow]); }
+    preload(): void { super.preload(); loadV2TroopSheets(this, [...YILING_TROOP_SHEETS.jiefan, ...YILING_TROOP_SHEETS.crossbow]); ensureMoves(this, LUXUN_MOVES); }
     create(): void {
       this.camps = []; this.campsPlaced = false; this.campsDown = 0; this.rageShown = false; this.fire = undefined;
       super.create();
       const s = this as unknown as Host;
       if (!s.player) return;
       if (this.arcStage === 3) {
-        this.fire = new YilingFire({ scene: this, player: s.player, enemies: () => s.enemies, allies: () => s.allies, hitEnemy: (e, d) => { s.hitEnemy(e, d, s.combatNow, 'fire', false, false); }, hurtAlly: (a, d) => s.legion.hurt(a, d, s.combatNow),
+        this.fire = new YilingFire({ scene: this, player: s.player, enemies: () => s.enemies, allies: () => s.allies, hitEnemy: (e, d) => { s.hitEnemy(e, d, s.combatNow, 'fire', false, false); }, hurtAlly: (a, d) => s.legion.hurt(a, d, s.combatNow), burnTrees: (x0, y0, size, now) => (s as unknown as { terrain?: { burnTreesIn: (a: number, b: number, c: number, d: number) => { x: number; y: number }[] } | null }).terrain?.burnTreesIn(x0, y0, size, now) ?? [],
           tents: () => s.env?.tents() ?? [], breakTent: e => s.supplies?.breakEnv(e), banner: (t, c) => s.showWaveBanner(t, false, c), sfx: k => s.sfx.play(k) }, s.combatNow);
         this.events.once('shutdown', () => { this.fire?.clear(); this.fire = undefined; });
       }
@@ -82,6 +87,30 @@ export function yilingGameSceneClass(Base: typeof GameScene, cfg: ArcSceneConfig
         if (s.boss?.active && !this.rageShown && s.boss.hp <= s.boss.maxHp * .5) { this.rageShown = true; s.showWaveBanner('火烧连营', true, '陆逊：火势已成，传令全军进击！（放火更勤）'); this.fire.schedule(s.combatNow); }
         this.fire.update(s.combatNow);
       }
+      this.luxunPose(s.combatNow);
+    }
+    /**
+     * 陆逊用招式图集盖在通用首领控制器（ThirdBoss）的姿势上：起手 / 出手 / 收招 / 半血转场各按进度换帧；
+     * 放火预警时（风起）挥扇纵火。没有招式图（v1 / 载入失败）就保持控制器原姿势。
+     */
+    private luxunPose(now: number): void {
+      const s = this as unknown as Host, b = s.boss, c = (this as unknown as { controller?: { state: string; until: number; warnFrom: number } }).controller;
+      if (this.arcStage !== 3 || !b?.active || !c || !this.textures.exists(LUXUN_MOVES)) return;
+      const prog = (from: number, to: number) => Math.max(0, Math.min(.999, (now - from) / Math.max(1, to - from)));
+      let f = -1;
+      if (c.state === 'warn') f = Math.floor(prog(c.warnFrom, c.until) * 4);
+      else if (c.state === 'attack') f = 4 + Math.floor(prog(c.until - 1000, c.until) * 4);
+      else if (c.state === 'recover') f = 8 + Math.floor(prog(c.until - 650, c.until) * 4);
+      else if (c.state === 'rage') f = 12 + Math.floor(now / 180) % 2;
+      else if (this.fire && this.fire.snapshot().pending > 0) f = 4 + Math.floor(now / 200) % 2; // 风起纵火：挥扇
+      if (f < 0) return;
+      b.sprite.setTexture(LUXUN_MOVES, f).setDisplaySize(144, 144).setOrigin(.5, 256 / 288).setFlipX(s.player.x < b.x);
+    }
+    /** 陆逊倒地：有专属倒地帧时交给通用倒地（playBossFall 播 yiling_luxun_death），不再用控制器的尸体帧。 */
+    protected killEnemy(enemy: Enemy): void {
+      const s = this as unknown as Host, self = this as unknown as { controller?: { clear(): void } };
+      if (this.arcStage === 3 && enemy === s.boss && bossDeathKey(this, 'luxun')) { self.controller?.clear(); self.controller = undefined; }
+      (super.killEnemy as (e: Enemy) => void).call(this, enemy);
     }
     protected spawnBoss(): void {
       const s = this as unknown as Host;

@@ -44,14 +44,14 @@ function commandTexture(scene:Phaser.Scene,width:number,height:number,primary:bo
 /** 水墨按钮美术（public/assets/ui-buttons，BootScene 加载；tools/prepare-button-art.mjs 切图）。
  * 每张贴图 1061×204，墨身约占中间 68% 高、中心比画布中心高约 6%；左右各 18% 为笔锋，拉伸时不变形。 */
 const INK={capRatio:.18,bodyRatio:.68,bodyOffset:-.06,overhang:1.1};
-function buttonArt(scene:Phaser.Scene,primary:boolean,state:CommandState):{key:string;w:number;h:number;cap:number}|null{
+export function buttonArt(scene:Phaser.Scene,primary:boolean,state:CommandState):{key:string;w:number;h:number;cap:number}|null{
  const key=state==='disabled'?'btn_ink_disabled':`btn_ink_${primary?'primary':'secondary'}_${state==='selected'?'hover':state}`;
  if(!scene.textures.exists(key))return null;
  const src=scene.textures.get(key).getSourceImage() as {width:number;height:number};
  return{key,w:src.width,h:src.height,cap:Math.round(src.width*INK.capRatio)};
 }
 /** 把墨身对齐到按钮矩形：高按墨身比例放大，笔锋略超出两端；窄按钮横向压缩笔锋。 */
-function fitArt(g:Phaser.GameObjects.NineSlice,a:{w:number;h:number;cap:number},width:number,height:number,y:number,pressed:boolean):void{
+export function fitArt(g:Phaser.GameObjects.NineSlice,a:{w:number;h:number;cap:number},width:number,height:number,y:number,pressed:boolean):void{
  const dispH=height/INK.bodyRatio,k=a.h/dispH,dispW=width*INK.overhang,nsW=Math.max(dispW*k,a.cap*2+4);
  g.setSlices(nsW,a.h,a.cap,a.cap,0,0);g.setScale(dispW/nsW,1/k).setY(y-INK.bodyOffset*dispH+(pressed?1:0));
 }
@@ -133,4 +133,11 @@ export function upgradeCardTexture(scene:Phaser.Scene,width:number,height:number
  shape(5);ctx.strokeStyle=rgb(light(accent,.4),.22);ctx.lineWidth=1;ctx.stroke();
  ctx.strokeStyle=rim;ctx.lineWidth=1.5;for(const [x,y,sx,sy] of [[6,6,1,1],[w-6,6,-1,1],[6,h-6,1,-1],[w-6,h-6,-1,-1]]){ctx.beginPath();ctx.moveTo(x,y+sy*16);ctx.lineTo(x,y);ctx.lineTo(x+sx*16,y);ctx.stroke();}
  scene.textures.addCanvas(key,canvas);return key;
+}
+
+/** 在已有文字按钮后面垫一块水墨按钮美术（招募卡等容器内的按钮用）：返回 NineSlice，缺图时返回 null。cx / cy 为按钮中心。 */
+export function inkPlate(scene:Phaser.Scene,prev:Phaser.GameObjects.NineSlice|null|undefined,cx:number,cy:number,width:number,height:number,primary:boolean,state:'normal'|'hover'|'pressed'|'disabled'):Phaser.GameObjects.NineSlice|null{
+ const a=buttonArt(scene,primary,state);if(!a)return null;
+ const g=prev??scene.add.nineslice(cx,cy,a.key,undefined,a.w,a.h,a.cap,a.cap,0,0);
+ g.setTexture(a.key).setX(cx);fitArt(g,a,width,height,cy,state==='pressed');return g;
 }

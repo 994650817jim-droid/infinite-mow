@@ -288,11 +288,11 @@ function chargeGuardFx(host: WeaponHost, pl: Player): void {
       onComplete: () => glow.destroy() });
   });
 }
-/** 马超像素特效图集 machao_fx（6×4，每帧 256，透明底）：0–5 上挑弧光、6–11 落地砸地、12–17 冲锋尘土拖影、18–23 枪尖破风。 */
+/** 马超手绘特效图集 machao_paint（6×4，每帧 256，透明底；2026-11-17 Gemini 出图，替换原像素图集 machao_fx）：0–5 上挑弧光、6–11 落地砸地、12–17 冲锋尘土拖影、18–23 枪尖破风。 */
 const MCFX = { lift: 0, land: 6, dust: 12, wind: 18 } as const;
 function mcFx(host: WeaponHost, row: number, x: number, y: number, w: number, h: number, fps: number, name: string, rot = 0, loops = 1, depth = 41): Phaser.GameObjects.Sprite | null {
-  const scene = sceneOf(host); if (!scene.textures.exists('machao_fx')) return null;
-  const s = scene.add.sprite(x, y, 'machao_fx', row).setDisplaySize(w, h).setRotation(rot).setDepth(depth).setName(name);
+  const scene = sceneOf(host); if (!scene.textures.exists('machao_paint')) return null;
+  const s = scene.add.sprite(x, y, 'machao_paint', row).setDisplaySize(w, h).setRotation(rot).setDepth(depth).setName(name);
   const st = { t: 0 };
   scene.tweens.add({ targets: st, t: 6 * loops - .01, duration: 6 * loops / fps * 1000, onUpdate: () => { if (s.active) s.setFrame(row + (Math.floor(st.t) % 6)); }, onComplete: () => s.destroy() });
   return s;

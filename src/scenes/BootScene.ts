@@ -13,6 +13,7 @@ import { warmIffTextures } from '../systems/IffOverlay';
 import { DRAG_ART_FILES } from '../data/dragArt';
 import { loadSkillFx } from '../systems/SkillFxSheets';
 import { loadEnvGround } from '../systems/EnvGround';
+import { applyPropsV2, loadPropsV2 } from '../systems/PropsV2';
 import { RENDER_SCALE } from '../config';
 import { artStyle, v2Filter } from '../systems/ArtStyle';
 import { applyArtStyleUrls, applyV2TroopFrames, isV2Texture, rotateV2StandFrames } from '../systems/ArtStyle';
@@ -196,10 +197,13 @@ export class BootScene extends Phaser.Scene {
     this.load.spritesheet('env_props', 'assets/env-v2/props.png', { frameWidth: 256, frameHeight: 256 });
     // 地面与道路 v2（第二～五章）
     loadEnvGround(this.load);
+    // 障碍物 / 道具 v2（黄巾营地、关隘营寨三势力、回血道具、第二章地面装饰、火盆与碎裂序列帧）；缺图沿用旧图
+    loadPropsV2(this.load);
   }
 
   create(): void {
     if(this.shellOnly){const hint=document.getElementById('boot-hint');if(hint)hint.style.display='none';this.scene.start('CityScene');return;}
+    applyPropsV2(this.textures);
     for(const key of ['zhangliang_walk','zhangliang_attack','zhangbao_walk','zhangbao_cast','spear_walk','spear_attack','archer_walk','archer_attack','shield_walk','shield_attack','shaman_walk','shaman_cast']){
       const tex=this.textures.get(`yellow_${key}`);['down','left','right','up'].forEach((dir,row)=>{for(let col=0;col<4;col++)tex.add(`${dir}_${col}`,0,col*96,row*96,96,96);});
     }

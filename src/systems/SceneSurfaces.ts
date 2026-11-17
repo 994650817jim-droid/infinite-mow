@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { factionPropsSource } from './PropsV2';
 /** Cached render derivatives. Originals, sprite origins and gameplay footprints stay intact. */
 function track(scene:Phaser.Scene,key:string):void {const keys=scene.registry.get('battleTextureKeys') as string[]|undefined;if(keys&&!keys.includes(key))keys.push(key);}
 export function terrainSurface(scene:Phaser.Scene,sourceKey:string,scale:number):{key:string;scale:number}{
@@ -39,9 +40,13 @@ export function terrainSurface(scene:Phaser.Scene,sourceKey:string,scale:number)
  }
  texture.refresh().setFilter(Phaser.Textures.FilterMode.NEAREST);track(scene,key);return{key,scale:2};
 }
-export function architecturalSurface(scene:Phaser.Scene):void{
- const key='sishui_props_refined';if(scene.textures.exists(key))return;
- const source=scene.textures.get('sishui_props').getSourceImage() as HTMLImageElement;
+/** 关隘营寨道具（4×2）：按势力选源图（v2 各势力一套，缺图用旧图 sishui_props），换势力时重建。 */
+export function architecturalSurface(scene:Phaser.Scene,faction=1):void{
+ const key='sishui_props_refined',src=factionPropsSource(scene,faction);
+ if(scene.textures.exists(key)){if(scene.registry.get('sishuiRefinedFrom')===src)return;scene.textures.remove(key);}
+ scene.registry.set('sishuiRefinedFrom',src);
+ const source=scene.textures.get(src).getSourceImage() as HTMLImageElement;
+ if(src!=='sishui_props'){const texture=scene.textures.createCanvas(key,1024,512)!,ctx=texture.context;ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality='high';ctx.drawImage(source,0,0,1024,512);for(let i=0;i<8;i++)texture.add(i,0,i%4*256,Math.floor(i/4)*256,256,256);texture.refresh().setFilter(Phaser.Textures.FilterMode.LINEAR);track(scene,key);return;}
  const texture=scene.textures.createCanvas(key,512,256)!,ctx=texture.context;ctx.imageSmoothingEnabled=true;ctx.drawImage(source,0,0,512,256);
  const image=ctx.getImageData(0,0,512,256),p=image.data;
  for(let i=0;i<p.length;i+=4){if(p[i+3]<24){p[i+3]=0;continue;}for(let c=0;c<3;c++)p[i+c]=Math.round(p[i+c]/6)*6;}

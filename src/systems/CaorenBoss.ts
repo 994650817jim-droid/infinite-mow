@@ -19,7 +19,7 @@ const GATE_NAMES = ['休', '生', '伤', '杜', '景', '死', '惊', '开'] as c
  */
 export class CaorenBoss extends ArcBossV2<Move> {
   private gates: Gate[] = []; private nextGates: Gate[] = []; private cx = 0; private cy = 0; private rotateAt = 0; private tickAt = 0;
-  private facing = 0; private order = 0;
+  private facing = 0; private order = 0; private lastAt = 0;
   private texts: Phaser.GameObjects.Text[] = []; private arena: Phaser.GameObjects.Graphics;
   readonly metrics = { rotations: 0, wall: 0, hold: 0, deadTicks: 0, frontBlocks: 0, phase2: 0 };
   readonly debug: BossDebug = {
@@ -96,8 +96,10 @@ export class CaorenBoss extends ArcBossV2<Move> {
     const G = CR.gates, every = this.phase2 ? G.rotateMs2 : G.rotateMs, p = this.h.player;
     if (now >= this.rotateAt) {
       this.metrics.rotations++; this.gates = this.nextGates; this.nextGates = this.roll(); this.rotateAt = now + every;
-      const b = this.h.boss; this.cx = b.x; this.cy = b.y; this.h.sfx('gong');
+      this.h.sfx('gong');
     }
+    // 阵心平滑跟着曹仁：生门 / 死门 = 站在曹仁的哪一侧
+    { const b = this.h.boss, k = Math.min(1, (now - (this.lastAt || now)) / 1000 * 2.5); this.cx += (b.x - this.cx) * k; this.cy += (b.y - this.cy) * k; this.lastAt = now; }
     const warning = this.rotateAt - now <= G.warnMs;
     // 死门伤害：主将与部曲
     if (now >= this.tickAt) {

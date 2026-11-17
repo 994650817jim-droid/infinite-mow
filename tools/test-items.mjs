@@ -46,7 +46,7 @@ const pace = await p.evaluate(G0 => {
   const big = pl.xpNext + 200 + 300; const gained = pl.gainXp(big); out.jump = [gained, pl.level, g.unallocated];
   return out;
 }, G);
-ck('战功升级仍按原经验表，局内升级不再给属性点', pace.lv2[0] === 2 && pace.lv3[0] === 3 && pace.lv4[0] === 4 && pace.lv4[1] === 0 && pace.jump[2] === 0, pace);
+ck('等级按武将经验表升（2026-11-17 只留武将等级）；Player.gainXp 本身不加点（加点由 onHeroLevelUp 给）', pace.lv2[0] === 2 && pace.lv3[0] === 3 && pace.lv4[0] === 4 && pace.lv4[1] === 0 && pace.jump[2] === 0, pace);
 // 升级面板提示与三选一仍每级一次
 const hint = await p.evaluate(async G0 => {
   const s = eval(G0), pl = s.player, out = {};
@@ -54,7 +54,7 @@ const hint = await p.evaluate(async G0 => {
   out.odd = s.levelPanel.getByName('upgrade-points-hint')?.text; out.cards = s.upgradeOptions.length; out.mode = s.mode;
   return out;
 }, G);
-ck('升级三选一仍出现（3 张卡），面板提示「战功 3」', hint.mode === 'levelup' && hint.cards === 3 && /^战功 3/.test(hint.odd), hint);
+ck('升级三选一仍出现（3 张卡），面板提示「武将 Lv.3」', hint.mode === 'levelup' && hint.cards === 3 && /武将 Lv.3/.test(hint.odd), hint);
 await p.screenshot({ path: `${out}/mobile-levelup-hint.png` });
 const hint2 = await p.evaluate(async G0 => {
   const s = eval(G0), pl = s.player, out = {};
@@ -64,7 +64,7 @@ const hint2 = await p.evaluate(async G0 => {
   pl.growth.unallocated = 0; pl.level = 5; s.attributeReturn = 'none'; s.renderAttributePanel(); out.panel = s.attributePointsText.text;
   return out;
 }, G);
-ck('战功 4 面板提示', /^战功 4/.test(hint2.even), hint2);
+ck('武将 Lv.4 面板提示', /武将 Lv.4/.test(hint2.even), hint2);
 ck('属性面板：点数用完时提示「武将每升 1 级获得 1 点」', /武将每升 1 级获得 1 点/.test(hint2.panel), hint2);
 
 // 2) 掉落与拾取
@@ -101,7 +101,7 @@ const data = await p.evaluate(async () => {
   out.base = m.BASE_ITEMS.length; out.legends = m.LEGENDS.length; out.slots = Object.keys(m.SLOTS).length;
   const count = (src, tier) => { const c = { white: 0, green: 0, blue: 0, purple: 0, orange: 0 }; for (let i = 0; i < 40000; i++) c[m.rollQuality(src, tier)]++; return c; };
   out.normal0 = count('normal', 0); out.normal3 = count('normal', 3); out.boss = count('boss', 0);
-  const items = ['white', 'green', 'blue', 'purple', 'orange'].map(q => m.rollItem(q)); out.affixCounts = items.map(i => i.affixes.length); out.orangeSpecial = !!items[4].special;
+  const items = ['white', 'green', 'blue', 'purple', 'orange'].map(q => m.rollItem(q, Math.random, 'armor')); /* 甲胄：不会抽到信物库新信物（词条规则不同，见 test-charms） */ out.affixCounts = items.map(i => i.affixes.length); out.orangeSpecial = !!items[4].special;
   return out;
 });
 ck('32 种基础道具 + 15 件橙色名器、4 个兵装槽 + 「Boss遗物」槽（无兵刃、坐骑）', data.base === 32 && data.legends === 15 && data.slots === 5, data);
@@ -247,7 +247,7 @@ await d.evaluate(async G0 => { const s = eval(G0), ui = s.campUI; s.legion.food 
 await d.screenshot({ path: `${out}/desktop-camp-shelf.png` });
 await d.evaluate(G0 => eval(G0).campUI.setVisible(false), G);
 await d.evaluate(async G0 => { const s = eval(G0); s.player.level = 5; s.pendingLevels = 1; s.openUpgrade(); await new Promise(r => setTimeout(r, 200)); }, G);
-ck('电脑布局升级面板提示', /^战功 5/.test(await d.evaluate(G0 => eval(G0).levelPanel.getByName('upgrade-points-hint')?.text, G)));
+ck('电脑布局升级面板提示（武将 Lv.5）', /武将 Lv.5/.test(await d.evaluate(G0 => eval(G0).levelPanel.getByName('upgrade-points-hint')?.text, G)));
 await d.screenshot({ path: `${out}/desktop-levelup-hint.png` });
 await d.evaluate(async G0 => { const s = eval(G0); s.pendingLevels = 0; s.setMode('none'); const items = await window.__mod('/src/data/items.ts'); s.itemDrops.runLoot.push(items.rollItem('purple'), items.rollItem('blue'));
   s.togglePause(); await new Promise(r => setTimeout(r, 150)); }, G);

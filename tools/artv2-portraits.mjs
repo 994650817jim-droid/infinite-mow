@@ -37,7 +37,7 @@ for (const art of ['v1', 'v2']) {
   await p.close();
 }
 ck('v2 招募卡胸像来自 troop-portraits-v2', /troop-portraits-v2\//.test(res.v2.src), res.v2.src.slice(-50));
-ck('v2 胸像 8 张都已加载（v1 只有 3 张）', res.v2.have === 8 && res.v1.have === 3, [res.v2.have, res.v1.have]);
+ck('v2 胸像 8 张都已加载（v1 Q 版也补齐 8 张，2026-11-17）', res.v2.have === 8 && res.v1.have === 8, [res.v2.have, res.v1.have]);
 ck('v2「招兵营」页签图标换成 v2 头像', /troop-portraits-v2\/icon_swordsman/.test(res.v2.icon), res.v2.icon.slice(-50));
 ck('v1 仍用旧胸像与旧图标', /troop-portraits\//.test(res.v1.src) && !/v2/.test(res.v1.src) && /processed\/icon_shu_swordsman/.test(res.v1.icon), [res.v1.src.slice(-40), res.v1.icon.slice(-40)]);
 ck('无页面报错', errors.length === 0, errors.slice(0, 5));

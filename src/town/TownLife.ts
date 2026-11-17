@@ -1,8 +1,8 @@
 /**
  * 城池全景里的民居与居民（用户 2026-11-17：「我想往城市里面加入居民楼和居民，这些互动不了，只能互动建筑物」）。
  * 纯装饰：不接收点击、不挡功能建筑的点击。小城少、大城多；府衙等级越高，民居和居民越多。
- * 民居暂用营寨旧的民居 / 市集 / 酒肆图（同一套手绘厚涂）；居民暂用 v2 兵种行走图（刀盾 / 长枪当巡逻兵，军医当百姓），
- * 平民行走图到了再换（FOLK_SHEETS）。坐标都是全景像素（1536×1024，与 assets/town-city/bg_<档>.webp 对应）。
+ * 民居暂用营寨旧的民居 / 市集 / 酒肆图（同一套手绘厚涂）；居民用平民行走图（assets/town-city/folk：布衣男子 / 民妇 / 挑担货郎 / 孩童，
+ * 2026-11-17 美术会话），另有 v2 刀盾 / 长枪兵当巡逻兵（约三分之一）。坐标都是全景像素（1536×1024，与 assets/town-city/bg_<档>.webp 对应）。
  */
 import Phaser from 'phaser';
 import type { CityTier } from '../world/WorldCities';
@@ -45,10 +45,13 @@ export const FOLK_PATHS: Record<CityTier, Array<Array<[number, number]>>> = {
     [[420, 1000], [700, 1000]], [[950, 1005], [1500, 1005]],
   ],
 };
-/** 居民用的行走图（4×4：行 = 下 / 左 / 右 / 上）。key → 文件；civilian 表示百姓，否则是巡逻兵。 */
+/** 居民用的行走图（4×4，每格 136：行 = 下 / 左 / 右 / 上）。key → 文件；civilian 表示百姓，否则是巡逻兵。按此顺序轮流分配（每 3 人里 1 个巡逻兵）。 */
 export const FOLK_SHEETS: Array<{ key: string; url: string; civilian: boolean }> = [
-  { key: 'folk_medic', url: 'assets/processed-v2/troops/medic_walk.png', civilian: true },
+  { key: 'folk_man', url: 'assets/town-city/folk/folk_man_walk.png', civilian: true },
+  { key: 'folk_woman', url: 'assets/town-city/folk/folk_woman_walk.png', civilian: true },
   { key: 'folk_swordsman', url: 'assets/processed-v2/troops/swordsman_walk.png', civilian: false },
+  { key: 'folk_porter', url: 'assets/town-city/folk/folk_porter_walk.png', civilian: true },
+  { key: 'folk_child', url: 'assets/town-city/folk/folk_child_walk.png', civilian: true },
   { key: 'folk_spearman', url: 'assets/processed-v2/troops/spearman_walk.png', civilian: false },
 ];
 const DIRS = ['down', 'left', 'right', 'up'] as const;
@@ -75,7 +78,7 @@ export class TownFolk {
     if (!keys.length) { this.active = 0; return; }
     const paths = FOLK_PATHS[this.tier], want = Math.min(FOLK_MAX, n);
     while (this.walkers.length < want) {
-      const i = this.walkers.length, sheet = keys[i % 3 === 2 ? Math.min(2, keys.length - 1) : i % 3 === 1 ? Math.min(1, keys.length - 1) : 0];
+      const i = this.walkers.length, sheet = keys[i % keys.length];
       const path = paths[i % paths.length], img = this.scene.add.image(0, 0, sheet.key, 'down_0').setOrigin(.5, .92).setName('folk-' + i);
       const cell = img.frame.height; img.setScale(this.k * 46 / cell * (1.6));
       this.root.add(img);

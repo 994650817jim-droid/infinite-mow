@@ -11,7 +11,7 @@ import type { Legion, LegionState } from './Legion';
 export interface CampaignTransfer {
   character: CharacterId; chapter: 'hulao' | 'huangjin'; stage?:1|2|3; army: LegionState;
   /** 2026-11-17 本局遗物 / 宝物并入信物库：不再存 relics、trinkets、build.treasures（旧档里有的读档时换成信物，见 takeLegacyTreasures）。stats 不含信物加成。 */
-  player: { build?: BuildSnapshot; growth?: Pick<RunGrowth,'attributes'|'masteries'|'unallocated'> & {heroFree?: number}; stats: PlayerStats; level: number; xp: number; xpNext: number; weapons: WeaponState[] };
+  player: { build?: BuildSnapshot; growth?: Pick<RunGrowth,'attributes'|'masteries'|'unallocated'> & {heroFree?: number}; stats: PlayerStats; weapons: WeaponState[] };
 }
 /**
  * 旧档迁移：构筑里的本局宝物 / 饰品换成同名信物（橙色，放进行囊、不自动穿）；已删除的（疾风靴）换成随机橙色信物。
@@ -26,12 +26,12 @@ export function takeLegacyTreasures(state: CampaignTransfer): number {
   return items.length;
 }
 export function packCampaign(character: CharacterId, player: Player, army: Legion): CampaignTransfer {
-  return { character, chapter: 'hulao', army: army.exportState(), player: { build:player.growth.build.snapshot(), growth: {attributes:{...player.growth.attributes},masteries:{...player.growth.masteries},unallocated:player.growth.unallocated,heroFree:player.growth.heroFree}, stats: statsWithoutCharms(player), level: player.level, xp: player.xp, xpNext: player.xpNext, weapons: player.weapons.map(w => ({ ...w, cooldownLeft: 0 })) } };
+  return { character, chapter: 'hulao', army: army.exportState(), player: { build:player.growth.build.snapshot(), growth: {attributes:{...player.growth.attributes},masteries:{...player.growth.masteries},unallocated:player.growth.unallocated,heroFree:player.growth.heroFree}, stats: statsWithoutCharms(player), weapons: player.weapons.map(w => ({ ...w, cooldownLeft: 0 })) } };
 }
 export function restoreCampaign(state: CampaignTransfer, player: Player, army: Legion): void {
   takeLegacyTreasures(state);
   // Restore the saved final stats exactly once (信物加成由 GameScene 随后 applyCharms 重新加上).
-  Object.assign(player.stats, state.player.stats); player.level = state.player.level; player.xp = state.player.xp; player.xpNext = state.player.xpNext;
+  Object.assign(player.stats, state.player.stats); // 2026-11-17 取消局内等级：等级 / 经验即武将等级，开局由 GameScene.syncHeroLevel 读入
   // Restore values, never reapply reward callbacks. Timers/counters start fresh.
   player.growth = new RunGrowth(state.character);
   player.growth.build.restore(state.player.build);
@@ -50,15 +50,15 @@ export function restoreCampaign(state: CampaignTransfer, player: Player, army: L
 export const CAMPAIGN_KEY = 'im_campaign_v1';
 function readBuilds(): Record<string, CampaignTransfer> {
   let heroes: Record<string, CampaignTransfer> = {};
-  try { const v = JSON.parse(localStorage.getItem(CAMPAIGN_KEY) ?? 'null'); heroes = v && v.version === 1 && v.heroes && typeof v.heroes === 'object' ? v.heroes : {}; } catch { return {}; }
+  try { const v = JSON.parse(localStorage.getItem(CAMPAIGN_KEY) ?? 'null'); heroes = v && (v.version === 1 || v.version === 2) && v.heroes && typeof v.heroes === 'object' ? v.heroes : {}; } catch { return {}; }
   // 旧档迁移：存档里的本局宝物换成信物（只做一次：换完立刻写回）
   let moved = 0; for (const s of Object.values(heroes)) if (s?.player) moved += takeLegacyTreasures(s);
-  if (moved) try { localStorage.setItem(CAMPAIGN_KEY, JSON.stringify({ version: 1, heroes })); } catch { /* */ }
+  if (moved) try { localStorage.setItem(CAMPAIGN_KEY, JSON.stringify({ version: 2, heroes })); } catch { /* */ }
   return heroes;
 }
 export function saveCampaignBuild(hero: CharacterId, state: CampaignTransfer): void {
   const heroes = readBuilds(); heroes[hero] = { ...structuredClone(state), character: hero, player: structuredClone(state.player) };
-  try { localStorage.setItem(CAMPAIGN_KEY, JSON.stringify({ version: 1, heroes })); localStorage.setItem('im_slot_touched', String(Date.now())); } catch { /* 存储不可用：本次不保存 */ }
+  try { localStorage.setItem(CAMPAIGN_KEY, JSON.stringify({ version: 2, heroes })); localStorage.setItem('im_slot_touched', String(Date.now())); } catch { /* 存储不可用：本次不保存 */ }
 }
 export function loadCampaignBuild(hero: CharacterId): CampaignTransfer | undefined {
   const s = readBuilds()[hero];

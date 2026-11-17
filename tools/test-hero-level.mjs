@@ -28,8 +28,8 @@ await p.waitForTimeout(500);
 // 1) 开局读入武将等级与永久属性
 const start = await p.evaluate(() => { const s = window.__game.scene.getScene('GameScene'), g = s.player.growth; s.updateHud?.();
   return { might: g.attributes.strength, free: g.heroFree, un: g.unallocated, lv: s.heroLv, battle: s.player.level, hud: s.hudTexts.level.text, full: s.player.hp === s.player.maxHp }; });
-ck('属性改版：旧记录的点数全部退回（不换算），Lv6 共 5 点待分配；新开一场生命回满', start.might === 0 && start.free === 5 && start.un === 5 && start.lv === 6 && start.battle === 1 && start.full, start);
-ck('HUD 显示「赵云 Lv.6 · 战功 1」', start.hud === '赵云 Lv.6 · 战功 1', start.hud);
+ck('属性改版：旧记录的点数全部退回（不换算），Lv6 共 5 点待分配；开局等级即武将等级 Lv6（2026-11-17 取消局内等级）；新开一场生命回满', start.might === 0 && start.free === 5 && start.un === 5 && start.lv === 6 && start.battle === 6 && start.full, start);
+ck('HUD 只显示「赵云 Lv.6」（不再有局内「战功」）', start.hud === '赵云 Lv.6', start.hud);
 await p.screenshot({ path: `${out}/desktop-hud.png`, clip: { x: 0, y: 0, width: 640, height: 200 } });
 
 // 2) 局内升级 = 战功，不再给属性点；加点用的是永久点（测试战斗不写回）
@@ -42,7 +42,7 @@ const alloc = await p.evaluate(async () => {
   out.after = [g.attributes.strength, g.unallocated, g.heroFree]; out.saved = hp.heroAttrs('zhaoyun').strength;
   s.setMode('none'); return out;
 });
-ck('局内升级（战功）不再给属性点，本场经验累计在 runXp', alloc.battleLv > 5 && alloc.un === 5 && alloc.runXp >= 500, alloc);
+ck('Player.gainXp 只升级不加点（加点由 GameScene.onHeroLevelUp 给，见 test-level-merge），本场经验累计在 runXp', alloc.battleLv > 5 && alloc.un === 5 && alloc.runXp >= 500, alloc);
 ck('加点消耗永久点；测试战斗（?dev=1）不写回存档', alloc.btn && JSON.stringify(alloc.after) === '[1,4,4]' && alloc.saved === 0, alloc);
 
 // 2b) 每点效果与「统御」；首通经验不乘 70%
@@ -50,14 +50,15 @@ const fx = await p.evaluate(() => { const s = window.__game.scene.getScene('Game
   for (const k in g.attributes) g.attributes[k] = 0; const ally0 = g.allyDamageMultiplier(), hp0 = g.bonusMaxHp(), crit0 = g.criticalBonus();
   const dm0 = g.damageMultiplier(0), sk0 = g.skillDamageMultiplier();
   g.attributes.command = 2; g.attributes.strength = 2; g.attributes.agility = 4; g.attributes.intellect = 2; out.ally = Math.round(g.allyDamageMultiplier() / ally0 * 1000) / 1000; out.hp = g.bonusMaxHp() - hp0; out.crit = Math.round((g.criticalBonus() - crit0) * 1000) / 1000;
-  // 赵云主属性 = 敏捷：敏捷 4 点 → 全伤害 +4%；力量 2 → 伤害 +3%；智力 2 → 技艺 +6%、范围 +3%
+  // 赵云主属性 = 敏捷：敏捷 4 点 → 全伤害 +4%；力量 2 → 伤害 +3%；智力 2 → 法术 +5%、范围 +1.6%（2026-11-17 智力改为法术）
   out.primary = Math.round(g.primaryBonus() * 1000) / 1000; out.dm = Math.round(g.damageMultiplier(0) / dm0 * 10000) / 10000; out.skill = Math.round(g.skillDamageMultiplier() / sk0 * 10000) / 10000; out.area = Math.round(g.areaMultiplier() * 1000) / 1000; out.allyHp = Math.round(g.allyHpMultiplier() * 1000) / 1000;
   out.label = s.attributePanel.list.filter(o => o.type === 'Text').map(o => o.text).find(t => /主属性/.test(t));
-  out.rows = s.attributeRows.length; Object.assign(g.attributes, saved);
+  out.rows = s.attributeRows.length; out.spell = [g.spellWeaponMultiplier('flame_banner'), g.spellWeaponMultiplier('crossbow'), g.spellWeaponMultiplier('spear_orbit'), g.spellWeaponMultiplier('guandao')].map(v => Math.round(v * 1000) / 1000); Object.assign(g.attributes, saved);
   const runXp = s.player.runXp; s.player.runXp = 100; s.heroXpBonus = 120; out.lord = s.lordHeroXp(); s.player.runXp = runXp; s.heroXpBonus = 0; return out; });
 ck('四项属性：力量 2 = 生命 +6%；敏捷 4 = 暴击 +2%；统御 2 = 部曲伤害 ×1.06、部曲生命 ×1.06；面板 4 行', fx.ally === 1.06 && fx.allyHp === 1.06 && fx.hp === 6 && fx.crit === .02 && fx.rows === 4, fx);
-ck('主属性（赵云 = 敏捷）：敏捷 4 点 → 全伤害 +4%；伤害 ×1.03×1.04；智力 2 → 技艺伤害 ×1.06×1.04、范围 ×1.03；面板标「主属性」', fx.primary === .04 && fx.dm === 1.0712 && fx.skill === 1.1024 && fx.area === 1.03 && /敏捷 · 主属性/.test(fx.label ?? ''), fx);
-ck('结算经验 = 本场经验 × 70% + 首次通关经验（不打折）', Math.round(fx.lord) === 190, fx.lord);
+ck('主属性（赵云 = 敏捷）：敏捷 4 点 → 全伤害 +4%；伤害 ×1.03×1.04；智力 2 → 法术伤害 ×1.05×1.04、范围 ×1.016；面板标「主属性」', fx.primary === .04 && fx.dm === 1.0712 && fx.skill === 1.092 && fx.area === 1.016 && /敏捷 · 主属性/.test(fx.label ?? ''), fx);
+ck('智力 2：法术武器（火旗 / 连弩）的武器命中 ×1.05，物理武器（枪 / 刀）不乘', JSON.stringify(fx.spell) === '[1.05,1.05,1,1]', fx.spell);
+ck('结算经验 = 本场经验（已乘倍率）+ 首次通关经验（不打折）', Math.round(fx.lord) === 220, fx.lord);
 
 // 3) 同章连打：保留本局额外点（城池加成），永久点按存档
 const carry = await p.evaluate(() => {
@@ -96,7 +97,7 @@ const store = await p.evaluate(async () => {
   out.keys = Object.fromEntries(['ThirdGameScene', 'GuanduGameScene', 'ChibiGameScene', 'SiegeGameScene', 'IntelGameScene', 'LubuGameScene'].map(n => [n, keyOf(n)]));
   return out;
 });
-ck('经验表与原来一致（16 / 16 / 36 / 52 / 88 / 188）', JSON.stringify(store.table) === '[16,16,36,52,88,188]' && store.slot, store);
+ck('武将经验表（2026-11-17 level-merge-proposal：16 / 20 / 28 / 36 / 120 / … / Lv10 1100）', JSON.stringify(store.table) === '[16,20,28,36,120,1100]' && store.slot, store);
 ck('只开第一章：上限 10，新武将从 Lv1 起步（含招募的 r_）', JSON.stringify(store.open1) === '[1,10,1,1,1]', store.open1);
 ck('结算记经验：Lv1 + 16 → Lv2；超出上限停在 Lv10，经验暂存', JSON.stringify(store.lv2) === '[1,2]' && JSON.stringify(store.capped) === '[10,true,10]', store);
 ck('每级 1 个永久属性点（Lv10 = 9 点），加点写入存档', JSON.stringify(store.points) === '[9,true,8,1]', store.points);
@@ -104,8 +105,8 @@ ck('开第二章：上限 15，暂存经验补升；新武将从 Lv10（上限 �
 ck('单项属性最多 10 点', JSON.stringify(store.maxOne) === '[10,false]', store.maxOne);
 ck('属性改版老档：六项点数全部退回（Lv9 → 8 点待分配），提示只给一次', JSON.stringify(store.refund.attrs) === '{"strength":0,"agility":0,"intellect":0,"command":0}' && store.refund.free === 8 && JSON.stringify(store.refund.notice) === '[true,false]', store.refund);
 ck('老档迁移：打赢过仗的武将补到当前上限的一半（≥ 起始等级），只迁移一次', store.migr[0] === 10 && store.migr[1] === 10 && store.migr[2] === true, store.migr);
-ck('主线关按 70% 折算', store.rate === .7, store.rate);
-ck('第 3–5 章场景有首通键（third-1 / guandu-1 / chibi-1，70% 折算）；攻城、军情、三英战吕布没有键、按 35% 折算', JSON.stringify(store.keys) === JSON.stringify({ ThirdGameScene: ['third-1', .7], GuanduGameScene: ['guandu-1', .7], ChibiGameScene: ['chibi-1', .7], SiegeGameScene: [null, .35], IntelGameScene: [null, .35], LubuGameScene: [null, .35] }), store.keys);
+ck('主线首次打经验 × 1.0', store.rate === 1, store.rate);
+ck('第 3–5 章场景有首通键（third-1 / guandu-1 / chibi-1，× 1.0）；攻城、军情、三英战吕布没有键、× 0.5', JSON.stringify(store.keys) === JSON.stringify({ ThirdGameScene: ['third-1', 1], GuanduGameScene: ['guandu-1', 1], ChibiGameScene: ['chibi-1', 1], SiegeGameScene: [null, .5], IntelGameScene: [null, .5], LubuGameScene: [null, .5] }), store.keys);
 ck('首次通关经验：一章 120、二章 250、三章 380、四章 510、五章 640；每关只给一次，存档保留；挑战关不给', JSON.stringify(store.fc) === '[120,0,250,380,510,640,0,0]' && JSON.stringify(store.fcKept) === '[0,120]' && store.key === 'huangjin-1', { fc: store.fc, fcKept: store.fcKept, key: store.key });
 
 ck('控制台无报错', errors.length === 0, errors.slice(0, 6));

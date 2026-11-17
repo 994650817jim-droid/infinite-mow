@@ -1,3 +1,4 @@
+import { heroXpToNext } from '../data/heroLevels';
 import {BuildState,type TacticId} from '../data/builds';
 import type { CharmLegends, CharmStatDelta } from './CharmEffects';
 import { BALANCE } from '../config';
@@ -5,7 +6,7 @@ import type { CharacterId } from '../data/characters';
 import type { Player } from '../entities/Player';
 import { emptyGear, type GearStats } from './ItemEffects';
 
-import { ATTRIBUTE_EFFECT, ATTRIBUTE_IDS, ATTRIBUTE_INFO, ATTRIBUTE_MAX, ATTRIBUTE_POINT_EVERY, PRIMARY_BONUS, primaryAttribute, type AttributeId } from '../data/attributes';
+import { ATTRIBUTE_EFFECT, SPELL_WEAPONS, ATTRIBUTE_IDS, ATTRIBUTE_INFO, ATTRIBUTE_MAX, ATTRIBUTE_POINT_EVERY, PRIMARY_BONUS, primaryAttribute, type AttributeId } from '../data/attributes';
 export { ATTRIBUTE_IDS, ATTRIBUTE_INFO, ATTRIBUTE_MAX, ATTRIBUTE_POINT_EVERY, type AttributeId };
 export type ZhaoMasteryId = 'dragon_gallop' | 'cloud_pierce';
 /**
@@ -53,8 +54,8 @@ export type PotionId = 'rejuvenation' | 'berserk';
 export function attributePointsBetween(from: number, to: number): number { return Math.max(0, Math.floor(to / ATTRIBUTE_POINT_EVERY) - Math.floor(from / ATTRIBUTE_POINT_EVERY)); }
 /** 当前等级再升几级可获得下一个属性点（1 或 2）。 */
 export function levelsToNextAttributePoint(level: number): number { return ATTRIBUTE_POINT_EVERY - (level % ATTRIBUTE_POINT_EVERY); }
-/** 局内「战功」与武将等级共用的经验表：从 level 升到 level+1 所需经验。 */
-export function xpToNext(level: number): number { return level <= 1 ? 16 : level <= 4 ? [16, 36, 52][level - 2] : 68 + (level - 4) * 20; }
+/** 武将经验表（2026-11-17 取消局内等级，只留武将等级；见 data/heroLevels.ts）：从 level 升到 level+1 所需经验。 */
+export function xpToNext(level: number): number { return heroXpToNext(level); }
 /** 属性图标（智力暂借「属性点」图标、统御暂借「虎符」图标，没有专属图）。 */
 export function attributeIcon(id: AttributeId): string { return ATTRIBUTE_INFO[id].icon; }
 
@@ -157,6 +158,8 @@ export class RunGrowth {
   /** 主属性：每点额外全伤害 +1%（最多 10 点）。 */
   primaryBonus(): number { const p = primaryAttribute(this.character); return p ? Math.min(PRIMARY_BONUS.maxPoints, this.attributes[p]) * PRIMARY_BONUS.perPoint : 0; }
   /** 智力：非普攻伤害（技艺、灼烧、遗珍等）倍率，含主属性加成。 */
+  /** 智力：法术武器的武器命中 × (1 + 法术系数 × 智力)。主属性加成已在 damageMultiplier 里，这里不再乘。 */
+  spellWeaponMultiplier(id: string | undefined): number { return id && SPELL_WEAPONS.has(id) ? 1 + ATTRIBUTE_EFFECT.intellect.skill * this.attributes.intellect : 1; }
   skillDamageMultiplier(): number { return (1 + ATTRIBUTE_EFFECT.intellect.skill * this.attributes.intellect) * (1 + this.primaryBonus()); }
   /** 智力：范围倍率（经 CharacterPassives.rangeMultiplier 作用到武器）。 */
   areaMultiplier(): number { return 1 + ATTRIBUTE_EFFECT.intellect.area * this.attributes.intellect; }
@@ -164,8 +167,8 @@ export class RunGrowth {
   allyHpMultiplier(): number { return 1 + ATTRIBUTE_EFFECT.command.allyHp * this.attributes.command; }
   /** 兵装「对精锐 / 首领伤害」与名器「斩将」：只作用于武将本人的命中。 */
   gearHitMultiplier(kind: string): number { return kind === 'boss' ? 1 + this.gear.elite + this.gear.boss : kind === 'elite' ? 1 + this.gear.elite : 1; }
-  /** 兵装「经验获取」：小数部分累计，不丢失。 */
-  scaleXp(value: number): number { const v = value * (1 + this.gear.xp) + this.xpCarry, n = Math.floor(v); this.xpCarry = v - n; return n; }
+  /** 兵装「经验获取」× 来源倍率（主线 1.0、其余 0.5）：小数部分累计，不丢失。 */
+  scaleXp(value: number, rate = 1): number { const v = value * (1 + this.gear.xp) * rate + this.xpCarry, n = Math.floor(v); this.xpCarry = v - n; return n; }
   spearLengthMultiplier(): number { return 1 + 0.1 * this.masteries.cloud_pierce; }
   spearTargetBonus(): number { return this.masteries.cloud_pierce; }
 }

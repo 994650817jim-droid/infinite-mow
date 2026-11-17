@@ -130,12 +130,13 @@ export class CaorenBoss extends ArcBossV2<Move> {
     const g = this.arena, R = CR.gates.radius, step = Math.PI / 4; g.clear();
     // 手绘阵盘（图到后）：浮现 0–1 → 发光循环 2–4；扇区的生 / 死只用淡色铺底 + 门名
     if (!this.disc) this.disc = bossFxImage(this.h.scene, 'cr_bagua', DEPTH.ground + 2);
-    if (this.disc) this.disc.setPosition(this.cx, this.cy).setDisplaySize(R * 2.3, R * 2.3 * .8).setFrame(2 + Math.floor(now / 200) % 3).setAlpha(.36);
+    if (this.disc) this.disc.setPosition(this.cx, this.cy).setDisplaySize(R * 2.3, R * 2.3 * .8).setFrame(2 + Math.floor(now / 200) % 3).setAlpha(.2); // 收敛：阵盘常驻铺满大半屏，调淡到 .2（用户「首领的攻击特效也需要兼容适应」）
     for (let i = 0; i < 8; i++) {
       const a0 = -Math.PI + i * step + GATE_OFFSET, a1 = a0 + step, kind = this.gates[i], nk = this.nextGates[i];
       const blink = warning && Math.floor(now / 160) % 2 === 0, show = blink ? nk : kind;
       if (show !== 'none') {
-        const col = show === 'live' ? 0x5fae5a : 0xb8382a, al = show === 'live' ? .2 : .22;
+        // 生 / 死门铺底调淡（.2/.22 → .08/.11），靠门名文字认门；轮转前闪烁照旧
+        const col = show === 'live' ? 0x5fae5a : 0xb8382a, al = show === 'live' ? .08 : .11;
         g.fillStyle(col, al);
         for (let k = 0; k < 6; k++) { const t0 = a0 + step * k / 6, t1 = a0 + step * (k + 1) / 6; g.fillTriangle(this.cx, this.cy, this.cx + Math.cos(t0) * R, this.cy + Math.sin(t0) * R * .8, this.cx + Math.cos(t1) * R, this.cy + Math.sin(t1) * R * .8); }
       }

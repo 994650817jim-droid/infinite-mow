@@ -43,7 +43,7 @@ export type MusicTheme = 'battle' | 'menu';
 
 export class Music {
   private ctx: BaseAudioContext | null = null;
-  /** BGM v2（EpicBgm.ts）：仅战斗曲与首领曲；界面曲仍为原版。 */
+  /** BGM v2（EpicBgm.ts）：战斗曲、首领曲、界面曲与胜负短曲。 */
   readonly v2: boolean;
   private epic: EpicBgm | null = null;
   private master: GainNode | null = null;
@@ -67,7 +67,7 @@ export class Music {
   private boss: { p: BossProfile; scale: number[]; melody: Array<[number, number] | null>; stepDur: number; step: number; startAt: number } | null = null;
 
   constructor(readonly theme: MusicTheme = 'battle', version = bgmVersion()) {
-    this.v2 = theme === 'battle' && version === 'v2';
+    this.v2 = version === 'v2';
     this.bpm = theme === 'menu' ? 72 : this.v2 ? BATTLE_THEMES.huangjin.bpm : 92;
     this.stepDur = 60 / this.bpm / 4;
     const form = theme === 'menu' ? MENU_FORM : FORM, phrases = theme === 'menu' ? MENU_PHRASES : PHRASES;
@@ -133,7 +133,7 @@ export class Music {
    * 离线渲染（试听样品 / 测试用）：在 OfflineAudioContext 上从头排好 seconds 秒，
    * bossAt 秒时首领出场（null 不出场）。音量固定 0.4，不读静音设置。
    */
-  async renderOffline(seconds: number, bossProfile: BossProfile | null, bossAt = 0, sampleRate = 44100): Promise<AudioBuffer> {
+  async renderOffline(seconds: number, bossProfile: BossProfile | null, bossAt = 0, sampleRate = 44100, endWith: boolean | null = null): Promise<AudioBuffer> {
     const ctx = new OfflineAudioContext(2, Math.ceil(seconds * sampleRate), sampleRate);
     this.muted = false; this.volume = .4; this.duck = 1;
     this.buildGraph(ctx);
@@ -141,10 +141,24 @@ export class Music {
     let bossSet = bossProfile === null;
     while (this.nextTime < seconds) {
       if (!bossSet && this.nextTime >= bossAt) { bossSet = true; this.intensity = 1; this.setBoss(bossProfile, this.nextTime); }
+      if (endWith !== null && this.nextTime >= 6) { this.timer = null; this.endBattle(endWith, this.nextTime); break; }
       this.scheduleUntil(Math.min(seconds, this.nextTime + .5));
     }
     this.playing = false;
     return ctx.startRendering();
+  }
+
+  /**
+   * 战斗结束：新版在战斗曲之后接约 4 秒的胜利 / 败退短曲（返回 true，调用方不再播旧的胜负音效）；
+   * 旧版或静音时与 stop() 相同（返回 false）。
+   */
+  endBattle(victory: boolean, at?: number): boolean {
+    if (!this.epic || !this.ctx || !this.playing || this.muted || this.volume <= 0) { this.stop(); return false; }
+    this.playing = false;
+    if (this.timer !== null) { window.clearInterval(this.timer); this.timer = null; }
+    this.boss = null; this.intensity = 0;
+    this.epic.jingle(victory, (at ?? this.ctx.currentTime) + .05);
+    return true;
   }
 
   stop(): void {
@@ -212,7 +226,8 @@ export class Music {
         this.nextTime += b.stepDur;
         continue;
       }
-      if (this.epic) { this.epic.battleStep(this.step, this.nextTime, this.stepDur, this.intensity === 1); this.step++; }
+      if (this.epic && this.theme === 'menu') { this.epic.menuStep(this.step, this.nextTime, this.stepDur, this.melodyAt, MENU_ROOTS, ARP); this.step++; }
+      else if (this.epic) { this.epic.battleStep(this.step, this.nextTime, this.stepDur, this.intensity === 1); this.step++; }
       else { this.scheduleStep(this.step, this.nextTime); this.step = (this.step + 1) % 512; }
       this.nextTime += this.stepDur;
     }

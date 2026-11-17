@@ -33,9 +33,9 @@ const bundle = await build({
         return { rmsDb: +(20 * Math.log10(rms + 1e-9)).toFixed(1), peakDb: +(20 * Math.log10(peak + 1e-9)).toFixed(1), nan };
       }
       window.__renderBgm = async (version, boss, seconds, bossAt, theme) => {
-        const m = new Music('battle', version);
-        if (theme) m.setBattleTheme(theme);
-        const buf = await m.renderOffline(seconds, boss ? bossProfile(boss) : null, bossAt);
+        const m = new Music(theme === 'menu' ? 'menu' : 'battle', version);
+        if (theme && theme !== 'menu' && !theme.startsWith('jingle')) m.setBattleTheme(theme);
+        const buf = await m.renderOffline(seconds, boss ? bossProfile(boss) : null, bossAt, 44100, theme === 'jingle-win' ? true : theme === 'jingle-lose' ? false : null);
         const bytes = wav(buf); let s = ''; for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
         return { b64: btoa(s), stats: stats(buf) };
       };
@@ -58,6 +58,9 @@ const jobs = [
   ['v2', null, 'battle-hulao', 67, 'hulao'], ['v2', null, 'battle-qunxiong', 74, 'qunxiong'],
   ['v2', null, 'battle-guandu', 80, 'guandu'], ['v2', null, 'battle-chibi', 72, 'chibi'],
   ['v2', '袁术', 'boss-yuanshu', 40], ['v2', '曹纯', 'boss-caochun', 40],
+  // 界面曲（新旧对比）与胜负短曲（战斗曲 6 秒后接短曲）
+  ['old', null, 'menu-yinghuo', 60, 'menu'], ['v2', null, 'menu-yinghuo', 60, 'menu'],
+  ['v2', null, 'jingle-victory', 11, 'jingle-win'], ['v2', null, 'jingle-defeat', 11, 'jingle-lose'],
 ];
 const results = []; let fail = 0;
 for (const [ver, boss, name, secs, theme] of jobs.filter(j => !ONLY || j[0] === ONLY || j[2] === ONLY)) {
@@ -65,11 +68,12 @@ for (const [ver, boss, name, secs, theme] of jobs.filter(j => !ONLY || j[0] === 
   const file = join(outDir, `${ver === 'v2' ? 'new' : 'old'}-${name}.wav`);
   writeFileSync(file, Buffer.from(r.b64, 'base64'));
   results.push({ ver, name, ...r.stats });
-  const ok = r.stats.nan === 0 && r.stats.rmsDb > -40 && r.stats.peakDb <= 0;
+  // 界面曲本就安静（旧版约 -40 dB），静音判定放宽到 -48 dB。
+  const ok = r.stats.nan === 0 && r.stats.rmsDb > (name.startsWith('menu') ? -48 : -40) && r.stats.peakDb <= 0;
   if (!ok) fail++;
   console.log(`${ok ? 'PASS' : 'FAIL'} ${ver} ${name} :: ${JSON.stringify(r.stats)} -> ${file}`);
 }
-for (const name of ONLY ? [] : ['battle-huangjin', 'boss-zhangjiao', 'boss-lubu']) {
+for (const name of ONLY ? [] : ['battle-huangjin', 'boss-zhangjiao', 'boss-lubu', 'menu-yinghuo']) {
   const o = results.find(r => r.ver === 'old' && r.name === name), n = results.find(r => r.ver === 'v2' && r.name === name);
   const diff = +(n.rmsDb - o.rmsDb).toFixed(1), ok = Math.abs(diff) <= 4;
   if (!ok) fail++;

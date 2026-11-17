@@ -16,6 +16,8 @@ export interface WeaponBolt {
   img: Phaser.GameObjects.Image; vx: number; vy: number; life: number;
   damage: number; bounce: number; active: boolean;
   lastHit: Enemy | null; hitIds: Set<number>;
+  /** 随行本命武器射出的箭：命中按友军结算并记到随行名下（GameScene.createFollowerWeapon）。 */
+  ally?: { hero: string; credit: (damage: number) => void };
 }
 
 export interface SpearShot {

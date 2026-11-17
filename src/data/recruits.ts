@@ -51,6 +51,9 @@ export const FOLLOW = {
    *  slotRadius 阵位离主公的距离；followK 追阵位的平滑系数（越大越紧，14 ≈ 跑动时只落后十来像素）；turnRate 阵位转向速度；
    *  lunge 近战出手时朝目标前出的距离（之后自动回位）；snap 离阵位超过这个距离直接归位（换图、复活等）。 */
   slotRadius: 56, followK: 14, turnRate: 6, lunge: 22, snap: 160, restMs: 20000,
+  /** 可玩名将随行用本命武器（用户 2026-11-16「随行武将要用他们自己的攻击」）：武将等级 ≥ 这些值时武器为 Lv1–5；
+   *  效果范围倍率（体量小一点）；随行出手当帧新建的特效放进半透明图层的不透明度（与主将区分）。初值，交平衡会话。 */
+  weaponLevelAt: [1, 8, 15, 22, 30], heroAreaMul: .85, fxAlpha: .72,
   /** 可玩名将跟随时专属武器的倍率；吃主将全局伤害加成的比例。 */
   heroDamageMul: .45, heroCooldownMul: 1.3, shareLeaderDamage: .5,
   /** 首领打跟随武将的倍率（同后备兵）。 */

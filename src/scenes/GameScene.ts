@@ -1,5 +1,8 @@
 import { stopMenuMusic } from '../systems/Music';
-import {FollowerSquad} from '../systems/FollowerSquad';
+import {FollowerSquad,type Follower} from '../systems/FollowerSquad';
+import {CharacterPassives} from '../systems/CharacterPassives';
+import {FOLLOW} from '../data/recruits';
+import type {PlayerStats} from '../types';
 import {followersFor} from '../systems/RosterStore';
 import { warnCircle, TELEGRAPH_CLASSIC, groundCracks, windupFlash } from '../ui/Telegraph';
 import { HINT_MOCK, SHOW_OWN_RANGE_FX, groundScar, keyOutline } from '../ui/HintStyle';
@@ -1482,6 +1485,57 @@ export class GameScene extends Phaser.Scene {
     };
   }
 
+  /** 随行出手当帧新建的特效放进这个半透明图层，和主将的攻击区分开（FOLLOW.fxAlpha）。 */
+  private followerFxLayer?: Phaser.GameObjects.Layer;
+  /**
+   * 可玩名将随行用本命武器（用户 2026-11-16「随行武将要用他们自己的攻击」）：复用 WEAPON_BEHAVIORS，以随行为发射源。
+   * 替身主将：位置 / 朝向 / 生死 / 血量都指向随行；被动用停掉的 CharacterPassives（不蓄层、不出招牌技），成长用全新 RunGrowth（无技艺、无拾取）；
+   * 伤害按随行自己的等级、属性、兵装与随行倍率结算，命中记为友军且不算武器命中（不触发主将被动、遗物、构筑、暴击与吸血）。
+   */
+  createFollowerWeapon(f: Follower, squad: FollowerSquad): ((dt: number, now: number) => void) | null {
+    const hero = f.recruit.hero; if (!hero) return null;
+    const id = getCharacter(hero).startWeapon, behave = WEAPON_BEHAVIORS[id]; if (!behave) return null;
+    const scene = this, passive = new CharacterPassives(hero, this.combatNow); passive.stop();
+    const stats: PlayerStats = { damageMul: f.weaponDamageMul, cooldownMul: f.weaponCooldownMul, moveMul: 1, critChance: 0, regen: 0, pickupRadius: 0, armor: 0, maxHpBonus: 0, meleeMul: 1, arrowMul: 1, fireMul: 1, fireAreaMul: FOLLOW.heroAreaMul, damageTakenMul: 1 };
+    const puppet = {
+      get x() { return f.x; }, get y() { return f.y; }, get sprite() { return f.sprite; }, stats, growth: new RunGrowth(hero), passive,
+      get alive() { return !f.resting; }, get hp() { return f.hp; }, get maxHp() { return f.maxHp; }, heal(n: number) { f.hp = Math.min(f.maxHp, f.hp + Math.max(0, n)); },
+      get direction() { return f.dir; }, get heading() { const a = squad.facing; return { x: Math.cos(a), y: Math.sin(a) }; },
+      nextSkillAction: 0, knockedUntil: 0, relics: [] as string[], weapons: [] as WeaponState[],
+      faceDirection(dir: 'down' | 'up' | 'left' | 'right') { f.dir = dir; f.faceUntil = scene.combatNow + 220; },
+      playAction() { return false; },
+      knockUp(_now: number, _ms: number, dx: number, dy: number) { f.lx += dx * .25; f.ly += dy * .25; },
+    } as unknown as Player;
+    const state: WeaponState = { id, level: f.weaponLevel, cooldownLeft: .4 + Math.random() * .4 };
+    const shots: SpearShot[] = [], ally = { hero, credit: (n: number) => squad.credit(f, n) };
+    const host: WeaponHost = {
+      get player() { return puppet; }, get enemies() { return scene.enemies; }, get grid() { return scene.grid; }, get add() { return scene.add; }, get time() { return scene.time; },
+      get combatNow() { return scene.combatNow; }, get cameras() { return scene.cameras; }, get sfx() { return scene.sfx; }, get over() { return scene.over; },
+      get spearShots() { return shots; }, get bolts() { return scene.bolts; },
+      hitEnemy: (e, d, now, src) => { const n = d * squad.share, live = e.active && !e.invulnerable; const ok = scene.hitEnemy(e, n, now, src, true, false); if (live) squad.credit(f, n); return ok; },
+      nearestEnemy: (x, y, r) => scene.nearestEnemy(x, y, r),
+      fireBolt: (pool, x, y, tx, ty, damage, bounce, fromPlayer, speed) => { scene.boltAlly = ally; try { scene.fireBolt(pool, x, y, tx, ty, damage * squad.share, bounce, fromPlayer, speed); } finally { scene.boltAlly = undefined; } },
+      spawnGuandaoSlash: (angle, alpha, size, duration) => scene.spawnGuandaoSlashAt(f.x, f.y, hero, angle, alpha * FOLLOW.fxAlpha, size, duration, FOLLOW.fxAlpha),
+      spawnFlagSwingFx: (dx, dy) => scene.spawnFlagSwingFxAt(f.x, f.y, dx, dy),
+      spawnFlameGatherFx: (...args) => scene.spawnFlameGatherFx(...args),
+      spawnFlameFx: (...args) => scene.spawnFlameFx(...args),
+      heroFx: (fid: string, x: number, y: number, size: number, rotation = 0) => scene.playHeroFx(fid, x, y, size * FOLLOW.heroAreaMul, rotation),
+      // 场地火（诸葛亮烧地、庞统火环）：每名随行自己一套，伤害记到随行名下；数量由 MartialFields 自身上限约束
+      martialField: (...args) => fields.add(...args),
+    };
+    const fields = new MartialFields(host);
+    if (!this.followerFxLayer || !this.followerFxLayer.scene) { this.followerFxLayer = this.add.layer().setDepth(DEPTH.fx - 1).setAlpha(FOLLOW.fxAlpha).setName('follower-fx'); this.events.once('shutdown', () => { this.followerFxLayer = undefined; }); }
+    const layer = this.followerFxLayer;
+    return (dt, now) => {
+      if (!this.over) fields.update(dt);
+      if (f.resting || this.over) return;
+      const list = this.children.list, before = list.length;
+      behave(host, state, dt, now);
+      // 当帧新建的特效挪进半透明图层（共用的箭矢对象池除外）
+      for (let i = list.length - 1; i >= before; i--) { const o = list[i]; if ((o as unknown) === layer || this.bolts.some(b => b.img === o)) continue; layer.add(o); }
+    };
+  }
+
   protected updateWeapons(dt: number, time: number): void {
     const weapons = this.player.weapons;
     // 旧环绕枪视觉已废弃：七探盘龙枪不再有环绕 blade
@@ -1638,7 +1692,8 @@ export class GameScene extends Phaser.Scene {
     bolt.life = 2.6;
     bolt.lastHit = null;
     bolt.hitIds = new Set();
-    if (fromPlayer) this.sfx.attack();
+    bolt.ally = this.boltAlly;
+    if (fromPlayer && !bolt.ally) this.sfx.attack();
     bolt.img
       .setTexture(textureKey ?? (fromPlayer ? 'bolt' : 'arrow'))
       .setPosition(x, y)
@@ -1647,8 +1702,12 @@ export class GameScene extends Phaser.Scene {
     if (fromPlayer) bolt.img.setScale(1);
     else if (textureKey === 'orb') bolt.img.setDisplaySize(22, 22);
     else bolt.img.setDisplaySize(30, 7);
-    { const tint = fromPlayer ? HERO_TINT[this.runConfig.character] : undefined; if (tint) bolt.img.setTint(tint); else bolt.img.clearTint(); }
+    { const tint = fromPlayer ? HERO_TINT[(bolt.ally?.hero ?? this.runConfig.character) as keyof typeof HERO_TINT] : undefined; if (tint) bolt.img.setTint(tint); else bolt.img.clearTint(); }
+    bolt.img.setAlpha(bolt.ally ? FOLLOW.fxAlpha : 1);
+    if (bolt.ally) bolt.img.setScale(bolt.img.scaleX * FOLLOW.heroAreaMul, bolt.img.scaleY * FOLLOW.heroAreaMul);
   }
+  /** 正在替随行发箭时设置（fireBolt 读取后挂到箭上）。 */
+  private boltAlly?: { hero: string; credit: (damage: number) => void };
 
   protected updateBolts(dt: number, time: number): void {
     for (const bolt of this.bolts) {
@@ -1671,7 +1730,8 @@ export class GameScene extends Phaser.Scene {
         }
       }
       if (target) {
-        this.hitEnemy(target, bolt.damage, time, 'arrow');
+        if (bolt.ally) { const live = target.active; this.hitEnemy(target, bolt.damage, time, 'arrow', true, false); if (live) bolt.ally.credit(bolt.damage); }
+        else this.hitEnemy(target, bolt.damage, time, 'arrow');
         bolt.hitIds.add(target.spawnId);
         if (bolt.bounce > 0) {
           const next = this.nearestEnemy(target.x, target.y, 260, null, bolt.hitIds);
@@ -1831,14 +1891,16 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  spawnGuandaoSlash(angle: number, alphaScale: number, size = 110, duration = 120): void {
+  spawnGuandaoSlash(angle: number, alphaScale: number, size = 110, duration = 120): void { this.spawnGuandaoSlashAt(this.player.x, this.player.y, this.runConfig.character, angle, alphaScale, size, duration); }
+  /** 关刀 / 双股剑 / 镇北刀刀光，画在指定位置（主将或随行）。 */
+  spawnGuandaoSlashAt(ox: number, oy: number, character: string, angle: number, alphaScale: number, size = 110, duration = 120, fxScale = 1): void {
     const reachOffset = size * .19;
-    this.artEffects.show(1,this.player.x+Math.cos(angle)*reachOffset,this.player.y+Math.sin(angle)*reachOffset,size,this.combatNow,duration,angle);
+    this.artEffects.show(1,ox+Math.cos(angle)*reachOffset,oy+Math.sin(angle)*reachOffset,size,this.combatNow,duration,angle);
     // 刘备 / 魏延：普攻用自己的剑气 / 劈地特效，不再借用关羽的青龙刀光
-    const own = ({ liubei: 'liubeiSlash', weiyan: 'weiyanSlash' } as Record<string, string>)[this.runConfig.character];
-    if (own && this.textures.exists('hero_fx_' + HERO_FX[own].sheet)) { if (alphaScale >= .9) this.playHeroFx(own, this.player.x + Math.cos(angle) * reachOffset * 1.6, this.player.y + Math.sin(angle) * reachOffset * 1.6, size * 1.15, own === 'liubeiSlash' ? angle : 0); return; }
+    const own = ({ liubei: 'liubeiSlash', weiyan: 'weiyanSlash' } as Record<string, string>)[character];
+    if (own && this.textures.exists('hero_fx_' + HERO_FX[own].sheet)) { if (alphaScale >= .9 * fxScale) this.playHeroFx(own, ox + Math.cos(angle) * reachOffset * 1.6, oy + Math.sin(angle) * reachOffset * 1.6, size * 1.15, own === 'liubeiSlash' ? angle : 0); return; }
     if (!this.textures.exists('guandao_slash_sheet')) return;
-    const originX = this.player.x, originY = this.player.y;
+    const originX = ox, originY = oy;
     for (let f = 0; f < 3; f += 1) {
       this.time.delayedCall(f * 45, () => {
         if (this.over) return;
@@ -1848,7 +1910,7 @@ export class GameScene extends Phaser.Scene {
           .setRotation(angle)
           .setDepth(41)
           .setAlpha(0.62 * alphaScale);
-        { const tint = HERO_TINT[this.runConfig.character]; if (tint) fx.setTint(tint); }
+        { const tint = HERO_TINT[character as keyof typeof HERO_TINT]; if (tint) fx.setTint(tint); }
         this.tweens.add({ targets: fx, alpha: 0, scaleX: fx.scaleX * 1.06, scaleY: fx.scaleY * 1.06, duration, onComplete: () => fx.destroy() });
       });
     }
@@ -1862,8 +1924,9 @@ export class GameScene extends Phaser.Scene {
   }
 
   /** 诸葛亮挥旗：正式战旗素材握在旗杆底端，朝目标一侧前挥；缺图时退回程序旗子。 */
-  protected spawnFlagSwingFx(dirX: number, dirY: number): void {
-    const px = this.player.x, py = this.player.y;
+  protected spawnFlagSwingFx(dirX: number, dirY: number): void { this.spawnFlagSwingFxAt(this.player.x, this.player.y, dirX, dirY); }
+  /** 诸葛亮挥旗，画在指定位置（主将或随行）。 */
+  protected spawnFlagSwingFxAt(px: number, py: number, dirX: number, dirY: number): void {
     if (this.textures.exists('zhuge_banner')) {
       const side = dirX < -0.15 ? -1 : 1, k = 86 / 256, ox = 0.302, from = -0.28 * side, to = 0.62 * side;
       const make = (alpha: number) => this.add.image(px + 10 * side, py + 18, 'zhuge_banner').setOrigin(side > 0 ? ox : 1 - ox, 1).setFlipX(side < 0).setScale(k).setDepth(DEPTH.fx - 1).setAlpha(alpha).setRotation(from);

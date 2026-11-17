@@ -115,8 +115,9 @@ for (const [layout, viewport] of Object.entries(LAYOUTS)) {
   ck(`选将(${layout})：第 3 页显示庞统、黄月英、孙尚香、貂蝉，可点选`, pg.vis.join() === '8,9,10,11' && pg.names.slice(2).join() === '孙尚香,貂蝉' && pg.candidate === 11, pg);
   await p.waitForTimeout(400);
   await p.screenshot({ path: `${out}/picker-${layout}.png` });
-  const conf = await p.evaluate(async () => { const s = window.__game.scene.getScene('MenuScene'); s.heroPicker.root.getByName('hero-confirm').emit('pointerdown'); await new Promise(r => setTimeout(r, 300)); return { saved: localStorage.getItem('im_last_hero'), sel: s.selectedChar }; });
-  ck(`选将(${layout})：确认出战后记住貂蝉`, conf.saved === 'diaochan' && conf.sel === 11, conf);
+  // 新存档开局择主公：「确认出战」要点两次（主公规则，2026-11-16）
+  const conf = await p.evaluate(async () => { const s = window.__game.scene.getScene('MenuScene'), ok = s.heroPicker.root.getByName('hero-confirm'); ok.emit('pointerdown'); ok.emit('pointerdown'); await new Promise(r => setTimeout(r, 300)); const R = await import('/src/systems/RosterStore.ts'); return { saved: localStorage.getItem('im_last_hero'), sel: s.selectedChar, lord: R.lordHero() }; });
+  ck(`选将(${layout})：确认出战（两次）后貂蝉定为主公并记住`, conf.saved === 'diaochan' && conf.sel === 11 && conf.lord === 'diaochan', conf);
   await p.waitForTimeout(400); await p.screenshot({ path: `${out}/home-${layout}.png` });
   await p.evaluate(() => localStorage.removeItem('im_last_hero'));
   await p.close();

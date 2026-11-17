@@ -35,6 +35,8 @@ export class Follower {
   slot = 0; dir: 'down' | 'up' | 'left' | 'right' = 'down'; walk = 0; lastX = 0; lastY = 0; hurtUntil = 0; downs = 0; kills = 0; hits = 0;
   /** 近战前出的偏移（出手时设、之后衰减回 0）与面向目标的时限。 */
   lx = 0; ly = 0; faceUntil = 0;
+  /** 可玩名将随行：本命武器执行器（战斗场景 createFollowerWeapon 提供）、武器等级、伤害 / 冷却倍率。没有执行器时用模板攻击。 */
+  weaponRun: ((dt: number, now: number) => void) | null = null; weaponLevel = 1; weaponDamageMul = 1; weaponCooldownMul = 1;
   readonly sprite: Phaser.GameObjects.Image; readonly shadow: Phaser.GameObjects.Ellipse; readonly label: Phaser.GameObjects.Text; readonly bar: Phaser.GameObjects.Graphics;
   readonly sheet: string; readonly template: FollowerTemplate; readonly damage: number; readonly speedMul: number; readonly haste: number; readonly gear: GearStats; level: number;
   constructor(readonly scene: Phaser.Scene, readonly recruit: Recruit, x: number, y: number, leaderLevelHp: number) {
@@ -54,6 +56,11 @@ export class Follower {
     this.maxHp = Math.round(t.hp * q * (hero?.hpMul ?? 1) * (1 + b.hp) * (1 + g.hp) * hpLv * leaderLevelHp); this.hp = this.maxHp;
     this.speedMul = t.speed * (hero?.speedMul ?? 1) * (1 + g.move);
     this.haste = (1 + b.haste) * (1 + g.attackSpeed);
+    if (hero) {
+      this.weaponLevel = Math.max(1, FOLLOW.weaponLevelAt.filter(lv => this.level >= lv).length);
+      this.weaponDamageMul = FOLLOW.heroDamageMul * hero.damageMul * (1 + b.damage) * (1 + g.damage) * (1 + g.crit) * dmgLv;
+      this.weaponCooldownMul = FOLLOW.heroCooldownMul / this.haste;
+    }
     this.cooldown = .3 + Math.random() * .4;
     this.shadow = scene.add.ellipse(x, y + 2, 34, 12, 0x000000, .28).setDepth(DEPTH.player - 2);
     this.sprite = scene.add.image(x, y, visualTextureKey(scene, this.sheet), 'down_0').setOrigin(.5, .86).setDepth(DEPTH.player - 1);
@@ -77,6 +84,12 @@ export class FollowerSquad {
   private readonly buf: Enemy[] = [];
   /** 统计（测试 / 平衡用）。 */
   readonly stats = { damage: 0, hits: 0, teleports: 0, downs: 0, maxDist: 0 };
+  /** 当前吃主将全局伤害加成的倍率（本命武器结算时用）。 */
+  share = 1;
+  /** 本命武器命中时记账（测试 / 平衡用）。 */
+  credit(f: Follower, damage: number): void { this.stats.damage += damage; this.stats.hits++; f.hits++; }
+  /** 阵位朝向（给本命武器的 heading 用）。 */
+  get facing(): number { return this.heading; }
   /** 阵位朝向（主公移动方向，平滑后；起始朝下）。 */
   private heading = Math.PI / 2; private px = NaN; private py = NaN;
   /** 主公速度（平滑后）：追阵位时提前量（前馈），匀速跑动时不落后。 */
@@ -85,6 +98,9 @@ export class FollowerSquad {
     this.gfx = scene.add.graphics().setDepth(DEPTH.fx);
     const n = recruits.length;
     recruits.forEach((r, i) => { const s = this.slotPos(i, n), f = new Follower(scene, r, s.x, s.y, 1); f.slot = i; this.members.push(f); });
+    // 可玩名将用本命武器（场景支持时）；测试面板与正式出征共用这里
+    const make = (scene as { createFollowerWeapon?: (f: Follower, squad: FollowerSquad) => ((dt: number, now: number) => void) | null }).createFollowerWeapon;
+    if (make) for (const f of this.members) if (f.recruit.hero) f.weaponRun = make.call(scene, f, this);
   }
   /** 阵位相对主公后方的角度偏移：1 人正后；2 人左后 / 右后；3 人左后 / 右后 / 正后。 */
   private static readonly OFFSETS: readonly (readonly number[])[] = [[0], [0], [-.8, .8], [-1, 1, 0]];
@@ -94,7 +110,7 @@ export class FollowerSquad {
   }
 
   update(dt: number, now: number): void {
-    const p = this.player, n = this.members.length, dmgShare = 1 + FOLLOW.shareLeaderDamage * (Math.max(.2, this.leaderDamage()) - 1);
+    const p = this.player, n = this.members.length, dmgShare = 1 + FOLLOW.shareLeaderDamage * (Math.max(.2, this.leaderDamage()) - 1); this.share = dmgShare;
     this.gfx.clear();
     for (const f of this.members) {
       if (f.resting) {
@@ -106,6 +122,9 @@ export class FollowerSquad {
       const s = this.slotPos(f.slot, n), lead = 1 / FOLLOW.followK, gx = s.x + f.lx + this.vx * lead, gy = s.y + f.ly + this.vy * lead;
       if (Math.hypot(gx - f.x, gy - f.y) > FOLLOW.snap) { f.place(gx, gy); f.target = null; this.stats.teleports++; f.sprite.setAlpha(.3); this.scene.tweens.add({ targets: f.sprite, alpha: 1, duration: 220 }); }
       this.move(f, gx, gy, dt, now);
+      // 可玩名将：本命武器自己找目标、出手（以随行为发射源）
+      if (f.weaponRun) { f.weaponRun(dt, now); }
+      else {
       // 索敌：只找自己射程内的敌人，不离阵去追
       const t = TEMPLATES[f.template];
       if (f.target && (!f.target.active || Math.hypot(f.target.x - f.x, f.target.y - f.y) > t.range)) f.target = null;
@@ -115,6 +134,7 @@ export class FollowerSquad {
       if (f.target && f.cooldown <= 0) {
         f.cooldown = t.cooldown / 1000 / f.haste; this.attack(f, f.target, now, f.damage * dmgShare); f.faceUntil = now + 320;
         if (f.template === 'spear' || f.template === 'blade') { const a = Math.atan2(f.target.y - f.y, f.target.x - f.x); f.lx = Math.cos(a) * FOLLOW.lunge; f.ly = Math.sin(a) * FOLLOW.lunge; }
+      }
       }
       if (f.gear.regen > 0) f.hp = Math.min(f.maxHp, f.hp + f.gear.regen * dt);
       // 接触伤害

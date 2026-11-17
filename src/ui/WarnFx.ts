@@ -145,18 +145,19 @@ export class WarnFx {
     return true;
   }
   /** 通用形状的落下：同一个 id 只播一次（调用方在命中窗口里每帧都会调）。 */
-  shapeImpact(id: string, kind: ShapeKind, x: number, y: number, size: number, angle: number, now: number, width = 0): boolean {
+  /** opt：首领招牌招可按真实范围、更实地显示（scale 默认按收敛倍数，alpha 默认 0.6 / 长条 0.75，ms 为播放时长）。 */
+  shapeImpact(id: string, kind: ShapeKind, x: number, y: number, size: number, angle: number, now: number, width = 0, opt: { scale?: number; alpha?: number; ms?: number } = {}): boolean {
     if (!this.has(kind)) return false;
     if ((this.impacted.get(id) ?? -1) > now) return true;
     this.impacted.set(id, now + 1500);
     if (this.impacted.size > 64) for (const [k, t] of this.impacted) if (t < now) this.impacted.delete(k);
     // 收敛（用户「首领的攻击特效也需要兼容适应」）：只播「炸开」那一行（不再接余尘行），圆形缩到 0.7 倍、0.35 秒、半透明，不抢首领本身的动作
     const f = WARN_FX_FILES[kind], lane = kind === 'charge', first = lane ? 4 : 6, count = lane ? 2 : 6;
-    const img = this.scene.add.image(x, y, f.key, first).setDepth(lane ? DEPTH.ground + 5 : DEPTH.ground + 6).setAlpha(lane ? .75 : .6);
+    const img = this.scene.add.image(x, y, f.key, first).setDepth(lane ? DEPTH.ground + 5 : DEPTH.ground + 6).setAlpha(opt.alpha ?? (lane ? .75 : .6));
     if (lane) img.setOrigin(0, .5).setRotation(angle).setDisplaySize(size, width / (LANE_FRAC[kind] ?? .5));
-    else if (kind === 'sweep') { const w = size * .75 / sweepR(); img.setOrigin(SWEEP_CX, .5).setRotation(angle).setDisplaySize(w, w * f.h / f.w); }
-    else { const d = size * 2 * .7 / ringFrac(kind); img.setOrigin(.5, ringOy(kind)).setDisplaySize(d, d); } // 原点与蓄力圈一致，落下不错位
-    this.scene.tweens.addCounter({ from: 0, to: count - .01, duration: lane ? 320 : 350, onUpdate: t => img.setFrame(first + Math.floor(t.getValue() ?? 0)),
+    else if (kind === 'sweep') { const w = size * (opt.scale ?? .75) / sweepR(); img.setOrigin(SWEEP_CX, .5).setRotation(angle).setDisplaySize(w, w * f.h / f.w); }
+    else { const d = size * 2 * (opt.scale ?? .7) / ringFrac(kind); img.setOrigin(.5, ringOy(kind)).setDisplaySize(d, d); } // 原点与蓄力圈一致，落下不错位
+    this.scene.tweens.addCounter({ from: 0, to: count - .01, duration: opt.ms ?? (lane ? 320 : 350), onUpdate: t => img.setFrame(first + Math.floor(t.getValue() ?? 0)),
       onComplete: () => this.scene.tweens.add({ targets: img, alpha: 0, duration: 140, onComplete: () => img.destroy() }) });
     return true;
   }

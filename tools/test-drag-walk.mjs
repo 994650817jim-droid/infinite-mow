@@ -67,7 +67,9 @@ await p.evaluate(G0 => {
   for (const e of s.enemies) { e.__keep = false; if (e.active) e.hp = 0; }
   s.player.growth.travel = 0;
 }, G);
-await p.evaluate(() => window.__v.set(1, 0)); await step(80);
+// 蓄力门槛由平衡会话调整（RunGrowth.DRAG_TRAVEL），这里直接把蓄力值设满，只验证出刀动作
+await p.evaluate(() => window.__v.set(1, 0)); await step(10);
+await p.evaluate(G0 => { const s = eval(G0); s.player.growth.travel = 1e4; }, G);
 await p.evaluate(() => window.__v.set(0, 0)); await step(6);
 const clip = async name => { const r = await p.evaluate(G0 => { const s = eval(G0), g = window.__game, c = g.canvas.getBoundingClientRect(), cam = s.cameras.main, k = c.width / g.scale.gameSize.width * cam.zoom, wv = cam.worldView; return { x: c.left + (s.player.x - wv.x) * k, y: c.top + (s.player.y - wv.y) * k, k }; }, G); await p.screenshot({ path: `${out}/${name}.png`, clip: { x: r.x - 190 * r.k, y: r.y - 130 * r.k, width: 380 * r.k, height: 240 * r.k } }); };
 await p.evaluate(G0 => { const s = eval(G0), pl = s.player; for (const [dx, dy] of [[70, 0], [100, -25]]) { const e = s.spawnEnemy('infantry', pl.x + dx, pl.y + dy, 1, true); if (e) { e.hp = e.maxHp = 1e7; e.speed = 0; e.__keep = true; } } for (const w of pl.weapons) w.cooldownLeft = 0; }, G);

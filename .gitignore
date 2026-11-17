@@ -154,5 +154,6 @@ assets/raw/*
 !/tools/test-hanzhong-full.mjs
 !/tools/test-shu.mjs
 !/tools/test-xiangfan.mjs
+!/tools/test-nanzheng.mjs
 !/tools/test-jingnan-art.mjs
 !/tools/test-hanzhong-art.mjs

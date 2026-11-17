@@ -12,7 +12,7 @@ export const WEAPON_META: Record<WeaponId, { name: string; desc: string }> = {
   spear_orbit: { name: '七探盘龙枪', desc: '银枪自动索敌，向不同敌人突刺' },
   guandao: { name: '青龙偃月斩', desc: '前方 120° 扇形劈砍，最多命中 8 人' },
   crossbow: { name: '连弩齐射', desc: '自动射向最近敌人，命中后弹射；每级多射 1 支分射其他敌人' },
-  flame_banner: { name: '烈焰战旗', desc: '前方爆发烈焰，范围灼烧' },
+  flame_banner: { name: '烈焰战旗', desc: '前方爆发烈焰，范围灼烧；火攻焚将：对首领、精锐伤害 ×1.8' },
   zhenbei_blade: { name: '镇北环首刀', desc: '朝敌群重劈，地面裂开直线冲击波，穿透全部敌人；贴身伤害更高' },
   lianhuan_mines: { name: '凤雏连环令', desc: '边走边在脚下落火雷，雷与雷之间拉起烧红的铁索：碰到铁索的敌人减速，踩雷引爆并连环引爆附近的雷' },
   sun_knives: { name: '弓腰姬飞刀', desc: '身边环绕飞刀割伤近敌，并不断掷出飞刀穿透远敌；移动中掷得更快' },

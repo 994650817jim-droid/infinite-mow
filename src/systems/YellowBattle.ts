@@ -107,6 +107,13 @@ export class YellowBattle {
     if(!z.fired)windupFlash(z.owner,now);
     // 张梁砍击：蓄力时刀光虚影沿砍击方向由短到长伸出去（刀光图前 4 帧，半透明）；砍下时刀光全亮
     if(z.kind==='sweep'&&HINT_MOCK==='c'&&WARN_FX_ON&&image){if(z.fired)image.setAlpha(.95);else image.setTexture(key,Math.min(3,Math.floor(progress*4))).setAlpha(.3+.45*progress).setVisible(true);continue;}
+    // 黄巾小兵（刀盾 / 长枪 / 戟兵 / 术士 / 符水道士）：小、短、低调，不抢首领的戏（用户 2026-11-16「需要符合，太浮夸了」）。
+    // 不用 WarnFx 的像素横扫 / 裂地圆；近战蓄力只留身上暖光，刺出时原手绘盾刺图缩小调淡；术士 / 道士用原手绘符阵图，调淡
+    if(HINT_MOCK==='c'&&WARN_FX_ON&&z.owner.kind!=='boss'){
+     if(image&&z.kind==='stab'){if(z.fired)image.setDisplaySize(z.radius*1.4,z.radius*1.4).setAlpha(.5).setVisible(true);else image.setVisible(false);}
+     else if(image&&(z.kind==='sigil'||z.kind==='thunder')){const k='yellow_shaman_ground_sigil_warning';if(!z.fired)image.setTexture(k,Math.min(3,Math.floor(progress*4))).setDisplaySize(z.radius*2,z.radius*2).setAlpha(.15+.3*progress).setVisible(true);else image.setTexture(k,Math.min(7,4+Math.max(0,Math.floor((now-z.at)/45)))).setDisplaySize(z.radius*1.8,z.radius*1.8).setAlpha(.5).setVisible(true);}
+     continue;
+    }
     // 特效型警示（默认）：黄巾章本来就画好了预警图（术士符阵、张梁冲锋、张宝地裂，前 4 帧是蓄力），按进度播放；召唤仪式没有伤害，不提示
     if(HINT_MOCK==='c'&&WARN_FX_ON){if(z.kind==='ritual'||!z.damage)continue;if(image&&(z.kind==='sigil'||z.kind==='charge'||z.kind==='rift')){if(!z.fired)image.setTexture(key,Math.min(3,Math.floor(progress*4))).setAlpha(.35+.45*progress).setVisible(true);else if(z.kind==='sigil')image.setAlpha(.8).setVisible(true);continue;}}
     if(z.kind==='charge')laneCracks(this.gfx,z.x,z.y,z.angle,z.radius,72,progress,z.fired);

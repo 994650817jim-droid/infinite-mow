@@ -71,4 +71,6 @@ export const PASSIVE_RULES = {
   /** 刘备·双股剑：出手距离、「×」斩溅射半径与倍率；一剑砍两人积 1 层仁德。 */
   swordsRange: 120, crossSplash: 30, crossSplashMul: .6, liubeiHaste: .3, liubeiHasteMs: 4000,
   fireRadiusMul: 1.25, burnMs: 2000, burnTickMs: 1000, burnDamageFraction: .10,
+  /** 诸葛亮烈焰战旗「火攻焚将」（2026-11-16 用户批准加强方案 A）：爆炸对首领 / 精锐伤害 ×flameEliteMul；清群伤害与 3.2 秒冷却不变。 */
+  flameEliteMul: 1.8,
 } as const;

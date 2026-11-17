@@ -28,7 +28,7 @@ export class CampRestUI {
   this.resources=this.text(D?40:28,D?57:78,'',D?17:19).setColor('#e6c894');
   this.next=this.text(D?W-40:28,D?30:110,'',D?16:17).setColor('#d2c3a6');if(D)this.next.setOrigin(1,0);
   this.root.add([this.header,this.resources,this.next]);
-  const bagBtn=this.text(D?W-40:W-28,D?62:34,'行囊 · 换装换马',D?15:16).setOrigin(1,0).setPadding(12,6,12,6).setBackgroundColor('#7a2a1c').setColor('#ffe9bd').setInteractive({useHandCursor:true}).setName('camp-bag');bagBtn.on('pointerdown',()=>this.onOpenBag?.());this.root.add(bagBtn);
+  const bagBtn=this.text(D?W-40:W-28,D?62:34,'行囊',D?15:16).setOrigin(1,0).setPadding(12,6,12,6).setBackgroundColor('#7a2a1c').setColor('#ffe9bd').setInteractive({useHandCursor:true}).setName('camp-bag');bagBtn.on('pointerdown',()=>this.onOpenBag?.());this.root.add(bagBtn);
   // 回营寨：电脑在「行囊」左侧，手机在它下方
   this.homeBtn=this.text(D?bagBtn.x-bagBtn.width-12:W-28,D?62:76,'回营寨',D?15:16).setOrigin(1,0).setPadding(12,6,12,6).setBackgroundColor('#3d4a33').setColor('#f0f3dc').setInteractive({useHandCursor:true}).setName('camp-home').setVisible(false);
   this.homeBtn.on('pointerdown',()=>{if(!this.onReturnHome)return;if(!this.homeArmed){this.homeArmed=true;this.homeBtn.setText('确认回营寨？本局等级与战法不保留').setBackgroundColor('#7a2a1c');return;}this.onReturnHome();});this.root.add(this.homeBtn);

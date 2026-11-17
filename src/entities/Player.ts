@@ -9,6 +9,7 @@ import { BALANCE, DEPTH, FONT, actorDepth } from '../config';
 import { applySetBonus, RELIC_BY_ID, type RelicSchool } from '../data/relics';
 import type { PlayerStats, WeaponState } from '../types';
 import { WalkGait } from '../systems/WalkGait';
+import { DRAG_WALK_SHEET } from '../data/dragArt';
 import { isV2Texture, V2_MARKER_LIFT, V2_WALK_DISPLAY, V2_WALK_ORIGIN_Y } from '../systems/ArtStyle';
 
 /**
@@ -116,7 +117,9 @@ export class Player {
   private actionSet?: HeroActionSet;
   /** 招牌技动作的节流（战斗时间，黄忠用）。 */
   nextSkillAction = 0;
-  private action: {kind: HeroActionKind; frames: ActionFrame[]; mirror: boolean; start: number; until: number; hold: boolean; weights?: readonly number[]} | null = null;
+  private action: {kind: HeroActionKind; frames: ActionFrame[]; mirror: boolean; start: number; until: number; hold: boolean; weights?: readonly number[]; texture?: string} | null = null;
+  /** 本帧是否在用拖刀行走图（关羽学了拖刀斩且在移动；DraggingBladeFx 据此把火星放到刀尖）。 */
+  dragWalking = false;
   /** 当前武将普攻四帧的时长占比（蓄力 / 出手 / 命中 / 收势）；未设置时四帧均分。 */
   private attackWeights?: readonly number[];
 
@@ -281,7 +284,7 @@ export class Player {
       if (moving || !set.idle?.length || this.facing !== 'down') return false;
       frame = set.idle[Math.floor(now / IDLE_FRAME_MS) % set.idle.length];
     }
-    const key = visualTextureKey(this.scene, set.texture);
+    const key = visualTextureKey(this.scene, a && (a.hold || now < a.until) && a.texture ? a.texture : set.texture);
     if (this.sprite.texture.key !== key || this.sprite.frame.name !== String(frame)) this.sprite.setTexture(key, frame);
     this.sprite.setFlipX(mirror);
     // 按行走表的帧高换算：figureCorrection 给的是“人物像素高度”之比，动作表帧（128）与行走表帧（96）大小不同，
@@ -291,6 +294,7 @@ export class Player {
     this.sprite.setScale(fit.k, fit.k);
     this.baseOriginY = fit.originY;
     this.sprite.setOrigin(.5, this.baseOriginY);
+    this.dragWalking = false; // 动作帧覆盖了拖刀行走（同一帧里武器在移动之后出手）
     return true;
   }
 
@@ -332,7 +336,27 @@ export class Player {
   }
 
   /** 有 4 方向行走素材时播放；没有时用轻微步态占位。 */
+  /**
+   * 播放单独图集里的一段动作（如关羽拖刀上撩），按招牌技优先级（不被普攻 / 受伤打断）。缺图返回 false。
+   */
+  playStrip(texture: string, frames: ActionFrame[], ms: number, mirror: boolean, weights?: readonly number[]): boolean {
+    if (!this.actionSet || !this.scene.textures.exists(texture) || !frames.length) return false;
+    const cur = this.currentAction; if (cur === 'die' || cur === 'win') return false;
+    const start = this.clock();
+    this.action = {kind: 'skill', frames, mirror, start, until: start + ms, hold: false, weights: weights?.length === frames.length ? weights : undefined, texture};
+    this.renderAction(false);
+    return true;
+  }
+
+  /** 拖刀行走图：学了拖刀斩、在移动、人物画风 v2 且图已加载时启用；否则 null（照常用普通行走图）。 */
+  private dragWalkSheet(moving: boolean): string | null {
+    if (!moving || !this.growth.masteries.dragging_blade) return null;
+    const key = DRAG_WALK_SHEET[this.growth.character];
+    return key && this.scene.textures.exists(key) && this.scene.textures.get(key).has(`${this.facing}_0`) ? key : null;
+  }
+
   private applyWalkVisual(moving: boolean): void {
+    this.dragWalking = false;
     if (this.renderAction(moving)) return;
     const sheet = this.scene.textures.exists(this.walkSheet);
     const dirKey = `hero_walk_${this.facing}`;
@@ -340,8 +364,9 @@ export class Player {
     if (hasFrames && moving) {
       const frame = Math.floor(this.walkPhase) % 4;
       if (sheet) {
-        const name = `${this.facing}_${frame}`;
-        if (this.sprite.frame.name !== name || this.sprite.texture.key !== visualTextureKey(this.scene, this.walkSheet)) this.sprite.setTexture(visualTextureKey(this.scene,this.walkSheet), name);
+        const name = `${this.facing}_${frame}`, drag = this.dragWalkSheet(moving), sheetKey = drag ?? visualTextureKey(this.scene, this.walkSheet);
+        this.dragWalking = !!drag;
+        if (this.sprite.frame.name !== name || this.sprite.texture.key !== sheetKey) this.sprite.setTexture(sheetKey, name);
       } else {
         const key = `${dirKey}_${frame}`;
         if (this.sprite.texture.key !== key) this.sprite.setTexture(visualTextureKey(this.scene,key));

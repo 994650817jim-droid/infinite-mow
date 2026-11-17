@@ -89,6 +89,7 @@ assets/raw/*
 !/tools/artv2-boss-check.mjs
 !/tools/artv2-recolor.mjs
 !/tools/artv2-split.mjs
+!/tools/prepare-painted-icon.mjs
 !/tools/artv2-troops.mjs
 !/tools/artv2-enemies.mjs
 !/tools/artv2-portraits.mjs
@@ -98,6 +99,8 @@ assets/raw/*
 !/tools/test-enemy-walk.mjs
 !/tools/test-flank.mjs
 !/tools/test-windstep.mjs
+!/tools/test-drag-walk.mjs
+!/tools/prepare-fx.mjs
 !/tools/test-hubao.mjs
 !/tools/test-mount.mjs
 !/tools/test-shield.mjs

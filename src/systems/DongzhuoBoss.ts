@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { DEPTH } from '../config';
 import type {Enemy} from '../entities/Enemy';
 import type {Player} from '../entities/Player';
 import type {Legion} from './Legion';
@@ -13,7 +14,7 @@ interface Host {
   spawn: (kind: 'infantry' | 'cavalry', x: number, y: number) => void;
   banner: (text: string, caption?: string) => void;
 }
-interface Fire {x: number; y: number; warnUntil: number; burnUntil: number; tickAt: number; g: Phaser.GameObjects.Graphics}
+interface Fire {x: number; y: number; warnUntil: number; burnUntil: number; tickAt: number; g: Phaser.GameObjects.Graphics; flames?: Phaser.GameObjects.Image[]}
 
 /**
  * 2-3 火烧洛阳 · 董卓：慢步追击；纵火（预警圈后燃烧，烧主将与部曲）；号令西凉铁骑突阵；飞熊军护驾；
@@ -57,10 +58,16 @@ export class DongzhuoBoss {
     for (const f of [...this.fires]) {
       f.g.clear();
       if (now < f.warnUntil) { warnCircle(f.g, f.x, f.y, D.fireRadius, 1 - (f.warnUntil - now) / D.fireWarnMs, 0xd2573a, 0xf2c27a, false, now, 'fire'); continue; }
-      if (now >= f.burnUntil) { f.g.destroy(); this.fires.splice(this.fires.indexOf(f), 1); continue; }
-      // 燃烧：橙红火焰（程序绘制，忽明忽暗）
-      const flick = .55 + .2 * Math.sin(now / 60 + f.x);
-      f.g.fillStyle(0xd2462a, flick * .55).fillEllipse(f.x, f.y, D.fireRadius * 2, D.fireRadius * 1.2).fillStyle(0xffb347, flick * .6).fillEllipse(f.x, f.y - 6, D.fireRadius * 1.2, D.fireRadius * .7);
+      if (now >= f.burnUntil) { f.g.destroy(); for (const im of f.flames ?? []) im.destroy(); this.fires.splice(this.fires.indexOf(f), 1); continue; }
+      // 燃烧：用现成的地火序列帧（ground_fire，3 簇小火错开帧），代替原来程序画的橙色实心椭圆（用户「首领的攻击特效也需要兼容适应」）
+      if (this.h.scene.textures.exists('ground_fire')) {
+        if (!f.flames) f.flames = [0, 1, 2].map(i => { const a = i * 2.1 + f.x * .01, r = i ? D.fireRadius * .5 : 0; return this.h.scene.add.image(f.x + Math.cos(a) * r, f.y + Math.sin(a) * r * .6, 'ground_fire', i * 2).setOrigin(.5, .72).setDisplaySize(D.fireRadius * (i ? 1.6 : 2.1), D.fireRadius * (i ? 1.6 : 2.1)).setDepth(DEPTH.ground + 3).setAlpha(0); });
+        const left = f.burnUntil - now, fade = Math.min(1, (now - f.warnUntil) / 200, left / 300);
+        f.flames.forEach((im, i) => im.setFrame((Math.floor(now / 110) + i * 3) % 8).setAlpha(.9 * fade));
+      } else {
+        const flick = .55 + .2 * Math.sin(now / 60 + f.x);
+        f.g.fillStyle(0xd2462a, flick * .55).fillEllipse(f.x, f.y, D.fireRadius * 2, D.fireRadius * 1.2).fillStyle(0xffb347, flick * .6).fillEllipse(f.x, f.y - 6, D.fireRadius * 1.2, D.fireRadius * .7);
+      }
       if (now >= f.tickAt) {
         f.tickAt = now + D.fireTickMs;
         if (Math.hypot((p.x - f.x) / 1, (p.y - f.y) / .6) <= D.fireRadius) p.takeDamage(D.fireDamage, now);
@@ -70,5 +77,5 @@ export class DongzhuoBoss {
   }
   /** 测试用。 */
   get state() { return {fires: this.fires.length, retreated: this.retreated, invulnerable: this.boss.invulnerable}; }
-  clear(): void { for (const f of this.fires) f.g.destroy(); this.fires = []; }
+  clear(): void { for (const f of this.fires) { f.g.destroy(); for (const im of f.flames ?? []) im.destroy(); } this.fires = []; }
 }

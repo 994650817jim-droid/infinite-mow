@@ -318,7 +318,15 @@ export function zhanjinBehavior(host: WeaponHost, weapon: WeaponState, dt: numbe
   const damage = ZHANJIN_DEF.damage(level, pl.stats) * g.damageMultiplier(time), tx0 = target.x - pl.x, ty0 = target.y - pl.y, d0 = Math.hypot(tx0, ty0) || 1;
   const cast = pl.passive.beginCast('zhanjin_lance');
   // 2026-11-16 用户：「马超被动是朝着头前冲锋」→ 冲锋朝最近一次移动的方向（键盘 / 手柄一样），挑飞仍朝目标
-  const hd = Math.hypot(pl.heading.x, pl.heading.y) || 1, ux = cast.charge ? pl.heading.x / hd : tx0 / d0, uy = cast.charge ? pl.heading.y / hd : ty0 / d0;
+  // 冲锋方向（2026-11-17 统筹定方案 A）：头前 ±45°、冲锋距离内有敌人就朝头前冲（用户要的「朝着头前冲锋」）；
+  // 头前没有敌人就转向目标冲，免得放风筝时冲锋扫空（92bdb4b 后 2-3 DPS 500+ → 177）
+  const hd = Math.hypot(pl.heading.x, pl.heading.y) || 1, hx = pl.heading.x / hd, hy = pl.heading.y / hd;
+  const reach = R.chargeLen * (1 + .2 * g.masteries.tieqi) + R.chargeWidth;
+  const ahead = cast.charge && host.grid.query(pl.x + hx * reach / 2, pl.y + hy * reach / 2, reach / 2 + 60).some(e => {
+    if (!alive(e)) return false; const dx = e.x - pl.x, dy = e.y - pl.y, d = Math.hypot(dx, dy) || 1;
+    return d <= reach + e.radius && (dx * hx + dy * hy) / d >= Math.cos(Math.PI / 4);
+  });
+  const ux = cast.charge && ahead ? hx : tx0 / d0, uy = cast.charge && ahead ? hy : ty0 / d0;
   pl.faceDirection(cardinal(ux, uy), 200);
   host.sfx.play('allySpear');
   if (cast.charge) {

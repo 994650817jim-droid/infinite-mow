@@ -202,7 +202,17 @@ for (const layout of ['mobile', 'desktop']) {
   await p.screenshot({ path: `${out}/battle-followers.png` });
   const h = await p.evaluate(G0 => { const s = eval(G0); return { ...s.followers.stats, perHit: s.followers.members.map(m => m.hits) }; }, G);
   ck('随行自动打主将附近的敌人（三人都有出手）', h.hits > 5 && h.perHit.every(x => x > 0), h);
-  ck('随行不离主将超过 260 像素（瞬移除外）', h.maxDist <= 262 || h.teleports > 0, h);
+  ck('紧贴跟随：打仗时随行离主公不超过 100 像素（阵位 56 + 近战前出），不离阵去追', h.maxDist <= 100 && h.teleports === 0, h);
+  // 跑动：主公每帧挪 4 像素（约 240 像素 / 秒）跑 1.5 秒，随行全程贴身，停下时都在主公身后（阵位）
+  const run = await p.evaluate(async G0 => {
+    const s = eval(G0), f = s.followers, pl = s.player; for (const e of s.enemies) if (e.active && !e.isSupplySlot) e.hp = 0;
+    let max = 0, sum = 0, n = 0; const t0 = performance.now();
+    while (performance.now() - t0 < 1500) { pl.sprite.setPosition(pl.x + 4, pl.y); await new Promise(r => requestAnimationFrame(r)); for (const m of f.members) { const d = Math.hypot(m.x - pl.x, m.y - pl.y); max = Math.max(max, d); sum += d; n++; } }
+    await new Promise(r => setTimeout(r, 700));
+    const behind = f.members.map(m => m.x < pl.x - 10), dist = f.members.map(m => Math.round(Math.hypot(m.x - pl.x, m.y - pl.y))), dirs = f.members.map(m => m.dir);
+    return { max: Math.round(max), avg: Math.round(sum / Math.max(1, n)), behind, dist, dirs, tp: f.stats.teleports };
+  }, G);
+  ck('跑动中随行全程贴身（最远 ≤ 80 像素），停下后都在主公身后 40–70 像素', run.max <= 80 && run.behind.every(Boolean) && run.dist.every(d => d >= 40 && d <= 70), run);
   // 主将瞬间远离：随行瞬移回身边
   const t = await p.evaluate(async G0 => { const s = eval(G0); for (const e of s.enemies) if (e.active && !e.isSupplySlot) e.hp = 0; const before = s.followers.stats.teleports; s.player.sprite.setPosition(s.player.x + 700, s.player.y); await new Promise(r => setTimeout(r, 800)); return { tp: s.followers.stats.teleports - before, d: s.followers.members.map(m => Math.round(Math.hypot(m.x - s.player.x, m.y - s.player.y))) }; }, G);
   ck('主将远离 480 像素以上时随行瞬移回来', t.tp >= 3 && t.d.every(d => d < 200), t);

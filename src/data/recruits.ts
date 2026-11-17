@@ -47,9 +47,10 @@ export const RECRUIT = {
 
 /** 跟随作战（RECRUIT_PLAN.md §4）：贴身站位环带、索敌半径、拉回与瞬移距离、倒下休整时长。 */
 export const FOLLOW = {
-  ringMin: 70, ringMax: 140, aggro: 220, leash: 260, teleport: 480, stuckMs: 2000, restMs: 20000,
-  /** 跟主将跑的速度倍率（略快，追得上）。 */
-  chaseMul: 1.05,
+  /** 紧贴跟随（用户 2026-11-16「一直紧紧跟随，像战锤幸存者那样」）：每人在主公身后有固定阵位，阵位随主公移动方向平滑转动。
+   *  slotRadius 阵位离主公的距离；followK 追阵位的平滑系数（越大越紧，14 ≈ 跑动时只落后十来像素）；turnRate 阵位转向速度；
+   *  lunge 近战出手时朝目标前出的距离（之后自动回位）；snap 离阵位超过这个距离直接归位（换图、复活等）。 */
+  slotRadius: 56, followK: 14, turnRate: 6, lunge: 22, snap: 160, restMs: 20000,
   /** 可玩名将跟随时专属武器的倍率；吃主将全局伤害加成的比例。 */
   heroDamageMul: .45, heroCooldownMul: 1.3, shareLeaderDamage: .5,
   /** 首领打跟随武将的倍率（同后备兵）。 */

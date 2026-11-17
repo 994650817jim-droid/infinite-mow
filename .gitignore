@@ -89,6 +89,7 @@ assets/raw/*
 !/tools/artv2-boss-check.mjs
 !/tools/artv2-recolor.mjs
 !/tools/artv2-split.mjs
+!/tools/artv2-to-row.mjs
 !/tools/prepare-painted-icon.mjs
 !/tools/prepare-fx-sheet.mjs
 !/tools/artv2-troops.mjs

@@ -2,7 +2,7 @@
  * 战役回顾 · 乱世编年：九关的史事摘要（原创撰写，据《后汉书》《三国志》等常见史载概括；
  * 演义情节明确标注为“演义”）。只做展示，不影响玩法。
  */
-export type ChronicleArc = 'huangjin' | 'dongzhuo' | 'qunxiong' | 'guandu' | 'chibi' | 'jingnan' | 'shu' | 'hanzhong' | 'yiling';
+export type ChronicleArc = 'huangjin' | 'dongzhuo' | 'qunxiong' | 'guandu' | 'chibi' | 'jingnan' | 'shu' | 'hanzhong' | 'xiangfan' | 'yiling';
 export interface ChronicleStage { code: string; name: string; boss: string; bossTitle: string; seal: string; year: string; story: string; legacy: string }
 export interface ChronicleChapter { arc: ChronicleArc; title: string; years: string; intro: string; stages: ChronicleStage[] }
 
@@ -125,6 +125,21 @@ export const CHRONICLE: ChronicleChapter[] = [
       { code: '8-3', name: '汉水', boss: '曹操', bossTitle: '魏王', seal: '操', year: '建安二十四年 · 219',
         story: '曹操自长安举众南征，刘备敛众拒险，终不交锋。积月不拔，亡者日多，曹操以「鸡肋」为令，引军还长安。',
         legacy: '刘备遂有汉中，进位汉中王。' },
+    ],
+  },
+  {
+    arc: 'xiangfan', title: '第九章 · 襄樊之战', years: '公元219年',
+    intro: '关羽北伐襄樊，水淹于禁七军，擒于禁、斩庞德，威震华夏；孙权遣吕蒙白衣渡江袭取荆州，关羽败走麦城。',
+    stages: [
+      { code: '9-1', name: '樊城', boss: '曹仁', bossTitle: '征南将军', seal: '仁', year: '建安二十四年 · 219',
+        story: '关羽率众攻曹仁于樊城，曹操遣于禁助仁，又以庞德为先锋，屯樊城之北。',
+        legacy: '樊城被围，中原震动，曹操议迁都以避其锐。' },
+      { code: '9-2', name: '水淹七军', boss: '庞德', bossTitle: '立义将军', seal: '德', year: '建安二十四年 · 219',
+        story: '秋，大霖雨，汉水溢，平地水数丈，于禁所督七军皆没。禁降羽。庞德乘小船欲还曹仁营，水盛船覆，为羽所获，不屈而死。',
+        legacy: '关羽威震华夏。' },
+      { code: '9-3', name: '麦城突围', boss: '吕蒙', bossTitle: '南郡太守', seal: '蒙', year: '建安二十四年 · 219',
+        story: '孙权遣吕蒙袭江陵，蒙伏精兵于𦨴𦪇中，使白衣摇橹作商贾之服，昼夜兼行，尽收江边屯候。关羽还救不及，西保麦城。',
+        legacy: '荆州尽入东吴之手，孙刘之盟破裂。' },
     ],
   },
   {

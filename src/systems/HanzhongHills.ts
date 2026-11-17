@@ -4,7 +4,7 @@ import type { Player } from '../entities/Player';
 import type { Legion } from './Legion';
 import type { EnemyKind } from '../types';
 import { DEPTH, FONT } from '../config';
-import { HILL } from '../data/hanzhongChapter';
+import { HILL, HILL_ART } from '../data/hanzhongChapter';
 
 interface HillHost {
   scene: Phaser.Scene; player: Player; legion: Legion; enemies: () => Enemy[];
@@ -12,13 +12,13 @@ interface HillHost {
   banner: (text: string, caption?: string) => void;
   sfx: (key: string) => void;
 }
-interface Hill { x: number; y: number; owner: 'none' | 'player' | 'enemy'; take: number; lose: number; raidAt: number; mound: Phaser.GameObjects.Graphics; flag: Phaser.GameObjects.Image | null; bar: Phaser.GameObjects.Graphics; label: Phaser.GameObjects.Text }
+interface Hill { x: number; y: number; owner: 'none' | 'player' | 'enemy'; take: number; lose: number; raidAt: number; mound: Phaser.GameObjects.Graphics | Phaser.GameObjects.Image; flag: Phaser.GameObjects.Image | null; bar: Phaser.GameObjects.Graphics; label: Phaser.GameObjects.Text }
 
 /**
  * 第八章「夺高地」：地图上 1~2 个山头。主将站上去（附近敌兵少于 2 个）读条 3 秒占领；
  * 占着任一山头时：主将伤害 +20%，部曲远程射程、伤害 +20%。
  * 主将不在山头、敌兵 ≥2 个围着时，敌军 4 秒夺回；占领后每 22 秒敌军派一队来反夺。
- * 山头地块与旗帜暂用程序画的土丘 + 现有军旗图（正式「山头地块」手绘图待画风会话出），读条条是界面提示。
+ * 山头地块：v2 用手绘图（env-v2/hill_1~4，画风会话出），v1 用程序画的土丘；旗帜借现有军旗图，读条条是界面提示。
  */
 export class HanzhongHills {
   readonly hills: Hill[] = [];
@@ -28,8 +28,11 @@ export class HanzhongHills {
     const p = h.player, spots = count === 1 ? [[380, -200]] : [[380, -220], [-400, 210]];
     for (const [dx, dy] of spots) {
       const x = p.x + dx, y = p.y + dy, s = h.scene;
-      const mound = s.add.graphics().setDepth(DEPTH.ground + 3).setName('hanzhong-hill');
-      mound.fillStyle(0x3a2c1c, .35).fillEllipse(x, y + 6, HILL.radius * 2.3, HILL.radius * 1.25).fillStyle(0x6b5434, .55).fillEllipse(x, y, HILL.radius * 2, HILL.radius * 1.05).fillStyle(0x8a7048, .45).fillEllipse(x - 10, y - 8, HILL.radius * 1.2, HILL.radius * .6);
+      // v2：手绘山头地块（256×160，土丘撑满宽、上下居中），按占领圈宽度缩放；没有图时程序画土丘
+      const art = HILL_ART.filter(a => s.textures.exists(a.key)), pick = art.length ? art[this.hills.length % art.length] : null;
+      let mound: Hill['mound'];
+      if (pick) mound = s.add.image(x, y + 4, pick.key).setDisplaySize(HILL.radius * 2.4, HILL.radius * 2.4 * 160 / 256).setDepth(DEPTH.ground + 3).setName('hanzhong-hill');
+      else { const g = s.add.graphics().setDepth(DEPTH.ground + 3).setName('hanzhong-hill'); g.fillStyle(0x3a2c1c, .35).fillEllipse(x, y + 6, HILL.radius * 2.3, HILL.radius * 1.25).fillStyle(0x6b5434, .55).fillEllipse(x, y, HILL.radius * 2, HILL.radius * 1.05).fillStyle(0x8a7048, .45).fillEllipse(x - 10, y - 8, HILL.radius * 1.2, HILL.radius * .6); mound = g; }
       const flag = s.textures.exists('zhuge_banner') ? s.add.image(x, y - 6, 'zhuge_banner').setOrigin(.32, 1).setDisplaySize(46, 70).setDepth(DEPTH.enemy + y / 10000).setTint(0x9a9a9a) : null;
       const bar = s.add.graphics().setDepth(DEPTH.fx);
       const label = s.add.text(x, y - 92, '高地', { fontFamily: FONT, fontSize: '14px', color: '#f2ddae', stroke: '#1a1310', strokeThickness: 4, resolution: 2 }).setOrigin(.5).setDepth(DEPTH.fx);

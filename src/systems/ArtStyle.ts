@@ -55,6 +55,11 @@ export const ART_V2_FILES: Readonly<Record<string, string>> = {
   legion_medic_action: 'assets/processed-v2/troops/medic_attack.png',
   // 第 3 批（一）：黄巾章小兵 + 通用弓兵
   // 第六章荆南新兵：山越弓手、藤牌兵（行走 512 / 攻击 640，4×4）
+  // 第八章汉中新兵：青州兵、魏军强弩手（同上规格）
+  hanzhong_qingzhou_walk_sheet: 'assets/processed-v2/enemies/hanzhong_qingzhou_walk.png',
+  hanzhong_qingzhou_attack_sheet: 'assets/processed-v2/enemies/hanzhong_qingzhou_attack.png',
+  hanzhong_wei_crossbow_walk_sheet: 'assets/processed-v2/enemies/hanzhong_wei_crossbow_walk.png',
+  hanzhong_wei_crossbow_attack_sheet: 'assets/processed-v2/enemies/hanzhong_wei_crossbow_attack.png',
   jingnan_shanyue_archer_walk_sheet: 'assets/processed-v2/enemies/jingnan_shanyue_archer_walk.png',
   jingnan_shanyue_archer_attack_sheet: 'assets/processed-v2/enemies/jingnan_shanyue_archer_attack.png',
   jingnan_rattan_shield_walk_sheet: 'assets/processed-v2/enemies/jingnan_rattan_shield_walk.png',
@@ -111,9 +116,9 @@ export const ART_V2_FILES: Readonly<Record<string, string>> = {
   jingnan_hanxuan: 'assets/bosses-v2/jingnan_hanxuan.png',
   jingnan_huangzhong: 'assets/bosses-v2/jingnan_huangzhong.png',
   // 第八章 汉中之战首领：正式 v2 图到之前借用现有首领 v2 图过渡（hanzhongChapter.HANZHONG_SHEETS 同步改）
-  hanzhong_zhanghe: 'assets/bosses-v2/third_zhangxiu.png',
-  hanzhong_xiahouyuan: 'assets/bosses-v2/guandu_wenchou.png',
-  hanzhong_caocao: 'assets/bosses-v2/chibi_caoren.png',
+  hanzhong_zhanghe: 'assets/bosses-v2/hanzhong_zhanghe.png',
+  hanzhong_xiahouyuan: 'assets/bosses-v2/hanzhong_xiahouyuan.png',
+  hanzhong_caocao: 'assets/bosses-v2/hanzhong_caocao.png',
   huaxiong_walk: 'assets/bosses-v2/huaxiong_walk.png',
   huaxiong_attack: 'assets/bosses-v2/huaxiong_attack.png',
   huaxiong_actions: 'assets/bosses-v2/huaxiong_actions.png',
@@ -244,7 +249,11 @@ export const V2_TROOP_KEYS: readonly string[] = [
   'yellow_zhangliang_walk', 'yellow_zhangliang_attack', 'yellow_zhangbao_walk', 'yellow_zhangbao_cast', 'zhangjiao_walk', 'zhangjiao_cast',
   // 第六章荆南新兵（JingnanGameScene.preload 按需加载）
   'jingnan_shanyue_archer_walk_sheet', 'jingnan_shanyue_archer_attack_sheet', 'jingnan_rattan_shield_walk_sheet', 'jingnan_rattan_shield_attack_sheet',
+  'hanzhong_qingzhou_walk_sheet', 'hanzhong_qingzhou_attack_sheet', 'hanzhong_wei_crossbow_walk_sheet', 'hanzhong_wei_crossbow_attack_sheet',
 ];
+/** 章节新兵：v2 时挂行走 / 攻击图集（4×4，行走格 128）并去掉换色；v1 保持换色过渡。图集由各章 GameScene.preload 用 loadV2TroopSheets 按需加载。 */
+export function withV2Sheets<D extends { tint?: number }>(def: D, [walk, atk]: readonly [string, string]): D { return isV2Texture(walk) ? { ...def, tint: 0xffffff, walkVisual: { texture: walk, scale: .5, groundY: 121 / 128 }, attackVisual: atk } : def; }
+export function loadV2TroopSheets(scene: Phaser.Scene, keys: readonly string[]): void { for (const key of keys) if (isV2Texture(key) && !scene.textures.exists(key)) { scene.load.once(`filecomplete-image-${key}`, () => regridV2(scene, key)); scene.load.image(key, ART_V2_FILES[key]); } }
 /** v2 兵种显示倍率：原生像素 → 逻辑像素 0.5，即 1080p 全屏（渲染 2 倍）下像素 1:1。 */
 export const V2_TROOP_SCALE = .5;
 /** v2 兵种帧的脚底位置（占帧高的比例），用作纵向锚点。 */

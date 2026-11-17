@@ -6,7 +6,7 @@ import { RELICS, relicChanceForLevel } from './relics';
 import { WEAPON_DEFS, SPEAR_PIERCE, GUANDAO_TABLE, crossbowExtraArrows, zhenbeiCracks, lianhuanLinksPerMine, sunOrbitKnives, sunThrowCount, sunThrowPierce, diaochanFanCount } from '../weapons/registry';
 import type { UpgradeOption, WeaponId, WeaponState } from '../types';
 import { getCharacter } from './characters';
-import { ATTRIBUTE_INFO, type AttributeId, type PotionId, type RunGrowth, type TrinketId, MARTIALS, type MasteryId } from '../systems/RunGrowth';
+import { ATTRIBUTE_INFO, dragBodyLengths, type AttributeId, type PotionId, type RunGrowth, type TrinketId, MARTIALS, type MasteryId } from '../systems/RunGrowth';
 
 export const WEAPON_META: Record<WeaponId, { name: string; desc: string }> = {
   spear_orbit: { name: '七探盘龙枪', desc: '银枪自动索敌，向不同敌人突刺' },
@@ -145,7 +145,7 @@ export function martialDescription(id:MasteryId,level:number):string {
  dragon_gallop:'枪刺攻击速度提高'+(8*n)+'%。\n出枪更快，最多强化3级。',
  cloud_pierce:'枪刺长度增加'+(10*n)+'%，多穿透'+n+'名敌人。\n适合攻击密集敌群。',
  dragon_charge:'普通挥刀4次后，下一刀造成'+[140,165,190][i]+'%伤害。'+(n===3?'\n这一刀还能击退普通敌人。':''),
- dragging_blade:'主动移动约'+['5','4','3'][i]+'个身位后，下次挥刀追加半月刀气。'+(n===3?'\n再追加一道较弱的回旋刀气。':''),
+ dragging_blade:'主动移动约'+dragBodyLengths(i+1)+'个身位后，下次挥刀追加半月刀气。'+(n===3?'\n再追加一道较弱的回旋刀气。':''),
  steady_aim:'站立蓄势，最多5秒提高'+[15,20,25][i]+'个百分点暴击率。\n自动射击不打断，移动会逐渐失去蓄势。',
  pearl_volley:'每射击'+[5,4,3][i]+'次，自动多射一发70%伤害的箭。'+(n===3?'\n追加箭可再弹射一次。':''),
  wildfire:'战旗爆炸后，留下'+[1,1.8,2.5][i]+'秒残火。\n每半秒烧伤一次。'+(n===3?'燃烧范围也变大。':''),

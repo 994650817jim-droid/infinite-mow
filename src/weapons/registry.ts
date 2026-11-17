@@ -8,6 +8,7 @@ import { PASSIVE_RULES } from '../data/passives';
 import { HERO_TINT } from '../data/characters';
 import { BAODIAO_DEF, DANGYANG_DEF, ZHANJIN_DEF, SHUANGGU_DEF, baodiaoBehavior, dangyangBehavior, zhanjinBehavior, shuangguBehavior, smartTarget } from './heroWeapons2';
 import { HINT_MOCK, groundScar } from '../ui/HintStyle';
+import { DRAG_TRAVEL, DRAG_WAVE_MUL, DRAG_SPIN_MUL } from '../systems/RunGrowth';
 import { ZHENBEI_DEF, LIANHUAN_DEF, SUN_KNIVES_DEF, DIAOCHAN_FANS_DEF, zhenbeiBehavior, lianhuanBehavior, sunKnivesBehavior, diaochanFansBehavior } from './heroWeapons';
 export { zhenbeiCracks, lianhuanLinksPerMine, sunOrbitKnives, sunThrowCount, sunThrowPierce, diaochanFanCount } from './heroWeapons';
 
@@ -414,7 +415,7 @@ export const WEAPON_BEHAVIORS: Record<WeaponId, (host: WeaponHost, weapon: Weapo
       if(heavy&&charge===3&&enemy.active&&enemy.kind!=='boss'&&!enemy.controlImmune){const push=enemy.kind==='elite'?6:18;enemy.sprite.x+=Math.cos(angle)*push;enemy.sprite.y+=Math.sin(angle)*push;}
     }
     const drag=growth.masteries.dragging_blade;
-    if(drag&&growth.travel>=[200,160,130][drag-1]){
+    if(drag&&growth.travel>=DRAG_TRAVEL[drag-1]){
       growth.travel=0;
       const waveRadius=radius*(1+.1*drag),ids=new Set<number>();
       const wave=(multiplier:number,rotation:number,kind:'crescent'|'spin')=>{
@@ -428,8 +429,8 @@ export const WEAPON_BEHAVIORS: Record<WeaponId, (host: WeaponHost, weapon: Weapo
         if(host.draggingBladeWave)host.draggingBladeWave(angle+rotation,row.arc*radiusMul*(1+.1*drag),kind,hits);
         else host.spawnGuandaoSlash(angle+rotation, .8, row.arc*radiusMul*(1+.1*drag),160);
       };
-      wave([.5,.65,.75][drag-1],0,'crescent');
-      if(drag===3)host.time.delayedCall(230,()=>{if(!host.over)wave(.4,0,'spin');});
+      wave(DRAG_WAVE_MUL[drag-1],0,'crescent');
+      if(drag===3)host.time.delayedCall(230,()=>{if(!host.over)wave(DRAG_SPIN_MUL,0,'spin');});
     }
     host.spawnGuandaoSlash(angle, 1, arcSize, heavy?200:120);
     if (level >= 3) {

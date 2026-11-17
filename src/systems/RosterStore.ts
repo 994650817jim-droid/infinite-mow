@@ -19,6 +19,8 @@ export interface Recruit { id: string; kind: RecruitKind; hero?: CharacterId; na
 export interface Offer { kind: RecruitKind; hero?: CharacterId; name: string; template: FollowerTemplate; quality: ItemQuality; cost: number; faction?: FactionId; expires?: number }
 export interface RosterSave {
   version: 1; lord: CharacterId | null; owned: Recruit[]; followers: string[];
+  /** 主公已最终确定（开新存档时选定，或老存档在提示里确认 / 改选过一次）。false = 老存档自动指定，还有一次改选机会。 */
+  lordFinal: boolean;
   offers: Offer[]; captives: Offer[]; season: number; manual: number; dry: number; seq: number; hall: number;
 }
 
@@ -53,14 +55,14 @@ function parseOffer(v: unknown): Offer | null {
   return { kind: o.kind, hero: o.kind === 'hero' ? o.hero as CharacterId : undefined, name, template: o.template, quality: o.quality, cost: int(o.cost, 100000), faction: isFaction(o.faction) ? o.faction : undefined, expires: Number.isSafeInteger(o.expires) ? o.expires as number : undefined };
 }
 
-const empty = (): RosterSave => ({ version: 1, lord: null, owned: [], followers: [], offers: [], captives: [], season: -1, manual: 0, dry: 0, seq: 0, hall: 1 });
+const empty = (): RosterSave => ({ version: 1, lord: null, lordFinal: false, owned: [], followers: [], offers: [], captives: [], season: -1, manual: 0, dry: 0, seq: 0, hall: 1 });
 
 function read(): RosterSave | null {
   try {
     const raw = localStorage.getItem(ROSTER_KEY); if (!raw) return null;
     const v = JSON.parse(raw); if (!v || v.version !== 1) return null;
     const s = empty();
-    s.lord = isHero(v.lord) ? v.lord : null;
+    s.lord = isHero(v.lord) ? v.lord : null; s.lordFinal = !!s.lord && v.lordFinal === true;
     const seen = new Set<string>();
     for (const r of Array.isArray(v.owned) ? v.owned.slice(0, RECRUIT.maxOwned + 5) : []) { const p = parseRecruit(r); if (p && !seen.has(p.id)) { seen.add(p.id); s.owned.push(p); } }
     if (s.lord && !seen.has(s.lord)) s.owned.unshift(heroRecruit(s.lord));
@@ -115,18 +117,59 @@ export function loadRoster(): RosterSave {
 }
 function currentSeason(): number { try { return seasonIndex(loadWorld().town); } catch { return 0; } }
 
-export function heroOwned(hero: CharacterId): boolean { return !rosterEnforced() || loadRoster().owned.some(r => r.kind === 'hero' && r.hero === hero); }
+/** 能不能当主将出战：主公规则生效且已有主公时只有主公；新存档还没选时都能选（这一步就是择主公）。 */
+export function heroOwned(hero: CharacterId): boolean { if (!lordRules()) return true; const lord = lordHero(); return !lord || lord === hero; }
 /** 可选作主将的武将（天下开放前为全部）。 */
-export function ownedHeroes(): CharacterId[] { if (!rosterEnforced()) return CHARACTERS.map(c => c.id); const s = loadRoster(); return CHARACTERS.map(c => c.id).filter(id => s.owned.some(r => r.hero === id)); }
+export function ownedHeroes(): CharacterId[] { return CHARACTERS.map(c => c.id).filter(id => heroOwned(id)); }
 /** 选将面板的默认武将：上次出战的若未拥有，换成主公。 */
 export function defaultHero(saved: string | null | undefined): CharacterId {
-  const owned = ownedHeroes(); if (isHero(saved) && owned.includes(saved)) return saved;
-  const s = rosterEnforced() ? loadRoster() : null; return s?.lord && owned.includes(s.lord) ? s.lord : owned[0] ?? 'zhaoyun';
+  const lord = lordRules() ? lordHero() : null; if (lord) return lord;
+  return isHero(saved) ? saved : 'zhaoyun';
 }
-export const LOCKED_HINT = '招贤馆可招';
+export const LOCKED_HINT = '主公已定，本存档不可更换';
+
+// ———— 主公（用户规则 2026-11-16：每个存档开局选定主公，之后整个存档不能更换） ————
+
+/** 主公规则是否生效：正式游玩生效；开发测试（?dev=1）不限制，带 ?roster=1 时照常限制。 */
+export function lordRules(): boolean {
+  if (!isChapterTestRun()) return true;
+  try { return new URLSearchParams(window.location.search).get('roster') === '1'; } catch { return false; }
+}
+/** 本存档的主公（天下开放前也可读）；没有则为 null（新存档还没选）。 */
+export function lordHero(): CharacterId | null { return read()?.lord ?? null; }
+export function lordFinal(): boolean { return read()?.lordFinal === true; }
+/** 选将界面能不能选这名武将当主公：还没主公、或老存档还有一次改选机会时都能选；主公已定后只有主公本人。 */
+export function canPickLord(hero: CharacterId): boolean { if (!lordRules()) return true; const s = read(); return !s?.lord || !s.lordFinal || s.lord === hero; }
+/** 定下主公（最终确定）。已最终确定时不能再改（测试模式除外）。 */
+export function setLord(hero: CharacterId): RosterResult {
+  if (!isHero(hero)) return { ok: false, message: '无效武将' };
+  const s = read() ?? empty();
+  if (lordRules() && s.lord && s.lordFinal && s.lord !== hero) return { ok: false, message: LOCKED_HINT };
+  s.lord = hero; s.lordFinal = true;
+  if (!s.owned.some(r => r.hero === hero)) s.owned.unshift(heroRecruit(hero));
+  s.followers = s.followers.filter(id => id !== hero);
+  write(s); try { localStorage.setItem('im_last_hero', hero); } catch { /* */ }
+  return { ok: true, message: `主公定为 ${getCharacter(hero).name}` };
+}
+/** 老存档保持自动指定的主公（用掉改选机会）。 */
+export function confirmLord(): void { const s = read(); if (s?.lord && !s.lordFinal) { s.lordFinal = true; write(s); } }
+/** 存档里有没有进度（用来区分「新存档」和「主公规则之前的老存档」）。 */
+function hasProgress(): boolean {
+  try { return !!(localStorage.getItem('im_last_hero') || localStorage.getItem('im_world_v1') || localStorage.getItem('im_heroes_v1')); } catch { return false; }
+}
+/** 老存档还没有主公时自动指定：最近一次出战的武将，其次武将等级最高的，再其次赵云；留一次改选机会（lordFinal = false）。返回是否刚指定。 */
+export function ensureLegacyLord(): boolean {
+  if (!lordRules() || read()?.lord || !hasProgress()) return false;
+  if (worldUnlocked()) { loadRoster(); return !!read()?.lord; } // 天下已开：走原来的人才库迁移（保留用过的武将），主公 = 最近出战的武将
+  let hero: CharacterId | null = null;
+  try { const v = localStorage.getItem('im_last_hero'); if (isHero(v)) hero = v; } catch { /* */ }
+  if (!hero) try { const h = JSON.parse(localStorage.getItem('im_heroes_v1') ?? 'null')?.heroes ?? {}; let best = 0; for (const [k, r] of Object.entries(h as Record<string, { level?: number }>)) if (isHero(k) && (r?.level ?? 0) > best) { best = r.level ?? 0; hero = k; } } catch { /* */ }
+  const s = read() ?? empty(); s.lord = hero ?? 'zhaoyun'; s.lordFinal = false; if (!s.owned.some(r => r.hero === s.lord)) s.owned.unshift(heroRecruit(s.lord)); write(s);
+  return true;
+}
 /** 行囊里可以换装的人：天下开放前为全部可玩武将；之后为麾下所有武将（含招来的 r_ 编号）。 */
 export function gearOwners(): Array<{ id: GearOwner; name: string }> {
-  if (!rosterEnforced()) return CHARACTERS.map(c => ({ id: c.id, name: c.name }));
+  if (!rosterEnforced()) { const lord = lordRules() ? lordHero() : null; return (lord ? CHARACTERS.filter(c => c.id === lord) : CHARACTERS).map(c => ({ id: c.id, name: c.name })); }
   return loadRoster().owned.map(r => ({ id: (r.hero ?? r.id) as GearOwner, name: r.name.replace(/（.*）/, '') }));
 }
 /** 武将显示名（含招来的人）。 */

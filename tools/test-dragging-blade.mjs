@@ -1,5 +1,5 @@
 // 关羽本命修习「拖刀斩」专属表现（src/systems/DraggingBladeFx.ts）：蓄力火星与划痕、蓄满刀焰与轻响、
-// 青色半月刀气向前飞出并碎散、命中闪光、三级金色回旋刀气；伤害判定不变（刀气倍率 0.5/0.65/0.75，回旋 0.4）。
+// 青色半月刀气向前飞出并碎散、命中闪光、三级金色回旋刀气；刀气倍率 1.1/1.5/1.8、回旋 1.0，触发距离 560/480/400（2026-11-16 用户：拖刀斩不要太容易触发）。
 // 电脑布局 1280×720，逐帧 game.step（60fps）。截图 / 连续帧存 assets/review/dragging-blade/。
 // 需要开发服务器。用法：BASE=http://127.0.0.1:5197/ node tools/test-dragging-blade.mjs
 import { chromium } from 'playwright';
@@ -40,10 +40,10 @@ for (const lv of [1, 3]) {
   else await step(36);
   const mid = await fx();
   ck(`Lv${lv}：移动时刀尖拖地，留下划痕与火星；未满时无刀焰`, early && early.grooves > 0 && early.sparks > 0 && !early.ready && !early.flame, { early, mid });
-  // 2. 蓄满：越过门槛（200/160/130）时出刀焰、播轻响
-  await step(60);
+  // 2. 蓄满：越过门槛（560/480/400，约 14/12/10 个身位）时出刀焰、播轻响
+  await step(270);
   const full = await fx(), sfx = await p.evaluate(() => window.__sfx);
-  ck(`Lv${lv}：移动约 ${[5, 4, 3][lv - 1]} 个身位后蓄满：刀尖青色刀焰 + 轻响`, full.ready && full.flame && full.readyCount >= 1 && sfx.includes('bladeReady'), { full, sfx: [...new Set(sfx)] });
+  ck(`Lv${lv}：移动约 ${[14, 12, 10][lv - 1]} 个身位后蓄满：刀尖青色刀焰 + 轻响`, full.ready && full.flame && full.readyCount >= 1 && sfx.includes('bladeReady'), { full, sfx: [...new Set(sfx)] });
   await p.evaluate(() => { window.__v.set(0, 0); }); await step(10);
   if (lv === 3) await shot('ready-flame');
   // 3. 释放：前方放三个木桩敌人，放开冷却等下一刀
@@ -63,9 +63,9 @@ for (const lv of [1, 3]) {
   else ck('Lv1：没有回旋刀气', after.spins === 0, { spins: after.spins });
   // 伤害判定不变：同一刀里刀气对每个木桩各结算一次
   const byId = {}; for (const h of hits) (byId[h.id] ??= []).push(h.dmg);
-  // 倍率：刀气 = 普攻基础伤害 × 0.5（Lv1）/ 0.75（Lv3），回旋 × 0.4（数值未改）
-  const okRatio = Object.values(byId).every(a => { const base = Math.max(...a), r = a.filter(d => d < base).map(d => d / base); return r.some(x => Math.abs(x - [.5, .65, .75][lv - 1]) < .04) && (lv < 3 || r.some(x => Math.abs(x - .4) < .04)); });
-  ck(`Lv${lv}：刀气伤害仍按原判定结算（每个木桩 普攻 + 刀气${lv === 3 ? ' + 回旋' : ''}，倍率 ${[.5, .65, .75][lv - 1]}${lv === 3 ? ' / 0.4' : ''}）`, Object.values(byId).length === 3 && Object.values(byId).every(a => a.length >= (lv === 3 ? 3 : 2)) && okRatio, byId);
+  // 倍率：刀气 = 普攻基础伤害 × 1.1（Lv1）/ 1.8（Lv3），回旋 × 1.0。每个木桩第一下是普攻（同一刀里先结算），之后是刀气 / 回旋
+  const okRatio = Object.values(byId).every(a => { const base = a[0], r = a.slice(1).map(d => d / base); return r.some(x => Math.abs(x - [1.1, 1.5, 1.8][lv - 1]) < .04) && (lv < 3 || r.some(x => Math.abs(x - 1) < .04)); });
+  ck(`Lv${lv}：刀气伤害仍按原判定结算（每个木桩 普攻 + 刀气${lv === 3 ? ' + 回旋' : ''}，倍率 ${[1.1, 1.5, 1.8][lv - 1]}${lv === 3 ? ' / 1.0' : ''}）`, Object.values(byId).length === 3 && Object.values(byId).every(a => a.length >= (lv === 3 ? 3 : 2)) && okRatio, byId);
   await p.evaluate(G0 => { const s = eval(G0); for (const e of s.enemies) { e.__keep = false; if (e.active) e.hp = 0; } }, G);
   await step(30);
 }

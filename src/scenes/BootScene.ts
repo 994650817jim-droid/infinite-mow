@@ -145,6 +145,8 @@ export class BootScene extends Phaser.Scene {
     this.load.image('zhuge_banner', 'assets/flame-banner/zhuge_banner.png');
     this.load.image('fire_sigil', 'assets/flame-banner/fire_sigil.png');
     for (const sheet of ['a', 'b', 'c', 'd']) this.load.spritesheet('hero_fx_' + sheet, 'assets/hero-fx/fx_' + sheet + '.png', { frameWidth: 256, frameHeight: 256 });
+    // 魏延「谁敢杀我」6 向裂波：手绘透明序列帧（2026-11-17 Gemini 出图，替换程序画地裂纹），6 帧竖排，每帧 1024×256
+    this.load.spritesheet('weiyan_crack', 'assets/hero-fx/weiyan_crack.png', { frameWidth: 1024, frameHeight: 256 });
     // 庞统火雷与连环铁链贴图（ChatGPT 生成，tools/prepare-weiyan-pangtong-icons.mjs 切出）
     this.load.image('pangtong_mine', 'assets/hero-fx/pangtong_mine.png'); this.load.image('pangtong_chain', 'assets/hero-fx/pangtong_chain.png');
     // 庞统铁索连环手绘特效（2026-11-17 替换原像素图集 pangtong_fx，旧文件保留不再加载）：
@@ -155,8 +157,8 @@ export class BootScene extends Phaser.Scene {
     this.load.spritesheet('huangzhong_fx', 'assets/hero-fx/huangzhong_fx.png', { frameWidth: 256, frameHeight: 256 });
     // 被动满层战吼像素特效（2 行 × 6 帧，每帧 256×512，黑底叠加）：脚下声浪冲击 / 身上迸发的气势
     this.load.spritesheet('warcry_fx', 'assets/hero-fx/warcry_fx.png', { frameWidth: 256, frameHeight: 512 });
-    // 马超虎头湛金枪像素特效（6×4，每帧 256，透明底）：上挑弧光 / 落地砸地 / 冲锋尘土拖影 / 枪尖破风
-    this.load.spritesheet('machao_fx', 'assets/hero-fx/machao_fx.png', { frameWidth: 256, frameHeight: 256 });
+    // 马超虎头湛金枪手绘特效（6×4，每帧 256，透明底；2026-11-17 Gemini 出图替换原像素图集 machao_fx，旧文件保留不再加载）：上挑弧光 / 落地砸地 / 冲锋尘土拖影 / 枪尖破风
+    this.load.spritesheet('machao_paint', 'assets/hero-fx/machao_paint.png', { frameWidth: 256, frameHeight: 256 });
     // 2026-11-16 专属武器贴图（tools/prepare-hero-icon-sheet.mjs 切出）与执刀侍婢行走图
     for (const k of ['sun_knife', 'diaochan_fan', 'huangzhong_arrow', 'charm_heart', 'charm_broken', 'zhangfei_spear']) this.load.image(k, 'assets/hero-fx/' + k + '.png');
     this.load.spritesheet('sun_maid_walk', 'assets/hero-fx/sun_maid_walk.png', { frameWidth: 96, frameHeight: 96 });

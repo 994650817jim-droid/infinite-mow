@@ -7,6 +7,7 @@ import {openChapterCount,citySiegeOpen} from './ChapterTimeline';
 import {territorySummary,cityAttacker,cityById,eraChanges,eraIndexFor,type FactionId} from './WorldCities';
 import {type TownState,type TownBuildingId,type CityFocus,type SeasonReport,type TownProgress,TOWN_BUILDINGS,FOCUS_CHANGE_COST,FOCUS_NAME,migrateTown,parseTown,legacyLevels,settleSeason,nextCost,buildBlockers,CITY_SIZE,CITY_TITLE,levyCost,LEVY_SOLDIERS,costText,buildingBattleEffects,levelOf,focusOpen,MERIT_TO_GRAIN,MONEY_TO_GRAIN,STABLE_HORSES,drillCap,drillCost,drillMultiplier,DRILL_MAX} from '../town/TownData';
 import {TECHS,techTotals,techBlockers,type TechId} from '../data/tech';
+import {TROOP_UNLOCK,troopUnlocked,barracksReinforcements} from '../data/barracks';
 /** W4 告急：某座玩家城池正被来犯；cause 为时代更替或攻城后反扑。 */
 export interface CityAlert{city:string;attacker:FactionId;cause:'era'|'retaliation';}
 export type BuildingId='barracks'|'farm'|'clinic';
@@ -106,7 +107,7 @@ export function granaryLevy():TownResult{const s=loadWorld(),t=s.town,lv=levelOf
 export type {TownState,TownBuildingId,CityFocus,SeasonReport};
 /** 营寨建筑、讲武堂科技 + W3 大城特产的出征开局效果。 */
 export function permanentEffects(){const s=loadWorld(),b=s.buildings,be=buildingBattleEffects(s.town),tech=techTotals(s.town.tech),sp=territorySummary(s.ownedCities).specialties.map(x=>x.specialty),sum=(k:'damage'|'maxHp'|'reserveSlots'|'attributePoints'|'provisions'|'reinforcements')=>sp.reduce((n,x)=>n+(x[k]??0),0);
- return{armyCapacity:armyCapacity(b.barracks),reinforcements:b.barracks-1+sum('reinforcements'),healMultiplier:1+tech.heal,provisionsMultiplier:1+(b.farm-1)*.08,
+ return{armyCapacity:armyCapacity(b.barracks),reinforcements:barracksReinforcements(b.barracks)+sum('reinforcements'),healMultiplier:1+tech.heal,provisionsMultiplier:1+(b.farm-1)*.08,
   damageBonus:sum('damage')+be.damage+tech.damage,maxHpBonus:Math.max(-.2,sum('maxHp')+be.maxHp+tech.maxHp),reserveSlots:2+sum('reserveSlots'),attributePoints:sum('attributePoints')+be.attributePoints+tech.attributePoints,provisionsBonus:sum('provisions'),
   /** 讲武堂：开局药囊里的回血药、开局即升级的兵种。 */
   potions:tech.potions,troopLevels:tech.troopLevels,
@@ -222,7 +223,11 @@ export function hardChapterCleared(id:string):boolean{return loadWorld().hardCle
 export function recordHardClear(id:string,reward:{merits:number;provisions:number}):boolean{const s=loadWorld();if(s.hardCleared.includes(id))return false;s.hardCleared.push(id);bank(s,reward.merits,reward.provisions);commit(s);return true;}
 /** 招募价（军粮）：兵种基础价，讲武堂「募兵有方」打折。 */
 export function recruitCost(kind:TroopKind,s:WorldSave=loadWorld()):number{return Math.max(1,Math.round(TROOPS[kind].cost*(1-techTotals(s.town.tech).recruitDiscount)));}
-export function recruitReserve(kind:TroopKind):{ok:boolean;message:string}{const s=loadWorld();if(s.yellowStages<3)return{ok:false,message:'击败张角后开放营寨招募'};if(!TROOPS[kind])return{ok:false,message:'无效兵种'};const cost=recruitCost(kind,s);if(s.provisions<cost)return{ok:false,message:"军粮不足：需要 "+cost};if((s.reserve[kind]??0)>=999)return{ok:false,message:'该兵种后备已满'};s.provisions-=cost;s.reserve[kind]=(s.reserve[kind]??0)+1;s.armyPlan.priority=kind;commit(s);return{ok:true,message:'已编入后备；下次出征最多带2名后备兵'};}
+/** 军营等级（1–6）与已解锁兵种：营寨招募、战斗支援招兵都只用已解锁的。 */
+export function barracksLevel(s:WorldSave=loadWorld()):number{return Math.max(1,levelOf(s.town,'barracks'));}
+export function unlockedTroopKinds(s:WorldSave=loadWorld()):TroopKind[]{const lv=barracksLevel(s);return TROOP_KINDS.filter(k=>troopUnlocked(k,lv));}
+export function troopUnlockLevel(kind:TroopKind):number{return TROOP_UNLOCK[kind]??1;}
+export function recruitReserve(kind:TroopKind):{ok:boolean;message:string}{const s=loadWorld();if(TROOPS[kind]&&!troopUnlocked(kind,barracksLevel(s)))return{ok:false,message:`军营 Lv.${TROOP_UNLOCK[kind]} 解锁`};if(s.yellowStages<3)return{ok:false,message:'击败张角后开放营寨招募'};if(!TROOPS[kind])return{ok:false,message:'无效兵种'};const cost=recruitCost(kind,s);if(s.provisions<cost)return{ok:false,message:"军粮不足：需要 "+cost};if((s.reserve[kind]??0)>=999)return{ok:false,message:'该兵种后备已满'};s.provisions-=cost;s.reserve[kind]=(s.reserve[kind]??0)+1;s.armyPlan.priority=kind;commit(s);return{ok:true,message:'已编入后备；下次出征最多带2名后备兵'};}
 export function takeExpeditionReserve(slots=2):TroopKind[]{const s=loadWorld(),out:TroopKind[]=[];if(!Number.isSafeInteger(slots)||slots<=0)return out;if(s.yellowStages<3||!s.active||s.active.state!=='active'||s.active.deployed?.length)return out;for(const kind of [...new Set([...(s.armyPlan.priority?[s.armyPlan.priority]:[]),...TROOP_KINDS])])while((s.reserve[kind]??0)>0&&out.length<Math.min(5,slots)){s.reserve[kind]--;out.push(kind);}if(out.length){if(s.active)s.active.deployed=[...out];commit(s);}return out;}
 
 export function yellowStageUnlocked(stage:number):boolean{return Number.isInteger(stage)&&stage>=1&&stage<=3&&stage<=loadWorld().yellowStages+1;}

@@ -87,6 +87,26 @@ const base8 = { version: 8, yellowStages: 3, dongzhuoStages: 0, warlordStages: 0
   await p.close();
 }
 
+// —— 2d. 军营 6 级解锁兵种（用户选定 6 级方案）——
+{
+  const p = await page({ ...base8, provisions: 5000, reserve: { rider: 2 } });
+  const r = await store(p, w => {
+    const o = { k1: w.unlockedTroopKinds(), xbow: w.recruitReserve('crossbowman'), base: w.recruitReserve('archer') };
+    o.up2 = w.townUpgrade('barracks'); o.k2 = w.unlockedTroopKinds(); o.xbow2 = w.recruitReserve('crossbowman');
+    o.up3 = w.townUpgrade('barracks'); o.up4 = w.townUpgrade('barracks'); o.lv = w.barracksLevel(); o.reinf = w.permanentEffects().reinforcements;
+    o.rider = w.loadWorld().reserve.rider; o.riderBuy = w.recruitReserve('rider');
+    o.grain = w.loadWorld().provisions; return o; });
+  ck('军营 1 级只能招刀盾 / 长枪 / 弓箭；连弩提示「军营 Lv.2 解锁」', r.k1.join() === 'swordsman,spearman,archer' && !r.xbow.ok && r.xbow.message.includes('Lv.2') && r.base.ok, r);
+  ck('军营升 2 级（120）解锁连弩兵，升 3 级（240）；4 级要县城', r.up2.ok && r.k2.includes('crossbowman') && r.xbow2.ok && r.up3.ok && !r.up4.ok && r.up4.message.includes('县城') && r.lv === 3, r);
+  ck('老存档已有的轻骑兵保留（2 人），但军营不到 5 级不能再招', r.rider === 2 && !r.riderBuy.ok && r.riderBuy.message.includes('Lv.5'), r);
+  ck('开局增援：军营 3 级 = 2 人', r.reinf === 2, r);
+  await p.close();
+  const p2 = await page({ ...base8, provisions: 5000, cleared: { huangjin: true, hulao: true }, dongzhuoStages: 3, warlordStages: 3, town: { year: 186, season: 0, levels: { hall: 3, barracks: 5, farm: 1, academy: 0, talent: 1, stable: 0, granary: 0, pavilion: 0 }, focus: {}, report: null, tech: [], drill: 0 }, version: 9 });
+  const r2 = await store(p2, w => { const o = { k5: w.unlockedTroopKinds() }; o.up6 = w.townUpgrade('barracks'); o.k6 = w.unlockedTroopKinds(); o.reinf = w.permanentEffects().reinforcements; o.max = w.townUpgrade('barracks'); return o; });
+  ck('州府：军营 5 → 6 级（900）解锁精锐戟兵，8 种全开；增援仍封顶 2；6 级满', !r2.k5.includes('halberdier') && r2.k5.includes('rider') && r2.k5.includes('medic') && r2.up6.ok && r2.k6.length === 8 && r2.reinf === 2 && !r2.max.ok, r2);
+  await p2.close();
+}
+
 // —— 3. 结算只给军粮；招募折扣；道具分解折军粮 ——
 {
   const p = await page({ ...base8, provisions: 1000, cleared: { huangjin: true, hulao: true }, dongzhuoStages: 3, reserve: { swordsman: 4 } });
@@ -168,6 +188,21 @@ for (const layout of ['mobile', 'desktop']) {
   await p.close();
 }
 
+// —— 4d. 营寨招募页：未解锁兵种灰卡「军营 Lv.X 解锁」、不能点（电脑布局）——
+{
+  const p = await page({ ...base8, provisions: 500 }, 'desktop');
+  await p.evaluate(() => window.__game.scene.getScenes(true).forEach(s => s.scene.start('CityRecruitScene')));
+  await p.waitForFunction(() => window.__game.scene.isActive('CityRecruitScene'), null, { timeout: 30000 }); await p.waitForTimeout(1200);
+  const r = await p.evaluate(() => { const sc = window.__game.scene.getScene('CityRecruitScene'), all = sc.children.list.flatMap(o => [o, ...(o.list ?? [])]), get = n => all.find(o => o.name === n);
+    return { lockText: get('reserve-lock-crossbowman')?.text, xbowInput: !!get('reserve-buy-crossbowman')?.input?.enabled, archerInput: !!get('reserve-buy-archer')?.input?.enabled, locks: all.filter(o => /^reserve-lock-/.test(o.name ?? '')).length }; });
+  await p.evaluate(() => { const sc = window.__game.scene.getScene('CityRecruitScene'); sc.children.list.flatMap(o => [o, ...(o.list ?? [])]).find(o => o.name === 'reserve-buy-crossbowman').emit('pointerup'); });
+  await p.waitForTimeout(200);
+  const after = await store(p, w => w.loadWorld().reserve.crossbowman ?? 0);
+  await p.screenshot({ path: `${out}/recruit-locked-desktop.png` });
+  ck('招募页：5 张未解锁灰卡，连弩写「军营 Lv.2 解锁」且点了不招；基础兵可招', r.locks === 5 && r.lockText === '军营 Lv.2 解锁' && !r.xbowInput && r.archerInput && after === 0, { ...r, after });
+  await p.close();
+}
+
 // —— 5. 第一章后：天下地图营寨提示，进营一次后消失 ——
 {
   const p = await page({ ...base8, provisions: 50 });
@@ -194,6 +229,8 @@ for (const layout of ['mobile', 'desktop']) {
   ck('开局药囊 2 份回血药（每份 30% 生命）', r.pouch?.length === 2 && r.pouch.every(a => a === Math.round(r.maxHp * .3)), r);
   ck('刀盾 / 长枪开局 Lv2，军营增援兵按 Lv2 入列', r.lv.swordsman === 2 && r.lv.spearman === 2 && r.lv.archer === 1 && r.units.length >= 1 && r.units.every(([k, l]) => !['swordsman', 'spearman'].includes(k) || l === 2), r);
   ck('练兵 2 级：部曲倍率 1.3（加法），刀盾兵生命 = 85 × 1.3（Lv2）× 1.3', Math.abs(r.drill - 1.3) < 1e-9 && r.units.filter(([k]) => k === 'swordsman').every(([, , hp]) => hp === Math.round(85 * 1.3 * 1.3)), r);
+  const pool = await p.evaluate(() => { const g = window.__game.scene.getScene('GameScene'), seen = new Set(); for (let wv = 1; wv <= 4; wv++) { g.waveIndex = wv; g.recruitedWaves?.clear?.(); g.resting = false; g.mode = 'none'; g.openRecruit(); for (const o of g.recruitOptions ?? []) seen.add(o.kind); g.setMode('none'); } return [...seen].sort(); });
+  ck('战斗支援招兵只出现已解锁兵种（军营 2 级：刀盾 / 长枪 / 弓箭 / 连弩）', pool.length > 0 && pool.every(k => ['swordsman', 'spearman', 'archer', 'crossbowman'].includes(k)) && pool.includes('crossbowman'), pool);
   await p.screenshot({ path: `${out}/battle-potions.png` });
   await p.close();
 }

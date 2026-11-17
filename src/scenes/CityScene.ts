@@ -129,7 +129,7 @@ export class CityScene extends Phaser.Scene {
   const ids=(Object.keys(slots) as TownBuildingId[]).filter(id=>buildingOpen(t,id)).sort((a,b)=>slots[a].y-slots[b].y);
   for(const id of ids){
    const sl=slots[id],lv=levelOf(t,id),x=sl.x*k,y=sl.y*k,st=statusOf(t,id,s.provisions,p);
-   let w=sl.w*k*(LEVEL_SCALE[Math.max(1,lv)]),h=w*.72,art:Phaser.GameObjects.Image|Phaser.GameObjects.Container|undefined,glow:Phaser.GameObjects.Ellipse|undefined;
+   let w=sl.w*k*(LEVEL_SCALE[Math.min(3,Math.max(1,lv))]),h=w*.72,art:Phaser.GameObjects.Image|Phaser.GameObjects.Container|undefined,glow:Phaser.GameObjects.Ellipse|undefined;
    if(lv>0){
     const key=this.artKey(id,lv);
     glow=this.add.ellipse(x,y-w*.06,w*1.02,w*.34,0xffe39a,0).setName('glow-'+id);this.pano.add(glow);

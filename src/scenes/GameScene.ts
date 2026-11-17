@@ -33,7 +33,7 @@ import {getSishuiEncounter} from '../data/sishui';
 import {BattlefieldSupplies,MAX_PROP_SLOTS} from '../systems/BattlefieldSupplies';
 import {YellowBattle} from '../systems/YellowBattle';
 import {XiliangBattle} from '../systems/XiliangBattle';
-import {dongzhuoStageUnlocked,yellowStageUnlocked} from '../world/WorldStore';
+import {dongzhuoStageUnlocked,yellowStageUnlocked,unlockedTroopKinds} from '../world/WorldStore';
 import {abandonExpedition,beginExpedition,settleExpedition,permanentEffects,worldUnlocked,worldChapterCleared,takeExpeditionReserve} from '../world/WorldStore';
 import Phaser from 'phaser';
 import { PAD, PAD_LABEL, gamepad, keyHint } from '../platform/gamepad';
@@ -2268,7 +2268,8 @@ export class GameScene extends Phaser.Scene {
     if (this.mode !== 'none') { this.pendingRecruit = true; return; }
     this.pendingRecruit = false; this.freeRecruit = true;
     const start = Math.max(0, this.waveIndex - 1) * 3;
-    const pool=worldUnlocked()?TROOP_KINDS:INITIAL_TROOPS;
+    // 支援招兵只出现军营已解锁的兵种（营寨未开放的新档军营 1 级，即基础三种）
+    const pool=unlockedTroopKinds();
     this.recruitOptions = Array.from({ length: 3 }, (_, i) => ({ kind: pool[(start + i) % pool.length], upgrade: false }));
     this.renderRecruit(); this.setMode('recruit');
   }

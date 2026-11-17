@@ -6,6 +6,7 @@ import { LEGION, ORDERS, TROOPS, TROOP_KINDS, INITIAL_TROOPS, type TroopKind } f
 import type { Legion } from '../systems/Legion';
 import { loadTroopPortraits, portraitHeadY, portraitKey } from '../systems/TroopPortraits';
 import { artStyle } from '../systems/ArtStyle';
+import { unlockedTroopKinds } from '../world/WorldStore';
 /** 人物画风 v2：血药卡徽章里的手绘药葫芦（与兵种胸像同一画风）；没加载到就用旧的像素药瓶 healing_potion。 */
 const POTION_ART = 'potion_card_v2', POTION_ART_URL = 'assets/troop-portraits-v2/potion_card.png';
 const ROLES: Record<TroopKind, string> = {
@@ -230,7 +231,9 @@ export class LegionUI {
       }
       return;
     }
-    const visible = wave ? this.options : D ? TROOP_KINDS : TROOP_KINDS.slice(this.page * 4, this.page * 4 + 4);
+    // 只列军营已解锁的兵种（营寨「军营」等级，src/data/barracks.ts）
+    const pool = unlockedTroopKinds();
+    const visible = wave ? this.options : D ? pool : pool.slice(this.page * 4, this.page * 4 + 4);
     for (const row of this.rows) {
       const index = visible.indexOf(row.kind); row.root.setVisible(index >= 0); if (index < 0) continue;
       const level = army.levels[row.kind], count = army.units.filter(u => u.active && u.kind === row.kind).length;

@@ -1,7 +1,7 @@
 import {playMenuMusic} from '../systems/Music';
 import Phaser from 'phaser';
 import {W,H,worldText,worldButton,worldShell,panel,worldAssets,releaseWorldArt} from '../world/WorldUI';
-import {loadWorld,worldUnlocked,recruitReserve,recruitCost} from '../world/WorldStore';
+import {loadWorld,worldUnlocked,recruitReserve,recruitCost,barracksLevel,troopUnlockLevel} from '../world/WorldStore';
 import {TROOPS,TROOP_KINDS,type TroopKind} from '../data/legion';
 import {isChapterTestRun} from '../systems/ChapterProgress';
 import {v2Filter} from '../systems/ArtStyle';
@@ -55,7 +55,9 @@ export class CityRecruitScene extends Phaser.Scene{
   TROOP_KINDS.slice(this.page*4,this.page*4+4).forEach((kind,i)=>{const width=(W-54)/2,height=230,x=20+(i%2)*(width+10),y=175+Math.floor(i/2)*248;
    const frame=panel(this,x+width/2,y+height/2,width,height),def=TROOPS[kind],icon=this.add.image(x+40,y+70,v2Key(kind),'stand').setOrigin(.5,.6);icon.setScale(80/icon.height);
    const title=worldText(this,x+14,y+14,def.name,17),detail=worldText(this,x+78,y+48,`后备 ${s.reserve[kind]??0}\n${recruitCost(kind,s)}军粮/人`,12,'#bfd0b8').setWordWrapWidth(width-86);
-   const btn=worldButton(this,x+width/2,y+height-35,'招募1人',()=>this.buy(kind),width-24);btn.image.setName(`reserve-buy-${kind}`);this.content!.add([frame,icon,title,detail,btn.image,btn.text]);});
+   const need=troopUnlockLevel(kind),locked=barracksLevel(s)<need;
+   const btn=worldButton(this,x+width/2,y+height-35,locked?`军营 Lv.${need} 解锁`:'招募1人',()=>{if(!locked)this.buy(kind);},width-24);btn.image.setName(`reserve-buy-${kind}`);
+   if(locked){btn.image.disableInteractive().setAlpha(.5);frame.setTint(0x6a6a6a);icon.setTint(0x5c5c5c);}this.content!.add([frame,icon,title,detail,btn.image,btn.text]);});
   const note=worldText(this,24,H-168,this.message||'新招兵种优先出征，超出编制的士兵继续留守。',12,'#d5c5a2').setWordWrapWidth(W-48);this.content.add(note);
   const button=worldButton(this,W/2,H-118,this.page?'查看前四兵种':'查看后四兵种',()=>{this.page=1-this.page;this.render();},230);this.content.add([button.image,button.text]);
  }
@@ -75,7 +77,9 @@ export class CityRecruitScene extends Phaser.Scene{
    const sub=worldText(this,tx,y+62,note,12,'#bfcab6').setWordWrapWidth(tw);
    const stock=worldText(this,tx,y+90,`后备 ${have} 人`,13,have?'#e9dcc0':'#9da592').setName(`reserve-have-${kind}`);
    const price=worldText(this,tx,y+110,`${cost} 军粮 / 人`,13,s.provisions>=cost?'#e8cf8f':'#d4887a').setName(`reserve-cost-${kind}`);
-   const btn=worldButton(this,tx+tw/2,y+ch-28,'招募 1 人',()=>this.buy(kind),tw);btn.image.setName(`reserve-buy-${kind}`);
+   const need=troopUnlockLevel(kind),locked=barracksLevel(s)<need;
+   const btn=worldButton(this,tx+tw/2,y+ch-28,locked?`军营 Lv.${need} 解锁`:'招募 1 人',()=>{if(!locked)this.buy(kind);},tw);btn.image.setName(`reserve-buy-${kind}`);
+   if(locked){btn.image.disableInteractive().setAlpha(.5);btn.text.setAlpha(.8).setFontSize(15).setName(`reserve-lock-${kind}`);frame.setTint(0x6a6a6a);icon.setTint(0x5c5c5c).setAlpha(.75);[title,role,sub,stock,price].forEach(o=>o.setColor("#8c8a80"));}
    this.content!.add([frame,shadow,icon,title,role,sub,stock,price,btn.image,btn.text]);
   });
  }

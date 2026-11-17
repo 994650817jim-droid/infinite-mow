@@ -9,6 +9,8 @@
 import type { CityTier } from '../world/WorldCities';
 import { TECH_IDS, type TechId } from '../data/tech';
 import { RECRUIT } from '../data/recruits';
+import { BARRACKS_MAX, BARRACKS_UPGRADE, BARRACKS_HALL, TROOP_UNLOCK, troopsAtLevel, barracksReinforcements } from '../data/barracks';
+import { TROOPS } from '../data/legion';
 
 export type TownBuildingId = 'hall' | 'barracks' | 'farm' | 'academy' | 'talent' | 'stable' | 'granary' | 'pavilion';
 /** 占领城池的发展方向：均衡（默认）/ 重农（多产军粮）/ 重军（少产粮，每场送后备兵）。 */
@@ -56,7 +58,7 @@ export interface BuildingDef {
   /** 最高等级（默认 3；奇观只有 1 级）。 */
   maxLevel?: number;
   /** 升级价（Lv1→2、Lv2→3）。 */
-  upgrade?: [Cost, Cost];
+  upgrade?: readonly Cost[];
 }
 /** 农田每场产粮；粮仓减口粮；马厩可养马数；开仓募兵人数。 */
 /**
@@ -72,7 +74,7 @@ export const LEVY_COST = { base: 100, perSoldier: 25 };
 export function levyCost(level: number): Cost { return LEVY_COST.base + LEVY_COST.perSoldier * LEVY_SOLDIERS[level]; }
 export const TOWN_BUILDINGS: Record<TownBuildingId, BuildingDef> = {
   hall: { name: '主帐', build: 0, blurb: '义军中枢，决定营寨规模；其它建筑的等级不能高于主帐。', effect: l => `规模：${CITY_TITLE[l]}${l < 3 ? `；可建 Lv${l} 建筑` : '；可建全部 Lv3 建筑'}` },
-  barracks: { name: '军营', build: 0, upgrade: [120, 320], blurb: '操练义军，招募后备兵。', effect: l => `招募后备兵；出征开局增援 ${l - 1} 人` },
+  barracks: { name: '军营', build: 0, maxLevel: BARRACKS_MAX, upgrade: BARRACKS_UPGRADE, noHallCap: true, blurb: '操练义军，招募后备兵；升级解锁新兵种。', effect: l => `可招 ${(Object.keys(TROOP_UNLOCK) as Array<keyof typeof TROOP_UNLOCK>).filter(k => TROOP_UNLOCK[k] <= l).length} 种兵${l > 1 ? `（本级解锁 ${troopsAtLevel(l).map(k => TROOPS[k].name).join('、')}）` : '（刀盾、长枪、弓箭）'}；出征开局增援 ${barracksReinforcements(l)} 人` },
   farm: { name: '农田', build: 0, upgrade: [120, 320], blurb: '营外良田，每打完一仗收一次粮。', effect: l => `每场出征后产军粮 ${FARM_GRAIN[l]}；战场军粮收益 +${(l - 1) * 8}%` },
   academy: { name: '讲武堂', build: 150, upgrade: [450, 1100], blurb: '研习兵法、改良军械：研究科技。', effect: l => `可研究第 ${l} 层科技（军需 / 兵略 / 武备）` },
   stable: { name: '马厩', build: 200, upgrade: [450, 900], minHall: 2, blurb: '养马换马之所；只能在营中休整时换马。', effect: l => `可养马 ${STABLE_HORSES[l]} 匹；在此更换坐骑` },
@@ -98,6 +100,7 @@ export function buildBlockers(t: TownState, id: TownBuildingId, p: TownProgress)
   const l = levelOf(t, id), hall = levelOf(t, 'hall'), out: string[] = [];
   if (l >= (TOWN_BUILDINGS[id].maxLevel ?? MAX_LEVEL)) return ['已达最高等级'];
   if (id === 'hall') { const u = HALL_UPGRADE[l]; if (u && !u.ok(p)) out.push(u.needs); return out; }
+  if (id === 'barracks') { const need = BARRACKS_HALL[l + 1]; if (need && hall < need) out.push(`扩建为${CITY_SIZE[need]}`); return out; }
   const minHall = TOWN_BUILDINGS[id].minHall ?? 1;
   if (l === 0 && hall < minHall) out.push(`扩建为${CITY_SIZE[minHall]}`);
   else if (l + 1 > hall && !TOWN_BUILDINGS[id].noHallCap) out.push(`扩建为${CITY_SIZE[l + 1]}`);
@@ -170,7 +173,7 @@ export function parseTown(v: unknown, legacy: { barracks: number; farm: number; 
   if (!v || typeof v !== 'object') return { town: migrateTown(legacy), money: 0, refund: 0 };
   const o = v as Record<string, unknown>, t = emptyTown();
   t.year = int(o.year, 400, START_YEAR); t.season = int(o.season, 3);
-  const old: Record<string, number> = o.levels && typeof o.levels === 'object' ? Object.fromEntries(Object.entries(o.levels as Record<string, unknown>).map(([k, x]) => [k, int(x, MAX_LEVEL)])) : Array.isArray(o.plots) ? levelsFromPlots(o.plots) : {};
+  const old: Record<string, number> = o.levels && typeof o.levels === 'object' ? Object.fromEntries(Object.entries(o.levels as Record<string, unknown>).map(([k, x]) => [k, int(x, BARRACKS_MAX)])) : Array.isArray(o.plots) ? levelsFromPlots(o.plots) : {};
   for (const id of IDS) if (id in old) t.levels[id] = Math.min(TOWN_BUILDINGS[id].maxLevel ?? MAX_LEVEL, old[id]);
   t.levels.hall = Math.max(1, t.levels.hall); t.levels.barracks = Math.max(1, t.levels.barracks); t.levels.farm = Math.max(1, t.levels.farm);
   if (o.focus && typeof o.focus === 'object') for (const [k, f] of Object.entries(o.focus as Record<string, unknown>).slice(0, 64)) if (k.length <= 32 && (f === 'farm' || f === 'military')) t.focus[k] = f;

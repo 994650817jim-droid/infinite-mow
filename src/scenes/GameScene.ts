@@ -169,7 +169,7 @@ type DmgKind = 'hit' | 'crit' | 'spell' | 'boss' | 'heal' | 'ally';
 const DMG_FONT = '"Bahnschrift","Arial Black","Segoe UI Black","Helvetica Neue",Arial,sans-serif';
 const DMG_STYLE: Record<DmgKind, { size: number; color: string; stroke: string; sw: number }> = {
   hit: { size: 15, color: '#f6e6bf', stroke: '#2a1608', sw: 3 },
-  crit: { size: 24, color: '#ffcf45', stroke: '#8c1c0a', sw: 4 },
+  crit: { size: 30, color: '#ffcf45', stroke: '#8c1c0a', sw: 5 }, // 2026-11-18 用户：不要「暴」字，字再大一些
   spell: { size: 15, color: '#86e8f2', stroke: '#0c2f3c', sw: 3 },
   boss: { size: 18, color: '#ffe9c4', stroke: '#3a1206', sw: 4 },
   heal: { size: 15, color: '#8ff08a', stroke: '#123a10', sw: 3 },
@@ -2133,7 +2133,7 @@ export class GameScene extends Phaser.Scene {
 
   /**
    * 伤害 / 治疗数字（池化 40 个，同屏多时普通部曲数字先丢、暴击和主将优先）：
-   * 同一位置同类的数字合并累加；向上飘出一道小弧线后淡出；暴击先放大再落定，左侧带小「暴」字。
+   * 同一位置同类的数字合并累加；向上飘出一道小弧线后淡出；暴击先放大再落定（字号更大，不带「暴」字）。
    * kind 缺省按 crit / priority 推：暴击 → crit，主将 → hit，部曲随行 → ally。设置「伤害数字」全部 / 仅暴击 / 关。
    */
   protected spawnDamageText(x: number, y: number, value: number, crit: boolean, priority=true, kind?: DmgKind): void {
@@ -2153,8 +2153,7 @@ export class GameScene extends Phaser.Scene {
     }
     if (fx.kind !== k) { const st = DMG_STYLE[k]; fx.kind = k; fx.text.setStyle({ fontSize: st.size + 'px', color: st.color, stroke: st.stroke, strokeThickness: st.sw }); }
     fx.crit = crit;
-    if (crit) { fx.tag ??= this.add.text(0, 0, '暴', { fontFamily: FONT, fontStyle: 'bold', fontSize: '13px', color: '#fff2c0', backgroundColor: '#a3240c', padding: { x: 2, y: 0 } }).setOrigin(1, .5).setDepth(DEPTH.dmgText); fx.tag.setVisible(true).setAlpha(1); }
-    else fx.tag?.setVisible(false);
+    fx.tag?.setVisible(false); // 2026-11-18 用户：暴击不再显示「暴」字，只靠更大的金色数字区分
     fx.active = true;
     fx.life = DMG_LIFE;
     fx.vx = (Math.random() - .5) * (crit ? 30 : 40);

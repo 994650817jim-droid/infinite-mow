@@ -35,6 +35,8 @@ export const BOSS_VS_TROOPS = { contactMul: 3, skillMul: 2, sweepReach: 60 } as 
  * killCapPerCast：同一招（同一帧结算）最多打死几个兵，其余留 1 血；immuneMs：挨首领一下后多久内不再吃首领伤害（防持续伤害连跳）。
  */
 export const BOSS_VS_ALLY = { mul: .4, killCapPerCast: 3, immuneMs: 500 } as const;
+/** 首领冲锋撞兵（BossMoveset 的 charge 招）：每兵每次冲锋一下，扣约 hpFrac 最大生命（满血的普通兵扛得住一冲），推开 knock 像素。初值，交平衡会话。 */
+export const BOSS_CHARGE = { hpFrac: .5, knock: 26 } as const;
 /**
  * 护阵收回（2026-11-17 用户：「我按了出击武将出去去打，但是我按护阵，随从一下子就回来了，回来太快了，移速太快了」）：
  * 出击 → 护阵后，部曲士兵（Legion）与随行武将（FollowerSquad）都按自己的行走速度 × speedMul 转身跑回阵位（播行走帧、面朝阵位），

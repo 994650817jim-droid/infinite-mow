@@ -224,3 +224,4 @@ assets/raw/*
 
 # 三选一节奏测量（2026-11-17 levelup-pace）
 !/tools/measure-levelup-pace.mjs
+!/tools/test-boss-charge-troops.mjs

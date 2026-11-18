@@ -1,4 +1,5 @@
 import { meleeReach } from '../data/bossReach';
+import { BOSS_CHARGE } from '../data/legion';
 import Phaser from 'phaser';
 import type { Enemy } from '../entities/Enemy';
 import { DEPTH, actorDepth } from '../config';
@@ -27,7 +28,7 @@ export class BossMoveset extends ArcBossV2<string> {
   private ride: { a0: number; t0: number; ms: number; dropAt: number; drops: number; cx: number; cy: number; dir: number } | null = null;
   private hideUntil = 0; private flags: { e: Enemy; img: Phaser.GameObjects.Image | null }[] = []; private flagMul = 1;
   private guards: Enemy[] = []; mount?: BossMount;
-  readonly metrics: Record<string, number> = { moves: 0, phase2: 0, dismount: 0, playerHits: 0 };
+  readonly metrics: Record<string, number> = { moves: 0, phase2: 0, dismount: 0, playerHits: 0, troopHits: 0 };
   private moveNames: string[] = [];
   readonly debug: BossDebug = {
     moves: this.moveNames,
@@ -149,8 +150,11 @@ export class BossMoveset extends ArcBossV2<string> {
     const sp = d.len / d.ms * 1000; b.sprite.x += d.ax * sp * dt; b.sprite.y += d.ay * sp * dt;
     this.state = 'attack'; this.pose((Math.abs(d.ax) > Math.abs(d.ay) ? (d.ax < 0 ? 1 : 2) : d.ay < 0 ? 3 : 0) * 4 + Math.floor(now / 70) % 4, now);
     if (!d.hitPlayer && p.alive && Math.hypot(p.x - b.x, p.y - b.y) < 44 + p.radius) { d.hitPlayer = true; p.takeDamage(b.def.damage * m.dmg, now); this.metrics.playerHits++; }
-    // 冲过部曲：每名士兵每次冲锋吃一整下（hurtByBoss：× 技能倍率 × BOSS_VS_ALLY）；时间戳用冲锋起点，「一招最多打死 3 个」按整次冲锋算
-    for (const u of this.h.army.units) if (u.active && !d.hitTroops.has(u) && Math.hypot(u.x - b.x, u.y - b.y) <= 46 + u.radius) { d.hitTroops.add(u); this.h.army.hurtByBoss(u, b.def.damage * m.dmg, d.t0); }
+    // 冲过部曲：每名士兵每次冲锋判定一次（Legion.hurtByCharge：约半管血、按当前时间结算、不吃士兵自身受击间隔；「一次冲锋最多打死 3 个」按冲锋起点算），并往冲锋道两侧推开一点
+    for (const u of this.h.army.units) if (u.active && !d.hitTroops.has(u) && Math.hypot(u.x - b.x, u.y - b.y) <= 46 + u.radius) {
+      d.hitTroops.add(u);
+      if (this.h.army.hurtByCharge(u, now, d.t0)) { this.metrics.troopHits++; if (u.active) { const side = (u.x - b.x) * -d.ay + (u.y - b.y) * d.ax >= 0 ? 1 : -1; u.setPosition(u.x - d.ay * side * BOSS_CHARGE.knock + d.ax * 8, u.y + d.ax * side * BOSS_CHARGE.knock + d.ay * 8); } }
+    }
     if (m.fire && now >= d.fireAt) { d.fireAt = now + 120; this.add({ kind: 'circle', x: b.x, y: b.y, r: 40, fx: 'fire' }, now, now + 380, m.dmg * .5); }
     if (now - d.t0 >= d.ms) {
       if (d.back) { const a = Math.atan2(p.y - b.y, p.x - b.x); this.angle = a; this.dash = { ...d, ax: Math.cos(a), ay: Math.sin(a), t0: now + 380, back: false, hitPlayer: false, hitTroops: new Set() }; this.add({ kind: 'lane', x: b.x, y: b.y, angle: a, len: d.len, width: m.width }, now, now + 380, 0, true); this.beat.set(m.name, 'windup', now, 380); this.dash = null; this.cur = { ...m, back: false, windupMs: 380 }; this.h.banner('折返再冲'); return; }

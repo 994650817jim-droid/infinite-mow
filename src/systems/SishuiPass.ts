@@ -17,12 +17,15 @@ import { playSheet } from './SkillFxSheets';
  *  - 温酒斩华雄：关羽为主将或随行，华雄出关 30 秒内斩之 → 「温酒斩华雄」，战功加赏（记两名首领）。
  * 美术全部复用：攻城 v2 城墙图集（城墙段 / 城门 / 城门破 / 箭楼 / 箭楼毁）、城门倒塌序列帧、西凉营寨道具（营帐走环境互动的可破坏营帐）。数值初值，交平衡会话。
  */
+const CLIFF = 'shu_pass', CLIFF_FILE = 'assets/shu/pass.png';
 export const SISHUI_PASS = {
   wallY: -440, wallHalf: 1250, segW: 230, gateW: 270, towerX: 250, towerHp: 420,
   volleyEverySec: 6.5, volleyPoints: 3, volleyR: 68, warnMs: 1300, playerRatio: .05, allyDamage: 12,
   buffMul: 1.2, buffSec: 12,
   tents: [[-560, -300], [-820, -250], [560, -300], [820, -250]] as const, tentHp: 260, tentEverySec: 9, tentRiders: 2,
   thinMul: 1.35, wenjiuSec: 30, guards: 4,
+  /** 关墙两端接山崖 + 场地围成封闭矩形（用户 2026-11-18「城墙要过不去，不是绕一下就过去」）：崖壁厚 / 往南到开局点之后多远 / 往北到关墙之后多远；碰撞框分块（导航按最大半边长查询，块不能太大）。 */
+  cliffThick: 520, southReach: 2300, northReach: 2600, chunk: 1100,
 } as const;
 
 export interface PassHost {
@@ -69,18 +72,36 @@ export class SishuiPass {
     // 关墙碰撞：左右两段城墙 + 关门（开门后移除）
     if (o.wall !== false) this.footprints.push({ left: p.x - P.wallHalf, right: p.x - P.gateW / 2, top: wy - 70, bottom: wy - 10 }, { left: p.x + P.gateW / 2, right: p.x + P.wallHalf, top: wy - 70, bottom: wy - 10 });
     this.gateFoot = { left: p.x - P.gateW / 2, right: p.x + P.gateW / 2, top: wy - 70, bottom: wy - 10 }; if (!this.o.palisade && o.wall !== false) this.footprints.push(this.gateFoot);
+    if (o.wall !== false) this.sealFlanks(p.x, p.y, wy);
     this.strikes = new Strikes({ scene: h.scene, player: p, army: h.legion, now: h.now });
     const s = h.scene, wall = MID_SIEGE_FILES[0];
     if (o.wall === false) return;
-    if (s.textures.exists(wall.key)) this.build(); else { s.load.spritesheet(wall.key, wall.file, { frameWidth: wall.cell, frameHeight: wall.cell }); s.load.once('filecomplete-spritesheet-' + wall.key, () => this.build()); if (!s.load.isLoading()) s.load.start(); }
+    const need = ([[wall.key, wall.file], [CLIFF, CLIFF_FILE]] as Array<[string, string]>).filter(([k]) => !s.textures.exists(k));
+    if (!need.length) this.build(); else { for (const [k, f] of need) s.load.spritesheet(k, f, { frameWidth: 384, frameHeight: 384 }); s.load.once('complete', () => { if (s.textures.exists(wall.key)) this.build(); }); if (!s.load.isLoading()) s.load.start(); }
   }
+  /** 把一块矩形切成不超过 chunk 的小块（导航按最大半边长查询，整块太大会拖慢）。 */
+  private slab(l: number, t: number, r: number, b: number): void {
+    const C = SISHUI_PASS.chunk, nx = Math.max(1, Math.ceil((r - l) / C)), ny = Math.max(1, Math.ceil((b - t) / C));
+    for (let i = 0; i < nx; i++) for (let j = 0; j < ny; j++) this.flank++, this.footprints.push({ left: l + (r - l) * i / nx, right: l + (r - l) * (i + 1) / nx, top: t + (b - t) * j / ny, bottom: t + (b - t) * (j + 1) / ny });
+  }
+  /** 关墙从地图一侧连到另一侧：两端接崖壁，崖壁往南围到场地南边、往北围到关内，再用一道南 / 北边界合上，整块场地封闭（只有关门可通）。 */
+  private sealFlanks(px: number, py: number, wy: number): void {
+    const P = SISHUI_PASS, W = P.wallHalf, T = P.cliffThick, top = wy - P.northReach, bot = py + P.southReach;
+    this.slab(px - W - T, top, px - W, bot); this.slab(px + W, top, px + W + T, bot);
+    this.slab(px - W - T, bot, px + W + T, bot + T); this.slab(px - W - T, top - T, px + W + T, top);
+    this.cliff = { x0: px - W, x1: px + W, top, bot };
+  }
+  private flank = 0;
+  private cliff: { x0: number; x1: number; top: number; bot: number } | null = null;
   /** 关墙 / 关门 / 箭楼（城墙图集：0 城墙段 · 1 城门 · 2 城门破 · 3 箭楼 · 4 箭楼毁）。 */
   private get wallY(): number { return this.o.wallY ?? SISHUI_PASS.wallY; }
   private get tag(): string { return this.o.tag ?? 'sishui'; }
   private build(): void {
     const P = SISHUI_PASS, s = this.h.scene, p = this.h.player, wy = p.y + this.wallY, K = MID_SIEGE_FILES[0].key, T = this.tag;
     const pal = this.o.palisade && s.textures.exists(this.o.palisade) ? this.o.palisade : null, seg = pal ? 150 : P.segW, segSize = pal ? 190 : P.segW + 8;
-    for (let x = -P.wallHalf + seg / 2; x <= P.wallHalf; x += seg) { if (Math.abs(x) < P.gateW / 2 + seg / 2 - 10) continue; this.art.push(s.add.image(p.x + x, wy, pal ?? K, pal ? 3 : 0).setOrigin(.5, .97).setDisplaySize(segSize, segSize).setDepth(actorDepth(wy) - .01).setName(T + '-wall')); }
+    // 城墙段从门两侧往外对称铺（段与段略压一点盖缝）一直铺到崖壁；原来按 -wallHalf 起点铺，左右不对称，门与箭楼之间漏出一截空缺
+    for (const side of [-1, 1]) for (let x = P.gateW / 2 + seg / 2 - 24; x - seg / 2 < P.wallHalf; x += seg - 14) this.art.push(s.add.image(p.x + side * x, wy, pal ?? K, pal ? 3 : 0).setOrigin(.5, .97).setDisplaySize(segSize, segSize).setDepth(actorDepth(wy) - .01).setName(T + '-wall').setFlipX(side > 0 && !pal));
+    this.buildCliffs(wy);
     this.gateImg = s.add.image(p.x, wy + 2, K, this.o.palisade ? 7 : 1).setOrigin(.5, .97).setDisplaySize(P.gateW + 30, P.gateW + 30).setDepth(actorDepth(wy)).setName(T + '-gate');
     if (this.o.towers !== false) for (const side of [-1, 1]) {
       const x = p.x + side * P.towerX, y = wy + 18, e = this.h.spawnTower(x, y, P.towerHp);
@@ -88,6 +109,17 @@ export class SishuiPass {
       this.towers.push({ e, x, y, at: this.h.now() + 4000 + (side > 0 ? 1800 : 0), down: false });
     }
   }
+  /** 崖壁美术：两侧沿崖壁竖向排开（山崖图帧 0 / 1，缺图用残墙帧）；南 / 北边界离开局点很远，不画。 */
+  private buildCliffs(wy: number): void {
+    const c = this.cliff, s = this.h.scene; if (!c) return;
+    const has = s.textures.exists(CLIFF), K = has ? CLIFF : MID_SIEGE_FILES[0].key, size = has ? 400 : 300;
+    for (const side of [-1, 1]) {
+      const x = side > 0 ? c.x1 + 120 : c.x0 - 120;
+      for (let y = wy - 40, k = 0; y > wy - 900; y -= 230, k++) this.art.push(s.add.image(x, y, K, has ? (side < 0 ? 0 : 1) : 6).setOrigin(.5, 1).setDisplaySize(size, size).setDepth(actorDepth(y)).setName(this.tag + '-cliff'));
+      for (let y = wy + 40, k = 0; y < c.bot + 60; y += 230, k++) this.art.push(s.add.image(x + (((k * 37) % 50) - 25) * .4, y, K, has ? (side < 0 ? 0 : 1) : 6).setOrigin(.5, 1).setDisplaySize(size, size).setDepth(actorDepth(y)).setName(this.tag + '-cliff'));
+    }
+  }
+
   /** 每帧（战斗中）。 */
   update(): void {
     const now = this.h.now(), P = SISHUI_PASS, p = this.h.player;
@@ -145,6 +177,6 @@ export class SishuiPass {
     if (this.bossAt < 0 || this.wenjiu || this.o.wenjiu === false) return;
     if (this.h.guanyu() && this.h.now() - this.bossAt <= SISHUI_PASS.wenjiuSec * 1000) { this.wenjiu = true; this.h.merit(0, 2); this.h.banner('温酒斩华雄', true, '其酒尚温 · 战功加赏'); this.h.sfx('gong'); }
   }
-  snapshot() { return { gateOpen: this.gateOpen, towers: this.towers.filter(t => !t.down).length, tents: this.tents.filter(t => !t.down).length, tentsPlaced: this.tentsPlaced, spawnMul: this.spawnMul, buffed: this.buffed, wenjiu: this.wenjiu, foot: this.footprints.length, metrics: { ...this.metrics }, pending: this.strikes.pending }; }
+  snapshot() { return { gateOpen: this.gateOpen, towers: this.towers.filter(t => !t.down).length, tents: this.tents.filter(t => !t.down).length, tentsPlaced: this.tentsPlaced, spawnMul: this.spawnMul, buffed: this.buffed, wenjiu: this.wenjiu, foot: this.footprints.length - this.flank, metrics: { ...this.metrics }, pending: this.strikes.pending }; }
   clear(): void { for (const a of this.art) a.destroy(); this.gateImg?.destroy(); this.strikes.clear(); if (this.buffed) { this.buffed = false; this.h.player.stats.damageMul /= SISHUI_PASS.buffMul; } }
 }

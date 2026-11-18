@@ -16,7 +16,7 @@ type PropKind = 'tent' | 'flag' | 'fire' | 'brazier' | 'rack' | 'shields' | 'cra
 /** 候选物件（全景像素：底边中心 x,y；w 显示宽）。按顺序放，压到建筑或已放物件的跳过。 */
 export const CAMP_PROPS: Array<{ x: number; y: number; w: number; kind: PropKind; flip?: boolean }> = [
   // 11-18 用户「丰富义军营寨更多空地」——按用途成组：马厩上方拴马桩 + 两匹马 + 草料；主帐门前两面「义」旗；主帐与军营之间的辎重棚
-  { x: 1300, y: 788, w: 110, kind: 'rail' }, { x: 1262, y: 795, w: 92, kind: 'horse' }, { x: 1342, y: 797, w: 92, kind: 'horse', flip: true }, { x: 1470, y: 795, w: 58, kind: 'fodder' },
+  { x: 1300, y: 788, w: 110, kind: 'rail' }, { x: 1262, y: 795, w: 92, kind: 'horse' }, { x: 1342, y: 797, w: 92, kind: 'horse', flip: true }, { x: 1470, y: 795, w: 72, kind: 'fodder' },
   { x: 735, y: 738, w: 66, kind: 'flag' }, { x: 1165, y: 738, w: 66, kind: 'flag' },
   { x: 1268, y: 660, w: 104, kind: 'canopy' }, { x: 1365, y: 672, w: 52, kind: 'barrels' },
   // 右侧营区：营帐一片，中间火塘
@@ -65,6 +65,8 @@ const SHEETS = {
 } as const;
 const RAM = { key: 'siege_mid_ram', url: 'assets/siege-v2/ram.png' };
 /** 拴着的马：v2 通用马行走表（4 方向 × 4 帧，每格 288）取站立帧，按毛色乘色；独立键，不干扰战斗里的马。 */
+/** 草料堆 / 拴马桩（即梦 Seedream 5.5，11-18，tools/prepare-camp-hay.mjs）：2 帧横排，每帧 256，0 草料堆、1 拴马桩；缺图时退回营地道具里的粮袋 / 木栏帧。 */
+const HAY = { key: 'camp_hay_rail', url: 'assets/props-v2/camp-hay-rail.png', cell: 256 };
 const HORSE = { key: 'camp_horse', url: 'assets/horses-v2/generic_walk.png', cell: 288, tints: [0xb59a7a, 0x8a6a4c] };
 /** 营地道具 / 火盆 / 扬尘：战斗里另有同图的键（yellow_props / brazier_burning 会在开战时被换图），这里用独立键载入，不干扰战斗的载入与换图。 */
 const PROPS = { key: 'camp_props_v2', url: 'assets/props-v2/camp-props.png', cell: 128 }, BRAZIER = { key: 'camp_brazier', url: 'assets/props-v2/brazier_burning.png', cell: 444 }, DUST = { key: 'fx_collapse_dust', url: 'assets/skill-fx/collapse_dust.png', cell: 256 };
@@ -79,7 +81,7 @@ type Box = { l: number; r: number; t: number; b: number };
 export function loadCampLife(scene: Phaser.Scene): void {
   for (const s of Object.values(SHEETS)) if (!scene.textures.exists(s.key)) scene.load.image(s.key, s.url);
   if (!scene.textures.exists(RAM.key)) scene.load.spritesheet(RAM.key, RAM.url, { frameWidth: 256, frameHeight: 256 });
-  for (const a of [PROPS, BRAZIER, DUST, CAMP_ART.firepit, CAMP_ART.dummy, HORSE]) if (!scene.textures.exists(a.key)) scene.load.spritesheet(a.key, a.url, { frameWidth: a.cell, frameHeight: a.cell });
+  for (const a of [PROPS, BRAZIER, DUST, CAMP_ART.firepit, CAMP_ART.dummy, HORSE, HAY]) if (!scene.textures.exists(a.key)) scene.load.spritesheet(a.key, a.url, { frameWidth: a.cell, frameHeight: a.cell });
   if (!scene.textures.exists(CAMP_ART.banner.key)) scene.load.image(CAMP_ART.banner.key, CAMP_ART.banner.url);
 }
 function sliceSheet(scene: Phaser.Scene, key: string) {
@@ -159,6 +161,7 @@ export class CampLife {
       case 'fire': if (sc.textures.exists(CAMP_ART.firepit.key)) { const f = img(CAMP_ART.firepit.key, 0, p.w * 1.5); this.fires.push({ x: p.x, y: p.y - p.w * .45, img: f }); return true; }
         if (camp) { img(PROPS.key, 30, p.w); this.fires.push({ x: p.x, y: p.y }); return true; } return false;
       case 'brazier': if (sc.textures.exists(BRAZIER.key)) { const b = img(BRAZIER.key, 0, p.w); this.fires.push({ x: p.x, y: p.y - p.w * .55, img: b }); return true; } return false;
+      case 'fodder': case 'rail': if (sc.textures.exists(HAY.key)) { img(HAY.key, p.kind === 'fodder' ? 0 : 1, p.w); return true; } if (!camp) return false; img(PROPS.key, p.kind === 'fodder' ? 17 : 10, p.w); return true;
       case 'horse': if (sc.textures.exists(HORSE.key)) { const h = img(HORSE.key, p.flip ? 8 : 4, p.w).setOrigin(.5, 280 / 288).setFlipX(false).setTint(HORSE.tints[this.horses++ % HORSE.tints.length]); void h; return true; } return false;
       default: {
         if (p.kind === 'post' && sc.textures.exists(CAMP_ART.dummy.key)) { this.dummies.push(img(CAMP_ART.dummy.key, 0, p.w * 1.25)); return true; }

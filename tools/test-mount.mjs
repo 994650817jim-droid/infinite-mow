@@ -14,7 +14,7 @@ const open = async (layout, horse, hero = 'zhaoyun', chapter = 'huangjin') => {
   const p = await b.newPage({ viewport: layout === 'mobile' ? { width: 390, height: 844 } : { width: 1280, height: 720 }, deviceScaleFactor: layout === 'mobile' ? 2 : 1 });
   p.on('pageerror', e => errors.push(layout + ' ' + e.message));
   p.on('console', m => { if (m.type() === 'error') errors.push(layout + ' console ' + m.text()); });
-  await p.addInitScript(([w, it]) => { if (!sessionStorage.getItem('seeded')) { localStorage.clear(); localStorage.setItem('im_world_v1', JSON.stringify(w)); localStorage.setItem('im_items_v1', JSON.stringify(it)); sessionStorage.setItem('seeded', '1'); } }, [world, items(horse, hero)]);
+  await p.addInitScript(([w, it]) => { if (!sessionStorage.getItem('seeded')) { localStorage.clear(); localStorage.setItem('im_world_v1', JSON.stringify(w)); localStorage.setItem('im_items_v1', JSON.stringify(it)); localStorage.setItem('im_story', 'off'); /* 剧情系统（11-17）开章卷轴会停住战斗时钟；本测试只测骑马 */ sessionStorage.setItem('seeded', '1'); } }, [world, items(horse, hero)]);
   await p.goto(base + '?layout=' + layout); await p.waitForFunction(() => window.__game?.scene.isActive('MenuScene'), null, { timeout: 60000 });
   await p.evaluate(([hero, chapter]) => { const g = window.__game; g.registry.set('runConfig', { character: hero, chapter, stage: 1 }); for (const s of g.scene.getScenes(true)) s.scene.stop(); if (g.registry.get('battleReady')) g.scene.start('GameScene'); else { g.registry.set('loadBattle', true); g.scene.start('BootScene'); } }, [hero, chapter]);
   await p.waitForFunction(() => window.__game.scene.isActive('GameScene') && window.__game.scene.getScene('GameScene').player, null, { timeout: 60000 });

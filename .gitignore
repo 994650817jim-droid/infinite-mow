@@ -182,6 +182,7 @@ assets/raw/*
 !/tools/test-zhangjiao-alive.mjs
 !/tools/shot-camp-pano.mjs
 !/tools/test-camp-mount.mjs
+!/tools/prepare-camp-hay.mjs
 !/tools/test-jingnan-art.mjs
 !/tools/test-hanzhong-art.mjs
 !/tools/test-yiling-full.mjs

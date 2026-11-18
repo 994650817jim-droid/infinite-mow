@@ -10,6 +10,7 @@ import { gearFor, gearSummary } from '../systems/ItemEffects';
 import { gearOwners, ownerName } from '../systems/RosterStore';
 import { TACTIC_UNLOCK_SCROLLS, TEMPER, XINDE_SLOTS, getXinde, grain, respec, respecCost, scrolls, tacticUnlocked, temperCost, temperLevel, temperUp, toggleXinde, unlockTactic } from '../systems/MasteryStore';
 import { lqHitBox, lqPanel, lqSkin } from './LacquerKit';
+import { attrBadge } from './AttrBadge';
 
 type Tab = 'overview' | 'attrs' | 'weapon' | 'xinde';
 const TABS: [Tab, string][] = [['overview', '总览'], ['attrs', '属性'], ['weapon', '本命'], ['xinde', '战法心得']];
@@ -88,6 +89,7 @@ export class HeroCodexUI {
   private renderOverview(x: number, y: number, w: number): void {
     const info = heroInfo(this.hero), name = ownerName(this.hero), c = this.playable;
     this.text(x, y, name, 24, '#f2ddae', true).setName('codex-name');
+    { const nm = this.body.getByName('codex-name') as Phaser.GameObjects.Text | null, b = attrBadge(this.scene, x + (nm?.width ?? 60) + 22, y + 15, this.hero, 26); if (b) this.add(b); }
     this.text(x, y + 36, `等级 Lv.${info.level}（本章上限 Lv.${info.cap}）· 经验 ${info.xp} / ${info.next}${info.level >= info.cap ? '（已到上限，经验暂存）' : ''}`, 14, '#d8ccb0').setName('codex-level');
     const a = heroAttrs(this.hero), attrs = (Object.keys(ATTRIBUTE_INFO) as AttributeId[]).map(id => `${ATTRIBUTE_INFO[id].name}${primaryAttribute(this.hero) === id ? '（主）' : ''} ${a[id]}`).join('　');
     this.text(x, y + 64, `属性：${attrs}　· 未分配 ${heroFreePoints(this.hero)} 点`, 14, '#d8ccb0').setWordWrapWidth(w);
@@ -109,6 +111,7 @@ export class HeroCodexUI {
       if (this.scene.textures.exists(attributeIcon(id))) this.add(this.scene.add.image(x + 16, ry + 12, attributeIcon(id)).setDisplaySize(28, 28));
       const primary = primaryAttribute(this.hero) === id;
       this.text(x + 40, ry, ATTRIBUTE_INFO[id].name + (primary ? ' · 主属性' : ''), 16, primary ? '#ffd27a' : '#f0dfb4').setName('codex-attr-name-' + id);
+      if (primary) { const b = attrBadge(this.scene, x + 16, ry + 12, this.hero, 30); if (b) this.add(b.setName('attr-badge-row')); }
       this.text(x + (primary ? 150 : 100), ry + 3, ATTRIBUTE_INFO[id].effect + (primary ? '；主属性每点再 +1% 全伤害' : ''), 12, primary ? '#e8d6a4' : '#a9b9a3');
       this.text(x + w - 110, ry + 2, `${a[id]} / ${ATTRIBUTE_MAX}`, 14, '#e5d4ab').setOrigin(1, 0).setName('codex-attr-' + id);
       this.button(x + w - 50, ry + 12, '+', 'codex-add-' + id, () => this.act(allocateHeroAttr(this.hero, id) ? { ok: true, message: `${ATTRIBUTE_INFO[id].name} +1` } : { ok: false, message: '没有可分配的点，或这一项已满' }), { disabled: free <= 0 || a[id] >= ATTRIBUTE_MAX, size: 18 });

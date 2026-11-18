@@ -4,6 +4,7 @@ import {MARTIALS} from '../systems/RunGrowth';
 import {WEAPON_META,weaponName} from '../data/upgrades';
 import {CHARACTER_PASSIVES} from '../data/passives';
 import {FONT,HEADING_FONT,TITLE_FONT,RENDER_SCALE,IS_DESKTOP} from '../config';
+import {attrBadge,setAttrBadge} from './AttrBadge';
 const titles=['游龙先锋','重甲武圣','百步神射','卧龙军师','燕人猛将','西凉锦马','镇北悍将','仁德之主','凤雏军师','巧思机关','弓腰郡主','闭月舞姬'];const roles=['突进','近战','远程','法术','猛攻','突骑','血战','统御','火计','机关','游射','魅惑'];
 /** 闲章与题句（原创短句，取材常见三国典故）。 */
 const leisure=['常胜','忠义','神射','卧龙','万夫','锦马','子午','仁德','凤雏','巧思','弓腰','闭月'];
@@ -191,6 +192,7 @@ function glowTexture(s:Phaser.Scene,w:number,h:number,state:FrameState,inset=1):
 export class HeroWarCard{
  readonly root:Phaser.GameObjects.Container;readonly art:Phaser.GameObjects.Image;readonly name:Phaser.GameObjects.Text;readonly weapon:Phaser.GameObjects.Text;readonly hit:Phaser.GameObjects.Rectangle;
  private scroll:Phaser.GameObjects.Image;private paper:Phaser.GameObjects.Image;private glow:Phaser.GameObjects.Image;private nameV:Phaser.GameObjects.Text;private brush:Phaser.GameObjects.Image;private title:Phaser.GameObjects.Text;private seal:Phaser.GameObjects.Image;private roleSeal:Phaser.GameObjects.Image;private role:Phaser.GameObjects.Text;private verse:Phaser.GameObjects.Text;private leisureSeal:Phaser.GameObjects.Image;private skills:Phaser.GameObjects.Text;private passive:Phaser.GameObjects.Text;private rules:Phaser.GameObjects.Graphics;
+ /** 主属性印（ui/AttrBadge.ts）：挂在势力印下面 */ private attrSeal:Phaser.GameObjects.Image|null=null;
  private roll?:Phaser.GameObjects.Image;private foldName?:Phaser.GameObjects.Text;private rollH=0;private prog=1;private rollTween?:Phaser.Tweens.Tween;
  /** 精简：主页电脑版只留名字、阵营印、定位印、兵器（2026-11-17 用户「不需要太多字」）。 */
  private compact=false;
@@ -236,10 +238,11 @@ export class HeroWarCard{
   this.hit=s.add.rectangle(w/2,h/2,w,h,0,0.001).setInteractive({useHandCursor:true});
   // 画卷版：外框（含惊燕）压在立绘之上；文字与印在最上层
   this.root.add([this.glow,this.paper,this.art,this.scroll,...(this.roll?[this.roll]:[]),...(this.foldName?[this.foldName]:[]),this.brush,this.nameV,this.title,this.seal,this.roleSeal,this.verse,this.rules,this.weapon,this.passive,this.skills,this.leisureSeal,this.role,this.name,this.hit]);
+  this.attrSeal=attrBadge(s,this.colX,0,'zhaoyun',small?24:28,{origin:[.5,0]});if(this.attrSeal)this.root.add(this.attrSeal);
   this.paint();
   this.hit.on('pointerover',()=>this.paint('hover')).on('pointerout',()=>this.paint()).on('pointerdown',()=>this.paint('pressed')).on('pointerup',()=>this.paint());
  }
- private get detail(){return [this.art,this.paper,this.brush,this.title,this.seal,this.roleSeal,this.verse,this.rules,this.weapon,this.passive,this.skills,this.leisureSeal];}
+ private get detail(){return [this.art,this.paper,this.brush,this.title,this.seal,this.roleSeal,this.verse,this.rules,this.weapon,this.passive,this.skills,this.leisureSeal,...(this.attrSeal?[this.attrSeal]:[])];}
  private paint(state:FrameState='normal'):void{
   const st:FrameState=state==='normal'&&this.chosen?'selected':state;
   const h=this.folded?this.foldedHeight:this.height,inset=this.painted?(this.L as InkLayout).body:1;
@@ -306,6 +309,7 @@ export class HeroWarCard{
   if(this.painted||!this.folded)this.nameV.setText([...c.name].join('\n'));else this.nameV.setText(c.name);
   this.title.setText([...titles[index]].join('\n'));
   const nameBottom=this.nameV.y+this.nameV.height;this.seal.setTexture(sealTexture(this.s,c.faction??'蜀',small?26:32)).setDisplaySize(small?26:32,small?26:32).setY(nameBottom+(small?4:6));
+  setAttrBadge(this.attrSeal,c.id);this.attrSeal?.setPosition(this.colX,this.seal.y+(small?30:36));
   this.brush.setDisplaySize(small?40:52,Math.max(small?96:128,this.nameV.height+(small?14:20)));
   this.role.setText(roles[index]);
   this.roleSeal.setTexture(sealTexture(this.s,roles[index],small?30:36,false,HEADING_FONT)).setDisplaySize(small?30:36,small?30:36);

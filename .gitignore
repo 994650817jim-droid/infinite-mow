@@ -162,6 +162,7 @@ assets/raw/*
 !/tools/test-siege-tiers.mjs
 !/tools/white-to-magenta.mjs
 !/tools/test-terrain.mjs
+!/tools/test-arrival-attr.mjs
 !/tools/test-jingnan-art.mjs
 !/tools/test-hanzhong-art.mjs
 !/tools/test-yiling-full.mjs

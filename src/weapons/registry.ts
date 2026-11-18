@@ -46,6 +46,8 @@ export interface WeaponHost {
   rallyAllies?(fraction: number): void;
   /** 武将招牌技序列帧特效（缺图时什么都不做）。 */
   heroFx?(id: string, x: number, y: number, size: number, rotation?: number): void;
+  /** 赵云「七进七出」满层那一枪的手绘特效（只有主将的 host 有；随行没有）。 */
+  zhaoyunBurst?(angle: number, len: number): void;
   /** 关羽拖刀斩刀气表现（src/systems/DraggingBladeFx.ts）；缺省时退回普通刀光。只管画面，不结算伤害。 */
   draggingBladeWave?(angle: number, size: number, kind: 'crescent' | 'spin', hits: { x: number; y: number }[]): void;
 }
@@ -267,6 +269,7 @@ export const WEAPON_BEHAVIORS: Record<WeaponId, (host: WeaponHost, weapon: Weapo
       used.set(pick.spawnId, (used.get(pick.spawnId) ?? 0) + 1);
       chosen.push(pick);
     }
+    if (passiveCast.extraSpear) host.zhaoyunBurst?.(Math.atan2(aimY, aimX), spearLength);
     if (passiveCast.extraSpear) chosen.push(targets.find(e => !used.has(e.spawnId)) ?? targets.find(e => (used.get(e.spawnId) ?? 0) < 2) ?? targets[0]);
     const roundHit = new Map<number, number>(); // 每轮重置
     const sx = host.player.x;

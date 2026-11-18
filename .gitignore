@@ -229,3 +229,4 @@ assets/raw/*
 !/tools/test-boss-charge-troops.mjs
 !/tools/render-opening.mjs
 !/tools/test-camp-buy-bag.mjs
+!/tools/test-zhaoyun-fx.mjs

@@ -213,12 +213,17 @@ export class GameScene extends Phaser.Scene {
   cutscene:Cutscene|null=null;
   /** 最近一段过场（测试读日志用）。 */
   lastCutscene:Cutscene|null=null;
+  /** 过场结束的时刻（真实时间 ms）：过场中与结束后 1 秒内压住武将台词（HeroBark），免得镜头刚回来就冒「来将通名！」。 */
+  private cutsceneEndedAt=-Infinity;
+  /** 排队中的首领台词（剧情台词之后主将接一句）；过场开播时取消。 */
+  private bossBarkTimer?:Phaser.Time.TimerEvent;
+  barksMuted():boolean{return !!this.cutscene?.active||performance.now()-this.cutsceneEndedAt<1000;}
   /** 播过场：战斗暂停（story 模式）、HUD 藏起；剧情设置关掉时不播，返回 false（调用方走原来的演出）。播完或跳过都回调 done。 */
   playCutscene(script:CutsceneScript,anchors:CutHost['anchors'],done:(skipped:boolean)=>void):boolean{
     if(!cutsceneAllowed(script)||this.over)return false;
-    const was=this.mode;this.setMode('story');
+    const was=this.mode;this.setMode('story');this.bossBarkTimer?.remove();this.bossBarkTimer=undefined;
     this.cutscene=new Cutscene({scene:this,anchors:{player:this.player.sprite,...anchors},heroes:()=>[this.runConfig.character,...(this.followers?.members??[]).map(m=>m.recruit.hero??'')].filter(Boolean),sfx:k=>this.sfx.play(k),music:d=>this.music.setDuck(d)},script,skipped=>{
-      this.lastCutscene=this.cutscene;this.cutscene=null;if(!this.over&&this.mode==='story')this.setMode(was==='story'?'none':was);done(skipped);});
+      this.lastCutscene=this.cutscene;this.cutscene=null;this.cutsceneEndedAt=performance.now();if(!this.over&&this.mode==='story')this.setMode(was==='story'?'none':was);done(skipped);});
     return true;
   }
   /** 场上某武将的精灵（主将或随行），不在场返回 undefined。 */
@@ -722,16 +727,31 @@ export class GameScene extends Phaser.Scene {
       .setOrigin(0.5)
       .setScrollFactor(0)
       .setDepth(DEPTH.hud);
-    // 剧情：关前章头 → 军情 → 羁绊（都看完 / 跳过后再开新手引导，避免两者叠在一起）
-    this.storyDir = new StoryDirector({ scene: this, chapterId: this.runConfig.encounter ? '' : this.chapter.id, stage: this.chapter.id === 'hulao' ? (this.chapter.westStage ?? 3) : (this.chapter.stage ?? 1), ctx: this.storyCtx(),
-      pause: () => { if (this.mode === 'none' && !this.over) this.setMode('story'); }, resume: () => { if (this.mode === 'story' && !this.over) this.setMode('none'); } });
-    { const k = this.storyDir.bondDamageMul(this.runConfig.character); if (k !== 1) this.player.stats.damageMul *= k; // 羁绊（如「桃园」）：主将与在队成员本关伤害加成
-      for (const m of this.followers?.members ?? []) if (m.recruit.hero) m.weaponDamageMul *= this.storyDir.bondDamageMul(m.recruit.hero); }
-    this.storyDir.beginStage(() => { if (this.sys.settings.status < Phaser.Scenes.SHUTDOWN && !this.over) this.tutorial = Tutorial.maybeStart(this); });
+    // 剧情：关前章头 → 过场 / 幕间 → 军情 → 羁绊（都看完 / 跳过后再开新手引导，避免两者叠在一起）
+    this.setupStory(this.runConfig.encounter ? '' : this.chapter.id, this.chapter.id === 'hulao' ? (this.chapter.westStage ?? 3) : (this.chapter.stage ?? 1), () => { if (this.sys.settings.status < Phaser.Scenes.SHUTDOWN && !this.over) this.tutorial = Tutorial.maybeStart(this); });
     // 首领阶段切换统一事件（boss-phase）：所有控制器的 phase2 都从这里发
     watchBossPhase(this, () => { const c = (this as unknown as { controller?: { phase2?: boolean } }).controller; return this.boss ? { boss: this.boss, phase2: !!(this.moveset?.phase2 || this.lubu?.phase2 || this.huaxiong?.phase2 || this.xurong?.phase2 || this.zhangjiao?.phase2 || c?.phase2), name: this.chapter.bossName, mounted: !!(this.bossMount?.mounted || this.moveset?.mounted) } : null; });
   }
 
+  /**
+   * 建本关剧情导演并开关前剧情（章头 → 过场 / 幕间 → 军情 → 羁绊）；套用羁绊加成（伤害、移速）。
+   * 篇章场景（第三章起，runConfig 是 encounter）在自己的 create 末尾按篇章 id 再调一次。
+   */
+  protected setupStory(chapterId: string, stage: number, done: () => void = () => {}): void {
+    this.storyDir = new StoryDirector({ scene: this, chapterId, stage, ctx: this.storyCtx(),
+      pause: () => { if (this.mode === 'none' && !this.over) this.setMode('story'); }, resume: () => { if (this.mode === 'story' && !this.over) this.setMode('none'); },
+      reward: r => { if (r.merit) addMerit(r.merit); if (r.grain) addProvisions(r.grain); }, banner: (t, c) => { this.showWaveBanner(t, true, c); this.sfx.play('gong'); } });
+    { const lord = this.runConfig.character, k = this.storyDir.bondDamageMul(lord), v = this.storyDir.bondSpeedMul(lord); if (k !== 1) this.player.stats.damageMul *= k; if (v !== 1) this.player.stats.moveMul *= v; this.player.stats.critChance += this.storyDir.bondCritBonus(lord); // 羁绊（「桃园」伤害、「借将」移速、「古城」暴击）
+      for (const m of this.followers?.members ?? []) if (m.recruit.hero) m.weaponDamageMul *= this.storyDir.bondDamageMul(m.recruit.hero); }
+    this.storyDir.beginStage(done);
+  }
+  /** 本场首领倒下时剧情是否说了台词（主将台词据此往后挪） */
+  private storyBossFell = false;
+  /** 主将对首领登场 / 倒下说一句（HeroBark）。剧情先让首领说了时，主将那句晚 2.3 秒（HeroBark 场上只留一句，同时说会互相顶掉）。 */
+  protected lordBossBark(kind: 'bossAppear' | 'bossDown', storySpoke: boolean): void {
+    const say = (): void => { if (this.sys.settings.status < Phaser.Scenes.SHUTDOWN && !this.barksMuted()) this.heroBark?.bossEvent(kind, this.barkSpeakers()[0], this.chapter.bossName, this.combatNow); };
+    if (storySpoke) { this.bossBarkTimer?.remove(); this.bossBarkTimer = this.time.delayedCall(2300, say); } else say();
+  }
   /** 剧情上下文：主公、在队（主公 + 随行武将）、已招募。 */
   storyCtx(): StoryCtx { return { lord: this.runConfig.character, team: () => [this.runConfig.character, ...(this.followers?.members ?? []).map(m => m.recruit.hero).filter((h): h is CharacterId => !!h)], recruited: id => heroOwned(id) }; }
   /** 把开局选择（武将/初始武器）应用到本局。 */
@@ -913,7 +933,7 @@ export class GameScene extends Phaser.Scene {
     this.updateHud();
     // 被动满层台词每帧检测（HUD 0.1 秒一刷，孙尚香这类攒满后马上触发的会漏掉）
     this.passiveShout.update(this.player.passive, this.combatNow, this.player.x, this.player.y, this.mode === 'none' && !this.over, this.player.sprite);
-    this.heroBark?.update(this.barkSpeakers(), this.combatNow, this.mode === 'none' && !this.over); // 武将台词气泡（被动大招触发时）
+    this.heroBark?.update(this.barkSpeakers(), this.combatNow, this.mode === 'none' && !this.over && !this.barksMuted()); // 武将台词气泡（被动大招触发时）；过场中与刚结束 1 秒内不喊
     this.artEffects.update(this.combatNow);
     this.updateRelicWaves();
     this.feedback.update(this.combatNow, this.mode === 'result' ? delta : 0);
@@ -1173,7 +1193,6 @@ export class GameScene extends Phaser.Scene {
     if(this.boss?.active)return;this.yellowAltar?.destroy();this.yellowAltar=null;
     if (this.bossSpawned) return;
     this.bossSpawned = true;
-    this.heroBark?.bossEvent('bossAppear', this.barkSpeakers()[0], this.chapter.bossName, this.combatNow); // 首领登场：主将说一句
     { const ws = this.paceOn() ? PICK_PACE.waves : PICK_GUARANTEE.waves; this.ensurePicks(ws[ws.length - 1]); } // 保底：第 3 波后直接是首领、波次不再推进，首领登场时补到最后一档
     const angle = -Math.PI / 2;
     const x = this.player.x + Math.cos(angle) * 430;
@@ -1222,7 +1241,7 @@ export class GameScene extends Phaser.Scene {
     this.music.setBoss(profile);
     this.announceBoss(profile.title, this.chapter.bossName);
     this.presence?.entrance(boss);
-    this.storyDir?.bossIntro(boss.sprite); // 剧情：首领登场大字台词
+    this.lordBossBark('bossAppear', !!this.storyDir?.bossIntro(boss.sprite)); // 剧情：首领登场大字台词；主将（HeroBark）接一句
   }
 
   /** 首领名号标题：画面上部一道短墨痕，墨上名号小字 + 名字，约 2.6 秒淡出；不拦截点击、不暂停。
@@ -1937,7 +1956,7 @@ export class GameScene extends Phaser.Scene {
     this.objective?.onKill(enemy);
     const kind = enemy.kind;
     // 吕布倒地改由 playBossFall（倒地 4 帧）播，不再叠旧的通用死亡闪影
-    if(kind==='boss'){const old=this.chasingBosses.find(t=>t.enemy===enemy&&t.life===enemy.spawnId),h=old?old.huaxiong:this.huaxiong,x=old?old.xurong:this.xurong;h?.defeat();x?.defeat();if(enemy===this.boss){this.sishuiPass?.onBossDown();{const at={x:enemy.x,y:enemy.y,displayHeight:enemy.sprite.displayHeight};this.storyDir?.bossFall(at);if(this.sishuiPass?.wenjiu){setStoryFlag('wenjiu_huaxiong');this.time.delayedCall(1600,()=>this.storyDir?.line('hulao-1.wenjiu',this.player.sprite));}}this.moveset?.defeat();this.moveset=null;this.bossMount?.destroy();this.bossMount=null;}if(old){if(h)this.deadBossControllers.push(h);if(x)this.deadBossControllers.push(x);}
+    if(kind==='boss'){const old=this.chasingBosses.find(t=>t.enemy===enemy&&t.life===enemy.spawnId),h=old?old.huaxiong:this.huaxiong,x=old?old.xurong:this.xurong;h?.defeat();x?.defeat();if(enemy===this.boss){this.sishuiPass?.onBossDown();{const at={x:enemy.x,y:enemy.y,displayHeight:enemy.sprite.displayHeight};this.storyBossFell=!!this.storyDir?.bossFall(at);if(this.sishuiPass?.wenjiu){setStoryFlag('wenjiu_huaxiong');this.time.delayedCall(1600,()=>this.storyDir?.line('hulao-1.wenjiu',this.player.sprite));}}this.moveset?.defeat();this.moveset=null;this.bossMount?.destroy();this.bossMount=null;}if(old){if(h)this.deadBossControllers.push(h);if(x)this.deadBossControllers.push(x);}
       // 倒地：控制器自己有倒地帧的（华雄 / 徐荣 / 子类首领）沿用；其余首领播通用倒地（受伤帧 + 倒下 + 手绘扬尘 + 下沉淡出）
       this.bossFallDir=0;if(!(h||x||this.bossHasDeathArt()))this.bossFallDir=playBossFall(this,enemy,this.zhangjiao?'zhangjiao_moves':this.lubu?'lubu_moves':undefined,old?undefined:this.chapter.bossStyle);}
     enemy.deactivate();
@@ -1964,7 +1983,7 @@ export class GameScene extends Phaser.Scene {
         unlockAchievement('chaser');
         const old=this.chasingBosses[index];old.battle?.clear();old.huaxiong?.clear();old.xurong?.clear();old.label.destroy();this.chasingBosses.splice(index,1);
         this.recordFrontlineVictory(old.stage);
-      }else{this.bossKilled=true;this.boss=null;this.recordFrontlineVictory(this.battleStage());this.heroBark?.bossEvent('bossDown',this.barkSpeakers()[0],this.chapter.bossName,this.combatNow);}
+      }else{this.bossKilled=true;this.boss=null;this.recordFrontlineVictory(this.battleStage());this.lordBossBark('bossDown',this.storyBossFell);this.storyBossFell=false;}
       // 倒地后原地掉宝箱，主将捡起遗物才进下一阶段（原来的三选一遗物卡改成宝箱）
       this.spawnBossChest(enemy.x,enemy.y,()=>{if(this.bossKilled&&this.chasingBosses.length===0){if(this.storyDir)this.storyDir.chapterClose(()=>this.finish(true,'boss'));else this.finish(true,'boss');}else{this.resumePendingChoices();if(this.bossKilled)this.showGrowthNotice('当前首领已败 · 仍有'+this.chasingBosses.length+'名追击首领');}});return;
     }
@@ -2344,7 +2363,7 @@ export class GameScene extends Phaser.Scene {
     this.legionUI?.panel.setVisible(mode === 'recruit');
     this.campUI?.setVisible(mode==='rest');
     // 营中闲话：行军休整画面左下（不挡「率军出征」）
-    if(mode==='rest'&&IS_DESKTOP&&!this.children.getByName('camp-talk'))campTalkStrip(this,24,GAME_HEIGHT-35,GAME_WIDTH/2-145-24-16,[this.chapter.id],this.storyCtx(),DEPTH.overlay+3);
+    if(mode==='rest'&&IS_DESKTOP&&!this.children.getByName('camp-talk'))campTalkStrip(this,24,GAME_HEIGHT-35,GAME_WIDTH/2-145-24-16,[this.storyDir?.chapterId||this.chapter.id],this.storyCtx(),DEPTH.overlay+3);
     else if(mode!=='rest')this.children.getByName('camp-talk')?.destroy();
     this.reinforcements?.panel.setVisible(mode === 'aid');
     if (this.pausePanel) {

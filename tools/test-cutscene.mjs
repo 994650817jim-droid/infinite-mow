@@ -27,6 +27,7 @@ try {
     let st = null;
     for (let i = 0; i < 120 && !st; i++) { st = await ev(s => s.cutscene?.active ? { snap: s.cutscene.snapshot(), mode: s.mode, paused: s.time.paused } : null); if (!st) await p.waitForTimeout(150); }
     ck('预览：过场开播（战斗暂停 story 模式、HUD 藏起）', st && st.mode === 'story' && st.paused && st.snap.hidden > 3, st);
+    const bark0 = await ev(s => s.heroBark?.count ?? 0);
     const t0 = Date.now(), shots = [[1500, '1-camera-gate'], [3200, '2-chitu-arrives'], [5200, '3-fengxian'], [6600, '4-slash'], [8600, '5-wo-xing-lv'], [10800, '6-ride-off']];
     for (const [at, name] of shots) { await p.waitForTimeout(Math.max(0, at - (Date.now() - t0))); const sn = await ev(s => s.cutscene?.snapshot() ?? null); await p.screenshot({ path: `${OUT}/${name}.png` }); if (name === '1-camera-gate') ck('黑边拉上、镜头推近到城门', sn && sn.bars > .9 && sn.zoom > 1.05, sn); if (name === '2-chitu-arrives') ck('吕布骑赤兔入场（演员在场）', sn && sn.actors.includes('lubu'), sn); }
     for (let i = 0; i < 100 && (await ev(s => !!s.cutscene)); i++) await p.waitForTimeout(150);
@@ -34,6 +35,9 @@ try {
     await p.waitForTimeout(400);
     const e = await ev(endState);
     await p.screenshot({ path: `${OUT}/7-after.png` });
+    await p.waitForTimeout(2600);
+    const bark = await ev(s => ({ count: s.heroBark?.count ?? 0, line: s.heroBark?.lastLine ?? '' }));
+    ck('过场中与刚结束时主将不喊首领台词（来将通名！等）', bark.count === bark0 || !['来将通名！', '贼将休走！'].includes(bark.line), { bark0, bark });
     const seq = e.log?.steps ?? [];
     ck(`按顺序播完（${(dur / 1000).toFixed(1)} 秒，约 12–15 秒）`, e.log && !e.log.skipped && seq.every((v, i) => !i || v > seq[i - 1]) && seq.length >= 25 && dur > 9000 && dur < 20000, { dur, seq });
     ck('台词：奉先……我儿 → 我姓吕，不姓董！（赵云主将不喊三姓家奴）', e.log.lines[0]?.startsWith('奉先') && e.log.lines.includes('我姓吕，不姓董！') && !e.log.lines.includes('三姓家奴！'), e.log.lines);

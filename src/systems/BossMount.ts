@@ -12,10 +12,7 @@ export interface BossMountDef { horse: BossHorse; tint?: number; /** 骑者裁�
  * 已交付的首领骑乘图（画风会话出，4×9 每格 256 脚底 240：行 1–4 骑行 下 / 左 / 右 / 上，行 5–8 马上出招，行 9 坠马朝右）。
  * 只给这里登记过的首领载图（没出的不去请求，免得 404）；没有的仍用「本体裁上半身放鞍上」顶替。
  */
-/**
- * 首领骑乘图第一批（吕布 / 华雄 / 张梁 / 李傕 / 张绣 / 颜良）画的是站姿（腿画到脚），整张放到马上像「站在马上」（用户 2026-11-17）。
- * 跨坐：裁到大腿根（seat，格内像素），髋部压在鞍上（离地 rise 世界像素），腿藏在马身后；坠马行不裁。美术重画成坐姿后可去掉裁切。
- */
+/** 站姿骑乘图的过渡裁切：裁到大腿根（seat，格内像素），髋部压在鞍上（离地 rise 世界像素）。只用于还没重画成坐姿（不在 SEATED_RIDE_ART）的首领。 */
 export const RIDE_SEAT = { seat: 200, rise: 50 } as const;
 export const BOSS_RIDE_ART = new Set<string>(['lubu', 'huaxiong', 'zhangliang', 'lijue', 'zhangxiu', 'yanliang']);
 /** 已重画成坐姿的骑乘图（不再裁切，按马镫对位，同英雄 HeroMount）；其余仍用 RIDE_SEAT 裁切过渡。 */

@@ -87,7 +87,7 @@ export class CityScene extends Phaser.Scene {
   const mapBtn=homeCommand(this,W/2,D?H-28:H-72,D?260:W-60,D?40:52,'天下地图 · 出征',true,true,D?16:17);mapBtn.hit.setName('city-map').on('pointerdown',()=>this.scene.start('WorldMapScene'));
   // 2026-11-17 UI 审查 K：底栏提示去掉（建筑上已有名牌，点了就进）
   // 营中闲话（剧情 campTalk）：底栏「天下地图」右侧，不挡建筑与出征按钮；按当前章节取一段没看过的
-  if(D){const w=loadWorld(),lord=(loadRoster().lord??'liubei') as CharacterId,chapters=!w.cleared?.huangjin?['huangjin']:!w.cleared?.hulao?['hulao','huangjin']:['hulao','huangjin'];
+  if(D){const w=loadWorld(),lord=(loadRoster().lord??'liubei') as CharacterId,chapters=!w.cleared?.huangjin?['huangjin']:!w.cleared?.hulao?['hulao','huangjin']:(w.warlordStages??0)<3?['qunxiong','hulao','huangjin']:['guandu','qunxiong','hulao','huangjin'];
    campTalkStrip(this,W/2+130+16,H-28,W-(W/2+130+16)-24,chapters,{lord,team:()=>[lord,...followersFor(lord).map(r=>r.hero).filter((h):h is CharacterId=>!!h)],recruited:id=>heroOwned(id)},5);}
   // 拖动 / 滚轮平移全景
   this.input.on('pointerdown',(p:Phaser.Input.Pointer)=>{if(this.anyModal()||!this.inView(p.x,p.y))return;this.drag={x:p.x,y:p.y,sx:this.sx,sy:this.sy,moved:false};});

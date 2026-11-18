@@ -15,7 +15,8 @@
 import Phaser from 'phaser';
 import { DEPTH, FONT, HEADING_FONT, GAME_WIDTH, GAME_HEIGHT, IS_DESKTOP } from '../config';
 import { CHARACTERS, HOME_ART_HEROES, type CharacterId } from '../data/characters';
-import { STORY_CAST, STORY_CHAPTERS, type StoryChapter, type StoryLine, type StoryNode, type StoryBond } from '../data/story';
+import { STORY_CAST, STORY_CHAPTERS, type StoryChapter, type StoryLine, type StoryNode, type StoryBond, type StoryStage } from '../data/story';
+import { BOSS_PHASE, type BossPhaseEvent } from './BossPhase';
 import { storyScroll, type StoryLine as ScrollLine } from '../ui/StoryScroll';
 import { storyMode } from './BattleSettings';
 import { isChapterTestRun } from './ChapterProgress';
@@ -52,11 +53,18 @@ export function speaker(who: string | undefined, ctx: StoryCtx): { name?: string
   if (hero) return { name: hero, portrait: HOME_ART_HEROES.includes(id) ? 'ink_hero_' + id : undefined, seal: hero };
   const c = STORY_CAST[id]; return c ? { name: c.name, portrait: c.portrait, seal: c.name } : { name: id, seal: id };
 }
+/** 旗标条件：'name' 为真 / 'name=value' 等于 / '!…' 取反。 */
+export function flagMatches(cond: string): boolean {
+  if (cond.startsWith('!')) return !flagMatches(cond.slice(1));
+  const [name, value] = cond.split('='), v = storyFlag(name);
+  return value === undefined ? !!v : String(v) === value;
+}
 /** 按主公与条件取出要说的句子（{lord} 已替换）。 */
 export function resolveLines(node: StoryNode, ctx: StoryCtx): StoryLine[] {
   const v = node.variants?.[ctx.lord] ?? (node.baseLords && !node.baseLords.includes(ctx.lord) ? node.variants?.other : undefined);
   const team = ctx.team(), lordName = heroName(ctx.lord) ?? '将军';
-  return (v ?? node.lines).filter(l => (!l.ifFollower || team.includes(l.ifFollower)) && (!l.ifRecruited || ctx.recruited(l.ifRecruited)) && (!l.ifFlag || !!storyFlag(l.ifFlag)) && (!l.ifLord || l.ifLord.includes(ctx.lord)))
+  return (v ?? node.lines).filter(l => (!l.ifFollower || team.includes(l.ifFollower)) && (!l.ifNotFollower || !team.includes(l.ifNotFollower)) && (!l.ifRecruited || ctx.recruited(l.ifRecruited))
+      && (!l.ifFlag || flagMatches(l.ifFlag)) && (!l.ifLord || l.ifLord.includes(ctx.lord)) && (!l.ifNotLord || !l.ifNotLord.includes(ctx.lord)))
     .map(l => ({ ...l, text: l.text.split('{lord}').join(lordName) }));
 }
 function toScroll(lines: StoryLine[], ctx: StoryCtx): ScrollLine[] { return lines.map(l => { const s = speaker(l.who, ctx); return { who: s.name, text: l.text, portrait: s.portrait, seal: s.seal, tip: l.tip }; }); }
@@ -112,39 +120,73 @@ export interface StoryHost {
   scene: Phaser.Scene; chapterId: string; stage: number; ctx: StoryCtx;
   /** 暂停 / 恢复战斗（卷轴期间） */
   pause: () => void; resume: () => void;
+  /** 抉择奖励（军功 / 军粮）；不给时不发 */
+  reward?: (r: { merit?: number; grain?: number }) => void;
+  /** 该章共几关（章末挂在最后一关），默认 3 */
+  lastStage?: number;
+  /** 首领倒下横幅（node.banner；如「斩颜良」） */
+  banner?: (title: string, caption?: string) => void;
 }
-/** 每关一个：GameScene.create 建立，关前（章头 → 军情 → 羁绊）、首领登场 / 倒下、章末都经这里。 */
+/**
+ * 每关一个：GameScene.create 建立（第三章起的篇章场景按自己的篇章 id 重建）。
+ * 关前：章头 → before（过场 / 幕间）→ 军情 + 羁绊；首领：登场 / 二阶段（boss-phase 事件）/ 倒下；
+ * 关末（首领宝箱捡完、结算前）：after 幕间 → 抉择 → 章末 → 章末后过场。
+ */
 export class StoryDirector {
   readonly chapter: StoryChapter | undefined;
+  readonly chapterId: string;
   /** 本关生效的羁绊（关前判定）；加成在 GameScene 里按 bond.members 套用 */
   readonly bonds: StoryBond[];
   /** 测试用：播过的节点 id（按顺序） */
   readonly played: string[] = [];
   constructor(private readonly h: StoryHost) {
-    this.chapter = STORY_CHAPTERS[h.chapterId];
+    this.chapterId = h.chapterId; this.chapter = STORY_CHAPTERS[h.chapterId];
     const team = h.ctx.team();
     this.bonds = (this.chapter?.bonds ?? []).filter(b => b.members.every(m => team.includes(m)));
+    // 首领二阶段大字台词（各首领控制器都发 boss-phase）
+    if (this.stageNodes()?.bossPhase) {
+      const onPhase = (e: BossPhaseEvent): void => { if (e.phase === 2) this.bossPhase(e.boss.sprite); };
+      h.scene.events.on(BOSS_PHASE, onPhase); h.scene.events.once('shutdown', () => h.scene.events.off(BOSS_PHASE, onPhase));
+    }
   }
-  private stageNodes() { return this.chapter?.stages[this.h.stage as 1 | 2 | 3]; }
-  /** 关前：章头（第一关、每存档一次）→ 关前军情（每存档一次）→ 羁绊台词（每存档一次）；都没有就直接 done。 */
-  beginStage(done: () => void): void {
-    const queue: Array<(next: () => void) => void> = [], ctx = this.h.ctx, sn = this.stageNodes();
-    const open = this.chapter?.open;
-    if (open && this.h.stage === 1 && !storySeen(open.id) && storyWanted('chapter')) queue.push(next => this.scroll(open, resolveLines(open, ctx), '出征 ▸', next));
-    const brief = sn?.brief, bondLines = this.bonds.filter(b => !storySeen(b.id)).flatMap(b => resolveLines({ id: b.id, type: 'bond', lines: b.lines }, ctx));
-    if (brief && !storySeen(brief.id) && storyWanted('stage')) queue.push(next => this.scroll(brief, resolveLines(brief, ctx), '开战', () => { for (const b of this.bonds) markStorySeen(b.id); next(); }, bondLines));
-    else if (bondLines.length && storyWanted('stage')) queue.push(next => this.scroll({ id: this.bonds[0].id, type: 'bond', kicker: '羁绊', title: this.bonds.map(b => b.name).join(' · '), lines: [] }, [], '开战', () => { for (const b of this.bonds) markStorySeen(b.id); next(); }, bondLines));
+  private stageNodes(): StoryStage | undefined { return this.chapter?.stages[this.h.stage as 1 | 2 | 3]; }
+  /** 依次播一串（暂停战斗，全部播完恢复）；都没有就直接 done。 */
+  private runQueue(queue: Array<(next: () => void) => void>, done: () => void): void {
     if (!queue.length) { done(); return; }
     this.h.pause();
     const run = (i: number): void => { if (i >= queue.length) { this.h.resume(); done(); return; } queue[i](() => run(i + 1)); };
     run(0);
   }
+  /** 一段卷轴（幕间 / 过场 / 章头章末）：没看过且条件下有句子才排进队列。 */
+  private queueScroll(queue: Array<(next: () => void) => void>, node: StoryNode | undefined, gate: 'chapter' | 'stage', confirm: string): void {
+    if (!node || storySeen(node.id) || !storyWanted(gate)) return;
+    const lines = resolveLines(node, this.h.ctx); if (!lines.length) return;
+    queue.push(next => this.scroll(node, lines, confirm, next));
+  }
+  /** 关前：章头（第一关）→ before（过场 / 幕间）→ 关前军情 + 羁绊台词；都每存档一次。 */
+  beginStage(done: () => void): void {
+    const queue: Array<(next: () => void) => void> = [], ctx = this.h.ctx, sn = this.stageNodes();
+    if (this.h.stage === 1) this.queueScroll(queue, this.chapter?.open, 'chapter', '出征 ▸');
+    for (const n of sn?.before ?? []) this.queueScroll(queue, n, 'stage', '继续');
+    const brief = sn?.brief, bondLines = this.bonds.filter(b => !storySeen(b.id)).flatMap(b => resolveLines({ id: b.id, type: 'bond', lines: b.lines }, ctx));
+    if (brief && !storySeen(brief.id) && storyWanted('stage')) queue.push(next => this.scroll(brief, resolveLines(brief, ctx), '开战', () => { for (const b of this.bonds) markStorySeen(b.id); next(); }, bondLines));
+    else if (bondLines.length && storyWanted('stage')) queue.push(next => this.scroll({ id: this.bonds[0].id, type: 'bond', kicker: '羁绊', title: this.bonds.map(b => b.name).join(' · '), lines: [] }, [], '开战', () => { for (const b of this.bonds) markStorySeen(b.id); next(); }, bondLines));
+    this.runQueue(queue, done);
+  }
   private scroll(node: StoryNode, lines: StoryLine[], confirm: string, next: () => void, extra?: StoryLine[]): void {
     this.played.push(node.id); playStoryScroll(this.h.scene, node, lines, this.h.ctx, confirm, next, extra);
   }
-  /** 首领登场 / 倒下：大字台词（每次都说）。 */
-  bossIntro(target: BarkTarget): void { const n = this.stageNodes()?.bossIntro; if (n) this.bark(n, target); }
-  bossFall(target: BarkTarget): void { const n = this.stageNodes()?.bossFall; if (n) this.bark(n, target); }
+  /** 首领登场 / 二阶段 / 倒下：大字台词（每次都说）。 */
+  /** 返回是否说了（说了的话 GameScene 把主将的登场 / 倒下台词往后挪，免得一句顶掉另一句）。 */
+  bossIntro(target: BarkTarget): boolean { const n = this.stageNodes()?.bossIntro; return n ? this.bark(n, target) : false; }
+  bossPhase(target: BarkTarget): boolean { const n = this.stageNodes()?.bossPhase; return n ? this.bark(n, target) : false; }
+  bossFall(target: BarkTarget): boolean {
+    const n = this.stageNodes()?.bossFall; if (!n) return false;
+    const spoke = this.bark(n, target);
+    // 横幅 + 旗标（如关羽在队「斩颜良」）：旗标是玩法结果，剧情关了也照记；横幅同温酒斩华雄，也照播
+    const b = n.banner; if (b && (!b.ifFollower || this.h.ctx.team().includes(b.ifFollower))) { if (b.flag) setStoryFlag(b.flag); this.h.banner?.(b.title, b.caption); }
+    return spoke;
+  }
   /** 按 id 说一句（bark 节点，其他系统调用；如 'hulao-3.lubu_enter'）。返回是否说了。 */
   line(id: string, target: BarkTarget): boolean {
     const n = this.chapter?.barks?.find(b => b.id === id); return n ? this.bark(n, target) : false;
@@ -157,14 +199,50 @@ export class StoryDirector {
     lines.forEach((l, i) => { if (i === 0) say(l); else this.h.scene.time.delayedCall(i * 1400, () => say(l)); }); // 第一句立即说（不受计时器暂停影响）
     return true;
   }
-  /** 章末（该章最后一关首领宝箱捡完、战报前；每存档一次）；不播时直接 done。 */
-  chapterClose(done: () => void): void {
-    const close = this.chapter?.close;
-    if (!close || this.h.stage !== 3 || storySeen(close.id) || !storyWanted('chapter')) { done(); return; }
-    this.h.pause(); this.scroll(close, resolveLines(close, this.h.ctx), '继续', () => { this.h.resume(); done(); });
+  /**
+   * 关末（首领宝箱捡完、结算前）：after 幕间 → 抉择 → 章末（最后一关）→ 章末后过场；都每存档一次。
+   * 抉择在剧情关闭 / 测试跑时也要定结果：不弹窗，直接按第一个选项（史实分支）写旗标。
+   */
+  stageEnd(done: () => void): void {
+    const queue: Array<(next: () => void) => void> = [], sn = this.stageNodes(), last = this.h.stage === (this.h.lastStage ?? 3);
+    if (this.chapter) setStoryFlag(`cleared_${this.chapterId}_${this.h.stage}`); // 「打过某关」条件用（如第四章闲话「打过 4-1」）
+    for (const n of sn?.after ?? []) this.queueScroll(queue, n, 'stage', '继续');
+    const choice = sn?.choice;
+    if (choice?.choices?.length && !storySeen(choice.id)) {
+      if (storyWanted('stage')) queue.push(next => this.playChoice(choice, next));
+      else this.applyChoice(choice, 0, false);
+    }
+    if (last) { this.queueScroll(queue, this.chapter?.close, 'chapter', '继续'); for (const n of this.chapter?.closeAfter ?? []) this.queueScroll(queue, n, 'chapter', '继续'); }
+    this.runQueue(queue, done);
   }
-  /** 本关羁绊给某武将的伤害倍率。 */
-  bondDamageMul(hero: CharacterId): number { let k = 1; for (const b of this.bonds) if (b.members.includes(hero)) k *= b.damageMul; return k; }
+  /** 第一、二章的旧名（章末），同 stageEnd。 */
+  chapterClose(done: () => void): void { this.stageEnd(done); }
+  /** 抉择：卷轴最后一页两个按钮；跳过按第一个选项。选完写旗标、给奖励、播回应。 */
+  private playChoice(node: StoryNode, next: () => void): void {
+    const ctx = this.h.ctx, lines = toScroll(resolveLines(node, ctx), ctx), choices = node.choices ?? [];
+    this.played.push(node.id);
+    loadPortraits(this.h.scene, lines, () => {
+      if (this.h.scene.sys.settings.status >= Phaser.Scenes.SHUTDOWN) return;
+      const after = (k: number, skipped: boolean): void => {
+        const reply = this.applyChoice(node, k, true); if (skipped || !reply.length) { next(); return; }
+        playStoryScroll(this.h.scene, { id: node.id + '.reply', type: 'interlude', kicker: node.kicker, title: choices[k].label, lines: [] }, reply, ctx, '继续', next);
+      };
+      storyScroll(this.h.scene, GAME_WIDTH, GAME_HEIGHT, IS_DESKTOP, { name: 'story-' + node.id.replace(/\./g, '-'), confirmName: 'story-confirm', kicker: node.kicker ?? '', title: node.title ?? '',
+        lines, reward: '', confirm: '', background: 'rest_camp', illustration: node.illustration, onDone: () => after(0, false), skip: () => after(0, true),
+        choices: choices.map(c => c.label), onChoice: k => after(k, false) });
+    });
+  }
+  /** 定下抉择结果：写旗标、记已看、给奖励；返回回应台词。 */
+  private applyChoice(node: StoryNode, k: number, rewardIt: boolean): StoryLine[] {
+    const c = node.choices?.[k]; if (!c) return [];
+    setStoryFlag(c.flag, c.value); markStorySeen(node.id);
+    if (rewardIt && c.reward) this.h.reward?.(c.reward);
+    return resolveLines({ id: node.id + '.reply', type: 'interlude', lines: c.reply }, this.h.ctx);
+  }
+  /** 本关羁绊给某武将的伤害 / 移速倍率。 */
+  bondDamageMul(hero: CharacterId): number { let k = 1; for (const b of this.bonds) if (b.members.includes(hero)) k *= b.damageMul ?? 1; return k; }
+  bondSpeedMul(hero: CharacterId): number { let k = 1; for (const b of this.bonds) if (b.members.includes(hero)) k *= b.speedMul ?? 1; return k; }
+  bondCritBonus(hero: CharacterId): number { let k = 0; for (const b of this.bonds) if (b.members.includes(hero)) k += b.critBonus ?? 0; return k; }
 }
 
 // ———— 营中闲话（营寨 / 行军休整画面底部小对话条）————

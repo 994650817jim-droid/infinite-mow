@@ -35,6 +35,16 @@ const open = async (c, presence) => {
 const measure = s => new Promise(res => { const out = {}; const f = () => { s.events.off('prerender', f); const sp = s.boss.sprite; out.render = sp.displayHeight; out.renderScale = sp.scaleY; }; s.events.once('postupdate', () => { out.logic = s.boss.sprite.displayHeight; out.logicScale = s.boss.sprite.scaleY; s.events.on('prerender', f); }); setTimeout(() => res(out), 400); });
 const fps = async ev => { await new Promise(r => setTimeout(r, 300)); return ev(s => new Promise(res => { const a = []; const t = setInterval(() => a.push(s.game.loop.actualFps), 250); setTimeout(() => { clearInterval(t); res(+(a.reduce((x, y) => x + y, 0) / a.length).toFixed(1)); }, 3000); })); };
 try {
+  // 近战距离（data/bossReach.ts BOSS_MELEE_REACH_MUL）：贴身近战 ×1.15，远程招式不变；?presence=0 时回到原值
+  for (const q of ['', '&presence=0']) {
+    const p = await b.newPage(); await p.goto(BASE + '?dev=1&layout=desktop' + q);
+    const r = await p.evaluate(async () => { const R = await import('/src/data/bossReach.ts'), D = await import('/src/data/bossRedesign.ts'), M = await import('/src/data/bossMoves.ts'), S = await import('/src/data/siegeMedium.ts');
+      return { mul: R.BOSS_MELEE_REACH_MUL, sweep: D.LB.combo.sweep.radius, thrust: D.LB.combo.thrust.length, smash: D.LB.combo.smash.radius, spin: D.LB.spin.r1, zig: D.LB.zigzag.length, shot: D.LB.shot.length,
+        siegeSweep: S.MID_SIEGE ? JSON.stringify(S.MID_SIEGE).match(/"sweep":\{[^}]*"radius":([\d.]+)/)?.[1] : null, zlSweep: M.BOSS_MOVES.zhangliang.p1.moves.find(m => m.kind === 'sweep').r, zlCharge: M.BOSS_MOVES.zhangliang.p1.moves.find(m => m.kind === 'charge').len }; });
+    const k = q ? 1 : 1.15, near = (a, x) => Math.abs(a - x) < .01;
+    ck(`近战距离${q ? '（?presence=0 回到原值）' : ' ×1.15，远程招式不变'}：吕布方天三连 / 无双乱舞${q ? '' : '、攻城守将横扫'}`, r.mul === 1.15 && near(r.sweep, 165 * k) && near(r.thrust, 230 * k) && near(r.smash, 105 * k) && near(r.spin, 195 * k) && r.zig === 300 && r.shot === 950 && (q || near(+r.siegeSweep, 150 * k)) && r.zlSweep === 120 && r.zlCharge === 380, r);
+    await p.close();
+  }
   for (const c of BOSSES) {
     // ---------- 改前（?presence=0）：截图 + 帧率 ----------
     { const { p, ev } = await open(c, false);

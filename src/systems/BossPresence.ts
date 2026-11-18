@@ -3,6 +3,7 @@ import { DEPTH, GAME_HEIGHT, GAME_WIDTH, HEADING_FONT, TITLE_FONT } from '../con
 import type { Enemy } from '../entities/Enemy';
 import { figureHeight } from './SpriteMetrics';
 import { outlineKeyOf } from './IffOverlay';
+import { BOSS_SCALE, ELITE_SCALE, PRESENCE_ON } from '../data/bossReach';
 
 /**
  * 首领存在感（用户 2026-11-17「boss出来后不要明显，感觉需要把boss做大一点或者明显一点，把小兵区分开来」）。
@@ -14,8 +15,7 @@ import { outlineKeyOf } from './IffOverlay';
  *  4. 首领在屏外：屏幕边缘出现指向首领的红金箭头。
  * ?presence=0 关闭本文件的全部效果（对比 / 回退用）。
  */
-export const PRESENCE_ON: boolean = (() => { try { return new URLSearchParams(globalThis.location?.search ?? '').get('presence') !== '0'; } catch { return true; } })();
-export const BOSS_SCALE = 1.4, ELITE_SCALE = 1.15;
+export { PRESENCE_ON, BOSS_SCALE, ELITE_SCALE } from '../data/bossReach';
 /** 体型倍数（判定半径也按这个放大）。 */
 export function presenceScale(kind: string): number { return !PRESENCE_ON ? 1 : kind === 'boss' ? BOSS_SCALE : kind === 'elite' ? ELITE_SCALE : 1; }
 

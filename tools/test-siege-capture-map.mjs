@@ -69,6 +69,8 @@ const fx2 = await p.evaluate(M0 => { const s = eval(M0); return { tex: s.layer.l
 ck('攻下陈留：迷雾像墨迹退去（先显示旧迷雾逐点擦开 + 手绘云雾散开序列帧），与归入版图一起播', fx2.tex === 'wfog_anim' && fx2.disperse, fx2);
 await p.screenshot({ path: `${out}/map-capture-reveal-1280x720.png` });
 await p.waitForTimeout(4500);
+const back = await p.evaluate(M0 => { const s = eval(M0), cx = s.area.x + s.area.w / 2, cy = (s.area.y + s.viewBottom) / 2; return { off: Math.round(Math.hypot(s.layer.x + 799 * s.zoom - cx, s.layer.y + 573 * s.zoom - cy)), zoom: +(s.zoom / s.minZoom).toFixed(2) }; }, M);
+ck('归入版图演出：先对准新攻下的城，播完后镜头平移回义军营寨（州郡档）', back.off <= 3 && Math.abs(back.zoom - 2) < .02, back);
 const f1 = await fogInfo();
 const opened = Object.keys(f0.v).filter(k => (f0.v[k] === 'hidden' && f1.v[k] !== 'hidden') || (f0.v[k] === 'dim' && f1.v[k] === 'clear'));
 ck('演出结束：迷雾纹理换成新局面缓存（含陈留），周边迷雾散开（临淄变清楚，北海、东莱由迷雾变半透明）', /^wfog_v_\d+_guandu\.chenliu_$/.test(f1.tex) && opened.length > 0 && f1.v.linzi === 'clear' && f1.v.beihai === 'dim' && f1.v.donglai === 'dim', { tex: f1.tex, opened });

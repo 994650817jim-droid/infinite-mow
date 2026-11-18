@@ -41,12 +41,20 @@ const coords = await p.evaluate(async M0 => {
 }, M);
 ck('坐标迁移：31 城、营寨、章节节点、全部关卡点都在图内；城池都落在新舆图陆地上；新图在旧图水域处明显偏青（对齐；错开 24 格后差值明显变小）；标记跟随地图层变换', coords.cities === 31 && coords.outOf.length === 0 && coords.onWater.length === 0 && coords.contrast >= 25 && coords.shifted < coords.contrast * .75 && coords.drift < .5, coords);
 
-// ② 打开时聚焦：州郡档以内，营寨与「下一步」目标都在视野里
-const f0 = await p.evaluate(M0 => { const s = eval(M0), t = s.guideTarget, inView = (x, y) => { const sx = s.layer.x + x * s.zoom, sy = s.layer.y + y * s.zoom; return sx > s.area.x && sx < s.area.x + s.area.w && sy > s.area.y && sy < s.viewBottom; }; return { zoom: s.zoom / s.minZoom, home: inView(799, 573), target: t ? inView(t.x, t.y) : null, guide: t?.text }; }, M);
+// ② 打开时聚焦：以义军营寨为中心、州郡档
 const t0 = await view(), want = await p.evaluate(M0 => { const s = eval(M0), z = s.zoom, a = s.area, x0 = (a.x - s.layer.x) / z, y0 = (a.y - s.layer.y) / z, x1 = x0 + a.w / z, y1 = y0 + a.h / z, out = []; for (let r = 0; r < 3; r++) for (let c = 0; c < 3; c++) if (c * 512 < x1 && (c + 1) * 512 > x0 && r * 1024 / 3 < y1 && (r + 1) * 1024 / 3 > y0) out.push(r + '' + c); return out; }, M);
 const got = t0.tiles.filter(t => t.img || t.loading).map(t => t.k);
 ck('分块按需载入：打开时只载入最终视野碰到的块（不是全部预载）', got.length > 0 && got.join() === want.join(), { got, want });
-ck('打开地图默认聚焦：我方营寨与「下一步」目标都在视野内，缩放不超过州郡档', f0.home && f0.target !== false && f0.zoom <= 2.001 && f0.zoom >= 1, f0);
+// 2026-11-18 用户「展开天下地图后，请视角定位在义军营寨那里」：以营寨为中心、州郡档；「下一步」在视野外只在屏幕边缘给箭头
+const focusInfo = () => p.evaluate(M0 => { const s = eval(M0), t = s.guideTarget, cx = s.area.x + s.area.w / 2, cy = (s.area.y + s.viewBottom) / 2, hx = s.layer.x + 799 * s.zoom, hy = s.layer.y + 573 * s.zoom, inView = (x, y) => { const sx = s.layer.x + x * s.zoom, sy = s.layer.y + y * s.zoom; return sx > s.area.x + 24 && sx < s.area.x + s.area.w - 24 && sy > s.area.y + 24 && sy < s.viewBottom - 24; }, e = s.children.getByName('world-next-edge'); return { zoom: +(s.zoom / s.minZoom).toFixed(3), off: Math.round(Math.hypot(hx - cx, hy - cy)), target: t ? inView(t.x, t.y) : null, edge: !!e?.visible, guide: t?.text }; }, M);
+const f0 = await focusInfo();
+ck('打开地图：镜头以义军营寨为中心、州郡档；「下一步」目标在视野内则不显示边缘箭头', f0.off <= 2 && Math.abs(f0.zoom - 2) < .01 && f0.edge === (f0.target === false), f0);
+// 把镜头拉到远处：「下一步」出了视野 → 屏幕边缘出现方向箭头，镜头不动
+await p.evaluate(M0 => { const s = eval(M0); s.flyTo(150, 150, s.minZoom * 3.6, 0); }, M); await p.waitForTimeout(200);
+const f1 = await focusInfo(), edgeAngle = await p.evaluate(M0 => { const s = eval(M0), e = s.children.getByName('world-next-edge'), t = s.guideTarget, b = { x: s.layer.x + t.x * s.zoom, y: s.layer.y + t.y * s.zoom }, a = Math.atan2(b.y - e.y, b.x - e.x), r = e.getByName('world-next-edge-arrow').rotation; return Math.round(Math.abs(Math.atan2(Math.sin(a - r), Math.cos(a - r))) * 57); }, M);
+ck('「下一步」在视野外：屏幕边缘出现小箭头，指向目标方向', f1.target === false && f1.edge && edgeAngle < 20, { ...f1, edgeAngle });
+await p.screenshot({ path: `${out}/next-edge-arrow-1280x720.png` });
+await p.evaluate(M0 => { const s = eval(M0); s.focusPlayer(0); }, M);
 await p.screenshot({ path: `${out}/open-focus-1280x720.png` });
 
 // ③ 镜头三档：滚轮换档（全国 → 州郡 → 城池），分块按需载入、只显示视野内的块
@@ -85,6 +93,13 @@ const flags = await p.evaluate(async M0 => { const s = eval(M0), sprites = s.cit
 ck('各势力军旗用手绘 8 帧飘动（染势力色）', flags.n >= 10 && flags.playing === flags.n && flags.changed > 0, flags);
 const leg = await p.evaluate(M0 => { const s = eval(M0), L = s.children.getByName('world-faction-strip'), rows = L?.list.filter(o => /^faction-row-/.test(o.name ?? '')).map(o => o.text) ?? []; const v0 = L?.visible; s.children.getByName('world-factions').emit('pointerup'); const v1 = L?.visible; s.children.getByName('world-factions').emit('pointerup'); return { v0, v1, rows }; }, M);
 ck('左上角势力图例：默认展开、列出各势力（我方置顶）与城数，可收起', leg.v0 === true && leg.v1 === false && leg.rows[0] === '义军' && leg.rows.length >= 4, leg);
+// ⑦ 地图动态：浮云（全国 / 州郡档飘，城池档收起）、江河流光、有战事处冒狼烟；镜头外的暂停不画
+const amb = async () => p.evaluate(M0 => { const s = eval(M0), cl = s.clouds, glint = s.ambient.filter(o => o.name === 'ambient-glint'), smoke = s.ambient.filter(o => /^ambient-smoke-/.test(o.name)); return { clouds: cl.length, cloudsVis: cl.filter(c => c.visible).length, glint: glint.length, glintPlaying: glint.filter(o => o.visible && o.anims.isPlaying).length, glintHidden: glint.filter(o => !o.visible && o.anims.isPaused).length, smoke: smoke.map(o => o.name), smokePlaying: smoke.filter(o => o.anims.isPlaying || !o.visible).length, war: [...new Set([...s.alerts.map(a => a.city), ...s.intel.map(e => e.city)])], tex: s.textures.get('wgrand_ambient')?.frameTotal }; }, M);
+await p.evaluate(M0 => { const s = eval(M0); s.flyTo(768, 512, s.minZoom, 0); }, M); await p.waitForTimeout(600);
+const a1 = await amb();
+await p.evaluate(M0 => { const s = eval(M0); s.flyTo(300, 300, s.minZoom * 3.6, 0); }, M); await p.waitForTimeout(400);
+const a3 = await amb();
+ck('地图动态：手绘浮云 5 朵（全国档飘、城池档收起）、江河流光 13 处、军情 / 告急城上冒狼烟；镜头外的流光暂停', a1.tex >= 32 && a1.clouds === 5 && a1.cloudsVis === 5 && a3.cloudsVis === 0 && a1.glint === 13 && a1.glintPlaying >= 10 && a3.glintHidden > 0 && a1.smoke.length >= 1 && a1.smoke.length === a1.war.filter(Boolean).length && a1.smokePlaying === a1.smoke.length, { a1, a3: { cloudsVis: a3.cloudsVis, glintHidden: a3.glintHidden } });
 // 全国档总览截图（带迷雾）
 await p.evaluate(M0 => { const s = eval(M0); s.flyTo(768, 512, s.minZoom, 0); }, M); await p.waitForTimeout(400);
 await p.screenshot({ path: `${out}/overview-fog-1280x720.png` });

@@ -55,3 +55,21 @@ export const BARKS_LABEL: Record<HeroBarks, string> = { on: '开', off: '关' };
 
 /** 在一组取值里循环切换（‹ › 按钮用）。 */
 export function cycle<T>(list: readonly T[], cur: T, dir: number): T { const i = list.indexOf(cur); return list[((i < 0 ? 0 : i) + dir + list.length) % list.length]; }
+
+/**
+ * 开场动画（2026-11-18 用户「开场动画播完再进游戏界面」）：im_opening = 'every' 每次 / 'first' 首次（缺省）/ 'off' 关闭；
+ * im_opening_seen = '1' 表示已经播过（「首次」模式据此跳过）。自动化测试（navigator.webdriver）与 ?autostart / ?perf 默认不播，?opening=1 强制播，?opening=auto 按真实规则判断（测试用）。
+ */
+export type OpeningMode = 'every' | 'first' | 'off';
+export function openingMode(): OpeningMode { const v = get('im_opening'); return v === 'every' || v === 'off' ? v : 'first'; }
+export function setOpeningMode(v: OpeningMode): void { set('im_opening', v); }
+export const OPENING_LABEL: Record<OpeningMode, string> = { every: '每次', first: '首次', off: '关闭' };
+export function markOpeningSeen(): void { set('im_opening_seen', '1'); }
+export function shouldPlayOpening(): boolean {
+  let q: URLSearchParams; try { q = new URLSearchParams(location.search); } catch { return false; }
+  if (q.get('opening') === '1') return true;
+  const auto = q.get('opening') === 'auto'; // 测试用：按真实规则（模式 + 是否播过）判断，不因自动化环境跳过
+  if (!auto && (q.has('autostart') || q.has('perf') || q.get('opening') === '0')) return false;
+  try { if (!auto && navigator.webdriver) return false; } catch { /* ignore */ }
+  const m = openingMode(); return m === 'every' || (m === 'first' && get('im_opening_seen') !== '1');
+}

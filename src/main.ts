@@ -16,6 +16,7 @@ import { TownScene } from './scenes/TownScene';
 import { CityScene } from './scenes/CityScene';
 import { WorldMapScene } from './scenes/WorldMapScene';
 import { MenuScene } from './scenes/MenuScene';
+import { OpeningScene } from './scenes/OpeningScene';
 import { installGamepad } from './ui/PadNavigator';
 import { installCjkWrap } from './ui/CjkWrap';
 import { installAchievements } from './systems/Achievements';
@@ -93,7 +94,7 @@ async function startGame(): Promise<void> {
     input: {
       activePointers: 3,
     },
-    scene: [BootScene, CityScene, CityRecruitScene, TownScene, TalentHallScene, WorldMapScene, MenuScene, BattleScene, ThirdChapterScene, ThirdBattleScene, GuanduChapterScene, GuanduBattleScene, ChibiChapterScene, ChibiBattleScene, JingnanChapterScene, JingnanBattleScene, ShuChapterScene, ShuBattleScene, HanzhongChapterScene, HanzhongBattleScene, XiangfanChapterScene, XiangfanBattleScene, YilingChapterScene, YilingBattleScene, NanzhengChapterScene, NanzhengBattleScene, BeifaChapterScene, BeifaBattleScene, EndingScene, SiegeBattleScene, IntelBattleScene, LubuBattleScene],
+    scene: [BootScene, OpeningScene, CityScene, CityRecruitScene, TownScene, TalentHallScene, WorldMapScene, MenuScene, BattleScene, ThirdChapterScene, ThirdBattleScene, GuanduChapterScene, GuanduBattleScene, ChibiChapterScene, ChibiBattleScene, JingnanChapterScene, JingnanBattleScene, ShuChapterScene, ShuBattleScene, HanzhongChapterScene, HanzhongBattleScene, XiangfanChapterScene, XiangfanBattleScene, YilingChapterScene, YilingBattleScene, NanzhengChapterScene, NanzhengBattleScene, BeifaChapterScene, BeifaBattleScene, EndingScene, SiegeBattleScene, IntelBattleScene, LubuBattleScene],
   });
 
   // 手柄：每帧轮询 + 界面焦点导航（STEAM_PLAN.md · S2）

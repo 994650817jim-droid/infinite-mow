@@ -1,3 +1,5 @@
+import { shouldPlayOpening } from '../systems/BattleSettings';
+let openingTried = false;
 import { BOOT_TO_KEY } from '../systems/BattleSnapshot';
 import {loadWarnFx} from '../ui/WarnFx';
 import {HOME_ART_HEROES} from '../data/characters';
@@ -294,6 +296,6 @@ export class BootScene extends Phaser.Scene {
     warmIffTextures(this.game);
     // 界面通用贴图（水墨按钮、小镇美术）常驻，不随战斗图集卸载
     this.registry.set('battleTextureKeys',this.textures.getTextureKeys().filter(k=>!k.startsWith('__')&&!k.startsWith('ui_war_')&&!k.startsWith('btn_ink_')&&!k.startsWith('town_')&&!k.startsWith('ach_')&&k!=='art_panel'&&k!=='icon_guandao'));
-    if(import.meta.env.DEV&&new URLSearchParams(location.search).get('dev')==='1'&&new URLSearchParams(location.search).has('thirdStage')){this.scene.start('ThirdChapterScene');}else if(this.registry.get('pendingThird')){this.registry.remove('pendingThird');this.scene.start('ThirdChapterScene');}else if(this.registry.get('pendingWarlord')){const key=String(this.registry.get('pendingWarlord'));this.registry.remove('pendingWarlord');this.scene.start(key);}else{let to:string|null=null;try{to=sessionStorage.getItem(BOOT_TO_KEY);sessionStorage.removeItem(BOOT_TO_KEY);}catch{/* 存储不可用 */}this.scene.start(to==='WorldMapScene'&&worldUnlocked()?'WorldMapScene':'MenuScene');} // 战斗中「撤退」回滚重载后直接回天下地图
+    if(import.meta.env.DEV&&new URLSearchParams(location.search).get('dev')==='1'&&new URLSearchParams(location.search).has('thirdStage')){this.scene.start('ThirdChapterScene');}else if(this.registry.get('pendingThird')){this.registry.remove('pendingThird');this.scene.start('ThirdChapterScene');}else if(this.registry.get('pendingWarlord')){const key=String(this.registry.get('pendingWarlord'));this.registry.remove('pendingWarlord');this.scene.start(key);}else{let to:string|null=null;try{to=sessionStorage.getItem(BOOT_TO_KEY);sessionStorage.removeItem(BOOT_TO_KEY);}catch{/* 存储不可用 */}const opening=!openingTried&&to!=='WorldMapScene'&&shouldPlayOpening();openingTried=true;this.scene.start(to==='WorldMapScene'&&worldUnlocked()?'WorldMapScene':opening?'OpeningScene':'MenuScene');} /* 开场动画：每页只在第一次启动时考虑（回战斗重载图集也会经过这里） */ // 战斗中「撤退」回滚重载后直接回天下地图
   }
 }

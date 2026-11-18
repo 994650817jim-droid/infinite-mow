@@ -5,7 +5,7 @@ import { showLordNotice } from '../ui/LordNotice';
 import {playMenuMusic,menuMusic} from '../systems/Music';
 import {artStyle,setArtStyle} from '../systems/ArtStyle';
 import { iffOutlineEnabled, setIffOutline, warmIffTextures } from '../systems/IffOverlay';
-import { OUTLINE_LABEL, cycle, outlineMode, setOutlineMode, shakeLevel, setShakeLevel, SHAKE_LABEL, type ShakeLevel, WIDTH_LABEL, outlineWidth, setOutlineWidth, DAMAGE_LABEL, damageNumbers, setDamageNumbers, SCALE_LABEL, renderScaleSetting, setRenderScaleSetting, type DamageNumbers, type RenderScaleSetting, STORY_LABEL, storyMode, setStoryMode } from '../systems/BattleSettings';
+import { OUTLINE_LABEL, cycle, outlineMode, setOutlineMode, shakeLevel, setShakeLevel, SHAKE_LABEL, type ShakeLevel, WIDTH_LABEL, outlineWidth, setOutlineWidth, DAMAGE_LABEL, damageNumbers, setDamageNumbers, SCALE_LABEL, renderScaleSetting, setRenderScaleSetting, type DamageNumbers, type RenderScaleSetting, STORY_LABEL, storyMode, setStoryMode, OPENING_LABEL, openingMode, setOpeningMode, type OpeningMode } from '../systems/BattleSettings';
 import {uiSfx} from '../systems/Sfx';
 import {GameCodex} from '../ui/GameCodex';
 import {HeroWarCard} from '../ui/HeroWarCard';
@@ -328,11 +328,11 @@ export class MenuScene extends Phaser.Scene {
     // 桌面版行距收紧，放下显示设置（分辨率 / 全屏 / 垂直同步）
     // 2026-11-17 用户批准 UI 审查 E：网页电脑版改成和战斗内「军中设置」同一套行样式（名称在左、‹ 值 › 在右）与同一组选项
     const web=D&&!desk;
-    const rowY=(i:number)=>desk?H/2-166+i*46:web?128+i*44:H/2-70+i*60;
+    const rowY=(i:number)=>desk?H/2-166+i*46:web?108+i*39:H/2-70+i*60; // 网页电脑版 10 行（第 9 行「开场动画」2026-11-18），行距收紧放进 540 高
     // 漆底描金面板（与图鉴、结算卷同系）；每行左右是漆金小方钮，返回为漆金按钮
     modal.add(this.add.rectangle(W/2,H/2,W,H,0x0c0805,.9).setInteractive());
-    {const pw=desk?560:web?520:Math.min(W-40,460),top=desk?H/2-250:web?28:H/2-190,bottom=desk?rowY(10)+40:web?rowY(9)+40:H/2+300,g=this.add.graphics();lqPanel(g,W/2-pw/2,top,pw,bottom-top);modal.add(g);
-     const t=label(W/2,desk?H/2-218:web?top+40:H/2-130,'军中设置',28).setFontFamily(desk?TITLE_FONT:HEADING_FONT).setColor(desk?'#efd399':'#f6dc9a').setStroke(desk?'#120904':'#2a170b',4);modal.add(t);
+    {const pw=desk?560:web?520:Math.min(W-40,460),top=desk?H/2-250:web?14:H/2-190,bottom=desk?rowY(10)+40:web?rowY(10)+36:H/2+300,g=this.add.graphics();lqPanel(g,W/2-pw/2,top,pw,bottom-top);modal.add(g);
+     const t=label(W/2,desk?H/2-218:web?top+34:H/2-130,'军中设置',28).setFontFamily(desk?TITLE_FONT:HEADING_FONT).setColor(desk?'#efd399':'#f6dc9a').setStroke(desk?'#120904':'#2a170b',4);modal.add(t);
      const div=this.add.graphics();lqDivider(div,W/2,t.y+30,desk?160:130);modal.add(div);
      modal.add(tutorialReplayLink(this,W/2+pw/2-22,top+24));} // 新手引导：重看（逻辑在 ui/TutorialOverlay.ts）
     /** 一行“名称  数值”，左右 －/＋（或 ‹ ›）调节；手柄焦点在行上时左右键也能调。 */
@@ -386,7 +386,11 @@ export class MenuScene extends Phaser.Scene {
     }
     // 剧情（2026-11-17 剧情系统）：完整 / 只看章头章末 / 关闭
     {const at=desk||web?8:5,list=['full','chapter','off'] as const;row(at,'剧情',()=>STORY_LABEL[storyMode()],dir=>setStoryMode(cycle(list,storyMode(),dir)),['‹','›']).setName('settings-story');}
-    const close=label(W/2,desk?rowY(10)+6:web?rowY(9)+2:H/2+264,'返回',20).setFontFamily(HEADING_FONT).setInteractive({useHandCursor:true}).setName('settings-close').setData('padDefault',true).on('pointerdown',()=>modal.destroy());
+    // 开场动画（2026-11-18）：每次 / 首次（缺省）/ 关闭；面板左上「重看开场 ›」
+    if(web){const list:OpeningMode[]=['every','first','off'];row(9,'开场动画',()=>OPENING_LABEL[openingMode()],dir=>setOpeningMode(cycle(list,openingMode(),dir)),['‹','›']).setName('settings-opening');
+     const t=this.add.text(W/2-246,40,'重看开场 ›',{fontFamily:FONT,fontSize:'13px',color:'#e8c98a',resolution:2}).setOrigin(0,.5).setInteractive({useHandCursor:true}).setName('settings-opening-replay');
+     t.on('pointerover',()=>t.setColor('#fff3d4')).on('pointerout',()=>t.setColor('#e8c98a')).on('pointerdown',()=>{modal.destroy();this.scene.start('OpeningScene',{next:'MenuScene'});});modal.add(t);}
+    const close=label(W/2,desk?rowY(10)+6:web?rowY(10)+2:H/2+264,'返回',20).setFontFamily(HEADING_FONT).setInteractive({useHandCursor:true}).setName('settings-close').setData('padDefault',true).on('pointerdown',()=>modal.destroy());
     const cs=(web?inkSkin(this,close,()=>({w:200,h:42}),{primary:true}):null)??lqSkin(this,close,close,()=>({w:200,h:desk?44:52}),{tone:'cinnabar'});lqHitBox(close,200,desk?44:52);
     modal.add([cs.gfx,close]);
   }

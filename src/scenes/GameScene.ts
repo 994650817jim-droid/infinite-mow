@@ -114,7 +114,7 @@ import { PROP_LOOT, rollPropItem, type PropLootKind } from '../data/propLoot';
 import { terrainConfigFor } from '../data/terrain';
 import { Tutorial } from '../systems/Tutorial';
 import { IffOverlay, readIffMode, warmIffTextures, type IffUnit } from '../systems/IffOverlay';
-import { BARKS_LABEL, heroBarks, setHeroBarks, type HeroBarks, STORY_LABEL, setStoryMode, storyMode, type StoryMode } from '../systems/BattleSettings';
+import {BARKS_LABEL, heroBarks, setHeroBarks, type HeroBarks, STORY_LABEL, setStoryMode, storyMode, type StoryMode, OPENING_LABEL, openingMode, setOpeningMode, type OpeningMode } from '../systems/BattleSettings';
 import { HeroBark, type BarkSpeaker } from '../ui/HeroBark';
 import { BossPresence } from '../systems/BossPresence';
 import { DAMAGE_LABEL, OUTLINE_LABEL, SCALE_LABEL, SHAKE_LABEL, WIDTH_LABEL, cycle, damageNumbers, outlineMode, outlineWidth, renderScaleSetting, setDamageNumbers, setOutlineMode, setOutlineWidth, setRenderScaleSetting, setShakeLevel, shakeLevel, shakeScale, type DamageNumbers, type OutlineMode, type OutlineWidth, type RenderScaleSetting, type ShakeLevel } from '../systems/BattleSettings';
@@ -2624,10 +2624,10 @@ export class GameScene extends Phaser.Scene {
     this.pausePanel.add(this.createVolumeRow('音乐', top + 122, this.music.getVolume(), v => this.music.setVolume(v), rx, width));
     this.pausePanel.add(this.createVolumeRow('音效', top + 180, this.sfx.getVolume(), v => this.sfx.setVolume(v), rx, width));
     // 右栏：‹ 值 › 行
-    const rowY = (i: number) => top + 226 + i * 34; // 第 5 行留给「武将台词」（平衡会话），「剧情」在第 6 行
+    const rowY = (i: number) => top + 222 + i * 31; // 第 5 行「武将台词」（平衡会话），第 6 行「剧情」，第 7 行「开场动画」（2026-11-18）
     const row = <T>(i: number, name: string, key: string, list: readonly T[], get: () => T, label: (v: T) => string, apply: (v: T) => void, note?: () => string): void => {
       const y = rowY(i);
-      const plate = this.add.graphics().setScrollFactor(0); plate.fillStyle(0x3a2616, .4).fillRoundedRect(rx - width / 2, y - 16, width, 32, 5).lineStyle(1, 0xc9a35e, .3).strokeRoundedRect(rx - width / 2, y - 16, width, 32, 5);
+      const plate = this.add.graphics().setScrollFactor(0); plate.fillStyle(0x3a2616, .4).fillRoundedRect(rx - width / 2, y - 14, width, 28, 5).lineStyle(1, 0xc9a35e, .3).strokeRoundedRect(rx - width / 2, y - 14, width, 28, 5);
       const nameT = this.add.text(rx - width / 2 + 12, y, name, { fontFamily: FONT, fontSize: '15px', color: '#e8d8b2', resolution: 2 }).setOrigin(0, .5).setScrollFactor(0).setStroke('#120904', 3);
       const val = this.add.text(rx + 62, y, label(get()), { fontFamily: HEADING_FONT, fontSize: '16px', color: '#efd399', resolution: 2 }).setOrigin(.5).setScrollFactor(0).setStroke('#120904', 3).setName('settings-' + key);
       const noteT = note ? this.add.text(rx + width / 2 + 8, y, '', { fontFamily: FONT, fontSize: '11px', color: '#9d8f78', resolution: 2 }).setOrigin(0, .5).setScrollFactor(0) : null;
@@ -2651,6 +2651,7 @@ export class GameScene extends Phaser.Scene {
     row<RenderScaleSetting>(4, '画面清晰度', 'render-scale', ['', '1', '2', '3'], renderScaleSetting, v => SCALE_LABEL[v], setRenderScaleSetting, () => renderScaleSetting() === scale0 ? '' : '刷新后生效');
     row<HeroBarks>(5, '武将台词', 'hero-barks', ['on', 'off'], heroBarks, v => BARKS_LABEL[v], v => { setHeroBarks(v); if (v === 'off') this.heroBark?.clear(); });
     row<StoryMode>(6, '剧情', 'story', ['full', 'chapter', 'off'], storyMode, v => STORY_LABEL[v], setStoryMode);
+    row<OpeningMode>(7, '开场动画', 'opening', ['every', 'first', 'off'], openingMode, v => OPENING_LABEL[v], setOpeningMode);
     const replay = tutorialReplayLink(this, rx + width / 2, top + ph - 14).setScrollFactor(0); this.pausePanel.add(replay);
   }
 

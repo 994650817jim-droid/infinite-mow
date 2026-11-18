@@ -1,0 +1,65 @@
+// 开场动画（2026-11-18 用户「开场动画播完再进游戏界面」）：首次启动播放、标题字与朱印出现、跳过有效、播完进主页、设置（每次 / 首次 / 关闭）生效、重看入口。
+// 用法：BASE=http://127.0.0.1:5180/ node tools/test-opening.mjs   截图在 assets/review/opening/
+import { chromium } from 'playwright';
+import { mkdirSync } from 'node:fs';
+const base = process.env.BASE ?? 'http://127.0.0.1:5173/', out = 'assets/review/opening';
+mkdirSync(out, { recursive: true });
+let fail = 0; const errors = [];
+const ck = (n, ok, d) => { if (!ok) fail++; console.log((ok ? 'PASS ' : 'FAIL ') + n + (d !== undefined ? ' · ' + JSON.stringify(d).slice(0, 300) : '')); };
+const b = await chromium.launch({ channel: 'chrome', headless: true, args: ['--autoplay-policy=no-user-gesture-required'] });
+const p = await b.newPage({ viewport: { width: 1280, height: 720 } });
+p.on('pageerror', e => errors.push(e.message)); p.on('console', m => { if (m.type() === 'error' && !/favicon|Failed to load resource|Texture key already in use/.test(m.text())) errors.push(m.text()); });
+await p.addInitScript(() => { if (!sessionStorage.getItem('seeded')) { localStorage.clear(); localStorage.setItem('im_last_hero', 'zhaoyun'); localStorage.setItem('im_tutorial_done', '1'); sessionStorage.setItem('seeded', '1'); } });
+const active = () => p.evaluate(() => window.__game?.scene.getScenes(true).map(s => s.scene.key) ?? []);
+const go = async () => { await p.goto(base + '?layout=desktop&opening=auto'); await p.waitForFunction(() => { const g = window.__game; return g && (g.scene.isActive('OpeningScene') || g.scene.isActive('MenuScene')); }, null, { timeout: 120000 }); };
+const O = "window.__game.scene.getScene('OpeningScene')";
+
+// ① 首次启动：播开场
+await go();
+ck('首次启动先播开场动画（不是直接进主页）', (await active()).includes('OpeningScene'), await active());
+await p.waitForFunction(O0 => (eval(O0).video?.video?.currentTime ?? 0) > .6, O, { timeout: 15000 }).catch(() => {});
+const v0 = await p.evaluate(O0 => { const s = eval(O0), v = s.video; return { t: v?.video?.currentTime, vis: v?.visible, scale: v?.scaleX, dur: v?.video?.duration, skip: !!s.children.getByName('opening-skip') }; }, O);
+ck('视频在播（铺满画面）、右下角有「跳过」', v0.t > 0 && v0.vis && v0.skip && v0.dur > 19, v0);
+await p.waitForTimeout(800);
+await p.screenshot({ path: `${out}/opening-start-1280x720.png` });
+await p.screenshot({ path: `${out}/opening-skip-button.png`, clip: { x: 1060, y: 630, width: 220, height: 90 } });
+// ② 最后一段：标题字淡入、朱印盖下（跳到 13.6 秒）
+await p.evaluate(O0 => { eval(O0).video.video.currentTime = 13.6; }, O);
+await p.waitForTimeout(2600);
+const t1 = await p.evaluate(O0 => { const s = eval(O0); return { t: s.video?.video?.currentTime, title: s.title?.alpha, seal: s.seal?.alpha, shown: s.titleShown }; }, O);
+ck('约 13.8 秒起宣纸留白处淡入水墨标题字，朱印盖下', t1.shown && t1.title > .9 && t1.seal > .9, t1);
+await p.screenshot({ path: `${out}/opening-title-1280x720.png` });
+// ③ 播完进主页，记「已播过」
+await p.evaluate(O0 => { eval(O0).video.video.currentTime = 19.9; }, O);
+await p.waitForFunction(() => window.__game.scene.isActive('MenuScene'), null, { timeout: 15000 }).catch(() => {});
+ck('播完自动进主页，并记已播过', (await active()).includes('MenuScene') && await p.evaluate(() => localStorage.getItem('im_opening_seen') === '1'), await active());
+// ④ 默认「首次」：再启动直接进主页
+await go();
+ck('默认「首次」：第二次启动不再播', (await active()).includes('MenuScene') && !(await active()).includes('OpeningScene'), await active());
+// ⑤ 主页设置改「每次」→ 每次启动都播；任意键跳过
+const set = await p.evaluate(() => { const m = window.__game.scene.getScene('MenuScene'); m.openHomeSettings(); const panel = m.children.getByName('home-settings-panel'), row = panel.list.find(o => o.name === 'settings-opening'); const dec = panel.list.find(o => /^settings-row-\d+-dec$/.test(o.name) && Math.abs(o.y - row.y) < 2); const before = row.text; dec.emit('pointerdown'); return { before, after: row.text, stored: localStorage.getItem('im_opening'), replay: !!panel.list.find(o => o.name === 'settings-opening-replay') }; });
+ck('主页设置有「开场动画」行（首次 → 每次）并存档；有「重看开场」', set.before === '首次' && set.after === '每次' && set.stored === 'every' && set.replay, set);
+await go();
+const every = await active();
+await p.waitForTimeout(1200); await p.keyboard.press('Space');
+await p.waitForFunction(() => window.__game.scene.isActive('MenuScene'), null, { timeout: 10000 }).catch(() => {});
+ck('「每次」：再启动又播；按任意键跳过进主页', every.includes('OpeningScene') && (await active()).includes('MenuScene'), { every, now: await active() });
+// ⑥ 点「跳过 ›」也能跳过；「重看开场」入口
+await p.evaluate(() => { const m = window.__game.scene.getScene('MenuScene'); m.openHomeSettings(); m.children.getByName('home-settings-panel').list.find(o => o.name === 'settings-opening-replay').emit('pointerdown'); });
+await p.waitForFunction(() => window.__game.scene.isActive('OpeningScene'), null, { timeout: 10000 }).catch(() => {});
+const replay = (await active()).includes('OpeningScene');
+await p.waitForTimeout(1200);
+await p.evaluate(O0 => eval(O0).children.getByName('opening-skip').emit('pointerdown'), O);
+await p.waitForFunction(() => window.__game.scene.isActive('MenuScene'), null, { timeout: 10000 }).catch(() => {});
+ck('设置里「重看开场」重播；点「跳过 ›」回主页', replay && (await active()).includes('MenuScene'), await active());
+// ⑦ 「关闭」：不播；战斗内设置也有同一行
+await p.evaluate(() => localStorage.setItem('im_opening', 'off'));
+await go();
+ck('「关闭」：启动不播', !(await active()).includes('OpeningScene'), await active());
+await p.goto(base + '?dev=1&autostart=1&stage=1&layout=desktop'); await p.waitForFunction(() => window.__game?.scene.getScene('GameScene')?.player, null, { timeout: 120000 }); await p.waitForTimeout(800);
+const bat = await p.evaluate(() => { const s = window.__game.scene.getScene('GameScene'); s.togglePause(); const t = s.pausePanel.list.find(o => o.name === 'settings-opening'); s.pausePanel.list.find(o => o.name === 'settings-opening-inc')?.emit('pointerdown'); return { text: t?.text, after: t?.text, stored: localStorage.getItem('im_opening') }; });
+ck('战斗内设置也有「开场动画」行，同一存档键', !!bat.text && !!bat.stored, bat);
+await p.screenshot({ path: `${out}/battle-settings-opening-row.png` });
+await b.close();
+ck('无控制台 / 页面错误', errors.length === 0, errors.slice(0, 4));
+process.exit(fail ? 1 : 0);

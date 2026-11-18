@@ -98,9 +98,9 @@ export class MenuScene extends Phaser.Scene {
     if(this.compactHome){if(!(isChapterTestRun()&&params.has('chapter')))this.selectedChapter=chapterOneCleared()||loadWorld().legacyHulaoAccess?'hulao':'huangjin';this.createLanding(params);return;}
     this.cameras.main.resetFX(); this.cameras.main.setBackgroundColor('#101813');
     const text = (x: number, y: number, value: string, size: number, color = '#ede4cc') => this.add.text(x, y, value, { fontFamily: size>=18?HEADING_FONT:FONT, fontSize: `${size}px`, color, resolution: 2 });
-    this.add.tileSprite(0, 0, W, H, 'ground_hulao').setOrigin(0).setAlpha(.16);
+    if (this.textures.exists('ground_hulao')) this.add.tileSprite(0, 0, W, H, 'ground_hulao').setOrigin(0).setAlpha(.16); // 手机精简启动时战斗图集还没载入
     this.add.rectangle(0, 0, W, H, 0x0b1612, .82).setOrigin(0);
-    this.add.image(W / 2, H / 2, 'vignette').setDisplaySize(W, H).setAlpha(.65);
+    if (this.textures.exists('vignette')) this.add.image(W / 2, H / 2, 'vignette').setDisplaySize(W, H).setAlpha(.65);
     const frame = this.add.graphics();
     frame.lineStyle(1, 0x977e4e, .3).strokeRect(12, 12, W - 24, H - 24);
     for (const x of [12, W - 12]) for (const y of [12, H - 12]) {

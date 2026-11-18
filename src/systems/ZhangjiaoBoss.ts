@@ -80,7 +80,11 @@ export class ZhangjiaoBoss {
     // 移动：空闲时慢步保持中距离（张角是法师，太近会后退）
     if (this.beat.phase === 'idle') {
       const want = d > 260 ? 1 : d < 150 ? -.6 : 0;
-      b.sprite.x += dx / d * b.def.speed * want * dt; b.sprite.y += dy / d * b.def.speed * want * dt;
+      // 中距离不再原地站桩：绕主将慢慢游走（切向），隔一阵换方向
+      const orbit = want === 0 ? ZJ.orbitMul * (Math.floor(now / ZJ.orbitFlipMs) % 2 ? 1 : -1) : 0;
+      const vx = (dx / d * want - dy / d * orbit) * b.def.speed, vy = (dy / d * want + dx / d * orbit) * b.def.speed;
+      b.sprite.x += vx * dt; b.sprite.y += vy * dt;
+      this.walkFrame(vx, vy, dx, dy, now);
       this.energy = Math.min(100, this.energy + dt * ZJ.heaven.energyPerSec * (this.phase2 ? 1.4 : 1));
       if (now >= this.summonAt) this.summon(now);
       if (now >= this.next) this.start(this.pick(), now);
@@ -89,6 +93,15 @@ export class ZhangjiaoBoss {
     this.step(now, dir);
   }
 
+  /**
+   * 空闲时的行走帧：招式图由 BossKit 只在渲染那一刻换上、画完还原，本体精灵一直停在行走表 down_0（以前空闲时就一直朝下不动，看着像卡住）。
+   * 这里按移动方向（不动时朝主将）换行走表的帧，走动时循环 4 步；行走表没有方向帧（v1 单图）时不动它。
+   */
+  private walkFrame(vx: number, vy: number, dx: number, dy: number, now: number): void {
+    const sp = this.h.boss.sprite, moving = Math.hypot(vx, vy) > 4, ax = moving ? vx : dx, ay = moving ? vy : dy;
+    const dir = Math.abs(ax) > Math.abs(ay) ? (ax < 0 ? 'left' : 'right') : ay < 0 ? 'up' : 'down', name = `${dir}_${moving ? Math.floor(now / ZJ.walkFrameMs) % 4 : 0}`;
+    if (sp.texture.has(name) && sp.frame.name !== name) sp.setFrame(name);
+  }
   private pick(): Move {
     if (this.energy >= 100) return 'heaven';
     const cycle: Move[] = this.phase2 ? ['grid', 'rain', 'thunder', 'rain'] : ['rain', 'thunder'];

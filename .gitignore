@@ -170,6 +170,7 @@ assets/raw/*
 !/tools/shot-siege-scene.mjs
 !/tools/measure-hero-actions.mjs
 !/tools/test-hero-action-fit.mjs
+!/tools/test-zhangjiao-alive.mjs
 !/tools/test-jingnan-art.mjs
 !/tools/test-hanzhong-art.mjs
 !/tools/test-yiling-full.mjs

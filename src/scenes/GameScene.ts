@@ -3727,6 +3727,14 @@ export class GameScene extends Phaser.Scene {
       const skin=lqSkin(this,t,t,()=>({w,h}),{tone:'quiet'});lqHitBox(t,w,h);return skin;}),pauseChips=pauseSkins.map(k=>k.gfx);
     this.pausePanel.add([pauseDim,panelG,panel,pauseTitle,pauseHint,...pauseChips,resume,resumeText,...bgmRow,...sfxRow]);
     this.pausePanel.add(this.attributePauseText);this.pausePanel.bringToTop(bagLink);this.pausePanel.bringToTop(buildLink);this.pausePanel.add([exit,keys]);
+    // 手机版暂停菜单没有 ‹ 值 › 行：「死亡特效」做成同风格的点按小牌（点一下开 ↔ 关，和电脑版 / 主页设置共用 im_death_fx）
+    if(!d){
+      const deathFxLink=this.add.text(cx,top+330,'',warText(15,'#e6cc90')).setOrigin(.5).setPadding(14,6).setInteractive({useHandCursor:true}).setName('settings-death-fx');
+      const paintDeathFx=():void=>{deathFxLink.setText('死亡特效：'+DEATHFX_LABEL[deathFxSetting()]);};paintDeathFx();
+      deathFxLink.on('pointerdown',()=>{setDeathFx(deathFxSetting()==='on'?'off':'on');paintDeathFx();});
+      const dsk=lqSkin(this,deathFxLink,deathFxLink,()=>({w:pw-120,h:32}),{tone:'quiet'});lqHitBox(deathFxLink,pw-120,32);
+      this.pausePanel.add([dsk.gfx,deathFxLink]);
+    }
     if (d) { this.layoutSettingsPanel({ panelG, panel, pauseTitle, pauseHint, resume, resumeText, bgmRow, sfxRow, buildLink, bagLink, exit, keys }); for (const k of pauseSkins) k.repaint(); } // 底板跟着按钮挪到左栏
 
     this.attributePanel=this.add.container(0,0).setScrollFactor(0).setDepth(DEPTH.overlay+1).setVisible(false);

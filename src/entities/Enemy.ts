@@ -6,6 +6,7 @@ import { DEPTH } from '../config';
 import { ENEMY_DEFS, type EnemyDef } from '../data/enemies';
 import type { Ally } from './Ally';
 import type { EnemyKind } from '../types';
+import { presenceScale } from '../systems/BossPresence';
 
 /** 敌人（含精英与 Boss）：数值 + sprite；AI 行为在 GameScene 中调度。 */
 let enemyUidSeq = 0;
@@ -110,7 +111,10 @@ export class Enemy {
   }
 
   spawn(x: number, y: number, def: EnemyDef, hpScale: number, now: number): void {
-    this.def = def;
+    // 首领 ×1.4、精锐 ×1.15：身体判定半径跟显示体型同倍（BossPresence；招式范围不变）
+    const grow = presenceScale(def.kind);
+    this.def = grow !== 1 ? { ...def, radius: def.radius * grow } : def;
+    def = this.def;
     this.kind = def.kind;
     this.martialSlow=1;this.martialSlowUntil=0;
     this.spawnId = (Enemy.spawnSeq += 1);

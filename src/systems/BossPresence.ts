@@ -1,0 +1,182 @@
+import Phaser from 'phaser';
+import { DEPTH, GAME_HEIGHT, GAME_WIDTH, HEADING_FONT, TITLE_FONT } from '../config';
+import type { Enemy } from '../entities/Enemy';
+import { figureHeight } from './SpriteMetrics';
+import { outlineKeyOf } from './IffOverlay';
+
+/**
+ * 首领存在感（用户 2026-11-17「boss出来后不要明显，感觉需要把boss做大一点或者明显一点，把小兵区分开来」）。
+ *  1. 体型：首领显示 ×1.4、精锐 ×1.15（身体判定半径同倍，见 Enemy.spawn；招式范围与预警不变，判定不变）。
+ *     只在渲染那一刻以脚底为原点放大精灵 / 影子 / 坐骑 / 描边，画完立刻还原——各首领控制器、招式、逻辑读到的仍是原尺寸，
+ *     所以 BossKit / ThirdBoss / BossMoveset / 专属控制器、骑乘图都不用改，也不会被累乘。
+ *  2. 与小兵区分：脚下手绘火环（吕布警示环的环形帧，压扁、低透明度慢慢轮转）、身上金红光晕（显卡辉光滤镜 preFX glow，不生成描边贴图、不受「敌我描边」设置影响）、头顶印章 + 名字。
+ *  3. 登场：画面暗一下（约 1 秒）、镜头朝首领方向探出去再回来（约 1.6 秒），配合原有名号墨条与换曲；不暂停、不挡操作。
+ *  4. 首领在屏外：屏幕边缘出现指向首领的红金箭头。
+ * ?presence=0 关闭本文件的全部效果（对比 / 回退用）。
+ */
+export const PRESENCE_ON: boolean = (() => { try { return new URLSearchParams(globalThis.location?.search ?? '').get('presence') !== '0'; } catch { return true; } })();
+export const BOSS_SCALE = 1.4, ELITE_SCALE = 1.15;
+/** 体型倍数（判定半径也按这个放大）。 */
+export function presenceScale(kind: string): number { return !PRESENCE_ON ? 1 : kind === 'boss' ? BOSS_SCALE : kind === 'elite' ? ELITE_SCALE : 1; }
+
+const RING_KEY = 'warnfx_lubu', RING_FRAMES = [6, 7, 8, 9, 10, 11];
+interface Host {
+  scene: Phaser.Scene;
+  enemies: () => Iterable<Enemy>;
+  boss: () => Enemy | null;
+  bossName: () => string;
+  /** 首领身上叠的额外图（坐骑），随首领一起放大。 */
+  extras: (e: Enemy) => Array<Phaser.GameObjects.Image | null | undefined>;
+  /** 身后的描边图（开了「敌我描边」时，IffOverlay）：渲染前先对齐到精灵本帧的姿势，再一起放大。 */
+  outline: (e: Enemy) => Phaser.GameObjects.Image | null | undefined;
+  /** 主将位置（屏外箭头从这里朝首领指）。 */
+  player: () => { x: number; y: number };
+}
+type Saved = { o: Phaser.GameObjects.Image; x: number; y: number; sx: number; sy: number };
+
+export class BossPresence {
+  private saved: Saved[] = [];
+  private ring: Phaser.GameObjects.Image | null = null;
+  private plate: Phaser.GameObjects.Container | null = null; private plateFor = '';
+  private arrow: Phaser.GameObjects.Graphics;
+  private dim: Phaser.GameObjects.Rectangle | null = null;
+  /** 首领身上的辉光（敌兵精灵是对象池复用的：首领倒下 / 换人时必须摘掉）。 */
+  private glow: { sp: Phaser.GameObjects.Sprite; fx: Phaser.FX.Glow } | null = null;
+  /** 镜头偏移（登场时朝首领探出去），GameScene.updateCamera 叠加。 */
+  readonly look = { x: 0, y: 0 };
+  private entranceAt = -1; private entranceDir = { x: 0, y: 0 };
+  /** 测试用。 */
+  readonly stats = { scaled: 0, ring: false, plate: false, arrow: false, entrance: false, glow: false };
+  /** 测试用：关掉身上辉光（同一页面里对比帧率）。 */
+  glowOff = false;
+
+  constructor(private h: Host) {
+    const s = h.scene;
+    this.arrow = s.add.graphics().setScrollFactor(0).setDepth(DEPTH.hud - 6).setName('boss-offscreen-arrow');
+    s.events.on(Phaser.Scenes.Events.POST_UPDATE, this.update, this);
+    s.events.on(Phaser.Scenes.Events.PRE_RENDER, this.grow, this);
+    s.events.on(Phaser.Scenes.Events.RENDER, this.restore, this);
+    s.events.once('shutdown', () => this.destroy());
+  }
+
+  /** 首领登场：画面暗一下、镜头朝首领探出去再回来（真实时钟，约 1.6 秒，不暂停）。 */
+  entrance(boss: Enemy): void {
+    if (!PRESENCE_ON) return;
+    const s = this.h.scene, p = this.h.player(), dx = boss.x - p.x, dy = boss.y - p.y, d = Math.hypot(dx, dy) || 1;
+    // 镜头最多探出半屏的 35%：主将始终留在画面里
+    const reach = Math.min(d * .6, Math.min(GAME_WIDTH, GAME_HEIGHT) * .35);
+    this.entranceDir = { x: dx / d * reach, y: dy / d * reach }; this.entranceAt = performance.now(); this.stats.entrance = true;
+    this.dim?.destroy();
+    this.dim = s.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH + 40, GAME_HEIGHT + 40, 0x050302, 0).setScrollFactor(0).setDepth(DEPTH.overlay - 9).setName('boss-entrance-dim');
+  }
+
+  private update(): void {
+    const s = this.h.scene, boss = this.h.boss(), alive = PRESENCE_ON && !!boss?.active, live = alive && boss!.sprite.visible;
+    // 登场：暗场 0→.3（0.2 秒）保持到 0.7 秒，1.1 秒淡完；镜头 0.5 秒探出、停 0.5 秒、0.6 秒收回
+    if (this.entranceAt >= 0) {
+      const t = performance.now() - this.entranceAt;
+      if (this.dim) { const a = t < 200 ? t / 200 : t < 700 ? 1 : Math.max(0, 1 - (t - 700) / 400); this.dim.setFillStyle(0x050302, .3 * a); if (t >= 1100) { this.dim.destroy(); this.dim = null; } }
+      const e = (x: number): number => x * x * (3 - 2 * x), k = t < 500 ? e(t / 500) : t < 1000 ? 1 : t < 1600 ? 1 - e((t - 1000) / 600) : 0;
+      this.look.x = this.entranceDir.x * k; this.look.y = this.entranceDir.y * k;
+      if (t >= 1600) { this.entranceAt = -1; this.look.x = this.look.y = 0; }
+    }
+    // 身上辉光：金红、缓慢呼吸
+    if ((alive && this.glow?.sp !== boss!.sprite) || this.glowOff) this.dropGlow();
+    if (alive && !this.glow && !this.glowOff && s.game.renderer.type === Phaser.WEBGL) {
+      const sp = boss!.sprite as Phaser.GameObjects.Sprite, pre = (sp as unknown as { preFX?: Phaser.GameObjects.Components.FX }).preFX;
+      if (pre) { pre.setPadding(10); this.glow = { sp, fx: pre.addGlow(0xffb347, 2, 0, false, .1, 10) }; }
+    }
+    if (!alive) this.dropGlow();
+    if (this.glow) this.glow.fx.outerStrength = 1.6 + .9 * Math.sin(s.time.now / 380);
+    this.stats.glow = !!this.glow;
+    // 脚下火环
+    if (live && s.textures.exists(RING_KEY)) {
+      const r = this.ring ?? (this.ring = s.add.image(0, 0, RING_KEY, RING_FRAMES[0]).setName('boss-presence-ring'));
+      const now = s.time.now, w = boss!.radius * 3.4, f = RING_FRAMES[Math.floor(now / 140) % RING_FRAMES.length];
+      if (r.frame.name !== String(f)) r.setFrame(f);
+      // 精灵锚点就是图里的脚底（行走图按 groundY 定原点；骑乘图锚在马蹄），影子在它下方约 0.7 个半径，不能拿来对位
+      r.setVisible(true).setPosition(boss!.sprite.x, boss!.sprite.y + 4).setDisplaySize(w, w * .42).setDepth(DEPTH.ground + 6).setAlpha(.32 + .1 * Math.sin(now / 420));
+    } else this.ring?.setVisible(false);
+    this.stats.ring = !!this.ring?.visible;
+    // 头顶印章 + 名字（位置在放大之后定，见 grow）
+    if (live) {
+      const name = this.h.bossName();
+      if (!this.plate || this.plateFor !== name) { this.plate?.destroy(); this.plate = this.makePlate(name); this.plateFor = name; }
+      this.plate.setVisible(true);
+    } else this.plate?.setVisible(false);
+    this.stats.plate = !!this.plate?.visible;
+    // 屏外箭头
+    this.arrow.clear(); this.stats.arrow = false;
+    if (alive) {
+      const cam = s.cameras.main, v = cam.worldView, m = 30;
+      if (boss!.x < v.x - m || boss!.x > v.right + m || boss!.y < v.y - m || boss!.y > v.bottom + m) {
+        const cx = GAME_WIDTH / 2, cy = GAME_HEIGHT / 2, p = this.h.player(), a = Math.atan2(boss!.y - p.y, boss!.x - p.x);
+        const ex = GAME_WIDTH / 2 - 34, ey = GAME_HEIGHT / 2 - 34, c = Math.cos(a), sn = Math.sin(a), t = Math.min(ex / Math.max(1e-3, Math.abs(c)), ey / Math.max(1e-3, Math.abs(sn)));
+        const x = cx + c * t, y = cy + sn * t, pulse = 1 + .08 * Math.sin(s.time.now / 160);
+        const pt = (fx: number, fy: number): [number, number] => [x + (c * fx - sn * fy) * pulse, y + (sn * fx + c * fy) * pulse];
+        this.arrow.fillStyle(0x1a0c08, .85).fillTriangle(...pt(21, 0), ...pt(-13, -16), ...pt(-13, 16))
+          .fillStyle(0xc8321e, 1).fillTriangle(...pt(16, 0), ...pt(-9, -12), ...pt(-9, 12))
+          .fillStyle(0xf2c27a, 1).fillTriangle(...pt(16, 0), ...pt(2, -4), ...pt(2, 4));
+        this.stats.arrow = true;
+      }
+    }
+  }
+
+  private makePlate(name: string): Phaser.GameObjects.Container {
+    const s = this.h.scene, seal = name.slice(-1);
+    const nameT = s.add.text(0, 0, name, { fontFamily: TITLE_FONT, fontSize: '17px', color: '#f3dcae', resolution: 2 }).setOrigin(0, .5).setLetterSpacing(3).setShadow(0, 1, '#000', 3, true, true);
+    const sz = 20, gap = 5, w = sz + gap + nameT.width, x0 = -w / 2;
+    const box = s.add.rectangle(x0 + sz / 2, 0, sz, sz, 0x9e2416, 1).setStrokeStyle(1.5, 0xe8bf6a, 1);
+    const sealT = s.add.text(x0 + sz / 2, .5, seal, { fontFamily: HEADING_FONT, fontSize: '13px', color: '#fbe6bd', resolution: 2 }).setOrigin(.5);
+    nameT.setX(x0 + sz + gap);
+    return s.add.container(0, 0, [box, sealT, nameT]).setDepth(DEPTH.hud - 7).setName('boss-name-plate');
+  }
+
+  /** 渲染前：首领 / 精锐以脚底为原点放大（连同影子、坐骑、描边），摆好头顶名牌。 */
+  private grow(): void {
+    this.saved.length = 0; this.stats.scaled = 0;
+    if (!PRESENCE_ON) return;
+    const boss = this.h.boss();
+    for (const e of this.h.enemies()) {
+      if (!e.active || e.isSupplySlot) continue;
+      const k = presenceScale(e.kind); if (k === 1 || !e.sprite.visible) continue;
+      // 以精灵锚点（脚底）为原点放大：脚站在原地，身体往上长；影子原地放大（它本来就在脚下偏一点的位置）
+      const sp = e.sprite, px = sp.x, py = sp.y;
+      // 「敌我描边」开着时：描边层在 postupdate 里跟随，招式姿态（BossKit 等）可能在它之后才改精灵，这里按本帧最终姿势对齐再一起放大；
+      // 换成了还没生成描边的招式图集就先隐藏（不在这里同步生成——整张图集生成描边会卡几百毫秒）
+      const outline = this.h.outline(e);
+      if (outline) {
+        if (outline.texture.key !== outlineKeyOf(sp.texture.key) || !outline.texture.has(String(sp.frame.name))) outline.setVisible(false);
+        else { if (outline.frame.name !== sp.frame.name) outline.setFrame(sp.frame.name); outline.setPosition(sp.x, sp.y).setScale(sp.scaleX, sp.scaleY).setOrigin(sp.originX, sp.originY).setFlip(sp.flipX, sp.flipY).setRotation(sp.rotation); }
+      }
+      this.saved.push({ o: e.shadow, x: e.shadow.x, y: e.shadow.y, sx: e.shadow.scaleX, sy: e.shadow.scaleY }); e.shadow.setScale(e.shadow.scaleX * k, e.shadow.scaleY * k);
+      for (const o of [sp, outline?.visible ? outline : null, ...this.h.extras(e)]) {
+        if (!o || !o.active) continue;
+        this.saved.push({ o, x: o.x, y: o.y, sx: o.scaleX, sy: o.scaleY });
+        o.setPosition(px + (o.x - px) * k, py + (o.y - py) * k).setScale(o.scaleX * k, o.scaleY * k);
+      }
+      this.stats.scaled++;
+      if (e === boss && this.plate?.visible) {
+        const fh = figureHeight(this.h.scene, sp.texture.key, sp.frame.name);
+        const top = fh ? py - fh * Math.abs(sp.scaleY) : sp.y - sp.displayHeight * sp.originY * .85;
+        this.plate.setPosition(Math.round(px), Math.round(Math.min(top - 14, py - 60)));
+      }
+    }
+  }
+  private dropGlow(): void {
+    if (!this.glow) return;
+    const pre = (this.glow.sp as unknown as { preFX?: Phaser.GameObjects.Components.FX }).preFX;
+    try { pre?.remove(this.glow.fx); pre?.setPadding(0); } catch { /* 精灵已销毁 */ }
+    this.glow = null;
+  }
+  private restore(): void { for (const v of this.saved) if (v.o.active) v.o.setPosition(v.x, v.y).setScale(v.sx, v.sy); this.saved.length = 0; }
+
+  destroy(): void {
+    const s = this.h.scene;
+    s.events.off(Phaser.Scenes.Events.POST_UPDATE, this.update, this);
+    s.events.off(Phaser.Scenes.Events.PRE_RENDER, this.grow, this);
+    s.events.off(Phaser.Scenes.Events.RENDER, this.restore, this);
+    this.dropGlow(); this.ring?.destroy(); this.plate?.destroy(); this.arrow.destroy(); this.dim?.destroy();
+    this.ring = this.plate = this.dim = null;
+  }
+}

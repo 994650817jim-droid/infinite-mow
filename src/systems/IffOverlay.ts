@@ -201,6 +201,9 @@ export class IffOverlay {
     for (const map of [this.marks, this.outlines]) for (const [sp, img] of map) if (!this.seen.has(sp) && img.visible) img.setVisible(false);
   }
 
+  /** 某个单位身后的描边图（开了「敌我描边」时；BossPresence 放大首领 / 精锐时一起放大）。 */
+  overlayOf(sp: Phaser.GameObjects.Image): Phaser.GameObjects.Image | undefined { const o = this.outlines.get(sp); return o?.visible ? o : undefined; }
+
   private newImage(map: Map<Phaser.GameObjects.Image, Phaser.GameObjects.Image>, sp: Phaser.GameObjects.Image, key: string): Phaser.GameObjects.Image {
     const img = this.scene.add.image(sp.x, sp.y, key).setVisible(false).setName('iff-overlay');
     if (map === this.marks) img.setOrigin(.5, .5).setScale(2);

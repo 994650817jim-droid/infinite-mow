@@ -108,6 +108,7 @@ import { PROP_LOOT, rollPropItem, type PropLootKind } from '../data/propLoot';
 import { terrainConfigFor } from '../data/terrain';
 import { Tutorial } from '../systems/Tutorial';
 import { IffOverlay, readIffMode, warmIffTextures, type IffUnit } from '../systems/IffOverlay';
+import { BossPresence } from '../systems/BossPresence';
 import { DAMAGE_LABEL, OUTLINE_LABEL, SCALE_LABEL, SHAKE_LABEL, WIDTH_LABEL, cycle, damageNumbers, outlineMode, outlineWidth, renderScaleSetting, setDamageNumbers, setOutlineMode, setOutlineWidth, setRenderScaleSetting, setShakeLevel, shakeLevel, shakeScale, type DamageNumbers, type OutlineMode, type OutlineWidth, type RenderScaleSetting, type ShakeLevel } from '../systems/BattleSettings';
 import { tutorialReplayLink } from '../ui/TutorialOverlay';
 import { beginBattle, commitBattle, rollbackBattle } from '../systems/BattleSnapshot';
@@ -217,6 +218,8 @@ export class GameScene extends Phaser.Scene {
   flankBladeFx(): FlankFx { if (!this.flankFx) { this.flankFx = new FlankFx(this, this.player, this.sfx); this.events.once('shutdown', () => { this.flankFx?.destroy(); this.flankFx = undefined; }); } return this.flankFx; }
   /** 敌我区分叠加层（默认阵营色；设置开启描边；?iff=0 关闭）。 */
   iff: IffOverlay | null = null;
+  /** 首领存在感：放大、脚下火环、光晕、头顶名牌、登场暗场与镜头、屏外箭头（systems/BossPresence.ts）。 */
+  presence: BossPresence | null = null;
   /** 敌我区分叠加层要处理的单位：敌军、部曲（仅已在屏上的）、随行武将。 */
   protected *iffUnits(): Generator<IffUnit> {
     // 第一章全是黄巾军：通用敌兵图（弓手 / 盾兵 / 骑兵 / 将校）也按黄巾染黄，不按图集名染红
@@ -541,6 +544,8 @@ export class GameScene extends Phaser.Scene {
     {const oldMax=this.player.maxHp;this.player.growth.gear=gearFor(this.runConfig.character);this.player.heal(this.player.maxHp-oldMax);}
     this.followers=null;this.followerPassives=[];{const allow=worldUnlocked()&&(!isChapterTestRun()||new URLSearchParams(location.search).get('followers')==='1');const list=allow?followersFor(this.runConfig.character):[];if(list.length)this.followers=new FollowerSquad(this,this.player,list,(x,y,r)=>this.grid.query(x,y,r),(e,d,fire)=>this.hitEnemy(e,d,this.combatNow,fire?'fire':'melee',true,false),()=>this.player.growth.damageMultiplier(this.combatNow));}
     { const mode = readIffMode(); this.iff = mode ? new IffOverlay(this, mode, () => this.iffUnits()) : null; }
+    this.presence = new BossPresence({ scene: this, enemies: () => this.enemies, boss: () => this.boss, bossName: () => this.chapter.bossName, player: () => this.player,
+      extras: e => e === this.boss ? [this.bossMount?.horseImage] : [], outline: e => this.iff?.overlayOf(e.sprite) });
     // 震屏设置（强 / 弱 / 关，im_shake，见 systems/BattleSettings）：包一层主相机 shake，现有调用全部按设置缩放
     { const cam = this.cameras.main, orig = cam.shake.bind(cam);
       cam.shake = ((duration?: number, intensity?: number | Phaser.Math.Vector2, force?: boolean, callback?: Phaser.Types.Cameras.Scene2D.CameraShakeCallback, context?: unknown) => {
@@ -928,8 +933,10 @@ export class GameScene extends Phaser.Scene {
 
   protected updateCamera(dt: number): void {
     const cam = this.cameras.main;
-    const targetX = this.player.x - GAME_WIDTH / 2;
-    const targetY = this.player.y - GAME_HEIGHT / 2;
+    // 首领登场时镜头朝首领探出去一下（BossPresence.look，平时为 0）
+    const look = this.presence?.look;
+    const targetX = this.player.x - GAME_WIDTH / 2 + (look?.x ?? 0);
+    const targetY = this.player.y - GAME_HEIGHT / 2 + (look?.y ?? 0);
     const k = 1 - Math.exp(-11 * dt);
     cam.scrollX += (targetX - cam.scrollX) * k;
     cam.scrollY += (targetY - cam.scrollY) * k;
@@ -1111,6 +1118,7 @@ export class GameScene extends Phaser.Scene {
     const profile = bossProfile(this.chapter.bossName);
     this.music.setBoss(profile);
     this.announceBoss(profile.title, this.chapter.bossName);
+    this.presence?.entrance(boss);
   }
 
   /** 首领名号标题：画面上部一道短墨痕，墨上名号小字 + 名字，约 2.6 秒淡出；不拦截点击、不暂停。

@@ -110,6 +110,8 @@ import { PROP_LOOT, rollPropItem, type PropLootKind } from '../data/propLoot';
 import { terrainConfigFor } from '../data/terrain';
 import { Tutorial } from '../systems/Tutorial';
 import { IffOverlay, readIffMode, warmIffTextures, type IffUnit } from '../systems/IffOverlay';
+import { BARKS_LABEL, heroBarks, setHeroBarks, type HeroBarks } from '../systems/BattleSettings';
+import { HeroBark, type BarkSpeaker } from '../ui/HeroBark';
 import { DAMAGE_LABEL, OUTLINE_LABEL, SCALE_LABEL, SHAKE_LABEL, WIDTH_LABEL, cycle, damageNumbers, outlineMode, outlineWidth, renderScaleSetting, setDamageNumbers, setOutlineMode, setOutlineWidth, setRenderScaleSetting, setShakeLevel, shakeLevel, shakeScale, type DamageNumbers, type OutlineMode, type OutlineWidth, type RenderScaleSetting, type ShakeLevel } from '../systems/BattleSettings';
 import { tutorialReplayLink } from '../ui/TutorialOverlay';
 import { beginBattle, commitBattle, rollbackBattle } from '../systems/BattleSnapshot';
@@ -316,7 +318,7 @@ export class GameScene extends Phaser.Scene {
   private hudChipState: Record<'pause' | 'mute' | 'music' | 'bag', LqState> = { pause: 'idle', mute: 'idle', music: 'idle', bag: 'idle' };
   private readonly hudChipRect = new Phaser.Geom.Rectangle();
   protected hudTexts!: Record<string, Phaser.GameObjects.Text>;
-  protected passiveHud!: PassiveHud; protected passiveShout!: PassiveShout;
+  protected passiveHud!: PassiveHud; protected passiveShout!: PassiveShout; protected heroBark!: HeroBark;
   private buffHud!:BuffHud;
   /** 用药：药囊里最早的一份，按原规则回血；不能用时轻微提示。 */
   protected usePotion():void{
@@ -862,6 +864,7 @@ export class GameScene extends Phaser.Scene {
     this.updateHud();
     // 被动满层台词每帧检测（HUD 0.1 秒一刷，孙尚香这类攒满后马上触发的会漏掉）
     this.passiveShout.update(this.player.passive, this.combatNow, this.player.x, this.player.y, this.mode === 'none' && !this.over, this.player.sprite);
+    this.heroBark?.update(this.barkSpeakers(), this.combatNow, this.mode === 'none' && !this.over); // 武将台词气泡（被动大招触发时）
     this.artEffects.update(this.combatNow);
     this.updateRelicWaves();
     this.feedback.update(this.combatNow, this.mode === 'result' ? delta : 0);
@@ -1107,10 +1110,17 @@ export class GameScene extends Phaser.Scene {
   protected customChapter():ChapterDef|null{return null;}
   protected customEnemyStep(_enemy:Enemy,_dt:number,_now:number,_target:{x:number;y:number}):boolean{return false;}
   protected customBossStep(_enemy:Enemy,_dt:number,_now:number):boolean{return false;}
+  /** 会说台词的武将：主将 + 是可玩武将的随从。 */
+  protected barkSpeakers(): BarkSpeaker[] {
+    const out: BarkSpeaker[] = [{ id: this.runConfig.character, passive: this.player.passive, sprite: this.player.sprite, lord: true }];
+    for (const f of this.followers?.members ?? []) if (f.recruit.hero && !f.downed) out.push({ id: f.recruit.hero, passive: f.passive, sprite: f.sprite, lord: false });
+    return out;
+  }
   protected spawnBoss(): void {
     if(this.boss?.active)return;this.yellowAltar?.destroy();this.yellowAltar=null;
     if (this.bossSpawned) return;
     this.bossSpawned = true;
+    this.heroBark?.bossEvent('bossAppear', this.barkSpeakers()[0], this.chapter.bossName, this.combatNow); // 首领登场：主将说一句
     this.ensurePicks(PICK_GUARANTEE.waves[PICK_GUARANTEE.waves.length - 1]); // 保底：第 3 波后直接是首领、波次不再推进，首领登场时补到 3 次
     const angle = -Math.PI / 2;
     const x = this.player.x + Math.cos(angle) * 430;
@@ -1890,7 +1900,7 @@ export class GameScene extends Phaser.Scene {
         unlockAchievement('chaser');
         const old=this.chasingBosses[index];old.battle?.clear();old.huaxiong?.clear();old.xurong?.clear();old.label.destroy();this.chasingBosses.splice(index,1);
         this.recordFrontlineVictory(old.stage);
-      }else{this.bossKilled=true;this.boss=null;this.recordFrontlineVictory(this.battleStage());}
+      }else{this.bossKilled=true;this.boss=null;this.recordFrontlineVictory(this.battleStage());this.heroBark?.bossEvent('bossDown',this.barkSpeakers()[0],this.chapter.bossName,this.combatNow);}
       // 倒地后原地掉宝箱，主将捡起遗物才进下一阶段（原来的三选一遗物卡改成宝箱）
       this.spawnBossChest(enemy.x,enemy.y,()=>{if(this.bossKilled&&this.chasingBosses.length===0)this.finish(true,'boss');else{this.resumePendingChoices();if(this.bossKilled)this.showGrowthNotice('当前首领已败 · 仍有'+this.chasingBosses.length+'名追击首领');}});return;
     }
@@ -2508,7 +2518,7 @@ export class GameScene extends Phaser.Scene {
     this.pausePanel.add(this.createVolumeRow('音乐', top + 122, this.music.getVolume(), v => this.music.setVolume(v), rx, width));
     this.pausePanel.add(this.createVolumeRow('音效', top + 180, this.sfx.getVolume(), v => this.sfx.setVolume(v), rx, width));
     // 右栏：‹ 值 › 行
-    const rowY = (i: number) => top + 232 + i * 40;
+    const rowY = (i: number) => top + 228 + i * 36;
     const row = <T>(i: number, name: string, key: string, list: readonly T[], get: () => T, label: (v: T) => string, apply: (v: T) => void, note?: () => string): void => {
       const y = rowY(i);
       const plate = this.add.graphics().setScrollFactor(0); plate.fillStyle(0x3a2616, .4).fillRoundedRect(rx - width / 2, y - 16, width, 32, 5).lineStyle(1, 0xc9a35e, .3).strokeRoundedRect(rx - width / 2, y - 16, width, 32, 5);
@@ -2533,6 +2543,7 @@ export class GameScene extends Phaser.Scene {
     row<ShakeLevel>(3, '震屏', 'shake', ['strong', 'weak', 'off'], shakeLevel, v => SHAKE_LABEL[v], v => { setShakeLevel(v); if (v !== 'off') this.cameras.main.shake(140, .004); });
     const scale0 = renderScaleSetting();
     row<RenderScaleSetting>(4, '画面清晰度', 'render-scale', ['', '1', '2', '3'], renderScaleSetting, v => SCALE_LABEL[v], setRenderScaleSetting, () => renderScaleSetting() === scale0 ? '' : '刷新后生效');
+    row<HeroBarks>(5, '武将台词', 'hero-barks', ['on', 'off'], heroBarks, v => BARKS_LABEL[v], v => { setHeroBarks(v); if (v === 'off') this.heroBark?.clear(); });
     const replay = tutorialReplayLink(this, rx + width / 2, top + ph - 26).setScrollFactor(0); this.pausePanel.add(replay);
   }
 
@@ -3240,7 +3251,7 @@ export class GameScene extends Phaser.Scene {
     for (const k of ['pause', 'mute', 'music', 'bag'] as const) this.hudTexts[k]
       .on('pointerover', () => { this.hudChipState[k] = 'hover'; }).on('pointerout', () => { this.hudChipState[k] = 'idle'; })
       .on('pointerdown', () => { this.hudChipState[k] = 'down'; }).on('pointerup', () => { this.hudChipState[k] = 'hover'; });
-    this.passiveHud = new PassiveHud(this); this.passiveShout = new PassiveShout(this, { sfx: () => this.sfx.play('passiveFull'), nearby: (x, y, r) => this.grid.query(x, y, r).filter(e => Math.hypot(e.x - x, e.y - y) <= r) });
+    this.passiveHud = new PassiveHud(this); this.heroBark = new HeroBark(this); this.passiveShout = new PassiveShout(this, { sfx: () => this.sfx.play('passiveFull'), nearby: (x, y, r) => this.grid.query(x, y, r).filter(e => Math.hypot(e.x - x, e.y - y) <= r) });
     this.buffHud=new BuffHud(this);
     this.muteText = this.hudTexts.mute;
     this.muteText.setText(this.sfx.muted ? '音效:关' : '音效:开');

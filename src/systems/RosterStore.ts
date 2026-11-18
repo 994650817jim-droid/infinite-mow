@@ -8,6 +8,7 @@ import { loadWorld, spendWorld, townUpgrade, worldUnlocked } from '../world/Worl
 import { TOWN_BUILDINGS, levelOf, type TownBuildingId } from '../town/TownData';
 import { loadItems, loadout, resetItemCache, unequipSlot, type GearOwner } from './ItemStore';
 import { isChapterTestRun } from './ChapterProgress';
+import { SURRENDER } from '../data/surrender';
 import { activeValue, passiveValue } from '../data/commonerSkills';
 
 /**
@@ -17,8 +18,9 @@ import { activeValue, passiveValue } from '../data/commonerSkills';
  */
 export const ROSTER_KEY = 'im_roster_v1';
 export type RankLine = 'weapon' | 'passive';
-export interface Recruit { id: string; kind: RecruitKind; hero?: CharacterId; name: string; template: FollowerTemplate; quality: ItemQuality; rank: number; picks: RankLine[]; faction?: FactionId }
-export interface Offer { kind: RecruitKind; hero?: CharacterId; name: string; template: FollowerTemplate; quality: ItemQuality; cost: number; faction?: FactionId; expires?: number }
+/** boss：首领降将的首领 id（招降系统 surrender-spec；同阵营降将在队、已在麾下不再弹劝降窗用）。 */
+export interface Recruit { id: string; kind: RecruitKind; hero?: CharacterId; name: string; template: FollowerTemplate; quality: ItemQuality; rank: number; picks: RankLine[]; faction?: FactionId; boss?: string }
+export interface Offer { kind: RecruitKind; hero?: CharacterId; name: string; template: FollowerTemplate; quality: ItemQuality; cost: number; faction?: FactionId; expires?: number; boss?: string }
 export interface RosterSave {
   version: 1; lord: CharacterId | null; owned: Recruit[]; followers: string[];
   /** 主公已最终确定（开新存档时选定，或老存档在提示里确认 / 改选过一次）。false = 老存档自动指定，还有一次改选机会。 */
@@ -47,14 +49,14 @@ function parseRecruit(v: unknown): Recruit | null {
   if (r.kind === 'hero') { if (!isHero(r.hero)) return null; const h = heroRecruit(r.hero); h.rank = int(r.rank, RANK.max, 1); h.picks = parsePicks(r.picks, h.rank); return h; }
   const id = str(r.id, 16), name = str(r.name); if (!id || !/^r_\d+$/.test(id) || !name || !isTemplate(r.template) || !isQuality(r.quality)) return null;
   const rank = int(r.rank, RANK.max, 1);
-  return { id, kind: r.kind, name, template: r.template, quality: r.quality, rank, picks: parsePicks(r.picks, rank), faction: isFaction(r.faction) ? r.faction : undefined };
+  return { id, kind: r.kind, name, template: r.template, quality: r.quality, rank, picks: parsePicks(r.picks, rank), faction: isFaction(r.faction) ? r.faction : undefined, boss: str(r.boss, 24) ?? undefined };
 }
 function parsePicks(v: unknown, rank: number): RankLine[] { return Array.isArray(v) ? v.filter((x): x is RankLine => x === 'weapon' || x === 'passive').slice(0, rank - 1) : []; }
 function parseOffer(v: unknown): Offer | null {
   const o = v as Record<string, unknown>; if (!o || !isKind(o.kind)) return null;
   const name = str(o.name); if (!name || !isTemplate(o.template) || !isQuality(o.quality)) return null;
   if (o.kind === 'hero' && !isHero(o.hero)) return null;
-  return { kind: o.kind, hero: o.kind === 'hero' ? o.hero as CharacterId : undefined, name, template: o.template, quality: o.quality, cost: int(o.cost, 100000), faction: isFaction(o.faction) ? o.faction : undefined, expires: Number.isSafeInteger(o.expires) ? o.expires as number : undefined };
+  return { kind: o.kind, hero: o.kind === 'hero' ? o.hero as CharacterId : undefined, name, template: o.template, quality: o.quality, cost: int(o.cost, 100000), faction: isFaction(o.faction) ? o.faction : undefined, expires: Number.isSafeInteger(o.expires) ? o.expires as number : undefined, boss: str(o.boss, 24) ?? undefined };
 }
 
 const empty = (): RosterSave => ({ version: 1, lord: null, lordFinal: false, owned: [], followers: [], offers: [], captives: [], season: -1, manual: 0, dry: 0, seq: 0, hall: 1 });
@@ -70,7 +72,7 @@ function read(): RosterSave | null {
     if (s.lord && !seen.has(s.lord)) s.owned.unshift(heroRecruit(s.lord));
     s.followers = Array.isArray(v.followers) ? [...new Set((v.followers as unknown[]).filter((x): x is string => typeof x === 'string' && seen.has(x)))].slice(0, 3) : [];
     s.offers = (Array.isArray(v.offers) ? v.offers : []).map(parseOffer).filter((o: Offer | null): o is Offer => !!o).slice(0, 6);
-    s.captives = (Array.isArray(v.captives) ? v.captives : []).map(parseOffer).filter((o: Offer | null): o is Offer => !!o).slice(0, 6);
+    s.captives = (Array.isArray(v.captives) ? v.captives : []).map(parseOffer).filter((o: Offer | null): o is Offer => !!o).slice(0, SURRENDER.captiveSlots);
     s.season = Number.isSafeInteger(v.season) ? v.season : -1; s.manual = int(v.manual, 999); s.dry = int(v.dry, 999); s.seq = int(v.seq, 1e9); s.hall = int(v.hall, 3, 1);
     return s;
   } catch { return null; }
@@ -276,7 +278,7 @@ export function recruit(index: number, captive = false): RosterResult {
   const joinCap = followerLevelCap(), joinLevel = Math.max(1, joinCap - FOLLOWER_LEVEL.joinBelowCap);
   const cost = captive ? Math.ceil(o.cost * RECRUIT.captiveDiscount) : o.cost;
   if (!spendWorld({ provisions: cost })) return { ok: false, message: `军粮不足：招募需要 ${cost}` };
-  const r: Recruit = o.kind === 'hero' ? heroRecruit(o.hero!) : { id: 'r_' + (++s.seq), kind: o.kind, name: o.name, template: o.template, quality: o.quality, rank: 1, picks: [], faction: o.faction };
+  const r: Recruit = o.kind === 'hero' ? heroRecruit(o.hero!) : { id: 'r_' + (++s.seq), kind: o.kind, name: o.name, template: o.template, quality: o.quality, rank: 1, picks: [], faction: o.faction, boss: o.boss };
   s.owned.push(r); list.splice(index, 1);
   // 新入队的随行定在「随行上限 − 2」级（可玩名将若早有更高的记录，保留但不超过上限）
   { const key = (r.hero ?? r.id) as HeroKey, keep = r.hero && hasHeroRecord(key) ? Math.min(heroLevel(key), joinCap) : 0; clampHeroLevel(key, joinCap, Math.max(joinLevel, keep)); }
@@ -307,18 +309,49 @@ export function tryCapture(source: keyof typeof RECRUIT.capture, name: string, f
   const s = loadRoster();
   if (s.owned.some(r => r.name === name) || s.captives.some(o => o.name === name)) return null;
   s.captives.push({ kind: 'named', name, faction: isFaction(faction) ? faction : undefined, template: pick(TEMPLATE_ORDER), quality: 'purple', cost: RECRUIT.cost.named, expires: currentSeason() + RECRUIT.captiveSeasons });
-  s.captives = s.captives.slice(-6); write(s); return name;
+  evictCaptives(s); write(s); return name;
+}
+/**
+ * 降将栏 8 格（surrender-spec §7）：栏满时先挤掉最早的普通俘虏；全是首领降将时挤掉最早的首领降将。返回被挤掉的首领降将名字。
+ */
+function evictCaptives(s: RosterSave): string[] {
+  const gone: string[] = [];
+  while (s.captives.length > SURRENDER.captiveSlots) {
+    const i = s.captives.findIndex(o => !o.boss), k = i >= 0 ? i : 0;
+    const [o] = s.captives.splice(k, 1); if (o?.boss) gone.push(o.name);
+  }
+  return gone;
+}
+/** 降将还能留几季（降将栏卡片「剩 N 季」）。 */
+export function captiveSeasonsLeft(o: Offer): number | null { return o.expires === undefined ? null : Math.max(0, o.expires - currentSeason()); }
+/** 这名首领是否已在麾下或降将栏（不再弹劝降窗、不重复招到同一人）。 */
+export function bossInRoster(id: string, name: string, hero?: CharacterId): boolean {
+  const s = read(); if (!s) return false;
+  if (hero) return s.owned.some(r => r.hero === hero);
+  return s.owned.some(r => r.boss === id || (!r.hero && r.name === name)) || s.captives.some(o => o.boss === id || o.name === name);
+}
+/**
+ * 首领降将进降将栏：留 4 季、名将价 500（六折招降 = 300 军粮）、橙色、模板按招降表固定。
+ * 已在麾下 / 栏里返回 null；evicted = 栏满被挤走的首领降将（结算里提示「久候不至，已离去」）。
+ */
+export function captureBoss(b: { id: string; name: string; template: FollowerTemplate }): { name: string; evicted: string[] } | null {
+  if (!worldUnlocked()) return null; // 招贤馆随天下地图开放（第二章起）；未开放时 loadRoster 是空的，写回会冲掉名册
+  const s = loadRoster();
+  if (s.owned.some(r => r.boss === b.id || (!r.hero && r.name === b.name)) || s.captives.some(o => o.boss === b.id || o.name === b.name)) return null;
+  s.captives.push({ kind: 'named', name: b.name, template: b.template, quality: 'orange', cost: RECRUIT.cost.named, expires: currentSeason() + SURRENDER.bossCaptiveSeasons, boss: b.id });
+  const evicted = evictCaptives(s); write(s); return { name: b.name, evicted };
 }
 
 /**
  * 第六章「劝降」：敌将当场归降，直接入招贤馆（不花军粮、不占降将栏）；hero = 以可玩武将身份加入（黄忠）。
  * 麾下已满时不加，返回提示。新增内容会话 2026-11-17。
  */
-export function joinByPersuasion(name: string, hero?: CharacterId): RosterResult {
+export function joinByPersuasion(name: string, hero?: CharacterId, opts: { boss?: string; template?: FollowerTemplate; quality?: ItemQuality } = {}): RosterResult {
   const s = loadRoster();
-  if (hero ? s.owned.some(r => r.hero === hero) : s.owned.some(r => r.name === name)) return { ok: true, message: `${name}已在麾下` };
+  if (hero ? s.owned.some(r => r.hero === hero) : s.owned.some(r => r.name === name || (opts.boss && r.boss === opts.boss))) return { ok: true, message: `${name}已在麾下` };
   if (s.owned.length >= RECRUIT.maxOwned) return { ok: false, message: `麾下已满 ${RECRUIT.maxOwned} 人，${name}暂回乡里（遣散一些后再来）` };
-  const r: Recruit = hero ? heroRecruit(hero) : { id: 'r_' + (++s.seq), kind: 'named', name, template: pick(TEMPLATE_ORDER), quality: 'purple', rank: 1, picks: [] };
+  const r: Recruit = hero ? heroRecruit(hero) : { id: 'r_' + (++s.seq), kind: 'named', name, template: opts.template ?? pick(TEMPLATE_ORDER), quality: opts.quality ?? 'purple', rank: 1, picks: [], boss: opts.boss };
+  if (opts.boss) s.captives = s.captives.filter(o => o.boss !== opts.boss);
   s.owned.push(r); const cap = followerCap(s); if (s.followers.length < cap) s.followers.push(r.id);
   write(s); return { ok: true, message: `${name}归降 · 已入招贤馆` };
 }

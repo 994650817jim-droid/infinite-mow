@@ -7,6 +7,7 @@ import { LEGION, ORDERS, TROOPS, TROOP_KINDS, INITIAL_TROOPS, type TroopKind } f
 import type { Legion } from '../systems/Legion';
 import { loadTroopPortraits, portraitHeadY, portraitKey } from '../systems/TroopPortraits';
 import { artStyle } from '../systems/ArtStyle';
+import { hotkeyLabel } from '../data/hotkeys';
 import { unlockedTroopKinds } from '../world/WorldStore';
 /** 人物画风 v2：血药卡徽章里的手绘药葫芦（与兵种胸像同一画风）；没加载到就用旧的像素药瓶 healing_potion。 */
 const POTION_ART = 'potion_card_v2', POTION_ART_URL = 'assets/troop-portraits-v2/potion_card.png';
@@ -75,7 +76,7 @@ export class LegionUI {
     this.orderPlate.setAlpha(.8);
     // 说明行不再显示（军令名已说明含义）；保留对象以免改动其它逻辑
     this.orderHint = text(this.orderX + 32, this.orderY + this.orderH, '', 10).setColor('#acbeb0').setVisible(false);
-    const key = this.keyHint = (D ? text(this.orderCx + 26, this.orderCy + 24, 'E', 11).setColor('#e8d3a6').setStroke('#120904', 3) : text(this.orderX + this.orderW - 14, this.orderY + this.orderH / 2, '⇄', 10).setColor('#9fa592')).setAlpha(D ? .9 : .7).setOrigin(.5);
+    const key = this.keyHint = (D ? text(this.orderCx + 26, this.orderCy + 24, hotkeyLabel('order'), 11).setName('hud-order-key').setColor('#e8d3a6').setStroke('#120904', 3) : text(this.orderX + this.orderW - 14, this.orderY + this.orderH / 2, '⇄', 10).setColor('#9fa592')).setAlpha(D ? .9 : .7).setOrigin(.5);
     if (D && scene.textures.exists('hud_order_guard')) this.orderIcon = scene.add.image(this.orderCx, this.orderCy, 'hud_order_guard').setDisplaySize(40, 40).setScrollFactor(0);
     this.hud.add([this.status, this.orderPlate, ...(this.orderIcon ? [this.orderIcon] : []), this.order, this.orderHint, key]);
     this.panel = scene.add.container(0, 0).setScrollFactor(0).setDepth(DEPTH.overlay + 1).setVisible(false);
@@ -106,13 +107,14 @@ export class LegionUI {
       this.rows.push(row);
       // 战地招募：整张卡可点，悬停描金变亮（仅 wave 模式开启命中区）
       const hover = (on: boolean) => { if (this.mode !== 'wave' || row.hover === on) return; row.hover = on; this.paintWaveCard(row); };
+      bg.setName('recruit-card-' + kind); // 快捷键 1–4 按屏幕位置点卡（systems/BattleHotkeys）
       bg.on('pointerover', () => hover(true)).on('pointerout', () => hover(false)).on('pointerdown', () => buy(kind, false));
       recruit.on('pointerover', () => hover(true)).on('pointerout', () => hover(false));
     }
     this.prev = button('上一页', () => { this.page = 0; this.repaint(); }).setPosition(W / 2 - 145, H - 225);
     this.next = button('下一页', () => { this.page = 1; this.repaint(); }).setPosition(W / 2 + 45, H - 225);
     this.pageText = text(W / 2, H - 207, '', 14).setOrigin(.5);
-    this.close = button('', close).setPosition(W / 2, H - (D ? 54 : 103)).setOrigin(.5, 0).setFontSize(18);
+    this.close = button('', close).setName('recruit-close').setPosition(W / 2, H - (D ? 54 : 103)).setOrigin(.5, 0).setFontSize(18);
     this.closeFrame = scene.add.graphics().setScrollFactor(0);
     this.panel.add([this.prev, this.next, this.pageText, this.closeFrame, this.close]);
     // 兵种胸像立绘（清单里有才加载）；到位后战地招募卡改用立绘

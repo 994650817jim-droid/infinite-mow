@@ -34,7 +34,7 @@ try {
         if (c) { const dx = c.x - s.player.x, dy = c.y - s.player.y, d = Math.hypot(dx, dy) || 1; s.player.sprite.x += dx / d * Math.min(d, 18); s.player.sprite.y += dy / d * Math.min(d, 18); }
         else if (s.boss?.active) { const dx = s.boss.x - s.player.x, dy = s.boss.y - s.player.y, d = Math.hypot(dx, dy) || 1; if (d > 120) { s.player.sprite.x += dx / d * 10; s.player.sprite.y += dy / d * 10; } s.boss.hp -= s.boss.maxHp * .01; if (s.boss.hp <= 0) s.hitEnemy(s.boss, 10, s.combatNow, 'melee', false, false); }
         const j = s.snapshotJingnan();
-        return { mode: s.mode, over: s.over, victory: s.victory, rest: s.mode === 'rest', boss: s.boss?.active ? s.chapter.bossName : null, parley: j.parley, panel: !!s.children.getByName('jingnan-parley'), chests: s.bossChests?.length ?? 0, endStory: !!end, j };
+        return { mode: s.mode, over: s.over, victory: s.victory, rest: s.mode === 'rest', boss: s.boss?.active ? s.chapter.bossName : null, parley: j.parley, panel: !!s.children.getByName('parley-panel'), chests: s.bossChests?.length ?? 0, endStory: !!end, j };
       }, S);
       if (st.gone) { end = { gone: true }; break; }
       if (st.boss && !sawBosses.includes(st.boss)) sawBosses.push(st.boss);

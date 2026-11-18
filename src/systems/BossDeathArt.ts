@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
-import { artStyle } from './ArtStyle';
+import { artStyle, v2Filter } from './ArtStyle';
+import { RENDER_SCALE } from '../config';
 
 /**
  * 首领倒地帧（人物画风 v2；用户 2026-11-17 要求首领死亡时有倒地动画）。
@@ -22,6 +23,8 @@ const known = (id: string): id is BossDeathId => (BOSS_DEATH_IDS as readonly str
 export function preloadBossDeath(scene: Phaser.Scene, id: string): void {
   if (artStyle() !== 'v2' || !known(id) || failed.has(id)) return;
   const k = key(id); if (scene.textures.exists(k)) return;
+  // 采样同其他 v2 首领图（倒地帧以前没设，是线性，比站着时糊）
+  scene.load.once(`filecomplete-spritesheet-${k}`, () => { if (scene.textures.exists(k)) scene.textures.get(k).setFilter(v2Filter(RENDER_SCALE)); });
   scene.load.spritesheet(k, `assets/bosses-v2/${DEATH_FILE[id] ?? id}_death.png`, { frameWidth: BOSS_DEATH.cell, frameHeight: BOSS_DEATH.cell });
   scene.load.once(Phaser.Loader.Events.FILE_LOAD_ERROR, (f: Phaser.Loader.File) => { if (f.key === k) failed.add(id); });
   if (!scene.load.isLoading()) scene.load.start();

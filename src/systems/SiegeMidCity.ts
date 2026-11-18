@@ -305,7 +305,7 @@ export class SiegeMidCity {
     this.box({ left: a.left - 400, right: a.left, top: a.top - 200, bottom: a.bottom });
     this.box({ left: a.right, right: a.right + 400, top: a.top - 200, bottom: a.bottom });
     this.box({ left: a.left, right: a.right, top: a.top - 200, bottom: a.top });
-    this.art(0, a.top + 40, [ART.hall, 0], ['sishui_props_refined', 0], 560, this.has(ART.hall) ? 300 : 300);
+    this.art(0, a.top + 40, [ART.hall, 0], ['sishui_props_refined', 0], 650, /* 2026-11-18 hall.png 物件缩进格内留边后，560→650 保持原屏幕宽度 */ this.has(ART.hall) ? 300 : 300);
     this.art(0, a.top + 80, [ART.hall, 1], ['yellow_props', 31], 220, this.has(ART.hall) ? 90 : 90);
     for (const c of H.corridors) for (const dy of [-150, 0, 150]) this.art(c.x, c.y + dy + 60, [ART.hall, 2], ['sishui_props_refined', 3], 120, 150);
     for (const x of [-170, 170]) this.art(x, a.top + 130, [ART.hall, 3], ['yellow_props', 32], 90).setFlipX(x > 0);

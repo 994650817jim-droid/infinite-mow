@@ -9,6 +9,7 @@ const BASE = process.env.BASE ?? 'http://127.0.0.1:5173/', OUT = 'assets/review/
 mkdirSync(OUT, { recursive: true });
 const rows = []; const ck = (n, ok, info) => { rows.push(!!ok); console.log(ok ? 'PASS' : 'FAIL', n, ok ? '' : JSON.stringify(info)); };
 const b = await chromium.launch({ channel: 'chrome', headless: true, args: ['--mute-audio'] });
+const SIZES = {};
 const CASES = [
   { id: 'zhangliang', scene: 'GameScene', run: { chapter: 'huangjin', stage: 1 }, reg: {}, ctl: 'moveset', mounted: false, rage: true }, // 2026-11-18 用户：第一章首领不骑马
   { id: 'zhangbao', scene: 'GameScene', run: { chapter: 'huangjin', stage: 2 }, reg: {}, ctl: 'moveset', mounted: false },
@@ -104,6 +105,12 @@ try {
     if (c.mounted && ['lubu', 'huaxiong'].includes(c.id)) { await p.screenshot({ path: `${OUT}/${c.id}-fall.png` }); ck(`${c.id}：坠马播骑乘图第 9 行坠马帧`, fall, fall); }
     await wait(2250);
     const ph = await p.evaluate(() => window.__phases);
+    // 步战体型 / 染色 / 清晰度（11-18 用户「张梁画风」：首领步战按 v2 统一标准，跟华雄、吕布一致）：二阶段（已坠马）取样 8 次
+    { const smp = []; for (let i = 0; i < 8; i++) { smp.push(await ev(s => { const sp = s.boss.sprite, fr = sp.frame, c = window.__bc ?? (window.__bc = document.createElement('canvas')); c.width = fr.cutWidth; c.height = fr.cutHeight; const g = c.getContext('2d', { willReadFrequently: true }); g.clearRect(0, 0, c.width, c.height); g.drawImage(fr.source.image, fr.cutX, fr.cutY, fr.cutWidth, fr.cutHeight, 0, 0, fr.cutWidth, fr.cutHeight); const d = g.getImageData(0, 0, c.width, c.height).data; let top = -1, bot = -1; for (let y = 0; y < c.height; y++) for (let x = 0; x < c.width; x++) if (d[(y * c.width + x) * 4 + 3] > 40) { if (top < 0) top = y; bot = y; }
+        const ps = s.player.sprite, pf = ps.frame; return { h: (bot - top + 1) * Math.abs(sp.scaleY) * (s.presence ? 1.4 : 1), key: sp.texture.key, cell: fr.height, tint: sp.isTinted && !sp.tintFill ? sp.tintTopLeft.toString(16) : '', filter: sp.texture.source[0].scaleMode, pfilter: ps.texture.source[0].scaleMode, fill: (bot - top + 1) / fr.height }; })); await p.waitForTimeout(120); }
+      // 首领合集图用的单人截图（以脚底为下边、站在主将旁）
+      { const c2 = await ev(s => { const cam = s.cameras.main, b = s.boss, W = window.innerWidth / s.scale.width; return { x: (b.x - cam.worldView.x) * cam.zoom * W, y: (b.y - cam.worldView.y) * cam.zoom * W }; }); await p.screenshot({ path: `${OUT}/size-${c.id}.png`, clip: { x: Math.max(0, Math.min(1280 - 240, c2.x - 120)), y: Math.max(0, Math.min(720 - 260, c2.y - 230)), width: 240, height: 260 } }); }
+      const hs = smp.map(x => x.h).sort((a, c) => a - c); SIZES[c.id] = { h: +hs[hs.length >> 1].toFixed(1), key: smp[0].key, cell: smp[0].cell, tint: smp.every(x => x.tint) ? smp[0].tint : '', filter: smp[0].filter, pfilter: smp[0].pfilter, fill: +smp[0].fill.toFixed(2) }; }
     const after = await ev((s, k) => { const o = s[k], m = o.mount ?? s.bossMount; return { phase2: !!o.phase2, mounted: !!m?.mounted, crop: !!s.boss.sprite.isCropped, horse: s.children.list.filter(x => x.name === 'boss-horse' && x.active).length }; }, c.ctl);
     if (!c.legacy) ck(`${c.id}：换阶段撤掉一阶段旗阵`, (await ev((s, k) => s[k].snapshot().flags, c.ctl)) === 0, null);
     ck(`${c.id}：半血换二阶段，发 boss-phase 事件`, after.phase2 && ph.some(e => e.phase === 2), { after, ph });
@@ -118,6 +125,10 @@ try {
       ck(`${c.id}：二阶段换招（${names.join('、')}）`, names.every(n => m2.metrics[n] > 0), m2.metrics);
     } else await p.screenshot({ path: `${OUT}/${c.id}-p2.png` });
   }
+  // 步战体型统一：以华雄 / 吕布（v2 首领标准：288 格 × 0.5、存在感 ×1.4）为准，各首领画面身高相差 ≤12%（姿势取样有起伏）；无残留染色；纹理过滤与主将一致
+  { const ids = Object.keys(SIZES); if (ids.length) { const ref = ['huaxiong', 'lubu'].map(k => SIZES[k]?.h).filter(Boolean), std = ref.length ? ref.reduce((a, c) => a + c, 0) / ref.length : null;
+    console.log('首领步战画面身高（世界像素，含 ×1.4）：' + ids.map(k => `${k} ${SIZES[k].h}${SIZES[k].tint ? ' tint ' + SIZES[k].tint : ''}`).join(' · ') + (std ? ` · 标准 ${std.toFixed(1)}` : ''));
+    for (const k of ids) { const z = SIZES[k]; ck(`${k}：步战画面身高与华雄 / 吕布一致（±12%）、无残留染色、纹理过滤同主将`, (!std || Math.abs(z.h / std - 1) <= .12) && !z.tint && z.filter === z.pfilter, { ...z, std }); } } }
   ck('无页面报错', !errs.length, errs.slice(0, 3));
 } finally { await b.close(); }
 const bad = rows.filter(x => !x).length; console.log(bad ? `FAIL ${bad}/${rows.length}` : `PASS ${rows.length}/${rows.length}`); if (bad) process.exit(1);

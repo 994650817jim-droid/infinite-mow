@@ -73,7 +73,7 @@ export class CampRestUI {
    this.tabInk.push(null);
    if(scene.textures.exists(icon)){const ic=scene.add.image(x+21,tabY+(D?22:21),icon).setDisplaySize(D?29:27,D?29:27).setScrollFactor(0);this.tabIcons.push(ic);this.root.add(ic);}else this.tabIcons.push(null);
    const hit=this.text(x,tabY,label,D?17:16).setPadding(D?43:39,D?12:13,0,0).setFixedSize(tabW-6,46).setInteractive({useHandCursor:true}).setName('camp-tab-'+i);
-   hit.setData('tab',i).on('pointerdown',()=>{this.tab=i;this.page=0;this.notice='';this.render();}).on('pointerover',()=>hit.setColor('#fff0cd')).on('pointerout',()=>hit.setColor(i===this.tab?'#f6dfb0':'#bcae93'));this.tabs.push(hit);this.root.add(hit);
+   hit.setData('tab',i).setData('slot',slot).on('pointerdown',()=>{this.tab=i;this.page=0;this.notice='';this.render();}).on('pointerover',()=>hit.setColor('#fff0cd')).on('pointerout',()=>hit.setColor(i===this.tab?'#f6dfb0':'#bcae93'));this.tabs.push(hit);this.root.add(hit);
   });
   this.tabLine=scene.add.rectangle(0,tabY+43,10,2,0xe8c27a,1).setOrigin(0,.5).setScrollFactor(0).setName('camp-tab-line');this.root.add(this.tabLine);
   // 页签切换：金色细线滑到选中页签下（休整时场景补间暂停，按真实时间插值）

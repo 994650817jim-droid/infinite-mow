@@ -138,6 +138,8 @@ export class SishuiPass {
     if (this.o.gateText) { this.h.banner(this.o.gateText[0], true, this.o.gateText[1]); return; }
     this.h.banner('关门洞开', true, this.h.guanyu() ? `华雄出关 · ${P.wenjiuSec} 秒内斩之，可成「温酒斩华雄」` : '华雄率亲卫杀出汜水关');
   }
+  /** 温酒斩华雄的条件此刻生效（关羽在队、华雄出关 30 秒内）——首领招降让斩华雄优先，不弹劝降窗。 */
+  wenjiuLive(): boolean { return this.bossAt >= 0 && !this.wenjiu && this.h.guanyu() && this.h.now() - this.bossAt <= SISHUI_PASS.wenjiuSec * 1000; }
   /** 华雄被斩：关羽在队且出关 30 秒内 → 温酒斩华雄。 */
   onBossDown(): void {
     if (this.bossAt < 0 || this.wenjiu || this.o.wenjiu === false) return;

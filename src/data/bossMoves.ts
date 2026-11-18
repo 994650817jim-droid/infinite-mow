@@ -174,7 +174,7 @@ export const BOSS_MOVES: Record<string, BossMovesetDef> = {
   // ===== 第三批：第八章汉中、第十章夷陵（孙桓 / 朱然）、第十二章北伐（张郃再战 / 郝昭） =====
   // 8-1 / 12-1 张郃：骑马；巧变阵（三面枪兵合围）+ 突阵 + 连环枪 → 坠马「瓦口隘死战」：亲卫护体、连环枪三段
   zhanghe: {
-    id: 'zhanghe', name: '张郃', phaseAt: .5, mount: { horse: 'generic', tint: 0x8a96b0 },
+    id: 'zhanghe', name: '张郃', phaseAt: .5, mount: { horse: 'generic', tint: 0x8a96b0, rider: 'zhanghe' },
     p1: { name: '巧变之将', caption: '巧变阵 · 突阵 · 连环枪', gapMs: 2300, speedMul: 1.35, moves: [
       { kind: 'summon', name: '巧变阵', windupMs: 900, cd: 8500, dmg: 0, troop: 'infantry', count: 6, radius: 240, around: 'player' },
       { kind: 'charge', name: '张郃突阵', windupMs: 850, cd: 4400, dmg: 1.4, len: 440, width: 66, dashMs: 480 },

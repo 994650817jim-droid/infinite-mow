@@ -17,3 +17,10 @@ export const HZ_SHARP = {
 
 /** 魏延·拒敌（方案 1）：除了受伤积层，身边 radius 内每有 perEnemies 名敌人，每秒再积 stacksPerSec 层（孤军深入、被围反击）。 */
 export const WY_SURROUND = { radius: 120, perEnemies: 3, stacksPerSec: 1 } as const;
+
+/** 刘备·统御（主属性）对本人也有收益（平衡审查：统御 10 点本人 DPS 只 +2%，全给了部曲）：每点（按实际加点，不乘主属性倍率）本人受伤 −selfGuardPerPoint，最多 maxPoints 点。 */
+export const LB_COMMAND = { selfGuardPerPoint: .01, maxPoints: 10 } as const;
+/** 某武将某属性的额外说明（属性面板 / 主属性章悬停里追加）；没有返回 ''。 */
+export function heroAttributeExtra(hero: string, attr: string): string {
+  return hero === 'liubei' && attr === 'command' ? `刘备本人受伤 −${Math.round(LB_COMMAND.selfGuardPerPoint * 100)}% / 点` : '';
+}

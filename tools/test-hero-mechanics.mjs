@@ -91,6 +91,29 @@ for (const hero of HEROES) {
       return { stacks: st };
     }, [G, MK, CLEAR]);
     ck('魏延：受伤积层照旧（单个敌人贴身打 2.5 秒积到层）', r2.stacks >= 1, r2);
+    // 刘备的统御自保只给刘备：魏延加满统御，受伤倍率不变
+    const r3 = await p.evaluate(G0 => { const s = eval(G0), g = s.player.growth, a = g.incomingDamageMultiplier(); g.attributes.command = 10; const b = g.incomingDamageMultiplier(); g.attributes.command = 0; return { a, b }; }, G);
+    ck('魏延：加满统御受伤倍率不变（统御自保只给刘备）', r3.a === r3.b, r3);
+  }
+  if (hero === 'liubei') {
+    // 统御 0 / 5 / 10 点：同一记 100 点伤害，实际掉血比
+    const r1 = await p.evaluate(async ([G0, C]) => {
+      const s = eval(G0), pl = s.player, g = pl.growth, wait = ms => new Promise(r => setTimeout(r, ms)); eval(C); pl.damageImmune = false;
+      const hurt = async pts => { g.attributes.command = pts; await wait(100); pl.invulnUntil = 0; pl.hp = 1e6; const h0 = pl.hp; pl.takeDamage(1000, s.combatNow); const d = h0 - pl.hp; pl.hp = pl.maxHp; return d; };
+      const d0 = await hurt(0), d5 = await hurt(5), d10 = await hurt(10); const mul10 = g.commandSelfGuard(); g.attributes.command = 0; pl.damageImmune = true;
+      return { d0, d5, d10, r5: +(d5 / d0).toFixed(3), r10: +(d10 / d0).toFixed(3), mul10 };
+    }, [G, CLEAR]);
+    ck('刘备：统御每点本人受伤 −1%（5 点 ×0.95、10 点 ×0.90，真实受伤结算）', r1.d0 > 0 && Math.abs(r1.r5 - .95) < .02 && Math.abs(r1.r10 - .9) < .02 && Math.abs(r1.mul10 - .9) < 1e-9, r1);
+    // 属性面板：刘备的统御一行多一句「刘备本人受伤 −1% / 点」
+    const r2 = await p.evaluate(async G0 => {
+      const s = eval(G0), wait = ms => new Promise(r => setTimeout(r, ms)); s.player.growth.attributePoints = Math.max(1, s.player.growth.attributePoints ?? 0);
+      const open = () => { s.attributeReturn = 'none'; s.renderAttributePanel(); s.setMode('attributes'); };
+      open(); await wait(400); const texts = []; const q = [...s.children.list]; while (q.length) { const o = q.shift(); if (o.text) texts.push(o.text); if (o.list) q.push(...o.list); }
+      const line = texts.find(t => t.includes('刘备本人受伤')); return { open: true, line };
+    }, G);
+    await p.screenshot({ path: 'assets/review/hero-mechanics/liubei-command-panel.png' });
+    await p.evaluate(G0 => { const s = eval(G0); s.attributePanel?.setVisible(false); if (s.mode === 'attributes') s.setMode('playing'); }, G);
+    ck('刘备：属性面板统御一行写明「刘备本人受伤 −1% / 点」', r2.open && !!r2.line, r2);
   }
   await p.close();
 }

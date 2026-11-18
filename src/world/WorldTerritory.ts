@@ -28,12 +28,14 @@ function noise(x: number, y: number): number {
 /** 原画中的大片水域（海、大湖）：偏蓝像素的大连通块；细河不算。 */
 function waterMask(scene: Phaser.Scene, gw: number, gh: number): Uint8Array {
   const mask = new Uint8Array(gw * gh);
-  if (!scene.textures.exists('strategy_art')) return mask;
-  const src = scene.textures.get('strategy_art').getSourceImage() as HTMLImageElement | HTMLCanvasElement;
+  // 宏大版舆图的海是灰青色，按颜色认不出：改用随图发的水域图 world_water（由旧战略图算出，新图按它 1:1 重绘，白 = 水）
+  const ref = scene.textures.exists('world_water') ? 'world_water' : 'strategy_art';
+  if (!scene.textures.exists(ref)) return mask;
+  const src = scene.textures.get(ref).getSourceImage() as HTMLImageElement | HTMLCanvasElement;
   const c = document.createElement('canvas'); c.width = gw; c.height = gh;
   const g = c.getContext('2d', {willReadFrequently: true})!; g.drawImage(src, 0, 0, gw, gh);
   const px = g.getImageData(0, 0, gw, gh).data, blue = new Uint8Array(gw * gh);
-  for (let i = 0; i < gw * gh; i++) { const r = px[i * 4], gg = px[i * 4 + 1], b = px[i * 4 + 2]; blue[i] = b > r + 25 && b > 95 && b >= gg - 12 ? 1 : 0; }
+  for (let i = 0; i < gw * gh; i++) { const r = px[i * 4], gg = px[i * 4 + 1], b = px[i * 4 + 2]; blue[i] = ref === 'world_water' ? (r > 128 ? 1 : 0) : b > r + 25 && b > 95 && b >= gg - 12 ? 1 : 0; }
   // 只保留大连通块（> 1.2% 地图面积）
   const seen = new Uint8Array(gw * gh), stack: number[] = [], comp: number[] = [], min = gw * gh * .012;
   for (let i = 0; i < gw * gh; i++) {
@@ -79,7 +81,7 @@ export function buildTerritory(scene: Phaser.Scene, era: EraId, owned: readonly 
       if (fac[j] !== f) { if (near) border = fac[j] ? 2 : 1; else inner = 1; } else if (near && cell[j] !== cell[i]) province = true;
     }
     let a: number, k = 1;
-    if (border === 2) { a = .95; k = .55; }          // 国界：暗边
+    if (border === 2) { const o = i * 4; d[o] = 58; d[o + 1] = 47; d[o + 2] = 34; d[o + 3] = .62 * 255; if (player) { const p = i * 4; pd[p] = 255; pd[p + 1] = 222; pd[p + 2] = 130; pd[p + 3] = 255; } continue; } // 国界：墨线（2026-11-18「边界画成墨线」）
     else if (border === 1) { a = .7; k = .8; }        // 疆域外缘（荒地 / 海岸）
     else if (inner) { a = .82; k = 1.15; }            // 国界内侧亮色带
     else if (province) { a = .38; k = 1.25; }         // 郡界

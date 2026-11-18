@@ -23,7 +23,7 @@ import {CITIES,CITY_LINKS,CITY_INCOME,FACTIONS,HOME,SPECIALTIES,TIER_NAME,cityAt
 import {cityMarker,factionLegend,markAlert,paintSelection,MARKER_FILES,type CityMarker} from '../world/WorldMapLayers';
 import {CITY_ART_FILES,MARKERS_V2,cityMarkerV2,siegeArtV2,intelGlyphPos,intelPennant,nodeMarkerV2,paintSelectionV2,sealGraphics} from '../world/WorldMarkers';
 import {REALM_V2,buildTerritory} from '../world/WorldTerritory';
-import {factionStrip,lacquerPlate,ownerSeal,realmLabels,resourceBar,sealGlyph} from '../world/WorldMapChrome';
+import {factionCorner,factionStrip,lacquerPlate,ownerSeal,realmLabels,resourceBar,sealGlyph} from '../world/WorldMapChrome';
 import {advanceEra,takeLostNotice,takeNewChapters,type CityAlert,type EraAdvance} from '../world/WorldStore';
 import {CHAPTER_TIMELINE,CHAPTER_REGIONS,CITY_CHAPTER,STAGE_POINTS,chapterById,chapterIntro,chapterStages,chapterState,chapterStagesDone,citySiegeOpen,currentChapter,stageOpen,type ChapterState,type TimelineChapterId} from '../world/ChapterTimeline';
 import {HARD_MODE,HARD_TITLES} from '../data/hardMode';
@@ -43,6 +43,15 @@ type IntelMarker={event:IntelEvent;city:CityDef;root:Phaser.GameObjects.Containe
 /** 城池在地图上的可攻状态（2026-11-18 用户「让玩家更加清晰哪个地方可以进攻」）。 */
 type CityStatus={kind:'own'|'alert'|'attack'|'gate'|'far'|'fog';reason:string};
 type FogState='clear'|'dim'|'hidden';type FogPt={x:number;y:number;r:number;a:number;f:number};
+/**
+ * 宏大版天下地图（2026-11-18 用户「天下地图可以做宏大点」）：Gemini 3.1 Pro 以旧战略图为布局参考 1:1 重绘的东汉舆图，
+ * 放大到 4608×3072 切 3×3 块（public/assets/world/grand/），按镜头范围按需载入；低清总图 overview 先垫底。?map=v1 回旧图。
+ * 坐标空间不变（1536×1024 地图像素），城池 / 章节 / 关卡点一一沿用，tools/test-grand-map.mjs 校验。
+ */
+export const GRAND_MAP=(()=>{try{return new URLSearchParams(location.search).get('map')!=='v1';}catch{return true;}})();
+const TILE_COLS=3,TILE_ROWS=3;
+/** 镜头三档（相对铺满视口的最小缩放）：全国 / 州郡 / 城池。城池档地图约 3.5 倍屏宽。 */
+export const ZOOM_TIERS=[1,2,3.6] as const,ZOOM_NAMES=['全国','州郡','城池'] as const;
 /** 城池挖雾半径（地图像素）。 */
 const FOG_R={large:135,medium:115,small:95} as const,CHAPTER_R=120;
 const TIER_RANK={small:0,medium:1,large:2} as const,TIER_STARS={small:'★☆☆',medium:'★★☆',large:'★★★'} as const;
@@ -59,6 +68,7 @@ export class WorldMapScene extends Phaser.Scene {
  /** 选中章节的三关路线：屏幕坐标关卡标记 + 虚线路线（随地图平移缩放重排）。 */
  private pins:Array<{stage:number;x:number;y:number;root:Phaser.GameObjects.Container}>=[];private route?:Phaser.GameObjects.Graphics;private routeChapter?:TimelineChapterId;private mapMask?:Phaser.GameObjects.Graphics;
  /** 「天下未定」纸雾（地图像素坐标的 RenderTexture，随章节开放揭开）。 */
+ private tilesArmed=false;private tiles:Array<{r:number;c:number;img?:Phaser.GameObjects.Image;loading:boolean}>=[];private tierLabel?:Phaser.GameObjects.Text;private lastTap={id:'',t:0};private legendRect?:Phaser.Geom.Rectangle;private factionBtn?:Phaser.GameObjects.Text;
  private fogImg?:Phaser.GameObjects.Image;private fogStamp?:Phaser.GameObjects.Image;private fogKey='';private fogPainted=false;private fogVis=new Map<string,FogState>();private hardBtn!:ReturnType<typeof worldButton>;private actionHome={x:0,y:0,w:0};
  /** 军情事件标记（城池右上方的小印）。 */
  private intel:IntelEvent[]=[];private intelMarkers:IntelMarker[]=[];
@@ -69,7 +79,7 @@ export class WorldMapScene extends Phaser.Scene {
  /** 可攻标记 / 不可攻原因 / 「下一步」引导（2026-11-18）。 */
  private status=new Map<string,CityStatus>();private guide?:Phaser.GameObjects.Graphics;private guideLabel?:Phaser.GameObjects.Container;private guideTarget?:{x:number;y:number;from:{x:number;y:number};text:string;id:string};
  constructor(){super('WorldMapScene');}
- preload(){if(!worldUnlocked()&&!isChapterTestRun())return;worldAssets(this,'strategy_art','assets/world/strategy-map.webp');
+ preload(){if(!worldUnlocked()&&!isChapterTestRun())return;worldAssets(this,'strategy_art',GRAND_MAP?'assets/world/grand/overview.webp':'assets/world/strategy-map.webp');if(GRAND_MAP)worldAssets(this,'world_water','assets/world/grand/water_mask.png');if(GRAND_MAP&&!this.textures.exists('wgrand_banner'))this.load.spritesheet('wgrand_banner','assets/world/grand/banner_wave.png',{frameWidth:192,frameHeight:128});
   // W5 城池徽框与军旗（缩小显示，用线性过滤）
   for(const [key,url] of Object.entries(MARKER_FILES))worldAssets(this,key,url);
   if(MARKERS_V2)for(const [key,url] of Object.entries(CITY_ART_FILES))worldAssets(this,key,url);
@@ -90,7 +100,8 @@ export class WorldMapScene extends Phaser.Scene {
   this.timelineY=detailTop-(desktop?40+6:54+8);this.viewBottom=this.timelineY-4;
   // 电脑版：地图铺满顶栏以下（约 89% 高），时间线与详情改成浮在地图角上的小件，标记一直排到地图底边
   if(desktop){this.timelineY=H-8-30;this.viewBottom=H-8;}
-  this.layer=this.add.container(0,0);this.layer.add(this.add.image(0,0,'strategy_art').setOrigin(0).setDisplaySize(this.mapW,this.mapH));
+  this.layer=this.add.container(0,0);this.layer.add(this.add.image(0,0,'strategy_art').setOrigin(0).setDisplaySize(this.mapW,this.mapH).setName('world-base'));
+  this.tiles=[];this.tilesArmed=false;this.legendRect=undefined;this.tierLabel=undefined;if(GRAND_MAP)for(let r=0;r<TILE_ROWS;r++)for(let c=0;c<TILE_COLS;c++)this.tiles.push({r,c,loading:false});
   // 势力范围：加权分区疆域 + 国界 / 郡界 + 疆域大字（随地图缩放）
   // 刚攻下的城（攻城结算写 registry mapCaptured）：先算出攻下前的疆域，演出时由旧疆域淡入新疆域
   const capId=String(this.registry.get('mapCaptured')??'');this.registry.remove('mapCaptured');const captured=!isChapterTestRun()&&this.owned.includes(capId)?cityById(capId):undefined;const prevRealm:Phaser.GameObjects.Image[]=[],nowRealm:Phaser.GameObjects.Image[]=[];
@@ -105,7 +116,7 @@ export class WorldMapScene extends Phaser.Scene {
   this.layer.setMask(mask.createGeometryMask());this.events.once('shutdown',()=>mask.destroy());this.mapMask=mask;
   // 选中城池时显示其道路相邻（屏幕坐标）
   this.links=this.add.graphics();this.links.setMask(mask.createGeometryMask());
-  for(const city of CITIES){const m=(MARKERS_V2?cityMarkerV2:cityMarker)(this,city,cityOwner(city.id,this.era,this.owned));m.hit.on('pointerup',(pointer:Phaser.Input.Pointer)=>{if(pointer.getDistance()>10*RENDER_SCALE||this.pinching)return;this.selected={kind:'city',city};this.refresh();});if(this.alertFor(city.id)){markAlert(this,m);if(MARKERS_V2)siegeArtV2(this,m);}this.cityMarkers.push(m);}
+  for(const city of CITIES){const m=(MARKERS_V2?cityMarkerV2:cityMarker)(this,city,cityOwner(city.id,this.era,this.owned));m.hit.on('pointerup',(pointer:Phaser.Input.Pointer)=>{if(pointer.getDistance()>10*RENDER_SCALE||this.pinching)return;const now=this.time.now,dbl=this.lastTap.id===city.id&&now-this.lastTap.t<350;this.lastTap={id:city.id,t:now};this.selected={kind:'city',city};this.refresh();if(dbl)this.flyTo(city.x,city.y,this.minZoom*ZOOM_TIERS[2]);});if(this.alertFor(city.id)){markAlert(this,m);if(MARKERS_V2)siegeArtV2(this,m);}this.cityMarkers.push(m);}
   // 纸雾下的城池：不显示、不可点（已占 / 告急城池始终可见）
   for(const m of this.cityMarkers){const fog=this.fogVis.get(m.city.id)??'clear';m.root.setData('fog',fog).setData('fogged',fog==='hidden');}
   this.paintCityStatus();
@@ -128,12 +139,13 @@ export class WorldMapScene extends Phaser.Scene {
    circle.on('pointerup',(pointer:Phaser.Input.Pointer)=>{if(pointer.getDistance()>10*RENDER_SCALE||this.pinching)return;this.selected={kind:'node',node};this.refresh();});marker.add(v2?[...v2.parts,circle]:[circle,icon!,label!]);if(v2)marker.setData('label',v2.label).setData('plate',v2.plate).setData('icon',v2.icon);marker.setData('locked',st==='locked');this.markers.push({node,root:marker});
   }
   for(const event of this.intel){const city=cityById(event.city);if(city)this.intelMarkers.push(this.intelMarker(event,city));}
-  this.minZoom=Math.max(this.area.w/this.mapW,this.area.h/this.mapH);this.zoom=this.minZoom*(desktop?1.75:1.2);
+  this.minZoom=Math.max(this.area.w/this.mapW,this.area.h/this.mapH);this.zoom=this.minZoom*(desktop?ZOOM_TIERS[1]:1.2);
   this.layer.setScale(this.zoom).setPosition(W/2-this.mapW*.52*this.zoom,(this.area.y+this.viewBottom)/2-this.mapH*.45*this.zoom);this.clampMap();
   const inside=(q:Phaser.Input.Pointer)=>{const p=screenPoint(q);return p.x>=this.area.x&&p.x<=this.area.x+this.area.w&&p.y>=this.area.y&&p.y<=this.viewBottom;};
   this.input.on('pointerdown',(q:Phaser.Input.Pointer)=>{const p=screenPoint(q);this.pointerX=p.x;this.pointerY=p.y;this.pinch=0;this.pinching=false;});
   this.input.on('pointermove',(q:Phaser.Input.Pointer)=>{if(!q.isDown||!inside(q))return;const p=screenPoint(q),a=this.input.manager.pointers.filter(o=>o.isDown&&inside(o)).map(screenPoint);if(a.length>=2){this.pinching=true;const distance=Phaser.Math.Distance.Between(a[0].x,a[0].y,a[1].x,a[1].y);if(this.pinch>0)this.setZoom(this.zoom*distance/this.pinch,(a[0].x+a[1].x)/2,(a[0].y+a[1].y)/2);this.pinch=distance;}else{this.pinch=0;this.layer.x+=p.x-this.pointerX;this.layer.y+=p.y-this.pointerY;this.clampMap();}this.pointerX=p.x;this.pointerY=p.y;});
-  this.input.on('wheel',(q:Phaser.Input.Pointer,_objs:unknown,_dx:number,dy:number)=>{const p=screenPoint(q);if(inside(q))this.setZoom(this.zoom*(dy>0?.9:1.1),p.x,p.y);});
+  // 滚轮按档缩放（全国 / 州郡 / 城池），以鼠标处为中心平滑过渡；双指仍连续缩放
+  this.input.on('wheel',(q:Phaser.Input.Pointer,_objs:unknown,_dx:number,dy:number)=>{const p=screenPoint(q);if(inside(q))this.stepTier(dy>0?-1:1,p.x,p.y);});
   // 地图外框：描金细线
   const frame=this.add.graphics();frame.lineStyle(2,0xc9a35e,.9).strokeRect(this.area.x-1,this.area.y-1,this.area.w+2,this.area.h+2).lineStyle(1,0x000000,.6).strokeRect(this.area.x-4,this.area.y-4,this.area.w+8,this.area.h+8);
   // 详情面板：漆底描金 + 势力旗印 + 标题 / 势力色分隔线 / 正文
@@ -151,7 +163,9 @@ export class WorldMapScene extends Phaser.Scene {
   this.action=worldButton(this,desktop?cx0+cw/2:W/2,desktop?py:H-36-38,"进入营寨",()=>{if(this.selected.kind==='city'){const c=this.selected.city,alert=!!this.alertFor(c.id);if(!alert&&this.owned.includes(c.id)){this.scene.start('TownScene',{city:c.id});return;}this.openSiege(c,alert);}else if(this.selected.kind==='intel')this.openIntel(this.selected.event);else this.launch(false);},desktop?cw-24:W-100);this.action.image.setName('map-action');this.actionHome={x:this.action.image.x,y:this.action.image.y,w:desktop?cw-24:W-100};
   this.hardBtn=worldButton(this,this.actionHome.x,this.actionHome.y,'乱世难度',()=>this.launch(true),this.actionHome.w);this.hardBtn.image.setName('map-hard').setTint(0xd98a6a);this.hardBtn.text.setColor('#2a0d08');if(desktop){this.inkify(this.action,true);this.inkify(this.hardBtn,false);}
   // 缩放按钮在地图标记之上（关卡印 / 令旗的深度 3–5）
-  for(const b of [worldButton(this,desktop?W-34:W-55,this.area.y+(desktop?26:35),'＋',()=>this.setZoom(this.zoom*1.2,W/2,(this.area.y+this.viewBottom)/2),desktop?38:48),worldButton(this,desktop?W-34:W-55,this.area.y+(desktop?70:107),'－',()=>this.setZoom(this.zoom/1.2,W/2,(this.area.y+this.viewBottom)/2),desktop?38:48)]){b.image.setDepth(8);b.text.setDepth(9);}
+  for(const b of [worldButton(this,desktop?W-34:W-55,this.area.y+(desktop?26:35),'＋',()=>this.stepTier(1,W/2,(this.area.y+this.viewBottom)/2),desktop?38:48),worldButton(this,desktop?W-34:W-55,this.area.y+(desktop?70:107),'－',()=>this.stepTier(-1,W/2,(this.area.y+this.viewBottom)/2),desktop?38:48)]){b.image.setDepth(8);b.text.setDepth(9);}
+  // 当前镜头档位小字（＋－ 下方）
+  {const t=worldText(this,desktop?W-34:W-55,this.area.y+(desktop?100:140),'',11,'#efe0b4').setOrigin(.5).setPadding(6,3).setDepth(9).setName('world-zoom-tier');const g=this.add.graphics().setDepth(8);this.tierLabel=t;t.setData('plate',g);this.paintTier();}
   // 年号与时代：点击展开势力图例
   const resRight=desktop?res.getBounds().right+12:0;
   const era=eraDef(this.era),chipG=this.add.graphics(),chip=worldText(this,desktop?resRight:this.area.x+12,desktop?12:this.area.y+12,`公元${era.year}年 · ${era.name}  ▾`,desktop?13:16,'#f6dc9a').setPadding(desktop?10:12,desktop?5:7).setInteractive({useHandCursor:true}).setName('world-era');
@@ -164,8 +178,10 @@ export class WorldMapScene extends Phaser.Scene {
   lacquerPlate(chipG,chip.x,chip.y,chip.width,chip.height,.9);lacquerPlate(chipG,land.x,land.y,land.width,land.height,.9,0x7fc48f);if(intelChip){lacquerPlate(chipG,intelChip.x,intelChip.y,intelChip.width,intelChip.height,.9,0xd0704a);intelChip.setDepth(1);}chipG.setDepth(chip.depth);chip.setDepth(1);land.setDepth(1);
   // 底边：势力排行（按城池数）+ 操作提示
   if(desktop){const last=intelChip??land,fb=worldText(this,last.x+last.width+8,chip.y,'势力  ▾',13,'#f2e6c8').setPadding(10,5).setInteractive({useHandCursor:true}).setName('world-factions');lacquerPlate(chipG,fb.x,fb.y,fb.width,fb.height,.9,0xc9a35e);fb.setDepth(1);
-   this.factionStripC=factionStrip(this,this.area.x+10,this.area.y+20,Math.min(this.area.w-80,620),this.era,this.owned,desktop).setDepth(20).setVisible(false);
-   fb.on('pointerup',()=>{const v=!this.factionStripC!.visible;this.legend?.destroy();this.legend=undefined;this.territory?.destroy();this.territory=undefined;this.factionStripC!.setVisible(v);fb.setText(v?'势力  ▴':'势力  ▾');});}
+   // 2026-11-18：势力图例放地图左上角竖排（各势力色块 + 城数），默认展开、点「势力」收起；收起状态记在本机
+   let open=true;try{open=localStorage.getItem('im_world_legend')!=='0';}catch{/* 存储不可用 */}
+   this.factionStripC=factionCorner(this,this.area.x+8,this.area.y+8,this.era,this.owned).setDepth(20).setVisible(open);this.factionBtn=fb;fb.setText(open?'势力  ▴':'势力  ▾');this.legendRect=open?this.factionStripC.getBounds():undefined;
+   fb.on('pointerup',()=>{const v=!this.factionStripC!.visible;this.legend?.destroy();this.legend=undefined;this.territory?.destroy();this.territory=undefined;this.factionStripC!.setVisible(v);fb.setText(v?'势力  ▴':'势力  ▾');this.legendRect=v?this.factionStripC!.getBounds():undefined;try{localStorage.setItem('im_world_legend',v?'1':'0');}catch{/* 存储不可用 */}this.clampMap();});}
   else factionStrip(this,this.area.x+10,this.viewBottom-24,this.area.w-20,this.era,this.owned,desktop);
   // 操作提示垫一块漆底小牌：地图拖到哪里，提示都不会和城名 / 章节标签叠在一起难以辨认
   if(!desktop){const hint=worldText(this,desktop?this.area.x+this.area.w-18:this.area.x+20,this.viewBottom-(desktop?20:56),'拖动查看 · 滚轮/双指缩放 · 点城池查看',desktop?11:12,'#f2e3c0').setOrigin(desktop?1:0,.5).setPadding(10,5).setName('world-hint');
@@ -179,13 +195,39 @@ export class WorldMapScene extends Phaser.Scene {
   this.buildGuide();
   const focusNode=WORLD_NODES.find(n=>n.id===this.registry.get('mapFocusNode'));this.registry.remove('mapFocusNode');
   if(focusIntel){this.selected={kind:'intel',event:focusIntel};this.centerOnCity(cityById(focusIntel.city)!);}
-  else if(!focus){const pick=focusNode??WORLD_NODES.find(n=>this.chapterOf(n)?.id===current);if(pick)this.selected={kind:'node',node:pick};if(focusNode)this.centerOn(focusNode);else if(desktop&&pick)this.centerOn(pick);} // 电脑版默认放大并对准当前章节
+  else if(!focus){const pick=focusNode??WORLD_NODES.find(n=>this.chapterOf(n)?.id===current);if(pick)this.selected={kind:'node',node:pick};if(focusNode)this.centerOn(focusNode);else if(desktop)this.focusPlayer();} // 电脑版默认聚焦玩家势力与下一个目标（2026-11-18）
   this.refresh();
   const fresh=isChapterTestRun()?0:takeNewChapters();
   if(fresh>0)this.revealChapter();
   if(advance||lost.length)this.showNotice(advance,lost);
   if(captured){this.selected={kind:'city',city:captured};this.refresh();this.playCapture(captured,nowRealm,prevRealm);}
+  this.tilesArmed=true;this.updateTiles();
  }
+ /** 镜头范围内的舆图分块：可见才显示，未载入的按需载入（全国档用低清总图即可）；其余隐藏，不画。 */
+ private updateTiles(){if(!this.tiles.length||!this.layer||!this.tilesArmed)return; // create 里镜头还在摆位，等摆好再按最终视野载入
+ const z=this.zoom,a=this.area,x0=(a.x-this.layer.x)/z,y0=(a.y-this.layer.y)/z,x1=x0+a.w/z,y1=y0+a.h/z,tw=this.mapW/TILE_COLS,th=this.mapH/TILE_ROWS,need=z>=this.minZoom*1.35;
+  for(const t of this.tiles){const vis=t.c*tw<x1&&(t.c+1)*tw>x0&&t.r*th<y1&&(t.r+1)*th>y0,key=`wgrand_${t.r}_${t.c}`;
+   if(t.img){t.img.setVisible(vis&&need);continue;} // 全国档用低清总图即可，分块不画
+   if(!vis||!need)continue;
+   if(this.textures.exists(key)){this.addTile(t,key);continue;}
+   if(t.loading)continue;t.loading=true;this.load.image(key,`assets/world/grand/tile_${t.r}_${t.c}.webp`);this.load.once(`filecomplete-image-${key}`,()=>{t.loading=false;if(this.scene.isActive()&&this.layer?.active){this.addTile(t,key);this.updateTiles();}});if(!this.load.isLoading())this.load.start();}}
+ private addTile(t:{r:number;c:number;img?:Phaser.GameObjects.Image},key:string){if(t.img)return;this.textures.get(key).setFilter(Phaser.Textures.FilterMode.LINEAR);const tw=this.mapW/TILE_COLS,th=this.mapH/TILE_ROWS;
+  t.img=this.add.image(t.c*tw,t.r*th,key).setOrigin(0).setDisplaySize(tw+.5,th+.5).setName(`world-tile-${t.r}-${t.c}`);this.layer.addAt(t.img,1);}
+ /** 当前最接近的镜头档。 */
+ private tierIndex(){let best=0;ZOOM_TIERS.forEach((k,i)=>{if(Math.abs(this.zoom-this.minZoom*k)<Math.abs(this.zoom-this.minZoom*ZOOM_TIERS[best]))best=i;});return best;}
+ private paintTier(){const t=this.tierLabel;if(!t)return;t.setText(ZOOM_NAMES[this.tierIndex()]);const g=t.getData('plate') as Phaser.GameObjects.Graphics;g.clear();lacquerPlate(g,t.x-t.width/2,t.y-t.height/2,t.width,t.height,.85);}
+ /** 换档：以 (x,y) 为中心平滑缩放到相邻一档。 */
+ private stepTier(dir:number,x:number,y:number){const i=Phaser.Math.Clamp(this.tierIndex()+dir,0,ZOOM_TIERS.length-1),z=this.minZoom*ZOOM_TIERS[i];if(Math.abs(z-this.zoom)<1e-4)return;
+  this.tweens.killTweensOf(this.zoomProxy);this.zoomProxy.z=this.zoom;this.tweens.add({targets:this.zoomProxy,z,duration:320,ease:'Sine.easeInOut',onUpdate:()=>this.setZoom(this.zoomProxy.z,x,y)});}
+ private zoomProxy={z:1};
+ /** 镜头推到地图点 (mx,my)、缩放 z（双击城池推近、打开地图时聚焦）。 */
+ private flyTo(mx:number,my:number,z:number,dur=450){z=Phaser.Math.Clamp(z,this.minZoom,this.minZoom*ZOOM_TIERS[2]);const fx=this.layer.x,fy=this.layer.y,fz=this.zoom,cx=this.area.x+this.area.w/2,cy=(this.area.y+this.viewBottom)/2,tx=cx-mx*z,ty=cy-my*z;
+  this.tweens.killTweensOf(this.zoomProxy);this.zoomProxy.z=0;const go=(k:number)=>{this.zoom=fz+(z-fz)*k;this.layer.setScale(this.zoom);this.layer.x=fx+(tx-fx)*k;this.layer.y=fy+(ty-fy)*k;this.clampMap();this.paintTier();};
+  if(dur<=0){go(1);return;}this.tweens.add({targets:this.zoomProxy,z:1,duration:dur,ease:'Sine.easeInOut',onUpdate:()=>go(this.zoomProxy.z)});}
+ /** 打开地图：框住营寨、我方城池与「下一步」目标，在州郡档以内取能全部放下的缩放。 */
+ private focusPlayer(){const pts=[{x:HOME.x,y:HOME.y},...this.owned.map(i=>cityById(i)).filter((c):c is CityDef=>!!c).map(c=>({x:c.x,y:c.y}))];if(this.guideTarget)pts.push({x:this.guideTarget.x,y:this.guideTarget.y});
+  const xs=pts.map(p=>p.x),ys=pts.map(p=>p.y),bx0=Math.min(...xs)-120,bx1=Math.max(...xs)+120,by0=Math.min(...ys)-110,by1=Math.max(...ys)+110,fit=Math.min(this.area.w/(bx1-bx0),(this.viewBottom-this.area.y)/(by1-by0));
+  this.flyTo((bx0+bx1)/2,(by0+by1)/2,Math.min(this.minZoom*ZOOM_TIERS[1],Math.max(this.minZoom,fit)),0);}
 /** 城池可攻状态：我方 / 告急 / 可攻 / 章节未开 / 不相邻（给出先攻哪座）。 */
  private cityStatusOf(c:CityDef):CityStatus{
   if(this.alertFor(c.id))return{kind:'alert',reason:'告急：守住可解除'};
@@ -347,10 +389,10 @@ export class WorldMapScene extends Phaser.Scene {
   const text=worldText(this,12,10,lines.join('\n'),14,'#d6e6d0').setWordWrapWidth(w-24).setLineSpacing(5);
   root.add([this.add.rectangle(0,0,w,text.height+20,0x0f1c15,.95).setOrigin(0).setStrokeStyle(1,0x7fc48f,.7),text]);this.territory=root;
  }
- private setZoom(next:number,x:number,y:number){const z=Phaser.Math.Clamp(next,this.minZoom,this.minZoom*2.7),ratio=z/this.zoom;this.layer.x=x-(x-this.layer.x)*ratio;this.layer.y=y-(y-this.layer.y)*ratio;this.zoom=z;this.layer.setScale(z);this.clampMap();}
+ private setZoom(next:number,x:number,y:number){const z=Phaser.Math.Clamp(next,this.minZoom,this.minZoom*ZOOM_TIERS[2]),ratio=z/this.zoom;this.layer.x=x-(x-this.layer.x)*ratio;this.layer.y=y-(y-this.layer.y)*ratio;this.zoom=z;this.layer.setScale(z);this.clampMap();this.paintTier();}
  private toScreen(mx:number,my:number){return{x:this.layer.x+mx*this.zoom,y:this.layer.y+my*this.zoom};}
  private clampMap(){const a=this.area;this.layer.x=Phaser.Math.Clamp(this.layer.x,a.x+a.w-this.mapW*this.zoom,a.x);this.layer.y=Phaser.Math.Clamp(this.layer.y,a.y+a.h-this.mapH*this.zoom,a.y);
-  const c=this.card,tl=this.timelineRect,visible=(x:number,y:number)=>x>a.x+14&&x<a.x+a.w-14&&y>a.y+14&&y<this.viewBottom-30&&!(c&&x>c.x-24&&y>c.y-36)&&!(tl&&x<tl.right+20&&y>tl.y-30); // 电脑版：右下小卡、左下时间线下面不放标记
+  const c=this.card,tl=this.timelineRect,visible=(x:number,y:number)=>x>a.x+14&&x<a.x+a.w-14&&y>a.y+14&&y<this.viewBottom-30&&!(c&&x>c.x-24&&y>c.y-36)&&!(tl&&x<tl.right+20&&y>tl.y-30)&&!(this.legendRect&&this.legendRect.contains(x,y-10)); // 电脑版：右下小卡、左下时间线、左上势力图例下面不放标记
   for(const m of this.markers){const x=this.layer.x+m.node.x*this.mapW*this.zoom,q=this.liftOffCity(x,this.layer.y+m.node.y*this.mapH*this.zoom);m.root.setPosition(q.x,q.y).setVisible(visible(q.x,q.y)&&!(this.routeChapter&&this.chapterOf(m.node)?.id===this.routeChapter));}
   // 小城名字在放大后才显示，避免默认视图拥挤
   const showSmall=this.zoom>=this.minZoom*1.65;
@@ -361,6 +403,7 @@ export class WorldMapScene extends Phaser.Scene {
   for(const m of this.intelMarkers){const p=this.toScreen(m.city.x,m.city.y),x=p.x+20,y=p.y-30;m.root.setPosition(x,y).setVisible(visible(x,y)&&y-(MARKERS_V2?30:16)>a.y+(MARKERS_V2?46:0)&&(this.fogVis.get(m.city.id)??'clear')!=='hidden');}
   this.drawLinks();
   this.layoutGuide();
+  this.updateTiles();
  }
  /** v2：章节牙旗 / 关卡印落在城郭上时挪开：依次试城上方、右侧、左侧、名牌下方，取第一个不压到别的城的位置。 */
  private liftOffCity(x:number,y:number,pin=false):{x:number;y:number}{if(!MARKERS_V2)return{x,y};

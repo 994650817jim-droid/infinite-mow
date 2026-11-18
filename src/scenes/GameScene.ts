@@ -281,6 +281,8 @@ export class GameScene extends Phaser.Scene {
     for (const e of this.enemies) if (e.active && !e.isSupplySlot && e.def.behavior !== 'wall') yield { sprite: e.sprite, foot: e.shadow, side: 'enemy', rank: e.kind === 'boss' ? 'boss' : e.kind === 'elite' ? 'elite' : 'normal', visible: e.sprite.visible, yellow };
     for (const a of this.allies) if (a.active && a.view) yield { sprite: a.view.sprite, foot: a.view.shadow, side: 'ally', rank: 'normal', visible: a.view.sprite.visible };
     for (const m of this.followers?.members ?? []) yield { sprite: m.sprite, foot: m.shadow, side: 'ally', rank: 'elite', visible: m.sprite.visible, keepColors: true };
+    // 黄巾力士（首领遗珍召出的符兵）：我方描边、保持金白原画（2026-11-18）
+    for (const l of this.relics?.lishiUnits() ?? []) yield { sprite: l.sprite, foot: l.foot, side: 'ally', rank: 'normal', visible: l.visible, keepColors: true };
   }
   dragBladeFx(): DraggingBladeFx { if (!this.dragFx) { this.dragFx = new DraggingBladeFx(this, this.player, this.sfx); this.events.once('shutdown', () => { this.dragFx?.destroy(); this.dragFx = undefined; }); } return this.dragFx; }
   /** 随行武将（招贤馆，RECRUIT_PLAN.md §4）。 */

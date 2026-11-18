@@ -62,6 +62,11 @@ export class BootScene extends Phaser.Scene {
     for(const key of ['walk','attack','actions','sweep'])this.load.spritesheet('huaxiong_'+key,'assets/phase17/huaxiong/'+key+'.png',{frameWidth:128,frameHeight:128});
     this.load.image('huaxiong_portrait','assets/phase17/huaxiong/portrait.png');
     this.load.spritesheet('sishui_props','assets/phase17/huaxiong/props.png',{frameWidth:256,frameHeight:256});
+    // 首领遗珍「黄巾力士」专用手绘图（2026-11-18：和敌方黄巾区分）：行走 / 攻击（v2 兵种规格）、符阵光圈 + 化符序列帧（黑底叠加）、「力」字符牌
+    this.load.spritesheet('lishi_walk','assets/processed-v2/troops/lishi_walk.png',{frameWidth:160,frameHeight:160});
+    this.load.spritesheet('lishi_attack','assets/processed-v2/troops/lishi_attack.png',{frameWidth:208,frameHeight:208});
+    this.load.spritesheet('lishi_fx','assets/relic-fx/lishi_fx.jpg',{frameWidth:256,frameHeight:256});
+    this.load.image('lishi_tag','assets/relic-fx/lishi_tag.png');
     for(const key of ['zhangliang_walk','zhangliang_attack','zhangbao_walk','zhangbao_cast','spear_walk','spear_attack','archer_walk','archer_attack','shield_walk','shield_attack','shaman_walk','shaman_cast'])this.load.spritesheet(`yellow_${key}`,`assets/processed/yellow/${key==='spear_walk'?'spear-walk-v2':key==='spear_attack'?'spear-attack-v2':key}.png`,{frameWidth:96,frameHeight:96});
     // 黄巾长枪兵 v5：128 帧、行走 / 刺击同一比例（tools/prepare-yellow-spear.mjs）
     for(const key of ['spear-walk-v5','spear-attack-v5'])this.load.spritesheet(`yellow_${key}`,`assets/processed/yellow/${key}.png`,{frameWidth:128,frameHeight:128});

@@ -31,6 +31,15 @@ await p.evaluate(async ([G0, hero]) => {
     while (pl.passive.isSharpshooter(s.combatNow)) await wait(50);
     await wait(1200); pl.damageImmune = false; const biter = mk(pl.x - 8, pl.y, { stun: false, dmg: 3 }); await wait(1600); biter.deactivate(); pl.damageImmune = true; await wait(600);
   }
+  if (hero === 'weiyan') {
+    // 被 6 名敌人围住、不挨打：拒敌每秒 2 层（左上面板），满层下一刀「谁敢杀我」六向裂波；两轮
+    pl.damageImmune = true;
+    for (let round = 0; round < 2; round++) {
+      for (let i = 0; i < 6; i++) { const a = i * Math.PI / 3 + round * .5; mk(pl.x + Math.cos(a) * 85, pl.y + Math.sin(a) * 70, { hp: 900 }); }
+      const t = s.combatNow, tr = pl.passive.snapshot(s.combatNow).triggers; while (pl.passive.snapshot(s.combatNow).triggers === tr && s.combatNow - t < 8000) await wait(50);
+      await wait(1800); for (const e of s.enemies) if (e.active && !e.isSupplySlot) e.deactivate(); await wait(500);
+    }
+  }
 }, [G, hero]);
 const dur = (Date.now() - t0) / 1000;
 await p.close(); await ctx.close(); await b.close();

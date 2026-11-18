@@ -2,7 +2,7 @@ import type { Enemy } from '../entities/Enemy';
 import type { CharacterId } from '../data/characters';
 import type { WeaponId } from '../types';
 import { CHARACTER_PASSIVES, PASSIVE_RULES as R } from '../data/passives';
-import { HZ_SHARP } from '../data/heroMechanics';
+import { HZ_SHARP, WY_SURROUND } from '../data/heroMechanics';
 export interface PassiveCast {
   owner: CharacterId; generation: number; weapon: WeaponId; empowered: boolean;
   radiusMul: number; damageMul: number; extraSpear: boolean; spearLengthMul: number;
@@ -32,6 +32,8 @@ export class CharacterPassives {
   private stacks = 0; private lastGain = -Infinity; private lastDamage = 0;
   /** 黄忠（2026-11-18 改为命中积层，data/heroMechanics.ts HZ_SHARP）：神射截止时间、神射时长（静心加长）、上次受伤掉层时间。 */
   private sharpUntil = -Infinity; private sharpMs: number = HZ_SHARP.sharpMs; private hurtDropAt = -Infinity;
+  /** 魏延：被围积层的进度（满 1 积 1 层）。 */
+  private surroundAcc = 0;
   /** 本关击杀数，及黄忠神射中射杀的精锐 / 首领数（技艺「老骥伏枥」读取）。 */
   private stageKills = 0; private sharpEliteKills = 0;
   private generation = 0; private stopped = false;
@@ -46,7 +48,7 @@ export class CharacterPassives {
   private lastMoveAt = -Infinity;
   constructor(character: CharacterId = 'zhaoyun', now = 0) { this.reset(character, now); }
   reset(character: CharacterId, now: number): void {
-    this.character = character; this.stacks = 0; this.lastGain = -Infinity; this.charmKillAt = -Infinity; this.lastDamage = now; this.sharpUntil = -Infinity; this.sharpMs = HZ_SHARP.sharpMs; this.hurtDropAt = -Infinity; this.stageKills = 0; this.sharpEliteKills = 0;
+    this.character = character; this.stacks = 0; this.lastGain = -Infinity; this.charmKillAt = -Infinity; this.lastDamage = now; this.sharpUntil = -Infinity; this.sharpMs = HZ_SHARP.sharpMs; this.hurtDropAt = -Infinity; this.surroundAcc = 0; this.stageKills = 0; this.sharpEliteKills = 0;
     this.generation++; this.stopped = false; this.gains = 0; this.triggers = 0; this.burns.clear(); this.charms.clear(); this.guardUntil = -Infinity; this.chargeInvulnUntil = this.chargeGuardUntil = -Infinity;
   }
   get characterId(): CharacterId { return this.character; }
@@ -59,6 +61,14 @@ export class CharacterPassives {
     if (this.character === 'huangzhong' && !this.isSharpshooter(now) && this.stacks > 0 && now - this.hurtDropAt + 1e-6 >= HZ_SHARP.hurtDropGapMs) { this.hurtDropAt = now; this.stacks--; }
     // 魏延·镇守汉中：每次受伤积 1 层拒敌（每 0.5 秒最多 1 层）
     if (this.character === 'weiyan' && this.stacks < this.maxStacks && now - this.lastGain + 1e-6 >= R.guardStepMs) { this.lastGain = now; this.stacks++; this.gains++; }
+  }
+  /** 魏延·拒敌：每帧报告身边 WY_SURROUND.radius 内的敌人数；每 perEnemies 名每秒积 stacksPerSec 层（与受伤积层并存）。 */
+  onSurrounded(now: number, dtSec: number, count: number): void {
+    if (this.stopped || this.character !== 'weiyan') return;
+    const rate = Math.floor(count / WY_SURROUND.perEnemies) * WY_SURROUND.stacksPerSec;
+    if (rate <= 0 || this.stacks >= this.maxStacks) { this.surroundAcc = 0; return; }
+    this.surroundAcc += rate * dtSec;
+    while (this.surroundAcc >= 1 && this.stacks < this.maxStacks) { this.surroundAcc -= 1; this.stacks++; this.gains++; }
   }
   /** 魏延「谁敢杀我」期间受到伤害的倍率。 */
   damageTakenMultiplier(now: number): number { if (this.stopped) return 1; return (now < this.guardUntil ? R.whoDaresGuardMul : 1) * (now < this.chargeGuardUntil && now >= this.chargeInvulnUntil ? R.chargeGuardMul : 1); }

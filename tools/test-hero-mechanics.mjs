@@ -65,6 +65,33 @@ for (const hero of HEROES) {
     }, [G, CLEAR]);
     ck('黄忠：静心神射 6/7/8/9 秒；宝刀未老神射中再延长 2 秒', r3.durations.join() === '6000,7000,8000,9000' && Math.abs(r3.extend - 2000) < 30, r3);
   }
+  if (hero === 'weiyan') {
+    // 1) 被围：身边 120 内 6 名敌人（不挨打）→ 每秒 2 层；2 名敌人 → 不积层
+    const r1 = await p.evaluate(async ([G0, MK0, C]) => {
+      const s = eval(G0), pl = s.player, mk = eval(MK0), wait = ms => new Promise(r => setTimeout(r, ms)); pl.damageImmune = true; eval(C);
+      const w = pl.weapons[0]; w.cooldownLeft = 1e9; pl.passive.stacks = 0;
+      const two = [mk(pl.x + 90, pl.y), mk(pl.x - 90, pl.y)]; await wait(2500); const withTwo = pl.passive.snapshot(s.combatNow).stacks;
+      for (const e of two) e.deactivate(); await wait(100);
+      for (let i = 0; i < 6; i++) { const a = i * Math.PI / 3; mk(pl.x + Math.cos(a) * 80, pl.y + Math.sin(a) * 70); }
+      const t0 = s.combatNow; await wait(1050); const after1s = pl.passive.snapshot(s.combatNow).stacks;
+      while (pl.passive.snapshot(s.combatNow).stacks < 5 && s.combatNow - t0 < 6000) await wait(30);
+      const fullMs = Math.round(s.combatNow - t0), hurt = pl.hp < pl.maxHp;
+      // 满层后放开武器：下一刀化为「谁敢杀我」
+      const trig0 = pl.passive.snapshot(s.combatNow).triggers; w.cooldownLeft = 0; await wait(600);
+      return { withTwo, after1s, fullMs, hurt, triggered: pl.passive.snapshot(s.combatNow).triggers - trig0, guard: pl.passive.damageTakenMultiplier(s.combatNow) };
+    }, [G, MK, CLEAR]);
+    ck('魏延：身边只有 2 名敌人、不挨打时不积拒敌', r1.withTwo === 0, r1);
+    ck('魏延：被 6 名敌人围住（不挨打）每秒积 2 层，约 2.5 秒满 5 层', !r1.hurt && r1.after1s >= 1 && r1.after1s <= 3 && r1.fullMs >= 2000 && r1.fullMs <= 3200, r1);
+    ck('魏延：被围攒满后下一刀「谁敢杀我」（触发、3 秒减伤）', r1.triggered === 1 && r1.guard < 1, r1);
+    // 2) 受伤积层仍在（1 名敌人贴身打，不够被围门槛）
+    const r2 = await p.evaluate(async ([G0, MK0, C]) => {
+      const s = eval(G0), pl = s.player, mk = eval(MK0), wait = ms => new Promise(r => setTimeout(r, ms)); eval(C); await wait(3200);
+      const w = pl.weapons[0]; w.cooldownLeft = 1e9; pl.passive.stacks = 0; pl.damageImmune = false; pl.hp = pl.maxHp;
+      const biter = mk(pl.x + 6, pl.y, { stun: false, dmg: 2 }); await wait(2500); const st = pl.passive.snapshot(s.combatNow).stacks; biter.deactivate(); pl.damageImmune = true; pl.hp = pl.maxHp;
+      return { stacks: st };
+    }, [G, MK, CLEAR]);
+    ck('魏延：受伤积层照旧（单个敌人贴身打 2.5 秒积到层）', r2.stacks >= 1, r2);
+  }
   await p.close();
 }
 ck('无报错', errors.length === 0, errors.slice(0, 4));

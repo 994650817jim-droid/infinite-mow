@@ -14,3 +14,6 @@ export const HZ_SHARP = {
   /** 老骥伏枥 3 级「宝刀未老」：神射中射杀精锐 / 首领，神射延长 */
   laojiExtendMs: 2000,
 } as const;
+
+/** 魏延·拒敌（方案 1）：除了受伤积层，身边 radius 内每有 perEnemies 名敌人，每秒再积 stacksPerSec 层（孤军深入、被围反击）。 */
+export const WY_SURROUND = { radius: 120, perEnemies: 3, stacksPerSec: 1 } as const;

@@ -93,6 +93,20 @@ const r6 = await p.evaluate(async () => {
 ck('对象池：150 个同帧清屏只建 150 个条目，第二批全部复用（新建 0）；超过 160 上限回收最老的、不增长', r6.first.live === 150 && r6.first.pool === 150 && r6.second.createdNew === 0 && r6.over.pool === 160 && r6.over.live === 160, r6);
 ck('尘土同屏封顶（电脑 120），播完归还名额', r6.dust > 0 && r6.dust <= 120 && r6.dustAfter === 0, { dust: r6.dust, after: r6.dustAfter });
 
+// —— 6b) 专属尘土素材（即梦出图，tools/prepare-death-dust.mjs 处理）：6 帧、无洋红残留、每帧居中、地面线对齐；缺图时退回 fx_collapse_dust ——
+const r6b = await p.evaluate(async base => {
+  const img = new Image(); img.src = base + 'assets/fx/death_dust.png'; await img.decode();
+  const c = document.createElement('canvas'); c.width = img.width; c.height = img.height; const g = c.getContext('2d', { willReadFrequently: true }); g.drawImage(img, 0, 0);
+  const d = g.getImageData(0, 0, c.width, c.height).data, W = c.width, out = { w: img.width, h: img.height, pink: 0, frames: [] };
+  for (let f = 0; f < 6; f++) { let x0 = 1e9, x1 = -1, y0 = 1e9, y1 = -1, edge = 0;
+    for (let y = 0; y < 256; y++) for (let x = 0; x < 256; x++) { const i = (y * W + f * 256 + x) * 4, a = d[i + 3]; if (a > 40 && d[i] > 200 && d[i + 2] > 200 && d[i + 1] < 90) out.pink++; if (a > 10) { x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y); if (x === 0 || x === 255 || y === 0) edge++; } }
+    out.frames.push({ cx: (x0 + x1) / 2, bottom: y1, w: x1 - x0 + 1, edge }); }
+  const s = window.__game.scene.getScene('GameScene'), fx = s.deathFx; out.key = fx.dustKey; out.has = s.textures.exists('fx_death_dust');
+  s.textures.remove('fx_death_dust'); out.fallback = fx.dustKey; return out;
+}, base);
+ck('专属尘土：1536×256、6 帧，无洋红残留；每帧水平居中（±6px）、底边落在同一条地面线（±4px）、不顶到格子边', r6b.w === 1536 && r6b.h === 256 && r6b.pink === 0 && r6b.frames.every(f => Math.abs(f.cx - 128) <= 6 && Math.abs(f.bottom - r6b.frames[0].bottom) <= 4 && f.edge === 0), r6b);
+ck('死亡特效用专属尘土 fx_death_dust；贴图缺失时退回 fx_collapse_dust 兜底', r6b.has && r6b.key === 'fx_death_dust' && r6b.fallback === 'fx_collapse_dust', { key: r6b.key, fallback: r6b.fallback });
+
 // —— 7) 设置界面：战斗内设置有「死亡特效」一行，点一下开 ↔ 关 ——
 const r7 = await p.evaluate(async () => {
   const s = window.__game.scene.getScene('GameScene'); s.pendingLevels = 0; s.militaryPending = 0; if (s.mode !== 'none') s.setMode('none'); s.togglePause(); await new Promise(r => setTimeout(r, 400));

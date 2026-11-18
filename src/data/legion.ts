@@ -30,6 +30,12 @@ export function armyCapacity(_level: number): number { return Infinity; }
  */
 export const BOSS_VS_TROOPS = { contactMul: 3, skillMul: 2, sweepReach: 60 } as const;
 /**
+ * 首领打我方士兵 / 随从再收一层（2026-11-17 用户：「我感觉boss杀我方小兵太快了」；主管理定初值）：只影响首领打兵，打主将、普通敌人打兵都不变。
+ * mul：在上面的 contactMul / skillMul 之后再乘（横扫 3 × 0.4 = 1.2，招式 2 × 0.4 = 0.8）；
+ * killCapPerCast：同一招（同一帧结算）最多打死几个兵，其余留 1 血；immuneMs：挨首领一下后多久内不再吃首领伤害（防持续伤害连跳）。
+ */
+export const BOSS_VS_ALLY = { mul: .4, killCapPerCast: 3, immuneMs: 500 } as const;
+/**
  * 招兵价随在场兵数浮动（用户要求：兵越多越贵、越少越便宜）：每人 = 基础价 ×（a + b·n + c·n²）。
  * 0 人半价；10 人约 2.4 倍、20 人约 4.1 倍、33 人约 9.8 倍（原为 1 + 0.2n）。
  */

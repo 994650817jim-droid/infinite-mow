@@ -2,5 +2,7 @@
 import type { StoryChapter } from './types';
 import { HUANGJIN_STORY } from './huangjin';
 import { HULAO_STORY } from './hulao';
+import { QUNXIONG_STORY } from './qunxiong';
+import { GUANDU_STORY } from './guandu';
 export * from './types';
-export const STORY_CHAPTERS: Record<string, StoryChapter> = { huangjin: HUANGJIN_STORY, hulao: HULAO_STORY };
+export const STORY_CHAPTERS: Record<string, StoryChapter> = { huangjin: HUANGJIN_STORY, hulao: HULAO_STORY, qunxiong: QUNXIONG_STORY, guandu: GUANDU_STORY };

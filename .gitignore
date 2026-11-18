@@ -93,6 +93,7 @@ assets/raw/*
 !/tools/deathfx-mixed.mjs
 !/tools/prepare-death-dust.mjs
 !/tools/prepare-death-props.mjs
+!/tools/prepare-enemy-horse.mjs
 !/tools/test-merit.mjs
 !/tools/test-level-merge.mjs
 !/tools/test-hero-codex.mjs

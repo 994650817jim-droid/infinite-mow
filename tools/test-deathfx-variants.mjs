@@ -64,14 +64,14 @@ const r2 = await p.evaluate(() => {
   for (const h of fx.horses) { h.active = false; h.img.setVisible(false); }
   const cv = s.spawnEnemy('cavalry', s.player.x + 140, s.player.y, 1, true); cv.speed = 0; cv.hp = 0; s.killEnemy(cv);
   const body = fx.pool.find(x => x.active), horse = fx.horses.find(x => x.active), hx = horse.x; fx.update(horse.start + 500);
-  out.horseOpp = Math.sign(horse.img.x - hx) === -body.dir && horse.dir === -body.dir; out.horseFar = Math.abs(horse.img.x - hx) > 120; out.horseFrame = horse.img.frame.name;
+  out.horseKey = fx.horseKey; out.horseTex = horse.img.texture.key; out.tinted = horse.img.isTinted; out.horseOpp = Math.sign(horse.img.x - hx) === -body.dir && horse.dir === -body.dir; out.horseFar = Math.abs(horse.img.x - hx) > 120; out.horseFrame = horse.img.frame.name;
   fx.update(horse.start + 1700 - 250); out.horseFading = horse.img.alpha > 0 && horse.img.alpha < 1; fx.update(horse.start + 1710); out.horseGone = !horse.active;
   return out;
 });
 ck('兵器：抛物线甩出（有弧度、旋转、朝倒下方向），落地后停约 0.5 秒再淡出（0.22 秒），之后回到池里', r2.arcUp && r2.rot && r2.dirOk && r2.landed && r2.alphaRest === 1 && r2.alphaStill === 1 && r2.alphaFading < 1 && r2.alphaFading > 0 && r2.gone, r2);
 ck('头巾：飘起 40px 左右、中途开始淡出、0.95 秒后消失', r2.turbanUp && r2.turbanA < 1 && r2.turbanGone, r2);
 ck('盾牌：先倒地（平躺 1.45 弧度）再扬起一圈小尘土，之后淡出', !r2.dustEarly && r2.dustLate && r2.shieldFlat && r2.shieldGone, r2);
-ck('骑兵：马沿「人倒下方向的反方向」跑出去（跑了 120px 以上、换跑步帧）、1.7 秒内淡出消失', r2.horseOpp && r2.horseFar && /^(left|right)_\d$/.test(r2.horseFrame) && r2.horseFading && r2.horseGone, r2);
+ck('骑兵：用专属暗橄榄褐战马图（不乘色），沿「人倒下方向的反方向」跑出去（跑了 120px 以上、换跑步帧）、1.7 秒内淡出消失', r2.horseKey === 'horse_v2_enemy_brown_walk' && r2.horseTex === 'horse_v2_enemy_brown_walk' && !r2.tinted && r2.horseOpp && r2.horseFar && /^(left|right)_\d$/.test(r2.horseFrame) && r2.horseFading && r2.horseGone, r2);
 
 // —— 3) 重击击飞：暴击 / 马超冲锋 / 张飞大喝 → 击飞 40–70px，落地处扬尘；普通击杀不击飞 ——
 const r3 = await p.evaluate(() => {

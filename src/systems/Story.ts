@@ -16,6 +16,7 @@ import Phaser from 'phaser';
 import { DEPTH, FONT, HEADING_FONT, GAME_WIDTH, GAME_HEIGHT, IS_DESKTOP } from '../config';
 import { CHARACTERS, HOME_ART_HEROES, type CharacterId } from '../data/characters';
 import { STORY_CAST, STORY_CHAPTERS, type StoryChapter, type StoryLine, type StoryNode, type StoryBond, type StoryStage } from '../data/story';
+import { storyArtFile } from '../data/story/art';
 import { BOSS_PHASE, type BossPhaseEvent } from './BossPhase';
 import { storyScroll, type StoryLine as ScrollLine } from '../ui/StoryScroll';
 import { storyMode } from './BattleSettings';
@@ -68,11 +69,12 @@ export function resolveLines(node: StoryNode, ctx: StoryCtx): StoryLine[] {
     .map(l => ({ ...l, text: l.text.split('{lord}').join(lordName) }));
 }
 function toScroll(lines: StoryLine[], ctx: StoryCtx): ScrollLine[] { return lines.map(l => { const s = speaker(l.who, ctx); return { who: s.name, text: l.text, portrait: s.portrait, seal: s.seal, tip: l.tip }; }); }
-/** 卷轴里要用到的立绘先载入（主页才载入水墨立轴，战斗里按需补载）。 */
-function loadPortraits(scene: Phaser.Scene, lines: ScrollLine[], done: () => void): void {
-  const need = [...new Set(lines.map(l => l.portrait).filter((k): k is string => !!k && !scene.textures.exists(k) && k.startsWith('ink_hero_')))];
+/** 卷轴里要用到的立绘与插画先载入（主页才载入水墨立轴，战斗里按需补载；剧情人物立绘与插画见 data/story/art.ts，没登记的不载）。 */
+function loadPortraits(scene: Phaser.Scene, lines: ScrollLine[], done: () => void, illustration?: string): void {
+  const keys = [...lines.map(l => l.portrait), illustration];
+  const need = [...new Set(keys.filter((k): k is string => !!k && !scene.textures.exists(k) && !!storyArtFile(k)))];
   if (!need.length) { done(); return; }
-  for (const k of need) scene.load.image(k, 'assets/ink-scroll/' + k.slice('ink_hero_'.length) + '.webp');
+  for (const k of need) scene.load.image(k, storyArtFile(k)!);
   let fired = false; const fin = (): void => { if (!fired) { fired = true; done(); } };
   scene.load.once(Phaser.Loader.Events.COMPLETE, fin); scene.load.once('loaderror', () => { /* 缺图时卷轴退回名字章 */ });
   window.setTimeout(fin, 4000); // 加载异常也不卡住流程（卷轴期间战斗计时器已暂停，用真实时钟）
@@ -87,7 +89,7 @@ export function playStoryScroll(scene: Phaser.Scene, node: StoryNode, lines: Sto
     const finish = (): void => { markStorySeen(node.id); done(); };
     storyScroll(scene, GAME_WIDTH, GAME_HEIGHT, IS_DESKTOP, { name: 'story-' + node.id.replace(/\./g, '-'), confirmName: 'story-confirm', kicker: node.kicker ?? '', title: node.title ?? '',
       lines: all, reward: '', confirm, background: 'rest_camp', illustration: node.illustration, onDone: finish, skip: finish });
-  });
+  }, node.illustration);
 }
 
 // ———— 大字台词（首领登场 / 倒下、bark）————
@@ -230,7 +232,7 @@ export class StoryDirector {
       storyScroll(this.h.scene, GAME_WIDTH, GAME_HEIGHT, IS_DESKTOP, { name: 'story-' + node.id.replace(/\./g, '-'), confirmName: 'story-confirm', kicker: node.kicker ?? '', title: node.title ?? '',
         lines, reward: '', confirm: '', background: 'rest_camp', illustration: node.illustration, onDone: () => after(0, false), skip: () => after(0, true),
         choices: choices.map(c => c.label), onChoice: k => after(k, false) });
-    });
+    }, node.illustration);
   }
   /** 定下抉择结果：写旗标、记已看、给奖励；返回回应台词。 */
   private applyChoice(node: StoryNode, k: number, rewardIt: boolean): StoryLine[] {

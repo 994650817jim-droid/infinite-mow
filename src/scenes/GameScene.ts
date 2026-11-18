@@ -33,7 +33,7 @@ import {HuaxiongBoss} from '../systems/HuaxiongBoss';
 import {getXingyangEncounter} from '../data/xingyang';
 import {XurongBoss} from '../systems/XurongBoss';
 import {getSishuiEncounter} from '../data/sishui';
-import {BattlefieldSupplies,MAX_PROP_SLOTS} from '../systems/BattlefieldSupplies';
+import {BattlefieldSupplies,MAX_PROP_SLOTS,POUCH_MAX} from '../systems/BattlefieldSupplies';
 import {YellowBattle} from '../systems/YellowBattle';
 import {XiliangBattle} from '../systems/XiliangBattle';
 import {dongzhuoStageUnlocked,yellowStageUnlocked,unlockedTroopKinds} from '../world/WorldStore';
@@ -2260,6 +2260,11 @@ export class GameScene extends Phaser.Scene {
     }
     const remaining = this.upgradeOptions.filter((_o, k) => k !== index);
     this.upgradeOptions = []; // 先消费选项，防止重复点击旧卡。
+    // 2026-11-17 用户：「奖励的回春丹可以存着」——药囊有空位就收进药囊（Q / 用药钮使用，回复 30% 生命），满了才立即回复
+    if (option.id === 'potion_rejuvenation' && this.supplies && this.supplies.pouch.length < POUCH_MAX) {
+      this.supplies.pouch.push({ amount: Math.round(this.player.maxHp * .3), texture: this.textures.exists('heal_props') ? 'heal_props' : 'healing_potion', frame: this.textures.exists('heal_props') ? 1 : undefined, name: '回春丹' });
+      growthNotice = '回春丹 · 已收入药囊（Q 使用）';
+    } else
     option.apply(this.player, this.player.weapons, this.player.growth);
     // 相国印：这次升级还能再选一张（剩下的卡里挑）
     if (this.relicExtraPicks > 0 && remaining.length) { this.relicExtraPicks--; this.upgradeOptions = remaining; this.renderCards(); (this.levelPanel.getByName('upgrade-points-hint') as Phaser.GameObjects.Text)?.setText('相国印 · 再选一张'); if (growthNotice) this.pendingGrowthNotices.push(growthNotice); return; }

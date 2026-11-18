@@ -59,23 +59,23 @@ check('吸取：加军功、不播放音效', r4.xpGain && r4.sounds.length === 
 
 // 5) 大号令牌、缺图兜底
 const r5 = await p.evaluate(`(async () => { ${H} clear(); s.spawnGem(pl.x + 300, pl.y, 12); const g = newest(); const out = { tex: g.img.texture.key, size: Math.round(g.img.displayWidth), glowFrame: g.glow?.frame.name };
-  const ga = s.gemArt; s.gemArt = () => false; s.spawnGem(pl.x + 300, pl.y + 40, 1); const f = newest(); out.fallbackTex = f.img.texture.key; out.fallbackLite = f.lite; out.fallbackGlow = !!f.glow?.visible; s.gemArt = ga; clear(); return out; })()`);
+  const ga = s.gemArt; s.gemArt = () => false; s.spawnGem(pl.x + 300, pl.y + 40, 1); const f = s.gems.find(q => q.active && q !== g); out.fallbackTex = f.img.texture.key; out.fallbackLite = f.lite; out.fallbackGlow = !!f.glow?.visible; s.gemArt = ga; clear(); return out; })()`);
 check('大号（价值 ≥10）用金令牌手绘图，大号光晕', r5.tex === 'gem_tok_large' && r5.size === 26 && r5.glowFrame === 5, r5);
 check('缺图时退回程序光团兜底（不画光晕）', r5.fallbackTex === 'gem_small' && r5.fallbackLite && !r5.fallbackGlow, r5);
 
 // 6) 同屏上限 200 + 对象池 + 降级，200 个同时掉落的帧率
 const r6 = await p.evaluate(`(async () => { ${H} clear(); pl.stats.pickupRadius = 40; const imgs0 = s.children.list.length;
   const frames = []; let last = performance.now(), run = true; const tick = () => { const n = performance.now(); frames.push(n - last); last = n; if (run) requestAnimationFrame(tick); }; requestAnimationFrame(tick);
-  await wait(800); const base = frames.splice(0);
+  await wait(800); const base = frames.splice(0); const ug = s.updateGems.bind(s), cost = []; s.updateGems = dt => { const t = performance.now(); ug(dt); cost.push(performance.now() - t); };
   for (let i = 0; i < 250; i++) s.spawnGem(pl.x + 180 + (i % 25) * 18, pl.y - 200 + Math.floor(i / 25) * 40, i % 9 === 0 ? 12 : 1);
   const live = s.gems.filter(g => g.active).length, lite = s.gems.filter(g => g.active && g.lite).length, glows = s.gems.filter(g => g.active && g.glow?.visible).length;
-  await wait(2500); run = false; const mass = frames.splice(0);
+  await wait(2500); run = false; const mass = frames.splice(0); s.updateGems = ug;
   const avg = a => a.reduce((x, y) => x + y, 0) / a.length, p95 = a => [...a].sort((x, y) => x - y)[Math.floor(a.length * .95)];
   const pool = s.gems.length; clear(); for (let i = 0; i < 200; i++) s.spawnGem(pl.x + 300, pl.y, 1); const poolAfter = s.gems.length, imgs1 = s.children.list.length; clear();
-  return { live, lite, glows, pool, poolAfter, childGrowth: imgs1 - imgs0, baseFps: Math.round(1000 / avg(base)), massFps: Math.round(1000 / avg(mass)), massP95: Math.round(p95(mass)), massMax: Math.round(Math.max(...mass)) }; })()`);
+  return { live, lite, glows, pool, poolAfter, childGrowth: imgs1 - imgs0, baseFps: Math.round(1000 / avg(base)), massFps: Math.round(1000 / avg(mass)), massP95: Math.round(p95(mass)), massMax: Math.round(Math.max(...mass)), gemsMsAvg: +avg(cost).toFixed(3), gemsMsMax: +Math.max(...cost).toFixed(2) }; })()`);
 check('同屏最多 200 个（多掉的丢弃），对象池不再新建', r6.live === 200 && r6.pool === 200 && r6.poolAfter === 200, r6);
 check('同屏过多时新掉的降级（超过 120 个后不画光晕）', r6.lite >= 70 && r6.glows <= 130, r6);
-check('200 个同时掉落与浮动不掉帧（平均 ≥ 55fps 且不低于平时 90%）', r6.massFps >= 55 && r6.massFps >= r6.baseFps * .9, r6);
+check('200 个同时掉落与浮动不掉帧（平均 ≥ 55fps、95% 帧 ≤ 20ms、信物更新平均 < 1ms）', r6.massFps >= 55 && r6.massP95 <= 20 && r6.gemsMsAvg < 1, r6);
 
 // 7) 手机布局降级
 const r7 = await p.evaluate(async () => { const c = await import('/src/config.ts'); return { desktop: c.IS_DESKTOP }; });

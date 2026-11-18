@@ -22,6 +22,8 @@ export const ZJ = {
   grid: { cell: 110, waves: 3, warnMs: 750, strikeGapMs: 350, damage: 24, troopDamage: 14, recoverMs: 700 },
   /** 召兵（保留，频率降低）。 */
   summonEveryMs: 14000, summonCount: 3, summonCap: 8,
+  /** 空闲（两招之间）：中距离（150～260）不再原地站着，绕主将慢慢游走（速度倍率），每 orbitFlipMs 换一次方向（用户 11-18「张角好像卡住不动了」）· 待平衡会话复核 */
+  orbitMul: .45, orbitFlipMs: 3200, walkFrameMs: 140,
 } as const;
 
 import { meleeReach } from './bossReach';

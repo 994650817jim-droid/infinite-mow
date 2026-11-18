@@ -3,6 +3,7 @@ import type { Enemy } from '../entities/Enemy';
 import type { Player } from '../entities/Player';
 import type { PlayerStats, WeaponState } from '../types';
 import { PASSIVE_RULES as R } from '../data/passives';
+import { WY_SURROUND } from '../data/heroMechanics';
 import type { WeaponHost } from './registry';
 import { smartTarget } from './heroWeapons2';
 import { SHOW_OWN_RANGE_FX } from '../ui/HintStyle';
@@ -78,6 +79,8 @@ function releaseCracks(host: WeaponHost, angles: number[], damage: number, len: 
 }
 
 export function zhenbeiBehavior(host: WeaponHost, weapon: WeaponState, dt: number, time: number): void {
+  // 拒敌：被围也积层（2026-11-18，data/heroMechanics.ts WY_SURROUND）——每帧数身边敌人，冷却中也算
+  { const p0 = host.player, r0 = WY_SURROUND.radius; p0.passive.onSurrounded(time, dt, host.grid.query(p0.x, p0.y, r0 + 30).filter(e => e.active && !e.isSupplySlot && Math.hypot(e.x - p0.x, e.y - p0.y) <= r0 + e.radius).length); }
   weapon.cooldownLeft -= dt;
   if (weapon.cooldownLeft > 0) return;
   const pl = host.player, growth = pl.growth, level = weapon.level;

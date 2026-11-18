@@ -71,9 +71,13 @@ export class MenuScene extends Phaser.Scene {
   create(): void {playMenuMusic(this);
     ensureWarTextures(this);
     this.cameras.main.fadeIn(180,0,0,0);
-    // 2026-11-15 用户要求：开局每次从本章第 1 关打起（原为“下一个未通关”）；想打后面的关可在选关 / 战役回顾中选
-    this.selectedStage=1;this.stageTabs=[];
-    this.westRows=[];this.westModal=undefined;this.westDeploy=undefined;this.westDeployLabel=undefined;this.selectedWestStage=1;
+    // 2026-11-15 用户要求：开局每次从本章第 1 关打起（原为“下一个未通关”）。
+    // 2026-11-18 修「退出后再进入，之前学习的武将技能和武器强化都没有了」：征程构筑（2026-11-17 用户批准）只在未通关的主线关读入，
+    // 已通关的关算「重打旧关」、用空构筑；从主页再进总是 1-1 / 2-1（已通关）→ 构筑「丢了」。现在主页出征接着本章下一个未通关的关（征程存档点，
+    // 与选关面板 pickChapter 一致）；本章全通了才从第 1 关起。想重打前面的关仍可在选关 / 战役回顾中选（重打用空构筑）。
+    {const w=loadWorld();this.selectedStage=(w.yellowStages>=1&&w.yellowStages<3?w.yellowStages+1:1) as YellowStage;this.selectedWestStage=(w.dongzhuoStages>=1&&w.dongzhuoStages<3?w.dongzhuoStages+1:1) as YellowStage;}
+    this.stageTabs=[];
+    this.westRows=[];this.westModal=undefined;this.westDeploy=undefined;this.westDeployLabel=undefined;
     this.started = false; this.chapterButtons = []; this.charCards = [];
     const params = new URLSearchParams(window.location.search), saved = this.registry.get('runConfig') as RunConfig | undefined;
     // 过场动画预览（?dev=1&cutscene=<id>[&hero=<武将>]）：直接开那一关，GameScene 推到过场处自动播
@@ -86,7 +90,7 @@ export class MenuScene extends Phaser.Scene {
     const expanded=fromWorld||this.registry.get('menuChapterPicker')===true||((params.has('autostart')||params.has('perf'))&&params.has('chapter'));
     this.registry.remove('menuChapterPicker');this.compactHome=!expanded;this.homeCard=undefined;this.heroPicker=undefined;this.heroEntryPaint=undefined;this.heroModal=undefined;this.homePortrait=undefined;this.homeBackground=undefined;
     const requested = getChapter(this.registry.get('selectedWorldChapter') ?? params.get('chapter') ?? (chapterOneCleared()?'hulao':saved?.chapter)).id;
-    const west=Number(this.registry.get('selectedWorldStage')??params.get('westStage')??(isChapterTestRun()&&requested==='hulao'?params.get('stage'):undefined)??1);
+    const west=Number(this.registry.get('selectedWorldStage')??params.get('westStage')??(isChapterTestRun()&&requested==='hulao'?params.get('stage'):undefined)??this.selectedWestStage);
     this.registry.remove('selectedWorldStage');if([1,2,3].includes(west)&&(dongzhuoStageUnlocked(west)||isChapterTestRun()))this.selectedWestStage=west as YellowStage;
     this.registry.remove('selectedWorldChapter');
     this.selectedChapter = chapterUnlocked(requested)||isChapterTestRun() ? requested : 'huangjin';

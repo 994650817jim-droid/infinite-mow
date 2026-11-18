@@ -226,3 +226,4 @@ assets/raw/*
 !/tools/test-boss-charge-troops.mjs
 !/tools/test-camp-medic.mjs
 !/tools/shot-camp-rest.mjs
+!/tools/test-surrender.mjs

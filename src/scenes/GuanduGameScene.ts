@@ -46,6 +46,10 @@ export function guanduGameSceneClass(Base: typeof GameScene) {
     private guanduStage: GuanduStage = 1; private controller?: GuanduBoss; private receipt = ''; private test = false;
     /** 马厩赠马键（见 data/mounts.ts HORSES.reward）。 */
     protected stableRewardKey(): string | null { return 'guandu-' + this.guanduStage; }
+    /** 首领招降表的键：guandu-关:首领 id（颜良 / 文丑 / 淳于琼）。 */
+    protected surrenderKey(): string | null { return 'guandu-' + this.guanduStage + ':' + this.chapter.bossStyle; }
+    /** 乌巢（4-3）：三座粮仓全烧 → 劝淳于琼 +15%。 */
+    protected parleyFlags(): Record<string, boolean> { return { depotsAllBurned: !!this.depots && this.depots.intact === 0 && (this.depots.burned ?? 0) > 0 }; }
     constructor() { super('GuanduGameScene'); }
     preload() { for (const [key, url] of Object.entries(GUANDU_ATLAS_FILES)) if (!this.textures.exists(key)) loadBossSheet(this.load, key, url); }
     create() {

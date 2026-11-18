@@ -80,7 +80,7 @@ async function newPage(seed) {
   const dpad0 = await st(p); await p.evaluate(() => { window.__vpad.buttons[13] = 1; }); await p.waitForTimeout(500); await p.evaluate(() => { window.__vpad.buttons[13] = 0; }); const dpad1 = await st(p);
   ck('十字键也能移动', dpad1.y - dpad0.y > 40, { dpad0, dpad1 });
   const hints = await p.evaluate(G0 => { const g = eval(G0); return { potion: g.potionCaption?.text, pause: g.hudTexts.pause.text, order: g.legionUI.keyHint?.text }; }, G);
-  ck('用手柄时 HUD 提示换成手柄键（用药 Ⓧ / 暂停 ☰ / 护阵 Ⓨ）', hints.potion === '用药 Ⓧ' && hints.pause === '☰ 暂停' && hints.order === 'Ⓨ', hints);
+  ck('用手柄时 HUD 提示换成手柄键（用药 Ⓧ / 暂停 ☰ / 护阵 Ⓨ）', hints.potion === '用药 Ⓧ' && (hints.pause === '☰ 暂停' || hints.pause === '☰ 设置') /* 电脑版右上改为「设置」 */ && hints.order === 'Ⓨ', hints);
   await shot(p, 'battle-hud');
   const o0 = await p.evaluate(G0 => eval(G0).legion.order, G); await pad.press('Y'); const o1 = await p.evaluate(G0 => eval(G0).legion.order, G);
   ck('Ⓨ 切换护阵 / 出击', o0 !== o1, { o0, o1 });
@@ -94,7 +94,8 @@ async function newPage(seed) {
   await shot(p, 'pause'); await layoutCheck(pad, '暂停');
   // 滑条：下移到战场音乐，右键 +10%
   let slider = null;
-  for (let i = 0; i < 4 && !slider; i++) { await pad.press('DOWN'); const f = await p.evaluate(() => !!window.__pad.focused?.getData?.('padAdjust')); if (f) slider = true; }
+  // 2026-11-17：暂停改成两栏「军中设置」，音量滑条在右栏顶部 → 先右再上下找到「音乐」滑条
+  for (const dir of ['RIGHT', 'UP', 'UP', 'DOWN', 'DOWN', 'DOWN', 'RIGHT', 'UP']) { if (slider) break; await pad.press(dir); const f = await p.evaluate(() => /^volume-(音乐|战场音乐)$/.test(window.__pad.focused?.name ?? '') && !!window.__pad.focused?.getData?.('padAdjust')); if (f) slider = true; }
   const v0 = await p.evaluate(G0 => eval(G0).music.getVolume(), G); await pad.press('RIGHT'); const v1 = await p.evaluate(G0 => eval(G0).music.getVolume(), G);
   await pad.press('LEFT');
   ck('暂停面板：焦点到音量滑条，左右键调节', slider && Math.round(v1 - v0) === 10, { v0, v1 });
@@ -113,7 +114,7 @@ async function newPage(seed) {
   // 键鼠接管后提示恢复
   await p.keyboard.press('Shift');
   const kb = await p.evaluate(G0 => { const g = eval(G0); return { potion: g.potionCaption?.text, pause: g.hudTexts.pause.text, order: g.legionUI.keyHint?.text, frame: window.__game.scene.getScene('GameScene').children.list.some(o => o.type === 'Graphics' && o.depth === 1e7 && o.visible) }; }, G);
-  ck('按键盘后提示恢复为键盘（用药 / 暂停 / E）、焦点框隐藏', kb.potion === '用药' && kb.pause === '暂停' && kb.order === 'E' && !kb.frame, kb);
+  ck('按键盘后提示恢复为键盘（用药 / 暂停 / E）、焦点框隐藏', kb.potion === '用药' && (kb.pause === '暂停' || kb.pause === '设置') /* 电脑版右上改为「设置」 */ && kb.order === 'E' && !kb.frame, kb);
 
   // ———— 2. 只用手柄打完一关：三选一 / 招募 / 战利品全部用 Ⓐ，行营里「率军出征」进下一关 ————
   await p.evaluate(G0 => { const g = eval(G0); g.player.damageImmune = true; g.devOneHit = true; g.devTimeScale = 5; g.spawnTimer = 0; }, G);

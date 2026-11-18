@@ -48,7 +48,7 @@ export const TECHS: Record<TechId, TechDef> = {
   elite_cav: {name: '骑戟精锐', branch: 'troops', tier: 3, cost: 800, needs: 'drill_ranged', desc: '轻骑兵、精锐戟兵出征开局即为 Lv2', effect: {troopLevel: {kinds: ['rider', 'halberdier'], level: 2}}},
 
   forge: {name: '磨砺兵刃', branch: 'arms', tier: 1, cost: 150, desc: '主将伤害 +4%', effect: {damage: .04}},
-  armor: {name: '坚甲', branch: 'arms', tier: 2, cost: 400, desc: '主将最大生命 +6%', effect: {maxHp: .06}},
+  armor: {name: '坚甲', branch: 'arms', tier: 2, cost: 400, desc: '主将生命上限 +6%', effect: {maxHp: .06}},
   drill_points: {name: '操练', branch: 'arms', tier: 2, cost: 400, needs: 'forge', desc: '出征开局属性点 +1', effect: {attributePoints: 1}},
   forge2: {name: '百炼', branch: 'arms', tier: 3, cost: 800, needs: 'forge', desc: '主将伤害再 +6%', effect: {damage: .06}},
 };

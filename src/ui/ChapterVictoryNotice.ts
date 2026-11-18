@@ -1,11 +1,13 @@
 import Phaser from 'phaser';
-import { DEPTH, FONT, HEADING_FONT } from '../config';
+import { DEPTH, FONT, HEADING_FONT, TITLE_FONT } from '../config';
+import { inkPlate } from './HomeCommand';
 
 /**
  * 章节告捷弹窗（漆金卷轴）：深色漆底 + 双层描金线 + 四角菱饰（同 HomePlaque 一系），
  * 顶部军营图横幅渐隐入漆底，朱砂「捷」印、描金大标题、路线指引（节点 + 连线箭头），漆金按钮带悬停 / 按下态。
  * 只负责表现：容器命名 name，按钮命中区命名 confirmName（测试与旧逻辑沿用），点击回调由场景决定。
  * 不用 tween：关卡结束时战斗计时器已暂停，状态切换均为即时重绘。
+ * 电脑版（2026-11-17 结算 UI 统一）：大标题用书法标题字 + 金色，正文象牙白，确认按钮换水墨笔触主按钮（同主页 / 结算）。
  */
 export interface VictoryNoticeOptions {
   name: string; confirmName: string;
@@ -89,8 +91,9 @@ export function chapterVictoryNotice(scene: Phaser.Scene, W: number, H: number, 
 
   // 描金大标题
   y = y0 + bannerH + (desk ? 18 : 28);
-  const title = text(cx, y, o.title, desk ? 34 : 40, '#f6dc9a', true)
-    .setStroke('#2a170b', 6).setShadow(0, 3, '#000000', 6, true, true);
+  const title = text(cx, y, o.title, desk ? 38 : 40, desk ? '#efd399' : '#f6dc9a', true)
+    .setStroke(desk ? '#120904' : '#2a170b', 6).setShadow(0, 3, '#000000', 6, true, true);
+  if (desk) title.setFontFamily(TITLE_FONT).setLetterSpacing(4);
   root.add(title);
 
   // 分隔：细线 + 中央菱饰
@@ -103,7 +106,7 @@ export function chapterVictoryNotice(scene: Phaser.Scene, W: number, H: number, 
 
   // 叙述
   y += desk ? 40 : 50;
-  root.add(text(cx, y, o.lines.join('\n'), desk ? 17 : 20, '#eadcbd').setLineSpacing(desk ? 10 : 14));
+  root.add(text(cx, y, o.lines.join('\n'), desk ? 17 : 20, desk ? '#e8d8b2' : '#eadcbd').setLineSpacing(desk ? 10 : 14).setStroke('#120904', desk ? 3 : 0));
 
   // 路线指引：节点 + 连线箭头，首节点为「当前」，末节点为朱砂目的地
   y += desk ? 74 : 96;
@@ -129,7 +132,11 @@ export function chapterVictoryNotice(scene: Phaser.Scene, W: number, H: number, 
   const bw = desk ? 260 : 300, bh = desk ? 52 : 62, by = y0 + ph - (desk ? 62 : 74);
   const btn = scene.add.graphics().setScrollFactor(0);
   const label = text(cx, by, o.confirm, desk ? 21 : 24, '#ffe9bd', true).setStroke('#2a170b', 3);
+  const inkArt = desk && scene.textures.exists('btn_ink_primary_normal');
+  let plate: Phaser.GameObjects.NineSlice | null = null;
+  if (inkArt) label.setColor('#f8e6bf').setStroke('#2a0c06', 3).setLetterSpacing(3);
   const paint = (state: 'idle' | 'hover' | 'down') => {
+    if (inkArt) { plate = inkPlate(scene, plate, cx, by, bw, bh, true, state === 'down' ? 'pressed' : state === 'hover' ? 'hover' : 'normal'); plate?.setScrollFactor(0); label.setY(by + (state === 'down' ? 1 : 0)).setColor(state === 'hover' ? '#fff3d4' : '#f8e6bf'); return; }
     const d = state === 'down' ? 2 : 0, hi = state !== 'idle';
     btn.clear();
     btn.fillStyle(0x000000, .4).fillRoundedRect(cx - bw / 2 + 2, by - bh / 2 + 4, bw, bh, 8);
@@ -144,6 +151,6 @@ export function chapterVictoryNotice(scene: Phaser.Scene, W: number, H: number, 
   hit.on('pointerover', () => paint('hover')).on('pointerout', () => paint('idle'))
     .on('pointerup', () => paint('hover'))
     .on('pointerdown', () => { paint('down'); o.onConfirm(); });
-  root.add([btn, label, hit]);
+  root.add(plate ? [plate, label, hit] : [btn, label, hit]);
   return root;
 }

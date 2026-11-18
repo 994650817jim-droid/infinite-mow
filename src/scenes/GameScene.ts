@@ -1206,13 +1206,15 @@ export class GameScene extends Phaser.Scene {
     // 末位首领倒地后等主将捡宝箱：不再刷兵
     if (this.awaitingChest) return;
     this.spawnTimer -= dt;
-    const cap = BALANCE.enemyCap;
+    // 首领在场：杂兵上限减半、刷兵间隔加倍、每次数量减半（BALANCE.bossSpawn）
+    const bossOn = !!this.boss?.active, B = BALANCE.bossSpawn;
+    const cap = bossOn ? Math.round(BALANCE.enemyCap * B.capMul) : BALANCE.enemyCap;
     if (this.spawnTimer <= 0 && this.activeEnemyCount() < cap) {
       // 刷怪时间轴按关卡节奏加速（stageTuning.pace）：原来第 N 波的刷怪强度在新的第 N 波出现
       const paced = this.elapsed * (this.chapter.pace ?? 1);
       const easy = this.tutorial?.easy(this.elapsed); // 新手引导：开局 30 秒刷兵放缓
-      this.spawnTimer = this.chapter.spawnInterval(paced) * (easy?.interval ?? 1) * (this.sishuiPass?.spawnMul ?? 1); // 汜水关西凉营帐全塌后变稀
-      const rawBurst = this.chapter.spawnBurst(paced), burst = easy && easy.burstDiv > 1 ? Math.max(1, Math.ceil(rawBurst / easy.burstDiv)) : rawBurst;
+      this.spawnTimer = this.chapter.spawnInterval(paced) * (easy?.interval ?? 1) * (this.sishuiPass?.spawnMul ?? 1) * (bossOn ? B.intervalMul : 1); // 汜水关西凉营帐全塌后变稀
+      const rawBurst = this.chapter.spawnBurst(paced), burst0 = easy && easy.burstDiv > 1 ? Math.max(1, Math.ceil(rawBurst / easy.burstDiv)) : rawBurst, burst = bossOn ? Math.max(1, Math.ceil(burst0 * B.burstMul)) : burst0;
       for (let i = 0; i < burst; i += 1) {
         if (this.activeEnemyCount() >= cap) break;
         if (!this.spawnAroundPlayer(this.chapter.pickEnemy(paced))) break;

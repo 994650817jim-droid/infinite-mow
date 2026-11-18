@@ -61,6 +61,27 @@ export function factionStrip(scene: Phaser.Scene, x: number, y: number, maxW: nu
   return root;
 }
 
+/** 电脑版左上角势力图例（2026-11-18）：竖排，各势力色块 + 名称 + 城数，我方置顶描绿边。 */
+export function factionCorner(scene: Phaser.Scene, x: number, y: number, era: EraId, owned: readonly string[]): Phaser.GameObjects.Container {
+  const root = scene.add.container(0, 0).setName('world-faction-strip'), counts = new Map<FactionId, number>(factionStrength(era, owned));
+  if (owned.length) counts.set('player', owned.length);
+  const rows = [...counts.entries()].filter(([f, n]) => f !== 'han' && n > 0).sort((a, b) => (a[0] === 'player' ? -1 : b[0] === 'player' ? 1 : b[1] - a[1]));
+  const g = scene.add.graphics(); root.add(g);
+  const head = scene.add.text(x + 10, y + 12, '势力 · 城', {fontFamily: HEADING_FONT, fontSize: '12px', color: '#e8c47a', resolution: 2}).setOrigin(0, .5); root.add(head);
+  let w = head.width + 20, cy = y + 30; const lines: Array<() => void> = [];
+  for (const [f, n] of rows) {
+    const player = f === 'player', t = scene.add.text(x + 26, cy, FACTIONS[f].name, {fontFamily: FONT, fontSize: '11px', color: player ? '#d8f5dc' : '#efe2c2', resolution: 2}).setOrigin(0, .5).setName('faction-row-' + f);
+    const c = scene.add.text(0, cy, String(n), {fontFamily: FONT, fontSize: '11px', color: player ? '#d8f5dc' : '#cdbf9e', resolution: 2}).setOrigin(1, .5);
+    root.add([t, c]); w = Math.max(w, 26 + t.width + 34); const yy = cy, color = FACTIONS[f].color;
+    lines.push(() => { g.fillStyle(color, .95).fillRoundedRect(x + 10, yy - 5, 10, 10, 2); if (player) g.lineStyle(1, 0x9fe0b4, .9).strokeRoundedRect(x + 4, yy - 9, w - 8, 18, 4); });
+    cy += 17;
+  }
+  for (const o of root.list) if (o instanceof Phaser.GameObjects.Text && o.originX === 1) o.setX(x + w - 10);
+  lacquerPlate(g, x, y, w, cy - y + 2, .86);
+  for (const l of lines) l();
+  return root;
+}
+
 /** 疆域大字：势力名写在疆域上（随地图缩放），字距拉开、半透明，像史书地图的题字。 */
 export function realmLabels(scene: Phaser.Scene, labels: readonly TerritoryLabel[]): Phaser.GameObjects.Text[] {
   return labels.filter(l => l.faction !== 'han').map(l => {

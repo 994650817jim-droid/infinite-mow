@@ -5,7 +5,7 @@ import { showLordNotice } from '../ui/LordNotice';
 import {playMenuMusic,menuMusic} from '../systems/Music';
 import {artStyle,setArtStyle} from '../systems/ArtStyle';
 import { iffOutlineEnabled, setIffOutline, warmIffTextures } from '../systems/IffOverlay';
-import { OUTLINE_LABEL, cycle, outlineMode, setOutlineMode, shakeLevel, setShakeLevel, SHAKE_LABEL, type ShakeLevel } from '../systems/BattleSettings';
+import { OUTLINE_LABEL, cycle, outlineMode, setOutlineMode, shakeLevel, setShakeLevel, SHAKE_LABEL, type ShakeLevel, STORY_LABEL, storyMode, setStoryMode } from '../systems/BattleSettings';
 import {uiSfx} from '../systems/Sfx';
 import {GameCodex} from '../ui/GameCodex';
 import {HeroWarCard} from '../ui/HeroWarCard';
@@ -322,10 +322,10 @@ export class MenuScene extends Phaser.Scene {
     const label=(x:number,y:number,value:string,size=20)=>this.add.text(x,y,value,{fontFamily:FONT,fontSize:size+'px',color:'#e8d0aa',resolution:2}).setOrigin(.5);
     const app=desktop,desk=IS_DESKTOP_APP&&!!app;
     // 桌面版行距收紧，放下显示设置（分辨率 / 全屏 / 垂直同步）
-    const rowY=(i:number)=>desk?H/2-166+i*46:H/2-70+i*60;
+    const rowY=(i:number)=>desk?H/2-166+i*46:H/2-70+i*54;
     // 漆底描金面板（与图鉴、结算卷同系）；每行左右是漆金小方钮，返回为漆金按钮
     modal.add(this.add.rectangle(W/2,H/2,W,H,0x0c0805,.9).setInteractive());
-    {const pw=desk?560:Math.min(W-40,460),top=desk?H/2-250:H/2-190,bottom=desk?rowY(9)+40:H/2+266,g=this.add.graphics();lqPanel(g,W/2-pw/2,top,pw,bottom-top);modal.add(g);
+    {const pw=desk?560:Math.min(W-40,460),top=desk?H/2-250:H/2-190,bottom=desk?rowY(10)+40:H/2+300,g=this.add.graphics();lqPanel(g,W/2-pw/2,top,pw,bottom-top);modal.add(g);
      const t=label(W/2,desk?H/2-218:H/2-130,'军中设置',28).setFontFamily(desk?TITLE_FONT:HEADING_FONT).setColor(desk?'#efd399':'#f6dc9a').setStroke(desk?'#120904':'#2a170b',4);modal.add(t);
      const div=this.add.graphics();lqDivider(div,W/2,t.y+30,desk?160:130);modal.add(div);
      modal.add(tutorialReplayLink(this,W/2+pw/2-22,top+24));} // 新手引导：重看（逻辑在 ui/TutorialOverlay.ts）
@@ -351,7 +351,7 @@ export class MenuScene extends Phaser.Scene {
       const vs=row(4,'垂直同步',()=>{const d=disp();return d?(d.vsync?'开':'关'):'—';},()=>{const d=disp();if(d&&app.display)app.display.set({vsync:!d.vsync});vsNote();},['‹','›']).setName('settings-vsync');
       const vsyncNote=label(W/2,rowY(4)+22,'',11).setColor('#9d8f78');modal.add(vsyncNote);
       const vsNote=()=>{const d=disp();vsyncNote.setText(d&&d.vsync!==d.vsyncActive?'重启游戏后生效':'');};vsNote();void vs;
-      const quit=label(W/2,rowY(8)+6,'退出游戏',18).setColor('#e7b68e').setInteractive({useHandCursor:true}).setName('settings-quit');
+      const quit=label(W/2,rowY(9)+6,'退出游戏',18).setColor('#e7b68e').setInteractive({useHandCursor:true}).setName('settings-quit');
       quit.on('pointerdown',()=>{if(quit.getData('confirm'))app.quit();else quit.setData('confirm',true).setText('确认退出？再点一次');});
       const qs=lqSkin(this,quit,quit,()=>({w:220,h:38}),{tone:'quiet'});lqHitBox(quit,220,38);
       modal.add([qs.gfx,quit]);
@@ -363,7 +363,9 @@ export class MenuScene extends Phaser.Scene {
     {const at=desk?6:3;const list=['off','enemy','all'] as const;row(at,'敌我描边',()=>OUTLINE_LABEL[outlineMode()],dir=>{const v=cycle(list,outlineMode(),dir);setOutlineMode(v);if(v!=='off')warmIffTextures(this.game);},['‹','›']).setName('settings-iff-outline');void iffOutlineEnabled;void setIffOutline;}
     // 震屏（打击感 2026-11-17）：强 / 弱 / 关，立即生效（战斗中所有震屏都按此缩放）
     {const at=desk?7:4,order:ShakeLevel[]=['strong','weak','off'];let cur=shakeLevel();row(at,'震屏',()=>SHAKE_LABEL[cur],dir=>{cur=order[(order.indexOf(cur)+(dir>0?1:2))%3];setShakeLevel(cur);},['‹','›']).setName('settings-shake');}
-    const close=label(W/2,desk?rowY(9)+6:H/2+226,'返回',20).setFontFamily(HEADING_FONT).setInteractive({useHandCursor:true}).setName('settings-close').setData('padDefault',true).on('pointerdown',()=>modal.destroy());
+    // 剧情（2026-11-17 剧情系统）：完整 / 只看章头章末 / 关闭
+    {const at=desk?8:5,list=['full','chapter','off'] as const;row(at,'剧情',()=>STORY_LABEL[storyMode()],dir=>setStoryMode(cycle(list,storyMode(),dir)),['‹','›']).setName('settings-story');}
+    const close=label(W/2,desk?rowY(10)+6:H/2+264,'返回',20).setFontFamily(HEADING_FONT).setInteractive({useHandCursor:true}).setName('settings-close').setData('padDefault',true).on('pointerdown',()=>modal.destroy());
     const cs=lqSkin(this,close,close,()=>({w:200,h:desk?44:52}),{tone:'cinnabar'});lqHitBox(close,200,desk?44:52);
     modal.add([cs.gfx,close]);
   }

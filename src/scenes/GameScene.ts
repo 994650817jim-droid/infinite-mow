@@ -3,7 +3,8 @@ import {FollowerSquad,type Follower} from '../systems/FollowerSquad';
 import {CharacterPassives} from '../systems/CharacterPassives';
 import {FOLLOW} from '../data/recruits';
 import type {PlayerStats} from '../types';
-import {followersFor,followerLevelCap} from '../systems/RosterStore';
+import {followersFor,followerLevelCap,heroOwned} from '../systems/RosterStore';
+import { StoryDirector, campTalkStrip, setStoryFlag, type StoryCtx } from '../systems/Story';
 import { warnCircle, TELEGRAPH_CLASSIC, groundCracks, windupFlash } from '../ui/Telegraph';
 import { HINT_MOCK, SHOW_OWN_RANGE_FX, groundScar, keyOutline } from '../ui/HintStyle';
 import { warnFx } from '../ui/WarnFx';
@@ -80,7 +81,7 @@ import { HERO_XP_RATE, OVERFLOW_XP_PER_GRAIN, PICK_GUARANTEE, PICK_PACE } from '
 import { addProvisions } from '../world/WorldStore';
 import { loadCampaignBuild, packCampaign, restoreCampaign, saveCampaignBuild, type CampaignTransfer } from '../systems/Campaign';
 import { TROOP_KINDS, INITIAL_TROOPS, LEGION, FREE_RECRUIT_BY_TIER, type TroopKind } from '../data/legion';
-import { DEFAULT_RUN_CONFIG, getCharacter, type RunConfig , HERO_TINT, HERO_FX } from '../data/characters';
+import { DEFAULT_RUN_CONFIG, getCharacter, type RunConfig , HERO_TINT, HERO_FX, type CharacterId } from '../data/characters';
 import { Music } from '../systems/Music';
 import { battleThemeFor } from '../systems/EpicBgm';
 import { Sfx } from '../systems/Sfx';
@@ -110,7 +111,7 @@ import { PROP_LOOT, rollPropItem, type PropLootKind } from '../data/propLoot';
 import { terrainConfigFor } from '../data/terrain';
 import { Tutorial } from '../systems/Tutorial';
 import { IffOverlay, readIffMode, warmIffTextures, type IffUnit } from '../systems/IffOverlay';
-import { BARKS_LABEL, heroBarks, setHeroBarks, type HeroBarks } from '../systems/BattleSettings';
+import { BARKS_LABEL, heroBarks, setHeroBarks, type HeroBarks, STORY_LABEL, setStoryMode, storyMode, type StoryMode } from '../systems/BattleSettings';
 import { HeroBark, type BarkSpeaker } from '../ui/HeroBark';
 import { BossPresence } from '../systems/BossPresence';
 import { DAMAGE_LABEL, OUTLINE_LABEL, SCALE_LABEL, SHAKE_LABEL, WIDTH_LABEL, cycle, damageNumbers, outlineMode, outlineWidth, renderScaleSetting, setDamageNumbers, setOutlineMode, setOutlineWidth, setRenderScaleSetting, setShakeLevel, shakeLevel, shakeScale, type DamageNumbers, type OutlineMode, type OutlineWidth, type RenderScaleSetting, type ShakeLevel } from '../systems/BattleSettings';
@@ -415,6 +416,8 @@ export class GameScene extends Phaser.Scene {
   protected orbitAngle = 0;
 
   protected mode: Mode = 'none';
+  /** 剧情（关前章头 / 军情 / 羁绊、首领登场 / 倒下、章末；2026-11-17 systems/Story.ts） */
+  storyDir!: StoryDirector;
   protected over = false;
   protected victory = false;
   protected pendingLevels = 0;
@@ -686,11 +689,18 @@ export class GameScene extends Phaser.Scene {
       .setOrigin(0.5)
       .setScrollFactor(0)
       .setDepth(DEPTH.hud);
-    this.tutorial = Tutorial.maybeStart(this);
+    // 剧情：关前章头 → 军情 → 羁绊（都看完 / 跳过后再开新手引导，避免两者叠在一起）
+    this.storyDir = new StoryDirector({ scene: this, chapterId: this.runConfig.encounter ? '' : this.chapter.id, stage: this.chapter.id === 'hulao' ? (this.chapter.westStage ?? 3) : (this.chapter.stage ?? 1), ctx: this.storyCtx(),
+      pause: () => { if (this.mode === 'none' && !this.over) this.setMode('story'); }, resume: () => { if (this.mode === 'story' && !this.over) this.setMode('none'); } });
+    { const k = this.storyDir.bondDamageMul(this.runConfig.character); if (k !== 1) this.player.stats.damageMul *= k; // 羁绊（如「桃园」）：主将与在队成员本关伤害加成
+      for (const m of this.followers?.members ?? []) if (m.recruit.hero) m.weaponDamageMul *= this.storyDir.bondDamageMul(m.recruit.hero); }
+    this.storyDir.beginStage(() => { if (this.sys.settings.status < Phaser.Scenes.SHUTDOWN && !this.over) this.tutorial = Tutorial.maybeStart(this); });
     // 首领阶段切换统一事件（boss-phase）：所有控制器的 phase2 都从这里发
     watchBossPhase(this, () => { const c = (this as unknown as { controller?: { phase2?: boolean } }).controller; return this.boss ? { boss: this.boss, phase2: !!(this.moveset?.phase2 || this.lubu?.phase2 || this.huaxiong?.phase2 || this.xurong?.phase2 || this.zhangjiao?.phase2 || c?.phase2), name: this.chapter.bossName, mounted: !!(this.bossMount?.mounted || this.moveset?.mounted) } : null; });
   }
 
+  /** 剧情上下文：主公、在队（主公 + 随行武将）、已招募。 */
+  storyCtx(): StoryCtx { return { lord: this.runConfig.character, team: () => [this.runConfig.character, ...(this.followers?.members ?? []).map(m => m.recruit.hero).filter((h): h is CharacterId => !!h)], recruited: id => heroOwned(id) }; }
   /** 把开局选择（武将/初始武器）应用到本局。 */
   protected applyRunConfig(config: RunConfig): void {
     const character = getCharacter(config.character);
@@ -1171,6 +1181,7 @@ export class GameScene extends Phaser.Scene {
     this.music.setBoss(profile);
     this.announceBoss(profile.title, this.chapter.bossName);
     this.presence?.entrance(boss);
+    this.storyDir?.bossIntro(boss.sprite); // 剧情：首领登场大字台词
   }
 
   /** 首领名号标题：画面上部一道短墨痕，墨上名号小字 + 名字，约 2.6 秒淡出；不拦截点击、不暂停。
@@ -1883,7 +1894,7 @@ export class GameScene extends Phaser.Scene {
     this.objective?.onKill(enemy);
     const kind = enemy.kind;
     // 吕布倒地改由 playBossFall（倒地 4 帧）播，不再叠旧的通用死亡闪影
-    if(kind==='boss'){const old=this.chasingBosses.find(t=>t.enemy===enemy&&t.life===enemy.spawnId),h=old?old.huaxiong:this.huaxiong,x=old?old.xurong:this.xurong;h?.defeat();x?.defeat();if(enemy===this.boss){this.sishuiPass?.onBossDown();this.moveset?.defeat();this.moveset=null;this.bossMount?.destroy();this.bossMount=null;}if(old){if(h)this.deadBossControllers.push(h);if(x)this.deadBossControllers.push(x);}
+    if(kind==='boss'){const old=this.chasingBosses.find(t=>t.enemy===enemy&&t.life===enemy.spawnId),h=old?old.huaxiong:this.huaxiong,x=old?old.xurong:this.xurong;h?.defeat();x?.defeat();if(enemy===this.boss){this.sishuiPass?.onBossDown();{const at={x:enemy.x,y:enemy.y,displayHeight:enemy.sprite.displayHeight};this.storyDir?.bossFall(at);if(this.sishuiPass?.wenjiu){setStoryFlag('wenjiu_huaxiong');this.time.delayedCall(1600,()=>this.storyDir?.line('hulao-1.wenjiu',this.player.sprite));}}this.moveset?.defeat();this.moveset=null;this.bossMount?.destroy();this.bossMount=null;}if(old){if(h)this.deadBossControllers.push(h);if(x)this.deadBossControllers.push(x);}
       // 倒地：控制器自己有倒地帧的（华雄 / 徐荣 / 子类首领）沿用；其余首领播通用倒地（受伤帧 + 倒下 + 手绘扬尘 + 下沉淡出）
       this.bossFallDir=0;if(!(h||x||this.bossHasDeathArt()))this.bossFallDir=playBossFall(this,enemy,this.zhangjiao?'zhangjiao_moves':this.lubu?'lubu_moves':undefined,old?undefined:this.chapter.bossStyle);}
     enemy.deactivate();
@@ -1912,7 +1923,7 @@ export class GameScene extends Phaser.Scene {
         this.recordFrontlineVictory(old.stage);
       }else{this.bossKilled=true;this.boss=null;this.recordFrontlineVictory(this.battleStage());this.heroBark?.bossEvent('bossDown',this.barkSpeakers()[0],this.chapter.bossName,this.combatNow);}
       // 倒地后原地掉宝箱，主将捡起遗物才进下一阶段（原来的三选一遗物卡改成宝箱）
-      this.spawnBossChest(enemy.x,enemy.y,()=>{if(this.bossKilled&&this.chasingBosses.length===0)this.finish(true,'boss');else{this.resumePendingChoices();if(this.bossKilled)this.showGrowthNotice('当前首领已败 · 仍有'+this.chasingBosses.length+'名追击首领');}});return;
+      this.spawnBossChest(enemy.x,enemy.y,()=>{if(this.bossKilled&&this.chasingBosses.length===0){if(this.storyDir)this.storyDir.chapterClose(()=>this.finish(true,'boss'));else this.finish(true,'boss');}else{this.resumePendingChoices();if(this.bossKilled)this.showGrowthNotice('当前首领已败 · 仍有'+this.chasingBosses.length+'名追击首领');}});return;
     }
     this.spawnGem(enemy.x, enemy.y, enemy.def.xp);
   }
@@ -2289,6 +2300,9 @@ export class GameScene extends Phaser.Scene {
     if (this.recruitPanel) this.recruitPanel.setVisible(false);
     this.legionUI?.panel.setVisible(mode === 'recruit');
     this.campUI?.setVisible(mode==='rest');
+    // 营中闲话：行军休整画面左下（不挡「率军出征」）
+    if(mode==='rest'&&IS_DESKTOP&&!this.children.getByName('camp-talk'))campTalkStrip(this,24,GAME_HEIGHT-35,GAME_WIDTH/2-145-24-16,[this.chapter.id],this.storyCtx(),DEPTH.overlay+3);
+    else if(mode!=='rest')this.children.getByName('camp-talk')?.destroy();
     this.reinforcements?.panel.setVisible(mode === 'aid');
     if (this.pausePanel) {
       this.pausePanel.setVisible(mode === 'pause');
@@ -2548,7 +2562,7 @@ export class GameScene extends Phaser.Scene {
     this.pausePanel.add(this.createVolumeRow('音乐', top + 122, this.music.getVolume(), v => this.music.setVolume(v), rx, width));
     this.pausePanel.add(this.createVolumeRow('音效', top + 180, this.sfx.getVolume(), v => this.sfx.setVolume(v), rx, width));
     // 右栏：‹ 值 › 行
-    const rowY = (i: number) => top + 228 + i * 36;
+    const rowY = (i: number) => top + 226 + i * 34; // 第 5 行留给「武将台词」（平衡会话），「剧情」在第 6 行
     const row = <T>(i: number, name: string, key: string, list: readonly T[], get: () => T, label: (v: T) => string, apply: (v: T) => void, note?: () => string): void => {
       const y = rowY(i);
       const plate = this.add.graphics().setScrollFactor(0); plate.fillStyle(0x3a2616, .4).fillRoundedRect(rx - width / 2, y - 16, width, 32, 5).lineStyle(1, 0xc9a35e, .3).strokeRoundedRect(rx - width / 2, y - 16, width, 32, 5);
@@ -2574,7 +2588,8 @@ export class GameScene extends Phaser.Scene {
     const scale0 = renderScaleSetting();
     row<RenderScaleSetting>(4, '画面清晰度', 'render-scale', ['', '1', '2', '3'], renderScaleSetting, v => SCALE_LABEL[v], setRenderScaleSetting, () => renderScaleSetting() === scale0 ? '' : '刷新后生效');
     row<HeroBarks>(5, '武将台词', 'hero-barks', ['on', 'off'], heroBarks, v => BARKS_LABEL[v], v => { setHeroBarks(v); if (v === 'off') this.heroBark?.clear(); });
-    const replay = tutorialReplayLink(this, rx + width / 2, top + ph - 26).setScrollFactor(0); this.pausePanel.add(replay);
+    row<StoryMode>(6, '剧情', 'story', ['full', 'chapter', 'off'], storyMode, v => STORY_LABEL[v], setStoryMode);
+    const replay = tutorialReplayLink(this, rx + width / 2, top + ph - 14).setScrollFactor(0); this.pausePanel.add(replay);
   }
 
   protected createVolumeRow(label: string, y: number, initial: number, onChange: (value: number) => void, cx = GAME_WIDTH / 2, width = Math.min(330, GAME_WIDTH - 144)): Phaser.GameObjects.GameObject[] {
@@ -2795,6 +2810,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   protected togglePause(): void {
+    if (performance.now() - ((this.data?.get('storyEscAt') as number | undefined) ?? -1e9) < 250) return; // 剧情卷轴刚被 Esc 跳过：同一下 Esc 不再打开暂停
     // 行囊开着时 Esc / ☰ 先关行囊（关掉时会按需恢复战斗）
     const bag = this.children.getByName('item-bag'); if (bag) { (bag.getData('ui') as { close?: () => void } | undefined)?.close?.(); return; }
     if (this.mode === 'none' && !this.over) {

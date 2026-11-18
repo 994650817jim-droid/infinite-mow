@@ -102,9 +102,14 @@ const R = (p, fn, arg) => p.evaluate(async ([src, a]) => { const r = await impor
     const o = {}; r.setRosterRandom(() => .99); // 全部出大众脸（不出名将）
     const p0 = w.loadWorld().provisions; r.loadRoster();
     o.c1 = r.refreshCost(); r.manualRefresh(); o.c2 = r.refreshCost(); o.spent = p0 - w.loadWorld().provisions;
-    // 保底：已刷 2 次（含开局 1 次自动）；继续刷到出现可玩名将
-    let n = 0; while (n < 12 && !r.loadRoster().offers.some(x => x.kind === 'hero')) { r.manualRefresh(); n++; }
-    o.pityAt = n; o.dry = r.loadRoster().dry;
+    // 招贤馆 Lv1 没有保底（用户 2026-11-17「lv1基本上不可能出名将」）：连刷 12 次不出名将，也不攒保底次数
+    o.hallLv = r.hallLevel(); let n = 0; while (n < 12 && !r.loadRoster().offers.some(x => x.kind !== 'common')) { r.manualRefresh(); n++; }
+    o.lv1Named = n < 12; o.dry = r.loadRoster().dry; o.odds1 = r.hallOdds();
+    // Lv1 真随机连刷 200 次：名将（史事 + 可玩）总数（期望约 1.8 个）
+    { const raw = JSON.parse(localStorage.getItem('im_world_v1')); raw.provisions = 1e8; localStorage.setItem('im_world_v1', JSON.stringify(raw)); }
+    r.setRosterRandom(); o.named200 = 0; o.common200 = 0; for (let i = 0; i < 200; i++) { r.manualRefresh(); for (const x of r.loadRoster().offers) x.kind === 'common' ? o.common200++ : o.named200++; }
+    // 随机数为 0 时 Lv1 也能出可玩名将（概率极低，不是 0），用来测招募
+    r.setRosterRandom(() => 0); r.manualRefresh(); r.setRosterRandom(() => .99);
     const s = r.loadRoster(), hi = s.offers.findIndex(x => x.kind === 'hero'), hero = s.offers[hi]?.hero, before = w.loadWorld().provisions;
     o.rec = r.recruit(hi); o.heroOwned = r.heroOwned(hero); o.cost = before - w.loadWorld().provisions;
     o.followers = r.loadRoster().followers;
@@ -114,13 +119,17 @@ const R = (p, fn, arg) => p.evaluate(async ([src, a]) => { const r = await impor
     // 随行上限 1：第二人加不进；升招贤馆后可以
     const zh = r.loadRoster().owned.find(x => x.name === '张郃');
     o.full = r.toggleFollower(zh.id); w.addTownMoney(1000); o.hall = r.upgradeHall(); o.add = r.toggleFollower(zh.id); o.cap2 = r.followerCap();
+    // Lv2 起有保底：连刷到出现可玩名将，不超过 11 次
+    o.odds2 = r.hallOdds(); r.setRosterRandom(() => .99); let m = 0; while (m < 15 && !r.loadRoster().offers.some(x => x.kind === 'hero')) { r.manualRefresh(); m++; } o.pityAt = m; o.dry2 = r.loadRoster().dry;
     o.rank = r.rankUp(zh.id, 'weapon'); o.bonus = r.rankBonus(r.loadRoster().owned.find(x => x.id === zh.id));
     o.lordDismiss = r.dismiss('zhaoyun');
     o.zhId = zh.id;
     r.setRosterRandom(); return o;
   });
   ck('手动刷新：第一次 30 军粮，之后 60', r.c1 === 30 && r.c2 === 60 && r.spent === 30, r);
-  ck('保底：连续未出名将第 7 次刷新必出', r.pityAt <= 6 && r.dry === 0, { pityAt: r.pityAt, dry: r.dry });
+  ck('招贤馆 Lv1：连刷 12 次不出名将，没有保底（不攒次数），每席名将率 0.3%', r.hallLv === 1 && !r.lv1Named && r.dry === 0 && Math.abs(r.odds1.seat - .003) < 1e-9 && r.odds1.pity === 0, { hallLv: r.hallLv, lv1Named: r.lv1Named, dry: r.dry, odds1: r.odds1 });
+  ck('招贤馆 Lv1 真随机连刷 200 次：名将 ≤ 8 个（期望约 1.8）', r.named200 <= 8 && r.named200 + r.common200 === 600, { named200: r.named200, common200: r.common200 });
+  ck('招贤馆 Lv2：每席名将率 5%，有保底，第 11 次刷新内必出可玩名将', Math.abs(r.odds2.seat - .05) < 1e-9 && r.odds2.pity === 10 && r.pityAt <= 11 && r.dry2 === 0, { odds2: r.odds2, pityAt: r.pityAt, dry2: r.dry2 });
   ck('招募可玩名将扣 900 军粮，只能随行、不能当主将出战（主公规则）', r.rec.ok && !r.heroOwned && r.cost === 900 && r.followers.length === 1, r);
   ck('击败敌将俘获进降将栏，不重复', r.cap === '张郃' && r.capAgain === null, r);
   ck('招降六折（300 军粮）', r.capRec.ok && r.capCost === 300, r);
@@ -174,7 +183,8 @@ for (const layout of ['mobile', 'desktop']) {
   await p.evaluate(() => window.__game.scene.getScene('CityScene').children.getByName('town-card').getByName('town-card-func').emit('pointerdown'));
   await p.waitForFunction(() => window.__game?.scene.isActive('TalentHallScene'), null, { timeout: 30000 }); await p.waitForTimeout(500);
   await p.screenshot({ path: `${out}/hall-offers-${layout}.png` });
-  const u = await p.evaluate(() => { const s = window.__game.scene.getScene('TalentHallScene'), c = s.children.list.find(x => x.type === 'Container'); const names = c.list.map(x => x.name).filter(Boolean); const btn = c.getByName('talent-offer-0'); btn.emit('pointerup'); return { names }; });
+  const u = await p.evaluate(() => { const s = window.__game.scene.getScene('TalentHallScene'), c = s.children.list.find(x => x.type === 'Container'); const names = c.list.map(x => x.name).filter(Boolean), odds = c.getByName('talent-odds')?.text; const btn = c.getByName('talent-offer-0'); btn.emit('pointerup'); return { names, odds }; });
+  ck(`${layout} 人才页刷新按钮旁显示「名将出现率：每席 x%」`, /^名将出现率：每席 [\d.]+%（可玩名将 [\d.]+%）/.test(u.odds ?? ''), u.odds);
   await p.waitForTimeout(200);
   const msg = await p.evaluate(() => { const s = window.__game.scene.getScene('TalentHallScene'), c = s.children.list.find(x => x.type === 'Container'); return c.getByName('talent-message')?.text; });
   ck(`${layout} 人才页：席位、降将、刷新按钮；点招募有提示`, u.names.includes('talent-offer-0') && u.names.includes('talent-captive-0') && u.names.includes('talent-face') && u.names.includes('talent-refresh') && /应募|不足|已满/.test(msg ?? ''), { names: u.names.slice(0, 12), msg });

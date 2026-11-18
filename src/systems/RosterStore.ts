@@ -216,8 +216,8 @@ const hallIdx = (s: RosterSave): number => Math.max(1, hallLevel(s)) - 1;
 export function legacyHallLevel(): number { return read()?.hall ?? 1; }
 
 function unownedHeroes(s: RosterSave): CharacterId[] { return CHARACTERS.map(c => c.id).filter(id => !s.owned.some(r => r.hero === id) && !s.offers.some(o => o.hero === id) && !s.captives.some(o => o.hero === id)); }
-function commonOffer(): Offer {
-  const w = RECRUIT.commonQuality, total = Object.values(w).reduce((a, b) => a + (b ?? 0), 0); let r = rand() * total, q: ItemQuality = 'white';
+function commonOffer(s: RosterSave): Offer {
+  const w = RECRUIT.commonQuality[hallIdx(s)], total = Object.values(w).reduce((a, b) => a + (b ?? 0), 0); let r = rand() * total, q: ItemQuality = 'white';
   for (const k of ['white', 'green', 'blue'] as const) { r -= w[k] ?? 0; if (r < 0) { q = k; break; } }
   return { kind: 'common', name: commonName(rand), template: pick(TEMPLATE_ORDER), quality: q, cost: RECRUIT.cost[q as 'white' | 'green' | 'blue'] };
 }
@@ -231,6 +231,12 @@ function namedOffer(s: RosterSave): Offer | null {
 }
 function heroOffer(s: RosterSave): Offer | null { const left = unownedHeroes(s); if (!left.length) return null; const hero = pick(left); return { kind: 'hero', hero, name: getCharacter(hero).name, template: HERO_TEMPLATE[hero], quality: 'orange', cost: RECRUIT.cost.hero }; }
 
+const pityOf = (s: RosterSave): number => RECRUIT.pity[hallIdx(s)];
+/** 当前招贤馆等级下的名将出现率（界面用）：每席出名将（史事 + 可玩）的概率、其中可玩名将的概率、保底还差几次（0 = 这一级没有保底）。 */
+export function hallOdds(s: RosterSave = loadRoster()): { seat: number; hero: number; pity: number; pityLeft: number } {
+  const r = RECRUIT.rates[hallIdx(s)], pity = pityOf(s);
+  return { seat: r.named + r.hero, hero: r.hero, pity, pityLeft: pity > 0 ? Math.max(1, pity - s.dry + 1) : 0 };
+}
 /** 刷新全部席位（自动换季与手动刷新共用），处理保底。 */
 function rollOffers(s: RosterSave): void {
   s.offers = [];
@@ -239,13 +245,13 @@ function rollOffers(s: RosterSave): void {
   for (let i = 0; i < seats; i++) {
     const r = rand(); let o: Offer | null = null;
     if (r < rates.hero) o = heroOffer(s); else if (r < rates.hero + rates.named) o = namedOffer(s);
-    s.offers.push(o ?? commonOffer());
+    s.offers.push(o ?? commonOffer(s));
   }
   const anyLeft = CHARACTERS.some(c => !s.owned.some(r => r.hero === c.id));
   if (s.offers.some(o => o.kind === 'hero')) s.dry = 0;
-  else if (anyLeft) {
+  else if (anyLeft && pityOf(s) > 0) { // Lv1 没有保底，也不攒次数
     s.dry++;
-    if (s.dry > RECRUIT.pity) { const h = heroOffer(s); if (h) { s.offers[s.offers.length - 1] = h; s.dry = 0; } }
+    if (s.dry > pityOf(s)) { const h = heroOffer(s); if (h) { s.offers[s.offers.length - 1] = h; s.dry = 0; } }
   }
 }
 

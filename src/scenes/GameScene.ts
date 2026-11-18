@@ -97,7 +97,7 @@ import {ItemDrops} from '../systems/ItemDrops';
 import {BossRelics, RELIC} from '../systems/BossRelics';
 import {FireShips} from '../systems/FireShips';
 import {gearFor} from '../systems/ItemEffects';
-import {claimRunLoot,depositRunLoot,grantHorse,heroHorse,ownedHorses} from '../systems/ItemStore';
+import {addItems,claimRunLoot,depositRunLoot,grantHorse,heroHorse,ownedHorses} from '../systems/ItemStore';
 import {STARTER_HORSE} from '../data/mounts';
 import {storyScroll} from '../ui/StoryScroll';
 import {MERCHANT_HORSE_REWARD,markMerchantStorySeen,merchantHorseLines,merchantStorySeen} from '../data/storyMerchantHorse';
@@ -701,7 +701,8 @@ export class GameScene extends Phaser.Scene {
       else if (this.mode === 'recruit') { this.recruitedWaves.add(this.waveIndex); this.freeRecruit = false; this.resumePendingChoices(); }
     }, () => this.takeRecruitPotion(), () => canOfferRejuvenation(this.player));
     this.campUI=new CampRestUI(this,this.player,this.legion,()=>this.continueCampaign());
-    this.campUI.onBuyItem=item=>this.itemDrops?.runLoot.push(item);
+    // 行营休整在本关结算之后：买下的兵装直接收入行囊（2026-11-18 用户报「休整买的装备背包没显示」——原先推进已结算的 runLoot，背包看不到、下一关重建时还会丢）。测试 / 调试战斗同结算规则不入行囊。
+    this.campUI.onBuyItem=item=>{const debug=isChapterTestRun()||this.debugModified||this.debugJumped||!!this.player.damageImmune||!!this.runConfig.encounter;if(this.over&&!debug)addItems([item]);else this.itemDrops?.runLoot.push(item);};
     this.campUI.onOpenBag=()=>this.openBattleBag(true);
     // 从营寨 / 天下地图出征的战役：关与关之间的休整可直接回营寨（本场奖励已在胜利时入库）
     if(this.worldCampaign&&worldUnlocked())this.campUI.onReturnHome=()=>{this.resting=false;this.registry.remove('campaignTransfer');this.scene.start('CityScene');};

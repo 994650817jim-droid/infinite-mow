@@ -149,7 +149,7 @@ export const BOSS_MOVES: Record<string, BossMovesetDef> = {
   },
   // 6-3 黄忠（长沙老将，可劝降）：骑马；百步穿杨（贯穿一箭）+ 连珠箭阵（扇形五箭）→ 坠马「老当益壮」：大刀连斩 + 穿杨
   huangzhong: {
-    id: 'huangzhong', name: '黄忠', phaseAt: .5, mount: { horse: 'generic', tint: 0xc8a070 },
+    id: 'huangzhong', name: '黄忠', phaseAt: .5, mount: { horse: 'generic', tint: 0xc8a070, rider: 'huangzhong' },
     p1: { name: '长沙老将', caption: '百步穿杨 · 连珠箭阵', gapMs: 2400, speedMul: 1.3, moves: [
       { kind: 'thrust', name: '百步穿杨', windupMs: 1100, cd: 4000, dmg: 1.9, len: 820, width: 40 },
       { kind: 'fan', name: '连珠箭阵', windupMs: 900, cd: 4600, dmg: 1.1, count: 5, spread: Math.PI * .55, len: 520, width: 34 },

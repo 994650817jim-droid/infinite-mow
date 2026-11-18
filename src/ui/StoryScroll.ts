@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { DEPTH, FONT, HEADING_FONT } from '../config';
+import { inkPlate } from './HomeCommand';
 
 /**
  * 剧情卷轴（漆金卷轴同款，见 ChapterVictoryNotice）：逐句对白，点一下翻下一句，最后一页显示奖励和确认按钮。
@@ -58,14 +59,19 @@ export function storyScroll(scene: Phaser.Scene, W: number, H: number, desk: boo
   const bw = desk ? 260 : 300, bh = desk ? 48 : 58, by = y0 + ph - (desk ? 46 : 54);
   const btn = scene.add.graphics().setScrollFactor(0);
   const label = text(cx, by, '', desk ? 20 : 22, '#ffe9bd', true).setOrigin(.5).setStroke('#2a170b', 3);
+  // 电脑版（2026-11-17 UI 审查）：按钮换水墨笔触主按钮，同章节告捷 / 结算
+  const inkArt = desk && scene.textures.exists('btn_ink_primary_normal');
+  let plate: Phaser.GameObjects.NineSlice | null = null;
+  if (inkArt) label.setColor('#f8e6bf').setStroke('#2a0c06', 3).setLetterSpacing(3);
   const paint = (hi: boolean) => {
+    if (inkArt) { plate = inkPlate(scene, plate, cx, by, bw, bh, true, hi ? 'hover' : 'normal'); plate?.setScrollFactor(0); label.setColor(hi ? '#fff3d4' : '#f8e6bf'); return; }
     btn.clear().fillStyle(0x000000, .4).fillRoundedRect(cx - bw / 2 + 2, by - bh / 2 + 4, bw, bh, 8)
       .fillStyle(hi ? 0x8a5f2a : 0x6e4a22, 1).fillRoundedRect(cx - bw / 2, by - bh / 2, bw, bh, 8)
       .lineStyle(1.5, hi ? GOLD_HI : GOLD, 1).strokeRoundedRect(cx - bw / 2 + 4, by - bh / 2 + 4, bw - 8, bh - 8, 5);
   };
   paint(false);
   const hit = scene.add.rectangle(cx, by, bw, bh, 0, 0).setScrollFactor(0).setInteractive({ useHandCursor: true }).setName(o.name + '-next');
-  root.add([btn, label, hit]);
+  root.add(plate ? [plate, label, hit] : [btn, label, hit]);
 
   let i = 0;
   const show = () => {

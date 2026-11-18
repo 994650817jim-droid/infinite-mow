@@ -103,6 +103,12 @@ import { envConfigFor } from '../data/envInteractions';
 import { Terrain } from '../systems/Terrain';
 import { terrainConfigFor } from '../data/terrain';
 import { Tutorial } from '../systems/Tutorial';
+import { beginBattle, commitBattle, rollbackBattle } from '../systems/BattleSnapshot';
+import { reloadGame } from '../systems/SaveSlots';
+import { BossMoveset } from '../systems/BossMoveset';
+import { BossMount } from '../systems/BossMount';
+import { watchBossPhase } from '../systems/BossPhase';
+import { BOSS_MOUNTS, BOSS_MOVES } from '../data/bossMoves';
 import { IffOverlay, readIffMode, type IffUnit } from '../systems/IffOverlay';
 import type {ItemInstance} from '../data/items';
 import {armShield,absorbShield,ShieldBars} from '../systems/ShieldGuard';
@@ -168,6 +174,10 @@ export class GameScene extends Phaser.Scene {
   protected lubu: LubuBoss | null = null;
   /** 张角重设计样板（?boss=old 回到旧版）。 */
   protected zhangjiao: ZhangjiaoBoss | null = null;
+  /** 首领招式框架（第一章张梁 / 张宝等，配置见 data/bossMoves.ts）。 */
+  moveset: BossMoveset | null = null;
+  /** 已有专属控制器的骑马首领（吕布、华雄）的坐骑：半血随 boss-phase 坠马。 */
+  bossMount: BossMount | null = null;
   protected yellow:YellowBattle|null=null;
   /** 第二章主线（汜水关 / 荥阳 / 虎牢关）西凉军战法：铁骑突阵、飞熊军。攻守城与军情战斗（encounter）不启用。 */
   protected xiliang:XiliangBattle|null=null;
@@ -438,6 +448,8 @@ export class GameScene extends Phaser.Scene {
   /** 游戏实际在用的马厩读写（测试走这里：常开的 dev server 热更新后，测试自己 import 的 ItemStore 可能是另一个模块实例，内存缓存不同步）。 */
   readonly stable = { ownedHorses, grantHorse };
   create(): void {
+    // 中途退出不算：进关先记下存档，告捷 / 战败才丢掉（systems/BattleSnapshot.ts）
+    beginBattle(this.scene.key);
     stopMenuMusic();
     this.hadStarterHorse = ownedHorses().some(h => h.id === STARTER_HORSE);
     this.resetState();
@@ -596,6 +608,8 @@ export class GameScene extends Phaser.Scene {
       .setScrollFactor(0)
       .setDepth(DEPTH.hud);
     this.tutorial = Tutorial.maybeStart(this);
+    // 首领阶段切换统一事件（boss-phase）：所有控制器的 phase2 都从这里发
+    watchBossPhase(this, () => { const c = (this as unknown as { controller?: { phase2?: boolean } }).controller; return this.boss ? { boss: this.boss, phase2: !!(this.moveset?.phase2 || this.lubu?.phase2 || this.huaxiong?.phase2 || this.xurong?.phase2 || this.zhangjiao?.phase2 || c?.phase2), name: this.chapter.bossName, mounted: !!(this.bossMount?.mounted || this.moveset?.mounted) } : null; });
   }
 
   /** 把开局选择（武将/初始武器）应用到本局。 */
@@ -659,7 +673,7 @@ export class GameScene extends Phaser.Scene {
     this.spawnTimer = 0.5;
     this.eliteTimer = BALANCE.eliteFirst;
     this.boss = null;
-    this.sishuiObstacles=null;this.huaxiong=null;this.xurong=null;this.lubu = null; this.zhangjiao?.clear(); this.zhangjiao = null; this.yellow=null; this.xiliang=null; this.supplies=null; this.yellowAltar=null;this.finaleFadeMs=0;
+    this.sishuiObstacles=null;this.huaxiong=null;this.xurong=null;this.lubu = null;this.moveset?.clear();this.moveset=null;this.bossMount?.destroy();this.bossMount=null; this.zhangjiao?.clear(); this.zhangjiao = null; this.yellow=null; this.xiliang=null; this.supplies=null; this.yellowAltar=null;this.finaleFadeMs=0;
     this.bossSpawned = false;
     this.bossCastCd = 3;
     this.bossSummonCd = 6;
@@ -1035,6 +1049,9 @@ export class GameScene extends Phaser.Scene {
 
     if(this.chapter.bossStyle==='xurong')this.xurong=new XurongBoss({scene:this,boss,player:this.player,army:this.legion,spawn:(kind,x,y)=>this.spawnEnemy(kind,x,y,1),sfx:()=>this.sfx.play('allySlash')},this.combatNow);
     if(this.chapter.bossStyle==='huaxiong'){this.huaxiong=new HuaxiongBoss({scene:this,boss,player:this.player,army:this.legion,hurtTroops:(x,y,r,d,n,a,arc)=>this.legion.hurtArea(x,y,r,d,n,a,arc),sfx:()=>this.sfx.play('allySlash')},this.combatNow);}
+    // 首领招式框架（第一章张梁 / 张宝）与已有控制器首领的坐骑（吕布赤兔、华雄）
+    {const mv=BOSS_MOVES[this.chapter.bossStyle];if(mv&&!BOSS_OLD&&(this.chapter.bossStyle==='zhangliang'||this.chapter.bossStyle==='zhangbao'))this.moveset=new BossMoveset({scene:this,boss,player:this.player,army:this.legion,spawn:(kind,x,y,def)=>this.spawnEnemy(kind,x,y,1,true,def),def:k=>this.chapter.enemies[k],banner:(t,c)=>this.showWaveBanner(t,true,c),sfx:k=>this.sfx.play(k)},boss.sprite.texture.key,this.combatNow,mv,'walk');
+     const md=BOSS_MOUNTS[this.chapter.bossStyle];if(md&&!BOSS_OLD)this.bossMount=new BossMount(this,boss,md);}
     if (this.chapter.bossStyle === 'zhangjiao' && !BOSS_OLD) {
       this.zhangjiao = new ZhangjiaoBoss({ scene: this, boss, player: this.player, army: this.legion,
         fireBolt: (x, y, tx, ty, d, sp) => this.fireBolt(this.bullets, x, y, tx, ty, d, 0, false, sp, this.textures.exists('bossfx_zj_talisman') ? 'bossfx_zj_talisman' : 'orb'),
@@ -1182,6 +1199,7 @@ export class GameScene extends Phaser.Scene {
         const chasing=this.chasingBosses.find(t=>t.enemy===enemy&&t.life===enemy.spawnId);
         if(this.customBossStep(enemy,dt,this.combatNow)){}
         else if(chasing){if(chasing.huaxiong)chasing.huaxiong.update(dt,this.combatNow);else if(chasing.xurong)chasing.xurong.update(dt,this.combatNow);else chasing.battle?.moveBoss(enemy,dt,this.combatNow);}
+        else if (this.moveset && enemy === this.boss) this.moveset.update(dt,this.combatNow);
         else if (this.yellow && this.chapter.stage!==3) this.yellow.moveBoss(enemy,dt,this.combatNow);
         else if(this.huaxiong)this.huaxiong.update(dt,this.combatNow);
         else if(this.xurong)this.xurong.update(dt,this.combatNow);
@@ -1643,6 +1661,7 @@ export class GameScene extends Phaser.Scene {
     if(enemy.isSupplySlot){enemy.hp-=Math.max(1,Math.round(rawDamage));enemy.flash(time);this.sfx.play('hitHeavy');if(enemy.hp<=0)this.killEnemy(enemy);return false;}
     if (enemy === this.boss) this.ensureBossPhase2();
     if (this.xiliang) rawDamage *= this.xiliang.incoming(enemy, source);
+    if (enemy === this.boss && this.moveset) { rawDamage *= this.moveset.incoming(fromAlly); this.moveset.hit(time); }
     if(this.yellow&&enemy.kind==='shield'&&enemy.shieldMax===0&&enemy.def.behavior!=='wall'&&!fromAlly&&source!=='fire'){const angle=enemy.direction==='left'?Math.PI:enemy.direction==='right'?0:enemy.direction==='up'?-Math.PI/2:Math.PI/2;if(Math.cos(Math.atan2(this.player.y-enemy.y,this.player.x-enemy.x)-angle)>.25)rawDamage*=.65;}
     if (source === 'arrow') this.sfx.play('hitArrow');
     else if (source === 'fire') this.sfx.play('hitFire');
@@ -1705,7 +1724,7 @@ export class GameScene extends Phaser.Scene {
     this.objective?.onKill(enemy);
     const kind = enemy.kind;
     // 吕布倒地改由 playBossFall（倒地 4 帧）播，不再叠旧的通用死亡闪影
-    if(kind==='boss'){const old=this.chasingBosses.find(t=>t.enemy===enemy&&t.life===enemy.spawnId),h=old?old.huaxiong:this.huaxiong,x=old?old.xurong:this.xurong;h?.defeat();x?.defeat();if(old){if(h)this.deadBossControllers.push(h);if(x)this.deadBossControllers.push(x);}
+    if(kind==='boss'){const old=this.chasingBosses.find(t=>t.enemy===enemy&&t.life===enemy.spawnId),h=old?old.huaxiong:this.huaxiong,x=old?old.xurong:this.xurong;h?.defeat();x?.defeat();if(enemy===this.boss){this.moveset?.defeat();this.moveset=null;this.bossMount?.destroy();this.bossMount=null;}if(old){if(h)this.deadBossControllers.push(h);if(x)this.deadBossControllers.push(x);}
       // 倒地：控制器自己有倒地帧的（华雄 / 徐荣 / 子类首领）沿用；其余首领播通用倒地（受伤帧 + 倒下 + 手绘扬尘 + 下沉淡出）
       this.bossFallDir=0;if(!(h||x||this.bossHasDeathArt()))this.bossFallDir=playBossFall(this,enemy,this.zhangjiao?'zhangjiao_moves':this.lubu?'lubu_moves':undefined,old?undefined:this.chapter.bossStyle);}
     enemy.deactivate();
@@ -2112,6 +2131,7 @@ export class GameScene extends Phaser.Scene {
       exit?.setData('confirm',false).setText('返回选将').setColor('#b5c4b2');
     }
     if (this.resultPanel) this.resultPanel.setVisible(mode === 'result');
+    if (mode === 'rest') commitBattle(); // 关卡告捷进行营：本场所得生效
     if (mode === 'rest' && !this.restIntroPlayed) { this.restIntroPlayed = true; this.playRestIntro(); }
   }
 
@@ -2700,6 +2720,7 @@ export class GameScene extends Phaser.Scene {
   protected finish(victory: boolean, reason: RunEndReason = 'death'): void {
     if (this.over) return;
     this.over = true;
+    commitBattle(); // 告捷（战报）与战败都按现行规则结算，本场写入生效
     this.player.passive.stop();
     // 动作层：胜利举兵器 / 战败倒地（有素材的武将才播放，播完定格）
     this.player.playAction(victory ? 'win' : 'die', 'down');
@@ -3124,8 +3145,8 @@ export class GameScene extends Phaser.Scene {
     bagLink.on('pointerdown',()=>{if(this.mode==='pause')this.openBattleBag();});this.pausePanel.add(bagLink);
     const exit=this.add.text(cx,top+ph-66,'返回选将',warText(16,'#b5c4b2')).setOrigin(.5).setPadding(24,10).setInteractive({useHandCursor:true}).setName('pause-exit');
     exit.on('pointerdown',()=>{
-      if(exit.getData('confirm')){this.abandonRun();this.registry.remove('campaignTransfer');this.scene.start(this.worldCampaign&&worldUnlocked()?'CityScene':'MenuScene');}
-      else exit.setData('confirm',true).setText('确认离开？本局进度不保留').setColor('#e7b68e');
+      if(exit.getData('confirm')){this.abandonRun();this.registry.remove('campaignTransfer');if(rollbackBattle()){reloadGame();return;}this.scene.start(this.worldCampaign&&worldUnlocked()?'CityScene':'MenuScene');}
+      else exit.setData('confirm',true).setText('退出后本场获得的等级与资源不保留，确定？').setColor('#e7b68e');
     });
     const keys=this.pauseKeysText=this.add.text(cx,top+ph-22,d?'Esc / P 继续战斗':'战斗已冻结 · 点击「继续战斗」恢复',warText(12,'#7f9987')).setOrigin(.5);
     // 暂停菜单里的文字入口改为漆金小牌：有底板、悬停 / 按下态，命中区与底板一致

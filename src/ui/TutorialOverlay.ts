@@ -26,10 +26,14 @@ export class TutorialOverlay {
   private y = GAME_HEIGHT - 82;
   /** 指向箭头的基准位置与方向（每帧按真实时间轻跳；升级 / 行营时游戏会暂停所有 Tween，所以不用 Tween）。 */
   private aim: { x: number; y: number; dx: number; dy: number } | null = null;
+  /** 逻辑上在显示 / 被面板挡住（行囊、暂停、战报…打开时收起）/ 提示型步骤到点淡出的起始时刻。 */
+  private active = false; private suppressed = false; private fadeAt: number | null = null;
+  /** 层级：平时压在所有面板之下；升级 / 支援弹窗那两步要盖在弹窗上。 */
+  static readonly DEPTH_UNDER = DEPTH.overlay - 5; static readonly DEPTH_TOP = DEPTH.overlay + 80;
 
   constructor(private scene: Phaser.Scene, onSkip: () => void) {
     const s = scene;
-    this.root = s.add.container(0, 0).setScrollFactor(0).setDepth(DEPTH.overlay + 80).setName('tutorial-overlay');
+    this.root = s.add.container(0, 0).setScrollFactor(0).setDepth(TutorialOverlay.DEPTH_UNDER).setName('tutorial-overlay');
     this.bar = s.textures.exists(INK) ? s.add.image(GAME_WIDTH / 2, this.y, INK).setScrollFactor(0).setAlpha(.92).setName('tutorial-bar') : null;
     this.text = s.add.text(GAME_WIDTH / 2, this.y, '', { fontFamily: FONT, fontSize: '17px', color: IVORY, stroke: STROKE, strokeThickness: 4, resolution: 2 }).setOrigin(.5).setScrollFactor(0).setName('tutorial-text');
     this.skipBtn = s.add.text(0, 0, '跳过引导', { fontFamily: HEADING_FONT, fontSize: '14px', color: '#d9c7a3', stroke: STROKE, strokeThickness: 3, resolution: 2 }).setOrigin(0, .5).setScrollFactor(0).setAlpha(.85)
@@ -40,7 +44,10 @@ export class TutorialOverlay {
   }
 
   /** 显示一行提示（keys：按键图标，如 ['W','A','S','D']）；at：'battle' 底部 / 'camp' 营地底部偏上 / 'top' 顶部。 */
-  show(line: string, keys: string[] = [], at: 'battle' | 'camp' | 'popup' = 'battle'): void {
+  /** fadeMs：提示型步骤（只说一句、不等操作）几毫秒后自动淡出；popup：升级 / 支援那两步盖在弹窗上。 */
+  show(line: string, keys: string[] = [], at: 'battle' | 'camp' | 'popup' = 'battle', fadeMs?: number): void {
+    this.active = true; this.fadeAt = fadeMs ? performance.now() + fadeMs : null;
+    this.root.setDepth(at === 'popup' ? TutorialOverlay.DEPTH_TOP : TutorialOverlay.DEPTH_UNDER);
     // 战场：底部；行营：顶部居中（标题与「下一关」之间的空处）；弹窗（升级 / 支援）：卡片下沿之下
     this.y = at === 'camp' ? 60 : at === 'popup' ? GAME_HEIGHT - 22 : GAME_HEIGHT - 82;
     for (const k of this.keys) k.destroy(); this.keys = [];
@@ -59,10 +66,14 @@ export class TutorialOverlay {
     this.bar?.setPosition(GAME_WIDTH / 2, this.y).setDisplaySize(barW, 50);
     this.skipBtn.setPosition(GAME_WIDTH / 2 + barW / 2 + 6, this.y);
     this.root.add(this.keys);
-    this.root.setVisible(true).setAlpha(1);
+    this.root.setVisible(!this.suppressed).setAlpha(1);
   }
   get arrowState() { return { vis: this.arrow.visible, x: Math.round(this.arrow.x), y: Math.round(this.arrow.y), aim: this.aim }; }
-  get line(): string { return this.root.visible ? this.text.text : ''; }
+  get line(): string { return this.active ? this.text.text : ''; }
+  /** 当前是否真的看得见（未被面板挡、未淡出）。 */
+  get visible(): boolean { return this.root.visible && this.root.alpha > .01; }
+  /** 面板（行囊 / 暂停 / 战报…）打开时收起，关上后恢复（若还没完成、没淡出）。 */
+  suppress(on: boolean): void { this.suppressed = on; }
 
   /** 指向一块屏幕区域（箭头在旁边上下轻跳）；glow：给该界面元素加柔光。传 null 收起。 */
   point(rect: ScreenRect | null, glow?: Phaser.GameObjects.GameObject | null, from?: 'below'): void {
@@ -78,10 +89,15 @@ export class TutorialOverlay {
   }
   private clearGlow(): void { if (this.glowOn) { try { this.glowOn.obj.postFX?.remove(this.glowOn.fx); } catch { /* 目标已销毁 */ } this.glowOn = null; } }
   /** 每帧调用：箭头按真实时间来回轻跳。 */
-  animate(): void { if (!this.aim) return; const k = (Math.sin(performance.now() / 210) + 1) * 4; this.arrow.setPosition(this.aim.x + this.aim.dx * k, this.aim.y + this.aim.dy * k); }
+  animate(): void {
+    const now = performance.now();
+    let a = 1; if (this.fadeAt !== null && now >= this.fadeAt) a = Math.max(0, 1 - (now - this.fadeAt) / 400);
+    this.root.setVisible(this.active && !this.suppressed && a > 0).setAlpha(a);
+    if (!this.aim) return; const k = (Math.sin(now / 210) + 1) * 4; this.arrow.setPosition(this.aim.x + this.aim.dx * k, this.aim.y + this.aim.dy * k);
+  }
   /** 只挪箭头（世界物件跟随，不重设柔光）。 */
   follow(rect: ScreenRect): void { if (!this.aim) { this.point(rect); return; } const r = rect; this.aim.x = r.x + r.w / 2; this.aim.y = r.y - 26; this.arrow.setRotation(Math.PI / 2).setVisible(true); this.aim.dx = 0; this.aim.dy = -1; }
-  hide(): void { this.point(null); this.root.setVisible(false); }
+  hide(): void { this.point(null); this.active = false; this.fadeAt = null; this.root.setVisible(false); }
   destroy(): void { this.clearGlow(); this.root.destroy(); }
 }
 

@@ -169,3 +169,5 @@ assets/raw/*
 !/tools/test-beifa-full.mjs
 !/tools/test-yiling-art.mjs
 !/tools/test-tutorial.mjs
+!/tools/test-boss-moves.mjs
+!/tools/test-quit-rollback.mjs

@@ -12,7 +12,7 @@ import { FACTIONS } from '../world/WorldCities';
 import { QUALITIES } from '../data/items';
 import { CHARACTERS, getCharacter } from '../data/characters';
 import { RANK, RECRUIT, TEMPLATES, TEMPLATE_ORDER, type FollowerTemplate } from '../data/recruits';
-import { hallInTown, hallLevel, dismiss, followerCap, loadRoster, manualRefresh, rankBonus, rankCap, rankUp, recruit, refreshCost, toggleFollower, upgradeHall, type Offer, type Recruit } from '../systems/RosterStore';
+import { LORD_LEVEL_HINT, followerLevel, followerLevelCap, hallInTown, hallLevel, dismiss, followerCap, loadRoster, manualRefresh, rankBonus, rankCap, rankUp, recruit, refreshCost, toggleFollower, upgradeHall, type Offer, type Recruit } from '../systems/RosterStore';
 
 /** 普通招募武将（内部 kind = 'common'）对玩家显示的称呼（用户 2026-11-17：不叫「大众脸」，改三国风；候选 无名之辈 / 偏裨之将 / 庸碌之将，待用户定）。 */
 export const COMMON_LABEL = '无名之辈';
@@ -101,12 +101,15 @@ export class TalentHallScene extends Phaser.Scene {
     this.content!.add(panel(this, W / 2, y, w, h));
     const size = h - 16; this.seal(x0 + 12 + size / 2, y, size, r.quality, TEMPLATES[r.template].name, r.hero ? getCharacter(r.hero).portrait : undefined, r.template);
     const tx = x0 + 24 + size, b = rankBonus(r);
-    this.content!.add(worldText(this, tx, y - h / 2 + 8, `${r.name} Lv.${heroLevel((r.hero ?? r.id) as HeroKey)}${lord ? ' · 主公' : ''}${following ? ' · 随行' : ''}`, D ? 17 : 18, q.css).setName('talent-roster-name'));
-    const c = RANK.cost(r.rank + 1), canRank = r.rank < cap;
-    const line = `将阶 ${r.rank}/${cap}${canRank ? ` · 下一阶 ${c.provisions} 军粮` : r.rank >= RANK.max ? ' · 已满' : ' · 升级招贤馆可继续'}
+    // 等级：主公随征战提升（不受随行上限）；随行显示「Lv 3 / 上限 5（解锁下一章提升）」
+    const lv = followerLevel(r), lvCap = followerLevelCap(), lvText = lord ? `Lv ${lv}` : `Lv ${lv} / 上限 ${lvCap}（解锁下一章提升）`;
+    this.content!.add(worldText(this, tx, y - h / 2 + 8, `${r.name} ${lvText}${lord ? ' · 主公' : ''}${following ? ' · 随行' : ''}`, D ? 17 : 18, q.css).setName('talent-roster-name'));
+    const c = RANK.cost(r.rank + 1), canRank = r.rank < cap && !lord;
+    const line = lord ? `${LORD_LEVEL_HINT}，不在招贤馆升级\n将阶 ${r.rank} · 兵器 +${Math.round(b.damage * 100)}% · 生命 +${Math.round(b.hp * 100)}%` : `将阶 ${r.rank}/${cap}${canRank ? ` · 下一阶 ${c.provisions} 军粮` : r.rank >= RANK.max ? ' · 已满' : ' · 升级招贤馆可继续'}
 兵器 +${Math.round(b.damage * 100)}% · 生命 +${Math.round(b.hp * 100)}%${r.hero ? '' : ' · 只能随行'}`;
     this.content!.add(worldText(this, tx, y - h / 2 + (D ? 30 : 34), line, 12, '#cdbf9f').setWordWrapWidth(D ? w - size - 330 : w - size - 40));
     const bx = D ? W - 16 - 320 : tx + 50, by = D ? y : y + h / 2 - 24;
+    // 主公：两个升阶按钮置灰不可点（说明写在上一行「主公等级随征战提升」）
     this.small(bx, by, D ? 96 : 92, '升·兵器', () => { this.message = rankUp(r.id, 'weapon').message; this.render(); }, `talent-rank-weapon-${r.id}`, canRank);
     this.small(bx + (D ? 102 : 98), by, D ? 96 : 92, '升·被动', () => { this.message = rankUp(r.id, 'passive').message; this.render(); }, `talent-rank-passive-${r.id}`, canRank);
     this.small(bx + (D ? 204 : 196), by, D ? 82 : 82, following ? '留守' : '随行', () => { this.message = toggleFollower(r.id).message; this.render(); }, `talent-follow-${r.id}`, true, following);

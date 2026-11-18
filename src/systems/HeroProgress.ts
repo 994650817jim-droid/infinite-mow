@@ -77,9 +77,9 @@ function migrate(s: HeroSave): void {
   commit();
 }
 
-/** 按当前上限消化存着的经验（开新章后补升）。返回是否有变化。 */
-function settle(r: HeroRecord): boolean {
-  const cap = levelCap(); let changed = false;
+/** 按当前上限消化存着的经验（开新章后补升）。返回是否有变化。cap 缺省为主将的本章上限。 */
+function settle(r: HeroRecord, cap = levelCap()): boolean {
+  let changed = false;
   while (r.level < cap && r.xp >= xpToNext(r.level)) { r.xp -= xpToNext(r.level); r.level++; changed = true; }
   return changed;
 }
@@ -126,14 +126,30 @@ export function claimFirstClear(stageKey: string | null): number {
 }
 export interface XpResult { from: number; to: number; gained: number; capped: boolean; cap: number; /** 到上限后超出「再存 1 级」的经验折的军粮（每 OVERFLOW_XP_PER_GRAIN 经验 1 粮）。 */ grain: number }
 /** 结算记经验（已按来源折算好的数值）。到上限后经验存着。 */
-export function creditHeroXp(id: HeroKey, amount: number): XpResult {
-  const r = record(id, true), from = r.level, cap = levelCap();
+export function creditHeroXp(id: HeroKey, amount: number, capLevel?: number): XpResult {
+  const r = record(id, true), from = r.level, cap = capLevel ?? levelCap();
   r.xp = Math.min(1e8, r.xp + Math.max(0, Math.round(amount)));
-  settle(r);
+  settle(r, cap);
   let grain = 0; if (r.level >= cap && r.xp > xpToNext(r.level)) { grain = Math.floor((r.xp - xpToNext(r.level)) / OVERFLOW_XP_PER_GRAIN); r.xp = xpToNext(r.level); }
+  // 随行（招贤馆）的上限比主将低：到顶时经验压到「差 1 点升级」，读档时不会被按主将上限自动补升
+  if (capLevel !== undefined && r.level >= cap) { r.level = cap; r.xp = Math.min(r.xp, xpToNext(r.level) - 1); }
   commit();
   return { from, to: r.level, gained: Math.max(0, Math.round(amount)), capped: r.level >= cap, cap, grain };
 }
+/**
+ * 随行等级上限（招贤馆，用户 2026-11-17「随从等级一开始不要这么高，随着章节解锁提升」）：
+ * 把某武将的等级压到 maxLevel 以内，经验不超过「差 1 点升级」（读档时不会按主将上限自动补升）；给 setLevel 时直接设成该级（新入队）。返回是否有变化。
+ */
+export function clampHeroLevel(id: HeroKey, maxLevel: number, setLevel?: number): boolean {
+  const s = read(), had = !!s.heroes[id], r = record(id, true), lv0 = r.level, xp0 = r.xp, top = Math.max(1, Math.floor(maxLevel));
+  r.level = Math.max(1, Math.min(top, setLevel !== undefined ? Math.floor(setLevel) : r.level));
+  if (setLevel !== undefined) r.xp = 0;
+  if (r.level >= top) r.xp = Math.min(r.xp, xpToNext(r.level) - 1);
+  const changed = !had || r.level !== lv0 || r.xp !== xp0; if (changed) commit();
+  return changed;
+}
+/** 有没有这位武将的等级记录（没有时 heroLevel 按 startLevel 给）。 */
+export function hasHeroRecord(id: HeroKey): boolean { return !!read().heroes[id]; }
 /** 战斗中升级：直接写入武将等级与当前经验（不超过本章上限；属性点按等级算）。 */
 export function setHeroProgress(id: HeroKey, level: number, xp: number): void {
   const r = record(id, true), cap = levelCap(); r.level = Math.max(r.level, Math.min(cap, Math.floor(level))); r.xp = Math.max(0, Math.min(xpToNext(r.level), Math.round(xp))); commit();

@@ -76,6 +76,14 @@ export const FOLLOW = {
   levelHp: .04, levelDamage: .03, mightDamage: .015, constitutionHp: .03,
 } as const;
 
+/**
+ * 随行等级上限（用户 2026-11-17「随从等级一开始不要这么高，随着章节解锁提升」，初值待平衡会话复核）：
+ * 上限 = capBase + capPerChapter ×（已开放章节数 − 1），即第一章 5 级、每开一章 +5；新入队的随行定在「上限 − joinBelowCap」级；
+ * 随行结算经验到上限为止（开新章后上限提高，可以继续升）。主公不受此限（等级随征战提升，不能在随行系统里升级）。
+ */
+export const FOLLOWER_LEVEL = { capBase: 5, capPerChapter: 5, joinBelowCap: 2 } as const;
+export function followerLevelCapFor(chaptersOpen: number): number { return FOLLOWER_LEVEL.capBase + FOLLOWER_LEVEL.capPerChapter * Math.max(0, chaptersOpen - 1); }
+
 /** 将阶（技能升级）：1–10 级；招贤馆等级决定上限；每级花军粮与军功。 */
 export const RANK = {
   max: 10, capByHall: [4, 7, 10],

@@ -11,7 +11,7 @@ import { framesFigure, sheetFigureHeight } from './SpriteMetrics';
 import { ACTION_MS, HERO_ACTIONS, type ActionFrame } from '../data/heroActions';
 import type { CharacterPassives } from './CharacterPassives';
 import { HINT_MOCK, groundScar } from '../ui/HintStyle';
-import { rankBonus, type Recruit } from './RosterStore';
+import { followerLevelCap, rankBonus, type Recruit } from './RosterStore';
 import { loadout, type GearOwner } from './ItemStore';
 import { emptyGear, gearFromItems, type GearStats } from './ItemEffects';
 import type { ItemInstance } from '../data/items';
@@ -71,7 +71,7 @@ export class Follower {
     this.gear = g;
     // 武将等级：可玩名将用自己加过的属性点（武力 / 体魄），招来的 r_ 武将按等级直接成长
     let dmgLv = 1, hpLv = 1; this.level = 1;
-    try { const key = (recruit.hero ?? recruit.id) as HeroKey; this.level = heroLevel(key);
+    try { const key = (recruit.hero ?? recruit.id) as HeroKey; this.level = Math.min(heroLevel(key), followerLevelCap()); // 随行等级不超过随行上限（主公不会出现在随行里）
       if (recruit.hero) { const a = heroAttrs(key); dmgLv = 1 + FOLLOW.mightDamage * a.strength; hpLv = 1 + FOLLOW.constitutionHp * a.strength; }
       else { dmgLv = 1 + FOLLOW.levelDamage * Math.max(0, this.level - 1); hpLv = 1 + FOLLOW.levelHp * Math.max(0, this.level - 1); } } catch { /* 等级存档不可用 */ }
     this.damage = t.damage * q * (hero?.damageMul ?? 1) * (1 + b.damage) * (1 + g.damage) * (1 + g.crit) * dmgLv;

@@ -1,6 +1,7 @@
 import { CHARACTERS, getCharacter, type CharacterId } from '../data/characters';
 import { QUALITY_ORDER, type ItemQuality } from '../data/items';
-import { FOLLOW, HERO_TEMPLATE, RANK, RECRUIT, TEMPLATE_ORDER, commonName, type FollowerTemplate, type RecruitKind } from '../data/recruits';
+import { FOLLOW, FOLLOWER_LEVEL, HERO_TEMPLATE, RANK, RECRUIT, TEMPLATE_ORDER, commonName, followerLevelCapFor, type FollowerTemplate, type RecruitKind } from '../data/recruits';
+import { chaptersOpen, clampHeroLevel, hasHeroRecord, heroLevel, type HeroKey } from './HeroProgress';
 import { BOUNTY_GENERALS, seasonIndex } from '../world/WorldIntel';
 import { MAJOR_FACTIONS, type FactionId } from '../world/WorldCities';
 import { loadWorld, spendWorld, townUpgrade, worldUnlocked } from '../world/WorldStore';
@@ -108,6 +109,7 @@ export function rosterEnforced(): boolean {
 export function loadRoster(): RosterSave {
   if (!worldUnlocked()) return empty();
   let s = read() ?? migrate();
+  clampFollowerLevels(s);
   const now = currentSeason();
   if (s.season !== now) {
     s.captives = s.captives.filter(o => (o.expires ?? now) > now);
@@ -127,6 +129,24 @@ export function defaultHero(saved: string | null | undefined): CharacterId {
   return isHero(saved) ? saved : 'zhaoyun';
 }
 export const LOCKED_HINT = '主公已定，本存档不可更换';
+
+// ———— 随行等级上限（用户 2026-11-17「随从等级一开始不要这么高，随着章节解锁提升」） ————
+
+/** 主公的等级只随征战（自己出战的经验）提升，不能在招贤馆 / 随行系统里升级。 */
+export const LORD_LEVEL_HINT = '主公等级随征战提升';
+const isLordRecruit = (s: RosterSave, r: Recruit): boolean => !!r.hero && r.hero === s.lord;
+/** 当前章节下随行的等级上限（第一章 5 级，每开一章 +5，见 FOLLOWER_LEVEL）。 */
+export function followerLevelCap(): number { return followerLevelCapFor(chaptersOpen()); }
+/** 随行的实际等级（不超过随行上限；主公返回自己的武将等级）。 */
+export function followerLevel(r: Recruit, s: RosterSave | null = null): number {
+  const lv = heroLevel((r.hero ?? r.id) as HeroKey); if (r.hero && r.hero === (s ?? read())?.lord) return lv;
+  return Math.min(lv, followerLevelCap());
+}
+/** 读档时把超上限的随行压到上限（开发期不兼容旧档，直接压；主公不压）。 */
+function clampFollowerLevels(s: RosterSave): void {
+  const cap = followerLevelCap();
+  for (const r of s.owned) { if (isLordRecruit(s, r)) continue; const key = (r.hero ?? r.id) as HeroKey; if (heroLevel(key) > cap) clampHeroLevel(key, cap); }
+}
 
 // ———— 主公（用户规则 2026-11-16：每个存档开局选定主公，之后整个存档不能更换） ————
 
@@ -246,10 +266,13 @@ export function recruit(index: number, captive = false): RosterResult {
   if (!o) return { ok: false, message: '这个席位已经空了' };
   if (s.owned.length >= RECRUIT.maxOwned) return { ok: false, message: `麾下已满 ${RECRUIT.maxOwned} 人，先遣散一些` };
   if (o.kind === 'hero' && s.owned.some(r => r.hero === o.hero)) { list.splice(index, 1); write(s); return { ok: false, message: '已在麾下' }; }
+  const joinCap = followerLevelCap(), joinLevel = Math.max(1, joinCap - FOLLOWER_LEVEL.joinBelowCap);
   const cost = captive ? Math.ceil(o.cost * RECRUIT.captiveDiscount) : o.cost;
   if (!spendWorld({ provisions: cost })) return { ok: false, message: `军粮不足：招募需要 ${cost}` };
   const r: Recruit = o.kind === 'hero' ? heroRecruit(o.hero!) : { id: 'r_' + (++s.seq), kind: o.kind, name: o.name, template: o.template, quality: o.quality, rank: 1, picks: [], faction: o.faction };
   s.owned.push(r); list.splice(index, 1);
+  // 新入队的随行定在「随行上限 − 2」级（可玩名将若早有更高的记录，保留但不超过上限）
+  { const key = (r.hero ?? r.id) as HeroKey, keep = r.hero && hasHeroRecord(key) ? Math.min(heroLevel(key), joinCap) : 0; clampHeroLevel(key, joinCap, Math.max(joinLevel, keep)); }
   const cap = followerCap(s); if (s.followers.length < cap) s.followers.push(r.id);
   write(s); return { ok: true, message: `${r.name}${captive ? '归降' : '应募'}，花 ${cost} 军粮` };
 }
@@ -325,6 +348,7 @@ export function upgradeHall(): RosterResult {
 export function rankCap(s: RosterSave = loadRoster()): number { return RANK.capByHall[hallIdx(s)]; }
 export function rankUp(id: string, line: RankLine): RosterResult {
   const s = loadRoster(), r = s.owned.find(x => x.id === id); if (!r) return { ok: false, message: '不在麾下' };
+  if (isLordRecruit(s, r)) return { ok: false, message: LORD_LEVEL_HINT }; // 主公不能在随行系统里升级
   if (r.rank >= rankCap(s)) return { ok: false, message: r.rank >= RANK.max ? '将阶已满' : '将阶已到招贤馆上限，升级招贤馆后可继续' };
   const c = RANK.cost(r.rank + 1);
   if (!spendWorld(c)) return { ok: false, message: `军粮不足：升阶需要 ${c.provisions}` };

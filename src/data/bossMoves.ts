@@ -212,7 +212,7 @@ export const BOSS_MOVES: Record<string, BossMovesetDef> = {
   },
   // 10-1 孙桓：骑马；宗室锐气（冲阵）+ 夷道死守（召兵）→ 坠马连斩
   sunhuan: {
-    id: 'sunhuan', name: '孙桓', phaseAt: .5, mount: { horse: 'generic', tint: 0xb06048 },
+    id: 'sunhuan', name: '孙桓', phaseAt: .5, mount: { horse: 'generic', tint: 0xb06048, rider: 'sunhuan' },
     p1: { name: '宗室少将', caption: '宗室锐气 · 夷道死守', gapMs: 2300, speedMul: 1.4, moves: [
       { kind: 'charge', name: '宗室锐气', windupMs: 850, cd: 4200, dmg: 1.4, len: 460, width: 66, dashMs: 480 },
       { kind: 'summon', name: '夷道死守', windupMs: 800, cd: 9000, dmg: 0, troop: 'infantry', count: 5, radius: 160, around: 'boss' },

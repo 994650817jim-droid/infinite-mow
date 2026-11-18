@@ -366,5 +366,5 @@ export const BOSS_MOUNTS: Record<string, BossMountDef> = {
   huaxiong: { horse: 'wuzhui', cut: .62, rider: 'huaxiong' },
   // 第四章官渡：颜良、文丑（GuanduBoss 专属控制器），半血坠马
   yanliang: { horse: 'dawan', cut: .62, rider: 'yanliang' },
-  wenchou: { horse: 'generic', tint: 0x6a5a48, cut: .62 },
+  wenchou: { horse: 'generic', tint: 0x6a5a48, cut: .62, rider: 'wenchou' },
 };

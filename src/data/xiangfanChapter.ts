@@ -27,7 +27,7 @@ const OWN: Record<string, { key: string; sheet: string }> = {
 };
 const FALLBACK: Record<string, string> = { xf_pangde: 'guandu_yanliang', xf_lvmeng: 'guandu_wenchou' };
 /** 已到的第九章图（只载这些；缺的用过渡图，避免 404）。只有 v2 版。 */
-export const XF_ART_READY: ReadonlySet<string> = new Set<string>(['xf_pangde', 'xf_lvmeng']); // 2026-11-17 Gemini 3.1 Pro 出图（白底 → tools/white-to-magenta.mjs → prepare-artv2）
+export const XF_ART_READY: ReadonlySet<string> = new Set<string>(['xf_pangde', 'xf_lvmeng', 'xf_baier_walk', 'xf_jiangdong_walk']); // 2026-11-17 Gemini 3.1 Pro 出图（白底 → tools/white-to-magenta.mjs → prepare-artv2）
 export const xfArt = (key: string): boolean => XF_ART_READY.has(key) && artStyle() === 'v2';
 export function xfBossTexture(id: string): string { const o = OWN[id]; if (!o.key.startsWith('xf_')) return o.key; return xfArt(o.key) ? o.key : FALLBACK[o.key]; }
 export function xfBossSheet(id: string): string { const k = xfBossTexture(id); return k.startsWith('xf_') ? OWN[id].sheet : k === OWN[id].key ? OWN[id].sheet : GUANDU_ATLAS_FILES[k]; }

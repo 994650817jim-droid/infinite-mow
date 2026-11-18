@@ -106,7 +106,7 @@ try {
     await p.waitForTimeout(150);
     ck(`${c.name}：回到屏内箭头消失`, !(await ev(s => s.presence.stats.arrow)));
     // 首领倒下：辉光摘掉（敌兵精灵对象池复用，不能带着辉光变成小兵）、火环 / 名牌收起
-    const dead = await ev(s => new Promise(res => { const sp = s.boss.sprite; s.__letDie = true; s.killEnemy(s.boss); setTimeout(() => { for (let i = 0; i < 5 && s.mode === 'levelup'; i++) s.chooseUpgrade(0); res({ fx: sp.preFX?.list?.length ?? 0, glow: s.presence.stats.glow, ring: !!s.children.getByName('boss-presence-ring')?.visible, plate: !!s.children.getByName('boss-name-plate')?.visible }); }, 400); }));
+    const dead = await ev(s => new Promise(res => { const sp = s.boss.sprite; s.__letDie = true; s.persuadeKill = true; /* 招降（Parley.preventKill）会拦住可招降首领的倒下，测试直接斩 */ s.killEnemy(s.boss); setTimeout(() => { for (let i = 0; i < 5 && s.mode === 'levelup'; i++) s.chooseUpgrade(0); res({ fx: sp.preFX?.list?.length ?? 0, glow: s.presence.stats.glow, ring: !!s.children.getByName('boss-presence-ring')?.visible, plate: !!s.children.getByName('boss-name-plate')?.visible }); }, 400); }));
     ck(`${c.name}：首领倒下后辉光摘掉、火环和名牌收起`, dead.fx === 0 && !dead.glow && !dead.ring && !dead.plate, dead);
     ck(`${c.name}：无页面报错`, !errs.length, errs.slice(0, 3));
     await p.close();

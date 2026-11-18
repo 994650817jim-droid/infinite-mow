@@ -241,7 +241,7 @@ export class FollowerSquad {
   }
   /** 救起：带 FOLLOW.reviveHp 生命，回到阵位继续战斗。 */
   revive(f: Follower, now: number): void {
-    f.downed = false; f.reviveProgress = 0; f.revives++; this.stats.revives++; f.act = null; f.hp = Math.max(1, Math.round(f.maxHp * FOLLOW.reviveHp));
+    f.downed = false; f.reviveProgress = 0; f.revives++; this.stats.revives++; f.act = null; f.hp = Math.max(1, Math.round(f.maxHp * (this.player.growth.followerRevive()?.hp ?? FOLLOW.reviveHp))); // 统御·同袍
     f.sprite.setAngle(0).clearTint().setAlpha(1); f.cooldown = .3; f.nextContact = now + 600; f.mark?.setVisible(false); f.arrowText?.setVisible(false);
     this.puff(f.x, f.y, now);
   }
@@ -249,7 +249,7 @@ export class FollowerSquad {
   private updateDowned(f: Follower, dt: number, now: number): void {
     const d = Math.hypot(this.player.x - f.x, this.player.y - f.y);
     f.reviveProgress = d <= FOLLOW.reviveRadius ? f.reviveProgress + dt : Math.max(0, f.reviveProgress - dt * FOLLOW.reviveDecay);
-    if (f.reviveProgress >= FOLLOW.reviveSec) this.revive(f, now);
+    if (f.reviveProgress >= FOLLOW.reviveSec * (this.player.growth.followerRevive()?.secMul ?? 1)) this.revive(f, now); // 统御·同袍
   }
   /** 救援界面：主将头顶环形读条 +「救援」、倒地者头上「救」字、屏幕外方向箭头。 */
   private drawRescue(now: number): void {
@@ -275,7 +275,7 @@ export class FollowerSquad {
       } else f.arrowText?.setVisible(false);
     }
     if (best) {
-      const x = p.x, y = p.y - 100, r = 17, k = Math.min(1, best.reviveProgress / FOLLOW.reviveSec);
+      const x = p.x, y = p.y - 100, r = 17, k = Math.min(1, best.reviveProgress / (FOLLOW.reviveSec * (this.player.growth.followerRevive()?.secMul ?? 1)));
       g.fillStyle(0x140c06, .7).fillCircle(x, y, r + 4);
       g.lineStyle(5, 0x3a2a1c, 1).strokeCircle(x, y, r);
       g.lineStyle(5, 0xffcf5a, 1).beginPath(); g.arc(x, y, r, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * k); g.strokePath();

@@ -125,10 +125,10 @@ export class CampRestUI {
    const hover=this.scene.add.rectangle(x+4,y+4,w-8,h-64,0,.001).setOrigin(0).setScrollFactor(0).setInteractive().setName('camp-item-card-'+i);this.body.add(hover);
    this.itemTip!.attach(hover,()=>item,()=>loadout(this.player.growth.character)[itemSlot(item)]);
    const can=!sold&&this.army.food>=price;
-   const b=this.button(x+(w-Math.min(w-24,180))/2,y+h-52,sold?'已售罄':this.army.food<price?'随军粮不足 · '+price+'粮':'购入 · '+price+'粮',()=>{if(this.itemSold[i]||this.army.food<price)return;this.army.food-=price;this.itemSold[i]=true;this.onBuyItem?.(item);this.sound('purchase');this.notice='已购入 '+itemName(item)+' · 结算后收入行囊';this.render();},Math.min(w-24,180),can).setName('camp-item-goods-'+i);b.setData('caption',this.body.list[this.body.list.length-1]);(this.body.list[this.body.list.length-1] as Phaser.GameObjects.GameObject).name='camp-item-price-'+i;
+   const b=this.button(x+(w-Math.min(w-24,180))/2,y+h-52,sold?'已售罄':this.army.food<price?'随军粮不足 · '+price+'粮':'购入 · '+price+'粮',()=>{if(this.itemSold[i]||this.army.food<price)return;this.army.food-=price;this.itemSold[i]=true;this.onBuyItem?.(item);this.sound('purchase');this.notice='已购入 '+itemName(item)+' · 已收入行囊，可点右上「行囊」穿戴';this.render();},Math.min(w-24,180),can).setName('camp-item-goods-'+i);b.setData('caption',this.body.list[this.body.list.length-1]);(this.body.list[this.body.list.length-1] as Phaser.GameObjects.GameObject).name='camp-item-price-'+i;
    this.body.add(b);
   });
-  if(!this.notice)this.detail.setText(D?'每次进营 4 件兵装，甲胄、头盔、战靴、信物各一；鼠标移到卡片上看属性对比，买下的结算后收入行囊。':'军需商人只卖兵装：每次进营 4 件，甲胄、头盔、战靴、信物各一。鼠标移到卡片上看属性与当前穿戴的对比；买下的结算后收入行囊。');
+  if(!this.notice)this.detail.setText(D?'每次进营 4 件兵装，甲胄、头盔、战靴、信物各一；鼠标移到卡片上看属性对比，买下的立即收入行囊。':'军需商人只卖兵装：每次进营 4 件，甲胄、头盔、战靴、信物各一。鼠标移到卡片上看属性与当前穿戴的对比；买下的立即收入行囊。');
  }
 
  private showDetails(title:string,description:string,confirm?:()=>void){

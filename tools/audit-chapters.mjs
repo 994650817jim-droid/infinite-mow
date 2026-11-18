@@ -39,7 +39,7 @@ for (const n of chapters) {
       const s0 = window.__game.scene.getScene('GameScene'); s0.registry.remove('campaignTransfer'); s0.registry.remove('thirdTransfer');
       const cfg = C.siege ? (s0.registry.set('siegeCity', C.siege), {}) : C.reg ? (s0.registry.set(C.reg, st), C.reg === 'guanduStage' ? {} : { thirdStage: st }) : C.cfgv;
       s0.registry.set('runConfig', { character: h, ...cfg }); s0.scene.start(C.key);
-    }, [{ ...C, cfgv: C.cfg?.(stage) }, hero, stage]);
+    }, [{ key: C.key, reg: C.reg, siege: C.siege, cfgv: C.cfg?.(stage) }, hero, stage]);
     await p.waitForFunction(k => { const s = window.__game.scene.getScene(k); return window.__game.scene.isActive(k) && s?.player && s.elapsed < 5; }, C.key, { timeout: 90000 });
     await p.waitForTimeout(800);
     r = await p.evaluate(async ([key, fpsMode, secs]) => {
@@ -53,6 +53,12 @@ for (const n of chapters) {
         B.modes[s.mode] = (B.modes[s.mode] ?? 0) + 1;
         if (s.mode === 'levelup' || s.mode === 'bossloot') s.chooseUpgrade?.(0);
         else if (s.mode === 'recruit') { s.chooseRecruit?.(0); if (s.mode === 'recruit') s.__DEV_ACTIONS?.closePopup?.(); }
+        else if (s.mode === 'parley' || s.mode === 'story') {
+          // 劝降（荆南 / 汉中等）选斩杀；章末剧情卷轴：按最上层可点的按钮（像玩家一样点，不强行改模式）
+          B.parley = (B.parley ?? 0) + 1;
+          if (s.parleyState === 'pending' && s.choose) s.choose('execute');
+          else { const hits = s.input._list.filter(o => o.active && o.visible !== false && o.input?.enabled); const top = hits[hits.length - 1]; if (top) { top.emit('pointerdown', { x: top.x, y: top.y }); top.emit('pointerup', { x: top.x, y: top.y }); } }
+        }
         else if (s.mode !== 'none') { s.__DEV_ACTIONS?.closePopup?.(); if (s.mode !== 'none' && s.mode !== 'result') s.setMode?.('none'); }
         if (s.awaitingChest) s.collectBossChests?.();
         if (s.bossSpawned && bossAt === null) bossAt = s.elapsed;
@@ -69,6 +75,7 @@ for (const n of chapters) {
       window.__IM.setMove(0, 0);
       const f = B.fps.slice(5).sort((x, y) => x - y), avg = f.length ? f.reduce((x, y) => x + y, 0) / f.length : 0;
       return { over: s.over, victory: s.victory, bossName: s.chapter?.bossName, bossAt, bossKilledAt, elapsed: s.elapsed, kills: s.kills, stuck: B.stuck, mode: s.mode,
+        diag: { parleyClicks: B.parley ?? 0, bossKilled: s.bossKilled, bossActive: !!s.boss?.active, bossHp: s.boss?.active ? +(s.boss.hp / s.boss.maxHp).toFixed(2) : null, bossInvuln: s.boss?.invulnerable, chasing: s.chasingBosses?.length, chests: s.bossChests?.length, awaitingChest: s.awaitingChest, objective: s.objective ? (s.objective.kind ?? s.objective.type ?? s.objective.id ?? Object.keys(s.objective).slice(0, 6).join('/')) : null, objText: s.hudTexts?.objective?.text ?? s.objectiveText?.text ?? null, enemies: s.enemies.filter(e => e.active).length, pending: s.pendingLevels, notice: s.growthNotice?.text ?? null, reason: s.endReason ?? null },
         fpsAvg: +avg.toFixed(0), fpsP5: f.length ? +f[Math.floor(f.length * .05)].toFixed(0) : 0, enemiesMax: s.enemies.filter(e => e.active).length, waves: s.chapter?.waves?.length, stageName: s.chapter?.name };
     }, [C.key, fpsMode, secs]);
     await p.screenshot({ path: `${out}/ch${n}-s${stage}${fpsMode ? '-fps' : ''}.png` });
@@ -77,7 +84,7 @@ for (const n of chapters) {
   rows.push(row);
   console.log(fpsMode
     ? `${n} ${C.name} ${stage} ${row.stageName ?? ''}：FPS 平均 ${row.fpsAvg} / 5% 低 ${row.fpsP5}${row.error ? ' 错误 ' + row.error : ''}${row.errors.length ? ' 页面错误 ' + row.errors[0] : ''}`
-    : `${n} ${C.name} ${stage} ${row.stageName ?? ''}（${row.bossName ?? '?'}）：${row.error ? '打不开 ' + row.error : row.over ? (row.victory ? '通关' : '失败') : row.stuck ? '卡住(' + row.mode + ')' : '超时(' + row.mode + ')'} · 首领 ${row.bossAt?.toFixed?.(0) ?? '—'}s 登场 / ${row.bossKilledAt?.toFixed?.(0) ?? '—'}s 倒下 · 用时 ${row.elapsed?.toFixed?.(0)}s · FPS ${row.fpsAvg}/${row.fpsP5} · 墙钟 ${row.wall}s${row.errors.length ? ' · 页面错误 ' + row.errors.join(' | ') : ''}`);
+    : `${n} ${C.name} ${stage} ${row.stageName ?? ''}（${row.bossName ?? '?'}）：${row.error ? '打不开 ' + row.error : row.over ? (row.victory ? '通关' : '失败') : row.stuck ? '卡住(' + row.mode + ')' : '超时(' + row.mode + ')'} · 首领 ${row.bossAt?.toFixed?.(0) ?? '—'}s 登场 / ${row.bossKilledAt?.toFixed?.(0) ?? '—'}s 倒下 · 用时 ${row.elapsed?.toFixed?.(0)}s · FPS ${row.fpsAvg}/${row.fpsP5} · 墙钟 ${row.wall}s${row.errors.length ? ' · 页面错误 ' + row.errors.join(' | ') : ''}${!row.victory && row.diag ? ' · 诊断 ' + JSON.stringify(row.diag) : ''}`);
   await p.close();
 }
 writeFileSync(`${out}/chapters-s${stage}${fpsMode ? '-fps' : ''}.json`, JSON.stringify(rows, null, 1));

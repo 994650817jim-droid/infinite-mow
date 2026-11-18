@@ -132,10 +132,10 @@ export const ART_V2_FILES: Readonly<Record<string, string>> = {
   yiling_sunhuan: 'assets/bosses-v2/third_zhangxiu.png',
   yiling_zhuran: 'assets/bosses-v2/jingnan_hanxuan.png',
   yiling_luxun: 'assets/bosses-v2/yiling_luxun.png', // 正式图（Gemini 出图，art-style ebfcb2b）
-  // 第十二章 北伐首领：正式 v2 图到之前借用现有首领 v2 图过渡（beifaChapter.BEIFA_SHEETS 是 v1 回退）
+  // 第十二章 北伐首领：张郃 / 郝昭正式 v2 图到之前借用现有首领 v2 图过渡（beifaChapter.BEIFA_SHEETS 是 v1 回退）；司马懿已有正式 v2 图（Gemini 3.1 Pro 出图）
   beifa_zhanghe: 'assets/bosses-v2/hanzhong_zhanghe.png',
   beifa_haozhao: 'assets/bosses-v2/jingnan_liudu.png',
-  beifa_simayi: 'assets/bosses-v2/hanzhong_caocao.png',
+  beifa_simayi: 'assets/bosses-v2/beifa_simayi.png',
   huaxiong_walk: 'assets/bosses-v2/huaxiong_walk.png',
   huaxiong_attack: 'assets/bosses-v2/huaxiong_attack.png',
   huaxiong_actions: 'assets/bosses-v2/huaxiong_actions.png',

@@ -3684,17 +3684,11 @@ export class GameScene extends Phaser.Scene {
       const button=this.add.image(attrCx+rowW/2-38,y,'ui_war_button').setDisplaySize(50,44).setInteractive({useHandCursor:true}).setName('attribute-add-'+id);
       const plus=this.add.text(button.x,button.y-1,'+',warText(26,'#ffe9bd')).setOrigin(.5).setStroke('#2a170b',3);
       lqImageButton(this,button,50,44,'gold',plus);
-      let ink:{plate:Phaser.GameObjects.NineSlice|null;hover:boolean}|undefined;
-      if(d&&this.textures.exists('btn_ink_secondary_normal')){ // 水墨底；原漆金图换透明贴图（不能用 alpha≈0，手柄焦点会跳过），命中区不变
-        const e={plate:inkPlate(this,null,button.x,button.y,52,38,false,'normal'),hover:false};ink=e;e.plate?.setScrollFactor(0);
-        const sync=()=>{button.setTexture('__DEFAULT').setDisplaySize(62,56);inkPlate(this,e.plate,button.x,button.y,52,38,false,!button.input?.enabled?'disabled':e.hover?'hover':'normal');plus.setColor(!button.input?.enabled?'#3a332a':e.hover?'#fff3d4':'#e8d3a6');};
-        button.on('pointerover',()=>{e.hover=true;sync();}).on('pointerout',()=>{e.hover=false;sync();}).on('pointerdown',sync).on('pointerup',sync);sync();
-      }
+      // 2026-11-18 每个界面最多 1 处水墨笔刷：「＋」用漆底描金方钮（上面的 lqImageButton），笔刷只留给底部「返回」
       button.on('pointerdown',()=>{const g=this.player.growth;if(g.allocate(this.player,id)){this.player.passive.areaMul=g.areaMultiplier();if(g.heroFree>0){g.heroFree--;if(!isChapterTestRun())allocateHeroAttr(this.runConfig.character,id);}this.renderAttributePanel();this.updateHud();}});
       this.attributePanel.add([row,attrIconImg,label,effect,pips,value,button,plus]);
       if(isPrimary){const ab=attrBadge(this,left+56+label.width+18,y-11,this.runConfig.character,22);if(ab)this.attributePanel.add(ab);} // 主属性印（ui/AttrBadge.ts）
-      this.attributeRows.push({value,button,plus,pips,pipX,pipY,perkG,perkX,perkY:y-11,ink});
-      if(ink?.plate)this.attributePanel.addAt(ink.plate,this.attributePanel.getIndex(button));
+      this.attributeRows.push({value,button,plus,pips,pipX,pipY,perkG,perkX,perkY:y-11});
     });
     this.attributePanel.add(perkTip);
     const attrCloseY=attrTop+attrH-38;
@@ -3768,19 +3762,19 @@ export class GameScene extends Phaser.Scene {
     if(this.worldCampaign)btnText.setText('再次出征');
     // 电脑版水墨笔触按钮（同主页 / 军营）：「返回 / 下一关」为主按钮（朱墨），「再次出征」为次按钮；缺图时退回漆金按钮
     const ink = d && this.textures.exists('btn_ink_primary_normal');
-    let restartInk: Phaser.GameObjects.NineSlice | null = null, homeInk: Phaser.GameObjects.NineSlice | null = null;
-    const restartSkin = ink ? null : lqSkin(this, btn, btnText, () => ({ w: rbw, h: rbh }));
+    let homeInk: Phaser.GameObjects.NineSlice | null = null;
+    // 2026-11-18 每个界面最多 1 处水墨笔刷：「再来一局 / 再次出征」用漆底小牌，笔刷只给「返回 / 下一关」主按钮
+    const restartSkin = lqSkin(this, btn, btnText, () => ({ w: rbw, h: rbh }), ink ? { tone: 'quiet' } : {});
     const homeSkin = ink ? null : lqSkin(this, selectChapter, selectChapter, () => ({ w: rbw, h: rbh }), { tone: 'quiet' });
     const paintInk = (which: 'restart' | 'home', state: 'normal' | 'hover' | 'pressed'): void => {
       const dy = state === 'pressed' ? 1 : 0, hi = state === 'hover';
-      if (which === 'restart') { restartInk = inkPlate(this, restartInk, btn.x, rby, rbw, rbh, false, state); restartInk?.setVisible(btn.visible); btnText.setPosition(btn.x, rby + dy).setColor(hi ? '#fff3d4' : '#e8d3a6'); }
-      else { homeInk = inkPlate(this, homeInk, selectChapter.x, rby, rbw, rbh, true, state); selectChapter.setY(rby + dy).setColor(hi ? '#fff3d4' : '#f8e6bf'); }
+      if (which === 'restart') return;
+      { homeInk = inkPlate(this, homeInk, selectChapter.x, rby, rbw, rbh, true, state); selectChapter.setY(rby + dy).setColor(hi ? '#fff3d4' : '#f8e6bf'); }
     };
     if (ink) {
       btnText.setFontSize(17).setStroke('#16100a', 4).setLetterSpacing(3);
       selectChapter.setFontSize(17).setStroke('#2a0c06', 3).setLetterSpacing(2);
-      paintInk('restart', 'normal'); paintInk('home', 'normal');
-      btn.on('pointerover', () => paintInk('restart', 'hover')).on('pointerout', () => paintInk('restart', 'normal')).on('pointerdown', () => paintInk('restart', 'pressed'));
+      paintInk('home', 'normal');
       selectChapter.on('pointerover', () => paintInk('home', 'hover')).on('pointerout', () => paintInk('home', 'normal'));
     }
     const homeDown = () => { if (ink) paintInk('home', 'pressed'); else homeSkin?.repaint('down'); };
@@ -3790,10 +3784,10 @@ export class GameScene extends Phaser.Scene {
       btn.setX(both ? pcx - rbw / 2 - (ink ? 14 : 10) : pcx); selectChapter.setPosition(both ? pcx + rbw / 2 + (ink ? 14 : 10) : pcx, rby);
       lqHitBox(selectChapter, rbw, rbh);
       selectChapter.off('pointerdown', homeDown).on('pointerdown', homeDown);
-      if (ink) { paintInk('restart', 'normal'); paintInk('home', 'normal'); } else { restartSkin?.repaint('idle'); homeSkin?.repaint('idle'); }
+      restartSkin.repaint('idle'); if (ink) paintInk('home', 'normal'); else homeSkin?.repaint('idle');
     };
     this.layoutResultButtons();
-    const plates: Phaser.GameObjects.GameObject[] = ink ? ([restartInk, homeInk] as Array<Phaser.GameObjects.NineSlice | null>).filter((g): g is Phaser.GameObjects.NineSlice => !!g) : [restartSkin!.gfx, homeSkin!.gfx];
+    const plates: Phaser.GameObjects.GameObject[] = ink ? [restartSkin.gfx, ...(homeInk ? [homeInk] : [])] : [restartSkin.gfx, homeSkin!.gfx];
     this.resultPanel.add([rDim,resultFrame,rDiv,rKicker,rTitle,rSub,rBody,rNotes,rStats,...plates,btn,btnText,selectChapter]);
     this.resultTexts = { title: rTitle.setResolution(2), subtitle: rSub.setResolution(2), body: rBody.setResolution(2) };
 
@@ -3862,7 +3856,6 @@ export class GameScene extends Phaser.Scene {
       if(can){row.button.setAlpha(1).setInteractive({useHandCursor:true});}
       else row.button.setAlpha(.38).disableInteractive();
       row.plus.setAlpha(can?1:.45);
-      if(row.ink?.plate){row.button.setAlpha(1);inkPlate(this,row.ink.plate,row.button.x,row.button.y,52,38,false,can?(row.ink.hover?'hover':'normal'):'disabled');row.plus.setColor(can?'#e8d3a6':'#3a332a');}
       if(row.perkG){row.perkG.clear();for(let k=0;k<PRIMARY_TIERS.length;k++){const on=level>=PRIMARY_TIERS[k],cx=(row.perkX??0)+k*17,cy=row.perkY??0,pts=[{x:cx,y:cy-6},{x:cx+6,y:cy},{x:cx,y:cy+6},{x:cx-6,y:cy}];row.perkG.fillStyle(on?0xe2bd6a:0x2a3328,1).fillPoints(pts,true).lineStyle(1,on?0xfff0c0:0x5d6a58,.9).strokePoints(pts,true);}}
     }
   }

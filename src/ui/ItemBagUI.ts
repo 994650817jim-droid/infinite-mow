@@ -79,7 +79,7 @@ export class ItemBagUI {
   private text(x: number, y: number, value: string, size: number, color = '#e9dcbc', heading = false, parent = this.body): Phaser.GameObjects.Text {
     return this.add(this.scene.add.text(x, y, value, { fontFamily: heading ? HEADING_FONT : FONT, fontSize: size + 'px', color, resolution: 2 }), parent);
   }
-  private button(x: number, y: number, label: string, name: string, onClick: () => void, o: { size?: number; active?: boolean; disabled?: boolean; parent?: Phaser.GameObjects.Container; w?: number } = {}): Phaser.GameObjects.Text {
+  private button(x: number, y: number, label: string, name: string, onClick: () => void, o: { size?: number; active?: boolean; disabled?: boolean; /** 本界面唯一的水墨笔刷主按钮（其余一律漆底，2026-11-18「每个界面最多 1 处水墨笔刷」）。 */ primary?: boolean; parent?: Phaser.GameObjects.Container; w?: number } = {}): Phaser.GameObjects.Text {
     // 漆金按钮：选中为朱漆，禁用为暗底；文字过长时整体缩小，不再溢出底框。命名的文字对象仍是命中区。
     const parent = o.parent ?? this.body;
     const t = this.text(x, y, label, o.size ?? 15, '#ffe9bd', o.size !== undefined && o.size >= 16, parent).setOrigin(.5).setPadding(12, 7).setName(name);
@@ -87,7 +87,9 @@ export class ItemBagUI {
     if (t.width > bw - 6) t.setScale((bw - 6) / t.width);
     if (!o.disabled) t.setInteractive({ useHandCursor: true }).on('pointerdown', (_p: unknown, _x: unknown, _y: unknown, e?: Phaser.Types.Input.EventData) => { e?.stopPropagation?.(); onClick(); });
     lqHitBox(t, bw, bh);
-    const skin = (IS_DESKTOP ? inkSkin(this.scene, t, () => ({ w: bw, h: bh }), { active: () => !!o.active, enabled: () => !o.disabled }) : null) ?? lqSkin(this.scene, t, t, () => ({ w: bw, h: bh }), { tone: o.active ? 'cinnabar' : 'quiet', on: () => !!o.active, enabled: () => !o.disabled }); // 电脑版水墨（2026-11-17 UI 审查 N）
+    // 不可用的按钮不画底板，只显示成灰色小字
+    if (o.disabled) { t.setColor('#7a705c').setPadding(6, 4); return t; }
+    const skin = (IS_DESKTOP && o.primary ? inkSkin(this.scene, t, () => ({ w: bw, h: bh }), { active: () => !!o.active, enabled: () => !o.disabled, primary: true }) : null) ?? lqSkin(this.scene, t, t, () => ({ w: bw, h: bh }), { tone: o.active ? 'cinnabar' : 'quiet', on: () => !!o.active, enabled: () => !o.disabled }); // 电脑版水墨（2026-11-17 UI 审查 N）
     skin.gfx.setScrollFactor(0); parent.addAt(skin.gfx, parent.getIndex(t));
     return t;
   }
@@ -222,7 +224,7 @@ export class ItemBagUI {
     this.button(gx + 134, pageY, '›', 'item-page-next', () => { this.page = Math.min(pages - 1, this.page + 1); this.render(); }, { disabled: this.page >= pages - 1, size: 16 });
     {
       this.button(gx + gw - (D ? 196 : 208), pageY, `自动分解白：${s.autoSalvageWhite ? '开' : '关'}`, 'item-auto-white', () => { setAutoSalvageWhite(!s.autoSalvageWhite); this.notice = s.autoSalvageWhite ? '已关闭：白色兵装照常收入行囊' : '已开启：之后的白色兵装收入时直接折成军粮'; this.render(); }, { size: 13, active: s.autoSalvageWhite });
-      this.button(gx + gw - 62, pageY, '分解白 / 绿', 'item-salvage-low', () => { const m = salvageUpTo('green'); this.notice = m ? `分解完成 · 军粮 +${rewardGrain(0, 0, m)}` : '没有可分解的白 / 绿兵装（已穿戴的不会分解）'; this.selected = null; this.render(); }, { size: 13 });
+      this.button(gx + gw - 62, pageY, '分解白 / 绿', 'item-salvage-low', () => { const m = salvageUpTo('green'); this.notice = m ? `分解完成 · 军粮 +${rewardGrain(0, 0, m)}` : '没有可分解的白 / 绿兵装（已穿戴的不会分解）'; this.selected = null; this.render(); }, { size: 13, primary: true });
     }
     return pageY;
   }
@@ -409,7 +411,7 @@ export class ItemBagUI {
     this.text(tx + 80, pageY, `${this.page + 1} / ${pages}`, 14, '#cdb98a').setOrigin(.5).setName('item-page');
     this.button(tx + 130, pageY, '›', 'item-page-next', () => { this.page = Math.min(pages - 1, this.page + 1); this.render(); }, { disabled: this.page >= pages - 1, size: 16 });
     this.button(tx + tw - 182, pageY, `自动分解白：${s.autoSalvageWhite ? '开' : '关'}`, 'item-auto-white', () => { setAutoSalvageWhite(!s.autoSalvageWhite); this.notice = s.autoSalvageWhite ? '已关闭：白色兵装照常收入行囊' : '已开启：之后的白色兵装收入时直接折成军粮'; this.render(); }, { size: 13, active: s.autoSalvageWhite });
-    this.button(tx + tw - 56, pageY, '分解白 / 绿', 'item-salvage-low', () => { const m = salvageUpTo('green'); this.notice = m ? `分解完成 · 军粮 +${rewardGrain(0, 0, m)}` : '没有可分解的白 / 绿兵装（已穿戴的不会分解）'; this.selected = null; this.render(); }, { size: 13 });
+    this.button(tx + tw - 56, pageY, '分解白 / 绿', 'item-salvage-low', () => { const m = salvageUpTo('green'); this.notice = m ? `分解完成 · 军粮 +${rewardGrain(0, 0, m)}` : '没有可分解的白 / 绿兵装（已穿戴的不会分解）'; this.selected = null; this.render(); }, { size: 13, primary: true });
     return pageY;
   }
 

@@ -17,6 +17,8 @@ import type {RunConfig} from '../data/characters';
 export function lubuGameSceneClass(Base: typeof GameScene) {
   return class LubuGameScene extends Base {
     protected achievementArc() { return 'lubu'; }
+    /** 首领招降：挑战关吕布（难降；貂蝉在队 +20、主公刘备 −20）。 */
+    protected surrenderKey(): string | null { return 'lubu-1:lubu'; }
     private receipt = ''; private test = false;
     constructor() { super('LubuGameScene'); }
     create() {

@@ -3,8 +3,11 @@ import {FollowerSquad,type Follower} from '../systems/FollowerSquad';
 import {CharacterPassives} from '../systems/CharacterPassives';
 import {FOLLOW} from '../data/recruits';
 import type {PlayerStats} from '../types';
-import {followersFor,followerLevelCap,heroOwned} from '../systems/RosterStore';
-import { StoryDirector, campTalkStrip, setStoryFlag, type StoryCtx } from '../systems/Story';
+import {followersFor,followerLevelCap,heroOwned,lordHero} from '../systems/RosterStore';
+import {Parley} from '../systems/Parley';
+import {SURRENDER,surrenderDef} from '../data/surrender';
+import {markSurrender,surrenderedIds,surrenderLive} from '../systems/SurrenderStore';
+import { StoryDirector, campTalkStrip, setStoryFlag, storyBark, type StoryCtx } from '../systems/Story';
 import { warnCircle, TELEGRAPH_CLASSIC, groundCracks, windupFlash } from '../ui/Telegraph';
 import { HINT_MOCK, SHOW_OWN_RANGE_FX, groundScar, keyOutline } from '../ui/HintStyle';
 import { warnFx } from '../ui/WarnFx';
@@ -82,7 +85,7 @@ import { primaryAttribute, PRIMARY_PERK, PRIMARY_PERK_INFO, PRIMARY_TIERS, PRIMA
 import { stageCleared, takeAttrNotice } from '../systems/HeroProgress';
 import { allocateHeroAttr, claimFirstClear, creditHeroXp, enlistHero, heroFreePoints, heroInfo, heroLevel, levelCap, setHeroProgress, type HeroKey } from '../systems/HeroProgress';
 import { HERO_XP_RATE, OVERFLOW_XP_PER_GRAIN, PICK_GUARANTEE, PICK_PACE } from '../data/heroLevels';
-import { addProvisions } from '../world/WorldStore';
+import { addProvisions, gainProvisions } from '../world/WorldStore';
 import { medicChapter } from '../data/campMedic';
 import { applyCarriedHp, patchCampaignHp, loadCampaignBuild, packCampaign, restoreCampaign, saveCampaignBuild, type CampaignTransfer } from '../systems/Campaign';
 import { TROOP_KINDS, INITIAL_TROOPS, LEGION, FREE_RECRUIT_BY_TIER, type TroopKind } from '../data/legion';
@@ -133,7 +136,7 @@ import { BOSS_MOUNTS, BOSS_MOVES } from '../data/bossMoves';
 import type {ItemInstance} from '../data/items';
 import {armShield,absorbShield,ShieldBars} from '../systems/ShieldGuard';
 import {StageObjectives} from '../systems/StageObjectives';
-import {itemName,relicDef,SPECIALS} from '../data/items';
+import {itemName,relicDef,rollItem,SPECIALS} from '../data/items';
 import {BossChest,playBossFall,type ChestLoot} from '../systems/BossChest';
 import {preloadBossDeath} from '../systems/BossDeathArt';
 import {ItemBagUI} from '../ui/ItemBagUI';
@@ -220,6 +223,38 @@ export class GameScene extends Phaser.Scene {
   protected hardMode=false;
   private huaxiong:HuaxiongBoss|null=null;private xurong:XurongBoss|null=null;
   protected sishuiObstacles:SishuiObstacles|null=null;
+  // ———— 首领招降（systems/Parley.ts + data/surrender.ts） ————
+  parley:Parley|null=null;
+  /** 劝降成功走击杀流程时的标记：不倒地、不播死亡慢动作、不掉首领宝箱。 */
+  protected persuadeKill=false;
+  /** 本关首领在招降表里的键（章节 arc-关:首领 id）；场景覆盖。null = 不招降（攻城、军情、试炼关等）。 */
+  protected surrenderKey():string|null{
+    if(this.runConfig.encounter||this.customChapter())return null;
+    if(this.chapter.id==='huangjin')return `huangjin-${this.chapter.stage??1}:${this.chapter.bossStyle}`;
+    if(this.chapter.id==='hulao')return `hulao-${this.chapter.westStage??3}:${this.chapter.bossStyle}`;
+    return null;
+  }
+  /** 本关的招降旗标（如官渡乌巢粮仓尽焚）；场景覆盖。 */
+  protected parleyFlags():Record<string,boolean>{return {};}
+  protected startParley(boss:Enemy):void{
+    this.parley?.clear();this.parley=null;
+    const def=surrenderDef(this.surrenderKey());
+    this.parley=Parley.for({scene:this,boss:()=>this.boss,mode:()=>this.mode,setMode:m=>this.setMode(m as Mode),over:()=>this.over,now:()=>this.combatNow,
+      ctx:()=>({lord:lordHero()??this.runConfig.character,team:[this.runConfig.character,...(this.followers?.members??[]).map(m=>m.recruit.hero??'').filter(Boolean)],surrendered:surrenderedIds(),followerBosses:(this.followers?.members??[]).map(m=>(m.recruit as {boss?:string}).boss??'').filter(Boolean),flags:this.parleyFlags()}),
+      wenjiu:()=>!!this.sishuiPass?.wenjiuLive(),banner:(t,d,c)=>this.showWaveBanner(t,d,c),sfx:k=>this.sfx.play(k),
+      bark:(t,name,text)=>{if(storyMode()==='off')return false;storyBark(this,t,name,text);return true;},
+      kill:b=>this.killEnemy(b),persuaded:b=>{this.persuadeKill=true;b.invulnerable=false;b.hp=0;this.killEnemy(b);}},def);
+    void boss;
+  }
+  /** 测试 / 调试：直接做选择（旧接口，第六章测试沿用）。 */
+  choose(c:'persuade'|'execute'|'press'):void{this.parley?.choose(c);}
+  /** 斩杀奖励（含劝降失败后斩杀、宁死不降）：军粮 +25；本存档首次斩杀此人额外一件紫色兵装（spec §6，防刷）。 */
+  protected parleyExecuteRewards(out:ChestLoot[]):void{
+    const p=this.parley;if(!p||p.persuadedOk||!surrenderLive())return;
+    gainProvisions(SURRENDER.executeProvisions);const first=markSurrender('executed',p.def.id);
+    if(first){const item=rollItem('purple');addItems([item]);out.push({name:`紫色兵装一件 · 军粮 +${SURRENDER.executeProvisions}`,desc:'首次斩杀此将所得 · 已入行囊',tag:'斩杀'});}
+    else out.push({name:`军粮 +${SURRENDER.executeProvisions}`,desc:'斩将所得',tag:'斩杀'});
+  }
   /** 正在播的过场动画（systems/Cutscene.ts）。 */
   cutscene:Cutscene|null=null;
   /** 最近一段过场（测试读日志用）。 */
@@ -835,7 +870,7 @@ export class GameScene extends Phaser.Scene {
     this.spawnTimer = 0.5;
     this.eliteTimer = BALANCE.eliteFirst;
     this.boss = null;
-    this.sishuiObstacles=null;this.sishuiPass?.clear();this.sishuiPass=null;this.dzLubu?.clear();this.dzLubu=null;this.huaxiong=null;this.xurong=null;this.lubu = null;this.moveset?.clear();this.moveset=null;this.bossMount?.destroy();this.bossMount=null; this.zhangjiao?.clear(); this.zhangjiao = null; this.yellow=null; this.xiliang=null; this.supplies=null; this.yellowAltar=null;this.finaleFadeMs=0;
+    this.sishuiObstacles=null;this.sishuiPass?.clear();this.sishuiPass=null;this.parley?.clear();this.parley=null;this.persuadeKill=false;this.dzLubu?.clear();this.dzLubu=null;this.huaxiong=null;this.xurong=null;this.lubu = null;this.moveset?.clear();this.moveset=null;this.bossMount?.destroy();this.bossMount=null; this.zhangjiao?.clear(); this.zhangjiao = null; this.yellow=null; this.xiliang=null; this.supplies=null; this.yellowAltar=null;this.finaleFadeMs=0;
     this.bossSpawned = false;
     this.bossCastCd = 3;
     this.bossSummonCd = 6;
@@ -997,6 +1032,7 @@ export class GameScene extends Phaser.Scene {
     if(!this.envInit&&this.supplies){this.envInit=true;const cfg=envConfigFor(this.scene.key,this.chapter.id,(this as unknown as {guanduStage?:number}).guanduStage);if(cfg){const sup=this.supplies;this.env=new EnvInteractions({scene:this,player:this.player,supplies:sup,enemies:()=>this.enemies,allies:()=>this.allies,hitEnemy:(e,d)=>{this.hitEnemy(e,d,this.combatNow,'fire',false,false);},hurtAlly:(a,d)=>{this.legion.hurt(a,d,this.combatNow);},spawnEnemy:(x,y)=>this.spawnEnemy('infantry',x,y,undefined,true),spawnGem:(x,y,v)=>this.spawnGem(x,y,v),spawnChest:(x,y)=>{this.itemDrops?.spawnChest(x,y);},now:()=>this.combatNow,sfx:k=>this.sfx.play(k)},cfg);this.events.once('shutdown',()=>{this.env?.destroy();this.env=null;});}}
     this.env?.update(dt);
     if(this.mode==='none'&&!this.over)this.sishuiPass?.update();
+    this.parley?.update(); // 首领招降：残血弹窗 / 再压一压
     if(!this.terrainInit&&this.player){this.terrainInit=true;const tc=terrainConfigFor(this.hardKey(),this.hardStage());if(tc){this.terrain=new Terrain(this,tc);const t=this.terrain;Ally.terrainMul=(x,y)=>t.speedMul(x,y);this.terrainNav=t.navBoxes();this.events.once('shutdown',()=>{t.clear();if(this.terrain===t){this.terrain=null;Ally.terrainMul=null;}});}}
     if(this.terrain){this.terrain.update(this.combatNow,dt);this.player.terrainSpeedMul=this.terrain.speedMul(this.player.x,this.player.y);}
     this.updateEnemies(dt, time);
@@ -1223,6 +1259,7 @@ export class GameScene extends Phaser.Scene {
       return;
     }
     this.boss = boss;
+    this.startParley(boss);
     preloadBossDeath(this, this.chapter.bossStyle); // 倒地帧（张角 / 张梁 / 张宝 / 董卓 / 吕布）提前载好
     this.firstBossAt=this.combatNow;
     if(this.chapter.stage&&this.chapter.stage>=2){this.yellowAltar=this.add.image(x,y+10,this.chapter.stage===2?'zhang_bao_altar':'zhang_jiao_altar').setDepth(DEPTH.ground+2).setDisplaySize(245,200).setAlpha(.75);}
@@ -1973,13 +2010,14 @@ export class GameScene extends Phaser.Scene {
 
   protected killEnemy(enemy: Enemy): void {
     if (this.dzLubu?.preventKill(enemy)) return; // 2-3 吕布打到底不死：锁血逃走
+    if (!this.persuadeKill && this.parley?.preventKill(enemy)) return; // 首领招降：没表态前不死
     if (!enemy.active) return;
     this.objective?.onKill(enemy);
     const kind = enemy.kind;
     // 吕布倒地改由 playBossFall（倒地 4 帧）播，不再叠旧的通用死亡闪影
-    if(kind==='boss'){const old=this.chasingBosses.find(t=>t.enemy===enemy&&t.life===enemy.spawnId),h=old?old.huaxiong:this.huaxiong,x=old?old.xurong:this.xurong;h?.defeat();x?.defeat();if(enemy===this.boss){this.sishuiPass?.onBossDown();{const at={x:enemy.x,y:enemy.y,displayHeight:enemy.sprite.displayHeight};this.storyBossFell=!!this.storyDir?.bossFall(at);if(this.sishuiPass?.wenjiu){setStoryFlag('wenjiu_huaxiong');this.time.delayedCall(1600,()=>this.storyDir?.line('hulao-1.wenjiu',this.player.sprite));}}this.moveset?.defeat();this.moveset=null;this.bossMount?.destroy();this.bossMount=null;}if(old){if(h)this.deadBossControllers.push(h);if(x)this.deadBossControllers.push(x);}
+    if(kind==='boss'){const old=this.chasingBosses.find(t=>t.enemy===enemy&&t.life===enemy.spawnId),h=old?old.huaxiong:this.huaxiong,x=old?old.xurong:this.xurong;h?.defeat();x?.defeat();if(enemy===this.boss){this.sishuiPass?.onBossDown();{const at={x:enemy.x,y:enemy.y,displayHeight:enemy.sprite.displayHeight};this.storyBossFell=this.persuadeKill?true:(this.parley?.dyingLine(at)??false)||!!this.storyDir?.bossFall(at);if(this.sishuiPass?.wenjiu){setStoryFlag('wenjiu_huaxiong');this.time.delayedCall(1600,()=>this.storyDir?.line('hulao-1.wenjiu',this.player.sprite));}}this.moveset?.defeat();this.moveset=null;this.bossMount?.destroy();this.bossMount=null;}if(old){if(h)this.deadBossControllers.push(h);if(x)this.deadBossControllers.push(x);}
       // 倒地：控制器自己有倒地帧的（华雄 / 徐荣 / 子类首领）沿用；其余首领播通用倒地（受伤帧 + 倒下 + 手绘扬尘 + 下沉淡出）
-      this.bossFallDir=0;if(!(h||x||this.bossHasDeathArt()))this.bossFallDir=playBossFall(this,enemy,this.zhangjiao?'zhangjiao_moves':this.lubu?'lubu_moves':undefined,old?undefined:this.chapter.bossStyle);}
+      this.bossFallDir=0;if(!(h||x||this.bossHasDeathArt()||this.persuadeKill))this.bossFallDir=playBossFall(this,enemy,this.zhangjiao?'zhangjiao_moves':this.lubu?'lubu_moves':undefined,old?undefined:this.chapter.bossStyle);}
     enemy.deactivate();
     if(enemy.isSupplySlot){this.sfx.play('propBreak');this.supplies?.onBroken(enemy);return;}
     this.warfeedKill();
@@ -1997,7 +2035,7 @@ export class GameScene extends Phaser.Scene {
     const jade=this.player.growth.charmLegend.army_jade;if(jade!==undefined&&this.combatNow>=this.relicHealAt){const k=CHARM_LEGEND.charm_army_jade.heal[jade];this.relicHealAt=this.combatNow+1000;this.player.heal(k);this.artEffects.show(5,this.player.x,this.player.y-12,35,this.combatNow,260);for(const u of this.allies.filter(u=>u.active&&u.hp<u.maxHp).slice(0,2)){u.hp=Math.min(u.maxHp,u.hp+2*k);this.artEffects.show(5,u.x,u.y-10,30,this.combatNow,260);}}
     this.sfx.play('enemyDie'); this.sfx.play('killThud'); // 击杀加一层闷响（节流）
     if (kind === 'elite') { this.hitFeel.hitStop(HIT_FEEL.eliteKillStopMs); this.hitFeel.shake('small'); }
-    if (kind === 'boss') { this.hitFeel.bossDeath(); this.sfx.play('bossHit'); } // 击杀首领：0.5 秒慢动作 + 强震，之后照常倒地 / 宝箱
+    if (kind === 'boss' && !this.persuadeKill) { this.hitFeel.bossDeath(); this.sfx.play('bossHit'); } // 击杀首领：0.5 秒慢动作 + 强震，之后照常倒地 / 宝箱
     if (kind === 'boss') {
       const index=this.chasingBosses.findIndex(t=>t.enemy===enemy&&t.life===enemy.spawnId);
       if(index>=0){
@@ -2813,6 +2851,7 @@ export class GameScene extends Phaser.Scene {
   padCapture(): boolean { return this.mode === 'none' && !this.over; }
   /** ☰ 暂停 / 继续，⧉ 行囊，Ⓧ 用药，Ⓨ 护阵 / 出击；暂停中 Ⓑ 继续战斗。 */
   padButton(button: number): boolean {
+    if (this.mode === 'parley' && this.parley?.pad(button === PAD.A ? 0 : button === PAD.B ? 1 : button === PAD.X ? 2 : -1)) return true;
     if (this.restIntroSkip && (button === PAD.A || button === PAD.B || button === PAD.START)) { this.restIntroSkip(); return true; }
     if (button === PAD.START && ((this.mode === 'none' && !this.over) || this.mode === 'pause')) { this.togglePause(); return true; }
     if (button === PAD.BACK && this.mode === 'none' && !this.over) { this.openBattleBag(); return true; }
@@ -2932,6 +2971,7 @@ export class GameScene extends Phaser.Scene {
   /** 首领宝箱：倒地点掉落，主将碰到打开。 */
   protected spawnBossChest(x:number,y:number,done:()=>void):void{
     if(!this.player.alive){this.finish(false);return;}
+    if(this.persuadeKill){this.persuadeKill=false;this.time.delayedCall(500,done);return;} // 劝降成功：算击败首领，但不掉首领宝箱（spec §6）
     // 落点避开尸体（画风会话量的躺倒身体范围）：倒地 4 帧往朝向前方偏 80，其余往下偏 30
     const ox=this.bossFallDir*80,oy=30;
     // 落点压在城墙 / 障碍里时（首领倒在墙边），沿着往主将的方向挪到第一个空地，免得宝箱捡不到、关卡结不了
@@ -2941,6 +2981,7 @@ export class GameScene extends Phaser.Scene {
   /** 宝箱里只有首领遗珍（用户 2026-11-17「首领宝箱只给首领遗珍」；道具系统发放，见 ItemDrops.claimBossRelic）。 */
   protected grantBossChest():ChestLoot[]{
     const out:ChestLoot[]=[];
+    this.parleyExecuteRewards(out);
     this.ensurePicks(this.campaignReplay?PICK_GUARANTEE.side:PICK_GUARANTEE.main,true);
     const item=this.itemDrops?.claimBossRelic();
     if(item){const rd=relicDef(item.base),sp=rd?.special?SPECIALS[rd.special as keyof typeof SPECIALS]:undefined;out.push({name:itemName(item),desc:sp?sp.name+'：'+sp.desc:(rd?.lore??'额外兵装 · 结算后入行囊'),tag:rd?'首领遗珍 · 结算后入行囊':'兵装'});}

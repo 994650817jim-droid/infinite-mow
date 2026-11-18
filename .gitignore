@@ -181,6 +181,8 @@ assets/raw/*
 !/tools/prepare-camp-props.mjs
 !/tools/prepare-town-badges.mjs
 !/tools/shot-boss-ride.mjs
+!/tools/prepare-siege-hall.mjs
+!/tools/shot-siege-hall.mjs
 !/tools/build-boss-ride.mjs
 !/tools/test-tutorial.mjs
 !/tools/test-boss-moves.mjs
@@ -239,3 +241,4 @@ assets/raw/*
 
 # 构筑总览测试（2026-11-18）
 !/tools/test-build-overview.mjs
+!/tools/test-surrender.mjs

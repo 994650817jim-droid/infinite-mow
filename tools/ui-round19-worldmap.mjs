@@ -40,7 +40,8 @@ for (const [w, h] of [[1280, 720], [1920, 1080], [1620, 900]]) {
     ck(`${w}：屏幕层文字互不重叠`, info.overlaps.n === 0, info.overlaps);
     const act = await p.evaluate(M0 => { const s = eval(M0), g = n => s.children.getByName(n);
       g('chapter-chip-huangjin').emit('pointerup'); const t1 = s.detailTitle.text, st = g('chapter-chip-status-huangjin').text;
-      g('world-factions').emit('pointerup'); const strip = s.children.getByName('world-faction-strip')?.visible;
+      // 2026-11-18：势力图例改左上角竖排，默认展开；点「势力」收起、再点展开
+      const strip0 = s.children.getByName('world-faction-strip')?.visible; g('world-factions').emit('pointerup'); const stripOff = s.children.getByName('world-faction-strip')?.visible; g('world-factions').emit('pointerup'); const strip = strip0 && !stripOff && s.children.getByName('world-faction-strip')?.visible;
       g('world-era').emit('pointerup'); const legend = !!g('world-legend'), stripAfter = s.children.getByName('world-faction-strip')?.visible; g('world-era').emit('pointerup');
       g('world-card').emit('pointerover'); const tip = g('world-tip')?.list?.[1]?.text ?? ''; g('world-card').emit('pointerout');
       g('chapter-chip-hulao').emit('pointerover'); const chipTip = g('world-tip')?.list?.[1]?.text ?? ''; g('chapter-chip-hulao').emit('pointerout');

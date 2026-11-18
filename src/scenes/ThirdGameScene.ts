@@ -56,6 +56,8 @@ export function thirdGameSceneClass(Base:typeof GameScene,cfg:ArcSceneConfig=THI
  protected get arcConfig():ArcSceneConfig{return cfg;}
  /** 马厩赠马键：群雄为 third-N，其余用篇章名（如 chibi-3）。 */
  protected stableRewardKey():string|null{return (cfg.arc==='qunxiong'?'third':cfg.arc)+'-'+this.thirdStage;}
+ /** 首领招降表的键（data/surrender.ts）：章节 arc-关:首领 id（6-3 黄忠 / 韩玄按当前出阵的首领）。 */
+ protected surrenderKey():string|null{return cfg.arc+'-'+this.thirdStage+':'+this.stageInfo().id;}
  private get sceneryStage():SceneryStage{return cfg.stages[this.thirdStage-1]?.scenery??this.thirdStage;}
  constructor(){super(cfg.key);}
  preload(){for(const d of cfg.stages)if(!this.textures.exists(cfg.texture(d.id)))loadBossSheet(this.load,cfg.texture(d.id),cfg.sheet(d.id));}

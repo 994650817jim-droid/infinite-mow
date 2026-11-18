@@ -142,6 +142,17 @@ function namePlate(scene: Phaser.Scene, y: number, name: string, owner: FactionI
 
 /** 方旗（燕尾）：杆 + 势力色旗面 + 姓氏；纯程序化。 */
 function flag(scene: Phaser.Scene, x: number, bottom: number, height: number, color: number, glyph?: string): Phaser.GameObjects.GameObject[] {
+  if (has(scene, 'wm2_flag_pole', 'wgrand_banner')) {
+    // 宏大版：杆用原图，旗面换成手绘 8 帧飘动（public/assets/world/grand/banner_wave.png），按势力染色，起始帧错开
+    const fr = scene.textures.getFrame('wm2_flag_pole'), w = height * fr.width / fr.height, ox = .22;
+    const pole = scene.add.image(x, bottom, 'wm2_flag_pole').setOrigin(ox, 1).setDisplaySize(w, height);
+    if (!scene.anims.exists('wgrand-banner')) scene.anims.create({key: 'wgrand-banner', frames: scene.anims.generateFrameNumbers('wgrand_banner', {start: 0, end: 7}), frameRate: 6, repeat: -1});
+    const ch = height * .46, cw = ch * 1.5, top = bottom - height * .97, cloth = scene.add.sprite(x + 1, top, 'wgrand_banner', 0).setOrigin(.03, 0).setDisplaySize(cw, ch).setTint(color);
+    cloth.play({key: 'wgrand-banner', startFrame: Math.floor(Math.random() * 8)});
+    const out: Phaser.GameObjects.GameObject[] = [cloth, pole];
+    if (glyph) out.push(scene.add.text(x + cw * .36, top + ch * .5, glyph.length > 1 ? glyph[0] : glyph, {fontFamily: HEADING_FONT, fontSize: Math.round(height * .27) + 'px', color: '#fff6e0', resolution: 2 * RENDER_SCALE}).setOrigin(.5).setStroke('#1a120a', 2));
+    return out;
+  }
   if (has(scene, 'wm2_flag_pole', 'wm2_flag_cloth')) {
     // 正式图：杆原色，旗面按势力染色；姓氏写在燕尾旗面中央
     const fr = scene.textures.getFrame('wm2_flag_pole'), w = height * fr.width / fr.height, ox = .22;

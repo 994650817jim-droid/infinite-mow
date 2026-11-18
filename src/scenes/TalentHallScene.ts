@@ -12,7 +12,7 @@ import { FACTIONS } from '../world/WorldCities';
 import { QUALITIES } from '../data/items';
 import { CHARACTERS, getCharacter } from '../data/characters';
 import { RECRUIT, TEMPLATES, TEMPLATE_ORDER, type FollowerTemplate } from '../data/recruits';
-import { LORD_LEVEL_HINT, followerLevel, hallOdds, followerLevelCap, hallInTown, hallLevel, dismiss, followerCap, loadRoster, manualRefresh, rankBonus, rankCap, recruit, refreshCost, toggleFollower, upgradeHall, type Offer, type Recruit } from '../systems/RosterStore';
+import { LORD_LEVEL_HINT, captiveSeasonsLeft, followerLevel, hallOdds, followerLevelCap, hallInTown, hallLevel, dismiss, followerCap, loadRoster, manualRefresh, rankBonus, rankCap, recruit, refreshCost, toggleFollower, upgradeHall, type Offer, type Recruit } from '../systems/RosterStore';
 import { attrBadge } from '../ui/AttrBadge';
 import { homeCommand } from '../ui/HomeCommand';
 import { lqPanel } from '../ui/LacquerKit';
@@ -100,9 +100,11 @@ export class TalentHallScene extends Phaser.Scene {
     if (D) { const g = this.add.graphics(); g.fillStyle(0x000000, .35).fillRoundedRect(x0 + 2, y - h / 2 + 3, w, h, 8).fillStyle(0x1b120b, .96).fillRoundedRect(x0, y - h / 2, w, h, 8).lineStyle(1.5, 0xc9a35e, .8).strokeRoundedRect(x0, y - h / 2, w, h, 8); this.content!.add(g); } else this.content!.add(panel(this, W / 2, y, w, h)); // 电脑版漆底单描金边（双层边会压到第三行字）
     const size = h - 16; this.seal(x0 + 12 + size / 2, y, size, o.quality, TEMPLATES[o.template].name, o.hero ? getCharacter(o.hero).portrait : undefined, o.template);
     { const b = o.hero ? attrBadge(this, x0 + 12 + size - 6, y - h / 2 + 16, o.hero, 22) : null; if (b) this.content!.add(b); }
-    const tx = x0 + 24 + size, kind = o.kind === 'hero' ? '可玩名将 · 随行' : o.kind === 'named' ? `史事名将${o.faction ? ' · ' + FACTIONS[o.faction].name : ''}` : COMMON_LABEL;
-    this.content!.add(worldText(this, tx, y - h / 2 + 8, `${captive ? '【降将】' : ''}${o.name}`, D ? 17 : 18, q.css).setName('talent-offer-name'));
-    this.content!.add(worldText(this, tx, y - h / 2 + (D ? 32 : 36), `${q.label} · ${kind}\n${TEMPLATES[o.template].name}：${TEMPLATES[o.template].desc}${captive && o.expires !== undefined ? ' · 两季内可招降' : ''}`, 12, '#cdbf9f').setWordWrapWidth(w - size - 150));
+    const tx = x0 + 24 + size, kind = o.boss ? '首领降将' : o.kind === 'hero' ? '可玩名将 · 随行' : o.kind === 'named' ? `史事名将${o.faction ? ' · ' + FACTIONS[o.faction].name : ''}` : COMMON_LABEL;
+    const nameT = worldText(this, tx, y - h / 2 + 8, `${captive ? '【降将】' : ''}${o.name}`, D ? 17 : 18, q.css).setName('talent-offer-name'); this.content!.add(nameT);
+    // 首领降将（surrender-spec §7）：名字旁一枚「首领」小印（手绘印章图到之前用文字章）
+    if (o.boss) { const sx = nameT.x + nameT.width + 22, sy = nameT.y + nameT.height / 2; if (this.textures.exists('seal_boss')) this.content!.add(this.add.image(sx, sy, 'seal_boss').setDisplaySize(32, 32).setAngle(-6).setName('talent-boss-seal')); else { const sg = this.add.graphics().lineStyle(1.5, 0xd0503a, .95).strokeRoundedRect(sx - 18, sy - 11, 36, 22, 4); this.content!.add([sg, worldText(this, sx, sy, '首领', 12, '#e0604a').setOrigin(.5).setName('talent-boss-seal')]); } }
+    this.content!.add(worldText(this, tx, y - h / 2 + (D ? 32 : 36), `${q.label} · ${kind}\n${TEMPLATES[o.template].name}：${TEMPLATES[o.template].desc}${captive && o.expires !== undefined ? ` · 剩 ${captiveSeasonsLeft(o)} 季` : ''}`, 12, '#cdbf9f').setWordWrapWidth(w - size - 150).setName('talent-offer-desc'));
     const cost = captive ? Math.ceil(o.cost * RECRUIT.captiveDiscount) : o.cost;
     this.small(W - 16 - 70, y, 120, `${captive ? '招降' : '招募'} ${cost}粮`, () => { this.message = recruit(i, captive).message; this.render(); }, `talent-${captive ? 'captive' : 'offer'}-${i}`, true, o.kind !== 'common');
   }

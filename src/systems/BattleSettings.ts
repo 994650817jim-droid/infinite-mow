@@ -31,8 +31,8 @@ export type ShakeLevel = 'strong' | 'weak' | 'off';
 export function shakeLevel(): ShakeLevel { if (shakeCache) return shakeCache; const v = get('im_shake'); return shakeCache = v === 'weak' || v === 'off' ? v : 'strong'; }
 export function setShakeLevel(v: ShakeLevel): void { set('im_shake', v); shakeCache = v; }
 export const SHAKE_LABEL: Record<ShakeLevel, string> = { strong: '强', weak: '弱', off: '关' };
-/** 震屏强度倍率：强 1、弱 0.4、关 0。 */
-export function shakeScale(): number { const v = shakeLevel(); return v === 'off' ? 0 : v === 'weak' ? .4 : 1; }
+/** 震屏强度倍率：强 1、弱 0.5、关 0（与新增武将会话 hitFeel.shakeMul 一致）。 */
+export function shakeScale(): number { const v = shakeLevel(); return v === 'off' ? 0 : v === 'weak' ? .5 : 1; }
 
 export type RenderScaleSetting = '' | '1' | '2' | '3';
 export function renderScaleSetting(): RenderScaleSetting { const v = get('im_render_scale'); return v === '1' || v === '2' || v === '3' ? v : ''; }

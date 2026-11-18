@@ -7,6 +7,7 @@
  * - 震屏 im_shake：'strong' / 'weak' / 'off'（与「新增可玩武将」会话约定同一键；缺省 strong）
  * - 武将台词 im_hero_barks：'off' 关 / 其余开（缺省开）
  * - 剧情 im_story：'full' 完整 / 'chapter' 只看章头章末 / 'off' 关闭（2026-11-17 剧情系统，缺省完整）
+ * - 死亡特效 im_death_fx：'off' 关 / 其余开（2026-11-18 敌军死亡特效，缺省开）
  * - 画面清晰度 im_render_scale：''（自动）/ '1' / '2' / '3'（config.pickRenderScale 启动时读，刷新后生效）
  */
 const get = (k: string): string | null => { try { return localStorage.getItem(k); } catch { return null; } };
@@ -45,6 +46,15 @@ export type RenderScaleSetting = '' | '1' | '2' | '3';
 export function renderScaleSetting(): RenderScaleSetting { const v = get('im_render_scale'); return v === '1' || v === '2' || v === '3' ? v : ''; }
 export function setRenderScaleSetting(v: RenderScaleSetting): void { set('im_render_scale', v || null); }
 export const SCALE_LABEL: Record<RenderScaleSetting, string> = { '': '自动', '1': '标准', '2': '高清', '3': '超清' };
+
+export type DeathFxSetting = 'on' | 'off';
+let deathCache: DeathFxSetting | null = null;
+export function deathFxSetting(): DeathFxSetting { if (deathCache) return deathCache; return deathCache = get('im_death_fx') === 'off' ? 'off' : 'on'; }
+export function deathFxOn(): boolean { return deathFxSetting() === 'on'; }
+export function setDeathFx(v: DeathFxSetting): void { set('im_death_fx', v); deathCache = v; }
+export const DEATHFX_LABEL: Record<DeathFxSetting, string> = { on: '开', off: '关' };
+/** 测试用：清掉内存缓存，下次读 localStorage。 */
+export function resetDeathFxCache(): void { deathCache = null; }
 
 export type HeroBarks = 'on' | 'off';
 let barkCache: HeroBarks | null = null;

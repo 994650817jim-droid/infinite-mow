@@ -6,7 +6,7 @@ import { showLordNotice } from '../ui/LordNotice';
 import {playMenuMusic,menuMusic} from '../systems/Music';
 import {artStyle,setArtStyle} from '../systems/ArtStyle';
 import { iffOutlineEnabled, setIffOutline, warmIffTextures } from '../systems/IffOverlay';
-import { OUTLINE_LABEL, cycle, outlineMode, setOutlineMode, shakeLevel, setShakeLevel, SHAKE_LABEL, type ShakeLevel, WIDTH_LABEL, outlineWidth, setOutlineWidth, DAMAGE_LABEL, damageNumbers, setDamageNumbers, SCALE_LABEL, renderScaleSetting, setRenderScaleSetting, type DamageNumbers, type RenderScaleSetting, STORY_LABEL, storyMode, setStoryMode, OPENING_LABEL, openingMode, setOpeningMode, type OpeningMode } from '../systems/BattleSettings';
+import { DEATHFX_LABEL, deathFxSetting, setDeathFx, type DeathFxSetting, OUTLINE_LABEL, cycle, outlineMode, setOutlineMode, shakeLevel, setShakeLevel, SHAKE_LABEL, type ShakeLevel, WIDTH_LABEL, outlineWidth, setOutlineWidth, DAMAGE_LABEL, damageNumbers, setDamageNumbers, SCALE_LABEL, renderScaleSetting, setRenderScaleSetting, type DamageNumbers, type RenderScaleSetting, STORY_LABEL, storyMode, setStoryMode, OPENING_LABEL, openingMode, setOpeningMode, type OpeningMode } from '../systems/BattleSettings';
 import {uiSfx} from '../systems/Sfx';
 import {GameCodex} from '../ui/GameCodex';
 import {HeroWarCard} from '../ui/HeroWarCard';
@@ -71,9 +71,13 @@ export class MenuScene extends Phaser.Scene {
   create(): void {playMenuMusic(this);
     ensureWarTextures(this);
     this.cameras.main.fadeIn(180,0,0,0);
-    // 2026-11-15 用户要求：开局每次从本章第 1 关打起（原为“下一个未通关”）；想打后面的关可在选关 / 战役回顾中选
-    this.selectedStage=1;this.stageTabs=[];
-    this.westRows=[];this.westModal=undefined;this.westDeploy=undefined;this.westDeployLabel=undefined;this.selectedWestStage=1;
+    // 2026-11-15 用户要求：开局每次从本章第 1 关打起（原为“下一个未通关”）。
+    // 2026-11-18 修「退出后再进入，之前学习的武将技能和武器强化都没有了」：征程构筑（2026-11-17 用户批准）只在未通关的主线关读入，
+    // 已通关的关算「重打旧关」、用空构筑；从主页再进总是 1-1 / 2-1（已通关）→ 构筑「丢了」。现在主页出征接着本章下一个未通关的关（征程存档点，
+    // 与选关面板 pickChapter 一致）；本章全通了才从第 1 关起。想重打前面的关仍可在选关 / 战役回顾中选（重打用空构筑）。
+    {const w=loadWorld();this.selectedStage=(w.yellowStages>=1&&w.yellowStages<3?w.yellowStages+1:1) as YellowStage;this.selectedWestStage=(w.dongzhuoStages>=1&&w.dongzhuoStages<3?w.dongzhuoStages+1:1) as YellowStage;}
+    this.stageTabs=[];
+    this.westRows=[];this.westModal=undefined;this.westDeploy=undefined;this.westDeployLabel=undefined;
     this.started = false; this.chapterButtons = []; this.charCards = [];
     const params = new URLSearchParams(window.location.search), saved = this.registry.get('runConfig') as RunConfig | undefined;
     // 过场动画预览（?dev=1&cutscene=<id>[&hero=<武将>]）：直接开那一关，GameScene 推到过场处自动播
@@ -86,7 +90,7 @@ export class MenuScene extends Phaser.Scene {
     const expanded=fromWorld||this.registry.get('menuChapterPicker')===true||((params.has('autostart')||params.has('perf'))&&params.has('chapter'));
     this.registry.remove('menuChapterPicker');this.compactHome=!expanded;this.homeCard=undefined;this.heroPicker=undefined;this.heroEntryPaint=undefined;this.heroModal=undefined;this.homePortrait=undefined;this.homeBackground=undefined;
     const requested = getChapter(this.registry.get('selectedWorldChapter') ?? params.get('chapter') ?? (chapterOneCleared()?'hulao':saved?.chapter)).id;
-    const west=Number(this.registry.get('selectedWorldStage')??params.get('westStage')??(isChapterTestRun()&&requested==='hulao'?params.get('stage'):undefined)??1);
+    const west=Number(this.registry.get('selectedWorldStage')??params.get('westStage')??(isChapterTestRun()&&requested==='hulao'?params.get('stage'):undefined)??this.selectedWestStage);
     this.registry.remove('selectedWorldStage');if([1,2,3].includes(west)&&(dongzhuoStageUnlocked(west)||isChapterTestRun()))this.selectedWestStage=west as YellowStage;
     this.registry.remove('selectedWorldChapter');
     this.selectedChapter = chapterUnlocked(requested)||isChapterTestRun() ? requested : 'huangjin';
@@ -98,9 +102,9 @@ export class MenuScene extends Phaser.Scene {
     if(this.compactHome){if(!(isChapterTestRun()&&params.has('chapter')))this.selectedChapter=chapterOneCleared()||loadWorld().legacyHulaoAccess?'hulao':'huangjin';this.createLanding(params);return;}
     this.cameras.main.resetFX(); this.cameras.main.setBackgroundColor('#101813');
     const text = (x: number, y: number, value: string, size: number, color = '#ede4cc') => this.add.text(x, y, value, { fontFamily: size>=18?HEADING_FONT:FONT, fontSize: `${size}px`, color, resolution: 2 });
-    this.add.tileSprite(0, 0, W, H, 'ground_hulao').setOrigin(0).setAlpha(.16);
+    if (this.textures.exists('ground_hulao')) this.add.tileSprite(0, 0, W, H, 'ground_hulao').setOrigin(0).setAlpha(.16); // 手机精简启动时战斗图集还没载入
     this.add.rectangle(0, 0, W, H, 0x0b1612, .82).setOrigin(0);
-    this.add.image(W / 2, H / 2, 'vignette').setDisplaySize(W, H).setAlpha(.65);
+    if (this.textures.exists('vignette')) this.add.image(W / 2, H / 2, 'vignette').setDisplaySize(W, H).setAlpha(.65);
     const frame = this.add.graphics();
     frame.lineStyle(1, 0x977e4e, .3).strokeRect(12, 12, W - 24, H - 24);
     for (const x of [12, W - 12]) for (const y of [12, H - 12]) {
@@ -329,10 +333,10 @@ export class MenuScene extends Phaser.Scene {
     // 桌面版行距收紧，放下显示设置（分辨率 / 全屏 / 垂直同步）
     // 2026-11-17 用户批准 UI 审查 E：网页电脑版改成和战斗内「军中设置」同一套行样式（名称在左、‹ 值 › 在右）与同一组选项
     const web=D&&!desk;
-    const rowY=(i:number)=>desk?H/2-166+i*46:web?108+i*39:H/2-70+i*60; // 网页电脑版 10 行（第 9 行「开场动画」2026-11-18），行距收紧放进 540 高
+    const rowY=(i:number)=>desk?H/2-166+i*36:web?106+i*36:H/2-70+i*54; // 网页电脑版 11 行（行距 36 放进 540 高；第 10 行「死亡特效」2026-11-18）（第 9 行「开场动画」2026-11-18），行距收紧放进 540 高
     // 漆底描金面板（与图鉴、结算卷同系）；每行左右是漆金小方钮，返回为漆金按钮
     modal.add(this.add.rectangle(W/2,H/2,W,H,0x0c0805,.9).setInteractive());
-    {const pw=desk?560:web?520:Math.min(W-40,460),top=desk?H/2-250:web?14:H/2-190,bottom=desk?rowY(10)+40:web?rowY(10)+36:H/2+300,g=this.add.graphics();lqPanel(g,W/2-pw/2,top,pw,bottom-top);modal.add(g);
+    {const pw=desk?560:web?520:Math.min(W-40,460),top=desk?H/2-250:web?14:H/2-190,bottom=desk?rowY(11)+40:web?rowY(11)+36:H/2+340,g=this.add.graphics();lqPanel(g,W/2-pw/2,top,pw,bottom-top);modal.add(g);
      const t=label(W/2,desk?H/2-218:web?top+34:H/2-130,'军中设置',28).setFontFamily(desk?TITLE_FONT:HEADING_FONT).setColor(desk?'#efd399':'#f6dc9a').setStroke(desk?'#120904':'#2a170b',4);modal.add(t);
      const div=this.add.graphics();lqDivider(div,W/2,t.y+30,desk?160:130);modal.add(div);
      modal.add(tutorialReplayLink(this,W/2+pw/2-22,top+24));} // 新手引导：重看（逻辑在 ui/TutorialOverlay.ts）
@@ -348,10 +352,10 @@ export class MenuScene extends Phaser.Scene {
         return value;
       }
       const y=rowY(i),value=label(W/2,y,name+'  '+get(),desk?18:20).setName('settings-row-'+i);
-      const plate=this.add.graphics();plate.fillStyle(0x3a2616,.45).fillRoundedRect(W/2-(desk?140:112),y-(desk?20:24),desk?280:224,desk?40:48,6).lineStyle(1,0xc9a35e,.35).strokeRoundedRect(W/2-(desk?140:112),y-(desk?20:24),desk?280:224,desk?40:48,6);modal.add([plate,value]);
+      const plate=this.add.graphics();plate.fillStyle(0x3a2616,.45).fillRoundedRect(W/2-(desk?140:112),y-(desk?17:24),desk?280:224,desk?34:48,6).lineStyle(1,0xc9a35e,.35).strokeRoundedRect(W/2-(desk?140:112),y-(desk?17:24),desk?280:224,desk?34:48,6);modal.add([plate,value]);
       for(const dir of [-1,1]){const b=label(W/2+dir*(desk?172:146),y,dir<0?arrows[0]:arrows[1],desk?22:26).setInteractive({useHandCursor:true}).setName(`settings-row-${i}-${dir<0?'dec':'inc'}`);
         b.setData('padAdjust',(d:number)=>{step(d);value.setText(name+'  '+get());}).on('pointerdown',()=>{step(dir);value.setText(name+'  '+get());});
-        const bw=desk?44:52,bh=desk?40:48,sk=lqSkin(this,b,b,()=>({w:bw,h:bh}));lqHitBox(b,bw,bh);modal.add([sk.gfx,b]);}
+        const bw=desk?44:52,bh=desk?34:48,sk=lqSkin(this,b,b,()=>({w:bw,h:bh}));lqHitBox(b,bw,bh);modal.add([sk.gfx,b]);}
       return value;
     };
     ['音乐','音效'].forEach((name,i)=>{const key=i?'im_sfx_vol':'im_bgm_vol';let volume= i?90:40;try{volume=Number(localStorage.getItem(key)??volume);}catch{}
@@ -367,7 +371,7 @@ export class MenuScene extends Phaser.Scene {
       const vs=row(4,'垂直同步',()=>{const d=disp();return d?(d.vsync?'开':'关'):'—';},()=>{const d=disp();if(d&&app.display)app.display.set({vsync:!d.vsync});vsNote();},['‹','›']).setName('settings-vsync');
       const vsyncNote=label(W/2,rowY(4)+22,'',11).setColor('#9d8f78');modal.add(vsyncNote);
       const vsNote=()=>{const d=disp();vsyncNote.setText(d&&d.vsync!==d.vsyncActive?'重启游戏后生效':'');};vsNote();void vs;
-      const quit=label(W/2,rowY(9)+6,'退出游戏',18).setColor('#e7b68e').setInteractive({useHandCursor:true}).setName('settings-quit');
+      const quit=label(W/2,rowY(10)+6,'退出游戏',18).setColor('#e7b68e').setInteractive({useHandCursor:true}).setName('settings-quit');
       quit.on('pointerdown',()=>{if(quit.getData('confirm'))app.quit();else quit.setData('confirm',true).setText('确认退出？再点一次');});
       const qs=lqSkin(this,quit,quit,()=>({w:220,h:38}),{tone:'quiet'});lqHitBox(quit,220,38);
       modal.add([qs.gfx,quit]);
@@ -391,8 +395,10 @@ export class MenuScene extends Phaser.Scene {
     if(web){const list:OpeningMode[]=['every','first','off'];row(9,'开场动画',()=>OPENING_LABEL[openingMode()],dir=>setOpeningMode(cycle(list,openingMode(),dir)),['‹','›']).setName('settings-opening');
      const t=this.add.text(W/2-246,40,'重看开场 ›',{fontFamily:FONT,fontSize:'13px',color:'#e8c98a',resolution:2}).setOrigin(0,.5).setInteractive({useHandCursor:true}).setName('settings-opening-replay');
      t.on('pointerover',()=>t.setColor('#fff3d4')).on('pointerout',()=>t.setColor('#e8c98a')).on('pointerdown',()=>{modal.destroy();this.scene.start('OpeningScene',{next:'MenuScene'});});modal.add(t);}
-    if(D||desk)modal.add(hotkeySettingsLink(this,W/2-(desk?560:520)/2+24,desk?rowY(10)+6:rowY(10)+2,600).setOrigin(0,.5)); // 快捷键页（与战斗内设置共用，ui/HotkeySettingsUI；放在左下，不碰右上的「重看新手引导」）
-    const close=label(W/2,desk?rowY(10)+6:web?rowY(10)+2:H/2+264,'返回',20).setFontFamily(HEADING_FONT).setInteractive({useHandCursor:true}).setName('settings-close').setData('padDefault',true).on('pointerdown',()=>modal.destroy());
+    // 死亡特效（2026-11-18）：开 / 关，与战斗内设置共用 im_death_fx，缺省开
+    {const at=desk?9:web?10:6,list:DeathFxSetting[]=['on','off'];row(at,'死亡特效',()=>DEATHFX_LABEL[deathFxSetting()],dir=>setDeathFx(cycle(list,deathFxSetting(),dir)),['‹','›']).setName('settings-death-fx');}
+    if(D||desk)modal.add(hotkeySettingsLink(this,W/2-(desk?560:520)/2+24,desk?rowY(11)+6:rowY(11)+2,600).setOrigin(0,.5)); // 快捷键页（与战斗内设置共用，ui/HotkeySettingsUI；放在左下，不碰右上的「重看新手引导」）
+    const close=label(W/2,desk?rowY(11)+6:web?rowY(11)+2:H/2+310,'返回',20).setFontFamily(HEADING_FONT).setInteractive({useHandCursor:true}).setName('settings-close').setData('padDefault',true).on('pointerdown',()=>modal.destroy());
     const cs=(web?inkSkin(this,close,()=>({w:200,h:42}),{primary:true}):null)??lqSkin(this,close,close,()=>({w:200,h:desk?44:52}),{tone:'cinnabar'});lqHitBox(close,200,desk?44:52);
     modal.add([cs.gfx,close]);
   }

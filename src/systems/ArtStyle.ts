@@ -129,8 +129,8 @@ export const ART_V2_FILES: Readonly<Record<string, string>> = {
   hanzhong_xiahouyuan: 'assets/bosses-v2/hanzhong_xiahouyuan.png',
   hanzhong_caocao: 'assets/bosses-v2/hanzhong_caocao.png',
   // 第十章 夷陵之战首领：正式 v2 图到之前借用现有首领 v2 图过渡（yilingChapter.YILING_SHEETS 是 v1 回退）
-  yiling_sunhuan: 'assets/bosses-v2/third_zhangxiu.png',
-  yiling_zhuran: 'assets/bosses-v2/jingnan_hanxuan.png',
+  yiling_sunhuan: 'assets/bosses-v2/yiling_sunhuan.png', // 正式图（Gemini 出图）
+  yiling_zhuran: 'assets/bosses-v2/yiling_zhuran.png', // 正式图（Gemini 出图）
   yiling_luxun: 'assets/bosses-v2/yiling_luxun.png', // 正式图（Gemini 出图，art-style ebfcb2b）
   // 第十二章 北伐首领：张郃 / 郝昭正式 v2 图到之前借用现有首领 v2 图过渡（beifaChapter.BEIFA_SHEETS 是 v1 回退）；司马懿已有正式 v2 图（Gemini 3.1 Pro 出图）
   beifa_zhanghe: 'assets/bosses-v2/hanzhong_zhanghe.png',

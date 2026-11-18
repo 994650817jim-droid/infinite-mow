@@ -23,11 +23,11 @@ for (const tier of (process.env.TIERS ?? 'medium,large').split(',')) {
   await p.waitForTimeout(1500);
   await p.evaluate(() => { const g = window.__game, s = g.scene.getScene('SiegeGameScene'); s.__DEV_ACTIONS?.closePopup?.(); s.player.damageImmune = true; for (let i = 0; i <= s.chapter.waves.length; i++) s.recruitedWaves.add(i); s.pendingRecruit = false; g.loop.sleep(); window.__T = performance.now();
     window.__go = (x, y, n = 40) => { s.player.sprite.setPosition(x, y); for (let i = 0; i < n; i++) { if (s.mode !== 'none' && !s.over) { s.__DEV_ACTIONS?.closePopup?.(); if (s.mode !== 'paused') s.setMode('none'); } window.__T += 1000 / 60; g.step(window.__T, 1000 / 60); } }; });
-  const ok = await p.evaluate(() => { const S = window.__S ?? window.__game.scene.getScene('SiegeGameScene'); const M = S.siegeMid; if (!M) return false; M.transition?.('hall'); return M.phase; });
+  const ok = await p.evaluate(() => { const S = window.__S ?? window.__game.scene.getScene('SiegeGameScene'); const M = S.siegeMid; if (!M) return false; M.phase = 'hall'; M.enterHall(); return M.phase; });
   console.log(tier, 'phase', ok);
   const arenaTop = await p.evaluate(async () => { const m = await import('/src/data/siegeMedium.ts'); return m.MID_SIEGE.hall.arena.top; });
-  for (const [name, dy] of [['hall', 0], ['hall-low', 160]]) {
-    await p.evaluate(([t, dy]) => { window.__go(0, t + dy + 150, 90); }, [arenaTop, dy]);
+  for (const [name, dy] of [['hall-up', -170]]) {
+    await p.evaluate(([t, dy]) => { window.__go(0, t + dy + 150, 420); }, [arenaTop, dy]);
     await p.screenshot({ path: `${OUT}/${TAG}-${tier}-${name}.png` });
   }
   await p.close();

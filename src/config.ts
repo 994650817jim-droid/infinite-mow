@@ -37,11 +37,28 @@ function mobileHeight(): number {
   return Math.round(Math.min(1280, Math.max(960, 540 * h / w)) / 2) * 2;
 }
 
+/** 手机 / 低内存设备（iOS、触屏小屏、deviceMemory ≤ 4；?lores=1 强制开、?lores=0 强制关；桌面版 Electron 不算）。
+ *  用于：大图缩半（systems/LowResTextures）、精简启动（systems/LeanBoot）、默认渲染倍率 1。 */
+export const LOW_MEM = ((): boolean => {
+  try {
+    const q = new URLSearchParams(location.search).get('lores');
+    if (q === '1') return true;
+    if (q === '0') return false;
+    if ((window as unknown as { imDesktop?: unknown }).imDesktop) return false;
+    const ua = navigator.userAgent, ios = /iPhone|iPad|iPod/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1);
+    const mem = (navigator as unknown as { deviceMemory?: number }).deviceMemory;
+    const touchSmall = matchMedia('(pointer: coarse)').matches && Math.min(screen.width, screen.height) < 900;
+    return ios || touchSmall || (typeof mem === 'number' && mem <= 4);
+  } catch { return false; }
+})();
+
 function pickRenderScale(): number {
   let forced: string | null = new URLSearchParams(window.location.search).get('hd');
   if (!forced) try { forced = localStorage.getItem('im_render_scale'); } catch { /* ignore */ }
   const n = Number(forced);
   if (forced && [1, 2, 3].includes(n)) return n;
+  // 手机默认 1 倍（2026-11-18 实测：2 倍画布连同 Phaser 各全屏帧缓冲，在首页就多占约 390 MB 显存，是 iOS 页面崩溃的大头）；?hd= / 设置里仍可改
+  if (LOW_MEM) return 1;
   // 按实际显示像素选择：显示区域比设计分辨率大 1.25 倍以上才提升到 2 倍，默认最高 2 倍以控制填充开销。
   const dpr = Math.min(3, window.devicePixelRatio || 1);
   const fit = Math.min(window.innerWidth / GAME_WIDTH, window.innerHeight / GAME_HEIGHT) * dpr;
@@ -98,6 +115,8 @@ export const BALANCE = {
   bossTime: 300,
   enemyCap: 150,
   enemyCapLow: 100,
+  /** 首领在场时刷杂兵（2026-11-18 用户：boss 出来后减少小兵生成）：同屏上限、刷兵间隔、每次数量的倍率。 */
+  bossSpawn: { capMul: .5, intervalMul: 2, burstMul: .5 },
   eliteFirst: 55,
   eliteInterval: 60,
   critMultiplier: 1.8,

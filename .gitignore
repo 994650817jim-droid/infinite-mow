@@ -85,6 +85,10 @@ assets/raw/*
 !/tools/test-campaign-build.mjs
 !/tools/test-charms.mjs
 !/tools/test-token-slots.mjs
+!/tools/deathfx-proto.mjs
+!/tools/deathfx-compose.mjs
+!/tools/test-deathfx.mjs
+!/tools/deathfx-live.mjs
 !/tools/test-merit.mjs
 !/tools/test-level-merge.mjs
 !/tools/test-hero-codex.mjs
@@ -170,6 +174,7 @@ assets/raw/*
 !/tools/shot-siege-scene.mjs
 !/tools/measure-hero-actions.mjs
 !/tools/test-hero-action-fit.mjs
+!/tools/test-zhangjiao-alive.mjs
 !/tools/test-jingnan-art.mjs
 !/tools/test-hanzhong-art.mjs
 !/tools/test-yiling-full.mjs
@@ -241,3 +246,4 @@ assets/raw/*
 !/tools/test-surrender.mjs
 !/tools/test-dual-boss.mjs
 !/tools/test-hotkeys.mjs
+!/tools/test-build-persist.mjs

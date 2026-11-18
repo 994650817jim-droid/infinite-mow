@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import { DEPTH, FONT, GAME_HEIGHT, GAME_WIDTH, IS_DESKTOP, TITLE_FONT } from '../config';
 import { CHAPTER_REGIONS, CHAPTER_TIMELINE, chapterStagesDone, chapterState, currentChapter, type ChapterState, type TimelineChapterId } from '../world/ChapterTimeline';
 import { MAP_W } from '../world/WorldCities';
-import { loadWorld } from '../world/WorldStore';
+import { loadWorld, worldUnlocked } from '../world/WorldStore';
 import { isChapterTestRun } from '../systems/ChapterProgress';
 import { bagArt, loadBagArt } from './ItemQuality';
 import { homeCommand } from './HomeCommand';
@@ -77,6 +77,12 @@ export class ChapterSelect {
     // homeCommand 直接加到场景：收进本面板（跟着面板的层级与销毁）
     for (const o of [back.g, back.caption, back.hit]) { (o as unknown as { setScrollFactor: (n: number) => void }).setScrollFactor(0); this.body.add(o); }
     back.hit.setName('chapter-select-back').on('pointerdown', (_p: unknown, _x: unknown, _y: unknown, e?: Phaser.Types.Input.EventData) => { e?.stopPropagation?.(); this.close(); });
+    // 电脑版主页右上不再放「营寨 / 天下地图」（2026-11-17 用户）：天下已开时在这里留一个「营寨」入口（营寨里可去天下地图）
+    if (D && worldUnlocked()) {
+      const city = homeCommand(sc, W - 128 - 132 - 12, 40, 132, 40, '营寨');
+      for (const o of [city.g, city.caption, city.hit]) { (o as unknown as { setScrollFactor: (n: number) => void }).setScrollFactor(0); this.body.add(o); }
+      city.hit.setName('chapter-select-city').on('pointerdown', (_p: unknown, _x: unknown, _y: unknown, e?: Phaser.Types.Input.EventData) => { e?.stopPropagation?.(); this.close(); sc.scene.start('CityScene'); });
+    }
 
     const cols = D ? 6 : 3, gap = D ? 12 : 10, cw = D ? 138 : (W - 40 - (cols - 1) * gap) / cols, ch = D ? 196 : 188;
     const rows = Math.ceil(CHAPTER_TIMELINE.length / cols), x0 = (W - (cols * cw + (cols - 1) * gap)) / 2, y0 = D ? 78 : 112;

@@ -13,6 +13,10 @@ import { YuanshuBoss } from '../systems/YuanshuBoss';
 import { CaorenBoss } from '../systems/CaorenBoss';
 import { BossMoveset } from '../systems/BossMoveset';
 import { BOSS_MOVES } from '../data/bossMoves';
+import { STORY_CHAPTERS } from '../data/story';
+import { setStoryFlag } from '../systems/Story';
+import { DianweiGuard, DIANWEI } from '../systems/DianweiGuard';
+import { addMerit } from '../systems/MasteryStore';
 
 /** 第三章式三关篇章的配置（第三章群雄割据、第五章赤壁之战共用同一套战场与首领招式框架）。 */
 export interface ArcSceneConfig{
@@ -39,6 +43,8 @@ export function thirdGameSceneClass(Base:typeof GameScene,cfg:ArcSceneConfig=THI
  private enemyCamps?:EnemyCamps;private fireShips?:FireShips;
  /** 第五章虎豹骑（突阵 + 5-1 护驾曹纯）。 */
  private hubao?:HubaoBattle;
+ /** 3-2 典韦守营（剧情第三章玩法挂钩） */
+ private dianwei?:DianweiGuard;
  private thirdStage:ThirdStage=1;private controller?:ThirdBoss|ArcController;private thirdReceipt='';private thirdTest=false;private spear=new WeakMap<Enemy,SpearWindup>();private spearWarnings?:ThirdSpearWarnings;
  /** 本关首领招式组与地貌组（第三章即关序号）。 */
  private get behavior():ThirdStage{return this.stageInfo()?.behavior??this.thirdStage;}
@@ -67,7 +73,10 @@ export function thirdGameSceneClass(Base:typeof GameScene,cfg:ArcSceneConfig=THI
   this.legion.campTarget=u=>this.enemyCamps?.assist(u)??null;
   this.fireShips=cfg.fireShips?.includes(this.thirdStage)?new FireShips({scene:this,enemies:()=>this.enemies,player:()=>this.player,boss:()=>this.boss??undefined,burn:(e,dmg,now)=>{this.hitEnemy(e,dmg,now,'fire',true,false);},announce:t=>this.showWaveBanner(t,false)},this.combatNow):undefined;
   const keys=(this.registry.get('battleTextureKeys')??[])as string[];this.registry.set('battleTextureKeys',[...new Set([...keys,...cfg.stages.map(d=>cfg.texture(d.id)),art.key,'third_road_'+this.sceneryStage])]);
-  this.hudTexts.chapter.setText(this.chapter.name);this.events.once('shutdown',()=>{this.spearWarnings?.clear();this.spearWarnings=undefined;this.enemyCamps?.clear();this.enemyCamps=undefined;this.controller?.clear();this.controller=undefined;this.fireShips?.clear();this.fireShips=undefined;});
+  // 剧情（第三章起）：基类按 encounter 没建剧情；有该篇章剧本时按篇章 id 重建并播关前剧情
+  if(STORY_CHAPTERS[cfg.arc])this.setupStory(cfg.arc,this.thirdStage);
+  this.dianwei=cfg.arc==='qunxiong'&&this.thirdStage===2?new DianweiGuard({scene:this,player:this.player,enemies:()=>this.enemies,hit:(e,d)=>{this.hitEnemy(e,d,this.combatNow,'melee',true,false);},banner:(t,d,c)=>this.showWaveBanner(t,d,c)},this.combatNow):undefined;
+  this.hudTexts.chapter.setText(this.chapter.name);this.events.once('shutdown',()=>{this.dianwei?.clear();this.dianwei=undefined;this.spearWarnings?.clear();this.spearWarnings=undefined;this.enemyCamps?.clear();this.enemyCamps=undefined;this.controller?.clear();this.controller=undefined;this.fireShips?.clear();this.fireShips=undefined;});
  }
  protected abandonRun(){if(!this.over)abandonExpedition(this.thirdReceipt,this.allies.filter(u=>u.active&&u.reserveSoldier).map(u=>u.kind));}
  protected handleBattlePointer(pointer:Phaser.Input.Pointer){return this.mode==='none'&&!this.over?(this.enemyCamps?.pointer(pointer)??false):false;}
@@ -81,7 +90,13 @@ export function thirdGameSceneClass(Base:typeof GameScene,cfg:ArcSceneConfig=THI
  protected customBossStep(enemy:Enemy,dt:number,now:number){if(enemy!==this.boss||!this.controller)return false;this.controller.update(dt,now);return true;}
 
  protected customEnemyStep(enemy:Enemy,dt:number,now:number,target:{x:number;y:number}){
+  // 典韦守营：约四成敌兵改打典韦（步兵照常突刺，只是目标换成典韦；其他兵种走过去贴身砍）
+  const dw=this.dianwei;if(dw?.lures(enemy)){const t={x:dw.x,y:dw.y};if(this.behavior===2&&enemy.kind==='infantry')return this.spearStep(enemy,dt,now,t);const dx=t.x-enemy.x,dy=t.y-enemy.y,d=Math.hypot(dx,dy)||1;if(d>enemy.radius+16)this.advanceEnemy(enemy,dx/d,dy/d,dt);else enemy.moveVx=enemy.moveVy=0;return true;}
   if(this.behavior!==2||enemy.kind!=='infantry')return false;
+  return this.spearStep(enemy,dt,now,target);
+ }
+ /** 3-2 步兵突刺（预警后沿直线刺出）。 */
+ private spearStep(enemy:Enemy,dt:number,now:number,target:{x:number;y:number}){
   let pending=this.spear.get(enemy);if(pending&&pending.spawn!==enemy.spawnId){this.spear.delete(enemy);pending=undefined;}
   if(pending){
    enemy.moveVx=enemy.moveVy=enemy.intentDx=enemy.intentDy=0;
@@ -93,6 +108,7 @@ export function thirdGameSceneClass(Base:typeof GameScene,cfg:ArcSceneConfig=THI
    enemy.startAttack(now,Math.abs(c)>Math.abs(s)?c<0?'left':'right':s<0?'up':'down');
    if(inside(this.player.x,this.player.y,this.player.radius))this.player.takeDamage(enemy.def.damage,now);
    for(const u of this.legion.grid.query(p.x,p.y,THIRD_SPEAR.length+30))if(u.active&&inside(u.x,u.y,u.radius))this.legion.hurt(u,enemy.def.damage,now);
+   if(this.dianwei?.alive&&inside(this.dianwei.x,this.dianwei.y,18))this.dianwei.hurt(enemy.def.damage,now);
    return true;
   }
   if(enemy.attackUntil>now)return true;
@@ -104,8 +120,11 @@ export function thirdGameSceneClass(Base:typeof GameScene,cfg:ArcSceneConfig=THI
  protected hitEnemy(enemy:Enemy,raw:number,now:number,source:'melee'|'arrow'|'fire'='melee',ally=false,weaponHit=true){if(enemy===this.boss&&this.controller){raw*=this.controller.incoming(ally);this.controller.hit(now);}return super.hitEnemy(enemy,raw,now,source,ally,weaponHit);}
  /** 第三 / 五章首领控制器自己播倒地帧（4×8 图集 28~31）。 */
  protected bossHasDeathArt(){return !!this.controller;}
- protected killEnemy(enemy:Enemy){this.enemyCamps?.onDestroyed(enemy,this.combatNow);if(enemy===this.boss)this.controller?.defeat();super.killEnemy(enemy);}
- update(time:number,delta:number){const before=this.combatNow;super.update(time,delta);if(this.combatNow>before&&!this.over&&this.mode==='none'){if(!this.awaitingChest)this.enemyCamps?.update(this.combatNow);this.fireShips?.update(this.combatNow);}this.spearWarnings?.draw(this.enemies,this.spear,this.combatNow,this.player,!this.over);this.controller?.updateDeath(delta);if(this.boss?.active&&this.controller)this.hudTexts.bossEnergy.setText(this.controller.label+(this.legion.count>12?' · 军势护阵':''));}
+ protected killEnemy(enemy:Enemy){this.enemyCamps?.onDestroyed(enemy,this.combatNow);if(enemy===this.boss){this.controller?.defeat();
+  // 典韦守营结果（剧情旗标 dianwei，第四章、编年史读）：张绣倒下时典韦还活着 = saved（军功 +80），否则 fell
+  if(this.dianwei){const saved=this.dianwei.alive;setStoryFlag('dianwei',saved?'saved':'fell');if(saved){addMerit(DIANWEI.meritSaved);this.showWaveBanner('典韦得救',false,'恶来无恙 · 军功 +'+DIANWEI.meritSaved);}}}
+  super.killEnemy(enemy);}
+ update(time:number,delta:number){const before=this.combatNow;super.update(time,delta);if(this.combatNow>before&&!this.over&&this.mode==='none'){if(!this.awaitingChest)this.enemyCamps?.update(this.combatNow);this.dianwei?.update((this.combatNow-before)/1000,this.combatNow);this.fireShips?.update(this.combatNow);}this.spearWarnings?.draw(this.enemies,this.spear,this.combatNow,this.player,!this.over);this.controller?.updateDeath(delta);if(this.boss?.active&&this.controller)this.hudTexts.bossEnergy.setText(this.controller.label+(this.legion.count>12?' · 军势护阵':''));}
  protected renderRecruit(){if(this.resting){this.campUI?.open(cfg.campPrefix+this.thirdStage,cfg.stages[this.thirdStage]?.name??'返回天下地图');return;}super.renderRecruit();}
  protected continueCampaign(){if(!this.resting||this.mode!=='rest'||this.thirdStage>=3)return;const next=(this.thirdStage+1)as ThirdStage;if(!this.thirdTest&&!arcStageUnlocked(cfg.arc,next))return;const transfer=packCampaign(this.runConfig.character,this.player,this.legion);transfer.chapter='hulao';this.registry.set(cfg.transferKey,transfer);this.registry.set(cfg.stageKey,next);this.registry.set('runConfig',{...this.runConfig,thirdStage:next});this.resting=false;this.scene.restart();}
  protected finish(victory:boolean,reason:RunEndReason='death'){

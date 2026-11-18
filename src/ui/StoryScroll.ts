@@ -16,6 +16,8 @@ export interface StoryScrollOptions {
   lines: StoryLine[]; reward: string; confirm: string; background?: string; illustration?: string; onDone: () => void;
   /** 给出时显示「跳过」按钮并响应 Esc：直接关掉卷轴，调用 skip（不再调 onDone）。 */
   skip?: () => void;
+  /** 抉择（剧情 choice 节点，第三章起）：最后一页不显示确认按钮，改成这几个选项；点了关掉卷轴并回调 onChoice(序号)。按钮名 name+'-choice-序号'。 */
+  choices?: readonly string[]; onChoice?: (index: number) => void;
 }
 
 const GOLD = 0xc9a35e, GOLD_HI = 0xf3d48a, LACQUER = 0x1b120b;
@@ -105,7 +107,24 @@ export function storyScroll(scene: Phaser.Scene, W: number, H: number, desk: boo
     page.setText(`${i + 1} / ${o.lines.length}`).setVisible(!last);
     reward.setVisible(last); label.setText(last ? o.confirm : '继续 ▸');
     hit.setName(last ? o.confirmName : o.name + '-next');
+    // 抉择：最后一页把确认按钮换成选项
+    const pick = last && !!o.choices?.length;
+    for (const x of [btn, label, hit, plate]) x?.setVisible(!pick);
+    if (pick) hit.disableInteractive(); else hit.setInteractive({ useHandCursor: true });
+    for (const c of choiceBtns) c.setVisible(pick);
   };
+  // 抉择按钮（两个并排；三个以上时缩窄）
+  const choiceBtns: Phaser.GameObjects.Container[] = [];
+  (o.choices ?? []).forEach((c, k, all) => {
+    const cw = Math.min(desk ? 220 : 200, (pw - 80) / all.length - 16), cxk = cx + (k - (all.length - 1) / 2) * (cw + 24);
+    const g = scene.add.graphics().setScrollFactor(0), t = text(0, 0, c, desk ? 19 : 20, '#ffe9bd', true).setOrigin(.5).setStroke('#2a170b', 3);
+    const draw = (hi: boolean): void => { g.clear().fillStyle(0x000000, .4).fillRoundedRect(-cw / 2 + 2, -bh / 2 + 4, cw, bh, 8).fillStyle(hi ? 0x8a3a22 : 0x6a2a18, 1).fillRoundedRect(-cw / 2, -bh / 2, cw, bh, 8).lineStyle(1.5, hi ? GOLD_HI : GOLD, 1).strokeRoundedRect(-cw / 2 + 4, -bh / 2 + 4, cw - 8, bh - 8, 5); };
+    draw(false);
+    const hz = scene.add.rectangle(0, 0, cw, bh, 0, 0).setScrollFactor(0).setInteractive({ useHandCursor: true }).setName(o.name + '-choice-' + k);
+    hz.on('pointerover', () => draw(true)).on('pointerout', () => draw(false)).on('pointerup', () => { root.destroy(); o.onChoice?.(k); });
+    const box = scene.add.container(cxk, by, [g, t, hz]).setScrollFactor(0).setVisible(false).setName(o.name + '-choice-box-' + k);
+    choiceBtns.push(box); root.add(box);
+  });
   if (o.skip) {
     const skipText = text(x0 + pw - (desk ? 30 : 20), by, '跳过 ▸▸', desk ? 15 : 16, '#c9b48a', true).setOrigin(1, .5).setInteractive({ useHandCursor: true }).setName(o.name + '-skip');
     const esc = scene.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.ESC);

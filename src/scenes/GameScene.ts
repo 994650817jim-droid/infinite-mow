@@ -689,16 +689,24 @@ export class GameScene extends Phaser.Scene {
       .setOrigin(0.5)
       .setScrollFactor(0)
       .setDepth(DEPTH.hud);
-    // 剧情：关前章头 → 军情 → 羁绊（都看完 / 跳过后再开新手引导，避免两者叠在一起）
-    this.storyDir = new StoryDirector({ scene: this, chapterId: this.runConfig.encounter ? '' : this.chapter.id, stage: this.chapter.id === 'hulao' ? (this.chapter.westStage ?? 3) : (this.chapter.stage ?? 1), ctx: this.storyCtx(),
-      pause: () => { if (this.mode === 'none' && !this.over) this.setMode('story'); }, resume: () => { if (this.mode === 'story' && !this.over) this.setMode('none'); } });
-    { const k = this.storyDir.bondDamageMul(this.runConfig.character); if (k !== 1) this.player.stats.damageMul *= k; // 羁绊（如「桃园」）：主将与在队成员本关伤害加成
-      for (const m of this.followers?.members ?? []) if (m.recruit.hero) m.weaponDamageMul *= this.storyDir.bondDamageMul(m.recruit.hero); }
-    this.storyDir.beginStage(() => { if (this.sys.settings.status < Phaser.Scenes.SHUTDOWN && !this.over) this.tutorial = Tutorial.maybeStart(this); });
+    // 剧情：关前章头 → 过场 / 幕间 → 军情 → 羁绊（都看完 / 跳过后再开新手引导，避免两者叠在一起）
+    this.setupStory(this.runConfig.encounter ? '' : this.chapter.id, this.chapter.id === 'hulao' ? (this.chapter.westStage ?? 3) : (this.chapter.stage ?? 1), () => { if (this.sys.settings.status < Phaser.Scenes.SHUTDOWN && !this.over) this.tutorial = Tutorial.maybeStart(this); });
     // 首领阶段切换统一事件（boss-phase）：所有控制器的 phase2 都从这里发
     watchBossPhase(this, () => { const c = (this as unknown as { controller?: { phase2?: boolean } }).controller; return this.boss ? { boss: this.boss, phase2: !!(this.moveset?.phase2 || this.lubu?.phase2 || this.huaxiong?.phase2 || this.xurong?.phase2 || this.zhangjiao?.phase2 || c?.phase2), name: this.chapter.bossName, mounted: !!(this.bossMount?.mounted || this.moveset?.mounted) } : null; });
   }
 
+  /**
+   * 建本关剧情导演并开关前剧情（章头 → 过场 / 幕间 → 军情 → 羁绊）；套用羁绊加成（伤害、移速）。
+   * 篇章场景（第三章起，runConfig 是 encounter）在自己的 create 末尾按篇章 id 再调一次。
+   */
+  protected setupStory(chapterId: string, stage: number, done: () => void = () => {}): void {
+    this.storyDir = new StoryDirector({ scene: this, chapterId, stage, ctx: this.storyCtx(),
+      pause: () => { if (this.mode === 'none' && !this.over) this.setMode('story'); }, resume: () => { if (this.mode === 'story' && !this.over) this.setMode('none'); },
+      reward: r => { if (r.merit) addMerit(r.merit); if (r.grain) addProvisions(r.grain); } });
+    { const lord = this.runConfig.character, k = this.storyDir.bondDamageMul(lord), v = this.storyDir.bondSpeedMul(lord); if (k !== 1) this.player.stats.damageMul *= k; if (v !== 1) this.player.stats.moveMul *= v; // 羁绊（「桃园」伤害、「借将」移速）
+      for (const m of this.followers?.members ?? []) if (m.recruit.hero) m.weaponDamageMul *= this.storyDir.bondDamageMul(m.recruit.hero); }
+    this.storyDir.beginStage(done);
+  }
   /** 剧情上下文：主公、在队（主公 + 随行武将）、已招募。 */
   storyCtx(): StoryCtx { return { lord: this.runConfig.character, team: () => [this.runConfig.character, ...(this.followers?.members ?? []).map(m => m.recruit.hero).filter((h): h is CharacterId => !!h)], recruited: id => heroOwned(id) }; }
   /** 把开局选择（武将/初始武器）应用到本局。 */
@@ -2301,7 +2309,7 @@ export class GameScene extends Phaser.Scene {
     this.legionUI?.panel.setVisible(mode === 'recruit');
     this.campUI?.setVisible(mode==='rest');
     // 营中闲话：行军休整画面左下（不挡「率军出征」）
-    if(mode==='rest'&&IS_DESKTOP&&!this.children.getByName('camp-talk'))campTalkStrip(this,24,GAME_HEIGHT-35,GAME_WIDTH/2-145-24-16,[this.chapter.id],this.storyCtx(),DEPTH.overlay+3);
+    if(mode==='rest'&&IS_DESKTOP&&!this.children.getByName('camp-talk'))campTalkStrip(this,24,GAME_HEIGHT-35,GAME_WIDTH/2-145-24-16,[this.storyDir?.chapterId||this.chapter.id],this.storyCtx(),DEPTH.overlay+3);
     else if(mode!=='rest')this.children.getByName('camp-talk')?.destroy();
     this.reinforcements?.panel.setVisible(mode === 'aid');
     if (this.pausePanel) {

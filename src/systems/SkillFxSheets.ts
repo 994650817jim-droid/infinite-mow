@@ -16,6 +16,8 @@ export const SKILL_FX: Readonly<Record<string, { file: string; cell: number; fra
   fx_explosion: { file: 'assets/skill-fx/explosion.png', cell: 256, frames: 6 },
   fx_ground_fire: { file: 'assets/skill-fx/ground_fire.png', cell: 192, frames: 6 },
   fx_collapse_dust: { file: 'assets/skill-fx/collapse_dust.png', cell: 256, frames: 6 },
+  // 敌军死亡特效专属尘土（即梦 Seedream 5.5，tools/prepare-death-dust.mjs 处理：抠洋红 + 去溢色 + 清水印 + 重新居中）；缺图时 DeathFx 退回 fx_collapse_dust
+  fx_death_dust: { file: 'assets/fx/death_dust.png', cell: 256, frames: 6 },
 };
 
 export function loadSkillFx(load: Phaser.Loader.LoaderPlugin): void {

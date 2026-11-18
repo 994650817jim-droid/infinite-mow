@@ -89,6 +89,7 @@ assets/raw/*
 !/tools/deathfx-compose.mjs
 !/tools/test-deathfx.mjs
 !/tools/deathfx-live.mjs
+!/tools/prepare-death-dust.mjs
 !/tools/test-merit.mjs
 !/tools/test-level-merge.mjs
 !/tools/test-hero-codex.mjs

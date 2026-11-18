@@ -33,6 +33,16 @@ const CASES = [
   { id: 'sunhuan', scene: 'YilingGameScene', run: { thirdStage: 1 }, reg: { yilingStage: 1 }, ctl: 'controller', mounted: true },
   { id: 'zhuran', scene: 'YilingGameScene', run: { thirdStage: 2 }, reg: { yilingStage: 2 }, ctl: 'controller', mounted: true },
   { id: 'haozhao', scene: 'BeifaGameScene', run: { thirdStage: 2 }, reg: { beifaStage: 2 }, ctl: 'controller', mounted: false, prep: 's => { s.siege?.gate?.deactivate(); }' },
+  // 第四批：第七章、第九章、第十一章（场地机制照常；prep 每轮都跑，推进到首领出场）
+  { id: 'yanghuai', scene: 'ShuGameScene', run: { thirdStage: 1 }, reg: { shuStage: 1 }, ctl: 'controller', mounted: false },
+  { id: 'zhangren', scene: 'ShuGameScene', run: { thirdStage: 2 }, reg: { shuStage: 2 }, ctl: 'controller', mounted: true },
+  { id: 'liuzhang', scene: 'ShuGameScene', run: { thirdStage: 3 }, reg: { shuStage: 3 }, ctl: 'controller', mounted: false, prep: "s => { const m = s.shuMid; if (!m) return; if (m.phase === 'outside') m.hitGate(1e6); if (m.phase === 'street') for (const pt of m.points) pt.state = 'secured'; }" },
+  { id: 'caoren', scene: 'XiangfanGameScene', run: { thirdStage: 1 }, reg: { xiangfanStage: 1 }, ctl: 'controller', mounted: false },
+  { id: 'pangde', scene: 'XiangfanGameScene', run: { thirdStage: 2 }, reg: { xiangfanStage: 2 }, ctl: 'controller', mounted: true },
+  { id: 'lvmeng', scene: 'XiangfanGameScene', run: { thirdStage: 3 }, reg: { xiangfanStage: 3 }, ctl: 'controller', mounted: false, prep: 's => { if (!s.boss?.active) s.player.sprite.setPosition(0, -1800); }' },
+  { id: 'mangyachang', scene: 'NanzhengGameScene', run: { thirdStage: 1 }, reg: { nanzhengStage: 1 }, ctl: 'controller', mounted: false },
+  { id: 'wutugu', scene: 'NanzhengGameScene', run: { thirdStage: 2 }, reg: { nanzhengStage: 2 }, ctl: 'controller', mounted: false },
+  { id: 'menghuo', scene: 'NanzhengGameScene', run: { thirdStage: 3 }, reg: { nanzhengStage: 3 }, ctl: 'controller', mounted: false },
 ];
 try {
   const p = await b.newPage({ viewport: { width: 1280, height: 720 } }); const errs = []; p.on('pageerror', e => errs.push(String(e)));
@@ -57,7 +67,7 @@ try {
       await ev(s => { if (s.mode === 'parley') s.choose('persuade'); });
       await wait(600);
     }
-    for (let i = 0; i < 150 && !ctl; i++) { ctl = await ev((s, [k, id, legacy]) => { const o = s[k]; return o && s.boss?.active && (legacy || o.def?.id === id) ? true : null; }, [c.ctl, c.id, !!c.legacy]); if (!ctl) { await ev(s => { if (s.mode === 'parley') s.choose('persuade'); if (!s.boss?.active && !s.bossSpawned) { const w = s.chapter?.waves; s.devSetTime?.(w?.length ? w[w.length - 1].start + 1 : 999); } }); await p.waitForTimeout(200); } }
+    for (let i = 0; i < 150 && !ctl; i++) { ctl = await ev((s, [k, id, legacy]) => { const o = s[k]; return o && s.boss?.active && (legacy || o.def?.id === id) ? true : null; }, [c.ctl, c.id, !!c.legacy]); if (!ctl) { if (c.prep) await ev(c.prep); await ev(s => { if (s.mode === 'story' || s.mode === 'parley') { for (const st of s.children.list) { const btn = st.list?.find(o => /-(next|confirm)$/.test(o.name ?? '')); if (btn) { btn.emit('pointerup'); break; } } } if (s.mode === 'parley') s.choose('persuade'); if (!s.boss?.active && !s.bossSpawned) { const w = s.chapter?.waves; s.devSetTime?.(w?.length ? w[w.length - 1].start + 1 : 999); } }); await p.waitForTimeout(200); } }
     ck(`${c.id}：首领出阵，控制器就位`, !!ctl, null);
     if (!ctl) continue;
     await wait(3200); // 出场名牌、马图载入
@@ -68,6 +78,7 @@ try {
     else ck(`${c.id}：不骑马（术士）`, !mount.mounted, mount);
     if (!c.legacy) {
       // 一阶段每招都放一遍
+      for (let w = 0; w < 50 && !(await ev((s, [k, id]) => s[k]?.def?.id === id && s.boss?.active, [c.ctl, c.id])); w++) { if (c.prep) await ev(c.prep); await p.waitForTimeout(200); } // 攻城转场等场景过渡时控制器会短暂重建
       const names = await ev((s, k) => [...s[k].debug.moves], c.ctl);
       for (let i = 0; i < names.length; i++) { await ev((s, [k, i]) => { const b = s.boss; b.sprite.x = s.player.x + 160; b.sprite.y = s.player.y; s[k].debug.force(i, s.combatNow); }, [c.ctl, i]); await wait(i === 0 ? 900 : 2600); if (i === 0) await p.screenshot({ path: `${OUT}/${c.id}-p1.png` }); }
       const m1 = await ev((s, k) => s[k].snapshot(), c.ctl);
@@ -92,6 +103,7 @@ try {
     ck(`${c.id}：半血换二阶段，发 boss-phase 事件`, after.phase2 && ph.some(e => e.phase === 2), { after, ph });
     if (c.mounted) ck(`${c.id}：坠马 → 步战（马跑开、骑者恢复整身）`, !after.mounted && !after.crop && ph.some(e => e.phase === 2 && e.dismount), { after, ph });
     if (!c.legacy) {
+      for (let w = 0; w < 50 && !(await ev((s, [k, id]) => s[k]?.def?.id === id && s.boss?.active, [c.ctl, c.id])); w++) { if (c.prep) await ev(c.prep); await p.waitForTimeout(200); } // 攻城转场等场景过渡时控制器会短暂重建
       const names = await ev((s, k) => [...s[k].debug.moves], c.ctl);
       for (let i = 0; i < names.length; i++) { await ev((s, [k, i]) => { const b = s.boss; b.sprite.x = s.player.x + 160; b.sprite.y = s.player.y; s[k].debug.force(i, s.combatNow); }, [c.ctl, i]); await wait(i === 0 ? 900 : 2600); if (i === 0) await p.screenshot({ path: `${OUT}/${c.id}-p2.png` }); }
       const m2 = await ev((s, k) => s[k].snapshot(), c.ctl);

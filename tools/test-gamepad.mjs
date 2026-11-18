@@ -194,11 +194,16 @@ async function newPage(seed) {
   await p.waitForTimeout(1500);
   const pad = padApi(p);
   await keepLord(p, pad);
-  await pad.press('UP');
-  const wf = await pad.focusTo(f => f.name === 'home-world');
+  // 2026-11-17：电脑版主页右上不再有「天下地图 / 营寨」，改走 择章 →「营寨」→「天下地图 · 出征」
+  await p.evaluate(() => window.__game.scene.getScene('MenuScene').openChapters()); await p.waitForTimeout(500);
+  const cf0 = await pad.focusTo(f => f.name === 'chapter-select-city');
+  await pad.press('A'); await p.waitForFunction(() => window.__game.scene.getScene('CityScene')?.sys.isActive() && window.__game.scene.getScene('CityScene').children.getByName('city-map'), null, { timeout: 20000 }).catch(() => {}); await p.waitForTimeout(800); /* 营寨首次进入要加载素材 */
+  const viaCity = await p.evaluate(() => window.__game.scene.getScene('CityScene')?.sys.isActive());
+  if (viaCity && (await pad.focus())?.name === 'town-intro-close') { await pad.press('A'); await p.waitForTimeout(500); } // 首次进营寨有介绍弹窗：先 Ⓐ 关掉
+  const wf = viaCity ? await pad.focusTo(f => f.name === 'city-map') : null;
   await pad.press('A'); await p.waitForTimeout(1500);
   const inWorld = await p.evaluate(() => window.__game.scene.getScene('WorldMapScene')?.sys.isActive());
-  ck('主页 → 天下地图（手柄）', !!wf && inWorld, wf);
+  ck('主页 → 择章 → 营寨 → 天下地图（手柄）', !!cf0 && viaCity && !!wf && inWorld, { cf0, wf });
   if (inWorld) {
     await pad.press('RIGHT'); await p.waitForTimeout(200);
     const f1 = await pad.focus(); await pad.press('DOWN'); const f2 = await pad.focus();
@@ -207,11 +212,11 @@ async function newPage(seed) {
   }
   await p.goto(base + '?layout=desktop'); await p.waitForFunction(() => window.__game?.scene.getScene('MenuScene')?.sys.isActive(), null, { timeout: 30000 }); await p.waitForTimeout(1200);
   await keepLord(p, pad);
-  await pad.press('UP');
-  const cf = await pad.focusTo(f => f.name === 'home-city');
+  await p.evaluate(() => window.__game.scene.getScene('MenuScene').openChapters()); await p.waitForTimeout(500);
+  const cf = await pad.focusTo(f => f.name === 'chapter-select-city');
   await pad.press('A'); await p.waitForTimeout(1500);
   const inCity = await p.evaluate(() => window.__game.scene.getScene('CityScene')?.sys.isActive());
-  ck('主页 → 主城（手柄）', !!cf && inCity, cf);
+  ck('主页 → 择章 → 营寨（手柄）', !!cf && inCity, cf);
   if (inCity) { await shot(p, 'city'); await layoutCheck(pad, '主城'); }
   await p.close();
 }

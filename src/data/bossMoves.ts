@@ -246,6 +246,119 @@ export const BOSS_MOVES: Record<string, BossMovesetDef> = {
       { kind: 'volley', name: '石磨压阵', windupMs: 1200, cd: 4600, dmg: 1.7, count: 3, r: 105, spread: 150, fx: 'slam' },
     ] },
   },
+
+  // ===== 第四批：第七章入蜀、第九章襄樊、第十一章南征（走路动画会话的场景；场地机制不动，只配首领招式） =====
+  // 7-1 杨怀（白水关，不骑）：白水伏杀（席间暗刺：隐身后近身）+ 关隘滚石（大落石）→「困兽」：亲兵护体
+  yanghuai: {
+    id: 'yanghuai', name: '杨怀', phaseAt: .5,
+    p1: { name: '白水关', caption: '白水伏杀 · 关隘滚石', gapMs: 2500, speedMul: 1, moves: [
+      { kind: 'vanish', name: '白水伏杀', windupMs: 500, cd: 7500, dmg: 1.6, hideMs: 1300, r: 135, arc: Math.PI * .6 },
+      { kind: 'volley', name: '关隘滚石', windupMs: 1300, cd: 4800, dmg: 1.5, count: 3, r: 95, spread: 160, fx: 'slam' },
+    ] },
+    p2: { name: '困兽', caption: '亲兵护体时杨怀减伤 · 先打亲兵', gapMs: 2100, speedMul: 1, guards: { troop: 'infantry', count: 4, takenMul: .4 }, moves: [
+      { kind: 'sweep', name: '困兽乱劈', windupMs: 600, cd: 3000, dmg: 1.3, r: 125, arc: Math.PI * .9, times: 2 },
+      { kind: 'volley', name: '关隘滚石', windupMs: 1200, cd: 4200, dmg: 1.6, count: 4, r: 95, spread: 190, fx: 'slam' },
+    ] },
+  },
+  // 7-2 张任（落凤坡）：骑马；落凤伏弩（扇形连弩）+ 冲阵 → 坠马「宁死不降」：弓手护体、连弩更密
+  zhangren: {
+    id: 'zhangren', name: '张任', phaseAt: .5, mount: { horse: 'generic', tint: 0x7a6a58 },
+    p1: { name: '落凤坡', caption: '落凤伏弩 · 冲阵', gapMs: 2300, speedMul: 1.35, moves: [
+      { kind: 'fan', name: '落凤伏弩', windupMs: 950, cd: 4400, dmg: 1.2, count: 5, spread: Math.PI * .5, len: 560, width: 34 },
+      { kind: 'charge', name: '张任冲阵', windupMs: 850, cd: 4800, dmg: 1.4, len: 440, width: 66, dashMs: 480 },
+    ] },
+    p2: { name: '宁死不降', caption: '坠马步战 · 弓手护体时张任减伤', gapMs: 2000, speedMul: 1, guards: { troop: 'archer', count: 4, takenMul: .45 }, moves: [
+      { kind: 'fan', name: '伏弩连射', windupMs: 850, cd: 3600, dmg: 1.2, count: 7, spread: Math.PI * .7, len: 560, width: 32 },
+      { kind: 'sweep', name: '宁死不降', windupMs: 600, cd: 3200, dmg: 1.4, r: 130, arc: Math.PI, times: 2 },
+    ] },
+  },
+  // 7-3 刘璋（益州牧，统帅不骑）：闭城自守（召守军）+ 城头弓阵 →「困守州府」：盾兵护体减伤
+  liuzhang: {
+    id: 'liuzhang', name: '刘璋', phaseAt: .5,
+    p1: { name: '益州牧', caption: '闭城自守 · 城头弓阵', gapMs: 2600, speedMul: .9, moves: [
+      { kind: 'summon', name: '闭城自守', windupMs: 900, cd: 8000, dmg: 0, troop: 'infantry', count: 6, radius: 240, around: 'player' },
+      { kind: 'volley', name: '城头弓阵', windupMs: 1100, cd: 4000, dmg: 1.1, count: 6, r: 64, spread: 200, fx: 'arrows' },
+    ] },
+    p2: { name: '困守州府', caption: '盾兵护体时刘璋减伤 · 先破盾兵', gapMs: 2200, speedMul: .9, guards: { troop: 'shield', count: 5, takenMul: .35 }, moves: [
+      { kind: 'volley', name: '州府箭雨', windupMs: 1000, cd: 3600, dmg: 1.2, count: 7, r: 64, spread: 220, fx: 'arrows' },
+      { kind: 'summon', name: '益州援兵', windupMs: 800, cd: 9000, dmg: 0, troop: 'infantry', count: 5, radius: 260, around: 'player' },
+    ] },
+  },
+  // 9-1 曹仁（樊城守将，不骑；第五章有专属八门金锁控制器，这里用章节键单配）：白耳精兵 + 大刀 →「城门死守」：盾兵护体
+  'xiangfan.caoren': {
+    id: 'caoren', name: '曹仁', phaseAt: .5,
+    p1: { name: '樊城守将', caption: '白耳精兵 · 坚守', gapMs: 2500, speedMul: 1, moves: [
+      { kind: 'summon', name: '白耳精兵', windupMs: 900, cd: 8500, dmg: 0, troop: 'infantry', count: 6, radius: 230, around: 'player' },
+      { kind: 'sweep', name: '大刀横扫', windupMs: 650, cd: 3400, dmg: 1.3, r: 130, arc: Math.PI * .9 },
+    ] },
+    p2: { name: '城门死守', caption: '盾兵护体时曹仁减伤 · 先破盾阵', gapMs: 2100, speedMul: .95, guards: { troop: 'shield', count: 5, takenMul: .35 }, moves: [
+      { kind: 'sweep', name: '大刀连斩', windupMs: 600, cd: 3000, dmg: 1.4, r: 135, arc: Math.PI, times: 2 },
+      { kind: 'volley', name: '城头弓阵', windupMs: 1100, cd: 4000, dmg: 1.1, count: 6, r: 64, spread: 200, fx: 'arrows' },
+    ] },
+  },
+  // 9-2 庞德（抬榇决战）：骑白马；抬榇冲锋 + 额前一箭（远射）→ 坠马「死战不退」：狂暴连斩（场景里另有半血抬棺加速）
+  pangde: {
+    id: 'pangde', name: '庞德', phaseAt: .5, mount: { horse: 'generic' },
+    p1: { name: '抬榇决战', caption: '抬榇冲锋 · 额前一箭', gapMs: 2300, speedMul: 1.35, moves: [
+      { kind: 'charge', name: '抬榇冲锋', windupMs: 850, cd: 4200, dmg: 1.6, len: 480, width: 70, dashMs: 480 },
+      { kind: 'thrust', name: '额前一箭', windupMs: 1000, cd: 4600, dmg: 1.7, len: 760, width: 38 },
+    ] },
+    // 移速不再另加：XiangfanGameScene 半血抬棺狂暴已把移速 ×1.45、伤害 ×1.35（两边叠加会过快）
+    p2: { name: '死战不退', caption: '坠马步战 · 狂暴连斩', gapMs: 1700, speedMul: 1, moves: [
+      { kind: 'sweep', name: '死战连斩', windupMs: 500, cd: 2600, dmg: 1.5, r: 135, arc: Math.PI, times: 3 },
+      { kind: 'charge', name: '步战冲杀', windupMs: 650, cd: 4200, dmg: 1.5, len: 340, width: 64, dashMs: 400, back: true },
+    ] },
+  },
+  // 9-3 吕蒙（白衣渡江，不骑）：白衣渡江（隐身后另处突袭）+ 士别三日（连斩）→「麦城合围」：召兵封路 + 箭雨
+  lvmeng: {
+    id: 'lvmeng', name: '吕蒙', phaseAt: .5,
+    p1: { name: '白衣渡江', caption: '隐身突袭 · 士别三日', gapMs: 2300, speedMul: 1.1, moves: [
+      { kind: 'vanish', name: '白衣渡江', windupMs: 500, cd: 7000, dmg: 1.7, hideMs: 1400, r: 140, arc: Math.PI * .6 },
+      { kind: 'sweep', name: '士别三日', windupMs: 600, cd: 3200, dmg: 1.3, r: 130, arc: Math.PI * .9, times: 3 },
+    ] },
+    p2: { name: '麦城合围', caption: '召兵封路 · 箭雨', gapMs: 2000, speedMul: 1.1, moves: [
+      { kind: 'summon', name: '麦城合围', windupMs: 900, cd: 8500, dmg: 0, troop: 'infantry', count: 7, radius: 260, around: 'player' },
+      { kind: 'volley', name: '吴军箭雨', windupMs: 1000, cd: 3600, dmg: 1.2, count: 7, r: 64, spread: 220, fx: 'arrows' },
+      { kind: 'vanish', name: '白衣再渡', windupMs: 450, cd: 7500, dmg: 1.8, hideMs: 1200, r: 140, arc: Math.PI * .6 },
+    ] },
+  },
+  // 11-1 忙牙长（不骑）：蛮刀乱劈 + 象兵冲撞（第十一章的骑兵就是象兵）→「瘴气」：身边一圈圈外扩
+  mangyachang: {
+    id: 'mangyachang', name: '忙牙长', phaseAt: .5,
+    p1: { name: '蛮将', caption: '蛮刀乱劈 · 象兵冲撞', gapMs: 2400, speedMul: 1, moves: [
+      { kind: 'sweep', name: '蛮刀乱劈', windupMs: 600, cd: 3000, dmg: 1.3, r: 125, arc: Math.PI * .9, times: 3 },
+      { kind: 'summon', name: '象兵冲撞', windupMs: 900, cd: 9500, dmg: 0, troop: 'cavalry', count: 2, radius: 300, around: 'player' },
+    ] },
+    p2: { name: '瘴气', caption: '身边瘴气一圈圈外扩', gapMs: 2000, speedMul: 1, moves: [
+      { kind: 'rings', name: '瘴气弥漫', windupMs: 900, cd: 4400, dmg: 1.2, radii: [110, 200, 290], gapMs: 400, band: 60 },
+      { kind: 'sweep', name: '蛮刀狂劈', windupMs: 550, cd: 2800, dmg: 1.4, r: 130, arc: Math.PI, times: 3 },
+    ] },
+  },
+  // 11-2 兀突骨（乌戈国主，不骑）：巨人践踏（重冲）+ 践踏震地 →「藤甲狂怒」：更快、三重震地
+  wutugu: {
+    id: 'wutugu', name: '兀突骨', phaseAt: .5,
+    p1: { name: '乌戈国主', caption: '巨人践踏 · 震地', gapMs: 2500, speedMul: .95, moves: [
+      { kind: 'charge', name: '巨人践踏', windupMs: 950, cd: 4600, dmg: 1.7, len: 400, width: 80, dashMs: 560 },
+      { kind: 'rings', name: '践踏震地', windupMs: 900, cd: 5000, dmg: 1.3, radii: [120, 220], gapMs: 420, band: 70 },
+    ] },
+    p2: { name: '藤甲狂怒', caption: '兀突骨狂怒 · 三重震地', gapMs: 1900, speedMul: 1.2, moves: [
+      { kind: 'rings', name: '三重震地', windupMs: 850, cd: 4200, dmg: 1.4, radii: [110, 210, 310], gapMs: 380, band: 70 },
+      { kind: 'charge', name: '狂怒践踏', windupMs: 800, cd: 4200, dmg: 1.8, len: 400, width: 80, dashMs: 500, back: true },
+    ] },
+  },
+  // 11-3 孟获（南蛮王）：象的骑乘图未到先步战；蛮王冲阵 + 蛮王怒吼 →「七擒不服」：召象兵 + 震地（场景里另有七擒七纵）
+  menghuo: {
+    id: 'menghuo', name: '孟获', phaseAt: .5,
+    p1: { name: '南蛮王', caption: '蛮王冲阵 · 蛮王怒吼', gapMs: 2400, speedMul: 1.05, moves: [
+      { kind: 'charge', name: '蛮王冲阵', windupMs: 850, cd: 4400, dmg: 1.5, len: 440, width: 72, dashMs: 500 },
+      { kind: 'summon', name: '蛮王怒吼', windupMs: 900, cd: 8500, dmg: 0, troop: 'infantry', count: 6, radius: 240, around: 'player' },
+    ] },
+    p2: { name: '七擒不服', caption: '象兵冲阵 · 蛮王震地', gapMs: 2000, speedMul: 1.1, moves: [
+      { kind: 'summon', name: '象兵冲阵', windupMs: 900, cd: 9000, dmg: 0, troop: 'cavalry', count: 3, radius: 300, around: 'player' },
+      { kind: 'rings', name: '蛮王震地', windupMs: 850, cd: 4400, dmg: 1.4, radii: [110, 210, 300], gapMs: 400, band: 65 },
+      { kind: 'sweep', name: '蛮王横扫', windupMs: 600, cd: 3000, dmg: 1.4, r: 135, arc: Math.PI, times: 2 },
+    ] },
+  },
 };
 /** 已有专属控制器的首领只补骑马（半血坠马跟着统一的 boss-phase 事件）。 */
 export const BOSS_MOUNTS: Record<string, BossMountDef> = {

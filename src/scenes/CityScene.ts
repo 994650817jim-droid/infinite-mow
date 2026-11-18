@@ -28,6 +28,7 @@ import {COMMONER_SKILLS} from '../data/commonerSkills';
 import {QUALITIES} from '../data/items';
 import {PANO_W,PANO_H,CITY_SLOTS,LEVEL_SCALE,CITY_BG_SIZES,CITY_ART_LEVELS,ART_ALIAS} from '../town/CityLayout';
 import {cityById,TIER_NAME} from '../world/WorldCities';
+import {CampLife,loadCampLife} from '../town/CampLife';
 
 /** 是否电脑布局：在场景构造时读取（模块加载时布局尚未初始化）。 */
 let D=false;
@@ -46,15 +47,18 @@ export class CityScene extends Phaser.Scene {
  private pano!:Phaser.GameObjects.Container;private top!:Phaser.GameObjects.Text;private hint!:Phaser.GameObjects.Text;private sizeText!:Phaser.GameObjects.Text;
  private vr={x:0,y:0,w:0,h:0};private k=1;private sx=0;private sy=0;
  private hits:Phaser.GameObjects.Rectangle[]=[];
+ /** 营寨档的营帐与兵士（town/CampLife.ts）；县城以后为 null。 */
+ private campLife:CampLife|null=null;
  private drag:{x:number;y:number;sx:number;sy:number;moved:boolean}|null=null;private pressedSlot:string|null=null;
  private popId:TownBuildingId|null=null;
  private techTab:TechBranch|'drill'='supply';
  /** 讲武堂「随从操练」翻页。 */
  private drillPage=0;
  constructor(){super('CityScene');}
- init(){D=W>600;this.vr=D?{x:12,y:62,w:W-24,h:H-62-58}:{x:0,y:104,w:W,h:H-104-104};this.k=Math.max(this.vr.w/PANO_W,this.vr.h/PANO_H);this.hits=[];this.drag=null;}
+ init(){D=W>600;this.vr=D?{x:12,y:62,w:W-24,h:H-62-58}:{x:0,y:104,w:W,h:H-104-104};this.k=Math.max(this.vr.w/PANO_W,this.vr.h/PANO_H);this.hits=[];this.drag=null;this.campLife=null;}
  preload(){if(!worldUnlocked()&&!isChapterTestRun())return;worldAssets(this,'town_ground','assets/town/ground.webp');
   for(const n of CITY_BG_SIZES)worldAssets(this,`city_bg_${n}`,`assets/city/bg_${n}.webp`);
+  loadCampLife(this);
   const ids=Object.keys(TOWN_BUILDINGS) as TownBuildingId[];
   for(const lv of CITY_ART_LEVELS)for(const id of ids)if(lv<=(TOWN_BUILDINGS[id].maxLevel??3)){const a=ART_ALIAS[id]??id;worldAssets(this,`city_${a}_${lv}`,`assets/city/${a}_${lv}.webp`);}}
  create(){playMenuMusic(this);this.registry.remove('hardChapter');
@@ -127,7 +131,7 @@ export class CityScene extends Phaser.Scene {
   return null;
  }
  private drawPano(){
-  this.pano.removeAll(true);this.hits=[];
+  this.campLife?.destroy();this.campLife=null;this.pano.removeAll(true);this.hits=[];
   const s=loadWorld(),t=s.town,size=citySize(t) as 1|2|3,k=this.k,p=townProgress(s),slots=CITY_SLOTS[size];
   const bg=`city_bg_${size}`;
   if(this.textures.exists(bg))this.pano.add(this.add.image(0,0,bg).setOrigin(0).setDisplaySize(PANO_W*k,PANO_H*k));
@@ -163,8 +167,12 @@ export class CityScene extends Phaser.Scene {
    this.pano.add(hit);this.hits.push(hit);
   }
   this.popId=null;
+  // 营寨档：营帐、兵士填空地（画在建筑之下；按建筑点击区与贴图外框避让）
+  if(size===1&&new URLSearchParams(location.search).get('camplife')!=='0'){const ox=this.pano.x,oy=this.pano.y,blocked=[...this.hits.map(h=>h.getBounds()),...this.pano.list.filter((o):o is Phaser.GameObjects.Image=>o instanceof Phaser.GameObjects.Image&&o.texture.key.startsWith('city_')&&!o.texture.key.startsWith('city_bg')).map(o=>o.getBounds())].map(b=>({l:(b.x-ox)/k,r:(b.right-ox)/k,t:(b.y-oy)/k,b:(b.bottom-oy)/k}));
+   this.campLife=new CampLife(this,k,blocked);this.pano.remove(this.campLife.root);this.pano.addAt(this.campLife.root,this.textures.exists(bg)?1:0);}
   this.scrollTo(this.sx,this.sy,false);
  }
+ update(_t:number,dt:number){this.campLife?.update(dt);}
  /** 无底图时：程序画天空、远山、土地、街道与对应规模的寨墙。 */
  private drawFallbackBg(size:number){
   const k=this.k,g=this.add.graphics(),w=PANO_W*k,h=PANO_H*k;

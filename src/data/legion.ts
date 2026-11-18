@@ -36,6 +36,14 @@ export const BOSS_VS_TROOPS = { contactMul: 3, skillMul: 2, sweepReach: 60 } as 
  */
 export const BOSS_VS_ALLY = { mul: .4, killCapPerCast: 3, immuneMs: 500 } as const;
 /**
+ * 护阵收回（2026-11-17 用户：「我按了出击武将出去去打，但是我按护阵，随从一下子就回来了，回来太快了，移速太快了」）：
+ * 出击 → 护阵后，部曲士兵（Legion）与随行武将（FollowerSquad）都按自己的行走速度 × speedMul 转身跑回阵位（播行走帧、面朝阵位），
+ * 正在出手的先打完再走；回到阵位 doneDist 以内恢复原来的紧贴跟随。
+ * 兜底：收回超过 fallbackMs 仍离阵位超过 farPx（约 1.5 屏）或 stuckMs 内没再靠近 progressPx，直接归位。
+ * enterDist：随行停止追击时离阵位超过这个距离才进入收回状态（贴身跟随时的小偏差不算）。初值，交平衡会话。
+ */
+export const RECALL = { speedMul: 1.2, enterDist: 60, doneDist: 18, fallbackMs: 4000, farPx: 1400, stuckMs: 1200, progressPx: 12 } as const;
+/**
  * 招兵价随在场兵数浮动（用户要求：兵越多越贵、越少越便宜）：每人 = 基础价 ×（a + b·n + c·n²）。
  * 0 人半价；10 人约 2.4 倍、20 人约 4.1 倍、33 人约 9.8 倍（原为 1 + 0.2n）。
  */

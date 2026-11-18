@@ -368,7 +368,10 @@ export class FollowerSquad {
     } else f.walk = 0;
     f.lastX = f.x; f.lastY = f.y;
   }
+  /** 随行名将普通出手音效（没有本命武器时，按模板；GameScene 接到 Sfx）。 */
+  attackSound: ((template: FollowerTemplate) => void) | null = null;
   private attack(f: Follower, e: Enemy, now: number, damage: number) {
+    this.attackSound?.(f.template);
     const a = Math.atan2(e.y - f.y, e.x - f.x);
     f.dir = Math.abs(Math.cos(a)) > Math.abs(Math.sin(a)) ? Math.cos(a) < 0 ? 'left' : 'right' : Math.sin(a) < 0 ? 'up' : 'down';
     f.play('attack', f.dir, now);

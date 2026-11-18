@@ -192,7 +192,7 @@ export const WEAPON_BEHAVIORS: Record<WeaponId, (host: WeaponHost, weapon: Weapo
           hitCount += 1;
           if (hitCount >= shot.cap) break;                    // 单枪命中上限
         }
-        if (hitCount > 0) host.sfx.play('allySpear');
+        // 出手音效改在出枪时播（atk_spear）；命中声由打击感系统负责
       }
       if (shot.elapsed >= 0.24 + shot.delay) {
         shot.img.destroy();
@@ -241,7 +241,7 @@ export const WEAPON_BEHAVIORS: Record<WeaponId, (host: WeaponHost, weapon: Weapo
       host.heroFx?.('dash', px + ux * R.dashLength / 2, py - 6 + uy * R.dashLength / 2, R.dashLength + 110, Math.atan2(uy, ux));
       const trail = host.add.image(px + ux * R.dashLength / 2, py - 6 + uy * R.dashLength / 2, 'spear_thrust', 'tight').setRotation(Math.atan2(uy, ux)).setDisplaySize(R.dashLength + 40, 34).setTint(0xbfe0ff).setAlpha(.85).setDepth(41);
       trail.scene.tweens.add({ targets: trail, alpha: 0, scaleY: trail.scaleY * 1.8, duration: 320, onComplete: () => trail.destroy() });
-      host.sfx.play('allySpear');
+      host.sfx.play('atk_charge');
     }
     // 张飞满怒：燕人咆哮——震慑并重创周围敌人（首领不受控，只吃伤害）
     if (passiveCast.roar) {
@@ -254,7 +254,7 @@ export const WEAPON_BEHAVIORS: Record<WeaponId, (host: WeaponHost, weapon: Weapo
       host.heroFx?.('roar', px, py - 10, R.roarRadius * 2.6);
       if (HINT_MOCK === 'b') groundScar(host.player.sprite.scene, px, py, R.roarRadius, 'crack');
       if (!HINT_MOCK) for (let k = 0; k < 2; k++) { const ring = host.add.circle(px, py - 6, 30, 0xffd27a, 0).setStrokeStyle(6 - k * 2, k ? 0xff8a3c : 0xffe2a0, .9).setDepth(41); ring.scene.tweens.add({ targets: ring, radius: R.roarRadius, alpha: 0, delay: k * 90, duration: 420, onComplete: () => ring.destroy() }); }
-      host.cameras.main.shake(160, .006); host.sfx.play('waveDrum');
+      host.cameras.main.shake(160, .006); host.sfx.play('atk_roar');
     }
     const spearLength = pierce.len * passiveCast.spearLengthMul * host.player.growth.spearLengthMultiplier() * spearAm;
     const count = level;
@@ -286,6 +286,7 @@ export const WEAPON_BEHAVIORS: Record<WeaponId, (host: WeaponHost, weapon: Weapo
         .setDepth(40)
         .setVisible(false);
       { const tint = HERO_TINT[host.player.passive.characterId]; if (tint) img.setTint(tint); }
+      host.sfx.play('atk_spear');
       host.spearShots.push({
         // 指向营寨优先目标或首领/精锐的那一枪，命中判定先结算该目标，避免单枪上限被沿途小兵占满
         img, sx, sy, dirX, dirY,priority:target===priority||target===focus?target:undefined,priorityLife:target.spawnId,
@@ -335,7 +336,7 @@ export const WEAPON_BEHAVIORS: Record<WeaponId, (host: WeaponHost, weapon: Weapo
     if(volley&&++host.player.growth.shotCount>=[5,4,3][volley-1]){
       host.player.growth.shotCount=0;
       host.fireBolt(host.bolts,host.player.x,host.player.y-5,target.x,target.y,damage*.7,Math.min(5,bounce+(volley===3?1:0)),true,560);
-      host.sfx.play('allySpear');
+      host.sfx.play('atk_crossbow_volley');
     }
     weapon.cooldownLeft = Math.max(.25, def.cooldown(level, host.player.stats) / host.player.growth.attackSpeedMultiplier(time));
   },
@@ -412,7 +413,7 @@ export const WEAPON_BEHAVIORS: Record<WeaponId, (host: WeaponHost, weapon: Weapo
     host.player.faceDirection(cardinal as 'left' | 'right' | 'up' | 'down', 130);
     // 招牌技动作：武势蓄满的强化一刀或青龙蓄势重斩
     if (passiveCast.empowered || heavy) host.player.playAction('skill', cardinal === 'left' ? 'left' : 'right');
-    host.sfx.play('allySlash');
+    host.sfx.play(passiveCast.empowered || heavy ? 'atk_guandao_heavy' : 'atk_guandao');
     host.cameras.main.shake(80, 0.002);
     for (const enemy of targets) {
       strike(enemy, castDamage, time);
@@ -476,7 +477,7 @@ export const WEAPON_BEHAVIORS: Record<WeaponId, (host: WeaponHost, weapon: Weapo
     }
     const cx = host.player.x + dirX * radius * 0.45;
     const cy = host.player.y + dirY * radius * 0.45;
-    host.sfx.play('flameSwing');
+    host.sfx.play('atk_flame');
     host.spawnFlagSwingFx(dirX, dirY);
     host.time.delayedCall(250, () => {
       if (host.over) return;
@@ -487,7 +488,7 @@ export const WEAPON_BEHAVIORS: Record<WeaponId, (host: WeaponHost, weapon: Weapo
       host.spawnFlameFx(cx, cy, radius);
       const burn=growth.masteries.wildfire;
       if(burn)host.martialField(cx,cy,radius*(burn===3?1.1:1),damage,[1000,1800,2500][burn-1],burn);
-      host.sfx.play('flameBoom');
+      host.sfx.play('atk_flame_boom');
       // 2026-11-14 用户要求：诸葛亮战旗爆炸不再震屏（高频普攻震屏易疲劳）；爆炸特效与音效保留。
       const candidates = host.grid.query(cx, cy, radius + 30);
       for (const enemy of candidates) {

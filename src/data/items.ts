@@ -31,7 +31,7 @@ export const SLOTS: Record<ItemSlot, { name: string; affixes: readonly AffixId[]
   helm: { name: '头盔', affixes: ['hp', 'reduce', 'crit', 'xp'] },
   boots: { name: '战靴', affixes: ['move', 'attackSpeed', 'pickup'] },
   token: { name: '信物', affixes: ['ally', 'xp', 'regen', 'elite', 'damage'] },
-  relic: { name: 'Boss遗物', affixes: [] },
+  relic: { name: '首领遗珍', affixes: [] },
 };
 export const SLOT_ORDER: readonly ItemSlot[] = ['armor', 'helm', 'boots', 'token', 'relic'];
 /** 普通兵装四槽（掉落、商人货架用）。 */

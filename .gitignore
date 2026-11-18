@@ -229,4 +229,8 @@ assets/raw/*
 !/tools/test-boss-charge-troops.mjs
 !/tools/render-opening.mjs
 !/tools/test-camp-buy-bag.mjs
+
+# 黄巾力士专用图测试 / 符牌抠图（2026-11-18）
+!/tools/test-lishi.mjs
+!/tools/prepare-lishi-tag.mjs
 !/tools/test-zhaoyun-fx.mjs

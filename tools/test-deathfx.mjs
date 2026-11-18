@@ -107,6 +107,22 @@ const r6b = await p.evaluate(async base => {
 ck('专属尘土：1536×256、6 帧，无洋红残留；每帧水平居中（±6px）、底边落在同一条地面线（±4px）、不顶到格子边', r6b.w === 1536 && r6b.h === 256 && r6b.pink === 0 && r6b.frames.every(f => Math.abs(f.cx - 128) <= 6 && Math.abs(f.bottom - r6b.frames[0].bottom) <= 4 && f.edge === 0), r6b);
 ck('死亡特效用专属尘土 fx_death_dust；贴图缺失时退回 fx_collapse_dust 兜底', r6b.has && r6b.key === 'fx_death_dust' && r6b.fallback === 'fx_collapse_dust', { key: r6b.key, fallback: r6b.fallback });
 
+// —— 6c) 兵器 / 头巾小图集（即梦出图，tools/prepare-death-props.mjs 处理）：768×512、6 格每格一件物品、居中、无粉色残留、不顶格边 ——
+const r6c = await p.evaluate(async base => {
+  const img = new Image(); img.src = base + 'assets/fx/death_props.png'; await img.decode();
+  const c = document.createElement('canvas'); c.width = img.width; c.height = img.height; const g = c.getContext('2d', { willReadFrequently: true }); g.drawImage(img, 0, 0);
+  const d = g.getImageData(0, 0, c.width, c.height).data, W = c.width, out = { w: img.width, h: img.height, pinkEdge: 0, cells: [] };
+  for (let f = 0; f < 6; f++) { const ox = (f % 3) * 256, oy = Math.floor(f / 3) * 256; let x0 = 1e9, x1 = -1, y0 = 1e9, y1 = -1, n = 0, edge = 0;
+    const seen = new Uint8Array(256 * 256); let comps = 0;
+    for (let y = 0; y < 256; y++) for (let x = 0; x < 256; x++) { const i = ((oy + y) * W + ox + x) * 4, a = d[i + 3]; if (a > 10) { x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y); n++; if (x === 0 || y === 0 || x === 255 || y === 255) edge++; }
+      if (a > 200 && d[i] > 190 && d[i + 2] > 110 && d[i + 1] < 80 && d[i + 2] > d[i + 1] + 60) out.pinkEdge++; }
+    for (let s0 = 0; s0 < 65536; s0++) { const sx = s0 % 256, sy = (s0 / 256) | 0; if (seen[s0] || d[((oy + sy) * W + ox + sx) * 4 + 3] <= 40) continue; let area = 0; const st = [s0]; seen[s0] = 1; while (st.length) { const k = st.pop(), x = k % 256, y = (k / 256) | 0; area++; for (const nk of [x > 0 ? k - 1 : -1, x < 255 ? k + 1 : -1, y > 0 ? k - 256 : -1, y < 255 ? k + 256 : -1]) if (nk >= 0 && !seen[nk] && d[((oy + ((nk / 256) | 0)) * W + ox + (nk % 256)) * 4 + 3] > 40) { seen[nk] = 1; st.push(nk); } } if (area >= 50) comps++; }
+    out.cells.push({ cx: (x0 + x1) / 2, cy: (y0 + y1) / 2, w: x1 - x0 + 1, h: y1 - y0 + 1, edge, comps }); }
+  const s = window.__game.scene.getScene('GameScene'); out.loaded = s.textures.exists('fx_death_props'); out.frames = s.textures.get('fx_death_props').getFrameNames().filter(n => n !== '__BASE').length;
+  return out;
+}, base);
+ck('兵器 / 头巾图集：768×512、6 格每格恰好一件物品（无水印 / 色带杂块）、居中（±6px）、不顶格边、最长边 ≥ 190px、无粉色残留；游戏里加载成 6 帧', r6c.w === 768 && r6c.h === 512 && r6c.cells.length === 6 && r6c.cells.every(c => c.comps === 1 && c.edge === 0 && Math.abs(c.cx - 128) <= 6 && Math.abs(c.cy - 128) <= 6 && Math.max(c.w, c.h) >= 190) && r6c.pinkEdge === 0 && r6c.loaded && r6c.frames === 6, r6c);
+
 // —— 7) 设置界面：战斗内设置有「死亡特效」一行，点一下开 ↔ 关 ——
 const r7 = await p.evaluate(async () => {
   const s = window.__game.scene.getScene('GameScene'); s.pendingLevels = 0; s.militaryPending = 0; if (s.mode !== 'none') s.setMode('none'); s.togglePause(); await new Promise(r => setTimeout(r, 400));
@@ -142,6 +158,14 @@ const r9 = await p.evaluate(() => {
   for (const e of fx.pool) if (e.active) fx.update(e.start + 70); return { pool: fx.poolSize, dust: fx.dustCount, played: fx.played, lite: fx.lite };
 });
 ck('手机降级：池上限 80，同屏尘土 ≤ 28', r9.lite && r9.pool === 80 && r9.dust <= 28 && r9.dust > 0, r9);
+const r9b = await p.evaluate(async () => {
+  const s = window.__game.scene.getScene('GameScene'); s.pendingLevels = 0; s.militaryPending = 0; if (s.mode !== 'none') s.setMode('none'); s.togglePause(); await new Promise(r => setTimeout(r, 400));
+  const find = (o, n) => { if (o.name === n) return o; for (const c of o.list ?? []) { const r = find(c, n); if (r) return r; } return null; }, t = find(s.pausePanel, 'settings-death-fx'), out = { has: !!t, label0: t?.text };
+  t?.emit('pointerdown'); out.label1 = t?.text; out.ls1 = localStorage.getItem('im_death_fx'); t?.emit('pointerdown'); out.label2 = t?.text; out.ls2 = localStorage.getItem('im_death_fx');
+  const bag = find(s.pausePanel, 'pause-bag'); out.gap = bag ? bag.y - t.y : null; out.h = t?.height; return out;
+});
+await p.screenshot({ path: `${out}/settings-battle-mobile.png` });
+ck('手机版战斗内设置也有「死亡特效」小牌：默认开，点一下 → 关（存 im_death_fx=off）→ 再点 → 开，不压到「行囊」小牌', r9b.has && r9b.label0 === '死亡特效：开' && r9b.label1 === '死亡特效：关' && r9b.ls1 === 'off' && r9b.label2 === '死亡特效：开' && r9b.ls2 === 'on' && r9b.gap >= 32, r9b);
 await p.context().close();
 
 ck('控制台无报错', errors.length === 0, errors.slice(0, 6));

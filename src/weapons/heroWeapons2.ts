@@ -9,7 +9,8 @@ import { HINT_MOCK, SHOW_OWN_RANGE_FX, groundScar } from '../ui/HintStyle';
 
 /**
  * 第二批专属本命武器（2026-11-16，用户确认）：黄忠「宝雕弓」、张飞「当阳喝断」、马超「虎头湛金枪」、刘备「双股剑」。
- * 不再共用黄月英连弩 / 赵云长枪 / 关羽偃月刀。特效全部是程序化过渡方案，正式图见 NEW_HEROES_ASSET_REQUEST.md。
+ * 不再共用黄月英连弩 / 赵云长枪 / 关羽偃月刀。特效都已换成手绘序列帧（黄忠 huangzhong_paint、马超 machao_paint、张飞 hero_fx_d 声浪与蛇矛 zhangfei_spear、刘备 hero_fx_d 交叉斩）；
+ * 文件里的程序画法只在缺图时兜底（tools/test-hero-code-fx.mjs 检查正常载图时一次都不走到）。
  */
 const lv = (level: number): number => Math.max(0, Math.min(4, Math.floor(level) - 1));
 const sceneOf = (host: WeaponHost): Phaser.Scene => (host.add as unknown as { scene: Phaser.Scene }).scene;
@@ -180,7 +181,7 @@ export const DANGYANG_DEF = {
 interface Wave { x: number; y: number; a: number; half: number; r: number; max: number; damage: number; hit: Set<number>; g: Phaser.GameObjects.Graphics; sprite: boolean; }
 interface Bridge { x: number; y: number; until: number; g: Phaser.GameObjects.Graphics; }
 const WAVES = new WeakMap<Player, { waves: Wave[]; bridges: Bridge[] }>();
-/** 丈八蛇矛矛影（程序化过渡）：蜿蜒矛身 + 矛尖，从身前扫过半圈（断桥时扫一整圈），声浪从矛尖发出。 */
+/** 丈八蛇矛矛影：正式手绘 zhangfei_spear 以握柄为轴扫过半圈（断桥时扫一整圈）；缺图时退回程序画的蜿蜒矛身（兜底）。 */
 function serpentSpear(host: WeaponHost, x: number, y: number, a: number, full: boolean): void {
   const from = full ? a - Math.PI : a - .9, to = full ? a + Math.PI : a + .9;
   if (sceneOf(host).textures.exists('zhangfei_spear')) { // 正式蛇矛贴图：以握柄为轴扫过

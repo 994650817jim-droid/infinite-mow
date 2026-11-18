@@ -14,6 +14,9 @@ await p.addInitScript(() => { if (!sessionStorage.getItem('seeded')) { localStor
 const active = () => p.evaluate(() => window.__game?.scene.getScenes(true).map(s => s.scene.key) ?? []);
 const go = async () => { await p.goto(base + '?layout=desktop&opening=auto&gate=0'); await p.waitForFunction(() => { const g = window.__game; return g && (g.scene.isActive('OpeningScene') || g.scene.isActive('MenuScene')); }, null, { timeout: 120000 }); };
 const O = "window.__game.scene.getScene('OpeningScene')";
+// 主页水墨标题的纹理 / 帧 / 尺寸 / 位置（2026-11-18 bug：开场往共用 title_wordmark 加朱印子帧 → 成了默认帧，主页标题变一大块朱印）
+const titleProps = async () => { await p.waitForTimeout(1500); return p.evaluate(() => { const m = window.__game.scene.getScene('MenuScene'), t = m.children.getByName('home-title-wordmark'); return t && { key: t.texture.key, frame: t.frame.name, frames: Object.keys(t.texture.frames), w: Math.round(t.displayWidth), h: Math.round(t.displayHeight), x: Math.round(t.x), y: Math.round(t.y) }; }); };
+const same = (a, b) => !!a && !!b && JSON.stringify(a) === JSON.stringify(b);
 const seek = t => p.evaluate(([O0, t0]) => eval(O0).seekTo(t0), [O, t]);
 
 // ① 首次启动：播开场（第一段）
@@ -45,10 +48,14 @@ await p.screenshot({ path: `${out}/opening-title-1280x720.png` });
 // ⑤ 播完进主页，记「已播过」
 await seek(19.9);
 await p.waitForFunction(() => window.__game.scene.isActive('MenuScene'), null, { timeout: 15000 }).catch(() => {});
+const afterOpening = await titleProps();
+await p.screenshot({ path: `${out}/home-after-opening-1280x720.png` });
 ck('20 秒播完自动进主页，并记已播过', (await active()).includes('MenuScene') && await p.evaluate(() => localStorage.getItem('im_opening_seen') === '1'), await active());
 // ⑥ 默认「首次」：再启动直接进主页
 await go();
 ck('默认「首次」：第二次启动不再播', (await active()).includes('MenuScene') && !(await active()).includes('OpeningScene'), await active());
+const noOpening = await titleProps();
+ck('开场播完进主页：标题纹理 / 帧 / 尺寸 / 位置与不播开场时完全一致（不是朱印）', same(afterOpening, noOpening) && noOpening.key === 'title_wordmark' && noOpening.frame === '__BASE' && noOpening.frames.length === 1, { afterOpening, noOpening });
 // ⑦ 主页设置改「每次」→ 每次启动都播；任意键跳过（画面淡出）
 const set = await p.evaluate(() => { const m = window.__game.scene.getScene('MenuScene'); m.openHomeSettings(); const panel = m.children.getByName('home-settings-panel'), row = panel.list.find(o => o.name === 'settings-opening'); const dec = panel.list.find(o => /^settings-row-\d+-dec$/.test(o.name) && Math.abs(o.y - row.y) < 2); const before = row.text; dec.emit('pointerdown'); return { before, after: row.text, stored: localStorage.getItem('im_opening'), replay: !!panel.list.find(o => o.name === 'settings-opening-replay') }; });
 ck('主页设置有「开场动画」行（首次 → 每次）并存档；有「重看开场」', set.before === '首次' && set.after === '每次' && set.stored === 'every' && set.replay, set);
@@ -65,6 +72,9 @@ await p.waitForTimeout(1200);
 await p.evaluate(O0 => eval(O0).children.getByName('opening-skip').emit('pointerdown'), O);
 await p.waitForFunction(() => window.__game.scene.isActive('MenuScene'), null, { timeout: 10000 }).catch(() => {});
 ck('设置里「重看开场」重播；点「跳过 ›」回主页', replay && (await active()).includes('MenuScene'), await active());
+const afterReplay = await titleProps();
+await p.screenshot({ path: `${out}/home-after-replay-1280x720.png` });
+ck('「重看开场」回主页：标题与不播开场时完全一致', same(afterReplay, noOpening), { afterReplay, noOpening });
 // ⑨ 「关闭」：不播；战斗内设置也有同一行
 await p.evaluate(() => localStorage.setItem('im_opening', 'off'));
 await go();

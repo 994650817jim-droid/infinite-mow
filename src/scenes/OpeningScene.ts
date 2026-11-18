@@ -80,9 +80,8 @@ export class OpeningScene extends Phaser.Scene {
       tex.setFilter(Phaser.Textures.FilterMode.LINEAR);
       const tw = Math.min(W * .46, 560), k = tw / src.width, cx = W / 2, cy = H * .2;
       this.title = this.add.image(cx, cy, 'title_wordmark').setScale(k).setAlpha(0).setDepth(100).setName('opening-title').setCrop(0, 0, src.width * SEAL.x0, src.height);
-      if (!tex.has('opening_seal')) tex.add('opening_seal', 0, src.width * SEAL.x0, src.height * SEAL.y0, src.width * (SEAL.x1 - SEAL.x0), src.height * (SEAL.y1 - SEAL.y0));
       const sx = cx - tw / 2 + tw * (SEAL.x0 + SEAL.x1) / 2, sy = cy - src.height * k / 2 + src.height * k * (SEAL.y0 + SEAL.y1) / 2;
-      this.seal = this.add.image(sx, sy, 'title_wordmark', 'opening_seal').setScale(k).setAlpha(0).setDepth(101).setName('opening-seal');
+      this.seal = this.add.image(sx, sy, this.sealTexture(), 'seal').setScale(k).setAlpha(0).setDepth(101).setName('opening-seal');
     }
 
     // 跳过：右下角水墨小钮 + 任意键 / 点击 / 手柄
@@ -99,6 +98,21 @@ export class OpeningScene extends Phaser.Scene {
     });
   }
 
+  /**
+   * 朱印：从水墨标识原图里切出来，但放在**独立纹理** opening_seal_tex 上（帧名 seal）。
+   * 不能往共用的 title_wordmark 里加子帧——Phaser 给只有 __BASE 的纹理加第一个子帧时会把它设成默认帧（firstFrame），
+   * 主页 add.image('title_wordmark') 不带帧名，就会变成一大块朱印（2026-11-18 用户「有问题播完 cg 这个界面」）。
+   */
+  private sealTexture(): string {
+    const KEY = 'opening_seal_tex';
+    if (!this.textures.exists(KEY)) {
+      const src = this.textures.get('title_wordmark').getSourceImage() as HTMLImageElement;
+      this.textures.addImage(KEY, src);
+      this.textures.get(KEY).add('seal', 0, src.width * SEAL.x0, src.height * SEAL.y0, src.width * (SEAL.x1 - SEAL.x0), src.height * (SEAL.y1 - SEAL.y0));
+      this.textures.get(KEY).setFilter(Phaser.Textures.FilterMode.LINEAR);
+    }
+    return KEY;
+  }
   private skipParts: Phaser.GameObjects.GameObject[] = [];
   /** 点击 / 按键：入口时开播，播放中跳过。 */
   private onInput(): void { if (this.gate) this.enter(); else if (this.begun) this.finish(); }
@@ -109,8 +123,7 @@ export class OpeningScene extends Phaser.Scene {
     else g.add(this.add.rectangle(W / 2, H / 2, W, H, 0xe9dfc8));
     const t = this.add.text(W / 2, H * .46, '点击 · 入乱世', { fontFamily: TITLE_FONT, fontSize: '46px', color: '#1c1610', resolution: 2 }).setOrigin(.5).setLetterSpacing(10).setShadow(0, 0, '#f6eedb', 12, true, true).setName('opening-gate-title');
     g.add(t);
-    if (this.textures.exists('title_wordmark')) { const tex = this.textures.get('title_wordmark'), src = tex.getSourceImage() as { width: number; height: number }; if (!tex.has('opening_seal')) tex.add('opening_seal', 0, src.width * SEAL.x0, src.height * SEAL.y0, src.width * (SEAL.x1 - SEAL.x0), src.height * (SEAL.y1 - SEAL.y0)); }
-    if (this.textures.exists('title_wordmark')) g.add(this.add.image(t.x + t.width / 2 + 34, t.y + 8, 'title_wordmark', 'opening_seal').setScale(.42));
+    if (this.textures.exists('title_wordmark')) g.add(this.add.image(t.x + t.width / 2 + 34, t.y + 8, this.sealTexture(), 'seal').setScale(.42));
     const hint = this.add.text(W / 2, H * .46 + 54, '点击画面或按任意键', { fontFamily: FONT, fontSize: '14px', color: '#5a4a36', resolution: 2 }).setOrigin(.5);
     g.add(hint); this.tweens.add({ targets: hint, alpha: .35, duration: 1100, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
     g.setAlpha(0); this.tweens.add({ targets: g, alpha: 1, duration: 500 });

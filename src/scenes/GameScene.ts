@@ -121,6 +121,9 @@ import { IffOverlay, readIffMode, warmIffTextures, type IffUnit } from '../syste
 import {BARKS_LABEL, heroBarks, setHeroBarks, type HeroBarks, STORY_LABEL, setStoryMode, storyMode, type StoryMode, OPENING_LABEL, openingMode, setOpeningMode, type OpeningMode } from '../systems/BattleSettings';
 import { HeroBark, type BarkSpeaker } from '../ui/HeroBark';
 import { ZhaoyunPassiveFx } from '../systems/ZhaoyunPassiveFx';
+import { BattleHotkeys, HotkeyHints } from '../systems/BattleHotkeys';
+import { hotkeyLabel } from '../data/hotkeys';
+import { hotkeySettingsLink } from '../ui/HotkeySettingsUI';
 import { BossPresence } from '../systems/BossPresence';
 import { DAMAGE_LABEL, OUTLINE_LABEL, SCALE_LABEL, SHAKE_LABEL, WIDTH_LABEL, cycle, damageNumbers, outlineMode, outlineWidth, renderScaleSetting, setDamageNumbers, setOutlineMode, setOutlineWidth, setRenderScaleSetting, setShakeLevel, shakeLevel, shakeScale, type DamageNumbers, type OutlineMode, type OutlineWidth, type RenderScaleSetting, type ShakeLevel } from '../systems/BattleSettings';
 import { tutorialReplayLink } from '../ui/TutorialOverlay';
@@ -401,6 +404,8 @@ export class GameScene extends Phaser.Scene {
   protected passiveHud!: PassiveHud; protected passiveShout!: PassiveShout; protected heroBark!: HeroBark;
   /** 赵云被动「七进七出」：脚下龙鳞层数 + 满层白龙枪芒 / 绕身一闪 / 突进残影。 */
   zhaoyunFx!: ZhaoyunPassiveFx;
+  /** 战斗快捷键与键位提示（systems/BattleHotkeys；键位表 data/hotkeys）。 */
+  hotkeys!: BattleHotkeys; protected hotkeyHints!: HotkeyHints;
   private buffHud!:BuffHud;
   /** 用药：药囊里最早的一份，按原规则回血；不能用时轻微提示。 */
   protected usePotion():void{
@@ -929,18 +934,16 @@ export class GameScene extends Phaser.Scene {
     for (const key of ['P', 'ESC', 'ONE', 'TWO', 'THREE', 'R', 'Q', 'E']) keyboard.removeAllListeners(`keydown-${key}`);
     this.cursors = keyboard.createCursorKeys();
     this.wasd = keyboard.addKeys('W,A,S,D') as Record<string, Phaser.Input.Keyboard.Key>;
-    keyboard.on('keydown-P', () => this.togglePause());
-    keyboard.on('keydown-Q', () => this.usePotion());
-    keyboard.on('keydown-ESC', () => this.togglePause());
-    keyboard.on('keydown-ONE', () => this.chooseUpgrade(0));
-    keyboard.on('keydown-TWO', () => this.chooseUpgrade(1));
-    keyboard.on('keydown-THREE', () => this.chooseUpgrade(2));
-    keyboard.on('keydown-R', () => {
-      if (this.mode === 'result'&&this.victory) this.scene.restart();
-    });
-    let lastE = -1;
-
-    keyboard.on('keydown-E', (event: KeyboardEvent) => { if (event.repeat || event.timeStamp === lastE) return; lastE = event.timeStamp; if (this.mode === 'none' && !this.over) this.legion.cycleOrder(); });
+    // 原来的 P / Esc 暂停、Q 服药、1–3 选卡、R 再来一局、E 护阵 都并进了快捷键分派（键位不变，可在设置「快捷键」里改）
+    const hotkeyHost = {
+      scene: this as Phaser.Scene, mode: () => this.mode as string, over: () => this.over,
+      togglePause: () => this.togglePause(), usePotion: () => this.usePotion(),
+      order: () => this.legion.order, cycleOrder: () => this.legion.cycleOrder(),
+      openBag: () => this.openBattleBag(), canAttributes: () => this.player.growth.unallocated > 0,
+      openAttributes: (from: 'none' | 'pause') => { this.attributeReturn = from; this.renderAttributePanel(); this.setMode('attributes'); },
+      openBuild: () => this.openBuildPanel(), chooseUpgrade: (i: number) => this.chooseUpgrade(i),
+    };
+    this.hotkeys = new BattleHotkeys(hotkeyHost); this.hotkeyHints = new HotkeyHints(hotkeyHost);
   }
 
   // ---------------- update ----------------
@@ -1008,6 +1011,7 @@ export class GameScene extends Phaser.Scene {
     if(this.finaleFadeMs>0){this.finaleFadeMs=Math.max(0,this.finaleFadeMs-delta);const a=this.finaleFadeMs/800;this.bossUltGfx.setAlpha(a);this.bossShieldGfx?.setAlpha(a);if(!this.finaleFadeMs){this.bossUltGfx.clear().setAlpha(1);this.bossShieldGfx?.clear().setAlpha(1);}}
     this.huaxiong?.updateDeath(delta);this.xurong?.updateDeath(delta);for(const controller of this.deadBossControllers)controller.updateDeath(delta);
     this.animateUpgradeCards();
+    this.hotkeyHints?.update(delta / 1000);
     if (this.mode !== 'none' || this.over) return;
     if (this.pendingLevels > 0 && this.pickGapOk()) this.openUpgrade();
 
@@ -2690,7 +2694,7 @@ export class GameScene extends Phaser.Scene {
     o.buildLink.setPosition(lx, top + 240);
     o.exit.setPosition(lx, top + 320);
     for (const t of [o.buildLink, o.exit]) t?.setFontFamily(HEADING_FONT);
-    o.keys.setText('Esc / P 继续战斗').setPosition(lx, top + ph - 26);
+    o.keys.setText(hotkeyLabel('back') + ' / P 继续战斗').setPosition(lx, top + ph - 26);
     // 右栏：音乐 / 音效滑条（原控件，挪到右栏）
     const moveRow = (row: Phaser.GameObjects.GameObject[], y: number): void => { const kept = row.filter(x => x.active); for (const x of kept) x.destroy(); void y; };
     moveRow(o.bgmRow, 0); moveRow(o.sfxRow, 0);
@@ -2727,6 +2731,7 @@ export class GameScene extends Phaser.Scene {
     row<StoryMode>(6, '剧情', 'story', ['full', 'chapter', 'off'], storyMode, v => STORY_LABEL[v], setStoryMode);
     row<OpeningMode>(7, '开场动画', 'opening', ['every', 'first', 'off'], openingMode, v => OPENING_LABEL[v], setOpeningMode);
     const replay = tutorialReplayLink(this, rx + width / 2, top + ph - 14).setScrollFactor(0); this.pausePanel.add(replay);
+    this.pausePanel.add(hotkeySettingsLink(this, rx - width / 2 + 62, top + ph - 14, DEPTH.overlay + 40).setScrollFactor(0)); // 快捷键页（与主页设置共用）
   }
 
   protected createVolumeRow(label: string, y: number, initial: number, onChange: (value: number) => void, cx = GAME_WIDTH / 2, width = Math.min(330, GAME_WIDTH - 144)): Phaser.GameObjects.GameObject[] {
@@ -2874,13 +2879,13 @@ export class GameScene extends Phaser.Scene {
   protected refreshInputHints(): void {
     const pad = gamepad.device === 'pad';
     this.potionCaption?.setText(pad ? '用药 ' + PAD_LABEL.X : '用药');
-    this.pauseKeysText?.setText(pad ? PAD_LABEL.START + ' / ' + PAD_LABEL.B + ' 继续战斗' : IS_DESKTOP ? 'Esc / P 继续战斗' : '战斗已冻结 · 点击「继续战斗」恢复');
+    this.pauseKeysText?.setText(pad ? PAD_LABEL.START + ' / ' + PAD_LABEL.B + ' 继续战斗' : IS_DESKTOP ? hotkeyLabel('back') + ' / P 继续战斗' : '战斗已冻结 · 点击「继续战斗」恢复');
     this.hudTexts?.pause?.setText(pad ? PAD_LABEL.START + (IS_DESKTOP ? ' 设置' : ' 暂停') : IS_DESKTOP ? '设置' : '暂停');
     // 有敌营 / 粮草可锁定的战场（子类覆写了 padTargets）多提示 RB
     const lockable = this.padTargets !== GameScene.prototype.padTargets;
     this.hintText?.setText(pad ? (lockable ? '左摇杆移动 · RB 锁定敌营 / 粮草 · 自动攻击' : '左摇杆移动 · 自动攻击') : IS_DESKTOP ? 'WASD / 方向键移动 · 自动攻击' : '自动攻击 · 拖动摇杆移动');
-    this.legionUI?.setKeyHint(pad ? PAD_LABEL.Y : IS_DESKTOP ? 'E' : '⇄');
-    for (const [i, v] of (this.cardViews ?? []).entries()) v.hint.setText(pad ? PAD_LABEL.A + ' 选择' : IS_DESKTOP ? '按 ' + (i + 1) + ' 选择' : '点击选择');
+    this.legionUI?.setKeyHint(pad ? PAD_LABEL.Y : IS_DESKTOP ? hotkeyLabel('order') : '⇄');
+    for (const [i, v] of (this.cardViews ?? []).entries()) v.hint.setText(pad ? PAD_LABEL.A + ' 选择' : IS_DESKTOP ? '按 ' + hotkeyLabel((['pick1', 'pick2', 'pick3'] as const)[i] ?? 'pick1') + ' 选择' : '点击选择');
   }
 
   /**
@@ -3431,7 +3436,7 @@ export class GameScene extends Phaser.Scene {
         .setPadding(8, 18, 8, 18)
         .setScrollFactor(0)
         .setDepth(DEPTH.hud + 1)
-        .setInteractive({ useHandCursor: true })
+        .setInteractive({ useHandCursor: true }).setName('hud-pause')
         .on('pointerdown', () => this.togglePause()),
     };
     attrBadge(this, 196, 31, this.runConfig.character, 20, { scrollFactor: 0, depth: DEPTH.hud + 2 })?.setName('hud-attr-badge'); // 主将主属性印（ui/AttrBadge.ts）
@@ -3641,7 +3646,7 @@ export class GameScene extends Phaser.Scene {
       const name=this.add.text(d?0:104-w/2,d?148-h/2:42-h/2,'',{...warText(d?21:21,'#f6e8c8'),fontFamily:HEADING_FONT,align:d?'center':'left',wordWrap:{width:d?w-36:w-122,useAdvancedWrap:true}}).setOrigin(d?.5:0,0).setShadow(0,1,'#0a0603',3,true,true);
       const desc=this.add.text(d?0:104-w/2,d?204-h/2:88-h/2,'',{...warText(d?16:17,'#dacfba'),align:d?'center':'left',lineSpacing:5,wordWrap:{width:d?w-40:w-122,useAdvancedWrap:true}}).setOrigin(d?.5:0,0);
       const rule=this.add.graphics();
-      const hint=this.add.text(d?0:w/2-16,d?h/2-22:h/2-14,d?'按 '+(i+1)+' 选择':'点击选择',warText(11,'#9d8f78')).setOrigin(d?.5:1,1).setAlpha(.85);
+      const hint=this.add.text(d?0:w/2-16,d?h/2-22:h/2-14,d?'按 '+hotkeyLabel((['pick1','pick2','pick3'] as const)[i]??'pick1')+' 选择':'点击选择',warText(11,'#9d8f78')).setOrigin(d?.5:1,1).setAlpha(.85);
       if(d){ // 统一字体：卡名 / 标签 / 提示用标题字，正文用正文字；水墨版换深墨色 + 朱砂标签
         name.setFontFamily(HEADING_FONT).setColor(INK?'#1f1710':GOLD).setStroke(INK?'#efe4c9':STROKE,3);
         desc.setFontFamily(FONT).setColor(INK?'#33281d':IVORY).setStroke(INK?'#efe4c9':STROKE,INK?2:2);

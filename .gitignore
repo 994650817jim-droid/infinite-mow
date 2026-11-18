@@ -239,3 +239,4 @@ assets/raw/*
 !/tools/test-camp-medic.mjs
 !/tools/shot-camp-rest.mjs
 !/tools/test-surrender.mjs
+!/tools/test-hotkeys.mjs

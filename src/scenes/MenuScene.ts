@@ -1,4 +1,5 @@
 import { IS_DESKTOP_APP, desktop } from '../platform/desktop';
+import { hotkeySettingsLink } from '../ui/HotkeySettingsUI';
 import { confirmLord, defaultHero, ensureLegacyLord, heroOwned, lordFinal, lordHero, lordRules, setLord } from '../systems/RosterStore';
 import {tutorialReplayLink} from '../ui/TutorialOverlay';
 import { showLordNotice } from '../ui/LordNotice';
@@ -390,6 +391,7 @@ export class MenuScene extends Phaser.Scene {
     if(web){const list:OpeningMode[]=['every','first','off'];row(9,'开场动画',()=>OPENING_LABEL[openingMode()],dir=>setOpeningMode(cycle(list,openingMode(),dir)),['‹','›']).setName('settings-opening');
      const t=this.add.text(W/2-246,40,'重看开场 ›',{fontFamily:FONT,fontSize:'13px',color:'#e8c98a',resolution:2}).setOrigin(0,.5).setInteractive({useHandCursor:true}).setName('settings-opening-replay');
      t.on('pointerover',()=>t.setColor('#fff3d4')).on('pointerout',()=>t.setColor('#e8c98a')).on('pointerdown',()=>{modal.destroy();this.scene.start('OpeningScene',{next:'MenuScene'});});modal.add(t);}
+    if(D||desk)modal.add(hotkeySettingsLink(this,W/2-(desk?560:520)/2+24,desk?rowY(10)+6:rowY(10)+2,600).setOrigin(0,.5)); // 快捷键页（与战斗内设置共用，ui/HotkeySettingsUI；放在左下，不碰右上的「重看新手引导」）
     const close=label(W/2,desk?rowY(10)+6:web?rowY(10)+2:H/2+264,'返回',20).setFontFamily(HEADING_FONT).setInteractive({useHandCursor:true}).setName('settings-close').setData('padDefault',true).on('pointerdown',()=>modal.destroy());
     const cs=(web?inkSkin(this,close,()=>({w:200,h:42}),{primary:true}):null)??lqSkin(this,close,close,()=>({w:200,h:desk?44:52}),{tone:'cinnabar'});lqHitBox(close,200,desk?44:52);
     modal.add([cs.gfx,close]);

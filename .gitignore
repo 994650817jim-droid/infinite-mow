@@ -182,6 +182,7 @@ assets/raw/*
 !/tools/prepare-siege-hall.mjs
 !/tools/shot-siege-hall.mjs
 !/tools/shot-yiling-body.mjs
+!/tools/prepare-scene-sheet.mjs
 !/tools/build-boss-ride.mjs
 !/tools/test-tutorial.mjs
 !/tools/test-boss-moves.mjs

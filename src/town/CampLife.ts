@@ -12,9 +12,13 @@ import Phaser from 'phaser';
 import { playSheet } from '../systems/SkillFxSheets';
 import { TITLE_FONT } from '../config';
 
-type PropKind = 'tent' | 'flag' | 'fire' | 'brazier' | 'rack' | 'shields' | 'crates' | 'sacks' | 'cart' | 'pot' | 'post';
+type PropKind = 'tent' | 'flag' | 'fire' | 'brazier' | 'rack' | 'shields' | 'crates' | 'sacks' | 'cart' | 'pot' | 'post' | 'rail' | 'fodder' | 'horse' | 'canopy' | 'barrels';
 /** 候选物件（全景像素：底边中心 x,y；w 显示宽）。按顺序放，压到建筑或已放物件的跳过。 */
 export const CAMP_PROPS: Array<{ x: number; y: number; w: number; kind: PropKind; flip?: boolean }> = [
+  // 11-18 用户「丰富义军营寨更多空地」——按用途成组：马厩上方拴马桩 + 两匹马 + 草料；主帐门前两面「义」旗；主帐与军营之间的辎重棚
+  { x: 1300, y: 788, w: 110, kind: 'rail' }, { x: 1262, y: 795, w: 92, kind: 'horse' }, { x: 1342, y: 797, w: 92, kind: 'horse', flip: true }, { x: 1470, y: 795, w: 58, kind: 'fodder' },
+  { x: 735, y: 738, w: 66, kind: 'flag' }, { x: 1165, y: 738, w: 66, kind: 'flag' },
+  { x: 1268, y: 660, w: 104, kind: 'canopy' }, { x: 1365, y: 672, w: 52, kind: 'barrels' },
   // 右侧营区：营帐一片，中间火塘
   { x: 1190, y: 345, w: 175, kind: 'tent' }, { x: 1355, y: 360, w: 165, kind: 'tent', flip: true }, { x: 1490, y: 400, w: 140, kind: 'tent' },
   { x: 1470, y: 520, w: 130, kind: 'tent' },
@@ -31,6 +35,8 @@ export const CAMP_PROPS: Array<{ x: number; y: number; w: number; kind: PropKind
   { x: 1500, y: 840, w: 100, kind: 'cart', flip: true }, { x: 650, y: 980, w: 72, kind: 'crates' }, { x: 560, y: 960, w: 68, kind: 'sacks' },
   // 前排：火盆、营帐
   { x: 860, y: 905, w: 56, kind: 'brazier' }, { x: 1010, y: 925, w: 150, kind: 'tent' }, { x: 520, y: 760, w: 140, kind: 'tent', flip: true },
+  // 军营门前操练用的木人桩
+  { x: 1100, y: 815, w: 52, kind: 'post' },
 ];
 /** 兵士走的路线（全景像素）；压到建筑的路线运行时去掉。巡逻 / 走动都在上面来回。 */
 export const CAMP_PATHS: Array<Array<[number, number]>> = [
@@ -43,9 +49,12 @@ export const CAMP_PATHS: Array<Array<[number, number]>> = [
   [[930, 860], [800, 940], [700, 1000]],
 ];
 /** 校场操练位（对着木桩出招）与火塘边站位。 */
-const DRILL_SPOTS: Array<{ x: number; y: number; dir: 'left' | 'right' }> = [{ x: 255, y: 640, dir: 'left' }, { x: 175, y: 640, dir: 'right' }, { x: 345, y: 640, dir: 'left' }];
+const DRILL_SPOTS: Array<{ x: number; y: number; dir: 'left' | 'right' }> = [{ x: 255, y: 640, dir: 'left' }, { x: 175, y: 640, dir: 'right' }, { x: 345, y: 640, dir: 'left' },
+  // 军营门前：两人对着木人桩操练（木人桩见 CAMP_PROPS 末尾）
+  { x: 1052, y: 830, dir: 'right' }, { x: 1150, y: 832, dir: 'left' }];
 const IDLE_SPOTS: Array<{ x: number; y: number; dir: 'left' | 'right' | 'down' }> = [{ x: 1205, y: 505, dir: 'right' }, { x: 1300, y: 515, dir: 'left' }];
-export const CAMP_MAX_WALKERS = 9;
+/** 走动的兵（11-18：加了军营门前两名操练的，走动的从 9 减到 7，总人数仍在 14 上下，不挤） */
+export const CAMP_MAX_WALKERS = 7;
 
 const SHEETS = {
   sw: { key: 'camp_sw_walk', url: 'assets/processed-v2/troops/swordsman_walk.png' },
@@ -55,6 +64,8 @@ const SHEETS = {
   spA: { key: 'camp_sp_atk', url: 'assets/processed-v2/troops/spearman_attack.png' },
 } as const;
 const RAM = { key: 'siege_mid_ram', url: 'assets/siege-v2/ram.png' };
+/** 拴着的马：v2 通用马行走表（4 方向 × 4 帧，每格 288）取站立帧，按毛色乘色；独立键，不干扰战斗里的马。 */
+const HORSE = { key: 'camp_horse', url: 'assets/horses-v2/generic_walk.png', cell: 288, tints: [0xb59a7a, 0x8a6a4c] };
 /** 营地道具 / 火盆 / 扬尘：战斗里另有同图的键（yellow_props / brazier_burning 会在开战时被换图），这里用独立键载入，不干扰战斗的载入与换图。 */
 const PROPS = { key: 'camp_props_v2', url: 'assets/props-v2/camp-props.png', cell: 128 }, BRAZIER = { key: 'camp_brazier', url: 'assets/props-v2/brazier_burning.png', cell: 444 }, DUST = { key: 'fx_collapse_dust', url: 'assets/skill-fx/collapse_dust.png', cell: 256 };
 /** 营寨专用图（美术会话 11-17）：「义」字大旗（1 帧，旗面空白，字用标题字体叠上去；旗杆在帧内 x≈73）、营寨火塘（8 帧，只换火苗）、木人桩（3 帧：站直 / 被击右歪 / 回弹左歪）。缺图时退回上面借用的图。 */
@@ -68,7 +79,7 @@ type Box = { l: number; r: number; t: number; b: number };
 export function loadCampLife(scene: Phaser.Scene): void {
   for (const s of Object.values(SHEETS)) if (!scene.textures.exists(s.key)) scene.load.image(s.key, s.url);
   if (!scene.textures.exists(RAM.key)) scene.load.spritesheet(RAM.key, RAM.url, { frameWidth: 256, frameHeight: 256 });
-  for (const a of [PROPS, BRAZIER, DUST, CAMP_ART.firepit, CAMP_ART.dummy]) if (!scene.textures.exists(a.key)) scene.load.spritesheet(a.key, a.url, { frameWidth: a.cell, frameHeight: a.cell });
+  for (const a of [PROPS, BRAZIER, DUST, CAMP_ART.firepit, CAMP_ART.dummy, HORSE]) if (!scene.textures.exists(a.key)) scene.load.spritesheet(a.key, a.url, { frameWidth: a.cell, frameHeight: a.cell });
   if (!scene.textures.exists(CAMP_ART.banner.key)) scene.load.image(CAMP_ART.banner.key, CAMP_ART.banner.url);
 }
 function sliceSheet(scene: Phaser.Scene, key: string) {
@@ -87,7 +98,7 @@ export class CampLife {
   readonly stats = { props: 0, walkers: 0, drillers: 0, idlers: 0, skippedProps: 0, skippedPaths: 0 };
   private walkers: Walker[] = []; private drillers: Driller[] = []; private flags: Array<Phaser.GameObjects.Image | Phaser.GameObjects.Container> = []; private dummies: Phaser.GameObjects.Image[] = []; private drillDummy = new Map<Driller, Phaser.GameObjects.Image>();
   private fires: Array<{ x: number; y: number; img?: Phaser.GameObjects.Image }> = [];
-  private smokeAt = 0; private sortAt = 0; private clock = 0;
+  private smokeAt = 0; private sortAt = 0; private clock = 0; private horses = 0;
 
   /** blocked：建筑贴图外框（全景像素）；装饰与路线不得压上去。 */
   constructor(private scene: Phaser.Scene, private k: number, blocked: Box[]) {
@@ -95,9 +106,10 @@ export class CampLife {
     const pad = 14, hit = (b: Box, o: Box) => b.l < o.r + pad && b.r > o.l - pad && b.t < o.b + pad && b.b > o.t - pad;
     const placed: Box[] = [];
     for (const p of CAMP_PROPS) {
-      const h = p.kind === 'tent' ? p.w * .78 : p.kind === 'flag' ? p.w * 1.1 : p.w * .9;
+      const h = p.kind === 'tent' ? p.w * .78 : p.kind === 'flag' ? p.w * 2 : p.w * .9; // 「义」字大旗画布 1:2
       const box = { l: p.x - p.w / 2, r: p.x + p.w / 2, t: p.y - h, b: p.y };
-      if (blocked.some(o => hit(box, o)) || placed.some(o => hit(box, o))) { this.stats.skippedProps++; continue; }
+      // 拴着的马本来就站在拴马桩跟前：只避开建筑，不和别的装饰互相让
+      if (blocked.some(o => hit(box, o)) || (p.kind !== 'horse' && placed.some(o => hit(box, o)))) { this.stats.skippedProps++; continue; }
       if (this.addProp(p)) { placed.push(box); this.stats.props++; }
     }
     // 兵士
@@ -147,10 +159,11 @@ export class CampLife {
       case 'fire': if (sc.textures.exists(CAMP_ART.firepit.key)) { const f = img(CAMP_ART.firepit.key, 0, p.w * 1.5); this.fires.push({ x: p.x, y: p.y - p.w * .45, img: f }); return true; }
         if (camp) { img(PROPS.key, 30, p.w); this.fires.push({ x: p.x, y: p.y }); return true; } return false;
       case 'brazier': if (sc.textures.exists(BRAZIER.key)) { const b = img(BRAZIER.key, 0, p.w); this.fires.push({ x: p.x, y: p.y - p.w * .55, img: b }); return true; } return false;
+      case 'horse': if (sc.textures.exists(HORSE.key)) { const h = img(HORSE.key, p.flip ? 8 : 4, p.w).setOrigin(.5, 280 / 288).setFlipX(false).setTint(HORSE.tints[this.horses++ % HORSE.tints.length]); void h; return true; } return false;
       default: {
         if (p.kind === 'post' && sc.textures.exists(CAMP_ART.dummy.key)) { this.dummies.push(img(CAMP_ART.dummy.key, 0, p.w * 1.25)); return true; }
         if (!camp) return false;
-        const frame = { rack: 21, shields: 23, crates: 14, sacks: 16, cart: 24, pot: 31, post: 34 }[p.kind]; img(PROPS.key, frame, p.w); return true;
+        const frame = { rack: 21, shields: 23, crates: 14, sacks: 16, cart: 24, pot: 31, post: 34, rail: 10, fodder: 17, canopy: 2, barrels: 18 }[p.kind as 'rack']; img(PROPS.key, frame, p.w); return true;
       }
     }
   }

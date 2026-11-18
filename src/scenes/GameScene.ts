@@ -113,6 +113,11 @@ import {preloadBossDeath} from '../systems/BossDeathArt';
 import {ItemBagUI} from '../ui/ItemBagUI';
 import { enemyArrowTexture } from '../systems/ArrowPalette';
 import { HitFeel, BossStagger } from '../systems/HitFeel';
+/** 武将序列帧的透明度与时长（缺省 1 / 450 毫秒）。2026-11-17 用户：「张飞攻击特效有点太夸张」「魏延也是」→ 张飞声浪 / 断桥怒吼、魏延劈地 / 裂波 / 谁敢杀我 调淡、调短。 */
+const HERO_FX_TONE: Record<string, { alpha: number; ms: number }> = {
+  roarWave: { alpha: .62, ms: 340 }, roar: { alpha: .7, ms: 380 },
+  weiyanSlash: { alpha: .72, ms: 340 }, crack: { alpha: .7, ms: 360 }, whoDares: { alpha: .68, ms: 400 },
+};
 import { HIT_FEEL, BOSS_FEEL, shakeMul, WEAPON_HIT_TYPE } from '../data/hitFeel';
 
 interface Gem {
@@ -2065,8 +2070,9 @@ export class GameScene extends Phaser.Scene {
   /** 新武将招牌技序列帧（黑底、叠加混合）：6 帧约 0.45 秒，末帧淡出。缺图时不显示。 */
   playHeroFx(id: string, x: number, y: number, size: number, rotation = 0): void {
     const def = HERO_FX[id], key = def ? 'hero_fx_' + def.sheet : ''; if (!def || !this.textures.exists(key)) return;
-    const fx = this.add.image(x, y, key, def.row * 6).setDisplaySize(size, size).setRotation(rotation).setBlendMode(Phaser.BlendModes.ADD).setDepth(actorDepth(y) + .6).setName('hero-fx-' + id);
-    this.tweens.addCounter({ from: 0, to: 5.99, duration: 450, onUpdate: t => fx.setFrame(def.row * 6 + Math.floor(t.getValue() ?? 0)), onComplete: () => this.tweens.add({ targets: fx, alpha: 0, duration: 140, onComplete: () => fx.destroy() }) });
+    const tone = HERO_FX_TONE[id];
+    const fx = this.add.image(x, y, key, def.row * 6).setDisplaySize(size, size).setRotation(rotation).setBlendMode(Phaser.BlendModes.ADD).setDepth(actorDepth(y) + .6).setAlpha(tone?.alpha ?? 1).setName('hero-fx-' + id);
+    this.tweens.addCounter({ from: 0, to: 5.99, duration: tone?.ms ?? 450, onUpdate: t => fx.setFrame(def.row * 6 + Math.floor(t.getValue() ?? 0)), onComplete: () => this.tweens.add({ targets: fx, alpha: 0, duration: 140, onComplete: () => fx.destroy() }) });
   }
 
   /** 诸葛亮挥旗：正式战旗素材握在旗杆底端，朝目标一侧前挥；缺图时退回程序旗子。 */

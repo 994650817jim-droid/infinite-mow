@@ -131,5 +131,30 @@ for (const [layout, viewport] of Object.entries(LAYOUTS)) {
   await p.evaluate(() => localStorage.removeItem('im_last_hero'));
   await p.close();
 }
+// 可破坏道具（2026-11-17 用户：「为什么我现在使用貂蝉但是打障碍物没坏」）：12 名武将的本命武器都能打碎身边的酒罐。
+// 酒罐放在主将右侧 60 像素，旁边再放一名定住的高血量敌人（多数武器要有敌人才出手，选靶仍跳过道具）。
+{
+  const p = await b.newPage({ viewport: LAYOUTS.desktop }); watch(p, 'props');
+  await p.goto(base + '?dev=1&autostart=1&stage=1&layout=desktop');
+  await p.waitForFunction(() => window.__game?.scene.getScene('GameScene')?.__DEV_ACTIONS, null, { timeout: 60000 }); await p.waitForTimeout(800);
+  for (const hero of ['zhaoyun', 'guanyu', 'huangzhong', 'zhuge', 'zhangfei', 'machao', 'weiyan', 'liubei', 'pangtong', 'huangyueying', 'sunshangxiang', 'diaochan']) {
+    await p.evaluate(id => { const s = window.__game.scene.getScene('GameScene'); s.registry.set('runConfig', { ...s.registry.get('runConfig'), character: id, weapon: undefined }); s.scene.restart(); }, hero);
+    await p.waitForTimeout(400);
+    await p.waitForFunction(id => { const s = window.__game.scene.getScene('GameScene'); return s?.player && s.runConfig?.character === id && s.__DEV_ACTIONS && s.supplies; }, hero, { timeout: 30000 });
+    const r = await p.evaluate(async () => {
+      const s = window.__game.scene.getScene('GameScene'), pl = s.player; pl.damageImmune = true; s.__DEV_ACTIONS.closePopup?.(); s.spawnTimer = s.eliteTimer = 1e9; s.spawnGem = () => {};
+      for (const e of s.enemies) if (e.active) e.deactivate();
+      const lv = setInterval(() => { if (s.mode === 'levelup') s.chooseUpgrade(0); }, 40);
+      const jar = s.supplies.spawnHealForTest('wine', 60, 0); if (!jar) { clearInterval(lv); return { jar: false }; }
+      const life = jar.spawnId, foe = s.spawnEnemy('infantry', pl.x + 88, pl.y + 12, 1); foe.hp = foe.maxHp = 1e7; foe.stunUntil = 1e12;
+      const t0 = performance.now(); let broke = false;
+      while (performance.now() - t0 < 9000) { await new Promise(r => setTimeout(r, 60)); if (!jar.active || jar.spawnId !== life) { broke = true; break; } }
+      clearInterval(lv);
+      return { jar: true, broke, ms: Math.round(performance.now() - t0), foeHurt: foe.maxHp - foe.hp > 0 };
+    });
+    ck(`道具(${hero})：本命武器能打碎身边的酒罐`, r.jar && r.broke, r);
+  }
+  await p.close();
+}
 ck('无 pageerror / console error', errors.length === 0, errors.slice(0, 5));
 console.log(`${pass}/${pass + fail} 通过`); await b.close(); process.exit(fail ? 1 : 0);

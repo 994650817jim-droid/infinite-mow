@@ -39,8 +39,8 @@ function crackFx(host: WeaponHost, x: number, y: number, angle: number, len: num
   // 帧内冲击点在 x≈90、裂缝末端在 x≈940；朝左时上下翻转，保证扬尘、土块始终朝画面上方。缺图时退回下面的程序化地裂纹。
   if (sceneOf(host).textures.exists('weiyan_crack')) {
     const s = len / 850, left = Math.cos(angle) < 0;
-    const fx = host.add.sprite(x, y, 'weiyan_crack', 0).setOrigin(90 / 1024, .5).setScale(s * (hot ? 1.05 : 1)).setRotation(angle).setFlipY(left).setDepth(19).setName('weiyan-crack-fx');
-    fx.scene.tweens.addCounter({ from: 0, to: 5.99, duration: 680, onUpdate: t => { if (fx.active) fx.setFrame(Math.floor(t.getValue() ?? 0)); }, onComplete: () => fx.destroy() });
+    const fx = host.add.sprite(x, y, 'weiyan_crack', 0).setOrigin(90 / 1024, .5).setScale(s * (hot ? .8 : .78), s * (hot ? .7 : .68)).setRotation(angle).setFlipY(left).setDepth(19).setAlpha(.82).setName('weiyan-crack-fx'); // 2026-11-17「魏延也是」：调小调淡
+    fx.scene.tweens.addCounter({ from: 0, to: 5.99, duration: 520, onUpdate: t => { if (fx.active) fx.setFrame(Math.floor(t.getValue() ?? 0)); }, onComplete: () => fx.destroy() });
     return;
   }
   const g =host.add.graphics().setDepth(19), ux = Math.cos(angle), uy = Math.sin(angle), nx = -uy, ny = ux;
@@ -64,14 +64,14 @@ function releaseCracks(host: WeaponHost, angles: number[], damage: number, len: 
   for (const a of angles) {
     const ux = Math.cos(a), uy = Math.sin(a);
     for (const e of host.grid.query(px + ux * len / 2, py + uy * len / 2, len / 2 + width)) {
-      if (!e.active || e.isSupplySlot || hit.has(e.spawnId)) continue;
+      if (!e.active || hit.has(e.spawnId)) continue; // 道具（酒罐、木箱等）也能劈碎
       const { along, side } = sideDistance(e, px, py, ux, uy, len);
       if (side > width / 2 + e.radius) continue;
       hit.add(e.spawnId);
       if (host.hitEnemy(e, damage * (along <= R.crackCloseRange ? R.crackCloseMul : 1), now, 'melee')) n++;
     }
     // 正式「劈地裂波」序列帧（朝右，按方向旋转、按长度放大）；缺图时退回程序化地裂纹
-    if (sprite && hasFxSheet(host, 'c')) host.heroFx?.('crack', px + ux * (len / 2 + 10), py + 8 + uy * (len / 2 + 10), len * 1.25, a);
+    if (sprite && hasFxSheet(host, 'c')) host.heroFx?.('crack', px + ux * (len / 2 + 6), py + 8 + uy * (len / 2 + 6), len * .95, a); // 2026-11-17「魏延也是」：1.25 → 0.95，调淡调短
     else crackFx(host, px + ux * 14, py + 10 + uy * 14, a, len, width, hot);
   }
   return n;
@@ -108,12 +108,12 @@ export function zhenbeiBehavior(host: WeaponHost, weapon: WeaponState, dt: numbe
     pl.passive.startGuard(time);
     const angles = Array.from({ length: R.whoDaresDirs }, (_, k) => best + k * Math.PI * 2 / R.whoDaresDirs);
     releaseCracks(host, angles, damage * R.whoDaresDamageMul, len * 1.1, width, time, true, false);
-    host.heroFx?.('whoDares', pl.x, pl.y - 4, len * 1.6);
+    host.heroFx?.('whoDares', pl.x, pl.y - 4, len * 1.1);
     if (!hasFxSheet(host, 'c')) { const ring = host.add.circle(pl.x, pl.y - 6, 30, 0xff5a3c, 0).setStrokeStyle(6, 0xff6a4a, .9).setDepth(41);
       ring.scene.tweens.add({ targets: ring, radius: len, alpha: 0, duration: 460, onComplete: () => ring.destroy() }); }
     const shout = host.add.text(pl.x, pl.y - 70, '谁敢杀我！', { fontFamily: 'serif', fontSize: '26px', color: '#ffe0b0', stroke: '#7a1a10', strokeThickness: 6 }).setOrigin(.5).setDepth(60).setName('weiyan-whodares');
     shout.scene.tweens.add({ targets: shout, y: pl.y - 104, alpha: 0, delay: 500, duration: 600, onComplete: () => shout.destroy() });
-    host.cameras.main.shake(140, .005);
+    host.cameras.main.shake(120, .003);
   } else {
     pl.playAction(heavy ? 'skill' : 'attack', ux < 0 ? 'left' : 'right');
     const n = zhenbeiCracks(level), spread = 18 * Math.PI / 180;
@@ -122,7 +122,7 @@ export function zhenbeiBehavior(host: WeaponHost, weapon: WeaponState, dt: numbe
     host.cameras.main.shake(70, heavy ? .004 : .002);
   }
   // 劈下瞬间：魏延自己的劈地序列帧（缺图时 heroFx 什么都不做）
-  host.heroFx?.('weiyanSlash', pl.x + ux * 56, pl.y + uy * 56, 230, best);
+  host.heroFx?.('weiyanSlash', pl.x + ux * 46, pl.y + uy * 46, 160, best);
   weapon.cooldownLeft = Math.max(.25, ZHENBEI_DEF.cooldown(level, pl.stats) / growth.attackSpeedMultiplier(time));
 }
 
@@ -258,7 +258,7 @@ function placeMine(host: WeaponHost, s: MineState, x: number, y: number, now: nu
 /** 火走铁索（Lv3）：火苗沿铁索从 a 跑到 b，铁索上的敌人挨一下。 */
 function fireRun(host: WeaponHost, a: Mine, b: Mine, damage: number, now: number): void {
   for (const e of host.grid.query((a.x + b.x) / 2, (a.y + b.y) / 2, Math.hypot(b.x - a.x, b.y - a.y) / 2 + 40))
-    if (e.active && !e.isSupplySlot && segDist(e.x, e.y, a, b) <= R.tetherWidth / 2 + e.radius + 6) host.hitEnemy(e, damage, now, 'fire');
+    if (e.active && segDist(e.x, e.y, a, b) <= R.tetherWidth / 2 + e.radius + 6) host.hitEnemy(e, damage, now, 'fire');
   if (ptFx(host)) {
     const f = host.add.sprite(a.x, a.y, 'pangtong_paint', PT.run).setDisplaySize(56, 56).setRotation(Math.atan2(b.y - a.y, b.x - a.x)).setDepth(41).setName('pangtong-firerun');
     playPt(f, PT.run, 40, true);
@@ -276,7 +276,7 @@ function explode(host: WeaponHost, s: MineState, m: Mine, damage: number, radius
   if (host.over) return;
   host.spawnFlameFx(m.x, m.y, radius); host.sfx.play('flameBoom');
   const dmg = damage * (chained && host.player.growth.masteries.lianying >= 3 ? 1.2 : 1);
-  for (const e of host.grid.query(m.x, m.y, radius + 30)) if (e.active && !e.isSupplySlot && Math.hypot(e.x - m.x, e.y - m.y) <= radius + e.radius) host.hitEnemy(e, dmg, now, 'fire');
+  for (const e of host.grid.query(m.x, m.y, radius + 30)) if (e.active && Math.hypot(e.x - m.x, e.y - m.y) <= radius + e.radius) host.hitEnemy(e, dmg, now, 'fire'); // 爆炸也炸道具
   if (!chain) return;
   chain.count++;
   if (!chain.awarded && chain.count >= R.mineChainStack) { chain.awarded = true; host.player.passive.onMineChain(chain.count); }
@@ -343,8 +343,8 @@ export function lianhuanBehavior(host: WeaponHost, weapon: WeaponState, dt: numb
   // 铁索：碰到的敌人减速（首领不受影响）；Lv2 起每 0.5 秒灼伤
   for (const t of s.tethers) {
     for (const e of host.grid.query((t.a.x + t.b.x) / 2, (t.a.y + t.b.y) / 2, Math.hypot(t.b.x - t.a.x, t.b.y - t.a.y) / 2 + 40)) {
-      if (!e.active || e.isSupplySlot || segDist(e.x, e.y, t.a, t.b) > R.tetherWidth / 2 + e.radius) continue;
-      if (e.kind !== 'boss') { e.martialSlow = Math.min(time >= e.martialSlowUntil ? 1 : e.martialSlow, 1 - R.tetherSlow); e.martialSlowUntil = time + 150; }
+      if (!e.active || segDist(e.x, e.y, t.a, t.b) > R.tetherWidth / 2 + e.radius) continue;
+      if (e.kind !== 'boss' && !e.isSupplySlot) { e.martialSlow = Math.min(time >= e.martialSlowUntil ? 1 : e.martialSlow, 1 - R.tetherSlow); e.martialSlowUntil = time + 150; }
       if (level < 2) continue;
       const b = s.burnAt.get(e.uid);
       if (b && b.spawn === e.spawnId && time < b.at) continue;
@@ -359,9 +359,9 @@ export function lianhuanBehavior(host: WeaponHost, weapon: WeaponState, dt: numb
       lp.nextTick = time + R.loopTickMs;
       const cx = (lp.box[0] + lp.box[2]) / 2, cy = (lp.box[1] + lp.box[3]) / 2, r = Math.hypot(lp.box[2] - lp.box[0], lp.box[3] - lp.box[1]) / 2 + 20;
       for (const e of host.grid.query(cx, cy, r)) {
-        if (!e.active || e.isSupplySlot || !inPoly(e.x, e.y, lp.poly)) continue;
+        if (!e.active || !inPoly(e.x, e.y, lp.poly)) continue;
         host.hitEnemy(e, damage * R.loopMul, time, 'fire');
-        if (e.kind !== 'boss') { e.martialSlow = Math.min(time >= e.martialSlowUntil ? 1 : e.martialSlow, 1 - R.loopSlow); e.martialSlowUntil = time + R.loopTickMs + 60; }
+        if (e.kind !== 'boss' && !e.isSupplySlot) { e.martialSlow = Math.min(time >= e.martialSlowUntil ? 1 : e.martialSlow, 1 - R.loopSlow); e.martialSlowUntil = time + R.loopTickMs + 60; }
       }
     }
     if (time >= lp.until - 800) for (const m of lp.mines) warnMine(m);
@@ -514,7 +514,7 @@ export function sunKnivesBehavior(host: WeaponHost, weapon: WeaponState, dt: num
     // 掷出后正在补刀的那一把也照样割伤（50%）：否则掷刀节奏（≤0.9 秒）与补刀（1.2 秒）、环绕周期（约 2 秒）
     // 会对上相位，经过某个贴身敌人的总是“空位”，近身防守时有时无（2026-11-16 回归发现）
     for (const e of host.grid.query(x, y, 40)) {
-      if (!e.active || e.isSupplySlot || Math.hypot(e.x - x, e.y - y) > 12 + e.radius) continue;
+      if (!e.active || Math.hypot(e.x - x, e.y - y) > 12 + e.radius) continue;
       if ((s.orbitHit.get(e.spawnId) ?? 0) > time) continue;
       s.orbitHit.set(e.spawnId, time + R.knifeOrbitHitMs);
       host.hitEnemy(e, orbitDamage * (ready ? 1 : .5), time, 'melee');
@@ -527,7 +527,7 @@ export function sunKnivesBehavior(host: WeaponHost, weapon: WeaponState, dt: num
     k.img.x += k.vx * dt; k.img.y += k.vy * dt; k.left -= step;
     for (const e of host.grid.query(k.img.x, k.img.y, 40)) {
       if (k.pierce <= 0) break;
-      if (!e.active || e.isSupplySlot || k.hit.has(e.spawnId) || Math.hypot(e.x - k.img.x, e.y - k.img.y) > 10 + e.radius) continue;
+      if (!e.active || k.hit.has(e.spawnId) || Math.hypot(e.x - k.img.x, e.y - k.img.y) > 10 + e.radius) continue;
       k.hit.add(e.spawnId); k.pierce--; host.hitEnemy(e, k.damage, time, 'arrow');
     }
     if (k.left <= 0 || k.pierce <= 0 || host.over) { k.img.destroy(); s.thrown.splice(i, 1); }
@@ -680,8 +680,8 @@ export function diaochanFansBehavior(host: WeaponHost, weapon: WeaponState, dt: 
     }
     const hits = f.back ? f.backHit : f.outHit;
     for (const e of host.grid.query(f.img.x, f.img.y, 50)) {
-      if (!e.active || e.isSupplySlot || hits.has(e.spawnId) || Math.hypot(e.x - f.img.x, e.y - f.img.y) > 16 + e.radius) continue;
-      hits.add(e.spawnId); fanHit(host, e, f.damage, time);
+      if (!e.active || hits.has(e.spawnId) || Math.hypot(e.x - f.img.x, e.y - f.img.y) > 16 + e.radius) continue;
+      hits.add(e.spawnId); if (e.isSupplySlot) host.hitEnemy(e, f.damage, time, 'arrow'); else fanHit(host, e, f.damage, time);
     }
   }
   // 闭月：舞带环身旋舞
@@ -692,8 +692,8 @@ export function diaochanFansBehavior(host: WeaponHost, weapon: WeaponState, dt: 
       s.nextTick = time + R.moonTickMs;
       const turnMs = R.turnMs + 500 * growth.masteries.meirenji;
       for (const e of host.grid.query(pl.x, pl.y, (R.moonRadius * host.player.passive.rangeMultiplier('diaochan_fans')) + 30)) {
-        if (!e.active || e.isSupplySlot || Math.hypot(e.x - pl.x, e.y - pl.y) > (R.moonRadius * host.player.passive.rangeMultiplier('diaochan_fans')) + e.radius) continue;
-        host.hitEnemy(e, damage * R.moonDamageMul, time, 'arrow'); pl.passive.forceTurn(e, time, turnMs);
+        if (!e.active || Math.hypot(e.x - pl.x, e.y - pl.y) > (R.moonRadius * host.player.passive.rangeMultiplier('diaochan_fans')) + e.radius) continue;
+        host.hitEnemy(e, damage * R.moonDamageMul, time, 'arrow'); if (!e.isSupplySlot) pl.passive.forceTurn(e, time, turnMs);
       }
     }
     return;

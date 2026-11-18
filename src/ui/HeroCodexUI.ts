@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { inkSkin } from './HomeCommand';
 import { DEPTH, FONT, GAME_HEIGHT, GAME_WIDTH, HEADING_FONT, IS_DESKTOP } from '../config';
 import { CHARACTERS, type CharacterId } from '../data/characters';
 import { TACTICS, TAG_NAMES, type BuildTag, type TacticId } from '../data/builds';
@@ -51,7 +52,7 @@ export class HeroCodexUI {
     if (t.width > bw - 6) t.setScale((bw - 6) / t.width);
     if (!o.disabled) t.setInteractive({ useHandCursor: true }).on('pointerdown', (_p: unknown, _x: unknown, _y: unknown, e?: Phaser.Types.Input.EventData) => { e?.stopPropagation?.(); onClick(); });
     lqHitBox(t, bw, bh);
-    const skin = lqSkin(this.scene, t, t, () => ({ w: bw, h: bh }), { tone: o.active ? 'cinnabar' : 'quiet', on: () => !!o.active, enabled: () => !o.disabled });
+    const skin = (IS_DESKTOP ? inkSkin(this.scene, t, () => ({ w: bw, h: bh }), { active: () => !!o.active, enabled: () => !o.disabled }) : null) ?? lqSkin(this.scene, t, t, () => ({ w: bw, h: bh }), { tone: o.active ? 'cinnabar' : 'quiet', on: () => !!o.active, enabled: () => !o.disabled }); // 电脑版水墨（2026-11-17 UI 审查 N）
     skin.gfx.setScrollFactor(0); this.body.addAt(skin.gfx, this.body.getIndex(t));
     return t;
   }
@@ -66,7 +67,7 @@ export class HeroCodexUI {
     lqPanel(this.add(this.scene.add.graphics()), x0, y0, pw, ph);
     this.text(x0 + 28, y0 + (D ? 18 : 22), '武将谱', D ? 26 : 30, '#f2ddae', true);
     this.text(x0 + (D ? 130 : 140), y0 + (D ? 28 : 34), `武学残卷 ${scrolls()} · 军粮 ${grain()}`, 13, '#e8d6a4').setName('codex-resources');
-    this.button(x0 + pw - (D ? 52 : 56), y0 + (D ? 32 : 40), '关闭', 'codex-close', () => this.close(), { size: D ? 15 : 17 });
+    this.button(x0 + pw - (D ? 52 : 56), y0 + (D ? 32 : 40), '返回', 'codex-close', () => this.close(), { size: D ? 15 : 17 });
 
     // 左：武将列表
     const owners = gearOwners(), lx = x0 + 24, lw = D ? 150 : pw - 48, top = y0 + (D ? 70 : 84);
@@ -98,9 +99,14 @@ export class HeroCodexUI {
     this.text(x, y + 100, `本命：${weapon?.name ?? ''} · 淬炼 ${temperLevel(c)}/${TEMPER.max}（本命伤害 +${Math.round(temperLevel(c) * TEMPER.step * 100)}%）`, 14, '#e8d6a4');
     const xd = getXinde(c);
     this.text(x, y + 128, `战法心得：${xd.length ? xd.map(t => TACTICS[t].name).join('、') : '未选（到「战法心得」页预选 2 个）'}`, 14, '#e8d6a4');
+    // 2026-11-17 UI 审查 F：电脑版总览右侧放武将立绘（主页同款手绘），填满原来空着的下半屏；缺图时按需加载
+    const art = IS_DESKTOP ? 'epic_hero_' + c : '', pw = 250, hasArt = IS_DESKTOP && this.scene.textures.exists(art);
+    if (IS_DESKTOP && !hasArt && !this.scene.textures.exists(art)) { this.scene.load.image(art, 'assets/epic-home/' + c + '.webp'); this.scene.load.once('filecomplete-image-' + art, () => { if (this.root.active && this.tab === 'overview') this.render(); }); this.scene.load.start(); }
+    if (hasArt) { const img = this.add(this.scene.add.image(x + w - pw / 2, GAME_HEIGHT - 52, art).setOrigin(.5, 1)), src = img.texture.getSourceImage() as { width: number; height: number }; img.setScale(Math.min(pw / src.width, (GAME_HEIGHT - 52 - y) / src.height)).setName('codex-portrait'); }
+    const tw = hasArt ? w - pw - 16 : w;
     const gear = gearSummary(gearFor(c));
     this.text(x, y + 160, '兵装加成', 15, '#ecd49a', true);
-    this.text(x, y + 184, gear.length ? gear.join('　') : '尚未穿戴兵装', 13, '#d8ccb0').setWordWrapWidth(w).setLineSpacing(4);
+    this.text(x, y + 184, gear.length ? gear.join('　') : '尚未穿戴兵装', 13, '#d8ccb0').setWordWrapWidth(tw).setLineSpacing(4);
   }
 
   private renderAttrs(x: number, y: number, w: number): void {

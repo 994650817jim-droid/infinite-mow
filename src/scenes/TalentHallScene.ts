@@ -14,6 +14,8 @@ import { CHARACTERS, getCharacter } from '../data/characters';
 import { RECRUIT, TEMPLATES, TEMPLATE_ORDER, type FollowerTemplate } from '../data/recruits';
 import { LORD_LEVEL_HINT, followerLevel, hallOdds, followerLevelCap, hallInTown, hallLevel, dismiss, followerCap, loadRoster, manualRefresh, rankBonus, rankCap, recruit, refreshCost, toggleFollower, upgradeHall, type Offer, type Recruit } from '../systems/RosterStore';
 import { attrBadge } from '../ui/AttrBadge';
+import { homeCommand } from '../ui/HomeCommand';
+import { lqPanel } from '../ui/LacquerKit';
 
 /** 普通招募武将（内部 kind = 'common'）对玩家显示的称呼（用户 2026-11-17：不叫「大众脸」，改三国风；候选 无名之辈 / 偏裨之将 / 庸碌之将，待用户定）。 */
 export const COMMON_LABEL = '无名之辈';
@@ -33,12 +35,17 @@ export class TalentHallScene extends Phaser.Scene {
   create() {
     playMenuMusic(this);
     if (!worldUnlocked() && !isChapterTestRun()) { this.scene.start('MenuScene'); return; }
+    // 2026-11-17 用户批准 UI 审查 A：电脑版整页改漆底描金 + 水墨按钮（原深绿底、扁平矩形按钮、绿木纹行，像网页）
+    const D = W > 600;
+    if (D) { this.cameras.main.setBackgroundColor('#0e0a07'); const fr = this.add.graphics(); lqPanel(fr, 8, 8, W - 16, H - 16, { shadow: false }); }
     worldShell(this, '招贤馆');
-    this.status = worldText(this, 24, 64, '', 13, '#cfdcc6').setWordWrapWidth(W - 48);
-    worldButton(this, W / 2, H - (W > 600 ? 34 : 62), '返回营寨', () => this.scene.start('CityScene'), 220).image.setName('talent-home');
+    this.status = worldText(this, 24, 64, '', 13, D ? '#e8d8b2' : '#cfdcc6').setWordWrapWidth(W - 48);
+    if (D) { const back = homeCommand(this, W / 2, H - 34, 220, 42, '返回营寨'); back.hit.setName('talent-home').on('pointerdown', () => this.scene.start('CityScene')); }
+    else worldButton(this, W / 2, H - (W > 600 ? 34 : 62), '返回营寨', () => this.scene.start('CityScene'), 220).image.setName('talent-home');
     this.render();
   }
   private small(x: number, y: number, w: number, label: string, fn: () => void, name: string, enabled = true, gold = false) {
+    if (W > 600) { const c = homeCommand(this, x, y, w, 30, label, gold, enabled, 14); c.hit.setName(name); if (enabled) c.hit.on('pointerup', () => fn()); this.content!.add([c.g, c.caption, c.hit]); return c.hit; }
     const h = W > 600 ? 30 : 38;
     const bg = this.add.rectangle(x, y, w, h, gold ? 0x6a4526 : 0x2a221a, enabled ? .96 : .5).setStrokeStyle(1, gold ? 0xd7b778 : 0x7a6a50).setName(name);
     const t = worldText(this, x, y, label, W > 600 ? 13 : 14, enabled ? '#f2dfb2' : '#8a7e68').setOrigin(.5);
@@ -90,7 +97,7 @@ export class TalentHallScene extends Phaser.Scene {
   }
   private offerRow(o: Offer, i: number, captive: boolean, y: number, h: number) {
     const D = W > 600, x0 = 16, w = W - 32, q = QUALITIES[o.quality];
-    this.content!.add(panel(this, W / 2, y, w, h));
+    if (D) { const g = this.add.graphics(); g.fillStyle(0x000000, .35).fillRoundedRect(x0 + 2, y - h / 2 + 3, w, h, 8).fillStyle(0x1b120b, .96).fillRoundedRect(x0, y - h / 2, w, h, 8).lineStyle(1.5, 0xc9a35e, .8).strokeRoundedRect(x0, y - h / 2, w, h, 8); this.content!.add(g); } else this.content!.add(panel(this, W / 2, y, w, h)); // 电脑版漆底单描金边（双层边会压到第三行字）
     const size = h - 16; this.seal(x0 + 12 + size / 2, y, size, o.quality, TEMPLATES[o.template].name, o.hero ? getCharacter(o.hero).portrait : undefined, o.template);
     { const b = o.hero ? attrBadge(this, x0 + 12 + size - 6, y - h / 2 + 16, o.hero, 22) : null; if (b) this.content!.add(b); }
     const tx = x0 + 24 + size, kind = o.kind === 'hero' ? '可玩名将 · 随行' : o.kind === 'named' ? `史事名将${o.faction ? ' · ' + FACTIONS[o.faction].name : ''}` : COMMON_LABEL;
@@ -101,7 +108,7 @@ export class TalentHallScene extends Phaser.Scene {
   }
   private rosterRow(r: Recruit, lord: boolean, following: boolean, y: number, h: number, cap: number) {
     const D = W > 600, x0 = 16, w = W - 32, q = QUALITIES[r.quality];
-    this.content!.add(panel(this, W / 2, y, w, h));
+    if (D) { const g = this.add.graphics(); g.fillStyle(0x000000, .35).fillRoundedRect(x0 + 2, y - h / 2 + 3, w, h, 8).fillStyle(0x1b120b, .96).fillRoundedRect(x0, y - h / 2, w, h, 8).lineStyle(1.5, 0xc9a35e, .8).strokeRoundedRect(x0, y - h / 2, w, h, 8); this.content!.add(g); } else this.content!.add(panel(this, W / 2, y, w, h)); // 电脑版漆底单描金边（双层边会压到第三行字）
     const size = h - 16; this.seal(x0 + 12 + size / 2, y, size, r.quality, TEMPLATES[r.template].name, r.hero ? getCharacter(r.hero).portrait : undefined, r.template);
     { const ab = r.hero ? attrBadge(this, x0 + 12 + size - 6, y - h / 2 + 16, r.hero, 22) : null; if (ab) this.content!.add(ab); }
     const tx = x0 + 24 + size, b = rankBonus(r);

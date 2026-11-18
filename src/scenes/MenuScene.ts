@@ -5,13 +5,13 @@ import { showLordNotice } from '../ui/LordNotice';
 import {playMenuMusic,menuMusic} from '../systems/Music';
 import {artStyle,setArtStyle} from '../systems/ArtStyle';
 import { iffOutlineEnabled, setIffOutline, warmIffTextures } from '../systems/IffOverlay';
-import { OUTLINE_LABEL, cycle, outlineMode, setOutlineMode, shakeLevel, setShakeLevel, SHAKE_LABEL, type ShakeLevel, STORY_LABEL, storyMode, setStoryMode } from '../systems/BattleSettings';
+import { OUTLINE_LABEL, cycle, outlineMode, setOutlineMode, shakeLevel, setShakeLevel, SHAKE_LABEL, type ShakeLevel, WIDTH_LABEL, outlineWidth, setOutlineWidth, DAMAGE_LABEL, damageNumbers, setDamageNumbers, SCALE_LABEL, renderScaleSetting, setRenderScaleSetting, type DamageNumbers, type RenderScaleSetting, STORY_LABEL, storyMode, setStoryMode } from '../systems/BattleSettings';
 import {uiSfx} from '../systems/Sfx';
 import {GameCodex} from '../ui/GameCodex';
 import {HeroWarCard} from '../ui/HeroWarCard';
 import {CampaignChronicle} from '../ui/CampaignChronicle';
 import {attachHomeVideo} from '../ui/HomeVideo';
-import {homeCommand,warPanelTexture} from '../ui/HomeCommand';
+import {homeCommand,warPanelTexture,inkSkin} from '../ui/HomeCommand';
 import {SaveSlotsUI} from '../ui/SaveSlotsUI';
 import {AchievementsUI} from '../ui/AchievementsUI';
 import {homePlaque} from '../ui/HomePlaque';
@@ -326,15 +326,26 @@ export class MenuScene extends Phaser.Scene {
     const label=(x:number,y:number,value:string,size=20)=>this.add.text(x,y,value,{fontFamily:FONT,fontSize:size+'px',color:'#e8d0aa',resolution:2}).setOrigin(.5);
     const app=desktop,desk=IS_DESKTOP_APP&&!!app;
     // 桌面版行距收紧，放下显示设置（分辨率 / 全屏 / 垂直同步）
-    const rowY=(i:number)=>desk?H/2-166+i*46:H/2-70+i*54;
+    // 2026-11-17 用户批准 UI 审查 E：网页电脑版改成和战斗内「军中设置」同一套行样式（名称在左、‹ 值 › 在右）与同一组选项
+    const web=D&&!desk;
+    const rowY=(i:number)=>desk?H/2-166+i*46:web?128+i*44:H/2-70+i*60;
     // 漆底描金面板（与图鉴、结算卷同系）；每行左右是漆金小方钮，返回为漆金按钮
     modal.add(this.add.rectangle(W/2,H/2,W,H,0x0c0805,.9).setInteractive());
-    {const pw=desk?560:Math.min(W-40,460),top=desk?H/2-250:H/2-190,bottom=desk?rowY(10)+40:H/2+300,g=this.add.graphics();lqPanel(g,W/2-pw/2,top,pw,bottom-top);modal.add(g);
-     const t=label(W/2,desk?H/2-218:H/2-130,'军中设置',28).setFontFamily(desk?TITLE_FONT:HEADING_FONT).setColor(desk?'#efd399':'#f6dc9a').setStroke(desk?'#120904':'#2a170b',4);modal.add(t);
+    {const pw=desk?560:web?520:Math.min(W-40,460),top=desk?H/2-250:web?28:H/2-190,bottom=desk?rowY(10)+40:web?rowY(9)+40:H/2+300,g=this.add.graphics();lqPanel(g,W/2-pw/2,top,pw,bottom-top);modal.add(g);
+     const t=label(W/2,desk?H/2-218:web?top+40:H/2-130,'军中设置',28).setFontFamily(desk?TITLE_FONT:HEADING_FONT).setColor(desk?'#efd399':'#f6dc9a').setStroke(desk?'#120904':'#2a170b',4);modal.add(t);
      const div=this.add.graphics();lqDivider(div,W/2,t.y+30,desk?160:130);modal.add(div);
      modal.add(tutorialReplayLink(this,W/2+pw/2-22,top+24));} // 新手引导：重看（逻辑在 ui/TutorialOverlay.ts）
     /** 一行“名称  数值”，左右 －/＋（或 ‹ ›）调节；手柄焦点在行上时左右键也能调。 */
     const row=(i:number,name:string,get:()=>string,step:(dir:number)=>void,arrows:[string,string]=['－','＋'])=>{
+      if(web){ // 同战斗内军中设置：漆底行、左名右值、‹ › 小钮
+        const y=rowY(i),pw=440,x0=W/2-pw/2,plate=this.add.graphics();lqPanel(plate,x0,y-18,pw,36,{shadow:false,glow:false});
+        const nm=this.add.text(x0+18,y,name,{fontFamily:HEADING_FONT,fontSize:'16px',color:'#e8d8b2',resolution:2}).setOrigin(0,.5);
+        const vx=x0+pw-110,value=this.add.text(vx,y,get(),{fontFamily:HEADING_FONT,fontSize:'16px',color:'#efd399',resolution:2}).setOrigin(.5).setName('settings-row-'+i);modal.add([plate,nm,value]);
+        for(const dir of [-1,1]){const b=label(vx+dir*72,y,dir<0?'‹':'›',18).setInteractive({useHandCursor:true}).setName(`settings-row-${i}-${dir<0?'dec':'inc'}`);
+          b.setData('padAdjust',(d:number)=>{step(d);value.setText(get());}).on('pointerdown',()=>{step(dir);value.setText(get());});
+          const sk=lqSkin(this,b,b,()=>({w:30,h:28}),{tone:'quiet'});lqHitBox(b,30,28);modal.add([sk.gfx,b]);}
+        return value;
+      }
       const y=rowY(i),value=label(W/2,y,name+'  '+get(),desk?18:20).setName('settings-row-'+i);
       const plate=this.add.graphics();plate.fillStyle(0x3a2616,.45).fillRoundedRect(W/2-(desk?140:112),y-(desk?20:24),desk?280:224,desk?40:48,6).lineStyle(1,0xc9a35e,.35).strokeRoundedRect(W/2-(desk?140:112),y-(desk?20:24),desk?280:224,desk?40:48,6);modal.add([plate,value]);
       for(const dir of [-1,1]){const b=label(W/2+dir*(desk?172:146),y,dir<0?arrows[0]:arrows[1],desk?22:26).setInteractive({useHandCursor:true}).setName(`settings-row-${i}-${dir<0?'dec':'inc'}`);
@@ -367,10 +378,16 @@ export class MenuScene extends Phaser.Scene {
     {const at=desk?6:3;const list=['off','enemy','all'] as const;row(at,'敌我描边',()=>OUTLINE_LABEL[outlineMode()],dir=>{const v=cycle(list,outlineMode(),dir);setOutlineMode(v);if(v!=='off')warmIffTextures(this.game);},['‹','›']).setName('settings-iff-outline');void iffOutlineEnabled;void setIffOutline;}
     // 震屏（打击感 2026-11-17）：强 / 弱 / 关，立即生效（战斗中所有震屏都按此缩放）
     {const at=desk?7:4,order:ShakeLevel[]=['strong','weak','off'];let cur=shakeLevel();row(at,'震屏',()=>SHAKE_LABEL[cur],dir=>{cur=order[(order.indexOf(cur)+(dir>0?1:2))%3];setShakeLevel(cur);},['‹','›']).setName('settings-shake');}
+    if(web){
+      {const list=['thin','thick'] as const;row(5,'描边粗细',()=>WIDTH_LABEL[outlineWidth()],dir=>setOutlineWidth(cycle(list,outlineWidth(),dir)),['‹','›']).setName('settings-outline-width');}
+      {const list:DamageNumbers[]=['all','crit','off'];row(6,'伤害数字',()=>DAMAGE_LABEL[damageNumbers()],dir=>setDamageNumbers(cycle(list,damageNumbers(),dir)),['‹','›']).setName('settings-damage');}
+      {const list:RenderScaleSetting[]=['','1','2','3'],start=renderScaleSetting(),note=label(W/2+120,rowY(7)+26,'',11).setColor('#9d8f78');modal.add(note);
+       row(7,'画面清晰度',()=>SCALE_LABEL[renderScaleSetting()],dir=>{setRenderScaleSetting(cycle(list,renderScaleSetting(),dir));note.setText(renderScaleSetting()===start?'':'刷新后生效');},['‹','›']).setName('settings-render-scale');}
+    }
     // 剧情（2026-11-17 剧情系统）：完整 / 只看章头章末 / 关闭
-    {const at=desk?8:5,list=['full','chapter','off'] as const;row(at,'剧情',()=>STORY_LABEL[storyMode()],dir=>setStoryMode(cycle(list,storyMode(),dir)),['‹','›']).setName('settings-story');}
-    const close=label(W/2,desk?rowY(10)+6:H/2+264,'返回',20).setFontFamily(HEADING_FONT).setInteractive({useHandCursor:true}).setName('settings-close').setData('padDefault',true).on('pointerdown',()=>modal.destroy());
-    const cs=lqSkin(this,close,close,()=>({w:200,h:desk?44:52}),{tone:'cinnabar'});lqHitBox(close,200,desk?44:52);
+    {const at=desk||web?8:5,list=['full','chapter','off'] as const;row(at,'剧情',()=>STORY_LABEL[storyMode()],dir=>setStoryMode(cycle(list,storyMode(),dir)),['‹','›']).setName('settings-story');}
+    const close=label(W/2,desk?rowY(10)+6:web?rowY(9)+2:H/2+264,'返回',20).setFontFamily(HEADING_FONT).setInteractive({useHandCursor:true}).setName('settings-close').setData('padDefault',true).on('pointerdown',()=>modal.destroy());
+    const cs=(web?inkSkin(this,close,()=>({w:200,h:42}),{primary:true}):null)??lqSkin(this,close,close,()=>({w:200,h:desk?44:52}),{tone:'cinnabar'});lqHitBox(close,200,desk?44:52);
     modal.add([cs.gfx,close]);
   }
   private corners(g: Phaser.GameObjects.Graphics, bg: Phaser.GameObjects.Rectangle, selected: boolean): void {

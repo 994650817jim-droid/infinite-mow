@@ -168,3 +168,22 @@ export function inkUpgradeCardTexture(scene:Phaser.Scene,width:number,height:num
  if(rare){ctx.fillStyle='rgba(168,40,28,.85)';ctx.fillRect(w-26,8,18,18);}
  scene.textures.addCanvas(key,canvas);return key;
 }
+
+/**
+ * 水墨按钮皮（2026-11-17 用户批准 UI 审查「剩下的漆金方钮换水墨」）：与 LacquerKit.lqSkin 同接口，
+ * 给一个文字命中对象垫一块水墨笔触底，跟随悬停 / 按下 / 禁用 / 选中（选中与 primary 用朱墨）。缺水墨图时返回 null，调用方退回 lqSkin。
+ */
+export function inkSkin(scene:Phaser.Scene,target:Phaser.GameObjects.Text,size:()=>{w:number;h:number},o:{active?:()=>boolean;enabled?:()=>boolean;primary?:boolean}={}):{gfx:Phaser.GameObjects.NineSlice;repaint:(s?:string)=>void}|null{
+ if(!scene.textures.exists('btn_ink_primary_normal'))return null;
+ let state:'normal'|'hover'|'pressed'='normal',plate:Phaser.GameObjects.NineSlice|null=null;
+ const repaint=(s?:string)=>{
+  if(s==='hover'||s==='pressed'||s==='normal')state=s;else if(s==='idle')state='normal';else if(s==='down')state='pressed';
+  if(!target.scene)return;
+  const en=o.enabled?o.enabled():true,on=!!o.active?.()||!!o.primary,{w,h}=size(),st=!en?'disabled':state;
+  plate=inkPlate(scene,plate,target.x,target.y,w,h,on,st);plate?.setVisible(target.visible).setScrollFactor(0);
+  target.setColor(!en?'#3a332a':st==='hover'?'#fff3d4':on?'#f8e6bf':'#e8d3a6').setStroke(!en?'#00000000':on?'#2a0c06':'#16100a',3);
+ };
+ target.on('pointerover',()=>repaint('hover')).on('pointerout',()=>repaint('normal')).on('pointerdown',()=>repaint('pressed')).on('pointerup',()=>repaint('hover'));
+ repaint();
+ return plate?{gfx:plate,repaint}:null;
+}

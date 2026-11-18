@@ -28,7 +28,7 @@ const ctx = await b.newContext({ viewport: { width: 1280, height: 720 } });
     return { before, after: row?.text, stored: localStorage.getItem('im_iff_outline'), quit: !!find('settings-quit'), minY: Math.min(...ys), maxY: Math.max(...ys), H };
   });
   await p.screenshot({ path: `${out}/settings-desktop.png` });
-  ck('设置面板「敌我描边」默认关，点一下变开并存档；面板不出画面', r.before === '敌我描边  关' && r.after === '敌我描边  开' && r.stored === '1' && r.minY >= 0 && r.maxY <= r.H, r);
+  ck('设置面板「敌我描边」默认关，点一下变开并存档；面板不出画面', /关$/.test(r.before) && /仅敌人$/.test(r.after) && r.stored === 'enemy' && r.minY >= 0 && r.maxY <= r.H /* 2026-11-17：描边改三档（关 / 仅敌人 / 敌我都描），电脑版行只显示值 */, r);
   // 空闲预生成：回到菜单后浏览器空闲，换色 / 轮廓贴图陆续生成
   await p.waitForTimeout(4000);
   const warm = await p.evaluate(() => { const k = window.__game.textures.getTextureKeys(); return { recolor: k.filter(x => x.startsWith('iffA_')).length, outline: k.filter(x => x.startsWith('iffO_')).length }; });

@@ -33,6 +33,10 @@ export class BootScene extends Phaser.Scene {
     loadWarnFx(this.load); // 手绘版优先，缺图的种类退回像素版
     this.load.spritesheet('refined_spear','assets/combat-refined/spear-sequence.png',{frameWidth:384,frameHeight:64});
     this.load.spritesheet('refined_impact','assets/combat-refined/impact-sequence.png',{frameWidth:64,frameHeight:64});
+    // 军功信物手绘图（2026-11-18，data/gemFx.ts）：青铜古钱 / 金令牌各 4 帧高光，gem_fx 拾取闪光 + 光晕
+    this.load.spritesheet('gem_tok_small','assets/gems/gem_tok_small.png',{frameWidth:64,frameHeight:64});
+    this.load.spritesheet('gem_tok_large','assets/gems/gem_tok_large.png',{frameWidth:96,frameHeight:96});
+    this.load.spritesheet('gem_fx','assets/gems/gem_fx.png',{frameWidth:128,frameHeight:128});
     // 三选一 / 增益栏图标：2026-11-14 起使用 ChatGPT 生成的厚涂图标（assets/upgrade-icons，tools/build-upgrade-icons.mjs 切图）；
     // 旧像素图标仍保留在 growth-icons / build 目录，未被删除。
     for(const id of GROWTH_ICON_IDS)this.load.image('growth_icon_'+id,'assets/upgrade-icons/'+id+'.webp');

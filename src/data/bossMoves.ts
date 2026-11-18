@@ -199,7 +199,7 @@ export const BOSS_MOVES: Record<string, BossMovesetDef> = {
   },
   // 8-3 曹操：骑绝影；虎豹骑冲阵（三道）+ 挟天子令诸侯（插旗减伤）→ 坠马「鸡肋断后」：火线箭雨、虎豹骑断后
   caocao: {
-    id: 'caocao', name: '曹操', phaseAt: .5, mount: { horse: 'jueying' },
+    id: 'caocao', name: '曹操', phaseAt: .5, mount: { horse: 'jueying', rider: 'caocao' },
     p1: { name: '魏王', caption: '虎豹骑冲阵 · 挟天子令诸侯', gapMs: 2400, speedMul: 1.35, moves: [
       { kind: 'charge', name: '虎豹骑冲阵', windupMs: 1000, cd: 4600, dmg: 1.5, len: 500, width: 72, dashMs: 520, lanes: 3 },
       { kind: 'flags', name: '挟天子令诸侯', windupMs: 800, cd: 15000, dmg: 0, count: 3, radius: 190, hp: 130, takenMul: .5 },

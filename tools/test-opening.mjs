@@ -12,7 +12,7 @@ const p = await b.newPage({ viewport: { width: 1280, height: 720 } });
 p.on('pageerror', e => errors.push(e.message)); p.on('console', m => { if (m.type() === 'error' && !/favicon|Failed to load resource|Texture key already in use|opening_theme/.test(m.text())) errors.push(m.text()); });
 await p.addInitScript(() => { if (!sessionStorage.getItem('seeded')) { localStorage.clear(); localStorage.setItem('im_last_hero', 'zhaoyun'); localStorage.setItem('im_tutorial_done', '1'); sessionStorage.setItem('seeded', '1'); } });
 const active = () => p.evaluate(() => window.__game?.scene.getScenes(true).map(s => s.scene.key) ?? []);
-const go = async () => { await p.goto(base + '?layout=desktop&opening=auto'); await p.waitForFunction(() => { const g = window.__game; return g && (g.scene.isActive('OpeningScene') || g.scene.isActive('MenuScene')); }, null, { timeout: 120000 }); };
+const go = async () => { await p.goto(base + '?layout=desktop&opening=auto&gate=0'); await p.waitForFunction(() => { const g = window.__game; return g && (g.scene.isActive('OpeningScene') || g.scene.isActive('MenuScene')); }, null, { timeout: 120000 }); };
 const O = "window.__game.scene.getScene('OpeningScene')";
 const seek = t => p.evaluate(([O0, t0]) => eval(O0).seekTo(t0), [O, t]);
 
@@ -73,6 +73,18 @@ await p.goto(base + '?dev=1&autostart=1&stage=1&layout=desktop'); await p.waitFo
 const bat = await p.evaluate(() => { const s = window.__game.scene.getScene('GameScene'); s.togglePause(); const t = s.pausePanel.list.find(o => o.name === 'settings-opening'); const before = t?.text; s.pausePanel.list.find(o => o.name === 'settings-opening-inc')?.emit('pointerdown'); return { before, after: t?.text, stored: localStorage.getItem('im_opening') }; });
 ck('战斗内设置也有「开场动画」行，同一存档键', bat.before === '关闭' && bat.after === '每次' && bat.stored === 'every', bat);
 await p.screenshot({ path: `${out}/battle-settings-opening-row.png` });
+// ⑩ 网页版声音未解锁：先显示水墨「点击 · 入乱世」，点一下才开播（配乐随之出声）；不带自动出声开关的浏览器
+{ const b2 = await chromium.launch({ channel: 'chrome', headless: true }); const q = await b2.newPage({ viewport: { width: 1280, height: 720 } });
+  q.on('pageerror', e => errors.push(e.message));
+  await q.addInitScript(() => { if (!sessionStorage.getItem('seeded')) { localStorage.clear(); localStorage.setItem('im_last_hero', 'zhaoyun'); sessionStorage.setItem('seeded', '1'); } });
+  await q.goto(base + '?layout=desktop&opening=auto'); await q.waitForFunction(() => window.__game?.scene.isActive('OpeningScene'), null, { timeout: 120000 }); await q.waitForTimeout(1500);
+  const g0 = await q.evaluate(O0 => { const s = eval(O0); return { gate: !!s.children.getByName('opening-gate'), title: s.children.getByName('opening-gate')?.list.find(o => o.name === 'opening-gate-title')?.text, begun: s.begun, ct: s.segs[0].v.video?.currentTime ?? 0, locked: s.sound.locked }; }, O);
+  ck('网页版声音未解锁：先显示「点击 · 入乱世」，视频不偷跑', g0.gate && g0.title === '点击 · 入乱世' && !g0.begun && g0.ct < .2, g0);
+  await q.screenshot({ path: `${out}/opening-gate-1280x720.png` });
+  await q.mouse.click(640, 360); await q.waitForTimeout(1800);
+  const g1 = await q.evaluate(O0 => { const s = eval(O0); return { gate: !!s.gate, begun: s.begun, clock: s.clock, scene: window.__game.scene.isActive('OpeningScene'), locked: s.sound.locked, music: !!s.music }; }, O);
+  ck('点一下：入口淡出、开播（不是直接跳过），声音解锁、配乐开始', !g1.gate && g1.begun && g1.clock > .5 && g1.scene && !g1.locked && g1.music, g1);
+  await b2.close(); }
 await b.close();
 ck('无控制台 / 页面错误', errors.length === 0, errors.slice(0, 4));
 process.exit(fail ? 1 : 0);

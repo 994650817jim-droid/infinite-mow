@@ -28,7 +28,7 @@ import {COMMONER_SKILLS} from '../data/commonerSkills';
 import {QUALITIES} from '../data/items';
 import {PANO_W,PANO_H,CITY_SLOTS,LEVEL_SCALE,CITY_BG_SIZES,CITY_ART_LEVELS,ART_ALIAS} from '../town/CityLayout';
 import {cityById,TIER_NAME} from '../world/WorldCities';
-import {CampLife,loadCampLife} from '../town/CampLife';
+import {CampLife,loadCampLife,CAMP_ART_IDS} from '../town/CampLife';
 
 /** 是否电脑布局：在场景构造时读取（模块加载时布局尚未初始化）。 */
 let D=false;
@@ -59,6 +59,7 @@ export class CityScene extends Phaser.Scene {
  preload(){if(!worldUnlocked()&&!isChapterTestRun())return;worldAssets(this,'town_ground','assets/town/ground.webp');
   for(const n of CITY_BG_SIZES)worldAssets(this,`city_bg_${n}`,`assets/city/bg_${n}.webp`);
   loadCampLife(this);
+  for(const id of CAMP_ART_IDS)worldAssets(this,`city_camp_${id}`,`assets/city/camp_${id}.webp`);
   const ids=Object.keys(TOWN_BUILDINGS) as TownBuildingId[];
   for(const lv of CITY_ART_LEVELS)for(const id of ids)if(lv<=(TOWN_BUILDINGS[id].maxLevel??3)){const a=ART_ALIAS[id]??id;worldAssets(this,`city_${a}_${lv}`,`assets/city/${a}_${lv}.webp`);}}
  create(){playMenuMusic(this);this.registry.remove('hardChapter');
@@ -124,7 +125,9 @@ export class CityScene extends Phaser.Scene {
  }
 
  /** 建筑贴图：营寨全景美术（新建筑复用旧图）→ 旧小镇像素画 → 无（程序画）。 */
+ /** 营寨档（大殿 1 级）：中军大帐 / 招贤帐 / 讲武校场 / 军营用营寨风图（美术会话 11-17，画布同 Lv1 图）；县城起照旧。 */
  private artKey(id:TownBuildingId,level:number):string|null{
+  if(citySize(loadWorld().town)===1&&(CAMP_ART_IDS as readonly string[]).includes(id)&&this.textures.exists(`city_camp_${id}`))return`city_camp_${id}`;
   const a=ART_ALIAS[id]??id;let best=0;for(const l of CITY_ART_LEVELS)if(l<=level&&l>best)best=l;
   if(best&&this.textures.exists(`city_${a}_${best}`))return`city_${a}_${best}`;
   const old=townArtLevel(level);if(id!=='hall'&&old&&this.textures.exists(`town_${a}_${old}`))return`town_${a}_${old}`;

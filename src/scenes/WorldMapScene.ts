@@ -35,6 +35,7 @@ import {ensureIntel,intelEvents,lubuChallengeOpen,lubuClears} from '../world/Wor
 import {LUBU_CHALLENGE} from '../data/dongzhuo';
 import {INTEL_INFO,intelBrief,intelReward,intelTitle,seasonIndex,type IntelEvent} from '../world/WorldIntel';
 import {QUALITIES} from '../data/items';
+import {addMainMenuButton} from '../ui/MainMenuButton';
 
 /** 按字数折行（中文无空格），行首不落标点。 */
 function wrapCJK(text:string,per:number):string{const out:string[]=[];let line='';for(const ch of text){if(line.length>=per&&!'，。、；：！？）」』”'.includes(ch)){out.push(line);line='';}line+=ch;}if(line)out.push(line);return out.join('\n');}
@@ -93,6 +94,7 @@ export class WorldMapScene extends Phaser.Scene {
   // 顶部资源栏（军粮 / 城池），漆底描金
   const res=resourceBar(this,desktop?shellTitle.x+shellTitle.width+12:24,desktop?25:88,[{glyph:"粮",label:"军粮",value:s.provisions,tint:0x7a5a22},{glyph:'城',label:'城池',value:this.owned.length,tint:0x2f6b45}],desktop);
   {const back=worldButton(this,desktop?W-74:W-105,desktop?25:43,"返回营寨",()=>this.scene.start("CityScene"),desktop?132:150);if(desktop){back.image.setDisplaySize(132,40);back.text.setFontSize(15);back.image.setName('world-back');}} // 2026-11-18 用户嫌水墨特效多：本界面只留出征主按钮一处笔刷，返回用漆底描金
+  addMainMenuButton(this,desktop?W-194:W-105,desktop?25:91); // 「主菜单」：返回营寨左边（手机在其下方），直接回主页，快捷键 M
   // 2026-11-16 用户反馈「大地图画面大点，下面的说明可以透明」：地图一直铺到屏幕底边，
   // 章节时间线与详情面板改为半透明漆底浮在地图上；viewBottom 以下（被浮层盖住的部分）不放标记、不接拖动。
   this.detailPh=desktop?124:244;const detailTop=H-(desktop?6:36)-this.detailPh;

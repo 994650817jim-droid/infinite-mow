@@ -115,6 +115,7 @@ export class BattleHotkeys {
       case 'pause':
         if (a === 'back') { h.togglePause(); return true; }
         if (a === 'confirm') return click(s, 'pause-resume');
+        if (a === 'menu') return click(s, 'pause-menu'); // 第一次进待确认，第二次执行
         if (a === 'bag') { h.openBag(); return true; }
         if (a === 'build') { h.openBuild(); this.buildFromBattle = false; return true; }
         if (a === 'attributes' && h.canAttributes()) { h.openAttributes('pause'); return true; }
@@ -165,7 +166,7 @@ export class BattleHotkeys {
 /** 每个界面要标键位的对象（名字 → 动作）。 */
 const HINTS: Record<string, Array<[string | RegExp, HotkeyAction | ((i: number) => HotkeyAction)]>> = {
   none: [['potion-button', 'potion'], ['attribute-plus', 'attributes'], ['hud-bag', 'bag'], ['hud-pause', 'back']],
-  pause: [['pause-resume', 'back'], ['pause-build', 'build']],
+  pause: [['pause-resume', 'back'], ['pause-build', 'build'], ['pause-menu', 'menu']],
   levelup: [[/^upgrade-card-[0-2]$/, i => (['pick1', 'pick2', 'pick3'] as const)[i]], ['upgrade-reroll', 'reroll']],
   bossloot: [[/^upgrade-card-[0-2]$/, i => (['pick1', 'pick2', 'pick3'] as const)[i]]],
   attributes: [['attributes-close', 'back']],

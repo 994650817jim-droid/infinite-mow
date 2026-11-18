@@ -58,7 +58,7 @@ for (const [layout, viewport] of Object.entries(LAYOUTS)) for (const [hero, h] o
       pl.passive.grantSharp(s.combatNow, 0); // 直接进入神射（等同不受伤满 3.5 秒）
       let most = 0, burst = false, enter = false; const t0 = performance.now();
       while (performance.now() - t0 < 3000) { await new Promise(r => setTimeout(r, 15)); most = Math.max(most, s.children.list.filter(o => o.name === 'huangzhong-heavy-arrow' && o.active).length); burst = burst || !!s.children.getByName('huangzhong-burst'); enter = enter || !!s.children.getByName('huangzhong-sharp-enter'); }
-      return { calm, most, burst, enter, fx: s.textures.exists('huangzhong_fx') };
+      return { calm, most, burst, enter, fx: s.textures.exists('huangzhong_paint') };
     }, [G, mk]);
     ck(`${tag}：静心——进入神射 5 → 4.5/4/3.5 秒；3 级神射第一箭扇形三连重箭，带像素爆裂与进入神射金光`, jx.calm.join() === '5000,4500,4000,3500' && jx.most >= 3 && (!jx.fx || (jx.burst && jx.enter)), jx);
     // 静心的神射重箭加成 20/22/25%（用户批准，逐级递增）：关掉暴击，比较神射时静心 0 级与 2 级的单箭伤害
@@ -126,7 +126,7 @@ for (const [layout, viewport] of Object.entries(LAYOUTS)) for (const [hero, h] o
       const shouts = s.passiveShout.count - shout0;
       // 紧接着再攒满一次：马超不设冷却，应再喊一次
       pl.passive.stacks = 6; await new Promise(r => setTimeout(r, 1200));
-      return { charge, moved: Math.round(moved), triggers: pl.passive.snapshot(s.combatNow).triggers, shouts, shoutText, bigText, wave, waveTex: s.textures.exists('warcry_fx'), glow, ring, shoutsAfterRefill: s.passiveShout.count - shout0 };
+      return { charge, moved: Math.round(moved), triggers: pl.passive.snapshot(s.combatNow).triggers, shouts, shoutText, bigText, wave, waveTex: s.textures.exists('warcry_paint'), glow, ring, shoutsAfterRefill: s.passiveShout.count - shout0 };
     }, [G, mk]);
     ck(`${tag}：铁骑满层，头前 ±45° 有敌人时朝头前冲锋（键盘往右走、右前方有敌、左边更近也有敌：仍向右突进 ≥120 像素）`, c.charge && c.moved >= 120 && c.triggers >= 1, c);
     // 方案 A：头前没有敌人（敌人只在身后左边）→ 转向目标冲，不扫空

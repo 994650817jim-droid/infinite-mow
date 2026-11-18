@@ -78,6 +78,10 @@ export class Enemy {
   martialSlowUntil = 0;
 
   flashUntil = 0;
+  /** 受击后仰（打击感 2026-11-17）：压扁结束时间与强度 0–1 */
+  private recoilUntil = 0;
+  private recoilMs = 90;
+  private squash = 0;
   private baseTint = 0xffffff;
   contactCd = 0;
   shootCd = 0;
@@ -119,6 +123,7 @@ export class Enemy {
     this.stunUntil = 0;
     this.targetAlly = null; this.targetLife = 0;
     this.flashUntil = 0;
+    this.recoilUntil = 0; this.squash = 0;
     this.contactCd = 0;
     this.shootCd = 1 + Math.random();
     this.dashCd = 1.5;
@@ -437,7 +442,7 @@ export class Enemy {
   private applyScale(): void {
     if (!this.walkSheet) return;
     const k = this.baseScaleY * this.frameScale;
-    this.sprite.setScale(k * (1 - .012 * this.stepStretch), k * (1 + .026 * this.stepStretch));
+    this.sprite.setScale(k * (1 - .012 * this.stepStretch) * (1 + .14 * this.squash), k * (1 + .026 * this.stepStretch) * (1 - .12 * this.squash));
     // 不再抬高原点：脚底始终贴着阴影（以前每步整体上移 2.5px，像在跳）。
     this.sprite.setOrigin(this.sprite.originX, this.baseOriginY);
   }
@@ -445,10 +450,18 @@ export class Enemy {
   flash(now: number): void {
     this.flashUntil = now + 70;
     this.sprite.setTintFill(0xffffff);
-    if (this.kind === 'elite' || this.kind === 'boss') this.sprite.setTintFill(0xffdddd);
+    if (this.kind === 'elite') this.sprite.setTintFill(0xffdddd);
+  }
+
+  /** 受击后仰：横向压扁一下再弹回；push 像素沿 angle 方向轻推（首领 / 不受控的单位只压扁不推）。 */
+  hitRecoil(now: number, angle: number, push: number, ms = 90): void {
+    if (this.kind === 'boss' || !this.walkSheet) return; // 首领的缩放由各首领控制器管，不在这里压扁
+    this.recoilUntil = now + ms; this.recoilMs = ms; this.squash = 1; this.applyScale();
+    if (push > 0 && !this.controlImmune && this.def.behavior !== 'wall') this.sprite.setPosition(this.sprite.x + Math.cos(angle) * push, this.sprite.y + Math.sin(angle) * push);
   }
 
   updateVisual(now: number): void {
+    if (this.squash > 0) { this.squash = now >= this.recoilUntil ? 0 : (this.recoilUntil - now) / this.recoilMs; this.applyScale(); }
     if (this.flashUntil > 0 && now >= this.flashUntil) {
       this.flashUntil = 0;
       this.sprite.setTint(this.baseTint);

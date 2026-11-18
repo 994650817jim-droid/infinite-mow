@@ -22,7 +22,7 @@ interface Hazard { id: string; shape: Shape; from: number; at: number; dmg: numb
 export class BossMoveset extends ArcBossV2<string> {
   phase: 1 | 2 = 1;
   private cds = new Map<string, number>(); private hazards: Hazard[] = []; private seq = 0; private order = 0;
-  private cur: MoveDef | null = null; private dash: { ax: number; ay: number; t0: number; ms: number; hitPlayer: boolean; back: boolean; len: number; fireAt: number } | null = null;
+  private cur: MoveDef | null = null; private dash: { ax: number; ay: number; t0: number; ms: number; hitPlayer: boolean; back: boolean; len: number; fireAt: number; hitTroops: Set<unknown> } | null = null;
   private ride: { a0: number; t0: number; ms: number; dropAt: number; drops: number; cx: number; cy: number; dir: number } | null = null;
   private hideUntil = 0; private flags: { e: Enemy; img: Phaser.GameObjects.Image | null }[] = []; private flagMul = 1;
   private guards: Enemy[] = []; mount?: BossMount;
@@ -36,7 +36,7 @@ export class BossMoveset extends ArcBossV2<string> {
   constructor(h: ArcHost, tex: string, now: number, readonly def: BossMovesetDef, private mode: 'arc' | 'walk' = 'arc') {
     super(h, tex, def.name, now);
     this.moveNames.push(...def.p1.moves.map(m => m.name));
-    if (def.mount) this.mount = new BossMount(h.scene, h.boss, def.mount);
+    if (def.mount) this.mount = new BossMount(h.scene, h.boss, { ...def.mount, rider: def.mount.rider ?? def.id }, () => this.state === 'warn' || this.state === 'attack');
     this.next = now + 1800;
     h.banner(def.p1.name, def.p1.caption);
   }
@@ -91,7 +91,13 @@ export class BossMoveset extends ArcBossV2<string> {
     if (this.mode === 'walk') b.startAttack(now, Math.abs(Math.cos(a)) > .7 ? (Math.cos(a) < 0 ? 'left' : 'right') : Math.sin(a) < 0 ? 'up' : 'down');
     const at = now + m.windupMs;
     switch (m.kind) {
-      case 'charge': this.add({ kind: 'lane', x: b.x, y: b.y, angle: a, len: m.len, width: m.width }, now, at, 0, true); break;
+      case 'charge': {
+        this.add({ kind: 'lane', x: b.x, y: b.y, angle: a, len: m.len, width: m.width }, now, at, 0, true);
+        // 两侧并行的骑兵道（虎豹冲阵）：同时冲过，只出预警与伤害
+        for (let k = 1; k < (m.lanes ?? 1); k++) { const side = k % 2 ? 1 : -1, off = Math.ceil(k / 2) * (m.width + 26) * side; this.add({ kind: 'lane', x: b.x - Math.sin(a) * off, y: b.y + Math.cos(a) * off, angle: a, len: m.len, width: m.width }, now, at + m.dashMs * .5, m.dmg); }
+        break;
+      }
+      case 'fan': for (let k = 0; k < m.count; k++) { const ang = a + (m.count > 1 ? (k / (m.count - 1) - .5) * m.spread : 0); this.add({ kind: 'lane', x: b.x, y: b.y, angle: ang, len: m.len, width: m.width }, now, at + k * 70, m.dmg); } break;
       case 'sweep': this.add({ kind: 'sector', x: b.x, y: b.y, r: m.r, angle: a, arc: m.arc }, now, at, m.dmg); for (let k = 1; k < (m.times ?? 1); k++) this.add({ kind: 'sector', x: b.x, y: b.y, r: m.r, angle: a + (k % 2 ? .35 : -.35), arc: m.arc }, now, at + k * 320, m.dmg); break;
       case 'rings': m.radii.forEach((r, k) => this.add({ kind: 'circle', x: b.x, y: b.y, r, inner: Math.max(0, r - m.band), fx: 'slam' }, now, at + k * m.gapMs, m.dmg)); break;
       case 'volley': for (let k = 0; k < m.count; k++) { const ang = Math.random() * Math.PI * 2, d = k === 0 ? 0 : 40 + Math.random() * m.spread; this.add({ kind: 'circle', x: p.x + Math.cos(ang) * d, y: p.y + Math.sin(ang) * d * .7, r: m.r, fx: m.fx }, now, at + k * 90, m.dmg); } break;
@@ -104,7 +110,7 @@ export class BossMoveset extends ArcBossV2<string> {
   private release(now: number): void {
     const m = this.cur!, b = this.h.boss, p = this.h.player;
     switch (m.kind) {
-      case 'charge': this.dash = { ax: Math.cos(this.angle), ay: Math.sin(this.angle), t0: now, ms: m.dashMs, hitPlayer: false, back: !!m.back, len: m.len, fireAt: now }; return;
+      case 'charge': this.dash = { ax: Math.cos(this.angle), ay: Math.sin(this.angle), t0: now, ms: m.dashMs, hitPlayer: false, back: !!m.back, len: m.len, fireAt: now, hitTroops: new Set() }; return;
       case 'ride': { const a0 = Math.atan2(b.y - p.y, b.x - p.x); this.ride = { a0, t0: now, ms: m.ms, dropAt: now, drops: 0, cx: p.x, cy: p.y, dir: Math.random() < .5 ? 1 : -1 }; return; }
       case 'vanish': { this.hideUntil = now + m.hideMs; this.beat.set(m.name, 'release', now, m.hideMs); this.h.scene.time.delayedCall(m.hideMs, () => this.reappear(m)); return; }
       case 'summon': for (let k = 0; k < m.count; k++) { const c = m.around === 'player' ? p : b, ang = k / m.count * Math.PI * 2; this.h.spawn(m.troop, c.x + Math.cos(ang) * m.radius, c.y + Math.sin(ang) * m.radius * .8); } break;
@@ -142,10 +148,11 @@ export class BossMoveset extends ArcBossV2<string> {
     const sp = d.len / d.ms * 1000; b.sprite.x += d.ax * sp * dt; b.sprite.y += d.ay * sp * dt;
     this.state = 'attack'; this.pose((Math.abs(d.ax) > Math.abs(d.ay) ? (d.ax < 0 ? 1 : 2) : d.ay < 0 ? 3 : 0) * 4 + Math.floor(now / 70) % 4, now);
     if (!d.hitPlayer && p.alive && Math.hypot(p.x - b.x, p.y - b.y) < 44 + p.radius) { d.hitPlayer = true; p.takeDamage(b.def.damage * m.dmg, now); this.metrics.playerHits++; }
-    this.h.army.hurtArea(b.x, b.y, 46, b.def.damage * m.dmg * dt * 3, now);
+    // 冲过部曲：每名士兵每次冲锋吃一整下（hurtByBoss：× 技能倍率 × BOSS_VS_ALLY）；时间戳用冲锋起点，「一招最多打死 3 个」按整次冲锋算
+    for (const u of this.h.army.units) if (u.active && !d.hitTroops.has(u) && Math.hypot(u.x - b.x, u.y - b.y) <= 46 + u.radius) { d.hitTroops.add(u); this.h.army.hurtByBoss(u, b.def.damage * m.dmg, d.t0); }
     if (m.fire && now >= d.fireAt) { d.fireAt = now + 120; this.add({ kind: 'circle', x: b.x, y: b.y, r: 40, fx: 'fire' }, now, now + 380, m.dmg * .5); }
     if (now - d.t0 >= d.ms) {
-      if (d.back) { const a = Math.atan2(p.y - b.y, p.x - b.x); this.angle = a; this.dash = { ...d, ax: Math.cos(a), ay: Math.sin(a), t0: now + 380, back: false, hitPlayer: false }; this.add({ kind: 'lane', x: b.x, y: b.y, angle: a, len: d.len, width: m.width }, now, now + 380, 0, true); this.beat.set(m.name, 'windup', now, 380); this.dash = null; this.cur = { ...m, back: false, windupMs: 380 }; this.h.banner('折返再冲'); return; }
+      if (d.back) { const a = Math.atan2(p.y - b.y, p.x - b.x); this.angle = a; this.dash = { ...d, ax: Math.cos(a), ay: Math.sin(a), t0: now + 380, back: false, hitPlayer: false, hitTroops: new Set() }; this.add({ kind: 'lane', x: b.x, y: b.y, angle: a, len: d.len, width: m.width }, now, now + 380, 0, true); this.beat.set(m.name, 'windup', now, 380); this.dash = null; this.cur = { ...m, back: false, windupMs: 380 }; this.h.banner('折返再冲'); return; }
       this.dash = null; this.toRecover(now, 700);
     }
   }
@@ -164,6 +171,8 @@ export class BossMoveset extends ArcBossV2<string> {
     const dismount = this.mounted;
     this.phase = 2; this.phase2 = true; this.metrics.phase2++; if (dismount) this.metrics.dismount++;
     this.dash = null; this.ride = null; this.cur = null; this.hideUntil = 0; this.beat.set(null, 'idle', now, 0); this.next = now + 2200;
+    // 一阶段的旗阵随换阶段撤掉（不带进二阶段减伤）
+    for (const f of this.flags) { f.img?.destroy(); if (f.e.active) f.e.deactivate(); } this.flags = [];
     emitBossPhase(this.h.scene, { boss: this.h.boss, phase: 2, dismount, name: this.def.name }); // 坐骑在 BossMount 里收到事件后坠马
     this.kit.phaseShift(now, dismount ? '坠马！' + this.def.p2.name : this.def.p2.name, this.def.p2.caption, 0x8a4a2a, .1);
     this.moveNames.length = 0; this.moveNames.push(...this.def.p2.moves.map(m => m.name));

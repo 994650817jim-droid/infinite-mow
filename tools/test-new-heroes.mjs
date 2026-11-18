@@ -51,7 +51,7 @@ for (const [layout, viewport] of Object.entries(LAYOUTS)) for (const [hero, h] o
       // 侍婢身边放一个定身敌人，看正式刀光（sun-maid-slash）
       const e = s.spawnEnemy('infantry', pl.x + 40, pl.y + 10, 1); if (e) { e.hp = e.maxHp = 99999; e.stunUntil = 1e12; } let slash = false; const t1 = performance.now();
       while (performance.now() - t1 < 3000 && !slash) { await new Promise(r => setTimeout(r, 20)); slash = !!s.children.getByName('sun-maid-slash'); }
-      return { stacksAfterWalk: sn0.stacks, gains: pl.passive.snapshot(s.combatNow).gains, triggers: pl.passive.snapshot(s.combatNow).triggers, maids, slash, slashTex: s.textures.exists('sun_maid_slash'), shouts: s.passiveShout.count, shout: s.passiveShout.lastLine };
+      return { stacksAfterWalk: sn0.stacks, gains: pl.passive.snapshot(s.combatNow).gains, triggers: pl.passive.snapshot(s.combatNow).triggers, maids, slash, slashTex: s.textures.exists('hero_small_paint'), shouts: s.passiveShout.count, shout: s.passiveShout.lastLine };
     }, G);
     ck(`${tag}：移动积满 6 层疾步，召出 2 名执刀侍婢`, m.gains >= 6 && m.triggers >= 1 && m.maids >= 2, m);
     ck(`${tag}：侍婢挥刀播正式刀光；疾步攒满时头顶喊一句台词`, m.slash && m.slashTex && m.shouts === 1 && ['侍婢何在，随我执刀！', '弓腰姬在此，谁敢近前！', '江东孙尚香，岂输男儿！'].includes(m.shout), m);
@@ -129,6 +129,31 @@ for (const [layout, viewport] of Object.entries(LAYOUTS)) {
   ck(`选将(${layout})：确认出战（两次）后貂蝉定为主公并记住`, conf.saved === 'diaochan' && conf.sel === 11 && conf.lord === 'diaochan', conf);
   await p.waitForTimeout(400); await p.screenshot({ path: `${out}/home-${layout}.png` });
   await p.evaluate(() => localStorage.removeItem('im_last_hero'));
+  await p.close();
+}
+// 可破坏道具（2026-11-17 用户：「为什么我现在使用貂蝉但是打障碍物没坏」）：12 名武将的本命武器都能打碎身边的酒罐。
+// 酒罐放在主将右侧 60 像素，旁边再放一名定住的高血量敌人（多数武器要有敌人才出手，选靶仍跳过道具）。
+{
+  const p = await b.newPage({ viewport: LAYOUTS.desktop }); watch(p, 'props');
+  await p.goto(base + '?dev=1&autostart=1&stage=1&layout=desktop');
+  await p.waitForFunction(() => window.__game?.scene.getScene('GameScene')?.__DEV_ACTIONS, null, { timeout: 60000 }); await p.waitForTimeout(800);
+  for (const hero of ['zhaoyun', 'guanyu', 'huangzhong', 'zhuge', 'zhangfei', 'machao', 'weiyan', 'liubei', 'pangtong', 'huangyueying', 'sunshangxiang', 'diaochan']) {
+    await p.evaluate(id => { const s = window.__game.scene.getScene('GameScene'); s.registry.set('runConfig', { ...s.registry.get('runConfig'), character: id, weapon: undefined }); s.scene.restart(); }, hero);
+    await p.waitForTimeout(400);
+    await p.waitForFunction(id => { const s = window.__game.scene.getScene('GameScene'); return s?.player && s.runConfig?.character === id && s.__DEV_ACTIONS && s.supplies; }, hero, { timeout: 30000 });
+    const r = await p.evaluate(async () => {
+      const s = window.__game.scene.getScene('GameScene'), pl = s.player; pl.damageImmune = true; s.__DEV_ACTIONS.closePopup?.(); s.spawnTimer = s.eliteTimer = 1e9; s.spawnGem = () => {};
+      for (const e of s.enemies) if (e.active) e.deactivate();
+      const lv = setInterval(() => { if (s.mode === 'levelup') s.chooseUpgrade(0); }, 40);
+      const jar = s.supplies.spawnHealForTest('wine', 60, 0); if (!jar) { clearInterval(lv); return { jar: false }; }
+      const life = jar.spawnId, foe = s.spawnEnemy('infantry', pl.x + 88, pl.y + 12, 1); foe.hp = foe.maxHp = 1e7; foe.stunUntil = 1e12;
+      const t0 = performance.now(); let broke = false;
+      while (performance.now() - t0 < 9000) { await new Promise(r => setTimeout(r, 60)); if (!jar.active || jar.spawnId !== life) { broke = true; break; } }
+      clearInterval(lv);
+      return { jar: true, broke, ms: Math.round(performance.now() - t0), foeHurt: foe.maxHp - foe.hp > 0 };
+    });
+    ck(`道具(${hero})：本命武器能打碎身边的酒罐`, r.jar && r.broke, r);
+  }
   await p.close();
 }
 ck('无 pageerror / console error', errors.length === 0, errors.slice(0, 5));

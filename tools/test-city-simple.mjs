@@ -209,7 +209,7 @@ for (const layout of ['mobile', 'desktop']) {
   await p.waitForFunction(() => window.__game.scene.isActive('WorldMapScene'), null, { timeout: 30000 }); await p.waitForTimeout(1500);
   const tip1 = await p.evaluate(() => { const m = window.__game.scene.getScene('WorldMapScene'); let found = false; m.children.each(function walk(o) { if (o.name === 'home-intro-tip') found = true; if (o.list) o.list.forEach(walk); }); return found; });
   await p.screenshot({ path: `${out}/map-home-tip.png` });
-  await p.evaluate(() => window.__game.scene.getScene('WorldMapScene').scene.start('CityScene'));
+  await p.evaluate(() => { window.__game.scene.getScene('WorldMapScene').scene.start('CityScene'); });
   await p.waitForFunction(() => window.__game.scene.isActive('CityScene')); await p.waitForTimeout(600);
   await p.evaluate(() => window.__game.scene.getScene('CityScene').children.getByName('city-map').emit('pointerdown'));
   await p.waitForFunction(() => window.__game.scene.isActive('WorldMapScene')); await p.waitForTimeout(1200);

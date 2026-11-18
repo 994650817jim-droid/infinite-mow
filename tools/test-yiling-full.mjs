@@ -70,6 +70,7 @@ try {
       await p.waitForTimeout(200);
     }
     ck(`10-${stage}：首领出阵 → 倒地掉宝箱 → 捡完告捷`, bossSeen && chest && end && (end.victory || end.rest), { bossSeen, chest, end });
+    if (stage === 3) ck('10-3：陆逊二阶段——两道火线、八阵图迷踪（隐身后另处现身）', end?.y?.double && end?.y?.mazes >= 1, end?.y);
     if (stage === 3) ck('10-3：陆逊半血「火烧连营」、章末剧情 → 夷陵之战终', end?.y?.rage && sawEnd && end?.victory === true, { end, sawEnd });
     await p.screenshot({ path: `${OUT}/stage${stage}-end.png` });
   }

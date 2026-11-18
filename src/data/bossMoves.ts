@@ -8,7 +8,9 @@ import type { BossMountDef } from '../systems/BossMount';
  */
 export type MoveDef =
   /** 直线冲锋：先出长条预警，再沿线冲过去，撞到主将掉血；back 折返再冲一次；fire 冲过的路上留地火。 */
-  | { kind: 'charge'; name: string; windupMs: number; cd: number; dmg: number; len: number; width: number; dashMs: number; back?: boolean; fire?: boolean }
+  | { kind: 'charge'; name: string; windupMs: number; cd: number; dmg: number; len: number; width: number; dashMs: number; back?: boolean; fire?: boolean; /** 两侧并行的骑兵道（虎豹冲阵）：只出预警与伤害，首领冲中间。 */ lanes?: number }
+  /** 扇形多道箭（连珠箭阵）：从首领朝主将张开 count 道长条。 */
+  | { kind: 'fan'; name: string; windupMs: number; cd: number; dmg: number; count: number; spread: number; len: number; width: number }
   /** 扇形横扫（朝主将）。 */
   | { kind: 'sweep'; name: string; windupMs: number; cd: number; dmg: number; r: number; arc: number; times?: number }
   /** 以首领为圆心一圈圈向外的地裂（每圈一段延迟）。 */
@@ -94,10 +96,162 @@ export const BOSS_MOVES: Record<string, BossMovesetDef> = {
       { kind: 'vanish', name: '宛城夜袭', windupMs: 450, cd: 7000, dmg: 1.7, hideMs: 1100, r: 140, arc: Math.PI * .6 },
     ] },
   },
-};
+  // ===== 第二批：第四章骑马补丁、第五章曹纯 / 蔡瑁、第六章荆南四将 =====
+  // 5-1 曹纯（虎豹骑）：骑黑马；虎豹冲阵（三道并冲）+ 长坂追袭（折返连冲）→ 坠马「虎豹围猎」：虎豹骑合围
+  caochun: {
+    id: 'caochun', name: '曹纯', phaseAt: .5, mount: { horse: 'wuzhui' },
+    p1: { name: '虎豹骑', caption: '三道并冲 · 长坂追袭', gapMs: 2300, speedMul: 1.45, moves: [
+      { kind: 'charge', name: '虎豹冲阵', windupMs: 1000, cd: 4600, dmg: 1.4, len: 480, width: 70, dashMs: 520, lanes: 3 },
+      { kind: 'charge', name: '长坂追袭', windupMs: 700, cd: 5200, dmg: 1.3, len: 300, width: 64, dashMs: 380, back: true },
+    ] },
+    p2: { name: '虎豹围猎', caption: '坠马步战 · 虎豹骑四面合围', gapMs: 2100, speedMul: 1, moves: [
+      { kind: 'summon', name: '虎豹围猎', windupMs: 900, cd: 9000, dmg: 0, troop: 'cavalry', count: 6, radius: 280, around: 'player' },
+      { kind: 'sweep', name: '马刀横扫', windupMs: 600, cd: 3000, dmg: 1.3, r: 130, arc: Math.PI * .9, times: 2 },
+    ] },
+  },
+  // 5-2 蔡瑁（水军都督，不骑）：楼船箭雨 + 水军旗令 →「连环火起」：火箭雨（落点起火）+ 水军增援
+  caimao: {
+    id: 'caimao', name: '蔡瑁', phaseAt: .5,
+    p1: { name: '荆州水军', caption: '楼船箭雨 · 水军旗令', gapMs: 2600, speedMul: 1, moves: [
+      { kind: 'volley', name: '楼船箭雨', windupMs: 1200, cd: 4200, dmg: 1, count: 7, r: 66, spread: 220, fx: 'arrows' },
+      { kind: 'flags', name: '水军旗令', windupMs: 700, cd: 15000, dmg: 0, count: 3, radius: 180, hp: 110, takenMul: .55 },
+    ] },
+    p2: { name: '连环火起', caption: '火箭雨落处起火 · 水军增援', gapMs: 2100, speedMul: 1, moves: [
+      { kind: 'volley', name: '火箭齐发', windupMs: 1100, cd: 3600, dmg: 1.2, count: 8, r: 70, spread: 230, fx: 'fire' },
+      { kind: 'summon', name: '水军增援', windupMs: 800, cd: 9000, dmg: 0, troop: 'archer', count: 5, radius: 260, around: 'player' },
+    ] },
+  },
+  // 6-1 赵范（桂阳太守，不骑）：亲军护驾 + 弓阵齐射 →「弃城欲逃」：绕城奔逃、身后落绊马索（落点）
+  zhaofan: {
+    id: 'zhaofan', name: '赵范', phaseAt: .5,
+    p1: { name: '桂阳太守', caption: '亲军护驾 · 弓阵齐射', gapMs: 2600, speedMul: 1, moves: [
+      { kind: 'summon', name: '亲军护驾', windupMs: 800, cd: 9000, dmg: 0, troop: 'shield', count: 4, radius: 110, around: 'boss' },
+      { kind: 'volley', name: '弓阵齐射', windupMs: 1100, cd: 4200, dmg: 1, count: 5, r: 62, spread: 170, fx: 'arrows' },
+    ] },
+    p2: { name: '弃城欲逃', caption: '赵范绕城奔逃 · 身后落下绊索', gapMs: 2000, speedMul: 1.3, moves: [
+      { kind: 'ride', name: '弃城欲逃', windupMs: 500, cd: 6000, dmg: .9, radius: 280, ms: 1800, drops: 6, r: 60 },
+      { kind: 'volley', name: '弓阵齐射', windupMs: 1000, cd: 3800, dmg: 1.1, count: 6, r: 62, spread: 180, fx: 'arrows' },
+    ] },
+  },
+  // 6-2 刘度（零陵太守，不骑）：山越伏林 + 藤牌推进 →「据险死守」：藤牌兵护体减伤 + 箭雨
+  liudu: {
+    id: 'liudu', name: '刘度', phaseAt: .5,
+    p1: { name: '零陵太守', caption: '山越伏林 · 藤牌推进', gapMs: 2600, speedMul: 1, moves: [
+      { kind: 'summon', name: '山越伏林', windupMs: 900, cd: 8500, dmg: 0, troop: 'archer', count: 5, radius: 250, around: 'player' },
+      { kind: 'summon', name: '藤牌推进', windupMs: 800, cd: 9500, dmg: 0, troop: 'shield', count: 5, radius: 150, around: 'boss' },
+      { kind: 'sweep', name: '军刀横扫', windupMs: 650, cd: 3400, dmg: 1.2, r: 125, arc: Math.PI * .9 },
+    ] },
+    p2: { name: '据险死守', caption: '藤牌兵护体时刘度减伤 · 先破藤牌', gapMs: 2200, speedMul: .9, guards: { troop: 'shield', count: 5, takenMul: .3 }, moves: [
+      { kind: 'volley', name: '山越毒箭', windupMs: 1000, cd: 3600, dmg: 1.1, count: 6, r: 62, spread: 190, fx: 'arrows' },
+      { kind: 'sweep', name: '军刀横扫', windupMs: 600, cd: 3000, dmg: 1.3, r: 130, arc: Math.PI * .9, times: 2 },
+    ] },
+  },
+  // 6-3 黄忠（长沙老将，可劝降）：骑马；百步穿杨（贯穿一箭）+ 连珠箭阵（扇形五箭）→ 坠马「老当益壮」：大刀连斩 + 穿杨
+  huangzhong: {
+    id: 'huangzhong', name: '黄忠', phaseAt: .5, mount: { horse: 'generic', tint: 0xc8a070 },
+    p1: { name: '长沙老将', caption: '百步穿杨 · 连珠箭阵', gapMs: 2400, speedMul: 1.3, moves: [
+      { kind: 'thrust', name: '百步穿杨', windupMs: 1100, cd: 4000, dmg: 1.9, len: 820, width: 40 },
+      { kind: 'fan', name: '连珠箭阵', windupMs: 900, cd: 4600, dmg: 1.1, count: 5, spread: Math.PI * .55, len: 520, width: 34 },
+    ] },
+    p2: { name: '老当益壮', caption: '坠马步战 · 大刀连斩', gapMs: 1900, speedMul: 1.15, moves: [
+      { kind: 'sweep', name: '老当益壮', windupMs: 550, cd: 2800, dmg: 1.4, r: 135, arc: Math.PI, times: 3 },
+      { kind: 'thrust', name: '百步穿杨', windupMs: 900, cd: 4200, dmg: 2, len: 820, width: 40 },
+    ] },
+  },
+  // 6-3 韩玄（长沙太守，不骑）：严刑督战（召兵）+ 城头弓阵 →「困兽」：亲兵护体
+  hanxuan: {
+    id: 'hanxuan', name: '韩玄', phaseAt: .5,
+    p1: { name: '长沙太守', caption: '严刑督战 · 城头弓阵', gapMs: 2500, speedMul: 1, moves: [
+      { kind: 'summon', name: '严刑督战', windupMs: 900, cd: 8000, dmg: 0, troop: 'infantry', count: 6, radius: 240, around: 'player' },
+      { kind: 'volley', name: '城头弓阵', windupMs: 1100, cd: 4000, dmg: 1.1, count: 6, r: 64, spread: 200, fx: 'arrows' },
+    ] },
+    p2: { name: '困兽', caption: '亲兵护体时韩玄减伤 · 先打亲兵', gapMs: 2100, speedMul: 1, guards: { troop: 'infantry', count: 5, takenMul: .35 }, moves: [
+      { kind: 'sweep', name: '困兽乱劈', windupMs: 600, cd: 3000, dmg: 1.3, r: 125, arc: Math.PI * .9, times: 2 },
+      { kind: 'volley', name: '城头弓阵', windupMs: 1000, cd: 3600, dmg: 1.2, count: 7, r: 64, spread: 210, fx: 'arrows' },
+    ] },
+  },
 
+  // ===== 第三批：第八章汉中、第十章夷陵（孙桓 / 朱然）、第十二章北伐（张郃再战 / 郝昭） =====
+  // 8-1 / 12-1 张郃：骑马；巧变阵（三面枪兵合围）+ 突阵 + 连环枪 → 坠马「瓦口隘死战」：亲卫护体、连环枪三段
+  zhanghe: {
+    id: 'zhanghe', name: '张郃', phaseAt: .5, mount: { horse: 'generic', tint: 0x8a96b0 },
+    p1: { name: '巧变之将', caption: '巧变阵 · 突阵 · 连环枪', gapMs: 2300, speedMul: 1.35, moves: [
+      { kind: 'summon', name: '巧变阵', windupMs: 900, cd: 8500, dmg: 0, troop: 'infantry', count: 6, radius: 240, around: 'player' },
+      { kind: 'charge', name: '张郃突阵', windupMs: 850, cd: 4400, dmg: 1.4, len: 440, width: 66, dashMs: 480 },
+      { kind: 'sweep', name: '连环枪击', windupMs: 600, cd: 3400, dmg: 1.2, r: 145, arc: Math.PI * .55, times: 2 },
+    ] },
+    p2: { name: '瓦口隘死战', caption: '坠马步战 · 亲卫护体时张郃减伤', gapMs: 2000, speedMul: 1, guards: { troop: 'infantry', count: 4, takenMul: .45 }, moves: [
+      { kind: 'sweep', name: '连环枪击', windupMs: 550, cd: 2800, dmg: 1.3, r: 150, arc: Math.PI * .55, times: 3 },
+      { kind: 'thrust', name: '长枪贯阵', windupMs: 850, cd: 4200, dmg: 1.7, len: 640, width: 44 },
+    ] },
+  },
+  // 8-2 夏侯渊：骑马；疾行突袭（全屏长冲折返）+ 三日五百（绕阵箭雨）→ 坠马「军刀横扫」大范围 + 召骑兵
+  xiahouyuan: {
+    id: 'xiahouyuan', name: '夏侯渊', phaseAt: .5, mount: { horse: 'generic', tint: 0x5a4a3a },
+    p1: { name: '疾行之将', caption: '疾行突袭 · 三日五百', gapMs: 2100, speedMul: 1.55, moves: [
+      { kind: 'charge', name: '疾行突袭', windupMs: 900, cd: 4800, dmg: 1.5, len: 720, width: 70, dashMs: 560, back: true },
+      { kind: 'ride', name: '三日五百', windupMs: 500, cd: 7000, dmg: 1.1, radius: 300, ms: 1700, drops: 8, r: 64 },
+    ] },
+    p2: { name: '军刀横扫', caption: '坠马步战 · 大范围横扫', gapMs: 2000, speedMul: 1.05, moves: [
+      { kind: 'sweep', name: '军刀横扫', windupMs: 650, cd: 3000, dmg: 1.5, r: 170, arc: Math.PI * 1.1, times: 2 },
+      { kind: 'summon', name: '号令援军', windupMs: 800, cd: 9000, dmg: 0, troop: 'cavalry', count: 4, radius: 280, around: 'player' },
+    ] },
+  },
+  // 8-3 曹操：骑绝影；虎豹骑冲阵（三道）+ 挟天子令诸侯（插旗减伤）→ 坠马「鸡肋断后」：火线箭雨、虎豹骑断后
+  caocao: {
+    id: 'caocao', name: '曹操', phaseAt: .5, mount: { horse: 'jueying' },
+    p1: { name: '魏王', caption: '虎豹骑冲阵 · 挟天子令诸侯', gapMs: 2400, speedMul: 1.35, moves: [
+      { kind: 'charge', name: '虎豹骑冲阵', windupMs: 1000, cd: 4600, dmg: 1.5, len: 500, width: 72, dashMs: 520, lanes: 3 },
+      { kind: 'flags', name: '挟天子令诸侯', windupMs: 800, cd: 15000, dmg: 0, count: 3, radius: 190, hp: 130, takenMul: .5 },
+      { kind: 'sweep', name: '倚天剑斩', windupMs: 600, cd: 3400, dmg: 1.3, r: 135, arc: Math.PI * .9 },
+    ] },
+    p2: { name: '鸡肋断后', caption: '坠马步战 · 断后火线 · 虎豹骑护驾', gapMs: 2000, speedMul: 1, guards: { troop: 'cavalry', count: 4, takenMul: .5 }, moves: [
+      { kind: 'volley', name: '断后火线', windupMs: 1000, cd: 3600, dmg: 1.2, count: 7, r: 66, spread: 220, fx: 'fire' },
+      { kind: 'sweep', name: '倚天剑斩', windupMs: 550, cd: 3000, dmg: 1.4, r: 140, arc: Math.PI, times: 2 },
+    ] },
+  },
+  // 10-1 孙桓：骑马；宗室锐气（冲阵）+ 夷道死守（召兵）→ 坠马连斩
+  sunhuan: {
+    id: 'sunhuan', name: '孙桓', phaseAt: .5, mount: { horse: 'generic', tint: 0xb06048 },
+    p1: { name: '宗室少将', caption: '宗室锐气 · 夷道死守', gapMs: 2300, speedMul: 1.4, moves: [
+      { kind: 'charge', name: '宗室锐气', windupMs: 850, cd: 4200, dmg: 1.4, len: 460, width: 66, dashMs: 480 },
+      { kind: 'summon', name: '夷道死守', windupMs: 800, cd: 9000, dmg: 0, troop: 'infantry', count: 5, radius: 160, around: 'boss' },
+    ] },
+    p2: { name: '少年血勇', caption: '坠马步战 · 连斩', gapMs: 1900, speedMul: 1.1, moves: [
+      { kind: 'sweep', name: '连斩', windupMs: 550, cd: 2800, dmg: 1.4, r: 130, arc: Math.PI * .9, times: 3 },
+      { kind: 'charge', name: '步战突进', windupMs: 700, cd: 4600, dmg: 1.3, len: 320, width: 60, dashMs: 420 },
+    ] },
+  },
+  // 10-2 朱然：骑马；连营反扑（绕营奔袭箭雨）+ 长枪突刺 → 坠马「坚守夷道」：亲兵护体减伤
+  zhuran: {
+    id: 'zhuran', name: '朱然', phaseAt: .5, mount: { horse: 'generic', tint: 0x9a6a52 },
+    p1: { name: '昭武将军', caption: '连营反扑 · 长枪突刺', gapMs: 2300, speedMul: 1.35, moves: [
+      { kind: 'ride', name: '连营反扑', windupMs: 500, cd: 6500, dmg: 1.1, radius: 290, ms: 1700, drops: 7, r: 64 },
+      { kind: 'thrust', name: '长枪突刺', windupMs: 800, cd: 3800, dmg: 1.6, len: 560, width: 44 },
+    ] },
+    p2: { name: '坚守夷道', caption: '坠马步战 · 亲兵护体时朱然减伤', gapMs: 2100, speedMul: .95, guards: { troop: 'shield', count: 5, takenMul: .35 }, moves: [
+      { kind: 'sweep', name: '长枪横扫', windupMs: 600, cd: 3000, dmg: 1.3, r: 150, arc: Math.PI * .8, times: 2 },
+      { kind: 'volley', name: '营寨弓弩', windupMs: 1000, cd: 3800, dmg: 1.1, count: 6, r: 64, spread: 200, fx: 'arrows' },
+    ] },
+  },
+  // 12-2 郝昭（守将，不骑）：火箭逆射 + 石磨压阵（大落石）→「死守陈仓」：城头弓手护体减伤
+  haozhao: {
+    id: 'haozhao', name: '郝昭', phaseAt: .5,
+    p1: { name: '陈仓守将', caption: '火箭逆射 · 石磨压阵', gapMs: 2500, speedMul: 1, moves: [
+      { kind: 'volley', name: '火箭逆射', windupMs: 1100, cd: 4000, dmg: 1.1, count: 6, r: 64, spread: 200, fx: 'fire' },
+      { kind: 'volley', name: '石磨压阵', windupMs: 1300, cd: 5200, dmg: 1.6, count: 2, r: 105, spread: 120, fx: 'slam' },
+    ] },
+    p2: { name: '死守陈仓', caption: '城头弓手护体时郝昭减伤 · 先打弓手', gapMs: 2100, speedMul: 1, guards: { troop: 'archer', count: 5, takenMul: .4 }, moves: [
+      { kind: 'volley', name: '火箭逆射', windupMs: 1000, cd: 3400, dmg: 1.2, count: 8, r: 64, spread: 220, fx: 'fire' },
+      { kind: 'volley', name: '石磨压阵', windupMs: 1200, cd: 4600, dmg: 1.7, count: 3, r: 105, spread: 150, fx: 'slam' },
+    ] },
+  },
+};
 /** 已有专属控制器的首领只补骑马（半血坠马跟着统一的 boss-phase 事件）。 */
 export const BOSS_MOUNTS: Record<string, BossMountDef> = {
-  lubu: { horse: 'chitu', cut: .6 },
-  huaxiong: { horse: 'wuzhui', cut: .62 },
+  lubu: { horse: 'chitu', cut: .6, rider: 'lubu' },
+  huaxiong: { horse: 'wuzhui', cut: .62, rider: 'huaxiong' },
+  // 第四章官渡：颜良、文丑（GuanduBoss 专属控制器），半血坠马
+  yanliang: { horse: 'dawan', cut: .62 },
+  wenchou: { horse: 'generic', tint: 0x6a5a48, cut: .62 },
 };

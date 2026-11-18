@@ -15,10 +15,15 @@ interface SfxConfig {
 
 const CONFIG: Record<string, SfxConfig> = {
   propBreak:{freq:170,dur:.12,type:'triangle',gain:.04,throttleMs:70,max:2,priority:0,slideTo:65},
-  hitLight: { freq: 220, dur: 0.05, type: 'triangle', gain: 0.035, throttleMs: 60, max: 3, priority: 0, pitchVar: 0.05 },
-  hitHeavy: { freq: 150, dur: 0.08, type: 'triangle', gain: 0.04, throttleMs: 80, max: 2, priority: 0, pitchVar: 0.05 },
-  hitArrow: { freq: 520, dur: 0.04, type: 'square', gain: 0.03, throttleMs: 60, max: 3, priority: 0, pitchVar: 0.06 },
+  hitLight: { freq: 220, dur: 0.05, type: 'triangle', gain: 0.035, throttleMs: 60, max: 3, priority: 0, pitchVar: 0.08 },
+  hitHeavy: { freq: 150, dur: 0.08, type: 'triangle', gain: 0.04, throttleMs: 80, max: 2, priority: 0, pitchVar: 0.08 },
+  hitArrow: { freq: 520, dur: 0.04, type: 'square', gain: 0.03, throttleMs: 60, max: 3, priority: 0, pitchVar: 0.08 },
   hitFire: { freq: 110, dur: 0.09, type: 'sawtooth', gain: 0.035, throttleMs: 80, max: 2, priority: 0, pitchVar: 0.08 },
+  // 打击感（2026-11-17）：暴击脆响、击杀闷响、首领沉重受击、破势
+  hitCrit: { freq: 0, dur: .14, type: 'sine', gain: 0, throttleMs: 90, max: 2, priority: 1, pitchVar: 0.08 },
+  killThud: { freq: 0, dur: .12, type: 'sine', gain: 0, throttleMs: 90, max: 2, priority: 0, pitchVar: 0.08 },
+  bossHit: { freq: 0, dur: .2, type: 'sine', gain: 0, throttleMs: 140, max: 1, priority: 1, pitchVar: 0.08 },
+  bossBreak: { freq: 0, dur: .5, type: 'sine', gain: 0, throttleMs: 400, max: 1, priority: 2 },
   enemyDie: { freq: 180, dur: 0.12, type: 'square', gain: 0.03, throttleMs: 100, max: 2, priority: 0, pitchVar: 0.05 },
   pickup: { freq: 880, dur: 0.05, type: 'sine', gain: 0.03, throttleMs: 120, max: 1, priority: 0, pitchVar: 0.04 },
   orbit: { freq: 420, dur: 0.05, type: 'square', gain: 0.025, throttleMs: 80, max: 3, priority: 1, pitchVar: 0.04 },
@@ -97,6 +102,14 @@ const RECIPES: Record<string, (v: Voice, t: number, p: number) => number> = {
   hitHeavy: (v, t, p) => { v.noise(t, .08, 'lowpass', 1200 * p, .08, 300); v.tone(t, .11, 'sine', 140 * p, .07, 55); return .12; },
   hitArrow: (v, t, p) => { v.noise(t, .03, 'highpass', 3200 * p, .05); v.tone(t, .03, 'triangle', 1500 * p, .025, 900); return .04; },
   hitFire: (v, t, p) => { v.noise(t, .14, 'bandpass', 700 * p, .07, 1600, .8); v.noise(t + .03, .08, 'highpass', 2500, .03); return .17; },
+  /** 暴击：高频金属脆响 + 短促重击 */
+  hitCrit: (v, t, p) => { v.metal(t, 1900 * p, .02, .12); v.noise(t, .05, 'bandpass', 2600 * p, .07, 1200, 1.4); v.tone(t, .09, 'sine', 210 * p, .07, 80); return .14; },
+  /** 击杀闷响：低频「咚」 */
+  killThud: (v, t, p) => { v.tone(t, .12, 'sine', 95 * p, .09, 45); v.noise(t, .05, 'lowpass', 500 * p, .05, 150); return .13; },
+  /** 首领受击：铠甲金属撞击 + 低频重锤 */
+  bossHit: (v, t, p) => { v.metal(t, 420 * p, .03, .18); v.noise(t, .07, 'bandpass', 1500 * p, .07, 600, 1.6); v.tone(t, .16, 'sine', 120 * p, .09, 50); return .2; },
+  /** 破势：重鼓 + 铠甲碎响 */
+  bossBreak: (v, t) => { v.drum(t, 120, 42, .3, .45); v.metal(t + .02, 330, .05, .4); v.noise(t, .25, 'bandpass', 1200, .09, 400, 1.2); return .5; },
   enemyDie: (v, t, p) => { v.noise(t, .12, 'lowpass', 900 * p, .06, 200); v.tone(t, .14, 'sine', 170 * p, .05, 60); return .15; },
   pickup: (v, t, p) => { v.metal(t, 1320 * p, .018, .18); v.tone(t + .04, .14, 'sine', 1760 * p, .02); return .2; },
   propBreak: (v, t, p) => { v.noise(t, .1, 'bandpass', 900 * p, .08, 400, 1.5); v.tone(t, .12, 'triangle', 170 * p, .04, 65); v.noise(t + .05, .07, 'highpass', 2200, .03); return .14; },

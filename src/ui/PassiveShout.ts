@@ -8,7 +8,7 @@ import type { CharacterPassives } from '../systems/CharacterPassives';
  * 2026-11-16 用户：「马超喊出台词需要像是真的喊出来一样，而不是一行字」→ 做成战吼：
  *  - 字：大号书法体逐字砸下（先放大再回弹、金字深墨边），落定后一抖，约 1.2 秒后上浮淡出；
  *  - 声：2026-11-16 用户：「喝——的音效可以去除不要」→ 只留被动满层那声轻鼓（Sfx 'passiveFull'）；合成战吼 'warCry' 保留在 Sfx 里备用；
- *  - 画面：脚下一圈像素声浪冲击 + 身上迸发的气势（图集 warcry_fx；缺图时只保留其余表现，不画程序圈）、轻微震屏、
+ *  - 画面：脚下一圈声浪冲击 + 身上迸发的气势（手绘图集 warcry_paint，2026-11-17 Gemini 出图替换像素 warcry_fx；缺图时只保留其余表现，不画程序圈）、轻微震屏、
  *    人物身上金光一闪；附近敌人被吓得一缩（只做表现，不改位置和判定）。
  * 技能提示方案 C：地上不画程序圈。
  * 只在「未满 → 满」的那一帧触发；同一武将喊过后 cooldownMs（默认 PASSIVE_SHOUT_COOLDOWN_MS）内再攒满不喊（被动效果照常触发），避免刷屏。
@@ -71,15 +71,15 @@ export class PassiveShout {
     tw.add({ targets: box, x: { from: x - 1.5, to: x + 1.5 }, duration: 40, yoyo: true, repeat: 2, delay: landed, onComplete: () => box.setX(x) });
     tw.add({ targets: box, y: y - 90, alpha: 0, delay: landed + WAR_CRY_HOLD_MS - 150, duration: 380, ease: 'Sine.In', onComplete: () => holder.destroy() });
     x = holder.x; y = holder.y; // 恢复世界坐标给下面的声浪 / 气势用
-    // 2) 像素声浪冲击（脚下压扁的气浪）+ 身上迸发的气势（图集 warcry_fx：2 行 × 6 帧，每帧 256×512，黑底叠加）
-    if (sc.textures.exists('warcry_fx')) {
+    // 2) 声浪冲击（脚下压扁的气浪）+ 身上迸发的气势（手绘图集 warcry_paint：2 行 × 6 帧，每帧 256×512，透明底叠加）
+    if (sc.textures.exists('warcry_paint')) {
       const play = (row: number, oy: number, dw: number, dh: number, fps: number, name: string) => {
-        const s = sc.add.sprite(x, y + 4, 'warcry_fx', row * 6).setOrigin(.5, oy).setDisplaySize(dw, dh).setBlendMode(Phaser.BlendModes.ADD).setDepth(name === 'warcry-wave' ? DEPTH.fx : DEPTH.fx + 1).setName(name);
+        const s = sc.add.sprite(x, y + 4, 'warcry_paint', row * 6).setOrigin(.5, oy).setDisplaySize(dw, dh).setBlendMode(Phaser.BlendModes.ADD).setDepth(name === 'warcry-wave' ? DEPTH.fx : DEPTH.fx + 1).setName(name);
         const st = { t: 0 };
         tw.add({ targets: st, t: 5.99, duration: 6000 / fps, onUpdate: () => { if (s.active) s.setFrame(row * 6 + Math.floor(st.t)); }, onComplete: () => s.destroy() });
       };
       play(0, .45, 230, 460, 16, 'warcry-wave'); // 图里声浪椭圆中心在格子约 0.45 高处
-      play(1, .63, 120, 240, 14, 'warcry-aura'); // 气势的底在格子约 0.63 高处，贴脚底
+      play(1, .75, 120, 240, 14, 'warcry-aura'); // 气势的底在格子约 0.75 高处，贴脚底
     }
     // 3) 轻微震屏
     sc.cameras.main.shake(140, .0022);

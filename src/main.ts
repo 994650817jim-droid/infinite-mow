@@ -19,8 +19,11 @@ import { MenuScene } from './scenes/MenuScene';
 import { installGamepad } from './ui/PadNavigator';
 import { installCjkWrap } from './ui/CjkWrap';
 import { installAchievements } from './systems/Achievements';
+import { installLowResTextures } from './systems/LowResTextures';
 
 initLayout();
+// 手机省内存：大图缩一半、canvas 贴图不留 ImageData 副本（电脑不启用，见 systems/LowResTextures.ts）
+installLowResTextures();
 installCjkWrap();
 
 // 高清渲染：画布放大 RENDER_SCALE 倍，每个相机以左上角为原点同倍缩放，

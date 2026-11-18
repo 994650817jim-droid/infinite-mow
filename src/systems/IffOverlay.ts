@@ -14,19 +14,21 @@ import { YUAN_HUE } from './YuanPalette';
  * URL 覆盖（测试用）：?iff=0 关闭全部；?iff=a / b / c / 组合（如 ac）强制指定。
  * 性能：同屏 ~200 单位每帧只做 setPosition / setTexture 等属性赋值，不用 Graphics 重画。
  */
-export interface IffMode { tint: boolean; marks: boolean; outline: boolean }
+export interface IffMode { tint: boolean; marks: boolean; outline: boolean; /** 描边只给敌人（设置「仅敌人」）。 */ enemyOnly?: boolean; /** 粗描边（设置「粗」）。 */ thick?: boolean }
 export type IffSide = 'ally' | 'enemy';
 export type IffRank = 'normal' | 'elite' | 'boss';
 export interface IffUnit { sprite: Phaser.GameObjects.Image; foot: { x: number; y: number }; side: IffSide; rank: IffRank; visible: boolean; /** 保持原画（随行武将）。 */ keepColors?: boolean; /** 黄巾军（第一章）：不论图集名，阵营色一律偏黄。 */ yellow?: boolean }
 
 const OUTLINE_KEY = 'im_iff_outline';
 /** 设置「敌我描边」（方案 c），默认关。 */
-export function iffOutlineEnabled(): boolean { try { return localStorage.getItem(OUTLINE_KEY) === '1'; } catch { return false; } }
+export function iffOutlineEnabled(): boolean { try { const v = localStorage.getItem(OUTLINE_KEY); return v === '1' || v === 'enemy'; } catch { return false; } }
+const iffOutlineEnemyOnly = (): boolean => { try { return localStorage.getItem(OUTLINE_KEY) === 'enemy'; } catch { return false; } };
+const iffOutlineThick = (): boolean => { try { return localStorage.getItem('im_iff_outline_w') === 'thick'; } catch { return false; } };
 export function setIffOutline(on: boolean): void { try { localStorage.setItem(OUTLINE_KEY, on ? '1' : '0'); } catch { /* ignore */ } }
 
 export function readIffMode(search = typeof location !== 'undefined' ? location.search : ''): IffMode | null {
   const v = new URLSearchParams(search).get('iff')?.toLowerCase();
-  if (v === undefined || v === '') return { tint: true, marks: false, outline: iffOutlineEnabled() };
+  if (v === undefined || v === '') return { tint: true, marks: false, outline: iffOutlineEnabled(), enemyOnly: iffOutlineEnemyOnly(), thick: iffOutlineThick() };
   const mode = { tint: v.includes('a'), marks: v.includes('b'), outline: v.includes('c') };
   return mode.tint || mode.marks || mode.outline ? mode : null;
 }
@@ -79,7 +81,7 @@ function track(game: Phaser.Game, key: string): void { const keys = game.registr
 /** 黄巾版换色副本另存一份（iffA_enemyY_…）：同一张通用敌兵图在第一章染黄、其他章节染红。 */
 export const recolorKey = (key: string, side: IffSide, yellow = false): string => `iffA_${side}${yellow && side === 'enemy' ? 'Y' : ''}_${key}`;
 const IFF_PREFIX = /^iffA_(ally|enemyY?)_/;
-export const outlineKeyOf = (key: string): string => 'iffO_' + key.replace(IFF_PREFIX, '');
+export const outlineKeyOf = (key: string, thick = false): string => (thick ? 'iffOT_' : 'iffO_') + key.replace(IFF_PREFIX, '');
 
 /** 方案 a：生成换色副本，返回新键（失败返回 null）。 */
 export function buildRecolor(game: Phaser.Game, key: string, side: IffSide, yellow = false): string | null {
@@ -108,14 +110,14 @@ export function buildRecolor(game: Phaser.Game, key: string, side: IffSide, yell
 }
 
 /** 方案 c：生成外轮廓贴图（白色，按阵营着色），返回新键（失败返回 null）。 */
-export function buildOutline(game: Phaser.Game, key: string): string | null {
-  const tm = game.textures, base = key.replace(IFF_PREFIX, ''), target = outlineKeyOf(key);
+export function buildOutline(game: Phaser.Game, key: string, thick = false): string | null {
+  const tm = game.textures, base = key.replace(IFF_PREFIX, ''), target = outlineKeyOf(key, thick);
   if (tm.exists(target)) return target;
   if (failed.has(target) || !tm.exists(base) || base.startsWith('__')) return null;
   const px = sourcePixels(tm, base); if (!px) { failed.add(target); return null; }
   const { w, h } = px, d = px.data.data, src = tm.get(base), frame = src.get(src.getFrameNames()[0] ?? '__BASE');
   // 线宽：约等于显示时 1.5 屏幕像素（96 帧 → 2px，192 帧 → 4px，256 帧 → 5px）
-  const r = Math.max(2, Math.round((frame?.cutHeight || 96) / 48));
+  const r = Math.max(2, Math.round((frame?.cutHeight || 96) / 48)) * (thick ? 2 : 1); // 粗描边线宽加倍
   const solid = new Uint8Array(w * h); for (let i = 0; i < w * h; i++) solid[i] = d[i * 4 + 3] > 60 ? 1 : 0;
   // 可分离膨胀（先横后竖），不跨帧格子边界
   const cw = frame?.cutWidth || w, ch = frame?.cutHeight || h, tmp = new Uint8Array(w * h), dil = new Uint8Array(w * h);
@@ -185,7 +187,7 @@ export class IffOverlay {
       }
       if (this.mode.outline) {
         const o = this.outlines.get(sp) ?? this.newImage(this.outlines, sp, '__WHITE');
-        const key = u.visible ? this.outline(sp.texture.key) : null;
+        const key = u.visible && !(this.mode.enemyOnly && u.side === 'ally') ? this.outline(sp.texture.key) : null;
         if (!key) { o.setVisible(false); continue; }
         if (o.texture.key !== key || o.frame.name !== sp.frame.name) o.setTexture(key, sp.frame.name);
         o.setVisible(true).setPosition(sp.x, sp.y).setScale(sp.scaleX, sp.scaleY).setOrigin(sp.originX, sp.originY).setFlip(sp.flipX, sp.flipY)
@@ -193,6 +195,8 @@ export class IffOverlay {
         st.outlines++;
       }
     }
+    // 描边关掉（战斗内设置即时切换）：已有描边全部隐藏
+    if (!this.mode.outline) for (const img of this.outlines.values()) if (img.visible) img.setVisible(false);
     // 单位消失（死亡、回收）：隐藏对应叠加图
     for (const map of [this.marks, this.outlines]) for (const [sp, img] of map) if (!this.seen.has(sp) && img.visible) img.setVisible(false);
   }
@@ -214,7 +218,7 @@ export class IffOverlay {
   }
 
   private outline(key: string): string | null {
-    const had = this.scene.textures.exists(outlineKeyOf(key)), target = buildOutline(this.scene.game, key);
+    const thick = !!this.mode.thick, had = this.scene.textures.exists(outlineKeyOf(key, thick)), target = buildOutline(this.scene.game, key, thick);
     if (target && !had) this.stats.built++;
     return target;
   }

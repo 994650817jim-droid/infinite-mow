@@ -13,7 +13,10 @@ import { HINT_MOCK, SHOW_OWN_RANGE_FX, groundScar } from '../ui/HintStyle';
  */
 const lv = (level: number): number => Math.max(0, Math.min(4, Math.floor(level) - 1));
 const sceneOf = (host: WeaponHost): Phaser.Scene => (host.add as unknown as { scene: Phaser.Scene }).scene;
+/** 选靶 / 触发用：活着且不是可破坏道具。 */
 const alive = (e: Enemy): boolean => e.active && !e.isSupplySlot;
+/** 结算伤害用：道具（酒罐、木箱、油桶、军旗等）也能被打碎（2026-11-17）；状态与击退仍只对敌人。 */
+const hittable = (e: Enemy): boolean => e.active;
 /** fx_d 正式序列帧（闭月 / 重箭命中 / 当阳声浪 / 交叉斩，2026-11-16 ChatGPT 生成）是否已加载；缺图时用程序化特效。 */
 const fxD = (host: WeaponHost): boolean => sceneOf(host).textures.exists('hero_fx_d');
 const cardinal = (ux: number, uy: number): 'left' | 'right' | 'up' | 'down' => Math.abs(ux) > Math.abs(uy) ? (ux < 0 ? 'left' : 'right') : (uy < 0 ? 'up' : 'down');
@@ -37,7 +40,7 @@ export function smartTarget(host: WeaponHost, range: number, minDist = 0): Enemy
 }
 /** 普通 / 精锐被推开（首领、免控不动）。 */
 function shove(e: Enemy, ux: number, uy: number, dist: number): void {
-  if (e.kind === 'boss' || e.controlImmune) return;
+  if (e.kind === 'boss' || e.controlImmune || e.isSupplySlot) return;
   const k = e.kind === 'elite' ? .4 : 1; e.sprite.x += ux * dist * k; e.sprite.y += uy * dist * k;
 }
 
@@ -53,11 +56,12 @@ const ARROWS = new WeakMap<Player, HeavyArrow[]>();
 /** 黄忠每关状态：上一帧是否神射、静心 3 级的三连重箭是否待发、宝刀未老是否已用（每关一次：每关新建 Player）。 */
 const HZ = new WeakMap<Player, { wasSharp: boolean; fanReady: boolean; eliteSeen: number }>();
 /** 黄忠像素特效图集 huangzhong_fx（6×4，每帧 256，黑底叠加）：0–5 神射爆裂、6–11 进入神射金光、12–17 神射箭金色拖光、18–23 宝刀未老红金火焰。 */
+/** 黄忠手绘特效图集 huangzhong_paint（6×4，每帧 256，透明底叠加；2026-11-17 Gemini 出图替换像素图）。 */
 const HZFX = { burst: 0, enter: 6, trail: 12, laoji: 18 } as const;
 function hzFx(host: WeaponHost, row: number, x: number, y: number, size: number, fps: number, name: string, loopMs = 0, follow?: Player): Phaser.GameObjects.Sprite | null {
-  const scene = sceneOf(host); if (!scene.textures.exists('huangzhong_fx')) return null;
+  const scene = sceneOf(host); if (!scene.textures.exists('huangzhong_paint')) return null;
   // 进入神射的光柱、宝刀未老的火焰在图里贴着格子下部（约 0.88 处），跟随人物时把这一点放在脚底
-  const s = scene.add.sprite(x, y, 'huangzhong_fx', row).setOrigin(.5, follow ? .88 : .5).setDisplaySize(size, size).setBlendMode('ADD').setDepth(43).setName(name);
+  const s = scene.add.sprite(x, y, 'huangzhong_paint', row).setOrigin(.5, follow ? .88 : .5).setDisplaySize(size, size).setBlendMode('ADD').setDepth(43).setName(name);
   const st = { t: 0 }, frames = loopMs ? Math.max(6, Math.round(loopMs / 1000 * fps)) : 6;
   scene.tweens.add({ targets: st, t: frames - .01, duration: frames / fps * 1000,
     onUpdate: () => { if (!s.active) return; s.setFrame(row + (Math.floor(st.t) % 6)); if (follow) s.setPosition(follow.x, follow.y + 4); },
@@ -115,6 +119,7 @@ export function baodiaoBehavior(host: WeaponHost, weapon: WeaponState, dt: numbe
     // 狙击：先只撞锁定的目标（途中的敌人不挡箭）；目标中箭或已死后，穿杨的余力才会打到路上的敌人
     const locked = a.target.active && a.target.spawnId === a.spawn && !a.hit.has(a.spawn);
     for (const e of host.grid.query(a.img.x, a.img.y, 50)) {
+      if (e.active && e.isSupplySlot && !a.hit.has(e.spawnId) && Math.hypot(e.x - a.img.x, e.y - a.img.y) <= 12 + e.radius) { a.hit.add(e.spawnId); host.hitEnemy(e, a.damage, time, 'arrow'); continue; }
       if (!alive(e) || a.hit.has(e.spawnId) || (locked && e !== a.target) || Math.hypot(e.x - a.img.x, e.y - a.img.y) > 12 + e.radius) continue;
       const ex = e.x, ey = e.y; // 爆裂以中箭位置为圆心（击退之前）
       a.hit.add(e.spawnId); host.hitEnemy(e, a.damage, time, 'arrow'); shove(e, a.ux, a.uy, R.heavyArrowKnock);
@@ -122,7 +127,7 @@ export function baodiaoBehavior(host: WeaponHost, weapon: WeaponState, dt: numbe
       else { const flash = host.add.circle(ex, ey - 8, 10, 0xffe6a0, .8).setDepth(42).setBlendMode(1);
         flash.scene.tweens.add({ targets: flash, radius: 34, alpha: 0, duration: 240, onComplete: () => flash.destroy() }); }
       if (a.burst) { // 神射：命中处小范围爆裂
-        for (const o of host.grid.query(ex, ey, (R.heavyBurstRadius * host.player.passive.rangeMultiplier('baodiao_bow')) + 30)) if (alive(o) && o !== e && Math.hypot(o.x - ex, o.y - ey) <= (R.heavyBurstRadius * host.player.passive.rangeMultiplier('baodiao_bow')) + o.radius) host.hitEnemy(o, a.damage * R.heavyBurstMul, time, 'arrow');
+        for (const o of host.grid.query(ex, ey, (R.heavyBurstRadius * host.player.passive.rangeMultiplier('baodiao_bow')) + 30)) if (hittable(o) && o !== e && Math.hypot(o.x - ex, o.y - ey) <= (R.heavyBurstRadius * host.player.passive.rangeMultiplier('baodiao_bow')) + o.radius) host.hitEnemy(o, a.damage * R.heavyBurstMul, time, 'arrow');
         // 神射爆裂：像素爆裂帧是命中特效（不是范围提示），各种提示方案下都播；缺图时旧方案（?hints=old）退回程序化光圈，b 方案留地面裂痕
         if (HINT_MOCK === 'b') groundScar(e.sprite.scene, ex, ey, (R.heavyBurstRadius * host.player.passive.rangeMultiplier('baodiao_bow')), 'crack');
         else if (!hzFx(host, HZFX.burst, ex, ey - 6, (R.heavyBurstRadius * host.player.passive.rangeMultiplier('baodiao_bow')) * 2.6, 22, 'huangzhong-burst') && !HINT_MOCK) { const ring = host.add.circle(ex, ey - 6, 12, 0xffd27a, 0).setStrokeStyle(4, 0xffe6a0, .9).setDepth(42);
@@ -178,11 +183,9 @@ const WAVES = new WeakMap<Player, { waves: Wave[]; bridges: Bridge[] }>();
 function serpentSpear(host: WeaponHost, x: number, y: number, a: number, full: boolean): void {
   const from = full ? a - Math.PI : a - .9, to = full ? a + Math.PI : a + .9;
   if (sceneOf(host).textures.exists('zhangfei_spear')) { // 正式蛇矛贴图：以握柄为轴扫过
-    const sp = host.add.image(x, y, 'zhangfei_spear').setOrigin(.08, .5).setDisplaySize(96, 40).setRotation(from).setDepth(41).setName('zhangfei-spear');
-    sp.scene.tweens.add({ targets: sp, rotation: to, duration: full ? 320 : 180, ease: 'Sine.easeOut', onComplete: () => sp.scene.tweens.add({ targets: sp, alpha: 0, duration: 120, onComplete: () => sp.destroy() }) });
-    const gh = host.add.graphics({ x, y }).setDepth(40.5); gh.lineStyle(10, 0xffb060, .25).beginPath().arc(0, 0, 80, from, to).strokePath();
-    gh.scene.tweens.add({ targets: gh, alpha: 0, duration: 260, onComplete: () => gh.destroy() });
-    return;
+    const sp = host.add.image(x, y, 'zhangfei_spear').setOrigin(.08, .5).setDisplaySize(84, 35).setRotation(from).setDepth(41).setName('zhangfei-spear');
+    sp.scene.tweens.add({ targets: sp, rotation: to, duration: full ? 280 : 170, ease: 'Sine.easeOut', onComplete: () => sp.scene.tweens.add({ targets: sp, alpha: 0, duration: 100, onComplete: () => sp.destroy() }) });
+    return; // 2026-11-17：去掉程序画的橙色弧形拖影
   }
   const g = host.add.graphics({ x, y }).setDepth(41).setName('zhangfei-spear'), L = 70;
   g.lineStyle(4, 0x3a2a1a, 1); g.beginPath(); g.moveTo(0, 0);
@@ -202,7 +205,7 @@ export function dangyangBehavior(host: WeaponHost, weapon: WeaponState, dt: numb
   for (let i = st.waves.length - 1; i >= 0; i--) {
     const w = st.waves[i]; w.r += R.roarWaveSpeed * dt;
     for (const e of host.grid.query(w.x, w.y, w.r + 40)) {
-      if (!alive(e)) continue;
+      if (!hittable(e)) continue;
       const dx = e.x - w.x, dy = e.y - w.y, d = Math.hypot(dx, dy) || 1, off = Math.abs(Math.atan2(Math.sin(Math.atan2(dy, dx) - w.a), Math.cos(Math.atan2(dy, dx) - w.a)));
       if (off > w.half || d > w.r + e.radius || d < w.r - 40) continue;
       if (!w.hit.has(e.spawnId)) { w.hit.add(e.spawnId); host.hitEnemy(e, w.damage, time, 'melee'); } // 命中即由 hitEnemy 计入怒气
@@ -238,21 +241,21 @@ export function dangyangBehavior(host: WeaponHost, weapon: WeaponState, dt: numb
     pl.playAction('skill', Math.cos(a) < 0 ? 'left' : 'right');
     const stun = R.roarStunMs + 200 * g.masteries.dahe;
     for (const e of host.grid.query(pl.x, pl.y, (R.roarRadius * host.player.passive.rangeMultiplier('dangyang_roar')) + 40)) {
-      if (!alive(e) || Math.hypot(e.x - pl.x, e.y - pl.y) > (R.roarRadius * host.player.passive.rangeMultiplier('dangyang_roar')) + e.radius) continue;
+      if (!hittable(e) || Math.hypot(e.x - pl.x, e.y - pl.y) > (R.roarRadius * host.player.passive.rangeMultiplier('dangyang_roar')) + e.radius) continue;
       host.hitEnemy(e, damage * R.roarDamageMul, time, 'melee');
-      if (!e.controlImmune && e.kind !== 'boss') e.stunUntil = Math.max(e.stunUntil, time + stun);
+      if (!e.controlImmune && e.kind !== 'boss' && !e.isSupplySlot) e.stunUntil = Math.max(e.stunUntil, time + stun);
     }
-    host.heroFx?.('roar', pl.x, pl.y - 10, (R.roarRadius * host.player.passive.rangeMultiplier('dangyang_roar')) * 2.6);
+    host.heroFx?.('roar', pl.x, pl.y - 10, (R.roarRadius * host.player.passive.rangeMultiplier('dangyang_roar')) * 1.7); // 2026-11-17「太夸张」：2.6 → 1.7
     const bg = host.add.graphics().setDepth(18.8).setName('zhangfei-bridge');
     if (SHOW_OWN_RANGE_FX) bg.fillStyle(0xff8a3c, .12).fillCircle(pl.x, pl.y, (R.bridgeRadius * host.player.passive.rangeMultiplier('dangyang_roar')));
     if (HINT_MOCK === 'b') groundScar(bg.scene, pl.x, pl.y, (R.bridgeRadius * host.player.passive.rangeMultiplier('dangyang_roar')), 'crack', 0, 360); // 断桥区：默认只铺淡淡一层，?rings=1 时加描边范围圈
     if (SHOW_RANGE_RINGS) bg.lineStyle(4, 0xffb060, .8).strokeCircle(pl.x, pl.y, (R.bridgeRadius * host.player.passive.rangeMultiplier('dangyang_roar')));
     st.bridges.push({ x: pl.x, y: pl.y, until: time + R.bridgeMs + 500 * g.masteries.dahe, g: bg });
-    host.cameras.main.shake(140, .005);
+    host.cameras.main.shake(120, .003);
   } else pl.playAction('attack', Math.cos(a) < 0 ? 'left' : 'right');
   serpentSpear(host, pl.x, pl.y - 8, a, !!cast.bridge);
   const sprite = fxD(host); // 正式声浪序列帧（朝右，按出手方向旋转）；判定仍由下面的弧形声浪负责
-  if (sprite) host.heroFx?.('roarWave', pl.x + Math.cos(a) * (max * .45), pl.y - 8 + Math.sin(a) * (max * .45), max * 1.05, a);
+  if (sprite) host.heroFx?.('roarWave', pl.x + Math.cos(a) * (max * .4), pl.y - 8 + Math.sin(a) * (max * .4), max * .72, a); // 2026-11-17「太夸张」：1.05 → 0.72，并调淡调短
   st.waves.push({ x: pl.x + Math.cos(a) * 46, y: pl.y - 4 + Math.sin(a) * 46, a, half: dangyangHalfAngle(level), r: 24, max, damage, hit: new Set(), g: host.add.graphics().setDepth(41).setName('zhangfei-wave'), sprite });
   weapon.cooldownLeft = Math.max(.3, DANGYANG_DEF.cooldown(level, pl.stats) / g.attackSpeedMultiplier(time));
 }
@@ -298,7 +301,7 @@ function mcFx(host: WeaponHost, row: number, x: number, y: number, w: number, h:
   return s;
 }
 function landSlam(host: WeaponHost, x: number, y: number, radius: number, damage: number, time: number, echo: boolean): void {
-  for (const e of host.grid.query(x, y, radius + 30)) if (alive(e) && Math.hypot(e.x - x, e.y - y) <= radius + e.radius) host.hitEnemy(e, damage, time, 'melee');
+  for (const e of host.grid.query(x, y, radius + 30)) if (hittable(e) && Math.hypot(e.x - x, e.y - y) <= radius + e.radius) host.hitEnemy(e, damage, time, 'melee');
   // 落地：一小团像素扬尘碎石（2026-11-16 用户：「砸下来的特效太夸张了」→ 尺寸减半、0.25 秒播完、半透明、不震屏）；名字 machao-land-fx 供测试检查；缺图时退回程序化尘点
   const landFx = mcFx(host, MCFX.land, x, y - 4, radius * 1.3, radius * 1.3, 24, 'machao-land-fx', 0, 1, 40);
   landFx?.setAlpha(.8);
@@ -334,7 +337,7 @@ export function zhanjinBehavior(host: WeaponHost, weapon: WeaponState, dt: numbe
     pl.playAction('skill', ux < 0 ? 'left' : ux > 0 ? 'right' : uy < 0 ? 'up' : 'down');
     const len = R.chargeLen * (1 + .2 * g.masteries.tieqi), px = pl.x, py = pl.y, hit = damage * R.chargeDamageMul * (1 + .1 * g.masteries.tieqi);
     for (const e of host.grid.query(px + ux * len / 2, py + uy * len / 2, len / 2 + R.chargeWidth)) {
-      if (!alive(e)) continue;
+      if (!hittable(e)) continue;
       const dx = e.x - px, dy = e.y - py, along = dx * ux + dy * uy, side = dx * -uy + dy * ux;
       if (along < -e.radius || along > len + e.radius || Math.abs(side) > R.chargeWidth / 2 + e.radius) continue;
       host.hitEnemy(e, hit, time, 'melee'); shove(e, -uy * Math.sign(side || 1), ux * Math.sign(side || 1), 28);
@@ -419,7 +422,10 @@ export function shuangguBehavior(host: WeaponHost, weapon: WeaponState, dt: numb
   const damage = SHUANGGU_DEF.damage(level, pl.stats) * g.damageMultiplier(time) * cast.damageMul, splash = shuangguSplash(level, g.masteries.taoyuan) * host.player.passive.rangeMultiplier('shuanggu_swords'); // 智力范围加成
   const targets = foes.slice(0, g.masteries.taoyuan >= 3 ? 3 : 2), colors = [0x8fe0c0, 0xffd27a, 0xffffff];
   if (cast.heal) pl.heal(pl.maxHp * cast.heal * (1 + .25 * g.masteries.xiemin));
-  if (cast.empowered) { LIUBEI_HASTE.set(pl, time + R.liubeiHasteMs); const aura = host.add.circle(pl.x, pl.y - 10, 30, 0xffd890, .25).setBlendMode(1).setDepth(41).setName('liubei-haste'); aura.scene.tweens.add({ targets: aura, radius: 70, alpha: 0, duration: 500, onComplete: () => aura.destroy() }); }
+  if (cast.empowered) { LIUBEI_HASTE.set(pl, time + R.liubeiHasteMs);
+    // 仁德满层：脚下一圈手绘金光 + 上升光点（hero_small_paint 第 2 行，2026-11-17 替换程序画的半透明光圈）
+    if (sceneOf(host).textures.exists('hero_small_paint')) { const aura = host.add.sprite(pl.x, pl.y + 6, 'hero_small_paint', 6).setOrigin(.5, .75).setDisplaySize(120, 120).setBlendMode('ADD').setDepth(41).setName('liubei-haste'); const f = { t: 0 };
+      aura.scene.tweens.add({ targets: f, t: 5.99, duration: 520, onUpdate: () => { if (aura.active) aura.setFrame(6 + Math.floor(f.t)).setPosition(pl.x, pl.y + 6); }, onComplete: () => aura.destroy() }); } }
   if (cast.rally) { host.rallyAllies?.(cast.rally * (1 + .25 * g.masteries.xiemin)); host.heroFx?.('rally', pl.x, pl.y - 20, 260); }
   const u = targets[0], ux = u.x - pl.x, uy = u.y - pl.y;
   pl.faceDirection(cardinal(ux, uy), 140); pl.playAction(cast.empowered ? 'skill' : 'attack', ux < 0 ? 'left' : 'right');
@@ -429,7 +435,7 @@ export function shuangguBehavior(host: WeaponHost, weapon: WeaponState, dt: numb
     if (fxD(host)) host.heroFx?.('crossSlash', t.x, t.y - 8, 70 + splash * 1.2, i ? Math.PI / 2 : 0); else crossFx(host, t.x, t.y - 6, 18 + splash * .3, colors[i]);
     if (host.hitEnemy(t, damage, time, 'melee')) pl.passive.recordHit(cast, t, time);
     struck.add(t.spawnId);
-    for (const o of host.grid.query(t.x, t.y, splash + 30)) if (alive(o) && o !== t && !struck.has(o.spawnId) && Math.hypot(o.x - t.x, o.y - t.y) <= splash + o.radius) { struck.add(o.spawnId); host.hitEnemy(o, damage * R.crossSplashMul, time, 'melee'); }
+    for (const o of host.grid.query(t.x, t.y, splash + 30)) if (hittable(o) && o !== t && !struck.has(o.spawnId) && Math.hypot(o.x - t.x, o.y - t.y) <= splash + o.radius) { struck.add(o.spawnId); host.hitEnemy(o, damage * R.crossSplashMul, time, 'melee'); }
   });
   // 只有一个目标时，第二把剑补砍同一人（60%）
   if (targets.length === 1) host.hitEnemy(targets[0], damage * .6, time, 'melee');

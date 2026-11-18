@@ -174,12 +174,13 @@ export function cityMarkerV2(scene: Phaser.Scene, city: CityDef, owner: FactionI
   const icon = scene.add.image(0, hasArt ? 11 : 8, hasArt ? art : citadelTexture(scene, city.tier)).setOrigin(.5, 1).setDisplaySize(w, h);
   const parts: Phaser.GameObjects.GameObject[] = [ring, icon];
   const ch = BANNER_CHAR[owner];
-  if (owner !== 'han') parts.push(...flag(scene, -w * .5 + (city.tier === 'small' ? 5 : 3), 8 - h * .38, city.tier === 'large' ? 40 : city.tier === 'medium' ? 34 : 26, color, ch));
+  const flagParts = owner !== 'han' ? flag(scene, -w * .5 + (city.tier === 'small' ? 5 : 3), 8 - h * .38, city.tier === 'large' ? 40 : city.tier === 'medium' ? 34 : 26, color, ch) : [];
+  parts.push(...flagParts);
   if (owner === 'player') { const g = scene.add.graphics(); g.lineStyle(1.5, 0xf3d48a, .85).strokeEllipse(0, 3, w * .98, 9); parts.unshift(g); }
   const plate = namePlate(scene, hasArt ? 7 : 9, city.name, owner, city.tier === 'large' ? 13 : city.tier === 'medium' ? 12 : 11);
   const hit = scene.add.circle(0, -h * .3, Math.max(w * .5, 16), 0, .001).setInteractive({useHandCursor: true}).setName('city-' + city.id);
   root.add([...parts, plate.g, plate.t, hit]);
-  root.setData('banner', ch ?? null).setData('v2', true).setData('plate', plate.g).setData('icon', icon);
+  root.setData('banner', ch ?? null).setData('flag', flagParts).setData('v2', true).setData('plate', plate.g).setData('icon', icon);
   // 选中光环、告急外环以 outer 为半径，top 为图标顶到城址的高度
   return {city, root, label: plate.t, ring, hit, outer: w * .5, top: h + (owner !== 'han' ? 10 : 0)};
 }

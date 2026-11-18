@@ -187,7 +187,7 @@ export const BOSS_MOVES: Record<string, BossMovesetDef> = {
   },
   // 8-2 夏侯渊：骑马；疾行突袭（全屏长冲折返）+ 三日五百（绕阵箭雨）→ 坠马「军刀横扫」大范围 + 召骑兵
   xiahouyuan: {
-    id: 'xiahouyuan', name: '夏侯渊', phaseAt: .5, mount: { horse: 'generic', tint: 0x5a4a3a },
+    id: 'xiahouyuan', name: '夏侯渊', phaseAt: .5, mount: { horse: 'generic', tint: 0x5a4a3a, rider: 'xiahouyuan' },
     p1: { name: '疾行之将', caption: '疾行突袭 · 三日五百', gapMs: 2100, speedMul: 1.55, moves: [
       { kind: 'charge', name: '疾行突袭', windupMs: 900, cd: 4800, dmg: 1.5, len: 720, width: 70, dashMs: 560, back: true },
       { kind: 'ride', name: '三日五百', windupMs: 500, cd: 7000, dmg: 1.1, radius: 300, ms: 1700, drops: 8, r: 64 },

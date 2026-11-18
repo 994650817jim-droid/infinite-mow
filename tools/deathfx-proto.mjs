@@ -11,14 +11,14 @@ const ready = async p => { await p.waitForFunction(() => window.__game?.scene.ge
   await p.evaluate(() => { const s = window.__game.scene.getScene('GameScene'); s.__DEV_ACTIONS.closePopup?.(); s.player.damageImmune = true; s.player.xpNext = 1e9; s.spawnTimer = s.eliteTimer = 1e9; for (const e of s.enemies) if (e.active && !e.isSupplySlot) { e.hp = 0; e.deactivate(); } s.legion?.allies?.forEach?.(a => { a.active = false; }); }); };
 
 // 一群黄巾兵：固定摆位（可复现），不动；精英几个
-const spawn = (p, rows, cols, elites) => p.evaluate(({ rows, cols, elites }) => {
+const spawn = (p, rows, cols, elites, mix = false) => p.evaluate(({ rows, cols, elites, mix }) => {
   const s = window.__game.scene.getScene('GameScene'), list = [];
   for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
-    const x = s.player.x + 140 + c * 46 - (cols * 46) / 2 + 120, y = s.player.y + r * 40 - (rows * 40) / 2 - 10, kind = elites.includes(r * cols + c) ? 'elite' : 'infantry';
+    const MIX = ['infantry', 'archer', 'shield', 'cavalry', 'infantry', 'elite'], x = s.player.x + 140 + c * 46 - (cols * 46) / 2 + 120, y = s.player.y + r * 40 - (rows * 40) / 2 - 10, kind = elites.includes(r * cols + c) ? 'elite' : mix ? MIX[(r * cols + c) % MIX.length] : 'infantry';
     const e = s.spawnEnemy(kind, x, y, 1, true); if (!e) continue; e.speed = 0; e.hp = e.maxHp = 9999; list.push(e);
   }
   window.__targets = list; return list.length;
-}, { rows, cols, elites });
+}, { rows, cols, elites, mix });
 // 清屏前在页面左上角闪一个洋红块（约 250ms），录像里用它精确对齐每次清屏的时刻
 const mark = p => p.evaluate(() => { const d = document.createElement('div'); d.style.cssText = 'position:fixed;left:0;top:0;width:14px;height:14px;background:#f0f;z-index:99999'; document.body.appendChild(d); setTimeout(() => d.remove(), 250); });
 // 一刀清屏：从左到右扫过，约 160ms
@@ -55,12 +55,14 @@ if (what === 'perf' || what === 'all') {
   for (const [name, q] of MODES) for (let rep = 0; rep < 2; rep++) {
     const b = await chromium.launch({ channel: 'chrome', headless: true }), p = await (await b.newContext({ viewport: { width: 1280, height: 720 } })).newPage();
     await p.goto(url(q), { timeout: 180000, waitUntil: 'domcontentloaded' }); await ready(p);
-    const n = await spawn(p, 10, 15, []); await p.waitForTimeout(1500);
+    if (process.env.STANDIN) await p.evaluate(() => { const s = window.__game.scene.getScene('GameScene'); if (s.textures.exists('fx_death_props')) return; const c = document.createElement('canvas'); c.width = 768; c.height = 512; const g = c.getContext('2d'); ['#aaa', '#8a6', '#a86', '#964', '#654', '#fc3'].forEach((k, i) => { g.fillStyle = k; g.fillRect((i % 3) * 256 + 80, Math.floor(i / 3) * 256 + 100, 96, 56); }); const t = s.textures.addCanvas('fx_death_props', c); for (let i = 0; i < 6; i++) t.add(i, 0, (i % 3) * 256, Math.floor(i / 3) * 256, 256, 256); });
+    const mix = !!process.env.MIX; if (mix) { await p.evaluate(() => { const s = window.__game.scene.getScene('GameScene'), e = s.spawnEnemy('cavalry', s.player.x + 300, s.player.y, 1, true); e.hp = 0; e.deactivate(); }); await p.waitForTimeout(2500); }
+    const n = await spawn(p, 10, 15, [], mix); await p.waitForTimeout(1500);
     const res = await p.evaluate(async () => {
       const s = window.__game.scene.getScene('GameScene'), frames = [];
       const sample = ms => new Promise(res => { const t0 = performance.now(); let last = t0; const loop = t => { frames.push(t - last); last = t; if (t - t0 < ms) requestAnimationFrame(loop); else res(); }; requestAnimationFrame(loop); });
       await sample(1000); const idle = frames.splice(0).slice(1);
-      const list = [...window.__targets]; for (const e of list) { e.hp = 0; s.killEnemy(e); }   // 150 个同一帧清屏
+      const list = [...window.__targets]; list.forEach((e, i) => { e.hp = 0; e.lastHitHeavy = i % 4 === 0; s.killEnemy(e); }); // 每 4 个一个重击（击飞）   // 150 个同一帧清屏
       await sample(2500); const clear = frames.splice(0).slice(1);
       const fps = a => 1000 / (a.reduce((x, y) => x + y, 0) / a.length), worst = a => Math.max(...a);
       return { idleFps: fps(idle), clearFps: fps(clear), clearWorstMs: worst(clear), fx: s.deathFx ? s.deathFx.played : 0, poolLive: s.deathFx?.liveCount ?? 0, objects: s.children.length };

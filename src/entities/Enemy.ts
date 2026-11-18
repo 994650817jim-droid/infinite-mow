@@ -74,6 +74,8 @@ export class Enemy {
   active = false;
   /** 最近一次受击来自我方部曲 / 随行（死亡特效据此找来源方向；主将和弹道都从主将出手，按主将位置算）。 */
   lastHitFromAlly = false;
+  /** 最近一次受击是不是「重击」（暴击 / 马超冲锋 / 张飞大喝）：死亡时击飞。 */
+  lastHitHeavy = false;
   invulnerable = false;
   controlImmune = false;
   stunUntil = 0;

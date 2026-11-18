@@ -33,7 +33,7 @@ import {BuildCombat} from '../systems/BuildCombat';
 import {TACTICS,TREASURES,TAG_NAMES,type TacticId} from '../data/builds';
 import { applyCharms, wornTokens, type CharmState } from '../systems/CharmEffects';
 import { meritFromKills } from '../data/merit';
-import { DeathFx, deathFxMode } from '../systems/DeathFx';
+import { DeathFx, deathFxMode, type DeathOpts } from '../systems/DeathFx';
 import { DEATHFX_LABEL, deathFxSetting, setDeathFx, type DeathFxSetting } from '../systems/BattleSettings';
 import { CHARM_LEGEND, CHARM_SCHOOL_NAMES, CHARM_SET_DESC, charmDef, type CharmSchool } from '../data/charms';
 import {SishuiObstacles} from '../systems/SishuiObstacles';
@@ -1205,6 +1205,7 @@ export class GameScene extends Phaser.Scene {
     override?:EnemyDef,
   ): Enemy | null {
     if (this.terrain) { const f = this.terrain.free(x, y, kind === 'boss' ? 34 : 20); x = f.x; y = f.y; } // 不刷在水里 / 树干里
+    if (kind === 'cavalry') this.deathFx?.warmHorse(); // 骑兵死亡放马：马匹行走图按需异步加载（只在场上出现骑兵时）
     const poolLimit = BALANCE.enemyCap;
     const bossReserve = this.bossSpawned ? 0 : 1;
     const activeLimit = kind === 'boss' ? BALANCE.enemyCap : BALANCE.enemyCap - bossReserve;
@@ -1988,6 +1989,7 @@ export class GameScene extends Phaser.Scene {
     { let v = this.player.passive.vulnerability(enemy, time); for (const fp of this.followerPassives) v = Math.max(v, 1 + (fp.vulnerability(enemy, time) - 1) * FOLLOW.passiveScale); rawDamage *= v; } // 貂蝉倾城：易伤（部曲伤害同样吃加成；随行貂蝉的按随行系数折算）
     const firstStrike = !fromAlly && weaponHit && !!this.relics?.firstStrike(enemy);
     const crit = this.debugCrit !== null && !fromAlly ? this.debugCrit : firstStrike || weaponHit && Math.random() < Math.min(0.65, this.player.stats.critChance + this.player.growth.criticalBonus() + (!fromAlly ? this.player.passive.critBonus(time) + this.player.growth.aimCriticalBonus() + this.buildCombat.criticalBonus() : 0));
+    enemy.lastHitHeavy = !fromAlly && (crit || this.player.passive.isInvulnerable(time) || this.player.weapons[0]?.id === 'dangyang_roar'); // 重击：暴击 / 马超冲锋中 / 张飞大喝（死亡特效击飞）
     if(!fromAlly&&weaponHit)rawDamage=this.buildCombat.damage(enemy,rawDamage,crit,time);
     if(!fromAlly)rawDamage*=this.player.growth.gearHitMultiplier(enemy.kind);
     // 智力：非武器伤害（技艺、灼烧等）按法术系数 × 智力、含主属性；法术武器（火旗 / 火雷 / 连弩 / 团扇）的武器命中再乘法术系数
@@ -2069,6 +2071,16 @@ export class GameScene extends Phaser.Scene {
   /** 敌军死亡特效（脚下尘土，2026-11-18）。 */
   protected deathFx: DeathFx | null = null;
   /** 受击来源（死亡倒向用）：我方部曲打的取离敌人最近的我方单位，其余（主将的近战 / 弹道）取主将位置。 */
+  /** 死亡特效的兵种变化：骑兵人坠马放马、弓兵 / 步兵 / 盾兵兵器脱手、黄巾兵（第一章）头巾飘走、重击击飞。 */
+  protected deathOptsOf(enemy: Enemy): DeathOpts {
+    const k = enemy.kind, sheet = enemy.walkSheet || '', o: DeathOpts = { heavy: enemy.lastHitHeavy };
+    if (k === 'cavalry') o.horse = true;
+    else if (k === 'archer') o.weapon = 'bow';
+    else if (k === 'shield') o.weapon = /rattan/.test(sheet) || enemy.spawnId % 2 ? 'rattan' : 'tower';
+    else if (k === 'infantry' || k === 'elite') o.weapon = /spear/.test(sheet) ? 'spear' : 'blade';
+    o.turban = this.chapter.id === 'huangjin' && k !== 'elite';
+    return o;
+  }
   protected hitSourceOf(enemy: Enemy): { x: number; y: number } {
     if (enemy.lastHitFromAlly) {
       let best: { x: number; y: number } | null = null, bd = 170 * 170;
@@ -2095,7 +2107,7 @@ export class GameScene extends Phaser.Scene {
     if(enemy.isSupplySlot){this.sfx.play('propBreak');this.supplies?.onBroken(enemy);return;}
     this.warfeedKill();
     if(enemy.def.behavior==='wall')return;
-    if(this.deathFx){const from=this.hitSourceOf(enemy);this.deathFx.play(enemy,from.x,from.y,this.combatNow);}
+    if(this.deathFx){const from=this.hitSourceOf(enemy);this.deathFx.play(enemy,from.x,from.y,this.combatNow,this.deathOptsOf(enemy));}
     this.kills += 1;
     this.player.passive.onKill(kind, this.combatNow);
     this.awakeningCombat?.onKill(enemy,this.combatNow);

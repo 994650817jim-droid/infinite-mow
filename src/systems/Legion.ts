@@ -68,6 +68,8 @@ export class Legion {
   private readonly effects: Array<{ x: number; y: number; tx: number; ty: number; until: number; heal: boolean; sweep: boolean; stab?:boolean; ranged?:boolean }> = [];
   private readonly artEffects: ArtEffects;
   private readonly gfx: Phaser.GameObjects.Graphics;
+  /** 兵种出手音效（GameScene 接到 Sfx；HeroSfx.TROOP_ATTACK_SFX）。 */
+  attackSound: ((kind: TroopKind) => void) | null = null;
   constructor(private readonly scene: Phaser.Scene, readonly units: Ally[], private readonly player: Player, _legacyCapacity?: number) {
     this.corpses = new AllyCorpses(scene);
     this.formation=new LegionFormation(player);this.artEffects=new ArtEffects(scene);
@@ -230,7 +232,7 @@ export class Legion {
         const candidates = enemyGrid.query(u.x, u.y, seekRange, this.near).filter(e => e.active && !e.invulnerable && Math.hypot(e.x - u.x, e.y - u.y) <= seekRange);
         candidates.sort((a, b) => a === target ? -1 : b === target ? 1 : (a.x - u.x) ** 2 + (a.y - u.y) ** 2 - (b.x - u.x) ** 2 - (b.y - u.y) ** 2);
         const hits = u.kind === 'halberdier' ? candidates.filter(e => Math.hypot(e.x - candidates[0].x, e.y - candidates[0].y) < 75) : candidates.slice(0, u.level === 3 && ['swordsman', 'archer'].includes(u.kind) ? 2 : u.kind === 'rider' && u.level === 3 ? 3 : 1);
-        u.cooldown = u.def.cooldown / stats.attackSpeed; u.act(candidates[0].x, candidates[0].y, now, u.kind === 'crossbowman' ? 420 : u.def.ranged ? 340 : 300);
+        u.cooldown = u.def.cooldown / stats.attackSpeed; this.attackSound?.(u.kind); u.act(candidates[0].x, candidates[0].y, now, u.kind === 'crossbowman' ? 420 : u.def.ranged ? 340 : 300);
         for (const e of hits) {
           if (u.kind === 'rider' && u.ai.mode === 'charge') {
             if (u.ai.chargeHits.has(e.spawnId) || u.ai.chargeHits.size >= (u.level === 3 ? 3 : 1)) continue;

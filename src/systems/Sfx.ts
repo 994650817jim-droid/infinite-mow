@@ -1,4 +1,5 @@
 /** 轻量音效：WebAudio 合成；分类节流 + 并发上限 + 优先级 + 静音持久化。 */
+import { ATTACK_SFX, ATTACK_SFX_CONFIG, GROUP_MAX, type SfxGroup } from './HeroSfx';
 export type SfxPriority = 0 | 1 | 2; // 0 低 / 1 中 / 2 高
 
 interface SfxConfig {
@@ -11,6 +12,8 @@ interface SfxConfig {
   priority: SfxPriority;
   pitchVar?: number;
   slideTo?: number;
+  /** 分组并发上限（HeroSfx.GROUP_MAX）：武将出手 / 兵种出手。 */
+  group?: SfxGroup;
 }
 
 const CONFIG: Record<string, SfxConfig> = {
@@ -64,15 +67,28 @@ const CONFIG: Record<string, SfxConfig> = {
   warCry: { freq: 0, dur: 1.2, type: 'sine', gain: 0, throttleMs: 600, max: 1, priority: 2 },
 };
 
+// 武将 / 兵种出手音效（HeroSfx.ts）并入同一张表
+for (const [k, c] of Object.entries(ATTACK_SFX_CONFIG)) CONFIG[k] = { freq: 0, type: 'sine', gain: 0, ...c };
+
 const GLOBAL_MAX = 14;
 
 /** 合成小工具：滤波噪声、带音高包络的振荡器、拨弦与金属泛音。 */
+export type SfxVoice = Voice;
 class Voice {
-  constructor(readonly ctx: AudioContext, readonly out: AudioNode, readonly noiseBuf: AudioBuffer) {}
+  constructor(readonly ctx: BaseAudioContext, readonly out: AudioNode, readonly noiseBuf: AudioBuffer) {}
   noise(t: number, dur: number, type: BiquadFilterType, from: number, gain: number, to = from, q = 1): void {
     const s = this.ctx.createBufferSource(), f = this.ctx.createBiquadFilter(), g = this.ctx.createGain();
     s.buffer = this.noiseBuf; s.loop = dur > .9; f.type = type; f.Q.value = q; f.frequency.setValueAtTime(from, t); if (to !== from) f.frequency.exponentialRampToValueAtTime(to, t + dur);
     g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(gain, t + .004); g.gain.exponentialRampToValueAtTime(.0001, t + dur);
+    s.connect(f); f.connect(g); g.connect(this.out); s.start(t, Math.random() * .4); s.stop(t + dur + .02);
+  }
+  /** 同一套合成工具，输出改接到另一个节点（HeroSfx 的响度校准用）。 */
+  withOut(out: AudioNode): Voice { return new Voice(this.ctx, out, this.noiseBuf); }
+  /** 滤波噪声，起音占 attackFrac（兵器挥动的「破风」感），之后指数衰减。 */
+  swell(t: number, dur: number, type: BiquadFilterType, from: number, to: number, gain: number, q = 1, attackFrac = .3): void {
+    const s = this.ctx.createBufferSource(), f = this.ctx.createBiquadFilter(), g = this.ctx.createGain(), a = Math.max(.006, dur * attackFrac);
+    s.buffer = this.noiseBuf; f.type = type; f.Q.value = q; f.frequency.setValueAtTime(from, t); f.frequency.exponentialRampToValueAtTime(to, t + dur);
+    g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(gain, t + a); g.gain.exponentialRampToValueAtTime(.0001, t + dur);
     s.connect(f); f.connect(g); g.connect(this.out); s.start(t, Math.random() * .4); s.stop(t + dur + .02);
   }
   tone(t: number, dur: number, type: OscillatorType, from: number, gain: number, to = from, attack = .004): void {
@@ -98,6 +114,7 @@ class Voice {
 const D5 = 587.33, F5 = 698.46, A5 = 880, C6 = 1046.5, D6 = 1174.66;
 /** 分层音效配方（返回时长秒）；未列出的沿用 CONFIG 单振荡器。 */
 const RECIPES: Record<string, (v: Voice, t: number, p: number) => number> = {
+  ...ATTACK_SFX,
   hitLight: (v, t, p) => { v.noise(t, .045, 'bandpass', 1900 * p, .06, 900, 1.2); v.tone(t, .06, 'sine', 190 * p, .05, 90); return .07; },
   hitHeavy: (v, t, p) => { v.noise(t, .08, 'lowpass', 1200 * p, .08, 300); v.tone(t, .11, 'sine', 140 * p, .07, 55); return .12; },
   hitArrow: (v, t, p) => { v.noise(t, .03, 'highpass', 3200 * p, .05); v.tone(t, .03, 'triangle', 1500 * p, .025, 900); return .04; },
@@ -227,7 +244,8 @@ export class Sfx {
     return this.stats;
   }
 
-  attack(): void { this.play('crossbow'); }
+  /** 主将弩矢出手（连弩，黄月英本命）。 */
+  attack(): void { this.play('atk_crossbow'); }
   hit(): void { this.play('hitLight'); }
   level(): void {
     this.play('level');
@@ -237,7 +255,17 @@ export class Sfx {
   win(): void { this.play('win'); }
   lose(): void { this.play('lose'); }
 
-  play(kind: string): void {
+  /** 同一音效、更轻的副本（随行名将用本命武器时）：play 按 mul 降低响度，节流 / 并发与主将分开计。 */
+  scaled(mul: number): Sfx {
+    const q = Object.create(this) as Sfx;
+    q.play = (kind: string) => this.play(kind, mul, 'f:');
+    return q;
+  }
+
+  /** 正在响的同组音效数（武将出手 / 兵种出手）。 */
+  private groupActive(group: SfxGroup): number { let n = 0; for (const [k, c] of Object.entries(this.active)) if (CONFIG[k.replace(/^f:/, '')]?.group === group) n += c; return n; }
+
+  play(kind: string, gainMul = 1, slot = ''): void {
     const cfg = CONFIG[kind];
     if (!cfg) return;
     const stat = (this.stats[kind] ??= { triggered: 0, played: 0, dropped: 0 });
@@ -246,25 +274,27 @@ export class Sfx {
       stat.dropped += 1;
       return;
     }
-    const now = performance.now();
-    if (cfg.throttleMs > 0 && now - (this.last[kind] || 0) < cfg.throttleMs) {
+    const now = performance.now(), key = slot + kind;
+    if (cfg.throttleMs > 0 && now - (this.last[key] || 0) < cfg.throttleMs) {
       stat.dropped += 1;
       return;
     }
     const activeTotal = Object.values(this.active).reduce((a, b) => a + b, 0);
-    if ((this.active[kind] || 0) >= cfg.max || (cfg.priority < 2 && activeTotal >= GLOBAL_MAX)) {
+    if ((this.active[key] || 0) >= cfg.max || (cfg.priority < 2 && activeTotal >= GLOBAL_MAX) || (cfg.group && cfg.priority < 2 && this.groupActive(cfg.group) >= GROUP_MAX[cfg.group])) {
       stat.dropped += 1;
       return;
     }
-    this.last[kind] = now;
-    this.active[kind] = (this.active[kind] || 0) + 1;
+    this.last[key] = now;
+    this.active[key] = (this.active[key] || 0) + 1;
     stat.played += 1;
     const t = this.ctx.currentTime;
     const recipe = RECIPES[kind];
     if (recipe) {
       const pitchMul = 1 + (Math.random() * 2 - 1) * (cfg.pitchVar ?? 0);
-      const dur = recipe(new Voice(this.ctx, this.master!, this.noiseBuffer()), t, pitchMul);
-      window.setTimeout(() => { this.active[kind] = Math.max(0, (this.active[kind] || 1) - 1); }, dur * 1000 + 30);
+      let out: AudioNode = this.master!;
+      if (gainMul !== 1) { const g = this.ctx.createGain(); g.gain.value = gainMul; g.connect(this.master!); out = g; }
+      const dur = recipe(new Voice(this.ctx, out, this.noiseBuffer()), t, pitchMul);
+      window.setTimeout(() => { this.active[key] = Math.max(0, (this.active[key] || 1) - 1); }, dur * 1000 + 30);
       return;
     }
     const osc = this.ctx.createOscillator();
@@ -302,6 +332,16 @@ export class Sfx {
     this.ctx = null;
     this.master = null;
   }
+}
+
+/**
+ * 离线渲染 / 试听用：直接在给定上下文上奏一个音效配方（不经节流与并发上限），返回时长秒。
+ * tools/render-sfx.mjs 用它把全部出手音效渲染成 WAV。
+ */
+export function renderSfxInto(ctx: BaseAudioContext, out: AudioNode, kind: string, t: number, pitch = 1): number {
+  const recipe = RECIPES[kind]; if (!recipe) return 0;
+  const n = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate), d = n.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+  return recipe(new Voice(ctx, out, n), t, pitch);
 }
 
 /** 菜单、营帐等没有战斗音效实例时使用的共享 UI 音效（首次点击后解锁）。 */

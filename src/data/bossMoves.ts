@@ -175,7 +175,7 @@ export const BOSS_MOVES: Record<string, BossMovesetDef> = {
   // ===== 第三批：第八章汉中、第十章夷陵（孙桓 / 朱然）、第十二章北伐（张郃再战 / 郝昭） =====
   // 8-1 / 12-1 张郃：骑马；巧变阵（三面枪兵合围）+ 突阵 + 连环枪 → 坠马「瓦口隘死战」：亲卫护体、连环枪三段
   zhanghe: {
-    id: 'zhanghe', name: '张郃', phaseAt: .5, mount: { horse: 'generic', tint: 0x8a96b0 },
+    id: 'zhanghe', name: '张郃', phaseAt: .5, mount: { horse: 'generic', tint: 0x8a96b0, rider: 'zhanghe' },
     p1: { name: '巧变之将', caption: '巧变阵 · 突阵 · 连环枪', gapMs: 2300, speedMul: 1.35, moves: [
       { kind: 'summon', name: '巧变阵', windupMs: 900, cd: 8500, dmg: 0, troop: 'infantry', count: 6, radius: 240, around: 'player' },
       { kind: 'charge', name: '张郃突阵', windupMs: 850, cd: 4400, dmg: 1.4, len: 440, width: 66, dashMs: 480 },
@@ -188,7 +188,7 @@ export const BOSS_MOVES: Record<string, BossMovesetDef> = {
   },
   // 8-2 夏侯渊：骑马；疾行突袭（全屏长冲折返）+ 三日五百（绕阵箭雨）→ 坠马「军刀横扫」大范围 + 召骑兵
   xiahouyuan: {
-    id: 'xiahouyuan', name: '夏侯渊', phaseAt: .5, mount: { horse: 'generic', tint: 0x5a4a3a },
+    id: 'xiahouyuan', name: '夏侯渊', phaseAt: .5, mount: { horse: 'generic', tint: 0x5a4a3a, rider: 'xiahouyuan' },
     p1: { name: '疾行之将', caption: '疾行突袭 · 三日五百', gapMs: 2100, speedMul: 1.55, moves: [
       { kind: 'charge', name: '疾行突袭', windupMs: 900, cd: 4800, dmg: 1.5, len: 720, width: 70, dashMs: 560, back: true },
       { kind: 'ride', name: '三日五百', windupMs: 500, cd: 7000, dmg: 1.1, radius: 300, ms: 1700, drops: 8, r: 64 },
@@ -200,7 +200,7 @@ export const BOSS_MOVES: Record<string, BossMovesetDef> = {
   },
   // 8-3 曹操：骑绝影；虎豹骑冲阵（三道）+ 挟天子令诸侯（插旗减伤）→ 坠马「鸡肋断后」：火线箭雨、虎豹骑断后
   caocao: {
-    id: 'caocao', name: '曹操', phaseAt: .5, mount: { horse: 'jueying' },
+    id: 'caocao', name: '曹操', phaseAt: .5, mount: { horse: 'jueying', rider: 'caocao' },
     p1: { name: '魏王', caption: '虎豹骑冲阵 · 挟天子令诸侯', gapMs: 2400, speedMul: 1.35, moves: [
       { kind: 'charge', name: '虎豹骑冲阵', windupMs: 1000, cd: 4600, dmg: 1.5, len: 500, width: 72, dashMs: 520, lanes: 3 },
       { kind: 'flags', name: '挟天子令诸侯', windupMs: 800, cd: 15000, dmg: 0, count: 3, radius: 190, hp: 130, takenMul: .5 },
@@ -213,7 +213,7 @@ export const BOSS_MOVES: Record<string, BossMovesetDef> = {
   },
   // 10-1 孙桓：骑马；宗室锐气（冲阵）+ 夷道死守（召兵）→ 坠马连斩
   sunhuan: {
-    id: 'sunhuan', name: '孙桓', phaseAt: .5, mount: { horse: 'generic', tint: 0xb06048 },
+    id: 'sunhuan', name: '孙桓', phaseAt: .5, mount: { horse: 'generic', tint: 0xb06048, rider: 'sunhuan' },
     p1: { name: '宗室少将', caption: '宗室锐气 · 夷道死守', gapMs: 2300, speedMul: 1.4, moves: [
       { kind: 'charge', name: '宗室锐气', windupMs: 850, cd: 4200, dmg: 1.4, len: 460, width: 66, dashMs: 480 },
       { kind: 'summon', name: '夷道死守', windupMs: 800, cd: 9000, dmg: 0, troop: 'infantry', count: 5, radius: 160, around: 'boss' },
@@ -225,7 +225,7 @@ export const BOSS_MOVES: Record<string, BossMovesetDef> = {
   },
   // 10-2 朱然：骑马；连营反扑（绕营奔袭箭雨）+ 长枪突刺 → 坠马「坚守夷道」：亲兵护体减伤
   zhuran: {
-    id: 'zhuran', name: '朱然', phaseAt: .5, mount: { horse: 'generic', tint: 0x9a6a52 },
+    id: 'zhuran', name: '朱然', phaseAt: .5, mount: { horse: 'generic', tint: 0x9a6a52, rider: 'zhuran' },
     p1: { name: '昭武将军', caption: '连营反扑 · 长枪突刺', gapMs: 2300, speedMul: 1.35, moves: [
       { kind: 'ride', name: '连营反扑', windupMs: 500, cd: 6500, dmg: 1.1, radius: 290, ms: 1700, drops: 7, r: 64 },
       { kind: 'thrust', name: '长枪突刺', windupMs: 800, cd: 3800, dmg: 1.6, len: 560, width: 44 },

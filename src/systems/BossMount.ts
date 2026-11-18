@@ -14,9 +14,9 @@ export interface BossMountDef { horse: BossHorse; tint?: number; /** 骑者裁�
  */
 /** 站姿骑乘图的过渡裁切：裁到大腿根（seat，格内像素），髋部压在鞍上（离地 rise 世界像素）。只用于还没重画成坐姿（不在 SEATED_RIDE_ART）的首领。 */
 export const RIDE_SEAT = { seat: 200, rise: 50 } as const;
-export const BOSS_RIDE_ART = new Set<string>(['lubu', 'huaxiong', 'lijue', 'zhangxiu', 'yanliang', 'wenchou', 'caochun', 'huangzhong']) // 张梁改步战（2026-11-18 用户：第一章首领不骑马），不再载他的骑乘图;
+export const BOSS_RIDE_ART = new Set<string>(['lubu', 'huaxiong', 'lijue', 'zhangxiu', 'yanliang', 'wenchou', 'caochun', 'huangzhong', 'zhanghe', 'xiahouyuan', 'caocao', 'sunhuan', 'zhuran']) // 张梁改步战（2026-11-18 用户：第一章首领不骑马），不再载他的骑乘图;
 /** 已重画成坐姿的骑乘图（不再裁切，按马镫对位，同英雄 HeroMount）；其余仍用 RIDE_SEAT 裁切过渡。 */
-export const SEATED_RIDE_ART = new Set<string>(['lubu', 'huaxiong', 'zhangliang', 'lijue', 'zhangxiu', 'yanliang', 'wenchou', 'caochun', 'huangzhong']);
+export const SEATED_RIDE_ART = new Set<string>(['lubu', 'huaxiong', 'zhangliang', 'lijue', 'zhangxiu', 'yanliang', 'wenchou', 'caochun', 'huangzhong', 'zhanghe', 'xiahouyuan', 'caocao', 'sunhuan', 'zhuran']);
 export const bossRideKey = (id: string): string => 'ride_v2_boss_' + id;
 const HORSE_KEY: Record<BossHorse, string> = { chitu: 'horse_v2_chitu_walk', wuzhui: 'horse_v2_wuzhui_walk', jueying: 'horse_v2_jueying_walk', dawan: 'horse_v2_dawan_walk', generic: 'horse_v2_generic_walk' };
 const DIRS = ['down', 'left', 'right', 'up'] as const;

@@ -9,7 +9,7 @@ mkdirSync(out, { recursive: true });
 const checks = [], errors = [];
 const pin = (p, id, n) => p.evaluate(([id, n]) => { const s = window.__game.scene.getScene('WorldMapScene'); s.pins.find(x => x.stage === n).root.list.find(o => o.name === `stage-pin-${id}-${n}`).emit('pointerup', { getDistance: () => 0 }); }, [id, n]);
 const startBattle = async p => { await p.evaluate(() => window.__game.scene.getScene('MenuScene').startButton?.emit('pointerdown')); await p.waitForTimeout(900);
-  if (!(await p.evaluate(() => window.__game.scene.isActive('GameScene')))) { await p.evaluate(() => { const m = window.__game.scene.getScene('MenuScene'), find = list => { for (const o of list) { if (o.name === 'hero-confirm') return o; if (o.list) { const r = find(o.list); if (r) return r; } } }; find(m.children.list)?.emit('pointerdown'); }); await p.waitForTimeout(800); await p.evaluate(() => window.__game.scene.getScene('MenuScene').children.getByName('start-campaign')?.emit('pointerdown')); }
+  if (!(await p.evaluate(() => window.__game.scene.isActive('GameScene')))) { await p.evaluate(() => { const m = window.__game.scene.getScene('MenuScene'), find = list => { for (const o of list) { if (o.name === 'hero-confirm') return o; if (o.list) { const r = find(o.list); if (r) return r; } } }; const c = find(m.children.list); c?.emit('pointerdown'); /* 2026-11-17：定主公要点两次「确认出战」 */ if (!localStorage.getItem('im_last_hero')) c?.emit('pointerdown'); }); await p.waitForTimeout(800); await p.evaluate(() => { const m = window.__game.scene.getScene('MenuScene'); m.children.getByName('start-campaign')?.emit('pointerdown'); /* 2026-11-17：先开择章页，选第一章 1-1 */ if (window.__game.scene.isActive('MenuScene')) m.pickChapter('huangjin', 1); }); }
   await p.waitForFunction(() => window.__game?.scene.isActive('GameScene'), null, { timeout: 30000 }); };
 const ck = (name, ok, data) => { checks.push({ name, ok: !!ok, data }); console.log(ok ? 'PASS' : 'FAIL', name, data === undefined ? '' : JSON.stringify(data)); };
 const b = await chromium.launch({ channel: 'chrome', headless: true });
@@ -69,8 +69,8 @@ try {
     await p.evaluate(() => localStorage.clear()); await p.reload(); await p.waitForFunction(() => window.__game?.scene.isActive('MenuScene'), null, { timeout: 30000 });
     // 主页 Enter → 点将；再 Enter → 确认出战
     await p.keyboard.press('Enter'); await p.waitForTimeout(800);
-    await p.evaluate(() => { const m = window.__game.scene.getScene('MenuScene'), find = list => { for (const o of list) { if (o.name === 'hero-confirm') return o; if (o.list) { const r = find(o.list); if (r) return r; } } }; find(m.children.list)?.emit('pointerdown'); });
-    await p.waitForTimeout(800); await p.evaluate(() => window.__game.scene.getScene('MenuScene').children.getByName('start-campaign')?.emit('pointerdown'));
+    await p.evaluate(() => { const m = window.__game.scene.getScene('MenuScene'), find = list => { for (const o of list) { if (o.name === 'hero-confirm') return o; if (o.list) { const r = find(o.list); if (r) return r; } } }; const c = find(m.children.list); c?.emit('pointerdown'); /* 2026-11-17：定主公要点两次「确认出战」 */ if (!localStorage.getItem('im_last_hero')) c?.emit('pointerdown'); });
+    await p.waitForTimeout(800); await p.evaluate(() => { const m = window.__game.scene.getScene('MenuScene'); m.children.getByName('start-campaign')?.emit('pointerdown'); /* 2026-11-17：先开择章页，选第一章 1-1 */ if (window.__game.scene.isActive('MenuScene')) m.pickChapter('huangjin', 1); });
     await p.waitForFunction(() => window.__game?.scene.isActive('GameScene'), null, { timeout: 30000 });
     for (let stage = 1; stage <= 3; stage++) {
       await p.waitForTimeout(200);
@@ -87,6 +87,8 @@ try {
     ck('ch1 victory notice announces the world map', !!notice && notice.includes('天下地图开启') && notice.includes('展开天下地图'), notice);
     await p.screenshot({ path: `${out}/mobile-1-victory-notice.png` });
     await p.evaluate(() => window.__game.scene.getScene('GameScene').children.getByName('chapter1-volunteers').getByName('volunteers-confirm').emit('pointerdown'));
+    // 2026-11-17：第一章告捷后先播献马剧情（story-merchant-horse），点完才进天下地图
+    for (let i = 0; i < 12; i++) { await p.waitForTimeout(300); const more = await p.evaluate(() => { const s = window.__game.scene.getScene('GameScene'), root = s?.children.getByName('story-merchant-horse'); if (!root) return false; (root.list.find(o => o.name === 'story-merchant-horse-next') ?? root.list.find(o => o.name === 'story-merchant-confirm'))?.emit('pointerup'); return true; }); if (!more && i > 2) break; }
     await p.waitForFunction(() => window.__game.scene.isActive('WorldMapScene'), null, { timeout: 15000 });
     await p.waitForTimeout(900);
     let m = await mapState(p);
@@ -148,8 +150,8 @@ try {
     // 手柄：方向键移到「肆 官渡之战」章节条，Ⓐ 选中
     const pad = padApi(p); await p.waitForTimeout(300); let f0 = null;
     for (let i = 0; i < 6 && !f0?.name?.startsWith('chapter-chip-'); i++) { await pad.press('DOWN'); f0 = await pad.focus(); }
-    const order = ['chapter-chip-huangjin', 'chapter-chip-hulao', 'chapter-chip-qunxiong', 'chapter-chip-guandu', 'chapter-chip-chibi'];
-    for (let i = 0; i < 5; i++) { const at = order.indexOf((await pad.focus())?.name ?? ''); if (at === 3 || at < 0) break; await pad.press(at < 3 ? 'RIGHT' : 'LEFT'); }
+    /* 2026-11-17：时间轴扩到十二章 */ const order = ['huangjin', 'hulao', 'qunxiong', 'guandu', 'chibi', 'jingnan', 'shu', 'hanzhong', 'xiangfan', 'yiling', 'nanzheng', 'beifa'].map(id => 'chapter-chip-' + id);
+    for (let i = 0; i < 14; i++) { const at = order.indexOf((await pad.focus())?.name ?? ''); if (at === 3 || at < 0) break; await pad.press(at < 3 ? 'RIGHT' : 'LEFT'); }
     const f = await pad.focus();
     ck('gamepad ↓/→ moves focus onto timeline chips', f0?.name?.startsWith('chapter-chip-') && f?.name === 'chapter-chip-guandu', { f0, f });
     if (f?.name === 'chapter-chip-guandu') { await pad.press('A'); await p.waitForTimeout(250); }
@@ -161,7 +163,7 @@ try {
   // ⑤ 乱世难度：全章已平定 → 讨董 2-3 乱世出征 → 首领生命 ×1.8 → 首通奖励与称号
   {
     const p = await b.newPage({ viewport: { width: 1280, height: 720 } }); watch(p);
-    const save = { version: 8, yellowStages: 3, dongzhuoStages: 3, warlordStages: 3, guanduStages: 3, chibiStages: 3, worldAvailable: true, chapterSeen: 5, eraSeen: 3, cleared: { huangjin: true, hulao: true }, merits: 1000, provisions: 1000, buildings: { barracks: 1, farm: 1, clinic: 1 }, reserve: {}, receipts: [], nodes: ['home', 'huangjin', 'hulao'] };
+    const save = { version: 8, yellowStages: 3, dongzhuoStages: 3, warlordStages: 3, guanduStages: 3, chibiStages: 3, jingnanStages: 3, shuStages: 3, hanzhongStages: 3, xiangfanStages: 3, yilingStages: 3, nanzhengStages: 3, beifaStages: 3, worldAvailable: true, chapterSeen: 12, /* 2026-11-17：十二章全平定 */ eraSeen: 3, cleared: { huangjin: true, hulao: true }, merits: 1000, provisions: 1000, buildings: { barracks: 1, farm: 1, clinic: 1 }, reserve: {}, receipts: [], nodes: ['home', 'huangjin', 'hulao'] };
     await p.addInitScript(sv => { if (!sessionStorage.getItem('seeded')) { localStorage.clear(); localStorage.setItem('im_world_v1', JSON.stringify(sv)); sessionStorage.setItem('seeded', '1'); } }, save);
     await p.goto(base + '?layout=desktop'); await p.waitForFunction(() => window.__game?.scene.isActive('MenuScene'), null, { timeout: 30000 });
     await p.evaluate(() => { window.__game.scene.getScene('MenuScene').scene.start('WorldMapScene'); }); await p.waitForFunction(() => window.__game.scene.isActive('WorldMapScene')); await p.waitForTimeout(700);

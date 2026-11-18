@@ -85,6 +85,10 @@ assets/raw/*
 !/tools/test-campaign-build.mjs
 !/tools/test-charms.mjs
 !/tools/test-token-slots.mjs
+!/tools/deathfx-proto.mjs
+!/tools/deathfx-compose.mjs
+!/tools/test-deathfx.mjs
+!/tools/deathfx-live.mjs
 !/tools/test-merit.mjs
 !/tools/test-level-merge.mjs
 !/tools/test-hero-codex.mjs

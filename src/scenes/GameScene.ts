@@ -31,6 +31,8 @@ import {BuildCombat} from '../systems/BuildCombat';
 import {TACTICS,TREASURES,TAG_NAMES,type TacticId} from '../data/builds';
 import { applyCharms, wornTokens, type CharmState } from '../systems/CharmEffects';
 import { meritFromKills } from '../data/merit';
+import { DeathFx, deathFxMode } from '../systems/DeathFx';
+import { DEATHFX_LABEL, deathFxSetting, setDeathFx, type DeathFxSetting } from '../systems/BattleSettings';
 import { CHARM_LEGEND, CHARM_SCHOOL_NAMES, CHARM_SET_DESC, charmDef, type CharmSchool } from '../data/charms';
 import {SishuiObstacles} from '../systems/SishuiObstacles';
 import {SishuiPass,type PassHost} from '../systems/SishuiPass';
@@ -595,6 +597,7 @@ export class GameScene extends Phaser.Scene {
     ensureWarTextures(this);
     this.hudAcc = 1; this.lastHudMode = '';
     this.feedback = new BattleFeedback(this);
+    { const m = deathFxMode(); this.deathFx = m ? new DeathFx(this, m) : null; } // 敌军死亡特效（缺省 B 脚下尘土；设置可关；?deathfx=a|b|c|off 调试）
     this.hitFeel = new HitFeel(this); this.bossStagger = new BossStagger();
     this.events.once('shutdown', () => { this.anims.globalTimeScale = 1; });
     this.sfx = new Sfx();
@@ -1030,6 +1033,7 @@ export class GameScene extends Phaser.Scene {
     this.player.update(time, dt);this.mount?.update(dt,this.combatNow);
 
     if(!this.over){for(const c of this.bossChests)c.update(this.combatNow);this.itemDrops?.update();this.relics?.update(this.combatNow);this.relicShips?.update(this.combatNow);}
+    this.deathFx?.update(this.combatNow);
     this.supplies?.update(dt,time,this.battlefieldDetails.props,(enemy,damage)=>this.hitEnemy(enemy,damage,time,'fire',false,false),this.allies,(ally,damage,now)=>this.legion.hurt(ally,damage,now));
     if(!this.envInit&&this.supplies){this.envInit=true;const cfg=envConfigFor(this.scene.key,this.chapter.id,(this as unknown as {guanduStage?:number}).guanduStage);if(cfg){const sup=this.supplies;this.env=new EnvInteractions({scene:this,player:this.player,supplies:sup,enemies:()=>this.enemies,allies:()=>this.allies,hitEnemy:(e,d)=>{this.hitEnemy(e,d,this.combatNow,'fire',false,false);},hurtAlly:(a,d)=>{this.legion.hurt(a,d,this.combatNow);},spawnEnemy:(x,y)=>this.spawnEnemy('infantry',x,y,undefined,true),spawnGem:(x,y,v)=>this.spawnGem(x,y,v),spawnChest:(x,y)=>{this.itemDrops?.spawnChest(x,y);},now:()=>this.combatNow,sfx:k=>this.sfx.play(k)},cfg);this.events.once('shutdown',()=>{this.env?.destroy();this.env=null;});}}
     this.env?.update(dt);
@@ -1918,6 +1922,7 @@ export class GameScene extends Phaser.Scene {
 
   protected hitEnemy(enemy: Enemy, rawDamage: number, time: number, source: 'melee' | 'arrow' | 'fire' = 'melee', fromAlly = false, weaponHit = true): boolean {
     if (!enemy.active || this.over || enemy.invulnerable) return false;
+    enemy.lastHitFromAlly = fromAlly;
     if(enemy.isSupplySlot){enemy.hp-=Math.max(1,Math.round(rawDamage));enemy.flash(time);this.sfx.play('hitHeavy');if(enemy.hp<=0)this.killEnemy(enemy);return false;}
     if (enemy === this.boss) this.ensureBossPhase2();
     if (this.xiliang) rawDamage *= this.xiliang.incoming(enemy, source);
@@ -2012,6 +2017,17 @@ export class GameScene extends Phaser.Scene {
     this.feedback.hit(boss.x, boss.y, a, time, 'melee', { boss: true, crit: true });
   }
 
+  /** 敌军死亡特效（脚下尘土，2026-11-18）。 */
+  protected deathFx: DeathFx | null = null;
+  /** 受击来源（死亡倒向用）：我方部曲打的取离敌人最近的我方单位，其余（主将的近战 / 弹道）取主将位置。 */
+  protected hitSourceOf(enemy: Enemy): { x: number; y: number } {
+    if (enemy.lastHitFromAlly) {
+      let best: { x: number; y: number } | null = null, bd = 170 * 170;
+      for (const a of this.allies) { if (!a.active) continue; const dx = a.x - enemy.x, dy = a.y - enemy.y, d = dx * dx + dy * dy; if (d < bd) { bd = d; best = a; } }
+      if (best) return best;
+    }
+    return this.player;
+  }
   protected killEnemy(enemy: Enemy): void {
     if (this.dzLubu?.preventKill(enemy)) return; // 2-3 吕布打到底不死：锁血逃走
     if (!this.persuadeKill && this.parley?.preventKill(enemy)) return; // 首领招降：没表态前不死
@@ -2026,6 +2042,7 @@ export class GameScene extends Phaser.Scene {
     if(enemy.isSupplySlot){this.sfx.play('propBreak');this.supplies?.onBroken(enemy);return;}
     this.warfeedKill();
     if(enemy.def.behavior==='wall')return;
+    if(this.deathFx){const from=this.hitSourceOf(enemy);this.deathFx.play(enemy,from.x,from.y,this.combatNow);}
     this.kills += 1;
     this.player.passive.onKill(kind, this.combatNow);
     this.awakeningCombat?.onKill(enemy,this.combatNow);
@@ -2684,7 +2701,7 @@ export class GameScene extends Phaser.Scene {
    * 改了立即写入并即时生效，与主页「军中设置」共用同一组键（systems/BattleSettings）。
    */
   private layoutSettingsPanel(o: { panelG: Phaser.GameObjects.Graphics; panel: Phaser.GameObjects.Rectangle; pauseTitle: Phaser.GameObjects.Text; pauseHint: Phaser.GameObjects.Text; resume: Phaser.GameObjects.Image; resumeText: Phaser.GameObjects.Text; bgmRow: Phaser.GameObjects.GameObject[]; sfxRow: Phaser.GameObjects.GameObject[]; buildLink: Phaser.GameObjects.Text; bagLink: Phaser.GameObjects.Text; exit: Phaser.GameObjects.Text; keys: Phaser.GameObjects.Text }): void {
-    const W = GAME_WIDTH, H = GAME_HEIGHT, pw = 780, ph = 470, top = (H - ph) / 2, cx = W / 2, lx = cx - 200, rx = cx + 165;
+    const W = GAME_WIDTH, H = GAME_HEIGHT, pw = 780, ph = 515, top = (H - ph) / 2, cx = W / 2, lx = cx - 200, rx = cx + 165;
     o.panelG.clear(); lqPanel(o.panelG, cx - pw / 2, top, pw, ph); o.panel.setSize(pw, ph).setPosition(cx, H / 2); if (o.panel.input) o.panel.input.hitArea.setTo(0, 0, pw, ph);
     o.pauseTitle.setText('军中设置').setFontFamily(TITLE_FONT).setFontSize(30).setColor('#efd399').setStroke('#120904', 4).setPosition(cx, top + 36);
     o.pauseHint.setText('战斗已暂停').setFontFamily(FONT).setColor('#b9a57a').setPosition(cx, top + 68);
@@ -2732,6 +2749,7 @@ export class GameScene extends Phaser.Scene {
     row<HeroBarks>(5, '武将台词', 'hero-barks', ['on', 'off'], heroBarks, v => BARKS_LABEL[v], v => { setHeroBarks(v); if (v === 'off') this.heroBark?.clear(); });
     row<StoryMode>(6, '剧情', 'story', ['full', 'chapter', 'off'], storyMode, v => STORY_LABEL[v], setStoryMode);
     row<OpeningMode>(7, '开场动画', 'opening', ['every', 'first', 'off'], openingMode, v => OPENING_LABEL[v], setOpeningMode);
+    row<DeathFxSetting>(8, '死亡特效', 'death-fx', ['on', 'off'], deathFxSetting, v => DEATHFX_LABEL[v], setDeathFx);
     const replay = tutorialReplayLink(this, rx + width / 2, top + ph - 14).setScrollFactor(0); this.pausePanel.add(replay);
     this.pausePanel.add(hotkeySettingsLink(this, rx - width / 2 + 62, top + ph - 14, DEPTH.overlay + 40).setScrollFactor(0)); // 快捷键页（与主页设置共用）
   }

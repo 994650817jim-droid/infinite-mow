@@ -72,6 +72,8 @@ export class Enemy {
   hp = 1;
   maxHp = 1;
   active = false;
+  /** 最近一次受击来自我方部曲 / 随行（死亡特效据此找来源方向；主将和弹道都从主将出手，按主将位置算）。 */
+  lastHitFromAlly = false;
   invulnerable = false;
   controlImmune = false;
   stunUntil = 0;

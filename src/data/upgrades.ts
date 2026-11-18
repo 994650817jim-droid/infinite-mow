@@ -114,7 +114,7 @@ function shuffle<T>(arr: T[]): T[] {
 }
 
 const POTIONS: Record<PotionId, { name: string; desc: string }> = {
-  rejuvenation: { name: '回春丹', desc: '立即恢复最大生命值的 30%' },
+  rejuvenation: { name: '回春丹', desc: '收入药囊，按 Q 服用：回复 30% 生命（药囊满时立即服用）' },
   berserk: { name: '狂战丹', desc: '10 秒内武器伤害 +25%，攻速 +20%' },
 };
 export function martialDescription(id:MasteryId,level:number):string {

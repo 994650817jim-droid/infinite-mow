@@ -53,6 +53,8 @@ export const PASSIVE_RULES = {
   fanRange: 230, fanSpeed: 520, charmNeed: 2, turnMs: 3000, turnVulnerability: 1.2, charmVulnerability: 1.25, turnSeek: 260, turnHitMs: 500, charmDecayMs: 4000,
   /** 貂蝉·闭月：舞带环身 2 秒，半径 160，每 0.4 秒 50% 伤害，圈内敌人倒戈。 */
   moonMs: 2000, moonRadius: 160, moonTickMs: 400, moonDamageMul: .5,
+  /** 2026-11-17 用户：「貂蝉被动好像不触发了」——飞扇打死带魅惑的敌人也 +1 层，但每秒最多 1 层；闭月结束后飞扇冷却（秒）。 */
+  charmKillGapMs: 1000, moonAfterCdS: .2,
   /** 黄忠·宝雕弓：重箭（速度 / 射程 / 击退）；神射时命中处小范围爆裂（半径 / 伤害倍率）。 */
   heavyArrowSpeed: 900, heavyArrowRange: 600, heavyArrowKnock: 40, heavyBurstRadius: 60, heavyBurstMul: .5,
   /** 2026-11-16 方案 C「老当益壮」（用户选定，初值待平衡）：静心每级缩短进入神射时间 jingxinStepMs；3 级神射第一箭扇形三连（夹角 fanSpreadRad、每支 fanMul）；

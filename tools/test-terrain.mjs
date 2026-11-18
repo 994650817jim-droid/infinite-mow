@@ -119,7 +119,7 @@ const step = (p, n) => p.evaluate(n => window.__step(n), n);
   });
   ck('刷兵 / 掉落落在水里时挪到岸上', sf.enemyInWater === false && sf.gemInWater === false && sf.moved >= 2, sf);
   // 部曲在水里也慢（Ally.moveTo 走地形倍率）
-  const al = await p.evaluate(async () => { const A = (await import('/src/entities/Ally.ts')).Ally; const [wx, wy] = window.__wpt; return { hook: typeof A?.terrainMul === 'function', water: A?.terrainMul?.(wx, wy), land: A?.terrainMul?.(wx, wy - 300) }; });
+  const al = await p.evaluate(async () => { const url = performance.getEntriesByType('resource').map(e => e.name).find(n => n.includes('/src/entities/Ally.ts')) ?? '/src/entities/Ally.ts'; const A = (await import(url)).Ally; /* 用游戏实际加载的那份模块（常开 dev server 热更新后裸路径是另一份实例） */ const [wx, wy] = window.__wpt; return { hook: typeof A?.terrainMul === 'function', water: A?.terrainMul?.(wx, wy), land: A?.terrainMul?.(wx, wy - 300) }; });
   ck('部曲在水里也减速（地形倍率接到部曲移动）', al.hook && al.water === .6 && al.land === 1, al);
   await p.close();
 }

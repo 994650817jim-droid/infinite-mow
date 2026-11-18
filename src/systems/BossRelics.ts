@@ -32,7 +32,10 @@ export interface RelicHost {
   hit: (e: Enemy, damage: number, now: number) => void;
   notice: (text: string) => void;
 }
-interface LiShi { img: Phaser.GameObjects.Image; until: number; nextHit: number; angle: number }
+/** 黄巾力士：用黄巾步兵 v2 行走图（四向 × 4 帧）走动、朝向、出手前扑，淡入淡出（2026-11-17 用户：「力士出来后没动画」）。 */
+interface LiShi { img: Phaser.GameObjects.Image; until: number; nextHit: number; angle: number; born: number; bx: number; by: number; dir: 'down' | 'left' | 'right' | 'up'; walk: number; lunge?: { x: number; y: number; at: number } }
+const LISHI_SHEETS = ['enemy_infantry_walk_sheet', 'shu_swordsman_walk_sheet'];
+const LISHI_FADE = 300, LISHI_LUNGE_MS = 220;
 
 export class BossRelics {
   private specials = new Set<SpecialId>();
@@ -82,10 +85,13 @@ export class BossRelics {
     if (!this.has('fushui') || ++this.gems < RELIC.fushuiGems) return;
     this.gems = 0;
     if (this.lishi.filter(l => l.until > now).length >= RELIC.fushuiMax) return;
-    const p = this.h.player, s = this.h.scene, key = s.textures.exists('shu_swordsman_walk_sheet') ? 'shu_swordsman_walk_sheet' : '__WHITE';
-    const img = s.add.image(p.x, p.y, key, key === '__WHITE' ? undefined : 'down_0').setTint(0xf2c84b).setName('relic-lishi');
+    const p = this.h.player, s = this.h.scene, key = LISHI_SHEETS.find(k => s.textures.exists(k) && s.textures.get(k).has('down_0')) ?? '__WHITE';
+    const angle = Math.random() * Math.PI * 2;
+    // 金色淡染：和真正的黄巾敌兵区分（召出来的「力士」），出场淡入
+    const img = s.add.image(p.x + Math.cos(angle) * 46, p.y + Math.sin(angle) * 30, key, key === '__WHITE' ? undefined : 'down_0').setTint(0xffe7a0).setAlpha(0).setName('relic-lishi');
     if (key === '__WHITE') img.setDisplaySize(18, 26);
-    this.lishi.push({ img, until: now + RELIC.fushuiLife, nextHit: now + 300, angle: Math.random() * Math.PI * 2 });
+    else img.setScale(Math.min(1, 64 / Math.max(1, img.height)));
+    this.lishi.push({ img, until: now + RELIC.fushuiLife, nextHit: now + 300, angle, born: now, bx: img.x, by: img.y, dir: 'down', walk: 0 });
     this.metrics.lishi++; this.h.notice('人公符水 · 黄巾力士助战');
   }
   /** 拾取酒罐 / 酒葫芦：豪饮。 */
@@ -109,12 +115,28 @@ export class BossRelics {
     }
     for (let i = this.lishi.length - 1; i >= 0; i--) {
       const l = this.lishi[i];
-      if (now >= l.until || !p.alive) { l.img.destroy(); this.lishi.splice(i, 1); continue; }
+      if (now >= l.until + LISHI_FADE || !p.alive) { l.img.destroy(); this.lishi.splice(i, 1); continue; }
+      // 淡入 / 到时淡出
+      l.img.setAlpha(Math.min(1, (now - l.born) / LISHI_FADE, now < l.until ? 1 : 1 - (now - l.until) / LISHI_FADE));
       l.angle += .015; const tx = p.x + Math.cos(l.angle) * 46, ty = p.y + Math.sin(l.angle) * 30;
-      l.img.setPosition(l.img.x + (tx - l.img.x) * .15, l.img.y + (ty - l.img.y) * .15).setDepth(actorDepth(l.img.y));
-      if (now >= l.nextHit) {
-        const e = live.find(x => Math.hypot(x.x - l.img.x, x.y - l.img.y) <= RELIC.fushuiRange);
-        if (e) { l.nextHit = now + RELIC.fushuiHitMs; this.h.hit(e, RELIC.fushuiDamage * p.growth.allyDamageMultiplier(), now); }
+      const nx = l.bx + (tx - l.bx) * .15, ny = l.by + (ty - l.by) * .15, dx = nx - l.bx, dy = ny - l.by, step = Math.hypot(dx, dy);
+      l.bx = nx; l.by = ny;
+      // 出手前扑：朝目标冲出 14 像素再收回（前半程出、后半程回）
+      let ox = 0, oy = 0, lunging = false;
+      if (l.lunge) { const t = (now - l.lunge.at) / LISHI_LUNGE_MS; if (t >= 1) l.lunge = undefined; else { const k = Math.sin(t * Math.PI) * 14; ox = l.lunge.x * k; oy = l.lunge.y * k; lunging = true; } }
+      // 朝向：前扑时朝目标，平时朝走的方向
+      const fx = lunging ? l.lunge!.x : dx, fy = lunging ? l.lunge!.y : dy;
+      if (Math.hypot(fx, fy) > .05) l.dir = Math.abs(fx) > Math.abs(fy) ? (fx < 0 ? 'left' : 'right') : (fy < 0 ? 'up' : 'down');
+      l.walk += step / 9;
+      if (l.img.texture.key !== '__WHITE') l.img.setFrame(`${l.dir}_${lunging ? 1 : step > .3 ? Math.floor(l.walk) % 4 : 0}`);
+      l.img.setPosition(l.bx + ox, l.by + oy).setDepth(actorDepth(l.by));
+      if (now >= l.nextHit && now < l.until) {
+        const e = live.find(x => Math.hypot(x.x - l.bx, x.y - l.by) <= RELIC.fushuiRange);
+        if (e) {
+          l.nextHit = now + RELIC.fushuiHitMs; const d = Math.max(1, Math.hypot(e.x - l.bx, e.y - l.by));
+          l.lunge = { x: (e.x - l.bx) / d, y: (e.y - l.by) / d, at: now };
+          this.h.hit(e, RELIC.fushuiDamage * p.growth.allyDamageMultiplier(), now);
+        }
       }
     }
   }

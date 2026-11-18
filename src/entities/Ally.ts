@@ -15,7 +15,7 @@ export class Ally {
   readonly id = ++sequence;
   private campaignHpMultiplier=1;
   applyCampaignHp(multiplier:number):void{const ratio=this.maxHp>0?this.hp/this.maxHp:1;this.campaignHpMultiplier=multiplier;this.maxHp=Math.round(this.def.hp*(1+.3*(this.level-1))*multiplier);this.hp=Math.min(this.maxHp,this.maxHp*ratio);}
-  active = true; level = 1; hp = 1; maxHp = 1; cooldown = 0; hurtUntil = 0; attackUntil = 0;
+  active = true; level = 1; hp = 1; maxHp = 1; cooldown = 0; hurtUntil = 0; bossImmuneUntil = 0; attackUntil = 0;
   reserveSoldier=false;
   lifeId = 0; attackStarted = 0;
   /** 弓兵射击时目标在左侧（攻击表各行都朝右拉弓，向左射时需镜像）。 */
@@ -38,7 +38,7 @@ export class Ally {
   reset(x: number, y: number, kind: TroopKind, level: number, slot: number): void {
     this.campaignHpMultiplier=1;this.kind = kind; this.active = true; this.level = level; this.maxHp = Math.round(this.def.hp * (1 + .3 * (level - 1))); this.hp = this.maxHp;
     this.reserveSoldier=false;this.lifeId++; this.attackStarted = 0; this.moving = false; this.ai = createTacticState(x, y); this.ai.nextThink = slot % 12 * 17;
-    this.px = x; this.py = y; this.slot = slot; this.cooldown = (slot % 10) * .08; this.hurtUntil = this.attackUntil = this.simDebt = this.walked = 0; this.deathsReported = false; this.dir = 'down';
+    this.px = x; this.py = y; this.slot = slot; this.cooldown = (slot % 10) * .08; this.hurtUntil = this.bossImmuneUntil = this.attackUntil = this.simDebt = this.walked = 0; this.deathsReported = false; this.dir = 'down';
     this.view?.sprite.setPosition(x, y);
   }
   train(level: number): void { const old = this.maxHp; this.level = level; this.maxHp = Math.round(this.def.hp * (1 + .3 * (level - 1))*this.campaignHpMultiplier); this.hp = Math.min(this.maxHp, this.hp + this.maxHp - old); }

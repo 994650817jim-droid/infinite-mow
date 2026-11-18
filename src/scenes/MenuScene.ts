@@ -1,5 +1,6 @@
 import { IS_DESKTOP_APP, desktop } from '../platform/desktop';
 import { confirmLord, defaultHero, ensureLegacyLord, heroOwned, lordFinal, lordHero, lordRules, setLord } from '../systems/RosterStore';
+import {tutorialReplayLink} from '../ui/TutorialOverlay';
 import { showLordNotice } from '../ui/LordNotice';
 import {playMenuMusic,menuMusic} from '../systems/Music';
 import {artStyle,setArtStyle} from '../systems/ArtStyle';
@@ -315,7 +316,8 @@ export class MenuScene extends Phaser.Scene {
     modal.add(this.add.rectangle(W/2,H/2,W,H,0x0c0805,.9).setInteractive());
     {const pw=desk?560:Math.min(W-40,460),top=desk?H/2-250:H/2-190,bottom=desk?rowY(8)+40:H/2+246,g=this.add.graphics();lqPanel(g,W/2-pw/2,top,pw,bottom-top);modal.add(g);
      const t=label(W/2,desk?H/2-218:H/2-130,'军中设置',28).setFontFamily(HEADING_FONT).setColor('#f6dc9a').setStroke('#2a170b',4);modal.add(t);
-     const div=this.add.graphics();lqDivider(div,W/2,t.y+30,desk?160:130);modal.add(div);}
+     const div=this.add.graphics();lqDivider(div,W/2,t.y+30,desk?160:130);modal.add(div);
+     modal.add(tutorialReplayLink(this,W/2+pw/2-22,top+24));} // 新手引导：重看（逻辑在 ui/TutorialOverlay.ts）
     /** 一行“名称  数值”，左右 －/＋（或 ‹ ›）调节；手柄焦点在行上时左右键也能调。 */
     const row=(i:number,name:string,get:()=>string,step:(dir:number)=>void,arrows:[string,string]=['－','＋'])=>{
       const y=rowY(i),value=label(W/2,y,name+'  '+get(),desk?18:20).setName('settings-row-'+i);

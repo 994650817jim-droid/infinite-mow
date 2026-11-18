@@ -29,6 +29,29 @@ export const ATTRIBUTE_INFO: Record<AttributeId, { name: string; effect: string;
   intellect: { name: '智力', effect: '法术伤害 +2.5%、范围 +0.8% / 点', icon: 'growth_icon_points' },
   command: { name: '统御', effect: '部曲伤害 +3%、部曲生命 +3% / 点', icon: 'growth_icon_tiger_tally' },
 };
+/**
+ * 主属性加成（2026-11-17 用户：「属性点点武将的主属性，有更多加成或者有特殊加成」；主管理定方案，初值待平衡）：
+ * 1. 主属性每点按 1.5 倍计算（力量的伤害 / 生命、敏捷的攻速 / 移速 / 暴击、智力的法术 / 范围、统御的部曲伤害 / 生命）。
+ * 2. 主属性专精：主属性满 4 / 7 / 10 点各解锁一档（单项上限 10 点，所以门槛按 4 / 7 / 10）。
+ */
+export const PRIMARY_MUL = 1.5;
+export const PRIMARY_TIERS: readonly number[] = [4, 7, 10];
+export const PRIMARY_PERK = {
+  /** 力量：千钧（武器命中把小兵推开，同一敌人每 0.5 秒一次）/ 破阵（每 5 次武器命中一次重击：伤害 ×2、定身 0.5 秒）/ 斩将（对精英、首领 +20%）。 */
+  strength: { shove: 18, shoveCdMs: 500, crushEvery: 5, crushMul: 2, crushStunMs: 500, eliteMul: .2 },
+  /** 敏捷：轻骑（移速 +8%）/ 游刃（暴击 +5%、10% 闪避）/ 疾影（暴击后 2 秒攻速 +20%）。 */
+  agility: { move: .08, crit: .05, dodge: .1, hasteMs: 2000, haste: .2 },
+  /** 智力：凝神（法术武器冷却 −10%）/ 连珠（法术伤害 15% 几率翻倍）/ 广域（范围再 +12%）。 */
+  intellect: { cooldown: .1, echoChance: .15, area: .12 },
+  /** 统御：励军（部曲伤害 +15%）/ 募众（每次免费招兵多 1 人）/ 同袍（随从救起快 40%，救起带 70% 生命）。 */
+  command: { allyDamage: .15, freeRecruit: 1, reviveFaster: .4, reviveHp: .7 },
+} as const;
+export const PRIMARY_PERK_INFO: Record<AttributeId, readonly { name: string; desc: string }[]> = {
+  strength: [{ name: '千钧', desc: '武器命中把小兵推开' }, { name: '破阵', desc: '每 5 次武器命中一次重击：伤害 ×2，定身 0.5 秒' }, { name: '斩将', desc: '对精英、首领伤害 +20%' }],
+  agility: [{ name: '轻骑', desc: '移速 +8%' }, { name: '游刃', desc: '暴击 +5%，10% 几率闪避伤害' }, { name: '疾影', desc: '暴击后 2 秒内攻速 +20%' }],
+  intellect: [{ name: '凝神', desc: '法术武器冷却 −10%' }, { name: '连珠', desc: '法术伤害 15% 几率翻倍' }, { name: '广域', desc: '范围再 +12%' }],
+  command: [{ name: '励军', desc: '部曲伤害 +15%' }, { name: '募众', desc: '每次免费招兵多 1 人' }, { name: '同袍', desc: '随从救起快 40%，救起带 70% 生命' }],
+};
 /** 武将主属性。 */
 export const PRIMARY_ATTRIBUTE: Record<CharacterId, AttributeId> = {
   guanyu: 'strength', zhangfei: 'strength', weiyan: 'strength',

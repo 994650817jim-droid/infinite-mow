@@ -45,7 +45,7 @@ export class CharacterPassives {
   private lastMoveAt = -Infinity;
   constructor(character: CharacterId = 'zhaoyun', now = 0) { this.reset(character, now); }
   reset(character: CharacterId, now: number): void {
-    this.character = character; this.stacks = 0; this.lastGain = -Infinity; this.lastDamage = now; this.calmMs = R.calmMs; this.sharpGuardUntil = -Infinity; this.stageKills = 0; this.sharpEliteKills = 0;
+    this.character = character; this.stacks = 0; this.lastGain = -Infinity; this.charmKillAt = -Infinity; this.lastDamage = now; this.calmMs = R.calmMs; this.sharpGuardUntil = -Infinity; this.stageKills = 0; this.sharpEliteKills = 0;
     this.generation++; this.stopped = false; this.gains = 0; this.triggers = 0; this.burns.clear(); this.charms.clear(); this.guardUntil = -Infinity; this.chargeInvulnUntil = this.chargeGuardUntil = -Infinity;
   }
   get characterId(): CharacterId { return this.character; }
@@ -107,6 +107,17 @@ export class CharacterPassives {
     if (enemy.kind === 'boss' || enemy.controlImmune) { c.vulnUntil = now + R.turnMs; return false; }
     return this.turn(c, now, enemy.kind === 'elite' ? turnMs / 2 : turnMs);
   }
+  /** 貂蝉：飞扇打死身上带魅惑的敌人，也算离间成功 +1 层（弱敌一两扇就死，光靠倒戈攒不满）。 */
+  charmKill(enemy: Enemy, now: number): void {
+    if (this.stopped || this.character !== 'diaochan' || enemy.isSupplySlot) return;
+    const c = this.charmOf(enemy); if (!c || c.marks <= 0) return;
+    c.marks = 0; this.charms.delete(enemy.uid);
+    // 击杀攒层每秒最多 1 层：割草时击杀极多，不限的话闭月会接连不断（又变成「一直闭月不扔扇子」）
+    if (now < this.charmKillAt) return;
+    this.charmKillAt = now + R.charmKillGapMs;
+    if (this.stacks < this.maxStacks) { this.stacks++; this.gains++; }
+  }
+  private charmKillAt = -Infinity;
   /** 闭月：直接让敌人倒戈（首领改为易伤）。 */
   forceTurn(enemy: Enemy, now: number, turnMs: number): boolean {
     if (this.stopped || !enemy.active || enemy.isSupplySlot) return false;

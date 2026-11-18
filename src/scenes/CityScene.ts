@@ -20,7 +20,8 @@ import {stableUnlocked} from '../systems/ItemStore';
 import {CHARACTERS,type CharacterId} from '../data/characters';
 import {uiSfx} from '../systems/Sfx';
 import {checkWorld} from '../systems/Achievements';
-import {loadWorld,saveWorld,worldUnlocked,storageUnavailable,incompatibleSave,townUpgrade,granaryLevy,researchTech,townProgress,stableCapacity,drillInfo,trainTroops} from '../world/WorldStore';
+import {loadWorld,saveWorld,worldUnlocked,storageUnavailable,incompatibleSave,townUpgrade,granaryLevy,researchTech,townProgress,stableCapacity,drillInfo,trainTroops,cityLevels} from '../world/WorldStore';
+import {cityIncome} from '../data/cityBuildings';
 import {CAMP_LOCK,TOWN_BUILDINGS,FOCUS_NAME,FOCUS_INCOME,FOCUS_CHANGE_COST,CITY_SIZE,CITY_TITLE,HALL_UPGRADE,nextCost,buildBlockers,buildingOpen,citySize,focusOpen,levelOf,costText,incomeText,townArtLevel,type TownBuildingId,type TownState,type CityFocus,type TownProgress} from '../town/TownData';
 import {TECHS,TECH_IDS,BRANCH_NAME,BRANCH_ORDER,techBlockers,techTotals,type TechBranch} from '../data/tech';
 import {LORD_LEVEL_HINT,followerLevel,followerLevelCap,hallLevel,loadRoster,rankCap,rankPreview,rankUp,type Recruit} from '../systems/RosterStore';
@@ -46,7 +47,7 @@ function statusOf(t:TownState,id:TownBuildingId,grain:number,p:TownProgress):'ma
 
 export class CityScene extends Phaser.Scene {
  private message='';
- private pano!:Phaser.GameObjects.Container;private top!:Phaser.GameObjects.Text;private hint!:Phaser.GameObjects.Text;private sizeText!:Phaser.GameObjects.Text;
+ private pano!:Phaser.GameObjects.Container;private top!:Phaser.GameObjects.Text;private domainText?:Phaser.GameObjects.Text;private hint!:Phaser.GameObjects.Text;private sizeText!:Phaser.GameObjects.Text;
  private vr={x:0,y:0,w:0,h:0};private k=1;private sx=0;private sy=0;
  private hits:Phaser.GameObjects.Rectangle[]=[];
  /** 营寨档的营帐与兵士（town/CampLife.ts）；县城以后为 null。 */
@@ -123,6 +124,9 @@ export class CityScene extends Phaser.Scene {
   const s=loadWorld(),t=s.town,size=citySize(t);
   checkWorld(s);
   this.top.setText(`军粮 ${s.provisions}`);
+  // 2026-11-18：攻下的城在营寨也看得到——城池数与每战城池产出（各城建筑合计）
+  {const inc={grain:0,troops:0};for(const id of s.ownedCities){const c=cityById(id);if(!c)continue;const r=cityIncome(c.tier,cityLevels(id,s));inc.grain+=r.grain;inc.troops+=r.troops;}
+   this.domainText?.destroy();this.domainText=s.ownedCities.length?txt(this,D?this.top.x-this.top.width-18:24,D?28:92,`城池 ${s.ownedCities.length} · 每战 ${incomeText(inc)}`,12,'#bff0c8').setOrigin(D?1:0,.5).setName('city-domain'):undefined;}
   this.sizeText.setText(`${CITY_TITLE[size]}`);
   this.hint.setText(this.nextHint(s));
   const tech=techTotals(t.tech),pav=levelOf(t,'pavilion')>0?1:0,pts=tech.attributePoints+pav,dmg=Math.round((tech.damage+pav*.06)*100),hp=Math.round((tech.maxHp+pav*.06)*100);

@@ -32,6 +32,7 @@ import {cityById,TIER_NAME} from '../world/WorldCities';
 import {CampLife,loadCampLife,CAMP_ART_IDS} from '../town/CampLife';
 import {campTalkStrip} from '../systems/Story';
 import {followersFor,heroOwned} from '../systems/RosterStore';
+import {addMainMenuButton} from '../ui/MainMenuButton';
 
 /** 是否电脑布局：在场景构造时读取（模块加载时布局尚未初始化）。 */
 let D=false;
@@ -86,6 +87,7 @@ export class CityScene extends Phaser.Scene {
   this.hint=txt(this,D?190:24,D?28:94,'',D?13:12,'#b9d2a8').setOrigin(0,.5).setName('city-hint');
   // 底栏：只有「天下地图」（出征也从天下地图选章节）；功能都在建筑里
   const mapBtn=homeCommand(this,W/2,D?H-28:H-72,D?260:W-60,D?40:52,'天下地图 · 出征',true,true,D?16:17);mapBtn.hit.setName('city-map').on('pointerdown',()=>this.scene.start('WorldMapScene'));
+  addMainMenuButton(this,D?24+46:W-62,D?H-28:120); // 「主菜单」：电脑左下角、手机右上，直接回主页，快捷键 M
   // 2026-11-17 UI 审查 K：底栏提示去掉（建筑上已有名牌，点了就进）
   // 营中闲话（剧情 campTalk）：底栏「天下地图」右侧，不挡建筑与出征按钮；按当前章节取一段没看过的
   if(D){const w=loadWorld(),lord=(loadRoster().lord??'liubei') as CharacterId,chapters=!w.cleared?.huangjin?['huangjin']:!w.cleared?.hulao?['hulao','huangjin']:(w.warlordStages??0)<3?['qunxiong','hulao','huangjin']:['guandu','qunxiong','hulao','huangjin'];

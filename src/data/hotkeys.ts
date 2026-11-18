@@ -9,7 +9,7 @@
  * 移动（WASD / 方向键）固定不可改，只在列表里显示。
  */
 export type HotkeyAction =
-  | 'back' | 'potion' | 'order' | 'sortie' | 'bag' | 'attributes' | 'build'
+  | 'back' | 'potion' | 'order' | 'sortie' | 'bag' | 'attributes' | 'build' | 'menu'
   | 'pick1' | 'pick2' | 'pick3' | 'pick4' | 'reroll' | 'confirm';
 
 export interface HotkeyDef {
@@ -30,6 +30,8 @@ export const HOTKEYS: Record<HotkeyAction, HotkeyDef> = {
   bag: { label: '行囊', where: '战斗中开关；行营休整', key: 'KeyB', alt: ['Tab'] },
   attributes: { label: '属性加点', where: '战斗中有属性点时开关', key: 'KeyC' },
   build: { label: '战法构筑', where: '战斗中开关', key: 'KeyV' },
+  // 2026-11-18 用户「返回主菜单按钮，三处都加」：暂停菜单里按一次待确认、再按一次执行；天下地图 / 义军营寨直接回主页
+  menu: { label: '返回主菜单', where: '暂停菜单（再按一次确认）；天下地图 / 义军营寨', key: 'KeyM' },
   pick1: { label: '选第 1 项', where: '三选一 / 遗珍 / 招募；休整页签 1；劝降', key: 'Digit1', alt: ['Numpad1'] },
   pick2: { label: '选第 2 项', where: '三选一 / 遗珍 / 招募；休整页签 2；斩杀', key: 'Digit2', alt: ['Numpad2'] },
   pick3: { label: '选第 3 项', where: '三选一 / 遗珍 / 招募；休整页签 3；再压一压', key: 'Digit3', alt: ['Numpad3'] },

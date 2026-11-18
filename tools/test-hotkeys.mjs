@@ -22,7 +22,7 @@ const key = async (k, ms = 150) => { await p.keyboard.press(k); await p.waitForT
 
 // 0. 键位表本身没有冲突
 const H = await p.evaluate(async () => { const m = await import('/src/data/hotkeys.ts'); return { conflicts: m.hotkeyConflicts(), n: m.HOTKEY_ORDER.length }; });
-ck('默认键位没有冲突（13 个动作）', H.conflicts.length === 0 && H.n === 13, H);
+ck('默认键位没有冲突（14 个动作，含 2026-11-18 加的「返回主菜单」M）', H.conflicts.length === 0 && H.n === 14, H);
 
 // 1. 战斗中
 await p.evaluate(G0 => { const s = eval(G0); window.__potion = 0; const u = s.usePotion.bind(s); s.usePotion = () => { window.__potion++; u(); }; }, G);
@@ -112,7 +112,7 @@ await key('Escape', 150); // 取消改键
 const modeIn = (await st()).mode;
 await key('Escape', 300); // 关掉快捷键页（不关暂停）
 const after = await p.evaluate(G0 => ({ open: !!eval(G0).children.getByName('hotkey-settings'), mode: eval(G0).mode }), G);
-ck('设置页列出全部 13 个可改的键位（另列移动键固定）', page.open && page.rows === 13, page);
+ck('设置页列出全部 14 个可改的键位（另列移动键固定）', page.open && page.rows === 14, page);
 ck('改键：服药改成 G，存进 localStorage', r1.potion === 'KeyG' && /KeyG/.test(r1.saved ?? ''), r1);
 ck('改键冲突：按 E 提示已被「护阵 / 出击 切换」占用、不改；再按一次 E 互换（服药 E、切换 G），无冲突', r2.potion === 'KeyG' && /已是/.test(r2.msg) && r3.potion === 'KeyE' && r3.order === 'KeyG' && r3.conflicts === 0, { r2, r3 });
 ck('移动键不能占用；Esc 先取消改键，再按 Esc 关掉快捷键页、仍停在暂停', r4 === 'KeyB' && modeIn === 'pause' && !after.open && after.mode === 'pause', { r4, modeIn, after });

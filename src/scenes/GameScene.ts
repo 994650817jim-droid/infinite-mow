@@ -1776,6 +1776,8 @@ export class GameScene extends Phaser.Scene {
   // ---------------- 武器 ----------------
 
   /** 暂停菜单主动离开：本场作废，仍存活的后备兵归还主城。 */
+  /** 中途离开战斗（撤退 / 返回主菜单共用，同一条回滚路径）：放弃远征；本关新获得的回滚（BattleSnapshot），回滚了就整页重载到 bootTo（不填则按启动规则进主页）。 */
+  protected leaveBattle(target:string,bootTo:string|null):void{this.abandonRun();this.registry.remove('campaignTransfer');if(rollbackBattle()){if(bootTo)try{sessionStorage.setItem(BOOT_TO_KEY,bootTo);}catch{/* 存储不可用：重载后回主页 */}reloadGame();return;}this.scene.start(target);}
   protected abandonRun():void{if(this.worldCampaign&&!this.over)abandonExpedition(this.expeditionId,this.allies.filter(a=>a.active&&a.reserveSoldier).map(a=>a.kind));}
   protected handleBattlePointer(_pointer:Phaser.Input.Pointer):boolean{return false;}
   /** 武器优先目标（统一索敌，2026-11-16）：射程内首领 > 精锐，各取最近；都没有时返回 null，由武器自己找群怪 / 最近。关卡场景可覆盖（先打敌营）。 */
@@ -2467,7 +2469,9 @@ export class GameScene extends Phaser.Scene {
       this.pausePanel.setVisible(mode === 'pause');
       this.attributePauseText?.setText(`分配属性点 · ${this.player?.growth.unallocated ?? 0}`);
       const exit=this.pausePanel.getByName('pause-exit') as Phaser.GameObjects.Text|null;
-      exit?.setData('confirm',false).setText(IS_DESKTOP?'撤退':'返回选将').setColor('#b5c4b2');
+      exit?.setData('confirm',false).setText(IS_DESKTOP?'撤退':'返回选将').setColor('#b5c4b2').setScale(1);
+      (this.pausePanel.getByName('pause-menu') as Phaser.GameObjects.Text|null)?.setData('confirm',false).setText('返回主菜单').setColor('#b5c4b2').setScale(1);
+      if(this.pauseKeysText?.getData('warn')){this.pauseKeysText.setData('warn',false).setColor('#7f9987');this.refreshInputHints();}
     }
     if (this.resultPanel) this.resultPanel.setVisible(mode === 'result');
     if (mode === 'rest') commitBattle(); // 关卡告捷进行营：本场所得生效
@@ -3706,16 +3710,22 @@ export class GameScene extends Phaser.Scene {
     exit.on('pointerdown',()=>{
       // 2026-11-17 用户「返回营寨改成撤退，然后回到大地图」：电脑版撤退 → 回滚本场所得 → 天下地图（天下未开时回主页）
       const toMap=d&&worldUnlocked();
-      if(exit.getData('confirm')){this.abandonRun();this.registry.remove('campaignTransfer');if(rollbackBattle()){if(toMap)try{sessionStorage.setItem(BOOT_TO_KEY,'WorldMapScene');}catch{/* 存储不可用：重载后回主页 */}reloadGame();return;}this.scene.start(toMap?'WorldMapScene':d?'MenuScene':this.worldCampaign&&worldUnlocked()?'CityScene':'MenuScene');}
-      else exit.setData('confirm',true).setText(d?'撤退？退出后本场获得的等级与资源不保留，确定？':'退出后本场获得的等级与资源不保留，确定？').setColor('#e7b68e');
+      if(exit.getData('confirm'))this.leaveBattle(toMap?'WorldMapScene':d?'MenuScene':this.worldCampaign&&worldUnlocked()?'CityScene':'MenuScene',toMap?'WorldMapScene':null);
+      else{exit.setData('confirm',true).setText(d?'撤退？退出后本场获得的等级与资源不保留，确定？':'退出后本场获得的等级与资源不保留，确定？').setColor('#e7b68e');if(!d)armPauseChip(exit,'返回选将？本场获得的等级与资源不保留');}
     });
+    // 2026-11-18 用户「返回主菜单按钮，三处都加」：撤退旁加「返回主菜单」，点一次待确认、再点执行；回滚规则与撤退同一条路（leaveBattle），最后进主页
+    const toMenu=this.add.text(cx,top+ph-66,'返回主菜单',warText(16,'#b5c4b2')).setOrigin(.5).setPadding(24,10).setInteractive({useHandCursor:true}).setName('pause-menu');
+    toMenu.on('pointerdown',()=>{if(toMenu.getData('confirm'))this.leaveBattle('MenuScene','MenuScene');else toMenu.setData('confirm',true).setText('返回主菜单？本关进度不保留').setColor('#e7b68e');if(!d)armPauseChip(toMenu,'返回主菜单？本关进度不保留');});
+    // 手机：撤退与返回主菜单并排（各占半宽）；待确认时半宽小牌只写「再点确认」，完整提示写到底下整行（另一块牌复原，底行只说一件事）
+    const armPauseChip=(t:Phaser.GameObjects.Text,warn:string):void=>{const o=t===exit?toMenu:exit;o.setData('confirm',false).setText(o===exit?'返回选将':'返回主菜单').setColor('#b5c4b2');t.setText('再点确认');this.pauseKeysText?.setData('warn',true).setText(warn).setColor('#e7b68e');};
+    if(!d){const half=(pw-120)/2-6;exit.setX(cx-half/2-6);toMenu.setX(cx+half/2+6);}
     const keys=this.pauseKeysText=this.add.text(cx,top+ph-22,d?'Esc / P 继续战斗':'战斗已冻结 · 点击「继续战斗」恢复',warText(12,'#7f9987')).setOrigin(.5);
     // 暂停菜单里的文字入口改为漆金小牌：有底板、悬停 / 按下态，命中区与底板一致
-    const pauseSkins=([[this.attributePauseText,pw-120,30],[bagLink,pw-120,32],[buildLink,pw-120,32],[exit,pw-120,36]] as const).map(([t,w,h])=>{
+    const pauseSkins=([[this.attributePauseText,pw-120,30],[bagLink,pw-120,32],[buildLink,pw-120,32],[exit,d?pw-120:(pw-120)/2-6,36],[toMenu,d?pw-120:(pw-120)/2-6,36]] as const).map(([t,w,h])=>{
       const skin=lqSkin(this,t,t,()=>({w,h}),{tone:'quiet'});lqHitBox(t,w,h);return skin;}),pauseChips=pauseSkins.map(k=>k.gfx);
     this.pausePanel.add([pauseDim,panelG,panel,pauseTitle,pauseHint,...pauseChips,resume,resumeText,...bgmRow,...sfxRow]);
-    this.pausePanel.add(this.attributePauseText);this.pausePanel.bringToTop(bagLink);this.pausePanel.bringToTop(buildLink);this.pausePanel.add([exit,keys]);
-    if (d) { this.layoutSettingsPanel({ panelG, panel, pauseTitle, pauseHint, resume, resumeText, bgmRow, sfxRow, buildLink, bagLink, exit, keys }); for (const k of pauseSkins) k.repaint(); } // 底板跟着按钮挪到左栏
+    this.pausePanel.add(this.attributePauseText);this.pausePanel.bringToTop(bagLink);this.pausePanel.bringToTop(buildLink);this.pausePanel.add([exit,toMenu,keys]);
+    if (d) { this.layoutSettingsPanel({ panelG, panel, pauseTitle, pauseHint, resume, resumeText, bgmRow, sfxRow, buildLink, bagLink, exit, keys }); toMenu.setPosition(exit.x, exit.y + 56).setFontFamily(HEADING_FONT); for (const k of pauseSkins) k.repaint(); } // 底板跟着按钮挪到左栏
 
     this.attributePanel=this.add.container(0,0).setScrollFactor(0).setDepth(DEPTH.overlay+1).setVisible(false);
     const attrDim=this.add.rectangle(0,0,GAME_WIDTH,GAME_HEIGHT,0x07120d,.76).setOrigin(0).setInteractive();

@@ -236,3 +236,6 @@ assets/raw/*
 !/tools/test-zhaoyun-fx.mjs
 !/tools/test-camp-medic.mjs
 !/tools/shot-camp-rest.mjs
+
+# 构筑总览测试（2026-11-18）
+!/tools/test-build-overview.mjs

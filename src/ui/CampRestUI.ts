@@ -1,4 +1,4 @@
-import Phaser from 'phaser';import {ItemTooltip} from './ItemTooltip';import {loadout} from '../systems/ItemStore';import {GAME_WIDTH as W,GAME_HEIGHT as H,IS_DESKTOP as D,FONT,HEADING_FONT,DEPTH,screenPoint} from '../config';import type {Player} from '../entities/Player';import type {Legion} from '../systems/Legion';import {CampMarket,campOption} from '../systems/CampMarket';import {CAMP_TRAINING,type CampTrainingId,type CampGroup} from '../data/camp';import {INITIAL_TROOPS,TROOPS,type TroopKind} from '../data/legion';import {TACTICS,TREASURES,TAG_NAMES,tacticDescription,type TacticId,type TreasureId,type BuildTag} from '../data/builds';import {AWAKENINGS,activeAwakenings} from '../data/awakenings';import {getCharacter} from '../data/characters';import {WEAPON_META} from '../data/upgrades';import {ATTRIBUTE_INFO,MARTIALS,type AttributeId,type MasteryId} from '../systems/RunGrowth';import {MERCHANT_PRICE,QUALITIES,formatAffix,itemName,rollMerchantGear,SLOTS,itemSlot,SPECIALS,type ItemInstance} from '../data/items';import {itemTile} from './ItemQuality';import {troopBadge} from './TroopBadge';import {loadTroopPortraits} from '../systems/TroopPortraits';
+import Phaser from 'phaser';import {ItemTooltip} from './ItemTooltip';import {drawBuildOverview} from './BuildOverview';import {wornTokens} from '../systems/CharmEffects';import {tokenSlots} from '../systems/ItemStore';import {loadout} from '../systems/ItemStore';import {GAME_WIDTH as W,GAME_HEIGHT as H,IS_DESKTOP as D,FONT,HEADING_FONT,DEPTH,screenPoint} from '../config';import type {Player} from '../entities/Player';import type {Legion} from '../systems/Legion';import {CampMarket,campOption} from '../systems/CampMarket';import {CAMP_TRAINING,type CampTrainingId,type CampGroup} from '../data/camp';import {INITIAL_TROOPS,TROOPS,type TroopKind} from '../data/legion';import {TACTICS,TREASURES,TAG_NAMES,tacticDescription,type TacticId,type TreasureId,type BuildTag} from '../data/builds';import {AWAKENINGS,activeAwakenings} from '../data/awakenings';import {getCharacter} from '../data/characters';import {WEAPON_META} from '../data/upgrades';import {ATTRIBUTE_INFO,MARTIALS,type AttributeId,type MasteryId} from '../systems/RunGrowth';import {MERCHANT_PRICE,QUALITIES,formatAffix,itemName,rollMerchantGear,SLOTS,itemSlot,SPECIALS,type ItemInstance} from '../data/items';import {itemTile} from './ItemQuality';import {troopBadge} from './TroopBadge';import {loadTroopPortraits} from '../systems/TroopPortraits';
 import {homeCommand,inkPlate,warPanelTexture} from './HomeCommand';
 import {lqButton,lqLabelColor,type LqState} from './LacquerKit';
 import {CAMP_MEDIC,medicPrice,type MedicKind} from '../data/campMedic';
@@ -232,46 +232,11 @@ export class CampRestUI {
   const action=(cx:number,width:number,label:string,fn:()=>void,primary=false)=>{const hit=this.button(cx-width/2,y+h-62,label,fn,width,true,38,modal).setName(primary?'camp-confirm-replace':'camp-close-details');if(primary)(hit.getData('paint') as (s:string)=>void)('selected');modal.add(hit);};
   if(confirm){action(x+w*.25,w*.42,'取消',close);action(x+w*.75,w*.42,'确认替换',()=>{close();confirm();},true);}else action(W/2,200,'返回',close);
  }
+ /** 将帅帐：一屏构筑总览（2026-11-18 用户：「这个玩家看自己 build 不清楚」）。和战斗内「战法构筑」共用 ui/BuildOverview。 */
  private renderBuild(top:number){
-  const g=this.player.growth,b=g.build,tags=b.tags(),active=activeAwakenings(tags),hero=getCharacter(g.character);
-  const missing=(a:typeof AWAKENINGS[number])=>a.tags.map(t=>({tag:t,n:Math.max(0,(a.tags.length===1?4:2)-tags[t])})).filter(t=>t.n>0);
-  const pending=AWAKENINGS.filter(a=>missing(a).length).sort((a,c)=>missing(a).reduce((n,t)=>n+t.n,0)-missing(c).reduce((n,t)=>n+t.n,0));
-  const condition=(a:typeof AWAKENINGS[number])=>missing(a).map(t=>TAG_NAMES[t.tag]+'缺'+t.n+'个不同来源').join('；');
-  const names=['武将总览','战法','信物','流派觉醒'],cw=(W-(D?80:48))/4;
-  { const sx=D?40:24,sh=D?32:36,sy=top+6,seg=this.scene.add.graphics().setScrollFactor(0);this.body.add(seg);
-   seg.fillStyle(0x140e09,.55).fillRect(sx,sy,cw*4,sh).lineStyle(1,0xc9a35e,.45).strokeRect(sx+.5,sy+.5,cw*4-1,sh-1);
-   for(let i=1;i<4;i++)seg.lineStyle(1,0xc9a35e,.3).lineBetween(sx+i*cw,sy+6,sx+i*cw,sy+sh-6);
-   const on=this.buildSection;seg.fillStyle(0x3a2616,.85).fillRect(sx+on*cw+1,sy+1,cw-2,sh-2).fillStyle(0xe8c27a,1).fillRect(sx+on*cw+14,sy+sh-3,cw-28,2);
-   names.forEach((name,i)=>{const t=this.text(sx+i*cw+cw/2,sy+sh/2,name,D?15:16).setOrigin(.5).setFontFamily(HEADING_FONT).setColor(i===on?'#ffe7b0':'#b8a684');this.body.add(t);
-    const hit=this.scene.add.rectangle(sx+i*cw+cw/2,sy+sh/2,cw,sh,0,.001).setScrollFactor(0).setInteractive({useHandCursor:true}).setName('camp-build-section-'+i);
-    hit.on('pointerover',()=>{if(i!==on)t.setColor('#efdcb4');}).on('pointerout',()=>t.setColor(i===on?'#ffe7b0':'#b8a684')).on('pointerdown',()=>{this.sound('uiClick');this.buildSection=i;this.buildOffset=0;this.notice='';this.render();});this.body.add(hit);});}
-  const entries:Array<{name:string;desc:string;icon?:string}>=[];
-  if(this.buildSection===0){
-   const weapon=this.player.weapons[0],arts=(Object.keys(MARTIALS)as MasteryId[]).filter(id=>MARTIALS[id].character===g.character).map(id=>MARTIALS[id].name+' Lv.'+g.masteries[id]).join(' / ');
-   entries.push({name:hero.name+' · '+(weapon?WEAPON_META[weapon.id].name+' Lv.'+weapon.level:''),desc:arts});
-   entries.push({name:'当前构筑 · 战法'+Object.keys(b.tactics).filter(id=>b.level(id as TacticId)>0).length+'/6 · 信物宝物'+b.treasures.length,desc:(Object.keys(b.tactics)as TacticId[]).filter(id=>b.level(id)>0).map(id=>TACTICS[id].name+' '+b.level(id)).join(' / ')||'尚未获得战法；在升级或军需商人处构筑。'});
-   entries.push({name:'已激活觉醒 · '+active.length,desc:active.map(a=>a.name).join(' / ')||'暂未觉醒；同系4来源或指定双系各2来源激活。'});
-   entries.push({name:pending[0]?'下一目标 · '+pending[0].name:'全部觉醒已满足',desc:pending[0]?condition(pending[0]):'所有觉醒条件已满足'});
-   entries.push({name:'属性 · 剩余'+g.unallocated+'点',desc:(Object.keys(ATTRIBUTE_INFO)as AttributeId[]).map(id=>ATTRIBUTE_INFO[id].name+g.attributes[id]).join(' / ')});
-   entries.push({name:'军团训练',desc:'体魄'+this.army.training.hp+' / 兵刃'+this.army.training.attack+' / 甲胄'+this.army.training.armor+'；仅本次连续战役有效'});
-  }
-  if(this.buildSection===1){for(const id of Object.keys(b.tactics)as TacticId[])if(b.level(id)>0)entries.push({name:TACTICS[id].name+' Lv.'+b.level(id)+'/3 · '+TAG_NAMES[TACTICS[id].tag],desc:tacticDescription(id,b.level(id)),icon:'build_icon_'+id});for(const id of Object.keys(MARTIALS)as MasteryId[])if(MARTIALS[id].character===g.character)entries.push({name:'专属 · '+MARTIALS[id].name+' Lv.'+g.masteries[id]+'/3',desc:MARTIALS[id].desc});}
-  if(this.buildSection===2){for(const id of b.treasures)entries.push({name:TREASURES[id].name+' · '+TAG_NAMES[TREASURES[id].tag],desc:TREASURES[id].desc,icon:'build_icon_'+id});if(!entries.length)entries.push({name:'信物 · 暂无宝物',desc:'宝物已并入信物库：在行囊里给武将穿上机制类信物（如玄铁镜、点将符），出征开局生效并计入流派件数。'});}
-  if(this.buildSection===3){for(const a of [...active,...pending])entries.push({name:(missing(a).length?'未激活 · ':'已激活 · ')+a.name,desc:missing(a).length?condition(a)+'。'+a.desc:a.desc,icon:a.icon});entries.push({name:'八系标签进度',desc:(Object.keys(TAG_NAMES)as BuildTag[]).map(t=>TAG_NAMES[t]+' '+tags[t]+'/4').join(' / ')});}
-  const count=D?4:5,step=D?46:80,start=top+(D?50:55);
-  this.buildOffset=Math.max(0,Math.min(this.buildOffset,Math.max(0,entries.length-count)));
-  const shift=(delta:number)=>{this.buildOffset=Math.max(0,Math.min(this.buildOffset+delta,Math.max(0,entries.length-count)));this.render();};
-  entries.slice(this.buildOffset,this.buildOffset+count).forEach((e,i)=>{
-   const x=D?40:24,y=start+i*step,w=W-(D?80:48),h=D?step-2:step-6;this.plate(x,y,w,h);if(e.icon)this.icon(x+25,y+23,e.icon,32);const pad=e.icon?48:14;
-   this.body.add(this.text(x+pad,y+(D?5:7),e.name,D?14:18).setWordWrapWidth(w-pad-12,true).setMaxLines(1));
-   this.body.add(this.text(x+14,y+(D?26:35),e.desc,D?11:14).setWordWrapWidth(w-28,true).setMaxLines(D?1:2));
-   let downY=0;const hit=this.scene.add.rectangle(x,y,w,h,0,.001).setOrigin(0).setScrollFactor(0).setInteractive({useHandCursor:true}).setName('camp-build-entry-'+(this.buildOffset+i));
-   hit.on('pointerdown',(p:Phaser.Input.Pointer)=>{downY=screenPoint(p).y;}).on('pointerup',(q:Phaser.Input.Pointer)=>{const p=screenPoint(q);if(Math.abs(p.y-downY)>24)shift(p.y<downY?1:-1);else this.showDetails(e.name,e.desc);}).on('wheel',(_p:unknown,_dx:number,dy:number)=>shift(dy>0?1:-1));this.body.add(hit);
-  });
-  const controlY=D?H-151:H-255;
-  this.body.add(this.button(D?40:24,controlY,'↑ 上移',()=>shift(-1),D?92:110,this.buildOffset>0,30));
-  this.body.add(this.text(W/2,controlY+13,entries.length>count?'滑动查看 · '+entries.length+'项':'共 '+entries.length+' 项',D?13:15).setOrigin(.5,0));
-  this.body.add(this.button(W-(D?132:134),controlY,'下移 ↓',()=>shift(1),D?92:110,this.buildOffset+count<entries.length,30));
-  if(!this.notice)this.detail.setText('分类查看当前构筑 · 点条目查看完整说明。宝物替换仅在购买时确认，不提供免费换装。');
+  this.itemTip??=new ItemTooltip(this.scene,DEPTH.overlay+40);
+  const g=this.player.growth,x=D?40:24,w=W-(D?80:48),h=D?H-110-top:H-top-210;
+  drawBuildOverview({scene:this.scene,root:this.body,x,y:top+4,w,h,desktop:D,prefix:'camp-build',growth:g,level:this.player.level,weapon:this.player.weapons[0],tokens:wornTokens(g.character),tokenSlots:tokenSlots(),tooltip:this.itemTip,training:this.army.training});
+  if(!this.notice)this.detail.setText('鼠标移到任意格子上看完整说明：战法看效果和下一级，流派条看还差几个来源能觉醒。');
  }
 }

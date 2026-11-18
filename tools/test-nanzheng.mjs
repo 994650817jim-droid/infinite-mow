@@ -84,7 +84,7 @@ const killBoss = async p => {
   const bk = await killBoss(p);
   const end = await p.evaluate(() => ({ over: window.__S.over, victory: window.__S.victory, mode: window.__S.mode }));
   await shot(p, '1-victory');
-  ck('11-1：忙牙长（过渡图）出场 → 倒地 → 宝箱 → 泸水告捷、进军营', bk.boss && bk.tex === 'guandu_chunyuqiong' && end.over && end.victory && end.mode === 'rest', { bk, end });
+  ck('11-1：忙牙长（v2 图 nz_mangyachang）出场 → 倒地 → 宝箱 → 泸水告捷、进军营', bk.boss && bk.tex === 'nz_mangyachang' && end.over && end.victory && end.mode === 'rest', { bk, end });
   await p.close();
 }
 
@@ -117,7 +117,7 @@ const killBoss = async p => {
   ck('11-2：被引燃的藤甲持续烧伤掉血', hp1.ticks > burn.ticks0 && hp1.hp < hp0, { hp0, hp1 });
   const bk = await killBoss(p);
   const end = await p.evaluate(() => ({ over: window.__S.over, victory: window.__S.victory }));
-  ck('11-2：兀突骨（过渡图）出场 → 击败 → 藤甲兵告捷', bk.tex === 'guandu_yanliang' && end.over && end.victory, { bk, end });
+  ck('11-2：兀突骨（v2 图 nz_wutugu）出场 → 击败 → 藤甲兵告捷', bk.tex === 'nz_wutugu' && end.over && end.victory, { bk, end });
   await p.close();
 }
 

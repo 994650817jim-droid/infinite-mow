@@ -69,7 +69,7 @@ export class BattlefieldDetails {
         if(this.stage){
           // Individual objects only; large tents restricted to sparse deterministic cells.
           const tent=this.stage===2&&x%6===0&&y%6===0;
-          const choices=this.stage===3?[14,15,19,22,24,25,26,27,28,29,30,32,33]:[10,11,14,15,16,19,20,21,22,24,25,26,27,28];
+          const choices=this.stage===3?[14,15,19,22,24,25,26,27,28,29,30,32,33]:[10,11,14,15,16,17,19,20,21,22,23,24,25,26,27,28];
           const prop=h%19===0?35:tent?h%4:flag?4+h%6:choices[h%choices.length];
           const size=propDisplaySize(prop);
           this.props.push({key:`prop-${x},${y}`,x:img.x,y:img.y,frame:prop,size,flip:mayMirrorProp(prop)&&(h&16)!==0});img.setVisible(false);

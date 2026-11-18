@@ -158,11 +158,11 @@ export class EnvInteractions {
     playSheet(sc, 'fx_collapse_dust', x, y + 4, { size: size * 1.05, ms: 620, depth: actorDepth(y) + .4, originY: .8, name: 'env-dust' });
     this.h.sfx?.('propBreak');
     this.remains.push({ img, until: now + 20000 });
-    // 掉落：经验宝石、回血、小概率兵装宝箱
+    // 掉落：经验宝石、回血
     for (let i = 0; i < ENV_TENT.gems; i++) { const a = i / ENV_TENT.gems * Math.PI * 2; this.h.spawnGem(x + Math.cos(a) * 26, y + 10 + Math.sin(a) * 12, ENV_TENT.gemXp); }
     const roll = this.hash(Math.round(x), Math.round(y), 77) % 1000 / 1000;
     if (roll < ENV_TENT.healChance) { this.h.supplies.dropHeal(x + 18, y + 16); this.stats.drops++; }
-    if (this.h.spawnChest && this.hash(Math.round(y), Math.round(x), 91) % 1000 / 1000 < ENV_TENT.chestChance) this.h.spawnChest(x, y + 30);
+    // 营帐不掉兵装宝箱（用户 2026-11-17：旗子、营帐掉宝箱太奇怪；兵装改由兵器架 / 甲胄架 / 木箱掉，见 data/propLoot.ts）
     // 伏兵
     if (this.hash(Math.round(x) + 5, Math.round(y), 33) % 1000 / 1000 < ENV_TENT.ambushChance) {
       const n = ENV_TENT.ambushMin + this.hash(Math.round(x), 3, 5) % (ENV_TENT.ambushMax - ENV_TENT.ambushMin + 1);

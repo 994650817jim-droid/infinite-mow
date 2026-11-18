@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>出手音效试听</title>
+  <style>
+    :root { --bg: #1b1612; --panel: #2a221b; --line: #4a3b2c; --text: #f1e4cc; --muted: #b7a58a; --gold: #d9b26a; --red: #b8402c; }
+    body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.5 "Microsoft YaHei", "PingFang SC", sans-serif; }
+    main { max-width: 980px; margin: 0 auto; padding: 20px 16px 48px; }
+    h1 { font-size: 22px; margin: 0 0 4px; color: var(--gold); }
+    p.note { margin: 0 0 16px; color: var(--muted); }
+    section { margin-top: 22px; }
+    h2 { font-size: 16px; color: var(--gold); border-bottom: 1px solid var(--line); padding-bottom: 6px; margin: 0 0 10px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 10px; }
+    .card { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; }
+    .card b { display: block; margin-bottom: 6px; }
+    .card small { color: var(--muted); display: block; margin-bottom: 8px; }
+    button { background: #3a2e23; color: var(--text); border: 1px solid #6b5640; border-radius: 6px; padding: 6px 10px; margin: 0 6px 6px 0; cursor: pointer; font: inherit; font-size: 14px; }
+    button:hover { border-color: var(--gold); }
+    button.stress { border-color: var(--red); }
+    #stats { margin-top: 10px; color: var(--muted); font-size: 13px; min-height: 1.5em; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>出手音效试听</h1>
+    <p class="note">点任意按钮试听（每次随机变体 + ±6% 音高）。音量取游戏里的「音效」设置（im_sfx_vol）。「割草连发」在 3 秒内触发 40 次，用来听并发上限与节流的效果；下方显示实际播放 / 被丢弃次数。</p>
+    <div id="app"></div>
+    <div id="stats"></div>
+  </main>
+  <script type="module" src="/src/dev/sfxPreview.ts"></script>
+</body>
+</html>

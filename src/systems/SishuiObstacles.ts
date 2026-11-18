@@ -4,11 +4,13 @@ import type {Ally} from '../entities/Ally';
 
 /** Permanent building footprints. Not Enemy instances: no HP, targeting, drops or destruction. */
 export class SishuiObstacles {
-  readonly footprints=[
+  readonly footprints:{left:number;right:number;top:number;bottom:number}[];
+  /** footprints：自定义碰撞框（汜水关关墙由 SishuiPass 给，开门后会移除关门那一段）；不给时用旧的关门 + 两座箭楼。 */
+  constructor(footprints?:{left:number;right:number;top:number;bottom:number}[]){this.footprints=footprints??[
     {left:-100,right:100,top:-292,bottom:-234},
     {left:-274,right:-186,top:-260,bottom:-228},
     {left:186,right:274,top:-260,bottom:-228},
-  ];
+  ];}
   private pushX=0;private pushY=0;
   private correction(x:number,y:number,r:number,box:typeof this.footprints[number]):boolean{
     if(x<box.left-r||x>box.right+r||y<box.top-r||y>box.bottom+r)return false;

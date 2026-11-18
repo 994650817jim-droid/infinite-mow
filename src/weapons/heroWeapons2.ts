@@ -127,6 +127,7 @@ export function baodiaoBehavior(host: WeaponHost, weapon: WeaponState, dt: numbe
       else { const flash = host.add.circle(ex, ey - 8, 10, 0xffe6a0, .8).setDepth(42).setBlendMode(1);
         flash.scene.tweens.add({ targets: flash, radius: 34, alpha: 0, duration: 240, onComplete: () => flash.destroy() }); }
       if (a.burst) { // 神射：命中处小范围爆裂
+        host.sfx.play('atk_bow_impact');
         for (const o of host.grid.query(ex, ey, (R.heavyBurstRadius * host.player.passive.rangeMultiplier('baodiao_bow')) + 30)) if (hittable(o) && o !== e && Math.hypot(o.x - ex, o.y - ey) <= (R.heavyBurstRadius * host.player.passive.rangeMultiplier('baodiao_bow')) + o.radius) host.hitEnemy(o, a.damage * R.heavyBurstMul, time, 'arrow');
         // 神射爆裂：像素爆裂帧是命中特效（不是范围提示），各种提示方案下都播；缺图时旧方案（?hints=old）退回程序化光圈，b 方案留地面裂痕
         if (HINT_MOCK === 'b') groundScar(e.sprite.scene, ex, ey, (R.heavyBurstRadius * host.player.passive.rangeMultiplier('baodiao_bow')), 'crack');
@@ -163,7 +164,7 @@ export function baodiaoBehavior(host: WeaponHost, weapon: WeaponState, dt: numbe
     }
     list[list.length - 3].damage = damage * R.fanMul;
   }
-  host.sfx.play('allySpear');
+  host.sfx.play(sharp ? 'atk_bow_heavy' : 'atk_bow');
   // 老骥伏枥：越战越勇——本关每击杀 10 名敌人射速 +2.5%，上限 15/20/25%
   const laoji = g.masteries.laoji ? 1 + Math.min(R.laojiCap[g.masteries.laoji - 1], Math.floor(pl.passive.kills / R.laojiKillsPerStack) * R.laojiPerStack) : 1;
   weapon.cooldownLeft = Math.max(.4, BAODIAO_DEF.cooldown(level, pl.stats) / g.attackSpeedMultiplier(time) / laoji);
@@ -235,7 +236,7 @@ export function dangyangBehavior(host: WeaponHost, weapon: WeaponState, dt: numb
   const cast = pl.passive.beginCast('dangyang_roar');
   const damage = DANGYANG_DEF.damage(level, pl.stats) * g.damageMultiplier(time), a = Math.atan2(target.y - pl.y, target.x - pl.x);
   pl.faceDirection(cardinal(Math.cos(a), Math.sin(a)), 200);
-  host.sfx.play('allySlash');
+  host.sfx.play(cast.bridge ? 'atk_roar' : 'atk_serpent');
   if (cast.bridge) {
     // 据水断桥：360° 喝断，震慑周围（首领只受伤），并留下 3 秒敌人进不来的断桥区
     pl.playAction('skill', Math.cos(a) < 0 ? 'left' : 'right');
@@ -331,7 +332,7 @@ export function zhanjinBehavior(host: WeaponHost, weapon: WeaponState, dt: numbe
   });
   const ux = cast.charge && ahead ? hx : tx0 / d0, uy = cast.charge && ahead ? hy : ty0 / d0;
   pl.faceDirection(cardinal(ux, uy), 200);
-  host.sfx.play('allySpear');
+  host.sfx.play(cast.charge ? 'atk_charge' : 'atk_lance');
   if (cast.charge) {
     // 锦马冲锋：朝头前突进，沿途重创并把敌人撞向两侧（借用受击位移平滑移动主将）
     pl.playAction('skill', ux < 0 ? 'left' : ux > 0 ? 'right' : uy < 0 ? 'up' : 'down');
@@ -429,7 +430,7 @@ export function shuangguBehavior(host: WeaponHost, weapon: WeaponState, dt: numb
   if (cast.rally) { host.rallyAllies?.(cast.rally * (1 + .25 * g.masteries.xiemin)); host.heroFx?.('rally', pl.x, pl.y - 20, 260); }
   const u = targets[0], ux = u.x - pl.x, uy = u.y - pl.y;
   pl.faceDirection(cardinal(ux, uy), 140); pl.playAction(cast.empowered ? 'skill' : 'attack', ux < 0 ? 'left' : 'right');
-  host.sfx.play('allySlash');
+  host.sfx.play('atk_twin');
   const struck = new Set<number>();
   targets.forEach((t, i) => {
     if (fxD(host)) host.heroFx?.('crossSlash', t.x, t.y - 8, 70 + splash * 1.2, i ? Math.PI / 2 : 0); else crossFx(host, t.x, t.y - 6, 18 + splash * .3, colors[i]);

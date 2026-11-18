@@ -29,6 +29,7 @@ import { applyCharms, wornTokens, type CharmState } from '../systems/CharmEffect
 import { meritFromKills } from '../data/merit';
 import { CHARM_LEGEND, CHARM_SCHOOL_NAMES, CHARM_SET_DESC, charmDef, type CharmSchool } from '../data/charms';
 import {SishuiObstacles} from '../systems/SishuiObstacles';
+import {SishuiPass} from '../systems/SishuiPass';
 import {HuaxiongBoss} from '../systems/HuaxiongBoss';
 import {getXingyangEncounter} from '../data/xingyang';
 import {XurongBoss} from '../systems/XurongBoss';
@@ -83,6 +84,7 @@ import { DEFAULT_RUN_CONFIG, getCharacter, type RunConfig , HERO_TINT, HERO_FX }
 import { Music } from '../systems/Music';
 import { battleThemeFor } from '../systems/EpicBgm';
 import { Sfx } from '../systems/Sfx';
+import { FOLLOWER_ATTACK_SFX, TROOP_ATTACK_SFX } from '../systems/HeroSfx';
 import { SpatialGrid } from '../systems/SpatialGrid';
 import { Ally, type AllyKind } from '../entities/Ally';
 import { WEAPON_BEHAVIORS, WEAPON_DEFS, type WeaponHost, type WeaponBolt as Bolt, type SpearShot } from '../weapons/registry';
@@ -146,11 +148,28 @@ interface Gem {
 
 interface DmgFx {
   crit: boolean;
+  /** 伤害数字样式（2026-11-17 用户：「造成伤害字体也改优化一下」）：普通 / 暴击 / 技艺法术 / 首领 / 治疗 / 部曲随行 */
+  kind: DmgKind;
   text: Phaser.GameObjects.Text;
+  /** 暴击时数字左侧的小「暴」字 */
+  tag?: Phaser.GameObjects.Text;
   life: number;
+  vx: number;
   vy: number;
   active: boolean;
 }
+type DmgKind = 'hit' | 'crit' | 'spell' | 'boss' | 'heal' | 'ally';
+/** 数字字体：粗黑体（小字号也清楚，不用书法体），深色描边 + 细投影。 */
+const DMG_FONT = '"Bahnschrift","Arial Black","Segoe UI Black","Helvetica Neue",Arial,sans-serif';
+const DMG_STYLE: Record<DmgKind, { size: number; color: string; stroke: string; sw: number }> = {
+  hit: { size: 15, color: '#f6e6bf', stroke: '#2a1608', sw: 3 },
+  crit: { size: 24, color: '#ffcf45', stroke: '#8c1c0a', sw: 4 },
+  spell: { size: 15, color: '#86e8f2', stroke: '#0c2f3c', sw: 3 },
+  boss: { size: 18, color: '#ffe9c4', stroke: '#3a1206', sw: 4 },
+  heal: { size: 15, color: '#8ff08a', stroke: '#123a10', sw: 3 },
+  ally: { size: 12, color: '#e6dcc4', stroke: '#2a1a0c', sw: 3 },
+};
+const DMG_LIFE = .62;
 
 interface CardView {
   bg: Phaser.GameObjects.Image;
@@ -184,6 +203,8 @@ export class GameScene extends Phaser.Scene {
   protected hardMode=false;
   private huaxiong:HuaxiongBoss|null=null;private xurong:XurongBoss|null=null;
   protected sishuiObstacles:SishuiObstacles|null=null;
+  /** 2-1 汜水关：关墙、箭楼、西凉营帐、关门（systems/SishuiPass.ts）。 */
+  sishuiPass:SishuiPass|null=null;
   protected runConfig: RunConfig = DEFAULT_RUN_CONFIG;
   protected chapter: ChapterDef = getChapter();
   protected lubu: LubuBoss | null = null;
@@ -279,6 +300,8 @@ export class GameScene extends Phaser.Scene {
   hitFeel!: HitFeel;
   bossStagger = new BossStagger();
   private lastHudReal = 0;
+  /** 治疗数字累加（见 create 里包的 player.heal） */
+  private healAcc = 0; private healShowAt = 0;
   /** 测试用：强制本次命中暴击 / 不暴击（null = 正常掷骰） */
   debugCrit: boolean | null = null;
   private readonly separationScratch: Enemy[] = [];
@@ -515,12 +538,16 @@ export class GameScene extends Phaser.Scene {
       .setScrollFactor(1)
       .setDepth(DEPTH.ground);
     this.ground.setTileScale(surface.scale);
-    if(scenery==='sishui'){for(const [frame,x,y,size]of [[0,0,-220,250],[1,-230,-220,150],[1,230,-220,150],[2,-250,-110,160],[2,260,-130,160]])this.add.image(x,y,'sishui_props_refined',frame).setOrigin(.5,1).setDisplaySize(size,size).setDepth(actorDepth(y));}
+    // 2-1 汜水关：旧的「关门 + 两座箭楼 + 营帐」摆在场地中间、不能互动，改由 SishuiPass 画关墙（见下方 create 末段）
     if(scenery==='xingyang'){for(const [frame,x,y,size]of [[2,-260,-180,130],[2,300,230,140],[6,-310,170,100],[4,270,-160,100]])this.add.image(x,y,'sishui_props_refined',frame).setOrigin(.5,1).setDisplaySize(size,size).setDepth(actorDepth(y));}
     this.battlefieldDetails = new BattlefieldDetails(this, this.chapter.id, this.chapter.id==='huangjin'?this.chapter.stage:undefined,groundKey);
     this.artEffects = new ArtEffects(this);
 
     this.player = new Player(this, 0, 0);
+
+    // 治疗数字：主将实际回复的量累加，每 0.4 秒合成一个绿色「+n」（药、酒、吸血、信物回血都算）
+
+    { const pl = this.player, raw = pl.heal.bind(pl); this.healAcc = 0; pl.heal = (n: number) => { const h0 = pl.hp; raw(n); this.healAcc += Math.max(0, pl.hp - h0); }; }
     this.dragFx = undefined; this.flankFx = undefined; this.windFx = undefined; this.skirmishPuffAt = 0; this.env = null; this.envInit = false; this.terrain?.clear(); this.terrain = null; this.terrainInit = false; this.terrainNav = []; Ally.terrainMul = null; this.player && (this.player.terrainSpeedMul = 1);
     this.applyRunConfig(this.runConfig);
     this.worldCampaign=!preview&&!isChapterTestRun()&&this.registry.get('worldCampaign')===true;
@@ -533,6 +560,7 @@ export class GameScene extends Phaser.Scene {
     // 新存档开局无兵，第一波后招募；已开放主城的出征另应用军营与后备。
     this.allies = [];
     this.legion = new Legion(this, this.allies, this.player);
+    this.legion.attackSound = kind => { const k = TROOP_ATTACK_SFX[kind]; if (k) this.sfx.play(k); };
     // 战地免费招兵每波人数随章节增加（档位与掉落一致：一章 0 … 五章 4）
     this.legion.freeRecruitCount = FREE_RECRUIT_BY_TIER[Math.max(0, Math.min(FREE_RECRUIT_BY_TIER.length - 1, this.itemTier()))];
     this.yellow=this.chapter.stage?new YellowBattle({scene:this,player:this.player,army:this.legion,enemies:this.enemies,move:(e,nx,ny,dt)=>this.advanceEnemy(e,nx,ny,dt),spawn:(def,x,y)=>this.spawnEnemy(def.kind,x,y,1,true,def)},this.chapter.stage):null;
@@ -541,7 +569,7 @@ export class GameScene extends Phaser.Scene {
     this.propItems = 0; this.supplies.onPropLoot = (kind, x, y) => this.propLoot(kind, x, y);
     // 兵装：开局读入该武将穿戴的道具加成（生命上限增加的部分补满）
     {const oldMax=this.player.maxHp;this.player.growth.gear=gearFor(this.runConfig.character);this.player.heal(this.player.maxHp-oldMax);}
-    this.followers=null;this.followerPassives=[];{const allow=worldUnlocked()&&(!isChapterTestRun()||new URLSearchParams(location.search).get('followers')==='1');const list=allow?followersFor(this.runConfig.character):[];if(list.length)this.followers=new FollowerSquad(this,this.player,list,(x,y,r)=>this.grid.query(x,y,r),(e,d,fire)=>this.hitEnemy(e,d,this.combatNow,fire?'fire':'melee',true,false),()=>this.player.growth.damageMultiplier(this.combatNow));}
+    this.followers=null;this.followerPassives=[];{const allow=worldUnlocked()&&(!isChapterTestRun()||new URLSearchParams(location.search).get('followers')==='1');const list=allow?followersFor(this.runConfig.character):[];if(list.length)this.followers=new FollowerSquad(this,this.player,list,(x,y,r)=>this.grid.query(x,y,r),(e,d,fire)=>this.hitEnemy(e,d,this.combatNow,fire?'fire':'melee',true,false),()=>this.player.growth.damageMultiplier(this.combatNow));if(this.followers){this.followers.onHitFx=(e,k,fx,fy)=>this.followerTemplateHitFx(e,k,fx,fy);this.followers.attackSound=t=>this.sfx.play(FOLLOWER_ATTACK_SFX[t]);}}
     { const mode = readIffMode(); this.iff = mode ? new IffOverlay(this, mode, () => this.iffUnits()) : null; }
     // 震屏设置（强 / 弱 / 关，im_shake，见 systems/BattleSettings）：包一层主相机 shake，现有调用全部按设置缩放
     { const cam = this.cameras.main, orig = cam.shake.bind(cam);
@@ -559,7 +587,16 @@ export class GameScene extends Phaser.Scene {
     this.events.once('shutdown',()=>{this.relics?.clear();this.relics=null;this.relicShips?.clear();this.relicShips=null;});
     // 酒罐 / 药篓不生成在房屋、城墙等障碍里（第三/四章、攻城在 create 之后才设置障碍，故调用时读取）
     this.supplies.healBlocked=(x,y,r)=>!!this.sishuiObstacles?.footprints.some(b=>x>b.left-r&&x<b.right+r&&y>b.top-r&&y<b.bottom+r);
-    if(scenery){if(scenery==='sishui')this.sishuiObstacles=new SishuiObstacles();this.supplies.spawnSishui(3,-330,180,116);this.supplies.spawnSishui(5,-310,350,105);this.supplies.spawnSishui(7,230,-50,100);this.supplies.spawnSishui(4,290,210,104);this.supplies.spawnSishui(6,300,370,110);}
+    if(scenery==='sishui'){
+      // 汜水关：关墙横在北面、关门居中、门两侧箭楼；西凉营帐在关前两翼（敌军出兵方向）；营寨杂物摆在营帐边，不挡战场中间
+      const sup=this.supplies;
+      this.sishuiPass=new SishuiPass({scene:this,player:this.player,legion:this.legion,now:()=>this.combatNow,elapsed:()=>this.elapsed,wave:()=>this.waveIndex,
+        spawn:(k,x,y)=>this.spawnEnemy(k,x,y,1,true),spawnTower:(x,y,hp)=>sup.spawnCamp(x,y,hp),placeTent:(x,y,id,hp)=>this.env?.placeTent(x,y,id,hp,1)??null,envReady:()=>!!this.env,
+        banner:(t,d,c)=>this.showWaveBanner(t,d,c),sfx:k=>this.sfx.play(k),merit:(e,b)=>{this.runMerit.elite+=e;this.runMerit.boss+=b;},
+        guanyu:()=>this.runConfig.character==='guanyu'||followersFor(this.runConfig.character).some(r=>r.hero==='guanyu')});
+      this.sishuiObstacles=new SishuiObstacles(this.sishuiPass.footprints);
+      sup.spawnSishui(3,-690,-180,116);sup.spawnSishui(5,-640,-150,105);sup.spawnSishui(7,690,-180,100);sup.spawnSishui(4,640,-150,104);sup.spawnSishui(6,0,-330,110);
+    }else if(scenery){this.supplies.spawnSishui(3,-330,180,116);this.supplies.spawnSishui(5,-310,350,105);this.supplies.spawnSishui(7,230,-50,100);this.supplies.spawnSishui(4,290,210,104);this.supplies.spawnSishui(6,300,370,110);}
     const transfer = this.registry.get('campaignTransfer') as CampaignTransfer | undefined;
     this.registry.remove('campaignTransfer');
     // 征程构筑：同章连打用内存里的 transfer；否则主线未通关的关读存档里的征程构筑（重打旧关 / 攻城 / 军情 / 挑战为空构筑）
@@ -710,7 +747,7 @@ export class GameScene extends Phaser.Scene {
     this.spawnTimer = 0.5;
     this.eliteTimer = BALANCE.eliteFirst;
     this.boss = null;
-    this.sishuiObstacles=null;this.huaxiong=null;this.xurong=null;this.lubu = null;this.moveset?.clear();this.moveset=null;this.bossMount?.destroy();this.bossMount=null; this.zhangjiao?.clear(); this.zhangjiao = null; this.yellow=null; this.xiliang=null; this.supplies=null; this.yellowAltar=null;this.finaleFadeMs=0;
+    this.sishuiObstacles=null;this.sishuiPass?.clear();this.sishuiPass=null;this.huaxiong=null;this.xurong=null;this.lubu = null;this.moveset?.clear();this.moveset=null;this.bossMount?.destroy();this.bossMount=null; this.zhangjiao?.clear(); this.zhangjiao = null; this.yellow=null; this.xiliang=null; this.supplies=null; this.yellowAltar=null;this.finaleFadeMs=0;
     this.bossSpawned = false;
     this.bossCastCd = 3;
     this.bossSummonCd = 6;
@@ -855,6 +892,7 @@ export class GameScene extends Phaser.Scene {
     this.elapsed += dt;
     this.combatNow += dt * 1000;
     this.hitFeel.endFrame(); this.bossStagger.decay(dt);
+    if (this.combatNow >= this.healShowAt) { this.healShowAt = this.combatNow + 400; if (this.healAcc >= 1) { this.spawnDamageText(this.player.x, this.player.y - 56, Math.round(this.healAcc), false, true, 'heal'); this.healAcc = 0; } }
     time = this.combatNow;
     const move = this.readMove();
     this.relics?.sway(move, this.combatNow);
@@ -868,6 +906,7 @@ export class GameScene extends Phaser.Scene {
     this.supplies?.update(dt,time,this.battlefieldDetails.props,(enemy,damage)=>this.hitEnemy(enemy,damage,time,'fire',false,false),this.allies,(ally,damage,now)=>this.legion.hurt(ally,damage,now));
     if(!this.envInit&&this.supplies){this.envInit=true;const cfg=envConfigFor(this.scene.key,this.chapter.id,(this as unknown as {guanduStage?:number}).guanduStage);if(cfg){const sup=this.supplies;this.env=new EnvInteractions({scene:this,player:this.player,supplies:sup,enemies:()=>this.enemies,allies:()=>this.allies,hitEnemy:(e,d)=>{this.hitEnemy(e,d,this.combatNow,'fire',false,false);},hurtAlly:(a,d)=>{this.legion.hurt(a,d,this.combatNow);},spawnEnemy:(x,y)=>this.spawnEnemy('infantry',x,y,undefined,true),spawnGem:(x,y,v)=>this.spawnGem(x,y,v),spawnChest:(x,y)=>{this.itemDrops?.spawnChest(x,y);},now:()=>this.combatNow,sfx:k=>this.sfx.play(k)},cfg);this.events.once('shutdown',()=>{this.env?.destroy();this.env=null;});}}
     this.env?.update(dt);
+    if(this.mode==='none'&&!this.over)this.sishuiPass?.update();
     if(!this.terrainInit&&this.player){this.terrainInit=true;const tc=terrainConfigFor(this.hardKey(),this.hardStage());if(tc){this.terrain=new Terrain(this,tc);const t=this.terrain;Ally.terrainMul=(x,y)=>t.speedMul(x,y);this.terrainNav=t.navBoxes();this.events.once('shutdown',()=>{t.clear();if(this.terrain===t){this.terrain=null;Ally.terrainMul=null;}});}}
     if(this.terrain){this.terrain.update(this.combatNow,dt);this.player.terrainSpeedMul=this.terrain.speedMul(this.player.x,this.player.y);}
     this.updateEnemies(dt, time);
@@ -1041,7 +1080,7 @@ export class GameScene extends Phaser.Scene {
       // 刷怪时间轴按关卡节奏加速（stageTuning.pace）：原来第 N 波的刷怪强度在新的第 N 波出现
       const paced = this.elapsed * (this.chapter.pace ?? 1);
       const easy = this.tutorial?.easy(this.elapsed); // 新手引导：开局 30 秒刷兵放缓
-      this.spawnTimer = this.chapter.spawnInterval(paced) * (easy?.interval ?? 1);
+      this.spawnTimer = this.chapter.spawnInterval(paced) * (easy?.interval ?? 1) * (this.sishuiPass?.spawnMul ?? 1); // 汜水关西凉营帐全塌后变稀
       const rawBurst = this.chapter.spawnBurst(paced), burst = easy && easy.burstDiv > 1 ? Math.max(1, Math.ceil(rawBurst / easy.burstDiv)) : rawBurst;
       for (let i = 0; i < burst; i += 1) {
         if (this.activeEnemyCount() >= cap) break;
@@ -1097,6 +1136,7 @@ export class GameScene extends Phaser.Scene {
     if(this.chapter.stage&&this.chapter.stage>=2){this.yellowAltar=this.add.image(x,y+10,this.chapter.stage===2?'zhang_bao_altar':'zhang_jiao_altar').setDepth(DEPTH.ground+2).setDisplaySize(245,200).setAlpha(.75);}
 
     if(this.chapter.bossStyle==='xurong')this.xurong=new XurongBoss({scene:this,boss,player:this.player,army:this.legion,spawn:(kind,x,y)=>this.spawnEnemy(kind,x,y,1),sfx:()=>this.sfx.play('allySlash')},this.combatNow);
+    if(this.chapter.bossStyle==='huaxiong')this.sishuiPass?.onBoss(boss); // 汜水关：关门洞开，华雄带亲卫杀出
     if(this.chapter.bossStyle==='huaxiong'){this.huaxiong=new HuaxiongBoss({scene:this,boss,player:this.player,army:this.legion,hurtTroops:(x,y,r,d,n,a,arc)=>this.legion.hurtArea(x,y,r,d,n,a,arc),sfx:()=>this.sfx.play('allySlash')},this.combatNow);}
     // 首领招式框架（第一章张梁 / 张宝）与已有控制器首领的坐骑（吕布赤兔、华雄）
     {const mv=BOSS_MOVES[this.chapter.bossStyle];if(mv&&!BOSS_OLD&&(this.chapter.bossStyle==='zhangliang'||this.chapter.bossStyle==='zhangbao'))this.moveset=new BossMoveset({scene:this,boss,player:this.player,army:this.legion,spawn:(kind,x,y,def)=>this.spawnEnemy(kind,x,y,1,true,def),def:k=>this.chapter.enemies[k],banner:(t,c)=>this.showWaveBanner(t,true,c),sfx:k=>this.sfx.play(k)},boss.sprite.texture.key,this.combatNow,mv,'walk');
@@ -1624,6 +1664,13 @@ export class GameScene extends Phaser.Scene {
 
   /** 随行命中的受击特效 / 命中火花（主将原版的 refined_impact 与 art_fx；伤害按友军结算时原本会跳过）。每帧限额 FOLLOW.hitFxPerFrame。 */
   private followerHitBudget = { at: -1, n: 0 };
+  /** 无名随行（枪 / 刀 / 弓 / 谋）命中火花：按兵器出现成手绘命中图（刺 / 斩 / 箭 / 法术），与名将随行共用每帧限额。 */
+  followerTemplateHitFx(enemy: Enemy, kind: 'spear' | 'blade' | 'bow' | 'strategist', fromX: number, fromY: number): void {
+    const time = this.combatNow; if (this.followerHitBudget.at !== time) { this.followerHitBudget.at = time; this.followerHitBudget.n = 0; }
+    if (this.followerHitBudget.n >= FOLLOW.hitFxPerFrame) return; this.followerHitBudget.n++;
+    const src = kind === 'bow' ? 'arrow' : kind === 'strategist' ? 'fire' : 'melee', type = kind === 'spear' ? 'pierce' : kind === 'blade' ? 'slash' : kind === 'bow' ? 'arrow' : 'spell';
+    this.feedback.hit(enemy.x, enemy.y, Math.atan2(enemy.y - fromY, enemy.x - fromX), time, src, { type });
+  }
   followerHitFx(enemy: Enemy, fromX: number, fromY: number, time: number, source: 'melee' | 'arrow' | 'fire'): void {
     if (this.followerHitBudget.at !== time) { this.followerHitBudget.at = time; this.followerHitBudget.n = 0; }
     if (this.followerHitBudget.n >= FOLLOW.hitFxPerFrame) return; this.followerHitBudget.n++;
@@ -1643,6 +1690,7 @@ export class GameScene extends Phaser.Scene {
    * 伤害按随行自己的等级、属性、兵装与随行倍率结算，命中记为友军且不算武器命中（不触发主将被动、遗物、构筑、暴击与吸血）。
    */
   createFollowerWeapon(f: Follower, squad: FollowerSquad): ((dt: number, now: number) => void) | null {
+    const followerSfx = this.sfx.scaled(.45); // 随行名将用本命武器：同音色、约一半响度，节流与主将分开
     const hero = f.recruit.hero; if (!hero) return null;
     const id = getCharacter(hero).startWeapon, behave = WEAPON_BEHAVIORS[id]; if (!behave) return null;
     // 随行带自己的天赋被动（统筹按用户授权决定，2026-11-17）：被动给的数值加成按 FOLLOW.passiveScale 折算（待平衡会话复核）
@@ -1666,7 +1714,7 @@ export class GameScene extends Phaser.Scene {
     const shots: SpearShot[] = [], ally = { hero, credit: (n: number) => squad.credit(f, n) };
     const host: WeaponHost = {
       get player() { return puppet; }, get enemies() { return scene.enemies; }, get grid() { return scene.grid; }, get add() { return scene.add; }, get time() { return scene.time; },
-      get combatNow() { return scene.combatNow; }, get cameras() { return scene.cameras; }, get sfx() { return scene.sfx; }, get over() { return scene.over; },
+      get combatNow() { return scene.combatNow; }, get cameras() { return scene.cameras; }, get sfx() { return followerSfx; }, get over() { return scene.over; },
       get spearShots() { return shots; }, get bolts() { return scene.bolts; },
       hitEnemy: (e, d, now, src) => { const n = d * squad.share, live = e.active && !e.invulnerable; const ok = scene.hitEnemy(e, n, now, src, true, false); if (live) { squad.credit(f, n); scene.followerHitFx(e, f.x, f.y, now, src); passive.onWeaponHit(now); if (!e.active) passive.onKill(e.kind, now); } return ok; },
       // 刘备仁德鼓舞：以随行自己为中心、半径 FOLLOW.rallyRadius（主将版是全军）；部曲与其他随行都算
@@ -1787,7 +1835,7 @@ export class GameScene extends Phaser.Scene {
     this.damageDealt += damage;
     credit(damage);
     if (enemy.kind === 'boss') this.bossFeelHit(enemy, damage, crit, bossHpBefore, time);
-    this.spawnDamageText(enemy.x, enemy.y - enemy.radius, damage, crit, !fromAlly||enemy.kind==='boss');
+    this.spawnDamageText(enemy.x, enemy.y - enemy.radius, damage, crit, !fromAlly||enemy.kind==='boss', enemy.kind==='boss' ? 'boss' : fromAlly ? 'ally' : (!weaponHit || source === 'fire') ? 'spell' : 'hit');
     if (!fromAlly && weaponHit && this.player.growth.build.treasures.includes('blood_jade')) this.bloodJadeHeal(damage, time);
     if (!fromAlly && weaponHit) this.relics?.onWeaponHit(enemy, rawDamage, time);
     if(!fromAlly&&weaponHit){const tags=this.player.growth.build.tags();const vfx=buildVfx(this);const a=Math.atan2(enemy.y-this.player.y,enemy.x-this.player.x);if(tags.combo)vfx.emit('combo',enemy.x,enemy.y-8,time,42,a);if(crit&&tags.critical)vfx.emit('critical',enemy.x,enemy.y-8,time,48);if(tags.charge&&this.buildCombat.charged())vfx.emit('pure_charge',enemy.x,enemy.y-8,time,70,a);this.legion.command.onHit(enemy,time);this.controlBuild?.onHit(enemy,time);this.awakeningCombat?.onHit(enemy,rawDamage,crit,time,this.buildCombat.charged());this.buildCombat.onHit(enemy,rawDamage,crit,time);this.relicHits++;
@@ -1825,7 +1873,7 @@ export class GameScene extends Phaser.Scene {
     this.objective?.onKill(enemy);
     const kind = enemy.kind;
     // 吕布倒地改由 playBossFall（倒地 4 帧）播，不再叠旧的通用死亡闪影
-    if(kind==='boss'){const old=this.chasingBosses.find(t=>t.enemy===enemy&&t.life===enemy.spawnId),h=old?old.huaxiong:this.huaxiong,x=old?old.xurong:this.xurong;h?.defeat();x?.defeat();if(enemy===this.boss){this.moveset?.defeat();this.moveset=null;this.bossMount?.destroy();this.bossMount=null;}if(old){if(h)this.deadBossControllers.push(h);if(x)this.deadBossControllers.push(x);}
+    if(kind==='boss'){const old=this.chasingBosses.find(t=>t.enemy===enemy&&t.life===enemy.spawnId),h=old?old.huaxiong:this.huaxiong,x=old?old.xurong:this.xurong;h?.defeat();x?.defeat();if(enemy===this.boss){this.sishuiPass?.onBossDown();this.moveset?.defeat();this.moveset=null;this.bossMount?.destroy();this.bossMount=null;}if(old){if(h)this.deadBossControllers.push(h);if(x)this.deadBossControllers.push(x);}
       // 倒地：控制器自己有倒地帧的（华雄 / 徐荣 / 子类首领）沿用；其余首领播通用倒地（受伤帧 + 倒下 + 手绘扬尘 + 下沉淡出）
       this.bossFallDir=0;if(!(h||x||this.bossHasDeathArt()))this.bossFallDir=playBossFall(this,enemy,this.zhangjiao?'zhangjiao_moves':this.lubu?'lubu_moves':undefined,old?undefined:this.chapter.bossStyle);}
     enemy.deactivate();
@@ -2000,48 +2048,50 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  protected spawnDamageText(x: number, y: number, value: number, crit: boolean, priority=true): void {
+  /**
+   * 伤害 / 治疗数字（池化 40 个，同屏多时普通部曲数字先丢、暴击和主将优先）：
+   * 同一位置同类的数字合并累加；向上飘出一道小弧线后淡出；暴击先放大再落定，左侧带小「暴」字。
+   * kind 缺省按 crit / priority 推：暴击 → crit，主将 → hit，部曲随行 → ally。设置「伤害数字」全部 / 仅暴击 / 关。
+   */
+  protected spawnDamageText(x: number, y: number, value: number, crit: boolean, priority=true, kind?: DmgKind): void {
     { const dm = damageNumbers(); if (dm === 'off' || (dm === 'crit' && !crit)) return; } // 设置「伤害数字」
+    const k: DmgKind = crit ? 'crit' : kind ?? (priority ? 'hit' : 'ally');
     const crowded=this.legion.visibleCount>=60,limit=crowded?18:32;
-    const merged=this.dmgFx.find(f=>f.active&&f.crit===crit&&f.life>.25&&Math.hypot(f.text.x-x,f.text.y-y)<(crowded?44:22));
-    if(merged){merged.text.setText(String(Number(merged.text.text)+value));return;}
+    const merged=this.dmgFx.find(f=>f.active&&f.kind===k&&f.life>.25&&Math.hypot(f.text.x-x,f.text.y-y)<(crowded?44:26));
+    if(merged){const n=Number(merged.text.text.replace('+',''))+value;merged.text.setText(k==='heal'?'+'+n:String(n));if(k==='crit')merged.life=Math.max(merged.life,DMG_LIFE-.08);return;}
     const active=this.dmgFx.filter(f=>f.active);if(!crit&&!priority&&active.length>=limit)return;
     let fx = this.dmgFx.find((f) => !f.active);
     if(!fx&&(crit||priority)&&this.dmgFx.length>=40)fx=this.dmgFx.filter(f=>!f.crit).sort((a,b)=>a.life-b.life)[0];
     if (!fx) {
       if (this.dmgFx.length >= 40) return;
-      fx = {
-        crit,
-        text: this.add
-          .text(0, 0, '', { fontFamily: FONT, fontSize: crit ? HIT_FEEL.critFontPx + 'px' : '14px', color: crit ? HIT_FEEL.critColor : '#f5efe6', stroke: crit ? HIT_FEEL.critStroke : '#000000', strokeThickness: crit ? 4 : 0 })
-          .setOrigin(0.5)
-          .setDepth(DEPTH.dmgText),
-        life: 0,
-        vy: 0,
-        active: false,
-      };
+      fx = { crit, kind: k, text: this.add.text(0, 0, '', { fontFamily: DMG_FONT, fontStyle: 'bold', fontSize: '15px' }).setOrigin(0.5).setDepth(DEPTH.dmgText).setShadow(1, 2, '#000000', 2, true, true), life: 0, vx: 0, vy: 0, active: false };
+      fx.kind = '' as DmgKind; // 强制下面套用样式
       this.dmgFx.push(fx);
     }
-    if (fx.crit !== crit) {
-      fx.crit = crit;
-      fx.text.setStyle({ fontSize: crit ? HIT_FEEL.critFontPx + 'px' : '14px', color: crit ? HIT_FEEL.critColor : '#f5efe6', stroke: crit ? HIT_FEEL.critStroke : '#000000', strokeThickness: crit ? 4 : 0 });
-    }
+    if (fx.kind !== k) { const st = DMG_STYLE[k]; fx.kind = k; fx.text.setStyle({ fontSize: st.size + 'px', color: st.color, stroke: st.stroke, strokeThickness: st.sw }); }
+    fx.crit = crit;
+    if (crit) { fx.tag ??= this.add.text(0, 0, '暴', { fontFamily: FONT, fontStyle: 'bold', fontSize: '13px', color: '#fff2c0', backgroundColor: '#a3240c', padding: { x: 2, y: 0 } }).setOrigin(1, .5).setDepth(DEPTH.dmgText); fx.tag.setVisible(true).setAlpha(1); }
+    else fx.tag?.setVisible(false);
     fx.active = true;
-    fx.life = 0.55;
-    fx.vy = -52;
-    fx.text.setPosition(x, y).setText(String(value)).setAlpha(1).setVisible(true).setScale(crit ? 1.35 : 1);
+    fx.life = DMG_LIFE;
+    fx.vx = (Math.random() - .5) * (crit ? 30 : 40);
+    fx.vy = crit ? -78 : k === 'heal' ? -48 : -66;
+    fx.text.setPosition(x, y).setText(k === 'heal' ? '+' + value : String(value)).setAlpha(1).setVisible(true).setScale(crit ? 1.45 : 1);
   }
 
   protected updateDmgFx(dt: number): void {
     for (const fx of this.dmgFx) {
       if (!fx.active) continue;
       fx.life -= dt;
-      fx.text.y += fx.vy * dt;
-      fx.text.setAlpha(Math.max(0, fx.life / 0.55));
-      if (fx.crit && fx.life > .39) fx.text.setScale(1 + .35 * (fx.life - .39) / .16); // 暴击数字先放大再落定（前 0.16 秒）
+      fx.vy += 120 * dt; // 上飘逐渐减速，走一道小弧线
+      fx.text.x += fx.vx * dt; fx.text.y += fx.vy * dt;
+      const t = Math.max(0, fx.life / DMG_LIFE);
+      fx.text.setAlpha(Math.min(1, t * 2.2)); // 前半段不透明，后半段淡出
+      if (fx.crit && fx.life > DMG_LIFE - .16) fx.text.setScale(1 + .45 * (fx.life - (DMG_LIFE - .16)) / .16); // 暴击数字先放大再落定（前 0.16 秒）
+      if (fx.tag?.visible) fx.tag.setPosition(fx.text.x - fx.text.displayWidth / 2 - 2, fx.text.y).setAlpha(fx.text.alpha);
       if (fx.life <= 0) {
         fx.active = false;
-        fx.text.setVisible(false);
+        fx.text.setVisible(false); fx.tag?.setVisible(false);
       }
     }
   }
@@ -2737,7 +2787,9 @@ export class GameScene extends Phaser.Scene {
     if(!this.player.alive){this.finish(false);return;}
     // 落点避开尸体（画风会话量的躺倒身体范围）：倒地 4 帧往朝向前方偏 80，其余往下偏 30
     const ox=this.bossFallDir*80,oy=30;
-    this.bossChests.push(new BossChest({scene:this,player:this.player,grant:()=>this.grantBossChest(),done,sfx:k=>this.sfx.play(k)},x+ox,y+oy,this.combatNow));
+    // 落点压在城墙 / 障碍里时（首领倒在墙边），沿着往主将的方向挪到第一个空地，免得宝箱捡不到、关卡结不了
+    let cx=x+ox,cy=y+oy;{const clear=(px:number,py:number)=>!this.supplies||this.supplies.envClear(px,py,44);if(!clear(cx,cy)){const px=this.player.x,py=this.player.y;for(let k=1;k<=12;k++){const t=k/12,tx=cx+(px-cx)*t,ty=cy+(py-cy)*t;if(clear(tx,ty)){cx=tx;cy=ty;break;}if(k===12){cx=px;cy=py+30;}}}}
+    this.bossChests.push(new BossChest({scene:this,player:this.player,grant:()=>this.grantBossChest(),done,sfx:k=>this.sfx.play(k)},cx,cy,this.combatNow));
   }
   /** 宝箱里只有首领遗珍（用户 2026-11-17「首领宝箱只给首领遗珍」；道具系统发放，见 ItemDrops.claimBossRelic）。 */
   protected grantBossChest():ChestLoot[]{

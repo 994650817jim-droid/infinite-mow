@@ -334,11 +334,13 @@ export class WorldMapScene extends Phaser.Scene {
  private refresh(){this.refreshInner();this.syncInks();}
  /** 电脑版按钮换水墨笔触（同主页 / 营寨 / 结算）：原漆金按钮图透明保留做命中区，墨迹底跟随其位置、大小、可点状态。 */
  private inkify(btn:ReturnType<typeof worldButton>,primary:boolean){if(!this.textures.exists('btn_ink_primary_normal'))return;const e:InkBtn={btn,plate:null,primary,hover:false};this.inks.push(e);
-  btn.image.on('pointerover',()=>{e.hover=true;this.syncInk(e);}).on('pointerout',()=>{e.hover=false;this.syncInk(e);});this.syncInk(e);}
+  btn.image.on('pointerover',()=>{e.hover=true;this.syncInk(e);}).on('pointerout',()=>{e.hover=false;this.syncInk(e);}).on('pointerdown',()=>this.syncInk(e)).on('pointerup',()=>this.syncInk(e));this.syncInk(e);}
  private syncInks(){for(const e of this.inks)this.syncInk(e);}
  private syncInk(e:InkBtn){const im=e.btn.image,t=e.btn.text,on=!!im.input?.enabled;
   e.plate=inkPlate(this,e.plate,im.x,im.y,im.displayWidth*.86,Math.min(im.displayHeight,40),e.primary,on?(e.hover?'hover':'normal'):'disabled');
-  if(e.plate)e.plate.setVisible(im.visible).setDepth(im.depth);im.setAlpha(.001);t.setDepth(Math.max(t.depth,im.depth+1)).setStroke(e.primary?'#2a0c06':'#16100a',3).setColor(!on?'#8e8576':e.hover?'#fff3d4':e.primary?'#f8e6bf':'#e8d3a6');}
+  if(e.plate)e.plate.setVisible(im.visible).setDepth(im.depth);
+  // 原漆金图换成透明贴图（不能用 alpha≈0：手柄焦点会跳过近乎透明的对象），大小与命中区不变
+  if(im.texture.key!=='__DEFAULT'){const w=im.displayWidth,h=im.displayHeight;im.setTexture('__DEFAULT').setDisplaySize(w,h);}im.setAlpha(1).clearTint();t.setDepth(Math.max(t.depth,im.depth+1)).setStroke(e.primary?'#2a0c06':'#16100a',3).setColor(!on?'#8e8576':e.hover?'#fff3d4':e.primary?'#f8e6bf':'#e8d3a6');}
  private refreshInner(){
   const sel=this.selected,routeId=sel.kind==='stage'?sel.chapter:sel.kind==='node'?this.chapterOf(sel.node)?.id:undefined;this.showRoute(routeId);
   for(const m of this.cityMarkers)(MARKERS_V2?paintSelectionV2:paintSelection)(m,this.isSelected(m.city));this.clampMap();this.paintChips();

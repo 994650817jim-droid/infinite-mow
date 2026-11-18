@@ -19,6 +19,9 @@ export type HealProp='wine'|'herb';
 export const HEAL_PROPS:Record<HealProp,{name:string;frame:number;drop:number;ratio:number;size:number}>={wine:{name:'酒罐',frame:0,drop:2,ratio:.08,size:70},herb:{name:'药篓',frame:1,drop:3,ratio:.12,size:66}};
 interface Potion {image:Phaser.GameObjects.Image;until:number;active:boolean;amount?:number;}
 /** 药囊里的一份药：回复量（未设则为原药瓶的固定 10 点）与图标。 */
+/** 回血药的手绘图（2026-11-17 用户「用药的ui图标也改一下」：不用程序画的像素药瓶）。缺图时退回旧的 healing_potion。 */
+export const POTION_ART='potion_jar';
+export function potionTexture(scene:Phaser.Scene,key='healing_potion'):string{return key==='healing_potion'&&scene.textures.exists(POTION_ART)?POTION_ART:key;}
 export interface PouchItem {amount?:number;texture:string;frame?:number;name:string;}
 export const POUCH_MAX=3;
 interface BrazierFire {x:number;y:number;started:number;nextHit:number;active:boolean;tripod?:boolean;}
@@ -54,6 +57,8 @@ export class BattlefieldSupplies {
  private devId=0;
  private pushX=0;private pushY=0;
  private readonly coals:Phaser.GameObjects.Graphics;
+ /** 地上的回血药：手绘药罐是方图（32×32），旧像素药瓶 24×29。 */
+ private potionSize():[number,number]{return this.scene.textures.exists(POTION_ART)?[32,32]:[24,29];}
  constructor(private scene:Phaser.Scene,private player:Player,private enemies:Enemy[],private now:()=>number,private onPickup:(kind?:'wine'|'other')=>void){
   this.coals=scene.add.graphics().setDepth(DEPTH.fx);
   if(!scene.textures.exists('healing_potion')){
@@ -158,10 +163,10 @@ export class BattlefieldSupplies {
  /** 在指定位置掉一份回血补给（营帐掉落用）。 */
  dropHeal(x:number,y:number,kind:HealProp='herb'):void{
   let potion=this.potions.find(p=>!p.active);
-  if(!potion){if(this.potions.length>=12)return;potion={image:this.scene.add.image(0,0,'healing_potion').setDepth(DEPTH.gem+1),until:0,active:false};this.potions.push(potion);}
+  if(!potion){if(this.potions.length>=12)return;potion={image:this.scene.add.image(0,0,potionTexture(this.scene)).setDepth(DEPTH.gem+1),until:0,active:false};this.potions.push(potion);}
   potion.active=true;potion.until=this.now()+60000;
   if(this.healArt){const heal=HEAL_PROPS[kind];potion.amount=this.player.maxHp*heal.ratio;potion.image.setTexture('heal_props',heal.drop).setPosition(x,y).setDisplaySize(34,34).setAlpha(1).setVisible(true);}
-  else{potion.amount=undefined;potion.image.setTexture('healing_potion').setPosition(x,y).setDisplaySize(24,29).setAlpha(1).setVisible(true);}
+  else{potion.amount=undefined;potion.image.setTexture(potionTexture(this.scene)).setPosition(x,y).setDisplaySize(...this.potionSize()).setAlpha(1).setVisible(true);}
  }
  onBroken(enemy:Enemy):void {
   const crate=this.crates.find(c=>c.enemy===enemy&&c.life===enemy.spawnId);if(!crate||!crate.cell||this.broken.has(crate.cell))return;
@@ -178,10 +183,10 @@ export class BattlefieldSupplies {
   if(crate.frame!==18)return;
   const heal=crate.heal?HEAL_PROPS[crate.heal]:undefined;crate.heal=undefined;
   let potion=this.potions.find(p=>!p.active);
-  if(!potion){if(this.potions.length>=12)return;potion={image:this.scene.add.image(0,0,'healing_potion').setDepth(DEPTH.gem+1),until:0,active:false};this.potions.push(potion);}
+  if(!potion){if(this.potions.length>=12)return;potion={image:this.scene.add.image(0,0,potionTexture(this.scene)).setDepth(DEPTH.gem+1),until:0,active:false};this.potions.push(potion);}
   potion.active=true;potion.until=this.now()+60000;
   if(heal){potion.amount=this.player.maxHp*heal.ratio;potion.image.setTexture('heal_props',heal.drop).setPosition(enemy.x,enemy.y+6).setDisplaySize(34,34).setAlpha(1).setVisible(true);}
-  else{potion.amount=undefined;potion.image.setTexture('healing_potion').setPosition(enemy.x,enemy.y+10).setDisplaySize(24,29).setAlpha(1).setVisible(true);}
+  else{potion.amount=undefined;potion.image.setTexture(potionTexture(this.scene)).setPosition(enemy.x,enemy.y+10).setDisplaySize(...this.potionSize()).setAlpha(1).setVisible(true);}
  }
  update(dt:number,now:number,placements:readonly BattlefieldProp[]=[],burn:(enemy:Enemy,damage:number)=>void=()=>{},allies:readonly Ally[]=[],hurtAlly:(ally:Ally,damage:number,now:number)=>void=()=>{}):void {
   this.updateDebris(now);

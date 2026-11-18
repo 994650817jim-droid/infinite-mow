@@ -295,7 +295,7 @@ export class CityScene extends Phaser.Scene {
   this.meritQty=Math.max(1,Math.min(this.meritQty,Math.max(1,max)));
   const line=(y:number,v:string,size:number,color:string,name:string)=>m.root.add(txt(this,W/2,y,v,size,color).setOrigin(.5).setName(name));
   line(m.y+76,`战功 ${have}　·　武学残卷 ${scrolls()}`,18,'#f3d48a','merit-have');
-  line(m.y+108,`每 ${MERIT.perScroll} 战功换 1 张武学残卷（数值待复核）。战功来自击杀精英（+${MERIT.elite}）与首领（+${MERIT.boss}）。`,13,'#b9a98a','merit-rule');
+  line(m.y+108,`每 ${MERIT.perScroll} 战功换 1 张武学残卷。战功来自击杀精英（+${MERIT.elite}）与首领（+${MERIT.boss}）。`,13,'#b9a98a','merit-rule');
   const qy=m.y+164,q=this.meritQty;
   const step=(label:string,dx:number,name:string,fn:()=>void,w=56)=>{const b=homeCommand(this,W/2+dx,qy,w,40,label,false,true,16);b.hit.setName(name).on('pointerdown',fn);m.root.add([b.g,b.hit,b.caption]);};
   step('−',-130,'merit-minus',()=>{this.meritQty=Math.max(1,q-1);this.openMeritExchange();});
@@ -319,9 +319,10 @@ export class CityScene extends Phaser.Scene {
   list.forEach((id,i)=>{
    const def=TECHS[id],done=t.tech.includes(id),block=techBlockers(id,t.tech,acad),ready=!done&&!block.length,afford=s.provisions>=def.cost,y=m.y+(acad?100:130)+i*rowH,x=m.x+24,w=m.w-48;
    const g=this.add.graphics();g.fillStyle(done?0x2f5a35:ready&&afford?0x3a4a2a:0x2a241c,.7).fillRoundedRect(x,y,w,rowH-8,8).lineStyle(2,done?0x9fd68a:ready?0xc9ad74:0x5a5040,.8).strokeRoundedRect(x,y,w,rowH-8,8);m.root.add(g);
-   m.root.add(txt(this,x+14,y+8,`${def.name}　·　第${def.tier}层`,16,done?'#c9f0b0':ready?'#f4d99f':'#9d927c',HEADING_FONT));
+   const head=txt(this,x+14,y+8,`${def.name}　·　第${def.tier}层`,16,done?'#c9f0b0':ready?'#f4d99f':'#9d927c',HEADING_FONT);m.root.add(head);
    const desc=txt(this,x+14,y+(D?32:34),def.desc,12,done?'#b9d2a8':'#d9ccae').setWordWrapWidth(w-(D?170:150),true);m.root.add(desc);
-   if(!done&&block.length)m.root.add(txt(this,x+14,desc.y+desc.height+4,`需要：${block.join('、')} · 军粮 ${def.cost}`,12,'#c99a7a').setName('tech-need-'+id));
+   // 2026-11-17 UI 审查：「需要…」原在说明下方，行高不够时压出行框；电脑版挪到标题同一行右侧
+   if(!done&&block.length)m.root.add(txt(this,D?head.x+head.width+18:x+14,D?y+11:desc.y+desc.height+4,`需要：${block.join('、')} · 军粮 ${def.cost}`,12,'#c99a7a').setName('tech-need-'+id));
    const bw=D?140:120,label=done?'已研究':block.length?'未解锁':`研究 ${def.cost}`;
    const btn=homeCommand(this,x+w-bw/2-10,y+(rowH-8)/2,bw,34,label,ready&&afford,ready&&afford,13);btn.hit.setName('tech-'+id).on('pointerdown',()=>{if(done)return;const res=researchTech(id);this.message=res.message;this.openTech();if(res.ok){uiSfx().play('uiClick');this.toast(res.message);}});
    if(ready&&afford&&!padSet){padSet=true;btn.hit.setData('padDefault',true);}

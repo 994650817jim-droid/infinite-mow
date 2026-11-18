@@ -10,7 +10,7 @@ import type { Player } from '../entities/Player';
 import { LegionTactics, TACTICS } from './LegionTactics';
 import { LegionProjectiles } from './LegionProjectiles';
 import { SpatialGrid } from './SpatialGrid';
-import { LEGION, TROOPS, TROOP_KINDS, type Order, type TroopKind, BOSS_VS_TROOPS, BOSS_VS_ALLY, RECRUIT_PRICE } from '../data/legion';
+import { LEGION, TROOPS, TROOP_KINDS, type Order, type TroopKind, BOSS_VS_TROOPS, BOSS_VS_ALLY, BOSS_CHARGE, RECRUIT_PRICE } from '../data/legion';
 import { DEPTH } from '../config';
 import { AllyCorpses } from './AllyCorpses';
 import { HINT_MOCK, groundScar } from '../ui/HintStyle';
@@ -132,8 +132,8 @@ export class Legion {
   }
   rebuildGrid(): void { this.grid.clear(); for (const u of this.units) if (u.active) this.grid.insert(u); }
   /** floor：最少留几点血（首领一招打死数到上限后留 1 血）。 */
-  hurt(u: Ally, raw: number, now: number, source?: { x: number; y: number; normal: boolean }, floor = 0): boolean {
-    if (!u.active || now < u.hurtUntil) return false;
+  hurt(u: Ally, raw: number, now: number, source?: { x: number; y: number; normal: boolean }, floor = 0, ignoreHurtGap = false): boolean {
+    if (!u.active || (!ignoreHurtGap && now < u.hurtUntil)) return false;
     const armor = u.def.armor + (u.kind === 'guardian' && u.level === 3 ? 5 : 0);
     let mitigation = Math.min(this.command.incoming(u,now),this.defense?.incoming(u,now)??1,this.awakeningDefense?.incoming(u,now)??1);
     if (source?.normal) {
@@ -170,6 +170,20 @@ export class Legion {
     if (!u.active || now < u.bossImmuneUntil) return false;
     if (now !== this.bossCastAt) { this.bossCastAt = now; this.bossCastKills = 0; }
     const ok = this.hurt(u, raw * BOSS_VS_ALLY.mul, now, source, this.bossCastKills >= BOSS_VS_ALLY.killCapPerCast ? 1 : 0);
+    if (ok) { u.bossImmuneUntil = now + BOSS_VS_ALLY.immuneMs; if (!u.active) this.bossCastKills++; }
+    return ok;
+  }
+  /**
+   * 首领冲锋撞兵（平衡会话审计 S8：原来按冲锋起点时间结算，正在近战、刚挨过小兵的士兵受击间隔没过就被跳过，冲过兵阵几乎不伤兵）：
+   * 每名士兵每次冲锋只判定一次（调用方去重），按当前时间结算、无视士兵自身 0.35 秒受击间隔；扣约 BOSS_CHARGE.hpFrac 的最大生命（护甲抵掉，阵型 / 防御 buff 照常减伤）；
+   * 一次冲锋（castKey 相同）最多打死 BOSS_VS_ALLY.killCapPerCast 个，其余留 1 血；之后 immuneMs 内不再吃首领伤害。返回是否命中。
+   * 不看首领免伤（bossImmuneUntil）：冲锋前一帧首领近身碰到的兵会有 0.5 秒首领免伤，原来冲锋那一下就被吞掉；冲锋本身每兵每次只判一次，叠不起来。
+   */
+  hurtByCharge(u: Ally, now: number, castKey: number): boolean {
+    if (!u.active) return false;
+    if (castKey !== this.bossCastAt) { this.bossCastAt = castKey; this.bossCastKills = 0; }
+    const armor = u.def.armor + (u.kind === 'guardian' && u.level === 3 ? 5 : 0);
+    const ok = this.hurt(u, u.maxHp * BOSS_CHARGE.hpFrac + armor, now, undefined, this.bossCastKills >= BOSS_VS_ALLY.killCapPerCast ? 1 : 0, true);
     if (ok) { u.bossImmuneUntil = now + BOSS_VS_ALLY.immuneMs; if (!u.active) this.bossCastKills++; }
     return ok;
   }

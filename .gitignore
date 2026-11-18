@@ -236,3 +236,4 @@ assets/raw/*
 !/tools/test-zhaoyun-fx.mjs
 !/tools/test-camp-medic.mjs
 !/tools/shot-camp-rest.mjs
+!/tools/test-hotkeys.mjs

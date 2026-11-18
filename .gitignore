@@ -262,3 +262,7 @@ assets/raw/*
 !/tools/test-scene-p1.mjs
 !/tools/test-hotkeys.mjs
 !/tools/test-build-persist.mjs
+!/tools/test-wall-seal.mjs
+!/tools/shot-wall-seal.mjs
+!/tools/test-boss-crowd.mjs
+!/tools/test-follower-obstacles.mjs

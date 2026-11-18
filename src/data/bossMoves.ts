@@ -224,7 +224,7 @@ export const BOSS_MOVES: Record<string, BossMovesetDef> = {
   },
   // 10-2 朱然：骑马；连营反扑（绕营奔袭箭雨）+ 长枪突刺 → 坠马「坚守夷道」：亲兵护体减伤
   zhuran: {
-    id: 'zhuran', name: '朱然', phaseAt: .5, mount: { horse: 'generic', tint: 0x9a6a52 },
+    id: 'zhuran', name: '朱然', phaseAt: .5, mount: { horse: 'generic', tint: 0x9a6a52, rider: 'zhuran' },
     p1: { name: '昭武将军', caption: '连营反扑 · 长枪突刺', gapMs: 2300, speedMul: 1.35, moves: [
       { kind: 'ride', name: '连营反扑', windupMs: 500, cd: 6500, dmg: 1.1, radius: 290, ms: 1700, drops: 7, r: 64 },
       { kind: 'thrust', name: '长枪突刺', windupMs: 800, cd: 3800, dmg: 1.6, len: 560, width: 44 },

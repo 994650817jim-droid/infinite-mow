@@ -18,6 +18,7 @@ const CASES = [
   { id: 'xiahouyuan', scene: 'HanzhongGameScene', run: { thirdStage: 2 }, reg: { hanzhongStage: 2 } },
   { id: 'caocao', scene: 'HanzhongGameScene', run: { thirdStage: 3 }, reg: { hanzhongStage: 3 } },
   { id: 'sunhuan', scene: 'YilingGameScene', run: { thirdStage: 1 }, reg: { yilingStage: 1 } },
+  { id: 'zhuran', scene: 'YilingGameScene', run: { thirdStage: 2 }, reg: { yilingStage: 2 } },
 ];
 const VIEWS = [{ tag: 'down', face: 'down', dx: 0, dy: -50 }, { tag: 'left', face: 'left', dx: 170, dy: 20 }, { tag: 'right', face: 'right', dx: -170, dy: 20 }];
 const ONLY = (process.env.ONLY ?? '').split(',').filter(Boolean);

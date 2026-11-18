@@ -1,3 +1,4 @@
+import { meleeReach } from '../data/bossReach';
 import Phaser from 'phaser';
 import type { Enemy } from '../entities/Enemy';
 import { DEPTH, actorDepth } from '../config';
@@ -98,7 +99,7 @@ export class BossMoveset extends ArcBossV2<string> {
         break;
       }
       case 'fan': for (let k = 0; k < m.count; k++) { const ang = a + (m.count > 1 ? (k / (m.count - 1) - .5) * m.spread : 0); this.add({ kind: 'lane', x: b.x, y: b.y, angle: ang, len: m.len, width: m.width }, now, at + k * 70, m.dmg); } break;
-      case 'sweep': this.add({ kind: 'sector', x: b.x, y: b.y, r: m.r, angle: a, arc: m.arc }, now, at, m.dmg); for (let k = 1; k < (m.times ?? 1); k++) this.add({ kind: 'sector', x: b.x, y: b.y, r: m.r, angle: a + (k % 2 ? .35 : -.35), arc: m.arc }, now, at + k * 320, m.dmg); break;
+      case 'sweep': this.add({ kind: 'sector', x: b.x, y: b.y, r: meleeReach(m.r), angle: a, arc: m.arc }, now, at, m.dmg); for (let k = 1; k < (m.times ?? 1); k++) this.add({ kind: 'sector', x: b.x, y: b.y, r: meleeReach(m.r), angle: a + (k % 2 ? .35 : -.35), arc: m.arc }, now, at + k * 320, m.dmg); break;
       case 'rings': m.radii.forEach((r, k) => this.add({ kind: 'circle', x: b.x, y: b.y, r, inner: Math.max(0, r - m.band), fx: 'slam' }, now, at + k * m.gapMs, m.dmg)); break;
       case 'volley': for (let k = 0; k < m.count; k++) { const ang = Math.random() * Math.PI * 2, d = k === 0 ? 0 : 40 + Math.random() * m.spread; this.add({ kind: 'circle', x: p.x + Math.cos(ang) * d, y: p.y + Math.sin(ang) * d * .7, r: m.r, fx: m.fx }, now, at + k * 90, m.dmg); } break;
       case 'thrust': this.add({ kind: 'lane', x: b.x, y: b.y, angle: a, len: m.len, width: m.width }, now, at, m.dmg); break;
@@ -125,7 +126,7 @@ export class BossMoveset extends ArcBossV2<string> {
     const side = Math.random() < .5 ? 1 : -1, a = Math.atan2(p.y - b.y, p.x - b.x) + Math.PI / 2 * side;
     b.sprite.x = p.x + Math.cos(a) * 110; b.sprite.y = p.y + Math.sin(a) * 80;
     const now = this.kit.now, aim = Math.atan2(p.y - b.sprite.y, p.x - b.sprite.x); this.angle = aim;
-    this.add({ kind: 'sector', x: b.sprite.x, y: b.sprite.y, r: m.r, angle: aim, arc: m.arc }, now, now + 420, m.dmg);
+    this.add({ kind: 'sector', x: b.sprite.x, y: b.sprite.y, r: meleeReach(m.r), angle: aim, arc: m.arc }, now, now + 420, m.dmg);
     this.h.banner('现身突刺', '侧面来袭 · 快闪开');
   }
   private plantFlags(m: Extract<MoveDef, { kind: 'flags' }>): void {

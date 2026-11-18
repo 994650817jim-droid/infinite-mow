@@ -23,8 +23,14 @@ import {checkWorld} from '../systems/Achievements';
 import {loadWorld,saveWorld,worldUnlocked,storageUnavailable,incompatibleSave,townUpgrade,granaryLevy,researchTech,townProgress,stableCapacity,drillInfo,trainTroops} from '../world/WorldStore';
 import {TOWN_BUILDINGS,FOCUS_NAME,FOCUS_INCOME,FOCUS_CHANGE_COST,CITY_SIZE,CITY_TITLE,HALL_UPGRADE,nextCost,buildBlockers,buildingOpen,citySize,focusOpen,levelOf,costText,incomeText,townArtLevel,type TownBuildingId,type TownState,type CityFocus,type TownProgress} from '../town/TownData';
 import {TECHS,TECH_IDS,BRANCH_NAME,BRANCH_ORDER,techBlockers,techTotals,type TechBranch} from '../data/tech';
+import {LORD_LEVEL_HINT,followerLevel,followerLevelCap,hallLevel,loadRoster,rankCap,rankPreview,rankUp,type Recruit} from '../systems/RosterStore';
+import {COMMONER_SKILLS} from '../data/commonerSkills';
+import {QUALITIES} from '../data/items';
 import {PANO_W,PANO_H,CITY_SLOTS,LEVEL_SCALE,CITY_BG_SIZES,CITY_ART_LEVELS,ART_ALIAS} from '../town/CityLayout';
 import {cityById,TIER_NAME} from '../world/WorldCities';
+import {CampLife,loadCampLife,CAMP_ART_IDS} from '../town/CampLife';
+import {campTalkStrip} from '../systems/Story';
+import {followersFor,heroOwned} from '../systems/RosterStore';
 
 /** 是否电脑布局：在场景构造时读取（模块加载时布局尚未初始化）。 */
 let D=false;
@@ -43,13 +49,19 @@ export class CityScene extends Phaser.Scene {
  private pano!:Phaser.GameObjects.Container;private top!:Phaser.GameObjects.Text;private hint!:Phaser.GameObjects.Text;private sizeText!:Phaser.GameObjects.Text;
  private vr={x:0,y:0,w:0,h:0};private k=1;private sx=0;private sy=0;
  private hits:Phaser.GameObjects.Rectangle[]=[];
+ /** 营寨档的营帐与兵士（town/CampLife.ts）；县城以后为 null。 */
+ private campLife:CampLife|null=null;
  private drag:{x:number;y:number;sx:number;sy:number;moved:boolean}|null=null;private pressedSlot:string|null=null;
  private popId:TownBuildingId|null=null;
- private techTab:TechBranch='supply';
+ private techTab:TechBranch|'drill'='supply';
+ /** 讲武堂「随从操练」翻页。 */
+ private drillPage=0;
  constructor(){super('CityScene');}
- init(){D=W>600;this.vr=D?{x:12,y:62,w:W-24,h:H-62-58}:{x:0,y:104,w:W,h:H-104-104};this.k=Math.max(this.vr.w/PANO_W,this.vr.h/PANO_H);this.hits=[];this.drag=null;}
+ init(){D=W>600;this.vr=D?{x:12,y:62,w:W-24,h:H-62-58}:{x:0,y:104,w:W,h:H-104-104};this.k=Math.max(this.vr.w/PANO_W,this.vr.h/PANO_H);this.hits=[];this.drag=null;this.campLife=null;}
  preload(){if(!worldUnlocked()&&!isChapterTestRun())return;worldAssets(this,'town_ground','assets/town/ground.webp');
   for(const n of CITY_BG_SIZES)worldAssets(this,`city_bg_${n}`,`assets/city/bg_${n}.webp`);
+  loadCampLife(this);
+  for(const id of CAMP_ART_IDS)worldAssets(this,`city_camp_${id}`,`assets/city/camp_${id}.webp`);
   const ids=Object.keys(TOWN_BUILDINGS) as TownBuildingId[];
   for(const lv of CITY_ART_LEVELS)for(const id of ids)if(lv<=(TOWN_BUILDINGS[id].maxLevel??3)){const a=ART_ALIAS[id]??id;worldAssets(this,`city_${a}_${lv}`,`assets/city/${a}_${lv}.webp`);}}
  create(){playMenuMusic(this);this.registry.remove('hardChapter');
@@ -74,6 +86,9 @@ export class CityScene extends Phaser.Scene {
   // 底栏：只有「天下地图」（出征也从天下地图选章节）；功能都在建筑里
   const mapBtn=homeCommand(this,W/2,D?H-28:H-72,D?260:W-60,D?40:52,'天下地图 · 出征',true,true,D?16:17);mapBtn.hit.setName('city-map').on('pointerdown',()=>this.scene.start('WorldMapScene'));
   if(D)txt(this,24,H-28,'点建筑进入：军营招兵 · 讲武堂科技 · 招贤馆 · 主帐武将谱',12,'#a9b9a2').setOrigin(0,.5).setName('city-tip');
+  // 营中闲话（剧情 campTalk）：底栏「天下地图」右侧，不挡建筑与出征按钮；按当前章节取一段没看过的
+  if(D){const w=loadWorld(),lord=(loadRoster().lord??'liubei') as CharacterId,chapters=!w.cleared?.huangjin?['huangjin']:!w.cleared?.hulao?['hulao','huangjin']:['hulao','huangjin'];
+   campTalkStrip(this,W/2+130+16,H-28,W-(W/2+130+16)-24,chapters,{lord,team:()=>[lord,...followersFor(lord).map(r=>r.hero).filter((h):h is CharacterId=>!!h)],recruited:id=>heroOwned(id)},5);}
   // 拖动 / 滚轮平移全景
   this.input.on('pointerdown',(p:Phaser.Input.Pointer)=>{if(this.anyModal()||!this.inView(p.x,p.y))return;this.drag={x:p.x,y:p.y,sx:this.sx,sy:this.sy,moved:false};});
   this.input.on('pointermove',(p:Phaser.Input.Pointer)=>{const d=this.drag;if(!d||!p.isDown)return;const dx=p.x-d.x,dy=p.y-d.y;if(!d.moved&&Math.hypot(dx,dy)<8)return;d.moved=true;this.scrollTo(d.sx-dx,d.sy-dy);});
@@ -115,14 +130,16 @@ export class CityScene extends Phaser.Scene {
  }
 
  /** 建筑贴图：营寨全景美术（新建筑复用旧图）→ 旧小镇像素画 → 无（程序画）。 */
+ /** 营寨档（大殿 1 级）：中军大帐 / 招贤帐 / 讲武校场 / 军营用营寨风图（美术会话 11-17，画布同 Lv1 图）；县城起照旧。 */
  private artKey(id:TownBuildingId,level:number):string|null{
+  if(citySize(loadWorld().town)===1&&(CAMP_ART_IDS as readonly string[]).includes(id)&&this.textures.exists(`city_camp_${id}`))return`city_camp_${id}`;
   const a=ART_ALIAS[id]??id;let best=0;for(const l of CITY_ART_LEVELS)if(l<=level&&l>best)best=l;
   if(best&&this.textures.exists(`city_${a}_${best}`))return`city_${a}_${best}`;
   const old=townArtLevel(level);if(id!=='hall'&&old&&this.textures.exists(`town_${a}_${old}`))return`town_${a}_${old}`;
   return null;
  }
  private drawPano(){
-  this.pano.removeAll(true);this.hits=[];
+  this.campLife?.destroy();this.campLife=null;this.pano.removeAll(true);this.hits=[];
   const s=loadWorld(),t=s.town,size=citySize(t) as 1|2|3,k=this.k,p=townProgress(s),slots=CITY_SLOTS[size];
   const bg=`city_bg_${size}`;
   if(this.textures.exists(bg))this.pano.add(this.add.image(0,0,bg).setOrigin(0).setDisplaySize(PANO_W*k,PANO_H*k));
@@ -158,8 +175,12 @@ export class CityScene extends Phaser.Scene {
    this.pano.add(hit);this.hits.push(hit);
   }
   this.popId=null;
+  // 营寨档：营帐、兵士填空地（画在建筑之下；按建筑点击区与贴图外框避让）
+  if(size===1&&new URLSearchParams(location.search).get('camplife')!=='0'){const ox=this.pano.x,oy=this.pano.y,blocked=[...this.hits.map(h=>h.getBounds()),...this.pano.list.filter((o):o is Phaser.GameObjects.Image=>o instanceof Phaser.GameObjects.Image&&o.texture.key.startsWith('city_')&&!o.texture.key.startsWith('city_bg')).map(o=>o.getBounds())].map(b=>({l:(b.x-ox)/k,r:(b.right-ox)/k,t:(b.y-oy)/k,b:(b.bottom-oy)/k}));
+   this.campLife=new CampLife(this,k,blocked);this.pano.remove(this.campLife.root);this.pano.addAt(this.campLife.root,this.textures.exists(bg)?1:0);}
   this.scrollTo(this.sx,this.sy,false);
  }
+ update(_t:number,dt:number){this.campLife?.update(dt);}
  /** 无底图时：程序画天空、远山、土地、街道与对应规模的寨墙。 */
  private drawFallbackBg(size:number){
   const k=this.k,g=this.add.graphics(),w=PANO_W*k,h=PANO_H*k;
@@ -230,7 +251,7 @@ export class CityScene extends Phaser.Scene {
   type Fn=[string,()=>void];
   const funcs:Partial<Record<TownBuildingId,Fn[]>>={
    barracks:[['招募后备',()=>this.scene.start('CityRecruitScene')]],
-   academy:[['研究科技',()=>{m.root.destroy();this.openTech();}],['战功换残卷',()=>{m.root.destroy();this.openMeritExchange();}]],
+   academy:[['研究科技',()=>{m.root.destroy();if(this.techTab==='drill')this.techTab='supply';this.openTech();}],['随从操练',()=>{m.root.destroy();this.techTab='drill';this.openTech();}],['战功换残卷',()=>{m.root.destroy();this.openMeritExchange();}]],
    talent:[['进入招贤馆',()=>this.scene.start('TalentHallScene')]],
    stable:[['进入马厩',()=>this.openStable(msg)]],
    // 城池发展已改为各城自己的建筑（天下地图 → 进入城池）
@@ -279,7 +300,7 @@ export class CityScene extends Phaser.Scene {
   this.meritQty=Math.max(1,Math.min(this.meritQty,Math.max(1,max)));
   const line=(y:number,v:string,size:number,color:string,name:string)=>m.root.add(txt(this,W/2,y,v,size,color).setOrigin(.5).setName(name));
   line(m.y+76,`战功 ${have}　·　武学残卷 ${scrolls()}`,18,'#f3d48a','merit-have');
-  line(m.y+108,`每 ${MERIT.perScroll} 战功换 1 张武学残卷（数值待复核）。战功来自击杀精英（+${MERIT.elite}）与首领（+${MERIT.boss}）。`,13,'#b9a98a','merit-rule');
+  line(m.y+108,`每 ${MERIT.perScroll} 战功换 1 张武学残卷。战功来自击杀精英（+${MERIT.elite}）与首领（+${MERIT.boss}）。`,13,'#b9a98a','merit-rule');
   const qy=m.y+164,q=this.meritQty;
   const step=(label:string,dx:number,name:string,fn:()=>void,w=56)=>{const b=homeCommand(this,W/2+dx,qy,w,40,label,false,true,16);b.hit.setName(name).on('pointerdown',fn);m.root.add([b.g,b.hit,b.caption]);};
   step('−',-130,'merit-minus',()=>{this.meritQty=Math.max(1,q-1);this.openMeritExchange();});
@@ -292,23 +313,66 @@ export class CityScene extends Phaser.Scene {
  private openTech(){
   const s=loadWorld(),t=s.town,acad=levelOf(t,'academy'),h=D?Math.min(H-24,520):Math.min(H-40,780),m=this.modal('town-tech',acad?`讲武堂 Lv${acad} · 军粮 ${s.provisions}`:'讲武堂（未建）',h);
   if(!acad)m.root.add(txt(this,W/2,m.y+66,'先在营中建讲武堂（军粮 '+TOWN_BUILDINGS.academy.build+'），即可研究科技。',13,'#e59a83').setOrigin(.5).setWordWrapWidth(m.w-60,true).setAlign('center').setName('town-tech-need'));
-  const tabW=Math.min(150,(m.w-60)/3);
+  const tabW=Math.min(140,(m.w-60)/4),tabY=m.y+(acad||this.techTab==='drill'?70:100);
   BRANCH_ORDER.forEach((b,i)=>{const on=this.techTab===b,done=TECH_IDS.filter(id=>TECHS[id].branch===b&&t.tech.includes(id)).length,all=TECH_IDS.filter(id=>TECHS[id].branch===b).length;
-   const btn=homeCommand(this,W/2+(i-1)*(tabW+8),m.y+(acad?70:100),tabW,38,`${BRANCH_NAME[b]} ${done}/${all}`,on,true,15);btn.hit.setName('tech-tab-'+b).on('pointerdown',()=>{this.techTab=b;this.openTech();});m.root.add([btn.g,btn.hit,btn.caption]);});
+   const btn=homeCommand(this,W/2+(i-1.5)*(tabW+8),tabY,tabW,38,`${BRANCH_NAME[b]} ${done}/${all}`,on,true,D?15:13);btn.hit.setName('tech-tab-'+b).on('pointerdown',()=>{this.techTab=b;this.openTech();});m.root.add([btn.g,btn.hit,btn.caption]);});
+  { const on=this.techTab==='drill',btn=homeCommand(this,W/2+1.5*(tabW+8),tabY,tabW,38,'随从操练',on,true,D?15:13);btn.hit.setName('tech-tab-drill').on('pointerdown',()=>{this.techTab='drill';this.drillPage=0;this.openTech();});m.root.add([btn.g,btn.hit,btn.caption]); }
+  if(this.techTab==='drill'){m.root.getByName('town-tech-need')?.destroy();this.drawDrill(m,h);return;}
+  const branch:TechBranch=this.techTab;
   let padSet=false;
-  const list=TECH_IDS.filter(id=>TECHS[id].branch===this.techTab),rowH=D?Math.min(70,(h-200)/list.length):Math.min(104,(h-220)/list.length);
+  const list=TECH_IDS.filter(id=>TECHS[id].branch===branch),rowH=D?Math.min(70,(h-200)/list.length):Math.min(104,(h-220)/list.length);
   list.forEach((id,i)=>{
    const def=TECHS[id],done=t.tech.includes(id),block=techBlockers(id,t.tech,acad),ready=!done&&!block.length,afford=s.provisions>=def.cost,y=m.y+(acad?100:130)+i*rowH,x=m.x+24,w=m.w-48;
    const g=this.add.graphics();g.fillStyle(done?0x2f5a35:ready&&afford?0x3a4a2a:0x2a241c,.7).fillRoundedRect(x,y,w,rowH-8,8).lineStyle(2,done?0x9fd68a:ready?0xc9ad74:0x5a5040,.8).strokeRoundedRect(x,y,w,rowH-8,8);m.root.add(g);
-   m.root.add(txt(this,x+14,y+8,`${def.name}　·　第${def.tier}层`,16,done?'#c9f0b0':ready?'#f4d99f':'#9d927c',HEADING_FONT));
+   const head=txt(this,x+14,y+8,`${def.name}　·　第${def.tier}层`,16,done?'#c9f0b0':ready?'#f4d99f':'#9d927c',HEADING_FONT);m.root.add(head);
    const desc=txt(this,x+14,y+(D?32:34),def.desc,12,done?'#b9d2a8':'#d9ccae').setWordWrapWidth(w-(D?170:150),true);m.root.add(desc);
-   if(!done&&block.length)m.root.add(txt(this,x+14,desc.y+desc.height+4,`需要：${block.join('、')} · 军粮 ${def.cost}`,12,'#c99a7a').setName('tech-need-'+id));
+   // 2026-11-17 UI 审查：「需要…」原在说明下方，行高不够时压出行框；电脑版挪到标题同一行右侧
+   if(!done&&block.length)m.root.add(txt(this,D?head.x+head.width+18:x+14,D?y+11:desc.y+desc.height+4,`需要：${block.join('、')} · 军粮 ${def.cost}`,12,'#c99a7a').setName('tech-need-'+id));
    const bw=D?140:120,label=done?'已研究':block.length?'未解锁':`研究 ${def.cost}`;
    const btn=homeCommand(this,x+w-bw/2-10,y+(rowH-8)/2,bw,34,label,ready&&afford,ready&&afford,13);btn.hit.setName('tech-'+id).on('pointerdown',()=>{if(done)return;const res=researchTech(id);this.message=res.message;this.openTech();if(res.ok){uiSfx().play('uiClick');this.toast(res.message);}});
    if(ready&&afford&&!padSet){padSet=true;btn.hit.setData('padDefault',true);}
    m.root.add([btn.g,btn.hit,btn.caption]);
   });
   if(this.message)m.root.add(txt(this,W/2,m.y+h-72,this.message,13,'#e8c98a').setOrigin(.5).setName('town-tech-message'));
+  this.message='';
+ }
+ /**
+  * 讲武堂 · 随从操练（用户 2026-11-17「升级随从功能挪到讲武堂」「升级兵器和被动要看到需要多少钱」）：
+  * 麾下武将逐行列出，兵器 / 被动两条线各一个按钮，按钮上写花费（军粮），买不起置灰且花费标红，到顶写「已满」；左边写升级前后的数值。
+  * 规则同原招贤馆：将阶上限看招贤馆等级，花费 RANK.cost，主公不能在这里升（LORD_LEVEL_HINT）。不看讲武堂等级（Lv1 也能操练）。
+  */
+ private drawDrill(m:{root:Phaser.GameObjects.Container;x:number;y:number;w:number;h:number},h:number){
+  const s=loadRoster(),cap=rankCap(s),lvCap=followerLevelCap(),grain=loadWorld().provisions;
+  const all:Recruit[]=[...s.owned].sort((a,b)=>(a.hero===s.lord?-1:0)-(b.hero===s.lord?-1:0)||(s.followers.includes(b.id)?1:0)-(s.followers.includes(a.id)?1:0));
+  const top=m.y+100,rowH=D?82:96,per=Math.max(1,Math.floor((h-top+m.y-120)/rowH)),pages=Math.max(1,Math.ceil(all.length/per));
+  this.drillPage=Math.min(this.drillPage,pages-1);
+  m.root.add(txt(this,W/2,top-4,`将阶上限 ${cap}（招贤馆 Lv${hallLevel(s)}）· 军粮 ${grain} · 花费只收军粮`,12,'#b9ceb8').setOrigin(.5,0).setName('drill-head'));
+  if(!all.length)m.root.add(txt(this,W/2,top+60,'麾下无人：先去招贤馆招募',15,'#cdbf9f').setOrigin(.5).setName('drill-empty'));
+  const x=m.x+20,w=m.w-40,bw=D?150:132;
+  all.slice(this.drillPage*per,this.drillPage*per+per).forEach((r,i)=>{
+   const y=top+18+i*rowH,lord=!!r.hero&&r.hero===s.lord,q=QUALITIES[r.quality],following=s.followers.includes(r.id);
+   const g=this.add.graphics();g.fillStyle(0x2a241c,.7).fillRoundedRect(x,y,w,rowH-8,8).lineStyle(2,lord?0x5a5040:0xc9ad74,.7).strokeRoundedRect(x,y,w,rowH-8,8);m.root.add(g);
+   const lv=followerLevel(r,s),skill=r.hero?null:COMMONER_SKILLS[r.template];
+   m.root.add(txt(this,x+12,y+6,`${r.name.replace(/（.*）/,'')} ${lord?`Lv ${lv} · 主公`:`Lv ${lv} / 上限 ${lvCap}`}${following?' · 随行':''}　将阶 ${r.rank}/${cap}${skill?`　招式「${skill.active.name}」· 被动「${skill.passive.name}」`:''}`,D?15:14,q.css,HEADING_FONT).setName('drill-name-'+r.id));
+   if(lord){m.root.add(txt(this,x+12,y+(D?34:38),LORD_LEVEL_HINT+'，不能在随从操练里升级',13,'#9d927c').setName('drill-lord-'+r.id));}
+   const tight=(v:string)=>v.replace(/ \+/g,'+').replace(/ · /g,' '); // 一行放得下：「生命+4% 攻速+3% 伤害+9.2%」
+   (['weapon','passive'] as const).forEach((line,k)=>{
+    const pv=rankPreview(r,line,s),ly=y+(D?30:34)+k*(D?24:28),ok=!lord&&!pv.full&&pv.afford;
+    if(!lord)m.root.add(txt(this,x+12,ly,`${line==='weapon'?'兵器':'被动'}　${pv.full?tight(pv.before):`${tight(pv.before)} → ${tight(pv.after)}`}`,D?12:11,pv.full?'#9d927c':pv.afford?'#d9ccae':'#e59a83').setWordWrapWidth(w-bw-40,true).setName(`drill-preview-${line}-${r.id}`));
+    const label=lord?'主公':pv.full?(pv.capByHall?'招贤馆升级后':'已满'):`升·${line==='weapon'?'兵器':'被动'} ${pv.cost}粮`;
+    const btn=homeCommand(this,x+w-bw/2-10,ly+9,bw,D?24:26,label,false,ok,D?13:12);
+    if(!lord&&!pv.full&&!pv.afford)btn.caption.setColor('#c4523f'); // 买不起：花费标红
+    btn.hit.setName(`drill-${line}-${r.id}`).on('pointerdown',()=>{const res=rankUp(r.id,line);this.message=res.message;if(res.ok){uiSfx().play('uiClick');this.toast(res.message);}this.openTech();});
+    m.root.add([btn.g,btn.hit,btn.caption]);
+   });
+  });
+  if(pages>1){
+   const py=m.y+h-80;
+   const prev=homeCommand(this,W/2-120,py,90,32,'上页',false,this.drillPage>0,13);prev.hit.setName('drill-prev').on('pointerdown',()=>{this.drillPage--;this.openTech();});
+   const next=homeCommand(this,W/2+120,py,90,32,'下页',false,this.drillPage<pages-1,13);next.hit.setName('drill-next').on('pointerdown',()=>{this.drillPage++;this.openTech();});
+   m.root.add([prev.g,prev.hit,prev.caption,next.g,next.hit,next.caption,txt(this,W/2,py,`${this.drillPage+1}/${pages}`,13,'#cdbf9f').setOrigin(.5)]);
+  }
+  if(this.message)m.root.add(txt(this,W/2,m.y+h-(pages>1?104:72),this.message,13,'#e8c98a').setOrigin(.5).setName('town-tech-message'));
   this.message='';
  }
  private introSeen():boolean{try{return localStorage.getItem('im_town_intro3')==='1';}catch{return true;}}

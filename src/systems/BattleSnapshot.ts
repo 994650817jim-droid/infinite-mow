@@ -22,10 +22,13 @@ export function beginBattle(label: string): void {
 export function commitBattle(): void { try { localStorage.removeItem(BATTLE_SNAPSHOT_KEY); } catch { /* ignore */ } }
 export function battleInProgress(): string | null { return read()?.label ?? null; }
 /** 中途退出：把存档换回进关时的样子并丢掉快照；返回是否真的回滚了（调用方随后应重载，丢掉各存档模块的内存缓存）。 */
+/** 中途撤退回滚后要重载页面：撤退前写入 sessionStorage，启动（BootScene）读到后直接进这个场景（一次性）。 */
+export const BOOT_TO_KEY = 'im_boot_to';
 export function rollbackBattle(): boolean {
   const s = read(); if (!s) return false;
   try {
-    if (s.slot === activeSlot()) for (const k of PROGRESS_KEYS) { const v = s.keys[k]; if (v === null || v === undefined) localStorage.removeItem(k); else localStorage.setItem(k, v); }
+    // 剧情「已看过」不回滚（关前军情重打不再播）；剧情旗标 im_story_v1 照常回滚
+    if (s.slot === activeSlot()) for (const k of PROGRESS_KEYS) { if (k === 'im_story_seen_v1') continue; const v = s.keys[k]; if (v === null || v === undefined) localStorage.removeItem(k); else localStorage.setItem(k, v); }
     localStorage.removeItem(BATTLE_SNAPSHOT_KEY);
   } catch { return false; }
   return s.slot === activeSlot();

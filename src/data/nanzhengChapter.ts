@@ -28,7 +28,7 @@ const OWN: Record<string, { key: string; sheet: string }> = {
 };
 const FALLBACK: Record<string, string> = { nz_mangyachang: 'guandu_chunyuqiong', nz_wutugu: 'guandu_yanliang', nz_menghuo: 'guandu_wenchou' };
 /** 已到的第十一章图（只载这些；缺的用过渡图，避免 404）。只有 v2 版。 */
-export const NZ_ART_READY: ReadonlySet<string> = new Set<string>(['nz_menghuo', 'nz_tengjia_walk', 'nz_manbing_walk', 'nz_elephant_walk']); // 2026-11-17 Gemini 3.1 Pro 出图；忙牙长 / 兀突骨 待补
+export const NZ_ART_READY: ReadonlySet<string> = new Set<string>(['nz_menghuo', 'nz_mangyachang', 'nz_wutugu', 'nz_tengjia_walk', 'nz_manbing_walk', 'nz_elephant_walk']); // 2026-11-17 Gemini 3.1 Pro 出图；忙牙长 / 兀突骨 ChatGPT 出图（21:53 / 21:59）
 export const nzArt = (key: string): boolean => NZ_ART_READY.has(key) && artStyle() === 'v2';
 export function nzBossTexture(id: string): string { const o = OWN[id]; return nzArt(o.key) ? o.key : FALLBACK[o.key]; }
 export function nzBossSheet(id: string): string { const k = nzBossTexture(id); return k === OWN[id].key ? OWN[id].sheet : GUANDU_ATLAS_FILES[k]; }

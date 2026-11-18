@@ -62,7 +62,7 @@ ck('城头箭雨：落点预警结束后命中，站在圈里的主将受伤', h
 const weak = await p.evaluate(() => { const s = window.__S, m = s.siegeMid; const t = m.towers[0]; s.hitEnemy(t.e, 1e7, s.combatNow, 'melee', false, false); window.__step(2); m.zones.length = 0; const n0 = m.stats.zones; m.volleyAt = s.combatNow; window.__step(2); return { alive: m.towersAlive, zones: m.stats.zones - n0, next: Math.round(m.volleyAt - s.combatNow) }; });
 ck('打掉一座箭楼：箭雨减弱（每轮 2 处、间隔 4.4 秒）', weak.alive === 1 && weak.zones === 2 && weak.next > 4000, weak);
 // 冲车被毁 → 回营地再领
-const wreck = await p.evaluate(() => { const s = window.__S, m = s.siegeMid; m.damageRam(1e6); window.__step(2); return { state: m.ramInfo.state, lost: m.stats.ramsLost }; });
+const wreck = await p.evaluate(() => { const s = window.__S, m = s.siegeMid; m.ram.guardUntil = 0; m.damageRam(1e6); /* 冲车受击后有 0.5 秒免伤（11-17 蒙皮顶棚），测试先清掉 */ window.__step(2); return { state: m.ramInfo.state, lost: m.stats.ramsLost }; });
 ck('冲车被打毁（变残骸、提示回营地）', wreck.state === 'wreck' && wreck.lost === 1, wreck);
 const re = await p.evaluate(() => { const s = window.__S, m = s.siegeMid, c = { x: 0, y: 250 }; s.player.sprite.setPosition(c.x, c.y); window.__step(200); const early = { state: m.ramInfo.state, readyIn: m.ramInfo.readyIn }; window.__step(360); return { early, state: m.ramInfo.state, taken: m.stats.ramsTaken, level: m.ramInfo.level }; });
 ck('回营地重领：有冷却（8 秒内领不到，冷却后领到新冲车）；攻城器械默认 0 级', re.early.state === 'wreck' && re.early.readyIn > 0 && re.state === 'move' && re.taken === 2 && re.level === 0, re);

@@ -101,7 +101,7 @@ export function zhenbeiBehavior(host: WeaponHost, weapon: WeaponState, dt: numbe
   const damage = ZHENBEI_DEF.damage(level, pl.stats) * growth.damageMultiplier(time) * gujun * (heavy ? [1.5, 1.7, 1.9][kaishan - 1] : 1);
   const ux = Math.cos(best), uy = Math.sin(best);
   pl.faceDirection(Math.abs(ux) > Math.abs(uy) ? (ux < 0 ? 'left' : 'right') : (uy < 0 ? 'up' : 'down'), 160);
-  host.sfx.play('allySlash');
+  host.sfx.play(cast.whoDares ? 'atk_zhenbei_cry' : 'atk_zhenbei');
   if (cast.whoDares) {
     // 谁敢杀我：怒吼，6 向裂波各 80%，并 3 秒受伤 -30%
     pl.playAction('skill', ux < 0 ? 'left' : 'right');
@@ -111,8 +111,7 @@ export function zhenbeiBehavior(host: WeaponHost, weapon: WeaponState, dt: numbe
     host.heroFx?.('whoDares', pl.x, pl.y - 4, len * 1.1);
     if (!hasFxSheet(host, 'c')) { const ring = host.add.circle(pl.x, pl.y - 6, 30, 0xff5a3c, 0).setStrokeStyle(6, 0xff6a4a, .9).setDepth(41);
       ring.scene.tweens.add({ targets: ring, radius: len, alpha: 0, duration: 460, onComplete: () => ring.destroy() }); }
-    const shout = host.add.text(pl.x, pl.y - 70, '谁敢杀我！', { fontFamily: 'serif', fontSize: '26px', color: '#ffe0b0', stroke: '#7a1a10', strokeThickness: 6 }).setOrigin(.5).setDepth(60).setName('weiyan-whodares');
-    shout.scene.tweens.add({ targets: shout, y: pl.y - 104, alpha: 0, delay: 500, duration: 600, onComplete: () => shout.destroy() });
+    // 「谁敢杀我！」大字改由武将台词（ui/HeroBark → warCryText，与马超 / 孙尚香战吼同一套表现）每次触发都喊
     host.cameras.main.shake(120, .003);
   } else {
     pl.playAction(heavy ? 'skill' : 'attack', ux < 0 ? 'left' : 'right');
@@ -274,7 +273,7 @@ function explode(host: WeaponHost, s: MineState, m: Mine, damage: number, radius
   m.body.destroy();
   if (s.lastTrail === m) s.lastTrail = null;
   if (host.over) return;
-  host.spawnFlameFx(m.x, m.y, radius); host.sfx.play('flameBoom');
+  host.spawnFlameFx(m.x, m.y, radius); host.sfx.play('atk_mine');
   const dmg = damage * (chained && host.player.growth.masteries.lianying >= 3 ? 1.2 : 1);
   for (const e of host.grid.query(m.x, m.y, radius + 30)) if (e.active && Math.hypot(e.x - m.x, e.y - m.y) <= radius + e.radius) host.hitEnemy(e, dmg, now, 'fire'); // 爆炸也炸道具
   if (!chain) return;
@@ -401,7 +400,7 @@ export function lianhuanBehavior(host: WeaponHost, weapon: WeaponState, dt: numb
     // 火烧连环：身边一圈 6 枚火雷，以锁链连成环
     pl.faceDirection(foes[0].x < pl.x ? 'left' : 'right', 200);
     host.spawnFlagSwingFx(Math.sign(foes[0].x - pl.x) || 1, 0);
-    host.sfx.play('flameSwing');
+    host.sfx.play('atk_chain');
     pl.playAction('skill', foes[0].x < pl.x ? 'left' : 'right');
     const g: RingGroup = { x: pl.x, y: pl.y, fuseAt: time + R.ringFuseMs, mines: [], links: host.add.container(0, 0).setDepth(19.5).setName('pangtong-ring'), fired: false };
     for (let k = 0; k < R.ringMines; k++) { const a = k * Math.PI * 2 / R.ringMines; g.mines.push(placeMine(host, s, pl.x + Math.cos(a) * R.ringRadius, pl.y + Math.sin(a) * R.ringRadius, time, R.ringFuseMs + R.loopMs + 1000, 'ring', g)); }
@@ -423,7 +422,7 @@ export function lianhuanBehavior(host: WeaponHost, weapon: WeaponState, dt: numb
         .sort((a, b) => Math.hypot(a.x - m.x, a.y - m.y) - Math.hypot(b.x - m.x, b.y - m.y))[0];
       if (back) {
         const ring = s.mines.filter(o => o.kind === 'trail' && !o.lit && !o.loop && o.seq >= back.seq && o.seq <= m.seq).sort((a, b) => a.seq - b.seq);
-        if (ring.length >= 3 && polyArea(ring) >= R.loopMinArea) { tie(host, s, back, m); startLoop(host, s, ring, time); host.sfx.play('flameSwing'); }
+        if (ring.length >= 3 && polyArea(ring) >= R.loopMinArea) { tie(host, s, back, m); startLoop(host, s, ring, time); host.sfx.play('atk_chain'); }
       }
     }
     s.lastTrail = m;
@@ -591,7 +590,7 @@ export function sunKnivesBehavior(host: WeaponHost, weapon: WeaponState, dt: num
       vx: ax / d * R.knifeSpeed, vy: ay / d * R.knifeSpeed, left: (R.knifeRange * host.player.passive.rangeMultiplier('sun_knives')) + 40,
       pierce, hit: new Set(), damage: base * (k === 0 ? 1 : R.knifeExtraMul) });
   }
-  host.sfx.play('allySpear');
+  host.sfx.play('atk_knife');
   weapon.cooldownLeft = Math.max(.2, SUN_KNIVES_DEF.cooldown(level, pl.stats) * (moving ? R.knifeMovingCdMul : 1) / growth.attackSpeedMultiplier(time));
 }
 /** 测试用：环绕刀 / 在飞的刀 / 侍婢数量。 */
@@ -710,6 +709,7 @@ export function diaochanFansBehavior(host: WeaponHost, weapon: WeaponState, dt: 
   const cast = pl.passive.beginCast('diaochan_fans');
   pl.faceDirection(target.x < pl.x ? 'left' : 'right', 200);
   if (cast.moonDance) {
+    host.sfx.play('atk_moon');
     pl.playAction('skill', target.x < pl.x ? 'left' : 'right');
     s.danceUntil = time + R.moonMs; s.nextTick = time;
     s.ribbon = host.add.graphics().setDepth(41).setName('diaochan-moon');
@@ -724,7 +724,7 @@ export function diaochanFansBehavior(host: WeaponHost, weapon: WeaponState, dt: 
     const a = a0 + (k - (n - 1) / 2) * spread, ox = pl.x, oy = pl.y - 8;
     s.fans.push({ img: host.add.image(ox, oy, tex).setDisplaySize(30, 30).setDepth(41).setName('diaochan-fan'), ox, oy, ex: ox + Math.cos(a) * range, ey: oy + Math.sin(a) * range, back: false, t: 0, outHit: new Set(), backHit: new Set(), damage });
   }
-  host.sfx.play('allySlash');
+  host.sfx.play('atk_fan');
   weapon.cooldownLeft = Math.max(.25, DIAOCHAN_FANS_DEF.cooldown(level, pl.stats) / growth.attackSpeedMultiplier(time));
 }
 /** 测试用：清掉庞统场上所有火雷、铁索、连舟地火与火烧连环（不引爆）。 */

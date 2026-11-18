@@ -18,14 +18,21 @@ for (const [save, label] of [[null, 'fresh'], [MID, 'mid']]) for (const vp of [{
   await p.screenshot({ path: `${out}/${tag}-home-${label}-${vp.width}x${vp.height}.png` });
   // 点「匡扶汉室」
   await p.evaluate(() => window.__game.scene.getScene('MenuScene').startButton.emit('pointerdown')); await p.waitForTimeout(1200);
-  const sel = await p.evaluate(() => { const m = window.__game.scene.getScene('MenuScene'), r = m?.children.getByName('chapter-select'); if (!r) return { open: false, scene: window.__game.scene.getScenes(true).map(s => s.scene.key) };
-    const cards = []; const walk = l => { for (const o of l) { if (/^chapter-card-/.test(o.name ?? '')) cards.push({ n: o.name, locked: !!o.getData('locked'), on: !!o.input?.enabled }); if (o.list) walk(o.list); } }; walk(r.list); return { open: true, cards }; });
+  // 2026-11-17 用户「点匡扶汉室是进入大地图，然后玩家自行选择」：天下已开 → 天下地图（在地图上选章，未到的章节锁住）；新档 → 直接出征 1-1
+  if (label === 'mid') await p.waitForFunction(() => window.__game.scene.getScene('WorldMapScene')?.sys.isActive() && window.__game.scene.getScene('WorldMapScene').chips?.length, null, { timeout: 30000 }).catch(() => {});
+  else await p.waitForFunction(() => window.__game.scene.isActive('GameScene'), null, { timeout: 30000 }).catch(() => {});
+  await p.waitForTimeout(800);
+  const sel = await p.evaluate(() => { const scenes = window.__game.scene.getScenes(true).map(s => s.scene.key), w = window.__game.scene.getScene('WorldMapScene');
+    const chips = w?.sys.isActive() ? w.chips.map(c => ({ id: c.id, state: c.state })) : []; return { scenes, chips }; });
   if (tag !== 'before') {
-    ck(`${label} ${vp.width}×${vp.height}：点「匡扶汉室」打开章节选择，12 章`, sel.open && sel.cards?.length === 12, sel);
-    const open = (sel.cards ?? []).filter(c => !c.locked).length;
-    ck(`${label} ${vp.width}×${vp.height}：已打到的章节可点，未打到的锁住`, label === 'fresh' ? open === 1 : open === 5, sel.cards?.map(c => c.n + (c.locked ? '🔒' : '')));
+    if (label === 'fresh') ck(`fresh ${vp.width}×${vp.height}：新档点「匡扶汉室」直接出征 1-1`, sel.scenes.includes('GameScene') && !sel.scenes.includes('WorldMapScene'), sel.scenes);
+    else {
+      ck(`mid ${vp.width}×${vp.height}：点「匡扶汉室」进入天下地图（不再打开择章页），12 章在时间线上`, sel.scenes.includes('WorldMapScene') && sel.chips.length === 12, sel.scenes);
+      const open = sel.chips.filter(c => c.state !== 'locked').length;
+      ck(`mid ${vp.width}×${vp.height}：地图上已到的章节可点，未到的锁住`, open === 5, sel.chips.map(c => c.id + ':' + c.state));
+    }
   }
-  await p.screenshot({ path: `${out}/${tag}-select-${label}-${vp.width}x${vp.height}.png` });
+  await p.screenshot({ path: `${out}/${tag}-after-start-${label}-${vp.width}x${vp.height}.png` });
   await ctx.close();
 }
 await b.close();

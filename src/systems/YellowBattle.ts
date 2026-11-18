@@ -1,3 +1,4 @@
+import { meleeReach } from '../data/bossReach';
 import Phaser from 'phaser';
 const DEPTH_WALL_WARN=12;
 import type { Enemy } from '../entities/Enemy';
@@ -75,7 +76,7 @@ export class YellowBattle {
   if(this.bossCd<=0&&!this.dash){this.bossCd=enraged?2200:3300;const n=this.cycle++%3;
    if(this.stage===1){
     if(n===1){const length=Math.min(d+80,320),delay=850;this.warn(boss,boss.x,boss.y,length,delay,0,'charge',angle,.22);this.dash={owner:boss,life:boss.spawnId,x:boss.x,y:boss.y,vx:Math.cos(angle)*570,vy:Math.sin(angle)*570,start:now+delay,end:now+delay+length/570*1000,hit:false};}
-    else{const delay=enraged?550:750;this.warn(boss,boss.x,boss.y,145,delay,16,'sweep',angle,Math.PI*.8);
+    else{const delay=enraged?550:750;this.warn(boss,boss.x,boss.y,meleeReach(145),delay,16,'sweep',angle,Math.PI*.8);
      // 张梁砍击（特效型警示，默认）：站定抬刀蓄力，刀落下后再走（原来蓄力时还在往前走，看不出要砍）
      if(!TELEGRAPH_CLASSIC&&HINT_MOCK==='c'&&WARN_FX_ON){const dir=Math.abs(Math.cos(angle))>Math.abs(Math.sin(angle))?(Math.cos(angle)<0?'left':'right'):(Math.sin(angle)<0?'up':'down');boss.startAttack(now,dir);boss.attackUntil=now+delay+220;boss.windupCol=1;}}
    }else if(n===0){for(let i=-1;i<=1;i++)this.warn(boss,p.x+i*78,p.y,55,1000,17,'rift');}

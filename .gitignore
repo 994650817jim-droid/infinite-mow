@@ -202,3 +202,4 @@ assets/raw/*
 !/tools/test-chronicle.mjs
 !/tools/test-pad-targets.mjs
 !/tools/test-sishui-pass.mjs
+!/tools/test-recall-speed.mjs

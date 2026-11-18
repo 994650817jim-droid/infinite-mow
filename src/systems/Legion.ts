@@ -110,7 +110,8 @@ export class Legion {
     for (const u of this.units) if (u.active && u.kind === kind) u.train(this.levels[kind]);
     return true;
   }
-  cycleOrder(): void { this.order = this.order === 'guard' ? 'sortie' : 'guard'; for (const u of this.units) u.ai.nextThink = 0; }
+  /** 护阵 / 出击。切回护阵：士兵进入收回状态（RECALL，按行走速度 ×1.2 跑回阵位，正在出手的打完再走）。 */
+  cycleOrder(): void { this.order = this.order === 'guard' ? 'sortie' : 'guard'; const back = this.order === 'guard'; for (const u of this.units) { u.ai.nextThink = 0; u.ai.recall = back; u.ai.recallAt = 0; } }
   private regroup(): void {
     this.squads.clear();
     for (const k of TROOP_KINDS) {
@@ -215,7 +216,7 @@ export class Legion {
     if (this.combatClock >= LEGION.nearStep) {
       this.combatClock = 0;
       for (const u of this.units) {
-        if (!u.active || u.cooldown > 0 || u.kind === 'rider' && u.ai.mode === 'return' || this.arriving.has(u)) continue;
+        if (!u.active || u.cooldown > 0 || u.kind === 'rider' && u.ai.mode === 'return' || u.ai.recall || this.arriving.has(u)) continue;
         const range = u.def.range * (u.def.ranged ? stats.range : u.kind === 'halberdier' && u.level === 3 ? 1.25 : 1);
         if (u.kind === 'medic') {
           const wounded = this.grid.query(u.x, u.y, range, this.friends).filter(a => a.active && a.hp < a.maxHp && Math.hypot(a.x - u.x, a.y - u.y) <= range).sort((a, b) => a.hp / a.maxHp - b.hp / b.maxHp);

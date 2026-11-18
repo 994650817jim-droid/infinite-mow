@@ -1,10 +1,10 @@
 import Phaser from 'phaser';
 import { heroAttrs, heroLevel, type HeroKey } from './HeroProgress';
-import { DEPTH, FONT } from '../config';
+import { BALANCE, DEPTH, FONT } from '../config';
 import { getCharacter } from '../data/characters';
 import { QUALITIES, type ItemQuality } from '../data/items';
 import { FOLLOW, TEMPLATES, type FollowerTemplate } from '../data/recruits';
-import { BOSS_VS_ALLY } from '../data/legion';
+import { BOSS_VS_ALLY, RECALL } from '../data/legion';
 import type { Enemy } from '../entities/Enemy';
 import type { Player } from '../entities/Player';
 import { visualTextureKey } from './ReadableTextures';
@@ -60,6 +60,8 @@ export class Follower {
   hp = 1; maxHp = 1; cooldown = 0; target: Enemy | null = null; nextQuery = 0; nextContact = 0;
   /** 出击时追的目标与重选时间。 */
   sortieTarget: Enemy | null = null; sortieUntil = 0;
+  /** 上一帧是否在追击；护阵收回（RECALL）状态、开始时间、最近距离与最近一次靠近的时间。 */
+  chasing = false; recalling = false; recallAt = 0; recallBest = 0; recallBestAt = 0;
   /** 倒地（等主将来救）与救援进度（秒）；救起次数。 */
   downed = false; reviveProgress = 0; revives = 0; bossImmuneUntil = 0;
   /** 正在播的动作（攻击 / 受伤 / 倒地），播完回到行走帧；倒地动作定格在最后一帧。 */
@@ -108,6 +110,8 @@ export class Follower {
     this.lastX = x; this.lastY = y;
   }
   get x() { return this.sprite.x; } get y() { return this.sprite.y; }
+  /** 平常的行走速度（像素 / 秒）：主将基础移速 × 自己的移速倍率。收回时 × RECALL.speedMul。 */
+  get walkSpeed(): number { return BALANCE.player.speed * this.speedMul; }
   /** 倒地期间不行动（本命武器执行器也按这个判断）。 */
   get resting() { return this.downed; }
   setVisible(on: boolean) { this.sprite.setVisible(on); this.shadow.setVisible(on); this.label.setVisible(on); this.bar.setVisible(on); }
@@ -163,7 +167,7 @@ export class FollowerSquad {
   private readonly gfx: Phaser.GameObjects.Graphics;
   private readonly buf: Enemy[] = [];
   /** 统计（测试 / 平衡用）。 */
-  readonly stats = { damage: 0, hits: 0, teleports: 0, downs: 0, revives: 0, maxDist: 0 };
+  readonly stats = { damage: 0, hits: 0, teleports: 0, downs: 0, revives: 0, maxDist: 0, recalls: 0, recallTeleports: 0 };
   /** 救援界面：主将头顶环形读条与「救援」字样、屏幕外方向箭头（都在世界坐标里画，箭头贴可见范围边缘）。 */
   private readonly rescueGfx: Phaser.GameObjects.Graphics; private readonly rescueText: Phaser.GameObjects.Text; private readonly hud: Phaser.GameObjects.Graphics;
   /** 当前吃主将全局伤害加成的倍率（本命武器结算时用）。 */
@@ -209,11 +213,17 @@ export class FollowerSquad {
       const decay = Math.exp(-8 * dt); f.lx *= decay; f.ly *= decay;
       const sortieTarget = sortie ? this.sortieTarget(f, now) : null;
       if (f.passive) f.passive.areaMul = sortie ? FOLLOW.sortieRangeMul : 1; // 出击：名将武器范围放大
-      if (sortieTarget) this.chase(f, sortieTarget, dt, now);
+      if (sortieTarget) { this.chase(f, sortieTarget, dt, now); f.chasing = true; f.recalling = false; }
       else {
-      const s = this.slotPos(f.slot, n), lead = 1 / FOLLOW.followK, gx = s.x + f.lx + this.vx * lead, gy = s.y + f.ly + this.vy * lead;
-      if (Math.hypot(gx - f.x, gy - f.y) > FOLLOW.snap) { f.place(gx, gy); f.target = null; this.stats.teleports++; f.sprite.setAlpha(.3); this.scene.tweens.add({ targets: f.sprite, alpha: 1, duration: 220 }); }
+      const s = this.slotPos(f.slot, n), lead = 1 / FOLLOW.followK, gx = s.x + f.lx + this.vx * lead, gy = s.y + f.ly + this.vy * lead, d = Math.hypot(gx - f.x, gy - f.y);
+      // 刚停止追击（切回护阵 / 附近没敌人了）且离阵位较远：进入收回状态，按行走速度跑回去（不再一下子被拉回来）
+      if (f.chasing && d > RECALL.enterDist && !f.recalling) { f.recalling = true; f.recallAt = now; f.recallBest = d; f.recallBestAt = now; this.stats.recalls++; }
+      f.chasing = false;
+      if (f.recalling) this.recall(f, gx, gy, d, dt, now);
+      else {
+      if (d > FOLLOW.snap) this.teleport(f, gx, gy);
       this.move(f, gx, gy, dt, now);
+      }
       }
       // 可玩名将：本命武器自己找目标、出手（以随行为发射源）
       if (f.weaponRun) { f.weaponRun(dt, now); }
@@ -331,6 +341,21 @@ export class FollowerSquad {
       f.sprite.setPosition(f.x + dx / dist * step, f.y + dy / dist * step); f.walk += step; f.passive?.onMove(now);
       if (now >= f.faceUntil) f.dir = Math.abs(dx) > Math.abs(dy) ? dx < 0 ? 'left' : 'right' : dy < 0 ? 'up' : 'down';
     } else f.walk = 0;
+    f.lastX = f.x; f.lastY = f.y;
+  }
+  private teleport(f: Follower, x: number, y: number): void { f.place(x, y); f.target = null; this.stats.teleports++; f.sprite.setAlpha(.3); this.scene.tweens.add({ targets: f.sprite, alpha: 1, duration: 220 }); }
+  /**
+   * 护阵收回（RECALL）：正在播的出手 / 受伤动作先播完；之后转身朝阵位、播行走帧、以 行走速度 × RECALL.speedMul 跑回去。
+   * 回到 doneDist 以内恢复紧贴跟随。兜底：收回超过 fallbackMs 仍离阵位超过 farPx（约 1.5 屏）或 stuckMs 内没再靠近，直接归位。
+   */
+  private recall(f: Follower, gx: number, gy: number, d: number, dt: number, now: number): void {
+    if (d < f.recallBest - RECALL.progressPx) { f.recallBest = d; f.recallBestAt = now; }
+    if (now - f.recallAt > RECALL.fallbackMs && (d > RECALL.farPx || now - f.recallBestAt > RECALL.stuckMs)) { this.teleport(f, gx, gy); f.recalling = false; this.stats.recallTeleports++; return; }
+    if (d <= RECALL.doneDist) { f.recalling = false; this.move(f, gx, gy, dt, now); return; }
+    if (f.act && !f.act.hold && now < f.act.until) { f.walk = 0; f.lastX = f.x; f.lastY = f.y; return; } // 先把这一下打完
+    const dx = gx - f.x, dy = gy - f.y, step = Math.min(d, f.walkSpeed * RECALL.speedMul * dt);
+    f.sprite.setPosition(f.x + dx / d * step, f.y + dy / d * step); f.walk += step; f.passive?.onMove(now);
+    f.faceUntil = 0; f.dir = Math.abs(dx) > Math.abs(dy) ? dx < 0 ? 'left' : 'right' : dy < 0 ? 'up' : 'down'; // 面朝阵位跑
     f.lastX = f.x; f.lastY = f.y;
   }
   /** 指数平滑追阵位（与帧率无关），走路距离推动行走帧，朝向跟随移动方向（出手后短时间朝向目标）。 */

@@ -77,6 +77,9 @@ export class ItemDrops {
     return rollItem(QUALITY_ORDER.indexOf(q) < QUALITY_ORDER.indexOf('purple') ? 'purple' : q, this.rng);
   }
 
+  /** 双将宝箱的额外一次兵装（品质按本关首领掉落规则）。 */
+  rollBossItem(): ItemInstance { return rollItem(rollDropQuality('boss', this.tier, this.pity, this.rng), this.rng); }
+
   /** 在地上放一件道具（品质光柱 + 图标，轻微浮动）。 */
   drop(item: ItemInstance, x: number, y: number): GroundItem {
     const q = QUALITIES[item.quality], s = this.scene;

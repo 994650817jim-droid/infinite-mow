@@ -27,6 +27,8 @@ export interface StoryNode {
   external?: boolean;
   /** 'choice' 节点的选项（两个） */
   choices?: readonly StoryChoice[];
+  /** 双首领关：bossPhase 节点只对这位首领（boss-phase 事件的 bossId）。 */
+  boss?: string;
   /** 过场动画 id（过场系统做好之前，这段按字幕当卷轴播；做好后由过场系统接管同一 id） */
   cutscene?: string;
   /** 首领倒下时的横幅 + 旗标（第四章「斩颜良」「诛文丑」，复用温酒斩华雄的横幅样式）：ifFollower 在队才触发；旗标不受剧情设置影响 */
@@ -35,7 +37,7 @@ export interface StoryNode {
 /** 羁绊：带着 members 全员（主公 + 随行）进关时，关前追加 lines（每存档一次）并给这些人加成（每关都给）：damageMul 伤害、speedMul 移速（主将）。 */
 export interface StoryBond { id: string; name: string; members: readonly CharacterId[]; lines: readonly StoryLine[]; damageMul?: number; speedMul?: number; /** 暴击率加成（主将），如 .05 */ critBonus?: number }
 /** 某一关的剧情：before 开打前（过场 / 幕间，按顺序，在军情之前）、brief 军情、首领三句、after 首次通关后（战报前）、choice 宝箱捡完后的抉择。 */
-export interface StoryStage { before?: readonly StoryNode[]; brief?: StoryNode; bossIntro?: StoryNode; bossPhase?: StoryNode; bossFall?: StoryNode; after?: readonly StoryNode[]; choice?: StoryNode }
+export interface StoryStage { before?: readonly StoryNode[]; brief?: StoryNode; bossIntro?: StoryNode; bossPhase?: StoryNode; bossFall?: StoryNode; /** 双首领关：按首领 id 的倒下台词 + 横幅（只在斩杀时播）。 */ bossFalls?: Readonly<Record<string, StoryNode>>; after?: readonly StoryNode[]; choice?: StoryNode }
 export interface StoryChapter {
   /** 章 id：与 ChapterDef.id 一致（huangjin / hulao …） */
   chapter: string;

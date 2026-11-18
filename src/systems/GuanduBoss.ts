@@ -48,15 +48,19 @@ export class GuanduBoss {
   private at = 0; private until = 0; private attackLen = TIMING.attackMs; private next = 0; private index = 0; private skill = 0; private angle = 0;
   private zones: Zone[] = []; private seen = new Set<string>(); private travelled = 0; private hitAt = 0; private dashEnd = 0;
   private lootId = -1; private lootDone = false; private shakenUntil = 0;
+  /** 双首领关（DualBoss）：伤害 / 招式间隔 / 召兵数量倍数；配合技的预警倍数与强制参数。 */
+  dmgMul = 1; gapMul = 1; summonMul = 1; readonly defDamage = false;
+  private warnLen = TIMING.warnMs; private comboOpt: {single?: boolean; lanes?: number; dmgMul?: number} | null = null;
   private gfx: Phaser.GameObjects.Graphics; private corpse?: Phaser.GameObjects.Image; private deathMs = 0;
   readonly metrics = {dash: 0, cleave: 0, spin: 0, siege: 0, feint: 0, volley: 0, loot: 0, looted: 0, healed: 0, guard: 0, arrows: 0, catapult: 0, shaken: 0, rage: 0, damage: 0};
 
   /** opts：攻城战大将借用技能时覆盖图集与名字。 */
-  constructor(private h: Host, readonly stage: GuanduStage, now: number, private opts: {atlas?: string; name?: string} = {}) {
+  constructor(private h: Host, readonly stage: GuanduStage, now: number, private opts: {atlas?: string; name?: string; kit?: 'yanliang' | 'wenchou' | 'chunyuqiong'} = {}) {
     this.gfx = h.scene.add.graphics().setDepth(39); this.next = now + 800; h.boss.controlImmune = true;
   }
   private get info() { const d = GUANDU_STAGES[this.stage - 1]; return {...d, atlas: this.opts.atlas ?? d.atlas, boss: this.opts.name ?? d.boss}; }
-  private get kit(): 'yanliang' | 'wenchou' | 'chunyuqiong' { return this.stage === 2 ? 'wenchou' : this.stage === 3 ? 'chunyuqiong' : 'yanliang'; }
+  /** 招式组：默认按关号（4-2 文丑）；双将关同一关建两个不同招式的实例（opts.kit）。 */
+  get kit(): 'yanliang' | 'wenchou' | 'chunyuqiong' { return this.opts.kit ?? (this.stage === 2 ? 'wenchou' : this.stage === 3 ? 'chunyuqiong' : 'yanliang'); }
   get name() { return this.info.boss; }
   forceSkill(now: number) { this.state = 'approach'; this.next = now; this.update(0, now); }
   get label() {
@@ -86,8 +90,8 @@ export class GuanduBoss {
 
   private begin(now: number) {
     const b = this.h.boss, p = this.h.player;
-    this.skill = this.index++ % 3; this.angle = Math.atan2(p.y - b.y, p.x - b.x);
-    this.zones = []; this.seen.clear(); this.travelled = 0; this.state = 'warn'; this.at = now; this.until = now + TIMING.warnMs; this.attackLen = TIMING.attackMs;
+    this.skill = this.index++ % 3; this.angle = Math.atan2(p.y - b.y, p.x - b.x); this.comboOpt = null;
+    this.zones = []; this.seen.clear(); this.travelled = 0; this.state = 'warn'; this.at = now; this.warnLen = TIMING.warnMs; this.until = now + this.warnLen; this.attackLen = TIMING.attackMs;
     if (this.kit === 'yanliang') this.beginYanliang(); else if (this.kit === 'wenchou') this.beginWenchou(now); else this.beginChunyu();
   }
   private beginYanliang() {
@@ -99,12 +103,12 @@ export class GuanduBoss {
       this.zone({x: ex, y: ey, radius: this.phase2 ? Y.dash.cleaveRadius2 : Y.dash.cleaveRadius});
     } else if (this.skill === 1) {
       this.metrics.spin++;
-      if (this.phase2) { this.zone({x: b.x, y: b.y, radius: Y.spin.innerRadius2}); this.zone({x: b.x, y: b.y, radius: Y.spin.outerRadius2, inner: Y.spin.innerRadius2, due: Y.spin.outerDelay2}); }
+      if (this.phase2 && !this.comboOpt?.single) { this.zone({x: b.x, y: b.y, radius: Y.spin.innerRadius2}); this.zone({x: b.x, y: b.y, radius: Y.spin.outerRadius2, inner: Y.spin.innerRadius2, due: Y.spin.outerDelay2}); }
       else this.zone({x: b.x, y: b.y, radius: Y.spin.radius});
     } else {
       this.metrics.siege++;
       // 每焚一处粮草，号令攻城少一路援军（至少一路）
-      const n = Math.max(1, (this.phase2 ? Y.siege.count2 : Y.siege.count) - (this.h.morale?.().burned ?? 0));
+      const n = Math.max(1, Math.ceil(((this.phase2 ? Y.siege.count2 : Y.siege.count) - (this.h.morale?.().burned ?? 0)) * this.summonMul));
       for (let i = 0; i < n; i++) { const a = this.angle + Math.PI + (i - (n - 1) / 2) * (Math.PI * 2 / Math.max(3, n)); this.zone({x: p.x + Math.cos(a) * Y.siege.distance, y: p.y + Math.sin(a) * Y.siege.distance, radius: Y.siege.radius}); }
     }
   }
@@ -119,7 +123,7 @@ export class GuanduBoss {
       this.attackLen = Math.max(TIMING.attackMs, W.feint.backMs + (W.feint.length + W.feint.back) / W.feint.speed * 1000 + 200);
     } else if (this.skill === 1) {
       this.metrics.volley++;
-      const n = this.phase2 ? W.volley.lanes2 : W.volley.lanes;
+      const n = this.comboOpt?.lanes ?? (this.phase2 ? W.volley.lanes2 : W.volley.lanes);
       for (let i = 0; i < n; i++) { const t = n === 1 ? 0 : i / (n - 1) - .5; this.zone({x: b.x, y: b.y, angle: this.angle + t * 2 * W.volley.spread, length: W.volley.length, width: W.volley.width, due: Math.abs(i - (n - 1) / 2) * W.volley.stagger}); }
     } else {
       this.metrics.loot++;
@@ -133,7 +137,7 @@ export class GuanduBoss {
         this.attackLen = Math.max(TIMING.attackMs, length / W.loot.speed * 1000 + 250);
       } else {
         // 辎重已尽：改为号令骑兵包抄
-        const n = this.phase2 ? W.loot.fallback2 : W.loot.fallback;
+        const n = Math.ceil((this.phase2 ? W.loot.fallback2 : W.loot.fallback) * this.summonMul);
         for (let i = 0; i < n; i++) { const a = this.angle + Math.PI + (i - (n - 1) / 2) * (Math.PI * 2 / Math.max(3, n)); this.zone({x: p.x + Math.cos(a) * W.loot.distance, y: p.y + Math.sin(a) * W.loot.distance, radius: W.loot.radius}); }
       }
     }
@@ -143,7 +147,7 @@ export class GuanduBoss {
     if (this.skill === 0) {
       // 守粮阵：首领四周召出刀盾护卫（二阶段六名并带弓手）
       this.metrics.guard++;
-      const n = this.phase2 ? C.guard.count2 : C.guard.count;
+      const n = Math.ceil((this.phase2 ? C.guard.count2 : C.guard.count) * this.summonMul);
       for (let i = 0; i < n; i++) { const a = i * Math.PI * 2 / n; this.zone({x: b.x + Math.cos(a) * C.guard.distance, y: b.y + Math.sin(a) * C.guard.distance, radius: C.guard.radius}); }
     } else if (this.skill === 1) {
       // 弓阵齐射：主将身边依次落下箭雨圈
@@ -165,7 +169,7 @@ export class GuanduBoss {
     return along >= -r && along <= z.length + r && Math.abs(-dx * s + dy * c) <= z.width / 2 + r;
   }
   private impact(z: Zone, now: number, damage: number, key: string) {
-    const p = this.h.player;
+    const p = this.h.player; damage *= this.dmgMul * (this.comboOpt?.dmgMul ?? 1);
     const hit = (id: string, x: number, y: number, r: number, fn: () => void) => { const k = key + ':' + id; if (!this.seen.has(k) && this.inside(z, x, y, r)) { this.seen.add(k); fn(); this.metrics.damage++; } };
     hit('p', p.x, p.y, p.radius, () => p.takeDamage(damage, now));
     const cx = z.radius ? z.x : z.x + Math.cos(z.angle) * z.length / 2, cy = z.radius ? z.y : z.y + Math.sin(z.angle) * z.length / 2;
@@ -176,7 +180,7 @@ export class GuanduBoss {
     if (!TELEGRAPH_CLASSIC && alpha < .3) windupFlash(this.h.boss, this.at);
     // 特效型警示用哪种：淳于琼 守粮阵 / 弓阵齐射 / 霹雳车投石 = 地动 / 箭雨 / 落火；颜良号令攻城 = 落火；其余圆形 = 地动
     // 蓄力进度：预警阶段（alpha .13）按剩余时间算，出手后等落点（.15）视为蓄满
-    const pr = alpha >= .3 ? 1 : alpha < .14 ? Math.max(0, Math.min(1, 1 - (this.until - this.at) / TIMING.warnMs)) : 1;
+    const pr = alpha >= .3 ? 1 : alpha < .14 ? Math.max(0, Math.min(1, 1 - (this.until - this.at) / this.warnLen)) : 1;
     const fx = this.kit === 'chunyuqiong' ? (['slam', 'arrows', 'fire'] as const)[this.skill] ?? 'slam' : this.kit === 'yanliang' && this.skill === 2 ? 'fire' : 'slam';
     if (z.radius) {
       if (z.inner > 0 && !TELEGRAPH_CLASSIC) groundCracks(g, z.x, z.y, z.radius, pr, 0, Math.PI * 2, z.inner, alpha >= .3, fx);
@@ -219,7 +223,7 @@ export class GuanduBoss {
       if (now >= this.until) { this.state = 'recover'; this.until = now + TIMING.recoverMs; }
     } else if (this.state === 'recover') {
       this.pose(23);
-      if (now >= this.until) { this.state = 'approach'; this.next = now + (this.phase2 ? TIMING.rest2 : TIMING.rest); }
+      if (now >= this.until) { this.state = 'approach'; this.next = now + (this.phase2 ? TIMING.rest2 : TIMING.rest) * this.gapMul; }
     }
   }
   private attackYanliang(dt: number, now: number, age: number) {
@@ -257,7 +261,7 @@ export class GuanduBoss {
         if (this.h.depots?.loot(this.lootId, now)) {
           this.metrics.looted++; const heal = b.maxHp * (this.phase2 ? GRAIN.lootHeal2 : GRAIN.lootHeal);
           b.hp = Math.min(b.maxHp, b.hp + heal); this.metrics.healed += heal;
-          for (let i = 0; i < W.loot.cavalry; i++) this.h.spawn('cavalry', b.x + (i ? 30 : -30), b.y + 24);
+          for (let i = 0; i < Math.ceil(W.loot.cavalry * this.summonMul); i++) this.h.spawn('cavalry', b.x + (i ? 30 : -30), b.y + 24);
         }
       }
     } else {
@@ -276,6 +280,22 @@ export class GuanduBoss {
   private burst(z: Zone) {
     this.draw(z, .4);
     if (TELEGRAPH_CLASSIC) for (let n = 0; n < 6; n++) { const a = n * Math.PI / 3, r0 = Math.max(10, z.inner); this.gfx.lineStyle(2, 0xffdb99, .6).lineBetween(z.x + Math.cos(a) * r0, z.y + Math.sin(a) * r0, z.x + Math.cos(a) * z.radius, z.y + Math.sin(a) * z.radius); }
+  }
+  // ———— 双首领关（DualBoss）接口 ————
+  busy() { return this.state === 'warn' || this.state === 'attack'; }
+  holdUntil(at: number) { if (this.state === 'approach') this.next = Math.max(this.next, at); }
+  forceRecover(now: number, ms: number) { if (this.state === 'dead' || this.busy()) return; this.zones = []; this.gfx.clear(); this.state = 'recover'; this.until = Math.max(this.until, now + ms); }
+  forcePhase2(now: number) { if (this.phase2) return; this.phase2 = true; this.metrics.rage++; this.state = 'rage'; this.until = now + 650; }
+  /** 狂怒转场：定住 ms（站姿 25 帧、受伤 ×0.25）；转场演出由 DualBoss 用 BossKit 补。 */
+  enrage(now: number, ms: number) { this.zones = []; this.gfx.clear(); this.state = 'rage'; this.until = now + ms; return false; }
+  /** 悲愤招：颜良斩将突进 / 文丑回马枪 / 淳于琼守粮阵，伤害 ×mul。 */
+  signature(now: number, mul: number) { this.combo(0, now, {dmgMul: mul}); }
+  /** 配合技：按指定招式起手（angle 朝向、warnMul 预警倍数、single 回旋只转一圈、lanes 骑射道数）；不推进普通出招轮换。 */
+  combo(skill: number, now: number, o: {angle?: number; warnMul?: number; single?: boolean; lanes?: number; dmgMul?: number} = {}) {
+    const b = this.h.boss, p = this.h.player;
+    this.comboOpt = o; this.skill = skill; this.angle = o.angle ?? Math.atan2(p.y - b.y, p.x - b.x);
+    this.zones = []; this.seen.clear(); this.travelled = 0; this.state = 'warn'; this.at = now; this.warnLen = TIMING.warnMs * (o.warnMul ?? 1); this.until = now + this.warnLen; this.attackLen = TIMING.attackMs;
+    if (this.kit === 'yanliang') this.beginYanliang(); else if (this.kit === 'wenchou') this.beginWenchou(now); else this.beginChunyu();
   }
   defeat() { this.state = 'dead'; this.gfx.clear(); const b = this.h.boss; this.corpse = this.h.scene.add.image(b.x, b.y, this.info.atlas, 28).setDisplaySize(144, 144).setOrigin(.5, 114 / 128).setDepth(28); }
   updateDeath(delta: number) { if (this.corpse) { this.deathMs += delta; this.corpse.setFrame(28 + Math.min(3, Math.floor(this.deathMs / 180))); } }

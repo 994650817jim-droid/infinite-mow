@@ -29,6 +29,8 @@ export class BossMoveset extends ArcBossV2<string> {
   private ride: { a0: number; t0: number; ms: number; dropAt: number; drops: number; cx: number; cy: number; dir: number } | null = null;
   private hideUntil = 0; private flags: { e: Enemy; img: Phaser.GameObjects.Image | null }[] = []; private flagMul = 1;
   private guards: Enemy[] = []; mount?: BossMount;
+  /** 双首领关（DualBoss）：伤害 / 招式间隔 / 召兵数量倍数。 */
+  dmgMul = 1; gapMul = 1; summonMul = 1; readonly defDamage = true;
   readonly metrics: Record<string, number> = { moves: 0, phase2: 0, dismount: 0, playerHits: 0, troopHits: 0 };
   private moveNames: string[] = [];
   readonly debug: BossDebug = {
@@ -78,7 +80,7 @@ export class BossMoveset extends ArcBossV2<string> {
     }
     if (B.phase === 'windup') { this.state = 'warn'; this.pose(this.cur?.kind === 'summon' || this.cur?.kind === 'flags' ? 24 : 17, now); this.kit.pose(this.cur?.kind === 'charge' ? 'crouch' : 'cast', B.progress(now)); if (B.done(now)) this.release(now); return; }
     if (B.phase === 'release') { this.state = 'attack'; this.pose([18, 19, 20, 22, 23][Math.min(4, Math.floor(B.age(now) / 120))], now); if (B.done(now)) this.toRecover(now, 650); return; }
-    this.pose(23, now); if (B.done(now)) { this.cur = null; this.toIdle(now, this.phaseDef.gapMs); }
+    this.pose(23, now); if (B.done(now)) { this.cur = null; this.toIdle(now, this.phaseDef.gapMs * this.gapMul); }
   }
 
   // ---------- 选招 / 起手 / 出手 ----------
@@ -87,13 +89,14 @@ export class BossMoveset extends ArcBossV2<string> {
     for (let i = 0; i < ms.length; i++) { const m = ms[(this.order + i) % ms.length]; if ((this.cds.get(m.name) ?? 0) <= now) { this.order = (this.order + i + 1) % ms.length; return m; } }
     return null;
   }
-  private start(m: MoveDef, now: number): void {
+  private start(m: MoveDef, now: number, o: { aim?: { x: number; y: number }; warnMul?: number } = {}): void {
     this.cur = m; this.cds.set(m.name, now + m.cd); this.metrics.moves++; this.metrics[m.name] = (this.metrics[m.name] ?? 0) + 1;
-    const b = this.h.boss, p = this.h.player, a = Math.atan2(p.y - b.y, p.x - b.x); this.angle = a;
+    const b = this.h.boss, p = this.h.player, t = o.aim ?? p, a = Math.atan2(t.y - b.y, t.x - b.x); this.angle = a;
+    const windup = m.windupMs * (o.warnMul ?? 1);
     this.h.banner(m.name);
     this.h.sfx(m.kind === 'summon' || m.kind === 'flags' ? 'bossSummon' : 'chargeWarn');
     if (this.mode === 'walk') b.startAttack(now, Math.abs(Math.cos(a)) > .7 ? (Math.cos(a) < 0 ? 'left' : 'right') : Math.sin(a) < 0 ? 'up' : 'down');
-    const at = now + m.windupMs;
+    const at = now + windup;
     switch (m.kind) {
       case 'charge': {
         this.add({ kind: 'lane', x: b.x, y: b.y, angle: a, len: m.len, width: m.width }, now, at, 0, true);
@@ -106,18 +109,19 @@ export class BossMoveset extends ArcBossV2<string> {
       case 'rings': m.radii.forEach((r, k) => this.add({ kind: 'circle', x: b.x, y: b.y, r, inner: Math.max(0, r - m.band), fx: 'slam' }, now, at + k * m.gapMs, m.dmg)); break;
       case 'volley': for (let k = 0; k < m.count; k++) { const ang = Math.random() * Math.PI * 2, d = k === 0 ? 0 : 40 + Math.random() * m.spread; this.add({ kind: 'circle', x: p.x + Math.cos(ang) * d, y: p.y + Math.sin(ang) * d * .7, r: m.r, fx: m.fx }, now, at + k * 90, m.dmg); } break;
       case 'thrust': this.add({ kind: 'lane', x: b.x, y: b.y, angle: a, len: m.len, width: m.width }, now, at, m.dmg); break;
-      case 'summon': { const wf = warnFx(this.h.scene), c = m.around === 'player' ? p : b; for (let k = 0; k < m.count; k += 2) { const ang = k / m.count * Math.PI * 2; wf.ambush(c.x + Math.cos(ang) * m.radius, c.y + Math.sin(ang) * m.radius * .8, 110); } break; }
+      case 'summon': { const wf = warnFx(this.h.scene), c = m.around === 'player' ? p : b; for (let k = 0; k < this.summonCount(m.count); k += 2) { const ang = k / m.count * Math.PI * 2; wf.ambush(c.x + Math.cos(ang) * m.radius, c.y + Math.sin(ang) * m.radius * .8, 110); } break; }
       default: break;
     }
-    this.beat.set(m.name, 'windup', now, m.windupMs);
+    this.beat.set(m.name, 'windup', now, windup);
   }
+  private summonCount(n: number): number { return Math.max(1, Math.ceil(n * this.summonMul)); }
   private release(now: number): void {
     const m = this.cur!, b = this.h.boss, p = this.h.player;
     switch (m.kind) {
       case 'charge': this.dash = { ax: Math.cos(this.angle), ay: Math.sin(this.angle), t0: now, ms: m.dashMs, hitPlayer: false, back: !!m.back, len: m.len, fireAt: now, hitTroops: new Set() }; return;
       case 'ride': { const a0 = Math.atan2(b.y - p.y, b.x - p.x); this.ride = { a0, t0: now, ms: m.ms, dropAt: now, drops: 0, cx: p.x, cy: p.y, dir: Math.random() < .5 ? 1 : -1 }; return; }
       case 'vanish': { this.hideUntil = now + m.hideMs; this.beat.set(m.name, 'release', now, m.hideMs); this.h.scene.time.delayedCall(m.hideMs, () => this.reappear(m)); return; }
-      case 'summon': for (let k = 0; k < m.count; k++) { const c = m.around === 'player' ? p : b, ang = k / m.count * Math.PI * 2; this.h.spawn(m.troop, c.x + Math.cos(ang) * m.radius, c.y + Math.sin(ang) * m.radius * .8); } break;
+      case 'summon': for (let k = 0, n = this.summonCount(m.count); k < n; k++) { const c = m.around === 'player' ? p : b, ang = k / n * Math.PI * 2; this.h.spawn(m.troop, c.x + Math.cos(ang) * m.radius, c.y + Math.sin(ang) * m.radius * .8); } break;
       case 'flags': this.plantFlags(m); break;
       default: break;
     }
@@ -151,7 +155,7 @@ export class BossMoveset extends ArcBossV2<string> {
     const d = this.dash!, b = this.h.boss, p = this.h.player, m = this.cur as Extract<MoveDef, { kind: 'charge' }>;
     const sp = d.len / d.ms * 1000; b.sprite.x += d.ax * sp * dt; b.sprite.y += d.ay * sp * dt;
     this.state = 'attack'; this.pose((Math.abs(d.ax) > Math.abs(d.ay) ? (d.ax < 0 ? 1 : 2) : d.ay < 0 ? 3 : 0) * 4 + Math.floor(now / 70) % 4, now);
-    if (!d.hitPlayer && p.alive && Math.hypot(p.x - b.x, p.y - b.y) < 44 + p.radius) { d.hitPlayer = true; p.takeDamage(b.def.damage * m.dmg, now); this.metrics.playerHits++; }
+    if (!d.hitPlayer && p.alive && Math.hypot(p.x - b.x, p.y - b.y) < 44 + p.radius) { d.hitPlayer = true; p.takeDamage(b.def.damage * m.dmg * this.dmgMul, now); this.metrics.playerHits++; }
     // 冲过部曲：每名士兵每次冲锋判定一次（Legion.hurtByCharge：约半管血、按当前时间结算、不吃士兵自身受击间隔；「一次冲锋最多打死 3 个」按冲锋起点算），并往冲锋道两侧推开一点
     for (const u of this.h.army.units) if (u.active && !d.hitTroops.has(u) && Math.hypot(u.x - b.x, u.y - b.y) <= 46 + u.radius) {
       d.hitTroops.add(u);
@@ -181,11 +185,11 @@ export class BossMoveset extends ArcBossV2<string> {
     // 一阶段的旗阵随换阶段撤掉（不带进二阶段减伤）；步战首领的狂暴演出里旗帜是倒下的
     if (this.def.rage && !dismount) this.rageShow(now);
     for (const f of this.flags) { f.img?.destroy(); if (f.e.active) f.e.deactivate(); } this.flags = [];
-    emitBossPhase(this.h.scene, { boss: this.h.boss, phase: 2, dismount, name: this.def.name }); // 坐骑在 BossMount 里收到事件后坠马
+    emitBossPhase(this.h.scene, { boss: this.h.boss, phase: 2, dismount, name: this.def.name, bossId: this.def.id }); // 坐骑在 BossMount 里收到事件后坠马
     this.kit.phaseShift(now, dismount ? '坠马！' + this.def.p2.name : this.def.p2.name, this.def.p2.caption, 0x8a4a2a, .1);
     this.moveNames.length = 0; this.moveNames.push(...this.def.p2.moves.map(m => m.name));
     const g = this.def.p2.guards, b = this.h.boss;
-    if (g) for (let k = 0; k < g.count; k++) { const a = k / g.count * Math.PI * 2; const e = this.h.spawn(g.troop, b.x + Math.cos(a) * 90, b.y + Math.sin(a) * 70); if (e) this.guards.push(e); }
+    if (g) for (let k = 0, n = this.summonCount(g.count); k < n; k++) { const a = k / n * Math.PI * 2; const e = this.h.spawn(g.troop, b.x + Math.cos(a) * 90, b.y + Math.sin(a) * 70); if (e) this.guards.push(e); }
   }
 
   // ---------- 步战首领狂暴（def.rage）：旗倒、大吼、黄色气焰（全部手绘素材：旗帜图、倒塌扬尘、战吼声浪 / 气势） ----------
@@ -245,12 +249,31 @@ export class BossMoveset extends ArcBossV2<string> {
         if (s.kind === 'lane') { const dx = x - s.x, dy = y - s.y, along = dx * Math.cos(s.angle) + dy * Math.sin(s.angle), across = Math.abs(-dx * Math.sin(s.angle) + dy * Math.cos(s.angle)); return along >= -pad && along <= s.len + pad && across <= s.width / 2 + pad; }
         const d = Math.hypot(x - s.x, y - s.y), da = Math.abs(Phaser.Math.Angle.Wrap(Math.atan2(y - s.y, x - s.x) - s.angle)); return d <= s.r + pad && da <= s.arc / 2;
       };
-      if (p.alive && inside(p.x, p.y, p.radius * .5)) { p.takeDamage(b.def.damage * z.dmg, now); this.metrics.playerHits++; }
+      if (p.alive && inside(p.x, p.y, p.radius * .5)) { p.takeDamage(b.def.damage * z.dmg * this.dmgMul, now); this.metrics.playerHits++; }
       const cx = s.kind === 'lane' ? s.x + Math.cos(s.angle) * s.len / 2 : s.x, cy = s.kind === 'lane' ? s.y + Math.sin(s.angle) * s.len / 2 : s.y;
-      this.h.army.hurtArea(cx, cy, s.kind === 'lane' ? s.len / 2 : s.r, b.def.damage * z.dmg * .6, now, s.kind === 'sector' ? s.angle : undefined, s.kind === 'sector' ? s.arc : undefined);
+      this.h.army.hurtArea(cx, cy, s.kind === 'lane' ? s.len / 2 : s.r, b.def.damage * z.dmg * .6 * this.dmgMul, now, s.kind === 'sector' ? s.angle : undefined, s.kind === 'sector' ? s.arc : undefined);
     }
   }
 
+  // ———— 双首领关（DualBoss）接口 ————
+  busy(): boolean { return !!this.dash || !!this.ride || this.beat.phase === 'windup' || this.beat.phase === 'release'; }
+  holdUntil(at: number): void { if (!this.busy()) this.next = Math.max(this.next, at); }
+  forceRecover(now: number, ms: number): void { if (this.state === 'dead' || this.busy()) return; if (this.beat.phase !== 'recover' || this.beat.done(now + ms - 50)) this.toRecover(now, ms); }
+  forcePhase2(now: number): void { this.enterPhase2(now); }
+  /** 狂怒转场：BossKit 转场（无敌、震屏、横幅、暗红色调）。 */
+  enrage(now: number, _ms: number, line: string, caption: string): boolean { this.dash = null; this.ride = null; this.cur = null; this.beat.set(null, 'idle', now, 0); this.kit.phaseShift(now, line, caption, 0x300808, .1); return true; }
+  /** 悲愤招：本阶段第一招，伤害 ×mul。 */
+  signature(now: number, mul: number): void { const m = this.phaseDef.moves[0]; if (m) this.combo({ ...m, dmg: m.dmg * mul } as MoveDef, now); }
+  /** 配合技：立刻起手指定招式（aim 朝向点、warnMul 预警倍数）；不受冷却限制。 */
+  combo(m: MoveDef, now: number, o: { aim?: { x: number; y: number }; warnMul?: number } = {}): void { this.dash = null; this.ride = null; this.beat.set(null, 'idle', now, 0); this.start(m, now, o); }
+  /** 配合技「枪墙」：一排落点圈，预警后连砸 times 次（每 every 毫秒，合起来就是持续的墙）。 */
+  comboWall(name: string, pts: Array<{ x: number; y: number }>, r: number, windupMs: number, dmg: number, times: number, every: number, now: number): void {
+    this.dash = null; this.ride = null;
+    this.cur = { kind: 'volley', name, windupMs, cd: 0, dmg, count: 0, r, spread: 0, fx: 'slam' } as MoveDef;
+    for (let k = 0; k < times; k++) for (const q of pts) this.add({ kind: 'circle', x: q.x, y: q.y, r, fx: 'slam' }, now, now + windupMs + k * every, dmg);
+    this.h.banner(name); this.h.sfx('chargeWarn');
+    this.beat.set(name, 'windup', now, windupMs);
+  }
   defeat(): void { if (this.mode === 'arc') super.defeat(); else { this.state = 'dead'; this.gfx.clear(); this.onDefeat(); } }
   protected onDefeat(): void { this.hazards = []; for (const f of this.flags) f.img?.destroy(); this.flags = []; this.mount?.destroy(); this.mount = undefined; this.h.boss.sprite.setAlpha(1); }
   snapshot() { return { phase: this.phase, mounted: this.mounted, horse: !!this.mount?.hasHorse, state: this.state, cur: this.cur?.name ?? null, hazards: this.hazards.length, flags: this.flags.filter(f => f.e.active).length, guards: this.guards.filter(g => g.active).length, metrics: { ...this.metrics }, label: this.label }; }

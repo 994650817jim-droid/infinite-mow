@@ -145,7 +145,7 @@ export class StoryDirector {
     this.bonds = (this.chapter?.bonds ?? []).filter(b => b.members.every(m => team.includes(m)));
     // 首领二阶段大字台词（各首领控制器都发 boss-phase）
     if (this.stageNodes()?.bossPhase) {
-      const onPhase = (e: BossPhaseEvent): void => { if (e.phase === 2) this.bossPhase(e.boss.sprite); };
+      const onPhase = (e: BossPhaseEvent): void => { if (e.phase === 2) this.bossPhase(e.boss.sprite, e.bossId); };
       h.scene.events.on(BOSS_PHASE, onPhase); h.scene.events.once('shutdown', () => h.scene.events.off(BOSS_PHASE, onPhase));
     }
   }
@@ -179,9 +179,11 @@ export class StoryDirector {
   /** 首领登场 / 二阶段 / 倒下：大字台词（每次都说）。 */
   /** 返回是否说了（说了的话 GameScene 把主将的登场 / 倒下台词往后挪，免得一句顶掉另一句）。 */
   bossIntro(target: BarkTarget): boolean { const n = this.stageNodes()?.bossIntro; return n ? this.bark(n, target) : false; }
-  bossPhase(target: BarkTarget): boolean { const n = this.stageNodes()?.bossPhase; return n ? this.bark(n, target) : false; }
-  bossFall(target: BarkTarget): boolean {
-    const n = this.stageNodes()?.bossFall; if (!n) return false;
+  /** 双首领关：节点写了 boss 时只对这位首领说（bossId 来自 boss-phase 事件）。 */
+  bossPhase(target: BarkTarget, bossId?: string): boolean { const n = this.stageNodes()?.bossPhase; return n && (!n.boss || !bossId || n.boss === bossId) ? this.bark(n, target) : false; }
+  /** bossId：双首领关按首领取 bossFalls[id]（没有时不说）。 */
+  bossFall(target: BarkTarget, bossId?: string): boolean {
+    const sn = this.stageNodes(), n = bossId && sn?.bossFalls ? sn.bossFalls[bossId] : sn?.bossFall; if (!n) return false;
     const spoke = this.bark(n, target);
     // 横幅 + 旗标（如关羽在队「斩颜良」）：旗标是玩法结果，剧情关了也照记；横幅同温酒斩华雄，也照播
     const b = n.banner; if (b && (!b.ifFollower || this.h.ctx.team().includes(b.ifFollower))) { if (b.flag) setStoryFlag(b.flag); this.h.banner?.(b.title, b.caption); }

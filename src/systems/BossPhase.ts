@@ -3,7 +3,7 @@ import type { Enemy } from '../entities/Enemy';
 
 /** 首领阶段切换事件名（scene.events）。顿帧、慢动作、首领踉跄等打击感（武将会话）都接这一个事件。 */
 export const BOSS_PHASE = 'boss-phase';
-export interface BossPhaseEvent { boss: Enemy; phase: 2 | 3; /** 这次切换是否坠马（骑马首领一阶段 → 步战）。 */ dismount: boolean; name: string }
+export interface BossPhaseEvent { boss: Enemy; phase: 2 | 3; /** 这次切换是否坠马（骑马首领一阶段 → 步战）。 */ dismount: boolean; name: string; /** 双首领关：哪位首领（DualBoss）。 */ bossId?: string }
 
 /** 发出阶段切换事件（每位首领每个阶段只发一次）。 */
 const sent = new WeakMap<Enemy, Set<string>>();

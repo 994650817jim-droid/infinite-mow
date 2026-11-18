@@ -5,6 +5,8 @@ import {FOLLOW} from '../data/recruits';
 import type {PlayerStats} from '../types';
 import {followersFor,followerLevelCap,heroOwned,lordHero} from '../systems/RosterStore';
 import {Parley} from '../systems/Parley';
+import {DUAL, DualBoss, retreatFade, type DualCtrl, type DualPlan} from '../systems/DualBoss';
+import type {BossMount as BossMountT} from '../systems/BossMount';
 import {SURRENDER,surrenderDef} from '../data/surrender';
 import {markSurrender,surrenderedIds,surrenderLive} from '../systems/SurrenderStore';
 import { StoryDirector, campTalkStrip, setStoryFlag, storyBark, type StoryCtx } from '../systems/Story';
@@ -239,14 +241,53 @@ export class GameScene extends Phaser.Scene {
   protected parleyFlags():Record<string,boolean>{return {};}
   protected startParley(boss:Enemy):void{
     this.parley?.clear();this.parley=null;
-    const def=surrenderDef(this.surrenderKey());
-    this.parley=Parley.for({scene:this,boss:()=>this.boss,mode:()=>this.mode,setMode:m=>this.setMode(m as Mode),over:()=>this.over,now:()=>this.combatNow,
-      ctx:()=>({lord:lordHero()??this.runConfig.character,team:[this.runConfig.character,...(this.followers?.members??[]).map(m=>m.recruit.hero??'').filter(Boolean)],surrendered:surrenderedIds(),followerBosses:(this.followers?.members??[]).map(m=>(m.recruit as {boss?:string}).boss??'').filter(Boolean),flags:this.parleyFlags()}),
-      wenjiu:()=>!!this.sishuiPass?.wenjiuLive(),banner:(t,d,c)=>this.showWaveBanner(t,d,c),sfx:k=>this.sfx.play(k),
-      bark:(t,name,text)=>{if(storyMode()==='off')return false;storyBark(this,t,name,text);return true;},
-      kill:b=>this.killEnemy(b),persuaded:b=>{this.persuadeKill=true;b.invulnerable=false;b.hp=0;this.killEnemy(b);}},def);
+    this.parley=this.makeParley(()=>this.boss,surrenderDef(this.surrenderKey()));
     void boss;
   }
+  /** 建一个招降控制器（单首领：本关首领；双首领：每人一个，partner = 同伴结果加减把握）。 */
+  protected makeParley(boss:()=>Enemy|null,def:ReturnType<typeof surrenderDef>,dual?:{partner:()=>{id:string;persuaded:boolean;executed:boolean}|undefined}):Parley|null{
+    return Parley.for({scene:this,boss,mode:()=>this.mode,setMode:m=>this.setMode(m as Mode),over:()=>this.over,now:()=>this.combatNow,
+      ctx:()=>({lord:lordHero()??this.runConfig.character,team:[this.runConfig.character,...(this.followers?.members??[]).map(m=>m.recruit.hero??'').filter(Boolean)],surrendered:surrenderedIds(),followerBosses:(this.followers?.members??[]).map(m=>(m.recruit as {boss?:string}).boss??'').filter(Boolean),flags:this.parleyFlags(),partner:dual?.partner()}),
+      wenjiu:()=>!!this.sishuiPass?.wenjiuLive(),banner:(t,d,c)=>this.showWaveBanner(t,d,c),sfx:k=>this.sfx.play(k),
+      bark:(t,name,text)=>{if(storyMode()==='off')return false;storyBark(this,t,name,text);return true;},
+      kill:b=>this.killEnemy(b),persuaded:b=>{this.persuadeKill=true;b.invulnerable=false;b.hp=0;this.killEnemy(b);},
+      opened:dual?p=>{this.parley=p;}:undefined},def);
+  }
+  // ———— 双首领关（systems/DualBoss.ts，dual-boss-spec） ————
+  dual:DualBoss|null=null;
+  /**
+   * 开双首领：子类在 spawnBoss 建好第一位首领的控制器之后调用。第一位当场入列（招降窗、坐骑按双将规则重建），
+   * 第二位 1.2 秒后从 second.at 登场（暗场减半）。keys = 两人在招降表里的键（null = 不弹窗）。
+   */
+  protected startDual(plan:DualPlan,first:{id:string;name:string;enemy:Enemy;ctrl:DualCtrl;mount?:BossMountT|null;ownKit?:boolean;key:string|null},
+    second:{id:string;name:string;at:{x:number;y:number};def:Partial<EnemyDef>;key:string|null;make:(e:Enemy)=>{ctrl:DualCtrl;mount?:BossMountT|null;ownKit?:boolean}}):void{
+    this.parley?.clear();this.parley=null;this.bossMount?.destroy();this.bossMount=null;
+    const now=this.combatNow,s=this;
+    const d=this.dual=new DualBoss({scene:this,player:()=>this.player,banner:(t,danger,c)=>this.showWaveBanner(t,danger,c),sfx:k=>this.sfx.play(k),
+      bark:(t,name,text)=>{if(storyMode()!=='off')storyBark(this,t,name,text);},
+      storyFall:(id,at)=>!!this.storyDir?.bossFall(at,id),
+      retire:e=>{if(!e.active)return;e.invulnerable=false;e.hp=0;this.killEnemy(e);},
+      setPrimary:(e,p)=>{s.boss=e;if(p!==undefined)s.parley=p;},
+      trail:(()=>{const last=new Map<number,number>();return (id:number,ratio:number)=>{const rn=performance.now(),dt=Math.min(.25,(rn-(last.get(id)??rn))/1000);last.set(id,rn);this.bossStagger.track(id,ratio);return this.bossStagger.trailRatio(ratio,rn,dt);};})(),
+      live:()=>surrenderLive(),setFlag:(k,v)=>setStoryFlag(k,v),
+      doubleSurrender:g=>{if(surrenderLive())gainProvisions(DUAL.doubleProvisions);this.showWaveBanner(g+' · 同归麾下',false,'双双归降 · 军粮 +'+DUAL.doubleProvisions);this.sfx.play('gong');},
+      spawn:(k,x,y)=>this.spawnEnemy(k,x,y,1,true)},plan,now);
+    const mk=(e:Enemy,key:string|null)=>{const ref:{x?:ReturnType<DualBoss['entryOf']>}={};const p=this.makeParley(()=>ref.x&&!ref.x.done&&e.active?e:null,surrenderDef(key),{partner:()=>ref.x?d.partnerOdds(ref.x):undefined});return {p,ref};};
+    {const {p,ref}=mk(first.enemy,first.key);ref.x=d.add({id:first.id,name:first.name,enemy:first.enemy,ctrl:first.ctrl,parley:p,mount:first.mount??null,ownKit:first.ownKit},now);}
+    if(plan.lines[first.id]?.intro)this.time.delayedCall(200,()=>{if(first.enemy.active&&storyMode()!=='off')storyBark(this,first.enemy.sprite,first.name,plan.lines[first.id].intro!);});
+    this.announceBoss(plan.group,first.name+' · '+second.name);
+    d.later(now+DUAL.entranceGapMs,()=>{
+      const e=this.spawnEnemy('boss',second.at.x,second.at.y,1,true,{...this.chapter.enemies.boss,...second.def} as EnemyDef);if(!e)return;
+      const made=second.make(e),{p,ref}=mk(e,second.key);
+      ref.x=d.add({id:second.id,name:second.name,enemy:e,ctrl:made.ctrl,parley:p,mount:made.mount??null,ownKit:made.ownKit},this.combatNow);
+      this.presence?.entrance(e,.5);this.sfx.boss();
+      const line=plan.lines[second.id]?.intro;if(line&&storyMode()!=='off')storyBark(this,e.sprite,second.name,line);
+    });
+  }
+  /** 单首领「败退型」（8-1 张郃、5-3 曹仁、4-1 颜良）：打到底不倒地，淡出退走。子类据此不播控制器倒地帧。 */
+  protected bossRetreats(enemy:Enemy):boolean{return enemy===this.boss&&!this.dual&&surrenderDef(this.surrenderKey())?.tier==='retreat';}
+  /** 败退型的退兵台词：招降表 retreat 句（8-1 张郃），没有时用剧本 bossFall（5-3 曹仁、4-1 颜良）。 */
+  protected retreatLine(at:{x:number;y:number;displayHeight:number}):boolean{const d=surrenderDef(this.surrenderKey());if(d?.retreat){if(storyMode()==='off')return false;storyBark(this,at,d.name,d.retreat);return true;}return !!this.storyDir?.bossFall(at);}
   /** 测试 / 调试：直接做选择（旧接口，第六章测试沿用）。 */
   choose(c:'persuade'|'execute'|'press'):void{this.parley?.choose(c);}
   /** 斩杀奖励（含劝降失败后斩杀、宁死不降）：军粮 +25；本存档首次斩杀此人额外一件紫色兵装（spec §6，防刷）。 */
@@ -661,7 +702,8 @@ export class GameScene extends Phaser.Scene {
     this.followers=null;this.followerPassives=[];{const allow=worldUnlocked()&&(!isChapterTestRun()||new URLSearchParams(location.search).get('followers')==='1');const list=allow?followersFor(this.runConfig.character):[];if(list.length)this.followers=new FollowerSquad(this,this.player,list,(x,y,r)=>this.grid.query(x,y,r),(e,d,fire)=>this.hitEnemy(e,d,this.combatNow,fire?'fire':'melee',true,false),()=>this.player.growth.damageMultiplier(this.combatNow));if(this.followers){this.followers.onHitFx=(e,k,fx,fy)=>this.followerTemplateHitFx(e,k,fx,fy);this.followers.attackSound=t=>this.sfx.play(FOLLOWER_ATTACK_SFX[t]);}}
     { const mode = readIffMode(); this.iff = mode ? new IffOverlay(this, mode, () => this.iffUnits()) : null; }
     this.presence = new BossPresence({ scene: this, enemies: () => this.enemies, boss: () => this.cutscene?.active ? null : this.boss, /* 过场时收起名牌 / 辉光 / 火环 */ bossName: () => this.chapter.bossName, player: () => this.player,
-      extras: e => e === this.boss ? [this.bossMount?.horseImage, this.bossMount?.frontImage] : [], outline: e => this.iff?.overlayOf(e.sprite) });
+      bosses: () => this.dual ? (this.cutscene?.active ? [] : this.dual.alive.map(x => ({ e: x.enemy, name: x.name, color: x.color }))) : null,
+      extras: e => { const x = this.dual?.entryOf(e); if (x) return [x.mount?.horseImage, x.mount?.frontImage]; return e === this.boss ? [this.bossMount?.horseImage, this.bossMount?.frontImage] : []; }, outline: e => this.iff?.overlayOf(e.sprite) });
     // 震屏设置（强 / 弱 / 关，im_shake，见 systems/BattleSettings）：包一层主相机 shake，现有调用全部按设置缩放
     { const cam = this.cameras.main, orig = cam.shake.bind(cam);
       cam.shake = ((duration?: number, intensity?: number | Phaser.Math.Vector2, force?: boolean, callback?: Phaser.Types.Cameras.Scene2D.CameraShakeCallback, context?: unknown) => {
@@ -787,7 +829,7 @@ export class GameScene extends Phaser.Scene {
     // 剧情：关前章头 → 过场 / 幕间 → 军情 → 羁绊（都看完 / 跳过后再开新手引导，避免两者叠在一起）
     this.setupStory(this.runConfig.encounter ? '' : this.chapter.id, this.chapter.id === 'hulao' ? (this.chapter.westStage ?? 3) : (this.chapter.stage ?? 1), () => { if (this.sys.settings.status < Phaser.Scenes.SHUTDOWN && !this.over) this.tutorial = Tutorial.maybeStart(this); });
     // 首领阶段切换统一事件（boss-phase）：所有控制器的 phase2 都从这里发
-    watchBossPhase(this, () => { const c = (this as unknown as { controller?: { phase2?: boolean } }).controller; return this.boss ? { boss: this.boss, phase2: !!(this.moveset?.phase2 || this.lubu?.phase2 || this.huaxiong?.phase2 || this.xurong?.phase2 || this.zhangjiao?.phase2 || c?.phase2), name: this.chapter.bossName, mounted: !!(this.bossMount?.mounted || this.moveset?.mounted) } : null; });
+    watchBossPhase(this, () => { if (this.dual) return null; const c = (this as unknown as { controller?: { phase2?: boolean } }).controller; return this.boss ? { boss: this.boss, phase2: !!(this.moveset?.phase2 || this.lubu?.phase2 || this.huaxiong?.phase2 || this.xurong?.phase2 || this.zhangjiao?.phase2 || c?.phase2), name: this.chapter.bossName, mounted: !!(this.bossMount?.mounted || this.moveset?.mounted) } : null; });
   }
 
   /**
@@ -873,7 +915,7 @@ export class GameScene extends Phaser.Scene {
     this.spawnTimer = 0.5;
     this.eliteTimer = BALANCE.eliteFirst;
     this.boss = null;
-    this.sishuiObstacles=null;this.sishuiPass?.clear();this.sishuiPass=null;this.parley?.clear();this.parley=null;this.persuadeKill=false;this.dzLubu?.clear();this.dzLubu=null;this.huaxiong=null;this.xurong=null;this.lubu = null;this.moveset?.clear();this.moveset=null;this.bossMount?.destroy();this.bossMount=null; this.zhangjiao?.clear(); this.zhangjiao = null; this.yellow=null; this.xiliang=null; this.supplies=null; this.yellowAltar=null;this.finaleFadeMs=0;
+    this.sishuiObstacles=null;this.sishuiPass?.clear();this.sishuiPass=null;this.parley?.clear();this.parley=null;this.persuadeKill=false;this.dual?.clear();this.dual=null;this.dzLubu?.clear();this.dzLubu=null;this.huaxiong=null;this.xurong=null;this.lubu = null;this.moveset?.clear();this.moveset=null;this.bossMount?.destroy();this.bossMount=null; this.zhangjiao?.clear(); this.zhangjiao = null; this.yellow=null; this.xiliang=null; this.supplies=null; this.yellowAltar=null;this.finaleFadeMs=0;
     this.bossSpawned = false;
     this.bossCastCd = 3;
     this.bossSummonCd = 6;
@@ -1035,6 +1077,7 @@ export class GameScene extends Phaser.Scene {
     this.env?.update(dt);
     if(this.mode==='none'&&!this.over)this.sishuiPass?.update();
     this.parley?.update(); // 首领招降：残血弹窗 / 再压一压
+    if(this.mode==='none'&&!this.over)this.dual?.update(this.combatNow); // 双首领：招降、配合技、狂怒 / 心乱、退走线
     if(!this.terrainInit&&this.player){this.terrainInit=true;const tc=terrainConfigFor(this.hardKey(),this.hardStage());if(tc){this.terrain=new Terrain(this,tc);const t=this.terrain;Ally.terrainMul=(x,y)=>t.speedMul(x,y);this.terrainNav=t.navBoxes();this.events.once('shutdown',()=>{t.clear();if(this.terrain===t){this.terrain=null;Ally.terrainMul=null;}});}}
     if(this.terrain){this.terrain.update(this.combatNow,dt);this.player.terrainSpeedMul=this.terrain.speedMul(this.player.x,this.player.y);}
     this.updateEnemies(dt, time);
@@ -1101,8 +1144,10 @@ export class GameScene extends Phaser.Scene {
     const cam = this.cameras.main;
     // 首领登场时镜头朝首领探出去一下（BossPresence.look，平时为 0）
     const look = this.presence?.look;
-    const targetX = this.player.x - GAME_WIDTH / 2 + (look?.x ?? 0);
-    const targetY = this.player.y - GAME_HEIGHT / 2 + (look?.y ?? 0);
+    // 双首领：主将 ×0.7 + 两首领中点 ×0.3（主将留在画面中间 60%）
+    const dualCam = this.dual?.cameraTarget(this.player.x, this.player.y);
+    const targetX = (dualCam ? dualCam.x : this.player.x - GAME_WIDTH / 2) + (look?.x ?? 0);
+    const targetY = (dualCam ? dualCam.y : this.player.y - GAME_HEIGHT / 2) + (look?.y ?? 0);
     const k = 1 - Math.exp(-11 * dt);
     cam.scrollX += (targetX - cam.scrollX) * k;
     cam.scrollY += (targetY - cam.scrollY) * k;
@@ -1211,7 +1256,7 @@ export class GameScene extends Phaser.Scene {
       // 刷怪时间轴按关卡节奏加速（stageTuning.pace）：原来第 N 波的刷怪强度在新的第 N 波出现
       const paced = this.elapsed * (this.chapter.pace ?? 1);
       const easy = this.tutorial?.easy(this.elapsed); // 新手引导：开局 30 秒刷兵放缓
-      this.spawnTimer = this.chapter.spawnInterval(paced) * (easy?.interval ?? 1) * (this.sishuiPass?.spawnMul ?? 1); // 汜水关西凉营帐全塌后变稀
+      this.spawnTimer = this.chapter.spawnInterval(paced) * (easy?.interval ?? 1) * (this.sishuiPass?.spawnMul ?? 1) * (this.dual?.spawnIntervalMul ?? 1); // 汜水关西凉营帐全塌后变稀；双首领在场刷兵 ×0.7
       const rawBurst = this.chapter.spawnBurst(paced), burst = easy && easy.burstDiv > 1 ? Math.max(1, Math.ceil(rawBurst / easy.burstDiv)) : rawBurst;
       for (let i = 0; i < burst; i += 1) {
         if (this.activeEnemyCount() >= cap) break;
@@ -1426,7 +1471,8 @@ export class GameScene extends Phaser.Scene {
         }
       } else if (enemy.kind === 'boss') {
         const chasing=this.chasingBosses.find(t=>t.enemy===enemy&&t.life===enemy.spawnId);
-        if(this.customBossStep(enemy,dt,this.combatNow)){}
+        if(this.dual?.step(enemy,dt,this.combatNow)){}
+        else if(this.customBossStep(enemy,dt,this.combatNow)){}
         else if(chasing){if(chasing.huaxiong)chasing.huaxiong.update(dt,this.combatNow);else if(chasing.xurong)chasing.xurong.update(dt,this.combatNow);else chasing.battle?.moveBoss(enemy,dt,this.combatNow);}
         else if (this.moveset && enemy === this.boss) this.moveset.update(dt,this.combatNow);
         else if (this.yellow && this.chapter.stage!==3) this.yellow.moveBoss(enemy,dt,this.combatNow);
@@ -1927,6 +1973,7 @@ export class GameScene extends Phaser.Scene {
     else this.sfx.play('hitLight');
     if (enemy.kind === 'boss' && !fromAlly) this.sfx.play('bossHit'); // 首领专属沉重受击声（节流，不会每下都响）
     const bossHpBefore = enemy.kind === 'boss' ? enemy.hp / enemy.maxHp : 1;
+    if (this.dual?.owns(enemy)) rawDamage *= this.dual.incoming(enemy, fromAlly, time);
     if (enemy === this.boss && this.lubu) rawDamage *= this.lubu.incomingDamageMultiplier(source, time);
     if (enemy === this.boss && this.zhangjiao) rawDamage *= this.zhangjiao.takenMul;
     { let v = this.player.passive.vulnerability(enemy, time); for (const fp of this.followerPassives) v = Math.max(v, 1 + (fp.vulnerability(enemy, time) - 1) * FOLLOW.passiveScale); rawDamage *= v; } // 貂蝉倾城：易伤（部曲伤害同样吃加成；随行貂蝉的按随行系数折算）
@@ -2013,13 +2060,17 @@ export class GameScene extends Phaser.Scene {
   protected killEnemy(enemy: Enemy): void {
     if (this.dzLubu?.preventKill(enemy)) return; // 2-3 吕布打到底不死：锁血逃走
     if (!this.persuadeKill && this.parley?.preventKill(enemy)) return; // 首领招降：没表态前不死
+    if (!this.persuadeKill && this.dual?.preventKill(enemy)) return; // 双首领：每人一个招降窗
     if (!enemy.active) return;
+    // 双首领：先了结的不掉宝箱（只做通用记账），最后一个照常；单首领败退型淡出退走
+    const dualRes = this.dual?.owns(enemy) ? this.dual.resolve(enemy, this.persuadeKill, this.combatNow) : null;
+    const retreat = dualRes ? dualRes.how === 'retreated' : this.bossRetreats(enemy);
     this.objective?.onKill(enemy);
     const kind = enemy.kind;
     // 吕布倒地改由 playBossFall（倒地 4 帧）播，不再叠旧的通用死亡闪影
-    if(kind==='boss'){const old=this.chasingBosses.find(t=>t.enemy===enemy&&t.life===enemy.spawnId),h=old?old.huaxiong:this.huaxiong,x=old?old.xurong:this.xurong;h?.defeat();x?.defeat();if(enemy===this.boss){this.sishuiPass?.onBossDown();{const at={x:enemy.x,y:enemy.y,displayHeight:enemy.sprite.displayHeight};this.storyBossFell=this.persuadeKill?true:(this.parley?.dyingLine(at)??false)||!!this.storyDir?.bossFall(at);if(this.sishuiPass?.wenjiu){setStoryFlag('wenjiu_huaxiong');this.time.delayedCall(1600,()=>this.storyDir?.line('hulao-1.wenjiu',this.player.sprite));}}this.moveset?.defeat();this.moveset=null;this.bossMount?.destroy();this.bossMount=null;}if(old){if(h)this.deadBossControllers.push(h);if(x)this.deadBossControllers.push(x);}
+    if(kind==='boss'){const old=this.chasingBosses.find(t=>t.enemy===enemy&&t.life===enemy.spawnId),h=old?old.huaxiong:this.huaxiong,x=old?old.xurong:this.xurong;h?.defeat();x?.defeat();if(enemy===this.boss){this.sishuiPass?.onBossDown();{const at={x:enemy.x,y:enemy.y,displayHeight:enemy.sprite.displayHeight};if(retreat&&!dualRes)retreatFade(this,enemy,this.player);this.storyBossFell=dualRes||this.persuadeKill?true:retreat?this.retreatLine(at):(this.parley?.dyingLine(at)??false)||!!this.storyDir?.bossFall(at);if(this.sishuiPass?.wenjiu){setStoryFlag('wenjiu_huaxiong');this.time.delayedCall(1600,()=>this.storyDir?.line('hulao-1.wenjiu',this.player.sprite));}}this.moveset?.defeat();this.moveset=null;this.bossMount?.destroy();this.bossMount=null;}if(old){if(h)this.deadBossControllers.push(h);if(x)this.deadBossControllers.push(x);}
       // 倒地：控制器自己有倒地帧的（华雄 / 徐荣 / 子类首领）沿用；其余首领播通用倒地（受伤帧 + 倒下 + 手绘扬尘 + 下沉淡出）
-      this.bossFallDir=0;if(!(h||x||this.bossHasDeathArt()||this.persuadeKill))this.bossFallDir=playBossFall(this,enemy,this.zhangjiao?'zhangjiao_moves':this.lubu?'lubu_moves':undefined,old?undefined:this.chapter.bossStyle);}
+      this.bossFallDir=0;if(!(h||x||this.bossHasDeathArt()||this.persuadeKill||dualRes||retreat))this.bossFallDir=playBossFall(this,enemy,this.zhangjiao?'zhangjiao_moves':this.lubu?'lubu_moves':undefined,old?undefined:this.chapter.bossStyle);}
     enemy.deactivate();
     if(enemy.isSupplySlot){this.sfx.play('propBreak');this.supplies?.onBroken(enemy);return;}
     this.warfeedKill();
@@ -2037,7 +2088,8 @@ export class GameScene extends Phaser.Scene {
     const jade=this.player.growth.charmLegend.army_jade;if(jade!==undefined&&this.combatNow>=this.relicHealAt){const k=CHARM_LEGEND.charm_army_jade.heal[jade];this.relicHealAt=this.combatNow+1000;this.player.heal(k);this.artEffects.show(5,this.player.x,this.player.y-12,35,this.combatNow,260);for(const u of this.allies.filter(u=>u.active&&u.hp<u.maxHp).slice(0,2)){u.hp=Math.min(u.maxHp,u.hp+2*k);this.artEffects.show(5,u.x,u.y-10,30,this.combatNow,260);}}
     this.sfx.play('enemyDie'); this.sfx.play('killThud'); // 击杀加一层闷响（节流）
     if (kind === 'elite') { this.hitFeel.hitStop(HIT_FEEL.eliteKillStopMs); this.hitFeel.shake('small'); }
-    if (kind === 'boss' && !this.persuadeKill) { this.hitFeel.bossDeath(); this.sfx.play('bossHit'); } // 击杀首领：0.5 秒慢动作 + 强震，之后照常倒地 / 宝箱
+    if (kind === 'boss' && !this.persuadeKill && !retreat) { this.hitFeel.bossDeath(); this.sfx.play('bossHit'); } // 击杀首领：0.5 秒慢动作 + 强震，之后照常倒地 / 宝箱
+    if (dualRes?.order === 'first') { this.persuadeKill = false; return; } // 双首领先了结的一位：不掉宝箱、不结算
     if (kind === 'boss') {
       const index=this.chasingBosses.findIndex(t=>t.enemy===enemy&&t.life===enemy.spawnId);
       if(index>=0){
@@ -2974,7 +3026,7 @@ export class GameScene extends Phaser.Scene {
   /** 首领宝箱：倒地点掉落，主将碰到打开。 */
   protected spawnBossChest(x:number,y:number,done:()=>void):void{
     if(!this.player.alive){this.finish(false);return;}
-    if(this.persuadeKill){this.persuadeKill=false;this.time.delayedCall(500,done);return;} // 劝降成功：算击败首领，但不掉首领宝箱（spec §6）
+    if(this.persuadeKill){this.persuadeKill=false;this.time.delayedCall(this.dual?.entries.every(x=>x.done==='persuaded')?1800:500,done);return;} /* 双降：横幅多亮一会儿再结算 */ // 劝降成功：算击败首领，但不掉首领宝箱（spec §6）
     // 落点避开尸体（画风会话量的躺倒身体范围）：倒地 4 帧往朝向前方偏 80，其余往下偏 30
     const ox=this.bossFallDir*80,oy=30;
     // 落点压在城墙 / 障碍里时（首领倒在墙边），沿着往主将的方向挪到第一个空地，免得宝箱捡不到、关卡结不了
@@ -2984,6 +3036,8 @@ export class GameScene extends Phaser.Scene {
   /** 宝箱里只有首领遗珍（用户 2026-11-17「首领宝箱只给首领遗珍」；道具系统发放，见 ItemDrops.claimBossRelic）。 */
   protected grantBossChest():ChestLoot[]{
     const out:ChestLoot[]=[];
+    if(this.dual){const keep=this.parley;for(const x of this.dual.entries)if(x.done==='killed'&&x.parley&&x.parley!==keep){this.parley=x.parley;this.parleyExecuteRewards(out);}this.parley=keep;
+      const item=this.itemDrops?.rollBossItem()??rollItem('blue');addItems([item]);out.push({name:itemName(item),desc:'双将宝箱 · 额外兵装 · 已入行囊',tag:'双将'});}
     this.parleyExecuteRewards(out);
     this.ensurePicks(this.campaignReplay?PICK_GUARANTEE.side:PICK_GUARANTEE.main,true);
     const item=this.itemDrops?.claimBossRelic();
@@ -3561,6 +3615,9 @@ export class GameScene extends Phaser.Scene {
     const tokens = wornTokens(this.runConfig.character), sets = this.charmInfo ? (Object.keys(this.charmInfo.schools) as CharmSchool[]).filter(sc => this.charmInfo!.schools[sc] >= 2) : [];
     this.hudTexts.relics.setText(tokens.length ? !IS_DESKTOP && !this.relicExpanded ? `信物 ${tokens.length}  · 点按展开` : `信物 ${tokens.map(t => charmDef(t.base)?.name ?? itemName(t)).join(' · ')}${sets.map(sc => `  ${CHARM_SCHOOL_NAMES[sc]}套装 ${CHARM_SET_DESC[sc]}`).join('')}` : '');
 
+    // 双首领：屏幕下方两条并排（DualBoss.drawHud）
+    if (this.dual?.hudActive) { this.hintText?.setVisible(false); this.hudTexts.boss.setVisible(false); this.hudTexts.bossHp.setVisible(false); this.hudTexts.bossEnergy.setVisible(false); this.dual.drawHud(g, COLORS.red, WAR.danger); return; }
+    this.dual?.hideHud();
     // 本关首领未击败、战线已推进时，追兵首领的血条继续显示（用户反馈血条不应消失）
     const chaser = this.boss?.active ? null : this.chasingBosses.find(t => t.enemy.active && t.enemy.spawnId === t.life) ?? null;
     const boss = this.boss?.active ? this.boss : chaser?.enemy ?? null;

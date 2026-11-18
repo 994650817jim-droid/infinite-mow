@@ -29,6 +29,7 @@ export interface ParleyHost {
   /** 大字台词（剧情关闭时宿主只出横幅，返回 false）。 */ bark: (target: { x: number; y: number }, name: string, text: string) => boolean;
   /** 斩杀：照常击杀（倒地、宝箱）。 */ kill: (boss: Enemy) => void;
   /** 劝降成功：算击败首领，但不倒地不掉宝箱。 */ persuaded: (boss: Enemy) => void;
+  /** 弹窗打开（双首领关：宿主把当前 parley 指到这一个，手柄 A/B/X 用）。 */ opened?: (p: Parley) => void;
 }
 
 export class Parley {
@@ -69,7 +70,7 @@ export class Parley {
     if (this.state === 'idle' && this.h.wenjiu?.()) { this.state = 'skip'; return; } // 温酒斩华雄优先
     const second = this.state === 'pressing'; this.state = 'open'; this.log.opens++; b.invulnerable = true;
     if (this.firstNever) markSurrender('neverSeen', this.def.key);
-    this.h.setMode('parley'); this.render(second);
+    this.h.setMode('parley'); this.h.opened?.(this); this.render(second);
   }
   /** 选择（按钮 / 键盘 1 2 3 / 手柄 A B X / 测试直接调）。 */
   choose(c: ParleyChoice): void {

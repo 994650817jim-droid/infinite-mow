@@ -6,7 +6,7 @@ import type { CharacterId } from './characters';
  * 打败的首领可以劝降，按史实分档——可降 / 难降 / 宁死不降 / 必降（可降的特例）/ 剧情首领（不弹窗）/ 第一章（新手章，不弹窗）。
  * 键：章节 arc + '-' + 第几关 + ':' + 首领 id（与各战斗场景的 surrenderKey() 对应）。数值都是初值，交平衡会话。
  */
-export type SurrenderTier = 'can' | 'hard' | 'never' | 'sure' | 'story' | 'silent' | 'meng';
+export type SurrenderTier = 'can' | 'hard' | 'never' | 'sure' | 'story' | 'silent' | 'meng' | 'retreat';
 /** 同阵营降将在队（现身说法）用的阵营。 */
 export type SurrenderCamp = 'dongzhuo' | 'zhangxiu' | 'yuan' | 'jingzhou' | 'yizhou' | 'wu' | 'nanzhong' | 'lubu';
 /** 关系 / 旗标加成：某武将在队（主将或随行）、主公是谁、本存档已劝降过谁、本关的旗标。 */
@@ -22,6 +22,7 @@ export interface SurrenderDef {
   /** 某武将在队时，拒绝前先由他说一句（夏侯渊：黄忠先开口）。 */ preIfHero?: { id: string; who: string; text: string };
   /** 本存档已劝降某人时换的归降台词（文丑：颜良已降）。 */ yesIfSurrendered?: { id: string; text: string };
   /** 这个条件生效时不弹窗（华雄：温酒斩华雄优先）。 */ skipIf?: 'wenjiu';
+  /** 败退型（retreat）：打到底不倒地、说这句后淡出退走（没有时用剧本 bossFall）。 */ retreat?: string;
 }
 
 export const SURRENDER_TIERS: Record<SurrenderTier, { seal: string; color: string; base: number }> = {
@@ -32,6 +33,8 @@ export const SURRENDER_TIERS: Record<SurrenderTier, { seal: string; color: strin
   story: { seal: '', color: '#c9b38a', base: 0 },
   silent: { seal: '', color: '#c9b38a', base: 0 },
   meng: { seal: '', color: '#c9b38a', base: 0 },
+  /** 败退型（dual-boss-spec「顺带发现」）：以后还要登场的首领——不弹窗，打到底淡出退走，照掉宝箱、照算击败首领。 */
+  retreat: { seal: '', color: '#c9b38a', base: 0 },
 };
 
 /** 成功率与流程常数（初值）。 */
@@ -44,6 +47,8 @@ export const SURRENDER = {
   bossCaptiveSeasons: 4, captiveSlots: 8,
 } as const;
 
+/** 双首领关同伴加减（dual-boss-spec §3，初值）。 */
+export const PARTNER_ODDS = { persuaded: .2, executed: -.1 } as const;
 const D = (key: string, name: string, title: string, tier: SurrenderTier, o: Partial<SurrenderDef> = {}): SurrenderDef => ({ key, id: key.split(':')[1], name, title, tier, ...o });
 
 export const SURRENDER_DEFS: readonly SurrenderDef[] = [
@@ -60,7 +65,10 @@ export const SURRENDER_DEFS: readonly SurrenderDef[] = [
   D('qunxiong-2:zhangxiu', '张绣', '北地枪王', 'can', { template: 'spear', camp: 'zhangxiu', yes: '文和先生说过，识时务者为俊杰……绣愿降。', no: '宛城之仇未了，休想！' }),
   D('qunxiong-3:yuanshu', '袁术', '仲家伪帝', 'never', { no: '朕乃天子！岂向你等匹夫低头！' }),
   // 第四章
-  D('guandu-1:yanliang', '颜良', '河北上将', 'hard', { template: 'blade', camp: 'yuan', yes: '袁公不能用人……良愿降。', no: '河北上将，只有战死，没有投降！' }),
+  // 双首领方案 A（dual-boss-spec，用户 2026-11-18）：4-1 白马颜良负伤败走（不弹窗）；4-2 延津颜良文丑同台，两人互为「已降 +20%」
+  D('guandu-1:yanliang', '颜良', '河北上将', 'retreat'),
+  D('guandu-2:yanliang', '颜良', '河北上将', 'hard', { template: 'blade', camp: 'yuan', bonuses: [{ kind: 'surrendered', id: 'wenchou', add: .2, label: '文丑已降' }],
+    yes: '袁公不能用人……良愿降。', yesIfSurrendered: { id: 'wenchou', text: '文丑兄弟都降了……良也降了罢。' }, no: '河北上将，只有战死，没有投降！' }),
   D('guandu-2:wenchou', '文丑', '河北上将', 'hard', { template: 'spear', camp: 'yuan', bonuses: [{ kind: 'surrendered', id: 'yanliang', add: .2, label: '颜良已降' }],
     yes: '……文丑认栽。', yesIfSurrendered: { id: 'yanliang', text: '颜良兄弟都降了……罢，罢！' }, no: '要我降？先问我手中这杆枪！' }),
   D('guandu-3:chunyuqiong', '淳于琼', '乌巢守将', 'hard', { template: 'blade', camp: 'yuan', bonuses: [{ kind: 'flag', id: 'depotsAllBurned', add: .15, label: '粮仓尽焚' }],
@@ -68,7 +76,7 @@ export const SURRENDER_DEFS: readonly SurrenderDef[] = [
   // 第五章
   D('chibi-1:caochun', '曹纯', '虎豹骑统领', 'never', { no: '曹氏子弟，只有战死的，没有降的！' }),
   D('chibi-2:caimao', '蔡瑁', '荆州水军都督', 'can', { template: 'bow', camp: 'jingzhou', yes: '荆州降过一回，再降一回又何妨。', no: '丞相待我不薄，我岂能……休想！' }),
-  D('chibi-3:caoren', '曹仁', '征南将军', 'never', { no: '曹子孝生为魏臣，死为魏鬼！' }),
+  D('chibi-3:caoren', '曹仁', '征南将军', 'retreat', { retreat: '……弃城，退守襄阳。' }), // 败退型：9-1 还要登场
   // 第六章（赵范、刘度、黄忠必降）
   D('jingnan-1:zhaofan', '赵范', '桂阳太守', 'sure', { template: 'bow', camp: 'jingzhou', yes: '某本无心抗拒，愿献桂阳印绶，从将军调遣。' }),
   D('jingnan-2:liudu', '刘度', '零陵太守', 'sure', { template: 'strategist', camp: 'jingzhou', yes: '零陵小郡，岂敢逆天兵？愿举城归降。' }),
@@ -79,7 +87,7 @@ export const SURRENDER_DEFS: readonly SurrenderDef[] = [
   D('shu-2:zhangren', '张任', '益州名将', 'never', { no: '老臣终不复事二主！' }),
   D('shu-3:liuzhang', '刘璋', '益州牧', 'story'),
   // 第八章
-  D('hanzhong-1:zhanghe', '张郃', '魏国名将', 'never', { no: '郃已负袁公一次，岂可再负魏王！' }),
+  D('hanzhong-1:zhanghe', '张郃', '魏国名将', 'retreat', { retreat: '阳平关守不住了——退守定军山！' }), // 败退型：8-2、12-1 还要登场
   D('hanzhong-2:xiahouyuan', '夏侯渊', '征西将军', 'never', { no: '夏侯妙才，宁死阵前！', preIfHero: { id: 'huangzhong', who: '黄忠', text: '夏侯渊，老夫的刀，可还快？' } }),
   D('hanzhong-3:caocao', '曹操', '魏王', 'story'),
   // 第九章（庞德：本关胜利后于禁自动进降将栏）
@@ -116,6 +124,7 @@ export interface OddsCtx {
   /** 随行里的首领降将 id（同阵营现身说法）。 */ followerBosses: readonly string[];
   /** 本关旗标（粮仓尽焚等）。 */ flags: Readonly<Record<string, boolean>>;
   /** 选过「再压一压」。 */ pressed: boolean;
+  /** 双首领关：同伴的结果（已降 +20%，已被斩 −10%）。 */ partner?: { id: string; persuaded: boolean; executed: boolean };
 }
 export interface Odds { pct: number; sure: boolean; parts: Array<{ label: string; add: number }> }
 /**
@@ -133,6 +142,9 @@ export function surrenderOdds(d: SurrenderDef, c: OddsCtx): Odds {
     const hit = b.kind === 'hero' ? c.team.includes(b.id) : b.kind === 'lord' ? c.lord === b.id : b.kind === 'surrendered' ? c.surrendered.includes(b.id) : !!c.flags[b.id];
     if (hit) parts.push({ label: b.label, add: b.add });
   }
+  // 双首领关：同伴已降 +20%（颜良文丑表里已写「某某已降」的不重复加）、同伴被斩 −10%
+  if (c.partner?.persuaded && !parts.some(p => p.add > 0 && d.bonuses?.some(b => b.kind === 'surrendered' && b.id === c.partner!.id && b.label === p.label))) parts.push({ label: '同伴已降', add: PARTNER_ODDS.persuaded });
+  if (c.partner?.executed) parts.push({ label: '同伴被斩', add: PARTNER_ODDS.executed });
   if (c.pressed) parts.push({ label: '再压一压', add: S.press });
   const sum = parts.reduce((n, p) => n + p.add, 0);
   return { pct: Math.round(Math.max(0, Math.min(S.cap, sum)) * 100), sure: false, parts: parts.map(p => ({ label: p.label, add: Math.round(p.add * 100) })) };

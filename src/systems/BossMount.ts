@@ -19,7 +19,7 @@ export interface BossMountDef { horse: BossHorse; tint?: number; /** 骑者裁�
 export const RIDE_SEAT = { seat: 200, rise: 50 } as const;
 export const BOSS_RIDE_ART = new Set<string>(['lubu', 'huaxiong', 'zhangliang', 'lijue', 'zhangxiu', 'yanliang']);
 /** 已重画成坐姿的骑乘图（不再裁切，按马镫对位，同英雄 HeroMount）；其余仍用 RIDE_SEAT 裁切过渡。 */
-export const SEATED_RIDE_ART = new Set<string>(['lubu', 'huaxiong', 'zhangliang', 'lijue']);
+export const SEATED_RIDE_ART = new Set<string>(['lubu', 'huaxiong', 'zhangliang', 'lijue', 'zhangxiu']);
 export const bossRideKey = (id: string): string => 'ride_v2_boss_' + id;
 const HORSE_KEY: Record<BossHorse, string> = { chitu: 'horse_v2_chitu_walk', wuzhui: 'horse_v2_wuzhui_walk', jueying: 'horse_v2_jueying_walk', dawan: 'horse_v2_dawan_walk', generic: 'horse_v2_generic_walk' };
 const DIRS = ['down', 'left', 'right', 'up'] as const;

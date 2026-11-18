@@ -103,7 +103,9 @@ import { envConfigFor } from '../data/envInteractions';
 import { Terrain } from '../systems/Terrain';
 import { terrainConfigFor } from '../data/terrain';
 import { Tutorial } from '../systems/Tutorial';
-import { IffOverlay, readIffMode, type IffUnit } from '../systems/IffOverlay';
+import { IffOverlay, readIffMode, warmIffTextures, type IffUnit } from '../systems/IffOverlay';
+import { DAMAGE_LABEL, OUTLINE_LABEL, SCALE_LABEL, SHAKE_LABEL, WIDTH_LABEL, cycle, damageNumbers, outlineMode, outlineWidth, renderScaleSetting, setDamageNumbers, setOutlineMode, setOutlineWidth, setRenderScaleSetting, setShakeLevel, shakeLevel, shakeScale, type DamageNumbers, type OutlineMode, type OutlineWidth, type RenderScaleSetting, type ShakeLevel } from '../systems/BattleSettings';
+import { tutorialReplayLink } from '../ui/TutorialOverlay';
 import type {ItemInstance} from '../data/items';
 import {armShield,absorbShield,ShieldBars} from '../systems/ShieldGuard';
 import {StageObjectives} from '../systems/StageObjectives';
@@ -499,6 +501,12 @@ export class GameScene extends Phaser.Scene {
     {const oldMax=this.player.maxHp;this.player.growth.gear=gearFor(this.runConfig.character);this.player.heal(this.player.maxHp-oldMax);}
     this.followers=null;this.followerPassives=[];{const allow=worldUnlocked()&&(!isChapterTestRun()||new URLSearchParams(location.search).get('followers')==='1');const list=allow?followersFor(this.runConfig.character):[];if(list.length)this.followers=new FollowerSquad(this,this.player,list,(x,y,r)=>this.grid.query(x,y,r),(e,d,fire)=>this.hitEnemy(e,d,this.combatNow,fire?'fire':'melee',true,false),()=>this.player.growth.damageMultiplier(this.combatNow));}
     { const mode = readIffMode(); this.iff = mode ? new IffOverlay(this, mode, () => this.iffUnits()) : null; }
+    // 震屏设置（强 / 弱 / 关，im_shake，见 systems/BattleSettings）：包一层主相机 shake，现有调用全部按设置缩放
+    { const cam = this.cameras.main, orig = cam.shake.bind(cam);
+      cam.shake = ((duration?: number, intensity?: number | Phaser.Math.Vector2, force?: boolean, callback?: Phaser.Types.Cameras.Scene2D.CameraShakeCallback, context?: unknown) => {
+        const k = shakeScale(); if (k <= 0) return cam;
+        return orig(duration, typeof intensity === 'number' ? intensity * k : intensity, force, callback, context);
+      }) as typeof cam.shake; }
     this.shieldBars=new ShieldBars(this);this.events.once('shutdown',()=>{this.shieldBars?.clear();this.shieldBars=null;this.objective?.clear();this.objective=null;this.objectiveText=undefined;});
     this.setupObjective();
     // 坐骑：马厩里给该武将分配的马（第一章通关后马厩开放；换马只在休整时，下一关出征生效）
@@ -1876,6 +1884,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   protected spawnDamageText(x: number, y: number, value: number, crit: boolean, priority=true): void {
+    { const dm = damageNumbers(); if (dm === 'off' || (dm === 'crit' && !crit)) return; } // 设置「伤害数字」
     const crowded=this.legion.visibleCount>=60,limit=crowded?18:32;
     const merged=this.dmgFx.find(f=>f.active&&f.crit===crit&&f.life>.25&&Math.hypot(f.text.x-x,f.text.y-y)<(crowded?44:22));
     if(merged){merged.text.setText(String(Number(merged.text.text)+value));return;}
@@ -2106,7 +2115,7 @@ export class GameScene extends Phaser.Scene {
       this.pausePanel.setVisible(mode === 'pause');
       this.attributePauseText?.setText(`分配属性点 · ${this.player?.growth.unallocated ?? 0}`);
       const exit=this.pausePanel.getByName('pause-exit') as Phaser.GameObjects.Text|null;
-      exit?.setData('confirm',false).setText('返回选将').setColor('#b5c4b2');
+      exit?.setData('confirm',false).setText(IS_DESKTOP?(this.worldCampaign&&worldUnlocked()?'返回营寨':'退出本关'):'返回选将').setColor('#b5c4b2');
     }
     if (this.resultPanel) this.resultPanel.setVisible(mode === 'result');
     if (mode === 'rest' && !this.restIntroPlayed) { this.restIntroPlayed = true; this.playRestIntro(); }
@@ -2310,13 +2319,64 @@ export class GameScene extends Phaser.Scene {
     this.tweens.add({ targets: label, alpha: 0, y: label.y - 8, delay: 1150, duration: 350, onComplete: () => label.destroy() });
   }
 
-  protected createVolumeRow(label: string, y: number, initial: number, onChange: (value: number) => void): Phaser.GameObjects.GameObject[] {
-    const cx = GAME_WIDTH / 2, width = Math.min(330, GAME_WIDTH - 144);
+  /**
+   * 战斗内「军中设置」（电脑版，2026-11-17 用户「暂停改成设置，然后可以调描边什么的」）：
+   * 原暂停面板加宽成两栏——左栏 继续战斗 / 分配属性点 / 行囊 / 战法 / 返回营寨；右栏 音乐 · 音效滑条与各项设置。
+   * 改了立即写入并即时生效，与主页「军中设置」共用同一组键（systems/BattleSettings）。
+   */
+  private layoutSettingsPanel(o: { panelG: Phaser.GameObjects.Graphics; panel: Phaser.GameObjects.Rectangle; pauseTitle: Phaser.GameObjects.Text; pauseHint: Phaser.GameObjects.Text; resume: Phaser.GameObjects.Image; resumeText: Phaser.GameObjects.Text; bgmRow: Phaser.GameObjects.GameObject[]; sfxRow: Phaser.GameObjects.GameObject[]; buildLink: Phaser.GameObjects.Text; bagLink: Phaser.GameObjects.Text; exit: Phaser.GameObjects.Text; keys: Phaser.GameObjects.Text }): void {
+    const W = GAME_WIDTH, H = GAME_HEIGHT, pw = 780, ph = 470, top = (H - ph) / 2, cx = W / 2, lx = cx - 200, rx = cx + 165;
+    o.panelG.clear(); lqPanel(o.panelG, cx - pw / 2, top, pw, ph); o.panel.setSize(pw, ph).setPosition(cx, H / 2); if (o.panel.input) o.panel.input.hitArea.setTo(0, 0, pw, ph);
+    o.pauseTitle.setText('军中设置').setFontFamily(TITLE_FONT).setFontSize(30).setColor('#efd399').setStroke('#120904', 4).setPosition(cx, top + 36);
+    o.pauseHint.setText('战斗已暂停').setFontFamily(FONT).setColor('#b9a57a').setPosition(cx, top + 68);
+    const div = this.add.graphics().setScrollFactor(0); div.lineStyle(1, 0xc9a96a, .35).lineBetween(cx - 30, top + 92, cx - 30, top + ph - 58); this.pausePanel.add(div);
+    // 左栏：动作
+    o.resume.setPosition(lx, top + 128).setDisplaySize(300, 50); o.resumeText.setPosition(lx, top + 128).setFontFamily(HEADING_FONT);
+    this.attributePauseText?.setPosition(lx, top + 190); o.bagLink.setPosition(lx, top + 236); o.buildLink.setPosition(lx, top + 282);
+    o.exit.setPosition(lx, top + ph - 92);
+    for (const t of [this.attributePauseText, o.bagLink, o.buildLink, o.exit]) t?.setFontFamily(HEADING_FONT);
+    o.keys.setText('Esc / P 继续战斗').setPosition(lx, top + ph - 26);
+    // 右栏：音乐 / 音效滑条（原控件，挪到右栏）
+    const moveRow = (row: Phaser.GameObjects.GameObject[], y: number): void => { const kept = row.filter(x => x.active); for (const x of kept) x.destroy(); void y; };
+    moveRow(o.bgmRow, 0); moveRow(o.sfxRow, 0);
+    const width = 250;
+    this.pausePanel.add(this.createVolumeRow('音乐', top + 122, this.music.getVolume(), v => this.music.setVolume(v), rx, width));
+    this.pausePanel.add(this.createVolumeRow('音效', top + 180, this.sfx.getVolume(), v => this.sfx.setVolume(v), rx, width));
+    // 右栏：‹ 值 › 行
+    const rowY = (i: number) => top + 232 + i * 40;
+    const row = <T>(i: number, name: string, key: string, list: readonly T[], get: () => T, label: (v: T) => string, apply: (v: T) => void, note?: () => string): void => {
+      const y = rowY(i);
+      const plate = this.add.graphics().setScrollFactor(0); plate.fillStyle(0x3a2616, .4).fillRoundedRect(rx - width / 2, y - 16, width, 32, 5).lineStyle(1, 0xc9a35e, .3).strokeRoundedRect(rx - width / 2, y - 16, width, 32, 5);
+      const nameT = this.add.text(rx - width / 2 + 12, y, name, { fontFamily: FONT, fontSize: '15px', color: '#e8d8b2', resolution: 2 }).setOrigin(0, .5).setScrollFactor(0).setStroke('#120904', 3);
+      const val = this.add.text(rx + 62, y, label(get()), { fontFamily: HEADING_FONT, fontSize: '16px', color: '#efd399', resolution: 2 }).setOrigin(.5).setScrollFactor(0).setStroke('#120904', 3).setName('settings-' + key);
+      const noteT = note ? this.add.text(rx + width / 2 + 8, y, '', { fontFamily: FONT, fontSize: '11px', color: '#9d8f78', resolution: 2 }).setOrigin(0, .5).setScrollFactor(0) : null;
+      const step = (dir: number): void => { const v = cycle(list, get(), dir); apply(v); val.setText(label(get())); noteT?.setText(note?.() ?? ''); };
+      const parts: Phaser.GameObjects.GameObject[] = [plate, nameT, val];
+      for (const dir of [-1, 1]) {
+        const b = this.add.text(rx + 62 + dir * 62, y, dir < 0 ? '‹' : '›', { fontFamily: HEADING_FONT, fontSize: '20px', color: '#e8d3a6', resolution: 2 }).setOrigin(.5).setScrollFactor(0).setName('settings-' + key + (dir < 0 ? '-dec' : '-inc')).setInteractive({ useHandCursor: true });
+        b.on('pointerdown', () => step(dir)); b.setData('padAdjust', (d2: number) => step(d2));
+        const sk = lqSkin(this, b, b, () => ({ w: 28, h: 26 }), { tone: 'quiet' }); lqHitBox(b, 28, 26); sk.gfx.setScrollFactor(0); parts.push(sk.gfx, b);
+      }
+      if (noteT) parts.push(noteT);
+      this.pausePanel.add(parts);
+    };
+    row<OutlineMode>(0, '敌我描边', 'outline', ['off', 'enemy', 'all'], outlineMode, v => OUTLINE_LABEL[v], v => {
+      setOutlineMode(v); if (this.iff) { this.iff.mode.outline = v !== 'off'; this.iff.mode.enemyOnly = v === 'enemy'; } if (v !== 'off') warmIffTextures(this.game);
+    });
+    row<OutlineWidth>(1, '描边粗细', 'outline-width', ['thin', 'thick'], outlineWidth, v => WIDTH_LABEL[v], v => { setOutlineWidth(v); if (this.iff) this.iff.mode.thick = v === 'thick'; });
+    row<DamageNumbers>(2, '伤害数字', 'damage', ['all', 'crit', 'off'], damageNumbers, v => DAMAGE_LABEL[v], setDamageNumbers);
+    row<ShakeLevel>(3, '震屏', 'shake', ['strong', 'weak', 'off'], shakeLevel, v => SHAKE_LABEL[v], v => { setShakeLevel(v); if (v !== 'off') this.cameras.main.shake(140, .004); });
+    const scale0 = renderScaleSetting();
+    row<RenderScaleSetting>(4, '画面清晰度', 'render-scale', ['', '1', '2', '3'], renderScaleSetting, v => SCALE_LABEL[v], setRenderScaleSetting, () => renderScaleSetting() === scale0 ? '' : '刷新后生效');
+    const replay = tutorialReplayLink(this, rx + width / 2, top + ph - 26).setScrollFactor(0); this.pausePanel.add(replay);
+  }
+
+  protected createVolumeRow(label: string, y: number, initial: number, onChange: (value: number) => void, cx = GAME_WIDTH / 2, width = Math.min(330, GAME_WIDTH - 144)): Phaser.GameObjects.GameObject[] {
     const text = this.add.text(cx-width/2,y-23,label,warText(15,'#c7d6c5'));
     const percent = this.add.text(cx+width/2,y-23,`${Math.round(initial)}%`,warText(15,'#dfc58a')).setOrigin(1,0);
     const track = this.add.rectangle(cx,y+9,width,6,0x07140d).setStrokeStyle(1,0x48634e);
     const fill = this.add.rectangle(cx-width/2,y+9,width*initial/100,4,WAR.jade).setOrigin(0,.5);
-    const hit = this.add.rectangle(cx,y+9,width+24,52,0,0).setInteractive({useHandCursor:true});
+    const hit = this.add.rectangle(cx,y+9,width+24,52,0,0).setInteractive({useHandCursor:true}).setName('volume-'+label);
     const knob = this.add.rectangle(cx-width/2+width*initial/100,y+9,14,20,0xdcc489).setStrokeStyle(1,0xf4dfac).setInteractive({useHandCursor:true});
     const apply = (ratio:number):void => {
       const pct=Math.round(Phaser.Math.Clamp(ratio,0,1)*100);
@@ -2424,7 +2484,7 @@ export class GameScene extends Phaser.Scene {
     const pad = gamepad.device === 'pad';
     this.potionCaption?.setText(pad ? '用药 ' + PAD_LABEL.X : '用药');
     this.pauseKeysText?.setText(pad ? PAD_LABEL.START + ' / ' + PAD_LABEL.B + ' 继续战斗' : IS_DESKTOP ? 'Esc / P 继续战斗' : '战斗已冻结 · 点击「继续战斗」恢复');
-    this.hudTexts?.pause?.setText(pad ? PAD_LABEL.START + ' 暂停' : '暂停');
+    this.hudTexts?.pause?.setText(pad ? PAD_LABEL.START + (IS_DESKTOP ? ' 设置' : ' 暂停') : IS_DESKTOP ? '设置' : '暂停');
     // 有敌营 / 粮草可锁定的战场（子类覆写了 padTargets）多提示 RB
     const lockable = this.padTargets !== GameScene.prototype.padTargets;
     this.hintText?.setText(pad ? (lockable ? '左摇杆移动 · RB 锁定敌营 / 粮草 · 自动攻击' : '左摇杆移动 · 自动攻击') : IS_DESKTOP ? 'WASD / 方向键移动 · 自动攻击' : '自动攻击 · 拖动摇杆移动');
@@ -2888,7 +2948,7 @@ export class GameScene extends Phaser.Scene {
         .setInteractive({ useHandCursor: true })
         .on('pointerdown', () => { if ((this.mode === 'none' && !this.over) || this.mode === 'pause') this.openBattleBag(); }),
       pause: this.add
-        .text(GAME_WIDTH - 24, 20, '暂停', style(17, '#ead39b')).setFixedSize(76,62).setAlign('center').setStroke('#10180f',2)
+        .text(GAME_WIDTH - 24, 20, IS_DESKTOP ? '设置' : '暂停', style(17, '#ead39b')).setFixedSize(76,62).setAlign('center').setStroke('#10180f',2)
         .setOrigin(1, 0)
         .setPadding(8, 18, 8, 18)
         .setScrollFactor(0)
@@ -2909,6 +2969,8 @@ export class GameScene extends Phaser.Scene {
     this.muteText = this.hudTexts.mute;
     this.muteText.setText(this.sfx.muted ? '音效:关' : '音效:开');
     this.hudTexts.music.setText(this.music.mutedState ? '音乐:关' : '音乐:开');
+    // 2026-11-17 用户「暂停改成设置」：电脑版右上只留「设置」，音效 / 音乐挪进设置面板；行囊顶到原音效位
+    if (IS_DESKTOP) { this.hudTexts.mute.setVisible(false).disableInteractive(); this.hudTexts.music.setVisible(false).disableInteractive(); this.hudTexts.bag.setY(100); }
     this.hudTexts.relics = this.add
       .text(28, 308, '', style(12, '#cfc3b0')).setWordWrapWidth(GAME_WIDTH - 56)
       .setScrollFactor(0)
@@ -2967,6 +3029,7 @@ export class GameScene extends Phaser.Scene {
     this.buffHud.update(this.player,this.combatNow,!overlay&&!this.over&&!this.relicExpanded,(id,now)=>this.buffProgress(id,now));
     this.hudGfx.setVisible(!overlay);
     if (this.hudTexts) for (const t of Object.values(this.hudTexts)) t.setVisible(!overlay);
+    if (IS_DESKTOP && this.hudTexts) { this.hudTexts.mute.setVisible(false); this.hudTexts.music.setVisible(false); } // 电脑版：音效 / 音乐在「设置」面板里
     for (const icon of this.relicIcons) icon.setVisible(!overlay && icon.visible);
     if (overlay) { this.hintText?.setVisible(false); return; }
     const g = this.hudGfx;
@@ -3137,10 +3200,11 @@ export class GameScene extends Phaser.Scene {
     });
     const keys=this.pauseKeysText=this.add.text(cx,top+ph-22,d?'Esc / P 继续战斗':'战斗已冻结 · 点击「继续战斗」恢复',warText(12,'#7f9987')).setOrigin(.5);
     // 暂停菜单里的文字入口改为漆金小牌：有底板、悬停 / 按下态，命中区与底板一致
-    const pauseChips=([[this.attributePauseText,pw-120,30],[bagLink,pw-120,32],[buildLink,pw-120,32],[exit,pw-120,36]] as const).map(([t,w,h])=>{
-      const skin=lqSkin(this,t,t,()=>({w,h}),{tone:'quiet'});lqHitBox(t,w,h);return skin.gfx;});
+    const pauseSkins=([[this.attributePauseText,pw-120,30],[bagLink,pw-120,32],[buildLink,pw-120,32],[exit,pw-120,36]] as const).map(([t,w,h])=>{
+      const skin=lqSkin(this,t,t,()=>({w,h}),{tone:'quiet'});lqHitBox(t,w,h);return skin;}),pauseChips=pauseSkins.map(k=>k.gfx);
     this.pausePanel.add([pauseDim,panelG,panel,pauseTitle,pauseHint,...pauseChips,resume,resumeText,...bgmRow,...sfxRow]);
     this.pausePanel.add(this.attributePauseText);this.pausePanel.bringToTop(bagLink);this.pausePanel.bringToTop(buildLink);this.pausePanel.add([exit,keys]);
+    if (d) { this.layoutSettingsPanel({ panelG, panel, pauseTitle, pauseHint, resume, resumeText, bgmRow, sfxRow, buildLink, bagLink, exit, keys }); for (const k of pauseSkins) k.repaint(); } // 底板跟着按钮挪到左栏
 
     this.attributePanel=this.add.container(0,0).setScrollFactor(0).setDepth(DEPTH.overlay+1).setVisible(false);
     const attrDim=this.add.rectangle(0,0,GAME_WIDTH,GAME_HEIGHT,0x07120d,.76).setOrigin(0).setInteractive();

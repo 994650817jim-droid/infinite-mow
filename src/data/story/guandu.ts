@@ -100,7 +100,10 @@ export const GUANDU_STORY: StoryChapter = {
         { who: 'guanyu', text: '文丑，可识得关某？', ifFollower: 'guanyu' },
       ], banner: { title: '诛文丑', caption: '延津道上 · 一合斩之', ifFollower: 'guanyu', flag: 'wenchou_by_guanyu' } },
       after: [{ id: 'guandu-2.after', type: 'interlude', kicker: '幕间', title: '官渡相持', lines: [
-        { text: '河北名将颜良、文丑相继授首，袁军夺气。两军相持于官渡，转眼数月。' },
+        // 首领招降（surrender-spec §9.3）：颜良文丑都降 / 一降一死 / 都斩
+        { text: '河北名将颜良、文丑相继授首，袁军夺气。两军相持于官渡，转眼数月。', ifFlag: '!hebei_surrendered' },
+        { text: '颜良、文丑一降一死，袁军夺气。两军相持于官渡，转眼数月。', ifFlag: 'hebei_surrendered=1' },
+        { text: '河北名将颜良、文丑相继归降，袁军夺气。两军相持于官渡，转眼数月。', ifFlag: 'hebei_surrendered=2' },
         { who: 'yuanshao', text: '（帐中拍案）我有十万之众，岂惧曹阿瞒一隅之兵！' },
       ] }],
     },

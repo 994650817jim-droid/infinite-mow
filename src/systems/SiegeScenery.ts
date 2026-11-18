@@ -3,6 +3,8 @@ import {actorDepth} from '../config';
 import type {CityDef} from '../world/WorldCities';
 import type {CampPoint} from './EnemyCamps';
 import {SIEGE} from '../data/siege';
+import {SIEGE_SPAWN} from '../data/siegeMedium';
+import {paintV2Road} from './EnvGround';
 
 /**
  * 攻城战场：复用现有地面与汜水关物件。北方城池用关中黄土地面，南方（原画长江以南）用绿地面。
@@ -18,6 +20,13 @@ export function siegeScenery(scene: Phaser.Scene, city: CityDef, spawnProp?: (fr
     if (!south) { g.globalCompositeOperation = 'color'; g.fillStyle = 'rgba(160,132,84,.22)'; g.fillRect(0, 0, 512, 512); g.globalCompositeOperation = 'source-over'; }
     tex.refresh(); tex.setFilter(Phaser.Textures.FilterMode.NEAREST);
   }
+  // 冲车路：v2 手绘路面（用户 11-17「这里的路不符合画风」）——小城夯土车辙路，中 / 大城半埋泥草的旧石板官道；缺图才退回程序画的石板路
+  const v2Road = city.tier === 'small' ? 'road_v2_dirt' : 'road_v2_stone', v2Width = 220;
+  if (paintV2Road(scene, 'siege_road_' + v2Road, v2Road, v2Width)) {
+    const roadKey = 'siege_road_' + v2Road, h = scene.textures.get(roadKey).getSourceImage().height;
+    scene.add.tileSprite(0, 0, v2Width, Math.ceil(8192 / h) * h, roadKey).setDepth(1);
+    return finish(roadKey);
+  }
   const roadKey = 'siege_road', roadWidth = 160;
   if (!scene.textures.exists(roadKey)) {
     const road = scene.textures.createCanvas(roadKey, roadWidth, 512)!; const ctx = road.context; ctx.imageSmoothingEnabled = false;
@@ -28,10 +37,13 @@ export function siegeScenery(scene: Phaser.Scene, city: CityDef, spawnProp?: (fr
     ctx.putImageData(image, 0, 0); road.refresh().setFilter(Phaser.Textures.FilterMode.NEAREST);
   }
   scene.add.tileSprite(0, 0, roadWidth, 8192, roadKey).setDepth(1);
+  return finish(roadKey);
+ function finish(roadKey: string) {
   const place = (frame: number, x: number, y: number, size: number) => { if (frame >= 3 && spawnProp) { spawnProp(frame, x, y, size); return; } scene.add.image(x, y, 'sishui_props_refined', frame).setOrigin(.5, 1).setDisplaySize(size, size).setDepth(actorDepth(y)); };
   const all: CampPoint[] = [{x: -340, y: 220, kind: 'shield', name: '城外守军营'}, {x: 360, y: -420, kind: 'archer', name: '城头弓营'}];
   // 大城（攻城战重做）：城墙前是护城河，城头弓营往南挪到河岸以外
-  if (opts.mid && city.tier === 'large') all[1] = {...all[1], x: 400, y: -250};
+  // 攻城（分段推进）：两座敌营在左右两翼上半段（下方是我方营地，敌营不放在我军身后）
+  if (opts.mid) { all[0] = {...all[0], ...SIEGE_SPAWN.flankCamps[0]}; all[1] = {...all[1], ...SIEGE_SPAWN.flankCamps[1]}; }
   const camps = all.slice(0, SIEGE[city.tier].camps);
   for (const c of camps) { place(4, c.x + 113, c.y - 8, 92); place(3, c.x - 110, c.y + 42, 90); place(6, c.x - 98, c.y - 74, 86); }
   const boxes: Array<{left: number; right: number; top: number; bottom: number}> = [];
@@ -41,4 +53,5 @@ export function siegeScenery(scene: Phaser.Scene, city: CityDef, spawnProp?: (fr
   }
   if (city.tier === 'medium' && !opts.mid) { place(0, SIEGE_GATE.x, SIEGE_GATE.y, SIEGE_GATE.size); boxes.push({left: -125, right: 125, top: -340, bottom: -285}); }
   return {key, roadKey, boxes, camps};
+ }
 }

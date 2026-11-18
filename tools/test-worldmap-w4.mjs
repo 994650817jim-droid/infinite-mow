@@ -79,7 +79,7 @@ const winSiege = async p => { await p.evaluate(G0 => { const s = eval(G0); s.spa
   const marks = await p.evaluate(([M0, ids]) => { const s = eval(M0); return ids.map(id => !!s.cityMarkers.find(m => m.city.id === id).root.getByName('alert-' + id)); }, [M, alerts.map(a => a.city)]);
   ck('告急城池有红环与「告急」标记', marks.length > 0 && marks.every(Boolean), { alerts, marks });
   const card = await pick(p, target);
-  ck('告急城池信息卡：“告急：X来犯”，按钮「守城 · 选择武将」', card.detail.includes('来犯') && card.action === '守城 · 选择武将', card);
+  ck('告急城池信息卡：“告急：X来犯”，按钮「亲征 · 守城」', card.detail.includes('来犯') && card.action === '亲征 · 守城', card);
   await p.screenshot({ path: `${out}/mobile-alert-card.png` });
   // 可攻城池：攻城面板带失守警示
   const warn = await p.evaluate(M0 => { const s = eval(M0); const c = s.cityMarkers.find(m => m.city.id === 'chenliu') ?? s.cityMarkers.find(m => s.owned.length && !s.owned.includes(m.city.id)); c.hit.emit('pointerup', { getDistance: () => 0 }); const detail = s.detail.text; s.action.image.emit('pointerup'); const modal = s.children.getByName('siege-modal'); const w = modal?.getByName('siege-warning')?.text; return { detail, w, open: !!modal }; }, M);
@@ -93,6 +93,7 @@ const winSiege = async p => { await p.evaluate(G0 => { const s = eval(G0); s.spa
   await pick(p, target);
   const dm = await p.evaluate(M0 => { const s = eval(M0); s.action.image.emit('pointerup'); const m = s.children.getByName('siege-modal'); return { texts: m.list.filter(o => o.type === 'Text').map(o => o.text).join('|'), warn: !!m.getByName('siege-warning') }; }, M);
   ck('守城面板：标题「守卫」、来犯势力、奖励减半、无失守警示', dm.texts.includes('守卫') && dm.texts.includes('来犯') && dm.texts.includes('守城奖励') && dm.texts.includes('出征守城') && !dm.warn, dm);
+  ck('守城面板：主公亲征，没有选将按钮（用户 11-17「攻城取消选择武将」）', dm.texts.includes('亲征') && await p.evaluate(M0 => { const m = eval(M0).children.getByName('siege-modal'); return !!m.getByName('siege-lord') && !m.list.some(o => /^siege-hero-/.test(o.name || '')); }, M), dm.texts);
   await p.screenshot({ path: `${out}/mobile-defense-modal.png` });
   await p.evaluate(M0 => eval(M0).children.getByName('siege-modal').getByName('siege-go').emit('pointerup'), M);
   await p.waitForFunction(() => window.__game.scene.getScene('SiegeGameScene')?.player && window.__game.scene.isActive('SiegeGameScene'), null, { timeout: 20000 }); await p.waitForTimeout(500);
@@ -138,7 +139,7 @@ const winSiege = async p => { await p.evaluate(G0 => { const s = eval(G0); s.spa
   const lost = await p.evaluate(M0 => { const m = eval(M0).children.getByName('era-modal'); return m?.list.filter(o => o.type === 'Text').map(o => o.text).join('|'); }, M);
   ck('回地图：失守提示“汝南已失守”', !!lost && lost.includes('城池失守') && lost.includes('汝南已失守'), lost);
   await p.screenshot({ path: `${out}/mobile-lost-notice.png` });
-  ck('汝南恢复为时代原主（地方豪强）且可再攻打', await p.evaluate(M0 => { const s = eval(M0); s.children.getByName('era-modal')?.getByName('era-ok').emit('pointerup'); s.cityMarkers.find(m => m.city.id === 'runan').hit.emit('pointerup', { getDistance: () => 0 }); return s.detail.text.includes('归属：地方豪强') && s.action.text.text === '攻城 · 选择武将'; }, M));
+  ck('汝南恢复为时代原主（地方豪强）且可再攻打', await p.evaluate(M0 => { const s = eval(M0); s.children.getByName('era-modal')?.getByName('era-ok').emit('pointerup'); s.cityMarkers.find(m => m.city.id === 'runan').hit.emit('pointerup', { getDistance: () => 0 }); return s.detail.text.includes('归属：地方豪强') && s.action.text.text === '亲征 · 攻城'; }, M));
   await p.close();
 }
 // —— 4. 电脑：时局面板与守城面板 ——

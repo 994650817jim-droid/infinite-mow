@@ -23,7 +23,7 @@ try {
         let xx = x; g.fillStyle = bgc; g.fillRect(x - 12, oy - 12, 256 + 64 + 32 + 16 + 4 * 28 + 12, 256 + 24);
         for (const s of sizes) { g.imageSmoothingQuality = 'high'; g.drawImage(im, xx, oy + (256 - s) / 2, s, s); xx += s + 28; }
       }
-      g.fillStyle = '#5a4a3a'; g.font = '22px H'; g.fillText('256 / 64 / 32 / 16（上：深色底；下：白底）', x, y + 44);
+      g.fillStyle = '#5a4a3a'; g.font = '22px H'; g.fillText('右侧：256 / 64 / 32 / 16', 1040, y + 110); g.fillText('上排深色底、下排白底', 1040, y + 140);
       y += rowH;
     }
     for (const mk of marks) {

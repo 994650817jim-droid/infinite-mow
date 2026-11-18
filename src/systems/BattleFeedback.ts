@@ -2,25 +2,54 @@ import Phaser from 'phaser';
 import type { Enemy } from '../entities/Enemy';
 import { DEPTH } from '../config';
 import { enemyArrowTexture } from './ArrowPalette';
+import type { HitType } from '../data/hitFeel';
+/** 打击感火花（池化）：按攻击类型选现成的手绘序列帧，暴击加大星芒，首领加金属火星。 */
+interface Spark { image: Phaser.GameObjects.Image; start: number; until: number; frames: number; }
+const SPARK_CAP = 28;
 interface Slot { image: Phaser.GameObjects.Image; enemy: Enemy | null; spawnId: number; start: number; duration: number; angle: number; kind: string; active: boolean; death: boolean; elapsed: number; }
 /** Reuses supplied art for procedural transitions; not independent hand-drawn attack frames. */
 export class BattleFeedback {
   private readonly slots: Slot[] = [];
   private readonly impacts: Array<{x:number;y:number;angle:number;until:number;color:number}> = [];
   private readonly hitSprites:Array<{image:Phaser.GameObjects.Image;start:number;until:number}>=[];
+  private readonly sparks: Spark[] = [];
+  /** 统计（测试用）：放出的火花数、因上限丢弃的数 */
+  readonly sparkStats = { shown: 0, dropped: 0 };
   private readonly impactGfx: Phaser.GameObjects.Graphics;
   constructor(private readonly scene: Phaser.Scene) { this.impactGfx=scene.add.graphics().setDepth(DEPTH.fx); }
-  hit(x:number,y:number,angle:number,now:number,source:'melee'|'arrow'|'fire'):void {
-    if(source!=='fire'&&this.scene.textures.exists('refined_impact')){
+  hit(x:number,y:number,angle:number,now:number,source:'melee'|'arrow'|'fire',o:{type?:HitType;crit?:boolean;boss?:boolean}={}):void {
+    if(o.crit||o.boss){this.typedHit(x,y,angle,now,source,o);return;}
+    if((source!=='fire'||o.type==='spell')&&this.scene.textures.exists('refined_impact')){
       if(!this.scene.cameras.main.worldView.contains(x,y))return;
       let slot=this.hitSprites.find(s=>s.until<=now);
       if(!slot&&this.hitSprites.length<20){slot={image:this.scene.add.image(0,0,'refined_impact',0).setDepth(DEPTH.fx),start:0,until:0};this.hitSprites.push(slot);}
-      if(slot){slot.start=now;slot.until=now+180;slot.image.setPosition(x,y-8).setRotation(angle).setFrame(0).setDisplaySize(source==='arrow'?26:34,source==='arrow'?26:34).setAlpha(1).setVisible(true);}
+      const sz=o.type==='blunt'?46:o.type==='slash'?38:o.type==='pierce'?32:source==='arrow'?26:34;
+      if(slot){if(source==='fire')slot.image.setTint(0xffb070);else slot.image.clearTint();slot.start=now;slot.until=now+180;slot.image.setPosition(x,y-8).setRotation(angle).setFrame(0).setDisplaySize(sz,sz).setAlpha(1).setVisible(true);}
       return;
     }
     if(this.impacts.length>=32)return;
     this.impacts.push({x,y:y-8,angle,until:now+130,color:source==='fire'?0xffbd76:source==='arrow'?0xe9d49c:0xf1ebcc});
   }
+  /** 按攻击类型的命中火花：斩击 / 穿刺 / 钝击 / 箭矢 / 法术；暴击叠大星芒；首领叠金属火星。全部是现成手绘序列帧，同屏上限 SPARK_CAP，超出丢弃。 */
+  private typedHit(x:number,y:number,angle:number,now:number,source:'melee'|'arrow'|'fire',o:{type?:HitType;crit?:boolean;boss?:boolean}):void {
+    if(!this.scene.cameras.main.worldView.contains(x,y))return;
+    const type=o.type??(source==='arrow'?'arrow':source==='fire'?'spell':'slash'),cy=y-8;
+    // 基础火花：refined_impact（手绘命中星光）按类型改大小 / 色调；穿刺用 strike_glint 星芒
+    if(type==='pierce')this.spark('fx_strike_glint',x,cy,30,angle,now,160,true);
+    else{const size=type==='blunt'?46:type==='arrow'?26:type==='spell'?32:38;this.spark('refined_impact',x,cy,size,angle,now,180,false,type==='spell'?0xffb070:undefined);}
+    if(o.crit)this.spark('fx_strike_glint',x,cy-4,o.boss?64:54,angle,now,200,true,0xffd27a);
+    if(o.boss){this.spark('fx_drag_sparks',x-Math.cos(angle)*6,cy,58,angle+Math.PI,now,260,true);if(!o.crit)this.spark('fx_strike_glint',x,cy,40,angle,now,170,true);}
+  }
+  private spark(key:string,x:number,y:number,size:number,angle:number,now:number,ms:number,add:boolean,tint?:number):void{
+    if(!this.scene.textures.exists(key))return;
+    let sp=this.sparks.find(s=>s.until<=now);
+    if(!sp){if(this.sparks.length>=SPARK_CAP){this.sparkStats.dropped++;return;}sp={image:this.scene.add.image(0,0,key,0).setDepth(DEPTH.fx+.2).setName('hit-spark'),start:0,until:0,frames:1};this.sparks.push(sp);}
+    const tex=this.scene.textures.get(key);sp.frames=Math.max(1,tex.frameTotal-1);sp.start=now;sp.until=now+ms;this.sparkStats.shown++;
+    sp.image.setTexture(key,0).setPosition(x,y).setRotation(angle).setDisplaySize(size,size).setAlpha(1).setVisible(true).setBlendMode(add?Phaser.BlendModes.ADD:Phaser.BlendModes.NORMAL);
+    if(tint===undefined)sp.image.clearTint();else sp.image.setTint(tint);
+  }
+  /** 当前可见火花数（测试用） */
+  liveSparks(now:number):number{return this.sparks.filter(s=>s.until>now).length;}
   attack(enemy: Enemy, angle: number, now: number, duration = 230): void {
     if (!enemy.def.walkVisual || !enemy.walkSheet) return;
     enemy.holdAttackPose(now, angle, duration);
@@ -39,6 +68,7 @@ export class BattleFeedback {
       .setPosition(enemy.x, enemy.y).setScale(enemy.sprite.scaleX, enemy.sprite.scaleY).setRotation(0).setAlpha(.85).setVisible(true);
   }
   update(now: number, resultDeltaMs = 0): void {
+    for(const sp of this.sparks){if(now>=sp.until){if(sp.image.visible)sp.image.setVisible(false);continue;}const t=(now-sp.start)/(sp.until-sp.start);sp.image.setFrame(Math.min(sp.frames-1,Math.floor(t*sp.frames)));}
     for(const slot of this.hitSprites){if(now>=slot.until){slot.image.setVisible(false);continue;}slot.image.setFrame(Math.min(5,Math.floor((now-slot.start)/30)));}
     this.impactGfx.clear();
     for(let i=this.impacts.length-1;i>=0;i--) {
@@ -61,7 +91,7 @@ export class BattleFeedback {
       else this.draw(slot, now);
     }
   }
-  clearAttacks(): void { for(const s of this.hitSprites){s.until=0;s.image.setVisible(false);}this.impacts.length=0;this.impactGfx.clear(); for (const slot of this.slots) if (!slot.death) this.release(slot); }
+  clearAttacks(): void { for(const sp of this.sparks){sp.until=0;sp.image.setVisible(false);} for(const s of this.hitSprites){s.until=0;s.image.setVisible(false);}this.impacts.length=0;this.impactGfx.clear(); for (const slot of this.slots) if (!slot.death) this.release(slot); }
   private acquire(priority = false): Slot | undefined {
     let slot = this.slots.find(s => !s.active);
     if (!slot && this.slots.length < 24) {

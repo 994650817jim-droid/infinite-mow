@@ -12,7 +12,7 @@ try {
     p.on('pageerror', e => errors.push(e.message)); p.on('console', m => { if (m.type() === 'error') errors.push(m.text()); });
     await p.addInitScript(sv => { localStorage.clear(); localStorage.setItem('im_world_v1', JSON.stringify(sv)); }, save);
     await p.goto(base + '?layout=' + layout); await p.waitForFunction(() => window.__game?.scene.isActive('MenuScene'), null, { timeout: 30000 });
-    await p.evaluate(() => window.__game.scene.getScene('MenuScene').scene.start('WorldMapScene')); await p.waitForFunction(() => window.__game.scene.isActive('WorldMapScene'));
+    await p.evaluate(() => { window.__game.scene.getScene('MenuScene').scene.start('WorldMapScene'); }); await p.waitForFunction(() => window.__game.scene.isActive('WorldMapScene'));
     await p.waitForTimeout(900);
     // 关掉时局变化提示（若有）
     await p.evaluate(() => { const s = window.__game.scene.getScene('WorldMapScene'); const ok = s.children.getByName('era-modal')?.getByName?.('era-ok'); if (ok) { ok.emit('pointerup'); } });

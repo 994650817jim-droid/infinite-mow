@@ -24,7 +24,7 @@ const battle = async hero => {
   await p.waitForTimeout(300);
   return p;
 };
-const state = p => p.evaluate(async G0 => { const s = eval(G0), pl = s.player; const m = await import(performance.getEntriesByType('resource').map(e => e.name).find(n => n.includes('/src/systems/SpriteMetrics.ts'))); const key = pl.sprite.texture.key, med = m.sheetFigureHeight(s, key) ?? pl.sprite.frame.height; return { action: pl.currentAction, tex: key, frame: String(pl.sprite.frame.name), flip: pl.sprite.flipX, h: Math.round(pl.sprite.scaleY * med) }; }, G);
+const state = p => p.evaluate(async G0 => { const s = eval(G0), pl = s.player; const m = await import('/src/systems/SpriteMetrics.ts') /* 资源计时表默认只记 250 条，模块多了查不到，直接按路径取 */; const key = pl.sprite.texture.key, med = (m.sheetFigureHeight(s, key) ?? pl.sprite.frame.height) / (pl.actionScaleNow || 1); /* 11-18：动作帧另乘逐帧尺寸系数（data/heroActionFit.ts，补图集里画小 / 画大的行），这里除掉，只比整套比例；逐帧大小由 test-hero-action-fit 验 */ return { action: pl.currentAction, tex: key, frame: String(pl.sprite.frame.name), flip: pl.sprite.flipX, h: Math.round(pl.sprite.scaleY * med) }; }, G);
 const shot = (p, file) => p.screenshot({ path: `${out}/${file}`, clip: { x: 130, y: 360, width: 130, height: 130 } });
 
 // 普攻按时长占比换帧（刀将举刀仅 16ms），取样时可能已到本行后续帧：只检查落在对应方向那一行

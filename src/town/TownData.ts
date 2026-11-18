@@ -2,7 +2,8 @@
  * 义军营寨（主城）：建筑表、按章节分阶段开放、每场出征后的结算。纯数据与纯函数，不碰存档 / 界面。
  * 2026-11-16 简化（用户批准，见共享笔记 city-simplify-proposal.md）：
  * - 只有一种货币「军粮」（存档字段 provisions）；军功、钱、税收、民户、市集、商队、季度事件全部取消。
- * - 营寨（第一章后）→ 县城（第二章后）→ 州府（第三章后或占领第一座城）逐步开放建筑。
+ * - 营寨（第一章后）→ 县城（占领第一座城镇时自动升级）→ 州府（第三章后或占领一座城，花军粮扩建）逐步开放建筑。
+ * - 营寨档所有建筑只到 Lv1、不能升级（用户 2026-11-18：「营寨只有lv1建筑不可以升级，只有占领城镇才解锁升级建筑」）。
  * - 原医馆 / 铁匠铺 / 校场 / 城墙的出征加成搬进讲武堂科技树（src/data/tech.ts）。
  * 数值为占位初值，由「平衡与数值」会话调整。
  */
@@ -41,7 +42,9 @@ export interface TownState {
   levied?: string;
 }
 /** 主帐升级的章节前提。 */
-export interface TownProgress { hulao: boolean; bigCity: boolean }
+export interface TownProgress { hulao: boolean; bigCity: boolean; /** 占领过城镇（天下地图上的小 / 中 / 大城）。 */ city: boolean }
+/** 营寨档（主帐 Lv1）建筑不能升级时的提示。 */
+export const CAMP_LOCK = '占领城镇后可扩建';
 
 /** 旧货币折算成军粮：军功 ×a、钱 ×b（旧存档迁移，以及仍按军功 / 钱给出的奖励表）。占位，平衡会话定。 */
 // 2026-11-16 平衡（用户批准，city-values-balance.md）：军功 → 军粮 ×2（收支里军功与粮草都约 1:2），钱 → 军粮 ×1.5（市集约 1.5 粮 / 钱）
@@ -86,7 +89,8 @@ export const TOWN_BUILDINGS: Record<TownBuildingId, BuildingDef> = {
 };
 /** 主帐扩建：花费与章节前提。 */
 export const HALL_UPGRADE: Record<number, { cost: Cost; needs: string; ok: (p: TownProgress) => boolean }> = {
-  1: { cost: 560, needs: '第二章（讨董）通关', ok: p => p.hulao },
+  // 营寨 → 县城：不花军粮，占领第一座城镇时自动升级（WorldStore.applyCampRule）；这里只给界面写条件
+  1: { cost: 0, needs: '占领城镇', ok: p => p.city },
   2: { cost: 1400, needs: '第三章通关或占领一座城池', ok: p => p.bigCity },
 };
 
@@ -101,6 +105,8 @@ export function nextCost(t: TownState, id: TownBuildingId): Cost | null { const 
 export function buildBlockers(t: TownState, id: TownBuildingId, p: TownProgress): string[] {
   const l = levelOf(t, id), hall = levelOf(t, 'hall'), out: string[] = [];
   if (l >= (TOWN_BUILDINGS[id].maxLevel ?? MAX_LEVEL)) return ['已达最高等级'];
+  // 营寨档：已建成的建筑（含主帐）都不能升级，只能新建到 Lv1
+  if (hall <= 1 && l >= 1) return [CAMP_LOCK];
   if (id === 'hall') { const u = HALL_UPGRADE[l]; if (u && !u.ok(p)) out.push(u.needs); return out; }
   if (id === 'barracks') { const need = BARRACKS_HALL[l + 1]; if (need && hall < need) out.push(`扩建为${CITY_SIZE[need]}`); return out; }
   const minHall = TOWN_BUILDINGS[id].minHall ?? 1;

@@ -43,36 +43,58 @@ const base8 = { version: 8, yellowStages: 3, dongzhuoStages: 0, warlordStages: 0
   const r = await store(p, (w, t) => {
     const o = {}; let s = w.loadWorld(); o.start = { ...s.town.levels };
     o.open = Object.fromEntries(Object.keys(t.TOWN_BUILDINGS).map(id => [id, t.buildingOpen(s.town, id)]));
-    o.stable = w.townUpgrade('stable'); o.hallBlocked = w.townUpgrade('hall');
+    o.stable = w.townUpgrade('stable'); o.hallBlocked = w.townUpgrade('hall'); o.barracksBlocked = w.townUpgrade('barracks'); o.farmBlocked = w.townUpgrade('farm'); o.talentBlocked = w.townUpgrade('talent');
     o.potionNoAcademy = w.researchTech('potion');
     o.academy = w.townUpgrade('academy'); o.potion = w.researchTech('potion'); o.potionAgain = w.researchTech('potion');
     o.rangedNeeds = w.researchTech('drill_ranged'); o.tier2 = w.researchTech('medicine');
     o.melee = w.researchTech('drill_melee'); o.forge = w.researchTech('forge');
     s = w.loadWorld(); o.after = { grain: s.provisions, tech: s.town.tech };
     o.eff = w.permanentEffects();
-    // 第二章通关后可扩建县城，开放马厩
+    // 2026-11-18 用户：「营寨只有lv1建筑不可以升级，只有占领城镇才解锁升级建筑」——第二章通关也不行，占领第一座城镇时营寨自动升为县城
     const raw = JSON.parse(localStorage.getItem('im_world_v1')); raw.cleared.hulao = true; raw.dongzhuoStages = 3; localStorage.setItem('im_world_v1', JSON.stringify(raw)); localStorage.removeItem('im_world_backup_v1');
-    o.hall = w.townUpgrade('hall'); o.stable2 = w.townUpgrade('stable'); o.cap = w.stableCapacity(); o.lvl = w.stableLevel();
+    o.hallAfterHulao = w.loadWorld().town.levels.hall; o.hallBlocked2 = w.townUpgrade('hall');
+    const g0 = w.loadWorld().provisions; o.granted = w.grantCity('xuchang'); o.hallLv = w.loadWorld().town.levels.hall; o.hallFree = w.loadWorld().provisions === g0;
+    o.hall = { ok: o.hallLv === 2 }; o.barracksUp = w.townUpgrade('barracks'); o.stable2 = w.townUpgrade('stable'); o.cap = w.stableCapacity(); o.lvl = w.stableLevel();
     return o;
   });
   ck('新档：营寨起步 主帐 / 军营 / 农田 Lv1，其余未建', r.start.hall === 1 && r.start.barracks === 1 && r.start.farm === 1 && !r.start.academy && !r.start.stable, r.start);
   ck('营寨阶段只开放主帐、军营、农田、讲武堂、招贤馆', r.open.hall && r.open.barracks && r.open.farm && r.open.academy && r.open.talent && !r.open.stable && !r.open.granary && !r.open.pavilion, r.open);
-  ck('马厩需县城；主帐扩建需第二章通关', !r.stable.ok && r.stable.message.includes('县城') && !r.hallBlocked.ok && r.hallBlocked.message.includes('第二章'), [r.stable, r.hallBlocked]);
+  ck('马厩需县城；营寨档主帐 / 军营 / 农田 / 招贤馆都不能升级，提示「占领城镇后可扩建」', !r.stable.ok && r.stable.message.includes('县城') && [r.hallBlocked, r.barracksBlocked, r.farmBlocked, r.talentBlocked].every(x => !x.ok && x.message.includes('占领城镇后可扩建')), [r.stable, r.hallBlocked, r.barracksBlocked, r.farmBlocked, r.talentBlocked]);
+  ck('第二章通关也不能花军粮扩建；占领第一座城镇时营寨自动升为县城（不花军粮），建筑解锁升级', r.hallAfterHulao === 1 && !r.hallBlocked2.ok && r.granted && r.hallLv === 2 && r.hallFree && r.barracksUp.ok, r);
   ck('讲武堂未建不能研究；建成后研究回血药扣军粮；不能重复研究', !r.potionNoAcademy.ok && r.academy.ok && r.potion.ok && !r.potionAgain.ok, [r.potionNoAcademy, r.potion, r.potionAgain]);
   ck('前置与层数限制（弓弩操练需刀枪操练；第二层需讲武堂 Lv2）', !r.rangedNeeds.ok && !r.tier2.ok && r.tier2.message.includes('Lv2'), [r.rangedNeeds, r.tier2]);
   ck('花费正确：讲武堂 150 + 回血药 150 + 刀枪 150 + 磨砺 150', r.after.grain === 3000 - 150 - 150 - 150 - 150 && r.melee.ok && r.forge.ok, r.after);
   ck('出征效果：回血药 2 份 30%、刀盾 / 长枪开局 Lv2、伤害 +4%', r.eff.potions?.count === 2 && r.eff.potions.ratio === .3 && r.eff.troopLevels.swordsman === 2 && r.eff.troopLevels.spearman === 2 && Math.abs(r.eff.damageBonus - .04) < 1e-9, r.eff);
-  ck('第二章后扩建县城、建马厩（接口：等级 1、可养 2 匹）', r.hall.ok && r.stable2.ok && r.lvl === 1 && r.cap === 2, [r.hall, r.stable2, r.cap]);
+  ck('升县城后建马厩（接口：等级 1、可养 2 匹）', r.hall.ok && r.stable2.ok && r.lvl === 1 && r.cap === 2, [r.hall, r.stable2, r.cap]);
   ck('营寨不再有「城池发展」（改为各城建筑）', typeof r.focusLocked === 'undefined', r.focusLocked);
+  await p.close();
+}
+
+// —— 2a. 营寨档存档读档压回 Lv1；卡片按钮写「占领城镇后可扩建」（用户 2026-11-18）——
+{
+  const p = await page({ ...base8, provisions: 3000, version: 9, town: { year: 185, season: 1, levels: { hall: 1, barracks: 3, farm: 2, academy: 2, talent: 3, stable: 0, granary: 0, pavilion: 0 }, focus: {}, report: null, tech: [], drill: 0 } }, 'desktop');
+  const r = await store(p, w => ({ ...w.loadWorld().town.levels }));
+  ck('营寨档旧存档：Lv1 以上的建筑读档时压回 Lv1', r.hall === 1 && r.barracks === 1 && r.farm === 1 && r.academy === 1 && r.talent === 1, r);
+  await p.evaluate(() => window.__game.scene.getScenes(true).forEach(s => s.scene.start('CityScene')));
+  await p.waitForFunction(() => window.__game.scene.isActive('CityScene'), null, { timeout: 30000 }); await p.waitForTimeout(1000);
+  await p.evaluate(() => { const c = window.__game.scene.getScene('CityScene'); const h = c.hits.find(h => h.name === 'bld-barracks'); h.emit('pointerdown'); h.emit('pointerup'); });
+  await p.waitForTimeout(300);
+  const card = await p.evaluate(() => { const c = window.__game.scene.getScene('CityScene'), card = c.children.getByName('town-card'), all = card.list.filter(o => o.type === 'Text').map(o => o.text); return { lock: card.getByName('town-card-camp-lock')?.text, cost: !!card.getByName('town-card-cost'), btn: all.includes('需占领城镇') }; });
+  await p.screenshot({ path: `${out}/camp-lv1-card-desktop.png` });
+  const before = await store(p, w => w.loadWorld().provisions);
+  await p.evaluate(() => window.__game.scene.getScene('CityScene').children.getByName('town-card').getByName('town-upgrade').emit('pointerdown'));
+  await p.waitForTimeout(300);
+  const after = await store(p, w => ({ grain: w.loadWorld().provisions, lv: w.loadWorld().town.levels.barracks }));
+  ck('营寨卡片：不显示花费，写「营寨只有 Lv1：占领城镇后可扩建」，按钮「需占领城镇」灰掉、点了不扣军粮', /占领城镇后可扩建/.test(card.lock ?? '') && !card.cost && card.btn && after.grain === before && after.lv === 1, { card, before, after });
   await p.close();
 }
 
 // —— 2b. 招贤馆建筑：从招募存档读入旧等级；升级花军粮、不受主帐等级限制 ——
 {
-  const p = await page({ ...base8, provisions: 5000 }, 'mobile', { im_roster_v1: JSON.stringify({ version: 1, hall: 2 }) });
+  const p = await page({ ...base8, provisions: 5000, ownedCities: ['xuchang'], capturedEver: ['xuchang'] }, 'mobile', { im_roster_v1: JSON.stringify({ version: 1, hall: 2 }) }); // 已占一城：营寨已是县城（营寨档招贤馆也只到 Lv1）
   const r = await store(p, (w, t) => { const o = { lv0: w.talentLevel() }; w.saveWorld(); localStorage.setItem('im_roster_v1', JSON.stringify({ version: 1, hall: 1 })); o.lv1 = w.talentLevel(); o.up = w.townUpgrade('talent'); o.lv2 = w.talentLevel(); o.max = w.townUpgrade('talent'); o.cost = t.nextCost(w.loadWorld().town, 'talent'); o.grain = w.loadWorld().provisions; return o; });
   ck('招贤馆：读入旧招募存档的 2 级，写盘后不再重读', r.lv0 === 2 && r.lv1 === 2, r);
-  ck('招贤馆：营寨（主帐 Lv1）也能升到 3 级，花军粮 1800（招募会话的价目）', r.up.ok && r.lv2 === 3 && !r.max.ok && r.cost === null && r.grain === 5000 - 1800, r);
+  ck('招贤馆：占城后（县城）可升到 3 级、不受主帐等级限制，花军粮 1800（招募会话的价目）', r.up.ok && r.lv2 === 3 && !r.max.ok && r.cost === null && r.grain === 5000 - 1800, r);
   await p.close();
 }
 
@@ -91,14 +113,15 @@ const base8 = { version: 8, yellowStages: 3, dongzhuoStages: 0, warlordStages: 0
   const p = await page({ ...base8, provisions: 5000, reserve: { rider: 2 } });
   const r = await store(p, w => {
     const o = { k1: w.unlockedTroopKinds(), xbow: w.recruitReserve('crossbowman'), base: w.recruitReserve('archer') };
+    o.camp = w.townUpgrade('barracks'); w.grantCity('xuchang'); // 营寨档不能升；占城后（县城）再升
     o.up2 = w.townUpgrade('barracks'); o.k2 = w.unlockedTroopKinds(); o.xbow2 = w.recruitReserve('crossbowman');
     o.up3 = w.townUpgrade('barracks'); o.up4 = w.townUpgrade('barracks'); o.lv = w.barracksLevel(); o.reinf = w.permanentEffects().reinforcements;
     o.rider = w.loadWorld().reserve.rider; o.riderBuy = w.recruitReserve('rider');
     o.grain = w.loadWorld().provisions; return o; });
   ck('军营 1 级只能招刀盾 / 长枪 / 弓箭；连弩提示「军营 Lv.2 解锁」', r.k1.join() === 'swordsman,spearman,archer' && !r.xbow.ok && r.xbow.message.includes('Lv.2') && r.base.ok, r);
-  ck('军营升 2 级（120）解锁连弩兵，升 3 级（240）；4 级要县城', r.up2.ok && r.k2.includes('crossbowman') && r.xbow2.ok && r.up3.ok && !r.up4.ok && r.up4.message.includes('县城') && r.lv === 3, r);
+  ck('营寨档军营不能升级；占城升县城后：升 2 级（120）解锁连弩兵，3 级（240）、4 级（400）', !r.camp.ok && r.camp.message.includes('占领城镇') && r.up2.ok && r.k2.includes('crossbowman') && r.xbow2.ok && r.up3.ok && r.up4.ok && r.lv === 4, r);
   ck('老存档已有的轻骑兵保留（2 人），但军营不到 5 级不能再招', r.rider === 2 && !r.riderBuy.ok && r.riderBuy.message.includes('Lv.5'), r);
-  ck('开局增援：军营 3 级 = 2 人', r.reinf === 2, r);
+  ck('开局增援：军营 4 级 = 2 人（封顶）', r.reinf === 2, r);
   await p.close();
   const p2 = await page({ ...base8, provisions: 5000, cleared: { huangjin: true, hulao: true }, dongzhuoStages: 3, warlordStages: 3, town: { year: 186, season: 0, levels: { hall: 3, barracks: 5, farm: 1, academy: 0, talent: 1, stable: 0, granary: 0, pavilion: 0 }, focus: {}, report: null, tech: [], drill: 0 }, version: 9 });
   const r2 = await store(p2, w => { const o = { k5: w.unlockedTroopKinds() }; o.up6 = w.townUpgrade('barracks'); o.k6 = w.unlockedTroopKinds(); o.reinf = w.permanentEffects().reinforcements; o.max = w.townUpgrade('barracks'); return o; });
@@ -131,7 +154,7 @@ for (const layout of ['mobile', 'desktop']) {
     return { nav: ['city-map', 'city-academy', 'city-focus', 'city-expedition', 'city-recruit', 'city-talent', 'city-tax', 'city-trade'].map(n), grain: c.children.getByName('city-grain')?.text, hint: c.children.getByName('city-hint')?.text,
       blds: c.hits.map(h => h.name), recruit: b('city-recruit'), grainBox: b('city-grain'), boon: b('city-boon'), mapBtn: b('city-map') }; });
   ck(`${layout}：营寨只剩「天下地图」一个按钮（讲武堂 / 出征 / 招募 / 招贤馆都改为点建筑或走天下地图）`, ui.nav.join() === 'true,false,false,false,false,false,false,false', ui.nav);
-  ck(`${layout}：顶部显示军粮与扩建提示`, ui.grain === '军粮 800' && ui.hint.includes('第二章'), [ui.grain, ui.hint]);
+  ck(`${layout}：顶部显示军粮与扩建提示`, ui.grain === '军粮 800' && ui.hint.includes('占领一座城镇'), [ui.grain, ui.hint]);
   ck(`${layout}：全景只画营寨阶段的建筑`, ui.blds.sort().join() === 'bld-academy,bld-barracks,bld-farm,bld-hall,bld-talent', ui.blds);
   const overlap = (a, c) => a && c && a.x < c.x + c.width && c.x < a.x + a.width && a.y < c.y + c.height && c.y < a.y + a.height;
   ck(`${layout}：「天下地图」按钮不与军粮文字相叠`, !overlap(ui.mapBtn, ui.grainBox), [ui.mapBtn, ui.grainBox]);
@@ -220,7 +243,7 @@ for (const layout of ['mobile', 'desktop']) {
 
 // —— 6. 战斗开局：回血药进药囊、刀盾 / 长枪开局 Lv2 ——
 {
-  const save = { ...base8, version: 9, provisions: 100, town: { year: 185, season: 1, levels: { hall: 1, barracks: 2, farm: 1, academy: 1, stable: 0, granary: 0, pavilion: 0 }, focus: {}, report: null, tech: ['potion', 'drill_melee'], drill: 2 } };
+  const save = { ...base8, version: 9, provisions: 100, ownedCities: ['xuchang'], capturedEver: ['xuchang'], town: { year: 185, season: 1, levels: { hall: 1, barracks: 2, farm: 1, academy: 1, stable: 0, granary: 0, pavilion: 0 }, focus: {}, report: null, tech: ['potion', 'drill_melee'], drill: 2 } };
   const p = await page(save);
   await p.evaluate(async () => { const { getCharacter } = await import('/src/data/characters.ts'); const m = window.__game.scene.getScene('MenuScene'); m.registry.set('worldCampaign', true); m.registry.remove('campaignTransfer'); m.registry.set('runConfig', { chapter: 'huangjin', stage: 1, character: 'zhaoyun', weapon: getCharacter('zhaoyun').startWeapon }); m.scene.start('GameScene'); });
   await p.waitForFunction(() => { const g = window.__game.scene.getScene('GameScene'); return window.__game.scene.isActive('GameScene') && g.player && g.legion; }, null, { timeout: 120000 }); await p.waitForTimeout(1500);

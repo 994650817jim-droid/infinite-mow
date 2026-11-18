@@ -64,6 +64,7 @@ export class TownScene extends Phaser.Scene {
   // 民居（营寨旧图）与居民行走图：纯装饰
   for (const a of new Set(HOUSE_ART)) for (let l = 1; l <= 3; l++) worldAssets(this, `city_${a}_${l}`, `assets/city/${a}_${l}.webp`);
   for (const f of FOLK_SHEETS) worldAssets(this, f.key, f.url);
+  worldAssets(this, 'town_badge_upgrade', 'assets/town-city/badge_upgrade.png'); worldAssets(this, 'town_badge_build', 'assets/town-city/badge_build.png');
   if (TOWN_ART_READY) { worldAssets(this, `town_bg_${t}`, `assets/town-city/bg_${t}.webp`); for (const id of CITY_BUILDING_IDS) for (let l = 1; l <= 3; l++) worldAssets(this, `town_${id}_${l}`, `assets/town-city/${id}_${l}.webp`); }
   else { const n = BORROW_BG[t]; worldAssets(this, `city_bg_${n}`, `assets/city/bg_${n}.webp`); for (const id of CITY_BUILDING_IDS) for (let l = 1; l <= 3; l++) worldAssets(this, `city_${BORROW_BUILDING[id]}_${l}`, `assets/city/${BORROW_BUILDING[id]}_${l}.webp`); }
  }
@@ -135,7 +136,7 @@ export class TownScene extends Phaser.Scene {
    const name = CITY_BUILDINGS[id].name, label = l > 0 ? `${name} Lv${l}` : block.length ? `${name} · 需${block[0]}` : `＋ ${name}`;
    const tag = txt(this, x, y - (l > 0 ? 4 : h * .24), label, D ? 12 : 13, l > 0 ? '#fff1cf' : block.length ? '#b3a78f' : '#f6e2ae').setOrigin(.5, 1).setBackgroundColor(l > 0 ? '#20150dcc' : '#20150d99').setPadding(6, 2, 6, 2).setName('tag-' + id);
    this.pano.add(tag);
-   if (ready) { const badge = this.add.container(x + w * .32, Math.max(14, y - h + 10)); badge.add(this.add.circle(0, 0, 11, 0x2f7a3a).setStrokeStyle(2, 0xd8f0b8)); badge.add(txt(this, 0, 0, '↑', 14, '#ffffff', HEADING_FONT).setOrigin(.5)); badge.setName('ready-' + id); this.pano.add(badge); this.tweens.add({targets: badge, y: badge.y - 4, yoyo: true, repeat: -1, duration: 600, ease: 'Sine.easeInOut'}); }
+   if (ready) { const badge = this.add.container(x + w * .32, Math.max(14, y - h + 10)); const bk = l > 0 ? 'town_badge_upgrade' : 'town_badge_build'; /* 2026-11-18 手绘「可升级 / 可建造」徽记（美术会话 art-style）；缺图时退回原绿圆 ↑ */ if (this.textures.exists(bk)) badge.add(this.add.image(0, 0, bk).setOrigin(.5, .56).setDisplaySize(32, 32)); else { badge.add(this.add.circle(0, 0, 11, 0x2f7a3a).setStrokeStyle(2, 0xd8f0b8)); badge.add(txt(this, 0, 0, '↑', 14, '#ffffff', HEADING_FONT).setOrigin(.5)); } badge.setName('ready-' + id); this.pano.add(badge); this.tweens.add({targets: badge, y: badge.y - 4, yoyo: true, repeat: -1, duration: 600, ease: 'Sine.easeInOut'}); }
    const hit = this.add.rectangle(x, y - h / 2, Math.max(w * .8, 60), Math.max(h, 50), 0xffffff, .001).setName('bld-' + id).setInteractive({useHandCursor: true});
    hit.on('pointerdown', () => { this.pressed = id; });
    hit.on('pointerup', () => { const own = this.pressed === id; this.pressed = null; if (!own || this.drag?.moved) return; this.openCard(id); });

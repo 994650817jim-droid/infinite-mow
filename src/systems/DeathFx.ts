@@ -167,8 +167,8 @@ export class DeathFx {
       if (this.horses.length < DEATH_FX.horseCap) { h = { img: this.scene.add.image(0, 0, HORSE, 'left_0').setVisible(false).setName('death-fx-horse'), active: false, start: 0, x: 0, y: 0, dir: 1, vy: 0, size: 60, face: 'left' }; this.horses.push(h); }
       else { h = this.horses[this.horseCursor]; this.horseCursor = (this.horseCursor + 1) % this.horses.length; }
     }
-    h.active = true; h.start = now; h.dir = -dir; h.vy = (Math.random() * 2 - 1) * 70; h.face = h.dir < 0 ? 'left' : 'right'; h.x = sp.x; h.y = sp.y + 4; h.size = Math.abs(sp.displayWidth);
-    h.img.setTexture(HORSE, h.face + '_0').setDisplaySize(h.size, h.size).setOrigin(.5, .93).setPosition(h.x, h.y).setTint(0xc88d5e).setAlpha(1).setDepth(sp.depth - .05).setVisible(true);
+    h.active = true; h.start = now; h.dir = -dir; h.vy = (Math.random() * 2 - 1) * 70; h.face = h.dir < 0 ? 'left' : 'right'; h.x = sp.x; h.y = sp.y + 4; h.size = Math.abs(sp.displayWidth); // 乘色 0x907050：通用白马 × 暗橄榄褐，对着敌军骑兵原来的战马调的（0xc88d5e 偏红偏亮）
+    h.img.setTexture(HORSE, h.face + '_0').setDisplaySize(h.size, h.size).setOrigin(.5, .93).setPosition(h.x, h.y).setTint(0x907050).setAlpha(1).setDepth(sp.depth - .05).setVisible(true);
   }
 
   /** 这一个要不要带尘土：手机隔一个出、同屏尘土封顶。 */

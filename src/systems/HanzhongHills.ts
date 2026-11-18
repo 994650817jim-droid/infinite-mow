@@ -40,6 +40,8 @@ export class HanzhongHills {
     }
     h.banner('夺高地', '站上山头读条占领 · 居高临下伤害、射程提高');
   }
+  /** 主将正站在某个山头上（8-2 双首领配合技「夺回山头」）。 */
+  get playerOnHill(): boolean { const p = this.h.player; return this.hills.some(hl => Math.hypot(p.x - hl.x, (p.y - hl.y) / .55) <= HILL.radius); }
   get held(): number { return this.hills.filter(x => x.owner === 'player').length; }
   private enemiesNear(x: number, y: number): number { let n = 0; for (const e of this.h.enemies()) if (e.active && !e.isSupplySlot && e.kind !== 'boss' && Math.hypot(e.x - x, e.y - y) <= HILL.radius) n++; return n; }
   update(dt: number, now: number): void {

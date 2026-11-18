@@ -8,6 +8,10 @@ import { HanzhongHills } from '../systems/HanzhongHills';
 import { followersFor } from '../systems/RosterStore';
 import { storyScroll } from '../ui/StoryScroll';
 import { getCharacter } from '../data/characters';
+import { BossMoveset } from '../systems/BossMoveset';
+import { BOSS_MOVES } from '../data/bossMoves';
+import { dingjunPlan, zhangheDualDef } from '../data/dualBossPlans';
+import { dualOff } from '../systems/DualBoss';
 
 /**
  * 第八章 · 汉中之战的战斗场景（在 thirdGameSceneClass 的配置版之上）：
@@ -49,12 +53,25 @@ export function hanzhongGameSceneClass(Base: typeof GameScene, cfg: ArcSceneConf
       if (!s.boss || had) return;
       // 等首领出场的墨迹名牌过去再出本关横幅，免得两条叠在一起
       const later = (t: string, c: string) => this.time.delayedCall(2600, () => { if (s.boss?.active) s.showWaveBanner(t, true, c); });
-      if (this.arcStage === 2) later('夏侯渊来争定军山', this.huangzhongInTeam ? '黄忠：老夫今日便斩夏侯渊！（夏侯渊受到伤害提高）' : '居高临下，以逸待劳');
+      if (this.arcStage === 2) later('夏侯渊、张郃来争定军山', this.huangzhongInTeam ? '黄忠：老夫今日便斩夏侯渊！（夏侯渊受到伤害提高）' : '居高临下，以逸待劳');
       if (this.arcStage === 3) later('曹操亲至', '虎豹骑冲阵 · 半血后断后');
     }
+    /** 8-2 定军山：夏侯渊（骑马疾行）+ 张郃（步战枪阵）双首领（dual-boss-spec 4.2）。 */
+    protected dualSetup(first: BossMoveset): boolean {
+      const s = this as unknown as { boss: Enemy | null; combatNow: number };
+      if (this.arcStage !== 2 || !s.boss || dualOff()) return false;
+      const b = s.boss, tex = cfg.texture('zhanghe');
+      this.startDual(dingjunPlan({ huangzhong: this.huangzhongInTeam, onHill: () => !!this.hills?.playerOnHill, xiahouyuan: BOSS_MOVES.xiahouyuan }),
+        { id: 'xiahouyuan', name: '夏侯渊', enemy: b, ctrl: first, mount: first.mount ?? null, key: 'hanzhong-2:xiahouyuan' },
+        { id: 'zhanghe', name: '张郃', at: { x: b.x + 220, y: b.y - 20 }, def: { texture: tex }, key: null,
+          make: e => ({ ctrl: new BossMoveset(this.arcHost(e), tex, s.combatNow, zhangheDualDef(BOSS_MOVES.zhanghe), 'arc'), mount: null }) });
+      return true;
+    }
+    /** 黄忠在队：夏侯渊受伤 ×1.5（双首领关按首领 id 认人）。 */
     protected hitEnemy(enemy: Enemy, raw: number, now: number, source: 'melee' | 'arrow' | 'fire' = 'melee', ally = false, weaponHit = true): boolean {
-      const s = this as unknown as { boss: Enemy | null };
-      if (this.arcStage === 2 && enemy === s.boss && this.huangzhongInTeam) raw *= DINGJUN_HUANGZHONG_MUL;
+      const s = this as unknown as { boss: Enemy | null; dual: { entryOf(e: Enemy): { id: string } | undefined } | null };
+      const xhy = s.dual ? s.dual.entryOf(enemy)?.id === 'xiahouyuan' : enemy === s.boss;
+      if (this.arcStage === 2 && xhy && this.huangzhongInTeam) raw *= DINGJUN_HUANGZHONG_MUL;
       return super.hitEnemy(enemy, raw, now, source, ally, weaponHit);
     }
     /** 曹操宝箱捡完 → 章末剧情 → 结算。 */

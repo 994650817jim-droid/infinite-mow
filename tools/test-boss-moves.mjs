@@ -46,7 +46,8 @@ const CASES = [
 ];
 try {
   const p = await b.newPage({ viewport: { width: 1280, height: 720 } }); const errs = []; p.on('pageerror', e => errs.push(String(e)));
-  await p.goto(BASE + '?dev=1&layout=desktop');
+  // 本测试看单首领招式表：4-2 文丑、8-2 夏侯渊关掉双首领（双将关另见 test-dual-boss）
+  await p.goto(BASE + '?dev=1&layout=desktop&dual=0');
   await p.waitForFunction(() => window.__game?.scene.isActive('MenuScene'), null, { timeout: 90000 });
   const ONLY = (process.env.ONLY ?? '').split(',').filter(Boolean);
   for (const c of CASES.filter(c => !ONLY.length || ONLY.includes(c.id))) {

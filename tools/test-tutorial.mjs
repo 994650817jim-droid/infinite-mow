@@ -23,6 +23,11 @@ try {
   await p.evaluate(() => localStorage.clear()); await p.reload();
   await p.waitForFunction(() => window.__game?.scene.isActive('MenuScene'), null, { timeout: 90000 });
   await start11();
+  // 剧情（2026-11-17）：首次进 1-1 先播章头「桃园结义」与关前军情，读完后才开新手引导
+  const storyFirst = await ev(s => ({ scroll: !!s.children.list.find(o => o.name?.startsWith('story-huangjin')), tut: !!s.tutorial }));
+  for (let i = 0; i < 16; i++) { const more = await ev(s => { const c = s.children.list.find(o => o.name?.startsWith('story-') && o.type === 'Container'); const hit = c?.list.find(o => o.name?.endsWith('-next') || o.name === 'story-confirm'); hit?.emit('pointerup'); return !!c; }); if (!more) { await p.waitForTimeout(400); if (!await ev(s => !!s.children.list.find(o => o.name?.startsWith('story-') && o.type === 'Container'))) break; } await p.waitForTimeout(120); }
+  await p.waitForTimeout(600);
+  ck('首次进 1-1：先播剧情（章头 / 军情），引导等剧情读完才出现', storyFirst.scroll && !storyFirst.tut, storyFirst);
   let t = await tut();
   await shot('1-move');
   ck('① 首次进 1-1：引导出现，第一步「移动」+ WASD 按键图标', t?.step === 'move' && t.line === '移动' && await ev(s => s.children.list.some(o => o.name === 'tutorial-overlay' && o.list.filter(c => c.name === 'tutorial-key').length === 4)), t);

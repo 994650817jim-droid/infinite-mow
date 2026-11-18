@@ -6,11 +6,15 @@ import { DEPTH, FONT, HEADING_FONT } from '../config';
  * 不用 tween（关卡结束时战斗计时器已暂停）。容器名 name，下一句命中区 name+'-next'，确认按钮 confirmName。
  * illustration：剧情专属插画（2026-11-17 献马剧情起）。贴图已加载时横幅加高、整张卷轴同步加长（台词区高度不变，不会被挡），
  * 插画按横幅比例取画面中间偏上的一段；缺图时退回 background 通用横幅和原尺寸。
+ * 剧情系统（2026-11-17，systems/Story.ts）新增：每句可带说话人水墨立绘 portrait（贴图键，取上半身）或名字章 seal（还没有立绘的人物），
+ * 对白左侧留一栏显示；tip 句以「提示」样式显示；skip 给出时右下角有「跳过」，Esc 也能跳过（跳过直接结束、回调 skip）。
  */
-export interface StoryLine { who?: string; text: string }
+export interface StoryLine { who?: string; text: string; portrait?: string; seal?: string; tip?: boolean }
 export interface StoryScrollOptions {
   name: string; confirmName: string; kicker: string; title: string;
   lines: StoryLine[]; reward: string; confirm: string; background?: string; illustration?: string; onDone: () => void;
+  /** 给出时显示「跳过」按钮并响应 Esc：直接关掉卷轴，调用 skip（不再调 onDone）。 */
+  skip?: () => void;
 }
 
 const GOLD = 0xc9a35e, GOLD_HI = 0xf3d48a, LACQUER = 0x1b120b;
@@ -47,9 +51,27 @@ export function storyScroll(scene: Phaser.Scene, W: number, H: number, desk: boo
   root.add(text(cx, y0 + bannerH + (desk ? 6 : 12), o.title, desk ? 30 : 34, '#f6dc9a', true).setOrigin(.5).setStroke('#2a170b', 6));
 
   // 对白区：说话人（描金）+ 台词（自动换行）+ 页码
-  const ty = y0 + bannerH + (desk ? 46 : 58), tw = pw - (desk ? 96 : 56);
-  const who = text(x0 + (desk ? 48 : 28), ty, '', desk ? 18 : 20, '#f0b48a', true);
-  const say = text(x0 + (desk ? 48 : 28), ty + (desk ? 30 : 34), '', desk ? 18 : 20, '#eadcbd').setWordWrapWidth(tw, true).setLineSpacing(desk ? 8 : 10);
+  const cast = o.lines.some(l => l.portrait || l.seal), col = cast ? (desk ? 150 : 104) : 0;
+  const ty = y0 + bannerH + (desk ? 46 : 58), tw = pw - (desk ? 96 : 56) - col, tx = x0 + (desk ? 48 : 28) + col;
+  const who = text(tx, ty, '', desk ? 18 : 20, '#f0b48a', true);
+  const say = text(tx, ty + (desk ? 30 : 34), '', desk ? 18 : 20, '#eadcbd').setWordWrapWidth(tw, true).setLineSpacing(desk ? 8 : 10);
+  // 说话人：水墨立绘（取上半身，贴在对白区左下）或朱红名字章
+  const faceH = desk ? 168 : 150, faceX = x0 + (desk ? 22 : 14) + col / 2, faceY = y0 + ph - (desk ? 78 : 96);
+  const face = scene.add.image(faceX, faceY, '__WHITE').setOrigin(.5, 1).setScrollFactor(0).setVisible(false).setName(o.name + '-portrait');
+  const sealBox = scene.add.graphics().setScrollFactor(0).setVisible(false);
+  const sealText = text(faceX, faceY - faceH * .45, '', desk ? 22 : 20, '#fff1dc', true).setOrigin(.5).setVisible(false).setName(o.name + '-seal');
+  const showFace = (l: StoryLine): void => {
+    face.setVisible(false); sealBox.setVisible(false); sealText.setVisible(false);
+    if (l.portrait && scene.textures.exists(l.portrait)) {
+      const tex = scene.textures.get(l.portrait).getSourceImage() as { width: number; height: number }, cropH = tex.height * .56, k = faceH / cropH;
+      face.setTexture(l.portrait).setCrop(0, 0, tex.width, cropH).setScale(k).setOrigin(.5, cropH / tex.height).setVisible(true);
+    } else if (l.seal) {
+      const name = l.seal.length > 2 ? l.seal.slice(0, 2) : l.seal, sw = desk ? 74 : 64;
+      sealBox.clear().fillStyle(0x9a2a1a, .95).fillRoundedRect(faceX - sw / 2, faceY - faceH * .45 - sw / 2, sw, sw, 6).lineStyle(2, 0xf3d48a, .8).strokeRoundedRect(faceX - sw / 2 + 4, faceY - faceH * .45 - sw / 2 + 4, sw - 8, sw - 8, 4).setVisible(true);
+      sealText.setText(name.length === 2 ? name[0] + '\n' + name[1] : name).setFontSize(name.length === 2 ? (desk ? 22 : 20) : (desk ? 34 : 30)).setLineSpacing(-2).setAlign('center').setVisible(true);
+    }
+  };
+  if (cast) root.add([face, sealBox, sealText]); else { face.destroy(); sealBox.destroy(); sealText.destroy(); }
   const page = text(x0 + pw - (desk ? 40 : 24), y0 + ph - (desk ? 92 : 108), '', desk ? 13 : 14, '#8d7d60').setOrigin(1, .5);
   const reward = text(cx, y0 + ph - (desk ? 92 : 108), o.reward, desk ? 15 : 16, '#f6dc9a').setOrigin(.5).setVisible(false).setName(o.name + '-reward');
   root.add([who, say, page, reward]);
@@ -70,12 +92,22 @@ export function storyScroll(scene: Phaser.Scene, W: number, H: number, desk: boo
   let i = 0;
   const show = () => {
     const l = o.lines[i], last = i === o.lines.length - 1;
-    who.setText(l.who ? l.who + '：' : '').setColor(l.who ? '#f0b48a' : '#b9a57a');
-    say.setText(l.text).setY(ty + (l.who ? (desk ? 30 : 34) : 0)).setColor(l.who ? '#eadcbd' : '#cdb88c');
+    const named = !!l.who || !!l.tip;
+    who.setText(l.tip ? '提示' : l.who ? l.who + '：' : '').setColor(l.tip ? '#9fd59a' : l.who ? '#f0b48a' : '#b9a57a');
+    say.setText(l.text).setY(ty + (named ? (desk ? 30 : 34) : 0)).setColor(l.tip ? '#cfe8c4' : l.who ? '#eadcbd' : '#cdb88c');
+    if (cast) showFace(l);
     page.setText(`${i + 1} / ${o.lines.length}`).setVisible(!last);
     reward.setVisible(last); label.setText(last ? o.confirm : '继续 ▸');
     hit.setName(last ? o.confirmName : o.name + '-next');
   };
+  if (o.skip) {
+    const skipText = text(x0 + pw - (desk ? 30 : 20), by, '跳过 ▸▸', desk ? 15 : 16, '#c9b48a', true).setOrigin(1, .5).setInteractive({ useHandCursor: true }).setName(o.name + '-skip');
+    const esc = scene.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.ESC);
+    const doSkip = (): void => { if (!root.active) return; esc?.off('down', doSkip); scene.data?.set('storyEscAt', performance.now()); root.destroy(); o.skip!(); };
+    skipText.on('pointerup', doSkip); esc?.on('down', doSkip);
+    root.once('destroy', () => esc?.off('down', doSkip));
+    root.add(skipText);
+  }
   hit.on('pointerover', () => paint(true)).on('pointerout', () => paint(false)).on('pointerup', () => {
     if (i < o.lines.length - 1) { i++; show(); return; }
     root.destroy(); o.onDone();

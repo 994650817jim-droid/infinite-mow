@@ -26,6 +26,8 @@ import {TECHS,TECH_IDS,BRANCH_NAME,BRANCH_ORDER,techBlockers,techTotals,type Tec
 import {PANO_W,PANO_H,CITY_SLOTS,LEVEL_SCALE,CITY_BG_SIZES,CITY_ART_LEVELS,ART_ALIAS} from '../town/CityLayout';
 import {cityById,TIER_NAME} from '../world/WorldCities';
 import {CampLife,loadCampLife} from '../town/CampLife';
+import {campTalkStrip} from '../systems/Story';
+import {followersFor,heroOwned,loadRoster} from '../systems/RosterStore';
 
 /** 是否电脑布局：在场景构造时读取（模块加载时布局尚未初始化）。 */
 let D=false;
@@ -78,6 +80,9 @@ export class CityScene extends Phaser.Scene {
   // 底栏：只有「天下地图」（出征也从天下地图选章节）；功能都在建筑里
   const mapBtn=homeCommand(this,W/2,D?H-28:H-72,D?260:W-60,D?40:52,'天下地图 · 出征',true,true,D?16:17);mapBtn.hit.setName('city-map').on('pointerdown',()=>this.scene.start('WorldMapScene'));
   if(D)txt(this,24,H-28,'点建筑进入：军营招兵 · 讲武堂科技 · 招贤馆 · 主帐武将谱',12,'#a9b9a2').setOrigin(0,.5).setName('city-tip');
+  // 营中闲话（剧情 campTalk）：底栏「天下地图」右侧，不挡建筑与出征按钮；按当前章节取一段没看过的
+  if(D){const w=loadWorld(),lord=(loadRoster().lord??'liubei') as CharacterId,chapters=!w.cleared?.huangjin?['huangjin']:!w.cleared?.hulao?['hulao','huangjin']:['hulao','huangjin'];
+   campTalkStrip(this,W/2+130+16,H-28,W-(W/2+130+16)-24,chapters,{lord,team:()=>[lord,...followersFor(lord).map(r=>r.hero).filter((h):h is CharacterId=>!!h)],recruited:id=>heroOwned(id)},5);}
   // 拖动 / 滚轮平移全景
   this.input.on('pointerdown',(p:Phaser.Input.Pointer)=>{if(this.anyModal()||!this.inView(p.x,p.y))return;this.drag={x:p.x,y:p.y,sx:this.sx,sy:this.sy,moved:false};});
   this.input.on('pointermove',(p:Phaser.Input.Pointer)=>{const d=this.drag;if(!d||!p.isDown)return;const dx=p.x-d.x,dy=p.y-d.y;if(!d.moved&&Math.hypot(dx,dy)<8)return;d.moved=true;this.scrollTo(d.sx-dx,d.sy-dy);});

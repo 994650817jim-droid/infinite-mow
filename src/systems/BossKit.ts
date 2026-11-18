@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import type { Enemy } from '../entities/Enemy';
-import { DEPTH, GAME_HEIGHT, GAME_WIDTH } from '../config';
+import { DEPTH, GAME_HEIGHT, GAME_WIDTH, RENDER_SCALE } from '../config';
+import { v2Filter } from './ArtStyle';
 import { BOSS_KIT } from '../data/bossRedesign';
 import { playBossFx } from './BossFx';
 
@@ -22,6 +23,8 @@ export const BOSS_OLD: boolean = (() => { try { return new URLSearchParams(globa
  */
 export function ensureMoves(scene: Phaser.Scene, key: string): void {
   if (scene.textures.exists(key)) return;
+  // 采样同其他 v2 首领图（loadBossSheet）：渲染倍率 ≥2 用最近邻，否则线性——以前没设，吕布招式图等一直是线性，比别的首领糊（11-18）
+  scene.load.once(`filecomplete-spritesheet-${key}`, () => { if (scene.textures.exists(key)) scene.textures.get(key).setFilter(v2Filter(RENDER_SCALE)); });
   scene.load.spritesheet(key, `assets/bosses-v2/${key}.png`, { frameWidth: 288, frameHeight: 288 });
   if (!scene.load.isLoading()) scene.load.start();
 }

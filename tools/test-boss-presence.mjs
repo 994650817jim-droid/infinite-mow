@@ -42,7 +42,7 @@ try {
       return { mul: R.BOSS_MELEE_REACH_MUL, sweep: D.LB.combo.sweep.radius, thrust: D.LB.combo.thrust.length, smash: D.LB.combo.smash.radius, spin: D.LB.spin.r1, zig: D.LB.zigzag.length, shot: D.LB.shot.length,
         siegeSweep: S.MID_SIEGE ? JSON.stringify(S.MID_SIEGE).match(/"sweep":\{[^}]*"radius":([\d.]+)/)?.[1] : null, zlSweep: M.BOSS_MOVES.zhangliang.p1.moves.find(m => m.kind === 'sweep').r, zlCharge: M.BOSS_MOVES.zhangliang.p1.moves.find(m => m.kind === 'charge').len }; });
     const k = q ? 1 : 1.15, near = (a, x) => Math.abs(a - x) < .01;
-    ck(`近战距离${q ? '（?presence=0 回到原值）' : ' ×1.15，远程招式不变'}：吕布方天三连 / 无双乱舞${q ? '' : '、攻城守将横扫'}`, r.mul === 1.15 && near(r.sweep, 165 * k) && near(r.thrust, 230 * k) && near(r.smash, 105 * k) && near(r.spin, 195 * k) && r.zig === 300 && r.shot === 950 && (q || near(+r.siegeSweep, 150 * k)) && r.zlSweep === 120 && r.zlCharge === 380, r);
+    ck(`近战距离${q ? '（?presence=0 回到原值）' : ' ×1.15，远程招式不变'}：吕布方天三连 / 无双乱舞${q ? '' : '、攻城守将横扫'}`, r.mul === 1.15 && near(r.sweep, 165 * k) && near(r.thrust, 230 * k) && near(r.smash, 105 * k) && near(r.spin, 195 * k) && r.zig === 300 && r.shot === 950 && (q || near(+r.siegeSweep, 150 * k)) && r.zlSweep === 120 && r.zlCharge === 300, r); // 张梁人公冲阵 380 → 300：新增内容会话 9f29b93「张梁改步战」
     await p.close();
   }
   for (const c of BOSSES) {

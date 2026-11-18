@@ -9,7 +9,7 @@
 export interface Pt { x: number; y: number }
 /** 一簇树林：在椭圆里撒 count 棵树（固定随机种子，每次一样），树与树至少隔 gap，自然留出可穿行的空隙。 */
 export interface WoodsSpec { x: number; y: number; rx: number; ry: number; count: number; seed: number; kind?: TreeKind; gap?: number }
-export type TreeKind = 'pine' | 'bamboo' | 'broad';
+export type TreeKind = 'pine' | 'bamboo' | 'broad' | 'jungle';
 export interface TreeSpec extends Pt { kind?: TreeKind; size?: number }
 /** 河：折线（points）+ 宽度；bridges 的 at 是沿河长度的比例（0～1），width 是桥面宽（垂直于桥的方向）。 */
 export interface RiverSpec { points: Pt[]; width: number; bridges: Array<{ at: number; width: number }>; flow?: number }
@@ -23,7 +23,7 @@ export const TERRAIN = {
   /** 树干碰撞半径（树冠画得大，碰撞只算树干，不挡视线） */
   trunk: 22,
   /** 树的显示尺寸（世界像素）：pine / bamboo / broad */
-  treeSize: { pine: 190, bamboo: 170, broad: 210 } as Record<TreeKind, number>,
+  treeSize: { pine: 190, bamboo: 170, broad: 210, jungle: 220 } as Record<TreeKind, number>,
   /** 主将走到树冠后面时树冠透明度 */
   behindAlpha: .42,
   /** 在水里的移动倍率（敌我一样）：减速 40% */
@@ -94,14 +94,14 @@ export function terrainConfigFor(arc: string, stage: number): TerrainConfig | nu
       woods: [
         { x: -1050, y: -520, rx: 260, ry: 160, count: 10, seed: 17, kind: 'bamboo' },
         { x: 1100, y: 420, rx: 280, ry: 170, count: 11, seed: 43, kind: 'bamboo' },
-        { x: 120, y: 620, rx: 260, ry: 140, count: 9, seed: 53, kind: 'broad' },
+        { x: 120, y: 620, rx: 260, ry: 140, count: 9, seed: 53, kind: 'jungle' },
       ],
     } : stage === 3 ? {
       clear: [C0, { x: -260, y: -200, r: 110 }, { x: 280, y: 260, r: 110 }, { x: 0, y: -560, r: 110 }],
       woods: [
         { x: -760, y: -300, rx: 340, ry: 230, count: 16, seed: 61, kind: 'bamboo' },
-        { x: 780, y: 320, rx: 340, ry: 230, count: 16, seed: 67, kind: 'broad' },
-        { x: -560, y: 600, rx: 300, ry: 170, count: 11, seed: 71, kind: 'broad' },
+        { x: 780, y: 320, rx: 340, ry: 230, count: 16, seed: 67, kind: 'jungle' },
+        { x: -560, y: 600, rx: 300, ry: 170, count: 11, seed: 71, kind: 'jungle' },
         { x: 600, y: -620, rx: 280, ry: 160, count: 10, seed: 73, kind: 'bamboo' },
       ],
     } : null;

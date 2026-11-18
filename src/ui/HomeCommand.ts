@@ -141,3 +141,30 @@ export function inkPlate(scene:Phaser.Scene,prev:Phaser.GameObjects.NineSlice|nu
  const g=prev??scene.add.nineslice(cx,cy,a.key,undefined,a.w,a.h,a.cap,a.cap,0,0);
  g.setTexture(a.key).setX(cx);fitArt(g,a,width,height,cy,state==='pressed');return g;
 }
+
+/**
+ * 三选一卡 · 水墨预览版（?levelup=ink，2026-11-17 用户「水墨风我看看再决定」，默认不启用）：
+ * 陈年宣纸（ink_paper）为底，四边淡墨晕染、干笔墨框；徽章位是一团淡墨；悬停时边缘墨色加深、透出朱砂光。
+ * 尺寸与 upgradeCardTexture 一致（外留 16px），命中区逻辑不变。
+ */
+export function inkUpgradeCardTexture(scene:Phaser.Scene,width:number,height:number,medallion:{x:number;y:number;r:number},hover=false,rare=false):string{
+ const S=RENDER_SCALE,w=Math.round(width),h=Math.round(height),key=`upcard-ink-${w}x${h}-${medallion.x}-${medallion.y}-${hover?1:0}-${rare?1:0}-${S}`;
+ if(scene.textures.exists(key))return key;
+ const P=16,canvas=document.createElement('canvas');canvas.width=Math.ceil((w+P*2)*S);canvas.height=Math.ceil((h+P*2)*S);
+ const ctx=canvas.getContext('2d')!;ctx.scale(S,S);ctx.translate(P,P);
+ // 投影 / 悬停朱砂光
+ ctx.save();ctx.shadowColor=rare?'rgba(255,190,90,.7)':hover?'rgba(190,60,40,.55)':'rgba(0,0,0,.55)';ctx.shadowBlur=hover||rare?18:10;ctx.shadowOffsetY=hover||rare?0:4;ctx.fillStyle='#000';ctx.fillRect(2,2,w-4,h-4);ctx.restore();
+ // 宣纸
+ if(scene.textures.exists('ink_paper')){const src=scene.textures.get('ink_paper').getSourceImage() as HTMLImageElement,k=Math.max(w/src.width,h/src.height);ctx.drawImage(src,(src.width-w/k)/2,(src.height-h/k)/2,w/k,h/k,0,0,w,h);}
+ else{const g=ctx.createLinearGradient(0,0,0,h);g.addColorStop(0,'#efe5ce');g.addColorStop(1,'#d8c7a3');ctx.fillStyle=g;ctx.fillRect(0,0,w,h);}
+ // 四边淡墨晕染
+ const edge=ctx.createRadialGradient(w/2,h/2,Math.min(w,h)*.32,w/2,h/2,Math.max(w,h)*.72);edge.addColorStop(0,'rgba(40,30,20,0)');edge.addColorStop(1,hover?'rgba(40,24,14,.55)':'rgba(40,30,20,.4)');ctx.fillStyle=edge;ctx.fillRect(0,0,w,h);
+ // 徽章位：一团淡墨
+ const m=ctx.createRadialGradient(medallion.x,medallion.y,2,medallion.x,medallion.y,medallion.r*1.25);m.addColorStop(0,'rgba(30,24,18,.55)');m.addColorStop(.7,'rgba(30,24,18,.28)');m.addColorStop(1,'rgba(30,24,18,0)');ctx.fillStyle=m;ctx.beginPath();ctx.arc(medallion.x,medallion.y,medallion.r*1.25,0,Math.PI*2);ctx.fill();
+ // 干笔墨框：多条略抖的细线叠出飞白
+ let seed=w*7+h*13;const rnd=()=>{seed=(seed*1664525+1013904223)>>>0;return seed/4294967296;};
+ for(let k=0;k<5;k++){ctx.strokeStyle=`rgba(20,16,12,${hover?.5:.38})`;ctx.lineWidth=.8+rnd()*1.6;ctx.beginPath();const j=()=>(rnd()-.5)*2.2,o=2+k*.7;ctx.moveTo(o+j(),o+j());ctx.lineTo(w-o+j(),o+j());ctx.lineTo(w-o+j(),h-o+j());ctx.lineTo(o+j(),h-o+j());ctx.closePath();ctx.stroke();}
+ // 稀有：朱砂角印
+ if(rare){ctx.fillStyle='rgba(168,40,28,.85)';ctx.fillRect(w-26,8,18,18);}
+ scene.textures.addCanvas(key,canvas);return key;
+}

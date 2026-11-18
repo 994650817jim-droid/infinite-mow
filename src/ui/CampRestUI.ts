@@ -1,5 +1,6 @@
 import Phaser from 'phaser';import {ItemTooltip} from './ItemTooltip';import {loadout} from '../systems/ItemStore';import {GAME_WIDTH as W,GAME_HEIGHT as H,IS_DESKTOP as D,FONT,HEADING_FONT,DEPTH,screenPoint} from '../config';import type {Player} from '../entities/Player';import type {Legion} from '../systems/Legion';import {CampMarket,campOption} from '../systems/CampMarket';import {CAMP_TRAINING,type CampTrainingId,type CampGroup} from '../data/camp';import {INITIAL_TROOPS,TROOPS,type TroopKind} from '../data/legion';import {TACTICS,TREASURES,TAG_NAMES,tacticDescription,type TacticId,type TreasureId,type BuildTag} from '../data/builds';import {AWAKENINGS,activeAwakenings} from '../data/awakenings';import {getCharacter} from '../data/characters';import {WEAPON_META} from '../data/upgrades';import {ATTRIBUTE_INFO,MARTIALS,type AttributeId,type MasteryId} from '../systems/RunGrowth';import {MERCHANT_PRICE,QUALITIES,formatAffix,itemName,rollMerchantGear,SLOTS,itemSlot,SPECIALS,type ItemInstance} from '../data/items';import {itemTile} from './ItemQuality';import {troopBadge} from './TroopBadge';import {loadTroopPortraits} from '../systems/TroopPortraits';
-import {homeCommand,warPanelTexture} from './HomeCommand';
+import {homeCommand,inkPlate,warPanelTexture} from './HomeCommand';
+import {loadBagArt} from './ItemQuality';
 import {visualTextureKey} from '../systems/ReadableTextures';
 export class CampRestUI {
  readonly root:Phaser.GameObjects.Container;
@@ -19,6 +20,8 @@ export class CampRestUI {
  /** 天下地图出征（营寨开放后）：休整时可回营寨。设置后显示「回营寨」按钮，点两次确认（本局成长不保留）。 */
  onReturnHome?:()=>void;
  private homeBtn!:Phaser.GameObjects.Text;private homeArmed=false;
+ /** 电脑版水墨按钮（2026-11-17 用户「这个行囊按钮改一下」）：行囊 / 回营寨 / 页签换成手绘墨迹底，同主页与战斗内按钮。 */
+ private readonly ink:boolean;private homePlate:Phaser.GameObjects.NineSlice|null=null;private tabInk:Array<Phaser.GameObjects.NineSlice|null>=[];
  private market?:CampMarket;private visit='';private tab=0;private page=0;private destination='';private notice='';
  constructor(private scene:Phaser.Scene,private player:Player,private army:Legion,depart:()=>void){
   this.root=scene.add.container(0,0).setScrollFactor(0).setDepth(DEPTH.overlay+2).setVisible(false).setName('camp-rest');
@@ -29,22 +32,43 @@ export class CampRestUI {
   this.resources=this.text(D?40:28,D?57:78,'',D?17:19).setColor('#e6c894');
   this.next=this.text(D?W-40:28,D?30:110,'',D?16:17).setColor('#d2c3a6');if(D)this.next.setOrigin(1,0);
   this.root.add([this.header,this.resources,this.next]);
-  const bagBtn=this.text(D?W-40:W-28,D?62:34,'行囊',D?15:16).setOrigin(1,0).setPadding(12,6,12,6).setBackgroundColor('#7a2a1c').setColor('#ffe9bd').setInteractive({useHandCursor:true}).setName('camp-bag');bagBtn.on('pointerdown',()=>this.onOpenBag?.());this.root.add(bagBtn);
+  this.ink=D&&scene.textures.exists('btn_ink_primary_normal');
+  let bagLeft:number;
+  if(this.ink){
+   // 行囊：朱墨笔触 + 手绘行囊图标（行囊页签同一张），命中区为整块按钮（对象名 camp-bag 不变）
+   const bw=118,bh=38,cx=W-40-bw/2,cy=62+bh/2;let plate=inkPlate(scene,null,cx,cy,bw,bh,true,'normal');plate?.setScrollFactor(0);
+   const icon=scene.add.image(cx-27,cy,scene.textures.exists('bag_tab_icon_all')?'bag_tab_icon_all':'__WHITE').setDisplaySize(28,28).setScrollFactor(0).setVisible(scene.textures.exists('bag_tab_icon_all'));
+   if(!icon.visible)loadBagArt(scene,()=>{if(icon.scene&&scene.textures.exists('bag_tab_icon_all'))icon.setTexture('bag_tab_icon_all').setDisplaySize(28,28).setVisible(true);});
+   const cap=scene.add.text(cx+13,cy,'行囊',{fontFamily:HEADING_FONT,fontSize:'17px',fontStyle:'bold',color:'#f8e6bf',resolution:2}).setOrigin(.5).setLetterSpacing(4).setStroke('#2a0c06',3).setShadow(0,1,'#120a05',3,true,true).setScrollFactor(0);
+   const hit=scene.add.rectangle(cx,cy,bw,bh,0,.001).setScrollFactor(0).setInteractive({useHandCursor:true}).setName('camp-bag');
+   const paint=(st:'normal'|'hover'|'pressed')=>{plate=inkPlate(scene,plate,cx,cy,bw,bh,true,st);cap.setY(cy+(st==='pressed'?1:0)).setColor(st==='hover'?'#fff3d4':'#f8e6bf');icon.setY(cy+(st==='pressed'?1:0));};
+   hit.on('pointerover',()=>paint('hover')).on('pointerout',()=>paint('normal')).on('pointerdown',()=>{paint('pressed');this.onOpenBag?.();}).on('pointerup',()=>paint('hover'));
+   this.root.add([...(plate?[plate]:[]),icon,cap,hit]);bagLeft=cx-bw/2-18;
+  }else{const bagBtn=this.text(D?W-40:W-28,D?62:34,'行囊',D?15:16).setOrigin(1,0).setPadding(12,6,12,6).setBackgroundColor('#7a2a1c').setColor('#ffe9bd').setInteractive({useHandCursor:true}).setName('camp-bag');bagBtn.on('pointerdown',()=>this.onOpenBag?.());this.root.add(bagBtn);bagLeft=bagBtn.x-bagBtn.width-12;}
   // 回营寨：电脑在「行囊」左侧，手机在它下方
-  this.homeBtn=this.text(D?bagBtn.x-bagBtn.width-12:W-28,D?62:76,'回营寨',D?15:16).setOrigin(1,0).setPadding(12,6,12,6).setBackgroundColor('#3d4a33').setColor('#f0f3dc').setInteractive({useHandCursor:true}).setName('camp-home').setVisible(false);
-  this.homeBtn.on('pointerdown',()=>{if(!this.onReturnHome)return;if(!this.homeArmed){this.homeArmed=true;this.homeBtn.setText('确认回营寨？本局等级与战法不保留').setBackgroundColor('#7a2a1c');return;}this.onReturnHome();});this.root.add(this.homeBtn);
+  this.homeBtn=this.text(D?bagLeft:W-28,D?62:76,'回营寨',D?15:16).setOrigin(1,0).setPadding(12,6,12,6).setBackgroundColor('#3d4a33').setColor('#f0f3dc').setInteractive({useHandCursor:true}).setName('camp-home').setVisible(false);
+  this.homeBtn.on('pointerdown',()=>{if(!this.onReturnHome)return;if(!this.homeArmed){this.homeArmed=true;this.homeBtn.setText('确认回营寨？本局等级与战法不保留').setBackgroundColor('#7a2a1c');this.paintHome();return;}this.onReturnHome();});this.root.add(this.homeBtn);
+  if(this.ink){this.homeBtn.setFontFamily(HEADING_FONT).setPadding(18,9,18,9).setStroke('#16100a',4).setY(62);this.homeBtn.on('pointerover',()=>this.paintHome('hover')).on('pointerout',()=>this.paintHome());this.paintHome();}
   // 用户 2026-11-17「休整的时候练兵营就不需要了」：去掉「练兵营」页签（本局体魄 / 兵刃 / 甲胄训练）。营寨军营的「练兵」是另一套永久加成，保留。
   // 其余页签保留原编号（0 招兵营 / 2 军需商人 / 3 将帅帐），对象名 camp-tab-<编号> 不变。
   const TABS:Array<[number,string,string]>=[[0,'招兵营','icon_shu_swordsman'],[2,'军需商人','build_icon_return_drum'],[3,'将帅帐','growth_icon_points']];
   const tabW=D?172:(W-48)/TABS.length,tabY=D?96:155;
-  TABS.forEach(([i,label,icon],slot)=>{const x=D?40+slot*180:24+slot*tabW;const frame=scene.add.image(x+(tabW-6)/2,tabY+23,warPanelTexture(scene,tabW-6,46)).setScrollFactor(0);this.tabFrames.push(frame);this.root.add(frame);
+  TABS.forEach(([i,label,icon],slot)=>{const x=D?40+slot*180:24+slot*tabW;const frame=scene.add.image(x+(tabW-6)/2,tabY+23,warPanelTexture(scene,tabW-6,46)).setScrollFactor(0).setVisible(!this.ink);this.tabFrames.push(frame);this.root.add(frame);
+   const plate=this.ink?inkPlate(scene,null,x+(tabW-6)/2,tabY+23,tabW-22,40,false,'normal'):null;plate?.setScrollFactor(0);this.tabInk.push(plate);if(plate)this.root.add(plate);
    if(scene.textures.exists(icon))this.root.add(scene.add.image(x+21,tabY+(D?22:21),icon).setDisplaySize(D?29:27,D?29:27).setScrollFactor(0));
    const hit=this.text(x,tabY,label,D?17:16).setPadding(D?43:39,D?12:13,0,0).setFixedSize(tabW-6,46).setInteractive({useHandCursor:true}).setName('camp-tab-'+i);
    hit.setData('tab',i).on('pointerdown',()=>{this.tab=i;this.page=0;this.notice='';this.render();}).on('pointerover',()=>hit.setColor('#fff0cd')).on('pointerout',()=>hit.setColor(i===this.tab?'#f6dfb0':'#bcae93'));this.tabs.push(hit);this.root.add(hit);
   });
   this.body=scene.add.container(0,0);this.root.add(this.body);
-  this.detail=this.text(D?40:28,D?H-103:H-176,'',D?13:15).setWordWrapWidth(W-(D?80:56),true);this.detail.setMaxLines(D?3:5);this.root.add(this.detail);
+  this.detail=this.text(D?W/2:28,D?H-103:H-176,'',D?13:15).setWordWrapWidth(W-(D?120:56),true);if(D)this.detail.setOrigin(.5,0).setAlign('center');/* 电脑版居中，左右各留 60，长句不会贴边被切 */this.detail.setMaxLines(D?3:5);this.root.add(this.detail);
   const command=homeCommand(scene,W/2,H-(D?35:48),D?290:W-72,D?48:56,'率军出征',true);[command.g,command.caption,command.hit].forEach(o=>o.setScrollFactor(0));command.hit.setName('camp-depart').setData('padDefault',true).on('pointerdown',depart);this.root.add([command.g,command.caption,command.hit]);
+ }
+ /** 电脑版「回营寨」：墨迹底随文字宽度伸缩；点第一次（待确认）换成朱墨主按钮。 */
+ private paintHome(state:'normal'|'hover'='normal'){
+  if(!this.ink)return;const b=this.homeBtn;b.setBackgroundColor('rgba(0,0,0,0)').setColor(state==='hover'?'#fff3d4':this.homeArmed?'#f8e6bf':'#e8d3a6');
+  const cx=b.x-b.width/2,cy=b.y+b.height/2,w=b.width-8,h=36;
+  this.homePlate=inkPlate(this.scene,this.homePlate,cx,cy,w,h,this.homeArmed,state);
+  if(this.homePlate){this.homePlate.setScrollFactor(0).setVisible(b.visible);if(!this.homePlate.parentContainer)this.root.addAt(this.homePlate,this.root.getIndex(b));}
  }
  private sound(kind:string){(this.scene as unknown as {sfx?:{play(k:string):void}}).sfx?.play(kind);}
  private text(x:number,y:number,s:string,size=16){return this.scene.add.text(x,y,s,{fontFamily:FONT,fontSize:size+'px',color:'#dfd4bd',resolution:2,stroke:'#17120c',strokeThickness:1,wordWrap:{width:W-100,useAdvancedWrap:true}}).setScrollFactor(0);}
@@ -56,7 +80,7 @@ export class CampRestUI {
   return c.hit;
  }
 
- open(key:string,destination:string){if(this.visit!==key){this.visit=key;this.page=this.tab=0;this.itemOffers=rollMerchantGear((this.scene as unknown as {itemTier?:()=>number}).itemTier?.()??0);this.itemSold=this.itemOffers.map(()=>false);this.buildSection=this.buildOffset=0;this.notice='';}this.destination=destination;this.homeArmed=false;this.homeBtn.setText('回营寨').setBackgroundColor('#3d4a33').setVisible(!!this.onReturnHome);this.render();
+ open(key:string,destination:string){if(this.visit!==key){this.visit=key;this.page=this.tab=0;this.itemOffers=rollMerchantGear((this.scene as unknown as {itemTier?:()=>number}).itemTier?.()??0);this.itemSold=this.itemOffers.map(()=>false);this.buildSection=this.buildOffset=0;this.notice='';}this.destination=destination;this.homeArmed=false;this.homeBtn.setText('回营寨').setBackgroundColor('#3d4a33').setVisible(!!this.onReturnHome);this.paintHome();this.render();
   // 招兵营圆框胸像（Q 版；缺的兵种用 v2 过渡）：加载完若还停在招兵营就重绘
   loadTroopPortraits(this.scene,()=>{if(this.root.visible&&this.tab===0)this.render();},true);}
  setVisible(visible:boolean){this.root.setVisible(visible);if(!visible){this.modal?.destroy();this.modal=undefined;}}
@@ -68,7 +92,7 @@ export class CampRestUI {
  private icon(x:number,y:number,key:string,size:number){if(this.scene.textures.exists(key))this.body.add(this.scene.add.image(x,y,key).setDisplaySize(size,size).setScrollFactor(0));}
  private row(y:number,title:string,description:string,icon?:string,compact=false){const x=D?40:24,w=W-(D?80:48),h=D?66:92;this.plate(x,y,w,h);if(icon)this.icon(x+28,y+27,icon,35);const offset=icon?54:16;this.body.add(this.text(x+offset,y+9,title,D?17:19).setWordWrapWidth(w-offset-16,true));this.body.add(this.text(x+16,y+(D?36:43),compact&&description.length>(D?80:44)?description.slice(0,D?80:44)+'…':description,D?12:14).setWordWrapWidth(w-32,true));return{x,y,w,h};}
  private render(){
-  this.body.removeAll(true);this.tabs.forEach((t,k)=>{const on=t.getData('tab')===this.tab;t.setColor(on?'#f6dfb0':'#bcae93');const w=t.width;this.tabFrames[k].setTexture(warPanelTexture(this.scene,w,46,on)).setDisplaySize(w+16,46+16).setAlpha(on?1:.82);});
+  this.body.removeAll(true);this.tabs.forEach((t,k)=>{const on=t.getData('tab')===this.tab;t.setColor(on?'#f6dfb0':'#bcae93');const w=t.width;this.tabFrames[k].setTexture(warPanelTexture(this.scene,w,46,on)).setDisplaySize(w+16,46+16).setAlpha(on?1:.82);const p=this.tabInk[k];if(p){inkPlate(this.scene,p,t.x+w/2,t.y+23,w-16,40,false,on?'hover':'normal');p.setAlpha(on?1:.78);t.setColor(on?'#ffe7b0':'#cdbd9c');}});
   this.resources.setText('随军粮 '+this.army.food+'   /   当前兵力：'+this.army.count);this.next.setText('下一关 · '+this.destination);this.detail.setText(this.notice);
   if(this.tab===0)this.renderRecruit();if(this.tab===2)this.renderMarket();if(this.tab===3)this.renderBuild(D?154:229);
  }
@@ -104,7 +128,7 @@ export class CampRestUI {
    const b=this.button(x+(w-Math.min(w-24,180))/2,y+h-52,sold?'已售罄':this.army.food<price?'随军粮不足 · '+price+'粮':'购入 · '+price+'粮',()=>{if(this.itemSold[i]||this.army.food<price)return;this.army.food-=price;this.itemSold[i]=true;this.onBuyItem?.(item);this.sound('purchase');this.notice='已购入 '+itemName(item)+' · 结算后收入行囊';this.render();},Math.min(w-24,180),can).setName('camp-item-goods-'+i);b.setData('caption',this.body.list[this.body.list.length-1]);(this.body.list[this.body.list.length-1] as Phaser.GameObjects.GameObject).name='camp-item-price-'+i;
    this.body.add(b);
   });
-  if(!this.notice)this.detail.setText('军需商人只卖兵装：每次进营 4 件，甲胄、头盔、战靴、信物各一。鼠标移到卡片上看属性与当前穿戴的对比；买下的结算后收入行囊。');
+  if(!this.notice)this.detail.setText(D?'每次进营 4 件兵装，甲胄、头盔、战靴、信物各一；鼠标移到卡片上看属性对比，买下的结算后收入行囊。':'军需商人只卖兵装：每次进营 4 件，甲胄、头盔、战靴、信物各一。鼠标移到卡片上看属性与当前穿戴的对比；买下的结算后收入行囊。');
  }
 
  private showDetails(title:string,description:string,confirm?:()=>void){

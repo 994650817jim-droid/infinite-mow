@@ -22,6 +22,8 @@ interface River { spec: RiverSpec; segs: Seg[]; half: number; box: { l: number; 
 const ART = 'shu_pass', ART_FILE = 'assets/shu/pass.png';
 /** 正式 v2 地形图（到了再接）：terrain_trees（松 / 竹 / 阔叶 / 焦桩 …）、terrain_water（水面平铺）、terrain_bridge（桥）。 */
 export const TERRAIN_ART = { trees: 'terrain_trees', water: 'terrain_water', bridge: 'terrain_bridge' } as const;
+/** v2 地形图（2026-11-17 Gemini 3.1 Pro 出图，原图在 public/assets/terrain/originals/）：树图集 4×2（384 格：松 / 竹 / 阔叶 / 焦桩 / 小松 / 细竹 / 雨林树 / 灌木）、水面平铺 512、木桥（横向，宽高约 2.5:1）。 */
+const ART_FILES = { trees: 'assets/terrain/trees.png', water: 'assets/terrain/water.png', bridge: 'assets/terrain/bridge.png' } as const;
 
 export class Terrain {
   readonly trees: Tree[] = [];
@@ -50,9 +52,14 @@ export class Terrain {
     }
     for (const t of this.trees) { const k = this.key(Math.floor(t.x / TERRAIN.cell), Math.floor(t.y / TERRAIN.cell)); const l = this.grid.get(k); if (l) l.push(t); else this.grid.set(k, [t]); }
     // 树的图：没载入就现载（山道图集），载完再画
-    if (scene.textures.exists(ART) || scene.textures.exists(TERRAIN_ART.trees)) this.build();
-    else { scene.load.spritesheet(ART, ART_FILE, { frameWidth: 384, frameHeight: 384 }); scene.load.once('complete', () => { if (scene.sys.isActive() || scene.sys.isPaused()) this.build(); }); scene.load.start(); }
-    this.buildWater();
+    // 地形图没载入就现载（v2 地形图；载不到时退回山道图集），载完再画
+    const L = scene.load; let pending = 0;
+    if (!scene.textures.exists(TERRAIN_ART.trees)) { L.spritesheet(TERRAIN_ART.trees, ART_FILES.trees, { frameWidth: 384, frameHeight: 384 }); pending++; }
+    if (!scene.textures.exists(TERRAIN_ART.water)) { L.image(TERRAIN_ART.water, ART_FILES.water); pending++; }
+    if (!scene.textures.exists(TERRAIN_ART.bridge)) { L.image(TERRAIN_ART.bridge, ART_FILES.bridge); pending++; }
+    if (!scene.textures.exists(ART)) { L.spritesheet(ART, ART_FILE, { frameWidth: 384, frameHeight: 384 }); pending++; }
+    if (!pending) { this.build(); this.buildWater(); }
+    else { L.once('complete', () => { if (scene.sys.isActive() || scene.sys.isPaused()) { this.build(); this.buildWater(); } }); L.start(); }
   }
   private key(cx: number, cy: number) { return (cx + 4096) * 8192 + (cy + 4096); }
   private addTree(x: number, y: number, kind: TreeKind, size?: number) { this.trees.push({ x, y, kind, burnt: false, burning: 0, behind: false, size: size ?? TERRAIN.treeSize[kind] }); }
@@ -161,7 +168,7 @@ export class Terrain {
     for (const w of this.water) { w.ts.tilePositionX -= TERRAIN.flow * dt; }
     for (const t of [...this.burning]) if (now >= t.burning) {
       this.burning.splice(this.burning.indexOf(t), 1); t.burning = 0; t.burnt = true;
-      if (t.img) { t.img.setTint(0x2a2018).setDisplaySize(t.size * .45, t.size * .45).setAlpha(.9); }
+      if (t.img) { if (t.img.texture.key === TERRAIN_ART.trees) t.img.clearTint().setFrame(3).setDisplaySize(t.size * .6, t.size * .6).setAlpha(1); else t.img.setTint(0x2a2018).setDisplaySize(t.size * .45, t.size * .45).setAlpha(.9); }
     }
   }
 
@@ -171,9 +178,10 @@ export class Terrain {
     const sc = this.scene, v2 = sc.textures.exists(TERRAIN_ART.trees);
     let s = 7; const rnd = () => ((s = (s * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff);
     for (const t of this.trees) {
-      const frame = v2 ? ({ pine: 0, bamboo: 1, broad: 2 } as const)[t.kind] : t.kind === 'bamboo' ? 3 : 2;
+      // v2：松 0 / 小松 4、竹 1 / 细竹 5、阔叶 2、雨林树 6 / 灌木 7（南征），随机挑
+      const alt = rnd() < .35, frame = v2 ? ({ pine: alt ? 4 : 0, bamboo: alt ? 5 : 1, broad: 2, jungle: alt ? 7 : 6 } as const)[t.kind] : t.kind === 'bamboo' ? 3 : 2;
       const img = sc.add.image(t.x, t.y + 6, v2 ? TERRAIN_ART.trees : ART, frame).setOrigin(.5, .92).setDisplaySize(t.size, t.size).setDepth(actorDepth(t.y)).setFlipX(rnd() < .5);
-      if (!v2 && t.kind === 'broad') img.setTint(0xc8d8a8); // 阔叶树过渡：松树换浅一点的色调
+      if (!v2 && (t.kind === 'broad' || t.kind === 'jungle')) img.setTint(0xc8d8a8); // 阔叶树过渡：松树换浅一点的色调
       t.img = img; this.objects.push(img);
     }
   }
@@ -184,12 +192,12 @@ export class Terrain {
         const cx = (g.ax + g.bx) / 2, cy = (g.ay + g.by) / 2, ang = Math.atan2(g.uy, g.ux), L = g.len + r.half; // 两头各伸半宽，折角处不露缝
         const bank = sc.add.tileSprite(cx, cy, L + 30, r.spec.width + 34, sc.textures.exists('ground_v2_jiang') ? 'ground_v2_jiang' : '__WHITE').setRotation(ang).setTint(0x5a4a30).setAlpha(.9).setDepth(DEPTH.ground + 1);
         const ts = sc.add.tileSprite(cx, cy, L, r.spec.width, wKey).setRotation(ang).setDepth(DEPTH.ground + 2);
-        if (!v2) ts.setTint(0x5f8e9c).setAlpha(.9);
+        if (!v2) ts.setTint(0x5f8e9c).setAlpha(.9); else ts.setTileScale(.42).setAlpha(.96);
         this.objects.push(bank, ts); this.water.push({ ts, ux: g.ux, uy: g.uy });
       }
       for (const b of r.bridges) {
         const ang = Math.atan2(b.uy, b.ux), len = b.halfLen * 2, v2b = sc.textures.exists(TERRAIN_ART.bridge);
-        const deck = v2b ? sc.add.image(b.x, b.y, TERRAIN_ART.bridge).setDisplaySize(len, b.halfW * 2.4).setRotation(ang)
+        const deck = v2b ? sc.add.image(b.x, b.y, TERRAIN_ART.bridge).setDisplaySize(Math.max(len, b.halfW * 2.5 * 2.5), b.halfW * 2.5).setRotation(ang)
           : sc.add.tileSprite(b.x, b.y, len, b.halfW * 2, 'yellow_props', 10).setTileScale(b.halfW * 2 / 128).setRotation(ang).setTint(0xd8c09a);
         deck.setDepth(DEPTH.ground + 3); this.objects.push(deck);
         if (!v2b) for (const sgn of [-1, 1]) {

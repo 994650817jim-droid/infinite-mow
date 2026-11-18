@@ -18,15 +18,15 @@ export const DRAG_TRAVEL: readonly number[] = [560, 480, 400], DRAG_WAVE_MUL: re
 /** 拖刀斩触发距离折合身位（约 40 像素一个身位），说明文字用。 */
 export const dragBodyLengths = (lv: number): string => String(Math.round(DRAG_TRAVEL[lv - 1] / 40 * 2) / 2);
 export const MARTIALS = {
-  dragon_gallop: {character:'zhaoyun',name:'龙胆连刺',desc:'每级连刺效率 +8%'},
+  dragon_gallop: {character:'zhaoyun',name:'龙胆连刺',desc:'每级枪刺攻速 +8%'},
   cloud_pierce: {character:'zhaoyun',name:'游龙穿云',desc:'每级枪长 +10%、穿透 +1'},
-  dragon_charge: {character:'guanyu',name:'青龙蓄势',desc:'四次基础挥砍后重斩 140%/165%/190%；三级击退'},
-  dragging_blade: {character:'guanyu',name:'拖刀斩',desc:'移动约14/12/10个身位蓄刀气；三级回旋'},
+  dragon_charge: {character:'guanyu',name:'青龙蓄势',desc:'每挥刀4次，下一刀 140/165/190% 伤害；3级附带击退'},
+  dragging_blade: {character:'guanyu',name:'拖刀斩',desc:'移动约14/12/10个身位后，下一刀追加刀气；3级再加回旋刀气'},
   // 2026-11-16：黄忠改用宝雕弓，连弩武学归黄月英
-  steady_aim: {character:'huangyueying',name:'百步穿杨',desc:'静止最多5秒，每秒暴击 +3/4/5%；移动衰减'},
-  pearl_volley: {character:'huangyueying',name:'连珠齐射',desc:'每 5/4/3 次基础射击追加70%伤害箭'},
-  wildfire: {character:'zhuge',name:'烽火燎原',desc:'爆发留火 1/1.8/2.5秒，每0.5秒20%伤害'},
-  eight_trigrams: {character:'zhuge',name:'八阵困军',desc:'每三次施法聚敌、减速后引爆；间隔10秒'},
+  steady_aim: {character:'huangyueying',name:'百步穿杨',desc:'站着不动每秒暴击率 +3/4/5%（最多5秒）；移动会慢慢失去'},
+  pearl_volley: {character:'huangyueying',name:'连珠齐射',desc:'每射击 5/4/3 次多射一支 70% 伤害的箭'},
+  wildfire: {character:'zhuge',name:'烽火燎原',desc:'战旗爆炸处留火 1/1.8/2.5 秒，每半秒灼烧一次'},
+  eight_trigrams: {character:'zhuge',name:'八阵困军',desc:'每挥旗3次布下减速法阵并引爆（每10秒最多一次）'},
   kaishan: {character:'weiyan',name:'开山',desc:'每劈 4 刀一次重劈：裂波加宽 50%，伤害 150%/170%/190%'},
   gujun: {character:'weiyan',name:'孤军深入',desc:'身边每名敌人伤害 +1.5%/2%/2.5%（最多 15 名）'},
   fulei: {character:'pangtong',name:'伏雷',desc:'每级火雷上限 +2、存在时间 +2 秒'},

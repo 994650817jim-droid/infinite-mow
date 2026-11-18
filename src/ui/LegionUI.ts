@@ -47,6 +47,8 @@ export class LegionUI {
   private readonly close: Phaser.GameObjects.Text;
   /** 「跳过」按钮下的水墨底（电脑版战地招募）。 */
   private closeInk: Phaser.GameObjects.NineSlice | null = null;
+  /** 电脑版战斗支援「跳过」的细线框（不用泼墨）。 */
+  private closeFrame!: Phaser.GameObjects.Graphics;
   private readonly prev: Phaser.GameObjects.Text;
   private readonly next: Phaser.GameObjects.Text;
   private readonly pageText: Phaser.GameObjects.Text;
@@ -111,7 +113,8 @@ export class LegionUI {
     this.next = button('下一页', () => { this.page = 1; this.repaint(); }).setPosition(W / 2 + 45, H - 225);
     this.pageText = text(W / 2, H - 207, '', 14).setOrigin(.5);
     this.close = button('', close).setPosition(W / 2, H - (D ? 54 : 103)).setOrigin(.5, 0).setFontSize(18);
-    this.panel.add([this.prev, this.next, this.pageText, this.close]);
+    this.closeFrame = scene.add.graphics().setScrollFactor(0);
+    this.panel.add([this.prev, this.next, this.pageText, this.closeFrame, this.close]);
     // 兵种胸像立绘（清单里有才加载）；到位后战地招募卡改用立绘
     loadTroopPortraits(scene, () => { if (this.panel.visible && this.mode === 'wave') this.repaint(); });
     // 血药卡（效果图）：与兵种卡同一套漆底描金卡面，徽章里是药囊
@@ -157,20 +160,24 @@ export class LegionUI {
     p.detail.setText('回复 30% 生命').setVisible(true).setAlign('center').setFontSize(D ? 14 : 16);
     if (D) p.detail.setPosition(w / 2, 190).setOrigin(.5, 0); else p.detail.setPosition(p.tag.x + tw / 2 + 12, p.tag.y).setOrigin(0, .5);
     p.buy.setText(D ? (ok ? '领取血药' : '主将满血') : ok ? '＋ 领取血药' : '主将满血');
-    if (D) p.buy.setFontFamily(HEADING_FONT).setFontStyle('bold').setStroke(ok ? '#2a0c06' : '#16100a', 3);
-    p.buy.setPosition(D ? 14 : 134, D ? 212 : h - 54).setFixedSize(D ? w - 28 : w - 152, 0).setAlign('center').setFontSize(D ? 16 : 18);
+    if (D) p.buy.setFontFamily(HEADING_FONT).setFontStyle(ok ? 'bold' : '').setStroke(ok ? '#120904' : '#16100a', ok ? 2 : 2).setPadding(6, 5);
+    // 电脑版：可领取时与兵种卡同款克制小牌（宽约卡片 60%）；不可用时只是一行灰色小字，不做成按钮
+    const pbw = D ? Math.round(w * .6) : w - 152;
+    p.buy.setPosition(D ? Math.round((w - pbw) / 2) : 134, D ? 210 : h - 54).setFixedSize(pbw, 0).setAlign('center').setFontSize(D ? (ok ? 14 : 13) : 18);
     // 按钮底板与兵种卡「招募入队」同尺寸同画法（文字自带 10px 内边距）
     const bx = p.buy.x, by = p.buy.y, bw = p.buy.width, bh = p.buy.height;
-    if (!(D && p.root.scene.textures.exists('btn_ink_primary_normal'))) g.fillStyle(0x000000, .35).fillRoundedRect(bx + 1, by + 3, bw, bh, 6).fillStyle(ok ? hover ? 0x9a6a2c : 0x6e4a22 : 0x4a443b, 1).fillRoundedRect(bx, by, bw, bh, 6)
+    if (D) { if (ok) this.smallButton(g, bx, by, bw, bh, hover ? 'hover' : 'normal'); this.potionInk?.setVisible(false); }
+    else g.fillStyle(0x000000, .35).fillRoundedRect(bx + 1, by + 3, bw, bh, 6).fillStyle(ok ? hover ? 0x9a6a2c : 0x6e4a22 : 0x4a443b, 1).fillRoundedRect(bx, by, bw, bh, 6)
       .fillStyle(0xffe2a0, hover ? .2 : .1).fillRoundedRect(bx + 2, by + 2, bw - 4, bh * .45, { tl: 5, tr: 5, bl: 0, br: 0 }).lineStyle(1, gold, 1).strokeRoundedRect(bx + 3, by + 3, bw - 6, bh - 6, 4);
-    p.buy.setColor(hover ? '#fff3d6' : '#ffe6b5');
-    if (D) {
-      const ink = inkPlate(p.root.scene, this.potionInk, bx + bw / 2, by + bh / 2, bw - 8, bh + 4, true, !ok ? 'disabled' : hover ? 'hover' : 'normal');
-      if (ink) { if (!this.potionInk) { ink.setScrollFactor(0); p.root.addAt(ink, p.root.getIndex(p.buy)); } this.potionInk = ink; p.buy.setColor(!ok ? '#c9bba6' : hover ? '#fff3d4' : '#f8e6bf'); }
-    }
+    p.buy.setColor(D ? (!ok ? '#8f8573' : hover ? '#fff3d6' : '#e8cf98') : hover ? '#fff3d6' : '#ffe6b5');
     this.panel.bringToTop(p.root);
   }
   setCampDestination(name:string,title='黄巾败退 · 战后休整'):void {this.heading.setText(title);this.close.setText(`出征 · ${name}`).setBackgroundColor('#59452d').setColor('#ffe5b3').setPadding(30,14);}
+  /** 电脑版战斗支援的克制按钮：normal = 漆底 + 细描金；hover = 朱红实底 + 亮金边。 */
+  private smallButton(g: Phaser.GameObjects.Graphics, x: number, y: number, w: number, h: number, state: 'normal' | 'hover'): void {
+    if (state === 'hover') g.fillStyle(0xa02a1a, 1).fillRoundedRect(x, y, w, h, 4).lineStyle(1.5, 0xf3d48a, 1).strokeRoundedRect(x + .5, y + .5, w - 1, h - 1, 4);
+    else g.fillStyle(0x14100b, .94).fillRoundedRect(x, y, w, h, 4).lineStyle(1, 0xc9a35e, .75).strokeRoundedRect(x + .5, y + .5, w - 1, h - 1, 4);
+  }
   /** 战地招募卡面：漆底描金、兵种徽章、金色招募按钮；悬停时描金加亮、按钮转亮金。 */
   private paintWaveCard(row: LegionUI['rows'][number]): void {
     const { w, h, hover } = row, g = row.plate, gold = hover ? 0xf3d48a : WAR.gold;
@@ -199,15 +206,16 @@ export class LegionUI {
     g.lineStyle(1.5, gold, 1).strokeRect(row.seal.x - row.seal.width / 2 - 1, row.seal.y - row.seal.height / 2 - 1, row.seal.width + 2, row.seal.height + 2);
     // 招募按钮底板（按文字对象的本地坐标绘制）
     const bx = row.buy.x, by = row.buy.y, bw = row.buy.width, bh = row.buy.height;
-    // 2026-11-17 用户「字体美术不统一」：电脑版按钮换主页同款水墨美术（缺图时退回程序底板）
+    // 2026-11-18 用户「这里水墨特效太多了」：电脑版招募按钮不再用泼墨——平时是漆底细描金的小牌（宽约卡片 60%），
+    // 当前选中 / 悬停的那张才用朱红实底强调
     if (D) {
-      const ink = inkPlate(row.root.scene, row.ink, bx + bw / 2, by + bh / 2, bw - 8, bh + 4, true, hover ? 'hover' : 'normal');
-      if (ink) { if (!row.ink) { ink.setScrollFactor(0); row.root.addAt(ink, row.root.getIndex(row.buy)); } row.ink = ink.setVisible(true); row.buy.setColor(hover ? '#fff3d4' : '#f8e6bf').clearTint(); }
+      row.ink?.setVisible(false);
+      this.smallButton(g, bx, by, bw, bh, hover ? 'hover' : 'normal'); row.buy.setColor(hover ? '#fff3d6' : '#e8cf98').clearTint();
       // 「已编入 N」角标：立绘左上角小圆印
       const cx = mx - mr * .72, cy = my - mr * .72;
       g.fillStyle(0x7a2a1c, 1).fillCircle(cx, cy, 13).lineStyle(1.5, gold, 1).strokeCircle(cx, cy, 13);
       row.detail.setPosition(cx, cy).setOrigin(.5);
-      if (ink) { const tw2 = row.tag.width + 18, th2 = row.tag.height + 6, tx2 = row.tag.x - tw2 / 2, ty2 = row.tag.y - th2 / 2; g.fillStyle(ROLE_TINT[row.kind], .95).fillRoundedRect(tx2, ty2, tw2, th2, 4).lineStyle(1, gold, .6).strokeRoundedRect(tx2, ty2, tw2, th2, 4); return; }
+      const tw2 = row.tag.width + 18, th2 = row.tag.height + 6, tx2 = row.tag.x - tw2 / 2, ty2 = row.tag.y - th2 / 2; g.fillStyle(ROLE_TINT[row.kind], .95).fillRoundedRect(tx2, ty2, tw2, th2, 4).lineStyle(1, gold, .6).strokeRoundedRect(tx2, ty2, tw2, th2, 4); return;
     }
     g.fillStyle(0x000000, .35).fillRoundedRect(bx + 1, by + 3, bw, bh, 6)
       .fillStyle(hover ? 0x9a6a2c : 0x6e4a22, 1).fillRoundedRect(bx, by, bw, bh, 6)
@@ -236,10 +244,11 @@ export class LegionUI {
     this.heading.setText(wave ? '战斗支援'  : '黄巾已破 · 战后休整').setFontFamily(wave && D ? HEADING_FONT : FONT).setStroke(wave && D ? '#120904' : '#101910', wave && D ? 4 : 1);
     this.summary.setText(wave ? (D ? `免费 ×${army.freeRecruitCount} · 兵力 ${army.count}` : `免费招募 ${army.freeRecruitCount} 人 · 点选兵种卡入队　当前兵力 ${army.count}`) : `随军粮 ${army.food}　当前兵力：${army.count}　阵亡 ${army.dead}\n仅开放刀盾、长枪、弓箭兵 · 使用本局军粮`).setAlign('center');
     this.close.setText(wave ? (D ? '跳过 · 继续战斗' : '跳过本次 · 继续战斗') : '率军出征 · 虎牢关').setFontFamily(wave && D ? HEADING_FONT : FONT);
-    this.closeInk?.setVisible(false);
-    if (wave) this.close.setBackgroundColor(D ? 'rgba(0,0,0,0)' : 'rgba(27,18,11,0.88)').setColor(D ? '#e8d3a6' : '#d9c79f').setStroke('#16100a', D ? 4 : 1).setFontSize(D ? 17 : 18).setPadding(26, 12).setY(D ? waveTop + waveCardH + 34 : Math.min(H - 103, waveTop + waveCardH * cards + waveGap * (cards - 1) + 40));
+    this.closeInk?.setVisible(false); this.closeFrame.clear();
+    // 电脑版「跳过」：一行文字 + 细金线框（不用泼墨）
+    if (wave) this.close.setBackgroundColor(D ? 'rgba(0,0,0,0)' : 'rgba(27,18,11,0.88)').setColor(D ? '#d9c79f' : '#d9c79f').setStroke('#16100a', D ? 3 : 1).setFontSize(D ? 15 : 18).setPadding(D ? 22 : 26, D ? 6 : 12).setY(D ? waveTop + waveCardH + 34 : Math.min(H - 103, waveTop + waveCardH * cards + waveGap * (cards - 1) + 40));
     else this.close.setY(H - (D ? 54 : 103));
-    for (const row of this.rows) { row.hover = false; row.tag.setVisible(wave); if (!wave) { row.seal.setVisible(false); row.icon.clearMask(); if (row.icon.texture.key !== row.walk) row.icon.setTexture(row.walk, 'down_0'); } row.buy.setBackgroundColor(wave ? 'rgba(0,0,0,0)' : 'rgba(57,83,62,0.96)'); if (wave) row.bg.setInteractive({ useHandCursor: true }); else row.bg.disableInteractive(); }
+    for (const row of this.rows) { row.hover = false; row.tag.setVisible(wave); if (!wave) { row.seal.setVisible(false); row.icon.clearMask(); if (row.icon.texture.key !== row.walk) row.icon.setTexture(row.walk, 'down_0'); } row.buy.setBackgroundColor(wave ? 'rgba(0,0,0,0)' : 'rgba(57,83,62,0.96)').setPadding(wave && D ? 6 : 10, wave && D ? 5 : 10); if (wave) row.bg.setInteractive({ useHandCursor: true }); else row.bg.disableInteractive(); }
     if(!wave){
       this.prev.setVisible(false);this.next.setVisible(false);this.pageText.setVisible(false);
       for(const row of this.rows){const i=INITIAL_TROOPS.indexOf(row.kind);row.root.setVisible(i>=0);if(i<0)continue;
@@ -289,12 +298,12 @@ export class LegionUI {
         row.title.setFontFamily(HEADING_FONT).setColor('#f6dc9a').setStroke('#120904', 3);
         row.tag.setFontFamily(HEADING_FONT).setColor('#f6e6c2');
         row.detail.setText(String(count)).setFontFamily(HEADING_FONT).setFontSize(14).setColor('#fff3d6').setStroke('#120904', 2).setWordWrapWidth(0).setLineSpacing(0).setAlign('center');
-        row.buy.setFontFamily(HEADING_FONT).setFontStyle('bold').setText('招募入队').setStroke('#2a0c06', 3).setPosition(14, 204);
+        { const bw = Math.round(width * .6); row.buy.setFontFamily(HEADING_FONT).setFontStyle('bold').setText('招募入队').setFontSize(14).setStroke('#120904', 2).setFixedSize(bw, 0).setPosition(Math.round((width - bw) / 2), 210); }
       } else { row.title.setFontFamily(FONT).setStroke('#101910', 1); row.tag.setFontFamily(FONT); row.buy.setFontFamily(FONT).setFontStyle('').setStroke('#101910', 1); row.ink?.setVisible(false); }
       if (wave) this.paintWaveCard(row);
     }
-    // 「跳过」按钮：电脑版垫水墨（次按钮）
-    if (wave && D) { const c = this.close, ink = inkPlate(this.close.scene, this.closeInk, c.x, c.y + c.height / 2, Math.max(200, c.width - 20), c.height - 6, false, 'normal'); if (ink) { if (!this.closeInk) { ink.setScrollFactor(0); this.panel.addAt(ink, this.panel.getIndex(c)); } this.closeInk = ink.setVisible(true); } }
+    // 「跳过」：电脑版细金线框（文字对象原点在上方居中）
+    if (wave && D) { const c = this.close; this.closeFrame.lineStyle(1, WAR.gold, .55).strokeRoundedRect(c.x - c.width / 2, c.y, c.width, c.height, 4); }
     // 第 4 张：血药卡（效果图）
     if (wave && cards === 4) {
       const w = D ? 208 : W - 72, i = 3;

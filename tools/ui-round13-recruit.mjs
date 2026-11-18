@@ -21,7 +21,8 @@ for (const vp of [{ width: 1280, height: 720 }, { width: 1920, height: 1080 }]) 
     // 标题、标签、按钮用标题字；正文（顶部「免费 ×N · 兵力 N」、血药「回复 30% 生命」）另用正文字
     const sans = info.texts.filter(t => /Lv\d|招募入队|领取血药|主将满血|跳过|血药 · 回春|战斗支援|^补给$|^近战|^长枪|^远程/.test(t.t) && t.f !== 'IMWarHeading' && t.f !== 'IMWarTitle');
     ck(`${vp.width}×${vp.height} 标题 / 标签 / 按钮都是标题字（正文另用一种）`, sans.length === 0, sans.map(t => t.t + '|' + t.f));
-    ck(`${vp.width}×${vp.height} 招募 / 血药 / 跳过按钮都是水墨美术，没有色块底`, info.ink === 3 && info.closeInk && info.potionInk && !info.texts.some(t => t.bg && t.bg !== 'rgba(0,0,0,0)' && t.t.length > 1) /* 单字兵种印（刀 / 枪 / 弓）本来就是朱底印 */, info);
+    // 2026-11-18 用户「这里水墨特效太多了」：战斗支援面板的招募 / 血药 / 跳过不再用泼墨按钮，改成漆底细描金小牌 / 灰色小字 / 细线框
+    ck(`${vp.width}×${vp.height} 招募 / 血药 / 跳过按钮不用泼墨（无水墨底板），文字也没有色块底`, info.ink === 0 && !info.closeInk && !info.potionInk && !info.texts.some(t => t.bg && t.bg !== 'rgba(0,0,0,0)' && t.t.length > 1) /* 单字兵种印（刀 / 枪 / 弓）本来就是朱底印 */, info);
     ck(`${vp.width}×${vp.height} 顶部只剩「免费 ×N · 兵力 N」`, info.texts.some(t => /^免费 ×\d+ · 兵力 \d+$/.test(t.t)), info.texts.map(t => t.t).slice(0, 3));
   }
   await p.screenshot({ path: `${out}/${tag}-recruit-${vp.width}x${vp.height}.png` });

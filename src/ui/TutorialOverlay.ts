@@ -49,8 +49,11 @@ export class TutorialOverlay {
     this.active = true; this.fadeAt = fadeMs ? performance.now() + fadeMs : null;
     this.root.setDepth(at === 'popup' ? TutorialOverlay.DEPTH_TOP : TutorialOverlay.DEPTH_UNDER);
     // 战场：底部；行营：顶部居中（标题与「下一关」之间的空处）；弹窗（升级 / 支援）：卡片下沿之下
-    this.y = at === 'camp' ? 60 : at === 'popup' ? GAME_HEIGHT - 22 : GAME_HEIGHT - 82;
+    // 弹窗（升级三选一 / 战斗支援）：不用墨团横幅，只一行小字贴在屏幕最下沿，不压卡片、不和面板上的按钮挤在一起（2026-11-18 用户「水墨特效太多」）
+    const pop = at === 'popup';
+    this.y = at === 'camp' ? 60 : pop ? GAME_HEIGHT - 14 : GAME_HEIGHT - 82;
     for (const k of this.keys) k.destroy(); this.keys = [];
+    this.bar?.setVisible(!pop); this.text.setFontSize(pop ? 13 : 17).setColor(pop ? '#d9c7a3' : IVORY); this.skipBtn.setFontSize(pop ? 12 : 14);
     this.text.setText(line);
     const capW = 30, gap = 6, capsW = keys.length ? keys.length * (capW + gap) + 8 : 0, total = this.text.width + capsW;
     let x = GAME_WIDTH / 2 - total / 2;
@@ -62,7 +65,7 @@ export class TutorialOverlay {
     }
     if (keys.length) x += 8;
     this.text.setPosition(x + this.text.width / 2, this.y);
-    const barW = Math.max(320, total + 120);
+    const barW = pop ? total + 24 : Math.max(320, total + 120);
     this.bar?.setPosition(GAME_WIDTH / 2, this.y).setDisplaySize(barW, 50);
     this.skipBtn.setPosition(GAME_WIDTH / 2 + barW / 2 + 6, this.y);
     this.root.add(this.keys);

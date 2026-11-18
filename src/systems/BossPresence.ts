@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { DEPTH, GAME_HEIGHT, GAME_WIDTH, HEADING_FONT, TITLE_FONT } from '../config';
 import type { Enemy } from '../entities/Enemy';
-import { figureHeight } from './SpriteMetrics';
+import { figureTop } from './SpriteMetrics';
 import { outlineKeyOf } from './IffOverlay';
 import { BOSS_SCALE, ELITE_SCALE, PRESENCE_ON } from '../data/bossReach';
 
@@ -38,6 +38,8 @@ export class BossPresence {
   private saved: Saved[] = [];
   private ring: Phaser.GameObjects.Image | null = null;
   private plate: Phaser.GameObjects.Container | null = null; private plateFor = '';
+  /** 名牌高度跟随：脚底到身体最高点（含马头）的平滑值——上升立即跟、下降慢慢收，名牌不抖。 */
+  private plateRise = 0; private plateBelow = false;
   private arrow: Phaser.GameObjects.Graphics;
   private dim: Phaser.GameObjects.Rectangle | null = null;
   /** 首领身上的辉光（敌兵精灵是对象池复用的：首领倒下 / 换人时必须摘掉）。 */
@@ -46,7 +48,7 @@ export class BossPresence {
   readonly look = { x: 0, y: 0 };
   private entranceAt = -1; private entranceDir = { x: 0, y: 0 };
   /** 测试用。 */
-  readonly stats = { scaled: 0, ring: false, plate: false, arrow: false, entrance: false, glow: false };
+  readonly stats = { scaled: 0, ring: false, plate: false, arrow: false, entrance: false, glow: false, plateGap: 0, plateBelow: false };
   /** 测试用：关掉身上辉光（同一页面里对比帧率）。 */
   glowOff = false;
 
@@ -123,13 +125,15 @@ export class BossPresence {
   }
 
   private makePlate(name: string): Phaser.GameObjects.Container {
-    const s = this.h.scene, seal = name.slice(-1);
-    const nameT = s.add.text(0, 0, name, { fontFamily: TITLE_FONT, fontSize: '17px', color: '#f3dcae', resolution: 2 }).setOrigin(0, .5).setLetterSpacing(3).setShadow(0, 1, '#000', 3, true, true);
-    const sz = 20, gap = 5, w = sz + gap + nameT.width, x0 = -w / 2;
-    const box = s.add.rectangle(x0 + sz / 2, 0, sz, sz, 0x9e2416, 1).setStrokeStyle(1.5, 0xe8bf6a, 1);
-    const sealT = s.add.text(x0 + sz / 2, .5, seal, { fontFamily: HEADING_FONT, fontSize: '13px', color: '#fbe6bd', resolution: 2 }).setOrigin(.5);
-    nameT.setX(x0 + sz + gap);
-    return s.add.container(0, 0, [box, sealT, nameT]).setDepth(DEPTH.hud - 7).setName('boss-name-plate');
+    // 低调名牌（2026-11-18 用户「标注会挡住 boss，梁字很显眼」）：小号书法字、米色、细描边，
+    // 底下一条半透明墨色小底条和一道极淡的金色细线；容器原点在名牌底边中央（往上长），方便贴着头顶放
+    const s = this.h.scene;
+    const nameT = s.add.text(0, -8.5, name, { fontFamily: TITLE_FONT, fontSize: '13px', color: '#ecdcb4', stroke: '#150e08', strokeThickness: 2, resolution: 2 }).setOrigin(.5).setLetterSpacing(2);
+    const w = Math.round(nameT.width) + 16;
+    const bar = s.add.rectangle(0, -8.5, w, 17, 0x120c08, .3);
+    const line = s.add.rectangle(0, -.5, w, 1, 0xc9a35e, .3);
+    // 深度压在伤害数字下面（不挡数字），也在「主将」标记之下
+    return s.add.container(0, 0, [bar, line, nameT]).setDepth(DEPTH.dmgText - 1).setAlpha(.92).setName('boss-name-plate');
   }
 
   /** 渲染前：首领 / 精锐以脚底为原点放大（连同影子、坐骑、描边），摆好头顶名牌。 */
@@ -156,12 +160,29 @@ export class BossPresence {
         o.setPosition(px + (o.x - px) * k, py + (o.y - py) * k).setScale(o.scaleX * k, o.scaleY * k);
       }
       this.stats.scaled++;
-      if (e === boss && this.plate?.visible) {
-        const fh = figureHeight(this.h.scene, sp.texture.key, sp.frame.name);
-        const top = fh ? py - fh * Math.abs(sp.scaleY) : sp.y - sp.displayHeight * sp.originY * .85;
-        this.plate.setPosition(Math.round(px), Math.round(Math.min(top - 14, py - 60)));
-      }
+      if (e === boss && this.plate?.visible) this.placePlate(px, py, [sp, ...this.h.extras(e)]);
     }
+  }
+  /** 名牌贴着身体最高点（骑马首领含马头 / 帽缨）上方留白；首领靠近屏幕顶边（会撞上血条 HUD）时改放脚下。 */
+  private placePlate(px: number, py: number, parts: Array<Phaser.GameObjects.Image | null | undefined>): void {
+    let top = py;
+    for (const o of parts) {
+      if (!o || !o.active || !o.visible || o.alpha < .05) continue;
+      const sy = Math.abs(o.scaleY), ft = figureTop(this.h.scene, o.texture.key, o.frame.name);
+      const t = ft !== undefined ? o.y - o.originY * o.frame.cutHeight * sy + ft * sy : o.y - o.displayHeight * o.originY * .85;
+      if (t < top) top = t;
+    }
+    const rise = py - top;
+    // 上升立即跟上（不遮头），下降慢慢收（不抖）
+    this.plateRise = rise > this.plateRise ? rise : this.plateRise + (rise - this.plateRise) * .15;
+    const view = this.h.scene.cameras.main.worldView, gap = 10, plateH = 17;
+    let y = py - this.plateRise - gap;
+    // 距屏幕顶边不足（顶部计时 / 章节名 / 武将卡占约 50 设计像素）→ 放到脚下；用迟滞避免在边界来回跳
+    const need = view.y + 50 + plateH;
+    this.plateBelow = this.plateBelow ? y < need + 16 : y < need;
+    if (this.plateBelow) y = py + 16 + plateH;
+    this.plate!.setPosition(Math.round(px), Math.round(y));
+    this.stats.plateGap = Math.round(top - y); this.stats.plateBelow = this.plateBelow; // 名牌底边到身体最高点的距离（放脚下时为负）
   }
   private dropGlow(): void {
     if (!this.glow) return;

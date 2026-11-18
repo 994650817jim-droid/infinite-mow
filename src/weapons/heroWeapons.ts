@@ -437,7 +437,8 @@ export function lianhuanNetStats(p: Player): { tethers: number; loops: number } 
 
 // ───────────────────────── 孙尚香 · 弓腰姬飞刀 ─────────────────────────
 // 近：身边环绕飞刀，割伤贴身敌人；远：从环里掷出一把，穿透、不飞回，1.2 秒后在身边重新凝成一把。
-// 被动「侍婢执刀」满层时召执刀侍婢护身。飞刀、侍婢、刀光均为程序化过渡（侍婢暂借蜀军刀兵行走图染红）。
+// 被动「侍婢执刀」满层时召执刀侍婢护身。飞刀（sun_knife）、侍婢（sun_maid_walk）、侍婢刀光（hero_small_paint 第 1 行）都是手绘图；
+// 下面的程序画法只在缺图时兜底（tools/test-hero-code-fx.mjs 检查正常载图时一次都不走到）。
 
 /** 环绕飞刀数：Lv1–2 两把、Lv3–4 三把、Lv5 四把。 */
 export const sunOrbitKnives = (level: number): number => (level >= 5 ? 4 : level >= 3 ? 3 : 2);
@@ -461,7 +462,7 @@ interface SunState { orbit: OrbitKnife[]; thrown: ThrownKnife[]; maids: Maid[]; 
 const SUN = new WeakMap<Player, SunState>();
 const sceneOf = (host: WeaponHost): Phaser.Scene => (host.add as unknown as { scene: Phaser.Scene }).scene;
 
-/** 程序化飞刀贴图（过渡）：银白刀身 + 赤红刀柄缠布。 */
+/** 飞刀贴图：正式手绘 sun_knife；缺图时退回程序画的银白刀身 + 赤红刀柄缠布（兜底）。 */
 function ensureKnifeTexture(host: WeaponHost): string {
   if (sceneOf(host).textures.exists('sun_knife')) return 'sun_knife'; // 正式飞刀贴图（2026-11-16 ChatGPT）
   const key = 'sun_knife_tex', scene = sceneOf(host);
@@ -601,7 +602,8 @@ export function sunKnifeStats(p: Player): { orbit: number; ready: number; thrown
 
 // ───────────────────────── 貂蝉 · 双花扇 ─────────────────────────
 // 回旋飞扇：掷出 230 像素后飞回手上，去程、回程各能打中同一敌人一次；命中加魅惑，满层倒戈（离间）。
-// 被动满层「闭月」：舞带环身旋舞 2 秒，圈内持续伤害并令敌人倒戈。飞扇、魅惑标记、舞带均为程序化过渡。
+// 被动满层「闭月」：舞带环身旋舞 2 秒，圈内持续伤害并令敌人倒戈。飞扇（diaochan_fan）、魅惑标记（charm_heart / charm_broken）、闭月（hero_fx_d 手绘帧）都是手绘图；
+// 舞带的程序画法只在 SHOW_OWN_RANGE_FX（范围提示调试）时画，正常不画。
 
 /** 同时掷出的扇子数：Lv1–2 一柄、Lv3–4 两柄、Lv5 三柄（霓裳 3 级再 +1）。 */
 export const diaochanFanCount = (level: number): number => (level >= 5 ? 3 : level >= 3 ? 2 : 1);
@@ -615,7 +617,7 @@ interface Fan { img: Phaser.GameObjects.Image; ox: number; oy: number; ex: numbe
 interface DiaoState { fans: Fan[]; marks: Map<number, Phaser.GameObjects.Text | Phaser.GameObjects.Image>; danceUntil: number; nextTick: number; ribbon?: Phaser.GameObjects.Graphics; }
 const DIAO = new WeakMap<Player, DiaoState>();
 
-/** 程序化团扇贴图（过渡）：粉色扇面 + 金色扇骨。 */
+/** 团扇贴图：正式手绘 diaochan_fan；缺图时退回程序画的粉色扇面 + 金色扇骨（兜底）。 */
 function ensureFanTexture(host: WeaponHost): string {
   if (sceneOf(host).textures.exists('diaochan_fan')) return 'diaochan_fan'; // 正式团扇贴图
   const key = 'diaochan_fan_tex', scene = sceneOf(host);

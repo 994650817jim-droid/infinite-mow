@@ -20,8 +20,9 @@ import {stableUnlocked} from '../systems/ItemStore';
 import {CHARACTERS,type CharacterId} from '../data/characters';
 import {uiSfx} from '../systems/Sfx';
 import {checkWorld} from '../systems/Achievements';
-import {loadWorld,saveWorld,worldUnlocked,storageUnavailable,incompatibleSave,townUpgrade,granaryLevy,researchTech,townProgress,stableCapacity,drillInfo,trainTroops} from '../world/WorldStore';
-import {TOWN_BUILDINGS,FOCUS_NAME,FOCUS_INCOME,FOCUS_CHANGE_COST,CITY_SIZE,CITY_TITLE,HALL_UPGRADE,nextCost,buildBlockers,buildingOpen,citySize,focusOpen,levelOf,costText,incomeText,townArtLevel,type TownBuildingId,type TownState,type CityFocus,type TownProgress} from '../town/TownData';
+import {loadWorld,saveWorld,worldUnlocked,storageUnavailable,incompatibleSave,townUpgrade,granaryLevy,researchTech,townProgress,stableCapacity,drillInfo,trainTroops,cityLevels} from '../world/WorldStore';
+import {cityIncome} from '../data/cityBuildings';
+import {CAMP_LOCK,TOWN_BUILDINGS,FOCUS_NAME,FOCUS_INCOME,FOCUS_CHANGE_COST,CITY_SIZE,CITY_TITLE,HALL_UPGRADE,nextCost,buildBlockers,buildingOpen,citySize,focusOpen,levelOf,costText,incomeText,townArtLevel,type TownBuildingId,type TownState,type CityFocus,type TownProgress} from '../town/TownData';
 import {TECHS,TECH_IDS,BRANCH_NAME,BRANCH_ORDER,techBlockers,techTotals,type TechBranch} from '../data/tech';
 import {LORD_LEVEL_HINT,followerLevel,followerLevelCap,hallLevel,loadRoster,rankCap,rankPreview,rankUp,type Recruit} from '../systems/RosterStore';
 import {COMMONER_SKILLS} from '../data/commonerSkills';
@@ -46,7 +47,7 @@ function statusOf(t:TownState,id:TownBuildingId,grain:number,p:TownProgress):'ma
 
 export class CityScene extends Phaser.Scene {
  private message='';
- private pano!:Phaser.GameObjects.Container;private top!:Phaser.GameObjects.Text;private hint!:Phaser.GameObjects.Text;private sizeText!:Phaser.GameObjects.Text;
+ private pano!:Phaser.GameObjects.Container;private top!:Phaser.GameObjects.Text;private domainText?:Phaser.GameObjects.Text;private hint!:Phaser.GameObjects.Text;private sizeText!:Phaser.GameObjects.Text;
  private vr={x:0,y:0,w:0,h:0};private k=1;private sx=0;private sy=0;
  private hits:Phaser.GameObjects.Rectangle[]=[];
  /** 营寨档的营帐与兵士（town/CampLife.ts）；县城以后为 null。 */
@@ -114,6 +115,8 @@ export class CityScene extends Phaser.Scene {
  /** 下一步提示：还没扩建时说明扩建条件，否则提示讲武堂。 */
  private nextHint(s:ReturnType<typeof loadWorld>):string{
   const t=s.town,size=citySize(t),up=HALL_UPGRADE[size];
+  // 营寨档：不能花军粮扩建，占领第一座城镇时自动升为县城（用户 2026-11-18）
+  if(size<=1)return '营寨建筑都只到 Lv1：去天下地图占领一座城镇，营寨升为县城后才能升级建筑';
   if(up)return up.ok(townProgress(s))?`主帐可扩建为${CITY_TITLE[size+1]}（${costText(up.cost)}）`:`${up.needs}后，营寨可扩建为${CITY_TITLE[size+1]}`;
   return levelOf(t,'pavilion')?'':'州府已成：可建奇观麒麟阁';
  }
@@ -121,6 +124,9 @@ export class CityScene extends Phaser.Scene {
   const s=loadWorld(),t=s.town,size=citySize(t);
   checkWorld(s);
   this.top.setText(`军粮 ${s.provisions}`);
+  // 2026-11-18：攻下的城在营寨也看得到——城池数与每战城池产出（各城建筑合计）
+  {const inc={grain:0,troops:0};for(const id of s.ownedCities){const c=cityById(id);if(!c)continue;const r=cityIncome(c.tier,cityLevels(id,s));inc.grain+=r.grain;inc.troops+=r.troops;}
+   this.domainText?.destroy();this.domainText=s.ownedCities.length?txt(this,D?this.top.x-this.top.width-18:24,D?28:92,`城池 ${s.ownedCities.length} · 每战 ${incomeText(inc)}`,12,'#bff0c8').setOrigin(D?1:0,.5).setName('city-domain'):undefined;}
   this.sizeText.setText(`${CITY_TITLE[size]}`);
   this.hint.setText(this.nextHint(s));
   const tech=techTotals(t.tech),pav=levelOf(t,'pavilion')>0?1:0,pts=tech.attributePoints+pav,dmg=Math.round((tech.damage+pav*.06)*100),hp=Math.round((tech.maxHp+pav*.06)*100);
@@ -239,14 +245,16 @@ export class CityScene extends Phaser.Scene {
   const line=(v:string,size=14,color='#e9dcc0',name?:string)=>{const o=txt(this,tx,y,v,size,color).setWordWrapWidth(tw,true);if(name)o.setName(name);m.root.add(o);y+=o.height+8;return o;};
   line(def.blurb,13,'#c9bf99');
   line(lv?'现在：'+def.effect(lv):'尚未建造',14,'#efe2c4');
-  if(cost!==null){line((lv?'下一级：':'建成后：')+def.effect(lv+1),14,'#cfe0c8');line('花费：'+costText(cost),14,s.provisions>=cost?'#d9c58f':'#d4887a','town-card-cost');}
+  const campLock=block[0]===CAMP_LOCK;
+  if(cost!==null&&campLock)line('营寨只有 Lv1：'+CAMP_LOCK,14,'#e59a83','town-card-camp-lock');
+  else if(cost!==null){line((lv?'下一级：':'建成后：')+def.effect(lv+1),14,'#cfe0c8');line('花费：'+costText(cost),14,s.provisions>=cost?'#d9c58f':'#d4887a','town-card-cost');}
   else line('已达最高等级',14,'#b9a98a');
-  if(id==='hall'&&cost!==null)line(`扩建为${CITY_TITLE[lv+1]}：${lv===1?'开放马厩、粮仓，建筑可升到 Lv2':'开放城池发展、奇观麒麟阁，建筑可升到 Lv3'}`,13,'#b9d2a8');
+  if(id==='hall'&&cost!==null)line(lv===1?'占领第一座城镇后，营寨自动升为县城：开放马厩、粮仓，建筑可升到 Lv2':`扩建为${CITY_TITLE[lv+1]}：开放城池发展、奇观麒麟阁，建筑可升到 Lv3`,13,'#b9d2a8');
   if(id==='stable'&&lv)line('只能在营中休整时换马。',12,'#b9c9b2');
   // 军营「练兵」：全体部曲生命、伤害每级 +15%，上限随已开放章节
   if(id==='barracks'){const d=drillInfo(s);line(`练兵 ${d.level} / ${d.cap} 级：全体部曲生命、伤害 ×${d.multiplier.toFixed(2)}${d.cost!==null?`；下一级 ×${d.next.toFixed(2)}`:d.level<12?'；开放新章节后可继续练':''}`,13,'#cfe0c8','town-card-drill');
    const db=homeCommand(this,tx+Math.min(220,tw)/2,y+20,Math.min(220,tw),38,d.cost!==null?`练兵 · 军粮 ${d.cost}`:'练兵已达上限',true,d.cost!==null&&s.provisions>=d.cost,14);db.hit.setName('town-drill').on('pointerdown',()=>{const res=trainTroops();if(!res.ok){(m.root.getByName('town-card-msg') as Phaser.GameObjects.Text|null)?.setText(res.message);return;}uiSfx().play('uiClick');this.toast(res.message);this.openCard('barracks');this.refresh();});m.root.add([db.g,db.hit,db.caption]);y+=50;}
-  if(block.length&&cost!==null)line('需要：'+block.join('、'),14,'#e59a83','town-card-block');
+  if(block.length&&cost!==null&&!campLock)line('需要：'+block.join('、'),14,'#e59a83','town-card-block');
   const msg=txt(this,W/2,m.y+h-(D?118:132),'',13,'#e8c98a').setOrigin(.5).setName('town-card-msg');m.root.add(msg);
   type Fn=[string,()=>void];
   const funcs:Partial<Record<TownBuildingId,Fn[]>>={
@@ -259,7 +267,7 @@ export class CityScene extends Phaser.Scene {
    granary:[['开仓募兵',()=>{const res=granaryLevy();if(!res.ok){msg.setText(res.message);return;}m.root.destroy();this.refresh();this.toast(res.message);}]],
   },fns=lv>0?funcs[id]??[]:[],n=fns.length+1,bgap=12,bw=Math.min(n>1?200:240,(m.w-60-bgap*(n-1))/n),bx=(i:number)=>W/2-((n-1)*(bw+bgap))/2+i*(bw+bgap),by=m.y+h-(D?84:94);
   fns.forEach(([label,fn],i)=>{const f=homeCommand(this,bx(i),by,bw,42,label,false,true,15);f.hit.setName(i?'town-card-func'+(i+1):'town-card-func').on('pointerdown',fn);m.root.add([f.g,f.hit,f.caption]);});
-  const up=homeCommand(this,bx(n-1),by,bw,42,cost!==null?(lv?(id==='hall'?'扩建':`升级到 Lv${lv+1}`):'建造'):'已满级',true,ok,16);
+  const up=homeCommand(this,bx(n-1),by,bw,42,campLock?'需占领城镇':cost!==null?(lv?(id==='hall'?'扩建':`升级到 Lv${lv+1}`):'建造'):'已满级',true,ok,16);
   up.hit.setName('town-upgrade').setData('padDefault',true).on('pointerdown',()=>{if(!ok){msg.setText(cost!==null?(block.length?'需要 '+block.join('、'):'军粮不足：需要 '+cost):'已达最高等级');return;}
    const res=townUpgrade(id);if(!res.ok){msg.setText(res.message);return;}
    m.root.destroy();if(id==='hall'){this.scene.restart();return;}this.popId=id;this.focusOn(id);this.refresh();this.toast(res.message);});

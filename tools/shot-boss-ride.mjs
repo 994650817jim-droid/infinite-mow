@@ -11,6 +11,14 @@ const CASES = [
   { id: 'lijue', scene: 'ThirdGameScene', run: { thirdStage: 1 }, reg: { thirdStage: 1 } },
   { id: 'zhangxiu', scene: 'ThirdGameScene', run: { thirdStage: 2 }, reg: { thirdStage: 2 } },
   { id: 'yanliang', scene: 'GuanduGameScene', run: {}, reg: { guanduStage: 1 } },
+  { id: 'wenchou', scene: 'GuanduGameScene', run: {}, reg: { guanduStage: 2 } },
+  { id: 'caochun', scene: 'ChibiGameScene', run: { thirdStage: 1 }, reg: { chibiStage: 1 } },
+  { id: 'huangzhong', scene: 'JingnanGameScene', run: { thirdStage: 3 }, reg: { jingnanStage: 3 } },
+  { id: 'zhanghe', scene: 'HanzhongGameScene', run: { thirdStage: 1 }, reg: { hanzhongStage: 1 } },
+  { id: 'xiahouyuan', scene: 'HanzhongGameScene', run: { thirdStage: 2 }, reg: { hanzhongStage: 2 } },
+  { id: 'caocao', scene: 'HanzhongGameScene', run: { thirdStage: 3 }, reg: { hanzhongStage: 3 } },
+  { id: 'sunhuan', scene: 'YilingGameScene', run: { thirdStage: 1 }, reg: { yilingStage: 1 } },
+  { id: 'zhuran', scene: 'YilingGameScene', run: { thirdStage: 2 }, reg: { yilingStage: 2 } },
 ];
 const VIEWS = [{ tag: 'down', face: 'down', dx: 0, dy: -50 }, { tag: 'left', face: 'left', dx: 170, dy: 20 }, { tag: 'right', face: 'right', dx: -170, dy: 20 }];
 const ONLY = (process.env.ONLY ?? '').split(',').filter(Boolean);

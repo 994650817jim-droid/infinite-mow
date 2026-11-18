@@ -19,6 +19,8 @@ if (process.env.IM_USER_DATA) app.setPath('userData', process.env.IM_USER_DATA);
 app.commandLine.appendSwitch('disable-gpu-sandbox');
 // 同理：音频服务进程沙箱在这些环境里出错，游戏的 AudioContext 停在 suspended 且报“audio device”错误 → 没有声音。关闭音频服务沙箱。
 app.commandLine.appendSwitch('disable-features', 'AudioServiceSandbox');
+// 开场动画（2026-11-18）：桌面版允许无手势自动出声，开场 CG 直接带配乐（网页版改为先显示「点击 · 入乱世」取得手势）
+app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
 // 自动测试用：受限环境里再关硬件加速、改软件渲染（玩家不受影响）
 if (process.env.IM_SAFE_GPU === '1') app.disableHardwareAcceleration();
 

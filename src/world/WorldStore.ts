@@ -65,7 +65,7 @@ function parse(raw:string|null):WorldSave|null {try{if(!raw)return null;const v=
  // v7：天下地图城池；旧档无城池，eraSeen=0（之后按当前时代处理）
  s.ownedCities=v.version>=7&&Array.isArray(v.ownedCities)?[...new Set(v.ownedCities.filter((c:unknown)=>typeof c==='string'&&c.length<=32))].slice(0,64) as string[]:[];s.eraSeen=v.version>=7?integer(v.eraSeen,3):0;s.capturedEver=v.version>=7&&Array.isArray(v.capturedEver)?[...new Set(v.capturedEver.filter((c:unknown)=>typeof c==='string'&&c.length<=32))].slice(0,64) as string[]:[];s.alerts=v.version>=7&&Array.isArray(v.alerts)?v.alerts.filter((a:CityAlert)=>a&&typeof a.city==='string'&&s.ownedCities.includes(a.city)&&typeof a.attacker==='string'&&a.attacker.length<=16).slice(0,16).map((a:CityAlert)=>({city:a.city,attacker:a.attacker,cause:a.cause==='era'?'era':'retaliation'})):[];s.lastLost=v.version>=7&&Array.isArray(v.lastLost)?v.lastLost.filter((c:unknown)=>typeof c==='string'&&c.length<=32).slice(0,16):[];s.yellowStages=integer(v.yellowStages,3);s.revision=integer(v.revision);s.provisions=integer(v.provisions);for(const id of ['barracks','farm','clinic'] as BuildingId[])s.buildings[id]=Math.max(1,integer(v.buildings[id],3));
  // v9：统一军粮。旧档的军功、钱（含在途商队）与已删建筑的退还一并折成军粮；v9 存档 merits 恒为 0。
- {const pt=parseTown(v.version>=8?v.town:null,s.buildings);s.town=pt.town;s.provisions=Math.min(1_000_000,s.provisions+Math.round(integer(v.merits)*MERIT_TO_GRAIN)+Math.round(pt.money*MONEY_TO_GRAIN)+pt.refund);s.merits=0;}if(!(v.town?.levels&&typeof v.town.levels==='object'&&'talent' in v.town.levels)){try{const r=JSON.parse(localStorage.getItem('im_roster_v1')??'null');s.town.levels.talent=Math.max(1,Math.min(3,integer(r?.hall,3)));}catch{s.town.levels.talent=1;}}s.buildings=legacyLevels(s.town);for(const id of ['huangjin','hulao'] as ChapterId[]){s.cleared[id]=v.cleared[id]===true;s.failureBest[id]=integer(v.failureBest?.[id],20);}if(s.cleared.huangjin||s.cleared.hulao)s.yellowStages=3;
+ {const pt=parseTown(v.version>=8?v.town:null,s.buildings);s.town=pt.town;s.provisions=Math.min(1_000_000,s.provisions+Math.round(integer(v.merits)*MERIT_TO_GRAIN)+Math.round(pt.money*MONEY_TO_GRAIN)+pt.refund);s.merits=0;}if(!(v.town?.levels&&typeof v.town.levels==='object'&&'talent' in v.town.levels)){try{const r=JSON.parse(localStorage.getItem('im_roster_v1')??'null');s.town.levels.talent=Math.max(1,Math.min(3,integer(r?.hall,3)));}catch{s.town.levels.talent=1;}}applyCampRule(s);for(const id of ['huangjin','hulao'] as ChapterId[]){s.cleared[id]=v.cleared[id]===true;s.failureBest[id]=integer(v.failureBest?.[id],20);}if(s.cleared.huangjin||s.cleared.hulao)s.yellowStages=3;
  // v1/v2 builds opened the map directly after Zhangjiao. Keep that access for existing saves;
  // v3–v8 builds opened it only after Hulao; since the chapter timeline it opens after Zhangjiao (see below).
  s.worldAvailable=v.version<3?(s.yellowStages===3||s.cleared.huangjin||s.cleared.hulao):v.worldAvailable===true;
@@ -96,8 +96,19 @@ export function upgradeCost(level:number):{merits:number;provisions:number}|null
 export function upgradeBuilding(id:BuildingId):{ok:boolean;message:string}{return id==='clinic'?{ok:false,message:'医馆已并入讲武堂科技'}:townUpgrade(id);}
 // —— 义军营寨（每种建筑一座，点建筑建造 / 升级；一律花军粮）——
 type TownResult={ok:boolean;message:string};
-/** 主帐扩建的章节前提：第二章（讨董）通关 → 县城；第三章通关或占领一座城池 → 州府。 */
-export function townProgress(s:WorldSave=loadWorld()):TownProgress{return{hulao:s.cleared.hulao,bigCity:s.warlordStages>=3||s.ownedCities.length>0};}
+/** 主帐扩建的前提：占领第一座城镇 → 县城（自动）；第三章通关或占领一座城池 → 州府（花军粮）。 */
+export function townProgress(s:WorldSave=loadWorld()):TownProgress{return{hulao:s.cleared.hulao,bigCity:s.warlordStages>=3||s.ownedCities.length>0,city:s.capturedEver.length>0||s.ownedCities.length>0};}
+/**
+ * 营寨规则（用户 2026-11-18：「营寨只有lv1建筑不可以升级，只有占领城镇才解锁升级建筑」）：
+ * 占领过城镇而主帐还是 Lv1 → 营寨自动升为县城（不花军粮）；仍是营寨的存档，Lv1 以上的建筑一律压回 Lv1（开发期不做兼容）。
+ * 返回 true = 这次刚升为县城。
+ */
+export function applyCampRule(s:WorldSave):boolean{const t=s.town;let promoted=false;
+ if(t.levels.hall<2&&(s.capturedEver.length>0||s.ownedCities.length>0)){t.levels.hall=2;promoted=true;}
+ if(t.levels.hall<=1)for(const id of Object.keys(t.levels) as TownBuildingId[])if(t.levels[id]>1)t.levels[id]=1;
+ s.buildings=legacyLevels(t);return promoted;}
+/** 营寨刚升为县城时附在结算 / 提示里的一句话。 */
+export const CAMP_PROMOTED='营寨升为县城：建筑可以升级了';
 function townCommit(s:WorldSave,message:string):TownResult{s.buildings=legacyLevels(s.town);const persisted=commit(s);return{ok:true,message:persisted?message:message+'（仅本次会话，存储不可用）'};}
 /** 建造（Lv0→1）或升级一座建筑；检查规模、章节前提与军粮。 */
 export function townUpgrade(id:TownBuildingId):TownResult{const s=loadWorld(),t=s.town,def=TOWN_BUILDINGS[id];if(!def)return{ok:false,message:'未知建筑'};
@@ -193,15 +204,15 @@ export function beginSiege(cityId:string,attackable:boolean,deployed:TroopKind[]
 export function settleSiege(id:string,result:{victory:boolean;bossKilled:boolean;debug:boolean;elapsed?:number;reward:{merits:number;provisions:number};firstBonus:number;returned?:TroopKind[]}):{merits:number;provisions:number;cityMerits?:number;cityProvisions?:number;season?:SeasonReport|null;captured:boolean;first:boolean;alert?:CityAlert|null;message:string}{
  const zero={merits:0,provisions:0,captured:false,first:false};if(result.debug)return{...zero,message:'测试战斗，不写入永久进度'};
  const s=loadWorld(),a=s.active;if(!a||a.arc!=='siege'||!a.cityId||a.id!==id||a.state!=='active'||s.receipts.some(r=>r.id===id))return{...zero,message:'本场已结算或无效'};
- a.state='settled';let merits=0,provisions=0,captured=false,first=false,alert:CityAlert|null=null;
+ a.state='settled';let merits=0,provisions=0,captured=false,first=false,promoted=false,alert:CityAlert|null=null;
  // 城池产出按出征前的领地计算（本场新占的城下次才产出）
  const inc=applyIncome(s,result.victory||(result.elapsed??0)>=60,0,0);
- if(result.victory&&result.bossKilled&&!s.ownedCities.includes(a.cityId)){first=!s.capturedEver.includes(a.cityId);const k=first?1+result.firstBonus:1;merits=Math.round(result.reward.merits*k);provisions=Math.round(result.reward.provisions*k*(1+(a.farm-1)*.08));s.ownedCities=[...s.ownedCities,a.cityId];if(first)s.capturedEver=[...s.capturedEver,a.cityId];captured=true;alert=retaliate(s,a.cityId);}
+ if(result.victory&&result.bossKilled&&!s.ownedCities.includes(a.cityId)){first=!s.capturedEver.includes(a.cityId);const k=first?1+result.firstBonus:1;merits=Math.round(result.reward.merits*k);provisions=Math.round(result.reward.provisions*k*(1+(a.farm-1)*.08));s.ownedCities=[...s.ownedCities,a.cityId];if(first)s.capturedEver=[...s.capturedEver,a.cityId];if(!s.cities[a.cityId])s.cities[a.cityId]=emptyCityLevels(); /* 新占城池的建筑等级当场写进存档（府衙 1 级）；失守后夺回保留原等级 */captured=true;promoted=applyCampRule(s);alert=retaliate(s,a.cityId);}
  const available=[...(a.deployed??[])];for(const k of result.returned??[]){const i=available.indexOf(k);if(i>=0){available.splice(i,1);s.reserve[k]=Math.min(999,(s.reserve[k]??0)+1);}}
  {const bonus=1+territorySummary(s.ownedCities.filter(c=>c!==a.cityId||!captured)).specialties.reduce((n,x)=>n+(x.specialty.provisions??0),0);provisions=Math.round(provisions*bonus);}
  merits+=inc.merits;provisions+=inc.provisions; // 季度净收益：城池产出 + 农田产粮 − 军粮（攻城本身奖励不受寿春加成以外的影响）
  ({merits,provisions}=bank(s,merits,provisions));s.receipts.push({id,merits,provisions});s.receipts=s.receipts.slice(-32);const persisted=commit(s);
- return{merits,provisions,cityMerits:inc.cityMerits,cityProvisions:inc.cityProvisions,season:inc.season,captured,first,alert,message:persisted?(captured?'城池已归入版图':'未能破城'):'已保留本次会话，存储不可用'};
+ return{merits,provisions,cityMerits:inc.cityMerits,cityProvisions:inc.cityProvisions,season:inc.season,captured,first,alert,message:persisted?(captured?'城池已归入版图'+(promoted?' · '+CAMP_PROMOTED:''):'未能破城'):'已保留本次会话，存储不可用'};
 }
 /* —— W4：时局变化与反攻 —— */
 /** 随机源（测试可替换）。 */
@@ -272,7 +283,7 @@ export function nextDongzhuoStage():1|2|3{return Math.min(3,loadWorld().dongzhuo
 /** 群雄篇章（第三章 qunxiong、第四章 guandu）用显式 arc 键结算，不会结算旧的虎牢出征。 */
 const ARC_FIELDS:Record<WarlordArc,{stages:'warlordStages'|'guanduStages'|'chibiStages'|'jingnanStages'|'shuStages'|'hanzhongStages'|'xiangfanStages'|'yilingStages'|'nanzhengStages'|'beifaStages';best:'thirdFailureBest'|'guanduFailureBest'|'chibiFailureBest'|'jingnanFailureBest'|'shuFailureBest'|'hanzhongFailureBest'|'xiangfanFailureBest'|'yilingFailureBest'|'nanzhengFailureBest'|'beifaFailureBest'}>={qunxiong:{stages:'warlordStages',best:'thirdFailureBest'},guandu:{stages:'guanduStages',best:'guanduFailureBest'},chibi:{stages:'chibiStages',best:'chibiFailureBest'},jingnan:{stages:'jingnanStages',best:'jingnanFailureBest'},shu:{stages:'shuStages',best:'shuFailureBest'},hanzhong:{stages:'hanzhongStages',best:'hanzhongFailureBest'},xiangfan:{stages:'xiangfanStages',best:'xiangfanFailureBest'},yiling:{stages:'yilingStages',best:'yilingFailureBest'},nanzheng:{stages:'nanzhengStages',best:'nanzhengFailureBest'},beifa:{stages:'beifaStages',best:'beifaFailureBest'}};
 /** 篇章剧情直接占城（第七章成都）：加入我方城池，返回是否新占。 */
-export function grantCity(cityId:string):boolean{const s=loadWorld();if(s.ownedCities.includes(cityId))return false;s.ownedCities=[...s.ownedCities,cityId];if(!s.capturedEver.includes(cityId))s.capturedEver=[...s.capturedEver,cityId];commit(s);return true;}
+export function grantCity(cityId:string):boolean{const s=loadWorld();if(s.ownedCities.includes(cityId))return false;s.ownedCities=[...s.ownedCities,cityId];if(!s.capturedEver.includes(cityId))s.capturedEver=[...s.capturedEver,cityId];if(!s.cities[cityId])s.cities[cityId]=emptyCityLevels();applyCampRule(s);commit(s);return true;}
 /** 第七章入蜀接在第六章平定荆南之后。 */
 export function shuPrereqCleared(s:WorldSave):boolean{return s.cleared.hulao&&s.jingnanStages>=3;}
 export function arcStages(arc:WarlordArc):number{return loadWorld()[ARC_FIELDS[arc].stages];}

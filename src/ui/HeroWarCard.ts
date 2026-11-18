@@ -260,6 +260,8 @@ export class HeroWarCard{
   for(const item of [this.brush,this.nameV,this.title,this.seal,this.roleSeal,this.verse,this.rules,this.weapon,this.passive,this.skills,this.leisureSeal]){
    item.setAlpha(a*(item===this.verse?.86:item===this.leisureSeal?.92:1)).setVisible(a>0&&!(item===this.verse&&hideVerse)&&!this.trimmed.includes(item));
   }
+  // 主属性印跟画卷一起收起（2026-11-18 用户：「敏捷没跟着画卷收起来」）；没有主属性的武将保持隐藏
+  if(this.attrSeal&&(this.attrSeal.getData('hasAttr')??true))this.attrSeal.setAlpha(a).setVisible(a>0);
   const fa=Phaser.Math.Clamp(1-p*2.2,0,1);this.foldName!.setAlpha(fa).setVisible(fa>0).setY(rollTop+(ROLL_NAME-ROLL_BOT)*I.bv);
   this.glow.setVisible(p<=0||open);
   this.hit.setSize(w,H).setPosition(w/2,H/2);if(this.hit.input)this.hit.input.hitArea.setTo(0,0,w,H);

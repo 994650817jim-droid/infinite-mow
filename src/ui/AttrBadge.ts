@@ -63,7 +63,7 @@ export function attrBadge(scene: Phaser.Scene, x: number, y: number, hero: strin
 }
 /** 换武将（卷轴切换选中武将时）：没有主属性就隐藏。 */
 export function setAttrBadge(img: Phaser.GameObjects.Image | null | undefined, hero: string): void {
-  if (!img) return; const id = primaryAttribute(hero); img.setVisible(!!id); if (!id) return;
+  if (!img) return; const id = primaryAttribute(hero); img.setVisible(!!id).setData('hasAttr', !!id); if (!id) return;
   const w = img.displayWidth, h = img.displayHeight, size = Math.round(Math.max(w, h));
   img.setTexture(sealKey(img.scene, id, size)).setDisplaySize(w, h).setData('attr', id);
 }

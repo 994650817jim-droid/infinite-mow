@@ -11,6 +11,8 @@ import type { Player } from '../entities/Player';
 import { visualTextureKey } from './ReadableTextures';
 import { framesFigure, sheetFigureHeight } from './SpriteMetrics';
 import { ACTION_MS, HERO_ACTIONS, type ActionFrame } from '../data/heroActions';
+import { HERO_ACTION_SCALE } from '../data/heroActionFit';
+import { isV2Texture } from './ArtStyle';
 import type { CharacterPassives } from './CharacterPassives';
 import { HINT_MOCK, groundScar } from '../ui/HintStyle';
 import { followerLevelCap, rankBonus, type Recruit } from './RosterStore';
@@ -77,7 +79,7 @@ export class Follower {
   attacks = 0; stillAt = 0; mx = NaN; my = NaN;
   /** 累计造成的伤害（测试 / 平衡用）。 */
   dealt = 0;
-  private readonly fits = new Map<string, { k: number; originY: number }>();
+  private readonly fits = new Map<string, { k: number; originY: number; foot: number; frameH: number }>();
   /** 倒地标记与屏幕外箭头的文字（用到才建）。 */
   mark?: Phaser.GameObjects.Text; arrowText?: Phaser.GameObjects.Text;
   slot = 0; dir: 'down' | 'up' | 'left' | 'right' = 'down'; walk = 0; lastX = 0; lastY = 0; hurtUntil = 0; downs = 0; kills = 0; hits = 0;
@@ -154,15 +156,18 @@ export class Follower {
     return true;
   }
   /** 动作帧 → 缩放与脚底锚点（同主将的做法：按「站姿人物高度」之比统一缩放，脚线对齐行走帧，切换时人物不忽大忽小、脚不上下跳）。 */
-  fitFor(key: string, ref: ActionFrame[]): { k: number; originY: number } {
+  fitFor(key: string, ref: ActionFrame[]): { k: number; originY: number; foot: number; frameH: number } {
     const hit = this.fits.get(key); if (hit) return hit;
+    // 名将正式动作图：一律按待机行（站姿）定比例，不随第一个播放的动作变（以前先播攻击就按攻击行的身高算，大小跟着变）
+    const heroSet = this.recruit.hero ? HERO_ACTIONS[this.recruit.hero] : undefined;
+    if (heroSet?.idle?.length && visualTextureKey(this.scene, heroSet.texture) === key) ref = heroSet.idle;
     const walkKey = visualTextureKey(this.scene, this.sheet), walkFrameH = this.scene.textures.getFrame(walkKey, 'down_0')?.height || 96, actFrameH = this.scene.textures.getFrame(key, ref[0])?.height || 96;
     const walkRef = framesFigure(this.scene, walkKey, (['down', 'left', 'right', 'up'] as const).flatMap(d => [0, 1, 2, 3].map(i => `${d}_${i}`)));
     const actRef = framesFigure(this.scene, key, ref);
     const walkH = walkRef?.height ?? sheetFigureHeight(this.scene, walkKey) ?? 90, actH = actRef?.height ?? sheetFigureHeight(this.scene, key) ?? 90;
     const kw = 70 / walkFrameH, k = kw * walkH / actH;
     const walkFoot = ((walkRef?.bottom ?? walkFrameH * .96) + 1 - walkFrameH * .86) * kw;
-    const fit = { k, originY: Phaser.Math.Clamp(((actRef?.bottom ?? actFrameH * .89) + 1 - walkFoot / k) / actFrameH, .3, .95) };
+    const fit = { k, originY: Phaser.Math.Clamp(((actRef?.bottom ?? actFrameH * .89) + 1 - walkFoot / k) / actFrameH, .3, .95), foot: (actRef?.bottom ?? actFrameH * .89) + 1, frameH: actFrameH };
     if (walkRef && actRef) this.fits.set(key, fit);
     return fit;
   }
@@ -187,6 +192,8 @@ export class FollowerSquad {
   sortie = false;
   /** 随行实际在用的规则（FOLLOW）。测试改参数要改这一份：常开的 dev server 热更新后，测试自己 import 的 recruits.ts 可能是另一个模块实例。 */
   readonly rules = FOLLOW;
+  /** 场景里的障碍物（城墙 / 城门 / 关隘等，地图坐标的矩形）：随行不能站进去（用户 2026-11-18「随从站在城墙上穿模」）。门破 / 拆除后场景把对应矩形移出数组，随行就能过。 */
+  obstacles: (() => ReadonlyArray<{ left: number; right: number; top: number; bottom: number }> | undefined) | null = () => (this.scene as unknown as { sishuiObstacles?: { footprints: Array<{ left: number; right: number; top: number; bottom: number }> } }).sishuiObstacles?.footprints;
   /** 无名之辈招式 / 被动的统计（测试 / 平衡用）。 */
   readonly skillStats = { sweep: 0, thrust: 0, thrustHits: 0, volley: 0, heal: 0, healed: 0, block: 0, crit: 0, formation: 0, rally: 0 };
   /** 招式 / 被动用的随机数（测试可替换）。 */
@@ -265,6 +272,7 @@ export class FollowerSquad {
         if (boss > 0 && now >= f.bossImmuneUntil) { dmg += boss * BOSS_VS_ALLY.mul; f.bossImmuneUntil = now + BOSS_VS_ALLY.immuneMs; }
         if (dmg > 0) this.hurt(f, dmg, now);
       }
+      this.pushOut(f);
       if (!(Math.hypot(f.x - f.mx, f.y - f.my) <= .5)) f.stillAt = now; f.mx = f.x; f.my = f.y; // 站定计时（弓「瞄准」）
       this.render(f, now);
       this.stats.maxDist = Math.max(this.stats.maxDist, Math.hypot(f.x - p.x, f.y - p.y));
@@ -360,6 +368,18 @@ export class FollowerSquad {
       if (now >= f.faceUntil) f.dir = Math.abs(dx) > Math.abs(dy) ? dx < 0 ? 'left' : 'right' : dy < 0 ? 'up' : 'down';
     } else f.walk = 0;
     f.lastX = f.x; f.lastY = f.y;
+  }
+  /** 把站进障碍物矩形里的随行推到最近的一条边外（脚底点 + 半径 14；阵位 / 追击 / 瞬移落点落在城墙上时都靠这里兜住）。 */
+  private pushOut(f: Follower): void {
+    const boxes = this.obstacles?.(); if (!boxes?.length) return;
+    const R = 14; let x = f.x, y = f.y, moved = false;
+    for (let pass = 0; pass < 2; pass++) for (const b of boxes) {
+      if (x <= b.left - R || x >= b.right + R || y <= b.top - R || y >= b.bottom + R) continue;
+      const dl = x - (b.left - R), dr = b.right + R - x, dt = y - (b.top - R), db = b.bottom + R - y, m = Math.min(dl, dr, dt, db);
+      if (m === dl) x = b.left - R; else if (m === dr) x = b.right + R; else if (m === dt) y = b.top - R; else y = b.bottom + R;
+      moved = true;
+    }
+    if (moved) f.sprite.setPosition(x, y);
   }
   private teleport(f: Follower, x: number, y: number): void { f.place(x, y); f.target = null; this.stats.teleports++; f.sprite.setAlpha(.3); this.scene.tweens.add({ targets: f.sprite, alpha: 1, duration: 220 }); }
   /**
@@ -526,7 +546,9 @@ export class FollowerSquad {
       const t = Math.min(.999, Math.max(0, (now - a.start) / Math.max(1, a.until - a.start))), fr = a.frames[a.hold && now >= a.until ? a.frames.length - 1 : Math.floor(t * a.frames.length)];
       const key = visualTextureKey(this.scene, a.key), fit = f.fitFor(key, a.frames);
       if (f.sprite.texture.key !== key || f.sprite.frame.name !== String(fr)) f.sprite.setTexture(key, fr);
-      f.sprite.setFlipX(a.mirror).setScale(fit.k).setOrigin(.5, fit.originY);
+      // 名将动作图逐帧尺寸系数（data/heroActionFit.ts，同主将），脚线不动
+      const sc = typeof fr === 'number' && isV2Texture(key) ? HERO_ACTION_SCALE[a.key]?.[fr] ?? 1 : 1;
+      f.sprite.setFlipX(a.mirror).setScale(fit.k * sc).setOrigin(.5, sc === 1 ? fit.originY : Phaser.Math.Clamp((fit.foot - (fit.foot - fit.originY * fit.frameH) / sc) / fit.frameH, .3, .95));
     } else {
       if (a) f.act = null;
       const moving = !f.downed && f.walk > 0, frame = moving ? Math.floor(f.walk / 14) % 4 : 0, key = visualTextureKey(this.scene, f.sheet), name = `${f.dir}_${frame}`;

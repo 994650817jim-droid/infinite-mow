@@ -118,8 +118,12 @@ import { PROP_LOOT, rollPropItem, type PropLootKind } from '../data/propLoot';
 import { terrainConfigFor } from '../data/terrain';
 import { Tutorial } from '../systems/Tutorial';
 import { IffOverlay, readIffMode, warmIffTextures, type IffUnit } from '../systems/IffOverlay';
-import { BARKS_LABEL, heroBarks, setHeroBarks, type HeroBarks, STORY_LABEL, setStoryMode, storyMode, type StoryMode } from '../systems/BattleSettings';
+import {BARKS_LABEL, heroBarks, setHeroBarks, type HeroBarks, STORY_LABEL, setStoryMode, storyMode, type StoryMode, OPENING_LABEL, openingMode, setOpeningMode, type OpeningMode } from '../systems/BattleSettings';
 import { HeroBark, type BarkSpeaker } from '../ui/HeroBark';
+import { ZhaoyunPassiveFx } from '../systems/ZhaoyunPassiveFx';
+import { BattleHotkeys, HotkeyHints } from '../systems/BattleHotkeys';
+import { hotkeyLabel } from '../data/hotkeys';
+import { hotkeySettingsLink } from '../ui/HotkeySettingsUI';
 import { BossPresence } from '../systems/BossPresence';
 import { DAMAGE_LABEL, OUTLINE_LABEL, SCALE_LABEL, SHAKE_LABEL, WIDTH_LABEL, cycle, damageNumbers, outlineMode, outlineWidth, renderScaleSetting, setDamageNumbers, setOutlineMode, setOutlineWidth, setRenderScaleSetting, setShakeLevel, shakeLevel, shakeScale, type DamageNumbers, type OutlineMode, type OutlineWidth, type RenderScaleSetting, type ShakeLevel } from '../systems/BattleSettings';
 import { tutorialReplayLink } from '../ui/TutorialOverlay';
@@ -145,6 +149,7 @@ const HERO_FX_TONE: Record<string, { alpha: number; ms: number }> = {
   weiyanSlash: { alpha: .72, ms: 340 }, crack: { alpha: .7, ms: 360 }, whoDares: { alpha: .68, ms: 400 },
 };
 import { HIT_FEEL, BOSS_FEEL, WEAPON_HIT_TYPE } from '../data/hitFeel';
+import { GEM_FX } from '../data/gemFx';
 
 interface Gem {
   img: Phaser.GameObjects.Image;
@@ -154,6 +159,12 @@ interface Gem {
   active: boolean;
   /** 落地缓冲（毫秒）：先落地，再从磁吸范围吸附。 */
   restMs: number;
+  /** 军功信物手感（2026-11-18，data/gemFx.ts）：掉落 → 落地浮动 → 吸取。phase 开始时刻 at；掉落起点 sx/sy、落点 lx/ly；吸取速度 speed */
+  phase: 'drop' | 'rest' | 'fly'; at: number; sx: number; sy: number; lx: number; ly: number; speed: number;
+  /** 降级（不画光晕 / 残影、不闪光）；随机相位让一地信物不同步浮动 */
+  lite: boolean; seed: number; large: boolean;
+  /** 手绘光晕与吸取残影（同槽复用） */
+  glow?: Phaser.GameObjects.Image; ghost?: Phaser.GameObjects.Image;
 }
 
 interface DmgFx {
@@ -173,7 +184,7 @@ type DmgKind = 'hit' | 'crit' | 'spell' | 'boss' | 'heal' | 'ally';
 const DMG_FONT = '"Bahnschrift","Arial Black","Segoe UI Black","Helvetica Neue",Arial,sans-serif';
 const DMG_STYLE: Record<DmgKind, { size: number; color: string; stroke: string; sw: number }> = {
   hit: { size: 15, color: '#f6e6bf', stroke: '#2a1608', sw: 3 },
-  crit: { size: 24, color: '#ffcf45', stroke: '#8c1c0a', sw: 4 },
+  crit: { size: 30, color: '#ffcf45', stroke: '#8c1c0a', sw: 5 }, // 2026-11-18 用户：不要「暴」字，字再大一些
   spell: { size: 15, color: '#86e8f2', stroke: '#0c2f3c', sw: 3 },
   boss: { size: 18, color: '#ffe9c4', stroke: '#3a1206', sw: 4 },
   heal: { size: 15, color: '#8ff08a', stroke: '#123a10', sw: 3 },
@@ -317,6 +328,8 @@ export class GameScene extends Phaser.Scene {
     for (const e of this.enemies) if (e.active && !e.isSupplySlot && e.def.behavior !== 'wall') yield { sprite: e.sprite, foot: e.shadow, side: 'enemy', rank: e.kind === 'boss' ? 'boss' : e.kind === 'elite' ? 'elite' : 'normal', visible: e.sprite.visible, yellow };
     for (const a of this.allies) if (a.active && a.view) yield { sprite: a.view.sprite, foot: a.view.shadow, side: 'ally', rank: 'normal', visible: a.view.sprite.visible };
     for (const m of this.followers?.members ?? []) yield { sprite: m.sprite, foot: m.shadow, side: 'ally', rank: 'elite', visible: m.sprite.visible, keepColors: true };
+    // 黄巾力士（首领遗珍召出的符兵）：我方描边、保持金白原画（2026-11-18）
+    for (const l of this.relics?.lishiUnits() ?? []) yield { sprite: l.sprite, foot: l.foot, side: 'ally', rank: 'normal', visible: l.visible, keepColors: true };
   }
   dragBladeFx(): DraggingBladeFx { if (!this.dragFx) { this.dragFx = new DraggingBladeFx(this, this.player, this.sfx); this.events.once('shutdown', () => { this.dragFx?.destroy(); this.dragFx = undefined; }); } return this.dragFx; }
   /** 随行武将（招贤馆，RECRUIT_PLAN.md §4）。 */
@@ -389,6 +402,10 @@ export class GameScene extends Phaser.Scene {
   private readonly hudChipRect = new Phaser.Geom.Rectangle();
   protected hudTexts!: Record<string, Phaser.GameObjects.Text>;
   protected passiveHud!: PassiveHud; protected passiveShout!: PassiveShout; protected heroBark!: HeroBark;
+  /** 赵云被动「七进七出」：脚下龙鳞层数 + 满层白龙枪芒 / 绕身一闪 / 突进残影。 */
+  zhaoyunFx!: ZhaoyunPassiveFx;
+  /** 战斗快捷键与键位提示（systems/BattleHotkeys；键位表 data/hotkeys）。 */
+  hotkeys!: BattleHotkeys; protected hotkeyHints!: HotkeyHints;
   private buffHud!:BuffHud;
   /** 用药：药囊里最早的一份，按原规则回血；不能用时轻微提示。 */
   protected usePotion():void{
@@ -737,10 +754,11 @@ export class GameScene extends Phaser.Scene {
       else if (this.mode === 'recruit') { this.recruitedWaves.add(this.waveIndex); this.freeRecruit = false; this.resumePendingChoices(); }
     }, () => this.takeRecruitPotion(), () => canOfferRejuvenation(this.player));
     this.campUI=new CampRestUI(this,this.player,this.legion,()=>this.continueCampaign());
+    // 行营休整在本关结算之后：买下的兵装直接收入行囊（2026-11-18 用户报「休整买的装备背包没显示」——原先推进已结算的 runLoot，背包看不到、下一关重建时还会丢）。测试 / 调试战斗同结算规则不入行囊。
+    this.campUI.onBuyItem=item=>{const debug=isChapterTestRun()||this.debugModified||this.debugJumped||!!this.player.damageImmune||!!this.runConfig.encounter;if(this.over&&!debug)addItems([item]);else this.itemDrops?.runLoot.push(item);};
     // 军医（2026-11-18）：按章定价；治疗后把存档里的征程构筑血量也改掉（存档点是打赢那一刻存的，治疗在之后；重打旧关不存档也不改）
     this.campUI.chapterNo=medicChapter(this.scene.key,this.chapter.id);
     this.campUI.onHealed=()=>{if(this.campaignReplay)return;const fh:Record<string,number>={};for(const m of this.followers?.members??[])fh[m.recruit.id]=m.downed?0:m.hp/Math.max(1,m.maxHp);patchCampaignHp(this.runConfig.character,this.player.hp/Math.max(1,this.player.maxHp),fh);};
-    this.campUI.onBuyItem=item=>this.itemDrops?.runLoot.push(item);
     this.campUI.onOpenBag=()=>this.openBattleBag(true);
     // 从营寨 / 天下地图出征的战役：关与关之间的休整可直接回营寨（本场奖励已在胜利时入库）
     if(this.worldCampaign&&worldUnlocked())this.campUI.onReturnHome=()=>{this.resting=false;this.registry.remove('campaignTransfer');this.scene.start('CityScene');};
@@ -916,18 +934,16 @@ export class GameScene extends Phaser.Scene {
     for (const key of ['P', 'ESC', 'ONE', 'TWO', 'THREE', 'R', 'Q', 'E']) keyboard.removeAllListeners(`keydown-${key}`);
     this.cursors = keyboard.createCursorKeys();
     this.wasd = keyboard.addKeys('W,A,S,D') as Record<string, Phaser.Input.Keyboard.Key>;
-    keyboard.on('keydown-P', () => this.togglePause());
-    keyboard.on('keydown-Q', () => this.usePotion());
-    keyboard.on('keydown-ESC', () => this.togglePause());
-    keyboard.on('keydown-ONE', () => this.chooseUpgrade(0));
-    keyboard.on('keydown-TWO', () => this.chooseUpgrade(1));
-    keyboard.on('keydown-THREE', () => this.chooseUpgrade(2));
-    keyboard.on('keydown-R', () => {
-      if (this.mode === 'result'&&this.victory) this.scene.restart();
-    });
-    let lastE = -1;
-
-    keyboard.on('keydown-E', (event: KeyboardEvent) => { if (event.repeat || event.timeStamp === lastE) return; lastE = event.timeStamp; if (this.mode === 'none' && !this.over) this.legion.cycleOrder(); });
+    // 原来的 P / Esc 暂停、Q 服药、1–3 选卡、R 再来一局、E 护阵 都并进了快捷键分派（键位不变，可在设置「快捷键」里改）
+    const hotkeyHost = {
+      scene: this as Phaser.Scene, mode: () => this.mode as string, over: () => this.over,
+      togglePause: () => this.togglePause(), usePotion: () => this.usePotion(),
+      order: () => this.legion.order, cycleOrder: () => this.legion.cycleOrder(),
+      openBag: () => this.openBattleBag(), canAttributes: () => this.player.growth.unallocated > 0,
+      openAttributes: (from: 'none' | 'pause') => { this.attributeReturn = from; this.renderAttributePanel(); this.setMode('attributes'); },
+      openBuild: () => this.openBuildPanel(), chooseUpgrade: (i: number) => this.chooseUpgrade(i),
+    };
+    this.hotkeys = new BattleHotkeys(hotkeyHost); this.hotkeyHints = new HotkeyHints(hotkeyHost);
   }
 
   // ---------------- update ----------------
@@ -972,6 +988,7 @@ export class GameScene extends Phaser.Scene {
     this.updateHud();
     // 被动满层台词每帧检测（HUD 0.1 秒一刷，孙尚香这类攒满后马上触发的会漏掉）
     this.passiveShout.update(this.player.passive, this.combatNow, this.player.x, this.player.y, this.mode === 'none' && !this.over, this.player.sprite);
+    this.zhaoyunFx.update(this.player.passive, this.combatNow, this.player.x, this.player.y, !this.over && this.player.sprite.visible);
     this.heroBark?.update(this.barkSpeakers(), this.combatNow, this.mode === 'none' && !this.over && !this.barksMuted()); // 武将台词气泡（被动大招触发时）；过场中与刚结束 1 秒内不喊
     this.artEffects.update(this.combatNow);
     this.updateRelicWaves();
@@ -994,6 +1011,7 @@ export class GameScene extends Phaser.Scene {
     if(this.finaleFadeMs>0){this.finaleFadeMs=Math.max(0,this.finaleFadeMs-delta);const a=this.finaleFadeMs/800;this.bossUltGfx.setAlpha(a);this.bossShieldGfx?.setAlpha(a);if(!this.finaleFadeMs){this.bossUltGfx.clear().setAlpha(1);this.bossShieldGfx?.clear().setAlpha(1);}}
     this.huaxiong?.updateDeath(delta);this.xurong?.updateDeath(delta);for(const controller of this.deadBossControllers)controller.updateDeath(delta);
     this.animateUpgradeCards();
+    this.hotkeyHints?.update(delta / 1000);
     if (this.mode !== 'none' || this.over) return;
     if (this.pendingLevels > 0 && this.pickGapOk()) this.openUpgrade();
 
@@ -1778,6 +1796,7 @@ export class GameScene extends Phaser.Scene {
       spawnFlameGatherFx: (...args) => scene.spawnFlameGatherFx(...args),
       spawnFlameFx: (...args) => scene.spawnFlameFx(...args),
       heroFx: (id: string, x: number, y: number, size: number, rotation = 0) => scene.playHeroFx(id, x, y, size, rotation),
+      zhaoyunBurst: (angle: number, len: number) => scene.zhaoyunFx?.burst(scene.player.x, scene.player.y, angle, len, scene.combatNow, scene.player.sprite),
       draggingBladeWave: (angle, size, kind, hits) => scene.dragBladeFx().release(angle, size, kind, hits),
       rallyAllies: (fraction: number) => { for (const u of scene.allies) if (u.active) u.hp = Math.min(u.maxHp, u.hp + u.maxHp * fraction); },
       martialField: (...args) => scene.martialFields.add(...args),
@@ -2175,7 +2194,7 @@ export class GameScene extends Phaser.Scene {
 
   /**
    * 伤害 / 治疗数字（池化 40 个，同屏多时普通部曲数字先丢、暴击和主将优先）：
-   * 同一位置同类的数字合并累加；向上飘出一道小弧线后淡出；暴击先放大再落定，左侧带小「暴」字。
+   * 同一位置同类的数字合并累加；向上飘出一道小弧线后淡出；暴击先放大再落定（字号更大，不带「暴」字）。
    * kind 缺省按 crit / priority 推：暴击 → crit，主将 → hit，部曲随行 → ally。设置「伤害数字」全部 / 仅暴击 / 关。
    */
   protected spawnDamageText(x: number, y: number, value: number, crit: boolean, priority=true, kind?: DmgKind): void {
@@ -2195,8 +2214,7 @@ export class GameScene extends Phaser.Scene {
     }
     if (fx.kind !== k) { const st = DMG_STYLE[k]; fx.kind = k; fx.text.setStyle({ fontSize: st.size + 'px', color: st.color, stroke: st.stroke, strokeThickness: st.sw }); }
     fx.crit = crit;
-    if (crit) { fx.tag ??= this.add.text(0, 0, '暴', { fontFamily: FONT, fontStyle: 'bold', fontSize: '13px', color: '#fff2c0', backgroundColor: '#a3240c', padding: { x: 2, y: 0 } }).setOrigin(1, .5).setDepth(DEPTH.dmgText); fx.tag.setVisible(true).setAlpha(1); }
-    else fx.tag?.setVisible(false);
+    fx.tag?.setVisible(false); // 2026-11-18 用户：暴击不再显示「暴」字，只靠更大的金色数字区分
     fx.active = true;
     fx.life = DMG_LIFE;
     fx.vx = (Math.random() - .5) * (crit ? 30 : 40);
@@ -2221,70 +2239,88 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
+  /** 军功信物是否用手绘图（缺图时退回程序光团兜底）。 */
+  private gemArt(): boolean { return this.textures.exists('gem_tok_small') && this.textures.exists('gem_tok_large'); }
+  /**
+   * 敌人倒下掉军功信物：从身上弹出，走一道小抛物线落地再轻弹一下（GEM_FX.dropMs + bounceMs，0.3 秒内）。
+   * 对象池（GEM_FX.cap 个槽，信物 / 光晕 / 残影同槽复用）；手机布局或同屏过多时降级。
+   */
   protected spawnGem(x: number, y: number, value: number): void {
-    if (this.terrain) { const f = this.terrain.free(x, y, 8); x = f.x; y = f.y; } // 掉落不落在水里
+    let lx = x + (Math.random() - .5) * 2 * GEM_FX.spread, ly = y + (Math.random() - .5) * GEM_FX.spread * .7;
+    if (this.terrain) { const f = this.terrain.free(lx, ly, 8); lx = f.x; ly = f.y; } // 掉落不落在水里
     let gem = this.gems.find((g) => !g.active);
     if (!gem) {
-      if (this.gems.length >= 200) return;
-      gem = {
-        img: this.add.image(x, y, 'gem_small').setDepth(DEPTH.gem),
-        value: 0,
-        vx: 0,
-        vy: 0,
-        active: false,
-        restMs: 0,
-      };
+      if (this.gems.length >= GEM_FX.cap) return;
+      gem = { img: this.add.image(x, y, 'gem_small').setDepth(DEPTH.gem).setName('gem'), value: 0, vx: 0, vy: 0, active: false, restMs: 0,
+        phase: 'drop', at: 0, sx: 0, sy: 0, lx: 0, ly: 0, speed: 0, lite: false, seed: 0, large: false };
       this.gems.push(gem);
     }
-    gem.active = true;
-    gem.value = value;
-    gem.restMs = 280;
-    gem.vx = (Math.random() - 0.5) * 40;
-    gem.vy = (Math.random() - 0.5) * 40;
-    gem.img.setTexture(value >= 10 ? 'gem_large' : 'gem_small').setPosition(x, y).setVisible(true).setAlpha(1).setScale(1);
+    const art = this.gemArt(), large = value >= GEM_FX.largeValue, live = this.gems.reduce((n, g) => n + (g.active ? 1 : 0), 0);
+    Object.assign(gem, { active: true, value, vx: 0, vy: 0, restMs: GEM_FX.dropMs + GEM_FX.bounceMs, phase: 'drop', at: this.combatNow, sx: x, sy: y - GEM_FX.lift, lx, ly, speed: 0,
+      lite: !art || !IS_DESKTOP || live > GEM_FX.liteAbove, seed: Math.random() * 10000, large });
+    const size = large ? GEM_FX.largeSize : GEM_FX.smallSize;
+    if (art) gem.img.setTexture(large ? 'gem_tok_large' : 'gem_tok_small', 0).setDisplaySize(size, size);
+    else gem.img.setTexture(large ? 'gem_large' : 'gem_small').setScale(1);
+    gem.img.setPosition(gem.sx, gem.sy).setVisible(true).setAlpha(1).setDepth(DEPTH.gem);
+    gem.ghost?.setVisible(false);
+    if (!gem.lite && this.textures.exists('gem_fx')) {
+      gem.glow ??= this.add.image(lx, ly, 'gem_fx', 4).setBlendMode(Phaser.BlendModes.ADD).setDepth(DEPTH.gem - .1).setName('gem-glow');
+      const gs = large ? GEM_FX.glowLarge : GEM_FX.glowSmall; gem.glow.setFrame(large ? 5 : 4).setDisplaySize(gs, gs).setPosition(lx, ly + 2).setAlpha(0).setVisible(true);
+    } else gem.glow?.setVisible(false);
+  }
+
+  /** 拾取闪光（手绘 gem_fx 0–3 帧）对象池 */
+  private gemSparks: Array<{ img: Phaser.GameObjects.Image; at: number }> = [];
+  private gemSpark(x: number, y: number): void {
+    if (!this.textures.exists('gem_fx')) return;
+    let sp = this.gemSparks.find(s => this.combatNow - s.at >= GEM_FX.sparkMs);
+    if (!sp) { if (this.gemSparks.length < GEM_FX.sparkCap) { sp = { img: this.add.image(x, y, 'gem_fx', 0).setBlendMode(Phaser.BlendModes.ADD).setDepth(DEPTH.player + 1).setName('gem-spark'), at: 0 }; this.gemSparks.push(sp); } else sp = this.gemSparks.reduce((o, s) => s.at < o.at ? s : o); }
+    sp.at = this.combatNow; sp.img.setPosition(x, y).setFrame(0).setDisplaySize(GEM_FX.sparkSize, GEM_FX.sparkSize).setVisible(true);
   }
 
   /** “搜集辎重”：此时刻之前全场宝石无视距离飞向主将。 */
   gemMagnetUntil = 0;
   protected updateGems(dt: number): void {
-    const radius = this.combatNow < this.gemMagnetUntil ? 1e9 : this.player.stats.pickupRadius * (1 + this.player.growth.gear.pickup);
+    const radius = this.combatNow < this.gemMagnetUntil ? 1e9 : this.player.stats.pickupRadius * (1 + this.player.growth.gear.pickup), now = this.combatNow, art = this.gemArt();
+    for (const sp of this.gemSparks) { const t = (now - sp.at) / GEM_FX.sparkMs; if (t >= 1) { if (sp.img.visible) sp.img.setVisible(false); continue; } sp.img.setFrame(Math.min(3, Math.floor(t * 4))).setPosition(this.player.x, this.player.y - 18); }
     for (const gem of this.gems) {
       if (!gem.active) continue;
-      const dx = this.player.x - gem.img.x;
-      const dy = this.player.y - gem.img.y;
-      const dist = Math.hypot(dx, dy) || 1;
-      if (dist < 22) {
-        gem.active = false;
-        gem.img.setVisible(false);
+      const img = gem.img, px = this.player.x, py = this.player.y - 6;
+      if (gem.phase === 'drop') {
+        // 抛物线落地 + 轻弹一下
+        const t = now - gem.at; gem.restMs = Math.max(0, GEM_FX.dropMs + GEM_FX.bounceMs - t);
+        if (t < GEM_FX.dropMs) { const k = t / GEM_FX.dropMs; img.setPosition(gem.sx + (gem.lx - gem.sx) * k, gem.sy + (gem.ly - gem.sy) * k - Math.sin(Math.PI * k) * GEM_FX.arc); }
+        else if (t < GEM_FX.dropMs + GEM_FX.bounceMs) { const k = (t - GEM_FX.dropMs) / GEM_FX.bounceMs; img.setPosition(gem.lx, gem.ly - Math.sin(Math.PI * k) * GEM_FX.bounce); }
+        else { img.setPosition(gem.lx, gem.ly); gem.phase = 'rest'; gem.at = now; }
+        if (gem.glow?.visible) gem.glow.setAlpha(Math.min(1, t / (GEM_FX.dropMs + GEM_FX.bounceMs)) * GEM_FX.glowAlpha[0]);
+        continue;
+      }
+      const dx = px - img.x, dy = py - img.y, dist = Math.hypot(dx, dy) || 1;
+      if (gem.phase === 'rest') {
+        if (dist < radius) { gem.phase = 'fly'; gem.at = now; gem.speed = GEM_FX.flyStart; gem.glow?.setVisible(false); if (!gem.lite) { gem.ghost ??= this.add.image(img.x, img.y, img.texture.key, 0).setDepth(DEPTH.gem - .05).setName('gem-ghost'); gem.ghost.setTexture(img.texture.key, img.frame.name).setDisplaySize(img.displayWidth, img.displayHeight).setPosition(img.x, img.y).setAlpha(GEM_FX.ghostAlpha).setVisible(true); } }
+        else {
+          // 落地：上下浮动、光晕呼吸、隔一会儿高光扫过
+          const ph = now + gem.seed, bob = Math.sin(ph / GEM_FX.bobMs * Math.PI * 2) * GEM_FX.bobPx;
+          img.y = gem.ly - GEM_FX.bobPx + bob;
+          if (gem.glow?.visible) { const [a0, a1] = GEM_FX.glowAlpha; gem.glow.setAlpha(a0 + (a1 - a0) * (.5 + .5 * Math.sin(ph / GEM_FX.glowMs * Math.PI * 2))); }
+          if (art && !gem.lite) { const st = ph % GEM_FX.shineEvery; img.setFrame(st < GEM_FX.shineMs ? Math.min(3, Math.floor(st / GEM_FX.shineMs * 4)) : 0); }
+          continue;
+        }
+      }
+      // 吸取：加速飞向主将，残影落后一点
+      if (dist < GEM_FX.arriveDist) {
+        gem.active = false; img.setVisible(false); gem.ghost?.setVisible(false); gem.glow?.setVisible(false);
+        if (!gem.lite) this.gemSpark(px, py);
         // 拾取军功宝石不再播放音效（用户要求；战场补给拾取仍有音效）
         const gained = this.player.gainXp(this.player.growth.scaleXp(gem.value, this.heroXpRate()), levelCap());
         this.relics?.onGem(this.combatNow);
         if (gained > 0) this.onHeroLevelUp(gained);
         continue;
       }
-      gem.restMs = Math.max(0, gem.restMs - dt * 1000);
-      if (gem.restMs > 0) {
-        gem.img.x += gem.vx * dt;
-        gem.img.y += gem.vy * dt;
-        gem.vx *= 0.82;
-        gem.vy *= 0.82;
-        if (Math.abs(gem.vx) + Math.abs(gem.vy) < 6) {
-          gem.vx = 0;
-          gem.vy = 0;
-        }
-      } else if (dist < radius) {
-        gem.img.x += (dx / dist) * 420 * dt;
-        gem.img.y += (dy / dist) * 420 * dt;
-      } else if (gem.vx !== 0 || gem.vy !== 0) {
-        gem.img.x += gem.vx * dt;
-        gem.img.y += gem.vy * dt;
-        gem.vx *= 0.86;
-        gem.vy *= 0.86;
-        if (Math.abs(gem.vx) + Math.abs(gem.vy) < 4) {
-          gem.vx = 0;
-          gem.vy = 0;
-        }
-      }
+      gem.speed = Math.min(GEM_FX.flyMax, gem.speed + GEM_FX.flyAccel * dt);
+      const step = Math.min(dist, gem.speed * dt); gem.vx = dx / dist * gem.speed; gem.vy = dy / dist * gem.speed;
+      if (gem.ghost?.visible) gem.ghost.setPosition(img.x - gem.vx * GEM_FX.ghostLag, img.y - gem.vy * GEM_FX.ghostLag);
+      img.x += dx / dist * step; img.y += dy / dist * step;
     }
   }
 
@@ -2658,7 +2694,7 @@ export class GameScene extends Phaser.Scene {
     o.buildLink.setPosition(lx, top + 240);
     o.exit.setPosition(lx, top + 320);
     for (const t of [o.buildLink, o.exit]) t?.setFontFamily(HEADING_FONT);
-    o.keys.setText('Esc / P 继续战斗').setPosition(lx, top + ph - 26);
+    o.keys.setText(hotkeyLabel('back') + ' / P 继续战斗').setPosition(lx, top + ph - 26);
     // 右栏：音乐 / 音效滑条（原控件，挪到右栏）
     const moveRow = (row: Phaser.GameObjects.GameObject[], y: number): void => { const kept = row.filter(x => x.active); for (const x of kept) x.destroy(); void y; };
     moveRow(o.bgmRow, 0); moveRow(o.sfxRow, 0);
@@ -2666,10 +2702,10 @@ export class GameScene extends Phaser.Scene {
     this.pausePanel.add(this.createVolumeRow('音乐', top + 122, this.music.getVolume(), v => this.music.setVolume(v), rx, width));
     this.pausePanel.add(this.createVolumeRow('音效', top + 180, this.sfx.getVolume(), v => this.sfx.setVolume(v), rx, width));
     // 右栏：‹ 值 › 行
-    const rowY = (i: number) => top + 226 + i * 34; // 第 5 行留给「武将台词」（平衡会话），「剧情」在第 6 行
+    const rowY = (i: number) => top + 222 + i * 31; // 第 5 行「武将台词」（平衡会话），第 6 行「剧情」，第 7 行「开场动画」（2026-11-18）
     const row = <T>(i: number, name: string, key: string, list: readonly T[], get: () => T, label: (v: T) => string, apply: (v: T) => void, note?: () => string): void => {
       const y = rowY(i);
-      const plate = this.add.graphics().setScrollFactor(0); plate.fillStyle(0x3a2616, .4).fillRoundedRect(rx - width / 2, y - 16, width, 32, 5).lineStyle(1, 0xc9a35e, .3).strokeRoundedRect(rx - width / 2, y - 16, width, 32, 5);
+      const plate = this.add.graphics().setScrollFactor(0); plate.fillStyle(0x3a2616, .4).fillRoundedRect(rx - width / 2, y - 14, width, 28, 5).lineStyle(1, 0xc9a35e, .3).strokeRoundedRect(rx - width / 2, y - 14, width, 28, 5);
       const nameT = this.add.text(rx - width / 2 + 12, y, name, { fontFamily: FONT, fontSize: '15px', color: '#e8d8b2', resolution: 2 }).setOrigin(0, .5).setScrollFactor(0).setStroke('#120904', 3);
       const val = this.add.text(rx + 62, y, label(get()), { fontFamily: HEADING_FONT, fontSize: '16px', color: '#efd399', resolution: 2 }).setOrigin(.5).setScrollFactor(0).setStroke('#120904', 3).setName('settings-' + key);
       const noteT = note ? this.add.text(rx + width / 2 + 8, y, '', { fontFamily: FONT, fontSize: '11px', color: '#9d8f78', resolution: 2 }).setOrigin(0, .5).setScrollFactor(0) : null;
@@ -2693,7 +2729,9 @@ export class GameScene extends Phaser.Scene {
     row<RenderScaleSetting>(4, '画面清晰度', 'render-scale', ['', '1', '2', '3'], renderScaleSetting, v => SCALE_LABEL[v], setRenderScaleSetting, () => renderScaleSetting() === scale0 ? '' : '刷新后生效');
     row<HeroBarks>(5, '武将台词', 'hero-barks', ['on', 'off'], heroBarks, v => BARKS_LABEL[v], v => { setHeroBarks(v); if (v === 'off') this.heroBark?.clear(); });
     row<StoryMode>(6, '剧情', 'story', ['full', 'chapter', 'off'], storyMode, v => STORY_LABEL[v], setStoryMode);
+    row<OpeningMode>(7, '开场动画', 'opening', ['every', 'first', 'off'], openingMode, v => OPENING_LABEL[v], setOpeningMode);
     const replay = tutorialReplayLink(this, rx + width / 2, top + ph - 14).setScrollFactor(0); this.pausePanel.add(replay);
+    this.pausePanel.add(hotkeySettingsLink(this, rx - width / 2 + 62, top + ph - 14, DEPTH.overlay + 40).setScrollFactor(0)); // 快捷键页（与主页设置共用）
   }
 
   protected createVolumeRow(label: string, y: number, initial: number, onChange: (value: number) => void, cx = GAME_WIDTH / 2, width = Math.min(330, GAME_WIDTH - 144)): Phaser.GameObjects.GameObject[] {
@@ -2841,13 +2879,13 @@ export class GameScene extends Phaser.Scene {
   protected refreshInputHints(): void {
     const pad = gamepad.device === 'pad';
     this.potionCaption?.setText(pad ? '用药 ' + PAD_LABEL.X : '用药');
-    this.pauseKeysText?.setText(pad ? PAD_LABEL.START + ' / ' + PAD_LABEL.B + ' 继续战斗' : IS_DESKTOP ? 'Esc / P 继续战斗' : '战斗已冻结 · 点击「继续战斗」恢复');
+    this.pauseKeysText?.setText(pad ? PAD_LABEL.START + ' / ' + PAD_LABEL.B + ' 继续战斗' : IS_DESKTOP ? hotkeyLabel('back') + ' / P 继续战斗' : '战斗已冻结 · 点击「继续战斗」恢复');
     this.hudTexts?.pause?.setText(pad ? PAD_LABEL.START + (IS_DESKTOP ? ' 设置' : ' 暂停') : IS_DESKTOP ? '设置' : '暂停');
     // 有敌营 / 粮草可锁定的战场（子类覆写了 padTargets）多提示 RB
     const lockable = this.padTargets !== GameScene.prototype.padTargets;
     this.hintText?.setText(pad ? (lockable ? '左摇杆移动 · RB 锁定敌营 / 粮草 · 自动攻击' : '左摇杆移动 · 自动攻击') : IS_DESKTOP ? 'WASD / 方向键移动 · 自动攻击' : '自动攻击 · 拖动摇杆移动');
-    this.legionUI?.setKeyHint(pad ? PAD_LABEL.Y : IS_DESKTOP ? 'E' : '⇄');
-    for (const [i, v] of (this.cardViews ?? []).entries()) v.hint.setText(pad ? PAD_LABEL.A + ' 选择' : IS_DESKTOP ? '按 ' + (i + 1) + ' 选择' : '点击选择');
+    this.legionUI?.setKeyHint(pad ? PAD_LABEL.Y : IS_DESKTOP ? hotkeyLabel('order') : '⇄');
+    for (const [i, v] of (this.cardViews ?? []).entries()) v.hint.setText(pad ? PAD_LABEL.A + ' 选择' : IS_DESKTOP ? '按 ' + hotkeyLabel((['pick1', 'pick2', 'pick3'] as const)[i] ?? 'pick1') + ' 选择' : '点击选择');
   }
 
   /**
@@ -3398,7 +3436,7 @@ export class GameScene extends Phaser.Scene {
         .setPadding(8, 18, 8, 18)
         .setScrollFactor(0)
         .setDepth(DEPTH.hud + 1)
-        .setInteractive({ useHandCursor: true })
+        .setInteractive({ useHandCursor: true }).setName('hud-pause')
         .on('pointerdown', () => this.togglePause()),
     };
     attrBadge(this, 196, 31, this.runConfig.character, 20, { scrollFactor: 0, depth: DEPTH.hud + 2 })?.setName('hud-attr-badge'); // 主将主属性印（ui/AttrBadge.ts）
@@ -3410,7 +3448,7 @@ export class GameScene extends Phaser.Scene {
     for (const k of ['pause', 'mute', 'music', 'bag'] as const) this.hudTexts[k]
       .on('pointerover', () => { this.hudChipState[k] = 'hover'; }).on('pointerout', () => { this.hudChipState[k] = 'idle'; })
       .on('pointerdown', () => { this.hudChipState[k] = 'down'; }).on('pointerup', () => { this.hudChipState[k] = 'hover'; });
-    this.passiveHud = new PassiveHud(this); this.heroBark = new HeroBark(this); this.passiveShout = new PassiveShout(this, { sfx: () => this.sfx.play('passiveFull'), nearby: (x, y, r) => this.grid.query(x, y, r).filter(e => Math.hypot(e.x - x, e.y - y) <= r) });
+    this.passiveHud = new PassiveHud(this); this.heroBark = new HeroBark(this); this.zhaoyunFx = new ZhaoyunPassiveFx(this); this.passiveShout = new PassiveShout(this, { sfx: () => this.sfx.play('passiveFull'), nearby: (x, y, r) => this.grid.query(x, y, r).filter(e => Math.hypot(e.x - x, e.y - y) <= r) });
     this.buffHud=new BuffHud(this);
     this.muteText = this.hudTexts.mute;
     this.muteText.setText(this.sfx.muted ? '音效:关' : '音效:开');
@@ -3608,7 +3646,7 @@ export class GameScene extends Phaser.Scene {
       const name=this.add.text(d?0:104-w/2,d?148-h/2:42-h/2,'',{...warText(d?21:21,'#f6e8c8'),fontFamily:HEADING_FONT,align:d?'center':'left',wordWrap:{width:d?w-36:w-122,useAdvancedWrap:true}}).setOrigin(d?.5:0,0).setShadow(0,1,'#0a0603',3,true,true);
       const desc=this.add.text(d?0:104-w/2,d?204-h/2:88-h/2,'',{...warText(d?16:17,'#dacfba'),align:d?'center':'left',lineSpacing:5,wordWrap:{width:d?w-40:w-122,useAdvancedWrap:true}}).setOrigin(d?.5:0,0);
       const rule=this.add.graphics();
-      const hint=this.add.text(d?0:w/2-16,d?h/2-22:h/2-14,d?'按 '+(i+1)+' 选择':'点击选择',warText(11,'#9d8f78')).setOrigin(d?.5:1,1).setAlpha(.85);
+      const hint=this.add.text(d?0:w/2-16,d?h/2-22:h/2-14,d?'按 '+hotkeyLabel((['pick1','pick2','pick3'] as const)[i]??'pick1')+' 选择':'点击选择',warText(11,'#9d8f78')).setOrigin(d?.5:1,1).setAlpha(.85);
       if(d){ // 统一字体：卡名 / 标签 / 提示用标题字，正文用正文字；水墨版换深墨色 + 朱砂标签
         name.setFontFamily(HEADING_FONT).setColor(INK?'#1f1710':GOLD).setStroke(INK?'#efe4c9':STROKE,3);
         desc.setFontFamily(FONT).setColor(INK?'#33281d':IVORY).setStroke(INK?'#efe4c9':STROKE,INK?2:2);
@@ -3692,17 +3730,11 @@ export class GameScene extends Phaser.Scene {
       const button=this.add.image(attrCx+rowW/2-38,y,'ui_war_button').setDisplaySize(50,44).setInteractive({useHandCursor:true}).setName('attribute-add-'+id);
       const plus=this.add.text(button.x,button.y-1,'+',warText(26,'#ffe9bd')).setOrigin(.5).setStroke('#2a170b',3);
       lqImageButton(this,button,50,44,'gold',plus);
-      let ink:{plate:Phaser.GameObjects.NineSlice|null;hover:boolean}|undefined;
-      if(d&&this.textures.exists('btn_ink_secondary_normal')){ // 水墨底；原漆金图换透明贴图（不能用 alpha≈0，手柄焦点会跳过），命中区不变
-        const e={plate:inkPlate(this,null,button.x,button.y,52,38,false,'normal'),hover:false};ink=e;e.plate?.setScrollFactor(0);
-        const sync=()=>{button.setTexture('__DEFAULT').setDisplaySize(62,56);inkPlate(this,e.plate,button.x,button.y,52,38,false,!button.input?.enabled?'disabled':e.hover?'hover':'normal');plus.setColor(!button.input?.enabled?'#3a332a':e.hover?'#fff3d4':'#e8d3a6');};
-        button.on('pointerover',()=>{e.hover=true;sync();}).on('pointerout',()=>{e.hover=false;sync();}).on('pointerdown',sync).on('pointerup',sync);sync();
-      }
+      // 2026-11-18 每个界面最多 1 处水墨笔刷：「＋」用漆底描金方钮（上面的 lqImageButton），笔刷只留给底部「返回」
       button.on('pointerdown',()=>{const g=this.player.growth;if(g.allocate(this.player,id)){this.player.passive.areaMul=g.areaMultiplier();if(g.heroFree>0){g.heroFree--;if(!isChapterTestRun())allocateHeroAttr(this.runConfig.character,id);}this.renderAttributePanel();this.updateHud();}});
       this.attributePanel.add([row,attrIconImg,label,effect,pips,value,button,plus]);
       if(isPrimary){const ab=attrBadge(this,left+56+label.width+18,y-11,this.runConfig.character,22);if(ab)this.attributePanel.add(ab);} // 主属性印（ui/AttrBadge.ts）
-      this.attributeRows.push({value,button,plus,pips,pipX,pipY,perkG,perkX,perkY:y-11,ink});
-      if(ink?.plate)this.attributePanel.addAt(ink.plate,this.attributePanel.getIndex(button));
+      this.attributeRows.push({value,button,plus,pips,pipX,pipY,perkG,perkX,perkY:y-11});
     });
     this.attributePanel.add(perkTip);
     const attrCloseY=attrTop+attrH-38;
@@ -3776,19 +3808,19 @@ export class GameScene extends Phaser.Scene {
     if(this.worldCampaign)btnText.setText('再次出征');
     // 电脑版水墨笔触按钮（同主页 / 军营）：「返回 / 下一关」为主按钮（朱墨），「再次出征」为次按钮；缺图时退回漆金按钮
     const ink = d && this.textures.exists('btn_ink_primary_normal');
-    let restartInk: Phaser.GameObjects.NineSlice | null = null, homeInk: Phaser.GameObjects.NineSlice | null = null;
-    const restartSkin = ink ? null : lqSkin(this, btn, btnText, () => ({ w: rbw, h: rbh }));
+    let homeInk: Phaser.GameObjects.NineSlice | null = null;
+    // 2026-11-18 每个界面最多 1 处水墨笔刷：「再来一局 / 再次出征」用漆底小牌，笔刷只给「返回 / 下一关」主按钮
+    const restartSkin = lqSkin(this, btn, btnText, () => ({ w: rbw, h: rbh }), ink ? { tone: 'quiet' } : {});
     const homeSkin = ink ? null : lqSkin(this, selectChapter, selectChapter, () => ({ w: rbw, h: rbh }), { tone: 'quiet' });
     const paintInk = (which: 'restart' | 'home', state: 'normal' | 'hover' | 'pressed'): void => {
       const dy = state === 'pressed' ? 1 : 0, hi = state === 'hover';
-      if (which === 'restart') { restartInk = inkPlate(this, restartInk, btn.x, rby, rbw, rbh, false, state); restartInk?.setVisible(btn.visible); btnText.setPosition(btn.x, rby + dy).setColor(hi ? '#fff3d4' : '#e8d3a6'); }
-      else { homeInk = inkPlate(this, homeInk, selectChapter.x, rby, rbw, rbh, true, state); selectChapter.setY(rby + dy).setColor(hi ? '#fff3d4' : '#f8e6bf'); }
+      if (which === 'restart') return;
+      { homeInk = inkPlate(this, homeInk, selectChapter.x, rby, rbw, rbh, true, state); selectChapter.setY(rby + dy).setColor(hi ? '#fff3d4' : '#f8e6bf'); }
     };
     if (ink) {
       btnText.setFontSize(17).setStroke('#16100a', 4).setLetterSpacing(3);
       selectChapter.setFontSize(17).setStroke('#2a0c06', 3).setLetterSpacing(2);
-      paintInk('restart', 'normal'); paintInk('home', 'normal');
-      btn.on('pointerover', () => paintInk('restart', 'hover')).on('pointerout', () => paintInk('restart', 'normal')).on('pointerdown', () => paintInk('restart', 'pressed'));
+      paintInk('home', 'normal');
       selectChapter.on('pointerover', () => paintInk('home', 'hover')).on('pointerout', () => paintInk('home', 'normal'));
     }
     const homeDown = () => { if (ink) paintInk('home', 'pressed'); else homeSkin?.repaint('down'); };
@@ -3798,10 +3830,10 @@ export class GameScene extends Phaser.Scene {
       btn.setX(both ? pcx - rbw / 2 - (ink ? 14 : 10) : pcx); selectChapter.setPosition(both ? pcx + rbw / 2 + (ink ? 14 : 10) : pcx, rby);
       lqHitBox(selectChapter, rbw, rbh);
       selectChapter.off('pointerdown', homeDown).on('pointerdown', homeDown);
-      if (ink) { paintInk('restart', 'normal'); paintInk('home', 'normal'); } else { restartSkin?.repaint('idle'); homeSkin?.repaint('idle'); }
+      restartSkin.repaint('idle'); if (ink) paintInk('home', 'normal'); else homeSkin?.repaint('idle');
     };
     this.layoutResultButtons();
-    const plates: Phaser.GameObjects.GameObject[] = ink ? ([restartInk, homeInk] as Array<Phaser.GameObjects.NineSlice | null>).filter((g): g is Phaser.GameObjects.NineSlice => !!g) : [restartSkin!.gfx, homeSkin!.gfx];
+    const plates: Phaser.GameObjects.GameObject[] = ink ? [restartSkin.gfx, ...(homeInk ? [homeInk] : [])] : [restartSkin.gfx, homeSkin!.gfx];
     this.resultPanel.add([rDim,resultFrame,rDiv,rKicker,rTitle,rSub,rBody,rNotes,rStats,...plates,btn,btnText,selectChapter]);
     this.resultTexts = { title: rTitle.setResolution(2), subtitle: rSub.setResolution(2), body: rBody.setResolution(2) };
 
@@ -3870,7 +3902,6 @@ export class GameScene extends Phaser.Scene {
       if(can){row.button.setAlpha(1).setInteractive({useHandCursor:true});}
       else row.button.setAlpha(.38).disableInteractive();
       row.plus.setAlpha(can?1:.45);
-      if(row.ink?.plate){row.button.setAlpha(1);inkPlate(this,row.ink.plate,row.button.x,row.button.y,52,38,false,can?(row.ink.hover?'hover':'normal'):'disabled');row.plus.setColor(can?'#e8d3a6':'#3a332a');}
       if(row.perkG){row.perkG.clear();for(let k=0;k<PRIMARY_TIERS.length;k++){const on=level>=PRIMARY_TIERS[k],cx=(row.perkX??0)+k*17,cy=row.perkY??0,pts=[{x:cx,y:cy-6},{x:cx+6,y:cy},{x:cx,y:cy+6},{x:cx-6,y:cy}];row.perkG.fillStyle(on?0xe2bd6a:0x2a3328,1).fillPoints(pts,true).lineStyle(1,on?0xfff0c0:0x5d6a58,.9).strokePoints(pts,true);}}
     }
   }

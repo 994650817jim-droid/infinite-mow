@@ -168,6 +168,8 @@ assets/raw/*
 !/tools/test-camp-life.mjs
 !/tools/test-siege-finite.mjs
 !/tools/shot-siege-scene.mjs
+!/tools/measure-hero-actions.mjs
+!/tools/test-hero-action-fit.mjs
 !/tools/test-jingnan-art.mjs
 !/tools/test-hanzhong-art.mjs
 !/tools/test-yiling-full.mjs
@@ -179,6 +181,9 @@ assets/raw/*
 !/tools/prepare-camp-props.mjs
 !/tools/prepare-town-badges.mjs
 !/tools/shot-boss-ride.mjs
+!/tools/prepare-siege-hall.mjs
+!/tools/shot-siege-hall.mjs
+!/tools/build-boss-ride.mjs
 !/tools/test-tutorial.mjs
 !/tools/test-boss-moves.mjs
 !/tools/test-quit-rollback.mjs
@@ -224,6 +229,14 @@ assets/raw/*
 # 三选一节奏测量（2026-11-17 levelup-pace）
 !/tools/measure-levelup-pace.mjs
 !/tools/test-boss-charge-troops.mjs
+!/tools/render-opening.mjs
+!/tools/test-camp-buy-bag.mjs
+
+# 黄巾力士专用图测试 / 符牌抠图（2026-11-18）
+!/tools/test-lishi.mjs
+!/tools/prepare-lishi-tag.mjs
+!/tools/test-zhaoyun-fx.mjs
 !/tools/test-camp-medic.mjs
 !/tools/shot-camp-rest.mjs
 !/tools/test-surrender.mjs
+!/tools/test-hotkeys.mjs

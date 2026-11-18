@@ -1,3 +1,5 @@
+import { shouldPlayOpening } from '../systems/BattleSettings';
+let openingTried = false;
 import { BOOT_TO_KEY } from '../systems/BattleSnapshot';
 import {loadWarnFx} from '../ui/WarnFx';
 import {HOME_ART_HEROES} from '../data/characters';
@@ -31,6 +33,10 @@ export class BootScene extends Phaser.Scene {
     loadWarnFx(this.load); // 手绘版优先，缺图的种类退回像素版
     this.load.spritesheet('refined_spear','assets/combat-refined/spear-sequence.png',{frameWidth:384,frameHeight:64});
     this.load.spritesheet('refined_impact','assets/combat-refined/impact-sequence.png',{frameWidth:64,frameHeight:64});
+    // 军功信物手绘图（2026-11-18，data/gemFx.ts）：青铜古钱 / 金令牌各 4 帧高光，gem_fx 拾取闪光 + 光晕
+    this.load.spritesheet('gem_tok_small','assets/gems/gem_tok_small.png',{frameWidth:64,frameHeight:64});
+    this.load.spritesheet('gem_tok_large','assets/gems/gem_tok_large.png',{frameWidth:96,frameHeight:96});
+    this.load.spritesheet('gem_fx','assets/gems/gem_fx.png',{frameWidth:128,frameHeight:128});
     // 三选一 / 增益栏图标：2026-11-14 起使用 ChatGPT 生成的厚涂图标（assets/upgrade-icons，tools/build-upgrade-icons.mjs 切图）；
     // 旧像素图标仍保留在 growth-icons / build 目录，未被删除。
     for(const id of GROWTH_ICON_IDS)this.load.image('growth_icon_'+id,'assets/upgrade-icons/'+id+'.webp');
@@ -60,6 +66,11 @@ export class BootScene extends Phaser.Scene {
     for(const key of ['walk','attack','actions','sweep'])this.load.spritesheet('huaxiong_'+key,'assets/phase17/huaxiong/'+key+'.png',{frameWidth:128,frameHeight:128});
     this.load.image('huaxiong_portrait','assets/phase17/huaxiong/portrait.png');
     this.load.spritesheet('sishui_props','assets/phase17/huaxiong/props.png',{frameWidth:256,frameHeight:256});
+    // 首领遗珍「黄巾力士」专用手绘图（2026-11-18：和敌方黄巾区分）：行走 / 攻击（v2 兵种规格）、符阵光圈 + 化符序列帧（黑底叠加）、「力」字符牌
+    this.load.spritesheet('lishi_walk','assets/processed-v2/troops/lishi_walk.png',{frameWidth:160,frameHeight:160});
+    this.load.spritesheet('lishi_attack','assets/processed-v2/troops/lishi_attack.png',{frameWidth:208,frameHeight:208});
+    this.load.spritesheet('lishi_fx','assets/relic-fx/lishi_fx.jpg',{frameWidth:256,frameHeight:256});
+    this.load.image('lishi_tag','assets/relic-fx/lishi_tag.png');
     for(const key of ['zhangliang_walk','zhangliang_attack','zhangbao_walk','zhangbao_cast','spear_walk','spear_attack','archer_walk','archer_attack','shield_walk','shield_attack','shaman_walk','shaman_cast'])this.load.spritesheet(`yellow_${key}`,`assets/processed/yellow/${key==='spear_walk'?'spear-walk-v2':key==='spear_attack'?'spear-attack-v2':key}.png`,{frameWidth:96,frameHeight:96});
     // 黄巾长枪兵 v5：128 帧、行走 / 刺击同一比例（tools/prepare-yellow-spear.mjs）
     for(const key of ['spear-walk-v5','spear-attack-v5'])this.load.spritesheet(`yellow_${key}`,`assets/processed/yellow/${key}.png`,{frameWidth:128,frameHeight:128});
@@ -166,6 +177,10 @@ export class BootScene extends Phaser.Scene {
     // 被动满层战吼像素特效（2 行 × 6 帧，每帧 256×512，黑底叠加）：脚下声浪冲击 / 身上迸发的气势
     // 2026-11-17 换成手绘 warcry_paint（Gemini 出图），旧像素图 warcry_fx 保留不再加载
     this.load.spritesheet('warcry_paint', 'assets/hero-fx/warcry_paint.png', { frameWidth: 256, frameHeight: 512 });
+    // 赵云被动「七进七出」手绘特效（2026-11-18 ChatGPT 出图，黑底叠加；说明见 src/data/zhaoyunFx.ts）
+    this.load.spritesheet('zhaoyun_scales', 'assets/hero-fx/zhaoyun_scales.png', { frameWidth: 128, frameHeight: 128 });
+    this.load.spritesheet('zhaoyun_thrust', 'assets/hero-fx/zhaoyun_thrust.png', { frameWidth: 384, frameHeight: 384 });
+    this.load.spritesheet('zhaoyun_aura', 'assets/hero-fx/zhaoyun_aura.png', { frameWidth: 256, frameHeight: 256 });
     // 马超虎头湛金枪手绘特效（6×4，每帧 256，透明底；2026-11-17 Gemini 出图替换原像素图集 machao_fx，旧文件保留不再加载）：上挑弧光 / 落地砸地 / 冲锋尘土拖影 / 枪尖破风
     this.load.spritesheet('machao_paint', 'assets/hero-fx/machao_paint.png', { frameWidth: 256, frameHeight: 256 });
     // 2026-11-16 专属武器贴图（tools/prepare-hero-icon-sheet.mjs 切出）与执刀侍婢行走图
@@ -296,6 +311,6 @@ export class BootScene extends Phaser.Scene {
     warmIffTextures(this.game);
     // 界面通用贴图（水墨按钮、小镇美术）常驻，不随战斗图集卸载
     this.registry.set('battleTextureKeys',this.textures.getTextureKeys().filter(k=>!k.startsWith('__')&&!k.startsWith('ui_war_')&&!k.startsWith('btn_ink_')&&!k.startsWith('town_')&&!k.startsWith('ach_')&&k!=='art_panel'&&k!=='icon_guandao'));
-    if(import.meta.env.DEV&&new URLSearchParams(location.search).get('dev')==='1'&&new URLSearchParams(location.search).has('thirdStage')){this.scene.start('ThirdChapterScene');}else if(this.registry.get('pendingThird')){this.registry.remove('pendingThird');this.scene.start('ThirdChapterScene');}else if(this.registry.get('pendingWarlord')){const key=String(this.registry.get('pendingWarlord'));this.registry.remove('pendingWarlord');this.scene.start(key);}else{let to:string|null=null;try{to=sessionStorage.getItem(BOOT_TO_KEY);sessionStorage.removeItem(BOOT_TO_KEY);}catch{/* 存储不可用 */}this.scene.start(to==='WorldMapScene'&&worldUnlocked()?'WorldMapScene':'MenuScene');} // 战斗中「撤退」回滚重载后直接回天下地图
+    if(import.meta.env.DEV&&new URLSearchParams(location.search).get('dev')==='1'&&new URLSearchParams(location.search).has('thirdStage')){this.scene.start('ThirdChapterScene');}else if(this.registry.get('pendingThird')){this.registry.remove('pendingThird');this.scene.start('ThirdChapterScene');}else if(this.registry.get('pendingWarlord')){const key=String(this.registry.get('pendingWarlord'));this.registry.remove('pendingWarlord');this.scene.start(key);}else{let to:string|null=null;try{to=sessionStorage.getItem(BOOT_TO_KEY);sessionStorage.removeItem(BOOT_TO_KEY);}catch{/* 存储不可用 */}const opening=!openingTried&&to!=='WorldMapScene'&&shouldPlayOpening();openingTried=true;this.scene.start(to==='WorldMapScene'&&worldUnlocked()?'WorldMapScene':opening?'OpeningScene':'MenuScene');} /* 开场动画：每页只在第一次启动时考虑（回战斗重载图集也会经过这里） */ // 战斗中「撤退」回滚重载后直接回天下地图
   }
 }

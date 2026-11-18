@@ -9,6 +9,7 @@ import { BALANCE, DEPTH, FONT, actorDepth } from '../config';
 import type { PlayerStats, WeaponState } from '../types';
 import { WalkGait } from '../systems/WalkGait';
 import { DRAG_WALK_SHEET } from '../data/dragArt';
+import { HERO_ACTION_SCALE } from '../data/heroActionFit';
 import { isV2Texture, V2_MARKER_LIFT, V2_WALK_DISPLAY, V2_WALK_ORIGIN_Y } from '../systems/ArtStyle';
 
 /**
@@ -107,7 +108,7 @@ export class Player {
   /** 当前帧的纵向锚点（行走帧 0.5；动作帧按脚线换算，使站姿脚底与行走时同一位置）。 */
   private baseOriginY = .5;
   /** 每套动作图集相对行走表的统一缩放与锚点（按待机站姿测量，一次计算后缓存）。 */
-  private actionFit = new Map<string, { k: number; originY: number }>();
+  private actionFit = new Map<string, { k: number; originY: number; foot: number; frameH: number }>();
   private readonly charTexture = 'hero_zhaoyun';
   /** 当前使用的行走表 key；关羽/黄忠正式素材到位后替换。 */
   walkSheet = 'hero_walk_sheet';
@@ -294,9 +295,11 @@ export class Player {
     // 按行走表的帧高换算：figureCorrection 给的是“人物像素高度”之比，动作表帧（128）与行走表帧（96）大小不同，
     // 若按动作帧高缩放，人物会比行走时小约两成
     const fit = this.actionFitFor(key, set);
-    // 整套动作用同一个比例：举刀过顶、下蹲前刺等姿势本来就高矮不同，逐帧“校正”会让人物忽大忽小。
-    this.sprite.setScale(fit.k, fit.k);
-    this.baseOriginY = fit.originY;
+    // 整套动作用同一个比例（举刀过顶、下蹲前刺等姿势本来就高矮不同，不按每帧高度校正）；
+    // 但图集里某些行整体画小 / 画大（v2 赵云攻击行比待机行小约一成），按 data/heroActionFit.ts 自动量出的逐帧系数补回，脚线不动
+    const s = this.actionFrameScale(key, set, frame, a && (a.hold || now < a.until) ? a.texture : undefined);
+    this.sprite.setScale(fit.k * s, fit.k * s);
+    this.baseOriginY = s === 1 ? fit.originY : Phaser.Math.Clamp((fit.foot - (fit.foot - fit.originY * fit.frameH) / s) / fit.frameH, .3, .95);
     this.sprite.setOrigin(.5, this.baseOriginY);
     this.dragWalking = false; // 动作帧覆盖了拖刀行走（同一帧里武器在移动之后出手）
     return true;
@@ -307,7 +310,14 @@ export class Player {
    * 以前用整张动作表（含下蹲、前刺）的中位身高做参照，中位被攻击姿势拉低，待机时人物比行走大 4–11%。
    * 锚点：让待机脚线落在行走帧脚线的同一世界位置，切换动作时脚不上下跳。
    */
-  private actionFitFor(key: string, set: HeroActionSet): { k: number; originY: number } {
+  /** 动作图集逐帧尺寸系数（只对 v2 正式动作图集；单独动作条 / v1 图为 1）。 */
+  private actionFrameScale(key: string, set: HeroActionSet, frame: ActionFrame | undefined, strip?: string): number {
+    if (strip || typeof frame !== 'number' || !isV2Texture(key)) return 1;
+    return HERO_ACTION_SCALE[set.texture]?.[frame] ?? 1;
+  }
+  /** 测试用：当前帧的逐帧尺寸系数。 */
+  get actionScaleNow(): number { const a = this.action, set = this.actionSet; if (!set) return 1; const f = this.sprite.frame.name, n = Number(f); return Number.isFinite(n) ? this.actionFrameScale(this.sprite.texture.key, set, n, a?.texture) : 1; }
+  private actionFitFor(key: string, set: HeroActionSet): { k: number; originY: number; foot: number; frameH: number } {
     const walkKey = visualTextureKey(this.scene, this.walkSheet), cacheKey = walkKey + '|' + key;
     const hit = this.actionFit.get(cacheKey); if (hit) return hit;
     const walkFrameH = this.scene.textures.exists(walkKey) ? this.scene.textures.getFrame(walkKey, 'down_0')?.height || 96 : 96;
@@ -319,7 +329,7 @@ export class Player {
     const kw = this.targetHeight / walkFrameH, k = kw * walkH / actH;
     const walkFoot = ((walkRef?.bottom ?? walkFrameH * .96) + 1 - walkFrameH * this.walkOriginY) * kw; // 行走脚底相对中心（世界像素）
     const originY = ((actRef?.bottom ?? actFrameH * .89) + 1 - walkFoot / k) / actFrameH;
-    const fit = { k, originY: Phaser.Math.Clamp(originY, .3, .95) };
+    const fit = { k, originY: Phaser.Math.Clamp(originY, .3, .95), foot: (actRef?.bottom ?? actFrameH * .89) + 1, frameH: actFrameH };
     // 测量失败（纹理未就绪）时不缓存，下次再算
     if (walkRef && actRef) this.actionFit.set(cacheKey, fit);
     return fit;

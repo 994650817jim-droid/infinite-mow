@@ -475,6 +475,105 @@ export class EpicBgm {
     else this.erhu(freq / 2, t, dur, gain * 1.1);
   }
 
+  // ============================================================ 开场动画曲（水墨开场 20 秒，时间轴固定）
+  /**
+   * 开场《黄巾烽起》：D 调五声（D F G A C → 高潮用 D E G A）。时间轴（秒，自 t0 起）：
+   * 0–4.3 黄巾起义（沉鼓 + 埙 + 低音长音；3.0 起人群呐喊铺底）
+   * 4.3–8.6 群雄攻关（战鼓逐拍加密、弦乐顿弓、铜管渐强、反向钹到 8.6）
+   * 8.6–12.9 桃园三骑冲锋（马蹄鼓点、奔马顿弓、主旋律唢呐 + 号角 + 二胡亮出）
+   * 12.9–13.2 刹停（只留反向钹与两下鼓点蓄力）
+   * 13.2 刀光劈下（三层大鼓 + 大锣 + 镲 + 金属斩击 + 地裂 + 号角合唱重击）
+   * 14.0–20 余音（古琴、竹笛收尾，合唱与大厅混响回荡）。总长以 20.5 秒渲染，渲染端从 18 秒起淡出。
+   */
+  openingTheme(t0 = 0): void {
+    const B = .5375, S = B / 4, T = (b: number): number => t0 + b * B; // 111.6 BPM：8 拍 = 4.3 秒
+    // ---- 一、黄巾起义 0–4.3
+    this.bassDrone(mtof(38), t0, 4.8, .1);
+    [[0, .9], [2.5, .55], [4, .7], [5.5, .5], [6, .75], [7, .45], [7.5, .6]].forEach(([b, v]) => this.warDrum(T(b), v));
+    [[57, .5, 2.2], [60, 2.8, 1], [57, 3.8, 1.2], [55, 5.2, 1], [62, 6.4, 1.7]].forEach(([m, b, d]) => this.xun(mtof(m), T(b), d * B, .075));
+    this.choir([50, 57, 62], t0 + 3, 2, .035, 'o');
+    this.crowd(t0 + 3, 1.6, .05);
+    // ---- 二、群雄攻关 4.3–8.6
+    for (let b = 8; b < 16; b++) this.warDrum(T(b), .5 + (b - 8) * .06);
+    for (let b = 14; b < 16; b += .5) this.warDrum(T(b + .25), .55 + (b - 14) * .1);
+    for (let i = 0; i < 32; i++) this.ostinato(mtof(50 + OSTI[i % 16]), T(8) + i * S * 2, S * 1.6, .04 + i * .0022);
+    for (let i = 0; i < 16; i++) this.smallDrum(T(12) + i * S, .2 + i * .035);
+    this.hornChord(48, T(8), 4.4 * B, .03); this.hornChord(50, T(12), 4.2 * B, .05);
+    this.choir([50, 57, 62, 69], T(12), 4.2 * B, .04, 'a');
+    this.bassDrone(mtof(38), T(8), 8 * B, .1);
+    [[62, 12, 1.5], [65, 13.5, 1], [69, 14.5, 1.5]].forEach(([m, b, d]) => this.voice('erhu', m, T(b), d * B, .04));
+    this.cymbalSwell(T(13.7), 2.3 * B, .1);
+    this.crowd(T(8), 4.2, .05);
+    // ---- 三、桃园三骑冲锋 8.6–12.9
+    this.gong(T(16), .3); this.cymbal(T(16), .18);
+    for (let k = 16; k < 24; k++) { this.warDrum(T(k), k % 2 ? .75 : 1); this.warDrum(T(k + .5), .5); this.warDrum(T(k + .75), .6); this.smallDrum(T(k + .25), .35); }
+    for (let i = 0; i < 32; i++) this.ostinato(mtof(50 + OSTI_GALLOP[i % 16]), T(16) + i * S * 2, S * 1.6, .1);
+    this.bassDrone(mtof(38), T(16), 8 * B, .1);
+    this.choir([50, 57, 62, 69], T(16), 8 * B, .06, 'a');
+    [[69, 16, 1], [74, 17, 1.5], [72, 18.5, .5], [69, 19, 1], [67, 20, 1], [69, 21, 1], [74, 22, 2]].forEach(([m, b, d]) => {
+      this.voice('suona', m, T(b), d * B, .075); this.voice('horn', m, T(b), d * B, .065); this.voice('erhu', m - 12, T(b), d * B, .06);
+    });
+    for (let b = 18; b < 24; b += 2) this.cymbal(T(b), .06);
+    this.cymbal(T(20), .1);
+    // ---- 刹停 12.9–13.2
+    this.cymbalSwell(t0 + 12.45, .75, .15); this.gongSwell(t0 + 12.55, .65, .2);
+    this.warDrum(t0 + 12.98, .6); this.warDrum(t0 + 13.1, .85);
+    // ---- 四、刀光劈下 13.2
+    const hit = t0 + 13.2;
+    this.warDrum(hit, 1.3); this.warDrum(hit + .002, 1.2); this.warDrum(hit + .03, .9);
+    this.gong(hit, .5, .004); this.cymbal(hit, .36); this.earth(hit, .4); this.thunder(hit, .14);
+    this.slash(hit, .34);
+    this.hornChord(50, hit, 2, .075); this.choir([38, 50, 57, 62, 69], hit, 2.4, .07, 'a');
+    this.bassDrone(mtof(38), hit, 5.8, .09);
+    // ---- 五、余音 14–20
+    [[50, 14.0], [57, 14.65], [62, 15.3], [69, 15.95], [67, 16.8], [62, 17.6], [57, 18.3], [50, 18.9]].forEach(([m, x]) => this.guqin(mtof(m), t0 + x, m === 50 && x > 18 ? .09 : .075));
+    [[69, 14.9, 1.4], [72, 16.3, .8], [74, 17.1, 2.2]].forEach(([m, x, d]) => this.dizi(mtof(m), t0 + x, d, .06));
+    this.choir([50, 57, 62], t0 + 14.2, 5.4, .035, 'o');
+    this.bell(mtof(74), t0 + 14.5, .022); this.bell(mtof(69), t0 + 17.9, .018);
+    this.gong(t0 + 16.8, .12);
+  }
+
+  /** 埙：近正弦 + 微弱二次泛音，低通闷音，气声起音，缓慢颤音。 */
+  private xun(freq: number, t: number, dur: number, v: number): void {
+    const ctx = this.ctx, out = this.bus(.8, .2), a = this.env(out, t, v, .22, dur - .3, .35);
+    const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 1100; lp.connect(a);
+    const o = ctx.createOscillator(), o2 = ctx.createOscillator(), m = ctx.createGain(), lfo = ctx.createOscillator(), dep = ctx.createGain();
+    o.type = 'sine'; o2.type = 'triangle'; m.gain.value = .12;
+    o.frequency.setValueAtTime(freq * .96, t); o.frequency.exponentialRampToValueAtTime(freq, t + .15); o2.frequency.setValueAtTime(freq * 2, t);
+    lfo.frequency.value = 4.2; dep.gain.setValueAtTime(0, t); dep.gain.linearRampToValueAtTime(freq * .008, t + Math.min(.8, dur));
+    lfo.connect(dep); dep.connect(o.frequency); o.connect(lp); o2.connect(m); m.connect(lp);
+    for (const n of [o, o2, lfo]) { n.start(t); n.stop(t + dur + .4); }
+    this.noiseHit(t, Math.max(.1, dur), 'bandpass', freq * 1.6, v * .5, lp, 1.8, .12);
+  }
+
+  /** 古琴：长余音的泛音列拨弦，起音带指甲声，音高略下滑。 */
+  private guqin(freq: number, t: number, v: number): void {
+    const out = this.bus(.8, .15);
+    for (const [mul, amp, d] of [[1, 1, 2.8], [2, .5, 1.8], [3, .26, 1.1], [4, .13, .7], [5.02, .06, .4]] as const) {
+      const o = this.osc('sine', freq * mul, t, t + d + .05, this.env(out, t, v * amp, .004, 0, d, true)); o.frequency.exponentialRampToValueAtTime(freq * mul * .995, t + d);
+    }
+    this.noiseHit(t, .03, 'bandpass', 1400, v * .5, out, 1.2);
+  }
+
+  /** 人群呐喊铺底：起伏的带通噪声（元音共振峰）+ 若干短促喊声。 */
+  private crowd(t: number, dur: number, v: number): void {
+    const out = this.bus(.6, .3);
+    this.noiseHit(t, dur, 'bandpass', 700, v * .7, out, .8, dur * .55);
+    this.noiseHit(t, dur, 'bandpass', 1250, v * .45, out, 1.1, dur * .6);
+    const n = Math.round(dur * 5);
+    for (let i = 0; i < n; i++) this.noiseHit(t + dur * .3 + (i / n) * dur * .8, .22 + Math.random() * .15, 'bandpass', 650 + Math.random() * 700, v * (.5 + Math.random() * .5), out, 1.6, .05);
+  }
+
+  /** 金属斩击：高频噪声快速下扫 + 非整数倍金属泛音短响。 */
+  private slash(t: number, v: number): void {
+    const ctx = this.ctx, out = this.bus(.45, .25), src = ctx.createBufferSource(), f = ctx.createBiquadFilter(), g = ctx.createGain();
+    src.buffer = this.noise; src.loop = true; f.type = 'bandpass'; f.Q.value = 1.6; f.frequency.setValueAtTime(11000, t); f.frequency.exponentialRampToValueAtTime(2200, t + .32);
+    g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(v, t + .004); g.gain.exponentialRampToValueAtTime(.0001, t + .45);
+    src.connect(f); f.connect(g); g.connect(out); src.start(t); src.stop(t + .5);
+    for (const [fr, a] of [[1900, 1], [2870, .7], [4310, .5], [6240, .3]] as const) this.osc('sine', fr, t, t + .75, this.env(out, t, v * a * .22, .002, 0, .7, true));
+    this.noiseHit(t, .02, 'highpass', 6000, v * .6, out);
+  }
+
   // ============================================================ 乐器
   /** 输出：干声 + 大厅 / 房间混响送量。 */
   private bus(hall: number, room = 0): GainNode {

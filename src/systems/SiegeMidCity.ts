@@ -51,6 +51,8 @@ export interface MidSiegeHost {
 type Box = { left: number; right: number; top: number; bottom: number };
 /** 城墙铺法（像素为世界坐标）：段距（< 段宽，互相压住接缝）、城门可见半宽、压进城门的量、伸出场地的长度、墙脚阴影、民房离城墙的距离、城门血量字（门前地上，不跑到顶部 HUD 底下）。 */
 const WALL = { segStep: 196, gateHalfVis: 124, gateOverlap: 14, beyond: 520, shadowBands: 8, shadowAlpha: .42, houseGap: 300, gateLabelDy: 62, moatFlow: 30 } as const;
+/** 城门图上多大比例（从顶往下）画成前景层：到门洞拱顶以上、含屋顶 / 阁楼 / 垛口。 */
+const GATE_FRONT_CUT = .46;
 const ART = { walls: 'siege_mid_walls', gateFx: 'siege_mid_gatefx', ram: 'siege_mid_ram', street: 'siege_mid_street', hall: 'siege_mid_hall' } as const;
 /** v2 图集帧（4×2）：城防 0 城墙段 1 城门 2 城门破 3 箭楼 4 箭楼毁 5 墩台 6 残墙 7 辕门；冲车 0–3 撞门 4 打坏 5 残骸 6 我方大旗 7 我方营帐；
  *  巷战 0 民房 1 两层民房 2 店铺 3 粮仓 4 兵营 5 路障 6 屋脊 7 水井；府衙 0 大堂 1 台阶 2 回廊 3 石狮 4 内城门 5 帅旗 6 香炉 7 照壁 */
@@ -86,6 +88,8 @@ export class SiegeMidCity {
   private bossPhase2 = false; private skillAt = 0; private skill: { kind: 'sweep' | 'charge'; at: number; x: number; y: number; angle: number; hit: boolean } | null = null;
   private gateBox: Box | null = null; private innerGateBox: Box | null = null; private arenaBoxes: Box[] = [];
   private campLabel?: Phaser.GameObjects.Text;
+  /** 城门楼上半（屋顶 / 阁楼 / 垛口）的前景层：画在主将、随行、士兵之上，人从门洞穿过去时钻到楼下面，不再「站在屋顶上」。 */
+  private gateFront?: Phaser.GameObjects.Image;
   private gateImg?: Phaser.GameObjects.Image; private innerGateImg?: Phaser.GameObjects.Image; private gateLabel?: Phaser.GameObjects.Text;
   private objects: Phaser.GameObjects.GameObject[] = [];
   private transitioning = false; private finalFlag?: Phaser.GameObjects.Image; private startAt = 0;
@@ -135,6 +139,8 @@ export class SiegeMidCity {
       for (let k = 0; k < WALL.shadowBands; k++) g.fillStyle(0x1a120a, WALL.shadowAlpha * (1 - k / WALL.shadowBands)).fillRect(L, wy + 14 + k * 4, R - L, 4); }
     // 城门用倒塌序列帧的第 1 帧（完好），破门时直接往下播，最后停在敞开的门洞
     this.gateImg = this.has(ART.gateFx) ? this.img(0, wy + 34, ART.gateFx, 0, 300, 300) : this.art(0, wy + 30, [ART.walls, 1], ['sishui_props_refined', 0], 260);
+    // 主将 / 随行画在场景物件之上（固定层级），穿过城门往北走时会盖在门楼屋顶上——门楼上半另画一层压在人物之上（用户 11-18「随从站在城墙上穿模」）
+    if (this.has(ART.gateFx)) { this.gateFront = this.img(0, wy + 34, ART.gateFx, 0, 300, 300, 1, DEPTH.player + 4); this.gateFront.setCrop(0, 0, this.gateFront.frame.width, Math.round(this.gateFront.frame.height * GATE_FRONT_CUT)); }
     // 小城：木门（可砍目标，贴在城门洞前）；城门图压暗成木色
     if (!this.prof.ram) { this.gateImg.setTint(0xb08a5a); const e = this.h.spawnTarget?.(0, wy + 34, this.gateHp, 200, 'yellow_props', 13) ?? null; if (e) { e.sprite.setAlpha(0); this.woodGate = { e, life: e.spawnId, x: 0, y: wy + 34 }; } }
     this.gateLabel = worldText(this.h.scene, 0, wy + WALL.gateLabelDy, '', 15, '#ffe1a0').setOrigin(.5).setDepth(36).setStroke('#1a120b', 4); this.objects.push(this.gateLabel);
@@ -299,7 +305,7 @@ export class SiegeMidCity {
     this.box({ left: a.left - 400, right: a.left, top: a.top - 200, bottom: a.bottom });
     this.box({ left: a.right, right: a.right + 400, top: a.top - 200, bottom: a.bottom });
     this.box({ left: a.left, right: a.right, top: a.top - 200, bottom: a.top });
-    this.art(0, a.top + 40, [ART.hall, 0], ['sishui_props_refined', 0], 560, this.has(ART.hall) ? 300 : 300);
+    this.art(0, a.top + 40, [ART.hall, 0], ['sishui_props_refined', 0], 650, /* 2026-11-18 hall.png 物件缩进格内留边后，560→650 保持原屏幕宽度 */ this.has(ART.hall) ? 300 : 300);
     this.art(0, a.top + 80, [ART.hall, 1], ['yellow_props', 31], 220, this.has(ART.hall) ? 90 : 90);
     for (const c of H.corridors) for (const dy of [-150, 0, 150]) this.art(c.x, c.y + dy + 60, [ART.hall, 2], ['sishui_props_refined', 3], 120, 150);
     for (const x of [-170, 170]) this.art(x, a.top + 130, [ART.hall, 3], ['yellow_props', 32], 90).setFlipX(x > 0);
@@ -405,7 +411,7 @@ export class SiegeMidCity {
     if (this.has(ART.gateFx) && this.gateImg) {
       const g = this.gateImg;
       // 用场景时钟逐帧播（跟随游戏步进），8 帧约 1.1 秒，停在最后一帧（门洞敞开）
-      for (let i = 1; i < 8; i++) sc.time.delayedCall(i * 140, () => { if (g.active) g.setFrame(i); });
+      for (let i = 1; i < 8; i++) sc.time.delayedCall(i * 140, () => { if (g.active) g.setFrame(i); if (this.gateFront?.active) this.gateFront.setFrame(i); });
     } else {
       if (this.has(ART.walls)) this.gateImg?.setTexture(ART.walls, 2).setDisplaySize(260, 260); else this.gateImg?.setAlpha(.35);
       for (let i = 0; i < 3; i++) sc.time.delayedCall(i * 160, () => playSheet(sc, 'fx_collapse_dust', (i - 1) * 70, wy + 10, { size: 240, depth: DEPTH.fx, ms: 700 }));

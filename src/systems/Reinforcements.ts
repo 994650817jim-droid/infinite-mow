@@ -39,7 +39,7 @@ export class Reinforcements {
     for (let i = 0; i < this.choices.length; i++) {
       const id = this.choices[i], char = CHARACTERS.find(c => c.id === id)!, pair = this.find(id), y = GAME_HEIGHT * (.32 + i * .18);
       const width = Math.min(600,GAME_WIDTH-60), height = GAME_HEIGHT>600 ? 128 : 88;
-      const card = scene.add.image(GAME_WIDTH/2,y,'ui_war_card').setDisplaySize(width,height);
+      const card = scene.add.image(GAME_WIDTH/2,y,'ui_war_card').setDisplaySize(width,height).setName('aid-card-'+i);
       const portrait = scene.add.image(GAME_WIDTH/2-width/2+60,y,char.portrait);
       portrait.setScale(Math.min((height-16)/portrait.width,(height-16)/portrait.height));
       const row = scene.add.text(GAME_WIDTH/2-width/2+120,y,`${char.name}\n${pair?.name ?? '合击配置待补充'}`,{...warText(GAME_HEIGHT>600?20:18,pair?'#e9dab5':'#7e897b'),lineSpacing:8}).setOrigin(0,.5);

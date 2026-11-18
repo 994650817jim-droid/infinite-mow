@@ -75,15 +75,17 @@ try {
     ck(`${c.name}：本系统每帧开销 ${cost} ms（< 0.5）`, cost < .5, { cost });
     // 摆位：首领在主将右边，旁边一队小兵 + 一个精锐
     await ev(s => { s.boss.sprite.setPosition(s.player.x + 190, s.player.y - 30); for (let i = 0; i < 6; i++) s.spawnEnemy('infantry', s.player.x + 120 + i * 30, s.player.y + 60 + (i % 2) * 40, 1, true); s.__elite = s.spawnEnemy('elite', s.player.x - 160, s.player.y + 40, 1, true); });
-    await p.waitForTimeout(1200);
+    await p.waitForTimeout(2200); // 名牌高度要等骑乘 / 招式姿态稳定后才收敛
     const size = await p.evaluate(([k, f]) => new Function('s', 'return (' + f + ')(s)')(window.__game.scene.getScene(k)), [c.scene, measure.toString()]);
     ck(`${c.name}：显示体型 ×1.4（渲染时放大，逻辑上原尺寸）`, Math.abs(size.renderScale / size.logicScale - 1.4) < .02, size);
     const look = await ev(s => { const b = s.boss, e = s.__elite, minions = s.enemies.filter(x => x.active && !x.isSupplySlot && x !== b && x.kind !== 'boss').map(x => x.sprite.texture.key.replace(/^(iff\w*_enemy_|readable_)+/, ''));
       const bossKey = b.sprite.texture.key.replace(/^(iff\w*_enemy_|readable_)+/, ''), plate = s.children.getByName('boss-name-plate'), ring = s.children.getByName('boss-presence-ring'), aura = s.presence.stats.glow && !!b.sprite.preFX?.list?.length;
       return { bossKey, shared: minions.filter(k => k === bossKey), nMinions: minions.length, radius: b.radius, eliteRadius: e?.radius, eliteBase: s.chapter?.enemies?.elite?.radius,
-        ring: !!ring?.visible, ringUnder: ring ? Math.abs(ring.x - b.sprite.x) < 2 && Math.abs(ring.y - b.sprite.y) < 8 : false, plate: !!plate?.visible, plateText: plate?.list.filter(o => o.type === 'Text').map(o => o.text), plateAbove: plate ? plate.y < b.y : false,
+        ring: !!ring?.visible, ringUnder: ring ? Math.abs(ring.x - b.sprite.x) < 2 && Math.abs(ring.y - b.sprite.y) < 8 : false, plate: !!plate?.visible, plateText: plate?.list.filter(o => o.type === 'Text').map(o => o.text).join(''), plateFont: parseInt(plate?.list.find(o => o.type === 'Text')?.style.fontSize ?? '99'), plateSolidBox: !!plate?.list.some(o => o.type === 'Rectangle' && o.fillAlpha > .6), plateAbove: plate ? plate.y < b.y : false,
         aura, stats: { ...s.presence.stats } }; });
-    ck(`${c.name}：脚下火环、身上光晕、头顶印章 + 名字`, look.ring && look.ringUnder && look.aura && look.plate && look.plateAbove && look.plateText?.join('') === c.name.slice(-1) + c.name, look);
+    // 名牌（2026-11-18 改低调）：只有小字名字、没有红底方印；底边在身体最高点（含马头）上方约 10px，不压身体
+    ck(`${c.name}：脚下火环、身上光晕、头顶低调名牌（只有名字，没有方印）`, look.ring && look.ringUnder && look.aura && look.plate && look.plateAbove && look.plateText === c.name && look.plateFont <= 13 && !look.plateSolidBox, look);
+    ck(`${c.name}：名牌在头顶上方留白 8–14px，不压在身体上（实际 ${look.stats.plateGap}px）`, !look.stats.plateBelow && look.stats.plateGap >= 8 && look.stats.plateGap <= 14, look.stats);
     ck(`${c.name}：场上小兵没有与首领同一套图`, look.nMinions > 0 && look.shared.length === 0, look);
     if (look.eliteBase) ck(`${c.name}：精锐判定半径 ×1.15`, Math.abs(look.eliteRadius / look.eliteBase - 1.15) < .01, look);
     await p.screenshot({ path: `${OUT}/${c.id}-after.png` });

@@ -11,8 +11,12 @@ import type { Legion, LegionState } from './Legion';
 export interface CampaignTransfer {
   character: CharacterId; chapter: 'hulao' | 'huangjin'; stage?:1|2|3; army: LegionState;
   /** 2026-11-17 本局遗物 / 宝物并入信物库：不再存 relics、trinkets、build.treasures（旧档里有的读档时换成信物，见 takeLegacyTreasures）。stats 不含信物加成。 */
-  player: { build?: BuildSnapshot; growth?: Pick<RunGrowth,'attributes'|'masteries'|'unallocated'> & {heroFree?: number}; stats: PlayerStats; weapons: WeaponState[] };
+  player: { build?: BuildSnapshot; growth?: Pick<RunGrowth,'attributes'|'masteries'|'unallocated'> & {heroFree?: number}; stats: PlayerStats; weapons: WeaponState[];
+    /** 2026-11-18 用户「前一关受的伤会继承到下一关」：主将剩余血量比例（0–1；旧档没有 = 满血）。 */ hpFrac?: number;
+    /** 名将随从剩余血量比例（按随从 recruit.id；倒地的记 0，下一关以救起血量开局）。 */ followerHp?: Record<string, number> };
 }
+/** 打包时读随从血量用（FollowerSquad 的最小接口，免得 Campaign 依赖场景）。 */
+export interface FollowerHpSource { members: ReadonlyArray<{ recruit: { id: string }; hp: number; maxHp: number; downed?: boolean }> }
 /**
  * 旧档迁移：构筑里的本局宝物 / 饰品换成同名信物（橙色，放进行囊、不自动穿）；已删除的（疾风靴）换成随机橙色信物。
  * 改写传入的 state（删掉这些字段），返回发放的件数。
@@ -25,8 +29,21 @@ export function takeLegacyTreasures(state: CampaignTransfer): number {
   if (items.length) { try { addItems(items); pushItemNotice(`旧的本局宝物 ${items.length} 件已换成橙色信物，放进行囊`); } catch { /* 存储不可用 */ } }
   return items.length;
 }
-export function packCampaign(character: CharacterId, player: Player, army: Legion): CampaignTransfer {
-  return { character, chapter: 'hulao', army: army.exportState(), player: { build:player.growth.build.snapshot(), growth: {attributes:{...player.growth.attributes},masteries:{...player.growth.masteries},unallocated:player.growth.unallocated,heroFree:player.growth.heroFree}, stats: statsWithoutCharms(player), weapons: player.weapons.map(w => ({ ...w, cooldownLeft: 0 })) } };
+export function packCampaign(character: CharacterId, player: Player, army: Legion, followers?: FollowerHpSource | null): CampaignTransfer {
+  const followerHp: Record<string, number> = {};
+  for (const m of followers?.members ?? []) followerHp[m.recruit.id] = m.downed ? 0 : Math.max(0, Math.min(1, m.hp / Math.max(1, m.maxHp)));
+  return { character, chapter: 'hulao', army: army.exportState(), player: { build:player.growth.build.snapshot(), growth: {attributes:{...player.growth.attributes},masteries:{...player.growth.masteries},unallocated:player.growth.unallocated,heroFree:player.growth.heroFree}, stats: statsWithoutCharms(player), weapons: player.weapons.map(w => ({ ...w, cooldownLeft: 0 })),
+    hpFrac: Math.max(0, Math.min(1, player.hp / Math.max(1, player.maxHp))), followerHp } };
+}
+/** 血量继承：主将（按比例，至少 1 血）与名将随从（倒地的以救起血量开局）。在等级 / 信物改完上限之后调用。 */
+export function applyCarriedHp(state: CampaignTransfer, player: Player, followers?: { members: Array<{ recruit: { id: string }; hp: number; maxHp: number }> } | null, reviveFrac = .4): void {
+  const f = state.player.hpFrac; player.hp = f === undefined ? player.maxHp : Math.max(1, Math.round(player.maxHp * Math.max(0, Math.min(1, f))));
+  const map = state.player.followerHp ?? {};
+  for (const m of followers?.members ?? []) { const v = map[m.recruit.id]; if (v === undefined) continue; m.hp = Math.max(1, Math.round(m.maxHp * (v > 0 ? Math.min(1, v) : reviveFrac))); }
+}
+/** 行营治疗后把存档里的征程构筑的血量也改掉（存档点是打赢那一刻存的，治疗在那之后）。 */
+export function patchCampaignHp(hero: CharacterId, hpFrac: number, followerHp?: Record<string, number>): void {
+  try { const v = JSON.parse(localStorage.getItem(CAMPAIGN_KEY) ?? 'null'); const s = v?.heroes?.[hero]; if (!s?.player) return; s.player.hpFrac = Math.max(0, Math.min(1, hpFrac)); if (followerHp) s.player.followerHp = { ...(s.player.followerHp ?? {}), ...followerHp }; localStorage.setItem(CAMPAIGN_KEY, JSON.stringify(v)); } catch { /* 存储不可用 */ }
 }
 export function restoreCampaign(state: CampaignTransfer, player: Player, army: Legion): void {
   takeLegacyTreasures(state);
@@ -45,7 +62,7 @@ export function restoreCampaign(state: CampaignTransfer, player: Player, army: L
  * 征程构筑（2026-11-17 用户批准 skill-carryover-proposal.md）：每位武将存一份，存进存档（im_campaign_v1），
  * 主线每赢一关（首次通关那一关）就更新，相当于「关卡存档点」。从天下地图 / 营寨 / 章节选关 / 结算「下一关」出征、
  * 关游戏重开时都从这里恢复；重打已通关的旧关、攻城、军情、挑战用空构筑，不读也不改它。失败 / 放弃不保存（退回开打前）。
- * 血量每关回满。2026-11-17 本局遗物 / 宝物并入信物库：只继承武器、战法、技艺、局内等级、部曲。
+ * 血量继承（2026-11-18 用户：前一关受的伤带到下一关；行营休整「军医」花随军粮治疗）。2026-11-17 本局遗物 / 宝物并入信物库：只继承武器、战法、技艺、局内等级、部曲。
  */
 export const CAMPAIGN_KEY = 'im_campaign_v1';
 function readBuilds(): Record<string, CampaignTransfer> {

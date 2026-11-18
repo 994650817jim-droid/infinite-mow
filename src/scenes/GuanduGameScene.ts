@@ -116,7 +116,7 @@ export function guanduGameSceneClass(Base: typeof GameScene) {
     protected continueCampaign() {
       if (!this.resting || this.mode !== 'rest' || this.guanduStage >= LAST_PLAYABLE) return;
       const next = (this.guanduStage + 1) as GuanduStage; if (!this.test && !arcStageUnlocked('guandu', next)) return;
-      const transfer = packCampaign(this.runConfig.character, this.player, this.legion); transfer.chapter = 'hulao';
+      const transfer = packCampaign(this.runConfig.character, this.player, this.legion, this.followers); transfer.chapter = 'hulao';
       this.registry.set('guanduTransfer', transfer); this.registry.set('guanduStage', next); this.resting = false; this.scene.restart();
     }
     protected finish(victory: boolean, reason: RunEndReason = 'death') {
@@ -130,7 +130,7 @@ export function guanduGameSceneClass(Base: typeof GameScene) {
       home?.setText(victory ? '返回天下地图' : '返回主菜单').removeAllListeners('pointerdown').on('pointerdown', () => { this.registry.remove('campaignTransfer'); this.registry.remove('guanduTransfer'); this.scene.start(victory ? 'WorldMapScene' : 'MenuScene'); });
       const restart = this.resultPanel.getByName('result-restart') as Phaser.GameObjects.Image;
       restart?.removeAllListeners('pointerdown').on('pointerdown', () => { this.registry.remove('guanduTransfer'); this.registry.remove('campaignTransfer'); this.scene.restart(); });
-      if (victory && !lastLeg) { this.pendingLevels = 0; this.pendingRecruit = false; this.freeRecruit = false; this.resting = true; this.player.hp = this.player.maxHp; this.legion.recover(); this.renderRecruit(); this.setMode('rest'); }
+      if (victory && !lastLeg) { this.pendingLevels = 0; this.pendingRecruit = false; this.freeRecruit = false; this.resting = true; this.renderRecruit(); /* 受伤跨关继承，休整不自动回满，改由军医治疗 */ this.setMode('rest'); }
     }
   };
 }

@@ -234,3 +234,5 @@ assets/raw/*
 !/tools/test-lishi.mjs
 !/tools/prepare-lishi-tag.mjs
 !/tools/test-zhaoyun-fx.mjs
+!/tools/test-camp-medic.mjs
+!/tools/shot-camp-rest.mjs

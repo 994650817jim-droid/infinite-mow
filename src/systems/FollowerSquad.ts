@@ -187,6 +187,8 @@ export class FollowerSquad {
   sortie = false;
   /** 随行实际在用的规则（FOLLOW）。测试改参数要改这一份：常开的 dev server 热更新后，测试自己 import 的 recruits.ts 可能是另一个模块实例。 */
   readonly rules = FOLLOW;
+  /** 场景里的障碍物（城墙 / 城门 / 关隘等，地图坐标的矩形）：随行不能站进去（用户 2026-11-18「随从站在城墙上穿模」）。门破 / 拆除后场景把对应矩形移出数组，随行就能过。 */
+  obstacles: (() => ReadonlyArray<{ left: number; right: number; top: number; bottom: number }> | undefined) | null = () => (this.scene as unknown as { sishuiObstacles?: { footprints: Array<{ left: number; right: number; top: number; bottom: number }> } }).sishuiObstacles?.footprints;
   /** 无名之辈招式 / 被动的统计（测试 / 平衡用）。 */
   readonly skillStats = { sweep: 0, thrust: 0, thrustHits: 0, volley: 0, heal: 0, healed: 0, block: 0, crit: 0, formation: 0, rally: 0 };
   /** 招式 / 被动用的随机数（测试可替换）。 */
@@ -265,6 +267,7 @@ export class FollowerSquad {
         if (boss > 0 && now >= f.bossImmuneUntil) { dmg += boss * BOSS_VS_ALLY.mul; f.bossImmuneUntil = now + BOSS_VS_ALLY.immuneMs; }
         if (dmg > 0) this.hurt(f, dmg, now);
       }
+      this.pushOut(f);
       if (!(Math.hypot(f.x - f.mx, f.y - f.my) <= .5)) f.stillAt = now; f.mx = f.x; f.my = f.y; // 站定计时（弓「瞄准」）
       this.render(f, now);
       this.stats.maxDist = Math.max(this.stats.maxDist, Math.hypot(f.x - p.x, f.y - p.y));
@@ -360,6 +363,18 @@ export class FollowerSquad {
       if (now >= f.faceUntil) f.dir = Math.abs(dx) > Math.abs(dy) ? dx < 0 ? 'left' : 'right' : dy < 0 ? 'up' : 'down';
     } else f.walk = 0;
     f.lastX = f.x; f.lastY = f.y;
+  }
+  /** 把站进障碍物矩形里的随行推到最近的一条边外（脚底点 + 半径 14；阵位 / 追击 / 瞬移落点落在城墙上时都靠这里兜住）。 */
+  private pushOut(f: Follower): void {
+    const boxes = this.obstacles?.(); if (!boxes?.length) return;
+    const R = 14; let x = f.x, y = f.y, moved = false;
+    for (let pass = 0; pass < 2; pass++) for (const b of boxes) {
+      if (x <= b.left - R || x >= b.right + R || y <= b.top - R || y >= b.bottom + R) continue;
+      const dl = x - (b.left - R), dr = b.right + R - x, dt = y - (b.top - R), db = b.bottom + R - y, m = Math.min(dl, dr, dt, db);
+      if (m === dl) x = b.left - R; else if (m === dr) x = b.right + R; else if (m === dt) y = b.top - R; else y = b.bottom + R;
+      moved = true;
+    }
+    if (moved) f.sprite.setPosition(x, y);
   }
   private teleport(f: Follower, x: number, y: number): void { f.place(x, y); f.target = null; this.stats.teleports++; f.sprite.setAlpha(.3); this.scene.tweens.add({ targets: f.sprite, alpha: 1, duration: 220 }); }
   /**

@@ -49,24 +49,27 @@ const phase = await p.evaluate(async T0 => { const s = eval(T0), wait = ms => ne
 await p.screenshot({ path: `${out}/boss-phase-1280x720.png` });
 ck('二阶段台词：颜良「坠马又如何？」', phase.some(t => t.includes('坠马又如何')), phase);
 const noGy = await killBoss();
-ck('关羽不在队：颜良倒下说「何时到了我面前」，没有「斩颜良」横幅与旗标', noGy.barks.some(t => t.includes('何时到了我面前')) && !noGy.banner.length && !noGy.flags.yanliang_by_guanyu, noGy);
+ck('4-1 颜良负伤败走（双首领方案 A）：说「到延津与文丑合兵」，没有「斩颜良」横幅与旗标', noGy.barks.some(t => t.includes('到延津与文丑合兵')) && !noGy.banner.length && !noGy.flags.yanliang_by_guanyu, noGy);
 
 // 3) 关羽是主公：土山 / 军情称呼去重；颜良倒下换关羽「插标卖首」+ 横幅「斩颜良」+ 旗标
 await guandu(1, 'guanyu');
 const gyPages = await readAll();
 ck('关羽主公：称呼去重（张辽「云长，困守土山」、曹操「云长，可愿随我」，不出现「云长、关羽」）', gyPages.some(t => t.includes('云长，困守土山')) && gyPages.some(t => t.includes('云长，可愿随我')) && !gyPages.some(t => t.includes('云长、关羽')), { n: gyPages.length });
-const gy = await killBoss();
+const gy0 = await killBoss(); await p.waitForTimeout(1600); /* 关羽那句在颜良之后 1.4 秒 */
+const gy = { ...gy0, barks: [...gy0.barks, ...(await p.evaluate(T0 => eval(T0).children.list.filter(o => o.name === 'story-bark').map(o => (function deep(x) { return x.type === 'Text' ? x.text : (x.list ?? []).map(deep).join(''); })(o)), T))] };
 await p.screenshot({ path: `${out}/yanliang-banner-1280x720.png` });
-ck('关羽在队：颜良倒下换成关羽「插标卖首」+ 横幅「斩颜良」+ 旗标 yanliang_by_guanyu', gy.barks.some(t => t.includes('插标卖首')) && gy.banner.some(t => t.includes('斩颜良')) && gy.flags.yanliang_by_guanyu === true, gy);
+ck('4-1 关羽在队：颜良败走时关羽「下回取你首级」，不出「斩颜良」（斩颜良挪到 4-2）', gy.barks.some(t => t.includes('下回取你首级')) && !gy.banner.length && !gy.flags.yanliang_by_guanyu, gy);
 // 首次通关后幕间
 await p.evaluate(T0 => { eval(T0).storyDir.stageEnd(() => {}); }, T); await p.waitForTimeout(300);
 const after41 = await scroll(); await readAll();
-ck('4-1 首次通关后幕间「云长神人」（曹操「今后遇张翼德，不可轻敌」）', after41?.name === 'story-guandu-1-after', after41?.name);
+ck('4-1 首次通关后幕间改为「白马解围」（颜良往延津去了；「云长神人」挪到 4-2）', after41?.name === 'story-guandu-1-after', after41?.name);
 
-// 4) 4-2 文丑（关羽主公）：「诛文丑」横幅 + 旗标
+// 4) 4-2 延津双首领（关羽主公）：斩文丑 →「诛文丑」横幅 + 旗标
 await guandu(2, 'guanyu');
 await readAll();
-const wc = await killBoss();
+const wc = await p.evaluate(async T0 => { const s = eval(T0), wait = ms => new Promise(r => setTimeout(r, ms)); s.player.damageImmune = true; s.spawnBoss(); for (let k = 0; k < 40 && (s.dual?.entries.length ?? 0) < 2; k++) { if (s.mode === 'levelup') s.chooseUpgrade(0); await wait(100); }
+  const x = s.dual.entries.find(y => y.id === 'wenchou'); for (const y of s.dual.entries) if (y.parley) y.parley.state = 'skip'; x.enemy.invulnerable = false; x.enemy.hp = 1; s.hitEnemy(x.enemy, 50, s.combatNow, 'melee', false, true); await wait(150);
+  return { barks: s.children.list.filter(o => o.name === 'story-bark').map(o => (function deep(x) { return x.type === 'Text' ? x.text : (x.list ?? []).map(deep).join(''); })(o)), banner: (function all(xs) { return xs.flatMap(o => o.type === 'Text' ? [o.text] : all(o.list ?? [])); })(s.children.list).filter(t => /斩颜良|诛文丑/.test(t)), flags: JSON.parse(localStorage.getItem('im_story_v1') ?? '{}').flags ?? {} }; }, T);
 ck('4-2：关羽在队「诛文丑」横幅 + 旗标 wenchou_by_guanyu', wc.banner.some(t => t.includes('诛文丑')) && wc.flags.wenchou_by_guanyu === true && wc.barks.some(t => t.includes('可识得关某')), wc);
 
 // 5) 4-3：开打前过场「许攸夜奔」；关末：章末「乌巢火起」→ 过场「千里走单骑」→ 结算

@@ -26,9 +26,9 @@ try {
       return {
         zhangxiuLiubei2: pct('qunxiong-2:zhangxiu', { lord: 'liubei', team: ['liubei'], surrendered: ['huaxiong', 'xurong'] }),
         zhangxiuLiubei2Press: pct('qunxiong-2:zhangxiu', { lord: 'liubei', team: ['liubei'], surrendered: ['huaxiong', 'xurong'], pressed: true }),
-        yanliang: pct('guandu-1:yanliang', {}), yanliangPress: pct('guandu-1:yanliang', { pressed: true }),
-        renownCap: pct('guandu-1:yanliang', { surrendered: ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'] }),
-        sameCampOnce: pct('guandu-1:yanliang', { followerBosses: ['wenchou', 'chunyuqiong'] }),
+        yanliang: pct('guandu-2:yanliang', {}), yanliangPress: pct('guandu-2:yanliang', { pressed: true }),
+        renownCap: pct('guandu-2:yanliang', { surrendered: ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'] }),
+        sameCampOnce: pct('guandu-2:yanliang', { followerBosses: ['wenchou', 'chunyuqiong'] }),
         wenchouYan: pct('guandu-2:wenchou', { surrendered: ['yanliang'] }),
         chunyuBurn: pct('guandu-3:chunyuqiong', { flags: { depotsAllBurned: true } }),
         lubuDiao: pct('lubu-1:lubu', { team: ['zhaoyun', 'diaochan'] }), lubuLiubei: pct('lubu-1:lubu', { lord: 'liubei', team: ['liubei'] }),
@@ -43,7 +43,7 @@ try {
     ck('同阵营降将在队只算一次（两名河北降将 → +10）', o.sameCampOnce === 25, o);
     ck('关系 / 旗标：颜良已降劝文丑 +20、粮仓尽焚劝淳于琼 +15、貂蝉在侧劝吕布 +20、刘备主公劝吕布（+10 −20）', o.wenchouYan === 35 + 2 && o.chunyuBurn === 30 && o.lubuDiao === 35 && o.lubuLiubei === 5, o);
     ck('上限 90%；必降 100% 不掷骰；宁死不降 0', o.cap === 90 && o.sure.pct === 100 && o.sure.sure && o.never === 0, o);
-    ck('招降表：38 个首领（含挑战关吕布），可降 3 / 必降 3 / 难降 10（含吕布）/ 宁死不降 11 + 第一章 3 / 剧情 7（2-3 吕布董卓算一关）/ 孟获 1', o.count === 38 && o.tiers.can === 3 && o.tiers.sure === 3 && o.tiers.hard === 10 && o.tiers.never === 11 && o.tiers.story === 7 && o.tiers.silent === 3 && o.tiers.meng === 1, o.tiers);
+    ck('招降表：39 个首领（含挑战关吕布；颜良 4-1 败走、4-2 难降），可降 3 / 必降 3 / 难降 10 / 宁死不降 9 + 败退型 3（4-1 颜良、5-3 曹仁、8-1 张郃）+ 第一章 3 / 剧情 7 / 孟获 1', o.count === 39 && o.tiers.retreat === 3 && o.tiers.can === 3 && o.tiers.sure === 3 && o.tiers.hard === 10 && o.tiers.never === 9 && o.tiers.story === 7 && o.tiers.silent === 3 && o.tiers.meng === 1, o.tiers);
   }
 
   // 场景工具：开某关、首领出场、把首领打到残血
@@ -201,14 +201,17 @@ try {
   }
   // ⑩ 「斩颜良」横幅 / 旗标只在斩杀时出现（关羽在队）
   if (want('yanliang')) {
-    let ev = await open('GuanduGameScene', { guanduStage: 1 }, { character: 'guanyu' });
-    await ev(s => { s.parley.constructor.random = () => .01; });
-    await hurtTo(ev, .12); await waitPanel(ev); await ev(s => s.choose('persuade')); await p.waitForTimeout(1600);
+    // 双首领方案 A：斩颜良在 4-2 延津（颜良是双首领的第一位）
+    const yan = s => s.dual.entries.find(x => x.id === 'yanliang');
+    let ev = await open('GuanduGameScene', { guanduStage: 2 }, { character: 'guanyu' });
+    await ev((s, f) => { const y = s.dual.entries[0]; y.parley.constructor.random = () => .01; const e = y.enemy; e.invulnerable = false; e.hp = Math.floor(e.maxHp * .12); s.hitEnemy(e, 1, s.combatNow, 'melee', false, false); }); await waitPanel(ev); await ev(s => s.choose('persuade')); await p.waitForTimeout(1600);
     const f1 = await p.evaluate(() => (JSON.parse(localStorage.getItem('im_story_v1') ?? '{}').flags ?? {}).yanliang_by_guanyu ?? null);
-    ev = await open('GuanduGameScene', { guanduStage: 1 }, { character: 'guanyu' });
-    await ev(s => { s.hitEnemy(s.boss, 1e7, s.combatNow, 'melee', false, false); }); await p.waitForTimeout(800);
+    ev = await open('GuanduGameScene', { guanduStage: 2 }, { character: 'guanyu' });
+    await ev(s => { const e = s.dual.entries[0].enemy; e.invulnerable = false; s.hitEnemy(e, 1e7, s.combatNow, 'melee', false, false); }); await p.waitForTimeout(800);
+    void yan;
     const f2 = await p.evaluate(() => (JSON.parse(localStorage.getItem('im_story_v1') ?? '{}').flags ?? {}).yanliang_by_guanyu ?? null);
-    ck('关羽劝降颜良：不记「斩颜良」；颜良已在降将栏后再打死：才记「斩颜良」', !f1 && !!f2, { f1, f2 });
+    const dbg = await ev(s => ({ e: s.dual?.snapshot().entries.map(x => x.id + ':' + x.done + ':' + x.parley), cap: (JSON.parse(localStorage.getItem('im_roster_v1') ?? '{}').captives ?? []).map(o => o.boss) }));
+    ck('关羽劝降颜良：不记「斩颜良」；颜良已在降将栏后再打死：才记「斩颜良」', !f1 && !!f2, { f1, f2, dbg });
   }
   // ⑪ 试炼 / 调试战斗不改人才库；⑫ 中途退出回滚旗标与降将栏
   if (want('rollback')) {

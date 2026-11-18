@@ -76,34 +76,47 @@ export const GUANDU_STORY: StoryChapter = {
       ] },
       bossIntro: { id: 'guandu-1.bossIntro', type: 'bossIntro', lines: [{ who: 'yanliang', text: '河北颜良在此，谁敢一战！' }] },
       bossPhase: { id: 'guandu-1.bossPhase', type: 'bossPhase', lines: [{ who: 'yanliang', text: '坠马又如何？河北上将，步战一样斩你！' }] },
+      // 双首领方案 A（11-18）：颜良在 4-1 负伤败走（招降表「败退型」，不死、不弹窗、照掉宝箱）；斩颜良挪到 4-2 延津
       bossFall: { id: 'guandu-1.bossFall', type: 'bossFall', lines: [
-        { who: 'yanliang', text: '来将……何时到了我面前……', ifNotFollower: 'guanyu' },
-        { who: 'guanyu', text: '颜良，插标卖首耳！', ifFollower: 'guanyu' },
-      ], banner: { title: '斩颜良', caption: '万军之中 · 刺颜良于马下', ifFollower: 'guanyu', flag: 'yanliang_by_guanyu' } },
-      after: [{ id: 'guandu-1.after', type: 'interlude', kicker: '幕间', title: '云长神人', lines: [
-        { who: 'caocao', text: '云长真神人也！' },
-        { who: 'guanyu', text: '某何足道哉！吾弟张翼德于百万军中取上将之首，如探囊取物。' },
-        { who: 'caocao', text: '（回顾左右）今后遇张翼德，不可轻敌。' },
+        { who: 'yanliang', text: '……退！到延津与文丑合兵！' },
+        { who: 'guanyu', text: '颜良，下回取你首级。', ifFollower: 'guanyu' },
+      ] },
+      after: [{ id: 'guandu-1.after', type: 'interlude', kicker: '幕间', title: '白马解围', lines: [
+        { text: '白马之围遂解。颜良收拾残兵北走，往延津去了。' },
       ] }],
     },
     2: {
       brief: { id: 'guandu-2.brief', type: 'stageBrief', kicker: '4-2 · 军情', title: '延津诱敌', lines: [
-        { who: 'scout', text: '文丑引五六千骑渡河追来，要为颜良报仇！' },
+        { who: 'scout', text: '颜良收拾白马残兵，与文丑合军渡河，要报白马之仇！' },
         { who: 'xunyou', text: '丞相把辎重散在道上——此所以饵敌，何去之？' },
         { who: 'caocao', text: '（笑）诸军听令：等袁军下马争抢辎重，再一齐杀出。' },
-        { tip: true, text: '文丑会假退一步再回马一枪，别追着他打；他会冲去抢道上的辎重回血——先把辎重烧掉。' },
+        { tip: true, text: '河北双雄一起上：颜良步战抡大刀，文丑骑马回马枪、抢辎重回血——先烧辎重。两人喊「夹击」时，冲锋道会交叉成 X，斜着走出去。' },
       ] },
-      bossIntro: { id: 'guandu-2.bossIntro', type: 'bossIntro', lines: [{ who: 'wenchou', text: '颜良兄弟的仇，拿你们的头来祭！' }] },
-      bossPhase: { id: 'guandu-2.bossPhase', type: 'bossPhase', lines: [{ who: 'wenchou', text: '马没了，枪还在！' }] },
-      bossFall: { id: 'guandu-2.bossFall', type: 'bossFall', lines: [
-        { who: 'wenchou', text: '颜良兄弟……我来了……', ifNotFollower: 'guanyu' },
-        { who: 'guanyu', text: '文丑，可识得关某？', ifFollower: 'guanyu' },
-      ], banner: { title: '诛文丑', caption: '延津道上 · 一合斩之', ifFollower: 'guanyu', flag: 'wenchou_by_guanyu' } },
+      // 双首领关（dual-boss-spec 5.1）：颜良先登场，文丑 1.2 秒后接一句（台词在 data/dualBossPlans.ts）
+      bossIntro: { id: 'guandu-2.bossIntro', type: 'bossIntro', lines: [{ who: 'yanliang', text: '白马一败，今日加倍讨回！' }] },
+      bossPhase: { id: 'guandu-2.bossPhase', type: 'bossPhase', boss: 'wenchou', lines: [{ who: 'wenchou', text: '马没了，枪还在！' }] },
+      // 按首领：斩杀才播（劝降不播）；关羽在队播「斩颜良」「诛文丑」横幅并记旗标
+      bossFalls: {
+        yanliang: { id: 'guandu-2.fall.yanliang', type: 'bossFall', lines: [
+          { who: 'yanliang', text: '文丑兄弟……替我……', ifNotFollower: 'guanyu' },
+          { who: 'guanyu', text: '颜良，插标卖首耳！', ifFollower: 'guanyu' },
+        ], banner: { title: '斩颜良', caption: '万军之中 · 刺颜良于马下', ifFollower: 'guanyu', flag: 'yanliang_by_guanyu' } },
+        wenchou: { id: 'guandu-2.fall.wenchou', type: 'bossFall', lines: [
+          { who: 'wenchou', text: '兄长……先走一步……', ifNotFollower: 'guanyu' },
+          { who: 'guanyu', text: '文丑，可识得关某？', ifFollower: 'guanyu' },
+        ], banner: { title: '诛文丑', caption: '延津道上 · 一合斩之', ifFollower: 'guanyu', flag: 'wenchou_by_guanyu' } },
+      },
       after: [{ id: 'guandu-2.after', type: 'interlude', kicker: '幕间', title: '官渡相持', lines: [
-        // 首领招降（surrender-spec §9.3）：颜良文丑都降 / 一降一死 / 都斩
-        { text: '河北名将颜良、文丑相继授首，袁军夺气。两军相持于官渡，转眼数月。', ifFlag: '!hebei_surrendered' },
-        { text: '颜良、文丑一降一死，袁军夺气。两军相持于官渡，转眼数月。', ifFlag: 'hebei_surrendered=1' },
-        { text: '河北名将颜良、文丑相继归降，袁军夺气。两军相持于官渡，转眼数月。', ifFlag: 'hebei_surrendered=2' },
+        // 四种结果（hebei_outcome = 颜良、文丑各一字：k 斩 / p 降）
+        { text: '河北名将颜良、文丑相继授首，袁军夺气。', ifFlag: 'hebei_outcome=kk' },
+        { text: '河北双雄一并归降。袁绍闻报，拔剑斫案。', ifFlag: 'hebei_outcome=pp' },
+        { text: '颜良归降，文丑战死延津，袁军夺气。', ifFlag: 'hebei_outcome=pk' },
+        { text: '颜良授首，文丑归降，袁军夺气。', ifFlag: 'hebei_outcome=kp' },
+        // 原 4-1「云长神人」挪来：只在关羽斩杀颜良时
+        { who: 'caocao', text: '云长真神人也！', ifFlag: 'yanliang_by_guanyu' },
+        { who: 'guanyu', text: '某何足道哉！吾弟张翼德于百万军中取上将之首，如探囊取物。', ifFlag: 'yanliang_by_guanyu' },
+        { who: 'caocao', text: '（回顾左右）今后遇张翼德，不可轻敌。', ifFlag: 'yanliang_by_guanyu' },
+        { text: '两军相持于官渡，转眼数月。' },
         { who: 'yuanshao', text: '（帐中拍案）我有十万之众，岂惧曹阿瞒一隅之兵！' },
       ] }],
     },

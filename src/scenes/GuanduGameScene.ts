@@ -2,6 +2,11 @@ import Phaser from 'phaser';
 import {EnemyCamps} from '../systems/EnemyCamps';
 import {GameScene} from './GameScene';
 import {GuanduBoss} from '../systems/GuanduBoss';
+import {HEBEI_PLAN} from '../data/dualBossPlans';
+import {dualOff} from '../systems/DualBoss';
+import {BossMount} from '../systems/BossMount';
+import {BOSS_MOUNTS} from '../data/bossMoves';
+import {BOSS_OLD} from '../systems/BossKit';
 import {guanduBattle, GUANDU_STAGES, GUANDU_PLAYABLE, GUANDU_ATLAS_FILES, type GuanduStage} from '../data/guanduChapter';
 import {isChapterTestRun} from '../systems/ChapterProgress';
 import {abandonExpedition, arcStageUnlocked, beginArcExpedition, settleArcExpedition, permanentEffects, takeExpeditionReserve} from '../world/WorldStore';
@@ -101,15 +106,25 @@ export function guanduGameSceneClass(Base: typeof GameScene) {
       const had = this.boss?.active;
       super.spawnBoss();
       if (this.boss && !had) this.sishuiPass?.onBoss(this.boss);
-      if (this.boss) this.controller = new GuanduBoss({scene: this, boss: this.boss, player: this.player, army: this.legion, spawn: (kind, x, y) => this.spawnEnemy(kind, x, y, 1, true),
+      // 4-2 延津：颜良（步战）+ 文丑（骑马）双首领（dual-boss-spec 方案 A）
+      const dual = !had && this.guanduStage === 2 && !BOSS_OLD && !dualOff() && !!this.boss;
+      const host = (boss: Enemy) => ({scene: this, boss, player: this.player, army: this.legion, spawn: (kind: EnemyKind, x: number, y: number) => this.spawnEnemy(kind, x, y, 1, true),
         morale: () => ({multiplier: this.depots?.moraleMultiplier ?? 1, burned: this.depots?.burned ?? 0, intact: this.depots?.intact ?? 0}),
-        depots: this.depots}, this.guanduStage, this.combatNow);
+        depots: this.depots});
+      if (this.boss) this.controller = new GuanduBoss(host(this.boss), this.guanduStage, this.combatNow, dual ? {kit: 'yanliang', atlas: GUANDU_STAGES[0].atlas, name: GUANDU_STAGES[0].boss} : {});
+      if (dual && this.boss && this.controller) {
+        const yan = this.controller, b = this.boss; this.controller = undefined;
+        b.def = {...b.def, texture: GUANDU_STAGES[0].atlas, speed: guanduBattle(1).enemies.boss.speed};
+        this.startDual(HEBEI_PLAN, {id: 'yanliang', name: '颜良', enemy: b, ctrl: yan, ownKit: true, key: 'guandu-2:yanliang'},
+          {id: 'wenchou', name: '文丑', at: {x: b.x + 220, y: b.y - 20}, def: {}, key: 'guandu-2:wenchou',
+            make: e => { const c = new GuanduBoss(host(e), 2, this.combatNow, {kit: 'wenchou'}); return {ctrl: c, ownKit: true, mount: BOSS_MOUNTS.wenchou ? new BossMount(this, e, BOSS_MOUNTS.wenchou, () => c.busy()) : null}; }});
+      }
     }
     protected customBossStep(enemy: Enemy, dt: number, now: number) { if (enemy !== this.boss || !this.controller) return false; this.controller.update(dt, now); return true; }
     protected hitEnemy(enemy: Enemy, raw: number, now: number, source: 'melee' | 'arrow' | 'fire' = 'melee', ally = false, weaponHit = true) { if (enemy === this.boss && this.controller) { raw *= this.controller.incoming(ally); this.controller.hit(now); } return super.hitEnemy(enemy, raw, now, source, ally, weaponHit); }
     /** 官渡首领控制器自己播倒地帧。 */
     protected bossHasDeathArt() { return !!this.controller; }
-    protected killEnemy(enemy: Enemy) { if (this.depots?.onDestroyed(enemy, this.combatNow) && this.boss?.active && this.guanduStage === 3) this.controller?.shaken(this.combatNow); this.enemyCamps?.onDestroyed(enemy, this.combatNow); if (enemy === this.boss) this.controller?.defeat(); super.killEnemy(enemy); }
+    protected killEnemy(enemy: Enemy) { if (this.depots?.onDestroyed(enemy, this.combatNow) && this.boss?.active && this.guanduStage === 3) this.controller?.shaken(this.combatNow); this.enemyCamps?.onDestroyed(enemy, this.combatNow); if (enemy === this.boss) { if (this.bossRetreats(enemy)) this.controller?.clear(); else this.controller?.defeat(); } /* 4-1 颜良负伤败走：不倒地、淡出 */ super.killEnemy(enemy); }
     update(time: number, delta: number) {
       const before = this.combatNow; super.update(time, delta);
       if (this.combatNow > before && !this.over && this.mode === 'none') { if (!this.awaitingChest) this.enemyCamps?.update(this.combatNow); this.depots?.update(this.combatNow); }

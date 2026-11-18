@@ -2,7 +2,8 @@ import { meleeReach } from '../data/bossReach';
 import { BOSS_CHARGE } from '../data/legion';
 import Phaser from 'phaser';
 import type { Enemy } from '../entities/Enemy';
-import { DEPTH, actorDepth } from '../config';
+import { DEPTH, HEADING_FONT, actorDepth } from '../config';
+import { playSheet } from './SkillFxSheets';
 import type { BossMovesetDef, MoveDef, PhaseDef } from '../data/bossMoves';
 import { ArcBossV2, type ArcHost } from './ArcBossV2';
 import type { BossDebug } from './BossKit';
@@ -63,6 +64,7 @@ export class BossMoveset extends ArcBossV2<string> {
     this.updateHazards(now);
     this.updateFlags();
     if (this.phase === 1 && b.hp <= b.maxHp * this.def.phaseAt) this.enterPhase2(now);
+    this.updateRage(now);
     b.sprite.setAlpha(now < this.hideUntil ? .12 : 1);
     if (this.kit.inShift) { this.pose(25, now); return; }
     if (this.dash) { this.updateDash(dt, now); return; }
@@ -176,13 +178,51 @@ export class BossMoveset extends ArcBossV2<string> {
     const dismount = this.mounted;
     this.phase = 2; this.phase2 = true; this.metrics.phase2++; if (dismount) this.metrics.dismount++;
     this.dash = null; this.ride = null; this.cur = null; this.hideUntil = 0; this.beat.set(null, 'idle', now, 0); this.next = now + 2200;
-    // 一阶段的旗阵随换阶段撤掉（不带进二阶段减伤）
+    // 一阶段的旗阵随换阶段撤掉（不带进二阶段减伤）；步战首领的狂暴演出里旗帜是倒下的
+    if (this.def.rage && !dismount) this.rageShow(now);
     for (const f of this.flags) { f.img?.destroy(); if (f.e.active) f.e.deactivate(); } this.flags = [];
     emitBossPhase(this.h.scene, { boss: this.h.boss, phase: 2, dismount, name: this.def.name }); // 坐骑在 BossMount 里收到事件后坠马
     this.kit.phaseShift(now, dismount ? '坠马！' + this.def.p2.name : this.def.p2.name, this.def.p2.caption, 0x8a4a2a, .1);
     this.moveNames.length = 0; this.moveNames.push(...this.def.p2.moves.map(m => m.name));
     const g = this.def.p2.guards, b = this.h.boss;
     if (g) for (let k = 0; k < g.count; k++) { const a = k / g.count * Math.PI * 2; const e = this.h.spawn(g.troop, b.x + Math.cos(a) * 90, b.y + Math.sin(a) * 70); if (e) this.guards.push(e); }
+  }
+
+  // ---------- 步战首领狂暴（def.rage）：旗倒、大吼、黄色气焰（全部手绘素材：旗帜图、倒塌扬尘、战吼声浪 / 气势） ----------
+  private auraAt = 0;
+  private rageShow(now: number): void {
+    const r = this.def.rage!, s = this.h.scene, b = this.h.boss; this.metrics.rage = (this.metrics.rage ?? 0) + 1;
+    const topple = (img: Phaser.GameObjects.Image, dir: number, delay: number): void => {
+      img.setName('boss-rage-flag');
+      s.tweens.add({ targets: img, angle: dir * 84, y: img.y + 4, duration: 520, delay, ease: 'Quad.easeIn', onComplete: () => {
+        playSheet(s, 'fx_collapse_dust', img.x + dir * 34, img.y, { size: 130, ms: 560, depth: actorDepth(img.y) + .1, originY: .8, name: 'boss-rage-dust' });
+        s.tweens.add({ targets: img, alpha: 0, delay: 1100, duration: 500, onComplete: () => img.destroy() });
+      } });
+    };
+    this.flags.forEach((f, i) => { if (f.img) { topple(f.img, f.img.x < b.x ? -1 : 1, 120 * i); f.img = null; } });
+    // 身后的黄天大旗（一阶段旗都被砍倒了也有旗可倒）
+    if (s.textures.exists('zhuge_banner')) topple(s.add.image(b.x + 46, b.y - 2, 'zhuge_banner').setOrigin(.32, 1).setDisplaySize(72, 112).setTint(r.color).setDepth(actorDepth(b.y) - .01), 1, 60);
+    // 大吼：战吼声浪 + 身上腾起气势
+    this.warcry(0, .45, 320, 640, 16, 'boss-rage-wave', 1);
+    this.warcry(1, .75, 170, 340, 13, 'boss-rage-aura', 1);
+    const t = s.add.text(b.x, b.y - 150, r.roar, { fontFamily: HEADING_FONT, fontSize: '30px', color: '#ffe08a', stroke: '#2a1206', strokeThickness: 6, resolution: 2 }).setOrigin(.5).setDepth(DEPTH.dmgText + 3).setScale(1.6).setName('boss-rage-roar');
+    s.tweens.add({ targets: t, scale: 1, duration: 160, ease: 'Back.Out' });
+    s.tweens.add({ targets: t, y: t.y - 30, alpha: 0, delay: 1300, duration: 450, onComplete: () => t.destroy() });
+    this.h.sfx('warCry'); s.cameras.main.shake(260, .006);
+    this.auraAt = now + 1800;
+  }
+  /** 手绘战吼图集 warcry_paint（2 行 × 6 帧，256×512；行 0 声浪、行 1 气势），跟着首领走，叠加混合。 */
+  private warcry(row: number, oy: number, w: number, h: number, fps: number, name: string, alpha: number): void {
+    const s = this.h.scene, b = this.h.boss; if (!s.textures.exists('warcry_paint')) return;
+    this.metrics[row === 0 ? 'rageWave' : 'rageAura'] = (this.metrics[row === 0 ? 'rageWave' : 'rageAura'] ?? 0) + 1;
+    const sp = s.add.sprite(b.x, b.y + 4, 'warcry_paint', row * 6).setOrigin(.5, oy).setDisplaySize(w, h).setBlendMode(Phaser.BlendModes.ADD).setAlpha(alpha).setDepth(row === 0 ? DEPTH.fx : actorDepth(b.y) + .05).setName(name);
+    const st = { t: 0 };
+    s.tweens.add({ targets: st, t: 5.99, duration: 6000 / fps, onUpdate: () => { if (!sp.active) return; sp.setFrame(row * 6 + Math.floor(st.t)).setPosition(b.x, b.y + 4); if (row) sp.setDepth(actorDepth(b.y) + .05); }, onComplete: () => sp.destroy() });
+  }
+  /** 二阶段：身上反复腾起黄色气焰。 */
+  private updateRage(now: number): void {
+    if (this.phase !== 2 || !this.def.rage || this.mounted || !this.h.boss.active || now < this.auraAt) return;
+    this.auraAt = now + 2600; this.warcry(1, .75, 130, 260, 11, 'boss-rage-aura', .5);
   }
 
   // ---------- 地面预警与结算 ----------

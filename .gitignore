@@ -168,6 +168,8 @@ assets/raw/*
 !/tools/test-camp-life.mjs
 !/tools/test-siege-finite.mjs
 !/tools/shot-siege-scene.mjs
+!/tools/measure-hero-actions.mjs
+!/tools/test-hero-action-fit.mjs
 !/tools/test-jingnan-art.mjs
 !/tools/test-hanzhong-art.mjs
 !/tools/test-yiling-full.mjs
@@ -231,3 +233,4 @@ assets/raw/*
 # 黄巾力士专用图测试 / 符牌抠图（2026-11-18）
 !/tools/test-lishi.mjs
 !/tools/prepare-lishi-tag.mjs
+!/tools/test-zhaoyun-fx.mjs

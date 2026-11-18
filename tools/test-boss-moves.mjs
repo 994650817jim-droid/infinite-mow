@@ -10,7 +10,7 @@ mkdirSync(OUT, { recursive: true });
 const rows = []; const ck = (n, ok, info) => { rows.push(!!ok); console.log(ok ? 'PASS' : 'FAIL', n, ok ? '' : JSON.stringify(info)); };
 const b = await chromium.launch({ channel: 'chrome', headless: true, args: ['--mute-audio'] });
 const CASES = [
-  { id: 'zhangliang', scene: 'GameScene', run: { chapter: 'huangjin', stage: 1 }, reg: {}, ctl: 'moveset', mounted: true },
+  { id: 'zhangliang', scene: 'GameScene', run: { chapter: 'huangjin', stage: 1 }, reg: {}, ctl: 'moveset', mounted: false, rage: true }, // 2026-11-18 用户：第一章首领不骑马
   { id: 'zhangbao', scene: 'GameScene', run: { chapter: 'huangjin', stage: 2 }, reg: {}, ctl: 'moveset', mounted: false },
   { id: 'lijue', scene: 'ThirdGameScene', run: { thirdStage: 1 }, reg: { thirdStage: 1 }, ctl: 'controller', mounted: true },
   { id: 'zhangxiu', scene: 'ThirdGameScene', run: { thirdStage: 2 }, reg: { thirdStage: 2 }, ctl: 'controller', mounted: true },
@@ -75,7 +75,7 @@ try {
     const RIDE_ART = ['lubu', 'huaxiong'];
     if (c.mounted && RIDE_ART.includes(c.id)) { const r = await ev((s, k) => { const o = s[k], m = o.mount ?? s.bossMount; return { ride: !!m?.usesRideArt, tex: s.boss.sprite.texture.key, horse: !!m?.hasHorse }; }, c.ctl); ck(`${c.id}：一阶段骑马用正式首领骑乘图`, r.ride && r.horse && r.tex === 'ride_v2_boss_' + c.id, r); }
     else if (c.mounted) ck(`${c.id}：一阶段骑马（马图在、骑者裁上半身或用首领骑乘图）`, mount.mounted && mount.horse && (mount.crop || mount.ride), mount);
-    else ck(`${c.id}：不骑马（术士）`, !mount.mounted, mount);
+    else ck(`${c.id}：不骑马（步战 / 术士）`, !mount.mounted, mount);
     if (!c.legacy) {
       // 一阶段每招都放一遍
       for (let w = 0; w < 50 && !(await ev((s, [k, id]) => s[k]?.def?.id === id && s.boss?.active, [c.ctl, c.id])); w++) { if (c.prep) await ev(c.prep); await p.waitForTimeout(200); } // 攻城转场等场景过渡时控制器会短暂重建
@@ -95,6 +95,12 @@ try {
     await ev((s, k) => { const b = s.boss; b.sprite.x = s.player.x + 170; b.sprite.y = s.player.y - 20; b.hp = Math.floor(b.maxHp * .48); s.hitEnemy(b, 1, s.combatNow, 'melee', false, false); }, c.ctl);
     await p.waitForTimeout(250);
     const fall = await ev(s => s.children.list.some(o => o.name === 'boss-fall'));
+    if (c.rage) { // 步战首领狂暴：旗倒（含身后大旗）、大吼、黄色气焰，不播坠马
+      await p.waitForTimeout(150);
+      const rg = await ev((s, k) => ({ rage: s[k].metrics.rage ?? 0, flags: s.children.list.filter(o => o.name === 'boss-rage-flag').length, wave: s[k].metrics.rageWave ?? 0, aura: s[k].metrics.rageAura ?? 0, roar: s.children.list.find(o => o.name === 'boss-rage-roar')?.text, horse: s.children.list.some(o => o.name === 'boss-horse' && o.active), fall: s.children.list.some(o => o.name === 'boss-fall') }), c.ctl);
+      await p.screenshot({ path: `${OUT}/${c.id}-rage.png` });
+      ck(`${c.id}：二阶段「旗倒人狂」——旗帜倒下、大吼声浪、黄色气焰，没有马也不播坠马`, rg.rage === 1 && rg.flags >= 1 && rg.wave >= 1 && rg.aura >= 1 && !!rg.roar && !rg.horse && !rg.fall, rg);
+    }
     if (c.mounted && ['lubu', 'huaxiong'].includes(c.id)) { await p.screenshot({ path: `${OUT}/${c.id}-fall.png` }); ck(`${c.id}：坠马播骑乘图第 9 行坠马帧`, fall, fall); }
     await wait(2250);
     const ph = await p.evaluate(() => window.__phases);
@@ -102,6 +108,8 @@ try {
     if (!c.legacy) ck(`${c.id}：换阶段撤掉一阶段旗阵`, (await ev((s, k) => s[k].snapshot().flags, c.ctl)) === 0, null);
     ck(`${c.id}：半血换二阶段，发 boss-phase 事件`, after.phase2 && ph.some(e => e.phase === 2), { after, ph });
     if (c.mounted) ck(`${c.id}：坠马 → 步战（马跑开、骑者恢复整身）`, !after.mounted && !after.crop && ph.some(e => e.phase === 2 && e.dismount), { after, ph });
+    if (c.rage) ck(`${c.id}：步战首领全程无马、boss-phase 不带坠马`, !after.mounted && !after.horse && ph.some(e => e.phase === 2 && !e.dismount), { after, ph });
+    if (c.rage) { const n = await ev((s, k) => s[k].metrics.rageAura ?? 0, c.ctl); ck(`${c.id}：二阶段身上反复腾起黄色气焰`, n >= 2, n); }
     if (!c.legacy) {
       for (let w = 0; w < 50 && !(await ev((s, [k, id]) => s[k]?.def?.id === id && s.boss?.active, [c.ctl, c.id])); w++) { if (c.prep) await ev(c.prep); await p.waitForTimeout(200); } // 攻城转场等场景过渡时控制器会短暂重建
       const names = await ev((s, k) => [...s[k].debug.moves], c.ctl);

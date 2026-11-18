@@ -46,6 +46,9 @@ await p.screenshot({ path: `${out}/opening-title-1280x720.png` });
 await seek(19.9);
 await p.waitForFunction(() => window.__game.scene.isActive('MenuScene'), null, { timeout: 15000 }).catch(() => {});
 ck('20 秒播完自动进主页，并记已播过', (await active()).includes('MenuScene') && await p.evaluate(() => localStorage.getItem('im_opening_seen') === '1'), await active());
+// 2026-11-18 用户报：播完开场，主页标题变成一大块红色朱印（Phaser 加子帧时改了 firstFrame）
+{ await p.waitForTimeout(600); const t = await p.evaluate(() => { const m = window.__game.scene.getScene('MenuScene'), o = m.children.getByName('home-title-wordmark'); return o ? { frame: o.frame.name, w: Math.round(o.width), first: m.textures.get('title_wordmark').firstFrame } : null; });
+  ck('播完开场后主页标题仍是完整水墨标识（整图帧，不是朱印子帧）', !!t && t.frame === '__BASE' && t.first === '__BASE', t); }
 // ⑥ 默认「首次」：再启动直接进主页
 await go();
 ck('默认「首次」：第二次启动不再播', (await active()).includes('MenuScene') && !(await active()).includes('OpeningScene'), await active());

@@ -171,6 +171,10 @@ export class BootScene extends Phaser.Scene {
     // 被动满层战吼像素特效（2 行 × 6 帧，每帧 256×512，黑底叠加）：脚下声浪冲击 / 身上迸发的气势
     // 2026-11-17 换成手绘 warcry_paint（Gemini 出图），旧像素图 warcry_fx 保留不再加载
     this.load.spritesheet('warcry_paint', 'assets/hero-fx/warcry_paint.png', { frameWidth: 256, frameHeight: 512 });
+    // 赵云被动「七进七出」手绘特效（2026-11-18 ChatGPT 出图，黑底叠加；说明见 src/data/zhaoyunFx.ts）
+    this.load.spritesheet('zhaoyun_scales', 'assets/hero-fx/zhaoyun_scales.png', { frameWidth: 128, frameHeight: 128 });
+    this.load.spritesheet('zhaoyun_thrust', 'assets/hero-fx/zhaoyun_thrust.png', { frameWidth: 384, frameHeight: 384 });
+    this.load.spritesheet('zhaoyun_aura', 'assets/hero-fx/zhaoyun_aura.png', { frameWidth: 256, frameHeight: 256 });
     // 马超虎头湛金枪手绘特效（6×4，每帧 256，透明底；2026-11-17 Gemini 出图替换原像素图集 machao_fx，旧文件保留不再加载）：上挑弧光 / 落地砸地 / 冲锋尘土拖影 / 枪尖破风
     this.load.spritesheet('machao_paint', 'assets/hero-fx/machao_paint.png', { frameWidth: 256, frameHeight: 256 });
     // 2026-11-16 专属武器贴图（tools/prepare-hero-icon-sheet.mjs 切出）与执刀侍婢行走图

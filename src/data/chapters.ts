@@ -7,6 +7,7 @@ import { ENEMY_DEFS, enemyHpScale, pickEnemyKind, spawnBurst, spawnInterval, typ
 import { WAVES, type WaveDef } from './waves';
 import type { EnemyKind } from '../types';
 import { tuneStage } from './stageTuning';
+import { meleeReach } from './bossReach';
 import { isV2Texture } from '../systems/ArtStyle';
 
 export type ChapterId = 'huangjin' | 'hulao';
@@ -92,7 +93,7 @@ export function chapterBossTime(chapter: ChapterDef): number {
 
 /** 第二章试玩参数；调平衡时集中修改，不散落在行为系统中。 */
 export const LUBU_COMBAT = {
-  sweepRadius: 150, sweepAngle: 220, sweepDamage: 24,
+  sweepRadius: meleeReach(150), sweepAngle: 220, sweepDamage: 24, // 横扫是贴身近战：距离 × BOSS_MELEE_REACH_MUL（data/bossReach.ts）
   sweepWarnMs: 650, enragedSweepWarnMs: 550, sweepFlashMs: 180,
   sweepCooldown: 2.8, enragedSweepCooldown: 2.2,
   dashLength: 300, dashSpeed: 650, dashHalfWidth: 40, dashDamage: 18,

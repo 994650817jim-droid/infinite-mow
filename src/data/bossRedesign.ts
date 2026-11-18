@@ -24,16 +24,20 @@ export const ZJ = {
   summonEveryMs: 14000, summonCount: 3, summonCap: 8,
 } as const;
 
+import { meleeReach } from './bossReach';
+
 /** 吕布：方天三连 / 赤兔突袭 / 辕门射戟 / 魔神降世（保留）；二阶段「人中吕布」加无双乱舞。 */
 export const LB = {
   combo: { cooldown: 2.2, cooldown2: 1.6, range: 175,
-    thrust: { warnMs: 380, length: 230, width: 54, damage: 16 },
-    sweep: { warnMs: 380, radius: 165, arcDeg: 150, damage: 18 },
-    smash: { warnMs: 650, ahead: 95, radius: 105, damage: 26 },
+    // 方天三连是贴身近战：突刺长度、横扫半径、砸地半径 × BOSS_MELEE_REACH_MUL（data/bossReach.ts）
+    thrust: { warnMs: 380, length: meleeReach(230), width: 54, damage: 16 },
+    sweep: { warnMs: 380, radius: meleeReach(165), arcDeg: 150, damage: 18 },
+    smash: { warnMs: 650, ahead: 95, radius: meleeReach(105), damage: 26 },
     gapMs: 130, recoverMs: 800 },
   zigzag: { cooldown: 5, cooldown2: 3.8, minRange: 140, maxRange: 560, folds: 2, folds2: 3, length: 300, halfWidth: 42, firstWarnMs: 700, foldWarnMs: 320, speed: 900, damage: 22, recoverMs: 700 },
   shot: { cooldown: 9, minRange: 230, hopMs: 300, hop: 150, aimMs: 1200, lockMs: 300, length: 950, width: 30, damage: 30, recoverMs: 750 },
-  spin: { cooldown: 8, range: 210, windupMs: 600, spinMs: 1800, r0: 80, r1: 195, tickMs: 300, damage: 12, recoverMs: 1000 },
+  // 无双乱舞：绕身回旋，近战距离同倍
+  spin: { cooldown: 8, range: 210, windupMs: 600, spinMs: 1800, r0: meleeReach(80), r1: meleeReach(195), tickMs: 300, damage: 12, recoverMs: 1000 },
 } as const;
 
 /** 袁术：玉玺号令 / 金钱开路 / 亲军护驾；二阶段「蜜水」（30%）逃跑。 */

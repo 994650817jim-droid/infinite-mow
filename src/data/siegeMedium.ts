@@ -4,6 +4,8 @@
  * 世界坐标：y 越小越靠北（城里）。每段一块固定场地，由 SishuiObstacles 的碰撞框围起来；段与段之间黑场推进转场。
  * 所有数值为试玩初值，**待平衡会话复核**。
  */
+import { meleeReach } from './bossReach';
+
 export const MID_SIEGE = {
   /** 第一段 · 城外：场地、城墙、城门、箭楼、冲车 */
   outside: {
@@ -55,7 +57,7 @@ export const MID_SIEGE = {
     guardsEveryMs: 15000, guardCount: 3, guardKind: 'shield' as const, shieldMul: .35, // 亲卫在场时守将只受 35% 伤害 · 待平衡会话复核
     corridors: [{ x: -510, y: -1980 }, { x: 510, y: -1980 }],
     phase2At: .5,
-    sweep: { everyMs: 4200, warnMs: 900, radius: 150, arc: Math.PI * .9, damage: 14 }, // 一阶段：横扫
+    sweep: { everyMs: 4200, warnMs: 900, radius: meleeReach(150), arc: Math.PI * .9, damage: 14 }, // 一阶段：横扫（贴身近战，距离 × BOSS_MELEE_REACH_MUL）
     charge: { everyMs: 6500, warnMs: 1000, length: 380, width: 70, speed: 900, damage: 18 }, // 二阶段加：冲锋 · 待平衡会话复核
     flagMs: 1600, // 击败守将后插旗占领的动画时长
   },

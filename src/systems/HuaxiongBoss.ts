@@ -1,3 +1,6 @@
+import { meleeReach } from '../data/bossReach';
+/** 破军横扫半径（贴身近战：原 145 × BOSS_MELEE_REACH_MUL，预警、命中、刀光同一个值）。 */
+const SWEEP_R = meleeReach(145);
 import Phaser from 'phaser';
 import type {Enemy} from '../entities/Enemy';
 import type {Player} from '../entities/Player';
@@ -60,12 +63,12 @@ export class HuaxiongBoss {
     }else if(this.state==='sweepWarn'){
 
       this.pose('huaxiong_attack',dir*4+Math.min(1,Math.floor((now-this.started)/300)));
-      if(TELEGRAPH_CLASSIC)this.gfx.lineStyle(2,0xf4c47a,.9).fillStyle(0xa64729,.18).slice(this.x,this.y,145,this.angle-Math.PI/3,this.angle+Math.PI/3).fillPath().strokePath();
-      else{groundCracks(this.gfx,this.x,this.y,145,(now-this.started)/Math.max(1,this.until-this.started),this.angle,Math.PI*2/3);windupFlash(b,now);}
+      if(TELEGRAPH_CLASSIC)this.gfx.lineStyle(2,0xf4c47a,.9).fillStyle(0xa64729,.18).slice(this.x,this.y,SWEEP_R,this.angle-Math.PI/3,this.angle+Math.PI/3).fillPath().strokePath();
+      else{groundCracks(this.gfx,this.x,this.y,SWEEP_R,(now-this.started)/Math.max(1,this.until-this.started),this.angle,Math.PI*2/3);windupFlash(b,now);}
       if(now>=this.until){this.enter('sweep',now,300);this.metrics.sweeps++;this.h.sfx();}
     }else if(this.state==='sweep'){
-      this.pose('huaxiong_attack',dir*4+2);this.slash.setPosition(this.x,this.y).setRotation(this.angle).setDisplaySize(290,290).setFrame(Math.min(7,Math.floor((now-this.started)/38))).setVisible(true);
-      if(!this.applied){this.applied=true;this.impact(now,145,this.phase2?20:16,Math.PI*2/3);}
+      this.pose('huaxiong_attack',dir*4+2);this.slash.setPosition(this.x,this.y).setRotation(this.angle).setDisplaySize(SWEEP_R*2,SWEEP_R*2).setFrame(Math.min(7,Math.floor((now-this.started)/38))).setVisible(true);
+      if(!this.applied){this.applied=true;this.impact(now,SWEEP_R,this.phase2?20:16,Math.PI*2/3);}
       if(now>=this.until){this.nextSweep=now+(this.phase2?1600:2200);this.enter('recover',now,500);}
     }else if(this.state==='chargeWarn'){
       this.pose('huaxiong_attack',dir*4+1);const nx=Math.cos(this.angle),ny=Math.sin(this.angle);

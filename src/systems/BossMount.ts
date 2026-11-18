@@ -27,6 +27,8 @@ const DIRS = ['down', 'left', 'right', 'up'] as const;
 export class BossMount {
   mounted = true;
   private horse: Phaser.GameObjects.Image | null = null;
+  /** 脚下的马（BossPresence 放大首领时一起放大）。 */
+  get horseImage(): Phaser.GameObjects.Image | null { return this.horse; }
   private key: string; private last = { x: 0, y: 0 }; private dir: typeof DIRS[number] = 'down'; private stepAt = 0; private frame = 0;
   private readonly onPhase = (e: BossPhaseEvent): void => { if (e.boss === this.boss && e.phase === 2 && this.mounted) this.dismount(); };
   /** 骑乘图已就绪时的纹理键；坠马动画播到何时（期间藏起首领本体）。 */

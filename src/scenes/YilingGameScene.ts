@@ -1,3 +1,4 @@
+import type Phaser from 'phaser';
 import type { GameScene } from './GameScene';
 import { thirdGameSceneClass, type ArcSceneConfig } from './ThirdGameScene';
 import type { Enemy } from '../entities/Enemy';
@@ -8,6 +9,10 @@ import type { EnvInteractions } from '../systems/EnvInteractions';
 import { YilingFire } from '../systems/YilingFire';
 import { storyScroll } from '../ui/StoryScroll';
 import { getCharacter } from '../data/characters';
+import { playSheet } from '../systems/SkillFxSheets';
+import { DEPTH } from '../config';
+/** 现身扬尘（手绘序列帧）。 */
+const playSheetSafe = (scene: Phaser.Scene, x: number, y: number): void => { playSheet(scene, 'fx_collapse_dust', x, y + 4, { size: 170, ms: 520, depth: DEPTH.fx, originY: .8, name: 'luxun-reappear' }); };
 import { ensureMoves } from '../systems/BossKit';
 import { bossDeathKey } from '../systems/BossDeathArt';
 
@@ -36,6 +41,8 @@ export function yilingGameSceneClass(Base: typeof GameScene, cfg: ArcSceneConfig
     private campsPlaced = false;
     private campsDown = 0;
     private rageShown = false;
+    /** 陆逊二阶段「八阵图迷踪」：下次隐身的时刻、隐身结束时刻、次数。 */
+    private mazeAt = 0; private mazeUntil = 0; mazes = 0;
     preload(): void { super.preload(); loadV2TroopSheets(this, [...YILING_TROOP_SHEETS.jiefan, ...YILING_TROOP_SHEETS.crossbow]); ensureMoves(this, LUXUN_MOVES); }
     create(): void {
       this.camps = []; this.campsPlaced = false; this.campsDown = 0; this.rageShown = false; this.fire = undefined;
@@ -84,7 +91,8 @@ export function yilingGameSceneClass(Base: typeof GameScene, cfg: ArcSceneConfig
       }
       if (this.fire && s.mode === 'none') {
         this.fire.everySec = !s.boss?.active ? FIRE.everySec : s.boss.hp <= s.boss.maxHp * .5 ? FIRE.rageEverySec : FIRE.bossEverySec;
-        if (s.boss?.active && !this.rageShown && s.boss.hp <= s.boss.maxHp * .5) { this.rageShown = true; s.showWaveBanner('火烧连营', true, '陆逊：火势已成，传令全军进击！（放火更勤）'); this.fire.schedule(s.combatNow); }
+        if (s.boss?.active && !this.rageShown && s.boss.hp <= s.boss.maxHp * .5) { this.rageShown = true; this.fire.double = true; this.mazeAt = s.combatNow + 4000; s.showWaveBanner('火烧连营', true, '陆逊：火势已成！（两道火线 · 八阵图迷踪）'); this.fire.schedule(s.combatNow); }
+        if (this.rageShown && s.boss?.active) this.updateMaze(s);
         this.fire.update(s.combatNow);
       }
       this.luxunPose(s.combatNow);
@@ -112,6 +120,23 @@ export function yilingGameSceneClass(Base: typeof GameScene, cfg: ArcSceneConfig
       if (this.arcStage === 3 && enemy === s.boss && bossDeathKey(this, 'luxun')) { self.controller?.clear(); self.controller = undefined; }
       (super.killEnemy as (e: Enemy) => void).call(this, enemy);
     }
+    /**
+     * 陆逊二阶段「八阵图迷踪」：每 11 秒隐入阵中（淡出、刀枪不入 1.2 秒），在主将侧后方另一处现身（伏兵预警处），配合两道火线逼人走位。
+     * 不换控制器（陆逊的招式图叠加与放火依赖通用首领控制器的时序），只在场景里加这一手。
+     */
+    private updateMaze(s: Host): void {
+      const b = s.boss!, now = s.combatNow;
+      if (this.mazeUntil && now >= this.mazeUntil) {
+        this.mazeUntil = 0; b.invulnerable = false; b.sprite.setAlpha(1);
+        const a = Math.random() * Math.PI * 2; b.sprite.x = s.player.x + Math.cos(a) * 300; b.sprite.y = s.player.y + Math.sin(a) * 220;
+        playSheetSafe(this, b.x, b.y);
+        s.showWaveBanner('陆逊现身', false, '八阵图中另一处');
+      } else if (this.mazeUntil) b.sprite.setAlpha(.12);
+      if (!this.mazeUntil && now >= this.mazeAt) {
+        this.mazeAt = now + 11000; this.mazeUntil = now + 1200; this.mazes++; b.invulnerable = true; b.sprite.setAlpha(.12);
+        s.showWaveBanner('八阵图迷踪', true, '陆逊隐入阵中 · 小心侧后'); s.sfx.play('chargeWarn');
+      }
+    }
     protected spawnBoss(): void {
       const s = this as unknown as Host;
       const had = s.boss?.active; super.spawnBoss();
@@ -135,6 +160,6 @@ export function yilingGameSceneClass(Base: typeof GameScene, cfg: ArcSceneConfig
           { text: '南中诸郡乘乱生变，孟获起兵……（第十一章 · 南征）' },
         ], reward: '火海突围 · 退守白帝', confirm: '收兵 · 退守白帝', background: 'rest_camp', onDone: () => { s.setMode('none'); next(); } });
     }
-    snapshotYiling() { return { stage: this.arcStage, camps: this.camps.length, campsDown: this.camps.filter(t => !t.active).length, fire: this.fire?.snapshot() ?? null, rage: this.rageShown }; }
+    snapshotYiling() { return { mazes: this.mazes, double: !!this.fire?.double, stage: this.arcStage, camps: this.camps.length, campsDown: this.camps.filter(t => !t.active).length, fire: this.fire?.snapshot() ?? null, rage: this.rageShown }; }
   };
 }

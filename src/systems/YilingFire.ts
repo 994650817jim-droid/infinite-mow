@@ -42,6 +42,8 @@ export class YilingFire {
   readonly metrics = { events: 0, ignited: 0, maxLit: 0, tentsBurnt: 0, playerTicks: 0, enemyTicks: 0 };
   /** 放火间隔（秒）：场景按首领状态改。 */
   everySec: number = FIRE.everySec;
+  /** 陆逊二阶段「火势已成」：每次放火两道火线（左右两组起火点，中间留一条退路）。 */
+  double = false;
   private readonly hasFx: boolean;
 
   constructor(private h: FireHost, now: number) {
@@ -67,7 +69,8 @@ export class YilingFire {
     const p = this.h.player, a = wind ?? WINDS[Math.floor(Math.random() * WINDS.length)].a;
     this.setWind(a, true); this.metrics.events++;
     const up = Phaser.Math.Between(FIRE.upwindMin, FIRE.upwindMax), bx = p.x - Math.cos(a) * up, by = p.y - Math.sin(a) * up, nx = -Math.sin(a), ny = Math.cos(a);
-    const points = Array.from({ length: FIRE.points }, (_, i) => { const o = (i - (FIRE.points - 1) / 2) * FIRE.pointGap; return { x: bx + nx * o, y: by + ny * o }; });
+    const span = FIRE.points * FIRE.pointGap, groups = this.double ? [-span * .85, span * .85] : [0];
+    const points = groups.flatMap(g => Array.from({ length: FIRE.points }, (_, i) => { const o = g + (i - (FIRE.points - 1) / 2) * FIRE.pointGap; return { x: bx + nx * o, y: by + ny * o }; }));
     this.pending.push({ at: now + FIRE.warnSec * 1000, points, wind: a, id: ++this.seq });
     this.h.banner(this.windName(a) + '起', '陆逊纵火 · 火顺风烧过来，往上风口退');
     this.h.sfx('chargeWarn');

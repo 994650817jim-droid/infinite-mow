@@ -38,22 +38,23 @@ export interface PhaseDef {
 export interface BossMovesetDef {
   id: string; name: string;
   /** 骑马（一阶段）；半血坠马转二阶段步战。 */ mount?: BossMountDef;
+  /** 步战首领转二阶段的狂暴演出（不骑马的才用）：一阶段的旗帜倒下、大吼（手绘战吼声浪）、二阶段身上反复腾起气焰（手绘气焰，色调 color）。 */ rage?: { color: number; roar: string };
   p1: PhaseDef; p2: PhaseDef;
   /** 进二阶段的生命比例。 */ phaseAt: number;
 }
 
 /** 第一批（第 1–3 章）：张梁、张宝、李傕、张绣。 */
 export const BOSS_MOVES: Record<string, BossMovesetDef> = {
-  // 1-1 张梁（人公将军）：骑黄骠马；黄天旗阵 + 人公冲阵 → 坠马「旗倒人狂」：折返连冲、冲过留地火
+  // 1-1 张梁（人公将军）：步战（用户 2026-11-18：第一章首领都不骑马）；黄天旗阵 + 徒步冲阵 → 半血「旗倒人狂」（旗倒、大吼、黄色气焰）：折返连冲、冲过留地火
   zhangliang: {
-    id: 'zhangliang', name: '张梁', phaseAt: .5, mount: { horse: 'generic', tint: 0xe2c06a, rider: 'zhangliang' },
-    p1: { name: '人公将军', caption: '黄天旗阵 · 人公冲阵', gapMs: 2600, speedMul: 1.35, moves: [
+    id: 'zhangliang', name: '张梁', phaseAt: .5, rage: { color: 0xffd25a, roar: '苍天已死！' },
+    p1: { name: '人公将军', caption: '黄天旗阵 · 人公冲阵', gapMs: 2600, speedMul: 1.1, moves: [
       { kind: 'flags', name: '黄天旗阵', windupMs: 700, cd: 16000, dmg: 0, count: 3, radius: 170, hp: 90, takenMul: .5 },
-      { kind: 'charge', name: '人公冲阵', windupMs: 900, cd: 4200, dmg: 1.4, len: 380, width: 70, dashMs: 520 },
-      { kind: 'sweep', name: '马上横斩', windupMs: 600, cd: 3600, dmg: 1.1, r: 120, arc: Math.PI * .8 },
+      { kind: 'charge', name: '人公冲阵', windupMs: 900, cd: 4200, dmg: 1.4, len: 300, width: 70, dashMs: 560 },
+      { kind: 'sweep', name: '人公横斩', windupMs: 600, cd: 3600, dmg: 1.1, r: 120, arc: Math.PI * .8 },
     ] },
-    p2: { name: '旗倒人狂', caption: '坠马步战 · 折返连冲，冲过之处起火', gapMs: 2000, speedMul: 1, moves: [
-      { kind: 'charge', name: '人公连冲', windupMs: 800, cd: 4000, dmg: 1.5, len: 340, width: 70, dashMs: 480, back: true, fire: true },
+    p2: { name: '旗倒人狂', caption: '黄天旗倒 · 折返连冲，冲过之处起火', gapMs: 2000, speedMul: 1.15, moves: [
+      { kind: 'charge', name: '人公连冲', windupMs: 800, cd: 4000, dmg: 1.5, len: 300, width: 70, dashMs: 520, back: true, fire: true },
       { kind: 'sweep', name: '黄巾大刀', windupMs: 650, cd: 3200, dmg: 1.3, r: 130, arc: Math.PI, times: 2 },
     ] },
   },

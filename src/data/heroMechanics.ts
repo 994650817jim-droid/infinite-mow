@@ -20,6 +20,11 @@ export const WY_SURROUND = { radius: 120, perEnemies: 3, stacksPerSec: 1 } as co
 
 /** 刘备·统御（主属性）对本人也有收益（平衡审查：统御 10 点本人 DPS 只 +2%，全给了部曲）：每点（按实际加点，不乘主属性倍率）本人受伤 −selfGuardPerPoint，最多 maxPoints 点。 */
 export const LB_COMMAND = { selfGuardPerPoint: .01, maxPoints: 10 } as const;
+
+/** 诸葛亮前期（平衡审查第 3 步之一，方案 2：1-1 首领掉血 0%、DPS 26 全员最低）：烈焰战旗 Lv1–3 伤害 ×earlyMul（审查建议 Lv1–2 各 +40%，
+ *  但那样 Lv2 36 > Lv3 30、升级反而掉伤害，改成逐级递减的加成：Lv1–5 = 30.8 / 32.5 / 33.5 / 33.9 / 37.8，仍逐级递增）；谋略满层 3 → stratagemMax。
+ *  单点爆发重做另写方案（统筹转用户确认后再做）。 */
+export const ZG_EARLY = { earlyMul: [1.4, 1.25, 1.12] as readonly number[], stratagemMax: 2 } as const;
 /** 某武将某属性的额外说明（属性面板 / 主属性章悬停里追加）；没有返回 ''。 */
 export function heroAttributeExtra(hero: string, attr: string): string {
   return hero === 'liubei' && attr === 'command' ? `刘备本人受伤 −${Math.round(LB_COMMAND.selfGuardPerPoint * 100)}% / 点` : '';

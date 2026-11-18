@@ -31,6 +31,13 @@ await p.evaluate(async ([G0, hero]) => {
     while (pl.passive.isSharpshooter(s.combatNow)) await wait(50);
     await wait(1200); pl.damageImmune = false; const biter = mk(pl.x - 8, pl.y, { stun: false, dmg: 3 }); await wait(1600); biter.deactivate(); pl.damageImmune = true; await wait(600);
   }
+  if (hero === 'zhuge') {
+    // Lv1 诸葛亮打 1-1 首领：战旗前期 ×1.4，首领血条明显下降；身边小兵让谋略（满 2 层）转起来
+    pl.damageImmune = true; pl.weapons[0].level = 1;
+    s.spawnBoss(); const boss = s.boss; if (boss) { boss.sprite.setPosition(pl.x + 150, pl.y); boss.stunUntil = 1e12; }
+    for (let i = 0; i < 4; i++) mk(pl.x + 130 + (i % 2) * 24, pl.y - 50 + i * 30, { hp: 300 });
+    await wait(9000);
+  }
   if (hero === 'weiyan') {
     // 被 6 名敌人围住、不挨打：拒敌每秒 2 层（左上面板），满层下一刀「谁敢杀我」六向裂波；两轮
     pl.damageImmune = true;

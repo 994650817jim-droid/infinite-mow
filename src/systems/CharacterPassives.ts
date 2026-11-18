@@ -2,7 +2,7 @@ import type { Enemy } from '../entities/Enemy';
 import type { CharacterId } from '../data/characters';
 import type { WeaponId } from '../types';
 import { CHARACTER_PASSIVES, PASSIVE_RULES as R } from '../data/passives';
-import { HZ_SHARP, WY_SURROUND } from '../data/heroMechanics';
+import { HZ_SHARP, WY_SURROUND, ZG_EARLY } from '../data/heroMechanics';
 export interface PassiveCast {
   owner: CharacterId; generation: number; weapon: WeaponId; empowered: boolean;
   radiusMul: number; damageMul: number; extraSpear: boolean; spearLengthMul: number;
@@ -53,7 +53,7 @@ export class CharacterPassives {
   }
   get characterId(): CharacterId { return this.character; }
   stop(): void { this.stopped = true; this.stacks = 0; this.generation++; this.burns.clear(); this.charms.clear(); this.chargeInvulnUntil = this.chargeGuardUntil = -Infinity; }
-  private get maxStacks(): number { return this.character === 'huangzhong' ? HZ_SHARP.need : CHARACTER_PASSIVES[this.character].maxStacks; }
+  private get maxStacks(): number { return this.character === 'huangzhong' ? HZ_SHARP.need : this.character === 'zhuge' ? ZG_EARLY.stratagemMax : CHARACTER_PASSIVES[this.character].maxStacks; }
   onDamage(now: number): void {
     if (this.stopped) return;
     this.lastDamage = now;
@@ -261,7 +261,7 @@ export class CharacterPassives {
   }
   snapshot(now: number) {
     return { character: this.character, stacks: this.stacks, maxStacks: this.maxStacks,
-      ready: !this.stopped && (this.character === 'huangzhong' ? this.isSharpshooter(now) : this.stacks === CHARACTER_PASSIVES[this.character].maxStacks),
+      ready: !this.stopped && (this.character === 'huangzhong' ? this.isSharpshooter(now) : this.stacks === this.maxStacks),
       // 黄忠：神射中为剩余时间比例，否则为蓄势比例（PassiveHud 进度条）
       calmProgress: this.stopped || this.character !== 'huangzhong' ? 0 : this.isSharpshooter(now) ? this.sharpLeft(now) / this.sharpMs : this.stacks / HZ_SHARP.need,
       critBonus: this.critBonus(now), guandaoRangeMul: this.rangeMultiplier('guandao'), burns: this.burns.size, charms: this.charms.size, turned: [...this.charms.values()].filter(c => c.turnedUntil > now).length, gains: this.gains, triggers: this.triggers, stopped: this.stopped };
@@ -269,6 +269,6 @@ export class CharacterPassives {
   label(now: number): string {
     const name = CHARACTER_PASSIVES[this.character].name;
     if (this.character === 'huangzhong') return this.isSharpshooter(now) ? `${name} · 神射 ${(this.sharpLeft(now) / 1000).toFixed(1)}秒：暴击+10% / 重箭爆裂` : `${name} · 蓄势 ${this.stacks}/${HZ_SHARP.need}`;
-    return `${name} · ${this.character === 'zhaoyun' ? '龙胆' : this.character === 'guanyu' ? '武势' : this.character === 'zhangfei' ? '怒气' : this.character === 'huangyueying' ? '机括' : this.character === 'pangtong' ? '计策' : this.character === 'liubei' ? '仁德' : this.character === 'weiyan' ? '拒敌' : this.character === 'machao' ? '铁骑' : this.character === 'sunshangxiang' ? '疾步' : this.character === 'diaochan' ? '舞势' : '谋略'} ${this.stacks}/${CHARACTER_PASSIVES[this.character].maxStacks}${this.snapshot(now).ready ? ' · 下次强化' : ''}${this.character === 'zhuge' && this.burns.size ? ` · 灼烧${this.burns.size}` : ''}${this.character === 'diaochan' && this.snapshot(now).turned ? ` · 离间${this.snapshot(now).turned}` : ''}${this.character === 'weiyan' && this.damageTakenMultiplier(now) < 1 ? ' · 谁敢杀我' : ''}`;
+    return `${name} · ${this.character === 'zhaoyun' ? '龙胆' : this.character === 'guanyu' ? '武势' : this.character === 'zhangfei' ? '怒气' : this.character === 'huangyueying' ? '机括' : this.character === 'pangtong' ? '计策' : this.character === 'liubei' ? '仁德' : this.character === 'weiyan' ? '拒敌' : this.character === 'machao' ? '铁骑' : this.character === 'sunshangxiang' ? '疾步' : this.character === 'diaochan' ? '舞势' : '谋略'} ${this.stacks}/${this.maxStacks}${this.snapshot(now).ready ? ' · 下次强化' : ''}${this.character === 'zhuge' && this.burns.size ? ` · 灼烧${this.burns.size}` : ''}${this.character === 'diaochan' && this.snapshot(now).turned ? ` · 离间${this.snapshot(now).turned}` : ''}${this.character === 'weiyan' && this.damageTakenMultiplier(now) < 1 ? ' · 谁敢杀我' : ''}`;
   }
 }

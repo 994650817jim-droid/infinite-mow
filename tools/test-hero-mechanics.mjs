@@ -115,6 +115,37 @@ for (const hero of HEROES) {
     await p.evaluate(G0 => { const s = eval(G0); s.attributePanel?.setVisible(false); if (s.mode === 'attributes') s.setMode('playing'); }, G);
     ck('刘备：属性面板统御一行写明「刘备本人受伤 −1% / 点」', r2.open && !!r2.line, r2);
   }
+  if (hero === 'zhuge') {
+    // 1) 单发伤害（关暴击、单个定身步兵）：Lv1–5 逐级递增，Lv1 是旧值 ×1.4
+    const r1 = await p.evaluate(async ([G0, MK0, C]) => {
+      const s = eval(G0), pl = s.player, mk = eval(MK0), wait = ms => new Promise(r => setTimeout(r, ms)), w = pl.weapons[0], crit0 = pl.stats.critChance; pl.damageImmune = true; pl.stats.critChance = -1;
+      const { WEAPON_DEFS } = await import('/src/weapons/registry.ts'), out = [];
+      for (const lv of [1, 2, 3, 4, 5]) {
+        eval(C); w.level = lv; w.cooldownLeft = 1e9; await wait(80); const e = mk(pl.x + 120, pl.y); w.cooldownLeft = 0; const t0 = performance.now();
+        while (e.hp === e.maxHp && performance.now() - t0 < 2500) await wait(20); w.cooldownLeft = 1e9; out.push(Math.round((e.maxHp - e.hp) * 10) / 10);
+      }
+      const old1 = WEAPON_DEFS.flame_banner.damage(1, pl.stats) * pl.growth.damageMultiplier(s.combatNow); pl.stats.critChance = crit0; w.level = 1; eval(C);
+      return { perLevel: out, old1: Math.round(old1 * 10) / 10, ratio1: +(out[0] / old1).toFixed(3) };
+    }, [G, MK, CLEAR]);
+    ck('诸葛亮：战旗 Lv1 伤害 ×1.4（旧值对比），Lv1→5 升级不掉伤害（整数掉血相邻两级可能相同）', Math.abs(r1.ratio1 - 1.4) < .03 && r1.perLevel.every((v, i, a) => i === 0 || v >= a[i - 1]) && r1.perLevel[4] > r1.perLevel[0], r1);
+    // 2) 1-1 首领：Lv1 诸葛亮站在首领身边 12 秒，首领要掉血
+    const r2 = await p.evaluate(async ([G0, C]) => {
+      const s = eval(G0), pl = s.player, wait = ms => new Promise(r => setTimeout(r, ms)), w = pl.weapons[0]; eval(C); pl.damageImmune = true; w.level = 1; w.cooldownLeft = 0;
+      s.spawnBoss(); const boss = s.boss; if (!boss) return { boss: false }; boss.sprite.setPosition(pl.x + 150, pl.y); boss.stunUntil = 1e12; const hp0 = boss.hp, t0 = s.combatNow;
+      while (s.combatNow - t0 < 12000 && boss.active) await wait(50);
+      const lost = hp0 - boss.hp; return { boss: true, name: boss.def?.name ?? boss.kind, lostPct: +(lost / boss.maxHp * 100).toFixed(1), dps: Math.round(lost / ((s.combatNow - t0) / 1000)) };
+    }, [G, CLEAR]);
+    ck('诸葛亮：Lv1 打 1-1 首领 12 秒有明显伤害（审查基线 1-1 首领掉血 0%）', r2.boss && r2.lostPct >= 5, r2);
+    // 3) 谋略满层 2：两次烧到 3 人以上的战旗后，下一面战旗强化（范围 +25%、灼烧）
+    const r3 = await p.evaluate(async ([G0, MK0, C]) => {
+      const s = eval(G0), pl = s.player, mk = eval(MK0), wait = ms => new Promise(r => setTimeout(r, ms)), w = pl.weapons[0]; eval(C); await wait(300); for (const e of s.enemies) if (e.active && e.kind === 'boss') e.deactivate();
+      pl.passive.reset('zhuge', s.combatNow); for (let i = 0; i < 5; i++) mk(pl.x + 100 + (i % 2) * 20, pl.y - 30 + i * 15);
+      const max = pl.passive.snapshot(s.combatNow).maxStacks, tr0 = pl.passive.snapshot(s.combatNow).triggers, seen = [];
+      for (let k = 0; k < 3; k++) { w.cooldownLeft = 0; await wait(700); seen.push(pl.passive.snapshot(s.combatNow).stacks); }
+      return { max, seen, triggered: pl.passive.snapshot(s.combatNow).triggers - tr0, label: pl.passive.label(s.combatNow) };
+    }, [G, MK, CLEAR]);
+    ck('诸葛亮：谋略满 2 层（HUD 2/2），第三面战旗强化', r3.max === 2 && r3.seen[0] === 1 && r3.seen[1] === 2 && r3.triggered === 1, r3);
+  }
   await p.close();
 }
 ck('无报错', errors.length === 0, errors.slice(0, 4));

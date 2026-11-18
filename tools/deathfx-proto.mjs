@@ -4,7 +4,8 @@ import { chromium } from 'playwright';
 import fs from 'node:fs';
 const base = process.env.BASE ?? 'http://127.0.0.1:5260/', out = 'assets/review/deathfx', what = process.argv[2] ?? 'all';
 fs.mkdirSync(out, { recursive: true });
-const MODES = [['base', ''], ['a', '&deathfx=a'], ['b', '&deathfx=b'], ['c', '&deathfx=c']];
+// 2026-11-18 B 已定稿成默认：对照组用 ?deathfx=off（关闭），b 不带参数；a / c 只留调试
+const MODES = process.env.MODES ? JSON.parse(process.env.MODES) : [['base', '&deathfx=off'], ['a', '&deathfx=a'], ['b', ''], ['c', '&deathfx=c']];
 const url = q => `${base}?dev=1&autostart=1&stage=1&layout=desktop${q}`;
 const ready = async p => { await p.waitForFunction(() => window.__game?.scene.getScene('GameScene')?.player && window.__game.scene.getScene('GameScene').__DEV_ACTIONS, null, { timeout: 180000 }); await p.waitForTimeout(800);
   await p.evaluate(() => { const s = window.__game.scene.getScene('GameScene'); s.__DEV_ACTIONS.closePopup?.(); s.player.damageImmune = true; s.player.xpNext = 1e9; s.spawnTimer = s.eliteTimer = 1e9; for (const e of s.enemies) if (e.active && !e.isSupplySlot) { e.hp = 0; e.deactivate(); } s.legion?.allies?.forEach?.(a => { a.active = false; }); }); };

@@ -1,4 +1,6 @@
 import {playMenuMusic} from '../systems/Music';
+import {homeCommand} from '../ui/HomeCommand';
+import {lqPanel} from '../ui/LacquerKit';
 import Phaser from 'phaser';
 import {W,H,worldText,worldButton,worldShell,panel,worldAssets,releaseWorldArt} from '../world/WorldUI';
 import {loadWorld,worldUnlocked,recruitReserve,recruitCost,barracksLevel,troopUnlockLevel} from '../world/WorldStore';
@@ -38,7 +40,9 @@ export class CityRecruitScene extends Phaser.Scene{
   this.status=worldText(this,D?220:24,D?24:66,'',D?14:13,'#cfdcc6').setWordWrapWidth(D?W-244:W-48).setName('reserve-status');
   this.notice=worldText(this,D?220:24,D?48:110,'',D?13:12,'#d5c5a2').setWordWrapWidth(D?W-244:W-48).setName('reserve-notice');
   if(!D)this.notice.setVisible(false);
-  worldButton(this,W/2,H-(D?30:62),'返回义军营寨',()=>this.scene.start('CityScene'),240).image.setName('reserve-home');this.render();
+  // 2026-11-17 用户批准 UI 审查 B：电脑版卡片换漆底描金、按钮换水墨（原绿木纹卡 + 漆金方钮）
+  if(D){const back=homeCommand(this,W/2,H-30,240,42,'返回义军营寨');back.hit.setName('reserve-home').on('pointerdown',()=>this.scene.start('CityScene'));}
+  else worldButton(this,W/2,H-(D?30:62),'返回义军营寨',()=>this.scene.start('CityScene'),240).image.setName('reserve-home');this.render();
   // 圆框 Q 版胸像（与战地招募卡一致；Q 版缺的兵种先用 v2 胸像过渡）：加载完重绘
   loadTroopPortraits(this,()=>this.render(),true);}
  /** 「下」行四帧里双脚最并拢的一帧（脚底一带横向跨度最小）作为站姿；读像素失败就用第 0 帧。 */
@@ -70,7 +74,7 @@ export class CityRecruitScene extends Phaser.Scene{
   const gap=12,x0=20,y0=78,cw=(W-x0*2-gap*3)/4,ch=186;
   TROOP_KINDS.forEach((kind,i)=>{
    const def=TROOPS[kind],x=x0+(i%4)*(cw+gap),y=y0+Math.floor(i/4)*(ch+gap),[tag,note]=ROLES[kind],have=s.reserve[kind]??0,cost=recruitCost(kind,s);
-   const frame=panel(this,x+cw/2,y+ch/2,cw,ch).setName(`reserve-card-${kind}`);
+   const frame=this.add.graphics().setName(`reserve-card-${kind}`);lqPanel(frame,x,y,cw,ch,{glow:false});
    // 形象：左侧圆框胸像（与战地招募卡同款）
    const need=troopUnlockLevel(kind),locked=barracksLevel(s)<need;
    const icon=troopBadge(this,kind,x+57,y+ch/2-2,46,{walkKey:v2Key(kind),walkFrame:'stand',dim:locked}).setName(`reserve-badge-${kind}`);
@@ -81,9 +85,9 @@ export class CityRecruitScene extends Phaser.Scene{
    const sub=worldText(this,tx,y+62,note,12,'#bfcab6').setWordWrapWidth(tw);
    const stock=worldText(this,tx,y+90,`后备 ${have} 人`,13,have?'#e9dcc0':'#9da592').setName(`reserve-have-${kind}`);
    const price=worldText(this,tx,y+110,`${cost} 军粮 / 人`,13,s.provisions>=cost?'#e8cf8f':'#d4887a').setName(`reserve-cost-${kind}`);
-   const btn=worldButton(this,tx+tw/2,y+ch-28,locked?`军营 Lv.${need} 解锁`:'招募 1 人',()=>{if(!locked)this.buy(kind);},tw);btn.image.setName(`reserve-buy-${kind}`);
-   if(locked){btn.image.disableInteractive().setAlpha(.5);btn.text.setAlpha(.8).setFontSize(15).setName(`reserve-lock-${kind}`);frame.setTint(0x6a6a6a);[title,role,sub,stock,price].forEach(o=>o.setColor("#8c8a80"));}
-   this.content!.add([frame,icon,title,role,sub,stock,price,btn.image,btn.text]);
+   const btn=homeCommand(this,tx+tw/2-4,y+ch-28,tw-18,38,locked?`军营 Lv.${need} 解锁`:'招募 1 人',!locked,!locked,15);btn.hit.setName(`reserve-buy-${kind}`);if(!locked)btn.hit.on('pointerdown',()=>this.buy(kind));
+   if(locked){btn.caption.setName(`reserve-lock-${kind}`);frame.setAlpha(.6);[title,role,sub,stock,price].forEach(o=>o.setColor("#8c8a80"));}
+   this.content!.add([frame,icon,title,role,sub,stock,price,btn.g,btn.caption,btn.hit]);
   });
  }
  private buy(kind:TroopKind){this.message=recruitReserve(kind).message;this.render();}

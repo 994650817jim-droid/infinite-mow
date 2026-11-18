@@ -20,7 +20,7 @@ import {stableUnlocked} from '../systems/ItemStore';
 import {CHARACTERS,type CharacterId} from '../data/characters';
 import {uiSfx} from '../systems/Sfx';
 import {checkWorld} from '../systems/Achievements';
-import {loadWorld,saveWorld,worldUnlocked,storageUnavailable,incompatibleSave,townUpgrade,granaryLevy,researchTech,townProgress,stableCapacity,drillInfo,trainTroops,cityLevels} from '../world/WorldStore';
+import {loadWorld,saveWorld,worldUnlocked,ensureStableBuilt,storageUnavailable,incompatibleSave,townUpgrade,granaryLevy,researchTech,townProgress,stableCapacity,drillInfo,trainTroops,cityLevels} from '../world/WorldStore';
 import {cityIncome} from '../data/cityBuildings';
 import {CAMP_LOCK,TOWN_BUILDINGS,FOCUS_NAME,FOCUS_INCOME,FOCUS_CHANGE_COST,CITY_SIZE,CITY_TITLE,HALL_UPGRADE,nextCost,buildBlockers,buildingOpen,citySize,focusOpen,levelOf,costText,incomeText,townArtLevel,type TownBuildingId,type TownState,type CityFocus,type TownProgress} from '../town/TownData';
 import {TECHS,TECH_IDS,BRANCH_NAME,BRANCH_ORDER,techBlockers,techTotals,type TechBranch} from '../data/tech';
@@ -30,6 +30,7 @@ import {QUALITIES} from '../data/items';
 import {PANO_W,PANO_H,CITY_SLOTS,LEVEL_SCALE,CITY_BG_SIZES,CITY_ART_LEVELS,ART_ALIAS} from '../town/CityLayout';
 import {cityById,TIER_NAME} from '../world/WorldCities';
 import {CampLife,loadCampLife,CAMP_ART_IDS} from '../town/CampLife';
+import {MountGuide} from '../systems/MountGuide';
 import {campTalkStrip} from '../systems/Story';
 import {followersFor,heroOwned} from '../systems/RosterStore';
 import {addMainMenuButton} from '../ui/MainMenuButton';
@@ -72,6 +73,8 @@ export class CityScene extends Phaser.Scene {
   const keys=this.registry.get('battleTextureKeys') as string[]|undefined;
   if(keys){for(const key of keys)if(this.textures.exists(key))this.textures.remove(key);this.registry.remove('battleTextureKeys');this.registry.set('battleReady',false);}
   saveWorld();
+  // 马厩随坐骑开放：第一章通关后营中自动设 1 级马厩（WorldStore.ensureStableBuilt），刚建成时提示一次
+  const stableNew=ensureStableBuilt(stableUnlocked());
   try{localStorage.setItem('im_home_seen','1');}catch{/* 存储不可用 */}
   // 全景（最底层）
   this.pano=this.add.container(0,0).setDepth(-5);
@@ -102,7 +105,12 @@ export class CityScene extends Phaser.Scene {
   if(saved)this.scrollTo(saved.sx,saved.sy,false);else this.scrollTo(hall.x*this.k-this.vr.w/2,PANO_H*this.k-this.vr.h,false);
   this.refresh();
   if(!this.introSeen())this.time.delayedCall(250,()=>this.openIntro());
+  if(stableNew)this.time.delayedCall(400,()=>this.toast('营中已设马厩 · 点马厩换马、看已有的马'));
+  // 坐骑引导（第一次有马：马厩 → 骑乘 → 效果说明），只出一次，设置「重看新手引导」可重看
+  this.mountGuide=MountGuide.maybeStart(this,()=>{let h='zhaoyun';try{h=localStorage.getItem('im_last_hero')||h;}catch{/* 存储不可用 */}return (CHARACTERS.some(c=>c.id===h)?h:'zhaoyun') as CharacterId;});
  }
+ /** 坐骑引导（测试读）。 */
+ mountGuide?:MountGuide;
  private boonText?:Phaser.GameObjects.Text;
  private openPreparation(){if(this.registry.get('battleReady'))this.scene.start('MenuScene');else{this.registry.set('loadBattle',true);this.scene.start('BootScene');}}
  private anyModal(){return this.children.list.some(o=>(o as unknown as {depth:number}).depth>=600);}
@@ -300,7 +308,7 @@ export class CityScene extends Phaser.Scene {
   if(this.textures.exists('item_icons'))open();else{this.load.atlas('item_icons','assets/items/item-icons.webp','assets/items/item-icons.json');this.load.once('complete',open);this.load.start();}
  }
  /** 把全景平移到某座建筑。 */
- private focusOn(id:TownBuildingId){const sl=CITY_SLOTS[citySize(loadWorld().town) as 1|2|3][id];this.scrollTo(sl.x*this.k-this.vr.w/2,sl.y*this.k-this.vr.h*.62);}
+ focusOn(id:TownBuildingId){const sl=CITY_SLOTS[citySize(loadWorld().town) as 1|2|3][id];this.scrollTo(sl.x*this.k-this.vr.w/2,sl.y*this.k-this.vr.h*.62);}
 
  /** 讲武堂：三条分支分页，每页列出该分支的科技（已研究 / 可研究 / 缺军粮 / 未解锁）。 */
  /** 讲武堂 · 战功换武学残卷（2026-11-17 用户：残卷去建筑手动换）：每 MERIT.perScroll 战功换 1 张，可选数量。 */

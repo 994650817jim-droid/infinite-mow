@@ -155,7 +155,7 @@ for (const layout of ['mobile', 'desktop']) {
       blds: c.hits.map(h => h.name), recruit: b('city-recruit'), grainBox: b('city-grain'), boon: b('city-boon'), mapBtn: b('city-map') }; });
   ck(`${layout}：营寨只剩「天下地图」一个按钮（讲武堂 / 出征 / 招募 / 招贤馆都改为点建筑或走天下地图）`, ui.nav.join() === 'true,false,false,false,false,false,false,false', ui.nav);
   ck(`${layout}：顶部显示军粮与扩建提示`, ui.grain === '军粮 800' && ui.hint.includes('占领一座城镇'), [ui.grain, ui.hint]);
-  ck(`${layout}：全景只画营寨阶段的建筑`, ui.blds.sort().join() === 'bld-academy,bld-barracks,bld-farm,bld-hall,bld-talent', ui.blds);
+  ck(`${layout}：全景只画营寨阶段的建筑`, ui.blds.sort().join() === 'bld-academy,bld-barracks,bld-farm,bld-hall,bld-stable,bld-talent', ui.blds); // 11-18：第一章通关（坐骑开放）营中自动设 1 级马厩
   const overlap = (a, c) => a && c && a.x < c.x + c.width && c.x < a.x + a.width && a.y < c.y + c.height && c.y < a.y + a.height;
   ck(`${layout}：「天下地图」按钮不与军粮文字相叠`, !overlap(ui.mapBtn, ui.grainBox), [ui.mapBtn, ui.grainBox]);
   await p.screenshot({ path: `${out}/city-${layout}.png` });

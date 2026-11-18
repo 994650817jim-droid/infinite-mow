@@ -71,6 +71,7 @@ import { getChapter, getBattleChapter, chapterBossTime, type ChapterDef } from '
 import { BattleFeedback } from '../systems/BattleFeedback';
 import { LubuBoss } from '../systems/LubuBoss';
 import { ZhangjiaoBoss } from '../systems/ZhangjiaoBoss';
+import { MountRideHint } from '../systems/MountGuide';
 import { BOSS_OLD, type BossDebug } from '../systems/BossKit';
 import { Enemy } from '../entities/Enemy';
 import { Player } from '../entities/Player';
@@ -332,6 +333,8 @@ export class GameScene extends Phaser.Scene {
   protected lubu: LubuBoss | null = null;
   /** 张角重设计样板（?boss=old 回到旧版）。 */
   protected zhangjiao: ZhangjiaoBoss | null = null;
+  /** 战斗里第一次骑马的操作提示（测试读）。 */
+  mountHint?: MountRideHint;
   /** 首领招式框架（第一章张梁 / 张宝等，配置见 data/bossMoves.ts）。 */
   moveset: BossMoveset | null = null;
   /** 已有专属控制器的骑马首领（吕布、华雄）的坐骑：半血随 boss-phase 坠马。 */
@@ -716,7 +719,7 @@ export class GameScene extends Phaser.Scene {
     this.shieldBars=new ShieldBars(this);this.events.once('shutdown',()=>{this.shieldBars?.clear();this.shieldBars=null;this.objective?.clear();this.objective=null;this.objectiveText=undefined;});
     this.setupObjective();
     // 坐骑：马厩里给该武将分配的马（第一章通关后马厩开放；换马只在休整时，下一关出征生效）
-    {const horse=heroHorse(this.runConfig.character);this.mount=horse?new HeroMount({scene:this,player:this.player,enemies:this.enemies,hit:(e,d,now)=>this.hitEnemy(e,d,now,'melee',false,false),notice:t=>this.showGrowthNotice(t)},{base:horse.id,name:horse.name},this.runConfig.character,this.player.growth.gear.specials.includes('hubao')?{trampleMul:RELIC.hubaoTrample,remountMs:RELIC.hubaoRemountMs}:{}):null;this.player.mountGuard=this.mount?(n,now)=>this.mount?.guard(n,now)??n:undefined;this.events.once('shutdown',()=>{this.mount?.clear();this.mount=null;});}
+    {const horse=heroHorse(this.runConfig.character);this.mount=horse?new HeroMount({scene:this,player:this.player,enemies:this.enemies,hit:(e,d,now)=>this.hitEnemy(e,d,now,'melee',false,false),notice:t=>this.showGrowthNotice(t)},{base:horse.id,name:horse.name},this.runConfig.character,this.player.growth.gear.specials.includes('hubao')?{trampleMul:RELIC.hubaoTrample,remountMs:RELIC.hubaoRemountMs}:{}):null;this.player.mountGuard=this.mount?(n,now)=>this.mount?.guard(n,now)??n:undefined;this.mountHint=MountRideHint.maybeShow(this,!!this.mount);this.events.once('shutdown',()=>{this.mount?.clear();this.mount=null;});}
     this.itemDrops=new ItemDrops(this,this.player,this.itemTier(),()=>this.elapsed,()=>this.isFinalBoss(),()=>this.sfx.play('pickup'),()=>this.bossRelicKey());this.itemDrops.deferBossRelic=true; // 首领遗珍由首领宝箱发（BossChest）
     this.relics=new BossRelics({scene:this,player:this.player,enemies:()=>this.enemies,hit:(e,d,now)=>{this.hitEnemy(e,d,now,'melee',false,false);},notice:t=>this.showGrowthNotice(t)},this.player.growth.gear.specials,this.combatNow);
     this.syncRelicShips();

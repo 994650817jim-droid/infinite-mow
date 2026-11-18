@@ -172,6 +172,7 @@ assets/raw/*
 !/tools/test-yiling-art.mjs
 !/tools/test-beifa-full.mjs
 !/tools/test-yiling-art.mjs
+!/tools/test-troop-deaths.mjs
 !/tools/test-tutorial.mjs
 !/tools/test-boss-moves.mjs
 !/tools/test-quit-rollback.mjs

@@ -49,6 +49,8 @@ export interface MidSiegeHost {
 }
 
 type Box = { left: number; right: number; top: number; bottom: number };
+/** 城墙铺法（像素为世界坐标）：段距（< 段宽，互相压住接缝）、城门可见半宽、压进城门的量、伸出场地的长度、墙脚阴影、民房离城墙的距离、城门血量字（门前地上，不跑到顶部 HUD 底下）。 */
+const WALL = { segStep: 196, gateHalfVis: 124, gateOverlap: 14, beyond: 520, shadowBands: 8, shadowAlpha: .42, houseGap: 300, gateLabelDy: 62, moatFlow: 30 } as const;
 const ART = { walls: 'siege_mid_walls', gateFx: 'siege_mid_gatefx', ram: 'siege_mid_ram', street: 'siege_mid_street', hall: 'siege_mid_hall' } as const;
 /** v2 图集帧（4×2）：城防 0 城墙段 1 城门 2 城门破 3 箭楼 4 箭楼毁 5 墩台 6 残墙 7 辕门；冲车 0–3 撞门 4 打坏 5 残骸 6 我方大旗 7 我方营帐；
  *  巷战 0 民房 1 两层民房 2 店铺 3 粮仓 4 兵营 5 路障 6 屋脊 7 水井；府衙 0 大堂 1 台阶 2 回廊 3 石狮 4 内城门 5 帅旗 6 香炉 7 照壁 */
@@ -68,7 +70,7 @@ export class SiegeMidCity {
   /** 小城木门 / 大城瓮城内门（可砍） */
   private woodGate: Target | null = null; private innerGate: Target | null = null;
   /** 大城护城河：吊桥是否放下、两根绳索 */
-  bridgeDown = false; private ropes: Target[] = []; private bridgeBox: Box | null = null; private bridgeImg?: Phaser.GameObjects.Image; private ropeLabel?: Phaser.GameObjects.Text;
+  bridgeDown = false; private moatWater?: Phaser.GameObjects.TileSprite; private ropes: Target[] = []; private bridgeBox: Box | null = null; private bridgeImg?: Phaser.GameObjects.Image; private ropeLabel?: Phaser.GameObjects.Text;
   /** 大城瓮城：滚木 */
   private logs: Log[] = []; private logAt = 0; private barbVolleyAt = 0; private barbGateBox: Box | null = null;
   gateHp: number = M.outside.gate.hp;
@@ -124,14 +126,18 @@ export class SiegeMidCity {
     this.box({ left: o.gate.halfW, right: a.right, top: wy - 30, bottom: wy + 20 });
     this.gateBox = this.box({ left: -o.gate.halfW, right: o.gate.halfW, top: wy - 30, bottom: wy + 20 });
     // 城墙：v2 城墙段横向拼接；缺图用汜水关木栅（第 3 帧）过渡
-    const segW = 220;
-    for (let x = a.left + segW / 2; x < a.right; x += segW) if (Math.abs(x) > o.gate.halfW + 60)
-      this.art(x, wy + 24, [ART.walls, 0], ['sishui_props_refined', 3], segW + 6, this.has(ART.walls) ? (segW + 6) * .55 : segW * .6);
+    // 城墙连续成一条（用户 11-17「这里的城墙没做好」）：从城门两侧往外铺，段与段互相压一点盖住接缝，伸出场地两边；城门压在最上面盖住两头
+    const segW = 226, step = WALL.segStep, from = WALL.gateHalfVis + step / 2 - WALL.gateOverlap;
+    for (const side of [-1, 1]) for (let i = 0, x = side * from; Math.abs(x) < Math.max(-a.left, a.right) + WALL.beyond; i++, x += side * step)
+      this.art(x, wy + 24, [ART.walls, 0], ['sishui_props_refined', 3], segW, this.has(ART.walls) ? segW * .55 : segW * .6).setFlipX(i % 2 === 1);
+    // 墙脚阴影：墙根一条柔和的暗带（贴地，压在地面上、人物之下），城墙不再像贴在地上
+    { const g = this.h.scene.add.graphics().setDepth(DEPTH.ground + 2); this.objects.push(g); const L = a.left - WALL.beyond, R = a.right + WALL.beyond;
+      for (let k = 0; k < WALL.shadowBands; k++) g.fillStyle(0x1a120a, WALL.shadowAlpha * (1 - k / WALL.shadowBands)).fillRect(L, wy + 14 + k * 4, R - L, 4); }
     // 城门用倒塌序列帧的第 1 帧（完好），破门时直接往下播，最后停在敞开的门洞
     this.gateImg = this.has(ART.gateFx) ? this.img(0, wy + 34, ART.gateFx, 0, 300, 300) : this.art(0, wy + 30, [ART.walls, 1], ['sishui_props_refined', 0], 260);
     // 小城：木门（可砍目标，贴在城门洞前）；城门图压暗成木色
     if (!this.prof.ram) { this.gateImg.setTint(0xb08a5a); const e = this.h.spawnTarget?.(0, wy + 34, this.gateHp, 200, 'yellow_props', 13) ?? null; if (e) { e.sprite.setAlpha(0); this.woodGate = { e, life: e.spawnId, x: 0, y: wy + 34 }; } }
-    this.gateLabel = worldText(this.h.scene, 0, wy - 210, '', 15, '#ffe1a0').setOrigin(.5).setDepth(36).setStroke('#1a120b', 4); this.objects.push(this.gateLabel);
+    this.gateLabel = worldText(this.h.scene, 0, wy + WALL.gateLabelDy, '', 15, '#ffe1a0').setOrigin(.5).setDepth(36).setStroke('#1a120b', 4); this.objects.push(this.gateLabel);
     // 箭楼：可摧毁目标（宿主用营寨物件生成，碰撞 / 命中沿用）
     for (const t of this.prof.towers) { const e = this.h.spawnTower(t.x, wy + 26); if (e) { this.towers.push({ e, life: e.spawnId, x: t.x }); if (this.has(ART.walls)) e.sprite.setTexture(ART.walls, 3).setOrigin(.5, 1).setDisplaySize(150, 150); } }
     // 我方营地（冲车在此领取）
@@ -152,9 +158,12 @@ export class SiegeMidCity {
     this.box({ left: a.left, right: -bw, top: m.top, bottom: m.bottom });
     this.box({ left: bw, right: a.right, top: m.top, bottom: m.bottom });
     this.bridgeBox = this.box({ left: -bw, right: bw, top: m.top, bottom: m.bottom });
-    // 水面：江岸地面压暗染青作护城河（v2 护城河图到之前的过渡）
-    const water = sc.add.tileSprite(a.left, m.top, a.right - a.left, m.bottom - m.top, sc.textures.exists('ground_v2_jiang') ? 'ground_v2_jiang' : '__WHITE').setOrigin(0, 0).setTint(0x6c97a3).setAlpha(.88).setDepth(DEPTH.ground + 2);
-    this.objects.push(water);
+    // 水面：用地形层的 v2 手绘水面（terrain/water.png，会流动）+ 两岸土坡；缺图时退回江岸地面压暗染青
+    const L0 = a.left - WALL.beyond, W0 = a.right - a.left + WALL.beyond * 2, v2 = sc.textures.exists('terrain_water');
+    if (v2) { const bank = sc.add.tileSprite(L0, m.top - 14, W0, m.bottom - m.top + 30, sc.textures.exists('ground_v2_jiang') ? 'ground_v2_jiang' : '__WHITE').setOrigin(0, 0).setTint(0x5a4a30).setAlpha(.92).setDepth(DEPTH.ground + 1); this.objects.push(bank); }
+    const water = sc.add.tileSprite(L0, m.top, W0, m.bottom - m.top, v2 ? 'terrain_water' : sc.textures.exists('ground_v2_jiang') ? 'ground_v2_jiang' : '__WHITE').setOrigin(0, 0).setDepth(DEPTH.ground + 2);
+    if (v2) water.setTileScale(.5); else water.setTint(0x6c97a3).setAlpha(.88);
+    this.objects.push(water); this.moatWater = v2 ? water : undefined;
     // 吊桥（收起：城门前一道木栅挡着；放下：木板桥）
     this.bridgeImg = this.img(0, m.bottom + 6, 'yellow_props', 10, bw * 2.2, 90);
     for (const r of m.ropes) {
@@ -170,7 +179,9 @@ export class SiegeMidCity {
     this.bridgeDown = true;
     if (this.bridgeBox) { const i = this.h.footprints.indexOf(this.bridgeBox); if (i >= 0) this.h.footprints.splice(i, 1); this.bridgeBox = null; }
     const m = L.moat;
-    this.bridgeImg?.setFrame(27).setDisplaySize(m.bridgeHalfW * 2.2, (m.bottom - m.top) + 50).setOrigin(.5, 1).setPosition(0, m.bottom + 18).setDepth(DEPTH.ground + 3);
+    // 放下的吊桥：地形层的 v2 木桥（横跨护城河，竖着摆）；缺图沿用营寨物件
+    if (this.h.scene.textures.exists('terrain_bridge')) this.bridgeImg?.setTexture('terrain_bridge').setOrigin(.5).setRotation(Math.PI / 2).setDisplaySize((m.bottom - m.top) + 70, m.bridgeHalfW * 2.4).setPosition(0, (m.top + m.bottom) / 2).setDepth(DEPTH.ground + 3);
+    else this.bridgeImg?.setFrame(27).setDisplaySize(m.bridgeHalfW * 2.2, (m.bottom - m.top) + 50).setOrigin(.5, 1).setPosition(0, m.bottom + 18).setDepth(DEPTH.ground + 3);
     playSheet(this.h.scene, 'fx_collapse_dust', 0, (m.top + m.bottom) / 2, { size: 220, depth: DEPTH.fx, ms: 600 });
     this.h.scene.cameras.main.shake(220, .005); this.h.sfx('propBreak');
     this.ropeLabel?.setText('');
@@ -267,7 +278,8 @@ export class SiegeMidCity {
     this.box({ left: a.right, right: a.right + 520, top: a.top, bottom: M.outside.wallY - 30 });
     this.innerGateBox = this.box({ left: a.left, right: a.right, top: s.innerGateY - 40, bottom: s.innerGateY });
     const houseW = 230;
-    for (let y = M.outside.wallY - 80; y > s.innerGateY + 140; y -= 180) for (const side of [-1, 1]) {
+    // 民房从城墙后 WALL.houseGap 起盖（城门内留一片空场）：在城外看不到民房「坐在」城墙上
+    for (let y = M.outside.wallY - WALL.houseGap; y > s.innerGateY + 140; y -= 180) for (const side of [-1, 1]) {
       const near = s.points.some(p => Math.abs(p.y - y) < 120 && Math.sign(p.x) === side); if (near) continue;
       const f = (Math.abs(Math.round(y / 180)) + (side > 0 ? 1 : 0)) % 3;
       this.art(side * (a.right + houseW / 2 - 6), y, [ART.street, f], ['sishui_props_refined', 2], houseW, this.has(ART.street) ? houseW * .9 : houseW);
@@ -655,7 +667,7 @@ export class SiegeMidCity {
   update(dt: number) {
     const now = this.h.now();
     if (this.phase === 'outside') {
-      this.updateVolley(now); this.updateRam(dt, now); this.updateMoat(now);
+      this.updateVolley(now); this.updateRam(dt, now); this.updateMoat(now); if (this.moatWater) this.moatWater.tilePositionX -= WALL.moatFlow * dt;
       // 小城木门：血量跟着可砍目标走
       const wg = this.woodGate; if (wg && wg.e.active && wg.e.spawnId === wg.life) this.gateHp = Math.ceil(wg.e.hp);
       this.gateLabel?.setText(this.gateHp > 0 ? `${this.prof.ram ? '城门' : '木门'} ${Math.ceil(this.gateHp)}/${this.gateMax}` : '');

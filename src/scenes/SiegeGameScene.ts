@@ -185,6 +185,13 @@ export function siegeGameSceneClass(Base: typeof GameScene) {
       return e;
     }
     private scriptedSpawn<T>(f: () => T): T { this.scripted = true; try { return f(); } finally { this.scripted = false; } }
+    /** 横幅（「冲车被毁」等）出现时，顶部目标行 / 守军行先淡出，免得叠字。 */
+    protected showWaveBanner(text: string, danger = false, captionText?: string) {
+      super.showWaveBanner(text, danger, captionText);
+      const lines = [this.goalText, this.garrisonText].filter((t): t is Phaser.GameObjects.Text => !!t?.active); if (!lines.length) return;
+      this.tweens.killTweensOf(lines); for (const t of lines) t.setAlpha(0);
+      this.tweens.add({ targets: lines, alpha: 1, delay: 2600, duration: 300 });
+    }
     protected spawnGem(x: number, y: number, value: number) { if (!this.noLoot) super.spawnGem(x, y, value); }
     /** 测试用：中城控制器。 */
     get siegeMid() { return this.mid ?? null; }

@@ -23,11 +23,11 @@ const helpers = `
 // 1) 暴击顿帧 + 冷却
 const r1 = await p.evaluate(`(async () => { ${helpers}
   s.hitFeel.reset(); for (const w of pl.weapons) w.cooldownLeft = 1e9; await wait(400); const e = mk();
-  const st0 = s.hitFeel.stats.critStops; hit(e, 10, true); const scaleNow = s.hitFeel.scale(); const st1 = s.hitFeel.stats.critStops;
+  const st0 = s.hitFeel.stats.critStops, tHit = performance.now(); hit(e, 10, true); const scaleNow = s.hitFeel.scale(tHit + 5), stopMs = Math.round(s.hitFeel.stopUntil - tHit); /* 按出手时刻判定（第一次建暴击字可能超过 32 毫秒） */ const st1 = s.hitFeel.stats.critStops;
   await wait(120); hit(e, 10, true); const st2 = s.hitFeel.stats.critStops;
   await wait(700); hit(e, 10, true); const st3 = s.hitFeel.stats.critStops;
   hit(e, 10, false); const st4 = s.hitFeel.stats.critStops;
-  e.deactivate(); return { first: st1 - st0, within120ms: st2 - st1, after800ms: st3 - st2, nonCrit: st4 - st3, scaleNow }; })()`);
+  e.deactivate(); return { first: st1 - st0, within120ms: st2 - st1, after800ms: st3 - st2, nonCrit: st4 - st3, scaleNow, stopMs }; })()`);
 check('暴击触发顿帧（时间倍率降到 ≤0.1）', r1.first === 1 && r1.scaleNow <= .1, r1);
 check('顿帧冷却：0.12 秒内第二次暴击不再顿帧，0.8 秒后可再顿', r1.within120ms === 0 && r1.after800ms === 1 && r1.nonCrit === 0, r1);
 

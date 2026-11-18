@@ -144,11 +144,28 @@ interface Gem {
 
 interface DmgFx {
   crit: boolean;
+  /** 伤害数字样式（2026-11-17 用户：「造成伤害字体也改优化一下」）：普通 / 暴击 / 技艺法术 / 首领 / 治疗 / 部曲随行 */
+  kind: DmgKind;
   text: Phaser.GameObjects.Text;
+  /** 暴击时数字左侧的小「暴」字 */
+  tag?: Phaser.GameObjects.Text;
   life: number;
+  vx: number;
   vy: number;
   active: boolean;
 }
+type DmgKind = 'hit' | 'crit' | 'spell' | 'boss' | 'heal' | 'ally';
+/** 数字字体：粗黑体（小字号也清楚，不用书法体），深色描边 + 细投影。 */
+const DMG_FONT = '"Bahnschrift","Arial Black","Segoe UI Black","Helvetica Neue",Arial,sans-serif';
+const DMG_STYLE: Record<DmgKind, { size: number; color: string; stroke: string; sw: number }> = {
+  hit: { size: 15, color: '#f6e6bf', stroke: '#2a1608', sw: 3 },
+  crit: { size: 24, color: '#ffcf45', stroke: '#8c1c0a', sw: 4 },
+  spell: { size: 15, color: '#86e8f2', stroke: '#0c2f3c', sw: 3 },
+  boss: { size: 18, color: '#ffe9c4', stroke: '#3a1206', sw: 4 },
+  heal: { size: 15, color: '#8ff08a', stroke: '#123a10', sw: 3 },
+  ally: { size: 12, color: '#e6dcc4', stroke: '#2a1a0c', sw: 3 },
+};
+const DMG_LIFE = .62;
 
 interface CardView {
   bg: Phaser.GameObjects.Image;
@@ -277,6 +294,8 @@ export class GameScene extends Phaser.Scene {
   hitFeel!: HitFeel;
   bossStagger = new BossStagger();
   private lastHudReal = 0;
+  /** 治疗数字累加（见 create 里包的 player.heal） */
+  private healAcc = 0; private healShowAt = 0;
   /** 测试用：强制本次命中暴击 / 不暴击（null = 正常掷骰） */
   debugCrit: boolean | null = null;
   private readonly separationScratch: Enemy[] = [];
@@ -519,6 +538,10 @@ export class GameScene extends Phaser.Scene {
     this.artEffects = new ArtEffects(this);
 
     this.player = new Player(this, 0, 0);
+
+    // 治疗数字：主将实际回复的量累加，每 0.4 秒合成一个绿色「+n」（药、酒、吸血、信物回血都算）
+
+    { const pl = this.player, raw = pl.heal.bind(pl); this.healAcc = 0; pl.heal = (n: number) => { const h0 = pl.hp; raw(n); this.healAcc += Math.max(0, pl.hp - h0); }; }
     this.dragFx = undefined; this.flankFx = undefined; this.windFx = undefined; this.skirmishPuffAt = 0; this.env = null; this.envInit = false; this.terrain?.clear(); this.terrain = null; this.terrainInit = false; this.terrainNav = []; Ally.terrainMul = null; this.player && (this.player.terrainSpeedMul = 1);
     this.applyRunConfig(this.runConfig);
     this.worldCampaign=!preview&&!isChapterTestRun()&&this.registry.get('worldCampaign')===true;
@@ -539,7 +562,7 @@ export class GameScene extends Phaser.Scene {
     this.propItems = 0; this.supplies.onPropLoot = (kind, x, y) => this.propLoot(kind, x, y);
     // 兵装：开局读入该武将穿戴的道具加成（生命上限增加的部分补满）
     {const oldMax=this.player.maxHp;this.player.growth.gear=gearFor(this.runConfig.character);this.player.heal(this.player.maxHp-oldMax);}
-    this.followers=null;this.followerPassives=[];{const allow=worldUnlocked()&&(!isChapterTestRun()||new URLSearchParams(location.search).get('followers')==='1');const list=allow?followersFor(this.runConfig.character):[];if(list.length)this.followers=new FollowerSquad(this,this.player,list,(x,y,r)=>this.grid.query(x,y,r),(e,d,fire)=>this.hitEnemy(e,d,this.combatNow,fire?'fire':'melee',true,false),()=>this.player.growth.damageMultiplier(this.combatNow));}
+    this.followers=null;this.followerPassives=[];{const allow=worldUnlocked()&&(!isChapterTestRun()||new URLSearchParams(location.search).get('followers')==='1');const list=allow?followersFor(this.runConfig.character):[];if(list.length)this.followers=new FollowerSquad(this,this.player,list,(x,y,r)=>this.grid.query(x,y,r),(e,d,fire)=>this.hitEnemy(e,d,this.combatNow,fire?'fire':'melee',true,false),()=>this.player.growth.damageMultiplier(this.combatNow));if(this.followers)this.followers.onHitFx=(e,k,fx,fy)=>this.followerTemplateHitFx(e,k,fx,fy);}
     { const mode = readIffMode(); this.iff = mode ? new IffOverlay(this, mode, () => this.iffUnits()) : null; }
     // 震屏设置（强 / 弱 / 关，im_shake，见 systems/BattleSettings）：包一层主相机 shake，现有调用全部按设置缩放
     { const cam = this.cameras.main, orig = cam.shake.bind(cam);
@@ -852,6 +875,7 @@ export class GameScene extends Phaser.Scene {
     this.elapsed += dt;
     this.combatNow += dt * 1000;
     this.hitFeel.endFrame(); this.bossStagger.decay(dt);
+    if (this.combatNow >= this.healShowAt) { this.healShowAt = this.combatNow + 400; if (this.healAcc >= 1) { this.spawnDamageText(this.player.x, this.player.y - 56, Math.round(this.healAcc), false, true, 'heal'); this.healAcc = 0; } }
     time = this.combatNow;
     const move = this.readMove();
     this.relics?.sway(move, this.combatNow);
@@ -1614,6 +1638,13 @@ export class GameScene extends Phaser.Scene {
 
   /** 随行命中的受击特效 / 命中火花（主将原版的 refined_impact 与 art_fx；伤害按友军结算时原本会跳过）。每帧限额 FOLLOW.hitFxPerFrame。 */
   private followerHitBudget = { at: -1, n: 0 };
+  /** 无名随行（枪 / 刀 / 弓 / 谋）命中火花：按兵器出现成手绘命中图（刺 / 斩 / 箭 / 法术），与名将随行共用每帧限额。 */
+  followerTemplateHitFx(enemy: Enemy, kind: 'spear' | 'blade' | 'bow' | 'strategist', fromX: number, fromY: number): void {
+    const time = this.combatNow; if (this.followerHitBudget.at !== time) { this.followerHitBudget.at = time; this.followerHitBudget.n = 0; }
+    if (this.followerHitBudget.n >= FOLLOW.hitFxPerFrame) return; this.followerHitBudget.n++;
+    const src = kind === 'bow' ? 'arrow' : kind === 'strategist' ? 'fire' : 'melee', type = kind === 'spear' ? 'pierce' : kind === 'blade' ? 'slash' : kind === 'bow' ? 'arrow' : 'spell';
+    this.feedback.hit(enemy.x, enemy.y, Math.atan2(enemy.y - fromY, enemy.x - fromX), time, src, { type });
+  }
   followerHitFx(enemy: Enemy, fromX: number, fromY: number, time: number, source: 'melee' | 'arrow' | 'fire'): void {
     if (this.followerHitBudget.at !== time) { this.followerHitBudget.at = time; this.followerHitBudget.n = 0; }
     if (this.followerHitBudget.n >= FOLLOW.hitFxPerFrame) return; this.followerHitBudget.n++;
@@ -1777,7 +1808,7 @@ export class GameScene extends Phaser.Scene {
     this.damageDealt += damage;
     credit(damage);
     if (enemy.kind === 'boss') this.bossFeelHit(enemy, damage, crit, bossHpBefore, time);
-    this.spawnDamageText(enemy.x, enemy.y - enemy.radius, damage, crit, !fromAlly||enemy.kind==='boss');
+    this.spawnDamageText(enemy.x, enemy.y - enemy.radius, damage, crit, !fromAlly||enemy.kind==='boss', enemy.kind==='boss' ? 'boss' : fromAlly ? 'ally' : (!weaponHit || source === 'fire') ? 'spell' : 'hit');
     if (!fromAlly && weaponHit && this.player.growth.build.treasures.includes('blood_jade')) this.bloodJadeHeal(damage, time);
     if (!fromAlly && weaponHit) this.relics?.onWeaponHit(enemy, rawDamage, time);
     if(!fromAlly&&weaponHit){const tags=this.player.growth.build.tags();const vfx=buildVfx(this);const a=Math.atan2(enemy.y-this.player.y,enemy.x-this.player.x);if(tags.combo)vfx.emit('combo',enemy.x,enemy.y-8,time,42,a);if(crit&&tags.critical)vfx.emit('critical',enemy.x,enemy.y-8,time,48);if(tags.charge&&this.buildCombat.charged())vfx.emit('pure_charge',enemy.x,enemy.y-8,time,70,a);this.legion.command.onHit(enemy,time);this.controlBuild?.onHit(enemy,time);this.awakeningCombat?.onHit(enemy,rawDamage,crit,time,this.buildCombat.charged());this.buildCombat.onHit(enemy,rawDamage,crit,time);this.relicHits++;
@@ -1990,48 +2021,50 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  protected spawnDamageText(x: number, y: number, value: number, crit: boolean, priority=true): void {
+  /**
+   * 伤害 / 治疗数字（池化 40 个，同屏多时普通部曲数字先丢、暴击和主将优先）：
+   * 同一位置同类的数字合并累加；向上飘出一道小弧线后淡出；暴击先放大再落定，左侧带小「暴」字。
+   * kind 缺省按 crit / priority 推：暴击 → crit，主将 → hit，部曲随行 → ally。设置「伤害数字」全部 / 仅暴击 / 关。
+   */
+  protected spawnDamageText(x: number, y: number, value: number, crit: boolean, priority=true, kind?: DmgKind): void {
     { const dm = damageNumbers(); if (dm === 'off' || (dm === 'crit' && !crit)) return; } // 设置「伤害数字」
+    const k: DmgKind = crit ? 'crit' : kind ?? (priority ? 'hit' : 'ally');
     const crowded=this.legion.visibleCount>=60,limit=crowded?18:32;
-    const merged=this.dmgFx.find(f=>f.active&&f.crit===crit&&f.life>.25&&Math.hypot(f.text.x-x,f.text.y-y)<(crowded?44:22));
-    if(merged){merged.text.setText(String(Number(merged.text.text)+value));return;}
+    const merged=this.dmgFx.find(f=>f.active&&f.kind===k&&f.life>.25&&Math.hypot(f.text.x-x,f.text.y-y)<(crowded?44:26));
+    if(merged){const n=Number(merged.text.text.replace('+',''))+value;merged.text.setText(k==='heal'?'+'+n:String(n));if(k==='crit')merged.life=Math.max(merged.life,DMG_LIFE-.08);return;}
     const active=this.dmgFx.filter(f=>f.active);if(!crit&&!priority&&active.length>=limit)return;
     let fx = this.dmgFx.find((f) => !f.active);
     if(!fx&&(crit||priority)&&this.dmgFx.length>=40)fx=this.dmgFx.filter(f=>!f.crit).sort((a,b)=>a.life-b.life)[0];
     if (!fx) {
       if (this.dmgFx.length >= 40) return;
-      fx = {
-        crit,
-        text: this.add
-          .text(0, 0, '', { fontFamily: FONT, fontSize: crit ? HIT_FEEL.critFontPx + 'px' : '14px', color: crit ? HIT_FEEL.critColor : '#f5efe6', stroke: crit ? HIT_FEEL.critStroke : '#000000', strokeThickness: crit ? 4 : 0 })
-          .setOrigin(0.5)
-          .setDepth(DEPTH.dmgText),
-        life: 0,
-        vy: 0,
-        active: false,
-      };
+      fx = { crit, kind: k, text: this.add.text(0, 0, '', { fontFamily: DMG_FONT, fontStyle: 'bold', fontSize: '15px' }).setOrigin(0.5).setDepth(DEPTH.dmgText).setShadow(1, 2, '#000000', 2, true, true), life: 0, vx: 0, vy: 0, active: false };
+      fx.kind = '' as DmgKind; // 强制下面套用样式
       this.dmgFx.push(fx);
     }
-    if (fx.crit !== crit) {
-      fx.crit = crit;
-      fx.text.setStyle({ fontSize: crit ? HIT_FEEL.critFontPx + 'px' : '14px', color: crit ? HIT_FEEL.critColor : '#f5efe6', stroke: crit ? HIT_FEEL.critStroke : '#000000', strokeThickness: crit ? 4 : 0 });
-    }
+    if (fx.kind !== k) { const st = DMG_STYLE[k]; fx.kind = k; fx.text.setStyle({ fontSize: st.size + 'px', color: st.color, stroke: st.stroke, strokeThickness: st.sw }); }
+    fx.crit = crit;
+    if (crit) { fx.tag ??= this.add.text(0, 0, '暴', { fontFamily: FONT, fontStyle: 'bold', fontSize: '13px', color: '#fff2c0', backgroundColor: '#a3240c', padding: { x: 2, y: 0 } }).setOrigin(1, .5).setDepth(DEPTH.dmgText); fx.tag.setVisible(true).setAlpha(1); }
+    else fx.tag?.setVisible(false);
     fx.active = true;
-    fx.life = 0.55;
-    fx.vy = -52;
-    fx.text.setPosition(x, y).setText(String(value)).setAlpha(1).setVisible(true).setScale(crit ? 1.35 : 1);
+    fx.life = DMG_LIFE;
+    fx.vx = (Math.random() - .5) * (crit ? 30 : 40);
+    fx.vy = crit ? -78 : k === 'heal' ? -48 : -66;
+    fx.text.setPosition(x, y).setText(k === 'heal' ? '+' + value : String(value)).setAlpha(1).setVisible(true).setScale(crit ? 1.45 : 1);
   }
 
   protected updateDmgFx(dt: number): void {
     for (const fx of this.dmgFx) {
       if (!fx.active) continue;
       fx.life -= dt;
-      fx.text.y += fx.vy * dt;
-      fx.text.setAlpha(Math.max(0, fx.life / 0.55));
-      if (fx.crit && fx.life > .39) fx.text.setScale(1 + .35 * (fx.life - .39) / .16); // 暴击数字先放大再落定（前 0.16 秒）
+      fx.vy += 120 * dt; // 上飘逐渐减速，走一道小弧线
+      fx.text.x += fx.vx * dt; fx.text.y += fx.vy * dt;
+      const t = Math.max(0, fx.life / DMG_LIFE);
+      fx.text.setAlpha(Math.min(1, t * 2.2)); // 前半段不透明，后半段淡出
+      if (fx.crit && fx.life > DMG_LIFE - .16) fx.text.setScale(1 + .45 * (fx.life - (DMG_LIFE - .16)) / .16); // 暴击数字先放大再落定（前 0.16 秒）
+      if (fx.tag?.visible) fx.tag.setPosition(fx.text.x - fx.text.displayWidth / 2 - 2, fx.text.y).setAlpha(fx.text.alpha);
       if (fx.life <= 0) {
         fx.active = false;
-        fx.text.setVisible(false);
+        fx.text.setVisible(false); fx.tag?.setVisible(false);
       }
     }
   }

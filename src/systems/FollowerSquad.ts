@@ -31,7 +31,21 @@ import type { ItemInstance } from '../data/items';
  */
 type Query = (x: number, y: number, r: number) => Enemy[];
 type Hit = (enemy: Enemy, damage: number, fire: boolean) => void;
-interface Fx { kind: FollowerTemplate | 'arrow'; x: number; y: number; tx: number; ty: number; angle: number; at: number; until: number; hitAt?: number; damage?: number; owner?: Follower; scar?: boolean }
+interface Fx { kind: FollowerTemplate | 'arrow' | 'puff'; x: number; y: number; tx: number; ty: number; angle: number; at: number; until: number; hitAt?: number; damage?: number; owner?: Follower; scar?: boolean; img?: Phaser.GameObjects.Image }
+/**
+ * 无名随行（枪 / 刀 / 弓 / 谋）出手特效（2026-11-17 用户：「很多大众脸攻击特效要改一下」）：原来全是代码画的弧线 / 直线 / 圆，
+ * 改成复用现成手绘序列帧，按兵器区分、比名将招牌弱（小、淡、短）：
+ *  枪 = 月白横扫弧光 fx_flank_streak（冷钢蓝调）；刀 = 半月刀气 fx_drag_wave（暖白）；弓 = 箭矢贴图 arrow 飞行；
+ *  谋 = 火星聚拢 hero_small_paint 第 3 行 → 地火 fx_ground_fire；救起 = 星芒 fx_strike_glint。缺图时退回原来的代码画法。
+ */
+const FFX: Record<string, { key: string; frames: number; size: number; alpha: number; tint?: number; add: boolean; first?: number }> = {
+  spear: { key: 'fx_flank_streak', frames: 6, size: 118, alpha: .62, tint: 0xcfe0ff, add: true },
+  blade: { key: 'fx_drag_wave', frames: 6, size: 92, alpha: .7, add: true },
+  gather: { key: 'hero_small_paint', frames: 4, size: 96, alpha: .7, add: true, first: 12 },
+  fire: { key: 'fx_ground_fire', frames: 6, size: 92, alpha: .8, add: false },
+  puff: { key: 'fx_strike_glint', frames: 6, size: 48, alpha: .8, add: true },
+};
+const FX_CAP = 24;
 
 const QUALITY_POWER: Record<ItemQuality, number> = { white: 1, green: 1.15, blue: 1.3, purple: 1.5, orange: 1.6 };
 const TROOP_SHEET: Record<FollowerTemplate, string> = { spear: 'shu_spearman_walk_sheet', blade: 'shu_swordsman_walk_sheet', bow: 'shu_archer_walk_sheet', strategist: 'legion_medic_walk' };
@@ -142,6 +156,10 @@ export class Follower {
 export class FollowerSquad {
   readonly members: Follower[] = [];
   private readonly fx: Fx[] = [];
+  /** 出手特效图片池（同屏上限 FX_CAP，超出只出伤害不出图）。 */
+  private readonly fxPool: Phaser.GameObjects.Image[] = []; private fxLive = 0;
+  /** 命中火花（场景设置）：按兵器类型出现成的手绘命中图，弱于名将。 */
+  onHitFx?: (e: Enemy, kind: FollowerTemplate, fromX: number, fromY: number) => void;
   private readonly gfx: Phaser.GameObjects.Graphics;
   private readonly buf: Enemy[] = [];
   /** 统计（测试 / 平衡用）。 */
@@ -329,7 +347,7 @@ export class FollowerSquad {
     const a = Math.atan2(e.y - f.y, e.x - f.x);
     f.dir = Math.abs(Math.cos(a)) > Math.abs(Math.sin(a)) ? Math.cos(a) < 0 ? 'left' : 'right' : Math.sin(a) < 0 ? 'up' : 'down';
     f.play('attack', f.dir, now);
-    const deal = (x: Enemy, n: number, fire = false) => { this.hit(x, n, fire); this.stats.damage += n; this.stats.hits++; f.hits++; };
+    const deal = (x: Enemy, n: number, fire = false) => { const live = x.active; this.hit(x, n, fire); this.stats.damage += n; this.stats.hits++; f.hits++; if (live) this.onHitFx?.(x, f.template, f.x, f.y); };
     if (f.template === 'spear') {
       let k = 0; for (const x of this.query(f.x, f.y, TEMPLATES.spear.range)) { if (k >= 6) break; if (x.active && Math.hypot(x.x - f.x, x.y - f.y) <= TEMPLATES.spear.range) { deal(x, damage); k++; } }
       this.fx.push({ kind: 'spear', x: f.x, y: f.y, tx: 0, ty: 0, angle: a, at: now, until: now + 220 });
@@ -348,10 +366,20 @@ export class FollowerSquad {
     for (let i = this.fx.length - 1; i >= 0; i--) {
       const fx = this.fx[i], k = Math.min(1, (now - fx.at) / (fx.until - fx.at));
       if (fx.hitAt && now >= fx.hitAt && fx.damage !== undefined) {
-        let n = 0; for (const x of this.query(fx.tx, fx.ty, 48)) { if (n >= 8) break; if (x.active && Math.hypot(x.x - fx.tx, x.y - fx.ty) <= 48) { this.hit(x, fx.damage, true); this.stats.damage += fx.damage; this.stats.hits++; if (fx.owner) fx.owner.hits++; n++; } }
-        fx.hitAt = undefined;
+        let n = 0; for (const x of this.query(fx.tx, fx.ty, 48)) { if (n >= 8) break; if (x.active && Math.hypot(x.x - fx.tx, x.y - fx.ty) <= 48) { this.hit(x, fx.damage, true); this.stats.damage += fx.damage; this.stats.hits++; if (fx.owner) fx.owner.hits++; n++; if (n <= 2) this.onHitFx?.(x, 'strategist', fx.tx, fx.ty - 40); } }
+        fx.hitAt = undefined; this.dropImg(fx); // 火点：聚拢帧换成地火帧
       }
-      if (now >= fx.until) { this.fx.splice(i, 1); continue; }
+      if (now >= fx.until) { this.dropImg(fx); this.fx.splice(i, 1); continue; }
+      if (fx.kind === 'puff') { if (!this.paint(fx, 'puff', fx.x, fx.y, k, 0)) { g.lineStyle(4, 0xe8f2ff, .8 * (1 - k)); g.strokeCircle(fx.x, fx.y, 20 + 20 * k); } continue; }
+      if (fx.kind === 'spear' && this.paint(fx, 'spear', fx.x + Math.cos(fx.angle) * 20, fx.y - 14 + Math.sin(fx.angle) * 20, k, fx.angle)) continue;
+      if (fx.kind === 'blade' && this.paint(fx, 'blade', fx.x + Math.cos(fx.angle) * 30, fx.y - 16 + Math.sin(fx.angle) * 30, k, fx.angle)) continue;
+      if (fx.kind === 'arrow' && this.scene.textures.exists('arrow')) {
+        if (!fx.img) fx.img = this.takeImg('arrow');
+        fx.img?.setPosition(fx.x + (fx.tx - fx.x) * k, fx.y + (fx.ty - fx.y) * k).setRotation(fx.angle).setDisplaySize(26, 5).setTint(0xffe0a3).setAlpha(1).setBlendMode(Phaser.BlendModes.NORMAL);
+        continue;
+      }
+      if (fx.kind === 'strategist') { const pre = fx.hitAt !== undefined, kk = pre ? (now - fx.at) / Math.max(1, (fx.hitAt ?? now) - fx.at) : (now - ((fx.until - fx.at) * .52 + fx.at)) / ((fx.until - fx.at) * .48);
+        if (this.paint(fx, pre ? 'gather' : 'fire', fx.tx, pre ? fx.ty : fx.ty - 18, Math.max(0, Math.min(.999, kk)), 0, 1, pre ? .62 : 1)) continue; }
       if (fx.kind === 'spear') { g.lineStyle(4, 0xe8f2ff, .8 * (1 - k)); g.beginPath(); g.arc(fx.x, fx.y - 16, TEMPLATES.spear.range * (.6 + .4 * k), fx.angle - 2.4 * k - .6, fx.angle + .6); g.strokePath(); }
       else if (fx.kind === 'blade') { g.lineStyle(5, 0xffe2a8, .85 * (1 - k)); g.beginPath(); g.arc(fx.x, fx.y - 16, TEMPLATES.blade.range * .8, fx.angle - .9, fx.angle - .9 + 1.8 * Math.min(1, k * 1.6)); g.strokePath(); }
       else if (fx.kind === 'arrow') { const hx = fx.x + (fx.tx - fx.x) * k, hy = fx.y + (fx.ty - fx.y) * k; g.lineStyle(2, 0xfff1c8, .9); g.lineBetween(hx - Math.cos(fx.angle) * 18, hy - Math.sin(fx.angle) * 18, hx, hy); }
@@ -359,7 +387,24 @@ export class FollowerSquad {
       else { const pre = fx.hitAt !== undefined; g.fillStyle(pre ? 0xff8a3a : 0xffb347, pre ? .25 + .25 * k : .5 * (1 - k)); g.fillCircle(fx.tx, fx.ty, pre ? 48 * (.4 + .6 * k) : 48); if (pre) { g.lineStyle(2, 0xffc070, .7); g.strokeCircle(fx.tx, fx.ty, 48); } }
     }
   }
-  private puff(x: number, y: number, now: number) { this.fx.push({ kind: 'spear', x, y, tx: 0, ty: 0, angle: 0, at: now, until: now + 300 }); }
+  private puff(x: number, y: number, now: number) { this.fx.push({ kind: 'puff', x, y: y - 20, tx: 0, ty: 0, angle: 0, at: now, until: now + 300 }); }
+  /** 取一张特效图（超过上限返回 undefined，这次不出图）。 */
+  private takeImg(key: string): Phaser.GameObjects.Image | undefined {
+    if (!this.scene.textures.exists(key) || this.fxLive >= FX_CAP) return undefined;
+    this.fxLive++; const img = this.fxPool.pop() ?? this.scene.add.image(0, 0, key, 0).setName('follower-fx');
+    return img.setTexture(key, 0).setVisible(true).setAlpha(1).clearTint().setDepth(DEPTH.fx - .5);
+  }
+  private dropImg(fx: Fx): void { if (!fx.img) return; fx.img.setVisible(false); this.fxPool.push(fx.img); fx.img = undefined; this.fxLive--; }
+  /** 按 FFX 播一段帧；返回 false 表示缺图（调用方退回代码画法）。 */
+  private paint(fx: Fx, style: keyof typeof FFX, x: number, y: number, k: number, rot: number, sx = 1, sy = 1): boolean {
+    const st = FFX[style]; if (!this.scene.textures.exists(st.key)) return false;
+    if (!fx.img) { fx.img = this.takeImg(st.key); if (!fx.img) return true; }
+    if (fx.img.texture.key !== st.key) fx.img.setTexture(st.key);
+    fx.img.setFrame((st.first ?? 0) + Math.min(st.frames - 1, Math.floor(k * st.frames))).setPosition(x, y).setRotation(rot).setDisplaySize(st.size * sx, st.size * sy)
+      .setAlpha(st.alpha * (k > .75 ? (1 - k) / .25 : 1)).setBlendMode(st.add ? Phaser.BlendModes.ADD : Phaser.BlendModes.NORMAL);
+    if (st.tint !== undefined) fx.img.setTint(st.tint); else fx.img.clearTint();
+    return true;
+  }
   private render(f: Follower, now: number) {
     const a = f.act;
     if (a && (a.hold || now < a.until)) {
@@ -381,5 +426,5 @@ export class FollowerSquad {
     const w = 36, r = Math.max(0, f.hp / f.maxHp); f.bar.clear();
     if (r < 1) { f.bar.fillStyle(0x1a0f08, .8).fillRect(f.x - w / 2, f.y - 58, w, 4); f.bar.fillStyle(r > .4 ? 0x6fd06a : 0xe0603a, 1).fillRect(f.x - w / 2, f.y - 58, w * r, 4); }
   }
-  clear(): void { for (const f of this.members) f.destroy(); this.members.length = 0; this.fx.length = 0; this.gfx.destroy(); this.rescueGfx.destroy(); this.rescueText.destroy(); this.hud.destroy(); }
+  clear(): void { for (const f of this.members) f.destroy(); this.members.length = 0; for (const fx of this.fx) fx.img?.destroy(); for (const img of this.fxPool) img.destroy(); this.fxPool.length = 0; this.fxLive = 0; this.fx.length = 0; this.gfx.destroy(); this.rescueGfx.destroy(); this.rescueText.destroy(); this.hud.destroy(); }
 }

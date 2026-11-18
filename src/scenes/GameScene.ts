@@ -82,7 +82,8 @@ import { stageCleared, takeAttrNotice } from '../systems/HeroProgress';
 import { allocateHeroAttr, claimFirstClear, creditHeroXp, enlistHero, heroFreePoints, heroInfo, heroLevel, levelCap, setHeroProgress, type HeroKey } from '../systems/HeroProgress';
 import { HERO_XP_RATE, OVERFLOW_XP_PER_GRAIN, PICK_GUARANTEE, PICK_PACE } from '../data/heroLevels';
 import { addProvisions } from '../world/WorldStore';
-import { loadCampaignBuild, packCampaign, restoreCampaign, saveCampaignBuild, type CampaignTransfer } from '../systems/Campaign';
+import { medicChapter } from '../data/campMedic';
+import { applyCarriedHp, patchCampaignHp, loadCampaignBuild, packCampaign, restoreCampaign, saveCampaignBuild, type CampaignTransfer } from '../systems/Campaign';
 import { TROOP_KINDS, INITIAL_TROOPS, LEGION, FREE_RECRUIT_BY_TIER, type TroopKind } from '../data/legion';
 import { DEFAULT_RUN_CONFIG, getCharacter, type RunConfig , HERO_TINT, HERO_FX, type CharacterId } from '../data/characters';
 import { Music } from '../systems/Music';
@@ -663,7 +664,7 @@ export class GameScene extends Phaser.Scene {
     this.campaignLoaded = !!carriedState && !chained;
     this.applyHeroLevel(!!carriedState);
     this.syncHeroLevel();
-    if(this.campaignLoaded)this.player.hp=this.player.maxHp; // 征程构筑：新开一场，血量回满
+    if(carriedState)applyCarriedHp(carriedState,this.player,this.followers); // 2026-11-18 用户：前一关受的伤带到下一关（主将按比例、名将随从同样；部曲在 Legion 存档里本来就带血量）
     if(!(transfer && this.chapter.id === transfer.chapter && this.runConfig.character === transfer.character))this.grantWeixiTreasures();
     if(this.worldCampaign&&worldUnlocked()){const effects=permanentEffects();this.legion.healingMultiplier=effects.healMultiplier;applyCitySpecialties(this.player,effects,!transfer,{legion:this.legion,supplies:this.supplies});if(!transfer){for(let i=0;i<effects.reinforcements;i++)this.legion.recruit(i===0?'swordsman':'spearman',1,true);}if(!transfer&&!isChapterTestRun())for(const kind of takeExpeditionReserve(effects.reserveSlots)){this.legion.recruit(kind,1,true);this.allies[this.allies.length-1].reserveSoldier=true;}}
     this.buildCombat=new BuildCombat(this.player.growth.build,(x,y,r)=>this.grid.query(x,y,r),(e,n,fire)=>this.hitEnemy(e,n,this.combatNow,fire?'fire':'melee',false,false),(e,fire)=>{this.artEffects.show(fire?5:3,e.x,e.y-8,32,this.combatNow,160);buildVfx(this).emit(fire?'flame':'combo',e.x,e.y-8,this.combatNow,fire?42:38);});
@@ -701,6 +702,9 @@ export class GameScene extends Phaser.Scene {
       else if (this.mode === 'recruit') { this.recruitedWaves.add(this.waveIndex); this.freeRecruit = false; this.resumePendingChoices(); }
     }, () => this.takeRecruitPotion(), () => canOfferRejuvenation(this.player));
     this.campUI=new CampRestUI(this,this.player,this.legion,()=>this.continueCampaign());
+    // 军医（2026-11-18）：按章定价；治疗后把存档里的征程构筑血量也改掉（存档点是打赢那一刻存的，治疗在之后；重打旧关不存档也不改）
+    this.campUI.chapterNo=medicChapter(this.scene.key,this.chapter.id);
+    this.campUI.onHealed=()=>{if(this.campaignReplay)return;const fh:Record<string,number>={};for(const m of this.followers?.members??[])fh[m.recruit.id]=m.downed?0:m.hp/Math.max(1,m.maxHp);patchCampaignHp(this.runConfig.character,this.player.hp/Math.max(1,this.player.maxHp),fh);};
     this.campUI.onBuyItem=item=>this.itemDrops?.runLoot.push(item);
     this.campUI.onOpenBag=()=>this.openBattleBag(true);
     // 从营寨 / 天下地图出征的战役：关与关之间的休整可直接回营寨（本场奖励已在胜利时入库）
@@ -2763,7 +2767,7 @@ export class GameScene extends Phaser.Scene {
     const chapter=west||stage===3?'hulao':'huangjin';
     const next=(west?stage+1:stage===3?1:stage+1) as 1|2|3;
     if(next>3||(chapter==='hulao'&&!dongzhuoStageUnlocked(next)&&!isChapterTestRun()))return;
-    const transfer=packCampaign(this.runConfig.character,this.player,this.legion);transfer.chapter=chapter;transfer.stage=chapter==='huangjin'?next:undefined;
+    const transfer=packCampaign(this.runConfig.character,this.player,this.legion,this.followers);transfer.chapter=chapter;transfer.stage=chapter==='huangjin'?next:undefined;
     this.registry.set('campaignTransfer',transfer);
     this.registry.set('runConfig',{...this.runConfig,chapter,stage:chapter==='huangjin'?next:undefined,westStage:chapter==='hulao'?next:undefined});
     this.resting = false; this.scene.restart();
@@ -3222,7 +3226,7 @@ export class GameScene extends Phaser.Scene {
       const half=this.lordHeroXp()/2,lines:string[]=[];for(const f of this.followers?.members??[]){const fr=creditHeroXp((f.recruit.hero??f.recruit.id) as HeroKey,half,followerLevelCap()) /* 随行经验到随行上限为止 */,fn=f.recruit.name.replace(/（.*）/,'');lines.push(fr.to>fr.from?fn+' Lv.'+fr.from+' → Lv.'+fr.to:fn+' Lv.'+fr.to);}
       if(lines.length)this.resultTexts.body.setText(this.resultTexts.body.text+'\n随行  '+lines.join(' · ')+' · 各得经验 +'+Math.floor(half));}}
     // 征程构筑：主线首次打赢这一关（首领已破）时存档，作为下一关的起点；重打旧关 / 测试战斗不存
-    if(victory&&this.bossKilled&&!this.campaignReplay&&!(isChapterTestRun()||this.debugModified||this.debugJumped||this.player.damageImmune))saveCampaignBuild(this.runConfig.character,packCampaign(this.runConfig.character,this.player,this.legion));
+    if(victory&&this.bossKilled&&!this.campaignReplay&&!(isChapterTestRun()||this.debugModified||this.debugJumped||this.player.damageImmune))saveCampaignBuild(this.runConfig.character,packCampaign(this.runConfig.character,this.player,this.legion,this.followers));
     // 战功：本场击杀精英 / 首领所得，存进存档（不论胜败；测试 / 调试战斗不计），去讲武堂换残卷
     if(!(isChapterTestRun()||this.debugModified||this.debugJumped||this.player.damageImmune))this.settleMerit();
     // 武将谱：本局武学残卷收入（测试 / 调试战斗不收）
@@ -3256,7 +3260,7 @@ export class GameScene extends Phaser.Scene {
       this.showRestSummary();
       this.cameras.main.flashEffect.reset(); this.cameras.main.shakeEffect.reset();
       this.pendingRecruit = false; this.pendingLevels = 0; this.freeRecruit = false; this.resting = true;
-      this.player.hp = this.player.maxHp; this.legion.recover(); this.renderRecruit(); this.legionUI.setCampDestination(this.chapter.id==='hulao'?((this.chapter.westStage??1)===1?'荥阳之战':'虎牢关决战'):this.chapter.stage===3?'第二章 · 汜水关':this.chapter.stage===1?'下曲阳破阵':'广宗决战',this.chapter.id==='hulao'?'讨董军营 · 战后休整':'黄巾败退 · 战后休整'); this.setMode('rest');
+      this.renderRecruit(); /* 2026-11-18 用户：受的伤跨关继承，休整不再自动回满（主将 / 部曲），改由「军医」花随军粮治疗 */ this.legionUI.setCampDestination(this.chapter.id==='hulao'?((this.chapter.westStage??1)===1?'荥阳之战':'虎牢关决战'):this.chapter.stage===3?'第二章 · 汜水关':this.chapter.stage===1?'下曲阳破阵':'广宗决战',this.chapter.id==='hulao'?'讨董军营 · 战后休整':'黄巾败退 · 战后休整'); this.setMode('rest');
       if(this.chapter.stage===3){
         this.legionUI.panel.setVisible(false);
         // 第一章通关即开启天下地图：告捷后进入地图，按史事时序选章出征（讨董起逐章解锁）。

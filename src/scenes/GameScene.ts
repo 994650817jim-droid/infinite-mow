@@ -28,6 +28,7 @@ import {BuildCombat} from '../systems/BuildCombat';
 import {TACTICS,TREASURES,TAG_NAMES,type TacticId} from '../data/builds';
 import { applyCharms, wornTokens, type CharmState } from '../systems/CharmEffects';
 import { meritFromKills } from '../data/merit';
+import { DeathFx, deathFxMode } from '../systems/DeathFx';
 import { CHARM_LEGEND, CHARM_SCHOOL_NAMES, CHARM_SET_DESC, charmDef, type CharmSchool } from '../data/charms';
 import {SishuiObstacles} from '../systems/SishuiObstacles';
 import {SishuiPass,type PassHost} from '../systems/SishuiPass';
@@ -555,6 +556,7 @@ export class GameScene extends Phaser.Scene {
     ensureWarTextures(this);
     this.hudAcc = 1; this.lastHudMode = '';
     this.feedback = new BattleFeedback(this);
+    { const m = deathFxMode(); this.deathFx = m ? new DeathFx(this, m) : null; } // 敌军死亡特效样片：?deathfx=a|b|c
     this.hitFeel = new HitFeel(this); this.bossStagger = new BossStagger();
     this.events.once('shutdown', () => { this.anims.globalTimeScale = 1; });
     this.sfx = new Sfx();
@@ -991,6 +993,7 @@ export class GameScene extends Phaser.Scene {
     this.player.update(time, dt);this.mount?.update(dt,this.combatNow);
 
     if(!this.over){for(const c of this.bossChests)c.update(this.combatNow);this.itemDrops?.update();this.relics?.update(this.combatNow);this.relicShips?.update(this.combatNow);}
+    this.deathFx?.update(this.combatNow);
     this.supplies?.update(dt,time,this.battlefieldDetails.props,(enemy,damage)=>this.hitEnemy(enemy,damage,time,'fire',false,false),this.allies,(ally,damage,now)=>this.legion.hurt(ally,damage,now));
     if(!this.envInit&&this.supplies){this.envInit=true;const cfg=envConfigFor(this.scene.key,this.chapter.id,(this as unknown as {guanduStage?:number}).guanduStage);if(cfg){const sup=this.supplies;this.env=new EnvInteractions({scene:this,player:this.player,supplies:sup,enemies:()=>this.enemies,allies:()=>this.allies,hitEnemy:(e,d)=>{this.hitEnemy(e,d,this.combatNow,'fire',false,false);},hurtAlly:(a,d)=>{this.legion.hurt(a,d,this.combatNow);},spawnEnemy:(x,y)=>this.spawnEnemy('infantry',x,y,undefined,true),spawnGem:(x,y,v)=>this.spawnGem(x,y,v),spawnChest:(x,y)=>{this.itemDrops?.spawnChest(x,y);},now:()=>this.combatNow,sfx:k=>this.sfx.play(k)},cfg);this.events.once('shutdown',()=>{this.env?.destroy();this.env=null;});}}
     this.env?.update(dt);
@@ -1969,6 +1972,8 @@ export class GameScene extends Phaser.Scene {
     this.feedback.hit(boss.x, boss.y, a, time, 'melee', { boss: true, crit: true });
   }
 
+  /** 敌军死亡特效样片（原型）。 */
+  protected deathFx: DeathFx | null = null;
   protected killEnemy(enemy: Enemy): void {
     if (this.dzLubu?.preventKill(enemy)) return; // 2-3 吕布打到底不死：锁血逃走
     if (!enemy.active) return;
@@ -1982,6 +1987,7 @@ export class GameScene extends Phaser.Scene {
     if(enemy.isSupplySlot){this.sfx.play('propBreak');this.supplies?.onBroken(enemy);return;}
     this.warfeedKill();
     if(enemy.def.behavior==='wall')return;
+    this.deathFx?.play(enemy,this.player.x,this.player.y,this.combatNow);
     this.kills += 1;
     this.player.passive.onKill(kind, this.combatNow);
     this.awakeningCombat?.onKill(enemy,this.combatNow);

@@ -5,6 +5,8 @@ import type { CharacterId } from './characters';
  * - trigger：被动大招触发（满层强化那一下；黄忠是进入「神射」）时说，第一次必说，之后 BARK.chance 几率，同一武将两句至少隔 BARK.gapMs。
  * - bossAppear / bossDown：首领登场 / 倒下时说（必说，不受间隔限制）；vsBoss 按首领名给专属台词，优先于通用句。
  * - 马超、孙尚香主将身份时，被动满层已有用户定稿的大字战吼（ui/PassiveShout），trigger 不再弹气泡；当随从时照常说。
+ * - everyTrigger：每次触发都说（不受几率、间隔限制），魏延「谁敢杀我！」沿用原来每次都喊；color：大字颜色（缺省金色）。
+ * 表现与马超 / 孙尚香被动满层战吼同一套大字（ui/PassiveShout.warCryText）；随从说话字号 ×0.7。
  * 每句不超过 12 个字。改台词只改这里。
  */
 export const BARK = {
@@ -20,6 +22,7 @@ export interface HeroBarkLines {
   trigger: readonly string[];
   bossAppear: readonly string[];
   bossDown: readonly string[];
+  everyTrigger?: boolean; color?: string;
   /** 首领名 → 登场时的专属台词。 */
   vsBoss?: Readonly<Record<string, string>>;
 }
@@ -56,8 +59,8 @@ export const HERO_BARKS: Record<CharacterId, HeroBarkLines> = {
     vsBoss: { 曹仁: '曹贼，还我父仇！', 许褚: '许褚，再斗三百合！' },
   },
   weiyan: {
-    trigger: ['谁敢杀我！', '我魏文长在此！', '子午谷，我自去得！'],
-    bossAppear: ['来得正好，看刀！'], bossDown: ['谁还敢来！'],
+    trigger: ['谁敢杀我！'], everyTrigger: true, color: '#ffe0b0',
+    bossAppear: ['我魏文长在此！', '子午谷，我自去得！'], bossDown: ['谁还敢来！'],
   },
   liubei: {
     trigger: ['仁德之师，誓扶汉室！', '众将士，随我杀敌！', '兄弟同心，其利断金！'],

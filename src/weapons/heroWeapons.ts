@@ -111,8 +111,7 @@ export function zhenbeiBehavior(host: WeaponHost, weapon: WeaponState, dt: numbe
     host.heroFx?.('whoDares', pl.x, pl.y - 4, len * 1.1);
     if (!hasFxSheet(host, 'c')) { const ring = host.add.circle(pl.x, pl.y - 6, 30, 0xff5a3c, 0).setStrokeStyle(6, 0xff6a4a, .9).setDepth(41);
       ring.scene.tweens.add({ targets: ring, radius: len, alpha: 0, duration: 460, onComplete: () => ring.destroy() }); }
-    const shout = host.add.text(pl.x, pl.y - 70, '谁敢杀我！', { fontFamily: 'serif', fontSize: '26px', color: '#ffe0b0', stroke: '#7a1a10', strokeThickness: 6 }).setOrigin(.5).setDepth(60).setName('weiyan-whodares');
-    shout.scene.tweens.add({ targets: shout, y: pl.y - 104, alpha: 0, delay: 500, duration: 600, onComplete: () => shout.destroy() });
+    // 「谁敢杀我！」大字改由武将台词（ui/HeroBark → warCryText，与马超 / 孙尚香战吼同一套表现）每次触发都喊
     host.cameras.main.shake(120, .003);
   } else {
     pl.playAction(heavy ? 'skill' : 'attack', ux < 0 ? 'left' : 'right');

@@ -27,17 +27,17 @@ async function startAs(hero, cfg = { chapter: 'huangjin', stage: 1 }) {
 // 让主将被动满层并放出一次大招（triggers +1），再跑一帧 heroBark.update；dt 毫秒后的时间点
 const fire = (dt = 0, roll = 0) => p.evaluate(([dt, roll]) => {
   const s = window.__game.scene.getScene('GameScene'), pa = s.player.passive, w = s.player.weapons[0].id, r = Math.random;
-  pa.stacks = pa.maxStacks; pa.beginCast(w); Math.random = () => roll;
-  s.heroBark.update(s.barkSpeakers(), s.combatNow + dt, true); Math.random = r;
-  const box = s.children.list.find(o => o.name === 'hero-bark' && o.active);
-  const txt = box?.list.find(o => o.type === 'Text')?.text, bounds = s.player.sprite.getBounds();
-  return { count: s.heroBark.count, line: s.heroBark.lastLine, shown: !!box, txt, above: box ? box.y < bounds.top : null };
+  pa.stacks = pa.maxStacks; pa.beginCast(w); s.heroBark.rng = () => roll;
+  s.heroBark.update(s.barkSpeakers(), s.combatNow + dt, true); s.heroBark.rng = r;
+  const box = s.children.list.find(o => (o.name === 'hero-bark' || o.name === 'weiyan-whodares') && o.active), inner = box?.list[0];
+  const chars = inner?.list.filter(o => o.type === 'Text') ?? [], txt = chars.map(o => o.text).join(''), bounds = s.player.sprite.getBounds();
+  return { count: s.heroBark.count, line: s.heroBark.lastLine, shown: !!box, txt, size: parseInt(chars[0]?.style.fontSize), font: chars[0]?.style.fontFamily, above: box ? box.y + inner.y < bounds.top + 10 : null };
 }, [dt, roll]);
 
 // 1) 赵云：第一次触发必说（几率掷 0.99 也说），气泡在头顶
 await startAs('zhaoyun');
 const z1 = await fire(0, .99);
-ck('赵云被动大招触发：第一次必说「吾乃常山赵子龙也！」，气泡在头顶上方', z1.count === 1 && z1.txt === '吾乃常山赵子龙也！' && z1.above === true, z1);
+ck('赵云被动大招触发：第一次必说「吾乃常山赵子龙也！」，用马超战吼同款书法大字（主将 20 号字），在头顶上方', z1.count === 1 && z1.txt === '吾乃常山赵子龙也！' && z1.size === 20 && z1.above === true, z1);
 await p.waitForTimeout(300); await p.screenshot({ path: `${out}/zhaoyun.png` });
 // 2) 间隔：5 秒后再触发（掷 0）不说；13 秒后掷 0 说第二句；再过 13 秒掷 0.99（> 50%）不说
 const z2 = await fire(5000, 0), z3 = await fire(13000, 0), z4 = await fire(26500, .99);
@@ -69,7 +69,20 @@ const zf = await p.evaluate(async () => {
 });
 ck('刘备打董卓：首领登场说「国贼董卓，天下共讨！」', zf.line === '国贼董卓，天下共讨！' && zf.shown, zf);
 await p.screenshot({ path: `${out}/liubei-vs-dongzhuo.png` });
-// 6) 诸葛亮截图
+// 6) 魏延「谁敢杀我！」走同一套，每次触发都喊（不受 12 秒 / 50% 限制）
+await startAs('weiyan');
+const wy1 = await fire(0, .99), wy2 = await fire(1000, .99);
+ck('魏延「谁敢杀我！」每次触发都喊（同一套大字）', wy1.txt === '谁敢杀我！' && wy2.count === 2 && wy2.txt === '谁敢杀我！', [wy1, wy2]);
+// 7) 随从说话：字号 ×0.7（14 号），主将的大字可以顶掉随从的
+const fl = await p.evaluate(() => {
+  const s = window.__game.scene.getScene('GameScene'), pl = s.player, img = s.add.image(pl.x + 110, pl.y, pl.sprite.texture.key, pl.sprite.frame.name).setOrigin(pl.sprite.originX, pl.sprite.originY).setScale(pl.sprite.scaleX, pl.sprite.scaleY).setDepth(pl.sprite.depth).setName('fake-follower');
+  const ok = s.heroBark.say({ id: 'guanyu', passive: null, sprite: img, lord: false }, 'trigger', s.combatNow + 90000);
+  const box = s.children.list.find(o => o.name === 'hero-bark' && o.active), chars = box?.list[0]?.list.filter(o => o.type === 'Text') ?? [];
+  return { ok, txt: chars.map(o => o.text).join(''), size: parseInt(chars[0]?.style.fontSize) };
+});
+ck('随从（可玩武将）也会说，字号 ×0.7', fl.ok && fl.txt === '关某在此，鼠辈休走！' && fl.size === 14, fl);
+await p.waitForTimeout(450); await p.screenshot({ path: out + '/follower.png' });
+// 8) 诸葛亮截图
 await startAs('zhuge');
 const zg = await fire(0, 0); await p.waitForTimeout(250);
 ck('诸葛亮被动大招：「火攻之计，正在此时。」', zg.txt === '火攻之计，正在此时。', zg);

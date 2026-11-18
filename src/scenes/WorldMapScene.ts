@@ -1,7 +1,7 @@
 import {playMenuMusic} from '../systems/Music';
 import {defaultHero,heroOwned,LOCKED_HINT} from '../systems/RosterStore';
 import {checkWorld} from '../systems/Achievements';
-import {RENDER_SCALE,screenPoint} from '../config';
+import {RENDER_SCALE,screenPoint,TITLE_FONT,HEADING_FONT} from '../config';
 import {thirdChapterUnlocked,arcUnlocked} from '../world/WorldStore';
 /** 群雄篇章节点：是否开放、未开放提示、进入的选关场景。 */
 const CAMPAIGNS={qunxiong:{open:()=>thirdChapterUnlocked(),hint:'通关虎牢关后解锁',scene:'ThirdChapterScene'},guandu:{open:()=>arcUnlocked('guandu'),hint:'平定群雄割据后解锁',scene:'GuanduChapterScene'},chibi:{open:()=>arcUnlocked('chibi'),hint:'官渡之战告捷后解锁',scene:'ChibiChapterScene'},yiling:{open:()=>arcUnlocked('yiling'),hint:'襄樊之战后解锁',scene:'YilingChapterScene'},nanzheng:{open:()=>arcUnlocked('nanzheng'),hint:'夷陵之战告捷后解锁',scene:'NanzhengChapterScene'},beifa:{open:()=>arcUnlocked('beifa'),hint:'南征告捷后解锁',scene:'BeifaChapterScene'},xiangfan:{open:()=>arcUnlocked('xiangfan'),hint:'汉中之战告捷后解锁',scene:'XiangfanChapterScene'},shu:{open:()=>arcUnlocked('shu'),hint:'平定荆南后解锁',scene:'ShuChapterScene'},jingnan:{open:()=>arcUnlocked('jingnan'),hint:'赤壁之战告捷后解锁',scene:'JingnanChapterScene'},hanzhong:{open:()=>arcUnlocked('hanzhong'),hint:'入蜀告捷后解锁',scene:'HanzhongChapterScene'}} as const;
@@ -9,6 +9,8 @@ import {isChapterTestRun} from '../systems/ChapterProgress';
 import {worldUnlocked} from '../world/WorldStore';
 import Phaser from 'phaser';
 import {W,H,worldText,worldButton,worldShell,panel,worldAssets,releaseWorldArt} from '../world/WorldUI';
+import {inkPlate} from '../ui/HomeCommand';
+type InkBtn={btn:ReturnType<typeof worldButton>;plate:Phaser.GameObjects.NineSlice|null;primary:boolean;hover:boolean};
 import {WORLD_NODES,type WorldNode} from '../world/WorldNodes';
 import {loadWorld,rewardGrain} from '../world/WorldStore';
 import {citySize,CITY_TITLE} from '../town/TownData';
@@ -54,6 +56,8 @@ export class WorldMapScene extends Phaser.Scene {
  /** 军情事件标记（城池右上方的小印）。 */
  private intel:IntelEvent[]=[];private intelMarkers:IntelMarker[]=[];
  private chips:Array<{id:TimelineChapterId;node:WorldNode;g:Phaser.GameObjects.Graphics;x:number;y:number;w:number;h:number;state:ChapterState}>=[];
+ /** 电脑版（2026-11-17 用户「这里太乱了…看到的地图太小了」）：右下角小卡 + 悬停提示 + 细时间线。 */
+ private card?:{x:number;y:number;w:number;h:number};private tip?:Phaser.GameObjects.Container;private detailFull='';private factionStripC?:Phaser.GameObjects.Container;private timelineRect?:Phaser.Geom.Rectangle;private inks:InkBtn[]=[];private detailView?:Phaser.GameObjects.Text;
  private area={x:20,y:110,w:W-40,h:H-360};private viewBottom=0;private timelineY=0;private detailPh=0;private minZoom=1;private zoom=1;private pointerX=0;private pointerY=0;private pinch=0;private pinching=false;private readonly mapW=1536;private readonly mapH=1024;
  constructor(){super('WorldMapScene');}
  preload(){if(!worldUnlocked()&&!isChapterTestRun())return;worldAssets(this,'strategy_art','assets/world/strategy-map.webp');
@@ -62,22 +66,24 @@ export class WorldMapScene extends Phaser.Scene {
   if(MARKERS_V2)for(const [key,url] of Object.entries(CITY_ART_FILES))worldAssets(this,key,url);
   this.load.once('complete',()=>{for(const key of [...Object.keys(MARKER_FILES),...Object.keys(CITY_ART_FILES)])if(this.textures.exists(key))this.textures.get(key).setFilter(Phaser.Textures.FilterMode.LINEAR);});}
  create(){playMenuMusic(this);try{checkWorld(loadWorld());}catch{/* 存档不可用 */}
-  if(!worldUnlocked()&&!isChapterTestRun()){this.registry.set('loadBattle',true);this.scene.start(this.registry.get('battleReady')?'MenuScene':'BootScene');return;}worldShell(this,this.registry.get('worldReveal')?'三国天下开启':'三国天下');if(this.registry.get('worldReveal')){this.registry.remove('worldReveal');this.cameras.main.fadeIn(900,0,0,0);}releaseWorldArt(this,'strategy_art');this.markers=[];this.cityMarkers=[];this.legend=undefined;
+  if(!worldUnlocked()&&!isChapterTestRun()){this.registry.set('loadBattle',true);this.scene.start(this.registry.get('battleReady')?'MenuScene':'BootScene');return;}const shellTitle=worldShell(this,this.registry.get('worldReveal')?'三国天下开启':'三国天下');if(W>600)shellTitle.setFontFamily(TITLE_FONT).setFontSize(22).setColor('#efd399').setOrigin(0,.5).setPosition(16,25).setStroke('#120904',4);if(this.registry.get('worldReveal')){this.registry.remove('worldReveal');this.cameras.main.fadeIn(900,0,0,0);}releaseWorldArt(this,'strategy_art');this.markers=[];this.cityMarkers=[];this.legend=undefined;this.inks=[];this.detailView=undefined;this.timelineRect=undefined;this.card=undefined;
   this.siegeModal=undefined;this.territory=undefined;this.notice=undefined;this.pins=[];this.route=undefined;this.routeChapter=undefined;this.fog=undefined;this.registry.remove('hardChapter');const advance=isChapterTestRun()?null:advanceEra(),lost=isChapterTestRun()?[]:takeLostNotice();if(!isChapterTestRun())ensureIntel();const s=loadWorld();this.intel=intelEvents();this.intelMarkers=[];this.owned=s.ownedCities;this.alerts=s.alerts;this.capturedEver=s.capturedEver;this.era=!s.cleared.hulao?0:eraIndexFor({hulaoCleared:s.cleared.hulao,warlordStages:s.warlordStages,guanduStages:s.guanduStages});
   const desktop=W>600;
   // 顶部资源栏（军粮 / 城池），漆底描金
-  resourceBar(this,desktop?190:24,desktop?40:88,[{glyph:"粮",label:"军粮",value:s.provisions,tint:0x7a5a22},{glyph:'城',label:'城池',value:this.owned.length,tint:0x2f6b45}],desktop);
-  worldButton(this,W-105,desktop?40:43,"返回营寨",()=>this.scene.start("CityScene"),150);
+  const res=resourceBar(this,desktop?shellTitle.x+shellTitle.width+12:24,desktop?25:88,[{glyph:"粮",label:"军粮",value:s.provisions,tint:0x7a5a22},{glyph:'城',label:'城池',value:this.owned.length,tint:0x2f6b45}],desktop);
+  {const back=worldButton(this,desktop?W-74:W-105,desktop?25:43,"返回营寨",()=>this.scene.start("CityScene"),desktop?132:150);if(desktop){back.image.setDisplaySize(132,40);back.text.setFontSize(15);this.inkify(back,false);}}
   // 2026-11-16 用户反馈「大地图画面大点，下面的说明可以透明」：地图一直铺到屏幕底边，
   // 章节时间线与详情面板改为半透明漆底浮在地图上；viewBottom 以下（被浮层盖住的部分）不放标记、不接拖动。
   this.detailPh=desktop?124:244;const detailTop=H-(desktop?6:36)-this.detailPh;
-  this.area=desktop?{x:20,y:72,w:W-40,h:H-8-72}:{x:20,y:118,w:W-40,h:H-12-118};
+  this.area=desktop?{x:8,y:50,w:W-16,h:H-50-8}:{x:20,y:118,w:W-40,h:H-12-118};
   this.timelineY=detailTop-(desktop?40+6:54+8);this.viewBottom=this.timelineY-4;
+  // 电脑版：地图铺满顶栏以下（约 89% 高），时间线与详情改成浮在地图角上的小件，标记一直排到地图底边
+  if(desktop){this.timelineY=H-8-30;this.viewBottom=H-8;}
   this.layer=this.add.container(0,0);this.layer.add(this.add.image(0,0,'strategy_art').setOrigin(0).setDisplaySize(this.mapW,this.mapH));
   // 势力范围：加权分区疆域 + 国界 / 郡界 + 疆域大字（随地图缩放）
   const realm=buildTerritory(this,this.era,this.owned);this.layer.add(this.add.image(0,0,realm.key).setOrigin(0).setDisplaySize(this.mapW,this.mapH).setName('world-realm'));
   if(REALM_V2&&this.textures.exists(realm.key+'_player'))this.layer.add(this.add.image(0,0,realm.key+'_player').setOrigin(0).setDisplaySize(this.mapW,this.mapH).setBlendMode(Phaser.BlendModes.ADD).setName('world-realm-player'));
-  this.layer.add(realmLabels(this,realm.labels));
+  {const rl=realmLabels(this,realm.labels);if(desktop)for(const t of rl)if(t.name!=='realm-player')t.setAlpha(.3).setScale(.8); /* 电脑版：势力大字淡一些、小一些，不压关卡印 */this.layer.add(rl);}
   this.buildFog();
   const mask=this.make.graphics({x:0,y:0}).fillStyle(0xffffff).fillRect(this.area.x,this.area.y,this.area.w,this.area.h);
   this.layer.setMask(mask.createGeometryMask());this.events.once('shutdown',()=>mask.destroy());this.mapMask=mask;
@@ -102,10 +108,10 @@ export class WorldMapScene extends Phaser.Scene {
    const circle=(v2?v2.hit:this.add.circle(0,0,18,st==='cleared'?0x3a2a12:0x16271e,.94).setStrokeStyle(2,color)).setInteractive({useHandCursor:true}).setName(`node-${node.id}`).setData('state',st);
    const icon=v2?null:worldText(this,0,0,glyphText,13,st==='cleared'?'#ffe7a8':active?'#f5dc9e':'#a4aa9c').setOrigin(.5);
    const label=v2?null:worldText(this,0,25,labelText,13,active?'#fff0cd':'#b6b8aa').setOrigin(.5).setStroke('#142016',3);
-   circle.on('pointerup',(pointer:Phaser.Input.Pointer)=>{if(pointer.getDistance()>10*RENDER_SCALE||this.pinching)return;this.selected={kind:'node',node};this.refresh();});marker.add(v2?[...v2.parts,circle]:[circle,icon!,label!]);if(v2)marker.setData('label',v2.label).setData('plate',v2.plate).setData('icon',v2.icon);this.markers.push({node,root:marker});
+   circle.on('pointerup',(pointer:Phaser.Input.Pointer)=>{if(pointer.getDistance()>10*RENDER_SCALE||this.pinching)return;this.selected={kind:'node',node};this.refresh();});marker.add(v2?[...v2.parts,circle]:[circle,icon!,label!]);if(v2)marker.setData('label',v2.label).setData('plate',v2.plate).setData('icon',v2.icon);marker.setData('locked',st==='locked');this.markers.push({node,root:marker});
   }
   for(const event of this.intel){const city=cityById(event.city);if(city)this.intelMarkers.push(this.intelMarker(event,city));}
-  this.minZoom=Math.max(this.area.w/this.mapW,this.area.h/this.mapH);this.zoom=this.minZoom*1.2;
+  this.minZoom=Math.max(this.area.w/this.mapW,this.area.h/this.mapH);this.zoom=this.minZoom*(desktop?1.75:1.2);
   this.layer.setScale(this.zoom).setPosition(W/2-this.mapW*.52*this.zoom,(this.area.y+this.viewBottom)/2-this.mapH*.45*this.zoom);this.clampMap();
   const inside=(q:Phaser.Input.Pointer)=>{const p=screenPoint(q);return p.x>=this.area.x&&p.x<=this.area.x+this.area.w&&p.y>=this.area.y&&p.y<=this.viewBottom;};
   this.input.on('pointerdown',(q:Phaser.Input.Pointer)=>{const p=screenPoint(q);this.pointerX=p.x;this.pointerY=p.y;this.pinch=0;this.pinching=false;});
@@ -114,31 +120,38 @@ export class WorldMapScene extends Phaser.Scene {
   // 地图外框：描金细线
   const frame=this.add.graphics();frame.lineStyle(2,0xc9a35e,.9).strokeRect(this.area.x-1,this.area.y-1,this.area.w+2,this.area.h+2).lineStyle(1,0x000000,.6).strokeRect(this.area.x-4,this.area.y-4,this.area.w+8,this.area.h+8);
   // 详情面板：漆底描金 + 势力旗印 + 标题 / 势力色分隔线 / 正文
-  const ph=this.detailPh,py=desktop?H-6-ph/2:H-36-ph/2,top=py-ph/2;
+  const cw=300,ch=128,cx0=W-8-cw-8,cy0=H-8-ch-8;if(desktop)this.card={x:cx0,y:cy0,w:cw,h:ch};
+  const ph=this.detailPh,py=desktop?cy0+ch-30:H-36-ph/2,top=desktop?cy0:py-ph/2;
   // 半透明漆底：地图从下面透出来，字仍清楚（字带描边）
-  const plate=this.add.graphics();lacquerPlate(plate,20,top,W-40,ph,.72);
-  const sealSize=desktop?54:58;this.seal=ownerSeal(this,desktop?52+sealSize/2-8:W-40-sealSize/2-14,desktop?py-14:top+sealSize/2+14,sealSize);
-  const tx=desktop?52+sealSize+8:40;this.detailBox={x:tx,y:top,w:desktop?W-tx-260:W-80-sealSize-16};
-  this.detailTitle=worldText(this,tx,top+12,'',desktop?20:22,'#f6dc9a').setName('world-detail-title');
+  const plate=this.add.graphics().setName('world-card-plate');if(desktop)lacquerPlate(plate,cx0,cy0,cw,ch,.95);else lacquerPlate(plate,20,top,W-40,ph,.72);
+  const sealSize=desktop?34:58;this.seal=ownerSeal(this,desktop?cx0+12+sealSize/2:W-40-sealSize/2-14,desktop?cy0+12+sealSize/2:top+sealSize/2+14,sealSize);
+  const tx=desktop?cx0+12+sealSize+10:40;this.detailBox={x:tx,y:top,w:desktop?cx0+cw-12-tx:W-80-sealSize-16};
+  this.detailTitle=worldText(this,tx,top+(desktop?10:12),'',desktop?16:22,'#f6dc9a').setName('world-detail-title');if(desktop)this.detailTitle.setFontFamily(HEADING_FONT).setStroke('#120904',3);
   this.detailRule=this.add.graphics();
-  this.detail=worldText(this,tx,top+(desktop?44:50),'',desktop?13:15,'#e4dcc4').setWordWrapWidth(desktop?W-tx-250:W-80-sealSize-16,true).setLineSpacing(desktop?2:4);
-  this.action=worldButton(this,desktop?W-140:W/2,desktop?py:H-36-38,"进入营寨",()=>{if(this.selected.kind==='city'){const c=this.selected.city,alert=!!this.alertFor(c.id);if(!alert&&this.owned.includes(c.id)){this.scene.start('TownScene',{city:c.id});return;}this.openSiege(c,alert);}else if(this.selected.kind==='intel')this.openIntel(this.selected.event);else this.launch(false);},desktop?190:W-100);this.action.image.setName('map-action');this.actionHome={x:this.action.image.x,y:this.action.image.y,w:desktop?190:W-100};
-  this.hardBtn=worldButton(this,this.actionHome.x,this.actionHome.y,'乱世难度',()=>this.launch(true),this.actionHome.w);this.hardBtn.image.setName('map-hard').setTint(0xd98a6a);this.hardBtn.text.setColor('#2a0d08');
+  this.detail=worldText(this,tx,top+(desktop?36:50),'',desktop?12:15,'#e4dcc4').setWordWrapWidth(desktop?cx0+cw-12-tx:W-80-sealSize-16,true).setLineSpacing(desktop?2:4);if(desktop){this.detailView=worldText(this,this.detail.x,this.detail.y,'',12,'#e4dcc4').setLineSpacing(2).setName('world-detail-view');this.detail.setVisible(false);} // 电脑版：detail 保留全文（逻辑 / 测试读取），小卡只显示前两行
+  // 电脑版小卡只写两行；鼠标移到卡上看全文（如「战斗中的随军粮只在本局有效…」）
+  if(desktop){const hit=this.add.rectangle(cx0+cw/2,cy0+(ch-56)/2,cw,ch-56,0,.001).setInteractive().setName('world-card');hit.on('pointerover',()=>this.showTip(this.detailFull,cx0+cw,cy0-6,1)).on('pointerout',()=>this.hideTip());}
+  this.action=worldButton(this,desktop?cx0+cw/2:W/2,desktop?py:H-36-38,"进入营寨",()=>{if(this.selected.kind==='city'){const c=this.selected.city,alert=!!this.alertFor(c.id);if(!alert&&this.owned.includes(c.id)){this.scene.start('TownScene',{city:c.id});return;}this.openSiege(c,alert);}else if(this.selected.kind==='intel')this.openIntel(this.selected.event);else this.launch(false);},desktop?cw-24:W-100);this.action.image.setName('map-action');this.actionHome={x:this.action.image.x,y:this.action.image.y,w:desktop?cw-24:W-100};
+  this.hardBtn=worldButton(this,this.actionHome.x,this.actionHome.y,'乱世难度',()=>this.launch(true),this.actionHome.w);this.hardBtn.image.setName('map-hard').setTint(0xd98a6a);this.hardBtn.text.setColor('#2a0d08');if(desktop){this.inkify(this.action,true);this.inkify(this.hardBtn,false);}
   // 缩放按钮在地图标记之上（关卡印 / 令旗的深度 3–5）
-  for(const b of [worldButton(this,W-55,this.area.y+35,'＋',()=>this.setZoom(this.zoom*1.2,W/2,(this.area.y+this.viewBottom)/2),48),worldButton(this,W-55,this.area.y+107,'－',()=>this.setZoom(this.zoom/1.2,W/2,(this.area.y+this.viewBottom)/2),48)]){b.image.setDepth(8);b.text.setDepth(9);}
+  for(const b of [worldButton(this,desktop?W-34:W-55,this.area.y+(desktop?26:35),'＋',()=>this.setZoom(this.zoom*1.2,W/2,(this.area.y+this.viewBottom)/2),desktop?38:48),worldButton(this,desktop?W-34:W-55,this.area.y+(desktop?70:107),'－',()=>this.setZoom(this.zoom/1.2,W/2,(this.area.y+this.viewBottom)/2),desktop?38:48)]){b.image.setDepth(8);b.text.setDepth(9);}
   // 年号与时代：点击展开势力图例
-  const era=eraDef(this.era),chipG=this.add.graphics(),chip=worldText(this,this.area.x+12,this.area.y+12,`公元${era.year}年 · ${era.name}  ▾`,desktop?15:16,'#f6dc9a').setPadding(12,7).setInteractive({useHandCursor:true}).setName('world-era');
+  const resRight=desktop?res.getBounds().right+12:0;
+  const era=eraDef(this.era),chipG=this.add.graphics(),chip=worldText(this,desktop?resRight:this.area.x+12,desktop?12:this.area.y+12,`公元${era.year}年 · ${era.name}  ▾`,desktop?13:16,'#f6dc9a').setPadding(desktop?10:12,desktop?5:7).setInteractive({useHandCursor:true}).setName('world-era');
   chip.on('pointerup',()=>this.toggleLegend());
   // 领地：城池数、每次出征产出、生效特产
-  const land=worldText(this,chip.x+chip.width+8,chip.y,`领地 ${this.owned.length}  ▾`,desktop?15:16,'#bff0c8').setPadding(12,7).setInteractive({useHandCursor:true}).setName('world-territory');
+  const land=worldText(this,chip.x+chip.width+8,chip.y,`领地 ${this.owned.length}  ▾`,desktop?13:16,'#bff0c8').setPadding(desktop?10:12,desktop?5:7).setInteractive({useHandCursor:true}).setName('world-territory');
   land.on('pointerup',()=>this.toggleTerritory());
-  const intelChip=this.intel.length?worldText(this,land.x+land.width+8,chip.y,`军情 ${this.intel.length}  ▸`,desktop?15:16,'#ffc49a').setPadding(12,7).setInteractive({useHandCursor:true}).setName('world-intel'):null;
+  const intelChip=this.intel.length?worldText(this,land.x+land.width+8,chip.y,`军情 ${this.intel.length}  ▸`,desktop?13:16,'#ffc49a').setPadding(desktop?10:12,desktop?5:7).setInteractive({useHandCursor:true}).setName('world-intel'):null;
   intelChip?.on('pointerup',()=>this.nextIntel());
   lacquerPlate(chipG,chip.x,chip.y,chip.width,chip.height,.9);lacquerPlate(chipG,land.x,land.y,land.width,land.height,.9,0x7fc48f);if(intelChip){lacquerPlate(chipG,intelChip.x,intelChip.y,intelChip.width,intelChip.height,.9,0xd0704a);intelChip.setDepth(1);}chipG.setDepth(chip.depth);chip.setDepth(1);land.setDepth(1);
   // 底边：势力排行（按城池数）+ 操作提示
-  factionStrip(this,this.area.x+10,this.viewBottom-(desktop?20:24),Math.min(this.area.w-20,desktop?620:this.area.w-20),this.era,this.owned,desktop);
+  if(desktop){const last=intelChip??land,fb=worldText(this,last.x+last.width+8,chip.y,'势力  ▾',13,'#f2e6c8').setPadding(10,5).setInteractive({useHandCursor:true}).setName('world-factions');lacquerPlate(chipG,fb.x,fb.y,fb.width,fb.height,.9,0xc9a35e);fb.setDepth(1);
+   this.factionStripC=factionStrip(this,this.area.x+10,this.area.y+20,Math.min(this.area.w-80,620),this.era,this.owned,desktop).setDepth(20).setVisible(false);
+   fb.on('pointerup',()=>{const v=!this.factionStripC!.visible;this.legend?.destroy();this.legend=undefined;this.territory?.destroy();this.territory=undefined;this.factionStripC!.setVisible(v);fb.setText(v?'势力  ▴':'势力  ▾');});}
+  else factionStrip(this,this.area.x+10,this.viewBottom-24,this.area.w-20,this.era,this.owned,desktop);
   // 操作提示垫一块漆底小牌：地图拖到哪里，提示都不会和城名 / 章节标签叠在一起难以辨认
-  {const hint=worldText(this,desktop?this.area.x+this.area.w-18:this.area.x+20,this.viewBottom-(desktop?20:56),'拖动查看 · 滚轮/双指缩放 · 点城池查看',desktop?11:12,'#f2e3c0').setOrigin(desktop?1:0,.5).setPadding(10,5).setName('world-hint');
+  if(!desktop){const hint=worldText(this,desktop?this.area.x+this.area.w-18:this.area.x+20,this.viewBottom-(desktop?20:56),'拖动查看 · 滚轮/双指缩放 · 点城池查看',desktop?11:12,'#f2e3c0').setOrigin(desktop?1:0,.5).setPadding(10,5).setName('world-hint');
    const hb=hint.getBounds(),hg=this.add.graphics().setName('world-hint-plate');lacquerPlate(hg,hb.x,hb.y,hb.width,hb.height,.86);hint.setDepth(1);}
   // 攻城归来：选中并居中该城
   const focus=cityById(String(this.registry.get('mapFocusCity')??''));this.registry.remove('mapFocusCity');
@@ -148,7 +161,7 @@ export class WorldMapScene extends Phaser.Scene {
   this.buildTimeline(desktop);
   const focusNode=WORLD_NODES.find(n=>n.id===this.registry.get('mapFocusNode'));this.registry.remove('mapFocusNode');
   if(focusIntel){this.selected={kind:'intel',event:focusIntel};this.centerOnCity(cityById(focusIntel.city)!);}
-  else if(!focus){const pick=focusNode??WORLD_NODES.find(n=>this.chapterOf(n)?.id===current);if(pick)this.selected={kind:'node',node:pick};if(focusNode)this.centerOn(focusNode);}
+  else if(!focus){const pick=focusNode??WORLD_NODES.find(n=>this.chapterOf(n)?.id===current);if(pick)this.selected={kind:'node',node:pick};if(focusNode)this.centerOn(focusNode);else if(desktop&&pick)this.centerOn(pick);} // 电脑版默认放大并对准当前章节
   this.refresh();
   const fresh=isChapterTestRun()?0:takeNewChapters();
   if(fresh>0)this.revealChapter();
@@ -161,6 +174,7 @@ export class WorldMapScene extends Phaser.Scene {
  private centerOn(node:WorldNode){this.layer.setPosition(this.area.x+this.area.w/2-node.x*this.mapW*this.zoom,(this.area.y+this.viewBottom)/2-node.y*this.mapH*this.zoom);this.clampMap();}
  /** 章节时间线条：壹 黄巾 → 贰 讨董 → 叁 群雄 → 肆 官渡 → 伍 赤壁，显示年份与状态。 */
  private buildTimeline(desktop:boolean){
+  if(desktop){this.buildSlimTimeline();return;}
   this.chips=[];const s=loadWorld(),y=this.timelineY,h=desktop?40:54,gap=desktop?14:8,n=CHAPTER_TIMELINE.length,w=(this.area.w-gap*(n-1))/n;
   const line=this.add.graphics().setName('chapter-timeline');line.lineStyle(2,0xc9a35e,.5).lineBetween(this.area.x+w/2,y+h/2,this.area.x+this.area.w-w/2,y+h/2);
   CHAPTER_TIMELINE.forEach((c,i)=>{const node=WORLD_NODES.find(x=>this.chapterOf(x)?.id===c.id);if(!node)return;const st=this.nodeState(node) as ChapterState,x=this.area.x+i*(w+gap),done=chapterStagesDone(c.id,s);
@@ -171,7 +185,32 @@ export class WorldMapScene extends Phaser.Scene {
    this.add.rectangle(x+w/2,y+h/2,w,h,0x000000,.001).setInteractive({useHandCursor:true}).setName(`chapter-chip-${c.id}`).setData('state',st).on('pointerup',()=>{this.selected={kind:'node',node};this.centerOn(node);this.refresh();});
   });
  }
+  /** 电脑版细时间线：地图左下角一条漆底细条，十二章一章一个点（已平定绿 / 可出征金 / 未解锁灰），选中的章点放大并写章名；悬停显示章名、年份、状态。 */
+  private buildSlimTimeline(){
+   this.chips=[];const s=loadWorld(),n=CHAPTER_TIMELINE.length,step=24,x0=this.area.x+16,y=this.timelineY,w=step*(n-1)+150;
+   const bg=this.add.graphics().setName('chapter-timeline-slim').setDepth(6);lacquerPlate(bg,x0-12,y-15,w,30,.82);this.timelineRect=new Phaser.Geom.Rectangle(x0-12,y-15,w,30);bg.lineStyle(1,0xc9a35e,.55).lineBetween(x0,y,x0+step*(n-1),y);
+   CHAPTER_TIMELINE.forEach((c,i)=>{const node=WORLD_NODES.find(x=>this.chapterOf(x)?.id===c.id);if(!node)return;const st=this.nodeState(node) as ChapterState,x=x0+i*step,done=chapterStagesDone(c.id,s);
+    const g=this.add.graphics().setDepth(7);this.chips.push({id:c.id,node,g,x,y,w:0,h:0,state:st});
+    const status=st==='cleared'?(hardChapterCleared(c.id)?'✓ 乱世':'✓ 已平定'):st==='open'?(done?`进行中 ${done}/3`:'可出征'):'未解锁';
+    // 章名 / 状态文字保留（测试与悬停提示读取），平时不显示
+    worldText(this,x,y,`${c.numeral} ${c.title}`,12,'#f6e3b4').setVisible(false).setName(`chapter-chip-title-${c.id}`);
+    worldText(this,x,y,`${c.year}年 · ${status}`,11,'#d6cdb4').setVisible(false).setName(`chapter-chip-status-${c.id}`);
+    this.add.circle(x,y,10,0x000000,.001).setDepth(8).setInteractive({useHandCursor:true}).setName(`chapter-chip-${c.id}`).setData('state',st)
+     .on('pointerup',()=>{this.selected={kind:'node',node};this.centerOn(node);this.refresh();})
+     .on('pointerover',()=>this.showTip(`第${c.numeral}章 · ${c.title}\n${c.year}年 · ${status}`,x,y-16,.5))
+     .on('pointerout',()=>this.hideTip());
+   });
+   this.add.text(0,0,'',{fontFamily:HEADING_FONT,fontSize:'13px',color:'#ffe2a0',resolution:2}).setOrigin(0,.5).setStroke('#120904',3).setDepth(7).setName('chapter-timeline-name');
+  }
+  /** 悬停提示（漆底小牌）：ax 为提示框水平锚点（0 左对齐 / .5 居中 / 1 右对齐），y 为底边。 */
+  private showTip(text:string,x:number,y:number,ax:number){this.hideTip();if(!text)return;const t=worldText(this,0,0,text,12,'#eadfc4').setLineSpacing(3).setWordWrapWidth(320,true);
+   const w=t.width+20,h=t.height+12,left=Phaser.Math.Clamp(x-w*ax,6,W-6-w),top=Math.max(this.area.y+4,y-h);const g=this.add.graphics();lacquerPlate(g,0,0,w,h,.95);t.setPosition(10,6);
+   this.tip=this.add.container(left,top,[g,t]).setDepth(60).setName('world-tip');}
+  private hideTip(){this.tip?.destroy();this.tip=undefined;}
  private paintChips(){const sel=this.selected.kind==='node'?this.chapterOf(this.selected.node)?.id:undefined;
+   if(this.card){const name=this.children.getByName('chapter-timeline-name') as Phaser.GameObjects.Text|null,last=this.chips[this.chips.length-1];
+    for(const c of this.chips){const on=c.id===sel,col=c.state==='cleared'?0x7fc48f:c.state==='open'?0xe5c47d:0x6b6f66;c.g.clear().fillStyle(0x000000,.5).fillCircle(c.x,c.y+1,on?7:5).fillStyle(col,1).fillCircle(c.x,c.y,on?6:4);if(on)c.g.lineStyle(2,0xffe2a0,1).strokeCircle(c.x,c.y,9);}
+    const cur=CHAPTER_TIMELINE.find(c=>c.id===sel);name?.setText(cur?`${cur.numeral} · ${cur.title}`:'').setPosition((last?.x??0)+16,last?.y??0);return;}
   for(const c of this.chips){c.g.clear();lacquerPlate(c.g,c.x,c.y,c.w,c.h,.78,c.state==='cleared'?0x7fc48f:c.state==='open'?0xe5c47d:0x6b6f66);if(c.id===sel)c.g.lineStyle(2,0xffe2a0,1).strokeRoundedRect(c.x-2,c.y-2,c.w+4,c.h+4,7);}}
  /** 有告急城池时出征别处的警示（空串表示无告急）。 */
  private lossWarning(){const names=this.alerts.map(a=>cityById(a.city)?.name).filter(Boolean);return names.length?`⚠ ${names.join('、')}告急：此时出征别处，${names.length>1?'这些城池':'该城'}将失守！`:'';}
@@ -196,7 +235,8 @@ export class WorldMapScene extends Phaser.Scene {
   if(this.legend){this.legend.destroy();this.legend=undefined;return;}
   // 留出右侧缩放按钮
   const w=Math.min(this.area.w-24-76,520),era=eraDef(this.era);
-  this.legend=factionLegend(this,this.area.x+12,this.area.y+52,this.era,this.owned,w).setDepth(20);
+  this.factionStripC?.setVisible(false);
+  this.legend=factionLegend(this,this.area.x+12,this.area.y+(W>600?8:52),this.era,this.owned,w).setDepth(20);
   const box=this.legend.list[0] as Phaser.GameObjects.Rectangle;
   const summary=worldText(this,12,box.height+6,era.summary,13,'#d6cdb4').setWordWrapWidth(w-24);
   box.setSize(w,box.height+summary.height+14);this.legend.add(summary);
@@ -205,7 +245,7 @@ export class WorldMapScene extends Phaser.Scene {
  private toggleTerritory(){
   this.legend?.destroy();this.legend=undefined;
   if(this.territory){this.territory.destroy();this.territory=undefined;return;}
-  const w=Math.min(this.area.w-24-76,520),sum=territorySummary(this.owned),root=this.add.container(this.area.x+12,this.area.y+52).setDepth(20).setName('territory-panel');
+  const w=Math.min(this.area.w-24-76,520),sum=territorySummary(this.owned),root=this.add.container(this.area.x+12,this.area.y+(W>600?8:52)).setDepth(20).setName('territory-panel');this.factionStripC?.setVisible(false);
   const lines=this.owned.length?[
    `我方城池 ${this.owned.length} 座 · 大城 ${sum.counts.large} / 中城 ${sum.counts.medium} / 小城 ${sum.counts.small}`,
    (()=>{const s=loadWorld(),t={grain:0,troops:0};for(const id of this.owned){const c=cityById(id);if(!c)continue;const inc=cityIncome(c.tier,cityLevels(id,s));t.grain+=inc.grain;t.troops+=inc.troops;}return `每战产出（各城建筑）：${incomeText(t)}`;})(),
@@ -218,7 +258,7 @@ export class WorldMapScene extends Phaser.Scene {
  private setZoom(next:number,x:number,y:number){const z=Phaser.Math.Clamp(next,this.minZoom,this.minZoom*2.7),ratio=z/this.zoom;this.layer.x=x-(x-this.layer.x)*ratio;this.layer.y=y-(y-this.layer.y)*ratio;this.zoom=z;this.layer.setScale(z);this.clampMap();}
  private toScreen(mx:number,my:number){return{x:this.layer.x+mx*this.zoom,y:this.layer.y+my*this.zoom};}
  private clampMap(){const a=this.area;this.layer.x=Phaser.Math.Clamp(this.layer.x,a.x+a.w-this.mapW*this.zoom,a.x);this.layer.y=Phaser.Math.Clamp(this.layer.y,a.y+a.h-this.mapH*this.zoom,a.y);
-  const visible=(x:number,y:number)=>x>a.x+14&&x<a.x+a.w-14&&y>a.y+14&&y<this.viewBottom-30;
+  const c=this.card,tl=this.timelineRect,visible=(x:number,y:number)=>x>a.x+14&&x<a.x+a.w-14&&y>a.y+14&&y<this.viewBottom-30&&!(c&&x>c.x-24&&y>c.y-36)&&!(tl&&x<tl.right+20&&y>tl.y-30); // 电脑版：右下小卡、左下时间线下面不放标记
   for(const m of this.markers){const x=this.layer.x+m.node.x*this.mapW*this.zoom,q=this.liftOffCity(x,this.layer.y+m.node.y*this.mapH*this.zoom);m.root.setPosition(q.x,q.y).setVisible(visible(q.x,q.y)&&!(this.routeChapter&&this.chapterOf(m.node)?.id===this.routeChapter));}
   // 小城名字在放大后才显示，避免默认视图拥挤
   const showSmall=this.zoom>=this.minZoom*1.65;
@@ -259,7 +299,7 @@ export class WorldMapScene extends Phaser.Scene {
   const take=(t:Phaser.GameObjects.Text|undefined,owner:Phaser.GameObjects.Container,plate?:Phaser.GameObjects.Graphics,must=false)=>{if(!t||!t.visible)return;let b=box(t);
    if(clash(b,owner)&&!must){t.setVisible(false);plate?.setVisible(false);return;}plate?.setVisible(true);placed.push(b);};
   // 底边的势力排行条、操作提示牌也算障碍：被压住的城名牌直接隐藏，免得只露半截
-  const chrome:Phaser.Geom.Rectangle[]=[];for(const name of ['world-faction-strip','world-hint','world-era','world-territory','world-intel']){const o=this.children.getByName(name) as unknown as Phaser.GameObjects.Components.GetBounds|null;if(o){chrome.push(o.getBounds());placed.push(o.getBounds());}}
+  const chrome:Phaser.Geom.Rectangle[]=[];for(const name of ['world-faction-strip','world-hint','world-era','world-territory','world-intel','world-card']){const o=this.children.getByName(name) as unknown as Phaser.GameObjects.Components.GetBounds|null;if(o){chrome.push(o.getBounds());placed.push(o.getBounds());}}if(this.timelineRect){chrome.push(this.timelineRect);placed.push(this.timelineRect);}
   const shown=(c:Phaser.GameObjects.Container)=>c.visible;
   {const sel=this.cityMarkers.find(m=>this.isSelected(m.city));if(sel&&shown(sel.root))take(sel.label,sel.root,sel.root.getData('plate'),true);}
   // 关卡标签：默认在印下方，被挡就翻到印上方；两处都挡仍显示（关卡名不能丢）
@@ -269,6 +309,8 @@ export class WorldMapScene extends Phaser.Scene {
    const spots=[[0,24],[0,-26],[hw,0],[-hw,0]];let ok=false;for(const [sx,sy] of spots){t.setPosition(sx,sy);if(inside()&&!clash(box(t),p.root)){ok=true;break;}}if(!ok)t.setPosition(0,24);
    take(t,p.root,undefined,true);}
   for(const m of this.markers)if(shown(m.root)){const t=m.root.getData('label') as Phaser.GameObjects.Text|undefined;t?.setVisible(true);
+   // 电脑版：未解锁章节只留锁印，不写章名（用户「太乱了」）
+   if(t&&this.card&&m.root.getData('locked')){t.setVisible(false);(m.root.getData('plate') as Phaser.GameObjects.Graphics|undefined)?.setVisible(false);continue;}
    // 章节名牌压到底栏 / 顶部按钮下时隐藏（牙旗仍在，点开详情可见章名）
    if(t&&chrome.some(r=>inter(r,box(t)))){t.setVisible(false);(m.root.getData('plate') as Phaser.GameObjects.Graphics|undefined)?.setVisible(false);continue;}take(t,m.root,m.root.getData('plate'),true);}
   for(const tier of ['large','medium','small'] as const)for(const m of this.cityMarkers)if(m.city.tier===tier&&shown(m.root)&&!this.isSelected(m.city))take(m.label,m.root,m.root.getData('plate'));}
@@ -287,9 +329,17 @@ export class WorldMapScene extends Phaser.Scene {
   this.detailTitle.setText(title);this.seal.set(color,glyph);
   const y=this.detailTitle.y+this.detailTitle.height+4,w=Math.min(this.detailBox.w,Math.max(this.detailTitle.width+60,300));
   this.detailRule.clear().fillStyle(color,1).fillRect(this.detailTitle.x,y,w*.35,2).fillStyle(0xc9a35e,.55).fillRect(this.detailTitle.x+w*.35,y+.5,w*.65,1);
-  this.detail.setText(body);
+  this.detail.setText(body);this.detailFull=body;if(this.card){const w=this.detail.getWrappedText(body);this.detailView?.setText(w.length>2?w[0]+'\n'+w[1].replace(/.$/,'…'):w.join('\n'));} /* 电脑版小卡两行放不下：第二行以「…」收尾，全文悬停可见 */
  }
- private refresh(){
+ private refresh(){this.refreshInner();this.syncInks();}
+ /** 电脑版按钮换水墨笔触（同主页 / 营寨 / 结算）：原漆金按钮图透明保留做命中区，墨迹底跟随其位置、大小、可点状态。 */
+ private inkify(btn:ReturnType<typeof worldButton>,primary:boolean){if(!this.textures.exists('btn_ink_primary_normal'))return;const e:InkBtn={btn,plate:null,primary,hover:false};this.inks.push(e);
+  btn.image.on('pointerover',()=>{e.hover=true;this.syncInk(e);}).on('pointerout',()=>{e.hover=false;this.syncInk(e);});this.syncInk(e);}
+ private syncInks(){for(const e of this.inks)this.syncInk(e);}
+ private syncInk(e:InkBtn){const im=e.btn.image,t=e.btn.text,on=!!im.input?.enabled;
+  e.plate=inkPlate(this,e.plate,im.x,im.y,im.displayWidth*.86,Math.min(im.displayHeight,40),e.primary,on?(e.hover?'hover':'normal'):'disabled');
+  if(e.plate)e.plate.setVisible(im.visible).setDepth(im.depth);im.setAlpha(.001);t.setDepth(Math.max(t.depth,im.depth+1)).setStroke(e.primary?'#2a0c06':'#16100a',3).setColor(!on?'#8e8576':e.hover?'#fff3d4':e.primary?'#f8e6bf':'#e8d3a6');}
+ private refreshInner(){
   const sel=this.selected,routeId=sel.kind==='stage'?sel.chapter:sel.kind==='node'?this.chapterOf(sel.node)?.id:undefined;this.showRoute(routeId);
   for(const m of this.cityMarkers)(MARKERS_V2?paintSelectionV2:paintSelection)(m,this.isSelected(m.city));this.clampMap();this.paintChips();
   for(const m of this.intelMarkers)m.ring.setStrokeStyle(this.selected.kind==='intel'&&this.selected.event.id===m.event.id?3:0,0xfff0c0,1);
@@ -373,10 +423,10 @@ ${city.tier==='large'?'守城大将：'+siegeBossName(city,owner):'守军：'+FA
  /** 出征按钮布局：已平定章节并列显示「乱世难度」。 */
  private layoutActions(showHard:boolean){const desk=W>600,h=this.actionHome,a=this.action,b=this.hardBtn,bh=desk?48:62;
   b.image.setVisible(showHard);b.text.setVisible(showHard);if(showHard)b.image.setInteractive({useHandCursor:true});else b.image.disableInteractive();
-  const place=(btn:ReturnType<typeof worldButton>,x:number,y:number,w:number)=>{btn.image.setPosition(x,y).setDisplaySize(w,bh);btn.text.setPosition(x,y);};
+  const place=(btn:ReturnType<typeof worldButton>,x:number,y:number,w:number)=>{btn.image.setPosition(x,y).setDisplaySize(w,this.card?40:bh);btn.text.setPosition(x,y);if(this.card)btn.text.setFontSize(w<150?14:15);};
   if(!showHard){place(a,h.x,h.y,h.w);return;}
   const id=this.selected.kind==='stage'?this.selected.chapter:this.selected.kind==='node'?this.chapterOf(this.selected.node)?.id:undefined;b.text.setText(id&&hardChapterCleared(id)?'乱世难度 ✓':'乱世难度');
-  if(desk){place(b,h.x,h.y-27,h.w);place(a,h.x,h.y+27,h.w);}else{const half=(h.w-12)/2;place(b,h.x-h.w/2+half/2,h.y,half);place(a,h.x+h.w/2-half/2,h.y,half);}}
+  if(desk&&!this.card){place(b,h.x,h.y-27,h.w);place(a,h.x,h.y+27,h.w);}else{const half=(h.w-12)/2;place(b,h.x-h.w/2+half/2,h.y,half);place(a,h.x+h.w/2-half/2,h.y,half);}}
  /** 关卡详情：史事、首领、年号与出征状态。 */
  private refreshStage(id:TimelineChapterId,stage:number){const save=loadWorld(),info=chapterById(id),d=chapterStages(id)[stage-1],done=stage<=chapterStagesDone(id,save),open=stageOpen(id,stage,save)||isChapterTestRun(),cleared=chapterState(id,save)==='cleared';
   if(!d)return;const status=done?'✓ 已告捷 · 可重打此关':open?'可出征':chapterState(id,save)==='locked'?`未解锁：${info.hint}`:'先通关前一关';
@@ -411,7 +461,8 @@ ${city.tier==='large'?'守城大将：'+siegeBossName(city,owner):'守军：'+FA
   if(!this.textures.exists('fog_brush')){const t=this.textures.createCanvas('fog_brush',256,256);if(!t)return;const ctx=t.getContext(),grd=ctx.createRadialGradient(128,128,0,128,128,128);grd.addColorStop(0,'rgba(255,255,255,1)');grd.addColorStop(.62,'rgba(255,255,255,1)');grd.addColorStop(1,'rgba(255,255,255,0)');ctx.fillStyle=grd;ctx.fillRect(0,0,256,256);t.refresh();}
   this.fogStamp=this.make.image({x:0,y:0,key:'fog_brush',add:false});
   this.fog=this.add.renderTexture(0,0,this.mapW,this.mapH).setOrigin(0).setName('world-fog');this.layer.add(this.fog);this.paintFog();
-  for(const c of CHAPTER_TIMELINE)if(chapterState(c.id,s)==='locked'){const r=CHAPTER_REGIONS[c.id][0];this.layer.add(worldText(this,r.x,r.y,`第${c.numeral}章 · ${c.title}\n天下未定`,34,'#5a4630').setOrigin(.5).setAlign('center').setAlpha(.62).setName(`fog-label-${c.id}`));}}
+  // 2026-11-17：雾上的「第X章 · 天下未定」大字叠成一片（用户「太乱了」），电脑版不再写，只留纸雾
+  if(W<=600)for(const c of CHAPTER_TIMELINE)if(chapterState(c.id,s)==='locked'){const r=CHAPTER_REGIONS[c.id][0];this.layer.add(worldText(this,r.x,r.y,`第${c.numeral}章 · ${c.title}\n天下未定`,34,'#5a4630').setOrigin(.5).setAlign('center').setAlpha(.62).setName(`fog-label-${c.id}`));}}
  private paintFog(reveal?:{id:TimelineChapterId;t:number}){const rt=this.fog,stamp=this.fogStamp;if(!rt||!stamp)return;rt.clear();rt.fill(0xcdb98c,.9);
   const erase=(c:{x:number;y:number;r:number},k=1)=>{if(k<=0)return;stamp.setDisplaySize(c.r*2.5*k,c.r*2.5*k);rt.erase(stamp,c.x,c.y);};
   for(const c of this.fogCircles(reveal?.id))erase(c);if(reveal)for(const c of CHAPTER_REGIONS[reveal.id])erase(c,reveal.t);}

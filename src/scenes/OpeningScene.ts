@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
-import { GAME_HEIGHT as H, GAME_WIDTH as W, TITLE_FONT } from '../config';
+import { FONT, GAME_HEIGHT as H, GAME_WIDTH as W, TITLE_FONT } from '../config';
+import { IS_DESKTOP_APP } from '../platform/desktop';
 import { markOpeningSeen } from '../systems/BattleSettings';
 import { homeCommand } from '../ui/HomeCommand';
 
@@ -13,7 +14,9 @@ import { homeCommand } from '../ui/HomeCommand';
  *   白底已转透明），不用代码画的形状：下一段从扩散的墨里显出来，墨缘（同一序列超前一帧、染成浓墨）先把上一段吞没。
  * - 字幕：游戏书法标题字（TITLE_FONT），墨色字 + 淡宣纸晕光，逐字像墨一样晕出（模糊 → 清晰），停约 2 秒再淡出。
  * - 最后一段：13.2 秒刀光劈下（配乐重击），14.5 秒上方留白处淡入主页同款水墨标识，朱印盖下、轻震屏。
- * - 配乐：assets/audio/opening_theme.ogg（bgm 会话按此时间轴制作）；文件没到时静音占位。跳过时音乐淡出，不硬切。
+ * - 配乐：assets/audio/opening_theme.ogg / .mp3（bgm 会话按此时间轴制作，音频 0 秒对齐视频 0 秒）；文件缺失时静音。跳过时音乐淡出，不硬切。
+ * - 出声：桌面版（Electron）开了 autoplay-policy 开关，直接带声播；网页版浏览器在用户操作前不许出声，
+ *   所以声音还锁着时先显示水墨「点击 · 入乱世」（宣纸底 + 书法字），点一下 / 任意键再开播（只在会播开场的那次启动出现）。
  * - 任意键 / 点击 / 手柄按键跳过；右下角水墨「跳过 ›」。播完或跳过都记「已播过」，再进主页（或 data.next）。
  */
 export const OPENING_SEGS = [
@@ -25,7 +28,7 @@ export const OPENING_SEGS = [
 export const OPENING_TOTAL = 20;
 const OVERLAP = .8, HIT = 13.2, TITLE_AT = 14.5;
 const INK_KEY = 'opening_ink_bloom', INK_URL = 'assets/epic-home/opening/ink_bloom.png', INK_FRAMES = 8;
-const MUSIC_KEY = 'opening_theme', MUSIC_URL = 'assets/audio/opening_theme.ogg';
+const MUSIC_KEY = 'opening_theme', MUSIC_URL = 'assets/audio/opening_theme.ogg', MUSIC_MP3 = 'assets/audio/opening_theme.mp3';
 /** 字幕（史实：中平元年＝184 年黄巾起事；「苍天已死，黄天当立」为张角口号）。at = 开始晕出的时间（秒）。 */
 export const OPENING_LINES: Array<{ at: number; until: number; main: string; sub?: string }> = [ // until = 最晚淡出完毕（下一次转场之前）
   { at: .7, until: 4.1, main: '中平元年　黄巾蜂起', sub: '苍天已死　黄天当立' },
@@ -33,6 +36,16 @@ export const OPENING_LINES: Array<{ at: number; until: number; main: string; sub
   { at: 9.3, until: 12.7, main: '桃园结义　誓扶汉室' },
 ];
 const SEAL = { x0: .886, y0: .672, x1: .996, y1: .904 }; // title_wordmark 里朱印所在区域（按原图比例）
+/**
+ * 在 title_wordmark 上切出朱印子帧。注意 Phaser 的坑：只有 __BASE 的纹理第一次 add 自定义帧时，会把 firstFrame 改成这个新帧，
+ * 之后主页 add.image(..., 'title_wordmark') 不带帧名就会画成朱印（2026-11-18 用户报「播完 cg 主页标题变成一大块红印」）。所以加完把默认帧改回 __BASE。
+ */
+function ensureSealFrame(scene: Phaser.Scene): void {
+  if (!scene.textures.exists('title_wordmark')) return;
+  const tex = scene.textures.get('title_wordmark'), src = tex.getSourceImage() as { width: number; height: number };
+  if (!tex.has('opening_seal')) tex.add('opening_seal', 0, src.width * SEAL.x0, src.height * SEAL.y0, src.width * (SEAL.x1 - SEAL.x0), src.height * (SEAL.y1 - SEAL.y0));
+  tex.firstFrame = '__BASE';
+}
 
 type Seg = { v: Phaser.GameObjects.Video; at: number; started: boolean; mask?: Phaser.GameObjects.Image; rim?: Phaser.GameObjects.Image; settled: boolean };
 
@@ -42,6 +55,8 @@ export class OpeningScene extends Phaser.Scene {
   private titleShown = false; private hitDone = false; private lineShown: boolean[] = [];
   private title?: Phaser.GameObjects.Image; private seal?: Phaser.GameObjects.Image;
   private music?: Phaser.Sound.BaseSound;
+  /** 网页版声音未解锁时的「点击 · 入乱世」入口；点了才开播。 */
+  private gate?: Phaser.GameObjects.Container; private begun = false;
   constructor() { super('OpeningScene'); }
 
   preload(): void {
@@ -50,7 +65,7 @@ export class OpeningScene extends Phaser.Scene {
   }
 
   create(data?: { next?: string }): void {
-    this.done = false; this.clockStarted = false; this.padArmed = false; this.titleShown = false; this.hitDone = false;
+    this.done = false; this.begun = false; this.gate = undefined; this.clockStarted = false; this.padArmed = false; this.titleShown = false; this.hitDone = false;
     this.lineShown = OPENING_LINES.map(() => false); this.next = data?.next ?? 'MenuScene'; this.startedAt = performance.now();
     this.cameras.main.setBackgroundColor('#000000').fadeIn(400, 0, 0, 0);
     // 四段视频一起建好（各自缓冲），按时间轴依次播；后一段叠在上面
@@ -60,20 +75,14 @@ export class OpeningScene extends Phaser.Scene {
       if (v.video) { v.video.muted = true; v.video.defaultMuted = true; v.video.loop = false; v.video.playsInline = true; v.video.preload = 'auto'; v.video.setAttribute('playsinline', ''); }
       v.on('play', () => { if (v.width && v.height) v.setScale(Math.max(W / v.width, H / v.height)); });
       v.on('error', () => { if (i === 0) this.finish(); });
-      const seg: Seg = { v, at: s.at, started: i === 0, settled: i === 0 };
-      // 后几段只预缓冲、停在第 0 帧：Phaser 的 loadURL 载入后会自己开播，不拦住的话第二段到 4.3 秒时已经快播完（实测整段黑屏）
-      if (i > 0 && v.video) { const el = v.video; el.autoplay = false; const hold = () => { if (!seg.started) { el.pause(); el.currentTime = 0; } }; el.addEventListener('playing', hold); el.addEventListener('loadeddata', hold); }
+      const seg: Seg = { v, at: s.at, started: false, settled: i === 0 };
+      // 各段先只预缓冲、停在第 0 帧：Phaser 的 loadURL 载入后会自己开播，不拦住的话第二段到 4.3 秒时已经快播完（实测整段黑屏），第一段也会在「点击进入」后面偷偷开播
+      if (v.video) { const el = v.video; el.autoplay = false; const hold = () => { if (!seg.started) { el.pause(); el.currentTime = 0; } }; el.addEventListener('playing', hold); el.addEventListener('loadeddata', hold); }
       return seg;
     });
-    const first = this.segs[0].v; first.setVisible(true);
-    first.once('play', () => { if (!this.clockStarted) { this.clockStarted = true; this.t0 = performance.now(); } });
-    first.play(false);
-    // 保险：4 秒还没开始播（被拦截 / 解码失败）直接进主页；总时长兜底 26 秒
-    this.time.delayedCall(4000, () => { if (!this.done && !this.clockStarted) this.finish(); });
-    this.time.delayedCall(26000, () => this.finish());
-
-    // 配乐：先探一下文件在不在（没交付时静音占位，不报解码错）；到了就按开场时钟对齐播放。浏览器未解锁声音时静音
-    this.startMusic();
+    // 网页版：声音还锁着（用户还没操作过页面）就先显示「点击 · 入乱世」；桌面版 / 已解锁（如设置里重看）直接开播
+    let q: URLSearchParams | null = null; try { q = new URLSearchParams(location.search); } catch { /* ignore */ }
+    if (!IS_DESKTOP_APP && this.sound.locked && q?.get('gate') !== '0') this.showGate(); else this.begin();
 
     // 水墨标识：去掉朱印部分先淡入，朱印另起一张（同一贴图的子帧）随后盖下
     if (this.textures.exists('title_wordmark')) {
@@ -81,7 +90,7 @@ export class OpeningScene extends Phaser.Scene {
       tex.setFilter(Phaser.Textures.FilterMode.LINEAR);
       const tw = Math.min(W * .46, 560), k = tw / src.width, cx = W / 2, cy = H * .2;
       this.title = this.add.image(cx, cy, 'title_wordmark').setScale(k).setAlpha(0).setDepth(100).setName('opening-title').setCrop(0, 0, src.width * SEAL.x0, src.height);
-      if (!tex.has('opening_seal')) tex.add('opening_seal', 0, src.width * SEAL.x0, src.height * SEAL.y0, src.width * (SEAL.x1 - SEAL.x0), src.height * (SEAL.y1 - SEAL.y0));
+      ensureSealFrame(this);
       const sx = cx - tw / 2 + tw * (SEAL.x0 + SEAL.x1) / 2, sy = cy - src.height * k / 2 + src.height * k * (SEAL.y0 + SEAL.y1) / 2;
       this.seal = this.add.image(sx, sy, 'title_wordmark', 'opening_seal').setScale(k).setAlpha(0).setDepth(101).setName('opening-seal');
     }
@@ -89,24 +98,60 @@ export class OpeningScene extends Phaser.Scene {
     // 跳过：右下角水墨小钮 + 任意键 / 点击 / 手柄
     const skip = homeCommand(this, W - 92, H - 36, 128, 38, '跳过 ›', false, true, 15);
     for (const o of [skip.g, skip.caption, skip.hit]) (o as unknown as { setDepth: (d: number) => void }).setDepth(200);
-    skip.hit.setName('opening-skip').on('pointerdown', () => this.finish());
+    skip.hit.setName('opening-skip').on('pointerdown', () => { if (this.begun) this.finish(); });
     for (const o of [skip.g, skip.caption]) (o as unknown as { setAlpha: (a: number) => void }).setAlpha(0);
-    this.tweens.add({ targets: [skip.g, skip.caption], alpha: .9, duration: 500, delay: 800 });
-    this.input.keyboard?.on('keydown', () => this.finish());
-    this.input.on('pointerdown', () => this.finish());
+    this.skipParts = [skip.g, skip.caption];
+    this.input.keyboard?.on('keydown', () => this.onInput());
+    this.input.on('pointerdown', () => this.onInput());
     this.events.once('shutdown', () => {
       for (const s of this.segs) { const key = s.v.videoTexture?.key; s.v.stop(); if (key && this.textures.exists(key)) this.textures.remove(key); s.mask?.destroy(); }
       this.segs = []; this.music?.stop(); this.music?.destroy(); this.music = undefined;
     });
   }
 
+  private skipParts: Phaser.GameObjects.GameObject[] = [];
+  /** 点击 / 按键：入口时开播，播放中跳过。 */
+  private onInput(): void { if (this.gate) this.enter(); else if (this.begun) this.finish(); }
+  /** 水墨入口：宣纸底 + 书法「点击 · 入乱世」+ 朱印，提示字呼吸。 */
+  private showGate(): void {
+    const g = this.add.container(0, 0).setDepth(300).setName('opening-gate');
+    if (this.textures.exists('ink_paper')) { const p = this.add.image(W / 2, H / 2, 'ink_paper'); p.setScale(Math.max(W / p.width, H / p.height)); g.add(p); }
+    else g.add(this.add.rectangle(W / 2, H / 2, W, H, 0xe9dfc8));
+    const t = this.add.text(W / 2, H * .46, '点击 · 入乱世', { fontFamily: TITLE_FONT, fontSize: '46px', color: '#1c1610', resolution: 2 }).setOrigin(.5).setLetterSpacing(10).setShadow(0, 0, '#f6eedb', 12, true, true).setName('opening-gate-title');
+    g.add(t);
+    ensureSealFrame(this);
+    if (this.textures.exists('title_wordmark')) g.add(this.add.image(t.x + t.width / 2 + 34, t.y + 8, 'title_wordmark', 'opening_seal').setScale(.42));
+    const hint = this.add.text(W / 2, H * .46 + 54, '点击画面或按任意键', { fontFamily: FONT, fontSize: '14px', color: '#5a4a36', resolution: 2 }).setOrigin(.5);
+    g.add(hint); this.tweens.add({ targets: hint, alpha: .35, duration: 1100, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+    g.setAlpha(0); this.tweens.add({ targets: g, alpha: 1, duration: 500 });
+    this.gate = g;
+  }
+  /** 点了入口：入口淡出，开播（这次点击就是浏览器要的手势，声音随之解锁）。 */
+  private enter(): void {
+    const g = this.gate; if (!g) return; this.gate = undefined; g.disableInteractive?.();
+    this.tweens.add({ targets: g, alpha: 0, duration: 450, onComplete: () => g.destroy() });
+    this.begin();
+  }
+  /** 开播：第一段 + 配乐 + 跳过钮；保险计时器从这里算。 */
+  private begin(): void {
+    if (this.begun) return; this.begun = true; this.startedAt = performance.now(); this.padArmed = false;
+    const s0 = this.segs[0], first = s0.v; s0.started = true; first.setVisible(true);
+    first.once('play', () => { if (!this.clockStarted) { this.clockStarted = true; this.t0 = performance.now(); } });
+    first.play(false);
+    // 保险：4 秒还没开始播（被拦截 / 解码失败）直接进主页；总时长兜底 26 秒
+    this.time.delayedCall(4000, () => { if (!this.done && !this.clockStarted) this.finish(); });
+    this.time.delayedCall(26000, () => this.finish());
+    this.tweens.add({ targets: this.skipParts, alpha: .9, duration: 500, delay: 800 });
+    // 配乐：按开场时钟对齐播放；声音若还锁着（极少：桌面外的特殊环境），解锁后从当前位置接上
+    if (this.sound.locked) this.sound.once(Phaser.Sound.Events.UNLOCKED, () => this.startMusic()); else this.startMusic();
+  }
   private startMusic(): void {
     let vol = .4; try { vol = Number(localStorage.getItem('im_bgm_vol') ?? 40) / 100; } catch { /* 存储不可用 */ }
     const play = () => { if (this.done || !this.sys.isActive()) return; this.music = this.sound.add(MUSIC_KEY, { volume: Phaser.Math.Clamp(vol, 0, 1) }); this.music.play({ seek: this.clock }); };
     if (this.cache.audio.exists(MUSIC_KEY)) { play(); return; }
     fetch(MUSIC_URL, { method: 'HEAD' }).then(r => {
       if (!r.ok || !/audio|ogg|octet-stream/.test(r.headers.get('content-type') ?? '') || this.done) return;
-      this.load.audio(MUSIC_KEY, MUSIC_URL); this.load.once(Phaser.Loader.Events.COMPLETE, () => { if (this.cache.audio.exists(MUSIC_KEY)) play(); }); this.load.start();
+      this.load.audio(MUSIC_KEY, [MUSIC_URL, MUSIC_MP3]); this.load.once(Phaser.Loader.Events.COMPLETE, () => { if (this.cache.audio.exists(MUSIC_KEY)) play(); }); this.load.start();
     }).catch(() => { /* 离线 / 不存在：静音 */ });
   }
   /** 测试 / 预览用：把开场时钟拨到 t 秒（已开播的段同步跳到对应位置）。 */
@@ -120,7 +165,7 @@ export class OpeningScene extends Phaser.Scene {
     if (performance.now() - this.startedAt > 600) {
       let pressed = false;
       try { for (const p of navigator.getGamepads?.() ?? []) if (p?.buttons.some(b => b.pressed)) pressed = true; } catch { /* 不支持手柄 */ }
-      if (pressed && this.padArmed) { this.finish(); return; }
+      if (pressed && this.padArmed) { this.padArmed = false; this.onInput(); if (this.done) return; }
       if (!pressed) this.padArmed = true;
     }
     if (!this.clockStarted) return;

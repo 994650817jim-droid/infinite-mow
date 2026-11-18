@@ -3,6 +3,7 @@ import type { Enemy } from '../entities/Enemy';
 import type { Player } from '../entities/Player';
 import type { PlayerStats, WeaponState } from '../types';
 import { PASSIVE_RULES as R } from '../data/passives';
+import { HZ_SHARP } from '../data/heroMechanics';
 import type { WeaponHost } from './registry';
 import { SHOW_RANGE_RINGS } from '../ui/RangeRings';
 import { HINT_MOCK, SHOW_OWN_RANGE_FX, groundScar } from '../ui/HintStyle';
@@ -95,12 +96,12 @@ export function sniperTarget(host: WeaponHost, range: number): Enemy | null {
 export function baodiaoBehavior(host: WeaponHost, weapon: WeaponState, dt: number, time: number): void {
   const pl = host.player, list = ARROWS.get(pl) ?? []; ARROWS.set(pl, list);
   const g = pl.growth, st = HZ.get(pl) ?? { wasSharp: false, fanReady: false, eliteSeen: pl.passive.sharpEliteKillCount }; HZ.set(pl, st);
-  // 静心：进入神射所需不受伤时间 5 → 4.5 / 4 / 3.5 秒
-  pl.passive.setCalmMs(R.calmMs - R.jingxinStepMs * g.masteries.jingxin);
-  // 老骥伏枥 3 级「宝刀未老」：神射中每射杀一名精锐 / 首领，回复少量生命，且一小段时间内受伤不退出神射
+  // 静心：神射持续 6 → 7 / 8 / 9 秒（2026-11-18 神射改为命中积层进入，见 data/heroMechanics.ts）
+  pl.passive.setSharpMs(HZ_SHARP.sharpMs + HZ_SHARP.jingxinExtraMs * g.masteries.jingxin);
+  // 老骥伏枥 3 级「宝刀未老」：神射中每射杀一名精锐 / 首领，回复少量生命，神射延长 2 秒
   const eliteKills = pl.passive.sharpEliteKillCount;
   if (eliteKills > st.eliteSeen && g.masteries.laoji >= 3 && pl.alive) {
-    pl.heal(pl.maxHp * R.laojiHealMul * (eliteKills - st.eliteSeen)); pl.passive.grantSharp(time, R.laojiGuardMs);
+    pl.heal(pl.maxHp * R.laojiHealMul * (eliteKills - st.eliteSeen)); pl.passive.grantSharp(time, HZ_SHARP.laojiExtendMs * (eliteKills - st.eliteSeen));
     hzFx(host, HZFX.laoji, pl.x, pl.y + 4, 120, 12, 'huangzhong-laoji', R.laojiGuardMs, pl);
     const t = host.add.text(pl.x, pl.y - 70, '宝刀未老', { fontFamily: 'serif', fontSize: '20px', color: '#ffe0a0', stroke: '#5a1a10', strokeThickness: 5 }).setOrigin(.5).setDepth(60).setName('huangzhong-laoji-text');
     t.scene.tweens.add({ targets: t, y: pl.y - 100, alpha: 0, delay: 600, duration: 600, onComplete: () => t.destroy() });
@@ -124,6 +125,8 @@ export function baodiaoBehavior(host: WeaponHost, weapon: WeaponState, dt: numbe
       if (!alive(e) || a.hit.has(e.spawnId) || (locked && e !== a.target) || Math.hypot(e.x - a.img.x, e.y - a.img.y) > 12 + e.radius) continue;
       const ex = e.x, ey = e.y; // 爆裂以中箭位置为圆心（击退之前）
       a.hit.add(e.spawnId); host.hitEnemy(e, a.damage, time, 'arrow'); shove(e, a.ux, a.uy, R.heavyArrowKnock);
+      // 神射蓄势：每支主箭第一次命中积 1 层（三连扇形的两侧箭 spawn = -1 不算）
+      if (a.spawn >= 0 && a.hit.size === 1) pl.passive.onSharpHit(time);
       if (fxD(host)) host.heroFx?.('heavyHit', ex - a.ux * 30, ey - 8 - a.uy * 30, 130, Math.atan2(a.uy, a.ux));
       else { const flash = host.add.circle(ex, ey - 8, 10, 0xffe6a0, .8).setDepth(42).setBlendMode(1);
         flash.scene.tweens.add({ targets: flash, radius: 34, alpha: 0, duration: 240, onComplete: () => flash.destroy() }); }

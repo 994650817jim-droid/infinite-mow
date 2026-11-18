@@ -2,6 +2,7 @@ import type { Enemy } from '../entities/Enemy';
 import type { CharacterId } from '../data/characters';
 import type { WeaponId } from '../types';
 import { CHARACTER_PASSIVES, PASSIVE_RULES as R } from '../data/passives';
+import { HZ_SHARP } from '../data/heroMechanics';
 export interface PassiveCast {
   owner: CharacterId; generation: number; weapon: WeaponId; empowered: boolean;
   radiusMul: number; damageMul: number; extraSpear: boolean; spearLengthMul: number;
@@ -29,8 +30,8 @@ interface Burn { enemy: Enemy; spawnId: number; until: number; nextTick: number;
 export class CharacterPassives {
   private character: CharacterId = 'zhaoyun';
   private stacks = 0; private lastGain = -Infinity; private lastDamage = 0;
-  /** 黄忠：进入神射所需的不受伤时间（技艺「静心」缩短）；「宝刀未老」期间受伤不退出神射。 */
-  private calmMs: number = R.calmMs; private sharpGuardUntil = -Infinity;
+  /** 黄忠（2026-11-18 改为命中积层，data/heroMechanics.ts HZ_SHARP）：神射截止时间、神射时长（静心加长）、上次受伤掉层时间。 */
+  private sharpUntil = -Infinity; private sharpMs: number = HZ_SHARP.sharpMs; private hurtDropAt = -Infinity;
   /** 本关击杀数，及黄忠神射中射杀的精锐 / 首领数（技艺「老骥伏枥」读取）。 */
   private stageKills = 0; private sharpEliteKills = 0;
   private generation = 0; private stopped = false;
@@ -45,16 +46,17 @@ export class CharacterPassives {
   private lastMoveAt = -Infinity;
   constructor(character: CharacterId = 'zhaoyun', now = 0) { this.reset(character, now); }
   reset(character: CharacterId, now: number): void {
-    this.character = character; this.stacks = 0; this.lastGain = -Infinity; this.charmKillAt = -Infinity; this.lastDamage = now; this.calmMs = R.calmMs; this.sharpGuardUntil = -Infinity; this.stageKills = 0; this.sharpEliteKills = 0;
+    this.character = character; this.stacks = 0; this.lastGain = -Infinity; this.charmKillAt = -Infinity; this.lastDamage = now; this.sharpUntil = -Infinity; this.sharpMs = HZ_SHARP.sharpMs; this.hurtDropAt = -Infinity; this.stageKills = 0; this.sharpEliteKills = 0;
     this.generation++; this.stopped = false; this.gains = 0; this.triggers = 0; this.burns.clear(); this.charms.clear(); this.guardUntil = -Infinity; this.chargeInvulnUntil = this.chargeGuardUntil = -Infinity;
   }
   get characterId(): CharacterId { return this.character; }
   stop(): void { this.stopped = true; this.stacks = 0; this.generation++; this.burns.clear(); this.charms.clear(); this.chargeInvulnUntil = this.chargeGuardUntil = -Infinity; }
-  private get maxStacks(): number { return CHARACTER_PASSIVES[this.character].maxStacks; }
+  private get maxStacks(): number { return this.character === 'huangzhong' ? HZ_SHARP.need : CHARACTER_PASSIVES[this.character].maxStacks; }
   onDamage(now: number): void {
     if (this.stopped) return;
-    if (this.character === 'huangzhong' && now < this.sharpGuardUntil) return; // 宝刀未老：受伤不退出神射
     this.lastDamage = now;
+    // 黄忠：受伤掉 1 层蓄势（每 0.5 秒最多掉 1 层）；神射中受伤不掉层、不退出
+    if (this.character === 'huangzhong' && !this.isSharpshooter(now) && this.stacks > 0 && now - this.hurtDropAt + 1e-6 >= HZ_SHARP.hurtDropGapMs) { this.hurtDropAt = now; this.stacks--; }
     // 魏延·镇守汉中：每次受伤积 1 层拒敌（每 0.5 秒最多 1 层）
     if (this.character === 'weiyan' && this.stacks < this.maxStacks && now - this.lastGain + 1e-6 >= R.guardStepMs) { this.lastGain = now; this.stacks++; this.gains++; }
   }
@@ -153,7 +155,13 @@ export class CharacterPassives {
   }
   /** 测试 / 表现用：当前魅惑与倒戈状态。 */
   charmViews(): CharmView[] { return [...this.charms.values()]; }
-  isSharpshooter(now: number): boolean { return !this.stopped && this.character === 'huangzhong' && now - this.lastDamage >= this.calmMs; }
+  isSharpshooter(now: number): boolean { return !this.stopped && this.character === 'huangzhong' && now < this.sharpUntil; }
+  /** 黄忠：一支重箭命中（每支箭只算一次），积 1 层蓄势；满层进入神射 sharpMs。神射中不积层。 */
+  onSharpHit(now: number): void {
+    if (this.stopped || this.character !== 'huangzhong' || this.isSharpshooter(now)) return;
+    this.stacks++; this.gains++;
+    if (this.stacks >= HZ_SHARP.need) { this.stacks = 0; this.sharpUntil = now + this.sharpMs; this.triggers++; }
+  }
   /** 敌人被击杀（GameScene.killEnemy 调用）：计本关击杀；黄忠神射中击杀精锐 / 首领另计。 */
   onKill(kind: string, now: number): void {
     if (this.stopped) return;
@@ -162,12 +170,16 @@ export class CharacterPassives {
   }
   get kills(): number { return this.stageKills; }
   get sharpEliteKillCount(): number { return this.sharpEliteKills; }
-  /** 黄忠「静心」：设定进入神射所需的不受伤时间（毫秒）。 */
-  setCalmMs(ms: number): void { this.calmMs = Math.max(500, ms); }
-  get sharpCalmMs(): number { return this.calmMs; }
-  /** 黄忠「宝刀未老」：立刻进入神射，guardMs 内受伤不退出。 */
-  grantSharp(now: number, guardMs: number): void { if (this.stopped) return; this.lastDamage = Math.min(this.lastDamage, now - this.calmMs); this.sharpGuardUntil = now + guardMs; }
-  sharpGuarded(now: number): boolean { return now < this.sharpGuardUntil; }
+  /** 黄忠「静心」：设定神射持续时间（毫秒）。 */
+  setSharpMs(ms: number): void { this.sharpMs = Math.max(1000, ms); }
+  get sharpDurationMs(): number { return this.sharpMs; }
+  /** 神射剩余毫秒（不在神射为 0）。 */
+  sharpLeft(now: number): number { return this.isSharpshooter(now) ? this.sharpUntil - now : 0; }
+  /** 黄忠「宝刀未老」/ 测试：已在神射中则延长 extendMs，否则立刻进入神射（持续 sharpMs 与 extendMs 取大）。 */
+  grantSharp(now: number, extendMs: number): void {
+    if (this.stopped || this.character !== 'huangzhong') return;
+    if (this.isSharpshooter(now)) this.sharpUntil += extendMs; else { this.stacks = 0; this.sharpUntil = now + Math.max(this.sharpMs, extendMs); this.triggers++; }
+  }
   critBonus(now: number): number { return this.isSharpshooter(now) ? R.critBonus : 0; }
   /** 智力的范围倍率（GameScene 开局 / 加点后设置，RunGrowth.areaMultiplier）。 */
   areaMul = 1;
@@ -238,14 +250,15 @@ export class CharacterPassives {
     }
   }
   snapshot(now: number) {
-    return { character: this.character, stacks: this.stacks, maxStacks: CHARACTER_PASSIVES[this.character].maxStacks,
+    return { character: this.character, stacks: this.stacks, maxStacks: this.maxStacks,
       ready: !this.stopped && (this.character === 'huangzhong' ? this.isSharpshooter(now) : this.stacks === CHARACTER_PASSIVES[this.character].maxStacks),
-      calmProgress: this.stopped ? 0 : Math.min(1, Math.max(0, (now - this.lastDamage) / this.calmMs)),
+      // 黄忠：神射中为剩余时间比例，否则为蓄势比例（PassiveHud 进度条）
+      calmProgress: this.stopped || this.character !== 'huangzhong' ? 0 : this.isSharpshooter(now) ? this.sharpLeft(now) / this.sharpMs : this.stacks / HZ_SHARP.need,
       critBonus: this.critBonus(now), guandaoRangeMul: this.rangeMultiplier('guandao'), burns: this.burns.size, charms: this.charms.size, turned: [...this.charms.values()].filter(c => c.turnedUntil > now).length, gains: this.gains, triggers: this.triggers, stopped: this.stopped };
   }
   label(now: number): string {
     const name = CHARACTER_PASSIVES[this.character].name;
-    if (this.character === 'huangzhong') return this.isSharpshooter(now) ? `${name} · 神射：暴击+10% / 重箭爆裂` : `${name} · 蓄势 ${Math.min(this.calmMs / 1000, Math.max(0, (now - this.lastDamage) / 1000)).toFixed(1)}/${this.calmMs / 1000}秒`;
+    if (this.character === 'huangzhong') return this.isSharpshooter(now) ? `${name} · 神射 ${(this.sharpLeft(now) / 1000).toFixed(1)}秒：暴击+10% / 重箭爆裂` : `${name} · 蓄势 ${this.stacks}/${HZ_SHARP.need}`;
     return `${name} · ${this.character === 'zhaoyun' ? '龙胆' : this.character === 'guanyu' ? '武势' : this.character === 'zhangfei' ? '怒气' : this.character === 'huangyueying' ? '机括' : this.character === 'pangtong' ? '计策' : this.character === 'liubei' ? '仁德' : this.character === 'weiyan' ? '拒敌' : this.character === 'machao' ? '铁骑' : this.character === 'sunshangxiang' ? '疾步' : this.character === 'diaochan' ? '舞势' : '谋略'} ${this.stacks}/${CHARACTER_PASSIVES[this.character].maxStacks}${this.snapshot(now).ready ? ' · 下次强化' : ''}${this.character === 'zhuge' && this.burns.size ? ` · 灼烧${this.burns.size}` : ''}${this.character === 'diaochan' && this.snapshot(now).turned ? ` · 离间${this.snapshot(now).turned}` : ''}${this.character === 'weiyan' && this.damageTakenMultiplier(now) < 1 ? ' · 谁敢杀我' : ''}`;
   }
 }

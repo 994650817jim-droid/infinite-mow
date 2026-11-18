@@ -32,16 +32,17 @@ for (const [layout, viewport] of Object.entries(LAYOUTS)) for (const [hero, h] o
   const mk = "(x, y, stun = true) => { const e = s.spawnEnemy('infantry', x, y, 1); if (e) { e.hp = e.maxHp = 99999; if (stun) e.stunUntil = 1e12; } return e; }";
 
   if (hero === 'huangzhong') {
-    // 统一索敌：近处落单的敌人不打，先打远处的敌群（首领 > 精锐 > 群怪 > 最近）；重箭单体、击退；神射（5 秒不受伤）时命中处爆裂波及同群
+    // 统一索敌：近处落单的敌人不打，先打远处的敌群（首领 > 精锐 > 群怪 > 最近）；重箭单体、击退；神射（蓄势满 5 层，这里直接进入）时命中处爆裂波及同群
     const r = await p.evaluate(async ([G0, MK]) => {
       const s = eval(G0), pl = s.player; const mk = eval(MK);
       const near = mk(pl.x + 140, pl.y), group = [mk(pl.x + 450, pl.y), mk(pl.x + 430, pl.y + 34), mk(pl.x + 430, pl.y - 34)];
-      const pos = group.map(e => [e.x, e.y]); const t0 = performance.now(); let first = null, pins = [];
+      const pos = group.map(e => [e.x, e.y]);
+      const t0 = performance.now(); let first = null, pins = [];
       while (performance.now() - t0 < 10000) {
         await new Promise(r => setTimeout(r, 30));
         const hit = group.findIndex(e => e.hp < e.maxHp);
         if (!first && (hit >= 0 || near.hp < near.maxHp)) { const e = group[hit]; first = { near: near.maxHp - near.hp, group: hit >= 0 ? e.maxHp - e.hp : 0, pushed: hit >= 0 ? Math.round(Math.hypot(e.x - pos[hit][0], e.y - pos[hit][1])) : 0 };
-          pins = group.map((e, i) => setInterval(() => { e.sprite.x = pos[i][0]; e.sprite.y = pos[i][1]; }, 10)); } // 量完击退后钉回原位，验证神射爆裂
+          pins = group.map((e, i) => setInterval(() => { e.sprite.x = pos[i][0]; e.sprite.y = pos[i][1]; }, 10)); pl.passive.grantSharp(s.combatNow, 12000); } // 量完击退后钉回原位，再直接进入神射（2026-11-18 改为命中积层）验证爆裂
         if (group.filter(e => e.hp < e.maxHp).length >= 2) break;
       }
       pins.forEach(clearInterval);
@@ -51,16 +52,16 @@ for (const [layout, viewport] of Object.entries(LAYOUTS)) for (const [hero, h] o
     // 2026-11-16 方案 C「老当益壮」：静心缩短进入神射时间；3 级神射第一箭扇形三连重箭（像素爆裂）
     const jx = await p.evaluate(async ([G0, MK]) => {
       const s = eval(G0), pl = s.player, mk = eval(MK), calm = [];
-      for (const lvl of [0, 1, 2, 3]) { pl.growth.masteries.jingxin = lvl; await new Promise(r => setTimeout(r, 120)); calm.push(pl.passive.sharpCalmMs); }
+      for (const lvl of [0, 1, 2, 3]) { pl.growth.masteries.jingxin = lvl; await new Promise(r => setTimeout(r, 120)); calm.push(pl.passive.sharpDurationMs); }
       for (const e of s.enemies) if (e.active && !e.isSupplySlot) e.deactivate();
       for (let i = 0; i < 5; i++) mk(pl.x + 320, pl.y - 80 + i * 40);
       pl.passive.onDamage(s.combatNow); pl.weapons[0].cooldownLeft = 0; await new Promise(r => setTimeout(r, 200));
-      pl.passive.grantSharp(s.combatNow, 0); // 直接进入神射（等同不受伤满 3.5 秒）
+      pl.passive.reset('huangzhong', s.combatNow); await new Promise(r => setTimeout(r, 120)); pl.passive.grantSharp(s.combatNow, 0); // 先清掉上一项留下的神射（等一帧让武器看到退出），再直接进入（等同蓄势满 5 层）
       let most = 0, burst = false, enter = false; const t0 = performance.now();
       while (performance.now() - t0 < 3000) { await new Promise(r => setTimeout(r, 15)); most = Math.max(most, s.children.list.filter(o => o.name === 'huangzhong-heavy-arrow' && o.active).length); burst = burst || !!s.children.getByName('huangzhong-burst'); enter = enter || !!s.children.getByName('huangzhong-sharp-enter'); }
       return { calm, most, burst, enter, fx: s.textures.exists('huangzhong_paint') };
     }, [G, mk]);
-    ck(`${tag}：静心——进入神射 5 → 4.5/4/3.5 秒；3 级神射第一箭扇形三连重箭，带像素爆裂与进入神射金光`, jx.calm.join() === '5000,4500,4000,3500' && jx.most >= 3 && (!jx.fx || (jx.burst && jx.enter)), jx);
+    ck(`${tag}：静心——神射持续 6 → 7/8/9 秒（2026-11-18 神射改为命中积层）；3 级神射第一箭扇形三连重箭，带像素爆裂与进入神射金光`, jx.calm.join() === '6000,7000,8000,9000' && jx.most >= 3 && (!jx.fx || (jx.burst && jx.enter)), jx);
     // 静心的神射重箭加成 20/22/25%（用户批准，逐级递增）：关掉暴击，比较神射时静心 0 级与 2 级的单箭伤害
     const jd = await p.evaluate(async ([G0, MK]) => {
       const s = eval(G0), pl = s.player, mk = eval(MK), w = pl.weapons[0], crit0 = pl.stats.critChance; pl.stats.critChance = -1;
@@ -90,7 +91,7 @@ for (const [layout, viewport] of Object.entries(LAYOUTS)) for (const [hero, h] o
       pl.passive.onDamage(s.combatNow); const keptAfterHit = pl.passive.isSharpshooter(s.combatNow); pl.hp = pl.maxHp;
       return { base: +base.toFixed(3), lowHpNoKills: +lowHpNoKills.toFixed(3), fast: fast.map(v => +v.toFixed(3)), ratio: fast.map(v => +(base / v).toFixed(3)), killed: !el?.active, healed, text, keptAfterHit };
     }, [G, mk]);
-    ck(`${tag}：老骥伏枥——残血不再加速；击杀 100 名后射速 +15/20/25%；3 级神射中射杀精锐回血、神射不因受伤退出`, Math.abs(lj.lowHpNoKills - lj.base) < .02 && Math.abs(lj.ratio[0] - 1.15) < .02 && Math.abs(lj.ratio[1] - 1.2) < .02 && Math.abs(lj.ratio[2] - 1.25) < .02 && lj.killed && lj.healed > 0 && lj.text && lj.keptAfterHit, lj);
+    ck(`${tag}：老骥伏枥——残血不再加速；击杀 100 名后射速 +15/20/25%；3 级神射中射杀精锐回血、神射延长且受伤不退出`, Math.abs(lj.lowHpNoKills - lj.base) < .02 && Math.abs(lj.ratio[0] - 1.15) < .02 && Math.abs(lj.ratio[1] - 1.2) < .02 && Math.abs(lj.ratio[2] - 1.25) < .02 && lj.killed && lj.healed > 0 && lj.text && lj.keptAfterHit, lj);
   } else if (hero === 'zhangfei') {
     const r = await p.evaluate(async ([G0, MK]) => {
       const s = eval(G0), pl = s.player; const mk = eval(MK);

@@ -155,7 +155,7 @@ export class DeathFx {
     }
     const h = Math.abs(sp.displayHeight), jit = Math.random() * 2 - 1;
     p.active = true; p.kind = kind; p.start = now; p.dir = dir; p.jit = jit; p.dustOn = false;
-    p.size = Math.max(26, Math.min(58, Math.abs(sp.displayWidth) * (kind === 'turban' ? .8 : kind === 'tower' || kind === 'rattan' ? .95 : 1.05)));
+    p.size = Math.max(20, Math.min(46, Math.abs(sp.displayWidth) * (kind === 'turban' ? .5 : kind === 'tower' || kind === 'rattan' ? .66 : .75))); // 图里物品约占格宽 0.75–0.8：按敌人身高换算成真实比例
     p.x = sp.x + dir * 2; p.y = sp.y - h * (kind === 'turban' ? .82 : .45); p.gy = sp.y + 3 + jit * 4;
     p.img.setFrame(PROP_FRAME[kind]).setDisplaySize(p.size, p.size).setPosition(p.x, p.y).setRotation(0).setAlpha(1).setDepth(sp.depth + .2).setVisible(true).setOrigin(.5, .5);
     p.dust?.setVisible(false);

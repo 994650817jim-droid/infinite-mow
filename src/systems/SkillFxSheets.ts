@@ -18,6 +18,8 @@ export const SKILL_FX: Readonly<Record<string, { file: string; cell: number; fra
   fx_collapse_dust: { file: 'assets/skill-fx/collapse_dust.png', cell: 256, frames: 6 },
   // 敌军死亡特效专属尘土（即梦 Seedream 5.5，tools/prepare-death-dust.mjs 处理：抠洋红 + 去溢色 + 清水印 + 重新居中）；缺图时 DeathFx 退回 fx_collapse_dust
   fx_death_dust: { file: 'assets/fx/death_dust.png', cell: 256, frames: 6 },
+  // 敌军死亡特效的兵器 / 头巾小图（即梦 Seedream 5.5，tools/prepare-death-props.mjs 处理；3 列 × 2 行，帧 0–5：刀 枪 弓 / 藤牌 重盾 头巾）。手机不用；缺图时兵器 / 头巾自动不显示
+  fx_death_props: { file: 'assets/fx/death_props.png', cell: 256, frames: 6 },
 };
 
 export function loadSkillFx(load: Phaser.Loader.LoaderPlugin): void {

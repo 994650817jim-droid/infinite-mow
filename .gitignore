@@ -92,6 +92,7 @@ assets/raw/*
 !/tools/deathfx-live.mjs
 !/tools/deathfx-mixed.mjs
 !/tools/prepare-death-dust.mjs
+!/tools/prepare-death-props.mjs
 !/tools/test-merit.mjs
 !/tools/test-level-merge.mjs
 !/tools/test-hero-codex.mjs

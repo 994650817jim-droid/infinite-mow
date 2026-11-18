@@ -1266,8 +1266,8 @@ export class GameScene extends Phaser.Scene {
       // 刷怪时间轴按关卡节奏加速（stageTuning.pace）：原来第 N 波的刷怪强度在新的第 N 波出现
       const paced = this.elapsed * (this.chapter.pace ?? 1);
       const easy = this.tutorial?.easy(this.elapsed); // 新手引导：开局 30 秒刷兵放缓
-      this.spawnTimer = this.chapter.spawnInterval(paced) * (easy?.interval ?? 1) * (this.sishuiPass?.spawnMul ?? 1) * (bossOn ? B.intervalMul : 1) * (this.dual?.spawnIntervalMul ?? 1); // 汜水关西凉营帐全塌后变稀；双首领在场再 ×0.7
-      const rawBurst = this.chapter.spawnBurst(paced), burst0 = easy && easy.burstDiv > 1 ? Math.max(1, Math.ceil(rawBurst / easy.burstDiv)) : rawBurst, burst = bossOn ? Math.max(1, Math.ceil(burst0 * B.burstMul)) : burst0;
+      this.spawnTimer = this.chapter.spawnInterval(paced) * (easy?.interval ?? 1) * (this.sishuiPass?.spawnMul ?? 1) * (bossOn ? B.intervalMul : 1) * (this.dual?.spawnIntervalMul ?? 1); // 汜水关西凉营帐全塌后变稀；双首领在场再 ×0.7
+      const rawBurst = this.chapter.spawnBurst(paced), burst0 = easy && easy.burstDiv > 1 ? Math.max(1, Math.ceil(rawBurst / easy.burstDiv)) : rawBurst, burst = bossOn ? Math.max(1, Math.ceil(burst0 * B.burstMul)) : burst0;
       for (let i = 0; i < burst; i += 1) {
         if (this.activeEnemyCount() >= cap) break;
         if (!this.spawnAroundPlayer(this.chapter.pickEnemy(paced))) break;
@@ -3798,7 +3798,14 @@ export class GameScene extends Phaser.Scene {
     this.pausePanel.add([pauseDim,panelG,panel,pauseTitle,pauseHint,...pauseChips,resume,resumeText,...bgmRow,...sfxRow]);
     this.pausePanel.add(this.attributePauseText);this.pausePanel.bringToTop(bagLink);this.pausePanel.bringToTop(buildLink);this.pausePanel.add([exit,toMenu,keys]);
     if (d) { this.layoutSettingsPanel({ panelG, panel, pauseTitle, pauseHint, resume, resumeText, bgmRow, sfxRow, buildLink, bagLink, exit, keys }); toMenu.setPosition(exit.x, exit.y + 56).setFontFamily(HEADING_FONT); for (const k of pauseSkins) k.repaint(); } // 底板跟着按钮挪到左栏
-
+    // 手机版暂停菜单没有 ‹ 值 › 行：「死亡特效」做成同风格的点按小牌（点一下开 ↔ 关，和电脑版 / 主页设置共用 im_death_fx）
+    if(!d){
+      const deathFxLink=this.add.text(cx,top+330,'',warText(15,'#e6cc90')).setOrigin(.5).setPadding(14,6).setInteractive({useHandCursor:true}).setName('settings-death-fx');
+      const paintDeathFx=():void=>{deathFxLink.setText('死亡特效：'+DEATHFX_LABEL[deathFxSetting()]);};paintDeathFx();
+      deathFxLink.on('pointerdown',()=>{setDeathFx(deathFxSetting()==='on'?'off':'on');paintDeathFx();});
+      const dsk=lqSkin(this,deathFxLink,deathFxLink,()=>({w:pw-120,h:32}),{tone:'quiet'});lqHitBox(deathFxLink,pw-120,32);
+      this.pausePanel.add([dsk.gfx,deathFxLink]);
+    }
     this.attributePanel=this.add.container(0,0).setScrollFactor(0).setDepth(DEPTH.overlay+1).setVisible(false);
     const attrDim=this.add.rectangle(0,0,GAME_WIDTH,GAME_HEIGHT,0x07120d,.76).setOrigin(0).setInteractive();
     const attrW=d?600:GAME_WIDTH-32,attrH=d?Math.min(580,GAME_HEIGHT-16):700,attrTop=(GAME_HEIGHT-attrH)/2,attrCx=GAME_WIDTH/2;

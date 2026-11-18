@@ -100,7 +100,7 @@ export const BOSS_MOVES: Record<string, BossMovesetDef> = {
   // ===== 第二批：第四章骑马补丁、第五章曹纯 / 蔡瑁、第六章荆南四将 =====
   // 5-1 曹纯（虎豹骑）：骑黑马；虎豹冲阵（三道并冲）+ 长坂追袭（折返连冲）→ 坠马「虎豹围猎」：虎豹骑合围
   caochun: {
-    id: 'caochun', name: '曹纯', phaseAt: .5, mount: { horse: 'wuzhui' },
+    id: 'caochun', name: '曹纯', phaseAt: .5, mount: { horse: 'wuzhui', rider: 'caochun' },
     p1: { name: '虎豹骑', caption: '三道并冲 · 长坂追袭', gapMs: 2300, speedMul: 1.45, moves: [
       { kind: 'charge', name: '虎豹冲阵', windupMs: 1000, cd: 4600, dmg: 1.4, len: 480, width: 70, dashMs: 520, lanes: 3 },
       { kind: 'charge', name: '长坂追袭', windupMs: 700, cd: 5200, dmg: 1.3, len: 300, width: 64, dashMs: 380, back: true },
@@ -367,5 +367,5 @@ export const BOSS_MOUNTS: Record<string, BossMountDef> = {
   huaxiong: { horse: 'wuzhui', cut: .62, rider: 'huaxiong' },
   // 第四章官渡：颜良、文丑（GuanduBoss 专属控制器），半血坠马
   yanliang: { horse: 'dawan', cut: .62, rider: 'yanliang' },
-  wenchou: { horse: 'generic', tint: 0x6a5a48, cut: .62 },
+  wenchou: { horse: 'generic', tint: 0x6a5a48, cut: .62, rider: 'wenchou' },
 };

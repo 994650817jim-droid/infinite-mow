@@ -11,6 +11,8 @@ const CASES = [
   { id: 'lijue', scene: 'ThirdGameScene', run: { thirdStage: 1 }, reg: { thirdStage: 1 } },
   { id: 'zhangxiu', scene: 'ThirdGameScene', run: { thirdStage: 2 }, reg: { thirdStage: 2 } },
   { id: 'yanliang', scene: 'GuanduGameScene', run: {}, reg: { guanduStage: 1 } },
+  { id: 'wenchou', scene: 'GuanduGameScene', run: {}, reg: { guanduStage: 2 } },
+  { id: 'caochun', scene: 'ChibiGameScene', run: { thirdStage: 1 }, reg: { chibiStage: 1 } },
 ];
 const VIEWS = [{ tag: 'down', face: 'down', dx: 0, dy: -50 }, { tag: 'left', face: 'left', dx: 170, dy: 20 }, { tag: 'right', face: 'right', dx: -170, dy: 20 }];
 const ONLY = (process.env.ONLY ?? '').split(',').filter(Boolean);

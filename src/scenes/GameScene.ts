@@ -76,7 +76,7 @@ import { addMerit, addScrolls, getXinde, SCROLL, temperBonus } from '../systems/
 import { primaryAttribute, PRIMARY_PERK, PRIMARY_PERK_INFO, PRIMARY_TIERS, PRIMARY_MUL, SPELL_WEAPONS } from '../data/attributes';
 import { stageCleared, takeAttrNotice } from '../systems/HeroProgress';
 import { allocateHeroAttr, claimFirstClear, creditHeroXp, enlistHero, heroFreePoints, heroInfo, heroLevel, levelCap, setHeroProgress, type HeroKey } from '../systems/HeroProgress';
-import { HERO_XP_RATE, OVERFLOW_XP_PER_GRAIN, PICK_GUARANTEE } from '../data/heroLevels';
+import { HERO_XP_RATE, OVERFLOW_XP_PER_GRAIN, PICK_GUARANTEE, PICK_PACE } from '../data/heroLevels';
 import { addProvisions } from '../world/WorldStore';
 import { loadCampaignBuild, packCampaign, restoreCampaign, saveCampaignBuild, type CampaignTransfer } from '../systems/Campaign';
 import { TROOP_KINDS, INITIAL_TROOPS, LEGION, FREE_RECRUIT_BY_TIER, type TroopKind } from '../data/legion';
@@ -775,7 +775,7 @@ export class GameScene extends Phaser.Scene {
     this.mode = 'none';
     this.over = false;
     this.victory = false;
-    this.pendingLevels = 0;
+    this.pendingLevels = 0; this.lastPickAt = -1e9; this.forcePickNow = false; this.pickBatch = 0; this.pickBatchDone = 0;
     this.upgradeOptions = [];
     this.cardViews = [];
     this.relicExpanded = false;
@@ -849,7 +849,7 @@ export class GameScene extends Phaser.Scene {
       this.waveBannerShown = true;
       // Finish a wave before recruiting; the opening wave starts immediately.
       if (nextWave > 0 && this.chapter.recruitWaves.includes(nextWave)) this.scheduleRecruit();
-      if (nextWave > 0) this.ensurePicks(PICK_GUARANTEE.waves[Math.min(nextWave, PICK_GUARANTEE.waves.length) - 1]);
+      if (nextWave > 0) { const ws = this.paceOn() ? PICK_PACE.waves : PICK_GUARANTEE.waves; this.ensurePicks(ws[Math.min(nextWave, ws.length) - 1]); }
     }
     if (!this.over && !this.objective && this.elapsed >= chapterBossTime(this.chapter) - 10 && !this.bossWarned) {
       this.bossWarned = true;
@@ -893,6 +893,7 @@ export class GameScene extends Phaser.Scene {
     this.huaxiong?.updateDeath(delta);this.xurong?.updateDeath(delta);for(const controller of this.deadBossControllers)controller.updateDeath(delta);
     this.animateUpgradeCards();
     if (this.mode !== 'none' || this.over) return;
+    if (this.pendingLevels > 0 && this.pickGapOk()) this.openUpgrade();
 
     if(this.battleStage()<3&&!this.runConfig.encounter&&this.boss?.active&&this.firstBossAt>=0&&this.combatNow>=this.firstBossAt+90000)this.advanceFrontline();
     this.elapsed += dt;
@@ -1129,7 +1130,7 @@ export class GameScene extends Phaser.Scene {
     if (this.bossSpawned) return;
     this.bossSpawned = true;
     this.heroBark?.bossEvent('bossAppear', this.barkSpeakers()[0], this.chapter.bossName, this.combatNow); // 首领登场：主将说一句
-    this.ensurePicks(PICK_GUARANTEE.waves[PICK_GUARANTEE.waves.length - 1]); // 保底：第 3 波后直接是首领、波次不再推进，首领登场时补到 3 次
+    { const ws = this.paceOn() ? PICK_PACE.waves : PICK_GUARANTEE.waves; this.ensurePicks(ws[ws.length - 1]); } // 保底：第 3 波后直接是首领、波次不再推进，首领登场时补到最后一档
     const angle = -Math.PI / 2;
     const x = this.player.x + Math.cos(angle) * 430;
     const y = this.player.y + Math.sin(angle) * 430;
@@ -2308,6 +2309,7 @@ export class GameScene extends Phaser.Scene {
       (this.levelPanel.getByName('upgrade-title') as Phaser.GameObjects.Text)?.setText(military ? '军略 · 本关保底强化' : '武将升级 · 选择本次强化');
       (this.levelPanel.getByName('upgrade-points-hint') as Phaser.GameObjects.Text)?.setVisible(true).setText(`${military ? '军略（不给属性点）· ' : ''}武将 Lv.${lv}${n > 0 ? ` · 待分配属性点 ${n}` : ''}`).setName('upgrade-points-hint'); }
     this.rerolls=0;
+    if (this.paceOn()) { this.lastPickAt = this.elapsed; this.forcePickNow = false; this.pickBatch = this.pendingLevels; this.pickBatchDone = 0; this.batchHint(); }
     this.upgradeOptions = buildUpgradeOptions(this.player, this.player.weapons, this.player.growth);
     if (this.relics?.takeXiangguo()) { this.relicExtraPicks = 1; this.relicFreeRerolls = 1; (this.levelPanel.getByName('upgrade-points-hint') as Phaser.GameObjects.Text)?.setVisible(true).setText('相国印 · 本次可连选两张，免费换一批 1 次'); }
     this.renderCards();
@@ -2440,11 +2442,27 @@ export class GameScene extends Phaser.Scene {
     if (this.relicExtraPicks > 0 && remaining.length) { this.relicExtraPicks--; this.upgradeOptions = remaining; this.renderCards(); (this.levelPanel.getByName('upgrade-points-hint') as Phaser.GameObjects.Text)?.setText('相国印 · 再选一张'); if (growthNotice) this.pendingGrowthNotices.push(growthNotice); return; }
     this.relicExtraPicks = 0; this.relicFreeRerolls = 0;
     this.pendingLevels -= 1; if (this.militaryPending > 0) this.militaryPending--;
+    if (this.paceOn() && this.pendingLevels > 0 && !this.over) {
+      // 连选：不关面板、不再响升级音，换一批继续选
+      this.pickBatchDone++; this.pickBatch = Math.max(this.pickBatch, this.pickBatchDone + this.pendingLevels); this.rerolls = 0;
+      this.upgradeOptions = buildUpgradeOptions(this.player, this.player.weapons, this.player.growth); this.renderCards(); this.batchHint();
+      if (growthNotice) this.pendingGrowthNotices.push(growthNotice);
+      return;
+    }
+    this.pickBatch = 0; this.pickBatchDone = 0;
     this.resumePendingChoices();
     if (growthNotice) {
       if ((this.mode as string) === 'none') this.showGrowthNotice(growthNotice);
       else this.pendingGrowthNotices.push(growthNotice);
     }
+  }
+
+  /** 连选提示：标题「连选 N 张 · 第 k 张」（PICK_PACE 合并多次升级 / 保底）。 */
+  protected batchHint(): void {
+    if (this.pickBatch <= 1) return;
+    const lv = this.player.level, n = this.player.growth.unallocated, military = this.militaryPending > 0;
+    (this.levelPanel.getByName('upgrade-title') as Phaser.GameObjects.Text)?.setText(`${military ? '军略' : '武将升级'} · 连选 ${this.pickBatch} 张（第 ${this.pickBatchDone + 1} 张）`);
+    (this.levelPanel.getByName('upgrade-points-hint') as Phaser.GameObjects.Text)?.setVisible(true).setText(`武将 Lv.${lv}${n > 0 ? ` · 待分配属性点 ${n}` : ''}`);
   }
 
   protected showGrowthNotice(message: string): void {
@@ -2458,7 +2476,8 @@ export class GameScene extends Phaser.Scene {
   protected resumePendingChoices(): void {
     if (this.over) return;
     this.setMode('none');
-    if (this.pendingLevels > 0) this.openUpgrade();
+    // 三选一节奏：间隔不够的升级 / 保底继续攒着（update 里到点再开），先处理招募
+    if (this.pendingLevels > 0 && this.pickGapOk()) this.openUpgrade();
     else if (this.pendingRecruit) this.openRecruit();
   }
 
@@ -2805,7 +2824,7 @@ export class GameScene extends Phaser.Scene {
   /** 宝箱里只有首领遗珍（用户 2026-11-17「首领宝箱只给首领遗珍」；道具系统发放，见 ItemDrops.claimBossRelic）。 */
   protected grantBossChest():ChestLoot[]{
     const out:ChestLoot[]=[];
-    this.ensurePicks(this.campaignReplay?PICK_GUARANTEE.side:PICK_GUARANTEE.main);
+    this.ensurePicks(this.campaignReplay?PICK_GUARANTEE.side:PICK_GUARANTEE.main,true);
     const item=this.itemDrops?.claimBossRelic();
     if(item){const rd=relicDef(item.base),sp=rd?.special?SPECIALS[rd.special as keyof typeof SPECIALS]:undefined;out.push({name:itemName(item),desc:sp?sp.name+'：'+sp.desc:(rd?.lore??'额外兵装 · 结算后入行囊'),tag:rd?'首领遗珍 · 结算后入行囊':'兵装'});}
     this.artEffects.show(5,this.player.x,this.player.y-10,80,this.combatNow,450);
@@ -2923,7 +2942,7 @@ export class GameScene extends Phaser.Scene {
     const next=(stage+1) as 2|3,west=this.chapter.id==='hulao';
     this.chapter=getBattleChapter(this.chapter.id,west?undefined:next,west?next:undefined);this.runConfig={...this.runConfig,stage:west?undefined:next,westStage:west?next:undefined};
     // 首领追击转下一关：先把本关没补完的保底补上（军略留在队列里），再给下一关重新计数
-    this.ensurePicks(this.campaignReplay?PICK_GUARANTEE.side:PICK_GUARANTEE.main);this.picksGiven=0;this.frontlineStarts.set(next,this.combatNow);this.setupObjective();this.elapsed=0;this.waveIndex=0;this.boss=null;this.bossSpawned=false;this.bossWarned=false;this.bossKilled=false;this.firstBossAt=-1;this.bossShield=0;this.bossPhase2=false;this.bossEnergy=0;this.recruitedWaves.clear();this.spawnTimer=.2;this.huaxiong=null;this.xurong=null;this.zhangjiao?.clear();this.zhangjiao=null;
+    this.ensurePicks(this.campaignReplay?PICK_GUARANTEE.side:PICK_GUARANTEE.main,true);this.picksGiven=0;this.lastPickAt=-1e9;this.frontlineStarts.set(next,this.combatNow);this.setupObjective();this.elapsed=0;this.waveIndex=0;this.boss=null;this.bossSpawned=false;this.bossWarned=false;this.bossKilled=false;this.firstBossAt=-1;this.bossShield=0;this.bossPhase2=false;this.bossEnergy=0;this.recruitedWaves.clear();this.spawnTimer=.2;this.huaxiong=null;this.xurong=null;this.zhangjiao?.clear();this.zhangjiao=null;
     this.yellow=west?null:new YellowBattle({scene:this,player:this.player,army:this.legion,enemies:this.enemies,move:(e,nx,ny,dt)=>this.advanceEnemy(e,nx,ny,dt),spawn:(def,x,y)=>this.spawnEnemy(def.kind,x,y,1,true,def)},next);
     // 战线推进与新一关第 1 波合成一条提示（原先“战线推进”下一帧就被第 1 波提示顶掉）
     const waves=this.chapter.waves,first=waves[0];
@@ -2994,6 +3013,11 @@ export class GameScene extends Phaser.Scene {
   protected heroStartLevel = 1;
   /** 本关已给的三选一次数（升级 + 军略），与等待中的军略次数。 */
   protected picksGiven = 0; protected militaryPending = 0;
+  /** 三选一节奏（PICK_PACE）：本关上次开面板的关内时刻；forcePickNow = 宝箱 / 转关补发，不等间隔；pickBatch = 本面板一共连选几张。 */
+  protected lastPickAt = -1e9; protected forcePickNow = false; protected pickBatch = 0; protected pickBatchDone = 0;
+  /** 第二章起套用三选一节奏（第一章新手期照旧）。 */
+  protected paceOn(): boolean { return this.chapter?.id !== 'huangjin' && PICK_PACE.fromChapter >= 2; }
+  protected pickGapOk(): boolean { return !this.paceOn() || this.forcePickNow || this.elapsed - this.lastPickAt >= PICK_PACE.minGapSec; }
   /** 开局：局内等级 / 经验就是武将等级 / 经验。 */
   protected syncHeroLevel(): void {
     const info = heroInfo(this.runConfig.character);
@@ -3006,15 +3030,16 @@ export class GameScene extends Phaser.Scene {
     const room = (Object.values(g.attributes) as number[]).reduce((n, v) => n + ATTRIBUTE_MAX - v, 0) - g.unallocated;
     if (!this.debugRun()) { setHeroProgress(id, this.player.level, this.player.xp); g.heroFree += gained; }
     g.unallocated += Math.max(0, Math.min(gained, room));
-    if (this.mode === 'none') this.openUpgrade();
+    if (this.mode === 'none' && this.pickGapOk()) this.openUpgrade();
   }
   /** 本关保底：三选一次数不够 target 时补「军略」（同一个三选一，不给属性点）。 */
-  protected ensurePicks(target: number): void {
+  protected ensurePicks(target: number, force = false): void {
     if (this.over || !this.player?.alive) return;
     const cap = this.campaignReplay ? PICK_GUARANTEE.side : PICK_GUARANTEE.main, need = Math.min(target, cap) - this.picksGiven;
     if (need <= 0) return;
     this.picksGiven += need; this.militaryPending += need; this.pendingLevels += need;
-    if (this.mode === 'none') this.openUpgrade();
+    if (force) this.forcePickNow = true;
+    if (this.mode === 'none' && this.pickGapOk()) this.openUpgrade();
   }
   /** 首次通关经验（不乘折算比例），结算时由 claimFirstClear 给出。 */
   protected heroXpBonus = 0;

@@ -4,7 +4,7 @@ import {TROOPS,TROOP_KINDS,type TroopKind} from '../data/legion';
 import {CHARACTER_PASSIVES} from '../data/passives';
 import {WEAPON_META} from '../data/upgrades';
 import {MARTIALS} from '../systems/RunGrowth';
-import {FONT,HEADING_FONT,GAME_WIDTH as W,GAME_HEIGHT as H,IS_DESKTOP as D,BALANCE} from '../config';
+import {FONT,HEADING_FONT,GAME_WIDTH as W,GAME_HEIGHT as H,IS_DESKTOP as D,BALANCE,TITLE_FONT} from '../config';
 import {visualTextureKey} from '../systems/ReadableTextures';
 import {lqButton,lqHitBox,lqPanel,lqSkin,type LqState} from './LacquerKit';
 // 2026-11-17 文案审校：12 名武将都有说明（原只有前 4 名，其余显示 undefined；黄忠旧写「3 秒 / 连弩」），顺序同 CHARACTERS，数值同 data/passives.ts PASSIVE_RULES
@@ -17,7 +17,7 @@ export class GameCodex {
   // 漆底描金整屏卷（与结算卷、行囊同系）；页签、卡片、按钮都是漆金三态
   this.root.add(scene.add.rectangle(W/2,H/2,W,H,0x0c0805,.96).setInteractive());
   const frame=scene.add.graphics();lqPanel(frame,8,8,W-16,H-16,{shadow:false});this.root.add(frame);
-  this.root.add(this.text(W/2,D?40:46,'将士图鉴',28,HEADING_FONT).setOrigin(.5).setColor('#f6dc9a').setStroke('#2a170b',4));
+  this.root.add(this.text(W/2,D?40:46,'将士图鉴',28,D?TITLE_FONT:HEADING_FONT).setOrigin(.5).setColor(D?'#efd399':'#f6dc9a').setStroke(D?'#120904':'#2a170b',4));
   this.tabs=['武将','兵种'].map((label,i)=>{const t=this.text(W/2+(i?72:-72),D?76:92,label,18,HEADING_FONT).setOrigin(.5).setInteractive({useHandCursor:true}).setName('codex-tab-'+i).on('pointerdown',()=>{this.tab=i?'troop':'hero';this.index=0;this.render();});
    const skin=lqSkin(scene,t,t,()=>({w:120,h:38}),{tone:'auto',on:()=>(this.tab==='troop')===(i===1)});lqHitBox(t,120,38);this.root.add([skin.gfx,t]);return skin;});
   this.root.add(this.content);

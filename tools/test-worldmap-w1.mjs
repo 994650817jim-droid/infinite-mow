@@ -48,7 +48,7 @@ for (const layout of ['desktop']) for (const [era, save] of [[1, mk(0, 0)], [2, 
   ck(`${layout} 时代${era}：31 个城池标记、年号（领地染色已随地图改版去掉）`, r.markers === 31 && r.era?.includes(['', '公元191年', '公元198年', '公元201年'][era]) && r.visible >= 10, r);
   if (era !== 2) { await p.screenshot({ path: `${out}/${layout}-era${era}.png` }); await p.close(); continue; }
   const sel = await p.evaluate(S0 => { const s = eval(S0); const m = s.cityMarkers.find(m => m.city.id === 'xuchang'); m.hit.emit('pointerup', { getDistance: () => 0 }); return { detail: s.detailTitle.text + ' ' + s.detail.text, action: s.action.text.text, links: s.links.commandBuffer.length > 0, label: m.label.visible }; }, S);
-  ck(`${layout} 点许昌：信息卡（中城·豫州·曹操·可攻打·相邻）与相邻道路`, sel.detail.includes('许昌 · 中城 · 豫州') && sel.detail.includes('归属：曹操') && sel.detail.includes('可以攻打') && sel.detail.includes('义军营寨') && sel.action === '攻城 · 选择武将' && sel.links && sel.label, sel);
+  ck(`${layout} 点许昌：信息卡（中城·豫州·曹操·可攻打·相邻）与相邻道路`, sel.detail.includes('许昌 · 中城 · 豫州') && sel.detail.includes('归属：曹操') && sel.detail.includes('可以攻打') && sel.detail.includes('义军营寨') && sel.action === '亲征 · 攻城' && sel.links && sel.label, sel);
   const far = await p.evaluate(S0 => { const s = eval(S0); s.cityMarkers.find(m => m.city.id === 'ye').hit.emit('pointerup', { getDistance: () => 0 }); return { detail: s.detailTitle.text + ' ' + s.detail.text, action: s.action.text.text }; }, S);
   ck(`${layout} 点邺城：大城·袁绍·尚不相邻`, far.detail.includes('邺城 · 大城') && far.detail.includes('袁绍') && (far.detail.includes('尚不相邻') || far.detail.includes('后开放攻城')) && (far.action === '尚不可攻打' || far.action.endsWith('后开放攻城')), far);
   const legend = await p.evaluate(S0 => { const s = eval(S0); s.children.getByName('world-era').emit('pointerup'); const l = s.children.getByName('world-legend'); const box = l?.list[0]; return { shown: !!l, texts: l?.list.filter(o => o.type === 'Text').map(o => o.text), right: l ? l.x + box.width : 0, zoomLeft: s.scale.width }; }, S);
@@ -58,7 +58,7 @@ for (const layout of ['desktop']) for (const [era, save] of [[1, mk(0, 0)], [2, 
   ck(`${layout} 小城名默认隐藏、放大后显示`, small.before === 0 && small.after > 0, small);
   await p.screenshot({ path: `${out}/${layout}-era2-zoom.png` });
   const node = await p.evaluate(async S0 => { const s = eval(S0), { WORLD_NODES } = await import('/src/world/WorldNodes.ts'); s.selected = { kind: 'node', node: WORLD_NODES.find(n => n.id === 'qunxiong') }; s.refresh(); return s.action.text.text; }, S);
-  ck(`${layout} 战役节点仍可出征`, node === '选择武将 · 出征' || node === '重温 · 选择武将', node);
+  ck(`${layout} 战役节点仍可出征`, node === '出征' || node === '重温 · 出征', node);
   await p.evaluate(S0 => eval(S0).enterNode(), S); await p.waitForFunction(() => window.__game.scene.isActive('ThirdChapterScene'), null, { timeout: 15000 });
   ck(`${layout} 进入第三章选关`, true);
   await p.close();

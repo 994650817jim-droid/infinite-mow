@@ -166,12 +166,17 @@ assets/raw/*
 !/tools/test-arrival-attr.mjs
 !/tools/test-prop-loot.mjs
 !/tools/test-camp-life.mjs
+!/tools/test-siege-finite.mjs
+!/tools/shot-siege-scene.mjs
 !/tools/test-jingnan-art.mjs
 !/tools/test-hanzhong-art.mjs
 !/tools/test-yiling-full.mjs
 !/tools/test-yiling-art.mjs
 !/tools/test-beifa-full.mjs
 !/tools/test-yiling-art.mjs
+!/tools/test-troop-deaths.mjs
+!/tools/prepare-camp-tier-art.mjs
+!/tools/prepare-camp-props.mjs
 !/tools/test-tutorial.mjs
 !/tools/test-boss-moves.mjs
 !/tools/test-quit-rollback.mjs
@@ -202,5 +207,6 @@ assets/raw/*
 !/tools/test-hero-actions.mjs
 !/tools/test-chronicle.mjs
 !/tools/test-pad-targets.mjs
+!/tools/test-commoner-skills.mjs
 !/tools/test-sishui-pass.mjs
 !/tools/test-recall-speed.mjs

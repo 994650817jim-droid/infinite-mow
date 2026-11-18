@@ -25,18 +25,26 @@ export const RECRUIT = {
   hallUpgrade: [{ provisions: 690 }, { provisions: 1800 }],
   /** 手动刷新：第 n 次花 base + step × (n − 1) 军粮，换季归零。 */
   refreshBase: 30, refreshStep: 30,
-  /** 每个席位独立抽：大众脸 / 史事名将 / 可玩名将，按招贤馆等级。 */
+  /**
+   * 每个席位独立抽：大众脸 / 史事名将 / 可玩名将，按招贤馆等级（用户 2026-11-17「招贤馆太容易出名将了，lv1基本上不可能出名将」；初值待平衡会话复核）：
+   * Lv1 每席名将 0.3%（3 席一次刷新约 0.9%），Lv2 每席 5%，Lv3 每席 12%；可玩名将只在 Lv2 起才有像样的概率。
+   * 剧情归附 / 劝降（降将栏）不走这张表，不受影响。
+   */
   rates: [
-    { common: .72, named: .20, hero: .08 },
-    { common: .66, named: .23, hero: .11 },
-    { common: .60, named: .26, hero: .14 },
+    { common: .997, named: .002, hero: .001 },
+    { common: .95, named: .04, hero: .01 },
+    { common: .88, named: .08, hero: .04 },
   ],
-  /** 大众脸品质权重（白 / 绿 / 蓝）。 */
-  commonQuality: { white: 55, green: 30, blue: 15 } as Partial<Record<ItemQuality, number>>,
+  /** 大众脸品质权重（白 / 绿 / 蓝），按招贤馆等级：高品质的到高等级才常见。 */
+  commonQuality: [
+    { white: 75, green: 22, blue: 3 },
+    { white: 60, green: 30, blue: 10 },
+    { white: 50, green: 32, blue: 18 },
+  ] as ReadonlyArray<Partial<Record<ItemQuality, number>>>,
   /** 招募费（军粮）。 */
   cost: { white: 80, green: 150, blue: 260, named: 500, hero: 900 },
-  /** 连续这么多次刷新都没有出现未拥有的可玩名将，下一次必出。 */
-  pity: 6,
+  /** 保底（按招贤馆等级）：连续这么多次刷新都没有出现未拥有的可玩名将，下一次必出；0 = 这一级没有保底（Lv1 不出名将）。 */
+  pity: [0, 10, 6],
   /** 击败敌将后被俘的概率：名将悬赏 / 攻城 / 守城。 */
   capture: { bounty: .35, siege: .20, defense: .10 },
   /** 降将栏停留季度数与招降折扣。 */

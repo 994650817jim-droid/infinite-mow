@@ -10,6 +10,7 @@
  */
 import Phaser from 'phaser';
 import { playSheet } from '../systems/SkillFxSheets';
+import { TITLE_FONT } from '../config';
 
 type PropKind = 'tent' | 'flag' | 'fire' | 'brazier' | 'rack' | 'shields' | 'crates' | 'sacks' | 'cart' | 'pot' | 'post';
 /** 候选物件（全景像素：底边中心 x,y；w 显示宽）。按顺序放，压到建筑或已放物件的跳过。 */
@@ -18,7 +19,7 @@ export const CAMP_PROPS: Array<{ x: number; y: number; w: number; kind: PropKind
   { x: 1190, y: 345, w: 175, kind: 'tent' }, { x: 1355, y: 360, w: 165, kind: 'tent', flip: true }, { x: 1490, y: 400, w: 140, kind: 'tent' },
   { x: 1470, y: 520, w: 130, kind: 'tent' },
   { x: 1250, y: 480, w: 64, kind: 'fire' }, { x: 1298, y: 478, w: 54, kind: 'pot' },
-  { x: 1010, y: 300, w: 130, kind: 'flag' }, { x: 700, y: 520, w: 120, kind: 'flag' }, { x: 360, y: 700, w: 120, kind: 'flag' },
+  { x: 1010, y: 300, w: 100, kind: 'flag' }, { x: 700, y: 520, w: 120, kind: 'flag' }, { x: 360, y: 700, w: 120, kind: 'flag' },
   // 中路两侧：营帐、兵器架
   { x: 600, y: 330, w: 165, kind: 'tent' }, { x: 735, y: 320, w: 150, kind: 'tent', flip: true },
   { x: 440, y: 300, w: 140, kind: 'tent' }, { x: 140, y: 335, w: 150, kind: 'tent', flip: true },
@@ -56,6 +57,10 @@ const SHEETS = {
 const RAM = { key: 'siege_mid_ram', url: 'assets/siege-v2/ram.png' };
 /** 营地道具 / 火盆 / 扬尘：战斗里另有同图的键（yellow_props / brazier_burning 会在开战时被换图），这里用独立键载入，不干扰战斗的载入与换图。 */
 const PROPS = { key: 'camp_props_v2', url: 'assets/props-v2/camp-props.png', cell: 128 }, BRAZIER = { key: 'camp_brazier', url: 'assets/props-v2/brazier_burning.png', cell: 444 }, DUST = { key: 'fx_collapse_dust', url: 'assets/skill-fx/collapse_dust.png', cell: 256 };
+/** 营寨专用图（美术会话 11-17）：「义」字大旗（1 帧，旗面空白，字用标题字体叠上去；旗杆在帧内 x≈73）、营寨火塘（8 帧，只换火苗）、木人桩（3 帧：站直 / 被击右歪 / 回弹左歪）。缺图时退回上面借用的图。 */
+const CAMP_ART = { banner: { key: 'camp_banner', url: 'assets/props-v2/camp-banner.png', w: 256, h: 512, poleX: 73, cloth: { x: 155, y: 228 } }, firepit: { key: 'camp_firepit', url: 'assets/props-v2/camp-firepit.png', cell: 256 }, dummy: { key: 'camp_dummy', url: 'assets/props-v2/camp-dummy.png', cell: 256 } } as const;
+/** 营寨档（大殿 1 级）用营寨风建筑图的建筑（public/assets/city/camp_<id>.webp，画布同 Lv1 图）。 */
+export const CAMP_ART_IDS = ['hall', 'talent', 'academy', 'barracks'] as const;
 const DIRS = ['down', 'left', 'right', 'up'] as const;
 type Box = { l: number; r: number; t: number; b: number };
 
@@ -63,7 +68,8 @@ type Box = { l: number; r: number; t: number; b: number };
 export function loadCampLife(scene: Phaser.Scene): void {
   for (const s of Object.values(SHEETS)) if (!scene.textures.exists(s.key)) scene.load.image(s.key, s.url);
   if (!scene.textures.exists(RAM.key)) scene.load.spritesheet(RAM.key, RAM.url, { frameWidth: 256, frameHeight: 256 });
-  for (const a of [PROPS, BRAZIER, DUST]) if (!scene.textures.exists(a.key)) scene.load.spritesheet(a.key, a.url, { frameWidth: a.cell, frameHeight: a.cell });
+  for (const a of [PROPS, BRAZIER, DUST, CAMP_ART.firepit, CAMP_ART.dummy]) if (!scene.textures.exists(a.key)) scene.load.spritesheet(a.key, a.url, { frameWidth: a.cell, frameHeight: a.cell });
+  if (!scene.textures.exists(CAMP_ART.banner.key)) scene.load.image(CAMP_ART.banner.key, CAMP_ART.banner.url);
 }
 function sliceSheet(scene: Phaser.Scene, key: string) {
   if (!scene.textures.exists(key)) return false;
@@ -79,7 +85,7 @@ interface Driller { img: Phaser.GameObjects.Image; key: string; dir: string; t: 
 export class CampLife {
   readonly root: Phaser.GameObjects.Container;
   readonly stats = { props: 0, walkers: 0, drillers: 0, idlers: 0, skippedProps: 0, skippedPaths: 0 };
-  private walkers: Walker[] = []; private drillers: Driller[] = []; private flags: Phaser.GameObjects.Image[] = [];
+  private walkers: Walker[] = []; private drillers: Driller[] = []; private flags: Array<Phaser.GameObjects.Image | Phaser.GameObjects.Container> = []; private dummies: Phaser.GameObjects.Image[] = []; private drillDummy = new Map<Driller, Phaser.GameObjects.Image>();
   private fires: Array<{ x: number; y: number; img?: Phaser.GameObjects.Image }> = [];
   private smokeAt = 0; private sortAt = 0; private clock = 0;
 
@@ -112,6 +118,8 @@ export class CampLife {
       this.scaleMan(img, 1.3); this.root.add(img); this.drillers.push({ img, key, dir: d.dir, t: i * .7, rest: 0 });
     });
     this.stats.drillers = this.drillers.length;
+    // 每个操练的兵对着最近的木人桩：出招那一帧木人桩被打歪、再回弹
+    if (this.dummies.length) for (const d of this.drillers) { let best = this.dummies[0]; for (const m of this.dummies) if (Math.hypot(m.x - d.img.x, m.y - d.img.y) < Math.hypot(best.x - d.img.x, best.y - d.img.y)) best = m; this.drillDummy.set(d, best); }
     // 火塘边站着的
     if (this.fires.length && walkKeys.length) IDLE_SPOTS.forEach((s, i) => {
       if (blocked.some(o => s.x > o.l && s.x < o.r && s.y > o.t && s.y < o.b)) return;
@@ -127,10 +135,20 @@ export class CampLife {
     const camp = sc.textures.exists(PROPS.key), ram = sc.textures.exists(RAM.key);
     switch (p.kind) {
       case 'tent': if (ram) { img(RAM.key, 7, p.w); return true; } if (camp) { img(PROPS.key, 1, p.w); return true; } return false;
-      case 'flag': if (ram) { const f = img(RAM.key, 6, p.w); f.setOrigin(.5, .95); this.flags.push(f); return true; } return false;
-      case 'fire': if (camp) { img(PROPS.key, 30, p.w); this.fires.push({ x: p.x, y: p.y }); return true; } return false;
+      case 'flag': if (sc.textures.exists(CAMP_ART.banner.key)) {
+        // 「义」字大旗：旗杆底座为转轴（摆动时旗面带着字一起摆）
+        const B = CAMP_ART.banner, w = p.w * k, h = w * B.h / B.w, s = w / B.w;
+        const c = sc.add.container(p.x * k, p.y * k).setName('camp-prop-flag');
+        c.add(sc.add.image(0, 0, B.key).setOrigin(B.poleX / B.w, .98).setDisplaySize(w, h));
+        c.add(sc.add.text((B.cloth.x - B.poleX) * s, (B.cloth.y - B.h * .98) * s, '义', { fontFamily: TITLE_FONT, fontSize: Math.round(w * .42) + 'px', color: '#1c0f08', resolution: 2 }).setOrigin(.5).setAlpha(.9));
+        this.root.add(c); this.flags.push(c); return true;
+      }
+      if (ram) { const f = img(RAM.key, 6, p.w); f.setOrigin(.5, .95); this.flags.push(f); return true; } return false;
+      case 'fire': if (sc.textures.exists(CAMP_ART.firepit.key)) { const f = img(CAMP_ART.firepit.key, 0, p.w * 1.5); this.fires.push({ x: p.x, y: p.y - p.w * .45, img: f }); return true; }
+        if (camp) { img(PROPS.key, 30, p.w); this.fires.push({ x: p.x, y: p.y }); return true; } return false;
       case 'brazier': if (sc.textures.exists(BRAZIER.key)) { const b = img(BRAZIER.key, 0, p.w); this.fires.push({ x: p.x, y: p.y - p.w * .55, img: b }); return true; } return false;
       default: {
+        if (p.kind === 'post' && sc.textures.exists(CAMP_ART.dummy.key)) { this.dummies.push(img(CAMP_ART.dummy.key, 0, p.w * 1.25)); return true; }
         if (!camp) return false;
         const frame = { rack: 21, shields: 23, crates: 14, sacks: 16, cart: 24, pot: 31, post: 34 }[p.kind]; img(PROPS.key, frame, p.w); return true;
       }
@@ -158,8 +176,9 @@ export class CampLife {
     for (const d of this.drillers) {
       if (d.rest > 0) { d.rest -= dt; continue; }
       d.t += dt * 7; const f = Math.floor(d.t);
-      if (f >= 4) { d.t = 0; d.rest = .25 + Math.random() * .5; d.img.setFrame(d.dir + '_0'); continue; }
-      d.img.setFrame(`${d.dir}_${f}`);
+      const dm = this.drillDummy.get(d);
+      if (f >= 4) { d.t = 0; d.rest = .25 + Math.random() * .5; d.img.setFrame(d.dir + '_0'); dm?.setFrame(0); continue; }
+      d.img.setFrame(`${d.dir}_${f}`); dm?.setFrame(f === 2 ? 1 : f === 3 ? 2 : 0);
     }
     for (const [i, f] of this.flags.entries()) f.setRotation(Math.sin(this.clock * 1.6 + i) * .035);
     for (const f of this.fires) if (f.img) f.img.setFrame(Math.floor(this.clock * 11) % 8);
@@ -171,6 +190,6 @@ export class CampLife {
     const k = this.k, img = playSheet(this.scene, 'fx_collapse_dust', x * k, y * k, { size: size * k, depth: 0, ms: 1400, alpha, tint, onUpdate: (im, t) => { im.setY((y + rise * t) * k).setAlpha(alpha * (1 - t)); } });
     if (img) { this.root.add(img); }
   }
-  get info() { return { ...this.stats, flags: this.flags.length, fires: this.fires.length }; }
-  destroy() { this.root.destroy(); this.walkers = []; this.drillers = []; this.flags = []; this.fires = []; }
+  get info() { return { ...this.stats, flags: this.flags.length, fires: this.fires.length, dummies: this.dummies.length, campArt: { banner: this.flags.some(f => f instanceof Phaser.GameObjects.Container), firepit: this.fires.some(f => f.img?.texture.key === CAMP_ART.firepit.key), dummy: this.dummies.length > 0 } }; }
+  destroy() { this.root.destroy(); this.walkers = []; this.drillers = []; this.flags = []; this.fires = []; this.dummies = []; this.drillDummy.clear(); }
 }

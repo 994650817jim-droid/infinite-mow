@@ -34,7 +34,7 @@ import {HuaxiongBoss} from '../systems/HuaxiongBoss';
 import {getXingyangEncounter} from '../data/xingyang';
 import {XurongBoss} from '../systems/XurongBoss';
 import {getSishuiEncounter} from '../data/sishui';
-import {BattlefieldSupplies,MAX_PROP_SLOTS,POUCH_MAX} from '../systems/BattlefieldSupplies';
+import {BattlefieldSupplies,MAX_PROP_SLOTS,POUCH_MAX,potionTexture} from '../systems/BattlefieldSupplies';
 import {YellowBattle} from '../systems/YellowBattle';
 import {XiliangBattle} from '../systems/XiliangBattle';
 import {dongzhuoStageUnlocked,yellowStageUnlocked,unlockedTroopKinds} from '../world/WorldStore';
@@ -50,7 +50,7 @@ import { WAR, warText, ensureWarTextures } from '../ui/WarStyle';
 import { LQ, lqButton, lqDivider, lqHitBox, lqImageButton, lqPanel, lqSkin, type LqState } from '../ui/LacquerKit';
 import { chapterUnlocked, isChapterTestRun, recordChapterVictory } from '../systems/ChapterProgress';
 import { BALANCE, COLORS, DEPTH, FONT, GAME_HEIGHT, GAME_WIDTH, HEADING_FONT, IS_DESKTOP, TITLE_FONT, actorDepth, screenPoint } from '../config';
-import {upgradeCardTexture,inkUpgradeCardTexture,inkPlate} from '../ui/HomeCommand';
+import {upgradeCardTexture,inkUpgradeCardTexture,inkPlate,homeCommand} from '../ui/HomeCommand';
 import { RESULT_GOLD, RESULT_IVORY, RESULT_STROKE, buildRewardView, parseHeroLine, playResultAnims, wan, type ResultAnim } from '../ui/ResultRewards';
 import { loadBagArt } from '../ui/ItemQuality';
 import type { EnemyDef } from '../data/enemies';
@@ -116,6 +116,7 @@ import { DAMAGE_LABEL, OUTLINE_LABEL, SCALE_LABEL, SHAKE_LABEL, WIDTH_LABEL, cyc
 import { tutorialReplayLink } from '../ui/TutorialOverlay';
 import { beginBattle, commitBattle, rollbackBattle } from '../systems/BattleSnapshot';
 import { reloadGame } from '../systems/SaveSlots';
+import { BOOT_TO_KEY } from '../systems/BattleSnapshot';
 import { BossMoveset } from '../systems/BossMoveset';
 import { BossMount } from '../systems/BossMount';
 import { watchBossPhase } from '../systems/BossPhase';
@@ -2284,7 +2285,7 @@ export class GameScene extends Phaser.Scene {
       this.pausePanel.setVisible(mode === 'pause');
       this.attributePauseText?.setText(`分配属性点 · ${this.player?.growth.unallocated ?? 0}`);
       const exit=this.pausePanel.getByName('pause-exit') as Phaser.GameObjects.Text|null;
-      exit?.setData('confirm',false).setText(IS_DESKTOP?(this.worldCampaign&&worldUnlocked()?'返回营寨':'退出本关'):'返回选将').setColor('#b5c4b2');
+      exit?.setData('confirm',false).setText(IS_DESKTOP?'撤退':'返回选将').setColor('#b5c4b2');
     }
     if (this.resultPanel) this.resultPanel.setVisible(mode === 'result');
     if (mode === 'rest') commitBattle(); // 关卡告捷进行营：本场所得生效
@@ -2506,10 +2507,12 @@ export class GameScene extends Phaser.Scene {
     o.pauseHint.setText('战斗已暂停').setFontFamily(FONT).setColor('#b9a57a').setPosition(cx, top + 68);
     const div = this.add.graphics().setScrollFactor(0); div.lineStyle(1, 0xc9a96a, .35).lineBetween(cx - 30, top + 92, cx - 30, top + ph - 58); this.pausePanel.add(div);
     // 左栏：动作
-    o.resume.setPosition(lx, top + 128).setDisplaySize(300, 50); o.resumeText.setPosition(lx, top + 128).setFontFamily(HEADING_FONT);
-    this.attributePauseText?.setPosition(lx, top + 190); o.bagLink.setPosition(lx, top + 236); o.buildLink.setPosition(lx, top + 282);
-    o.exit.setPosition(lx, top + ph - 92);
-    for (const t of [this.attributePauseText, o.bagLink, o.buildLink, o.exit]) t?.setFontFamily(HEADING_FONT);
+    // 2026-11-17 用户「这里不需要属性点，行囊，因为战斗界面有」：左栏只留 继续战斗（大）/ 查看构筑 / 撤退
+    o.resume.setPosition(lx, top + 150).setDisplaySize(310, 60); o.resumeText.setPosition(lx, top + 150).setFontFamily(HEADING_FONT).setFontSize(24);
+    for (const t of [this.attributePauseText, o.bagLink]) t?.setVisible(false).disableInteractive();
+    o.buildLink.setPosition(lx, top + 240);
+    o.exit.setPosition(lx, top + 320);
+    for (const t of [o.buildLink, o.exit]) t?.setFontFamily(HEADING_FONT);
     o.keys.setText('Esc / P 继续战斗').setPosition(lx, top + ph - 26);
     // 右栏：音乐 / 音效滑条（原控件，挪到右栏）
     const moveRow = (row: Phaser.GameObjects.GameObject[], y: number): void => { const kept = row.filter(x => x.active); for (const x of kept) x.destroy(); void y; };
@@ -2847,7 +2850,7 @@ export class GameScene extends Phaser.Scene {
     // 奖励区在分隔线与要事之间居中
     const areaTop = top + 142, areaBottom = (notes.length ? noteText.y - noteText.height - 6 : stats.y - 16);
     view.root.setPosition(cx, areaTop + Math.max(0, (areaBottom - areaTop - view.height) / 2));
-    if (!view.height) { view.root.add(this.add.text(0, 0, victory ? '' : '胜败乃兵家常事 · 整军再战', { fontFamily: HEADING_FONT, fontSize: '18px', color: RESULT_IVORY, resolution: 2 }).setOrigin(.5).setStroke(RESULT_STROKE, 3).setAlpha(.8)); view.root.setY((areaTop + areaBottom) / 2); }
+    if (!view.height) { view.root.add(this.add.text(0, 0, victory ? '本场没有新的奖励' : '胜败乃兵家常事 · 整军再战', { fontFamily: HEADING_FONT, fontSize: '18px', color: RESULT_IVORY, resolution: 2 }).setOrigin(.5).setStroke(RESULT_STROKE, 3).setAlpha(.8)); view.root.setY((areaTop + areaBottom) / 2); }
     view.root.setScrollFactor(0); for (const c of view.root.list) (c as unknown as { setScrollFactor: (v: number) => void }).setScrollFactor(0);
     this.resultPanel.addAt(view.root, this.resultPanel.getIndex(noteText));
     const ty = title.y, kick = kicker;
@@ -3283,13 +3286,15 @@ export class GameScene extends Phaser.Scene {
     {
       // 用药按钮：在加点按钮上方；药囊有药时显示，满血或上一份药未回完时变暗
       const root=this.add.container(GAME_WIDTH-58,IS_DESKTOP?GAME_HEIGHT-288:GAME_HEIGHT-340).setScrollFactor(0).setDepth(DEPTH.hud+4).setName('potion-button').setVisible(false);
-      const glow=this.add.circle(0,0,33,0xff7a4a,0).setStrokeStyle(3,0xff8a5a,.6);
-      const disc=this.add.circle(0,0,29,0x2a1a14,.94).setStrokeStyle(2,0xd8b56a,1);
-      const icon=this.add.image(0,-1,'healing_potion').setDisplaySize(30,36);
-      const bubble=this.add.circle(21,-21,11,0x3f8a4a,1).setStrokeStyle(1.5,0xffe2a4,1);
+      // 2026-11-17 用户「用药的ui图标也改一下」：手绘药罐 + 漆底描金圆框（同 HUD 其他漆金按钮），数字角标朱砂底金边
+      const glow=this.add.circle(0,0,33,0xff7a4a,0).setStrokeStyle(3,0xf3d48a,.55);
+      const disc=this.add.circle(0,0,29,0x1b120b,.95).setStrokeStyle(2.5,0xc9a35e,1);
+      const ring=this.add.circle(0,0,24,0x000000,0).setStrokeStyle(1,0xf3d48a,.45);
+      const potionKey=potionTexture(this),icon=this.add.image(0,-1,potionKey).setDisplaySize(potionKey==='healing_potion'?30:42,potionKey==='healing_potion'?36:42);
+      const bubble=this.add.circle(21,-21,11,0x9a2a1c,1).setStrokeStyle(1.5,0xf3d48a,1);
       this.potionBadge=this.add.text(21,-21,'0',{fontFamily:FONT,fontSize:'13px',color:'#fff6e0',resolution:2,fontStyle:'bold'}).setOrigin(.5);
       const caption=this.potionCaption=this.add.text(0,40,'用药',{fontFamily:FONT,fontSize:'13px',color:'#ffe2a4',resolution:2,stroke:'#17140d',strokeThickness:3}).setOrigin(.5);
-      root.add([glow,disc,icon,bubble,this.potionBadge,caption]);
+      root.add([glow,disc,ring,icon,bubble,this.potionBadge,caption]);
       root.setInteractive(new Phaser.Geom.Circle(0,0,34),Phaser.Geom.Circle.Contains).on('pointerdown',(_p:Phaser.Input.Pointer,_x:number,_y:number,event:Phaser.Types.Input.EventData)=>{event?.stopPropagation?.();this.usePotion();});
       if(root.input)root.input.cursor='pointer';
       this.tweens.add({targets:glow,scale:1.2,alpha:{from:.95,to:.2},duration:600,yoyo:true,repeat:-1,ease:'Sine.easeInOut'});
@@ -3306,7 +3311,7 @@ export class GameScene extends Phaser.Scene {
       const bag=this.supplies.pouch,next=bag[0],can=this.supplies.canUsePotion,low=this.player.hp<this.player.maxHp*.4;
       this.potionButton.setVisible(!overlay&&!this.over&&bag.length>0).setAlpha(can?1:.5);
       this.potionBadge?.setText(String(bag.length));
-      if(next&&this.potionIcon&&(this.potionIcon.texture.key!==next.texture||(next.frame!==undefined&&this.potionIcon.frame.name!==String(next.frame))))this.potionIcon.setTexture(next.texture,next.frame).setDisplaySize(next.texture==='heal_props'?40:30,next.texture==='heal_props'?40:36);
+      {const tk=next?potionTexture(this,next.texture):'';if(next&&this.potionIcon&&(this.potionIcon.texture.key!==tk||(next.frame!==undefined&&this.potionIcon.frame.name!==String(next.frame))))this.potionIcon.setTexture(tk,tk===next.texture?next.frame:undefined).setDisplaySize(tk==='heal_props'?40:tk==='healing_potion'?30:42,tk==='heal_props'?40:tk==='healing_potion'?36:42);}
       this.potionGlow?.setVisible(can&&low);
     }
     this.pointsBadge?.setText(String(Math.min(99,this.player.growth.unallocated)));if(this.pointsButton)this.pointsButton.setVisible(!overlay&&!this.over&&this.player.growth.unallocated>0).setData('points',this.player.growth.unallocated);
@@ -3485,8 +3490,10 @@ export class GameScene extends Phaser.Scene {
     bagLink.on('pointerdown',()=>{if(this.mode==='pause')this.openBattleBag();});this.pausePanel.add(bagLink);
     const exit=this.add.text(cx,top+ph-66,'返回选将',warText(16,'#b5c4b2')).setOrigin(.5).setPadding(24,10).setInteractive({useHandCursor:true}).setName('pause-exit');
     exit.on('pointerdown',()=>{
-      if(exit.getData('confirm')){this.abandonRun();this.registry.remove('campaignTransfer');if(rollbackBattle()){reloadGame();return;}this.scene.start(this.worldCampaign&&worldUnlocked()?'CityScene':'MenuScene');}
-      else exit.setData('confirm',true).setText('退出后本场获得的等级与资源不保留，确定？').setColor('#e7b68e');
+      // 2026-11-17 用户「返回营寨改成撤退，然后回到大地图」：电脑版撤退 → 回滚本场所得 → 天下地图（天下未开时回主页）
+      const toMap=d&&worldUnlocked();
+      if(exit.getData('confirm')){this.abandonRun();this.registry.remove('campaignTransfer');if(rollbackBattle()){if(toMap)try{sessionStorage.setItem(BOOT_TO_KEY,'WorldMapScene');}catch{/* 存储不可用：重载后回主页 */}reloadGame();return;}this.scene.start(toMap?'WorldMapScene':d?'MenuScene':this.worldCampaign&&worldUnlocked()?'CityScene':'MenuScene');}
+      else exit.setData('confirm',true).setText(d?'撤退？退出后本场获得的等级与资源不保留，确定？':'退出后本场获得的等级与资源不保留，确定？').setColor('#e7b68e');
     });
     const keys=this.pauseKeysText=this.add.text(cx,top+ph-22,d?'Esc / P 继续战斗':'战斗已冻结 · 点击「继续战斗」恢复',warText(12,'#7f9987')).setOrigin(.5);
     // 暂停菜单里的文字入口改为漆金小牌：有底板、悬停 / 按下态，命中区与底板一致
@@ -3653,14 +3660,18 @@ export class GameScene extends Phaser.Scene {
     const root=this.add.container(0,0).setDepth(DEPTH.overlay+4).setScrollFactor(0).setName('build-panel'),b=this.player.growth.build;
     const text=(x:number,y:number,value:string,size=16)=>this.add.text(x,y,value,{fontFamily:FONT,fontSize:size+'px',color:'#ecd9b5',resolution:2,wordWrap:{width:GAME_WIDTH-90}}).setScrollFactor(0);
     root.add(this.add.rectangle(GAME_WIDTH/2,GAME_HEIGHT/2,GAME_WIDTH,GAME_HEIGHT,0x17130e,.98).setScrollFactor(0).setInteractive());
-    root.add(text(36,24,'本局构筑 · 战法 '+Object.keys(b.tactics).length+'/6 · 信物宝物 '+b.treasures.length,22));
+    // 电脑版（2026-11-17 UI 审查）：原来字直接铺在半透明底上、透出后面的军中设置；改为漆底描金面板 + 书法标题 + 水墨返回，打开时先收起军中设置
+    const D=IS_DESKTOP;if(D){this.pausePanel.setVisible(false);const fr=this.add.graphics().setScrollFactor(0);lqPanel(fr,20,12,GAME_WIDTH-40,GAME_HEIGHT-24);root.add(fr);}
+    const head=text(36,24,'本局构筑 · 战法 '+Object.keys(b.tactics).length+'/6 · 信物宝物 '+b.treasures.length,22);if(D)head.setFontFamily(TITLE_FONT).setColor('#efd399').setStroke('#120904',4).setPosition(44,26);root.add(head);
     let y=66;for(const id of Object.keys(b.tactics) as TacticId[]){root.add(this.add.image(48,y+16,'build_icon_'+id).setDisplaySize(26,26).setScrollFactor(0));root.add(text(70,y,TACTICS[id].name+' Lv.'+b.level(id)+'  ['+TAG_NAMES[TACTICS[id].tag]+']',17));root.add(text(36,y+23,TACTICS[id].desc,13));y+=IS_DESKTOP?45:68;}
     if(!Object.keys(b.tactics).length){root.add(text(36,y,'升级时选择战法，构筑你的战斗风格。'));y+=42;}
     for(const id of b.treasures){root.add(this.add.image(48,y+10,'build_icon_'+id).setDisplaySize(24,24).setScrollFactor(0));root.add(text(70,y,TREASURES[id].name+' · '+TREASURES[id].desc,14));y+=IS_DESKTOP?29:48;}
 
     root.add(text(36,GAME_HEIGHT-106,Object.entries(b.tags()).map(([id,n])=>TAG_NAMES[id as keyof typeof TAG_NAMES]+' '+n+'件').join('  '),14));
-    root.add(text(36,GAME_HEIGHT-78,'标签仅记录进度；2件加成 / 4件觉醒将在后续阶段开放。',12));
-    root.add(text(GAME_WIDTH/2-70,GAME_HEIGHT-46,'返回暂停菜单',17).setPadding(12,8).setInteractive({useHandCursor:true}).on('pointerdown',()=>root.destroy()));
+    if(!D)root.add(text(36,GAME_HEIGHT-78,'标签仅记录进度；2件加成 / 4件觉醒将在后续阶段开放。',12));
+    const close=()=>{root.destroy();if(this.mode==='pause')this.pausePanel.setVisible(true);};
+    if(D){const back=homeCommand(this,GAME_WIDTH/2,GAME_HEIGHT-46,200,42,'返回');for(const o of [back.g,back.caption,back.hit]){(o as unknown as {setScrollFactor:(n:number)=>void}).setScrollFactor(0);root.add(o);}back.hit.setName('build-panel-back').setData('padDefault',true).on('pointerdown',close);}
+    else root.add(text(GAME_WIDTH/2-70,GAME_HEIGHT-46,'返回暂停菜单',17).setPadding(12,8).setInteractive({useHandCursor:true}).on('pointerdown',close));
   }
   protected renderAttributePanel(): void {
     if (!this.player || !this.attributePointsText) return;

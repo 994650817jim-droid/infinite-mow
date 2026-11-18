@@ -92,7 +92,7 @@ try {
     await p.waitForFunction(() => window.__game.scene.isActive('WorldMapScene'), null, { timeout: 15000 });
     await p.waitForTimeout(900);
     let m = await mapState(p);
-    ck('notice confirm opens world map focused on 讨伐董卓', m.selected === 'hulao' && m.actionOn && m.action === '选择武将 · 出征', m);
+    ck('notice confirm opens world map focused on 讨伐董卓', m.selected === 'hulao' && m.actionOn && m.action === '出征', m);
     ck('map: huangjin cleared, hulao open, later chapters locked', m.nodes.huangjin === 'cleared' && m.nodes.hulao === 'open' && ['qunxiong', 'guandu', 'chibi'].every(k => m.nodes[k] === 'locked'), m.nodes);
     ck('timeline chips mirror node states', JSON.stringify(m.chips) === JSON.stringify(m.nodes), m.chips);
     ck('new-chapter banner shown', m.banner);

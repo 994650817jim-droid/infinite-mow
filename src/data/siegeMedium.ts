@@ -23,7 +23,13 @@ export const MID_SIEGE = {
   ram: {
     hp: 520, speed: 34, escortRadius: 200, hitEveryMs: 1500, gateDamage: 95, // 待平衡会话复核
     respawnMs: 8000, // 毁后重领冷却（营地显示倒计时）· 待平衡会话复核
-    enemyAggroRadius: 230, contactDamageMul: 1.6, contactCdMs: 800, // 敌兵优先打冲车（一半敌兵）
+    enemyAggroRadius: 230, contactDamageMul: 1.3, contactCdMs: 800, // 敌兵优先打冲车（一半敌兵）；原 1.6 · 待平衡会话复核
+    /** 蒙皮顶棚（用户 11-17「敌方弓手射我方冲车，感觉冲车一下被射烂」）：普通箭（城头箭雨）对冲车只吃 25%；每次受击后 0.5 秒免伤，齐射不会瞬间打爆。 */
+    arrowMul: .25, guardMs: 500,
+    /** 火箭：冲车掉到 hpGate 以下后，瞄冲车的那一处箭雨有 chance 换成火箭（地面火焰预警）；中了起火 burnMs 持续掉血，主将站到旁边 putOutRadius 内扑灭。 */
+    fire: { hpGate: .85, chance: .5, burnMs: 4000, burnDps: 9, putOutRadius: 120 },
+    /** 受击提示：冲车名牌闪红；顶部目标行「冲车受击」最多每 alertCdMs 提示一次 */
+    alertCdMs: 3000,
     size: 150,
   },
   /** 第二段 · 巷战：窄街两侧民房，2 个据点 */
@@ -123,3 +129,22 @@ export const LARGE_SIEGE = {
     logs: { everyMs: 5200, warnMs: 1100, speed: 560, width: 90, damage: 20, enemyDamage: 140, count: 2 }, // 滚木礌石：从城头沿南北向滚下
   },
 } as const;
+
+/**
+ * 攻城守军有限（用户 2026-11-17「关于攻城是没有波数的，这个要设计不可以无限刷等级」）：
+ * - 每座城一池守军（按档位，时代越后越多），普通刷兵、敌营增援、城内反扑都从池里出；池空后不再来人。
+ * - 各段（城外 / 瓮城 / 巷战 / 府衙）按份额分池：进到该段才放出该段的份额（前段没用完的留给后段）。
+ * - 剧情 / 目标必刷的兵（吊桥出城、据点反扑、屋顶伏兵、守将亲卫）池空后照样出，但不给经验、不掉落、不记战功。
+ * - 敌营每营最多增援 campBatches 批；拆掉敌营，剩下没出的批次从守军池里扣掉。
+ * 数值为开发期初值 · 待平衡会话复核。
+ */
+export const SIEGE_GARRISON = {
+  total: { small: 120, medium: 200, large: 300 } as Record<'small' | 'medium' | 'large', number>,
+  /** 时代加成：第 n 时代 ×(1 + eraStep×(n−1)) */
+  eraStep: .15,
+  share: { outside: .5, barbican: .15, street: .25, hall: .1 } as Record<SiegePhaseName, number>,
+  campBatches: 3,
+} as const;
+
+/** 攻城刷兵方向：城门出城占比；场地下方 rearCut 比例是我方后方（营地 / 冲车来路），不刷兵。敌营挪到左右两翼上半段。 */
+export const SIEGE_SPAWN = { gateShare: .6, rearCut: .3, flankCamps: [{ x: -470, y: -170 }, { x: 470, y: -300 }] } as const;

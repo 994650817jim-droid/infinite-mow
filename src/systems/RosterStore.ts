@@ -8,6 +8,7 @@ import { loadWorld, spendWorld, townUpgrade, worldUnlocked } from '../world/Worl
 import { TOWN_BUILDINGS, levelOf, type TownBuildingId } from '../town/TownData';
 import { loadItems, loadout, resetItemCache, unequipSlot, type GearOwner } from './ItemStore';
 import { isChapterTestRun } from './ChapterProgress';
+import { activeValue, passiveValue } from '../data/commonerSkills';
 
 /**
  * 人才库与已招武将（RECRUIT_PLAN.md，用户选 A 方案）：独立存档键 im_roster_v1（在 SaveSlots.PROGRESS_KEYS 里，随存档位切换）。
@@ -216,8 +217,8 @@ const hallIdx = (s: RosterSave): number => Math.max(1, hallLevel(s)) - 1;
 export function legacyHallLevel(): number { return read()?.hall ?? 1; }
 
 function unownedHeroes(s: RosterSave): CharacterId[] { return CHARACTERS.map(c => c.id).filter(id => !s.owned.some(r => r.hero === id) && !s.offers.some(o => o.hero === id) && !s.captives.some(o => o.hero === id)); }
-function commonOffer(): Offer {
-  const w = RECRUIT.commonQuality, total = Object.values(w).reduce((a, b) => a + (b ?? 0), 0); let r = rand() * total, q: ItemQuality = 'white';
+function commonOffer(s: RosterSave): Offer {
+  const w = RECRUIT.commonQuality[hallIdx(s)], total = Object.values(w).reduce((a, b) => a + (b ?? 0), 0); let r = rand() * total, q: ItemQuality = 'white';
   for (const k of ['white', 'green', 'blue'] as const) { r -= w[k] ?? 0; if (r < 0) { q = k; break; } }
   return { kind: 'common', name: commonName(rand), template: pick(TEMPLATE_ORDER), quality: q, cost: RECRUIT.cost[q as 'white' | 'green' | 'blue'] };
 }
@@ -231,6 +232,12 @@ function namedOffer(s: RosterSave): Offer | null {
 }
 function heroOffer(s: RosterSave): Offer | null { const left = unownedHeroes(s); if (!left.length) return null; const hero = pick(left); return { kind: 'hero', hero, name: getCharacter(hero).name, template: HERO_TEMPLATE[hero], quality: 'orange', cost: RECRUIT.cost.hero }; }
 
+const pityOf = (s: RosterSave): number => RECRUIT.pity[hallIdx(s)];
+/** 当前招贤馆等级下的名将出现率（界面用）：每席出名将（史事 + 可玩）的概率、其中可玩名将的概率、保底还差几次（0 = 这一级没有保底）。 */
+export function hallOdds(s: RosterSave = loadRoster()): { seat: number; hero: number; pity: number; pityLeft: number } {
+  const r = RECRUIT.rates[hallIdx(s)], pity = pityOf(s);
+  return { seat: r.named + r.hero, hero: r.hero, pity, pityLeft: pity > 0 ? Math.max(1, pity - s.dry + 1) : 0 };
+}
 /** 刷新全部席位（自动换季与手动刷新共用），处理保底。 */
 function rollOffers(s: RosterSave): void {
   s.offers = [];
@@ -239,13 +246,13 @@ function rollOffers(s: RosterSave): void {
   for (let i = 0; i < seats; i++) {
     const r = rand(); let o: Offer | null = null;
     if (r < rates.hero) o = heroOffer(s); else if (r < rates.hero + rates.named) o = namedOffer(s);
-    s.offers.push(o ?? commonOffer());
+    s.offers.push(o ?? commonOffer(s));
   }
   const anyLeft = CHARACTERS.some(c => !s.owned.some(r => r.hero === c.id));
   if (s.offers.some(o => o.kind === 'hero')) s.dry = 0;
-  else if (anyLeft) {
+  else if (anyLeft && pityOf(s) > 0) { // Lv1 没有保底，也不攒次数
     s.dry++;
-    if (s.dry > RECRUIT.pity) { const h = heroOffer(s); if (h) { s.offers[s.offers.length - 1] = h; s.dry = 0; } }
+    if (s.dry > pityOf(s)) { const h = heroOffer(s); if (h) { s.offers[s.offers.length - 1] = h; s.dry = 0; } }
   }
 }
 
@@ -358,6 +365,18 @@ export function rankUp(id: string, line: RankLine): RosterResult {
 export function rankBonus(r: Pick<Recruit, 'rank' | 'picks'>): { damage: number; hp: number; haste: number } {
   const w = r.picks.filter(p => p === 'weapon').length, p = r.picks.filter(x => x === 'passive').length;
   return { damage: w * RANK.weaponStep, hp: p * RANK.passiveHp, haste: p * RANK.passiveHaste };
+}
+/** 讲武堂「随从操练」按钮与说明用（用户 2026-11-17「升级兵器和被动要看到需要多少钱」）：这一线下一阶的花费、是否买得起 / 已满 / 主公，以及升级前后的数值。 */
+export interface RankPreview { cost: number; afford: boolean; full: boolean; lord: boolean; capByHall: boolean; before: string; after: string }
+export function rankPreview(r: Recruit, line: RankLine, s: RosterSave = loadRoster()): RankPreview {
+  const cap = rankCap(s), full = r.rank >= cap, cost = RANK.cost(r.rank + 1).provisions, lord = isLordRecruit(s, r);
+  const w = r.picks.filter(p => p === 'weapon').length, p = r.picks.length - w, tpl = !r.hero;
+  const pc = (v: number) => `${Math.round(v * 100)}%`;
+  const text = (w2: number, p2: number) => line === 'weapon'
+    ? `伤害 +${pc(w2 * RANK.weaponStep)}${tpl ? ' · ' + activeValue(r.template, w2) : ''}`
+    : `生命 +${pc(p2 * RANK.passiveHp)} 攻速 +${pc(p2 * RANK.passiveHaste)}${tpl ? ' · ' + passiveValue(r.template, p2) : ''}`;
+  let afford = false; try { afford = loadWorld().provisions >= cost; } catch { /* 存档不可用 */ }
+  return { cost, afford, full, lord, capByHall: full && r.rank < RANK.max, before: text(w, p), after: line === 'weapon' ? text(w + 1, p) : text(w, p + 1) };
 }
 /** 主将的将阶开局加成（未拥有记录时为 0）。 */
 export { FOLLOW };

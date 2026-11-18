@@ -10,6 +10,10 @@ import { GAME_WIDTH, GAME_HEIGHT, IS_DESKTOP, DEPTH } from '../config';
 import { getCharacter } from '../data/characters';
 import type { Enemy } from '../entities/Enemy';
 import type { RunEndReason } from '../types';
+import { SURRENDER, surrenderDef } from '../data/surrender';
+import { bossInRoster, joinByPersuasion } from '../systems/RosterStore';
+import { markSurrender, surrenderLive } from '../systems/SurrenderStore';
+import { gainProvisions } from '../world/WorldStore';
 
 /**
  * 第十一章 · 南征（数据 data/nanzhengChapter.ts）。三关沿用第三章篇章框架（关间军营、首领招式组、倒地 → 宝箱）。
@@ -115,6 +119,19 @@ export function nanzhengGameSceneClass(Base: typeof GameScene) {
         this.nanman?.update((this.combatNow - before) / 1000);
         if (this.mhHidden && this.combatNow >= this.mhReturnAt) this.returnMenghuo();
       }
+    }
+    /**
+     * 首领招降（surrender-spec §5.1）：七擒之后孟获心服，必定归降——直接入麾下（免费、不进降将栏，橙、模板刀），
+     * 本关不掉首领宝箱，改为「心服」奖励军粮 +120。本存档孟获已在麾下后再打 11-3：照常打倒、掉宝箱。
+     */
+    protected spawnBossChest(x: number, y: number, done: () => void): void {
+      if (this.nzStage === 3 && surrenderLive() && !bossInRoster('menghuo', '孟获')) {
+        const r = joinByPersuasion('孟获', undefined, { boss: 'menghuo', template: 'blade', quality: 'orange' });
+        if (markSurrender('surrendered', 'menghuo')) gainProvisions(SURRENDER.mengProvisions);
+        this.showWaveBanner('孟获心服', false, `孟获：${surrenderDef('nanzheng-3:menghuo')?.yes ?? ''} · ${r.ok ? '已入麾下' : r.message} · 军粮 +${SURRENDER.mengProvisions}`);
+        this.sfx.play('gong'); this.time.delayedCall(900, done); return;
+      }
+      super.spawnBossChest(x, y, done);
     }
     protected finish(victory: boolean, reason: RunEndReason = 'death') {
       if (this.over) return;

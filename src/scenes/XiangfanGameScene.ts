@@ -11,6 +11,9 @@ import { getCharacter } from '../data/characters';
 import { warText } from '../ui/WarStyle';
 import type { Enemy } from '../entities/Enemy';
 import type { EnemyKind, RunEndReason } from '../types';
+import { YUJIN } from '../data/surrender';
+import { bossInRoster, captureBoss } from '../systems/RosterStore';
+import { markSurrender, surrenderLive } from '../systems/SurrenderStore';
 
 /**
  * 第九章 · 襄樊之战（数据 data/xiangfanChapter.ts）。三关沿用第三章篇章框架（关间军营、首领招式组、倒地 → 宝箱）。
@@ -116,6 +119,8 @@ export function xiangfanGameSceneClass(Base: typeof GameScene) {
       if (this.over) return;
       // 麦城：击败吕蒙后还要冲进出口才算突围
       if (this.breakout && victory && !this.breakout.exited) { this.pendingWin = true; this.setMode('none'); this.showWaveBanner('吕蒙已败', false, '冲进出口，杀出麦城！'); return; }
+      // 首领招降（surrender-spec §5.2）：9-2 胜利后于禁乞降，自动进降将栏（不掷骰；已在麾下 / 栏里跳过）
+      if (victory && this.xfStage === 2 && surrenderLive() && !bossInRoster(YUJIN.id, YUJIN.name)) { const r = captureBoss({ id: YUJIN.id, name: YUJIN.name, template: YUJIN.template }); if (r) { markSurrender('surrendered', YUJIN.id); this.showWaveBanner(YUJIN.banner, false, `于禁：${YUJIN.yes} · 已入降将栏（四季内六折招降）`); } }
       super.finish(victory, reason);
       if (!victory || this.registry.get('xfNoStory') === 'all') return;
       if (this.xfStage === 3) { const h = getCharacter(this.runConfig.character); this.story('xf-ending', '第九章 · 襄樊之战 · 终', '走出麦城', xfEnding(h.name, h.id === 'guanyu'), '展开天下地图'); }

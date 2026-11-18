@@ -58,16 +58,16 @@ export const STORY_CAST: Record<string, { name: string; portrait?: string }> = {
   zhangliang: { name: '张梁' }, zhangbao: { name: '张宝' }, zhangjiao: { name: '张角' },
   huaxiong: { name: '华雄' }, xurong: { name: '徐荣' }, dongzhuo: { name: '董卓' }, lubu: { name: '吕布' },
   zhangshiping: { name: '张世平' },
-  // 第三章（占位：还没有对白半身像，先显示朱红名字章；美术到位后在 portrait 填贴图键即可）
-  jiaxu: { name: '贾诩' }, wangyun: { name: '王允' }, lijue: { name: '李傕' }, taoqian: { name: '陶谦' }, zhangxiu: { name: '张绣' },
-  dianwei: { name: '典韦' }, yuanshu: { name: '袁术' }, jiling: { name: '纪灵' }, mizhu: { name: '糜竺' },
-  // 第四章（占位：同上，先显示名字章）
-  dongcheng: { name: '董承' }, chengyu: { name: '程昱' }, zhangliao: { name: '张辽' }, yanliang: { name: '颜良' }, wenchou: { name: '文丑' }, xunyou: { name: '荀攸' },
-  chunyuqiong: { name: '淳于琼' }, xuyou: { name: '许攸' }, xuchu: { name: '许褚' }, caiyang: { name: '蔡阳' }, qinbing: { name: '亲兵' },
+  // 第三章：对白水墨立绘 assets/ink-cast/（2026-11-18，见 data/story/art.ts）
+  jiaxu: { name: '贾诩', portrait: 'ink_cast_jiaxu' }, wangyun: { name: '王允', portrait: 'ink_cast_wangyun' }, lijue: { name: '李傕', portrait: 'ink_cast_lijue' }, taoqian: { name: '陶谦', portrait: 'ink_cast_taoqian' }, zhangxiu: { name: '张绣', portrait: 'ink_cast_zhangxiu' },
+  dianwei: { name: '典韦', portrait: 'ink_cast_dianwei' }, yuanshu: { name: '袁术', portrait: 'ink_cast_yuanshu' }, jiling: { name: '纪灵', portrait: 'ink_cast_jiling' }, mizhu: { name: '糜竺', portrait: 'ink_cast_mizhu' },
+  // 第四章：对白水墨立绘 assets/ink-cast/（2026-11-18；蔡阳待补，先显示名字章）
+  dongcheng: { name: '董承', portrait: 'ink_cast_dongcheng' }, chengyu: { name: '程昱', portrait: 'ink_cast_chengyu' }, zhangliao: { name: '张辽', portrait: 'ink_cast_zhangliao' }, yanliang: { name: '颜良', portrait: 'ink_cast_yanliang' }, wenchou: { name: '文丑', portrait: 'ink_cast_wenchou' }, xunyou: { name: '荀攸', portrait: 'ink_cast_xunyou' },
+  chunyuqiong: { name: '淳于琼', portrait: 'ink_cast_chunyuqiong' }, xuyou: { name: '许攸', portrait: 'ink_cast_xuyou' }, xuchu: { name: '许褚', portrait: 'ink_cast_xuchu' }, caiyang: { name: '蔡阳' }, qinbing: { name: '亲兵' },
 };
 /** 第一、二章用到、还没有对白立绘的人物（交美术会话补水墨对白半身像，透明底）。 */
 /** 第三章新增缺图人物（曹操、吕布、简雍已在上面）。 */
 /** 第四章新增缺图人物（袁绍已在第一批）。 */
-export const MISSING_PORTRAITS_CH4 = ['董承', '程昱', '张辽', '颜良', '文丑', '荀攸', '淳于琼', '许攸', '许褚', '蔡阳（可只用名字章）'];
-export const MISSING_PORTRAITS_CH3 = ['贾诩', '王允', '李傕', '陶谦', '张绣', '典韦', '袁术', '纪灵', '糜竺'];
+export const MISSING_PORTRAITS_CH4 = ['蔡阳（可只用名字章）']; // 2026-11-18 其余九人立绘已补齐
+export const MISSING_PORTRAITS_CH3: string[] = []; // 2026-11-18 九人立绘已补齐（assets/ink-cast/）
 export const MISSING_PORTRAITS = ['旁白卷首图（通用）', '斥候（通用）', '简雍', '曹操', '袁绍', '张梁', '张宝', '张角', '华雄', '徐荣', '董卓', '吕布', '张世平'];

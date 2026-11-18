@@ -14,6 +14,10 @@ import { LEGION, TROOPS, TROOP_KINDS, type Order, type TroopKind, BOSS_VS_TROOPS
 import { DEPTH } from '../config';
 import { AllyCorpses } from './AllyCorpses';
 import { HINT_MOCK, groundScar } from '../ui/HintStyle';
+import { playSheet } from './SkillFxSheets';
+
+/** 战场支援援兵入场（用户 2026-11-17：「支援的兵不要立刻出现在武将脚下，而是场外进入到武将那里」）：比平时跑得快一点，3 秒还没到就直接归位。 */
+export const ARRIVAL = { speedMul: 1.25, maxSeconds: 3, joinDist: 34, dustEvery: .16 } as const;
 export interface LegionState { training?:CampTraining;groups?:Partial<Record<TroopKind,CampGroup>>; food: number; dead: number; recruited: number; levels: Record<TroopKind, number>; soldiers: Array<{ kind: TroopKind; hp: number;reserveSoldier?:boolean }> }
 
 export class Legion {
@@ -51,6 +55,12 @@ export class Legion {
   visibleCount = 0;
   private viewClock = 0; private combatClock = 0; private nextSquadSlot = 0;
   private stopped = false;
+  /** 下一次 recruit 的入场点（场外）；用一次就清掉。没设时照旧出现在主将脚下（军营 / 开局 / 读档）。 */
+  arriveFrom: { x: number; y: number } | null = null;
+  /** 正在从场外跑来入列的援兵：剩余秒数、扬尘计时。跑来途中照常挨打，到了才入列（跟随 / 出击）。 */
+  private readonly arriving = new Map<Ally, { left: number; dust: number; life: number }>();
+  get arrivingCount(): number { return this.arriving.size; }
+  isArriving(u: Ally): boolean { return this.arriving.has(u); }
   private readonly views: AllyView[] = [];
   /** 阵亡士兵的倒地动画与尸体（留 60 秒）。 */
   readonly corpses: AllyCorpses;
@@ -90,7 +100,8 @@ export class Legion {
       else { u = new Ally(this.scene, x, y, kind, this.nextSquadSlot++); u.train(this.levels[kind]); this.units.push(u); }
       this.navigation.forget(u.id);u.applyCampaignHp(this.hpMultiplier());newborn.push(u);this.recruited++;
     }
-    this.regroup();for(const u of newborn){const p=this.formation.position(u);u.setPosition(p.x,p.y);u.ai.x=p.x;u.ai.y=p.y;} this.viewClock = 1; this.rebuildGrid(); return true;
+    const from=this.arriveFrom;this.arriveFrom=null;
+    this.regroup();newborn.forEach((u,i)=>{const p=this.formation.position(u);if(from){u.setPosition(from.x+(i%3-1)*30,from.y+Math.floor(i/3)*30);this.arriving.set(u,{left:ARRIVAL.maxSeconds,dust:0,life:u.lifeId});}else u.setPosition(p.x,p.y);u.ai.x=p.x;u.ai.y=p.y;}); this.viewClock = 1; this.rebuildGrid(); return true;
   }
   train(kind: TroopKind, free = false): boolean {
     const level = this.levels[kind]; if (!level || level >= 3) return false;
@@ -166,6 +177,14 @@ export class Legion {
   onKill(enemy: Enemy): void { this.food += enemy.kind === 'boss' ? 20 : enemy.kind === 'elite' ? 5 : 1; }
   stop(): void { this.command.clear(); this.stopped = true; this.player.armyDamageTakenMul = 1; this.effects.length = 0; this.artEffects.clear(); this.heals.length = 0; this.strikes.length=0; this.projectiles.clear(); this.gfx.clear(); }
   clear(): void { this.corpses.clear(); this.command.clear();this.projectiles.clear(); this.heals.length = 0;this.strikes.length=0; for (const u of this.units) { const v = u.release(); if (v) this.views.push(v); } this.units.length = 0;this.navigation.clear();this.formation.clear(); this.squads.clear(); this.grid.clear(); }
+  /** 援兵从场外跑向自己的阵位：到了（或 3 秒到点）才入列。 */
+  private stepArrival(u: Ally, dt: number): void {
+    const a = this.arriving.get(u)!; if (!u.active || u.lifeId !== a.life) { this.arriving.delete(u); return; }
+    const p = this.formation.position(u); a.left -= dt; a.dust -= dt;
+    u.moveTo(p.x, p.y, dt, u.def.speed * ARRIVAL.speedMul);
+    if (a.dust <= 0) { a.dust = ARRIVAL.dustEvery; playSheet(this.scene, 'fx_collapse_dust', u.x, u.y + 8, { size: 46, depth: DEPTH.ground + 4, ms: 420, alpha: .42 }); }
+    if (Math.hypot(p.x - u.x, p.y - u.y) <= ARRIVAL.joinDist || a.left <= 0) { if (a.left <= 0) u.setPosition(p.x, p.y); u.ai.x = p.x; u.ai.y = p.y; u.ai.nextThink = 0; this.arriving.delete(u); }
+  }
   update(dt: number, now: number, enemies: Enemy[], enemyGrid: SpatialGrid<Enemy>, damage: (e: Enemy, n: number) => void): void {
     this.corpses.update(now);
     if (this.stopped) return;
@@ -184,6 +203,7 @@ export class Legion {
     for (const u of this.units) {
       if (!u.active) continue;
       u.beginStep();
+      if (this.arriving.size && this.arriving.has(u)) { this.stepArrival(u, dt); continue; }
       u.simDebt += dt; const nearPlayer = Math.hypot(u.x - this.player.x, u.y - this.player.y) < 900;
       if (!nearPlayer && u.simDebt < LEGION.farStep) continue;
       const step = nearPlayer ? dt : u.simDebt; u.simDebt = 0;
@@ -195,7 +215,7 @@ export class Legion {
     if (this.combatClock >= LEGION.nearStep) {
       this.combatClock = 0;
       for (const u of this.units) {
-        if (!u.active || u.cooldown > 0 || u.kind === 'rider' && u.ai.mode === 'return') continue;
+        if (!u.active || u.cooldown > 0 || u.kind === 'rider' && u.ai.mode === 'return' || this.arriving.has(u)) continue;
         const range = u.def.range * (u.def.ranged ? stats.range : u.kind === 'halberdier' && u.level === 3 ? 1.25 : 1);
         if (u.kind === 'medic') {
           const wounded = this.grid.query(u.x, u.y, range, this.friends).filter(a => a.active && a.hp < a.maxHp && Math.hypot(a.x - u.x, a.y - u.y) <= range).sort((a, b) => a.hp / a.maxHp - b.hp / b.maxHp);

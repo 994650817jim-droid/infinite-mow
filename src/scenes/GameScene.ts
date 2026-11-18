@@ -101,6 +101,8 @@ import { WindstepFx } from '../systems/WindstepFx';
 import { EnvInteractions } from '../systems/EnvInteractions';
 import { envConfigFor } from '../data/envInteractions';
 import { Terrain } from '../systems/Terrain';
+import { attrBadge } from '../ui/AttrBadge';
+import { PROP_LOOT, rollPropItem, type PropLootKind } from '../data/propLoot';
 import { terrainConfigFor } from '../data/terrain';
 import { Tutorial } from '../systems/Tutorial';
 import { beginBattle, commitBattle, rollbackBattle } from '../systems/BattleSnapshot';
@@ -197,6 +199,8 @@ export class GameScene extends Phaser.Scene {
   tutorial?: Tutorial;
   private envInit = false;
   /** 战场地形层（树 / 树林、河、桥；data/terrain.ts 按篇章与关配置） */
+  /** 本关障碍物已掉的兵装件数（每关上限 PROP_LOOT.perStageItems）与掉落随机源（测试可换） */
+  propItems = 0; propRng: () => number = Math.random;
   protected terrain: Terrain | null = null; private terrainInit = false; private terrainNav: Array<{left:number;right:number;top:number;bottom:number}> = [];
   windstepFx(): WindstepFx { if (!this.windFx) { this.windFx = new WindstepFx(this, this.player, this.sfx); this.events.once('shutdown', () => { this.windFx?.destroy(); this.windFx = undefined; }); } return this.windFx; }
   flankBladeFx(): FlankFx { if (!this.flankFx) { this.flankFx = new FlankFx(this, this.player, this.sfx); this.events.once('shutdown', () => { this.flankFx?.destroy(); this.flankFx = undefined; }); } return this.flankFx; }
@@ -509,6 +513,7 @@ export class GameScene extends Phaser.Scene {
     this.yellow=this.chapter.stage?new YellowBattle({scene:this,player:this.player,army:this.legion,enemies:this.enemies,move:(e,nx,ny,dt)=>this.advanceEnemy(e,nx,ny,dt),spawn:(def,x,y)=>this.spawnEnemy(def.kind,x,y,1,true,def)},this.chapter.stage):null;
     this.xiliang=this.chapter.id==='hulao'&&!this.runConfig.encounter&&!this.customChapter()?new XiliangBattle({scene:this,player:this.player,army:this.legion,enemies:this.enemies,spawn:(kind,x,y,def)=>this.spawnEnemy(kind,x,y,undefined,true,def),stage:()=>(this.chapter.westStage??3) as 1|2|3,elapsed:()=>this.elapsed,def:k=>this.chapter.enemies[k],banner:(t,c)=>this.showWaveBanner(t,true,c),sfx:k=>this.sfx.play(k),boss:()=>this.boss,bossStyle:()=>this.chapter.bossStyle,move:(e,nx,ny,dt)=>this.advanceEnemy(e,nx,ny,dt),obstacles:()=>this.sishuiObstacles?.footprints??[]}):null;
     this.supplies=new BattlefieldSupplies(this,this.player,this.enemies,()=>this.combatNow,kind=>{this.sfx.play('pickup');this.artEffects.show(5,this.player.x,this.player.y-12,35,this.combatNow,280);if(kind==='wine')this.relics?.onWine(this.combatNow);});
+    this.propItems = 0; this.supplies.onPropLoot = (kind, x, y) => this.propLoot(kind, x, y);
     // 兵装：开局读入该武将穿戴的道具加成（生命上限增加的部分补满）
     {const oldMax=this.player.maxHp;this.player.growth.gear=gearFor(this.runConfig.character);this.player.heal(this.player.maxHp-oldMax);}
     this.followers=null;this.followerPassives=[];{const allow=worldUnlocked()&&(!isChapterTestRun()||new URLSearchParams(location.search).get('followers')==='1');const list=allow?followersFor(this.runConfig.character):[];if(list.length)this.followers=new FollowerSquad(this,this.player,list,(x,y,r)=>this.grid.query(x,y,r),(e,d,fire)=>this.hitEnemy(e,d,this.combatNow,fire?'fire':'melee',true,false),()=>this.player.growth.damageMultiplier(this.combatNow));}
@@ -2406,11 +2411,42 @@ export class GameScene extends Phaser.Scene {
       return;
     }
     if (this.mode !== 'recruit' || !this.freeRecruit || train || this.recruitedWaves.has(this.waveIndex) || !this.recruitOptions.some(o => o.kind === kind)) return;
+    this.legion.arriveFrom = this.recruitEntryPoint(); // 援兵从场外跑来入列（用户 2026-11-17）
     if (this.legion.recruit(kind, this.legion.freeRecruitCount, true)) { // freeRecruitCount 开招兵时已含统御·募众
       if(this.waveIndex%2===0){const id=this.player.hp<this.player.maxHp?'rejuvenation':'berserk';this.player.growth.usePotion(id,this.player,this.combatNow);this.showGrowthNotice(id==='rejuvenation'?'整军奖励 · 回春丹':'整军奖励 · 狂战丹');}
       this.recruitedWaves.add(this.waveIndex); this.freeRecruit = false; this.recruitOptions = [];
       this.resumePendingChoices();
     }
+  }
+
+  /**
+   * 战场支援援兵的入场点：画面边缘外一点，先试主将面朝的那一边，再按离主将由近到远试其余三边；
+   * 每边沿边线试几个偏移，避开城墙 / 关隘碰撞框、河水与树干（地形层的禁区判定）。都不行就退回主将身后。
+   */
+  /** 障碍物按类别掉落（data/propLoot.ts）：兵器架只出攻击类兵装、甲胄架只出护具，封顶蓝色、每关上限；粮袋粮车给随军粮；军旗 / 营帐 / 景物不会走到这里。 */
+  protected propLoot(kind: PropLootKind, x: number, y: number): void {
+    const L = PROP_LOOT, rng = this.propRng, now = this.combatNow;
+    if (kind === 'grain') { this.legion.food += L.grain.food; this.showGrowthNotice('缴获粮草 · 随军粮 +' + L.grain.food); return; }
+    if (kind !== 'weapons' && kind !== 'armor' && kind !== 'crate' && kind !== 'coins') return;
+    const c = L[kind];
+    for (let i = 0; i < c.gems; i++) { const a = i / Math.max(1, c.gems) * Math.PI * 2; this.spawnGem(x + Math.cos(a) * 22, y + 8 + Math.sin(a) * 10, 1); }
+    if (this.itemDrops && this.propItems < L.perStageItems && rng() < c.itemChance) { const it = rollPropItem(kind, rng); if (it) { this.propItems++; this.itemDrops.drop(it, x, y + 18); } }
+    if (kind === 'weapons' && rng() < L.weapons.buffChance) { const g = this.player.growth; g.berserkUntil = Math.max(g.berserkUntil, now) + L.weapons.buffMs; this.showGrowthNotice('取兵器 · 斗志昂扬（短时伤害提升）'); }
+    if (kind === 'armor' && rng() < L.armor.buffChance) { this.player.propGuardUntil = Math.max(this.player.propGuardUntil, now) + L.armor.buffMs; this.player.propGuardMul = L.armor.guardMul; this.showGrowthNotice('披甲执盾 · 短时减伤'); }
+  }
+
+  protected recruitEntryPoint(): { x: number; y: number } {
+    const v = this.cameras.main.worldView, p = this.player, m = 70;
+    const edges: Record<'left' | 'right' | 'up' | 'down', { x: number; y: number; along: 'x' | 'y'; d: number }> = {
+      left: { x: v.x - m, y: p.y, along: 'y', d: p.x - v.x }, right: { x: v.right + m, y: p.y, along: 'y', d: v.right - p.x },
+      up: { x: p.x, y: v.y - m, along: 'x', d: p.y - v.y }, down: { x: p.x, y: v.bottom + m, along: 'x', d: v.bottom - p.y },
+    };
+    const order = [p.direction, ...(['left', 'right', 'up', 'down'] as const).filter(k => k !== p.direction).sort((a, b) => edges[a].d - edges[b].d)];
+    const boxes = this.sishuiObstacles?.footprints ?? [];
+    const blocked = (x: number, y: number) => boxes.some(b => x > b.left - 40 && x < b.right + 40 && y > b.top - 40 && y < b.bottom + 40)
+      || !!this.terrain && (this.terrain.inWater(x, y, 30) || (() => { const f = this.terrain!.free(x, y, 30); return Math.hypot(f.x - x, f.y - y) > 1; })());
+    for (const k of order) { const e = edges[k]; for (const off of [0, 120, -120, 240, -240]) { const x = e.along === 'x' ? e.x + off : e.x, y = e.along === 'y' ? e.y + off : e.y; if (!blocked(x, y)) return { x, y }; } }
+    return { x: p.x, y: p.y + 55 };
   }
 
   protected chooseRecruit(index: number): void { const option = this.recruitOptions[index]; if (option) this.buyTroops(option.kind, false); }
@@ -2944,6 +2980,7 @@ export class GameScene extends Phaser.Scene {
         .setInteractive({ useHandCursor: true })
         .on('pointerdown', () => this.togglePause()),
     };
+    attrBadge(this, 196, 31, this.runConfig.character, 20, { scrollFactor: 0, depth: DEPTH.hud + 2 })?.setName('hud-attr-badge'); // 主将主属性印（ui/AttrBadge.ts）
     this.hudTexts.details = this.add.text(GAME_WIDTH - 24, 94, '战况 ▾', style(13, '#dfcfab'))
       .setOrigin(1,0).setFixedSize(96,62).setAlign('center').setPadding(10,12).setScrollFactor(0).setDepth(DEPTH.hud+1)
       .setVisible(false); // 「战况」下拉已取消（用户反馈不需要）；音效 / 音乐开关改为常驻
@@ -3211,6 +3248,7 @@ export class GameScene extends Phaser.Scene {
       lqImageButton(this,button,50,44,'gold',plus);
       button.on('pointerdown',()=>{const g=this.player.growth;if(g.allocate(this.player,id)){this.player.passive.areaMul=g.areaMultiplier();if(g.heroFree>0){g.heroFree--;if(!isChapterTestRun())allocateHeroAttr(this.runConfig.character,id);}this.renderAttributePanel();this.updateHud();}});
       this.attributePanel.add([row,attrIconImg,label,effect,pips,value,button,plus]);
+      if(isPrimary){const ab=attrBadge(this,left+56+label.width+18,y-11,this.runConfig.character,22);if(ab)this.attributePanel.add(ab);} // 主属性印（ui/AttrBadge.ts）
       this.attributeRows.push({value,button,plus,pips,pipX,pipY,perkG,perkX,perkY:y-11});
     });
     this.attributePanel.add(perkTip);

@@ -159,6 +159,8 @@ export class Player {
   envSpeedMul = 1;
   /** 地形（河水）移动倍率：GameScene 每帧按所站位置设，水里 0.6（data/terrain.ts） */
   terrainSpeedMul = 1;
+  /** 打碎甲胄架 / 盾牌堆偶得的短时减伤：截止时间与受伤倍率（data/propLoot.ts PROP_LOOT.armor） */
+  propGuardUntil = 0; propGuardMul = 1;
   get speed(): number {
     return BALANCE.player.speed * Math.min(1.6, this.stats.moveMul * this.growth.movementMultiplier()*(this.growth.build.tags().skirmish>=2?1.04:1)) * this.mountSpeedMul * this.envSpeedMul * this.terrainSpeedMul;
   }
@@ -400,7 +402,7 @@ export class Player {
     if (!this.alive || this.damageImmune || now < this.invulnUntil || this.passive.isInvulnerable(now)) return false; // 马超锦马冲锋中无敌
     if (Math.random() < this.growth.dodgeChance()) return false; // 敏捷·游刃：闪避
     const afterArmor = Math.max(1, raw - this.stats.armor);
-    const unguarded = Math.max(1, Math.round(afterArmor * this.stats.damageTakenMul * this.armyDamageTakenMul * this.growth.incomingDamageMultiplier() * this.passive.damageTakenMultiplier(now)));
+    const unguarded = Math.max(1, Math.round(afterArmor * this.stats.damageTakenMul * this.armyDamageTakenMul * this.growth.incomingDamageMultiplier() * this.passive.damageTakenMultiplier(now) * (now < this.propGuardUntil ? this.propGuardMul : 1)));
     const ridden=this.mountGuard?this.mountGuard(unguarded,now):unguarded;if(ridden<=0)return false;
     const dmg=Math.max(1,this.damageGuard?.(ridden,now)??ridden);
     (this.scene as unknown as {sfx?:{play(k:string):void}}).sfx?.play('playerHurt');

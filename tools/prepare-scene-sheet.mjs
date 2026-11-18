@@ -1,5 +1,5 @@
 // 场景图集整理：洋红底网格原图（COLS×ROWS 等分，可选只取一条横带）→ 透明图集（每格 CELL 见方）。
-// 每格：抠洋红（硬抠 + 去溢色）→ 取不透明外框 → 等比缩放塞进格子（四周留 MARGIN）→ 水平居中，ANCHOR=bottom 贴底（默认）或 center。
+// 每格：抠洋红（硬抠 + 只对半透明边缘去溢色——紫色物件的实心像素不能去，否则变蓝）→ 取不透明外框 → 等比缩放塞进格子（四周留 MARGIN）→ 水平居中，ANCHOR=bottom 贴底（默认）或 center。
 // 用法：SRC=…/warships_gem.jpg OUT=public/assets/scene-v2/warships.png COLS=2 ROWS=2 CELL=512 ANCHOR=center node tools/prepare-scene-sheet.mjs
 // 可选：XSPLIT / YSPLIT（列 / 行的分界，占原图宽 / 高的比例，逗号分隔，个数 = 列数 − 1；物件越过等分线时用）、MARGIN（默认 .06）、BAND=y0,y1（只取原图高度的这段，如 .25,.75，网格排在带里）、KEYHARD / KEYSOFT、SCALE_SHARE=1（所有格共用一个缩放：按最大一格定，保持相对大小）、COUNT（只输出前 N 格）。
 import { chromium } from 'playwright';
@@ -22,7 +22,7 @@ try {
       const R = d[i], G = d[i + 1], B = d[i + 2], m = Math.max(0, Math.min(R, B) - G);
       const a = m >= KH ? 0 : m <= KS ? 1 : 1 - (m - KS) / (KH - KS); let r2 = R, b2 = B;
       if (a > 0 && a < 1) { r2 = Math.max(0, Math.min(255, (R - (1 - a) * 255) / a)); b2 = Math.max(0, Math.min(255, (B - (1 - a) * 255) / a)); }
-      const spill = Math.max(0, Math.min(r2, b2) - G); d[i] = r2 - spill; d[i + 2] = b2 - spill; d[i + 3] = Math.round(a * 255);
+      const spill = a < 1 ? Math.max(0, Math.min(r2, b2) - G) : 0; d[i] = r2 - spill; d[i + 2] = b2 - spill; d[i + 3] = Math.round(a * 255);
     }
     g.putImageData(img, 0, 0);
     const gy0 = Math.round(H * by0), gh = Math.round(H * (by1 - by0)), cw = W / COLS, ch = gh / ROWS, boxes = [];

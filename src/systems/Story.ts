@@ -124,6 +124,8 @@ export interface StoryHost {
   reward?: (r: { merit?: number; grain?: number }) => void;
   /** 该章共几关（章末挂在最后一关），默认 3 */
   lastStage?: number;
+  /** 首领倒下横幅（node.banner；如「斩颜良」） */
+  banner?: (title: string, caption?: string) => void;
 }
 /**
  * 每关一个：GameScene.create 建立（第三章起的篇章场景按自己的篇章 id 重建）。
@@ -177,7 +179,12 @@ export class StoryDirector {
   /** 首领登场 / 二阶段 / 倒下：大字台词（每次都说）。 */
   bossIntro(target: BarkTarget): void { const n = this.stageNodes()?.bossIntro; if (n) this.bark(n, target); }
   bossPhase(target: BarkTarget): void { const n = this.stageNodes()?.bossPhase; if (n) this.bark(n, target); }
-  bossFall(target: BarkTarget): void { const n = this.stageNodes()?.bossFall; if (n) this.bark(n, target); }
+  bossFall(target: BarkTarget): void {
+    const n = this.stageNodes()?.bossFall; if (!n) return;
+    this.bark(n, target);
+    // 横幅 + 旗标（如关羽在队「斩颜良」）：旗标是玩法结果，剧情关了也照记；横幅同温酒斩华雄，也照播
+    const b = n.banner; if (b && (!b.ifFollower || this.h.ctx.team().includes(b.ifFollower))) { if (b.flag) setStoryFlag(b.flag); this.h.banner?.(b.title, b.caption); }
+  }
   /** 按 id 说一句（bark 节点，其他系统调用；如 'hulao-3.lubu_enter'）。返回是否说了。 */
   line(id: string, target: BarkTarget): boolean {
     const n = this.chapter?.barks?.find(b => b.id === id); return n ? this.bark(n, target) : false;
@@ -196,6 +203,7 @@ export class StoryDirector {
    */
   stageEnd(done: () => void): void {
     const queue: Array<(next: () => void) => void> = [], sn = this.stageNodes(), last = this.h.stage === (this.h.lastStage ?? 3);
+    if (this.chapter) setStoryFlag(`cleared_${this.chapterId}_${this.h.stage}`); // 「打过某关」条件用（如第四章闲话「打过 4-1」）
     for (const n of sn?.after ?? []) this.queueScroll(queue, n, 'stage', '继续');
     const choice = sn?.choice;
     if (choice?.choices?.length && !storySeen(choice.id)) {
@@ -232,6 +240,7 @@ export class StoryDirector {
   /** 本关羁绊给某武将的伤害 / 移速倍率。 */
   bondDamageMul(hero: CharacterId): number { let k = 1; for (const b of this.bonds) if (b.members.includes(hero)) k *= b.damageMul ?? 1; return k; }
   bondSpeedMul(hero: CharacterId): number { let k = 1; for (const b of this.bonds) if (b.members.includes(hero)) k *= b.speedMul ?? 1; return k; }
+  bondCritBonus(hero: CharacterId): number { let k = 0; for (const b of this.bonds) if (b.members.includes(hero)) k += b.critBonus ?? 0; return k; }
 }
 
 // ———— 营中闲话（营寨 / 行军休整画面底部小对话条）————

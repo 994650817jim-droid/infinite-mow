@@ -66,6 +66,7 @@ export function guanduGameSceneClass(Base: typeof GameScene) {
       const keys = (this.registry.get('battleTextureKeys') ?? []) as string[];
       this.registry.set('battleTextureKeys', [...new Set([...keys, ...Object.keys(GUANDU_ATLAS_FILES), art.key, art.roadKey, ...yuanKeys])]);
       this.hudTexts.chapter.setText(this.chapter.name);
+      this.setupStory('guandu', this.guanduStage); // 剧情第四章（基类按 encounter 没建）：关前过场 / 幕间 / 军情
       this.events.once('shutdown', () => { this.depots?.clear(); this.depots = undefined; this.enemyCamps?.clear(); this.enemyCamps = undefined; this.controller?.clear(); this.controller = undefined; });
     }
     protected abandonRun() { if (!this.over) abandonExpedition(this.receipt, this.allies.filter(u => u.active && u.reserveSoldier).map(u => u.kind)); }

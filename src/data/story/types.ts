@@ -29,9 +29,11 @@ export interface StoryNode {
   choices?: readonly StoryChoice[];
   /** 过场动画 id（过场系统做好之前，这段按字幕当卷轴播；做好后由过场系统接管同一 id） */
   cutscene?: string;
+  /** 首领倒下时的横幅 + 旗标（第四章「斩颜良」「诛文丑」，复用温酒斩华雄的横幅样式）：ifFollower 在队才触发；旗标不受剧情设置影响 */
+  banner?: { title: string; caption?: string; ifFollower?: CharacterId; flag?: string };
 }
 /** 羁绊：带着 members 全员（主公 + 随行）进关时，关前追加 lines（每存档一次）并给这些人加成（每关都给）：damageMul 伤害、speedMul 移速（主将）。 */
-export interface StoryBond { id: string; name: string; members: readonly CharacterId[]; lines: readonly StoryLine[]; damageMul?: number; speedMul?: number }
+export interface StoryBond { id: string; name: string; members: readonly CharacterId[]; lines: readonly StoryLine[]; damageMul?: number; speedMul?: number; /** 暴击率加成（主将），如 .05 */ critBonus?: number }
 /** 某一关的剧情：before 开打前（过场 / 幕间，按顺序，在军情之前）、brief 军情、首领三句、after 首次通关后（战报前）、choice 宝箱捡完后的抉择。 */
 export interface StoryStage { before?: readonly StoryNode[]; brief?: StoryNode; bossIntro?: StoryNode; bossPhase?: StoryNode; bossFall?: StoryNode; after?: readonly StoryNode[]; choice?: StoryNode }
 export interface StoryChapter {
@@ -57,8 +59,13 @@ export const STORY_CAST: Record<string, { name: string; portrait?: string }> = {
   // 第三章（占位：还没有对白半身像，先显示朱红名字章；美术到位后在 portrait 填贴图键即可）
   jiaxu: { name: '贾诩' }, wangyun: { name: '王允' }, lijue: { name: '李傕' }, taoqian: { name: '陶谦' }, zhangxiu: { name: '张绣' },
   dianwei: { name: '典韦' }, yuanshu: { name: '袁术' }, jiling: { name: '纪灵' }, mizhu: { name: '糜竺' },
+  // 第四章（占位：同上，先显示名字章）
+  dongcheng: { name: '董承' }, chengyu: { name: '程昱' }, zhangliao: { name: '张辽' }, yanliang: { name: '颜良' }, wenchou: { name: '文丑' }, xunyou: { name: '荀攸' },
+  chunyuqiong: { name: '淳于琼' }, xuyou: { name: '许攸' }, xuchu: { name: '许褚' }, caiyang: { name: '蔡阳' }, qinbing: { name: '亲兵' },
 };
 /** 第一、二章用到、还没有对白立绘的人物（交美术会话补水墨对白半身像，透明底）。 */
 /** 第三章新增缺图人物（曹操、吕布、简雍已在上面）。 */
+/** 第四章新增缺图人物（袁绍已在第一批）。 */
+export const MISSING_PORTRAITS_CH4 = ['董承', '程昱', '张辽', '颜良', '文丑', '荀攸', '淳于琼', '许攸', '许褚', '蔡阳（可只用名字章）'];
 export const MISSING_PORTRAITS_CH3 = ['贾诩', '王允', '李傕', '陶谦', '张绣', '典韦', '袁术', '纪灵', '糜竺'];
 export const MISSING_PORTRAITS = ['旁白卷首图（通用）', '斥候（通用）', '简雍', '曹操', '袁绍', '张梁', '张宝', '张角', '华雄', '徐荣', '董卓', '吕布', '张世平'];

@@ -93,6 +93,7 @@ assets/raw/*
 !/tools/deathfx-mixed.mjs
 !/tools/prepare-death-dust.mjs
 !/tools/prepare-death-props.mjs
+!/tools/prepare-enemy-horse.mjs
 !/tools/test-merit.mjs
 !/tools/test-level-merge.mjs
 !/tools/test-hero-codex.mjs
@@ -181,6 +182,7 @@ assets/raw/*
 !/tools/test-zhangjiao-alive.mjs
 !/tools/shot-camp-pano.mjs
 !/tools/test-camp-mount.mjs
+!/tools/prepare-camp-hay.mjs
 !/tools/test-jingnan-art.mjs
 !/tools/test-hanzhong-art.mjs
 !/tools/test-yiling-full.mjs

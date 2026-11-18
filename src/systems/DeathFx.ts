@@ -33,7 +33,9 @@ export type DeathProp = 'blade' | 'spear' | 'bow' | 'rattan' | 'tower';
 const PROP_FRAME: Record<DeathProp | 'turban', number> = { blade: 0, spear: 1, bow: 2, rattan: 3, tower: 4, turban: 5 };
 /** 每次击杀的变化（GameScene.deathOptsOf 按兵种 / 章节 / 受击类型算出）。 */
 export interface DeathOpts { heavy?: boolean; turban?: boolean; weapon?: DeathProp; horse?: boolean }
-const HORSE = 'horse_v2_generic_walk';
+/** 放走的战马：优先用专属的暗橄榄褐敌军战马图（4×4），没有就退回通用白马图 + 乘色（HeroMount 也用这张，可能已载入）。 */
+const HORSE_BROWN = 'horse_v2_enemy_brown_walk', HORSE_GENERIC = 'horse_v2_generic_walk';
+const HORSE_SHEETS: Record<string, { originY: number; size: number; tint?: number }> = { [HORSE_BROWN]: { originY: .91, size: .84 }, [HORSE_GENERIC]: { originY: .93, size: 1, tint: 0x907050 } };
 const DUST = 'fx_collapse_dust'; // 墨晕（C 调试）和尘土缺图时的兜底
 /** 专属黄土地扬尘（死亡特效 B）；缺图退回 fx_collapse_dust。originY = 贴图里的地面线（占格高比例），scale = 显示尺寸倍率（专属图内容占格宽约 3/4）。 */
 const DUST_SHEETS: Record<string, { originY: number; scale: number; alpha: number }> = { fx_death_dust: { originY: .8, scale: .95, alpha: .7 }, fx_collapse_dust: { originY: .62, scale: 1, alpha: .8 } };
@@ -69,7 +71,9 @@ export class DeathFx {
   get horseCount(): number { let n = 0; for (const h of this.horses) if (h.active) n++; return n; }
   /** 兵器 / 头巾小图在不在（不在就不显示这些变化）。 */
   get hasProps(): boolean { return !this.lite && this.scene.textures.exists(PROPS); }
-  get hasHorse(): boolean { return !this.lite && this.scene.textures.exists(HORSE) && this.scene.textures.get(HORSE).has('left_0'); }
+  /** 本场放马用哪张图：专属棕色战马优先，其次通用马；都没载入返回 null（手机 / 不是 v2 画风也是 null）。 */
+  get horseKey(): string | null { if (this.lite) return null; for (const k of [HORSE_BROWN, HORSE_GENERIC]) if (this.scene.textures.exists(k) && this.scene.textures.get(k).has('left_0')) return k; return null; }
+  get hasHorse(): boolean { return this.horseKey !== null; }
 
   /** 池预热：战斗开始后每帧建几个条目（含阴影 / 尘土），避免第一次大清屏时一帧里创建几百个对象。 */
   private prewarm(): void {
@@ -141,9 +145,9 @@ export class DeathFx {
   private horseLoading = false;
   /** 场上出现骑兵时调用：把通用战马行走图按需异步载入（HeroMount 也是这样按需载入）；手机 / 已载入 / 不是 v2 画风时什么都不做。 */
   warmHorse(): void {
-    if (this.lite || this.horseLoading || this.mode !== 'b' || !deathFxOn() || this.scene.textures.exists(HORSE) || !isV2Texture(HORSE)) return;
+    if (this.lite || this.horseLoading || this.mode !== 'b' || !deathFxOn() || this.scene.textures.exists(HORSE_BROWN) || !isV2Texture(HORSE_BROWN)) return;
     this.horseLoading = true; const s = this.scene;
-    s.load.image(HORSE, ART_V2_FILES[HORSE]); s.load.once('filecomplete-image-' + HORSE, () => { regridV2(s, HORSE); });
+    s.load.image(HORSE_BROWN, ART_V2_FILES[HORSE_BROWN]); s.load.once('filecomplete-image-' + HORSE_BROWN, () => { regridV2(s, HORSE_BROWN); });
     if (!s.load.isLoading()) s.load.start();
   }
 
@@ -164,11 +168,12 @@ export class DeathFx {
   private spawnHorse(sp: Phaser.GameObjects.Image, dir: number, now: number): void {
     let h = this.horses.find(x => !x.active);
     if (!h) {
-      if (this.horses.length < DEATH_FX.horseCap) { h = { img: this.scene.add.image(0, 0, HORSE, 'left_0').setVisible(false).setName('death-fx-horse'), active: false, start: 0, x: 0, y: 0, dir: 1, vy: 0, size: 60, face: 'left' }; this.horses.push(h); }
+      if (this.horses.length < DEATH_FX.horseCap) { h = { img: this.scene.add.image(0, 0, this.horseKey ?? HORSE_GENERIC, 'left_0').setVisible(false).setName('death-fx-horse'), active: false, start: 0, x: 0, y: 0, dir: 1, vy: 0, size: 60, face: 'left' }; this.horses.push(h); }
       else { h = this.horses[this.horseCursor]; this.horseCursor = (this.horseCursor + 1) % this.horses.length; }
     }
-    h.active = true; h.start = now; h.dir = -dir; h.vy = (Math.random() * 2 - 1) * 70; h.face = h.dir < 0 ? 'left' : 'right'; h.x = sp.x; h.y = sp.y + 4; h.size = Math.abs(sp.displayWidth); // 乘色 0x907050：通用白马 × 暗橄榄褐，对着敌军骑兵原来的战马调的（0xc88d5e 偏红偏亮）
-    h.img.setTexture(HORSE, h.face + '_0').setDisplaySize(h.size, h.size).setOrigin(.5, .93).setPosition(h.x, h.y).setTint(0x907050).setAlpha(1).setDepth(sp.depth - .05).setVisible(true);
+    const key = this.horseKey ?? HORSE_GENERIC, sheet = HORSE_SHEETS[key];
+    h.active = true; h.start = now; h.dir = -dir; h.vy = (Math.random() * 2 - 1) * 70; h.face = h.dir < 0 ? 'left' : 'right'; h.x = sp.x; h.y = sp.y + 4; h.size = Math.abs(sp.displayWidth) * sheet.size;
+    h.img.setTexture(key, h.face + '_0').setDisplaySize(h.size, h.size).setOrigin(.5, sheet.originY).setPosition(h.x, h.y).setAlpha(1).setDepth(sp.depth - .05).setVisible(true); if (sheet.tint !== undefined) h.img.setTint(sheet.tint); else h.img.clearTint();
   }
 
   /** 这一个要不要带尘土：手机隔一个出、同屏尘土封顶。 */

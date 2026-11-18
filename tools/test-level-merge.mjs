@@ -109,6 +109,34 @@ ck('正式模式：战斗中升到上限 Lv10 立刻写入存档，属性点同�
 ck('结算写「武将等级 Lv.1 → Lv.10」，满级多出的经验按 50 : 1 折军粮', /Lv\.1 → Lv\.10/.test(prod.line ?? '') && /折军粮 \+\d+/.test(prod.grainLine ?? '') && prod.grain > 0 && prod.final.level === 10 && prod.final.xp <= prod.final.next, prod);
 await p.screenshot({ path: 'assets/review/level-merge-result-1280x720.png' });
 
+// 8) 三选一节奏（PICK_PACE，2026-11-17 用户：「中期好像3选一触发的太频繁了」）：第二章起同关两次面板至少隔 minGapSec 秒，
+//    攒着的升级 / 保底合成一个面板连选；首领宝箱 / 转关补发不等间隔；第一章不受影响（上面 1–7 都在 1-1 跑）
+await battle('?dev=1&autostart=1&chapter=hulao&westStage=1&layout=desktop');
+const pace = await p.evaluate(async () => {
+  const s = window.__game.scene.getScene('GameScene'), h = await window.__mod('/src/data/heroLevels.ts'), gap = h.PICK_PACE.minGapSec, wait = ms => new Promise(r => setTimeout(r, ms));
+  const panel = () => ({ mode: s.mode, title: s.levelPanel.getByName('upgrade-title')?.text, given: s.picksGiven, pending: s.pendingLevels });
+  const out = { ch: s.chapter.id, on: s.paceOn(), gap, waves: h.PICK_PACE.waves };
+  s.picksGiven = 0; s.pendingLevels = 0; s.militaryPending = 0; s.lastPickAt = -1e9; s.chapter = { ...s.chapter, recruitWaves: [] }; s.freeRecruit = false; s.pendingRecruit = false; // 波次招募弹窗不参与
+  s.elapsed = 46; s.ensurePicks(h.PICK_PACE.waves[0]); out.wave1 = panel(); while (s.mode === 'levelup') s.chooseUpgrade(0);
+  // 10 秒后连升 2 级：间隔不够，先攒着
+  s.elapsed = 56; s.onHeroLevelUp(2); out.queued = panel();
+  // 第 2 波清完不再单独补（waves[1] = 1）
+  s.ensurePicks(h.PICK_PACE.waves[1]); out.wave2 = panel();
+  // 到点：合成一个面板「连选 2 张」，选完第 1 张原地换一批
+  s.elapsed = 46 + gap + 1; await wait(400); out.merged = panel();
+  if (s.mode === 'levelup') s.chooseUpgrade(0); out.second = panel(); while (s.mode === 'levelup') s.chooseUpgrade(0); out.after = panel();
+  // 首领宝箱：补到 4 张，刚开过面板也立刻弹（不等间隔）
+  s.elapsed += 5; s.grantBossChest(); out.chest = panel(); while (s.mode === 'levelup') s.chooseUpgrade(0);
+  // 转关 / 一次补多张：同一个面板连选
+  s.picksGiven = 0; s.ensurePicks(4, true); out.burst = panel(); let n = 0; while (s.mode === 'levelup' && n < 9) { s.chooseUpgrade(0); n++; } out.burstChoices = n;
+  return out;
+});
+ck('第二章起套用节奏：最短间隔 50 秒，保底节点 1 / 1 / 2', pace.ch === 'hulao' && pace.on && pace.gap >= 45 && pace.gap <= 60 && pace.waves.join() === '1,1,2', pace);
+ck('第 1 波清完弹 1 次；10 秒后连升 2 级不弹（攒着），第 2 波也不另补', pace.wave1.mode === 'levelup' && pace.queued.mode === 'none' && pace.queued.pending === 2 && pace.wave2.mode === 'none' && pace.wave2.pending === 2, pace);
+ck('间隔到点：合成一个面板「连选 2 张」，选完第 1 张原地换一批（仍是同一面板）', pace.merged.mode === 'levelup' && /连选 2 张（第 1 张）/.test(pace.merged.title ?? '') && pace.second.mode === 'levelup' && /第 2 张/.test(pace.second.title ?? '') && pace.after.mode === 'none', pace);
+ck('首领宝箱补到 4 张、不等间隔立刻弹', pace.chest.mode === 'levelup' && pace.chest.given === 4, pace.chest);
+ck('一次补 4 张：同一面板连选 4 张', /连选 4 张/.test(pace.burst.title ?? '') && pace.burstChoices === 4, { burst: pace.burst, n: pace.burstChoices });
+
 ck('控制台无报错', errors.length === 0, errors.slice(0, 6));
 console.log(`\n${pass} passed, ${fail} failed`);
 await b.close();

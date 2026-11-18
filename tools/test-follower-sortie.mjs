@@ -44,14 +44,15 @@ const so = await p.evaluate(async G0 => {
   for (const e of s.enemies) if (e.active && !e.isSupplySlot) e.hp = 0; await wait(200);
   s.spawnEnemy('elite', pl.x + 330, pl.y, 400); let far = 0; const c2 = s.combatNow; while (s.combatNow - c2 < 2000) { for (const e of s.enemies) if (e.active && e.kind === 'elite') e.sprite?.setPosition?.(pl.x + 330, pl.y); await new Promise(r => setTimeout(r, 30)); far = Math.max(far, ...dists()); }
   o.far = far;
-  s.legion.cycleOrder(); o.back = s.legion.order; for (const e of s.enemies) if (e.active && !e.isSupplySlot) e.hp = 0; await wait(1200); o.backDist = dists();
+  // 切回护阵：按行走速度 ×1.2 跑回来（RECALL，2026-11-17 用户嫌原来一下子就回来了），约 330 像素要 1.5 秒多
+  s.legion.cycleOrder(); o.back = s.legion.order; for (const e of s.enemies) if (e.active && !e.isSupplySlot) e.hp = 0; await wait(2500); o.backDist = dists();
   return o;
 }, G);
 ck('护阵：随行紧贴主将（≤ 100 像素）', so.guardMax <= 100, so);
 ck('按下出击：随行离开主将去打敌人，优先精锐，并有命中', so.order === 'sortie' && so.outMax > 150 && so.targets.includes('elite') && so.sortieHits > 0, so);
 ck('拴绳：出击最远距离（临时调成 150）时随行追到约 150 处就停住', so.leashMax >= 130 && so.leashMax <= 156, so);
 ck('出击时敌人在 330 处：随行追过去（> 200），仍不超过 400', so.far > 200 && so.far <= 405, so);
-ck('切回护阵：随行回到主将身边（≤ 80 像素）', so.back === 'guard' && so.backDist.every(d => d <= 80), so);
+ck('切回护阵：随行跑回主将身边（2.5 秒内 ≤ 80 像素）', so.back === 'guard' && so.backDist.every(d => d <= 80), so);
 
 // 2. 随行带天赋被动（效果 50%）
 const R2 = roster(['guanyu', 'zhuge', 'diaochan'], [rec('guanyu'), rec('zhuge'), rec('diaochan')]);

@@ -5,6 +5,8 @@
  * - 描边粗细 im_iff_outline_w：'thin' / 'thick'
  * - 伤害数字 im_dmg_numbers：'all' / 'crit' 仅暴击 / 'off'
  * - 震屏 im_shake：'strong' / 'weak' / 'off'（与「新增可玩武将」会话约定同一键；缺省 strong）
+ * - 武将台词 im_hero_barks：'off' 关 / 其余开（缺省开）
+ * - 剧情 im_story：'full' 完整 / 'chapter' 只看章头章末 / 'off' 关闭（2026-11-17 剧情系统，缺省完整）
  * - 画面清晰度 im_render_scale：''（自动）/ '1' / '2' / '3'（config.pickRenderScale 启动时读，刷新后生效）
  */
 const get = (k: string): string | null => { try { return localStorage.getItem(k); } catch { return null; } };
@@ -34,10 +36,22 @@ export const SHAKE_LABEL: Record<ShakeLevel, string> = { strong: '强', weak: '�
 /** 震屏强度倍率：强 1、弱 0.5、关 0（与新增武将会话 hitFeel.shakeMul 一致）。 */
 export function shakeScale(): number { const v = shakeLevel(); return v === 'off' ? 0 : v === 'weak' ? .5 : 1; }
 
+export type StoryMode = 'full' | 'chapter' | 'off';
+export function storyMode(): StoryMode { const v = get('im_story'); return v === 'chapter' || v === 'off' ? v : 'full'; }
+export function setStoryMode(v: StoryMode): void { set('im_story', v); }
+export const STORY_LABEL: Record<StoryMode, string> = { full: '完整', chapter: '只看章头章末', off: '关闭' };
+
 export type RenderScaleSetting = '' | '1' | '2' | '3';
 export function renderScaleSetting(): RenderScaleSetting { const v = get('im_render_scale'); return v === '1' || v === '2' || v === '3' ? v : ''; }
 export function setRenderScaleSetting(v: RenderScaleSetting): void { set('im_render_scale', v || null); }
 export const SCALE_LABEL: Record<RenderScaleSetting, string> = { '': '自动', '1': '标准', '2': '高清', '3': '超清' };
+
+export type HeroBarks = 'on' | 'off';
+let barkCache: HeroBarks | null = null;
+export function heroBarks(): HeroBarks { if (barkCache) return barkCache; return barkCache = get('im_hero_barks') === 'off' ? 'off' : 'on'; }
+export function heroBarksOn(): boolean { return heroBarks() === 'on'; }
+export function setHeroBarks(v: HeroBarks): void { set('im_hero_barks', v); barkCache = v; }
+export const BARKS_LABEL: Record<HeroBarks, string> = { on: '开', off: '关' };
 
 /** 在一组取值里循环切换（‹ › 按钮用）。 */
 export function cycle<T>(list: readonly T[], cur: T, dir: number): T { const i = list.indexOf(cur); return list[((i < 0 ? 0 : i) + dir + list.length) % list.length]; }

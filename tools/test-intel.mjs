@@ -105,7 +105,7 @@ for (const layout of ['mobile', 'desktop']) {
   await p.screenshot({ path: `${out}/${layout}-map-intel.png` });
   await p.evaluate(M0 => eval(M0).action.image.emit('pointerup'), M); await p.waitForTimeout(250);
   const modal = await p.evaluate(M0 => { const r = eval(M0).children.getByName('intel-modal'); return r && r.list.filter(o => o.type === 'Text').map(o => o.text).join('\n'); }, M);
-  ck(`[${layout}] 出征面板：胜利条件、奖励、武将选择`, !!modal && modal.includes('悬赏 · 许褚') && modal.includes('击败许褚') && modal.includes('出战武将'), modal);
+  ck(`[${layout}] 出征面板：胜利条件、奖励、主公亲征（无选将）`, !!modal && modal.includes('悬赏 · 许褚') && modal.includes('击败许褚') && modal.includes('亲征') && !modal.includes('出战武将'), modal);
   await p.screenshot({ path: `${out}/${layout}-intel-modal.png` });
   await p.evaluate(M0 => eval(M0).children.getByName('intel-modal').getByName('intel-cancel').emit('pointerup'), M);
   if (layout === 'desktop') {

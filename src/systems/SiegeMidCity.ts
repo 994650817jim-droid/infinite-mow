@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { actorDepth, DEPTH } from '../config';
-import { MID_SIEGE as M, LARGE_SIEGE as L, SIEGE_PROFILES, ramStats, type MidSiegePhase, type RamStats, type SiegeProfile } from '../data/siegeMedium';
+import { MID_SIEGE as M, LARGE_SIEGE as L, SIEGE_PROFILES, SIEGE_SPAWN, ramStats, type MidSiegePhase, type RamStats, type SiegeProfile } from '../data/siegeMedium';
 import { warnFx } from '../ui/WarnFx';
 import { playSheet } from './SkillFxSheets';
 import { worldText } from '../world/WorldUI';
@@ -49,26 +49,28 @@ export interface MidSiegeHost {
 }
 
 type Box = { left: number; right: number; top: number; bottom: number };
+/** 城墙铺法（像素为世界坐标）：段距（< 段宽，互相压住接缝）、城门可见半宽、压进城门的量、伸出场地的长度、墙脚阴影、民房离城墙的距离、城门血量字（门前地上，不跑到顶部 HUD 底下）。 */
+const WALL = { segStep: 196, gateHalfVis: 124, gateOverlap: 14, beyond: 520, shadowBands: 8, shadowAlpha: .42, houseGap: 300, gateLabelDy: 62, moatFlow: 30 } as const;
 const ART = { walls: 'siege_mid_walls', gateFx: 'siege_mid_gatefx', ram: 'siege_mid_ram', street: 'siege_mid_street', hall: 'siege_mid_hall' } as const;
 /** v2 图集帧（4×2）：城防 0 城墙段 1 城门 2 城门破 3 箭楼 4 箭楼毁 5 墩台 6 残墙 7 辕门；冲车 0–3 撞门 4 打坏 5 残骸 6 我方大旗 7 我方营帐；
  *  巷战 0 民房 1 两层民房 2 店铺 3 粮仓 4 兵营 5 路障 6 屋脊 7 水井；府衙 0 大堂 1 台阶 2 回廊 3 石狮 4 内城门 5 帅旗 6 香炉 7 照壁 */
 export const MID_SIEGE_ART = ART;
 
-interface Ram { img: Phaser.GameObjects.Image; x: number; y: number; hp: number; state: 'move' | 'ram' | 'wreck'; hitAt: number; frame: number; label: Phaser.GameObjects.Text; contact: Map<number, number>; }
+interface Ram { img: Phaser.GameObjects.Image; x: number; y: number; hp: number; state: 'move' | 'ram' | 'wreck'; hitAt: number; frame: number; label: Phaser.GameObjects.Text; contact: Map<number, number>; guardUntil: number; burnUntil: number; burnFxAt: number; flashUntil: number; }
 interface Point { name: string; x: number; y: number; radius: number; state: 'open' | 'held' | 'secured'; progress: number; hold: number; lost: number; counterAt: number; flag?: Phaser.GameObjects.Image; label: Phaser.GameObjects.Text; gfx: Phaser.GameObjects.Graphics; }
-interface Zone { x: number; y: number; at: number; id: string; }
+interface Zone { x: number; y: number; at: number; id: string; fire?: boolean }
 interface Target { e: Enemy; life: number; x: number; y: number; }
 interface Log { x: number; y: number; at: number; rolling: boolean; id: string; img?: Phaser.GameObjects.Image; hitPlayer: boolean; hit: Set<number>; }
 
 export class SiegeMidCity {
   phase: MidSiegePhase = 'outside';
-  readonly stats = { volleys: 0, zones: 0, ramHits: 0, ramsLost: 0, ramsTaken: 1, ambushes: 0, transitions: 0, guardWaves: 0, shieldHits: 0, bossSkills: 0, ropesCut: 0, logs: 0, logHits: 0, sally: 0 };
+  readonly stats = { volleys: 0, zones: 0, ramHits: 0, ramsLost: 0, ramsTaken: 1, fireArrows: 0, burns: 0, putOut: 0, ambushes: 0, transitions: 0, guardWaves: 0, shieldHits: 0, bossSkills: 0, ropesCut: 0, logs: 0, logHits: 0, sally: 0 };
   /** 档位配置（小 / 中 / 大城） */
   readonly prof: SiegeProfile; readonly tier: 'small' | 'medium' | 'large';
   /** 小城木门 / 大城瓮城内门（可砍） */
   private woodGate: Target | null = null; private innerGate: Target | null = null;
   /** 大城护城河：吊桥是否放下、两根绳索 */
-  bridgeDown = false; private ropes: Target[] = []; private bridgeBox: Box | null = null; private bridgeImg?: Phaser.GameObjects.Image; private ropeLabel?: Phaser.GameObjects.Text;
+  bridgeDown = false; private moatWater?: Phaser.GameObjects.TileSprite; private ropes: Target[] = []; private bridgeBox: Box | null = null; private bridgeImg?: Phaser.GameObjects.Image; private ropeLabel?: Phaser.GameObjects.Text;
   /** 大城瓮城：滚木 */
   private logs: Log[] = []; private logAt = 0; private barbVolleyAt = 0; private barbGateBox: Box | null = null;
   gateHp: number = M.outside.gate.hp;
@@ -124,14 +126,18 @@ export class SiegeMidCity {
     this.box({ left: o.gate.halfW, right: a.right, top: wy - 30, bottom: wy + 20 });
     this.gateBox = this.box({ left: -o.gate.halfW, right: o.gate.halfW, top: wy - 30, bottom: wy + 20 });
     // 城墙：v2 城墙段横向拼接；缺图用汜水关木栅（第 3 帧）过渡
-    const segW = 220;
-    for (let x = a.left + segW / 2; x < a.right; x += segW) if (Math.abs(x) > o.gate.halfW + 60)
-      this.art(x, wy + 24, [ART.walls, 0], ['sishui_props_refined', 3], segW + 6, this.has(ART.walls) ? (segW + 6) * .55 : segW * .6);
+    // 城墙连续成一条（用户 11-17「这里的城墙没做好」）：从城门两侧往外铺，段与段互相压一点盖住接缝，伸出场地两边；城门压在最上面盖住两头
+    const segW = 226, step = WALL.segStep, from = WALL.gateHalfVis + step / 2 - WALL.gateOverlap;
+    for (const side of [-1, 1]) for (let i = 0, x = side * from; Math.abs(x) < Math.max(-a.left, a.right) + WALL.beyond; i++, x += side * step)
+      this.art(x, wy + 24, [ART.walls, 0], ['sishui_props_refined', 3], segW, this.has(ART.walls) ? segW * .55 : segW * .6).setFlipX(i % 2 === 1);
+    // 墙脚阴影：墙根一条柔和的暗带（贴地，压在地面上、人物之下），城墙不再像贴在地上
+    { const g = this.h.scene.add.graphics().setDepth(DEPTH.ground + 2); this.objects.push(g); const L = a.left - WALL.beyond, R = a.right + WALL.beyond;
+      for (let k = 0; k < WALL.shadowBands; k++) g.fillStyle(0x1a120a, WALL.shadowAlpha * (1 - k / WALL.shadowBands)).fillRect(L, wy + 14 + k * 4, R - L, 4); }
     // 城门用倒塌序列帧的第 1 帧（完好），破门时直接往下播，最后停在敞开的门洞
     this.gateImg = this.has(ART.gateFx) ? this.img(0, wy + 34, ART.gateFx, 0, 300, 300) : this.art(0, wy + 30, [ART.walls, 1], ['sishui_props_refined', 0], 260);
     // 小城：木门（可砍目标，贴在城门洞前）；城门图压暗成木色
     if (!this.prof.ram) { this.gateImg.setTint(0xb08a5a); const e = this.h.spawnTarget?.(0, wy + 34, this.gateHp, 200, 'yellow_props', 13) ?? null; if (e) { e.sprite.setAlpha(0); this.woodGate = { e, life: e.spawnId, x: 0, y: wy + 34 }; } }
-    this.gateLabel = worldText(this.h.scene, 0, wy - 210, '', 15, '#ffe1a0').setOrigin(.5).setDepth(36).setStroke('#1a120b', 4); this.objects.push(this.gateLabel);
+    this.gateLabel = worldText(this.h.scene, 0, wy + WALL.gateLabelDy, '', 15, '#ffe1a0').setOrigin(.5).setDepth(36).setStroke('#1a120b', 4); this.objects.push(this.gateLabel);
     // 箭楼：可摧毁目标（宿主用营寨物件生成，碰撞 / 命中沿用）
     for (const t of this.prof.towers) { const e = this.h.spawnTower(t.x, wy + 26); if (e) { this.towers.push({ e, life: e.spawnId, x: t.x }); if (this.has(ART.walls)) e.sprite.setTexture(ART.walls, 3).setOrigin(.5, 1).setDisplaySize(150, 150); } }
     // 我方营地（冲车在此领取）
@@ -152,9 +158,12 @@ export class SiegeMidCity {
     this.box({ left: a.left, right: -bw, top: m.top, bottom: m.bottom });
     this.box({ left: bw, right: a.right, top: m.top, bottom: m.bottom });
     this.bridgeBox = this.box({ left: -bw, right: bw, top: m.top, bottom: m.bottom });
-    // 水面：江岸地面压暗染青作护城河（v2 护城河图到之前的过渡）
-    const water = sc.add.tileSprite(a.left, m.top, a.right - a.left, m.bottom - m.top, sc.textures.exists('ground_v2_jiang') ? 'ground_v2_jiang' : '__WHITE').setOrigin(0, 0).setTint(0x6c97a3).setAlpha(.88).setDepth(DEPTH.ground + 2);
-    this.objects.push(water);
+    // 水面：用地形层的 v2 手绘水面（terrain/water.png，会流动）+ 两岸土坡；缺图时退回江岸地面压暗染青
+    const L0 = a.left - WALL.beyond, W0 = a.right - a.left + WALL.beyond * 2, v2 = sc.textures.exists('terrain_water');
+    if (v2) { const bank = sc.add.tileSprite(L0, m.top - 14, W0, m.bottom - m.top + 30, sc.textures.exists('ground_v2_jiang') ? 'ground_v2_jiang' : '__WHITE').setOrigin(0, 0).setTint(0x5a4a30).setAlpha(.92).setDepth(DEPTH.ground + 1); this.objects.push(bank); }
+    const water = sc.add.tileSprite(L0, m.top, W0, m.bottom - m.top, v2 ? 'terrain_water' : sc.textures.exists('ground_v2_jiang') ? 'ground_v2_jiang' : '__WHITE').setOrigin(0, 0).setDepth(DEPTH.ground + 2);
+    if (v2) water.setTileScale(.5); else water.setTint(0x6c97a3).setAlpha(.88);
+    this.objects.push(water); this.moatWater = v2 ? water : undefined;
     // 吊桥（收起：城门前一道木栅挡着；放下：木板桥）
     this.bridgeImg = this.img(0, m.bottom + 6, 'yellow_props', 10, bw * 2.2, 90);
     for (const r of m.ropes) {
@@ -163,6 +172,8 @@ export class SiegeMidCity {
     }
     this.ropeLabel = worldText(sc, 0, m.bottom + 120, '', 14, '#ffe1a0').setOrigin(.5).setDepth(36).setStroke('#1a120b', 4); this.objects.push(this.ropeLabel);
   }
+  /** 场上的说明字（城门血量 / 吊桥绳索 / 营地）：横幅出现时宿主先把它们淡出，免得叠字。 */
+  get floatLabels(): Phaser.GameObjects.Text[] { return [this.gateLabel, this.ropeLabel, this.campLabel].filter((t): t is Phaser.GameObjects.Text => !!t?.active); }
   get ropesLeft() { return this.ropes.filter(r => r.e.active && r.e.spawnId === r.life).length; }
   /** 放下吊桥：砍断两根绳索，或守军到时自己放桥出城（出城兵一波）。 */
   lowerBridge(sally = false) {
@@ -170,7 +181,9 @@ export class SiegeMidCity {
     this.bridgeDown = true;
     if (this.bridgeBox) { const i = this.h.footprints.indexOf(this.bridgeBox); if (i >= 0) this.h.footprints.splice(i, 1); this.bridgeBox = null; }
     const m = L.moat;
-    this.bridgeImg?.setFrame(27).setDisplaySize(m.bridgeHalfW * 2.2, (m.bottom - m.top) + 50).setOrigin(.5, 1).setPosition(0, m.bottom + 18).setDepth(DEPTH.ground + 3);
+    // 放下的吊桥：地形层的 v2 木桥（横跨护城河，竖着摆）；缺图沿用营寨物件
+    if (this.h.scene.textures.exists('terrain_bridge')) this.bridgeImg?.setTexture('terrain_bridge').setOrigin(.5).setRotation(Math.PI / 2).setDisplaySize((m.bottom - m.top) + 70, m.bridgeHalfW * 2.4).setPosition(0, (m.top + m.bottom) / 2).setDepth(DEPTH.ground + 3);
+    else this.bridgeImg?.setFrame(27).setDisplaySize(m.bridgeHalfW * 2.2, (m.bottom - m.top) + 50).setOrigin(.5, 1).setPosition(0, m.bottom + 18).setDepth(DEPTH.ground + 3);
     playSheet(this.h.scene, 'fx_collapse_dust', 0, (m.top + m.bottom) / 2, { size: 220, depth: DEPTH.fx, ms: 600 });
     this.h.scene.cameras.main.shake(220, .005); this.h.sfx('propBreak');
     this.ropeLabel?.setText('');
@@ -267,7 +280,8 @@ export class SiegeMidCity {
     this.box({ left: a.right, right: a.right + 520, top: a.top, bottom: M.outside.wallY - 30 });
     this.innerGateBox = this.box({ left: a.left, right: a.right, top: s.innerGateY - 40, bottom: s.innerGateY });
     const houseW = 230;
-    for (let y = M.outside.wallY - 80; y > s.innerGateY + 140; y -= 180) for (const side of [-1, 1]) {
+    // 民房从城墙后 WALL.houseGap 起盖（城门内留一片空场）：在城外看不到民房「坐在」城墙上
+    for (let y = M.outside.wallY - WALL.houseGap; y > s.innerGateY + 140; y -= 180) for (const side of [-1, 1]) {
       const near = s.points.some(p => Math.abs(p.y - y) < 120 && Math.sign(p.x) === side); if (near) continue;
       const f = (Math.abs(Math.round(y / 180)) + (side > 0 ? 1 : 0)) % 3;
       this.art(side * (a.right + houseW / 2 - 6), y, [ART.street, f], ['sishui_props_refined', 2], houseW, this.has(ART.street) ? houseW * .9 : houseW);
@@ -298,11 +312,17 @@ export class SiegeMidCity {
     const c = M.outside.camp, sz = M.ram.size;
     const img = this.art(c.x, c.y - 40, [ART.ram, 0], ['yellow_props', 24], sz);
     const label = worldText(this.h.scene, c.x, c.y - 40 - sz, '', 13, '#ffe1a0').setOrigin(.5).setDepth(36).setStroke('#1a120b', 4); this.objects.push(label);
-    return { img, x: c.x, y: c.y - 40, hp: this.ramCfg.hp, state: 'move', hitAt: 0, frame: 0, label, contact: new Map() };
+    return { img, x: c.x, y: c.y - 40, hp: this.ramCfg.hp, state: 'move', hitAt: 0, frame: 0, label, contact: new Map(), guardUntil: 0, burnUntil: 0, burnFxAt: 0, flashUntil: 0 };
   }
   get ramInfo() { const r = this.ram; return r ? { x: r.x, y: r.y, hp: r.hp, state: r.state, readyIn: Math.max(0, Math.round(this.ramReadyAt - this.h.now())), spare: this.spareLeft, level: this.ramCfg.level } : null; }
-  private damageRam(d: number) {
-    const r = this.ram; if (!r || r.state === 'wreck') return;
+  /** 冲车「受击」提示到期时间（顶部目标行显示）与下次可提示时间。 */
+  private ramAlertUntil = 0; private ramAlertNext = 0;
+  /** 冲车受伤：arrow = 普通箭（蒙皮顶棚只吃 25%），melee = 敌兵砍，burn = 起火持续伤害（不受免伤）。普通箭 / 砍击后 0.5 秒免伤。 */
+  private damageRam(d: number, src: 'arrow' | 'melee' | 'burn' = 'melee') {
+    const r = this.ram, now = this.h.now(); if (!r || r.state === 'wreck') return;
+    if (src !== 'burn') { if (now < r.guardUntil) return; r.guardUntil = now + M.ram.guardMs; }
+    if (src === 'arrow') d *= M.ram.arrowMul;
+    r.flashUntil = now + 260; if (now >= this.ramAlertNext) { this.ramAlertNext = now + M.ram.alertCdMs; this.ramAlertUntil = now + 1500; }
     r.hp -= d; r.img.setTintFill(0xffffff); this.h.scene.time.delayedCall(70, () => r.img.active && r.img.clearTint());
     if (r.hp > 0) { if (r.hp < this.ramCfg.hp * .45 && this.has(ART.ram)) r.img.setFrame(4); return; }
     r.state = 'wreck'; this.stats.ramsLost++;
@@ -338,13 +358,21 @@ export class SiegeMidCity {
       if (now >= r.hitAt) { r.hitAt = now + T; this.stats.ramHits++; this.hitGate(this.ramCfg.gateDamage); }
       r.label.setText(`冲车 ${Math.ceil(r.hp)} · 撞门中`);
     }
-    r.img.setPosition(r.x, r.y).setDepth(actorDepth(r.y)); r.label.setPosition(r.x, r.y - M.ram.size * .95);
+    r.img.setPosition(r.x, r.y).setDepth(actorDepth(r.y)); r.label.setPosition(r.x, r.y - M.ram.size * .95).setColor(now < r.flashUntil ? '#ff6a50' : now < r.burnUntil ? '#ffb070' : '#ffe1a0');
+    // 起火：持续掉血（手绘火焰序列帧），主将站到旁边扑灭
+    if (now < r.burnUntil) {
+      if (Math.hypot(p.x - r.x, p.y - r.y) <= M.ram.fire.putOutRadius) { r.burnUntil = 0; this.stats.putOut++; this.h.banner('火已扑灭', false); }
+      else {
+        this.stats.burns += dt; this.damageRam(M.ram.fire.burnDps * dt, 'burn'); if (this.ram !== r || (r.state as string) === 'wreck') return;
+        if (now >= r.burnFxAt) { r.burnFxAt = now + 380; playSheet(this.h.scene, 'fx_ground_fire', r.x + (Math.random() - .5) * 50, r.y - 30, { size: 90, depth: actorDepth(r.y) + 1, ms: 420, alpha: .9 }); }
+      }
+    }
     // 敌兵围攻冲车（接触伤害，带冷却）
     for (const e of this.h.enemies()) {
       if (!e.active || e.isSupplySlot || e.kind === 'boss' || e.kind === 'archer') continue;
       if (Math.hypot(e.x - r.x, e.y - r.y) > e.radius + 46) continue;
       const last = r.contact.get(e.uid) ?? 0; if (now < last) continue;
-      r.contact.set(e.uid, now + M.ram.contactCdMs); this.damageRam(e.def.damage * M.ram.contactDamageMul);
+      r.contact.set(e.uid, now + M.ram.contactCdMs); this.damageRam(e.def.damage * M.ram.contactDamageMul, 'melee');
       if (this.ram?.state === 'wreck') break;
     }
   }
@@ -400,17 +428,18 @@ export class SiegeMidCity {
         const target = i === 0 || !this.ram || this.ram.state === 'wreck' ? p : (i % 2 ? this.ram : p);
         const jx = i === 0 ? 0 : (Math.random() - .5) * 260, jy = i === 0 ? 0 : (Math.random() - .5) * 180;
         const y = Math.min(M.outside.arena.bottom - 40, Math.max(M.outside.wallY + 60, target.y + jy));
-        this.zones.push({ x: target.x + jx, y, at: now + V.warnMs, id: 'mid-volley-' + (this.zoneSeq++) }); this.stats.zones++;
+        const R = this.ram, fire = target === R && !!R && R.hp < this.ramCfg.hp * M.ram.fire.hpGate && Math.random() < M.ram.fire.chance; // 冲车受损后：瞄冲车的箭雨有时换火箭
+        this.zones.push({ x: target.x + jx, y, at: now + V.warnMs, id: 'mid-volley-' + (this.zoneSeq++), fire }); this.stats.zones++; if (fire) this.stats.fireArrows++;
       }
     }
     const fx = warnFx(this.h.scene);
     for (const z of [...this.zones]) {
       const prog = 1 - (z.at - now) / V.warnMs;
-      if (now < z.at) { fx.circle(z.id, 'arrows', z.x, z.y, V.radius, prog, now); continue; }
-      fx.shapeImpact(z.id, 'arrows', z.x, z.y, V.radius, 0, now, 0, { scale: 1, alpha: .85 });
+      if (now < z.at) { fx.circle(z.id, z.fire ? 'fire' : 'arrows', z.x, z.y, V.radius, prog, now); continue; }
+      fx.shapeImpact(z.id, z.fire ? 'fire' : 'arrows', z.x, z.y, V.radius, 0, now, 0, { scale: 1, alpha: .85 });
       if (Math.hypot(p.x - z.x, p.y - z.y) <= V.radius + p.radius) p.takeDamage(V.damage, now);
       this.h.hurtTroops(z.x, z.y, V.radius, V.allyDamage);
-      if (this.ram && this.ram.state !== 'wreck' && Math.hypot(this.ram.x - z.x, this.ram.y - z.y) <= V.radius + 40) this.damageRam(V.ramDamage);
+      if (this.ram && this.ram.state !== 'wreck' && Math.hypot(this.ram.x - z.x, this.ram.y - z.y) <= V.radius + 40) { this.damageRam(V.ramDamage, 'arrow'); if (z.fire && this.ram && (this.ram.state as string) !== 'wreck') { if (!(this.ram.burnUntil > now)) this.h.banner('冲车着火', true, '站到冲车旁扑灭'); this.ram.burnUntil = now + M.ram.fire.burnMs; } }
       this.zones.splice(this.zones.indexOf(z), 1);
     }
   }
@@ -441,9 +470,11 @@ export class SiegeMidCity {
       const [alive, total] = this.h.campsAlive(), keep = 1 - M.outside.campSpawnBonus * (total - alive);
       if (Math.random() > keep) return null;
       const a = M.outside.arena;
-      if (r < .4) return { x: (Math.random() - .5) * 2 * (M.outside.gate.halfW + 260), y: M.outside.wallY + 60 }; // 城门两侧出城
-      if (r < .7) return { x: Math.random() < .5 ? a.left + 40 : a.right - 40, y: p.y + (Math.random() - .5) * 300 }; // 两翼
-      return { x: p.x + (Math.random() - .5) * 700, y: Math.min(a.bottom - 30, p.y + 380) }; // 身后
+      // 敌兵从城里出（城门两侧出城为主）、两翼只在上半段；下方是我方营地 / 冲车来路，不刷兵（用户 11-17「攻城战的敌军不会从攻城车那一侧出」）
+      const rearY = a.bottom - (a.bottom - a.top) * SIEGE_SPAWN.rearCut, moatUp = this.tier === 'large' && !this.bridgeDown, topY = moatUp ? L.moat.bottom + 40 : M.outside.wallY + 80;
+      // 大城吊桥未放：城里的兵过不了河，只有两翼敌营方向来人；放桥后从吊桥出城
+      if (!moatUp && r < SIEGE_SPAWN.gateShare) return { x: (Math.random() - .5) * 2 * (M.outside.gate.halfW + 200), y: M.outside.wallY + 60 }; // 城门两侧出城
+      return { x: Math.random() < .5 ? a.left + 40 : a.right - 40, y: Math.max(topY, Math.min(rearY - 20, p.y - 120 - Math.random() * 260)) }; // 两翼（上半段）
     }
     if (this.phase === 'barbican') {
       const d = L.barbican.doors[Math.floor(Math.random() * L.barbican.doors.length)];
@@ -452,8 +483,7 @@ export class SiegeMidCity {
     if (this.phase === 'street') {
       const a = M.street.arena;
       if (r < .55) return { x: (Math.random() - .5) * 300, y: Math.max(a.top + 50, p.y - 420) }; // 前方巷口
-      if (r < .8) return { x: Math.random() < .5 ? a.left + 30 : a.right - 30, y: p.y - 150 - Math.random() * 200 }; // 侧巷
-      return { x: (Math.random() - .5) * 300, y: Math.min(a.bottom - 30, p.y + 380) };
+      return { x: Math.random() < .5 ? a.left + 30 : a.right - 30, y: Math.max(a.top + 50, p.y - 150 - Math.random() * 200) }; // 侧巷（前方；身后是我军来路，不刷）
     }
     if (this.phase === 'hall') {
       if (kind === 'cavalry') return null;
@@ -639,7 +669,7 @@ export class SiegeMidCity {
   update(dt: number) {
     const now = this.h.now();
     if (this.phase === 'outside') {
-      this.updateVolley(now); this.updateRam(dt, now); this.updateMoat(now);
+      this.updateVolley(now); this.updateRam(dt, now); this.updateMoat(now); if (this.moatWater) this.moatWater.tilePositionX -= WALL.moatFlow * dt;
       // 小城木门：血量跟着可砍目标走
       const wg = this.woodGate; if (wg && wg.e.active && wg.e.spawnId === wg.life) this.gateHp = Math.ceil(wg.e.hp);
       this.gateLabel?.setText(this.gateHp > 0 ? `${this.prof.ram ? '城门' : '木门'} ${Math.ceil(this.gateHp)}/${this.gateMax}` : '');
@@ -652,7 +682,7 @@ export class SiegeMidCity {
     const T = this.prof.towers.length, tw = ` · 箭楼 ${T - this.towersAlive}/${T}`, pct = Math.round((1 - this.gateHp / this.gateMax) * 100);
     if (this.phase === 'outside' && !this.prof.ram) return `城外 · 砍破木门 ${pct}%${tw}`;
     if (this.phase === 'outside' && this.tier === 'large' && !this.bridgeDown) return `城外 · 砍断吊桥绳索 ${2 - this.ropesLeft}/2${tw}`;
-    if (this.phase === 'outside') return `城外 · 冲车撞门 ${pct}%${tw}${this.ram?.state === 'wreck' ? ' · 冲车已毁，回营地领' : ''}`;
+    if (this.phase === 'outside') return `城外 · 冲车撞门 ${pct}%${tw}${this.ram && this.ram.state !== 'wreck' && this.h.now() < this.ramAlertUntil ? (this.ram.burnUntil > this.h.now() ? ' · 冲车着火！' : ' · 冲车受击！') : ''}${this.ram?.state === 'wreck' ? ' · 冲车已毁 · 回营地领新车' : ''}`;
     if (this.phase === 'barbican') return `瓮城 · 砍破内门 ${Math.round((1 - this.innerGateHp / L.barbican.innerGate.hp) * 100)}% · 小心滚木`;
     if (this.phase === 'street') return '巷战 · ' + this.points.map(p => `${p.name}${p.state === 'secured' ? '✓' : p.state === 'held' ? '守' : ''}`).join(' · ');
     if (this.phase === 'hall') return `${this.hallName} · 击败${this.h.opts?.bossName ?? '守将'}${this.guardsAlive ? ' · 亲卫护盾中' : ''}`;

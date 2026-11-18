@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import type { Enemy } from '../entities/Enemy';
 import { ART_V2_FILES, regridV2 } from './ArtStyle';
-import { HORSE_V2, RIDE } from './HeroMount';
+import { HORSE_V2, RIDE, RIDE_DIR_LIFT, RIDE_FRONT } from './HeroMount';
 import { playSheet } from './SkillFxSheets';
 import { BOSS_PHASE, type BossPhaseEvent } from './BossPhase';
 
@@ -12,11 +12,6 @@ export interface BossMountDef { horse: BossHorse; tint?: number; /** 骑者裁�
  * 已交付的首领骑乘图（画风会话出，4×9 每格 256 脚底 240：行 1–4 骑行 下 / 左 / 右 / 上，行 5–8 马上出招，行 9 坠马朝右）。
  * 只给这里登记过的首领载图（没出的不去请求，免得 404）；没有的仍用「本体裁上半身放鞍上」顶替。
  */
-/**
- * 首领骑乘图第一批（吕布 / 华雄 / 张梁 / 李傕 / 张绣 / 颜良）画的是站姿（腿画到脚），整张放到马上像「站在马上」（用户 2026-11-17）。
- * 跨坐：裁到大腿根（seat，格内像素），髋部压在鞍上（离地 rise 世界像素），腿藏在马身后；坠马行不裁。美术重画成坐姿后可去掉裁切。
- */
-export const RIDE_SEAT = { seat: 200, rise: 50 } as const;
 export const BOSS_RIDE_ART = new Set<string>(['lubu', 'huaxiong', 'zhangliang', 'lijue', 'zhangxiu', 'yanliang']);
 export const bossRideKey = (id: string): string => 'ride_v2_boss_' + id;
 const HORSE_KEY: Record<BossHorse, string> = { chitu: 'horse_v2_chitu_walk', wuzhui: 'horse_v2_wuzhui_walk', jueying: 'horse_v2_jueying_walk', dawan: 'horse_v2_dawan_walk', generic: 'horse_v2_generic_walk' };
@@ -32,6 +27,11 @@ const DIRS = ['down', 'left', 'right', 'up'] as const;
 export class BossMount {
   mounted = true;
   private horse: Phaser.GameObjects.Image | null = null;
+  /** 脚下的马（BossPresence 放大首领时一起放大）。 */
+  get horseImage(): Phaser.GameObjects.Image | null { return this.horse; }
+  /** 朝镜头时盖在骑者腿前的马头马颈（骑乘图版：骑者才像「跨坐」而不是「站在马背上」）；BossPresence 放大首领时一起放大。 */
+  private front: Phaser.GameObjects.Image | null = null;
+  get frontImage(): Phaser.GameObjects.Image | null { return this.front; }
   private key: string; private last = { x: 0, y: 0 }; private dir: typeof DIRS[number] = 'down'; private stepAt = 0; private frame = 0;
   private readonly onPhase = (e: BossPhaseEvent): void => { if (e.boss === this.boss && e.phase === 2 && this.mounted) this.dismount(); };
   /** 骑乘图已就绪时的纹理键；坠马动画播到何时（期间藏起首领本体）。 */
@@ -64,6 +64,8 @@ export class BossMount {
   private make(): void {
     this.horse = this.scene.add.image(this.boss.x, this.boss.y, this.key, 'down_0').setOrigin(.5, HORSE_V2.foot / HORSE_V2.cell).setScale(HORSE_V2.scale).setName('boss-horse');
     if (this.def.tint !== undefined) this.horse.setTint(this.def.tint);
+    this.front = this.scene.add.image(this.boss.x, this.boss.y, this.key, 'down_0').setOrigin(.5, HORSE_V2.foot / HORSE_V2.cell).setScale(HORSE_V2.scale).setName('boss-horse-front').setVisible(false);
+    if (this.def.tint !== undefined) this.front.setTint(this.def.tint);
   }
   get hasHorse(): boolean { return !!this.horse && this.mounted; }
 
@@ -77,10 +79,17 @@ export class BossMount {
     if (moving) this.dir = Math.abs(dx) > Math.abs(dy) ? (dx < 0 ? 'left' : 'right') : dy < 0 ? 'up' : 'down';
     if (moving && now >= this.stepAt) { this.stepAt = now + 95; this.frame = (this.frame + 1) % 4; } else if (!moving) this.frame = 0;
     h.setPosition(b.x, b.y).setFrame(`${this.dir}_${this.frame}`).setDepth(b.sprite.depth - .002).setVisible(b.sprite.visible).setAlpha(b.sprite.alpha);
-    // 骑者：有首领骑乘图 → 整张换成骑乘帧（行 1–4 骑行、行 5–8 马上出招），马镫对到马的镫高
+    // 前景层：骑乘图版朝镜头时，马头马颈（帧高 30%~56%）盖在骑者腿前（同英雄骑乘 HeroMount）
+    const fr = this.front;
+    if (fr) {
+      const down = !!this.rideKey && this.dir === 'down';
+      fr.setVisible(down && b.sprite.visible).setPosition(b.x, b.y).setDepth(b.sprite.depth + .001).setAlpha(b.sprite.alpha);
+      if (down) { fr.setFrame(`down_${this.frame}`); fr.setCrop(0, HORSE_V2.cell * RIDE_FRONT.top, HORSE_V2.cell, HORSE_V2.cell * (RIDE_FRONT.cut - RIDE_FRONT.top)); }
+    }
+    // 骑者：有首领骑乘图 → 整张换成骑乘帧（行 1–4 骑行、行 5–8 马上出招），马镫对到马的镫高（朝镜头 / 背对时整体再抬，同英雄）
     if (this.rideKey) {
       const row = DIRS.indexOf(this.dir) + (this.attacking?.() ? 4 : 0), f = row * 4 + (this.attacking?.() ? Math.floor(now / 110) % 4 : this.frame);
-      b.sprite.setTexture(this.rideKey, f).setCrop(0, 0, RIDE.cell, RIDE_SEAT.seat).setFlipX(false).setScale(RIDE.scale).setOrigin(.5, (RIDE_SEAT.seat + RIDE_SEAT.rise / RIDE.scale) / RIDE.cell);
+      b.sprite.setCrop().setTexture(this.rideKey, f).setFlipX(false).setScale(RIDE.scale).setOrigin(.5, (RIDE.foot + (RIDE.stirrup + (RIDE_DIR_LIFT[this.dir] ?? 0)) / RIDE.scale) / RIDE.cell);
       return;
     }
     // 没有骑乘图：裁掉本体下半身，髋部对到鞍高（HORSE_V2.riderRise 逻辑像素）
@@ -94,6 +103,7 @@ export class BossMount {
     if (!this.mounted) return; this.mounted = false;
     const b = this.boss, h = this.horse, s = this.scene;
     b.sprite.setCrop();
+    this.front?.destroy(); this.front = null;
     // 有骑乘图：播第 9 行坠马 4 帧（掀下 → 落地 → 半跪 → 起身，朝右画；主将在左时镜像），期间藏起首领本体
     if (this.rideKey) {
       const k = this.rideKey, left = b.x > (s as unknown as { player?: { x: number } }).player!.x, img = s.add.image(b.x, b.y, k, 32).setOrigin(.5, RIDE.foot / RIDE.cell).setScale(RIDE.scale).setFlipX(left).setDepth(b.sprite.depth + .05).setName('boss-fall');
@@ -115,7 +125,7 @@ export class BossMount {
   }
   destroy(): void {
     this.scene.events.off('postupdate', this.update, this); this.scene.events.off(BOSS_PHASE, this.onPhase);
-    this.horse?.destroy(); this.horse = null;
+    this.horse?.destroy(); this.horse = null; this.front?.destroy(); this.front = null;
     if (this.boss.sprite?.active) this.boss.sprite.setCrop();
   }
 }

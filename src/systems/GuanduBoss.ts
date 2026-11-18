@@ -1,3 +1,4 @@
+import { meleeReach } from '../data/bossReach';
 import Phaser from 'phaser';
 import { warnCircle, warnLane, TELEGRAPH_CLASSIC, groundCracks, windupFlash } from '../ui/Telegraph';
 import type {Enemy} from '../entities/Enemy';
@@ -19,8 +20,8 @@ interface Zone {x: number; y: number; angle: number; length: number; width: numb
 
 /** 颜良（4-1）技能参数（伤害与第三章首领同量级）。 */
 export const YANLIANG = {
-  dash: {length: 300, width: 56, speed: 420, speed2: 480, damage: 16, cleaveRadius: 72, cleaveRadius2: 92, cleaveDamage: 20},
-  spin: {radius: 140, damage: 18, innerRadius2: 110, outerRadius2: 215, outerDelay2: 420},
+  dash: {length: 300, width: 56, speed: 420, speed2: 480, damage: 16, cleaveRadius: meleeReach(72), cleaveRadius2: meleeReach(92), cleaveDamage: 20},
+  spin: {radius: meleeReach(140), damage: 18, innerRadius2: meleeReach(110), outerRadius2: 215, outerDelay2: 420},
   siege: {count: 3, count2: 5, distance: 170, radius: 36},
 };
 /** 文丑（4-2）技能参数。 */

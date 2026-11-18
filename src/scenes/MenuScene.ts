@@ -5,7 +5,7 @@ import { showLordNotice } from '../ui/LordNotice';
 import {playMenuMusic,menuMusic} from '../systems/Music';
 import {artStyle,setArtStyle} from '../systems/ArtStyle';
 import { iffOutlineEnabled, setIffOutline, warmIffTextures } from '../systems/IffOverlay';
-import { OUTLINE_LABEL, cycle, outlineMode, setOutlineMode, shakeLevel, setShakeLevel, SHAKE_LABEL, type ShakeLevel } from '../systems/BattleSettings';
+import { OUTLINE_LABEL, cycle, outlineMode, setOutlineMode, shakeLevel, setShakeLevel, SHAKE_LABEL, type ShakeLevel, STORY_LABEL, storyMode, setStoryMode } from '../systems/BattleSettings';
 import {uiSfx} from '../systems/Sfx';
 import {GameCodex} from '../ui/GameCodex';
 import {HeroWarCard} from '../ui/HeroWarCard';
@@ -108,7 +108,8 @@ export class MenuScene extends Phaser.Scene {
     }
     text(28,D?22:48,'乱世千军',D?36:42,'#efd493').setFontFamily(TITLE_FONT).setLetterSpacing(3);
     text(D ? 196 : 30, D ? 32 : 99, '三国割草 · 将星出征', D ? 13 : 14, '#8eaa9c');
-    text(W-130,D?29:59,worldUnlocked()||isChapterTestRun()?'营寨':'营寨未开放',12,'#d9c58d').setOrigin(1,0).setPadding(8,6).setInteractive({useHandCursor:true}).on('pointerdown',()=>{if(worldUnlocked()||isChapterTestRun())this.scene.start('CityScene');});
+    // 2026-11-17 用户「右上角天下地图和营寨可以不需要」：电脑版右上只留「成就」；营寨改从「择章」页右上角进入（营寨里有「天下地图 · 出征」）
+    if(!D)text(W-130,D?29:59,worldUnlocked()||isChapterTestRun()?'营寨':'营寨未开放',12,'#d9c58d').setOrigin(1,0).setPadding(8,6).setInteractive({useHandCursor:true}).on('pointerdown',()=>{if(worldUnlocked()||isChapterTestRun())this.scene.start('CityScene');});
     const layout = text(W - 28, D ? 29 : 59, D ? '手机布局' : '电脑布局', 12, '#acb5a0').setOrigin(1, 0).setPadding(6, 6).setInteractive({ useHandCursor: true }).setVisible(!IS_DESKTOP_APP);
     layout.on('pointerdown', () => switchLayout(D ? 'mobile' : 'desktop')).on('pointerover', () => layout.setColor('#f1d69a')).on('pointerout', () => layout.setColor('#acb5a0'));
     const section = (y: number, n: string, title: string, tip: string) => {
@@ -220,7 +221,7 @@ export class MenuScene extends Phaser.Scene {
     // 成就入口（右上角；天下已开时排在主城 / 天下地图左侧）
     try{checkWorld(save);}catch{/* 存档不可用 */}
     {const got=Object.keys(unlockedMap()).filter(id=>ACHIEVEMENTS.some(a=>a.id===id)).length,py=D?34:54;let rx=W-24;
-     if(worldUnlocked()){rx-=homePlaque(this,rx,py,{label:'营寨',name:'home-city',glyph:'营',onClick:()=>this.scene.start('CityScene')},D)+8;rx-=homePlaque(this,rx,py,{label:'天下地图',name:'home-world',glyph:'图',onClick:()=>this.scene.start('WorldMapScene')},D)+8;}
+     if(worldUnlocked()&&!D){rx-=homePlaque(this,rx,py,{label:'营寨',name:'home-city',glyph:'营',onClick:()=>this.scene.start('CityScene')},D)+8;rx-=homePlaque(this,rx,py,{label:'天下地图',name:'home-world',glyph:'图',onClick:()=>this.scene.start('WorldMapScene')},D)+8;}
      homePlaque(this,rx,py,{label:'成就',name:'home-achievements',icon:'ach_first_win',progress:[got,ACHIEVEMENTS.length],onClick:()=>{if(!this.children.getByName('achievements-panel'))new AchievementsUI(this);}},D);
      // 2026-11-16 用户：「界面的行囊可以不要」——主页不再放行囊匾；行囊仍可在战斗 HUD、暂停菜单、行营休整（换装换马）里打开。
     }
@@ -234,7 +235,7 @@ export class MenuScene extends Phaser.Scene {
     const primary=homeCommand(this,D?W*.73:W/2,startY,startW,startH,'匡扶汉室',true);this.startButton=primary.hit.setName('start-campaign').setData('padDefault',true);this.startLabel=primary.caption;
     // W4：有城池告急时提示“出征将失守”
     const lossWarn=isChapterTestRun()?'':alertLossWarning();if(lossWarn)text(D?W*.73:W/2,startY-startH/2-(D?14:16),lossWarn,D?12:13,'#ff8a70').setStroke('#1a0e08',3).setName('home-alert-warning');
-    this.startButton.on('pointerdown',()=>{let chosen=!!this.registry.get('heroConfirmed');try{chosen=chosen||!!localStorage.getItem('im_last_hero');}catch{}if(!chosen&&!params.has('autostart')&&!params.has('perf')){openHeroes();return;}if(this.children.getByName('chapter-select'))return;this.openChapters();});
+    this.startButton.on('pointerdown',()=>{let chosen=!!this.registry.get('heroConfirmed');try{chosen=chosen||!!localStorage.getItem('im_last_hero');}catch{}if(!chosen&&!params.has('autostart')&&!params.has('perf')){openHeroes();return;}if(this.children.getByName('chapter-select'))return;this.campaignEntry();});
     for(let k=0;k<navItems-1;k++)text((navX(k)+navX(k+1))/2,navRowY,'·',D?18:20,'#a68a57');
     if(isChapterTestRun())text(W/2,D?529:955+this.padY,'测试战斗不记录正式进度',10,'#8c806f');
     if(isChapterTestRun())text(W-34,24,'测试选关 ›',14,'#dcc399').setOrigin(1,.5).setPadding(12,10).setInteractive({useHandCursor:true}).setName('dev-stage-picker').on('pointerdown',()=>this.openTestStages());
@@ -243,7 +244,16 @@ export class MenuScene extends Phaser.Scene {
     this.renderSelection();if(params.has('autostart')||params.has('perf'))this.time.delayedCall(80,()=>this.startGame());
   }
   /** 章节选择（2026-11-17）：已打到的章可进，没打到的锁住；第一、二章由主页直接出征，第三章起进各章选关场景。 */
-  private openChapters():void{
+  /**
+   * 「匡扶汉室」（2026-11-17 用户：「点匡扶汉室是进入大地图，然后玩家自行选择」）：天下已开 → 直接进天下地图，在地图上选章（未到的章节锁住）；
+   * 天下未开（第一章还没打完）→ 直接出征第一章下一关。择章页（openChapters）已不从主页进入，代码暂留。
+   */
+  private campaignEntry():void{
+    if(this.started||this.heroModal?.visible)return;
+    if(worldUnlocked()){this.started=true;this.registry.remove('campaignTransfer');this.cameras.main.fadeOut(150,0,0,0);this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE,()=>this.scene.start('WorldMapScene'));return;}
+    this.startGame();
+  }
+  openChapters():void{
     if(this.started||this.heroModal?.visible)return;
     openChapterSelect(this,{onPick:(id,stage)=>this.pickChapter(id,stage)});
   }
@@ -316,11 +326,11 @@ export class MenuScene extends Phaser.Scene {
     const label=(x:number,y:number,value:string,size=20)=>this.add.text(x,y,value,{fontFamily:FONT,fontSize:size+'px',color:'#e8d0aa',resolution:2}).setOrigin(.5);
     const app=desktop,desk=IS_DESKTOP_APP&&!!app;
     // 桌面版行距收紧，放下显示设置（分辨率 / 全屏 / 垂直同步）
-    const rowY=(i:number)=>desk?H/2-166+i*46:H/2-70+i*60;
+    const rowY=(i:number)=>desk?H/2-166+i*46:H/2-70+i*54;
     // 漆底描金面板（与图鉴、结算卷同系）；每行左右是漆金小方钮，返回为漆金按钮
     modal.add(this.add.rectangle(W/2,H/2,W,H,0x0c0805,.9).setInteractive());
-    {const pw=desk?560:Math.min(W-40,460),top=desk?H/2-250:H/2-190,bottom=desk?rowY(9)+40:H/2+266,g=this.add.graphics();lqPanel(g,W/2-pw/2,top,pw,bottom-top);modal.add(g);
-     const t=label(W/2,desk?H/2-218:H/2-130,'军中设置',28).setFontFamily(HEADING_FONT).setColor('#f6dc9a').setStroke('#2a170b',4);modal.add(t);
+    {const pw=desk?560:Math.min(W-40,460),top=desk?H/2-250:H/2-190,bottom=desk?rowY(10)+40:H/2+300,g=this.add.graphics();lqPanel(g,W/2-pw/2,top,pw,bottom-top);modal.add(g);
+     const t=label(W/2,desk?H/2-218:H/2-130,'军中设置',28).setFontFamily(desk?TITLE_FONT:HEADING_FONT).setColor(desk?'#efd399':'#f6dc9a').setStroke(desk?'#120904':'#2a170b',4);modal.add(t);
      const div=this.add.graphics();lqDivider(div,W/2,t.y+30,desk?160:130);modal.add(div);
      modal.add(tutorialReplayLink(this,W/2+pw/2-22,top+24));} // 新手引导：重看（逻辑在 ui/TutorialOverlay.ts）
     /** 一行“名称  数值”，左右 －/＋（或 ‹ ›）调节；手柄焦点在行上时左右键也能调。 */
@@ -345,7 +355,7 @@ export class MenuScene extends Phaser.Scene {
       const vs=row(4,'垂直同步',()=>{const d=disp();return d?(d.vsync?'开':'关'):'—';},()=>{const d=disp();if(d&&app.display)app.display.set({vsync:!d.vsync});vsNote();},['‹','›']).setName('settings-vsync');
       const vsyncNote=label(W/2,rowY(4)+22,'',11).setColor('#9d8f78');modal.add(vsyncNote);
       const vsNote=()=>{const d=disp();vsyncNote.setText(d&&d.vsync!==d.vsyncActive?'重启游戏后生效':'');};vsNote();void vs;
-      const quit=label(W/2,rowY(8)+6,'退出游戏',18).setColor('#e7b68e').setInteractive({useHandCursor:true}).setName('settings-quit');
+      const quit=label(W/2,rowY(9)+6,'退出游戏',18).setColor('#e7b68e').setInteractive({useHandCursor:true}).setName('settings-quit');
       quit.on('pointerdown',()=>{if(quit.getData('confirm'))app.quit();else quit.setData('confirm',true).setText('确认退出？再点一次');});
       const qs=lqSkin(this,quit,quit,()=>({w:220,h:38}),{tone:'quiet'});lqHitBox(quit,220,38);
       modal.add([qs.gfx,quit]);
@@ -357,7 +367,9 @@ export class MenuScene extends Phaser.Scene {
     {const at=desk?6:3;const list=['off','enemy','all'] as const;row(at,'敌我描边',()=>OUTLINE_LABEL[outlineMode()],dir=>{const v=cycle(list,outlineMode(),dir);setOutlineMode(v);if(v!=='off')warmIffTextures(this.game);},['‹','›']).setName('settings-iff-outline');void iffOutlineEnabled;void setIffOutline;}
     // 震屏（打击感 2026-11-17）：强 / 弱 / 关，立即生效（战斗中所有震屏都按此缩放）
     {const at=desk?7:4,order:ShakeLevel[]=['strong','weak','off'];let cur=shakeLevel();row(at,'震屏',()=>SHAKE_LABEL[cur],dir=>{cur=order[(order.indexOf(cur)+(dir>0?1:2))%3];setShakeLevel(cur);},['‹','›']).setName('settings-shake');}
-    const close=label(W/2,desk?rowY(9)+6:H/2+226,'返回',20).setFontFamily(HEADING_FONT).setInteractive({useHandCursor:true}).setName('settings-close').setData('padDefault',true).on('pointerdown',()=>modal.destroy());
+    // 剧情（2026-11-17 剧情系统）：完整 / 只看章头章末 / 关闭
+    {const at=desk?8:5,list=['full','chapter','off'] as const;row(at,'剧情',()=>STORY_LABEL[storyMode()],dir=>setStoryMode(cycle(list,storyMode(),dir)),['‹','›']).setName('settings-story');}
+    const close=label(W/2,desk?rowY(10)+6:H/2+264,'返回',20).setFontFamily(HEADING_FONT).setInteractive({useHandCursor:true}).setName('settings-close').setData('padDefault',true).on('pointerdown',()=>modal.destroy());
     const cs=lqSkin(this,close,close,()=>({w:200,h:desk?44:52}),{tone:'cinnabar'});lqHitBox(close,200,desk?44:52);
     modal.add([cs.gfx,close]);
   }

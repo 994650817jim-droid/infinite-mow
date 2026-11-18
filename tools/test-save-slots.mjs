@@ -32,8 +32,11 @@ await p.screenshot({ path: `${out}/deck-slots.png` });
 await click('save-slot-1-load'); await reloaded();
 const s1 = await store();
 ck('存档二「新建征途」→ 重新载入为空进度，存档一的进度保存在 im_slot_0，音量设置不变', s1.active === 1 && !s1.world && !s1.hero && s1.slot0 && s1.bgm === '70', s1);
-const fresh = await p.evaluate(M0 => !eval(M0).children.getByName('home-world'), M);
-ck('新存档主页没有天下地图入口（新征途）', fresh);
+// 2026-11-17：电脑版天下 / 营寨入口在「择章」页右上（主页右上只留成就）
+// 2026-11-17：「匡扶汉室」天下已开时进天下地图（营寨从地图「返回营寨」进），新征途时直接出征 1-1
+const cityEntry = () => p.evaluate(async () => (await import('/src/world/WorldStore.ts')).worldUnlocked());
+const fresh = !(await cityEntry()) && await p.evaluate(M0 => !eval(M0).children.getByName('home-world'), M);
+ck('新存档天下未开：「匡扶汉室」直接出征，没有天下地图 / 营寨入口（新征途）', fresh);
 // 在存档二玩出一点进度
 await p.evaluate(() => { localStorage.setItem('im_last_hero', 'guanyu'); localStorage.setItem('im_world_v1', JSON.stringify({ version: 7, yellowStages: 1, dongzhuoStages: 0, warlordStages: 0, guanduStages: 0, worldAvailable: false, cleared: {}, merits: 5, provisions: 0, buildings: {}, reserve: {}, receipts: [] })); localStorage.setItem('im_slot_touched', String(Date.now())); });
 await open();
@@ -42,7 +45,7 @@ ck('面板：存档一可读取，存档二为当前（关羽 · 第一章 1/3�
 await click('save-slot-0-load'); await reloaded();
 const s2 = await store();
 ck('读取存档一：进度换回赵云 / 天下，存档二存入 im_slot_1', s2.active === 0 && s2.hero === 'zhaoyun' && s2.world && s2.slot1 && !s2.slot0, s2);
-ck('读取后主页有天下地图入口', await p.evaluate(M0 => !!eval(M0).children.getByName('home-world'), M));
+ck('读取后天下已开：「匡扶汉室」进天下地图（地图有「返回营寨」）', await cityEntry());
 // 删除存档二（非当前）：需确认两次
 await open();
 await click('save-slot-1-delete');

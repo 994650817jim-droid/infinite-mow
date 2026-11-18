@@ -18,6 +18,31 @@ import type { CharacterPassives } from '../systems/CharacterPassives';
 export const PASSIVE_SHOUT_COOLDOWN_MS = 60000;
 /** 战吼字停留时长（毫秒），之后上浮淡出。 */
 export const WAR_CRY_HOLD_MS = 1200;
+/**
+ * 战吼大字（马超 / 孙尚香被动满层战吼、魏延「谁敢杀我」、各武将台词共用一套表现）：书法体逐字砸下（放大 → 回弹）、金字深墨边，
+ * 落定后一抖，停 WAR_CRY_HOLD_MS 后上浮淡出；跟着 body 走。scale：随从说话用 0.7。不压顶部 HUD（离屏幕顶部至少 topMargin）。
+ */
+export function warCryText(sc: Phaser.Scene, line: string, color: string, x: number, y: number, body?: { active: boolean; x: number; y: number }, scale = 1, name = 'passive-shout', topMargin = 110): Phaser.GameObjects.Container {
+  const tw = sc.tweens, chars = [...line], size = Math.round(20 * scale), gap = size * .98, w = (chars.length - 1) * gap, stagger = 35, pop = 120;
+  // 外层跟着武将走（马超喊完马上冲锋，字不能留在原地），内层 box 负责砸字、抖动、上浮
+  const holder = sc.add.container(x, y).setDepth(DEPTH.dmgText + 3).setName(name);
+  const lift = -78 * (scale < 1 ? .9 : 1), cam = sc.cameras.main;
+  const follow = (): void => { if (body?.active && holder.active) holder.setPosition(body.x, Math.max(body.y, cam.worldView.top + topMargin - lift)); };
+  follow();
+  const total = chars.length * stagger + pop + WAR_CRY_HOLD_MS + 300;
+  if (body) { const st = { t: 0 }; tw.add({ targets: st, t: 1, duration: total, onUpdate: follow }); }
+  const box = sc.add.container(0, lift).setName(name + '-text'); holder.add(box);
+  chars.forEach((ch, i) => {
+    const t = sc.add.text(-w / 2 + i * gap, 0, ch, { fontFamily: HEADING_FONT, fontSize: size + 'px', color, stroke: '#2a1206', strokeThickness: Math.max(3, Math.round(4 * scale)), resolution: 2 })
+      .setOrigin(.5, .5).setShadow(0, 1, '#000000', 3, true, true).setAlpha(0).setScale(1.7);
+    box.add(t);
+    tw.add({ targets: t, alpha: 1, scale: 1, duration: pop, delay: i * stagger, ease: 'Back.Out' });
+  });
+  const landed = chars.length * stagger + pop;
+  tw.add({ targets: box, x: { from: -1.5, to: 1.5 }, duration: 40, yoyo: true, repeat: 2, delay: landed, onComplete: () => box.setX(0) });
+  tw.add({ targets: box, y: lift - 12 * scale, alpha: 0, delay: landed + WAR_CRY_HOLD_MS - 150, duration: 380, ease: 'Sine.In', onComplete: () => holder.destroy() });
+  return holder;
+}
 export interface PassiveFullShout { lines: readonly string[]; color: string; cooldownMs?: number; }
 export const PASSIVE_FULL_SHOUTS: Partial<Record<CharacterId, PassiveFullShout>> = {
   // 2026-11-16 用户选定台词：马超「西凉铁骑」满 6 层、下一枪要冲锋时喊一句，三句轮流；
@@ -53,24 +78,9 @@ export class PassiveShout {
   private shout(line: string, color: string, x: number, y: number, body?: Phaser.GameObjects.Image): void {
     this.count++; this.lastLine = line;
     const sc = this.scene, tw = sc.tweens;
-    // 1) 字：大号书法体逐字砸下（放大 → 回弹），金字深墨边；落定后一抖，停留后上浮淡出
-    // 2026-11-16 用户：「马超喊话太大了字」→ 字号 34 → 20（约 59%），贴着头顶；砸字放大与停顿一起收小
-    const chars = [...line], size = 20, gap = size * .98, w = (chars.length - 1) * gap, stagger = 35, pop = 120;
-    // 外层跟着武将走（马超喊完马上冲锋，字不能留在原地），内层 box 负责砸字、抖动、上浮
-    const holder = sc.add.container(x, y).setDepth(DEPTH.dmgText + 3).setName('passive-shout');
-    if (body) { const st = { t: 0 }; tw.add({ targets: st, t: 1, duration: chars.length * stagger + pop + WAR_CRY_HOLD_MS + 300, onUpdate: () => { if (body.active && holder.active) holder.setPosition(body.x, body.y); } }); }
-    const box = sc.add.container(0, -78).setName('passive-shout-text'); holder.add(box);
-    x = 0; y = 0; // 下面 box 的抖动 / 上浮都按 holder 内的本地坐标
-    chars.forEach((ch, i) => {
-      const t = sc.add.text(-w / 2 + i * gap, 0, ch, { fontFamily: HEADING_FONT, fontSize: `${size}px`, color, stroke: '#2a1206', strokeThickness: 4, resolution: 2 })
-        .setOrigin(.5, .5).setShadow(0, 1, '#000000', 3, true, true).setAlpha(0).setScale(1.7);
-      box.add(t);
-      tw.add({ targets: t, alpha: 1, scale: 1, duration: pop, delay: i * stagger, ease: 'Back.Out' });
-    });
-    const landed = chars.length * stagger + pop;
-    tw.add({ targets: box, x: { from: x - 1.5, to: x + 1.5 }, duration: 40, yoyo: true, repeat: 2, delay: landed, onComplete: () => box.setX(x) });
-    tw.add({ targets: box, y: y - 90, alpha: 0, delay: landed + WAR_CRY_HOLD_MS - 150, duration: 380, ease: 'Sine.In', onComplete: () => holder.destroy() });
-    x = holder.x; y = holder.y; // 恢复世界坐标给下面的声浪 / 气势用
+    // 1) 字：共用 warCryText（书法体逐字砸下、金字深墨边、落定一抖、停留后上浮淡出；武将台词也用这一套）
+    const holder = warCryText(sc, line, color, x, y, body);
+    void holder; // x / y 仍是武将脚底世界坐标，下面的声浪 / 气势用
     // 2) 声浪冲击（脚下压扁的气浪）+ 身上迸发的气势（手绘图集 warcry_paint：2 行 × 6 帧，每帧 256×512，透明底叠加）
     if (sc.textures.exists('warcry_paint')) {
       const play = (row: number, oy: number, dw: number, dh: number, fps: number, name: string) => {

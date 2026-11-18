@@ -118,7 +118,9 @@ export class BossKit {
     const sp = this.h.boss.sprite, k = this.poseKind, a = this.poseAmt, d = this.poseDir;
     this.poseKind = null;
     // 招式图集：保持当前显示高度换帧（v2 本体格子同为 288、人物等高），脚底对齐 256/288
-    if (this.moveKey && sp.active && this.h.boss.active) {
+    // 骑乘图版的首领（BossMount 已换成骑乘帧）：不再换成站姿招式图集，否则马上出招时会变成「人站在马前面」
+    const bm = (this.h.scene as unknown as { bossMount?: { mounted: boolean; usesRideArt: boolean } }).bossMount, onRide = !!bm?.mounted && !!bm.usesRideArt;
+    if (this.moveKey && !onRide && sp.active && this.h.boss.active) {
       this.savedTex = { key: sp.texture.key, frame: sp.frame.name, ox: sp.originX, oy: sp.originY, flip: sp.flipX, sx: sp.scaleX, sy: sp.scaleY };
       const s = Math.abs(sp.displayHeight) / 288;
       sp.setTexture(this.moveKey, this.moveFrame).setOrigin(.5, 256 / 288).setFlipX(this.moveDir < 0).setScale(s);

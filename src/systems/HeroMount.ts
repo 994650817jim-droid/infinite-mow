@@ -27,8 +27,8 @@ const v2Rise = (key: string): number => V2_RISE[key] ?? HORSE_V2.riderRise;
  */
 export const RIDE = {cell: 256, foot: 240, scale: .5, stirrup: 38} as const;
 /** 朝镜头时骑者整体再抬高（头肩要露在马头上方），背对时略抬；朝镜头时马头马颈（帧高 30%~56%）盖在骑者腿上。 */
-const RIDE_DIR_LIFT: Record<string, number> = {down: 20, up: 6};
-const RIDE_FRONT = {top: .3, cut: .56} as const;
+export const RIDE_DIR_LIFT: Record<string, number> = {down: 20, up: 6};
+export const RIDE_FRONT = {top: .3, cut: .56} as const;
 const RIDE_STIRRUP: Record<string, number> = {horse_v2_mule_walk: 24};
 export const rideKey = (hero: string): string => 'ride_v2_' + hero;
 const DIRS4 = ['down', 'left', 'right', 'up'] as const;

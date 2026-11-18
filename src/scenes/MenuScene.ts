@@ -104,7 +104,8 @@ export class MenuScene extends Phaser.Scene {
     }
     text(28,D?22:48,'乱世千军',D?36:42,'#efd493').setFontFamily(TITLE_FONT).setLetterSpacing(3);
     text(D ? 196 : 30, D ? 32 : 99, '三国割草 · 将星出征', D ? 13 : 14, '#8eaa9c');
-    text(W-130,D?29:59,worldUnlocked()||isChapterTestRun()?'营寨':'营寨未开放',12,'#d9c58d').setOrigin(1,0).setPadding(8,6).setInteractive({useHandCursor:true}).on('pointerdown',()=>{if(worldUnlocked()||isChapterTestRun())this.scene.start('CityScene');});
+    // 2026-11-17 用户「右上角天下地图和营寨可以不需要」：电脑版右上只留「成就」；营寨改从「择章」页右上角进入（营寨里有「天下地图 · 出征」）
+    if(!D)text(W-130,D?29:59,worldUnlocked()||isChapterTestRun()?'营寨':'营寨未开放',12,'#d9c58d').setOrigin(1,0).setPadding(8,6).setInteractive({useHandCursor:true}).on('pointerdown',()=>{if(worldUnlocked()||isChapterTestRun())this.scene.start('CityScene');});
     const layout = text(W - 28, D ? 29 : 59, D ? '手机布局' : '电脑布局', 12, '#acb5a0').setOrigin(1, 0).setPadding(6, 6).setInteractive({ useHandCursor: true }).setVisible(!IS_DESKTOP_APP);
     layout.on('pointerdown', () => switchLayout(D ? 'mobile' : 'desktop')).on('pointerover', () => layout.setColor('#f1d69a')).on('pointerout', () => layout.setColor('#acb5a0'));
     const section = (y: number, n: string, title: string, tip: string) => {
@@ -216,7 +217,7 @@ export class MenuScene extends Phaser.Scene {
     // 成就入口（右上角；天下已开时排在主城 / 天下地图左侧）
     try{checkWorld(save);}catch{/* 存档不可用 */}
     {const got=Object.keys(unlockedMap()).filter(id=>ACHIEVEMENTS.some(a=>a.id===id)).length,py=D?34:54;let rx=W-24;
-     if(worldUnlocked()){rx-=homePlaque(this,rx,py,{label:'营寨',name:'home-city',glyph:'营',onClick:()=>this.scene.start('CityScene')},D)+8;rx-=homePlaque(this,rx,py,{label:'天下地图',name:'home-world',glyph:'图',onClick:()=>this.scene.start('WorldMapScene')},D)+8;}
+     if(worldUnlocked()&&!D){rx-=homePlaque(this,rx,py,{label:'营寨',name:'home-city',glyph:'营',onClick:()=>this.scene.start('CityScene')},D)+8;rx-=homePlaque(this,rx,py,{label:'天下地图',name:'home-world',glyph:'图',onClick:()=>this.scene.start('WorldMapScene')},D)+8;}
      homePlaque(this,rx,py,{label:'成就',name:'home-achievements',icon:'ach_first_win',progress:[got,ACHIEVEMENTS.length],onClick:()=>{if(!this.children.getByName('achievements-panel'))new AchievementsUI(this);}},D);
      // 2026-11-16 用户：「界面的行囊可以不要」——主页不再放行囊匾；行囊仍可在战斗 HUD、暂停菜单、行营休整（换装换马）里打开。
     }

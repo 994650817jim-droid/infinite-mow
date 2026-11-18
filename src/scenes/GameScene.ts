@@ -661,7 +661,7 @@ export class GameScene extends Phaser.Scene {
     this.propItems = 0; this.supplies.onPropLoot = (kind, x, y) => this.propLoot(kind, x, y);
     // 兵装：开局读入该武将穿戴的道具加成（生命上限增加的部分补满）
     {const oldMax=this.player.maxHp;this.player.growth.gear=gearFor(this.runConfig.character);this.player.heal(this.player.maxHp-oldMax);}
-    this.followers=null;this.followerPassives=[];{const allow=worldUnlocked()&&(!isChapterTestRun()||new URLSearchParams(location.search).get('followers')==='1');const list=allow?followersFor(this.runConfig.character):[];if(list.length)this.followers=new FollowerSquad(this,this.player,list,(x,y,r)=>this.grid.query(x,y,r),(e,d,fire)=>this.hitEnemy(e,d,this.combatNow,fire?'fire':'melee',true,false),()=>this.player.growth.damageMultiplier(this.combatNow));if(this.followers){this.followers.onHitFx=(e,k,fx,fy)=>this.followerTemplateHitFx(e,k,fx,fy);this.followers.attackSound=t=>this.sfx.play(FOLLOWER_ATTACK_SFX[t]);}}
+    this.followers=null;this.followerPassives=[];{const allow=worldUnlocked()&&(!isChapterTestRun()||new URLSearchParams(location.search).get('followers')==='1');const list=allow?followersFor(this.runConfig.character):[];if(list.length)this.followers=new FollowerSquad(this,this.player,list,(x,y,r)=>this.grid.query(x,y,r),(e,d,fire)=>this.hitEnemy(e,d,this.combatNow,fire?'fire':'melee',true,false),()=>this.player.growth.damageMultiplier(this.combatNow));if(this.followers){this.followers.onHitFx=(e,k,fx,fy)=>this.followerTemplateHitFx(e,k,fx,fy);this.followers.attackSound=t=>this.sfx.play(FOLLOWER_ATTACK_SFX[t]);this.wireFollowerObstacles(this.followers);}}
     { const mode = readIffMode(); this.iff = mode ? new IffOverlay(this, mode, () => this.iffUnits()) : null; }
     this.presence = new BossPresence({ scene: this, enemies: () => this.enemies, boss: () => this.cutscene?.active ? null : this.boss, /* 过场时收起名牌 / 辉光 / 火环 */ bossName: () => this.chapter.bossName, player: () => this.player,
       extras: e => e === this.boss ? [this.bossMount?.horseImage, this.bossMount?.frontImage] : [], outline: e => this.iff?.overlayOf(e.sprite) });
@@ -1054,7 +1054,7 @@ export class GameScene extends Phaser.Scene {
     this.separateAlliesFromEnemies(dt);
     this.supplies?.resolveBodies(this.allies,(a,d,n)=>this.legion.hurt(a,d,n),(e,d,n)=>this.hitEnemy(e,d,n,'melee',false,false));
     this.sishuiObstacles?.resolve(this.player,this.allies,this.enemies);
-    if(this.terrain){this.terrain.resolve(this.player,this.allies,this.enemies);this.terrain.updateCanopy(this.player);}
+    if(this.terrain){this.terrain.resolve(this.player,this.allies,this.enemies);this.terrain.updateCanopy(this.player,this.enemies.filter(e=>e.active&&!e.isSupplySlot&&(e.kind==='boss'||e.kind==='elite')));}
     this.player.growth.recordMovement(Math.hypot(move.x,move.y)>.1&&time>=this.player.knockedUntil?Math.hypot(this.player.x-moveX,this.player.y-moveY):0,dt);
     if(this.player.growth.masteries.dragging_blade||this.dragFx)this.dragBladeFx().update(dt,Math.hypot(move.x,move.y)>.1&&time>=this.player.knockedUntil?Math.hypot(this.player.x-moveX,this.player.y-moveY):0);
     this.awakeningCombat?.movement(Math.hypot(move.x,move.y)>.1&&time>=this.player.knockedUntil?Math.hypot(this.player.x-moveX,this.player.y-moveY):0);
@@ -1494,14 +1494,48 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
+  /**
+   * 首领 / 精英的绘制层（用户 2026-11-18「华雄穿模，可能其他 boss 也是」）：
+   * 原来每帧只给杂兵按脚底 y 排深度，首领被跳过，一直停在生成时的 DEPTH.enemy（20），比所有杂兵（20.1~21.9）都低，被兵堆整片盖住。
+   * 现在：首领、精英也按脚底 y 排（和主将照常前后遮挡）；但谁的脚站在首领身体范围里（身前约 95 像素以内、横向在身宽内），
+   * 就压到首领整体（坐骑层 -0.002 / 马头前景 +0.001 都跟着首领精灵）之下，杂兵永远插不进首领的几层中间、也盖不住首领；精英同理压杂兵，首领压精英。
+   */
+  private layerHeads(): Array<{ e: Enemy; rank: number; depth: number; hw: number }> {
+    const out: Array<{ e: Enemy; rank: number; depth: number; hw: number }> = [];
+    for (const e of this.enemies) if (e.active && !e.isSupplySlot && (e.kind === 'boss' || e.kind === 'elite')) out.push({ e, rank: e.kind === 'boss' ? 2 : 1, depth: 0, hw: Math.max(e.kind === 'boss' ? 70 : 44, e.sprite.displayWidth * .5) });
+    out.sort((a, b) => b.rank - a.rank);
+    for (const h of out) { h.depth = this.underHeads(h.e, actorDepth(h.e.y + h.e.radius * .72), out, h.rank); h.e.sprite.setDepth(h.depth); }
+    return out;
+  }
+  /** 脚底站在更高一级（首领 > 精英 > 杂兵）身体范围里的，深度压到它之下。 */
+  private underHeads(e: Enemy, d: number, heads: ReadonlyArray<{ e: Enemy; rank: number; depth: number; hw: number }>, rank: number): number {
+    for (const h of heads) {
+      if (h.rank <= rank || h.e === e || !h.depth) continue;
+      const dy = (e.y + e.radius * .72) - (h.e.y + h.e.radius * .72);
+      if (dy > -4 && dy < 95 && Math.abs(e.x - h.e.x) < h.hw + e.radius) d = Math.min(d, h.depth - .004);
+    }
+    return d;
+  }
+
+  /**
+   * 随行认的障碍 = 主将认的那几套（场景审查 B，用户 2026-11-18「随从站进城墙里」）：
+   * 场景碰撞框（关墙 / 城墙 / 山崖 / 洪水边界 / 突围通道，都在 sishuiObstacles.footprints）+ 董卓城墙（DongzhuoLubu 自己一份）+ 地形树干（圆）。
+   * 河水只减速不挡人，主将也能下水，随行照旧。
+   */
+  protected wireFollowerObstacles(sq: FollowerSquad): void {
+    sq.obstacles = () => { const a = this.sishuiObstacles?.footprints ?? [], d = this.dzLubu?.obstacles.footprints; return d?.length ? [...a, ...d] : a; };
+    sq.terrainPush = (x, y, r) => this.terrain?.pushCircle(x, y, r) ?? null;
+  }
+
   /** 步态必须基于碰撞/分离后的真实位移：被挤住时回待机帧。 */
   protected updateEnemyWalkAnimations(dt: number): void {
     const view = this.cameras.main.worldView;
     const margin = 80;
+    const heads = this.layerHeads();
     for (const enemy of this.enemies) {
       if (!enemy.active) continue;
       enemy.shadow.setPosition(enemy.x,enemy.isSupplySlot?enemy.y+2:enemy.y + enemy.radius * .72);
-      if (enemy.kind !== 'boss') enemy.sprite.setDepth(actorDepth(enemy.isSupplySlot?enemy.y:enemy.y + enemy.radius * .72));
+      if (enemy.kind !== 'boss' && enemy.kind !== 'elite') enemy.sprite.setDepth(this.underHeads(enemy, actorDepth(enemy.isSupplySlot?enemy.y:enemy.y + enemy.radius * .72), heads, 0));
       // 华雄 / 徐荣由专属控制器出帧；前线推进后成为追兵首领时也不再套通用走路帧（xurong 图集没有 down_0 等帧，会持续报 no frame）
       if(((this.huaxiong||this.xurong)&&enemy===this.boss)||(enemy.kind==='boss'&&this.chasingBosses.some(t=>t.enemy===enemy&&t.life===enemy.spawnId&&(t.huaxiong||t.xurong)))){enemy.shadow.setPosition(enemy.x,enemy.y+1).setDisplaySize(74,20);continue;}
       if (!enemy.walkSheet) continue;

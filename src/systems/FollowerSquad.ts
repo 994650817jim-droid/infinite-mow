@@ -194,6 +194,8 @@ export class FollowerSquad {
   readonly rules = FOLLOW;
   /** 场景里的障碍物（城墙 / 城门 / 关隘等，地图坐标的矩形）：随行不能站进去（用户 2026-11-18「随从站在城墙上穿模」）。门破 / 拆除后场景把对应矩形移出数组，随行就能过。 */
   obstacles: (() => ReadonlyArray<{ left: number; right: number; top: number; bottom: number }> | undefined) | null = () => (this.scene as unknown as { sishuiObstacles?: { footprints: Array<{ left: number; right: number; top: number; bottom: number }> } }).sishuiObstacles?.footprints;
+  /** 地形层（树干）推开：返回推开量（没碰到为 null）。场景有地形时接上。 */
+  terrainPush: ((x: number, y: number, r: number) => { x: number; y: number } | null) | null = null;
   /** 无名之辈招式 / 被动的统计（测试 / 平衡用）。 */
   readonly skillStats = { sweep: 0, thrust: 0, thrustHits: 0, volley: 0, heal: 0, healed: 0, block: 0, crit: 0, formation: 0, rally: 0 };
   /** 招式 / 被动用的随机数（测试可替换）。 */
@@ -371,8 +373,10 @@ export class FollowerSquad {
   }
   /** 把站进障碍物矩形里的随行推到最近的一条边外（脚底点 + 半径 14；阵位 / 追击 / 瞬移落点落在城墙上时都靠这里兜住）。 */
   private pushOut(f: Follower): void {
-    const boxes = this.obstacles?.(); if (!boxes?.length) return;
-    const R = 14; let x = f.x, y = f.y, moved = false;
+    const boxes = this.obstacles?.() ?? [], R = 14; let x = f.x, y = f.y, moved = false;
+    // 树干（地形层，圆形）：和主将同一套推开（场景审查 B：随行原来只认城墙 / 关墙矩形）
+    const tp = this.terrainPush?.(x, y, R); if (tp) { x += tp.x; y += tp.y; moved = true; }
+    if (!boxes.length) { if (moved) f.sprite.setPosition(x, y); return; }
     for (let pass = 0; pass < 2; pass++) for (const b of boxes) {
       if (x <= b.left - R || x >= b.right + R || y <= b.top - R || y >= b.bottom + R) continue;
       const dl = x - (b.left - R), dr = b.right + R - x, dt = y - (b.top - R), db = b.bottom + R - y, m = Math.min(dl, dr, dt, db);
@@ -559,9 +563,11 @@ export class FollowerSquad {
     if (f.downed) { if (!f.act) f.sprite.setAngle(f.dir === 'left' ? -84 : 84).setOrigin(.5, .7); f.sprite.setTint(0x8a7a6a); f.sprite.setAlpha(.92); }
     else if (now < f.hurtUntil) f.sprite.setTintFill(0xffd0c0); else if (f.sprite.tintFill || f.sprite.isTinted) { f.sprite.clearTint(); if (!f.recruit.hero && f.sheet === 'hero_walk_sheet') f.sprite.setTint(QUALITIES[f.recruit.quality].color); }
     f.shadow.setPosition(f.x, f.y + 2); f.label.setPosition(f.x, f.y - 66);
+    // 站得离主将太近时隐藏名牌和血条（用户 2026-11-18 截图：随行名牌 / 血条压在主将身上，和「主将」标记叠在一起）
+    const pl = this.player, near = Math.hypot(f.x - pl.x, f.y - pl.y) < 96; f.label.setAlpha(near ? 0 : 1);
     f.sprite.setDepth(DEPTH.player - 1 + f.y / 100000);
     const w = 36, r = Math.max(0, f.hp / f.maxHp); f.bar.clear();
-    if (r < 1) { f.bar.fillStyle(0x1a0f08, .8).fillRect(f.x - w / 2, f.y - 58, w, 4); f.bar.fillStyle(r > .4 ? 0x6fd06a : 0xe0603a, 1).fillRect(f.x - w / 2, f.y - 58, w * r, 4); }
+    if (r < 1 && !near) { f.bar.fillStyle(0x1a0f08, .8).fillRect(f.x - w / 2, f.y - 58, w, 4); f.bar.fillStyle(r > .4 ? 0x6fd06a : 0xe0603a, 1).fillRect(f.x - w / 2, f.y - 58, w * r, 4); }
   }
   clear(): void { for (const f of this.members) f.destroy(); this.members.length = 0; for (const fx of this.fx) fx.img?.destroy(); for (const img of this.fxPool) img.destroy(); this.fxPool.length = 0; this.fxLive = 0; this.fx.length = 0; this.gfx.destroy(); this.rescueGfx.destroy(); this.rescueText.destroy(); this.hud.destroy(); }
 }

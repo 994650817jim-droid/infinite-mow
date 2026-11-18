@@ -129,6 +129,7 @@ export class DevGameScene extends GameScene {
       // 选择记在本浏览器会话里（不是存档），选将 / 选关 / 重开后自动带上
       try { sessionStorage.setItem('im_dev_followers', JSON.stringify(list.map(r => r.id))); } catch { /* ignore */ }
       if (picked.length) host.followers = new FollowerSquad(scene, scene.player, picked, (x, y, r) => scene.grid.query(x, y, r), (e, d, fire) => scene.hitEnemy(e, d, scene.combatNow, fire ? 'fire' : 'melee', true, false), () => scene.player.growth.damageMultiplier(scene.combatNow));
+      if (host.followers) (scene as unknown as { wireFollowerObstacles(sq: FollowerSquad): void }).wireFollowerObstacles(host.followers);
       mark();
     };
     const toggleFollower = (r: Recruit): void => { const now = current(); setSquad(now.some(x => x.id === r.id) ? now.filter(x => x.id !== r.id) : [...now, r].slice(-3)); };

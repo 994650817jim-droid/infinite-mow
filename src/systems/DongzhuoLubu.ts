@@ -56,7 +56,7 @@ export interface DzHost {
 export class DongzhuoLubu {
   phase: DzPhase = 'wall';
   lubu: Enemy | null = null;
-  private art: Phaser.GameObjects.GameObject[] = []; private obstacles: SishuiObstacles; private strikes: Strikes;
+  private art: Phaser.GameObjects.GameObject[] = []; readonly obstacles: SishuiObstacles; private strikes: Strikes;
   private perch = { x: 0, y: 0 }; private gate = { x: 0, y: 0 }; private letDie = false; private dzLineAt = 0; private nextSweep = 0; private sweep: { at: number; a: number; id: string } | null = null; private volleyAt = 0;
   private anim: ((now: number) => boolean) | null = null;
   readonly metrics = { sweeps: 0, volleys: 0, lockHits: 0 };

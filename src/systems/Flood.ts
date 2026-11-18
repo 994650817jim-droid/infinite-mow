@@ -48,6 +48,7 @@ export class Flood {
       { left: a.left - 600, right: a.left, top: a.top - 600, bottom: a.bottom + 600 }, { left: a.right, right: a.right + 600, top: a.top - 600, bottom: a.bottom + 600 },
       { left: a.left, right: a.right, top: a.top - 600, bottom: a.top }, { left: a.left, right: a.right, top: a.bottom, bottom: a.bottom + 600 });
     const sc = h.scene, v2 = sc.textures.exists(PROPS);
+    this.buildBanks();
     // 高地 / 小船
     for (const m of FLOOD.mounds) this.img(m.x, m.y + m.ry * .55, v2 ? PROPS : 'art_props', v2 ? 0 : '2', m.rx * 2.2, m.rx * 2.2 * (v2 ? 1 : .8), DEPTH.ground + 3);
     for (const b of FLOOD.boats) this.img(b.x, b.y + b.ry * .6, v2 ? PROPS : 'yellow_props', v2 ? 1 : 24, b.rx * 2.4, b.rx * 2.4, DEPTH.ground + 3);
@@ -59,6 +60,20 @@ export class Flood {
     if (wKey !== FX) this.water.setTint(0x8a7a52);
     this.objects.push(this.water);
     this.label = worldText(sc, 0, 0, '', 15, '#cfe6ff').setOrigin(.5).setDepth(36).setStroke('#0d1620', 4).setVisible(false); this.objects.push(this.label);
+  }
+  /**
+   * 场地边界看得见（全场景审查 C：原来四周碰撞框没有画面）：场地是汉水边的一块洼地，四面被暴涨的汉水围住——
+   * 框外铺流动的江水（地形水面图 terrain_water，缺图用江岸地面染水色），沿边一圈泥岸。水面在地面层，不挡人物。
+   */
+  private banks: Phaser.GameObjects.TileSprite[] = [];
+  private buildBanks() {
+    const sc = this.h.scene, a = FLOOD.arena, T = 1400, B = 40;
+    const wKey = sc.textures.exists('terrain_water') ? 'terrain_water' : sc.textures.exists('ground_v2_jiang') ? 'ground_v2_jiang' : '__WHITE', bKey = sc.textures.exists('ground_v2_jiang') ? 'ground_v2_jiang' : '__WHITE';
+    const rects = [[a.left - T, a.top - T, T, a.bottom - a.top + 2 * T], [a.right, a.top - T, T, a.bottom - a.top + 2 * T], [a.left, a.top - T, a.right - a.left, T], [a.left, a.bottom, a.right - a.left, T]];
+    for (const [x, y, w, hh] of rects) { const ts = sc.add.tileSprite(x, y, w, hh, wKey).setOrigin(0, 0).setDepth(DEPTH.ground + 2).setName('flood-river'); if (wKey !== 'terrain_water') ts.setTint(0x6f7f74); this.banks.push(ts); this.objects.push(ts); }
+    // 泥岸：沿场地边一圈（压在水面之上，像岸线）
+    const edges = [[a.left - B / 2, a.top - B / 2, B, a.bottom - a.top + B], [a.right - B / 2, a.top - B / 2, B, a.bottom - a.top + B], [a.left - B / 2, a.top - B / 2, a.right - a.left + B, B], [a.left - B / 2, a.bottom - B / 2, a.right - a.left + B, B]];
+    for (const [x, y, w, hh] of edges) this.objects.push(sc.add.tileSprite(x, y, w, hh, bKey).setOrigin(0, 0).setTint(0x5a4a30).setAlpha(.9).setDepth(DEPTH.ground + 2.5));
   }
   private img(x: number, y: number, key: string, frame: number | string, w: number, h: number, depth?: number) { const i = this.h.scene.add.image(x, y, key, frame).setOrigin(.5, 1).setDisplaySize(w, h).setDepth(depth ?? actorDepth(y)); this.objects.push(i); return i; }
 
@@ -96,6 +111,7 @@ export class Flood {
       this.water.width = Math.max(1, Math.min(a.right, this.front) - a.left);
       if (this.water.texture.key === FX) this.water.setFrame(12 + Math.floor(now / 160) % 6); else this.water.tilePositionX -= FLOOD.flowSpeed * dt * .5;
     }
+    for (const b of this.banks) b.tilePositionX -= FLOOD.flowSpeed * dt * .5; // 四周汉水向东流
     // 水患：每 0.5 秒结算一次伤害；推流每帧
     const tick = now >= this.tickAt; if (tick) this.tickAt = now + 500;
     const wetPlayer = this.wet(p.x, p.y);
@@ -135,5 +151,5 @@ export class Flood {
     if (sc.textures.exists(FX)) { const s = sc.add.image(x, y, FX, 6).setOrigin(.5, .75).setDisplaySize(110, 110).setDepth(DEPTH.fx); sc.tweens.addCounter({ from: 0, to: 5.99, duration: 420, onUpdate: t => s.setFrame(6 + Math.floor(t.getValue() ?? 0)), onComplete: () => s.destroy() }); }
     else playSheet(sc, 'fx_collapse_dust', x, y, { size: 80, depth: DEPTH.fx, ms: 380, alpha: .6 });
   }
-  clear() { for (const o of this.objects) o.destroy(); this.objects = []; this.crest = []; this.h.player.envSpeedMul = 1; }
+  clear() { for (const o of this.objects) o.destroy(); this.objects = []; this.banks = []; this.crest = []; this.h.player.envSpeedMul = 1; }
 }

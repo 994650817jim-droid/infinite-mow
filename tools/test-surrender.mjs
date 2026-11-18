@@ -225,7 +225,8 @@ try {
     ev = await open('ThirdGameScene', { thirdStage: 1 }, { thirdStage: 1 });
     await p.evaluate(async () => { (await import('/src/systems/BattleSnapshot.ts')).beginBattle('test-surrender'); });
     await ev(s => { s.parley.constructor.random = () => .01; });
-    const b0 = await snap(); await hurtTo(ev, .12); await waitPanel(ev); await ev(s => s.choose('persuade')); await p.waitForTimeout(1500); const b1 = await snap();
+    // 劝降结果在选择当下就写进存档；跪降 1 秒 + 0.5 秒后告捷进营会 commitBattle（快照作废），所以要在告捷前回滚（原来等 1.5 秒正好卡在边上，偶发失败）
+    const b0 = await snap(); await hurtTo(ev, .12); await waitPanel(ev); await ev(s => s.choose('persuade')); await p.waitForTimeout(300); const b1 = await snap();
     await p.evaluate(async () => { (await import('/src/systems/BattleSnapshot.ts')).rollbackBattle(); });
     const b2 = await snap();
     ck('中途退出回滚：劝降李傕进栏 + surrendered 旗标，回滚后一起撤销', b1.cap.includes('lijue') && b1.sur.includes('lijue') && b2.cap === b0.cap && b2.sur === b0.sur, { b0, b1, b2 });

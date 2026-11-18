@@ -12,6 +12,7 @@ import { warText } from '../ui/WarStyle';
 import type { Enemy } from '../entities/Enemy';
 import type { EnemyKind, RunEndReason } from '../types';
 import { YUJIN } from '../data/surrender';
+import { shuArt } from '../data/shuChapter';
 import { bossInRoster, captureBoss } from '../systems/RosterStore';
 import { markSurrender, surrenderLive } from '../systems/SurrenderStore';
 
@@ -42,6 +43,10 @@ export function xiangfanGameSceneClass(Base: typeof GameScene) {
       for (const t of Object.values(XF_TROOPS)) if (xfArt(t.walk) && !this.textures.exists(t.walk)) this.load.spritesheet(t.walk, t.file, { frameWidth: 176, frameHeight: 176 });
       if (xfArt('xf_flood') && !this.textures.exists('xf_flood')) this.load.spritesheet('xf_flood', 'assets/xiangfan/flood.png', { frameWidth: 256, frameHeight: 256 });
       if (xfArt('xf_props') && !this.textures.exists('xf_props')) this.load.spritesheet('xf_props', 'assets/xiangfan/props.png', { frameWidth: 384, frameHeight: 384 });
+      // 9-2 场地四周的汉水、9-3 谷壁山崖（全场景审查 C：碰撞框要看得见）——复用地形水面与第七章山道图集
+      const st = Number(this.registry.get('xiangfanStage')) || 1;
+      if (st === 2 && !this.textures.exists('terrain_water')) this.load.image('terrain_water', 'assets/terrain/water.png');
+      if (st === 3 && shuArt('shu_pass') && !this.textures.exists('shu_pass')) this.load.spritesheet('shu_pass', 'assets/shu/pass.png', { frameWidth: 384, frameHeight: 384 });
     }
     create() {
       this.flood = undefined; this.breakout = undefined; this.rage = false; this.coffin = undefined; this.pendingWin = false; this.timerText = undefined;

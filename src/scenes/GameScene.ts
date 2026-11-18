@@ -5,6 +5,7 @@ import {FOLLOW} from '../data/recruits';
 import type {PlayerStats} from '../types';
 import {followersFor,followerLevelCap,heroOwned,lordHero} from '../systems/RosterStore';
 import {Parley} from '../systems/Parley';
+import {freeSpawn} from '../systems/SpawnClear';
 import {DUAL, DualBoss, retreatFade, type DualCtrl, type DualPlan} from '../systems/DualBoss';
 import type {BossMount as BossMountT} from '../systems/BossMount';
 import {SURRENDER,surrenderDef} from '../data/surrender';
@@ -736,6 +737,8 @@ export class GameScene extends Phaser.Scene {
       // 2-2 荥阳 · 徐荣伏营：四角伏兵营帐，「道路伏击」波起扬尘示警后伏兵冲出；烧掉营帐断其伏兵
       const A=XINGYANG_AMBUSH;this.sishuiPass=new SishuiPass(this.passHost(),{wall:false,towers:false,wenjiu:false,tentSpots:A.tents,tentRider:'infantry',tentCount:A.count,tentWarnMs:A.warnMs,tentFromWave:A.fromWave,tentName:'伏兵营帐',campName:'徐荣伏营',tag:'xurong'});
       this.supplies.spawnSishui(3,-330,180,116);this.supplies.spawnSishui(5,-310,350,105);this.supplies.spawnSishui(7,230,-50,100);this.supplies.spawnSishui(4,290,210,104);this.supplies.spawnSishui(6,300,370,110);}
+    // 1-3 广宗决战（全场景审查 P2：「广宗城」只有空地）：北面一道广宗城墙（攻城城墙图集，同 2-1 汜水关那套），城门紧闭，张角在城下列阵
+    if(this.chapter.id==='huangjin'&&this.chapter.stage===3&&!this.runConfig.encounter&&!this.customChapter()&&!this.sishuiPass){this.sishuiPass=new SishuiPass(this.passHost(),{towers:false,tents:false,wenjiu:false,wallY:-900,tag:'guangzong'});this.sishuiObstacles=new SishuiObstacles(this.sishuiPass.footprints);}
     // 过场动画预览（MenuScene 收到 ?dev=1&cutscene=<id>）：清场、首领出阵，推到过场处自动播
     {const pv=this.registry.get('cutscenePreview') as string|undefined;if(pv){this.registry.remove('cutscenePreview');this.player.damageImmune=true;const t0=performance.now();
       const poll=():void=>{if(!this.scene.isActive()){this.events.off('postupdate',poll);return;}this.spawnTimer=this.eliteTimer=1e9;for(const e of this.enemies)if(e.active&&e.kind!=='boss'&&!e.isSupplySlot&&e!==this.dzLubu?.lubu)e.deactivate();
@@ -1085,7 +1088,7 @@ export class GameScene extends Phaser.Scene {
     if(this.mode==='none'&&!this.over)this.sishuiPass?.update();
     this.parley?.update(); // 首领招降：残血弹窗 / 再压一压
     if(this.mode==='none'&&!this.over)this.dual?.update(this.combatNow); // 双首领：招降、配合技、狂怒 / 心乱、退走线
-    if(!this.terrainInit&&this.player){this.terrainInit=true;const tc=terrainConfigFor(this.hardKey(),this.hardStage());if(tc){this.terrain=new Terrain(this,tc);const t=this.terrain;Ally.terrainMul=(x,y)=>t.speedMul(x,y);this.terrainNav=t.navBoxes();this.events.once('shutdown',()=>{t.clear();if(this.terrain===t){this.terrain=null;Ally.terrainMul=null;}});}}
+    if(!this.terrainInit&&this.player){this.terrainInit=true;const tc=terrainConfigFor(this.hardKey(),this.hardStage());if(tc){this.terrain=new Terrain(this,tc);const t=this.terrain;Ally.terrainMul=(x,y)=>t.speedMul(x,y);this.terrainNav=[...t.navBoxes(),...t.cliffBoxes];if(t.cliffBoxes.length){if(!this.sishuiObstacles)this.sishuiObstacles=new SishuiObstacles([]);this.sishuiObstacles.footprints.push(...t.cliffBoxes);} /* 山崖碰撞并进场景障碍：挡人、刷兵避开、随行也认 */this.events.once('shutdown',()=>{t.clear();if(this.terrain===t){this.terrain=null;Ally.terrainMul=null;}});}}
     if(this.terrain){this.terrain.update(this.combatNow,dt);this.player.terrainSpeedMul=this.terrain.speedMul(this.player.x,this.player.y);}
     this.updateEnemies(dt, time);
     this.yellow?.update(dt,time);this.xiliang?.update(dt,this.combatNow);this.shieldBars?.draw(this.enemies);if(this.objective){this.objective.update(dt);this.objectiveText?.setText(this.objective.text);}
@@ -1209,6 +1212,8 @@ export class GameScene extends Phaser.Scene {
   ): Enemy | null {
     if (this.terrain) { const f = this.terrain.free(x, y, kind === 'boss' ? 34 : 20); x = f.x; y = f.y; } // 不刷在水里 / 树干里
     if (kind === 'cavalry') this.deathFx?.warmHorse(); // 骑兵死亡放马：马匹行走图按需异步加载（只在场上出现骑兵时）
+    // 不刷在关墙 / 营栅 / 场地边界 / 谷壁 / 崖壁里（全场景审查 F）：挪到最近的框边、朝主将那一侧；首领与城头守军按设计摆位，不挪
+    if (kind !== 'boss' && override?.behavior !== 'wall' && this.sishuiObstacles?.footprints.length) { const f = freeSpawn(this.sishuiObstacles.footprints, x, y, 20, this.player); x = f.x; y = f.y; }
     const poolLimit = BALANCE.enemyCap;
     const bossReserve = this.bossSpawned ? 0 : 1;
     const activeLimit = kind === 'boss' ? BALANCE.enemyCap : BALANCE.enemyCap - bossReserve;

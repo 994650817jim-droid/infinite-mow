@@ -17,7 +17,7 @@ export const BREAKOUT = {
   limitSeconds: 180,
   checkpoints: [-600, -1200, -1750], // 每过一道：横幅提示剩余距离
 } as const;
-const PROPS = 'xf_props';
+const PROPS = 'xf_props', CLIFF = 'shu_pass';
 
 export interface BreakoutHost {
   scene: Phaser.Scene; player: Player; now: () => number; elapsed: () => number;
@@ -41,8 +41,22 @@ export class Breakout {
     // 出口城门、两侧谷壁上的吴军旗
     this.img(0, E.y + 60, v2 ? PROPS : 'sishui_props_refined', v2 ? 4 : 0, 360);
     for (let y = a.bottom - 200; y > a.top + 400; y -= 420) for (const s of [-1, 1]) this.img(s * (a.right - 30), y, v2 ? PROPS : 'yellow_props', v2 ? 7 : 4, v2 ? 120 : 80);
+    this.buildWalls();
     this.exitG = sc.add.graphics().setDepth(DEPTH.ground + 3); this.objects.push(this.exitG);
     this.label = worldText(sc, E.x, E.y - E.radius - 40, '', 16, '#ffe1a0').setOrigin(.5).setStroke('#1a120b', 4).setDepth(36); this.objects.push(this.label);
+  }
+  /**
+   * 谷壁看得见（全场景审查 C：原来两侧碰撞框没有画面）：两侧、出口两旁、身后都立山崖（第七章山道图集 shu_pass 左 / 右坡），
+   * 崖脚贴着碰撞框边；缺图时用碎石堆。深度压在地面层（同山道），不挡人物。
+   */
+  private buildWalls() {
+    const a = BREAKOUT.arena, E = BREAKOUT.exit, sc = this.h.scene, cliff = sc.textures.exists(CLIFF);
+    const put = (x: number, y: number, side: -1 | 1, w = 360) => { const i = cliff ? sc.add.image(x, y, CLIFF, side < 0 ? 0 : 1) : sc.add.image(x, y, 'yellow_props', 33); i.setOrigin(.5, 1).setDisplaySize(cliff ? w : 140, cliff ? w : 140).setDepth(DEPTH.ground + 3 + (y - a.top) / 1e5); this.objects.push(i); };
+    for (let y = a.top + 60; y < a.bottom + 420; y += 230) { const j = ((y * 7) % 40) - 20; put(a.left - 150 + j, y + 40, -1); put(a.right + 150 - j, y + 40, 1); }
+    // 出口两旁（拒马城门左右是实心）
+    for (const s of [-1, 1] as const) for (let y = a.top + 40; y <= E.y + 120; y += 170) put(s * 290, y, s, 300);
+    // 身后（南端封死）
+    for (let x = a.left + 40; x <= a.right - 40; x += 200) put(x, a.bottom + 210, x < 0 ? -1 : 1, 320);
   }
   private img(x: number, y: number, key: string, frame: number, w: number) { const i = this.h.scene.add.image(x, y, key, frame).setOrigin(.5, 1).setDisplaySize(w, w).setDepth(actorDepth(y)); this.objects.push(i); return i; }
   get timeLeft() { return Math.max(0, BREAKOUT.limitSeconds - this.h.elapsed()); }
@@ -51,9 +65,10 @@ export class Breakout {
   /** 合围刷兵：前方拦截 45%、身后追兵 30%、两翼 25%（都在谷道里）。 */
   spawnPoint(kind: EnemyKind): { x: number; y: number } {
     const p = this.h.player, a = BREAKOUT.arena, r = Math.random(); void kind;
-    if (r < .45) return { x: (Math.random() * 2 - 1) * (a.right - 60), y: Math.max(a.top + 200, p.y - 460) };
+    // 前方拦截：不越过出口城门那一线（城门两旁是实心谷壁）
+    if (r < .45) return { x: (Math.random() * 2 - 1) * (a.right - 60), y: Math.max(BREAKOUT.exit.y + 120, p.y - 460) };
     if (r < .75) return { x: (Math.random() * 2 - 1) * (a.right - 60), y: Math.min(a.bottom - 30, p.y + 440) };
-    return { x: (Math.random() < .5 ? -1 : 1) * (a.right - 40), y: p.y - 150 + Math.random() * 300 };
+    return { x: (Math.random() < .5 ? -1 : 1) * (a.right - 40), y: Math.max(BREAKOUT.exit.y + 120, p.y - 150 + Math.random() * 300) };
   }
   update() {
     const p = this.h.player, E = BREAKOUT.exit;

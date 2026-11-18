@@ -6,6 +6,7 @@ import type { EnemyKind } from '../types';
 import { DEPTH, FONT, actorDepth } from '../config';
 import { CHENCANG, WATER } from '../data/beifaChapter';
 import { warnFx } from '../ui/WarnFx';
+import { MID_SIEGE_FILES } from './SiegeMidArt';
 import { playSheet } from './SkillFxSheets';
 
 /** 地面落点打击（箭雨 / 落雷 / 陨星）：先手绘预警圈，到点播手绘命中序列帧并结算伤害。第十二章各处共用。 */
@@ -90,6 +91,7 @@ export class BeifaWater {
 
 // ---------------- 陈仓：城门与箭楼 ----------------
 export interface SiegeHost { scene: Phaser.Scene; player: Player; strikes: Strikes; spawnGate: (x: number, y: number, hp: number) => Enemy | null; spawnTower: (x: number, y: number, hp: number) => Enemy | null; banner: (t: string, c?: string) => void; sfx: (k: string) => void;
+  /** 场景碰撞框（城墙段推进去；全场景审查 P2：陈仓原来只有孤城门，没有城墙）。 */ footprints?: Array<{ left: number; right: number; top: number; bottom: number }>;
   /** 首领到点后离攻城失利还剩几秒（基础场景：首领时间 + 60 秒没出首领判负）；没到点为 null。 */ timeLeft?: () => number | null }
 /** 陈仓攻城（复用攻城样板的城门 / 箭楼物件）：城门在前方，两侧城头箭楼；箭楼每隔几秒朝主将放一轮箭雨（手绘预警圈）。城门未破郝昭不出城。 */
 export class ChencangSiege {
@@ -102,6 +104,18 @@ export class ChencangSiege {
     for (let i = 0; i < CHENCANG.towers; i++) { const side = i % 2 ? 1 : -1, t = h.spawnTower(gx + side * CHENCANG.towerGap, gy - 10, CHENCANG.towerHp); if (t) { this.towers.push(t); this.volleyAt.push(now + 2500 + i * 1500); } }
     this.label = h.scene.add.text(gx, gy - 230, '', { fontFamily: FONT, fontSize: '15px', color: '#ffe1a0', stroke: '#1a120b', strokeThickness: 4, resolution: 2 }).setOrigin(.5).setDepth(DEPTH.fx).setName('chencang-gate-label');
     h.banner('陈仓', '先破城门 · 城头箭楼会放箭雨，拆掉箭楼箭雨就停');
+    this.buildWalls(gx, gy);
+  }
+  /**
+   * 陈仓城墙（攻城 v2 城墙图集帧 0，同 2-1 汜水关）：城门两侧一直铺到 ±wallHalf，碰撞框贴着城门（城门本身是可打的物件，破了才通）。
+   * 城头两座箭楼压在城墙线上。
+   */
+  private walls: Phaser.GameObjects.Image[] = [];
+  private buildWalls(gx: number, gy: number): void {
+    const C = CHENCANG, s = this.h.scene, K = MID_SIEGE_FILES[0];
+    this.h.footprints?.push({ left: gx - C.wallHalf, right: gx - C.gateHalf, top: gy - 70, bottom: gy - 10 }, { left: gx + C.gateHalf, right: gx + C.wallHalf, top: gy - 70, bottom: gy - 10 });
+    const draw = (): void => { if (!this.label.active) return; for (let x = -C.wallHalf + C.segW / 2; x <= C.wallHalf; x += C.segW) { if (Math.abs(x) < 130 + C.segW / 2 - 10) continue; this.walls.push(s.add.image(gx + x, gy, K.key, 0).setOrigin(.5, .97).setDisplaySize(C.segW + 8, C.segW + 8).setDepth(actorDepth(gy) - .01).setName('chencang-wall')); } };
+    if (s.textures.exists(K.key)) draw(); else { s.load.spritesheet(K.key, K.file, { frameWidth: K.cell, frameHeight: K.cell }); s.load.once('filecomplete-spritesheet-' + K.key, draw); if (!s.load.isLoading()) s.load.start(); }
   }
   get gateAlive(): boolean { return !!this.gate && this.gate.active && this.gate.spawnId === this.gateLife; }
   get towersAlive(): number { return this.towers.filter(t => t.active).length; }
@@ -116,5 +130,5 @@ export class ChencangSiege {
     });
   }
   snapshot() { return { gate: this.gateAlive, gateHp: this.gate?.hp ?? 0, towers: this.towersAlive, metrics: { ...this.metrics } }; }
-  clear(): void { this.label.destroy(); }
+  clear(): void { this.label.destroy(); for (const w of this.walls) w.destroy(); this.walls = []; }
 }

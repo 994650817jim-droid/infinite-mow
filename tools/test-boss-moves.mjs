@@ -71,10 +71,10 @@ try {
     ck(`${c.id}：首领出阵，控制器就位`, !!ctl, null);
     if (!ctl) continue;
     await wait(3200); // 出场名牌、马图载入
-    const mount = await ev((s, k) => { const o = s[k], m = o.mount ?? s.bossMount; return { mounted: !!m?.mounted, horse: !!m?.hasHorse, crop: !!s.boss.sprite.isCropped }; }, c.ctl);
+    const mount = await ev((s, k) => { const o = s[k], m = o.mount ?? s.bossMount; return { mounted: !!m?.mounted, horse: !!m?.hasHorse, crop: !!s.boss.sprite.isCropped, ride: !!m?.usesRideArt }; }, c.ctl);
     const RIDE_ART = ['lubu', 'huaxiong'];
     if (c.mounted && RIDE_ART.includes(c.id)) { const r = await ev((s, k) => { const o = s[k], m = o.mount ?? s.bossMount; return { ride: !!m?.usesRideArt, tex: s.boss.sprite.texture.key, horse: !!m?.hasHorse }; }, c.ctl); ck(`${c.id}：一阶段骑马用正式首领骑乘图`, r.ride && r.horse && r.tex === 'ride_v2_boss_' + c.id, r); }
-    else if (c.mounted) ck(`${c.id}：一阶段骑马（马图在、骑者裁上半身）`, mount.mounted && mount.horse && mount.crop, mount);
+    else if (c.mounted) ck(`${c.id}：一阶段骑马（马图在、骑者裁上半身或用首领骑乘图）`, mount.mounted && mount.horse && (mount.crop || mount.ride), mount);
     else ck(`${c.id}：不骑马（术士）`, !mount.mounted, mount);
     if (!c.legacy) {
       // 一阶段每招都放一遍

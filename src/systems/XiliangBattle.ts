@@ -33,7 +33,8 @@ export interface Host {
   def: (kind: 'cavalry' | 'shield') => EnemyDef;
   banner: (text: string, caption: string) => void; sfx: (key: 'chargeWarn' | 'hitHeavy') => void;
   /** 2-3 董卓（DongzhuoBoss）：当前首领、首领招式组、敌兵寻路移动。 */
-  boss?: () => Enemy | null; bossStyle?: () => string; move?: (e: Enemy, nx: number, ny: number, dt: number) => void;
+  boss?: () => Enemy | null; bossStyle?: () => string;
+  /** 2-3：董卓与吕布同场时，城头 / 下城 / 授首阶段由 DongzhuoLubu 接管董卓的位置。 */ holdBoss?: () => boolean; move?: (e: Enemy, nx: number, ny: number, dt: number) => void;
   /** 战场上的建筑碰撞框（城墙、城门等）：突阵选道时避开，免得骑兵从墙后起冲被挡住。 */
   obstacles?: () => ReadonlyArray<{left: number; right: number; top: number; bottom: number}>;
 }
@@ -74,7 +75,7 @@ export class XiliangBattle {
   incoming(e: Enemy, source: 'melee' | 'arrow' | 'fire'): number { return this.isFeixiong(e) && source === 'arrow' ? F.arrowMul : 1; }
   /** 本帧是否由西凉战法接管该敌兵的移动。 */
   handleEnemy(e: Enemy, dt: number, now: number): boolean {
-    if (this.dongzhuo && e === this.dongzhuo.boss) { if (e.active) this.dongzhuo.step(dt, now); return true; }
+    if (this.dongzhuo && e === this.dongzhuo.boss) { if (e.active && !this.h.holdBoss?.()) this.dongzhuo.step(dt, now); return true; } // 2-3 董卓在城头 / 走下城 / 授首时不自己走
     for (const r of this.raids) if (r.riders.some(x => x.e === e && x.e.spawnId === x.life)) return true;
     if (this.guardStep(e, dt, now)) return true;
     if (!this.isFeixiong(e)) return false;

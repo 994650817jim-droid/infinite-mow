@@ -181,7 +181,8 @@ try {
       check(`chapter_selection_input_${width}`, true, {});
       await page.evaluate(() => { const s = window.__game.scene.getScene('GameScene'); s.spawnBoss(); s.boss.sprite.setPosition(s.player.x, s.player.y - 150); window.__IM.god(); });
       await page.waitForTimeout(350); await page.screenshot({ path: `${out}/hulao-game-${width}.png` });
-      await page.evaluate(() => { const s = window.__game.scene.getScene('GameScene'); s.hitEnemy(s.boss, 4000, s.combatNow); });
+      // 2026-11-17 用户设计：2-3 董卓 + 吕布同场（董卓在城头打不到、吕布逃走后才下城、20% 时吕布斩董卓）→ 直接推到「吕布斩董卓」并跳过过场；其余章仍一击打倒
+      await page.evaluate(() => { const s = window.__game.scene.getScene('GameScene'); if (s.dzLubu) { s.dzLubu.devFinale(); s.cutscene?.skip(); } else s.hitEnemy(s.boss, 4000, s.combatNow); });
       // 2026-11-17：首领倒地后掉宝箱，主将捡起遗物才进结算（原来的遗物三选一卡改成宝箱）。
       await page.waitForTimeout(1300);
       // 等级合并（f4ea0ab / 5f89729）后：首领经验可能让武将升级、开箱补保底「军略」，三选一弹窗会暂停战斗时钟（宝箱落地也停）；点掉后流程应照常走到结算

@@ -46,7 +46,7 @@ export interface BossMovesetDef {
 export const BOSS_MOVES: Record<string, BossMovesetDef> = {
   // 1-1 张梁（人公将军）：骑黄骠马；黄天旗阵 + 人公冲阵 → 坠马「旗倒人狂」：折返连冲、冲过留地火
   zhangliang: {
-    id: 'zhangliang', name: '张梁', phaseAt: .5, mount: { horse: 'generic', tint: 0xe2c06a },
+    id: 'zhangliang', name: '张梁', phaseAt: .5, mount: { horse: 'generic', tint: 0xe2c06a, rider: 'zhangliang' },
     p1: { name: '人公将军', caption: '黄天旗阵 · 人公冲阵', gapMs: 2600, speedMul: 1.35, moves: [
       { kind: 'flags', name: '黄天旗阵', windupMs: 700, cd: 16000, dmg: 0, count: 3, radius: 170, hp: 90, takenMul: .5 },
       { kind: 'charge', name: '人公冲阵', windupMs: 900, cd: 4200, dmg: 1.4, len: 380, width: 70, dashMs: 520 },
@@ -72,7 +72,7 @@ export const BOSS_MOVES: Record<string, BossMovesetDef> = {
   },
   // 3-1 李傕（西凉余部）：骑西凉马；西凉铁骑长冲 + 劫掠长安绕圈箭雨 → 坠马「困兽之斗」：连劈 + 西凉亲兵护卫
   lijue: {
-    id: 'lijue', name: '李傕', phaseAt: .5, mount: { horse: 'generic', tint: 0xb9774a },
+    id: 'lijue', name: '李傕', phaseAt: .5, mount: { horse: 'generic', tint: 0xb9774a, rider: 'lijue' },
     p1: { name: '西凉铁骑', caption: '长距离冲锋 · 绕阵箭雨', gapMs: 2400, speedMul: 1.4, moves: [
       { kind: 'charge', name: '西凉铁骑', windupMs: 900, cd: 4000, dmg: 1.5, len: 520, width: 76, dashMs: 560 },
       { kind: 'ride', name: '劫掠长安', windupMs: 600, cd: 7000, dmg: 1, radius: 260, ms: 1600, drops: 6, r: 64 },
@@ -84,7 +84,7 @@ export const BOSS_MOVES: Record<string, BossMovesetDef> = {
   },
   // 3-2 张绣（北地枪王）：骑白马；百鸟朝凤枪 + 宛城夜袭（隐身突刺）→ 坠马「枪出如龙」：贯穿一线 + 二连扇刺
   zhangxiu: {
-    id: 'zhangxiu', name: '张绣', phaseAt: .5, mount: { horse: 'generic' },
+    id: 'zhangxiu', name: '张绣', phaseAt: .5, mount: { horse: 'generic', rider: 'zhangxiu' },
     p1: { name: '北地枪王', caption: '百鸟朝凤枪 · 宛城夜袭', gapMs: 2400, speedMul: 1.35, moves: [
       { kind: 'sweep', name: '百鸟朝凤枪', windupMs: 650, cd: 3400, dmg: 1.1, r: 150, arc: Math.PI * .5, times: 3 },
       { kind: 'vanish', name: '宛城夜袭', windupMs: 500, cd: 7500, dmg: 1.6, hideMs: 1300, r: 140, arc: Math.PI * .6 },
@@ -365,6 +365,6 @@ export const BOSS_MOUNTS: Record<string, BossMountDef> = {
   lubu: { horse: 'chitu', cut: .6, rider: 'lubu' },
   huaxiong: { horse: 'wuzhui', cut: .62, rider: 'huaxiong' },
   // 第四章官渡：颜良、文丑（GuanduBoss 专属控制器），半血坠马
-  yanliang: { horse: 'dawan', cut: .62 },
+  yanliang: { horse: 'dawan', cut: .62, rider: 'yanliang' },
   wenchou: { horse: 'generic', tint: 0x6a5a48, cut: .62 },
 };

@@ -10,6 +10,16 @@ import {applyCitySpecialties} from '../systems/CityBonuses';
 import {cityIncomeLine} from '../world/WorldStore';
 import {guanduScenery} from '../systems/GuanduScenery';
 import {SishuiObstacles} from '../systems/SishuiObstacles';
+import {SishuiPass} from '../systems/SishuiPass';
+import {FACTION_PROPS} from '../systems/PropsV2';
+import type {EnemyKind} from '../types';
+
+/** 4-1 白马 / 4-2 延津的袁军大营（统筹会话 2026-11-17 障碍物整改）。数值初值，交平衡会话。 */
+export const YUAN_CAMP: {wallY: number; tents: ReadonlyArray<readonly [number, number]>} & Partial<Record<number, {rider: EnemyKind; gate: readonly [string, string]}>> = {
+  wallY: -560, tents: [[-480, -430], [-760, -400], [480, -430], [760, -400]],
+  1: {rider: 'infantry', gate: ['袁军辕门大开', '颜良率亲卫杀出']},
+  2: {rider: 'cavalry', gate: ['袁军辕门大开', '文丑率河北骑杀出']},
+};
 import {GrainDepots} from '../systems/GrainDepots';
 import {ensureYuanTextures} from '../systems/YuanPalette';
 import {guanduYuanSourceKeys} from '../data/guanduChapter';
@@ -60,6 +70,9 @@ export function guanduGameSceneClass(Base: typeof GameScene) {
       const art = guanduScenery(this, this.guanduStage, (frame, x, y, size) => this.spawnSceneProp(frame, x, y, size));
       this.ground.setTexture(art.key).setTileScale(1);
       this.sishuiObstacles = new SishuiObstacles(); this.sishuiObstacles.footprints.splice(0, this.sishuiObstacles.footprints.length, ...art.boxes);
+      // 4-1 白马 / 4-2 延津：北面袁军大营——木栅横在北面、辕门居中、营帐在辕门两翼（第 2 波起出兵，可烧毁；全毁后刷兵变稀）；颜良 / 文丑出阵时从辕门杀出
+      const yc = YUAN_CAMP[this.guanduStage];
+      if (yc) { this.sishuiPass = new SishuiPass(this.passHost(), {towers: false, wenjiu: false, wallY: YUAN_CAMP.wallY, palisade: FACTION_PROPS[2].key, tentSpots: YUAN_CAMP.tents, tentRider: yc.rider, tentFaction: 2, tentName: '袁军营帐', campName: '袁军大营', gateText: yc.gate, tag: 'yuan'}); this.sishuiObstacles = new SishuiObstacles(this.sishuiPass.footprints); }
       this.enemyCamps = new EnemyCamps({scene: this, player: this.player, create: (x, y, hp) => this.supplies?.spawnCamp(x, y, hp) ?? null, spawn: (kind, x, y) => this.spawnEnemy(kind, x, y, 1), support: () => this.legion.grid.query(this.player.x, this.player.y, 260), reward: n => { this.legion.food += n; }}, art.camps, this.combatNow);
       this.legion.campTarget = u => this.enemyCamps?.assist(u) ?? null;
       this.depots = new GrainDepots({scene: this, player: this.player, create: (x, y, hp, frame, size) => this.supplies?.spawnDepot(x, y, hp, frame, size) ?? null, reward: n => { this.legion.food += n; }}, art.depots);
@@ -80,7 +93,9 @@ export function guanduGameSceneClass(Base: typeof GameScene) {
     protected tryCustomBossSkill() { if (!this.controller || !this.boss?.active) return false; this.controller.forceSkill(this.combatNow); return true; }
     protected customChapter() { return guanduBattle(this.guanduStage); }
     protected spawnBoss() {
+      const had = this.boss?.active;
       super.spawnBoss();
+      if (this.boss && !had) this.sishuiPass?.onBoss(this.boss);
       if (this.boss) this.controller = new GuanduBoss({scene: this, boss: this.boss, player: this.player, army: this.legion, spawn: (kind, x, y) => this.spawnEnemy(kind, x, y, 1, true),
         morale: () => ({multiplier: this.depots?.moraleMultiplier ?? 1, burned: this.depots?.burned ?? 0, intact: this.depots?.intact ?? 0}),
         depots: this.depots}, this.guanduStage, this.combatNow);

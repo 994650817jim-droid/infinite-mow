@@ -24,9 +24,15 @@ export class DongzhuoBoss {
   private fires: Fire[] = []; private nextFire: number; private nextRaid: number; private retreated = false; private retreatUntil = 0; private rx = 0; private ry = 0;
   constructor(private h: Host, readonly boss: Enemy, now: number) {
     this.nextFire = now + 3000; this.nextRaid = now + D.raidEvery * 1000 * .6;
-    // 正式图（ChatGPT 生成的董卓行走 / 攻击图）已加载时换掉占位造型
-    if (troopArtReady(h.scene, 'dongzhuo_walk')) boss.reskin({...boss.def, texture: 'dongzhuo_walk', walkVisual: {texture: 'dongzhuo_walk', scale: D.artScale, groundY: D.artGroundY, matched: true}, attackVisual: troopArtReady(h.scene, 'dongzhuo_attack') ? 'dongzhuo_attack' : undefined, tint: undefined});
+    this.trySkin();
     h.guards(D.guards, boss.x, boss.y); h.banner('董卓 · 火烧洛阳', '躲开火圈 · 飞熊军护驾');
+  }
+  /** 正式图（董卓行走 / 攻击图）载好就换掉占位造型；还没载好（首领出场很早，如过场预览）就每帧再试。 */
+  private skinned = false;
+  private trySkin(): void {
+    if (this.skinned || !troopArtReady(this.h.scene, 'dongzhuo_walk') || !this.boss.active) return;
+    this.skinned = true; const boss = this.boss;
+    boss.reskin({...boss.def, texture: 'dongzhuo_walk', walkVisual: {texture: 'dongzhuo_walk', scale: D.artScale, groundY: D.artGroundY, matched: true}, attackVisual: troopArtReady(this.h.scene, 'dongzhuo_attack') ? 'dongzhuo_attack' : undefined, tint: undefined});
   }
   get label(): string { return this.retreated ? '迁都 · 纵火加剧' : '纵火 · 铁骑 · 飞熊军'; }
   /** 每帧接管董卓移动。 */
@@ -48,6 +54,7 @@ export class DongzhuoBoss {
   }
   /** 纵火与号令（GameScene 每帧调用，首领活着时）。 */
   update(now: number): void {
+    this.trySkin();
     const p = this.h.player;
     if (now >= this.nextFire) {
       this.nextFire = now + (this.retreated ? D.fireEveryEnraged : D.fireEvery) * 1000;

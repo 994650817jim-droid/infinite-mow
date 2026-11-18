@@ -50,6 +50,8 @@ import { LQ, lqButton, lqDivider, lqHitBox, lqImageButton, lqPanel, lqSkin, type
 import { chapterUnlocked, isChapterTestRun, recordChapterVictory } from '../systems/ChapterProgress';
 import { BALANCE, COLORS, DEPTH, FONT, GAME_HEIGHT, GAME_WIDTH, HEADING_FONT, IS_DESKTOP, TITLE_FONT, actorDepth, screenPoint } from '../config';
 import {upgradeCardTexture,inkUpgradeCardTexture,inkPlate} from '../ui/HomeCommand';
+import { RESULT_GOLD, RESULT_IVORY, RESULT_STROKE, buildRewardView, parseHeroLine, playResultAnims, wan, type ResultAnim } from '../ui/ResultRewards';
+import { loadBagArt } from '../ui/ItemQuality';
 import type { EnemyDef } from '../data/enemies';
 import { WEAPON_META, weaponName, buildUpgradeOptions, canOfferRejuvenation } from '../data/upgrades';
 import { waveIndexAt } from '../data/waves';
@@ -415,6 +417,10 @@ export class GameScene extends Phaser.Scene {
   protected resultPanel!: Phaser.GameObjects.Container;
   private layoutResultButtons?: () => void;
   protected resultTexts!: Record<string, Phaser.GameObjects.Text>;
+  /** 结算动画是否放完（测试读）；resultAnimSkip 跳到结尾。resultTop / resultH 为电脑版结算卷位置。 */
+  resultAnimDone = true;
+  private resultAnimSkip: (() => void) | null = null;
+  private resultTop = 0; private resultH = 0;
   protected pausePanel!: Phaser.GameObjects.Container;
   protected attributePanel!: Phaser.GameObjects.Container;
   protected attributePauseText!: Phaser.GameObjects.Text;
@@ -2605,12 +2611,85 @@ export class GameScene extends Phaser.Scene {
    * 战报小结：第一章各关、第二章前两关打赢后直接进行营休整，结算文字不显示（用户反映「武将等级好像一直不涨」其实是看不到）。
    * 入营水墨过场结束后，把武将等级、首次通关、随行、战功、残卷这几行在画面中间显示约 5 秒。
    */
+  /**
+   * 电脑版结算展示（2026-11-17 用户「关于打败boss后结算ui也要优化一下」）：
+   * 小标题「X-X 告捷」+ 书法大标题，中间武将经验条与奖励图标格（数字滚动、升级弹字、首领遗珍翻牌），下方一两行要事与一行战况。
+   * 原结算文字（resultTexts.body）照旧写全、只是电脑版不显示：逻辑与测试都读它。动画 2 秒内放完，点空白处跳过。
+   */
+  protected presentResult(victory: boolean): void {
+    if (!IS_DESKTOP || !this.resultPanel) return;
+    this.resultAnimSkip?.();
+    (this.resultPanel.getByName('result-rewards') as Phaser.GameObjects.Container | null)?.destroy();
+    const lines = this.resultTexts.body.text.split('\n'), top = this.resultTop, H = this.resultH, cx = GAME_WIDTH / 2;
+    this.resultTexts.body.setVisible(false);
+    const code = /^(\d+-\d+)/.exec(this.chapter.name ?? '')?.[1];
+    const kicker = this.resultPanel.getByName('result-kicker') as Phaser.GameObjects.Text | null;
+    kicker?.setText(victory ? (code ? code + ' 告捷' : '大 捷') : (code ? code + ' 失利' : '失 利')).setColor(victory ? '#d9b878' : '#c98a7a');
+    const title = this.resultTexts.title.setColor(victory ? RESULT_GOLD : '#e0624f'), sub = this.resultTexts.subtitle;
+    const relic = victory ? this.itemDrops?.runLoot.find(i => !!relicDef(i.base)) ?? null : null;
+    const hero = parseHeroLine(lines); let xpFraction: number | null = null;
+    if (hero) { try { const h = heroInfo(this.runConfig.character as HeroKey); xpFraction = h.next > 0 ? h.xp / h.next : 1; } catch { /* 存档不可用 */ } }
+    const view = buildRewardView(this, { lines, width: 640, relic, xpFraction });
+    // 要事（小字，最多三行）：首通、随行、坐骑、乱世首通、屯田 / 城池细项、测试或败退提示
+    const notes: string[] = [];
+    for (const l of lines) {
+      const t = l.replace(/\s{2,}/g, ' ');
+      if (/^(首次通关|随行|获得坐骑|乱世首通|屯田供粮|城池产出|流寇未平|成都归入)/.test(l)) notes.push(t);
+      else if (/^营寨 · 农田 \+\d+ · /.test(l)) { const rest = t.replace(/^营寨 · 农田 \+\d+ · /, ''); if (rest !== '口粮 −0') notes.push('营寨 · ' + rest); }
+      else if (/^缴获兵装/.test(l) && /测试战斗不入行囊|败退遗失/.test(l)) notes.push('兵装' + (l.match(/· (测试战斗不入行囊|败退遗失 \d+ 件)/)?.[1] ?? ''));
+    }
+    if (hero?.capped) notes.push('武将已到本章等级上限 Lv.' + hero.to);
+    const noteText = this.resultPanel.getByName('result-notes') as Phaser.GameObjects.Text;
+    noteText.setText(notes.length > 3 ? [notes.slice(0, 2).join(' · '), notes.slice(2).join(' · ')].join('\n') : notes.join('\n')).setVisible(notes.length > 0);
+    const stats = this.resultPanel.getByName('result-stats') as Phaser.GameObjects.Text;
+    stats.setText(['击杀 ' + this.kills, '用时 ' + this.formatTime(this.elapsed), '伤害 ' + wan(this.damageDealt), '军团 ' + this.legion.count + ' 存活' + (this.legion.dead ? ' / ' + this.legion.dead + ' 阵亡' : '')].join('　·　')).setVisible(true);
+    // 奖励区在分隔线与要事之间居中
+    const areaTop = top + 142, areaBottom = (notes.length ? noteText.y - noteText.height - 6 : stats.y - 16);
+    view.root.setPosition(cx, areaTop + Math.max(0, (areaBottom - areaTop - view.height) / 2));
+    if (!view.height) { view.root.add(this.add.text(0, 0, victory ? '' : '胜败乃兵家常事 · 整军再战', { fontFamily: HEADING_FONT, fontSize: '18px', color: RESULT_IVORY, resolution: 2 }).setOrigin(.5).setStroke(RESULT_STROKE, 3).setAlpha(.8)); view.root.setY((areaTop + areaBottom) / 2); }
+    view.root.setScrollFactor(0); for (const c of view.root.list) (c as unknown as { setScrollFactor: (v: number) => void }).setScrollFactor(0);
+    this.resultPanel.addAt(view.root, this.resultPanel.getIndex(noteText));
+    const ty = title.y, kick = kicker;
+    const anims: ResultAnim[] = [
+      { start: 0, dur: 320, step: p => { title.setAlpha(p).setScale(1.25 - .25 * (1 - Math.pow(1 - p, 3))).setY(ty); kick?.setAlpha(p); sub.setAlpha(.85 * p); } },
+      ...view.anims,
+      { start: 1150, dur: 400, step: p => { noteText.setAlpha(p); stats.setAlpha(p); } },
+    ];
+    if (view.levelUp) this.sfx.level();
+    this.resultAnimDone = false;
+    this.resultAnimSkip = playResultAnims(this, anims, () => { this.resultAnimDone = true; this.resultAnimSkip = null; }, () => view.root.active);
+  }
   protected showRestSummary():void{
     const lines=(this.resultTexts?.body?.text??'').split('\n').filter(l=>/^(武将等级|首次通关|随行|本场战功|武学残卷)/.test(l));
     if(!lines.length)return;
-    const show=()=>{if(!this.sys?.isActive())return;const t=this.add.text(GAME_WIDTH/2,GAME_HEIGHT*.42,'战报\n'+lines.join('\n'),{fontFamily:FONT,fontSize:IS_DESKTOP?'18px':'16px',color:'#f0d28b',fontStyle:'bold',align:'center',lineSpacing:6,resolution:2,stroke:'#211b12',strokeThickness:4,backgroundColor:'#140d07e6',padding:{x:24,y:14},wordWrap:{width:GAME_WIDTH-60}}).setOrigin(.5).setScrollFactor(0).setDepth(DEPTH.overlay+60).setName('rest-summary').setInteractive();t.on('pointerdown',()=>t.destroy());window.setTimeout(()=>{if(t.active)t.destroy();},5200);};
+    const show=()=>{if(!this.sys?.isActive())return;if(IS_DESKTOP){this.showRestSummaryDesk(lines);return;}const t=this.add.text(GAME_WIDTH/2,GAME_HEIGHT*.42,'战报\n'+lines.join('\n'),{fontFamily:FONT,fontSize:IS_DESKTOP?'18px':'16px',color:'#f0d28b',fontStyle:'bold',align:'center',lineSpacing:6,resolution:2,stroke:'#211b12',strokeThickness:4,backgroundColor:'#140d07e6',padding:{x:24,y:14},wordWrap:{width:GAME_WIDTH-60}}).setOrigin(.5).setScrollFactor(0).setDepth(DEPTH.overlay+60).setName('rest-summary').setInteractive();t.on('pointerdown',()=>t.destroy());window.setTimeout(()=>{if(t.active)t.destroy();},5200);};
     // 休整时场景计时器暂停，用浏览器计时等入营过场结束
     let tries=0;const wait=()=>{if(this.children.getByName('rest-intro')&&tries++<40)window.setTimeout(wait,250);else show();};window.setTimeout(wait,400);
+  }
+  /** 电脑版入营「战报」：漆卷小窗（书法「战报」+ 经验条 + 战功 / 残卷格 + 首通 / 随行小字），约 5 秒后自动收起，点一下收起。 */
+  private showRestSummaryDesk(lines: string[]): void {
+    const cx = GAME_WIDTH / 2, w = 470;
+    const view = buildRewardView(this, { lines, width: w, only: /武将等级|本场战功|武学残卷/ });
+    const notes = lines.filter(l => /^(首次通关|随行)/.test(l)).map(l => l.replace(/\s{2,}/g, ' '));
+    const h = 72 + view.height + (notes.length ? notes.length * 17 + 6 : 0) + 12, top = Math.round(GAME_HEIGHT * .45 - h / 2);
+    const card = this.add.container(0, 0).setScrollFactor(0).setDepth(DEPTH.overlay + 60).setName('rest-summary-card');
+    const g = this.add.graphics(); lqPanel(g, cx - w / 2, top, w, h); lqDivider(g, cx, top + 58, 130);
+    const head = this.add.text(cx, top + 32, '战 报', { fontFamily: TITLE_FONT, fontSize: '28px', color: RESULT_GOLD, resolution: 2 }).setOrigin(.5).setStroke(RESULT_STROKE, 5).setShadow(0, 3, '#000000', 4, true, true);
+    view.root.setPosition(cx, top + 72);
+    const note = this.add.text(cx, top + 72 + view.height + 2, notes.join('\n'), { fontFamily: FONT, fontSize: '12px', color: RESULT_IVORY, align: 'center', lineSpacing: 5, resolution: 2, wordWrap: { width: w - 60 } }).setOrigin(.5, 0).setStroke(RESULT_STROKE, 3).setAlpha(.85);
+    // 测试与旧逻辑读 rest-summary 的文字、点它收起：保留同名文字对象作整张卡的命中区（透明）
+    const hit = this.add.text(cx, top + h / 2, '战报\n' + lines.join('\n'), { fontFamily: FONT, fontSize: '12px', fixedWidth: w, fixedHeight: h }).setOrigin(.5).setAlpha(.001).setScrollFactor(0).setDepth(DEPTH.overlay + 61).setName('rest-summary').setInteractive({ useHandCursor: true });
+    card.add([g, head, view.root, note]);
+    for (const c of card.list) (c as unknown as { setScrollFactor: (v: number) => void }).setScrollFactor(0);
+    for (const c of view.root.list) (c as unknown as { setScrollFactor: (v: number) => void }).setScrollFactor(0);
+    const skip = playResultAnims(this, [{ start: 0, dur: 260, step: p => card.setAlpha(p) }, ...view.anims], () => {}, () => card.active);
+    const close = () => { skip(); if (hit.active) hit.destroy(); if (card.active) card.destroy(); };
+    // 1-3 告捷：章节告捷弹窗与战报同时出现会叠在一起——先看战报，收起后再显示告捷弹窗
+    const notice = this.children.getByName('chapter1-volunteers') as Phaser.GameObjects.Container | null, held = !!notice?.visible;
+    if (held) notice!.setVisible(false);
+    hit.on('pointerdown', close).on('destroy', () => { if (card.active) card.destroy(); if (held && notice?.active) notice.setVisible(true); });
+    if (view.levelUp) this.sfx.level();
+    window.setTimeout(() => { if (hit.active) close(); }, 5600);
   }
   /** 测试 / 调试：直接打开所有等待中的首领宝箱。 */
   collectBossChests():void{for(const c of [...this.bossChests])c.collectNow();}
@@ -2848,6 +2927,8 @@ export class GameScene extends Phaser.Scene {
       else {this.registry.set('menuChapterPicker',true);this.scene.start('MenuScene');}
     });
     this.layoutResultButtons?.();
+    // 电脑版结算展示：子类 finish 还会追加结算文字，等本轮调用结束再解析
+    if (IS_DESKTOP) queueMicrotask(() => { if (this.sys?.isActive() && this.mode === 'result') this.presentResult(victory); });
     this.onRunFinished(stats);
     // 成就：战斗结果与天下 / 城镇状态（测试战斗、调试改动过的战斗不计）
     onBattleEnd({victory,debug:isChapterTestRun()||this.debugModified||this.debugJumped||!!this.player.damageImmune||!!this.runConfig.encounter,kills:this.kills,level:this.player.level,hero:this.runConfig.character,chapter:this.chapter.id,stage:this.chapter.stage,westStage:this.chapter.westStage,arc:this.achievementArc(),bossKilled:this.bossKilled});
@@ -3270,19 +3351,30 @@ export class GameScene extends Phaser.Scene {
     this.resultPanel = this.add.container(0, 0).setScrollFactor(0).setDepth(DEPTH.overlay).setVisible(false);
     const rDim = this.add.rectangle(0, 0, GAME_WIDTH, GAME_HEIGHT, 0x0c0805, 0.84).setOrigin(0, 0).setInteractive();
     // 结算卷：漆底双层描金（同告捷弹窗），按钮为漆金按钮，有悬停 / 按下态；按钮仍是原来的命名对象。
-    const rpw = d ? 600 : GAME_WIDTH - 48, rph = d ? 480 : 700, px0 = (GAME_WIDTH - rpw) / 2, py0 = d ? Math.round((GAME_HEIGHT - rph) / 2) : 120, pcx = GAME_WIDTH / 2;
+    // 电脑版（2026-11-17 用户「打败boss后结算ui也要优化一下」）：书法大标题 + 「X-X 告捷」小标题、奖励图标格与经验条（presentResult）、一行战况、水墨按钮；手机版不变
+    const rpw = d ? 640 : GAME_WIDTH - 48, rph = d ? 500 : 700, px0 = (GAME_WIDTH - rpw) / 2, py0 = d ? Math.round((GAME_HEIGHT - rph) / 2) : 120, pcx = GAME_WIDTH / 2;
+    this.resultTop = py0; this.resultH = rph;
+    rDim.on('pointerdown', () => this.resultAnimSkip?.()); // 点空白处跳过动画
     const resultFrame = this.add.graphics(); lqPanel(resultFrame, px0, py0, rpw, rph);
     const rTitle = this.add
-      .text(pcx, py0 + (d ? 54 : 78), '', { fontFamily: HEADING_FONT, fontSize: d ? '40px' : '46px', color: '#e8c76a' })
-      .setOrigin(0.5).setStroke('#2a170b', 6).setShadow(0, 3, '#000000', 6, true, true);
+      .text(pcx, py0 + (d ? 74 : 78), '', { fontFamily: d ? TITLE_FONT : HEADING_FONT, fontSize: d ? '44px' : '46px', color: '#e8c76a' })
+      .setOrigin(0.5).setStroke(d ? RESULT_STROKE : '#2a170b', 6).setShadow(0, 3, '#000000', 6, true, true);
+    if (d) rTitle.setLetterSpacing(6);
+    const rKicker = this.add.text(pcx, py0 + 32, '', { fontFamily: HEADING_FONT, fontSize: '14px', color: '#d9b878', resolution: 2 })
+      .setOrigin(.5).setLetterSpacing(5).setStroke(RESULT_STROKE, 3).setName('result-kicker').setVisible(d);
     const rSub = this.add
-      .text(pcx, py0 + (d ? 98 : 134), '', { fontFamily: FONT, fontSize: d ? '14px' : '16px', color: '#cdb88c', align: 'center', wordWrap: { width: rpw - 80 } })
+      .text(pcx, py0 + (d ? 112 : 134), '', { fontFamily: FONT, fontSize: d ? '13px' : '16px', color: d ? RESULT_IVORY : '#cdb88c', align: 'center', wordWrap: { width: rpw - 80 } })
       .setOrigin(0.5);
-    const rDiv = this.add.graphics(); lqDivider(rDiv, pcx, py0 + (d ? 122 : 166), d ? 170 : 160);
+    if (d) rSub.setAlpha(.85).setStroke(RESULT_STROKE, 3);
+    const rDiv = this.add.graphics(); lqDivider(rDiv, pcx, py0 + (d ? 130 : 166), d ? 190 : 160);
     const rBody = this.add
       .text(pcx, py0 + (d ? 140 : 196), '', { fontFamily: FONT, fontSize: d ? '16px' : '19px', color: '#eadcbd', align: 'left', lineSpacing: d ? 9 : 16 })
       .setOrigin(0.5, 0);
-    const rbw = d ? 220 : 216, rbh = d ? 50 : 60, rby = py0 + rph - (d ? 52 : 66);
+    const rNotes = this.add.text(pcx, py0 + rph - 98, '', { fontFamily: FONT, fontSize: '12px', color: RESULT_IVORY, align: 'center', lineSpacing: 3, wordWrap: { width: rpw - 90 }, resolution: 2 })
+      .setOrigin(.5, 1).setStroke(RESULT_STROKE, 3).setName('result-notes').setVisible(false);
+    const rStats = this.add.text(pcx, py0 + rph - 82, '', { fontFamily: FONT, fontSize: '12px', color: '#b9a57a', resolution: 2 })
+      .setOrigin(.5).setStroke(RESULT_STROKE, 3).setName('result-stats').setVisible(false);
+    const rbw = d ? 210 : 216, rbh = d ? 46 : 60, rby = py0 + rph - (d ? 42 : 66);
     const btn = this.add
       .image(pcx, rby, 'ui_war_button')
       .setDisplaySize(rbw, rbh).setAlpha(.001)
@@ -3296,19 +3388,35 @@ export class GameScene extends Phaser.Scene {
       .setOrigin(.5).setStroke('#2a170b', 3).setInteractive({ useHandCursor: true });
     selectChapter.setName('result-home').on('pointerdown', () => this.scene.start(this.worldCampaign&&worldUnlocked()?(this.registry.get('worldReveal')?'WorldMapScene':'CityScene'):'MenuScene'));
     if(this.worldCampaign)btnText.setText('再次出征');
-    const restartSkin = lqSkin(this, btn, btnText, () => ({ w: rbw, h: rbh }));
-    const homeSkin = lqSkin(this, selectChapter, selectChapter, () => ({ w: rbw, h: rbh }), { tone: 'quiet' });
-    const homeDown = () => homeSkin.repaint('down');
+    // 电脑版水墨笔触按钮（同主页 / 军营）：「返回 / 下一关」为主按钮（朱墨），「再次出征」为次按钮；缺图时退回漆金按钮
+    const ink = d && this.textures.exists('btn_ink_primary_normal');
+    let restartInk: Phaser.GameObjects.NineSlice | null = null, homeInk: Phaser.GameObjects.NineSlice | null = null;
+    const restartSkin = ink ? null : lqSkin(this, btn, btnText, () => ({ w: rbw, h: rbh }));
+    const homeSkin = ink ? null : lqSkin(this, selectChapter, selectChapter, () => ({ w: rbw, h: rbh }), { tone: 'quiet' });
+    const paintInk = (which: 'restart' | 'home', state: 'normal' | 'hover' | 'pressed'): void => {
+      const dy = state === 'pressed' ? 1 : 0, hi = state === 'hover';
+      if (which === 'restart') { restartInk = inkPlate(this, restartInk, btn.x, rby, rbw, rbh, false, state); restartInk?.setVisible(btn.visible); btnText.setPosition(btn.x, rby + dy).setColor(hi ? '#fff3d4' : '#e8d3a6'); }
+      else { homeInk = inkPlate(this, homeInk, selectChapter.x, rby, rbw, rbh, true, state); selectChapter.setY(rby + dy).setColor(hi ? '#fff3d4' : '#f8e6bf'); }
+    };
+    if (ink) {
+      btnText.setFontSize(17).setStroke('#16100a', 4).setLetterSpacing(3);
+      selectChapter.setFontSize(17).setStroke('#2a0c06', 3).setLetterSpacing(2);
+      paintInk('restart', 'normal'); paintInk('home', 'normal');
+      btn.on('pointerover', () => paintInk('restart', 'hover')).on('pointerout', () => paintInk('restart', 'normal')).on('pointerdown', () => paintInk('restart', 'pressed'));
+      selectChapter.on('pointerover', () => paintInk('home', 'hover')).on('pointerout', () => paintInk('home', 'normal'));
+    }
+    const homeDown = () => { if (ink) paintInk('home', 'pressed'); else homeSkin?.repaint('down'); };
     /** 胜利时「再战 / 返回」并排，败走时只剩返回居中；命中区固定为按钮大小（文字长短不影响）。 */
     this.layoutResultButtons = () => {
       const both = btn.visible;
-      btn.setX(both ? pcx - rbw / 2 - 10 : pcx); selectChapter.setPosition(both ? pcx + rbw / 2 + 10 : pcx, rby);
+      btn.setX(both ? pcx - rbw / 2 - (ink ? 14 : 10) : pcx); selectChapter.setPosition(both ? pcx + rbw / 2 + (ink ? 14 : 10) : pcx, rby);
       lqHitBox(selectChapter, rbw, rbh);
       selectChapter.off('pointerdown', homeDown).on('pointerdown', homeDown);
-      restartSkin.repaint('idle'); homeSkin.repaint('idle');
+      if (ink) { paintInk('restart', 'normal'); paintInk('home', 'normal'); } else { restartSkin?.repaint('idle'); homeSkin?.repaint('idle'); }
     };
     this.layoutResultButtons();
-    this.resultPanel.add([rDim,resultFrame,rDiv,rTitle,rSub,rBody,restartSkin.gfx,homeSkin.gfx,btn,btnText,selectChapter]);
+    const plates: Phaser.GameObjects.GameObject[] = ink ? ([restartInk, homeInk] as Array<Phaser.GameObjects.NineSlice | null>).filter((g): g is Phaser.GameObjects.NineSlice => !!g) : [restartSkin!.gfx, homeSkin!.gfx];
+    this.resultPanel.add([rDim,resultFrame,rDiv,rKicker,rTitle,rSub,rBody,rNotes,rStats,...plates,btn,btnText,selectChapter]);
     this.resultTexts = { title: rTitle.setResolution(2), subtitle: rSub.setResolution(2), body: rBody.setResolution(2) };
 
     // 相机跟随会导致容器子元素的输入命中偏移，逐个子元素固定 scrollFactor(0)。
@@ -3320,6 +3428,7 @@ export class GameScene extends Phaser.Scene {
     fixInput(this.levelPanel);
     fixInput(this.pausePanel);
     fixInput(this.resultPanel);
+    if (IS_DESKTOP) this.time.delayedCall(4000, () => { if (this.sys?.isActive()) loadBagArt(this, () => {}); });
     fixInput(this.recruitPanel);
     fixInput(this.attributePanel);
   }

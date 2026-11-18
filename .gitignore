@@ -245,3 +245,4 @@ assets/raw/*
 !/tools/shot-camp-rest.mjs
 !/tools/test-surrender.mjs
 !/tools/test-hotkeys.mjs
+!/tools/test-build-persist.mjs

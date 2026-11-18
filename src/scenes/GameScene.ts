@@ -112,6 +112,8 @@ import {BossChest,playBossFall,type ChestLoot} from '../systems/BossChest';
 import {preloadBossDeath} from '../systems/BossDeathArt';
 import {ItemBagUI} from '../ui/ItemBagUI';
 import { enemyArrowTexture } from '../systems/ArrowPalette';
+import { HitFeel, BossStagger } from '../systems/HitFeel';
+import { HIT_FEEL, BOSS_FEEL, shakeMul, WEAPON_HIT_TYPE } from '../data/hitFeel';
 
 interface Gem {
   img: Phaser.GameObjects.Image;
@@ -246,6 +248,12 @@ export class GameScene extends Phaser.Scene {
   };
   protected debugJumped = false;
   protected feedback!: BattleFeedback;
+  /** 打击感：顿帧 / 慢动作 / 震屏（统一时间倍率）与首领破势、白色残血条（2026-11-17） */
+  hitFeel!: HitFeel;
+  bossStagger = new BossStagger();
+  private lastHudReal = 0;
+  /** 测试用：强制本次命中暴击 / 不暴击（null = 正常掷骰） */
+  debugCrit: boolean | null = null;
   private readonly separationScratch: Enemy[] = [];
   private readonly enemyMovement = new EnemyMovement();
   protected crowdSteering = true;
@@ -442,6 +450,10 @@ export class GameScene extends Phaser.Scene {
     ensureWarTextures(this);
     this.hudAcc = 1; this.lastHudMode = '';
     this.feedback = new BattleFeedback(this);
+    this.hitFeel = new HitFeel(this); this.bossStagger = new BossStagger();
+    this.events.once('shutdown', () => { this.anims.globalTimeScale = 1; });
+    // 所有震屏都按设置「震屏 强 / 弱 / 关」缩放（技能、首领、战吼等原有震屏一并受控）
+    { const cam = this.cameras.main, raw = cam.shake.bind(cam); cam.shake = ((d?: number, k?: number | Phaser.Math.Vector2, f?: boolean, cb?: Phaser.Types.Cameras.Scene2D.CameraShakeCallback, ctx?: unknown) => { const m = shakeMul(); if (m <= 0) return cam; return raw(d, typeof k === 'number' ? k * m : k === undefined ? .05 * m : k, f, cb, ctx); }) as typeof cam.shake; }
     this.sfx = new Sfx();
     const registryConfig = this.registry.get('runConfig') as RunConfig | undefined;
     const requested = getBattleChapter(registryConfig?.chapter, registryConfig?.stage,registryConfig?.westStage);
@@ -647,6 +659,7 @@ export class GameScene extends Phaser.Scene {
     this.debugJumped = false;
     this.debugModified = false;
     this.devTimeScale = 1;
+    this.hitFeel?.reset();
     this.devAcc = 0;
     this.perf = undefined;
     this.grid.clear();
@@ -736,9 +749,12 @@ export class GameScene extends Phaser.Scene {
 
   update(time: number, delta: number): void {
     let dt = Math.min(delta / 1000, 0.05);
-    if (this.devTimeScale !== 1) dt *= this.devTimeScale;
-    this.time.timeScale = this.devTimeScale;
-    this.tweens.timeScale = this.devTimeScale;
+    // 统一时间倍率：开发倍速 × 打击感（顿帧 / 慢动作，只在战斗进行中生效；升级、暂停、结算不受影响）
+    const feel = this.mode === 'none' && !this.over ? this.hitFeel.scale() : 1, timeScale = this.devTimeScale * feel;
+    if (timeScale !== 1) dt *= timeScale;
+    this.time.timeScale = timeScale;
+    this.tweens.timeScale = timeScale;
+    this.anims.globalTimeScale = timeScale;
     this.updateCamera(dt);
     this.music.setIntensity(this.boss?.active||this.chasingBosses.some(t=>t.enemy.active&&t.enemy.spawnId===t.life)?1:0);
     if (!this.boss || !this.boss.active) this.music.setDuck(1);
@@ -797,6 +813,7 @@ export class GameScene extends Phaser.Scene {
     if(this.battleStage()<3&&!this.runConfig.encounter&&this.boss?.active&&this.firstBossAt>=0&&this.combatNow>=this.firstBossAt+90000)this.advanceFrontline();
     this.elapsed += dt;
     this.combatNow += dt * 1000;
+    this.hitFeel.endFrame(); this.bossStagger.decay(dt);
     time = this.combatNow;
     const move = this.readMove();
     this.relics?.sway(move, this.combatNow);
@@ -1644,11 +1661,13 @@ export class GameScene extends Phaser.Scene {
     if (source === 'arrow') this.sfx.play('hitArrow');
     else if (source === 'fire') this.sfx.play('hitFire');
     else this.sfx.play('hitLight');
+    if (enemy.kind === 'boss' && !fromAlly) this.sfx.play('bossHit'); // 首领专属沉重受击声（节流，不会每下都响）
+    const bossHpBefore = enemy.kind === 'boss' ? enemy.hp / enemy.maxHp : 1;
     if (enemy === this.boss && this.lubu) rawDamage *= this.lubu.incomingDamageMultiplier(source, time);
     if (enemy === this.boss && this.zhangjiao) rawDamage *= this.zhangjiao.takenMul;
     { let v = this.player.passive.vulnerability(enemy, time); for (const fp of this.followerPassives) v = Math.max(v, 1 + (fp.vulnerability(enemy, time) - 1) * FOLLOW.passiveScale); rawDamage *= v; } // 貂蝉倾城：易伤（部曲伤害同样吃加成；随行貂蝉的按随行系数折算）
     const firstStrike = !fromAlly && weaponHit && !!this.relics?.firstStrike(enemy);
-    const crit = firstStrike || weaponHit && Math.random() < Math.min(0.65, this.player.stats.critChance + this.player.growth.criticalBonus() + (!fromAlly ? this.player.passive.critBonus(time) + this.player.growth.aimCriticalBonus() + this.buildCombat.criticalBonus() : 0));
+    const crit = this.debugCrit !== null && !fromAlly ? this.debugCrit : firstStrike || weaponHit && Math.random() < Math.min(0.65, this.player.stats.critChance + this.player.growth.criticalBonus() + (!fromAlly ? this.player.passive.critBonus(time) + this.player.growth.aimCriticalBonus() + this.buildCombat.criticalBonus() : 0));
     if(!fromAlly&&weaponHit)rawDamage=this.buildCombat.damage(enemy,rawDamage,crit,time);
     if(!fromAlly)rawDamage*=this.player.growth.gearHitMultiplier(enemy.kind);
     // 智力：非武器伤害（技艺、灼烧等）按法术系数 × 智力、含主属性；法术武器（火旗 / 火雷 / 连弩 / 团扇）的武器命中再乘法术系数
@@ -1656,7 +1675,15 @@ export class GameScene extends Phaser.Scene {
     let damage = Math.max(1, Math.round(rawDamage * (crit ? BALANCE.critMultiplier : 1) * (firstStrike ? RELIC.zhanjiangMul : 1)));
     enemy.flash(time);
     if(!fromAlly&&source==='arrow')this.artEffects.show(3,enemy.x,enemy.y-8,32,time,120);
-    if (!fromAlly) this.feedback.hit(enemy.x, enemy.y, Math.atan2(enemy.y-this.player.y,enemy.x-this.player.x), time, source);
+    if (!fromAlly) {
+      // 打击感：按攻击类型的手绘火花、受击后仰 + 轻推、暴击顿帧 + 暴击音、同帧多目标算技能 / 大招（帧末结算）
+      const ang = Math.atan2(enemy.y-this.player.y,enemy.x-this.player.x), boss = enemy.kind === 'boss';
+      const type = source === 'arrow' ? 'arrow' : source === 'fire' ? 'spell' : WEAPON_HIT_TYPE[this.player.weapons[0]?.id ?? ''] ?? 'slash';
+      this.feedback.hit(enemy.x, enemy.y, ang, time, source, { type, crit, boss });
+      enemy.hitRecoil(time, ang, crit ? HIT_FEEL.critKnockbackPx : HIT_FEEL.knockbackPx, HIT_FEEL.recoilMs);
+      if (crit) { this.sfx.play('hitCrit'); if (this.hitFeel.critStop()) this.hitFeel.shake('small'); }
+      if (weaponHit) this.hitFeel.noteHit();
+    }
     if (!fromAlly && weaponHit) this.player.passive.onWeaponHit(time);
     const credit = (n: number): void => { if (fromAlly) this.allyDamageDealt += n; else this.playerDamageDealt += n; };
     // Boss 护盾优先吸收伤害
@@ -1684,6 +1711,7 @@ export class GameScene extends Phaser.Scene {
     enemy.hp -= damage;
     this.damageDealt += damage;
     credit(damage);
+    if (enemy.kind === 'boss') this.bossFeelHit(enemy, damage, crit, bossHpBefore, time);
     this.spawnDamageText(enemy.x, enemy.y - enemy.radius, damage, crit, !fromAlly||enemy.kind==='boss');
     if (!fromAlly && weaponHit && this.player.growth.build.treasures.includes('blood_jade')) this.bloodJadeHeal(damage, time);
     if (!fromAlly && weaponHit) this.relics?.onWeaponHit(enemy, rawDamage, time);
@@ -1695,6 +1723,26 @@ export class GameScene extends Phaser.Scene {
     if (enemy.hp <= 0) this.killEnemy(enemy);
     else if (enemy === this.boss) this.ensureBossPhase2();
     return true;
+  }
+
+  /** 首领受击的打击感：白色残血条保持、破势值累积（满了硬直后退 +「破势！」）、半血转阶段顿帧 + 慢动作。 */
+  protected bossFeelHit(boss: Enemy, damage: number, crit: boolean, hpBefore: number, time: number): void {
+    const st = this.bossStagger, after = boss.hp / boss.maxHp;
+    st.track(boss.spawnId, hpBefore); st.hold(performance.now());
+    if (hpBefore > .5 && after <= .5 && boss.hp > 0) this.hitFeel.bossPhase();
+    if (boss.hp > 0 && st.hit(damage, boss.maxHp, crit)) this.bossBreak(boss, time);
+  }
+  /** 破势：硬直 BOSS_FEEL.breakMs、朝远离主将方向后退、盔甲抖动、「破势！」字样、短顿帧 + 中震。 */
+  protected bossBreak(boss: Enemy, time: number): void {
+    const a = Math.atan2(boss.y - this.player.y, boss.x - this.player.x), sp = boss.sprite;
+    if (!boss.controlImmune) boss.stunUntil = Math.max(boss.stunUntil, time + BOSS_FEEL.breakMs);
+    this.tweens.add({ targets: sp, x: sp.x + Math.cos(a) * BOSS_FEEL.pushPx, y: sp.y + Math.sin(a) * BOSS_FEEL.pushPx, duration: 220, ease: 'Quad.Out' });
+    const r0 = sp.rotation; this.tweens.add({ targets: sp, rotation: { from: r0 - .06, to: r0 + .06 }, duration: 55, yoyo: true, repeat: 3, onComplete: () => { if (sp.active) sp.setRotation(r0); } });
+    const t = this.add.text(boss.x, boss.y - boss.radius - 46, '破势！', { fontFamily: FONT, fontSize: '30px', color: '#ffe2a0', stroke: '#6a1408', strokeThickness: 6 }).setOrigin(.5).setDepth(DEPTH.dmgText + 1).setScale(1.6).setName('boss-break-text');
+    this.tweens.add({ targets: t, scale: 1, duration: 140, ease: 'Back.Out' });
+    this.tweens.add({ targets: t, y: t.y - 30, alpha: 0, delay: 650, duration: 380, onComplete: () => t.destroy() });
+    this.hitFeel.hitStop(BOSS_FEEL.breakStopMs, true); this.hitFeel.shake('medium'); this.sfx.play('bossBreak');
+    this.feedback.hit(boss.x, boss.y, a, time, 'melee', { boss: true, crit: true });
   }
 
   protected killEnemy(enemy: Enemy): void {
@@ -1720,7 +1768,9 @@ export class GameScene extends Phaser.Scene {
     this.relics?.onKill();
     if(this.player.growth.gear.specials.includes('bloodthirst')&&this.combatNow>=this.player.growth.killHealAt){this.player.growth.killHealAt=this.combatNow+500;this.player.heal(this.player.maxHp*.01);}
     const jade=this.player.growth.charmLegend.army_jade;if(jade!==undefined&&this.combatNow>=this.relicHealAt){const k=CHARM_LEGEND.charm_army_jade.heal[jade];this.relicHealAt=this.combatNow+1000;this.player.heal(k);this.artEffects.show(5,this.player.x,this.player.y-12,35,this.combatNow,260);for(const u of this.allies.filter(u=>u.active&&u.hp<u.maxHp).slice(0,2)){u.hp=Math.min(u.maxHp,u.hp+2*k);this.artEffects.show(5,u.x,u.y-10,30,this.combatNow,260);}}
-    this.sfx.play('enemyDie');
+    this.sfx.play('enemyDie'); this.sfx.play('killThud'); // 击杀加一层闷响（节流）
+    if (kind === 'elite') { this.hitFeel.hitStop(HIT_FEEL.eliteKillStopMs); this.hitFeel.shake('small'); }
+    if (kind === 'boss') { this.hitFeel.bossDeath(); this.sfx.play('bossHit'); } // 击杀首领：0.5 秒慢动作 + 强震，之后照常倒地 / 宝箱
     if (kind === 'boss') {
       const index=this.chasingBosses.findIndex(t=>t.enemy===enemy&&t.life===enemy.spawnId);
       if(index>=0){
@@ -1887,7 +1937,7 @@ export class GameScene extends Phaser.Scene {
       fx = {
         crit,
         text: this.add
-          .text(0, 0, '', { fontFamily: FONT, fontSize: crit ? '18px' : '14px', color: crit ? '#ffd166' : '#f5efe6' })
+          .text(0, 0, '', { fontFamily: FONT, fontSize: crit ? HIT_FEEL.critFontPx + 'px' : '14px', color: crit ? HIT_FEEL.critColor : '#f5efe6', stroke: crit ? HIT_FEEL.critStroke : '#000000', strokeThickness: crit ? 4 : 0 })
           .setOrigin(0.5)
           .setDepth(DEPTH.dmgText),
         life: 0,
@@ -1898,12 +1948,12 @@ export class GameScene extends Phaser.Scene {
     }
     if (fx.crit !== crit) {
       fx.crit = crit;
-      fx.text.setStyle({ fontSize: crit ? '18px' : '14px', color: crit ? '#ffd166' : '#f5efe6' });
+      fx.text.setStyle({ fontSize: crit ? HIT_FEEL.critFontPx + 'px' : '14px', color: crit ? HIT_FEEL.critColor : '#f5efe6', stroke: crit ? HIT_FEEL.critStroke : '#000000', strokeThickness: crit ? 4 : 0 });
     }
     fx.active = true;
     fx.life = 0.55;
     fx.vy = -52;
-    fx.text.setPosition(x, y).setText(String(value)).setAlpha(1).setVisible(true).setScale(crit ? 1.15 : 1);
+    fx.text.setPosition(x, y).setText(String(value)).setAlpha(1).setVisible(true).setScale(crit ? 1.35 : 1);
   }
 
   protected updateDmgFx(dt: number): void {
@@ -1912,6 +1962,7 @@ export class GameScene extends Phaser.Scene {
       fx.life -= dt;
       fx.text.y += fx.vy * dt;
       fx.text.setAlpha(Math.max(0, fx.life / 0.55));
+      if (fx.crit && fx.life > .39) fx.text.setScale(1 + .35 * (fx.life - .39) / .16); // 暴击数字先放大再落定（前 0.16 秒）
       if (fx.life <= 0) {
         fx.active = false;
         fx.text.setVisible(false);
@@ -3027,6 +3078,9 @@ export class GameScene extends Phaser.Scene {
         .setText(this.zhangjiao?this.zhangjiao.label:this.xurong?this.xurong.label+' · 推进 '+Math.max(0,Math.ceil(90-(this.combatNow-this.firstBossAt)/1000))+'秒':this.huaxiong?this.huaxiong.label+' · 推进 '+Math.max(0,Math.ceil(90-(this.combatNow-this.firstBossAt)/1000))+'秒':this.lubu ? `${this.lubu.phase2 ? `魔神 ${Math.floor(energy)}%` : '半血解锁大招'} · ${this.lubu.statusLabel}` : stageBoss?`${boss.hp<=boss.maxHp*.5?'半血强化 · ':''}${this.battleStage()<3?'战线推进倒计时 '+Math.max(0,Math.ceil(90-(this.combatNow-this.firstBossAt)/1000))+'秒':'注意地裂与环形预警'}`:`⚡ ${Math.floor(energy)}%`);
       g.fillStyle(0x000000, 0.72);
       g.fillRect(left, barY, barW, 12);
+      // 白色残血条：受击的那一截先显示成白色，停一下再慢慢缩到当前血量（按真实时间，不跟顿帧慢动作走）
+      { const rn = performance.now(), dtr = Math.min(.25, (rn - (this.lastHudReal || rn)) / 1000); this.lastHudReal = rn; this.bossStagger.track(boss.spawnId, ratio); const tr = this.bossStagger.trailRatio(ratio, rn, dtr);
+        if (tr > ratio) { g.fillStyle(0xfff4e0, 0.92); g.fillRect(left + 2 + (barW - 4) * ratio, barY + 2, (barW - 4) * (tr - ratio), 8); } }
       g.fillStyle(COLORS.red, 0.95);
       g.fillRect(left + 2, barY + 2, Math.max(0, (barW - 4) * ratio), 8);
       if (!chaser && this.bossShield > 0) {

@@ -4,6 +4,7 @@ import { DEPTH, FONT } from '../config';
 import { getCharacter } from '../data/characters';
 import { QUALITIES, type ItemQuality } from '../data/items';
 import { FOLLOW, TEMPLATES, type FollowerTemplate } from '../data/recruits';
+import { BOSS_VS_ALLY } from '../data/legion';
 import type { Enemy } from '../entities/Enemy';
 import type { Player } from '../entities/Player';
 import { visualTextureKey } from './ReadableTextures';
@@ -46,7 +47,7 @@ export class Follower {
   /** 出击时追的目标与重选时间。 */
   sortieTarget: Enemy | null = null; sortieUntil = 0;
   /** 倒地（等主将来救）与救援进度（秒）；救起次数。 */
-  downed = false; reviveProgress = 0; revives = 0;
+  downed = false; reviveProgress = 0; revives = 0; bossImmuneUntil = 0;
   /** 正在播的动作（攻击 / 受伤 / 倒地），播完回到行走帧；倒地动作定格在最后一帧。 */
   act: ActState | null = null;
   private readonly fits = new Map<string, { k: number; originY: number }>();
@@ -214,8 +215,10 @@ export class FollowerSquad {
       if (f.gear.regen > 0) f.hp = Math.min(f.maxHp, f.hp + f.gear.regen * dt);
       // 接触伤害
       if (now >= f.nextContact) {
-        f.nextContact = now + 400; let dmg = 0;
-        for (const e of this.query(f.x, f.y, 26)) if (e.active && Math.hypot(e.x - f.x, e.y - f.y) < 22 + (e.def.radius ?? 14)) dmg += e.def.damage * (e.kind === 'boss' ? FOLLOW.bossMul : 1);
+        f.nextContact = now + 400; let dmg = 0, boss = 0;
+        for (const e of this.query(f.x, f.y, 26)) if (e.active && Math.hypot(e.x - f.x, e.y - f.y) < 22 + (e.def.radius ?? 14)) { if (e.kind === 'boss') boss += e.def.damage * FOLLOW.bossMul; else dmg += e.def.damage; }
+        // 首领打随从：再 × BOSS_VS_ALLY.mul，挨一下后 immuneMs 内不再吃首领伤害（与士兵同一套）
+        if (boss > 0 && now >= f.bossImmuneUntil) { dmg += boss * BOSS_VS_ALLY.mul; f.bossImmuneUntil = now + BOSS_VS_ALLY.immuneMs; }
         if (dmg > 0) this.hurt(f, dmg, now);
       }
       this.render(f, now);

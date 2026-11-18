@@ -10,7 +10,7 @@ import type { Player } from '../entities/Player';
 import { LegionTactics, TACTICS } from './LegionTactics';
 import { LegionProjectiles } from './LegionProjectiles';
 import { SpatialGrid } from './SpatialGrid';
-import { LEGION, TROOPS, TROOP_KINDS, type Order, type TroopKind, BOSS_VS_TROOPS, RECRUIT_PRICE } from '../data/legion';
+import { LEGION, TROOPS, TROOP_KINDS, type Order, type TroopKind, BOSS_VS_TROOPS, BOSS_VS_ALLY, RECRUIT_PRICE } from '../data/legion';
 import { DEPTH } from '../config';
 import { AllyCorpses } from './AllyCorpses';
 import { HINT_MOCK, groundScar } from '../ui/HintStyle';
@@ -117,7 +117,8 @@ export class Legion {
     return { x: (slot % columns - (columns - 1) / 2) * 38, y: 70 + Math.floor(slot / columns) * 38 };
   }
   rebuildGrid(): void { this.grid.clear(); for (const u of this.units) if (u.active) this.grid.insert(u); }
-  hurt(u: Ally, raw: number, now: number, source?: { x: number; y: number; normal: boolean }): boolean {
+  /** floor：最少留几点血（首领一招打死数到上限后留 1 血）。 */
+  hurt(u: Ally, raw: number, now: number, source?: { x: number; y: number; normal: boolean }, floor = 0): boolean {
     if (!u.active || now < u.hurtUntil) return false;
     const armor = u.def.armor + (u.kind === 'guardian' && u.level === 3 ? 5 : 0);
     let mitigation = Math.min(this.command.incoming(u,now),this.defense?.incoming(u,now)??1,this.awakeningDefense?.incoming(u,now)??1);
@@ -128,7 +129,7 @@ export class Legion {
       if (frontal && u.kind === 'swordsman' && now >= u.ai.blockReady) { mitigation *= .5; u.ai.blockReady = now + TACTICS.blockMs; u.ai.blockUntil = now + 180; }
     }
     mitigation*=1-CAMP_TRAINING.armor.perLevel*this.training.armor;
-    u.hp = Math.max(0, u.hp - Math.max(1, Math.round(Math.max(1, raw - armor) * mitigation)));
+    u.hp = Math.max(Math.min(floor, u.hp), u.hp - Math.max(1, Math.round(Math.max(1, raw - armor) * mitigation)));
     u.hurtUntil = now + 350;
     this.defense?.onAllyHurt(u,now);this.awakeningDefense?.onAllyHurt(u,now);
     if (!u.hp) {
@@ -145,7 +146,19 @@ export class Legion {
     this.scene.tweens.add({ targets: ring, radius: r, alpha: 0, duration: 250, onComplete: () => ring.destroy() });
   }
   /** 首领招式打到士兵（伤害 × BOSS_VS_TROOPS.skillMul）。各首领系统直接结算士兵伤害时都走这里。 */
-  hurtByBoss(u: Ally, raw: number, now: number): boolean { return this.hurt(u, raw * BOSS_VS_TROOPS.skillMul, now); }
+  hurtByBoss(u: Ally, raw: number, now: number): boolean { return this.hurtFromBoss(u, raw * BOSS_VS_TROOPS.skillMul, now); }
+  private bossCastAt = -1; private bossCastKills = 0;
+  /**
+   * 首领打士兵的唯一入口（招式 hurtByBoss / hurtArea、近身横扫都走这里）：× BOSS_VS_ALLY.mul；
+   * 挨首领一下后 immuneMs 内不再吃首领伤害（同一招多次判定、持续伤害只算一次）；同一帧结算的一招最多打死 killCapPerCast 个，其余留 1 血。
+   */
+  hurtFromBoss(u: Ally, raw: number, now: number, source?: { x: number; y: number; normal: boolean }): boolean {
+    if (!u.active || now < u.bossImmuneUntil) return false;
+    if (now !== this.bossCastAt) { this.bossCastAt = now; this.bossCastKills = 0; }
+    const ok = this.hurt(u, raw * BOSS_VS_ALLY.mul, now, source, this.bossCastKills >= BOSS_VS_ALLY.killCapPerCast ? 1 : 0);
+    if (ok) { u.bossImmuneUntil = now + BOSS_VS_ALLY.immuneMs; if (!u.active) this.bossCastKills++; }
+    return ok;
+  }
   /** 范围伤害：目前只有首领招式调用（张角雷、华雄、吕布、徐荣），按首领倍率结算。 */
   hurtArea(x: number, y: number, radius: number, damage: number, now: number, angle?: number, arc = Math.PI * 2): void {
     for (const u of this.grid.query(x, y, radius + 20, this.friends)) if (u.active && Math.hypot(u.x - x, u.y - y) <= radius + u.radius && (angle === undefined || Math.cos(Math.atan2(u.y - y, u.x - x) - angle) >= Math.cos(arc / 2))) this.hurtByBoss(u, damage, now);
@@ -214,7 +227,7 @@ export class Legion {
         const boss = e.kind === 'boss', reach = boss ? BOSS_VS_TROOPS.sweepReach : 2, victims = this.grid.query(e.x, e.y, e.radius + 20 + reach, this.friends);
         { let hitAny = false;
           // 首领：伤害 × contactMul，横扫身边 sweepReach 内所有士兵；其他敌人贴身一次只打一个
-          for (const u of victims) if (u.active && Math.hypot(u.x - e.x, u.y - e.y) < u.radius + e.radius + reach) { this.hurt(u, e.def.damage * (boss ? BOSS_VS_TROOPS.contactMul : 1), now, { x: e.x, y: e.y, normal: !boss }); hitAny = true; if (!boss && e.kind !== 'cavalry') e.startAttack(now, Math.abs(u.x - e.x) > Math.abs(u.y - e.y) ? u.x < e.x ? 'left' : 'right' : u.y < e.y ? 'up' : 'down'); if (!boss) break; }
+          for (const u of victims) if (u.active && Math.hypot(u.x - e.x, u.y - e.y) < u.radius + e.radius + reach) { if (boss) this.hurtFromBoss(u, e.def.damage * BOSS_VS_TROOPS.contactMul, now, { x: e.x, y: e.y, normal: false }); else this.hurt(u, e.def.damage, now, { x: e.x, y: e.y, normal: true }); hitAny = true; if (!boss && e.kind !== 'cavalry') e.startAttack(now, Math.abs(u.x - e.x) > Math.abs(u.y - e.y) ? u.x < e.x ? 'left' : 'right' : u.y < e.y ? 'up' : 'down'); if (!boss) break; }
           if (hitAny) { e.contactCd = 1; if (boss) this.bossSweepFx(e.x, e.y, e.radius + reach); } }
       }
     }

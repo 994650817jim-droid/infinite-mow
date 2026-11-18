@@ -53,7 +53,6 @@ export function envConfigFor(sceneKey: string, chapterId: string, guanduStage?: 
     case 'SiegeGameScene': return { faction: 2, barrels: false, banners: true, tents: false };
     case 'YilingGameScene': return { faction: 3, barrels: false, banners: true, tents: false }; // 第十章：军旗随机生成；营帐由关卡固定摆放
     case 'BeifaGameScene': return { faction: 3, barrels: false, banners: true, tents: false }; // 第十二章：魏军军旗；司马懿营垒由首领控制器摆
-    case 'YilingGameScene': return { faction: 3, barrels: false, banners: true, tents: false }; // 第十章：军旗随机生成；营帐由关卡固定摆放
     case 'IntelGameScene': return { faction: 1, barrels: false, banners: true, tents: false };
     default: return null; // 吕布等首领专场不放
   }

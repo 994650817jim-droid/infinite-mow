@@ -185,10 +185,11 @@ export function siegeGameSceneClass(Base: typeof GameScene) {
       return e;
     }
     private scriptedSpawn<T>(f: () => T): T { this.scripted = true; try { return f(); } finally { this.scripted = false; } }
-    /** 横幅（「冲车被毁」等）出现时，顶部目标行 / 守军行先淡出，免得叠字。 */
+    /** 横幅（「冲车被毁」「吊桥已落」等）出现时，顶部目标行 / 守军行和场上说明字先淡出，免得叠字。 */
     protected showWaveBanner(text: string, danger = false, captionText?: string) {
       super.showWaveBanner(text, danger, captionText);
-      const lines = [this.goalText, this.garrisonText].filter((t): t is Phaser.GameObjects.Text => !!t?.active); if (!lines.length) return;
+      // 顶部目标行 / 守军行，加上场上的城门血量 / 绳索 / 营地说明字（吊桥已落时横幅正压在城门字上）
+      const lines = [this.goalText, this.garrisonText, ...(this.mid?.floatLabels ?? [])].filter((t): t is Phaser.GameObjects.Text => !!t?.active); if (!lines.length) return;
       this.tweens.killTweensOf(lines); for (const t of lines) t.setAlpha(0);
       this.tweens.add({ targets: lines, alpha: 1, delay: 2600, duration: 300 });
     }

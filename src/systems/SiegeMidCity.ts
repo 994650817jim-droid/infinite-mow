@@ -172,6 +172,8 @@ export class SiegeMidCity {
     }
     this.ropeLabel = worldText(sc, 0, m.bottom + 120, '', 14, '#ffe1a0').setOrigin(.5).setDepth(36).setStroke('#1a120b', 4); this.objects.push(this.ropeLabel);
   }
+  /** 场上的说明字（城门血量 / 吊桥绳索 / 营地）：横幅出现时宿主先把它们淡出，免得叠字。 */
+  get floatLabels(): Phaser.GameObjects.Text[] { return [this.gateLabel, this.ropeLabel, this.campLabel].filter((t): t is Phaser.GameObjects.Text => !!t?.active); }
   get ropesLeft() { return this.ropes.filter(r => r.e.active && r.e.spawnId === r.life).length; }
   /** 放下吊桥：砍断两根绳索，或守军到时自己放桥出城（出城兵一波）。 */
   lowerBridge(sally = false) {

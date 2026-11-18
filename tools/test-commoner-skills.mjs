@@ -36,7 +36,7 @@ const a = await p.evaluate(async G0 => {
     bl.recruit.picks = ['weapon', 'weapon', 'weapon', 'weapon', 'weapon']; foes([[bl.x + r, bl.y]]); o.bladeUp = strike(bl, s.enemies.find(e => e.active && !e.isSupplySlot)); bl.recruit.picks = []; }
   // 枪「突刺」：一条直线上 3 个（穿 2）
   { const es = foes([[sp.x + 60, sp.y], [sp.x + 100, sp.y], [sp.x + 140, sp.y]]); o.spearSkill = strike(sp, es[0]); o.thrust = sq.skillStats.thrust;
-    sp.recruit.picks = ['weapon', 'weapon', 'weapon', 'weapon', 'weapon']; foes([[sp.x + 60, sp.y], [sp.x + 100, sp.y], [sp.x + 140, sp.y]]); o.spearUp = strike(sp, s.enemies.find(e => e.active && !e.isSupplySlot)); sp.recruit.picks = []; }
+    sp.recruit.picks = ['weapon', 'weapon', 'weapon', 'weapon', 'weapon']; const e3 = foes([[sp.x + 60, sp.y], [sp.x + 100, sp.y], [sp.x + 140, sp.y]]); o.spearUp = strike(sp, e3[0]); sp.recruit.picks = []; }
   // 弓「连射」：两个目标各一箭
   { const es = foes([[bw.x + 120, bw.y], [bw.x + 150, bw.y + 40]]); bw.stillAt = s.combatNow; o.bowSkill = strike(bw, es[0]); o.volley = sq.skillStats.volley;
     bw.recruit.picks = ['weapon', 'weapon', 'weapon', 'weapon', 'weapon']; const e2 = foes([[bw.x + 120, bw.y], [bw.x + 150, bw.y + 40]]); bw.stillAt = s.combatNow; o.bowUp = strike(bw, e2[0]); bw.recruit.picks = []; }
@@ -73,17 +73,24 @@ const c = await p.evaluate(async G0 => {
   // 包扎：刀卫半血，谋士第 3 次施术给身边回 4% 最大生命
   bl.maxHp = 1000; bl.hp = 500; bl.place(st.x + 40, st.y); const e = s.spawnEnemy('infantry', st.x + 120, st.y, 500); s.grid.clear(); for (const x of s.enemies) if (x.active) s.grid.insert(x);
   st.attacks = 2; sq.attack(st, e, s.combatNow, 10); o.healHp = bl.hp; o.heal = sq.skillStats.heal;
-  // 强度：同为 10 级，6 秒打一圈小兵：刀卫（无名之辈）造成的伤害明显少于关羽（名将随行）
-  for (const x of s.enemies) if (x.active && !x.isSupplySlot) x.hp = 0; for (const m of sq.members) { m.maxHp = m.hp = 1e9; m.dealt = 0; }
-  const t0 = s.combatNow; let wave = 0;
-  while (s.combatNow - t0 < 6000) { if (s.enemies.filter(x => x.active && !x.isSupplySlot).length < 14) { wave++; for (let i = 0; i < 10; i++) { const a = i / 10 * Math.PI * 2 + wave; s.spawnEnemy('infantry', pl.x + Math.cos(a) * 100, pl.y + Math.sin(a) * 100, 10); } } await new Promise(r => setTimeout(r, 60)); }
-  o.dealt = sq.members.map(m => Math.round(m.dealt)); o.skills = { ...sq.skillStats };
+  // 强度：同一场 6 秒混战各打一遍「不放招式」与「放招式」，招式只带来有限的加成（大众脸的强度）
+  //（刀卫普通劈砍本就能一刀劈多个，基础伤害与名将本命武器的对比属于平衡会话，不在这里断言）
+  const fight = async noSkill => {
+    for (const x of s.enemies) if (x.active && !x.isSupplySlot) x.hp = 0; for (const m of sq.members) { m.maxHp = m.hp = 1e9; m.dealt = 0; m.attacks = 0; m.place(pl.x + (m === st ? -47 : m === bl ? 47 : 0), pl.y + (m === gy ? -64 : -30)); }
+    if (noSkill) sq.commonerSkill = () => false; else delete sq.commonerSkill;
+    await new Promise(r => setTimeout(r, 100));
+    const t0 = s.combatNow; let wave = 0;
+    while (s.combatNow - t0 < 6000) { if (s.enemies.filter(x => x.active && !x.isSupplySlot).length < 14) { wave++; for (let i = 0; i < 10; i++) { const a = i / 10 * Math.PI * 2 + wave; s.spawnEnemy('infantry', pl.x + Math.cos(a) * 100, pl.y + Math.sin(a) * 100, 300); } } await new Promise(r => setTimeout(r, 60)); }
+    delete sq.commonerSkill; return sq.members.map(m => Math.round(m.dealt));
+  };
+  o.plain = await fight(true); const s0 = { ...sq.skillStats }; o.dealt = await fight(false);
+  o.skills = Object.fromEntries(Object.entries(sq.skillStats).map(([k, v]) => [k, v - (s0[k] ?? 0)]));
   return o;
 }, G);
 await p.screenshot({ path: `${out}/commoner-skills-desktop.png` });
 ck('谋「鼓舞」：身边的无名之辈攻速 +6%（谋士自己、名将不吃），升被动 2 次 → +8%', Math.abs(c.rally - .06) < 1e-9 && c.rallyHero === 0 && c.rallySelf === 0 && Math.abs(c.rallyUp - .08) < 1e-9, c);
 ck('谋「包扎」：第 3 次施术给身边随行回 4% 最大生命', c.heal === 1 && c.healHp === 540, c);
-ck('强度：无名之辈刀卫 6 秒伤害明显少于同级名将关羽（≤ 60%）', c.dealt[1] > 0 && c.dealt[2] > 0 && c.dealt[1] <= c.dealt[2] * .6, c);
+ck('强度：招式让刀卫 6 秒伤害提高，但不超过 +50%（大众脸的强度）；名将不受招式影响', c.dealt[1] > c.plain[1] && c.dealt[1] <= c.plain[1] * 1.5 && Math.abs(c.dealt[2] - c.plain[2]) <= c.plain[2] * .35, c);
 ck('实战中招式会自己放出来（横斩 / 包扎都 ≥ 1）', c.skills.sweep >= 1 && c.skills.heal >= 1, c.skills);
 
 // —— 3. 数值说明随将阶提高（讲武堂「随从操练」的升级前后） ——

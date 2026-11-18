@@ -91,7 +91,7 @@ Object.assign(dr, await p.evaluate(async () => {
 }));
 await p.screenshot({ path: `${out}/drill-hall-desktop.png` });
 ck('讲武堂「随从操练」：主公两个升阶按钮不可点，写着「主公等级随征战提升」', dr.lordPage >= 0 && dr.lordBtn.every(x => !x) && dr.lordHint, dr);
-ck('讲武堂「随从操练」：随行按钮上写花费「升·兵器 300粮」，旁边写升级前后（伤害 +6% → +12%），可升阶', dr.r1Btn && dr.label.some(t => t === '升·兵器 300粮') && /伤害 \+6%.*→.*伤害 \+12%/.test(dr.preview ?? '') && /武璋 Lv 15 \/ 上限 15/.test(dr.name ?? ''), dr);
+ck('讲武堂「随从操练」：随行按钮上写花费「升·兵器 300粮」，旁边写升级前后（伤害 +6% → +12%），可升阶', dr.r1Btn && dr.label.some(t => t === '升·兵器 300粮') && /伤害 ?\+6%.*→.*伤害 ?\+12%/.test(dr.preview ?? '') && /武璋 Lv 15 \/ 上限 15/.test(dr.name ?? ''), dr);
 ck('讲武堂「随从操练」：点升·兵器扣 300 军粮，将阶 2 → 3', dr.p0 - dr.p1 === 300 && /将阶 3\//.test(dr.name2 ?? '') && /升到将阶 3/.test(dr.msg ?? ''), dr);
 ck('无页面 / 控制台报错', errors.length === 0, errors.slice(0, 6));
 await b.close();

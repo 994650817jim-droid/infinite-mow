@@ -346,9 +346,10 @@ export class CityScene extends Phaser.Scene {
    const lv=followerLevel(r,s),skill=r.hero?null:COMMONER_SKILLS[r.template];
    m.root.add(txt(this,x+12,y+6,`${r.name.replace(/（.*）/,'')} ${lord?`Lv ${lv} · 主公`:`Lv ${lv} / 上限 ${lvCap}`}${following?' · 随行':''}　将阶 ${r.rank}/${cap}${skill?`　招式「${skill.active.name}」· 被动「${skill.passive.name}」`:''}`,D?15:14,q.css,HEADING_FONT).setName('drill-name-'+r.id));
    if(lord){m.root.add(txt(this,x+12,y+(D?34:38),LORD_LEVEL_HINT+'，不能在随从操练里升级',13,'#9d927c').setName('drill-lord-'+r.id));}
+   const tight=(v:string)=>v.replace(/ \+/g,'+').replace(/ · /g,' '); // 一行放得下：「生命+4% 攻速+3% 伤害+9.2%」
    (['weapon','passive'] as const).forEach((line,k)=>{
     const pv=rankPreview(r,line,s),ly=y+(D?30:34)+k*(D?24:28),ok=!lord&&!pv.full&&pv.afford;
-    if(!lord)m.root.add(txt(this,x+12,ly,`${line==='weapon'?'兵器':'被动'}　${pv.full?pv.before:`${pv.before}　→　${pv.after}`}`,D?12:11,pv.full?'#9d927c':pv.afford?'#d9ccae':'#e59a83').setWordWrapWidth(w-bw-40,true).setName(`drill-preview-${line}-${r.id}`));
+    if(!lord)m.root.add(txt(this,x+12,ly,`${line==='weapon'?'兵器':'被动'}　${pv.full?tight(pv.before):`${tight(pv.before)} → ${tight(pv.after)}`}`,D?12:11,pv.full?'#9d927c':pv.afford?'#d9ccae':'#e59a83').setWordWrapWidth(w-bw-40,true).setName(`drill-preview-${line}-${r.id}`));
     const label=lord?'主公':pv.full?(pv.capByHall?'招贤馆升级后':'已满'):`升·${line==='weapon'?'兵器':'被动'} ${pv.cost}粮`;
     const btn=homeCommand(this,x+w-bw/2-10,ly+9,bw,D?24:26,label,false,ok,D?13:12);
     if(!lord&&!pv.full&&!pv.afford)btn.caption.setColor('#c4523f'); // 买不起：花费标红

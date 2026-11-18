@@ -200,3 +200,6 @@ assets/raw/*
 !/tools/test-hero-actions.mjs
 !/tools/test-chronicle.mjs
 !/tools/test-pad-targets.mjs
+
+# 三选一节奏测量（2026-11-17 levelup-pace）
+!/tools/measure-levelup-pace.mjs

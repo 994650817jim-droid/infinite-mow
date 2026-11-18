@@ -18,12 +18,12 @@ const T = "window.__game.scene.getScene('GuanduGameScene')";
 const guandu = async (stage, lord = 'zhaoyun', flags = {}) => {
   await p.evaluate(([stage, lord, flags]) => { localStorage.removeItem('im_story_seen_v1'); localStorage.setItem('im_story_v1', JSON.stringify({ version: 1, flags })); const g = window.__game; window.__prevT = g.scene.getScene('GuanduGameScene')?.player;
     g.registry.set('guanduStage', stage); g.registry.set('runConfig', { ...(g.registry.get('runConfig') ?? {}), character: lord, weapon: undefined }); g.registry.remove('campaignTransfer');
-    for (const s of g.scene.getScenes(true)) s.scene.stop(); g.scene.start('GuanduGameScene'); }, [stage, lord, flags]);
+    const cur = g.scene.getScene('GuanduGameScene'); if (cur?.sys.isActive()) cur.scene.restart(); else { for (const s of g.scene.getScenes(true)) s.scene.stop(); g.scene.start('GuanduGameScene'); } }, [stage, lord, flags]);
   await p.waitForFunction(lord => { const s = window.__game.scene.getScene('GuanduGameScene'); return s?.sys.isActive() && s.player && s.player !== window.__prevT && s.runConfig?.character === lord && s.storyDir?.chapterId === 'guandu'; }, lord, { timeout: 90000 });
   await p.waitForTimeout(700);
 };
-const scroll = () => p.evaluate(T0 => { const s = eval(T0); const c = s.children.list.find(o => o.name?.startsWith('story-') && o.type === 'Container'); if (!c) return null; return { name: c.name, texts: c.list.filter(o => o.type === 'Text').map(o => o.text).filter(Boolean), mode: s.mode }; }, T);
-const next = () => p.evaluate(T0 => { const s = eval(T0); const c = s.children.list.find(o => o.name?.startsWith('story-') && o.type === 'Container'); c?.list.find(o => o.name?.endsWith('-next') || o.name === 'story-confirm')?.emit('pointerup'); }, T);
+const scroll = () => p.evaluate(T0 => { const s = eval(T0); const c = s.children.list.find(o => o.name?.startsWith('story-') && o.name !== 'story-bark' && o.type === 'Container'); if (!c) return null; return { name: c.name, texts: c.list.filter(o => o.type === 'Text').map(o => o.text).filter(Boolean), mode: s.mode }; }, T);
+const next = () => p.evaluate(T0 => { const s = eval(T0); const c = s.children.list.find(o => o.name?.startsWith('story-') && o.name !== 'story-bark' && o.type === 'Container'); c?.list.find(o => o.name?.endsWith('-next') || o.name === 'story-confirm')?.emit('pointerup'); }, T);
 /** 读完当前一串卷轴，收集每页文字 */
 const readAll = async () => { const seen = []; for (let i = 0; i < 60; i++) { const sc = await scroll(); if (!sc) { await p.waitForTimeout(400); if (!await scroll() && await p.evaluate(T0 => eval(T0).mode !== 'story', T)) return seen; continue; } seen.push(sc.texts.join('|')); await next(); await p.waitForTimeout(40); } return seen; };
 const played = () => p.evaluate(T0 => [...eval(T0).storyDir.played], T);
@@ -32,7 +32,7 @@ const L = async (node, lord, team, flags = {}) => p.evaluate(async ([node, lord,
 /** 打倒本关首领（关掉升级弹窗） */
 const killBoss = () => p.evaluate(async T0 => { const s = eval(T0), wait = ms => new Promise(r => setTimeout(r, ms)); s.player.damageImmune = true; s.spawnBoss(); for (let k = 0; k < 6 && s.mode === 'levelup'; k++) { s.chooseUpgrade(0); await wait(60); }
   await wait(100); s.boss.invulnerable = false; s.boss.hp = 1; s.debugCrit = false; s.hitEnemy(s.boss, 50, s.combatNow, 'melee', false, true); s.debugCrit = null; await wait(150);
-  return { barks: s.children.list.filter(o => o.name === 'story-bark').map(o => (o.list ?? []).map(t => t.text).join(':')), banner: s.children.list.filter(o => o.type === 'Text' && o.visible && /斩颜良|诛文丑/.test(o.text)).map(o => o.text), flags: JSON.parse(localStorage.getItem('im_story_v1') ?? '{}').flags ?? {} }; }, T);
+  return { barks: s.children.list.filter(o => o.name === 'story-bark').map(o => (function deep(x) { return x.type === 'Text' ? x.text : (x.list ?? []).map(deep).join(''); })(o)), banner: (function all(xs) { return xs.flatMap(o => o.type === 'Text' ? [o.text] : all(o.list ?? [])); })(s.children.list).filter(t => /斩颜良|诛文丑/.test(t)), flags: JSON.parse(localStorage.getItem('im_story_v1') ?? '{}').flags ?? {} }; }, T);
 
 // 1) 4-1：章头（jade_seal=kept → 程昱一句）→ 幕间「土山约三事」→ 军情（dianwei=saved → 典韦一句）
 await guandu(1, 'zhaoyun', { jade_seal: 'kept', dianwei: 'saved' });
@@ -45,7 +45,7 @@ ck('旗标没有时：不出程昱、典韦那两句', !plainOpen.join().include
 
 // 2) 关羽不在队：颜良默认台词，无横幅、无旗标；二阶段台词
 const phase = await p.evaluate(async T0 => { const s = eval(T0), wait = ms => new Promise(r => setTimeout(r, ms)); s.player.damageImmune = true; s.spawnBoss(); for (let k = 0; k < 6 && s.mode === 'levelup'; k++) { s.chooseUpgrade(0); await wait(60); }
-  s.events.emit('boss-phase', { boss: s.boss, phase: 2, dismount: true, name: '颜良' }); await wait(120); return s.children.list.filter(o => o.name === 'story-bark').map(o => (o.list ?? []).map(t => t.text).join(':')); }, T);
+  s.events.emit('boss-phase', { boss: s.boss, phase: 2, dismount: true, name: '颜良' }); await wait(120); return s.children.list.filter(o => o.name === 'story-bark').map(o => (function deep(x) { return x.type === 'Text' ? x.text : (x.list ?? []).map(deep).join(''); })(o)); }, T);
 await p.screenshot({ path: `${out}/boss-phase-1280x720.png` });
 ck('二阶段台词：颜良「坠马又如何？」', phase.some(t => t.includes('坠马又如何')), phase);
 const noGy = await killBoss();

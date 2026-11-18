@@ -18,13 +18,13 @@ const T = "window.__game.scene.getScene('ThirdGameScene')";
 const third = async (stage, lord = 'zhaoyun', { clear = true } = {}) => {
   await p.evaluate(([stage, lord, clear]) => { if (clear) { localStorage.removeItem('im_story_seen_v1'); localStorage.removeItem('im_story_v1'); } const g = window.__game; window.__prevT = g.scene.getScene('ThirdGameScene')?.player;
     g.registry.set('thirdStage', stage); g.registry.set('runConfig', { ...(g.registry.get('runConfig') ?? {}), character: lord, weapon: undefined }); g.registry.remove('thirdTransfer'); g.registry.remove('campaignTransfer');
-    for (const s of g.scene.getScenes(true)) s.scene.stop(); g.scene.start('ThirdGameScene'); }, [stage, lord, clear]);
+    const cur = g.scene.getScene('ThirdGameScene'); if (cur?.sys.isActive()) cur.scene.restart(); else { for (const s of g.scene.getScenes(true)) s.scene.stop(); g.scene.start('ThirdGameScene'); } }, [stage, lord, clear]);
   await p.waitForFunction(lord => { const s = window.__game.scene.getScene('ThirdGameScene'); return s?.sys.isActive() && s.player && s.player !== window.__prevT && s.runConfig?.character === lord && s.storyDir?.chapterId === 'qunxiong'; }, lord, { timeout: 90000 });
   await p.waitForTimeout(700);
 };
-const scroll = () => p.evaluate(T0 => { const s = eval(T0); const c = s.children.list.find(o => o.name?.startsWith('story-') && o.type === 'Container'); if (!c) return null;
+const scroll = () => p.evaluate(T0 => { const s = eval(T0); const c = s.children.list.find(o => o.name?.startsWith('story-') && o.name !== 'story-bark' && o.type === 'Container'); if (!c) return null;
   const texts = c.list.filter(o => o.type === 'Text').map(o => o.text).filter(Boolean), choices = c.list.filter(o => o.name?.includes('-choice-box-') && o.visible).length; return { name: c.name, texts, choices, mode: s.mode }; }, T);
-const next = () => p.evaluate(T0 => { const s = eval(T0); const c = s.children.list.find(o => o.name?.startsWith('story-') && o.type === 'Container'); const hit = c?.list.find(o => o.name?.endsWith('-next') || o.name === 'story-confirm'); if (hit?.input?.enabled !== false) hit?.emit('pointerup'); return !!hit; }, T);
+const next = () => p.evaluate(T0 => { const s = eval(T0); const c = s.children.list.find(o => o.name?.startsWith('story-') && o.name !== 'story-bark' && o.type === 'Container'); const hit = c?.list.find(o => o.name?.endsWith('-next') || o.name === 'story-confirm'); if (hit?.input?.enabled !== false) hit?.emit('pointerup'); return !!hit; }, T);
 const readAll = async () => { for (let i = 0; i < 40; i++) { const sc = await scroll(); if (!sc) { await p.waitForTimeout(400); if (!await scroll() && await p.evaluate(T0 => eval(T0).mode !== 'story', T)) return; continue; } if (sc.choices) return; await next(); await p.waitForTimeout(50); } };
 const played = () => p.evaluate(T0 => [...eval(T0).storyDir.played], T);
 const L = async (node, lord, team, flags = {}) => p.evaluate(async ([node, lord, team, flags]) => { const St = await import('/src/systems/Story.ts'), D = await import('/src/data/story/index.ts'); localStorage.setItem('im_story_v1', JSON.stringify({ version: 1, flags }));
@@ -36,7 +36,7 @@ const open = await scroll(); await p.screenshot({ path: `${out}/chapter-open-128
 await readAll(); const p31 = await played();
 ck('3-1：先播章头「长安之乱」，再播军情', open?.name === 'story-qunxiong-open' && p31.join() === 'qunxiong.open,qunxiong-1.brief', { open: open?.name, p31 });
 const phase = await p.evaluate(async T0 => { const s = eval(T0), wait = ms => new Promise(r => setTimeout(r, ms)); s.player.damageImmune = true; s.spawnBoss(); for (let k = 0; k < 6 && s.mode === 'levelup'; k++) { s.chooseUpgrade(0); await wait(60); }
-  s.events.emit('boss-phase', { boss: s.boss, phase: 2, dismount: true, name: '李傕' }); await wait(120); return s.children.list.filter(o => o.name === 'story-bark').map(o => (o.list ?? []).map(t => t.text).join(':')); }, T);
+  s.events.emit('boss-phase', { boss: s.boss, phase: 2, dismount: true, name: '李傕' }); await wait(120); return s.children.list.filter(o => o.name === 'story-bark').map(o => (function deep(x) { return x.type === 'Text' ? x.text : (x.list ?? []).map(deep).join(''); })(o)); }, T);
 await p.screenshot({ path: `${out}/boss-phase-1280x720.png` });
 ck('二阶段台词：boss-phase 事件 → 李傕「我的马——亲兵」大字', phase.some(t => t.includes('我的马')), phase);
 const end31 = await p.evaluate(async T0 => { const s = eval(T0), wait = ms => new Promise(r => setTimeout(r, ms)); let done = 0; s.storyDir.stageEnd(() => { done++; }); await wait(300); return { done }; }, T);

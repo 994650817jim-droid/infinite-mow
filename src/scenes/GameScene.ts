@@ -707,6 +707,13 @@ export class GameScene extends Phaser.Scene {
       for (const m of this.followers?.members ?? []) if (m.recruit.hero) m.weaponDamageMul *= this.storyDir.bondDamageMul(m.recruit.hero); }
     this.storyDir.beginStage(done);
   }
+  /** 本场首领倒下时剧情是否说了台词（主将台词据此往后挪） */
+  private storyBossFell = false;
+  /** 主将对首领登场 / 倒下说一句（HeroBark）。剧情先让首领说了时，主将那句晚 2.3 秒（HeroBark 场上只留一句，同时说会互相顶掉）。 */
+  protected lordBossBark(kind: 'bossAppear' | 'bossDown', storySpoke: boolean): void {
+    const say = (): void => { if (this.sys.settings.status < Phaser.Scenes.SHUTDOWN) this.heroBark?.bossEvent(kind, this.barkSpeakers()[0], this.chapter.bossName, this.combatNow); };
+    if (storySpoke) this.time.delayedCall(2300, say); else say();
+  }
   /** 剧情上下文：主公、在队（主公 + 随行武将）、已招募。 */
   storyCtx(): StoryCtx { return { lord: this.runConfig.character, team: () => [this.runConfig.character, ...(this.followers?.members ?? []).map(m => m.recruit.hero).filter((h): h is CharacterId => !!h)], recruited: id => heroOwned(id) }; }
   /** 把开局选择（武将/初始武器）应用到本局。 */
@@ -1147,7 +1154,6 @@ export class GameScene extends Phaser.Scene {
     if(this.boss?.active)return;this.yellowAltar?.destroy();this.yellowAltar=null;
     if (this.bossSpawned) return;
     this.bossSpawned = true;
-    this.heroBark?.bossEvent('bossAppear', this.barkSpeakers()[0], this.chapter.bossName, this.combatNow); // 首领登场：主将说一句
     { const ws = this.paceOn() ? PICK_PACE.waves : PICK_GUARANTEE.waves; this.ensurePicks(ws[ws.length - 1]); } // 保底：第 3 波后直接是首领、波次不再推进，首领登场时补到最后一档
     const angle = -Math.PI / 2;
     const x = this.player.x + Math.cos(angle) * 430;
@@ -1189,7 +1195,7 @@ export class GameScene extends Phaser.Scene {
     this.music.setBoss(profile);
     this.announceBoss(profile.title, this.chapter.bossName);
     this.presence?.entrance(boss);
-    this.storyDir?.bossIntro(boss.sprite); // 剧情：首领登场大字台词
+    this.lordBossBark('bossAppear', !!this.storyDir?.bossIntro(boss.sprite)); // 剧情：首领登场大字台词；主将（HeroBark）接一句
   }
 
   /** 首领名号标题：画面上部一道短墨痕，墨上名号小字 + 名字，约 2.6 秒淡出；不拦截点击、不暂停。
@@ -1902,7 +1908,7 @@ export class GameScene extends Phaser.Scene {
     this.objective?.onKill(enemy);
     const kind = enemy.kind;
     // 吕布倒地改由 playBossFall（倒地 4 帧）播，不再叠旧的通用死亡闪影
-    if(kind==='boss'){const old=this.chasingBosses.find(t=>t.enemy===enemy&&t.life===enemy.spawnId),h=old?old.huaxiong:this.huaxiong,x=old?old.xurong:this.xurong;h?.defeat();x?.defeat();if(enemy===this.boss){this.sishuiPass?.onBossDown();{const at={x:enemy.x,y:enemy.y,displayHeight:enemy.sprite.displayHeight};this.storyDir?.bossFall(at);if(this.sishuiPass?.wenjiu){setStoryFlag('wenjiu_huaxiong');this.time.delayedCall(1600,()=>this.storyDir?.line('hulao-1.wenjiu',this.player.sprite));}}this.moveset?.defeat();this.moveset=null;this.bossMount?.destroy();this.bossMount=null;}if(old){if(h)this.deadBossControllers.push(h);if(x)this.deadBossControllers.push(x);}
+    if(kind==='boss'){const old=this.chasingBosses.find(t=>t.enemy===enemy&&t.life===enemy.spawnId),h=old?old.huaxiong:this.huaxiong,x=old?old.xurong:this.xurong;h?.defeat();x?.defeat();if(enemy===this.boss){this.sishuiPass?.onBossDown();{const at={x:enemy.x,y:enemy.y,displayHeight:enemy.sprite.displayHeight};this.storyBossFell=!!this.storyDir?.bossFall(at);if(this.sishuiPass?.wenjiu){setStoryFlag('wenjiu_huaxiong');this.time.delayedCall(1600,()=>this.storyDir?.line('hulao-1.wenjiu',this.player.sprite));}}this.moveset?.defeat();this.moveset=null;this.bossMount?.destroy();this.bossMount=null;}if(old){if(h)this.deadBossControllers.push(h);if(x)this.deadBossControllers.push(x);}
       // 倒地：控制器自己有倒地帧的（华雄 / 徐荣 / 子类首领）沿用；其余首领播通用倒地（受伤帧 + 倒下 + 手绘扬尘 + 下沉淡出）
       this.bossFallDir=0;if(!(h||x||this.bossHasDeathArt()))this.bossFallDir=playBossFall(this,enemy,this.zhangjiao?'zhangjiao_moves':this.lubu?'lubu_moves':undefined,old?undefined:this.chapter.bossStyle);}
     enemy.deactivate();
@@ -1929,7 +1935,7 @@ export class GameScene extends Phaser.Scene {
         unlockAchievement('chaser');
         const old=this.chasingBosses[index];old.battle?.clear();old.huaxiong?.clear();old.xurong?.clear();old.label.destroy();this.chasingBosses.splice(index,1);
         this.recordFrontlineVictory(old.stage);
-      }else{this.bossKilled=true;this.boss=null;this.recordFrontlineVictory(this.battleStage());this.heroBark?.bossEvent('bossDown',this.barkSpeakers()[0],this.chapter.bossName,this.combatNow);}
+      }else{this.bossKilled=true;this.boss=null;this.recordFrontlineVictory(this.battleStage());this.lordBossBark('bossDown',this.storyBossFell);this.storyBossFell=false;}
       // 倒地后原地掉宝箱，主将捡起遗物才进下一阶段（原来的三选一遗物卡改成宝箱）
       this.spawnBossChest(enemy.x,enemy.y,()=>{if(this.bossKilled&&this.chasingBosses.length===0){if(this.storyDir)this.storyDir.chapterClose(()=>this.finish(true,'boss'));else this.finish(true,'boss');}else{this.resumePendingChoices();if(this.bossKilled)this.showGrowthNotice('当前首领已败 · 仍有'+this.chasingBosses.length+'名追击首领');}});return;
     }

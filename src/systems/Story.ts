@@ -177,13 +177,15 @@ export class StoryDirector {
     this.played.push(node.id); playStoryScroll(this.h.scene, node, lines, this.h.ctx, confirm, next, extra);
   }
   /** 首领登场 / 二阶段 / 倒下：大字台词（每次都说）。 */
-  bossIntro(target: BarkTarget): void { const n = this.stageNodes()?.bossIntro; if (n) this.bark(n, target); }
-  bossPhase(target: BarkTarget): void { const n = this.stageNodes()?.bossPhase; if (n) this.bark(n, target); }
-  bossFall(target: BarkTarget): void {
-    const n = this.stageNodes()?.bossFall; if (!n) return;
-    this.bark(n, target);
+  /** 返回是否说了（说了的话 GameScene 把主将的登场 / 倒下台词往后挪，免得一句顶掉另一句）。 */
+  bossIntro(target: BarkTarget): boolean { const n = this.stageNodes()?.bossIntro; return n ? this.bark(n, target) : false; }
+  bossPhase(target: BarkTarget): boolean { const n = this.stageNodes()?.bossPhase; return n ? this.bark(n, target) : false; }
+  bossFall(target: BarkTarget): boolean {
+    const n = this.stageNodes()?.bossFall; if (!n) return false;
+    const spoke = this.bark(n, target);
     // 横幅 + 旗标（如关羽在队「斩颜良」）：旗标是玩法结果，剧情关了也照记；横幅同温酒斩华雄，也照播
     const b = n.banner; if (b && (!b.ifFollower || this.h.ctx.team().includes(b.ifFollower))) { if (b.flag) setStoryFlag(b.flag); this.h.banner?.(b.title, b.caption); }
+    return spoke;
   }
   /** 按 id 说一句（bark 节点，其他系统调用；如 'hulao-3.lubu_enter'）。返回是否说了。 */
   line(id: string, target: BarkTarget): boolean {
@@ -225,7 +227,7 @@ export class StoryDirector {
         const reply = this.applyChoice(node, k, true); if (skipped || !reply.length) { next(); return; }
         playStoryScroll(this.h.scene, { id: node.id + '.reply', type: 'interlude', kicker: node.kicker, title: choices[k].label, lines: [] }, reply, ctx, '继续', next);
       };
-      storyScroll(this.h.scene, GAME_WIDTH, GAME_HEIGHT, IS_DESKTOP, { name: 'story-' + node.id.replace(/./g, '-'), confirmName: 'story-confirm', kicker: node.kicker ?? '', title: node.title ?? '',
+      storyScroll(this.h.scene, GAME_WIDTH, GAME_HEIGHT, IS_DESKTOP, { name: 'story-' + node.id.replace(/\./g, '-'), confirmName: 'story-confirm', kicker: node.kicker ?? '', title: node.title ?? '',
         lines, reward: '', confirm: '', background: 'rest_camp', illustration: node.illustration, onDone: () => after(0, false), skip: () => after(0, true),
         choices: choices.map(c => c.label), onChoice: k => after(k, false) });
     });

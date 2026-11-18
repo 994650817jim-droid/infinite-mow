@@ -116,7 +116,7 @@ export function storyScroll(scene: Phaser.Scene, W: number, H: number, desk: boo
   // 抉择按钮（两个并排；三个以上时缩窄）
   const choiceBtns: Phaser.GameObjects.Container[] = [];
   (o.choices ?? []).forEach((c, k, all) => {
-    const cw = Math.min(desk ? 220 : 200, (pw - 80) / all.length - 16), cxk = cx + (k - (all.length - 1) / 2) * (cw + 24);
+    const cw = Math.min(desk ? 200 : 190, (pw - 120) / all.length - 16) /* 留出右下「跳过」 */, cxk = cx + (k - (all.length - 1) / 2) * (cw + 24);
     const g = scene.add.graphics().setScrollFactor(0), t = text(0, 0, c, desk ? 19 : 20, '#ffe9bd', true).setOrigin(.5).setStroke('#2a170b', 3);
     const draw = (hi: boolean): void => { g.clear().fillStyle(0x000000, .4).fillRoundedRect(-cw / 2 + 2, -bh / 2 + 4, cw, bh, 8).fillStyle(hi ? 0x8a3a22 : 0x6a2a18, 1).fillRoundedRect(-cw / 2, -bh / 2, cw, bh, 8).lineStyle(1.5, hi ? GOLD_HI : GOLD, 1).strokeRoundedRect(-cw / 2 + 4, -bh / 2 + 4, cw - 8, bh - 8, 5); };
     draw(false);

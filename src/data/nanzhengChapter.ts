@@ -28,7 +28,7 @@ const OWN: Record<string, { key: string; sheet: string }> = {
 };
 const FALLBACK: Record<string, string> = { nz_mangyachang: 'guandu_chunyuqiong', nz_wutugu: 'guandu_yanliang', nz_menghuo: 'guandu_wenchou' };
 /** 已到的第十一章图（只载这些；缺的用过渡图，避免 404）。只有 v2 版。 */
-export const NZ_ART_READY: ReadonlySet<string> = new Set<string>(['nz_menghuo', 'nz_tengjia_walk']); // 2026-11-17 Gemini 3.1 Pro 出图；忙牙长 / 兀突骨 / 蛮兵 / 象兵 待补
+export const NZ_ART_READY: ReadonlySet<string> = new Set<string>(['nz_menghuo', 'nz_tengjia_walk', 'nz_manbing_walk', 'nz_elephant_walk']); // 2026-11-17 Gemini 3.1 Pro 出图；忙牙长 / 兀突骨 待补
 export const nzArt = (key: string): boolean => NZ_ART_READY.has(key) && artStyle() === 'v2';
 export function nzBossTexture(id: string): string { const o = OWN[id]; return nzArt(o.key) ? o.key : FALLBACK[o.key]; }
 export function nzBossSheet(id: string): string { const k = nzBossTexture(id); return k === OWN[id].key ? OWN[id].sheet : GUANDU_ATLAS_FILES[k]; }
@@ -44,7 +44,9 @@ export function nanzhengBattle(stage: NanzhengStage): ChapterDef {
   const d = NANZHENG_STAGES[stage - 1], base = thirdBattle(d.behavior), t = stageTuning('chibi', stage), e = base.enemies;
   const v = (def: EnemyDef, key: string, extra: Partial<EnemyDef>): EnemyDef => nzArt(key) && def.walkVisual
     ? { ...def, ...extra, texture: key, walkVisual: { ...def.walkVisual, texture: key }, attackVisual: undefined } : { ...def, ...extra };
-  const cav = e.cavalry, big = cav.walkVisual && !nzArt(NZ_TROOPS.elephant.walk) ? { walkVisual: { ...cav.walkVisual, scale: cav.walkVisual.scale * 1.55 } } : {};
+  // 象兵比人高大：有象兵 v2 图时按兵种图规格（同人高）放大 1.6 倍，没图时把骑兵图放大 1.55 倍过渡
+  const cav = e.cavalry, ele = v(cav, NZ_TROOPS.elephant.walk, { hp: Math.round(cav.hp * 4.5), speed: Math.round(cav.speed * .72), damage: Math.round(cav.damage * 1.6), radius: 26, xp: cav.xp * 3 });
+  const big = ele.walkVisual ? { walkVisual: { ...ele.walkVisual, scale: ele.walkVisual.scale * (nzArt(NZ_TROOPS.elephant.walk) ? 1.6 : 1.55) } } : {};
   return {
     ...base,
     waves: base.waves.map((w, i) => ({ ...w, name: WAVE_NAMES[stage - 1][i] ?? w.name })),
@@ -55,7 +57,7 @@ export function nanzhengBattle(stage: NanzhengStage): ChapterDef {
       // 藤甲兵：血量略高；减伤 / 怕火在 systems/Nanman.ts（按 kind === 'shield' 判定）
       shield: v(e.shield, NZ_TROOPS.tengjia.walk, { hp: Math.round(e.shield.hp * 1.2), damage: Math.round(e.shield.damage * 1.1), tint: nzArt(NZ_TROOPS.tengjia.walk) ? undefined : 0xc9a46a }),
       // 象兵：皮糙肉厚、体型大；冲撞在 systems/Nanman.ts
-      cavalry: { ...v(cav, NZ_TROOPS.elephant.walk, { hp: Math.round(cav.hp * 4.5), speed: Math.round(cav.speed * .72), damage: Math.round(cav.damage * 1.6), radius: 26, xp: cav.xp * 3 }), ...big },
+      cavalry: { ...ele, ...big },
       boss: { ...e.boss, texture: nzBossTexture(d.id), hp: [2700, 3100, 2600][stage - 1], speed: [46, 40, 48][stage - 1], damage: [16, 18, 17][stage - 1] },
     },
     pickEnemy: tt => { const r = Math.random(); return stage === 1 ? (tt < 25 ? 'infantry' : r < .6 ? 'infantry' : r < .78 ? 'archer' : r < .9 ? 'cavalry' : 'elite') : stage === 2 ? (tt < 15 ? 'infantry' : r < .3 ? 'infantry' : r < .78 ? 'shield' : r < .9 ? 'archer' : 'elite') : (r < .42 ? 'infantry' : r < .64 ? 'shield' : r < .8 ? 'cavalry' : r < .92 ? 'archer' : 'elite'); },

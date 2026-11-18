@@ -5,7 +5,7 @@ import {TACTICS,TREASURES,tacticDescription,type TacticId} from '../data/builds'
 import {charmDef} from '../data/charms';
 import {PASSIVE_RULES} from '../data/passives';
 import {WEAPON_META,martialDescription} from '../data/upgrades';
-import {MARTIALS,DRAG_TRAVEL,ATTRIBUTE_INFO,attributeIcon,type MasteryId,type AttributeId,type RunGrowth} from '../systems/RunGrowth';
+import {MARTIALS,DRAG_TRAVEL,ATTRIBUTE_INFO,ATTRIBUTE_MAX,attributeIcon,type MasteryId,type AttributeId,type RunGrowth} from '../systems/RunGrowth';
 import {FONT,DEPTH,IS_DESKTOP as D} from '../config';
 import {type BuffProgress,countProgress,distanceProgress,chargeProgress,timerProgress} from './BuffProgress';
 interface BuffEntry {id:string;icon:string;name:string;desc:string;/** 类别与生效方式（说明首行）。 */kind:string;badge:string;mark?:string;rare?:boolean;remaining?:number;/** 「每 N 次 / 每 N 秒 / 攒满」类的触发进度。 */progress?:BuffProgress|null;}
@@ -79,7 +79,7 @@ export class BuffHud {
   for(const id of Object.keys(g.masteries)as MasteryId[])if(g.masteries[id]>0){const d=MARTIALS[id];entries.push({id:'mastery_'+id,icon:'growth_icon_'+id,name:d.name+' Lv.'+g.masteries[id],desc:martialDescription(id,g.masteries[id]),kind:'武学 · 本命武器修习',badge:String(g.masteries[id]),mark:d.name.slice(0,2),progress:masteryProgress(id,g.masteries[id],g,now)});}
   for(const id of Object.keys(g.build.tactics)as TacticId[]){const level=g.build.level(id),d=TACTICS[id];if(level)entries.push({id:'tactic_'+id,icon:'build_icon_'+id,name:d.name+' Lv.'+level,desc:tacticDescription(id,level),kind:'战法',badge:String(level)});}
   for(const w of player.weapons)if(w.level>1)entries.push({id:'weapon_'+w.id,icon:({spear_orbit:'icon_1',crossbow:'icon_2',guandao:'icon_guandao',flame_banner:'icon_3',zhenbei_blade:'icon_zhenbei',lianhuan_mines:'icon_lianhuan',sun_knives:'icon_sunknives',diaochan_fans:'icon_fans',baodiao_bow:'icon_baodiao',dangyang_roar:'icon_shemao',zhanjin_lance:'icon_zhanjin',shuanggu_swords:'icon_shuanggu'})[w.id],name:WEAPON_META[w.id].name+' Lv.'+w.level,desc:WEAPON_META[w.id].desc+'。已强化至 Lv.'+w.level+'，详细属性可在修习面板查看。',kind:'本命武器 · 自动攻击',badge:String(w.level),mark:'兵'});
-  for(const id of Object.keys(g.attributes)as AttributeId[])if(g.attributes[id]>0)entries.push({id:'attribute_'+id,icon:attributeIcon(id),name:ATTRIBUTE_INFO[id].name+' '+g.attributes[id]+'/5',desc:ATTRIBUTE_INFO[id].effect,kind:'属性 · 常驻',badge:String(g.attributes[id]),mark:ATTRIBUTE_INFO[id].name[0]});
+  for(const id of Object.keys(g.attributes)as AttributeId[])if(g.attributes[id]>0)entries.push({id:'attribute_'+id,icon:attributeIcon(id),name:ATTRIBUTE_INFO[id].name+' '+g.attributes[id]+'/'+ATTRIBUTE_MAX,desc:ATTRIBUTE_INFO[id].effect,kind:'属性 · 常驻',badge:String(g.attributes[id]),mark:ATTRIBUTE_INFO[id].name[0]});
   for(const k of Object.keys(g.charmLegend)as (keyof typeof g.charmLegend)[]){const d=charmDef('charm_'+k);if(d)entries.push({id:'relic_'+k,icon:d.icon,name:d.name,desc:d.desc(g.charmLegend[k]?'orange':'purple'),kind:'信物 · 传奇',badge:'信',rare:true});}
   const overflow=entries.length>this.maximum,show=entries.slice(0,overflow?this.maximum-1:this.maximum);
   if(overflow){const rest=entries.slice(this.maximum-1);show.push({id:'overflow',icon:'icon_passive',name:'其余'+rest.length+'项增益',desc:rest.map(e=>e.name).join('、')+'。完整战法和宝物说明可在暂停菜单查看。',kind:'更多',badge:'+'+rest.length});}

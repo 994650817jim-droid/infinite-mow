@@ -11,6 +11,8 @@ import { BOSS_OLD } from '../systems/BossKit';
 import type { ArcController, ArcHost } from '../systems/ArcBossV2';
 import { YuanshuBoss } from '../systems/YuanshuBoss';
 import { CaorenBoss } from '../systems/CaorenBoss';
+import { BossMoveset } from '../systems/BossMoveset';
+import { BOSS_MOVES } from '../data/bossMoves';
 
 /** 第三章式三关篇章的配置（第三章群雄割据、第五章赤壁之战共用同一套战场与首领招式框架）。 */
 export interface ArcSceneConfig{
@@ -74,7 +76,7 @@ export function thirdGameSceneClass(Base:typeof GameScene,cfg:ArcSceneConfig=THI
  protected tryCustomBossSkill(){if(!this.controller||!this.boss?.active)return false;this.controller.forceSkill(this.combatNow);return true;}
  protected customChapter(){return cfg.battle(this.thirdStage);}
  bossDebug(){return (this.controller as ArcController|undefined)?.debug??null;}
- protected spawnBoss(){const had=this.boss?.active;super.spawnBoss();if(this.boss&&!had)this.hubao?.onBoss(this.combatNow);const d=this.stageInfo();if(this.boss&&!BOSS_OLD&&(cfg.arc==='qunxiong'&&d.id==='yuanshu'||cfg.arc==='chibi'&&d.id==='caoren')){const host:ArcHost={scene:this,boss:this.boss,player:this.player,army:this.legion,spawn:(kind,x,y,def)=>this.spawnEnemy(kind,x,y,1,true,def),def:k=>this.chapter.enemies[k],banner:(t,c)=>this.showWaveBanner(t,true,c),sfx:k=>this.sfx.play(k)};this.controller=d.id==='yuanshu'?new YuanshuBoss(host,cfg.texture(d.id),this.combatNow):new CaorenBoss(host,cfg.texture(d.id),this.combatNow);return;}
+ protected spawnBoss(){const had=this.boss?.active;super.spawnBoss();if(this.boss&&!had)this.hubao?.onBoss(this.combatNow);const d=this.stageInfo();const mv=BOSS_MOVES[cfg.arc+'.'+d.id]??BOSS_MOVES[d.id];if(this.boss&&!had&&!BOSS_OLD&&mv){/* 首领招式框架（data/bossMoves.ts）：按章节.首领 id 或首领 id 查；有专属控制器的首领（袁术、曹仁…）不在表里 */this.controller=new BossMoveset({scene:this,boss:this.boss,player:this.player,army:this.legion,spawn:(kind,x,y,def)=>this.spawnEnemy(kind,x,y,1,true,def),def:k=>this.chapter.enemies[k],banner:(t,c)=>this.showWaveBanner(t,true,c),sfx:k=>this.sfx.play(k)},this.boss.def.texture,this.combatNow,mv,'arc');return;}if(this.boss&&!BOSS_OLD&&(cfg.arc==='qunxiong'&&d.id==='yuanshu'||cfg.arc==='chibi'&&d.id==='caoren')){const host:ArcHost={scene:this,boss:this.boss,player:this.player,army:this.legion,spawn:(kind,x,y,def)=>this.spawnEnemy(kind,x,y,1,true,def),def:k=>this.chapter.enemies[k],banner:(t,c)=>this.showWaveBanner(t,true,c),sfx:k=>this.sfx.play(k)};this.controller=d.id==='yuanshu'?new YuanshuBoss(host,cfg.texture(d.id),this.combatNow):new CaorenBoss(host,cfg.texture(d.id),this.combatNow);return;}
   if(this.boss)this.controller=new ThirdBoss({scene:this,boss:this.boss,player:this.player,army:this.legion,spawn:(kind,x,y)=>this.spawnEnemy(kind,x,y,1,true)},this.behavior,this.combatNow,cfg===THIRD_CONFIG?undefined:{texture:cfg.texture(d.id),name:d.boss,skills:d.skills,signature:d.signature?{id:(d.signatureId??d.id) as 'caochun'|'caimao'|'caoren',name:d.signature}:undefined});}
  protected customBossStep(enemy:Enemy,dt:number,now:number){if(enemy!==this.boss||!this.controller)return false;this.controller.update(dt,now);return true;}
 

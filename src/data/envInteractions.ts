@@ -36,7 +36,7 @@ export const ENV_BANNER = {
 export const ENV_TENT = {
   hp: 200,
   /** 打塌后的掉落：经验宝石个数与每个的经验值、回血道具概率、兵装宝箱概率。待平衡会话复核。 */
-  gems: 6, gemXp: 2, healChance: .5, chestChance: .03,
+  gems: 6, gemXp: 2, healChance: .5, chestChance: 0, // 营帐不掉兵装宝箱（2026-11-17，见 data/propLoot.ts）
   /** 伏兵：概率与人数（小兵，按本关难度）。 */
   ambushChance: .3, ambushMin: 2, ambushMax: 3,
   every: 10, maxActive: 3,

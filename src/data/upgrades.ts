@@ -19,7 +19,7 @@ export const WEAPON_META: Record<WeaponId, { name: string; desc: string }> = {
   dangyang_roar: { name: '丈八蛇矛·当阳喝断', desc: '朝前大喝，越推越宽的弧形声浪向前推进，伤害并一路推后敌人' },
   zhanjin_lance: { name: '虎头湛金枪', desc: '一枪把敌人挑飞，落地时砸出范围伤害；铁骑满层后向前冲锋破阵' },
   shuanggu_swords: { name: '双股剑', desc: '双剑同时出手，分别在两名敌人身上斩出「×」形交叉斩；仁德满层时攻速提高' },
-  diaochan_fans: { name: '双花扇', desc: '掷出回旋团扇，去回各打一次；命中积魅惑，满层的敌人倒戈攻击同伴' },
+  diaochan_fans: { name: '双花扇', desc: '掷出回旋团扇，去回各打一次；被扇中 2 次的敌人倒戈（3 秒内转而攻击同伴）' },
 };
 /** 武器显示名：张飞用同一套长枪，叫丈八蛇矛。 */
 export function weaponName(id: WeaponId, character?: string): string { return character === 'zhangfei' && id === 'spear_orbit' ? '丈八蛇矛' : character === 'zhangfei' && id === 'dangyang_roar' ? '丈八蛇矛' : character === 'huangyueying' ? '机关连弩' : character === 'pangtong' && id === 'lianhuan_mines' ? '凤雏连环令' : character === 'liubei' ? '双股剑' : character === 'weiyan' && id === 'zhenbei_blade' ? '镇北环首刀' : character === 'machao' ? '虎头湛金枪' : character === 'sunshangxiang' && id === 'sun_knives' ? '弓腰姬飞刀' : character === 'diaochan' && id === 'diaochan_fans' ? '双花扇' : WEAPON_META[id].name; }
@@ -114,36 +114,37 @@ function shuffle<T>(arr: T[]): T[] {
 }
 
 const POTIONS: Record<PotionId, { name: string; desc: string }> = {
-  rejuvenation: { name: '回春丹', desc: '立即恢复最大生命值的 30%' },
-  berserk: { name: '狂战丹', desc: '10 秒内武器伤害 +25%，攻速 +20%' },
+  rejuvenation: { name: '回春丹', desc: '收入药囊，按 Q 服用：回复 30% 生命（药囊满时立即服用）' },
+  berserk: { name: '狂战丹', desc: '10 秒内武器伤害 +25%、攻速 +20%' },
 };
 export function martialDescription(id:MasteryId,level:number):string {
  const n=Math.max(1,Math.min(3,level)),i=n-1;
  const descriptions:Record<MasteryId,string>={
- dragon_gallop:'枪刺攻击速度提高'+(8*n)+'%。\n出枪更快，最多强化3级。',
- cloud_pierce:'枪刺长度增加'+(10*n)+'%，多穿透'+n+'名敌人。\n适合攻击密集敌群。',
- dragon_charge:'普通挥刀4次后，下一刀造成'+[140,165,190][i]+'%伤害。'+(n===3?'\n这一刀还能击退普通敌人。':''),
- dragging_blade:'主动移动约'+dragBodyLengths(i+1)+'个身位后，下次挥刀追加半月刀气。'+(n===3?'\n再追加一道较弱的回旋刀气。':''),
- steady_aim:'站立蓄势，最多5秒提高'+[15,20,25][i]+'个百分点暴击率。\n自动射击不打断，移动会逐渐失去蓄势。',
- pearl_volley:'每射击'+[5,4,3][i]+'次，自动多射一发70%伤害的箭。'+(n===3?'\n追加箭可再弹射一次。':''),
- wildfire:'战旗爆炸后，留下'+[1,1.8,2.5][i]+'秒残火。\n每半秒烧伤一次。'+(n===3?'燃烧范围也变大。':''),
- eight_trigrams:'每施放3次战旗，生成减速法阵，随后爆炸。\n减速'+[35,45,50][i]+'%。'+(n>=2?'敌人会向阵心聚集。':'')+(n===3?'爆炸再扩散一次。':''),
- kaishan:'每劈4刀，下一刀为重劈：裂波加宽50%，伤害'+[150,170,190][i]+'%。',
- gujun:'身边160像素内每有1名敌人，伤害提高'+[1.5,2,2.5][i]+'%（最多算15名）。\n越是陷入重围越勇。',
+ // 2026-11-17 文案审校：先写效果、统一「攻速 / 移速 / 首领」，两行以内；数值按代码
+ dragon_gallop:'枪刺攻速 +'+(8*n)+'%。',
+ cloud_pierce:'枪刺长度 +'+(10*n)+'%，多穿透'+n+'名敌人。',
+ dragon_charge:'每挥刀4次，下一刀造成'+[140,165,190][i]+'%伤害。'+(n===3?'\n这一刀还会击退普通敌人。':''),
+ dragging_blade:'主动移动约'+dragBodyLengths(i+1)+'个身位后，下一刀追加半月刀气。'+(n===3?'\n再追加一道回旋刀气。':''),
+ steady_aim:'站着不动时暴击率逐渐提高，5秒内最多 +'+[15,20,25][i]+'%。\n移动会慢慢失去加成。',
+ pearl_volley:'每射击'+[5,4,3][i]+'次，多射一支70%伤害的箭。'+(n===3?'\n这支箭还能弹射一次。':''),
+ wildfire:'战旗爆炸处留下残火'+[1,1.8,2.5][i]+'秒，每半秒灼烧一次。'+(n===3?'\n残火范围也变大。':''),
+ eight_trigrams:'每挥旗3次，在敌群中布下减速'+[35,45,50][i]+'%的法阵，随后爆炸。\n每10秒最多一次'+(n>=2?'，敌人会被吸向阵心':'')+(n===3?'，爆炸再扩散一次':'')+'。',
+ kaishan:'每劈4刀，下一刀为重劈：伤害'+[150,170,190][i]+'%，裂波加宽50%。',
+ gujun:'身边约4个身位内每有1名敌人，伤害 +'+[1.5,2,2.5][i]+'%（最多算15名）。',
  fulei:'火雷同时存在上限 +'+(2*n)+'，每枚多存在'+(2*n)+'秒。',
- lianying:'火雷连锁引爆的距离增加'+(15*n)+'%。'+(n===3?'\n被连锁引爆的火雷伤害再 +20%。':''),
- huishen:'移动中掷出的飞刀多穿透'+n+'名敌人。\n边跑边掷，越跑越利。',
+ lianying:'火雷连锁引爆的距离 +'+(15*n)+'%。'+(n===3?'\n被连锁引爆的火雷伤害再 +20%。':''),
+ huishen:'移动中掷出的飞刀多穿透'+n+'名敌人。',
  baibi:'执刀侍婢上限 +'+n+'，每名多护卫'+(2*n)+'秒。',
- nichang:'飞扇飞行距离增加'+(15*n)+'%。'+(n===3?'\n每次多掷 1 柄团扇。':''),
- meirenji:'被离间的敌人多倒戈'+(0.5*n)+'秒。'+(n===3?'\n只需 2 层魅惑即可离间。':''),
- jingxin:'连续不受伤 '+[4.5,4,3.5][i]+' 秒即进入神射（原 5 秒），神射中重箭伤害 +'+[20,22,25][i]+'%。'+(n===3?'\n进入神射后的第一箭化为扇形三连重箭，每支都带爆裂。':'\n心静则箭稳。'),
- laoji:'越战越勇：本关每击杀 10 名敌人，射速 +2.5%，最多 +'+[15,20,25][i]+'%。'+(n===3?'\n「宝刀未老」：神射中每射杀一名精锐或首领，回复 4% 生命，且 2 秒内受伤不退出神射。':'\n老当益壮，越战越勇。'),
- wanrendi:'声浪推进距离增加'+(12*n)+'%。',
- dahe:'据水断桥的断桥区多持续'+(0.5*n)+'秒，震慑多'+(0.2*n).toFixed(1)+'秒。',
- jinma:'挑飞落地的范围增加'+(15*n)+'%。'+(n===3?'\n落地后再震一次（50% 伤害）。':''),
- tieqi:'锦马冲锋距离增加'+(20*n)+'%，冲锋伤害增加'+(10*n)+'%。',
- taoyuan:'交叉斩的溅射范围增加'+(10*n)+'。'+(n===3?'\n三剑分击，同时斩三名敌人。':''),
- xiemin:'仁德回复量（自身与部曲）提高'+(25*n)+'%。',
+ nichang:'飞扇飞行距离 +'+(15*n)+'%。'+(n===3?'\n每次多掷1柄团扇。':''),
+ meirenji:'倒戈的敌人多倒戈'+(0.5*n)+'秒。',
+ jingxin:'连续'+[4.5,4,3.5][i]+'秒不受伤即进入神射（原5秒），神射中重箭伤害 +'+[20,22,25][i]+'%。'+(n===3?'\n进入神射后，第一箭变成扇形三连重箭。':''),
+ laoji:'本关每击杀10名敌人，射速 +2.5%（最多 +'+[15,20,25][i]+'%）。'+(n===3?'\n神射中射杀精锐或首领：回复4%生命，2秒内受伤不打断神射。':''),
+ wanrendi:'声浪推进距离 +'+(12*n)+'%。',
+ dahe:'断桥区多持续'+(0.5*n)+'秒，震慑（敌人无法行动）多'+(0.2*n).toFixed(1)+'秒。',
+ jinma:'挑飞落地的范围 +'+(15*n)+'%。'+(n===3?'\n落地后再震一次（50%伤害）。':''),
+ tieqi:'铁骑冲锋距离 +'+(20*n)+'%，冲锋伤害 +'+(10*n)+'%。',
+ taoyuan:'交叉斩溅射范围 +'+(10*n)+'（基础 30）。'+(n===3?'\n三剑分击，同时斩三名敌人。':''),
+ xiemin:'仁德回复量（自身与部曲）+'+(25*n)+'%。',
  };
  return descriptions[id];
 }
@@ -166,9 +167,9 @@ export function canOfferRejuvenation(player: Player): boolean {
 /** 保底选项：原数值（+5生命/+5%拾取/+0.1回复）几乎无感，提高到可感知并各附带一个即时效果。 */
 export function foundationOptions():UpgradeOption[]{
   return [
-    {id:'foundation_hp',name:'固本培元',desc:'最大生命+12\n并立即回复12生命',kind:'foundation',categoryLabel:'基础成长',apply:p=>{p.stats.maxHpBonus+=12;p.heal(12);}},
-    {id:'foundation_pickup',name:'搜集辎重',desc:'拾取范围+15%\n并立刻收拢全场军功宝石',kind:'foundation',categoryLabel:'基础成长',apply:p=>{p.stats.pickupRadius*=1.15;const s=p.scene as unknown as {gemMagnetUntil?:number;combatNow?:number};s.gemMagnetUntil=(s.combatNow??0)+2500;}},
-    {id:'foundation_recovery',name:'调息养元',desc:'每秒生命恢复+0.3\n并立即回复15%生命',kind:'foundation',categoryLabel:'基础成长',apply:p=>{p.stats.regen+=.3;p.heal(Math.round(p.maxHp*.15));}},
+    {id:'foundation_hp',name:'固本培元',desc:'生命上限 +12\n并立即回复 12 生命',kind:'foundation',categoryLabel:'基础成长',apply:p=>{p.stats.maxHpBonus+=12;p.heal(12);}},
+    {id:'foundation_pickup',name:'搜集辎重',desc:'拾取范围 +15%\n并立即收拢全场军功宝石',kind:'foundation',categoryLabel:'基础成长',apply:p=>{p.stats.pickupRadius*=1.15;const s=p.scene as unknown as {gemMagnetUntil?:number;combatNow?:number};s.gemMagnetUntil=(s.combatNow??0)+2500;}},
+    {id:'foundation_recovery',name:'调息养元',desc:'每秒回复 +0.3 生命\n并立即回复 15% 生命',kind:'foundation',categoryLabel:'基础成长',apply:p=>{p.stats.regen+=.3;p.heal(Math.round(p.maxHp*.15));}},
   ];
 }
 
@@ -177,13 +178,14 @@ export function foundationOptions():UpgradeOption[]{
  * 同流派集齐 4 件觉醒；或与搭档流派各 2 件双系觉醒。升级已学战法不增加件数。
  */
 export function schoolLabel(tag:BuildTag,tags:Record<BuildTag,number>,learned:boolean):string{
+  // 2026-11-17 文案审校：「连击系 2/4 · 凑满4个触发觉醒」——觉醒 = 同系凑满后解锁的额外强力效果（觉醒时屏幕有提示）
   const name=TAG_NAMES[tag],now=tags[tag];
-  if(learned)return name+'流派 · 升级（仍为'+Math.min(4,now)+'/4件）';
-  const next=now+1;if(next>=4)return name+'流派 第'+Math.min(4,next)+'/4件 · 觉醒';
+  if(learned)return name+'系 · 升级（仍为 '+Math.min(4,now)+'/4）';
+  const next=now+1;if(next>=4)return name+'系 '+Math.min(4,next)+'/4 · 凑满，触发觉醒！';
   const pair=AWAKENINGS.find(a=>a.tags.length===2&&(a.tags as readonly BuildTag[]).includes(tag)),partner=pair?(pair.tags as readonly BuildTag[]).find(t=>t!==tag):undefined;
-  if(partner&&next>=2&&tags[partner]>=2)return name+'流派 第'+next+'/4件 · 与'+TAG_NAMES[partner]+'各2件，双系觉醒';
-  if(partner&&next>=1)return name+'流派 第'+next+'/4件 · 集齐4件，或与'+TAG_NAMES[partner]+'各2件觉醒';
-  return name+'流派 第'+next+'/4件 · 集齐4件觉醒';
+  if(partner&&next>=2&&tags[partner]>=2)return name+'系 '+next+'/4 · 与'+TAG_NAMES[partner]+'系各2个，触发双系觉醒！';
+  if(partner&&next>=1)return name+'系 '+next+'/4 · 凑满4个觉醒（或与'+TAG_NAMES[partner]+'系各2个）';
+  return name+'系 '+next+'/4 · 凑满4个触发觉醒';
 }
 /** 只从当前角色可用的局内成长中抽取三张唯一奖励；绝不授予其他武将的武器。 */
 export function buildUpgradeOptions(player: Player, weapons: WeaponState[], growth: RunGrowth = player.growth): UpgradeOption[] {

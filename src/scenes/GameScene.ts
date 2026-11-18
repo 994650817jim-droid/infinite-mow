@@ -3,7 +3,7 @@ import {FollowerSquad,type Follower} from '../systems/FollowerSquad';
 import {CharacterPassives} from '../systems/CharacterPassives';
 import {FOLLOW} from '../data/recruits';
 import type {PlayerStats} from '../types';
-import {followersFor} from '../systems/RosterStore';
+import {followersFor,followerLevelCap} from '../systems/RosterStore';
 import { warnCircle, TELEGRAPH_CLASSIC, groundCracks, windupFlash } from '../ui/Telegraph';
 import { HINT_MOCK, SHOW_OWN_RANGE_FX, groundScar, keyOutline } from '../ui/HintStyle';
 import { warnFx } from '../ui/WarnFx';
@@ -33,7 +33,7 @@ import {HuaxiongBoss} from '../systems/HuaxiongBoss';
 import {getXingyangEncounter} from '../data/xingyang';
 import {XurongBoss} from '../systems/XurongBoss';
 import {getSishuiEncounter} from '../data/sishui';
-import {BattlefieldSupplies,MAX_PROP_SLOTS} from '../systems/BattlefieldSupplies';
+import {BattlefieldSupplies,MAX_PROP_SLOTS,POUCH_MAX} from '../systems/BattlefieldSupplies';
 import {YellowBattle} from '../systems/YellowBattle';
 import {XiliangBattle} from '../systems/XiliangBattle';
 import {dongzhuoStageUnlocked,yellowStageUnlocked,unlockedTroopKinds} from '../world/WorldStore';
@@ -49,7 +49,9 @@ import { WAR, warText, ensureWarTextures } from '../ui/WarStyle';
 import { LQ, lqButton, lqDivider, lqHitBox, lqImageButton, lqPanel, lqSkin, type LqState } from '../ui/LacquerKit';
 import { chapterUnlocked, isChapterTestRun, recordChapterVictory } from '../systems/ChapterProgress';
 import { BALANCE, COLORS, DEPTH, FONT, GAME_HEIGHT, GAME_WIDTH, HEADING_FONT, IS_DESKTOP, TITLE_FONT, actorDepth, screenPoint } from '../config';
-import { upgradeCardTexture } from '../ui/HomeCommand';
+import {upgradeCardTexture,inkUpgradeCardTexture,inkPlate} from '../ui/HomeCommand';
+import { RESULT_GOLD, RESULT_IVORY, RESULT_STROKE, buildRewardView, parseHeroLine, playResultAnims, wan, type ResultAnim } from '../ui/ResultRewards';
+import { loadBagArt } from '../ui/ItemQuality';
 import type { EnemyDef } from '../data/enemies';
 import { WEAPON_META, weaponName, buildUpgradeOptions, canOfferRejuvenation } from '../data/upgrades';
 import { waveIndexAt } from '../data/waves';
@@ -70,7 +72,7 @@ import { Reinforcements } from '../systems/Reinforcements';
 import { MartialFields } from '../systems/MartialFields';
 import { RunGrowth, ATTRIBUTE_INFO, ATTRIBUTE_MAX, attributeIcon, type AttributeId } from '../systems/RunGrowth';
 import { addMerit, addScrolls, getXinde, SCROLL, temperBonus } from '../systems/MasteryStore';
-import { primaryAttribute } from '../data/attributes';
+import { primaryAttribute, PRIMARY_PERK, PRIMARY_PERK_INFO, PRIMARY_TIERS, PRIMARY_MUL, SPELL_WEAPONS } from '../data/attributes';
 import { stageCleared, takeAttrNotice } from '../systems/HeroProgress';
 import { allocateHeroAttr, claimFirstClear, creditHeroXp, enlistHero, heroFreePoints, heroInfo, heroLevel, levelCap, setHeroProgress, type HeroKey } from '../systems/HeroProgress';
 import { HERO_XP_RATE, OVERFLOW_XP_PER_GRAIN, PICK_GUARANTEE } from '../data/heroLevels';
@@ -101,9 +103,19 @@ import { WindstepFx } from '../systems/WindstepFx';
 import { EnvInteractions } from '../systems/EnvInteractions';
 import { envConfigFor } from '../data/envInteractions';
 import { Terrain } from '../systems/Terrain';
+import { attrBadge } from '../ui/AttrBadge';
+import { PROP_LOOT, rollPropItem, type PropLootKind } from '../data/propLoot';
 import { terrainConfigFor } from '../data/terrain';
 import { Tutorial } from '../systems/Tutorial';
-import { IffOverlay, readIffMode, type IffUnit } from '../systems/IffOverlay';
+import { IffOverlay, readIffMode, warmIffTextures, type IffUnit } from '../systems/IffOverlay';
+import { DAMAGE_LABEL, OUTLINE_LABEL, SCALE_LABEL, SHAKE_LABEL, WIDTH_LABEL, cycle, damageNumbers, outlineMode, outlineWidth, renderScaleSetting, setDamageNumbers, setOutlineMode, setOutlineWidth, setRenderScaleSetting, setShakeLevel, shakeLevel, shakeScale, type DamageNumbers, type OutlineMode, type OutlineWidth, type RenderScaleSetting, type ShakeLevel } from '../systems/BattleSettings';
+import { tutorialReplayLink } from '../ui/TutorialOverlay';
+import { beginBattle, commitBattle, rollbackBattle } from '../systems/BattleSnapshot';
+import { reloadGame } from '../systems/SaveSlots';
+import { BossMoveset } from '../systems/BossMoveset';
+import { BossMount } from '../systems/BossMount';
+import { watchBossPhase } from '../systems/BossPhase';
+import { BOSS_MOUNTS, BOSS_MOVES } from '../data/bossMoves';
 import type {ItemInstance} from '../data/items';
 import {armShield,absorbShield,ShieldBars} from '../systems/ShieldGuard';
 import {StageObjectives} from '../systems/StageObjectives';
@@ -118,7 +130,7 @@ const HERO_FX_TONE: Record<string, { alpha: number; ms: number }> = {
   roarWave: { alpha: .62, ms: 340 }, roar: { alpha: .7, ms: 380 },
   weiyanSlash: { alpha: .72, ms: 340 }, crack: { alpha: .7, ms: 360 }, whoDares: { alpha: .68, ms: 400 },
 };
-import { HIT_FEEL, BOSS_FEEL, shakeMul, WEAPON_HIT_TYPE } from '../data/hitFeel';
+import { HIT_FEEL, BOSS_FEEL, WEAPON_HIT_TYPE } from '../data/hitFeel';
 
 interface Gem {
   img: Phaser.GameObjects.Image;
@@ -175,6 +187,10 @@ export class GameScene extends Phaser.Scene {
   protected lubu: LubuBoss | null = null;
   /** 张角重设计样板（?boss=old 回到旧版）。 */
   protected zhangjiao: ZhangjiaoBoss | null = null;
+  /** 首领招式框架（第一章张梁 / 张宝等，配置见 data/bossMoves.ts）。 */
+  moveset: BossMoveset | null = null;
+  /** 已有专属控制器的骑马首领（吕布、华雄）的坐骑：半血随 boss-phase 坠马。 */
+  bossMount: BossMount | null = null;
   protected yellow:YellowBattle|null=null;
   /** 第二章主线（汜水关 / 荥阳 / 虎牢关）西凉军战法：铁骑突阵、飞熊军。攻守城与军情战斗（encounter）不启用。 */
   protected xiliang:XiliangBattle|null=null;
@@ -186,12 +202,16 @@ export class GameScene extends Phaser.Scene {
   protected flankFx?: FlankFx;
   /** 战法踏风步表现（同上，拥有后首次用到时创建）。 */
   protected windFx?: WindstepFx;
+  /** 游击战法移动风痕下次可出现的时间（combatNow）。 */
+  private skirmishPuffAt = 0;
   /** 场地环境互动（火油桶 / 军旗 / 营帐）；首次更新时按场景与章节创建，场景重启时清空。 */
   env: EnvInteractions | null = null;
   /** 新手引导（第一次进 1-1 时情境式教学，见 systems/Tutorial.ts）。 */
   tutorial?: Tutorial;
   private envInit = false;
   /** 战场地形层（树 / 树林、河、桥；data/terrain.ts 按篇章与关配置） */
+  /** 本关障碍物已掉的兵装件数（每关上限 PROP_LOOT.perStageItems）与掉落随机源（测试可换） */
+  propItems = 0; propRng: () => number = Math.random;
   protected terrain: Terrain | null = null; private terrainInit = false; private terrainNav: Array<{left:number;right:number;top:number;bottom:number}> = [];
   windstepFx(): WindstepFx { if (!this.windFx) { this.windFx = new WindstepFx(this, this.player, this.sfx); this.events.once('shutdown', () => { this.windFx?.destroy(); this.windFx = undefined; }); } return this.windFx; }
   flankBladeFx(): FlankFx { if (!this.flankFx) { this.flankFx = new FlankFx(this, this.player, this.sfx); this.events.once('shutdown', () => { this.flankFx?.destroy(); this.flankFx = undefined; }); } return this.flankFx; }
@@ -424,13 +444,17 @@ export class GameScene extends Phaser.Scene {
   protected resultPanel!: Phaser.GameObjects.Container;
   private layoutResultButtons?: () => void;
   protected resultTexts!: Record<string, Phaser.GameObjects.Text>;
+  /** 结算动画是否放完（测试读）；resultAnimSkip 跳到结尾。resultTop / resultH 为电脑版结算卷位置。 */
+  resultAnimDone = true;
+  private resultAnimSkip: (() => void) | null = null;
+  private resultTop = 0; private resultH = 0;
   protected pausePanel!: Phaser.GameObjects.Container;
   protected attributePanel!: Phaser.GameObjects.Container;
   protected attributePauseText!: Phaser.GameObjects.Text;
   protected attributePointsText!: Phaser.GameObjects.Text;
   protected attributeWeaponText!: Phaser.GameObjects.Text;
   protected attributeSummaryText!: Phaser.GameObjects.Text;
-  protected attributeRows: Array<{ value: Phaser.GameObjects.Text; button: Phaser.GameObjects.Image; plus: Phaser.GameObjects.Text; pips: Phaser.GameObjects.Graphics; pipX: number; pipY: number }> = [];
+  protected attributeRows: Array<{ value: Phaser.GameObjects.Text; button: Phaser.GameObjects.Image; plus: Phaser.GameObjects.Text; pips: Phaser.GameObjects.Graphics; pipX: number; pipY: number; perkG?: Phaser.GameObjects.Graphics; perkX?: number; perkY?: number }> = [];
 
   protected cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
   protected wasd!: Record<string, Phaser.Input.Keyboard.Key>;
@@ -449,6 +473,8 @@ export class GameScene extends Phaser.Scene {
   /** 游戏实际在用的马厩读写（测试走这里：常开的 dev server 热更新后，测试自己 import 的 ItemStore 可能是另一个模块实例，内存缓存不同步）。 */
   readonly stable = { ownedHorses, grantHorse };
   create(): void {
+    // 中途退出不算：进关先记下存档，告捷 / 战败才丢掉（systems/BattleSnapshot.ts）
+    beginBattle(this.scene.key);
     stopMenuMusic();
     this.hadStarterHorse = ownedHorses().some(h => h.id === STARTER_HORSE);
     this.resetState();
@@ -457,8 +483,6 @@ export class GameScene extends Phaser.Scene {
     this.feedback = new BattleFeedback(this);
     this.hitFeel = new HitFeel(this); this.bossStagger = new BossStagger();
     this.events.once('shutdown', () => { this.anims.globalTimeScale = 1; });
-    // 所有震屏都按设置「震屏 强 / 弱 / 关」缩放（技能、首领、战吼等原有震屏一并受控）
-    { const cam = this.cameras.main, raw = cam.shake.bind(cam); cam.shake = ((d?: number, k?: number | Phaser.Math.Vector2, f?: boolean, cb?: Phaser.Types.Cameras.Scene2D.CameraShakeCallback, ctx?: unknown) => { const m = shakeMul(); if (m <= 0) return cam; return raw(d, typeof k === 'number' ? k * m : k === undefined ? .05 * m : k, f, cb, ctx); }) as typeof cam.shake; }
     this.sfx = new Sfx();
     const registryConfig = this.registry.get('runConfig') as RunConfig | undefined;
     const requested = getBattleChapter(registryConfig?.chapter, registryConfig?.stage,registryConfig?.westStage);
@@ -495,7 +519,7 @@ export class GameScene extends Phaser.Scene {
     this.artEffects = new ArtEffects(this);
 
     this.player = new Player(this, 0, 0);
-    this.dragFx = undefined; this.flankFx = undefined; this.windFx = undefined; this.env = null; this.envInit = false; this.terrain?.clear(); this.terrain = null; this.terrainInit = false; this.terrainNav = []; Ally.terrainMul = null; this.player && (this.player.terrainSpeedMul = 1);
+    this.dragFx = undefined; this.flankFx = undefined; this.windFx = undefined; this.skirmishPuffAt = 0; this.env = null; this.envInit = false; this.terrain?.clear(); this.terrain = null; this.terrainInit = false; this.terrainNav = []; Ally.terrainMul = null; this.player && (this.player.terrainSpeedMul = 1);
     this.applyRunConfig(this.runConfig);
     this.worldCampaign=!preview&&!isChapterTestRun()&&this.registry.get('worldCampaign')===true;
     this.hardMode=!preview&&this.registry.get('hardChapter')===this.hardKey()&&(chapterState(this.hardKey() as TimelineChapterId,loadWorldState())==='cleared'||isChapterTestRun());
@@ -512,10 +536,17 @@ export class GameScene extends Phaser.Scene {
     this.yellow=this.chapter.stage?new YellowBattle({scene:this,player:this.player,army:this.legion,enemies:this.enemies,move:(e,nx,ny,dt)=>this.advanceEnemy(e,nx,ny,dt),spawn:(def,x,y)=>this.spawnEnemy(def.kind,x,y,1,true,def)},this.chapter.stage):null;
     this.xiliang=this.chapter.id==='hulao'&&!this.runConfig.encounter&&!this.customChapter()?new XiliangBattle({scene:this,player:this.player,army:this.legion,enemies:this.enemies,spawn:(kind,x,y,def)=>this.spawnEnemy(kind,x,y,undefined,true,def),stage:()=>(this.chapter.westStage??3) as 1|2|3,elapsed:()=>this.elapsed,def:k=>this.chapter.enemies[k],banner:(t,c)=>this.showWaveBanner(t,true,c),sfx:k=>this.sfx.play(k),boss:()=>this.boss,bossStyle:()=>this.chapter.bossStyle,move:(e,nx,ny,dt)=>this.advanceEnemy(e,nx,ny,dt),obstacles:()=>this.sishuiObstacles?.footprints??[]}):null;
     this.supplies=new BattlefieldSupplies(this,this.player,this.enemies,()=>this.combatNow,kind=>{this.sfx.play('pickup');this.artEffects.show(5,this.player.x,this.player.y-12,35,this.combatNow,280);if(kind==='wine')this.relics?.onWine(this.combatNow);});
+    this.propItems = 0; this.supplies.onPropLoot = (kind, x, y) => this.propLoot(kind, x, y);
     // 兵装：开局读入该武将穿戴的道具加成（生命上限增加的部分补满）
     {const oldMax=this.player.maxHp;this.player.growth.gear=gearFor(this.runConfig.character);this.player.heal(this.player.maxHp-oldMax);}
     this.followers=null;this.followerPassives=[];{const allow=worldUnlocked()&&(!isChapterTestRun()||new URLSearchParams(location.search).get('followers')==='1');const list=allow?followersFor(this.runConfig.character):[];if(list.length)this.followers=new FollowerSquad(this,this.player,list,(x,y,r)=>this.grid.query(x,y,r),(e,d,fire)=>this.hitEnemy(e,d,this.combatNow,fire?'fire':'melee',true,false),()=>this.player.growth.damageMultiplier(this.combatNow));}
     { const mode = readIffMode(); this.iff = mode ? new IffOverlay(this, mode, () => this.iffUnits()) : null; }
+    // 震屏设置（强 / 弱 / 关，im_shake，见 systems/BattleSettings）：包一层主相机 shake，现有调用全部按设置缩放
+    { const cam = this.cameras.main, orig = cam.shake.bind(cam);
+      cam.shake = ((duration?: number, intensity?: number | Phaser.Math.Vector2, force?: boolean, callback?: Phaser.Types.Cameras.Scene2D.CameraShakeCallback, context?: unknown) => {
+        const k = shakeScale(); if (k <= 0) return cam;
+        return orig(duration, typeof intensity === 'number' ? intensity * k : intensity, force, callback, context);
+      }) as typeof cam.shake; }
     this.shieldBars=new ShieldBars(this);this.events.once('shutdown',()=>{this.shieldBars?.clear();this.shieldBars=null;this.objective?.clear();this.objective=null;this.objectiveText=undefined;});
     this.setupObjective();
     // 坐骑：马厩里给该武将分配的马（第一章通关后马厩开放；换马只在休整时，下一关出征生效）
@@ -611,6 +642,8 @@ export class GameScene extends Phaser.Scene {
       .setScrollFactor(0)
       .setDepth(DEPTH.hud);
     this.tutorial = Tutorial.maybeStart(this);
+    // 首领阶段切换统一事件（boss-phase）：所有控制器的 phase2 都从这里发
+    watchBossPhase(this, () => { const c = (this as unknown as { controller?: { phase2?: boolean } }).controller; return this.boss ? { boss: this.boss, phase2: !!(this.moveset?.phase2 || this.lubu?.phase2 || this.huaxiong?.phase2 || this.xurong?.phase2 || this.zhangjiao?.phase2 || c?.phase2), name: this.chapter.bossName, mounted: !!(this.bossMount?.mounted || this.moveset?.mounted) } : null; });
   }
 
   /** 把开局选择（武将/初始武器）应用到本局。 */
@@ -675,7 +708,7 @@ export class GameScene extends Phaser.Scene {
     this.spawnTimer = 0.5;
     this.eliteTimer = BALANCE.eliteFirst;
     this.boss = null;
-    this.sishuiObstacles=null;this.huaxiong=null;this.xurong=null;this.lubu = null; this.zhangjiao?.clear(); this.zhangjiao = null; this.yellow=null; this.xiliang=null; this.supplies=null; this.yellowAltar=null;this.finaleFadeMs=0;
+    this.sishuiObstacles=null;this.huaxiong=null;this.xurong=null;this.lubu = null;this.moveset?.clear();this.moveset=null;this.bossMount?.destroy();this.bossMount=null; this.zhangjiao?.clear(); this.zhangjiao = null; this.yellow=null; this.xiliang=null; this.supplies=null; this.yellowAltar=null;this.finaleFadeMs=0;
     this.bossSpawned = false;
     this.bossCastCd = 3;
     this.bossSummonCd = 6;
@@ -866,7 +899,8 @@ export class GameScene extends Phaser.Scene {
     this.awakeningCombat?.update(this.combatNow);
     const vfx=buildVfx(this);vfx.update(this.combatNow);
     if(this.buildCombat.charged()&&this.player.growth.build.tags().charge>0)vfx.emit('charge',this.player.x+14,this.player.y-14,this.combatNow,34);
-    if(Math.hypot(move.x,move.y)>.1&&this.player.growth.build.tags().skirmish>0)vfx.emit('skirmish',this.player.x-move.x*12,this.player.y-move.y*12,this.combatNow,40,Math.atan2(move.y,move.x));
+    // 游击类战法（疾行印等）的移动风痕：用户反馈「疾行」特效一直挂在身后太显眼 → 改为脚边一小团、每 1.5 秒最多一次
+    if(Math.hypot(move.x,move.y)>.1&&this.player.growth.build.tags().skirmish>0&&this.combatNow>=this.skirmishPuffAt){this.skirmishPuffAt=this.combatNow+1500;vfx.emit('skirmish',this.player.x-move.x*16,this.player.y+16-move.y*10,this.combatNow,26,Math.atan2(move.y,move.x),260);}
     this.updateWeapons(dt, time);
     this.reinforcements.update(time, this.enemies, (enemy, amount, fire) => this.hitEnemy(enemy, amount, time, fire ? 'fire' : 'melee', true, false));
     if (this.over) return;
@@ -1054,6 +1088,9 @@ export class GameScene extends Phaser.Scene {
 
     if(this.chapter.bossStyle==='xurong')this.xurong=new XurongBoss({scene:this,boss,player:this.player,army:this.legion,spawn:(kind,x,y)=>this.spawnEnemy(kind,x,y,1),sfx:()=>this.sfx.play('allySlash')},this.combatNow);
     if(this.chapter.bossStyle==='huaxiong'){this.huaxiong=new HuaxiongBoss({scene:this,boss,player:this.player,army:this.legion,hurtTroops:(x,y,r,d,n,a,arc)=>this.legion.hurtArea(x,y,r,d,n,a,arc),sfx:()=>this.sfx.play('allySlash')},this.combatNow);}
+    // 首领招式框架（第一章张梁 / 张宝）与已有控制器首领的坐骑（吕布赤兔、华雄）
+    {const mv=BOSS_MOVES[this.chapter.bossStyle];if(mv&&!BOSS_OLD&&(this.chapter.bossStyle==='zhangliang'||this.chapter.bossStyle==='zhangbao'))this.moveset=new BossMoveset({scene:this,boss,player:this.player,army:this.legion,spawn:(kind,x,y,def)=>this.spawnEnemy(kind,x,y,1,true,def),def:k=>this.chapter.enemies[k],banner:(t,c)=>this.showWaveBanner(t,true,c),sfx:k=>this.sfx.play(k)},boss.sprite.texture.key,this.combatNow,mv,'walk');
+     const md=BOSS_MOUNTS[this.chapter.bossStyle];if(md&&!BOSS_OLD)this.bossMount=new BossMount(this,boss,md,()=>{const c=(this.lubu??this.huaxiong) as unknown as {state?:string}|null;return !!c&&(c.state==='warn'||c.state==='attack'||c.state==='windup'||c.state==='charge');});}
     if (this.chapter.bossStyle === 'zhangjiao' && !BOSS_OLD) {
       this.zhangjiao = new ZhangjiaoBoss({ scene: this, boss, player: this.player, army: this.legion,
         fireBolt: (x, y, tx, ty, d, sp) => this.fireBolt(this.bullets, x, y, tx, ty, d, 0, false, sp, this.textures.exists('bossfx_zj_talisman') ? 'bossfx_zj_talisman' : 'orb'),
@@ -1201,6 +1238,7 @@ export class GameScene extends Phaser.Scene {
         const chasing=this.chasingBosses.find(t=>t.enemy===enemy&&t.life===enemy.spawnId);
         if(this.customBossStep(enemy,dt,this.combatNow)){}
         else if(chasing){if(chasing.huaxiong)chasing.huaxiong.update(dt,this.combatNow);else if(chasing.xurong)chasing.xurong.update(dt,this.combatNow);else chasing.battle?.moveBoss(enemy,dt,this.combatNow);}
+        else if (this.moveset && enemy === this.boss) this.moveset.update(dt,this.combatNow);
         else if (this.yellow && this.chapter.stage!==3) this.yellow.moveBoss(enemy,dt,this.combatNow);
         else if(this.huaxiong)this.huaxiong.update(dt,this.combatNow);
         else if(this.xurong)this.xurong.update(dt,this.combatNow);
@@ -1657,11 +1695,32 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
+  /** 主属性专精的命中效果，返回伤害倍率。同一敌人「千钧」推开至少隔 shoveCdMs。 */
+  private perkShoveAt = new WeakMap<Enemy, number>();
+  protected primaryPerkHit(enemy: Enemy, time: number, weaponHit: boolean, crit: boolean): number {
+    const g = this.player.growth, P = PRIMARY_PERK; let mul = 1;
+    if (!weaponHit || SPELL_WEAPONS.has(this.player.weapons[0]?.id ?? '')) mul *= g.spellEcho(); // 智力·连珠
+    if (!weaponHit) return mul;
+    if (crit && g.perk('agility', 3)) g.hasteUntil = time + P.agility.hasteMs; // 敏捷·疾影
+    const pushable = enemy.kind !== 'boss' && !enemy.controlImmune && !enemy.isSupplySlot;
+    if (g.perk('strength', 2) && ++g.crushCount >= P.strength.crushEvery) { // 力量·破阵
+      g.crushCount = 0; mul *= P.strength.crushMul;
+      if (pushable) enemy.stunUntil = Math.max(enemy.stunUntil, time + P.strength.crushStunMs);
+    }
+    if (g.perk('strength', 1) && pushable && time - (this.perkShoveAt.get(enemy) ?? -1e9) >= P.strength.shoveCdMs) { // 力量·千钧
+      this.perkShoveAt.set(enemy, time);
+      const dx = enemy.x - this.player.x, dy = enemy.y - this.player.y, d = Math.hypot(dx, dy) || 1, k = enemy.kind === 'elite' ? .4 : 1;
+      enemy.sprite.x += dx / d * P.strength.shove * k; enemy.sprite.y += dy / d * P.strength.shove * k;
+    }
+    return mul;
+  }
+
   protected hitEnemy(enemy: Enemy, rawDamage: number, time: number, source: 'melee' | 'arrow' | 'fire' = 'melee', fromAlly = false, weaponHit = true): boolean {
     if (!enemy.active || this.over || enemy.invulnerable) return false;
     if(enemy.isSupplySlot){enemy.hp-=Math.max(1,Math.round(rawDamage));enemy.flash(time);this.sfx.play('hitHeavy');if(enemy.hp<=0)this.killEnemy(enemy);return false;}
     if (enemy === this.boss) this.ensureBossPhase2();
     if (this.xiliang) rawDamage *= this.xiliang.incoming(enemy, source);
+    if (enemy === this.boss && this.moveset) { rawDamage *= this.moveset.incoming(fromAlly); this.moveset.hit(time); }
     if(this.yellow&&enemy.kind==='shield'&&enemy.shieldMax===0&&enemy.def.behavior!=='wall'&&!fromAlly&&source!=='fire'){const angle=enemy.direction==='left'?Math.PI:enemy.direction==='right'?0:enemy.direction==='up'?-Math.PI/2:Math.PI/2;if(Math.cos(Math.atan2(this.player.y-enemy.y,this.player.x-enemy.x)-angle)>.25)rawDamage*=.65;}
     if (source === 'arrow') this.sfx.play('hitArrow');
     else if (source === 'fire') this.sfx.play('hitFire');
@@ -1677,6 +1736,7 @@ export class GameScene extends Phaser.Scene {
     if(!fromAlly)rawDamage*=this.player.growth.gearHitMultiplier(enemy.kind);
     // 智力：非武器伤害（技艺、灼烧等）按法术系数 × 智力、含主属性；法术武器（火旗 / 火雷 / 连弩 / 团扇）的武器命中再乘法术系数
     if(!fromAlly&&!weaponHit)rawDamage*=this.player.growth.skillDamageMultiplier();else if(!fromAlly)rawDamage*=this.player.growth.spellWeaponMultiplier(this.player.weapons[0]?.id);
+    if(!fromAlly)rawDamage*=this.primaryPerkHit(enemy,time,weaponHit,crit); // 主属性专精（千钧 / 破阵 / 疾影 / 连珠）
     let damage = Math.max(1, Math.round(rawDamage * (crit ? BALANCE.critMultiplier : 1) * (firstStrike ? RELIC.zhanjiangMul : 1)));
     enemy.flash(time);
     if(!fromAlly&&source==='arrow')this.artEffects.show(3,enemy.x,enemy.y-8,32,time,120);
@@ -1755,7 +1815,7 @@ export class GameScene extends Phaser.Scene {
     this.objective?.onKill(enemy);
     const kind = enemy.kind;
     // 吕布倒地改由 playBossFall（倒地 4 帧）播，不再叠旧的通用死亡闪影
-    if(kind==='boss'){const old=this.chasingBosses.find(t=>t.enemy===enemy&&t.life===enemy.spawnId),h=old?old.huaxiong:this.huaxiong,x=old?old.xurong:this.xurong;h?.defeat();x?.defeat();if(old){if(h)this.deadBossControllers.push(h);if(x)this.deadBossControllers.push(x);}
+    if(kind==='boss'){const old=this.chasingBosses.find(t=>t.enemy===enemy&&t.life===enemy.spawnId),h=old?old.huaxiong:this.huaxiong,x=old?old.xurong:this.xurong;h?.defeat();x?.defeat();if(enemy===this.boss){this.moveset?.defeat();this.moveset=null;this.bossMount?.destroy();this.bossMount=null;}if(old){if(h)this.deadBossControllers.push(h);if(x)this.deadBossControllers.push(x);}
       // 倒地：控制器自己有倒地帧的（华雄 / 徐荣 / 子类首领）沿用；其余首领播通用倒地（受伤帧 + 倒下 + 手绘扬尘 + 下沉淡出）
       this.bossFallDir=0;if(!(h||x||this.bossHasDeathArt()))this.bossFallDir=playBossFall(this,enemy,this.zhangjiao?'zhangjiao_moves':this.lubu?'lubu_moves':undefined,old?undefined:this.chapter.bossStyle);}
     enemy.deactivate();
@@ -1931,6 +1991,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   protected spawnDamageText(x: number, y: number, value: number, crit: boolean, priority=true): void {
+    { const dm = damageNumbers(); if (dm === 'off' || (dm === 'crit' && !crit)) return; } // 设置「伤害数字」
     const crowded=this.legion.visibleCount>=60,limit=crowded?18:32;
     const merged=this.dmgFx.find(f=>f.active&&f.crit===crit&&f.life>.25&&Math.hypot(f.text.x-x,f.text.y-y)<(crowded?44:22));
     if(merged){merged.text.setText(String(Number(merged.text.text)+value));return;}
@@ -2163,9 +2224,10 @@ export class GameScene extends Phaser.Scene {
       this.pausePanel.setVisible(mode === 'pause');
       this.attributePauseText?.setText(`分配属性点 · ${this.player?.growth.unallocated ?? 0}`);
       const exit=this.pausePanel.getByName('pause-exit') as Phaser.GameObjects.Text|null;
-      exit?.setData('confirm',false).setText('返回选将').setColor('#b5c4b2');
+      exit?.setData('confirm',false).setText(IS_DESKTOP?(this.worldCampaign&&worldUnlocked()?'返回营寨':'退出本关'):'返回选将').setColor('#b5c4b2');
     }
     if (this.resultPanel) this.resultPanel.setVisible(mode === 'result');
+    if (mode === 'rest') commitBattle(); // 关卡告捷进行营：本场所得生效
     if (mode === 'rest' && !this.restIntroPlayed) { this.restIntroPlayed = true; this.playRestIntro(); }
   }
 
@@ -2240,7 +2302,8 @@ export class GameScene extends Phaser.Scene {
         relic:{bg:'#5c4920',color:'#ffd166'},rare:{bg:'#64352e',color:'#ffd0c0'},passive:{bg:'#293e34',color:'#d8ffe9'},
       };
       const style=categoryStyle[option.kind];
-      view.tag.setBackgroundColor(style.bg).setColor(style.color);
+      // 水墨预览：标签统一朱砂底（类别色只在现版用）
+      if (GameScene.INK_LEVELUP) view.tag.setBackgroundColor('#8a2a1c').setColor('#fff0d6'); else view.tag.setBackgroundColor(style.bg).setColor(style.color);
       const iconKey = option.kind === 'potion' ? 'icon_rare' : option.kind === 'weapon' ? ({
         spear_orbit:'icon_1',crossbow:'icon_2',flame_banner:'icon_3',guandao:'icon_guandao',zhenbei_blade:'icon_zhenbei',lianhuan_mines:'icon_lianhuan',sun_knives:'icon_sunknives',diaochan_fans:'icon_fans',baodiao_bow:'icon_baodiao',dangyang_roar:'icon_shemao',zhanjin_lance:'icon_zhanjin',shuanggu_swords:'icon_shuanggu',
       } as const)[option.weaponId!] : option.weaponId === 'spear_orbit'
@@ -2263,8 +2326,10 @@ export class GameScene extends Phaser.Scene {
   }
 
   /** 卡面贴图按类别色/悬停/稀有切换。 */
+  /** 三选一 · 水墨预览（?levelup=ink，2026-11-17 用户「水墨风我看看再决定」；默认不启用）。 */
+  private static get INK_LEVELUP(): boolean { try { return IS_DESKTOP && new URLSearchParams(location.search).get('levelup') === 'ink'; } catch { return false; } } // 用时再算：IS_DESKTOP 在 main.ts initLayout() 之后才定
   private paintUpgradeCard(view: CardView): void {
-    view.bg.setTexture(upgradeCardTexture(this, view.w, view.h, view.accent, view.medal, view.hover, view.rare)).setDisplaySize(view.w + 32, view.h + 32);
+    view.bg.setTexture(GameScene.INK_LEVELUP ? inkUpgradeCardTexture(this, view.w, view.h, view.medal, view.hover, view.rare) : upgradeCardTexture(this, view.w, view.h, view.accent, view.medal, view.hover, view.rare)).setDisplaySize(view.w + 32, view.h + 32);
     (view.bg.getData('fitHit') as (() => void) | undefined)?.();
   }
 
@@ -2296,6 +2361,11 @@ export class GameScene extends Phaser.Scene {
     }
     const remaining = this.upgradeOptions.filter((_o, k) => k !== index);
     this.upgradeOptions = []; // 先消费选项，防止重复点击旧卡。
+    // 2026-11-17 用户：「奖励的回春丹可以存着」——药囊有空位就收进药囊（Q / 用药钮使用，回复 30% 生命），满了才立即回复
+    if (option.id === 'potion_rejuvenation' && this.supplies && this.supplies.pouch.length < POUCH_MAX) {
+      this.supplies.pouch.push({ amount: Math.round(this.player.maxHp * .3), texture: this.textures.exists('heal_props') ? 'heal_props' : 'healing_potion', frame: this.textures.exists('heal_props') ? 1 : undefined, name: '回春丹' });
+      growthNotice = '回春丹 · 已收入药囊（Q 使用）';
+    } else
     option.apply(this.player, this.player.weapons, this.player.growth);
     // 相国印：这次升级还能再选一张（剩下的卡里挑）
     if (this.relicExtraPicks > 0 && remaining.length) { this.relicExtraPicks--; this.upgradeOptions = remaining; this.renderCards(); (this.levelPanel.getByName('upgrade-points-hint') as Phaser.GameObjects.Text)?.setText('相国印 · 再选一张'); if (growthNotice) this.pendingGrowthNotices.push(growthNotice); return; }
@@ -2364,13 +2434,64 @@ export class GameScene extends Phaser.Scene {
     this.tweens.add({ targets: label, alpha: 0, y: label.y - 8, delay: 1150, duration: 350, onComplete: () => label.destroy() });
   }
 
-  protected createVolumeRow(label: string, y: number, initial: number, onChange: (value: number) => void): Phaser.GameObjects.GameObject[] {
-    const cx = GAME_WIDTH / 2, width = Math.min(330, GAME_WIDTH - 144);
+  /**
+   * 战斗内「军中设置」（电脑版，2026-11-17 用户「暂停改成设置，然后可以调描边什么的」）：
+   * 原暂停面板加宽成两栏——左栏 继续战斗 / 分配属性点 / 行囊 / 战法 / 返回营寨；右栏 音乐 · 音效滑条与各项设置。
+   * 改了立即写入并即时生效，与主页「军中设置」共用同一组键（systems/BattleSettings）。
+   */
+  private layoutSettingsPanel(o: { panelG: Phaser.GameObjects.Graphics; panel: Phaser.GameObjects.Rectangle; pauseTitle: Phaser.GameObjects.Text; pauseHint: Phaser.GameObjects.Text; resume: Phaser.GameObjects.Image; resumeText: Phaser.GameObjects.Text; bgmRow: Phaser.GameObjects.GameObject[]; sfxRow: Phaser.GameObjects.GameObject[]; buildLink: Phaser.GameObjects.Text; bagLink: Phaser.GameObjects.Text; exit: Phaser.GameObjects.Text; keys: Phaser.GameObjects.Text }): void {
+    const W = GAME_WIDTH, H = GAME_HEIGHT, pw = 780, ph = 470, top = (H - ph) / 2, cx = W / 2, lx = cx - 200, rx = cx + 165;
+    o.panelG.clear(); lqPanel(o.panelG, cx - pw / 2, top, pw, ph); o.panel.setSize(pw, ph).setPosition(cx, H / 2); if (o.panel.input) o.panel.input.hitArea.setTo(0, 0, pw, ph);
+    o.pauseTitle.setText('军中设置').setFontFamily(TITLE_FONT).setFontSize(30).setColor('#efd399').setStroke('#120904', 4).setPosition(cx, top + 36);
+    o.pauseHint.setText('战斗已暂停').setFontFamily(FONT).setColor('#b9a57a').setPosition(cx, top + 68);
+    const div = this.add.graphics().setScrollFactor(0); div.lineStyle(1, 0xc9a96a, .35).lineBetween(cx - 30, top + 92, cx - 30, top + ph - 58); this.pausePanel.add(div);
+    // 左栏：动作
+    o.resume.setPosition(lx, top + 128).setDisplaySize(300, 50); o.resumeText.setPosition(lx, top + 128).setFontFamily(HEADING_FONT);
+    this.attributePauseText?.setPosition(lx, top + 190); o.bagLink.setPosition(lx, top + 236); o.buildLink.setPosition(lx, top + 282);
+    o.exit.setPosition(lx, top + ph - 92);
+    for (const t of [this.attributePauseText, o.bagLink, o.buildLink, o.exit]) t?.setFontFamily(HEADING_FONT);
+    o.keys.setText('Esc / P 继续战斗').setPosition(lx, top + ph - 26);
+    // 右栏：音乐 / 音效滑条（原控件，挪到右栏）
+    const moveRow = (row: Phaser.GameObjects.GameObject[], y: number): void => { const kept = row.filter(x => x.active); for (const x of kept) x.destroy(); void y; };
+    moveRow(o.bgmRow, 0); moveRow(o.sfxRow, 0);
+    const width = 250;
+    this.pausePanel.add(this.createVolumeRow('音乐', top + 122, this.music.getVolume(), v => this.music.setVolume(v), rx, width));
+    this.pausePanel.add(this.createVolumeRow('音效', top + 180, this.sfx.getVolume(), v => this.sfx.setVolume(v), rx, width));
+    // 右栏：‹ 值 › 行
+    const rowY = (i: number) => top + 232 + i * 40;
+    const row = <T>(i: number, name: string, key: string, list: readonly T[], get: () => T, label: (v: T) => string, apply: (v: T) => void, note?: () => string): void => {
+      const y = rowY(i);
+      const plate = this.add.graphics().setScrollFactor(0); plate.fillStyle(0x3a2616, .4).fillRoundedRect(rx - width / 2, y - 16, width, 32, 5).lineStyle(1, 0xc9a35e, .3).strokeRoundedRect(rx - width / 2, y - 16, width, 32, 5);
+      const nameT = this.add.text(rx - width / 2 + 12, y, name, { fontFamily: FONT, fontSize: '15px', color: '#e8d8b2', resolution: 2 }).setOrigin(0, .5).setScrollFactor(0).setStroke('#120904', 3);
+      const val = this.add.text(rx + 62, y, label(get()), { fontFamily: HEADING_FONT, fontSize: '16px', color: '#efd399', resolution: 2 }).setOrigin(.5).setScrollFactor(0).setStroke('#120904', 3).setName('settings-' + key);
+      const noteT = note ? this.add.text(rx + width / 2 + 8, y, '', { fontFamily: FONT, fontSize: '11px', color: '#9d8f78', resolution: 2 }).setOrigin(0, .5).setScrollFactor(0) : null;
+      const step = (dir: number): void => { const v = cycle(list, get(), dir); apply(v); val.setText(label(get())); noteT?.setText(note?.() ?? ''); };
+      const parts: Phaser.GameObjects.GameObject[] = [plate, nameT, val];
+      for (const dir of [-1, 1]) {
+        const b = this.add.text(rx + 62 + dir * 62, y, dir < 0 ? '‹' : '›', { fontFamily: HEADING_FONT, fontSize: '20px', color: '#e8d3a6', resolution: 2 }).setOrigin(.5).setScrollFactor(0).setName('settings-' + key + (dir < 0 ? '-dec' : '-inc')).setInteractive({ useHandCursor: true });
+        b.on('pointerdown', () => step(dir)); b.setData('padAdjust', (d2: number) => step(d2));
+        const sk = lqSkin(this, b, b, () => ({ w: 28, h: 26 }), { tone: 'quiet' }); lqHitBox(b, 28, 26); sk.gfx.setScrollFactor(0); parts.push(sk.gfx, b);
+      }
+      if (noteT) parts.push(noteT);
+      this.pausePanel.add(parts);
+    };
+    row<OutlineMode>(0, '敌我描边', 'outline', ['off', 'enemy', 'all'], outlineMode, v => OUTLINE_LABEL[v], v => {
+      setOutlineMode(v); if (this.iff) { this.iff.mode.outline = v !== 'off'; this.iff.mode.enemyOnly = v === 'enemy'; } if (v !== 'off') warmIffTextures(this.game);
+    });
+    row<OutlineWidth>(1, '描边粗细', 'outline-width', ['thin', 'thick'], outlineWidth, v => WIDTH_LABEL[v], v => { setOutlineWidth(v); if (this.iff) this.iff.mode.thick = v === 'thick'; });
+    row<DamageNumbers>(2, '伤害数字', 'damage', ['all', 'crit', 'off'], damageNumbers, v => DAMAGE_LABEL[v], setDamageNumbers);
+    row<ShakeLevel>(3, '震屏', 'shake', ['strong', 'weak', 'off'], shakeLevel, v => SHAKE_LABEL[v], v => { setShakeLevel(v); if (v !== 'off') this.cameras.main.shake(140, .004); });
+    const scale0 = renderScaleSetting();
+    row<RenderScaleSetting>(4, '画面清晰度', 'render-scale', ['', '1', '2', '3'], renderScaleSetting, v => SCALE_LABEL[v], setRenderScaleSetting, () => renderScaleSetting() === scale0 ? '' : '刷新后生效');
+    const replay = tutorialReplayLink(this, rx + width / 2, top + ph - 26).setScrollFactor(0); this.pausePanel.add(replay);
+  }
+
+  protected createVolumeRow(label: string, y: number, initial: number, onChange: (value: number) => void, cx = GAME_WIDTH / 2, width = Math.min(330, GAME_WIDTH - 144)): Phaser.GameObjects.GameObject[] {
     const text = this.add.text(cx-width/2,y-23,label,warText(15,'#c7d6c5'));
     const percent = this.add.text(cx+width/2,y-23,`${Math.round(initial)}%`,warText(15,'#dfc58a')).setOrigin(1,0);
     const track = this.add.rectangle(cx,y+9,width,6,0x07140d).setStrokeStyle(1,0x48634e);
     const fill = this.add.rectangle(cx-width/2,y+9,width*initial/100,4,WAR.jade).setOrigin(0,.5);
-    const hit = this.add.rectangle(cx,y+9,width+24,52,0,0).setInteractive({useHandCursor:true});
+    const hit = this.add.rectangle(cx,y+9,width+24,52,0,0).setInteractive({useHandCursor:true}).setName('volume-'+label);
     const knob = this.add.rectangle(cx-width/2+width*initial/100,y+9,14,20,0xdcc489).setStrokeStyle(1,0xf4dfac).setInteractive({useHandCursor:true});
     const apply = (ratio:number):void => {
       const pct=Math.round(Phaser.Math.Clamp(ratio,0,1)*100);
@@ -2399,6 +2520,7 @@ export class GameScene extends Phaser.Scene {
     // 支援招兵只出现军营已解锁的兵种（营寨未开放的新档军营 1 级，即基础三种）
     const pool=unlockedTroopKinds();
     this.recruitOptions = Array.from({ length: 3 }, (_, i) => ({ kind: pool[(start + i) % pool.length], upgrade: false }));
+    this.legion.freeRecruitCount = FREE_RECRUIT_BY_TIER[Math.max(0, Math.min(FREE_RECRUIT_BY_TIER.length - 1, this.itemTier()))] + this.player.growth.freeRecruitBonus(); // 统御·募众
     this.renderRecruit(); this.setMode('recruit');
   }
 
@@ -2413,11 +2535,42 @@ export class GameScene extends Phaser.Scene {
       return;
     }
     if (this.mode !== 'recruit' || !this.freeRecruit || train || this.recruitedWaves.has(this.waveIndex) || !this.recruitOptions.some(o => o.kind === kind)) return;
-    if (this.legion.recruit(kind, this.legion.freeRecruitCount, true)) {
+    this.legion.arriveFrom = this.recruitEntryPoint(); // 援兵从场外跑来入列（用户 2026-11-17）
+    if (this.legion.recruit(kind, this.legion.freeRecruitCount, true)) { // freeRecruitCount 开招兵时已含统御·募众
       if(this.waveIndex%2===0){const id=this.player.hp<this.player.maxHp?'rejuvenation':'berserk';this.player.growth.usePotion(id,this.player,this.combatNow);this.showGrowthNotice(id==='rejuvenation'?'整军奖励 · 回春丹':'整军奖励 · 狂战丹');}
       this.recruitedWaves.add(this.waveIndex); this.freeRecruit = false; this.recruitOptions = [];
       this.resumePendingChoices();
     }
+  }
+
+  /**
+   * 战场支援援兵的入场点：画面边缘外一点，先试主将面朝的那一边，再按离主将由近到远试其余三边；
+   * 每边沿边线试几个偏移，避开城墙 / 关隘碰撞框、河水与树干（地形层的禁区判定）。都不行就退回主将身后。
+   */
+  /** 障碍物按类别掉落（data/propLoot.ts）：兵器架只出攻击类兵装、甲胄架只出护具，封顶蓝色、每关上限；粮袋粮车给随军粮；军旗 / 营帐 / 景物不会走到这里。 */
+  protected propLoot(kind: PropLootKind, x: number, y: number): void {
+    const L = PROP_LOOT, rng = this.propRng, now = this.combatNow;
+    if (kind === 'grain') { this.legion.food += L.grain.food; this.showGrowthNotice('缴获粮草 · 随军粮 +' + L.grain.food); return; }
+    if (kind !== 'weapons' && kind !== 'armor' && kind !== 'crate' && kind !== 'coins') return;
+    const c = L[kind];
+    for (let i = 0; i < c.gems; i++) { const a = i / Math.max(1, c.gems) * Math.PI * 2; this.spawnGem(x + Math.cos(a) * 22, y + 8 + Math.sin(a) * 10, 1); }
+    if (this.itemDrops && this.propItems < L.perStageItems && rng() < c.itemChance) { const it = rollPropItem(kind, rng); if (it) { this.propItems++; this.itemDrops.drop(it, x, y + 18); } }
+    if (kind === 'weapons' && rng() < L.weapons.buffChance) { const g = this.player.growth; g.berserkUntil = Math.max(g.berserkUntil, now) + L.weapons.buffMs; this.showGrowthNotice('取兵器 · 斗志昂扬（短时伤害提升）'); }
+    if (kind === 'armor' && rng() < L.armor.buffChance) { this.player.propGuardUntil = Math.max(this.player.propGuardUntil, now) + L.armor.buffMs; this.player.propGuardMul = L.armor.guardMul; this.showGrowthNotice('披甲执盾 · 短时减伤'); }
+  }
+
+  protected recruitEntryPoint(): { x: number; y: number } {
+    const v = this.cameras.main.worldView, p = this.player, m = 70;
+    const edges: Record<'left' | 'right' | 'up' | 'down', { x: number; y: number; along: 'x' | 'y'; d: number }> = {
+      left: { x: v.x - m, y: p.y, along: 'y', d: p.x - v.x }, right: { x: v.right + m, y: p.y, along: 'y', d: v.right - p.x },
+      up: { x: p.x, y: v.y - m, along: 'x', d: p.y - v.y }, down: { x: p.x, y: v.bottom + m, along: 'x', d: v.bottom - p.y },
+    };
+    const order = [p.direction, ...(['left', 'right', 'up', 'down'] as const).filter(k => k !== p.direction).sort((a, b) => edges[a].d - edges[b].d)];
+    const boxes = this.sishuiObstacles?.footprints ?? [];
+    const blocked = (x: number, y: number) => boxes.some(b => x > b.left - 40 && x < b.right + 40 && y > b.top - 40 && y < b.bottom + 40)
+      || !!this.terrain && (this.terrain.inWater(x, y, 30) || (() => { const f = this.terrain!.free(x, y, 30); return Math.hypot(f.x - x, f.y - y) > 1; })());
+    for (const k of order) { const e = edges[k]; for (const off of [0, 120, -120, 240, -240]) { const x = e.along === 'x' ? e.x + off : e.x, y = e.along === 'y' ? e.y + off : e.y; if (!blocked(x, y)) return { x, y }; } }
+    return { x: p.x, y: p.y + 55 };
   }
 
   protected chooseRecruit(index: number): void { const option = this.recruitOptions[index]; if (option) this.buyTroops(option.kind, false); }
@@ -2478,7 +2631,7 @@ export class GameScene extends Phaser.Scene {
     const pad = gamepad.device === 'pad';
     this.potionCaption?.setText(pad ? '用药 ' + PAD_LABEL.X : '用药');
     this.pauseKeysText?.setText(pad ? PAD_LABEL.START + ' / ' + PAD_LABEL.B + ' 继续战斗' : IS_DESKTOP ? 'Esc / P 继续战斗' : '战斗已冻结 · 点击「继续战斗」恢复');
-    this.hudTexts?.pause?.setText(pad ? PAD_LABEL.START + ' 暂停' : '暂停');
+    this.hudTexts?.pause?.setText(pad ? PAD_LABEL.START + (IS_DESKTOP ? ' 设置' : ' 暂停') : IS_DESKTOP ? '设置' : '暂停');
     // 有敌营 / 粮草可锁定的战场（子类覆写了 padTargets）多提示 RB
     const lockable = this.padTargets !== GameScene.prototype.padTargets;
     this.hintText?.setText(pad ? (lockable ? '左摇杆移动 · RB 锁定敌营 / 粮草 · 自动攻击' : '左摇杆移动 · 自动攻击') : IS_DESKTOP ? 'WASD / 方向键移动 · 自动攻击' : '自动攻击 · 拖动摇杆移动');
@@ -2596,12 +2749,85 @@ export class GameScene extends Phaser.Scene {
    * 战报小结：第一章各关、第二章前两关打赢后直接进行营休整，结算文字不显示（用户反映「武将等级好像一直不涨」其实是看不到）。
    * 入营水墨过场结束后，把武将等级、首次通关、随行、战功、残卷这几行在画面中间显示约 5 秒。
    */
+  /**
+   * 电脑版结算展示（2026-11-17 用户「关于打败boss后结算ui也要优化一下」）：
+   * 小标题「X-X 告捷」+ 书法大标题，中间武将经验条与奖励图标格（数字滚动、升级弹字、首领遗珍翻牌），下方一两行要事与一行战况。
+   * 原结算文字（resultTexts.body）照旧写全、只是电脑版不显示：逻辑与测试都读它。动画 2 秒内放完，点空白处跳过。
+   */
+  protected presentResult(victory: boolean): void {
+    if (!IS_DESKTOP || !this.resultPanel) return;
+    this.resultAnimSkip?.();
+    (this.resultPanel.getByName('result-rewards') as Phaser.GameObjects.Container | null)?.destroy();
+    const lines = this.resultTexts.body.text.split('\n'), top = this.resultTop, H = this.resultH, cx = GAME_WIDTH / 2;
+    this.resultTexts.body.setVisible(false);
+    const code = /^(\d+-\d+)/.exec(this.chapter.name ?? '')?.[1];
+    const kicker = this.resultPanel.getByName('result-kicker') as Phaser.GameObjects.Text | null;
+    kicker?.setText(victory ? (code ? code + ' 告捷' : '大 捷') : (code ? code + ' 失利' : '失 利')).setColor(victory ? '#d9b878' : '#c98a7a');
+    const title = this.resultTexts.title.setColor(victory ? RESULT_GOLD : '#e0624f'), sub = this.resultTexts.subtitle;
+    const relic = victory ? this.itemDrops?.runLoot.find(i => !!relicDef(i.base)) ?? null : null;
+    const hero = parseHeroLine(lines); let xpFraction: number | null = null;
+    if (hero) { try { const h = heroInfo(this.runConfig.character as HeroKey); xpFraction = h.next > 0 ? h.xp / h.next : 1; } catch { /* 存档不可用 */ } }
+    const view = buildRewardView(this, { lines, width: 640, relic, xpFraction });
+    // 要事（小字，最多三行）：首通、随行、坐骑、乱世首通、屯田 / 城池细项、测试或败退提示
+    const notes: string[] = [];
+    for (const l of lines) {
+      const t = l.replace(/\s{2,}/g, ' ');
+      if (/^(首次通关|随行|获得坐骑|乱世首通|屯田供粮|城池产出|流寇未平|成都归入)/.test(l)) notes.push(t);
+      else if (/^营寨 · 农田 \+\d+ · /.test(l)) { const rest = t.replace(/^营寨 · 农田 \+\d+ · /, ''); if (rest !== '口粮 −0') notes.push('营寨 · ' + rest); }
+      else if (/^缴获兵装/.test(l) && /测试战斗不入行囊|败退遗失/.test(l)) notes.push('兵装' + (l.match(/· (测试战斗不入行囊|败退遗失 \d+ 件)/)?.[1] ?? ''));
+    }
+    if (hero?.capped) notes.push('武将已到本章等级上限 Lv.' + hero.to);
+    const noteText = this.resultPanel.getByName('result-notes') as Phaser.GameObjects.Text;
+    noteText.setText(notes.length > 3 ? [notes.slice(0, 2).join(' · '), notes.slice(2).join(' · ')].join('\n') : notes.join('\n')).setVisible(notes.length > 0);
+    const stats = this.resultPanel.getByName('result-stats') as Phaser.GameObjects.Text;
+    stats.setText(['击杀 ' + this.kills, '用时 ' + this.formatTime(this.elapsed), '伤害 ' + wan(this.damageDealt), '军团 ' + this.legion.count + ' 存活' + (this.legion.dead ? ' / ' + this.legion.dead + ' 阵亡' : '')].join('　·　')).setVisible(true);
+    // 奖励区在分隔线与要事之间居中
+    const areaTop = top + 142, areaBottom = (notes.length ? noteText.y - noteText.height - 6 : stats.y - 16);
+    view.root.setPosition(cx, areaTop + Math.max(0, (areaBottom - areaTop - view.height) / 2));
+    if (!view.height) { view.root.add(this.add.text(0, 0, victory ? '' : '胜败乃兵家常事 · 整军再战', { fontFamily: HEADING_FONT, fontSize: '18px', color: RESULT_IVORY, resolution: 2 }).setOrigin(.5).setStroke(RESULT_STROKE, 3).setAlpha(.8)); view.root.setY((areaTop + areaBottom) / 2); }
+    view.root.setScrollFactor(0); for (const c of view.root.list) (c as unknown as { setScrollFactor: (v: number) => void }).setScrollFactor(0);
+    this.resultPanel.addAt(view.root, this.resultPanel.getIndex(noteText));
+    const ty = title.y, kick = kicker;
+    const anims: ResultAnim[] = [
+      { start: 0, dur: 320, step: p => { title.setAlpha(p).setScale(1.25 - .25 * (1 - Math.pow(1 - p, 3))).setY(ty); kick?.setAlpha(p); sub.setAlpha(.85 * p); } },
+      ...view.anims,
+      { start: 1150, dur: 400, step: p => { noteText.setAlpha(p); stats.setAlpha(p); } },
+    ];
+    if (view.levelUp) this.sfx.level();
+    this.resultAnimDone = false;
+    this.resultAnimSkip = playResultAnims(this, anims, () => { this.resultAnimDone = true; this.resultAnimSkip = null; }, () => view.root.active);
+  }
   protected showRestSummary():void{
     const lines=(this.resultTexts?.body?.text??'').split('\n').filter(l=>/^(武将等级|首次通关|随行|本场战功|武学残卷)/.test(l));
     if(!lines.length)return;
-    const show=()=>{if(!this.sys?.isActive())return;const t=this.add.text(GAME_WIDTH/2,GAME_HEIGHT*.42,'战报\n'+lines.join('\n'),{fontFamily:FONT,fontSize:IS_DESKTOP?'18px':'16px',color:'#f0d28b',fontStyle:'bold',align:'center',lineSpacing:6,resolution:2,stroke:'#211b12',strokeThickness:4,backgroundColor:'#140d07e6',padding:{x:24,y:14},wordWrap:{width:GAME_WIDTH-60}}).setOrigin(.5).setScrollFactor(0).setDepth(DEPTH.overlay+60).setName('rest-summary').setInteractive();t.on('pointerdown',()=>t.destroy());window.setTimeout(()=>{if(t.active)t.destroy();},5200);};
+    const show=()=>{if(!this.sys?.isActive())return;if(IS_DESKTOP){this.showRestSummaryDesk(lines);return;}const t=this.add.text(GAME_WIDTH/2,GAME_HEIGHT*.42,'战报\n'+lines.join('\n'),{fontFamily:FONT,fontSize:IS_DESKTOP?'18px':'16px',color:'#f0d28b',fontStyle:'bold',align:'center',lineSpacing:6,resolution:2,stroke:'#211b12',strokeThickness:4,backgroundColor:'#140d07e6',padding:{x:24,y:14},wordWrap:{width:GAME_WIDTH-60}}).setOrigin(.5).setScrollFactor(0).setDepth(DEPTH.overlay+60).setName('rest-summary').setInteractive();t.on('pointerdown',()=>t.destroy());window.setTimeout(()=>{if(t.active)t.destroy();},5200);};
     // 休整时场景计时器暂停，用浏览器计时等入营过场结束
     let tries=0;const wait=()=>{if(this.children.getByName('rest-intro')&&tries++<40)window.setTimeout(wait,250);else show();};window.setTimeout(wait,400);
+  }
+  /** 电脑版入营「战报」：漆卷小窗（书法「战报」+ 经验条 + 战功 / 残卷格 + 首通 / 随行小字），约 5 秒后自动收起，点一下收起。 */
+  private showRestSummaryDesk(lines: string[]): void {
+    const cx = GAME_WIDTH / 2, w = 470;
+    const view = buildRewardView(this, { lines, width: w, only: /武将等级|本场战功|武学残卷/ });
+    const notes = lines.filter(l => /^(首次通关|随行)/.test(l)).map(l => l.replace(/\s{2,}/g, ' '));
+    const h = 72 + view.height + (notes.length ? notes.length * 17 + 6 : 0) + 12, top = Math.round(GAME_HEIGHT * .45 - h / 2);
+    const card = this.add.container(0, 0).setScrollFactor(0).setDepth(DEPTH.overlay + 60).setName('rest-summary-card');
+    const g = this.add.graphics(); lqPanel(g, cx - w / 2, top, w, h); lqDivider(g, cx, top + 58, 130);
+    const head = this.add.text(cx, top + 32, '战 报', { fontFamily: TITLE_FONT, fontSize: '28px', color: RESULT_GOLD, resolution: 2 }).setOrigin(.5).setStroke(RESULT_STROKE, 5).setShadow(0, 3, '#000000', 4, true, true);
+    view.root.setPosition(cx, top + 72);
+    const note = this.add.text(cx, top + 72 + view.height + 2, notes.join('\n'), { fontFamily: FONT, fontSize: '12px', color: RESULT_IVORY, align: 'center', lineSpacing: 5, resolution: 2, wordWrap: { width: w - 60 } }).setOrigin(.5, 0).setStroke(RESULT_STROKE, 3).setAlpha(.85);
+    // 测试与旧逻辑读 rest-summary 的文字、点它收起：保留同名文字对象作整张卡的命中区（透明）
+    const hit = this.add.text(cx, top + h / 2, '战报\n' + lines.join('\n'), { fontFamily: FONT, fontSize: '12px', fixedWidth: w, fixedHeight: h }).setOrigin(.5).setAlpha(.001).setScrollFactor(0).setDepth(DEPTH.overlay + 61).setName('rest-summary').setInteractive({ useHandCursor: true });
+    card.add([g, head, view.root, note]);
+    for (const c of card.list) (c as unknown as { setScrollFactor: (v: number) => void }).setScrollFactor(0);
+    for (const c of view.root.list) (c as unknown as { setScrollFactor: (v: number) => void }).setScrollFactor(0);
+    const skip = playResultAnims(this, [{ start: 0, dur: 260, step: p => card.setAlpha(p) }, ...view.anims], () => {}, () => card.active);
+    const close = () => { skip(); if (hit.active) hit.destroy(); if (card.active) card.destroy(); };
+    // 1-3 告捷：章节告捷弹窗与战报同时出现会叠在一起——先看战报，收起后再显示告捷弹窗
+    const notice = this.children.getByName('chapter1-volunteers') as Phaser.GameObjects.Container | null, held = !!notice?.visible;
+    if (held) notice!.setVisible(false);
+    hit.on('pointerdown', close).on('destroy', () => { if (card.active) card.destroy(); if (held && notice?.active) notice.setVisible(true); });
+    if (view.levelUp) this.sfx.level();
+    window.setTimeout(() => { if (hit.active) close(); }, 5600);
   }
   /** 测试 / 调试：直接打开所有等待中的首领宝箱。 */
   collectBossChests():void{for(const c of [...this.bossChests])c.collectNow();}
@@ -2749,6 +2975,7 @@ export class GameScene extends Phaser.Scene {
   protected finish(victory: boolean, reason: RunEndReason = 'death'): void {
     if (this.over) return;
     this.over = true;
+    commitBattle(); // 告捷（战报）与战败都按现行规则结算，本场写入生效
     this.player.passive.stop();
     // 动作层：胜利举兵器 / 战败倒地（有素材的武将才播放，播完定格）
     this.player.playAction(victory ? 'win' : 'die', 'down');
@@ -2815,7 +3042,7 @@ export class GameScene extends Phaser.Scene {
       const grain=addProvisions(r.grain+Math.floor(this.player.overflowXp/OVERFLOW_XP_PER_GRAIN));
       this.resultTexts.body.setText(this.resultTexts.body.text+'\n武将等级  '+name+(r.to>this.heroStartLevel?' Lv.'+this.heroStartLevel+' → Lv.'+r.to:' Lv.'+r.to)+' · 经验 +'+Math.round(this.lordHeroXp())+(r.capped?' · 已到本章上限 Lv.'+r.cap:'')+(grain>0?'\n经验已满  折军粮 +'+grain:''));
       // 随行武将：每人拿主公折算后经验的一半（hero-level-proposal 方案 A，用户批准）
-      const half=this.lordHeroXp()/2,lines:string[]=[];for(const f of this.followers?.members??[]){const fr=creditHeroXp((f.recruit.hero??f.recruit.id) as HeroKey,half),fn=f.recruit.name.replace(/（.*）/,'');lines.push(fr.to>fr.from?fn+' Lv.'+fr.from+' → Lv.'+fr.to:fn+' Lv.'+fr.to);}
+      const half=this.lordHeroXp()/2,lines:string[]=[];for(const f of this.followers?.members??[]){const fr=creditHeroXp((f.recruit.hero??f.recruit.id) as HeroKey,half,followerLevelCap()) /* 随行经验到随行上限为止 */,fn=f.recruit.name.replace(/（.*）/,'');lines.push(fr.to>fr.from?fn+' Lv.'+fr.from+' → Lv.'+fr.to:fn+' Lv.'+fr.to);}
       if(lines.length)this.resultTexts.body.setText(this.resultTexts.body.text+'\n随行  '+lines.join(' · ')+' · 各得经验 +'+Math.floor(half));}}
     // 征程构筑：主线首次打赢这一关（首领已破）时存档，作为下一关的起点；重打旧关 / 测试战斗不存
     if(victory&&this.bossKilled&&!this.campaignReplay&&!(isChapterTestRun()||this.debugModified||this.debugJumped||this.player.damageImmune))saveCampaignBuild(this.runConfig.character,packCampaign(this.runConfig.character,this.player,this.legion));
@@ -2839,6 +3066,8 @@ export class GameScene extends Phaser.Scene {
       else {this.registry.set('menuChapterPicker',true);this.scene.start('MenuScene');}
     });
     this.layoutResultButtons?.();
+    // 电脑版结算展示：子类 finish 还会追加结算文字，等本轮调用结束再解析
+    if (IS_DESKTOP) queueMicrotask(() => { if (this.sys?.isActive() && this.mode === 'result') this.presentResult(victory); });
     this.onRunFinished(stats);
     // 成就：战斗结果与天下 / 城镇状态（测试战斗、调试改动过的战斗不计）
     onBattleEnd({victory,debug:isChapterTestRun()||this.debugModified||this.debugJumped||!!this.player.damageImmune||!!this.runConfig.encounter,kills:this.kills,level:this.player.level,hero:this.runConfig.character,chapter:this.chapter.id,stage:this.chapter.stage,westStage:this.chapter.westStage,arc:this.achievementArc(),bossKilled:this.bossKilled});
@@ -2942,7 +3171,7 @@ export class GameScene extends Phaser.Scene {
         .setInteractive({ useHandCursor: true })
         .on('pointerdown', () => { if ((this.mode === 'none' && !this.over) || this.mode === 'pause') this.openBattleBag(); }),
       pause: this.add
-        .text(GAME_WIDTH - 24, 20, '暂停', style(17, '#ead39b')).setFixedSize(76,62).setAlign('center').setStroke('#10180f',2)
+        .text(GAME_WIDTH - 24, 20, IS_DESKTOP ? '设置' : '暂停', style(17, '#ead39b')).setFixedSize(76,62).setAlign('center').setStroke('#10180f',2)
         .setOrigin(1, 0)
         .setPadding(8, 18, 8, 18)
         .setScrollFactor(0)
@@ -2950,6 +3179,7 @@ export class GameScene extends Phaser.Scene {
         .setInteractive({ useHandCursor: true })
         .on('pointerdown', () => this.togglePause()),
     };
+    attrBadge(this, 196, 31, this.runConfig.character, 20, { scrollFactor: 0, depth: DEPTH.hud + 2 })?.setName('hud-attr-badge'); // 主将主属性印（ui/AttrBadge.ts）
     this.hudTexts.details = this.add.text(GAME_WIDTH - 24, 94, '战况 ▾', style(13, '#dfcfab'))
       .setOrigin(1,0).setFixedSize(96,62).setAlign('center').setPadding(10,12).setScrollFactor(0).setDepth(DEPTH.hud+1)
       .setVisible(false); // 「战况」下拉已取消（用户反馈不需要）；音效 / 音乐开关改为常驻
@@ -2963,6 +3193,8 @@ export class GameScene extends Phaser.Scene {
     this.muteText = this.hudTexts.mute;
     this.muteText.setText(this.sfx.muted ? '音效:关' : '音效:开');
     this.hudTexts.music.setText(this.music.mutedState ? '音乐:关' : '音乐:开');
+    // 2026-11-17 用户「暂停改成设置」：电脑版右上只留「设置」，音效 / 音乐挪进设置面板；行囊顶到原音效位
+    if (IS_DESKTOP) { this.hudTexts.mute.setVisible(false).disableInteractive(); this.hudTexts.music.setVisible(false).disableInteractive(); this.hudTexts.bag.setY(100); }
     this.hudTexts.relics = this.add
       .text(28, 308, '', style(12, '#cfc3b0')).setWordWrapWidth(GAME_WIDTH - 56)
       .setScrollFactor(0)
@@ -3021,6 +3253,7 @@ export class GameScene extends Phaser.Scene {
     this.buffHud.update(this.player,this.combatNow,!overlay&&!this.over&&!this.relicExpanded,(id,now)=>this.buffProgress(id,now));
     this.hudGfx.setVisible(!overlay);
     if (this.hudTexts) for (const t of Object.values(this.hudTexts)) t.setVisible(!overlay);
+    if (IS_DESKTOP && this.hudTexts) { this.hudTexts.mute.setVisible(false); this.hudTexts.music.setVisible(false); } // 电脑版：音效 / 音乐在「设置」面板里
     for (const icon of this.relicIcons) icon.setVisible(!overlay && icon.visible);
     if (overlay) { this.hintText?.setVisible(false); return; }
     const g = this.hudGfx;
@@ -3116,10 +3349,16 @@ export class GameScene extends Phaser.Scene {
     const title = this.add
       .text(GAME_WIDTH / 2, d ? 52 : 120 + Math.max(0, Math.round((GAME_HEIGHT - 960) / 2)), '将星精进 · 择一强化', { fontFamily: HEADING_FONT, fontSize: d ? '28px' : '30px', color: '#f0d79e', resolution: 2 })
       .setOrigin(0.5).setLetterSpacing(4).setShadow(0, 2, '#0a0603', 4, true, true);
-    title.setName('upgrade-title');this.levelPanel.add([dim, title]);
+    title.setName('upgrade-title');
+    // 2026-11-17 用户「统一书法字体」：电脑版标题与主页「乱世千军」、点将页同字体同金色；正文象牙白、描边统一
+    const INK = GameScene.INK_LEVELUP, GOLD = '#efd399', IVORY = '#e8d8b2', STROKE = '#120904';
+    if (d) title.setFontFamily(TITLE_FONT).setFontSize(34).setColor(INK ? '#f4e6c4' : GOLD).setLetterSpacing(3).setShadow(0, 3, '#130a05', 2, true, true);
+    const titleInk = d && INK ? inkPlate(this, null, GAME_WIDTH / 2, title.y + 2, 470, 46, false, 'normal') : null;
+    if (titleInk) dim.setFillStyle(0x16110c, .9);
+    this.levelPanel.add(titleInk ? [dim, titleInk.setScrollFactor(0), title] : [dim, title]);
     // 战功提示：局内每升一级一次三选一；属性点来自武将等级（跨战斗）
-    this.levelPanel.add(this.add.text(GAME_WIDTH / 2, title.y + (d ? 60 : 66), '', { fontFamily: FONT, fontSize: '15px', color: '#cdb98a', resolution: 2 }).setOrigin(0.5).setShadow(0, 1, '#0a0603', 3, true, true).setName('upgrade-points-hint'));
-    this.rerollButton=this.add.text(GAME_WIDTH-(d?28:32),d?24:42,'',{fontFamily:FONT,fontSize:'16px',color:'#e8cf91',resolution:2}).setOrigin(1,0).setPadding(16,10).setBackgroundColor('rgba(52,38,24,0.92)').setShadow(0,1,'#0a0603',2,true,true).setName('upgrade-reroll').setInteractive({useHandCursor:true}).on('pointerdown',()=>this.rerollUpgrades());this.levelPanel.add(this.rerollButton);
+    this.levelPanel.add(this.add.text(GAME_WIDTH / 2, title.y + (d ? 44 : 66), '', { fontFamily: FONT, fontSize: '15px', color: d ? IVORY : '#cdb98a', resolution: 2 }).setOrigin(0.5).setShadow(0, 1, '#0a0603', 3, true, true).setStroke(STROKE, d ? 3 : 0).setName('upgrade-points-hint'));
+    this.rerollButton=this.add.text(GAME_WIDTH-(d?28:32),d?24:42,'',{fontFamily:d?HEADING_FONT:FONT,fontSize:'16px',color:d?'#e8d3a6':'#e8cf91',resolution:2}).setOrigin(1,0).setPadding(16,10).setBackgroundColor(d?'rgba(0,0,0,0)':'rgba(52,38,24,0.92)').setStroke(STROKE,d?4:0).setShadow(0,1,'#0a0603',2,true,true).setName('upgrade-reroll').setInteractive({useHandCursor:true}).on('pointerdown',()=>this.rerollUpgrades());this.levelPanel.add(this.rerollButton);
 
 
     if(!this.textures.exists('ui_upgrade_bronze')){
@@ -3129,6 +3368,7 @@ export class GameScene extends Phaser.Scene {
     }
     const sub=this.add.text(GAME_WIDTH/2,d?88:160+Math.max(0,Math.round((GAME_HEIGHT-960)/2)),'三择其一 · 点击卡片获得强化',warText(14,'#c6b99e')).setOrigin(.5).setName('upgrade-subtitle');
     const subRule=this.add.graphics().lineStyle(1,0xc9a96a,.45).lineBetween(GAME_WIDTH/2-170,sub.y,GAME_WIDTH/2-110,sub.y).lineBetween(GAME_WIDTH/2+110,sub.y,GAME_WIDTH/2+170,sub.y);
+    if (d) { sub.setVisible(false); subRule.setVisible(false); } // 电脑版去掉「三择其一 · 点击卡片获得强化」（少字）
     this.levelPanel.add([sub,subRule]);
     // 三选一卡片：每张卡是一个容器（入场滑入、悬停上浮），卡面按类别着色。电脑横排、手机竖排。
     const pad=d?0:Math.max(0,Math.round((GAME_HEIGHT-960)/2));
@@ -3145,6 +3385,12 @@ export class GameScene extends Phaser.Scene {
       const desc=this.add.text(d?0:104-w/2,d?204-h/2:88-h/2,'',{...warText(d?16:17,'#dacfba'),align:d?'center':'left',lineSpacing:5,wordWrap:{width:d?w-40:w-122,useAdvancedWrap:true}}).setOrigin(d?.5:0,0);
       const rule=this.add.graphics();
       const hint=this.add.text(d?0:w/2-16,d?h/2-22:h/2-14,d?'按 '+(i+1)+' 选择':'点击选择',warText(11,'#9d8f78')).setOrigin(d?.5:1,1).setAlpha(.85);
+      if(d){ // 统一字体：卡名 / 标签 / 提示用标题字，正文用正文字；水墨版换深墨色 + 朱砂标签
+        name.setFontFamily(HEADING_FONT).setColor(INK?'#1f1710':GOLD).setStroke(INK?'#efe4c9':STROKE,3);
+        desc.setFontFamily(FONT).setColor(INK?'#33281d':IVORY).setStroke(INK?'#efe4c9':STROKE,INK?2:2);
+        tag.setFontFamily(HEADING_FONT).setColor(INK?'#fff0d6':'#f6e6c2');if(INK)tag.setBackgroundColor('#8a2a1c');
+        hint.setFontFamily(HEADING_FONT).setFontSize(12).setColor(INK?'#5b4630':'#b9a57a').setStroke(INK?'#efe4c9':STROKE,2).setAlpha(1);
+      }
       // 子元素也必须固定在屏幕上，否则命中检测按相机滚动偏移（点不中卡片）。
       for(const o of [bg,rule,icon,tag,name,desc,hint])o.setScrollFactor(0);root.add([bg,rule,icon,tag,name,desc,hint]);root.setScrollFactor(0);this.levelPanel.add(root);
       const view:CardView={bg,icon,name,desc,tag,root,rule,hint,w,h,baseY:y,medal,accent:UPGRADE_ACCENT.passive,rare:false,hover:false,lift:0};
@@ -3176,15 +3422,16 @@ export class GameScene extends Phaser.Scene {
     bagLink.on('pointerdown',()=>{if(this.mode==='pause')this.openBattleBag();});this.pausePanel.add(bagLink);
     const exit=this.add.text(cx,top+ph-66,'返回选将',warText(16,'#b5c4b2')).setOrigin(.5).setPadding(24,10).setInteractive({useHandCursor:true}).setName('pause-exit');
     exit.on('pointerdown',()=>{
-      if(exit.getData('confirm')){this.abandonRun();this.registry.remove('campaignTransfer');this.scene.start(this.worldCampaign&&worldUnlocked()?'CityScene':'MenuScene');}
-      else exit.setData('confirm',true).setText('确认离开？本局进度不保留').setColor('#e7b68e');
+      if(exit.getData('confirm')){this.abandonRun();this.registry.remove('campaignTransfer');if(rollbackBattle()){reloadGame();return;}this.scene.start(this.worldCampaign&&worldUnlocked()?'CityScene':'MenuScene');}
+      else exit.setData('confirm',true).setText('退出后本场获得的等级与资源不保留，确定？').setColor('#e7b68e');
     });
     const keys=this.pauseKeysText=this.add.text(cx,top+ph-22,d?'Esc / P 继续战斗':'战斗已冻结 · 点击「继续战斗」恢复',warText(12,'#7f9987')).setOrigin(.5);
     // 暂停菜单里的文字入口改为漆金小牌：有底板、悬停 / 按下态，命中区与底板一致
-    const pauseChips=([[this.attributePauseText,pw-120,30],[bagLink,pw-120,32],[buildLink,pw-120,32],[exit,pw-120,36]] as const).map(([t,w,h])=>{
-      const skin=lqSkin(this,t,t,()=>({w,h}),{tone:'quiet'});lqHitBox(t,w,h);return skin.gfx;});
+    const pauseSkins=([[this.attributePauseText,pw-120,30],[bagLink,pw-120,32],[buildLink,pw-120,32],[exit,pw-120,36]] as const).map(([t,w,h])=>{
+      const skin=lqSkin(this,t,t,()=>({w,h}),{tone:'quiet'});lqHitBox(t,w,h);return skin;}),pauseChips=pauseSkins.map(k=>k.gfx);
     this.pausePanel.add([pauseDim,panelG,panel,pauseTitle,pauseHint,...pauseChips,resume,resumeText,...bgmRow,...sfxRow]);
     this.pausePanel.add(this.attributePauseText);this.pausePanel.bringToTop(bagLink);this.pausePanel.bringToTop(buildLink);this.pausePanel.add([exit,keys]);
+    if (d) { this.layoutSettingsPanel({ panelG, panel, pauseTitle, pauseHint, resume, resumeText, bgmRow, sfxRow, buildLink, bagLink, exit, keys }); for (const k of pauseSkins) k.repaint(); } // 底板跟着按钮挪到左栏
 
     this.attributePanel=this.add.container(0,0).setScrollFactor(0).setDepth(DEPTH.overlay+1).setVisible(false);
     const attrDim=this.add.rectangle(0,0,GAME_WIDTH,GAME_HEIGHT,0x07120d,.76).setOrigin(0).setInteractive();
@@ -3198,12 +3445,19 @@ export class GameScene extends Phaser.Scene {
     this.attributePanel.add([attrDim,attrFrameG,attrFrame,attrTitle,this.attributePointsText,this.attributeWeaponText,this.attributeSummaryText]);
     const rowH=d?50:66,firstY=attrTop+(d?186:206),rowW=attrW-50;
     this.attributeRows=[];
+    const perkTip=this.add.text(0,0,'',{...warText(13,'#ffe3a0'),backgroundColor:'#1b120bee',padding:{x:8,y:5}}).setOrigin(.5,1).setVisible(false).setName('attribute-perk-tip');
     (Object.keys(ATTRIBUTE_INFO) as AttributeId[]).forEach((id,index)=>{
       const y=firstY+index*rowH,left=attrCx-rowW/2;
-      const row=this.add.graphics();row.fillStyle(LQ.lacquerHi,.5).fillRoundedRect(left,y-(rowH-8)/2,rowW,rowH-8,6).lineStyle(1,LQ.gold,.38).strokeRoundedRect(left,y-(rowH-8)/2,rowW,rowH-8,6);
+      const isPrimaryRow=primaryAttribute(this.runConfig.character)===id;
+      const row=this.add.graphics();row.fillStyle(LQ.lacquerHi,.5).fillRoundedRect(left,y-(rowH-8)/2,rowW,rowH-8,6).lineStyle(isPrimaryRow?2:1,LQ.gold,isPrimaryRow?.95:.38).strokeRoundedRect(left,y-(rowH-8)/2,rowW,rowH-8,6); // 主属性一行金边
       const attrIconImg=this.add.image(left+30,y,attributeIcon(id)).setDisplaySize(34,34);
       const isPrimary=primaryAttribute(this.runConfig.character)===id;
-      const label=this.add.text(left+56,y-11,ATTRIBUTE_INFO[id].name+(isPrimary?' · 主属性':''),{...warText(17,'#f0dfb4')}).setOrigin(0,.5);
+      const label=this.add.text(left+56,y-11,ATTRIBUTE_INFO[id].name+(isPrimary?' · 主属性 ×'+PRIMARY_MUL:''),{...warText(17,isPrimary?'#ffe3a0':'#f0dfb4')}).setOrigin(0,.5);
+      // 主属性专精：三个小菱形（满 4 / 7 / 10 点点亮），悬停看说明
+      let perkG:Phaser.GameObjects.Graphics|undefined,perkX=0;
+      if(isPrimary){perkX=label.x+label.width+16;perkG=this.add.graphics().setName('attribute-perks');this.attributePanel.add(perkG);
+        for(let k=0;k<PRIMARY_TIERS.length;k++){const info=PRIMARY_PERK_INFO[id][k],z=this.add.zone(perkX+k*17,y-11,16,16).setInteractive().setName('attribute-perk-'+(k+1));
+          z.on('pointerover',()=>{perkTip.setText('满 '+PRIMARY_TIERS[k]+' 点「'+info.name+'」：'+info.desc).setPosition(z.x,y-24).setVisible(true);});z.on('pointerout',()=>perkTip.setVisible(false));this.attributePanel.add(z);}}
       const effect=this.add.text(left+56,y+12,ATTRIBUTE_INFO[id].effect,warText(12,'#a9b9a3')).setOrigin(0,.5);
       // 等级：10 格，右侧数值
       const pipX=attrCx+rowW/2-(d?226:212),pipY=y,pips=this.add.graphics();
@@ -3213,8 +3467,10 @@ export class GameScene extends Phaser.Scene {
       lqImageButton(this,button,50,44,'gold',plus);
       button.on('pointerdown',()=>{const g=this.player.growth;if(g.allocate(this.player,id)){this.player.passive.areaMul=g.areaMultiplier();if(g.heroFree>0){g.heroFree--;if(!isChapterTestRun())allocateHeroAttr(this.runConfig.character,id);}this.renderAttributePanel();this.updateHud();}});
       this.attributePanel.add([row,attrIconImg,label,effect,pips,value,button,plus]);
-      this.attributeRows.push({value,button,plus,pips,pipX,pipY});
+      if(isPrimary){const ab=attrBadge(this,left+56+label.width+18,y-11,this.runConfig.character,22);if(ab)this.attributePanel.add(ab);} // 主属性印（ui/AttrBadge.ts）
+      this.attributeRows.push({value,button,plus,pips,pipX,pipY,perkG,perkX,perkY:y-11});
     });
+    this.attributePanel.add(perkTip);
     const attrCloseY=attrTop+attrH-38;
     const attrClose=this.add.text(attrCx,attrCloseY,'返回暂停菜单',warText(16,'#d8c9ae')).setOrigin(.5).setPadding(18,8).setInteractive({useHandCursor:true});
     attrClose.setName('attributes-close').on('pointerdown',()=>this.setMode(this.attributeReturn));
@@ -3247,19 +3503,30 @@ export class GameScene extends Phaser.Scene {
     this.resultPanel = this.add.container(0, 0).setScrollFactor(0).setDepth(DEPTH.overlay).setVisible(false);
     const rDim = this.add.rectangle(0, 0, GAME_WIDTH, GAME_HEIGHT, 0x0c0805, 0.84).setOrigin(0, 0).setInteractive();
     // 结算卷：漆底双层描金（同告捷弹窗），按钮为漆金按钮，有悬停 / 按下态；按钮仍是原来的命名对象。
-    const rpw = d ? 600 : GAME_WIDTH - 48, rph = d ? 480 : 700, px0 = (GAME_WIDTH - rpw) / 2, py0 = d ? Math.round((GAME_HEIGHT - rph) / 2) : 120, pcx = GAME_WIDTH / 2;
+    // 电脑版（2026-11-17 用户「打败boss后结算ui也要优化一下」）：书法大标题 + 「X-X 告捷」小标题、奖励图标格与经验条（presentResult）、一行战况、水墨按钮；手机版不变
+    const rpw = d ? 640 : GAME_WIDTH - 48, rph = d ? 500 : 700, px0 = (GAME_WIDTH - rpw) / 2, py0 = d ? Math.round((GAME_HEIGHT - rph) / 2) : 120, pcx = GAME_WIDTH / 2;
+    this.resultTop = py0; this.resultH = rph;
+    rDim.on('pointerdown', () => this.resultAnimSkip?.()); // 点空白处跳过动画
     const resultFrame = this.add.graphics(); lqPanel(resultFrame, px0, py0, rpw, rph);
     const rTitle = this.add
-      .text(pcx, py0 + (d ? 54 : 78), '', { fontFamily: HEADING_FONT, fontSize: d ? '40px' : '46px', color: '#e8c76a' })
-      .setOrigin(0.5).setStroke('#2a170b', 6).setShadow(0, 3, '#000000', 6, true, true);
+      .text(pcx, py0 + (d ? 74 : 78), '', { fontFamily: d ? TITLE_FONT : HEADING_FONT, fontSize: d ? '44px' : '46px', color: '#e8c76a' })
+      .setOrigin(0.5).setStroke(d ? RESULT_STROKE : '#2a170b', 6).setShadow(0, 3, '#000000', 6, true, true);
+    if (d) rTitle.setLetterSpacing(6);
+    const rKicker = this.add.text(pcx, py0 + 32, '', { fontFamily: HEADING_FONT, fontSize: '14px', color: '#d9b878', resolution: 2 })
+      .setOrigin(.5).setLetterSpacing(5).setStroke(RESULT_STROKE, 3).setName('result-kicker').setVisible(d);
     const rSub = this.add
-      .text(pcx, py0 + (d ? 98 : 134), '', { fontFamily: FONT, fontSize: d ? '14px' : '16px', color: '#cdb88c', align: 'center', wordWrap: { width: rpw - 80 } })
+      .text(pcx, py0 + (d ? 112 : 134), '', { fontFamily: FONT, fontSize: d ? '13px' : '16px', color: d ? RESULT_IVORY : '#cdb88c', align: 'center', wordWrap: { width: rpw - 80 } })
       .setOrigin(0.5);
-    const rDiv = this.add.graphics(); lqDivider(rDiv, pcx, py0 + (d ? 122 : 166), d ? 170 : 160);
+    if (d) rSub.setAlpha(.85).setStroke(RESULT_STROKE, 3);
+    const rDiv = this.add.graphics(); lqDivider(rDiv, pcx, py0 + (d ? 130 : 166), d ? 190 : 160);
     const rBody = this.add
       .text(pcx, py0 + (d ? 140 : 196), '', { fontFamily: FONT, fontSize: d ? '16px' : '19px', color: '#eadcbd', align: 'left', lineSpacing: d ? 9 : 16 })
       .setOrigin(0.5, 0);
-    const rbw = d ? 220 : 216, rbh = d ? 50 : 60, rby = py0 + rph - (d ? 52 : 66);
+    const rNotes = this.add.text(pcx, py0 + rph - 98, '', { fontFamily: FONT, fontSize: '12px', color: RESULT_IVORY, align: 'center', lineSpacing: 3, wordWrap: { width: rpw - 90 }, resolution: 2 })
+      .setOrigin(.5, 1).setStroke(RESULT_STROKE, 3).setName('result-notes').setVisible(false);
+    const rStats = this.add.text(pcx, py0 + rph - 82, '', { fontFamily: FONT, fontSize: '12px', color: '#b9a57a', resolution: 2 })
+      .setOrigin(.5).setStroke(RESULT_STROKE, 3).setName('result-stats').setVisible(false);
+    const rbw = d ? 210 : 216, rbh = d ? 46 : 60, rby = py0 + rph - (d ? 42 : 66);
     const btn = this.add
       .image(pcx, rby, 'ui_war_button')
       .setDisplaySize(rbw, rbh).setAlpha(.001)
@@ -3273,19 +3540,35 @@ export class GameScene extends Phaser.Scene {
       .setOrigin(.5).setStroke('#2a170b', 3).setInteractive({ useHandCursor: true });
     selectChapter.setName('result-home').on('pointerdown', () => this.scene.start(this.worldCampaign&&worldUnlocked()?(this.registry.get('worldReveal')?'WorldMapScene':'CityScene'):'MenuScene'));
     if(this.worldCampaign)btnText.setText('再次出征');
-    const restartSkin = lqSkin(this, btn, btnText, () => ({ w: rbw, h: rbh }));
-    const homeSkin = lqSkin(this, selectChapter, selectChapter, () => ({ w: rbw, h: rbh }), { tone: 'quiet' });
-    const homeDown = () => homeSkin.repaint('down');
+    // 电脑版水墨笔触按钮（同主页 / 军营）：「返回 / 下一关」为主按钮（朱墨），「再次出征」为次按钮；缺图时退回漆金按钮
+    const ink = d && this.textures.exists('btn_ink_primary_normal');
+    let restartInk: Phaser.GameObjects.NineSlice | null = null, homeInk: Phaser.GameObjects.NineSlice | null = null;
+    const restartSkin = ink ? null : lqSkin(this, btn, btnText, () => ({ w: rbw, h: rbh }));
+    const homeSkin = ink ? null : lqSkin(this, selectChapter, selectChapter, () => ({ w: rbw, h: rbh }), { tone: 'quiet' });
+    const paintInk = (which: 'restart' | 'home', state: 'normal' | 'hover' | 'pressed'): void => {
+      const dy = state === 'pressed' ? 1 : 0, hi = state === 'hover';
+      if (which === 'restart') { restartInk = inkPlate(this, restartInk, btn.x, rby, rbw, rbh, false, state); restartInk?.setVisible(btn.visible); btnText.setPosition(btn.x, rby + dy).setColor(hi ? '#fff3d4' : '#e8d3a6'); }
+      else { homeInk = inkPlate(this, homeInk, selectChapter.x, rby, rbw, rbh, true, state); selectChapter.setY(rby + dy).setColor(hi ? '#fff3d4' : '#f8e6bf'); }
+    };
+    if (ink) {
+      btnText.setFontSize(17).setStroke('#16100a', 4).setLetterSpacing(3);
+      selectChapter.setFontSize(17).setStroke('#2a0c06', 3).setLetterSpacing(2);
+      paintInk('restart', 'normal'); paintInk('home', 'normal');
+      btn.on('pointerover', () => paintInk('restart', 'hover')).on('pointerout', () => paintInk('restart', 'normal')).on('pointerdown', () => paintInk('restart', 'pressed'));
+      selectChapter.on('pointerover', () => paintInk('home', 'hover')).on('pointerout', () => paintInk('home', 'normal'));
+    }
+    const homeDown = () => { if (ink) paintInk('home', 'pressed'); else homeSkin?.repaint('down'); };
     /** 胜利时「再战 / 返回」并排，败走时只剩返回居中；命中区固定为按钮大小（文字长短不影响）。 */
     this.layoutResultButtons = () => {
       const both = btn.visible;
-      btn.setX(both ? pcx - rbw / 2 - 10 : pcx); selectChapter.setPosition(both ? pcx + rbw / 2 + 10 : pcx, rby);
+      btn.setX(both ? pcx - rbw / 2 - (ink ? 14 : 10) : pcx); selectChapter.setPosition(both ? pcx + rbw / 2 + (ink ? 14 : 10) : pcx, rby);
       lqHitBox(selectChapter, rbw, rbh);
       selectChapter.off('pointerdown', homeDown).on('pointerdown', homeDown);
-      restartSkin.repaint('idle'); homeSkin.repaint('idle');
+      if (ink) { paintInk('restart', 'normal'); paintInk('home', 'normal'); } else { restartSkin?.repaint('idle'); homeSkin?.repaint('idle'); }
     };
     this.layoutResultButtons();
-    this.resultPanel.add([rDim,resultFrame,rDiv,rTitle,rSub,rBody,restartSkin.gfx,homeSkin.gfx,btn,btnText,selectChapter]);
+    const plates: Phaser.GameObjects.GameObject[] = ink ? ([restartInk, homeInk] as Array<Phaser.GameObjects.NineSlice | null>).filter((g): g is Phaser.GameObjects.NineSlice => !!g) : [restartSkin!.gfx, homeSkin!.gfx];
+    this.resultPanel.add([rDim,resultFrame,rDiv,rKicker,rTitle,rSub,rBody,rNotes,rStats,...plates,btn,btnText,selectChapter]);
     this.resultTexts = { title: rTitle.setResolution(2), subtitle: rSub.setResolution(2), body: rBody.setResolution(2) };
 
     // 相机跟随会导致容器子元素的输入命中偏移，逐个子元素固定 scrollFactor(0)。
@@ -3297,6 +3580,7 @@ export class GameScene extends Phaser.Scene {
     fixInput(this.levelPanel);
     fixInput(this.pausePanel);
     fixInput(this.resultPanel);
+    if (IS_DESKTOP) this.time.delayedCall(4000, () => { if (this.sys?.isActive()) loadBagArt(this, () => {}); });
     fixInput(this.recruitPanel);
     fixInput(this.attributePanel);
   }
@@ -3348,6 +3632,7 @@ export class GameScene extends Phaser.Scene {
       if(can){row.button.setAlpha(1).setInteractive({useHandCursor:true});}
       else row.button.setAlpha(.38).disableInteractive();
       row.plus.setAlpha(can?1:.45);
+      if(row.perkG){row.perkG.clear();for(let k=0;k<PRIMARY_TIERS.length;k++){const on=level>=PRIMARY_TIERS[k],cx=(row.perkX??0)+k*17,cy=row.perkY??0,pts=[{x:cx,y:cy-6},{x:cx+6,y:cy},{x:cx,y:cy+6},{x:cx-6,y:cy}];row.perkG.fillStyle(on?0xe2bd6a:0x2a3328,1).fillPoints(pts,true).lineStyle(1,on?0xfff0c0:0x5d6a58,.9).strokePoints(pts,true);}}
     }
   }
 

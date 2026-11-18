@@ -1,4 +1,5 @@
-import {mayMirrorProp} from '../data/sceneArt';
+import {mayMirrorProp,propDisplaySize} from '../data/sceneArt';
+import {propLootKind,type PropLootKind} from '../data/propLoot';
 import Phaser from 'phaser';
 import {Enemy} from '../entities/Enemy';
 import type {Player} from '../entities/Player';
@@ -28,6 +29,8 @@ export class BattlefieldSupplies {
  healGeneration=true;
  /** 场地环境互动物件被打破时的回调（EnvInteractions）：交出物件与类型，默认碎裂表现不再播放。 */
  onEnvBroken?:(enemy:Enemy,env:string)=>void;
+ /** 障碍物按类别掉落（data/propLoot.ts）：兵器架 / 甲胄架 / 木箱 / 钱袋 / 粮袋粮车；军旗 / 营帐 / 景物不回调。由 GameScene 发掉落。 */
+ onPropLoot?:(kind:PropLootKind,x:number,y:number)=>void;
  /** 场景障碍（房屋、城墙等）；回血道具不放进去。 */
  healBlocked?:(x:number,y:number,r:number)=>boolean;
  private healRate=HEAL_RATE;
@@ -164,6 +167,7 @@ export class BattlefieldSupplies {
   const crate=this.crates.find(c=>c.enemy===enemy&&c.life===enemy.spawnId);if(!crate||!crate.cell||this.broken.has(crate.cell))return;
   this.broken.add(crate.cell);crate.cell=null;crate.shadow.setVisible(false);
   if(crate.env){const env=crate.env;crate.env=undefined;this.onEnvBroken?.(enemy,env);return;}
+  {const kind=propLootKind(enemy.sprite.texture.key,Number(enemy.sprite.frame.name),!!crate.heal);if(kind!=='none'&&kind!=='heal')this.onPropLoot?.(kind,enemy.x,enemy.y);}
   const material=crate.heal==='herb'?0:crate.frame===18?1:crate.frame===29||crate.frame===30||crate.frame===32||crate.frame===33?2:crate.frame<10||crate.frame===34?3:0;
   if(crate.frame===35){const index=this.fires.findIndex(f=>!f.active);if(index>=0){const fire=this.fires[index];fire.x=enemy.x;fire.y=enemy.y;fire.started=this.now();fire.nextHit=this.now()+640;fire.active=true;fire.tripod=enemy.sprite.texture.key.startsWith('sishui_props');
     if(fire.tripod){this.remains.push({x:enemy.x,y:enemy.y,size:enemy.sprite.displayWidth*.8,row:2,at:this.now()+440});this.nextDebrisCheck=0;const fx=this.breakFx.find(f=>!f.active);if(fx){fx.active=true;fx.start=this.now();fx.row=2;fx.image.setTexture('prop_break_fx',12).setPosition(enemy.x,enemy.y).setOrigin(.5,.85).setDisplaySize(85,85).setAlpha(1).setVisible(true);}this.brazierBreak[index].setVisible(false);}
@@ -210,7 +214,9 @@ export class BattlefieldSupplies {
   for(let y=cy-1;y<=cy+1;y++)for(let x=cx-1;x<=cx+1;x++){
    const h=this.hash(x,y),cell=`${x},${y}`;if(h%12!==3||this.broken.has(cell)||this.crates.some(c=>c.enemy.active&&c.cell===cell))continue;
    const px=x*CELL+120+(h>>>8)%400,py=y*CELL+120+(h>>>16)%400;if(Math.hypot(px-this.player.x,py-this.player.y)>1250||!this.placementClear(px,py,92))continue;
-   if(this.crates.filter(c=>c.enemy.active&&c.cell&&!c.cell.startsWith('prop-')).length>=MAX_CRATES)return;const slot=this.freeSlot();if(!slot)return;this.place(slot,cell,px,py);
+   if(this.crates.filter(c=>c.enemy.active&&c.cell&&!c.cell.startsWith('prop-')).length>=MAX_CRATES)return;const slot=this.freeSlot();if(!slot)return;
+   // 随机补给：一半仍是酒罐（回血），其余混入兵器架 / 盾牌堆 / 木箱 / 钱袋 / 粮袋 / 粮车（各按 data/propLoot.ts 掉对应的东西）
+   const pick=[18,18,18,18,18,19,21,23,14,16,17,24][(h>>>5)%12];this.place(slot,cell,px,py,pick,pick===18?92:propDisplaySize(pick));
   }
  }
  private updateDebris(now:number):void {

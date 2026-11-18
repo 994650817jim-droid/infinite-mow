@@ -3,6 +3,8 @@ import './dev/TestSave';
 // 桌面版（Steam）平台层必须最先执行：替换 localStorage 为存档文件
 import { TalentHallScene } from './scenes/TalentHallScene';
 import './platform/desktop';
+// 中途退出不算：上次没打完就关了 / 刷新 / 崩溃 → 先把存档回滚到那场进关前（必须在任何模块缓存存档之前）
+import './systems/BattleSnapshotBoot';
 import {NanzhengChapterScene} from './scenes/NanzhengChapterScene';import {nanzhengGameSceneClass} from './scenes/NanzhengGameScene';import {YILING_STAGES,YILING_SHEETS,yilingBattle,yilingTexture} from './data/yilingChapter';import {YilingChapterScene} from './scenes/YilingChapterScene';import {yilingGameSceneClass} from './scenes/YilingGameScene';import {BEIFA_STAGES,BEIFA_SHEETS,beifaBattle,beifaTexture} from './data/beifaChapter';import {BeifaChapterScene} from './scenes/BeifaChapterScene';import {beifaGameSceneClass} from './scenes/BeifaGameScene';import {EndingScene} from './scenes/EndingScene';import {XiangfanChapterScene} from './scenes/XiangfanChapterScene';import {xiangfanGameSceneClass} from './scenes/XiangfanGameScene';import {ShuChapterScene} from './scenes/ShuChapterScene';import {shuGameSceneClass} from './scenes/ShuGameScene';import {ThirdChapterScene} from './scenes/ThirdChapterScene';import {ChibiChapterScene} from './scenes/ChibiChapterScene';import {CHIBI_STAGES,chibiBattle} from './data/chibiChapter';import {JINGNAN_STAGES,JINGNAN_SHEETS,jingnanBattle,jingnanTexture} from './data/jingnanChapter';import {JingnanChapterScene} from './scenes/JingnanChapterScene';import {jingnanGameSceneClass} from './scenes/JingnanGameScene';import {HANZHONG_STAGES,HANZHONG_SHEETS,hanzhongBattle,hanzhongTexture} from './data/hanzhongChapter';import {HanzhongChapterScene} from './scenes/HanzhongChapterScene';import {hanzhongGameSceneClass} from './scenes/HanzhongGameScene';import {thirdGameSceneClass} from './scenes/ThirdGameScene';import {GuanduChapterScene} from './scenes/GuanduChapterScene';import {guanduGameSceneClass} from './scenes/GuanduGameScene';import {siegeGameSceneClass} from './scenes/SiegeGameScene';import {intelGameSceneClass} from './scenes/IntelGameScene';import {lubuGameSceneClass} from './scenes/LubuGameScene';
 import {loadGameFonts} from './ui/GameFonts';
 import Phaser from 'phaser';
@@ -17,8 +19,11 @@ import { MenuScene } from './scenes/MenuScene';
 import { installGamepad } from './ui/PadNavigator';
 import { installCjkWrap } from './ui/CjkWrap';
 import { installAchievements } from './systems/Achievements';
+import { installLowResTextures } from './systems/LowResTextures';
 
 initLayout();
+// 手机省内存：大图缩一半、canvas 贴图不留 ImageData 副本（电脑不启用，见 systems/LowResTextures.ts）
+installLowResTextures();
 installCjkWrap();
 
 // 高清渲染：画布放大 RENDER_SCALE 倍，每个相机以左上角为原点同倍缩放，

@@ -1,11 +1,11 @@
 import { IS_DESKTOP_APP, desktop } from '../platform/desktop';
 import { confirmLord, defaultHero, ensureLegacyLord, heroOwned, lordFinal, lordHero, lordRules, setLord } from '../systems/RosterStore';
-import { shakeLevel, setShakeLevel, SHAKE_LABEL, type ShakeLevel } from '../data/hitFeel';
 import {tutorialReplayLink} from '../ui/TutorialOverlay';
 import { showLordNotice } from '../ui/LordNotice';
 import {playMenuMusic,menuMusic} from '../systems/Music';
 import {artStyle,setArtStyle} from '../systems/ArtStyle';
 import { iffOutlineEnabled, setIffOutline, warmIffTextures } from '../systems/IffOverlay';
+import { OUTLINE_LABEL, cycle, outlineMode, setOutlineMode, shakeLevel, setShakeLevel, SHAKE_LABEL, type ShakeLevel } from '../systems/BattleSettings';
 import {uiSfx} from '../systems/Sfx';
 import {GameCodex} from '../ui/GameCodex';
 import {HeroWarCard} from '../ui/HeroWarCard';
@@ -350,7 +350,7 @@ export class MenuScene extends Phaser.Scene {
     {const at=desk?5:2,note=label(W/2,rowY(at)+(desk?22:30),'',11).setColor('#9d8f78');modal.add(note);const start=artStyle();let cur=start;
      row(at,'人物画风',()=>cur==='v2'?'新版':'旧版',()=>{cur=cur==='v2'?'v1':'v2';setArtStyle(cur);note.setText(cur===start?'':desk?'重启游戏后生效':'刷新页面后生效');},['‹','›']).setName('settings-art-style');}
     // 敌我描边（用户选定的方案 c，默认关）：部曲青色、敌军暗红的细描边，混战时更好分辨；下一场战斗生效
-    {const at=desk?6:3;let on=iffOutlineEnabled();row(at,'敌我描边',()=>on?'开':'关',()=>{on=!on;setIffOutline(on);if(on)warmIffTextures(this.game);},['‹','›']).setName('settings-iff-outline');}
+    {const at=desk?6:3;const list=['off','enemy','all'] as const;row(at,'敌我描边',()=>OUTLINE_LABEL[outlineMode()],dir=>{const v=cycle(list,outlineMode(),dir);setOutlineMode(v);if(v!=='off')warmIffTextures(this.game);},['‹','›']).setName('settings-iff-outline');void iffOutlineEnabled;void setIffOutline;}
     // 震屏（打击感 2026-11-17）：强 / 弱 / 关，立即生效（战斗中所有震屏都按此缩放）
     {const at=desk?7:4,order:ShakeLevel[]=['strong','weak','off'];let cur=shakeLevel();row(at,'震屏',()=>SHAKE_LABEL[cur],dir=>{cur=order[(order.indexOf(cur)+(dir>0?1:2))%3];setShakeLevel(cur);},['‹','›']).setName('settings-shake');}
     const close=label(W/2,desk?rowY(9)+6:H/2+226,'返回',20).setFontFamily(HEADING_FONT).setInteractive({useHandCursor:true}).setName('settings-close').setData('padDefault',true).on('pointerdown',()=>modal.destroy());

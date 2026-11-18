@@ -637,8 +637,11 @@ function diaoState(host: WeaponHost): DiaoState {
 
 function fanHit(host: WeaponHost, e: Enemy, damage: number, time: number): void {
   const g = host.player.growth, need = g.masteries.meirenji >= 3 ? 2 : R.charmNeed, ms = R.turnMs + 500 * g.masteries.meirenji;
+  // 先上魅惑再结算伤害：一扇打死的敌人也带着魅惑标记（否则弱敌一扇就死、离间层数攒不起来）
+  const turned = host.player.passive.addCharm(e, time, need, ms);
   host.hitEnemy(e, damage, time, 'arrow');
-  if (host.player.passive.addCharm(e, time, need, ms)) {
+  if (!e.active || e.hp <= 0) host.player.passive.charmKill(e, time);
+  if (turned) {
     const t = host.add.text(e.x, e.y - e.radius - 30, '离间', { fontFamily: 'serif', fontSize: '15px', color: '#ffd0ec', stroke: '#6a1a4a', strokeThickness: 4 }).setOrigin(.5).setDepth(60);
     t.scene.tweens.add({ targets: t, y: t.y - 18, alpha: 0, duration: 650, onComplete: () => t.destroy() });
   }
@@ -711,7 +714,8 @@ export function diaochanFansBehavior(host: WeaponHost, weapon: WeaponState, dt: 
     s.danceUntil = time + R.moonMs; s.nextTick = time;
     s.ribbon = host.add.graphics().setDepth(41).setName('diaochan-moon');
     host.heroFx?.(sceneOf(host).textures.exists('hero_fx_d') ? 'moonDance' : 'charm', pl.x, pl.y - 6, (R.moonRadius * host.player.passive.rangeMultiplier('diaochan_fans')) * 2.4); // 闭月正式序列帧（fx_d 第 1 行），缺图用倾城花瓣旋涡
-    weapon.cooldownLeft = R.moonMs / 1000;
+    // 冷却在舞带期间不走（舞时直接 return），所以这里只留舞后的一小段：舞完立刻接着掷扇（原 2 秒导致停手约 4 秒）
+    weapon.cooldownLeft = R.moonAfterCdS;
     return;
   }
   pl.playAction('attack', target.x < pl.x ? 'left' : 'right');

@@ -1,4 +1,4 @@
-// 打击感（2026-11-17）：顿帧 / 震屏设置 / 首领破势 / 白色残血条 / 转阶段与击杀慢动作 / 火花池上限。电脑布局 1280×720。
+// 打击感（2026-11-17）：震屏设置走 systems/BattleSettings（带内存缓存，测试经模块调用 setShakeLevel）。顿帧 / 震屏设置 / 首领破势 / 白色残血条 / 转阶段与击杀慢动作 / 火花池上限。电脑布局 1280×720。
 // 用法：BASE=http://127.0.0.1:5173/ node tools/test-hit-feel.mjs
 import { chromium } from 'playwright';
 const BASE = process.env.BASE ?? 'http://127.0.0.1:5173/';
@@ -11,7 +11,8 @@ const G = "window.__game.scene.getScene('GameScene')";
 await p.goto(BASE + '?dev=1&autostart=1&stage=1&layout=desktop');
 await p.waitForFunction(() => window.__game?.scene.getScene('GameScene')?.__DEV_ACTIONS && window.__game.scene.getScene('GameScene').hitFeel, null, { timeout: 60000 });
 await p.waitForTimeout(1200);
-await p.evaluate(G0 => { const s = eval(G0); localStorage.setItem('im_shake', 'strong'); s.player.damageImmune = true; s.__DEV_ACTIONS.closePopup?.(); s.spawnTimer = s.eliteTimer = 1e9; for (const e of s.enemies) if (e.active && !e.isSupplySlot) e.deactivate(); s.spawnGem = () => {}; setInterval(() => { if (s.mode === 'levelup') s.chooseUpgrade(0); }, 30); }, G);
+await p.evaluate(async () => { (await import('/src/systems/BattleSettings.ts')).setShakeLevel('strong'); });
+await p.evaluate(G0 => { const s = eval(G0); s.player.damageImmune = true; s.__DEV_ACTIONS.closePopup?.(); s.spawnTimer = s.eliteTimer = 1e9; for (const e of s.enemies) if (e.active && !e.isSupplySlot) e.deactivate(); s.spawnGem = () => {}; setInterval(() => { if (s.mode === 'levelup') s.chooseUpgrade(0); }, 30); }, G);
 // 帮手：强制暴击 / 不暴击地打一下
 const helpers = `
   const s = ${G}, pl = s.player;
@@ -39,10 +40,10 @@ check('顿帧期间战斗时钟按倍率放慢，结束后恢复', r2.slowedRati
 
 // 3) 震屏设置：强 / 弱 / 关
 const r3 = await p.evaluate(`(async () => { ${helpers}
-  const cam = s.cameras.main, out = {};
-  for (const lv of ['strong', 'weak', 'off']) { localStorage.setItem('im_shake', lv); cam.shakeEffect.reset(); s.hitFeel.shake('big'); out[lv] = cam.shakeEffect.isRunning ? +cam.shakeEffect.intensity.x.toFixed(4) : 0; await wait(350); }
-  localStorage.setItem('im_shake', 'off'); cam.shakeEffect.reset(); cam.shake(200, .01); out.otherShakeOff = cam.shakeEffect.isRunning;
-  localStorage.setItem('im_shake', 'strong'); cam.shakeEffect.reset(); return out; })()`);
+  const cam = s.cameras.main, out = {}, BS = await import('/src/systems/BattleSettings.ts');
+  for (const lv of ['strong', 'weak', 'off']) { BS.setShakeLevel(lv); cam.shakeEffect.reset(); s.hitFeel.shake('big'); out[lv] = cam.shakeEffect.isRunning ? +cam.shakeEffect.intensity.x.toFixed(4) : 0; await wait(350); }
+  BS.setShakeLevel('off'); cam.shakeEffect.reset(); cam.shake(200, .01); out.otherShakeOff = cam.shakeEffect.isRunning;
+  BS.setShakeLevel('strong'); cam.shakeEffect.reset(); return out; })()`);
 check('震屏设置生效：强 > 弱 = 强×0.5，关不震（其它震屏也受控）', r3.strong > 0 && Math.abs(r3.weak - r3.strong / 2) < 1e-4 && r3.off === 0 && r3.otherShakeOff === false, r3);
 
 // 4) 首领：破势、白色残血条、半血转阶段慢动作、击杀慢动作
@@ -64,6 +65,7 @@ const r4 = await p.evaluate(`(async () => { ${helpers}
   out.phaseSlow = s.hitFeel.stats.slows - sl0; await wait(160); out.phaseScale = +s.hitFeel.scale().toFixed(2);
   await wait(500); out.phaseOver = s.hitFeel.scale();
   // 击杀：慢动作 0.5 秒
+  { const t0 = performance.now(); while (boss.invulnerable && performance.now() - t0 < 4000) await wait(100); } // 转阶段时首领有短暂无敌（BossKit），等它结束再补刀
   s.hitFeel.reset(); boss.hp = 5; const sl1 = s.hitFeel.stats.slows; hit(boss, 50, false); out.deathSlow = s.hitFeel.stats.slows - sl1; out.deathScale = +s.hitFeel.scale().toFixed(2); out.bossDead = !boss.active;
   await wait(700); out.deathOver = s.hitFeel.scale();
   return out; })()`);
@@ -84,7 +86,7 @@ check('火花池上限：150 次暴击命中，同屏火花 ≤28、伤害数字
 await p.evaluate(() => { const g = window.__game; for (const s of g.scene.getScenes(true)) s.scene.stop(); g.scene.start('MenuScene'); });
 await p.waitForFunction(() => window.__game.scene.isActive('MenuScene'), null, { timeout: 30000 }); await p.waitForTimeout(800);
 const r6 = await p.evaluate(async () => {
-  const m = window.__game.scene.getScene('MenuScene'); localStorage.setItem('im_shake', 'strong'); m.openHomeSettings();
+  const m = window.__game.scene.getScene('MenuScene'); (await import('/src/systems/BattleSettings.ts')).setShakeLevel('strong'); m.openHomeSettings();
   const row = m.children.getByName('home-settings-panel').list.find(o => o.name === 'settings-shake'); const inc = m.children.getByName('home-settings-panel').list.find(o => o.name?.startsWith('settings-row-') && o.name.endsWith('-inc') && Math.abs(o.y - row.y) < 2);
   const before = row.text; inc.emit('pointerdown'); const after1 = row.text, v1 = localStorage.getItem('im_shake'); inc.emit('pointerdown'); const v2 = localStorage.getItem('im_shake'); inc.emit('pointerdown'); const v3 = localStorage.getItem('im_shake');
   const panel = m.children.getByName('home-settings-panel'), close = panel.list.find(o => o.name === 'settings-close'), quitRowOverlap = Math.abs(close.y - row.y) < 30;

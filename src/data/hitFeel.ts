@@ -41,12 +41,8 @@ export const BOSS_FEEL = {
   deathSlowMs: 500, deathSlowScale: .3,
 } as const;
 
-export type ShakeLevel = 'strong' | 'weak' | 'off';
-const SHAKE_KEY = 'im_shake';
-export const SHAKE_LABEL: Record<ShakeLevel, string> = { strong: '强', weak: '弱', off: '关' };
-export function shakeLevel(): ShakeLevel { try { const v = localStorage.getItem(SHAKE_KEY); if (v === 'weak' || v === 'off' || v === 'strong') return v; } catch { /* 无存储时用默认 */ } return 'strong'; }
-export function setShakeLevel(v: ShakeLevel): void { try { localStorage.setItem(SHAKE_KEY, v); } catch { /* 忽略 */ } }
-export const shakeMul = (v: ShakeLevel = shakeLevel()): number => v === 'strong' ? 1 : v === 'weak' ? .5 : 0;
+// 震屏设置（强 / 弱 / 关，键 im_shake）统一由 systems/BattleSettings 管（UI 会话已合进 main；2026-11-17 约定：后合者去掉自己那份）
+export { shakeLevel, setShakeLevel, SHAKE_LABEL, type ShakeLevel, shakeScale as shakeMul } from '../systems/BattleSettings';
 
 /** 命中火花的攻击类型：斩击 / 穿刺 / 钝击 / 箭矢 / 法术。 */
 export type HitType = 'slash' | 'pierce' | 'blunt' | 'arrow' | 'spell';

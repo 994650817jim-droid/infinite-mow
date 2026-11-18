@@ -50,7 +50,7 @@ import { WAR, warText, ensureWarTextures } from '../ui/WarStyle';
 import { LQ, lqButton, lqDivider, lqHitBox, lqImageButton, lqPanel, lqSkin, type LqState } from '../ui/LacquerKit';
 import { chapterUnlocked, isChapterTestRun, recordChapterVictory } from '../systems/ChapterProgress';
 import { BALANCE, COLORS, DEPTH, FONT, GAME_HEIGHT, GAME_WIDTH, HEADING_FONT, IS_DESKTOP, TITLE_FONT, actorDepth, screenPoint } from '../config';
-import {upgradeCardTexture,inkUpgradeCardTexture,inkPlate,homeCommand} from '../ui/HomeCommand';
+import {upgradeCardTexture,inkUpgradeCardTexture,inkPlate,homeCommand,inkSkin} from '../ui/HomeCommand';
 import { RESULT_GOLD, RESULT_IVORY, RESULT_STROKE, buildRewardView, parseHeroLine, playResultAnims, wan, type ResultAnim } from '../ui/ResultRewards';
 import { loadBagArt } from '../ui/ItemQuality';
 import type { EnemyDef } from '../data/enemies';
@@ -480,7 +480,7 @@ export class GameScene extends Phaser.Scene {
   protected attributePointsText!: Phaser.GameObjects.Text;
   protected attributeWeaponText!: Phaser.GameObjects.Text;
   protected attributeSummaryText!: Phaser.GameObjects.Text;
-  protected attributeRows: Array<{ value: Phaser.GameObjects.Text; button: Phaser.GameObjects.Image; plus: Phaser.GameObjects.Text; pips: Phaser.GameObjects.Graphics; pipX: number; pipY: number; perkG?: Phaser.GameObjects.Graphics; perkX?: number; perkY?: number }> = [];
+  protected attributeRows: Array<{ value: Phaser.GameObjects.Text; button: Phaser.GameObjects.Image; plus: Phaser.GameObjects.Text; pips: Phaser.GameObjects.Graphics; pipX: number; pipY: number; perkG?: Phaser.GameObjects.Graphics; perkX?: number; perkY?: number; ink?: { plate: Phaser.GameObjects.NineSlice | null; hover: boolean } }> = [];
 
   protected cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
   protected wasd!: Record<string, Phaser.Input.Keyboard.Key>;
@@ -3509,6 +3509,7 @@ export class GameScene extends Phaser.Scene {
     const attrFrameG=this.add.graphics();lqPanel(attrFrameG,attrCx-attrW/2,attrTop,attrW,attrH);
     const attrFrame=this.add.rectangle(attrCx,GAME_HEIGHT/2,attrW,attrH,0x000000,.001).setInteractive();
     const attrTitle=this.add.text(attrCx,attrTop+34,'武将修习 · 属性分配',warText(24,'#e8cf91')).setOrigin(.5);
+    if(d)attrTitle.setFontFamily(TITLE_FONT).setColor('#efd399').setStroke('#120904',4); // 2026-11-17 用户批准 UI 审查 G：书法标题、点数改金字、点数条换描金小菱、＋ 与返回换水墨
     this.attributePointsText=this.add.text(attrCx,attrTop+74,'可分配属性点 0',warText(16,'#91ab98')).setOrigin(.5).setPadding(14,4);
     this.attributeWeaponText=this.add.text(attrCx,attrTop+104,'',warText(13,'#d3bd86')).setOrigin(.5);
     this.attributeSummaryText=this.add.text(attrCx,attrTop+133,'',{...warText(d?11:12,'#c7d6c8'),align:'center',lineSpacing:3}).setOrigin(.5).setWordWrapWidth(attrW-46);
@@ -3535,16 +3536,23 @@ export class GameScene extends Phaser.Scene {
       const button=this.add.image(attrCx+rowW/2-38,y,'ui_war_button').setDisplaySize(50,44).setInteractive({useHandCursor:true}).setName('attribute-add-'+id);
       const plus=this.add.text(button.x,button.y-1,'+',warText(26,'#ffe9bd')).setOrigin(.5).setStroke('#2a170b',3);
       lqImageButton(this,button,50,44,'gold',plus);
+      let ink:{plate:Phaser.GameObjects.NineSlice|null;hover:boolean}|undefined;
+      if(d&&this.textures.exists('btn_ink_secondary_normal')){ // 水墨底；原漆金图换透明贴图（不能用 alpha≈0，手柄焦点会跳过），命中区不变
+        const e={plate:inkPlate(this,null,button.x,button.y,52,38,false,'normal'),hover:false};ink=e;e.plate?.setScrollFactor(0);
+        const sync=()=>{button.setTexture('__DEFAULT').setDisplaySize(62,56);inkPlate(this,e.plate,button.x,button.y,52,38,false,!button.input?.enabled?'disabled':e.hover?'hover':'normal');plus.setColor(!button.input?.enabled?'#3a332a':e.hover?'#fff3d4':'#e8d3a6');};
+        button.on('pointerover',()=>{e.hover=true;sync();}).on('pointerout',()=>{e.hover=false;sync();}).on('pointerdown',sync).on('pointerup',sync);sync();
+      }
       button.on('pointerdown',()=>{const g=this.player.growth;if(g.allocate(this.player,id)){this.player.passive.areaMul=g.areaMultiplier();if(g.heroFree>0){g.heroFree--;if(!isChapterTestRun())allocateHeroAttr(this.runConfig.character,id);}this.renderAttributePanel();this.updateHud();}});
       this.attributePanel.add([row,attrIconImg,label,effect,pips,value,button,plus]);
       if(isPrimary){const ab=attrBadge(this,left+56+label.width+18,y-11,this.runConfig.character,22);if(ab)this.attributePanel.add(ab);} // 主属性印（ui/AttrBadge.ts）
-      this.attributeRows.push({value,button,plus,pips,pipX,pipY,perkG,perkX,perkY:y-11});
+      this.attributeRows.push({value,button,plus,pips,pipX,pipY,perkG,perkX,perkY:y-11,ink});
+      if(ink?.plate)this.attributePanel.addAt(ink.plate,this.attributePanel.getIndex(button));
     });
     this.attributePanel.add(perkTip);
     const attrCloseY=attrTop+attrH-38;
     const attrClose=this.add.text(attrCx,attrCloseY,'返回暂停菜单',warText(16,'#d8c9ae')).setOrigin(.5).setPadding(18,8).setInteractive({useHandCursor:true});
     attrClose.setName('attributes-close').on('pointerdown',()=>this.setMode(this.attributeReturn));
-    const attrCloseSkin=lqSkin(this,attrClose,attrClose,()=>({w:220,h:44}),{tone:'cinnabar'});attrClose.setStyle({fontFamily:HEADING_FONT,fontSize:'18px'});
+    attrClose.setStyle({fontFamily:HEADING_FONT,fontSize:'18px'});const attrCloseSkin=(d?inkSkin(this,attrClose,()=>({w:220,h:44}),{primary:true}):null)??lqSkin(this,attrClose,attrClose,()=>({w:220,h:44}),{tone:'cinnabar'});
     this.attributePanel.add([attrCloseSkin.gfx,attrClose]);
     this.renderAttributePanel();
 
@@ -3677,7 +3685,7 @@ export class GameScene extends Phaser.Scene {
     if (!this.player || !this.attributePointsText) return;
     const growth=this.player.growth;
     {const close=this.attributePanel.getByName('attributes-close') as Phaser.GameObjects.Text|null;close?.setText(this.attributeReturn==='none'?'继续战斗':'返回暂停菜单');if(close&&!close.getData('hitBox')){lqHitBox(close,220,44);close.setData('hitBox',true);}}
-    this.attributePointsText.setText(growth.unallocated>0?`可分配属性点 ${growth.unallocated}`:`属性点已用完 · 武将每升 1 级获得 1 点（当前 Lv.${this.heroLv}）`).setColor(growth.unallocated>0?'#1c160c':'#91ab98').setBackgroundColor(growth.unallocated>0?'#e2bd6a':'#00000000');
+    this.attributePointsText.setText(growth.unallocated>0?`可分配属性点 ${growth.unallocated}`:`属性点已用完 · 武将每升 1 级获得 1 点（当前 Lv.${this.heroLv}）`).setColor(growth.unallocated>0?(IS_DESKTOP?'#efd399':'#1c160c'):'#91ab98').setBackgroundColor(growth.unallocated>0&&!IS_DESKTOP?'#e2bd6a':'#00000000');if(IS_DESKTOP)this.attributePointsText.setFontFamily(HEADING_FONT).setFontSize(growth.unallocated>0?20:15).setStroke('#120904',growth.unallocated>0?4:0);
     this.attributePauseText?.setText(`分配属性点 · ${growth.unallocated}`);
     const weapon=this.player.weapons[0];
     this.attributeWeaponText?.setText((weapon?weaponName(weapon.id,this.runConfig.character):'')+' · '+growth.masteryLabel());
@@ -3701,11 +3709,12 @@ export class GameScene extends Phaser.Scene {
       const id=ids[i],level=growth.attributes[id],row=this.attributeRows[i];
       if(!row)continue;
       row.value.setText(level>=ATTRIBUTE_MAX?'已满':`${level}/${ATTRIBUTE_MAX}`).setColor(level>=ATTRIBUTE_MAX?'#e2bd6a':'#e5d4ab');
-      row.pips.clear();for(let k=0;k<ATTRIBUTE_MAX;k++){const x=row.pipX+k*11;row.pips.fillStyle(k<level?0xe2bd6a:0x2a3328,1).fillRect(x,row.pipY-5,8,10).lineStyle(1,k<level?0xfff0c0:0x5d6a58,.9).strokeRect(x+.5,row.pipY-4.5,7,9);}
+      row.pips.clear();for(let k=0;k<ATTRIBUTE_MAX;k++){const x=row.pipX+k*11;if(IS_DESKTOP){const cx=x+4,cy=row.pipY,pts=[{x:cx,y:cy-5},{x:cx+4,y:cy},{x:cx,y:cy+5},{x:cx-4,y:cy}];row.pips.fillStyle(k<level?0xe2bd6a:0x241a10,1).fillPoints(pts,true).lineStyle(1,k<level?0xfff0c0:0x7a6440,.9).strokePoints(pts,true);continue;}row.pips.fillStyle(k<level?0xe2bd6a:0x2a3328,1).fillRect(x,row.pipY-5,8,10).lineStyle(1,k<level?0xfff0c0:0x5d6a58,.9).strokeRect(x+.5,row.pipY-4.5,7,9);}
       const can=growth.unallocated>0&&level<ATTRIBUTE_MAX;
       if(can){row.button.setAlpha(1).setInteractive({useHandCursor:true});}
       else row.button.setAlpha(.38).disableInteractive();
       row.plus.setAlpha(can?1:.45);
+      if(row.ink?.plate){row.button.setAlpha(1);inkPlate(this,row.ink.plate,row.button.x,row.button.y,52,38,false,can?(row.ink.hover?'hover':'normal'):'disabled');row.plus.setColor(can?'#e8d3a6':'#3a332a');}
       if(row.perkG){row.perkG.clear();for(let k=0;k<PRIMARY_TIERS.length;k++){const on=level>=PRIMARY_TIERS[k],cx=(row.perkX??0)+k*17,cy=row.perkY??0,pts=[{x:cx,y:cy-6},{x:cx+6,y:cy},{x:cx,y:cy+6},{x:cx-6,y:cy}];row.perkG.fillStyle(on?0xe2bd6a:0x2a3328,1).fillPoints(pts,true).lineStyle(1,on?0xfff0c0:0x5d6a58,.9).strokePoints(pts,true);}}
     }
   }

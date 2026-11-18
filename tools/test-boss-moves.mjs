@@ -16,26 +16,55 @@ const CASES = [
   { id: 'zhangxiu', scene: 'ThirdGameScene', run: { thirdStage: 2 }, reg: { thirdStage: 2 }, ctl: 'controller', mounted: true },
   { id: 'huaxiong', scene: 'GameScene', run: { chapter: 'hulao', westStage: 1 }, reg: {}, ctl: 'huaxiong', mounted: true, legacy: true },
   { id: 'lubu', scene: 'LubuGameScene', run: {}, reg: {}, ctl: 'lubu', mounted: true, legacy: true },
+  // 第二批：第四章骑马补丁、第五章、第六章
+  { id: 'yanliang', scene: 'GuanduGameScene', run: {}, reg: { guanduStage: 1 }, ctl: 'controller', mounted: true, legacy: true },
+  { id: 'wenchou', scene: 'GuanduGameScene', run: {}, reg: { guanduStage: 2 }, ctl: 'controller', mounted: true, legacy: true },
+  { id: 'caochun', scene: 'ChibiGameScene', run: { thirdStage: 1 }, reg: { chibiStage: 1 }, ctl: 'controller', mounted: true },
+  { id: 'caimao', scene: 'ChibiGameScene', run: { thirdStage: 2 }, reg: { chibiStage: 2 }, ctl: 'controller', mounted: false },
+  { id: 'zhaofan', scene: 'JingnanGameScene', run: { thirdStage: 1 }, reg: { jingnanStage: 1 }, ctl: 'controller', mounted: false },
+  { id: 'liudu', scene: 'JingnanGameScene', run: { thirdStage: 2 }, reg: { jingnanStage: 2 }, ctl: 'controller', mounted: false },
+  { id: 'huangzhong', scene: 'JingnanGameScene', run: { thirdStage: 3 }, reg: { jingnanStage: 3 }, ctl: 'controller', mounted: true },
+  // 韩玄：长沙先战黄忠（劝降后）才出阵
+  { id: 'hanxuan', scene: 'JingnanGameScene', run: { thirdStage: 3 }, reg: { jingnanStage: 3 }, ctl: 'controller', mounted: false, pre: 'huangzhong' },
+  // 第三批：第八章、第十章、第十二章
+  { id: 'zhanghe', scene: 'HanzhongGameScene', run: { thirdStage: 1 }, reg: { hanzhongStage: 1 }, ctl: 'controller', mounted: true },
+  { id: 'xiahouyuan', scene: 'HanzhongGameScene', run: { thirdStage: 2 }, reg: { hanzhongStage: 2 }, ctl: 'controller', mounted: true },
+  { id: 'caocao', scene: 'HanzhongGameScene', run: { thirdStage: 3 }, reg: { hanzhongStage: 3 }, ctl: 'controller', mounted: true },
+  { id: 'sunhuan', scene: 'YilingGameScene', run: { thirdStage: 1 }, reg: { yilingStage: 1 }, ctl: 'controller', mounted: true },
+  { id: 'zhuran', scene: 'YilingGameScene', run: { thirdStage: 2 }, reg: { yilingStage: 2 }, ctl: 'controller', mounted: true },
+  { id: 'haozhao', scene: 'BeifaGameScene', run: { thirdStage: 2 }, reg: { beifaStage: 2 }, ctl: 'controller', mounted: false, prep: 's => { s.siege?.gate?.deactivate(); }' },
 ];
 try {
   const p = await b.newPage({ viewport: { width: 1280, height: 720 } }); const errs = []; p.on('pageerror', e => errs.push(String(e)));
   await p.goto(BASE + '?dev=1&layout=desktop');
   await p.waitForFunction(() => window.__game?.scene.isActive('MenuScene'), null, { timeout: 90000 });
-  for (const c of CASES) {
+  const ONLY = (process.env.ONLY ?? '').split(',').filter(Boolean);
+  for (const c of CASES.filter(c => !ONLY.length || ONLY.includes(c.id))) {
     const S = `window.__game.scene.getScene('${c.scene}')`;
     const ev = (fn, arg) => p.evaluate(([S0, f, a]) => { const s = eval(S0); if (s && (s.mode === 'levelup' || s.mode === 'recruit')) s.__DEV_ACTIONS?.closePopup?.(); return eval('(' + f + ')')(s, a); }, [S, String(fn), arg]);
     const wait = async ms => { for (let t = 0; t < ms; t += 200) { await ev(() => 0); await p.waitForTimeout(200); } };
     await p.evaluate(([key, run, reg]) => { const g = window.__game; for (const k of ['campaignTransfer', 'thirdTransfer']) g.registry.remove(k); for (const [k, v] of Object.entries(reg)) g.registry.set(k, v); g.registry.set('runConfig', { character: 'zhaoyun', ...run }); window.__phases = []; const cur = g.scene.getScene(key); if (cur && g.scene.isActive(key)) cur.scene.restart(); else { for (const s of g.scene.getScenes(true)) s.scene.stop(); g.scene.start(key); } }, [c.scene, c.run, c.reg]);
     await p.waitForTimeout(500);
     await p.waitForFunction(S0 => { const s = eval(S0); return s?.player && s.scene.isActive(); }, S, { timeout: 90000 }); await p.waitForTimeout(1000);
-    await ev(s => { s.player.damageImmune = true; s.events.on('boss-phase', e => window.__phases.push({ phase: e.phase, dismount: e.dismount, name: e.name })); if (!s.boss?.active) { if (s.devSetTime) s.devSetTime(999); else s.spawnBoss?.(); } });
+    if (c.prep) { await p.waitForTimeout(800); await ev(c.prep); }
+    await ev(s => { s.player.damageImmune = true; s.events.on('boss-phase', e => window.__phases.push({ phase: e.phase, dismount: e.dismount, name: e.name })); if (!s.boss?.active) { const w = s.chapter?.waves; if (s.devSetTime) s.devSetTime(w?.length ? w[w.length - 1].start + 1 : 999); else s.spawnBoss?.(); } });
     let ctl = null;
-    for (let i = 0; i < 100 && !ctl; i++) { ctl = await ev((s, k) => { const o = s[k]; return o && s.boss?.active ? true : null; }, c.ctl); if (!ctl) await p.waitForTimeout(200); }
+    if (c.pre) {
+      for (let i = 0; i < 100; i++) { if (await ev((s, k) => false, c.ctl)) break; if (await ev(s => s.controller?.def?.id === 'huangzhong' && s.boss?.active)) break; await p.waitForTimeout(200); }
+      await wait(2500);
+      await ev(s => { s.boss.hp = 1; s.hitEnemy(s.boss, 50, s.combatNow, 'melee', false, false); });
+      await wait(800);
+      await ev(s => { if (s.mode === 'parley') s.choose('persuade'); });
+      await wait(600);
+    }
+    for (let i = 0; i < 150 && !ctl; i++) { ctl = await ev((s, [k, id, legacy]) => { const o = s[k]; return o && s.boss?.active && (legacy || o.def?.id === id) ? true : null; }, [c.ctl, c.id, !!c.legacy]); if (!ctl) { await ev(s => { if (s.mode === 'parley') s.choose('persuade'); if (!s.boss?.active && !s.bossSpawned) { const w = s.chapter?.waves; s.devSetTime?.(w?.length ? w[w.length - 1].start + 1 : 999); } }); await p.waitForTimeout(200); } }
     ck(`${c.id}：首领出阵，控制器就位`, !!ctl, null);
     if (!ctl) continue;
     await wait(3200); // 出场名牌、马图载入
     const mount = await ev((s, k) => { const o = s[k], m = o.mount ?? s.bossMount; return { mounted: !!m?.mounted, horse: !!m?.hasHorse, crop: !!s.boss.sprite.isCropped }; }, c.ctl);
-    if (c.mounted) ck(`${c.id}：一阶段骑马（马图在、骑者裁上半身）`, mount.mounted && mount.horse && mount.crop, mount);
+    const RIDE_ART = ['lubu', 'huaxiong'];
+    if (c.mounted && RIDE_ART.includes(c.id)) { const r = await ev((s, k) => { const o = s[k], m = o.mount ?? s.bossMount; return { ride: !!m?.usesRideArt, tex: s.boss.sprite.texture.key, horse: !!m?.hasHorse }; }, c.ctl); ck(`${c.id}：一阶段骑马用正式首领骑乘图`, r.ride && r.horse && r.tex === 'ride_v2_boss_' + c.id, r); }
+    else if (c.mounted) ck(`${c.id}：一阶段骑马（马图在、骑者裁上半身）`, mount.mounted && mount.horse && mount.crop, mount);
     else ck(`${c.id}：不骑马（术士）`, !mount.mounted, mount);
     if (!c.legacy) {
       // 一阶段每招都放一遍
@@ -43,12 +72,23 @@ try {
       for (let i = 0; i < names.length; i++) { await ev((s, [k, i]) => { const b = s.boss; b.sprite.x = s.player.x + 160; b.sprite.y = s.player.y; s[k].debug.force(i, s.combatNow); }, [c.ctl, i]); await wait(i === 0 ? 900 : 2600); if (i === 0) await p.screenshot({ path: `${OUT}/${c.id}-p1.png` }); }
       const m1 = await ev((s, k) => s[k].snapshot(), c.ctl);
       ck(`${c.id}：一阶段招式都放出（${names.join('、')}）`, names.every(n => m1.metrics[n] > 0), m1.metrics);
-    } else await p.screenshot({ path: `${OUT}/${c.id}-p1.png` });
+    } else { await ev(s => { const b = s.boss; b.sprite.x = s.player.x + 170; b.sprite.y = s.player.y - 20; }); await p.waitForTimeout(150); await p.screenshot({ path: `${OUT}/${c.id}-p1.png` }); }
+    if (c.id === 'lijue') {
+      // 冲锋穿过部曲：每名士兵吃一整下（不再按帧摊成几乎无伤）
+      await ev(s => { s.legion.recruit('swordsman', 6, true); const b = s.boss, p = s.player; b.sprite.x = p.x + 300; b.sprite.y = p.y; s.allies.filter(u => u.active).forEach((u, i) => { u.setPosition(p.x + 60 + i * 35, p.y); u.hp = u.maxHp; u.bossImmuneUntil = 0; }); s.controller.debug.force(0, s.combatNow); });
+      await wait(2400);
+      const tr = await ev(s => s.allies.filter(u => u.active || u.hp <= 0).map(u => Math.round((1 - Math.max(0, u.hp) / u.maxHp) * 100)));
+      ck('李傕冲锋穿过部曲：士兵各吃一整下', tr.filter(x => x >= 15).length >= 3, tr);
+    }
     // 半血 → 二阶段
-    await ev((s, k) => { const b = s.boss; b.hp = Math.floor(b.maxHp * .48); s.hitEnemy(b, 1, s.combatNow, 'melee', false, false); }, c.ctl);
-    await wait(2500);
+    await ev((s, k) => { const b = s.boss; b.sprite.x = s.player.x + 170; b.sprite.y = s.player.y - 20; b.hp = Math.floor(b.maxHp * .48); s.hitEnemy(b, 1, s.combatNow, 'melee', false, false); }, c.ctl);
+    await p.waitForTimeout(250);
+    const fall = await ev(s => s.children.list.some(o => o.name === 'boss-fall'));
+    if (c.mounted && ['lubu', 'huaxiong'].includes(c.id)) { await p.screenshot({ path: `${OUT}/${c.id}-fall.png` }); ck(`${c.id}：坠马播骑乘图第 9 行坠马帧`, fall, fall); }
+    await wait(2250);
     const ph = await p.evaluate(() => window.__phases);
     const after = await ev((s, k) => { const o = s[k], m = o.mount ?? s.bossMount; return { phase2: !!o.phase2, mounted: !!m?.mounted, crop: !!s.boss.sprite.isCropped, horse: s.children.list.filter(x => x.name === 'boss-horse' && x.active).length }; }, c.ctl);
+    if (!c.legacy) ck(`${c.id}：换阶段撤掉一阶段旗阵`, (await ev((s, k) => s[k].snapshot().flags, c.ctl)) === 0, null);
     ck(`${c.id}：半血换二阶段，发 boss-phase 事件`, after.phase2 && ph.some(e => e.phase === 2), { after, ph });
     if (c.mounted) ck(`${c.id}：坠马 → 步战（马跑开、骑者恢复整身）`, !after.mounted && !after.crop && ph.some(e => e.phase === 2 && e.dismount), { after, ph });
     if (!c.legacy) {

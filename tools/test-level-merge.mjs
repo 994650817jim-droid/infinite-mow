@@ -78,7 +78,7 @@ const cap = await p.evaluate(async () => {
 ck('战斗中到上限 Lv10：不再升级，经验最多存 1 级（1100），多出的记作溢出', cap.gained === 0 && cap.level === 10 && cap.xp === 1100 && cap.overflow === 3900, cap);
 
 // 5) 重打已通关的关：经验倍率 0.5、保底 3 次
-await p.evaluate(async () => { const hp = await window.__mod('/src/systems/HeroProgress.ts'); hp.claimFirstClear('huangjin-1'); });
+await p.evaluate(async () => { const hp = await window.__mod('/src/systems/HeroProgress.ts'); hp.claimFirstClear('huangjin-1'); (await window.__mod('/src/systems/BattleSnapshot.ts')).commitBattle(); /* 测试在战斗中直接改存档代替结算：先提交本场，免得跳转时被「中途退出」回滚（2026-11-17） */ });
 await battle('?dev=1&autostart=1&stage=1&layout=desktop');
 const rep = await p.evaluate(() => { const s = window.__game.scene.getScene('GameScene'); s.ensurePicks(9); return { replay: s.campaignReplay, rate: s.heroXpRate(), picks: s.picksGiven }; });
 ck('重打旧关：经验 ×0.5，保底最多 3 次', rep.replay && rep.rate === .5 && rep.picks === 3, rep);

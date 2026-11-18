@@ -150,6 +150,7 @@ await p.screenshot({ path: `${out}/mobile-battle-hud-bag.png` });
 // 6) 主页：角标、纸娃娃、点击穿戴、悬停提示框
 await p.evaluate(async () => { const st = await window.__mod('/src/systems/ItemStore.ts'), items = await window.__mod('/src/data/items.ts'); st.setAutoSalvageWhite(false);
   { const raw = JSON.parse(localStorage.getItem('im_items_v2')); raw.legacy = [{ uid: 'old-1', base: 'sword_tassel', quality: 'green', affixes: [{ id: 'attackSpeed', value: .02 }] }]; localStorage.setItem('im_items_v2', JSON.stringify(raw)); st.resetItemCache(); } st.addItems(['blue', 'purple', 'green', 'orange'].map((q, i) => items.rollItem(q, Math.random, ['helm', 'boots', 'token', 'armor'][i]))); });
+await p.evaluate(async () => { (await window.__mod('/src/systems/BattleSnapshot.ts')).commitBattle(); /* 测试在战斗中直接改存档代替结算：先提交本场，免得跳转时被「中途退出」回滚（2026-11-17） */ });
 await p.goto(base + '?dev=1&layout=mobile');
 await p.waitForFunction(() => window.__game?.scene.getScene('MenuScene')?.sys.isActive() && window.__game.scene.getScene('MenuScene').children.getByName('home-achievements-plaque'), null, { timeout: 60000 });
 await p.waitForTimeout(800);

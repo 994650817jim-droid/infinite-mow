@@ -32,7 +32,9 @@ import type { ItemInstance } from '../data/items';
  */
 type Query = (x: number, y: number, r: number) => Enemy[];
 type Hit = (enemy: Enemy, damage: number, fire: boolean) => void;
-interface Fx { kind: FollowerTemplate | 'arrow' | 'puff'; x: number; y: number; tx: number; ty: number; angle: number; at: number; until: number; hitAt?: number; damage?: number; owner?: Follower; scar?: boolean; img?: Phaser.GameObjects.Image }
+/** 招式特效种类（招募会话在 attack() 里推入，画法在 updateFx）：'blade-sweep' 刀·横斩一圈 / 'spear-thrust' 枪·突刺直线（tx,ty 为终点）/ 'heal' 谋·包扎回血 / 'block' 刀·格挡闪光。 */
+export type FollowerFxKind = FollowerTemplate | 'arrow' | 'puff' | 'blade-sweep' | 'spear-thrust' | 'heal' | 'block';
+interface Fx { kind: FollowerFxKind; x: number; y: number; tx: number; ty: number; angle: number; at: number; until: number; hitAt?: number; damage?: number; owner?: Follower; scar?: boolean; img?: Phaser.GameObjects.Image }
 /**
  * 无名随行（枪 / 刀 / 弓 / 谋）出手特效（2026-11-17 用户：「很多大众脸攻击特效要改一下」）：原来全是代码画的弧线 / 直线 / 圆，
  * 改成复用现成手绘序列帧，按兵器区分、比名将招牌弱（小、淡、短）：
@@ -45,6 +47,10 @@ const FFX: Record<string, { key: string; frames: number; size: number; alpha: nu
   gather: { key: 'hero_small_paint', frames: 4, size: 96, alpha: .7, add: true, first: 12 },
   fire: { key: 'fx_ground_fire', frames: 6, size: 92, alpha: .8, add: false },
   puff: { key: 'fx_strike_glint', frames: 6, size: 48, alpha: .8, add: true },
+  sweep: { key: 'fx_drag_wave', frames: 6, size: 112, alpha: .62, tint: 0xffe6c4, add: true },
+  thrust: { key: 'refined_spear', frames: 6, size: 150, alpha: .78, add: false },
+  heal: { key: 'hero_small_paint', frames: 6, size: 104, alpha: .7, tint: 0xa8f0a0, add: true, first: 6 },
+  block: { key: 'fx_strike_glint', frames: 6, size: 34, alpha: .85, tint: 0xd6e6ff, add: true },
 };
 const FX_CAP = 24;
 
@@ -474,6 +480,11 @@ export class FollowerSquad {
       }
       if (now >= fx.until) { this.dropImg(fx); this.fx.splice(i, 1); continue; }
       if (now < fx.at) continue; // 连射第二箭稍晚出手
+      // 招式（招募会话 2026-11-17）：横斩 = 半月刀气绕身转一圈；突刺 = 手绘枪影从随行刺向终点；包扎 = 脚下绿金光圈；格挡 = 小星芒。缺图时不画
+      if (fx.kind === 'blade-sweep') { this.paint(fx, 'sweep', fx.x + Math.cos(fx.angle + k * Math.PI * 2) * 26, fx.y - 16 + Math.sin(fx.angle + k * Math.PI * 2) * 20, k, fx.angle + k * Math.PI * 2); continue; }
+      if (fx.kind === 'spear-thrust') { const len = Math.hypot(fx.tx - fx.x, fx.ty - fx.y) || 1; this.paint(fx, 'thrust', fx.x + (fx.tx - fx.x) * (.35 + .25 * k), fx.y - 14 + (fx.ty - fx.y) * (.35 + .25 * k), k, fx.angle, len / 150, len / 150 * 64 / 384 * 1.6); continue; }
+      if (fx.kind === 'heal') { this.paint(fx, 'heal', fx.x, fx.y - 22, k, 0); continue; }
+      if (fx.kind === 'block') { this.paint(fx, 'block', fx.x, fx.y - 24, k, fx.angle); continue; }
       if (fx.kind === 'puff') { if (!this.paint(fx, 'puff', fx.x, fx.y, k, 0)) { g.lineStyle(4, 0xe8f2ff, .8 * (1 - k)); g.strokeCircle(fx.x, fx.y, 20 + 20 * k); } continue; }
       if (fx.kind === 'spear' && this.paint(fx, 'spear', fx.x + Math.cos(fx.angle) * 20, fx.y - 14 + Math.sin(fx.angle) * 20, k, fx.angle)) continue;
       if (fx.kind === 'blade' && this.paint(fx, 'blade', fx.x + Math.cos(fx.angle) * 30, fx.y - 16 + Math.sin(fx.angle) * 30, k, fx.angle)) continue;

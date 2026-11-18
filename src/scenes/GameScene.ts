@@ -2671,7 +2671,9 @@ export class GameScene extends Phaser.Scene {
     if(!this.player.alive){this.finish(false);return;}
     // 落点避开尸体（画风会话量的躺倒身体范围）：倒地 4 帧往朝向前方偏 80，其余往下偏 30
     const ox=this.bossFallDir*80,oy=30;
-    this.bossChests.push(new BossChest({scene:this,player:this.player,grant:()=>this.grantBossChest(),done,sfx:k=>this.sfx.play(k)},x+ox,y+oy,this.combatNow));
+    // 落点压在城墙 / 障碍里时（首领倒在墙边），沿着往主将的方向挪到第一个空地，免得宝箱捡不到、关卡结不了
+    let cx=x+ox,cy=y+oy;{const clear=(px:number,py:number)=>!this.supplies||this.supplies.envClear(px,py,44);if(!clear(cx,cy)){const px=this.player.x,py=this.player.y;for(let k=1;k<=12;k++){const t=k/12,tx=cx+(px-cx)*t,ty=cy+(py-cy)*t;if(clear(tx,ty)){cx=tx;cy=ty;break;}if(k===12){cx=px;cy=py+30;}}}}
+    this.bossChests.push(new BossChest({scene:this,player:this.player,grant:()=>this.grantBossChest(),done,sfx:k=>this.sfx.play(k)},cx,cy,this.combatNow));
   }
   /** 宝箱里只有首领遗珍（用户 2026-11-17「首领宝箱只给首领遗珍」；道具系统发放，见 ItemDrops.claimBossRelic）。 */
   protected grantBossChest():ChestLoot[]{

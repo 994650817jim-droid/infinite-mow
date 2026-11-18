@@ -40,7 +40,7 @@ const killBoss = async p => {
   await step(p, 30);
   const before = await p.evaluate(() => ({ boss: !!window.__S.boss?.active, tex: window.__S.boss?.sprite.texture.key }));
   await p.evaluate(() => { const s = window.__S; window.__clear(); s.player.damageImmune = false; s.player.hp = s.player.maxHp; s.player.invulnUntil = s.combatNow + 120000; s.hitEnemy(s.boss, 1e8, s.combatNow, 'melee', false, false); });
-  for (let i = 0; i < 40; i++) { const o = await p.evaluate(() => { const s = window.__S; window.__step(20); s.collectBossChests?.(); const c = s.bossChests?.[0]; if (c && c.x !== undefined) s.player.sprite.setPosition(c.x, c.y); return s.over || s.xfState.pendingWin; }); if (o) break; }
+  for (let i = 0; i < 40; i++) { const o = await p.evaluate(() => { const s = window.__S; if (s.boss?.active) s.hitEnemy(s.boss, 1e8, s.combatNow, 'melee', false, false); /* 半血换阶段有 1.5 秒转场无敌（首领招式框架），一下打不死就接着打 */ window.__step(20); s.collectBossChests?.(); const c = s.bossChests?.[0]; if (c && c.x !== undefined) s.player.sprite.setPosition(c.x, c.y); return s.over || s.xfState.pendingWin; }); if (o) break; }
   await step(p, 10);
   return before;
 };

@@ -1,7 +1,7 @@
 import type { Ally } from '../entities/Ally';
 import type { Enemy } from '../entities/Enemy';
 import type { Player } from '../entities/Player';
-import type { Order } from '../data/legion';
+import { RECALL, type Order } from '../data/legion';
 import type { SpatialGrid } from './SpatialGrid';
 
 export const TACTICS = { thinkMs: 240, retreatHp: .3, returnHp: .6, retreatMinMs: 1600, guardLeash: 260, sortieLeash: 400, blockMs: 1500, chargeMs: 550, chargeCooldownMs: 4200 } as const;
@@ -9,9 +9,11 @@ export interface TacticState {
   nextThink: number; mode: 'advance' | 'retreat' | 'regroup' | 'charge' | 'return'; until: number;
   spaceX: number; spaceY: number; target: Enemy | null; spawn: number; x: number; y: number; danger: number;
   chargeReady: number; chargeHits: Set<number>; faceX: number; faceY: number; blockReady: number; blockUntil: number;
+  /** 护阵收回（RECALL）：切回护阵后跑回阵位，途中不接新战斗；开始时间、最近距离与最近一次靠近的时间（卡住兜底用）。 */
+  recall: boolean; recallAt: number; recallBest: number; recallBestAt: number;
 }
 export function createTacticState(x = 0, y = 0): TacticState {
-  return { nextThink: 0, mode: 'advance', until: 0, spaceX:0,spaceY:0,target: null, spawn: 0, x, y, danger: 0, chargeReady: 0, chargeHits: new Set(), faceX: 0, faceY: 1, blockReady: 0, blockUntil: 0 };
+  return { nextThink: 0, mode: 'advance', until: 0, spaceX:0,spaceY:0,target: null, spawn: 0, x, y, danger: 0, chargeReady: 0, chargeHits: new Set(), faceX: 0, faceY: 1, blockReady: 0, blockUntil: 0, recall: false, recallAt: 0, recallBest: 0, recallBestAt: 0 };
 }
 /** Cached decisions; all candidate searches use the existing grids, never an all-enemy scan. */
 export class LegionTactics {
@@ -92,6 +94,18 @@ export class LegionTactics {
       const healSafe = medic && this.dangerAt(medic.x, medic.y, grid) < 3;
       this.safe(u, healSafe && medic ? medic.x : this.player.x, healSafe && medic ? medic.y : this.player.y, grid); return;
     }
+    // 护阵收回：直接回阵位，不接新战斗；回到阵位附近结束；超时且很远 / 卡住时直接归位
+    if (a.recall) {
+      if (order !== 'guard') a.recall = false;
+      else {
+        const home = this.home(u), d = Math.hypot(home.x - u.x, home.y - u.y);
+        if (!a.recallAt) { a.recallAt = now; a.recallBest = d; a.recallBestAt = now; }
+        if (d < a.recallBest - RECALL.progressPx) { a.recallBest = d; a.recallBestAt = now; }
+        if (d <= RECALL.doneDist * 2) a.recall = false;
+        else if (now - a.recallAt > RECALL.fallbackMs && (d > RECALL.farPx || now - a.recallBestAt > RECALL.stuckMs)) { u.setPosition(home.x, home.y); a.recall = false; }
+        else { a.mode = 'advance'; a.target = null; a.x = home.x; a.y = home.y; return; }
+      }
+    }
     if (a.mode === 'charge' && now >= a.until) { a.mode = 'return'; a.until = now + 1100; }
     if (a.mode === 'return' && now >= a.until) a.mode = 'advance';
     if (a.danger >= Math.max(4, (support + 1) * 2) || Math.hypot(u.x - this.player.x, u.y - this.player.y) > leash + 50) {
@@ -100,7 +114,7 @@ export class LegionTactics {
     if (a.mode === 'regroup' || a.mode === 'return') { a.target = null; this.safe(u, this.player.x, this.player.y, grid); return; }
     const target = u.kind === 'medic' ? null : this.select(u, grid, order === 'guard' ? Math.max(210, u.def.range) : 500, leash);
     a.target = target; a.spawn = target?.spawnId ?? 0;
-    const home=this.anchor?.(u)??{x:this.player.x+(u.slot%5-2)*38,y:this.player.y+70+Math.floor(u.slot/5)*38};
+    const home=this.home(u);
     a.x=home.x;a.y=home.y;
     if (u.kind === 'medic') {
       const friend = wounded ?? (order === 'sortie' ? front : null);
@@ -130,6 +144,8 @@ export class LegionTactics {
       else { a.x = u.x; a.y = u.y; }
     }
   }
+  /** 阵位（编队锚点；没有编队时按槽位排在主将身后）。 */
+  private home(u: Ally): { x: number; y: number } { return this.anchor?.(u)??{x:this.player.x+(u.slot%5-2)*38,y:this.player.y+70+Math.floor(u.slot/5)*38}; }
   move(u: Ally, dt: number, now: number, friends: SpatialGrid<Ally>): void {
     const a = u.ai;
     const attacking=now<u.attackUntil && a.mode!=='retreat' && a.mode!=='regroup' && a.mode!=='charge';
@@ -158,9 +174,9 @@ export class LegionTactics {
       // 近战接敌（含长枪兵拉开距离）时保持面向目标，避免一退一进来回翻身造成闪烁。
       const target=a.target,engaged=!!target?.active&&!u.def.ranged&&u.kind!=='rider'&&a.mode!=='retreat'&&a.mode!=='regroup'&&Math.hypot(target.x-u.x,target.y-u.y)<=u.def.range*1.2;
       if(engaged&&target)u.face(target.x,target.y);
-      u.moveTo(goal.x,goal.y,dt,u.def.speed*(a.mode==='charge'?1.8:1),engaged);
+      u.moveTo(goal.x,goal.y,dt,u.def.speed*(a.mode==='charge'?1.8:a.recall?RECALL.speedMul:1),engaged);
     }
   }
 
-  canAttack(u: Ally): boolean { return u.ai.mode === 'advance' || u.ai.mode === 'charge'; }
+  canAttack(u: Ally): boolean { return !u.ai.recall && (u.ai.mode === 'advance' || u.ai.mode === 'charge'); }
 }

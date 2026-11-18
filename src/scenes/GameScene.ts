@@ -3125,7 +3125,7 @@ export class GameScene extends Phaser.Scene {
     const notes: string[] = [];
     for (const l of lines) {
       const t = l.replace(/\s{2,}/g, ' ');
-      if (/^(首次通关|随行|获得坐骑|乱世首通|屯田供粮|城池产出|流寇未平|成都归入)/.test(l)) notes.push(t);
+      if (/^(首次通关|随行|获得坐骑|乱世首通|屯田供粮|城池产出|流寇未平|成都归入|速攻破城|撤军收场)/.test(l)) notes.push(t);
       else if (/^营寨 · 农田 \+\d+ · /.test(l)) { const rest = t.replace(/^营寨 · 农田 \+\d+ · /, ''); if (rest !== '口粮 −0') notes.push('营寨 · ' + rest); }
       else if (/^缴获兵装/.test(l) && /测试战斗不入行囊|败退遗失/.test(l)) notes.push('兵装' + (l.match(/· (测试战斗不入行囊|败退遗失 \d+ 件)/)?.[1] ?? ''));
     }

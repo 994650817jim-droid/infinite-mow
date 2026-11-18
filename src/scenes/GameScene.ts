@@ -143,6 +143,7 @@ const HERO_FX_TONE: Record<string, { alpha: number; ms: number }> = {
   weiyanSlash: { alpha: .72, ms: 340 }, crack: { alpha: .7, ms: 360 }, whoDares: { alpha: .68, ms: 400 },
 };
 import { HIT_FEEL, BOSS_FEEL, WEAPON_HIT_TYPE } from '../data/hitFeel';
+import { GEM_FX } from '../data/gemFx';
 
 interface Gem {
   img: Phaser.GameObjects.Image;
@@ -152,6 +153,12 @@ interface Gem {
   active: boolean;
   /** 落地缓冲（毫秒）：先落地，再从磁吸范围吸附。 */
   restMs: number;
+  /** 军功信物手感（2026-11-18，data/gemFx.ts）：掉落 → 落地浮动 → 吸取。phase 开始时刻 at；掉落起点 sx/sy、落点 lx/ly；吸取速度 speed */
+  phase: 'drop' | 'rest' | 'fly'; at: number; sx: number; sy: number; lx: number; ly: number; speed: number;
+  /** 降级（不画光晕 / 残影、不闪光）；随机相位让一地信物不同步浮动 */
+  lite: boolean; seed: number; large: boolean;
+  /** 手绘光晕与吸取残影（同槽复用） */
+  glow?: Phaser.GameObjects.Image; ghost?: Phaser.GameObjects.Image;
 }
 
 interface DmgFx {
@@ -2190,70 +2197,88 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
+  /** 军功信物是否用手绘图（缺图时退回程序光团兜底）。 */
+  private gemArt(): boolean { return this.textures.exists('gem_tok_small') && this.textures.exists('gem_tok_large'); }
+  /**
+   * 敌人倒下掉军功信物：从身上弹出，走一道小抛物线落地再轻弹一下（GEM_FX.dropMs + bounceMs，0.3 秒内）。
+   * 对象池（GEM_FX.cap 个槽，信物 / 光晕 / 残影同槽复用）；手机布局或同屏过多时降级。
+   */
   protected spawnGem(x: number, y: number, value: number): void {
-    if (this.terrain) { const f = this.terrain.free(x, y, 8); x = f.x; y = f.y; } // 掉落不落在水里
+    let lx = x + (Math.random() - .5) * 2 * GEM_FX.spread, ly = y + (Math.random() - .5) * GEM_FX.spread * .7;
+    if (this.terrain) { const f = this.terrain.free(lx, ly, 8); lx = f.x; ly = f.y; } // 掉落不落在水里
     let gem = this.gems.find((g) => !g.active);
     if (!gem) {
-      if (this.gems.length >= 200) return;
-      gem = {
-        img: this.add.image(x, y, 'gem_small').setDepth(DEPTH.gem),
-        value: 0,
-        vx: 0,
-        vy: 0,
-        active: false,
-        restMs: 0,
-      };
+      if (this.gems.length >= GEM_FX.cap) return;
+      gem = { img: this.add.image(x, y, 'gem_small').setDepth(DEPTH.gem).setName('gem'), value: 0, vx: 0, vy: 0, active: false, restMs: 0,
+        phase: 'drop', at: 0, sx: 0, sy: 0, lx: 0, ly: 0, speed: 0, lite: false, seed: 0, large: false };
       this.gems.push(gem);
     }
-    gem.active = true;
-    gem.value = value;
-    gem.restMs = 280;
-    gem.vx = (Math.random() - 0.5) * 40;
-    gem.vy = (Math.random() - 0.5) * 40;
-    gem.img.setTexture(value >= 10 ? 'gem_large' : 'gem_small').setPosition(x, y).setVisible(true).setAlpha(1).setScale(1);
+    const art = this.gemArt(), large = value >= GEM_FX.largeValue, live = this.gems.reduce((n, g) => n + (g.active ? 1 : 0), 0);
+    Object.assign(gem, { active: true, value, vx: 0, vy: 0, restMs: GEM_FX.dropMs + GEM_FX.bounceMs, phase: 'drop', at: this.combatNow, sx: x, sy: y - GEM_FX.lift, lx, ly, speed: 0,
+      lite: !art || !IS_DESKTOP || live > GEM_FX.liteAbove, seed: Math.random() * 10000, large });
+    const size = large ? GEM_FX.largeSize : GEM_FX.smallSize;
+    if (art) gem.img.setTexture(large ? 'gem_tok_large' : 'gem_tok_small', 0).setDisplaySize(size, size);
+    else gem.img.setTexture(large ? 'gem_large' : 'gem_small').setScale(1);
+    gem.img.setPosition(gem.sx, gem.sy).setVisible(true).setAlpha(1).setDepth(DEPTH.gem);
+    gem.ghost?.setVisible(false);
+    if (!gem.lite && this.textures.exists('gem_fx')) {
+      gem.glow ??= this.add.image(lx, ly, 'gem_fx', 4).setBlendMode(Phaser.BlendModes.ADD).setDepth(DEPTH.gem - .1).setName('gem-glow');
+      const gs = large ? GEM_FX.glowLarge : GEM_FX.glowSmall; gem.glow.setFrame(large ? 5 : 4).setDisplaySize(gs, gs).setPosition(lx, ly + 2).setAlpha(0).setVisible(true);
+    } else gem.glow?.setVisible(false);
+  }
+
+  /** 拾取闪光（手绘 gem_fx 0–3 帧）对象池 */
+  private gemSparks: Array<{ img: Phaser.GameObjects.Image; at: number }> = [];
+  private gemSpark(x: number, y: number): void {
+    if (!this.textures.exists('gem_fx')) return;
+    let sp = this.gemSparks.find(s => this.combatNow - s.at >= GEM_FX.sparkMs);
+    if (!sp) { if (this.gemSparks.length < GEM_FX.sparkCap) { sp = { img: this.add.image(x, y, 'gem_fx', 0).setBlendMode(Phaser.BlendModes.ADD).setDepth(DEPTH.player + 1).setName('gem-spark'), at: 0 }; this.gemSparks.push(sp); } else sp = this.gemSparks.reduce((o, s) => s.at < o.at ? s : o); }
+    sp.at = this.combatNow; sp.img.setPosition(x, y).setFrame(0).setDisplaySize(GEM_FX.sparkSize, GEM_FX.sparkSize).setVisible(true);
   }
 
   /** “搜集辎重”：此时刻之前全场宝石无视距离飞向主将。 */
   gemMagnetUntil = 0;
   protected updateGems(dt: number): void {
-    const radius = this.combatNow < this.gemMagnetUntil ? 1e9 : this.player.stats.pickupRadius * (1 + this.player.growth.gear.pickup);
+    const radius = this.combatNow < this.gemMagnetUntil ? 1e9 : this.player.stats.pickupRadius * (1 + this.player.growth.gear.pickup), now = this.combatNow, art = this.gemArt();
+    for (const sp of this.gemSparks) { const t = (now - sp.at) / GEM_FX.sparkMs; if (t >= 1) { if (sp.img.visible) sp.img.setVisible(false); continue; } sp.img.setFrame(Math.min(3, Math.floor(t * 4))).setPosition(this.player.x, this.player.y - 18); }
     for (const gem of this.gems) {
       if (!gem.active) continue;
-      const dx = this.player.x - gem.img.x;
-      const dy = this.player.y - gem.img.y;
-      const dist = Math.hypot(dx, dy) || 1;
-      if (dist < 22) {
-        gem.active = false;
-        gem.img.setVisible(false);
+      const img = gem.img, px = this.player.x, py = this.player.y - 6;
+      if (gem.phase === 'drop') {
+        // 抛物线落地 + 轻弹一下
+        const t = now - gem.at; gem.restMs = Math.max(0, GEM_FX.dropMs + GEM_FX.bounceMs - t);
+        if (t < GEM_FX.dropMs) { const k = t / GEM_FX.dropMs; img.setPosition(gem.sx + (gem.lx - gem.sx) * k, gem.sy + (gem.ly - gem.sy) * k - Math.sin(Math.PI * k) * GEM_FX.arc); }
+        else if (t < GEM_FX.dropMs + GEM_FX.bounceMs) { const k = (t - GEM_FX.dropMs) / GEM_FX.bounceMs; img.setPosition(gem.lx, gem.ly - Math.sin(Math.PI * k) * GEM_FX.bounce); }
+        else { img.setPosition(gem.lx, gem.ly); gem.phase = 'rest'; gem.at = now; }
+        if (gem.glow?.visible) gem.glow.setAlpha(Math.min(1, t / (GEM_FX.dropMs + GEM_FX.bounceMs)) * GEM_FX.glowAlpha[0]);
+        continue;
+      }
+      const dx = px - img.x, dy = py - img.y, dist = Math.hypot(dx, dy) || 1;
+      if (gem.phase === 'rest') {
+        if (dist < radius) { gem.phase = 'fly'; gem.at = now; gem.speed = GEM_FX.flyStart; gem.glow?.setVisible(false); if (!gem.lite) { gem.ghost ??= this.add.image(img.x, img.y, img.texture.key, 0).setDepth(DEPTH.gem - .05).setName('gem-ghost'); gem.ghost.setTexture(img.texture.key, img.frame.name).setDisplaySize(img.displayWidth, img.displayHeight).setPosition(img.x, img.y).setAlpha(GEM_FX.ghostAlpha).setVisible(true); } }
+        else {
+          // 落地：上下浮动、光晕呼吸、隔一会儿高光扫过
+          const ph = now + gem.seed, bob = Math.sin(ph / GEM_FX.bobMs * Math.PI * 2) * GEM_FX.bobPx;
+          img.y = gem.ly - GEM_FX.bobPx + bob;
+          if (gem.glow?.visible) { const [a0, a1] = GEM_FX.glowAlpha; gem.glow.setAlpha(a0 + (a1 - a0) * (.5 + .5 * Math.sin(ph / GEM_FX.glowMs * Math.PI * 2))); }
+          if (art && !gem.lite) { const st = ph % GEM_FX.shineEvery; img.setFrame(st < GEM_FX.shineMs ? Math.min(3, Math.floor(st / GEM_FX.shineMs * 4)) : 0); }
+          continue;
+        }
+      }
+      // 吸取：加速飞向主将，残影落后一点
+      if (dist < GEM_FX.arriveDist) {
+        gem.active = false; img.setVisible(false); gem.ghost?.setVisible(false); gem.glow?.setVisible(false);
+        if (!gem.lite) this.gemSpark(px, py);
         // 拾取军功宝石不再播放音效（用户要求；战场补给拾取仍有音效）
         const gained = this.player.gainXp(this.player.growth.scaleXp(gem.value, this.heroXpRate()), levelCap());
         this.relics?.onGem(this.combatNow);
         if (gained > 0) this.onHeroLevelUp(gained);
         continue;
       }
-      gem.restMs = Math.max(0, gem.restMs - dt * 1000);
-      if (gem.restMs > 0) {
-        gem.img.x += gem.vx * dt;
-        gem.img.y += gem.vy * dt;
-        gem.vx *= 0.82;
-        gem.vy *= 0.82;
-        if (Math.abs(gem.vx) + Math.abs(gem.vy) < 6) {
-          gem.vx = 0;
-          gem.vy = 0;
-        }
-      } else if (dist < radius) {
-        gem.img.x += (dx / dist) * 420 * dt;
-        gem.img.y += (dy / dist) * 420 * dt;
-      } else if (gem.vx !== 0 || gem.vy !== 0) {
-        gem.img.x += gem.vx * dt;
-        gem.img.y += gem.vy * dt;
-        gem.vx *= 0.86;
-        gem.vy *= 0.86;
-        if (Math.abs(gem.vx) + Math.abs(gem.vy) < 4) {
-          gem.vx = 0;
-          gem.vy = 0;
-        }
-      }
+      gem.speed = Math.min(GEM_FX.flyMax, gem.speed + GEM_FX.flyAccel * dt);
+      const step = Math.min(dist, gem.speed * dt); gem.vx = dx / dist * gem.speed; gem.vy = dy / dist * gem.speed;
+      if (gem.ghost?.visible) gem.ghost.setPosition(img.x - gem.vx * GEM_FX.ghostLag, img.y - gem.vy * GEM_FX.ghostLag);
+      img.x += dx / dist * step; img.y += dy / dist * step;
     }
   }
 

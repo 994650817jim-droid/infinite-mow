@@ -123,6 +123,21 @@ const r6c = await p.evaluate(async base => {
 }, base);
 ck('兵器 / 头巾图集：768×512、6 格每格恰好一件物品（无水印 / 色带杂块）、居中（±6px）、不顶格边、最长边 ≥ 190px、无粉色残留；游戏里加载成 6 帧', r6c.w === 768 && r6c.h === 512 && r6c.cells.length === 6 && r6c.cells.every(c => c.comps === 1 && c.edge === 0 && Math.abs(c.cx - 128) <= 6 && Math.abs(c.cy - 128) <= 6 && Math.max(c.w, c.h) >= 190) && r6c.pinkEdge === 0 && r6c.loaded && r6c.frames === 6, r6c);
 
+// —— 6d) 敌军棕色战马行走图（即梦出图，tools/prepare-enemy-horse.mjs 处理）：1152×1152、4×4 每格恰好一匹马、无粉色残留、同一行脚底线一致（±6px，原位缩放不逐帧居中）、侧视两行朝向相反 ——
+const r6d = await p.evaluate(async base => {
+  const img = new Image(); img.src = base + 'assets/horses-v2/enemy_brown_walk.png'; await img.decode();
+  const c = document.createElement('canvas'); c.width = img.width; c.height = img.height; const g = c.getContext('2d', { willReadFrequently: true }); g.drawImage(img, 0, 0);
+  const d = g.getImageData(0, 0, c.width, c.height).data, W = c.width, cell = W / 4, out = { w: img.width, h: img.height, pink: 0, rows: [] };
+  for (let r = 0; r < 4; r++) { const row = []; for (let col = 0; col < 4; col++) { let x0 = 1e9, x1 = -1, y0 = 1e9, y1 = -1, edge = 0, hx = 0, hn = 0;
+    for (let y = 0; y < cell; y++) for (let x = 0; x < cell; x++) { const i = ((r * cell + y) * W + col * cell + x) * 4, a = d[i + 3]; if (a > 10) { x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y); if (x === 0 || y === 0 || x === cell - 1 || y === cell - 1) edge++; }
+      if (a > 200 && d[i] > 190 && d[i + 2] > 110 && d[i + 1] < 80 && d[i + 2] > d[i + 1] + 60) out.pink++; }
+    // 头在哪边：上半部分不透明像素的重心相对外框中心
+    for (let y = y0; y < y0 + (y1 - y0) * .45; y++) for (let x = 0; x < cell; x++) { const i = ((r * cell + y) * W + col * cell + x) * 4; if (d[i + 3] > 200) { hx += x; hn++; } }
+    row.push({ bottom: y1, w: x1 - x0 + 1, h: y1 - y0 + 1, edge, headLeft: hn ? hx / hn < (x0 + x1) / 2 : null }); } out.rows.push(row); }
+  return out;
+}, base);
+ck('敌军棕色战马图：1152×1152、4×4 十六格每格一匹马、不顶格边、无粉色残留；同一行脚底线一致（±6px）；左行朝左、右行朝右', r6d.w === 1152 && r6d.h === 1152 && r6d.pink === 0 && r6d.rows.every(row => row.every(f => f.edge === 0 && f.h > 200) && Math.max(...row.map(f => f.bottom)) - Math.min(...row.map(f => f.bottom)) <= 6) && r6d.rows[1].every(f => f.headLeft === true) && r6d.rows[2].every(f => f.headLeft === false), r6d);
+
 // —— 7) 设置界面：战斗内设置有「死亡特效」一行，点一下开 ↔ 关 ——
 const r7 = await p.evaluate(async () => {
   const s = window.__game.scene.getScene('GameScene'); s.pendingLevels = 0; s.militaryPending = 0; if (s.mode !== 'none') s.setMode('none'); s.togglePause(); await new Promise(r => setTimeout(r, 400));

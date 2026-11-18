@@ -42,6 +42,6 @@ export function paintV2Road(scene: Phaser.Scene, key: string, source: string, wi
   if (vertical) g.drawImage(img, 0, 0, width, len);
   else { g.translate(len, 0); g.rotate(Math.PI / 2); g.drawImage(img, 0, 0, width, len); g.setTransform(1, 0, 0, 1, 0, 0); }
   if (overlay) { g.globalCompositeOperation = 'source-atop'; g.fillStyle = overlay; g.fillRect(0, 0, tex.width, tex.height); g.globalCompositeOperation = 'source-over'; }
-  tex.refresh(); tex.setFilter(Phaser.Textures.FilterMode.LINEAR);
+  tex.refresh(); tex.setFilter(Phaser.Textures.FilterMode.LINEAR); (tex.customData as Record<string, unknown>).source = source; // 测试读：这条路用的哪张图
   return true;
 }

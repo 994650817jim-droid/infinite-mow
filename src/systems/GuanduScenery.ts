@@ -9,7 +9,7 @@ import type {DepotPoint} from './GrainDepots';
  * 第四章战场：复用现有地面与汜水关物件（城门、箭楼、营帐），程序化调成兖州黄土色；不新生成地面图。
  * 4-1 白马：北面袁军大营（木栅 + 辕门 + 营帐出兵，见 GuanduGameScene），两侧袁军云梯营，两处袁军粮垛。
  * 4-2 延津：无城，十字路口；河北骑营与前营，四辆散落的辎重车（文丑会来劫）。
- * 4-3 乌巢：夜色营地，横向营道；乌巢亲军营 / 守粮弓营，三座乌巢粮仓。
+ * 4-3 乌巢：夜色营地，横向土路营道；乌巢亲军营 / 守粮弓营，三座乌巢粮仓。
  */
 export function guanduScenery(scene: Phaser.Scene, stage: GuanduStage, spawnProp?: (frame: number, x: number, y: number, size: number) => void) {
   const key = 'guandu_ground_' + stage;
@@ -25,7 +25,8 @@ export function guanduScenery(scene: Phaser.Scene, stage: GuanduStage, spawnProp
     tex.refresh(); tex.setFilter(Phaser.Textures.FilterMode.NEAREST);
   }
   const roadKey = 'guandu_road_' + stage, roadWidth = 168;
-  paintV2Road(scene, roadKey, stage === 3 ? 'road_v2_plank' : 'road_v2_dirt', roadWidth, true, stage === 3 ? 'rgba(10,16,30,.35)' : undefined);
+  // 4-3 原来用军营木板道（竖条木板），横着铺开从上往下看像一道木栅栏、人却能穿过（全场景审查 C）→ 改夜色土路
+  paintV2Road(scene, roadKey, 'road_v2_dirt', roadWidth, true, stage === 3 ? 'rgba(10,16,30,.35)' : undefined);
   if (!scene.textures.exists(roadKey)) {
     const road = scene.textures.createCanvas(roadKey, roadWidth, 512)!; const ctx = road.context; ctx.imageSmoothingEnabled = false;
     ctx.fillStyle = '#7d6a4c'; ctx.fillRect(0, 0, roadWidth, 512);

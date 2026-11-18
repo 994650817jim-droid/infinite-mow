@@ -1,3 +1,4 @@
+import {chibiRiverCamp} from '../systems/ChibiRiverCamp';
 import {ThirdSpearWarnings,THIRD_SPEAR,type SpearWindup} from '../systems/ThirdSpearWarnings';
 import {EnemyCamps} from '../systems/EnemyCamps';
 import type {CampPoint} from '../systems/EnemyCamps';
@@ -75,6 +76,7 @@ export function thirdGameSceneClass(Base:typeof GameScene,cfg:ArcSceneConfig=THI
   const fort=this.fort;if(fort&&fort.kind!=='clear'&&!cfg.scenery){this.sishuiPass=new SishuiPass(this.passHost(),{towers:fort.kind==='pass',tents:false,wenjiu:false,wallY:ARC_FORT_WALL_Y,gateText:fort.gate,tag:'fort'});this.sishuiPass.footprints.push(...art.boxes);this.sishuiObstacles=new SishuiObstacles(this.sishuiPass.footprints);}
   this.enemyCamps=new EnemyCamps({scene:this,player:this.player,create:(x,y,hp)=>this.supplies?.spawnCamp(x,y,hp)??null,spawn:(kind,x,y)=>this.spawnEnemy(kind,x,y,1),support:()=>this.legion.grid.query(this.player.x,this.player.y,260),reward:n=>{this.legion.food+=n;}},art.camps,this.combatNow);
   this.legion.campTarget=u=>this.enemyCamps?.assist(u)??null;
+  if(cfg.arc==='chibi'&&this.thirdStage===2)chibiRiverCamp(this); /* 5-2 赤壁：北岸曹军水寨布景（江面是 Terrain 的河） */
   this.fireShips=cfg.fireShips?.includes(this.thirdStage)?new FireShips({scene:this,enemies:()=>this.enemies,player:()=>this.player,boss:()=>this.boss??undefined,burn:(e,dmg,now)=>{this.hitEnemy(e,dmg,now,'fire',true,false);},announce:t=>this.showWaveBanner(t,false)},this.combatNow):undefined;
   const keys=(this.registry.get('battleTextureKeys')??[])as string[];this.registry.set('battleTextureKeys',[...new Set([...keys,...cfg.stages.map(d=>cfg.texture(d.id)),art.key,'third_road_'+this.sceneryStage])]);
   // 剧情（第三章起）：基类按 encounter 没建剧情；有该篇章剧本时按篇章 id 重建并播关前剧情

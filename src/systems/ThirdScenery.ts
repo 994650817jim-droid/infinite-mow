@@ -17,7 +17,8 @@ export function thirdScenery(scene:Phaser.Scene,stage:SceneryStage,spawnProp?:(f
  const roadKey=(arc==='chibi'?'chibi_road_':'third_road_')+stage;
  const roadWidth=stage===1||stage===4?172:stage===2?124:164;
  // 路面 v2：替换程序画的灰色石板路（第 3 关为横向营中木板道，第 2 关夜色土路，其余石板官道）；缺图退回下面的程序版
- paintV2Road(scene,roadKey,stage===3?'road_v2_plank':stage===2||arc==='chibi'?'road_v2_dirt':'road_v2_stone',stage===3?164:roadWidth,stage!==3,stage===2?'rgba(8,18,32,.5)':undefined);
+ // 第 3 关的横向营道原来是军营木板道：竖条木板横着铺，看上去像一道木栅栏却不挡人（全场景审查 C：3-3 寿春）→ 改土路
+ paintV2Road(scene,roadKey,stage===3||stage===2||arc==='chibi'?'road_v2_dirt':'road_v2_stone',stage===3?164:roadWidth,stage!==3,stage===2?'rgba(8,18,32,.5)':undefined);
  if(!scene.textures.exists(roadKey)){
   const road=scene.textures.createCanvas(roadKey,stage===3?512:roadWidth,stage===3?164:512)!;
   const ctx=road.context;ctx.imageSmoothingEnabled=false;

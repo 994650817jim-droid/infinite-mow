@@ -5,6 +5,7 @@ import {FOLLOW} from '../data/recruits';
 import type {PlayerStats} from '../types';
 import {followersFor,followerLevelCap,heroOwned,lordHero} from '../systems/RosterStore';
 import {Parley} from '../systems/Parley';
+import {freeSpawn} from '../systems/SpawnClear';
 import {DUAL, DualBoss, retreatFade, type DualCtrl, type DualPlan} from '../systems/DualBoss';
 import type {BossMount as BossMountT} from '../systems/BossMount';
 import {SURRENDER,surrenderDef} from '../data/surrender';
@@ -1205,6 +1206,8 @@ export class GameScene extends Phaser.Scene {
     override?:EnemyDef,
   ): Enemy | null {
     if (this.terrain) { const f = this.terrain.free(x, y, kind === 'boss' ? 34 : 20); x = f.x; y = f.y; } // 不刷在水里 / 树干里
+    // 不刷在关墙 / 营栅 / 场地边界 / 谷壁 / 崖壁里（全场景审查 F）：挪到最近的框边、朝主将那一侧；首领与城头守军按设计摆位，不挪
+    if (kind !== 'boss' && override?.behavior !== 'wall' && this.sishuiObstacles?.footprints.length) { const f = freeSpawn(this.sishuiObstacles.footprints, x, y, 20, this.player); x = f.x; y = f.y; }
     const poolLimit = BALANCE.enemyCap;
     const bossReserve = this.bossSpawned ? 0 : 1;
     const activeLimit = kind === 'boss' ? BALANCE.enemyCap : BALANCE.enemyCap - bossReserve;

@@ -71,6 +71,12 @@ export function terrainConfigFor(arc: string, stage: number): TerrainConfig | nu
     } : null;
     // 第七章 入蜀：山道两侧松竹林
     case 'shu': return stage === 1 ? { trees: shuTrees(300, -4200, 2200, 7) } : stage === 2 ? { trees: shuTrees(260, -4200, 2200, 19) } : null;
+    // 第五章 赤壁（全场景审查 P1：原来一格水都没有）：北面横贯一段大江（长江，宽 340，规则同其它河：水里减速），两座浮桥渡江；
+    // 曹军水寨在北岸（systems/ChibiRiverCamp.ts 摆布景）。江心在 y≈-720，躲开南岸伏弓营（y -400）；刷兵 / 掉落不落在江里（Terrain.free）
+    case 'chibi': return stage === 2 ? {
+      clear: [C0],
+      rivers: [{ points: [{ x: -2600, y: -700 }, { x: -1250, y: -760 }, { x: 0, y: -690 }, { x: 1300, y: -770 }, { x: 2600, y: -710 }], width: 340, bridges: [{ at: .35, width: 130 }, { at: .68, width: 130 }] }],
+    } : null;
     // 第九章 樊城：城南一条汉水支流，两座木桥（与水淹七军的洪水互不干扰：洪水在第二关）
     case 'xiangfan': return stage === 1 ? {
       clear: [C0],

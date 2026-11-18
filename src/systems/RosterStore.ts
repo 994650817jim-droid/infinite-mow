@@ -8,6 +8,7 @@ import { loadWorld, spendWorld, townUpgrade, worldUnlocked } from '../world/Worl
 import { TOWN_BUILDINGS, levelOf, type TownBuildingId } from '../town/TownData';
 import { loadItems, loadout, resetItemCache, unequipSlot, type GearOwner } from './ItemStore';
 import { isChapterTestRun } from './ChapterProgress';
+import { activeValue, passiveValue } from '../data/commonerSkills';
 
 /**
  * 人才库与已招武将（RECRUIT_PLAN.md，用户选 A 方案）：独立存档键 im_roster_v1（在 SaveSlots.PROGRESS_KEYS 里，随存档位切换）。
@@ -364,6 +365,18 @@ export function rankUp(id: string, line: RankLine): RosterResult {
 export function rankBonus(r: Pick<Recruit, 'rank' | 'picks'>): { damage: number; hp: number; haste: number } {
   const w = r.picks.filter(p => p === 'weapon').length, p = r.picks.filter(x => x === 'passive').length;
   return { damage: w * RANK.weaponStep, hp: p * RANK.passiveHp, haste: p * RANK.passiveHaste };
+}
+/** 讲武堂「随从操练」按钮与说明用（用户 2026-11-17「升级兵器和被动要看到需要多少钱」）：这一线下一阶的花费、是否买得起 / 已满 / 主公，以及升级前后的数值。 */
+export interface RankPreview { cost: number; afford: boolean; full: boolean; lord: boolean; capByHall: boolean; before: string; after: string }
+export function rankPreview(r: Recruit, line: RankLine, s: RosterSave = loadRoster()): RankPreview {
+  const cap = rankCap(s), full = r.rank >= cap, cost = RANK.cost(r.rank + 1).provisions, lord = isLordRecruit(s, r);
+  const w = r.picks.filter(p => p === 'weapon').length, p = r.picks.length - w, tpl = !r.hero;
+  const pc = (v: number) => `${Math.round(v * 100)}%`;
+  const text = (w2: number, p2: number) => line === 'weapon'
+    ? `伤害 +${pc(w2 * RANK.weaponStep)}${tpl ? ' · ' + activeValue(r.template, w2) : ''}`
+    : `生命 +${pc(p2 * RANK.passiveHp)} 攻速 +${pc(p2 * RANK.passiveHaste)}${tpl ? ' · ' + passiveValue(r.template, p2) : ''}`;
+  let afford = false; try { afford = loadWorld().provisions >= cost; } catch { /* 存档不可用 */ }
+  return { cost, afford, full, lord, capByHall: full && r.rank < RANK.max, before: text(w, p), after: line === 'weapon' ? text(w + 1, p) : text(w, p + 1) };
 }
 /** 主将的将阶开局加成（未拥有记录时为 0）。 */
 export { FOLLOW };

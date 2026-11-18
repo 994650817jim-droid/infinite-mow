@@ -200,3 +200,4 @@ assets/raw/*
 !/tools/test-hero-actions.mjs
 !/tools/test-chronicle.mjs
 !/tools/test-pad-targets.mjs
+!/tools/test-commoner-skills.mjs

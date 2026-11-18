@@ -213,12 +213,17 @@ export class GameScene extends Phaser.Scene {
   cutscene:Cutscene|null=null;
   /** 最近一段过场（测试读日志用）。 */
   lastCutscene:Cutscene|null=null;
+  /** 过场结束的时刻（真实时间 ms）：过场中与结束后 1 秒内压住武将台词（HeroBark），免得镜头刚回来就冒「来将通名！」。 */
+  private cutsceneEndedAt=-Infinity;
+  /** 排队中的首领台词（剧情台词之后主将接一句）；过场开播时取消。 */
+  private bossBarkTimer?:Phaser.Time.TimerEvent;
+  barksMuted():boolean{return !!this.cutscene?.active||performance.now()-this.cutsceneEndedAt<1000;}
   /** 播过场：战斗暂停（story 模式）、HUD 藏起；剧情设置关掉时不播，返回 false（调用方走原来的演出）。播完或跳过都回调 done。 */
   playCutscene(script:CutsceneScript,anchors:CutHost['anchors'],done:(skipped:boolean)=>void):boolean{
     if(!cutsceneAllowed(script)||this.over)return false;
-    const was=this.mode;this.setMode('story');
+    const was=this.mode;this.setMode('story');this.bossBarkTimer?.remove();this.bossBarkTimer=undefined;this.heroBark?.clear(); /* 开播前已冒出的武将台词也收掉（补间暂停时会一直挂着） */
     this.cutscene=new Cutscene({scene:this,anchors:{player:this.player.sprite,...anchors},heroes:()=>[this.runConfig.character,...(this.followers?.members??[]).map(m=>m.recruit.hero??'')].filter(Boolean),sfx:k=>this.sfx.play(k),music:d=>this.music.setDuck(d)},script,skipped=>{
-      this.lastCutscene=this.cutscene;this.cutscene=null;if(!this.over&&this.mode==='story')this.setMode(was==='story'?'none':was);done(skipped);});
+      this.lastCutscene=this.cutscene;this.cutscene=null;this.cutsceneEndedAt=performance.now();if(!this.over&&this.mode==='story')this.setMode(was==='story'?'none':was);done(skipped);this.hudAcc=1;this.updateHud(); /* 结束状态（如首领倒下）立刻反映到刚恢复的 HUD，免得首领血条闪一下 */});
     return true;
   }
   /** 场上某武将的精灵（主将或随行），不在场返回 undefined。 */
@@ -744,8 +749,8 @@ export class GameScene extends Phaser.Scene {
   private storyBossFell = false;
   /** 主将对首领登场 / 倒下说一句（HeroBark）。剧情先让首领说了时，主将那句晚 2.3 秒（HeroBark 场上只留一句，同时说会互相顶掉）。 */
   protected lordBossBark(kind: 'bossAppear' | 'bossDown', storySpoke: boolean): void {
-    const say = (): void => { if (this.sys.settings.status < Phaser.Scenes.SHUTDOWN) this.heroBark?.bossEvent(kind, this.barkSpeakers()[0], this.chapter.bossName, this.combatNow); };
-    if (storySpoke) this.time.delayedCall(2300, say); else say();
+    const say = (): void => { if (this.sys.settings.status < Phaser.Scenes.SHUTDOWN && !this.barksMuted()) this.heroBark?.bossEvent(kind, this.barkSpeakers()[0], this.chapter.bossName, this.combatNow); };
+    if (storySpoke) { this.bossBarkTimer?.remove(); this.bossBarkTimer = this.time.delayedCall(2300, say); } else say();
   }
   /** 剧情上下文：主公、在队（主公 + 随行武将）、已招募。 */
   storyCtx(): StoryCtx { return { lord: this.runConfig.character, team: () => [this.runConfig.character, ...(this.followers?.members ?? []).map(m => m.recruit.hero).filter((h): h is CharacterId => !!h)], recruited: id => heroOwned(id) }; }
@@ -928,7 +933,7 @@ export class GameScene extends Phaser.Scene {
     this.updateHud();
     // 被动满层台词每帧检测（HUD 0.1 秒一刷，孙尚香这类攒满后马上触发的会漏掉）
     this.passiveShout.update(this.player.passive, this.combatNow, this.player.x, this.player.y, this.mode === 'none' && !this.over, this.player.sprite);
-    this.heroBark?.update(this.barkSpeakers(), this.combatNow, this.mode === 'none' && !this.over); // 武将台词气泡（被动大招触发时）
+    this.heroBark?.update(this.barkSpeakers(), this.combatNow, this.mode === 'none' && !this.over && !this.barksMuted()); // 武将台词气泡（被动大招触发时）；过场中与刚结束 1 秒内不喊
     this.artEffects.update(this.combatNow);
     this.updateRelicWaves();
     this.feedback.update(this.combatNow, this.mode === 'result' ? delta : 0);

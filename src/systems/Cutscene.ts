@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { DEPTH, GAME_HEIGHT, GAME_WIDTH, HEADING_FONT, actorDepth } from '../config';
 import { SKILL_FX } from './SkillFxSheets';
 import { HORSE_V2, RIDE, RIDE_DIR_LIFT } from './HeroMount';
+import { RIDE_SEAT, SEATED_RIDE_ART } from './BossMount';
 import { ART_V2_FILES, regridV2 } from './ArtStyle';
 import type { ActorSpec, CutStep, CutsceneScript, Dir, Ease, Pos, Pose } from '../data/cutscenes/types';
 
@@ -247,8 +248,11 @@ export class Cutscene {
       // 骑者对马：与战斗里首领骑马（BossMount，美术会话 774f41d）同一算法——整张骑乘帧，脚底对到马镫高、朝镜头 / 背对再抬（RIDE_DIR_LIFT）；
       // 另外跟着马步起伏（马蹄落地那帧沉一点）。坠马行脚底着地。
       const moving = a.pose === 'ride' || a.pose === 'walk', step = moving ? Math.floor((this.ct - a.poseAt) / 80) % 4 : 0, bob = moving ? [0, -3, -1, -4][step] : 0;
-      if (a.pose === 'fall') a.main.setFrame(fr).setOrigin(.5, RIDE.foot / RIDE.cell).setPosition(a.x, a.y);
-      else a.main.setFrame(fr).setOrigin(.5, (RIDE.foot + (RIDE.stirrup + (RIDE_DIR_LIFT[a.dir] ?? 0)) / RIDE.scale) / RIDE.cell).setPosition(a.x, a.y + bob);
+      // 与 BossMount 同一规则：重画成坐姿的（SEATED_RIDE_ART）不裁，按马镫对位；其余站姿图裁到大腿根（RIDE_SEAT）过渡
+      const seated = sp.kind === 'ride' && SEATED_RIDE_ART.has(sp.rider);
+      if (a.pose === 'fall') a.main.setFrame(fr).setCrop().setOrigin(.5, RIDE.foot / RIDE.cell).setPosition(a.x, a.y);
+      else if (seated) a.main.setFrame(fr).setCrop().setOrigin(.5, (RIDE.foot + (RIDE.stirrup + (RIDE_DIR_LIFT[a.dir] ?? 0)) / RIDE.scale) / RIDE.cell).setPosition(a.x, a.y + bob);
+      else a.main.setFrame(fr).setCrop(0, 0, RIDE.cell, RIDE_SEAT.seat).setOrigin(.5, (RIDE_SEAT.seat + RIDE_SEAT.rise / RIDE.scale) / RIDE.cell).setPosition(a.x, a.y + bob);
       a.main.setDepth(depth + .01);
     } else if (a.main) {
       const moving = a.pose === 'ride' || a.pose === 'walk', i = moving ? Math.floor((this.ct - a.poseAt) / 110) % 4 : 0;

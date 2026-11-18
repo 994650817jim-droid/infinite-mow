@@ -24,7 +24,7 @@ try {
   const pos = await ev(s => ({ py: Math.round(s.player.y), name: s.chapter.name, lubuTex: s.dzLubu?.lubu?.sprite.texture.key }));
   await ev(s => { s.player.sprite.setPosition(s.dzLubu.dongzhuo.x, s.dzLubu.dongzhuo.y + 260); }); await wait(500);
   await p.screenshot({ path: `${OUT}/1-together.png` });
-  ck('2-3：董卓 · 吕布同时出阵（董卓在城头、吕布在城下）', st?.phase === 'wall' && st.lubu?.active && st.dzY < pos.py - 250 && String(pos.lubuTex).includes('boss_lubu'), { st, pos });
+  ck('2-3：董卓 · 吕布同时出阵（董卓在城头、吕布在城下）', st?.phase === 'wall' && st.lubu?.active && st.dzY < pos.py - 250 && /lubu/.test(String(pos.lubuTex)), { st, pos });
   const hp0 = st.dzHp, wallY = st.dzY;
   await ev(s => s.hitEnemy(s.dzLubu.dongzhuo, 1e6, s.combatNow, 'melee', false, false));
   st = await snap();

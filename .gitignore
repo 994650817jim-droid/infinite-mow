@@ -246,5 +246,6 @@ assets/raw/*
 !/tools/shot-camp-rest.mjs
 !/tools/test-surrender.mjs
 !/tools/test-dual-boss.mjs
+!/tools/test-scene-p1.mjs
 !/tools/test-hotkeys.mjs
 !/tools/test-build-persist.mjs

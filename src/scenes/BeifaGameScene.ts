@@ -1,3 +1,4 @@
+import { SishuiObstacles } from '../systems/SishuiObstacles';
 import type { GameScene } from './GameScene';
 import { thirdGameSceneClass, type ArcSceneConfig } from './ThirdGameScene';
 import type { Enemy } from '../entities/Enemy';
@@ -44,7 +45,9 @@ export function beifaGameSceneClass(Base: typeof GameScene, cfg: ArcSceneConfig)
     private setupSiege(): void {
       const s = this as unknown as Host; if (this.siegeReady || this.arcStage !== 2 || !s.supplies || !this.strikes) return; this.siegeReady = true;
       const sup = s.supplies;
-      this.siege = new ChencangSiege({ scene: this, player: s.player, strikes: this.strikes,
+      // 陈仓城墙要进场景碰撞（这关 arcForts 登记是 clear：城门 / 城墙由 ChencangSiege 自己摆，城门可攻破）
+      const so = this as unknown as { sishuiObstacles: SishuiObstacles | null }; if (!so.sishuiObstacles) so.sishuiObstacles = new SishuiObstacles([]);
+      this.siege = new ChencangSiege({ scene: this, player: s.player, strikes: this.strikes, footprints: so.sishuiObstacles.footprints,
         spawnGate: (x, y, hp) => sup.spawnGate(x, y, hp, 260),
         spawnTower: (x, y, hp) => { const e = sup.spawnCamp(x, y, hp); e?.sprite.setTexture('sishui_props_refined', 1).setOrigin(.5, 1).setDisplaySize(140, 140).setAlpha(1); return e; },
         banner: (t, c) => s.showWaveBanner(t, false, c), sfx: k => s.sfx.play(k),

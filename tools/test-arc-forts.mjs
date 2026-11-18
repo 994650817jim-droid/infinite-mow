@@ -15,7 +15,7 @@ const CASES = [
   { key: 'jingnan.3', name: '6-3 长沙', scene: 'JingnanGameScene', reg: { jingnanStage: 3 }, kind: 'pass' },
   { key: 'hanzhong.1', name: '8-1 阳平关', scene: 'HanzhongGameScene', reg: { hanzhongStage: 1 }, kind: 'pass', boss: true, tower: true },
   { key: 'hanzhong.3', name: '8-3 汉水', scene: 'HanzhongGameScene', reg: { hanzhongStage: 3 }, kind: 'clear' },
-  { key: 'yiling.1', name: '10-1 猇亭', scene: 'YilingGameScene', reg: { yilingStage: 1 }, kind: 'pass', boss: true },
+  { key: 'yiling.1', name: '10-1 猇亭', scene: 'YilingGameScene', reg: { yilingStage: 1 }, kind: 'camp', boss: true }, // 全场景审查 P2：野战连营，木栅 + 辕门
   { key: 'yiling.3', name: '10-3 火烧连营', scene: 'YilingGameScene', reg: { yilingStage: 3 }, kind: 'clear' },
   { key: 'beifa.1', name: '12-1 街亭', scene: 'BeifaGameScene', reg: { beifaStage: 1 }, kind: 'clear' },
   { key: 'beifa.2', name: '12-2 陈仓', scene: 'BeifaGameScene', reg: { beifaStage: 2 }, kind: 'clear' },
@@ -42,7 +42,7 @@ try {
     await ev(s => { s.player.damageImmune = true; s.player.sprite.setPosition(0, -470); }); await wait(700);
     await p.screenshot({ path: `${OUT}/${c.key}.png` });
     if (c.kind === 'clear') ck(`${c.name}：场中城门去掉、不加关墙`, lay.fort === 'clear' && !lay.pass && !lay.gate && !lay.oldGate && lay.walls === 0, lay);
-    else ck(`${c.name}：${c.kind === 'pass' ? '关墙 + 关门 + 两座箭楼' : '城墙 + 城门（无箭楼）'}，场中旧城门去掉`, lay.fort === c.kind && lay.pass && lay.walls >= 8 && lay.gate && !lay.oldGate && lay.pass.towers === (c.kind === 'pass' ? 2 : 0) && !lay.pass.gateOpen && lay.pass.tentsPlaced === false, lay);
+    else ck(`${c.name}：${c.kind === 'pass' ? '关墙 + 关门 + 两座箭楼' : c.kind === 'camp' ? '营栅 + 辕门（无箭楼）' : '城墙 + 城门（无箭楼）'}，场中旧城门去掉`, lay.fort === c.kind && lay.pass && lay.walls >= 8 && lay.gate && !lay.oldGate && lay.pass.towers === (c.kind === 'pass' ? 2 : 0) && !lay.pass.gateOpen && lay.pass.tentsPlaced === false, lay);
     if (c.tower) {
       await wait(6000);
       const v = await ev(s => s.sishuiPass.snapshot());
@@ -64,7 +64,7 @@ try {
       const g = await ev(s => { const gate = s.children.getByName('fort-gate'); return { ...s.sishuiPass.snapshot(), frame: gate?.frame.name, gx: Math.round(gate?.x), gy: Math.round(gate?.y), bx: Math.round(s.boss.x), by: Math.round(s.boss.y) }; });
       await ev(s => { s.player.sprite.setPosition(0, -470); }); await wait(500);
       await p.screenshot({ path: `${OUT}/${c.key}-gate-open.png` });
-      ck(`${c.name}：首领出阵 → 门洞开（破门图、门洞可通行），首领从门里杀出`, g.gateOpen && g.frame === 2 && Math.hypot(g.bx - g.gx, g.by - g.gy) < 220, g);
+      ck(`${c.name}：首领出阵 → 门洞开（破门图、门洞可通行），首领从门里杀出`, g.gateOpen && g.frame === (c.kind === 'camp' ? 7 : 2) /* 营寨辕门一直可通行、不换破门图 */ && Math.hypot(g.bx - g.gx, g.by - g.gy) < 220, g);
     }
   }
   ck('无页面报错', !errs.length, errs.slice(0, 3));

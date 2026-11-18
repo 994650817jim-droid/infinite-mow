@@ -1,3 +1,4 @@
+import {FACTION_PROPS} from '../systems/PropsV2';
 import {chibiRiverCamp} from '../systems/ChibiRiverCamp';
 import {ThirdSpearWarnings,THIRD_SPEAR,type SpearWindup} from '../systems/ThirdSpearWarnings';
 import {EnemyCamps} from '../systems/EnemyCamps';
@@ -73,7 +74,7 @@ export function thirdGameSceneClass(Base:typeof GameScene,cfg:ArcSceneConfig=THI
   this.battlefieldDetails.useStructuredLayout();if(this.supplies)this.supplies.randomGeneration=false;
   const art=cfg.scenery?.(this,this.thirdStage)??thirdScenery(this,this.sceneryStage,(frame,x,y,size)=>this.spawnSceneProp(frame,x,y,size),cfg.arc,this.fort?.kind);this.ground.setTexture(art.key).setTileScale(1);this.sishuiObstacles=new SishuiObstacles();this.sishuiObstacles.footprints.splice(0,this.sishuiObstacles.footprints.length,...art.boxes);
   /* 关隘 / 城池（data/arcForts.ts）：关墙、关门、箭楼复用 2-1 汜水关；碰撞框共用一个数组，开门时关门那格移除 */
-  const fort=this.fort;if(fort&&fort.kind!=='clear'&&!cfg.scenery){this.sishuiPass=new SishuiPass(this.passHost(),{towers:fort.kind==='pass',tents:false,wenjiu:false,wallY:ARC_FORT_WALL_Y,gateText:fort.gate,tag:'fort'});this.sishuiPass.footprints.push(...art.boxes);this.sishuiObstacles=new SishuiObstacles(this.sishuiPass.footprints);}
+  const fort=this.fort;if(fort&&fort.kind!=='clear'&&!cfg.scenery){this.sishuiPass=new SishuiPass(this.passHost(),{towers:fort.kind==='pass',tents:false,wenjiu:false,wallY:ARC_FORT_WALL_Y,gateText:fort.gate,tag:'fort',palisade:fort.kind==='camp'?FACTION_PROPS[3].key:undefined});this.sishuiPass.footprints.push(...art.boxes);this.sishuiObstacles=new SishuiObstacles(this.sishuiPass.footprints);}
   this.enemyCamps=new EnemyCamps({scene:this,player:this.player,create:(x,y,hp)=>this.supplies?.spawnCamp(x,y,hp)??null,spawn:(kind,x,y)=>this.spawnEnemy(kind,x,y,1),support:()=>this.legion.grid.query(this.player.x,this.player.y,260),reward:n=>{this.legion.food+=n;}},art.camps,this.combatNow);
   this.legion.campTarget=u=>this.enemyCamps?.assist(u)??null;
   if(cfg.arc==='chibi'&&this.thirdStage===2)chibiRiverCamp(this); /* 5-2 赤壁：北岸曹军水寨布景（江面是 Terrain 的河） */

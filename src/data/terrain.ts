@@ -13,8 +13,10 @@ export type TreeKind = 'pine' | 'bamboo' | 'broad' | 'jungle';
 export interface TreeSpec extends Pt { kind?: TreeKind; size?: number }
 /** 河：折线（points）+ 宽度；bridges 的 at 是沿河长度的比例（0～1），width 是桥面宽（垂直于桥的方向）。 */
 export interface RiverSpec { points: Pt[]; width: number; bridges: Array<{ at: number; width: number }>; flow?: number }
+/** 山崖 / 山坡：实心矩形（x、y 为中心），画成第七章山道的崖壁、坡上几棵松；碰撞并进场景障碍（sishuiObstacles），敌我、随行都挡，刷兵避开。 */
+export interface CliffSpec { x: number; y: number; w: number; h: number }
 export interface TerrainConfig {
-  woods?: WoodsSpec[]; trees?: TreeSpec[]; rivers?: RiverSpec[];
+  woods?: WoodsSpec[]; trees?: TreeSpec[]; rivers?: RiverSpec[]; cliffs?: CliffSpec[];
   /** 这些圆里不长树（主将出生点、首领出场点、玩法要用的空地）。 */
   clear?: Array<Pt & { r: number }>;
 }
@@ -73,7 +75,11 @@ export function terrainConfigFor(arc: string, stage: number): TerrainConfig | nu
     case 'shu': return stage === 1 ? { trees: shuTrees(300, -4200, 2200, 7) } : stage === 2 ? { trees: shuTrees(260, -4200, 2200, 19) } : null;
     // 第五章 赤壁（全场景审查 P1：原来一格水都没有）：北面横贯一段大江（长江，宽 340，规则同其它河：水里减速），两座浮桥渡江；
     // 曹军水寨在北岸（systems/ChibiRiverCamp.ts 摆布景）。江心在 y≈-720，躲开南岸伏弓营（y -400）；刷兵 / 掉落不落在江里（Terrain.free）
-    case 'chibi': return stage === 2 ? {
+    // 第五章 长坂（全场景审查 P2：剧本里张飞「据水断桥」却没河）：北面一条河、一座长坂桥（在北岸营地后面，不挡开局空地）
+    case 'chibi': return stage === 1 ? {
+      clear: [C0],
+      rivers: [{ points: [{ x: -2600, y: -700 }, { x: -1100, y: -740 }, { x: 0, y: -690 }, { x: 1200, y: -760 }, { x: 2600, y: -720 }], width: 180, bridges: [{ at: .5, width: 150 }] }],
+    } : stage === 2 ? {
       clear: [C0],
       rivers: [{ points: [{ x: -2600, y: -700 }, { x: -1250, y: -760 }, { x: 0, y: -690 }, { x: 1300, y: -770 }, { x: 2600, y: -710 }], width: 340, bridges: [{ at: .35, width: 130 }, { at: .68, width: 130 }] }],
     } : null;
@@ -82,6 +88,38 @@ export function terrainConfigFor(arc: string, stage: number): TerrainConfig | nu
       clear: [C0],
       rivers: [{ points: [{ x: -1500, y: 330 }, { x: -600, y: 270 }, { x: 200, y: 300 }, { x: 1500, y: 240 }], width: 150, bridges: [{ at: .3, width: 120 }, { at: .72, width: 120 }] }],
       woods: [{ x: -900, y: 620, rx: 300, ry: 140, count: 9, seed: 5, kind: 'broad' }, { x: 950, y: 600, rx: 280, ry: 140, count: 8, seed: 9, kind: 'broad' }],
+    } : null;
+    // 第六章 零陵武陵（P2：「山越据险、林间弓手」原来是空地）：东西两侧山崖各留一道山口，崖前林子
+    case 'jingnan': return stage === 2 ? {
+      clear: [C0, { x: -270, y: 340, r: 200 }, { x: 290, y: -400, r: 200 }],
+      cliffs: [{ x: -1150, y: -250, w: 500, h: 800 }, { x: -1150, y: 850, w: 500, h: 600 }, { x: 1150, y: 250, w: 500, h: 900 }, { x: 1150, y: -900, w: 500, h: 400 }],
+      woods: [
+        { x: -720, y: -640, rx: 240, ry: 150, count: 9, seed: 91, kind: 'pine' },
+        { x: 760, y: 660, rx: 240, ry: 150, count: 9, seed: 97, kind: 'broad' },
+        { x: -700, y: 620, rx: 200, ry: 130, count: 6, seed: 99, kind: 'bamboo' },
+      ],
+    } : null;
+    // 第八章 定军山（P2：「高地」只是小土包）：北面一道山脊（中间一处山口），两处山头外侧松林；汉水（P2：关名叫汉水却没河）：北面汉水、两座桥
+    case 'hanzhong': return stage === 2 ? {
+      clear: [C0, { x: 380, y: -220, r: 210 }, { x: -400, y: 210, r: 210 }, { x: -270, y: 340, r: 180 }, { x: 290, y: -400, r: 180 }],
+      cliffs: [{ x: -700, y: -1000, w: 1300, h: 340 }, { x: 1000, y: -1040, w: 900, h: 340 }],
+      woods: [
+        { x: 760, y: -380, rx: 200, ry: 130, count: 7, seed: 83, kind: 'pine' },
+        { x: -780, y: 400, rx: 200, ry: 130, count: 7, seed: 89, kind: 'pine' },
+        { x: -150, y: -720, rx: 260, ry: 110, count: 7, seed: 87, kind: 'pine' },
+      ],
+    } : stage === 3 ? {
+      clear: [C0, { x: 380, y: -220, r: 210 }, { x: -400, y: 210, r: 210 }],
+      rivers: [{ points: [{ x: -2600, y: -760 }, { x: -1300, y: -720 }, { x: 0, y: -800 }, { x: 1300, y: -740 }, { x: 2600, y: -790 }], width: 260, bridges: [{ at: .3, width: 140 }, { at: .7, width: 140 }] }],
+    } : null;
+    // 第十二章 街亭（P2：马谡上的「南山」没有）：南面一座山（崖壁 + 坡前松林）；五丈原（P2：渭水没体现）：南面渭水、两座桥
+    case 'beifa': return stage === 1 ? {
+      clear: [C0, { x: -360, y: 160, r: 160 }, { x: 380, y: -170, r: 160 }, { x: -340, y: 200, r: 180 }],
+      cliffs: [{ x: -100, y: 980, w: 1700, h: 440 }],
+      woods: [{ x: -880, y: 680, rx: 220, ry: 120, count: 7, seed: 107, kind: 'pine' }, { x: 760, y: 700, rx: 220, ry: 120, count: 7, seed: 109, kind: 'pine' }],
+    } : stage === 3 ? {
+      clear: [C0],
+      rivers: [{ points: [{ x: -2600, y: 760 }, { x: -1200, y: 820 }, { x: 0, y: 740 }, { x: 1300, y: 810 }, { x: 2600, y: 770 }], width: 240, bridges: [{ at: .3, width: 140 }, { at: .72, width: 140 }] }],
     } : null;
     // 第十章 夷陵：林中连营（火烧连营里树会被点着，烧完成焦桩、不再挡路）
     case 'yiling': return stage === 2 || stage === 3 ? {
@@ -101,6 +139,15 @@ export function terrainConfigFor(arc: string, stage: number): TerrainConfig | nu
         { x: -1050, y: -520, rx: 260, ry: 160, count: 10, seed: 17, kind: 'bamboo' },
         { x: 1100, y: 420, rx: 280, ry: 170, count: 11, seed: 43, kind: 'bamboo' },
         { x: 120, y: 620, rx: 260, ry: 140, count: 9, seed: 53, kind: 'jungle' },
+      ],
+    } : stage === 2 ? {
+      // 盘蛇谷（P2：原来是空地）：南北向谷道（半宽约 620），两侧山崖、崖下丛林；营地在谷里
+      clear: [C0, { x: -330, y: 210, r: 180 }, { x: 340, y: -420, r: 180 }],
+      cliffs: [{ x: -900, y: 0, w: 560, h: 3600 }, { x: 900, y: 0, w: 560, h: 3600 }],
+      woods: [
+        { x: -500, y: -720, rx: 110, ry: 280, count: 7, seed: 101, kind: 'jungle' },
+        { x: 510, y: 660, rx: 110, ry: 280, count: 7, seed: 103, kind: 'jungle' },
+        { x: -500, y: 900, rx: 110, ry: 200, count: 5, seed: 105, kind: 'bamboo' },
       ],
     } : stage === 3 ? {
       clear: [C0, { x: -260, y: -200, r: 110 }, { x: 280, y: 260, r: 110 }, { x: 0, y: -560, r: 110 }],

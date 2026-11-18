@@ -28,6 +28,8 @@ const ART_FILES = { trees: 'assets/terrain/trees.png', water: 'assets/terrain/wa
 export class Terrain {
   readonly trees: Tree[] = [];
   readonly rivers: River[] = [];
+  /** 山崖碰撞框（场景把它们并进 sishuiObstacles）。 */
+  readonly cliffBoxes: Array<{ left: number; right: number; top: number; bottom: number }> = [];
   readonly stats = { pushes: 0, waterChecks: 0, moved: 0, burnt: 0 };
   private grid = new Map<number, Tree[]>();
   private objects: Phaser.GameObjects.GameObject[] = [];
@@ -37,9 +39,11 @@ export class Terrain {
 
   constructor(private readonly scene: Phaser.Scene, cfg: TerrainConfig) {
     for (const r of cfg.rivers ?? []) this.rivers.push(this.makeRiver(r));
+    for (const c of cfg.cliffs ?? []) this.cliffBoxes.push({ left: c.x - c.w / 2, right: c.x + c.w / 2, top: c.y - c.h / 2, bottom: c.y + c.h / 2 });
     const clear = cfg.clear ?? [];
     const ok = (x: number, y: number, gap: number) => !clear.some(c => Math.hypot(x - c.x, y - c.y) < c.r)
-      && !this.inWater(x, y, TERRAIN.trunk + 20) && !this.onBridge(x, y, 60) && !this.trees.some(t => Math.hypot(t.x - x, t.y - y) < gap);
+      && !this.inWater(x, y, TERRAIN.trunk + 20) && !this.onBridge(x, y, 60) && !this.trees.some(t => Math.hypot(t.x - x, t.y - y) < gap)
+      && !this.cliffBoxes.some(b => x > b.left - 40 && x < b.right + 40 && y > b.top - 40 && y < b.bottom + 60);
     for (const t of cfg.trees ?? []) if (ok(t.x, t.y, 70)) this.addTree(t.x, t.y, t.kind ?? 'pine', t.size);
     for (const w of cfg.woods ?? []) {
       let s = w.seed * 9973 + 1; const rnd = () => ((s = (s * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff);
@@ -184,6 +188,24 @@ export class Terrain {
       if (!v2 && (t.kind === 'broad' || t.kind === 'jungle')) img.setTint(0xc8d8a8); // 阔叶树过渡：松树换浅一点的色调
       t.img = img; this.objects.push(img);
     }
+    this.buildCliffs();
+  }
+  /**
+   * 山崖：第七章山道图集 shu_pass 的左 / 右坡壁（帧 0 / 1）铺满矩形（底排的脚贴着碰撞框底边），坡上几棵松；
+   * 深度压在地面层（同山道崖壁），人物永远画在崖前，不会被遮住。
+   */
+  private buildCliffs() {
+    const sc = this.scene; if (!this.cliffBoxes.length || !sc.textures.exists(ART)) return;
+    let s = 31; const rnd = () => ((s = (s * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff);
+    for (const b of this.cliffBoxes) {
+      const w = b.right - b.left, h = b.bottom - b.top, cols = Math.max(1, Math.round(w / 230)), rows = Math.max(1, Math.round(h / 190)), size = 330;
+      for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
+        const x = b.left + (c + .5) * w / cols + (rnd() - .5) * 30, y = b.top + (r + 1) * h / rows + 30;
+        const img = sc.add.image(x, y, ART, (c + r) % 2).setOrigin(.5, 1).setDisplaySize(size, size).setFlipX(rnd() < .5).setDepth(DEPTH.ground + 3 + (y + 5000) / 1e5).setName('terrain-cliff');
+        this.objects.push(img);
+        if (rnd() < .35) this.objects.push(sc.add.image(x + (rnd() - .5) * 80, y - size * .55, ART, 2).setOrigin(.5, 1).setDisplaySize(150, 150).setDepth(DEPTH.ground + 3.05 + (y + 5000) / 1e5).setName('terrain-cliff-pine'));
+      }
+    }
   }
   private buildWater() {
     const sc = this.scene, v2 = sc.textures.exists(TERRAIN_ART.water), wKey = v2 ? TERRAIN_ART.water : sc.textures.exists('ground_v2_jiang') ? 'ground_v2_jiang' : '__WHITE';
@@ -207,7 +229,7 @@ export class Terrain {
       }
     }
   }
-  get info() { return { trees: this.trees.length, burnt: this.trees.filter(t => t.burnt).length, rivers: this.rivers.length, bridges: this.rivers.reduce((n, r) => n + r.bridges.length, 0) }; }
+  get info() { return { cliffs: this.cliffBoxes.length, trees: this.trees.length, burnt: this.trees.filter(t => t.burnt).length, rivers: this.rivers.length, bridges: this.rivers.reduce((n, r) => n + r.bridges.length, 0) }; }
   /** 测试用：第 i 座桥的中心与桥向。 */
   bridge(i = 0) { const all = this.rivers.flatMap(r => r.bridges); return all[i] ?? null; }
   clear() { for (const o of this.objects) o.destroy(); this.objects = []; this.water = []; }

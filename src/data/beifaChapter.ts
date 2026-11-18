@@ -42,7 +42,7 @@ export const BEIFA_TROOPS = {
  */
 export const WATER = { count: 2, radius: 80, captureSec: 2.5, drainRatio: .012, graceSec: 10, cutEverySec: 26, cutSize: 6 } as const;
 /** 陈仓（第二关）攻城：城门生命、箭楼数与生命、每座箭楼放箭雨的间隔、落点数、半径、预警、伤害（主将最大生命比例 / 部曲）。 */
-export const CHENCANG = { gateHp: 1600, gateY: -360, towers: 2, towerHp: 420, towerGap: 380, volleyEverySec: 6, volleyPoints: 3, volleyR: 70, warnMs: 1300, playerRatio: .06, allyDamage: 14 } as const;
+export const CHENCANG = { gateHp: 1600, gateY: -360, wallHalf: 2400, gateHalf: 88, segW: 230, towers: 2, towerHp: 420, towerGap: 380, volleyEverySec: 6, volleyPoints: 3, volleyR: 70, warnMs: 1300, playerRatio: .06, allyDamage: 14 } as const;
 /**
  * 五丈原 · 司马懿（最终首领，初值）：
  *  ① 坚守不出：营垒 forts 顶环绕司马懿，营垒在时他不动、受伤 ×fortTakenMul；伏兵箭阵 volleyEverySec 秒一轮，伏兵 ambushEverySec 秒一次。

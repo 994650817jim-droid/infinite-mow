@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { LOW_MEM } from '../config';
 
 /**
  * 手机省内存（2026-11-17：iPhone 打开网页版页面崩溃，iOS WebKit 单页内存上限紧）。
@@ -11,19 +12,7 @@ import Phaser from 'phaser';
  *  3. 缩小后的图再异步转成 ImageBitmap、释放 canvas 像素，避开 iOS 的 canvas 总内存上限。
  * 首页 / 界面 / 立绘 / 图标等需要清晰的贴图不缩。
  */
-function detect(): boolean {
-  try {
-    const q = new URLSearchParams(location.search).get('lores');
-    if (q === '1') return true;
-    if (q === '0') return false;
-    if ((window as unknown as { imDesktop?: unknown }).imDesktop) return false;
-    const ua = navigator.userAgent, ios = /iPhone|iPad|iPod/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1);
-    const mem = (navigator as unknown as { deviceMemory?: number }).deviceMemory;
-    const touchSmall = matchMedia('(pointer: coarse)').matches && Math.min(screen.width, screen.height) < 900;
-    return ios || touchSmall || (typeof mem === 'number' && mem <= 4);
-  } catch { return false; }
-}
-export const LOW_RES = detect();
+export const LOW_RES = LOW_MEM;
 
 const MIN_AREA = 512 * 512;
 /** 不缩：首页 / 剧情插画、水墨卷轴、按钮、图标、立绘、界面底板、小镇与地图界面美术。 */
@@ -50,7 +39,8 @@ function real(o: Shrunk, d: 'w' | 'h'): number {
 function shrink(src: CanvasImageSource, w: number, h: number): HTMLCanvasElement {
   const c = document.createElement('canvas'), rw = Math.max(1, Math.ceil(w / 2)), rh = Math.max(1, Math.ceil(h / 2));
   c.width = rw; c.height = rh;
-  const ctx = c.getContext('2d')!; ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
+  // CPU 画布（willReadFrequently）：缩图与随后转成的位图都留在内存里，不占显卡进程（GPU 画布 + GPU 位图在每次重载时都会在显存里多一份）
+  const ctx = c.getContext('2d', { willReadFrequently: true })!; ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
   ctx.drawImage(src, 0, 0, rw, rh);
   fake(c, w, h);
   return c;
@@ -72,6 +62,11 @@ function toBitmap(texture: Phaser.Textures.Texture, c: HTMLCanvasElement): void 
 function dropImageData(t: Phaser.Textures.CanvasTexture): void {
   const o = t as unknown as Record<string, unknown>;
   o.imageData = null; o.data = null; o.pixels = null; o.buffer = null;
+}
+
+/** 放掉 <img> 的解码缓存：去掉 src（贴图已经是缩小后的 canvas / 位图，不再读它）。 */
+function releaseImage(img: HTMLImageElement): void {
+  try { img.onload = null; img.onerror = null; img.removeAttribute('src'); img.src = ''; } catch { /* 忽略 */ }
 }
 
 /** 在创建 Phaser.Game 之前调用。 */
@@ -99,6 +94,7 @@ export function installLowResTextures(): void {
       if (w * h >= MIN_AREA) {
         const c = shrink(source, w, h), t = create.call(this, key, c, w, h);
         if (t) toBitmap(t, c);
+        releaseImage(source); // 原尺寸的 <img> 仍被 Phaser 的加载文件对象引用到整批加载结束：浏览器会一直留着它解码后的整张位图（实测占大头），缩好后立刻放掉
         return t;
       }
     }

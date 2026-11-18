@@ -21,10 +21,12 @@ import { installGamepad } from './ui/PadNavigator';
 import { installCjkWrap } from './ui/CjkWrap';
 import { installAchievements } from './systems/Achievements';
 import { installLowResTextures } from './systems/LowResTextures';
+import { attachLeanBoot, installLeanBoot } from './systems/LeanBoot';
 
 initLayout();
 // 手机省内存：大图缩一半、canvas 贴图不留 ImageData 副本（电脑不启用，见 systems/LowResTextures.ts）
 installLowResTextures();
+installLeanBoot();
 installCjkWrap();
 
 // 高清渲染：画布放大 RENDER_SCALE 倍，每个相机以左上角为原点同倍缩放，
@@ -100,6 +102,7 @@ async function startGame(): Promise<void> {
   // 手柄：每帧轮询 + 界面焦点导航（STEAM_PLAN.md · S2）
   const pad = installGamepad(game);
   installAchievements(game);
+  attachLeanBoot(game);
   // 开发构建，或桌面版自动测试（IM_TEST=1 启动）时暴露游戏实例供测试脚本使用；正式发行的玩家环境不暴露
   if (import.meta.env.DEV || window.imDesktop?.testMode) { (window as unknown as { __game?: Phaser.Game }).__game = game; (window as unknown as { __pad?: unknown }).__pad = pad; }
   if (import.meta.env.DEV && new URLSearchParams(window.location.search).get('dev') === '1') mountDevLayoutToggle();

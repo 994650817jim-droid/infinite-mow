@@ -146,10 +146,11 @@ export function warmIffTextures(game: Phaser.Game): void {
     // readable_ 派生版与原图只会用到其一：v2 图集用原键，v1 用 readable_ 键，两种都备好成本翻倍，只备实际会显示的那份
     if (!key.startsWith('readable_') && game.textures.exists('readable_' + key)) continue;
     const side: IffSide = ally ? 'ally' : 'enemy';
-    if (mode.tint && !game.textures.exists(recolorKey(key, side))) jobs.push(() => { buildRecolor(game, key, side); });
+    // 每个任务执行前再确认原图还在（主城 / 手机回主页会卸载战斗图集，空闲任务可能晚于卸载才执行）
+    if (mode.tint && !game.textures.exists(recolorKey(key, side))) jobs.push(() => { if (game.textures.exists(key)) buildRecolor(game, key, side); });
     // 通用敌兵图第一章也用（黄巾版）：顺带备好黄巾换色
-    if (mode.tint && enemy && /^(readable_)?enemy_/.test(key) && !game.textures.exists(recolorKey(key, side, true))) jobs.push(() => { buildRecolor(game, key, side, true); });
-    if (mode.outline && !game.textures.exists(outlineKeyOf(key))) jobs.push(() => { buildOutline(game, key); });
+    if (mode.tint && enemy && /^(readable_)?enemy_/.test(key) && !game.textures.exists(recolorKey(key, side, true))) jobs.push(() => { if (game.textures.exists(key)) buildRecolor(game, key, side, true); });
+    if (mode.outline && !game.textures.exists(outlineKeyOf(key))) jobs.push(() => { if (game.textures.exists(key)) buildOutline(game, key); });
   }
   if (warmTimer) clearTimeout(warmTimer);
   const idle = (fn: () => void): void => { const ric = (window as unknown as { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number }).requestIdleCallback; if (ric) ric(fn, { timeout: 1500 }); else warmTimer = window.setTimeout(fn, 30); };

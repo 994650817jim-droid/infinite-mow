@@ -1,4 +1,5 @@
 import { shouldPlayOpening } from '../systems/BattleSettings';
+import { LOW_RES } from '../systems/LowResTextures';
 let openingTried = false;
 import { BOOT_TO_KEY } from '../systems/BattleSnapshot';
 import {loadWarnFx} from '../ui/WarnFx';
@@ -23,24 +24,27 @@ import { applyArtStyleUrls, applyV2TroopFrames, isV2Texture, rotateV2StandFrames
 
 export class BootScene extends Phaser.Scene {
   private shellOnly=false;
+  /** 手机精简启动：首次只载入主页 / 界面资源，战斗图集等进战斗时再载入（见 systems/LeanBoot.ts），避免一次性解码几百张图撑爆 iOS 页面内存。 */
+  private lean=false;
   constructor() {
     super('BootScene');
   }
 
   preload(): void {
-    this.load.spritesheet('build_vfx','assets/build-vfx/styles-ai-v1.png',{frameWidth:64,frameHeight:64});
+    const lean=this.lean=LOW_RES&&!this.registry.get('loadBattle')&&!this.registry.get('battleReady');
+    if(!lean)this.load.spritesheet('build_vfx','assets/build-vfx/styles-ai-v1.png',{frameWidth:64,frameHeight:64});
     // 特效型警示序列帧（src/ui/WarnFx.ts；缺图时首领招式退回细虚线 / 无提示）
-    loadWarnFx(this.load); // 手绘版优先，缺图的种类退回像素版
+    if(!lean){loadWarnFx(this.load); // 手绘版优先，缺图的种类退回像素版
     this.load.spritesheet('refined_spear','assets/combat-refined/spear-sequence.png',{frameWidth:384,frameHeight:64});
-    this.load.spritesheet('refined_impact','assets/combat-refined/impact-sequence.png',{frameWidth:64,frameHeight:64});
+    this.load.spritesheet('refined_impact','assets/combat-refined/impact-sequence.png',{frameWidth:64,frameHeight:64});}
     // 军功信物手绘图（2026-11-18，data/gemFx.ts）：青铜古钱 / 金令牌各 4 帧高光，gem_fx 拾取闪光 + 光晕
-    this.load.spritesheet('gem_tok_small','assets/gems/gem_tok_small.png',{frameWidth:64,frameHeight:64});
+    if(!lean){this.load.spritesheet('gem_tok_small','assets/gems/gem_tok_small.png',{frameWidth:64,frameHeight:64});
     this.load.spritesheet('gem_tok_large','assets/gems/gem_tok_large.png',{frameWidth:96,frameHeight:96});
-    this.load.spritesheet('gem_fx','assets/gems/gem_fx.png',{frameWidth:128,frameHeight:128});
+    this.load.spritesheet('gem_fx','assets/gems/gem_fx.png',{frameWidth:128,frameHeight:128});}
     // 三选一 / 增益栏图标：2026-11-14 起使用 ChatGPT 生成的厚涂图标（assets/upgrade-icons，tools/build-upgrade-icons.mjs 切图）；
     // 旧像素图标仍保留在 growth-icons / build 目录，未被删除。
-    for(const id of GROWTH_ICON_IDS)this.load.image('growth_icon_'+id,'assets/upgrade-icons/'+id+'.webp');
-    for(const id of [...Object.keys(TACTICS),...Object.keys(TREASURES)])this.load.image('build_icon_'+id,'assets/upgrade-icons/'+id+'.webp');
+    if(!lean)for(const id of GROWTH_ICON_IDS)this.load.image('growth_icon_'+id,'assets/upgrade-icons/'+id+'.webp');
+    if(!lean)for(const id of [...Object.keys(TACTICS),...Object.keys(TREASURES)])this.load.image('build_icon_'+id,'assets/upgrade-icons/'+id+'.webp');
     // 水墨按钮底板（ChatGPT 生成，tools/prepare-button-art.mjs 切图）；homeCommand 有图即用，缺图退回程序画底板
     // 成就图标（解锁提示与成就面板用，约 200 KB）
     for(const id of ['first_win','zhangjiao','lubu','qunxiong','guandu','kills_1000','kills_10000','level_20','all_heroes','chaser','first_siege','cities_5','luoyang','defense','focus','town_build','town_all','town_lv3','money_500','caravan','events_10','year_190','potions_10','reserve_20'])this.load.image('ach_'+id,'assets/achievements/'+id+'.webp');
@@ -59,6 +63,15 @@ export class BootScene extends Phaser.Scene {
     // 武将卡立轴（生成美术）：外框、宣纸与当前武将的水墨立绘
     this.load.image('title_wordmark','assets/ui/title_wordmark.webp');this.load.image('ink_frame','assets/ink-scroll/frame.webp');this.load.image('ink_paper','assets/ink-scroll/paper.webp');
     if(HOME_ART_HEROES.includes(homeHero))this.load.image('ink_hero_'+homeHero,'assets/ink-scroll/'+homeHero+'.webp');
+    if(lean){ // 手机精简启动到此为止：另外只带上主页 / 选将 / 章节卡会用到的小图（立绘头像、章节首领小像），走同一套 v2 画风换图
+      this.load.image('rest_camp','assets/world/rest-camp.webp');this.load.image('hero_zhaoyun','assets/processed/hero_zhaoyun.png');
+      this.load.image('portrait_zhuge','assets/processed/portrait_zhuge.png');
+      for(const id of ['huangzhong','guanyu','machao','weiyan','liubei','pangtong','huangyueying','sunshangxiang','diaochan','zhangfei'])this.load.image(id+'_portrait','assets/processed/'+id+'_portrait.png');
+      this.load.image('huaxiong_portrait','assets/phase17/huaxiong/portrait.png');
+      this.load.spritesheet('xurong','assets/phase17/xurong/sheet.png',{frameWidth:128,frameHeight:128});
+      this.load.spritesheet('boss_lubu','assets/processed/hulao/lubu-walk.png',{frameWidth:256,frameHeight:256});
+      applyArtStyleUrls(this.load);return;
+    }
     // Menu fallback and rest screens share the rest_camp texture allocation.
     // Both formal west stages can be selected after this boot; preload their existing atlases once.
     this.load.spritesheet('xurong','assets/phase17/xurong/sheet.png',{frameWidth:128,frameHeight:128});
@@ -231,6 +244,14 @@ export class BootScene extends Phaser.Scene {
 
   create(): void {
     if(this.shellOnly){const hint=document.getElementById('boot-hint');if(hint)hint.style.display='none';this.scene.start('CityScene');return;}
+    if(this.lean){
+      // 手机精简启动：只载入了主页 / 界面资源。设好过滤方式就进主页；战斗图集到进战斗时再载入（systems/LeanBoot.ts 拦截战斗场景的启动）
+      for(const key of this.textures.getTextureKeys())this.textures.get(key).setFilter((key.startsWith('ground')&&!key.startsWith('ground_overhaul'))||key==='shadow'||key.startsWith('epic_')||key.startsWith('growth_icon_')||key.startsWith('build_icon_')?Phaser.Textures.FilterMode.LINEAR:Phaser.Textures.FilterMode.NEAREST);
+      const hint=document.getElementById('boot-hint');if(hint)hint.style.display='none';
+      this.registry.set('battleReady',false);
+      this.registry.set('shellTextureKeys',this.textures.getTextureKeys()); // 回主页卸载战斗图集时保留这些（LeanBoot）
+      this.goNext();return;
+    }
     applyPropsV2(this.textures);
     for(const key of ['zhangliang_walk','zhangliang_attack','zhangbao_walk','zhangbao_cast','spear_walk','spear_attack','archer_walk','archer_attack','shield_walk','shield_attack','shaman_walk','shaman_cast']){
       const tex=this.textures.get(`yellow_${key}`);['down','left','right','up'].forEach((dir,row)=>{for(let col=0;col<4;col++)tex.add(`${dir}_${col}`,0,col*96,row*96,96,96);});
@@ -309,6 +330,11 @@ export class BootScene extends Phaser.Scene {
     warmIffTextures(this.game);
     // 界面通用贴图（水墨按钮、小镇美术）常驻，不随战斗图集卸载
     this.registry.set('battleTextureKeys',this.textures.getTextureKeys().filter(k=>!k.startsWith('__')&&!k.startsWith('ui_war_')&&!k.startsWith('btn_ink_')&&!k.startsWith('town_')&&!k.startsWith('ach_')&&k!=='art_panel'&&k!=='icon_guandao'));
-    if(import.meta.env.DEV&&new URLSearchParams(location.search).get('dev')==='1'&&new URLSearchParams(location.search).has('thirdStage')){this.scene.start('ThirdChapterScene');}else if(this.registry.get('pendingThird')){this.registry.remove('pendingThird');this.scene.start('ThirdChapterScene');}else if(this.registry.get('pendingWarlord')){const key=String(this.registry.get('pendingWarlord'));this.registry.remove('pendingWarlord');this.scene.start(key);}else{let to:string|null=null;try{to=sessionStorage.getItem(BOOT_TO_KEY);sessionStorage.removeItem(BOOT_TO_KEY);}catch{/* 存储不可用 */}const opening=!openingTried&&to!=='WorldMapScene'&&shouldPlayOpening();openingTried=true;this.scene.start(to==='WorldMapScene'&&worldUnlocked()?'WorldMapScene':opening?'OpeningScene':'MenuScene');} /* 开场动画：每页只在第一次启动时考虑（回战斗重载图集也会经过这里） */ // 战斗中「撤退」回滚重载后直接回天下地图
+    this.goNext();
   }
+  /** 启动后去哪：测试入口 / 待进的战斗 / 开场 / 主页 / 天下地图。 */
+  private goNext():void{
+    if(import.meta.env.DEV&&new URLSearchParams(location.search).get('dev')==='1'&&new URLSearchParams(location.search).has('thirdStage')){this.scene.start('ThirdChapterScene');}else if(this.registry.get('pendingThird')){this.registry.remove('pendingThird');this.scene.start('ThirdChapterScene');}else if(this.registry.get('pendingWarlord')){const key=String(this.registry.get('pendingWarlord'));this.registry.remove('pendingWarlord');const pd=this.registry.get('pendingBattleData');this.registry.remove('pendingBattleData');this.scene.start(key,pd);}else{let to:string|null=null;try{to=sessionStorage.getItem(BOOT_TO_KEY);sessionStorage.removeItem(BOOT_TO_KEY);}catch{/* 存储不可用 */}const opening=!openingTried&&to!=='WorldMapScene'&&shouldPlayOpening();openingTried=true;this.scene.start(to==='WorldMapScene'&&worldUnlocked()?'WorldMapScene':opening?'OpeningScene':'MenuScene');} /* 开场动画：每页只在第一次启动时考虑（回战斗重载图集也会经过这里） */ // 战斗中「撤退」回滚重载后直接回天下地图
+  }
+
 }

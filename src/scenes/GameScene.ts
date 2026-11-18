@@ -602,7 +602,7 @@ export class GameScene extends Phaser.Scene {
     {const oldMax=this.player.maxHp;this.player.growth.gear=gearFor(this.runConfig.character);this.player.heal(this.player.maxHp-oldMax);}
     this.followers=null;this.followerPassives=[];{const allow=worldUnlocked()&&(!isChapterTestRun()||new URLSearchParams(location.search).get('followers')==='1');const list=allow?followersFor(this.runConfig.character):[];if(list.length)this.followers=new FollowerSquad(this,this.player,list,(x,y,r)=>this.grid.query(x,y,r),(e,d,fire)=>this.hitEnemy(e,d,this.combatNow,fire?'fire':'melee',true,false),()=>this.player.growth.damageMultiplier(this.combatNow));if(this.followers){this.followers.onHitFx=(e,k,fx,fy)=>this.followerTemplateHitFx(e,k,fx,fy);this.followers.attackSound=t=>this.sfx.play(FOLLOWER_ATTACK_SFX[t]);}}
     { const mode = readIffMode(); this.iff = mode ? new IffOverlay(this, mode, () => this.iffUnits()) : null; }
-    this.presence = new BossPresence({ scene: this, enemies: () => this.enemies, boss: () => this.boss, bossName: () => this.chapter.bossName, player: () => this.player,
+    this.presence = new BossPresence({ scene: this, enemies: () => this.enemies, boss: () => this.cutscene?.active ? null : this.boss, /* 过场时收起名牌 / 辉光 / 火环 */ bossName: () => this.chapter.bossName, player: () => this.player,
       extras: e => e === this.boss ? [this.bossMount?.horseImage, this.bossMount?.frontImage] : [], outline: e => this.iff?.overlayOf(e.sprite) });
     // 震屏设置（强 / 弱 / 关，im_shake，见 systems/BattleSettings）：包一层主相机 shake，现有调用全部按设置缩放
     { const cam = this.cameras.main, orig = cam.shake.bind(cam);

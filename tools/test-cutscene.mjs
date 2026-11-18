@@ -19,7 +19,7 @@ const open = async (q, story) => {
   const ev = fn => p.evaluate(([S0, f]) => { const s = eval(S0); return eval('(' + f + ')')(s); }, [S, String(fn)]);
   return { p, ev };
 };
-const endState = s => ({ mode: s.mode, timePaused: s.time.paused, boss: !!s.boss?.active, killed: s.bossKilled, chests: s.bossChests.length, zoom: +(s.cameras.main.zoom / (s.cameras.main.width / 960)).toFixed(2), hud: s.hudTexts.wave.visible, overlays: s.children.list.filter(o => /^cutscene-(bar|veil|flash|subtitle|skip)$/.test(o.name)).length, lubuActor: s.children.list.filter(o => o.name === 'cutscene-actor').length, lying: s.children.list.some(o => o.name === 'cutscene-fall'), dz: s.dzLubu?.phase, log: s.lastCutscene ? { steps: s.lastCutscene.log.steps, lines: s.lastCutscene.log.lines, skipped: s.lastCutscene.skipped } : null });
+const endState = s => ({ barkBubble: !!s.heroBark?.bubble, mode: s.mode, timePaused: s.time.paused, boss: !!s.boss?.active, killed: s.bossKilled, chests: s.bossChests.length, zoom: +(s.cameras.main.zoom / (s.cameras.main.width / 960)).toFixed(2), hud: s.hudTexts.wave.visible, overlays: s.children.list.filter(o => /^cutscene-(bar|veil|flash|subtitle|skip)$/.test(o.name)).length, lubuActor: s.children.list.filter(o => o.name === 'cutscene-actor').length, lying: s.children.list.some(o => o.name === 'cutscene-fall'), dz: s.dzLubu?.phase, log: s.lastCutscene ? { steps: s.lastCutscene.log.steps, lines: s.lastCutscene.log.lines, skipped: s.lastCutscene.skipped } : null });
 try {
   // ①② 完整播放
   {
@@ -37,7 +37,7 @@ try {
     await p.screenshot({ path: `${OUT}/7-after.png` });
     await p.waitForTimeout(2600);
     const bark = await ev(s => ({ count: s.heroBark?.count ?? 0, line: s.heroBark?.lastLine ?? '' }));
-    ck('过场中与刚结束时主将不喊首领台词（来将通名！等）', bark.count === bark0 || !['来将通名！', '贼将休走！'].includes(bark.line), { bark0, bark });
+    ck('过场中与刚结束时主将不喊首领台词（来将通名！等），开播前冒出的台词也收掉', !e.barkBubble && (bark.count === bark0 || !['来将通名！', '贼将休走！'].includes(bark.line)), { bark0, bark, bubbleAtEnd: e.barkBubble });
     const seq = e.log?.steps ?? [];
     ck(`按顺序播完（${(dur / 1000).toFixed(1)} 秒，约 12–15 秒）`, e.log && !e.log.skipped && seq.every((v, i) => !i || v > seq[i - 1]) && seq.length >= 25 && dur > 9000 && dur < 20000, { dur, seq });
     ck('台词：奉先……我儿 → 我姓吕，不姓董！（赵云主将不喊三姓家奴）', e.log.lines[0]?.startsWith('奉先') && e.log.lines.includes('我姓吕，不姓董！') && !e.log.lines.includes('三姓家奴！'), e.log.lines);

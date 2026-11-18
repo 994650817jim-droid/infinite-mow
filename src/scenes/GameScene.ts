@@ -221,9 +221,9 @@ export class GameScene extends Phaser.Scene {
   /** 播过场：战斗暂停（story 模式）、HUD 藏起；剧情设置关掉时不播，返回 false（调用方走原来的演出）。播完或跳过都回调 done。 */
   playCutscene(script:CutsceneScript,anchors:CutHost['anchors'],done:(skipped:boolean)=>void):boolean{
     if(!cutsceneAllowed(script)||this.over)return false;
-    const was=this.mode;this.setMode('story');this.bossBarkTimer?.remove();this.bossBarkTimer=undefined;
+    const was=this.mode;this.setMode('story');this.bossBarkTimer?.remove();this.bossBarkTimer=undefined;this.heroBark?.clear(); /* 开播前已冒出的武将台词也收掉（补间暂停时会一直挂着） */
     this.cutscene=new Cutscene({scene:this,anchors:{player:this.player.sprite,...anchors},heroes:()=>[this.runConfig.character,...(this.followers?.members??[]).map(m=>m.recruit.hero??'')].filter(Boolean),sfx:k=>this.sfx.play(k),music:d=>this.music.setDuck(d)},script,skipped=>{
-      this.lastCutscene=this.cutscene;this.cutscene=null;this.cutsceneEndedAt=performance.now();if(!this.over&&this.mode==='story')this.setMode(was==='story'?'none':was);done(skipped);});
+      this.lastCutscene=this.cutscene;this.cutscene=null;this.cutsceneEndedAt=performance.now();if(!this.over&&this.mode==='story')this.setMode(was==='story'?'none':was);done(skipped);this.hudAcc=1;this.updateHud(); /* 结束状态（如首领倒下）立刻反映到刚恢复的 HUD，免得首领血条闪一下 */});
     return true;
   }
   /** 场上某武将的精灵（主将或随行），不在场返回 undefined。 */

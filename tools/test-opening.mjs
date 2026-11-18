@@ -51,6 +51,9 @@ await p.waitForFunction(() => window.__game.scene.isActive('MenuScene'), null, {
 const afterOpening = await titleProps();
 await p.screenshot({ path: `${out}/home-after-opening-1280x720.png` });
 ck('20 秒播完自动进主页，并记已播过', (await active()).includes('MenuScene') && await p.evaluate(() => localStorage.getItem('im_opening_seen') === '1'), await active());
+// 2026-11-18 用户报：播完开场，主页标题变成一大块红色朱印（Phaser 加子帧时改了 firstFrame）
+{ await p.waitForTimeout(600); const t = await p.evaluate(() => { const m = window.__game.scene.getScene('MenuScene'), o = m.children.getByName('home-title-wordmark'); return o ? { frame: o.frame.name, w: Math.round(o.width), first: m.textures.get('title_wordmark').firstFrame } : null; });
+  ck('播完开场后主页标题仍是完整水墨标识（整图帧，不是朱印子帧）', !!t && t.frame === '__BASE' && t.first === '__BASE', t); }
 // ⑥ 默认「首次」：再启动直接进主页
 await go();
 ck('默认「首次」：第二次启动不再播', (await active()).includes('MenuScene') && !(await active()).includes('OpeningScene'), await active());
@@ -91,7 +94,9 @@ await p.screenshot({ path: `${out}/battle-settings-opening-row.png` });
   const g0 = await q.evaluate(O0 => { const s = eval(O0); return { gate: !!s.children.getByName('opening-gate'), title: s.children.getByName('opening-gate')?.list.find(o => o.name === 'opening-gate-title')?.text, begun: s.begun, ct: s.segs[0].v.video?.currentTime ?? 0, locked: s.sound.locked }; }, O);
   ck('网页版声音未解锁：先显示「点击 · 入乱世」，视频不偷跑', g0.gate && g0.title === '点击 · 入乱世' && !g0.begun && g0.ct < .2, g0);
   await q.screenshot({ path: `${out}/opening-gate-1280x720.png` });
+  // 配乐要先 HEAD 探测再加载解码，慢机上会晚于 1.8 秒：等配乐对象出现（最多 10 秒）再判，免得偶发误报
   await q.mouse.click(640, 360); await q.waitForTimeout(1800);
+  await q.waitForFunction(O0 => !!eval(O0).music, O, { timeout: 10000 }).catch(() => {});
   const g1 = await q.evaluate(O0 => { const s = eval(O0); return { gate: !!s.gate, begun: s.begun, clock: s.clock, scene: window.__game.scene.isActive('OpeningScene'), locked: s.sound.locked, music: !!s.music }; }, O);
   ck('点一下：入口淡出、开播（不是直接跳过），声音解锁、配乐开始', !g1.gate && g1.begun && g1.clock > .5 && g1.scene && !g1.locked && g1.music, g1);
   await b2.close(); }

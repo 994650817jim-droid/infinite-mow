@@ -36,7 +36,6 @@ export const OPENING_LINES: Array<{ at: number; until: number; main: string; sub
   { at: 9.3, until: 12.7, main: '桃园结义　誓扶汉室' },
 ];
 const SEAL = { x0: .886, y0: .672, x1: .996, y1: .904 }; // title_wordmark 里朱印所在区域（按原图比例）
-
 type Seg = { v: Phaser.GameObjects.Video; at: number; started: boolean; mask?: Phaser.GameObjects.Image; rim?: Phaser.GameObjects.Image; settled: boolean };
 
 export class OpeningScene extends Phaser.Scene {

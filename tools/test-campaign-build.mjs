@@ -26,7 +26,7 @@ const saved = await p.evaluate(async () => {
   const s = window.__game.scene.getScene('GameScene'), c = await window.__mod('/src/systems/Campaign.ts'), st = await window.__mod('/src/systems/ItemStore.ts'), it = await window.__mod('/src/data/items.ts'), g = s.player.growth, out = {};
   st.setAutoSalvageWhite(false); const armor = it.rollItem('purple', Math.random, 'armor'); st.addItems([armor]); st.equipItem('zhaoyun', armor.uid);
   g.build.learn('pursuit'); g.build.learn('pursuit'); g.build.learn('ember'); g.learn('dragon_gallop'); s.player.weapons[0].level = 3; s.player.level = 7;
-  c.saveCampaignBuild('zhaoyun', c.packCampaign('zhaoyun', s.player, s.legion));
+  c.saveCampaignBuild('zhaoyun', c.packCampaign('zhaoyun', s.player, s.legion)); (await window.__mod('/src/systems/BattleSnapshot.ts')).commitBattle(); /* 真实流程在胜利结算时写，结算即提交本场（中途退出回滚，2026-11-17） */
   const raw = JSON.parse(localStorage.getItem('im_campaign_v1')); out.key = !!raw?.heroes?.zhaoyun; out.relics = raw.heroes.zhaoyun.player.relics; out.treasures = raw.heroes.zhaoyun.player.build?.treasures; out.slot = (await window.__mod('/src/systems/SaveSlots.ts')).PROGRESS_KEYS.includes('im_campaign_v1');
   out.replay11 = s.campaignReplay; return out;
 });
@@ -40,14 +40,14 @@ ck('新开一场进未通关的主线关（1-2）：战法、技艺、武器等�
 ck('恢复后兵装加成仍在（以前同章连打会丢）、血量回满、没有本局遗物', loaded.gearHp && loaded.full && !loaded.relicsField, loaded);
 
 // 3) 已通关的旧关（重打）：空构筑，也不改存档里的构筑
-await p.evaluate(async () => { const hp = await window.__mod('/src/systems/HeroProgress.ts'); hp.claimFirstClear('huangjin-2'); });
+await p.evaluate(async () => { const hp = await window.__mod('/src/systems/HeroProgress.ts'); hp.claimFirstClear('huangjin-2'); (await window.__mod('/src/systems/BattleSnapshot.ts')).commitBattle(); /* 真实流程在胜利结算时写，结算即提交本场（中途退出回滚，2026-11-17） */ });
 await battle(2);
 const replay = await p.evaluate(async () => { const s = window.__game.scene.getScene('GameScene'), g = s.player.growth, c = await window.__mod('/src/systems/Campaign.ts');
   return { replay: s.campaignReplay, loaded: s.campaignLoaded, pursuit: g.build.level('pursuit'), level: s.player.level, stillSaved: c.loadCampaignBuild('zhaoyun')?.player.build?.tactics?.pursuit }; });
 ck('重打已通关的关：用空构筑（不读），存档里的征程构筑不变', replay.replay && !replay.loaded && replay.pursuit === 0 && replay.level === 1 && replay.stillSaved === 2, replay);
 
 // 4) 换武将：各自一份
-const other = await p.evaluate(async () => { const c = await window.__mod('/src/systems/Campaign.ts'); localStorage.setItem('im_campaign_v1', '{bad'); const broken = c.loadCampaignBuild('zhaoyun'); localStorage.removeItem('im_campaign_v1'); return { guanyu: c.loadCampaignBuild('guanyu') ?? null, broken: broken ?? null, empty: c.loadCampaignBuild('zhaoyun') ?? null }; });
+const other = await p.evaluate(async () => { const c = await window.__mod('/src/systems/Campaign.ts'); localStorage.setItem('im_campaign_v1', '{bad'); const broken = c.loadCampaignBuild('zhaoyun'); localStorage.removeItem('im_campaign_v1'); (await window.__mod('/src/systems/BattleSnapshot.ts')).commitBattle(); /* 测试直接改存档当作「老档」：提交本场，免得重载时被中途退出回滚 */ return { guanyu: c.loadCampaignBuild('guanyu') ?? null, broken: broken ?? null, empty: c.loadCampaignBuild('zhaoyun') ?? null }; });
 ck('每位武将各一份（关羽没打过为空）；老档没有 / 损坏时为空构筑不报错', other.guanyu === null && other.broken === null && other.empty === null, other);
 // 5) 老档（没有征程构筑）进未通关的关：空构筑开局
 await battle(3);
@@ -58,7 +58,7 @@ ck('老档没有征程构筑：未通关的主线关从空构筑开局', !fresh.
 await battle(1);
 // 局内等级跨章继承：1-3 打赢后存的征程构筑，第二章 2-1 接着上次的等级（本关起点也是这个等级）
 await p.evaluate(async () => { const s = window.__game.scene.getScene('GameScene'), c = await window.__mod('/src/systems/Campaign.ts'), hp = await window.__mod('/src/systems/HeroProgress.ts');
-  c.saveCampaignBuild('zhaoyun', c.packCampaign('zhaoyun', s.player, s.legion)); hp.setHeroProgress('zhaoyun', 9, 0); hp.claimFirstClear('huangjin-3'); });
+  c.saveCampaignBuild('zhaoyun', c.packCampaign('zhaoyun', s.player, s.legion)); hp.setHeroProgress('zhaoyun', 9, 0); hp.claimFirstClear('huangjin-3'); (await window.__mod('/src/systems/BattleSnapshot.ts')).commitBattle(); /* 真实流程在胜利结算时写，结算即提交本场（中途退出回滚，2026-11-17） */ });
 await p.goto(base + '?dev=1&autostart=1&chapter=hulao&westStage=1&layout=desktop');
 await p.waitForFunction(() => window.__game?.scene.getScene('GameScene')?.player && window.__game.scene.getScene('GameScene').__DEV_ACTIONS, null, { timeout: 120000 });
 const cross = await p.evaluate(() => { const s = window.__game.scene.getScene('GameScene'); return { chapter: s.chapter.id, stage: s.chapter.westStage, loaded: s.campaignLoaded, level: s.player.level, start: 0 }; });

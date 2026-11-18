@@ -162,6 +162,8 @@ assets/raw/*
 !/tools/test-siege-tiers.mjs
 !/tools/white-to-magenta.mjs
 !/tools/test-terrain.mjs
+!/tools/test-arrival-attr.mjs
+!/tools/test-prop-loot.mjs
 !/tools/test-jingnan-art.mjs
 !/tools/test-hanzhong-art.mjs
 !/tools/test-yiling-full.mjs
@@ -169,3 +171,6 @@ assets/raw/*
 !/tools/test-beifa-full.mjs
 !/tools/test-yiling-art.mjs
 !/tools/test-tutorial.mjs
+!/tools/test-boss-moves.mjs
+!/tools/test-quit-rollback.mjs
+!/tools/test-follower-cap.mjs

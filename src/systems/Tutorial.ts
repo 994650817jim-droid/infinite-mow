@@ -14,6 +14,8 @@ const MAIN: TutorialStep[] = ['move', 'attack', 'gem', 'sortie', 'boss', 'chest'
 export const TUTORIAL_EASY = { seconds: 30, intervalMul: 2.2, burstDiv: 2 } as const;
 /** 每一步至少停留（毫秒），免得条件早已满足而一闪而过。 */
 const MIN_SHOW = 1800;
+/** 提示型步骤（只说一句、不等操作：自动攻击、首领出阵、营中建筑、行囊）几毫秒后自动淡出；要操作的步骤一直显示到做完。 */
+const INFO_MS = 4000;
 
 /** GameScene 里引导要读的状态（只读，不改场景）。 */
 interface Host {
@@ -59,15 +61,15 @@ export class Tutorial {
     const h = this.h, pad = () => gamepad.device === 'pad', key = (k: string, p: string) => (pad() ? p : k);
     this.steps = {
       move: { show: () => { o.show(pad() ? '左摇杆移动' : '移动', pad() ? [] : ['W', 'A', 'S', 'D']); o.point(null); this.moved = 0; this.lastPos = { x: h.player.x, y: h.player.y }; }, done: () => this.moved >= 2 },
-      attack: { show: () => { o.show('武将自动攻击，靠近敌人即可'); o.point(null); this.kills0 = h.kills; }, done: () => h.kills - this.kills0 >= 3 },
+      attack: { show: () => { o.show('武将自动攻击，靠近敌人即可', [], 'battle', INFO_MS); o.point(null); this.kills0 = h.kills; }, done: () => h.kills - this.kills0 >= 3 },
       gem: { show: () => { o.show('拾取军功，攒满升级'); o.point(null); this.xp0 = this.xpTotal(); }, done: () => this.xpTotal() > this.xp0 },
       levelup: { show: () => { o.show('升级：三选一强化', [], 'popup'); this.pointCards(); }, done: () => h.mode !== 'levelup', minMs: 0 },
       recruit: { show: () => { o.show('战斗支援：选一队兵随行', [], 'popup'); this.pointObj(h.legionUI.rows?.[0]?.root ?? null); }, done: () => h.mode !== 'recruit', minMs: 0 },
       sortie: { ready: () => h.legion.count > 0, show: () => { o.show('部曲出击 / 护阵', [key('E', 'Ⓨ')]); this.pointObj(h.legionUI.order ?? null); }, done: () => h.legion.order === 'sortie' },
-      boss: { ready: () => !!h.boss?.active, show: () => { o.show('首领出阵，击败他'); o.point(null); }, done: () => h.bossKilled && h.bossChests.length > 0 },
+      boss: { ready: () => !!h.boss?.active, show: () => { o.show('首领出阵，击败他', [], 'battle', INFO_MS); o.point(null); }, done: () => h.bossKilled && h.bossChests.length > 0 },
       chest: { ready: () => h.bossChests.some(c => c.ready && !c.done), show: () => o.show('走过去捡宝箱'), done: () => h.bossChests.length > 0 && h.bossChests.every(c => c.done), minMs: 0 },
-      camp: { ready: () => h.mode === 'rest' && !this.find('rest-intro'), show: () => { o.show('营中建筑：招兵、商人、将帅', [], 'camp'); this.pointName('camp-tab-0'); }, done: () => this.shownFor(4500) },
-      bag: { ready: () => h.mode === 'rest', show: () => { o.show('行囊里换兵装', [], 'camp'); this.pointName('camp-bag'); }, done: () => this.shownFor(4000) || !!this.find('item-bag') },
+      camp: { ready: () => h.mode === 'rest' && !this.find('rest-intro'), show: () => { o.show('营中建筑：招兵、商人、将帅', [], 'camp', INFO_MS); this.pointName('camp-tab-0'); }, done: () => this.shownFor(4500) },
+      bag: { ready: () => h.mode === 'rest', show: () => { o.show('行囊里换兵装', [], 'camp', INFO_MS); this.pointName('camp-bag'); }, done: () => this.shownFor(4000) || !!this.find('item-bag') },
       depart: { ready: () => h.mode === 'rest', show: () => { o.show('整军完毕，率军出征', [], 'camp'); this.pointName('camp-depart'); }, done: () => h.mode !== 'rest' || this.scene.sys.isActive() === false, minMs: 0 },
     };
     scene.events.on('postupdate', this.tick, this);
@@ -89,6 +91,8 @@ export class Tutorial {
 
   private tick(): void {
     if (this.finished || !this.scene.sys.isActive()) return;
+    // 行囊 / 暂停 / 战报 / 图鉴等面板打开时收起引导（升级、支援两步本身就是在弹窗上教，不收）
+    this.overlay.suppress(this.panelOpen());
     this.overlay.animate();
     const h = this.h, p = h.player;
     if (this.step === 'move') { const d = Math.hypot(p.x - this.lastPos.x, p.y - this.lastPos.y), t = performance.now(); this.lastPos = { x: p.x, y: p.y }; if (h.mode === 'none' && d > .3) this.lastMoveAt = t; if (h.mode === 'none' && t - this.lastMoveAt < 250) this.moved += this.scene.game.loop.delta / 1000; }
@@ -111,6 +115,12 @@ export class Tutorial {
     else if (this.step === 'move' && this.shownFor(20000)) this.advance(); // 挂机不动也别卡住
   }
 
+  /** 有没有全屏 / 叠加面板开着：非战斗模式（升级 / 支援在教的那步除外、行营本身除外）或行囊、建造、宝箱掉落、图鉴等面板。 */
+  private panelOpen(): boolean {
+    const m = this.h.mode;
+    if (m !== 'none' && m !== 'rest' && !(this.interrupt && (m === 'levelup' || m === 'recruit'))) return true;
+    return ['item-bag', 'build-panel', 'boss-chest-popup', 'codex', 'campaign-chronicle', 'merchant-panel'].some(n => !!this.find(n));
+  }
   private find(name: string): Phaser.GameObjects.GameObject | null {
     let hit: Phaser.GameObjects.GameObject | null = null;
     const walk = (list: Phaser.GameObjects.GameObject[]) => { for (const o of list) { if (hit) return; if (o.name === name && (o as unknown as { visible?: boolean }).visible !== false) hit = o; const sub = (o as unknown as { list?: Phaser.GameObjects.GameObject[] }).list; if (sub) walk(sub); } };

@@ -6,7 +6,7 @@ import type { CharacterId } from '../data/characters';
 import type { Player } from '../entities/Player';
 import { emptyGear, type GearStats } from './ItemEffects';
 
-import { ATTRIBUTE_EFFECT, SPELL_WEAPONS, ATTRIBUTE_IDS, ATTRIBUTE_INFO, ATTRIBUTE_MAX, ATTRIBUTE_POINT_EVERY, PRIMARY_BONUS, primaryAttribute, type AttributeId } from '../data/attributes';
+import { ATTRIBUTE_EFFECT, SPELL_WEAPONS, ATTRIBUTE_IDS, ATTRIBUTE_INFO, ATTRIBUTE_MAX, ATTRIBUTE_POINT_EVERY, PRIMARY_BONUS, PRIMARY_MUL, PRIMARY_TIERS, PRIMARY_PERK, primaryAttribute, type AttributeId } from '../data/attributes';
 export { ATTRIBUTE_IDS, ATTRIBUTE_INFO, ATTRIBUTE_MAX, ATTRIBUTE_POINT_EVERY, type AttributeId };
 export type ZhaoMasteryId = 'dragon_gallop' | 'cloud_pierce';
 /**
@@ -105,6 +105,14 @@ export class RunGrowth {
 
   constructor(readonly character: CharacterId) {}
 
+  /** 属性生效点数：主属性每点按 PRIMARY_MUL 倍计算。 */
+  pts(id: AttributeId): number { return this.attributes[id] * (primaryAttribute(this.character) === id ? PRIMARY_MUL : 1); }
+  /** 主属性专精档位（0–3）：主属性满 4 / 7 / 10 点各一档。 */
+  primaryTier(): number { const p = primaryAttribute(this.character); return p ? PRIMARY_TIERS.filter(n => this.attributes[p] >= n).length : 0; }
+  /** 是否已解锁某属性的第 tier 档专精（只看主属性）。 */
+  perk(id: AttributeId, tier: number): boolean { return primaryAttribute(this.character) === id && this.primaryTier() >= tier; }
+  /** 敏捷「疾影」：暴击后攻速提升的截止时刻；力量「破阵」：武器命中计数。 */
+  hasteUntil = -Infinity; crushCount = 0;
   get hasAttributeRoom(): boolean { return Object.values(this.attributes).reduce((n,level)=>n+ATTRIBUTE_MAX-level,0)>this.unallocated; }
   get weaponMasteryLevel(): number { return this.masteries.dragon_gallop; }
   get spearPierceLevel(): number { return this.masteries.cloud_pierce; }
@@ -135,38 +143,47 @@ export class RunGrowth {
   }
 
   damageMultiplier(now: number): number {
-    const might = (1 + ATTRIBUTE_EFFECT.strength.damage * this.attributes.strength) * (1 + this.primaryBonus());
+    const might = (1 + ATTRIBUTE_EFFECT.strength.damage * this.pts('strength')) * (1 + this.primaryBonus());
     const fury = this.lowHp && this.gear.specials.includes('fury') ? 1.25 : 1;
     const wine = now < this.wineUntil && this.gear.specials.includes('jiuhu') ? 1.4 : 1; // 遗珍「乌巢酒葫」（BossRelics.RELIC.jiuhuDamage）
     return Math.min(2, might * (now < this.berserkUntil ? 1.25 : 1) * (1 + this.permanentDamage) * (1 + this.gear.damage) * (1 + this.temperDamage)) * fury * wine;
   }
 
   attackSpeedMultiplier(now: number): number {
-    const quickness = 1 + ATTRIBUTE_EFFECT.agility.attackSpeed * this.attributes.agility;
-    return Math.min(1.8, quickness * (now < this.berserkUntil ? 1.2 : 1) * (1 + this.gear.attackSpeed));
+    const quickness = 1 + ATTRIBUTE_EFFECT.agility.attackSpeed * this.pts('agility');
+    const haste = this.perk('agility', 3) && now < this.hasteUntil ? 1 + PRIMARY_PERK.agility.haste : 1, focus = this.perk('intellect', 1) ? 1 / (1 - PRIMARY_PERK.intellect.cooldown) : 1;
+    return Math.min(1.8, quickness * (now < this.berserkUntil ? 1.2 : 1) * (1 + this.gear.attackSpeed) * haste * focus);
   }
 
   movementMultiplier(): number {
     const windrider = this.lowHp && this.gear.specials.includes('windrider') ? 1.2 : 1;
-    return Math.min(1.45, (1 + [0,.03,.05,.07][this.build.level('swift')]) * (1 + ATTRIBUTE_EFFECT.agility.move * this.attributes.agility) * (1 + this.gear.move)) * windrider;
+    return Math.min(1.45, (1 + [0,.03,.05,.07][this.build.level('swift')]) * (1 + ATTRIBUTE_EFFECT.agility.move * this.pts('agility')) * (1 + this.gear.move) * (this.perk('agility', 1) ? 1 + PRIMARY_PERK.agility.move : 1)) * windrider;
   }
 
-  criticalBonus(): number { return Math.min(0.1, ATTRIBUTE_EFFECT.agility.crit * this.attributes.agility) + this.gear.crit; }
-  bonusMaxHp(): number { return Math.round(BALANCE.player.maxHp * (ATTRIBUTE_EFFECT.strength.hp * this.attributes.strength + this.gear.hp + this.charmHp)); }
+  criticalBonus(): number { return Math.min(0.1, ATTRIBUTE_EFFECT.agility.crit * this.pts('agility')) + this.gear.crit + (this.perk('agility', 2) ? PRIMARY_PERK.agility.crit : 0); }
+  bonusMaxHp(): number { return Math.round(BALANCE.player.maxHp * (ATTRIBUTE_EFFECT.strength.hp * this.pts('strength') + this.gear.hp + this.charmHp)); }
   incomingDamageMultiplier(): number { return (this.gear.specials.includes('weixi') ? 1.15 : 1)*(this.build.tags().bulwark>=2?.95:1)*Math.max(.6, 1 - this.gear.reduce); }
-  allyDamageMultiplier(): number { return (this.build.tags().command>=2?1.05:1)*(1 + this.gear.ally)*(1 + ATTRIBUTE_EFFECT.command.allyDamage * this.attributes.command); }
+  allyDamageMultiplier(): number { return (this.build.tags().command>=2?1.05:1)*(1 + this.gear.ally)*(1 + ATTRIBUTE_EFFECT.command.allyDamage * this.pts('command')) * (this.perk('command', 1) ? 1 + PRIMARY_PERK.command.allyDamage : 1); }
   /** 主属性：每点额外全伤害 +1%（最多 10 点）。 */
   primaryBonus(): number { const p = primaryAttribute(this.character); return p ? Math.min(PRIMARY_BONUS.maxPoints, this.attributes[p]) * PRIMARY_BONUS.perPoint : 0; }
   /** 智力：非普攻伤害（技艺、灼烧、遗珍等）倍率，含主属性加成。 */
   /** 智力：法术武器的武器命中 × (1 + 法术系数 × 智力)。主属性加成已在 damageMultiplier 里，这里不再乘。 */
-  spellWeaponMultiplier(id: string | undefined): number { return id && SPELL_WEAPONS.has(id) ? 1 + ATTRIBUTE_EFFECT.intellect.skill * this.attributes.intellect : 1; }
-  skillDamageMultiplier(): number { return (1 + ATTRIBUTE_EFFECT.intellect.skill * this.attributes.intellect) * (1 + this.primaryBonus()); }
+  spellWeaponMultiplier(id: string | undefined): number { return id && SPELL_WEAPONS.has(id) ? 1 + ATTRIBUTE_EFFECT.intellect.skill * this.pts('intellect') : 1; }
+  skillDamageMultiplier(): number { return (1 + ATTRIBUTE_EFFECT.intellect.skill * this.pts('intellect')) * (1 + this.primaryBonus()); }
   /** 智力：范围倍率（经 CharacterPassives.rangeMultiplier 作用到武器）。 */
-  areaMultiplier(): number { return 1 + ATTRIBUTE_EFFECT.intellect.area * this.attributes.intellect; }
+  areaMultiplier(): number { return (1 + ATTRIBUTE_EFFECT.intellect.area * this.pts('intellect')) * (this.perk('intellect', 3) ? 1 + PRIMARY_PERK.intellect.area : 1); }
+  /** 敏捷「游刃」：受伤时闪避的几率。 */
+  dodgeChance(): number { return this.perk('agility', 2) ? PRIMARY_PERK.agility.dodge : 0; }
+  /** 智力「连珠」：法术伤害翻倍的倍率（掷骰）。 */
+  spellEcho(): number { return this.perk('intellect', 2) && Math.random() < PRIMARY_PERK.intellect.echoChance ? 2 : 1; }
+  /** 统御「募众」：每次免费招兵多给的人数。 */
+  freeRecruitBonus(): number { return this.perk('command', 2) ? PRIMARY_PERK.command.freeRecruit : 0; }
+  /** 统御「同袍」：随从救起所需时间倍率与救起生命比例（null = 用默认）。 */
+  followerRevive(): { secMul: number; hp: number } | null { return this.perk('command', 3) ? { secMul: 1 - PRIMARY_PERK.command.reviveFaster, hp: PRIMARY_PERK.command.reviveHp } : null; }
   /** 统御：部曲生命倍率。 */
-  allyHpMultiplier(): number { return 1 + ATTRIBUTE_EFFECT.command.allyHp * this.attributes.command; }
+  allyHpMultiplier(): number { return 1 + ATTRIBUTE_EFFECT.command.allyHp * this.pts('command'); }
   /** 兵装「对精锐 / 首领伤害」与名器「斩将」：只作用于武将本人的命中。 */
-  gearHitMultiplier(kind: string): number { return kind === 'boss' ? 1 + this.gear.elite + this.gear.boss : kind === 'elite' ? 1 + this.gear.elite : 1; }
+  gearHitMultiplier(kind: string): number { return (this.perk('strength', 3) && (kind === 'boss' || kind === 'elite') ? 1 + PRIMARY_PERK.strength.eliteMul : 1) * (kind === 'boss' ? 1 + this.gear.elite + this.gear.boss : kind === 'elite' ? 1 + this.gear.elite : 1); }
   /** 兵装「经验获取」× 来源倍率（主线 1.0、其余 0.5）：小数部分累计，不丢失。 */
   scaleXp(value: number, rate = 1): number { const v = value * (1 + this.gear.xp) * rate + this.xpCarry, n = Math.floor(v); this.xpCarry = v - n; return n; }
   spearLengthMultiplier(): number { return 1 + 0.1 * this.masteries.cloud_pierce; }

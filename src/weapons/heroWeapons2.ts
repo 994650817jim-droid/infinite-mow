@@ -56,11 +56,12 @@ const ARROWS = new WeakMap<Player, HeavyArrow[]>();
 /** 黄忠每关状态：上一帧是否神射、静心 3 级的三连重箭是否待发、宝刀未老是否已用（每关一次：每关新建 Player）。 */
 const HZ = new WeakMap<Player, { wasSharp: boolean; fanReady: boolean; eliteSeen: number }>();
 /** 黄忠像素特效图集 huangzhong_fx（6×4，每帧 256，黑底叠加）：0–5 神射爆裂、6–11 进入神射金光、12–17 神射箭金色拖光、18–23 宝刀未老红金火焰。 */
+/** 黄忠手绘特效图集 huangzhong_paint（6×4，每帧 256，透明底叠加；2026-11-17 Gemini 出图替换像素图）。 */
 const HZFX = { burst: 0, enter: 6, trail: 12, laoji: 18 } as const;
 function hzFx(host: WeaponHost, row: number, x: number, y: number, size: number, fps: number, name: string, loopMs = 0, follow?: Player): Phaser.GameObjects.Sprite | null {
-  const scene = sceneOf(host); if (!scene.textures.exists('huangzhong_fx')) return null;
+  const scene = sceneOf(host); if (!scene.textures.exists('huangzhong_paint')) return null;
   // 进入神射的光柱、宝刀未老的火焰在图里贴着格子下部（约 0.88 处），跟随人物时把这一点放在脚底
-  const s = scene.add.sprite(x, y, 'huangzhong_fx', row).setOrigin(.5, follow ? .88 : .5).setDisplaySize(size, size).setBlendMode('ADD').setDepth(43).setName(name);
+  const s = scene.add.sprite(x, y, 'huangzhong_paint', row).setOrigin(.5, follow ? .88 : .5).setDisplaySize(size, size).setBlendMode('ADD').setDepth(43).setName(name);
   const st = { t: 0 }, frames = loopMs ? Math.max(6, Math.round(loopMs / 1000 * fps)) : 6;
   scene.tweens.add({ targets: st, t: frames - .01, duration: frames / fps * 1000,
     onUpdate: () => { if (!s.active) return; s.setFrame(row + (Math.floor(st.t) % 6)); if (follow) s.setPosition(follow.x, follow.y + 4); },
@@ -421,7 +422,10 @@ export function shuangguBehavior(host: WeaponHost, weapon: WeaponState, dt: numb
   const damage = SHUANGGU_DEF.damage(level, pl.stats) * g.damageMultiplier(time) * cast.damageMul, splash = shuangguSplash(level, g.masteries.taoyuan) * host.player.passive.rangeMultiplier('shuanggu_swords'); // 智力范围加成
   const targets = foes.slice(0, g.masteries.taoyuan >= 3 ? 3 : 2), colors = [0x8fe0c0, 0xffd27a, 0xffffff];
   if (cast.heal) pl.heal(pl.maxHp * cast.heal * (1 + .25 * g.masteries.xiemin));
-  if (cast.empowered) { LIUBEI_HASTE.set(pl, time + R.liubeiHasteMs); const aura = host.add.circle(pl.x, pl.y - 10, 30, 0xffd890, .25).setBlendMode(1).setDepth(41).setName('liubei-haste'); aura.scene.tweens.add({ targets: aura, radius: 70, alpha: 0, duration: 500, onComplete: () => aura.destroy() }); }
+  if (cast.empowered) { LIUBEI_HASTE.set(pl, time + R.liubeiHasteMs);
+    // 仁德满层：脚下一圈手绘金光 + 上升光点（hero_small_paint 第 2 行，2026-11-17 替换程序画的半透明光圈）
+    if (sceneOf(host).textures.exists('hero_small_paint')) { const aura = host.add.sprite(pl.x, pl.y + 6, 'hero_small_paint', 6).setOrigin(.5, .75).setDisplaySize(120, 120).setBlendMode('ADD').setDepth(41).setName('liubei-haste'); const f = { t: 0 };
+      aura.scene.tweens.add({ targets: f, t: 5.99, duration: 520, onUpdate: () => { if (aura.active) aura.setFrame(6 + Math.floor(f.t)).setPosition(pl.x, pl.y + 6); }, onComplete: () => aura.destroy() }); } }
   if (cast.rally) { host.rallyAllies?.(cast.rally * (1 + .25 * g.masteries.xiemin)); host.heroFx?.('rally', pl.x, pl.y - 20, 260); }
   const u = targets[0], ux = u.x - pl.x, uy = u.y - pl.y;
   pl.faceDirection(cardinal(ux, uy), 140); pl.playAction(cast.empowered ? 'skill' : 'attack', ux < 0 ? 'left' : 'right');

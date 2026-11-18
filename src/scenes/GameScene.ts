@@ -2107,10 +2107,10 @@ export class GameScene extends Phaser.Scene {
       const warn = this.add.circle(x, y, radius * 0.55, 0xff6a2a, 0.16).setStrokeStyle(3, 0xffb347, 0.9).setDepth(DEPTH.fx - 2);
       this.tweens.add({ targets: warn, scale: 1.18, alpha: 0.4, duration: 150, yoyo: true, onComplete: () => warn.destroy() });
     }
-    for (let i = 0; i < 6; i += 1) {
-      const a = Math.random() * Math.PI * 2, dist = radius * (0.7 + Math.random() * 0.4);
-      const ember = this.add.circle(x + Math.cos(a) * dist, y + Math.sin(a) * dist * 0.5, 2, 0xffd27a, 0.9).setDepth(DEPTH.fx);
-      this.tweens.add({ targets: ember, x, y, alpha: 0, duration: 150, delay: i * 10, onComplete: () => ember.destroy() });
+    // 火星向中心聚拢：手绘序列帧（hero_small_paint 第 3 行前 4 帧，2026-11-17 替换程序画的 6 个小圆点），压扁贴地
+    if (this.textures.exists('hero_small_paint')) {
+      const g = this.add.sprite(x, y, 'hero_small_paint', 12).setDisplaySize(radius * 1.5, radius * .9).setBlendMode(Phaser.BlendModes.ADD).setDepth(DEPTH.fx).setName('flame-gather'), f = { t: 0 };
+      this.tweens.add({ targets: f, t: 3.99, duration: 170, onUpdate: () => { if (g.active) g.setFrame(12 + Math.floor(f.t)); }, onComplete: () => g.destroy() });
     }
   }
 

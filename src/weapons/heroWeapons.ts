@@ -548,10 +548,10 @@ export function sunKnivesBehavior(host: WeaponHost, weapon: WeaponState, dt: num
     m.nextSlash = time + R.maidSlashMs; m.img.setFlipX(best.x < m.img.x);
     host.hitEnemy(best, maidDamage, time, 'melee');
     const a = Math.atan2(best.y - m.img.y, best.x - m.img.x);
-    if (texOk(host, 'sun_maid_slash')) {
-      // 正式刀光：6 帧弧形斩击（图里弧背朝左上，转 a + 3π/4 让弧背朝向目标），叠加混合，约 0.25 秒播完
-      const fx = host.add.sprite(m.img.x + Math.cos(a) * 14, m.img.y + Math.sin(a) * 14, 'sun_maid_slash', 0).setDisplaySize(64, 64)
-        .setRotation(a + Math.PI * .75).setBlendMode('ADD').setDepth(41).setName('sun-maid-slash');
+    if (texOk(host, 'hero_small_paint')) {
+      // 手绘刀光（2026-11-17 Gemini 出图替换像素 sun_maid_slash）：hero_small_paint 第 1 行 6 帧弧形斩击，弧背朝左，转 a + π 让弧背朝向目标，叠加混合，约 0.25 秒播完
+      const fx = host.add.sprite(m.img.x + Math.cos(a) * 14, m.img.y + Math.sin(a) * 14, 'hero_small_paint', 0).setDisplaySize(60, 60)
+        .setRotation(a + Math.PI).setBlendMode('ADD').setDepth(41).setName('sun-maid-slash');
       const f = { t: 0 };
       fx.scene.tweens.add({ targets: f, t: 5.99, duration: 250, onUpdate: () => fx.setFrame(Math.floor(f.t)), onComplete: () => fx.destroy() });
     } else {

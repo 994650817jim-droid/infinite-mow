@@ -51,7 +51,7 @@ for (const [layout, viewport] of Object.entries(LAYOUTS)) for (const [hero, h] o
       // 侍婢身边放一个定身敌人，看正式刀光（sun-maid-slash）
       const e = s.spawnEnemy('infantry', pl.x + 40, pl.y + 10, 1); if (e) { e.hp = e.maxHp = 99999; e.stunUntil = 1e12; } let slash = false; const t1 = performance.now();
       while (performance.now() - t1 < 3000 && !slash) { await new Promise(r => setTimeout(r, 20)); slash = !!s.children.getByName('sun-maid-slash'); }
-      return { stacksAfterWalk: sn0.stacks, gains: pl.passive.snapshot(s.combatNow).gains, triggers: pl.passive.snapshot(s.combatNow).triggers, maids, slash, slashTex: s.textures.exists('sun_maid_slash'), shouts: s.passiveShout.count, shout: s.passiveShout.lastLine };
+      return { stacksAfterWalk: sn0.stacks, gains: pl.passive.snapshot(s.combatNow).gains, triggers: pl.passive.snapshot(s.combatNow).triggers, maids, slash, slashTex: s.textures.exists('hero_small_paint'), shouts: s.passiveShout.count, shout: s.passiveShout.lastLine };
     }, G);
     ck(`${tag}：移动积满 6 层疾步，召出 2 名执刀侍婢`, m.gains >= 6 && m.triggers >= 1 && m.maids >= 2, m);
     ck(`${tag}：侍婢挥刀播正式刀光；疾步攒满时头顶喊一句台词`, m.slash && m.slashTex && m.shouts === 1 && ['侍婢何在，随我执刀！', '弓腰姬在此，谁敢近前！', '江东孙尚香，岂输男儿！'].includes(m.shout), m);

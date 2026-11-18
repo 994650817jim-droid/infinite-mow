@@ -154,16 +154,18 @@ export class BootScene extends Phaser.Scene {
     this.load.spritesheet('pangtong_paint', 'assets/hero-fx/pangtong_paint.png', { frameWidth: 256, frameHeight: 256 });
     this.load.spritesheet('pangtong_chain_hot', 'assets/hero-fx/pangtong_chain_hot.png', { frameWidth: 1024, frameHeight: 130 });
     // 黄忠神射像素特效（6×4，每帧 256，黑底叠加）：神射爆裂 / 进入神射金光 / 神射箭拖光 / 宝刀未老；缺图时退回程序化过渡
-    this.load.spritesheet('huangzhong_fx', 'assets/hero-fx/huangzhong_fx.png', { frameWidth: 256, frameHeight: 256 });
+    // 2026-11-17 换成手绘 huangzhong_paint（Gemini 出图，行序不变：神射爆裂 / 进入神射光柱 / 神射箭拖光 / 宝刀未老火焰），旧像素图 huangzhong_fx 保留不再加载
+    this.load.spritesheet('huangzhong_paint', 'assets/hero-fx/huangzhong_paint.png', { frameWidth: 256, frameHeight: 256 });
     // 被动满层战吼像素特效（2 行 × 6 帧，每帧 256×512，黑底叠加）：脚下声浪冲击 / 身上迸发的气势
-    this.load.spritesheet('warcry_fx', 'assets/hero-fx/warcry_fx.png', { frameWidth: 256, frameHeight: 512 });
+    // 2026-11-17 换成手绘 warcry_paint（Gemini 出图），旧像素图 warcry_fx 保留不再加载
+    this.load.spritesheet('warcry_paint', 'assets/hero-fx/warcry_paint.png', { frameWidth: 256, frameHeight: 512 });
     // 马超虎头湛金枪手绘特效（6×4，每帧 256，透明底；2026-11-17 Gemini 出图替换原像素图集 machao_fx，旧文件保留不再加载）：上挑弧光 / 落地砸地 / 冲锋尘土拖影 / 枪尖破风
     this.load.spritesheet('machao_paint', 'assets/hero-fx/machao_paint.png', { frameWidth: 256, frameHeight: 256 });
     // 2026-11-16 专属武器贴图（tools/prepare-hero-icon-sheet.mjs 切出）与执刀侍婢行走图
     for (const k of ['sun_knife', 'diaochan_fan', 'huangzhong_arrow', 'charm_heart', 'charm_broken', 'zhangfei_spear']) this.load.image(k, 'assets/hero-fx/' + k + '.png');
     this.load.spritesheet('sun_maid_walk', 'assets/hero-fx/sun_maid_walk.png', { frameWidth: 96, frameHeight: 96 });
-    // 执刀侍婢挥刀刀光：3×2 共 6 帧（每帧 256，黑底，叠加混合）
-    this.load.spritesheet('sun_maid_slash', 'assets/hero-fx/sun_maid_slash.png', { frameWidth: 256, frameHeight: 256 });
+    // 武将小特效手绘图集（2026-11-17 Gemini 出图，6×3 每帧 256，透明底叠加）：侍婢刀光 / 刘备仁德金光 / 诸葛亮火星聚拢；替换像素 sun_maid_slash（旧文件保留不再加载）与程序画光圈、火星
+    this.load.spritesheet('hero_small_paint', 'assets/hero-fx/hero_small_paint.png', { frameWidth: 256, frameHeight: 256 });
     this.load.spritesheet('flame_burst', 'assets/flame-banner/flame_burst.png', { frameWidth: 256, frameHeight: 256 });
     this.load.image('portrait_zhuge', 'assets/processed/portrait_zhuge.png');
     this.load.image('spear_thrust', 'assets/processed/spear_thrust.png');

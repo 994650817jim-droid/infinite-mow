@@ -152,7 +152,8 @@ const RECIPES: Record<string, (v: Voice, t: number, p: number) => number> = {
   waveDrum: (v, t) => { v.drum(t, 115, 46, .26, .4); v.drum(t + .2, 115, 46, .22, .35); v.drum(t + .4, 120, 44, .32, .5); return .9; },
   gong: (v, t) => { v.metal(t, 98, .08, 2.6); v.noise(t, .25, 'bandpass', 2200, .04, 1400); return 2.6; },
   /** 武将满层战吼：重鼓开声，合成人声「喝——」（两层八度）叠低沉号角与喘息噪声，尾音再一声鼓；响度压过 BGM。 */
-  warCry: (v, t) => { v.drum(t, 92, 38, .4, .55); v.vox(t + .04, 1.05, 128, 168, 1.6); v.vox(t + .04, 1.05, 256, 336, .45); v.tone(t + .08, .95, 'sawtooth', 98, .05, 104, .09); v.tone(t + .08, .95, 'sawtooth', 147, .035, 156, .12); v.noise(t + .03, .7, 'bandpass', 1500, .06, 900, 1.4); v.drum(t + .5, 112, 44, .32, .45); return 1.15; },
+  // 2026-11-18 用户：「那个喝声音太吓人了，都不要了」→ 去掉两层合成人声，只留鼓、号角与气声
+  warCry: (v, t) => { v.drum(t, 92, 38, .4, .55); v.tone(t + .08, .95, 'sawtooth', 98, .05, 104, .09); v.tone(t + .08, .95, 'sawtooth', 147, .035, 156, .12); v.noise(t + .03, .7, 'bandpass', 1500, .06, 900, 1.4); v.drum(t + .5, 112, 44, .32, .45); return 1.15; },
   /** 被动满层：两声轻鼓 + 一点金属余音，不抢战斗音。 */
   bladeReady: (v, t) => { v.metal(t, 1760, .012, .32); v.tone(t + .03, .2, 'sine', 2640, .012, 2700); v.noise(t, .12, 'highpass', 5200, .015); return .35; },
   bladeWave: (v, t, p) => { v.noise(t, .26, 'bandpass', 900 * p, .09, 2600, 1.2); v.metal(t + .02, 1180 * p, .01, .18); return .3; },

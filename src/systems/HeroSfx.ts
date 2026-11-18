@@ -56,7 +56,8 @@ export const ATTACK_SFX: Record<string, (v: SfxVoice, t: number, p: number) => n
   // ---------------- 马超 · 铁骑冲锋：马蹄连击（四声低鼓）+ 长枪破风 + 枪尖鸣
   atk_charge: (v, t, p) => { [0, .09, .2, .29].forEach((x, i) => v.drum(t + x, 120 * p, 55, i % 2 ? .1 : .14, .14)); swish(v, t + .3, .22, 900 * p, 3800 * p, .08, 1.6); v.metal(t + .42, 2500 * p, .012, .16); return .6; },
   // ---------------- 张飞 · 燕人咆哮 / 据水断桥：低沉人声吼 + 地面重击
-  atk_roar: (v, t, p) => { v.vox(t, .8, 96 * p, 118 * p, 1.4); v.vox(t, .8, 192 * p, 236 * p, .35); boom(v, t + .05, .16, .7, 70); v.noise(t + .05, .5, 'bandpass', 900, .05, 400, 1); return 1; },
+  // 2026-11-18 用户：「那个喝声音太吓人了，都不要了」→ 去掉合成人声 vox，只留重击与气浪
+  atk_roar: (v, t, p) => { boom(v, t + .05, .16, .7, 70); v.noise(t + .05, .5, 'bandpass', 900, .05, 400, 1); return 1; },
   // ---------------- 关羽 · 青龙偃月刀：沉重横扫的长破风 + 刀身嗡鸣
   atk_guandao: (v, t, p) => { const f = pick([[380, 1500], [420, 1700], [340, 1350]]); swish(v, t, .3, f[0] * p, f[1] * p, .09, 1); v.tone(t + .04, .3, 'sawtooth', 110 * p, .01, 104 * p, .08); v.metal(t + .12, 880 * p, .006, .24); return .36; },
   atk_guandao_heavy: (v, t, p) => { swish(v, t, .42, 260 * p, 1300 * p, .12, .9); v.tone(t + .05, .42, 'sawtooth', 82 * p, .016, 76 * p, .1); v.metal(t + .18, 660 * p, .012, .32); v.tone(t + .3, .2, 'sine', 70, .06, 40); return .5; },
@@ -81,7 +82,7 @@ export const ATTACK_SFX: Record<string, (v: SfxVoice, t: number, p: number) => n
   atk_mine: (v, t, p) => { boom(v, t, .13, .45, 95 * p); v.noise(t, .12, 'bandpass', 1400 * p, .08, 500, 1); v.noise(t + .02, .2, 'highpass', 2600, .03); return .5; },
   // ---------------- 魏延 · 镇北刀：沉重劈砍；谁敢杀我：怒吼 + 地裂轰鸣
   atk_zhenbei: (v, t, p) => { swish(v, t, .22, 500 * p, 2000 * p, .09, 1.1); v.tone(t + .16, .18, 'sine', 95 * p, .08, 45); v.noise(t + .16, .06, 'lowpass', 1200, .05, 300); return .36; },
-  atk_zhenbei_cry: (v, t, p) => { v.vox(t, .7, 110 * p, 140 * p, 1.3); boom(v, t + .3, .2, .7, 60); v.noise(t + .3, .6, 'bandpass', 500, .07, 160, .9); for (let k = 0; k < 4; k++) v.noise(t + .35 + k * .08, .05, 'highpass', 1800, .04); return 1.1; },
+  atk_zhenbei_cry: (v, t, p) => { /* 去掉合成人声「喝」（2026-11-18 用户） */ boom(v, t + .3, .2, .7, 60); v.noise(t + .3, .6, 'bandpass', 500, .07, 160, .9); for (let k = 0; k < 4; k++) v.noise(t + .35 + k * .08, .05, 'highpass', 1800, .04); return 1.1; },
   // ---------------- 刘备 · 双股剑：两剑交错的清脆双响
   atk_twin: (v, t, p) => { swish(v, t, .12, 2200 * p, 4200 * p, .055, 2); swish(v, t + .07, .12, 2600 * p, 4600 * p, .05, 2); v.metal(t + .08, pick([3100, 3400]) * p, .012, .14); v.metal(t + .13, pick([3700, 4000]) * p, .009, .12); return .28; },
   // ---------------- 黄月英 · 连弩：机括「咔」+ 弦响 + 弩矢破空

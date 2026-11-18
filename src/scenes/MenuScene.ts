@@ -231,7 +231,7 @@ export class MenuScene extends Phaser.Scene {
     const primary=homeCommand(this,D?W*.73:W/2,startY,startW,startH,'匡扶汉室',true);this.startButton=primary.hit.setName('start-campaign').setData('padDefault',true);this.startLabel=primary.caption;
     // W4：有城池告急时提示“出征将失守”
     const lossWarn=isChapterTestRun()?'':alertLossWarning();if(lossWarn)text(D?W*.73:W/2,startY-startH/2-(D?14:16),lossWarn,D?12:13,'#ff8a70').setStroke('#1a0e08',3).setName('home-alert-warning');
-    this.startButton.on('pointerdown',()=>{let chosen=!!this.registry.get('heroConfirmed');try{chosen=chosen||!!localStorage.getItem('im_last_hero');}catch{}if(!chosen&&!params.has('autostart')&&!params.has('perf')){openHeroes();return;}if(this.children.getByName('chapter-select'))return;this.openChapters();});
+    this.startButton.on('pointerdown',()=>{let chosen=!!this.registry.get('heroConfirmed');try{chosen=chosen||!!localStorage.getItem('im_last_hero');}catch{}if(!chosen&&!params.has('autostart')&&!params.has('perf')){openHeroes();return;}if(this.children.getByName('chapter-select'))return;this.campaignEntry();});
     for(let k=0;k<navItems-1;k++)text((navX(k)+navX(k+1))/2,navRowY,'·',D?18:20,'#a68a57');
     if(isChapterTestRun())text(W/2,D?529:955+this.padY,'测试战斗不记录正式进度',10,'#8c806f');
     if(isChapterTestRun())text(W-34,24,'测试选关 ›',14,'#dcc399').setOrigin(1,.5).setPadding(12,10).setInteractive({useHandCursor:true}).setName('dev-stage-picker').on('pointerdown',()=>this.openTestStages());
@@ -240,7 +240,16 @@ export class MenuScene extends Phaser.Scene {
     this.renderSelection();if(params.has('autostart')||params.has('perf'))this.time.delayedCall(80,()=>this.startGame());
   }
   /** 章节选择（2026-11-17）：已打到的章可进，没打到的锁住；第一、二章由主页直接出征，第三章起进各章选关场景。 */
-  private openChapters():void{
+  /**
+   * 「匡扶汉室」（2026-11-17 用户：「点匡扶汉室是进入大地图，然后玩家自行选择」）：天下已开 → 直接进天下地图，在地图上选章（未到的章节锁住）；
+   * 天下未开（第一章还没打完）→ 直接出征第一章下一关。择章页（openChapters）已不从主页进入，代码暂留。
+   */
+  private campaignEntry():void{
+    if(this.started||this.heroModal?.visible)return;
+    if(worldUnlocked()){this.started=true;this.registry.remove('campaignTransfer');this.cameras.main.fadeOut(150,0,0,0);this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE,()=>this.scene.start('WorldMapScene'));return;}
+    this.startGame();
+  }
+  openChapters():void{
     if(this.started||this.heroModal?.visible)return;
     openChapterSelect(this,{onPick:(id,stage)=>this.pickChapter(id,stage)});
   }

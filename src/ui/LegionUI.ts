@@ -113,7 +113,7 @@ export class LegionUI {
     loadTroopPortraits(scene, () => { if (this.panel.visible && this.mode === 'wave') this.repaint(); });
     // 血药卡（效果图）：与兵种卡同一套漆底描金卡面，徽章里是药囊
     {const root = scene.add.container(0, 0).setScrollFactor(0).setVisible(false).setName('recruit-potion-card'), g = scene.add.graphics().setScrollFactor(0);
-     const icon = scene.add.image(0, 0, scene.textures.exists('healing_potion') ? 'healing_potion' : 'icon_1').setScrollFactor(0);
+     const icon = scene.add.image(0, 0, scene.textures.exists('potion_jar') ? 'potion_jar' : scene.textures.exists('healing_potion') ? 'healing_potion' : 'icon_1').setScrollFactor(0); // 缺 v2 卡图时用手绘药罐，不再用像素药瓶
      const title = text(0, 0, '血药 · 回春', 21).setColor('#f6dc9a'), detail = text(0, 0, '', 14).setColor('#d9c79f'), buy = text(0, 0, '＋ 领取血药', 16).setColor('#ffe6b5').setPadding(10, 10);
      const tag = text(0, 0, '补给', 14).setColor('#f6e6c2').setOrigin(.5);
      // 整张卡可点（命中区名 recruit-potion），悬停描金变亮

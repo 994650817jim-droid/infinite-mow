@@ -65,10 +65,7 @@ async function newPage(seed) {
   const home2 = await pad.focus();
   ck('确认出战后焦点回到「匡扶汉室」', home2?.name === 'start-campaign', home2);
   await layoutCheck(pad, '主页');
-  // 2026-11-17：「匡扶汉室」先打开章节选择（焦点在当前章），再按 Ⓐ 进章
-  await pad.press('A'); await p.waitForTimeout(500);
-  const chap = await pad.focus();
-  ck('Ⓐ「匡扶汉室」打开章节选择，焦点在当前章', /^chapter-card-/.test(chap?.name ?? ''), chap);
+  // 2026-11-17 用户「点匡扶汉室是进入大地图」：新存档（天下未开）Ⓐ「匡扶汉室」直接出征 1-1
   await pad.press('A');
   await p.waitForFunction(G0 => eval(G0)?.mode === 'none', G, { timeout: 20000 });
   await p.waitForTimeout(600);
@@ -194,16 +191,11 @@ async function newPage(seed) {
   await p.waitForTimeout(1500);
   const pad = padApi(p);
   await keepLord(p, pad);
-  // 2026-11-17：电脑版主页右上不再有「天下地图 / 营寨」，改走 择章 →「营寨」→「天下地图 · 出征」
-  await p.evaluate(() => window.__game.scene.getScene('MenuScene').openChapters()); await p.waitForTimeout(500);
-  const cf0 = await pad.focusTo(f => f.name === 'chapter-select-city');
-  await pad.press('A'); await p.waitForFunction(() => window.__game.scene.getScene('CityScene')?.sys.isActive() && window.__game.scene.getScene('CityScene').children.getByName('city-map'), null, { timeout: 20000 }).catch(() => {}); await p.waitForTimeout(800); /* 营寨首次进入要加载素材 */
-  const viaCity = await p.evaluate(() => window.__game.scene.getScene('CityScene')?.sys.isActive());
-  if (viaCity && (await pad.focus())?.name === 'town-intro-close') { await pad.press('A'); await p.waitForTimeout(500); } // 首次进营寨有介绍弹窗：先 Ⓐ 关掉
-  const wf = viaCity ? await pad.focusTo(f => f.name === 'city-map') : null;
-  await pad.press('A'); await p.waitForTimeout(1500);
+  // 2026-11-17：电脑版主页右上不再有「天下地图 / 营寨」；「匡扶汉室」直接进天下地图
+  const wf = await pad.focusTo(f => f.name === 'start-campaign');
+  await pad.press('A'); await p.waitForFunction(() => window.__game.scene.getScene('WorldMapScene')?.sys.isActive(), null, { timeout: 20000 }).catch(() => {}); await p.waitForTimeout(800);
   const inWorld = await p.evaluate(() => window.__game.scene.getScene('WorldMapScene')?.sys.isActive());
-  ck('主页 → 择章 → 营寨 → 天下地图（手柄）', !!cf0 && viaCity && !!wf && inWorld, { cf0, wf });
+  ck('主页「匡扶汉室」→ 天下地图（手柄）', !!wf && inWorld, wf);
   if (inWorld) {
     await pad.press('RIGHT'); await p.waitForTimeout(200);
     const f1 = await pad.focus(); await pad.press('DOWN'); const f2 = await pad.focus();
@@ -212,11 +204,13 @@ async function newPage(seed) {
   }
   await p.goto(base + '?layout=desktop'); await p.waitForFunction(() => window.__game?.scene.getScene('MenuScene')?.sys.isActive(), null, { timeout: 30000 }); await p.waitForTimeout(1200);
   await keepLord(p, pad);
-  await p.evaluate(() => window.__game.scene.getScene('MenuScene').openChapters()); await p.waitForTimeout(500);
-  const cf = await pad.focusTo(f => f.name === 'chapter-select-city');
-  await pad.press('A'); await p.waitForTimeout(1500);
+  await pad.focusTo(f => f.name === 'start-campaign'); await pad.press('A');
+  await p.waitForFunction(() => window.__game.scene.getScene('WorldMapScene')?.sys.isActive(), null, { timeout: 20000 }).catch(() => {}); await p.waitForTimeout(800);
+  const cf = await pad.focusTo(f => f.text === '返回营寨');
+  await pad.press('A'); await p.waitForFunction(() => window.__game.scene.getScene('CityScene')?.sys.isActive(), null, { timeout: 20000 }).catch(() => {}); await p.waitForTimeout(800);
   const inCity = await p.evaluate(() => window.__game.scene.getScene('CityScene')?.sys.isActive());
-  ck('主页 → 择章 → 营寨（手柄）', !!cf && inCity, cf);
+  ck('主页「匡扶汉室」→ 天下地图「返回营寨」→ 营寨（手柄）', !!cf && inCity, cf);
+  if (inCity && (await pad.focus())?.name === 'town-intro-close') { await pad.press('A'); await p.waitForTimeout(500); } // 首次进营寨有介绍弹窗
   if (inCity) { await shot(p, 'city'); await layoutCheck(pad, '主城'); }
   await p.close();
 }

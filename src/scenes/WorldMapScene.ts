@@ -1,5 +1,5 @@
 import {playMenuMusic} from '../systems/Music';
-import {defaultHero,heroOwned,LOCKED_HINT} from '../systems/RosterStore';
+import {defaultHero} from '../systems/RosterStore';
 import {checkWorld} from '../systems/Achievements';
 import {RENDER_SCALE,screenPoint,TITLE_FONT,HEADING_FONT} from '../config';
 import {thirdChapterUnlocked,arcUnlocked} from '../world/WorldStore';
@@ -355,7 +355,7 @@ export class WorldMapScene extends Phaser.Scene {
    const alert=this.alertFor(c.id),gate=!citySiegeOpen(c.id,loadWorld())&&!isChapterTestRun()&&!alert&&owner!=='player',usable=(attack||!!alert)&&!gate,warn=attack?this.lossWarning():'';
    this.setDetail(`${c.name} · ${TIER_NAME[c.tier]} · ${c.region}`,FACTIONS[owner].color,sealGlyph(owner),`归属：${FACTIONS[owner].name}（公元${era.year}年 · ${era.name}）\n${alert?`告急：${FACTIONS[alert.attacker].name}来犯！守住可解除；出征别处则此城失守`:owner==='player'?'你的城池':gate?`通关第${gateChapter.numeral}章「${gateChapter.title}」后开放攻城`:attack?warn||'与你的领地相邻，可以攻打':'尚不相邻：先攻下相邻城池'}\n${yieldText}\n相邻：${neighbors}`);
    const enter=owner==='player'&&!alert;
-   this.action.text.setText(alert?'守城 · 选择武将':enter?'进入城池':gate?`${gateChapter.short}后开放攻城`:attack?'攻城 · 选择武将':'尚不可攻打');this.action.image.setAlpha(usable||enter?1:.45);if(usable||enter)this.action.image.setInteractive({useHandCursor:true});else this.action.image.disableInteractive();
+   this.action.text.setText(alert?'亲征 · 守城':enter?'进入城池':gate?`${gateChapter.short}后开放攻城`:attack?'亲征 · 攻城':'尚不可攻打');this.action.image.setAlpha(usable||enter?1:.45);if(usable||enter)this.action.image.setInteractive({useHandCursor:true});else this.action.image.disableInteractive();
    this.layoutActions(false);return;
   }
   if(this.selected.kind==='stage'){this.refreshStage(this.selected.chapter,this.selected.stage);return;}
@@ -364,7 +364,7 @@ export class WorldMapScene extends Phaser.Scene {
   if(n.kind==='home'||!info){const next=currentChapter(save),cleared=CHAPTER_TIMELINE.filter(c=>chapterStagesDone(c.id,save)>=3).length;this.setDetail(n.name,FACTIONS.player.color,n.kind==='home'?'营':'锁',`${n.region} · ${n.kind==='home'?'玩家领地':'地区开发中'}\n从义军营寨出发，建设后再次出征。\n章节进度 ${cleared}/${CHAPTER_TIMELINE.length} · ${cleared>=CHAPTER_TIMELINE.length?'诸章皆已平定':`下一章：第${next.numeral}章「${next.title}」`}`);}
   else{const hard=hardChapterCleared(info.id),status=locked?`未解锁：${info.hint}`:st==='cleared'?`已平定（3/3 关）· ${hard?`乱世已平 · 称号「${HARD_TITLES[info.id]}」`:'可重温，或挑战乱世难度'}`:done?`进行中：已过 ${done}/3 关`:'已开放：可出征';
    this.setDetail(`第${info.numeral}章 · ${n.name}`,st==='cleared'?0x5f8f4e:locked?0x4a4f46:0x8e2a1e,st==='cleared'?'捷':locked?'锁':'战',`公元${info.year}年（${info.era}） · ${n.region}\n${status}\n${locked?'按史事时序逐章解锁。':this.lossWarning()||'战斗中的随军粮只在本局有效，战后另结算营寨军粮。'}`);}
-  this.action.text.setText(locked?'尚未解锁':n.kind==='home'?"进入营寨":st==='cleared'?'重温 · 选择武将':'选择武将 · 出征');this.action.image.setAlpha(locked?.45:1);if(locked)this.action.image.disableInteractive();else this.action.image.setInteractive({useHandCursor:true});
+  this.action.text.setText(locked?'尚未解锁':n.kind==='home'?"进入营寨":st==='cleared'?'重温 · 出征':'出征');this.action.image.setAlpha(locked?.45:1);if(locked)this.action.image.disableInteractive();else this.action.image.setInteractive({useHandCursor:true});
   this.layoutActions(st==='cleared');}
 /** 挑战关「虎牢关 · 三英战吕布」详情：开放条件、首通奖励赤兔、胜场。 */
  private challengeDetail(n:WorldNode,st:'home'|ChapterState){const locked=st==='locked',wins=lubuClears(),r=LUBU_CHALLENGE.reward,rr=LUBU_CHALLENGE.repeatReward;
@@ -375,7 +375,7 @@ export class WorldMapScene extends Phaser.Scene {
  private launchChallenge(){let hero:CharacterId=defaultHero(null);try{hero=defaultHero(localStorage.getItem('im_last_hero'));}catch{/* storage unavailable */} // 挑战关也只用主公出战（用户规则 2026-11-16）
   this.registry.remove('campaignTransfer');this.registry.set('runConfig',{character:hero});
   if(this.registry.get('battleReady'))this.scene.start('LubuGameScene');else{this.registry.set('pendingWarlord','LubuGameScene');this.registry.set('loadBattle',true);this.scene.start('BootScene');}}
-/** 攻城出征面板：守军、时长、胜利条件、奖励，选择武将后出征。 */
+/** 攻城出征面板：守军、时长、胜利条件、奖励，主公亲征。 */
  private openSiege(city:CityDef,defense=false){
   const alert=defense?this.alertFor(city.id):undefined;
   if(this.siegeModal||(defense?!alert:!cityAttackable(city.id,this.owned)||(!citySiegeOpen(city.id,loadWorld())&&!isChapterTestRun())))return;
@@ -398,13 +398,17 @@ ${city.tier==='large'?'守城大将：'+siegeBossName(city,owner):'守军：'+FA
 失败不损失城池与资源，可再次攻打。`;
   const info=t(px+24,py+86,body,14,'#d6cdb4').setLineSpacing(6).setWordWrapWidth(pw-48);
   if(warn)t(px+24,info.y+info.height+4,warn,13,'#ff8a70').setWordWrapWidth(pw-48).setName('siege-warning');
-  t(px+24,py+dy+(desk?214:236),'出战武将',13,'#b6a07b');
-  const btns:Phaser.GameObjects.Rectangle[]=[];const bw=(pw-48-6*(CHARACTERS.length-1))/CHARACTERS.length,by=py+dy+(desk?256:282);
-  const paint=()=>btns.forEach((b,i)=>b.setFillStyle(CHARACTERS[i].id===hero?0x51402b:0x241e1a).setStrokeStyle(1,CHARACTERS[i].id===hero?0xd7b778:0x70604b).setAlpha(b.getData('locked')?.35:1));
-  CHARACTERS.forEach((c,i)=>{const x=px+24+i*(bw+6)+bw/2;const b=this.add.rectangle(x,by,bw,desk?42:54,0x241e1a,.96).setInteractive({useHandCursor:true}).setName('siege-hero-'+c.id);b.on('pointerup',()=>{if(!heroOwned(c.id))return;hero=c.id;paint();});btns.push(b);root.add(b);const l=worldText(this,x,by,c.name,16,'#d1c2a7').setOrigin(.5);root.add(l);if(!heroOwned(c.id)){b.setData('locked',LOCKED_HINT);l.setAlpha(.35);}});paint();
+  this.lordLine(root,px+24,py+dy+(desk?214:236),pw-48,hero,'siege-lord');
   const close=()=>{root.destroy();this.siegeModal=undefined;};
   const cancel=worldButton(this,px+pw*.27,py+ph-(desk?48:58),'返回',close,pw*.38);cancel.image.setName('siege-cancel');root.add([cancel.image,cancel.text]);
   const go=worldButton(this,px+pw*.73,py+ph-(desk?48:58),alert?'出征守城':'出征攻城',()=>this.launchSiege(city,hero,!!alert),pw*.38);go.image.setName('siege-go');root.add([go.image,go.text]);
+ }
+ /** 攻城 / 守城 / 军情只由主公亲征（用户 2026-11-17「攻城取消选择武将，所有地图占领需要自己亲历亲为」）：面板只写出战的主公，不能换将。 */
+ private lordLine(root:Phaser.GameObjects.Container,x:number,y:number,w:number,hero:CharacterId,name:string){
+  const n=CHARACTERS.find(c=>c.id===hero)?.name??hero;
+  root.add(worldText(this,x,y,'出战',13,'#b6a07b'));
+  root.add(this.add.rectangle(x+w/2,y+42,w,44,0x51402b,.96).setStrokeStyle(1,0xd7b778).setName(name));
+  root.add(worldText(this,x+w/2,y+42,`主公 ${n} · 亲征`,18,'#f0d79e').setOrigin(.5).setName(name+'-text'));
  }
  private launchSiege(city:CityDef,hero:CharacterId,defense=false){
   if(!isChapterTestRun())try{localStorage.setItem('im_last_hero',hero);}catch{/* storage unavailable */}
@@ -496,8 +500,8 @@ ${city.tier==='large'?'守城大将：'+siegeBossName(city,owner):'守军：'+FA
   this.setDetail(`${info.name} · ${intelTitle(event).split(' · ')[1]}`,info.color,info.glyph,`${this.intelLeft(event)}${c?` · ${c.name}（${c.region}）`:''}
 ${intelBrief(event,f)}
 奖励：${this.intelRewardText(event)}${this.lossWarning()?'\n'+this.lossWarning():''}`);
-  this.action.text.setText('军情 · 选择武将');this.action.image.setAlpha(1).setInteractive({useHandCursor:true});this.layoutActions(false);}
- /** 军情出征面板：说明、奖励、期限，选择武将后出征。 */
+  this.action.text.setText('亲征 · 军情');this.action.image.setAlpha(1).setInteractive({useHandCursor:true});this.layoutActions(false);}
+ /** 军情出征面板：说明、奖励、期限，主公亲征。 */
  private openIntel(event:IntelEvent){
   if(this.siegeModal)return;const info=INTEL_INFO[event.kind],desk=W>600,warn=this.lossWarning(),dy=warn?(desk?36:54):0;
   let hero:CharacterId=defaultHero(null);try{hero=defaultHero(localStorage.getItem('im_last_hero'));}catch{/* storage unavailable */}
@@ -513,10 +517,7 @@ ${intelBrief(event,f)}
 ${fail}`;
   const infoText=t(px+24,py+86,body,14,'#d6cdb4').setLineSpacing(6).setWordWrapWidth(pw-48);
   if(warn)t(px+24,infoText.y+infoText.height+4,warn,13,'#ff8a70').setWordWrapWidth(pw-48).setName('intel-warning');
-  t(px+24,py+dy+(desk?214:236),'出战武将',13,'#b6a07b');
-  const btns:Phaser.GameObjects.Rectangle[]=[];const per=desk?CHARACTERS.length:Math.ceil(CHARACTERS.length/2),bw=(pw-48-6*(per-1))/per,by=py+dy+(desk?256:296);
-  const paint=()=>btns.forEach((b,i)=>b.setFillStyle(CHARACTERS[i].id===hero?0x51402b:0x241e1a).setStrokeStyle(1,CHARACTERS[i].id===hero?0xd7b778:0x70604b).setAlpha(b.getData('locked')?.35:1));
-  CHARACTERS.forEach((c,i)=>{const x=px+24+(i%per)*(bw+6)+bw/2,y=by+Math.floor(i/per)*62;const b=this.add.rectangle(x,y,bw,desk?42:54,0x241e1a,.96).setInteractive({useHandCursor:true}).setName('intel-hero-'+c.id);b.on('pointerup',()=>{if(!heroOwned(c.id))return;hero=c.id;paint();});if(!heroOwned(c.id))b.setData('locked',LOCKED_HINT);btns.push(b);root.add(b);root.add(worldText(this,x,y,c.name,16,'#d1c2a7').setOrigin(.5));});paint();
+  this.lordLine(root,px+24,py+dy+(desk?214:236),pw-48,hero,'intel-lord');
   const close=()=>{root.destroy();this.siegeModal=undefined;};
   const cancel=worldButton(this,px+pw*.27,py+ph-(desk?48:58),'返回',close,pw*.38);cancel.image.setName('intel-cancel');root.add([cancel.image,cancel.text]);
   const go=worldButton(this,px+pw*.73,py+ph-(desk?48:58),'出征',()=>this.launchIntel(event,hero),pw*.38);go.image.setName('intel-go');root.add([go.image,go.text]);

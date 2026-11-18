@@ -166,6 +166,7 @@ assets/raw/*
 !/tools/test-arrival-attr.mjs
 !/tools/test-prop-loot.mjs
 !/tools/test-camp-life.mjs
+!/tools/test-siege-finite.mjs
 !/tools/test-jingnan-art.mjs
 !/tools/test-hanzhong-art.mjs
 !/tools/test-yiling-full.mjs

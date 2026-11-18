@@ -19,6 +19,7 @@ import {checkWorld,ACHIEVEMENTS,unlockedMap} from '../systems/Achievements';
 import {HomeHeroPicker} from '../ui/HomeHeroPicker';
 import {dongzhuoStageUnlocked,nextDongzhuoStage,yellowStageUnlocked,loadWorld,worldUnlocked,alertLossWarning} from '../world/WorldStore';
 import Phaser from 'phaser';
+import {CUTSCENE_PREVIEW} from '../data/cutscenes';
 import { WAR, ensureWarTextures, warFrame } from '../ui/WarStyle';
 import { CHAPTERS, YELLOW_STAGES,DONGZHUO_STAGES, getChapter, type YellowStage, type ChapterId } from '../data/chapters';
 import { CHARACTERS, HOME_ART_HEROES, type RunConfig } from '../data/characters';
@@ -74,6 +75,9 @@ export class MenuScene extends Phaser.Scene {
     this.westRows=[];this.westModal=undefined;this.westDeploy=undefined;this.westDeployLabel=undefined;this.selectedWestStage=1;
     this.started = false; this.chapterButtons = []; this.charCards = [];
     const params = new URLSearchParams(window.location.search), saved = this.registry.get('runConfig') as RunConfig | undefined;
+    // 过场动画预览（?dev=1&cutscene=<id>[&hero=<武将>]）：直接开那一关，GameScene 推到过场处自动播
+    { const cs = params.get('cutscene'), pv = cs && params.has('dev') ? CUTSCENE_PREVIEW[cs] : undefined;
+      if (cs && pv) { this.registry.remove('campaignTransfer'); this.registry.set('cutscenePreview', cs); this.registry.set('runConfig', { chapter: pv.chapter, westStage: pv.westStage, character: params.get('hero') ?? 'zhaoyun' } as RunConfig); this.time.delayedCall(60, () => this.scene.start('GameScene')); } }
     if(isChapterTestRun()&&['1','2','3'].includes(params.get('stage')??''))this.selectedStage=Number(params.get('stage')) as YellowStage;
     const fromWorld=this.registry.has('selectedWorldChapter');
     // 天下地图点选的关卡（黄巾 / 讨董）；乱世难度只对从地图出征有效

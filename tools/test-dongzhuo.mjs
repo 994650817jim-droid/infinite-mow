@@ -1,4 +1,4 @@
-// 2-3 火烧洛阳（董卓：纵火、铁骑、飞熊军护驾、半血迁都）与天下地图挑战关「虎牢关 · 三英战吕布」（首胜赤兔）。需要开发服务器。
+// 2-3 火烧洛阳（董卓城头纵火 + 吕布同场，吕布逃走后董卓下城，20% 时吕布杀回斩之）与天下地图挑战关「虎牢关 · 三英战吕布」（首胜赤兔）。需要开发服务器。
 // 用法：BASE=http://127.0.0.1:5187/ node tools/test-dongzhuo.mjs
 import { chromium } from 'playwright';
 import { mkdirSync } from 'node:fs';
@@ -23,26 +23,25 @@ const start = async (p, key, cfg) => {
 };
 const quiet = (p, S) => p.evaluate(S0 => { const s = eval(S0); s.spawnTimer = s.eliteTimer = 1e9; for (const e of s.enemies) if (e.active && e.kind !== 'boss' && !e.isSupplySlot) e.deactivate(); for (let i = 0; i <= s.chapter.waves.length; i++) s.recruitedWaves.add(i); s.pendingRecruit = false; }, S);
 
-// —— 2-3 火烧洛阳 · 董卓 ——
-for (const layout of ['mobile', 'desktop']) {
+// —— 2-3 火烧洛阳 · 董卓与吕布同场（细节见 test-dongzhuo-lubu）——
+{
+  const layout = 'desktop';
   const p = await page(layout, mk());
   await start(p, 'GameScene', { chapter: 'hulao', westStage: 3 }); await quiet(p, G);
   const a = await p.evaluate(G0 => { const s = eval(G0); return { name: s.chapter.name, boss: s.chapter.bossName, style: s.chapter.bossStyle, waves: s.chapter.waves.map(w => w.name) }; }, G);
-  ck(`[${layout}] 2-3 改为「火烧洛阳」：首领董卓、3 波`, a.name === '2-3 火烧洛阳' && a.boss === '董卓' && a.style === 'dongzhuo' && a.waves.length === 3, a);
-  const sp = await p.evaluate(async G0 => { const s = eval(G0); s.player.damageImmune = false; s.player.invulnUntil = 0; s.spawnBoss(); await new Promise(r => setTimeout(r, 600)); const dz = s.xiliang.dongzhuo; return { ctrl: !!dz, guards: s.enemies.filter(e => e.active && e.def.variant === 'feixiong').length, sheet: s.boss.walkSheet, atk: s.boss.attackSheet }; }, G);
-  ck(`[${layout}] 董卓出场：飞熊军三人护驾`, sp.ctrl && sp.guards >= 3, sp);
-  ck(`[${layout}] 董卓换上正式图（行走 + 纵火号令动作）`, sp.sheet === 'dongzhuo_walk' && sp.atk === 'dongzhuo_attack', sp);
+  ck(`[${layout}] 2-3「火烧洛阳」：首领董卓、3 波`, a.name === '2-3 火烧洛阳' && a.boss === '董卓' && a.style === 'dongzhuo' && a.waves.length === 3, a);
+  const sp = await p.evaluate(async G0 => { const s = eval(G0); s.player.damageImmune = false; s.player.invulnUntil = 0; s.spawnBoss(); for (let i = 0; i < 40 && !s.xiliang.dongzhuo; i++) { if (s.mode === 'levelup') s.chooseUpgrade?.(0); else if (s.mode === 'recruit') s.__DEV_ACTIONS?.closePopup?.(); await new Promise(r => setTimeout(r, 150)); } const dz = s.xiliang.dongzhuo; return { mode: s.mode, now: Math.round(s.combatNow), ctrl: !!dz, joint: s.dzLubu?.snapshot(), sheet: s.boss.walkSheet, atk: s.boss.attackSheet }; }, G);
+  ck(`[${layout}] 董卓 · 吕布同时出阵：董卓在城头刀枪不入，吕布在城下`, sp.ctrl && sp.joint?.phase === 'wall' && sp.joint.dzInv && sp.joint.lubu?.active, sp);
+  ck(`[${layout}] 董卓用正式图（行走 + 纵火号令动作）`, sp.sheet === 'dongzhuo_walk' && sp.atk === 'dongzhuo_attack', sp);
   const fire = await p.evaluate(async G0 => { const s = eval(G0), dz = s.xiliang.dongzhuo; dz.nextFire = s.combatNow; await new Promise(r => setTimeout(r, 400)); const n = dz.state.fires; const hp0 = s.player.hp; s.player.invulnUntil = 0; await new Promise(r => setTimeout(r, 2200)); return { n, hp0, hp1: s.player.hp }; }, G);
-  ck(`[${layout}] 纵火：主将周围 3 处火（预警后燃烧，站在火里掉血）`, fire.n === 3 && fire.hp1 < fire.hp0, fire);
+  ck(`[${layout}] 城头纵火：主将周围 3 处火（预警后燃烧，站在火里掉血）`, fire.n === 3 && fire.hp1 < fire.hp0, fire);
   await p.screenshot({ path: `${out}/${layout}-dongzhuo-fire.png` });
-  const rt = await p.evaluate(async G0 => { const s = eval(G0), b = s.boss; const n0 = s.enemies.filter(e => e.active).length; b.hp = Math.floor(b.maxHp * .49); await new Promise(r => setTimeout(r, 400)); const st = s.xiliang.dongzhuo.state; return { st, more: s.enemies.filter(e => e.active).length - n0 }; }, G);
-  ck(`[${layout}] 半血迁都：短暂无敌后撤、召一波西凉兵`, rt.st.retreated && rt.st.invulnerable && rt.more >= 8, rt);
-  if (layout === 'desktop') {
-    const v = await p.evaluate(async G0 => { const s = eval(G0); await new Promise(r => setTimeout(r, 2800)); s.boss.invulnerable = false; s.hitEnemy(s.boss, 1e7, s.combatNow, 'melee', false, false); for (let i = 0; i < 30 && !s.over; i++) { await new Promise(r => setTimeout(r, 150)); s.collectBossChests?.(); } return { over: s.over, victory: s.victory, sub: s.resultTexts.subtitle.text }; }, G);
-    ck('击败董卓：讨伐董卓告捷', v.victory && /董卓败退/.test(v.sub), v);
-    const owned = await p.evaluate(() => (JSON.parse(localStorage.getItem('im_items_v2') ?? '{}').stable ?? { owned: [] }).owned);
-    ck('击败董卓不送赤兔（赤兔只在三英战吕布首胜获得）', !owned.includes('chitu'), owned);
-  }
+  const fl = await p.evaluate(async G0 => { const s = eval(G0); s.player.damageImmune = true; const l = s.dzLubu.lubu; for (let i = 0; i < 6 && !l.invulnerable; i++) s.hitEnemy(l, 500, s.combatNow, 'melee', false, false); for (let i = 0; i < 40 && s.dzLubu.phase !== 'down'; i++) await new Promise(r => setTimeout(r, 150)); return s.dzLubu.snapshot(); }, G);
+  ck(`[${layout}] 吕布 1/3 血唤赤兔逃走 → 董卓下城、可以打`, fl.phase === 'down' && !fl.dzInv && !fl.lubu.active, fl);
+  const v = await p.evaluate(async G0 => { const s = eval(G0), d = s.boss; d.hp = Math.floor(d.maxHp * .21); s.hitEnemy(d, d.maxHp * .02, s.combatNow, 'melee', false, false); for (let i = 0; i < 200 && !s.over; i++) { await new Promise(r => setTimeout(r, 150)); s.collectBossChests?.(); } return { over: s.over, victory: s.victory, sub: s.resultTexts.subtitle.text, phase: s.dzLubu?.phase }; }, G);
+  ck('董卓 20%：吕布杀回斩董卓 → 讨伐董卓告捷', v.victory && /董卓/.test(v.sub), v);
+  const owned = await p.evaluate(() => (JSON.parse(localStorage.getItem('im_items_v2') ?? '{}').stable ?? { owned: [] }).owned);
+  ck('击败董卓不送赤兔（赤兔只在三英战吕布首胜获得）', !owned.includes('chitu'), owned);
   await p.close();
 }
 // —— 天下地图挑战关：锁定 / 开放 / 首胜赤兔 / 再胜无赤兔 ——

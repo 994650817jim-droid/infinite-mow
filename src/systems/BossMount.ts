@@ -12,7 +12,12 @@ export interface BossMountDef { horse: BossHorse; tint?: number; /** 骑者裁�
  * 已交付的首领骑乘图（画风会话出，4×9 每格 256 脚底 240：行 1–4 骑行 下 / 左 / 右 / 上，行 5–8 马上出招，行 9 坠马朝右）。
  * 只给这里登记过的首领载图（没出的不去请求，免得 404）；没有的仍用「本体裁上半身放鞍上」顶替。
  */
-export const BOSS_RIDE_ART = new Set<string>(['lubu', 'huaxiong']);
+/**
+ * 首领骑乘图第一批（吕布 / 华雄 / 张梁 / 李傕 / 张绣 / 颜良）画的是站姿（腿画到脚），整张放到马上像「站在马上」（用户 2026-11-17）。
+ * 跨坐：裁到大腿根（seat，格内像素），髋部压在鞍上（离地 rise 世界像素），腿藏在马身后；坠马行不裁。美术重画成坐姿后可去掉裁切。
+ */
+export const RIDE_SEAT = { seat: 200, rise: 50 } as const;
+export const BOSS_RIDE_ART = new Set<string>(['lubu', 'huaxiong', 'zhangliang', 'lijue', 'zhangxiu', 'yanliang']);
 export const bossRideKey = (id: string): string => 'ride_v2_boss_' + id;
 const HORSE_KEY: Record<BossHorse, string> = { chitu: 'horse_v2_chitu_walk', wuzhui: 'horse_v2_wuzhui_walk', jueying: 'horse_v2_jueying_walk', dawan: 'horse_v2_dawan_walk', generic: 'horse_v2_generic_walk' };
 const DIRS = ['down', 'left', 'right', 'up'] as const;
@@ -75,7 +80,7 @@ export class BossMount {
     // 骑者：有首领骑乘图 → 整张换成骑乘帧（行 1–4 骑行、行 5–8 马上出招），马镫对到马的镫高
     if (this.rideKey) {
       const row = DIRS.indexOf(this.dir) + (this.attacking?.() ? 4 : 0), f = row * 4 + (this.attacking?.() ? Math.floor(now / 110) % 4 : this.frame);
-      b.sprite.setCrop().setTexture(this.rideKey, f).setFlipX(false).setScale(RIDE.scale).setOrigin(.5, (RIDE.foot + RIDE.stirrup / RIDE.scale) / RIDE.cell);
+      b.sprite.setTexture(this.rideKey, f).setCrop(0, 0, RIDE.cell, RIDE_SEAT.seat).setFlipX(false).setScale(RIDE.scale).setOrigin(.5, (RIDE_SEAT.seat + RIDE_SEAT.rise / RIDE.scale) / RIDE.cell);
       return;
     }
     // 没有骑乘图：裁掉本体下半身，髋部对到鞍高（HORSE_V2.riderRise 逻辑像素）

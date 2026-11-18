@@ -201,3 +201,8 @@ assets/raw/*
 !/tools/test-chronicle.mjs
 !/tools/test-pad-targets.mjs
 !/tools/test-sishui-pass.mjs
+!/tools/test-dongzhuo-lubu.mjs
+!/tools/test-arc-forts.mjs
+!/tools/test-camp-ambush.mjs
+!/tools/test-cutscene.mjs
+!/tools/record-cutscene.mjs

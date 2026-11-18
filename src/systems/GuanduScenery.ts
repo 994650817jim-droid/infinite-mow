@@ -7,7 +7,7 @@ import type {DepotPoint} from './GrainDepots';
 
 /**
  * 第四章战场：复用现有地面与汜水关物件（城门、箭楼、营帐），程序化调成兖州黄土色；不新生成地面图。
- * 4-1 白马：北侧白马城门与两座箭楼（不可摧毁、接地碰撞），两侧袁军云梯营，两处袁军粮垛。
+ * 4-1 白马：北面袁军大营（木栅 + 辕门 + 营帐出兵，见 GuanduGameScene），两侧袁军云梯营，两处袁军粮垛。
  * 4-2 延津：无城，十字路口；河北骑营与前营，四辆散落的辎重车（文丑会来劫）。
  * 4-3 乌巢：夜色营地，横向营道；乌巢亲军营 / 守粮弓营，三座乌巢粮仓。
  */
@@ -45,7 +45,7 @@ export function guanduScenery(scene: Phaser.Scene, stage: GuanduStage, spawnProp
     {x: 380, y: 320, kind: 'infantry', name: '袁军前营'},
   ] : [
     {x: -340, y: 210, kind: 'shield', name: '袁军云梯营'},
-    {x: 350, y: -430, kind: 'archer', name: '河北弓营'},
+    {x: 380, y: -250, kind: 'archer', name: '河北弓营'},
   ];
   // 焚粮目标：4-1 粮垛；4-2 散落辎重车
   const depots: DepotPoint[] = stage === 3 ? [
@@ -61,9 +61,6 @@ export function guanduScenery(scene: Phaser.Scene, stage: GuanduStage, spawnProp
     // 夜色（不另放营火：小火盆在路上显得杂乱，且破坏后的地火会伤人）
     scene.add.rectangle(0, 0, 4000, 4000, 0x0a1428, .14).setDepth(18);
   }
-  if (stage !== 1) return {key, roadKey, boxes: [] as Array<{left: number; right: number; top: number; bottom: number}>, camps, depots};
-  // 白马城：城门与两座箭楼
-  place(0, 0, -280, 300); for (const x of [-250, 250]) place(1, x, -265, 126);
-  const boxes = [{left: -125, right: 125, top: -340, bottom: -285}, ...[-250, 250].map(x => ({left: x - 34, right: x + 34, top: -300, bottom: -265}))];
-  return {key, roadKey, boxes, camps, depots};
+  // 4-1 白马 / 4-2 延津：北面袁军大营（木栅 + 辕门 + 营帐）由 GuanduGameScene 用 SishuiPass 画；原来场中孤零零的白马城门 / 箭楼去掉
+  return {key, roadKey, boxes: [] as Array<{left: number; right: number; top: number; bottom: number}>, camps, depots};
 }

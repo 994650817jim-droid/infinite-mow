@@ -1,9 +1,10 @@
 import {paintCampRoad} from './CampRoad';
 import {paintV2Ground,paintV2Road} from './EnvGround';
-import Phaser from 'phaser';import {actorDepth}from'../config';import type{ThirdStage}from'../data/thirdChapter';
+import Phaser from 'phaser';import {actorDepth}from'../config';import type{ThirdStage}from'../data/thirdChapter';import type{FortKind}from'../data/arcForts';
 /** Existing art, four distinct layouts (4 = 江陵城下：石板广场、城门箭楼、十字大道); no illustrated camp image is tiled. */
 export type SceneryStage=ThirdStage|4;
-export function thirdScenery(scene:Phaser.Scene,stage:SceneryStage,spawnProp?:(frame:number,x:number,y:number,size:number)=>void,arc='third'){
+/** fort：本关在 data/arcForts.ts 里登记过（关隘 / 城池由 SishuiPass 画关墙；clear = 去掉场中城门）→ 不再摆场中城门 / 箭楼，北面敌营让出关墙前的位置。 */
+export function thirdScenery(scene:Phaser.Scene,stage:SceneryStage,spawnProp?:(frame:number,x:number,y:number,size:number)=>void,arc='third',fort?:FortKind){
  const key=(arc==='chibi'?'chibi_ground_':'third_ground_')+stage;
  // 地面 v2（环境互动第一批 ④）：第三章长安夯土、第五章江岸湿地；各关原来的夜色 / 灰调叠色保留（减淡）；缺图退回下面的程序调色版
  paintV2Ground(scene,key,arc==='chibi'?'ground_v2_jiang':'ground_v2_changan',stage===2?'rgba(8,18,32,.55)':stage===4?'rgba(72,70,66,.2)':arc==='chibi'?undefined:'rgba(52,38,24,.2)');if(!scene.textures.exists(key)){const tex=scene.textures.createCanvas(key,512,512)!;const g=tex.context;g.imageSmoothingEnabled=false;const source=scene.textures.get(stage===2?'xingyang_ground':stage===1||stage===4?'ground_hulao':'ground_ai2').getSourceImage()as HTMLImageElement;g.drawImage(source,0,0,512,512);
@@ -61,16 +62,19 @@ export function thirdScenery(scene:Phaser.Scene,stage:SceneryStage,spawnProp?:(f
   {x:-330,y:210,kind:'shield' as const,name:'寿春亲军营'},
   {x:340,y:-420,kind:'archer' as const,name:'旗令弓营'}
  ];
+ if(fort==='pass'||fort==='city')for(const c of camps)if(c.y<0){c.x=c.x>0?620:-620;c.y=-330;}
  for(const c of camps){
   place(4,c.x+113,c.y-8,92);
   place(3,c.x-110,c.y+42,90);
   place(6,c.x-98,c.y-74,86);
   place(7,c.x+108,c.y+80,72);
  }
- if(stage===1){place(0,0,-280,300);for(const x of[-250,250])place(1,x,-265,126);}
+ if(fort){/* 关墙 / 城门由 SishuiPass 画，或本关去掉城门 */}
+ else if(stage===1){place(0,0,-280,300);for(const x of[-250,250])place(1,x,-265,126);}
  if(stage===2){for(const x of[-145,145])place(7,x,-65,72);scene.add.rectangle(0,0,4000,4000,0x091526,.12).setDepth(18);}
  if(stage===3)place(0,0,-300,230);
- if(stage===4){place(0,0,-300,320);for(const x of[-270,270])place(1,x,-285,130);for(const x of[-150,150])place(7,x,140,70);}
- const boxes=stage===1?[{left:-125,right:125,top:-340,bottom:-285},...[-250,250].map(x=>({left:x-34,right:x+34,top:-300,bottom:-265}))]:stage===3?[{left:-85,right:85,top:-345,bottom:-305}]:stage===4?[{left:-135,right:135,top:-365,bottom:-305},...[-270,270].map(x=>({left:x-36,right:x+36,top:-320,bottom:-285}))]:[];
+ if(stage===4&&!fort){place(0,0,-300,320);for(const x of[-270,270])place(1,x,-285,130);}
+ if(stage===4)for(const x of[-150,150])place(7,x,140,70);
+ const boxes=fort?[]:stage===1?[{left:-125,right:125,top:-340,bottom:-285},...[-250,250].map(x=>({left:x-34,right:x+34,top:-300,bottom:-265}))]:stage===3?[{left:-85,right:85,top:-345,bottom:-305}]:stage===4?[{left:-135,right:135,top:-365,bottom:-305},...[-270,270].map(x=>({left:x-36,right:x+36,top:-320,bottom:-285}))]:[];
  return{key,boxes,camps};
 }

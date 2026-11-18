@@ -29,9 +29,12 @@ import { applyCharms, wornTokens, type CharmState } from '../systems/CharmEffect
 import { meritFromKills } from '../data/merit';
 import { CHARM_LEGEND, CHARM_SCHOOL_NAMES, CHARM_SET_DESC, charmDef, type CharmSchool } from '../data/charms';
 import {SishuiObstacles} from '../systems/SishuiObstacles';
-import {SishuiPass} from '../systems/SishuiPass';
+import {SishuiPass,type PassHost} from '../systems/SishuiPass';
+import {Cutscene,cutsceneAllowed,type CutHost} from '../systems/Cutscene';
+import type {CutsceneScript} from '../data/cutscenes/types';
+import {DongzhuoLubu} from '../systems/DongzhuoLubu';
 import {HuaxiongBoss} from '../systems/HuaxiongBoss';
-import {getXingyangEncounter} from '../data/xingyang';
+import {getXingyangEncounter,XINGYANG_AMBUSH} from '../data/xingyang';
 import {XurongBoss} from '../systems/XurongBoss';
 import {getSishuiEncounter} from '../data/sishui';
 import {BattlefieldSupplies,MAX_PROP_SLOTS,POUCH_MAX} from '../systems/BattlefieldSupplies';
@@ -183,8 +186,29 @@ export class GameScene extends Phaser.Scene {
   protected hardMode=false;
   private huaxiong:HuaxiongBoss|null=null;private xurong:XurongBoss|null=null;
   protected sishuiObstacles:SishuiObstacles|null=null;
+  /** 正在播的过场动画（systems/Cutscene.ts）。 */
+  cutscene:Cutscene|null=null;
+  /** 最近一段过场（测试读日志用）。 */
+  lastCutscene:Cutscene|null=null;
+  /** 播过场：战斗暂停（story 模式）、HUD 藏起；剧情设置关掉时不播，返回 false（调用方走原来的演出）。播完或跳过都回调 done。 */
+  playCutscene(script:CutsceneScript,anchors:CutHost['anchors'],done:(skipped:boolean)=>void):boolean{
+    if(!cutsceneAllowed(script)||this.over)return false;
+    const was=this.mode;this.setMode('story');
+    this.cutscene=new Cutscene({scene:this,anchors:{player:this.player.sprite,...anchors},heroes:()=>[this.runConfig.character,...(this.followers?.members??[]).map(m=>m.recruit.hero??'')].filter(Boolean),sfx:k=>this.sfx.play(k),music:d=>this.music.setDuck(d)},script,skipped=>{
+      this.lastCutscene=this.cutscene;this.cutscene=null;if(!this.over&&this.mode==='story')this.setMode(was==='story'?'none':was);done(skipped);});
+    return true;
+  }
+  /** 场上某武将的精灵（主将或随行），不在场返回 undefined。 */
+  heroSprite(id:string):{x:number;y:number}|undefined{if(this.runConfig.character===id)return this.player.sprite;return this.followers?.members.find(m=>m.recruit.hero===id&&m.sprite.active)?.sprite;}
+  /** 关墙 / 箭楼 / 营帐 / 关门的宿主（2-1 汜水关；第 3~12 章关隘、城池复用，见 data/arcForts.ts）。 */
+  protected passHost():PassHost{const sup=this.supplies;return{scene:this,player:this.player,legion:this.legion,now:()=>this.combatNow,elapsed:()=>this.elapsed,wave:()=>this.waveIndex,
+    spawn:(k,x,y)=>this.spawnEnemy(k,x,y,1,true),spawnTower:(x,y,hp)=>sup?.spawnCamp(x,y,hp)??null,placeTent:(x,y,id,hp,f)=>this.env?.placeTent(x,y,id,hp,f??1)??null,envReady:()=>!!this.env,
+    banner:(t,d,c)=>this.showWaveBanner(t,d,c),sfx:k=>this.sfx.play(k),merit:(e,b)=>{this.runMerit.elite+=e;this.runMerit.boss+=b;},
+    guanyu:()=>this.runConfig.character==='guanyu'||followersFor(this.runConfig.character).some(r=>r.hero==='guanyu')};}
   /** 2-1 汜水关：关墙、箭楼、西凉营帐、关门（systems/SishuiPass.ts）。 */
   sishuiPass:SishuiPass|null=null;
+  /** 2-3 洛阳：董卓与吕布同场（systems/DongzhuoLubu.ts）。 */
+  dzLubu:DongzhuoLubu|null=null;
   protected runConfig: RunConfig = DEFAULT_RUN_CONFIG;
   protected chapter: ChapterDef = getChapter();
   protected lubu: LubuBoss | null = null;
@@ -517,7 +541,7 @@ export class GameScene extends Phaser.Scene {
       .setDepth(DEPTH.ground);
     this.ground.setTileScale(surface.scale);
     // 2-1 汜水关：旧的「关门 + 两座箭楼 + 营帐」摆在场地中间、不能互动，改由 SishuiPass 画关墙（见下方 create 末段）
-    if(scenery==='xingyang'){for(const [frame,x,y,size]of [[2,-260,-180,130],[2,300,230,140],[6,-310,170,100],[4,270,-160,100]])this.add.image(x,y,'sishui_props_refined',frame).setOrigin(.5,1).setDisplaySize(size,size).setDepth(actorDepth(y));}
+    // 2-2 荥阳：原来场地中间不能互动的营帐 / 杂物去掉，改为四角伏兵营帐（XINGYANG_AMBUSH，见下方 create 末段）
     this.battlefieldDetails = new BattlefieldDetails(this, this.chapter.id, this.chapter.id==='huangjin'?this.chapter.stage:undefined,groundKey);
     this.artEffects = new ArtEffects(this);
 
@@ -537,7 +561,7 @@ export class GameScene extends Phaser.Scene {
     // 战地免费招兵每波人数随章节增加（档位与掉落一致：一章 0 … 五章 4）
     this.legion.freeRecruitCount = FREE_RECRUIT_BY_TIER[Math.max(0, Math.min(FREE_RECRUIT_BY_TIER.length - 1, this.itemTier()))];
     this.yellow=this.chapter.stage?new YellowBattle({scene:this,player:this.player,army:this.legion,enemies:this.enemies,move:(e,nx,ny,dt)=>this.advanceEnemy(e,nx,ny,dt),spawn:(def,x,y)=>this.spawnEnemy(def.kind,x,y,1,true,def)},this.chapter.stage):null;
-    this.xiliang=this.chapter.id==='hulao'&&!this.runConfig.encounter&&!this.customChapter()?new XiliangBattle({scene:this,player:this.player,army:this.legion,enemies:this.enemies,spawn:(kind,x,y,def)=>this.spawnEnemy(kind,x,y,undefined,true,def),stage:()=>(this.chapter.westStage??3) as 1|2|3,elapsed:()=>this.elapsed,def:k=>this.chapter.enemies[k],banner:(t,c)=>this.showWaveBanner(t,true,c),sfx:k=>this.sfx.play(k),boss:()=>this.boss,bossStyle:()=>this.chapter.bossStyle,move:(e,nx,ny,dt)=>this.advanceEnemy(e,nx,ny,dt),obstacles:()=>this.sishuiObstacles?.footprints??[]}):null;
+    this.xiliang=this.chapter.id==='hulao'&&!this.runConfig.encounter&&!this.customChapter()?new XiliangBattle({scene:this,player:this.player,army:this.legion,enemies:this.enemies,spawn:(kind,x,y,def)=>this.spawnEnemy(kind,x,y,undefined,true,def),stage:()=>(this.chapter.westStage??3) as 1|2|3,elapsed:()=>this.elapsed,def:k=>this.chapter.enemies[k],banner:(t,c)=>this.showWaveBanner(t,true,c),sfx:k=>this.sfx.play(k),boss:()=>this.boss,bossStyle:()=>this.chapter.bossStyle,holdBoss:()=>!!this.dzLubu?.holdsDongzhuo,move:(e,nx,ny,dt)=>this.advanceEnemy(e,nx,ny,dt),obstacles:()=>this.sishuiObstacles?.footprints??[]}):null;
     this.supplies=new BattlefieldSupplies(this,this.player,this.enemies,()=>this.combatNow,kind=>{this.sfx.play('pickup');this.artEffects.show(5,this.player.x,this.player.y-12,35,this.combatNow,280);if(kind==='wine')this.relics?.onWine(this.combatNow);});
     this.propItems = 0; this.supplies.onPropLoot = (kind, x, y) => this.propLoot(kind, x, y);
     // 兵装：开局读入该武将穿戴的道具加成（生命上限增加的部分补满）
@@ -563,13 +587,22 @@ export class GameScene extends Phaser.Scene {
     if(scenery==='sishui'){
       // 汜水关：关墙横在北面、关门居中、门两侧箭楼；西凉营帐在关前两翼（敌军出兵方向）；营寨杂物摆在营帐边，不挡战场中间
       const sup=this.supplies;
-      this.sishuiPass=new SishuiPass({scene:this,player:this.player,legion:this.legion,now:()=>this.combatNow,elapsed:()=>this.elapsed,wave:()=>this.waveIndex,
-        spawn:(k,x,y)=>this.spawnEnemy(k,x,y,1,true),spawnTower:(x,y,hp)=>sup.spawnCamp(x,y,hp),placeTent:(x,y,id,hp)=>this.env?.placeTent(x,y,id,hp,1)??null,envReady:()=>!!this.env,
-        banner:(t,d,c)=>this.showWaveBanner(t,d,c),sfx:k=>this.sfx.play(k),merit:(e,b)=>{this.runMerit.elite+=e;this.runMerit.boss+=b;},
-        guanyu:()=>this.runConfig.character==='guanyu'||followersFor(this.runConfig.character).some(r=>r.hero==='guanyu')});
+      this.sishuiPass=new SishuiPass(this.passHost());
       this.sishuiObstacles=new SishuiObstacles(this.sishuiPass.footprints);
       sup.spawnSishui(3,-690,-180,116);sup.spawnSishui(5,-640,-150,105);sup.spawnSishui(7,690,-180,100);sup.spawnSishui(4,640,-150,104);sup.spawnSishui(6,0,-330,110);
-    }else if(scenery){this.supplies.spawnSishui(3,-330,180,116);this.supplies.spawnSishui(5,-310,350,105);this.supplies.spawnSishui(7,230,-50,100);this.supplies.spawnSishui(4,290,210,104);this.supplies.spawnSishui(6,300,370,110);}
+    }else if(scenery==='xingyang'){
+      // 2-2 荥阳 · 徐荣伏营：四角伏兵营帐，「道路伏击」波起扬尘示警后伏兵冲出；烧掉营帐断其伏兵
+      const A=XINGYANG_AMBUSH;this.sishuiPass=new SishuiPass(this.passHost(),{wall:false,towers:false,wenjiu:false,tentSpots:A.tents,tentRider:'infantry',tentCount:A.count,tentWarnMs:A.warnMs,tentFromWave:A.fromWave,tentName:'伏兵营帐',campName:'徐荣伏营',tag:'xurong'});
+      this.supplies.spawnSishui(3,-330,180,116);this.supplies.spawnSishui(5,-310,350,105);this.supplies.spawnSishui(7,230,-50,100);this.supplies.spawnSishui(4,290,210,104);this.supplies.spawnSishui(6,300,370,110);}
+    // 过场动画预览（MenuScene 收到 ?dev=1&cutscene=<id>）：清场、首领出阵，推到过场处自动播
+    {const pv=this.registry.get('cutscenePreview') as string|undefined;if(pv){this.registry.remove('cutscenePreview');this.player.damageImmune=true;const t0=performance.now();
+      const poll=():void=>{if(!this.scene.isActive()){this.events.off('postupdate',poll);return;}this.spawnTimer=this.eliteTimer=1e9;for(const e of this.enemies)if(e.active&&e.kind!=='boss'&&!e.isSupplySlot&&e!==this.dzLubu?.lubu)e.deactivate();
+        if(this.mode==='levelup'||this.mode==='recruit'){(this as unknown as {__DEV_ACTIONS?:{closePopup?:()=>void}}).__DEV_ACTIONS?.closePopup?.();return;}
+        if(!this.boss?.active){if(performance.now()-t0>800)this.spawnBoss();return;}
+        const ready=this.textures.exists('ride_v2_boss_lubu')&&this.textures.exists('boss_death_dongzhuo');
+        const dzArt=!!(this.xiliang as unknown as {dongzhuo?:unknown}|null)?.dongzhuo&&(this.boss.sprite.texture.key.includes('dongzhuo')||performance.now()-t0>8000); // 董卓换上正式图再开演
+        if(pv==='lubu_kills_dongzhuo'&&this.dzLubu&&dzArt&&(ready||performance.now()-t0>6000)&&performance.now()-t0>2000){this.events.off('postupdate',poll);this.dzLubu.devFinale();}};
+      this.events.on('postupdate',poll);}}
     const transfer = this.registry.get('campaignTransfer') as CampaignTransfer | undefined;
     this.registry.remove('campaignTransfer');
     // 征程构筑：同章连打用内存里的 transfer；否则主线未通关的关读存档里的征程构筑（重打旧关 / 攻城 / 军情 / 挑战为空构筑）
@@ -720,7 +753,7 @@ export class GameScene extends Phaser.Scene {
     this.spawnTimer = 0.5;
     this.eliteTimer = BALANCE.eliteFirst;
     this.boss = null;
-    this.sishuiObstacles=null;this.sishuiPass?.clear();this.sishuiPass=null;this.huaxiong=null;this.xurong=null;this.lubu = null;this.moveset?.clear();this.moveset=null;this.bossMount?.destroy();this.bossMount=null; this.zhangjiao?.clear(); this.zhangjiao = null; this.yellow=null; this.xiliang=null; this.supplies=null; this.yellowAltar=null;this.finaleFadeMs=0;
+    this.sishuiObstacles=null;this.sishuiPass?.clear();this.sishuiPass=null;this.dzLubu?.clear();this.dzLubu=null;this.huaxiong=null;this.xurong=null;this.lubu = null;this.moveset?.clear();this.moveset=null;this.bossMount?.destroy();this.bossMount=null; this.zhangjiao?.clear(); this.zhangjiao = null; this.yellow=null; this.xiliang=null; this.supplies=null; this.yellowAltar=null;this.finaleFadeMs=0;
     this.bossSpawned = false;
     this.bossCastCd = 3;
     this.bossSummonCd = 6;
@@ -940,6 +973,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   protected updateCamera(dt: number): void {
+    if (this.cutscene?.active) return; // 过场动画时镜头归过场管
     const cam = this.cameras.main;
     const targetX = this.player.x - GAME_WIDTH / 2;
     const targetY = this.player.y - GAME_HEIGHT / 2;
@@ -1100,6 +1134,13 @@ export class GameScene extends Phaser.Scene {
     if(this.chapter.stage&&this.chapter.stage>=2){this.yellowAltar=this.add.image(x,y+10,this.chapter.stage===2?'zhang_bao_altar':'zhang_jiao_altar').setDepth(DEPTH.ground+2).setDisplaySize(245,200).setAlpha(.75);}
 
     if(this.chapter.bossStyle==='xurong')this.xurong=new XurongBoss({scene:this,boss,player:this.player,army:this.legion,spawn:(kind,x,y)=>this.spawnEnemy(kind,x,y,1),sfx:()=>this.sfx.play('allySlash')},this.combatNow);
+    // 2-3 洛阳：董卓上城、弱化吕布在城下（吕布 1/3 血逃走 → 董卓下城 → 20% 吕布杀回斩董卓）
+    if(this.chapter.bossStyle==='dongzhuo'&&!BOSS_OLD)this.dzLubu=new DongzhuoLubu({scene:this,player:this.player,legion:this.legion,now:()=>this.combatNow,
+      spawnLubu:(def,x,y)=>this.spawnEnemy('elite',x,y,1,true,def),lubuBase:()=>({...this.chapter.enemies.elite,hp:3200,damage:16,speed:48}),
+      banner:(t,d,c)=>this.showWaveBanner(t,d,c),sfx:k=>this.sfx.play(k),killBoss:()=>{const b=this.boss;if(b?.active){b.invulnerable=false;b.hp=0;this.killEnemy(b);}},
+      enemies:()=>this.enemies,allies:()=>this.allies,hitFeel:()=>this.hitFeel,
+      cutscene:(script,anchors,done)=>this.playCutscene(script,anchors,done),heroSprite:id=>this.heroSprite(id),
+      line:(id,t)=>(this as unknown as {storyDir?:{line(id:string,t:{x:number;y:number}):boolean}}).storyDir?.line(id,t)??false},boss); // 剧情台词：故事系统（claude/story-batch1）合并后生效
     if(this.chapter.bossStyle==='huaxiong')this.sishuiPass?.onBoss(boss); // 汜水关：关门洞开，华雄带亲卫杀出
     if(this.chapter.bossStyle==='huaxiong'){this.huaxiong=new HuaxiongBoss({scene:this,boss,player:this.player,army:this.legion,hurtTroops:(x,y,r,d,n,a,arc)=>this.legion.hurtArea(x,y,r,d,n,a,arc),sfx:()=>this.sfx.play('allySlash')},this.combatNow);}
     // 首领招式框架（第一章张梁 / 张宝）与已有控制器首领的坐骑（吕布赤兔、华雄）
@@ -1735,6 +1776,7 @@ export class GameScene extends Phaser.Scene {
     if (enemy === this.boss) this.ensureBossPhase2();
     if (this.xiliang) rawDamage *= this.xiliang.incoming(enemy, source);
     if (enemy === this.boss && this.moveset) { rawDamage *= this.moveset.incoming(fromAlly); this.moveset.hit(time); }
+    if (this.dzLubu && enemy === this.dzLubu.lubu) rawDamage = this.dzLubu.clampDamage(enemy, rawDamage); // 2-3 吕布锁在 1/3 血
     if(this.yellow&&enemy.kind==='shield'&&enemy.shieldMax===0&&enemy.def.behavior!=='wall'&&!fromAlly&&source!=='fire'){const angle=enemy.direction==='left'?Math.PI:enemy.direction==='right'?0:enemy.direction==='up'?-Math.PI/2:Math.PI/2;if(Math.cos(Math.atan2(this.player.y-enemy.y,this.player.x-enemy.x)-angle)>.25)rawDamage*=.65;}
     if (source === 'arrow') this.sfx.play('hitArrow');
     else if (source === 'fire') this.sfx.play('hitFire');
@@ -1825,6 +1867,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   protected killEnemy(enemy: Enemy): void {
+    if (this.dzLubu?.preventKill(enemy)) return; // 2-3 吕布打到底不死：锁血逃走
     if (!enemy.active) return;
     this.objective?.onKill(enemy);
     const kind = enemy.kind;

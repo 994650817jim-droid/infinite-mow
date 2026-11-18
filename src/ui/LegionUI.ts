@@ -34,6 +34,8 @@ export class LegionUI {
   private readonly order: Phaser.GameObjects.Text;
   private readonly orderPlate: Phaser.GameObjects.Graphics;
   private readonly orderHint: Phaser.GameObjects.Text;
+  /** 电脑版军令圆钮（2026-11-17 用户批准 UI 审查 H：与「用药 / 加点」同款圆钮，手绘盾 / 箭图标）。 */
+  private orderIcon?: Phaser.GameObjects.Image; private readonly orderCx = W - 58; private readonly orderCy = H - 104;
   private keyHint?: Phaser.GameObjects.Text;
   /** 护阵 / 出击按键提示（E / 手柄 Ⓨ）。 */
   setKeyHint(label: string): void { this.keyHint?.setText(label); }
@@ -62,8 +64,8 @@ export class LegionUI {
     this.hud = scene.add.container(0, 0).setScrollFactor(0).setDepth(DEPTH.hud + 3);
     this.status = text(28, 115, '', 15).setStroke('#171a13', 2);
     this.orderPlate = scene.add.graphics().setScrollFactor(0);
-    this.order = text(this.orderX, this.orderY, '', D ? 14 : 16).setPadding(32, D ? 6 : 9, 0, 0)
-      .setFixedSize(this.orderW, this.orderH).setInteractive({ useHandCursor: true }).setAlpha(.9)
+    this.order = (D ? text(this.orderCx - 32, this.orderCy - 32, '', 13).setPadding(0, 68, 0, 0).setFixedSize(64, 88).setAlign('center').setStroke('#17140d', 3) : text(this.orderX, this.orderY, '', 16).setPadding(32, 9, 0, 0).setFixedSize(this.orderW, this.orderH))
+      .setInteractive({ useHandCursor: true }).setAlpha(D ? 1 : .9)
       .on('pointerdown', () => { this.orderPlate.setAlpha(.55); order(); })
       .on('pointerup', () => this.orderPlate.setAlpha(.8))
       .on('pointerover', () => this.orderPlate.setAlpha(1))
@@ -71,8 +73,9 @@ export class LegionUI {
     this.orderPlate.setAlpha(.8);
     // 说明行不再显示（军令名已说明含义）；保留对象以免改动其它逻辑
     this.orderHint = text(this.orderX + 32, this.orderY + this.orderH, '', 10).setColor('#acbeb0').setVisible(false);
-    const key = this.keyHint = text(this.orderX + this.orderW - 14, this.orderY + this.orderH / 2, D ? 'E' : '⇄', 10).setColor('#9fa592').setAlpha(.7).setOrigin(.5);
-    this.hud.add([this.status, this.orderPlate, this.order, this.orderHint, key]);
+    const key = this.keyHint = (D ? text(this.orderCx + 26, this.orderCy + 24, 'E', 11).setColor('#e8d3a6').setStroke('#120904', 3) : text(this.orderX + this.orderW - 14, this.orderY + this.orderH / 2, '⇄', 10).setColor('#9fa592')).setAlpha(D ? .9 : .7).setOrigin(.5);
+    if (D && scene.textures.exists('hud_order_guard')) this.orderIcon = scene.add.image(this.orderCx, this.orderCy, 'hud_order_guard').setDisplaySize(40, 40).setScrollFactor(0);
+    this.hud.add([this.status, this.orderPlate, ...(this.orderIcon ? [this.orderIcon] : []), this.order, this.orderHint, key]);
     this.panel = scene.add.container(0, 0).setScrollFactor(0).setDepth(DEPTH.overlay + 1).setVisible(false);
     this.backdrop = scene.add.rectangle(0, 0, W, H, 0x0c0906, 0).setOrigin(0).setScrollFactor(0).setInteractive();
     this.panel.add(this.backdrop);
@@ -307,6 +310,15 @@ export class LegionUI {
     const color = guard ? 0x83c8b3 : 0xe9b777, g = this.orderPlate;
     this.order.setText(ORDERS[army.order]).setColor(guard ? '#ddf3e9' : '#ffdfb4');
     this.orderHint.setText(guard ? '跟随护卫' : '主动迎敌');
+    if (D) { // 圆钮：漆底描金圈 + 手绘图标（护阵盾 / 出击箭），下方军令名
+      const ox = this.orderCx, oy = this.orderCy;
+      g.clear().fillStyle(0x000000, .35).fillCircle(ox, oy + 2, 30).fillStyle(0x1b120b, .95).fillCircle(ox, oy, 29).lineStyle(2.5, guard ? 0xc9a35e : 0xe0a35a, 1).strokeCircle(ox, oy, 29).lineStyle(1, 0xf3d48a, .45).strokeCircle(ox, oy, 24);
+      const tex = guard ? 'hud_order_guard' : 'hud_order_sortie';
+      if (this.orderIcon && this.order.scene.textures.exists(tex)) this.orderIcon.setTexture(tex).setDisplaySize(40, 40);
+      else if (!this.orderIcon) { const cx = ox, cy = oy; g.lineStyle(2, color, .9); if (guard) g.beginPath().moveTo(cx, cy - 10).lineTo(cx + 9, cy - 6).lineTo(cx + 7, cy + 4).lineTo(cx, cy + 10).lineTo(cx - 7, cy + 4).lineTo(cx - 9, cy - 6).closePath().strokePath(); else g.lineBetween(cx - 8, cy + 8, cx + 8, cy - 8).lineBetween(cx, cy - 8, cx + 8, cy - 8).lineBetween(cx + 8, cy - 8, cx + 8, cy); }
+      this.order.setColor(guard ? '#ffe2a4' : '#ffd3a0');
+      return;
+    }
     const r = height / 2, cx = x + 16, cy = y + r;
     g.clear().fillStyle(0x101e19, .5).fillRoundedRect(x, y, width, height, r)
       .lineStyle(1, color, .35).strokeRoundedRect(x, y, width, height, r)

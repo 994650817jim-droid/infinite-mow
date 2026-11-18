@@ -85,7 +85,7 @@ export class CityScene extends Phaser.Scene {
   this.hint=txt(this,D?190:24,D?28:94,'',D?13:12,'#b9d2a8').setOrigin(0,.5).setName('city-hint');
   // 底栏：只有「天下地图」（出征也从天下地图选章节）；功能都在建筑里
   const mapBtn=homeCommand(this,W/2,D?H-28:H-72,D?260:W-60,D?40:52,'天下地图 · 出征',true,true,D?16:17);mapBtn.hit.setName('city-map').on('pointerdown',()=>this.scene.start('WorldMapScene'));
-  if(D)txt(this,24,H-28,'点建筑进入：军营招兵 · 讲武堂科技 · 招贤馆 · 主帐武将谱',12,'#a9b9a2').setOrigin(0,.5).setName('city-tip');
+  // 2026-11-17 UI 审查 K：底栏提示去掉（建筑上已有名牌，点了就进）
   // 营中闲话（剧情 campTalk）：底栏「天下地图」右侧，不挡建筑与出征按钮；按当前章节取一段没看过的
   if(D){const w=loadWorld(),lord=(loadRoster().lord??'liubei') as CharacterId,chapters=!w.cleared?.huangjin?['huangjin']:!w.cleared?.hulao?['hulao','huangjin']:['hulao','huangjin'];
    campTalkStrip(this,W/2+130+16,H-28,W-(W/2+130+16)-24,chapters,{lord,team:()=>[lord,...followersFor(lord).map(r=>r.hero).filter((h):h is CharacterId=>!!h)],recruited:id=>heroOwned(id)},5);}
@@ -378,12 +378,11 @@ export class CityScene extends Phaser.Scene {
  private introSeen():boolean{try{return localStorage.getItem('im_town_intro3')==='1';}catch{return true;}}
  /** 首次进入营寨的简短引导（看过一次后不再弹出）。 */
  private openIntro(){
-  const m=this.modal('town-intro','义军营寨',D?380:450);
+  const m=this.modal('town-intro','义军营寨',D?230:450);
+  // 2026-11-17 UI 审查 K：介绍压成两条（原四条长句）
   const lines=[
-   '◆打仗赢来的只有一种：军粮。建造、研究、招募都花军粮。',
-   '◆点营中的建筑或空地即可建造、升级；拖动画面可查看全营。每打完一仗，农田收一次粮。',
-   '◆讲武堂研究科技：开局带回血药、兵种开局升级、主将更强。',
-   `◆打完第二章可扩建为县城（开放马厩、粮仓）；打完第三章或占领城池后扩建为州府（开放城池发展）。`,
+   '◆ 打仗只得军粮：建造、研究、招募都花军粮；每打完一仗农田收一次粮。',
+   '◆ 点建筑或空地建造、升级；拖动画面看全营。',
   ];
   m.root.add(txt(this,m.x+34,m.y+68,lines.join('\n'),D?14:15,'#e9dcc0').setLineSpacing(10).setWordWrapWidth(m.w-68,true));
   try{localStorage.setItem('im_town_intro3','1');}catch{/* 存储不可用 */}

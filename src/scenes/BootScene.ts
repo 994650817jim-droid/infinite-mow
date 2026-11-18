@@ -72,6 +72,8 @@ export class BootScene extends Phaser.Scene {
     this.load.spritesheet('heal_props','assets/heal-props/heal_props.png',{frameWidth:128,frameHeight:128});
     // 回血药手绘药罐（由 troop-portraits-v2/potion_card.png 缩成 128px）：用药按钮、地上的药、药囊图标；替代程序画的像素药瓶
     this.load.image('potion_jar','assets/heal-props/potion_jar.webp');
+    // 军令圆钮图标（电脑版 HUD「护阵 / 出击」，沿用手绘增益图标）
+    this.load.image('hud_order_guard','assets/upgrade-icons/deflect.webp');this.load.image('hud_order_sortie','assets/upgrade-icons/pursuit.webp');
     this.load.spritesheet('yellow_contact_shadow','assets/processed/yellow/camp-props-contact-shadows-v1.png',{frameWidth:128,frameHeight:128});
     for(const key of ['zhang_bao_altar','zhang_jiao_altar'])this.load.image(key,`assets/processed/yellow/${key}.png`);
     this.load.spritesheet('prop_debris','assets/processed/yellow/prop-debris.png',{frameWidth:96,frameHeight:96});

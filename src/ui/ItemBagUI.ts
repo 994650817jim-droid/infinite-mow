@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { inkSkin } from './HomeCommand';
 import { charmText } from '../data/charms';
 import { gearOwners, ownerName } from '../systems/RosterStore';
 import { DEPTH, FONT, GAME_HEIGHT, GAME_WIDTH, HEADING_FONT, IS_DESKTOP } from '../config';
@@ -86,7 +87,7 @@ export class ItemBagUI {
     if (t.width > bw - 6) t.setScale((bw - 6) / t.width);
     if (!o.disabled) t.setInteractive({ useHandCursor: true }).on('pointerdown', (_p: unknown, _x: unknown, _y: unknown, e?: Phaser.Types.Input.EventData) => { e?.stopPropagation?.(); onClick(); });
     lqHitBox(t, bw, bh);
-    const skin = lqSkin(this.scene, t, t, () => ({ w: bw, h: bh }), { tone: o.active ? 'cinnabar' : 'quiet', on: () => !!o.active, enabled: () => !o.disabled });
+    const skin = (IS_DESKTOP ? inkSkin(this.scene, t, () => ({ w: bw, h: bh }), { active: () => !!o.active, enabled: () => !o.disabled }) : null) ?? lqSkin(this.scene, t, t, () => ({ w: bw, h: bh }), { tone: o.active ? 'cinnabar' : 'quiet', on: () => !!o.active, enabled: () => !o.disabled }); // 电脑版水墨（2026-11-17 UI 审查 N）
     skin.gfx.setScrollFactor(0); parent.addAt(skin.gfx, parent.getIndex(t));
     return t;
   }
@@ -126,7 +127,7 @@ export class ItemBagUI {
     this.text(x0 + 28, y0 + (D ? 18 : 22), '行囊', D ? 26 : 30, '#f2ddae', true);
     const loose = looseCount(s), over = loose > BAG_CAPACITY;
     this.text(x0 + (D ? 100 : 108), y0 + (D ? 28 : 34), `未穿戴 ${loose} / ${BAG_CAPACITY}${over ? ' · 已超出，请分解' : ''}${this.battle ? (this.o.atRest ? ' · 休整中' : ' · 战斗中可换装') : ''}`, 13, over ? '#f08a6a' : '#b9a57a').setName('item-bag-count');
-    this.button(x0 + pw - (D ? 52 : 56), y0 + (D ? 32 : 40), '关闭', 'item-bag-close', () => this.close(), { size: D ? 15 : 17 });
+    this.button(x0 + pw - (D ? 52 : 56), y0 + (D ? 32 : 40), '返回', 'item-bag-close', () => this.close(), { size: D ? 15 : 17 });
     // 旧物（旧档的兵刃挂饰、重复的马）：原样保留，点开可按双倍价分解
     if (s.legacy.length) this.button(x0 + pw - (D ? 170 : 176), y0 + (D ? 32 : 40), `旧物 ${s.legacy.length}`, 'item-legacy', () => this.select('legacy'), { size: D ? 14 : 15 });
 

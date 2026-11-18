@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import {inkSkin} from './HomeCommand';
 import {CHARACTERS} from '../data/characters';
 import {TROOPS,TROOP_KINDS,type TroopKind} from '../data/legion';
 import {CHARACTER_PASSIVES} from '../data/passives';
@@ -19,10 +20,10 @@ export class GameCodex {
   const frame=scene.add.graphics();lqPanel(frame,8,8,W-16,H-16,{shadow:false});this.root.add(frame);
   this.root.add(this.text(W/2,D?40:46,'将士图鉴',28,D?TITLE_FONT:HEADING_FONT).setOrigin(.5).setColor(D?'#efd399':'#f6dc9a').setStroke(D?'#120904':'#2a170b',4));
   this.tabs=['武将','兵种'].map((label,i)=>{const t=this.text(W/2+(i?72:-72),D?76:92,label,18,HEADING_FONT).setOrigin(.5).setInteractive({useHandCursor:true}).setName('codex-tab-'+i).on('pointerdown',()=>{this.tab=i?'troop':'hero';this.index=0;this.render();});
-   const skin=lqSkin(scene,t,t,()=>({w:120,h:38}),{tone:'auto',on:()=>(this.tab==='troop')===(i===1)});lqHitBox(t,120,38);this.root.add([skin.gfx,t]);return skin;});
+   const on=()=>(this.tab==='troop')===(i===1),skin=(D?inkSkin(scene,t,()=>({w:120,h:38}),{active:on}):null)??lqSkin(scene,t,t,()=>({w:120,h:38}),{tone:'auto',on});lqHitBox(t,120,38);this.root.add([skin.gfx,t]);return skin;});
   this.root.add(this.content);
-  const close=this.text(W/2,H-(D?32:40),'返回首页',18,HEADING_FONT).setOrigin(.5).setInteractive({useHandCursor:true}).setName('codex-close').on('pointerdown',()=>this.root.destroy());
-  const cs=lqSkin(scene,close,close,()=>({w:200,h:42}),{tone:'quiet'});lqHitBox(close,200,42);this.root.add([cs.gfx,close]);this.render();
+  const close=this.text(W/2,H-(D?32:40),D?'返回':'返回首页',18,HEADING_FONT).setOrigin(.5).setInteractive({useHandCursor:true}).setName('codex-close').on('pointerdown',()=>this.root.destroy());
+  const cs=(D?inkSkin(scene,close,()=>({w:200,h:42})):null)??lqSkin(scene,close,close,()=>({w:200,h:42}),{tone:'quiet'});lqHitBox(close,200,42);this.root.add([cs.gfx,close]);this.render();
  }
  private tabs:Array<{repaint:(s?:LqState)=>void}>=[];
  private text(x:number,y:number,value:string,size=16,font=FONT){return this.scene.add.text(x,y,value,{fontFamily:font,fontSize:size+'px',color:'#e9d5b0',resolution:2}).setScrollFactor(0);}
@@ -49,7 +50,8 @@ export class GameCodex {
   else{const d=TROOPS[TROOP_KINDS[this.index] as TroopKind];name=d.name+' · 基础Lv.1';body=`生命 ${d.hp}    护甲 ${d.armor}\n每次伤害 ${d.damage}    攻击间隔 ${d.cooldown}秒\n射程 ${d.range}    移速 ${d.speed}\n招募消耗 ${d.cost}军粮\n\n${d.perk}\n\n${['保护前排、格挡普通攻击。','保持刺击距离，优先应对骑兵。','后排射击，优先敌方远程。','后排快速连射，集火威胁目标。','承受前线压力，正面减伤。','短距离突击后回到队伍。','横扫附近敌群。','不主动攻击，优先治疗受伤友军。'][this.index]}\n\n实际战斗属性还会受到训练、武将宝物与主城增益影响。`;}
   const title=this.text(x,y,name,D?20:21,HEADING_FONT).setColor('#f6dc9a').setWordWrapWidth(width,true);this.content.add(title);
   this.content.add(this.text(x,y+title.height+12,body,D?15:16).setLineSpacing(D?5:7).setWordWrapWidth(width,true));
-  if(hero){const sel=this.text(D?x+width/2:W/2,H-(D?82:96),'选择此武将出战',19,HEADING_FONT).setOrigin(.5).setInteractive({useHandCursor:true}).setName('codex-select-hero').on('pointerdown',()=>{this.selectHero(this.index);this.root.destroy();});
+  // 2026-11-17 用户批准 UI 审查 D：主公规则下主公不能换，图鉴只看不选（去掉「选择此武将出战」）
+  if(hero&&!D){const sel=this.text(D?x+width/2:W/2,H-(D?82:96),'选择此武将出战',19,HEADING_FONT).setOrigin(.5).setInteractive({useHandCursor:true}).setName('codex-select-hero').on('pointerdown',()=>{this.selectHero(this.index);this.root.destroy();});
    const sk=lqSkin(this.scene,sel,sel,()=>({w:240,h:46}),{tone:'cinnabar'});lqHitBox(sel,240,46);this.content.add([sk.gfx,sel]);}
  }
 }

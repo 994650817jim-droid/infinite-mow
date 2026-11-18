@@ -16,11 +16,13 @@ for (const layout of ['mobile', 'desktop']) {
   await p.evaluate(G0 => { const s = eval(G0); s.player.damageImmune = true; s.__DEV_ACTIONS.closePopup?.(); s.spawnTimer = s.eliteTimer = 1e9; }, G);
   await p.waitForTimeout(400);
   const hud = await p.evaluate(G0 => { const s = eval(G0), t = s.hudTexts; return { details: t.details.visible, mute: { v: t.mute.visible, text: t.mute.text, x: Math.round(t.mute.x) }, music: { v: t.music.visible, text: t.music.text }, W: s.scale.width / (window.__game.config.zoom || 1) }; }, G);
-  ck(`${layout}：「战况」已隐藏，音效 / 音乐开关常驻`, !hud.details && hud.mute.v && hud.music.v && /^音效:/.test(hud.mute.text) && /^音乐:/.test(hud.music.text), hud);
+  // 2026-11-17 用户「暂停改成设置」：电脑版音效 / 音乐挪进「设置」面板，HUD 上不再显示；手机仍常驻
+  ck(`${layout}：「战况」已隐藏，${layout === 'desktop' ? '音效 / 音乐挪进设置' : '音效 / 音乐开关常驻'}`, !hud.details && (layout === 'desktop' ? !hud.mute.v && !hud.music.v : hud.mute.v && hud.music.v) && /^音效:/.test(hud.mute.text) && /^音乐:/.test(hud.music.text), hud);
   const toggled = await p.evaluate(G0 => { const s = eval(G0), before = s.sfx.muted; s.hudTexts.mute.emit('pointerdown'); const r = { before, after: s.sfx.muted, text: s.hudTexts.mute.text }; s.hudTexts.mute.emit('pointerdown'); return r; }, G);
   ck(`${layout}：点「音效」切换开关并更新文字`, toggled.after !== toggled.before && toggled.text === (toggled.after ? '音效:关' : '音效:开'), toggled);
   const order = await p.evaluate(G0 => { const s = eval(G0), ui = s.legionUI ?? Object.values(s).find(v => v && v.orderPlate && v.order); if (!ui) return null; const before = s.legion.order; ui.order.emit('pointerdown'); ui.order.emit('pointerup'); const after = s.legion.order; return { w: ui.order.width, h: ui.order.height, hint: ui.orderHint.visible, text: ui.order.text, before, after }; }, G);
-  ck(`${layout}：护阵按钮紧凑（≤110×40）、无说明行、可切换军令`, order && order.w <= 110 && order.h <= 40 && !order.hint && order.before !== order.after, order);
+  // 2026-11-17 UI 审查 H：电脑版护阵改成与用药 / 加点同款圆钮（图标 + 下方军令名，命中区 64×88）
+  ck(`${layout}：护阵按钮紧凑（${layout === 'desktop' ? '圆钮 ≤ 70×90' : '≤110×40'}）、无说明行、可切换军令`, order && order.w <= (layout === 'desktop' ? 70 : 110) && order.h <= (layout === 'desktop' ? 90 : 40) && !order.hint && order.before !== order.after, order);
   await p.waitForTimeout(200);
   await p.screenshot({ path: `${out}/${layout}-hud.png` });
   await p.close();

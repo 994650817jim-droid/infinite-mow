@@ -1,9 +1,8 @@
 import Phaser from 'phaser';
 import { DEPTH, GAME_HEIGHT, GAME_WIDTH, HEADING_FONT, actorDepth } from '../config';
 import { SKILL_FX } from './SkillFxSheets';
-import { HORSE_V2, RIDE } from './HeroMount';
+import { HORSE_V2, RIDE, RIDE_DIR_LIFT } from './HeroMount';
 import { ART_V2_FILES, regridV2 } from './ArtStyle';
-import { RIDE_SEAT } from './BossMount';
 import type { ActorSpec, CutStep, CutsceneScript, Dir, Ease, Pos, Pose } from '../data/cutscenes/types';
 
 /**
@@ -42,7 +41,6 @@ interface Actor {
 interface Task { update(cdt: number, rdt: number): boolean; end?(): void }
 
 const DIRS: Dir[] = ['down', 'left', 'right', 'up'];
-/** 骑者跨坐（与战斗里首领骑马同一组值，见 BossMount.RIDE_SEAT）。 */
 const HORSE_KEY: Record<string, string> = { chitu: 'horse_v2_chitu_walk', wuzhui: 'horse_v2_wuzhui_walk', jueying: 'horse_v2_jueying_walk', dawan: 'horse_v2_dawan_walk', generic: 'horse_v2_generic_walk' };
 const ease = (e: Ease | undefined, k: number): number => e === 'linear' ? k : e === 'quad' ? k * k : e === 'out' ? 1 - (1 - k) * (1 - k) : .5 - Math.cos(Math.PI * k) / 2;
 
@@ -246,12 +244,11 @@ export class Cutscene {
     const depth = actorDepth(a.y);
     if (sp.kind === 'ride' && a.main && a.main.texture.key.startsWith('ride_v2_boss_')) {
       const row = a.pose === 'attack' ? 4 + di : di, fr = a.pose === 'fall' ? 32 + Math.min(3, f) : a.pose === 'attack' ? row * 4 + Math.min(3, f) : a.pose === 'ride' || a.pose === 'walk' ? row * 4 + Math.floor((this.ct - a.poseAt) / 90) % 4 : row * 4;
-      // 跨坐：首领骑乘图第一批是站姿（腿画到脚），整张放上去像「站在马上」。裁到大腿根（seat），髋部压在鞍上，腿藏在马身后；
-      // 跟着马步起伏（马蹄落地那帧沉一点）。坠马行不裁。
+      // 骑者对马：与战斗里首领骑马（BossMount，美术会话 774f41d）同一算法——整张骑乘帧，脚底对到马镫高、朝镜头 / 背对再抬（RIDE_DIR_LIFT）；
+      // 另外跟着马步起伏（马蹄落地那帧沉一点）。坠马行脚底着地。
       const moving = a.pose === 'ride' || a.pose === 'walk', step = moving ? Math.floor((this.ct - a.poseAt) / 80) % 4 : 0, bob = moving ? [0, -3, -1, -4][step] : 0;
-      const seat = sp.kind === 'ride' ? sp.seat ?? RIDE_SEAT.seat : RIDE_SEAT.seat, rise = sp.kind === 'ride' ? sp.rise ?? RIDE_SEAT.rise : RIDE_SEAT.rise;
-      if (a.pose === 'fall') a.main.setFrame(fr).setCrop().setOrigin(.5, RIDE.foot / RIDE.cell).setPosition(a.x, a.y);
-      else a.main.setFrame(fr).setCrop(0, 0, RIDE.cell, seat).setOrigin(.5, seat / RIDE.cell).setPosition(a.x, a.y - rise + bob);
+      if (a.pose === 'fall') a.main.setFrame(fr).setOrigin(.5, RIDE.foot / RIDE.cell).setPosition(a.x, a.y);
+      else a.main.setFrame(fr).setOrigin(.5, (RIDE.foot + (RIDE.stirrup + (RIDE_DIR_LIFT[a.dir] ?? 0)) / RIDE.scale) / RIDE.cell).setPosition(a.x, a.y + bob);
       a.main.setDepth(depth + .01);
     } else if (a.main) {
       const moving = a.pose === 'ride' || a.pose === 'walk', i = moving ? Math.floor((this.ct - a.poseAt) / 110) % 4 : 0;

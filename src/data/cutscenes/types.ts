@@ -15,7 +15,7 @@ export interface Cond { hero?: string }
 /** 演员外观。 */
 export type ActorSpec =
   /** 首领骑乘图（public/assets/ride-v2/boss_<rider>_ride.png，4×9）+ v2 名马（horses-v2）。 */
-  | { kind: 'ride'; rider: string; horse: 'chitu' | 'wuzhui' | 'jueying' | 'dawan' | 'generic'; /** 跨坐：大腿根行（格内像素）、髋部离地高度。 */ seat?: number; rise?: number }
+  | { kind: 'ride'; rider: string; horse: 'chitu' | 'wuzhui' | 'jueying' | 'dawan' | 'generic' }
   /** 按方向命名帧的图集（'left_0' … 'up_3'，如 boss_lubu、武将行走图）。scale / foot（脚底在帧高的比例）。 */
   | { kind: 'sheet'; tex: string; scale: number; foot: number; attack?: string }
   /** 只有一张图（立绘、道具）。 */

@@ -220,3 +220,7 @@ assets/raw/*
 !/tools/test-camp-ambush.mjs
 !/tools/test-cutscene.mjs
 !/tools/record-cutscene.mjs
+!/tools/test-recall-speed.mjs
+
+# 三选一节奏测量（2026-11-17 levelup-pace）
+!/tools/measure-levelup-pace.mjs

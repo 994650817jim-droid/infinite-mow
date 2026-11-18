@@ -4,7 +4,7 @@ import { chromium } from 'playwright';
 import { mkdirSync, readdirSync, renameSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 const base = process.env.BASE ?? 'http://127.0.0.1:5173/', ID = process.env.ID ?? 'lubu_kills_dongzhuo', HERO = process.env.HERO ?? '';
-const NAME = ID + (HERO ? '-' + HERO : ''), out = 'assets/review/cutscene', vid = `${out}/video-${NAME}`;
+const NAME = ID + (HERO ? '-' + HERO : '') + (process.env.SUFFIX ? '-' + process.env.SUFFIX : ''), out = 'assets/review/cutscene', vid = `${out}/video-${NAME}`;
 mkdirSync(vid, { recursive: true });
 const b = await chromium.launch({ channel: 'chrome', headless: true });
 const ctx = await b.newContext({ viewport: { width: 1280, height: 720 }, recordVideo: { dir: vid, size: { width: 1280, height: 720 } } });

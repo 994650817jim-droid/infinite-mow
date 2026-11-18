@@ -12,7 +12,7 @@ import { FACTIONS } from '../world/WorldCities';
 import { QUALITIES } from '../data/items';
 import { CHARACTERS, getCharacter } from '../data/characters';
 import { RANK, RECRUIT, TEMPLATES, TEMPLATE_ORDER, type FollowerTemplate } from '../data/recruits';
-import { LORD_LEVEL_HINT, followerLevel, followerLevelCap, hallInTown, hallLevel, dismiss, followerCap, loadRoster, manualRefresh, rankBonus, rankCap, rankUp, recruit, refreshCost, toggleFollower, upgradeHall, type Offer, type Recruit } from '../systems/RosterStore';
+import { LORD_LEVEL_HINT, followerLevel, hallOdds, followerLevelCap, hallInTown, hallLevel, dismiss, followerCap, loadRoster, manualRefresh, rankBonus, rankCap, rankUp, recruit, refreshCost, toggleFollower, upgradeHall, type Offer, type Recruit } from '../systems/RosterStore';
 import { attrBadge } from '../ui/AttrBadge';
 
 /** 普通招募武将（内部 kind = 'common'）对玩家显示的称呼（用户 2026-11-17：不叫「大众脸」，改三国风；候选 无名之辈 / 偏裨之将 / 庸碌之将，待用户定）。 */
@@ -70,8 +70,9 @@ export class TalentHallScene extends Phaser.Scene {
     if (this.tab === 'offers') {
       const list: Array<{ o: Offer; i: number; captive: boolean }> = [...s.offers.map((o, i) => ({ o, i, captive: false })), ...s.captives.map((o, i) => ({ o, i, captive: true }))];
       for (const it of list) rows.push(() => this.offerRow(it.o, it.i, it.captive, at(), rowH - 8));
-      const cost = refreshCost(s), left = RECRUIT.pity - s.dry;
-      this.content.add(worldText(this, 24, bottom + 6, `换季自动刷新 · 再刷 ${Math.max(1, left + 1)} 次内必出未归附名将`, 12, '#b9ceb8'));
+      // 名将出现率（用户 2026-11-17：Lv1 基本不出名将，升级招贤馆后提高）
+      const cost = refreshCost(s), odds = hallOdds(s), pct = (v: number) => `${+(v * 100).toFixed(1)}%`;
+      this.content.add(worldText(this, 24, bottom + 6, `名将出现率：每席 ${pct(odds.seat)}（可玩名将 ${pct(odds.hero)}）` + (odds.pity ? ` · 再刷 ${odds.pityLeft} 次内必出未归附名将` : ' · 升级招贤馆后提高'), 12, '#b9ceb8').setName('talent-odds'));
       this.small(W - (D ? 110 : 100), bottom + 14, D ? 190 : 170, `刷新（${cost} 军粮）`, () => { this.message = manualRefresh().message; this.page = 0; this.render(); }, 'talent-refresh', w.provisions >= cost, true);
     } else {
       for (const r of s.owned) rows.push(() => this.rosterRow(r, s.lord === r.hero, s.followers.includes(r.id), at(), rowH - 8, rankCap(s)));

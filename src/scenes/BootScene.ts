@@ -202,6 +202,8 @@ export class BootScene extends Phaser.Scene {
     // 武将小特效手绘图集（2026-11-17 Gemini 出图，6×3 每帧 256，透明底叠加）：侍婢刀光 / 刘备仁德金光 / 诸葛亮火星聚拢；替换像素 sun_maid_slash（旧文件保留不再加载）与程序画光圈、火星
     this.load.spritesheet('hero_small_paint', 'assets/hero-fx/hero_small_paint.png', { frameWidth: 256, frameHeight: 256 });
     this.load.spritesheet('flame_burst', 'assets/flame-banner/flame_burst.png', { frameWidth: 256, frameHeight: 256 });
+    // 诸葛亮七星灯 · 天火手绘序列帧（2026-11-18 Gemini 黑底出图，tools/build-zhuge-tianhuo-fx.mjs）：8×3 每帧 256（星位 / 天火落下 / 八阵图）+ 东风火龙横条 6 帧 512×128
+    this.load.spritesheet('zhuge_tianhuo', 'assets/hero-fx/zhuge_tianhuo.png', { frameWidth: 256, frameHeight: 256 }); this.load.spritesheet('zhuge_eastwind', 'assets/hero-fx/zhuge_eastwind.png', { frameWidth: 512, frameHeight: 128 });
     this.load.image('portrait_zhuge', 'assets/processed/portrait_zhuge.png');
     this.load.image('spear_thrust', 'assets/processed/spear_thrust.png');
     this.load.spritesheet('guandao_slash_sheet', 'assets/processed/guandao_slash_sheet.png', { frameWidth: 256, frameHeight: 256 });

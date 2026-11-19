@@ -183,6 +183,7 @@ assets/raw/*
 !/tools/shot-camp-pano.mjs
 !/tools/test-camp-mount.mjs
 !/tools/prepare-camp-hay.mjs
+!/tools/steam-assets.mjs
 !/tools/test-jingnan-art.mjs
 !/tools/test-hanzhong-art.mjs
 !/tools/test-yiling-full.mjs
@@ -266,3 +267,4 @@ assets/raw/*
 !/tools/shot-wall-seal.mjs
 !/tools/test-boss-crowd.mjs
 !/tools/test-follower-obstacles.mjs
+!/tools/test-siege-large-flow.mjs

@@ -36,8 +36,8 @@ const ROLES = ['游龙先锋 · 灵动突刺', '重甲武圣 · 横扫千军', '
 const PASSIVE_HINTS = [
   '命中积攒龙胆，满七层强化下一次龙枪。',
   '横斩命中怪群蓄势，强化斩击范围与伤害。',
-  '连续三秒不受伤，提升暴击并追加弩箭。',
-  '战旗命中怪群积谋，强化爆炸并附加灼烧。',
+  '重箭命中积蓄势，满五层进入神射。',
+  '天火连击同一目标积星象，第四发算无遗策。',
 ];
 interface ChapterCard { id: ChapterId; bg: Phaser.GameObjects.Rectangle; name: Phaser.GameObjects.Text; tag: Phaser.GameObjects.Text; hint: Phaser.GameObjects.Text; decor: Phaser.GameObjects.Graphics; }
 interface HeroCard { bg: Phaser.GameObjects.Rectangle; icon: Phaser.GameObjects.Image; badge: Phaser.GameObjects.Text; decor: Phaser.GameObjects.Graphics; }

@@ -81,6 +81,9 @@ export class Enemy {
   stunUntil = 0;
   martialSlow = 1;
   martialSlowUntil = 0;
+  /** 首领出招间隔倍率与截止（诸葛亮八阵图 3 级；ArcBossV2 系首领在 toIdle 时读）。 */
+  gapSlowMul = 1;
+  gapSlowUntil = 0;
 
   flashUntil = 0;
   /** 受击后仰（打击感 2026-11-17）：压扁结束时间与强度 0–1 */
@@ -120,7 +123,7 @@ export class Enemy {
     this.def = grow !== 1 ? { ...def, radius: def.radius * grow } : def;
     def = this.def;
     this.kind = def.kind;
-    this.martialSlow=1;this.martialSlowUntil=0;
+    this.martialSlow=1;this.martialSlowUntil=0;this.gapSlowMul=1;this.gapSlowUntil=0;
     this.spawnId = (Enemy.spawnSeq += 1);
     this.hp = Math.round(def.hp * hpScale);
     this.shieldHp = this.shieldMax = 0;

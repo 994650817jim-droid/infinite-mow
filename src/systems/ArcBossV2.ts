@@ -69,7 +69,7 @@ export abstract class ArcBossV2<M extends string> implements ArcController {
     return e;
   }
   protected toRecover(now: number, ms: number): void { this.beat.set(this.beat.move, 'recover', now, ms); this.kit.recover(now, ms); this.state = 'recover'; }
-  protected toIdle(now: number, gap: number): void { this.beat.set(null, 'idle', now, 0); this.state = 'approach'; this.next = now + gap; }
+  protected toIdle(now: number, gap: number): void { const b = this.h.boss; this.beat.set(null, 'idle', now, 0); this.state = 'approach'; this.next = now + gap * (now < b.gapSlowUntil ? b.gapSlowMul : 1); } // 八阵图 3 级：阵内首领出招间隔变长
 
   defeat(): void {
     this.state = 'dead'; this.gfx.clear(); const b = this.h.boss;

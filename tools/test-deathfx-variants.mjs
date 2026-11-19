@@ -63,7 +63,7 @@ const r2 = await p.evaluate(() => {
   // 马
   for (const h of fx.horses) { h.active = false; h.img.setVisible(false); }
   const cv = s.spawnEnemy('cavalry', s.player.x + 140, s.player.y, 1, true); cv.speed = 0; cv.hp = 0; s.killEnemy(cv);
-  const body = fx.pool.find(x => x.active), horse = fx.horses.find(x => x.active), hx = horse.x; fx.update(horse.start + 500);
+  const body = fx.pool.find(x => x.active), horse = fx.horses.find(x => x.active), hx = horse.x; fx.update(horse.start + 1000);
   out.horseKey = fx.horseKey; out.horseTex = horse.img.texture.key; out.tinted = horse.img.isTinted; out.horseOpp = Math.sign(horse.img.x - hx) === -body.dir && horse.dir === -body.dir; out.horseFar = Math.abs(horse.img.x - hx) > 120; out.horseFrame = horse.img.frame.name;
   fx.update(horse.start + 1700 - 250); out.horseFading = horse.img.alpha > 0 && horse.img.alpha < 1; fx.update(horse.start + 1710); out.horseGone = !horse.active;
   return out;
@@ -72,6 +72,35 @@ ck('兵器：抛物线甩出（有弧度、旋转、朝倒下方向），落地�
 ck('头巾：飘起 40px 左右、中途开始淡出、0.95 秒后消失', r2.turbanUp && r2.turbanA < 1 && r2.turbanGone, r2);
 ck('盾牌：先倒地（平躺 1.45 弧度）再扬起一圈小尘土，之后淡出', !r2.dustEarly && r2.dustLate && r2.shieldFlat && r2.shieldGone, r2);
 ck('骑兵：用专属暗橄榄褐战马图（不乘色），沿「人倒下方向的反方向」跑出去（跑了 120px 以上、换跑步帧）、1.7 秒内淡出消失', r2.horseKey === 'horse_v2_enemy_brown_walk' && r2.horseTex === 'horse_v2_enemy_brown_walk' && !r2.tinted && r2.horseOpp && r2.horseFar && /^(left|right)_\d$/.test(r2.horseFrame) && r2.horseFading && r2.horseGone, r2);
+
+// —— 2b) 马的奔跑动画（2026-11-18 用户：「马跑走是平移」）：先受惊（原地扬头小跳）→ 加速起跑 → 腿按距离换帧 → 上下起伏 + 自己的阴影 → 淡出 ——
+const horseRun = async key => p.evaluate(async key => {
+  const s = window.__game.scene.getScene('GameScene'), fx = s.deathFx, out = { key }; for (const h of fx.horses) { h.active = false; h.img.setVisible(false); h.shadow.setVisible(false); }
+  const cv = s.spawnEnemy('cavalry', s.player.x + 200, s.player.y, 1, true); cv.speed = 0; cv.hp = 0; cv.lastHitHeavy = false; cv.lastHitFromAlly = false; s.killEnemy(cv);
+  const body = fx.pool.find(x => x.active), h = fx.horses.find(x => x.active), x0 = h.x, y0 = h.y, T0 = h.start; out.texture = h.img.texture.key; out.tinted = h.img.isTinted; out.shadowVisible = h.shadow.visible;
+  // 受惊：0–240ms 原地（x 不动）、第 0 帧、扬头旋转 ≥ 0.2 弧度
+  fx.update(T0 + 100); out.startle = { x: h.img.x - x0, frame: h.img.frame.name, rot: Math.abs(h.img.rotation), hop: h.img.y - y0 };
+  // 加速：每 10ms 采样，记录位置、帧名、朝向；全速（≥ 700ms）后统计换帧间隔
+  const xs = [], frames = [], bobs = [], shadowYs = []; let last = null, changes = [];
+  for (let t = 250; t <= 1500; t += 10) { fx.update(T0 + t); xs.push(h.img.x - x0); const fr = h.img.frame.name; frames.push(fr); if (t >= 700) { bobs.push(h.img.y - h.shadow.y); shadowYs.push(h.shadow.y - (h.y + 1 + h.vy * Math.max(0, t - 240) / 1000)); if (fr !== last) { changes.push(t); last = fr; } } }
+  out.mono = xs.every((v, i) => i === 0 || (h.dir > 0 ? v >= xs[i - 1] - 1e-6 : v <= xs[i - 1] + 1e-6)); out.dist = Math.abs(xs[xs.length - 1]); out.distinct = new Set(frames).size;
+  const gaps = changes.slice(1).map((v, i) => v - changes[i]); out.gapMin = Math.min(...gaps); out.gapMax = Math.max(...gaps); out.bobRange = Math.max(...bobs) - Math.min(...bobs); out.shadowRange = Math.max(...shadowYs) - Math.min(...shadowYs);
+  out.dirOk = Math.sign(xs[xs.length - 1]) === h.dir && h.dir === -body.dir; out.faceOk = frames.every(n => n.startsWith(h.dir < 0 ? 'left_' : 'right_'));
+  // 慢速段（起跑时）换帧比全速慢：250–400ms 内最多换 1–2 次，全速后每 ~80ms 一次
+  const early = frames.slice(0, 15), earlyChanges = early.filter((v, i) => i && v !== early[i - 1]).length; out.earlyChanges = earlyChanges;
+  fx.update(T0 + 1700 - 250); out.fading = h.img.alpha < 1 && h.shadow.alpha < .5 && h.shadow.alpha > 0; fx.update(T0 + 1710); out.gone = !h.active && !h.img.visible && !h.shadow.visible;
+  return out; }, key);
+const rb = await horseRun('brown');
+ck('马的奔跑（专属棕马）：先受惊原地扬头（x 不动、第 0 帧、旋转 ≥ 0.2）；之后只往一个方向加速跑、朝向与移动方向一致、腿换满 4 个帧；全速后每 70–95ms 换一帧；上下起伏 ≥ 2px、阴影贴地不起伏；淡出时阴影同淡、播完全隐藏',
+  rb.texture === 'horse_v2_enemy_brown_walk' && !rb.tinted && rb.shadowVisible && Math.abs(rb.startle.x) < .01 && rb.startle.frame.endsWith('_0') && rb.startle.rot >= .2 && rb.mono && rb.dirOk && rb.faceOk && rb.distinct === 4 && rb.gapMin >= 70 && rb.gapMax <= 95 && rb.bobRange >= 2 && rb.shadowRange < .01 && rb.earlyChanges <= 3 && rb.fading && rb.gone, rb);
+// 通用马兜底：把专属图拿掉、临时载入通用白马图，同一套动画
+const rg = await p.evaluate(async () => {
+  const s = window.__game.scene.getScene('GameScene'), m = await window.__mod('/src/systems/ArtStyle.ts'), key = 'horse_v2_generic_walk';
+  if (!s.textures.exists(key)) await new Promise(r => { s.load.image(key, m.ART_V2_FILES[key]); s.load.once('filecomplete-image-' + key, () => { m.regridV2(s, key); r(); }); s.load.start(); });
+  s.textures.remove('horse_v2_enemy_brown_walk'); return { key: s.deathFx.horseKey, has: s.textures.get(key).has('left_3') };
+});
+const rg2 = await horseRun('generic');
+ck('马的奔跑（通用白马兜底，乘色）：专属图缺失时同一套动画照常（换满 4 帧、朝向与方向一致、起伏 + 阴影）', rg.key === 'horse_v2_generic_walk' && rg.has && rg2.texture === 'horse_v2_generic_walk' && rg2.tinted && rg2.mono && rg2.dirOk && rg2.faceOk && rg2.distinct === 4 && rg2.gapMin >= 70 && rg2.gapMax <= 95 && rg2.bobRange >= 2 && rg2.shadowRange < .01 && rg2.gone, { ...rg, ...rg2 });
 
 // —— 3) 重击击飞：暴击 / 马超冲锋 / 张飞大喝 → 击飞 40–70px，落地处扬尘；普通击杀不击飞 ——
 const r3 = await p.evaluate(() => {

@@ -3,7 +3,7 @@
 // 慢放：SLOW=0.3（devTimeScale）；录视频：VIDEO=1（再用 ffmpeg 做 GIF）。需要开发服务器。
 import { chromium } from 'playwright';
 import { mkdirSync } from 'node:fs';
-const E = process.env, BASE = E.BASE ?? 'http://127.0.0.1:5260/', OUT = E.OUT ?? 'assets/review/boss-theme', SLOW = +(E.SLOW ?? 1);
+const E = process.env, BASE = E.BASE ?? 'http://127.0.0.1:5260/', OUT = E.OUT ?? 'assets/review/boss-theme', SLOW = +(E.SLOW ?? 1), STEP = +(E.STEP ?? 200), NSHOT = +(E.NSHOT ?? 12);
 mkdirSync(OUT, { recursive: true });
 const CASES = {
   zhangliang: { scene: 'GameScene', run: { chapter: 'huangjin', stage: 1 }, reg: {}, ctl: 'moveset' },
@@ -44,8 +44,7 @@ try {
     await ev((s, sc) => { s.devTimeScale = sc; }, SLOW);
     for (const i of (MOVES.length ? MOVES : names.map((_, k) => k))) {
       await ev((s, [k, i0]) => { const b = s.boss; b.sprite.x = s.player.x + 200; b.sprite.y = s.player.y; s.player.damageImmune = true; s[k].debug.force(i0, s.combatNow); }, [c.ctl, i]);
-      const clip = await ev(s => { const cam = s.cameras.main, cv = s.game.canvas.getBoundingClientRect(), k = cv.width / cam.width; const px = (s.player.x + s.boss.x) / 2, py = (s.player.y + s.boss.y) / 2; return { x: Math.round(cv.left + (px - 300 - cam.worldView.x) * cam.zoom * k), y: Math.round(cv.top + (py - 170 - cam.worldView.y) * cam.zoom * k), w: Math.round(600 * k), h: Math.round(340 * k) }; });
-      for (let n = 0; n < 7; n++) { await p.waitForTimeout(Math.round(((names[i] && /冲|突|奔|追|袭/.test(names[i])) ? 380 : 330) / SLOW)); await p.screenshot({ path: `${OUT}/${id}-m${i}-${n}.png`, clip: { x: Math.max(0, clip.x), y: Math.max(0, clip.y), width: Math.min(clip.w, 1280), height: Math.min(clip.h, 720) } }); }
+      for (let n = 0; n < NSHOT; n++) { await p.waitForTimeout(Math.round(STEP / SLOW)); await p.screenshot({ path: `${OUT}/${id}-m${i}-${n}.png`, clip: { x: 300, y: 190, width: 700, height: 340 } }); }
       await p.waitForTimeout(1500 / SLOW);
     }
   }

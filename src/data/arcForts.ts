@@ -14,6 +14,7 @@ export interface ArcFort { kind: FortKind; gate?: readonly [string, string]; end
 export const ARC_FORTS: Record<string, ArcFort> = {
   // 场景 1（孤城门）
   'qunxiong.1': { kind: 'city', gate: ['长安城门洞开', '李傕率亲卫杀出城来'] },
+  'qunxiong.3': { kind: 'clear' }, // 3-3 寿春：城墙由有边场地（data/stageMaps）画在北边，场地中间原来的孤城门去掉
   'chibi.1': { kind: 'clear' },
   'jingnan.1': { kind: 'city', gate: ['桂阳城门洞开', '赵范率亲卫出城迎战'] },
   'hanzhong.1': { kind: 'pass', gate: ['阳平关门洞开', '张郃率亲卫杀出关来'] },

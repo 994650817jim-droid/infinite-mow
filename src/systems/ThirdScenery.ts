@@ -82,7 +82,7 @@ export function thirdScenery(scene:Phaser.Scene,stage:SceneryStage,spawnProp?:(f
  if(fort){/* 关墙 / 城门由 SishuiPass 画，或本关去掉城门 */}
  else if(stage===1){place(0,0,-280,300);for(const x of[-250,250])place(1,x,-265,126);}
  if(stage===2){for(const x of[-145,145])place(7,x,-65,72);scene.add.rectangle(0,0,4000,4000,0x091526,.12).setDepth(18);}
- if(stage===3)place(0,0,-300,230);
+ if(stage===3&&!fort)place(0,0,-300,230); // 有 ARC_FORTS 项（关墙 / 城门另画，或 clear 去掉城门）时不放孤城门（3-3 寿春：城墙由有边场地画）
  if(stage===4&&!fort){place(0,0,-300,320);for(const x of[-270,270])place(1,x,-285,130);}
  if(stage===4)for(const x of[-150,150])place(7,x,140,70);
  const boxes=fort?[]:stage===1?[{left:-125,right:125,top:-340,bottom:-285},...[-250,250].map(x=>({left:x-34,right:x+34,top:-300,bottom:-265}))]:stage===3?[{left:-85,right:85,top:-345,bottom:-305}]:stage===4?[{left:-135,right:135,top:-365,bottom:-305},...[-270,270].map(x=>({left:x-36,right:x+36,top:-320,bottom:-285}))]:[];

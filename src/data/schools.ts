@@ -1,7 +1,7 @@
 /**
  * 战法六大流派（2026-11-19 用户：「我想重做流派系统…太没用了，也没什么联动」→ 设计稿 tactic-schools-redesign.md，用户「流派同意」）。
  * - 流派：火攻 / 奇谋 / 弓弩 / 骑突 / 猛将 / 兵阵，每派 4 个战法（data/builds.ts TACTICS 的 tag）。
- * - 「势」= 本派战法等级之和 + 武将亲和（第一亲和派开局 +1）+ 随行（每名按兵种 +1，最多 +2）+ 机制类信物（每件 +1）+ 橙色名马（骑突 +1）。
+ * - 「势」= 本派战法等级之和 + 武将亲和（第一亲和派开局 +1）+ 随行（按兵种 +1，最多 +1）+ 机制类信物（每件 +1）+ 橙色名马（骑突 +1）。
  * - 档位：2 势加成、4 势新机制（数值在 SCHOOL_TIER）；6 势觉醒、合击在第 2 期接（AWAKEN / COMBOS）。
  * 数值为开发期初值，平衡会话再调。
  */
@@ -28,7 +28,7 @@ export const SCHOOLS: Readonly<Record<SchoolId, SchoolDef>> = {
   cavalry: { name: '骑突', short: '骑', color: 0xc89a3a, css: '#e6be5e', icon: 'build_icon_school_cavalry', fantasy: '跑起来就强、冲撞、击退',
     tiers: { 2: { name: '疾驰', desc: '移速 +10%，冲势攒得快 50%' }, 4: { name: '冲阵', desc: '攒满冲势的一击震退一圈，周围敌人吃 50% 溅射' }, 6: { name: '单骑突阵', desc: '觉醒：铁骑幻影沿朝向横扫一条长线，冲锋中无敌' } } },
   warrior: { name: '猛将', short: '猛', color: 0xa62a2a, css: '#d85a4a', icon: 'build_icon_school_warrior', fantasy: '连击叠层、重击震荡、越打越猛',
-    tiers: { 2: { name: '鏖战', desc: '连打同一敌人每次 +2%，最多 8 层' }, 4: { name: '震荡', desc: '每第 6 次命中放一圈冲击波：震退、眩晕 0.3 秒' }, 6: { name: '横扫千军', desc: '觉醒：连续猛攻后进入狂斗，攻速大增、每击带冲击波' } } },
+    tiers: { 2: { name: '鏖战', desc: '连打同一敌人每次 +2%，最多 8 层' }, 4: { name: '震荡', desc: '每第 6 次命中放一圈冲击波（至少隔 1.2 秒）：震退、眩晕 0.3 秒' }, 6: { name: '横扫千军', desc: '觉醒：连续猛攻后进入狂斗，攻速大增、每击带冲击波' } } },
   formation: { name: '兵阵', short: '阵', color: 0x8a6a3a, css: '#c8a46a', icon: 'build_icon_school_formation', fantasy: '部曲、随行、召兵、护阵',
     tiers: { 2: { name: '军势', desc: '部曲 / 随行伤害 +15%、受伤 -10%' }, 4: { name: '援军', desc: '每 12 秒从后方冲来 3 名义军助战 10 秒' }, 6: { name: '铁壁军阵', desc: '觉醒：全军结阵无敌并嘲讽，随后一起冲杀' } } },
 };
@@ -43,7 +43,7 @@ export const SCHOOL_TIER = {
   stratagem: { slowAdd: .10, controlledTaken: .10, stunEvery: 3, stunMs: 600 },
   archery: { crit: .08, critDmg: .20, sunder: .15, sunderMs: 3000, splashRatio: .4, splashR: 70 },
   cavalry: { move: .10, chargeGain: 1.5, ringR: 85, push: 42, splash: .5, targets: 4 },
-  warrior: { stackPct: .02, stackCap: 8, every: 6, r: 90, ratio: .3, targets: 5, stunMs: 300, push: 30 },
+  warrior: { stackPct: .02, stackCap: 8, every: 6, minGapMs: 1200, r: 90, ratio: .3, targets: 5, stunMs: 300, push: 30 },
   formation: { allyDmg: .15, allyTaken: .10, everyMs: 12000, n: 3, lifeMs: 10000 },
 } as const;
 
@@ -58,7 +58,7 @@ export const HERO_AFFINITY: Readonly<Record<CharacterId, readonly SchoolId[]>> =
 export function heroAffinity(hero: string): readonly SchoolId[] { return (HERO_AFFINITY as Record<string, readonly SchoolId[]>)[hero] ?? []; }
 /** 随行按兵种算势（每名 +1，全部随行合计最多 followerCap）。 */
 export const FOLLOWER_SCHOOL: Readonly<Record<FollowerTemplate, SchoolId>> = { blade: 'warrior', spear: 'formation', bow: 'archery', strategist: 'stratagem' };
-export const SHI_SOURCES = { affinityStart: 1, followerCap: 2, orangeMount: 1 } as const;
+export const SHI_SOURCES = { affinityStart: 1, followerCap: 1, orangeMount: 1 } as const;
 
 /** 三选一：每张战法卡权重 1 + min(weightMax, 势 × weightPer)，亲和派再 × affinityWeight；有一派到 specialtyAt 势后，两张战法卡里必有一张是势最高那派的。 */
 export const OFFER = { weightPer: .3, weightMax: 2, affinityWeight: 1.5, specialtyAt: 2, tacticCards: 2 } as const;

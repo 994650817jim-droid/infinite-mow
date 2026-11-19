@@ -1,6 +1,7 @@
 import {rollMerchantGear,type ItemInstance} from '../data/items';
 import {TACTICS,type TacticId} from '../data/builds';
 import {rollMerchantTactic,type CampOffer} from './CampMarket';
+import {SCHOOL_IDS} from '../data/schools';
 
 /**
  * 军需商人的货架（2026-11-18）：行营休整与义军营寨「旅商」是同一个商人、同一份货。
@@ -11,7 +12,7 @@ import {rollMerchantTactic,type CampOffer} from './CampMarket';
  */
 export interface MerchantStock {key: string; items: ItemInstance[]; sold: boolean[]; tactic: CampOffer | null;}
 /** 判定战法卷轴用的构筑（本局构筑 RunBuild，或营寨里读出的征程构筑，见 campaignTacticBook）。 */
-export interface TacticBook {canLearn(id: TacticId): boolean; level(id: TacticId): number;}
+export interface TacticBook {canLearn(id: TacticId): boolean; level(id: TacticId): number; manualsRead?(): readonly import('../data/schools').SchoolId[];}
 
 const KEY = 'im_merchant_v1';
 let memo: MerchantStock | null = null; // 本页内唯一的一份（行营与营寨拿到的是同一个对象，任一边买了另一边立刻看到）；刷新页面后从存储读回
@@ -19,7 +20,7 @@ let memo: MerchantStock | null = null; // 本页内唯一的一份（行营与�
 function valid(v: unknown): v is MerchantStock {
   const s = v as MerchantStock;
   return !!s && typeof s.key === 'string' && Array.isArray(s.items) && Array.isArray(s.sold) && s.items.length === s.sold.length
-    && (s.tactic === null || (!!s.tactic && s.tactic.id in TACTICS && Number.isFinite(s.tactic.price)));
+    && (s.tactic === null || (!!s.tactic && Number.isFinite(s.tactic.price) && (s.tactic.kind === 'manual' ? SCHOOL_IDS.includes(s.tactic.school) : s.tactic.id in TACTICS)));
 }
 function read(): MerchantStock | null {
   if (memo) return memo;

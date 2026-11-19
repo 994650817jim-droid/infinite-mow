@@ -36,11 +36,11 @@ ck('合击：火攻 2 势 + 弓弩 1 势不生效，两派都到 2 势「火箭�
 
 // 2. 实战：六派都 4 势（15 个合击全生效），学火种 / 疾风 / 绊阵 / 连环 / 鹰眼 / 蓄势冲锋，主将半血（背水一战），打 16 秒
 await ev(s => { const b = s.player.growth.build; b.tactics = {}; for (const id of ['ember', 'ember', 'ember', 'gust', 'snare', 'chain', 'eagle', 'stored_edge']) b.learn(id);
-  b.bonus = { fire: 3, stratagem: 3, archery: 3, cavalry: 3, warrior: 4, formation: 4 }; b.bonusNotes = {}; s.player.hp = s.player.maxHp * .4; return true; });
+  b.bonus = { fire: 3, stratagem: 3, archery: 3, cavalry: 3, warrior: 4, formation: 4 }; b.bonusNotes = {}; s.player.hp = s.player.maxHp * .3; return true; });
 const seenBanners = new Set();
 for (let i = 0; i < 16; i++) {
   await ev((s, i) => { s.buildCombat.movement(260); s.buildCombat.update(s.combatNow); // 烈马：同一帧里先动再结算（真实对局每帧都是这样）
-    if (i % 4 === 2) for (const e of s.enemies) if (e.active && !e.isSupplySlot && Math.hypot(e.x - s.player.x, e.y - s.player.y) < 300) s.buildCombat.igniteDerived(e, 2, s.combatNow); // 让震荡多打到燃烧的敌人（爆燃） s.player.hp = Math.min(s.player.hp, s.player.maxHp * .45); s.debugCrit = i % 3 === 0 ? true : null;
+    if (i % 4 === 2) for (const e of s.enemies) if (e.active && !e.isSupplySlot && Math.hypot(e.x - s.player.x, e.y - s.player.y) < 300) s.buildCombat.igniteDerived(e, 2, s.combatNow); // 让震荡多打到燃烧的敌人（爆燃） s.player.hp = Math.min(s.player.hp, s.player.maxHp * .35); s.debugCrit = i % 3 === 0 ? true : null;
     window.crowd(s, 130);
     // 万军取首：冲势满时打一个精锐（临时把一个敌人当精锐打）
     if (i === 5) { const e = s.enemies.find(e => e.active && !e.isSupplySlot && e.kind === 'infantry'); if (e) { s.buildCombat.distances.charge = 999; const k = e.kind; e.kind = 'elite'; s.buildCombat.damage(e, 10, false, s.combatNow); e.kind = k; } }
@@ -63,7 +63,9 @@ await ev(s => { const b = s.player.growth.build; b.bonus = { fire: 6, stratagem:
 const aw = {};
 // 火烧连天：火浪扫过之后，屏上的普通敌人在烧；截图一张
 await ev(s => { window.crowd(s, 300); window.__hp0 = s.enemies.filter(e => e.active && !e.isSupplySlot).reduce((a, e) => a + e.hp, 0); s.synergy.force('fire'); return true; });
-await p.waitForTimeout(700); await p.screenshot({ path: `${OUT}/awaken-fire.png` }); await p.waitForTimeout(900);
+await p.waitForTimeout(700); await p.screenshot({ path: `${OUT}/awaken-fire.png` }); const liveFire = await ev(s => s.children.list.filter(o => o.name === 'awaken-fire').length); await p.waitForTimeout(900);
+const art = await ev(s => ({ tex: ['fire', 'stratagem', 'archery', 'cavalry', 'warrior', 'formation'].every(k => s.textures.exists('fx_awaken_' + k) && s.textures.exists('build_icon_school_' + k)) && ['fx_gust_band', 'school_banner_combo', 'school_banner_awaken', 'build_icon_napalm', 'build_icon_gust'].every(k => s.textures.exists(k)), banner: s.children.list.filter(o => o.name === 'school-banner').map(o => o.list.find(c => c.name === 'school-banner-title')?.text) }));
+ck('第 3 期美术：六派觉醒序列帧、徽印、风带、横幅、火油罐 / 疾风图标都已加载；火浪用手绘火墙帧；觉醒打横幅', art.tex && liveFire >= 3 && art.banner.some(t => /觉醒 · 火烧连天/.test(t ?? '')), { ...art, liveFire });
 aw.fire = await ev(s => ({ hits: s.synergy.stats.hits.fire ?? 0, burning: s.enemies.filter(e => e.active && !e.isSupplySlot && s.buildCombat.isBurning(e, s.combatNow)).length, boost: s.buildCombat.burnBoost.until > s.combatNow }));
 ck('觉醒「火烧连天」：火浪扫过全屏，打到 3 个以上敌人（活下来的着火），之后灼烧更痛', aw.fire.hits >= 3 && aw.fire.boost, aw.fire);
 aw.strat = await ev(s => { window.crowd(s, 120); s.synergy.force('stratagem'); return true; }).then(() => p.waitForTimeout(1200)).then(() => ev(s => ({ stunned: s.enemies.filter(e => e.active && e.stunUntil > s.combatNow).length, fields: s.synergy.fields.length })));

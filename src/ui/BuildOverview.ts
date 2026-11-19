@@ -211,22 +211,23 @@ export function drawBuildOverview(o: BuildOverviewOpts): void {
   // ── 右：六大流派的势 + 下一步（2026-11-19 流派重做）──
   {
     frame(R.x, R.y, R.w, R.h);
-    const pad = 10, rowH = D ? 30 : 34, nameW = 34, barW = R.w - pad * 2 - nameW - 46, sw = barW / 6;
+    const pad = 10, rowH = D ? 30 : 34, sealW = 22, nameW = 34, barW = R.w - pad * 2 - sealW - nameW - 46, sw = barW / 6;
     text(R.x + pad, R.y + 7, '流派 · 势', 15, '#f6dc9a', true);
     text(R.x + R.w - pad, R.y + 10, '2 / 4 / 6 势各一档', 11, '#a8956c').setOrigin(1, 0);
     let y = R.y + 32;
     for (const t of TAG_ORDER) {
       const n = tags[t], st = TAG_STYLE[t], d = SCHOOLS[t], tier = tierOf(n), src = b.sources(t), notes = b.bonusNotes[t] ?? [];
-      text(R.x + pad, y - 1, d.name, 12, n ? st.css : '#8e7f62', true);
-      const bx = R.x + pad + nameW;
+      icon(R.x + pad + 9, y + 6, d.icon, 20); // 流派徽印（第 3 期）
+      text(R.x + pad + sealW, y - 1, d.name, 12, n ? st.css : '#8e7f62', true);
+      const bx = R.x + pad + sealW + nameW;
       for (let k = 0; k < 6; k++) g0.fillStyle(k < n ? st.color : 0x3a2c1c, k < n ? 1 : .85).fillRect(bx + k * sw + .5, y + 3, sw - 2, 8);
       for (const m of [2, 4]) g0.lineStyle(1, 0xf3d48a, .8).lineBetween(bx + m * sw - 1, y + 1, bx + m * sw - 1, y + 13);
       text(bx + barW + 4, y - 1, '势 ' + n, 12, tier ? '#f3d48a' : '#d8c8a4').setName(P + '-tag-' + t);
       const reached = TIER_STEPS.filter(x => n >= x).map(x => d.tiers[x].name).join(' · ');
       text(bx, y + 13, reached || ('2 势：' + d.tiers[2].name), 10, reached ? st.css : '#8e7f62').setName(P + '-tag-tier-' + t);
-      const srcLine = [src.tactics ? '战法 ' + src.tactics : '', src.treasures ? '信物 ' + src.treasures : '', src.extra ? '信物 ' + src.extra : '', ...notes].filter(Boolean).join('、') || '还没有';
+      const srcLine = [src.tactics ? '战法 ' + src.tactics : '', src.treasures ? '信物 ' + src.treasures : '', src.extra ? '信物 ' + src.extra : '', src.manual ? '心法 1' : '', ...notes].filter(Boolean).join('、') || '还没有';
       hot(R.x + pad, y - 2, R.w - pad * 2, rowH, P + '-tag-hit-' + t, () => ({ title: `〔${d.name}〕 势 ${n}`, sub: d.fantasy,
-        body: TIER_STEPS.map(x => `${n >= x ? '✓' : '○'} ${x} 势 · ${d.tiers[x].name}：${d.tiers[x].desc}`).join('\n') + `\n\n势的来源：${srcLine}\n学本派战法、或升级本派战法，每级 +1 势；亲和武将、随行兵种、机制类信物、橙色名马也给势。`, color: st.color, icon: d.icon }));
+        body: TIER_STEPS.map(x => `${n >= x ? '✓' : '○'} ${x} 势 · ${d.tiers[x].name}：${d.tiers[x].desc}`).join('\n') + `\n\n势的来源：${srcLine}\n学本派战法、或升级本派战法，每级 +1 势；亲和武将、随行兵种、机制类信物、橙色名马、军需商人的「流派心法」也给势。`, color: st.color, icon: d.icon }));
       y += rowH;
     }
     // 下一步：势最高、还没到 6 的那派，下一档是什么

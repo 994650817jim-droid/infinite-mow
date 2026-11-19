@@ -6,6 +6,7 @@ import { statsWithoutCharms } from './CharmEffects';
 import { addItems, pushItemNotice } from './ItemStore';
 import { RunGrowth } from './RunGrowth';
 import type { CharacterId } from '../data/characters';
+import type { SchoolId } from '../data/schools';
 import type { PlayerStats, WeaponState } from '../types';
 import type { Player } from '../entities/Player';
 import type { Legion, LegionState } from './Legion';
@@ -47,18 +48,23 @@ export function patchCampaignHp(hero: CharacterId, hpFrac: number, followerHp?: 
   try { const v = JSON.parse(localStorage.getItem(CAMPAIGN_KEY) ?? 'null'); const s = v?.heroes?.[hero]; if (!s?.player) return; s.player.hpFrac = Math.max(0, Math.min(1, hpFrac)); if (followerHp) s.player.followerHp = { ...(s.player.followerHp ?? {}), ...followerHp }; localStorage.setItem(CAMPAIGN_KEY, JSON.stringify(v)); } catch { /* 存储不可用 */ }
 }
 /** 行营军需商人买了战法：把存档点里的战法与随军粮一并改掉（同 patchCampaignHp，存档点在买之前）。 */
-export function patchCampaignTactics(hero: CharacterId, tactics: Record<string, number>, food: number): void {
-  try { const v = JSON.parse(localStorage.getItem(CAMPAIGN_KEY) ?? 'null'); const s = v?.heroes?.[hero]; if (!s?.player || !s.army) return; s.player.build = { ...(s.player.build ?? {}), tactics: { ...tactics } }; s.army.food = food; localStorage.setItem(CAMPAIGN_KEY, JSON.stringify(v)); } catch { /* 存储不可用 */ }
+export function patchCampaignTactics(hero: CharacterId, tactics: Record<string, number>, food: number, manuals?: readonly string[]): void {
+  try { const v = JSON.parse(localStorage.getItem(CAMPAIGN_KEY) ?? 'null'); const s = v?.heroes?.[hero]; if (!s?.player || !s.army) return; s.player.build = { ...(s.player.build ?? {}), tactics: { ...tactics }, ...(manuals ? { manuals: [...manuals] } : {}) }; s.army.food = food; localStorage.setItem(CAMPAIGN_KEY, JSON.stringify(v)); } catch { /* 存储不可用 */ }
 }
 /**
  * 营寨旅商（军需商人在营寨里摆的摊）卖战法：不在战斗里，买下的写进该武将的征程构筑（下次从存档点出征时带上）。
  * 规则同 RunBuild：最多 6 种、每种到 3 级。没有征程构筑（还没打赢过主线关）时返回 null，商人卷轴不能买。
  */
-export function campaignTacticBook(hero: CharacterId): { canLearn(id: TacticId): boolean; level(id: TacticId): number } | null {
+export function campaignTacticBook(hero: CharacterId): { canLearn(id: TacticId): boolean; level(id: TacticId): number; manualsRead(): readonly SchoolId[] } | null {
   const s = loadCampaignBuild(hero); if (!s) return null;
   // 同 BuildState（2026-11-19 流派重做）：读档丢掉已删除的旧 id；基础成长不占战法格；反震不再出卡
   const b = new BuildState(); b.restore(s.player.build);
-  return { level: id => b.level(id), canLearn: id => b.canLearn(id) };
+  return { level: id => b.level(id), canLearn: id => b.canLearn(id), manualsRead: () => b.manuals };
+}
+/** 营寨旅商卖的「流派心法」：写进征程构筑（下次出征生效）；没有征程构筑或已研读过返回 false。 */
+export function learnCampaignManual(hero: CharacterId, school: SchoolId): boolean {
+  const book = campaignTacticBook(hero); if (!book || book.manualsRead().includes(school)) return false;
+  try { const v = JSON.parse(localStorage.getItem(CAMPAIGN_KEY) ?? 'null'); const s = v?.heroes?.[hero]; if (!s?.player) return false; s.player.build = { ...(s.player.build ?? { tactics: {} }), manuals: [...book.manualsRead(), school] }; localStorage.setItem(CAMPAIGN_KEY, JSON.stringify(v)); return true; } catch { return false; }
 }
 /** 把一卷战法学进征程构筑：等级须与卷轴标的一致（买前没在别处升过），成功返回 true。 */
 export function learnCampaignTactic(hero: CharacterId, id: TacticId, fromLevel: number): boolean {

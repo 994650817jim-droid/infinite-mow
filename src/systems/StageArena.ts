@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { drawSidePalisade, sideWallReady, whenSideWallReady } from './SideWall';
 import { actorDepth, DEPTH } from '../config';
 import { ARENA, type StageMapDef, type Pt } from '../data/stageMaps';
 import { FACTION_PROPS } from './PropsV2';
@@ -73,7 +74,13 @@ export class StageArena {
         for (const h of d.openings?.[dir] ?? []) img(h, y + 6, propKey, 0, 250);
       } else {
         const x = dir === 'w' ? b.left - 100 : b.right + 100;
-        for (let y = b.top + 20, k = 0; y <= b.bottom + 70; y += 72, k++) if (!isHole(dir, y)) img(x + (k % 2 ? 8 : -8), y, propKey, 3, 180, dir === 'e');
+        const oldRow = () => { for (let y = b.top + 20, k = 0; y <= b.bottom + 70; y += 72, k++) if (!isHole(dir, y)) img(x + (k % 2 ? 8 : -8), y, propKey, 3, 180, dir === 'e'); };
+        // 新营栅（SideWall.ts 侧墙套件的竖排木桩）：开口两侧各一段；缺图退回原来的单桩排
+        whenSideWallReady(sc, () => {
+          if (sc.sys.settings.status >= Phaser.Scenes.SHUTDOWN) return; if (!sideWallReady(sc)) { oldRow(); return; }
+          const holes = (d.openings?.[dir] ?? []).slice().sort((p, q) => p - q); let y0 = b.top - 30;
+          for (const h of [...holes, Infinity]) { const y1 = Math.min(b.bottom + 100, h - G / 2); if (y1 > y0 + 20) this.objs.push(...drawSidePalisade(sc, { x, y0, y1, flip: dir === 'e', name: 'arena-edge' })); y0 = h + G / 2; }
+        });
         for (const h of d.openings?.[dir] ?? []) img(x + (dir === 'w' ? 30 : -30), h + 70, propKey, 0, 230);
       }
     };

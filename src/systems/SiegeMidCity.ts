@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { drawSideWall, sideWallReady } from './SideWall';
 import { actorDepth, DEPTH } from '../config';
 import { MID_SIEGE as M, LARGE_SIEGE as L, SIEGE_PROFILES, SIEGE_SPAWN, ramStats, type MidSiegePhase, type RamStats, type SiegeProfile } from '../data/siegeMedium';
 import { SIEGE_CITY, CITY_ART, CITY_FX, POINT_BUILDING, cityBuildingBox, type CityLayout, type CityBuildingKind, type CityPointKind } from '../data/siegeCity';
@@ -242,14 +243,8 @@ export class SiegeMidCity {
       const rowXs = (): number[] => { const L0 = a.left - 34, R0 = a.right + 34, n = Math.ceil((R0 - L0) / (W - 26)); return Array.from({ length: n }, (_, i) => L0 + (R0 - L0) * (i + .5) / n); };
       for (const x of rowXs()) if (Math.abs(x - B.innerGate.x) > 150) this.art(x, wallH, [ART.barb, 2], [ART.walls, 0], W);
       for (const x of rowXs()) if (Math.abs(x - B.cx) > 150) this.art(x, a.bottom + 64, [ART.barb, 2], [ART.walls, 0], W);
-      // 侧墙：侧墙段图上下两头是斜的（帧内 y 163–283 这一段左右边才是直的），原来整张竖叠、每节错开成锯齿。
-      // 改为只取直的那一段竖向拼接（步长 = 这段的显示高度），最上一节保留斜顶、最下一节保留墙脚；同一列 x 对齐。
-      { const size = 220, k = size / 384, band0 = 163, band1 = 283, step = (band1 - band0) * k, y0 = a.top + 120, y1 = a.bottom + 64, n = Math.max(2, Math.ceil((y1 - y0) / step));
-        for (const x of [a.left - 34, a.right + 34]) for (let i = 0; i < n; i++) {
-          const y = y0 + i * step + (384 - band1) * k, top = i === 0 ? 19 : band0, bot = i === n - 1 ? 365 : band1;
-          const im = this.art(x, y, [ART.barb, 4], [ART.walls, 5], size).setFlipX(x > B.cx);
-          if (this.has(ART.barb)) im.setCrop(0, top, 384, bot - top);
-        } }
+      // 侧墙：新侧墙套件（SideWall.ts，俯视 3/4 的竖向墙段 + 南端墙脚收口），上端压在角楼底下
+      for (const x of [a.left - 34, a.right + 34]) this.sideWall(x, a.top + 60, a.bottom + 64, x > B.cx);
       for (const [x, y] of [[a.left - 34, a.top + 60], [a.right + 34, a.top + 60], [a.left - 34, a.bottom + 80], [a.right + 34, a.bottom + 80]]) this.art(x, y, [ART.barb, 3], [ART.walls, 5], 210);
       this.art(B.cx, a.bottom + 70, [ART.barb, 0], [ART.walls, 1], 290);
       this.barbGateImg = this.art(B.innerGate.x, a.top + 50, [ART.barb, 0], [ART.hall, 4], 300);
@@ -399,12 +394,10 @@ export class SiegeMidCity {
    * 只取直的那一段竖向拼接，最上一节留斜顶、最下一节留墙脚（同 W7 瓮城侧墙的做法）。y0 = 第一节直段的下沿，y1 = 墙脚。缺图退回墩台竖排。
    */
   private sideWall(x: number, y0: number, y1: number, flip: boolean) {
-    const size = 220, k = size / 384, band0 = 163, band1 = 283, step = (band1 - band0) * k, n = Math.max(2, Math.ceil((y1 - y0) / step));
-    if (!this.has(ART.barb)) { for (let y = y0 + 60; y < y1 + 40; y += 150) this.art(x, y, [ART.barb, 4], [ART.walls, 5], size).setFlipX(flip); return; }
-    for (let i = 0; i < n; i++) {
-      const y = y0 + i * step + (384 - band1) * k, top = i === 0 ? 19 : band0, bot = i === n - 1 ? 365 : band1;
-      this.art(x, y, [ART.barb, 4], [ART.walls, 5], size).setFlipX(flip).setCrop(0, top, 384, bot - top);
-    }
+    const sc = this.h.scene;
+    if (sideWallReady(sc)) { this.objects.push(...drawSideWall(sc, { x, y0: y0 - 60, y1, flip, south: 'cap', name: 'siege-sidewall' })); return; }
+    // 缺图退回墩台竖排
+    for (let y = y0 + 60; y < y1 + 40; y += 150) this.art(x, y, [ART.barb, 4], [ART.walls, 5], 220).setFlipX(flip);
   }
   private hallWalls(a: { left: number; right: number; top: number; bottom: number }) {
     for (const x of [a.left, a.right]) { this.art(x, a.top + 70, [ART.barb, 3], [ART.walls, 5], 230); this.art(x, a.bottom + 50, [ART.barb, 3], [ART.walls, 5], 210); }

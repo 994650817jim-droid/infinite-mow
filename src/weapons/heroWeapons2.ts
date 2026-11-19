@@ -49,9 +49,9 @@ function shove(e: Enemy, ux: number, uy: number, dist: number): void {
 // ───────────────────────── 黄忠 · 宝雕弓（百步穿杨重箭狙击） ─────────────────────────
 export const BAODIAO_DEF = {
   id: 'baodiao_bow' as const, name: '宝雕弓', maxLevel: 5,
-  damage: (level: number, stats: PlayerStats) => [70, 80, 92, 105, 120][lv(level)] * stats.damageMul * stats.arrowMul,
+  damage: (level: number, stats: PlayerStats) => [80, 92, 106, 121, 138][lv(level)] * stats.damageMul * stats.arrowMul, // 2026-11-18 平衡：+15%（原 70 / 80 / 92 / 105 / 120）
   cooldown: (level: number, stats: PlayerStats) => [2.2, 2.1, 2.0, 1.9, 1.8][lv(level)] * stats.cooldownMul,
-  desc: '向远处最强的敌人射出重箭，单体重创并击退；首领、精锐优先',
+  desc: '向远处最强的敌人射出重箭，重创并击退，再穿透身后 2 人；首领、精锐优先',
 };
 interface HeavyArrow { img: Phaser.GameObjects.Image; target: Enemy; spawn: number; damage: number; burst: boolean; pierce: number; hit: Set<number>; ux: number; uy: number; left: number; trail?: Phaser.GameObjects.Sprite; }
 const ARROWS = new WeakMap<Player, HeavyArrow[]>();
@@ -112,7 +112,7 @@ export function baodiaoBehavior(host: WeaponHost, weapon: WeaponState, dt: numbe
   if (sharpNow && !st.wasSharp) { hzFx(host, HZFX.enter, pl.x, pl.y + 4, 150, 14, 'huangzhong-sharp-enter', 0, pl); if (g.masteries.jingxin >= 3) st.fanReady = true; }
   if (!sharpNow) st.fanReady = false;
   st.wasSharp = sharpNow;
-  // 飞行中的重箭：追向目标，命中单体（穿杨 3 级再穿 1 人）
+  // 飞行中的重箭：追向目标，命中锁定目标后再穿 R.heavyPierce 人（每穿一人伤害 ×R.heavyPierceMul）
   for (let i = list.length - 1; i >= 0; i--) {
     const a = list[i];
     if (a.target.active && a.target.spawnId === a.spawn && !a.hit.has(a.spawn)) { const d = Math.hypot(a.target.x - a.img.x, a.target.y - a.img.y) || 1; a.ux = (a.target.x - a.img.x) / d; a.uy = (a.target.y - a.img.y) / d; }
@@ -139,6 +139,7 @@ export function baodiaoBehavior(host: WeaponHost, weapon: WeaponState, dt: numbe
         ring.scene.tweens.add({ targets: ring, radius: (R.heavyBurstRadius * host.player.passive.rangeMultiplier('baodiao_bow')), alpha: 0, duration: 300, onComplete: () => ring.destroy() }); }
       }
       if (a.pierce-- <= 0) { a.left = 0; break; }
+      a.damage *= R.heavyPierceMul;
     }
     if (a.left <= 0 || host.over) { a.img.destroy(); a.trail?.destroy(); list.splice(i, 1); }
   }
@@ -156,7 +157,7 @@ export function baodiaoBehavior(host: WeaponHost, weapon: WeaponState, dt: numbe
   // 神射箭带金色拖光（像素帧）
   const trail = (): Phaser.GameObjects.Sprite | undefined => { const t = sharp ? hzFx(host, HZFX.trail, pl.x, pl.y - 10, 90, 18, 'huangzhong-trail', 1500) : null; return t?.setDisplaySize(96, 40) ?? undefined; };
   list.push({ img: host.add.image(pl.x, pl.y - 10, arrowTexture(host)).setDisplaySize(58, 15).setDepth(41).setName('huangzhong-heavy-arrow').setBlendMode(sharp ? 1 : 0),
-    target, spawn: target.spawnId, damage, burst: sharp, pierce: 0, hit: new Set(), ux: ux / d, uy: uy / d, left: R.heavyArrowRange + 120, trail: trail() });
+    target, spawn: target.spawnId, damage, burst: sharp, pierce: R.heavyPierce, hit: new Set(), ux: ux / d, uy: uy / d, left: R.heavyArrowRange + 120, trail: trail() });
   // 静心 3 级：进入神射后的第一箭化为扇形三连重箭（两侧各一支，每支 70%、都带爆裂；两侧箭不追踪，打路上的敌人）
   if (sharp && st.fanReady) {
     st.fanReady = false;

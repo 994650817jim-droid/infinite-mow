@@ -30,7 +30,7 @@ async function open(hero) {
 for (const hero of HEROES) {
   const p = await open(hero);
   if (hero === 'huangzhong') {
-    // 1) 不挨打、重箭命中 5 次进入神射（旧规则下「5 秒不受伤」也会进，这里先确认光站着不会进）
+    // 1) 不挨打、重箭命中 4 次进入神射（旧规则下「5 秒不受伤」也会进，这里先确认光站着不会进）
     const r1 = await p.evaluate(async ([G0, MK0, C]) => {
       const s = eval(G0), pl = s.player, mk = eval(MK0), wait = ms => new Promise(r => setTimeout(r, ms)); pl.damageImmune = true;
       eval(C); const w = pl.weapons[0]; w.cooldownLeft = 1e9; await wait(6000); const idleSharp = pl.passive.isSharpshooter(s.combatNow);
@@ -43,7 +43,7 @@ for (const hero of HEROES) {
       return { idleSharp, seen, enteredAt: Math.round(enteredAt), label, enterFx, keptAfterHurt, sharpLasted: Math.round(s.combatNow - t1) };
     }, [G, MK, CLEAR]);
     ck('黄忠：光站着不挨打 6 秒不会进入神射（不再看不受伤时间）', r1.idleSharp === false, r1);
-    ck('黄忠：重箭命中逐层积蓄势 1→5，满 5 层进入神射（金光、HUD 文案「神射 x秒」）', r1.enteredAt > 0 && [1, 2, 3, 4].every(k => r1.seen.includes(k)) && r1.enterFx && /神射 \d/.test(r1.label), r1);
+    ck('黄忠：重箭命中逐层积蓄势 1→4，满 4 层进入神射（金光、HUD 文案「神射 x秒」；2026-11-18 平衡 5 → 4）', r1.enteredAt > 0 && [1, 2, 3].every(k => r1.seen.includes(k)) && r1.enterFx && /神射 \d/.test(r1.label), r1);
     ck('黄忠：神射约 6 秒，期间受伤不退出', r1.keptAfterHurt && r1.sharpLasted >= 5600 && r1.sharpLasted <= 6500, r1);
     // 2) 真实挨打：受伤只掉 1 层（每 0.5 秒最多 1 层），不清零
     const r2 = await p.evaluate(async ([G0, MK0, C]) => {

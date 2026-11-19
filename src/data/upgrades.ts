@@ -15,7 +15,7 @@ export const WEAPON_META: Record<WeaponId, { name: string; desc: string }> = {
   zhenbei_blade: { name: '镇北环首刀', desc: '朝敌群重劈，地面裂开直线冲击波，穿透全部敌人；贴身伤害更高' },
   lianhuan_mines: { name: '凤雏连环令', desc: '边走边在脚下落火雷，雷与雷之间拉起烧红的铁索：碰到铁索的敌人减速，踩雷引爆并连环引爆附近的雷' },
   sun_knives: { name: '弓腰姬飞刀', desc: '身边环绕飞刀割伤近敌，并不断掷出飞刀穿透远敌；移动中掷得更快' },
-  baodiao_bow: { name: '宝雕弓', desc: '向远处最强的敌人射出重箭，单体重创并击退；首领、精锐优先' },
+  baodiao_bow: { name: '宝雕弓', desc: '向远处最强的敌人射出重箭，重创并击退，再穿透身后 2 人；首领、精锐优先' },
   dangyang_roar: { name: '丈八蛇矛·当阳喝断', desc: '朝前大喝，越推越宽的弧形声浪向前推进，伤害并一路推后敌人' },
   zhanjin_lance: { name: '虎头湛金枪', desc: '一枪把敌人挑飞，落地时砸出范围伤害；铁骑满层后向前冲锋破阵' },
   shuanggu_swords: { name: '双股剑', desc: '双剑同时出手，分别在两名敌人身上斩出「×」形交叉斩；仁德满层时攻速提高' },

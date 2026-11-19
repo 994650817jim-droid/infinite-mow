@@ -23,9 +23,9 @@ export const MID_SIEGE = {
   /** 冲车（用户 2026-11-17：「冲车开局送就够了后面可以升级科技」）：每场开局送一台；主将在护送半径内才前进；被敌兵围攻、被箭雨波及；
    *  毁了回营地重领，有冷却。耐久 / 撞门速度 / 撞门伤害 / 冷却 / 备用台数按「攻城器械等级」加成（SIEGE_ENGINE_LEVELS，现在默认 0 级）。 */
   ram: {
-    hp: 520, speed: 34, escortRadius: 200, hitEveryMs: 1500, gateDamage: 95, // 待平衡会话复核
+    hp: 800, speed: 34, escortRadius: 200, hitEveryMs: 1500, gateDamage: 95, // 2026-11-18 平衡：hp 520 → 800（tools/probe-siege-ram.mjs：大城挂机 / 护送都要毁 1～2 台，九成伤害来自敌兵近身）
     respawnMs: 8000, // 毁后重领冷却（营地显示倒计时）· 待平衡会话复核
-    enemyAggroRadius: 230, contactDamageMul: 1.3, contactCdMs: 800, // 敌兵优先打冲车（一半敌兵）；原 1.6 · 待平衡会话复核
+    enemyAggroRadius: 230, contactDamageMul: 1, contactCdMs: 800, // 敌兵优先打冲车（一半敌兵）；原 1.6 → 1.3 → 1（2026-11-18 平衡：配合 hp 800，大城 6 局冲车 0 台被毁、到门时只剩 60～130 血）
     /** 蒙皮顶棚（用户 11-17「敌方弓手射我方冲车，感觉冲车一下被射烂」）：普通箭（城头箭雨）对冲车只吃 25%；每次受击后 0.5 秒免伤，齐射不会瞬间打爆。 */
     arrowMul: .25, guardMs: 500,
     /** 火箭：冲车掉到 hpGate 以下后，瞄冲车的那一处箭雨有 chance 换成火箭（地面火焰预警）；中了起火 burnMs 持续掉血，主将站到旁边 putOutRadius 内扑灭。 */

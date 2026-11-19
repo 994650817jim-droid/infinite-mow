@@ -14,7 +14,11 @@ import { GameScene } from './scenes/GameScene';
 import { CityRecruitScene } from './scenes/CityRecruitScene';
 import { TownScene } from './scenes/TownScene';
 import { CityScene } from './scenes/CityScene';
-import { WorldMapScene } from './scenes/WorldMapScene';
+import { WorldMapScene as WorldMapSceneV2 } from './scenes/WorldMapScene';
+import { WorldMapSceneV1 } from './scenes/WorldMapSceneV1';
+import { WORLD_MAP_VERSION } from './world/RouteMap';
+/** 天下地图：缺省旧版 V1（2026-11-19 用户要求先用回 V1 上线），?map=v2 切到「征途」路线图。两版键名都是 'WorldMapScene'。 */
+const WorldMapScene = WORLD_MAP_VERSION === 'v2' ? WorldMapSceneV2 : WorldMapSceneV1;
 import { MenuScene } from './scenes/MenuScene';
 import { OpeningScene } from './scenes/OpeningScene';
 import { installGamepad } from './ui/PadNavigator';

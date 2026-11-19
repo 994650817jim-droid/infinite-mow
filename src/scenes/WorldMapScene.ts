@@ -32,7 +32,7 @@ type Btn = { image: Phaser.GameObjects.Rectangle; text: Phaser.GameObjects.Text;
 
 const RT = 'assets/world/route/';
 /** 征途美术件（ChatGPT 出图，tools/prepare-route-art.py 去底切件）。 */
-const ART = ['medal_open', 'medal_cleared', 'medal_locked', 'medal_boss', 'city_enemy', 'city_own', 'city_alert', 'camp', 'pennant_intel', 'pennant_challenge', 'banner_next', 'seal_hard', 'road_done', 'road_todo', 'road_branch', 'foot_1', 'cloud_sea', 'cloud_wall', 'cloud_a', 'cloud_b', 'cloud_c', 'cloud_d'] as const;
+const ART = ['medal_open', 'medal_cleared', 'medal_locked', 'medal_boss', 'city_enemy', 'city_own', 'city_alert', 'camp', 'pennant_intel', 'pennant_challenge', 'banner_next', 'seal_hard', 'road_done', 'road_todo', 'road_branch', 'foot_1', 'brush', 'cloud_sea', 'cloud_wall', 'cloud_a', 'cloud_b', 'cloud_c', 'cloud_d'] as const;
 const MAP_W = 1536, MAP_H = 1024, TILE_N = 3;
 /** 镜头三档（相对铺满视口的最小缩放）：全图 / 章节 / 近看。 */
 export const ZOOM_TIERS = [1, 2.6, 4] as const;
@@ -61,6 +61,13 @@ export class WorldMapScene extends Phaser.Scene {
   private pointer = { x: 0, y: 0, down: false, moved: 0 }; private pinch = 0; private pinching = false;
   private modal?: Phaser.GameObjects.Container;
   private desktop = true;
+  /** 第 2 期动效：本次新露出的点（上次进地图时还没露出）——路线描画、迷雾散开、节点浮现。 */
+  fresh = new Set<string>();
+  private fogRT?: Phaser.GameObjects.RenderTexture;
+  private drawIns: Array<{ rope: Phaser.GameObjects.Rope; pts: Phaser.Math.Vector2[]; feet: Phaser.GameObjects.Image[] }> = [];
+  private arrow?: Phaser.GameObjects.Container;
+  /** 测试用：动效计数。 */
+  readonly fx = { drawn: 0, holes: 0, popped: 0 };
 
   constructor() { super('WorldMapScene'); }
 
@@ -88,6 +95,12 @@ export class WorldMapScene extends Phaser.Scene {
     if (this.desktop) { this.panelBox = { x: W - 322, y: top + 6, w: 314, h: H - top - 14 }; this.area = { x: 8, y: top + 4, w: W - 322 - 16, h: H - top - 4 - strip - 8 }; }
     else { this.panelBox = { x: 10, y: H - 300, w: W - 20, h: 292 }; this.area = { x: 10, y: top, w: W - 20, h: H - top - 300 - strip - 10 }; }
 
+    // 新露出的点：和上次进地图时记下的对比（只是界面记忆，存在 im_route_seen_v1，不进存档）；第一次进地图不播
+    this.fresh = new Set(); this.drawIns = []; this.fogRT = undefined; this.arrow = undefined; this.fx.drawn = this.fx.holes = this.fx.popped = 0;
+    { const KEY = 'im_route_seen_v1', vis = [...this.view.vis].filter(([, v]) => v !== 'hidden').map(([id]) => id); let prev: Set<string> | null = null;
+      try { const v = JSON.parse(localStorage.getItem(KEY) ?? 'null'); if (Array.isArray(v)) prev = new Set(v as string[]); } catch { /* 存储不可用 */ }
+      if (prev) for (const id of vis) if (!prev.has(id) && id !== 'camp') this.fresh.add(id);
+      try { localStorage.setItem(KEY, JSON.stringify(vis)); } catch { /* 存储不可用 */ } }
     this.buildMap();
     this.buildTopBar(s);
     this.buildPanel();
@@ -110,7 +123,55 @@ export class WorldMapScene extends Phaser.Scene {
     if (advance || lost.length) this.showNotice(advance, lost);
     const captured = !test && this.owned.includes(capId) ? cityById(capId) : undefined;
     if (captured) this.playCapture(captured);
+    this.buildArrow();
+    if (this.fresh.size) this.later(450, () => this.playReveal());
     this.updateTiles();
+  }
+
+  /** 新露出的点：路线由毛笔描过去、迷雾从中心散开、节点浮现（约 1.3 秒）。 */
+  private playReveal() {
+    for (const d of this.drawIns) {
+      const n = d.pts.length, brush = this.textures.exists('rt_brush') ? this.add.image(d.pts[0].x, d.pts[0].y, 'rt_brush').setOrigin(.15, .85).setDisplaySize(26, 30).setName('route-brush') : undefined;
+      if (brush) this.layer.add(brush);
+      const st = { t: 0 }, alphas = new Array(n).fill(0);
+      this.tweens.add({ targets: st, t: 1, duration: 900, ease: 'Sine.easeInOut', onUpdate: () => { const k = Math.floor(st.t * (n - 1)); for (let i = 0; i <= k; i++) alphas[i] = 1; d.rope.setAlphas(alphas); brush?.setPosition(d.pts[k].x, d.pts[k].y); },
+        onComplete: () => { d.rope.setAlphas(1); this.fx.drawn++; if (brush) this.tweens.add({ targets: brush, alpha: 0, duration: 250, onComplete: () => brush.destroy() }); for (const f of d.feet) this.tweens.add({ targets: f, alpha: .8, duration: 300 }); } });
+    }
+    const rt = this.fogRT;
+    if (rt) for (const h of this.view.holes) {
+      if (!this.fresh.has(h.id)) continue; const brush = this.make.image({ key: 'rt_hole', add: false }), st = { r: 4 };
+      this.tweens.add({ targets: st, r: h.r, duration: 1000, delay: 250, ease: 'Quad.easeOut', onUpdate: () => { brush.setPosition(h.x, h.y).setScale(st.r * 2.3 / 128); rt.erase(brush); }, onComplete: () => { brush.destroy(); this.fx.holes++; } });
+    }
+    for (const id of this.fresh) {
+      const v = this.nodes.get(id); if (!v) continue; const y = v.root.y; v.root.y = y - 14 / this.zoom;
+      this.tweens.add({ targets: v.root, alpha: 1, y, duration: 420, delay: 850, ease: 'Back.easeOut', onComplete: () => { this.fx.popped++; } });
+    }
+  }
+
+  /** 「下一战」在镜头外：地图边上一枚指向它的小旗牌，点一下飞过去。 */
+  private buildArrow() {
+    const n = this.view.next ? routeNode(this.view.next) : undefined; if (!n) return;
+    const d = n.chapter && n.stage ? chapterStages(n.chapter)[n.stage - 1] : undefined;
+    const t = worldText(this, 0, 0, '下一战 · ' + (d ? d.code + ' ' + d.name : ''), 13, '#ffe3a0').setOrigin(.5).setFontFamily(HEADING_FONT).setStroke('#3a0c06', 3).setName('next-arrow-text');
+    const g = this.add.graphics(); lacquerPlate(g, -t.width / 2 - 12, -t.height / 2 - 5, t.width + 24, t.height + 10, .94, 0xb42a1c);
+    const tip = worldText(this, 0, 0, '➤', 18, '#d8402a').setOrigin(.5).setStroke('#2a0806', 3).setName('next-arrow-tip');
+    const hit = this.add.zone(0, 0, t.width + 24, t.height + 10).setInteractive({ useHandCursor: true }).setName('next-arrow-hit');
+    hit.on('pointerup', () => { this.select({ kind: 'node', node: n }); this.flyTo(n.x, n.y, Math.max(this.zoom, this.minZoom * ZOOM_TIERS[1]), 600); });
+    this.arrow = this.add.container(0, 0, [g, t, tip, hit]).setDepth(9).setName('next-arrow').setVisible(false);
+  }
+  update() {
+    const a = this.arrow, n = this.view?.next ? routeNode(this.view.next) : undefined; if (!a || !n || !this.layer) return;
+    const sx = this.layer.x + n.x * this.zoom, sy = this.layer.y + n.y * this.zoom, A = this.area, pad = 26;
+    const inside = sx > A.x + pad && sx < A.x + A.w - pad && sy > A.y + pad && sy < A.y + A.h - pad;
+    if (inside || this.modal) { a.setVisible(false); return; }
+    const cx = A.x + A.w / 2, cy = A.y + A.h / 2, dx = sx - cx, dy = sy - cy, ang = Math.atan2(dy, dx);
+    const hw = A.w / 2 - 90, hh = A.h / 2 - 30, k = Math.min(hw / Math.max(1, Math.abs(dx)), hh / Math.max(1, Math.abs(dy)));
+    const tip = a.getByName('next-arrow-tip') as Phaser.GameObjects.Text, plate = a.getByName('next-arrow-text') as Phaser.GameObjects.Text;
+    let px = cx + dx * k, py = cy + dy * k;
+    // 右上角是缩放按钮（约 50×100）：旗牌落进去就往下让开
+    if (px + plate.width / 2 + 40 > A.x + A.w - 52 && py - plate.height / 2 - 12 < A.y + 100) py = A.y + 100 + plate.height / 2 + 14;
+    a.setPosition(px, py).setVisible(true);
+    tip.setRotation(ang).setPosition(Math.cos(ang) * (plate.width / 2 + 22), Math.sin(ang) * (plate.height / 2 + 14));
   }
 
   // ———————————————————————— 地图层 ————————————————————————
@@ -150,12 +211,14 @@ export class WorldMapScene extends Phaser.Scene {
     const rope = this.add.rope(0, 0, key, undefined, pts.map(p => new Phaser.Math.Vector2(p.x / k, p.y / k)), true).setScale(k).setName(`road-${a.id}-${b.id}`);
     if (kind === 'todo') rope.setAlpha(.8);
     into.add(rope);
+    const fresh = this.fresh.has(b.id), feet: Phaser.GameObjects.Image[] = [];
+    if (fresh) { rope.setAlphas(0); this.drawIns.push({ rope, pts, feet }); }
     if (kind !== 'done' || !this.textures.exists('rt_foot_1')) return;
     let acc = 30;
     for (let i = 1; i < pts.length; i++) {
       acc += Phaser.Math.Distance.BetweenPoints(pts[i - 1], pts[i]); if (acc < 58) continue; acc = 0;
       const ang = Math.atan2(pts[i].y - pts[i - 1].y, pts[i].x - pts[i - 1].x);
-      into.add(this.add.image(pts[i].x, pts[i].y, 'rt_foot_1').setDisplaySize(7, 7).setRotation(ang + Math.PI / 2).setAlpha(.8));
+      const f = this.add.image(pts[i].x, pts[i].y, 'rt_foot_1').setDisplaySize(7, 7).setRotation(ang + Math.PI / 2).setAlpha(fresh ? 0 : .8); into.add(f); if (fresh) feet.push(f);
     }
   }
 
@@ -171,7 +234,7 @@ export class WorldMapScene extends Phaser.Scene {
       grad.addColorStop(0, 'rgba(255,255,255,1)'); grad.addColorStop(.62, 'rgba(255,255,255,1)'); grad.addColorStop(1, 'rgba(255,255,255,0)'); g.fillStyle = grad; g.fillRect(0, 0, 128, 128); c.refresh();
     }
     const brush = this.make.image({ key: 'rt_hole', add: false });
-    for (const h of this.view.holes) { brush.setPosition(h.x, h.y).setScale(h.r * 2.3 / 128); rt.erase(brush); }
+    for (const h of this.view.holes) { if (this.fresh.has(h.id)) continue; brush.setPosition(h.x, h.y).setScale(h.r * 2.3 / 128); rt.erase(brush); }
     brush.destroy();
     // 揭开处边缘压几朵小云，像云头卷在已到地区的边上（中心不落在任何揭开圆里）
     const inside = (x: number, y: number) => this.view.holes.some(h => Math.hypot(x - h.x, y - h.y) < h.r * .95);
@@ -180,6 +243,7 @@ export class WorldMapScene extends Phaser.Scene {
       const a = rnd.realInRange(0, Math.PI * 2), x = h.x + Math.cos(a) * h.r * 1.12, y = h.y + Math.sin(a) * h.r * 1.0;
       if (!inside(x, y)) stamp(small[k % small.length], x, y, h.r * rnd.realInRange(.7, 1.05), .95);
     }
+    this.fogRT = rt;
     return rt;
   }
 
@@ -229,7 +293,7 @@ export class WorldMapScene extends Phaser.Scene {
     if (lab) parts.push(lab);
     const hit = this.add.zone(0, n.kind === 'stage' ? 0 : -h * .3, Math.max(44, w), Math.max(44, h)).setInteractive({ useHandCursor: true }).setName('node-' + n.id);
     hit.on('pointerup', (p: Phaser.Input.Pointer) => { if (this.pointer.moved > 10 * RENDER_SCALE || this.pinching || this.modal) return; void p; this.select({ kind: 'node', node: n }); });
-    parts.push(hit); root.add(parts); root.setData('vis', v); this.nodeLayer.add(root);
+    parts.push(hit); root.add(parts); root.setData('vis', v); this.nodeLayer.add(root); if (this.fresh.has(n.id)) root.setAlpha(0);
     this.nodes.set(n.id, { node: n, root, hit, label: lab, ring });
   }
   /** 全图唯一「下一战」：燕尾战旗 + 三个字，轻轻摆动。 */

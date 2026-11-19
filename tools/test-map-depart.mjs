@@ -28,9 +28,8 @@ const battle = p => p.evaluate(() => { const g = window.__game, gs = g.scene.get
 // ① 第贰章节点：小卡写出战主公；出征 → 直接进战斗（2-2，下一个未通关）
 {
   const p = await open();
-  // 2026-11-19 天下地图 v2「征途」：节点即关卡（hulao-2 = 2-2），右侧详情栏写出战主公
-  const card = await p.evaluate(M0 => { const s = eval(M0); s.select({ kind: 'node', node: s.nodes.get('hulao-2').node }); return { title: s.detailTitle.text, detail: s.detail.text, action: s.action.text.text, next: s.view.next }; }, M);
-  ck('下一战 2-2：详情栏写「主公 关羽 亲征」（存档主公，不是缺省赵云）；按钮「出征」', card.next === 'hulao-2' && card.title === '2-2 荥阳' && card.detail.split('\n')[1]?.startsWith('主公 关羽') && card.action === '出征', card);
+  const card = await p.evaluate(M0 => { const s = eval(M0); const n = s.markers.find(m => m.node.chapter === 'hulao' || m.node.id === 'hulao'); s.selected = { kind: 'node', node: n.node }; s.refresh(); return { title: s.detailTitle.text, detail: s.detail.text, view: s.detailView?.text, action: s.action.text.text }; }, M);
+  ck('第贰章小卡：第一行进度、第二行「主公 关羽 亲征」（存档主公，不是缺省赵云）；按钮「出征」', /第贰章/.test(card.title) && card.view?.split('\n')[1]?.startsWith('主公 关羽') && card.action === '出征', card);
   await p.screenshot({ path: `${out}/1-map-card.png` });
   await p.evaluate(M0 => eval(M0).action.image.emit('pointerup'), M);
   await p.waitForFunction(() => window.__game.scene.isActive('GameScene') && window.__game.scene.getScene('GameScene').player, null, { timeout: 90000 });
@@ -43,8 +42,8 @@ const battle = p => p.evaluate(() => { const g = window.__game, gs = g.scene.get
 // ② 点关卡印 2-1（已过）：「重打此关」→ 直接打 2-1
 {
   const p = await open();
-  const pin = await p.evaluate(M0 => { const s = eval(M0); s.select({ kind: 'node', node: s.nodes.get('hulao-1').node }); return { title: s.detailTitle.text, view: s.detail.text, action: s.action.text.text }; }, M);
-  ck('打下的 2-1：「重打此关」，详情栏写出战主公', /汜水关/.test(pin.title) && pin.action === '重打此关' && /主公 关羽/.test(pin.view ?? ''), pin);
+  const pin = await p.evaluate(M0 => { const s = eval(M0); const n = s.markers.find(m => m.node.chapter === 'hulao' || m.node.id === 'hulao'); s.selected = { kind: 'node', node: n.node }; s.refresh(); s.selected = { kind: 'stage', chapter: 'hulao', stage: 1 }; s.refresh(); return { title: s.detailTitle.text, view: s.detailView?.text, action: s.action.text.text }; }, M);
+  ck('关卡印 2-1：「重打此关」（不再写「选将」），小卡写出战主公', /汜水关/.test(pin.title) && pin.action === '重打此关' && /主公 关羽/.test(pin.view ?? ''), pin);
   await p.evaluate(M0 => eval(M0).action.image.emit('pointerup'), M);
   await p.waitForFunction(() => window.__game.scene.isActive('GameScene') && window.__game.scene.getScene('GameScene').player, null, { timeout: 90000 });
   const r = await battle(p);
@@ -54,13 +53,12 @@ const battle = p => p.evaluate(() => { const g = window.__game, gs = g.scene.get
 // ③④ 2026-11-19 用户「打第三章的时候又出现这个老界面了」：第三章起（各章自己的选关场景）也直接出征，不显示「出战武将」选将页
 const arcCase = async (label, extra, chapter, scene, stageKey, expectStage, shot) => {
   const p = await open({ ...save, dongzhuoStages: 3, cleared: { huangjin: true, hulao: true }, ...extra });
-  // 天下地图 v2「征途」：节点即关卡（<章>-<关>），点该章要打的那一关
-  const card = await p.evaluate(([M0, id]) => { const s = eval(M0); const v = s.nodes.get(id); if (!v) return null; s.centerOn(v.node.x, v.node.y); s.select({ kind: 'node', node: v.node }); return { title: s.detailTitle.text, action: s.action.text.text, state: s.view.vis.get(id) }; }, [M, `${chapter}-${expectStage}`]);
+  const card = await p.evaluate(([M0, ch]) => { const s = eval(M0); const n = s.markers.find(m => m.node.chapter === ch || m.node.id === ch); if (!n) return null; s.centerOn?.(n.node); s.selected = { kind: 'node', node: n.node }; s.refresh(); return { title: s.detailTitle.text, action: s.action.text.text, state: s.nodeState(n.node) }; }, [M, chapter]);
   await p.evaluate(M0 => eval(M0).action.image.emit('pointerup'), M);
   await p.waitForFunction(k => window.__game.scene.isActive(k) && window.__game.scene.getScene(k).player, scene, { timeout: 120000 }).catch(() => {});
   await p.waitForTimeout(1500);
   const r = await p.evaluate(([k, sk]) => { const g = window.__game, rc = g.registry.get('runConfig'); return { active: g.scene.isActive(k), hero: rc?.character, stage: g.registry.get(sk), arcSeen: window.__arcSeen, arcActive: g.scene.getScenes(true).map(x => x.scene.key).filter(x => /ChapterScene$/.test(x)), menuSeen: window.__menuSeen }; }, [scene, stageKey]);
-  ck(`${label}：出征直接进战斗（${scene}），主公关羽、第 ${expectStage} 关；章节场景只转一下、选将页没画出来`, !!card && card.state === 'open' && card.action === '出征' && r.active && r.hero === 'guanyu' && r.stage === expectStage && !r.arcActive.length && !r.menuSeen, { card, r });
+  ck(`${label}：出征直接进战斗（${scene}），主公关羽、第 ${expectStage} 关；章节场景只转一下、选将页没画出来`, !!card && card.state !== 'locked' && r.active && r.hero === 'guanyu' && r.stage === expectStage && !r.arcActive.length && !r.menuSeen, { card, r });
   if (shot) await p.screenshot({ path: `${out}/${shot}.png` });
   await p.close();
 };

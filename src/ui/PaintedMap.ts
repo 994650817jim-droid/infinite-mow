@@ -14,6 +14,24 @@ import type { Enemy } from '../entities/Enemy';
  *    随行碧点、首领「帅」字朱印、军令令旗（当前军令一明一暗地跳）+ 楷书名字、攻城据点圆圈。
  *  - 固定装饰：左上题签（关名）、右上方位标（北）、右下比例尺（千步）、左下图例框、四角云纹。
  */
+/** 敌军红点（2026-11-19 用户「关于小地图，敌军过来就以红点显示就好」）：每个敌兵一个红点，精锐大一号、描深边；首领照旧朱印「帅」。
+ *  按离主将远近取前 max 个（画面里兵再多也不卡），随地图 8 Hz 重画。 */
+export const ENEMY_DOTS = { max: 150, color: 0xd42a1c, edge: 0x3a0806, r: 2.3, eliteR: 3.8, bigScale: 1.25 } as const;
+/** 画敌军红点：返回画了几个（测试 / 性能用）。 */
+export function drawEnemyDots(g: Phaser.GameObjects.Graphics, enemies: readonly Enemy[], map: (x: number, y: number) => [number, number], inside: (x: number, y: number) => boolean, center: { x: number; y: number }, big: boolean): number {
+  const list: Array<[number, number, number, boolean]> = [];
+  for (const e of enemies) {
+    if (!e.active || e.isSupplySlot || e.kind === 'boss' || e.hp <= 0) continue; const [px, py] = map(e.x, e.y); if (!inside(px, py)) continue;
+    list.push([px, py, (e.x - center.x) ** 2 + (e.y - center.y) ** 2, e.kind === 'elite']);
+  }
+  if (list.length > ENEMY_DOTS.max) list.sort((a, b) => a[2] - b[2]).length = ENEMY_DOTS.max;
+  const s = big ? ENEMY_DOTS.bigScale : 1, D = ENEMY_DOTS;
+  g.lineStyle(1, D.edge, .8); g.fillStyle(D.color, .95);
+  for (const [px, py, , elite] of list) if (!elite) g.fillCircle(px, py, D.r * s).strokeCircle(px, py, D.r * s);
+  g.lineStyle(1.6, D.edge, .95); g.fillStyle(D.color, 1);
+  for (const [px, py, , elite] of list) if (elite) g.fillCircle(px, py, D.eliteR * s).strokeCircle(px, py, D.eliteR * s);
+  return list.length;
+}
 export const MAP_ICONS = 'map_icons';
 export const MAP_ICONS_FILES = { png: 'assets/ui/map_icons.png', json: 'assets/ui/map_icons.json' } as const;
 type Box = { left: number; right: number; top: number; bottom: number };
@@ -37,7 +55,7 @@ export class PaintedMap {
   private readonly icons: Phaser.GameObjects.Image[] = []; private iconN = 0;
   private readonly labels: Phaser.GameObjects.Text[] = []; private labelN = 0;
   private sig = '';
-  readonly stats = { bakes: 0, icons: 0, labels: 0, stamps: 0 };
+  readonly stats = { bakes: 0, icons: 0, labels: 0, stamps: 0, dots: 0 };
   constructor(private readonly scene: Phaser.Scene, private readonly w: number, private readonly h: number, private readonly range: number, title: string) {
     const k = this.k;
     this.root = scene.add.container(0, 0).setName('painted-map');
@@ -54,10 +72,11 @@ export class PaintedMap {
     deco.add(scene.add.text(w - 16 - bar / 2, h - 30, '千 步', { fontFamily: TITLE_FONT, fontSize: '12px', color: '#2a1608', resolution: 2 }).setOrigin(.5, 1));
     // 图例：纸框，四列两行（压在画心左下，不挡中间）
     const LW = 292, LH = 46, lg = scene.add.nineslice(6, h - 6, MAP_ICONS, 'legendbox', LW, LH, 16, 16, 16, 16).setOrigin(0, 1).setAlpha(.95).setName('painted-map-legend'); deco.add(lg);
-    const items: Array<[string, string, number]> = [['主将', '', 0], ['敌营', 'camp', 20], ['我军攻势', 'brusharrow', 22], ['敌军', 'enemy', 20], ['首领', 'seal', 15], ['军令', 'flag', 15], ['树林', 'forest', 20], ['城墙', 'wall', 20]];
+    const items: Array<[string, string, number]> = [['主将', '', 0], ['敌营', 'camp', 20], ['我军攻势', 'brusharrow', 22], ['敌军', 'dot', 0], ['首领', 'seal', 15], ['军令', 'flag', 15], ['树林', 'forest', 20], ['城墙', 'wall', 20]];
     items.forEach(([label, f, sz], i) => {
       const x = 6 + 20 + (i % 4) * 69, y = h - 6 - LH + 14 + Math.floor(i / 4) * 17;
-      if (f) { const im = ic(f, x, y, sz * .7); if (im.height * im.scaleY > 12) im.setScale(12 / im.height); }
+      if (f === 'dot') { const g = scene.add.graphics(); g.lineStyle(1, ENEMY_DOTS.edge, .8).fillStyle(ENEMY_DOTS.color, 1).fillCircle(x - 3, y + 1, ENEMY_DOTS.r).strokeCircle(x - 3, y + 1, ENEMY_DOTS.r).fillCircle(x + 4, y - 1, ENEMY_DOTS.eliteR * .9).strokeCircle(x + 4, y - 1, ENEMY_DOTS.eliteR * .9); deco.add(g); } // 小点兵、大点精锐
+      else if (f) { const im = ic(f, x, y, sz * .7); if (im.height * im.scaleY > 12) im.setScale(12 / im.height); }
       else { const g = scene.add.graphics(); g.fillStyle(LQ.lacquer, 1); lqDiamond(g, x, y, 6); g.fillStyle(LQ.goldHi, 1); lqDiamond(g, x, y, 4.2); deco.add(g); }
       deco.add(scene.add.text(x + 10, y, label, { fontFamily: TITLE_FONT, fontSize: '11px', color: '#2a1608', resolution: 2 }).setOrigin(0, .5));
     });
@@ -141,18 +160,8 @@ export class PaintedMap {
     const ox = (c.x - EXT.x0) * k - W / 2, oy = (c.y - EXT.y0) * k - H / 2;
     this.rt.setPosition(-ox, -oy).setCrop(ox * RES, oy * RES, W * RES, H * RES);
     this.iconN = 0; this.labelN = 0;
-    // 敌军：12×8 分格，人多的格子画一队敌兵（越多越大），四周淡墨晕
-    const C = 12, R = 8, bins = new Uint16Array(C * R), elites: Array<[number, number]> = [];
-    for (const e of h.enemies()) {
-      if (!e.active || e.isSupplySlot || e.kind === 'boss' || e.hp <= 0) continue; const [px, py] = map(e.x, e.y); if (!inside(px, py)) continue;
-      if (e.kind === 'elite') { if (elites.length < 12) elites.push([px, py]); continue; }
-      const i = Math.min(C - 1, Math.floor(px / W * C)), j = Math.min(R - 1, Math.floor(py / H * R)); bins[j * C + i]++;
-    }
-    const cw = W / C, ch = H / R;
-    for (let j = 0; j < R; j++) for (let i = 0; i < C; i++) { const n = bins[j * C + i]; if (!n) continue; const x = (i + .5) * cw, y = (j + .5) * ch;
-      g.fillStyle(0x5a2a18, Math.min(.16, .05 + n * .015)).fillEllipse(x, y, Math.min(cw * 1.2, cw * (.5 + n * .05)), Math.min(ch * 1.2, ch * (.5 + n * .05)));
-      if (n >= 2) this.icon('enemy', x, y + 2, Math.min(34, 16 + n * 1.3), { originY: .75 }); else g.fillStyle(0x7a1a10, .8).fillCircle(x, y, 2.2); }
-    for (const [px, py] of elites) this.icon('elite', px, py, 13);
+    // 敌军：每兵一个红点（精锐大一号），见 drawEnemyDots
+    this.stats.dots = drawEnemyDots(g, h.enemies(), map, (x, y) => inside(x, y), c, true);
     // 我军攻势：碧色毛笔箭头（粗 → 细，墨迹往前流）+ 箭头尖；队伍画在兵的中心
     for (const p of h.pushes?.() ?? []) {
       const live = p.members; if (!p.to) continue;

@@ -3,7 +3,7 @@ import { DEPTH, GAME_HEIGHT, GAME_WIDTH } from '../config';
 import { LQ, lqDiamond } from './LacquerKit';
 import { warText } from './WarStyle';
 import { hotkeyLabel } from '../data/hotkeys';
-import { PaintedMap, MAP_ICONS, MAP_ICONS_FILES, type PaintLayout } from './PaintedMap';
+import { PaintedMap, MAP_ICONS, MAP_ICONS_FILES, ENEMY_DOTS, drawEnemyDots, type PaintLayout } from './PaintedMap';
 import type { BattleOrders } from '../systems/BattleOrders';
 import type { Enemy } from '../entities/Enemy';
 
@@ -14,7 +14,7 @@ import type { Enemy } from '../entities/Enemy';
  *    手卷图：即梦出图（public/assets/ui/map_scroll_*.webp，原图 ui/originals/map_scroll_jimeng.webp）。
  *  - 地图：画心 640×262，以主将为中心，约 5200 宽，军令目标标名字；不暂停。
  *  - 屏外军令箭头：当前首要军令（不含首领——首领箭头 BossPresence 已有）在屏外时，屏幕边缘画朱红小箭头 + 距离。
- * 图层：墨色障碍框、青色河道、敌兵密度淡墨（12×8 分桶，不逐个画）、精锐朱点、首领朱印（对象池 2）、随行碧点、主将金菱、军令朱旗菱。
+ * 图层：墨色障碍框、青色河道、敌军红点（每兵一点、精锐大一号，最多 ENEMY_DOTS.max 个）、首领朱印（对象池 2）、随行碧点、主将金菱、军令朱旗菱。
  * 小 / 大地图 8 Hz 重画（一个 Graphics clear 重画）；障碍框每 2 秒重取一次。
  */
 export const BATTLE_MAP = {
@@ -63,7 +63,7 @@ function legend(scene: Phaser.Scene, mapH: number): Phaser.GameObjects.Container
     ['我军攻势', (g, x, y) => { g.lineStyle(2, 0x3f9a5a, .9).lineBetween(x - 8, y + 4, x + 2, y - 2); g.fillStyle(0x58c27a, 1).fillTriangle(x + 7, y - 5, x, y - 4, x + 4, y + 2); }],
     ['首领', (g, x, y) => { g.fillStyle(0xa62a1a, 1).fillRoundedRect(x - 5, y - 5, 10, 10, 2); }],
     ['敌营（血条）', (g, x, y) => { g.fillStyle(0x7a1a12, 1).fillTriangle(x, y - 7, x - 6, y + 2, x + 6, y + 2); g.fillStyle(0xd2452e, 1).fillRect(x - 7, y + 4, 14, 2.5); }],
-    ['敌军', (g, x, y) => { g.fillStyle(0x24170e, .55).fillEllipse(x, y, 16, 10); }],
+    ['敌军', (g, x, y) => { g.lineStyle(1, ENEMY_DOTS.edge, .8).fillStyle(ENEMY_DOTS.color, 1).fillCircle(x - 3, y + 1, ENEMY_DOTS.r).strokeCircle(x - 3, y + 1, ENEMY_DOTS.r).fillCircle(x + 4, y - 1, ENEMY_DOTS.eliteR * .9).strokeCircle(x + 4, y - 1, ENEMY_DOTS.eliteR * .9); }],
     ['军令', (g, x, y) => { g.fillStyle(0xf3d48a, 1); lqDiamond(g, x, y, 6); g.fillStyle(0xb3261a, 1); lqDiamond(g, x, y, 4); }],
     ['树林 · 河 · 路', (g, x, y) => { g.fillStyle(0x46703a, .7).fillCircle(x - 6, y, 2.6).fillCircle(x - 2, y - 3, 2.6); g.lineStyle(3, 0x4f8592, .6).lineBetween(x + 1, y + 4, x + 8, y + 4); g.lineStyle(3, 0xb08a58, .5).lineBetween(x + 1, y - 2, x + 8, y - 2); }],
   ];
@@ -78,6 +78,8 @@ class MapView {
   readonly root: Phaser.GameObjects.Container;
   private readonly g: Phaser.GameObjects.Graphics;
   private readonly seals: Phaser.GameObjects.Image[] = [];
+  /** 上一次画了几个敌军红点（测试用）。 */
+  dots = 0;
   private readonly names: Phaser.GameObjects.Text[] = [];
   /** bare：只画地图内容（卷轴画心当底，框与纸由 BattleMap 的卷轴画）。 */
   /** 手绘舆图（图集 map_icons 载到了就用；没载到退回简画）。 */
@@ -141,18 +143,8 @@ class MapView {
       const hx = Phaser.Math.Clamp(bx - ux * 12, 6, W - 6), hy = Phaser.Math.Clamp(by - uy * 12, 6, H - 6), r = big ? 8 : 6;
       g.fillStyle(0x3f9a5a, .95).fillTriangle(hx + ux * r, hy + uy * r, hx - uy * r * .7 - ux * r * .5, hy + ux * r * .7 - uy * r * .5, hx + uy * r * .7 - ux * r * .5, hy - ux * r * .7 - uy * r * .5);
     }
-    // 敌兵密度：分桶淡墨（精锐另画朱点）
-    const C = BATTLE_MAP.cols, R = BATTLE_MAP.rows, bins = new Uint8Array(C * R), elites: Array<[number, number]> = [];
-    for (const e of h.enemies()) {
-      if (!e.active || e.isSupplySlot || e.kind === 'boss' || e.hp <= 0) continue;
-      const [px, py] = this.map(c, e.x, e.y); if (!this.inside(px, py)) continue;
-      if (e.kind === 'elite') { if (elites.length < 24) elites.push([px, py]); continue; }
-      const i = Math.min(C - 1, Math.floor(px / W * C)), j = Math.min(R - 1, Math.floor(py / H * R)); if (bins[j * C + i] < 255) bins[j * C + i]++;
-    }
-    const cw = W / C, ch = H / R;
-    for (let j = 0; j < R; j++) for (let i = 0; i < C; i++) { const n = bins[j * C + i]; if (!n) continue;
-      g.fillStyle(0x24170e, Math.min(.62, .16 + n * .05)).fillEllipse((i + .5) * cw, (j + .5) * ch, Math.min(cw * 1.25, cw * (.55 + n * .07)), Math.min(ch * 1.25, ch * (.55 + n * .07))); }
-    g.fillStyle(0xa62a1a, .95); for (const [px, py] of elites) g.fillCircle(px, py, big ? 3 : 2);
+    // 敌军：每兵一个红点（精锐大一号），与卷轴舆图同一画法
+    this.dots = drawEnemyDots(g, h.enemies(), (x, y) => this.map(c, x, y), (x, y) => this.inside(x, y), c, big);
     // 敌营：朱红小帐 + 血条；被友军砍着时一圈闪
     for (const cp of h.camps?.() ?? []) {
       const [px, py] = this.map(c, cp.x, cp.y); if (!this.inside(px, py, 4)) continue; const s = big ? 1 : .75;

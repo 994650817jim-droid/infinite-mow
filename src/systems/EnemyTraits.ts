@@ -159,7 +159,8 @@ export class EnemyTraits {
     if (dist < t.slamRange && now >= s.next) {
       s.next = now + t.everyMs; s.slamAt = now + t.warnMs;
       s.sx = e.x + nx * Math.min(dist, t.slamRange * .6); s.sy = e.y + ny * Math.min(dist, t.slamRange * .6);
-      e.poseUntil = Math.max(e.poseUntil, s.slamAt + 160); e.startAttack(now, dirOf(nx, ny));
+      // 攻击表 4 帧 = 起手 / 出击 / 收招 / 复位（力士第 2～3 帧锤砸地）：预警期间停在起手帧，砸下那一刻正好播到第 3 帧（Enemy.updateAttackVisual：最后 360ms 每 90ms 一帧）
+      e.poseUntil = Math.max(e.poseUntil, s.slamAt + 180); e.startAttack(now, dirOf(nx, ny)); e.windupCol = 0; e.attackUntil = s.slamAt + 180;
       e.moveVx = e.moveVy = 0; void target;
       return true;
     }

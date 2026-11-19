@@ -195,14 +195,28 @@ export class BossPresence {
     const rise = py - top;
     // 上升立即跟上（不遮头），下降慢慢收（不抖）
     sl.plateRise = rise > sl.plateRise ? rise : sl.plateRise + (rise - sl.plateRise) * .15;
-    const view = this.h.scene.cameras.main.worldView, gap = 10, plateH = 17;
+    const cam = this.h.scene.cameras.main, view = cam.worldView, z = cam.zoom || 1, gap = 10, plateH = 17;
     let y = py - sl.plateRise - gap;
-    // 距屏幕顶边不足（顶部计时 / 章节名 / 武将卡占约 50 设计像素）→ 放到脚下；用迟滞避免在边界来回跳
-    const need = view.y + 50 + plateH;
-    sl.plateBelow = sl.plateBelow ? y < need + 16 : y < need;
+    // 2026-11-20：原来「离屏幕顶边不足 67 设计像素就放脚下」——骑马的吕布身高 ×1.4 后头顶很高，站在屏幕中线略上方时名牌就被挪到脚下。
+    // 改为只在名牌真的会出屏、或压到顶部 HUD（计时 / 章节名 / 武将卡 / 右上按钮，按场上实际 HUD 对象的范围）时才放脚下；迟滞 16 像素避免来回跳
+    const w = Math.max(40, sl.plate!.getBounds().width), m = sl.plateBelow ? 16 : 0;
+    const r = { x0: (px - w / 2 - view.x) * z - m, x1: (px + w / 2 - view.x) * z + m, y0: (y - plateH - view.y) * z - m, y1: (y - view.y) * z + m };
+    sl.plateBelow = r.y0 < 4 || this.hudRects().some(h => r.x1 > h.x && r.x0 < h.right && r.y1 > h.y && r.y0 < h.bottom);
     if (sl.plateBelow) y = py + 16 + plateH;
     sl.plate!.setPosition(Math.round(px), Math.round(y));
     if (sl === this.slots[0]) { this.stats.plateGap = Math.round(top - y); this.stats.plateBelow = sl.plateBelow; } // 名牌底边到身体最高点的距离（放脚下时为负）
+  }
+  /** 顶部 HUD 占的屏幕范围（固定在屏幕上的 HUD 层对象，屏幕上方 160 设计像素内；每 0.4 秒重算一次）。 */
+  private hudCache: { at: number; rects: Phaser.Geom.Rectangle[] } = { at: -1e9, rects: [] };
+  private hudRects(): Phaser.Geom.Rectangle[] {
+    const s = this.h.scene, now = s.time.now; if (now - this.hudCache.at < 400) return this.hudCache.rects;
+    const rects: Phaser.Geom.Rectangle[] = [];
+    for (const o of s.children.list as Array<Phaser.GameObjects.GameObject & { scrollFactorX?: number; depth?: number; visible?: boolean; alpha?: number; getBounds?: () => Phaser.Geom.Rectangle }>) {
+      if (o.scrollFactorX !== 0 || !o.visible || (o.alpha ?? 1) < .05 || (o.depth ?? 0) < DEPTH.hud - 10 || (o.depth ?? 0) >= DEPTH.overlay || typeof o.getBounds !== 'function') continue;
+      const b = o.getBounds(); if (b.width <= 0 || b.height <= 0 || b.y > 160 || b.width > GAME_WIDTH * .8) continue;
+      rects.push(b);
+    }
+    this.hudCache = { at: now, rects }; return rects;
   }
   private dropGlow(sl: Slot): void {
     if (!sl.glow) return;

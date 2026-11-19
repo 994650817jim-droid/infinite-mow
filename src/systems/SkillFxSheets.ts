@@ -32,6 +32,11 @@ export const SKILL_FX: Readonly<Record<string, { file: string; cell: number; fra
   fx_awaken_warrior: { file: 'assets/schools/awaken_warrior.png', cell: 256, frames: 6 },
   fx_awaken_formation: { file: 'assets/schools/awaken_formation.png', cell: 256, frames: 6 },
   fx_gust_band: { file: 'assets/schools/gust_band.png', cell: 512, cellH: 192, frames: 6 },
+  // 3-2 典韦技能手绘特效（ChatGPT，友军薄荷青白色；tools/prepare-fx-strips.mjs 去黑底、每条 6 帧 × 256）：双戟旋风 / 恶来死战红气（循环）/ 掷戟（旋转飞行 + 螺旋残影）/ 命中火花
+  fx_dianwei_whirl: { file: 'assets/dianwei-fx/whirl.png', cell: 256, frames: 6 },
+  fx_dianwei_rage: { file: 'assets/dianwei-fx/rage.png', cell: 256, frames: 6 },
+  fx_dianwei_throw: { file: 'assets/dianwei-fx/throw.png', cell: 256, frames: 6 },
+  fx_dianwei_hit: { file: 'assets/dianwei-fx/hit.png', cell: 256, frames: 6 },
   fx_zhurong_knife: { file: 'assets/zhurong-fx/knife_fx.png', cell: 256, frames: 8 },
   // 武将出招起手特效（2026-11-19 ChatGPT 黑底 6×4 三张，tools/build-hero-cast-fx.mjs 去底切条；systems/HeroCastFx.ts 用）：每人 6 帧
   ...Object.fromEntries(['guanyu', 'zhangfei', 'zhaoyun', 'huangzhong', 'machao', 'weiyan', 'liubei', 'zhuge', 'pangtong', 'huangyueying', 'sunshangxiang', 'diaochan']

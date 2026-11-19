@@ -10,13 +10,14 @@
  */
 import type { SfxVoice } from './Sfx';
 
-export type SfxGroup = 'hero' | 'troop';
+/** hero / troop：出手；fx：新内容的战斗特效（ContentSfx）；amb：城池环境声。 */
+export type SfxGroup = 'hero' | 'troop' | 'fx' | 'amb';
 export interface AttackSfxConfig { dur: number; throttleMs: number; max: number; priority: 0 | 1 | 2; pitchVar: number; group: SfxGroup }
 
 const H = (dur: number, throttleMs: number, max = 2, priority: 0 | 1 | 2 = 1): AttackSfxConfig => ({ dur, throttleMs, max, priority, pitchVar: .06, group: 'hero' });
 const T = (dur: number, throttleMs: number): AttackSfxConfig => ({ dur, throttleMs, max: 2, priority: 0, pitchVar: .06, group: 'troop' });
 
-export const GROUP_MAX: Record<SfxGroup, number> = { hero: 4, troop: 3 };
+export const GROUP_MAX: Record<SfxGroup, number> = { hero: 4, troop: 3, fx: 4, amb: 1 };
 
 export const ATTACK_SFX_CONFIG: Record<string, AttackSfxConfig> = {
   atk_spear: H(.16, 90), atk_charge: H(.6, 300, 1, 2), atk_roar: H(1, 500, 1, 2),

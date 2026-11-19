@@ -11,11 +11,11 @@ const b = await chromium.launch({ channel: 'chrome', headless: true });
 const G = "window.__game.scene.getScene('GameScene')", M = "window.__game.scene.getScene('MenuScene')";
 const FIND = `window.__find=(root,name)=>{const list=root.list??root.getChildren?.()??[];for(const o of list){if(o.name===name)return o;if(o.list){const r=window.__find(o,name);if(r)return r;}}return null;};
 window.__tap=o=>{o.emit('pointerdown');o.emit('pointerup');};
-window.__mod=async part=>import(performance.getEntriesByType('resource').map(e=>e.name).find(n=>n.includes(part))??('/src/'+part.replace(/^\\//,'')));`;
+window.__mod=async part=>import(performance.getEntriesByType('resource').map(e=>e.name).find(n=>n.includes(part))??(part.startsWith('/src/')?part:'/src/'+part.replace(/^\\//,'')));`;
 async function page(layout, viewport) {
   const p = await b.newPage({ viewport, deviceScaleFactor: layout === 'mobile' ? 2 : 1 });
   p.on('pageerror', e => errors.push(layout + ' ' + e.message));
-  p.on('console', m => { if (m.type() === 'error' && !/favicon|Failed to load resource/.test(m.text())) errors.push(layout + ' console ' + m.text()); });
+  p.on('console', m => { if (m.type() === 'error' && !/favicon|Failed to load resource|Texture key already in use/.test(m.text()) /* 场景重开时重复 preload 的无害提示（其他测试同样过滤） */) errors.push(layout + ' console ' + m.text()); });
   await p.addInitScript(FIND);
   await p.addInitScript(() => { if (!sessionStorage.getItem('seeded')) { localStorage.clear(); localStorage.setItem('im_last_hero', 'zhaoyun'); sessionStorage.setItem('seeded', '1'); } });
   return p;
@@ -254,13 +254,16 @@ await d.screenshot({ path: `${out}/desktop-city-stable.png` });
 // 行营休整里点「行囊」（真实流程：打赢 1-1 → 选首领战利品 → 进营；真实鼠标点击）。2026-11-17 用户报「休整时行囊点不了」：结算后 over 为真，打开被拦下
 await d.goto(base + '?dev=1&autostart=1&stage=1&layout=desktop');
 await d.waitForFunction(() => window.__game?.scene.getScene('GameScene')?.player && window.__game.scene.getScene('GameScene').__DEV_ACTIONS, null, { timeout: 120000 });
-await d.evaluate(() => { const s = window.__game.scene.getScene('GameScene'); s.__DEV_ACTIONS.closePopup?.(); s.__DEV_ACTIONS.winNow(); });
-for (let i = 0; i < 40; i++) { const mode = await d.evaluate(() => { const s = window.__game.scene.getScene('GameScene'); if (s.mode === 'bossloot') s.chooseUpgrade(0); return s.mode; }); if (mode === 'rest') break; await d.waitForTimeout(1000); }
+// 2026-11-20：前面几步写了天下已开的存档，autostart 会接着进当前章节（汜水关）而不是 1-1，主将还会在等待时阵亡 → 明确开 1-1、主将无伤
+await d.evaluate(() => { const s = window.__game.scene.getScene('GameScene'); if (s.runConfig?.chapter !== 'huangjin' || (s.runConfig?.stage ?? 1) !== 1) { s.registry.remove('campaignTransfer'); s.registry.set('runConfig', { character: 'zhaoyun', chapter: 'huangjin', stage: 1 }); s.scene.restart(); } });
+await d.waitForFunction(() => { const s = window.__game.scene.getScene('GameScene'); return s?.player && s.runConfig?.chapter === 'huangjin' && s.elapsed < 5 && s.__DEV_ACTIONS; }, null, { timeout: 120000 });
+await d.evaluate(() => { const s = window.__game.scene.getScene('GameScene'); s.player.damageImmune = true; s.__DEV_ACTIONS.closePopup?.(); s.__DEV_ACTIONS.winNow(); });
+for (let i = 0; i < 40; i++) { const mode = await d.evaluate(() => { const s = window.__game.scene.getScene('GameScene'); if (s.mode === 'bossloot') s.chooseUpgrade(0); if (s.mode === 'parley' && s.parley?.choose) s.parley.choose('execute'); /* 首领 15% 劝降弹窗（surrender）：选斩杀 */ return s.mode; }); if (mode === 'rest') break; await d.waitForTimeout(1000); }
 await d.waitForFunction(() => { const s = window.__game.scene.getScene('GameScene'); return s.mode === 'rest' && s.campUI?.root.visible && !s.children.getByName('rest-intro'); }, null, { timeout: 60000 }).catch(() => {});
 await d.waitForTimeout(1200);
 const restAt = await d.evaluate(() => { const s = window.__game.scene.getScene('GameScene'), btn = s.campUI.root.list.find(o => o.name === 'camp-bag'), bb = btn.getBounds(), r = window.__game.canvas.getBoundingClientRect(), cam = s.cameras.main, k = r.width / cam.width * cam.zoom; return { x: r.left + bb.centerX * k, y: r.top + bb.centerY * k, mode: s.mode, over: s.over }; });
 await d.mouse.click(restAt.x, restAt.y); await d.waitForTimeout(500);
-const restBag = await d.evaluate(() => { const s = window.__game.scene.getScene('GameScene'), bag = s.children.getByName('item-bag'); return { open: !!bag, rest: /休整中/.test(window.__find(bag, 'item-bag-count')?.text ?? ''), loot: !!window.__find(bag, 'item-tab-loot') }; });
+const restBag = await d.evaluate(() => { const s = window.__game.scene.getScene('GameScene'), bag = s.children.getByName('item-bag'); if (!bag) return { open: false, diag: { mode: s.mode, result: [s.resultTexts?.title?.text, s.resultTexts?.subtitle?.text].join(' | '), victory: s.victory, world: !!JSON.parse(localStorage.getItem('im_world_v1') ?? 'null')?.worldAvailable, run: s.runConfig, scenes: window.__game.scene.getScenes(true).map(x => x.scene.key), top: s.children.list.filter(o => o.visible && (o.depth ?? 0) >= 1400).map(o => (o.name || o.type) + '@' + Math.round(o.depth)).slice(-8), bagElsewhere: window.__game.scene.getScenes(true).filter(x => x.children.getByName('item-bag')).map(x => x.scene.key) } }; return { open: true, rest: /休整中/.test(window.__find(bag, 'item-bag-count')?.text ?? ''), loot: !!window.__find(bag, 'item-tab-loot') }; });
 ck('行营休整（本关已结算）点「行囊」能打开，标「休整中」', restAt.mode === 'rest' && restAt.over && restBag.open && restBag.rest, { restAt, restBag });
 await d.screenshot({ path: `${out}/desktop-rest-bag.png` });
 await d.close();

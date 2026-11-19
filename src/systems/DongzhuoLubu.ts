@@ -290,7 +290,7 @@ export class DongzhuoLubu {
     this.phase = 'leaping'; this.metrics.leaps++;
     if (!this.h.line?.('hulao-3.lubu_enter', l.sprite)) this.say(l, '人中吕布，马中赤兔！谁来送死？');
     // 横幅交给关卡目标（「营寨尽毁 · 吕布跃下城头！」，data/dongzhuo.ts），这里只喊台词，不叠第二条横幅
-    this.h.sfx('bossSummon');
+    this.h.sfx('lubu_leap');
     const x0 = l.x, y0 = l.y, x1 = this.gate.x + L.landDx, y1 = this.gate.y + L.landDy, t0 = s.time.now;
     this.anim = now => {
       const k = Math.min(1, (now - t0) / L.leapMs), x = Phaser.Math.Linear(x0, x1, k), y = Phaser.Math.Linear(y0, y1, k) - Math.sin(Math.PI * k) * L.leapArc;
@@ -298,7 +298,7 @@ export class DongzhuoLubu {
       if (k < 1) return false;
       // 落地：扬尘、震屏，吕布可以打了
       playSheet(s, 'fx_collapse_dust', x1, y1 + 4, { size: 200, ms: 620, depth: DEPTH.fx, originY: .8, name: 'dz-lubu-land' });
-      this.h.hitFeel()?.shake('big'); this.h.sfx('hitHeavy');
+      this.h.hitFeel()?.shake('big'); this.h.sfx('lubu_land');
       if (l.active) { l.invulnerable = false; l.def = { ...l.def, speed: P.lubuSpeed }; }
       this.phase = 'wall'; this.nextSweep = this.h.now() + 1800;
       return true;

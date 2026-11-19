@@ -132,6 +132,8 @@ export class WorldMapSceneV1 extends Phaser.Scene {
   // 第一章后初入天下：营寨上挂“你的营寨”提示，直到第一次进营（CityScene 记 im_home_seen）
   let homeIntro=false;try{homeIntro=localStorage.getItem("im_home_seen")!=="1"&&!isChapterTestRun();}catch{homeIntro=false;}
   const homeSize=citySize(s.town);
+  // 2026-11-19 用户「天下地图ui修复」（原「看着好乱」）：只给下一个未解锁的章节留锁旗，更远的不画（底部时间线照样能选）；已平定的章节捷旗缩小变淡、不写章名
+  const curIdx=CHAPTER_TIMELINE.findIndex(c=>c.id===current),nextLocked=CHAPTER_TIMELINE.slice(curIdx+1).find(c=>chapterState(c.id,s)==='locked')?.id;
   for(const node of WORLD_NODES){const st=this.nodeState(node),active=st!=='locked',info=this.chapterOf(node),color=st==='home'?0x88c5a4:st==='cleared'?0x9fd18a:active?0xe5c47d:0x747a6f;
    const marker=this.add.container(0,0);
    // 当前该打的一章：金色脉冲圈
@@ -146,7 +148,10 @@ export class WorldMapSceneV1 extends Phaser.Scene {
    const icon=v2?null:worldText(this,0,0,glyphText,13,st==='cleared'?'#ffe7a8':active?'#f5dc9e':'#a4aa9c').setOrigin(.5);
    const label=v2?null:worldText(this,0,25,labelText,13,active?'#fff0cd':'#b6b8aa').setOrigin(.5).setStroke('#142016',3);
    circle.on('pointerup',(pointer:Phaser.Input.Pointer)=>{if(pointer.getDistance()>10*RENDER_SCALE||this.pinching)return;this.selected={kind:'node',node};this.refresh();});
-   if(node.challenge&&W>600)circle.on('pointerover',()=>{const locked=this.nodeState(node)==='locked';this.showTip(`挑战 · ${node.region} · ${node.name}\n${locked?LUBU_CHALLENGE.unlockHint:lubuClears()?`已胜 ${lubuClears()} 场 · 可反复挑战`:'首胜得名马「赤兔」'}`,marker.x,marker.y-40,.5);}).on('pointerout',()=>this.hideTip());marker.add(v2?[...v2.parts,circle]:[circle,icon!,label!]);if(v2)marker.setData('label',v2.label).setData('plate',v2.plate).setData('icon',v2.icon);marker.setData('locked',st==='locked');this.markers.push({node,root:marker});
+   if(node.challenge&&W>600)circle.on('pointerover',()=>{const locked=this.nodeState(node)==='locked';this.showTip(`挑战 · ${node.region} · ${node.name}\n${locked?LUBU_CHALLENGE.unlockHint:lubuClears()?`已胜 ${lubuClears()} 场 · 可反复挑战`:'首胜得名马「赤兔」'}`,marker.x,marker.y-40,.5);}).on('pointerout',()=>this.hideTip());marker.add(v2?[...v2.parts,circle]:[circle,icon!,label!]);if(v2)marker.setData('label',v2.label).setData('plate',v2.plate).setData('icon',v2.icon);marker.setData('locked',st==='locked');
+   {const ch=this.chapterOf(node)?.id,role=st==='home'?'home':st==='cleared'?'cleared':st==='locked'?(ch&&ch===nextLocked?'next-locked':'far-locked'):'open';marker.setData('role',role).setName('world-node-'+node.id);
+    if(role==='cleared')marker.setScale(.74).setAlpha(.7);else if(role==='next-locked')marker.setAlpha(.78);}
+   this.markers.push({node,root:marker});
   }
   for(const event of this.intel){const city=cityById(event.city);if(city)this.intelMarkers.push(this.intelMarker(event,city));}
   this.minZoom=Math.max(this.area.w/this.mapW,this.area.h/this.mapH);this.zoom=this.minZoom*(desktop?ZOOM_TIERS[1]:1.2);
@@ -253,7 +258,10 @@ export class WorldMapSceneV1 extends Phaser.Scene {
   this.tweens.killTweensOf(this.zoomProxy);this.zoomProxy.z=0;const go=(k:number)=>{this.zoom=fz+(z-fz)*k;this.layer.setScale(this.zoom);this.layer.x=fx+(tx-fx)*k;this.layer.y=fy+(ty-fy)*k;this.clampMap();this.paintTier();};
   if(dur<=0){go(1);return;}this.tweens.add({targets:this.zoomProxy,z:1,duration:dur,ease:'Sine.easeInOut',onUpdate:()=>go(this.zoomProxy.z)});}
  /** 打开地图：镜头以义军营寨为中心、州郡档（用户 2026-11-18「展开天下地图后，请视角定位在义军营寨那里」）；「下一步」在视野外时只在屏幕边缘给箭头。 */
- private focusPlayer(dur=0){this.flyTo(HOME.x,HOME.y,this.minZoom*ZOOM_TIERS[1],dur);}
+ private focusPlayer(dur=0){const z=this.minZoom*ZOOM_TIERS[1],g=this.guideTarget;let x=HOME.x,y=HOME.y;
+  // 2026-11-19：「下一战」和营寨同框放得下就取中点（两者都在画面里）；放不下仍以营寨为中心，「下一战」在边缘给箭头
+  if(g&&Math.abs(g.x-HOME.x)*z<this.area.w-160&&Math.abs(g.y-HOME.y)*z<(this.viewBottom-this.area.y)-120){x=(g.x+HOME.x)/2;y=(g.y+HOME.y)/2;}
+  this.flyTo(x,y,z,dur);}
 /** 城池可攻状态：我方 / 告急 / 可攻 / 章节未开 / 不相邻（给出先攻哪座）。 */
  private cityStatusOf(c:CityDef):CityStatus{
   if(this.alertFor(c.id))return{kind:'alert',reason:'告急：守住可解除'};
@@ -270,9 +278,9 @@ export class WorldMapSceneV1 extends Phaser.Scene {
   for(const m of this.cityMarkers){const fog=this.fogVis.get(m.city.id)??'clear',st:CityStatus=fog==='hidden'?{kind:'fog',reason:'迷雾未散，需先攻下相邻城池'}:this.cityStatusOf(m.city);this.status.set(m.city.id,st);m.root.setData('status',st.kind);
    const icon=m.root.getData('icon') as Phaser.GameObjects.Image|undefined,flag=(m.root.getData('flag') as Phaser.GameObjects.GameObject[]|undefined)??[];
    // 迷雾下：不画城郭和旗，名牌换成「？」
-   if(st.kind==='fog'){icon?.setVisible(false);for(const f of flag)(f as unknown as Phaser.GameObjects.Components.Visible).setVisible(false);(m.root.getData('plate') as Phaser.GameObjects.Components.Visible|undefined)?.setVisible(false);m.root.setData('plate',null);m.label.setText('？').setColor('#e8dcc0').setStroke('#2a2016',3).setAlpha(.85);}
+   if(st.kind==='fog'){icon?.setVisible(false);for(const f of flag)(f as unknown as Phaser.GameObjects.Components.Visible).setVisible(false);(m.root.getData('plate') as Phaser.GameObjects.Components.Visible|undefined)?.setVisible(false);m.root.setData('plate',null);m.label.setText('').setAlpha(0);} // 2026-11-19：迷雾里不再标「？」（只留纸雾）
    else if(fog==='dim'){icon?.setAlpha(.45);for(const f of flag)(f as unknown as Phaser.GameObjects.Components.Alpha).setAlpha(.45);}
-   if(st.kind==='far'||st.kind==='gate'){icon?.setAlpha(.55).setTint(0xb8b2a4);for(const f of flag)(f as unknown as Phaser.GameObjects.Components.Alpha).setAlpha(.55);(m.root.getData('plate') as Phaser.GameObjects.Components.Alpha|undefined)?.setAlpha(.75);m.label.setAlpha(.75);}
+   if(st.kind==='far'||st.kind==='gate'){icon?.setAlpha(.55).setTint(0xb8b2a4);for(const f of flag)(f as unknown as Phaser.GameObjects.Components.Visible).setVisible(false);(m.root.getData('plate') as Phaser.GameObjects.Components.Alpha|undefined)?.setAlpha(.75);m.label.setAlpha(.75);}
    if(st.kind==='attack'&&MARKERS_V2){const ring=this.add.graphics().setName('attack-ring-'+m.city.id);ring.lineStyle(1.6,0xd2462c,1).strokeEllipse(0,3,m.outer*2.2,13);m.root.addAt(ring,0);this.tweens.add({targets:ring,alpha:{from:.95,to:.3},duration:1100,yoyo:true,repeat:-1,ease:'Sine.easeInOut'});
     const tt=worldText(this,0,0,'可攻',11,'#ffe2a0').setOrigin(.5).setFontFamily(HEADING_FONT),g=this.add.graphics();lacquerPlate(g,-tt.width/2-6,-tt.height/2-2,tt.width+12,tt.height+4,.92,0xd2462c);
     m.root.add(this.add.container(m.outer*.62,-m.top*.62,[g,tt]).setName('attack-tag-'+m.city.id));}
@@ -432,7 +440,7 @@ export class WorldMapSceneV1 extends Phaser.Scene {
  private toScreen(mx:number,my:number){return{x:this.layer.x+mx*this.zoom,y:this.layer.y+my*this.zoom};}
  private clampMap(){const a=this.area;this.layer.x=Phaser.Math.Clamp(this.layer.x,a.x+a.w-this.mapW*this.zoom,a.x);this.layer.y=Phaser.Math.Clamp(this.layer.y,a.y+a.h-this.mapH*this.zoom,a.y);
   const c=this.card,tl=this.timelineRect,visible=(x:number,y:number)=>x>a.x+14&&x<a.x+a.w-14&&y>a.y+14&&y<this.viewBottom-30&&!(c&&x>c.x-24&&y>c.y-36)&&!(tl&&x<tl.right+20&&y>tl.y-30)&&!(this.legendRect&&this.legendRect.contains(x,y-10)); // 电脑版：右下小卡、左下时间线、左上势力图例下面不放标记
-  for(const m of this.markers){const x=this.layer.x+m.node.x*this.mapW*this.zoom,q=this.liftOffCity(x,this.layer.y+m.node.y*this.mapH*this.zoom);m.root.setPosition(q.x,q.y).setVisible(visible(q.x,q.y)&&!(this.routeChapter&&this.chapterOf(m.node)?.id===this.routeChapter));}
+  for(const m of this.markers){const x=this.layer.x+m.node.x*this.mapW*this.zoom,q=this.liftOffCity(x,this.layer.y+m.node.y*this.mapH*this.zoom);m.root.setPosition(q.x,q.y).setVisible(visible(q.x,q.y)&&!(this.routeChapter&&this.chapterOf(m.node)?.id===this.routeChapter)&&(m.root.getData('role')!=='far-locked'||(this.selected.kind==='node'&&this.selected.node===m.node)));}
   // 小城名字在放大后才显示，避免默认视图拥挤
   const showSmall=this.zoom>=this.minZoom*1.65;
   // 军旗高出徽框，靠近地图上沿时整个标记隐藏，免得旗子伸出地图框
@@ -488,7 +496,10 @@ export class WorldMapSceneV1 extends Phaser.Scene {
    // 电脑版：未解锁章节只留锁印，不写章名（用户「太乱了」）
    if(t&&this.card&&m.root.getData('locked')){t.setVisible(false);(m.root.getData('plate') as Phaser.GameObjects.Graphics|undefined)?.setVisible(false);continue;}
    // 章节名牌压到底栏 / 顶部按钮下时隐藏（牙旗仍在，点开详情可见章名）
-   if(t&&chrome.some(r=>inter(r,box(t)))){t.setVisible(false);(m.root.getData('plate') as Phaser.GameObjects.Graphics|undefined)?.setVisible(false);continue;}take(t,m.root,m.root.getData('plate'),true);}
+   if(t&&chrome.some(r=>inter(r,box(t)))){t.setVisible(false);(m.root.getData('plate') as Phaser.GameObjects.Graphics|undefined)?.setVisible(false);continue;}
+   {const sel=this.selected.kind==='node'&&this.selected.node===m.node,role=m.root.getData('role');
+    if(t&&role==='cleared'&&!sel){t.setVisible(false);(m.root.getData('plate') as Phaser.GameObjects.Graphics|undefined)?.setVisible(false);continue;}
+    take(t,m.root,m.root.getData('plate'),sel||role==='open'||role==='home');}}
   for(const tier of ['large','medium','small'] as const)for(const m of this.cityMarkers)if(m.city.tier===tier&&shown(m.root)&&!this.isSelected(m.city))take(m.label,m.root,m.root.getData('plate'));}
  private isSelected(city:CityDef){return this.selected.kind==='city'&&this.selected.city.id===city.id;}
  private drawLinks(){

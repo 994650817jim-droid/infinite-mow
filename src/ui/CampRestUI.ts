@@ -156,7 +156,7 @@ export class CampRestUI {
   if(kind==='small')p.hp=Math.min(p.maxHp,p.hp+p.maxHp*CAMP_MEDIC.small.frac);
   else if(kind==='full')p.hp=p.maxHp;
   else{for(const u of this.army.units)if(u.active)u.hp=u.maxHp;const sq=this.squad();for(const m of sq?.members??[]){if(m.downed)sq!.revive(m,(this.scene as unknown as {combatNow?:number}).combatNow??0);m.hp=m.maxHp;}}
-  this.sound('purchase');
+  this.sound('medic_heal');
   this.notice=kind==='army'?'军医为全军疗伤 · 部曲与随从伤兵皆已痊愈':'军医施治 · 主将生命 '+Math.ceil(p.hp)+' / '+p.maxHp;
   this.onHealed?.();this.render();this.playMedicFx();return true;
  }

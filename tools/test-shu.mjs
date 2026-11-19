@@ -67,7 +67,7 @@ const killBoss = async p => {
   const n = await p.evaluate(() => window.__story('shu-opening'));
   const s1 = await p.evaluate(() => ({ mode: window.__S.mode, pass: window.__S.shuState.pass, foot: window.__S.sishuiObstacles.footprints.length }));
   const HW = await p.evaluate(async () => (await import('/src/systems/MountainPass.ts')).MOUNTAIN_PASS.halfWidth);
-  ck(`7-1：章首剧情卷轴（冻结战斗）→ 看完继续；山道半宽 ${HW[0]}（MOUNTAIN_PASS）、两侧坡壁碰撞框`, s0.story && s0.mode === 'story' && n >= 2 && s1.mode === 'none' && s1.pass?.halfW === HW[0] && s1.foot === 2, { s0, n, s1 });
+  ck(`7-1：章首剧情卷轴（冻结战斗）→ 看完继续；山道半宽 ${HW[0]}（MOUNTAIN_PASS）、两侧坡壁碰撞框`, s0.story && s0.mode === 'story' && n >= 2 && s1.mode === 'none' && s1.pass?.halfW === HW[0] && s1.foot >= 2 /* 两侧坡壁 + 有边场地后来加的边（11-19 起 4 个） */, { s0, n, s1 });
   // 刷兵只在山道里
   const sp = await p.evaluate(() => { const s = window.__S; window.__clear(); for (let i = 0; i < 8; i++) s.spawnAroundPlayer('infantry', true); const es = s.enemies.filter(e => e.active && !e.isSupplySlot && e.kind !== 'boss'); return { n: es.length, maxX: Math.max(...es.map(e => Math.abs(e.x))) }; });
   ck('7-1：敌兵只从山道前后来（不在坡壁里）', sp.n >= 6 && sp.maxX <= HW[0] - 30, { ...sp, halfW: HW[0] });

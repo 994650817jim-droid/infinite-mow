@@ -16,6 +16,7 @@ import type { Enemy } from '../entities/Enemy';
 import { playSheet } from './SkillFxSheets';
 import { ordersOf } from './BattleOrders';
 import { ART_V2_FILES, isV2Texture, regridV2 } from './ArtStyle';
+import { sceneSfx } from './ContentSfx';
 import { warnFx } from '../ui/WarnFx';
 import { DIANWEI_GUARD as D, DIANWEI_BARKS as BARK } from '../data/dianweiGuard';
 
@@ -162,7 +163,7 @@ export class DianweiGuard {
   /** 恶来死战：减伤、加攻速、红气、台词（一局一次）。 */
   private startRage(now: number): void {
     this.raged = true; this.rageUntil = now + D.rage.ms; this.stats.rage++;
-    this.h.banner('恶来死战', false, '典韦血战不退 · 减伤加速');
+    this.h.banner('恶来死战', false, '典韦血战不退 · 减伤加速'); sceneSfx(this.h.scene, 'dw_rage');
     this.say('rage'); this.rageFxAt = 0;
   }
   private updateRage(now: number): void {
@@ -170,7 +171,7 @@ export class DianweiGuard {
     if (now >= this.rageUntil) { this.rageUntil = 0; this.rageFx?.destroy(); this.rageFx = null; return; }
     // 红气：手绘序列帧循环（每段播完再接一段）；缺图则不画
     const rk = fxKey(this.h.scene, FX.rage);
-    if (rk && now >= this.rageFxAt) { this.rageFxAt = now + 600; this.rageFx = playSheet(this.h.scene, rk, this.x, this.y - 10, { size: D.rage.fx, ms: 600, depth: actorDepth(this.y) - .01, alpha: .7, add: true, tint: rk === 'fx_awaken_fire' ? 0xff5a40 : undefined, originY: .8, name: 'dianwei-rage', onUpdate: img => img.setPosition(this.x, this.y - 10).setDepth(actorDepth(this.y) - .01) }); }
+    if (rk && now >= this.rageFxAt) { this.rageFxAt = now + 600; this.rageFx = playSheet(this.h.scene, rk, this.x, this.y - 10, { size: D.rage.fx, ms: 600, depth: actorDepth(this.y) - .01, alpha: .7, add: true, tint: rk === 'fx_awaken_fire' ? 0xff5a40 : undefined, originY: rk === 'fx_dianwei_rage' ? .55 : .8, name: 'dianwei-rage', onUpdate: img => img.setPosition(this.x, this.y - 10).setDepth(actorDepth(this.y) - .01) }); }
     if (Math.floor(now / 120) % 2 === 0 && !this.hurtFlashUntil) this.img.setTint(0xffb0a0); else if (!this.hurtFlashUntil) this.img.clearTint();
   }
   /** 双戟旋风：起手（友军色预警圈）→ 旋扫一圈 + 击退。 */
@@ -178,7 +179,7 @@ export class DianweiGuard {
     const W = D.whirl, sc = this.h.scene, id = 'dianwei-whirl';
     if (this.whirlAt && now < this.whirlAt) { warnFx(sc).circle(id, 'slam', this.x, this.y, W.radius, 1 - (this.whirlAt - now) / W.windupMs, now, D.warnTint); return true; }
     if (this.whirlAt) {
-      this.whirlAt = 0; this.stats.whirls++; this.attackUntil = now + W.spinMs; this.say('whirl');
+      this.whirlAt = 0; this.stats.whirls++; this.attackUntil = now + W.spinMs; this.say('whirl'); sceneSfx(sc, 'dw_whirl');
       for (const e of enemies) {
         if (!e.active || e.isSupplySlot) continue; const dx = e.x - this.x, dy = e.y - this.y, d = Math.hypot(dx, dy) || 1; if (d > W.radius + e.radius) continue;
         this.h.hit(e, D.swingDamage * W.damageMul);
@@ -206,7 +207,7 @@ export class DianweiGuard {
     if (this.throwAt) {
       this.throwAt = 0; this.throwTarget = null;
       if (tg?.active) {
-        this.stats.throws++; this.attackUntil = now + D.attackMs; this.say('throw');
+        this.stats.throws++; this.attackUntil = now + D.attackMs; this.say('throw'); sceneSfx(sc, 'dw_throw');
         const sheet = sc.textures.exists(FX.throwSheet), img = sheet ? sc.add.image(this.x, this.y - 40, FX.throwSheet, 0).setDisplaySize(T.fx, T.fx) : sc.textures.exists(FX.halberd) ? sc.add.image(this.x, this.y - 40, FX.halberd).setScale(T.fx / 80) : null;
         img?.setDepth(DEPTH.fx).setName('dianwei-halberd');
         this.throws.push({ img, x: this.x, y: this.y - 40, tx: tg.x, ty: tg.y - 20, target: tg, life: 1.2, spin: 0 });
@@ -226,7 +227,7 @@ export class DianweiGuard {
       if (t.target.active) { t.tx = t.target.x; t.ty = t.target.y - 20; }
       const dx = t.tx - t.x, dy = t.ty - t.y, d = Math.hypot(dx, dy), st = T.speed * dt;
       if (d <= st + 8 || t.life <= 0) {
-        if (t.target.active && d <= st + 30) { this.h.hit(t.target, D.swingDamage * T.damageMul); this.stats.throwHits++; playSheet(sc, FX.hit, t.tx, t.ty, { size: 90, ms: 260, depth: DEPTH.fx + 1, add: true, name: 'dianwei-throw-hit' }); }
+        if (t.target.active && d <= st + 30) { this.h.hit(t.target, D.swingDamage * T.damageMul); this.stats.throwHits++; playSheet(sc, fxKey(sc, ['fx_dianwei_hit', FX.hit]) ?? FX.hit, t.tx, t.ty, { size: 90, ms: 260, depth: DEPTH.fx + 1, add: true, name: 'dianwei-throw-hit' }); }
         t.img?.destroy(); this.throws.splice(i, 1); continue;
       }
       t.x += dx / d * st; t.y += dy / d * st; t.spin += dt;
@@ -246,6 +247,9 @@ export class DianweiGuard {
     // 技能优先（起手 / 出手期间站定）
     const casting = this.updateWhirl(now, enemies) || this.updateThrow(now, enemies);
     const target = this.move(dt, enemies, casting || now < this.attackUntil);
+    // 主将不被推：典韦自己让开（走位时会走到主将身上；11-20 test-wancheng「没人站在典韦身上」onDw = 1），仍不出守区
+    { const pdx = this.x - p.x, pdy = this.y - p.y, pd = Math.hypot(pdx, pdy), min = D.body + 14;
+      if (pd < min) { const a = pd > .5 ? Math.atan2(pdy, pdx) : Math.atan2(this.home.y - p.y, this.home.x - p.x); let nx = p.x + Math.cos(a) * min, ny = p.y + Math.sin(a) * min; const hx = nx - this.home.x, hy = ny - this.home.y, hd = Math.hypot(hx, hy); if (hd > D.zone) { nx = this.home.x + hx / hd * D.zone; ny = this.home.y + hy / hd * D.zone; } this.x = nx; this.y = ny; this.stats.pushed++; } }
     for (const e of enemies) if (e.active && !e.isSupplySlot && e.kind !== 'boss') this.pushOut(e, e.radius * .7, (x, y) => e.sprite.setPosition(x, y));
     for (const a of this.h.allies?.() ?? []) if (a.active) this.pushOut(a, 12, (x, y) => a.setPosition(x, y));
     // 贴身敌兵砍典韦

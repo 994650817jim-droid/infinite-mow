@@ -1,5 +1,6 @@
 /** 出手音效试听页（sfx-preview.html，只在 dev server 下可用，不进正式包）。 */
 import { Sfx } from '../systems/Sfx';
+import { CONTENT_SFX_CONFIG } from '../systems/ContentSfx';
 
 type Row = { title: string; sub: string; sounds: Array<[string, string]> };
 const HEROES: Row[] = [
@@ -47,4 +48,14 @@ function section(title: string, rows: Row[], withStress: boolean): void {
 section('可玩武将（本命武器）', HEROES, true);
 section('兵种', TROOPS, false);
 section('对照', [MIX], false);
+// 新内容音效（ContentSfx，2026-11-19）：按类分组，按钮名就是键名
+{ const keys = Object.keys(CONTENT_SFX_CONFIG), by = (title: string, sub: string, f: (k: string) => boolean): Row => ({ title, sub, sounds: keys.filter(f).map(k => [k, k] as [string, string]) });
+  section('新内容音效', [
+    by('武将出招起手', '招牌技 / 被动触发；被动另叠 cast_sigil', k => k.startsWith('cast_')),
+    by('首领主题', '起手 bcast_* · 命中 bhit_* · 狂暴爆发 bburst', k => /^b(cast|hit|burst)/.test(k)),
+    by('诸葛亮 · 典韦', '星火焦土 / 借东风 / 八阵图 · 双戟旋风 / 掷戟 / 恶来死战', k => /^(zg_|dw_)/.test(k)),
+    by('新杂兵 · 滚石滚木', '投石 / 强弩 / 扑跳 / 纵火罐 / 火船 / 地火', k => /^(mn_|fire_ignite|ship_boom|roll_)/.test(k)),
+    by('场景事件 · 提示', '断桥 / 营帐起火 / 吕布跃下 / 据点 / 插旗 / 合击 / 觉醒', k => /^(bridge_|tent_|lubu_|cap_|flag_|toast_)/.test(k)),
+    by('营寨 · 城池', '旅商购买 / 军医 / 环境声', k => /^(shop_|medic_|amb_)/.test(k)),
+  ], false); }
 (window as unknown as { __sfxPreview?: Sfx }).__sfxPreview = sfx;

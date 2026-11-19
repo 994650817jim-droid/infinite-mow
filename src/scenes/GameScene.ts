@@ -844,7 +844,7 @@ export class GameScene extends Phaser.Scene {
     this.controlBuild=new ControlBuild(this,this.player.growth.build,(x,y,r)=>this.grid.query(x,y,r));
     this.events.once('shutdown',()=>{this.controlBuild?.clear();this.controlBuild=undefined;});
     const schoolBanner=new SchoolBanner(this,()=>this.mode==='none'&&!this.over,sch=>this.buffHud?.flashSchools(sch));this.schoolBanner=schoolBanner;
-    this.synergy=new SchoolSynergy({scene:this,player:this.player,combat:this.buildCombat,nearby:(x,y,r)=>this.grid.query(x,y,r),deal:(e,n,fire)=>{this.hitEnemy(e,n,this.combatNow,fire?'fire':'melee',false,false);},banner:(k,t,sub,sch)=>schoolBanner.show(k,t,sub,sch),
+    this.synergy=new SchoolSynergy({scene:this,player:this.player,combat:this.buildCombat,nearby:(x,y,r)=>this.grid.query(x,y,r),deal:(e,n,fire)=>{this.hitEnemy(e,n,this.combatNow,fire?'fire':'melee',false,false);},banner:(k,t,sub,sch)=>{schoolBanner.show(k,t,sub,sch);this.sfx.play(k==='combo'?'toast_combo':'toast_awaken');},
       controlled:(e,n)=>this.controlBuild?.isControlled(e,n)??false,slowArea:(x,y,r,k,ms,n)=>this.controlBuild?.slowArea(x,y,r,k,ms,n)??0,escort:(x,y,n,ms)=>this.reinforcePush().spawnEscortAt(x,y,n,ms)?.members.length??0,
       vfx:(st,x,y,size,a=0,ms=360)=>buildVfx(this).emit(st,x,y,this.combatNow,size,a,ms,true),flame:(x,y,r)=>this.spawnFlameFx(x,y,r),
       wind:(x,y,a,size)=>playSheet(this,'fx_gust_band',x,y,{size,ms:420,depth:DEPTH.fx+.05,rotation:a,name:'awaken-wind'}),shake:()=>this.hitFeel.shake('medium'),
@@ -1189,7 +1189,7 @@ export class GameScene extends Phaser.Scene {
       fireArrow:(e,tx,ty,d,sp)=>this.fireBolt(this.bullets,e.x,e.y,tx,ty,d*(this.env?.damageMul(e)??1),0,false,sp,enemyArrowTexture(this,e.sprite.texture.key)),hurtTroops:(x,y,r,d)=>this.legion.hurtArea(x,y,r,d,this.combatNow),
       move:(e,nx,ny,dt)=>{e.moveVx=nx*e.def.speed;e.moveVy=ny*e.def.speed;this.advanceEnemy(e,nx,ny,dt);},sfx:k=>this.sfx.play(k),
       inWater:(x,y)=>this.terrain?.inWater(x,y)??false,waterPoint:(px,py)=>{const t=this.terrain;if(!t)return null;for(let i=0;i<40;i++){const a=Math.random()*Math.PI*2,d=420+Math.random()*560,x=px+Math.cos(a)*d,y=py+Math.sin(a)*d;if(t.inWater(x,y))return{x,y};}return null;},
-      gainFood:n=>{this.legion.food+=n;},farPoint:(x,y)=>{const g=this.arena?.info.gates;if(!g?.length)return null;const p=this.player;return [...g].sort((a,b)=>Math.hypot(b.x-p.x,b.y-p.y)-Math.hypot(a.x-p.x,a.y-p.y))[0]??null;void x;void y;}}); // 机制自己定方向（保持距离 / 绕圈）：不用群体寻路的追击速度
+      gainFood:n=>{this.legion.food+=n;},boss:()=>this.boss,farPoint:(x,y)=>{const g=this.arena?.info.gates;if(!g?.length)return null;const p=this.player;return [...g].sort((a,b)=>Math.hypot(b.x-p.x,b.y-p.y)-Math.hypot(a.x-p.x,a.y-p.y))[0]??null;void x;void y;}}); // 机制自己定方向（保持距离 / 绕圈）：不用群体寻路的追击速度
     if(!this.arenaInit&&this.player&&this.terrainInit){this.arenaInit=true;const def=stageMapFor(this.hardKey(),this.hardStage());if(def)this.arena=new StageArena({scene:this,player:this.player,allies:()=>this.allies,enemies:()=>this.enemies,now:()=>this.combatNow,
       spawnTarget:(x,y,hp,size)=>{const e=this.supplies?.spawnGate(x,y,hp,size)??null;e?.sprite.setAlpha(0);return e;},hitEnemy:(e,d,src)=>{this.hitEnemy(e,d,this.combatNow,src??'melee',true,false);},spawnEnemy:(k,x,y)=>this.spawnEnemy(k,x,y,undefined,true),breakBridgeNear:(x,y)=>{const t=this.terrain as unknown as {rivers?:Array<{bridges:Array<{x:number;y:number}>}>;setBridgeBroken?:(i:number,b?:boolean)=>boolean}|null;const all=t?.rivers?.flatMap(r=>r.bridges)??[];let bi=-1,bd=300;all.forEach((b,i)=>{const d=Math.hypot(b.x-x,b.y-y);if(d<bd){bd=d;bi=i;}});return bi>=0&&!!t?.setBridgeBroken?.(bi,true);},
       hurtTroops:(x,y,r,d)=>this.legion.hurtArea(x,y,r,d,this.combatNow),banner:(t,d,c)=>this.showWaveBanner(t,!!d,c),sfx:k=>this.sfx.play(k),purge:pred=>{this.supplies?.purge(pred);}},def);}
@@ -1656,7 +1656,7 @@ export class GameScene extends Phaser.Scene {
             const p = enemy.targetAlly?.active && enemy.targetAlly.lifeId === enemy.targetLife ? enemy.targetAlly : this.player;
             this.sfx.play('enemyArrow');
             // 箭矢颜色跟射箭的人穿的阵营色走（第二章西凉暗红、袁军土黄、各势力色；黄巾原样），只换颜色
-            this.fireBolt(this.bullets, enemy.x, enemy.y, p.x, p.y, enemy.def.damage*(this.env?.damageMul(enemy)??1), 0, false, 210, enemyArrowTexture(this, enemy.sprite.texture.key));
+            this.fireBolt(this.bullets, enemy.x, enemy.y, p.x, p.y, enemy.def.damage*(this.env?.damageMul(enemy)??1)*(this.traits?.damageMul(enemy)??1), 0, false, 210, enemyArrowTexture(this, enemy.sprite.texture.key));
           });
         }
       } else if (enemy.kind === 'cavalry') {
@@ -1732,7 +1732,7 @@ export class GameScene extends Phaser.Scene {
     // 出手（拉弓放箭、挥砍）期间原地站定，避免攻击帧边播边平移；首领与骑兵冲锋有各自的位移逻辑。
     if (enemy.kind !== 'boss' && enemy.kind !== 'cavalry' && enemy.attackUntil > this.combatNow) { enemy.moveVx = enemy.moveVy = 0; return; }
     const controlSpeed=this.controlBuild?.motion(enemy,this.combatNow,dt)??1;
-    const martialSpeed=controlSpeed*(enemy.kind!=='boss'&&this.combatNow<enemy.martialSlowUntil?enemy.martialSlow:1)*(this.env?.speedMul(enemy)??1)*(this.terrain?.speedMul(enemy.x,enemy.y)??1);
+    const martialSpeed=controlSpeed*(enemy.kind!=='boss'&&this.combatNow<enemy.martialSlowUntil?enemy.martialSlow:1)*(this.env?.speedMul(enemy)??1)*(this.traits?.speedMul(enemy)??1)*(this.terrain?.speedMul(enemy.x,enemy.y)??1);
     enemy.sprite.x += (this.crowdSteering ? enemy.moveVx : nx * enemy.def.speed) * dt * martialSpeed;
     enemy.sprite.y += (this.crowdSteering ? enemy.moveVy : ny * enemy.def.speed) * dt * martialSpeed;
   }
@@ -1830,7 +1830,7 @@ export class GameScene extends Phaser.Scene {
       if (dist < player.radius + enemy.radius + 2) {
         enemy.contactCd = 1.0;
         this.feedback.attack(enemy, Math.atan2(player.y - enemy.y, player.x - enemy.x), this.combatNow);
-        if (player.takeDamage(enemy.def.damage*(this.env?.damageMul(enemy)??1), this.combatNow)) {
+        if (player.takeDamage(enemy.def.damage*(this.env?.damageMul(enemy)??1)*(this.traits?.damageMul(enemy)??1), this.combatNow)) {
           this.cameras.main.flash(90, 180, 40, 40, false);
         }
       }

@@ -307,3 +307,4 @@ assets/raw/*
 !/tools/gif-dianwei.mjs
 !/tools/gif-zhangliang.mjs
 !/tools/test-xurong-cast.mjs
+!/tools/prepare-fx-strips.mjs

@@ -82,12 +82,12 @@ export function buildTerritory(scene: Phaser.Scene, era: EraId, owned: readonly 
     }
     let a: number, k = 1;
     // 国界墨线只画在交界一侧（势力序号大的那侧），线宽一格，不再两侧各一格叠成粗糊带（2026-11-18）
-    if (border === 2 && !ink) { a = .45; k = 1.05; }
-    else if (border === 2) { const o = i * 4; d[o] = 40; d[o + 1] = 32; d[o + 2] = 24; d[o + 3] = .78 * 255; if (player) { const p = i * 4; pd[p] = 255; pd[p + 1] = 222; pd[p + 2] = 130; pd[p + 3] = 255; } continue; } // 国界：墨线（2026-11-18「边界画成墨线」）
-    else if (border === 1) { a = .32; k = .8; }       // 疆域外缘（荒地 / 海岸）：淡收边（2026-11-18 不再是一圈浓色带）
-    else if (inner) { a = .4; k = 1.05; }             // 国界内侧一道淡势力色（原 .82 的浓色带看着糊）
-    else if (province) { a = .2; k = 1.2; }           // 郡界
-    else a = player ? (REALM_V2 ? .34 : .28) : .2;    // 疆域底色：淡设色（v2：我方更实）
+    if (border === 2 && !ink) { a = .3; k = 1.05; } // 2026-11-19 用户「天下地图ui修复」：整体设色再淡一档
+    else if (border === 2) { const o = i * 4; d[o] = 40; d[o + 1] = 32; d[o + 2] = 24; d[o + 3] = .62 * 255; if (player) { const p = i * 4; pd[p] = 255; pd[p + 1] = 222; pd[p + 2] = 130; pd[p + 3] = 255; } continue; } // 国界：墨线（2026-11-18「边界画成墨线」）
+    else if (border === 1) { a = .2; k = .8; }       // 疆域外缘（荒地 / 海岸）：淡收边（2026-11-18 不再是一圈浓色带）
+    else if (inner) { a = .24; k = 1.05; }             // 国界内侧一道淡势力色（原 .82 的浓色带看着糊）
+    else if (province) { a = .12; k = 1.2; }           // 郡界
+    else a = player ? (REALM_V2 ? .24 : .2) : .12;    // 疆域底色：淡设色（v2：我方更实）
     const o = i * 4; d[o] = Math.min(255, r * k); d[o + 1] = Math.min(255, gg * k); d[o + 2] = Math.min(255, b * k); d[o + 3] = a * 255;
     // 我方疆界另画一层金色描边（v2，见下方 playerKey）
     if (player && border) { const p = i * 4; pd[p] = 255; pd[p + 1] = 222; pd[p + 2] = 130; pd[p + 3] = 255; }

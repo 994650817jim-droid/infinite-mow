@@ -56,6 +56,8 @@ export interface StoryChapter {
   bonds: readonly StoryBond[];
   /** 其他系统按 id 触发的台词（不自动播） */
   barks?: readonly StoryNode[];
+  /** 战斗中途的卷轴（暂停战斗、显示对白立绘；每存档一次）：其他系统按时机调 StoryDirector.midScroll(id)，如 2-3 董卓吕布上城头 / 董卓下城 */
+  midScrolls?: readonly StoryNode[];
 }
 
 /** 非武将人物：显示名；portrait 为对白半身像贴图键（还没有的先只显示名字章，清单见 MISSING_PORTRAITS）。 */

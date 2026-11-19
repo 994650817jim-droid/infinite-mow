@@ -1425,7 +1425,8 @@ export class GameScene extends Phaser.Scene {
       enemies:()=>this.enemies,allies:()=>this.allies,hitFeel:()=>this.hitFeel,
       cutscene:(script,anchors,done)=>this.playCutscene(script,anchors,done),heroSprite:id=>this.heroSprite(id),
       ready:()=>!this.objective||this.objective.done, // 2-3：营寨全毁 → 吕布跃下城头
-      line:(id,t)=>(this as unknown as {storyDir?:{line(id:string,t:{x:number;y:number}):boolean}}).storyDir?.line(id,t)??false},boss); // 剧情台词：故事系统（claude/story-batch1）合并后生效
+      line:(id,t)=>(this as unknown as {storyDir?:{line(id:string,t:{x:number;y:number}):boolean}}).storyDir?.line(id,t)??false,
+      scroll:id=>(this as unknown as {storyDir?:{midScroll(id:string):boolean}}).storyDir?.midScroll(id)??false},boss); // 剧情台词：故事系统（claude/story-batch1）合并后生效
     // 2-3 友军攻势：义军小队从后方一路打向营寨（data/dongzhuo.ts LUOYANG.push）
     if(this.dzLubu&&this.objective&&!this.objective.done&&!this.allyPush)this.allyPush=new AllyPush({scene:this,now:()=>this.combatNow,paused:()=>this.mode!=='none'||this.over||!!this.cutscene?.active,player:()=>this.player,
       camps:()=>this.objective?.standing??[],enemies:()=>this.enemies,hit:(e,d)=>{this.hitEnemy(e,d,this.combatNow,'melee',true,false);},push:(x,y,r)=>this.terrain?.pushCircle(x,y,r)??null},LUOYANG.push);

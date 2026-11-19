@@ -4,6 +4,7 @@
 // 用法：SRC=public/assets/ink-cast/originals/sheet_a.png IDS=jiaxu,wangyun,lijue node tools/build-ink-cast.mjs
 //   PAD（默认 .14）：每格向两侧多裁的比例；两人在底部云雾里连在一起、邻居衣角混进来时设 PAD=0（只裁本格）。
 //   MINBLOB（默认 .01）：离人物较远、小于最大墨块这个比例的零碎墨块丢掉；画面分格底色不一留下灰块时调大（如 .06）。
+//   KEEP=x0,y0,x1,y1（源图像素）：这块里只有近纯白才算背景（浅色钢刃、白袍不被抠掉），如张梁的刀：KEEP=930,740,1180,960
 //   切分：在 W·k/N 附近 ±18% 内找「非白像素最少」的竖线当分界（人物之间的白缝）。
 import { chromium } from 'playwright';
 import fs from 'fs';
@@ -11,7 +12,7 @@ const { SRC } = process.env, IDS = (process.env.IDS ?? '').split(',').filter(Boo
 if (!SRC || !IDS.length) { console.error('需要 SRC 与 IDS'); process.exit(2); }
 fs.mkdirSync(OUT, { recursive: true });
 const b = await chromium.launch({ channel: 'chrome', headless: true }); const p = await b.newPage();
-const res = await p.evaluate(async ([src, N, PAD, MINBLOB]) => {
+const res = await p.evaluate(async ([src, N, PAD, MINBLOB, KEEP]) => {
   const im = new Image(); im.src = src; await im.decode();
   const W = im.width, H = im.height, c0 = document.createElement('canvas'); c0.width = W; c0.height = H;
   const g0 = c0.getContext('2d', { willReadFrequently: true }); g0.drawImage(im, 0, 0);
@@ -28,7 +29,7 @@ const res = await p.evaluate(async ([src, N, PAD, MINBLOB]) => {
     const g = c.getContext('2d', { willReadFrequently: true }); g.fillStyle = '#fff'; g.fillRect(0, 0, cw, H); g.drawImage(im, -x0, 0);
     const img = g.getImageData(0, 0, cw, H), d = img.data, light = i => 255 - Math.min(d[i], d[i + 1], d[i + 2]);
     const bg = new Uint8Array(cw * H), q = new Int32Array(cw * H); let qh = 0, qt = 0;
-    const push = (x, y) => { const j = y * cw + x; if (bg[j] || light(j * 4) > 48) return; bg[j] = 1; q[qt++] = j; };
+    const push = (x, y) => { const j = y * cw + x; if (bg[j] || light(j * 4) > (KEEP && x + x0 >= KEEP[0] && x + x0 < KEEP[2] && y >= KEEP[1] && y < KEEP[3] ? 8 : 48)) return; bg[j] = 1; q[qt++] = j; };
     for (let x = 0; x < cw; x++) { push(x, 0); push(x, H - 1); } for (let y = 0; y < H; y++) { push(0, y); push(cw - 1, y); }
     while (qh < qt) { const j = q[qh++], x = j % cw, y = (j / cw) | 0; if (x > 0) push(x - 1, y); if (x < cw - 1) push(x + 1, y); if (y > 0) push(x, y - 1); if (y < H - 1) push(x, y + 1); }
     // 非背景连通块（8 邻接）：重心不在本格的整块丢掉
@@ -64,7 +65,7 @@ const res = await p.evaluate(async ([src, N, PAD, MINBLOB]) => {
     outs.push(o.toDataURL('image/webp', .86));
   }
   return { size: [W, H], cuts, outs };
-}, ['data:image/png;base64,' + fs.readFileSync(SRC).toString('base64'), IDS.length, +(process.env.PAD ?? .14), +(process.env.MINBLOB ?? .01)]);
+}, ['data:image/png;base64,' + fs.readFileSync(SRC).toString('base64'), IDS.length, +(process.env.PAD ?? .14), +(process.env.MINBLOB ?? .01), process.env.KEEP ? process.env.KEEP.split(",").map(Number) : null]);
 res.outs.forEach((u, k) => { const f = OUT + IDS[k] + '.webp', buf = Buffer.from(u.split(',')[1], 'base64'); fs.writeFileSync(f, buf); console.log('→', f, buf.length); });
 console.log('源图', res.size.join('×'), '分界', res.cuts.join(','));
 await b.close();

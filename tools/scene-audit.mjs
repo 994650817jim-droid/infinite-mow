@@ -24,7 +24,15 @@ const CH = {
   11: { name: '南征', key: 'NanzhengGameScene', reg: 'nanzhengStage' }, 12: { name: '北伐', key: 'BeifaGameScene', reg: 'beifaStage' },
 };
 const SIEGE = { 'siege-small': 'shangdang', 'siege-medium': 'chenliu', 'siege-large': 'luoyang' };
-const all = [...Object.keys(CH).flatMap(n => [1, 2, 3].map(s => `${n}-${s}`)), ...Object.keys(SIEGE)];
+// 2026-11-19 全面检查（统筹「整体检查每个章节场景和逻辑合不合理和攻城战，有没有什么贴图错误」）：加守城、军情、三英战吕布
+const EXTRA = {
+  'defense-small': { key: 'SiegeGameScene', reg: { siegeCity: 'shangdang', siegeMode: 'defense' } },
+  'defense-medium': { key: 'SiegeGameScene', reg: { siegeCity: 'chenliu', siegeMode: 'defense' } },
+  'defense-large': { key: 'SiegeGameScene', reg: { siegeCity: 'luoyang', siegeMode: 'defense' } },
+  'intel-bounty': { key: 'IntelGameScene', intel: 'bounty' }, 'intel-bandit': { key: 'IntelGameScene', intel: 'bandit' }, 'intel-escort': { key: 'IntelGameScene', intel: 'escort' },
+  'challenge-lubu': { key: 'LubuGameScene' },
+};
+const all = [...Object.keys(CH).flatMap(n => [1, 2, 3].map(s => `${n}-${s}`)), ...Object.keys(SIEGE), ...Object.keys(EXTRA)];
 const only = arg('only', ''), list = only ? only.split(',') : all;
 
 const heroRec = id => ({ id, kind: 'hero', hero: id, name: id, template: 'spear', quality: 'orange', rank: 1, picks: [] });
@@ -39,23 +47,26 @@ for (const id of list) {
   const t0 = Date.now(), errors = [], shots = [];
   const p = await b.newPage({ viewport: { width: 1280, height: 720 } });
   p.on('pageerror', e => errors.push(e.message.slice(0, 160)));
-  p.on('console', m => { if (m.type() === 'error' && !/favicon|Failed to load resource|Texture key already in use/.test(m.text())) errors.push('console ' + m.text().slice(0, 160)); });
+  const warns = []; p.on('console', m => { if (m.type() === 'error' && !/favicon|Failed to load resource|Texture key already in use/.test(m.text())) errors.push('console ' + m.text().slice(0, 160)); if (m.type() === 'warning' && /texture|frame|missing|not found/i.test(m.text())) warns.push(m.text().slice(0, 140)); });
   const shot = async name => { const f = `${OUT}/${id}-${name}.png`; await p.screenshot({ path: f }); shots.push(f); };
   let row = { id };
   try {
     await p.addInitScript(([r, w, h]) => { if (!sessionStorage.getItem('seeded')) { localStorage.clear(); localStorage.setItem('im_world_v1', JSON.stringify(w)); localStorage.setItem('im_roster_v1', JSON.stringify(r)); localStorage.setItem('im_last_hero', 'zhaoyun'); localStorage.setItem('im_heroes_v1', JSON.stringify(h)); sessionStorage.setItem('seeded', '1'); } }, [roster, world, heroes]);
     await p.goto(base + '?dev=1&autostart=1&stage=1&layout=desktop&followers=1');
     await p.waitForFunction(() => window.__game?.scene.getScene('GameScene')?.player && window.__IM, null, { timeout: 120000 });
-    const siege = SIEGE[id], [chn, stn] = siege ? [0, 0] : id.split('-').map(Number), C = CH[chn];
-    const key = siege ? 'SiegeGameScene' : C.key;
-    await p.evaluate(([C, st, siege, key]) => {
+    const X = EXTRA[id], siege = SIEGE[id], [chn, stn] = siege || X ? [0, 0] : id.split('-').map(Number), C = CH[chn];
+    const key = X ? X.key : siege ? 'SiegeGameScene' : C.key;
+    await p.evaluate(async ([C, st, siege, key, X]) => {
       const g = window.__game, s0 = g.scene.getScene('GameScene'); s0.registry.remove('campaignTransfer'); s0.registry.remove('thirdTransfer');
       let cfg = {};
-      if (siege) { s0.registry.set('siegeCity', siege); s0.registry.remove('siegeMode'); }
+      if (X?.reg) for (const [k, v] of Object.entries(X.reg)) s0.registry.set(k, v);
+      if (X?.intel) { const W = await import('/src/world/WorldIntel.ts'), first = Object.entries(W.BOUNTY_GENERALS)[0]; const ev = { id: 'audit-' + X.intel, kind: X.intel, city: X.intel === 'escort' ? 'xiangyang' : 'luoyang', faction: X.intel === 'bounty' ? first[0] : X.intel === 'bandit' ? 'yellow' : 'han', general: X.intel === 'bounty' ? first[1][0] : undefined, expires: 9999 }; s0.registry.set('intelEvent', ev.id); s0.registry.set('intelPreview', ev); }
+      if (X) {}
+      else if (siege) { s0.registry.set('siegeCity', siege); s0.registry.remove('siegeMode'); }
       else if (C.reg) { s0.registry.set(C.reg, st); cfg = C.reg === 'guanduStage' ? {} : { thirdStage: st }; }
       else cfg = C.cfgv;
       s0.registry.set('runConfig', { character: 'zhaoyun', ...cfg }); s0.scene.start(key);
-    }, [C ? { reg: C.reg, cfgv: C.cfg?.(stn) } : {}, stn, siege, key]);
+    }, [C ? { reg: C.reg, cfgv: C.cfg?.(stn) } : {}, stn, siege, key, X ?? null]);
     await p.waitForFunction(k => { const s = window.__game.scene.getScene(k); return window.__game.scene.isActive(k) && s?.player && s.elapsed < 6; }, key, { timeout: 120000 });
     // 剧情卷轴 / 弹窗先点掉，等随行到位
     await p.evaluate(async k => {
@@ -74,6 +85,15 @@ for (const id of list) {
     await p.waitForTimeout(1500);
     await p.evaluate(() => window.__clear());
     await shot('start');
+    const texCheck = tag => p.evaluate(tag => {
+      const s = window.__S, all = []; const walk = l => { for (const o of l) { all.push(o); if (o.list) walk(o.list); } }; walk(s.children.list);
+      const vis = all.filter(o => o.visible !== false && (o.alpha ?? 1) > .02 && o.texture);
+      const missing = vis.filter(o => o.texture.key === '__MISSING' || (o.texture.key === '__DEFAULT' && o.type !== 'Container' && o.type !== 'Graphics' && o.type !== 'Text' && !o.input)).map(o => [o.type, o.name || '', Math.round(o.x), Math.round(o.y)]);
+      const badFrame = vis.filter(o => o.frame && o.frame.name === '__BASE' && o.texture.frameTotal > 2 && /walk|attack|sheet|_s$/.test(o.texture.key)).map(o => o.texture.key);
+      const enemyKeys = {}; for (const e of s.enemies) if (e.active && !e.isSupplySlot) { const k = e.sprite?.texture?.key ?? '?'; enemyKeys[k] = (enemyKeys[k] ?? 0) + 1; }
+      return { tag, missing: missing.slice(0, 8), missingN: missing.length, badFrame: [...new Set(badFrame)].slice(0, 6), enemyKeys };
+    }, tag);
+    row.tex = [await texCheck('start')];
 
     // ———— 障碍图（主将逐格瞬移 + 跑一帧） ————
     const probe = async (tag, rx = 1700, ry = 1500, step = 60) => {
@@ -145,6 +165,7 @@ for (const id of list) {
       return R;
     }, [fightSecs, !!siege]);
     await shot('fight');
+    row.tex.push(await texCheck('fight'));
     // 2) 秒杀推进，遇到首领登场 / 攻城换段就停下来
     let more = true, guard = 0;
     while (more && guard++ < 12) {
@@ -168,7 +189,7 @@ for (const id of list) {
         await p.evaluate(async () => { const s = window.__S; s.devOneHit = false; s.devTimeScale = 1; const t = performance.now(); while (performance.now() - t < 4000) { window.__clear(); await new Promise(r => setTimeout(r, 150)); } });
         const crowd = await p.evaluate(() => { const s = window.__S, bo = s.boss?.active ? s.boss : window.__bossRef; if (!bo?.active) return null; const cam = s.cameras.main, v = cam.worldView;
           return { near: s.enemies.filter(e => e.active && e !== bo && !e.isSupplySlot && Math.hypot(e.x - bo.x, e.y - bo.y) < 70).length, onScreen: v.contains(bo.x, bo.y), dist: Math.round(Math.hypot(bo.x - s.player.x, bo.y - s.player.y)) }; });
-        row.bossCrowd = crowd; await shot('boss');
+        row.bossCrowd = crowd; await shot('boss'); row.tex.push(await texCheck('boss'));
       } else if (ev.ev === 'phase') {
         await p.waitForTimeout(2500); await p.evaluate(() => window.__clear());
         await shot('phase-' + ev.phase); maps[ev.phase] = await probe('-' + ev.phase);
@@ -179,11 +200,11 @@ for (const id of list) {
       const s = window.__S, inBlocked = (x, y) => { const i = Math.round((x - (m.cx - m.rx)) / m.step), j = Math.round((y - (m.cy - m.ry)) / m.step); if (i < 0 || j < 0 || i >= m.cols || j >= m.rows) return 'out'; return m.data[j * m.cols + i]; };
       const sp = window.__spawns, c = { total: sp.length, blocked: 0, water: 0, out: 0, ex: [] };
       for (const [x, y, k] of sp) { const v = inBlocked(x, y); if (v === '1') { c.blocked++; if (c.ex.length < 5) c.ex.push([k, x, y]); } else if (v === '2') c.water++; else if (v === 'out') c.out++; }
-      return { spawns: c, stage: s.chapter?.name, label: s.chapter?.label, boss: s.chapter?.bossName };
+      return { spawns: c, stage: s.chapter?.name, label: s.chapter?.label, boss: s.chapter?.bossName, result: s.over ? [s.resultTexts?.title?.text, s.resultTexts?.subtitle?.text, (s.resultTexts?.body?.text ?? '').split('\n').find(l => /结局/.test(l))].join(' | ') : null, hp: Math.round(s.player.hp), elapsed: Math.round(s.elapsed) };
     }, maps.first);
     Object.assign(row, run, tail, { maps: Object.fromEntries(Object.entries(maps).map(([k, v]) => [k, { blocked: v.blocked, water: v.water, cx: v.cx, cy: v.cy, step: v.step, cols: v.cols, rows: v.rows, data: v.data }])) });
   } catch (e) { row.error = e.message.split('\n')[0].slice(0, 220); try { await shot('error'); } catch {} }
-  row.errors = [...new Set(errors)].slice(0, 5); row.shots = shots; row.wall = Math.round((Date.now() - t0) / 1000);
+  row.errors = [...new Set(errors)].slice(0, 5); row.warns = [...new Set(warns)].slice(0, 8); row.shots = shots; row.wall = Math.round((Date.now() - t0) / 1000);
   results[id] = row; writeFileSync(jsonPath, JSON.stringify(results, null, 1));
   const mp = row.maps?.first;
   console.log(`${id} ${row.stage ?? ''}：${row.error ? '出错 ' + row.error : (row.end?.ev ?? '?')}${row.end?.victory != null ? (row.end.victory ? ' 胜' : ' 负') : ''} · 障碍格 ${mp?.blocked ?? '—'} 水格 ${mp?.water ?? '—'} · 刷怪 ${row.spawns?.total ?? '—'}（墙里 ${row.spawns?.blocked ?? '—'} 水里 ${row.spawns?.water ?? '—'}）· 深入障碍 随行 ${row.deep?.follower ?? '—'} 敌 ${row.deep?.enemy ?? '—'} 首领 ${row.deep?.boss ?? '—'} · 首领周围小兵 ${row.bossCrowd?.near ?? '—'} · ${row.wall}s${row.errors.length ? ' · 页面错误 ' + row.errors[0] : ''}`);

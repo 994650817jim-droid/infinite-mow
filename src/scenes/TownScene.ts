@@ -10,6 +10,7 @@ import {isChapterTestRun} from '../systems/ChapterProgress';
 import {W,H,worldShell,worldAssets} from '../world/WorldUI';
 import {FONT,HEADING_FONT} from '../config';
 import {homeCommand,warPanelTexture} from '../ui/HomeCommand';
+import {lqCommand,lqPanel} from '../ui/LacquerKit';
 import {uiSfx} from '../systems/Sfx';
 import {loadWorld,worldUnlocked,storageUnavailable,incompatibleSave,cityLevels,cityBuild,spendProvisions} from '../world/WorldStore';
 import {openMerchantShop} from '../ui/MerchantShop';
@@ -42,7 +43,8 @@ const BORROW_SLOTS: Record<CityTier, Record<CityBuildingId, Slot>> = {
 };
 const HQ_IDS: HqId[] = ['talent', 'academy', 'stable', 'barracks'];
 /** 电脑版顶 / 底栏高度（顶栏放城名、档次与产出两行）。 */
-const TOWN_BARS = {top: 62, bottom: CAMP_BARS.bottom} as const;
+const TOWN_BARS = {top: 0, bottom: 0} as const; // 11-19 第二轮：顶 / 底栏改为角落浮牌，全景不再留栏位
+void CAMP_BARS;
 const txt = (s: Phaser.Scene, x: number, y: number, v: string, size = 15, color = '#ede3c9', font = FONT) => s.add.text(x, y, v, {fontFamily: font, fontSize: size + 'px', color, resolution: 2});
 let D = false;
 
@@ -53,7 +55,7 @@ export class TownScene extends Phaser.Scene {
  private hits: Phaser.GameObjects.Rectangle[] = [];
  private drag: {x: number; y: number; sx: number; sy: number; moved: boolean} | null = null;
  private pressed: string | null = null;
- private folk?: TownFolk;
+ private folk?: TownFolk; private plates!: Phaser.GameObjects.Graphics;
  private header!: Phaser.GameObjects.Text; private grain!: Phaser.GameObjects.Text; private income!: Phaser.GameObjects.Text;
  constructor() { super('TownScene'); }
  init(data: {city?: string}) {
@@ -85,20 +87,17 @@ export class TownScene extends Phaser.Scene {
   // 居民与全景同一容器（按脚下 y 排前后，走到屋后被屋子挡住）；精灵不接收点击，不挡建筑
   this.folk = new TownFolk(this, this.pano, this.k, this.tier());
   const tick = (_t: number, dt: number) => this.folk?.update(dt); this.events.on('update', tick); this.events.once('shutdown', () => { this.events.off('update', tick); this.folk = undefined; }); this.events.once('shutdown', () => mask.destroy());
-  const head = this.add.graphics().setDepth(-1).setName('town-bars');
-  if (D) { const {top, bottom} = TOWN_BARS; // 顶 / 底两条半透明漆底描金栏叠在全景上（同营寨）
-   for (let i = 0; i < 8; i++) head.fillStyle(0x120b06, .8 - i * .07).fillRect(0, top + i * 3, W, 3);
-   head.fillStyle(0x120b06, .8).fillRect(0, 0, W, top).lineStyle(1, 0x000000, .7).lineBetween(0, top + .5, W, top + .5).lineStyle(1, 0xc9a35e, .75).lineBetween(0, top - 1.5, W, top - 1.5);
-   for (let i = 0; i < 8; i++) head.fillStyle(0x120b06, .8 - i * .07).fillRect(0, H - bottom - (i + 1) * 3, W, 3);
-   head.fillStyle(0x120b06, .82).fillRect(0, H - bottom, W, bottom).lineStyle(1, 0x000000, .7).lineBetween(0, H - bottom - .5, W, H - bottom - .5).lineStyle(1, 0xc9a35e, .75).lineBetween(0, H - bottom + 1.5, W, H - bottom + 1.5); }
-  else { head.fillStyle(0x102019, 1).fillRect(0, 0, W, this.vr.y).fillRect(0, this.vr.y + this.vr.h, W, H - this.vr.y - this.vr.h); head.lineStyle(2, 0xb3935b, .85).strokeRect(this.vr.x, this.vr.y, this.vr.w, this.vr.h); }
+  // 电脑：不再有整条顶 / 底栏——左上一块漆牌（城名、档次、产出，压在城墙与天空上）、右上军粮牌、底部正中一枚漆金「返回天下地图」，全城建筑与名牌都不被挡
+  //（11-19 第二轮用户：「城市ui还是有问题」）。手机照旧页眉底色。
+  this.plates = this.add.graphics().setDepth(-1).setName('town-plates');
+  if (!D) { this.plates.fillStyle(0x102019, 1).fillRect(0, 0, W, this.vr.y).fillRect(0, this.vr.y + this.vr.h, W, H - this.vr.y - this.vr.h); this.plates.lineStyle(2, 0xb3935b, .85).strokeRect(this.vr.x, this.vr.y, this.vr.w, this.vr.h); }
   worldShell(this, c.name);
   this.header = txt(this, D ? 150 : 24, D ? 20 : 62, '', D ? 15 : 13, '#e7c98a', HEADING_FONT).setOrigin(0, .5).setName('town-header');
   this.income = txt(this, D ? 150 : 24, D ? 44 : 86, '', D ? 13 : 12, '#b9d2a8').setOrigin(0, .5).setName('town-income');
-  this.grain = txt(this, W - 24, D ? 26 : 30, '', D ? 15 : 14, '#efe0b4', HEADING_FONT).setOrigin(1, .5).setName('town-grain');
-  const back = homeCommand(this, W / 2, D ? H - 28 : H - 72, D ? 260 : W - 60, D ? 40 : 52, '返回天下地图', true, true, D ? 16 : 17);
+  this.grain = txt(this, W - 26, D ? 26 : 30, '', D ? 15 : 14, '#efe0b4', HEADING_FONT).setOrigin(1, .5).setName('town-grain');
+  const back = D ? lqCommand(this, W / 2, H - 26, 190, 36, '返回天下地图', true, true, 15) : homeCommand(this, W / 2, H - 72, W - 60, 52, '返回天下地图', true, true, 17);
+  if (D) { back.g.setDepth(0); back.hit.setDepth(1); back.caption.setDepth(2); } // 漆金按钮：字压在底板上（场景里直接加，不在容器里）
   back.hit.setName('town-back').on('pointerdown', () => { this.registry.set('mapFocusCity', this.cityId); this.scene.start('WorldMapScene'); });
-  if (D) txt(this, 24, H - 28, '点建筑即可建造或升级', 12, '#a9b9a2').setOrigin(0, .5).setName('town-tip');
   this.input.on('pointerdown', (p: Phaser.Input.Pointer) => { if (this.anyModal() || !this.inView(p.x, p.y)) return; this.drag = {x: p.x, y: p.y, sx: this.sx, sy: this.sy, moved: false}; });
   this.input.on('pointermove', (p: Phaser.Input.Pointer) => { const d = this.drag; if (!d || !p.isDown) return; const dx = p.x - d.x, dy = p.y - d.y; if (!d.moved && Math.hypot(dx, dy) < 8) return; d.moved = true; this.scrollTo(d.sx - dx, d.sy - dy); });
   this.input.on('pointerup', (p: Phaser.Input.Pointer, over: Phaser.GameObjects.GameObject[]) => {
@@ -123,7 +122,11 @@ export class TownScene extends Phaser.Scene {
   const wx = (px - this.pano.x) / this.z, wy = (py - this.pano.y) / this.z; this.z = nz; this.pano.setScale(nz); this.labelScale();
   this.scrollTo(wx * nz - (px - this.vr.x), wy * nz - (py - this.vr.y));
  }
- private labelScale() { const k = 1 / this.z; if (this.folk) this.folk.labelK = k; for (const o of this.pano?.list ?? []) if (/^(tag-|ready-|folk-b)/.test(o.name)) (o as Phaser.GameObjects.Text).setScale(k); }
+ private labelScale() {
+  const k = 1 / this.z; if (this.folk) this.folk.labelK = k; for (const o of this.pano?.list ?? []) if (/^(tag-|ready-|folk-b)/.test(o.name)) (o as Phaser.GameObjects.Text).setScale(k);
+  // 可建造 / 可升级徽记：贴在对应名牌右端（11-19 第二轮：原来浮在建筑旁的空地上）
+  for (const o of this.pano?.list ?? []) { if (!o.name.startsWith('ready-')) continue; const t = this.pano.getByName('tag-' + o.name.slice(6)) as Phaser.GameObjects.Text | null; if (!t) continue; (o as Phaser.GameObjects.Container).setPosition(t.x + t.width * k / 2 + 13 * k, t.y - t.height * k / 2); }
+ }
  private scrollTo(sx: number, sy: number, _remember = true) {
   this.sx = Phaser.Math.Clamp(sx, 0, Math.max(0, PANO_W * this.ke - this.vr.w)); this.sy = Phaser.Math.Clamp(sy, 0, Math.max(0, PANO_H * this.ke - this.vr.h + (D ? TOWN_BARS.bottom : 0)));
   this.pano?.setScale(this.z).setPosition(this.vr.x - this.sx, this.vr.y - this.sy);
@@ -135,6 +138,10 @@ export class TownScene extends Phaser.Scene {
   this.folk?.setCount(folkCount(c.tier, lv.office)); this.folk?.setAmbient(lv);
   this.income.setText(`每战产出：${incomeText(cityIncome(c.tier, lv))}${sp ? `　特产「${sp.title}」${sp.text}` : ''}`);
   this.grain.setText(`军粮 ${s.provisions}`);
+  if (D) { const g = this.plates; g.clear(); const lw = Math.max(this.header.x + this.header.width, this.income.x + this.income.width) + 16 - 8, gw = this.grain.width + 32;
+   lqPanel(g, 8, 6, lw, 58, {alpha: .9}); lqPanel(g, W - gw - 10, 8, gw, 36, {alpha: .9});
+   for (const n of ['town-plate-hit-l', 'town-plate-hit-r']) this.children.getByName(n)?.destroy();
+   this.add.rectangle(8, 6, lw, 58, 0, .001).setOrigin(0).setInteractive().setDepth(-1).setName('town-plate-hit-l'); this.add.rectangle(W - gw - 10, 8, gw, 36, 0, .001).setOrigin(0).setInteractive().setDepth(-1).setName('town-plate-hit-r'); }
   this.drawPano();
  }
  private drawPano() {
@@ -159,9 +166,8 @@ export class TownScene extends Phaser.Scene {
     this.pano.add(g); h = fw * .5; }
    }
    const name = CITY_BUILDINGS[id].name, label = l > 0 ? `${name} Lv${l}` : block.length ? `${name} · 需${block[0]}` : `＋ ${name}`;
-   const tag = txt(this, x, y - (l > 0 ? 4 : h * .24), label, D ? 12 : 13, l > 0 ? '#fff1cf' : block.length ? '#b3a78f' : '#f6e2ae').setOrigin(.5, 1).setBackgroundColor(l > 0 ? '#20150dcc' : '#20150d99').setPadding(6, 2, 6, 2).setName('tag-' + id);
-   this.pano.add(tag);
-   if (ready) { const badge = this.add.container(x + w * .32, Math.max(14, y - h + 10)); const bk = l > 0 ? 'town_badge_upgrade' : 'town_badge_build'; /* 2026-11-18 手绘「可升级 / 可建造」徽记（美术会话 art-style）；缺图时退回原绿圆 ↑ */ if (this.textures.exists(bk)) badge.add(this.add.image(0, 0, bk).setOrigin(.5, .56).setDisplaySize(32, 32)); else { badge.add(this.add.circle(0, 0, 11, 0x2f7a3a).setStrokeStyle(2, 0xd8f0b8)); badge.add(txt(this, 0, 0, '↑', 14, '#ffffff', HEADING_FONT).setOrigin(.5)); } badge.setName('ready-' + id); this.pano.add(badge); this.tweens.add({targets: badge, y: badge.y - 4, yoyo: true, repeat: -1, duration: 600, ease: 'Sine.easeInOut'}); }
+   const tag = this.label(x, y - (l > 0 ? 4 : h * .24), label, l > 0 ? 'built' : block.length ? 'blocked' : 'open', 'tag-' + id);
+   if (ready) { const badge = this.add.container(tag.x, tag.y); /* 位置由 labelScale 贴到名牌右端 */ const bk = l > 0 ? 'town_badge_upgrade' : 'town_badge_build'; /* 2026-11-18 手绘「可升级 / 可建造」徽记（美术会话 art-style）；缺图时退回原绿圆 ↑ */ if (this.textures.exists(bk)) badge.add(this.add.image(0, 0, bk).setOrigin(.5, .56).setDisplaySize(32, 32)); else { badge.add(this.add.circle(0, 0, 11, 0x2f7a3a).setStrokeStyle(2, 0xd8f0b8)); badge.add(txt(this, 0, 0, '↑', 14, '#ffffff', HEADING_FONT).setOrigin(.5)); } badge.setName('ready-' + id); this.pano.add(badge); }
    const hit = this.add.rectangle(x, y - h / 2, Math.max(w * .8, 60), Math.max(h, 50), 0xffffff, .001).setName('bld-' + id).setInteractive({useHandCursor: true});
    hit.on('pointerdown', () => { this.pressed = id; });
    hit.on('pointerup', () => { const own = this.pressed === id; this.pressed = null; if (!own || this.drag?.moved) return; this.openCard(id); });
@@ -190,8 +196,7 @@ export class TownScene extends Phaser.Scene {
    const camp = size === 1 && (CAMP_ART_IDS as readonly string[]).includes(id) && this.textures.exists('city_camp_' + id), key = camp ? 'city_camp_' + id : 'city_' + id + '_' + Math.min(3, Math.max(1, lv));
    let h = w * .6, art: Phaser.GameObjects.Image | undefined;
    if (this.textures.exists(key)) { art = this.add.image(x, y, key).setOrigin(.5, 1).setName('hq-' + id); art.setScale(w / art.width); if (!lv) art.setAlpha(.45); h = art.displayHeight; this.pano.add(art); }
-   const name = TOWN_BUILDINGS[id].name, tag = txt(this, x, y - 4, lv > 0 ? name + ' Lv' + lv : '＋ ' + name, D ? 12 : 13, lv > 0 ? '#fff1cf' : '#f6e2ae').setOrigin(.5, 1).setBackgroundColor(lv > 0 ? '#20150dcc' : '#20150d99').setPadding(6, 2, 6, 2).setName('tag-hq-' + id);
-   this.pano.add(tag);
+   const name = TOWN_BUILDINGS[id].name, tag = this.label(x, y - 4, lv > 0 ? name + ' Lv' + lv : '＋ ' + name, lv > 0 ? 'built' : 'open', 'tag-hq-' + id);
    const hit = this.add.rectangle(x, y - h / 2, Math.max(w * .8, 60), Math.max(h, 50), 0xffffff, .001).setName('bld-hq-' + id).setInteractive({useHandCursor: true});
    hit.on('pointerdown', () => { this.pressed = 'hq-' + id; });
    hit.on('pointerup', () => { const own = this.pressed === 'hq-' + id; this.pressed = null; if (!own || this.drag?.moved) return; uiSfx().play('uiClick'); this.scene.start('CityScene', {open: id, back: this.cityId}); });
@@ -200,17 +205,17 @@ export class TownScene extends Phaser.Scene {
     .on('pointerout', () => { tag.setColor(color).setScale(1 / this.z); if (art && base) art.setScale(base.x, base.y); });
    this.pano.add(hit); this.hits.push(hit);
   }
-  // 旅商摊：遮棚 + 推车 + 坛罐（营地道具），点开军需商人
-  const m = slots.merchant, mx = m.x * k, my = m.y * k, P = 'camp_props_v2';
-  if (this.textures.exists(P)) {
-   const prop = (fr: number, dx: number, dy: number, w: number, flip = false) => { const im = this.add.image(mx + dx * k, my + dy * k, P, fr).setOrigin(.5, .9).setFlipX(flip).setName('hq-merchant-prop'); im.setScale(w * k / 128 * 1.15); zy(im, my + dy * k); this.pano.add(im); return im; };
-   const stall = prop(2, 0, 0, m.w); prop(24, -m.w * .62, 3, 40, true); prop(18, m.w * .42, 4, 22);
-   const tag = txt(this, mx, my + 2, '旅商', D ? 12 : 13, '#fff1cf').setOrigin(.5, 1).setBackgroundColor('#5a1f14dd').setPadding(8, 2, 8, 2).setName('tag-hq-merchant'); this.pano.add(tag);
-   const hit = this.add.rectangle(mx - 8 * k, my - m.w * .3 * k, m.w * 1.8 * k, Math.max(m.w * .7 * k, 46), 0xffffff, .001).setName('bld-hq-merchant').setInteractive({useHandCursor: true});
+  // 旅商摊：市集摊棚（攻城城内图集，与民居同比例）+ 坛罐，点开军需商人；名牌同其它建筑
+  const m = slots.merchant, mx = m.x * k, my = m.y * k, ST = 'town_cityset';
+  if (this.textures.exists(ST)) {
+   const stall = this.add.image(mx, my, ST, 0).setOrigin(.5, .95).setName('hq-merchant'); stall.setScale(m.w * k / 384 * 1.08); this.pano.add(stall);
+   if (this.textures.exists('camp_props_v2')) { const jar = this.add.image(mx + m.w * .5 * k, my + 2 * k, 'camp_props_v2', 18).setOrigin(.5, .9).setName('hq-merchant-prop'); jar.setScale(30 * k / 128 * 1.15); zy(jar, my + 2 * k); this.pano.add(jar); }
+   const tag = this.label(mx, my - 4, '旅商', 'built', 'tag-hq-merchant'), sh = stall.displayHeight;
+   const hit = this.add.rectangle(mx, my - sh / 2, Math.max(m.w * k, 60), Math.max(sh, 46), 0xffffff, .001).setName('bld-hq-merchant').setInteractive({useHandCursor: true});
    hit.on('pointerdown', () => { this.pressed = 'hq-merchant'; });
    hit.on('pointerup', () => { const own = this.pressed === 'hq-merchant'; this.pressed = null; if (!own || this.drag?.moved) return; this.openMerchant(); });
    const base = {x: stall.scaleX, y: stall.scaleY};
-   hit.on('pointerover', () => { tag.setColor('#ffe08a').setScale(1.18 / this.z); stall.setScale(base.x * 1.05, base.y * 1.05); }).on('pointerout', () => { tag.setColor('#fff1cf').setScale(1 / this.z); stall.setScale(base.x, base.y); });
+   hit.on('pointerover', () => { tag.setColor('#ffe08a').setScale(1.18 / this.z); stall.setScale(base.x * 1.04, base.y * 1.04); }).on('pointerout', () => { tag.setColor('#f6e3b4').setScale(1 / this.z); stall.setScale(base.x, base.y); });
    this.pano.add(hit); this.hits.push(hit);
   }
  }
@@ -220,6 +225,11 @@ export class TownScene extends Phaser.Scene {
   const s = loadWorld(), tier = s.warlordStages >= 3 ? 2 : s.cleared.hulao ? 1 : 0; let hero = 'zhaoyun'; try { hero = localStorage.getItem('im_last_hero') || hero; } catch { /* 存储不可用 */ }
   const open = () => { if (!this.sys.isActive()) return; openMerchantShop(this, {wallet: {name: '军粮', get: () => loadWorld().provisions, spend: spendProvisions}, tier, hero: (CHARACTERS.some(c => c.id === hero) ? hero : 'zhaoyun') as CharacterId, depth: 600, onClose: () => { if (this.sys.settings.status === Phaser.Scenes.RUNNING) this.refresh(); }, sound: k => uiSfx().play(k as 'uiClick')}); };
   if (this.textures.exists('item_icons')) open(); else { this.load.atlas('item_icons', 'assets/items/item-icons.webp', 'assets/items/item-icons.json'); this.load.once('complete', open); this.load.start(); }
+ }
+ /** 统一名牌（功能建筑 / 分署 / 旅商）：漆底描金字、同字号、底边中点对齐建筑底边。state：built 已建 / open 可建 / blocked 未满足条件。 */
+ private label(x: number, y: number, v: string, state: 'built' | 'open' | 'blocked', name: string): Phaser.GameObjects.Text {
+  const t = txt(this, x, y, v, D ? 13 : 13, state === 'built' ? '#f6e3b4' : state === 'open' ? '#eed79f' : '#b3a78f', HEADING_FONT).setOrigin(.5, 1).setBackgroundColor(state === 'built' ? '#1b120be6' : '#1b120bb8').setPadding(8, 3, 8, 3).setName(name);
+  this.pano.add(t); return t;
  }
  private toast(v: string) {
   const warn = storageUnavailable ? (incompatibleSave ? '存档版本较新，本次修改不会保存' : '存储不可用，修改仅保留本次会话') : '', msg = [v, warn].filter(Boolean).join('\n'); if (!msg) return;

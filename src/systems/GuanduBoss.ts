@@ -7,6 +7,7 @@ import type {Legion} from './Legion';
 import type {EnemyKind} from '../types';
 import {GUANDU_STAGES, type GuanduStage} from '../data/guanduChapter';
 import {GRAIN} from './GrainDepots';
+import {ensureBossTheme, playThemeFx, themeShake} from './BossThemeFx';
 
 interface Host {
   scene: Phaser.Scene; boss: Enemy; player: Player; army: Legion; spawn: (kind: EnemyKind, x: number, y: number) => Enemy | null;
@@ -56,7 +57,7 @@ export class GuanduBoss {
 
   /** opts：攻城战大将借用技能时覆盖图集与名字。 */
   constructor(private h: Host, readonly stage: GuanduStage, now: number, private opts: {atlas?: string; name?: string; kit?: 'yanliang' | 'wenchou' | 'chunyuqiong'} = {}) {
-    this.gfx = h.scene.add.graphics().setDepth(39); this.next = now + 800; h.boss.controlImmune = true;
+    this.gfx = h.scene.add.graphics().setDepth(39); this.next = now + 800; h.boss.controlImmune = true; ensureBossTheme(h.scene, 'dust');
   }
   private get info() { const d = GUANDU_STAGES[this.stage - 1]; return {...d, atlas: this.opts.atlas ?? d.atlas, boss: this.opts.name ?? d.boss}; }
   /** 招式组：默认按关号（4-2 文丑）；双将关同一关建两个不同招式的实例（opts.kit）。 */
@@ -168,6 +169,9 @@ export class GuanduBoss {
     const dx = x - z.x, dy = y - z.y, c = Math.cos(z.angle), s = Math.sin(z.angle), along = dx * c + dy * s;
     return along >= -r && along <= z.length + r && Math.abs(-dx * s + dy * c) <= z.width / 2 + r;
   }
+  /** 主题特效（BossThemeFx 尘土冲锋）：区域结算那一刻在真实范围上补手绘冲击；没图什么都不画。 */
+  private fx(z: Zone) { const sc = this.h.scene, ok = z.radius ? playThemeFx(sc, 'dust', {kind: 'circle', x: z.x, y: z.y, r: z.radius}) : playThemeFx(sc, 'dust', {kind: 'lane', x: z.x, y: z.y, angle: z.angle, len: z.length, width: z.width}); if (ok) themeShake(sc, false); }
+  private trailAt = 0;
   private impact(z: Zone, now: number, damage: number, key: string) {
     const p = this.h.player; damage *= this.dmgMul * (this.comboOpt?.dmgMul ?? 1);
     const hit = (id: string, x: number, y: number, r: number, fn: () => void) => { const k = key + ':' + id; if (!this.seen.has(k) && this.inside(z, x, y, r)) { this.seen.add(k); fn(); this.metrics.damage++; } };
@@ -194,6 +198,7 @@ export class GuanduBoss {
   private travel(line: Zone, dt: number, speed: number, damage: number, now: number, key: string) {
     const b = this.h.boss, step = Math.min(line.length - this.travelled, dt * speed); if (step <= 0) return 0;
     b.sprite.x += Math.cos(line.angle) * step; b.sprite.y += Math.sin(line.angle) * step;
+    if (now >= this.trailAt) { this.trailAt = now + 90; playThemeFx(this.h.scene, 'dust', {kind: 'puff', x: b.x - Math.cos(line.angle) * 26, y: b.y - Math.sin(line.angle) * 26 + 4, size: 90}, {ms: 360, alpha: .75}); }
     this.impact({...line, x: b.x - Math.cos(line.angle) * step, y: b.y - Math.sin(line.angle) * step, length: step}, now, damage, key);
     this.travelled += step; this.gfx.lineStyle(3, 0xd5b77f, .6).lineBetween(b.x - Math.cos(line.angle) * 35, b.y - Math.sin(line.angle) * 35, b.x, b.y);
     return step;
@@ -233,10 +238,10 @@ export class GuanduBoss {
       if (this.travelled < line.length) {
         this.travel(line, dt, this.phase2 ? Y.dash.speed2 : Y.dash.speed, Y.dash.damage, now, 'dash'); this.draw(circle, .15);
         if (this.travelled >= line.length) this.dashEnd = age;
-      } else if (!circle.done) { circle.done = true; this.metrics.cleave++; this.impact(circle, now, Y.dash.cleaveDamage, 'cleave'); }
+      } else if (!circle.done) { circle.done = true; this.metrics.cleave++; this.fx(circle); this.impact(circle, now, Y.dash.cleaveDamage, 'cleave'); }
       if (circle.done && age - this.dashEnd < 260) this.burst(circle);
     } else if (this.skill === 1) {
-      this.zones.forEach((z, i) => { if (age < z.due) { this.draw(z, .15); return; } if (!z.done) { z.done = true; this.impact(z, now, Y.spin.damage, 'spin' + i); } if (age - z.due < 260) this.burst(z); });
+      this.zones.forEach((z, i) => { if (age < z.due) { this.draw(z, .15); return; } if (!z.done) { z.done = true; this.fx(z); this.impact(z, now, Y.spin.damage, 'spin' + i); } if (age - z.due < 260) this.burst(z); });
     } else {
       this.zones.forEach(z => { if (z.done) return; z.done = true; this.h.spawn('shield', z.x, z.y); this.h.spawn('infantry', z.x + 24, z.y + 16); if (this.phase2) this.h.spawn('archer', z.x - 24, z.y + 16); });
     }
@@ -250,9 +255,9 @@ export class GuanduBoss {
         const back = W.feint.back * dt * 1000 / W.feint.backMs;
         b.sprite.x -= Math.cos(line.angle) * back; b.sprite.y -= Math.sin(line.angle) * back; this.draw(line, .15);
       } else if (this.travelled < line.length) this.travel(line, dt, W.feint.speed, W.feint.damage, now, 'feint');
-      for (let i = 1; i < this.zones.length; i++) { const z = this.zones[i]; if (age < z.due) { this.draw(z, .15); continue; } if (!z.done) { z.done = true; this.impact(z, now, W.feint.sideDamage, 'side' + i); } if (age - z.due < 220) this.draw(z, .4); }
+      for (let i = 1; i < this.zones.length; i++) { const z = this.zones[i]; if (age < z.due) { this.draw(z, .15); continue; } if (!z.done) { z.done = true; this.fx(z); this.impact(z, now, W.feint.sideDamage, 'side' + i); } if (age - z.due < 220) this.draw(z, .4); }
     } else if (this.skill === 1) {
-      this.zones.forEach((z, i) => { if (age < z.due) { this.draw(z, .15); return; } if (!z.done) { z.done = true; this.impact(z, now, W.volley.damage, 'arrow' + i); } if (age - z.due < 200) this.draw(z, .4); });
+      this.zones.forEach((z, i) => { if (age < z.due) { this.draw(z, .15); return; } if (!z.done) { z.done = true; this.fx(z); this.impact(z, now, W.volley.damage, 'arrow' + i); } if (age - z.due < 200) this.draw(z, .4); });
     } else if (this.lootId >= 0) {
       const line = this.zones[0];
       if (this.travelled < line.length - W.loot.reach) this.travel({...line, length: line.length - W.loot.reach}, dt, W.loot.speed, W.loot.damage, now, 'loot');
@@ -274,7 +279,7 @@ export class GuanduBoss {
       this.zones.forEach(z => { if (z.done) return; z.done = true; this.h.spawn('shield', z.x, z.y); if (this.phase2) this.h.spawn('archer', z.x + 20, z.y + 14); });
     } else {
       const damage = this.skill === 1 ? C.volley.damage : C.catapult.damage;
-      this.zones.forEach((z, i) => { if (age < z.due) { this.draw(z, .15); return; } if (!z.done) { z.done = true; this.impact(z, now, damage, (this.skill === 1 ? 'arrows' : 'rock') + i); } if (age - z.due < 260) this.burst(z); });
+      this.zones.forEach((z, i) => { if (age < z.due) { this.draw(z, .15); return; } if (!z.done) { z.done = true; this.fx(z); this.impact(z, now, damage, (this.skill === 1 ? 'arrows' : 'rock') + i); } if (age - z.due < 260) this.burst(z); });
     }
   }
   private burst(z: Zone) {

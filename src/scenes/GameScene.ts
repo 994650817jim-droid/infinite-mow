@@ -97,6 +97,7 @@ import { LegionUI } from '../ui/LegionUI';
 import { Reinforcements } from '../systems/Reinforcements';
 import { MartialFields } from '../systems/MartialFields';
 import { RunGrowth, ATTRIBUTE_INFO, attributeCap, attributeIcon, type AttributeId } from '../systems/RunGrowth';
+import { BossPace } from '../systems/BossPace';
 import { addMerit, addScrolls, getXinde, SCROLL, temperBonus } from '../systems/MasteryStore';
 import { primaryAttribute, PRIMARY_PERK, PRIMARY_PERK_INFO, PRIMARY_TIERS, PRIMARY_MUL, SPELL_WEAPONS } from '../data/attributes';
 import { stageCleared, takeAttrNotice } from '../systems/HeroProgress';
@@ -165,6 +166,8 @@ import {BossChest,playBossFall,type ChestLoot} from '../systems/BossChest';
 import {preloadBossDeath} from '../systems/BossDeathArt';
 import {ItemBagUI} from '../ui/ItemBagUI';
 import { enemyArrowTexture } from '../systems/ArrowPalette';
+import { EnemyTraits } from '../systems/EnemyTraits';
+import { LuoyangCamps } from '../systems/LuoyangCamps';
 import { HitFeel, BossStagger } from '../systems/HitFeel';
 /** 武将序列帧的透明度与时长（缺省 1 / 450 毫秒）。2026-11-17 用户：「张飞攻击特效有点太夸张」「魏延也是」→ 张飞声浪 / 断桥怒吼、魏延劈地 / 裂波 / 谁敢杀我 调淡、调短。 */
 const HERO_FX_TONE: Record<string, { alpha: number; ms: number }> = {
@@ -388,6 +391,10 @@ export class GameScene extends Phaser.Scene {
   protected terrain: Terrain | null = null; private terrainInit = false;
   /** 有边场地（data/stageMaps，按剧情定场地）：边界、守边、刷兵关口、场景互动；没配的关为 null（无限大场地）。 */
   protected arena: StageArena | null = null; private arenaInit = false;
+  /** 各章新兵种机制（data/enemyRoster，systems/EnemyTraits）。 */
+  protected traits: EnemyTraits | null = null;
+  /** 2-3 洛阳五座营寨：营栅、守军、援兵（systems/LuoyangCamps）。 */
+  luoyangCamps: LuoyangCamps | null = null;
   /** 小地图 / 测试读：本关场地边界（无限大场地为 null）。 */
   get stageBounds() { return this.arena?.info ?? null; } private terrainNav: Array<{left:number;right:number;top:number;bottom:number}> = [];
   windstepFx(): WindstepFx { if (!this.windFx) { this.windFx = new WindstepFx(this, this.player, this.sfx); this.events.once('shutdown', () => { this.windFx?.destroy(); this.windFx = undefined; }); } return this.windFx; }
@@ -553,6 +560,8 @@ export class GameScene extends Phaser.Scene {
 
   /** 游戏内毫秒时钟：暂停、升级和招募期间冻结。 */
   combatNow = 0;
+  /** 首领走路提速 / 追击（systems/BossPace，测试读 stats）。 */
+  bossPace?: BossPace;
   protected elapsed = 0;
   protected kills = 0;
   protected damageDealt = 0;
@@ -724,7 +733,7 @@ export class GameScene extends Phaser.Scene {
     // 治疗数字：主将实际回复的量累加，每 0.4 秒合成一个绿色「+n」（药、酒、吸血、信物回血都算）
 
     { const pl = this.player, raw = pl.heal.bind(pl); this.healAcc = 0; pl.heal = (n: number) => { const h0 = pl.hp; raw(n); this.healAcc += Math.max(0, pl.hp - h0); }; }
-    this.dragFx = undefined; this.flankFx = undefined; this.windFx = undefined; this.skirmishPuffAt = 0; this.env = null; this.envInit = false; this.terrain?.clear(); this.arena?.clear(); this.arena = null; this.arenaInit = false; this.terrain = null; this.terrainInit = false; this.terrainNav = []; Ally.terrainMul = null; this.player && (this.player.terrainSpeedMul = 1);
+    this.dragFx = undefined; this.flankFx = undefined; this.windFx = undefined; this.skirmishPuffAt = 0; this.env = null; this.envInit = false; this.terrain?.clear(); this.arena?.clear(); this.arena = null; this.traits?.clear(); this.traits = null; this.luoyangCamps?.clear(); this.luoyangCamps = null; this.arenaInit = false; this.terrain = null; this.terrainInit = false; this.terrainNav = []; Ally.terrainMul = null; this.player && (this.player.terrainSpeedMul = 1);
     this.applyRunConfig(this.runConfig);
     this.worldCampaign=!preview&&!isChapterTestRun()&&this.registry.get('worldCampaign')===true;
     this.hardMode=!preview&&this.registry.get('hardChapter')===this.hardKey()&&(chapterState(this.hardKey() as TimelineChapterId,loadWorldState())==='cleared'||isChapterTestRun());
@@ -762,6 +771,7 @@ export class GameScene extends Phaser.Scene {
     this.setupBattleMap();
     // 坐骑：马厩里给该武将分配的马（第一章通关后马厩开放；换马只在休整时，下一关出征生效）
     {const horse=heroHorse(this.runConfig.character);this.mount=horse?new HeroMount({scene:this,player:this.player,enemies:this.enemies,hit:(e,d,now)=>this.hitEnemy(e,d,now,'melee',false,false),notice:t=>this.showGrowthNotice(t)},{base:horse.id,name:horse.name},this.runConfig.character,this.player.growth.gear.specials.includes('hubao')?{trampleMul:RELIC.hubaoTrample,remountMs:RELIC.hubaoRemountMs}:{}):null;this.player.mountGuard=this.mount?(n,now)=>this.mount?.guard(n,now)??n:undefined;this.mountHint=MountRideHint.maybeShow(this,!!this.mount);this.events.once('shutdown',()=>{this.mount?.clear();this.mount=null;});}
+    this.bossPace=new BossPace(this as unknown as ConstructorParameters<typeof BossPace>[0]); // 首领走路提速 / 追击（BALANCE.bossPace）
     this.itemDrops=new ItemDrops(this,this.player,this.itemTier(),()=>this.elapsed,()=>this.isFinalBoss(),()=>this.sfx.play('pickup'),()=>this.bossRelicKey());this.itemDrops.deferBossRelic=true; // 首领遗珍由首领宝箱发（BossChest）
     this.relics=new BossRelics({scene:this,player:this.player,enemies:()=>this.enemies,hit:(e,d,now)=>{this.hitEnemy(e,d,now,'melee',false,false);},notice:t=>this.showGrowthNotice(t)},this.player.growth.gear.specials,this.combatNow);
     this.syncRelicShips();
@@ -1124,7 +1134,7 @@ export class GameScene extends Phaser.Scene {
           (performance as unknown as { memory?: { usedJSHeapSize: number } }).memory
             ? Math.round(((performance as unknown as { memory: { usedJSHeapSize: number } }).memory.usedJSHeapSize / 1048576) * 10) / 10
             : '-'
-        }MB`,
+        }MB${this.traits ? ' | ' + this.traits.summary() : ''}`,
       );
     }
 
@@ -1159,6 +1169,12 @@ export class GameScene extends Phaser.Scene {
     this.parley?.update(); // 首领招降：残血弹窗 / 再压一压
     if(this.mode==='none'&&!this.over)this.dual?.update(this.combatNow); // 双首领：招降、配合技、狂怒 / 心乱、退走线
     if(!this.terrainInit&&this.player){this.terrainInit=true;const tc0=terrainConfigFor(this.hardKey(),this.hardStage()),tc=tc0?.auto&&new URLSearchParams(location.search).get('groves')==='0'?{...tc0,auto:undefined}:tc0; /* ?groves=0：关掉自动树林（前后对比截图用） */if(tc){this.terrain=new Terrain(this,tc,tc.auto?this.treeAvoid():undefined);const t=this.terrain;if(tc.auto)this.supplies?.purge((x,y)=>t.treeNear(x,y,50)); /* 自动树林种下后，已经摆在树脚下的补给箱 / 道具收掉 */Ally.terrainMul=(x,y)=>t.speedMul(x,y);this.terrainNav=[...t.navBoxes(),...t.cliffBoxes];if(t.cliffBoxes.length){if(!this.sishuiObstacles)this.sishuiObstacles=new SishuiObstacles([]);this.sishuiObstacles.footprints.push(...t.cliffBoxes);} /* 山崖碰撞并进场景障碍：挡人、刷兵避开、随行也认 */this.events.once('shutdown',()=>{t.clear();if(this.terrain===t){this.terrain=null;Ally.terrainMul=null;}});}}
+    if(!this.traits&&this.player)this.traits=new EnemyTraits({scene:this,player:this.player,enemies:()=>this.enemies,stageKey:()=>this.hardKey()+'.'+this.hardStage(),wave:()=>waveIndexAt(this.elapsed,this.chapter.waves)+1,enabled:()=>!this.hardMode&&this.mode==='none'&&(!this.runConfig.encounter||this.achievementArc()!==undefined),/* 第三章起的篇章场景都带 encounter（qunxiong），按自己的篇章键配兵；只排除 ?encounter= 预览 */
+      baseDef:k=>{const b=this.chapter.enemies[k];if(!this.yellow)return b;const v=this.yellow.variant(b,this.elapsed);return v.behavior?b:v;},spawn:(k,x,y,def)=>this.spawnEnemy(k,x,y,undefined,false,def),
+      fireArrow:(e,tx,ty,d,sp)=>this.fireBolt(this.bullets,e.x,e.y,tx,ty,d*(this.env?.damageMul(e)??1),0,false,sp,enemyArrowTexture(this,e.sprite.texture.key)),hurtTroops:(x,y,r,d)=>this.legion.hurtArea(x,y,r,d,this.combatNow),
+      move:(e,nx,ny,dt)=>{e.moveVx=nx*e.def.speed;e.moveVy=ny*e.def.speed;this.advanceEnemy(e,nx,ny,dt);},sfx:k=>this.sfx.play(k),
+      inWater:(x,y)=>this.terrain?.inWater(x,y)??false,waterPoint:(px,py)=>{const t=this.terrain;if(!t)return null;for(let i=0;i<40;i++){const a=Math.random()*Math.PI*2,d=420+Math.random()*560,x=px+Math.cos(a)*d,y=py+Math.sin(a)*d;if(t.inWater(x,y))return{x,y};}return null;},
+      gainFood:n=>{this.legion.food+=n;},farPoint:(x,y)=>{const g=this.arena?.info.gates;if(!g?.length)return null;const p=this.player;return [...g].sort((a,b)=>Math.hypot(b.x-p.x,b.y-p.y)-Math.hypot(a.x-p.x,a.y-p.y))[0]??null;void x;void y;}}); // 机制自己定方向（保持距离 / 绕圈）：不用群体寻路的追击速度
     if(!this.arenaInit&&this.player&&this.terrainInit){this.arenaInit=true;const def=stageMapFor(this.hardKey(),this.hardStage());if(def)this.arena=new StageArena({scene:this,player:this.player,allies:()=>this.allies,enemies:()=>this.enemies,now:()=>this.combatNow,
       spawnTarget:(x,y,hp,size)=>{const e=this.supplies?.spawnGate(x,y,hp,size)??null;e?.sprite.setAlpha(0);return e;},hitEnemy:(e,d,src)=>{this.hitEnemy(e,d,this.combatNow,src??'melee',true,false);},spawnEnemy:(k,x,y)=>this.spawnEnemy(k,x,y,undefined,true),breakBridgeNear:(x,y)=>{const t=this.terrain as unknown as {rivers?:Array<{bridges:Array<{x:number;y:number}>}>;setBridgeBroken?:(i:number,b?:boolean)=>boolean}|null;const all=t?.rivers?.flatMap(r=>r.bridges)??[];let bi=-1,bd=300;all.forEach((b,i)=>{const d=Math.hypot(b.x-x,b.y-y);if(d<bd){bd=d;bi=i;}});return bi>=0&&!!t?.setBridgeBroken?.(bi,true);},
       hurtTroops:(x,y,r,d)=>this.legion.hurtArea(x,y,r,d,this.combatNow),banner:(t,d,c)=>this.showWaveBanner(t,!!d,c),sfx:k=>this.sfx.play(k),purge:pred=>{this.supplies?.purge(pred);}},def);}
@@ -1427,7 +1443,10 @@ export class GameScene extends Phaser.Scene {
       const rawBurst = this.chapter.spawnBurst(paced), burst0 = easy && easy.burstDiv > 1 ? Math.max(1, Math.ceil(rawBurst / easy.burstDiv)) : rawBurst, burst = bossOn ? Math.max(1, Math.ceil(burst0 * B.burstMul)) : burst0;
       for (let i = 0; i < burst; i += 1) {
         if (this.activeEnemyCount() >= cap) break;
-        if (!this.spawnAroundPlayer(this.chapter.pickEnemy(paced))) break;
+        // 配兵表（data/enemyRoster STAGE_MIX / ROSTER_MIX）：新兵种按权重混进来、受占比和同类上限管；底层兵种不配就用本章原刷怪表
+        const mix = this.traits?.pick();
+        if (mix && 'trait' in mix) { if (this.traits!.spawnSpecial(mix.trait)) continue; }
+        if (!this.spawnAroundPlayer(mix && 'base' in mix ? mix.base : this.chapter.pickEnemy(paced))) break;
       }
     }
 
@@ -1488,9 +1507,14 @@ export class GameScene extends Phaser.Scene {
       ready:()=>!this.objective||this.objective.done, // 2-3：营寨全毁 → 吕布跃下城头
       line:(id,t)=>(this as unknown as {storyDir?:{line(id:string,t:{x:number;y:number}):boolean}}).storyDir?.line(id,t)??false,
       scroll:id=>(this as unknown as {storyDir?:{midScroll(id:string):boolean}}).storyDir?.midScroll(id)??false},boss); // 剧情台词：故事系统（claude/story-batch1）合并后生效
+    // 2-3 营寨：营栅围一圈、营里守军待命、营门出援兵（systems/LuoyangCamps；用户 11-19「营寨…有围栏围着…小怪比较多守着」）
+    if(this.dzLubu&&this.objective&&!this.objective.done&&!this.luoyangCamps){if(!this.sishuiObstacles)this.sishuiObstacles=new SishuiObstacles([]);
+      const lc=this.luoyangCamps=new LuoyangCamps({scene:this,player:this.player,now:()=>this.combatNow,tents:()=>this.objective?.standing??[],obstacles:this.sishuiObstacles.footprints,
+        pick:()=>this.traits?.pick()??null,basePick:()=>this.chapter.pickEnemy(120),spawn:(k,x,y)=>this.spawnEnemy(k,x,y,undefined,true),spawnTrait:(id,x,y)=>this.traits?.spawnSpecial(id,{x,y})??null,move:(e,nx,ny,dt)=>{e.moveVx=nx*e.def.speed;e.moveVy=ny*e.def.speed;this.advanceEnemy(e,nx,ny,dt);}});
+      this.supplies?.purge((x,y)=>lc.camps.some(c=>c.boxes.some(b=>x>b.left-40&&x<b.right+40&&y>b.top-40&&y<b.bottom+40))); /* 落在营栅上的布景收掉 */}
     // 2-3 友军攻势：义军小队从后方一路打向营寨（data/dongzhuo.ts LUOYANG.push）
     if(this.dzLubu&&this.objective&&!this.objective.done&&!this.allyPush)this.allyPush=new AllyPush({scene:this,now:()=>this.combatNow,paused:()=>this.mode!=='none'||this.over||!!this.cutscene?.active,player:()=>this.player,
-      camps:()=>this.objective?.standing??[],enemies:()=>this.enemies,hit:(e,d)=>{this.hitEnemy(e,d,this.combatNow,'melee',true,false);},push:(x,y,r)=>this.terrain?.pushCircle(x,y,r)??null},LUOYANG.push);
+      camps:()=>this.objective?.standing??[],enemies:()=>this.enemies,hit:(e,d)=>{this.hitEnemy(e,d,this.combatNow,'melee',true,false);},push:(x,y,r)=>{const t=this.terrain?.pushCircle(x,y,r)??null,c=this.luoyangCamps?.pushOut(x+(t?.x??0),y+(t?.y??0),r)??null;return t||c?{x:(t?.x??0)+(c?.x??0),y:(t?.y??0)+(c?.y??0)}:null;} /* 推开量相加（树 + 营栅） */,approach:(c,x,y)=>this.luoyangCamps?.approach(c,x,y)??null},LUOYANG.push);
     // 2-3：城墙 / 洛水封口建好后，撤掉开局先于城墙生成、落在城墙里或场地外的布景与旗子
     {const z=this.dzLubu;if(z)this.supplies?.purge((x,y)=>!z.inArena(x,y,0)||z.obstacles.footprints.some(b=>x>b.left&&x<b.right&&y>b.top&&y<b.bottom));}
     if(this.chapter.bossStyle==='huaxiong')this.sishuiPass?.onBoss(boss); // 汜水关：关门洞开，华雄带亲卫杀出
@@ -1551,6 +1575,8 @@ export class GameScene extends Phaser.Scene {
     const player = this.player;
     this.rebuildGrid();
     this.enemyMovement.prepare(this.enemies, this.grid, this.legion.grid, player.x, player.y, dt, this.combatNow);
+    this.traits?.update(this.combatNow); // 新兵种：落石 / 地火 / 毒箭 / 中毒
+    this.luoyangCamps?.update(dt); // 2-3 营寨：警觉 / 援兵
     for (const enemy of this.enemies) {
       if (!enemy.active) continue;
       enemy.updateVisual(time);
@@ -1572,7 +1598,9 @@ export class GameScene extends Phaser.Scene {
       const nx = dx / dist;
       const ny = dy / dist;
 
-      if(this.customEnemyStep(enemy,dt,this.combatNow,target)){}
+      if(this.luoyangCamps?.step(enemy,dt)){} // 2-3 营寨守军：待命 / 出营门
+      else if(this.traits?.step(enemy,dt,this.combatNow,target)){} // 新兵种机制（重装 / 治疗 / 投掷 / 纵火 / 毒箭 / 弓骑）
+      else if(this.customEnemyStep(enemy,dt,this.combatNow,target)){}
       else if (this.xiliang?.handleEnemy(enemy,dt,this.combatNow)) {}
       else if (this.yellow?.handleEnemy(enemy,dt,this.combatNow,target)) {
         // Stage-specific spear, earth caster, shield and temporary elite behaviors.
@@ -1752,7 +1780,7 @@ export class GameScene extends Phaser.Scene {
       if (enemy.kind !== 'boss' && enemy.kind !== 'elite') enemy.sprite.setDepth(this.underHeads(enemy, actorDepth(enemy.isSupplySlot?enemy.y:enemy.y + enemy.radius * .72), heads, 0));
       // 华雄 / 徐荣由专属控制器出帧；前线推进后成为追兵首领时也不再套通用走路帧（xurong 图集没有 down_0 等帧，会持续报 no frame）
       if(((this.huaxiong||this.xurong)&&enemy===this.boss)||(enemy.kind==='boss'&&this.chasingBosses.some(t=>t.enemy===enemy&&t.life===enemy.spawnId&&(t.huaxiong||t.xurong)))){enemy.shadow.setPosition(enemy.x,enemy.y+1).setDisplaySize(74,20);continue;}
-      if (!enemy.walkSheet) continue;
+      if (!enemy.walkSheet || enemy.externalWalk) continue;
       const onScreen =
         enemy.x > view.x - margin &&
         enemy.x < view.right + margin &&
@@ -2182,6 +2210,7 @@ export class GameScene extends Phaser.Scene {
     if (this.xiliang) rawDamage *= this.xiliang.incoming(enemy, source);
     if (enemy === this.boss && this.moveset) { rawDamage *= this.moveset.incoming(fromAlly); this.moveset.hit(time); }
     if (this.dzLubu && enemy === this.dzLubu.lubu) rawDamage = this.dzLubu.clampDamage(enemy, rawDamage); // 2-3 吕布锁在 1/3 血
+    if (enemy.def.trait && this.traits) rawDamage *= this.traits.damageTakenMul(enemy); // 新兵种：盾墙 / 举盾正面减伤
     if(this.yellow&&enemy.kind==='shield'&&enemy.shieldMax===0&&enemy.def.behavior!=='wall'&&!fromAlly&&source!=='fire'){const angle=enemy.direction==='left'?Math.PI:enemy.direction==='right'?0:enemy.direction==='up'?-Math.PI/2:Math.PI/2;if(Math.cos(Math.atan2(this.player.y-enemy.y,this.player.x-enemy.x)-angle)>.25)rawDamage*=.65;}
     if (source === 'arrow') this.sfx.play('hitArrow');
     else if (source === 'fire') this.sfx.play('hitFire');
@@ -2303,6 +2332,7 @@ export class GameScene extends Phaser.Scene {
     if (!this.persuadeKill && this.parley?.preventKill(enemy)) return; // 首领招降：没表态前不死
     if (!this.persuadeKill && this.dual?.preventKill(enemy)) return; // 双首领：每人一个招降窗
     if (!enemy.active) return;
+    this.traits?.onKilled(enemy); // 纵火兵爆燃、驯兽师倒下猛兽狂暴
     // 双首领：先了结的不掉宝箱（只做通用记账），最后一个照常；单首领败退型淡出退走
     const dualRes = this.dual?.owns(enemy) ? this.dual.resolve(enemy, this.persuadeKill, this.combatNow) : null;
     const retreat = dualRes ? dualRes.how === 'retreated' : this.bossRetreats(enemy);

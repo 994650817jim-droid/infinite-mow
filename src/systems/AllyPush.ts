@@ -11,6 +11,19 @@ import { visualTextureKey } from './ReadableTextures';
  * 挨打按「身边敌兵数 × enemyDps」算。伤害走 GameScene.hitEnemy（fromAlly），营寨被打塌照常算进「摧毁营寨」军令。
  * 地图（ui/BattleMap）读 squads：行军线（后方 → 营寨的碧色箭头）、兵的碧点、正在挨打的营寨闪烁。
  */
+/** 把圆（义军兵）推出一组碰撞框，返回推开量（同 Terrain.pushCircle；没碰到为 null）。 */
+export function pushOutBoxes(boxes: ReadonlyArray<{ left: number; right: number; top: number; bottom: number }>, x0: number, y0: number, r: number): { x: number; y: number } | null {
+  let x = x0, y = y0, moved = false;
+  for (const b of boxes) {
+    if (x < b.left - r || x > b.right + r || y < b.top - r || y > b.bottom + r) continue;
+    const qx = Phaser.Math.Clamp(x, b.left, b.right), qy = Phaser.Math.Clamp(y, b.top, b.bottom), dx = x - qx, dy = y - qy, d = Math.hypot(dx, dy);
+    if (d >= r) continue;
+    if (d > .001) { x += dx / d * (r - d); y += dy / d * (r - d); }
+    else { const l = x - b.left, rt = b.right - x, t = y - b.top, bt = b.bottom - y, m = Math.min(l, rt, t, bt); if (m === l) x = b.left - r; else if (m === rt) x = b.right + r; else if (m === t) y = b.top - r; else y = b.bottom + r; }
+    moved = true;
+  }
+  return moved ? { x: x - x0, y: y - y0 } : null;
+}
 export interface AllyPushConfig {
   firstMs: number; everyMs: number; squad: number; cap: number; sheets: readonly string[];
   speed: number; hp: number; dmg: number; campDmg: number; hitMs: number; engage: number; reach: number; campReach: number; enemyDps: number; rearPad: number;
@@ -21,6 +34,12 @@ export interface PushHost {
   camps: () => Enemy[]; enemies: () => readonly Enemy[];
   hit: (e: Enemy, dmg: number) => void;
   push?: (x: number, y: number, r: number) => { x: number; y: number } | null;
+  /** 有营栅的营寨（2-3 LuoyangCamps）：在营外时先去哪个路点（营门），null = 直接走向营帐。 */
+  approach?: (camp: Enemy, x: number, y: number) => { x: number; y: number } | null;
+  /** 没有营寨目标时的集结点（攻城：跟着冲车 → 城内要点 → 府衙）。给了它，小队没营寨可打也不散，照集结点推进。 */
+  rally?: () => { x: number; y: number } | null;
+  /** 新小队从哪冒出来（不给 = 镜头下沿外）。 */
+  origin?: () => { x: number; y: number } | null;
 }
 interface Soldier { sp: Phaser.GameObjects.Sprite; shadow: Phaser.GameObjects.Ellipse; x: number; y: number; ox: number; oy: number; hp: number; sheet: string; dir: string; walk: number; nextHit: number; lunge: number; dead: number }
 /** escort：援军小队（兵阵 4 势「援军」，没有营寨目标）——跟在主将身边打最近的敌兵，到点散去。 */
@@ -41,9 +60,9 @@ export class AllyPush {
 
   /** 出一队：营寨里离主将最近的那座；出生在它正南方、镜头下沿外 rearPad。 */
   spawn(): Squad | null {
-    const camps = this.h.camps(); if (!camps.length) return null;
-    const free = this.c.cap - this.alive; if (free <= 0) return null;
+    const camps = this.h.camps(), free = this.c.cap - this.alive; if (free <= 0) return null;
     const pl = this.h.player(), cam = this.h.scene.cameras.main.worldView;
+    if (!camps.length) { const r = this.h.rally?.(); if (!r) return null; const o = this.h.origin?.() ?? { x: r.x, y: cam.bottom + this.c.rearPad }; return this.spawnAt(o.x, o.y, Math.min(this.c.squad, free), null); }
     const target = camps.slice().sort((a, b) => Math.hypot(a.x - pl.x, a.y - pl.y) - Math.hypot(b.x - pl.x, b.y - pl.y))[0];
     const n = Math.min(this.c.squad, free), fx = Phaser.Math.Linear(target.x, pl.x, .35), fy = Math.max(cam.bottom + this.c.rearPad, target.y + 520);
     return this.spawnAt(fx, fy, n, target);
@@ -59,6 +78,12 @@ export class AllyPush {
   spawnEscortAt(x: number, y: number, n: number, lifeMs: number): Squad | null {
     const free = this.c.cap - this.alive; if (free <= 0) return null;
     const sq = this.spawnAt(x, y, Math.min(n, free), null); sq.escort = { until: this.h.now() + lifeMs }; return sq;
+  }
+  /** 圈里有几名活着的义军（攻城城内要点：义军帮着占 / 守）。 */
+  near(x: number, y: number, r: number): number { let n = 0; for (const s of this.squads) if (!s.done) for (const m of s.members) if (!m.dead && Math.hypot(m.x - x, m.y - y) <= r) n++; return n; }
+  /** 转场（攻城进城 / 进府衙）：活着的义军整体挪到 (x, y) 一带。 */
+  relocate(x: number, y: number): void {
+    for (const s of this.squads) { s.from = { x, y }; for (const m of s.members) if (!m.dead) { m.x = x + m.ox * 1.4 + (Math.random() - .5) * 40; m.y = y + m.oy + (Math.random() - .5) * 30; this.draw(m, this.h.now()); } }
   }
   private spawnAt(fx: number, fy: number, n: number, target: Enemy | null): Squad {
     const sq: Squad = { id: ++this.seq, from: { x: fx, y: fy }, target, life: target?.spawnId ?? 0, members: [], done: 0 };
@@ -84,7 +109,7 @@ export class AllyPush {
       else if (!sq.target || !sq.target.active || sq.target.spawnId !== sq.life || sq.target.hp <= 0) {
         const lead = sq.members.find(m => !m.dead), camps = this.h.camps();
         const next = lead && camps.length ? camps.slice().sort((a, b) => Math.hypot(a.x - lead.x, a.y - lead.y) - Math.hypot(b.x - lead.x, b.y - lead.y))[0] : null;
-        if (next) { sq.target = next; sq.life = next.spawnId; sq.from = { x: lead!.x, y: lead!.y }; } else { sq.target = null; if (!sq.done) sq.done = now; }
+        if (next) { sq.target = next; sq.life = next.spawnId; sq.from = { x: lead!.x, y: lead!.y }; } else { sq.target = null; if (!sq.done && !this.h.rally?.()) sq.done = now; }
       }
       for (const m of sq.members) {
         if (m.dead) continue;
@@ -95,8 +120,8 @@ export class AllyPush {
         const camp = sq.target, cd = camp ? Math.hypot(camp.x - m.x, camp.y - m.y) : 0;
         let tx: number, ty: number, strike: Enemy | null = null, reach: number;
         if (foe) { tx = foe.x; ty = foe.y; reach = C.reach + foe.radius * .5; if (fd <= reach) strike = foe; }
-        else if (!camp) { const pl = this.h.player(); tx = pl.x + m.ox * 1.6; ty = pl.y + 70 + m.oy; reach = 0; }
-        else { const a = Math.atan2(m.y - camp.y, m.x - camp.x) || Math.PI / 2, rr = camp.radius + C.campReach * .6; tx = camp.x + Math.cos(a) * rr + m.ox * .4; ty = camp.y + Math.sin(a) * rr * .7; reach = camp.radius + C.campReach; if (cd <= reach) strike = camp; }
+        else if (!camp) { const r = sq.escort ? null : this.h.rally?.(), pl = r ?? this.h.player(); tx = pl.x + m.ox * 1.6; ty = pl.y + (r ? 0 : 70) + m.oy; reach = 0; }
+        else { const a = Math.atan2(m.y - camp.y, m.x - camp.x) || Math.PI / 2, rr = camp.radius + C.campReach * .6; tx = camp.x + Math.cos(a) * rr + m.ox * .4; ty = camp.y + Math.sin(a) * rr * .7; reach = camp.radius + C.campReach; if (cd <= reach) strike = camp; else { const via = this.h.approach?.(camp, m.x, m.y); if (via) { tx = via.x + m.ox * .4; ty = via.y + m.oy * .3; } } }
         if (!strike) {
           const dx = tx - m.x, dy = ty - m.y, d = Math.hypot(dx, dy);
           if (d > 2) { const st = Math.min(d, C.speed * dt); m.x += dx / d * st; m.y += dy / d * st; m.walk += st; m.dir = Math.abs(dx) > Math.abs(dy) ? dx < 0 ? 'left' : 'right' : dy < 0 ? 'up' : 'down'; }

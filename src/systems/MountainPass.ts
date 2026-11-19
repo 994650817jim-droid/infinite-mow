@@ -17,7 +17,7 @@ import type { EnemyKind } from '../types';
  * 美术：场景物件图 shu_pass（4×2：左坡 / 右坡 / 松 / 竹 / 滚石 / 碎石 / 关门 / 石碑），缺图时用现有岩石道具过渡。
  */
 export const MOUNTAIN_PASS = {
-  halfWidth: [300, 260], // 山道半宽：葭萌关 / 落凤坡
+  halfWidth: [450, 390], // 山道半宽：葭萌关 / 落凤坡（11-19 用户「战斗场地有点限制太小了」：300 / 260 × 1.5，stageMaps shu.1 / shu.2 同步）
   yRange: [-4200, 2200] as const,
   ambush: { everyMs: 8500, firstMs: 9000, count: [2, 4], warnMs: 750 },
   boulder: { everyMs: 6500, firstMs: 6000, warnMs: 1300, speed: 620, radius: 46, damage: 22, enemyDamage: 260, allyDamage: 16, width: 96 },

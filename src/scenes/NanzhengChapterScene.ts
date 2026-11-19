@@ -1,4 +1,5 @@
 import {playMenuMusic,menuMusic} from '../systems/Music';
+import {takeDirectDepart} from '../systems/DirectDepart';
 import {defaultHero,heroOwned,LOCKED_HINT} from '../systems/RosterStore';
 import Phaser from 'phaser';
 import {NANZHENG_STAGES,nzBossTexture,nzBossSheet,type NanzhengStage} from '../data/nanzhengChapter';
@@ -21,6 +22,8 @@ export class NanzhengChapterScene extends Phaser.Scene {
   if(!this.registry.get('battleReady')){this.registry.set('pendingWarlord','NanzhengChapterScene');this.registry.set('loadBattle',true);this.scene.start('BootScene');return;}
   this.cards=[];this.heroButtons=[];const desk=W>600,state=loadWorld(),test=isChapterTestRun();this.selected=Math.min(3,state.nanzhengStages+1)as NanzhengStage;{const pick=Number(this.registry.get('worldStagePick'));this.registry.remove('worldStagePick');if([1,2,3].includes(pick)&&(stageOpen(pick)||test))this.selected=pick as NanzhengStage;}
   try{this.hero=defaultHero(localStorage.getItem('im_last_hero'));}catch{this.hero=defaultHero(null);}
+  // 2026-11-19 用户「打第三章的时候又出现这个老界面了」：电脑版从天下地图 / 选关 / 战役回顾出征时不显示本页（选将 + 选关），直接以主公打选中的关（DIRECT_DEPART，见 systems/DirectDepart.ts）
+  if(takeDirectDepart(this)){this.depart();return;}
   this.cameras.main.setBackgroundColor('#191815');
   // Quiet campaign-map lines and mountain silhouettes, all behind interactive content.
   const g=this.add.graphics();g.fillStyle(0x29261f,.6);for(let i=0;i<8;i++)g.fillTriangle(i*W/6-140,H*.62,i*W/6+80,H*.2+(i%3)*44,i*W/6+290,H*.62);

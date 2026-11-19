@@ -14,6 +14,9 @@ export const SKILL_FX: Readonly<Record<string, { file: string; cell: number; fra
   fx_windstep_burst: { file: 'assets/skill-fx/windstep_burst.png', cell: 192, frames: 6 },
   // 场地环境互动（火油桶爆炸 / 地火循环 / 倒塌扬尘）
   fx_explosion: { file: 'assets/skill-fx/explosion.png', cell: 256, frames: 6 },
+  // 小怪第一批特效（2026-11-19 Gemini 出图，洋红底 → tools/prepare-fx.mjs，横排）：符水道徒治疗光 8 帧（淡黄符水光环，普通混合）/ 毒箭蛮的毒雾 6 帧（可循环；整团偏实，叠在人物身上请降透明度）
+  fx_heal_fushui: { file: 'assets/skill-fx/heal_fushui.png', cell: 256, frames: 8 },
+  fx_poison_mist: { file: 'assets/skill-fx/poison_mist.png', cell: 256, frames: 6 },
   fx_ground_fire: { file: 'assets/skill-fx/ground_fire.png', cell: 192, frames: 6 },
   fx_collapse_dust: { file: 'assets/skill-fx/collapse_dust.png', cell: 256, frames: 6 },
   // 敌军死亡特效专属尘土（即梦 Seedream 5.5，tools/prepare-death-dust.mjs 处理：抠洋红 + 去溢色 + 清水印 + 重新居中）；缺图时 DeathFx 退回 fx_collapse_dust

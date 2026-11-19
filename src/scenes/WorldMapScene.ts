@@ -4,6 +4,7 @@ import { defaultHero, loadRoster } from '../systems/RosterStore';
 import { checkWorld } from '../systems/Achievements';
 import { RENDER_SCALE, screenPoint, TITLE_FONT, HEADING_FONT } from '../config';
 import { isChapterTestRun } from '../systems/ChapterProgress';
+import { requestDirectDepart } from '../systems/DirectDepart';
 import { W, H, worldText, worldButton, worldShell, panel, worldAssets } from '../world/WorldUI';
 import { homeCommand } from '../ui/HomeCommand';
 import { lqPanel } from '../ui/LacquerKit';
@@ -463,7 +464,7 @@ export class WorldMapScene extends Phaser.Scene {
   }
   private enterStage(id: TimelineChapterId, stage: number, hard: boolean) {
     if (hard && chapterState(id, loadWorld()) === 'cleared') this.registry.set('hardChapter', id); else this.registry.remove('hardChapter');
-    if (id in CAMPAIGNS) { const c = CAMPAIGNS[id as CampaignId]; if (!c.open() && !isChapterTestRun()) return; this.registry.set('worldStagePick', stage); this.scene.start(c.scene); return; }
+    if (id in CAMPAIGNS) { const c = CAMPAIGNS[id as CampaignId]; if (!c.open() && !isChapterTestRun()) return; this.registry.set('worldStagePick', stage); requestDirectDepart(this); this.scene.start(c.scene); return; } // 电脑版直接以主公开战（不再显示各章选将 / 选关页，见 systems/DirectDepart）
     this.launchMain(id, stage);
   }
   /** 壹 / 贰章：直接以主公开战（不经点将页）。 */

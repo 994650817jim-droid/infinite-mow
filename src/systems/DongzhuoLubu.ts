@@ -11,7 +11,7 @@ import { playSheet } from './SkillFxSheets';
 import { emitBossPhase } from './BossPhase';
 import { ART_V2_FILES, isV2Texture, regridV2 } from './ArtStyle';
 import { HORSE_V2, RIDE } from './HeroMount';
-import { BOSS_RIDE_ART, bossRideKey } from './BossMount';
+import { BOSS_RIDE, BOSS_RIDE_ART, bossRideKey } from './BossMount';
 import { warnFx } from '../ui/WarnFx';
 import { preloadCutscene } from './Cutscene';
 import { preloadBossDeath } from './BossDeathArt';
@@ -28,13 +28,16 @@ import { LUOYANG } from '../data/dongzhuo';
  * 每段都发 boss-phase（董卓：城下 = 2、授首 = 3），打击感会话的慢动作 / 踉跄可接。数值初值，交平衡会话。
  * 美术复用：攻城城墙图集（城墙段 / 城门）、吕布 v2 行走 / 攻击图、赤兔（horses-v2）与吕布骑乘图（有就用）、手绘扬尘 / 斩击序列帧。
  */
+/** 赤兔奔跑：帧按跑过的距离推进（每 GALLOP_STRIDE 像素换一帧），快慢都不打滑。 */
+const GALLOP_STRIDE = 56;
+const gallop = (dist: number): number => Math.floor(Math.abs(dist) / GALLOP_STRIDE) % 4;
 export const DZ_LUBU = {
   wallY: -330, wallHalf: 900, segW: 230, gateW: 270, perchUp: 200, perchDx: 210,
   /** 城内纵深：两端侧墙往北延伸多远、再用北墙合上（城墙专项检查：洛阳城墙原来两端敞着，绕过去就到了城里）。 */ cityDepth: 2000,
   lubuHpMul: .5, lubuDmgMul: .6, lubuSpeed: 74, lubuReach: 70, fleeAt: 1 / 3,
   sweepEveryMs: 4500, sweepR: 150, sweepArc: Math.PI * .75, sweepWarnMs: 700, sweepDmgMul: 1.3,
   wallVolleyEverySec: 7, wallVolleyPoints: 3, volleyR: 66, volleyWarnMs: 1300, playerRatio: .05, allyDamage: 12,
-  descendMs: 1100, finishAt: .2, finishSlowMs: 1600, finishSlow: .35,
+  descendMs: 2200, /* 11-19「董卓也在平移」：慢步走下城（约 117px/s），步态能起来 */ finishAt: .2, finishSlowMs: 1600, finishSlow: .35,
 } as const;
 
 /** perch = 董卓、吕布都在城头（摧毁营寨阶段）；leaping = 吕布跃下城头；wall = 城下战吕布（原有）；之后照旧。 */
@@ -116,6 +119,7 @@ export class DongzhuoLubu {
     const onWall = !!h.ready && !h.ready();
     this.lubuHome = { x: p.x + P.perchDx, y: wy - P.perchUp };
     this.lubu = h.spawnLubu(def, onWall ? this.lubuHome.x : p.x + 60, onWall ? this.lubuHome.y : wy + 90);
+    if (this.lubu) this.lubu.externalWalk = true; // 城头踱步 / 城下追人都由本控制器推着走、出步态（用户「吕布下来后在平移」）
     if (this.lubu) this.lubu.controlImmune = true;
     if (onWall && this.lubu) { this.phase = 'perch'; this.lubu.invulnerable = true; this.lubu.def = { ...this.lubu.def, speed: 0 }; }
     // 登场台词：吕布先喊，董卓（城头）隔一会儿再喊
@@ -163,8 +167,8 @@ export class DongzhuoLubu {
   /** 赤兔：从画面边奔来 / 驮着吕布离去。返回马与（有骑乘图时的）骑者图。 */
   private horse(x: number, y: number, dir: 'left' | 'right'): { horse: Phaser.GameObjects.Image | null; rider: Phaser.GameObjects.Image | null } {
     const s = this.h.scene, hk = 'horse_v2_chitu_walk';
-    const horse = s.textures.exists(hk) && s.textures.get(hk).has('down_0') ? s.add.image(x, y, hk, `${dir}_0`).setOrigin(.5, HORSE_V2.foot / HORSE_V2.cell).setScale(HORSE_V2.scale).setDepth(actorDepth(y)).setName('dz-chitu') : null;
-    const rk = bossRideKey('lubu'), rider = BOSS_RIDE_ART.has('lubu') && s.textures.exists(rk) ? s.add.image(x, y, rk, (dir === 'left' ? 1 : 2) * 4).setOrigin(.5, (RIDE.foot + RIDE.stirrup / RIDE.scale) / RIDE.cell).setScale(RIDE.scale).setDepth(actorDepth(y) + .01).setName('dz-lubu-rider') : null;
+    const horse = s.textures.exists(hk) && s.textures.get(hk).has('down_0') ? s.add.image(x, y, hk, `${dir}_0`).setOrigin(.5, HORSE_V2.foot / HORSE_V2.cell).setScale(HORSE_V2.scale * BOSS_RIDE.k).setDepth(actorDepth(y)).setName('dz-chitu') : null;
+    const rk = bossRideKey('lubu'), rider = BOSS_RIDE_ART.has('lubu') && s.textures.exists(rk) ? s.add.image(x, y, rk, (dir === 'left' ? 1 : 2) * 4).setOrigin(.5, (RIDE.foot + RIDE.stirrup / RIDE.scale) / RIDE.cell).setScale(RIDE.scale * BOSS_RIDE.k).setDepth(actorDepth(y) + .01).setName('dz-lubu-rider') : null;
     return { horse, rider };
   }
   /** ② 吕布锁血：喊话、唤赤兔、骑走。 */
@@ -178,10 +182,10 @@ export class DongzhuoLubu {
     const t0 = s.time.now, arrive = 700, leave = 1100, ex = fromLeft ? cam.worldView.right + 200 : cam.worldView.left - 200;
     this.anim = now => {
       const t = now - t0;
-      if (t < arrive) { const k = t / arrive; horse?.setPosition(Phaser.Math.Linear(sx, l.x, k), l.y).setFrame(`${dir}_${Math.floor(t / 90) % 4}`); return false; }
-      const k = Math.min(1, (t - arrive) / leave), x = Phaser.Math.Linear(l.x, ex, k), back: 'left' | 'right' = dir === 'right' ? 'right' : 'left';
-      horse?.setPosition(x, l.y).setFrame(`${back}_${Math.floor(t / 80) % 4}`);
-      if (rider) { rider.setPosition(x, l.y).setFrame((back === 'left' ? 1 : 2) * 4 + Math.floor(t / 90) % 4); l.sprite.setAlpha(0); } else l.sprite.setPosition(x, l.y - 30);
+      if (t < arrive) { const k = t / arrive, x = Phaser.Math.Linear(sx, l.x, k); horse?.setPosition(x, l.y).setFrame(`${dir}_${gallop(x - sx)}`); return false; }
+      const k = Math.min(1, (t - arrive) / leave), x = Phaser.Math.Linear(l.x, ex, k), back: 'left' | 'right' = dir === 'right' ? 'right' : 'left', f = gallop(Math.abs(l.x - sx) + Math.abs(x - l.x));
+      horse?.setPosition(x, l.y).setFrame(`${back}_${f}`);
+      if (rider) { rider.setPosition(x, l.y).setFrame((back === 'left' ? 1 : 2) * 4 + f); l.sprite.setAlpha(0); } else l.sprite.setPosition(x, l.y - 30);
       if (k >= 1) { horse?.destroy(); rider?.destroy(); l.sprite.setAlpha(1); l.deactivate(); this.lubu = null; this.descend(); return true; } // 敌人对象会被对象池复用，离场后不再引用
       return false;
     };
@@ -190,8 +194,9 @@ export class DongzhuoLubu {
   private descend(): void {
     const s = this.h.scene, d = this.dongzhuo, P = DZ_LUBU; this.phase = 'descending';
     this.h.scroll?.('hulao-3.dongzhuo_descend'); // 吕布败走、董卓亲自下城：卷轴（对白立绘）
-    const y0 = d.y, y1 = this.perch.y + P.perchUp + 70, t0 = s.time.now;
-    this.anim = now => { const k = Math.min(1, (now - t0) / P.descendMs); d.sprite.y = Phaser.Math.Linear(y0, y1, k); if (k >= 1) { this.phase = 'down'; d.invulnerable = false; emitBossPhase(s, { boss: d, phase: 2, dismount: false, name: '董卓' }); this.h.banner('董卓下城', true, '国贼亲自督战 · 打他！'); this.h.line?.('hulao-3.dongzhuo_down', d.sprite); playSheet(s, 'fx_collapse_dust', d.x, d.y + 4, { size: 160, ms: 560, depth: DEPTH.fx, originY: .8, name: 'dz-down-dust' }); return true; } return false; };
+    const y0 = d.y, y1 = this.perch.y + P.perchUp + 70, t0 = s.time.now; let last = t0;
+    d.externalWalk = true; // 走下城由这里推（postupdate），自己出步态；落地后交回 DongzhuoBoss（场景 update 里走，通用步态即可）
+    this.anim = now => { const k = Math.min(1, (now - t0) / P.descendMs), dt = Math.min(.1, Math.max(.001, (now - last) / 1000)), yPrev = d.y; last = now; d.sprite.y = Phaser.Math.Linear(y0, y1, k); d.intentDx = 0; d.intentDy = d.y - yPrev; d.updateWalk(dt, 0, d.y - yPrev); if (k >= 1) { d.externalWalk = false; this.phase = 'down'; d.invulnerable = false; emitBossPhase(s, { boss: d, phase: 2, dismount: false, name: '董卓' }); this.h.banner('董卓下城', true, '国贼亲自督战 · 打他！'); this.h.line?.('hulao-3.dongzhuo_down', d.sprite); playSheet(s, 'fx_collapse_dust', d.x, d.y + 4, { size: 160, ms: 560, depth: DEPTH.fx, originY: .8, name: 'dz-down-dust' }); return true; } return false; };
   }
   /** ④ 董卓 20%：过场「吕布斩董卓」（data/cutscenes/lubuKillsDongzhuo.ts）；剧情关掉时走下面的简短演出。 */
   private finale(): void {
@@ -218,7 +223,7 @@ export class DongzhuoLubu {
     const t0 = s.time.now, run = 650, ex = fromLeft ? cam.worldView.right + 220 : cam.worldView.left - 220; let struck = false;
     this.anim = now => {
       const t = now - t0;
-      if (t < run) { const k = t / run, x = Phaser.Math.Linear(sx, tx, k); horse?.setPosition(x, d.y + 10).setFrame(`${dir}_${Math.floor(t / 80) % 4}`); rider?.setPosition(x, d.y + 10).setFrame((dir === 'left' ? 1 : 2) * 4 + Math.floor(t / 90) % 4); fallback?.setPosition(x, d.y - 20).setFrame(`${dir}_${Math.floor(t / 90) % 4}`); return false; }
+      if (t < run) { const k = t / run, x = Phaser.Math.Linear(sx, tx, k), f = gallop(x - sx); horse?.setPosition(x, d.y + 10).setFrame(`${dir}_${f}`); rider?.setPosition(x, d.y + 10).setFrame((dir === 'left' ? 1 : 2) * 4 + f); fallback?.setPosition(x, d.y - 20).setFrame(`${dir}_${f}`); return false; }
       if (!struck) {
         struck = true;
         rider?.setFrame((dir === 'left' ? 5 : 6) * 4 + 1); // 马上出招行
@@ -230,7 +235,7 @@ export class DongzhuoLubu {
       }
       if (t < run + 900) return false;
       const k = Math.min(1, (t - run - 900) / 1000), x = Phaser.Math.Linear(tx, ex, k);
-      horse?.setPosition(x, d.y + 10).setFrame(`${dir}_${Math.floor(t / 80) % 4}`); rider?.setPosition(x, d.y + 10).setFrame((dir === 'left' ? 1 : 2) * 4 + Math.floor(t / 90) % 4); fallback?.setPosition(x, d.y - 20);
+      { const f = gallop(Math.abs(tx - sx) + Math.abs(x - tx)); horse?.setPosition(x, d.y + 10).setFrame(`${dir}_${f}`); rider?.setPosition(x, d.y + 10).setFrame((dir === 'left' ? 1 : 2) * 4 + f); fallback?.setPosition(x, d.y - 20).setFrame(`${dir}_${f}`); }
       if (k >= 1) { horse?.destroy(); rider?.destroy(); fallback?.destroy(); this.phase = 'done'; return true; }
       return false;
     };
@@ -324,10 +329,11 @@ export class DongzhuoLubu {
       if (l?.active && !this.sweep && l.attackUntil <= now) {
         const dt = this.chaseAt ? Math.min(.1, Math.max(.001, (now - this.chaseAt) / 1000)) : 1 / 60, dx = p.x - l.x, dy = p.y - l.y, dist = Math.hypot(dx, dy);
         if (dist > P.lubuReach) { const st = Math.min(dist - P.lubuReach, P.lubuSpeed * dt), mx = dx / dist * st, my = dy / dist * st; l.sprite.x += mx; l.sprite.y += my; l.intentDx = mx; l.intentDy = my; l.updateWalk(dt, mx, my); }
+        else { l.intentDx = l.intentDy = 0; l.updateWalk(dt, 0, 0); } // 贴身站定：回待机帧
       }
       this.chaseAt = now;
       if (l?.active) {
-        if (!this.sweep && now >= this.nextSweep && Math.hypot(p.x - l.x, p.y - l.y) < 260) { const a = Math.atan2(p.y - l.y, p.x - l.x); this.sweep = { at: now + P.sweepWarnMs, a, id: 'dz-lubu-sweep-' + this.metrics.sweeps }; l.startAttack(now, Math.abs(Math.cos(a)) > .7 ? (Math.cos(a) < 0 ? 'left' : 'right') : Math.sin(a) < 0 ? 'up' : 'down'); this.h.banner('方天横扫', false); }
+        if (!this.sweep && now >= this.nextSweep && Math.hypot(p.x - l.x, p.y - l.y) < 260) { const a = Math.atan2(p.y - l.y, p.x - l.x); this.sweep = { at: now + P.sweepWarnMs, a, id: 'dz-lubu-sweep-' + this.metrics.sweeps }; l.startAttack(now, Math.abs(Math.cos(a)) > .7 ? (Math.cos(a) < 0 ? 'left' : 'right') : Math.sin(a) < 0 ? 'up' : 'down'); l.attackUntil = this.sweep.at + 120; this.h.banner('方天横扫', false); }
         if (this.sweep) {
           const prog = 1 - (this.sweep.at - now) / P.sweepWarnMs;
           warnFx(s).sector(this.sweep.id, l.x, l.y, P.sweepR, this.sweep.a, prog, now);

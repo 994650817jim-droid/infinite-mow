@@ -1,5 +1,4 @@
 import {visualTextureKey} from '../systems/ReadableTextures';
-import { MOUNT_VISUAL, isHorseCavalry } from '../data/mounts';
 import {figureCorrection,sheetFigureHeight} from '../systems/SpriteMetrics';
 import {isV2Texture, V2_TROOP_SCALE, v2TroopGround} from '../systems/ArtStyle';
 import Phaser from 'phaser';
@@ -44,6 +43,10 @@ export class Enemy {
   /** 出手时长超过 360ms 时（蓄力），蓄力段停在攻击图的第几帧（张梁砍击用 1 = 抬刀）。 */
   windupCol = 0;
   attackUntil = 0;
+  /** 由专属控制器自己推着走、自己调 updateWalk 的敌人（2-3 吕布）：场景的通用步态更新跳过它，否则那一帧位移为 0 会把步态计时清零，变成定格平移。 */
+  externalWalk = false;
+  /** 帧后被额外推着走的距离（BossPace 放大首领步子）：下一次 updateWalk 计进步频，免得步子跟不上位移（滑步）；不参与「被击退」判定。 */
+  extraWalk = 0;
   poseUntil = 0;
   chargeSheet = '';
   chargeState: 'none' | 'warn' | 'charge' | 'recover' = 'none';
@@ -93,7 +96,7 @@ export class Enemy {
   private recoilUntil = 0;
   private recoilMs = 90;
   private squash = 0;
-  private baseTint = 0xffffff;
+  baseTint = 0xffffff;
   contactCd = 0;
   shootCd = 0;
   dashCd = 0;
@@ -172,6 +175,8 @@ export class Enemy {
     this.walkDistance = 0;
     this.frameStartX = x;
     this.frameStartY = y;
+    this.externalWalk = false;
+    this.extraWalk = 0;
     this.intentDx = 0;
     this.intentDy = 0;
     this.moveVx = this.moveVy = this.facingVx = this.facingVy = 0;
@@ -378,8 +383,8 @@ export class Enemy {
   updateWalk(dt: number, dx: number, dy: number): void {
     if (!this.walkSheet) return;
     if (this.attackUntil > 0 || this.chargeState !== 'none' || this.poseUntil > ((this.scene as Phaser.Scene & { combatNow?: number }).combatNow ?? 0)) return;
-    const moved = Math.hypot(dx, dy);
-    const actualSpeed = moved / Math.max(dt, 0.0001);
+    const moved = Math.hypot(dx, dy), extra = this.extraWalk; this.extraWalk = 0;
+    const actualSpeed = (moved + extra) / Math.max(dt, 0.0001);
     const intentSpeed = Math.hypot(this.intentDx, this.intentDy) / Math.max(dt, 0.0001);
     // 按实际位移判定走路：与蜀军缠斗、相互挤开、被友军推着走时也播放步伐，避免定格站立帧“平移”。
     // 单帧位移远超自身步速视为被击退/冲撞，不算走路。
@@ -413,11 +418,11 @@ export class Enemy {
         this.frameElapsed = 0;
       }
       this.frameElapsed += dt;
-      this.walkDistance += moved;
+      this.walkDistance += moved + extra;
       // Tie cadence to travelled distance so eased movement and low FPS stay in sync, but never
       // slower than ~7 frame changes per second (slow archers / crowd-pushed units no longer slide).
       const effStride = Math.min(stride, Math.max(4, actualSpeed / 7));
-      this.stepPhase += moved / effStride;
+      this.stepPhase += (moved + extra) / effStride;
     } else if (!this.walking) {
       this.walkDistance = 0;
       this.stepPhase = 0;
@@ -437,15 +442,13 @@ export class Enemy {
     this.applyScale();
   }
 
-  /** 骑兵（马，不含象兵）整体缩小（MOUNT_VISUAL.visualScale，11-18 用户「骑马整体的比例可以小点」）；步兵 1。 */
-  private get mountedScale(): number { return isHorseCavalry(this.def) ? MOUNT_VISUAL.visualScale : 1; }
   /** 设置帧并按素材比例校正缩放；非行走调用会清除步伐摆动。 */
   private applyFrame(key: string, frame: string): void {
     this.sprite.setTexture(key, frame);
     if (isV2Texture(key)) {
       // 人物画风 v2：0.5 倍（1080p 像素 1:1），脚底 = 帧高-7；行走 / 攻击格子大小可以不同，按当前帧重算锚点
       const fh = this.sprite.frame.height || 96;
-      this.baseScaleY = V2_TROOP_SCALE * this.mountedScale;
+      this.baseScaleY = V2_TROOP_SCALE;
       this.baseOriginY = v2TroopGround(fh) - this.def.radius * .72 / (fh * this.baseScaleY);
       this.frameScale = 1;
     } else

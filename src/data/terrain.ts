@@ -1,4 +1,5 @@
 import { stageMapFor, arenaTerrain } from './stageMaps';
+import { LUOYANG } from './dongzhuo';
 /**
  * 战场地形层（用户 2026-11-17：「我想做更多场景比如说有树（不可摧毁）树林，河水流过，踩上去河水会减速。桥跨过河水之类的」；统筹会话定的细则）：
  * - 树 / 树林：不可摧毁的实心障碍（主将、敌兵、部曲、随从都挡住，贴着滑开不卡死）；树林 = 成簇的树，中间留能穿过的空隙；
@@ -129,7 +130,9 @@ function shuTrees(halfW: number, y0: number, y1: number, seed: number): TreeSpec
 export function terrainConfigFor(arc: string, stage: number): TerrainConfig | null {
   const base0 = baseTerrain(arc, stage), g = GROVES[arc + '.' + stage], map = stageMapFor(arc, stage);
   // 有边场地（data/stageMaps）：边界外的山崖 / 密林 / 大河并进来；本关原来就有河的，原来的河当边，不再加
-  const base = map ? withArena(base0 ?? { clear: [C0] }, arenaTerrain(map)) : base0;
+  const base1 = map ? withArena(base0 ?? { clear: [C0] }, arenaTerrain(map)) : base0;
+  // 2-3 洛阳：五座营寨（营栅一圈 + 营门前）不长树
+  const base = arc === 'hulao' && stage === 3 && g ? { ...(base1 ?? {}), clear: [...(base1?.clear ?? [C0]), ...LUOYANG.camps.map(([x, y]) => ({ x, y: y - 10, r: LUOYANG.camp.clearR }))] } : base1;
   return g ? { ...(base ?? { clear: [C0] }), auto: g } : base;
 }
 function withArena(b: TerrainConfig, a: TerrainConfig): TerrainConfig {
@@ -217,13 +220,13 @@ function baseTerrain(arc: string, stage: number): TerrainConfig | null {
         { x: 120, y: 620, rx: 260, ry: 140, count: 9, seed: 53, kind: 'jungle' },
       ],
     } : stage === 2 ? {
-      // 盘蛇谷（P2：原来是空地）：南北向谷道（半宽约 620），两侧山崖、崖下丛林；营地在谷里
+      // 盘蛇谷（P2：原来是空地）：南北向谷道（半宽约 930；11-19 用户「战斗场地有点限制太小了」从 620 × 1.5，stageMaps nanzheng.2 同步），两侧山崖、崖下丛林；营地在谷里
       clear: [C0, { x: -330, y: 210, r: 180 }, { x: 340, y: -420, r: 180 }],
-      cliffs: [{ x: -900, y: 0, w: 560, h: 3600 }, { x: 900, y: 0, w: 560, h: 3600 }],
+      cliffs: [{ x: -1210, y: 0, w: 560, h: 3600 }, { x: 1210, y: 0, w: 560, h: 3600 }],
       woods: [
-        { x: -500, y: -720, rx: 110, ry: 280, count: 7, seed: 101, kind: 'jungle' },
-        { x: 510, y: 660, rx: 110, ry: 280, count: 7, seed: 103, kind: 'jungle' },
-        { x: -500, y: 900, rx: 110, ry: 200, count: 5, seed: 105, kind: 'bamboo' },
+        { x: -750, y: -720, rx: 110, ry: 280, count: 7, seed: 101, kind: 'jungle' },
+        { x: 765, y: 660, rx: 110, ry: 280, count: 7, seed: 103, kind: 'jungle' },
+        { x: -750, y: 900, rx: 110, ry: 200, count: 5, seed: 105, kind: 'bamboo' },
       ],
     } : stage === 3 ? {
       clear: [C0, { x: -260, y: -200, r: 110 }, { x: 280, y: 260, r: 110 }, { x: 0, y: -560, r: 110 }],

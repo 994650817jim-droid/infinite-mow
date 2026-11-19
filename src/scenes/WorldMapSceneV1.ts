@@ -1,4 +1,5 @@
 import {playMenuMusic} from '../systems/Music';
+import {requestDirectDepart} from '../systems/DirectDepart';
 import {defaultHero,loadRoster} from '../systems/RosterStore';
 import {checkWorld} from '../systems/Achievements';
 import {RENDER_SCALE,screenPoint,TITLE_FONT,HEADING_FONT} from '../config';
@@ -606,7 +607,7 @@ ${city.tier==='large'?'守城大将：'+siegeBossName(city,owner):'守军：'+FA
   if(this.nodeState(sel.node)==='locked')return;this.enterStage(info.id,undefined,hard);}
  private enterStage(id:TimelineChapterId,stage:number|undefined,hard:boolean){
   if(hard&&chapterState(id,loadWorld())==='cleared')this.registry.set('hardChapter',id);else this.registry.remove('hardChapter');
-  if(id==='qunxiong'||id==='guandu'||id==='chibi'||id==='jingnan'||id==='shu'||id==='hanzhong'||id==='xiangfan'||id==='yiling'||id==='nanzheng'||id==='beifa'){if(stage)this.registry.set('worldStagePick',stage);this.scene.start(CAMPAIGNS[id].scene);return;}
+  if(id==='qunxiong'||id==='guandu'||id==='chibi'||id==='jingnan'||id==='shu'||id==='hanzhong'||id==='xiangfan'||id==='yiling'||id==='nanzheng'||id==='beifa'){if(stage)this.registry.set('worldStagePick',stage);requestDirectDepart(this);this.scene.start(CAMPAIGNS[id].scene);return;}
   this.launchMain(id,stage);}
  /**
   * 第壹 / 贰章出征（2026-11-18 用户「应该不需要这个画面，因为只有主公可以出战」）：不再经点将页，直接以主公开战。
@@ -786,5 +787,5 @@ ${fail}`;
   this.registry.remove('campaignTransfer');this.registry.set('intelEvent',event.id);this.registry.set('runConfig',{character:hero});
   if(this.registry.get('battleReady'))this.scene.start('IntelGameScene');else{this.registry.set('pendingWarlord','IntelGameScene');this.registry.set('loadBattle',true);this.scene.start('BootScene');}
  }
- private enterNode(){if(this.selected.kind!=='node')return;const n=this.selected.node;if(n.campaign){const c=CAMPAIGNS[n.campaign];if(c.open()||isChapterTestRun())this.scene.start(c.scene);return;}if(n.kind==='home'){this.scene.start('CityScene');return;}if(!n.chapter||!chapterUnlocked(n.chapter))return;this.launchMain(n.chapter as TimelineChapterId);}
+ private enterNode(){if(this.selected.kind!=='node')return;const n=this.selected.node;if(n.campaign){const c=CAMPAIGNS[n.campaign];if(c.open()||isChapterTestRun()){requestDirectDepart(this);this.scene.start(c.scene);}return;}if(n.kind==='home'){this.scene.start('CityScene');return;}if(!n.chapter||!chapterUnlocked(n.chapter))return;this.launchMain(n.chapter as TimelineChapterId);}
 }

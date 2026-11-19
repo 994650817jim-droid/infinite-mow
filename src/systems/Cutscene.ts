@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import { DEPTH, GAME_HEIGHT, GAME_WIDTH, HEADING_FONT, actorDepth } from '../config';
 import { SKILL_FX } from './SkillFxSheets';
 import { HORSE_V2, RIDE, RIDE_DIR_LIFT } from './HeroMount';
-import { RIDE_SEAT, SEATED_RIDE_ART } from './BossMount';
+import { BOSS_RIDE, RIDE_SEAT, SEATED_RIDE_ART } from './BossMount';
 import { ART_V2_FILES, regridV2 } from './ArtStyle';
 import type { ActorSpec, CutStep, CutsceneScript, Dir, Ease, Pos, Pose } from '../data/cutscenes/types';
 
@@ -219,8 +219,8 @@ export class Cutscene {
     const s = this.h.scene, sp = a.spec!;
     if (sp.kind === 'ride') {
       const hk = HORSE_KEY[sp.horse], rk = 'ride_v2_boss_' + sp.rider;
-      if (s.textures.exists(hk) && s.textures.get(hk).has('down_0')) a.horse = s.add.image(a.x, a.y, hk, `${a.dir}_0`).setOrigin(.5, HORSE_V2.foot / HORSE_V2.cell).setScale(HORSE_V2.scale).setName('cutscene-actor');
-      if (s.textures.exists(rk)) a.main = s.add.image(a.x, a.y, rk, 0).setOrigin(.5, (RIDE.foot + RIDE.stirrup / RIDE.scale) / RIDE.cell).setScale(RIDE.scale).setName('cutscene-actor');
+      if (s.textures.exists(hk) && s.textures.get(hk).has('down_0')) a.horse = s.add.image(a.x, a.y, hk, `${a.dir}_0`).setOrigin(.5, HORSE_V2.foot / HORSE_V2.cell).setScale(HORSE_V2.scale * BOSS_RIDE.k).setName('cutscene-actor');
+      if (s.textures.exists(rk)) a.main = s.add.image(a.x, a.y, rk, 0).setOrigin(.5, (RIDE.foot + RIDE.stirrup / RIDE.scale) / RIDE.cell).setScale(RIDE.scale * BOSS_RIDE.k).setName('cutscene-actor');
       else if (s.textures.exists('boss_' + sp.rider)) a.main = s.add.image(a.x, a.y, 'boss_' + sp.rider, `${a.dir}_0`).setOrigin(.5, .89).setScale(.5).setName('cutscene-actor');
     } else if (sp.kind === 'sheet') a.main = s.add.image(a.x, a.y, sp.tex, `${a.dir}_0`).setOrigin(.5, sp.foot).setScale(sp.scale).setName('cutscene-actor');
     else a.main = s.add.image(a.x, a.y, sp.tex, sp.frame).setOrigin(.5, sp.foot).setScale(sp.scale).setName('cutscene-actor');
@@ -257,7 +257,7 @@ export class Cutscene {
     } else if (a.main) {
       const moving = a.pose === 'ride' || a.pose === 'walk', i = moving ? Math.floor((this.ct - a.poseAt) / 110) % 4 : 0;
       if (a.main.texture.has(`${a.dir}_${i}`)) a.main.setFrame(`${a.dir}_${i}`);
-      a.main.setPosition(a.x, a.y - (sp.kind === 'ride' ? HORSE_V2.riderRise : 0)).setDepth(depth + .01);
+      a.main.setPosition(a.x, a.y - (sp.kind === 'ride' ? HORSE_V2.riderRise * BOSS_RIDE.k : 0)).setDepth(depth + .01);
     }
     if (a.horse) { const moving = a.pose === 'ride' || a.pose === 'walk', hdir = side || a.dir === 'up' ? a.dir : 'down'; a.horse.setFrame(`${hdir}_${moving ? Math.floor((this.ct - a.poseAt) / 80) % 4 : 0}`).setPosition(a.x, a.y).setDepth(depth); }
   }

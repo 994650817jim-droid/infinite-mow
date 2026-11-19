@@ -25,7 +25,7 @@ const open = async (save, extra, settle = 1500) => {
   await p.evaluate(() => window.__game.scene.getScene('MenuScene').scene.start('WorldMapScene'));
   await p.waitForFunction(() => window.__game.scene.isActive('WorldMapScene') && window.__game.scene.getScene('WorldMapScene').view, null, { timeout: 60000 }); await p.waitForTimeout(settle);
   // 截住出征：记下要进的场景与 registry，不真的开战（主线真开战见 test-map-depart，攻城真开战见下）
-  await p.evaluate(() => { const s = window.__game.scene.getScene('WorldMapScene'), real = s.scene.start.bind(s.scene); window.__went = null; s.scene.start = (k, d) => { if (window.__realStart) return real(k, d); const r = s.registry; window.__went = { key: k, data: d ?? null, pending: r.get('pendingWarlord') ?? null, run: r.get('runConfig') ?? null, siege: r.get('siegeCity') ?? null, mode: r.get('siegeMode') ?? null, intel: r.get('intelEvent') ?? null, pick: r.get('worldStagePick') ?? null, hard: r.get('hardChapter') ?? null }; }; });
+  await p.evaluate(() => { const s = window.__game.scene.getScene('WorldMapScene'), real = s.scene.start.bind(s.scene); window.__went = null; s.scene.start = (k, d) => { if (window.__realStart) return real(k, d); const r = s.registry; window.__went = { key: k, data: d ?? null, pending: r.get('pendingWarlord') ?? null, run: r.get('runConfig') ?? null, siege: r.get('siegeCity') ?? null, mode: r.get('siegeMode') ?? null, intel: r.get('intelEvent') ?? null, pick: r.get('worldStagePick') ?? null, hard: r.get('hardChapter') ?? null, direct: r.get('directDepart') ?? null }; }; });
   return p;
 };
 const M = "window.__game.scene.getScene('WorldMapScene')";
@@ -84,7 +84,7 @@ const modalGo = async (p, name, go) => { await p.evaluate(([M0, n, g]) => { cons
   ck('告急城池：「亲征 · 守城」→ 守城面板 → SiegeGameScene（siegeMode = defense）', a.action === '亲征 · 守城' && /告急/.test(a.detail) && (w3.key === 'SiegeGameScene' || w3.pending === 'SiegeGameScene') && w3.siege === 'chenliu' && w3.mode === 'defense', { a, w3 });
   await p.evaluate(M0 => eval(M0).closeModal(), M);
   const q = await pick(p, 'qunxiong-1'); const w4 = await act(p);
-  ck('第叁章：「出征」→ ThirdChapterScene，worldStagePick = 1', q.action === '出征' && w4.key === 'ThirdChapterScene' && w4.pick === 1, { q: q.title, w4 });
+  ck('第叁章：「出征」→ ThirdChapterScene，worldStagePick = 1，并打「直接出征」标记（不显示选将 / 选关页）', q.action === '出征' && w4.key === 'ThirdChapterScene' && w4.pick === 1 && w4.direct === true, { q: q.title, w4 });
   await p.evaluate(M0 => { const s = eval(M0); s.setZoom(s.minZoom); }, M); await p.waitForTimeout(600);
   await p.screenshot({ path: `${OUT}/overview.png` });
   await p.close();

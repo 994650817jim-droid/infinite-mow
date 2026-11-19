@@ -6,18 +6,22 @@ import type {FactionId} from '../world/WorldCities';
  * 原贴图不改；readable_ 处理版同步生成。董卓沿用原红色；地方豪强、公孙瓒去饱和为灰白。
  * 新键：f_<势力>_<原键>，帧名与切分不变。（第四章的 YuanPalette 为同一做法的早期专用版。）
  */
-type Target = {hue: number; sat: number} | 'gray' | null;
-const TARGET: Record<FactionId, Target> = {
+/** val：明度倍率（压暗，如第三章凉州残部的「黑底土黄」）。 */
+type Target = {hue: number; sat: number; val?: number} | 'gray' | null;
+/** 势力之外的配色（不是天下地图势力）：liangzhou = 第三章李傕 / 张绣的凉州残部（用户 11-19：张绣兵沿用西凉红黑被当成友军；深铁灰 + 锈褐，和我方绿、曹军蓝青、第二章西凉红、黄巾黄都分开）。 */
+export type PaletteId = FactionId | 'liangzhou';
+const TARGET: Record<PaletteId, Target> = {
+  liangzhou: {hue: 16, sat: .3, val: .6}, // 11-19 用户「4做」：土黄会被看成黄巾黄 → 深铁灰带一点锈褐（低饱和、压暗，和第二章鲜红、黄巾黄、曹军蓝青、我方绿、袁术紫都分开）
   player: null, dongzhuo: null,
   yuanshao: {hue: 42, sat: .82}, yellow: {hue: 52, sat: .9}, caocao: {hue: 218, sat: .7}, yuanshu: {hue: 282, sat: .6},
   liubiao: {hue: 112, sat: .42}, sun: {hue: 22, sat: .95}, mateng: {hue: 32, sat: .55}, liuzhang: {hue: 78, sat: .55},
   zhanglu: {hue: 228, sat: .35}, taoqian: {hue: 140, sat: .5}, han: 'gray', court: 'gray', gongsun: 'gray',
 };
-export function factionKey(faction: FactionId, key: string): string { return TARGET[faction] ? `f_${faction}_${key}` : key; }
+export function factionKey(faction: PaletteId, key: string): string { return TARGET[faction] ? `f_${faction}_${key}` : key; }
 /** 势力换色贴图（f_<势力>_…）对应的目标色；不是势力贴图返回 undefined。敌我区分阵营色据此保持势力色。 */
 export function factionTargetOfKey(key: string): {hue: number; sat: number} | 'gray' | undefined {
   const m = /^(?:readable_)?f_([a-z]+)_/.exec(key); if (!m) return undefined;
-  return TARGET[m[1] as FactionId] ?? undefined;
+  return TARGET[m[1] as PaletteId] ?? undefined;
 }
 
 function hsvToRgb(h: number, s: number, v: number): [number, number, number] {
@@ -34,7 +38,7 @@ function recolor(ctx: CanvasRenderingContext2D, w: number, h: number, target: Ex
     let hue = 60 * (((g - b) / delta) % 6); if (hue < 0) hue += 360;
     if (hue > 18 && hue < 330) continue; // 只动红色系
     if (s < .32 && hue > 10 && hue < 330) continue; // v2 图的暗红 / 绛红饱和度低（.2~.32）：只收正红到洋红一段，棕色皮革不动
-    const [nr, ng, nb] = target === 'gray' ? hsvToRgb(0, 0, Math.min(1, max * .95)) : hsvToRgb(target.hue, Math.min(1, s * target.sat), max);
+    const [nr, ng, nb] = target === 'gray' ? hsvToRgb(0, 0, Math.min(1, max * .95)) : hsvToRgb(target.hue, Math.min(1, s * target.sat), max * (target.val ?? 1));
     d[i] = nr; d[i + 1] = ng; d[i + 2] = nb;
   }
   ctx.putImageData(img, 0, 0);
@@ -49,7 +53,7 @@ function copyRecolored(scene: Phaser.Scene, src: string, dst: string, target: Ex
   nt.setFilter(Phaser.Textures.FilterMode.NEAREST);
 }
 /** 生成某势力的守军贴图（含 readable_ 版），返回新建的键。董卓等无需换色时返回空。 */
-export function ensureFactionTextures(scene: Phaser.Scene, faction: FactionId, keys: readonly string[]): string[] {
+export function ensureFactionTextures(scene: Phaser.Scene, faction: PaletteId, keys: readonly string[]): string[] {
   const target = TARGET[faction]; if (!target) return [];
   const made: string[] = [];
   for (const key of keys) {

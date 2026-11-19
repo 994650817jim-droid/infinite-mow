@@ -1,0 +1,192 @@
+{
+  "now": {
+    "rideScale": 0.425,
+    "horseScale": 0.425,
+    "stirrup": 32.3,
+    "seatRow": 200,
+    "troopScale": 0.5,
+    "cavalryScale": 0.85,
+    "bossK": 1
+  },
+  "heroes": [
+    {
+      "name": "赵云 · 赤兔",
+      "walk": "assets/processed-v2/zhaoyun_walk_sheet.png",
+      "ride": "assets/ride-v2/zhaoyun_ride.png",
+      "cell": 176,
+      "horse": "chitu"
+    },
+    {
+      "name": "关羽 · 赤兔",
+      "walk": "assets/processed-v2/guanyu_walk_sheet.png",
+      "ride": "assets/ride-v2/guanyu_ride.png",
+      "cell": 176,
+      "horse": "chitu"
+    },
+    {
+      "name": "张飞 · 乌骓",
+      "walk": "assets/processed-v2/zhangfei_walk_sheet.png",
+      "ride": "assets/ride-v2/zhangfei_ride.png",
+      "cell": 176,
+      "horse": "wuzhui"
+    },
+    {
+      "name": "刘备 · 的卢",
+      "walk": "assets/processed-v2/liubei_walk_sheet.png",
+      "ride": "assets/ride-v2/liubei_ride.png",
+      "cell": 176,
+      "horse": "dilu"
+    },
+    {
+      "name": "马超 · 大宛",
+      "walk": "assets/processed-v2/machao_walk_sheet.png",
+      "ride": "assets/ride-v2/machao_ride.png",
+      "cell": 176,
+      "horse": "dawan"
+    },
+    {
+      "name": "诸葛亮 · 骡车",
+      "walk": "assets/processed-v2/zhuge_walk_sheet.png",
+      "ride": "assets/ride-v2/zhuge_ride.png",
+      "cell": 176,
+      "horse": "mule",
+      "stirrup": 20.4
+    },
+    {
+      "name": "貂蝉 · 绝影",
+      "walk": "assets/processed-v2/diaochan_walk_sheet.png",
+      "ride": "assets/ride-v2/diaochan_ride.png",
+      "cell": 176,
+      "horse": "jueying"
+    },
+    {
+      "name": "黄忠 · 通用马",
+      "walk": "assets/processed-v2/huangzhong_walk_sheet.png",
+      "ride": "assets/ride-v2/huangzhong_ride.png",
+      "cell": 176,
+      "horse": "generic"
+    }
+  ],
+  "bosses": [
+    {
+      "name": "吕布（首领）",
+      "id": "lubu",
+      "walk": "assets/bosses-v2/lubu_walk.png",
+      "cell": 288,
+      "horse": "chitu"
+    },
+    {
+      "name": "华雄（首领）",
+      "id": "huaxiong",
+      "walk": "assets/bosses-v2/huaxiong_walk.png",
+      "cell": 288,
+      "horse": "wuzhui"
+    },
+    {
+      "name": "李傕（首领）",
+      "id": "lijue",
+      "walk": "assets/bosses-v2/third_lijue.png",
+      "cell": 288,
+      "horse": "generic"
+    },
+    {
+      "name": "张绣（首领）",
+      "id": "zhangxiu",
+      "walk": "assets/bosses-v2/third_zhangxiu.png",
+      "cell": 288,
+      "horse": "generic"
+    },
+    {
+      "name": "颜良（首领）",
+      "id": "yanliang",
+      "walk": "assets/bosses-v2/guandu_yanliang.png",
+      "cell": 288,
+      "horse": "dawan"
+    },
+    {
+      "name": "文丑（首领）",
+      "id": "wenchou",
+      "walk": "assets/bosses-v2/guandu_wenchou.png",
+      "cell": 288,
+      "horse": "generic"
+    },
+    {
+      "name": "曹纯（首领）",
+      "id": "caochun",
+      "walk": "assets/bosses-v2/chibi_caochun.png",
+      "cell": 288,
+      "horse": "wuzhui"
+    },
+    {
+      "name": "黄忠（首领）",
+      "id": "huangzhong",
+      "walk": "assets/bosses-v2/jingnan_huangzhong.png",
+      "cell": 288,
+      "horse": "generic"
+    },
+    {
+      "name": "张郃（首领）",
+      "id": "zhanghe",
+      "walk": "assets/bosses-v2/hanzhong_zhanghe.png",
+      "cell": 288,
+      "horse": "generic"
+    },
+    {
+      "name": "夏侯渊（首领）",
+      "id": "xiahouyuan",
+      "walk": "assets/bosses-v2/hanzhong_xiahouyuan.png",
+      "cell": 288,
+      "horse": "generic"
+    },
+    {
+      "name": "曹操（首领）",
+      "id": "caocao",
+      "walk": "assets/bosses-v2/hanzhong_caocao.png",
+      "cell": 288,
+      "horse": "jueying"
+    },
+    {
+      "name": "孙桓（首领）",
+      "id": "sunhuan",
+      "walk": "assets/bosses-v2/yiling_sunhuan.png",
+      "cell": 288,
+      "horse": "generic"
+    },
+    {
+      "name": "朱然（首领）",
+      "id": "zhuran",
+      "walk": "assets/bosses-v2/yiling_zhuran.png",
+      "cell": 288,
+      "horse": "generic"
+    }
+  ],
+  "troops": [
+    {
+      "name": "敌骑（棕马）· 羌胡弓骑同图",
+      "file": "assets/processed-v2/enemies/enemy_cavalry_walk.png",
+      "cell": 176,
+      "mounted": true
+    },
+    {
+      "name": "西凉铁骑",
+      "file": "assets/processed-v2/enemies/xiliang_cavalry_walk.png",
+      "cell": 176,
+      "mounted": true
+    },
+    {
+      "name": "虎豹骑",
+      "file": "assets/processed-v2/enemies/hubao_walk.png",
+      "cell": 176,
+      "mounted": true
+    }
+  ],
+  "after": {
+    "rideScale": 0.5,
+    "horseScale": 0.425,
+    "stirrup": 32.3,
+    "seatRow": 200,
+    "troopScale": 0.5,
+    "cavalryScale": 1,
+    "bossK": 1.48
+  }
+}

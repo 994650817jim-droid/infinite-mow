@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { drawSideWall, sideWallReady } from './SideWall';
 import { actorDepth, DEPTH } from '../config';
-import { MID_SIEGE as M, LARGE_SIEGE as L, SIEGE_PROFILES, SIEGE_SPAWN, ramStats, type MidSiegePhase, type RamStats, type SiegeProfile } from '../data/siegeMedium';
+import { MID_SIEGE as M, LARGE_SIEGE as L, SIEGE_PROFILES, SIEGE_SPAWN, SIEGE_ALLIES, ramStats, type MidSiegePhase, type RamStats, type SiegeProfile } from '../data/siegeMedium';
 import { SIEGE_CITY, CITY_ART, CITY_FX, POINT_BUILDING, cityBuildingBox, type CityLayout, type CityBuildingKind, type CityPointKind } from '../data/siegeCity';
 import { CapturePointView, spreadArrows } from './SiegeCityPoints';
 import { ordersOf } from './BattleOrders';
@@ -52,6 +52,10 @@ export interface MidSiegeHost {
   spawnBoss: () => void;
   boss: () => Enemy | null;
   campsAlive: () => [number, number];
+  /** 我方义军（AllyPush）在圈里几个人：城内要点主将不在圈里时，圈里有义军也能占（速度 × SIEGE_ALLIES.pointRate）、守点不算失守。 */
+  allyNear?: (x: number, y: number, r: number) => number;
+  /** 转场时把义军小队带到新场地。 */
+  moveAllies?: (x: number, y: number) => void;
   /** 攻城器械等级（讲武堂科技预留，默认 0） */
   engineLevel?: number;
   /** 复用到别的篇章（第七章成都）：守将由篇章首领控制器驱动（不走 stepBoss）、城门血量与段名覆盖 */
@@ -84,6 +88,8 @@ export class SiegeMidCity {
   readonly prof: SiegeProfile; readonly tier: 'small' | 'medium' | 'large';
   /** 城内段布局（data/siegeCity.ts） */
   readonly city: CityLayout;
+  /** 城外段场地：南北用 MID_SIEGE.outside.arena，左右跟城内段同宽（城墙、两端角楼、两侧城墙都在同一条线上）。 */
+  readonly oa: { left: number; right: number; top: number; bottom: number };
   /** 小城木门 / 大城瓮城内门（可砍） */
   private woodGate: Target | null = null; private innerGate: Target | null = null;
   /** 大城护城河：吊桥是否放下、两根绳索 */
@@ -114,6 +120,7 @@ export class SiegeMidCity {
   constructor(private readonly h: MidSiegeHost) {
     const now = h.now();
     this.tier = h.opts?.tier ?? 'medium'; this.prof = SIEGE_PROFILES[this.tier]; this.city = SIEGE_CITY[this.tier];
+    this.oa = { ...M.outside.arena, left: Math.min(M.outside.arena.left, this.city.arena.left), right: Math.max(M.outside.arena.right, this.city.arena.right) };
     this.gateHp = this.gateMax = h.opts?.gateHp ?? this.prof.gateHp;
     this.ramCfg = ramStats(h.engineLevel ?? 0); this.spareLeft = this.ramCfg.spare;
     this.volleyAt = now + 2500; this.ramReadyAt = now; this.startAt = now;
@@ -137,7 +144,7 @@ export class SiegeMidCity {
   private box(b: Box) { this.arenaBoxes.push(b); return b; }
 
   private buildOutside() {
-    const o = M.outside, a = o.arena, wy = o.wallY;
+    const o = M.outside, a = this.oa, wy = o.wallY;
     // 场地边界：左右、南边；城墙（城门处留口，口由城门碰撞框堵上）
     // 两侧只到城墙线（原来往北伸 1800 穿过城里；城内段改成整座城之后城比城外场地宽，两侧由城内段自己围）
     const inCity = this.prof.phases.includes('street'), half = Math.max(-a.left, a.right, inCity ? -this.city.arena.left : 0, inCity ? this.city.arena.right : 0);
@@ -179,7 +186,7 @@ export class SiegeMidCity {
 
   // ---------- 大城：护城河、吊桥 ----------
   private buildMoat() {
-    const m = L.moat, a = M.outside.arena, sc = this.h.scene, bw = m.bridgeHalfW;
+    const m = L.moat, a = this.oa, sc = this.h.scene, bw = m.bridgeHalfW;
     this.box({ left: a.left, right: -bw, top: m.top, bottom: m.bottom });
     this.box({ left: bw, right: a.right, top: m.top, bottom: m.bottom });
     this.bridgeBox = this.box({ left: -bw, right: bw, top: m.top, bottom: m.bottom });
@@ -331,7 +338,7 @@ export class SiegeMidCity {
     this.box({ left: a.left, right: -gw, top: wy - 110, bottom: wy + 20 });
     this.box({ left: gw, right: a.right, top: wy - 110, bottom: wy + 20 });
     // 外城墙上的两座角楼（城外段两端那两座）往城里伸出一截：楼身也挡人，主将不会「站在楼上」
-    { const ox = Math.max(-M.outside.arena.left, M.outside.arena.right); for (const x of [-ox, ox]) this.box({ left: x - 85, right: x + 85, top: wy - 200, bottom: wy + 20 }); }
+    { const ox = Math.max(-this.oa.left, this.oa.right); for (const x of [-ox, ox]) this.box({ left: x - 85, right: x + 85, top: wy - 200, bottom: wy + 20 }); }
     this.box({ left: a.left, right: -c.gateHalf, top: gy - 40, bottom: gy + 50 });
     this.box({ left: c.gateHalf, right: a.right, top: gy - 40, bottom: gy + 50 });
     this.innerGateBox = this.box({ left: -c.gateHalf, right: c.gateHalf, top: gy - 40, bottom: gy + 50 });
@@ -349,7 +356,7 @@ export class SiegeMidCity {
     // 两侧侧墙；角楼要点立在南角时，侧墙收在角楼后面（角楼画在前面）
     for (const x of [a.left - 40, a.right + 40]) { const tp = c.points.find(p => p.kind === 'tower' && Math.abs(p.b.x - x) < 240); this.sideWall(x, gy + 130, tp ? tp.b.y - 60 : wy + 30, x > 0); }
     // 南面两角：城外段两端已有角楼（离得近，小城）或角楼要点就立在这个角（大城）时不再叠一座
-    const oa = M.outside.arena, nearTower = (x: number) => Math.abs(Math.abs(x) - Math.max(-oa.left, oa.right)) < 160 || c.points.some(p => p.kind === 'tower' && Math.abs(p.b.x - x) < 200);
+    const oa = this.oa, nearTower = (x: number) => Math.abs(Math.abs(x) - Math.max(-oa.left, oa.right)) < 160 || c.points.some(p => p.kind === 'tower' && Math.abs(p.b.x - x) < 200);
     for (const x of [a.left, a.right]) { this.art(x, gy + 70, [ART.barb, 3], [ART.walls, 5], 230); if (!nearTower(x)) this.art(x, wy + 44, [ART.barb, 3], [ART.walls, 5], 240); }
     // 内城门（府衙图集 4 号格）
     this.innerGateImg = this.art(0, gy + 60, [ART.hall, 4], ['sishui_props_refined', 0], 300);
@@ -527,7 +534,7 @@ export class SiegeMidCity {
         // 落点：第一处对准主将（略提前），其余散在主将 / 冲车附近
         const target = i === 0 || !this.ram || this.ram.state === 'wreck' ? p : (i % 2 ? this.ram : p);
         const jx = i === 0 ? 0 : (Math.random() - .5) * 260, jy = i === 0 ? 0 : (Math.random() - .5) * 180;
-        const y = Math.min(M.outside.arena.bottom - 40, Math.max(M.outside.wallY + 60, target.y + jy));
+        const y = Math.min(this.oa.bottom - 40, Math.max(M.outside.wallY + 60, target.y + jy));
         const R = this.ram, fire = target === R && !!R && R.hp < this.ramCfg.hp * M.ram.fire.hpGate && Math.random() < M.ram.fire.chance; // 冲车受损后：瞄冲车的箭雨有时换火箭
         this.zones.push({ x: target.x + jx, y, at: now + V.warnMs, id: 'mid-volley-' + (this.zoneSeq++), fire }); this.stats.zones++; if (fire) this.stats.fireArrows++;
       }
@@ -567,13 +574,38 @@ export class SiegeMidCity {
 
   // ---------- 刷兵点 ----------
   /** 中城刷兵：按段从固定方向来（城门 / 敌营 / 巷口 / 回廊）。城外敌营存活越多来兵越多。返回 null 表示这次不刷。 */
+  /**
+   * 用户 11-19「小怪生成在我脸上」：所有普通刷兵都过这里——先按段取来路（rawSpawnPoint），离主将不到 minDist 又在镜头里的换一个，
+   * 试 tries 次都不行就从本段离主将最远的来路出；还是太近这次不刷。
+   */
   spawnPoint(kind: EnemyKind): { x: number; y: number } | null {
+    const first = this.rawSpawnPoint(kind); if (!first) return null;
+    if (this.farEnough(first.x, first.y)) return first;
+    for (let i = 1; i < SIEGE_SPAWN.tries; i++) { const q = this.rawSpawnPoint(kind); if (q && this.farEnough(q.x, q.y)) return q; }
+    return this.farSource();
+  }
+  /** 离主将 ≥ minDist，或在镜头外（留 offPad 边）。 */
+  farEnough(x: number, y: number): boolean {
+    const p = this.h.player, S = SIEGE_SPAWN; if (Math.hypot(x - p.x, y - p.y) >= S.minDist) return true;
+    const v = this.h.scene.cameras.main.worldView; return x < v.left - S.offPad || x > v.right + S.offPad || y < v.top - S.offPad || y > v.bottom + S.offPad;
+  }
+  /** 本段的固定来路（城门、两翼、藏兵洞、街口巷口、回廊）里离主将最远、且够远的那个。 */
+  private farSource(): { x: number; y: number } | null {
+    const p = this.h.player, a = this.oa, wy = M.outside.wallY;
+    const list = this.phase === 'outside' ? [{ x: 0, y: wy + 60 }, { x: a.left + 40, y: wy + 160 }, { x: a.right - 40, y: wy + 160 }]
+      : this.phase === 'barbican' ? L.barbican.doors.map(d => ({ x: d.x + (d.x < L.barbican.cx ? 30 : -30), y: d.y }))
+      : this.phase === 'street' ? [...this.city.spawns, { x: 0, y: this.city.innerGateY + 90 }]
+      : this.phase === 'hall' ? M.hall.corridors.map(c => ({ x: c.x, y: c.y })) : [];
+    const best = list.sort((u, v) => Math.hypot(v.x - p.x, v.y - p.y) - Math.hypot(u.x - p.x, u.y - p.y))[0];
+    return best && this.farEnough(best.x, best.y) ? best : null;
+  }
+  private rawSpawnPoint(kind: EnemyKind): { x: number; y: number } | null {
     if (this.transitioning) return null;
     const p = this.h.player, r = Math.random();
     if (this.phase === 'outside') {
       const [alive, total] = this.h.campsAlive(), keep = 1 - M.outside.campSpawnBonus * (total - alive);
       if (Math.random() > keep) return null;
-      const a = M.outside.arena;
+      const a = this.oa;
       // 敌兵从城里出（城门两侧出城为主）、两翼只在上半段；下方是我方营地 / 冲车来路，不刷兵（用户 11-17「攻城战的敌军不会从攻城车那一侧出」）
       const rearY = a.bottom - (a.bottom - a.top) * SIEGE_SPAWN.rearCut, moatUp = this.tier === 'large' && !this.bridgeDown, topY = moatUp ? L.moat.bottom + 40 : M.outside.wallY + 80;
       // 大城吊桥未放：城里的兵过不了河，只有两翼敌营方向来人；放桥后从吊桥出城
@@ -599,6 +631,37 @@ export class SiegeMidCity {
       return { x: c.x, y: c.y + (Math.random() - .5) * 300 };
     }
     return null;
+  }
+
+  // ---------- 我方义军（AllyPush，SIEGE_ALLIES）----------
+  /** 义军集结点：城外跟着冲车（冲车前方）/ 小城木门前 / 冲车毁了在营地；瓮城内门前；城内最近一处没拿下的要点（都拿下了在府衙门前）；府衙跟着主将。 */
+  rallyPoint(): { x: number; y: number } | null {
+    if (this.transitioning || this.phase === 'done') return null;
+    const p = this.h.player, wy = M.outside.wallY;
+    if (this.phase === 'outside') {
+      const r = this.ram; if (r && r.state !== 'wreck') return { x: r.x, y: r.y - SIEGE_ALLIES.ramLead };
+      return this.prof.ram ? { x: M.outside.camp.x, y: M.outside.camp.y - 60 } : { x: 0, y: wy + 130 };
+    }
+    if (this.phase === 'barbican') return { x: L.barbican.innerGate.x, y: L.barbican.innerGate.y + 170 };
+    if (this.phase === 'street') {
+      const open = this.points.filter(q => q.state !== 'secured').sort((u, v) => Math.hypot(u.x - p.x, u.y - p.y) - Math.hypot(v.x - p.x, v.y - p.y))[0];
+      return open ? { x: open.x, y: open.y } : { x: 0, y: this.city.innerGateY + 130 };
+    }
+    return { x: p.x, y: p.y + 60 };
+  }
+  /** 义军新小队从哪冒出来：城外在冲车来路（场地南边、镜头下沿外）；城内从城门进来；瓮城 / 府衙从南口。 */
+  allyOrigin(): { x: number; y: number } {
+    const cam = this.h.scene.cameras.main.worldView, r = this.rallyPoint() ?? { x: 0, y: 0 };
+    if (this.phase === 'outside') return { x: Phaser.Math.Clamp(r.x, this.oa.left + 80, this.oa.right - 80), y: Math.min(cam.bottom + 90, this.oa.bottom - 40) };
+    if (this.phase === 'barbican') return { x: L.barbican.start.x, y: L.barbican.start.y + 60 };
+    if (this.phase === 'street') return { x: 0, y: M.outside.wallY - 90 };
+    return { x: M.hall.start.x, y: M.hall.start.y + 80 };
+  }
+  /** 义军能砍的目标：小城木门、瓮城内门（冲车撞的城门不算——那是冲车的活）。 */
+  allyTargets(): Enemy[] {
+    const out: Enemy[] = [];
+    for (const t of [this.woodGate, this.innerGate]) if (t && t.e.active && t.e.spawnId === t.life && t.e.hp > 0) out.push(t.e);
+    return this.phase === 'outside' || this.phase === 'barbican' ? out : [];
   }
 
   // ---------- 第二段：巷战 ----------
@@ -639,14 +702,15 @@ export class SiegeMidCity {
       const leader = this.leaderAlive(pt);
       if (pt.leaderTag) { if (leader) pt.leaderTag.setPosition(pt.leader!.e.x, pt.leader!.e.y - 96); else { pt.leaderTag.destroy(); pt.leaderTag = undefined; } }
       let foes = 0; for (const e of this.h.enemies()) if (e.active && !e.isSupplySlot && e.kind !== 'boss' && Math.hypot(e.x - pt.x, e.y - pt.y) <= pt.radius) foes++;
-      const slowLeader = pt.state === 'open' && leader;
+      const slowLeader = pt.state === 'open' && leader, helpers = this.h.allyNear?.(pt.x, pt.y, pt.radius) ?? 0, rate = inside ? 1 : helpers ? SIEGE_ALLIES.pointRate : 0;
       if (pt.state === 'open') {
-        if (inside) pt.progress = Math.min(1, pt.progress + dt / s.captureSeconds * (foes ? s.contestedMul : 1) * (slowLeader ? F.leaderMul : 1));
+        if (rate) pt.progress = Math.min(1, pt.progress + dt / s.captureSeconds * rate * (foes ? s.contestedMul : 1) * (slowLeader ? F.leaderMul : 1));
         if (pt.progress >= 1) this.takePoint(pt, now);
       } else if (pt.state === 'held') {
         pt.hold += dt;
-        if (!inside && foes) pt.lost += dt; else pt.lost = Math.max(0, pt.lost - dt * .5);
-        if (now >= pt.counterAt) { pt.counterAt = now + s.counterEveryMs; for (let i = 0; i < s.counterBurst; i++) { const a = -Math.PI / 2 + (Math.random() - .5) * 1.6; this.h.spawnEnemy(Math.random() < .25 ? 'shield' : 'infantry', Phaser.Math.Clamp(pt.x + Math.cos(a) * 420, ca.left + 40, ca.right - 40), Phaser.Math.Clamp(pt.y + Math.sin(a) * 420, this.city.innerGateY + 90, M.outside.wallY - 120)); } }
+        if (!inside && !helpers && foes) pt.lost += dt; else pt.lost = Math.max(0, pt.lost - dt * .5);
+        // 反扑：从要点外一圈杀来（离主将不够远就换个方向 / 退回最远的巷口，不刷到脸上）
+        if (now >= pt.counterAt) { pt.counterAt = now + s.counterEveryMs; for (let i = 0; i < s.counterBurst; i++) { let q: { x: number; y: number } | null = null; for (let k = 0; k < 6 && !q; k++) { const a = -Math.PI / 2 + (Math.random() - .5) * (1.6 + k * .5), r = 460 + k * 30, c = { x: Phaser.Math.Clamp(pt.x + Math.cos(a) * r, ca.left + 40, ca.right - 40), y: Phaser.Math.Clamp(pt.y + Math.sin(a) * r, this.city.innerGateY + 90, M.outside.wallY - 120) }; if (this.farEnough(c.x, c.y)) q = c; } q ??= this.farSource(); if (q) this.h.spawnEnemy(Math.random() < .25 ? 'shield' : 'infantry', q.x, q.y); } }
         if (pt.lost >= s.loseSeconds) { pt.state = 'open'; pt.progress = 0; pt.hold = 0; pt.lost = 0; pt.view.lowerFlag(); this.h.banner(`${pt.name}失守`, true, '我方旗倒 · 重新占领'); }
         else if (pt.hold >= s.holdSeconds) this.securePoint(pt);
       }
@@ -668,7 +732,8 @@ export class SiegeMidCity {
     if (now >= this.ambushAt) {
       this.ambushAt = now + s.ambush.everyMs; this.stats.ambushes++;
       const n = s.ambush.count[0] + Math.floor(Math.random() * (s.ambush.count[1] - s.ambush.count[0] + 1));
-      const roofs = [...this.city.roofs].sort((u, v) => Math.hypot(u.x - p.x, u.y - p.y) - Math.hypot(v.x - p.x, v.y - p.y)).slice(0, n);
+      // 只挑离主将 roofMin～roofMax 的房檐（不跳到脸上）；预警 warnMs 后跳下
+      const dist = (u: { x: number; y: number }) => Math.hypot(u.x - p.x, u.y - p.y), roofs = this.city.roofs.filter(u => dist(u) >= SIEGE_SPAWN.roofMin && dist(u) <= SIEGE_SPAWN.roofMax).sort((u, v) => dist(u) - dist(v)).slice(0, n);
       roofs.forEach(({ x, y }, i) => { warnFx(this.h.scene).ambush(x, y, 70); this.ambushPending.push({ x, y, at: now + s.ambush.warnMs, kind: i === 0 ? 'shield' : 'infantry' }); });
     }
     for (const a of [...this.ambushPending]) if (now >= a.at) {
@@ -774,7 +839,9 @@ export class SiegeMidCity {
     const H = M.hall, boss = this.h.boss();
     if (boss?.active && now >= this.guardsAt) {
       this.guardsAt = now + this.prof.hall.guardsEveryMs * (this.bossPhase2 ? .75 : 1); this.stats.guardWaves++;
-      for (let i = 0; i < this.prof.hall.guardCount; i++) { const c = H.corridors[i % 2]; const e = this.h.spawnEnemy(H.guardKind, c.x + (c.x < 0 ? 30 : -30), c.y + (i - 1) * 60, true); if (e) this.guards.push({ e, life: e.spawnId }); }
+      // 亲卫从回廊杀出：主将贴着哪边回廊，就都从另一边出（不刷到脸上）
+      const p = this.h.player, near = H.corridors.map(c => Math.hypot(c.x - p.x, c.y - p.y) < SIEGE_SPAWN.minDist);
+      for (let i = 0; i < this.prof.hall.guardCount; i++) { const c = H.corridors[near[i % 2] && !near[(i + 1) % 2] ? (i + 1) % 2 : i % 2]; const e = this.h.spawnEnemy(H.guardKind, c.x + (c.x < 0 ? 30 : -30), c.y + (i - 1) * 60, true); if (e) this.guards.push({ e, life: e.spawnId }); }
       this.h.banner('亲卫杀出回廊', true, '亲卫在场，守将受伤大减');
     }
     // 外部首领控制器（大城名将 / 第七章刘璋）：半血时这里也报一次「死战」，亲卫提前杀出
@@ -857,6 +924,7 @@ export class SiegeMidCity {
       if (this.ram) { this.ram.label.setText(''); }
       const p = this.h.player; p.sprite.setPosition(start.x, start.y);
       this.h.allies().forEach((a, i) => { if (a.active) a.setPosition(start.x + ((i % 5) - 2) * 34, start.y + 50 + Math.floor(i / 5) * 30); });
+      this.h.moveAllies?.(start.x, start.y + 120);
       cam.scrollX = start.x - cam.width / 2; cam.scrollY = start.y - cam.height / 2;
       this.phase = to;
       if (to === 'barbican') this.enterBarbican(); else if (to === 'street') this.enterStreet(); else this.enterHall();

@@ -54,9 +54,11 @@ export interface StageMapDef {
 }
 
 /** 边带厚度：场外看得见的那条天然边（镜头最多停到这里）。 */
-export const ARENA = { edgeBand: 300, gateWidth: 260, minSpawnDist: 520, gateJitter: 90 } as const;
+export const ARENA = { edgeBand: 300, gateWidth: 260, minSpawnDist: 520, gateJitter: 90,
+  /** 营帐（200px 图，脚底在图下缘）挡人的帐底椭圆：圆心在脚底往上 up，半轴 rx × ry（11-19 防穿模） */
+  tentFoot: { up: 30, rx: 78, ry: 34 } } as const;
 
-export const STAGE_MAPS: Record<string, StageMapDef> = {
+const BASE_MAPS: Record<string, StageMapDef> = {
   // 5-1 长坂突围：虎豹骑追袭——南北追击通道；北边长坂河，长坂桥是北面唯一来路（可砍断）；东西山崖；南边山口是追兵来路
   'chibi.1': {
     kind: 'corridor', bounds: { left: -1150, right: 1150, top: -560, bottom: 2300 },
@@ -200,6 +202,45 @@ export const STAGE_MAPS: Record<string, StageMapDef> = {
     gates: [{ x: 0, y: -1250 }, { x: -1250, y: -400 }, { x: 1250, y: -400 }], forest: 'cypress',
   },
 };
+
+/**
+ * 场地放大（用户 11-19「我感觉战斗场地有点限制太小了，应该开阔的地方战斗」）：上面是原始布局，这里按场地类型整体放大——
+ *  - 封闭场地（arena）/ 渡口（ford）每个方向 × arena（面积约 1.8 倍）；渡口那条河照旧在边上，主将这一岸变宽；
+ *  - 通道（corridor）横向 × corridorAcross（还是一条通道，但能绕着走、躲得开），纵向不变（两头的山口 / 关墙原样）。
+ * 以开局点为原点、分四个半轴各自缩放：本关原有的边（existing：关墙、城墙、原有的河）那一侧不动；同一侧的关口、营门 / 山口、营帐、灌木、火油车、滚木滚石的路线一起跟着挪。
+ * GROW_EXISTING：原有边界本身也是数据、已经同步加宽的关（11-2 盘蛇谷崖 terrain.ts、7-1 / 7-2 山道 MountainPass.halfWidth）。
+ * KEEP：不放大的边（12-1 南边紧贴本关原有的南山）。
+ */
+export const ARENA_GROW = { arena: 1.35, corridorAcross: 1.5, ringTime: 1.25 } as const;
+const GROW_EXISTING = new Set(['nanzheng.2', 'shu.1', 'shu.2']);
+const KEEP: Record<string, ReadonlyArray<'n' | 's' | 'w' | 'e'>> = { 'beifa.1': ['s'] };
+function grow(key: string, d: StageMapDef): StageMapDef {
+  const b = d.bounds, tall = b.bottom - b.top > b.right - b.left, G = ARENA_GROW;
+  const fx = d.kind === 'corridor' ? (tall ? G.corridorAcross : 1) : G.arena, fy = d.kind === 'corridor' ? (tall ? 1 : G.corridorAcross) : G.arena;
+  const on = (s: 'n' | 's' | 'w' | 'e') => (d.edges[s] !== 'existing' || GROW_EXISTING.has(key)) && !KEEP[key]?.includes(s);
+  const X = (x: number) => x < 0 ? (on('w') ? x * fx : x) : (on('e') ? x * fx : x), Y = (y: number) => y < 0 ? (on('n') ? y * fy : y) : (on('s') ? y * fy : y);
+  const P = <T extends Pt>(p: T): T => ({ ...p, x: Math.round(X(p.x)), y: Math.round(Y(p.y)) });
+  const kx = (on('w') || on('e')) ? fx : 1, ky = (on('n') || on('s')) ? fy : 1;
+  return {
+    ...d,
+    bounds: { left: Math.round(X(b.left)), right: Math.round(X(b.right)), top: Math.round(Y(b.top)), bottom: Math.round(Y(b.bottom)) },
+    openings: d.openings && { n: d.openings.n?.map(X), s: d.openings.s?.map(X), w: d.openings.w?.map(Y), e: d.openings.e?.map(Y) },
+    // 贴着原有边（不动的那一侧）的关口（原有河上的桥头、关门、城门）：沿边的位置也不动
+    gates: d.gates.map(g => { const fixed = (!on('n') && g.y - b.top < 150) || (!on('s') && b.bottom - g.y < 150) ? 'y' : (!on('w') && g.x - b.left < 150) || (!on('e') && b.right - g.x < 150) ? 'x' : null; return fixed === 'y' ? { ...g, y: Math.round(Y(g.y)) } : fixed === 'x' ? { ...g, x: Math.round(X(g.x)) } : P(g); }), riverBridges: d.riverBridges?.map(X),
+    interactions: d.interactions?.map(it => {
+      switch (it.kind) {
+        case 'bridge': return { ...it, ...P(it) };
+        case 'campfire': return { ...it, tents: it.tents.map(P), spreadRange: Math.round(it.spreadRange * Math.max(kx, ky)) };
+        case 'logs': return it.axis === 'x' ? { ...it, fromY: Math.round(X(it.fromY)), toY: Math.round(X(it.toY)) } : { ...it, fromY: Math.round(Y(it.fromY)), toY: Math.round(Y(it.toY)) };
+        case 'firering': return { ...it, durationMs: Math.round(it.durationMs * G.ringTime) }; // 火墙从更远的边收起：收圈时长跟着加长，收圈速度不变太多
+        case 'firecarts': return { ...it, carts: it.carts.map(P) };
+        case 'bushes': return { ...it, spots: it.spots.map(P) };
+        default: return it;
+      }
+    }),
+  };
+}
+export const STAGE_MAPS: Record<string, StageMapDef> = Object.fromEntries(Object.entries(BASE_MAPS).map(([k, d]) => [k, grow(k, d)]));
 
 export function stageMapFor(arc: string, stage: number): StageMapDef | null { return STAGE_MAPS[arc + '.' + stage] ?? null; }
 

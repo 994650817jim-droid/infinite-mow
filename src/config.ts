@@ -118,6 +118,9 @@ export const BALANCE = {
   /** 首领在场时刷杂兵（2026-11-18 用户：boss 出来后减少小兵生成）：同屏上限、刷兵间隔、每次数量的倍率。 */
   // xpMul：首领在场时杂兵经验倍率（2026-11-18 平衡方案 A：少刷兵后首领战经验约少一半，×2 补回）
   bossSpawn: { capMul: .5, intervalMul: 2, burstMul: .5, xpMul: 2 },
+  /** 首领走路提速（2026-11-19 用户：「boss 移动速度都很慢，我在骑着马的时候打 boss」；systems/BossPace）：朝主将走时 ×walkMul；离主将 chaseFrom 起渐增，到 chaseFull 再 ×chaseMul（追击）；
+   *  一帧位移超过 def.speed × walkCap 的算招式位移（冲锋 / 突进），不放大。主将步行约 178、骑马约 196～210。 */
+  bossPace: { walkMul: 1.3, chaseMul: 2, chaseFrom: 300, chaseFull: 500, walkCap: 1.8 },
   eliteFirst: 55,
   eliteInterval: 60,
   critMultiplier: 1.8,

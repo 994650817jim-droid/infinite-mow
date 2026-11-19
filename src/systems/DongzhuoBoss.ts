@@ -38,15 +38,20 @@ export class DongzhuoBoss {
   /** 每帧接管董卓移动。 */
   step(dt: number, now: number): void {
     const b = this.boss, p = this.h.player;
-    if (now < this.retreatUntil) { const k = Math.min(1, dt * 4); b.sprite.x += (this.rx - b.x) * k; b.sprite.y += (this.ry - b.y) * k; b.moveVx = b.moveVy = 0; return; }
+    // 迁都：匀速走到撤退点（原来按比例缓动，头几帧一步十几像素被步态当成击退，定格平移；11-19「董卓也在平移」）
+    if (now < this.retreatUntil) { const rx = this.rx - b.x, ry = this.ry - b.y, rd = Math.hypot(rx, ry); if (rd > 1) { const st = Math.min(rd, this.retreatSpeed * dt); b.sprite.x += rx / rd * st; b.sprite.y += ry / rd * st; } b.moveVx = b.moveVy = 0; return; }
     if (b.invulnerable && this.retreated) b.invulnerable = false;
     const dx = p.x - b.x, dy = p.y - b.y, d = Math.hypot(dx, dy) || 1;
-    this.h.move(b, d > 50 ? dx / d : 0, d > 50 ? dy / d : 0, dt);
+    // 群体移动（EnemyMovement）把首领的 moveVx 清零，人群避让开着时 advanceEnemy 按 moveVx 走 → 董卓几乎不动、只被挤着平移。这里自己给速度
+    const nx = d > 50 ? dx / d : 0, ny = d > 50 ? dy / d : 0; b.moveVx = nx * b.def.speed; b.moveVy = ny * b.def.speed;
+    this.h.move(b, nx, ny, dt);
     if (!this.retreated && b.hp <= b.maxHp * D.retreatAt) this.retreat(now);
   }
+  /** 迁都撤退的匀速（像素 / 秒）：撤退时长的八成走完。 */
+  private retreatSpeed = 0;
   private retreat(now: number): void {
     const b = this.boss, p = this.h.player; this.retreated = true; b.invulnerable = true; this.retreatUntil = now + D.retreatMs;
-    const dx = b.x - p.x, dy = b.y - p.y, d = Math.hypot(dx, dy) || 1; this.rx = b.x + dx / d * D.retreatDistance; this.ry = b.y + dy / d * D.retreatDistance;
+    const dx = b.x - p.x, dy = b.y - p.y, d = Math.hypot(dx, dy) || 1; this.rx = b.x + dx / d * D.retreatDistance; this.ry = b.y + dy / d * D.retreatDistance; this.retreatSpeed = D.retreatDistance / (D.retreatMs * .8 / 1000);
     this.h.banner('董卓迁都 · 焚城西走', '西凉兵断后');
     for (let i = 0; i < D.retreatInfantry; i++) { const a = i / D.retreatInfantry * Math.PI * 2; this.h.spawn('infantry', p.x + Math.cos(a) * 320, p.y + Math.sin(a) * 320); }
     for (let i = 0; i < D.retreatCavalry; i++) { const a = Math.random() * Math.PI * 2; this.h.spawn('cavalry', p.x + Math.cos(a) * 380, p.y + Math.sin(a) * 380); }

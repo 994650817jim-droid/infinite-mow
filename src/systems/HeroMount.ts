@@ -16,8 +16,8 @@ const V2_HORSE: Record<string, string> = {chitu: 'horse_v2_chitu_walk', dilu: 'h
 const V2_GENERIC = 'horse_v2_generic_walk';
 /** v2 马的显示：0.5 倍（1080p 像素 1:1）；脚底行；朝镜头时盖在骑者前面的是帧高 frontTop~frontCut 这一段（马眼以下的头颈），
  * 耳朵与额鬃留在骑者身后；骑者抬高，朝镜头时再多抬 downRise（骑者的头要高过马头）。 */
-/** 显示大小与抬高都乘 MOUNT_VISUAL.visualScale（11-18 骑马整体缩小）；帧格与脚底行是图本身的，不乘。 */
-const MV = MOUNT_VISUAL.visualScale;
+/** 马的显示大小与马镫 / 鞍高都乘 MOUNT_VISUAL.horseScale（只缩马）；骑者不缩，与步战同大（11-19 人马比例）。帧格与脚底行是图本身的，不乘。 */
+const MV = MOUNT_VISUAL.horseScale;
 export const HORSE_V2 = {cell: 288, foot: 280, scale: .5 * MV, frontTop: .34, frontCut: .54, riderRise: 40 * MV, downRise: 16 * MV} as const;
 function v2HorseKey(base: string): string { return V2_HORSE[base] ?? V2_GENERIC; }
 /** 个别坐骑鞍子更低（骡比马矮），骑者少抬一些。 */
@@ -28,7 +28,7 @@ const v2Rise = (key: string): number => V2_RISE[key] ?? HORSE_V2.riderRise;
  * 每格 RIDE.cell、脚底（踩镫处）在 RIDE.foot 行；显示 0.5 倍。脚底对到马的镫高（离地 stirrup 逻辑像素）。
  * 有姿态图的武将骑马时整个人换成姿态帧；没有的仍用「行走帧上半身拼在鞍上」。
  */
-export const RIDE = {cell: 256, foot: 240, scale: .5 * MV, stirrup: 38 * MV} as const;
+export const RIDE = {cell: 256, foot: 240, scale: .5, stirrup: 38 * MV} as const;
 /** 朝镜头时骑者整体再抬高（头肩要露在马头上方），背对时略抬；朝镜头时马头马颈（帧高 30%~56%）盖在骑者腿上。 */
 export const RIDE_DIR_LIFT: Record<string, number> = {down: 20 * MV, up: 6 * MV};
 export const RIDE_FRONT = {top: .3, cut: .56} as const;

@@ -202,6 +202,8 @@ assets/raw/*
 !/tools/crop-terrain-kit.mjs
 !/tools/shot-river.mjs
 !/tools/shot-sidewall.mjs
+!/tools/flood-magenta.mjs
+!/tools/erase-grey.mjs
 !/tools/resize-image.mjs
 !/tools/shot-boss-still.mjs
 !/tools/prepare-story-art.mjs
@@ -285,6 +287,7 @@ assets/raw/*
 # 营寨回营 / 全屏截图（2026-11-18）
 !/tools/test-camp-return.mjs
 !/tools/test-camp-merchant.mjs
+!/tools/shot-town-life.mjs
 !/tools/shot-camp-full.mjs
 !/tools/deathfx-horse.mjs
 !/tools/shot-academy.mjs
@@ -295,3 +298,8 @@ assets/raw/*
 !/tools/prepare-black-fx.mjs
 !/tools/test-knife-fx.mjs
 !/tools/record-zhurong-throw.mjs
+!/tools/shot-boss-theme.mjs
+!/tools/shot-theme-preview.mjs
+!/tools/mount-proportions.mjs
+!/tools/mount-proportions.json
+!/tools/test-wancheng.mjs

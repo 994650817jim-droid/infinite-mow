@@ -102,7 +102,7 @@ export class SchoolSynergy{
   this.h.banner('awaken','觉醒 · '+SCHOOLS[s].tiers[6].name+'！',SCHOOLS[s].name+' 6 势 · 本关第 '+st.used+' / '+AWAKEN.perStage+' 次');this.h.shake();
   const raw=this.h.combat.rawBase(),p=this.h.player,cam=this.h.scene.cameras.main.worldView;
   switch(s){
-  case 'fire':{const F=AWAKEN.fire,w=cam.width/F.columns,dir=Math.random()<.5?1:-1;this.h.combat.burnBoost={until:now+F.takenMs,mul:F.takenMul};
+  case 'fire':{const F=AWAKEN.fire,w=cam.width/F.columns,dir=Math.random()<.5?1:-1;this.h.combat.burnBoost={until:now+F.takenMs,mul:F.takenMul,bossMul:F.takenBossMul};
    for(let i=0;i<F.columns;i++){const col=dir>0?i:F.columns-1-i,x=cam.x+(col+.5)*w;this.wakes.push({at:now+i*F.sweepMs/F.columns,run:()=>{
     for(let k=0;k<3;k++)this.h.sheet('fx_awaken_fire',x+(Math.random()-.5)*w*.25,cam.y+(k+.92)*cam.height/3,{size:Math.max(w*1.5,cam.height/2.6),ms:900,originY:.94});
     for(const e of this.h.nearby(x,cam.centerY,Math.max(w,cam.height))){if(!e.active||e.isSupplySlot||Math.abs(e.x-x)>w/2+e.radius||e.y<cam.y-20||e.y>cam.bottom+20)continue;

@@ -36,11 +36,11 @@ ck('合击：火攻 2 势 + 弓弩 1 势不生效，两派都到 2 势「火箭�
 
 // 2. 实战：六派都 4 势（15 个合击全生效），学火种 / 疾风 / 绊阵 / 连环 / 鹰眼 / 蓄势冲锋，主将半血（背水一战），打 16 秒
 await ev(s => { const b = s.player.growth.build; b.tactics = {}; for (const id of ['ember', 'ember', 'ember', 'gust', 'snare', 'chain', 'eagle', 'stored_edge']) b.learn(id);
-  b.bonus = { fire: 3, stratagem: 3, archery: 3, cavalry: 3, warrior: 4, formation: 4 }; b.bonusNotes = {}; s.player.hp = s.player.maxHp * .4; return true; });
+  b.bonus = { fire: 3, stratagem: 3, archery: 3, cavalry: 3, warrior: 4, formation: 4 }; b.bonusNotes = {}; s.player.hp = s.player.maxHp * .3; return true; });
 const seenBanners = new Set();
 for (let i = 0; i < 16; i++) {
   await ev((s, i) => { s.buildCombat.movement(260); s.buildCombat.update(s.combatNow); // 烈马：同一帧里先动再结算（真实对局每帧都是这样）
-    if (i % 4 === 2) for (const e of s.enemies) if (e.active && !e.isSupplySlot && Math.hypot(e.x - s.player.x, e.y - s.player.y) < 300) s.buildCombat.igniteDerived(e, 2, s.combatNow); // 让震荡多打到燃烧的敌人（爆燃） s.player.hp = Math.min(s.player.hp, s.player.maxHp * .45); s.debugCrit = i % 3 === 0 ? true : null;
+    if (i % 4 === 2) for (const e of s.enemies) if (e.active && !e.isSupplySlot && Math.hypot(e.x - s.player.x, e.y - s.player.y) < 300) s.buildCombat.igniteDerived(e, 2, s.combatNow); // 让震荡多打到燃烧的敌人（爆燃） s.player.hp = Math.min(s.player.hp, s.player.maxHp * .35); s.debugCrit = i % 3 === 0 ? true : null;
     window.crowd(s, 130);
     // 万军取首：冲势满时打一个精锐（临时把一个敌人当精锐打）
     if (i === 5) { const e = s.enemies.find(e => e.active && !e.isSupplySlot && e.kind === 'infantry'); if (e) { s.buildCombat.distances.charge = 999; const k = e.kind; e.kind = 'elite'; s.buildCombat.damage(e, 10, false, s.combatNow); e.kind = k; } }

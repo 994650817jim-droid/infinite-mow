@@ -23,7 +23,7 @@ export const COMBOS: readonly ComboDef[] = [
   { id: 'crossbow_line', name: '弩阵', a: 'archery', b: 'formation', desc: '部曲、随行、义军也会暴击（主将暴击率的一半）' },
   { id: 'take_general', name: '万军取首', a: 'cavalry', b: 'warrior', desc: '冲势一击打精锐 / 首领时伤害 +50%' },
   { id: 'iron_cavalry', name: '铁骑冲阵', a: 'cavalry', b: 'formation', desc: '冲势打出时，2 名骑卒随你冲阵（助战 4 秒）' },
-  { id: 'last_stand', name: '背水一战', a: 'warrior', b: 'formation', desc: '主将生命低于 50% 时，你和全军伤害 +25%，你的武器命中吸血 5%' },
+  { id: 'last_stand', name: '背水一战', a: 'warrior', b: 'formation', desc: '主将生命低于 40% 时，你和全军伤害 +15%，你的武器命中吸血 3%' },
 ];
 export type ComboId = typeof COMBOS[number]['id'];
 export const COMBO_VALUES = {
@@ -41,7 +41,7 @@ export const COMBO_VALUES = {
   crossbowLineCritShare: .5,
   takeGeneral: .5,
   ironCavalryN: 2, ironCavalryLifeMs: 4000,
-  lastStandHp: .5, lastStandDmg: .25, lastStandLeech: .05, lastStandLeechCapPerSec: .03,
+  lastStandHp: .4, lastStandDmg: .15, lastStandLeech: .03, lastStandLeechCapPerSec: .015, // 11-19 平衡复核：原 .5 / .25 / .05 / .03 偏强
 } as const;
 export function activeCombos(tags: Record<SchoolId, number>): ComboDef[] { return COMBOS.filter(c => tags[c.a] >= COMBO_AT && tags[c.b] >= COMBO_AT); }
 export function comboOf(a: SchoolId, b: SchoolId): ComboDef | undefined { return COMBOS.find(c => (c.a === a && c.b === b) || (c.a === b && c.b === a)); }
@@ -49,7 +49,7 @@ export function comboOf(a: SchoolId, b: SchoolId): ComboDef | undefined { return
 /** 觉醒：每关最多 perStage 次、间隔 cooldownMs；到 6 势后至少 firstDelayMs 才第一次；身边（minRange 内）至少 minEnemies 个敌人才放。 */
 export const AWAKEN = {
   perStage: 2, cooldownMs: 45000, firstDelayMs: 2500, minEnemies: 6, minRange: 420,
-  fire: { columns: 7, sweepMs: 1400, ratio: 2.2, burnMs: 4000, takenMul: 1.5, takenMs: 6000 },
+  fire: { columns: 7, sweepMs: 1400, ratio: 2.2, burnMs: 4000, takenMul: 1.3, takenBossMul: 1.15, takenMs: 6000 },
   stratagem: { r: 150, ms: 5000, tickMs: 1000, stunMs: 700, taken: .3 },
   archery: { r: 160, waves: 3, waveMs: 450, ratio: 1.4, sunder: .15 },
   cavalry: { len: 540, width: 90, ratio: 2.6, push: 70, invulnMs: 1000 },

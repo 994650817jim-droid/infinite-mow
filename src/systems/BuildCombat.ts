@@ -19,13 +19,13 @@ export class BuildCombat {
  private pendingEcho:{x:number;y:number;at:number;damage:number}|null=null;
  private position:()=>{x:number;y:number}=()=>({x:0,y:0});
  setOrigin(origin:()=>{x:number;y:number}):void{this.position=origin;}
- private hits=0;private kills=0;private killUntil=0;private distances={windstep:0,flank:0,horse:0,charge:0};private moving=false;private procAt=0;private slayerAt=0;private shockHits=0;
+ private hits=0;private kills=0;private killUntil=0;private distances={windstep:0,flank:0,horse:0,charge:0};private moving=false;private procAt=0;private slayerAt=0;private shockHits=0;private shockAt=-1e9;
  /** 测试 / 平衡用：各档位效果触发次数。 */
  readonly stats={burnTicks:0,liaoyuan:0,charge:0,shock:0,heavy:0,sunder:0,napalm:0,gust:0,focus:0};
  /** 测试 / 平衡用：各合击触发次数。 */
  readonly comboStats:Record<string,number>={};
  /** 觉醒「火烧连天」之后一段时间灼烧更痛：截止时刻与倍率（SchoolSynergy 设）。 */
- burnBoost={until:0,mul:1};
+ burnBoost={until:0,mul:1,bossMul:1};
  constructor(private state:BuildState,private nearby:(x:number,y:number,r:number)=>Enemy[],private deal:(e:Enemy,n:number,fire:boolean)=>void,private fx:(e:Enemy,fire:boolean)=>void){}
  /** 奇谋 2 势「牵制」：被控制的敌人受伤加深（GameScene 接 ControlBuild.isControlled）。 */
  controlled?:(e:Enemy,now:number)=>boolean;
@@ -135,7 +135,7 @@ export class BuildCombat {
   // 破阵重击：每 8/7/6 次命中一次重击（震伤 + 震退）
   const hb=this.lv('heavy_break');if(hb&&this.hits%[8,7,6][hb-1]===0){this.stats.heavy++;for(const t of this.targets(e,80,e).slice(0,1+hb)){const hot=this.isBurning(t,now);this.fx(t,false);this.deal(t,raw*[.3,.4,.5][hb-1],false);this.knock(t,e,30,now);this.burst(t,raw,now,hot);}}
   // 猛将 4 势「震荡」：每第 6 次命中一圈冲击波（眩晕 + 震退）
-  if(this.tier('warrior')>=4&&++this.shockHits>=T.warrior.every){this.shockHits=0;this.stats.shock++;const W=T.warrior;this.onShock?.(e.x,e.y,W.r);for(const t of this.targets(e,W.r).slice(0,W.targets)){const hot=this.isBurning(t,now);if(t!==e)this.fx(t,false);this.deal(t,raw*W.ratio,false);this.stun(t,W.stunMs,now);if(t!==e)this.knock(t,e,W.push,now);this.burst(t,raw,now,hot);}}
+  if(this.tier('warrior')>=4&&++this.shockHits>=T.warrior.every&&now-this.shockAt>=T.warrior.minGapMs){this.shockHits=0;this.shockAt=now;this.stats.shock++;const W=T.warrior;this.onShock?.(e.x,e.y,W.r);for(const t of this.targets(e,W.r).slice(0,W.targets)){const hot=this.isBurning(t,now);if(t!==e)this.fx(t,false);this.deal(t,raw*W.ratio,false);this.stun(t,W.stunMs,now);if(t!==e)this.knock(t,e,W.push,now);this.burst(t,raw,now,hot);}}
   // 凝神：站定 1 秒（或每 2.5 秒）下一击沿攻击方向贯穿
   const cc=this.lv('concentration');if(cc&&(this.still>=1000||now-this.focusAt>=2500)&&now-this.focusAt>=800){this.still=0;this.focusAt=now;this.stats.focus++;const origin=this.position(),dx=e.x-origin.x,dy=e.y-origin.y,len=Math.hypot(dx,dy)||1;
    const line=this.targets(e,160,e).filter(t=>{const x=t.x-e.x,y=t.y-e.y,along=(x*dx+y*dy)/len,side=Math.abs(x*dy-y*dx)/len;return along>=0&&along<=160&&side<=18+t.radius;}).sort((a,b)=>Math.hypot(a.x-e.x,a.y-e.y)-Math.hypot(b.x-e.x,b.y-e.y));
@@ -188,11 +188,11 @@ export class BuildCombat {
  }
  update(now:number):void{const dt=Math.max(0,Math.min(100,now-this.clock));this.clock=now;this.still=Math.max(0,Math.min(1500,this.still+dt*(this.moving?-2:1)));
   const echo=this.pendingEcho;if(echo&&now>=echo.at){this.pendingEcho=null;for(const t of this.targets(echo,75).slice(0,3)){this.fx(t,false);this.deal(t,echo.damage,false);}}
-  const fireMul=(1+(this.tier('fire')>=2?T.fire.fireDmg:0))*(now<this.burnBoost.until?this.burnBoost.mul:1),windFire=this.combo('fire_wind');
+  const boosted=now<this.burnBoost.until,fireMul=(1+(this.tier('fire')>=2?T.fire.fireDmg:0))*(boosted?this.burnBoost.mul:1),windFire=this.combo('fire_wind');
   for(const [id,b]of this.burns){if(!b.enemy.active||b.enemy.spawnId!==b.spawn||now>b.until){this.burns.delete(id);continue;}if(now>=b.next){b.next=now+500;this.stats.burnTicks++;
    // 合击「火借风势」：被控制的燃烧敌人灼烧 ×2
    const ctl=windFire&&!!this.controlled?.(b.enemy,now);if(ctl)this.noteCombo('fire_wind');
-   this.fx(b.enemy,true);this.deal(b.enemy,b.damage*fireMul*(ctl?CV.fireWindBurnMul:1),true);}}
+   this.fx(b.enemy,true);this.deal(b.enemy,b.damage*fireMul*(boosted&&b.enemy.kind==='boss'?this.burnBoost.bossMul/this.burnBoost.mul:1)*(ctl?CV.fireWindBurnMul:1),true);}}
   for(const [id,t] of this.windUntil)if(t<now)this.windUntil.delete(id);
   // 合击「火借风势」：被风吹开的燃烧敌人一路点着撞到的人
   for(const [e,w] of this.winds){if(!e.active||e.spawnId!==w.spawn||now>w.until){this.winds.delete(e);continue;}if(!windFire||now<w.next||!this.isBurning(e,now))continue;w.next=now+200;

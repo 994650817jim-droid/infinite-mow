@@ -66,18 +66,18 @@ const noFire = Object.entries(each).filter(([, v]) => !(v.ok && v.casts === 1 &&
 ck('每位降将的专属招式在战斗里出得来、打得到敌人（' + Object.keys(each).length + ' 招）', noFire.length === 0, noFire.length ? noFire : Object.fromEntries(Object.entries(each).map(([k, v]) => [k, v.hits])));
 ck('专属招式不伤主将（自己人的招）', Object.values(each).every(v => !v.playerHurt), each);
 
-// 3 吕布正常出手也会出招，且不比冷却更勤；4 伤害 = 普通出手 × 2.2
+// 3 吕布正常出手也会出招，且不比冷却更勤；4 伤害 = 普通出手 × 配置的 dmg
 const nat = await p.evaluate(async () => {
   const s = window.__game.scene.getScene('GameScene'), sq = s.followers, f = sq.members[0], M = await window.__mod('data/surrenderMoves.ts'), m = M.SURRENDER_MOVES.lubu;
   f.recruit = { ...f.recruit, boss: 'lubu' }; f.sigReadyAt = 0; f.sigAt = f.attacks; window.__pack(f, 5);
   const c0 = sq.signatureStats.byBoss.lubu ?? 0, a0 = f.attacks, d0 = sq.signatureStats.damage, h0 = sq.signatureStats.hits, t0 = s.combatNow;
   while (s.combatNow - t0 < 14000) { window.__hold(); await new Promise(r => setTimeout(r, 25)); }
   const casts = (sq.signatureStats.byBoss.lubu ?? 0) - c0, perHit = (sq.signatureStats.damage - d0) / Math.max(1, sq.signatureStats.hits - h0);
-  return { casts, attacks: f.attacks - a0, secs: (s.combatNow - t0) / 1000, cd: m.cd, every: m.every, perHit, expect: f.damage * sq.share * m.dmg };
+  return { casts, attacks: f.attacks - a0, secs: (s.combatNow - t0) / 1000, cd: m.cd, every: m.every, dmg: m.dmg, perHit, expect: f.damage * sq.share * m.dmg };
 });
-ck('吕布正常出手就会出「方天横扫」（不靠强制），每 ' + 3 + ' 下、冷却 8 秒内最多一次', nat.casts >= 1 && nat.casts <= Math.ceil(nat.secs * 1000 / nat.cd) + 1 && nat.attacks >= nat.every, nat);
+ck('吕布正常出手就会出「方天横扫」（不靠强制），每 ' + nat.every + ' 下、冷却 ' + nat.cd / 1000 + ' 秒内最多一次', nat.casts >= 1 && nat.casts <= Math.ceil(nat.secs * 1000 / nat.cd) + 1 && nat.attacks >= nat.every, nat);
 // 枪模板身边有部曲时普通出手吃「列阵」加成（commonerSkills），专属招式在这一下的基础上 × dmg，所以允许 1.0–1.3 倍
-ck('专属招式伤害 = 随行这一下出手 × 2.2（吕布；枪「列阵」加成可叠）', nat.perHit / nat.expect >= .98 && nat.perHit / nat.expect <= 1.3, nat);
+ck('专属招式伤害 = 随行这一下出手 × 配置倍数（吕布 ×' + nat.dmg + '；枪「列阵」加成可叠）', nat.perHit / nat.expect >= .98 && nat.perHit / nat.expect <= 1.3, nat);
 
 // GIF：吕布 / 华雄 / 孟获各出一招（随行身边 360×260 区域，约 1.6 秒）
 if (gifDir) {

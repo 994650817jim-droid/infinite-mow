@@ -423,7 +423,7 @@ export class EnemyTraits {
       if (k >= 1) { s.phase = undefined; e.controlImmune = false; this.metrics.leaps += 1; wf.shapeImpact(id, 'slam', tx, ty, t.radius, 0, now); playSheet(this.h.scene, 'fx_collapse_dust', tx, ty - 10, { size: t.radius * 2.2, depth: DEPTH.fx, ms: 420, alpha: .8 }); this.hitPlayer(tx, ty, t.radius, t.damage, now); }
       return true;
     }
-    if (dist <= t.range && dist >= t.minRange && now >= s.next) { s.next = now + t.everyMs; s.phase = 'warn'; s.until = now + t.warnMs; s.tx = this.h.player.x; s.ty = this.h.player.y; e.startAttack(now, dirOf(nx, ny)); return true; }
+    if (dist <= t.range && dist >= t.minRange && now >= s.next) { s.next = now + t.everyMs; s.phase = 'warn'; s.until = now + t.warnMs; s.tx = this.h.player.x; s.ty = this.h.player.y; e.startAttack(now, dirOf(nx, ny)); e.windupCol = 0; e.attackUntil = now + t.warnMs + t.flightMs + 180; e.poseUntil = Math.max(e.poseUntil, e.attackUntil); return true; } // 攻击表：预警时蹲低蓄力（第 1 帧）、落地前腾空劈下（第 2 帧）、落地那一刻砍到（第 3 帧）
     this.h.move(e, nx, ny, dt); return true;
   }
   /** 长沙强弓：远处站定、蓄力（预警线）、一箭穿透。 */
@@ -443,7 +443,7 @@ export class EnemyTraits {
     if (dist > t.range) { this.h.move(e, nx, ny, dt); return true; }
     if (dist < t.range * .55) { this.h.move(e, -nx, -ny, dt); return true; }
     e.moveVx = e.moveVy = 0;
-    if (now >= s.next) { s.next = now + t.everyMs; s.phase = 'warn'; s.until = now + t.chargeMs; s.face = Math.atan2(ny, nx); e.startAttack(now, dirOf(nx, ny)); e.windupCol = 0; e.attackUntil = now + t.chargeMs + 180; }
+    if (now >= s.next) { s.next = now + t.everyMs; s.phase = 'warn'; s.until = now + t.chargeMs; s.face = Math.atan2(ny, nx); e.startAttack(now, dirOf(nx, ny)); e.windupCol = 0; e.attackUntil = now + t.chargeMs + 270; } // 攻击表：蓄力时拉满停住（第 1 帧），放箭那一刻播到箭离弦（第 2 帧）
     return true;
   }
 

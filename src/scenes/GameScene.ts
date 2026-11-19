@@ -1319,6 +1319,10 @@ export class GameScene extends Phaser.Scene {
     // 不刷在关墙 / 营栅 / 场地边界 / 谷壁 / 崖壁里（全场景审查 F）：挪到最近的框边、朝主将那一侧；首领与城头守军按设计摆位，不挪
     if (kind !== 'boss' && override?.behavior !== 'wall' && this.sishuiObstacles?.footprints.length) { const f = freeSpawn(this.sishuiObstacles.footprints, x, y, 20, this.player); x = f.x; y = f.y; }
     if (this.arena && kind !== 'boss') { const c = this.arena.clampPoint(x, y); x = c.x; y = c.y; } // 有边场地：挪出障碍后可能被推到边外（崖口旁），夹回场内
+    // 全面检查 #7：夹回场内后又可能落进角上的房子 / 墙里——再挪出、再夹，最多两轮
+    if (this.arena && kind !== 'boss' && override?.behavior !== 'wall' && this.sishuiObstacles?.footprints.length) { let ok = false; for (let i = 0; i < 2 && !ok; i++) { const f = freeSpawn(this.sishuiObstacles.footprints, x, y, 20, this.player); if (!f.moved) { ok = true; break; } const c = this.arena.clampPoint(f.x, f.y); x = c.x; y = c.y; }
+      // 还在墙里（两排房子的拐角）：改到离主将最远的关口（关口都是空地）
+      if (!ok && freeSpawn(this.sishuiObstacles.footprints, x, y, 20, this.player).moved) { const g = [...(this.arena.info.gates ?? [])].sort((u, v) => Math.hypot(v.x - this.player.x, v.y - this.player.y) - Math.hypot(u.x - this.player.x, u.y - this.player.y))[0]; if (g) { x = g.x; y = g.y; } } }
     if (kind !== 'boss' && override?.behavior !== 'wall' && this.dzLubu) { const f = this.dzLubu.southSpawn(x, y); x = f.x; y = f.y; } // 2-3 洛阳：城北（城里）不刷兵
     const poolLimit = BALANCE.enemyCap;
     const bossReserve = this.bossSpawned ? 0 : 1;

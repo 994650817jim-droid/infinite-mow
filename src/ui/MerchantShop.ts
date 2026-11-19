@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import {GAME_WIDTH as W,GAME_HEIGHT as H,IS_DESKTOP as D,FONT,HEADING_FONT,DEPTH} from '../config';
 import {ItemTooltip} from './ItemTooltip';import {itemTile} from './ItemQuality';import {warPanelTexture} from './HomeCommand';import {lqButton,lqLabelColor,type LqState} from './LacquerKit';
 import {MERCHANT_PRICE,QUALITIES,formatAffix,itemName,SLOTS,itemSlot,SPECIALS,type ItemInstance} from '../data/items';
-import {TACTICS,TAG_NAMES,tacticDescription} from '../data/builds';
+import {TACTICS,TAG_NAMES,tacticDescription,type TacticId} from '../data/builds';
 import type {CharacterId} from '../data/characters';
 import {addItems,loadout,type GearOwner} from '../systems/ItemStore';
 import {currentMerchantStock,saveMerchantStock,type MerchantStock} from '../systems/MerchantStock';
@@ -32,6 +32,14 @@ export interface MerchantShopOptions{
 /** 把立绘排进加载队列（已在 / 正在载就跳过）；载好回调。 */
 export function loadMerchantArt(scene:Phaser.Scene,done?:()=>void):void{
  loadCampFigure(scene,MERCHANT_FIGURE,done);
+}
+/**
+ * 卷轴卡面文字：effect = 说明第一句（效果）；cooldown = 从整段里摘出的「冷却 N 秒」（没有则 null）；full = 完整说明（悬停用）。
+ * 例：牵机「命中时把周围2名敌人拉向命中点（0.7秒），并减速12%。\n冷却4秒，对首领无效。」→ effect 第一句，cooldown「冷却 4 秒」。
+ */
+export function tacticCardText(id:TacticId,level:number):{effect:string;cooldown:string|null;full:string}{
+ const full=tacticDescription(id,level),[effect='',...rest]=full.split('\n'),m=full.match(/冷却\s*([\d.]+)\s*秒/);
+ return{effect:effect.trim(),cooldown:m?'冷却 '+m[1]+' 秒':null,full:[effect,...rest].join('\n')};
 }
 export class MerchantShop{
  private tip?:ItemTooltip;private root!:Phaser.GameObjects.Container;
@@ -85,21 +93,35 @@ export class MerchantShop{
   },bw,!sold&&!poor);
   hit.setName('camp-item-goods-'+i).setData('caption',cap);cap.setName('camp-item-price-'+i);
  }
- /** 战法卷轴卡：漆底描金外框里一幅宣纸手卷（上下卷轴），写战法名、流派、等级与下一级效果。 */
+ /**
+  * 战法卷轴卡（2026-11-18 用户「这里也要优化一下」重排）：与兵装卡同宽同框，框里一幅宣纸手卷，自上而下：
+  * 流派 → 大图标 → 战法名与等级 → 效果（只取卡面第一句，字号 12 起、放不下逐级缩到 10，保证不截断）→ 冷却（从说明里摘出来单独一行）。
+  * 「新学 / 精进」是压在上轴头上的漆牌。完整说明（含条件、当前等级）悬停看。
+  */
  private tacticCard(s:MerchantStock,t:CampOffer,x:number,y:number,w:number,h:number){
-  const d=TACTICS[t.id],next=t.level+1,tac=this.o.tactics,able=!!tac&&tac.canBuy(t),poor=this.o.wallet.get()<t.price;
-  this.plate(x,y,w,h,true).setName('camp-tactic-card');
-  const px=x+9,pw=w-18,py=y+12,ph=h-74,g=this.scene.add.graphics().setScrollFactor(0);
-  g.fillStyle(0xe8dcc0,.96).fillRect(px,py,pw,ph).lineStyle(1,0xb59a6a,.8).strokeRect(px+3,py+3,pw-6,ph-6);
-  for(const ry of [py-3,py+ph-3]){g.fillStyle(0x3b2414,1).fillRect(px-5,ry,pw+10,6);g.fillStyle(0xc9a35a,1).fillRect(px-8,ry-1,5,8).fillRect(px+pw+3,ry-1,5,8);}
+  const d=TACTICS[t.id],next=t.level+1,tac=this.o.tactics,able=!!tac&&tac.canBuy(t),poor=this.o.wallet.get()<t.price,{effect,cooldown,full}=tacticCardText(t.id,next);
+  this.plate(x,y,w,h).setName('camp-tactic-card');
+  const px=x+7,pw=w-14,py=y+14,ph=h-76,g=this.scene.add.graphics().setScrollFactor(0);
+  g.fillStyle(0xe9ddc2,.97).fillRect(px,py,pw,ph).lineStyle(1,0xb59a6a,.7).strokeRect(px+3,py+3,pw-6,ph-6);
+  for(const ry of [py-4,py+ph-3]){g.fillStyle(0x3b2414,1).fillRect(px-4,ry,pw+8,7);g.fillStyle(0xc9a35a,1).fillRect(px-7,ry-1,5,9).fillRect(px+pw+2,ry-1,5,9);}
   this.root.add(g);
   const ink=(tx:number,ty:number,str:string,size:number,color:string)=>this.text(tx,ty,str,size).setColor(color).setStroke('#000',0);
-  if(this.scene.textures.exists('build_icon_'+t.id))this.root.add(this.scene.add.image(x+w/2,py+(D?28:26),'build_icon_'+t.id).setDisplaySize(D?36:34,D?36:34).setScrollFactor(0));
-  ink(x+w/2,py+50,TAG_NAMES[d.tag]+'系 · 战法',12,'#8a5a2a').setOrigin(.5,0);
-  ink(x+w/2,py+66,d.name+' '+(t.level?'Lv.'+t.level+'→'+next:'Lv.1'),D?15:17,'#2a170b').setOrigin(.5,0).setFontFamily(HEADING_FONT).setName('camp-tactic-name');
-  ink(px+8,py+90,tacticDescription(t.id,next),D?11:13,'#3b2a18').setLineSpacing(1).setWordWrapWidth(pw-16,true).setMaxLines(D?5:3).setName('camp-tactic-desc');
-  ink(px+pw-7,py+6,t.level?'精进':'新学',11,'#a3341c').setOrigin(1,0);
-  const label=t.sold?'已研习':!tac?(this.o.tactics===null?'出征后可研习':'已无法研习'):!able?(tac.lockedText??'已无法研习'):poor?(D?'粮不足 · ':this.o.wallet.name+'不足 · ')+t.price+'粮':(t.level?'精进 · ':'研习 · ')+t.price+'粮',bw=Math.min(w-20,180);
+  // 新学 / 精进：漆牌压在上轴中间
+  const badge=this.scene.add.graphics().setScrollFactor(0);lqButton(badge,x+w/2,py-1,48,20,'on',t.level?'gold':'cinnabar');this.root.add(badge);
+  this.root.add(this.scene.add.text(x+w/2,py-1,t.level?'精进':'新学',{fontFamily:HEADING_FONT,fontSize:'12px',color:'#fff1cf',resolution:2}).setOrigin(.5).setLetterSpacing(2).setScrollFactor(0).setName('camp-tactic-badge'));
+  ink(x+w/2,py+13,TAG_NAMES[d.tag]+'系 · 战法',11,'#8a5a2a').setOrigin(.5,0).setName('camp-tactic-school');
+  if(this.scene.textures.exists('build_icon_'+t.id))this.root.add(this.scene.add.image(x+w/2,py+50,'build_icon_'+t.id).setDisplaySize(46,46).setScrollFactor(0).setName('camp-tactic-icon'));
+  ink(x+w/2,py+75,d.name+'  '+(t.level?'Lv.'+t.level+'→'+next:'Lv.1'),15,'#2a170b').setOrigin(.5,0).setFontFamily(HEADING_FONT).setName('camp-tactic-name');
+  g.lineStyle(1,0xa58a5c,.55).lineBetween(px+10,py+96,px+pw-10,py+96);
+  // 冷却行贴底；效果在名字与冷却之间，放不下就缩字号（不截断）
+  const cdY=py+ph-18,descTop=py+100,limit=cdY-2;
+  ink(x+w/2,cdY,cooldown??'悬停看详情',11,cooldown?'#7a3a1c':'#9a8a6c').setOrigin(.5,0).setName('camp-tactic-cd');
+  const desc=ink(px+6,descTop,effect,12,'#33220f').setWordWrapWidth(pw-12,true).setLineSpacing(1).setName('camp-tactic-desc');
+  for(const size of [11,10.5,10])if(desc.y+desc.height>limit)desc.setFontSize(size+'px');
+  desc.setData('limit',limit).setData('full',full);
+  const hover=this.scene.add.rectangle(px,py,pw,ph,0,.001).setOrigin(0).setScrollFactor(0).setInteractive().setName('camp-tactic-hover');this.root.add(hover);
+  this.tip!.attachInfo(hover,()=>({title:d.name+' '+(t.level?'Lv.'+t.level+' → Lv.'+next:'Lv.1（新学）'),sub:TAG_NAMES[d.tag]+'系 · 战法 · '+t.price+'粮',body:full,icon:'build_icon_'+t.id}));
+  const label=t.sold?'已研习':!tac?'出征后可研习':!able?(tac.lockedText??'已无法研习'):poor?(D?'粮不足 · ':this.o.wallet.name+'不足 · ')+t.price+'粮':(t.level?'精进 · ':'研习 · ')+t.price+'粮',bw=Math.min(w-20,180);
   this.button(x+(w-bw)/2,y+h-52,label,()=>{
    const cur=this.o.stock().tactic;if(!cur||cur.sold||!tac||!tac.canBuy(cur)||this.o.wallet.get()<cur.price)return;
    const lv=cur.level;if(!tac.learn(cur))return;this.o.wallet.spend(cur.price);cur.sold=true;saveMerchantStock(this.o.stock());tac.afterBuy?.();

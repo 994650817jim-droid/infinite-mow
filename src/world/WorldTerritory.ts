@@ -74,18 +74,20 @@ export function buildTerritory(scene: Phaser.Scene, era: EraId, owned: readonly 
   for (let y = 0; y < gh; y++) for (let x = 0; x < gw; x++) {
     const i = y * gw + x, f = fac[i]; if (!f) continue;
     const [r, gg, b] = rgb[f - 1], player = factionIds[f - 1] === 'player';
-    let border = 0, inner = 0, province = false;
+    let border = 0, inner = 0, province = false, ink = false;
     for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) {
       if (!dx && !dy) continue; const nx = x + dx, ny = y + dy; if (nx < 0 || ny < 0 || nx >= gw || ny >= gh) continue;
       const j = ny * gw + nx, near = Math.abs(dx) <= 1 && Math.abs(dy) <= 1;
-      if (fac[j] !== f) { if (near) border = fac[j] ? 2 : 1; else inner = 1; } else if (near && cell[j] !== cell[i]) province = true;
+      if (fac[j] !== f) { if (near) { border = fac[j] ? 2 : 1; if (fac[j] && fac[j] < f) ink = true; } else inner = 1; } else if (near && cell[j] !== cell[i]) province = true;
     }
     let a: number, k = 1;
-    if (border === 2) { const o = i * 4; d[o] = 58; d[o + 1] = 47; d[o + 2] = 34; d[o + 3] = .62 * 255; if (player) { const p = i * 4; pd[p] = 255; pd[p + 1] = 222; pd[p + 2] = 130; pd[p + 3] = 255; } continue; } // 国界：墨线（2026-11-18「边界画成墨线」）
-    else if (border === 1) { a = .7; k = .8; }        // 疆域外缘（荒地 / 海岸）
-    else if (inner) { a = .82; k = 1.15; }            // 国界内侧亮色带
-    else if (province) { a = .38; k = 1.25; }         // 郡界
-    else a = player ? (REALM_V2 ? .46 : .34) : .26;   // 疆域底色（v2：我方更实）
+    // 国界墨线只画在交界一侧（势力序号大的那侧），线宽一格，不再两侧各一格叠成粗糊带（2026-11-18）
+    if (border === 2 && !ink) { a = .45; k = 1.05; }
+    else if (border === 2) { const o = i * 4; d[o] = 40; d[o + 1] = 32; d[o + 2] = 24; d[o + 3] = .78 * 255; if (player) { const p = i * 4; pd[p] = 255; pd[p + 1] = 222; pd[p + 2] = 130; pd[p + 3] = 255; } continue; } // 国界：墨线（2026-11-18「边界画成墨线」）
+    else if (border === 1) { a = .32; k = .8; }       // 疆域外缘（荒地 / 海岸）：淡收边（2026-11-18 不再是一圈浓色带）
+    else if (inner) { a = .4; k = 1.05; }             // 国界内侧一道淡势力色（原 .82 的浓色带看着糊）
+    else if (province) { a = .2; k = 1.2; }           // 郡界
+    else a = player ? (REALM_V2 ? .34 : .28) : .2;    // 疆域底色：淡设色（v2：我方更实）
     const o = i * 4; d[o] = Math.min(255, r * k); d[o + 1] = Math.min(255, gg * k); d[o + 2] = Math.min(255, b * k); d[o + 3] = a * 255;
     // 我方疆界另画一层金色描边（v2，见下方 playerKey）
     if (player && border) { const p = i * 4; pd[p] = 255; pd[p + 1] = 222; pd[p + 2] = 130; pd[p + 3] = 255; }
@@ -94,13 +96,13 @@ export function buildTerritory(scene: Phaser.Scene, era: EraId, owned: readonly 
   // 我方疆界金边层：稍粗、带柔光，叠在疆域图上（ADD 混合），远看也能一眼认出自家地盘
   {const pc = document.createElement('canvas'); pc.width = gw; pc.height = gh; pc.getContext('2d')!.putImageData(pimg, 0, 0);
    const po = document.createElement('canvas'); po.width = gw * 2; po.height = gh * 2; const pg = po.getContext('2d')!;
-   pg.imageSmoothingEnabled = true; pg.filter = 'blur(3px)'; pg.globalAlpha = .9; pg.drawImage(pc, 0, 0, po.width, po.height);
-   pg.filter = 'blur(.8px)'; pg.globalAlpha = 1; pg.drawImage(pc, 0, 0, po.width, po.height);
+   // 2026-11-18：去掉 3px 宽光晕（糊成一条光带），只留一道细金线
+   pg.imageSmoothingEnabled = true; pg.filter = 'blur(0.6px)'; pg.globalAlpha = .85; pg.drawImage(pc, 0, 0, po.width, po.height);
    if (scene.textures.exists(key + '_player')) scene.textures.remove(key + '_player');
    scene.textures.addCanvas(key + '_player', po); scene.textures.get(key + '_player').setFilter(Phaser.Textures.FilterMode.LINEAR);}
   // 2 倍放大 + 轻微模糊：放大地图时疆界不出现台阶状锯齿
   const out = document.createElement('canvas'); out.width = gw * 2; out.height = gh * 2;
-  const og = out.getContext('2d')!; og.imageSmoothingEnabled = true; og.imageSmoothingQuality = 'high'; og.filter = 'blur(1.1px)'; og.drawImage(c, 0, 0, out.width, out.height);
+  const og = out.getContext('2d')!; og.imageSmoothingEnabled = true; og.imageSmoothingQuality = 'high'; og.filter = 'blur(0.55px)'; /* 疆界清楚些（原 1.1px 糊） */ og.drawImage(c, 0, 0, out.width, out.height);
   if (scene.textures.exists(key)) scene.textures.remove(key);
   scene.textures.addCanvas(key, out);
   scene.textures.get(key).setFilter(Phaser.Textures.FilterMode.LINEAR);

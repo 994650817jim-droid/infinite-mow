@@ -39,7 +39,7 @@ for (const [w, h] of [[1280, 720], [1620, 900], [1920, 1080]]) {
   await p.waitForTimeout(1500);
   const b2 = await info(p);
   const moved = (a.walkers ?? []).filter((w, i) => b2.walkers?.[i] && (w[0] !== b2.walkers[i][0] || w[1] !== b2.walkers[i][1])).length;
-  ck(`${w}×${h}：营寨档有营帐 / 大旗 / 火塘 / 兵器架等装饰（≥8 件）与兵士（8–14 人）`, a.camp && a.props >= 8 && a.men >= 8 && a.men <= 14 && ['tent', 'flag', 'fire'].every(k => a.kinds.includes(k)), a);
+  ck(`${w}×${h}：营寨档有营帐 / 大旗 / 火塘 / 兵器架等装饰（≥8 件）与兵士（8–18 人；11-18 全屏放大后营帐、兵士加多）`, a.camp && a.props >= 8 && a.men >= 8 && a.men <= 18 && ['tent', 'flag', 'fire'].every(k => a.kinds.includes(k)), a);
   ck(`${w}×${h}：装饰画在建筑之下、不接收点击、不压建筑点击区`, a.below && a.interactive === 0 && a.overlap.length === 0, { below: a.below, interactive: a.interactive, overlap: a.overlap });
   ck(`${w}×${h}：兵士在走动（1.5 秒内至少 4 人移动了位置）`, moved >= 4, { moved, n: a.walkers?.length });
   // 建筑照常能点（点讲武堂弹出面板）

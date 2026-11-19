@@ -202,6 +202,8 @@ assets/raw/*
 !/tools/crop-terrain-kit.mjs
 !/tools/shot-river.mjs
 !/tools/shot-sidewall.mjs
+!/tools/flood-magenta.mjs
+!/tools/erase-grey.mjs
 !/tools/resize-image.mjs
 !/tools/shot-boss-still.mjs
 !/tools/prepare-story-art.mjs

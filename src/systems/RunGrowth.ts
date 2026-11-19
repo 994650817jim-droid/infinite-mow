@@ -1,3 +1,4 @@
+import { SCHOOL_TIER } from '../data/schools';
 import { heroXpToNext } from '../data/heroLevels';
 import {BuildState,type TacticId} from '../data/builds';
 import type { CharmLegends, CharmStatDelta } from './CharmEffects';
@@ -114,6 +115,8 @@ export class RunGrowth {
   perk(id: AttributeId, tier: number): boolean { return primaryAttribute(this.character) === id && this.primaryTier() >= tier; }
   /** 敏捷「疾影」：暴击后攻速提升的截止时刻；力量「破阵」：武器命中计数。 */
   hasteUntil = -Infinity; crushCount = 0;
+  /** 猛将觉醒「横扫千军」：狂斗截止时刻与攻速加成（SchoolSynergy 设）。 */
+  frenzyUntil = -Infinity; frenzyHaste = 0;
   /** 本局单项上限（attributeCap(武将等级)，开局 / 升级时由 GameScene 写入）。 */
   attrMax = 10;
   get hasAttributeRoom(): boolean { return Object.values(this.attributes).reduce((n,level)=>n+this.attrMax-level,0)>this.unallocated; }
@@ -155,7 +158,7 @@ export class RunGrowth {
   attackSpeedMultiplier(now: number): number {
     const quickness = 1 + ATTRIBUTE_EFFECT.agility.attackSpeed * this.pts('agility');
     const haste = this.perk('agility', 3) && now < this.hasteUntil ? 1 + PRIMARY_PERK.agility.haste : 1, focus = this.perk('intellect', 1) ? 1 / (1 - PRIMARY_PERK.intellect.cooldown) : 1;
-    return Math.min(1.8, quickness * (now < this.berserkUntil ? 1.2 : 1) * (1 + this.gear.attackSpeed) * haste * focus);
+    return Math.min(1.8, quickness * (now < this.berserkUntil ? 1.2 : 1) * (1 + this.gear.attackSpeed) * haste * focus) * (now < this.frenzyUntil ? 1 + this.frenzyHaste : 1);
   }
 
   movementMultiplier(): number {
@@ -165,10 +168,10 @@ export class RunGrowth {
 
   criticalBonus(): number { return Math.min(0.1, ATTRIBUTE_EFFECT.agility.crit * this.pts('agility')) + this.gear.crit + (this.perk('agility', 2) ? PRIMARY_PERK.agility.crit : 0); }
   bonusMaxHp(): number { return Math.round(BALANCE.player.maxHp * (ATTRIBUTE_EFFECT.strength.hp * this.pts('strength') + this.gear.hp + this.charmHp)); }
-  incomingDamageMultiplier(): number { return (this.gear.specials.includes('weixi') ? 1.15 : 1)*(this.build.tags().bulwark>=2?.95:1)*Math.max(.6, 1 - this.gear.reduce)*this.commandSelfGuard(); }
+  incomingDamageMultiplier(): number { return (this.gear.specials.includes('weixi') ? 1.15 : 1)*Math.max(.6, 1 - this.gear.reduce)*this.commandSelfGuard(); }
   /** 刘备：统御每点本人受伤 −1%（2026-11-18 平衡审查，data/heroMechanics.ts LB_COMMAND）；其他武将为 1。 */
   commandSelfGuard(): number { return this.character === 'liubei' ? 1 - LB_COMMAND.selfGuardPerPoint * Math.min(LB_COMMAND.maxPoints, this.attributes.command) : 1; }
-  allyDamageMultiplier(): number { return (this.build.tags().command>=2?1.05:1)*(1 + this.gear.ally)*(1 + ATTRIBUTE_EFFECT.command.allyDamage * this.pts('command')) * (this.perk('command', 1) ? 1 + PRIMARY_PERK.command.allyDamage : 1); }
+  allyDamageMultiplier(): number { return (this.build.tier('formation')>=2?1+SCHOOL_TIER.formation.allyDmg:1)*(1 + this.gear.ally)*(1 + ATTRIBUTE_EFFECT.command.allyDamage * this.pts('command')) * (this.perk('command', 1) ? 1 + PRIMARY_PERK.command.allyDamage : 1); }
   /** 主属性：每点额外全伤害 +1%（最多 10 点）。 */
   primaryBonus(): number { const p = primaryAttribute(this.character); return p ? Math.min(PRIMARY_BONUS.maxPoints, this.attributes[p]) * PRIMARY_BONUS.perPoint : 0; }
   /** 智力：非普攻伤害（技艺、灼烧、遗珍等）倍率，含主属性加成。 */

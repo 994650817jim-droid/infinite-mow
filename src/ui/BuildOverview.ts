@@ -3,8 +3,9 @@ import { FONT, HEADING_FONT } from '../config';
 import type { RunGrowth } from '../systems/RunGrowth';
 import { MARTIALS, type MasteryId } from '../systems/RunGrowth';
 import { ATTRIBUTE_IDS, ATTRIBUTE_INFO, primaryAttribute, type AttributeId } from '../data/attributes';
-import { TACTICS, TREASURES, TAG_NAMES, tacticDescription, type BuildTag, type TacticId, type TreasureId } from '../data/builds';
-import { AWAKENINGS, activeAwakenings } from '../data/awakenings';
+import { TACTICS, TREASURES, TAG_NAMES, tacticDescription, tacticSchool, tacticGeneral, type BuildTag, type TacticId, type TreasureId } from '../data/builds';
+import { SCHOOLS, SCHOOL_IDS, TIER_STEPS, tierOf } from '../data/schools';
+import { COMBOS, COMBO_AT, activeCombos } from '../data/schoolCombos';
 import { getCharacter } from '../data/characters';
 import { WEAPON_META } from '../data/upgrades';
 import { WEAPON_DEFS } from '../weapons/registry';
@@ -18,40 +19,16 @@ import type { ItemTooltip, InfoTip } from './ItemTooltip';
 /**
  * 构筑总览（2026-11-18 用户：「这个玩家看自己 build 不清楚，需要优化一下」）：
  * 行营休整「将帅帐」与战斗内暂停菜单的「战法构筑」共用。一屏三栏（电脑）/ 上下三段（手机）：
- * 左 武将卡（立绘、等级、主属性印、本命武器、专属武学、四项属性）；中 战法 6 格 + 信物 / 宝物格；右 八系进度 + 已觉醒 + 下一步提示。
+ * 左 武将卡（立绘、等级、主属性印、本命武器、专属武学、四项属性）；中 战法 6 格 + 信物 / 宝物格；右 六大流派的势（2 / 4 / 6 档）+ 下一步提示（2026-11-19 流派重做）。
  * 所有格子悬停弹出完整说明（ItemTooltip 同款漆底卡片；信物直接用兵装悬停卡）。不再分页、不再一条条点开。
- * 对象名：<prefix>-hero / -weapon / -martial-<id> / -attr-<id> / -tactic-<i> / -token-<i> / -treasure-<i> / -tag-<tag> / -awake-<id> / -next-<i>。
+ * 对象名：<prefix>-hero / -weapon / -martial-<id> / -attr-<id> / -tactic-<i> / -token-<i> / -treasure-<i> / -tag-<tag> / -next-<i> / -combo-<id> / -combo-near-<i>。
  */
 
-/** 每系的颜色与一句大白话说明（觉醒门槛：同系 4 个不同来源觉醒本系；两个搭档系各 2 个觉醒双系）。 */
-export const TAG_STYLE: Record<BuildTag, { color: number; css: string; plain: string }> = {
-  combo: { color: 0xe0a24a, css: '#f0b864', plain: '多打几下、追打旁边的敌人' },
-  critical: { color: 0xd8564a, css: '#ef7a68', plain: '提高暴击，暴击时追加伤害' },
-  skirmish: { color: 0x58b27a, css: '#7fd39c', plain: '边走边打：走动之后下一击更强' },
-  flame: { color: 0xe8662c, css: '#ff8a4c', plain: '点燃敌人，火会烧到旁边' },
-  charge: { color: 0x9a7ad8, css: '#bba2f0', plain: '停手蓄力，下一击更重、能贯穿' },
-  control: { color: 0x4aa6c8, css: '#78c8e6', plain: '减速、拉扯、困住敌人' },
-  command: { color: 0xd8c25a, css: '#f0dc7a', plain: '指挥、治疗、保护部下士兵' },
-  bulwark: { color: 0x8a96a8, css: '#b8c2d0', plain: '减伤、反震、保命' },
-};
-export const TAG_ORDER: readonly BuildTag[] = ['combo', 'critical', 'skirmish', 'charge', 'flame', 'control', 'command', 'bulwark'];
-type Awakening = typeof AWAKENINGS[number];
-/** 觉醒还差的：[系, 还差几个]。 */
-export function awakeningMissing(a: Awakening, tags: Record<BuildTag, number>): Array<[BuildTag, number]> {
-  const need = a.tags.length === 1 ? 4 : 2;
-  return (a.tags as readonly BuildTag[]).map(t => [t, Math.max(0, need - tags[t])] as [BuildTag, number]).filter(([, n]) => n > 0);
-}
-/** 觉醒条件的大白话：「〔连击〕凑满 4 个」/「〔控场〕〔烈焰〕各 2 个」。 */
-export function awakeningCondition(a: Awakening): string {
-  return a.tags.length === 1 ? `〔${TAG_NAMES[a.tags[0] as BuildTag]}〕凑满 4 个来源` : `${(a.tags as readonly BuildTag[]).map(t => `〔${TAG_NAMES[t]}〕`).join('')}各 2 个来源`;
-}
-/** 离激活最近的未激活觉醒（按还差总数排序）。 */
-export function nearestAwakenings(tags: Record<BuildTag, number>, n = 2): Array<{ a: Awakening; missing: Array<[BuildTag, number]>; total: number }> {
-  return AWAKENINGS.map(a => ({ a, missing: awakeningMissing(a, tags) })).filter(x => x.missing.length)
-    .map(x => ({ ...x, total: x.missing.reduce((s, [, k]) => s + k, 0) })).sort((p, q) => p.total - q.total).slice(0, n);
-}
-/** 每系离下一个门槛还差几个：不到 2 个 → 到双系门槛（2）；2–3 个 → 到本系觉醒（4）；满 4 为 0。 */
-export function tagGap(n: number): { target: number; left: number } { return n < 2 ? { target: 2, left: 2 - n } : n < 4 ? { target: 4, left: 4 - n } : { target: 4, left: 0 }; }
+/** 每派的颜色与一句大白话说明（data/schools.ts SCHOOLS）。 */
+export const TAG_STYLE: Record<BuildTag, { color: number; css: string; plain: string }> = Object.fromEntries(SCHOOL_IDS.map(id => [id, { color: SCHOOLS[id].color, css: SCHOOLS[id].css, plain: SCHOOLS[id].fantasy }])) as Record<BuildTag, { color: number; css: string; plain: string }>;
+export const TAG_ORDER: readonly BuildTag[] = SCHOOL_IDS;
+/** 某派离下一档还差几势（6 势以后为 0）。 */
+export function tagGap(n: number): { target: number; left: number } { const t = TIER_STEPS.find(x => n < x); return t ? { target: t, left: t - n } : { target: 6, left: 0 }; }
 
 export interface BuildOverviewOpts {
   scene: Phaser.Scene;
@@ -187,7 +164,7 @@ export function drawBuildOverview(o: BuildOverviewOpts): void {
   // ── 中：战法 6 格 + 信物 / 宝物 ──
   {
     frame(M.x, M.y, M.w, M.h);
-    const learned = (Object.keys(b.tactics) as TacticId[]).filter(id => b.level(id) > 0), pad = 10;
+    const learned = (Object.keys(b.tactics) as TacticId[]).filter(id => b.level(id) > 0 && !tacticGeneral(id)), general = (Object.keys(b.tactics) as TacticId[]).filter(id => b.level(id) > 0 && tacticGeneral(id)), pad = 10;
     text(M.x + pad, M.y + 7, `战法  ${learned.length} / 6`, 15, '#f6dc9a', true).setName(P + '-tactic-count');
     const cols = 3, cg = 8, cw = (M.w - pad * 2 - cg * (cols - 1)) / cols, ch = D ? Math.min(74, (M.h - 120) / 2) : 72, gy = M.y + 30;
     for (let i = 0; i < 6; i++) {
@@ -196,18 +173,20 @@ export function drawBuildOverview(o: BuildOverviewOpts): void {
         dashed(cx, cy, cw, ch);
         text(cx + cw / 2, cy + ch / 2 - 8, '空', 13, '#7a6a4c', true).setOrigin(.5);
         text(cx + cw / 2, cy + ch / 2 + 10, '升级 / 商人处获得', 10, '#7a6a4c').setOrigin(.5);
-        hot(cx, cy, cw, ch, P + '-tactic-' + i, () => ({ title: '空战法格', sub: `已学 ${learned.length} / 6`, body: '武将升级时的三选一、或行营的军需商人处可学战法。最多学 6 种，每种可升到 3 级；同系战法越多，越接近觉醒。', color: 0x7a6a4c }));
+        hot(cx, cy, cw, ch, P + '-tactic-' + i, () => ({ title: '空战法格', sub: `已学 ${learned.length} / 6`, body: '武将升级时的三选一、或行营的军需商人处可学战法。最多学 6 种，每种可升到 3 级；每升一级本派「势」+1，2 / 4 / 6 势各解锁一档（6 势觉醒）。', color: 0x7a6a4c }));
         continue;
       }
-      const t = TACTICS[id], st = TAG_STYLE[t.tag], lv = b.level(id);
+      const t = TACTICS[id], sc = tacticSchool(id) ?? 'warrior', st = TAG_STYLE[sc], lv = b.level(id);
       frame(cx, cy, cw, ch, st.color, .9);
       g0.fillStyle(st.color, .95).fillTriangle(cx + 3, cy + 3, cx + 24, cy + 3, cx + 3, cy + 24);
-      text(cx + 6, cy + 3, TAG_NAMES[t.tag][0], 10, '#120904', true);
+      text(cx + 6, cy + 3, SCHOOLS[sc].short, 10, '#120904', true);
       icon(cx + cw / 2, cy + 22, 'build_icon_' + id, 30);
       text(cx + cw / 2, cy + ch - 30, t.name, 13, '#f0e2c0', true).setOrigin(.5, 0).setName(P + '-tactic-name-' + i);
       text(cx + cw / 2, cy + ch - 15, dots(lv, 3), 11, st.css).setOrigin(.5, 0).setName(P + '-tactic-lv-' + i);
-      hot(cx, cy, cw, ch, P + '-tactic-' + i, () => ({ title: t.name, sub: `〔${TAG_NAMES[t.tag]}〕战法 · Lv.${lv}/3`, body: tacticDescription(id, lv) + (lv < 3 ? `\n下一级：${tacticDescription(id, lv + 1)}` : ''), color: st.color, icon: 'build_icon_' + id }));
+      hot(cx, cy, cw, ch, P + '-tactic-' + i, () => ({ title: t.name, sub: `〔${TAG_NAMES[sc]}〕战法 · Lv.${lv}/3 · 本派势 +${lv}`, body: tacticDescription(id, lv) + (lv < 3 ? `\n下一级：${tacticDescription(id, lv + 1)}` : ''), color: st.color, icon: 'build_icon_' + id }));
     }
+    // 基础成长（卸力 / 以战养战：不占战法格、不算流派）
+    if (general.length) text(M.x + M.w - pad, M.y + 10, '基础成长：' + general.map(id => TACTICS[id].name + ' Lv.' + b.level(id)).join(' · '), 11, '#b9a57a').setOrigin(1, 0).setName(P + '-general');
     // 信物格（穿戴的信物）+ 宝物（由信物注入的机制）
     let y = gy + 2 * ch + cg + 8;
     text(M.x + pad, y, '信物', 13, '#f6dc9a', true); y += 20;
@@ -217,7 +196,7 @@ export function drawBuildOverview(o: BuildOverviewOpts): void {
       if (item) {
         const tile = itemTile(s, tx + ts / 2, y + ts / 2, ts, item).setScrollFactor(0).setName(P + '-token-' + i); root.add(tile);
         const z = add(s.add.rectangle(tx, y, ts, ts, 0, .001).setOrigin(0).setInteractive({ useHandCursor: false }).setName(P + '-token-hit-' + i)); tip.attach(z, () => item, () => item);
-      } else { dashed(tx, y, ts, ts); hot(tx, y, ts, ts, P + '-token-' + i, () => ({ title: '空信物格', sub: `信物格 ${i + 1} / ${o.tokenSlots}`, body: '在行囊里给武将戴上信物：属性类直接加成，机制类会带来宝物效果并计入流派件数。', color: 0x7a6a4c })); }
+      } else { dashed(tx, y, ts, ts); hot(tx, y, ts, ts, P + '-token-' + i, () => ({ title: '空信物格', sub: `信物格 ${i + 1} / ${o.tokenSlots}`, body: '在行囊里给武将戴上信物：属性类直接加成，机制类会带来宝物效果并给所属流派 +1 势。', color: 0x7a6a4c })); }
     }
     const tr = b.treasures as readonly TreasureId[], tx0 = M.x + pad + Math.max(1, o.tokenSlots) * (ts + tg) + 10;
     if (tr.length) text(tx0, y - 18, '宝物', 13, '#f6dc9a', true);
@@ -229,52 +208,56 @@ export function drawBuildOverview(o: BuildOverviewOpts): void {
     if (!o.tokens.length && !tr.length) text(M.x + pad + Math.max(1, o.tokenSlots) * (ts + tg) + 8, y + 12, '尚未佩戴信物', 12, '#7a6a4c');
   }
 
-  // ── 右：流派进度 + 已觉醒 + 下一步 ──
+  // ── 右：六大流派的势 + 下一步（2026-11-19 流派重做）──
   {
     frame(R.x, R.y, R.w, R.h);
-    const pad = 10, active = activeAwakenings(tags), near = nearestAwakenings(tags, 2);
-    text(R.x + pad, R.y + 7, '流派 · 觉醒', 15, '#f6dc9a', true);
-    text(R.x + R.w - pad, R.y + 10, `已觉醒 ${active.length}`, 12, active.length ? '#f3d48a' : '#8e7f62').setOrigin(1, 0).setName(P + '-awake-count');
+    const pad = 10, rowH = D ? 30 : 34, nameW = 34, barW = R.w - pad * 2 - nameW - 46, sw = barW / 6;
+    text(R.x + pad, R.y + 7, '流派 · 势', 15, '#f6dc9a', true);
+    text(R.x + R.w - pad, R.y + 10, '2 / 4 / 6 势各一档', 11, '#a8956c').setOrigin(1, 0);
     let y = R.y + 32;
-    const rowH = D ? 16 : 19, nameW = 30, barW = R.w - pad * 2 - nameW - 74, sw = barW / 4;
     for (const t of TAG_ORDER) {
-      const n = tags[t], st = TAG_STYLE[t], gp = tagGap(n);
-      text(R.x + pad, y - 1, TAG_NAMES[t], 12, n ? st.css : '#8e7f62', true);
+      const n = tags[t], st = TAG_STYLE[t], d = SCHOOLS[t], tier = tierOf(n), src = b.sources(t), notes = b.bonusNotes[t] ?? [];
+      text(R.x + pad, y - 1, d.name, 12, n ? st.css : '#8e7f62', true);
       const bx = R.x + pad + nameW;
-      for (let k = 0; k < 4; k++) g0.fillStyle(k < n ? st.color : 0x3a2c1c, k < n ? 1 : .85).fillRect(bx + k * sw + .5, y + 3, sw - 2, 8);
-      g0.lineStyle(1, 0xf3d48a, .8).lineBetween(bx + 2 * sw - 1, y + 1, bx + 2 * sw - 1, y + 13); // 双系门槛刻度
-      text(bx + barW + 4, y - 1, `${Math.min(n, 4)}/4`, 12, n >= 4 ? '#f3d48a' : '#d8c8a4').setName(P + '-tag-' + t);
-      text(R.x + R.w - pad, y, gp.left ? `差${gp.left}` : '满', 11, gp.left ? '#a8956c' : '#f3d48a').setOrigin(1, 0).setName(P + '-tag-gap-' + t);
-      hot(R.x + pad, y - 2, R.w - pad * 2, rowH, P + '-tag-hit-' + t, () => ({ title: `〔${TAG_NAMES[t]}〕 ${n} 个来源`, sub: gp.left ? `离 ${gp.target} 个还差 ${gp.left} 个` : '已满 4 个', body: `${st.plain}。\n学一种该系战法、或戴一件该系信物，各算 1 个来源（同一种只算 1 个）。\n凑满 4 个：觉醒「${AWAKENINGS.find(a => a.tags.length === 1 && a.tags[0] === t)?.name ?? ''}」；与搭档系各 2 个：觉醒「${AWAKENINGS.find(a => a.tags.length === 2 && (a.tags as readonly string[]).includes(t))?.name ?? ''}」。`, color: st.color }));
+      for (let k = 0; k < 6; k++) g0.fillStyle(k < n ? st.color : 0x3a2c1c, k < n ? 1 : .85).fillRect(bx + k * sw + .5, y + 3, sw - 2, 8);
+      for (const m of [2, 4]) g0.lineStyle(1, 0xf3d48a, .8).lineBetween(bx + m * sw - 1, y + 1, bx + m * sw - 1, y + 13);
+      text(bx + barW + 4, y - 1, '势 ' + n, 12, tier ? '#f3d48a' : '#d8c8a4').setName(P + '-tag-' + t);
+      const reached = TIER_STEPS.filter(x => n >= x).map(x => d.tiers[x].name).join(' · ');
+      text(bx, y + 13, reached || ('2 势：' + d.tiers[2].name), 10, reached ? st.css : '#8e7f62').setName(P + '-tag-tier-' + t);
+      const srcLine = [src.tactics ? '战法 ' + src.tactics : '', src.treasures ? '信物 ' + src.treasures : '', src.extra ? '信物 ' + src.extra : '', ...notes].filter(Boolean).join('、') || '还没有';
+      hot(R.x + pad, y - 2, R.w - pad * 2, rowH, P + '-tag-hit-' + t, () => ({ title: `〔${d.name}〕 势 ${n}`, sub: d.fantasy,
+        body: TIER_STEPS.map(x => `${n >= x ? '✓' : '○'} ${x} 势 · ${d.tiers[x].name}：${d.tiers[x].desc}`).join('\n') + `\n\n势的来源：${srcLine}\n学本派战法、或升级本派战法，每级 +1 势；亲和武将、随行兵种、机制类信物、橙色名马也给势。`, color: st.color, icon: d.icon }));
       y += rowH;
     }
-    // 已觉醒：点亮的小卡
-    y += 4; g0.lineStyle(1, GOLD, .35).lineBetween(R.x + pad, y, R.x + R.w - pad, y); y += 6;
-    if (!active.length) { text(R.x + pad, y, '还没有觉醒：同一系凑满 4 个，或两个搭档系各 2 个', 11, '#8e7f62').setWordWrapWidth(R.w - pad * 2, true).setName(P + '-awake-none'); y += 30; }
-    else {
-      // 觉醒小卡：能放几行放几行（给下一步提示留位），放不下的收成「+N」，悬停列出其余
-      const chipH = 22, room = R.y + R.h - y - (near.length ? 58 : 26), maxRows = Math.max(1, Math.floor((room + 4) / (chipH + 4)));
-      let cx = R.x + pad, rowsUsed = 0;
-      for (let i = 0; i < active.length; i++) {
-        const a = active[i], label = a.name.replace(/^.+ · /, ''), cw = Math.min(R.w - pad * 2, 30 + label.length * 12);
-        if (cx + cw > R.x + R.w - pad) { cx = R.x + pad; y += chipH + 4; rowsUsed++; }
-        if (rowsUsed >= maxRows) { const rest = active.slice(i), more = text(R.x + R.w - pad, y - chipH - 2, `+${rest.length}`, 12, '#f3d48a').setOrigin(1, 0).setName(P + '-awake-more'); hot(more.x - more.width - 4, more.y - 2, more.width + 8, 20, P + '-awake-more-hit', () => ({ title: `另有 ${rest.length} 个觉醒`, body: rest.map(a => `· ${a.name}：${a.desc}`).join('\n'), color: 0xf3d48a })); y -= chipH + 4; /* 换行后才发现放不下：退回上一行 */ break; }
-        g0.fillStyle(0x3a2616, .95).fillRoundedRect(cx, y, cw, chipH, 4).lineStyle(1, 0xf3d48a, .9).strokeRoundedRect(cx + .5, y + .5, cw - 1, chipH - 1, 4);
-        icon(cx + 11, y + chipH / 2, a.icon, 16);
-        text(cx + 22, y + 3, label, 12, '#ffe7b0', true);
-        hot(cx, y, cw, chipH, P + '-awake-' + a.id, () => ({ title: a.name, sub: '已觉醒 · ' + awakeningCondition(a), body: a.desc, color: 0xf3d48a, icon: a.icon }));
-        cx += cw + 6;
-      }
-      y += chipH + 8;
-    }
-    // 下一步：最接近的 1–2 个觉醒
-    near.forEach((x, i) => {
+    // 下一步：势最高、还没到 6 的那派，下一档是什么
+    y += 2; g0.lineStyle(1, GOLD, .35).lineBetween(R.x + pad, y, R.x + R.w - pad, y); y += 6;
+    const next = [...TAG_ORDER].filter(t => tags[t] < 6).sort((a1, b1) => tags[b1] - tags[a1]).slice(0, 2);
+    next.forEach((t, i) => {
       if (y > R.y + R.h - 20) return;
-      const need = x.missing.map(([t, k]) => `${k} 个〔${TAG_NAMES[t]}〕`).join('、');
-      const line = text(R.x + pad, y, `再拿 ${need}来源，即可激活「${x.a.name}」`, 12, i ? '#c9b88f' : '#e8c98a').setWordWrapWidth(R.w - pad * 2, true).setName(P + '-next-' + i);
-      hot(R.x + pad, y - 2, R.w - pad * 2, line.height + 4, P + '-next-hit-' + i, () => ({ title: x.a.name, sub: '未激活 · ' + awakeningCondition(x.a), body: x.a.desc, color: 0x9a8a6a, icon: x.a.icon }));
-      y += line.height + 6;
+      const gp = tagGap(tags[t]), d = SCHOOLS[t];
+      const line = text(R.x + pad, y, `${d.name}再 ${gp.left} 势：${gp.target === 6 ? '觉醒' : '解锁'}【${d.tiers[gp.target as 2 | 4 | 6].name}】`, 12, i ? '#c9b88f' : '#e8c98a').setWordWrapWidth(R.w - pad * 2, true).setName(P + '-next-' + i);
+      y += line.height + 4;
     });
-    if (!near.length) text(R.x + pad, Math.min(y, R.y + R.h - 20), '全部觉醒都已激活', 12, '#f3d48a').setName(P + '-next-0');
+    // 合击（第 2 期）：两派都到 2 势即生效；没有生效的就提示最近的两个（差几势）
+    const on = activeCombos(tags), near = on.length >= 4 ? [] : COMBOS.filter(c => !on.includes(c) && Math.max(tags[c.a], tags[c.b]) >= COMBO_AT).map(c => ({ c, left: Math.max(0, COMBO_AT - tags[c.a]) + Math.max(0, COMBO_AT - tags[c.b]) })).sort((a1, b1) => a1.left - b1.left).slice(0, on.length ? 1 : 2);
+    if (y < R.y + R.h - 44) {
+      y += 2; g0.lineStyle(1, GOLD, .35).lineBetween(R.x + pad, y, R.x + R.w - pad, y); y += 6;
+      text(R.x + pad, y, '合击', 13, '#f6dc9a', true).setName(P + '-combo-title'); text(R.x + R.w - pad, y + 2, on.length ? '已生效 ' + on.length : '两派都到 2 势即生效', 11, '#a8956c').setOrigin(1, 0).setName(P + '-combo-count'); y += 20;
+      on.forEach((c, i) => {
+        if (y > R.y + R.h - 18) return;
+        const ca = SCHOOLS[c.a], cb = SCHOOLS[c.b];
+        text(R.x + pad, y, c.name, 12, '#f3d48a', true).setName(P + '-combo-' + c.id);
+        text(R.x + R.w - pad, y + 1, ca.name + ' × ' + cb.name, 10, '#a8956c').setOrigin(1, 0);
+        hot(R.x + pad, y - 2, R.w - pad * 2, 18, P + '-combo-hit-' + i, () => ({ title: '合击 · ' + c.name, sub: ca.name + ' × ' + cb.name + ' · 两派都到 ' + COMBO_AT + ' 势', body: c.desc, color: ca.color, icon: ca.icon }));
+        y += 18;
+      });
+      near.forEach(({ c, left }, i) => {
+        if (y > R.y + R.h - 18) return;
+        const need = [c.a, c.b].filter(t => tags[t] < COMBO_AT).map(t => SCHOOLS[t].name).join('、');
+        const line = text(R.x + pad, y, need + '再 ' + left + ' 势：合击【' + c.name + '】', 11, '#c9b88f').setWordWrapWidth(R.w - pad * 2, true).setName(P + '-combo-near-' + i);
+        hot(R.x + pad, y - 2, R.w - pad * 2, line.height + 2, P + '-combo-near-hit-' + i, () => ({ title: '合击 · ' + c.name + '（未生效）', sub: SCHOOLS[c.a].name + ' × ' + SCHOOLS[c.b].name + ' · 两派都到 ' + COMBO_AT + ' 势', body: c.desc, color: SCHOOLS[c.a].color, icon: SCHOOLS[c.a].icon }));
+        y += line.height + 3;
+      });
+    }
   }
 }

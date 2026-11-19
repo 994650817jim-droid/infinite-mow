@@ -216,7 +216,7 @@ export class Legion {
     }
     for(let i=this.strikes.length-1;i>=0;i--){const hit=this.strikes[i];if(now<hit.due)continue;this.strikes.splice(i,1);if(hit.owner.active&&hit.owner.lifeId===hit.life&&hit.target.active&&hit.target.spawnId===hit.spawn&&Math.hypot(hit.owner.x-hit.target.x,hit.owner.y-hit.target.y)<=hit.owner.def.range+hit.target.radius){this.fx(hit.owner,hit.target.x,hit.target.y,now,false);this.knock(hit.owner,hit.target,4,now);damage(hit.target,hit.amount);}if(this.stopped)return;}
     this.viewClock += dt; this.combatClock += dt;
-    const stats = { range: this.rangeMul, melee: this.damageMul*this.player.growth.allyDamageMultiplier()*(this.order==='sortie'&&this.player.growth.build.tags().command>=4?1.15:1), attackSpeed: 1 };
+    const stats = { range: this.rangeMul, melee: this.damageMul*this.player.growth.allyDamageMultiplier()*1, attackSpeed: 1 };
     for (const u of this.units) {
       if (!u.active) continue;
       u.beginStep();

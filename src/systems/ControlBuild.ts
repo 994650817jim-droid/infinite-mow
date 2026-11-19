@@ -1,3 +1,4 @@
+import { SCHOOL_TIER } from '../data/schools';
 import {buildVfx} from './BuildVfx';
 import { softField } from './SoftField';
 import {HINT_MOCK} from '../ui/HintStyle';
@@ -8,14 +9,22 @@ interface Mark{enemy:Enemy;spawn:number;until:number;slow:number;spread:boolean;
 interface Field{x:number;y:number;r:number;until:number;next:number;gfx:Phaser.GameObjects.Graphics;}
 /** Bounded status dispatcher, sharing the game's normal movement/collision pass. */
 export class ControlBuild {
- private marks=new Map<number,Mark>();private fields:Field[]=[];private pullAt=0;private diskAt=0;private spreadAt=0;
+ private marks=new Map<number,Mark>();private controls=0;private now=0;
+ /** 测试用：乱阵眩晕次数。 */ stuns=0;private fields:Field[]=[];private pullAt=0;private diskAt=0;private spreadAt=0;
  constructor(private scene:Phaser.Scene,private state:BuildState,private nearby:(x:number,y:number,r:number)=>Enemy[]){}
  private valid(e:Enemy){return e.active&&!e.isSupplySlot&&e.kind!=='boss'&&!e.controlImmune&&e.def.behavior!=='wall';}
  private mark(e:Enemy,slow:number,until:number,spread=false):Mark|undefined{
-  if(!this.valid(e))return;if(this.state.tags().control>=2)slow=Math.min(.6,slow+.05);let m=this.marks.get(e.uid);if(m?.spawn!==e.spawnId){if(this.marks.size>=160)return;m={enemy:e,spawn:e.spawnId,until,slow,spread};this.marks.set(e.uid,m);}else{m.until=Math.max(m.until,until);m.slow=Math.max(m.slow,slow);m.spread=m.spread&&spread;}return m;
+  if(!this.valid(e))return;if(this.state.tier('stratagem')>=2)slow=Math.min(.65,slow+SCHOOL_TIER.stratagem.slowAdd);let m=this.marks.get(e.uid);if(m?.spawn!==e.spawnId){if(this.marks.size>=160)return;m={enemy:e,spawn:e.spawnId,until,slow,spread};this.marks.set(e.uid,m);}else{m.until=Math.max(m.until,until);m.slow=Math.max(m.slow,slow);m.spread=m.spread&&spread;}
+  // 奇谋 4 势「乱阵」：每第 3 次控制附带眩晕（首领 / 免控已被 valid 排除）
+  if(this.state.tier('stratagem')>=4&&++this.controls%SCHOOL_TIER.stratagem.stunEvery===0){e.stunUntil=Math.max(e.stunUntil,this.now+SCHOOL_TIER.stratagem.stunMs);this.stuns++;this.onStun?.(e,this.now);}
+  return m;
  }
+ /** 乱阵眩晕了一个敌人（合击「十面埋伏」在 SchoolSynergy 接）。 */
+ onStun?:(e:Enemy,now:number)=>void;
+ /** 一片减速（合击「声东击西」）：圈内普通敌人减速 slow、ms 毫秒（也算一次控制）。 */
+ slowArea(x:number,y:number,r:number,slow:number,ms:number,now:number):number{this.now=now;let n=0;for(const t of this.nearby(x,y,r))if(this.valid(t)&&Math.hypot(t.x-x,t.y-y)<=r&&this.mark(t,slow,now+ms))n++;return n;}
  isControlled(e:Enemy,now:number):boolean{const m=this.marks.get(e.uid);return !!m&&m.spawn===e.spawnId&&m.until>now&&this.valid(e);}
- onHit(e:Enemy,now:number):void{
+ onHit(e:Enemy,now:number):void{this.now=now;
   const n=this.state.level('snare'),p=this.state.level('traction');if((n||p)&&this.valid(e))buildVfx(this.scene).emit('control',e.x,e.y,now,48);
   if(n)this.mark(e,[.18,.26,.34][n-1],now+[1000,1300,1600][n-1]);
   if(p&&now>=this.pullAt){this.pullAt=now+[4000,3500,3000][p-1];for(const t of this.nearby(e.x,e.y,100).filter(t=>this.valid(t)&&Math.hypot(t.x-e.x,t.y-e.y)<=100).slice(0,[2,3,4][p-1])){const m=this.mark(t,.12,now+900);if(m)m.pull={x:e.x,y:e.y,until:now+700,speed:[18,24,30][p-1]};}}
@@ -27,11 +36,11 @@ export class ControlBuild {
  }
  motion(e:Enemy,now:number,dt:number):number{
   const m=this.marks.get(e.uid);if(!m||m.spawn!==e.spawnId||m.until<=now||!this.valid(e))return 1;
-  const elite=e.kind==='elite'?.5:1;
+  const elite=e.kind==='elite'&&this.state.tier('stratagem')<4?.5:1; // 乱阵：精锐也吃满控制
   if(m.pull&&now<m.pull.until){const dx=m.pull.x-e.x,dy=m.pull.y-e.y,d=Math.hypot(dx,dy);if(d>8){const step=Math.min(d-8,m.pull.speed*elite*dt);e.sprite.x+=dx/d*step;e.sprite.y+=dy/d*step;}}
   return 1-m.slow*elite;
  }
- update(now:number):void{
+ update(now:number):void{this.now=now;
   for(const[id,m]of this.marks)if(!m.enemy.active||m.spawn!==m.enemy.spawnId||m.until<=now)this.marks.delete(id);
   for(let i=this.fields.length-1;i>=0;i--){const f=this.fields[i];if(now>=f.until){f.gfx.destroy();this.fields.splice(i,1);continue;}if(now>=f.next){f.next=now+100;for(const e of this.nearby(f.x,f.y,f.r).filter(e=>this.valid(e)&&Math.hypot(e.x-f.x,e.y-f.y)<=f.r).slice(0,6)){const m=this.mark(e,.25*this.state.power('control_disk'),now+250);if(m)m.pull={x:f.x,y:f.y,until:now+200,speed:16};}}}
  }

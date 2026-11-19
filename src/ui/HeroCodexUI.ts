@@ -3,6 +3,7 @@ import { inkSkin } from './HomeCommand';
 import { DEPTH, FONT, GAME_HEIGHT, GAME_WIDTH, HEADING_FONT, IS_DESKTOP } from '../config';
 import { CHARACTERS, type CharacterId } from '../data/characters';
 import { TACTICS, TAG_NAMES, type BuildTag, type TacticId } from '../data/builds';
+import { SCHOOLS, heroAffinity } from '../data/schools';
 import { WEAPON_DEFS } from '../weapons/registry';
 import { ATTRIBUTE_INFO, attributeCap, attributeIcon, type AttributeId } from '../systems/RunGrowth';
 import { allocateHeroAttr, heroAttrs, heroFreePoints, heroInfo, takeAttrNotice, type HeroKey } from '../systems/HeroProgress';
@@ -154,9 +155,10 @@ export class HeroCodexUI {
   private renderXindeDesk(x: number, y: number, w: number, bottom: number): void {
     const c = this.playable;
     if (!c) { this.text(x, y, '招募武将的随行心得由招贤馆管理。', 14, '#9c8c6c'); return; }
-    const xd = getXinde(c), all = Object.keys(TACTICS) as TacticId[];
+    const xd = getXinde(c), all = (Object.keys(TACTICS) as TacticId[]).filter(t => TACTICS[t].tag); // 流派重做：基础成长（卸力 / 以战养战）、反震不在流派里，不进心得表
     this.text(x, y, `心得 ${xd.length} / ${XINDE_SLOTS}：${xd.map(t => TACTICS[t].name).join('、') || '未选'}　· 局内出现概率 ×2，开局第一次升级必出一张`, 13, '#f3d48a').setWordWrapWidth(w).setName('codex-xinde');
     this.text(x, y + 22, `点已解锁的战法选为 / 取消心得；未解锁的花 ${TACTIC_UNLOCK_SCROLLS} 武学残卷解锁（局内照样会出，只是不能选为心得）。`, 12, '#9c8c6c').setWordWrapWidth(w);
+    { const aff = heroAffinity(c); if (aff.length) this.text(x + w, y, `亲和流派：${aff.map(s => SCHOOLS[s].name).join(' · ')}（开局 +1 势，出现率 ×1.5）`, 12, '#c8a46a').setOrigin(1, 0).setName('codex-affinity'); }
     const tags = [...new Set(all.map(t => TACTICS[t].tag))] as BuildTag[];
     const labelW = 64, gap = 8, cols = Math.max(...tags.map(tag => all.filter(t => TACTICS[t].tag === tag).length));
     const tileW = Math.floor((w - labelW - (cols - 1) * gap) / cols), tileH = 30, descH = 46;
@@ -203,7 +205,7 @@ export class HeroCodexUI {
     const xd = getXinde(c);
     this.text(x, y, `心得 ${xd.length} / ${XINDE_SLOTS}：${xd.map(t => TACTICS[t].name).join('、') || '未选'}　· 局内出现概率 ×2，开局第一次升级必出一张`, 13, '#f3d48a').setWordWrapWidth(w).setName('codex-xinde');
     this.text(x, y + 22, `点已解锁的战法选为心得；未解锁的花 ${TACTIC_UNLOCK_SCROLLS} 武学残卷解锁（局内照样会出，只是不能选为心得）。`, 12, '#9c8c6c').setWordWrapWidth(w);
-    const tags = [...new Set((Object.keys(TACTICS) as TacticId[]).map(t => TACTICS[t].tag))] as BuildTag[];
+    const tags = [...new Set((Object.keys(TACTICS) as TacticId[]).map(t => TACTICS[t].tag).filter(Boolean))] as BuildTag[];
     const colW = w / 2, step = (colW - 64) / 3, rowH = Math.min(46, (bottom - y - 60) / Math.ceil(tags.length / 2));
     tags.forEach((tag, ti) => {
       const col = ti % 2, gx = x + col * colW, gy = y + 60 + Math.floor(ti / 2) * rowH;

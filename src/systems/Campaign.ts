@@ -1,4 +1,5 @@
 import type {BuildSnapshot,TacticId} from '../data/builds';
+import {BuildState} from '../data/builds';
 import { charmForLegacy } from '../data/charms';
 import { rollBaseItem, rollCharm, type ItemInstance } from '../data/items';
 import { statsWithoutCharms } from './CharmEffects';
@@ -54,9 +55,10 @@ export function patchCampaignTactics(hero: CharacterId, tactics: Record<string, 
  * 规则同 RunBuild：最多 6 种、每种到 3 级。没有征程构筑（还没打赢过主线关）时返回 null，商人卷轴不能买。
  */
 export function campaignTacticBook(hero: CharacterId): { canLearn(id: TacticId): boolean; level(id: TacticId): number } | null {
-  const s = loadCampaignBuild(hero); if (!s) return null; const t: Partial<Record<TacticId, number>> = { ...s.player.build?.tactics };
-  const level = (id: TacticId) => t[id] ?? 0;
-  return { level, canLearn: id => level(id) < 3 && (level(id) > 0 || Object.keys(t).filter(k => (t[k as TacticId] ?? 0) > 0).length < 6) };
+  const s = loadCampaignBuild(hero); if (!s) return null;
+  // 同 BuildState（2026-11-19 流派重做）：读档丢掉已删除的旧 id；基础成长不占战法格；反震不再出卡
+  const b = new BuildState(); b.restore(s.player.build);
+  return { level: id => b.level(id), canLearn: id => b.canLearn(id) };
 }
 /** 把一卷战法学进征程构筑：等级须与卷轴标的一致（买前没在别处升过），成功返回 true。 */
 export function learnCampaignTactic(hero: CharacterId, id: TacticId, fromLevel: number): boolean {

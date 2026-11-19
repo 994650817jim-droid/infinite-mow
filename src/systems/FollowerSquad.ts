@@ -19,6 +19,8 @@ import { followerLevelCap, rankBonus, type Recruit } from './RosterStore';
 import { loadout, type GearOwner } from './ItemStore';
 import { emptyGear, gearFromItems, type GearStats } from './ItemEffects';
 import type { ItemInstance } from '../data/items';
+import { ALLY_WINDUP_MS, FRIENDLY_TINT, surrenderMove, type SurrenderMove } from '../data/surrenderMoves';
+import { warnFx } from '../ui/WarnFx';
 
 /**
  * 随行武将（RECRUIT_PLAN.md §4，参考《战锤：幸存者》的随从）：一直紧贴主公，不离阵去追敌人。
@@ -36,6 +38,11 @@ type Query = (x: number, y: number, r: number) => Enemy[];
 type Hit = (enemy: Enemy, damage: number, fire: boolean) => void;
 /** 招式特效种类（招募会话在 attack() 里推入，画法在 updateFx）：'blade-sweep' 刀·横斩一圈 / 'spear-thrust' 枪·突刺直线（tx,ty 为终点）/ 'heal' 谋·包扎回血 / 'block' 刀·格挡闪光。 */
 export type FollowerFxKind = FollowerTemplate | 'arrow' | 'puff' | 'blade-sweep' | 'spear-thrust' | 'heal' | 'block';
+/** 降将专属招式的地面判定（起手淡青预警 → at 时落下：手绘命中帧 + 结算伤害）。 */
+type AllyShape = { kind: 'circle'; x: number; y: number; r: number; inner: number; fx: 'slam' | 'arrows' | 'fire' }
+  | { kind: 'lane'; x: number; y: number; angle: number; len: number; width: number; look: 'charge' | 'rift' }
+  | { kind: 'sector'; x: number; y: number; r: number; angle: number; arc: number };
+interface AllyHazard { id: string; shape: AllyShape; from: number; at: number; dmg: number; maxHits: number; fire: boolean; owner: Follower; move: string }
 interface Fx { kind: FollowerFxKind; x: number; y: number; tx: number; ty: number; angle: number; at: number; until: number; hitAt?: number; damage?: number; owner?: Follower; scar?: boolean; img?: Phaser.GameObjects.Image }
 /**
  * 无名随行（枪 / 刀 / 弓 / 谋）出手特效（2026-11-17 用户：「很多大众脸攻击特效要改一下」）：原来全是代码画的弧线 / 直线 / 圆，
@@ -77,6 +84,8 @@ export class Follower {
   act: ActState | null = null;
   /** 无名之辈 / 史事名将的招式计数（每 COMMONER.activeEvery 下出一次招式）；站定计时（弓「瞄准」）。 */
   attacks = 0; stillAt = 0; mx = NaN; my = NaN;
+  /** 降将专属招式：上次出招时的出手计数、下次可出的时刻。 */
+  sigAt = 0; sigReadyAt = 0;
   /** 累计造成的伤害（测试 / 平衡用）。 */
   dealt = 0;
   private readonly fits = new Map<string, { k: number; originY: number; foot: number; frameH: number }>();
@@ -198,6 +207,9 @@ export class FollowerSquad {
   terrainPush: ((x: number, y: number, r: number) => { x: number; y: number } | null) | null = null;
   /** 无名之辈招式 / 被动的统计（测试 / 平衡用）。 */
   readonly skillStats = { sweep: 0, thrust: 0, thrustHits: 0, volley: 0, heal: 0, healed: 0, block: 0, crit: 0, formation: 0, rally: 0 };
+  /** 降将专属招式统计：casts 出招次数、hits 命中人次、damage 伤害；byBoss[首领 id] = 出招次数（测试 / 平衡用）。 */
+  readonly signatureStats = { casts: 0, hits: 0, damage: 0, byBoss: {} as Record<string, number>, hitsByBoss: {} as Record<string, number> };
+  private readonly allyHazards: AllyHazard[] = []; private sigSeq = 0;
   /** 招式 / 被动用的随机数（测试可替换）。 */
   rand: () => number = Math.random;
   /** 本命武器命中时记账（测试 / 平衡用）。 */
@@ -283,6 +295,7 @@ export class FollowerSquad {
     // 阵位朝向：跟主公的移动方向平滑转动（停下时保持）
     if (Number.isFinite(this.px) && dt > 0) { const mx = p.x - this.px, my = p.y - this.py, kv = 1 - Math.exp(-10 * dt), jump = Math.hypot(mx, my) > 60; this.vx = jump ? 0 : this.vx + (mx / dt - this.vx) * kv; this.vy = jump ? 0 : this.vy + (my / dt - this.vy) * kv; if (Math.hypot(mx, my) > .4) { const to = Math.atan2(my, mx), d = Phaser.Math.Angle.Wrap(to - this.heading); this.heading += d * (1 - Math.exp(-FOLLOW.turnRate * dt)); } }
     this.px = p.x; this.py = p.y;
+    this.updateAllyHazards(now);
     this.updateFx(now);
   }
   /** 外部伤害（首领技能等）。 */
@@ -422,6 +435,9 @@ export class FollowerSquad {
     if (!f.recruit.hero) {
       const { w, p } = this.picks(f); f.attacks++;
       if (f.template === 'spear' && this.troopsNear(f.x, f.y, COMMONER.spear.formation.radius)) { damage *= 1 + COMMONER.spear.formation.bonus + COMMONER.spear.formation.bonusPerRank * p; this.skillStats.formation++; }
+      // 降将专属招式（data/surrenderMoves）：每出手 every 下、且冷却到了，这一下改出首领招式缩小版
+      const sig = surrenderMove(f.recruit.boss);
+      if (sig && f.attacks - f.sigAt >= sig.every && now >= f.sigReadyAt) { this.castSignature(f, sig, e, a, now, damage); return; }
       if (f.attacks % COMMONER.activeEvery === 0 && this.commonerSkill(f, e, a, now, damage, w, p, deal)) return;
     }
     if (f.template === 'bow' && !f.recruit.hero) { deal(e, this.aimed(f, now, damage)); this.fx.push({ kind: 'arrow', x: f.x, y: f.y - 30, tx: e.x, ty: e.y - 20, angle: a, at: now, until: now + 140 }); return; }
@@ -436,6 +452,62 @@ export class FollowerSquad {
       deal(e, damage); this.fx.push({ kind: 'arrow', x: f.x, y: f.y - 30, tx: e.x, ty: e.y - 20, angle: a, at: now, until: now + 140 });
     } else {
       this.fx.push({ kind: 'strategist', x: e.x, y: e.y, tx: e.x, ty: e.y, angle: a, at: now, until: now + 620, hitAt: now + 320, damage, owner: f });
+    }
+  }
+  /** 立刻出降将专属招式（测试 / 演示用；目标取射程内最近的敌人，没有就朝阵位前方）。返回是否出招。 */
+  signatureNow(f: Follower, now: number): boolean {
+    const m = surrenderMove(f.recruit.boss); if (!m || f.downed) return false;
+    const e = this.nearest(f.x, f.y, Math.max(TEMPLATES[f.template].range, m.r) * 1.5, f.x, f.y);
+    const a = e ? Math.atan2(e.y - f.y, e.x - f.x) : this.heading;
+    this.castSignature(f, m, e ?? { x: f.x + Math.cos(a) * 80, y: f.y + Math.sin(a) * 80 } as Enemy, a, now, f.damage * this.share); return true;
+  }
+  /** 降将专属招式起手：记冷却、推入地面判定（形状按招式种类，位置在出招这一刻定下）。 */
+  private castSignature(f: Follower, m: SurrenderMove, e: Enemy, a: number, now: number, base: number): void {
+    f.sigAt = f.attacks; f.sigReadyAt = now + m.cd;
+    const st = this.signatureStats, boss = f.recruit.boss ?? '?'; st.casts++; st.byBoss[boss] = (st.byBoss[boss] ?? 0) + 1;
+    f.play('attack', f.dir, now); f.faceUntil = now + ALLY_WINDUP_MS + 300;
+    const at = now + ALLY_WINDUP_MS, n = base * m.dmg, fire = m.fx === 'fire';
+    const push = (shape: AllyShape, when: number) => this.allyHazards.push({ id: 'ally-' + f.recruit.id + '-' + (++this.sigSeq), shape, from: now, at: when, dmg: n, maxHits: m.maxHits, fire, owner: f, move: m.name });
+    switch (m.kind) {
+      case 'sweep': for (let k = 0; k < (m.times ?? 1); k++) push({ kind: 'sector', x: f.x, y: f.y, r: m.r, angle: a + (k === 0 ? 0 : k % 2 ? .35 : -.35), arc: m.arc ?? Math.PI * .8 }, at + k * 300); break;
+      case 'charge': case 'rift': case 'thrust':
+        push({ kind: 'lane', x: f.x, y: f.y, angle: a, len: m.r, width: m.width ?? 40, look: m.kind === 'rift' ? 'rift' : 'charge' }, at);
+        if (m.kind === 'charge') { f.lx = Math.cos(a) * 46; f.ly = Math.sin(a) * 46; } // 冲锋：前冲一小段（阵位偏移，随后衰减回位）
+        break;
+      case 'fan': for (let k = 0, c = m.count ?? 3; k < c; k++) { const ang = a + (c > 1 ? (k / (c - 1) - .5) * (m.arc ?? .7) : 0); push({ kind: 'lane', x: f.x, y: f.y, angle: ang, len: m.r, width: m.width ?? 24, look: 'charge' }, at + k * 70); this.fx.push({ kind: 'arrow', x: f.x, y: f.y - 30, tx: f.x + Math.cos(ang) * m.r, ty: f.y - 30 + Math.sin(ang) * m.r, angle: ang, at: at + k * 70, until: at + k * 70 + 180 }); } break;
+      case 'volley': for (let k = 0, c = m.count ?? 3; k < c; k++) { const ang = this.rand() * Math.PI * 2, d = k === 0 ? 0 : 24 + this.rand() * (m.spread ?? 60); push({ kind: 'circle', x: e.x + Math.cos(ang) * d, y: e.y + Math.sin(ang) * d * .7, r: m.r, inner: 0, fx: m.fx ?? 'arrows' }, at + k * 90); } break;
+      case 'rings': (m.radii ?? [m.r]).forEach((r, k) => push({ kind: 'circle', x: f.x, y: f.y, r, inner: Math.max(0, r - (m.width ?? 46)), fx: 'slam' }, at + k * 300)); break;
+    }
+  }
+  /** 降将专属招式的地面判定：蓄力时出淡青预警（手绘预警帧染色），落下播首领那招的手绘命中帧（同样染淡青；火团保留本色），打敌人。 */
+  private updateAllyHazards(now: number): void {
+    if (!this.allyHazards.length) return;
+    const wf = warnFx(this.scene), T = FRIENDLY_TINT;
+    for (let i = this.allyHazards.length - 1; i >= 0; i--) {
+      const z = this.allyHazards[i], s = z.shape, prog = (now - z.from) / Math.max(1, z.at - z.from);
+      if (now < z.at) {
+        if (s.kind === 'circle') wf.circle(z.id, s.fx === 'fire' ? 'slam' : s.fx, s.x, s.y, s.r, prog, now, T);
+        else if (s.kind === 'lane') { if (s.look === 'rift') wf.warn(z.id, 'rift', s.x, s.y, s.len, prog, now, s.angle, T); else wf.lane(z.id, 'charge', s.x, s.y, s.angle, s.len, s.width, prog, now, T); }
+        else wf.sector(z.id, s.x, s.y, s.r, s.angle, prog, now, T);
+        continue;
+      }
+      this.allyHazards.splice(i, 1);
+      if (s.kind === 'circle') wf.shapeImpact(z.id, s.fx, s.x, s.y, s.r * 2, 0, now, 0, { tint: s.fx === 'fire' ? undefined : T, alpha: .75 });
+      else if (s.kind === 'lane') { if (s.look === 'rift') wf.impact('rift', s.x, s.y, s.len, s.angle, T); else wf.shapeImpact(z.id, 'charge', s.x, s.y, s.len, s.angle, now, s.width, { tint: T }); }
+      else wf.shapeImpact(z.id, 'sweep', s.x, s.y, s.r, s.angle, now, 0, { tint: T, scale: 1, alpha: .75 });
+      const cx = s.kind === 'lane' ? s.x + Math.cos(s.angle) * s.len / 2 : s.x, cy = s.kind === 'lane' ? s.y + Math.sin(s.angle) * s.len / 2 : s.y, reach = s.kind === 'lane' ? s.len / 2 + s.width : s.r;
+      const inside = (x: Enemy): boolean => {
+        const pad = (x.def.radius ?? 14) * .5;
+        if (s.kind === 'circle') { const d = Math.hypot(x.x - s.x, x.y - s.y); return d <= s.r + pad && d >= s.inner - pad; }
+        if (s.kind === 'lane') { const dx = x.x - s.x, dy = x.y - s.y, along = dx * Math.cos(s.angle) + dy * Math.sin(s.angle), across = Math.abs(-dx * Math.sin(s.angle) + dy * Math.cos(s.angle)); return along >= -pad && along <= s.len + pad && across <= s.width / 2 + pad; }
+        const d = Math.hypot(x.x - s.x, x.y - s.y), da = Math.abs(Phaser.Math.Angle.Wrap(Math.atan2(x.y - s.y, x.x - s.x) - s.angle)); return d <= s.r + pad && (da <= s.arc / 2 || d < 24);
+      };
+      let k = 0; const st = this.signatureStats, boss = z.owner.recruit.boss ?? '?';
+      for (const x of this.query(cx, cy, reach + 20)) {
+        if (k >= z.maxHits) break; if (!x.active || !inside(x)) continue;
+        const live = x.active; this.hit(x, z.dmg, z.fire); this.credit(z.owner, z.dmg); st.hits++; st.damage += z.dmg; st.hitsByBoss[boss] = (st.hitsByBoss[boss] ?? 0) + 1; k++;
+        if (live && k <= 2) this.onHitFx?.(x, z.owner.template, z.owner.x, z.owner.y);
+      }
     }
   }
   /** 将阶里兵器线 / 被动线各升了几次。 */
@@ -569,5 +641,5 @@ export class FollowerSquad {
     const w = 36, r = Math.max(0, f.hp / f.maxHp); f.bar.clear();
     if (r < 1 && !near) { f.bar.fillStyle(0x1a0f08, .8).fillRect(f.x - w / 2, f.y - 58, w, 4); f.bar.fillStyle(r > .4 ? 0x6fd06a : 0xe0603a, 1).fillRect(f.x - w / 2, f.y - 58, w * r, 4); }
   }
-  clear(): void { for (const f of this.members) f.destroy(); this.members.length = 0; for (const fx of this.fx) fx.img?.destroy(); for (const img of this.fxPool) img.destroy(); this.fxPool.length = 0; this.fxLive = 0; this.fx.length = 0; this.gfx.destroy(); this.rescueGfx.destroy(); this.rescueText.destroy(); this.hud.destroy(); }
+  clear(): void { this.allyHazards.length = 0; for (const f of this.members) f.destroy(); this.members.length = 0; for (const fx of this.fx) fx.img?.destroy(); for (const img of this.fxPool) img.destroy(); this.fxPool.length = 0; this.fxLive = 0; this.fx.length = 0; this.gfx.destroy(); this.rescueGfx.destroy(); this.rescueText.destroy(); this.hud.destroy(); }
 }

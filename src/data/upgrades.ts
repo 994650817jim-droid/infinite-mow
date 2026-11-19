@@ -1,5 +1,6 @@
-import {TACTICS,TAG_NAMES,tacticDescription,type TacticId,type BuildTag} from './builds';
-import {AWAKENINGS} from './awakenings';
+import {TACTICS,TAG_NAMES,tacticDescription,tacticSchool,tacticGeneral,type TacticId,type BuildTag} from './builds';
+import {SCHOOLS,SCHOOL_IDS,OFFER,heroAffinity} from './schools';
+import {COMBOS,COMBO_AT} from './schoolCombos';
 import { BALANCE } from '../config';
 import type { Player } from '../entities/Player';
 import { WEAPON_DEFS, SPEAR_PIERCE, GUANDAO_TABLE, crossbowExtraArrows, zhenbeiCracks, lianhuanLinksPerMine, sunOrbitKnives, sunThrowCount, sunThrowPierce, diaochanFanCount } from '../weapons/registry';
@@ -174,18 +175,17 @@ export function foundationOptions():UpgradeOption[]{
 }
 
 /**
- * 战法卡上的流派说明（原“1→2/4 · 2基础 / 4觉醒”难懂）：一件 = 该流派的一个战法或宝物。
- * 同流派集齐 4 件觉醒；或与搭档流派各 2 件双系觉醒。升级已学战法不增加件数。
+ * 战法卡上的流派说明（2026-11-19 流派重做）：「火攻 · 势 3 → 4　解锁【燎原】」。
+ * 势 = 本派战法等级之和（学新战法、升级都 +1）+ 亲和 / 随行 / 信物 / 名马；2 / 4 / 6 势各解锁一档（6 势 = 觉醒）。
  */
-export function schoolLabel(tag:BuildTag,tags:Record<BuildTag,number>,learned:boolean):string{
-  // 2026-11-17 文案审校：「连击系 2/4 · 凑满4个触发觉醒」——觉醒 = 同系凑满后解锁的额外强力效果（觉醒时屏幕有提示）
-  const name=TAG_NAMES[tag],now=tags[tag];
-  if(learned)return name+'系 · 升级（仍为 '+Math.min(4,now)+'/4）';
-  const next=now+1;if(next>=4)return name+'系 '+Math.min(4,next)+'/4 · 凑满，触发觉醒！';
-  const pair=AWAKENINGS.find(a=>a.tags.length===2&&(a.tags as readonly BuildTag[]).includes(tag)),partner=pair?(pair.tags as readonly BuildTag[]).find(t=>t!==tag):undefined;
-  if(partner&&next>=2&&tags[partner]>=2)return name+'系 '+next+'/4 · 与'+TAG_NAMES[partner]+'系各2个，触发双系觉醒！';
-  if(partner&&next>=1)return name+'系 '+next+'/4 · 凑满4个觉醒（或与'+TAG_NAMES[partner]+'系各2个）';
-  return name+'系 '+next+'/4 · 凑满4个触发觉醒';
+export function schoolLabel(tag:BuildTag,tags:Record<BuildTag,number>,_learned=false):string{
+  const d=SCHOOLS[tag],now=tags[tag],next=now+1,step=([2,4,6] as const).find(t=>now<t&&next>=t);
+  const name=d.name+' · 势 '+now+' → '+next;
+  if(step===6)return name+'　觉醒【'+d.tiers[6].name+'】！';
+  if(step===2){const combo=COMBOS.find(c=>(c.a===tag&&tags[c.b]>=COMBO_AT)||(c.b===tag&&tags[c.a]>=COMBO_AT));if(combo)return name+'　解锁【'+d.tiers[2].name+'】· 合击【'+combo.name+'】';}
+  if(step)return name+'　解锁【'+d.tiers[step].name+'】';
+  const goal=([2,4,6] as const).find(t=>next<t);
+  return goal?name+'　（'+goal+' 势：'+d.tiers[goal].name+'）':name;
 }
 /** 只从当前角色可用的局内成长中抽取三张唯一奖励；绝不授予其他武将的武器。 */
 export function buildUpgradeOptions(player: Player, weapons: WeaponState[], growth: RunGrowth = player.growth): UpgradeOption[] {
@@ -199,9 +199,12 @@ export function buildUpgradeOptions(player: Player, weapons: WeaponState[], grow
   const core=pool.length?shuffle(pool)[0]:undefined;
   const b=growth.build,tags=b.tags();
   if(canOfferRejuvenation(player))pool.push(potionOption('rejuvenation'));
+  // 战法卡（流派重做：三选一 = 1 张本命 / 武艺 + 2 张战法）；卸力 / 以战养战是「基础成长」，不占战法卡位
+  const tacticCards:UpgradeOption[]=[];
   for(const id of Object.keys(TACTICS)as TacticId[])if(b.canLearn(id)){
-    const d=TACTICS[id],n=b.level(id)+1;
-    pool.push({id:'tactic_'+id,name:d.name+' · Lv.'+n,desc:tacticDescription(id,n),kind:'tactic',icon:'build_icon_'+id,categoryLabel:schoolLabel(d.tag,tags,!!b.level(id)),apply:(_p,_w,g)=>{g?.build.learn(id);}});
+    const d=TACTICS[id],n=b.level(id)+1,school=tacticSchool(id);
+    const option:UpgradeOption={id:'tactic_'+id,name:d.name+' · Lv.'+n,desc:tacticDescription(id,n),kind:'tactic',icon:'build_icon_'+id,categoryLabel:school?schoolLabel(school,tags):'基础成长',apply:(_p,_w,g)=>{g?.build.learn(id);}};
+    if(school&&!tacticGeneral(id))tacticCards.push(option);else pool.push(option);
   }
   // Potions leave the normal pool. Valid, non-healing fallback choices avoid exhausted-pool deadlocks.
   const foundations=foundationOptions();
@@ -209,9 +212,18 @@ export function buildUpgradeOptions(player: Player, weapons: WeaponState[], grow
   const guaranteed=core??foundations[0];
   // 武将谱「战法心得」：心得战法权重 ×2；开局第一次升级保证出一张心得卡（xindeFirst）
   const isXinde=(option:UpgradeOption)=>option.kind==='tactic'&&growth.xinde.includes(option.id.replace('tactic_','')as TacticId);
-  const weight=(option:UpgradeOption):number=>{const id=option.id.replace('tactic_','')as TacticId;return option.kind==='tactic'?(1+Math.min(2,tags[TACTICS[id].tag]*.5))*(isXinde(option)?2:1):1;};
-  const rest=pool.filter(o=>o.id!==guaranteed.id).map(o=>({o,key:Math.pow(Math.random(),1/weight(o))})).sort((a,b)=>b.key-a.key).map(v=>v.o);
-  if(growth.xindeFirst){const k=rest.findIndex(isXinde);if(k>=0||isXinde(guaranteed)){growth.xindeFirst=false;if(k>0)rest.unshift(...rest.splice(k,1));}}
-  for(const f of foundations)if(rest.length<2&&f.id!==guaranteed.id&&!rest.some(o=>o.id===f.id))rest.push(f);
-  return shuffle([guaranteed,...rest.slice(0,2)]);
+  // 权重：1 + min(上限, 势 × 系数)，亲和派 ×1.5，心得 ×2（data/schools.ts OFFER）
+  const affinity=heroAffinity(growth.character),schoolOf=(o:UpgradeOption)=>tacticSchool(o.id.replace('tactic_','')as TacticId);
+  const weight=(o:UpgradeOption):number=>{const sc=o.kind==='tactic'?schoolOf(o):null;if(!sc)return 1;return (1+Math.min(OFFER.weightMax,tags[sc]*OFFER.weightPer))*(affinity.includes(sc)?OFFER.affinityWeight:1)*(isXinde(o)?2:1);};
+  const draw=(list:UpgradeOption[])=>list.map(o=>({o,key:Math.pow(Math.random(),1/weight(o))})).sort((x,y)=>y.key-x.key).map(v=>v.o);
+  // 专精卡位：有一派到 OFFER.specialtyAt 势后，两张战法卡里必有一张是势最高那派的
+  const top=[...SCHOOL_IDS].sort((x,y)=>tags[y]-tags[x])[0],picked:UpgradeOption[]=[];
+  if(tags[top]>=OFFER.specialtyAt){const own=draw(tacticCards.filter(o=>schoolOf(o)===top));if(own[0])picked.push(own[0]);}
+  for(const o of draw(tacticCards))if(picked.length<OFFER.tacticCards&&!picked.includes(o))picked.push(o);
+  if(growth.xindeFirst){const xd=tacticCards.find(isXinde);if(xd||isXinde(guaranteed)){growth.xindeFirst=false;if(xd&&!picked.includes(xd)){picked.pop();picked.unshift(xd);}}}
+  // 战法卡不够两张：从其余（另一张本命 / 武艺、药、基础成长）补
+  const rest=draw(pool.filter(o=>o.id!==guaranteed.id&&!picked.includes(o)));
+  for(const o of rest)if(picked.length<2)picked.push(o);
+  for(const f of foundations)if(picked.length<2&&f.id!==guaranteed.id&&!picked.some(o=>o.id===f.id))picked.push(f);
+  return shuffle([guaranteed,...picked.slice(0,2)]);
 }

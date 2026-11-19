@@ -28,8 +28,9 @@ const battle = p => p.evaluate(() => { const g = window.__game, gs = g.scene.get
 // ① 第贰章节点：小卡写出战主公；出征 → 直接进战斗（2-2，下一个未通关）
 {
   const p = await open();
-  const card = await p.evaluate(M0 => { const s = eval(M0); const n = s.markers.find(m => m.node.chapter === 'hulao' || m.node.id === 'hulao'); s.selected = { kind: 'node', node: n.node }; s.refresh(); return { title: s.detailTitle.text, detail: s.detail.text, view: s.detailView?.text, action: s.action.text.text }; }, M);
-  ck('第贰章小卡：第一行进度、第二行「主公 关羽 亲征」（存档主公，不是缺省赵云）；按钮「出征」', /第贰章/.test(card.title) && card.view?.split('\n')[1]?.startsWith('主公 关羽') && card.action === '出征', card);
+  // 2026-11-19 天下地图 v2「征途」：节点即关卡（hulao-2 = 2-2），右侧详情栏写出战主公
+  const card = await p.evaluate(M0 => { const s = eval(M0); s.select({ kind: 'node', node: s.nodes.get('hulao-2').node }); return { title: s.detailTitle.text, detail: s.detail.text, action: s.action.text.text, next: s.view.next }; }, M);
+  ck('下一战 2-2：详情栏写「主公 关羽 亲征」（存档主公，不是缺省赵云）；按钮「出征」', card.next === 'hulao-2' && card.title === '2-2 荥阳' && card.detail.split('\n')[1]?.startsWith('主公 关羽') && card.action === '出征', card);
   await p.screenshot({ path: `${out}/1-map-card.png` });
   await p.evaluate(M0 => eval(M0).action.image.emit('pointerup'), M);
   await p.waitForFunction(() => window.__game.scene.isActive('GameScene') && window.__game.scene.getScene('GameScene').player, null, { timeout: 90000 });
@@ -42,8 +43,8 @@ const battle = p => p.evaluate(() => { const g = window.__game, gs = g.scene.get
 // ② 点关卡印 2-1（已过）：「重打此关」→ 直接打 2-1
 {
   const p = await open();
-  const pin = await p.evaluate(M0 => { const s = eval(M0); const n = s.markers.find(m => m.node.chapter === 'hulao' || m.node.id === 'hulao'); s.selected = { kind: 'node', node: n.node }; s.refresh(); s.selected = { kind: 'stage', chapter: 'hulao', stage: 1 }; s.refresh(); return { title: s.detailTitle.text, view: s.detailView?.text, action: s.action.text.text }; }, M);
-  ck('关卡印 2-1：「重打此关」（不再写「选将」），小卡写出战主公', /汜水关/.test(pin.title) && pin.action === '重打此关' && /主公 关羽/.test(pin.view ?? ''), pin);
+  const pin = await p.evaluate(M0 => { const s = eval(M0); s.select({ kind: 'node', node: s.nodes.get('hulao-1').node }); return { title: s.detailTitle.text, view: s.detail.text, action: s.action.text.text }; }, M);
+  ck('打下的 2-1：「重打此关」，详情栏写出战主公', /汜水关/.test(pin.title) && pin.action === '重打此关' && /主公 关羽/.test(pin.view ?? ''), pin);
   await p.evaluate(M0 => eval(M0).action.image.emit('pointerup'), M);
   await p.waitForFunction(() => window.__game.scene.isActive('GameScene') && window.__game.scene.getScene('GameScene').player, null, { timeout: 90000 });
   const r = await battle(p);

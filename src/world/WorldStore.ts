@@ -3,7 +3,8 @@ import {rosterFreshUnlock} from '../systems/RosterStore';
 import type {ChapterId} from '../data/chapters';
 import {LUBU_CHALLENGE} from '../data/dongzhuo';
 import {INTEL_INFO,intelReward,parseIntel,rollIntel,seasonIndex,type IntelEvent,type IntelReward} from './WorldIntel';
-import {openChapterCount,citySiegeOpen} from './ChapterTimeline';
+import {openChapterCount} from './ChapterTimeline';
+import {siegeUnlocked} from './RouteMap';
 import {territorySummary,cityAttacker,cityById,eraChanges,eraIndexFor,type FactionId} from './WorldCities';
 import {type TownState,type TownBuildingId,type CityFocus,type SeasonReport,type TownProgress,TOWN_BUILDINGS,FOCUS_CHANGE_COST,FOCUS_NAME,migrateTown,parseTown,legacyLevels,settleSeason,nextCost,buildBlockers,CITY_SIZE,CITY_TITLE,levyCost,LEVY_SOLDIERS,costText,buildingBattleEffects,levelOf,focusOpen,MERIT_TO_GRAIN,MONEY_TO_GRAIN,STABLE_HORSES,drillCap,drillCost,drillMultiplier,DRILL_MAX} from '../town/TownData';
 import {TECHS,techTotals,techBlockers,type TechId} from '../data/tech';
@@ -338,7 +339,7 @@ export function addTownMoney(amount:number):void{const n=Math.floor(amount);if(!
 function liveIntel(s:WorldSave):IntelEvent[]{const now=seasonIndex(s.town);return s.intel.filter(e=>e.expires>=now&&(e.kind==='bounty'?!s.ownedCities.includes(e.city):e.kind==='bandit'?s.ownedCities.includes(e.city):true));}
 /** 本季流寇未平的我方城池（季度结算时产出减半）。 */
 function raidedNow(s:WorldSave):string[]{return liveIntel(s).filter(e=>e.kind==='bandit').map(e=>e.city);}
-function spawnIntel(s:WorldSave,first=false):IntelEvent[]{if(!s.cleared.hulao)return[];const fresh=rollIntel({era:eraOf(s),owned:s.ownedCities,alerts:s.alerts.map(a=>a.city),existing:s.intel,season:seasonIndex(s.town),seq:s.intelSeq,random,noBandit:first,bountyOpen:id=>citySiegeOpen(id,s)});s.intel=[...s.intel,...fresh];s.intelSeq+=Math.max(1,fresh.length);return fresh;}
+function spawnIntel(s:WorldSave,first=false):IntelEvent[]{if(!s.cleared.hulao)return[];const fresh=rollIntel({era:eraOf(s),owned:s.ownedCities,alerts:s.alerts.map(a=>a.city),existing:s.intel,season:seasonIndex(s.town),seq:s.intelSeq,random,noBandit:first,bountyOpen:id=>siegeUnlocked(id,s)});s.intel=[...s.intel,...fresh];s.intelSeq+=Math.max(1,fresh.length);return fresh;}
 /** 季度推进后：清掉过期 / 失效的军情，再刷新一批。 */
 function refreshIntel(s:WorldSave):void{s.intel=liveIntel(s);spawnIntel(s);}
 /** 打开天下地图时调用：讨董后首次进入（从未刷过军情）先刷一批，免得要等下一季；这一批不刷流寇（本季来不及应对就减产不公平）。返回是否有新军情。 */

@@ -14,7 +14,7 @@ export const BOSS_THEME_FILES: Readonly<Record<BossTheme, string>> = {
   wall: 'assets/boss-fx/themes/wall.png', lance: 'assets/boss-fx/themes/lance.png', ink: 'assets/boss-fx/themes/ink.png', wei: 'assets/boss-fx/themes/wei.png',
 };
 /** 已出图的主题（图到一组登记一组，避免请求不存在的文件）。 */
-export const BOSS_THEME_READY: readonly BossTheme[] = ['blood', 'yellow', 'dust', 'quake', 'wall', 'lance'];
+export const BOSS_THEME_READY: readonly BossTheme[] = ['blood', 'yellow', 'dust', 'quake', 'wall', 'lance', 'ink'];
 /** 首领 → 主题。 */
 export const BOSS_THEME_OF: Readonly<Record<string, BossTheme>> = {
   zhangliang: 'yellow', zhangbao: 'yellow',

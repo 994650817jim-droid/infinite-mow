@@ -7,6 +7,7 @@ import type { CharacterId } from '../data/characters';
 import type { Player } from '../entities/Player';
 import { emptyGear, type GearStats } from './ItemEffects';
 
+import { attributePointsAt } from '../data/attributes';
 import { ATTRIBUTE_EFFECT, SPELL_WEAPONS, ATTRIBUTE_IDS, ATTRIBUTE_INFO, ATTRIBUTE_MAX, attributeCap, ATTRIBUTE_POINT_EVERY, PRIMARY_BONUS, PRIMARY_MUL, PRIMARY_TIERS, PRIMARY_PERK, primaryAttribute, type AttributeId } from '../data/attributes';
 import { LB_COMMAND } from '../data/heroMechanics';
 export { ATTRIBUTE_IDS, ATTRIBUTE_INFO, ATTRIBUTE_MAX, ATTRIBUTE_POINT_EVERY, attributeCap, type AttributeId };
@@ -53,9 +54,9 @@ export type PotionId = 'rejuvenation' | 'berserk';
 
 /** 2026-11-17 属性改版：力量 / 敏捷 / 智力 + 统御，单项最多 10、每级 1 点，武将主属性（数值见 data/attributes.ts）。 */
 /** 从 from 级升到 to 级途中到达的「加点等级」数。 */
-export function attributePointsBetween(from: number, to: number): number { return Math.max(0, Math.floor(to / ATTRIBUTE_POINT_EVERY) - Math.floor(from / ATTRIBUTE_POINT_EVERY)); }
+export function attributePointsBetween(from: number, to: number): number { return Math.max(0, attributePointsAt(to) - attributePointsAt(from)); }
 /** 当前等级再升几级可获得下一个属性点（1 或 2）。 */
-export function levelsToNextAttributePoint(level: number): number { return ATTRIBUTE_POINT_EVERY - (level % ATTRIBUTE_POINT_EVERY); }
+export function levelsToNextAttributePoint(level: number): number { const p = attributePointsAt(level); let n = 1; while (attributePointsAt(level + n) <= p && n < 8) n++; return n; }
 /** 武将经验表（2026-11-17 取消局内等级，只留武将等级；见 data/heroLevels.ts）：从 level 升到 level+1 所需经验。 */
 export function xpToNext(level: number): number { return heroXpToNext(level); }
 /** 属性图标（智力暂借「属性点」图标、统御暂借「虎符」图标，没有专属图）。 */

@@ -16,7 +16,29 @@ export const ATTRIBUTE_IDS: readonly AttributeId[] = ['strength', 'agility', 'in
  * ATTRIBUTE_MAX = 绝对上限（读档夹取、格子排版）；实际上限看 attributeCap(武将等级)。主属性专精门槛 4 / 7 / 10 不变。
  */
 export const ATTRIBUTE_MAX = 15;
-export function attributeCap(level: number): number { return Math.min(ATTRIBUTE_MAX, Math.max(10, Math.ceil((level - 1) / 4))); }
+/** 2026-11-19 波数 / 等级重做（wave-progression-redesign.md §3）：点数不跟等级一起涨，第十二章末约 35 点，单项上限固定 10。 */
+export function attributeCap(_level: number): number { return Math.min(ATTRIBUTE_MAX, 10); }
+/**
+ * 某等级累计属性点（2026-11-19 用户定上限 B：10 / 14 / … / 54，每章 +4；点数和等级脱钩）：
+ * Lv25 前每级 1 点，Lv25–38 每 2 级 1 点，Lv38 起每 3 级 1 点。
+ * 各章打完：9 / 13 / 17 / 21 / 24 / 26 / 28 / 30 / 31 / 32 / 34 / 35（第五章末约 24、第十二章末约 35，对得上敌人调参时假设的强度）。
+ */
+export const ATTRIBUTE_POINTS = { fullUntil: 25, halfUntil: 38 } as const;
+export function attributePointsAt(level: number): number {
+  const lv = Math.max(1, Math.floor(level)), A = ATTRIBUTE_POINTS;
+  if (lv <= A.fullUntil) return lv - 1;
+  const mid = A.fullUntil - 1 + Math.floor((Math.min(lv, A.halfUntil) - A.fullUntil) / 2);
+  return lv <= A.halfUntil ? mid : mid + Math.floor((lv - A.halfUntil) / 3);
+}
+/**
+ * 体魄：武将等级生命（取代固本培元无限叠出来的生命）。Lv10 前每级 +8、Lv10–26 每级 +15、之后每级 +6：
+ * Lv10 +72、Lv26 +312（第五章末，对齐现在 5-2 叠出的约 +340）、Lv54 +480（第十二章末，对齐 10-3 约 +440）。
+ */
+export const VIGOR = { early: 8, mid: 15, late: 6, midFrom: 10, lateFrom: 26 } as const;
+export function vigorHp(level: number): number {
+  const lv = Math.max(1, Math.floor(level)), V = VIGOR;
+  return V.early * (Math.min(lv, V.midFrom) - 1) + V.mid * Math.max(0, Math.min(lv, V.lateFrom) - V.midFrom) + V.late * Math.max(0, lv - V.lateFrom);
+}
 export const ATTRIBUTE_POINT_EVERY = 1;
 /** 每点效果。 */
 export const ATTRIBUTE_EFFECT = {

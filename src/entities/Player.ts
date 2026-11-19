@@ -6,6 +6,7 @@ import type {CharacterId} from '../data/characters';
 import Phaser from 'phaser';
 import { CharacterPassives } from '../systems/CharacterPassives';
 import { RunGrowth, xpToNext } from '../systems/RunGrowth';
+import { vigorHp } from '../data/attributes';
 import { BALANCE, DEPTH, FONT, actorDepth } from '../config';
 import type { PlayerStats, WeaponState } from '../types';
 import { WalkGait } from '../systems/WalkGait';
@@ -150,7 +151,7 @@ export class Player {
   }
 
   get maxHp(): number {
-    return BALANCE.player.maxHp + this.stats.maxHpBonus + this.growth.bonusMaxHp();
+    return BALANCE.player.maxHp + this.stats.maxHpBonus + this.growth.bonusMaxHp() + vigorHp(this.level); // 体魄：武将等级生命（2026-11-19）
   }
 
   get radius(): number {

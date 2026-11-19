@@ -74,6 +74,8 @@ await stageCase('3-2 宛城夜袭（ThirdGameScene）', { key: 'ThirdGameScene',
   await p.waitForTimeout(1200); await p.screenshot({ path: `${OUT}/fortune-cards.png` });
   const pick = await p.evaluate(async () => { const s = window.__S, before = { ...s.player.stats }; const o = s.upgradeOptions[0]; s.chooseUpgrade(0); const ce = await import('/src/systems/CharmEffects.ts'); const packed = ce.statsWithoutCharms(s.player); const keys = Object.keys(before).filter(k => before[k] !== s.player.stats[k]); return { name: o.name, mode: s.mode, changed: keys, packedSame: keys.every(k => Math.abs(packed[k] - before[k]) < 1e-6), taken: s.fortuneTaken }; });
   ck('P2 选了增益：属性当场变化，征程构筑存档时扣掉（不带到下一关），回到战斗', pick.mode === 'none' && pick.changed.length > 0 && pick.packedSame && Object.values(pick.taken)[0] === 1, pick);
+  const f0 = await p.evaluate(async () => { const s = window.__S, up = await import('/src/data/upgrades.ts'), ce = await import('/src/systems/CharmEffects.ts'); const hp0 = s.player.maxHp, packed0 = ce.statsWithoutCharms(s.player).maxHpBonus; up.foundationOptions()[0].apply(s.player); return { up: s.player.maxHp - hp0, packedDelta: ce.statsWithoutCharms(s.player).maxHpBonus - packed0, label: up.foundationOptions()[0].categoryLabel }; });
+  ck('P0 固本培元改为本关有效：当场生命上限 +12，征程构筑存档不带走（不再无限叠加）', f0.up === 12 && f0.packedDelta === 0 && /本关/.test(f0.label), f0);
   await jump(p, 109); await p.waitForTimeout(500);
   const ev = await p.evaluate(() => { const s = window.__S, f = s.fortunes, L = f.live.find(x => !x.done); return { spawned: f.stats.spawned, kind: L?.kind, label: L?.label.text }; });
   ck('P2 事件段 8 秒后再来一次机缘（义军被围 / 降将来投 / 烽燧之一）', ev.spawned.length === 2 && ['rescue', 'defector', 'beacon'].includes(ev.kind), ev);
@@ -81,6 +83,29 @@ await stageCase('3-2 宛城夜袭（ThirdGameScene）', { key: 'ThirdGameScene',
   for (let i = 0; i < 40 && await p.evaluate(() => window.__S.mode !== 'bossloot'); i++) { await p.evaluate(() => { const s = window.__S; if (s.mode === 'levelup') s.chooseUpgrade(0); const L = s.fortunes.live.find(x => !x.done); if (L) s.player.sprite.setPosition(L.x, L.y); }); await p.waitForTimeout(300); }
   const e2 = await p.evaluate(() => { const s = window.__S; return { mode: s.mode, done: s.fortunes.stats.done, title: s.levelPanel.getByName('upgrade-title')?.text }; });
   ck('P2 完成第二次机缘 → 再弹一次机缘三选一', e2.mode === 'bossloot' && e2.done.length === 2, e2);
+  await p.close();
+}
+// P4 新卡池：五段主线关的升级三选一里，战法位按章节概率换成新卡（战场机缘 / 锦囊 / 兵源 / 军资 / 心法）；锦囊 R 键使用
+{
+  const p = await open({ key: 'GameScene', run: { chapter: 'hulao', westStage: 2 } });
+  await p.evaluate(() => window.__calm());
+  const d = await p.evaluate(() => { const s = window.__S, src = s.newCardSource(); const kinds = new Set(); for (let i = 0; i < 40; i++) for (const o of src.draw(3)) kinds.add(o.categoryLabel); return { chance: src.replaceChance, kinds: [...kinds] }; });
+  ck('P4 新卡池：第二章战法位 20% 换新卡；抽得出战场机缘 / 锦囊 / 兵源 / 军资（心法要先学过该派战法）', d.chance === .2 && ['战场机缘 · 本关有效', '锦囊 · 一次性', '兵源 · 本关', '军资 · 立即'].every(k => d.kinds.includes(k)), d);
+  // 截图：把概率临时调到 1，弹一次升级三选一（三张里两张战法位都换成新卡）
+  await p.evaluate(() => { const s = window.__S, ns = s.newCardSource.bind(s); s.newCardSource = () => ({ ...ns(), replaceChance: 1 }); s.pendingLevels += 1; s.militaryPending += 1; s.openUpgrade(); });
+  await p.waitForTimeout(1200);
+  const cards = await p.evaluate(() => window.__S.upgradeOptions.map(o => o.name + '｜' + o.categoryLabel));
+  ck('P4 升级三选一出现新卡（战法位两张都换成新卡，类不重复）', cards.length === 3 && cards.filter(c => /战场机缘|锦囊|兵源|军资|心法/.test(c)).length >= 2 && new Set(cards.map(c => c.split('｜')[1])).size === 3, cards);
+  await p.screenshot({ path: `${OUT}/new-cards.png` });
+  await p.evaluate(() => { const s = window.__S; s.newCardSource = Object.getPrototypeOf(s).newCardSource.bind(s); s.chooseUpgrade(0); window.__calm(); });
+  const r5 = await p.evaluate(async () => { const B = (await import('/src/data/builds.ts')).BuildState, bd = await import('/src/data/builds.ts'); const capNow = B.rankCap, caps = [2, 5, 9].map(B.rankCapFor); const t = Object.keys(bd.TACTICS).find(id => !bd.TACTICS[id].general && !bd.TACTICS[id].hidden && bd.TACTICS[id].tag); const b = new B(); for (let i = 0; i < 5; i++) b.learn(t); const at3 = b.rank(t); B.rankCap = 4; b.learn(t); b.learn(t); const r = { capNow, caps, at3, rank: b.rank(t), level: b.level(t), shi: b.tags()[bd.TACTICS[t].tag], snap: b.snapshot().tactics[t], desc: bd.tacticDescription(t, 4).split(String.fromCharCode(10))[0] }; B.rankCap = capNow; return r; });
+  ck('P5 战法精研：第二章上限 Lv3，第五章 Lv4、第九章 Lv5；精研只加势（效果停在 Lv3），存档保留实际等级', r5.capNow === 3 && r5.caps.join() === '3,4,5' && r5.at3 === 3 && r5.rank === 4 && r5.level === 3 && r5.shi === 4 && r5.snap === 4 && /精研/.test(r5.desc), r5);
+  await p.evaluate(() => { const s = window.__S; s.jinnang = 'drum'; s.paintJinnang(); });
+  await p.waitForTimeout(300);
+  const j0 = await p.evaluate(() => { const s = window.__S; return { shown: !!s.jinnangButton?.visible, caption: s.jinnangButton?.getByName('jinnang-caption')?.text, berserk: s.player.growth.berserkUntil > s.combatNow }; });
+  await p.keyboard.press('r'); await p.waitForTimeout(300);
+  const j1 = await p.evaluate(() => { const s = window.__S; return { held: s.jinnang, shown: !!s.jinnangButton?.visible, berserk: s.player.growth.berserkUntil > s.combatNow, banner: window.__banners.slice(-1)[0] }; });
+  ck('P4 锦囊：右侧锦囊钮「锦囊 · 擂鼓」，R 键使用 → 10 秒狂战，钮收起', j0.shown && /擂鼓/.test(j0.caption ?? '') && !j0.berserk && j1.held === null && !j1.shown && j1.berserk && /锦囊 · 擂鼓/.test(j1.banner ?? ''), { j0, j1 });
   await p.close();
 }
 await b.close();

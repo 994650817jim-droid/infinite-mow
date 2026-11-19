@@ -86,11 +86,19 @@ export class BuildState {
  manualsRead(): readonly BuildTag[] { return this.manuals; }
  canManual(s: BuildTag): boolean { return SCHOOL_IDS.includes(s) && !this.manuals.includes(s); }
  power(id: TreasureId): number { return this.treasurePower[id] ?? 1; }
- level(id: TacticId): number { return this.tactics[id] ?? 0; }
+ /**
+  * 2026-11-19 构筑上限随章节开放（wave-progression-redesign.md §4.4）：战法第五章起可精研到 Lv4、第九章起 Lv5。
+  * 精研只加势（势 = 本派战法等级之和，冲 2 / 4 / 6 档与觉醒），战法本身效果停在 Lv3：level() 给效果用（最多 3），rank() 是实际等级。
+  * rankCap 由战斗场景按章节设（营寨读征程构筑时沿用最近一次的值）。
+  */
+ static rankCap = 3;
+ static rankCapFor(chapter: number): number { return chapter >= 9 ? 5 : chapter >= 5 ? 4 : 3; }
+ rank(id: TacticId): number { return this.tactics[id] ?? 0; }
+ level(id: TacticId): number { return Math.min(3, this.rank(id)); }
  /** 占战法格的种数（基础成长不占）。 */
- slots(): number { return (Object.keys(this.tactics) as TacticId[]).filter(id => TDEF[id] && !TDEF[id].general && this.level(id) > 0).length; }
- canLearn(id: TacticId): boolean { const d = TDEF[id]; if (!d || d.hidden) return false; return this.level(id) < 3 && (this.level(id) > 0 || !!d.general || this.slots() < 6); }
- learn(id: TacticId): boolean { if (!this.canLearn(id)) return false; this.tactics[id] = this.level(id) + 1; return true; }
+ slots(): number { return (Object.keys(this.tactics) as TacticId[]).filter(id => TDEF[id] && !TDEF[id].general && this.rank(id) > 0).length; }
+ canLearn(id: TacticId): boolean { const d = TDEF[id]; if (!d || d.hidden) return false; const cap = d.general ? 3 : BuildState.rankCap; return this.rank(id) < cap && (this.rank(id) > 0 || !!d.general || this.slots() < 6); }
+ learn(id: TacticId): boolean { if (!this.canLearn(id)) return false; this.tactics[id] = this.rank(id) + 1; return true; }
  /** 各派的势。 */
  tags(): Record<BuildTag, number> {
   const out = Object.fromEntries(SCHOOL_IDS.map(s => [s, 0])) as Record<BuildTag, number>;
@@ -98,14 +106,14 @@ export class BuildState {
   return out;
  }
  sources(s: BuildTag): ShiSources {
-  let tactics = 0; for (const id of Object.keys(this.tactics) as TacticId[]) if (TDEF[id]?.tag === s) tactics += this.level(id);
+  let tactics = 0; for (const id of Object.keys(this.tactics) as TacticId[]) if (TDEF[id]?.tag === s) tactics += this.rank(id); // 精研 Lv4 / 5 也算势
   const treasures = [...new Set(this.treasures)].filter(id => TREASURES[id]?.tag === s).length;
   return { tactics, treasures, extra: this.extraTags.filter(t => t === s).length, bonus: this.bonus[s] ?? 0, manual: this.manuals.includes(s) ? 1 : 0 };
  }
  /** 某派当前档位（0 / 2 / 4 / 6）。 */
  tier(s: BuildTag): 0 | 2 | 4 | 6 { return tierOf(this.tags()[s]); }
  snapshot(): BuildSnapshot { return { tactics: { ...this.tactics }, ...(this.manuals.length ? { manuals: [...this.manuals] } : {}) }; }
- restore(data?: BuildSnapshot): void { this.tactics = {}; for (const [id, lv] of Object.entries(data?.tactics ?? {})) if (id in TACTICS && typeof lv === 'number') this.tactics[id as TacticId] = Math.max(0, Math.min(3, lv));
+ restore(data?: BuildSnapshot): void { this.tactics = {}; for (const [id, lv] of Object.entries(data?.tactics ?? {})) if (id in TACTICS && typeof lv === 'number') this.tactics[id as TacticId] = Math.max(0, Math.min(5, lv));
   this.manuals = [...new Set((Array.isArray(data?.manuals) ? data.manuals : []).filter(s => SCHOOL_IDS.includes(s)))]; }
  label(): string {
   const t = this.tags();
@@ -115,6 +123,7 @@ export class BuildState {
 }
 /** Player-facing descriptions show only the level being offered. */
 export function tacticDescription(id: TacticId, level: number): string {
+ if (level >= 4) return '精研 Lv.' + level + '：本派势 +1（冲流派档位 / 觉醒）\n战法效果已满（同 Lv.3）';
  const n = Math.max(1, Math.min(3, level)), i = n - 1;
  const descriptions: Record<TacticId, string> = {
  // 卡面：先写效果、后写条件，最多两行（2026-11-17 文案审校）

@@ -21,6 +21,8 @@ export interface HotkeyHost {
   over(): boolean;
   togglePause(): void;
   usePotion(): void;
+  /** 锦囊（R 键，战斗中；三选一面板里 R 仍是换一批）。 */
+  useJinnang?(): boolean;
   order(): 'guard' | 'sortie';
   cycleOrder(): void;
   openBag(): void;
@@ -112,6 +114,7 @@ export class BattleHotkeys {
         case 'orders': if (!h.toggleOrders) return false; h.toggleOrders(); return true;
         case 'back': h.togglePause(); return true;
         case 'potion': h.usePotion(); return true;
+        case 'reroll': return h.useJinnang?.() ?? false;
         case 'order': h.cycleOrder(); return true;
         case 'sortie': if (h.order() === 'guard') h.cycleOrder(); return true;
         case 'bag': h.openBag(); return true;

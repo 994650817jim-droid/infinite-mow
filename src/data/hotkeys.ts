@@ -41,7 +41,7 @@ export const HOTKEYS: Record<HotkeyAction, HotkeyDef> = {
   pick2: { label: '选第 2 项', where: '三选一 / 遗珍 / 招募；休整页签 2；斩杀', key: 'Digit2', alt: ['Numpad2'] },
   pick3: { label: '选第 3 项', where: '三选一 / 遗珍 / 招募；休整页签 3；再压一压', key: 'Digit3', alt: ['Numpad3'] },
   pick4: { label: '选第 4 项', where: '招募第 4 张卡；休整页签 4', key: 'Digit4', alt: ['Numpad4'] },
-  reroll: { label: '刷新 / 再来一局', where: '三选一刷新；结算再来一局', key: 'KeyR' },
+  reroll: { label: '刷新 / 再来一局 / 锦囊', where: '三选一刷新；结算再来一局；战斗中使用锦囊', key: 'KeyR' },
   confirm: { label: '确认 / 出征', where: '结算主行动；休整「率军出征」；剧情确认', key: 'Enter', alt: ['Space', 'NumpadEnter'] },
 };
 export const HOTKEY_ORDER = Object.keys(HOTKEYS) as HotkeyAction[];

@@ -7,6 +7,7 @@ import { WEAPON_DEFS, SPEAR_PIERCE, GUANDAO_TABLE, crossbowExtraArrows, zhenbeiC
 import type { UpgradeOption, WeaponId, WeaponState } from '../types';
 import { getCharacter } from './characters';
 import { ATTRIBUTE_INFO, dragBodyLengths, type AttributeId, type PotionId, type RunGrowth, MARTIALS, type MasteryId } from '../systems/RunGrowth';
+import { applyStageBuff } from '../systems/StageBuffs';
 
 export const WEAPON_META: Record<WeaponId, { name: string; desc: string }> = {
   spear_orbit: { name: '七探盘龙枪', desc: '银枪自动索敌，向不同敌人突刺' },
@@ -168,9 +169,10 @@ export function canOfferRejuvenation(player: Player): boolean {
 /** 保底选项：原数值（+5生命/+5%拾取/+0.1回复）几乎无感，提高到可感知并各附带一个即时效果。 */
 export function foundationOptions():UpgradeOption[]{
   return [
-    {id:'foundation_hp',name:'固本培元',desc:'生命上限 +12\n并立即回复 12 生命',kind:'foundation',categoryLabel:'基础成长',apply:p=>{p.stats.maxHpBonus+=12;p.heal(12);}},
-    {id:'foundation_pickup',name:'搜集辎重',desc:'拾取范围 +15%\n并立即收拢全场军功宝石',kind:'foundation',categoryLabel:'基础成长',apply:p=>{p.stats.pickupRadius*=1.15;const s=p.scene as unknown as {gemMagnetUntil?:number;combatNow?:number};s.gemMagnetUntil=(s.combatNow??0)+2500;}},
-    {id:'foundation_recovery',name:'调息养元',desc:'每秒回复 +0.3 生命\n并立即回复 15% 生命',kind:'foundation',categoryLabel:'基础成长',apply:p=>{p.stats.regen+=.3;p.heal(Math.round(p.maxHp*.15));}},
+    // 2026-11-19（wave-progression-redesign.md P0）：改为本关有效（记在 StageBuffs，征程构筑存档时扣掉），永久生命由「体魄」按等级给
+    {id:'foundation_hp',name:'固本培元',desc:'本关生命上限 +12\n并立即回复 12 生命',kind:'foundation',categoryLabel:'基础成长 · 本关',apply:p=>{applyStageBuff(p,s=>{s.maxHpBonus+=12;});p.heal(12);}},
+    {id:'foundation_pickup',name:'搜集辎重',desc:'本关拾取范围 +15%\n并立即收拢全场军功宝石',kind:'foundation',categoryLabel:'基础成长 · 本关',apply:p=>{applyStageBuff(p,s=>{s.pickupRadius*=1.15;});const s=p.scene as unknown as {gemMagnetUntil?:number;combatNow?:number};s.gemMagnetUntil=(s.combatNow??0)+2500;}},
+    {id:'foundation_recovery',name:'调息养元',desc:'本关每秒回复 +0.3 生命\n并立即回复 15% 生命',kind:'foundation',categoryLabel:'基础成长 · 本关',apply:p=>{applyStageBuff(p,s=>{s.regen+=.3;});p.heal(Math.round(p.maxHp*.15));}},
   ];
 }
 
@@ -188,7 +190,9 @@ export function schoolLabel(tag:BuildTag,tags:Record<BuildTag,number>,_learned=f
   return goal?name+'　（'+goal+' 势：'+d.tiers[goal].name+'）':name;
 }
 /** 只从当前角色可用的局内成长中抽取三张唯一奖励；绝不授予其他武将的武器。 */
-export function buildUpgradeOptions(player: Player, weapons: WeaponState[], growth: RunGrowth = player.growth): UpgradeOption[] {
+/** 新卡来源（五段主线关由 GameScene 给，systems/LevelCards）：战法位按概率换新卡；核心位只剩固本培元时也换。 */
+export interface NewCardSource { replaceChance: number; draw: (n: number) => UpgradeOption[] }
+export function buildUpgradeOptions(player: Player, weapons: WeaponState[], growth: RunGrowth = player.growth, extra?: NewCardSource): UpgradeOption[] {
   const pool: UpgradeOption[] = [];
   const ownWeaponId = getCharacter(growth.character).startWeapon;
   const ownWeapon = weapons.find(weapon => weapon.id === ownWeaponId);
@@ -202,7 +206,7 @@ export function buildUpgradeOptions(player: Player, weapons: WeaponState[], grow
   // 战法卡（流派重做：三选一 = 1 张本命 / 武艺 + 2 张战法）；卸力 / 以战养战是「基础成长」，不占战法卡位
   const tacticCards:UpgradeOption[]=[];
   for(const id of Object.keys(TACTICS)as TacticId[])if(b.canLearn(id)){
-    const d=TACTICS[id],n=b.level(id)+1,school=tacticSchool(id);
+    const d=TACTICS[id],n=b.rank(id)+1,school=tacticSchool(id); // 精研 Lv4 / 5（按章开放）显示实际等级
     const option:UpgradeOption={id:'tactic_'+id,name:d.name+' · Lv.'+n,desc:tacticDescription(id,n),kind:'tactic',icon:'build_icon_'+id,categoryLabel:school?schoolLabel(school,tags):'基础成长',apply:(_p,_w,g)=>{g?.build.learn(id);}};
     if(school&&!tacticGeneral(id))tacticCards.push(option);else pool.push(option);
   }
@@ -225,5 +229,9 @@ export function buildUpgradeOptions(player: Player, weapons: WeaponState[], grow
   const rest=draw(pool.filter(o=>o.id!==guaranteed.id&&!picked.includes(o)));
   for(const o of rest)if(picked.length<2)picked.push(o);
   for(const f of foundations)if(picked.length<2&&f.id!==guaranteed.id&&!picked.some(o=>o.id===f.id))picked.push(f);
-  return shuffle([guaranteed,...picked.slice(0,2)]);
+  const final=[guaranteed,...picked.slice(0,2)];
+  // 2026-11-19 新卡池（wave-progression-redesign.md §4.2）：固本培元一类的保底卡、以及按概率的战法位，换成新卡（战场机缘 / 锦囊 / 兵源 / 军资 / 心法）
+  if(extra){const slots:number[]=[];final.forEach((o,i)=>{if(o.kind==='foundation'||(i>0&&o.kind==='tactic'&&Math.random()<extra.replaceChance))slots.push(i);});
+    if(slots.length){const fresh=extra.draw(slots.length);slots.forEach((k,j)=>{if(fresh[j])final[k]=fresh[j];});}}
+  return shuffle(final);
 }

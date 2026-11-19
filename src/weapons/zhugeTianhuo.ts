@@ -138,7 +138,7 @@ export function tianhuoBehavior(host: WeaponHost, weapon: WeaponState, dt: numbe
   st.casts++;
   const W = g.masteries.wildfire;
   if (W && st.casts % Z.eastWind.every === 0) {
-    const len = Z.eastWind.len[W - 1], half = Z.eastWind.width / 2, hit = damage * Z.eastWind.mul[W - 1], dir = target.kind === 'boss' || target.kind === 'elite' ? { x: ux, y: uy } : densestDir(host, len, half, { x: ux, y: uy }); // 打首领 / 精锐时朝目标扫（2026-11-18 平衡：朝怪最密方向时 1-1 首领段 12 → 34 秒）；打杂兵时朝怪最密的方向扫
+    const len = Z.eastWind.len[W - 1], half = Z.eastWind.width / 2, hit = damage * Z.eastWind.mul[W - 1], dir = target.kind === 'boss' ? { x: ux, y: uy } : densestDir(host, len, half, { x: ux, y: uy }); // 打首领时朝首领扫（2026-11-18 平衡：一律朝怪最密方向时 1-1 首领段 12 → 34 秒；精锐也朝目标时 5-2 清杂每分钟 98 → 73，所以只限首领）；其余朝怪最密的方向扫
     pl.playAction('skill', dir.x < 0 ? 'left' : 'right');
     eastWindFx(host, pl.x, pl.y, dir.x, dir.y, len);
     for (const e of host.grid.query(pl.x + dir.x * len / 2, pl.y + dir.y * len / 2, len / 2 + half + 40)) {

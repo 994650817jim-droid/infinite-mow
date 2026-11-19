@@ -76,6 +76,19 @@ export function beifaGameSceneClass(Base: typeof GameScene, cfg: ArcSceneConfig)
       // 陈仓：城门一破，郝昭立刻出城
       if (this.siege && !this.siege.gateAlive && !s.bossSpawned && !s.boss?.active) { s.showWaveBanner('城门已破', true, '郝昭出城迎战！'); this.spawnBoss(); }
     }
+    /**
+     * 12-3 司马懿坚守：营垒在时他只受 10% 伤害——自动瞄准先打射程内最近的营垒，不全打在司马懿身上
+     * （2026-11-18 平衡：诸葛亮天火、黄忠重箭都是「首领优先」，诸葛亮 4 局一座营垒都没拆掉，司马懿一直不出营）。
+     */
+    protected priorityWeaponTarget(range: number, bodyRadius = true): Enemy | null {
+      const smy = this.simayi;
+      if (smy && smy.phase === 'hold' && smy.fortsAlive > 0) {
+        const p = (this as unknown as Host).player; let best: Enemy | null = null, bd = Infinity;
+        for (const f of smy.forts) { if (!f.active) continue; const d = Math.hypot(f.x - p.x, f.y - p.y) - (bodyRadius ? f.radius : 0); if (d <= range && d < bd) { bd = d; best = f; } }
+        if (best) return best;
+      }
+      return super.priorityWeaponTarget(range, bodyRadius);
+    }
     protected spawnBoss(): void {
       const s = this as unknown as Host;
       // 陈仓：城门未破，郝昭不出城（到点也只提示）

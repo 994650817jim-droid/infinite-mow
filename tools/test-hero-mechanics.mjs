@@ -1,11 +1,11 @@
-// 武将机制改动（2026-11-18 平衡审查第 2、3 步，data/heroMechanics.ts）：黄忠神射命中积层、魏延被围积层、刘备统御自身减伤、诸葛亮前期。
+// 武将机制改动（2026-11-18 平衡审查第 2、3 步，data/heroMechanics.ts）：黄忠神射命中积层、魏延被围积层、刘备统御自身减伤、诸葛亮重做（借东风 / 八阵图）、庞统火烧连环减速。
 // 电脑布局 1280×720；实战驱动（真实出手、真实挨打），全程无 pageerror / console error。
 // 用法：BASE=http://127.0.0.1:5173/ node tools/test-hero-mechanics.mjs [huangzhong|weiyan|liubei|zhuge ...]
 import { chromium } from 'playwright';
 const base = process.env.BASE ?? 'http://127.0.0.1:5173/';
 let pass = 0, fail = 0; const errors = [];
 const ck = (n, ok, d) => { ok ? pass++ : fail++; console.log((ok ? 'PASS ' : 'FAIL ') + n + (d !== undefined ? ' · ' + JSON.stringify(d).slice(0, 480) : '')); };
-const ALL = ['huangzhong', 'weiyan', 'liubei', 'zhuge'], only = process.argv.slice(2), HEROES = ALL.filter(h => !only.length || only.includes(h));
+const ALL = ['huangzhong', 'weiyan', 'liubei', 'zhuge', 'pangtong'], only = process.argv.slice(2), HEROES = ALL.filter(h => !only.length || only.includes(h));
 const b = await chromium.launch({ channel: 'chrome', headless: true });
 const G = "window.__game.scene.getScene('GameScene')";
 const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -54,7 +54,7 @@ for (const hero of HEROES) {
       const after2s = pl.passive.snapshot(s.combatNow).stacks; biter.deactivate(); pl.damageImmune = true;
       return { after1, after2s, hurt: 1e6 - pl.hp };
     }, [G, MK, CLEAR]);
-    ck('黄忠：被贴身挨打时蓄势一次只掉 1 层、每 0.5 秒最多掉 1 层（2 秒内从 4 层掉到 0–1 层，不是一下清零）', r2.hurt > 0 && r2.after1 === 3 && r2.after2s >= 0 && r2.after2s <= 1, r2);
+    ck('黄忠：被贴身挨打时蓄势一次只掉 1 层（第一下 4 → 3，2 秒内逐层往下掉，不是一下清零）', r2.hurt > 0 && r2.after1 === 3 && r2.after2s >= 0 && r2.after2s <= 2, r2);
     // 3) 静心延长神射、宝刀未老延长 2 秒
     const r3 = await p.evaluate(async ([G0, C]) => {
       const s = eval(G0), pl = s.player, wait = ms => new Promise(r => setTimeout(r, ms)); eval(C);
@@ -116,35 +116,42 @@ for (const hero of HEROES) {
     ck('刘备：属性面板统御一行写明「刘备本人受伤 −1% / 点」', r2.open && !!r2.line, r2);
   }
   if (hero === 'zhuge') {
-    // 1) 单发伤害（关暴击、单个定身步兵）：Lv1–5 逐级递增，Lv1 是旧值 ×1.4
+    // 诸葛亮重做（2026-11-18 方案 A）：借东风、八阵图（天火本体与观星见 test-zhuge-flame）
+    // 1) 借东风 1 级：每第 4 发天火同时放出东风火龙，朝目标方向直线扫过，路上的敌人吃 60%
     const r1 = await p.evaluate(async ([G0, MK0, C]) => {
-      const s = eval(G0), pl = s.player, mk = eval(MK0), wait = ms => new Promise(r => setTimeout(r, ms)), w = pl.weapons[0], crit0 = pl.stats.critChance; pl.damageImmune = true; pl.stats.critChance = -1;
-      const { WEAPON_DEFS } = await import('/src/weapons/registry.ts'), out = [];
-      for (const lv of [1, 2, 3, 4, 5]) {
-        eval(C); w.level = lv; w.cooldownLeft = 1e9; await wait(80); const e = mk(pl.x + 120, pl.y); w.cooldownLeft = 0; const t0 = performance.now();
-        while (e.hp === e.maxHp && performance.now() - t0 < 2500) await wait(20); w.cooldownLeft = 1e9; out.push(Math.round((e.maxHp - e.hp) * 10) / 10);
-      }
-      const old1 = WEAPON_DEFS.flame_banner.damage(1, pl.stats) * pl.growth.damageMultiplier(s.combatNow); pl.stats.critChance = crit0; w.level = 1; eval(C);
-      return { perLevel: out, old1: Math.round(old1 * 10) / 10, ratio1: +(out[0] / old1).toFixed(3) };
+      const s = eval(G0), pl = s.player, mk = eval(MK0), wait = ms => new Promise(r => setTimeout(r, ms)), w = pl.weapons[0]; pl.damageImmune = true; pl.stats.critChance = -1; eval(C);
+      const { TIANHUO_DEF } = await import('/src/weapons/zhugeTianhuo.ts');
+      pl.growth.masteries.wildfire = 1; w.cooldownLeft = 1e9; await wait(100); pl.passive.reset('zhuge', s.combatNow);
+      const boss = mk(pl.x + 330, pl.y, { kind: 'elite' }), lane = [mk(pl.x + 120, pl.y + 8), mk(pl.x + 220, pl.y - 8)], off = mk(pl.x + 150, pl.y + 140);
+      const lane0 = []; for (let k = 1; k <= 4; k++) { w.cooldownLeft = 0; await wait(100); w.cooldownLeft = 1e9; await wait(900); lane0.push(lane.map(e => e.maxHp - e.hp)); }
+      const one = TIANHUO_DEF.damage(w.level, pl.stats) * pl.growth.damageMultiplier(s.combatNow); pl.growth.masteries.wildfire = 0;
+      return { lane: lane0, off: off.maxHp - off.hp, expect: Math.round(one * .6), wind: lane0[3][0] - lane0[2][0] };
     }, [G, MK, CLEAR]);
-    ck('诸葛亮：战旗 Lv1 伤害 ×1.4（旧值对比），Lv1→5 升级不掉伤害（整数掉血相邻两级可能相同）', Math.abs(r1.ratio1 - 1.4) < .03 && r1.perLevel.every((v, i, a) => i === 0 || v >= a[i - 1]) && r1.perLevel[4] > r1.perLevel[0], r1);
-    // 2) 1-1 首领：Lv1 诸葛亮站在首领身边 12 秒，首领要掉血
-    const r2 = await p.evaluate(async ([G0, C]) => {
-      const s = eval(G0), pl = s.player, wait = ms => new Promise(r => setTimeout(r, ms)), w = pl.weapons[0]; eval(C); pl.damageImmune = true; w.level = 1; w.cooldownLeft = 0;
-      s.spawnBoss(); const boss = s.boss; if (!boss) return { boss: false }; boss.sprite.setPosition(pl.x + 150, pl.y); boss.stunUntil = 1e12; const hp0 = boss.hp, t0 = s.combatNow;
-      while (s.combatNow - t0 < 12000 && boss.active) await wait(50);
-      const lost = hp0 - boss.hp; return { boss: true, name: boss.def?.name ?? boss.kind, lostPct: +(lost / boss.maxHp * 100).toFixed(1), dps: Math.round(lost / ((s.combatNow - t0) / 1000)) };
-    }, [G, CLEAR]);
-    ck('诸葛亮：Lv1 打 1-1 首领 12 秒有明显伤害（审查基线 1-1 首领掉血 0%）', r2.boss && r2.lostPct >= 5, r2);
-    // 3) 谋略满层 2：两次烧到 3 人以上的战旗后，下一面战旗强化（范围 +25%、灼烧）
-    const r3 = await p.evaluate(async ([G0, MK0, C]) => {
-      const s = eval(G0), pl = s.player, mk = eval(MK0), wait = ms => new Promise(r => setTimeout(r, ms)), w = pl.weapons[0]; eval(C); await wait(300); for (const e of s.enemies) if (e.active && e.kind === 'boss') e.deactivate();
-      pl.passive.reset('zhuge', s.combatNow); for (let i = 0; i < 5; i++) mk(pl.x + 100 + (i % 2) * 20, pl.y - 30 + i * 15);
-      const max = pl.passive.snapshot(s.combatNow).maxStacks, tr0 = pl.passive.snapshot(s.combatNow).triggers, seen = [];
-      for (let k = 0; k < 3; k++) { w.cooldownLeft = 0; await wait(700); seen.push(pl.passive.snapshot(s.combatNow).stacks); }
-      return { max, seen, triggered: pl.passive.snapshot(s.combatNow).triggers - tr0, label: pl.passive.label(s.combatNow) };
+    ck('诸葛亮·借东风：前三发路上的敌人不挨打，第 4 发东风火龙直线扫过（各 60%），偏离直线的不挨打', r1.lane[2].every(v => v === 0) && r1.lane[3].every(v => Math.abs(v - r1.expect) <= 2) && r1.off === 0, r1);
+    // 2) 八阵图 3 级：观星爆发处布阵——阵内步兵减速、受伤 +15%；阵内首领出招间隔 ×1.25（gapSlow）
+    const r2 = await p.evaluate(async ([G0, MK0, C]) => {
+      const s = eval(G0), pl = s.player, mk = eval(MK0), wait = ms => new Promise(r => setTimeout(r, ms)), w = pl.weapons[0]; pl.damageImmune = true; pl.stats.critChance = -1; eval(C);
+      pl.growth.masteries.eight_trigrams = 3; w.cooldownLeft = 1e9; await wait(100); pl.passive.reset('zhuge', s.combatNow);
+      s.spawnBoss(); const boss = s.boss; boss.sprite.setPosition(pl.x + 260, pl.y); boss.stunUntil = 1e12; boss.hp = boss.maxHp = 1e6;
+      const near = mk(pl.x + 290, pl.y + 30, { stun: false }); near.def = { ...near.def, speed: 40 };
+      let casts = 0; const active = () => pl.passive.vulnerability(boss, s.combatNow) > 1; // 不读模块内部状态（热更新后测试拿到的是另一份模块）
+      for (; casts < 7 && !active(); casts++) { for (const e of s.enemies) if (e.active && !e.isSupplySlot && e !== boss && e !== near) e.deactivate(); /* 首领召来的兵会抢走天火 */ boss.sprite.setPosition(pl.x + 260, pl.y); w.cooldownLeft = 0; await wait(100); w.cooldownLeft = 1e9; await wait(900); }
+      await wait(60); const now = s.combatNow;
+      const out = { casts, zones: active() ? 1 : 0, slow: near.martialSlowUntil > now ? +near.martialSlow.toFixed(2) : 1, vulnNear: +pl.passive.vulnerability(near, now).toFixed(2), vulnBoss: +pl.passive.vulnerability(boss, now).toFixed(2), gap: boss.gapSlowUntil > now ? boss.gapSlowMul : 1, fx: !!s.children.getByName('zhuge-bazhen') || !s.textures.exists('zhuge_tianhuo') };
+      await wait(3200); out.after = { zones: active() ? 1 : 0, vuln: +pl.passive.vulnerability(boss, s.combatNow).toFixed(2) }; pl.growth.masteries.eight_trigrams = 0; boss.deactivate(); return out;
     }, [G, MK, CLEAR]);
-    ck('诸葛亮：谋略满 2 层（HUD 2/2），第三面战旗强化', r3.max === 2 && r3.seen[0] === 1 && r3.seen[1] === 2 && r3.triggered === 1, r3);
+    ck('诸葛亮·八阵图 3 级：观星爆发处布阵，阵内步兵减速 40%、敌人受伤 +15%、首领出招间隔 ×1.25；3 秒后散', r2.zones === 1 && r2.slow === .6 && r2.vulnNear === 1.15 && r2.vulnBoss === 1.15 && r2.gap === 1.25 && r2.fx && r2.after.zones === 0 && r2.after.vuln === 1, r2);
+  }
+  if (hero === 'pangtong') {
+    // 庞统·火烧连环（2026-11-18 与诸葛亮分开、强调控场）：火环布下到落火结束，圈内敌人减速 20%（首领不减）
+    const r1 = await p.evaluate(async ([G0, MK0, C]) => {
+      const s = eval(G0), pl = s.player, mk = eval(MK0), wait = ms => new Promise(r => setTimeout(r, ms)), w = pl.weapons[0]; pl.damageImmune = true; eval(C);
+      const inside = mk(pl.x + 60, pl.y, { stun: false }), outside = mk(pl.x + 400, pl.y, { stun: false }); inside.def = { ...inside.def, speed: 30 }; outside.def = { ...outside.def, speed: 30 };
+      pl.passive.stacks = 3; w.cooldownLeft = 0; await wait(300);
+      const now = s.combatNow, ring = !!s.children.getByName('pangtong-ring');
+      return { ring, inside: inside.martialSlowUntil > now ? +inside.martialSlow.toFixed(2) : 1, outside: outside.martialSlowUntil > now ? +outside.martialSlow.toFixed(2) : 1 };
+    }, [G, MK, CLEAR]);
+    ck('庞统·火烧连环：火环圈内敌人减速 20%，圈外不受影响', r1.ring && r1.inside <= .8 && r1.outside === 1, r1);
   }
   await p.close();
 }

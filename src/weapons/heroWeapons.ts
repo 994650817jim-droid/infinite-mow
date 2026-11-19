@@ -3,7 +3,7 @@ import type { Enemy } from '../entities/Enemy';
 import type { Player } from '../entities/Player';
 import type { PlayerStats, WeaponState } from '../types';
 import { PASSIVE_RULES as R } from '../data/passives';
-import { WY_SURROUND } from '../data/heroMechanics';
+import { WY_SURROUND, PT_RING } from '../data/heroMechanics';
 import type { WeaponHost } from './registry';
 import { smartTarget } from './heroWeapons2';
 import { SHOW_OWN_RANGE_FX } from '../ui/HintStyle';
@@ -325,8 +325,13 @@ function fireRing(host: WeaponHost, s: MineState, g: RingGroup, damage: number, 
   host.martialField(g.x, g.y, R.ringRadius + 20, damage, R.ringFireMs, 2);
 }
 
+/** 火烧连环减速圈（布下到落火结束；2026-11-18 PT_RING）。 */
+const RING_SLOW = new WeakMap<object, { x: number; y: number; r: number; until: number }[]>();
 export function lianhuanBehavior(host: WeaponHost, weapon: WeaponState, dt: number, time: number): void {
   const pl = host.player, s = stateOf(pl), growth = pl.growth, level = weapon.level;
+  { const zs = (RING_SLOW.get(pl) ?? []).filter(z => z.until > time); RING_SLOW.set(pl, zs);
+    for (const z of zs) for (const e of host.grid.query(z.x, z.y, z.r + 40)) { if (!e.active || e.isSupplySlot || e.kind === 'boss' || Math.hypot(e.x - z.x, e.y - z.y) > z.r + e.radius) continue;
+      e.martialSlow = Math.min(time >= e.martialSlowUntil ? 1 : e.martialSlow, 1 - PT_RING.slow); e.martialSlowUntil = time + 120; } }
   const damage = LIANHUAN_DEF.damage(level, pl.stats) * growth.damageMultiplier(time), radius = mineRadius(level) * host.player.passive.rangeMultiplier('lianhuan_mines'); // 智力范围加成
   const chainRange = R.mineChainRange * (1 + .15 * growth.masteries.lianying), len = tetherLen(pl);
   // 火雷：被踩后先烧引信（mineFuseMs，期间再有人踩不重新计时）再爆并带出连锁；到期无人踩则原地自爆。铁索连舟中的雷由地火统一引爆
@@ -406,6 +411,7 @@ export function lianhuanBehavior(host: WeaponHost, weapon: WeaponState, dt: numb
     host.sfx.play('atk_chain');
     pl.playAction('skill', foes[0].x < pl.x ? 'left' : 'right');
     const g: RingGroup = { x: pl.x, y: pl.y, fuseAt: time + R.ringFuseMs, mines: [], links: host.add.container(0, 0).setDepth(19.5).setName('pangtong-ring'), fired: false };
+    RING_SLOW.get(pl)?.push({ x: pl.x, y: pl.y, r: R.ringRadius + 20, until: time + R.ringFuseMs + R.ringFireMs });
     for (let k = 0; k < R.ringMines; k++) { const a = k * Math.PI * 2 / R.ringMines; g.mines.push(placeMine(host, s, pl.x + Math.cos(a) * R.ringRadius, pl.y + Math.sin(a) * R.ringRadius, time, R.ringFuseMs + R.loopMs + 1000, 'ring', g)); }
     for (let k = 0; k < R.ringMines; k++) linkFx(host, g.mines[k], g.mines[(k + 1) % R.ringMines], g.links);
     s.rings.push(g);

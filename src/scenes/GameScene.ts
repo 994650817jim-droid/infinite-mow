@@ -1888,6 +1888,7 @@ export class GameScene extends Phaser.Scene {
       get sfx() { return scene.sfx; }, get over() { return scene.over; },
       get spearShots() { return scene.spearShots; }, get bolts() { return scene.bolts; },
       hitEnemy: (...args) => scene.hitEnemy(...args),
+      setCritOverride: (crit) => { scene.debugCrit = crit; },
       nearestEnemy: (...args) => scene.nearestEnemy(...args),
       priorityTarget: (range,bodyRadius)=>scene.priorityWeaponTarget(range,bodyRadius),
       fireBolt: (...args) => scene.fireBolt(...args),

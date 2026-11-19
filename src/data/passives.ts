@@ -3,7 +3,7 @@ export const CHARACTER_PASSIVES: Record<CharacterId, { name: string; maxStacks: 
   zhaoyun: { name: '七进七出', maxStacks: 7 },
   guanyu: { name: '势如破竹', maxStacks: 3 },
   huangzhong: { name: '老当益壮', maxStacks: 0 },
-  zhuge: { name: '运筹帷幄', maxStacks: 3 },
+  zhuge: { name: '观星', maxStacks: 3 }, // 2026-11-18 重做（原「运筹帷幄」），见 data/heroMechanics.ts ZG_TIANHUO
   zhangfei: { name: '据水断桥', maxStacks: 5 },
   huangyueying: { name: '机关连弩', maxStacks: 8 },
   pangtong: { name: '连环计', maxStacks: 3 },

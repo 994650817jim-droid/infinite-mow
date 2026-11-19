@@ -23,6 +23,8 @@ export function compareLines(item: ItemInstance, current?: ItemInstance): { text
  * 兵装悬停提示框（2026-11-16 用户要求「鼠标挪上去可以显示属性」）：名称（品质色）、品质 · 栏位、词条、名器特效，
  * 以及与当前穿着的同槽装备对比（涨绿降红）。跟随鼠标，不超出屏幕边。一个界面建一个，用 attach 挂到装备图块上。
  */
+/** 非兵装的说明卡（构筑总览的战法 / 宝物 / 属性 / 觉醒等）：同一张漆底卡片，顶部换成该项的颜色带。 */
+export interface InfoTip { title: string; sub?: string; body: string; color?: number; icon?: string }
 export class ItemTooltip {
   readonly root: Phaser.GameObjects.Container;
   constructor(private readonly scene: Phaser.Scene, depth: number) {
@@ -70,6 +72,35 @@ export class ItemTooltip {
     if (x + w > GAME_WIDTH - 4) x = px - gap - w;
     if (y + h > GAME_HEIGHT - 4) y = py - gap - h;
     this.root.setPosition(Math.max(4, Math.min(GAME_WIDTH - w - 4, x)), Math.max(4, Math.min(GAME_HEIGHT - h - 4, y)));
+  }
+  /** 通用说明卡（与兵装卡同一套漆底描金 + 顶部颜色带）。 */
+  showInfo(info: InfoTip, px: number, py: number): void {
+    const s = this.scene, pad = 12, w = 268, color = info.color ?? 0xc9a35e, hasIcon = !!info.icon && s.textures.exists(info.icon), tx = hasIcon ? 56 : pad, bandH = info.sub ? 52 : 36;
+    this.root.removeAll(true);
+    const add = (t: Phaser.GameObjects.Text) => { t.setScrollFactor(0); this.root.add(t); return t; };
+    const g = s.add.graphics().setScrollFactor(0);
+    if (hasIcon) { const im = s.add.image(8 + 20, 8 + 20, info.icon!).setScrollFactor(0); im.setScale(36 / Math.max(im.width, im.height)); this.root.add(im); }
+    add(s.add.text(tx, 9, info.title, { fontFamily: HEADING_FONT, fontSize: '17px', color: '#f6dc9a', resolution: 2, wordWrap: { width: w - tx - pad, useAdvancedWrap: true } })).setName('info-tooltip-title');
+    if (info.sub) add(s.add.text(tx, 32, info.sub, { fontFamily: FONT, fontSize: '12px', color: '#c9b89a', resolution: 2, wordWrap: { width: w - tx - pad, useAdvancedWrap: true } }));
+    const body = add(s.add.text(pad, bandH + 8, info.body, { fontFamily: FONT, fontSize: '13px', color: '#e9dcbc', resolution: 2, lineSpacing: 3, wordWrap: { width: w - pad * 2, useAdvancedWrap: true } })).setName('info-tooltip-body');
+    const h = bandH + 8 + body.height + pad;
+    const card = bagArt(s, 'tooltip_card');
+    if (card) { const ns = s.add.nineslice(0, 0, card, undefined, w * 2, h * 2, 40, 40, 40, 40).setOrigin(0).setScale(.5).setScrollFactor(0); this.root.addAt(ns, 0); }
+    this.root.addAt(g, card ? 1 : 0);
+    if (!card) { g.fillStyle(0x0a0603, .5).fillRoundedRect(3, 5, w, h, 7); g.fillStyle(0x1b110a, .97).fillRoundedRect(0, 0, w, h, 6); }
+    for (let i = 0; i < 12; i++) g.fillStyle(color, .3 * (1 - i / 12)).fillRect(2 + i * (w - 4) / 12, 2, (w - 4) / 12 + 1, bandH - 2);
+    g.fillStyle(0x000000, .25).fillRect(2, bandH, w - 4, 1);
+    if (!card) g.lineStyle(1, 0x000000, 1).strokeRoundedRect(.5, .5, w - 1, h - 1, 6).lineStyle(2, 0xc08a3e, 1).strokeRoundedRect(2, 2, w - 4, h - 4, 5);
+    g.lineStyle(1, color, .7).strokeRoundedRect(4.5, 4.5, w - 9, h - 9, 4);
+    this.root.setData('w', w).setData('h', h).setData('info', info.title).setVisible(true);
+    this.move(px, py);
+  }
+  /** 通用说明卡挂到可交互对象上（悬停显示、移动跟随、移出隐藏）。 */
+  attachInfo(obj: Phaser.GameObjects.GameObject, getInfo: () => InfoTip | null | undefined): void {
+    obj.on('pointerover', (p: Phaser.Input.Pointer) => { const it = getInfo(); if (!it) return; const q = screenPoint(p); this.showInfo(it, q.x, q.y); });
+    obj.on('pointermove', (p: Phaser.Input.Pointer) => { if (!this.root.visible) return; const q = screenPoint(p); this.move(q.x, q.y); });
+    obj.on('pointerout', () => this.hide());
+    obj.once('destroy', () => this.hide());
   }
   hide(): void { this.root.setVisible(false); }
   destroy(): void { this.root.destroy(); }

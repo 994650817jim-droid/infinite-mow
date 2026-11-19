@@ -60,8 +60,8 @@ for (const layout of ['mobile', 'desktop']) {
     }, G);
     ck('中城：破门 → 巷战 → 府衙 → 击败守将插旗 → 破城', r.street === 'street' && r.hall === 'hall' && r.boss && r.over && r.victory && await owned(p, city), r);
   } else {
-    const t = await p.evaluate(async G0 => { const s = eval(G0); s.elapsed = 481; await new Promise(r => setTimeout(r, 500)); return { over: s.over, victory: s.victory }; }, G);
-    ck('中城：限时 480 秒未破城 → 失败', t.over && t.victory === false, t);
+    const t = await p.evaluate(async G0 => { const s = eval(G0); s.elapsed = 481 + 60; /* 2026-11-18 限时到先进 60 秒援军阶段，结束仍未破城才撤军 */ await new Promise(r => setTimeout(r, 500)); return { over: s.over, victory: s.victory }; }, G);
+    ck('中城：限时 480 秒 + 援军阶段 60 秒仍未破城 → 撤军（失败）', t.over && t.victory === false, t);
   }
   await p.close();
 }

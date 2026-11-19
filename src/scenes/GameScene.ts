@@ -34,6 +34,7 @@ import { type BuffProgress, countProgress, timerProgress } from '../ui/BuffProgr
 import {BuildCombat} from '../systems/BuildCombat';
 import {TACTICS,TREASURES,TAG_NAMES,type TacticId} from '../data/builds';
 import { applyCharms, wornTokens, type CharmState } from '../systems/CharmEffects';
+import { drawBuildOverview } from '../ui/BuildOverview';
 import { meritFromKills } from '../data/merit';
 import { DeathFx, deathFxMode, type DeathOpts } from '../systems/DeathFx';
 import { DEATHFX_LABEL, deathFxSetting, setDeathFx, type DeathFxSetting } from '../systems/BattleSettings';
@@ -108,7 +109,8 @@ import {ItemDrops} from '../systems/ItemDrops';
 import {BossRelics, RELIC} from '../systems/BossRelics';
 import {FireShips} from '../systems/FireShips';
 import {gearFor} from '../systems/ItemEffects';
-import {addItems,claimRunLoot,depositRunLoot,grantHorse,heroHorse,ownedHorses} from '../systems/ItemStore';
+import {addItems,claimRunLoot,depositRunLoot,grantHorse,heroHorse,ownedHorses,tokenSlots} from '../systems/ItemStore';
+import { ItemTooltip } from '../ui/ItemTooltip';
 import {STARTER_HORSE} from '../data/mounts';
 import {storyScroll} from '../ui/StoryScroll';
 import {MERCHANT_HORSE_REWARD,markMerchantStorySeen,merchantHorseLines,merchantStorySeen} from '../data/storyMerchantHorse';
@@ -157,6 +159,7 @@ const HERO_FX_TONE: Record<string, { alpha: number; ms: number }> = {
 };
 import { HIT_FEEL, BOSS_FEEL, WEAPON_HIT_TYPE } from '../data/hitFeel';
 import { GEM_FX } from '../data/gemFx';
+import { heroAttributeExtra } from '../data/heroMechanics';
 
 interface Gem {
   img: Phaser.GameObjects.Image;
@@ -709,7 +712,7 @@ export class GameScene extends Phaser.Scene {
     this.propItems = 0; this.supplies.onPropLoot = (kind, x, y) => this.propLoot(kind, x, y);
     // 兵装：开局读入该武将穿戴的道具加成（生命上限增加的部分补满）
     {const oldMax=this.player.maxHp;this.player.growth.gear=gearFor(this.runConfig.character);this.player.heal(this.player.maxHp-oldMax);}
-    this.followers=null;this.followerPassives=[];{const allow=worldUnlocked()&&(!isChapterTestRun()||new URLSearchParams(location.search).get('followers')==='1');const list=allow?followersFor(this.runConfig.character):[];if(list.length)this.followers=new FollowerSquad(this,this.player,list,(x,y,r)=>this.grid.query(x,y,r),(e,d,fire)=>this.hitEnemy(e,d,this.combatNow,fire?'fire':'melee',true,false),()=>this.player.growth.damageMultiplier(this.combatNow));if(this.followers){this.followers.onHitFx=(e,k,fx,fy)=>this.followerTemplateHitFx(e,k,fx,fy);this.followers.attackSound=t=>this.sfx.play(FOLLOWER_ATTACK_SFX[t]);}}
+    this.followers=null;this.followerPassives=[];{const allow=worldUnlocked()&&(!isChapterTestRun()||new URLSearchParams(location.search).get('followers')==='1');const list=allow?followersFor(this.runConfig.character):[];if(list.length)this.followers=new FollowerSquad(this,this.player,list,(x,y,r)=>this.grid.query(x,y,r),(e,d,fire)=>this.hitEnemy(e,d,this.combatNow,fire?'fire':'melee',true,false),()=>this.player.growth.damageMultiplier(this.combatNow));if(this.followers){this.followers.onHitFx=(e,k,fx,fy)=>this.followerTemplateHitFx(e,k,fx,fy);this.followers.attackSound=t=>this.sfx.play(FOLLOWER_ATTACK_SFX[t]);this.wireFollowerObstacles(this.followers);}}
     { const mode = readIffMode(); this.iff = mode ? new IffOverlay(this, mode, () => this.iffUnits()) : null; }
     this.presence = new BossPresence({ scene: this, enemies: () => this.enemies, boss: () => this.cutscene?.active ? null : this.boss, /* 过场时收起名牌 / 辉光 / 火环 */ bossName: () => this.chapter.bossName, player: () => this.player,
       bosses: () => this.dual ? (this.cutscene?.active ? [] : this.dual.alive.map(x => ({ e: x.enemy, name: x.name, color: x.color }))) : null,
@@ -1108,7 +1111,7 @@ export class GameScene extends Phaser.Scene {
     this.separateAlliesFromEnemies(dt);
     this.supplies?.resolveBodies(this.allies,(a,d,n)=>this.legion.hurt(a,d,n),(e,d,n)=>this.hitEnemy(e,d,n,'melee',false,false));
     this.sishuiObstacles?.resolve(this.player,this.allies,this.enemies);
-    if(this.terrain){this.terrain.resolve(this.player,this.allies,this.enemies);this.terrain.updateCanopy(this.player);}
+    if(this.terrain){this.terrain.resolve(this.player,this.allies,this.enemies);this.terrain.updateCanopy(this.player,this.enemies.filter(e=>e.active&&!e.isSupplySlot&&(e.kind==='boss'||e.kind==='elite')));}
     this.player.growth.recordMovement(Math.hypot(move.x,move.y)>.1&&time>=this.player.knockedUntil?Math.hypot(this.player.x-moveX,this.player.y-moveY):0,dt);
     if(this.player.growth.masteries.dragging_blade||this.dragFx)this.dragBladeFx().update(dt,Math.hypot(move.x,move.y)>.1&&time>=this.player.knockedUntil?Math.hypot(this.player.x-moveX,this.player.y-moveY):0);
     this.awakeningCombat?.movement(Math.hypot(move.x,move.y)>.1&&time>=this.player.knockedUntil?Math.hypot(this.player.x-moveX,this.player.y-moveY):0);
@@ -1554,14 +1557,48 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
+  /**
+   * 首领 / 精英的绘制层（用户 2026-11-18「华雄穿模，可能其他 boss 也是」）：
+   * 原来每帧只给杂兵按脚底 y 排深度，首领被跳过，一直停在生成时的 DEPTH.enemy（20），比所有杂兵（20.1~21.9）都低，被兵堆整片盖住。
+   * 现在：首领、精英也按脚底 y 排（和主将照常前后遮挡）；但谁的脚站在首领身体范围里（身前约 95 像素以内、横向在身宽内），
+   * 就压到首领整体（坐骑层 -0.002 / 马头前景 +0.001 都跟着首领精灵）之下，杂兵永远插不进首领的几层中间、也盖不住首领；精英同理压杂兵，首领压精英。
+   */
+  private layerHeads(): Array<{ e: Enemy; rank: number; depth: number; hw: number }> {
+    const out: Array<{ e: Enemy; rank: number; depth: number; hw: number }> = [];
+    for (const e of this.enemies) if (e.active && !e.isSupplySlot && (e.kind === 'boss' || e.kind === 'elite')) out.push({ e, rank: e.kind === 'boss' ? 2 : 1, depth: 0, hw: Math.max(e.kind === 'boss' ? 70 : 44, e.sprite.displayWidth * .5) });
+    out.sort((a, b) => b.rank - a.rank);
+    for (const h of out) { h.depth = this.underHeads(h.e, actorDepth(h.e.y + h.e.radius * .72), out, h.rank); h.e.sprite.setDepth(h.depth); }
+    return out;
+  }
+  /** 脚底站在更高一级（首领 > 精英 > 杂兵）身体范围里的，深度压到它之下。 */
+  private underHeads(e: Enemy, d: number, heads: ReadonlyArray<{ e: Enemy; rank: number; depth: number; hw: number }>, rank: number): number {
+    for (const h of heads) {
+      if (h.rank <= rank || h.e === e || !h.depth) continue;
+      const dy = (e.y + e.radius * .72) - (h.e.y + h.e.radius * .72);
+      if (dy > -4 && dy < 95 && Math.abs(e.x - h.e.x) < h.hw + e.radius) d = Math.min(d, h.depth - .004);
+    }
+    return d;
+  }
+
+  /**
+   * 随行认的障碍 = 主将认的那几套（场景审查 B，用户 2026-11-18「随从站进城墙里」）：
+   * 场景碰撞框（关墙 / 城墙 / 山崖 / 洪水边界 / 突围通道，都在 sishuiObstacles.footprints）+ 董卓城墙（DongzhuoLubu 自己一份）+ 地形树干（圆）。
+   * 河水只减速不挡人，主将也能下水，随行照旧。
+   */
+  protected wireFollowerObstacles(sq: FollowerSquad): void {
+    sq.obstacles = () => { const a = this.sishuiObstacles?.footprints ?? [], d = this.dzLubu?.obstacles.footprints; return d?.length ? [...a, ...d] : a; };
+    sq.terrainPush = (x, y, r) => this.terrain?.pushCircle(x, y, r) ?? null;
+  }
+
   /** 步态必须基于碰撞/分离后的真实位移：被挤住时回待机帧。 */
   protected updateEnemyWalkAnimations(dt: number): void {
     const view = this.cameras.main.worldView;
     const margin = 80;
+    const heads = this.layerHeads();
     for (const enemy of this.enemies) {
       if (!enemy.active) continue;
       enemy.shadow.setPosition(enemy.x,enemy.isSupplySlot?enemy.y+2:enemy.y + enemy.radius * .72);
-      if (enemy.kind !== 'boss') enemy.sprite.setDepth(actorDepth(enemy.isSupplySlot?enemy.y:enemy.y + enemy.radius * .72));
+      if (enemy.kind !== 'boss' && enemy.kind !== 'elite') enemy.sprite.setDepth(this.underHeads(enemy, actorDepth(enemy.isSupplySlot?enemy.y:enemy.y + enemy.radius * .72), heads, 0));
       // 华雄 / 徐荣由专属控制器出帧；前线推进后成为追兵首领时也不再套通用走路帧（xurong 图集没有 down_0 等帧，会持续报 no frame）
       if(((this.huaxiong||this.xurong)&&enemy===this.boss)||(enemy.kind==='boss'&&this.chasingBosses.some(t=>t.enemy===enemy&&t.life===enemy.spawnId&&(t.huaxiong||t.xurong)))){enemy.shadow.setPosition(enemy.x,enemy.y+1).setDisplaySize(74,20);continue;}
       if (!enemy.walkSheet) continue;
@@ -3129,7 +3166,7 @@ export class GameScene extends Phaser.Scene {
     const notes: string[] = [];
     for (const l of lines) {
       const t = l.replace(/\s{2,}/g, ' ');
-      if (/^(首次通关|随行|获得坐骑|乱世首通|屯田供粮|城池产出|流寇未平|成都归入)/.test(l)) notes.push(t);
+      if (/^(首次通关|随行|获得坐骑|乱世首通|屯田供粮|城池产出|流寇未平|成都归入|速攻破城|撤军收场)/.test(l)) notes.push(t);
       else if (/^营寨 · 农田 \+\d+ · /.test(l)) { const rest = t.replace(/^营寨 · 农田 \+\d+ · /, ''); if (rest !== '口粮 −0') notes.push('营寨 · ' + rest); }
       else if (/^缴获兵装/.test(l) && /测试战斗不入行囊|败退遗失/.test(l)) notes.push('兵装' + (l.match(/· (测试战斗不入行囊|败退遗失 \d+ 件)/)?.[1] ?? ''));
     }
@@ -3842,7 +3879,8 @@ export class GameScene extends Phaser.Scene {
       if(isPrimary){perkX=label.x+label.width+16;perkG=this.add.graphics().setName('attribute-perks');this.attributePanel.add(perkG);
         for(let k=0;k<PRIMARY_TIERS.length;k++){const info=PRIMARY_PERK_INFO[id][k],z=this.add.zone(perkX+k*17,y-11,16,16).setInteractive().setName('attribute-perk-'+(k+1));
           z.on('pointerover',()=>{perkTip.setText('满 '+PRIMARY_TIERS[k]+' 点「'+info.name+'」：'+info.desc).setPosition(z.x,y-24).setVisible(true);});z.on('pointerout',()=>perkTip.setVisible(false));this.attributePanel.add(z);}}
-      const effect=this.add.text(left+56,y+12,ATTRIBUTE_INFO[id].effect,warText(12,'#a9b9a3')).setOrigin(0,.5);
+      const heroExtra=heroAttributeExtra(this.runConfig.character,id); // 刘备统御：本人受伤也减（2026-11-18）
+      const effect=this.add.text(left+56,y+12,ATTRIBUTE_INFO[id].effect+(heroExtra?'；'+heroExtra:''),warText(12,heroExtra?'#cfe0a8':'#a9b9a3')).setOrigin(0,.5);
       // 等级：10 格，右侧数值
       const pipX=attrCx+rowW/2-(d?226:212),pipY=y,pips=this.add.graphics();
       const value=this.add.text(attrCx+rowW/2-80,y,`0/${ATTRIBUTE_MAX}`,warText(13,'#b6c3ab')).setOrigin(1,.5);
@@ -3977,13 +4015,11 @@ export class GameScene extends Phaser.Scene {
     root.add(this.add.rectangle(GAME_WIDTH/2,GAME_HEIGHT/2,GAME_WIDTH,GAME_HEIGHT,0x17130e,.98).setScrollFactor(0).setInteractive());
     // 电脑版（2026-11-17 UI 审查）：原来字直接铺在半透明底上、透出后面的军中设置；改为漆底描金面板 + 书法标题 + 水墨返回，打开时先收起军中设置
     const D=IS_DESKTOP;if(D){this.pausePanel.setVisible(false);const fr=this.add.graphics().setScrollFactor(0);lqPanel(fr,20,12,GAME_WIDTH-40,GAME_HEIGHT-24);root.add(fr);}
-    const head=text(36,24,'本局构筑 · 战法 '+Object.keys(b.tactics).length+'/6 · 信物宝物 '+b.treasures.length,22);if(D)head.setFontFamily(TITLE_FONT).setColor('#efd399').setStroke('#120904',4).setPosition(44,26);root.add(head);
-    let y=66;for(const id of Object.keys(b.tactics) as TacticId[]){root.add(this.add.image(48,y+16,'build_icon_'+id).setDisplaySize(26,26).setScrollFactor(0));root.add(text(70,y,TACTICS[id].name+' Lv.'+b.level(id)+'  ['+TAG_NAMES[TACTICS[id].tag]+']',17));root.add(text(36,y+23,TACTICS[id].desc,13));y+=IS_DESKTOP?45:68;}
-    if(!Object.keys(b.tactics).length){root.add(text(36,y,'升级时选择战法，构筑你的战斗风格。'));y+=42;}
-    for(const id of b.treasures){root.add(this.add.image(48,y+10,'build_icon_'+id).setDisplaySize(24,24).setScrollFactor(0));root.add(text(70,y,TREASURES[id].name+' · '+TREASURES[id].desc,14));y+=IS_DESKTOP?29:48;}
-
-    root.add(text(36,GAME_HEIGHT-106,Object.entries(b.tags()).map(([id,n])=>TAG_NAMES[id as keyof typeof TAG_NAMES]+' '+n+'件').join('  '),14));
-    if(!D)root.add(text(36,GAME_HEIGHT-78,'标签仅记录进度；2件加成 / 4件觉醒将在后续阶段开放。',12));
+    const head=text(36,24,'本局构筑',22);if(D)head.setFontFamily(TITLE_FONT).setColor('#efd399').setStroke('#120904',4).setPosition(44,26);root.add(head);
+    // 2026-11-18：和行营「将帅帐」共用构筑总览（武将卡 / 战法格 / 流派与觉醒），悬停看说明
+    const tip=new ItemTooltip(this,DEPTH.overlay+40);root.once('destroy',()=>tip.destroy());
+    drawBuildOverview({scene:this,root,x:D?44:24,y:D?66:70,w:GAME_WIDTH-(D?88:48),h:GAME_HEIGHT-(D?66+82:70+120),desktop:D,prefix:'build-panel',growth:this.player.growth,level:this.player.level,weapon:this.player.weapons[0],tokens:wornTokens(this.runConfig.character),tokenSlots:tokenSlots(),tooltip:tip,training:this.legion.training});
+    void b;
     const close=()=>{root.destroy();if(this.mode==='pause')this.pausePanel.setVisible(true);};
     if(D){const back=homeCommand(this,GAME_WIDTH/2,GAME_HEIGHT-46,200,42,'返回');for(const o of [back.g,back.caption,back.hit]){(o as unknown as {setScrollFactor:(n:number)=>void}).setScrollFactor(0);root.add(o);}back.hit.setName('build-panel-back').setData('padDefault',true).on('pointerdown',close);}
     else root.add(text(GAME_WIDTH/2-70,GAME_HEIGHT-46,'返回暂停菜单',17).setPadding(12,8).setInteractive({useHandCursor:true}).on('pointerdown',close));

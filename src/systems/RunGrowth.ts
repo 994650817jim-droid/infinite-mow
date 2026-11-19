@@ -7,6 +7,7 @@ import type { Player } from '../entities/Player';
 import { emptyGear, type GearStats } from './ItemEffects';
 
 import { ATTRIBUTE_EFFECT, SPELL_WEAPONS, ATTRIBUTE_IDS, ATTRIBUTE_INFO, ATTRIBUTE_MAX, ATTRIBUTE_POINT_EVERY, PRIMARY_BONUS, PRIMARY_MUL, PRIMARY_TIERS, PRIMARY_PERK, primaryAttribute, type AttributeId } from '../data/attributes';
+import { LB_COMMAND } from '../data/heroMechanics';
 export { ATTRIBUTE_IDS, ATTRIBUTE_INFO, ATTRIBUTE_MAX, ATTRIBUTE_POINT_EVERY, type AttributeId };
 export type ZhaoMasteryId = 'dragon_gallop' | 'cloud_pierce';
 /**
@@ -36,9 +37,9 @@ export const MARTIALS = {
   nichang: {character:'diaochan',name:'霓裳',desc:'每级飞扇距离 +15%；3 级时多掷 1 柄'},
   meirenji: {character:'diaochan',name:'美人计',desc:'每级倒戈时间 +0.5 秒；3 级时 2 层魅惑即可离间'},
   // 2026-11-16 方案 C「老当益壮」（用户选定）：「百步」去掉（和黄月英「百步穿杨」撞名），换成「静心」
-  jingxin: {character:'huangzhong',name:'静心',desc:'进入神射只需不受伤 4.5/4/3.5 秒，神射重箭伤害 +20%/22%/25%；3 级时神射第一箭化为扇形三连重箭'},
+  jingxin: {character:'huangzhong',name:'静心',desc:'神射持续 7/8/9 秒，神射重箭伤害 +20%/22%/25%；3 级时神射第一箭化为扇形三连重箭'},
   // 2026-11-16 用户：「不靠残血触发」→ 改为越战越勇
-  laoji: {character:'huangzhong',name:'老骥伏枥',desc:'本关每击杀 10 名敌人射速 +2.5%（上限 15%/20%/25%）；3 级时神射中射杀精锐回血、神射更稳'},
+  laoji: {character:'huangzhong',name:'老骥伏枥',desc:'本关每击杀 10 名敌人射速 +2.5%（上限 15%/20%/25%）；3 级时神射中射杀精锐回血、神射延长'},
   wanrendi: {character:'zhangfei',name:'万人敌',desc:'每级声浪推进距离 +12%'},
   dahe: {character:'zhangfei',name:'大喝',desc:'每级断桥区多 0.5 秒、震慑多 0.2 秒'},
   jinma: {character:'machao',name:'锦马',desc:'每级落地范围 +15%；3 级时落地后再震一次'},
@@ -162,7 +163,9 @@ export class RunGrowth {
 
   criticalBonus(): number { return Math.min(0.1, ATTRIBUTE_EFFECT.agility.crit * this.pts('agility')) + this.gear.crit + (this.perk('agility', 2) ? PRIMARY_PERK.agility.crit : 0); }
   bonusMaxHp(): number { return Math.round(BALANCE.player.maxHp * (ATTRIBUTE_EFFECT.strength.hp * this.pts('strength') + this.gear.hp + this.charmHp)); }
-  incomingDamageMultiplier(): number { return (this.gear.specials.includes('weixi') ? 1.15 : 1)*(this.build.tags().bulwark>=2?.95:1)*Math.max(.6, 1 - this.gear.reduce); }
+  incomingDamageMultiplier(): number { return (this.gear.specials.includes('weixi') ? 1.15 : 1)*(this.build.tags().bulwark>=2?.95:1)*Math.max(.6, 1 - this.gear.reduce)*this.commandSelfGuard(); }
+  /** 刘备：统御每点本人受伤 −1%（2026-11-18 平衡审查，data/heroMechanics.ts LB_COMMAND）；其他武将为 1。 */
+  commandSelfGuard(): number { return this.character === 'liubei' ? 1 - LB_COMMAND.selfGuardPerPoint * Math.min(LB_COMMAND.maxPoints, this.attributes.command) : 1; }
   allyDamageMultiplier(): number { return (this.build.tags().command>=2?1.05:1)*(1 + this.gear.ally)*(1 + ATTRIBUTE_EFFECT.command.allyDamage * this.pts('command')) * (this.perk('command', 1) ? 1 + PRIMARY_PERK.command.allyDamage : 1); }
   /** 主属性：每点额外全伤害 +1%（最多 10 点）。 */
   primaryBonus(): number { const p = primaryAttribute(this.character); return p ? Math.min(PRIMARY_BONUS.maxPoints, this.attributes[p]) * PRIMARY_BONUS.perPoint : 0; }

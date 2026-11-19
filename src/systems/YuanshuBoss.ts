@@ -6,7 +6,7 @@ import { ArcBossV2, type ArcHost } from './ArcBossV2';
 import { ensureMoves, type BossDebug } from './BossKit';
 import { groundCracks } from '../ui/Telegraph';
 import { bossFxImage, ensureBossFx, fxFrame, playBossFx } from './BossFx';
-import { castFlourish } from './BossThemeFx';
+import { castFlourish, warmCast } from './BossThemeFx';
 
 type Move = 'flags' | 'coins' | 'guards';
 interface Flag { e: Enemy; life: number; x: number; y: number; nextSpawn: number; label: Phaser.GameObjects.Text }
@@ -29,7 +29,7 @@ export class YuanshuBoss extends ArcBossV2<Move> {
     force: (i, now) => { this.beat.set(null, 'idle', now, 0); this.start((['flags', 'coins', 'guards'] as const)[i] ?? 'flags', now); },
     phase2: (now) => { const b = this.h.boss; if (b.hp > b.maxHp * YS.honey.at) b.hp = Math.floor(b.maxHp * YS.honey.at); this.enterHoney(now); },
   };
-  constructor(h: ArcHost, tex: string, now: number) {
+  constructor(h: ArcHost, tex: string, now: number) { warmCast(h.scene, 'yuanshu');
     super(h, tex, '袁术', now);
     this.propGfx = h.scene.add.graphics().setDepth(DEPTH.enemy + 1).setName('yuanshu-props');
     ensureMoves(h.scene, 'yuanshu_moves');

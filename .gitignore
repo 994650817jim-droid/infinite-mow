@@ -306,3 +306,4 @@ assets/raw/*
 !/tools/shot-cast-preview.mjs
 !/tools/gif-dianwei.mjs
 !/tools/gif-zhangliang.mjs
+!/tools/test-xurong-cast.mjs

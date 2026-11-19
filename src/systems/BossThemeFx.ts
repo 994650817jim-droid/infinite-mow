@@ -125,3 +125,5 @@ export function castFlourish(scene: Phaser.Scene, bossId: string, boss: { x: num
   playCastFx(scene, t, 'aura', boss.x, boss.y, 170, { ms, follow });
   if (big) playCastFx(scene, t, 'sigil', boss.x, boss.y + 4, 150, { ms, follow: () => (boss.active ? { x: boss.x, y: boss.y + 4 } : null) });
 }
+/** 有专属手绘的首领在构造时预载起手图（第一个招式就有特效）。 */
+export function warmCast(scene: Phaser.Scene, bossId: string): void { ensureBossCast(scene, castThemeOf(bossId)); }

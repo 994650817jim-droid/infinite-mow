@@ -1296,6 +1296,7 @@ export class GameScene extends Phaser.Scene {
     if (IS_DESKTOP) {
       this.ordersPanel = new OrdersPanel(this, orders);
       this.battleMap = new BattleMap({scene: this, player: () => this.player, enemies: () => this.enemies, followers: () => this.followers?.members ?? [],
+        title: () => this.chapter.name ?? this.chapter.label ?? '',
         camps: () => { const z = this.allyPush, now = this.combatNow; return (this.objective?.standing ?? []).map(e => ({x: e.x, y: e.y, ratio: e.hp / Math.max(1, e.maxHp), hit: !!z && now - (z.campHitAt.get(e) ?? -1e9) < 900})); },
         pushes: () => (this.allyPush?.squads ?? []).map(q => ({from: q.from, to: q.target ? {x: q.target.x, y: q.target.y} : null, members: q.members.filter(m => !m.dead)})), bosses: () => [...(this.dual ? this.dual.alive.map(x => x.enemy) : this.boss?.active ? [this.boss] : []), ...this.dzLubuBoss().map(x => x.e)]}, orders);
       this.objectiveText?.setVisible(false);

@@ -10,6 +10,7 @@ import {exchangeMerit,merit,scrolls} from '../systems/MasteryStore';
 import {playMenuMusic} from '../systems/Music';
 import {isChapterTestRun} from '../systems/ChapterProgress';
 import Phaser from 'phaser';
+import {lqCommand} from '../ui/LacquerKit';
 import {W,H,worldShell,worldAssets} from '../world/WorldUI';
 import {FONT,HEADING_FONT} from '../config';
 import {homeCommand,warPanelTexture} from '../ui/HomeCommand';
@@ -254,13 +255,13 @@ export class CityScene extends Phaser.Scene {
  }
 
  // —— 弹窗 ——
- private modal(name:string,title:string,h:number,depth=600):{root:Phaser.GameObjects.Container;x:number;y:number;w:number;h:number}{
+ private modal(name:string,title:string,h:number,depth=600,lacquer=false):{root:Phaser.GameObjects.Container;x:number;y:number;w:number;h:number}{
   this.children.getByName(name)?.destroy();
   const root=this.add.container(0,0).setDepth(depth).setName(name),w=Math.min(D?640:W-24,W-24),y=(H-h)/2;
   root.add(this.add.rectangle(W/2,H/2,W,H,0x0b0806,.78).setInteractive());
   root.add(this.add.image(W/2,H/2,warPanelTexture(this,w,h,true)).setDisplaySize(w+16,h+16));
   root.add(txt(this,W/2,y+30,title,22,'#efd399',HEADING_FONT).setOrigin(.5).setName(name+'-title'));
-  const close=homeCommand(this,W/2,y+h-34,160,40,'返回',false,true,15);close.hit.setName(name+'-close').setData('padDefault',true).on('pointerdown',()=>{root.destroy();this.refresh();});root.add([close.g,close.hit,close.caption]);
+  const close=(lacquer?lqCommand:homeCommand)(this,W/2,y+h-34,160,40,'返回',false,true,15);close.hit.setName(name+'-close').setData('padDefault',true).on('pointerdown',()=>{root.destroy();this.refresh();});root.add([close.g,close.hit,close.caption]);
   return{root,x:(W-w)/2,y,w,h};
  }
  /** 建筑面板：现状、下一级效果、花费、前提，建造 / 升级，以及建筑功能（招募、研究、换马、开仓）。 */
@@ -349,12 +350,12 @@ export class CityScene extends Phaser.Scene {
   line(qy+104,notice||(max?`现有战功最多可换 ${max} 张`:'战功不足：去战场击杀精英、首领获得战功'),13,notice?'#9fd38a':'#b9a98a','merit-msg');
  }
  private openTech(){
-  const s=loadWorld(),t=s.town,acad=levelOf(t,'academy'),h=D?Math.min(H-24,520):Math.min(H-40,780),m=this.modal('town-tech',acad?`讲武堂 Lv${acad} · 军粮 ${s.provisions}`:'讲武堂（未建）',h);
+  const s=loadWorld(),t=s.town,acad=levelOf(t,'academy'),h=D?Math.min(H-24,520):Math.min(H-40,780),m=this.modal('town-tech',acad?`讲武堂 Lv${acad} · 军粮 ${s.provisions}`:'讲武堂（未建）',h,600,true); // 2026-11-18：讲武堂弹窗按钮全用漆金（一屏最多一个水墨按钮，这里一个都不留）
   if(!acad)m.root.add(txt(this,W/2,m.y+66,'先在营中建讲武堂（军粮 '+TOWN_BUILDINGS.academy.build+'），即可研究科技。',13,'#e59a83').setOrigin(.5).setWordWrapWidth(m.w-60,true).setAlign('center').setName('town-tech-need'));
   const tabW=Math.min(140,(m.w-60)/4),tabY=m.y+(acad||this.techTab==='drill'?70:100);
   BRANCH_ORDER.forEach((b,i)=>{const on=this.techTab===b,done=TECH_IDS.filter(id=>TECHS[id].branch===b&&t.tech.includes(id)).length,all=TECH_IDS.filter(id=>TECHS[id].branch===b).length;
-   const btn=homeCommand(this,W/2+(i-1.5)*(tabW+8),tabY,tabW,38,`${BRANCH_NAME[b]} ${done}/${all}`,on,true,D?15:13);btn.hit.setName('tech-tab-'+b).on('pointerdown',()=>{this.techTab=b;this.openTech();});m.root.add([btn.g,btn.hit,btn.caption]);});
-  { const on=this.techTab==='drill',btn=homeCommand(this,W/2+1.5*(tabW+8),tabY,tabW,38,'随从操练',on,true,D?15:13);btn.hit.setName('tech-tab-drill').on('pointerdown',()=>{this.techTab='drill';this.drillPage=0;this.openTech();});m.root.add([btn.g,btn.hit,btn.caption]); }
+   const btn=lqCommand(this,W/2+(i-1.5)*(tabW+8),tabY,tabW,38,`${BRANCH_NAME[b]} ${done}/${all}`,on,true,D?15:13);btn.hit.setName('tech-tab-'+b).on('pointerdown',()=>{this.techTab=b;this.openTech();});m.root.add([btn.g,btn.hit,btn.caption]);});
+  { const on=this.techTab==='drill',btn=lqCommand(this,W/2+1.5*(tabW+8),tabY,tabW,38,'随从操练',on,true,D?15:13);btn.hit.setName('tech-tab-drill').on('pointerdown',()=>{this.techTab='drill';this.drillPage=0;this.openTech();});m.root.add([btn.g,btn.hit,btn.caption]); }
   if(this.techTab==='drill'){m.root.getByName('town-tech-need')?.destroy();this.drawDrill(m,h);return;}
   const branch:TechBranch=this.techTab;
   let padSet=false;
@@ -367,7 +368,7 @@ export class CityScene extends Phaser.Scene {
    // 2026-11-17 UI 审查：「需要…」原在说明下方，行高不够时压出行框；电脑版挪到标题同一行右侧
    if(!done&&block.length)m.root.add(txt(this,D?head.x+head.width+18:x+14,D?y+11:desc.y+desc.height+4,`需要：${block.join('、')} · 军粮 ${def.cost}`,12,'#c99a7a').setName('tech-need-'+id));
    const bw=D?140:120,label=done?'已研究':block.length?'未解锁':`研究 ${def.cost}`;
-   const btn=homeCommand(this,x+w-bw/2-10,y+(rowH-8)/2,bw,34,label,ready&&afford,ready&&afford,13);btn.hit.setName('tech-'+id).on('pointerdown',()=>{if(done)return;const res=researchTech(id);this.message=res.message;this.openTech();if(res.ok){uiSfx().play('uiClick');this.toast(res.message);}});
+   const btn=lqCommand(this,x+w-bw/2-10,y+(rowH-8)/2,bw,34,label,ready&&afford,ready&&afford,13);btn.hit.setName('tech-'+id).on('pointerdown',()=>{if(done)return;const res=researchTech(id);this.message=res.message;this.openTech();if(res.ok){uiSfx().play('uiClick');this.toast(res.message);}});
    if(ready&&afford&&!padSet){padSet=true;btn.hit.setData('padDefault',true);}
    m.root.add([btn.g,btn.hit,btn.caption]);
   });
@@ -398,7 +399,7 @@ export class CityScene extends Phaser.Scene {
     const pv=rankPreview(r,line,s),ly=y+(D?30:34)+k*(D?24:28),ok=!lord&&!pv.full&&pv.afford;
     if(!lord)m.root.add(txt(this,x+12,ly,`${line==='weapon'?'兵器':'被动'}　${pv.full?tight(pv.before):`${tight(pv.before)} → ${tight(pv.after)}`}`,D?12:11,pv.full?'#9d927c':pv.afford?'#d9ccae':'#e59a83').setWordWrapWidth(w-bw-40,true).setName(`drill-preview-${line}-${r.id}`));
     const label=lord?'主公':pv.full?(pv.capByHall?'招贤馆升级后':'已满'):`升·${line==='weapon'?'兵器':'被动'} ${pv.cost}粮`;
-    const btn=homeCommand(this,x+w-bw/2-10,ly+9,bw,D?24:26,label,false,ok,D?13:12);
+    const btn=lqCommand(this,x+w-bw/2-10,ly+9,bw,D?24:26,label,false,ok,D?13:12);
     if(!lord&&!pv.full&&!pv.afford)btn.caption.setColor('#c4523f'); // 买不起：花费标红
     btn.hit.setName(`drill-${line}-${r.id}`).on('pointerdown',()=>{const res=rankUp(r.id,line);this.message=res.message;if(res.ok){uiSfx().play('uiClick');this.toast(res.message);}this.openTech();});
     m.root.add([btn.g,btn.hit,btn.caption]);
@@ -406,8 +407,8 @@ export class CityScene extends Phaser.Scene {
   });
   if(pages>1){
    const py=m.y+h-80;
-   const prev=homeCommand(this,W/2-120,py,90,32,'上页',false,this.drillPage>0,13);prev.hit.setName('drill-prev').on('pointerdown',()=>{this.drillPage--;this.openTech();});
-   const next=homeCommand(this,W/2+120,py,90,32,'下页',false,this.drillPage<pages-1,13);next.hit.setName('drill-next').on('pointerdown',()=>{this.drillPage++;this.openTech();});
+   const prev=lqCommand(this,W/2-120,py,90,32,'上页',false,this.drillPage>0,13);prev.hit.setName('drill-prev').on('pointerdown',()=>{this.drillPage--;this.openTech();});
+   const next=lqCommand(this,W/2+120,py,90,32,'下页',false,this.drillPage<pages-1,13);next.hit.setName('drill-next').on('pointerdown',()=>{this.drillPage++;this.openTech();});
    m.root.add([prev.g,prev.hit,prev.caption,next.g,next.hit,next.caption,txt(this,W/2,py,`${this.drillPage+1}/${pages}`,13,'#cdbf9f').setOrigin(.5)]);
   }
   if(this.message)m.root.add(txt(this,W/2,m.y+h-(pages>1?104:72),this.message,13,'#e8c98a').setOrigin(.5).setName('town-tech-message'));

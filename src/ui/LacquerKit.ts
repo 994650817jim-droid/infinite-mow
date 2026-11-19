@@ -137,3 +137,15 @@ export function lqImageButton(scene: Phaser.Scene, image: Phaser.GameObjects.Ima
   if (image.input) image.input.hitArea.setTo(0, 0, image.frame.realWidth, image.frame.realHeight);
   image.on('pointerover', () => set('hover')).on('pointerout', () => set('idle')).on('pointerdown', () => set('down')).on('pointerup', () => set('hover'));
 }
+
+/**
+ * 漆金命令按钮：与 HomeCommand.homeCommand 同签名、同返回形状（{ g, hit, caption }），调用处换函数名即可。
+ * 用于「一屏最多一个水墨按钮」的面板（2026-11-18 讲武堂弹窗：页签、研究 / 升级行、翻页、返回都换成漆金）。
+ * primary：选中的页签 / 可点的主操作用描金底，其余用素底；enabled=false 为禁用态、不接收点击。
+ */
+export function lqCommand(scene: Phaser.Scene, x: number, y: number, width: number, height: number, label: string, primary = false, enabled = true, fontSize = 15): { g: Phaser.GameObjects.Graphics; hit: Phaser.GameObjects.Rectangle; caption: Phaser.GameObjects.Text } {
+  const hit = scene.add.rectangle(x, y, width, height, 0, .001); if (enabled) hit.setInteractive({ useHandCursor: true });
+  const caption = scene.add.text(x, y, label, { fontFamily: HEADING_FONT, fontSize: fontSize + 'px', color: '#eadcbd', resolution: 2 }).setOrigin(.5);
+  const sk = lqSkin(scene, hit, caption, () => ({ w: width, h: height }), { tone: primary ? 'gold' : 'quiet', enabled: () => enabled, on: () => primary });
+  return { g: sk.gfx, hit, caption };
+}

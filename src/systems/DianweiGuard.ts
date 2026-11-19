@@ -33,6 +33,8 @@ export const DIANWEI = {
   heightMul: 1.35,
   /** 挥戟攻击帧时长（4 帧） */
   attackMs: 380,
+  /** 专属双戟图显示倍率（同首领 v2：格 288 × 0.5） */
+  artScale: .5,
 } as const;
 
 /** 专属双戟图（v2 4×4：行 下 / 左 / 右 / 上）；没有就用友军刀兵图占位。 */
@@ -73,7 +75,11 @@ export class DianweiGuard {
   private walkKey(): string { const s = this.h.scene.textures; return s.exists(ART.walk) ? ART.walk : s.exists(FALLBACK.walk) ? FALLBACK.walk : 'hero_walk_sheet'; }
   private attackKey(): string | null { const s = this.h.scene.textures; return s.exists(ART.attack) ? ART.attack : s.exists(ART.walk) ? null : s.exists(FALLBACK.attack) ? FALLBACK.attack : null; }
   /** 按帧高缩到 targetH（换贴图后重算）。 */
-  private fit(): void { const fh = this.img.frame.height || 96; this.img.setScale(this.targetH / fh); this.barY = this.y - this.img.displayHeight * .88 - 4; }
+  private fit(): void {
+    // 专属图按首领 v2 标准（格 288、人高约 216）显示 ×0.5；占位图按主将身高 ×heightMul 缩放
+    if (this.img.texture.key === ART.walk) this.img.setScale(DIANWEI.artScale); else { const fh = this.img.frame.height || 96; this.img.setScale(this.targetH / fh); }
+    this.barY = this.y - this.img.displayHeight * (this.img.texture.key === ART.walk ? .8 : .88) - 4;
+  }
   /** 专属双戟图在 ART_V2_FILES 里登记了才载（图还没到就一直用占位）。 */
   private loadArt(): void {
     const sc = this.h.scene; let n = 0;

@@ -272,3 +272,4 @@ assets/raw/*
 !/tools/test-siege-large-flow.mjs
 !/tools/shot-luoyang-wall.mjs
 !/tools/shot-hero-cards.mjs
+!/tools/deathfx-horse.mjs

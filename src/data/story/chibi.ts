@@ -12,7 +12,8 @@ export const CHIBI_STORY: StoryChapter = {
   open: {
     id: 'chibi.open', type: 'chapterOpen', kicker: '第五章 · 赤壁之战', title: '三顾茅庐', illustration: 'story_longzhong',
     lines: [
-      { text: '建安十二年，刘备屯兵新野。徐庶临别，走马荐贤：隆中有卧龙，诸葛孔明。' },
+      { text: '建安十二年，刘备屯兵新野。曹操囚徐庶之母于许都，徐庶不得不辞行北去。' },
+      { who: 'xushu', text: '方寸已乱，不能再侍左右了。临行一言：隆中有卧龙，诸葛孔明。此人可就见，不可屈致——将军宜枉驾顾之。' },
       { text: '刘备三顾草庐。前两回不遇；第三回孔明昼寝，刘备拱立阶下，候了一个时辰。' },
       { who: 'zhangfei', text: '这村夫好大架子！待俺去屋后放一把火，看他起不起！', ifFollower: 'zhangfei' },
       { who: '{lord}', text: '（推了推孔明）皇叔第三回来了，你还装睡？', ifLord: ['huangyueying'] },

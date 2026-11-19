@@ -286,3 +286,8 @@ assets/raw/*
 !/tools/shot-academy.mjs
 !/tools/shot-mounted.mjs
 !/tools/measure-horse-size.mjs
+!/tools/prepare-boss-sheet.mjs
+!/tools/record-sheet-compare-gif.mjs
+!/tools/prepare-black-fx.mjs
+!/tools/test-knife-fx.mjs
+!/tools/record-zhurong-throw.mjs

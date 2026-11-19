@@ -43,6 +43,9 @@ const pages = await readAll(); const p51 = await played();
 ck('5-1：章头「三顾茅庐」→ 军情（赵云主公多一句「小主人和夫人交给云」）', open?.name === 'story-chibi-open' && p51.join() === 'chibi.open,chibi-1.brief' && pages.some(t => t.includes('小主人和夫人交给云')) && pages.some(t => t.includes('跨有荆、益')), { open: open?.name, p51 });
 const zfOpen = await L('open', 'liubei', ['zhangfei']), hyyOpen = await L('open', 'huangyueying', []), wyBrief = await L('stages/1/brief', 'weiyan', []);
 ck('章头：张飞在队「去屋后放一把火」；黄月英主公「你还装睡？」；5-1 魏延主公「襄阳城上开门迎皇叔」', zfOpen.join().includes('放一把火') && hyyOpen.join().includes('你还装睡') && wyBrief.join().includes('襄阳城上开门'), { zf: zfOpen.length, hyy: hyyOpen.length, wy: wyBrief.length });
+// 徐庶辞行荐诸葛（2026-11-18 补台词 + 对白立绘）
+const xsOpen = await L('open', 'liubei', []);
+ck('章头：徐庶辞行，亲口荐「隆中有卧龙」（说话人 xushu）', xsOpen.some(t => t.includes('卧龙') && t.endsWith('@xushu')), xsOpen.filter(t => t.includes('@xushu')));
 // 首领登场 / 二阶段
 const intro = await p.evaluate(async T0 => { const s = eval(T0), wait = ms => new Promise(r => setTimeout(r, ms)); s.player.damageImmune = true; s.spawnBoss(); for (let k = 0; k < 8 && s.mode === 'levelup'; k++) { s.chooseUpgrade(0); await wait(60); } await wait(150);
   const deep = x => x.type === 'Text' ? x.text : (x.list ?? []).map(deep).join(''), grab = () => s.children.list.filter(o => o.name === 'story-bark').map(deep); const a = grab();

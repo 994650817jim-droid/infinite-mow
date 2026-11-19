@@ -53,6 +53,8 @@ export const JINGNAN_STORY: StoryChapter = {
     2: {
       brief: { id: 'jingnan-2.brief', type: 'stageBrief', kicker: '6-2 · 军情', title: '零陵武陵', lines: [
         { text: '零陵太守刘度据险不降，其子刘贤与上将邢道荣率山越弓手守山道。' },
+        { who: 'xingdaorong', text: '零陵上将邢道荣在此！谁敢上山，先问我这柄开山大斧！' },
+        { who: 'liuxian', text: '邢将军，山道窄，守住林子便是——莫要轻出。' },
         { who: 'scout', text: '武陵太守金旋闻风，已遣使来降！' },
         { who: 'zhangfei', text: '零陵还敢挡道？俺的蛇矛正痒！', ifFollower: 'zhangfei' },
         { who: '{lord}', text: '零陵还敢挡道？进兵！', ifNotFollower: 'zhangfei' },
@@ -60,12 +62,15 @@ export const JINGNAN_STORY: StoryChapter = {
         { tip: true, text: '山越弓手藏在林间，弓兵多时先清弓兵；藤牌兵正面挡箭，绕到侧面打。' },
       ] },
       bossIntro: { id: 'jingnan-2.bossIntro', type: 'bossIntro', lines: [{ who: 'liudu', text: '零陵虽小，也有铁骑！' }] },
-      bossPhase: { id: 'jingnan-2.bossPhase', type: 'bossPhase', lines: [{ who: 'liudu', text: '贤儿！快引兵来救！' }] },
+      bossPhase: { id: 'jingnan-2.bossPhase', type: 'bossPhase', lines: [{ who: 'liudu', text: '贤儿！快引兵来救！' }, { who: 'liuxian', text: '父亲莫慌，孩儿来了！' }] },
       bossFall: { id: 'jingnan-2.bossFall', type: 'bossFall', lines: [{ who: 'liudu', text: '我儿……零陵……' }] },
       after: [{ id: 'jingnan-2.after', type: 'interlude', kicker: '幕间', title: '零陵既定', lines: [
         { text: '刘度出城请降，刘贤亦缚邢道荣来献。', ifFlag: '!liudu=slain' },
+        { who: 'liuxian', text: '家父愿降。邢道荣在此，听凭皇叔发落。', ifFlag: '!liudu=slain' },
+        { who: 'xingdaorong', text: '（被缚）……邢某服了。', ifFlag: '!liudu=slain' },
         { who: 'liubei', text: '皆是荆州旧人，各复原职，安抚百姓。', ifFlag: '!liudu=slain' },
         { text: '刘度死于阵中，刘贤闭城三日后降。', ifFlag: 'liudu=slain' },
+        { who: 'liuxian', text: '父仇在前，城中百姓何辜……开城吧。', ifFlag: 'liudu=slain' },
         { text: '零陵、武陵既定，只剩长沙。' },
       ] }],
     },

@@ -61,6 +61,8 @@ const panel = p => p.evaluate(() => { const s = window.__S, P = s.ordersPanel; r
     const op = await p.evaluate(() => { const S = window.__S, l = S.children.getByName('battle-map-scroll-left'), r = S.children.getByName('battle-map-scroll-right'); return { ...S.battleMap.stats, open: S.battleMap.bigOpen, mode: S.mode, gap: Math.round(r.x - l.x), icon: S.children.getByName('battle-map-scroll').visible }; });
     const d0 = op.draws; await p.waitForTimeout(1000); const d1 = await p.evaluate(() => window.__S.battleMap.stats.draws);
     await p.screenshot({ path: `${OUT}/scroll-open.png` });
+    const pm = await p.evaluate(() => { const v = window.__S.battleMap.big; const P = v?.painted; return P ? { ...P.stats, base: !!window.__S.children.list.length, title: P.root.getByName('painted-map-deco')?.getByName?.('painted-map-title')?.text ?? (P.root.list.find(o => o.name === 'painted-map-deco')?.list.find(o => o.name === 'painted-map-title')?.text) } : null; });
+    ck('手绘舆图（用户「小地图还是有点太简陋」）：底图画进 RenderTexture（一次）、标记是古舆图图标、题签写关名', !!pm && pm.bakes >= 1 && pm.bakes <= 2 && pm.stamps > 10 && pm.icons >= 1 && /荥阳/.test(pm.title ?? ''), pm);
     ck('点卷轴展开：先飞到中央、两轴往两边拉开（中途），展开后地图在纸上、8 Hz 重画、不暂停', mid.state === 'opening' && mid.t > 0 && mid.t < 1 && op.state === 'open' && op.t === 1 && op.gap >= 640 && !op.icon && op.mode === 'none' && d1 - d0 >= 4 && d1 - d0 <= 12, { mid, op, hz: d1 - d0 });
     await p.mouse.click(c.x > 900 ? 480 : 480, 270); await p.waitForTimeout(800);
     const cl = await p.evaluate(() => { const S = window.__S, m = S.children.getByName('battle-map-scroll'); return { state: S.battleMap.stats.state, open: S.battleMap.bigOpen, icon: m.visible, x: Math.round(m.x), y: Math.round(m.y), angle: m.angle }; });

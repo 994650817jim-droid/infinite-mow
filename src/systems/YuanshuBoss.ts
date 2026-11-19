@@ -6,6 +6,7 @@ import { ArcBossV2, type ArcHost } from './ArcBossV2';
 import { ensureMoves, type BossDebug } from './BossKit';
 import { groundCracks } from '../ui/Telegraph';
 import { bossFxImage, ensureBossFx, fxFrame, playBossFx } from './BossFx';
+import { castFlourish } from './BossThemeFx';
 
 type Move = 'flags' | 'coins' | 'guards';
 interface Flag { e: Enemy; life: number; x: number; y: number; nextSpawn: number; label: Phaser.GameObjects.Text }
@@ -78,6 +79,7 @@ export class YuanshuBoss extends ArcBossV2<Move> {
   }
   private start(move: Move, now: number): void {
     const ms = move === 'flags' ? YS.flags.windupMs : move === 'coins' ? YS.coins.windupMs : YS.guards.windupMs;
+    castFlourish(this.h.scene, 'yuanshu', this.h.boss, ms, move === 'coins');
     this.beat.set(move, 'windup', now, ms); this.h.sfx(move === 'coins' ? 'chargeWarn' : 'bossSummon');
     if (move === 'flags') this.h.banner('玉玺号令', '打掉「伪诏」旗，援兵才会停');
   }

@@ -141,7 +141,7 @@ import { stageMapFor } from '../data/stageMaps';
 import { StageArena } from '../systems/StageArena';
 import { Tutorial } from '../systems/Tutorial';
 import { IffOverlay, readIffMode, warmIffTextures, type IffUnit } from '../systems/IffOverlay';
-import {BARKS_LABEL, heroBarks, setHeroBarks, type HeroBarks, STORY_LABEL, setStoryMode, storyMode, type StoryMode, OPENING_LABEL, openingMode, setOpeningMode, type OpeningMode } from '../systems/BattleSettings';
+import {ORDERS_PANEL_LABEL, ordersPanelSetting, setOrdersPanelSetting, type OrdersPanelSetting, SCHOOL_HINT_LABEL, schoolHint, setSchoolHint, type SchoolHint, BARKS_LABEL, heroBarks, setHeroBarks, type HeroBarks, STORY_LABEL, setStoryMode, storyMode, type StoryMode, OPENING_LABEL, openingMode, setOpeningMode, type OpeningMode } from '../systems/BattleSettings';
 import { HeroBark, type BarkSpeaker } from '../ui/HeroBark';
 import { ZhaoyunPassiveFx } from '../systems/ZhaoyunPassiveFx';
 import { PassiveGauge } from '../systems/PassiveGauge';
@@ -499,6 +499,8 @@ export class GameScene extends Phaser.Scene {
   /** 战斗快捷键与键位提示（systems/BattleHotkeys；键位表 data/hotkeys）。 */
   hotkeys!: BattleHotkeys; protected hotkeyHints!: HotkeyHints;
   private buffHud!:BuffHud;
+  /** 合击 / 觉醒小签（测试读 stats）。 */
+  schoolBanner?:SchoolBanner;
   /** 用药：药囊里最早的一份，按原规则回血；不能用时轻微提示。 */
   protected usePotion():void{
     if(this.mode!=='none'||this.over||!this.supplies)return;
@@ -763,10 +765,14 @@ export class GameScene extends Phaser.Scene {
       bosses: () => this.dual ? (this.cutscene?.active ? [] : this.dual.alive.map(x => ({ e: x.enemy, name: x.name, color: x.color }))) : this.dzLubu?.lubuFocus ? (this.cutscene?.active ? [] : [{ e: this.dzLubu.lubuFocus, name: '吕布' }]) : null,
       extras: e => { const x = this.dual?.entryOf(e); if (x) return [x.mount?.horseImage, x.mount?.frontImage]; return e === this.boss ? [this.bossMount?.horseImage, this.bossMount?.frontImage] : []; }, outline: e => this.iff?.overlayOf(e.sprite) });
     // 震屏设置（强 / 弱 / 关，im_shake，见 systems/BattleSettings）：包一层主相机 shake，现有调用全部按设置缩放
-    { const cam = this.cameras.main, orig = cam.shake.bind(cam);
+    { const cam = this.cameras.main, orig = cam.shake.bind(cam), T = HIT_FEEL.shakeThrottle; let lastShakeAt = -1e9;
       cam.shake = ((duration?: number, intensity?: number | Phaser.Math.Vector2, force?: boolean, callback?: Phaser.Types.Cameras.Scene2D.CameraShakeCallback, context?: unknown) => {
         const k = shakeScale(); if (k <= 0) return cam;
-        return orig(duration, typeof intensity === 'number' ? intensity * k : intensity, force, callback, context);
+        // 全局节流（用户「屏幕触发震动太多」）：弱震距上次不足 minGapMs 跳过；强震（首领转阶段 / 倒下）照常
+        const raw = typeof intensity === 'number' ? intensity : .005, now = this.time.now;
+        if (raw < T.strongAt && now - lastShakeAt < T.minGapMs) return cam;
+        lastShakeAt = now;
+        return orig(duration, typeof intensity === 'number' ? intensity * k * T.globalMul : intensity, force, callback, context);
       }) as typeof cam.shake; }
     this.shieldBars=new ShieldBars(this);this.events.once('shutdown',()=>{this.shieldBars?.clear();this.shieldBars=null;this.objective?.clear();this.objective=null;this.objectiveText=undefined;});
     this.setupObjective();
@@ -832,8 +838,8 @@ export class GameScene extends Phaser.Scene {
     this.events.once('shutdown',()=>{this.bulwarkBuild?.clear();this.bulwarkBuild=undefined;this.player.damageGuard=undefined;});
     this.controlBuild=new ControlBuild(this,this.player.growth.build,(x,y,r)=>this.grid.query(x,y,r));
     this.events.once('shutdown',()=>{this.controlBuild?.clear();this.controlBuild=undefined;});
-    const schoolBanner=new SchoolBanner(this,()=>this.mode==='none'&&!this.over);
-    this.synergy=new SchoolSynergy({scene:this,player:this.player,combat:this.buildCombat,nearby:(x,y,r)=>this.grid.query(x,y,r),deal:(e,n,fire)=>{this.hitEnemy(e,n,this.combatNow,fire?'fire':'melee',false,false);},banner:(k,t,sub)=>schoolBanner.show(k,t,sub),
+    const schoolBanner=new SchoolBanner(this,()=>this.mode==='none'&&!this.over,sch=>this.buffHud?.flashSchools(sch));this.schoolBanner=schoolBanner;
+    this.synergy=new SchoolSynergy({scene:this,player:this.player,combat:this.buildCombat,nearby:(x,y,r)=>this.grid.query(x,y,r),deal:(e,n,fire)=>{this.hitEnemy(e,n,this.combatNow,fire?'fire':'melee',false,false);},banner:(k,t,sub,sch)=>schoolBanner.show(k,t,sub,sch),
       controlled:(e,n)=>this.controlBuild?.isControlled(e,n)??false,slowArea:(x,y,r,k,ms,n)=>this.controlBuild?.slowArea(x,y,r,k,ms,n)??0,escort:(x,y,n,ms)=>this.reinforcePush().spawnEscortAt(x,y,n,ms)?.members.length??0,
       vfx:(st,x,y,size,a=0,ms=360)=>buildVfx(this).emit(st,x,y,this.combatNow,size,a,ms,true),flame:(x,y,r)=>this.spawnFlameFx(x,y,r),
       wind:(x,y,a,size)=>playSheet(this,'fx_gust_band',x,y,{size,ms:420,depth:DEPTH.fx+.05,rotation:a,name:'awaken-wind'}),shake:()=>this.hitFeel.shake('medium'),
@@ -1359,14 +1365,22 @@ export class GameScene extends Phaser.Scene {
       bossOutcome: key => this.dual?.entries.find(x => x.id === key)?.done ?? null,
     });
     if (IS_DESKTOP) {
-      this.ordersPanel = new OrdersPanel(this, orders);
+      if (ordersPanelSetting() === 'on') this.ordersPanel = new OrdersPanel(this, orders);
       this.battleMap = new BattleMap({scene: this, player: () => this.player, enemies: () => this.enemies, followers: () => this.followers?.members ?? [],
         title: () => this.chapter.name ?? this.chapter.label ?? '',
         camps: () => { const z = this.allyPush, now = this.combatNow; return (this.objective?.standing ?? []).map(e => ({x: e.x, y: e.y, ratio: e.hp / Math.max(1, e.maxHp), hit: !!z && now - (z.campHitAt.get(e) ?? -1e9) < 900})); },
         pushes: () => (this.allyPush?.squads ?? []).map(q => ({from: q.from, to: q.target ? {x: q.target.x, y: q.target.y} : null, members: q.members.filter(m => !m.dead)})), bosses: () => [...(this.dual ? this.dual.alive.map(x => x.enemy) : this.boss?.active ? [this.boss] : []), ...this.dzLubuBoss().map(x => x.e)]}, orders);
-      this.objectiveText?.setVisible(false);
+      if (this.ordersPanel) this.objectiveText?.setVisible(false);
     }
     this.events.once('shutdown', () => { this.ordersPanel?.destroy(); this.battleMap?.destroy(); this.battleOrders?.clear(); this.ordersPanel = null; this.battleMap = null; this.battleOrders = null; });
+  }
+  /** 军中设置「军令面板」开关（战斗中即时生效）：开 = 建面板并收起章节名下的目标行；关 = 拆掉面板、目标行露出来。 */
+  protected applyOrdersPanelSetting(): void {
+    if (!IS_DESKTOP || !this.battleOrders) return;
+    const on = ordersPanelSetting() === 'on';
+    if (on && !this.ordersPanel) this.ordersPanel = new OrdersPanel(this, this.battleOrders);
+    if (!on && this.ordersPanel) { this.ordersPanel.destroy(); this.ordersPanel = null; }
+    this.objectiveText?.setVisible(!this.ordersPanel && !!this.objective);
   }
   /** 2-3 洛阳：吕布在城下打的那段，当成一名首领进军令（「打退吕布」，逃走即完成）和地图朱印。 */
   /**
@@ -3092,6 +3106,8 @@ export class GameScene extends Phaser.Scene {
       { key: 'shake', name: '震屏', tab: 'view', kind: 'choice', options: ch(['strong', 'weak', 'off'], SHAKE_LABEL), get: () => shakeLevel(), set: v => { setShakeLevel(v as ShakeLevel); if (v !== 'off') this.cameras.main.shake(140, .004); } },
       { key: 'death-fx', name: '死亡特效', tab: 'view', kind: 'toggle', options: ch(['on', 'off'], DEATHFX_LABEL), get: () => deathFxSetting(), set: v => setDeathFx(v as DeathFxSetting) },
       { key: 'damage', name: '伤害数字', tab: 'battle', kind: 'choice', options: ch(['all', 'crit', 'off'], DAMAGE_LABEL), get: () => damageNumbers(), set: v => setDamageNumbers(v as DamageNumbers) },
+      { key: 'orders-panel', name: '军令面板', tab: 'battle', kind: 'toggle', options: ch(['on', 'off'], ORDERS_PANEL_LABEL), get: () => ordersPanelSetting(), set: v => { setOrdersPanelSetting(v as OrdersPanelSetting); this.applyOrdersPanelSetting(); } },
+      { key: 'school-hint', name: '合击觉醒提示', tab: 'battle', kind: 'choice', options: ch(['brief', 'full', 'off'], SCHOOL_HINT_LABEL), get: () => schoolHint(), set: v => setSchoolHint(v as SchoolHint) },
       { key: 'hero-barks', name: '武将台词', tab: 'battle', kind: 'toggle', options: ch(['on', 'off'], BARKS_LABEL), get: () => heroBarks(), set: v => { setHeroBarks(v as HeroBarks); if (v === 'off') this.heroBark?.clear(); } },
       { key: 'story', name: '剧情', tab: 'story', kind: 'choice', options: ch(['full', 'chapter', 'off'], STORY_LABEL), get: () => storyMode(), set: v => setStoryMode(v as StoryMode) },
       { key: 'opening', name: '开场动画', tab: 'story', kind: 'choice', options: ch(['every', 'first', 'off'], OPENING_LABEL), get: () => openingMode(), set: v => setOpeningMode(v as OpeningMode) },

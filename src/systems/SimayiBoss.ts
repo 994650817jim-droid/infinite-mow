@@ -7,6 +7,7 @@ import type { BossDebug } from './BossKit';
 import type { Strikes } from './BeifaSystems';
 import { warnFx } from '../ui/WarnFx';
 import { playSheet } from './SkillFxSheets';
+import { castFlourish } from './BossThemeFx';
 
 type Move = 'surround' | 'feint' | 'thunder';
 export type SimayiPhase = 'hold' | 'battle' | 'omen';
@@ -115,6 +116,7 @@ export class SimayiBoss extends ArcBossV2<Move> {
   // ---------- ② 出营决战 ----------
   private start(move: Move, now: number): void {
     const w = move === 'surround' ? SMY.surround.warnMs : move === 'thunder' ? 600 : 500;
+    castFlourish(this.h.scene, 'simayi', this.h.boss, w, move === 'thunder');
     this.beat.set(move, 'windup', now, w); this.h.sfx(move === 'thunder' ? 'chargeWarn' : 'bossSummon');
     if (move === 'surround') { this.h.banner('调兵合围', '魏军四面围上来 · 冲出包围'); const p = this.h.player, wf = warnFx(this.h.scene); for (let i = 0; i < SMY.surround.count; i += 2) { const a = i / SMY.surround.count * Math.PI * 2; wf.ambush(p.x + Math.cos(a) * SMY.surround.radius, p.y + Math.sin(a) * SMY.surround.radius * .8, 110); } }
     if (move === 'feint') { this.h.banner('假退诱敌', '司马懿佯败后撤 · 追深了会中伏'); this.feintFrom = { x: this.h.boss.x, y: this.h.boss.y }; }

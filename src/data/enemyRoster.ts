@@ -136,25 +136,25 @@ export const ROSTER: Record<string, RosterType> = {
   wuxi: { id: 'wuxi', name: '五溪蛮兵', base: 'infantry', role: 'leaper', mul: { hp: 1.3, speed: 1.1, damage: 1.2 }, trait: { kind: 'leaper', range: 320, minRange: 120, warnMs: 700, flightMs: 420, everyMs: 3800, radius: 80, damage: 12 }, art: A('wuxi', 128), fallback: { tint: 0xc88860, scale: 1.05 }, cap: 4 },
   changsha: { id: 'changsha', name: '长沙强弓', base: 'archer', role: 'sniper', mul: { hp: .9, speed: .6, damage: 2.2 }, trait: { kind: 'sniper', range: 620, chargeMs: 1200, everyMs: 4800, width: 36, length: 900, damage: 20 }, art: A('changsha', 144), fallback: { tint: 0xa89878, scale: 1 }, cap: 2 },
   // —— 第三批 · 第 7 章 入蜀 ——
-  liehu: { id: 'liehu', name: '巴蜀猎户', base: 'infantry', role: 'ranged', mul: { hp: .9, speed: 1.1, damage: .5 }, trait: { kind: 'net', range: 320, everyMs: 4200, slow: .4, slowMs: 3000, hitDamage: 3 }, art: A('liehu', 128), fallback: { tint: 0xb0a080, scale: 1 }, cap: 4 },
+  liehu: { id: 'liehu', name: '巴蜀猎户', base: 'infantry', role: 'ranged', mul: { hp: .9, speed: 1.1, damage: .5 }, trait: { kind: 'net', range: 320, everyMs: 4200, slow: .4, slowMs: 3000, hitDamage: 3 }, art: A('lieshou', 128), fallback: { tint: 0xb0a080, scale: 1 }, cap: 4 },
   dongzhou: { id: 'dongzhou', name: '东州兵', base: 'shield', role: 'wall', mul: { hp: 2.5, speed: .7, damage: 1.3 }, trait: { kind: 'shieldwall', front: .55, turnDeg: 75, bashRange: 80, bashDamage: 11, everyMs: 1900 }, art: A('dongzhou', 144), fallback: { tint: 0xb08870, scale: 1.1 }, group: [3, 5], cap: 6 },
-  funu: { id: 'funu', name: '伏弩手', base: 'archer', role: 'ambush', mul: { hp: .8, speed: .5, damage: 1.5 }, trait: { kind: 'volley', range: 460, everyMs: 4200, warnMs: 1000, radius: 85, damage: 11, allyDamage: 10 }, hide: { reveal: 400 }, art: A('funu', 144), fallback: { tint: 0x8a9a80, scale: 1 }, cap: 3 },
+  funu: { id: 'funu', name: '伏弩手', base: 'archer', role: 'ambush', mul: { hp: .8, speed: .5, damage: 1.5 }, trait: { kind: 'volley', range: 460, everyMs: 4200, warnMs: 1000, radius: 85, damage: 11, allyDamage: 10 }, hide: { reveal: 400 }, art: A('funu', 128), fallback: { tint: 0x8a9a80, scale: 1 }, cap: 3 },
   // —— 第 8 章 汉中 ——
-  jijiu: { id: 'jijiu', name: '五斗米祭酒', base: 'infantry', role: 'aura', mul: { hp: 1.2, speed: .7, damage: .5 }, trait: { kind: 'aura', radius: 220, speedMul: 1.25, damageMul: 1.25, keepAway: 300 }, art: A('jijiu', 144), fallback: { tint: 0xc8a868, scale: 1 }, cap: 2 },
-  shanqi: { id: 'shanqi', name: '魏军山地轻骑', base: 'cavalry', role: 'cavalry', mul: { hp: 1.2, speed: 1.2, damage: 1.3 }, trait: { kind: 'swarm' }, from: 'north', art: A('shanqi', 176), fallback: { tint: 0x9aa0a8, scale: 1 }, cap: 4 },
-  pili: { id: 'pili', name: '霹雳车', base: 'shield', role: 'engine', mul: { hp: 6, speed: .25, damage: 3 }, trait: { kind: 'lobber', range: 620, everyMs: 6000, warnMs: 1400, radius: 110, damage: 22, allyDamage: 26, flightMs: 1300 }, art: A('pili', 176), fallback: { tint: 0xa08060, scale: 1.4 }, cap: 1 },
+  jijiu: { id: 'jijiu', name: '五斗米祭酒', base: 'infantry', role: 'aura', mul: { hp: 1.2, speed: .7, damage: .5 }, trait: { kind: 'aura', radius: 220, speedMul: 1.25, damageMul: 1.25, keepAway: 300 }, art: A('jisi', 128), fallback: { tint: 0xc8a868, scale: 1 }, cap: 2 },
+  shanqi: { id: 'shanqi', name: '魏军山地轻骑', base: 'cavalry', role: 'cavalry', mul: { hp: 1.2, speed: 1.2, damage: 1.3 }, trait: { kind: 'swarm' }, from: 'north', art: A('shanji', 176), fallback: { tint: 0x9aa0a8, scale: 1 }, cap: 4 },
+  pili: { id: 'pili', name: '霹雳车', base: 'shield', role: 'engine', mul: { hp: 6, speed: .25, damage: 3 }, trait: { kind: 'lobber', range: 620, everyMs: 6000, warnMs: 1400, radius: 110, damage: 22, allyDamage: 26, flightMs: 1300 }, art: A('pilie', 176), fallback: { tint: 0xa08060, scale: 1.4 }, cap: 1 },
   // —— 第 9 章 襄樊 ——
   kuibing: { id: 'kuibing', name: '七军溃兵', base: 'infantry', role: 'fodder', mul: { hp: .4, speed: 1.1, damage: .6 }, trait: { kind: 'amphibious', waterSpeed: 1 }, art: A('kuibing', 128), fallback: { tint: 0x9a9a98, scale: .9 }, group: [5, 7], cap: 28 },
   baiyi: { id: 'baiyi', name: '白衣商旅兵', base: 'infantry', role: 'ambush', mul: { hp: 1, speed: 1.2, damage: 1.4 }, trait: { kind: 'ambusher', dash: 2, dashMs: 800, fireMs: 0 }, hide: { reveal: 200, disguise: true }, art: A('baiyi', 128), fallback: { tint: 0xd8c8b8, scale: 1 }, cap: 4 },
   leimu: { id: 'leimu', name: '樊城擂木兵', base: 'shield', role: 'artillery', mul: { hp: 1.5, speed: .5, damage: 1.5 }, trait: { kind: 'roller', range: 320, length: 520, width: 90, warnMs: 1000, everyMs: 5000, speed: 560, damage: 16, allyDamage: 20 }, art: A('leimu', 144), fallback: { tint: 0x9a9890, scale: 1 }, cap: 3 },
   // —— 第 10 章 夷陵 ——
   huogong: { id: 'huogong', name: '吴军火攻兵', base: 'infantry', role: 'artillery', mul: { hp: 1, speed: 1, damage: .8 }, trait: { kind: 'firepot', range: 380, everyMs: 4200, warnMs: 900, radius: 75, damage: 9, allyDamage: 10, flightMs: 800, fireMs: 2500, fireRadius: 60, fireDamage: 4, burstRadius: 90, burstDamage: 12 }, art: A('huogong', 128), fallback: { tint: 0xb07058, scale: 1 }, cap: 3 },
-  linfu: { id: 'linfu', name: '林中伏弓', base: 'archer', role: 'ambush', mul: { hp: .9, speed: .6, damage: 1 }, trait: { kind: 'burst', range: 400, everyMs: 3800, shots: 3, gapMs: 200, arrowSpeed: 300 }, hide: { reveal: 380 }, art: A('linfu', 128), fallback: { tint: 0x8aa078, scale: 1 }, cap: 3 },
-  zhuran: { id: 'zhuran', name: '朱然亲军', base: 'shield', role: 'heavy', mul: { hp: 3, speed: .8, damage: 1.5 }, trait: { kind: 'sweeper', range: 150, arcDeg: 120, warnMs: 750, everyMs: 3000, damage: 13, allyDamage: 16 }, art: A('zhuran', 176), fallback: { tint: 0xc07060, scale: 1.25 }, cap: 2 },
+  linfu: { id: 'linfu', name: '林中伏弓', base: 'archer', role: 'ambush', mul: { hp: .9, speed: .6, damage: 1 }, trait: { kind: 'burst', range: 400, everyMs: 3800, shots: 3, gapMs: 200, arrowSpeed: 300 }, hide: { reveal: 380 }, art: A('linggong', 128), fallback: { tint: 0x8aa078, scale: 1 }, cap: 3 },
+  zhuran: { id: 'zhuran', name: '朱然亲军', base: 'shield', role: 'heavy', mul: { hp: 3, speed: .8, damage: 1.5 }, trait: { kind: 'sweeper', range: 150, arcDeg: 120, warnMs: 750, everyMs: 3000, damage: 13, allyDamage: 16 }, art: A('zhuranqin', 176), fallback: { tint: 0xc07060, scale: 1.25 }, cap: 2 },
   // —— 第 12 章 北伐 ——
   huwei: { id: 'huwei', name: '魏国虎卫', base: 'shield', role: 'heavy', mul: { hp: 4, speed: .8, damage: 1.6 }, trait: { kind: 'guard', radius: 200, mul: .5, engage: 260 }, art: A('huwei', 176), fallback: { tint: 0x6a6a78, scale: 1.25 }, cap: 4 },
   qiangbing: { id: 'qiangbing', name: '西凉羌兵', base: 'infantry', role: 'leaper', mul: { hp: 1, speed: 1.3, damage: 1.1 }, trait: { kind: 'leaper', range: 340, minRange: 120, warnMs: 600, flightMs: 380, everyMs: 3200, radius: 75, damage: 11 }, art: A('qiangbing', 128), fallback: { tint: 0xc0a888, scale: 1 }, cap: 4 },
-  huojian: { id: 'huojian', name: '火箭手', base: 'archer', role: 'ranged', mul: { hp: .9, speed: .6, damage: 1 }, trait: { kind: 'firearrow', range: 420, everyMs: 3200, speed: 300, fireMs: 2000, fireRadius: 50, fireDamage: 4 }, art: A('huojian', 128), fallback: { tint: 0xb89070, scale: 1 }, cap: 4 },
+  huojian: { id: 'huojian', name: '火箭手', base: 'archer', role: 'ranged', mul: { hp: .9, speed: .6, damage: 1 }, trait: { kind: 'firearrow', range: 420, everyMs: 3200, speed: 300, fireMs: 2000, fireRadius: 50, fireDamage: 4 }, art: A('huojian', 144), fallback: { tint: 0xb89070, scale: 1 }, cap: 4 },
   beast: { id: 'beast', name: '猛兽', base: 'infantry', role: 'pack', mul: { hp: .6, speed: 1.5, damage: 1.2 }, trait: { kind: 'swarm' }, art: A('beast', 144), fallback: { tint: 0x7a5a38, scale: .75 }, cap: 6 },
 };
 
@@ -198,7 +198,7 @@ export const STAGE_MIX: Record<string, StageMix> = {
   'chibi.3': { traits: { qiangzhen: { w: 6 } } },
   'jingnan.2': { traits: { feishi: { w: 5 }, wuxi: { w: 5 } } },
   'jingnan.3': { traits: { changsha: { w: 4 } } },
-  // 第三批（第 7～10、12 章）
+  // 第三批（第 7～10、12 章）；专属图键按美术风格会话定的名字（巴蜀猎户 lieshou、祭酒 jisi、山地轻骑 shanji、霹雳车 pilie、林中伏弓 linggong、朱然亲军 zhuranqin），兵种 id 不变
   'shu.1': { traits: { liehu: { w: 6 } } },
   'shu.2': { traits: { liehu: { w: 5 }, funu: { w: 4 } } },
   'shu.3': { traits: { dongzhou: { w: 4 } } },

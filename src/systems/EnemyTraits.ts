@@ -134,7 +134,7 @@ export class EnemyTraits {
     if (t.noCharge) e.dashCd = 1e9;
     const s = this.state(e); s.born = this.now();
     // 伏兵：半透明、刀枪不入（自动索敌跳过 invulnerable）、不动，等主将走近
-    if (t.hide) { s.hidden = true; e.invulnerable = true; if (t.hide.disguise) { s.disguised = true; e.sprite.setTint(0xf4efe4); } else e.sprite.setAlpha(.16); }
+    if (t.hide) { s.hidden = true; e.invulnerable = true; if (t.hide.disguise) { s.disguised = true; if (!art) e.sprite.setTint(0xf4efe4); /* 专属图的行走表就是白衣伪装形态，不再染白 */ } else e.sprite.setAlpha(.16); }
     // 火船没有专属图时：本体隐去，用辎重车 + 地火序列帧当一条着火的船（图到了换成 enemy_huochuan_walk）
     if (t.trait.kind === 'fireship' && !art) this.fireshipLook(e, s);
     this.metrics.spawned += 1;
@@ -299,7 +299,7 @@ export class EnemyTraits {
     const t = ROSTER[e.def.roster ?? '']; const reveal = t?.hide?.reveal ?? 260;
     if (Math.hypot(this.h.player.x - e.x, this.h.player.y - e.y) > reveal) return true;
     s.hidden = false; e.invulnerable = false; e.sprite.setAlpha(1); this.metrics.reveals += 1;
-    if (s.disguised) { s.disguised = false; e.sprite.setTint(e.baseTint); }
+    if (s.disguised) { s.disguised = false; e.sprite.setTint(e.baseTint); if (e.def.attackVisual) e.startAttack(now, dirOf(this.h.player.x - e.x, this.h.player.y - e.y)); } // 露刀：播攻击表（抽刀、脱白衣）
     warnFx(this.h.scene).ambush(e.x, e.y, 70); this.h.sfx('bossSummon');
     const tr = e.def.trait;
     if (tr?.kind === 'ambusher') { s.dashUntil = now + tr.dashMs; this.addFire(e.x, e.y + 4, 46, now, tr.fireMs, 4); }

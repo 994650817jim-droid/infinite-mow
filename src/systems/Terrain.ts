@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { actorDepth, DEPTH } from '../config';
-import { TERRAIN, type TerrainConfig, type TreeKind, type Pt, type RiverSpec } from '../data/terrain';
+import { TERRAIN, type TerrainConfig, type TreeKind, type Pt, type RiverSpec, type AutoGroves } from '../data/terrain';
 import { playSheet } from './SkillFxSheets';
 import type { Player } from '../entities/Player';
 import type { Enemy } from '../entities/Enemy';
@@ -16,28 +16,35 @@ import type { Ally } from '../entities/Ally';
  * 美术：v2 地形图（树 / 水面 / 桥）到之前的过渡——树用第七章山道图集 shu_pass 的松（帧 2）、竹（帧 3），阔叶树用松树压暗换色；
  *   水面用江岸地面 ground_v2_jiang 染青、贴图沿河向滚动表示流动；桥面用营地道具的横木栅（yellow_props 帧 10）平铺。都是现有手绘图，不画像素特效。
  */
-interface Tree { x: number; y: number; kind: TreeKind; img?: Phaser.GameObjects.Image; burnt: boolean; burning: number; behind: boolean; size: number }
+interface Tree { x: number; y: number; kind: TreeKind; img?: Phaser.GameObjects.Image; burnt: boolean; burning: number; behind: boolean; size: number; auto?: boolean }
 interface Seg { ax: number; ay: number; bx: number; by: number; len: number; ux: number; uy: number; s0: number }
 interface River { spec: RiverSpec; segs: Seg[]; half: number; box: { l: number; r: number; t: number; b: number }; bridges: Array<{ x: number; y: number; ux: number; uy: number; halfLen: number; halfW: number }>; total: number }
 const ART = 'shu_pass', ART_FILE = 'assets/shu/pass.png';
 /** 正式 v2 地形图（到了再接）：terrain_trees（松 / 竹 / 阔叶 / 焦桩 …）、terrain_water（水面平铺）、terrain_bridge（桥）。 */
-export const TERRAIN_ART = { trees: 'terrain_trees', water: 'terrain_water', bridge: 'terrain_bridge' } as const;
+export const TERRAIN_ART = { trees: 'terrain_trees', trees2: 'terrain_trees2', water: 'terrain_water', bridge: 'terrain_bridge' } as const;
 /** v2 地形图（2026-11-17 Gemini 3.1 Pro 出图，原图在 public/assets/terrain/originals/）：树图集 4×2（384 格：松 / 竹 / 阔叶 / 焦桩 / 小松 / 细竹 / 雨林树 / 灌木）、水面平铺 512、木桥（横向，宽高约 2.5:1）。 */
-const ART_FILES = { trees: 'assets/terrain/trees.png', water: 'assets/terrain/water.png', bridge: 'assets/terrain/bridge.png' } as const;
+/** 第二张树图集 trees2（2026-11-18 即梦 Seedream 5.5，原图 originals/jimeng_terrain_trees2.webp）4×2（384 格）：垂柳 / 侧柏 / 白杨 / 枯树 / 小垂柳 / 小枯树 / 棕榈 / 榕树。 */
+const ART_FILES = { trees: 'assets/terrain/trees.png', trees2: 'assets/terrain/trees2.png', water: 'assets/terrain/water.png', bridge: 'assets/terrain/bridge.png' } as const;
+/** 树种 → 图集帧（[图集, 帧, 备选帧]：备选帧三成机会用）。 */
+const TREE_FRAMES: Record<TreeKind, [keyof typeof ART_FILES, number, number?]> = {
+  pine: ['trees', 0, 4], bamboo: ['trees', 1, 5], broad: ['trees', 2], jungle: ['trees', 6, 7],
+  willow: ['trees2', 0, 4], cypress: ['trees2', 1], poplar: ['trees2', 2], dead: ['trees2', 3, 5], palm: ['trees2', 6], banyan: ['trees2', 7],
+};
 
 export class Terrain {
   readonly trees: Tree[] = [];
   readonly rivers: River[] = [];
   /** 山崖碰撞框（场景把它们并进 sishuiObstacles）。 */
   readonly cliffBoxes: Array<{ left: number; right: number; top: number; bottom: number }> = [];
-  readonly stats = { pushes: 0, waterChecks: 0, moved: 0, burnt: 0 };
+  readonly stats = { pushes: 0, waterChecks: 0, moved: 0, burnt: 0, auto: 0, drawn: 0 };
   private grid = new Map<number, Tree[]>();
   private objects: Phaser.GameObjects.GameObject[] = [];
   private water: Array<{ ts: Phaser.GameObjects.TileSprite; ux: number; uy: number }> = [];
   private near: Tree[] = []; private faded = new Set<Tree>(); private burning: Tree[] = [];
-  private built = false;
+  private built = false; private cullAcc = 1e9;
 
-  constructor(private readonly scene: Phaser.Scene, cfg: TerrainConfig) {
+  /** avoid：场景给的「这里别种树」（障碍框旁、城墙北边、关卡目标 / 营寨 / 布景附近），只管自动树林。 */
+  constructor(private readonly scene: Phaser.Scene, cfg: TerrainConfig, avoid?: (x: number, y: number) => boolean) {
     for (const r of cfg.rivers ?? []) this.rivers.push(this.makeRiver(r));
     for (const c of cfg.cliffs ?? []) this.cliffBoxes.push({ left: c.x - c.w / 2, right: c.x + c.w / 2, top: c.y - c.h / 2, bottom: c.y + c.h / 2 });
     const clear = cfg.clear ?? [];
@@ -54,11 +61,13 @@ export class Terrain {
         this.addTree(x, y, w.kind ?? (rnd() < .5 ? 'pine' : 'broad')); n++;
       }
     }
+    if (cfg.auto) this.plantAuto(cfg.auto, ok, avoid);
     for (const t of this.trees) { const k = this.key(Math.floor(t.x / TERRAIN.cell), Math.floor(t.y / TERRAIN.cell)); const l = this.grid.get(k); if (l) l.push(t); else this.grid.set(k, [t]); }
     // 树的图：没载入就现载（山道图集），载完再画
     // 地形图没载入就现载（v2 地形图；载不到时退回山道图集），载完再画
     const L = scene.load; let pending = 0;
     if (!scene.textures.exists(TERRAIN_ART.trees)) { L.spritesheet(TERRAIN_ART.trees, ART_FILES.trees, { frameWidth: 384, frameHeight: 384 }); pending++; }
+    if (this.trees.some(t => TREE_FRAMES[t.kind][0] === 'trees2') && !scene.textures.exists(TERRAIN_ART.trees2)) { L.spritesheet(TERRAIN_ART.trees2, ART_FILES.trees2, { frameWidth: 384, frameHeight: 384 }); pending++; }
     if (!scene.textures.exists(TERRAIN_ART.water)) { L.image(TERRAIN_ART.water, ART_FILES.water); pending++; }
     if (!scene.textures.exists(TERRAIN_ART.bridge)) { L.image(TERRAIN_ART.bridge, ART_FILES.bridge); pending++; }
     if (!scene.textures.exists(ART)) { L.spritesheet(ART, ART_FILE, { frameWidth: 384, frameHeight: 384 }); pending++; }
@@ -66,7 +75,41 @@ export class Terrain {
     else { L.once('complete', () => { if (scene.sys.isActive() || scene.sys.isPaused()) { this.build(); this.buildWater(); } }); L.start(); }
   }
   private key(cx: number, cy: number) { return (cx + 4096) * 8192 + (cy + 4096); }
-  private addTree(x: number, y: number, kind: TreeKind, size?: number) { this.trees.push({ x, y, kind, burnt: false, burning: 0, behind: false, size: size ?? TERRAIN.treeSize[kind] }); }
+  private addTree(x: number, y: number, kind: TreeKind, size?: number, auto = false) { this.trees.push({ x, y, kind, burnt: false, burning: 0, behind: false, size: size ?? TERRAIN.treeSize[kind], auto }); }
+  /**
+   * 自动树林（data/terrain.ts GROVES）：环带里成簇的树林、十字通道两侧的行道树、河两岸一行。
+   * 中间十字通道（半宽 corridor）不种——开局点、主战场、路都留空；ok = 原有规则（不在水里 / 桥上 / 山崖旁 / clear 圈里、和别的树隔开）；avoid = 场景给的禁区。
+   */
+  private plantAuto(g: AutoGroves, ok: (x: number, y: number, gap: number) => boolean, avoid?: (x: number, y: number) => boolean) {
+    let s = g.seed * 7919 + 3; const rnd = () => ((s = (s * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff);
+    const [r0, r1] = g.ring ?? [700, 2500], cor = g.corridor ?? 280, kinds = Object.entries(g.mix) as Array<[TreeKind, number]>, tot = kinds.reduce((n, [, w]) => n + w, 0);
+    const pick = (): TreeKind => { let r = rnd() * tot; for (const [k, w] of kinds) if ((r -= w) <= 0) return k; return kinds[0][0]; };
+    const fine = (x: number, y: number, gap: number) => Math.abs(x) > cor && Math.abs(y) > cor && (g.minY === undefined || y > g.minY) && ok(x, y, gap) && !avoid?.(x, y);
+    const n0 = this.trees.length;
+    // 成簇的树林：一簇一个主树种（七成），椭圆里撒，树间隔 95 留穿行缝
+    for (let i = 0, tries = 0; i < g.groves && tries < g.groves * 40; tries++) {
+      const a = rnd() * Math.PI * 2, r = r0 + (r1 - r0) * Math.sqrt(rnd()), cx = Math.cos(a) * r, cy = Math.sin(a) * r * .8;
+      if (!fine(cx, cy, 160)) continue; i++;
+      const rx = 200 + rnd() * 150, ry = 130 + rnd() * 90, dom = pick(), n = g.per[0] + Math.floor(rnd() * (g.per[1] - g.per[0] + 1));
+      for (let k = 0, t = 0; k < n && t < n * 25; t++) {
+        const aa = rnd() * Math.PI * 2, rr = Math.sqrt(rnd()), x = cx + Math.cos(aa) * rx * rr, y = cy + Math.sin(aa) * ry * rr, kind = rnd() < .7 ? dom : pick();
+        if (!fine(x, y, 95)) continue; this.addTree(x, y, kind, undefined, true); k++;
+      }
+    }
+    // 行道树：十字通道两侧各一行（开局点附近不种、三成留缺口）
+    if (g.rows) for (const v of [true, false]) for (const side of [-1, 1]) for (let t = -r1; t <= r1; t += 200 + rnd() * 90) {
+      if (Math.abs(t) < r0 * .8 || rnd() < .35) continue;
+      const off = side * (cor + 60 + rnd() * 60), x = v ? off : t, y = v ? t : off;
+      if (fine(x, y, 110)) this.addTree(x, y, g.rows, undefined, true);
+    }
+    // 河岸：两岸各一行，避开桥头
+    if (g.riverside) for (const r of this.rivers) for (const sg of r.segs) for (let d = 0; d < sg.len; d += 220 + rnd() * 80) for (const side of [-1, 1]) {
+      if (rnd() < .4) continue;
+      const off = r.half + 80 + rnd() * 70, x = sg.ax + sg.ux * d - sg.uy * off * side, y = sg.ay + sg.uy * d + sg.ux * off * side;
+      if (!this.onBridge(x, y, 200) && fine(x, y, 110)) this.addTree(x, y, g.riverside, undefined, true);
+    }
+    this.stats.auto = this.trees.length - n0;
+  }
 
   // ---------- 河 ----------
   private makeRiver(spec: RiverSpec): River {
@@ -178,20 +221,32 @@ export class Terrain {
     for (const w of this.water) { w.ts.tilePositionX -= TERRAIN.flow * dt; }
     for (const t of [...this.burning]) if (now >= t.burning) {
       this.burning.splice(this.burning.indexOf(t), 1); t.burning = 0; t.burnt = true;
-      if (t.img) { if (t.img.texture.key === TERRAIN_ART.trees) t.img.clearTint().setFrame(3).setDisplaySize(t.size * .6, t.size * .6).setAlpha(1); else t.img.setTint(0x2a2018).setDisplaySize(t.size * .45, t.size * .45).setAlpha(.9); }
+      if (t.img) { if (t.img.texture.key === TERRAIN_ART.trees || t.img.texture.key === TERRAIN_ART.trees2) t.img.clearTint().setTexture(TERRAIN_ART.trees, 3).setDisplaySize(t.size * .6, t.size * .6).setAlpha(1); else t.img.setTint(0x2a2018).setDisplaySize(t.size * .45, t.size * .45).setAlpha(.9); }
+    }
+    // 镜头外的树不画（4 Hz 按镜头开关可见；树是静态图，画不画不影响碰撞）
+    this.cullAcc += dt * 1000;
+    if (this.cullAcc >= 250 && this.trees.length > 40) {
+      this.cullAcc = 0; const v = this.scene.cameras.main.worldView, pad = TERRAIN.cullPad; let n = 0;
+      for (const t of this.trees) { if (!t.img) continue; const on = t.x > v.x - pad && t.x < v.right + pad && t.y > v.y - pad && t.y < v.bottom + pad + t.size; if (on !== t.img.visible) t.img.setVisible(on); if (on) n++; }
+      this.stats.drawn = n;
     }
   }
 
   // ---------- 画 ----------
   private build() {
     if (this.built) return; this.built = true;
-    const sc = this.scene, v2 = sc.textures.exists(TERRAIN_ART.trees);
+    const sc = this.scene, v2 = sc.textures.exists(TERRAIN_ART.trees), v2b = sc.textures.exists(TERRAIN_ART.trees2);
     let s = 7; const rnd = () => ((s = (s * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff);
     for (const t of this.trees) {
-      // v2：松 0 / 小松 4、竹 1 / 细竹 5、阔叶 2、雨林树 6 / 灌木 7（南征），随机挑
-      const alt = rnd() < .35, frame = v2 ? ({ pine: alt ? 4 : 0, bamboo: alt ? 5 : 1, broad: 2, jungle: alt ? 7 : 6 } as const)[t.kind] : t.kind === 'bamboo' ? 3 : 2;
-      const img = sc.add.image(t.x, t.y + 6, v2 ? TERRAIN_ART.trees : ART, frame).setOrigin(.5, .92).setDisplaySize(t.size, t.size).setDepth(actorDepth(t.y)).setFlipX(rnd() < .5);
-      if (!v2 && (t.kind === 'broad' || t.kind === 'jungle')) img.setTint(0xc8d8a8); // 阔叶树过渡：松树换浅一点的色调
+      // v2：松 0 / 小松 4、竹 1 / 细竹 5、阔叶 2、雨林树 6 / 灌木 7；第二张：垂柳 0 / 小柳 4、侧柏 1、白杨 2、枯树 3 / 小枯树 5、棕榈 6、榕树 7（TREE_FRAMES，备选帧三成机会）
+      let [sheet, frame, alt] = TREE_FRAMES[t.kind]; if (alt !== undefined && rnd() < .35) frame = alt;
+      if (sheet === 'trees2' && !v2b) { sheet = 'trees'; frame = t.kind === 'palm' || t.kind === 'banyan' ? 6 : t.kind === 'dead' ? 3 : 2; } // 第二张没载到：退回第一张相近的树
+      // 大小、色调浮动：成片的树不像复制粘贴（自动树林和原有树林都用）
+      const j = 1 + (rnd() * 2 - 1) * TERRAIN.sizeJitter, f = rnd() * TERRAIN.tintJitter / .22; t.size = Math.round(t.size * j);
+      const img = v2 ? sc.add.image(t.x, t.y + 6, sheet === 'trees2' ? TERRAIN_ART.trees2 : TERRAIN_ART.trees, frame) : sc.add.image(t.x, t.y + 6, ART, t.kind === 'bamboo' ? 3 : 2);
+      img.setOrigin(.5, .92).setDisplaySize(t.size, t.size).setDepth(actorDepth(t.y)).setFlipX(rnd() < .5).setName(t.auto ? 'terrain-tree-auto' : 'terrain-tree');
+      if (!v2 && t.kind !== 'pine' && t.kind !== 'bamboo') img.setTint(0xc8d8a8); // 阔叶树过渡：松树换浅一点的色调
+      else if (f > .05) img.setTint(Phaser.Display.Color.GetColor(255 - 50 * f, 255 - 58 * f, 255 - 86 * f));
       t.img = img; this.objects.push(img);
     }
     this.buildCliffs();

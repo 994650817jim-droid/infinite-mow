@@ -1116,7 +1116,7 @@ export class GameScene extends Phaser.Scene {
     if(this.mode==='none'&&!this.over)this.sishuiPass?.update();
     this.parley?.update(); // 首领招降：残血弹窗 / 再压一压
     if(this.mode==='none'&&!this.over)this.dual?.update(this.combatNow); // 双首领：招降、配合技、狂怒 / 心乱、退走线
-    if(!this.terrainInit&&this.player){this.terrainInit=true;const tc=terrainConfigFor(this.hardKey(),this.hardStage());if(tc){this.terrain=new Terrain(this,tc);const t=this.terrain;Ally.terrainMul=(x,y)=>t.speedMul(x,y);this.terrainNav=[...t.navBoxes(),...t.cliffBoxes];if(t.cliffBoxes.length){if(!this.sishuiObstacles)this.sishuiObstacles=new SishuiObstacles([]);this.sishuiObstacles.footprints.push(...t.cliffBoxes);} /* 山崖碰撞并进场景障碍：挡人、刷兵避开、随行也认 */this.events.once('shutdown',()=>{t.clear();if(this.terrain===t){this.terrain=null;Ally.terrainMul=null;}});}}
+    if(!this.terrainInit&&this.player){this.terrainInit=true;const tc0=terrainConfigFor(this.hardKey(),this.hardStage()),tc=tc0?.auto&&new URLSearchParams(location.search).get('groves')==='0'?{...tc0,auto:undefined}:tc0; /* ?groves=0：关掉自动树林（前后对比截图用） */if(tc){this.terrain=new Terrain(this,tc,tc.auto?this.treeAvoid():undefined);const t=this.terrain;Ally.terrainMul=(x,y)=>t.speedMul(x,y);this.terrainNav=[...t.navBoxes(),...t.cliffBoxes];if(t.cliffBoxes.length){if(!this.sishuiObstacles)this.sishuiObstacles=new SishuiObstacles([]);this.sishuiObstacles.footprints.push(...t.cliffBoxes);} /* 山崖碰撞并进场景障碍：挡人、刷兵避开、随行也认 */this.events.once('shutdown',()=>{t.clear();if(this.terrain===t){this.terrain=null;Ally.terrainMul=null;}});}}
     if(this.terrain){this.terrain.update(this.combatNow,dt);this.player.terrainSpeedMul=this.terrain.speedMul(this.player.x,this.player.y);}
     this.updateEnemies(dt, time);
     this.yellow?.update(dt,time);this.xiliang?.update(dt,this.combatNow);this.shieldBars?.draw(this.enemies);if(this.objective){this.objective.update(dt);this.objectiveText?.setText(this.objective.text);}
@@ -1294,6 +1294,26 @@ export class GameScene extends Phaser.Scene {
     this.events.once('shutdown', () => { this.ordersPanel?.destroy(); this.battleMap?.destroy(); this.battleOrders?.clear(); this.ordersPanel = null; this.battleMap = null; this.battleOrders = null; });
   }
   /** 2-3 洛阳：吕布在城下打的那段，当成一名首领进军令（「打退吕布」，逃走即完成）和地图朱印。 */
+  /**
+   * 自动树林的禁区（用户「树增加多点在不同适合的场景」，不挡打仗的地方）：
+   *  - 场景里所有挡人的框（关墙、营栅、山崖、陈仓城、董卓城墙…——各系统的 footprints）旁 110 以内；
+   *  - 长的横墙（宽 > 900、薄）北边（城里）一律不种、墙脚 180 以内不种：城池的关只在城外有树；
+   *  - 关卡目标、营寨 / 补给、营帐 / 箭楼 / 城门之类的布景图附近（布景按图大小留边）。
+   */
+  private treeAvoid(): (x: number, y: number) => boolean {
+    type B = {left: number; right: number; top: number; bottom: number};
+    const sc = this as unknown as Record<string, unknown>, boxes: B[] = [], seen = new Set<unknown>();
+    const add = (list: unknown) => { if (!Array.isArray(list) || seen.has(list)) return; seen.add(list); for (const b of list) if (b && typeof (b as B).left === 'number') boxes.push(b as B); };
+    for (const k of Object.keys(sc)) { const v = sc[k] as Record<string, unknown> | null; if (!v || typeof v !== 'object' || (v as unknown) === this.terrain) continue; add(v.footprints); const o = v.obstacles as Record<string, unknown> | undefined; if (o && typeof o === 'object') add(o.footprints); }
+    const walls = boxes.filter(b => b.right - b.left > 900 && b.bottom - b.top < 500);
+    const pts: Array<{x: number; y: number; r: number}> = [...(this.objective?.points ?? []).map(p => ({...p, r: 260})), ...this.enemies.filter(e => e.active && e.isSupplySlot).map(e => ({x: e.x, y: e.y, r: 200}))];
+    for (const o of this.children.list) { const im = o as Phaser.GameObjects.Image; if (o.type !== 'Image' || !im.visible || im.scrollFactorX !== 1) continue; const k = im.texture?.key ?? '', n = o.name ?? '';
+      if (/terrain|ground|road|water|shadow|fx_/i.test(k + n)) continue;
+      if (/prop|camp|tent|fort|wall|barb|siege|gate|tower|altar|banner|palisade|luoyang|sishui|faction/i.test(k + ' ' + n) && im.displayWidth > 50) pts.push({x: im.x, y: im.y - im.displayHeight * .3, r: Math.max(im.displayWidth, im.displayHeight) * .55 + 70}); }
+    return (x, y) => boxes.some(b => x > b.left - 110 && x < b.right + 110 && y > b.top - 110 && y < b.bottom + 150)
+      || walls.some(w => x > w.left - 200 && x < w.right + 200 && y < w.bottom + 180)
+      || pts.some(p => Math.hypot(p.x - x, p.y - y) < p.r);
+  }
   private dzLubuBoss(): Array<{key: string; name: string; e: Enemy; label: string}> {
     const z = this.dzLubu, l = z?.lubu; return z && l?.active && z.phase === 'wall' ? [{key: 'lubu', name: '吕布', e: l, label: '打退吕布'}] : [];
   }

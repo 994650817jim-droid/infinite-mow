@@ -159,6 +159,9 @@ export const ART_V2_FILES: Readonly<Record<string, string>> = {
   beifa_zhanghe: 'assets/bosses-v2/hanzhong_zhanghe.png',
   beifa_haozhao: 'assets/bosses-v2/jingnan_liudu.png',
   beifa_simayi: 'assets/bosses-v2/beifa_simayi.png',
+  // 3-2 典韦（友军守营）双铁戟行走 / 攻击图（ChatGPT 出图，首领 v2 标准：格 288、脚底 256，显示 ×0.5；朝左行由朝右逐格镜像）
+  dianwei_walk: 'assets/allies-v2/dianwei_walk.png',
+  dianwei_attack: 'assets/allies-v2/dianwei_attack.png',
   huaxiong_walk: 'assets/bosses-v2/huaxiong_walk.png',
   huaxiong_attack: 'assets/bosses-v2/huaxiong_attack.png',
   huaxiong_actions: 'assets/bosses-v2/huaxiong_actions.png',

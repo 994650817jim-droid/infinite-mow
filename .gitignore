@@ -302,3 +302,4 @@ assets/raw/*
 !/tools/shot-theme-preview.mjs
 !/tools/mount-proportions.mjs
 !/tools/mount-proportions.json
+!/tools/test-wancheng.mjs

@@ -54,7 +54,9 @@ export interface StageMapDef {
 }
 
 /** 边带厚度：场外看得见的那条天然边（镜头最多停到这里）。 */
-export const ARENA = { edgeBand: 300, gateWidth: 260, minSpawnDist: 520, gateJitter: 90 } as const;
+export const ARENA = { edgeBand: 300, gateWidth: 260, minSpawnDist: 520, gateJitter: 90,
+  /** 营帐（200px 图，脚底在图下缘）挡人的帐底椭圆：圆心在脚底往上 up，半轴 rx × ry（11-19 防穿模） */
+  tentFoot: { up: 30, rx: 78, ry: 34 } } as const;
 
 const BASE_MAPS: Record<string, StageMapDef> = {
   // 5-1 长坂突围：虎豹骑追袭——南北追击通道；北边长坂河，长坂桥是北面唯一来路（可砍断）；东西山崖；南边山口是追兵来路

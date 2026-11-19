@@ -48,7 +48,7 @@ export class StageArena {
   private roofAt = 0; private roofPending: Array<{ x: number; y: number; at: number; kind: 'infantry' | 'shield' }> = [];
   private tents: Tent[] = []; private logs: Log[] = []; private logAt = 0; private logSeq = 0;
   /** 测试读 */
-  readonly stats = { ringScale: 1, ringClosing: false, ringHits: 0, ringPlayerHits: 0, bushAmbushers: 0, cartsLit: 0, fireBands: 0, fireHits: 0, bushesSprung: 0, roofDrops: 0, relocated: 0, clamped: 0, bridgeDown: false, bridgeDeck: false, tentsLit: 0, tentsBurnt: 0, fireTicks: 0, logs: 0, logHits: 0, logEnemyHits: 0 };
+  readonly stats = { tentPushes: 0, ringScale: 1, ringClosing: false, ringHits: 0, ringPlayerHits: 0, bushAmbushers: 0, cartsLit: 0, fireBands: 0, fireHits: 0, bushesSprung: 0, roofDrops: 0, relocated: 0, clamped: 0, bridgeDown: false, bridgeDeck: false, tentsLit: 0, tentsBurnt: 0, fireTicks: 0, logs: 0, logHits: 0, logEnemyHits: 0 };
 
   constructor(private readonly h: ArenaHost, readonly def: StageMapDef) {
     const b = this.bounds = { ...def.bounds }, /* 拷一份：火墙收圈会改它 */ P = def.band ?? ARENA.edgeBand, sc = h.scene; this.band = P;
@@ -159,6 +159,15 @@ export class StageArena {
     const p = this.h.player; clamp(p, (x, y) => p.sprite.setPosition(x, y));
     for (const a of this.h.allies()) if (a.active) clamp(a, (x, y) => a.setPosition(x, y));
     for (const e of this.h.enemies()) if (e.active && !e.isSupplySlot && e.kind !== 'boss') clamp(e, (x, y) => e.sprite.setPosition(x, y));
+    // 营帐是实物（11-19 用户「穿模」：人从营帐里穿过去）：帐底椭圆挡人，主将 / 友军 / 敌兵都推到帐外。地上的土路只是地面，可以走
+    if (this.tents.length) {
+      const T = ARENA.tentFoot, push = (o: { x: number; y: number }, r: number, set: (x: number, y: number) => void) => {
+        for (const t of this.tents) { const cx = t.x, cy = t.y - T.up, dx = (o.x - cx) / (T.rx + r), dy = (o.y - cy) / (T.ry + r), d = Math.hypot(dx, dy); if (d >= 1) continue; const k = d > .01 ? 1 / d : 1, ux = d > .01 ? dx : 0, uy = d > .01 ? dy : 1; set(cx + ux * k * (T.rx + r), cy + uy * k * (T.ry + r)); this.stats.tentPushes++; }
+      };
+      push(p, 12, (x, y) => p.sprite.setPosition(x, y));
+      for (const a of this.h.allies()) if (a.active) push(a, 10, (x, y) => a.setPosition(x, y));
+      for (const e of this.h.enemies()) if (e.active && !e.isSupplySlot && e.kind !== 'boss') push(e, e.radius * .6, (x, y) => e.sprite.setPosition(x, y));
+    }
   }
   /** 刷兵点在场外：改到离主将最远的那个关口附近（沿边错开一点）。场内的刷兵点不动。 */
   spawnAt(x: number, y: number): Pt {

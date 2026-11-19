@@ -191,6 +191,8 @@ import { HIT_FEEL, BOSS_FEEL, WEAPON_HIT_TYPE } from '../data/hitFeel';
 import { GEM_FX } from '../data/gemFx';
 import { heroAttributeExtra } from '../data/heroMechanics';
 import { BuildState } from '../data/builds';
+import { WEAPON_OVER, branchById } from '../data/weaponBranches';
+import { WeaponBranches } from '../systems/WeaponBranches';
 
 interface Gem {
   img: Phaser.GameObjects.Image;
@@ -683,6 +685,8 @@ export class GameScene extends Phaser.Scene {
   private momentum = { on: false, kills: 0, stacks: 0 }; private gambles = new Set<GambleId>();
   private bounties: Partial<Record<BountyId, { elites?: number }>> = {}; private chain = { until: 0, set: new Map<Enemy, number>(), sharing: false };
   private arrows = { until: 0, absorbed: 0 }; private chestPick = false; private freeReroll = true;
+  /** 兵器专职分支的战斗效果（本命武器选了分支才有）。 */
+  private branchRt: WeaponBranches | null = null; private branchFor: unknown = null;
   protected bossWarned = false;
   protected chargeGfx!: Phaser.GameObjects.Graphics;
   protected resultPanel!: Phaser.GameObjects.Container;
@@ -867,7 +871,7 @@ export class GameScene extends Phaser.Scene {
     if(this.worldCampaign&&worldUnlocked()){const effects=permanentEffects();this.legion.healingMultiplier=effects.healMultiplier;applyCitySpecialties(this.player,effects,!transfer,{legion:this.legion,supplies:this.supplies});if(!transfer){for(let i=0;i<effects.reinforcements;i++)this.legion.recruit(i===0?'swordsman':'spearman',1,true);}if(!transfer&&!isChapterTestRun())for(const kind of takeExpeditionReserve(effects.reserveSlots)){this.legion.recruit(kind,1,true);this.allies[this.allies.length-1].reserveSoldier=true;}}
     this.buildCombat=new BuildCombat(this.player.growth.build,(x,y,r)=>this.grid.query(x,y,r),(e,n,fire)=>this.hitEnemy(e,n,this.combatNow,fire?'fire':'melee',false,false),(e,fire)=>{this.artEffects.show(fire?5:3,e.x,e.y-8,32,this.combatNow,160);buildVfx(this).emit(fire?'flame':'combo',e.x,e.y-8,this.combatNow,fire?42:38);});
     this.bulwarkBuild=new BulwarkBuild(this,this.player.growth.build,this.player,this.allies,(x,y,r)=>this.grid.query(x,y,r),(e,n)=>this.hitEnemy(e,n,this.combatNow,'melee',false,false));
-    this.player.damageGuard=(n,now)=>this.bulwarkBuild?.guard(n,now)??n;this.legion.defense=this.bulwarkBuild;
+    this.player.damageGuard=(n,now)=>{const m=this.bulwarkBuild?.guard(n,now)??n;return this.branchRt?this.branchRt.guard(m):m;}; // 兵器专职「燕人怒吼」减伤this.legion.defense=this.bulwarkBuild;
     this.events.once('shutdown',()=>{this.bulwarkBuild?.clear();this.bulwarkBuild=undefined;this.player.damageGuard=undefined;});
     this.controlBuild=new ControlBuild(this,this.player.growth.build,(x,y,r)=>this.grid.query(x,y,r));
     this.events.once('shutdown',()=>{this.controlBuild?.clear();this.controlBuild=undefined;});
@@ -999,7 +1003,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   protected resetState(): void {
-    this.phaseRunner?.clear();this.battleTrack?.destroy();this.phaseRunner=null;this.battleTrack=null;this.phasePlan=null;this.phasedFor=null;this.fortunes?.clear();this.fortunes=null;this.fortuneQueue=[];this.fortuneTaken={};this.jinnang=null;this.jinnangButton=undefined;this.resetStageCards();
+    this.phaseRunner?.clear();this.battleTrack?.destroy();this.phaseRunner=null;this.battleTrack=null;this.phasePlan=null;this.phasedFor=null;this.fortunes?.clear();this.fortunes=null;this.fortuneQueue=[];this.fortuneTaken={};this.jinnang=null;this.jinnangButton=undefined;this.resetStageCards();this.branchRt?.clear();this.branchRt=null;this.branchFor=null;
     this.relicWaves=[];this.runMerit={elite:0,boss:0};this.picksGiven=0;this.militaryPending=0; // 场景实例会被重复使用：每场重置
     this.firstBossAt=-1;this.settledFrontlineKills=0;this.frontlineNextSettlement=1;this.frontlineVictories.clear();this.frontlineStarts.clear();this.chasingBosses=[];this.deadBossControllers=[];for(const c of this.bossChests)c.clear();this.bossChests=[];this.lootContinue=null;this.relicHits=0;this.relicFireAt=0;this.relicHealAt=0;
     this.rerolls=0;this.warfeedCount=0;this.pointsButton=undefined;this.pointsBadge=undefined;this.potionButton=undefined;this.potionBadge=undefined;this.potionIcon=undefined;this.potionGlow=undefined;this.rerollButton=undefined;
@@ -1132,6 +1136,7 @@ export class GameScene extends Phaser.Scene {
     this.music.setIntensity(this.boss?.active||this.chasingBosses.some(t=>t.enemy.active&&t.enemy.spawnId===t.life)?1:0);
     if (!this.boss || !this.boss.active) this.music.setDuck(1);
     this.applyPhases();
+    this.tickBranch();
     const nextWave = waveIndexAt(this.elapsed, this.chapter.waves);
     if (!this.over && nextWave !== this.waveIndex) {
       this.waveIndex = nextWave;
@@ -2309,6 +2314,7 @@ export class GameScene extends Phaser.Scene {
 
   protected hitEnemy(enemy: Enemy, rawDamage: number, time: number, source: 'melee' | 'arrow' | 'fire' = 'melee', fromAlly = false, weaponHit = true): boolean {
     if (!enemy.active || this.over || enemy.invulnerable) return false;
+    if (weaponHit && !fromAlly && this.branchRt && !enemy.isSupplySlot) this.branchRt.onWeaponHit(enemy, rawDamage); // 兵器专职（仁德 / 三英）
     if (this.chain.until > time && !this.chain.sharing && this.chain.set.get(enemy) === enemy.spawnId) { this.chain.sharing = true; for (const [o, life] of this.chain.set) if (o !== enemy && o.active && o.spawnId === life) this.hitEnemy(o, rawDamage * .3, time, source, fromAlly, false); this.chain.sharing = false; } // 锦囊「连环计」
     enemy.lastHitFromAlly = fromAlly;
     if(enemy.isSupplySlot){enemy.hp-=Math.max(1,Math.round(rawDamage));enemy.flash(time);this.sfx.play('hitHeavy');if(enemy.hp<=0)this.killEnemy(enemy);return false;}
@@ -2439,6 +2445,7 @@ export class GameScene extends Phaser.Scene {
     if (!this.persuadeKill && this.dual?.preventKill(enemy)) return; // 双首领：每人一个招降窗
     if (!enemy.active) return;
     if (this.phasePlan) this.onStageCardKill(enemy);
+    this.branchRt?.onKill(enemy);
     this.traits?.onKilled(enemy); // 纵火兵爆燃、驯兽师倒下猛兽狂暴
     // 双首领：先了结的不掉宝箱（只做通用记账），最后一个照常；单首领败退型淡出退走
     const dualRes = this.dual?.owns(enemy) ? this.dual.resolve(enemy, this.persuadeKill, this.combatNow) : null;
@@ -3669,7 +3676,7 @@ export class GameScene extends Phaser.Scene {
       const base = this.chapter, plan = buildPhasePlan(this.hardKey(), this.hardStage(), base.waves, base.bossName), g = base.growth;
       this.chapter = { ...base, waves: plan.waves, pace: phasedPace(base.pace, chapterBossTime(base), plan.bossAt), growth: { hp: g?.hp ?? 1, damage: g?.damage ?? 1, bossHp: (g?.bossHp ?? 1) * PHASES.bossHp } };
       this.phasePlan = plan;
-      BuildState.rankCap = BuildState.rankCapFor(plan.chapter); BuildState.slotCap = BuildState.slotCapFor(plan.chapter); RunGrowth.extraCap = RunGrowth.extraCapFor(plan.chapter); // 永久成长分章：精研 Lv4 / 5、第 7 格、武艺精熟
+      BuildState.rankCap = BuildState.rankCapFor(plan.chapter); BuildState.slotCap = BuildState.slotCapFor(plan.chapter); RunGrowth.extraCap = RunGrowth.extraCapFor(plan.chapter); WEAPON_OVER.cap = WEAPON_OVER.capFor(plan.chapter); // 永久成长分章：精研 Lv4 / 5、第 7 格、武艺精熟
       const hard = (n: number) => this.hardMode ? n : 1;
       this.phaseRunner = new StagePhaseRunner({
         scene: this, player: () => this.player, elapsed: () => this.elapsed,
@@ -3740,6 +3747,26 @@ export class GameScene extends Phaser.Scene {
       (this.jinnangButton.getByName('jinnang-caption') as Phaser.GameObjects.Text).setText('锦囊 · ' + JINNANG[id].name);
     }
     this.jinnangButton.setVisible(!!id && this.mode === 'none' && !this.over);
+  }
+  /** 兵器专职：本命 Lv6 / 7 的伤害加成写进 growth；选了分支就建分支效果（换了主将对象则重建）。 */
+  private tickBranch(): void {
+    const P = this.player; if (!P?.growth) return; const w = P.weapons[0];
+    P.growth.weaponOver = w?.over ?? 0;
+    if (!w?.branch) { if (this.branchRt) { this.branchRt.clear(); this.branchRt = null; } return; }
+    if (!this.branchRt || this.branchFor !== P) {
+      this.branchRt?.clear(); this.branchFor = P;
+      this.branchRt = new WeaponBranches({
+        scene: this, player: P, now: () => this.combatNow, weapon: () => this.player.weapons[0], hit: () => this.weaponHit(),
+        query: (x, y, r) => this.grid.query(x, y, r), damage: (e, n, fire) => { this.hitEnemy(e, n, this.combatNow, fire ? 'fire' : 'melee', false, false); },
+        shi: s => this.player.growth.build.tags()[s] ?? 0, allies: () => this.allies,
+        troopBoost: (mul, ms) => { this.legion.drillMultiplier *= mul; this.time.delayedCall(ms, () => { this.legion.drillMultiplier /= mul; }); },
+        escort: (x, y, n, ms) => { this.reinforcePush().spawnEscortAt(x, y, n, ms); },
+        slow: (x, y, r, sl, ms) => { this.controlBuild?.slowArea(x, y, r, sl, ms, this.combatNow); },
+        followerHeroes: () => (this.followers?.members ?? []).map(m => m.recruit.hero).filter((h): h is NonNullable<typeof h> => !!h),
+        banner: (t, sub) => this.showWaveBanner(t, false, sub), sfx: k => this.sfx.play(k),
+      });
+    }
+    if (this.mode === 'none' && !this.over) this.branchRt.update();
   }
   /** 本命武器一击的基础伤害（锦囊火计 / 草船借箭按它算）。 */
   private weaponHit(): number { const w = this.player.weapons[0], d = w ? WEAPON_DEFS[w.id] : undefined; return (d ? d.damage(w!.level, this.player.stats) : 20) * this.player.growth.damageMultiplier(this.combatNow); }
@@ -4187,7 +4214,7 @@ export class GameScene extends Phaser.Scene {
     this.hudTexts.details.setVisible(false);
     const weapon = this.player.weapons[0];
     const mastery = '\n'+this.player.growth.masteryLabel();
-    this.hudTexts.gear.setText(`${weapon ? `${weaponName(weapon.id,this.runConfig.character)} Lv.${weapon.level}` : '本命武器'}${mastery}\n属性点 ${this.player.growth.unallocated}${this.player.growth.unallocated>0?'':` · 武将 Lv.${this.heroLv}`} · ${this.passiveHud.description}`);
+    this.hudTexts.gear.setText(`${weapon ? `${weaponName(weapon.id,this.runConfig.character)} Lv.${weapon.level + (weapon.over ?? 0)}${branchById(weapon.branch) ? ' · ' + branchById(weapon.branch)!.name : ''}` : '本命武器'}${mastery}\n属性点 ${this.player.growth.unallocated}${this.player.growth.unallocated>0?'':` · 武将 Lv.${this.heroLv}`} · ${this.passiveHud.description}`);
     // 信物（2026-11-17 本局遗物并入信物库）：穿着的信物 + 已激活的同流派套装
     const tokens = wornTokens(this.runConfig.character), sets = this.charmInfo ? (Object.keys(this.charmInfo.schools) as CharmSchool[]).filter(sc => this.charmInfo!.schools[sc] >= 2) : [];
     this.hudTexts.relics.setText(tokens.length ? !IS_DESKTOP && !this.relicExpanded ? `信物 ${tokens.length}  · 点按展开` : `信物 ${tokens.map(t => charmDef(t.base)?.name ?? itemName(t)).join(' · ')}${sets.map(sc => `  ${CHARM_SCHOOL_NAMES[sc]}套装 ${CHARM_SET_DESC[sc]}`).join('')}` : '');

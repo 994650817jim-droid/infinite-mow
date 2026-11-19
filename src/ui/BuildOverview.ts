@@ -15,6 +15,7 @@ import { itemTile } from './ItemQuality';
 import { attrBadge } from './AttrBadge';
 import { primarySummary } from './PrimaryAttrInfo';
 import type { ItemTooltip, InfoTip } from './ItemTooltip';
+import { branchById } from '../data/weaponBranches';
 
 /**
  * 构筑总览（2026-11-18 用户：「这个玩家看自己 build 不清楚，需要优化一下」）：
@@ -133,8 +134,9 @@ export function drawBuildOverview(o: BuildOverviewOpts): void {
     // 本命武器
     const w = o.weapon, wmax = w ? WEAPON_DEFS[w.id]?.maxLevel ?? 5 : 5;
     text(L.x + pad, y, '本命', 12, '#a8956c');
-    text(L.x + pad + 34, y - 1, w ? `${WEAPON_META[w.id].name}  ${dots(w.level, wmax)}` : '—', 13, '#eadcbd').setName(P + '-weapon');
-    if (w) hot(L.x + pad, y - 2, L.w - pad * 2, 18, P + '-weapon-hit', () => ({ title: WEAPON_META[w.id].name, sub: `本命武器 · Lv.${w.level}/${wmax}`, body: WEAPON_META[w.id].desc + (w.level < wmax ? '\n升级时可在三选一里继续强化。' : '\n已满级。'), color: 0xe0b860 }));
+    const br = w ? branchById(w.branch) : undefined; // 兵器专职：名字后写分支，超出 Lv5 的级数写成 +n
+    text(L.x + pad + 34, y - 1, w ? `${WEAPON_META[w.id].name}  ${dots(w.level, wmax)}${w.over ? ' +' + w.over : ''}${br ? ' · ' + br.name : ''}` : '—', 13, br ? '#ffe2a0' : '#eadcbd').setName(P + '-weapon');
+    if (w) hot(L.x + pad, y - 2, L.w - pad * 2, 18, P + '-weapon-hit', () => ({ title: WEAPON_META[w.id].name, sub: `本命武器 · Lv.${w.level + (w.over ?? 0)}/${wmax}${br ? ' · 专职 ' + br.name : ''}`, body: (br ? br.name + '：' + br.desc + String.fromCharCode(10) : '') + WEAPON_META[w.id].desc + (w.level < wmax ? '\n升级时可在三选一里继续强化。' : '\n已满级。'), color: 0xe0b860 }));
     y += 20;
     // 专属武学
     const arts = (Object.keys(MARTIALS) as MasteryId[]).filter(id => MARTIALS[id].character === g.character);

@@ -36,7 +36,7 @@ for (const hero of HEROES) {
       eval(C); const w = pl.weapons[0]; w.cooldownLeft = 1e9; await wait(6000); const idleSharp = pl.passive.isSharpshooter(s.combatNow);
       mk(pl.x + 300, pl.y); w.cooldownLeft = 0; const seen = []; let enteredAt = -1, t0 = s.combatNow;
       while (s.combatNow - t0 < 15000) { await wait(40); const sn = pl.passive.snapshot(s.combatNow); if (seen[seen.length - 1] !== sn.stacks) seen.push(sn.stacks); if (sn.ready) { enteredAt = s.combatNow - t0; break; } }
-      const label = pl.passive.label(s.combatNow), enterFx = !!s.children.getByName('huangzhong-sharp-enter');
+      const label = pl.passive.label(s.combatNow); let enterFx = !!s.children.getByName('huangzhong-sharp-enter'); /* 进神射的那支箭在武器 update 后段命中，金光下一帧才出：最多等 0.5 秒 */ for (let k = 0; k < 10 && !enterFx; k++) { await wait(50); enterFx = !!s.children.getByName('huangzhong-sharp-enter'); }
       // 神射持续 6 秒，期间受伤不退出
       const t1 = s.combatNow; pl.passive.onDamage(s.combatNow); const keptAfterHurt = pl.passive.isSharpshooter(s.combatNow);
       w.cooldownLeft = 1e9; while (pl.passive.isSharpshooter(s.combatNow) && s.combatNow - t1 < 9000) await wait(50);

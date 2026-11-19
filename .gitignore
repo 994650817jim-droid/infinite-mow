@@ -199,6 +199,8 @@ assets/raw/*
 !/tools/shot-siege-hall.mjs
 !/tools/shot-yiling-body.mjs
 !/tools/prepare-scene-sheet.mjs
+!/tools/crop-terrain-kit.mjs
+!/tools/shot-river.mjs
 !/tools/resize-image.mjs
 !/tools/shot-boss-still.mjs
 !/tools/prepare-story-art.mjs

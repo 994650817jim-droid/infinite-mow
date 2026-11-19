@@ -103,7 +103,9 @@ import { addMerit, addScrolls, getXinde, SCROLL, temperBonus } from '../systems/
 import { primaryAttribute, PRIMARY_PERK, PRIMARY_PERK_INFO, PRIMARY_TIERS, PRIMARY_MUL, SPELL_WEAPONS } from '../data/attributes';
 import { chaptersOpen, stageCleared, takeAttrNotice } from '../systems/HeroProgress';
 import { allocateHeroAttr, claimFirstClear, creditHeroXp, enlistHero, heroFreePoints, heroInfo, heroLevel, levelCap, setHeroProgress, type HeroKey } from '../systems/HeroProgress';
-import { HERO_XP_RATE, OVERFLOW_XP_PER_GRAIN, PICK_GUARANTEE, PICK_PACE } from '../data/heroLevels';
+import { HERO_XP_RATE, OVERFLOW_XP_PER_GRAIN, PICK_GUARANTEE, PICK_PACE, chapterXpMul } from '../data/heroLevels';
+import { attributePointsBetween } from '../systems/RunGrowth';
+import { vigorHp } from '../data/attributes';
 import { CHAPTER_INDEX, PHASES, buildPhasePlan, phasedPace, type PhaseKind, type PhasePlan } from '../data/stagePhases';
 import { StagePhaseRunner } from '../systems/StagePhases';
 import { BattleFortunes } from '../systems/BattleFortunes';
@@ -3600,7 +3602,7 @@ export class GameScene extends Phaser.Scene {
     this.player.hp = carried ? Math.max(1, Math.min(this.player.maxHp, Math.round(this.player.maxHp * ratio))) : this.player.maxHp;
   }
   /** 经验倍率（2026-11-17 只留武将等级）：主线首次打 1.0；攻城 / 军情 / 挑战 / 重打旧关 0.5。 */
-  protected heroXpRate(): number { return ['GameScene', 'ThirdGameScene', 'GuanduGameScene', 'ChibiGameScene'].includes(this.scene.key) && !(this.scene.key === 'GameScene' && this.runConfig.encounter) && !this.campaignReplay ? HERO_XP_RATE.main : HERO_XP_RATE.side; }
+  protected heroXpRate(): number { const main = (!!this.phasePlan || ['GameScene', 'ThirdGameScene', 'GuanduGameScene', 'ChibiGameScene'].includes(this.scene.key)) && !(this.scene.key === 'GameScene' && this.runConfig.encounter) && !this.campaignReplay; return (main ? HERO_XP_RATE.main : HERO_XP_RATE.side) * chapterXpMul(CHAPTER_INDEX[this.hardKey()] ?? 1); } // 2026-11-19：宝石经验按章节放大；第六～十二章主线（五段关）也按主线算
   /** 测试 / 调试战斗：不写武将等级、不记经验。 */
   protected debugRun(): boolean { return isChapterTestRun() || this.debugModified || this.debugJumped || !!this.player.damageImmune; }
   /** 本场开打时的武将等级（结算显示 Lv.a → Lv.b）。 */
@@ -3614,16 +3616,18 @@ export class GameScene extends Phaser.Scene {
   protected pickGapOk(): boolean { return !this.paceOn() || this.forcePickNow || this.elapsed - this.lastPickAt >= PICK_PACE.minGapSec; }
   /** 开局：局内等级 / 经验就是武将等级 / 经验。 */
   protected syncHeroLevel(): void {
-    const info = heroInfo(this.runConfig.character);
-    this.player.level = info.level; this.player.xp = info.xp; this.player.xpNext = info.next; this.heroLv = info.level; this.heroStartLevel = info.level;
+    const info = heroInfo(this.runConfig.character), full = this.player.hp >= this.player.maxHp - 1e-6; // 体魄生命随等级：开局满血的话按新上限补满（带伤继承在之后的 applyCarriedHp 处理）
+    this.player.level = info.level; this.player.xp = info.xp; this.player.xpNext = info.next; this.heroLv = info.level; this.heroStartLevel = info.level; if (full) this.player.hp = this.player.maxHp;
   }
   /** 战斗中武将升级：每级一次三选一并给 1 个属性点（正式战斗立刻写入存档）。 */
   protected onHeroLevelUp(gained: number): void {
     const g = this.player.growth, id = this.runConfig.character;
+    const fromLv = this.heroLv, pts = attributePointsBetween(fromLv, this.player.level); // 2026-11-19：Lv20 后每 4 级才给 1 点（三选一照给）
     this.heroLv = this.player.level; this.picksGiven += gained; this.pendingLevels += gained; g.attrMax = attributeCap(this.player.level);
+    this.player.heal(vigorHp(this.player.level) - vigorHp(fromLv)); // 体魄：升级多出的生命上限直接补满这一截
     const room = (Object.values(g.attributes) as number[]).reduce((n, v) => n + g.attrMax - v, 0) - g.unallocated;
-    if (!this.debugRun()) { setHeroProgress(id, this.player.level, this.player.xp); g.heroFree += gained; }
-    g.unallocated += Math.max(0, Math.min(gained, room));
+    if (!this.debugRun()) { setHeroProgress(id, this.player.level, this.player.xp); g.heroFree += pts; }
+    g.unallocated += Math.max(0, Math.min(pts, room));
     if (this.mode === 'none' && this.pickGapOk()) this.openUpgrade();
   }
   /** 本关保底：三选一次数不够 target 时补「军略」（同一个三选一，不给属性点）。 */
@@ -4400,7 +4404,7 @@ export class GameScene extends Phaser.Scene {
     if (!this.player || !this.attributePointsText) return;
     const growth=this.player.growth;
     {const close=this.attributePanel.getByName('attributes-close') as Phaser.GameObjects.Text|null;close?.setText(this.attributeReturn==='none'?'继续战斗':'返回暂停菜单');if(close&&!close.getData('hitBox')){lqHitBox(close,220,44);close.setData('hitBox',true);}}
-    this.attributePointsText.setText(growth.unallocated>0?`可分配属性点 ${growth.unallocated}`:`属性点已用完 · 武将每升 1 级获得 1 点（当前 Lv.${this.heroLv}）`).setColor(growth.unallocated>0?(IS_DESKTOP?'#efd399':'#1c160c'):'#91ab98').setBackgroundColor(growth.unallocated>0&&!IS_DESKTOP?'#e2bd6a':'#00000000');if(IS_DESKTOP)this.attributePointsText.setFontFamily(HEADING_FONT).setFontSize(growth.unallocated>0?20:15).setStroke('#120904',growth.unallocated>0?4:0);
+    this.attributePointsText.setText(growth.unallocated>0?`可分配属性点 ${growth.unallocated}`:`属性点已用完 · Lv20 前每级 1 点、之后每 4 级 1 点（当前 Lv.${this.heroLv}）`).setColor(growth.unallocated>0?(IS_DESKTOP?'#efd399':'#1c160c'):'#91ab98').setBackgroundColor(growth.unallocated>0&&!IS_DESKTOP?'#e2bd6a':'#00000000');if(IS_DESKTOP)this.attributePointsText.setFontFamily(HEADING_FONT).setFontSize(growth.unallocated>0?20:15).setStroke('#120904',growth.unallocated>0?4:0);
     this.attributePauseText?.setText(`分配属性点 · ${growth.unallocated}`);
     const weapon=this.player.weapons[0];
     this.attributeWeaponText?.setText((weapon?weaponName(weapon.id,this.runConfig.character):'')+' · '+growth.masteryLabel());

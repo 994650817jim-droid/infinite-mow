@@ -1,4 +1,5 @@
 import { OVERFLOW_XP_PER_GRAIN } from '../data/heroLevels';
+import { attributePointsAt } from '../data/attributes';
 import type { CharacterId } from '../data/characters';
 import { ATTRIBUTE_IDS, ATTRIBUTE_MAX, ATTRIBUTE_POINT_EVERY, attributeCap, xpToNext, type AttributeId } from './RunGrowth';
 import { chapterOneCleared } from './ChapterProgress';
@@ -8,13 +9,14 @@ import { arcUnlocked } from '../world/WorldStore';
  * 武将等级（跨战斗永久，2026-11-16 用户批准 hero-level-proposal.md 做法 A）：
  * - 每位武将（可玩名将 CharacterId 或招募的 r_ 编号）各记等级、经验、已加的属性点；存档键 im_heroes_v1（SaveSlots.PROGRESS_KEYS）。
  * - 结算时本场经验折进武将经验（主线 100%、攻城 / 军情 / 挑战 50%，测试战斗不记）；经验表与局内相同（xpToNext）。
- * - 每级 1 个属性点（Lv.N 共 N−1 点，2026-11-16 改版），单项最多 8，分配永久保留；局内升级不再给属性点（局内只出三选一，见 Player.gainXp「战功」）。
- * - 等级上限随章节开放：一章 10、二章 15、三章 20、四章 25、五章 30；超出的经验先存着，开新章后再升。
- * - 第一次出战的武将：只开第一章时 Lv1，之后从「当前上限 − 5」起步（避免后期才用的武将打不动）。
+ * - 属性点：2026-11-19 起 Lv20 前每级 1 点、之后每 4 级 1 点（data/attributes.ts attributePointsAt），单项最多 10，分配永久保留。
+ * - 等级上限随章节开放（2026-11-19 波数 / 等级重做）：10 / 18 / 26 / 34 / 42 / 48 / 54 / 60 / 66 / 72 / 78 / 84；超出的经验先存着，开新章后再升。
+ * - 第一次出战的武将：只开第一章时 Lv1，之后从「当前上限 − 6」起步（避免后期才用的武将打不动）。
  */
 export const HEROES_KEY = 'im_heroes_v1';
 /** 各章开放时的武将等级上限（第 n 章 = LEVEL_CAPS[n−1]）。2026-11-18 平衡：第六～十二章每章 +4，到 58（属性单项上限 14、共 56 点）。 */
-export const LEVEL_CAPS: readonly number[] = [10, 15, 20, 25, 30, 34, 38, 42, 46, 50, 54, 58];
+/** 2026-11-19 波数 / 等级重做（wave-progression-redesign.md §3）：上限提高，经验按章节放大，各章打完正好到上限；点数与等级脱钩（attributePointsAt）。 */
+export const LEVEL_CAPS: readonly number[] = [10, 18, 26, 34, 42, 48, 54, 60, 66, 72, 78, 84];
 export type HeroKey = CharacterId | `r_${number}`;
 export interface HeroRecord { level: number; xp: number; attributes: Record<AttributeId, number> }
 /**
@@ -39,9 +41,9 @@ export function chaptersOpen(): number {
 }
 export function levelCap(): number { return LEVEL_CAPS[chaptersOpen() - 1]; }
 /** 第一次出战的武将的起始等级。 */
-export function startLevel(): number { const cap = levelCap(); return cap <= LEVEL_CAPS[0] ? 1 : cap - 5; }
+export function startLevel(): number { const cap = levelCap(); return cap <= LEVEL_CAPS[0] ? 1 : cap - 6; }
 /** 某等级累计可得的属性点。 */
-export function pointsAt(level: number): number { return Math.max(0, Math.floor((level - 1) / ATTRIBUTE_POINT_EVERY)); }
+export function pointsAt(level: number): number { return attributePointsAt(level); }
 
 let memory: HeroSave | null = null;
 function read(): HeroSave {
@@ -58,6 +60,8 @@ function read(): HeroSave {
         if (!isKey(k) || !r) continue;
         const attributes = zeroAttrs(); if (s.attrSet === 3) for (const a of ATTRS) attributes[a] = int(r.attributes?.[a], ATTRIBUTE_MAX);
         s.heroes[k] = { level: int(r.level, LEVEL_CAPS[LEVEL_CAPS.length - 1], 1), xp: int(r.xp, 1e8), attributes };
+        // 2026-11-19 点数改版（Lv20 后每 4 级 1 点、单项上限 10）：已加的点超过新规则就全部退回重加（提示一次）
+        { const h = s.heroes[k], spent = ATTRS.reduce((n, a) => n + h.attributes[a], 0); if (spent > attributePointsAt(h.level) || ATTRS.some(a => h.attributes[a] > attributeCap(h.level))) { h.attributes = zeroAttrs(); s.attrNotice = true; } }
       }
     }
   } catch { s = { version: 1, heroes: {}, migrated: false, firstClears: [], attrSet: 3 }; }

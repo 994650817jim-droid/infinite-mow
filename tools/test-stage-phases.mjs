@@ -74,6 +74,8 @@ await stageCase('3-2 宛城夜袭（ThirdGameScene）', { key: 'ThirdGameScene',
   await p.waitForTimeout(1200); await p.screenshot({ path: `${OUT}/fortune-cards.png` });
   const pick = await p.evaluate(async () => { const s = window.__S, before = { ...s.player.stats }; const o = s.upgradeOptions[0]; s.chooseUpgrade(0); const ce = await import('/src/systems/CharmEffects.ts'); const packed = ce.statsWithoutCharms(s.player); const keys = Object.keys(before).filter(k => before[k] !== s.player.stats[k]); return { name: o.name, mode: s.mode, changed: keys, packedSame: keys.every(k => Math.abs(packed[k] - before[k]) < 1e-6), taken: s.fortuneTaken }; });
   ck('P2 选了增益：属性当场变化，征程构筑存档时扣掉（不带到下一关），回到战斗', pick.mode === 'none' && pick.changed.length > 0 && pick.packedSame && Object.values(pick.taken)[0] === 1, pick);
+  const f0 = await p.evaluate(async () => { const s = window.__S, up = await import('/src/data/upgrades.ts'), ce = await import('/src/systems/CharmEffects.ts'); const hp0 = s.player.maxHp, packed0 = ce.statsWithoutCharms(s.player).maxHpBonus; up.foundationOptions()[0].apply(s.player); return { up: s.player.maxHp - hp0, packedDelta: ce.statsWithoutCharms(s.player).maxHpBonus - packed0, label: up.foundationOptions()[0].categoryLabel }; });
+  ck('P0 固本培元改为本关有效：当场生命上限 +12，征程构筑存档不带走（不再无限叠加）', f0.up === 12 && f0.packedDelta === 0 && /本关/.test(f0.label), f0);
   await jump(p, 109); await p.waitForTimeout(500);
   const ev = await p.evaluate(() => { const s = window.__S, f = s.fortunes, L = f.live.find(x => !x.done); return { spawned: f.stats.spawned, kind: L?.kind, label: L?.label.text }; });
   ck('P2 事件段 8 秒后再来一次机缘（义军被围 / 降将来投 / 烽燧之一）', ev.spawned.length === 2 && ['rescue', 'defector', 'beacon'].includes(ev.kind), ev);

@@ -93,18 +93,22 @@ const store = await p.evaluate(async () => {
   hp.resetHeroCache(); out.fcKept = [hp.claimFirstClear('huangjin-1'), hp.claimFirstClear('huangjin-2')];
   const s = window.__game.scene.getScene('GameScene'); out.rate = s.heroXpRate(); out.key = s.stableRewardKey();
   // 各章场景的首通 / 赠马关卡键：第 3–5 章由 ThirdGameScene（群雄、赤壁）与 GuanduGameScene 覆盖；攻城、军情、三英战吕布没有键（不发首通经验）
-  const sm = window.__game.scene, keyOf = n => { const sc = sm.getScene(n); if (!sc) return 'missing'; const probe = Object.assign(Object.create(sc), { runConfig: { encounter: 'qunxiong' }, chapter: { id: 'hulao', westStage: 3 } }); return [sc.stableRewardKey.call(probe), sc.heroXpRate.call(probe)]; };
+  const hl = await window.__mod('/src/data/heroLevels.ts'), sp = await window.__mod('/src/data/stagePhases.ts');
+  const sm = window.__game.scene, keyOf = n => { const sc = sm.getScene(n); if (!sc) return 'missing'; const probe = Object.assign(Object.create(sc), { runConfig: { encounter: 'qunxiong' }, chapter: { id: 'hulao', westStage: 3 } }); const mul = hl.chapterXpMul(sp.CHAPTER_INDEX[sc.hardKey.call(probe)] ?? 1); return [sc.stableRewardKey.call(probe), +(sc.heroXpRate.call(probe) / mul).toFixed(3)]; };
+  out.chapterMul = [1, 2, 5, 12].map(hl.chapterXpMul); out.points = [...out.points, ...[10, 20, 24, 42, 72, 84].map(hp.pointsAt)];
+  const at = await window.__mod('/src/data/attributes.ts'); out.vigor = [1, 10, 40, 84].map(at.vigorHp); out.caps = [1, 2, 5, 12].map(i => [10, 18, 26, 34, 42, 48, 54, 60, 66, 72, 78, 84][i - 1] === hp.LEVEL_CAPS[i - 1]);
   out.keys = Object.fromEntries(['ThirdGameScene', 'GuanduGameScene', 'ChibiGameScene', 'SiegeGameScene', 'IntelGameScene', 'LubuGameScene'].map(n => [n, keyOf(n)]));
   return out;
 });
-ck('武将经验表（2026-11-17 level-merge-proposal：16 / 20 / 28 / 36 / 120 / … / Lv10 1100）', JSON.stringify(store.table) === '[16,20,28,36,120,1100]' && store.slot, store);
+ck('武将经验表（2026-11-19 wave-progression-redesign §3.3：16 / 20 / 28 / 36 / 120 / … / Lv10 275）', JSON.stringify(store.table) === '[16,20,28,36,120,275]' && store.slot, store);
 ck('只开第一章：上限 10，新武将从 Lv1 起步（含招募的 r_）', JSON.stringify(store.open1) === '[1,10,1,1,1]', store.open1);
 ck('结算记经验：Lv1 + 16 → Lv2；超出上限停在 Lv10，经验暂存', JSON.stringify(store.lv2) === '[1,2]' && JSON.stringify(store.capped) === '[10,true,10]', store);
-ck('每级 1 个永久属性点（Lv10 = 9 点），加点写入存档', JSON.stringify(store.points) === '[9,true,8,1]', store.points);
-ck('开第二章：上限 15，暂存经验补升；新武将从 Lv10（上限 − 5）起步', store.open2[0] === 2 && store.open2[1] === 15 && store.open2[2] === 10 && store.open2[3] > 10 && store.open2[4] === 10, store.open2);
+ck('属性点：Lv20 前每级 1 点、之后每 4 级 1 点（Lv10 = 9、Lv20 = 19、Lv24 = 20、Lv42 = 24、Lv72 = 32、Lv84 = 35），加点写入存档', JSON.stringify(store.points) === '[9,true,8,1,9,19,20,24,32,35]', store.points);
+ck('2026-11-19 等级重做：上限 10 / 18 / … / 84；宝石经验章节倍率 ×1 / 1.5 / 3 / 6.5；体魄生命 Lv1 0、Lv10 +72、Lv40 +312、Lv84 +488', store.caps.every(Boolean) && JSON.stringify(store.chapterMul) === '[1,1.5,3,6.5]' && JSON.stringify(store.vigor) === '[0,72,312,488]', { caps: store.caps, mul: store.chapterMul, vigor: store.vigor });
+ck('开第二章：上限 18，暂存经验补升；新武将从 Lv12（上限 − 6）起步', store.open2[0] === 2 && store.open2[1] === 18 && store.open2[2] === 12 && store.open2[3] > 10 && store.open2[4] === 12, store.open2);
 ck('单项属性最多 10 点', JSON.stringify(store.maxOne) === '[10,false]', store.maxOne);
 ck('属性改版老档：六项点数全部退回（Lv9 → 8 点待分配），提示只给一次', JSON.stringify(store.refund.attrs) === '{"strength":0,"agility":0,"intellect":0,"command":0}' && store.refund.free === 8 && JSON.stringify(store.refund.notice) === '[true,false]', store.refund);
-ck('老档迁移：打赢过仗的武将补到当前上限的一半（≥ 起始等级），只迁移一次', store.migr[0] === 10 && store.migr[1] === 10 && store.migr[2] === true, store.migr);
+ck('老档迁移：打赢过仗的武将补到当前上限的一半（≥ 起始等级 Lv12），只迁移一次', store.migr[0] === 12 && store.migr[1] === 12 && store.migr[2] === true, store.migr);
 ck('主线首次打经验 × 1.0', store.rate === 1, store.rate);
 ck('第 3–5 章场景有首通键（third-1 / guandu-1 / chibi-1，× 1.0）；攻城、军情、三英战吕布没有键、× 0.5', JSON.stringify(store.keys) === JSON.stringify({ ThirdGameScene: ['third-1', 1], GuanduGameScene: ['guandu-1', 1], ChibiGameScene: ['chibi-1', 1], SiegeGameScene: [null, .5], IntelGameScene: [null, .5], LubuGameScene: [null, .5] }), store.keys);
 ck('首次通关经验：一章 120、二章 250、三章 380、四章 510、五章 640；每关只给一次，存档保留；挑战关不给', JSON.stringify(store.fc) === '[120,0,250,380,510,640,0,0]' && JSON.stringify(store.fcKept) === '[0,120]' && store.key === 'huangjin-1', { fc: store.fc, fcKept: store.fcKept, key: store.key });

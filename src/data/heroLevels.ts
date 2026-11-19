@@ -5,15 +5,21 @@
 /** 升到下一级所需经验（Lv1→2 起）。累计：Lv5 100、Lv10 1280、Lv15 7280、Lv20 16030、Lv25 27280、Lv30 40780。 */
 const TABLE: readonly number[] = [
   16, 20, 28, 36,                 // Lv1–5
-  120, 160, 220, 300, 380,        // Lv5–10
-  1100, 1150, 1200, 1250, 1300,   // Lv10–15（第二章）
+  120, 150, 180, 210, 240,        // Lv5–10（第一章）
 ];
+/**
+ * 2026-11-19 波数 / 等级重做（wave-progression-redesign.md §3.3）：上限 10 / 18 / 26 / 34 / 42 / 48 / 54 / 60 / 66 / 72 / 78 / 84，
+ * 每章可得 = 3 关 × 约 320 局内经验 × 章节倍率 + 3 × 首通，摊到本章要升的级数（二～五章 8 级、六章起 6 级）。实现后由平衡会话实测再校。
+ */
+const BANDS: ReadonlyArray<readonly [number, number]> = [[18, 275], [26, 380], [34, 490], [42, 600], [48, 945], [54, 1090], [60, 1235], [66, 1380], [72, 1525], [78, 1670], [84, 1815]];
 export function heroXpToNext(level: number): number {
   const lv = Math.max(1, Math.floor(level));
   if (lv - 1 < TABLE.length) return TABLE[lv - 1];
-  // 第六～十二章（Lv30 起，每章约 4 级）：2026-11-18 平衡，按每章约 3 关 × 4500 经验 + 首通估
-  return lv < 20 ? 1750 : lv < 25 ? 2250 : lv < 30 ? 2700 : lv < 38 ? 3800 : lv < 46 ? 4200 : lv < 54 ? 4600 : 5000;
+  for (const [top, xp] of BANDS) if (lv < top) return xp;
+  return BANDS[BANDS.length - 1][1];
 }
+/** 宝石经验的章节倍率：第 n 章 ×(1 + 0.5 × (n − 1))，第十二章 ×6.5（小兵经验各章一样，靠这个让经验跟上更高的等级上限）。 */
+export function chapterXpMul(chapter: number): number { return 1 + .5 * (Math.max(1, Math.min(12, Math.floor(chapter))) - 1); }
 
 /** 经验倍率：主线首次打 1.0；攻城 / 军情 / 挑战 / 重打旧关 0.5。首次通关经验另加，不乘。 */
 export const HERO_XP_RATE = { main: 1, side: .5 } as const;

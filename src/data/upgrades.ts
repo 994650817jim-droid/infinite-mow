@@ -7,6 +7,7 @@ import { WEAPON_DEFS, SPEAR_PIERCE, GUANDAO_TABLE, crossbowExtraArrows, zhenbeiC
 import type { UpgradeOption, WeaponId, WeaponState } from '../types';
 import { getCharacter } from './characters';
 import { ATTRIBUTE_INFO, dragBodyLengths, type AttributeId, type PotionId, type RunGrowth, MARTIALS, type MasteryId } from '../systems/RunGrowth';
+import { applyStageBuff } from '../systems/StageBuffs';
 
 export const WEAPON_META: Record<WeaponId, { name: string; desc: string }> = {
   spear_orbit: { name: '七探盘龙枪', desc: '银枪自动索敌，向不同敌人突刺' },
@@ -168,9 +169,10 @@ export function canOfferRejuvenation(player: Player): boolean {
 /** 保底选项：原数值（+5生命/+5%拾取/+0.1回复）几乎无感，提高到可感知并各附带一个即时效果。 */
 export function foundationOptions():UpgradeOption[]{
   return [
-    {id:'foundation_hp',name:'固本培元',desc:'生命上限 +12\n并立即回复 12 生命',kind:'foundation',categoryLabel:'基础成长',apply:p=>{p.stats.maxHpBonus+=12;p.heal(12);}},
-    {id:'foundation_pickup',name:'搜集辎重',desc:'拾取范围 +15%\n并立即收拢全场军功宝石',kind:'foundation',categoryLabel:'基础成长',apply:p=>{p.stats.pickupRadius*=1.15;const s=p.scene as unknown as {gemMagnetUntil?:number;combatNow?:number};s.gemMagnetUntil=(s.combatNow??0)+2500;}},
-    {id:'foundation_recovery',name:'调息养元',desc:'每秒回复 +0.3 生命\n并立即回复 15% 生命',kind:'foundation',categoryLabel:'基础成长',apply:p=>{p.stats.regen+=.3;p.heal(Math.round(p.maxHp*.15));}},
+    // 2026-11-19（wave-progression-redesign.md P0）：改为本关有效（记在 StageBuffs，征程构筑存档时扣掉），永久生命由「体魄」按等级给
+    {id:'foundation_hp',name:'固本培元',desc:'本关生命上限 +12\n并立即回复 12 生命',kind:'foundation',categoryLabel:'基础成长 · 本关',apply:p=>{applyStageBuff(p,s=>{s.maxHpBonus+=12;});p.heal(12);}},
+    {id:'foundation_pickup',name:'搜集辎重',desc:'本关拾取范围 +15%\n并立即收拢全场军功宝石',kind:'foundation',categoryLabel:'基础成长 · 本关',apply:p=>{applyStageBuff(p,s=>{s.pickupRadius*=1.15;});const s=p.scene as unknown as {gemMagnetUntil?:number;combatNow?:number};s.gemMagnetUntil=(s.combatNow??0)+2500;}},
+    {id:'foundation_recovery',name:'调息养元',desc:'本关每秒回复 +0.3 生命\n并立即回复 15% 生命',kind:'foundation',categoryLabel:'基础成长 · 本关',apply:p=>{applyStageBuff(p,s=>{s.regen+=.3;});p.heal(Math.round(p.maxHp*.15));}},
   ];
 }
 

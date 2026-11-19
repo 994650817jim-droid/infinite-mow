@@ -16,7 +16,23 @@ export const ATTRIBUTE_IDS: readonly AttributeId[] = ['strength', 'agility', 'in
  * ATTRIBUTE_MAX = 绝对上限（读档夹取、格子排版）；实际上限看 attributeCap(武将等级)。主属性专精门槛 4 / 7 / 10 不变。
  */
 export const ATTRIBUTE_MAX = 15;
-export function attributeCap(level: number): number { return Math.min(ATTRIBUTE_MAX, Math.max(10, Math.ceil((level - 1) / 4))); }
+/** 2026-11-19 波数 / 等级重做（wave-progression-redesign.md §3）：点数不跟等级一起涨，最多约 35 点，单项上限固定 10。 */
+export function attributeCap(_level: number): number { return Math.min(ATTRIBUTE_MAX, 10); }
+/**
+ * 某等级累计属性点（2026-11-19 等级上限提高到 84，点数和等级脱钩）：Lv20 前每级 1 点，之后每 4 级 1 点。
+ * Lv10 = 9、Lv20 = 19、Lv42 = 24、Lv72 = 32、Lv84 = 35（对得上敌人调参时假设的强度）。
+ */
+export const ATTRIBUTE_POINTS = { fullUntil: 20, lateEvery: 4 } as const;
+export function attributePointsAt(level: number): number {
+  const lv = Math.max(1, Math.floor(level)), A = ATTRIBUTE_POINTS;
+  return lv <= A.fullUntil ? lv - 1 : A.fullUntil - 1 + Math.floor((lv - A.fullUntil) / A.lateEvery);
+}
+/** 体魄：武将每级生命上限 +8（Lv40 起每级 +4），取代固本培元无限叠出来的生命。 */
+export const VIGOR = { perLevel: 8, lateFrom: 40, perLevelLate: 4 } as const;
+export function vigorHp(level: number): number {
+  const lv = Math.max(1, Math.floor(level));
+  return VIGOR.perLevel * (Math.min(lv, VIGOR.lateFrom) - 1) + VIGOR.perLevelLate * Math.max(0, lv - VIGOR.lateFrom);
+}
 export const ATTRIBUTE_POINT_EVERY = 1;
 /** 每点效果。 */
 export const ATTRIBUTE_EFFECT = {

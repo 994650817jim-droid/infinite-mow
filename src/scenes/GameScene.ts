@@ -761,10 +761,14 @@ export class GameScene extends Phaser.Scene {
       bosses: () => this.dual ? (this.cutscene?.active ? [] : this.dual.alive.map(x => ({ e: x.enemy, name: x.name, color: x.color }))) : this.dzLubu?.lubuFocus ? (this.cutscene?.active ? [] : [{ e: this.dzLubu.lubuFocus, name: '吕布' }]) : null,
       extras: e => { const x = this.dual?.entryOf(e); if (x) return [x.mount?.horseImage, x.mount?.frontImage]; return e === this.boss ? [this.bossMount?.horseImage, this.bossMount?.frontImage] : []; }, outline: e => this.iff?.overlayOf(e.sprite) });
     // 震屏设置（强 / 弱 / 关，im_shake，见 systems/BattleSettings）：包一层主相机 shake，现有调用全部按设置缩放
-    { const cam = this.cameras.main, orig = cam.shake.bind(cam);
+    { const cam = this.cameras.main, orig = cam.shake.bind(cam), T = HIT_FEEL.shakeThrottle; let lastShakeAt = -1e9;
       cam.shake = ((duration?: number, intensity?: number | Phaser.Math.Vector2, force?: boolean, callback?: Phaser.Types.Cameras.Scene2D.CameraShakeCallback, context?: unknown) => {
         const k = shakeScale(); if (k <= 0) return cam;
-        return orig(duration, typeof intensity === 'number' ? intensity * k : intensity, force, callback, context);
+        // 全局节流（用户「屏幕触发震动太多」）：弱震距上次不足 minGapMs 跳过；强震（首领转阶段 / 倒下）照常
+        const raw = typeof intensity === 'number' ? intensity : .005, now = this.time.now;
+        if (raw < T.strongAt && now - lastShakeAt < T.minGapMs) return cam;
+        lastShakeAt = now;
+        return orig(duration, typeof intensity === 'number' ? intensity * k * T.globalMul : intensity, force, callback, context);
       }) as typeof cam.shake; }
     this.shieldBars=new ShieldBars(this);this.events.once('shutdown',()=>{this.shieldBars?.clear();this.shieldBars=null;this.objective?.clear();this.objective=null;this.objectiveText=undefined;});
     this.setupObjective();

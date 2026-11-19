@@ -11,15 +11,15 @@ const ck = (n, ok, d) => { if (!ok) fail++; console.log((ok ? 'PASS ' : 'FAIL ')
 const save = { version: 7, yellowStages: 3, dongzhuoStages: 1, warlordStages: 0, guanduStages: 0, worldAvailable: true, cleared: { huangjin: true, hulao: false }, merits: 0, provisions: 300, buildings: { barracks: 1, farm: 1, clinic: 1 }, reserve: {}, receipts: [], nodes: ['home', 'huangjin', 'hulao'], ownedCities: [], eraSeen: 0, capturedEver: [], chapterSeen: 2, tutorialDone: true };
 const roster = { version: 1, lord: 'guanyu', lordFinal: true, owned: [], followers: [], offers: [], captives: [], season: -1, manual: 0, dry: 0, seq: 0, hall: 1 };
 const b = await chromium.launch({ channel: 'chrome', headless: true, args: ['--mute-audio'] });
-const open = async () => {
+const open = async (sv0 = save) => {
   const p = await b.newPage({ viewport: { width: 1920, height: 1080 } });
   p.on('pageerror', e => errors.push(e.message)); p.on('console', m => { if (m.type() === 'error' && !/favicon|Failed to load resource/.test(m.text())) errors.push(m.text()); });
-  await p.addInitScript(([sv, rs]) => { if (!sessionStorage.getItem('seeded')) { localStorage.clear(); localStorage.setItem('im_world_v1', JSON.stringify(sv)); localStorage.setItem('im_roster_v1', JSON.stringify(rs)); localStorage.setItem('im_last_hero', 'zhaoyun'); localStorage.setItem('im_home_seen', '1'); localStorage.setItem('im_tutorial_done', '1'); sessionStorage.setItem('seeded', '1'); } window.__menuSeen = false; }, [save, roster]);
+  await p.addInitScript(([sv, rs]) => { if (!sessionStorage.getItem('seeded')) { localStorage.clear(); localStorage.setItem('im_world_v1', JSON.stringify(sv)); localStorage.setItem('im_roster_v1', JSON.stringify(rs)); localStorage.setItem('im_last_hero', 'zhaoyun'); localStorage.setItem('im_home_seen', '1'); localStorage.setItem('im_tutorial_done', '1'); sessionStorage.setItem('seeded', '1'); } window.__menuSeen = false; }, [sv0, roster]);
   await p.goto(base + '?layout=desktop'); await p.waitForFunction(() => window.__game?.scene.isActive('MenuScene'), null, { timeout: 180000 });
   await p.evaluate(() => { window.__game.scene.getScene('MenuScene').scene.start('WorldMapScene'); });
   await p.waitForFunction(() => window.__game.scene.isActive('WorldMapScene') && !window.__game.scene.isActive('MenuScene')); await p.waitForTimeout(1800);
   // 从这里起盯着：出征后 MenuScene（选将页）不能有任何一帧是开着的
-  await p.evaluate(() => { const g = window.__game; g.events.on('step', () => { if (g.scene.isActive('MenuScene')) window.__menuSeen = true; }); });
+  await p.evaluate(() => { const g = window.__game; window.__arcSeen = []; g.events.on('step', () => { if (g.scene.isActive('MenuScene')) window.__menuSeen = true; for (const sc of g.scene.getScenes(true)) if (/ChapterScene$/.test(sc.scene.key) && !window.__arcSeen.includes(sc.scene.key)) window.__arcSeen.push(sc.scene.key); }); });
   return p;
 };
 const M = "window.__game.scene.getScene('WorldMapScene')";
@@ -50,6 +50,20 @@ const battle = p => p.evaluate(() => { const g = window.__game, gs = g.scene.get
   ck('重打 2-1：直接进战斗、关羽出战', r.active && !r.menuSeen && r.west === 2 - 1 && r.hero === 'guanyu', r);
   await p.close();
 }
+// ③④ 2026-11-19 用户「打第三章的时候又出现这个老界面了」：第三章起（各章自己的选关场景）也直接出征，不显示「出战武将」选将页
+const arcCase = async (label, extra, chapter, scene, stageKey, expectStage, shot) => {
+  const p = await open({ ...save, dongzhuoStages: 3, cleared: { huangjin: true, hulao: true }, ...extra });
+  const card = await p.evaluate(([M0, ch]) => { const s = eval(M0); const n = s.markers.find(m => m.node.chapter === ch || m.node.id === ch); if (!n) return null; s.centerOn?.(n.node); s.selected = { kind: 'node', node: n.node }; s.refresh(); return { title: s.detailTitle.text, action: s.action.text.text, state: s.nodeState(n.node) }; }, [M, chapter]);
+  await p.evaluate(M0 => eval(M0).action.image.emit('pointerup'), M);
+  await p.waitForFunction(k => window.__game.scene.isActive(k) && window.__game.scene.getScene(k).player, scene, { timeout: 120000 }).catch(() => {});
+  await p.waitForTimeout(1500);
+  const r = await p.evaluate(([k, sk]) => { const g = window.__game, rc = g.registry.get('runConfig'); return { active: g.scene.isActive(k), hero: rc?.character, stage: g.registry.get(sk), arcSeen: window.__arcSeen, arcActive: g.scene.getScenes(true).map(x => x.scene.key).filter(x => /ChapterScene$/.test(x)), menuSeen: window.__menuSeen }; }, [scene, stageKey]);
+  ck(`${label}：出征直接进战斗（${scene}），主公关羽、第 ${expectStage} 关；章节场景只转一下、选将页没画出来`, !!card && card.state !== 'locked' && r.active && r.hero === 'guanyu' && r.stage === expectStage && !r.arcActive.length && !r.menuSeen, { card, r });
+  if (shot) await p.screenshot({ path: `${out}/${shot}.png` });
+  await p.close();
+};
+await arcCase('第叁章「群雄割据」（3-1 已过）', { warlordStages: 1 }, 'qunxiong', 'ThirdGameScene', 'thirdStage', 2, '3-ch3-battle');
+await arcCase('第柒章「蜀」（第七章起）', { warlordStages: 3, guanduStages: 3, chibiStages: 3, jingnanStages: 3, shuStages: 0 }, 'shu', 'ShuGameScene', 'shuStage', 1, '4-ch7-battle');
 await b.close();
 ck('无控制台 / 页面错误', errors.length === 0, errors.slice(0, 4));
 process.exit(fail ? 1 : 0);

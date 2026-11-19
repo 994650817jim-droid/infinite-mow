@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { loadSideWallArt } from './SideWall';
 import { MID_SIEGE_ART } from './SiegeMidCity';
 
 /**
@@ -20,5 +21,6 @@ export function loadMidSiegeArt(scene: Phaser.Scene): void {
   for (const f of MID_SIEGE_FILES) if (!scene.textures.exists(f.key)) scene.load.spritesheet(f.key, f.file, { frameWidth: f.cell, frameHeight: f.cell });
   // 大城护城河 / 吊桥借地形层的 v2 水面与木桥（同一套手绘图）
   for (const [k, f] of [['terrain_water', 'assets/terrain/water.png'], ['terrain_bridge', 'assets/terrain/bridge.png']] as const) if (!scene.textures.exists(k)) scene.load.image(k, f);
+  loadSideWallArt(scene);
   void MID_SIEGE_ART;
 }

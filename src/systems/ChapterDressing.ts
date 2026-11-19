@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { drawSideWall, loadSideWallArt, sideWallReady } from './SideWall';
 import { DEPTH, actorDepth } from '../config';
 import { MID_SIEGE_FILES } from './SiegeMidArt';
 
@@ -71,7 +72,8 @@ export function sealCityWall(scene: Phaser.Scene, o: { cx: number; wy: number; h
     const B = MID_SIEGE_FILES[5], W = MID_SIEGE_FILES[0], barb = scene.textures.exists(B.key);
     const piece = (x: number, y: number, f: number, size: number, flip = false) => img(scene, x, y, barb ? B.key : W.key, barb ? f : 5, size, size, o.tag + '-seal').setFlipX(flip);
     // 侧墙：从墙线往南排到南边界（压住碰撞框内沿）
-    for (let y = o.wy + 170; y < o.south + 60; y += 150) { piece(L - 40, y, 4, 230); piece(R + 40, y, 4, 230, true); }
+    if (sideWallReady(scene)) { drawSideWall(scene, { x: L - 40, y0: o.wy + 100, y1: o.south + 40, south: 'cap', name: o.tag + '-seal-side' }); drawSideWall(scene, { x: R + 40, y0: o.wy + 100, y1: o.south + 40, flip: true, south: 'cap', name: o.tag + '-seal-side' }); }
+    else for (let y = o.wy + 170; y < o.south + 60; y += 150) { piece(L - 40, y, 4, 230); piece(R + 40, y, 4, 230, true); }
     // 角楼：墙端（盖住城墙段的平切口）与南角
     for (const x of [L, R]) { if (o.endTowers !== false) piece(x, o.wy + 40, 3, 250); piece(x, o.south + 40, 3, 230); } // endTowers: false = 墙端角楼由调用方自己画（2-3 洛阳的 2.5D 角楼）
     // 南边界
@@ -83,9 +85,9 @@ export function sealCityWall(scene: Phaser.Scene, o: { cx: number; wy: number; h
       let k = 0; for (let x = L + 90; x < R - 60; x += 150, k++) img(scene, x, o.south + 30, o.palisade, k % 9 === 4 ? 2 : k % 9 === 7 ? 6 : 3, k % 9 === 4 ? 200 : 170, k % 9 === 4 ? 200 : 170, o.tag + '-seal-camp');
     }
   };
-  const need = [MID_SIEGE_FILES[5], MID_SIEGE_FILES[0]].filter(f => !scene.textures.exists(f.key));
+  const need = [MID_SIEGE_FILES[5], MID_SIEGE_FILES[0]].filter(f => !scene.textures.exists(f.key)), swNeed = loadSideWallArt(scene);
   if (o.south_ === 'river' && !scene.textures.exists('terrain_water')) scene.load.image('terrain_water', 'assets/terrain/water.png');
-  if (!need.length && (o.south_ !== 'river' || scene.textures.exists('terrain_water'))) { draw(); return; }
+  if (!need.length && !swNeed && (o.south_ !== 'river' || scene.textures.exists('terrain_water'))) { draw(); return; }
   for (const f of need) scene.load.spritesheet(f.key, f.file, { frameWidth: f.cell, frameHeight: f.cell });
   scene.load.once('complete', draw); if (!scene.load.isLoading()) scene.load.start();
 }

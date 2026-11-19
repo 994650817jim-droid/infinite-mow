@@ -18,10 +18,11 @@ const SHOTS_CH56 = [
   ['jingnan.open', 'lusu', 'liubei'], ['jingnan-1.bossIntro', 'zhaofan', 'zhaoyun'], ['jingnan-2.bossIntro', 'liudu', 'zhangfei'],
   ['jingnan-3.intro.hanxuan', 'hanxuan', 'guanyu'], ['jingnan-3.intro.huangzhong', 'yangling', 'huangzhong'],
 ];
-// 第一、二章 + 徐庶 / 刘贤 / 邢道荣（2026-11-18 夜补的对白立绘）；董卓只有 bark（战斗里是气泡，不出立绘），这里当卷轴播一下验立绘
+// 第一、二章 + 徐庶 / 刘贤 / 邢道荣（2026-11-18 夜补的对白立绘）；董卓在 2-3 战斗中途卷轴（midScrolls）里露脸，张世平在第一章章头
 const SHOTS_CH12 = [
   ['huangjin-2.brief', 'jianyong', 'liubei'], ['huangjin-1.bossIntro', 'zhangliang', 'liubei'], ['huangjin-2.bossIntro', 'zhangbao', 'liubei'], ['huangjin-3.bossIntro', 'zhangjiao', 'liubei'],
-  ['hulao-1.bossIntro', 'huaxiong', 'guanyu'], ['hulao-2.bossIntro', 'xurong', 'liubei'], ['hulao-3.dongzhuo_enter', 'dongzhuo', 'liubei'], ['qunxiong.open', 'lubu', 'liubei'],
+  ['hulao-1.bossIntro', 'huaxiong', 'guanyu'], ['hulao-2.bossIntro', 'xurong', 'liubei'], ['hulao-3.on_wall', 'dongzhuo', 'liubei'], ['hulao-3.on_wall', 'lubu', 'liubei'], ['hulao-3.dongzhuo_descend', 'dongzhuo', 'liubei'],
+  ['qunxiong.open', 'lubu', 'liubei'], ['huangjin.open', 'zhangshiping', 'liubei'],
   ['chibi.open', 'xushu', 'liubei'], ['jingnan-2.brief', 'xingdaorong', 'zhaoyun'], ['jingnan-2.brief', 'liuxian', 'zhaoyun'],
 ];
 const SHOTS = process.env.SET === 'ch56' ? SHOTS_CH56 : process.env.SET === 'ch12' ? SHOTS_CH12 : SHOTS_CH34;
@@ -38,7 +39,7 @@ for (const [id, who, lord] of SHOTS) {
     for (const o of s.children.list.filter(o => o.name?.startsWith?.('story-'))) o.destroy();
     let node = null;
     for (const c of Object.values(D.STORY_CHAPTERS)) {
-      const all = [c.open, c.close, ...(c.closeAfter ?? []), ...(c.camp ?? []), ...(c.barks ?? []), ...Object.values(c.stages).flatMap(st => [...(st.before ?? []), st.brief, ...(st.after ?? []), st.choice, st.bossIntro, st.bossPhase, st.bossFall,
+      const all = [c.open, c.close, ...(c.closeAfter ?? []), ...(c.camp ?? []), ...(c.barks ?? []), ...(c.midScrolls ?? []), ...Object.values(c.stages).flatMap(st => [...(st.before ?? []), st.brief, ...(st.after ?? []), st.choice, st.bossIntro, st.bossPhase, st.bossFall,
         ...Object.values(st.bossIntros ?? {}), ...Object.values(st.bossPhases ?? {}), ...Object.values(st.bossFalls ?? {})])];
       node = all.find(n => n?.id === id) ?? node;
     }

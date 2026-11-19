@@ -107,7 +107,7 @@ export class YilingFire {
     const p = this.h.player, C = FIRE.cell;
     for (const [k, c] of [...this.cells]) {
       if (now >= c.until) { this.cells.delete(k); this.ash.add(k); if (c.img) { c.img.setVisible(false); this.pool.push(c.img); } continue; }
-      c.img?.setFrame(this.hasFx ? (Math.floor((now - c.lit) / 90) + (c.cx * 7 + c.cy * 3)) % 6 : 0).setAlpha(Math.min(1, (c.until - now) / 500, (now - c.lit) / 160 + .3));
+      c.img?.setFrame(this.hasFx ? (((Math.floor((now - c.lit) / 90) + (c.cx * 7 + c.cy * 3)) % 6) + 6) % 6 : 0) /* 火格坐标可为负：取正余数（11-19 全面检查：负帧会画出整张图集） */.setAlpha(Math.min(1, (c.until - now) / 500, (now - c.lit) / 160 + .3));
       // 顺风引燃
       if (now >= c.nextSpread && c.gen < FIRE.maxGen) {
         c.nextSpread = Infinity;

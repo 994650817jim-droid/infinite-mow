@@ -15,6 +15,8 @@ const WALK_STRIDES: Partial<Record<EnemyKind, number>> = { infantry: 11, shield:
 export class Enemy {
   static spawnSeq = 0;
   isSupplySlot=false;
+  /** 可破坏障碍（用户 11-19「攻击逻辑也要加上打障碍物」）：补给箱 / 酒罐 / 油桶 / 军旗 / 敌营 / 箭楼 / 城门 / 绳索 / 火油车等，没敌人时自动索敌会去打。BattlefieldSupplies 放物件时设 true；不该被自动打的（断桥）设回 false。 */
+  breakable=false;
   /** 关卡锁定目标（摧毁型关卡的营寨等，StageObjectives 设）：虽然是补给槽位的物件，武器照样当敌人打。 */
   lockTarget=false;
   readonly uid: number = (enemyUidSeq += 1);
@@ -131,6 +133,7 @@ export class Enemy {
     this.kind = def.kind;
     this.martialSlow=1;this.martialSlowUntil=0;this.gapSlowMul=1;this.gapSlowUntil=0;
     this.spawnId = (Enemy.spawnSeq += 1);
+    this.breakable = false;
     this.hp = Math.round(def.hp * hpScale);
     this.shieldHp = this.shieldMax = 0;
     this.maxHp = this.hp;
@@ -380,6 +383,15 @@ export class Enemy {
     this.appliedFrame = '';
   }
 
+  /** 专属控制器推着冲锋 / 快跑时出走路帧（帧按跑过的距离推进、朝向随跑向）；配合 externalWalk（通用步态别再改帧）。11-19「张梁移动和动作有问题」：冲锋整段定格平移。 */
+  driveRun(dx: number, dy: number, stride: number): void {
+    if (!this.walkSheet) return;
+    const m = Math.hypot(dx, dy); if (m < .01) return;
+    this.direction = Math.abs(dx) > Math.abs(dy) ? (dx < 0 ? 'left' : 'right') : dy < 0 ? 'up' : 'down';
+    this.walkDistance += m; this.walking = true;
+    const tex = visualTextureKey(this.scene, this.walkSheet), key = `${this.direction}_${Math.floor(this.walkDistance / stride) % 4}`;
+    if (key !== this.appliedFrame || this.sprite.texture.key !== tex) { this.applyFrame(tex, key); this.appliedFrame = key; }
+  }
   updateWalk(dt: number, dx: number, dy: number): void {
     if (!this.walkSheet) return;
     if (this.attackUntil > 0 || this.chargeState !== 'none' || this.poseUntil > ((this.scene as Phaser.Scene & { combatNow?: number }).combatNow ?? 0)) return;

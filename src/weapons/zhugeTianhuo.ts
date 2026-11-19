@@ -24,7 +24,7 @@ export const TIANHUO_DEF = {
 };
 /** 手绘图集 zhuge_tianhuo 的行起点（每行 8 格，每格 256）：星位 6 帧、天火 8 帧、东风火龙 6 帧（横条在 zhuge_eastwind）、八阵地面 6 帧。 */
 export const ZGFX = { star: 0, fall: 8, bazhen: 16 } as const;
-interface Strike { target: Enemy; spawn: number; x: number; y: number; at: number; damage: number; mark: Phaser.GameObjects.GameObject | null; /** 打的是杂兵（怪堆）：溅射加大 */ crowd: boolean; /** 出手时场上没有首领 / 精锐：观星按怪堆积层（每发都积） */ crowdStars: boolean; }
+interface Strike { target: Enemy; spawn: number; x: number; y: number; at: number; damage: number; mark: Phaser.GameObjects.GameObject | null; /** 从高空落下的火流星（天火落下前那 0.8 秒） */ fall: Phaser.GameObjects.Sprite | null; /** 打的是杂兵（怪堆）：溅射加大 */ crowd: boolean; /** 出手时场上没有首领 / 精锐：观星按怪堆积层（每发都积） */ crowdStars: boolean; }
 interface Zone { x: number; y: number; r: number; until: number; level: number; fx: Phaser.GameObjects.GameObject | null; /** 天火单发伤害（每跳 × bazhen.mul） */ base: number; next: number; }
 /** 天火余烬：算无遗策落地处的星火焦土（谁都烧；首领 / 精锐按 bossMul） */
 interface Ember { x: number; y: number; r: number; until: number; next: number; /** 天火单发伤害（每跳 × mul / bossMul） */ base: number; }
@@ -67,23 +67,71 @@ function bazhenPulse(host: WeaponHost, fx: Phaser.GameObjects.GameObject | null)
   sceneOf(host).tweens.add({ targets: s, alpha: { from: 1, to: .75 }, scaleX: { from: sx * 1.07, to: sx }, scaleY: { from: sy * 1.07, to: sy }, duration: 220, ease: 'Quad.easeOut' });
 }
 /**
- * 天火余烬画面：手绘 8 帧 zhuge_ember（0–1 星纹烧进地面、2–5 灼烧循环、6–7 余火熄灭），压扁贴地铺满余烬圈，持续 ms。
+ * 天火从高空落下（2026-11-19 用户：「从天上落下来的攻击可以再高点落下来」）：出手那一刻在目标头顶约 620 处生成手绘天火第 2 帧（拖尾火流星），
+ * 星位那 0.8 秒里越落越快（加速下坠）、跟着目标走，到点撞地再接落地帧（第 3 帧起）。总时长不变，星位预警一直在地上。
+ * 算无遗策那一发（出手时已知星象满）火流星大一号。缺图时不画。
+ */
+const SKY = { height: 620, w: 96, h: 250, burstK: 1.35, ease: 2.2 } as const;
+function skyFall(host: WeaponHost, x: number, y: number, burst: boolean): Phaser.GameObjects.Sprite | null {
+  if (!art(host)) return null;
+  const k = burst ? SKY.burstK : 1;
+  return sceneOf(host).add.sprite(x, y - SKY.height, 'zhuge_tianhuo', ZGFX.fall + 1).setOrigin(.5, .9).setDisplaySize(SKY.w * k, SKY.h * k).setBlendMode('ADD').setDepth(43).setAlpha(0).setName('zhuge-tianhuo-sky');
+}
+function skyFallStep(f: Phaser.GameObjects.Sprite, x: number, y: number, t: number): void {
+  const k = Math.max(0, Math.min(1, t));
+  f.setPosition(x, y - SKY.height * (1 - Math.pow(k, SKY.ease))).setAlpha(Math.min(1, k * 6));
+}
+/**
+ * 天火余烬「星火焦土」画面（2026-11-19 用户：「这个我想有动态」）：持续 ms，整段都在动——
+ * - 底圈：手绘 8 帧 zhuge_ember（0–1 星纹烧进地面、2–5 灼烧循环、6–7 熄灭），入场从中心往外烧开；
+ * - 火舌：再叠两层同图、错开帧相位，透明度与高度各按自己的节奏起伏，像火舌一直往上舔；
+ * - 七星：每颗星位上一枚手绘星芒（fx_strike_glint），入场一颗颗亮起，之后一道亮光沿北斗依次流过；每跳伤害（tickMs）七颗一起闪、焦土裂纹跟着亮一下；
+ * - 火星：固定 5 个小火星（ember 第 8 帧）从圈上冒起、上飘、淡去，循环用；
+ * - 退场：火舌先收、星芒熄、整圈淡出。
  * 缺图时退回现有手绘地火 fx_ground_fire（5 簇），不画程序特效。
  */
+// 星位：在 zhuge_ember 每格 256 里的位置（北斗，勺口到勺柄；在 tools/build-zhuge-extra-fx.mjs 生成的图上量的）
+const EMBER_STARS: ReadonlyArray<readonly [number, number]> = [[177, 132], [173, 154], [133, 150], [128, 128], [105, 115], [72, 123]];
 function emberFx(host: WeaponHost, x: number, y: number, r: number, ms: number): void {
   const scene = sceneOf(host);
   if (!scene.textures.exists('zhuge_ember')) {
     for (const [fx, fy] of [[0, 0], [.55, 0], [-.55, 0], [0, .4], [0, -.4]]) playSheet(scene, 'fx_ground_fire', x + fx * r, y + fy * r, { size: r * .75, ms, depth: 18.7, alpha: .85, originY: .75, name: 'zhuge-ember' });
     return;
   }
-  // 每格 256 里椭圆约宽 194、中心在 55% 高处（tools/build-zhuge-extra-fx.mjs）：统一缩放让椭圆宽 = 2r
-  const s = scene.add.sprite(x, y, 'zhuge_ember', 0).setDisplaySize(r * 2.64, r * 2.64).setOrigin(.5, .55).setDepth(18.7).setBlendMode('ADD').setName('zhuge-ember');
-  const IGNITE = 260, FADE = 420, LOOP_FRAME = 120;
+  // 每格 256 里椭圆约宽 194、中心在 55% 高处：统一缩放让椭圆宽 = 2r
+  const D = r * 2.64, at = (u: number, v: number): [number, number] => [x + (u / 256 - .5) * D, y + (v / 256 - .55) * D];
+  const mk = (frame: number, depth: number): Phaser.GameObjects.Sprite => scene.add.sprite(x, y, 'zhuge_ember', frame).setDisplaySize(D, D).setOrigin(.5, .55).setDepth(depth).setBlendMode('ADD').setName('zhuge-ember');
+  const base = mk(0, 18.7), lick = [mk(3, 18.72).setAlpha(0), mk(4, 18.74).setAlpha(0)], glow = mk(2, 18.76).setAlpha(0);
+  const stars = scene.textures.exists('fx_strike_glint') ? EMBER_STARS.map(([u, v]) => { const [sx, sy] = at(u, v); return scene.add.sprite(sx, sy, 'fx_strike_glint', 0).setDisplaySize(D * .14, D * .14).setDepth(18.8).setBlendMode('ADD').setAlpha(0).setName('zhuge-ember-star'); }) : [];
+  const sparks = Array.from({ length: 5 }, (_, i) => ({ sp: scene.add.sprite(x, y, 'zhuge_ember', 7).setDisplaySize(D * .3, D * .3).setOrigin(.5, .55).setDepth(18.9).setBlendMode('ADD').setAlpha(0).setName('zhuge-ember-spark'), phase: i * 197, u: .2 + .6 * ((i * 37) % 10) / 10 }));
+  const all: Phaser.GameObjects.Sprite[] = [base, ...lick, glow, ...stars, ...sparks.map(o => o.sp)];
+  const IGNITE = 260, FADE = 420, LOOP = 120, TICK = Z.ember.tickMs, SPARK = 900;
   scene.tweens.addCounter({ from: 0, to: ms, duration: ms, onUpdate: tw => {
-    if (!s.active) return; const t = tw.getValue() ?? 0;
-    s.setFrame(t < IGNITE ? (t < IGNITE / 2 ? 0 : 1) : t > ms - FADE ? (t > ms - FADE / 2 ? 7 : 6) : 2 + Math.floor((t - IGNITE) / LOOP_FRAME) % 4);
-    s.setAlpha(t > ms - FADE ? Math.max(0, (ms - t) / FADE) : 1);
-  }, onComplete: () => { if (s.active) s.destroy(); } });
+    if (!base.active) return; const t = tw.getValue() ?? 0, out = t > ms - FADE ? Math.max(0, (ms - t) / FADE) : 1, inK = Math.min(1, t / IGNITE);
+    const loopF = (ph: number): number => 2 + (Math.max(0, Math.floor((t - IGNITE) / LOOP)) + ph) % 4;
+    // 底圈：点燃 → 循环 → 熄灭；入场从中心往外烧开（0.7 → 1 倍）
+    base.setFrame(t < IGNITE ? (t < IGNITE / 2 ? 0 : 1) : t > ms - FADE ? (t > ms - FADE / 2 ? 7 : 6) : loopF(0)).setAlpha(out).setDisplaySize(D * (.7 + .3 * inK), D * (.7 + .3 * inK));
+    // 火舌：两层错相位，透明度与高度各自起伏（往上舔）；入场后才起、退场先收
+    lick.forEach((l, i) => {
+      if (t < IGNITE || t > ms - FADE) { l.setAlpha(0); return; }
+      const w = Math.sin(t / (i ? 170 : 230) + i * 2.1);
+      l.setFrame(loopF(i + 1)).setAlpha(.32 + .2 * w).setDisplaySize(D * (1 + .02 * i), D * (1.05 + .05 * w));
+    });
+    // 每跳伤害：七星齐闪 + 焦土裂纹亮一下
+    const since = t >= TICK ? t % TICK : Infinity, flash = since < 180 ? 1 - since / 180 : 0;
+    glow.setFrame(loopF(2)).setAlpha(.55 * flash * out);
+    // 七星：入场一颗颗亮起；之后一道亮光沿北斗流过（每颗 110 毫秒）
+    const run = Math.floor(t / 110) % (stars.length + 2);
+    stars.forEach((st, i) => {
+      const t0 = IGNITE * .6 + i * 90, k = t >= t0 ? Math.min(1, (t - t0) / 120) : 0, wave = run === i ? 1 : run === i + 1 ? .5 : 0, sz = D * (.12 + .05 * wave + .1 * flash);
+      st.setAlpha(Math.min(1, k * (.45 + .4 * wave + .5 * flash) * out)).setFrame(Math.floor(t / 60 + i) % 6).setDisplaySize(sz, sz);
+    });
+    // 火星：从圈上冒起、上飘、淡去，循环
+    for (const o of sparks) {
+      const c = ((t + o.phase) % SPARK) / SPARK, [sx, sy] = at(256 * o.u, 150 - 40 * Math.sin(o.u * Math.PI));
+      o.sp.setPosition(sx, sy - c * D * .35).setAlpha(t < IGNITE ? 0 : (c < .2 ? c / .2 : 1 - (c - .2) / .8) * .8 * out);
+    }
+  }, onComplete: () => { for (const o of all) if (o.active) o.destroy(); } });
 }
 /** 星位预警：跟着目标的手绘星位圈（缺图时用现有火阵地纹 fire_sigil，压扁贴地）。 */
 function starMark(host: WeaponHost, x: number, y: number): Phaser.GameObjects.GameObject | null {
@@ -97,8 +145,8 @@ function starMark(host: WeaponHost, x: number, y: number): Phaser.GameObjects.Ga
   return null;
 }
 /** 天火落下：手绘 8 帧（缺图时用现有火焰爆发 flame_burst）。 */
-function fallFx(host: WeaponHost, x: number, y: number, burst: boolean): void {
-  if (art(host)) { const size = burst ? 190 : 150, s = playRow(host, 'zhuge_tianhuo', ZGFX.fall, 8, x, y, size, size, 20, false, 'zhuge-tianhuo-fall', 43); s.setOrigin(.5, .82); return; }
+function fallFx(host: WeaponHost, x: number, y: number, burst: boolean, fromSky = false): void {
+  if (art(host)) { const size = burst ? 190 : 150, k = fromSky ? 2 : 0, s = playRow(host, 'zhuge_tianhuo', ZGFX.fall + k, 8 - k, x, y, size, size, 20, false, 'zhuge-tianhuo-fall', 43); s.setOrigin(.5, .82); return; }
   host.spawnFlameFx(x, y, Z.splashRadius * (burst ? 1.6 : 1.25));
 }
 /**
@@ -158,8 +206,9 @@ export function tianhuoBehavior(host: WeaponHost, weapon: WeaponState, dt: numbe
   for (let i = st.strikes.length - 1; i >= 0; i--) {
     const s = st.strikes[i], live = s.target.active && s.target.spawnId === s.spawn;
     if (live) { s.x = s.target.x; s.y = s.target.y; (s.mark as Phaser.GameObjects.Sprite | null)?.setPosition?.(s.x, s.y + 4); }
+    if (s.fall?.active) skyFallStep(s.fall, s.x, s.y, 1 - (s.at - time) / Z.delayMs);
     if (time < s.at && !host.over) continue;
-    st.strikes.splice(i, 1); s.mark?.destroy();
+    st.strikes.splice(i, 1); s.mark?.destroy(); s.fall?.destroy();
     if (host.over) continue;
     // 观星：场上没有首领 / 精锐时每发都积星象（2026-11-18 夜，怪堆里也能每第 4 发算无遗策）；有首领 / 精锐时照旧只算同一目标
     const burst = s.crowdStars ? pl.passive.starLandCrowd(time) : live && pl.passive.starLand(s.target, time);
@@ -172,7 +221,7 @@ export function tianhuoBehavior(host: WeaponHost, weapon: WeaponState, dt: numbe
       const fx = art(host) ? playRow(host, 'zhuge_tianhuo', ZGFX.bazhen, 6, s.x, s.y + 6, r * 2.2, r * 1.25, 8, true, 'zhuge-bazhen', 18.6).setAlpha(.75) : null;
       st.zones.push({ x: s.x, y: s.y, r, until, level: L, fx, base: s.damage, next: time + Z.bazhen.tickMs }); pl.passive.addBazhen(s.x, s.y, r, until);
     }
-    fallFx(host, s.x, s.y, burst);
+    fallFx(host, s.x, s.y, burst, !!s.fall);
     // 天火余烬（2026-11-18 晚 用户：「只有被动触发后才触发」）：只有算无遗策那一发（观星第 4 发）落地留下星火焦土
     if (burst && Z.ember.mul > 0) { // ember.mul 填 0 即关掉余烬（不留地火、不结算）
       const r = Z.ember.radius; st.embers.push({ x: s.x, y: s.y, r, until: time + Z.ember.ms, next: time + Z.ember.tickMs, base: s.damage });
@@ -196,9 +245,10 @@ export function tianhuoBehavior(host: WeaponHost, weapon: WeaponState, dt: numbe
   pl.faceDirection(cardinal(ux, uy), 200);
   const bossOrElite = host.enemies.some(e => e.active && (e.kind === 'boss' || e.kind === 'elite')), crowd = isCrowdShot(host, target, Z.range), crowdStars = Z.crowdStars && crowd && !bossOrElite;
   // 这一发会是观星爆发（星象已满）→ 播招牌技动作；否则普通出手
-  pl.playAction((crowdStars ? pl.passive.crowdStarMarks(time) : pl.passive.starMarks(target, time)) >= Z.starNeed ? 'skill' : 'attack', ux < 0 ? 'left' : 'right');
+  const willBurst = (crowdStars ? pl.passive.crowdStarMarks(time) : pl.passive.starMarks(target, time)) >= Z.starNeed;
+  pl.playAction(willBurst ? 'skill' : 'attack', ux < 0 ? 'left' : 'right');
   host.spawnFlagSwingFx(ux, uy); host.sfx.play('atk_flame');
-  st.strikes.push({ target, spawn: target.spawnId, x: target.x, y: target.y, at: time + Z.delayMs, damage, mark: starMark(host, target.x, target.y), crowd, crowdStars });
+  st.strikes.push({ target, spawn: target.spawnId, x: target.x, y: target.y, at: time + Z.delayMs, damage, mark: starMark(host, target.x, target.y), fall: skyFall(host, target.x, target.y, willBurst), crowd, crowdStars });
   // 借东风：每第 4 发同时放出东风火龙，朝目标方向直线扫过
   st.casts++; st.sinceWind++;
   const W = g.masteries.wildfire;

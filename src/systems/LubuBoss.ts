@@ -8,6 +8,7 @@ import { TELEGRAPH_CLASSIC, groundCracks, laneCracks, windupFlash } from '../ui/
 import { BossKit, BOSS_OLD, ensureMoves, faceDir, type BossDebug } from './BossKit';
 import { LB } from '../data/bossRedesign';
 import { bossFxImage, ensureBossFx, hasBossFx } from './BossFx';
+import { castFlourish, warmCast } from './BossThemeFx';
 
 export type LubuState = 'approach' | 'sweepWindup' | 'sweep' | 'dashWindup' | 'dash' | 'recover' | 'ultTakeoff' | 'ultAirborne' | 'ultLanding'
   | 'comboWindup' | 'combo' | 'zigWindup' | 'zig' | 'hop' | 'aim' | 'shot' | 'spinWindup' | 'spin';
@@ -57,7 +58,7 @@ export class LubuBoss {
   /** 重设计公共件（姿态 / 收招 / 转场）；?boss=old 时为空，走旧版。 */
   private readonly kit?: BossKit;
 
-  constructor(private readonly host: LubuHost) {
+  constructor(private readonly host: LubuHost) { warmCast(host.scene, 'lubu');
     if (!BOSS_OLD) { ensureBossFx(host.scene, ['lb_whirl', 'lb_arrow', 'kit_shift', 'kit_recover']); ensureMoves(host.scene, 'lubu_moves'); }
     if (!BOSS_OLD) this.kit = new BossKit({ scene: host.scene, boss: host.boss, banner: (t, c) => host.banner?.(t, c), sfx: host.playSfx });
     this.ultimate = new LubuUltimate(host.scene, host.boss, host.player, host.playSfx, host.hurtTroops);
@@ -398,6 +399,7 @@ export class LubuBoss {
     this.state = state; this.startedAt = now; this.ox = boss.x; this.oy = boss.y;
     this.angle = Math.atan2(player.y - boss.y, player.x - boss.x); this.hitApplied = false;
     const warn = state === 'sweepWindup' ? (this.phase2 ? C.enragedSweepWarnMs : C.sweepWarnMs) : (this.phase2 ? C.enragedDashWarnMs : C.dashWarnMs);
+    castFlourish(this.host.scene, 'lubu', boss, warn, state === 'dashWindup');
     this.lastAttack = state === 'sweepWindup' ? 'sweep' : 'dash';
     if (state === 'sweepWindup') {
       this.sweepMask.clear();

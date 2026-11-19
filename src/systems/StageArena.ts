@@ -184,7 +184,7 @@ export class StageArena {
   // ———— 断桥（长坂）————
   private setupBridge(it: { x: number; y: number; hp: number; killRadius: number }) {
     const e = this.h.spawnTarget(it.x, it.y, it.hp, 220); if (!e) return;
-    e.sprite.setAlpha(0);
+    e.sprite.setAlpha(0); e.breakable = false; // 桥不让自动索敌去砍（要砍由玩家自己决定）
     const label = worldText(this.h.scene, it.x, it.y + 40, '', 14, '#ffe1a0').setOrigin(.5).setDepth(36).setStroke('#1a120b', 4); this.objs.push(label);
     this.bridge = { e, life: e.spawnId, x: it.x, y: it.y, label, killR: it.killRadius };
   }

@@ -9,6 +9,7 @@ import { BossKit, Beat, ensureMoves, faceDir, type BossDebug } from './BossKit';
 import { warnFx } from '../ui/WarnFx';
 import { groundCracks, laneCracks, warnCircle } from '../ui/Telegraph';
 import { bossFxImage, ensureBossFx, fxFrame, hasBossFx, playBossFx } from './BossFx';
+import { castFlourish, warmCast } from './BossThemeFx';
 
 interface Host {
   scene: Phaser.Scene; boss: Enemy; player: Player; army: Legion;
@@ -40,7 +41,7 @@ export class ZhangjiaoBoss {
   private gfx: Phaser.GameObjects.Graphics; private pillarGfx: Phaser.GameObjects.Graphics;
   readonly metrics = { rain: 0, thunder: 0, heaven: 0, heavenBroken: 0, heavenUlt: 0, grid: 0, phase2: 0, hits: 0 };
 
-  constructor(private h: Host, now: number) {
+  constructor(private h: Host, now: number) { warmCast(h.scene, 'zhangjiao');
     this.kit = new BossKit({ scene: h.scene, boss: h.boss, banner: h.banner, sfx: h.sfx });
     ensureMoves(h.scene, 'zhangjiao_moves');
     this.gfx = h.scene.add.graphics().setDepth(DEPTH.fx - 1).setName('zhangjiao-fx');
@@ -110,6 +111,7 @@ export class ZhangjiaoBoss {
 
   private start(move: Move, now: number): void {
     const b = this.h.boss, p = this.h.player;
+    castFlourish(this.h.scene, 'zhangjiao', b, move === 'rain' ? ZJ.rain.windupMs : move === 'thunder' ? ZJ.thunder.windupMs : move === 'heaven' ? 700 : 500, move !== 'rain');
     this.angle = Math.atan2(p.y - b.y, p.x - b.x); this.round = 0;
     if (move === 'rain') { this.metrics.rain++; this.beat.set(move, 'windup', now, ZJ.rain.windupMs); this.h.sfx('bossVolley'); }
     else if (move === 'thunder') {

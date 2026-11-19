@@ -56,7 +56,7 @@ ck('火系合击：火箭（暴击点燃）、烈马（脚下留火）、火牛�
 ck('背水一战：半血以下全军增伤并计入触发', st.combos.last_stand > 0, st.combos.last_stand);
 ck('冲势合击：声东击西减速、铁骑冲阵出骑卒、万军取首打精锐', st.combos.feint > 0 && st.combos.iron_cavalry > 0 && st.syn.cavalry >= 2 && st.combos.take_general > 0, { combos: st.combos, syn: st.syn });
 ck('背水一战：半血以下吸血；十面埋伏：眩晕时冒伏兵', st.syn.leech > 0 && st.syn.ambush >= 1, st.syn);
-ck('第一次触发打横幅「合击 · 名字！」（每个只打一次）', st.seen.length >= 8 && [...seenBanners].some(t => /^合击 · .+！/.test(t)), { seen: st.seen.length, banners: [...seenBanners].slice(0, 4) });
+ck('第一次触发出小签「合击 · 名字」（每关每个只出一次）', st.seen.length >= 8 && [...seenBanners].some(t => /^合击 · .+/.test(t)), { seen: st.seen.length, banners: [...seenBanners].slice(0, 4) });
 
 // 3. 觉醒：六派都 6 势，逐个强制放一次，看效果
 await ev(s => { const b = s.player.growth.build; b.bonus = { fire: 6, stratagem: 6, archery: 6, cavalry: 6, warrior: 6, formation: 6 }; s.player.hp = s.player.maxHp; s.buildCombat.update(s.combatNow + 1); return true; });
@@ -64,8 +64,8 @@ const aw = {};
 // 火烧连天：火浪扫过之后，屏上的普通敌人在烧；截图一张
 await ev(s => { window.crowd(s, 300); window.__hp0 = s.enemies.filter(e => e.active && !e.isSupplySlot).reduce((a, e) => a + e.hp, 0); s.synergy.force('fire'); return true; });
 await p.waitForTimeout(700); await p.screenshot({ path: `${OUT}/awaken-fire.png` }); const liveFire = await ev(s => s.children.list.filter(o => o.name === 'awaken-fire').length); await p.waitForTimeout(900);
-const art = await ev(s => ({ tex: ['fire', 'stratagem', 'archery', 'cavalry', 'warrior', 'formation'].every(k => s.textures.exists('fx_awaken_' + k) && s.textures.exists('build_icon_school_' + k)) && ['fx_gust_band', 'school_banner_combo', 'school_banner_awaken', 'build_icon_napalm', 'build_icon_gust'].every(k => s.textures.exists(k)), banner: s.children.list.filter(o => o.name === 'school-banner').map(o => o.list.find(c => c.name === 'school-banner-title')?.text) }));
-ck('第 3 期美术：六派觉醒序列帧、徽印、风带、横幅、火油罐 / 疾风图标都已加载；火浪用手绘火墙帧；觉醒打横幅', art.tex && liveFire >= 3 && art.banner.some(t => /觉醒 · 火烧连天/.test(t ?? '')), { ...art, liveFire });
+const art = await ev(s => ({ tex: ['fire', 'stratagem', 'archery', 'cavalry', 'warrior', 'formation'].every(k => s.textures.exists('fx_awaken_' + k) && s.textures.exists('build_icon_school_' + k)) && ['fx_gust_band', 'school_banner_combo', 'school_banner_awaken', 'build_icon_napalm', 'build_icon_gust'].every(k => s.textures.exists(k)), banner: [...(s.schoolBanner?.stats.toasts ?? [])] }));
+ck('第 3 期美术：六派觉醒序列帧、徽印、风带、横幅、火油罐 / 疾风图标都已加载；火浪用手绘火墙帧；觉醒出小签', art.tex && liveFire >= 3 && art.banner.some(t => /觉醒 · 火烧连天/.test(t ?? '')), { ...art, liveFire });
 aw.fire = await ev(s => ({ hits: s.synergy.stats.hits.fire ?? 0, burning: s.enemies.filter(e => e.active && !e.isSupplySlot && s.buildCombat.isBurning(e, s.combatNow)).length, boost: s.buildCombat.burnBoost.until > s.combatNow }));
 ck('觉醒「火烧连天」：火浪扫过全屏，打到 3 个以上敌人（活下来的着火），之后灼烧更痛', aw.fire.hits >= 3 && aw.fire.boost, aw.fire);
 aw.strat = await ev(s => { window.crowd(s, 120); s.synergy.force('stratagem'); return true; }).then(() => p.waitForTimeout(1200)).then(() => ev(s => ({ stunned: s.enemies.filter(e => e.active && e.stunUntil > s.combatNow).length, fields: s.synergy.fields.length })));
@@ -87,6 +87,21 @@ const a2 = await ev(s => { const sy = s.synergy, used = Object.values(sy.stats.a
 ck('自动释放：6 势后身边敌人够多自己放；两次觉醒至少隔 3 秒（6 秒内不超过 2 次）；冷却中 HUD 写「冷却」', a2.used >= 1 && a2.used <= 2 && /冷却/.test(a2.cd ?? ''), a2);
 ck('每派每关最多 2 次：用完后 HUD 写「本关觉醒已用完」', /用完/.test(a2.done ?? ''), a2.done);
 
+// 2026-11-19 用户「关于觉醒合击提示有点碍眼」：小签在左上空带（不居中、不压主将 / 首领血条 / 军令 / 舆图 / 用药），矮小半透明；同一个第二次不再出签只闪徽印；设置「关」只闪徽印
+{ const geo = await ev(async s => { const sb = s.schoolBanner; sb.shown.clear(); /* 前面第 3 节已放过各派觉醒：当作新的一关重新计「第一次」 */ const t0 = sb.stats.toasts.length, f0 = sb.stats.flashes; await new Promise(r => setTimeout(r, 2300));
+    s.synergy.force('stratagem'); await new Promise(r => setTimeout(r, 450));
+    const o = s.children.list.find(x => x.name === 'school-banner'), b = o?.getBounds(), orders = s.ordersPanel?.bounds?.(), pl = s.player;
+    const wv = s.cameras.main.worldView, px = (pl.x - wv.x) / wv.width * 960, py = (pl.y - wv.y) / wv.height * 540;
+    const out = { b: b && [Math.round(b.x), Math.round(b.y), Math.round(b.right), Math.round(b.bottom)], kind: o?.getData('kind'), toasts: sb.stats.toasts.slice(t0), orders: orders && [orders.x, orders.y, orders.x + orders.w, orders.y + orders.h], player: [Math.round(px), Math.round(py)], f0 };
+    return out; });
+  await p.screenshot({ path: `${OUT}/school-toast.png` });
+  Object.assign(geo, await ev(async (s, f0) => { const sb = s.schoolBanner, out = {};
+    await new Promise(r => setTimeout(r, 2300)); const t1 = sb.stats.toasts.length; s.synergy.force('stratagem'); await new Promise(r => setTimeout(r, 450)); out.repeatToast = sb.stats.toasts.length > t1; out.repeatFlash = sb.stats.flashes > f0 + 1;
+    localStorage.setItem('im_school_hint', 'off'); const t2 = sb.stats.toasts.length; s.synergy.force('archery'); await new Promise(r => setTimeout(r, 450)); out.offToast = sb.stats.toasts.length > t2; localStorage.removeItem('im_school_hint');
+    return out; }, geo.f0));
+  const [x0, y0, x1, y1] = geo.b ?? [0, 0, 999, 999], o = geo.orders ?? [9e3, 9e3, 9e3, 9e3];
+  ck('觉醒小签：左上空带（x 200–600、y < 145），高 ≤ 36、宽 ≤ 340，不压主将 / 军令面板；同一觉醒第二次不再出签只闪徽印；设置「关」不出签', geo.kind === 'awaken' && x0 >= 200 && x1 <= 600 && y1 <= 145 && y1 - y0 <= 36 && x1 - x0 <= 340 && !(x1 > o[0] && x0 < o[2] && y1 > o[1] && y0 < o[3]) && !(geo.player[0] > x0 && geo.player[0] < x1 && geo.player[1] > y0 - 40 && geo.player[1] < y1 + 40) && geo.toasts.some(t => /觉醒 · 八门金锁/.test(t)) && !geo.repeatToast && geo.repeatFlash && !geo.offToast, geo);
+ }
 // 5. 三选一卡面写合击；战法构筑面板有合击栏（截图一张）
 const label = await p.evaluate(async () => { const up = await window.__mod('data/upgrades.ts'); return up.schoolLabel('fire', { fire: 1, stratagem: 0, archery: 3, cavalry: 0, warrior: 0, formation: 0 }); });
 ck('三选一：这张卡让火攻到 2 势、弓弩已 2 势 → 卡面写「合击【火箭】」', /解锁【火势】· 合击【火箭】/.test(label), label);

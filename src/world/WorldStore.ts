@@ -87,6 +87,8 @@ export function loadWorld():WorldSave {if(storageUnavailable&&memory)return stru
  }}catch{storageUnavailable=true;s=memory??defaults();}memory=s;return structuredClone(s);}
 function commit(s:WorldSave):boolean {s.revision++;if(storageUnavailable){memory=structuredClone(s);return false;}try{const old=localStorage.getItem(WORLD_KEY);if(parse(old))localStorage.setItem(BACKUP_KEY,old!);localStorage.setItem(WORLD_KEY,JSON.stringify(s));localStorage.setItem('im_slot_touched',String(Date.now()));memory=structuredClone(s);return true;}catch{storageUnavailable=true;memory=structuredClone(s);return false;}}
 export function saveWorld():void{commit(loadWorld());}
+/** 花营寨军粮（营寨旅商 town/CampMerchant 用）：够就扣下存档、返回 true。 */
+export function spendProvisions(cost:number):boolean{const s=loadWorld(),n=Math.max(0,Math.round(cost));if(s.provisions<n)return false;s.provisions-=n;commit(s);return true;}
 export function worldChapterCleared(chapter:ChapterId):boolean{return loadWorld().cleared[chapter];}
 export const BUILDINGS:Record<BuildingId,{name:string;description:(level:number)=>string}>= {
  barracks:{name:'军营',description:l=>`不限制兵力 · 开局增援 ${l-1} 人`},

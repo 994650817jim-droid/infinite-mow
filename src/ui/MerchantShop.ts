@@ -2,12 +2,13 @@ import Phaser from 'phaser';
 import {GAME_WIDTH as W,GAME_HEIGHT as H,IS_DESKTOP as D,FONT,HEADING_FONT,DEPTH} from '../config';
 import {ItemTooltip} from './ItemTooltip';import {itemTile} from './ItemQuality';import {warPanelTexture} from './HomeCommand';import {lqButton,lqLabelColor,type LqState} from './LacquerKit';
 import {MERCHANT_PRICE,QUALITIES,formatAffix,itemName,SLOTS,itemSlot,SPECIALS,type ItemInstance} from '../data/items';
-import {TACTICS,TAG_NAMES,tacticDescription} from '../data/builds';
+import {TACTICS,TAG_NAMES,tacticDescription,type TacticId} from '../data/builds';
 import type {CharacterId} from '../data/characters';
 import {addItems,loadout,type GearOwner} from '../systems/ItemStore';
 import {currentMerchantStock,saveMerchantStock,type MerchantStock} from '../systems/MerchantStock';
 import {campaignTacticBook,learnCampaignTactic} from '../systems/Campaign';
 import type {CampOffer} from '../systems/CampMarket';
+import {MERCHANT_FIGURE,drawCampFigure,loadCampFigure,type FigurePlace} from './CampFigure';
 
 /**
  * 军需商人（2026-11-18）：行营休整「军需商人」页与义军营寨「旅商」共用这一个货架与界面。
@@ -15,8 +16,8 @@ import type {CampOffer} from '../systems/CampMarket';
  * - 行营休整：随军粮 + 本局构筑（当场生效），见 ui/CampRestUI；
  * - 营寨旅商：openMerchantShop(scene, {wallet,…})，战法写进征程构筑（下次出征生效）。
  */
-export const MERCHANT_ART_KEY='camp_merchant_art';
-export const MERCHANT_ART_PATH='assets/camp/merchant.webp';
+export const MERCHANT_ART_KEY=MERCHANT_FIGURE.key;
+export const MERCHANT_ART_PATH=MERCHANT_FIGURE.path;
 /** 付账用的粮：name 用于按钮（「粮不足」）与提示；spend 失败返回 false。 */
 export interface MerchantWallet{name:string;get():number;spend(amount:number):boolean;}
 /** 战法卷轴怎么学：canBuy 现在能不能学（等级没变、没满）；learn 学下并返回是否成功。 */
@@ -30,11 +31,18 @@ export interface MerchantShopOptions{
 }
 /** 把立绘排进加载队列（已在 / 正在载就跳过）；载好回调。 */
 export function loadMerchantArt(scene:Phaser.Scene,done?:()=>void):void{
- if(scene.textures.exists(MERCHANT_ART_KEY)){done?.();return;}
- const L=scene.load;L.image(MERCHANT_ART_KEY,MERCHANT_ART_PATH);L.once(Phaser.Loader.Events.COMPLETE,()=>done?.());if(!L.isLoading())L.start();
+ loadCampFigure(scene,MERCHANT_FIGURE,done);
+}
+/**
+ * 卷轴卡面文字：effect = 说明第一句（效果）；cooldown = 从整段里摘出的「冷却 N 秒」（没有则 null）；full = 完整说明（悬停用）。
+ * 例：牵机「命中时把周围2名敌人拉向命中点（0.7秒），并减速12%。\n冷却4秒，对首领无效。」→ effect 第一句，cooldown「冷却 4 秒」。
+ */
+export function tacticCardText(id:TacticId,level:number):{effect:string;cooldown:string|null;full:string}{
+ const full=tacticDescription(id,level),[effect='',...rest]=full.split('\n'),m=full.match(/冷却\s*([\d.]+)\s*秒/);
+ return{effect:effect.trim(),cooldown:m?'冷却 '+m[1]+' 秒':null,full:[effect,...rest].join('\n')};
 }
 export class MerchantShop{
- private tip?:ItemTooltip;private root!:Phaser.GameObjects.Container;private artWanted=false;
+ private tip?:ItemTooltip;private root!:Phaser.GameObjects.Container;
  /** 立绘载好时调用（宿主重绘）。 */
  onArtLoaded?:()=>void;
  constructor(private scene:Phaser.Scene,private o:MerchantShopOptions){}
@@ -49,11 +57,12 @@ export class MerchantShop{
   if(enabled)hit.on('pointerdown',()=>{paint('down');this.o.sound?.('uiClick');fn();});
   paint('idle');this.root.add([g,cap,hit]);return{hit,cap};
  }
- /** 画进 root（宿主每次重绘前清空 root）：电脑版左侧立绘，右侧 4 件兵装 + 偶尔 1 卷战法。 */
- render(root:Phaser.GameObjects.Container,left:number,top:number,right:number,h:number){
+ /** 画进 root（宿主每次重绘前清空 root）：电脑版左侧军需商人（不加框，站在帐中），右侧 4 件兵装 + 偶尔 1 卷战法。
+  *  figure：人物位置（默认在 left 起 196 宽的一栏里、比卡片高出一截）。 */
+ render(root:Phaser.GameObjects.Container,left:number,top:number,right:number,h:number,figure?:FigurePlace){
   this.root=root;const s=this.o.stock(),t=s.tactic,n=s.items.length+(t?1:0),gap=10;
   this.tip??=this.o.tooltip??new ItemTooltip(this.scene,this.o.tooltipDepth??DEPTH.overlay+40);
-  if(D){this.art(left,top,150,h);left+=162;}
+  if(D){drawCampFigure(this.scene,root,MERCHANT_FIGURE,figure??{cx:left+92,bottom:top+h+18,height:h+50},()=>this.onArtLoaded?.());left=Math.max(left+196,figure?figure.cx+108:0);}
   const w=D?((right-left)-gap*(n-1))/n:(right-left-gap)/2;
   const at=(i:number)=>D?{x:left+i*(w+gap),y:top}:{x:left+(i%2)*(w+gap),y:top+Math.floor(i/2)*(h+gap)};
   s.items.forEach((item,i)=>this.itemCard(s,item,i,at(i).x,at(i).y,w,h));
@@ -84,36 +93,41 @@ export class MerchantShop{
   },bw,!sold&&!poor);
   hit.setName('camp-item-goods-'+i).setData('caption',cap);cap.setName('camp-item-price-'+i);
  }
- /** 战法卷轴卡：漆底描金外框里一幅宣纸手卷（上下卷轴），写战法名、流派、等级与下一级效果。 */
+ /**
+  * 战法卷轴卡（2026-11-18 用户「这里也要优化一下」重排）：与兵装卡同宽同框，框里一幅宣纸手卷，自上而下：
+  * 流派 → 大图标 → 战法名与等级 → 效果（只取卡面第一句，字号 12 起、放不下逐级缩到 10，保证不截断）→ 冷却（从说明里摘出来单独一行）。
+  * 「新学 / 精进」是压在上轴头上的漆牌。完整说明（含条件、当前等级）悬停看。
+  */
  private tacticCard(s:MerchantStock,t:CampOffer,x:number,y:number,w:number,h:number){
-  const d=TACTICS[t.id],next=t.level+1,tac=this.o.tactics,able=!!tac&&tac.canBuy(t),poor=this.o.wallet.get()<t.price;
-  this.plate(x,y,w,h,true).setName('camp-tactic-card');
-  const px=x+9,pw=w-18,py=y+12,ph=h-74,g=this.scene.add.graphics().setScrollFactor(0);
-  g.fillStyle(0xe8dcc0,.96).fillRect(px,py,pw,ph).lineStyle(1,0xb59a6a,.8).strokeRect(px+3,py+3,pw-6,ph-6);
-  for(const ry of [py-3,py+ph-3]){g.fillStyle(0x3b2414,1).fillRect(px-5,ry,pw+10,6);g.fillStyle(0xc9a35a,1).fillRect(px-8,ry-1,5,8).fillRect(px+pw+3,ry-1,5,8);}
+  const d=TACTICS[t.id],next=t.level+1,tac=this.o.tactics,able=!!tac&&tac.canBuy(t),poor=this.o.wallet.get()<t.price,{effect,cooldown,full}=tacticCardText(t.id,next);
+  this.plate(x,y,w,h).setName('camp-tactic-card');
+  const px=x+7,pw=w-14,py=y+14,ph=h-76,g=this.scene.add.graphics().setScrollFactor(0);
+  g.fillStyle(0xe9ddc2,.97).fillRect(px,py,pw,ph).lineStyle(1,0xb59a6a,.7).strokeRect(px+3,py+3,pw-6,ph-6);
+  for(const ry of [py-4,py+ph-3]){g.fillStyle(0x3b2414,1).fillRect(px-4,ry,pw+8,7);g.fillStyle(0xc9a35a,1).fillRect(px-7,ry-1,5,9).fillRect(px+pw+2,ry-1,5,9);}
   this.root.add(g);
   const ink=(tx:number,ty:number,str:string,size:number,color:string)=>this.text(tx,ty,str,size).setColor(color).setStroke('#000',0);
-  if(this.scene.textures.exists('build_icon_'+t.id))this.root.add(this.scene.add.image(x+w/2,py+(D?28:26),'build_icon_'+t.id).setDisplaySize(D?36:34,D?36:34).setScrollFactor(0));
-  ink(x+w/2,py+50,TAG_NAMES[d.tag]+'系 · 战法',12,'#8a5a2a').setOrigin(.5,0);
-  ink(x+w/2,py+66,d.name+' '+(t.level?'Lv.'+t.level+'→'+next:'Lv.1'),D?15:17,'#2a170b').setOrigin(.5,0).setFontFamily(HEADING_FONT).setName('camp-tactic-name');
-  ink(px+8,py+90,tacticDescription(t.id,next),D?11:13,'#3b2a18').setLineSpacing(1).setWordWrapWidth(pw-16,true).setMaxLines(D?5:3).setName('camp-tactic-desc');
-  ink(px+pw-7,py+6,t.level?'精进':'新学',11,'#a3341c').setOrigin(1,0);
-  const label=t.sold?'已研习':!tac?(this.o.tactics===null?'出征后可研习':'已无法研习'):!able?(tac.lockedText??'已无法研习'):poor?(D?'粮不足 · ':this.o.wallet.name+'不足 · ')+t.price+'粮':(t.level?'精进 · ':'研习 · ')+t.price+'粮',bw=Math.min(w-20,180);
+  // 新学 / 精进：漆牌压在上轴中间
+  const badge=this.scene.add.graphics().setScrollFactor(0);lqButton(badge,x+w/2,py-1,48,20,'on',t.level?'gold':'cinnabar');this.root.add(badge);
+  this.root.add(this.scene.add.text(x+w/2,py-1,t.level?'精进':'新学',{fontFamily:HEADING_FONT,fontSize:'12px',color:'#fff1cf',resolution:2}).setOrigin(.5).setLetterSpacing(2).setScrollFactor(0).setName('camp-tactic-badge'));
+  ink(x+w/2,py+13,TAG_NAMES[d.tag]+'系 · 战法',11,'#8a5a2a').setOrigin(.5,0).setName('camp-tactic-school');
+  if(this.scene.textures.exists('build_icon_'+t.id))this.root.add(this.scene.add.image(x+w/2,py+50,'build_icon_'+t.id).setDisplaySize(46,46).setScrollFactor(0).setName('camp-tactic-icon'));
+  ink(x+w/2,py+75,d.name+'  '+(t.level?'Lv.'+t.level+'→'+next:'Lv.1'),15,'#2a170b').setOrigin(.5,0).setFontFamily(HEADING_FONT).setName('camp-tactic-name');
+  g.lineStyle(1,0xa58a5c,.55).lineBetween(px+10,py+96,px+pw-10,py+96);
+  // 冷却行贴底；效果在名字与冷却之间，放不下就缩字号（不截断）
+  const cdY=py+ph-18,descTop=py+100,limit=cdY-2;
+  ink(x+w/2,cdY,cooldown??'悬停看详情',11,cooldown?'#7a3a1c':'#9a8a6c').setOrigin(.5,0).setName('camp-tactic-cd');
+  const desc=ink(px+6,descTop,effect,12,'#33220f').setWordWrapWidth(pw-12,true).setLineSpacing(1).setName('camp-tactic-desc');
+  for(const size of [11,10.5,10])if(desc.y+desc.height>limit)desc.setFontSize(size+'px');
+  desc.setData('limit',limit).setData('full',full);
+  const hover=this.scene.add.rectangle(px,py,pw,ph,0,.001).setOrigin(0).setScrollFactor(0).setInteractive().setName('camp-tactic-hover');this.root.add(hover);
+  this.tip!.attachInfo(hover,()=>({title:d.name+' '+(t.level?'Lv.'+t.level+' → Lv.'+next:'Lv.1（新学）'),sub:TAG_NAMES[d.tag]+'系 · 战法 · '+t.price+'粮',body:full,icon:'build_icon_'+t.id}));
+  const label=t.sold?'已研习':!tac?'出征后可研习':!able?(tac.lockedText??'已无法研习'):poor?(D?'粮不足 · ':this.o.wallet.name+'不足 · ')+t.price+'粮':(t.level?'精进 · ':'研习 · ')+t.price+'粮',bw=Math.min(w-20,180);
   this.button(x+(w-bw)/2,y+h-52,label,()=>{
    const cur=this.o.stock().tactic;if(!cur||cur.sold||!tac||!tac.canBuy(cur)||this.o.wallet.get()<cur.price)return;
    const lv=cur.level;if(!tac.learn(cur))return;this.o.wallet.spend(cur.price);cur.sold=true;saveMerchantStock(this.o.stock());tac.afterBuy?.();
    this.o.sound?.('purchase');this.o.notice('研习战法「'+d.name+'」'+(lv?'Lv.'+lv+'→'+(lv+1):'Lv.1')+' · '+tac.doneText);this.o.changed();
   },bw,!t.sold&&able&&!poor).hit.setName('camp-tactic-buy');
   void s;
- }
- /** 电脑版军需商人立绘（手绘水墨淡彩半身像，透明底）：没载到先空着，载好由宿主重绘。 */
- private art(x:number,y:number,w:number,h:number){
-  this.plate(x,y,w,h);
-  if(!this.scene.textures.exists(MERCHANT_ART_KEY)){if(!this.artWanted){this.artWanted=true;loadMerchantArt(this.scene,()=>this.onArtLoaded?.());}return;}
-  const img=this.scene.add.image(x+w/2,y+h/2,MERCHANT_ART_KEY).setScrollFactor(0).setName('camp-merchant-art'),src=img.texture.getSourceImage() as {width:number;height:number},bw=w-10,bh=h-10,s=Math.max(bw/src.width,bh/src.height);
-  img.setScale(s).setCrop((src.width-bw/s)/2,(src.height-bh/s)/2,bw/s,bh/s);this.root.add(img);
-  this.root.add(this.scene.add.rectangle(x+5,y+h-33,w-10,28,0x120c07,.62).setOrigin(0).setScrollFactor(0));
-  this.text(x+w/2,y+h-19,'军需商人',15).setOrigin(.5).setFontFamily(HEADING_FONT).setColor('#f1ddb5').setLetterSpacing(3);
  }
  hideTip(){this.tip?.hide();}
  destroy(){if(this.tip!==this.o.tooltip)this.tip?.destroy();this.tip=undefined;}
@@ -128,8 +142,8 @@ export interface OpenMerchantOptions{
  hero?:CharacterId;
  /** 买下的兵装（默认直接进行囊 addItems）。 */
  onBuyItem?:(item:ItemInstance)=>void;
- /** 关闭后回调。 */
- onClose?:()=>void;
+ /** 关闭后回调。reason：'leave' = 玩家点「离开」/ Esc / 调用返回的关闭函数；'shutdown' = 场景正在关闭（这时别重绘场景，否则重进同一场景会卡住）。 */
+ onClose?:(reason:'leave'|'shutdown')=>void;
  title?:string;depth?:number;sound?:(kind:string)=>void;
 }
 /**
@@ -153,7 +167,8 @@ export function openMerchantShop(scene:Phaser.Scene,opts:OpenMerchantOptions):()
  const top=py+64,h=D?250:200;
  const draw=()=>{if(closed)return;shop.hideTip();body.removeAll(true);shop.render(body,px+16,top,px+pw-16,h);purse.setText(opts.wallet.name+' '+opts.wallet.get());note.setY(D?top+h+18:H-210).setText(notice||shop.hint());};
  shop.onArtLoaded=draw;
- const close=()=>{if(closed)return;closed=true;scene.input.keyboard?.off('keydown-ESC',close);shop.destroy();root.destroy();opts.onClose?.();};
+ const finish=(reason:'leave'|'shutdown')=>{if(closed)return;closed=true;scene.input.keyboard?.off('keydown-ESC',close);scene.events.off('shutdown',onShutdown);shop.destroy();root.destroy();opts.onClose?.(reason);};
+ const close=()=>finish('leave'),onShutdown=()=>finish('shutdown');
  // 离开
  const bw=180,bx=W/2-bw/2,by=py+ph-56,g=scene.add.graphics().setScrollFactor(0);
  const cap=scene.add.text(W/2,by+22,'离开',{fontFamily:HEADING_FONT,fontSize:'16px',color:'#ffe9bd',resolution:2}).setOrigin(.5).setLetterSpacing(4).setScrollFactor(0);
@@ -161,6 +176,6 @@ export function openMerchantShop(scene:Phaser.Scene,opts:OpenMerchantOptions):()
  const paint=(st:LqState)=>{g.clear();const d=lqButton(g,W/2,by+22,bw,38,st,'gold');cap.setY(by+22+d).setColor(lqLabelColor(st));};
  hit.on('pointerover',()=>paint('hover')).on('pointerout',()=>paint('idle')).on('pointerdown',()=>{paint('down');opts.sound?.('uiClick');close();});paint('idle');void bx;
  root.add([g,cap,hit]);
- scene.input.keyboard?.on('keydown-ESC',close);scene.events.once('shutdown',close);
+ scene.input.keyboard?.on('keydown-ESC',close);scene.events.once('shutdown',onShutdown);
  draw();return close;
 }

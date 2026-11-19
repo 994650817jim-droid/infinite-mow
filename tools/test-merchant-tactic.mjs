@@ -134,6 +134,30 @@ const camp = await p.evaluate(async () => {
 ck('营寨旅商：武将还没有征程构筑时卷轴不能买（显示「出征后可研习」）', !camp.noBuildEnabled && /出征后可研习/.test(camp.noBuildLabel ?? ''), camp);
 ck('营寨旅商：买下战法写进征程构筑（下次出征带上）、扣军粮、标已售', camp.saved?.rally === 1 && camp.saved?.deflect === 1 && camp.grain === 850 && camp.sold, camp);
 
+// 卷轴卡排版：所有战法 × 新学 / 精进 1→2 / 2→3 都放得下（效果整句不截断、不压到冷却行、字号 ≥ 10），悬停看完整说明
+const fit = await p.evaluate(async () => {
+  const s = window.__game.scene.getScene('GameScene'), ui = s.campUI, B = await window.__mod('data/builds.ts'), MS = await window.__mod('ui/MerchantShop.ts');
+  s.legion.food = 500; ui.open('test-fit-' + Math.random(), '测试'); ui.tab = 2; const bad = []; let n = 0, tip = null;
+  for (const id of Object.keys(B.TACTICS)) for (const level of [0, 1, 2]) {
+    ui.tacticOffer = { id, kind: 'tactic', level, price: 150, sold: false }; ui.render(); n++;
+    const f = name => window.__find(ui.root, name), desc = f('camp-tactic-desc'), cd = f('camp-tactic-cd'), card = f('camp-tactic-card'), badge = f('camp-tactic-badge');
+    const want = MS.tacticCardText(id, level + 1), size = parseFloat(desc.style.fontSize), lines = desc.getWrappedText().join('');
+    const cardRight = card.x + card.displayWidth / 2;
+    const problem = [];
+    if (desc.y + desc.height > desc.getData('limit') + .5) problem.push('溢出 ' + Math.round(desc.y + desc.height - desc.getData('limit')) + 'px');
+    if (lines.replace(/\s/g, '') !== want.effect.replace(/\s/g, '')) problem.push('文字被截');
+    if (size < 10) problem.push('字号 ' + size);
+    if (desc.x + desc.width > cardRight) problem.push('超出右边');
+    if (!cd || cd.y < desc.y + desc.height) problem.push('冷却行被压');
+    if (badge?.text !== (level ? '精进' : '新学')) problem.push('漆牌');
+    if (problem.length) bad.push(id + ' Lv' + (level + 1) + '：' + problem.join('、'));
+    if (id === 'traction' && level === 0) { const h = f('camp-tactic-hover'); h.emit('pointerover', { x: 600, y: 300 }); const t = s.children.list.find(o => o.name === 'item-tooltip' && o.visible); tip = t ? t.list.filter(o => typeof o.text === 'string').map(o => o.text).join(' | ') : null; h.emit('pointerout'); }
+  }
+  return { n, bad, tip };
+});
+ck('卷轴卡：全部 ' + fit.n + ' 种（战法 × 新学 / 精进）效果整句放得下、不截断、不压冷却行、字号 ≥ 10、漆牌对', fit.n >= 75 && fit.bad.length === 0, fit.bad.slice(0, 8));
+ck('卷轴卡悬停看完整说明（牵机：含「对首领无效」）', /对首领无效/.test(fit.tip ?? '') && /牵机/.test(fit.tip ?? ''), fit.tip);
+
 // 存档点同步
 const save = await p.evaluate(async () => {
   const C = await window.__mod('systems/Campaign.ts');

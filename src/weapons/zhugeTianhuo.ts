@@ -10,7 +10,7 @@ import { playSheet } from '../systems/SkillFxSheets';
 /**
  * 诸葛亮「七星灯 · 天火」（2026-11-18 重做，用户选方案 A；参数 data/heroMechanics.ts ZG_TIANHUO）。武器 id 仍为 flame_banner（存档 / 技艺 / 随行都沿用）。
  * 出手：目标脚下标星位（跟着目标走）→ delayMs 后天火落下，单体重创 + 小范围溅射；被动「观星」在 CharacterPassives（starLand）。
- * 技艺：借东风（每第 4 发放东风火龙直线扫过、顺风吹开敌人）、八阵图（观星爆发处布阵：减速 / 易伤 / 3 级首领出招变慢）。
+ * 技艺：借东风（每第 4 发放东风火龙直线扫过、顺风吹开敌人）、八阵图（观星爆发处布阵：减速 / 易伤 / 每 0.5 秒伤害 / 3 级首领出招变慢）。
  * 特效：手绘序列帧 zhuge_tianhuo（星位 / 天火 / 东风 / 八阵，缺图时退回现有手绘火焰帧 flame_burst / fire_sigil，不画程序特效）。
  */
 // 测试钩子（只在开发版）：测试要改的是游戏实际在用的那份 ZG_TIANHUO。dev server 热更新过后，测试自己 import('/src/data/heroMechanics.ts')
@@ -25,7 +25,7 @@ export const TIANHUO_DEF = {
 /** 手绘图集 zhuge_tianhuo 的行起点（每行 8 格，每格 256）：星位 6 帧、天火 8 帧、东风火龙 6 帧（横条在 zhuge_eastwind）、八阵地面 6 帧。 */
 export const ZGFX = { star: 0, fall: 8, bazhen: 16 } as const;
 interface Strike { target: Enemy; spawn: number; x: number; y: number; at: number; damage: number; mark: Phaser.GameObjects.GameObject | null; /** 打的是杂兵（怪堆）：溅射加大 */ crowd: boolean; /** 出手时场上没有首领 / 精锐：观星按怪堆积层（每发都积） */ crowdStars: boolean; }
-interface Zone { x: number; y: number; r: number; until: number; level: number; fx: Phaser.GameObjects.GameObject | null; }
+interface Zone { x: number; y: number; r: number; until: number; level: number; fx: Phaser.GameObjects.GameObject | null; /** 天火单发伤害（每跳 × bazhen.mul） */ base: number; next: number; }
 /** 天火余烬：算无遗策落地处的星火焦土（谁都烧；首领 / 精锐按 bossMul） */
 interface Ember { x: number; y: number; r: number; until: number; next: number; /** 天火单发伤害（每跳 × mul / bossMul） */ base: number; }
 const STATE = new WeakMap<Player, { strikes: Strike[]; casts: number; zones: Zone[]; embers: Ember[]; sinceWind: number }>();
@@ -59,6 +59,12 @@ function playRow(host: WeaponHost, key: string, row: number, frames: number, x: 
   const st = { t: 0 };
   scene.tweens.add({ targets: st, t: frames - .01, duration: frames / fps * 1000, repeat: loop ? -1 : 0, onUpdate: () => { if (s.active) s.setFrame(row + Math.floor(st.t)); }, onComplete: () => { if (!loop && s.active) s.destroy(); } });
   return s;
+}
+/** 八阵图每跳受伤时阵纹亮一下：手绘八阵序列帧本身短暂提亮、微微放大再回去（不另画程序特效）。 */
+function bazhenPulse(host: WeaponHost, fx: Phaser.GameObjects.GameObject | null): void {
+  const s = fx as Phaser.GameObjects.Sprite | null; if (!s?.active) return;
+  const sx = s.getData('bz-sx') ?? s.scaleX, sy = s.getData('bz-sy') ?? s.scaleY; s.setData('bz-sx', sx).setData('bz-sy', sy);
+  sceneOf(host).tweens.add({ targets: s, alpha: { from: 1, to: .75 }, scaleX: { from: sx * 1.07, to: sx }, scaleY: { from: sy * 1.07, to: sy }, duration: 220, ease: 'Quad.easeOut' });
 }
 /**
  * 天火余烬画面：手绘 8 帧 zhuge_ember（0–1 星纹烧进地面、2–5 灼烧循环、6–7 余火熄灭），压扁贴地铺满余烬圈，持续 ms。
@@ -128,10 +134,19 @@ export function tianhuoBehavior(host: WeaponHost, weapon: WeaponState, dt: numbe
       host.hitEnemy(e, em.base * (e.kind === 'boss' || e.kind === 'elite' ? Z.ember.bossMul : Z.ember.mul), time, 'fire');
     }
   }
-  // 八阵图：阵内非首领减速；3 级时阵内首领出招间隔变长（ArcBossV2 系首领读 gapSlow*）；易伤在 CharacterPassives.vulnerability
+  // 八阵图：阵内非首领减速；3 级时阵内首领出招间隔变长（ArcBossV2 系首领读 gapSlow*）；易伤在 CharacterPassives.vulnerability；
+  // 每 tickMs 阵内敌人受伤（2026-11-18 夜，首领 / 精锐按 bossMul），手绘阵纹亮一下
   for (let i = st.zones.length - 1; i >= 0; i--) {
     const z = st.zones[i];
     if (time >= z.until || host.over) { z.fx?.destroy(); st.zones.splice(i, 1); continue; }
+    if (time >= z.next) {
+      z.next += Z.bazhen.tickMs; const hit = z.base * Z.bazhen.mul[z.level - 1];
+      for (const e of host.grid.query(z.x, z.y, z.r + 40)) {
+        if (!alive(e) || Math.hypot(e.x - z.x, e.y - z.y) > z.r + e.radius) continue;
+        host.hitEnemy(e, hit * (e.kind === 'boss' || e.kind === 'elite' ? Z.bazhen.bossMul : 1), time, 'fire');
+      }
+      bazhenPulse(host, z.fx);
+    }
     for (const e of host.grid.query(z.x, z.y, z.r + 40)) {
       if (!alive(e) || Math.hypot(e.x - z.x, e.y - z.y) > z.r + e.radius) continue;
       if (e.kind === 'boss') { if (z.level >= 3) { e.gapSlowMul = Z.bazhen.bossGapMul; e.gapSlowUntil = time + 120; } continue; }
@@ -154,8 +169,8 @@ export function tianhuoBehavior(host: WeaponHost, weapon: WeaponState, dt: numbe
     }
     if (burst && g.masteries.eight_trigrams) {
       const L = g.masteries.eight_trigrams, r = Z.bazhen.radius[L - 1], until = time + Z.bazhen.ms[L - 1];
-      const fx = art(host) ? playRow(host, 'zhuge_tianhuo', ZGFX.bazhen, 6, s.x, s.y + 6, r * 2.2, r * 1.25, 8, true, 'zhuge-bazhen', 18.6) : null;
-      st.zones.push({ x: s.x, y: s.y, r, until, level: L, fx }); pl.passive.addBazhen(s.x, s.y, r, until);
+      const fx = art(host) ? playRow(host, 'zhuge_tianhuo', ZGFX.bazhen, 6, s.x, s.y + 6, r * 2.2, r * 1.25, 8, true, 'zhuge-bazhen', 18.6).setAlpha(.75) : null;
+      st.zones.push({ x: s.x, y: s.y, r, until, level: L, fx, base: s.damage, next: time + Z.bazhen.tickMs }); pl.passive.addBazhen(s.x, s.y, r, until);
     }
     fallFx(host, s.x, s.y, burst);
     // 天火余烬（2026-11-18 晚 用户：「只有被动触发后才触发」）：只有算无遗策那一发（观星第 4 发）落地留下星火焦土

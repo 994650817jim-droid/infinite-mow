@@ -93,11 +93,14 @@ ck('城内：4 处要点（粮仓 / 市集 / 武库 / 兵营）待占、占 3 �
 const allies0 = await p.evaluate(() => window.__S.allies.filter(a => a.active).length);
 // 站进粮仓圈：占领 → 插旗补员 → 反扑守 20 秒（录像）
 await rec(320, 6, async () => p.evaluate(P => { const s = window.__S; s.player.sprite.setPosition(P[0][0], P[0][1]); for (const e of s.enemies) if (e.active && !e.isSupplySlot && Math.hypot(e.x - P[0][0], e.y - P[0][1]) < 80) e.hp = Math.min(e.hp, 1); }, P));
+const cut0 = await p.evaluate(() => window.__S.garrisonInfo.cut);
 const s1 = await goals(), allies1 = await p.evaluate(() => window.__S.allies.filter(a => a.active).length);
 ck('据点：站圈占下 → 插旗、补员、守军反扑', s1.mid.points[0].state !== 'open' && allies1 > allies0, { p: s1.mid.points[0], allies0, allies1 });
 await p.evaluate(P => { const s = window.__S; for (let i = 0; i < 20; i++) { s.player.sprite.setPosition(P[0][0], P[0][1]); window.__step(60); window.__clear(); } }, P);
 const s2 = await goals();
 ck('据点：顶住反扑 20 秒 → 守住', s2.mid.points[0].state === 'secured', s2.mid.points[0]);
+const gc = await p.evaluate(() => ({ ...window.__S.garrisonInfo }));
+ck('联动 · 守军池：占稳粮仓直接扣守军池 8%（顶部「守军 x / y」同步）', gc.cut - cut0 === Math.round(gc.total * .08), { cut0, ...gc });
 // 市集：占下后离开、敌兵占点 5 秒 → 失守
 const lost = await p.evaluate(P => { const s = window.__S, m = s.siegeMid, [x, y] = P[1]; s.player.sprite.setPosition(x, y); window.__step(300); const st = m.points[1].state; s.player.sprite.setPosition(0, -720); const e = s.spawnEnemy('shield', x, y, 1, true); if (e) { e.def = { ...e.def, speed: 0 }; e.hp = e.maxHp = 1e6; } window.__step(380); return { before: st, after: m.points[1].state }; }, P);
 ck('据点：主将离开、敌兵占点累计 5 秒 → 失守', lost.before === 'held' && lost.after === 'open', lost);
@@ -146,7 +149,11 @@ await p.evaluate(() => { const s = window.__S; window.__clear(); s.player.damage
 await rec(160, 4, async () => p.evaluate(() => { const s = window.__S; const c = s.bossChests?.[0]; if (c) s.player.sprite.setPosition(c.x ?? s.player.x, c.y ?? s.player.y); s.collectBossChests?.(); }));
 for (let i = 0; i < 20; i++) { const o = await p.evaluate(() => { window.__step(30); window.__S.collectBossChests?.(); return window.__S.over; }); if (o) break; }
 await step(20); await shot();
-const end = await p.evaluate(async G0 => { const s = eval(G0), w = await import('/src/world/WorldStore.ts'); return { over: s.over, victory: s.victory, phase: s.siegeMid?.phase, owned: w.loadWorld().ownedCities.includes(s.city.id), home: s.resultPanel.getByName('result-home')?.text }; }, G);
+const end = await p.evaluate(async G0 => { const s = eval(G0), w = await import('/src/world/WorldStore.ts'); return { over: s.over, victory: s.victory, phase: s.siegeMid?.phase, owned: w.loadWorld().ownedCities.includes(s.city.id), home: s.resultPanel.getByName('result-home')?.text, body: s.resultTexts.body.text, link: { refill: +s.siegeMid.refillMul().toFixed(2), squads: s.siegeMid.squadCut(), bonus: s.siegeMid.provisionsBonus(), full: s.siegeMid.fullTake }, folk: { ...s.siegeMid.folk?.stats } }; }, G);
+await p.screenshot({ path: OUT + '/result.png' });
+ck('联动 · 限时：占了 3 处（含粮仓）→ 敌援补兵 ×0.25（每处 −15%、粮仓再 −30%）、城外援兵少 3 批；结算军粮 +30%（粮仓）+ 市集一笔 40，没全取', end.link.refill === .25 && end.link.squads === 3 && end.link.bonus.share === .3 && end.link.bonus.flat === 40 && !end.link.full, end.link);
+ck('结算列表：「城内要点 3/4」，占了的写作用、没占的兵营写「未占」', /城内要点 3\/4/.test(end.body) && /✓ 粮仓/.test(end.body) && /✓ 市集.*百姓归附/.test(end.body) && /· 兵营　未占/.test(end.body), end.body.split('\n').filter(l => /要点|✓|·/.test(l)));
+ck('百姓（电脑版）：入城时四散跑回民居；占下要点后从附近民居出来；市集归附时一齐作揖', end.folk.fled > 0 && end.folk.came >= 13 && end.folk.bowed === 1, end.folk);
 ck('击败守将 → 宝箱 → 插旗占领 → 攻占成功、城归我方、结算按钮「建设城池」', end.over && end.victory && end.owned && end.phase === 'done' && end.home === '建设城池', end);
 ck('府衙段 GIF', gif('3-hall'));
 ck('全程无 pageerror / console error', errors.length === 0, errors.slice(0, 5));

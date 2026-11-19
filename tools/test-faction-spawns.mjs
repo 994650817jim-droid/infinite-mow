@@ -30,7 +30,7 @@ for (const id of STAGES) {
     const sheets = {}, rosters = {}; let n = 0; const seen = new Set(); const t = performance.now(); s.devTimeScale = 3;
     while (performance.now() - t < 22000 && !s.over) {
       clear();
-      for (const e of s.enemies) { if (!e.active || e.isSupplySlot || e.kind === 'boss' || seen.has(e.spawnId) || e.sprite.alpha === 0 || !e.sprite.visible) continue; /* 首领的旗 / 柱等隐形物件敌人不算 */ seen.add(e.spawnId); n++;
+      for (const e of s.enemies) { if (!e.active || e.isSupplySlot || e.kind === 'boss' || seen.has(e.spawnId)) continue; /* 隐形的首领物件（伪诏旗等）也算：全面检查 #4 后它们也用本章底层兵种图 */ seen.add(e.spawnId); n++;
         const key = (e.walkSheet || e.sprite.texture.key || '').replace(/^readable_/, ''); sheets[key] = (sheets[key] ?? 0) + 1; if (e.def.roster) rosters[e.def.roster] = (rosters[e.def.roster] ?? 0) + 1; }
       await new Promise(r => setTimeout(r, 150));
     }

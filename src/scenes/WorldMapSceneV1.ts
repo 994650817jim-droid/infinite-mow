@@ -26,13 +26,14 @@ import {CITY_ART_FILES,MARKERS_V2,cityMarkerV2,siegeArtV2,intelGlyphPos,intelPen
 import {REALM_V2,buildTerritory} from '../world/WorldTerritory';
 import {factionCorner,factionStrip,lacquerPlate,ownerSeal,realmLabels,resourceBar,sealGlyph} from '../world/WorldMapChrome';
 import {advanceEra,takeLostNotice,takeNewChapters,type CityAlert,type EraAdvance} from '../world/WorldStore';
-import {CHAPTER_TIMELINE,CHAPTER_REGIONS,CITY_CHAPTER,STAGE_POINTS,chapterById,chapterIntro,chapterStages,chapterState,chapterStagesDone,citySiegeOpen,currentChapter,stageOpen,type ChapterState,type TimelineChapterId} from '../world/ChapterTimeline';
+import {CHAPTER_TIMELINE,CHAPTER_REGIONS,CITY_CHAPTER,STAGE_POINTS,chapterById,chapterIntro,chapterStages,chapterState,chapterStagesDone,currentChapter,stageOpen,type ChapterState,type TimelineChapterId} from '../world/ChapterTimeline';
 import {HARD_MODE,HARD_TITLES} from '../data/hardMode';
 import {hardChapterCleared} from '../world/WorldStore';
 import {defenseBossName} from '../data/siege';
 import {SIEGE,FIRST_CAPTURE_BONUS,siegeBossName} from '../data/siege';
 import {CHARACTERS,type CharacterId} from '../data/characters';
 import {ensureIntel,intelEvents,lubuChallengeOpen,lubuClears} from '../world/WorldStore';
+import {siegeGateStage,siegeUnlocked} from '../world/RouteMap';
 import {LUBU_CHALLENGE} from '../data/dongzhuo';
 import {INTEL_INFO,intelBrief,intelReward,intelTitle,seasonIndex,type IntelEvent} from '../world/WorldIntel';
 import {QUALITIES} from '../data/items';
@@ -64,7 +65,7 @@ const TIER_RANK={small:0,medium:1,large:2} as const,TIER_STARS={small:'★☆☆
  * 天下地图：原画地图 + 势力领地染色 + 三档城池标记 + 战役节点。
  * W1：城池可查看归属、时代、相邻与可攻打状态；攻城战在 W2 开放。
  */
-/** 旧版天下地图（2026-11-19 起被「征途」路线图 WorldMapScene 取代；未注册，施工第 3 期删除）。 */
+/** 旧版天下地图（2026-11-19 用户要求先用回 V1：WORLD_MAP_VERSION = 'v1' 时注册成 'WorldMapScene'；攻城 = 相邻 + 规则 B）。 */
 export class WorldMapSceneV1 extends Phaser.Scene {
  private layer!:Phaser.GameObjects.Container;private selected:Selection={kind:'node',node:WORLD_NODES[0]};private detail!:Phaser.GameObjects.Text;private detailTitle!:Phaser.GameObjects.Text;private detailRule!:Phaser.GameObjects.Graphics;private seal!:ReturnType<typeof ownerSeal>;private detailBox={x:0,y:0,w:0};private action!:ReturnType<typeof worldButton>;
  private markers:Array<{node:WorldNode;root:Phaser.GameObjects.Container}>=[];private cityMarkers:CityMarker[]=[];private links!:Phaser.GameObjects.Graphics;private legend?:Phaser.GameObjects.Container;
@@ -84,7 +85,7 @@ export class WorldMapSceneV1 extends Phaser.Scene {
  private area={x:20,y:110,w:W-40,h:H-360};private viewBottom=0;private timelineY=0;private detailPh=0;private minZoom=1;private zoom=1;private pointerX=0;private pointerY=0;private pinch=0;private pinching=false;private readonly mapW=1536;private readonly mapH=1024;
  /** 可攻标记 / 不可攻原因 / 「下一步」引导（2026-11-18）。 */
  private status=new Map<string,CityStatus>();private guide?:Phaser.GameObjects.Graphics;private guideLabel?:Phaser.GameObjects.Container;private guideEdge?:Phaser.GameObjects.Container;private guideTarget?:{x:number;y:number;from:{x:number;y:number};text:string;id:string};
- constructor(){super('WorldMapSceneV1');}
+ constructor(){super('WorldMapScene');}
  preload(){if(!worldUnlocked()&&!isChapterTestRun())return;worldAssets(this,'strategy_art',GRAND_MAP?'assets/world/grand/overview.webp':'assets/world/strategy-map.webp');if(GRAND_MAP)worldAssets(this,'world_water','assets/world/grand/water_mask.png');if(GRAND_MAP&&!this.textures.exists('wgrand_ambient'))this.load.spritesheet('wgrand_ambient','assets/world/grand/ambient.png',{frameWidth:256,frameHeight:256});if(GRAND_MAP&&!this.textures.exists('wgrand_banner'))this.load.spritesheet('wgrand_banner','assets/world/grand/banner_wave.png',{frameWidth:192,frameHeight:128});
   // W5 城池徽框与军旗（缩小显示，用线性过滤）
   for(const [key,url] of Object.entries(MARKER_FILES))worldAssets(this,key,url);
@@ -257,7 +258,7 @@ export class WorldMapSceneV1 extends Phaser.Scene {
  private cityStatusOf(c:CityDef):CityStatus{
   if(this.alertFor(c.id))return{kind:'alert',reason:'告急：守住可解除'};
   if(this.owned.includes(c.id))return{kind:'own',reason:'你的城池'};
-  if(cityAttackable(c.id,this.owned)){if(!citySiegeOpen(c.id,loadWorld())&&!isChapterTestRun()){const g=chapterById(CITY_CHAPTER[c.id]??'hulao');return{kind:'gate',reason:`未解锁：通关第${g.numeral}章「${g.title}」后开放攻城`};}return{kind:'attack',reason:'与你的领地相邻，可以攻打'};}
+  if(cityAttackable(c.id,this.owned)){if(!siegeUnlocked(c.id,loadWorld())&&!isChapterTestRun()){const a=siegeGateStage(c.id),d=a?.chapter&&a.stage?chapterStages(a.chapter)[a.stage-1]:undefined,g=chapterById(a?.chapter??CITY_CHAPTER[c.id]??'hulao');return{kind:'gate',reason:d?`未解锁：打下 ${d.code}「${d.name}」后开放攻城`:`未解锁：第${g.numeral}章「${g.title}」中开放攻城`};}return{kind:'attack',reason:'与你的领地相邻，可以攻打'};}
   const step=this.firstStep(c.id);return{kind:'far',reason:step?`尚不相邻：需先攻下${step}`:'尚不相邻：先攻下相邻城池'};}
  /** 通往某城最近一步：从目标沿道路倒推，取与我方领地相邻、离目标最近的城（至多两座）。 */
  private firstStep(target:string):string{const dist=new Map<string,number>([[target,0]]),q=[target];
@@ -533,11 +534,11 @@ export class WorldMapSceneV1 extends Phaser.Scene {
    const neighbors=[...(CITY_LINKS.get(c.id)??[])].map(id=>id===HOME.id?'义军营寨':cityById(id)!.name).join('、');
    const inc=cityIncome(c.tier,owner==='player'?cityLevels(c.id):emptyCityLevels()),sp=SPECIALTIES[c.id],yieldText=`${owner==='player'?'产出（进入城池可建设）':'占领后产出'}：每战 ${incomeText(inc)}${sp?` · 特产「${sp.title}」${sp.text}`:''}`;
    // 攻城分区：城池所属章节通关后才可攻打（守城不受限）
-   const gateChapter=chapterById(CITY_CHAPTER[c.id]??'hulao');
-   const alert=this.alertFor(c.id),gate=!citySiegeOpen(c.id,loadWorld())&&!isChapterTestRun()&&!alert&&owner!=='player',usable=(attack||!!alert)&&!gate,warn=attack?this.lossWarning():'';
-   this.setDetail(`${c.name} · ${TIER_NAME[c.tier]} · ${c.region}`,FACTIONS[owner].color,sealGlyph(owner),`归属：${FACTIONS[owner].name}（公元${era.year}年 · ${era.name}）\n${alert?`告急：${FACTIONS[alert.attacker].name}来犯！守住可解除；出征别处则此城失守`:owner==='player'?'你的城池':gate?`通关第${gateChapter.numeral}章「${gateChapter.title}」后开放攻城`:attack?warn||'与你的领地相邻，可以攻打':this.status.get(c.id)?.reason??'尚不相邻：先攻下相邻城池'}\n${yieldText}\n相邻：${neighbors}`);
+   const gateStage=siegeGateStage(c.id),gateDef=gateStage?.chapter&&gateStage.stage?chapterStages(gateStage.chapter)[gateStage.stage-1]:undefined,gateChapter=chapterById(gateStage?.chapter??CITY_CHAPTER[c.id]??'hulao'),gateName=gateDef?`${gateDef.code}「${gateDef.name}」`:`第${gateChapter.numeral}章「${gateChapter.title}」`;
+   const alert=this.alertFor(c.id),gate=!siegeUnlocked(c.id,loadWorld())&&!isChapterTestRun()&&!alert&&owner!=='player',usable=(attack||!!alert)&&!gate,warn=attack?this.lossWarning():'';
+   this.setDetail(`${c.name} · ${TIER_NAME[c.tier]} · ${c.region}`,FACTIONS[owner].color,sealGlyph(owner),`归属：${FACTIONS[owner].name}（公元${era.year}年 · ${era.name}）\n${alert?`告急：${FACTIONS[alert.attacker].name}来犯！守住可解除；出征别处则此城失守`:owner==='player'?'你的城池':gate?`打下 ${gateName} 后开放攻城`:attack?warn||'与你的领地相邻，可以攻打':this.status.get(c.id)?.reason??'尚不相邻：先攻下相邻城池'}\n${yieldText}\n相邻：${neighbors}`);
    const enter=owner==='player'&&!alert;
-   this.action.text.setText(alert?'亲征 · 守城':enter?'进入城池':gate?`${gateChapter.short}后开放攻城`:attack?'亲征 · 攻城':'尚不可攻打');this.action.image.setAlpha(usable||enter?1:.45);if(usable||enter)this.action.image.setInteractive({useHandCursor:true});else this.action.image.disableInteractive();
+   this.action.text.setText(alert?'亲征 · 守城':enter?'进入城池':gate?`打下 ${gateDef?.code??gateChapter.short} 后可攻`:attack?'亲征 · 攻城':'尚不可攻打');this.action.image.setAlpha(usable||enter?1:.45);if(usable||enter)this.action.image.setInteractive({useHandCursor:true});else this.action.image.disableInteractive();
    this.layoutActions(false);return;
   }
   if(this.selected.kind==='stage'){this.refreshStage(this.selected.chapter,this.selected.stage);return;}
@@ -561,7 +562,7 @@ export class WorldMapSceneV1 extends Phaser.Scene {
  private openSiege(city:CityDef,defense=false){
   const alert=defense?this.alertFor(city.id):undefined;
   if(this.status.get(city.id)?.kind==='fog')return;
-  if(this.siegeModal||(defense?!alert:!cityAttackable(city.id,this.owned)||(!citySiegeOpen(city.id,loadWorld())&&!isChapterTestRun())))return;
+  if(this.siegeModal||(defense?!alert:!cityAttackable(city.id,this.owned)||(!siegeUnlocked(city.id,loadWorld())&&!isChapterTestRun())))return;
   const warn=alert?'':this.lossWarning(),dy=warn?(W>600?36:54):0;
   const owner=alert?alert.attacker:cityOwner(city.id,this.era,this.owned),T=SIEGE[city.tier],first=!this.capturedEver.includes(city.id),k=first?1+FIRST_CAPTURE_BONUS:1,desk=W>600;
   let hero:CharacterId=defaultHero(null);try{hero=defaultHero(localStorage.getItem('im_last_hero'));}catch{/* storage unavailable */}

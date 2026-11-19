@@ -43,6 +43,8 @@ export class CharacterPassives {
   private stageKills = 0; private sharpEliteKills = 0;
   private generation = 0; private stopped = false;
   private gains = 0; private triggers = 0;
+  /** 被动触发了几次（出招起手特效 HeroCastFx 每帧比对） */
+  triggerCount(): number { return this.triggers; }
   private readonly burns = new Map<number, Burn>();
   private readonly charms = new Map<number, Charm>();
   /** 魏延「谁敢杀我」减伤截止时间。 */

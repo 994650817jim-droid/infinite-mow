@@ -16,7 +16,7 @@ import {siegeScenery} from '../systems/SiegeScenery';
 import {SishuiObstacles} from '../systems/SishuiObstacles';
 import {worldText} from '../world/WorldUI';
 import {actorDepth, DEPTH, GAME_HEIGHT, GAME_WIDTH} from '../config';
-import {QUALITIES, itemName, rollItem} from '../data/items';
+import {QUALITIES, capLootQuality, itemName, rollItem} from '../data/items';
 import {addItems} from '../systems/ItemStore';
 import type {Enemy} from '../entities/Enemy';
 import type {RunEndReason} from '../types';
@@ -32,7 +32,8 @@ import { loadBossSheet } from '../systems/ArtStyle';
 export function intelGameSceneClass(Base: typeof GameScene) {
   return class IntelGameScene extends Base {
     protected achievementArc() { return 'intel'; }
-    protected itemTier() { return this.event?.kind === 'bounty' ? 3 : 2; }
+    /** 掉落品质段：按已开放章节（GameScene.lootChapter 默认），悬赏再 +1 段（2026-11-19 掉落随章节）。 */
+    protected itemTier() { return Math.min(4, super.itemTier() + (this.event?.kind === 'bounty' ? 1 : 0)); }
     protected padTargets() { return this.enemyCamps?.padTargets() ?? []; }
     protected padClearTargets() { this.enemyCamps?.cancel(); }
     private event!: IntelEvent; private city!: CityDef; private receipt = ''; private test = false;
@@ -164,7 +165,7 @@ export function intelGameSceneClass(Base: typeof GameScene) {
       const r = settleIntel(this.receipt, {success, lost, victory, debug, elapsed: this.elapsed, returned: this.allies.filter(u => u.active && u.reserveSoldier).map(u => u.kind)});
       this.controller?.clear(); this.escortHint?.setText(''); this.cartPointer?.setVisible(false);
       let loot = '';
-      if (r.item && !debug) { const q = Math.random() < r.item.orangeChance ? 'orange' : r.item.quality, it = rollItem(q); addItems([it]); loot = ` · 兵装 ${QUALITIES[q].label}「${itemName(it)}」入行囊`; }
+      if (r.item && !debug) { const q = capLootQuality(Math.random() < r.item.orangeChance ? 'orange' : r.item.quality, this.itemTier()), it = rollItem(q, Math.random, undefined, this.lootChapter()); addItems([it]); loot = ` · 兵装 ${QUALITIES[q].label}「${itemName(it)}」入行囊`; }
       this.resultTexts.subtitle.setText(success ? this.chapter.victoryText : lost ? '商车被劫 · 此事作罢' : `${INTEL_INFO[e.kind].name}未成 · 期限内可再战`);
       this.resultTexts.body.setText(this.resultTexts.body.text + '\n军情 · 军粮 +' + r.provisions + loot + cityIncomeLine(r) + captureLine(success && e.kind === 'bounty' && (!debug || (this.test && !this.debugModified && !this.debugJumped && !this.player.damageImmune && new URLSearchParams(location.search).get('roster') === '1')) ? tryCapture('bounty', e.general ?? '', e.faction) : null) + (debug ? '\n' + r.message : ''));
       const home = this.resultPanel.getByName('result-home') as Phaser.GameObjects.Text;

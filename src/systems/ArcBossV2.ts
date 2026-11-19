@@ -64,7 +64,7 @@ export abstract class ArcBossV2<M extends string> implements ArcController {
   /** 一个不会动、不会攻击的「物件」敌人（旗、柱）：本体隐藏，由调用方画。 */
   protected spawnProp(x: number, y: number, hp: number, tint: number): Enemy | null {
     const base = this.h.def('infantry');
-    const e = this.h.spawn('infantry', x, y, { ...base, walkVisual: undefined, attackVisual: undefined, behavior: undefined, hp, speed: 0, damage: 0, xp: 1, radius: 18, tint });
+    const e = this.h.spawn('infantry', x, y, { ...base, attackVisual: undefined, behavior: undefined, hp, speed: 0, damage: 0, xp: 1, radius: 18, tint }); // 行走图沿用本章底层兵种（本体隐形，只是键对：全面检查 #4，原来去掉 walkVisual 退回了第一章通用步兵图）
     if (e) { e.controlImmune = true; e.sprite.setAlpha(0); }
     return e;
   }

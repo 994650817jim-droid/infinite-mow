@@ -21,6 +21,8 @@ import {CITY_BUILDINGS,CITY_BUILDING_IDS,cityBuildCost,cityBuildBlockers,cityInc
 import {incomeText,TOWN_BUILDINGS,buildingOpen,citySize,levelOf} from '../town/TownData';
 import {PANO_W,PANO_H,LEVEL_SCALE,PANO_ZOOM,CAMP_BARS} from '../town/CityLayout';
 import {TownFolk,folkCount,loadTownLife,drawTownDecor,zy,HQ_SLOTS,type HqId} from '../town/TownLife';
+import {lootBand} from '../data/items';
+import {chaptersOpen} from '../systems/HeroProgress';
 
 /** 城池正式美术是否已导入（assets/town-city/bg_<档>.webp、<建筑>_<级>.webp）。未导入时借营寨图。 */
 export const TOWN_ART_READY = true;
@@ -222,8 +224,8 @@ export class TownScene extends Phaser.Scene {
  /** 旅商：同营寨（ui/MerchantShop，同一份货，用军粮买，兵装进行囊）；道具图集按需载入。 */
  private openMerchant() {
   uiSfx().play('uiClick');
-  const s = loadWorld(), tier = s.warlordStages >= 3 ? 2 : s.cleared.hulao ? 1 : 0; let hero = 'zhaoyun'; try { hero = localStorage.getItem('im_last_hero') || hero; } catch { /* 存储不可用 */ }
-  const open = () => { if (!this.sys.isActive()) return; openMerchantShop(this, {wallet: {name: '军粮', get: () => loadWorld().provisions, spend: spendProvisions}, tier, hero: (CHARACTERS.some(c => c.id === hero) ? hero : 'zhaoyun') as CharacterId, depth: 600, onClose: () => { if (this.sys.settings.status === Phaser.Scenes.RUNNING) this.refresh(); }, sound: k => uiSfx().play(k as 'uiClick')}); };
+  const s = loadWorld(), lootCh = chaptersOpen(), tier = lootBand(lootCh); /* 掉落品质随章节（data/items.ts lootBand） */ let hero = 'zhaoyun'; try { hero = localStorage.getItem('im_last_hero') || hero; } catch { /* 存储不可用 */ }
+  const open = () => { if (!this.sys.isActive()) return; openMerchantShop(this, {wallet: {name: '军粮', get: () => loadWorld().provisions, spend: spendProvisions}, tier, chapter: lootCh, hero: (CHARACTERS.some(c => c.id === hero) ? hero : 'zhaoyun') as CharacterId, depth: 600, onClose: () => { if (this.sys.settings.status === Phaser.Scenes.RUNNING) this.refresh(); }, sound: k => uiSfx().play(k as 'uiClick')}); };
   if (this.textures.exists('item_icons')) open(); else { this.load.atlas('item_icons', 'assets/items/item-icons.webp', 'assets/items/item-icons.json'); this.load.once('complete', open); this.load.start(); }
  }
  /** 统一名牌（功能建筑 / 分署 / 旅商）：漆底描金字、同字号、底边中点对齐建筑底边。state：built 已建 / open 可建 / blocked 未满足条件。 */

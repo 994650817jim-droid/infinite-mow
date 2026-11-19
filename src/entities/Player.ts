@@ -254,7 +254,10 @@ export class Player {
    * 播放动作。优先级：倒地 / 胜利 > 招牌技 > 受伤 > 普攻；招牌技播放中不被普攻、受伤打断。
    * 没有对应素材时返回 false（招牌技缺图时用普攻帧代替）。
    */
+  /** 放招牌技 / 专属武艺时（playAction('skill')）回调：出招起手特效（systems/HeroCastFx.ts），动作没播成也算出手 */
+  onSkillAction?: () => void;
   playAction(kind: HeroActionKind, dir: 'down' | 'up' | 'left' | 'right' = this.direction): boolean {
+    if (kind === 'skill') this.onSkillAction?.();
     const set = this.actionSet; if (!set) return false;
     const now = this.clock(), cur = this.currentAction;
     if (cur === 'die' || cur === 'win') return false;

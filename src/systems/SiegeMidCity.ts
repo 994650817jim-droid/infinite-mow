@@ -485,11 +485,24 @@ export class SiegeMidCity {
   }
   /** 敌兵寻路：一半敌兵（uid 偶数）在冲车附近时转去打冲车。返回 true 表示已接管。 */
   steer(e: Enemy, dt: number): boolean {
+    if (this.moatSteer(e, dt)) return true;
     const r = this.ram;
     if (this.phase !== 'outside' || !r || r.state === 'wreck' || e.kind === 'boss' || e.kind === 'archer' || e.uid % 2) return false;
     const dx = r.x - e.x, dy = r.y - e.y, d = Math.hypot(dx, dy);
     if (d > M.ram.enemyAggroRadius) return false;
     if (d < 40) { this.h.advance(e, 0, 0, dt); return true; }
+    this.h.advance(e, dx / d, dy / d, dt); return true;
+  }
+
+  /** 大城城外：敌兵和主将分在护城河两岸时，先沿岸走到吊桥头再过河；吊桥没放就在岸边待着（全面检查 #5：骑兵贴着河岸往北挤、卡在岸边）。 */
+  private moatSteer(e: Enemy, dt: number): boolean {
+    if (this.tier !== 'large' || this.phase !== 'outside' || e.kind === 'boss') return false;
+    const m = L.moat, mid = (m.top + m.bottom) / 2, p = this.h.player, side = e.y > mid ? 1 : -1;
+    if ((p.y > mid ? 1 : -1) === side || Math.abs(e.x) < m.bridgeHalfW - 24) return false; // 同岸，或已经在桥头这一段：照常
+    if (Math.abs(e.y - (side > 0 ? m.bottom : m.top)) > 260) return false; // 离河远：照常走，到河边再说
+    e.chargeState = 'none';
+    if (!this.bridgeDown) { this.h.advance(e, 0, 0, dt); return true; }
+    const ty = side > 0 ? m.bottom + 30 : m.top - 30, dx = -e.x, dy = ty - e.y, d = Math.hypot(dx, dy) || 1;
     this.h.advance(e, dx / d, dy / d, dt); return true;
   }
 

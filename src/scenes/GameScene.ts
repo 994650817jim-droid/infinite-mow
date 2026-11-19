@@ -1,6 +1,7 @@
 import { stopMenuMusic } from '../systems/Music';
 import { SCHOOL_TIER, SHI_SOURCES, FOLLOWER_SCHOOL, heroAffinity, type SchoolId } from '../data/schools';
 import { playSheet } from '../systems/SkillFxSheets';
+import { HeroCastFx } from '../systems/HeroCastFx';
 import { MOUNT_VISUAL, isHorseCavalry } from '../data/mounts';
 import { buildSettingsPanel, type SettingSpec } from '../ui/SettingsPanel';
 import {FollowerSquad,type Follower} from '../systems/FollowerSquad';
@@ -100,7 +101,7 @@ import { RunGrowth, ATTRIBUTE_INFO, attributeCap, attributeIcon, type AttributeI
 import { BossPace } from '../systems/BossPace';
 import { addMerit, addScrolls, getXinde, SCROLL, temperBonus } from '../systems/MasteryStore';
 import { primaryAttribute, PRIMARY_PERK, PRIMARY_PERK_INFO, PRIMARY_TIERS, PRIMARY_MUL, SPELL_WEAPONS } from '../data/attributes';
-import { stageCleared, takeAttrNotice } from '../systems/HeroProgress';
+import { chaptersOpen, stageCleared, takeAttrNotice } from '../systems/HeroProgress';
 import { allocateHeroAttr, claimFirstClear, creditHeroXp, enlistHero, heroFreePoints, heroInfo, heroLevel, levelCap, setHeroProgress, type HeroKey } from '../systems/HeroProgress';
 import { HERO_XP_RATE, OVERFLOW_XP_PER_GRAIN, PICK_GUARANTEE, PICK_PACE } from '../data/heroLevels';
 import { addProvisions, gainProvisions } from '../world/WorldStore';
@@ -135,7 +136,7 @@ import { EnvInteractions } from '../systems/EnvInteractions';
 import { envConfigFor, type Faction } from '../data/envInteractions';
 import { Terrain } from '../systems/Terrain';
 import { attrBadge } from '../ui/AttrBadge';
-import { PROP_LOOT, rollPropItem, type PropLootKind } from '../data/propLoot';
+import { PROP_LOOT, rollPropItem, rollPropQuality, type PropLootKind } from '../data/propLoot';
 import { terrainConfigFor } from '../data/terrain';
 import { stageMapFor } from '../data/stageMaps';
 import { StageArena } from '../systems/StageArena';
@@ -161,7 +162,7 @@ import { BOSS_MOUNTS, BOSS_MOVES } from '../data/bossMoves';
 import type {ItemInstance} from '../data/items';
 import {armShield,absorbShield,ShieldBars} from '../systems/ShieldGuard';
 import {StageObjectives} from '../systems/StageObjectives';
-import {itemName,relicDef,rollItem,SPECIALS} from '../data/items';
+import {capLootQuality,itemName,lootBand,QUALITIES,relicDef,rollItem,SPECIALS} from '../data/items';
 import {BossChest,playBossFall,type ChestLoot} from '../systems/BossChest';
 import {preloadBossDeath} from '../systems/BossDeathArt';
 import {ItemBagUI} from '../ui/ItemBagUI';
@@ -325,7 +326,7 @@ export class GameScene extends Phaser.Scene {
   protected parleyExecuteRewards(out:ChestLoot[]):void{
     const p=this.parley;if(!p||p.persuadedOk||!surrenderLive())return;
     gainProvisions(SURRENDER.executeProvisions);const first=markSurrender('executed',p.def.id);
-    if(first){const item=rollItem('purple');addItems([item]);out.push({name:`紫色兵装一件 · 军粮 +${SURRENDER.executeProvisions}`,desc:'首次斩杀此将所得 · 已入行囊',tag:'斩杀'});}
+    if(first){const q=capLootQuality('purple',this.itemTier()),item=rollItem(q,Math.random,undefined,this.lootChapter());addItems([item]);out.push({name:`${QUALITIES[q].label}兵装一件 · 军粮 +${SURRENDER.executeProvisions}`,desc:'首次斩杀此将所得 · 已入行囊',tag:'斩杀'});}
     else out.push({name:`军粮 +${SURRENDER.executeProvisions}`,desc:'斩将所得',tag:'斩杀'});
   }
   /** 正在播的过场动画（systems/Cutscene.ts）。 */
@@ -336,6 +337,8 @@ export class GameScene extends Phaser.Scene {
   private cutsceneEndedAt=-Infinity;
   /** 排队中的首领台词（剧情台词之后主将接一句）；过场开播时取消。 */
   private bossBarkTimer?:Phaser.Time.TimerEvent;
+  /** 武将出招起手特效（systems/HeroCastFx.ts） */
+  heroCastFx?: HeroCastFx;
   /** 首领血条换人时淡入（bossBarKey = 当前显示的是谁）。 */
   private bossBarKey = ''; private bossBarAt = 0;
   barksMuted():boolean{return !!this.cutscene?.active||performance.now()-this.cutsceneEndedAt<1000;}
@@ -780,7 +783,7 @@ export class GameScene extends Phaser.Scene {
     // 坐骑：马厩里给该武将分配的马（第一章通关后马厩开放；换马只在休整时，下一关出征生效）
     {const horse=heroHorse(this.runConfig.character);this.mount=horse?new HeroMount({scene:this,player:this.player,enemies:this.enemies,hit:(e,d,now)=>this.hitEnemy(e,d,now,'melee',false,false),notice:t=>this.showGrowthNotice(t)},{base:horse.id,name:horse.name},this.runConfig.character,this.player.growth.gear.specials.includes('hubao')?{trampleMul:RELIC.hubaoTrample,remountMs:RELIC.hubaoRemountMs}:{}):null;this.player.mountGuard=this.mount?(n,now)=>this.mount?.guard(n,now)??n:undefined;this.mountHint=MountRideHint.maybeShow(this,!!this.mount);this.events.once('shutdown',()=>{this.mount?.clear();this.mount=null;});}
     this.bossPace=new BossPace(this as unknown as ConstructorParameters<typeof BossPace>[0]); // 首领走路提速 / 追击（BALANCE.bossPace）
-    this.itemDrops=new ItemDrops(this,this.player,this.itemTier(),()=>this.elapsed,()=>this.isFinalBoss(),()=>this.sfx.play('pickup'),()=>this.bossRelicKey());this.itemDrops.deferBossRelic=true; // 首领遗珍由首领宝箱发（BossChest）
+    this.itemDrops=new ItemDrops(this,this.player,this.itemTier(),this.lootChapter(),()=>this.elapsed,()=>this.isFinalBoss(),()=>this.sfx.play('pickup'),()=>this.bossRelicKey());this.itemDrops.deferBossRelic=true; // 首领遗珍由首领宝箱发（BossChest）
     this.relics=new BossRelics({scene:this,player:this.player,enemies:()=>this.enemies,hit:(e,d,now)=>{this.hitEnemy(e,d,now,'melee',false,false);},notice:t=>this.showGrowthNotice(t)},this.player.growth.gear.specials,this.combatNow);
     this.syncRelicShips();
     this.events.once('shutdown',()=>{this.relics?.clear();this.relics=null;this.relicShips?.clear();this.relicShips=null;});
@@ -1227,6 +1230,9 @@ export class GameScene extends Phaser.Scene {
     // 游击类战法（疾行印等）的移动风痕：用户反馈「疾行」特效一直挂在身后太显眼 → 改为脚边一小团、每 1.5 秒最多一次
     if(Math.hypot(move.x,move.y)>.1&&this.player.growth.build.tags().cavalry>0&&this.combatNow>=this.skirmishPuffAt){this.skirmishPuffAt=this.combatNow+1500;vfx.emit('skirmish',this.player.x-move.x*16,this.player.y+16-move.y*10,this.combatNow,26,Math.atan2(move.y,move.x),260);}
     this.updateWeapons(dt, time);
+    // 武将出招起手特效（2026-11-19）：招牌技 / 专属武艺（skill 动作）与被动触发那一刻在身上亮一下
+    if (this.heroCastFx?.owner !== this.player) { const fx = new HeroCastFx(this, this.player, this.runConfig.character); this.heroCastFx = fx; this.player.onSkillAction = () => fx.markSkill(); } // 场景重开换了主将对象就重建
+    this.heroCastFx.update(this.combatNow);
     this.reinforcements.update(time, this.enemies, (enemy, amount, fire) => this.hitEnemy(enemy, amount, time, fire ? 'fire' : 'melee', true, false));
     if (this.over) return;
     this.updateSpawner(dt, time);
@@ -1319,6 +1325,10 @@ export class GameScene extends Phaser.Scene {
     // 不刷在关墙 / 营栅 / 场地边界 / 谷壁 / 崖壁里（全场景审查 F）：挪到最近的框边、朝主将那一侧；首领与城头守军按设计摆位，不挪
     if (kind !== 'boss' && override?.behavior !== 'wall' && this.sishuiObstacles?.footprints.length) { const f = freeSpawn(this.sishuiObstacles.footprints, x, y, 20, this.player); x = f.x; y = f.y; }
     if (this.arena && kind !== 'boss') { const c = this.arena.clampPoint(x, y); x = c.x; y = c.y; } // 有边场地：挪出障碍后可能被推到边外（崖口旁），夹回场内
+    // 全面检查 #7：夹回场内后又可能落进角上的房子 / 墙里——再挪出、再夹，最多两轮
+    if (this.arena && kind !== 'boss' && override?.behavior !== 'wall' && this.sishuiObstacles?.footprints.length) { let ok = false; for (let i = 0; i < 2 && !ok; i++) { const f = freeSpawn(this.sishuiObstacles.footprints, x, y, 20, this.player); if (!f.moved) { ok = true; break; } const c = this.arena.clampPoint(f.x, f.y); x = c.x; y = c.y; }
+      // 还在墙里（两排房子的拐角）：改到离主将最远的关口（关口都是空地）
+      if (!ok && freeSpawn(this.sishuiObstacles.footprints, x, y, 20, this.player).moved) { const g = [...(this.arena.info.gates ?? [])].sort((u, v) => Math.hypot(v.x - this.player.x, v.y - this.player.y) - Math.hypot(u.x - this.player.x, u.y - this.player.y))[0]; if (g) { x = g.x; y = g.y; } } }
     if (kind !== 'boss' && override?.behavior !== 'wall' && this.dzLubu) { const f = this.dzLubu.southSpawn(x, y); x = f.x; y = f.y; } // 2-3 洛阳：城北（城里）不刷兵
     const poolLimit = BALANCE.enemyCap;
     const bossReserve = this.bossSpawned ? 0 : 1;
@@ -3189,7 +3199,7 @@ export class GameScene extends Phaser.Scene {
     if (kind !== 'weapons' && kind !== 'armor' && kind !== 'crate' && kind !== 'coins') return;
     const c = L[kind];
     for (let i = 0; i < c.gems; i++) { const a = i / Math.max(1, c.gems) * Math.PI * 2; this.spawnGem(x + Math.cos(a) * 22, y + 8 + Math.sin(a) * 10, 1); }
-    if (this.itemDrops && this.propItems < L.perStageItems && rng() < c.itemChance) { const it = rollPropItem(kind, rng); if (it) { this.propItems++; this.itemDrops.drop(it, x, y + 18); } }
+    if (this.itemDrops && this.propItems < L.perStageItems && rng() < c.itemChance) { const it = rollPropItem(kind, rng, rollPropQuality(rng, this.itemTier()), this.lootChapter()); if (it) { this.propItems++; this.itemDrops.drop(it, x, y + 18); } }
     if (kind === 'weapons' && rng() < L.weapons.buffChance) { const g = this.player.growth; g.berserkUntil = Math.max(g.berserkUntil, now) + L.weapons.buffMs; this.showGrowthNotice('取兵器 · 斗志昂扬（短时伤害提升）'); }
     if (kind === 'armor' && rng() < L.armor.buffChance) { this.player.propGuardUntil = Math.max(this.player.propGuardUntil, now) + L.armor.buffMs; this.player.propGuardMul = L.armor.guardMul; this.showGrowthNotice('披甲执盾 · 短时减伤'); }
   }
@@ -3510,11 +3520,17 @@ export class GameScene extends Phaser.Scene {
     if (!this.bossSpawned && (this.objective ? this.objective.failed || this.elapsed >= this.objective.o.limit : this.elapsed >= chapterBossTime(this.chapter) + 60)) this.finish(false, 'timeout');
   }
 
-  /** 道具掉落的章节档：0 黄巾 / 1 讨董 / 2 群雄·攻守城 / 3 官渡 / 4 赤壁。 */
-  protected itemTier(): number {
+  /** 掉落按的章节（1–12）：章节场景按场景；攻城、军情、挑战关等不属于某章的，按已开放的章节数（2026-11-19 掉落品质随章节，data/items.ts lootBand）。 */
+  protected lootChapter(): number {
     const key = this.scene.key, arc = (this.runConfig as { arc?: string }).arc;
-    return key === 'ChibiGameScene' || arc === 'chibi' ? 4 : key === 'GuanduGameScene' ? 3 : key === 'ThirdGameScene' || key === 'SiegeGameScene' ? 2 : this.chapter.id === 'hulao' ? 1 : 0;
+    const byKey: Record<string, number> = { ThirdGameScene: 3, GuanduGameScene: 4, ChibiGameScene: 5, JingnanGameScene: 6, ShuGameScene: 7, HanzhongGameScene: 8, XiangfanGameScene: 9, YilingGameScene: 10, NanzhengGameScene: 11, BeifaGameScene: 12 };
+    if (arc === 'chibi') return 5;
+    if (byKey[key]) return byKey[key];
+    if (key === 'GameScene' && !this.runConfig.encounter && !this.customChapter()) return this.chapter.id === 'hulao' ? 2 : 1;
+    return chaptersOpen();
   }
+  /** 道具掉落的品质段（0 一、二章 … 4 十一、十二章；乱世 +1）：品质表与封顶见 data/items.ts。也用于开局免费招兵数。 */
+  protected itemTier(): number { return lootBand(this.lootChapter(), this.hardMode); }
   /** 马厩赠马用的关卡键（见 data/mounts.ts HORSES.reward）；章节场景覆盖，攻城 / 军情为空。 */
   protected stableRewardKey(): string | null {
     if (this.runConfig.encounter || this.customChapter()) return null;

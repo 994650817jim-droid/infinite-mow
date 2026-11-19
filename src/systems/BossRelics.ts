@@ -21,7 +21,7 @@ export const RELIC = {
   bainiaoHits: 5, bainiaoCooldown: 4000, bainiaoRange: 170, bainiaoArc: 1.4, bainiaoCount: 6, bainiaoMul: .6,
   weixiTreasures: 2, weixiTaken: 1.15,
   jiuhuMs: 8000, jiuhuDamage: 1.4, jiuhuJitter: Math.PI / 12, jiuhuJitterMs: 400,
-  hubaoTrample: 2, hubaoRemountMs: 6000,
+  hubaoTrample: 2, hubaoRemountMs: 60000, // 11-18 用户：落马后不可再上马；虎豹骑特例每战可重新上马一次，等 60 秒（待平衡会话复核）
   louchuanMs: 12000, louchuanFirst: 6000,
 } as const;
 

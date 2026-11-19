@@ -1,4 +1,5 @@
 import { stopMenuMusic } from '../systems/Music';
+import { MOUNT_VISUAL, isHorseCavalry } from '../data/mounts';
 import { buildSettingsPanel, type SettingSpec } from '../ui/SettingsPanel';
 import {FollowerSquad,type Follower} from '../systems/FollowerSquad';
 import {CharacterPassives} from '../systems/CharacterPassives';
@@ -1254,7 +1255,9 @@ export class GameScene extends Phaser.Scene {
       enemy = new Enemy(this);
       this.enemies.push(enemy);
     }
-    const base=override??this.chapter.enemies[kind];
+    const base0=override??this.chapter.enemies[kind];
+    // 敌方骑兵（马）移速 ×MOUNT_VISUAL.enemyCavalrySpeedMul（11-18「骑马移速慢点」；冲锋速度由 speed 推出，随之变慢）；象兵不变
+    const base=isHorseCavalry(base0)?{...base0,speed:base0.speed*MOUNT_VISUAL.enemyCavalrySpeedMul}:base0;
     const variant=!override&&this.yellow&&kind!=='boss'?this.yellow.variant(base,this.elapsed):base;
     // 小怪按章节 / 关序成长（stageTuning.growth；首领不受影响）
     const growth=kind!=='boss'?this.chapter.growth:undefined;

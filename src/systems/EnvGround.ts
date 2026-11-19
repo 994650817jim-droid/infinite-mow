@@ -11,6 +11,8 @@ export const ENV_GROUND_FILES: Readonly<Record<string, string>> = {
   ground_v2_changan: 'assets/env-v2/ground_changan.png', // 长安夯土：第三章
   ground_v2_hebei: 'assets/env-v2/ground_hebei.png', // 河北平原：第四章官渡
   ground_v2_jiang: 'assets/env-v2/ground_jiang.png', // 江岸湿地：第五章赤壁 / 长坂
+  ground_v2_grass: 'assets/env-v2/ground_grass.png', // 草地：野战关（场景审查 P3，美术会话出图）
+  ground_v2_dirt: 'assets/env-v2/ground_dirt.png', // 荒土：野战关（场景审查 P3）
   road_v2_dirt: 'assets/env-v2/road_dirt.png', // 夯土车辙路（竖条）
   road_v2_stone: 'assets/env-v2/road_stone.png', // 石板官道（竖条）
   road_v2_plank: 'assets/env-v2/road_plank.png', // 军营木板道（竖条）
@@ -26,7 +28,7 @@ export function paintV2Ground(scene: Phaser.Scene, key: string, source: string, 
   g.imageSmoothingEnabled = true; g.imageSmoothingQuality = 'high';
   g.drawImage(scene.textures.get(source).getSourceImage() as HTMLImageElement, 0, 0, S, S);
   if (overlay) { g.fillStyle = overlay; g.fillRect(0, 0, S, S); }
-  tex.refresh(); tex.setFilter(Phaser.Textures.FilterMode.LINEAR);
+  tex.refresh(); tex.setFilter(Phaser.Textures.FilterMode.LINEAR); (tex.customData as Record<string, unknown>).source = source;
   return true;
 }
 

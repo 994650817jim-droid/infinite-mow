@@ -1,3 +1,5 @@
+import {ARC_FACTIONS,SCENE_LOOKS} from '../data/sceneLooks';
+import {architecturalSurface} from '../systems/SceneSurfaces';
 import {FACTION_PROPS} from '../systems/PropsV2';
 import {chibiRiverCamp} from '../systems/ChibiRiverCamp';
 import {ThirdSpearWarnings,THIRD_SPEAR,type SpearWindup} from '../systems/ThirdSpearWarnings';
@@ -68,16 +70,17 @@ export function thirdGameSceneClass(Base:typeof GameScene,cfg:ArcSceneConfig=THI
   const saved=this.registry.get('runConfig')as RunConfig|undefined,transfer=this.registry.get(cfg.transferKey)as CampaignTransfer|undefined;this.registry.remove(cfg.transferKey);this.registry.remove('campaignTransfer');if(transfer&&transfer.character===saved?.character)this.registry.set('campaignTransfer',transfer);
   this.registry.set('runConfig',{...saved,character:saved?.character??'zhaoyun',chapter:'hulao',westStage:3,encounter:'qunxiong'});super.create();
   this.controller=undefined;this.spear=new WeakMap();this.chapter=cfg.battle(this.thirdStage);this.runConfig={...this.runConfig,thirdStage:this.thirdStage,encounter:'qunxiong'};
+  {const fac=ARC_FACTIONS[cfg.arc+'.'+this.thirdStage];if(fac!==undefined&&FACTION_PROPS[fac]&&this.textures.exists(FACTION_PROPS[fac].key))architecturalSurface(this,fac);} /* 场景审查 P3：营具按本关敌方势力（原来一律西凉红黑帐篷）；吴 / 蜀 / 蛮的营具图没到之前照旧 */
   this.hubao=cfg.arc==='chibi'?new HubaoBattle({scene:this,player:this.player,army:this.legion,enemies:this.enemies,spawn:(kind,x,y,def)=>this.spawnEnemy(kind,x,y,undefined,true,def),stage:()=>this.thirdStage,elapsed:()=>this.elapsed,def:k=>this.chapter.enemies[k],banner:(t,c)=>this.showWaveBanner(t,true,c||undefined),sfx:k=>this.sfx.play(k),move:(e,nx,ny,dt)=>this.advanceEnemy(e,nx,ny,dt),boss:()=>this.boss,obstacles:()=>this.sishuiObstacles?.footprints??[]}):undefined;this.xiliang=this.hubao??null;
   this.thirdReceipt=this.thirdTest?'':beginArcExpedition(cfg.arc,this.thirdStage,this.allies.filter(u=>u.active&&u.reserveSoldier).map(u=>u.kind));const effect=permanentEffects();this.legion.healingMultiplier=effect.healMultiplier;applyCitySpecialties(this.player,effect,!transfer,{legion:this.legion,supplies:this.supplies});if(!transfer){for(let i=0;i<effect.reinforcements;i++)this.legion.recruit(i===0?'swordsman':'spearman',1,true);if(!this.thirdTest)for(const kind of takeExpeditionReserve(effect.reserveSlots)){this.legion.recruit(kind,1,true);this.allies[this.allies.length-1].reserveSoldier=true;}}
   this.spearWarnings=new ThirdSpearWarnings(this);
   this.battlefieldDetails.useStructuredLayout();if(this.supplies)this.supplies.randomGeneration=false;
-  const art=cfg.scenery?.(this,this.thirdStage)??thirdScenery(this,this.sceneryStage,(frame,x,y,size)=>this.spawnSceneProp(frame,x,y,size),cfg.arc,this.fort?.kind);this.ground.setTexture(art.key).setTileScale(1);this.sishuiObstacles=new SishuiObstacles();this.sishuiObstacles.footprints.splice(0,this.sishuiObstacles.footprints.length,...art.boxes);
+  const art=cfg.scenery?.(this,this.thirdStage)??thirdScenery(this,this.sceneryStage,(frame,x,y,size)=>this.spawnSceneProp(frame,x,y,size),cfg.arc,this.fort?.kind,SCENE_LOOKS[cfg.arc+'.'+this.thirdStage],cfg.arc+this.thirdStage);this.ground.setTexture(art.key).setTileScale(1);this.sishuiObstacles=new SishuiObstacles();this.sishuiObstacles.footprints.splice(0,this.sishuiObstacles.footprints.length,...art.boxes);
   /* 关隘 / 城池（data/arcForts.ts）：关墙、关门、箭楼复用 2-1 汜水关；碰撞框共用一个数组，开门时关门那格移除 */
-  const fort=this.fort;if(fort&&fort.kind!=='clear'&&!cfg.scenery){this.sishuiPass=new SishuiPass(this.passHost(),{towers:fort.kind==='pass',tents:false,wenjiu:false,wallY:ARC_FORT_WALL_Y,gateText:fort.gate,tag:'fort',palisade:fort.kind==='camp'?FACTION_PROPS[3].key:undefined});this.sishuiPass.footprints.push(...art.boxes);this.sishuiObstacles=new SishuiObstacles(this.sishuiPass.footprints);}
+  const fort=this.fort;if(fort&&fort.kind!=='clear'&&!cfg.scenery){this.sishuiPass=new SishuiPass(this.passHost(),{towers:fort.kind==='pass',tents:false,wenjiu:false,wallY:ARC_FORT_WALL_Y,gateText:fort.gate,tag:'fort',palisade:fort.kind==='camp'?FACTION_PROPS[ARC_FACTIONS[cfg.arc+'.'+this.thirdStage]??3]?.key??FACTION_PROPS[3].key:undefined});this.sishuiPass.footprints.push(...art.boxes);this.sishuiObstacles=new SishuiObstacles(this.sishuiPass.footprints);}
   this.enemyCamps=new EnemyCamps({scene:this,player:this.player,create:(x,y,hp)=>this.supplies?.spawnCamp(x,y,hp)??null,spawn:(kind,x,y)=>this.spawnEnemy(kind,x,y,1),support:()=>this.legion.grid.query(this.player.x,this.player.y,260),reward:n=>{this.legion.food+=n;}},art.camps,this.combatNow);
   this.legion.campTarget=u=>this.enemyCamps?.assist(u)??null;
-  if(cfg.arc==='chibi'&&this.thirdStage===2)chibiRiverCamp(this); /* 5-2 赤壁：北岸曹军水寨布景（江面是 Terrain 的河） */
+  if(cfg.arc==='chibi'&&this.thirdStage===2){if(!this.sishuiObstacles)this.sishuiObstacles=new SishuiObstacles([]);chibiRiverCamp(this,this.sishuiObstacles.footprints);} /* 5-2 赤壁：北岸曹军水寨布景、江北连环战船（船身挡人；江面是 Terrain 的河） */
   this.fireShips=cfg.fireShips?.includes(this.thirdStage)?new FireShips({scene:this,enemies:()=>this.enemies,player:()=>this.player,boss:()=>this.boss??undefined,burn:(e,dmg,now)=>{this.hitEnemy(e,dmg,now,'fire',true,false);},announce:t=>this.showWaveBanner(t,false)},this.combatNow):undefined;
   const keys=(this.registry.get('battleTextureKeys')??[])as string[];this.registry.set('battleTextureKeys',[...new Set([...keys,...cfg.stages.map(d=>cfg.texture(d.id)),art.key,'third_road_'+this.sceneryStage])]);
   // 剧情（第三章起）：基类按 encounter 没建剧情；有该篇章剧本时按篇章 id 重建并播关前剧情
@@ -100,6 +103,7 @@ export function thirdGameSceneClass(Base:typeof GameScene,cfg:ArcSceneConfig=THI
  protected arcHost(boss:Enemy):ArcHost{return {scene:this,boss,player:this.player,army:this.legion,spawn:(kind,x,y,def)=>this.spawnEnemy(kind,x,y,1,true,def),def:k=>this.chapter.enemies[k],banner:(t,c)=>this.showWaveBanner(t,true,c),sfx:k=>this.sfx.play(k)};}
  /** 双首领关：子类在第一位首领的招式控制器建好后接手（返回 true = 控制器交给 DualBoss）。 */
  protected dualSetup(_first:BossMoveset):boolean{return false;}
+ protected sceneFaction():number|null{return ARC_FACTIONS[cfg.arc+'.'+this.thirdStage]??null;}
  protected customBossStep(enemy:Enemy,dt:number,now:number){if(enemy!==this.boss||!this.controller)return false;this.controller.update(dt,now);return true;}
 
  protected customEnemyStep(enemy:Enemy,dt:number,now:number,target:{x:number;y:number}){

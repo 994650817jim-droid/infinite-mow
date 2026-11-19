@@ -6,6 +6,7 @@ import type {PlayerStats} from '../types';
 import {followersFor,followerLevelCap,heroOwned,lordHero} from '../systems/RosterStore';
 import {Parley} from '../systems/Parley';
 import {freeSpawn} from '../systems/SpawnClear';
+import {luoyangRuins,xiaquyangAltarCamp} from '../systems/ChapterDressing';
 import {DUAL, DualBoss, retreatFade, type DualCtrl, type DualPlan} from '../systems/DualBoss';
 import type {BossMount as BossMountT} from '../systems/BossMount';
 import {SURRENDER,surrenderDef} from '../data/surrender';
@@ -117,7 +118,7 @@ import { DraggingBladeFx } from '../systems/DraggingBladeFx';
 import { FlankFx } from '../systems/FlankFx';
 import { WindstepFx } from '../systems/WindstepFx';
 import { EnvInteractions } from '../systems/EnvInteractions';
-import { envConfigFor } from '../data/envInteractions';
+import { envConfigFor, type Faction } from '../data/envInteractions';
 import { Terrain } from '../systems/Terrain';
 import { attrBadge } from '../ui/AttrBadge';
 import { PROP_LOOT, rollPropItem, type PropLootKind } from '../data/propLoot';
@@ -288,6 +289,8 @@ export class GameScene extends Phaser.Scene {
       const line=plan.lines[second.id]?.intro;if(line&&storyMode()!=='off')storyBark(this,e.sprite,second.name,line);
     });
   }
+  /** 本关敌方势力（营具 / 军旗）；篇章场景按章节.关覆盖（data/sceneLooks.ts ARC_FACTIONS），null = 照 envConfigFor。 */
+  protected sceneFaction():number|null{return null;}
   /** 单首领「败退型」（8-1 张郃、5-3 曹仁、4-1 颜良）：打到底不倒地，淡出退走。子类据此不播控制器倒地帧。 */
   protected bossRetreats(enemy:Enemy):boolean{return enemy===this.boss&&!this.dual&&surrenderDef(this.surrenderKey())?.tier==='retreat';}
   /** 败退型的退兵台词：招降表 retreat 句（8-1 张郃），没有时用剧本 bossFall（5-3 曹仁、4-1 颜良）。 */
@@ -739,6 +742,8 @@ export class GameScene extends Phaser.Scene {
       this.supplies.spawnSishui(3,-330,180,116);this.supplies.spawnSishui(5,-310,350,105);this.supplies.spawnSishui(7,230,-50,100);this.supplies.spawnSishui(4,290,210,104);this.supplies.spawnSishui(6,300,370,110);}
     // 1-3 广宗决战（全场景审查 P2：「广宗城」只有空地）：北面一道广宗城墙（攻城城墙图集，同 2-1 汜水关那套），城门紧闭，张角在城下列阵
     if(this.chapter.id==='huangjin'&&this.chapter.stage===3&&!this.runConfig.encounter&&!this.customChapter()&&!this.sishuiPass){this.sishuiPass=new SishuiPass(this.passHost(),{towers:false,tents:false,wenjiu:false,wallY:-900,tag:'guangzong'});this.sishuiObstacles=new SishuiObstacles(this.sishuiPass.footprints);}
+    // 场景审查 P3：1-2 下曲阳张宝法坛营、2-3 洛阳火城残垣（systems/ChapterDressing.ts，实心部分进场景碰撞框）
+    if(!this.runConfig.encounter&&!this.customChapter()&&((this.chapter.id==='huangjin'&&this.chapter.stage===2)||(this.chapter.id==='hulao'&&(this.chapter.westStage??3)===3&&this.chapter.bossStyle==='dongzhuo'))){if(!this.sishuiObstacles)this.sishuiObstacles=new SishuiObstacles([]);const bx=this.sishuiObstacles.footprints;if(this.chapter.id==='huangjin')xiaquyangAltarCamp(this,this.player,bx);else luoyangRuins(this,this.player,bx);}
     // 过场动画预览（MenuScene 收到 ?dev=1&cutscene=<id>）：清场、首领出阵，推到过场处自动播
     {const pv=this.registry.get('cutscenePreview') as string|undefined;if(pv){this.registry.remove('cutscenePreview');this.player.damageImmune=true;const t0=performance.now();
       const poll=():void=>{if(!this.scene.isActive()){this.events.off('postupdate',poll);return;}this.spawnTimer=this.eliteTimer=1e9;for(const e of this.enemies)if(e.active&&e.kind!=='boss'&&!e.isSupplySlot&&e!==this.dzLubu?.lubu)e.deactivate();
@@ -1083,7 +1088,7 @@ export class GameScene extends Phaser.Scene {
     if(!this.over){for(const c of this.bossChests)c.update(this.combatNow);this.itemDrops?.update();this.relics?.update(this.combatNow);this.relicShips?.update(this.combatNow);}
     this.deathFx?.update(this.combatNow);
     this.supplies?.update(dt,time,this.battlefieldDetails.props,(enemy,damage)=>this.hitEnemy(enemy,damage,time,'fire',false,false),this.allies,(ally,damage,now)=>this.legion.hurt(ally,damage,now));
-    if(!this.envInit&&this.supplies){this.envInit=true;const cfg=envConfigFor(this.scene.key,this.chapter.id,(this as unknown as {guanduStage?:number}).guanduStage);if(cfg){const sup=this.supplies;this.env=new EnvInteractions({scene:this,player:this.player,supplies:sup,enemies:()=>this.enemies,allies:()=>this.allies,hitEnemy:(e,d)=>{this.hitEnemy(e,d,this.combatNow,'fire',false,false);},hurtAlly:(a,d)=>{this.legion.hurt(a,d,this.combatNow);},spawnEnemy:(x,y)=>this.spawnEnemy('infantry',x,y,undefined,true),spawnGem:(x,y,v)=>this.spawnGem(x,y,v),spawnChest:(x,y)=>{this.itemDrops?.spawnChest(x,y);},now:()=>this.combatNow,sfx:k=>this.sfx.play(k)},cfg);this.events.once('shutdown',()=>{this.env?.destroy();this.env=null;});}}
+    if(!this.envInit&&this.supplies){this.envInit=true;const sf=this.sceneFaction(),cfg0=envConfigFor(this.scene.key,this.chapter.id,(this as unknown as {guanduStage?:number}).guanduStage),cfg=cfg0&&sf!==null&&sf<=3?{...cfg0,faction:sf as Faction}:cfg0;if(cfg){const sup=this.supplies;this.env=new EnvInteractions({scene:this,player:this.player,supplies:sup,enemies:()=>this.enemies,allies:()=>this.allies,hitEnemy:(e,d)=>{this.hitEnemy(e,d,this.combatNow,'fire',false,false);},hurtAlly:(a,d)=>{this.legion.hurt(a,d,this.combatNow);},spawnEnemy:(x,y)=>this.spawnEnemy('infantry',x,y,undefined,true),spawnGem:(x,y,v)=>this.spawnGem(x,y,v),spawnChest:(x,y)=>{this.itemDrops?.spawnChest(x,y);},now:()=>this.combatNow,sfx:k=>this.sfx.play(k)},cfg);this.events.once('shutdown',()=>{this.env?.destroy();this.env=null;});}}
     this.env?.update(dt);
     if(this.mode==='none'&&!this.over)this.sishuiPass?.update();
     this.parley?.update(); // 首领招降：残血弹窗 / 再压一压

@@ -1,4 +1,5 @@
 import {activeAwakenings} from '../data/awakenings';
+import {SCHOOLS,SCHOOL_IDS,TIER_STEPS,tierOf} from '../data/schools';
 import Phaser from 'phaser';
 import type {Player} from '../entities/Player';
 import {TACTICS,TREASURES,tacticDescription,type TacticId} from '../data/builds';
@@ -73,6 +74,8 @@ export class BuffHud {
   this.now=now;if(!visible){this.root.setVisible(false);this.hideTip();return;}
   const g=player.growth,entries:BuffEntry[]=[];
   for(const a of activeAwakenings(g.build.tags()))entries.push({id:'awakening_'+a.id,icon:a.icon,name:a.name,desc:a.desc,kind:'觉醒 · 常驻',badge:'醒',rare:true});
+  // 流派档位（2026-11-19 流派重做）：到 2 / 4 势的派各一个图标，角标写势
+  {const t=g.build.tags();for(const sc of SCHOOL_IDS){const n=t[sc],tier=tierOf(n);if(tier<2)continue;const d=SCHOOLS[sc],got=TIER_STEPS.filter(x=>n>=x);entries.push({id:'school_'+sc,icon:d.icon,name:d.name+' · 势 '+n,desc:got.map(x=>x+' 势「'+d.tiers[x].name+'」：'+d.tiers[x].desc).join('\n'),kind:'流派 · '+got.map(x=>d.tiers[x].name).join(' · '),badge:String(n),rare:tier>=4});}}
   if(g.berserkUntil>now)entries.push({id:'berserk',icon:'growth_icon_berserk',name:'狂战丹',desc:'武器伤害提高25%，攻击速度提高20%。限时效果，进入新关卡会清除。',kind:'丹药 · 限时 '+Math.ceil((g.berserkUntil-now)/1000)+' 秒',badge:Math.ceil((g.berserkUntil-now)/1000)+'s',mark:'药',remaining:Math.min(1,(g.berserkUntil-now)/10000)});
   {const left=player.passive.chargeGuardLeft(now);if(left>0)entries.push({id:'tieqi_guard',icon:'icon_zhanjin',name:'铁骑余威',desc:'锦马冲锋之后，受到的伤害减少'+Math.round((1-PASSIVE_RULES.chargeGuardMul)*100)+'%。',kind:'被动 · 限时 '+(left/1000).toFixed(1)+' 秒',badge:Math.ceil(left/1000)+'s',remaining:left/PASSIVE_RULES.chargeGuardMs,rare:true});}
   for(const id of g.build.treasures){const d=TREASURES[id];entries.push({id:'treasure_'+id,icon:'build_icon_'+id,name:d.name,desc:d.desc,kind:'信物 · 宝物',badge:'信',rare:true});}

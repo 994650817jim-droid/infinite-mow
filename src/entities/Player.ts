@@ -1,3 +1,4 @@
+import { SCHOOL_TIER } from '../data/schools';
 import {visualTextureKey} from '../systems/ReadableTextures';
 import {framesFigure, sheetFigureHeight} from '../systems/SpriteMetrics';
 import {ACTION_MS, HERO_ACTIONS, IDLE_FRAME_MS, ZHUGE_FALLBACK, type ActionFrame, type HeroActionKind, type HeroActionSet} from '../data/heroActions';
@@ -163,7 +164,7 @@ export class Player {
   /** 打碎甲胄架 / 盾牌堆偶得的短时减伤：截止时间与受伤倍率（data/propLoot.ts PROP_LOOT.armor） */
   propGuardUntil = 0; propGuardMul = 1;
   get speed(): number {
-    return BALANCE.player.speed * Math.min(1.6, this.stats.moveMul * this.growth.movementMultiplier()*(this.growth.build.tags().skirmish>=2?1.04:1)) * this.mountSpeedMul * this.envSpeedMul * this.terrainSpeedMul;
+    return BALANCE.player.speed * Math.min(1.6, this.stats.moveMul * this.growth.movementMultiplier()*(this.growth.build.tier('cavalry')>=2?1+SCHOOL_TIER.cavalry.move:1)) * this.mountSpeedMul * this.envSpeedMul * this.terrainSpeedMul;
   }
 
   /** 被外力击退 / 挑起；self 为自己的突进（冲锋、龙胆突刺）。马超冲锋无敌中不被外力击退。 */
@@ -416,7 +417,7 @@ export class Player {
     const ridden=this.mountGuard?this.mountGuard(unguarded,now):unguarded;if(ridden<=0)return false;
     const dmg=Math.max(1,this.damageGuard?.(ridden,now)??ridden);
     (this.scene as unknown as {sfx?:{play(k:string):void}}).sfx?.play('playerHurt');
-    const ironRescue=this.hp<=dmg&&this.growth.build.tags().bulwark>=4&&!this.growth.awakenRescueUsed;
+    const ironRescue=false; // 旧「铁壁 4 件 · 绝境不屈」随流派重做删除（2026-11-19）
     if(ironRescue)this.growth.awakenRescueUsed=true;
     const rescue=!ironRescue&&this.hp<=dmg&&this.growth.build.treasures.includes('revival_jade')&&!this.growth.revivalUsed;
     if(rescue)this.growth.revivalUsed=true;

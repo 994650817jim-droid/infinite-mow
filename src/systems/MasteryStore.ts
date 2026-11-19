@@ -22,7 +22,7 @@ export const XINDE_SLOTS = 2;
 interface MasterySave { version: 1; scrolls: number; /** 战功（击杀精英 / 首领获得，讲武堂换残卷）。 */ merit: number; temper: Record<string, number>; xinde: Record<string, TacticId[]>; tactics: TacticId[]; respecFree: Record<string, number>; migrated: boolean }
 const TACTIC_IDS = Object.keys(TACTICS) as TacticId[];
 /** 起始解锁：每个流派在 TACTICS 里排第一个的战法。 */
-export const STARTER_TACTICS: readonly TacticId[] = (() => { const seen = new Set<string>(), out: TacticId[] = []; for (const id of TACTIC_IDS) { const t = TACTICS[id].tag; if (!seen.has(t)) { seen.add(t); out.push(id); } } return out; })();
+export const STARTER_TACTICS: readonly TacticId[] = (() => { const seen = new Set<string>(), out: TacticId[] = []; for (const id of TACTIC_IDS) { const t = TACTICS[id].tag; if (t && !seen.has(t)) { seen.add(t); out.push(id); } } return out; })();
 const int = (v: unknown, max: number) => Number.isSafeInteger(v) ? Math.max(0, Math.min(max, v as number)) : 0;
 const isHeroKey = (k: string) => /^r_\d{1,9}$/.test(k) || /^[a-z]{2,20}$/.test(k);
 

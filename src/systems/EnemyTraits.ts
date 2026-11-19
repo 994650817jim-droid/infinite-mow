@@ -475,10 +475,12 @@ export class EnemyTraits {
     if (dist > t.range) this.h.move(e, nx, ny, dt); else if (dist < t.range * .55) this.h.move(e, -nx, -ny, dt); else this.h.move(e, -ny * .35, nx * .35, dt);
     if (now >= s.next && dist < t.range + 80 && e.attackUntil <= now) {
       s.next = now + t.everyMs * (.85 + Math.random() * .3); this.metrics.nets += 1; e.startAttack(now, dirOf(nx, ny));
-      const p = this.h.player, key = this.h.scene.textures.exists('arrow') ? 'arrow' : ''; if (!key) return true;
+      const key = this.h.scene.textures.exists('arrow') ? 'arrow' : ''; if (!key) return true;
+      // 攻击表第 2 帧网张开：网在那一刻才飞出
+      const life = e.spawnId; this.h.scene.time.delayedCall(ARROW_MS, () => { if (!e.active || e.spawnId !== life) return; const p = this.h.player, n0 = this.now();
       const flight = Math.max(280, Math.hypot(p.x - e.x, p.y - e.y) / .4);
       const img = this.h.scene.add.image(e.x, e.y - 18, key).setDepth(DEPTH.projectile).setScale(.6).setTint(0xc8b080).setRotation(Math.atan2(p.y - e.y, p.x - e.x));
-      this.darts.push({ img, x0: e.x, y0: e.y - 18, tx: p.x, ty: p.y - 10, from: now, at: now + flight, dmg: t.hitDamage, hit: n => { this.snareUntil = n + t.slowMs; this.h.player.snareSpeedMul = 1 - t.slow; this.metrics.snared += 1; } });
+      this.darts.push({ img, x0: e.x, y0: e.y - 18, tx: p.x, ty: p.y - 10, from: n0, at: n0 + flight, dmg: t.hitDamage, hit: n => { this.snareUntil = n + t.slowMs; this.h.player.snareSpeedMul = 1 - t.slow; this.metrics.snared += 1; } }); });
     }
     return true;
   }

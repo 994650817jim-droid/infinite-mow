@@ -233,7 +233,9 @@ for (const hero of HEROES) {
       return { zone: a, waveOff, waveOn, speedup: +(waveOff.ms / Math.max(1, waveOn.ms)).toFixed(2), bossOff, bossOn, bossRatio: +(bossOn / Math.max(1, bossOff)).toFixed(3), mul: mul0, bossMul: Z.bazhen.bossMul };
     }, [G, MK, CLEAR]);
     ck('诸葛亮·八阵图伤害：阵内杂兵、精锐都挨跳伤（精锐按 bossMul 更少），每跳手绘阵纹提亮', !!r2b.zone && r2b.zone.inf > 0 && r2b.zone.el > 0 && r2b.zone.el < r2b.zone.inf && r2b.zone.maxA >= .95 && r2b.zone.minA <= .8, r2b);
-    ck('诸葛亮·八阵图伤害：同一波杂兵清得不比阵不伤人慢；同样 12 秒首领掉血 ≤ 1.1 倍', r2b.waveOff.left === 0 && r2b.waveOn.left === 0 && r2b.speedup >= 1 && r2b.bossRatio >= .95 && r2b.bossRatio <= 1.1, r2b);
+    // 首领掉血比：12 秒里落 2 发还是 3 发算无遗策（各布一个阵）随出手时机变，实测 1.09–1.11（立项时 1.096，正好卡在 1.1 上，机器忙时偶发超线）；
+    // 本意是「八阵图对首领只多一点（bossMul .2）」——上限放到 1.15，与上面「打首领」一项同线
+    ck('诸葛亮·八阵图伤害：同一波杂兵清得不比阵不伤人慢；同样 12 秒首领掉血 ≤ 1.15 倍（八阵图对首领只多一点）', r2b.waveOff.left === 0 && r2b.waveOn.left === 0 && r2b.speedup >= 1 && r2b.bossRatio >= .95 && r2b.bossRatio <= 1.15, r2b);
     // 2) 八阵图 3 级：观星爆发处布阵——阵内步兵减速、受伤 +15%；阵内首领出招间隔 ×1.25（gapSlow）
     const r2 = await p.evaluate(async ([G0, MK0, C]) => {
       const s = eval(G0), pl = s.player, mk = eval(MK0), wait = ms => new Promise(r => setTimeout(r, ms)), w = pl.weapons[0]; pl.damageImmune = true; pl.stats.critChance = -1; eval(C);

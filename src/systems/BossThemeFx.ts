@@ -74,7 +74,7 @@ export function themeShake(scene: Phaser.Scene, heavy: boolean): void {
  * 每个主题再配一张 4×4 手绘透明图（assets/boss-fx/cast/<主题>.png，每格 256）：行 0 蓄力光（包在首领身上，循环）、行 1 脚下法阵（大招起手，压扁成地面椭圆）、
  * 行 2 兵器闪光（出手瞬间的星芒）、行 3 狂暴爆发（换阶段）。只放在首领身上 / 脚下，不盖住地面预警（预警在判定范围里，这些只在首领自己周围一圈）。缺图什么都不画。
  */
-export const BOSS_CAST_READY: readonly BossTheme[] = ['blood', 'yellow', 'dust', 'quake', 'wall', 'lance'];
+export const BOSS_CAST_READY: readonly BossTheme[] = ['blood', 'yellow', 'dust', 'quake', 'wall', 'lance', 'ink', 'wei'];
 /** 有专属手绘的首领（不走 BossMoveset）借用的起手主题：只加一个贴合的起手光，不动它们原有的画面。 */
 export const CAST_THEME_EXTRA: Readonly<Record<string, BossTheme>> = { zhangjiao: 'yellow', lubu: 'blood', yuanshu: 'wei', simayi: 'ink', caoren5: 'wall', xurong: 'dust' };
 export function castThemeOf(bossId: string): BossTheme | null { return BOSS_THEME_OF[bossId] ?? CAST_THEME_EXTRA[bossId] ?? null; }

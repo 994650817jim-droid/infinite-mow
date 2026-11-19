@@ -35,6 +35,6 @@ if (process.env.GIF) {
   rmSync(dir, { recursive: true, force: true }); console.log('gif frames', n);
 }
 // 四角（拖到边界）各截一张，看全营
-if (tag === 'after') for (const [name, x, y] of [['nw', 0, 0], ['ne', 1e4, 0], ['sw', 0, 1e4], ['se', 1e4, 1e4]]) { await p.evaluate(([x, y]) => window.__game.scene.getScene('CityScene').scrollTo(x, y), [x, y]); await p.waitForTimeout(250); await p.screenshot({ path: `${out}/${tag}-${name}.png` }); }
+for (const [name, x, y] of [['nw', 0, 0], ['ne', 1e4, 0], ['sw', 0, 1e4], ['se', 1e4, 1e4]]) { await p.evaluate(([x, y]) => window.__game.scene.getScene('CityScene').scrollTo(x, y), [x, y]); await p.waitForTimeout(250); await p.screenshot({ path: `${out}/${tag}-${name}.png` }); }
 console.log('errors', JSON.stringify(errors.slice(0, 3)));
 await b.close();

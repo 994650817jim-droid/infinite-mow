@@ -12,7 +12,8 @@ import Phaser from 'phaser';
 import { playSheet } from '../systems/SkillFxSheets';
 import { TITLE_FONT } from '../config';
 
-type PropKind = 'tent' | 'flag' | 'fire' | 'brazier' | 'rack' | 'shields' | 'crates' | 'sacks' | 'cart' | 'pot' | 'post' | 'rail' | 'fodder' | 'horse' | 'canopy' | 'barrels';
+type PropKind = 'tent' | 'flag' | 'fire' | 'brazier' | 'rack' | 'shields' | 'crates' | 'sacks' | 'cart' | 'pot' | 'post' | 'rail' | 'fodder' | 'horse' | 'canopy' | 'barrels'
+  | 'tentb' | 'yurt' | 'tents' | 'palisade' | 'gate' | 'spears' | 'weapons' | 'bows' | 'jars' | 'sacks2' | 'crates2' | 'cart2' | 'wheels';
 /** 候选物件（全景像素：底边中心 x,y；w 显示宽）。按顺序放，压到建筑或已放物件的跳过。 */
 export const CAMP_PROPS: Array<{ x: number; y: number; w: number; kind: PropKind; flip?: boolean }> = [
   // 11-18 用户「丰富义军营寨更多空地」——按用途成组：马厩上方拴马桩 + 两匹马 + 草料；主帐门前两面「义」旗；主帐与军营之间的辎重棚
@@ -38,11 +39,49 @@ export const CAMP_PROPS: Array<{ x: number; y: number; w: number; kind: PropKind
   // 军营门前操练用的木人桩
   { x: 1100, y: 815, w: 52, kind: 'post' },
   // 11-18 用户「义军营寨放多点帐篷和画面整个屏幕」：全屏放大后看得到的空地补营帐、粮堆、兵器架、小旗（都避开建筑与上面已放的）
-  { x: 530, y: 430, w: 120, kind: 'tent' }, { x: 110, y: 440, w: 120, kind: 'tent', flip: true }, { x: 625, y: 465, w: 56, kind: 'sacks' },
+  { x: 110, y: 440, w: 120, kind: 'tent', flip: true }, 
   { x: 660, y: 700, w: 110, kind: 'tent', flip: true }, { x: 250, y: 720, w: 130, kind: 'tent' },
-  { x: 790, y: 1015, w: 120, kind: 'tent' }, { x: 40, y: 560, w: 60, kind: 'barrels' }, { x: 420, y: 480, w: 54, kind: 'flag' },
+  { x: 790, y: 1015, w: 120, kind: 'tent' }, { x: 40, y: 560, w: 60, kind: 'barrels' },
   { x: 160, y: 1010, w: 60, kind: 'sacks' }, { x: 410, y: 1000, w: 120, kind: 'tent', flip: true },
 ];
+/**
+ * 密集布置（用户 11-18「我觉得营寨还是很多空地」）：一簇簇营帐沿路排开、辎重场、兵器架、练兵场、马厩旁营帐。
+ * 与 CAMP_PROPS 不同：彼此可以挨着（允许压边 DENSE_OVERLAP 像素），但不压建筑、不压路面（CAMP_ROADS 中线两侧 ROAD_HALF 内不放）；
+ * 每件按序号轻微染色（DENSE_TINTS），同一张图看起来不重样。全是静态图，不加动画。
+ */
+export const CAMP_DENSE: Array<{ x: number; y: number; w: number; kind: PropKind; flip?: boolean }> = [
+  // 西北：路北两排营帐
+  { x: 60, y: 350, w: 100, kind: 'tentb' }, { x: 150, y: 365, w: 78, kind: 'tents', flip: true }, { x: 35, y: 392, w: 40, kind: 'jars' },
+  { x: 470, y: 335, w: 120, kind: 'tent' }, { x: 585, y: 330, w: 108, kind: 'tentb', flip: true }, { x: 690, y: 330, w: 98, kind: 'yurt' },
+  { x: 455, y: 385, w: 86, kind: 'tents' }, { x: 545, y: 382, w: 54, kind: 'crates' }, { x: 625, y: 388, w: 112, kind: 'tent', flip: true }, { x: 722, y: 380, w: 48, kind: 'sacks2' },
+  // 北路口辎重场：车、粮袋、木箱、坛罐
+  { x: 990, y: 382, w: 92, kind: 'cart' }, { x: 1062, y: 362, w: 50, kind: 'sacks' }, { x: 948, y: 425, w: 56, kind: 'crates2' }, { x: 1078, y: 415, w: 44, kind: 'jars' }, { x: 1022, y: 440, w: 46, kind: 'sacks2', flip: true },
+  // 主帐西侧：兵器架
+  { x: 700, y: 612, w: 58, kind: 'spears' }, { x: 742, y: 700, w: 50, kind: 'shields' }, { x: 742, y: 590, w: 46, kind: 'jars' },
+  // 西侧练兵场：弓架、枪架、栅栏
+  { x: 280, y: 662, w: 58, kind: 'bows' }, { x: 112, y: 692, w: 104, kind: 'palisade' }, { x: 340, y: 630, w: 56, kind: 'weapons', flip: true },
+  // 讲武堂与大路之间
+  { x: 420, y: 692, w: 44, kind: 'jars' }, { x: 402, y: 762, w: 56, kind: 'spears', flip: true }, { x: 452, y: 742, w: 48, kind: 'sacks2' },
+  // 主帐南、大路东：营帐一簇
+  { x: 728, y: 846, w: 100, kind: 'tentb' }, { x: 792, y: 862, w: 46, kind: 'sacks' },
+  // 军营西侧：粮袋、坛罐
+  { x: 900, y: 962, w: 50, kind: 'sacks2' }, { x: 918, y: 1004, w: 44, kind: 'jars', flip: true },
+  // 东侧马厩一带：营帐、车轮、坛罐
+  { x: 1462, y: 722, w: 108, kind: 'tentb', flip: true }, { x: 1172, y: 722, w: 72, kind: 'tents' }, { x: 1515, y: 868, w: 50, kind: 'wheels' }, { x: 1515, y: 1012, w: 46, kind: 'jars' },
+  // 东北营区外圈：再补一顶、栅门
+  { x: 1120, y: 300, w: 92, kind: 'yurt', flip: true }, { x: 1505, y: 470, w: 64, kind: 'crates2' },
+];
+const DENSE_OVERLAP = 12, ROAD_HALF = 24;
+const DENSE_TINTS = [0xffffff, 0xf3e7da, 0xe9dccb, 0xfff4e6];
+/** 底图上的路（中线，全景像素）：密集布置不压上去，路面保持清楚。 */
+export const CAMP_ROADS: Array<Array<[number, number]>> = [
+  [[900, 262], [880, 330], [800, 400], [700, 450], [620, 520], [540, 600], [505, 700], [560, 800], [650, 900], [720, 1024]], // 城门 → 西南大路
+  [[700, 445], [600, 425], [500, 415], [400, 412], [300, 410], [200, 415], [100, 420], [0, 430]], // 西路
+  [[860, 300], [990, 275]], // 城门东岔
+  [[1000, 510], [1150, 530], [1300, 560], [1536, 620]], [[1180, 515], [1360, 470], [1536, 450]], // 东路两岔
+];
+const distToRoad = (x: number, y: number) => { let best = Infinity; for (const r of CAMP_ROADS) for (let i = 0; i + 1 < r.length; i++) { const [ax, ay] = r[i], [bx, by] = r[i + 1], dx = bx - ax, dy = by - ay, t = Math.max(0, Math.min(1, ((x - ax) * dx + (y - ay) * dy) / (dx * dx + dy * dy || 1))); best = Math.min(best, Math.hypot(x - ax - dx * t, y - ay - dy * t)); } return best; };
+
 /** 兵士走的路线（全景像素）；压到建筑的路线运行时去掉。巡逻 / 走动都在上面来回。 */
 export const CAMP_PATHS: Array<Array<[number, number]>> = [
   [[140, 292], [760, 292], [1480, 292]], // 沿栅栏巡逻
@@ -104,7 +143,9 @@ interface Driller { img: Phaser.GameObjects.Image; key: string; dir: string; t: 
 
 export class CampLife {
   readonly root: Phaser.GameObjects.Container;
-  readonly stats = { props: 0, walkers: 0, drillers: 0, idlers: 0, skippedProps: 0, skippedPaths: 0 };
+  /** 没放上的密集布置（调试 / 测试读）：种类@坐标:原因。 */
+  readonly skippedDense: string[] = [];
+  readonly stats = { props: 0, walkers: 0, drillers: 0, idlers: 0, skippedProps: 0, skippedPaths: 0, dense: 0, skippedDense: 0 };
   private walkers: Walker[] = []; private drillers: Driller[] = []; private flags: Array<Phaser.GameObjects.Image | Phaser.GameObjects.Container> = []; private dummies: Phaser.GameObjects.Image[] = []; private drillDummy = new Map<Driller, Phaser.GameObjects.Image>();
   private fires: Array<{ x: number; y: number; img?: Phaser.GameObjects.Image }> = [];
   private smokeAt = 0; private sortAt = 0; private clock = 0; private horses = 0;
@@ -113,14 +154,25 @@ export class CampLife {
   constructor(private scene: Phaser.Scene, private k: number, blocked: Box[]) {
     this.root = scene.add.container(0, 0).setName('camp-life');
     const pad = 14, hit = (b: Box, o: Box) => b.l < o.r + pad && b.r > o.l - pad && b.t < o.b + pad && b.b > o.t - pad;
-    const placed: Box[] = [];
+    const placed: Box[] = [], feet: Box[] = [];
+    /** 落地占位（底边往上最多 44 像素）：密集布置只看它，前后挨着靠绘制顺序（按 y）分层，旗杆身后也能放营帐。 */
+    const foot = (b: Box): Box => ({ l: b.l, r: b.r, b: b.b, t: Math.max(b.t, b.b - 44) });
     for (const p of CAMP_PROPS) {
       const h = p.kind === 'tent' ? p.w * .78 : p.kind === 'flag' ? p.w * 2 : p.w * .9; // 「义」字大旗画布 1:2
       const box = { l: p.x - p.w / 2, r: p.x + p.w / 2, t: p.y - h, b: p.y };
       // 拴着的马本来就站在拴马桩跟前：只避开建筑，不和别的装饰互相让
       if (blocked.some(o => hit(box, o)) || (p.kind !== 'horse' && placed.some(o => hit(box, o)))) { this.stats.skippedProps++; continue; }
-      if (this.addProp(p)) { placed.push(box); this.stats.props++; }
+      if (this.addProp(p)) { placed.push(box); feet.push(foot(box)); this.stats.props++; }
     }
+    // 密集布置：可以彼此挨着，但不压建筑、不压路面
+    const tight = (b: Box, o: Box) => b.l < o.r - DENSE_OVERLAP && b.r > o.l + DENSE_OVERLAP && b.t < o.b - DENSE_OVERLAP && b.b > o.t + DENSE_OVERLAP;
+    CAMP_DENSE.forEach((p, i) => {
+      const h = p.w * (/tent|yurt/.test(p.kind) ? .78 : .9), box = { l: p.x - p.w / 2, r: p.x + p.w / 2, t: p.y - h, b: p.y };
+      const onRoad = [[p.x, p.y], [p.x - p.w * .35, p.y], [p.x + p.w * .35, p.y]].some(([x, y]) => distToRoad(x, y) < ROAD_HALF);
+      const why = onRoad ? 'road' : blocked.some(o => hit(box, o)) ? 'building' : feet.some(o => tight(foot(box), o)) ? 'prop' : '';
+      if (why) { this.stats.skippedProps++; this.stats.skippedDense++; this.skippedDense.push(`${p.kind}@${p.x},${p.y}:${why}`); return; }
+      const img = this.addProp(p); if (img) { placed.push(box); feet.push(foot(box)); this.stats.props++; this.stats.dense++; this.root.list.at(-1) && (this.root.list.at(-1) as Phaser.GameObjects.Image).setTint?.(DENSE_TINTS[i % DENSE_TINTS.length]); }
+    });
     // 兵士
     const okPath = (path: Array<[number, number]>) => { for (let i = 0; i + 1 < path.length; i++) { const [ax, ay] = path[i], [bx, by] = path[i + 1]; for (let s = 0; s <= 8; s++) { const x = ax + (bx - ax) * s / 8, y = ay + (by - ay) * s / 8; if (blocked.some(o => x > o.l - 20 && x < o.r + 20 && y > o.t && y < o.b + 30)) return false; } } return true; };
     const paths = CAMP_PATHS.filter(p => okPath(p) || (this.stats.skippedPaths++, false));
@@ -173,7 +225,7 @@ export class CampLife {
       default: {
         if (p.kind === 'post' && sc.textures.exists(CAMP_ART.dummy.key)) { this.dummies.push(img(CAMP_ART.dummy.key, 0, p.w * 1.25)); return true; }
         if (!camp) return false;
-        const frame = { rack: 21, shields: 23, crates: 14, sacks: 16, cart: 24, pot: 31, post: 34, rail: 10, fodder: 17, canopy: 2, barrels: 18 }[p.kind as 'rack']; img(PROPS.key, frame, p.w); return true;
+        const frame = { rack: 21, shields: 23, crates: 14, sacks: 16, cart: 24, pot: 31, post: 34, rail: 10, fodder: 17, canopy: 2, barrels: 18, tentb: 0, yurt: 1, tents: 3, palisade: 12, gate: 13, spears: 19, weapons: 20, bows: 22, jars: 18, sacks2: 17, crates2: 15, cart2: 25, wheels: 26 }[p.kind as 'rack']; img(PROPS.key, frame, p.w); return true;
       }
     }
   }

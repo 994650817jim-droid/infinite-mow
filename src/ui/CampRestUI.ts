@@ -1,4 +1,4 @@
-import Phaser from 'phaser';import {ItemTooltip} from './ItemTooltip';import {drawBuildOverview} from './BuildOverview';import {wornTokens} from '../systems/CharmEffects';import {tokenSlots} from '../systems/ItemStore';import {GAME_WIDTH as W,GAME_HEIGHT as H,IS_DESKTOP as D,FONT,HEADING_FONT,DEPTH,screenPoint} from '../config';import type {Player} from '../entities/Player';import type {Legion} from '../systems/Legion';import {campOption,type CampOffer} from '../systems/CampMarket';import {merchantStockForVisit,saveMerchantStock,type MerchantStock} from '../systems/MerchantStock';import {MerchantShop} from './MerchantShop';import {CAMP_TRAINING,type CampTrainingId,type CampGroup} from '../data/camp';import {INITIAL_TROOPS,TROOPS,type TroopKind} from '../data/legion';import {TREASURES,type TacticId,type TreasureId,type BuildTag} from '../data/builds';import {AWAKENINGS,activeAwakenings} from '../data/awakenings';import {getCharacter} from '../data/characters';import {WEAPON_META} from '../data/upgrades';import {ATTRIBUTE_INFO,MARTIALS,type AttributeId,type MasteryId} from '../systems/RunGrowth';import type {ItemInstance} from '../data/items';import {troopBadge} from './TroopBadge';import {loadTroopPortraits} from '../systems/TroopPortraits';
+import Phaser from 'phaser';import {ItemTooltip} from './ItemTooltip';import {drawBuildOverview} from './BuildOverview';import {wornTokens} from '../systems/CharmEffects';import {tokenSlots} from '../systems/ItemStore';import {GAME_WIDTH as W,GAME_HEIGHT as H,IS_DESKTOP as D,FONT,HEADING_FONT,DEPTH,screenPoint} from '../config';import type {Player} from '../entities/Player';import type {Legion} from '../systems/Legion';import {campOption,type CampOffer} from '../systems/CampMarket';import {merchantStockForVisit,saveMerchantStock,type MerchantStock} from '../systems/MerchantStock';import {MerchantShop} from './MerchantShop';import {MEDIC_FIGURE,drawCampFigure,type FigurePlace} from './CampFigure';import {CAMP_TRAINING,type CampTrainingId,type CampGroup} from '../data/camp';import {INITIAL_TROOPS,TROOPS,type TroopKind} from '../data/legion';import {TREASURES,type TacticId,type TreasureId,type BuildTag} from '../data/builds';import {AWAKENINGS,activeAwakenings} from '../data/awakenings';import {getCharacter} from '../data/characters';import {WEAPON_META} from '../data/upgrades';import {ATTRIBUTE_INFO,MARTIALS,type AttributeId,type MasteryId} from '../systems/RunGrowth';import type {ItemInstance} from '../data/items';import {troopBadge} from './TroopBadge';import {loadTroopPortraits} from '../systems/TroopPortraits';
 import {homeCommand,inkPlate,warPanelTexture} from './HomeCommand';
 import {lqButton,lqLabelColor,type LqState} from './LacquerKit';
 import {CAMP_MEDIC,medicPrice,type MedicKind} from '../data/campMedic';
@@ -124,10 +124,14 @@ export class CampRestUI {
  private card(index:number){const x=D?40+index*(W-68)/3:24,y=D?158:229,w=D?(W-104)/3:W-48,h=D?246:161;return{x,y:y+(D?0:index*174),w,h};}
  private icon(x:number,y:number,key:string,size:number){if(this.scene.textures.exists(key))this.body.add(this.scene.add.image(x,y,key).setDisplaySize(size,size).setScrollFactor(0));}
  private row(y:number,title:string,description:string,icon?:string,compact=false){const x=D?40:24,w=W-(D?80:48),h=D?66:92;this.plate(x,y,w,h);if(icon)this.icon(x+28,y+27,icon,35);const offset=icon?54:16;this.body.add(this.text(x+offset,y+9,title,D?17:19).setWordWrapWidth(w-offset-16,true));this.body.add(this.text(x+16,y+(D?36:43),compact&&description.length>(D?80:44)?description.slice(0,D?80:44)+'…':description,D?12:14).setWordWrapWidth(w-32,true));return{x,y,w,h};}
+ /** 军需商人 / 军医（电脑版）：人物不加框、站在左侧帐中（2026-11-18 用户「军医和商人不要一个框框住」），右侧从 STATION_LEFT 起排卡片。 */
+ private static readonly FIGURE:FigurePlace={cx:120,bottom:474,height:320};
+ private static readonly STATION_LEFT=236;
  private render(){
   this.body.removeAll(true);this.tabs.forEach((t,k)=>{const on=t.getData('tab')===this.tab;t.setColor(on?'#ffe7b0':'#bcae93').setAlpha(on?1:.78);const w=t.width;this.tabFrames[k].setTexture(warPanelTexture(this.scene,w,46,on)).setDisplaySize(w+16,46+16).setVisible(true).setAlpha(on?1:.62);this.tabIcons[k]?.setAlpha(on?1:.6);
    if(on){const to={x:t.x+18,w:w-36};if(!this.lineTo){this.tabLine.setX(to.x);this.tabLine.width=to.w;}this.lineTo=to;}});
   this.resources.setText('随军粮 '+this.army.food+'   /   当前兵力：'+this.army.count);this.next.setText('下一关 · '+this.destination);this.detail.setText(this.notice);
+  {const side=D&&(this.tab===2||this.tab===4),l=CampRestUI.STATION_LEFT;this.detail.setX(side?l+(W-40-l)/2:D?W/2:28).setWordWrapWidth(side?W-40-l-16:W-(D?120:56),true);}
   if(this.tab===0)this.renderRecruit();if(this.tab===2)this.renderMarket();if(this.tab===3)this.renderBuild(D?154:229);if(this.tab===4)this.renderMedic();
  }
  // ---------- 军医（data/campMedic.ts）----------
@@ -158,14 +162,10 @@ export class CampRestUI {
  }
  private renderMedic(){
   const st=this.medicState(),p=this.player,name=this.player.growth.character?(getCharacter(this.player.growth.character)?.name??'主将'):'主将';
-  // 左：手绘军医立绘（与招兵营卡片同尺寸；没载到就先空着，载好重绘）
-  const a=this.card(0),key='camp_medic_art';
-  if(D){this.plate(a.x,a.y,a.w,a.h);
-   if(this.scene.textures.exists(key)){const img=this.scene.add.image(a.x+a.w/2,a.y+a.h/2,key).setScrollFactor(0).setName('camp-medic-art'),src=img.texture.getSourceImage() as {width:number;height:number},bw=a.w-14,bh=a.h-14,s=Math.max(bw/src.width,bh/src.height);
-    img.setScale(s).setCrop((src.width-bw/s)/2,(src.height-bh/s)/2,bw/s,bh/s);this.body.add(img);}
-   else this.loadMedicArt();}
+  // 左：军医站在帐中（不加框；没载到就先空着，载好重绘）。施治药气特效仍用手绘序列帧 medic_herb_fx。
+  if(D){drawCampFigure(this.scene,this.body,MEDIC_FIGURE,CampRestUI.FIGURE,()=>{if(this.root.active&&this.tab===4)this.render();});this.loadMedicFx();}
   // 右：主将血量、伤兵，三档治疗
-  const x0=D?this.card(1).x:24,w0=D?W-40-x0:W-48,y0=D?158:229;
+  const x0=D?CampRestUI.STATION_LEFT:24,w0=D?W-40-x0:W-48,y0=D?158:229;
   this.plate(x0,y0,w0,84);
   this.body.add(this.text(x0+16,y0+10,'主将 '+name,D?17:18).setFontFamily(HEADING_FONT).setColor('#f1ddb5'));
   this.body.add(this.text(x0+w0-16,y0+12,'生命 '+st.hp+' / '+st.maxHp,D?16:17).setOrigin(1,0).setColor(st.hale?'#cfe3b0':'#f0b090').setName('camp-medic-hp'));
@@ -182,15 +182,14 @@ export class CampRestUI {
    const bw2=D?176:150;this.body.add(this.button(x0+w0-bw2-10,y+(h-44)/2,label,()=>this.heal(kind),bw2,st.can[kind]).setName('camp-medic-'+kind));});
   if(!this.notice)this.detail.setText('前一关所受的伤会带到下一关；军医用随军粮施治，价格随章节递增（第 '+st.chapter+' 章）。');
  }
- private medicArtLoading=false;
- private loadMedicArt(){if(this.medicArtLoading)return;this.medicArtLoading=true;const s=this.scene,L=s.load;
-  L.image('camp_medic_art','assets/camp/medic.webp');if(!s.textures.exists('medic_herb_fx'))L.spritesheet('medic_herb_fx','assets/camp/medic_herb_fx.webp',{frameWidth:256,frameHeight:256});
-  L.once(Phaser.Loader.Events.COMPLETE,()=>{if(this.root.active&&this.tab===4)this.render();});if(!L.isLoading())L.start();} /* 隐藏时（入营过场中）载完也重绘，免得揭开后立绘还是空的 */
+ private medicFxLoading=false;
+ private loadMedicFx(){const s=this.scene;if(this.medicFxLoading||s.textures.exists('medic_herb_fx'))return;this.medicFxLoading=true;const L=s.load;
+  L.spritesheet('medic_herb_fx','assets/camp/medic_herb_fx.webp',{frameWidth:256,frameHeight:256});if(!L.isLoading())L.start();}
  /** 治疗成功：立绘上飘一阵手绘淡绿药气（序列帧 medic_herb_fx，6 帧）。休整时场景补间暂停，按真实时间逐帧走。 */
  private playMedicFx(){
   const s=this.scene,key='medic_herb_fx';if(!D||!s.textures.exists(key))return;
   this.medicFx?.img.destroy();if(this.medicFx)s.events.off('postupdate',this.medicFx.run);
-  const a=this.card(0),img=s.add.image(a.x+a.w/2,a.y+a.h/2,key,0).setDisplaySize(a.w*.9,a.w*.9).setScrollFactor(0).setBlendMode(Phaser.BlendModes.ADD).setDepth(DEPTH.overlay+3).setName('camp-medic-fx');this.root.add(img);
+  const f=CampRestUI.FIGURE,img=s.add.image(f.cx,f.bottom-f.height*.55,key,0).setDisplaySize(f.height*.8,f.height*.8).setScrollFactor(0).setBlendMode(Phaser.BlendModes.ADD).setDepth(DEPTH.overlay+3).setName('camp-medic-fx');this.root.add(img);
   const fx={img,t:0,run:()=>{fx.t+=s.game.loop.delta;const f=Math.floor(fx.t/110);if(f>=6||!img.active){s.events.off('postupdate',fx.run);img.destroy();if(this.medicFx===fx)this.medicFx=undefined;return;}img.setFrame(f).setAlpha(f>=4?.8-(f-4)*.3:.85);}};
   this.medicFx=fx;s.events.on('postupdate',fx.run);
  }
@@ -219,7 +218,7 @@ export class CampRestUI {
    onBuyItem:item=>this.onBuyItem?.(item),owner:()=>this.player.growth.character,
    notice:t=>{this.notice=t;},changed:()=>this.render(),sound:k=>this.sound(k),tooltipDepth:DEPTH.overlay+40});
   this.shop.onArtLoaded=()=>{if(this.root.active&&this.tab===2)this.render();};
-  this.shop.render(this.body,D?40:24,D?158:229,D?W-40:W-24,D?250:200);
+  this.shop.render(this.body,D?40:24,D?158:229,D?W-40:W-24,D?250:200,D?CampRestUI.FIGURE:undefined);
   if(!this.notice)this.detail.setText(this.shop.hint());
  }
 

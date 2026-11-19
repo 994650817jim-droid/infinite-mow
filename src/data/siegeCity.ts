@@ -144,9 +144,15 @@ export const POINT_BUILDING: Record<CityPointKind, CityBuildingKind> = { granary
  *  - 粮仓 granaryProvisions：结算军粮 +30%，granaryRefill：援军阶段守军补充 −30%（第三步接结算 / 限时）；
  *  - 武库 armoryDamage：我军伤害 ×1.08（且城内不再刷弓手）；兵营 barracksSkip：每占一座，城内刷兵少 25%；
  *  - 角楼 tower：大城没占的角楼往城里放箭雨（两座都在：everyMs[0] / zones[0]；剩一座：[1]）；市集 marketFood：立刻随军粮 +60。
+ *  - 联动和结算（第三步）见 perPointRefill 以下几项。
  */
 export const CITY_FX = {
   squadRange: 560, squad: 3, leaderMul: .5,
   granaryProvisions: .3, granaryRefill: .3, armoryDamage: 1.08, barracksSkip: .25, marketFood: 60,
   tower: { firstMs: 6000, everyMs: [6500, 10000], zones: [2, 1] },
+  // 第三步 · 联动和结算：每占一处要点，援军阶段守军补充 −perPointRefill、城外援兵少 perPointSquads 批；兵营 / 粮仓各扣守军池 garrisonCut；
+  // 全部要点都占了再破城：结算军粮 +fullTake；市集：结算再给一笔军粮 marketProvisions（钱粮，代替原方案的「民心」）
+  perPointRefill: .15, perPointSquads: 1, garrisonCut: .08, fullTake: .2, marketProvisions: 40,
+  // 百姓（只在电脑版）：入城时四散跑回民居的人数；占下要点后从附近民居出来的人数；市集归附时围过来的人数
+  folk: { flee: 8, secured: 3, market: 7 },
 } as const;

@@ -62,7 +62,9 @@ const killBoss = async p => {
   const st = await p.evaluate(() => { const m = window.__M; return { n: m.points.length, need: m.city.need, goal: window.__S.children.getByName('siege-goal')?.text }; });
   await p.screenshot({ path: `${OUT}/small-2-street.png` });
   ck('小城：砍破木门 → 进城内（丁字街）：3 处要点，占 2 处开县衙', inSt && st.n === 3 && st.need === 2 && (st.goal ?? '').includes('要点 0/2'), st);
-  await p.evaluate(() => { const m = window.__M; m.points[0].state = 'secured'; m.points[1].state = 'secured'; });
+  // 全取：三处要点都占 → 结算军粮 +20%，结算列表写「全取」
+  const ft = await p.evaluate(() => { const m = window.__M; for (const q of m.points) q.state = 'secured'; return { full: m.fullTake, share: m.provisionsBonus().share, line: m.settleLines()[0] }; });
+  ck('小城：三处要点全占 → 「全取」结算军粮 +20%', ft.full && ft.share === .2 && /全取/.test(ft.line), ft);
   const toHall = await waitPhase(p, 'hall');
   await step(p, 80);
   const h = await p.evaluate(() => { const s = window.__S, b = s.boss; return { phase: window.__M.phase, boss: !!b?.active, hp: b?.maxHp, name: s.chapter.bossName, goal: s.children.getByName('siege-goal')?.text, py: Math.round(s.player.y) }; });

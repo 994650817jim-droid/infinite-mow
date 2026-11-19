@@ -46,7 +46,25 @@ const panel = p => p.evaluate(() => { const s = window.__S, P = s.ordersPanel; r
   const o = await orders(p), pn = await panel(p);
   ck('普通关：军令「击退敌军 n/3」', !!o?.find(x => x.id === 'waves' && x.state === 'active' && /\/3$/.test(x.prog ?? '')), o);
   ck('普通关：首领出阵倒计时', (pn?.lines ?? []).some(l => /^首领出阵 \d+:\d\d$/.test(l)), pn?.lines);
-  ck('军令面板显示在右侧（行囊下、用药上）', !!pn && pn.visible && pn.b.y >= 190 && pn.b.y + pn.b.h <= 360 && pn.b.x + pn.b.w <= 960 && pn.b.x >= 700, pn?.b);
+  ck('军令面板显示在右侧（舆图卷轴下、右列圆钮左边）', !!pn && pn.visible && pn.b.y >= 72 && pn.b.x + pn.b.w <= 860 && pn.b.x >= 600, pn?.b);
+  // 2026-11-19 用户「用药和军令重叠了」：6 条军令 + 用药 / 加点可用 + 右侧台词卡同时出现，右侧 HUD 互不重叠（军令展开 / 收起都查）
+  { const hud = async () => p.evaluate(async () => {
+      const s = window.__S, names = ['orders-panel', 'potion-button', 'attribute-plus', 'hud-bag', 'hud-pause', 'battle-map-scroll', 'story-bark-card'], out = {};
+      for (const c of s.children.list) { const n = c.name; if (!c.visible) continue;
+        if (names.includes(n)) { const b = n === 'orders-panel' ? s.ordersPanel.bounds() : c.getBounds(); out[n] = [b.x, b.y, b.x + (b.w ?? b.width), b.y + (b.h ?? b.height)]; }
+        if (c.type === 'Container' && c.list?.some(k => k.type === 'Text' && /^(护阵|出击)/.test(k.text ?? ''))) { const b = c.getBounds(); if (b.width < 120) out['legion-order'] = [b.x, b.y, b.right, b.bottom]; } }
+      return out; });
+    await p.evaluate(async () => { const s = window.__S, { ordersOf } = await import('/src/systems/BattleOrders.ts'), o = ordersOf(s);
+      for (let i = 1; i <= 6; i++) o.set('pt' + i, { label: `占据点 ${i} · 城门东侧`, kind: 'point', state: 'active', detail: '站在圈内 6 秒占领', progress: { cur: 0, max: 6 } });
+      s.player.growth.unallocated = 3; s.player.hp = s.player.maxHp * .5; for (let i = 0; i < 2; i++) s.supplies?.pouch.push({ amount: 50, texture: 'healing_potion' });
+      const { showBarkCard } = await import('/src/ui/StoryBarkCard.ts'); showBarkCard(s, { side: 'right', name: '张角', text: '苍天已死，黄天当立！岁在甲子，天下大吉！' }); });
+    await settle(p, 1200);
+    const overlaps = r => { const ks = Object.keys(r), bad = []; for (let i = 0; i < ks.length; i++) for (let j = i + 1; j < ks.length; j++) { const a = r[ks[i]], b = r[ks[j]]; if (a[0] < b[2] - 1 && b[0] < a[2] - 1 && a[1] < b[3] - 1 && b[1] < a[3] - 1) bad.push(ks[i] + '×' + ks[j]); } return bad; };
+    const r1 = await hud(), pl = (await panel(p))?.lines ?? [];
+    await p.screenshot({ path: `${OUT}/hud-crowded.png` });
+    await p.evaluate(() => window.__S.ordersPanel.toggleFold()); await settle(p, 300); const r2 = await hud(); await p.evaluate(() => window.__S.ordersPanel.toggleFold()); await settle(p, 300);
+    ck('右侧 HUD 不重叠：6 条军令（多的收成「另有 n 条」）+ 用药 + 加点 + 护阵 + 台词卡，展开 / 收起都不压', ['orders-panel', 'potion-button', 'attribute-plus', 'story-bark-card'].every(k => r1[k]) && !overlaps(r1).length && !overlaps(r2).length && pl.some(l => /另有 \d+ 条/.test(l)), { r1, bad1: overlaps(r1), bad2: overlaps(r2), pl });
+    await p.evaluate(async () => { const { ordersOf } = await import('/src/systems/BattleOrders.ts'), o = ordersOf(window.__S); for (let i = 1; i <= 6; i++) o.remove('pt' + i); }); await settle(p, 300); }
   // 用户「小地图是可以打开的，平时就是卷轴的样子收缩起来，点击才放大」：平时右上角一卷收起的手卷，不画地图
   const mini = await p.evaluate(() => { const S = window.__S, m = S.children.getByName('battle-map-scroll'), b = m?.getBounds(); return m ? { x: Math.round(b.x), y: Math.round(b.y), w: Math.round(b.width), h: Math.round(b.height), visible: m.visible, oldMini: !!S.children.getByName('battle-map-mini'), state: S.battleMap.stats.state } : null; });
   ck('舆图平时收成卷轴，在右上角（设置钮左侧、计时器右侧），不压战场', !!mini && mini.visible && mini.x >= 600 && mini.x + mini.w <= 884 && mini.y + mini.h <= 80 && !mini.oldMini && mini.state === 'closed', mini);

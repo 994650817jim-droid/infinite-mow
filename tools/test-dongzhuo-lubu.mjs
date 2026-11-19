@@ -52,7 +52,10 @@ try {
   st = await snap();
   await p.screenshot({ path: `${OUT}/2-lubu-flee.png` });
   ck('吕布打到 1/3 锁血（打不死）、唤赤兔逃走', st.phase === 'fleeing' && st.lubu.active && st.lubu.hp >= Math.floor(st.lubu.max / 3) - 1 && st.lubu.inv, st);
-  for (let i = 0; i < 30 && (await snap()).phase !== 'down'; i++) await wait(200);
+  // 用户 11-19「董卓也在平移」：走下城、城下追人都要播走路帧
+  const desc = []; for (let i = 0; i < 60; i++) { const r = await ev(s => { const d = s.dzLubu.dongzhuo; return { ph: s.dzLubu.phase, f: d.sprite.frame.name, x: Math.round(d.x), y: Math.round(d.y) }; }); if (r.ph === 'descending') desc.push(r); if (r.ph === 'down') break; await p.waitForTimeout(100); }
+  { const fr = new Set(desc.map(d => d.f)), dy = desc.length ? desc.at(-1).y - desc[0].y : 0;
+    ck('董卓走下城：边走边换走路帧（≥3 帧）、朝下，不平移', desc.length >= 3 && dy > 20 && fr.size >= 3 && /^down_/.test(desc.at(-1).f), { n: desc.length, dy, frames: [...fr] }); }
   await wait(400);
   st = await snap();
   await p.screenshot({ path: `${OUT}/3-dongzhuo-down.png` });
@@ -60,6 +63,10 @@ try {
   const h1 = st.dzHp; await ev(s => s.hitEnemy(s.dzLubu.dongzhuo, 200, s.combatNow, 'melee', false, false));
   st = await snap();
   ck('下城后的董卓受伤', st.dzHp < h1, { h1, st });
+  await ev(s => { const d = s.dzLubu.dongzhuo; s.player.sprite.setPosition(d.x + 320, d.y); });
+  const chase = []; for (let i = 0; i < 14; i++) { await p.waitForTimeout(110); chase.push(await ev(s => { const d = s.dzLubu.dongzhuo; return { ph: s.dzLubu.phase, f: d.sprite.frame.name, x: Math.round(d.x), y: Math.round(d.y) }; })); }
+  { const fr = new Set(chase.map(d => d.f)), mv = Math.hypot(chase.at(-1).x - chase[0].x, chase.at(-1).y - chase[0].y);
+    ck('城下董卓追人：边走边换走路帧（≥3 帧）、朝向主将，不平移', mv > 30 && fr.size >= 3 && /^right_/.test(chase.at(-1).f), { mv: Math.round(mv), frames: [...fr] }); }
   // 董卓 20%：吕布杀回斩董卓
   await ev(s => { const d = s.dzLubu.dongzhuo; d.hp = Math.floor(d.maxHp * .21); s.hitEnemy(d, d.maxHp * .02, s.combatNow, 'melee', false, false); });
   await wait(400);

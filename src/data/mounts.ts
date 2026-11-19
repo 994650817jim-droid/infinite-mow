@@ -11,7 +11,14 @@ import type {CharacterId} from './characters';
  * enemyCavalrySpeedMul：敌方骑兵（不含象兵）移速倍率，冲锋速度随之；主将骑乘移速倍率见下面 speedMul / MOUNT_STYLES。
  * 初值 · 待平衡会话复核。
  */
-export const MOUNT_VISUAL = { visualScale: .85, enemyCavalrySpeedMul: .82 } as const;
+/**
+ * 人马比例（11-19 用户「请注意人和马的比例要正常」，tools/mount-proportions.mjs 量过）：
+ * - 骑者与步战同大：英雄骑乘图（格 256）与行走图（格 176 显示 88）同像素密度，骑者按 0.5 画，不再跟着缩。
+ * - horseScale：只缩马（11-18「骑马整体小点」的 .85 改为只作用于马）；马身长约为骑者站高 1.16–1.35 倍，马背约在胸口下。
+ * - bossRideK：首领步战图（格 288）比骑乘图（格 256）画得大约 1.48 倍，骑乘图、马、马镫高一起乘它，骑在马上才与步战同大。
+ * - 敌方骑兵是人马一张图，人与步兵同密度：不缩（缩了骑手就比步兵小）。
+ */
+export const MOUNT_VISUAL = { horseScale: .85, bossRideK: 1.48, enemyCavalrySpeedMul: .82 } as const;
 /** 骑马的敌兵：kind 为 cavalry 且不是象兵（第十一章象兵另有体型，不在「骑马」之列）。 */
 export function isHorseCavalry(def: { kind: string; texture?: string; walkVisual?: { texture: string } }): boolean { return def.kind === 'cavalry' && !/elephant/.test(def.walkVisual?.texture ?? def.texture ?? ''); }
 export const MOUNT = {
@@ -22,7 +29,7 @@ export const MOUNT = {
   stamina: 100, staminaPerHp: .25, heavyHitHpRatio: .12, heavyMul: 3, lightMul: 1,
   trampleRadius: 30, trampleDamage: 6, tramplePush: 26, trampleCooldownMs: 600, trampleMinSpeed: 60,
   /** 马与骑者的显示：骑者抬高（像素）、骑者下半身裁掉的比例、马的显示宽度。 */
-  riderRise: Math.round(36 * MOUNT_VISUAL.visualScale), riderCrop: .7, horseSize: Math.round(124 * MOUNT_VISUAL.visualScale),
+  riderRise: Math.round(36 * MOUNT_VISUAL.horseScale), riderCrop: .7, horseSize: Math.round(124 * MOUNT_VISUAL.horseScale),
 } as const;
 
 /** 马上名将：耐力 +40、践踏伤害 ×1.3。 */

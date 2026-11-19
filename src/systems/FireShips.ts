@@ -7,6 +7,7 @@ import { TELEGRAPH_CLASSIC } from '../ui/Telegraph';
  * 先有 2 秒地面预警（橙色航道 + 风向箭头），随后火墙扫过，烧伤航道内的敌军（我方不受伤）；首领只受三成伤害。
  * 所有计时用战斗时钟（毫秒），暂停时不推进。一个 Graphics 画预警与火墙，火星粒子数有上限。
  */
+import { sceneSfx } from './ContentSfx';
 export interface FireShipHost {
   scene: Phaser.Scene;
   enemies: () => readonly Enemy[];
@@ -43,6 +44,8 @@ export class FireShips {
       this.lane = {y: p.y + Phaser.Math.Between(-60, 60), dir: Math.random() < .5 ? 1 : -1, start: now};
       this.hitIds.clear(); this.metrics.waves++;
       this.h.announce('东南风起 · 火船顺流而下！');
+      // 东南风起（风声）→ 预警结束火船扫过（爆燃）
+      sceneSfx(this.h.scene, 'zg_wind'); this.h.scene.time.delayedCall(FIRE_SHIP.warnMs, () => sceneSfx(this.h.scene, 'ship_boom'));
     }
     const L = this.lane; if (!L) return;
     const cam = this.h.scene.cameras.main, left = cam.worldView.x - 80, right = cam.worldView.right + 80, top = L.y - FIRE_SHIP.laneH / 2, age = now - L.start;

@@ -231,7 +231,7 @@ export class EnemyTraits {
       s.next = now + t.everyMs * (.85 + Math.random() * .3); this.metrics.throws += 1;
       const p = this.h.player, tx = p.x + Phaser.Math.Between(-24, 24), ty = p.y + Phaser.Math.Between(-24, 24);
       // 攻击表：第 2 帧举石过顶（石头画在图里），第 3 帧出手——飞行石从出手那一刻（+RELEASE_MS）才飞
-      e.poseUntil = now + 360; e.startAttack(now, dirOf(nx, ny));
+      e.poseUntil = now + 360; e.startAttack(now, dirOf(nx, ny)); this.h.sfx('mn_lob');
       this.hazards.push({ id: `trait-stone-${++this.seq}`, kind: 'stone', x: tx, y: ty, r: t.radius, from: now, at: now + t.warnMs, end: now + t.warnMs, damage: t.damage, allyDamage: t.allyDamage, tick: 0 });
       this.flyStone(e.x, e.y - 40, tx, ty, now + RELEASE_MS, Math.max(400, t.warnMs - RELEASE_MS));
     }
@@ -345,7 +345,7 @@ export class EnemyTraits {
     e.moveVx = e.moveVy = 0;
     if (s.phase === 'up') { e.sprite.setTint(0xb8c0c8); if (now >= (s.until ?? 0)) { s.phase = 'down'; s.until = now + t.downMs; s.shots = 0; e.sprite.setTint(e.baseTint); } return true; }
     if ((s.shots ?? 0) < t.shots && now >= (s.until ?? 0) - t.downMs + (s.shots ?? 0) * t.shotGapMs) {
-      s.shots = (s.shots ?? 0) + 1; this.metrics.volleys += 1; e.startAttack(now, dirOf(nx, ny)); this.h.sfx('enemyArrow');
+      s.shots = (s.shots ?? 0) + 1; this.metrics.volleys += 1; e.startAttack(now, dirOf(nx, ny)); this.h.sfx('mn_xbow');
       const life = e.spawnId; this.h.scene.time.delayedCall(ARROW_MS, () => { if (e.active && e.spawnId === life) this.h.fireArrow(e, this.h.player.x + (Math.random() - .5) * 30, this.h.player.y + (Math.random() - .5) * 30, e.def.damage, t.arrowSpeed); }); // 弩箭在攻击表第 2 帧射出
     }
     if (now >= (s.until ?? 0)) { s.phase = dist > t.range * 1.2 ? 'move' : 'up'; s.until = now + t.upMs; }
@@ -383,7 +383,7 @@ export class EnemyTraits {
   private shipBoom(e: Enemy, s: St, t: Extract<TraitDef, { kind: 'fireship' }>, now: number): void {
     if (s.boom) return; s.boom = true; this.metrics.shipBooms += 1;
     if (!e.def.attackVisual) playSheet(this.h.scene, 'fx_explosion', e.x, e.y - 20, { size: t.radius * 2.2, depth: DEPTH.fx, ms: 520 }); // 有专属图时爆燃画在攻击表里，不再叠
-    this.h.sfx('hitHeavy'); this.h.scene.cameras.main.shake(160, .005);
+    this.h.sfx('ship_boom'); this.h.scene.cameras.main.shake(160, .005);
     this.hitPlayer(e.x, e.y, t.radius, t.damage, now); this.h.hurtTroops(e.x, e.y, t.radius, t.allyDamage);
     for (let i = 0; i < 3; i++) { const a = i * 2.1; this.addFire(e.x + Math.cos(a) * 50, e.y + Math.sin(a) * 30, t.fireRadius, now, t.fireMs, t.fireDamage); }
     for (const im of s.imgs ?? []) (im as unknown as Phaser.GameObjects.GameObject).destroy(); s.imgs = [];
@@ -414,13 +414,13 @@ export class EnemyTraits {
     const id = `trait-leap-${e.spawnId}`, wf = warnFx(this.h.scene);
     if (s.phase === 'warn') {
       e.moveVx = e.moveVy = 0; wf.circle(id, 'slam', s.tx ?? e.x, s.ty ?? e.y, t.radius, 1 - ((s.until ?? now) - now) / t.warnMs, now);
-      if (now >= (s.until ?? 0)) { s.phase = 'air'; s.air = { x0: e.x, y0: e.y, from: now }; e.controlImmune = true; }
+      if (now >= (s.until ?? 0)) { s.phase = 'air'; s.air = { x0: e.x, y0: e.y, from: now }; e.controlImmune = true; this.h.sfx('mn_leap'); }
       return true;
     }
     if (s.phase === 'air' && s.air) {
       e.moveVx = e.moveVy = 0; const k = Math.min(1, (now - s.air.from) / t.flightMs), tx = s.tx ?? e.x, ty = s.ty ?? e.y;
       e.sprite.setPosition(s.air.x0 + (tx - s.air.x0) * k, s.air.y0 + (ty - s.air.y0) * k - Math.sin(k * Math.PI) * 90);
-      if (k >= 1) { s.phase = undefined; e.controlImmune = false; this.metrics.leaps += 1; wf.shapeImpact(id, 'slam', tx, ty, t.radius, 0, now); playSheet(this.h.scene, 'fx_collapse_dust', tx, ty - 10, { size: t.radius * 2.2, depth: DEPTH.fx, ms: 420, alpha: .8 }); this.hitPlayer(tx, ty, t.radius, t.damage, now); }
+      if (k >= 1) { s.phase = undefined; e.controlImmune = false; this.metrics.leaps += 1; this.h.sfx('mn_land'); wf.shapeImpact(id, 'slam', tx, ty, t.radius, 0, now); playSheet(this.h.scene, 'fx_collapse_dust', tx, ty - 10, { size: t.radius * 2.2, depth: DEPTH.fx, ms: 420, alpha: .8 }); this.hitPlayer(tx, ty, t.radius, t.damage, now); }
       return true;
     }
     if (dist <= t.range && dist >= t.minRange && now >= s.next) { s.next = now + t.everyMs; s.phase = 'warn'; s.until = now + t.warnMs; s.tx = this.h.player.x; s.ty = this.h.player.y; e.startAttack(now, dirOf(nx, ny)); e.windupCol = 0; e.attackUntil = now + t.warnMs + t.flightMs + 180; e.poseUntil = Math.max(e.poseUntil, e.attackUntil); return true; } // 攻击表：预警时蹲低蓄力（第 1 帧）、落地前腾空劈下（第 2 帧）、落地那一刻砍到（第 3 帧）
@@ -455,7 +455,7 @@ export class EnemyTraits {
     if (t.kind === 'torch') {
       this.metrics.bursts += 1;
       playSheet(this.h.scene, 'fx_explosion', e.x, e.y - 16, { size: t.burstRadius * 2, depth: DEPTH.fx, ms: 480 });
-      this.h.sfx('hitHeavy');
+      this.h.sfx('mn_firepot');
       this.hitPlayer(e.x, e.y, t.burstRadius, t.burstDamage, now);
       this.h.hurtTroops(e.x, e.y, t.burstRadius, t.burstDamage);
       this.addFire(e.x, e.y, t.fireRadius * 1.3, now, t.fireMs, t.fireDamage);
@@ -485,7 +485,7 @@ export class EnemyTraits {
         if (now < z.at) { wf.circle(z.id, 'slam', z.x, z.y, z.r, (now - z.from) / (z.at - z.from), now); continue; }
         wf.shapeImpact(z.id, 'slam', z.x, z.y, z.r, 0, now);
         playSheet(this.h.scene, 'fx_collapse_dust', z.x, z.y - 14, { size: z.r * 2.4, depth: DEPTH.fx, ms: 480, alpha: .85 });
-        this.h.sfx('hitHeavy');
+        this.h.sfx('mn_stone');
         this.hitPlayer(z.x, z.y, z.r, z.damage, now);
         this.h.hurtTroops(z.x, z.y, z.r, z.allyDamage);
         this.hazards.splice(i, 1);

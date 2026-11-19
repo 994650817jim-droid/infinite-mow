@@ -297,7 +297,7 @@ export class SiegeMidCity {
     for (const l of [...this.logs]) {
       if (!l.rolling) {
         fx.lane(l.id, 'charge', l.x, a.top + 30, Math.PI / 2, len, G.width, 1 - (l.at - now) / G.warnMs, now);
-        if (now >= l.at) { l.rolling = true; this.stats.logs++; l.img = this.img(l.x, l.y, 'yellow_props', 27, 120, 120, .6); }
+        if (now >= l.at) { l.rolling = true; this.stats.logs++; this.h.sfx('roll_log'); l.img = this.img(l.x, l.y, 'yellow_props', 27, 120, 120, .6); }
         continue;
       }
       l.y += G.speed * dt; l.img?.setPosition(l.x, l.y).setRotation((l.img.rotation + dt * 9) % (Math.PI * 2)).setDepth(actorDepth(l.y));
@@ -768,11 +768,11 @@ export class SiegeMidCity {
   private takePoint(pt: Point, now: number) {
     pt.state = 'held'; pt.hold = 0; pt.lost = 0; pt.counterAt = now + 1200;
     pt.view.raiseFlag(); playSheet(this.h.scene, 'fx_collapse_dust', pt.x + pt.radius * .78, pt.y - 4, { size: 110, depth: DEPTH.fx, ms: 420, alpha: .6 });
-    this.h.recruit(M.street.reinforce); this.h.sfx('bossSummon');
+    this.h.recruit(M.street.reinforce); this.h.sfx('flag_raise');
     this.h.banner(`占领${pt.name} · 插旗`, false, `守军反扑！守住 ${M.street.holdSeconds} 秒`);
   }
   private securePoint(pt: Point) {
-    pt.state = 'secured'; this.h.recruit(M.street.secureReinforce); this.h.player.heal(this.h.player.maxHp * M.street.secureHeal);
+    pt.state = 'secured'; this.h.sfx('cap_done'); this.h.recruit(M.street.secureReinforce); this.h.player.heal(this.h.player.maxHp * M.street.secureHeal);
     this.taken[pt.kind]++;
     if (pt.kind === 'barracks' || pt.kind === 'granary') this.h.cutGarrison?.(CITY_FX.garrisonCut);
     this.folk?.secured(pt, pt.kind === 'market');
@@ -916,7 +916,7 @@ export class SiegeMidCity {
     this.finalFlag = this.art(0, y, [ART.ram, 6], ['zhuge_banner', 0], 120, 170);
     const f = this.finalFlag, h0 = f.displayHeight; f.setDisplaySize(f.displayWidth, 4).setAlpha(.6);
     sc.tweens.add({ targets: f, displayHeight: h0, alpha: 1, duration: M.hall.flagMs * .6, ease: 'Back.Out' });
-    this.h.banner(`插旗占领${this.hallName}`, false, `${this.h.opts?.cityName ?? '此城'}归入义军版图`); this.h.sfx('bossSummon');
+    this.h.banner(`插旗占领${this.hallName}`, false, `${this.h.opts?.cityName ?? '此城'}归入义军版图`); this.h.sfx('flag_raise');
     this.phase = 'done'; sc.time.delayedCall(M.hall.flagMs, done);
   }
 

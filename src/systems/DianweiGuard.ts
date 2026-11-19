@@ -16,6 +16,7 @@ import type { Enemy } from '../entities/Enemy';
 import { playSheet } from './SkillFxSheets';
 import { ordersOf } from './BattleOrders';
 import { ART_V2_FILES, isV2Texture, regridV2 } from './ArtStyle';
+import { sceneSfx } from './ContentSfx';
 import { warnFx } from '../ui/WarnFx';
 import { DIANWEI_GUARD as D, DIANWEI_BARKS as BARK } from '../data/dianweiGuard';
 
@@ -162,7 +163,7 @@ export class DianweiGuard {
   /** 恶来死战：减伤、加攻速、红气、台词（一局一次）。 */
   private startRage(now: number): void {
     this.raged = true; this.rageUntil = now + D.rage.ms; this.stats.rage++;
-    this.h.banner('恶来死战', false, '典韦血战不退 · 减伤加速');
+    this.h.banner('恶来死战', false, '典韦血战不退 · 减伤加速'); sceneSfx(this.h.scene, 'dw_rage');
     this.say('rage'); this.rageFxAt = 0;
   }
   private updateRage(now: number): void {
@@ -178,7 +179,7 @@ export class DianweiGuard {
     const W = D.whirl, sc = this.h.scene, id = 'dianwei-whirl';
     if (this.whirlAt && now < this.whirlAt) { warnFx(sc).circle(id, 'slam', this.x, this.y, W.radius, 1 - (this.whirlAt - now) / W.windupMs, now, D.warnTint); return true; }
     if (this.whirlAt) {
-      this.whirlAt = 0; this.stats.whirls++; this.attackUntil = now + W.spinMs; this.say('whirl');
+      this.whirlAt = 0; this.stats.whirls++; this.attackUntil = now + W.spinMs; this.say('whirl'); sceneSfx(sc, 'dw_whirl');
       for (const e of enemies) {
         if (!e.active || e.isSupplySlot) continue; const dx = e.x - this.x, dy = e.y - this.y, d = Math.hypot(dx, dy) || 1; if (d > W.radius + e.radius) continue;
         this.h.hit(e, D.swingDamage * W.damageMul);
@@ -206,7 +207,7 @@ export class DianweiGuard {
     if (this.throwAt) {
       this.throwAt = 0; this.throwTarget = null;
       if (tg?.active) {
-        this.stats.throws++; this.attackUntil = now + D.attackMs; this.say('throw');
+        this.stats.throws++; this.attackUntil = now + D.attackMs; this.say('throw'); sceneSfx(sc, 'dw_throw');
         const sheet = sc.textures.exists(FX.throwSheet), img = sheet ? sc.add.image(this.x, this.y - 40, FX.throwSheet, 0).setDisplaySize(T.fx, T.fx) : sc.textures.exists(FX.halberd) ? sc.add.image(this.x, this.y - 40, FX.halberd).setScale(T.fx / 80) : null;
         img?.setDepth(DEPTH.fx).setName('dianwei-halberd');
         this.throws.push({ img, x: this.x, y: this.y - 40, tx: tg.x, ty: tg.y - 20, target: tg, life: 1.2, spin: 0 });

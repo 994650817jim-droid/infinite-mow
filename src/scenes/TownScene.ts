@@ -12,6 +12,7 @@ import {FONT,HEADING_FONT} from '../config';
 import {homeCommand,warPanelTexture} from '../ui/HomeCommand';
 import {lqCommand,lqPanel} from '../ui/LacquerKit';
 import {uiSfx} from '../systems/Sfx';
+import {startCityAmbient} from '../systems/ContentSfx';
 import {loadWorld,worldUnlocked,storageUnavailable,incompatibleSave,cityLevels,cityBuild,spendProvisions} from '../world/WorldStore';
 import {openMerchantShop} from '../ui/MerchantShop';
 import {CHARACTERS,type CharacterId} from '../data/characters';
@@ -84,6 +85,7 @@ export class TownScene extends Phaser.Scene {
   playMenuMusic(this);
   const c = cityById(this.cityId), s = loadWorld();
   if ((!worldUnlocked() && !isChapterTestRun()) || !c || !s.ownedCities.includes(this.cityId)) { this.scene.start('WorldMapScene'); return; }
+  startCityAmbient(this, k => uiSfx().play(k)); // 城池环境声（鸟鸣、打铁、车轮、远钟、风）
   this.pano = this.add.container(0, 0).setDepth(-5);
   const mask = this.make.graphics({x: 0, y: 0}).fillStyle(0xffffff).fillRect(this.vr.x, this.vr.y, this.vr.w, this.vr.h); this.pano.setMask(mask.createGeometryMask());
   // 居民与全景同一容器（按脚下 y 排前后，走到屋后被屋子挡住）；精灵不接收点击，不挡建筑

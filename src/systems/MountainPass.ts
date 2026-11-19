@@ -109,7 +109,7 @@ export class MountainPass {
         const prog = 1 - (b.at - now) / P.boulder.warnMs;
         fx.lane(b.id, 'charge', -b.dir * (this.halfW + 60), b.y, b.dir > 0 ? 0 : Math.PI, len, P.boulder.width, prog, now);
         b.img.setAlpha(Math.min(1, prog * 1.5));
-        if (now >= b.at) { b.rolling = true; fx.shapeImpact(b.id, 'charge', -b.dir * (this.halfW + 60), b.y, len, b.dir > 0 ? 0 : Math.PI, now, P.boulder.width, { alpha: .5 }); }
+        if (now >= b.at) { b.rolling = true; this.h.sfx('roll_boulder'); fx.shapeImpact(b.id, 'charge', -b.dir * (this.halfW + 60), b.y, len, b.dir > 0 ? 0 : Math.PI, now, P.boulder.width, { alpha: .5 }); }
         continue;
       }
       b.x += b.dir * P.boulder.speed * dt; b.img.setPosition(b.x, b.y).setRotation(b.img.rotation + b.dir * P.boulder.speed * dt / P.boulder.radius);

@@ -87,7 +87,7 @@ await p.evaluate(() => { const g = window.__game; for (const s of g.scene.getSce
 await p.waitForFunction(() => window.__game.scene.isActive('MenuScene'), null, { timeout: 30000 }); await p.waitForTimeout(800);
 const r6 = await p.evaluate(async () => {
   const m = window.__game.scene.getScene('MenuScene'); (await import('/src/systems/BattleSettings.ts')).setShakeLevel('strong'); m.openHomeSettings();
-  const row = m.children.getByName('home-settings-panel').list.find(o => o.name === 'settings-shake'); const inc = m.children.getByName('home-settings-panel').list.find(o => o.name?.startsWith('settings-row-') && o.name.endsWith('-inc') && Math.abs(o.y - row.y) < 2);
+  const row = m.children.getByName('home-settings-panel').list.find(o => o.name === 'settings-shake'); const inc = m.children.getByName('home-settings-panel').list.find(o => o.name === 'settings-shake-inc'); /* 2026-11-18 设置改版 */
   const before = row.text; inc.emit('pointerdown'); const after1 = row.text, v1 = localStorage.getItem('im_shake'); inc.emit('pointerdown'); const v2 = localStorage.getItem('im_shake'); inc.emit('pointerdown'); const v3 = localStorage.getItem('im_shake');
   const panel = m.children.getByName('home-settings-panel'), close = panel.list.find(o => o.name === 'settings-close'), quitRowOverlap = Math.abs(close.y - row.y) < 30;
   return { before, after1, v1, v2, v3, overlap: quitRowOverlap };

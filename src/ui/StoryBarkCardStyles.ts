@@ -70,12 +70,16 @@ interface In { side: 'left' | 'right'; name: string; text: string; portrait?: st
 const txt = (s: Phaser.Scene, x: number, y: number, v: string, size: number, color: string, extra: Phaser.Types.GameObjects.Text.TextStyle = {}): Phaser.GameObjects.Text =>
   s.add.text(x, y, v, { fontFamily: HEADING_FONT, fontSize: size + 'px', color, resolution: 2, ...extra }).setScrollFactor(0);
 
-/** 电影感台词卡（敌方右、我方左；游戏坐标，电脑布局 960 宽）：外侧立绘一栏、内侧文字一栏，台词不压立绘。 */
-export function buildCinematic(s: Phaser.Scene, l: In, W: number, margin: number): StyledCard {
-  const right = l.side === 'right', ally = !right, f = factionOf(l.id, ally);
-  const w = 372, PW = 124, gap = 10, colW = w - PW - gap, x0 = right ? W - margin - w : margin, y0 = 290;
+/**
+ * 电影感台词卡（游戏坐标，电脑布局 960 宽）：外侧立绘一栏、内侧文字一栏，台词不压立绘。
+ * place 给了（电脑布局，2026-11-19 用户「剧情对话挪到左下角」）：不分敌我都放左下——左边 x = place.x、底边 = place.bottom，立绘在左栏、台词在右栏、从左滑入，宽收到 340；
+ * 没给（手机）：敌方右、我方左（旧摆法）。阵营色 / 朱印 / 称号始终按说话人（side 是说话人的阵营）。
+ */
+export function buildCinematic(s: Phaser.Scene, l: In, W: number, margin: number, place?: { x: number; bottom: number }): StyledCard {
+  const ally = l.side === 'left', right = !place && !ally, f = factionOf(l.id, ally);
+  const w = place ? 340 : 372, PW = 124, gap = 10, colW = w - PW - gap, x0 = place ? place.x : right ? W - margin - w : margin;
   const cx0 = right ? 0 : PW + gap; // 文字栏左边
-  const root = s.add.container(x0, y0).setScrollFactor(0);
+  const root = s.add.container(x0, 0).setScrollFactor(0);
   // 名字（大号标题字）+ 阵营朱印 + 称号
   const tx = cx0 + 12, tw = colW - 30;
   const name = txt(s, tx, 0, l.name, 28, f.light, { stroke: f.dark, strokeThickness: 6 }).setName('story-bark-card-name');
@@ -85,7 +89,8 @@ export function buildCinematic(s: Phaser.Scene, l: In, W: number, margin: number
   // 台词：在文字栏里换行；笔刷带只铺文字栏，高度跟着台词
   const say = txt(s, tx + 4, 0, l.text, 15, '#fff1d0', { wordWrap: { width: tw, useAdvancedWrap: true }, lineSpacing: 2 }).setShadow(0, 2, '#000000', 4, false, true).setName('story-bark-card-text');
   if (say.height > 66) say.setFontSize(13);
-  const sy = 56, sh = Math.max(52, say.height + 24), h = sy + sh;
+  const sy = 56, sh = Math.max(52, say.height + 24), h = sy + sh, y0 = place ? place.bottom - h : 290;
+  root.setY(y0);
   say.setY(sy + (sh - say.height) / 2);
   // 墨迹晕开（入场时在笔刷带后面放一遍，手绘 8 帧）
   const bloom = s.textures.exists('barkui_inkbloom') ? s.add.sprite(cx0 + colW / 2, sy + sh / 2, 'barkui_inkbloom', 0).setDisplaySize(colW * .95, sh * 2.2).setScrollFactor(0).setAlpha(.7).setName('story-bark-card-ink') : null;

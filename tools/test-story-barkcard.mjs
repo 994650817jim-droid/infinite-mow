@@ -40,7 +40,8 @@ const r1 = await p.evaluate(async () => {
   return { spoke, at700, mode, ran, bubble, gone, at3600 };
 });
 
-ck('张角登场：右边滑入侧边卡，立绘 ink_cast_zhangjiao，名字「张角」', r1.spoke && r1.at700.length === 1 && r1.at700[0].side === 'right' && r1.at700[0].portrait === 'ink_cast_zhangjiao' && r1.at700[0].name === '张角', r1);
+ck('张角登场：滑入侧边卡，立绘 ink_cast_zhangjiao，名字「张角」', r1.spoke && r1.at700.length === 1 && r1.at700[0].side === 'right' && r1.at700[0].portrait === 'ink_cast_zhangjiao' && r1.at700[0].name === '张角', r1);
+ck('电脑布局：敌方台词也在左下角（卡左边 ≤ 120、顶边 ≥ 280）', r1.at700.length === 1 && r1.at700[0].x <= 120 && r1.at700[0].y >= 280, r1.at700[0]);
 ck('不暂停：出卡时仍在战斗（mode none），战斗时钟照走', r1.mode === 'none' && r1.ran > 200 /* 机器忙时帧率低，0.7 秒真实时间里战斗时钟只走 0.3–0.9 秒；暂停时是 0 */, { mode: r1.mode, ran: r1.ran });
 ck('头顶不重复台词：只冒一个「！」（没有大字整句）', !r1.bubble.some(t => t.includes('苍天') || t.length > 4), r1.bubble);
 ck('约 3 秒后自己滑走（出现后 4.5 秒内收掉）', r1.at3600.length === 0, r1.at3600);
@@ -58,7 +59,7 @@ const r3 = await p.evaluate(async () => {
   const s = window.__game.scene.getScene('GameScene'), wait = ms => new Promise(r => setTimeout(r, ms)), d = await window.__dir('hulao', 3, ['liubei', 'guanyu', 'zhangfei']);
   for (let k = 0; k < 80 && window.__cards().length; k++) await wait(80); const spoke = d.line('hulao-3.zhangfei_jeer', s.player.sprite); let c = []; for (let k = 0; k < 60 && !c.length; k++) { await wait(50); c = window.__cards(); } await wait(400); c = window.__cards(); await wait(3200); return { spoke, c };
 });
-ck('我方从左边滑入：张飞「三姓家奴！」左卡、武将水墨立绘', r3.spoke && r3.c.length === 1 && r3.c[0].side === 'left' && r3.c[0].name === '张飞' && !!r3.c[0].portrait, r3);
+ck('我方同在左下：张飞「三姓家奴！」我方卡、武将水墨立绘、与敌方同一位置', r3.spoke && r3.c.length === 1 && r3.c[0].side === 'left' && r3.c[0].name === '张飞' && !!r3.c[0].portrait && r3.c[0].x <= 120, r3);
 // 4) 三张登场截图：张角（上面已拍）、华雄、曹仁
 for (const [ch, st, file] of [['huangjin', 3, 'zhangjiao-intro'], ['hulao', 1, 'huaxiong-intro'], ['chibi', 3, 'caoren-intro']]) {
   await p.evaluate(async ([ch, st]) => { const s = window.__game.scene.getScene('GameScene'), d = await window.__dir(ch, st); d.bossIntro(s.boss?.sprite ?? s.player.sprite); }, [ch, st]);
@@ -66,7 +67,7 @@ for (const [ch, st, file] of [['huangjin', 3, 'zhangjiao-intro'], ['hulao', 1, '
 }
 // 5) 剧情设置关掉：不出卡（导演也不说）
 const r5 = await p.evaluate(async () => {
-  const wait = ms => new Promise(r => setTimeout(r, ms)); localStorage.setItem('im_story', 'off'); const s = window.__game.scene.getScene('GameScene'), d = await window.__dir('huangjin', 1);
+  const wait = ms => new Promise(r => setTimeout(r, ms)); for (let k = 0; k < 80 && window.__cards().length; k++) await wait(80); /* 先等上一步截图的卡收完 */ localStorage.setItem('im_story', 'off'); const s = window.__game.scene.getScene('GameScene'), d = await window.__dir('huangjin', 1);
   const spoke = d.bossIntro(s.player.sprite); await wait(500); const c = window.__cards(); localStorage.removeItem('im_story'); return { spoke, c };
 });
 ck('剧情设置关掉：首领台词不说、不出卡', r5.spoke === false && r5.c.length === 0, r5);

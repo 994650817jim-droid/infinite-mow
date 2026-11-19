@@ -22,8 +22,8 @@ const GLYPH: Record<CityPointKind, string> = { granary: '粮', armory: '武', ba
 const STONE = { cx: 137, cy: 145, r: 117 }, INK_R = 118;
 /** 远近：离主将超过 FAR 就收起名牌，只留徽章。 */
 const FAR = 620;
-/** 屏外令箭的放置框（离屏幕四边的距离）：避开左上状态栏、顶部计时 / 横幅、右侧按钮列。 */
-const ARROW_BOX = { left: 64, right: 150, top: 150, bottom: 80 } as const, HUD_LEFT = { w: 300, h: 250 } as const;
+/** 屏外令箭的放置框（离屏幕四边的距离）：避开左上状态栏、顶部计时 / 横幅、右侧小地图 / 军令面板 / 按钮列。 */
+const ARROW_BOX = { left: 64, right: 300, top: 150, bottom: 80 } as const, HUD_LEFT = { w: 300, h: 250 } as const;
 /** 占领旗：city.png 6 号格，旗面在格内的矩形（染色只染这一块）。 */
 const FLAG = { frame: 6, cloth: { x: 176, y: 22, w: 64, h: 240 } } as const;
 

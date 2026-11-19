@@ -129,7 +129,7 @@ export function siegeGameSceneClass(Base: typeof GameScene) {
     }
     private updateGoals(dt: number) {
       this.paintGarrison();
-      if (this.mid) { this.mid.update(dt); this.goalText?.setText('目标 · ' + this.mid.goalLine()); return; }
+      if (this.mid) { this.mid.update(dt); this.goalText?.setText('目标 · ' + this.mid.goalLine()).setVisible(!this.ordersPanelOn); return; } // 电脑布局有军令面板：顶部目标行收起（面板里有同样内容）
       const now = this.combatNow, p = this.player;
       // 箭楼放箭
       for (const t of this.towers) {

@@ -54,7 +54,7 @@ export class BossPace {
       if ((mx * dx + my * dy) / (m * d) < .5) continue; // 不是朝主将走（后撤、绕圈、招式位移）
       if (m > e.def.speed * dt * P.walkCap + .5) continue; // 比走路快得多：冲锋 / 突进 / 瞬移，不管
       const mul = BossPace.mulAt(d), k = mul - 1;
-      e.sprite.x += mx * k; e.sprite.y += my * k;
+      e.sprite.x += mx * k; e.sprite.y += my * k; e.extraWalk += m * k; // 放大的这段也算进步频（不然腿跟不上身子，滑步）
       this.stats.steps++; this.stats.lastMul = mul;
     }
   }

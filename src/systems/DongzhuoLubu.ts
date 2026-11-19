@@ -37,7 +37,7 @@ export const DZ_LUBU = {
   lubuHpMul: .5, lubuDmgMul: .6, lubuSpeed: 74, lubuReach: 70, fleeAt: 1 / 3,
   sweepEveryMs: 4500, sweepR: 150, sweepArc: Math.PI * .75, sweepWarnMs: 700, sweepDmgMul: 1.3,
   wallVolleyEverySec: 7, wallVolleyPoints: 3, volleyR: 66, volleyWarnMs: 1300, playerRatio: .05, allyDamage: 12,
-  descendMs: 1100, finishAt: .2, finishSlowMs: 1600, finishSlow: .35,
+  descendMs: 2200, /* 11-19「董卓也在平移」：慢步走下城（约 117px/s），步态能起来 */ finishAt: .2, finishSlowMs: 1600, finishSlow: .35,
 } as const;
 
 /** perch = 董卓、吕布都在城头（摧毁营寨阶段）；leaping = 吕布跃下城头；wall = 城下战吕布（原有）；之后照旧。 */
@@ -194,8 +194,9 @@ export class DongzhuoLubu {
   private descend(): void {
     const s = this.h.scene, d = this.dongzhuo, P = DZ_LUBU; this.phase = 'descending';
     this.h.scroll?.('hulao-3.dongzhuo_descend'); // 吕布败走、董卓亲自下城：卷轴（对白立绘）
-    const y0 = d.y, y1 = this.perch.y + P.perchUp + 70, t0 = s.time.now;
-    this.anim = now => { const k = Math.min(1, (now - t0) / P.descendMs); d.sprite.y = Phaser.Math.Linear(y0, y1, k); if (k >= 1) { this.phase = 'down'; d.invulnerable = false; emitBossPhase(s, { boss: d, phase: 2, dismount: false, name: '董卓' }); this.h.banner('董卓下城', true, '国贼亲自督战 · 打他！'); this.h.line?.('hulao-3.dongzhuo_down', d.sprite); playSheet(s, 'fx_collapse_dust', d.x, d.y + 4, { size: 160, ms: 560, depth: DEPTH.fx, originY: .8, name: 'dz-down-dust' }); return true; } return false; };
+    const y0 = d.y, y1 = this.perch.y + P.perchUp + 70, t0 = s.time.now; let last = t0;
+    d.externalWalk = true; // 走下城由这里推（postupdate），自己出步态；落地后交回 DongzhuoBoss（场景 update 里走，通用步态即可）
+    this.anim = now => { const k = Math.min(1, (now - t0) / P.descendMs), dt = Math.min(.1, Math.max(.001, (now - last) / 1000)), yPrev = d.y; last = now; d.sprite.y = Phaser.Math.Linear(y0, y1, k); d.intentDx = 0; d.intentDy = d.y - yPrev; d.updateWalk(dt, 0, d.y - yPrev); if (k >= 1) { d.externalWalk = false; this.phase = 'down'; d.invulnerable = false; emitBossPhase(s, { boss: d, phase: 2, dismount: false, name: '董卓' }); this.h.banner('董卓下城', true, '国贼亲自督战 · 打他！'); this.h.line?.('hulao-3.dongzhuo_down', d.sprite); playSheet(s, 'fx_collapse_dust', d.x, d.y + 4, { size: 160, ms: 560, depth: DEPTH.fx, originY: .8, name: 'dz-down-dust' }); return true; } return false; };
   }
   /** ④ 董卓 20%：过场「吕布斩董卓」（data/cutscenes/lubuKillsDongzhuo.ts）；剧情关掉时走下面的简短演出。 */
   private finale(): void {

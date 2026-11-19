@@ -45,6 +45,8 @@ export class Enemy {
   attackUntil = 0;
   /** 由专属控制器自己推着走、自己调 updateWalk 的敌人（2-3 吕布）：场景的通用步态更新跳过它，否则那一帧位移为 0 会把步态计时清零，变成定格平移。 */
   externalWalk = false;
+  /** 帧后被额外推着走的距离（BossPace 放大首领步子）：下一次 updateWalk 计进步频，免得步子跟不上位移（滑步）；不参与「被击退」判定。 */
+  extraWalk = 0;
   poseUntil = 0;
   chargeSheet = '';
   chargeState: 'none' | 'warn' | 'charge' | 'recover' = 'none';
@@ -174,6 +176,7 @@ export class Enemy {
     this.frameStartX = x;
     this.frameStartY = y;
     this.externalWalk = false;
+    this.extraWalk = 0;
     this.intentDx = 0;
     this.intentDy = 0;
     this.moveVx = this.moveVy = this.facingVx = this.facingVy = 0;
@@ -380,8 +383,8 @@ export class Enemy {
   updateWalk(dt: number, dx: number, dy: number): void {
     if (!this.walkSheet) return;
     if (this.attackUntil > 0 || this.chargeState !== 'none' || this.poseUntil > ((this.scene as Phaser.Scene & { combatNow?: number }).combatNow ?? 0)) return;
-    const moved = Math.hypot(dx, dy);
-    const actualSpeed = moved / Math.max(dt, 0.0001);
+    const moved = Math.hypot(dx, dy), extra = this.extraWalk; this.extraWalk = 0;
+    const actualSpeed = (moved + extra) / Math.max(dt, 0.0001);
     const intentSpeed = Math.hypot(this.intentDx, this.intentDy) / Math.max(dt, 0.0001);
     // 按实际位移判定走路：与蜀军缠斗、相互挤开、被友军推着走时也播放步伐，避免定格站立帧“平移”。
     // 单帧位移远超自身步速视为被击退/冲撞，不算走路。
@@ -415,11 +418,11 @@ export class Enemy {
         this.frameElapsed = 0;
       }
       this.frameElapsed += dt;
-      this.walkDistance += moved;
+      this.walkDistance += moved + extra;
       // Tie cadence to travelled distance so eased movement and low FPS stay in sync, but never
       // slower than ~7 frame changes per second (slow archers / crowd-pushed units no longer slide).
       const effStride = Math.min(stride, Math.max(4, actualSpeed / 7));
-      this.stepPhase += moved / effStride;
+      this.stepPhase += (moved + extra) / effStride;
     } else if (!this.walking) {
       this.walkDistance = 0;
       this.stepPhase = 0;

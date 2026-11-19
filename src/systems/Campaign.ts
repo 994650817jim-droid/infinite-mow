@@ -59,7 +59,7 @@ export function campaignTacticBook(hero: CharacterId): { canLearn(id: TacticId):
   const s = loadCampaignBuild(hero); if (!s) return null;
   // 同 BuildState（2026-11-19 流派重做）：读档丢掉已删除的旧 id；基础成长不占战法格；反震不再出卡
   const b = new BuildState(); b.restore(s.player.build);
-  return { level: id => b.level(id), canLearn: id => b.canLearn(id), manualsRead: () => b.manuals };
+  return { level: id => b.rank(id), canLearn: id => b.canLearn(id), manualsRead: () => b.manuals };
 }
 /** 营寨旅商卖的「流派心法」：写进征程构筑（下次出征生效）；没有征程构筑或已研读过返回 false。 */
 export function learnCampaignManual(hero: CharacterId, school: SchoolId): boolean {

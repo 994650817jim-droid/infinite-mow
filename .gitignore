@@ -253,6 +253,7 @@ assets/raw/*
 !/tools/test-boss-charge-troops.mjs
 !/tools/render-opening.mjs
 !/tools/test-camp-buy-bag.mjs
+!/tools/test-surrender-moves.mjs
 !/tools/test-merchant-tactic.mjs
 !/tools/prepare-merchant-art.mjs
 !/tools/shot-camp-stations.mjs

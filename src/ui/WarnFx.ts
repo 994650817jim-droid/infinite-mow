@@ -66,6 +66,16 @@ const riftH = (): number => isHp('rift') ? .44 : .5;
 export const WARN_FX_ON: boolean = (() => { try { return new URLSearchParams(globalThis.location?.search ?? '').get('warnfx') !== '0'; } catch { return true; } })();
 
 interface Live { imgs: Phaser.GameObjects.Image[]; at: number; }
+/**
+ * 友军（降将专属招式，2026-11-18）：调用方传 tint（任意值）即按友军显示——手绘帧暖橙 / 米色，乘色只会变灰褐，
+ * 所以用色相旋转（preFX ColorMatrix，转约 170°）把同一套手绘笔触转成天青色，一眼看出是自己人的招；不支持 FX（Canvas 渲染）时退回乘色。
+ */
+export const ALLY_HUE = 170;
+function allyLook(img: Phaser.GameObjects.Image, ally: boolean, fallbackTint: number): void {
+  if (!ally) return;
+  const fx = (img as unknown as { preFX?: Phaser.GameObjects.Components.FX }).preFX;
+  if (fx) { if (!img.getData('allyHue')) { fx.addColorMatrix().hue(ALLY_HUE); img.setData('allyHue', 1); } img.setTint(0xffffff); } else img.setTint(fallbackTint);
+}
 const clamp01 = (v: number): number => Math.max(0, Math.min(1, v));
 const step6 = (p: number): number => Math.min(5, Math.floor(clamp01(p) * 6));
 
@@ -78,7 +88,7 @@ export class WarnFx {
   has(kind: WarnKind): boolean { return WARN_FX_ON && this.scene.textures.exists(WARN_FX_FILES[kind].key); }
 
   /** 蓄力中：progress 0~1，now 用战斗时钟。同一个 id 每帧调用一次；战斗时钟走了却没再调用的自动移除（暂停时时钟不走，图留着）。 */
-  warn(id: string, kind: WarnKind, x: number, y: number, size: number, progress: number, now: number, angle = 0): boolean {
+  warn(id: string, kind: WarnKind, x: number, y: number, size: number, progress: number, now: number, angle = 0, tint?: number): boolean {
     if (!this.has(kind)) return false;
     const key = WARN_FX_FILES[kind].key, p = clamp01(progress);
     const e = this.get(id, kind === 'rift' ? 1 : 2, key, now);
@@ -93,7 +103,7 @@ export class WarnFx {
       b.setFrame(8 + Math.floor(now / 90) % 4).setOrigin(.5, ringOy('lubu')).setPosition(x, y).setDisplaySize(size * 2.8 * groundRingMul('lubu'), size * 2.8 * groundRingMul('lubu')).setAlpha(.35 + .35 * p).setDepth(DEPTH.ground + 4);
     } else {
       // 裂地：沿刀路一条横条，碎石跳动、地缝透光，按进度换 4 帧
-      a.setFrame(Math.min(3, Math.floor(p * 4))).setOrigin(0, .5).setPosition(x, y).setRotation(angle).setDisplaySize(size, size * riftH()).setAlpha(.6 + .4 * p).setTint(0xffc890).setDepth(DEPTH.ground + 4);
+      a.setFrame(Math.min(3, Math.floor(p * 4))).setOrigin(0, .5).setPosition(x, y).setRotation(angle).setDisplaySize(size, size * riftH()).setAlpha(.6 + .4 * p).setTint(0xffc890).setDepth(DEPTH.ground + 4); allyLook(a, tint !== undefined, tint ?? 0xffc890);
     }
     return true;
   }
@@ -107,12 +117,12 @@ export class WarnFx {
   }
 
   /** 落下瞬间：播一次命中序列帧（约 0.35 秒）后销毁。 */
-  impact(kind: WarnKind, x: number, y: number, size: number, angle = 0): boolean {
+  impact(kind: WarnKind, x: number, y: number, size: number, angle = 0, tint?: number): boolean {
     if (!this.has(kind)) return false;
     const key = WARN_FX_FILES[kind].key;
     const first = kind === 'rift' ? 4 : 12, count = kind === 'rift' ? 2 : 6;
     const img = this.scene.add.image(x, y, key, first).setDepth(kind === 'rift' ? DEPTH.ground + 5 : DEPTH.fx);
-    if (kind === 'rift') img.setTint(0xffc890).setOrigin(0, .5).setRotation(angle).setDisplaySize(size, size * riftH());
+    if (kind === 'rift') { img.setTint(0xffc890); allyLook(img, tint !== undefined, tint ?? 0xffc890); img.setOrigin(0, .5).setRotation(angle).setDisplaySize(size, size * riftH()); }
     else if (kind === 'lightning') img.setOrigin(.5, isHp('lightning') ? .7 : .88).setDisplaySize(size * 2.6, size * 2.6); // 手绘雷落地点在格高 .7
     else img.setOrigin(.5, ringOy(kind)).setDisplaySize(size * 1.9, size * 1.9).setAlpha(.85); // 吕布落地冲击：缩小，别盖过吕布本人
     this.scene.tweens.addCounter({ from: 0, to: count - .01, duration: kind === 'rift' ? 360 : 340, onUpdate: t => img.setFrame(first + Math.floor(t.getValue() ?? 0)),
@@ -124,29 +134,33 @@ export class WarnFx {
   private impacted = new Map<string, number>();
 
   /** 圆 / 环形落点蓄力：第 1 行按进度换帧，外缘 = r。 */
-  circle(id: string, kind: 'fire' | 'arrows' | 'slam', x: number, y: number, r: number, progress: number, now: number): boolean {
+  /** tint：友军（降将专属招式）预警染淡青，与敌人的预警分开。 */
+  circle(id: string, kind: 'fire' | 'arrows' | 'slam', x: number, y: number, r: number, progress: number, now: number, tint?: number): boolean {
     if (!this.has(kind)) return false;
     const p = clamp01(progress), d = r * 2 / ringFrac(kind);
     this.get(id, 1, WARN_FX_FILES[kind].key, now).imgs[0].setFrame(step6(p)).setOrigin(.5, ringOy(kind)).setRotation(0).setPosition(x, y).setDisplaySize(d, d).setAlpha(.3 + .4 * p).setDepth(DEPTH.ground + 4);
+    allyLook(this.live.get(id)!.imgs[0], tint !== undefined, tint ?? 0xffffff);
     return true;
   }
   /** 长条（冲锋道）蓄力：从 (x,y) 沿 angle 伸出 length，宽 width。 */
-  lane(id: string, kind: 'charge', x: number, y: number, angle: number, length: number, width: number, progress: number, now: number): boolean {
+  lane(id: string, kind: 'charge', x: number, y: number, angle: number, length: number, width: number, progress: number, now: number, tint?: number): boolean {
     if (!this.has(kind)) return false;
     const p = clamp01(progress);
     this.get(id, 1, WARN_FX_FILES[kind].key, now).imgs[0].setFrame(Math.min(3, Math.floor(p * 4))).setOrigin(0, .5).setPosition(x, y).setRotation(angle).setDisplaySize(length, width / (LANE_FRAC[kind] ?? .5)).setAlpha(.7 + .3 * p).setDepth(DEPTH.ground + 4);
+    allyLook(this.live.get(id)!.imgs[0], tint !== undefined, tint ?? 0xffffff);
     return true;
   }
   /** 扇形（横扫）蓄力：圆心 (x,y)、半径 r、朝 angle。图里扇形张开约 140°，不随 arc 变形。 */
-  sector(id: string, x: number, y: number, r: number, angle: number, progress: number, now: number): boolean {
+  sector(id: string, x: number, y: number, r: number, angle: number, progress: number, now: number, tint?: number): boolean {
     if (!this.has('sweep')) return false;
     const p = clamp01(progress), w = r / sweepR(), f = WARN_FX_FILES.sweep;
     this.get(id, 1, f.key, now).imgs[0].setFrame(step6(p)).setOrigin(SWEEP_CX, .5).setPosition(x, y).setRotation(angle).setDisplaySize(w, w * f.h / f.w).setAlpha(.35 + .4 * p).setDepth(DEPTH.ground + 4);
+    allyLook(this.live.get(id)!.imgs[0], tint !== undefined, tint ?? 0xffffff);
     return true;
   }
   /** 通用形状的落下：同一个 id 只播一次（调用方在命中窗口里每帧都会调）。 */
   /** opt：首领招牌招可按真实范围、更实地显示（scale 默认按收敛倍数，alpha 默认 0.6 / 长条 0.75，ms 为播放时长）。 */
-  shapeImpact(id: string, kind: ShapeKind, x: number, y: number, size: number, angle: number, now: number, width = 0, opt: { scale?: number; alpha?: number; ms?: number } = {}): boolean {
+  shapeImpact(id: string, kind: ShapeKind, x: number, y: number, size: number, angle: number, now: number, width = 0, opt: { scale?: number; alpha?: number; ms?: number; tint?: number } = {}): boolean {
     if (!this.has(kind)) return false;
     if ((this.impacted.get(id) ?? -1) > now) return true;
     this.impacted.set(id, now + 1500);
@@ -154,6 +168,7 @@ export class WarnFx {
     // 收敛（用户「首领的攻击特效也需要兼容适应」）：只播「炸开」那一行（不再接余尘行），圆形缩到 0.7 倍、0.35 秒、半透明，不抢首领本身的动作
     const f = WARN_FX_FILES[kind], lane = kind === 'charge', first = lane ? 4 : 6, count = lane ? 2 : 6;
     const img = this.scene.add.image(x, y, f.key, first).setDepth(lane ? DEPTH.ground + 5 : DEPTH.ground + 6).setAlpha(opt.alpha ?? (lane ? .75 : .6));
+    allyLook(img, opt.tint !== undefined, opt.tint ?? 0xffffff);
     if (lane) img.setOrigin(0, .5).setRotation(angle).setDisplaySize(size, width / (LANE_FRAC[kind] ?? .5));
     else if (kind === 'sweep') { const w = size * (opt.scale ?? .75) / sweepR(); img.setOrigin(SWEEP_CX, .5).setRotation(angle).setDisplaySize(w, w * f.h / f.w); }
     else { const d = size * 2 * (opt.scale ?? .7) / ringFrac(kind); img.setOrigin(.5, ringOy(kind)).setDisplaySize(d, d); } // 原点与蓄力圈一致，落下不错位

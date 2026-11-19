@@ -62,7 +62,7 @@ export function luoyangRuins(scene: Phaser.Scene, p: Pt, boxes: Box[]): void {
  * 整块场地围成封闭矩形；碰撞按 1000 见方切块（导航按最大半边长查询，整块太大会拖慢；同 SishuiPass.slab）。
  * cx / wy：城墙中心与墙线；half：城墙半宽（墙端）；south：南边界 y。
  */
-export function sealCityWall(scene: Phaser.Scene, o: { cx: number; wy: number; half: number; south: number; boxes: Box[]; south_: 'river' | 'palisade'; palisade?: string; tag: string }): void {
+export function sealCityWall(scene: Phaser.Scene, o: { cx: number; wy: number; half: number; south: number; boxes: Box[]; south_: 'river' | 'palisade'; palisade?: string; tag: string; endTowers?: boolean }): void {
   const T = 520, C = 1000, L = o.cx - o.half, R = o.cx + o.half;
   const slab = (l: number, t: number, r: number, b: number) => { const nx = Math.max(1, Math.ceil((r - l) / C)), ny = Math.max(1, Math.ceil((b - t) / C)); for (let i = 0; i < nx; i++) for (let j = 0; j < ny; j++) o.boxes.push({ left: l + (r - l) * i / nx, right: l + (r - l) * (i + 1) / nx, top: t + (b - t) * j / ny, bottom: t + (b - t) * (j + 1) / ny }); };
   slab(L - T, o.wy - T, L, o.south + T); slab(R, o.wy - T, R + T, o.south + T); slab(L, o.south, R, o.south + T);
@@ -73,7 +73,7 @@ export function sealCityWall(scene: Phaser.Scene, o: { cx: number; wy: number; h
     // 侧墙：从墙线往南排到南边界（压住碰撞框内沿）
     for (let y = o.wy + 170; y < o.south + 60; y += 150) { piece(L - 40, y, 4, 230); piece(R + 40, y, 4, 230, true); }
     // 角楼：墙端（盖住城墙段的平切口）与南角
-    for (const x of [L, R]) { piece(x, o.wy + 40, 3, 250); piece(x, o.south + 40, 3, 230); }
+    for (const x of [L, R]) { if (o.endTowers !== false) piece(x, o.wy + 40, 3, 250); piece(x, o.south + 40, 3, 230); } // endTowers: false = 墙端角楼由调用方自己画（2-3 洛阳的 2.5D 角楼）
     // 南边界
     if (o.south_ === 'river') {
       const wk = scene.textures.exists('terrain_water') ? 'terrain_water' : 'ground_v2_jiang';

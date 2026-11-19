@@ -105,9 +105,23 @@ ck('据点：主将离开、敌兵占点累计 5 秒 → 失守', lost.before ==
 const amb = await p.evaluate(() => { const s = window.__S, m = s.siegeMid; window.__clear(); const n0 = m.stats.ambushes; m.ambushAt = s.combatNow; window.__step(60); const roof = s.enemies.filter(e => e.active && !e.isSupplySlot && m.city.roofs.some(r => Math.abs(e.x - r.x) < 40 && Math.abs(e.y - r.y) < 120) /* 跳下补间期间敌兵按起跳点（房檐上方 90）移动，落地点偏北 */).length; return { ambushes: m.stats.ambushes - n0, roof, p: [Math.round(s.player.x), Math.round(s.player.y)], at: s.enemies.filter(e => e.active && !e.isSupplySlot).map(e => [Math.round(e.x), Math.round(e.y)]) }; });
 ck('房檐伏兵：预警后从主将附近的房檐跳下', amb.ambushes === 1 && amb.roof >= 2, amb);
 // 再占市集、武库并守住（共 3 处）→ 府衙门开 → 转场（录像）；兵营不占
+// 第二步：守点小队 / 小队长 / 占领圈状态（兵营：只测，不占）
+const sq = await p.evaluate(P => { const s = window.__S, m = s.siegeMid, k = 3, q = m.points[k]; window.__clear();
+  q.squad = false; q.leader = null; s.player.sprite.setPosition(P[k][0], P[k][1] + 760); window.__step(4); const before = q.squad; s.player.sprite.setPosition(P[k][0], P[k][1] + 420); window.__step(4); const squad = q.squad, leader = m.pointsInfo[k].leader;
+  if (q.leader?.e) { q.leader.e.def = { ...q.leader.e.def, speed: 0, damage: 0 }; q.leader.e.hp = q.leader.e.maxHp = 1e6; }
+  for (const e of s.enemies) if (e.active && !e.isSupplySlot && e !== q.leader?.e) e.deactivate();
+  s.player.sprite.setPosition(P[k][0], P[k][1] + 30); q.progress = 0; window.__step(60); const slow = q.progress, info = m.pointsInfo[k];
+  window.__clear(); q.progress = 0; window.__step(60); const fast = q.progress; q.progress = 0;
+  return { before, squad, leader, slow: +slow.toFixed(3), fast: +fast.toFixed(3), reason: info.view.reason, tint: info.view.tint, leaders: m.stats.leaders }; }, P);
+ck('守点小队：主将走近才从要点杀出（小队长 = 精锐）；小队长在时占领读条减半、圈转朱红、圈下写原因', !sq.before && sq.squad && sq.leader && sq.slow < sq.fast * .7 && sq.tint === 0xd8503a && /小队长/.test(sq.reason), sq);
+const far = await p.evaluate(() => { const s = window.__S, m = s.siegeMid; window.__clear(); s.player.sprite.setPosition(0, -1500); window.__step(3); return m.pointsInfo.map(q => ({ n: q.name, st: q.state, far: q.view.far, arrow: q.view.arrow, flag: q.view.flag })); });
+ck('远处：要点圈收起名牌（far）；屏外没占的要点有令箭指过去；已占的插着旗、不再指', far.every(q => q.far) && far.filter(q => q.st !== 'secured').some(q => q.arrow) && far.filter(q => q.st === 'secured').every(q => q.flag && !q.arrow), far);
+const food0 = await p.evaluate(() => window.__S.legion.food);
 const mid3 = await p.evaluate(P => { const s = window.__S, m = s.siegeMid; window.__clear(); for (const k of [1, 2]) for (let i = 0; i < 30; i++) { if (m.phase !== 'street') break; s.player.sprite.setPosition(P[k][0], P[k][1]); window.__step(60); window.__clear(); if (m.points[k].state === 'secured') break; } return { phase: m.phase, secured: m.securedCount }; }, P);
 await rec(160, 4, async () => p.evaluate(() => window.__clear()));
 const s3 = await goals();
+const eff = await p.evaluate(() => { const m = window.__S.siegeMid; return { food: window.__S.legion.food, mul: m.outgoingMul(), taken: { ...m.taken } }; });
+ck('要点作用：市集守住立刻随军粮 +60；武库守住我军伤害 ×1.08；占过的要点记账（第三步结算用）', eff.food - food0 >= 60 && eff.mul === 1.08 && eff.taken.market === 1 && eff.taken.armory === 1 && eff.taken.granary === 1, { food0, ...eff });
 ck('占够 3 处要点（兵营没占）→ 府衙门开 → 推进转场进府衙', s3.mid.phase === 'hall' && s3.mid.stats.transitions === 2 && s3.mid.points.filter(q => q.state === 'secured').length === 3, { mid3, phase: s3.mid.phase, points: s3.mid.points });
 ck('巷战段 GIF', gif('2-street'));
 

@@ -113,6 +113,10 @@ const killBoss = async p => {
   const inner = await p.evaluate(() => { window.__clear(); return window.__chop(3000, -400); });
   const inStreet = await waitPhase(p, 'street');
   ck('大城：砍破瓮城内门 → 进巷战', inner && inStreet, { inner, inStreet });
+  // 大城角楼：没占的角楼往城里放箭雨；两座角楼都占下后箭雨停
+  const tv = await p.evaluate(() => { const s = window.__S, m = window.__M; window.__clear(); const v0 = m.stats.cityVolleys; m.cityVolleyAt = s.combatNow; window.__step(3); const v1 = m.stats.cityVolleys;
+    for (const q of m.points) if (q.kind === 'tower') q.state = 'secured'; m.cityVolleyAt = s.combatNow; window.__step(3); return { towers: m.points.filter(q => q.kind === 'tower').length, fired: v1 - v0, after: m.stats.cityVolleys - v1 }; });
+  ck('大城：两座角楼在时往城里放箭雨（有预警圈）；两座都占下后箭雨停', tv.towers === 2 && tv.fired === 1 && tv.after === 0, tv);
   await p.evaluate(() => { for (const pt of window.__M.points) pt.state = 'secured'; });
   const inHall = await waitPhase(p, 'hall');
   await step(p, 90);

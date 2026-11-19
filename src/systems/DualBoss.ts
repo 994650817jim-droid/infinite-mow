@@ -10,9 +10,9 @@ import { PARTNER_ODDS } from '../data/surrender';
 
 /**
  * 双首领关（设计会话 dual-boss-spec.md，用户 2026-11-18 确认）：两个首领同场，各有控制器、坐骑、招降窗、名牌、辉光、火环。
- *  - 压力控制：每人生命 ×0.65、伤害 ×0.8、招式间隔 ×1.4、召兵减半；首领在场时本关小怪刷新 ×0.7。
+ *  - 压力控制：每人生命 ×0.9（2026-11-18 由 0.65 上调）、伤害 ×0.8、招式间隔 ×1.4、召兵减半；首领在场时本关小怪刷新 ×0.7。
  *  - 大招令牌：同一时间只有一人能起手有预警的招，两人起手至少隔 0.8 秒（配合技除外）。
- *  - 配合技：两人都在场、都在主将 500 像素内，每 28 秒（任一人进二阶段后 20 秒）一次；横幅 + 预警 ×1.5 → 两人同时出手 → 两人 1.5 秒收招破绽。
+ *  - 配合技：两人都在场、都在主将 500 像素内，首次 12 秒、之后每 20 秒（任一人进二阶段后 15 秒）一次；横幅 + 预警 ×1.5 → 两人同时出手 → 两人 1.5 秒收招破绽。
  *  - 一人了结（斩杀 / 劝降 / 退走）：先了结的不掉宝箱；剩下的斩杀 / 退走 → 狂怒（2 秒转场、伤害 +25%、间隔 −25%、移速 +15%、立刻进二阶段、悲愤招），
  *    劝降 → 「心乱」15 秒（伤害 −15%、劝降把握 +20%）；某组可自定（夏侯渊张郃：张郃代督退兵）。被斩一方的同伴劝降把握 −10%。
  *  - 最后一人了结才走宝箱 → 结算（宿主 GameScene 照常处理）；双降不掉宝箱，改军粮 +100、横幅「{组名} · 同归麾下」。
@@ -20,9 +20,10 @@ import { PARTNER_ODDS } from '../data/surrender';
  * 数值都是初值，交平衡会话。演出全用现成手绘素材（WarnFx 预警、warcry_paint 战吼、BossKit 收招火星）。
  */
 export const DUAL = {
-  hpMul: .65, dmgMul: .8, gapMul: 1.4, summonMul: .5, spawnMul: .7,
+  // 2026-11-18 平衡（hero-balance-review.md 7.4）：双将段 9–29 秒就打完、配合技几乎看不到 → 每人生命 .65 → .9，配合技首次 12 秒、之后 20 秒（二阶段 15 秒）
+  hpMul: .9, dmgMul: .8, gapMul: 1.4, summonMul: .5, spawnMul: .7,
   tokenGapMs: 800, entranceGapMs: 1200,
-  combo: { everyMs: 28000, every2Ms: 20000, range: 500, warnMul: 1.5, recoverMs: 1500, gatherMs: 450, timeoutMs: 7000 },
+  combo: { firstMs: 12000, everyMs: 20000, every2Ms: 15000, range: 500, warnMul: 1.5, recoverMs: 1500, gatherMs: 450, timeoutMs: 7000 },
   rage: { dmg: 1.25, gap: .75, speed: 1.15, cap: 1.4, shiftMs: 2000, signatureMul: 1.2, auraMs: 2600 },
   shaken: { dmg: .85, ms: 15000 },
   doubleProvisions: 100,
@@ -129,7 +130,7 @@ export class DualBoss {
   private banner(t: string, danger: boolean, cap?: string): void { const wait = this.quietUntil - performance.now(); if (wait > 0) this.h.scene.time.delayedCall(wait, () => this.h.banner(t, danger, cap)); else this.h.banner(t, danger, cap); }
   private real = 0;
   constructor(readonly h: DualHost, readonly plan: DualPlan, now: number) {
-    this.nextCombo = now + DUAL.combo.everyMs;
+    this.nextCombo = now + DUAL.combo.firstMs;
     const s = h.scene;
     s.events.on('postupdate', this.post, this);
     s.events.once('shutdown', () => this.clear());
@@ -144,7 +145,7 @@ export class DualBoss {
     const entry: DualEntry = { id: spec.id, name: spec.name, color: side === 0 ? 'gold' : 'red', side, enemy: e, spawnId: e.spawnId, ctrl: c, parley: spec.parley, mount: spec.mount, kit,
       done: null, doneAt: 0, rage: false, shakenUntil: 0, sigAt: 0, auraAt: 0, invulnUntil: 0, lastStart: -1e9, wasBusy: false, phase2Sent: false, baseSpeed: e.def.speed, retreatAt: 0, status: '', guards: [], guardMul: 1, spawnedAt: now, doneReal: 0, baseMaxHp };
     this.entries.push(entry);
-    if (side === 1) this.nextCombo = Math.max(this.nextCombo, now + DUAL.combo.everyMs);
+    if (side === 1) this.nextCombo = Math.max(this.nextCombo, now + DUAL.combo.firstMs);
     return entry;
   }
   entryOf(e: Enemy | null | undefined): DualEntry | undefined { return e ? this.entries.find(x => x.enemy === e && x.spawnId === e.spawnId) : undefined; }

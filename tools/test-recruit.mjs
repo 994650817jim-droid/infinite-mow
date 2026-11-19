@@ -209,7 +209,7 @@ for (const layout of ['mobile', 'desktop']) {
   const a = await p.evaluate(G0 => { const s = eval(G0); s.player.damageImmune = true; s.__DEV_ACTIONS.closePopup?.(); s.spawnTimer = s.eliteTimer = 1e9; for (const e of s.enemies) if (e.active && !e.isSupplySlot) e.hp = 0; const f = s.followers; return { n: f?.members.length, names: f?.members.map(m => m.recruit.name), sheets: f?.members.map(m => m.sheet), dmg: f?.members.map(m => +m.damage.toFixed(2)), hp: f?.members.map(m => m.maxHp), lv: f?.members.map(m => m.level) }; }, G);
   // 期望值：张飞 枪 16 × 橙 1.6 × 伤害倍率 1.2 × (1 + 1.5%×2) = 31.64，生命 220 × 1.6 × 1.1 × (1 + 3%×2) = 410；
   // 王勇 弓 18 × 绿 1.15 × (1 + 3%×10) = 26.91，生命 160 × 1.15 × (1 + 4%×10) = 258
-  ck('随行按武将等级成长：可玩名将用自己的属性点，招来的人按等级', a.dmg?.[0] === 31.64 && a.hp?.[0] === 410 && a.dmg?.[1] === 26.91 && a.hp?.[1] === 258 && a.lv?.[1] === 11, a);
+  ck('随行按武将等级成长：可玩名将用自己的属性点，招来的人按等级', a.dmg?.[0] === 23.73 /* 2026-11-18 平衡：枪兵模板 16 → 12，张飞随行 31.64 × 0.75 */ && a.hp?.[0] === 410 && a.dmg?.[1] === 26.91 && a.hp?.[1] === 258 && a.lv?.[1] === 11, a);
   ck('三名随行进入战斗（张飞用自己的行走图，大众脸用兵种图）', a.n === 3 && a.sheets[0] === 'zhangfei_walk_sheet' && a.sheets[1] === 'shu_archer_walk_sheet', a);
   // 敌人围上来：随行出手
   await p.evaluate(G0 => { const s = eval(G0), pl = s.player; for (let i = 0; i < 24; i++) { const ang = i / 24 * Math.PI * 2; s.spawnEnemy('infantry', pl.x + Math.cos(ang) * 170, pl.y + Math.sin(ang) * 170, 3); } }, G);

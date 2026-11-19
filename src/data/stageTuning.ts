@@ -23,7 +23,7 @@ const chapterStages = (pace: number, hp: readonly number[], damage: number, boss
 
 export const STAGE_TUNING: Record<TunedChapter, readonly StageTuning[]> = {
   huangjin: [
-    { pace: 120 / 90, hp: 1, damage: 1, bossHp: .6 }, // 1-1 张梁：原首领 2:00
+    { pace: 120 / 90, hp: 1, damage: 1, bossHp: .48 }, // 1-1 张梁：原首领 2:00；2026-11-18 平衡 .6 → .48（×0.8：Lv1 有 6 / 12 名武将 90 秒打不死）
     { pace: 180 / 90, hp: 1.3, damage: 1.05, bossHp: .65 }, // 1-2 张宝：原 3:00
     { pace: 300 / 90, hp: 1.7, damage: 1.1, bossHp: .5 }, // 1-3 张角：原 5:00
   ],

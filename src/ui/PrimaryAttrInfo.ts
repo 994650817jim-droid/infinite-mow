@@ -1,4 +1,4 @@
-import { ATTRIBUTE_EFFECT, ATTRIBUTE_INFO, ATTRIBUTE_MAX, PRIMARY_BONUS, PRIMARY_MUL, PRIMARY_PERK_INFO, PRIMARY_TIERS, primaryAttribute, type AttributeId } from '../data/attributes';
+import { ATTRIBUTE_EFFECT, ATTRIBUTE_INFO, PRIMARY_BONUS, PRIMARY_MUL, PRIMARY_PERK_INFO, PRIMARY_TIERS, primaryAttribute, type AttributeId } from '../data/attributes';
 import { getCharacter, type CharacterId } from '../data/characters';
 import type { InfoTip } from './ItemTooltip';
 
@@ -34,7 +34,8 @@ const PARTS: Record<AttributeId, Array<[string, number]>> = {
 };
 export const primaryMulText = (): string => '×' + +PRIMARY_MUL.toFixed(2);
 
-export function primarySummary(hero: string, points: number): PrimarySummary | null {
+/** cap = 本局 / 该武将的单项上限（attributeCap(等级)，Lv41 前 10）。 */
+export function primarySummary(hero: string, points: number, cap = 10): PrimarySummary | null {
   const attr = primaryAttribute(hero); if (!attr) return null;
   const name = ATTRIBUTE_INFO[attr].name, mul = primaryMulText(), info = PRIMARY_PERK_INFO[attr];
   const tiers: PrimaryTier[] = PRIMARY_TIERS.map((at, k) => ({ at, name: info[k]?.name ?? '', desc: info[k]?.desc ?? '', on: points >= at, left: Math.max(0, at - points) }));
@@ -56,6 +57,6 @@ export function primarySummary(hero: string, points: number): PrimarySummary | n
   return {
     attr, name, mul, tiers, chips, next,
     head: `主属性：${name} · 每点效果 ${mul}`,
-    tip: { title: `主属性：${name}`, sub: `${heroName ? heroName + ' · ' : ''}已加 ${points}/${ATTRIBUTE_MAX} 点 · 专精 ${lit}/${tiers.length} 档`, body, color: 0xe8c27a },
+    tip: { title: `主属性：${name}`, sub: `${heroName ? heroName + ' · ' : ''}已加 ${points}/${cap} 点 · 专精 ${lit}/${tiers.length} 档`, body, color: 0xe8c27a },
   };
 }

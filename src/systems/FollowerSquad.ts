@@ -426,11 +426,11 @@ export class FollowerSquad {
     }
     if (f.template === 'bow' && !f.recruit.hero) { deal(e, this.aimed(f, now, damage)); this.fx.push({ kind: 'arrow', x: f.x, y: f.y - 30, tx: e.x, ty: e.y - 20, angle: a, at: now, until: now + 140 }); return; }
     if (f.template === 'spear') {
-      let k = 0; for (const x of this.query(f.x, f.y, TEMPLATES.spear.range)) { if (k >= 6) break; if (x.active && Math.hypot(x.x - f.x, x.y - f.y) <= TEMPLATES.spear.range) { deal(x, damage); k++; } }
+      let k = 0; for (const x of this.query(f.x, f.y, TEMPLATES.spear.range)) { if (k >= FOLLOW.groupMax) break; if (x.active && Math.hypot(x.x - f.x, x.y - f.y) <= TEMPLATES.spear.range) { deal(x, damage * (k + 1 >= FOLLOW.groupFalloffFrom ? FOLLOW.groupFalloffMul : 1)); k++; } }
       this.fx.push({ kind: 'spear', x: f.x, y: f.y, tx: 0, ty: 0, angle: a, at: now, until: now + 220 });
     } else if (f.template === 'blade') {
       let k = 0; const R = TEMPLATES.blade.range;
-      for (const x of this.query(f.x, f.y, R)) { if (k >= 6) break; if (!x.active) continue; const d = Math.hypot(x.x - f.x, x.y - f.y), da = Math.abs(Phaser.Math.Angle.Wrap(Math.atan2(x.y - f.y, x.x - f.x) - a)); if (d <= R && (da < .9 || d < 26)) { deal(x, damage); k++; } }
+      for (const x of this.query(f.x, f.y, R)) { if (k >= FOLLOW.groupMax) break; if (!x.active) continue; const d = Math.hypot(x.x - f.x, x.y - f.y), da = Math.abs(Phaser.Math.Angle.Wrap(Math.atan2(x.y - f.y, x.x - f.x) - a)); if (d <= R && (da < .9 || d < 26)) { deal(x, damage * (k + 1 >= FOLLOW.groupFalloffFrom ? FOLLOW.groupFalloffMul : 1)); k++; } } // 群伤：最多 FOLLOW.groupMax 人，第 3 人起 ×0.5
       this.fx.push({ kind: 'blade', x: f.x, y: f.y, tx: 0, ty: 0, angle: a, at: now, until: now + 200 });
     } else if (f.template === 'bow') {
       deal(e, damage); this.fx.push({ kind: 'arrow', x: f.x, y: f.y - 30, tx: e.x, ty: e.y - 20, angle: a, at: now, until: now + 140 });

@@ -29,6 +29,7 @@ import type { CutsceneScript } from '../data/cutscenes/types';
  */
 export const DZ_LUBU = {
   wallY: -330, wallHalf: 900, segW: 230, gateW: 270, perchUp: 128,
+  /** 城内纵深：两端侧墙往北延伸多远、再用北墙合上（城墙专项检查：洛阳城墙原来两端敞着，绕过去就到了城里）。 */ cityDepth: 2000,
   lubuHpMul: .5, lubuDmgMul: .6, lubuSpeed: 74, fleeAt: 1 / 3,
   sweepEveryMs: 4500, sweepR: 150, sweepArc: Math.PI * .75, sweepWarnMs: 700, sweepDmgMul: 1.3,
   wallVolleyEverySec: 7, wallVolleyPoints: 3, volleyR: 66, volleyWarnMs: 1300, playerRatio: .05, allyDamage: 12,
@@ -64,14 +65,29 @@ export class DongzhuoLubu {
     const P = DZ_LUBU, s = h.scene, now = h.now(), p = h.player, wy = p.y + P.wallY;
     this.perch = { x: p.x, y: wy - P.perchUp }; this.gate = { x: p.x, y: wy };
     preloadCutscene(s, LUBU_KILLS_DONGZHUO, () => {}); preloadBossDeath(s, 'dongzhuo');
-    this.obstacles = new SishuiObstacles([{ left: p.x - P.wallHalf, right: p.x + P.wallHalf, top: wy - 70, bottom: wy - 8 }]);
+    // 洛阳城：南墙（董卓所在）+ 两端侧墙往北 cityDepth + 北墙，围成一圈；城里空着（董卓 / 吕布在城头上不受影响），主将在城外、绕不进去
+    const X0 = p.x - P.wallHalf, X1 = p.x + P.wallHalf, NY = wy - P.cityDepth;
+    this.obstacles = new SishuiObstacles([{ left: X0, right: X1, top: wy - 70, bottom: wy - 8 },
+      { left: X0 - 70, right: X0, top: NY, bottom: wy - 8 }, { left: X1, right: X1 + 70, top: NY, bottom: wy - 8 }, { left: X0 - 70, right: X1 + 70, top: NY - 70, bottom: NY }]);
     this.strikes = new Strikes({ scene: s, player: p, army: h.legion, now: h.now });
     // 城墙（攻城 v2 图集：0 城墙段 · 1 城门）
-    const wall = MID_SIEGE_FILES[0], build = (): void => {
-      for (let x = -P.wallHalf + P.segW / 2; x <= P.wallHalf; x += P.segW) { if (Math.abs(x) < P.gateW / 2 + P.segW / 2 - 10) continue; this.art.push(s.add.image(p.x + x, wy, wall.key, 0).setOrigin(.5, .97).setDisplaySize(P.segW + 8, P.segW + 8).setDepth(actorDepth(wy) - .01).setName('luoyang-wall')); }
+    const wall = MID_SIEGE_FILES[0], BARB = 'siege_mid_barb', build = (): void => {
+      // 城墙段从城门两侧对称往外铺到墙端（原来从 -wallHalf 起步，左右不对称，门左边露一截空缺）
+      for (const side of [-1, 1]) for (let x = P.gateW / 2 + P.segW / 2 - 24; x + P.segW / 2 < P.wallHalf + 80; x += P.segW - 14) this.art.push(s.add.image(p.x + side * x, wy, wall.key, 0).setOrigin(.5, .97).setDisplaySize(P.segW + 8, P.segW + 8).setDepth(actorDepth(wy) - .01).setFlipX(side > 0).setName('luoyang-wall'));
+      const hasB = s.textures.exists(BARB);
+      // 侧墙：瓮城套件侧墙段（帧 4）只取左右边是直的那一段（帧内 y 163–283）竖向拼接，同一列 x 对齐；北墙一排；四角角楼（帧 3）
+      if (hasB) { const size = 220, k = size / 384, b0 = 163, b1 = 283, step = (b1 - b0) * k, n = Math.ceil((P.cityDepth - 60) / step);
+        for (const [x, flip] of [[X0 - 34, false], [X1 + 34, true]] as const) for (let i = 0; i < n; i++) {
+          const y = wy - 40 - i * step, top = i === n - 1 ? 19 : b0;
+          this.art.push(s.add.image(x, y, BARB, 4).setOrigin(.5, (b1) / 384).setDisplaySize(size, size).setFlipX(flip).setCrop(0, top, 384, b1 - top).setDepth(actorDepth(y) - .02).setName('luoyang-side'));
+        }
+        for (let x = X0 + 110; x < X1; x += 216) this.art.push(s.add.image(x, NY, BARB, 2).setOrigin(.5, .97).setDisplaySize(246, 246).setDepth(actorDepth(NY)).setName('luoyang-north'));
+        for (const [x, y] of [[X0 - 20, wy + 6], [X1 + 20, wy + 6], [X0 - 20, NY + 6], [X1 + 20, NY + 6]]) this.art.push(s.add.image(x, y, BARB, 3).setOrigin(.5, .97).setDisplaySize(250, 250).setDepth(actorDepth(y) + .001).setName('luoyang-corner'));
+      }
       this.art.push(s.add.image(p.x, wy + 2, wall.key, 1).setOrigin(.5, .97).setDisplaySize(P.gateW + 30, P.gateW + 30).setDepth(actorDepth(wy)).setName('luoyang-gate'));
     };
-    if (s.textures.exists(wall.key)) build(); else { s.load.spritesheet(wall.key, wall.file, { frameWidth: wall.cell, frameHeight: wall.cell }); s.load.once('filecomplete-spritesheet-' + wall.key, build); if (!s.load.isLoading()) s.load.start(); }
+    { const need = ([[wall.key, wall.file], [BARB, 'assets/siege-v2/barbican.png']] as const).filter(([k]) => !s.textures.exists(k));
+      if (!need.length) build(); else { for (const [k, f] of need) s.load.spritesheet(k, f, { frameWidth: 384, frameHeight: 384 }); s.load.once('complete', () => { if (s.textures.exists(wall.key)) build(); }); if (!s.load.isLoading()) s.load.start(); } }
     // 赤兔（horses-v2）与吕布骑乘图（有就载）：逃走 / 杀回时用
     { const hk = 'horse_v2_chitu_walk'; if (!s.textures.exists(hk) && ART_V2_FILES[hk]) { s.load.image(hk, ART_V2_FILES[hk]); s.load.once('filecomplete-image-' + hk, () => regridV2(s, hk)); } else if (s.textures.exists(hk) && !s.textures.get(hk).has('down_0')) regridV2(s, hk);
       const rk = bossRideKey('lubu'); if (BOSS_RIDE_ART.has('lubu') && !s.textures.exists(rk)) s.load.spritesheet(rk, 'assets/ride-v2/boss_lubu_ride.png', { frameWidth: RIDE.cell, frameHeight: RIDE.cell });

@@ -5,7 +5,7 @@ export const CHARACTER_PASSIVES: Record<CharacterId, { name: string; maxStacks: 
   huangzhong: { name: '老当益壮', maxStacks: 0 },
   zhuge: { name: '观星', maxStacks: 3 }, // 2026-11-18 重做（原「运筹帷幄」），见 data/heroMechanics.ts ZG_TIANHUO
   zhangfei: { name: '据水断桥', maxStacks: 5 },
-  huangyueying: { name: '机关连弩', maxStacks: 8 },
+  huangyueying: { name: '机关连弩', maxStacks: 12 }, // 2026-11-18 平衡：8 → 12（一局约 35 次 → 约 23 次，原来等于常驻）
   pangtong: { name: '连环计', maxStacks: 3 },
   liubei: { name: '仁德聚义', maxStacks: 4 },
   weiyan: { name: '镇守汉中', maxStacks: 5 },
@@ -50,7 +50,7 @@ export const PASSIVE_RULES = {
   knifeCountByLevel: [1, 1, 2, 2, 3], knifePierceByLevel: [2, 2, 3, 3, 4], knifeExtraMul: .6,
   /** 貂蝉·双花扇：回旋飞扇（距离 / 速度）；离间：魅惑 3 层倒戈 3 秒（精锐减半），倒戈者受伤 +20%、冲向 260 内最近同伴每 0.5 秒撞一次；首领改为 3 秒受伤 +25%；4 秒没扇中魅惑消散。 */
   // 2026-11-16 平衡（12 将基线：1-1 整关放不出大招）：倒戈所需扇中次数 3 → 2
-  fanRange: 230, fanSpeed: 520, charmNeed: 2, turnMs: 3000, turnVulnerability: 1.2, charmVulnerability: 1.25, turnSeek: 260, turnHitMs: 500, charmDecayMs: 4000,
+  fanRange: 230, fanSpeed: 520, charmNeed: 2, turnMs: 3000, turnVulnerability: 1.2, charmVulnerability: 1.15, /* 2026-11-18 平衡：首领易伤 +25% → +15%（貂蝉打首领 9–10 秒，全员最快） */ turnSeek: 260, turnHitMs: 500, charmDecayMs: 4000,
   /** 貂蝉·闭月：舞带环身 2 秒，半径 160，每 0.4 秒 50% 伤害，圈内敌人倒戈。 */
   moonMs: 2000, moonRadius: 160, moonTickMs: 400, moonDamageMul: .5,
   /** 2026-11-17 用户：「貂蝉被动好像不触发了」——飞扇打死带魅惑的敌人也 +1 层，但每秒最多 1 层；闭月结束后飞扇冷却（秒）。 */

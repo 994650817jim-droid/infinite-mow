@@ -55,7 +55,7 @@ try {
     ck('登场：颜良先、文丑后，相隔约 1.2 秒（战斗时钟）', a.entries.length === 1 && a.entries[0].id === 'yanliang' && c.entries[1]?.id === 'wenchou' && gap >= 1150 && gap <= 1500, { a: a.entries.map(x => x.id), gap });
     ck('登场：两人各有名牌、火环（辉光按渲染器）', st.plates === 2 && st.rings === 2, st);
     ck('双血条：左颜良 / 右文丑，名字与 100% 正确', t[0].startsWith('颜良') && t[1] === '100%' && t[3].startsWith('文丑') && t[4] === '100%', t);
-    ck('双将压力：每人生命 ×0.65、伤害 ×0.8、间隔 ×1.4、召兵减半', c.entries.every(x => x.maxHp === Math.round(x.baseMaxHp * .65) && Math.abs(x.dmgMul - .8) < 1e-6 && Math.abs(x.gapMul - 1.4) < 1e-6 && x.summonMul === .5), c.entries);
+    ck('双将压力：每人生命 ×0.9（2026-11-18 平衡由 0.65 上调）、伤害 ×0.8、间隔 ×1.4、召兵减半', c.entries.every(x => x.maxHp === Math.round(x.baseMaxHp * .9) && Math.abs(x.dmgMul - .8) < 1e-6 && Math.abs(x.gapMul - 1.4) < 1e-6 && x.summonMul === .5), c.entries);
     ck('双将：文丑骑马、颜良步战', c.entries[0].mounted === false && c.entries[1].mounted === true, c.entries.map(x => x.mounted));
   }
   // ② 大招令牌：普通招式预警不重叠，两人起手间隔 ≥ 0.8 秒
@@ -67,7 +67,7 @@ try {
     const r = await snap(ev);
     ck('大招令牌：17 秒混战两人都出过招，普通招式预警从不重叠，起手间隔 ≥ 0.8 秒', starts.a > 0 && starts.b > 0 && r.log.overlap === 0 && (r.log.minGap ?? 9999) >= 800, { overlap: r.log.overlap, minGap: r.log.minGap, starts });
   }
-  // ③ 配合技：28 秒（二阶段 20 秒）、500 像素内、横幅 + 预警 ×1.5 + 同时出手 + 1.5 秒破绽
+  // ③ 配合技：首次 12 秒、之后 20 秒（二阶段 15 秒；2026-11-18 平衡）、500 像素内、横幅 + 预警 ×1.5 + 同时出手 + 1.5 秒破绽
   if (want('combo')) {
     const ev = await open(...G42);
     const n0 = await ev(s => s.dual.snapshot().nextCombo - s.dual.entries[1].spawnedAt);
@@ -81,17 +81,17 @@ try {
     await p.waitForTimeout(250); await p.screenshot({ path: `${OUT}/combo-warning-1280x720.png` });
     const tx = await texts(ev);
     let after = null, last = null; for (let i = 0; i < 120; i++) { await p.waitForTimeout(100); const r = await snap(ev); last = { combo: r.combo, st: r.entries.map(x => x.state), mode: await ev(s => s.mode + '@' + Math.round(s.combatNow)) }; if (!r.combo) { after = r; break; } }
-    ck('配合技：首发在第二位登场后 28 秒', Math.abs(n0 - 28000) < 1300, n0);
+    ck('配合技：首发在第二位登场后 12 秒', Math.abs(n0 - 12000) < 1300, n0);
     ck('配合技：有人超出 500 像素时不放', !far.combo && far.log.combos.length === 0, far.log.combos);
     ck('配合技「夹击」：横幅、预警 ×1.5、两人同时出手（横幅见 combo-warning 截图）', !!fired && fired.log.combos[0]?.id === 'jiaji' && fired.log.combos[0].warnMul === 1.5 && fired.entries.every(x => x.busy), { fired: fired?.entries.map(x => x.state), tx: tx.filter(t => t.includes('夹') || t.includes('双雄')) });
-    ck('配合技之后两人都进收招破绽，下一次 28 秒后', !!after && after.entries.every(x => x.state === 'recover') && Math.abs(after.nextCombo - (await ev(s => s.combatNow)) - 28000) < 1500, after ? { st: after.entries.map(x => x.state), next: after.nextCombo } : last);
-    // 二阶段：刀枪合璧可用、间隔 20 秒
+    ck('配合技之后两人都进收招破绽，下一次 20 秒后', !!after && after.entries.every(x => x.state === 'recover') && Math.abs(after.nextCombo - (await ev(s => s.combatNow)) - 20000) < 1500, after ? { st: after.entries.map(x => x.state), next: after.nextCombo } : last);
+    // 二阶段：刀枪合璧可用、间隔 15 秒
     await ev(s => { for (const x of s.dual.entries) x.ctrl.forcePhase2(s.combatNow); });
     await p.waitForTimeout(1500);
     await ev(s => { const p = s.player, [a, b] = s.dual.entries; a.enemy.sprite.x = p.x - 150; a.enemy.sprite.y = p.y - 60; b.enemy.sprite.x = p.x + 200; b.enemy.sprite.y = p.y - 40; s.dual.comboNow(s.combatNow); });
     let c2 = null; for (let i = 0; i < 40; i++) { await p.waitForTimeout(100); const r = await snap(ev); if (r.log.combos.length >= 2) { c2 = r; break; } }
     let after2 = null, last2 = null; for (let i = 0; i < 140; i++) { await p.waitForTimeout(100); const r = await snap(ev); last2 = { combo: r.combo, st: r.entries.map(x => x.state + (x.done ?? '')), mode: await ev(s => s.mode + '@' + Math.round(s.combatNow)) }; if (!r.combo) { after2 = r; break; } }
-    ck('二阶段：轮到「刀枪合璧」，下一次 20 秒后', c2?.log.combos[1]?.id === 'heben' && !!after2 && Math.abs(after2.nextCombo - (await ev(s => s.combatNow)) - 20000) < 1500, { c2: c2?.log.combos, next: after2 && after2.nextCombo, last2 });
+    ck('二阶段：轮到「刀枪合璧」，下一次 15 秒后', c2?.log.combos[1]?.id === 'heben' && !!after2 && Math.abs(after2.nextCombo - (await ev(s => s.combatNow)) - 15000) < 1500, { c2: c2?.log.combos, next: after2 && after2.nextCombo, last2 });
   }
   // ④ 一人被斩：狂怒；⑨ 关羽在队「斩颜良」只在斩杀时
   if (want('rage')) {

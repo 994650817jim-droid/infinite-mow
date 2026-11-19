@@ -183,6 +183,7 @@ assets/raw/*
 !/tools/shot-camp-pano.mjs
 !/tools/test-camp-mount.mjs
 !/tools/prepare-camp-hay.mjs
+!/tools/steam-assets.mjs
 !/tools/test-jingnan-art.mjs
 !/tools/test-hanzhong-art.mjs
 !/tools/test-yiling-full.mjs
@@ -199,6 +200,7 @@ assets/raw/*
 !/tools/shot-yiling-body.mjs
 !/tools/prepare-scene-sheet.mjs
 !/tools/resize-image.mjs
+!/tools/shot-boss-still.mjs
 !/tools/build-boss-ride.mjs
 !/tools/test-tutorial.mjs
 !/tools/test-boss-moves.mjs
@@ -267,3 +269,4 @@ assets/raw/*
 !/tools/test-boss-crowd.mjs
 !/tools/test-follower-obstacles.mjs
 !/tools/test-siege-large-flow.mjs
+!/tools/shot-luoyang-wall.mjs

@@ -14,6 +14,7 @@ import type { EnemyKind, RunEndReason } from '../types';
 import { YUJIN } from '../data/surrender';
 import { shuArt } from '../data/shuChapter';
 import { MID_SIEGE_FILES } from '../systems/SiegeMidArt';
+import { sealCityWall } from '../systems/ChapterDressing';
 import { bossInRoster, captureBoss } from '../systems/RosterStore';
 import { markSurrender, surrenderLive } from '../systems/SurrenderStore';
 
@@ -79,6 +80,8 @@ export function xiangfanGameSceneClass(Base: typeof GameScene) {
       const K = MID_SIEGE_FILES[0], draw = (): void => { if (this.sys.settings.status >= Phaser.Scenes.SHUTDOWN) return; for (let x = -1150; x <= 1150; x += 230) this.add.image(x, y + 30, v2 ? 'xf_props' : K.key, v2 ? 6 : Math.abs(x) < 100 ? 1 : 0).setOrigin(.5, .97).setDisplaySize(238, 238).setDepth(actorDepth(y)).setName('fancheng-wall'); };
       if (v2 || this.textures.exists(K.key)) draw(); else { this.load.spritesheet(K.key, K.file, { frameWidth: K.cell, frameHeight: K.cell }); this.load.once('filecomplete-spritesheet-' + K.key, draw); if (!this.load.isLoading()) this.load.start(); }
       footprints.splice(0, footprints.length, { left: -1300, right: 1300, top: y - 40, bottom: y + 12 });
+      // 城墙专项检查 W5：城墙两端原来平切口、能绕过去 → 两端角楼、往南转成侧墙，南边界画成汉水，整块场地封闭（城墙没有门：敌军都在城下）
+      sealCityWall(this, { cx: 0, wy: y, half: 1300, south: 1500, boxes: footprints, south_: 'river', tag: 'fancheng' });
     }
     private story(name: string, kicker: string, title: string, lines: { who?: string; text: string }[], confirm: string) {
       const show = () => {
@@ -88,10 +91,12 @@ export function xiangfanGameSceneClass(Base: typeof GameScene) {
       };
       if (this.over) show(); else this.time.delayedCall(60, show);
     }
+    /** W5：樊城城墙封死，曹仁出场点不越过城墙线。 */
+    protected bossSpawnPoint(x: number, y: number): { x: number; y: number } { return this.xfStage === 1 ? { x: Math.max(-1200, Math.min(1200, x)), y: Math.max(-470, y) } : { x, y }; }
     protected spawnAroundPlayer(kind: EnemyKind, force = false): Enemy | null {
       if (this.breakout) { const p = this.breakout.spawnPoint(kind); return this.spawnEnemy(kind, p.x, p.y, undefined, force); }
       if (this.flood) { const a = FLOOD.arena, s = Math.floor(Math.random() * 4), t = Math.random(); const x = s === 0 ? a.left + 40 : s === 1 ? a.right - 40 : a.left + 40 + t * (a.right - a.left - 80), y = s === 2 ? a.top + 40 : s === 3 ? a.bottom - 40 : a.top + 40 + t * (a.bottom - a.top - 80); return this.spawnEnemy(kind, x, y, undefined, force); }
-      if (this.xfStage === 1) { const p = this.player, r = Math.random(); const x = p.x + (Math.random() - .5) * 1100, y = r < .55 ? -470 : p.y + (Math.random() < .5 ? -1 : 1) * 420; return this.spawnEnemy(kind, x, Math.min(y, p.y + 500), undefined, force); }
+      if (this.xfStage === 1) { const p = this.player, r = Math.random(); const x = Math.max(-1240, Math.min(1240, p.x + (Math.random() - .5) * 1100)), y = Math.max(-470, r < .55 ? -470 : p.y + (Math.random() < .5 ? -1 : 1) * 420); /* W5：城墙封死后城里出不来，刷兵点不越过城墙线、不出侧墙 */ return this.spawnEnemy(kind, x, Math.min(y, p.y + 500, 1440), undefined, force); }
       return super.spawnAroundPlayer(kind, force);
     }
     /** 洪水里的敌人自身移动变慢。 */

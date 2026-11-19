@@ -86,7 +86,7 @@ import { Legion } from '../systems/Legion';
 import { LegionUI } from '../ui/LegionUI';
 import { Reinforcements } from '../systems/Reinforcements';
 import { MartialFields } from '../systems/MartialFields';
-import { RunGrowth, ATTRIBUTE_INFO, ATTRIBUTE_MAX, attributeIcon, type AttributeId } from '../systems/RunGrowth';
+import { RunGrowth, ATTRIBUTE_INFO, attributeCap, attributeIcon, type AttributeId } from '../systems/RunGrowth';
 import { addMerit, addScrolls, getXinde, SCROLL, temperBonus } from '../systems/MasteryStore';
 import { primaryAttribute, PRIMARY_PERK, PRIMARY_PERK_INFO, PRIMARY_TIERS, PRIMARY_MUL, SPELL_WEAPONS } from '../data/attributes';
 import { stageCleared, takeAttrNotice } from '../systems/HeroProgress';
@@ -293,6 +293,8 @@ export class GameScene extends Phaser.Scene {
       const line=plan.lines[second.id]?.intro;if(line&&storyMode()!=='off')storyBark(this,e.sprite,second.name,line);
     });
   }
+  /** 首领出场点（默认主将正北 430）；城墙封死的关覆盖，别刷到墙那边过不来（城墙专项 W5）。 */
+  protected bossSpawnPoint(x:number,y:number):{x:number;y:number}{return {x,y};}
   /** 本关敌方势力（营具 / 军旗）；篇章场景按章节.关覆盖（data/sceneLooks.ts ARC_FACTIONS），null = 照 envConfigFor。 */
   protected sceneFaction():number|null{return null;}
   /** 单首领「败退型」（8-1 张郃、5-3 曹仁、4-1 颜良）：打到底不倒地，淡出退走。子类据此不播控制器倒地帧。 */
@@ -747,7 +749,7 @@ export class GameScene extends Phaser.Scene {
       const A=XINGYANG_AMBUSH;this.sishuiPass=new SishuiPass(this.passHost(),{wall:false,towers:false,wenjiu:false,tentSpots:A.tents,tentRider:'infantry',tentCount:A.count,tentWarnMs:A.warnMs,tentFromWave:A.fromWave,tentName:'伏兵营帐',campName:'徐荣伏营',tag:'xurong'});
       this.supplies.spawnSishui(3,-330,180,116);this.supplies.spawnSishui(5,-310,350,105);this.supplies.spawnSishui(7,230,-50,100);this.supplies.spawnSishui(4,290,210,104);this.supplies.spawnSishui(6,300,370,110);}
     // 1-3 广宗决战（全场景审查 P2：「广宗城」只有空地）：北面一道广宗城墙（攻城城墙图集，同 2-1 汜水关那套），城门紧闭，张角在城下列阵
-    if(this.chapter.id==='huangjin'&&this.chapter.stage===3&&!this.runConfig.encounter&&!this.customChapter()&&!this.sishuiPass){this.sishuiPass=new SishuiPass(this.passHost(),{towers:false,tents:false,wenjiu:false,wallY:-900,tag:'guangzong'});this.sishuiObstacles=new SishuiObstacles(this.sishuiPass.footprints);}
+    if(this.chapter.id==='huangjin'&&this.chapter.stage===3&&!this.runConfig.encounter&&!this.customChapter()&&!this.sishuiPass){this.sishuiPass=new SishuiPass(this.passHost(),{towers:false,tents:false,wenjiu:false,wallY:-900,tag:'guangzong',ends:'tower'});this.sishuiObstacles=new SishuiObstacles(this.sishuiPass.footprints);}
     // 场景审查 P3：1-2 下曲阳张宝法坛营、2-3 洛阳火城残垣（systems/ChapterDressing.ts，实心部分进场景碰撞框）
     if(!this.runConfig.encounter&&!this.customChapter()&&((this.chapter.id==='huangjin'&&this.chapter.stage===2)||(this.chapter.id==='hulao'&&(this.chapter.westStage??3)===3&&this.chapter.bossStyle==='dongzhuo'))){if(!this.sishuiObstacles)this.sishuiObstacles=new SishuiObstacles([]);const bx=this.sishuiObstacles.footprints;if(this.chapter.id==='huangjin')xiaquyangAltarCamp(this,this.player,bx);else luoyangRuins(this,this.player,bx);}
     // 过场动画预览（MenuScene 收到 ?dev=1&cutscene=<id>）：清场、首领出阵，推到过场处自动播
@@ -1328,8 +1330,7 @@ export class GameScene extends Phaser.Scene {
     this.bossSpawned = true;
     { const ws = this.paceOn() ? PICK_PACE.waves : PICK_GUARANTEE.waves; this.ensurePicks(ws[ws.length - 1]); } // 保底：第 3 波后直接是首领、波次不再推进，首领登场时补到最后一档
     const angle = -Math.PI / 2;
-    const x = this.player.x + Math.cos(angle) * 430;
-    const y = this.player.y + Math.sin(angle) * 430;
+    const at = this.bossSpawnPoint(this.player.x + Math.cos(angle) * 430, this.player.y + Math.sin(angle) * 430), x = at.x, y = at.y;
     const boss = this.spawnEnemy('boss', x, y, 1, true);
     if (!boss) {
       this.bossSpawned = false;
@@ -2191,7 +2192,7 @@ export class GameScene extends Phaser.Scene {
       // 倒地后原地掉宝箱，主将捡起遗物才进下一阶段（原来的三选一遗物卡改成宝箱）
       this.spawnBossChest(enemy.x,enemy.y,()=>{if(this.bossKilled&&this.chasingBosses.length===0){if(this.storyDir)this.storyDir.chapterClose(()=>this.finish(true,'boss'));else this.finish(true,'boss');}else{this.resumePendingChoices();if(this.bossKilled)this.showGrowthNotice('当前首领已败 · 仍有'+this.chasingBosses.length+'名追击首领');}});return;
     }
-    this.spawnGem(enemy.x, enemy.y, enemy.def.xp);
+    this.spawnGem(enemy.x, enemy.y, enemy.def.xp * (this.boss?.active && enemy.kind !== 'boss' ? BALANCE.bossSpawn.xpMul : 1)); // 首领在场：杂兵经验 ×2（BALANCE.bossSpawn.xpMul）
   }
 
   protected nearestEnemy(x: number, y: number, range: number, exclude: Enemy | null = null, ignored?: Set<number>): Enemy | null {
@@ -3304,9 +3305,10 @@ export class GameScene extends Phaser.Scene {
     this.heroLv = heroLevel(this.runConfig.character);
     const id = this.runConfig.character, g = this.player.growth, r = enlistHero(id), ratio = this.player.hp / Math.max(1, this.player.maxHp);
     const bonusLeft = Math.max(0, g.unallocated - g.heroFree);
-    for (const a of Object.keys(g.attributes) as AttributeId[]) g.attributes[a] = Math.min(ATTRIBUTE_MAX, r.attributes[a] + Math.max(0, (carried ? g.attributes[a] : 0) - r.attributes[a]));
+    g.attrMax = attributeCap(this.heroLv);
+    for (const a of Object.keys(g.attributes) as AttributeId[]) g.attributes[a] = Math.min(g.attrMax, r.attributes[a] + Math.max(0, (carried ? g.attributes[a] : 0) - r.attributes[a]));
     g.heroFree = heroFreePoints(id);
-    const room = (Object.values(g.attributes) as number[]).reduce((n, v) => n + ATTRIBUTE_MAX - v, 0);
+    const room = (Object.values(g.attributes) as number[]).reduce((n, v) => n + g.attrMax - v, 0);
     g.unallocated = Math.min(room, g.heroFree + (carried ? bonusLeft : 0));
     // 武将谱：本命淬炼、战法心得（新开一场时开局第一次升级保证出一张心得卡）
     g.temperDamage = temperBonus(id); g.xinde = getXinde(id); if (!carried) g.xindeFirst = g.xinde.length > 0;
@@ -3336,8 +3338,8 @@ export class GameScene extends Phaser.Scene {
   /** 战斗中武将升级：每级一次三选一并给 1 个属性点（正式战斗立刻写入存档）。 */
   protected onHeroLevelUp(gained: number): void {
     const g = this.player.growth, id = this.runConfig.character;
-    this.heroLv = this.player.level; this.picksGiven += gained; this.pendingLevels += gained;
-    const room = (Object.values(g.attributes) as number[]).reduce((n, v) => n + ATTRIBUTE_MAX - v, 0) - g.unallocated;
+    this.heroLv = this.player.level; this.picksGiven += gained; this.pendingLevels += gained; g.attrMax = attributeCap(this.player.level);
+    const room = (Object.values(g.attributes) as number[]).reduce((n, v) => n + g.attrMax - v, 0) - g.unallocated;
     if (!this.debugRun()) { setHeroProgress(id, this.player.level, this.player.xp); g.heroFree += gained; }
     g.unallocated += Math.max(0, Math.min(gained, room));
     if (this.mode === 'none' && this.pickGapOk()) this.openUpgrade();
@@ -3893,7 +3895,7 @@ export class GameScene extends Phaser.Scene {
       const heroExtra=heroAttributeExtra(this.runConfig.character,id); // 刘备统御：本人受伤也减（2026-11-18）
       const effect=this.add.text(left+56,lineB,ATTRIBUTE_INFO[id].effect+(heroExtra?'；'+heroExtra:''),warText(12,heroExtra?'#cfe0a8':'#a9b9a3')).setOrigin(0,.5);
       // 等级：10 格，右侧数值
-      const value=this.add.text(attrCx+rowW/2-80,cy,`0/${ATTRIBUTE_MAX}`,warText(13,'#b6c3ab')).setOrigin(1,.5);
+      const value=this.add.text(attrCx+rowW/2-80,cy,`0/${this.player.growth.attrMax}`,warText(13,'#b6c3ab')).setOrigin(1,.5);
       const button=this.add.image(attrCx+rowW/2-38,cy,'ui_war_button').setDisplaySize(50,44).setInteractive({useHandCursor:true}).setName('attribute-add-'+id);
       const plus=this.add.text(button.x,button.y-1,'+',warText(26,'#ffe9bd')).setOrigin(.5).setStroke('#2a170b',3);
       lqImageButton(this,button,50,44,'gold',plus);
@@ -3908,7 +3910,7 @@ export class GameScene extends Phaser.Scene {
         perks={prefix,chips};this.attributePanel.add([prefix,...chips]);
         // 整行（点数条之前）悬停 / 点按：完整说明（ItemTooltip 风格）
         const zone=this.add.zone(left,rowTop,pipX-left-6,H-8).setOrigin(0).setInteractive().setName('attribute-primary-hit');this.attributePanel.addAt(zone,this.attributePanel.getIndex(row)+1);
-        const info=()=>primarySummary(this.runConfig.character,this.player?.growth.attributes[id]??0)?.tip;
+        const info=()=>primarySummary(this.runConfig.character,this.player?.growth.attributes[id]??0,this.player?.growth.attrMax)?.tip;
         for(const o of [zone,...chips]){attrTip.attachInfo(o,info);o.on('pointerdown',(p:Phaser.Input.Pointer)=>{const it=info();if(!it)return;const q=screenPoint(p);attrTip.showInfo(it,q.x,q.y);});}
       }
       this.attributeRows.push({value,button,plus,pips,pipX,pipY,perks});
@@ -4070,13 +4072,13 @@ export class GameScene extends Phaser.Scene {
     for(let i=0;i<ids.length;i++){
       const id=ids[i],level=growth.attributes[id],row=this.attributeRows[i];
       if(!row)continue;
-      row.value.setText(level>=ATTRIBUTE_MAX?'已满':`${level}/${ATTRIBUTE_MAX}`).setColor(level>=ATTRIBUTE_MAX?'#e2bd6a':'#e5d4ab');
-      row.pips.clear();for(let k=0;k<ATTRIBUTE_MAX;k++){const x=row.pipX+k*11;if(IS_DESKTOP){const cx=x+4,cy=row.pipY,pts=[{x:cx,y:cy-5},{x:cx+4,y:cy},{x:cx,y:cy+5},{x:cx-4,y:cy}];row.pips.fillStyle(k<level?0xe2bd6a:0x241a10,1).fillPoints(pts,true).lineStyle(1,k<level?0xfff0c0:0x7a6440,.9).strokePoints(pts,true);continue;}row.pips.fillStyle(k<level?0xe2bd6a:0x2a3328,1).fillRect(x,row.pipY-5,8,10).lineStyle(1,k<level?0xfff0c0:0x5d6a58,.9).strokeRect(x+.5,row.pipY-4.5,7,9);}
-      const can=growth.unallocated>0&&level<ATTRIBUTE_MAX;
+      const cap=growth.attrMax;row.value.setText(level>=cap?'已满':`${level}/${cap}`).setColor(level>=cap?'#e2bd6a':'#e5d4ab');
+      row.pips.clear();const step=Math.min(11,110/cap),rh=Math.min(4,step/2-.5);/* 单项上限超过 10（Lv42 起）时格子收窄，总宽仍是 110 */for(let k=0;k<cap;k++){const x=row.pipX+k*step;if(IS_DESKTOP){const cx=x+4,cy=row.pipY,pts=[{x:cx,y:cy-5},{x:cx+rh,y:cy},{x:cx,y:cy+5},{x:cx-rh,y:cy}];row.pips.fillStyle(k<level?0xe2bd6a:0x241a10,1).fillPoints(pts,true).lineStyle(1,k<level?0xfff0c0:0x7a6440,.9).strokePoints(pts,true);continue;}row.pips.fillStyle(k<level?0xe2bd6a:0x2a3328,1).fillRect(x,row.pipY-5,step-3,10).lineStyle(1,k<level?0xfff0c0:0x5d6a58,.9).strokeRect(x+.5,row.pipY-4.5,step-4,9);}
+      const can=growth.unallocated>0&&level<cap;
       if(can){row.button.setAlpha(1).setInteractive({useHandCursor:true});}
       else row.button.setAlpha(.38).disableInteractive();
       row.plus.setAlpha(can?1:.45);
-      if(row.perks){const sum=primarySummary(this.runConfig.character,level);let x=row.perks.prefix.x+row.perks.prefix.width+10;row.perks.chips.forEach((c,k)=>{const on=!!sum?.tiers[k]?.on;c.setText(sum?.chips[k]??'').setColor(on?'#ffe3a0':'#93a08e').setX(x);x+=c.width+(IS_DESKTOP?14:10);});}
+      if(row.perks){const sum=primarySummary(this.runConfig.character,level,cap);let x=row.perks.prefix.x+row.perks.prefix.width+10;row.perks.chips.forEach((c,k)=>{const on=!!sum?.tiers[k]?.on;c.setText(sum?.chips[k]??'').setColor(on?'#ffe3a0':'#93a08e').setX(x);x+=c.width+(IS_DESKTOP?14:10);});}
     }
   }
 

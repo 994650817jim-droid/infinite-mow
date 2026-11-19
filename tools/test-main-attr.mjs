@@ -1,5 +1,5 @@
 // 主属性加成（2026-11-17 用户：「属性点点武将的主属性，有更多加成或者有特殊加成」）：
-// 主属性每点 ×1.5；主属性满 4 / 7 / 10 点解锁三档专精（力量 千钧 / 破阵 / 斩将，敏捷 轻骑 / 游刃 / 疾影，
+// 主属性每点 ×1.25；主属性满 4 / 7 / 10 点解锁三档专精（力量 千钧 / 破阵 / 斩将，敏捷 轻骑 / 游刃 / 疾影，
 // 智力 凝神 / 连珠 / 广域，统御 励军 / 募众 / 同袍）；加点面板主属性金边、「主属性 ×1.5」、三个菱形。电脑布局 1280×720。
 // 用法：BASE=http://127.0.0.1:5195/ node tools/test-main-attr.mjs（默认 5173）
 import { chromium } from 'playwright';
@@ -47,19 +47,19 @@ const v = await p.evaluate(async () => {
   o.revive = [mk('liubei', { command: 9 }).followerRevive(), mk('liubei', { command: 10 }).followerRevive()];
   return o;
 });
-ck('主属性每点 ×1.5：4 点智力，诸葛亮范围 ×1.048、关羽 ×1.032', near(v.areaZhuge, 1.048) && near(v.areaGuanyu, 1.032), [v.areaZhuge, v.areaGuanyu]);
-ck('主属性每点 ×1.5：4 点力量，关羽生命 +18%、诸葛亮 +12%（基础 100）', v.hpGuanyu === 18 && v.hpZhuge === 12, [v.hpGuanyu, v.hpZhuge]);
+ck('主属性每点 ×1.25：4 点智力，诸葛亮范围 ×1.04、关羽 ×1.032', near(v.areaZhuge, 1.04) && near(v.areaGuanyu, 1.032), [v.areaZhuge, v.areaGuanyu]);
+ck('主属性每点 ×1.25：4 点力量，关羽生命 +15%、诸葛亮 +12%（基础 100）', v.hpGuanyu === 15 && v.hpZhuge === 12, [v.hpGuanyu, v.hpZhuge]);
 ck('专精档位：主属性 3/4/6/7/9/10 点 → 0/1/1/2/2/3；非主属性加满不算', JSON.stringify(v.tiers) === '[0,1,1,2,2,3]' && v.tierNonPrimary === 0, [v.tiers, v.tierNonPrimary]);
-ck('力量·斩将（满 10 点）：对首领伤害 ×1.2，对小兵不变', near(v.bossMul[0], 1) && near(v.bossMul[1], 1.2) && near(v.bossMul[2], 1), v.bossMul);
-ck('敏捷·轻骑（满 4 点）：移速再 ×1.08', near(v.move[1] / (1 + .01 * 6), 1.08) && near(v.move[0], 1 + .01 * 4.5), v.move);
-ck('敏捷·游刃（满 7 点）：暴击 +5%、闪避 10%；非主属性没有', near(v.crit[1] - Math.min(.1, .005 * 10.5), .05) && v.dodge[0] === 0 && v.dodge[1] === .1 && v.dodge[2] === 0, [v.crit, v.dodge]);
-ck('敏捷·疾影（满 10 点）：暴击后 2 秒内攻速 ×1.2，过后恢复', near(v.haste[1] / v.haste[0], 1.2) && near(v.haste[2], v.haste[0]), v.haste);
+ck('力量·斩将（满 10 点）：对首领伤害 ×1.1，对小兵不变', near(v.bossMul[0], 1) && near(v.bossMul[1], 1.1) && near(v.bossMul[2], 1), v.bossMul);
+ck('敏捷·轻骑（满 4 点）：移速再 ×1.08', near(v.move[1] / (1 + .01 * 5), 1.08) && near(v.move[0], 1 + .01 * 3.75), v.move);
+ck('敏捷·游刃（满 7 点）：暴击 +5%、闪避 10%；非主属性没有', near(v.crit[1] - Math.min(.1, .005 * 8.75), .05) && v.dodge[0] === 0 && v.dodge[1] === .1 && v.dodge[2] === 0, [v.crit, v.dodge]);
+ck('敏捷·疾影（满 10 点）：暴击后 2 秒内攻速 ×1.1，过后恢复', near(v.haste[1] / v.haste[0], 1.1) && near(v.haste[2], v.haste[0]), v.haste);
 ck('智力·凝神（满 4 点）：法术武器冷却 −10%（攻速 ×1/0.9）', near(v.cd[0], 1) && near(v.cd[1], 1 / .9), v.cd);
 ck('智力·连珠（满 7 点）：法术伤害 15% 几率翻倍', v.echo[0] === 1 && v.echo[1] === 2 && v.echoMiss === 1, [v.echo, v.echoMiss]);
-ck('智力·广域（满 10 点）：范围再 ×1.12', near(v.area[1], (1 + .008 * 15) * 1.12) && near(v.area[0], 1 + .008 * 13.5), v.area);
-ck('统御·励军（满 4 点）：部曲伤害再 ×1.15', near(v.ally[1] / (1 + .03 * 6), 1.15) && near(v.ally[0], 1 + .03 * 4.5), v.ally);
+ck('智力·广域（满 10 点）：范围再 ×1.06', near(v.area[1], (1 + .008 * 12.5) * 1.06) && near(v.area[0], 1 + .008 * 11.25), v.area);
+ck('统御·励军（满 4 点）：部曲伤害再 ×1.15', near(v.ally[1] / (1 + .03 * 5), 1.15) && near(v.ally[0], 1 + .03 * 3.75), v.ally);
 ck('统御·募众（满 7 点）：免费招兵多 1 人', v.recruit[0] === 0 && v.recruit[1] === 1, v.recruit);
-ck('统御·同袍（满 10 点）：救起时间 ×0.6、救起带 70% 生命', v.revive[0] === null && near(v.revive[1]?.secMul, .6) && v.revive[1]?.hp === .7, v.revive);
+ck('统御·同袍（满 10 点）：救起时间 ×0.8、救起带 55% 生命', v.revive[0] === null && near(v.revive[1]?.secMul, .8) && v.revive[1]?.hp === .55, v.revive);
 
 // 2) 实战：按武将重开战斗（存档里写好主属性 10 点）
 async function startAs(hero, attrs) {
@@ -86,7 +86,7 @@ const gy = await p.evaluate(() => {
   return { tier: pl.growth.primaryTier(), dmg, pushed: x1 - (pl.x + 60), stun: e.stunUntil - (t + 40), boss: e.kind };
 });
 ck('关羽主属性 10 点：三档全开', gy.tier === 3, gy.tier);
-ck('力量·千钧：武器命中把小兵推开约 18 像素（同一敌人 0.5 秒一次）', gy.pushed > 15 && gy.pushed < 21, gy.pushed);
+ck('力量·千钧：武器命中把小兵推开约 18 像素（同一敌人 0.5 秒一次；实测再加受击后仰 HIT_FEEL.knockbackPx 3 像素 ≈ 21）', gy.pushed > 19 && gy.pushed < 23, gy.pushed);
 ck('力量·破阵：第 5 次武器命中伤害 ×2，并定身 0.5 秒', Math.abs(gy.dmg[4] / gy.dmg[3] - 2) < .05 && gy.dmg.slice(0, 4).every(d => Math.abs(d - gy.dmg[0]) <= 1) && Math.abs(gy.stun - 500) < 1, gy);
 
 // 赵云：游刃闪避（掷骰 0 → 闪避，生命不变）
@@ -118,7 +118,7 @@ const ui = await p.evaluate(async () => {
   return { mul, head, chips, title, body, hidden, tier: s.player.growth.primaryTier() };
 });
 ck('加点面板：主属性一行写「主属性：智力 · 每点效果 ×' + ui.mul + '」，专精前两档点亮、第三档「再加 3 点」', ui.head === '主属性：智力 · 每点效果 ×' + ui.mul && ui.chips[0] === '◆ 凝神' && ui.chips[1] === '◆ 连珠' && ui.chips[2] === '◇ 广域 · 再加 3 点' && ui.tier === 2, ui);
-ck('悬停专精：弹完整说明（主属性、每点效果、三档，已解锁 / 再加 X 点），移开隐藏', ui.title === '主属性：智力' && ui.body.includes('满 7 点「连珠」法术伤害 15% 几率翻倍（已解锁）') && ui.body.includes('满 10 点「广域」范围再 +12%（再加 3 点）') && ui.hidden, { title: ui.title, body: ui.body });
+ck('悬停专精：弹完整说明（主属性、每点效果、三档，已解锁 / 再加 X 点），移开隐藏', ui.title === '主属性：智力' && ui.body.includes('满 7 点「连珠」法术伤害 15% 几率翻倍（已解锁）') && ui.body.includes('满 10 点「广域」范围再 +6%（再加 3 点）') && ui.hidden, { title: ui.title, body: ui.body });
 await p.screenshot({ path: `${out}/desktop-attr-panel.png` });
 
 ck('没有页面错误', errors.length === 0, errors.slice(0, 3));

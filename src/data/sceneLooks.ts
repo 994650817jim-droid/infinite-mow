@@ -6,7 +6,7 @@
  *    有河、山崖的关只留不会冲进江里、撞上崖壁的那一条（桥不在路上时竖路会直接冲进江里）。
  * 城池 / 关隘（长安、江陵、桂阳、长沙、阳平关、陈仓）保留石板官道。未列出的关照旧。
  */
-export interface SceneLook { ground?: string; overlay?: string | null; road?: string; roads?: 'v' | 'h' | 'cross' | 'none' }
+export interface SceneLook { ground?: string; overlay?: string | null; road?: string; roads?: 'v' | 'h' | 'cross' | 'none'; /** 北面敌营挪到城墙前（城墙封死后，墙北的营出兵过不来）。 */ campsSouth?: boolean }
 
 export const SCENE_LOOKS: Readonly<Record<string, SceneLook>> = {
   // 5-2 赤壁：江在北面、浮桥在两侧——只留横向江岸土路
@@ -23,6 +23,8 @@ export const SCENE_LOOKS: Readonly<Record<string, SceneLook>> = {
   'yiling.2': { ground: 'ground_v2_jiang', overlay: 'rgba(8,18,32,.35)' },
   // 10-3 火烧连营：烧过的荒土 + 十字土路（原来石板十字）
   'yiling.3': { ground: 'ground_v2_dirt', overlay: 'rgba(30,20,12,.15)', road: 'road_v2_dirt', roads: 'cross' },
+  // 12-2 陈仓：城墙两端封口后（城墙专项 W6），北面敌营挪到城墙前，不然营里出的兵困在城里
+  'beifa.2': { campsSouth: true },
   // 12-1 街亭：草地，不铺路（南面南山，竖路会撞进山崖）
   'beifa.1': { ground: 'ground_v2_grass', overlay: null, roads: 'none' },
   // 12-3 五丈原：原上荒土（暮色），只留横向土路（渭水在南、桥在两侧）

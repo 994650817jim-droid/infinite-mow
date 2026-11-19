@@ -6,9 +6,9 @@ import type { CharacterId } from '../data/characters';
 import type { Player } from '../entities/Player';
 import { emptyGear, type GearStats } from './ItemEffects';
 
-import { ATTRIBUTE_EFFECT, SPELL_WEAPONS, ATTRIBUTE_IDS, ATTRIBUTE_INFO, ATTRIBUTE_MAX, ATTRIBUTE_POINT_EVERY, PRIMARY_BONUS, PRIMARY_MUL, PRIMARY_TIERS, PRIMARY_PERK, primaryAttribute, type AttributeId } from '../data/attributes';
+import { ATTRIBUTE_EFFECT, SPELL_WEAPONS, ATTRIBUTE_IDS, ATTRIBUTE_INFO, ATTRIBUTE_MAX, attributeCap, ATTRIBUTE_POINT_EVERY, PRIMARY_BONUS, PRIMARY_MUL, PRIMARY_TIERS, PRIMARY_PERK, primaryAttribute, type AttributeId } from '../data/attributes';
 import { LB_COMMAND } from '../data/heroMechanics';
-export { ATTRIBUTE_IDS, ATTRIBUTE_INFO, ATTRIBUTE_MAX, ATTRIBUTE_POINT_EVERY, type AttributeId };
+export { ATTRIBUTE_IDS, ATTRIBUTE_INFO, ATTRIBUTE_MAX, ATTRIBUTE_POINT_EVERY, attributeCap, type AttributeId };
 export type ZhaoMasteryId = 'dragon_gallop' | 'cloud_pierce';
 /**
  * 关羽「拖刀斩」（2026-11-16 用户：「拖刀斩不要这么容易触发」「还可以再久一点才触发」）：触发所需移动距离 200/160/130 → 560/480/400（约 14/12/10 个身位），
@@ -114,17 +114,19 @@ export class RunGrowth {
   perk(id: AttributeId, tier: number): boolean { return primaryAttribute(this.character) === id && this.primaryTier() >= tier; }
   /** 敏捷「疾影」：暴击后攻速提升的截止时刻；力量「破阵」：武器命中计数。 */
   hasteUntil = -Infinity; crushCount = 0;
-  get hasAttributeRoom(): boolean { return Object.values(this.attributes).reduce((n,level)=>n+ATTRIBUTE_MAX-level,0)>this.unallocated; }
+  /** 本局单项上限（attributeCap(武将等级)，开局 / 升级时由 GameScene 写入）。 */
+  attrMax = 10;
+  get hasAttributeRoom(): boolean { return Object.values(this.attributes).reduce((n,level)=>n+this.attrMax-level,0)>this.unallocated; }
   get weaponMasteryLevel(): number { return this.masteries.dragon_gallop; }
   get spearPierceLevel(): number { return this.masteries.cloud_pierce; }
   /** 张飞同用长枪，与赵云共用两项枪术专精。 */
   owns(id: MasteryId): boolean { const c = MARTIALS[id].character as string; return c === this.character; } // 2026-11-16 起每位武将只用自己的专属武学
   canLearn(id: MasteryId): boolean { return this.owns(id) && this.masteries[id] < 3; }
 
-  addAttributePoints(amount = 2): void { this.unallocated = Math.min(Object.values(this.attributes).reduce((n,level)=>n+ATTRIBUTE_MAX-level,0),this.unallocated+Math.max(0, Math.floor(amount))); }
+  addAttributePoints(amount = 2): void { this.unallocated = Math.min(Object.values(this.attributes).reduce((n,level)=>n+this.attrMax-level,0),this.unallocated+Math.max(0, Math.floor(amount))); }
 
   allocate(player: Player, id: AttributeId): boolean {
-    if (this.unallocated <= 0 || this.attributes[id] >= ATTRIBUTE_MAX) return false;
+    if (this.unallocated <= 0 || this.attributes[id] >= this.attrMax) return false;
     const oldMax = player.maxHp;
     this.attributes[id] += 1;
     this.unallocated -= 1;

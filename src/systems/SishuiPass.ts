@@ -17,7 +17,7 @@ import { playSheet } from './SkillFxSheets';
  *  - 温酒斩华雄：关羽为主将或随行，华雄出关 30 秒内斩之 → 「温酒斩华雄」，战功加赏（记两名首领）。
  * 美术全部复用：攻城 v2 城墙图集（城墙段 / 城门 / 城门破 / 箭楼 / 箭楼毁）、城门倒塌序列帧、西凉营寨道具（营帐走环境互动的可破坏营帐）。数值初值，交平衡会话。
  */
-const CLIFF = 'shu_pass', CLIFF_FILE = 'assets/shu/pass.png';
+const CLIFF = 'shu_pass', CLIFF_FILE = 'assets/shu/pass.png', TREES = 'terrain_trees', TREES_FILE = 'assets/terrain/trees.png', BARB = 'siege_mid_barb', BARB_FILE = 'assets/siege-v2/barbican.png';
 export const SISHUI_PASS = {
   wallY: -440, wallHalf: 1250, segW: 230, gateW: 270, towerX: 250, towerHp: 420,
   volleyEverySec: 6.5, volleyPoints: 3, volleyR: 68, warnMs: 1300, playerRatio: .05, allyDamage: 12,
@@ -25,7 +25,8 @@ export const SISHUI_PASS = {
   tents: [[-560, -300], [-820, -250], [560, -300], [820, -250]] as const, tentHp: 260, tentEverySec: 9, tentRiders: 2,
   thinMul: 1.35, wenjiuSec: 30, guards: 4,
   /** 关墙两端接山崖 + 场地围成封闭矩形（用户 2026-11-18「城墙要过不去，不是绕一下就过去」）：崖壁厚 / 往南到开局点之后多远 / 往北到关墙之后多远；碰撞框分块（导航按最大半边长查询，块不能太大）。 */
-  cliffThick: 520, southReach: 2300, northReach: 2600, chunk: 1100,
+  // 城墙专项检查 W1–W3（2026-11-18）：南 / 北边界、崖壁外侧都要画出来，碰撞不超出画面；关内只留 1400（原 2600，北段崖壁只画到 900）
+  cliffThick: 520, southReach: 2300, northReach: 1400, chunk: 1100,
 } as const;
 
 export interface PassHost {
@@ -55,6 +56,7 @@ export interface PassOpts {
   /** 营帐 / 营寨叫什么（横幅用；默认 西凉营帐 / 西凉营寨）。 */ tentName?: string; campName?: string;
   /** 伏兵预兆：出兵前多少毫秒营帐扬尘、喊「有伏兵」，再从帐里冲出来（2-2 荥阳）。 */ tentWarnMs?: number;
   /** false = 不画关墙 / 关门（只要营帐）。 */ wall?: boolean;
+  /** 场地边界画什么：cliff 山崖（关隘）· tower 墙端角楼 + 林带（平原城池）· woods 林带（营寨）。不传：营栅 woods，否则 cliff。 */ ends?: 'cliff' | 'tower' | 'woods';
 }
 
 export class SishuiPass {
@@ -76,7 +78,7 @@ export class SishuiPass {
     this.strikes = new Strikes({ scene: h.scene, player: p, army: h.legion, now: h.now });
     const s = h.scene, wall = MID_SIEGE_FILES[0];
     if (o.wall === false) return;
-    const need = ([[wall.key, wall.file], [CLIFF, CLIFF_FILE]] as Array<[string, string]>).filter(([k]) => !s.textures.exists(k));
+    const need = ([[wall.key, wall.file], [CLIFF, CLIFF_FILE], [TREES, TREES_FILE], [BARB, BARB_FILE]] as Array<[string, string]>).filter(([k]) => !s.textures.exists(k));
     if (!need.length) this.build(); else { for (const [k, f] of need) s.load.spritesheet(k, f, { frameWidth: 384, frameHeight: 384 }); s.load.once('complete', () => { if (s.textures.exists(wall.key)) this.build(); }); if (!s.load.isLoading()) s.load.start(); }
   }
   /** 把一块矩形切成不超过 chunk 的小块（导航按最大半边长查询，整块太大会拖慢）。 */
@@ -90,7 +92,10 @@ export class SishuiPass {
     this.slab(px - W - T, top, px - W, bot); this.slab(px + W, top, px + W + T, bot);
     this.slab(px - W - T, bot, px + W + T, bot + T); this.slab(px - W - T, top - T, px + W + T, top);
     this.cliff = { x0: px - W, x1: px + W, top, bot };
+    // 平原城池：墙端角楼底座也挡人（角楼一半压在场内）
+    if (this.ends === 'tower') for (const side of [-1, 1]) this.footprints.push(side < 0 ? { left: px - W, right: px - W + 100, top: wy - 70, bottom: wy + 6 } : { left: px + W - 100, right: px + W, top: wy - 70, bottom: wy + 6 }), this.flank++;
   }
+  private get ends(): 'cliff' | 'tower' | 'woods' { return this.o.ends ?? (this.o.palisade ? 'woods' : 'cliff'); }
   private flank = 0;
   private cliff: { x0: number; x1: number; top: number; bot: number } | null = null;
   /** 关墙 / 关门 / 箭楼（城墙图集：0 城墙段 · 1 城门 · 2 城门破 · 3 箭楼 · 4 箭楼毁）。 */
@@ -100,8 +105,8 @@ export class SishuiPass {
     const P = SISHUI_PASS, s = this.h.scene, p = this.h.player, wy = p.y + this.wallY, K = MID_SIEGE_FILES[0].key, T = this.tag;
     const pal = this.o.palisade && s.textures.exists(this.o.palisade) ? this.o.palisade : null, seg = pal ? 150 : P.segW, segSize = pal ? 190 : P.segW + 8;
     // 城墙段从门两侧往外对称铺（段与段略压一点盖缝）一直铺到崖壁；原来按 -wallHalf 起点铺，左右不对称，门与箭楼之间漏出一截空缺
-    for (const side of [-1, 1]) for (let x = P.gateW / 2 + seg / 2 - 24; x - seg / 2 < P.wallHalf; x += seg - 14) this.art.push(s.add.image(p.x + side * x, wy, pal ?? K, pal ? 3 : 0).setOrigin(.5, .97).setDisplaySize(segSize, segSize).setDepth(actorDepth(wy) - .01).setName(T + '-wall').setFlipX(side > 0 && !pal));
-    this.buildCliffs(wy);
+    for (const side of [-1, 1]) for (let x = P.gateW / 2 + seg / 2 - 24; this.ends === 'tower' ? x + seg / 2 < P.wallHalf + 80 : x - seg / 2 < P.wallHalf; x += seg - 14) this.art.push(s.add.image(p.x + side * x, wy, pal ?? K, pal ? 3 : 0).setOrigin(.5, .97).setDisplaySize(segSize, segSize).setDepth(actorDepth(wy) - .01).setName(T + '-wall').setFlipX(side > 0 && !pal));
+    this.buildBounds(wy);
     this.gateImg = s.add.image(p.x, wy + 2, K, this.o.palisade ? 7 : 1).setOrigin(.5, .97).setDisplaySize(P.gateW + 30, P.gateW + 30).setDepth(actorDepth(wy)).setName(T + '-gate');
     if (this.o.towers !== false) for (const side of [-1, 1]) {
       const x = p.x + side * P.towerX, y = wy + 18, e = this.h.spawnTower(x, y, P.towerHp);
@@ -109,15 +114,29 @@ export class SishuiPass {
       this.towers.push({ e, x, y, at: this.h.now() + 4000 + (side > 0 ? 1800 : 0), down: false });
     }
   }
-  /** 崖壁美术：两侧沿崖壁竖向排开（山崖图帧 0 / 1，缺图用残墙帧）；南 / 北边界离开局点很远，不画。 */
-  private buildCliffs(wy: number): void {
+  /**
+   * 场地边界的画面（城墙专项检查 W1–W4）：左右两侧、南北两道边界都画满，盖住整块碰撞（崖壁厚 cliffThick，外侧再多画一点，镜头贴边时也看不到空地）。
+   * - cliff（关隘）：蜀道山崖图（shu_pass 帧 0 / 1），侧边两列，南北各一排；
+   * - tower（平原城池）：墙两端接角楼（瓮城套件 barbican 帧 3），其余边界是林带；
+   * - woods（营寨）：营栅两端直接接林带。
+   */
+  private buildBounds(wy: number): void {
     const c = this.cliff, s = this.h.scene; if (!c) return;
-    const has = s.textures.exists(CLIFF), K = has ? CLIFF : MID_SIEGE_FILES[0].key, size = has ? 400 : 300;
-    for (const side of [-1, 1]) {
-      const x = side > 0 ? c.x1 + 120 : c.x0 - 120;
-      for (let y = wy - 40, k = 0; y > wy - 900; y -= 230, k++) this.art.push(s.add.image(x, y, K, has ? (side < 0 ? 0 : 1) : 6).setOrigin(.5, 1).setDisplaySize(size, size).setDepth(actorDepth(y)).setName(this.tag + '-cliff'));
-      for (let y = wy + 40, k = 0; y < c.bot + 60; y += 230, k++) this.art.push(s.add.image(x + (((k * 37) % 50) - 25) * .4, y, K, has ? (side < 0 ? 0 : 1) : 6).setOrigin(.5, 1).setDisplaySize(size, size).setDepth(actorDepth(y)).setName(this.tag + '-cliff'));
-    }
+    const P = SISHUI_PASS, T = P.cliffThick, tag = this.tag, style = this.ends;
+    const cliffArt = style === 'cliff' && s.textures.exists(CLIFF), treeArt = s.textures.exists(TREES);
+    const put = (x: number, y: number, k: number, side: number): void => {
+      if (cliffArt) { this.art.push(s.add.image(x, y, CLIFF, side < 0 ? 0 : side > 0 ? 1 : k % 2).setOrigin(.5, 1).setDisplaySize(400, 400).setDepth(actorDepth(y)).setName(tag + '-cliff')); return; }
+      if (treeArt) { const f = [0, 2, 7, 4, 2, 0, 7][k % 7], z = 260 + (k * 53) % 70; this.art.push(s.add.image(x, y, TREES, f).setOrigin(.5, .95).setDisplaySize(z, z).setDepth(actorDepth(y)).setName(tag + '-bound')); return; }
+      this.art.push(s.add.image(x, y, MID_SIEGE_FILES[0].key, 6).setOrigin(.5, 1).setDisplaySize(300, 300).setDepth(actorDepth(y)).setName(tag + '-bound'));
+    };
+    const step = cliffArt ? 230 : 150, cols = cliffArt ? [120, 440] : [70, 230, 390, 560], jit = (k: number): number => ((k * 37) % 50) - 25;
+    // 左右两侧：从北边界外一路到南边界外
+    for (const side of [-1, 1]) cols.forEach((dx, ci) => { for (let y = c.top - 300 + ci * 60, k = ci * 3; y < c.bot + 420; y += step, k++) put(side > 0 ? c.x1 + dx + jit(k) * .4 : c.x0 - dx - jit(k) * .4, y, k, cliffArt ? side : 0); });
+    // 南 / 北边界：横贯整个场地（含两侧崖壁宽度），挡住看不见的墙（石板路也到这里为止）
+    const rows = cliffArt ? [[c.bot + 360], [c.top + 30]] : [[c.bot + 130, c.bot + 330], [c.top + 30, c.top - 200]];
+    for (const ys of rows) ys.forEach((y0, ri) => { for (let x = c.x0 - T, k = ri * 5; x <= c.x1 + T; x += cliffArt ? 220 : 140, k++) put(x + jit(k) * .3, y0 + jit(k + 3) * .5, k, 0); });
+    // 平原城池：墙两端角楼
+    if (style === 'tower' && s.textures.exists(BARB)) for (const x of [c.x0, c.x1]) this.art.push(s.add.image(x, wy + 6, BARB, 3).setOrigin(.5, .97).setDisplaySize(250, 250).setDepth(actorDepth(wy) + .001).setName(tag + '-corner'));
   }
 
   /** 每帧（战斗中）。 */

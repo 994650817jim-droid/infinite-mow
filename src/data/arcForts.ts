@@ -9,7 +9,8 @@
  * 键：章节 arc + '.' + 第几关。未列出的关保持原样。
  */
 export type FortKind = 'pass' | 'city' | 'camp' | 'clear';
-export interface ArcFort { kind: FortKind; gate?: readonly [string, string] }
+/** ends：场地边界画法（SishuiPass.ends）。不填按 kind：pass 山崖、camp 林带、city 角楼 + 林带（城墙专项检查 W4：平原城池两端不接蜀道山崖）。 */
+export interface ArcFort { kind: FortKind; gate?: readonly [string, string]; ends?: 'cliff' | 'tower' | 'woods' }
 export const ARC_FORTS: Record<string, ArcFort> = {
   // 场景 1（孤城门）
   'qunxiong.1': { kind: 'city', gate: ['长安城门洞开', '李傕率亲卫杀出城来'] },
@@ -19,8 +20,8 @@ export const ARC_FORTS: Record<string, ArcFort> = {
   'yiling.1': { kind: 'camp', gate: ['猇亭寨门洞开', '孙桓率亲卫杀出'] },
   'beifa.1': { kind: 'clear' },
   // 场景 4（城门 + 两座箭楼）
-  'chibi.3': { kind: 'pass', gate: ['江陵城门洞开', '曹仁率亲卫出城列阵'] },
-  'jingnan.3': { kind: 'pass', gate: ['长沙城门洞开', '守将率亲卫出城迎战'] },
+  'chibi.3': { kind: 'pass', ends: 'tower', gate: ['江陵城门洞开', '曹仁率亲卫出城列阵'] },
+  'jingnan.3': { kind: 'pass', ends: 'tower', gate: ['长沙城门洞开', '守将率亲卫出城迎战'] },
   'hanzhong.3': { kind: 'clear' },
   'yiling.3': { kind: 'clear' },
   'beifa.2': { kind: 'clear' }, // 12-2 陈仓：攻城关——可攻破的城门、城头箭楼、两侧城墙都由 BeifaSystems.ChencangSiege 摆（全场景审查 P2），这里不再叠一套关墙

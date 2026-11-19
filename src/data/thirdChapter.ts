@@ -9,7 +9,7 @@ export const THIRD_STAGES=[
  {stage:2 as const,name:'宛城夜袭',boss:'张绣',id:'zhangxiu',story:'夜火映城，枪影伏巷。守住后阵，避开连环突刺。'},
  {stage:3 as const,name:'寿春讨逆',boss:'袁术',id:'yuanshu',story:'伪帝据营，旗令如林。击破亲军，瓦解寿春军势。'},
 ];
-/** 第三章敌军配色（用户 11-19 批准换色）：3-1 李傕、3-2 张绣是凉州残部——黑底土黄（liangzhou），3-3 袁术用袁术势力紫（yuanshu）；只换衣甲红色，图不变。ThirdGameScene 开局按这里生成换色贴图。 */
+/** 第三章敌军配色（用户 11-19 批准换色）：3-1 李傕、3-2 张绣是凉州残部——深铁灰带锈褐（liangzhou），3-3 袁术用袁术势力紫（yuanshu）；只换衣甲红色，图不变。ThirdGameScene 开局按这里生成换色贴图。 */
 export function thirdPalette(stage:ThirdStage):PaletteId{return stage===3?'yuanshu':'liangzhou';}
 const recolor=(es:Record<string,EnemyDef>,p:PaletteId)=>Object.fromEntries(Object.entries(es).map(([k,d])=>[k,k==='boss'||!d.walkVisual?d:{...d,walkVisual:{...d.walkVisual,texture:factionKey(p,d.walkVisual.texture)}}])) as typeof es;
 /** The battle engine's west-army template is reused; progression uses WorldStore's qunxiong arc. */

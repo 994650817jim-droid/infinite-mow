@@ -44,7 +44,7 @@ for (const id of STAGES) {
   // 第三章敌军换色（用户 11-19 批准）：3-1 / 3-2 凉州残部黑底土黄（f_liangzhou_），3-3 袁术紫（f_yuanshu_）；不再用西凉红黑原图
   if (chn === 3) { const want = stn === 3 ? 'f_yuanshu_' : 'f_liangzhou_', bad = Object.keys(r.sheets).filter(k => !k.startsWith(want) && !/^(third_|boss_)/.test(k));
     ck(`${id}：第三章敌军换色（${want}…），没有西凉红黑原图`, bad.length === 0, { bad, sheets: r.sheets });
-    if (stn === 2) await p.screenshot({ path: 'assets/review/faction/3-2-colours.png' }); }
+    }
   if (r.want.length) ck(`${id}：本关配兵表里的新兵种确实刷得出来（第三章起的篇章场景也算）`, r.want.some(x => r.rosters[x] > 0), { want: r.want, rosters: r.rosters });
   await p.close();
 }

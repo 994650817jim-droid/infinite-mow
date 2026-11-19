@@ -22,14 +22,14 @@ const chibi = async (stage, lord = 'zhaoyun', flags = {}) => {
   await p.waitForFunction(([lord, KEY]) => { const s = window.__game.scene.getScene(KEY); return s?.sys.isActive() && s.player && s.player !== window.__prevT && s.runConfig?.character === lord && s.storyDir?.chapterId === 'chibi'; }, [lord, KEY], { timeout: 90000 });
   await p.waitForTimeout(700);
 };
-const scroll = () => p.evaluate(T0 => { const s = eval(T0); const c = s.children.list.find(o => o.name?.startsWith('story-') && o.name !== 'story-bark' && o.type === 'Container'); if (!c) return null; const all = x => x.type === 'Text' ? [x.text] : (x.list ?? []).flatMap(all); return { name: c.name, texts: all(c).filter(Boolean) }; }, T);
-const next = () => p.evaluate(T0 => { const s = eval(T0); const c = s.children.list.find(o => o.name?.startsWith('story-') && o.name !== 'story-bark' && o.type === 'Container'); c?.list.find(o => o.name?.endsWith('-next') || o.name === 'story-confirm')?.emit('pointerup'); }, T);
+const scroll = () => p.evaluate(T0 => { const s = eval(T0); const c = s.children.list.find(o => o.name?.startsWith('story-') && o.name !== 'story-bark' && o.name !== 'story-bark-card' && o.type === 'Container'); if (!c) return null; const all = x => x.type === 'Text' ? [x.text] : (x.list ?? []).flatMap(all); return { name: c.name, texts: all(c).filter(Boolean) }; }, T);
+const next = () => p.evaluate(T0 => { const s = eval(T0); const c = s.children.list.find(o => o.name?.startsWith('story-') && o.name !== 'story-bark' && o.name !== 'story-bark-card' && o.type === 'Container'); c?.list.find(o => o.name?.endsWith('-next') || o.name === 'story-confirm')?.emit('pointerup'); }, T);
 const readAll = async () => { const seen = []; for (let i = 0; i < 80; i++) { const sc = await scroll(); if (!sc) { await p.waitForTimeout(400); if (!await scroll() && await p.evaluate(T0 => eval(T0).mode !== 'story', T)) return seen; continue; } seen.push(sc.texts.join('|')); await next(); await p.waitForTimeout(120); } return seen; };
 const played = () => p.evaluate(T0 => [...eval(T0).storyDir.played], T);
 const flags = () => p.evaluate(() => JSON.parse(localStorage.getItem('im_story_v1') ?? '{}').flags ?? {});
 const L = async (node, lord, team, fl = {}) => p.evaluate(async ([node, lord, team, fl]) => { const St = await import('/src/systems/Story.ts'), D = await import('/src/data/story/index.ts'); localStorage.setItem('im_story_v1', JSON.stringify({ version: 1, flags: fl }));
   const n = node.split('/').reduce((o, k) => o?.[k], D.STORY_CHAPTERS.chibi); return St.resolveLines(n, { lord, team: () => [lord, ...team], recruited: () => false }).map(l => l.text + (l.who ? '@' + l.who : '')); }, [node, lord, team, fl]);
-const barks = () => p.evaluate(T0 => eval(T0).children.list.filter(o => o.name === 'story-bark').map(o => (function deep(x) { return x.type === 'Text' ? x.text : (x.list ?? []).map(deep).join(''); })(o)), T);
+const barks = () => p.evaluate(T0 => [...eval(T0).children.list.filter(o => o.name === 'story-bark').map(o => (function deep(x) { return x.type === 'Text' ? x.text : (x.list ?? []).map(deep).join(''); })(o)), ...(eval(T0).data.get('__storyBarkCardLog')?.splice(0) ?? [])] /* 2026-11-18 夜：有说话人的首领台词改出侧边立绘卡（头顶只冒「！」），卡的台词从日志读 */, T);
 const texts = () => p.evaluate(T0 => (function all(xs) { return xs.flatMap(o => o.type === 'Text' ? [o.text] : all(o.list ?? [])); })(eval(T0).children.list), T);
 /** 首领上场并打到招降线（弹窗）；random 固定劝降成功 */
 const toParley = () => p.evaluate(async T0 => { const s = eval(T0), wait = ms => new Promise(r => setTimeout(r, ms)); 
@@ -48,7 +48,7 @@ const xsOpen = await L('open', 'liubei', []);
 ck('章头：徐庶辞行，亲口荐「隆中有卧龙」（说话人 xushu）', xsOpen.some(t => t.includes('卧龙') && t.endsWith('@xushu')), xsOpen.filter(t => t.includes('@xushu')));
 // 首领登场 / 二阶段
 const intro = await p.evaluate(async T0 => { const s = eval(T0), wait = ms => new Promise(r => setTimeout(r, ms)); s.player.damageImmune = true; s.spawnBoss(); for (let k = 0; k < 8 && s.mode === 'levelup'; k++) { s.chooseUpgrade(0); await wait(60); } await wait(150);
-  const deep = x => x.type === 'Text' ? x.text : (x.list ?? []).map(deep).join(''), grab = () => s.children.list.filter(o => o.name === 'story-bark').map(deep); const a = grab();
+  const deep = x => x.type === 'Text' ? x.text : (x.list ?? []).map(deep).join(''), grab = () => [...s.children.list.filter(o => o.name === 'story-bark').map(deep), ...(s.data.get('__storyBarkCardLog')?.splice(0) ?? [])]; const a = grab(); // 首领台词出侧边立绘卡，台词从卡的日志读
   s.events.emit('boss-phase', { boss: s.boss, phase: 2, dismount: true, name: '曹纯' }); await wait(150); return [...a, ...grab()]; }, T);
 const b51 = intro; // 主将台词框只留一句：登场与二阶段分两次取
 ck('5-1 曹纯：登场「一个也不许放过」、坠马二阶段「围起来，困死他」', b51.some(t => t.includes('一个也不许放过')) && b51.some(t => t.includes('困死他')), b51);

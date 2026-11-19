@@ -18,7 +18,20 @@ import type { Ally } from '../entities/Ally';
  */
 interface Tree { x: number; y: number; kind: TreeKind; img?: Phaser.GameObjects.Image; burnt: boolean; burning: number; behind: boolean; size: number; auto?: boolean }
 interface Seg { ax: number; ay: number; bx: number; by: number; len: number; ux: number; uy: number; s0: number }
-interface River { spec: RiverSpec; segs: Seg[]; half: number; box: { l: number; r: number; t: number; b: number }; bridges: Array<{ x: number; y: number; ux: number; uy: number; halfLen: number; halfW: number }>; total: number }
+interface Bridge { x: number; y: number; ux: number; uy: number; halfLen: number; halfW: number; broken: boolean; style: 'wood' | 'stone' }
+interface River { spec: RiverSpec; segs: Seg[]; half: number; box: { l: number; r: number; t: number; b: number }; bridges: Bridge[]; total: number }
+/** 河 / 桥新图（2026-11-18 ChatGPT 出图，原图 originals/river_kit_gpt_v1.png、bridge_kit_gpt_v1.png，tools/crop-terrain-kit.mjs 裁切；带 Mirror 的是与自身镜像拼成的无缝平铺）。 */
+const RV = 'assets/terrain/river/', BR = 'assets/terrain/bridge/';
+const BANK_KINDS = ['mud', 'rock', 'reed', 'cliff'] as const;
+const RIVER_ART: Record<string, string> = {
+  tr_water: RV + 'water.png', tr_foam: RV + 'foam.png', tr_reed: RV + 'reed.png', tr_rocks: RV + 'rocks.png', tr_boat: RV + 'boat.png',
+  ...Object.fromEntries(BANK_KINDS.flatMap(k => [[`tr_bankN_${k}`, `${RV}bankN_${k}.png`], [`tr_bankS_${k}`, `${RV}bankS_${k}.png`]])),
+  tb_deck: BR + 'deckT.png', tb_railL: BR + 'railLT.png', tb_railR: BR + 'railRT.png', tb_headN: BR + 'headN.png', tb_headS: BR + 'headS.png', tb_piers: BR + 'piers.png',
+  tb_stoneDeck: BR + 'stoneDeckT.png', tb_stoneHead: BR + 'stoneHead.png', tb_broken: BR + 'broken.png',
+};
+interface WaterRec { cx: number; cy: number; rad: number; flow: Phaser.GameObjects.TileSprite[]; glint?: Phaser.GameObjects.TileSprite; foam: Phaser.GameObjects.TileSprite[]; ph: number }
+interface BridgeVis { always: Phaser.GameObjects.GameObject[]; intact: Phaser.GameObjects.GameObject[]; broken: Phaser.GameObjects.GameObject[] }
+const tex1 = (sc: Phaser.Scene, k: string) => sc.textures.get(k).getSourceImage() as { width: number; height: number };
 const ART = 'shu_pass', ART_FILE = 'assets/shu/pass.png';
 /** 正式 v2 地形图（到了再接）：terrain_trees（松 / 竹 / 阔叶 / 焦桩 …）、terrain_water（水面平铺）、terrain_bridge（桥）。 */
 export const TERRAIN_ART = { trees: 'terrain_trees', trees2: 'terrain_trees2', water: 'terrain_water', bridge: 'terrain_bridge' } as const;
@@ -39,7 +52,7 @@ export class Terrain {
   readonly stats = { pushes: 0, waterChecks: 0, moved: 0, burnt: 0, auto: 0, drawn: 0 };
   private grid = new Map<number, Tree[]>();
   private objects: Phaser.GameObjects.GameObject[] = [];
-  private water: Array<{ ts: Phaser.GameObjects.TileSprite; ux: number; uy: number }> = [];
+  private water: WaterRec[] = []; private bridgeVis: BridgeVis[] = [];
   private near: Tree[] = []; private faded = new Set<Tree>(); private burning: Tree[] = [];
   private built = false; private cullAcc = 1e9;
 
@@ -68,8 +81,7 @@ export class Terrain {
     const L = scene.load; let pending = 0;
     if (!scene.textures.exists(TERRAIN_ART.trees)) { L.spritesheet(TERRAIN_ART.trees, ART_FILES.trees, { frameWidth: 384, frameHeight: 384 }); pending++; }
     if (this.trees.some(t => TREE_FRAMES[t.kind][0] === 'trees2') && !scene.textures.exists(TERRAIN_ART.trees2)) { L.spritesheet(TERRAIN_ART.trees2, ART_FILES.trees2, { frameWidth: 384, frameHeight: 384 }); pending++; }
-    if (!scene.textures.exists(TERRAIN_ART.water)) { L.image(TERRAIN_ART.water, ART_FILES.water); pending++; }
-    if (!scene.textures.exists(TERRAIN_ART.bridge)) { L.image(TERRAIN_ART.bridge, ART_FILES.bridge); pending++; }
+    if (this.rivers.length) for (const [k, f] of Object.entries(RIVER_ART)) if (!scene.textures.exists(k)) { L.image(k, f); pending++; }
     if (!scene.textures.exists(ART)) { L.spritesheet(ART, ART_FILE, { frameWidth: 384, frameHeight: 384 }); pending++; }
     if (!pending) { this.build(); this.buildWater(); }
     else { L.once('complete', () => { if (scene.sys.isActive() || scene.sys.isPaused()) { this.build(); this.buildWater(); } }); L.start(); }
@@ -122,7 +134,7 @@ export class Terrain {
     const river: River = { spec, segs, half, total: s0, box: { l: Math.min(...xs) - half, r: Math.max(...xs) + half, t: Math.min(...ys) - half, b: Math.max(...ys) + half }, bridges: [] };
     for (const br of spec.bridges) {
       const at = br.at * s0, seg = segs.find(sg => at >= sg.s0 && at <= sg.s0 + sg.len) ?? segs[segs.length - 1], d = at - seg.s0;
-      river.bridges.push({ x: seg.ax + seg.ux * d, y: seg.ay + seg.uy * d, ux: -seg.uy, uy: seg.ux, halfLen: half + TERRAIN.bridgeOverhang, halfW: br.width / 2 });
+      river.bridges.push({ x: seg.ax + seg.ux * d, y: seg.ay + seg.uy * d, ux: -seg.uy, uy: seg.ux, halfLen: half + TERRAIN.bridgeOverhang, halfW: br.width / 2, broken: !!br.broken, style: br.style ?? 'wood' });
     }
     return river;
   }
@@ -135,7 +147,7 @@ export class Terrain {
   }
   /** 是否站在桥面上（margin 放宽判定）。 */
   onBridge(x: number, y: number, margin = 0): boolean {
-    for (const r of this.rivers) for (const b of r.bridges) { const dx = x - b.x, dy = y - b.y, along = dx * b.ux + dy * b.uy, side = dx * -b.uy + dy * b.ux; if (Math.abs(along) <= b.halfLen + margin && Math.abs(side) <= b.halfW + margin) return true; }
+    for (const r of this.rivers) for (const b of r.bridges) { if (b.broken) continue; const dx = x - b.x, dy = y - b.y, along = dx * b.ux + dy * b.uy, side = dx * -b.uy + dy * b.ux; if (Math.abs(along) <= b.halfLen + margin && Math.abs(side) <= b.halfW + margin) return true; }
     return false;
   }
   /** 是否在水里（不在桥上；pad 放宽水面半宽）。 */
@@ -220,7 +232,7 @@ export class Terrain {
     return out;
   }
   update(now: number, dt: number) {
-    for (const w of this.water) { w.ts.tilePositionX -= TERRAIN.flow * dt; }
+    this.animateWater(now, dt);
     for (const t of [...this.burning]) if (now >= t.burning) {
       this.burning.splice(this.burning.indexOf(t), 1); t.burning = 0; t.burnt = true;
       if (t.img) { if (t.img.texture.key === TERRAIN_ART.trees || t.img.texture.key === TERRAIN_ART.trees2) t.img.clearTint().setTexture(TERRAIN_ART.trees, 3).setDisplaySize(t.size * .6, t.size * .6).setAlpha(1); else t.img.setTint(0x2a2018).setDisplaySize(t.size * .45, t.size * .45).setAlpha(.9); }
@@ -270,30 +282,123 @@ export class Terrain {
       }
     }
   }
+  /**
+   * 河与桥（2026-11-18 重做）。河：水面（无缝镜像平铺，沿河滚动）+ 高光叠层（更快、略斜地滚）+ 两岸岸带（泥 / 石 / 芦苇 / 土坎四种，一段一种，镜像平铺无缝）
+   * + 岸边浪花（透明度起伏）+ 岸边道具（芦苇 / 岩石 / 渔船）。桥：桥面平铺 + 两侧栏杆 + 水中桥墩 + 两端桥头（木桥 / 石拱桥）+ 水面桥影；断桥 setBridgeBroken。
+   * 图都按「南北向横跨东西流向河」画：河向 = 贴图 X 向，桥向 = 贴图 Y 向（北端在上），任意折线用旋转。静态件一次摆好，只有水面 / 高光 / 浪花三类平铺图每帧滚动（屏幕外的不滚）。
+   */
   private buildWater() {
-    const sc = this.scene, v2 = sc.textures.exists(TERRAIN_ART.water), wKey = v2 ? TERRAIN_ART.water : sc.textures.exists('ground_v2_jiang') ? 'ground_v2_jiang' : '__WHITE';
+    const sc = this.scene, has = (k: string) => sc.textures.exists(k);
+    const tex = (k: string) => sc.textures.get(k).getSourceImage() as { width: number; height: number };
+    let seed = 17; const rnd = () => ((seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff);
+    const D = DEPTH.ground, HB = .48, kinds = BANK_KINDS.filter(k => has(`tr_bankN_${k}`));
     for (const r of this.rivers) {
-      for (const g of r.segs) {
-        const cx = (g.ax + g.bx) / 2, cy = (g.ay + g.by) / 2, ang = Math.atan2(g.uy, g.ux), L = g.len + r.half; // 两头各伸半宽，折角处不露缝
-        const bank = sc.add.tileSprite(cx, cy, L + 30, r.spec.width + 34, sc.textures.exists('ground_v2_jiang') ? 'ground_v2_jiang' : '__WHITE').setRotation(ang).setTint(0x5a4a30).setAlpha(.9).setDepth(DEPTH.ground + 1);
-        const ts = sc.add.tileSprite(cx, cy, L, r.spec.width, wKey).setRotation(ang).setDepth(DEPTH.ground + 2);
-        if (!v2) ts.setTint(0x5f8e9c).setAlpha(.9); else ts.setTileScale(.42).setAlpha(.96);
-        this.objects.push(bank, ts); this.water.push({ ts, ux: g.ux, uy: g.uy });
-      }
-      for (const b of r.bridges) {
-        const ang = Math.atan2(b.uy, b.ux), len = b.halfLen * 2, v2b = sc.textures.exists(TERRAIN_ART.bridge);
-        const deck = v2b ? sc.add.image(b.x, b.y, TERRAIN_ART.bridge).setDisplaySize(Math.max(len, b.halfW * 2.5 * 2.5), b.halfW * 2.5).setRotation(ang)
-          : sc.add.tileSprite(b.x, b.y, len, b.halfW * 2, 'yellow_props', 10).setTileScale(b.halfW * 2 / 128).setRotation(ang).setTint(0xd8c09a);
-        deck.setDepth(DEPTH.ground + 3); this.objects.push(deck);
-        if (!v2b) for (const sgn of [-1, 1]) {
-          const rx = b.x + -b.uy * sgn * b.halfW, ry = b.y + b.ux * sgn * b.halfW;
-          const rail = sc.add.tileSprite(rx, ry, len, 26, 'yellow_props', 11).setTileScale(26 / 128).setRotation(ang).setDepth(DEPTH.ground + 4); this.objects.push(rail);
+      const W = r.spec.width, half = r.half;
+      const nearBridge = (x: number, y: number, pad: number) => r.bridges.some(b => Math.hypot(x - b.x, y - b.y) < b.halfW + pad);
+      let prev = '';
+      r.segs.forEach((g, si) => {
+        const cx = (g.ax + g.bx) / 2, cy = (g.ay + g.by) / 2, ang = Math.atan2(g.uy, g.ux), L = g.len + half, nx = g.uy, ny = -g.ux; // n = 北侧（贴图「上」）
+        const rec: WaterRec = { cx, cy, rad: L / 2 + W, flow: [], foam: [], ph: si * 1.7 + rnd() * 3 };
+        if (has('tr_water')) {
+          const ts = sc.add.tileSprite(cx, cy, L, W + 40, 'tr_water').setRotation(ang).setTileScale(620 / tex('tr_water').width).setDepth(D + 2); rec.flow.push(ts); this.objects.push(ts);
+        } else { const ts = sc.add.tileSprite(cx, cy, L, W + 40, 'ground_v2_jiang').setRotation(ang).setTint(0x5f8e9c).setDepth(D + 2); rec.flow.push(ts); this.objects.push(ts); }
+        if (has('tr_glint')) {
+          const gl = sc.add.tileSprite(cx, cy, L, W + 40, 'tr_glint').setRotation(ang).setTileScale(560 / tex('tr_glint').width).setAlpha(.55).setDepth(D + 2.05); rec.glint = gl; this.objects.push(gl);
         }
-      }
+        // 岸带：沿河分段，一段一种（段长约 1100，相邻不同种）
+        for (const side of [1, -1]) {
+          const sk = side > 0 ? 'N' : 'S', n = Math.max(1, Math.round((g.len + 60) / 1100)), cl = (g.len + 60) / n;
+          for (let c = 0; c < n; c++) {
+            const pool = kinds.filter(k => k !== prev), kind = pool[Math.floor(rnd() * pool.length)] ?? kinds[0]; prev = kind;
+            const key = `tr_bank${sk}_${kind}`; if (!has(key)) continue;
+            const hh = tex(key).height * HB, t = -30 + cl * (c + .5), off = side > 0 ? half + hh * .3 : -(half + hh * .1);
+            const bank = sc.add.tileSprite(g.ax + g.ux * t + nx * off, g.ay + g.uy * t + ny * off, cl + 2, hh, key).setRotation(ang).setTileScale(HB).setDepth(D + 2.2 + (side > 0 ? 0 : .01)); this.objects.push(bank);
+          }
+          if (has('tr_foam')) {
+            const fh = tex('tr_foam').height * .5, off2 = side * (half - 4);
+            const fm = sc.add.tileSprite(cx + nx * off2, cy + ny * off2, L, fh, 'tr_foam').setRotation(ang).setTileScale(.5).setAlpha(.5).setDepth(D + 2.3); rec.foam.push(fm); this.objects.push(fm);
+          }
+        }
+        this.water.push(rec);
+        // 岸边道具：芦苇（岸线上）、岩石（近岸水里）；宽河（≥240）一条渔船
+        for (let d = 120 + rnd() * 200; d < g.len - 60; d += 380 + rnd() * 420) {
+          const side = rnd() < .5 ? 1 : -1, kind = rnd();
+          const lat = kind < .55 ? side * (half - 6 + rnd() * 10) : side * (half * (.5 + rnd() * .25)), x = g.ax + g.ux * d + nx * lat, y = g.ay + g.uy * d + ny * lat;
+          if (nearBridge(x, y, 150)) continue;
+          if (kind < .55 && has('tr_reed')) this.objects.push(sc.add.image(x, y, 'tr_reed').setOrigin(.5, .86).setScale(.42 + rnd() * .12).setDepth(D + 2.8 + y / 1e6).setFlipX(rnd() < .5));
+          else if (has('tr_rocks')) this.objects.push(sc.add.image(x, y, 'tr_rocks').setOrigin(.5, .6).setScale(.42 + rnd() * .15).setDepth(D + 2.8 + y / 1e6).setFlipX(rnd() < .5));
+        }
+        if (W >= 240 && si === 0 && has('tr_boat')) {
+          for (let d = g.len * .18; d < g.len * .9; d += 90) {
+            const x = g.ax + g.ux * d + nx * half * .32, y = g.ay + g.uy * d + ny * half * .32; if (nearBridge(x, y, 220)) continue;
+            this.objects.push(sc.add.image(x, y, 'tr_boat').setOrigin(.5, .6).setScale(.5).setRotation(ang).setDepth(D + 2.8 + y / 1e6)); break;
+          }
+        }
+      });
+      for (const b of r.bridges) this.bridgeVis.push(this.buildBridge(r, b));
+    }
+    this.bridgeVis.forEach((_, i) => this.applyBridgeState(i));
+  }
+  /** 一座桥的全部图件：always = 桥墩 / 桥头（两种状态都在）；intact = 桥面 / 栏杆 / 桥影；broken = 断口残骸。 */
+  private buildBridge(r: River, b: Bridge): BridgeVis {
+    const sc = this.scene, has = (k: string) => sc.textures.exists(k), D = DEPTH.ground, stone = b.style === 'stone';
+    const vis: BridgeVis = { always: [], intact: [], broken: [] }, rot = Math.atan2(-b.ux, b.uy), half = r.half, span = half * 2;
+    const P = (a: number, c: number) => ({ x: b.x + b.ux * a + b.uy * c, y: b.y + b.uy * a - b.ux * c });
+    const add = <T extends Phaser.GameObjects.GameObject>(o: T, list: Phaser.GameObjects.GameObject[]) => { list.push(o); this.objects.push(o); return o; };
+    const deckKey = stone ? 'tb_stoneDeck' : 'tb_deck';
+    if (!has(deckKey)) { // 没载到新图：退回营地木栅
+      add(sc.add.tileSprite(b.x, b.y, b.halfW * 2, span + 90, 'yellow_props', 10).setTileScale(b.halfW * 2 / 128).setRotation(rot).setTint(0xd8c09a).setDepth(D + 3), vis.intact); return vis;
+    }
+    const dw = tex1(sc, deckKey).width, s = b.halfW * 2 / dw, sp = P(0, 0);
+    // 桥影：桥面图染深、向右下错一点，贴在水面上
+    add(sc.add.tileSprite(sp.x + 12, sp.y + 18, dw * s, span + 60, deckKey).setRotation(rot).setTileScale(s).setTint(0x06222c).setAlpha(.3).setDepth(D + 2.5), vis.intact);
+    // 桥墩（木桥）：每 ~170 一组，木桩插在水里，桥面盖在上面
+    if (!stone && has('tb_piers')) {
+      const ps = b.halfW * 2 * 1.2 / tex1(sc, 'tb_piers').width, n = Math.max(1, Math.round(span / 170) - 1);
+      for (let k = 1; k <= n; k++) { const p = P(-half + span * k / (n + 1), 0); add(sc.add.image(p.x, p.y, 'tb_piers').setScale(ps).setRotation(rot).setDepth(D + 2.6), vis.always); }
+    }
+    add(sc.add.tileSprite(sp.x, sp.y, dw * s, span + 80, deckKey).setRotation(rot).setTileScale(s).setDepth(D + 3), vis.intact);
+    if (!stone && has('tb_railL')) {
+      const rw = tex1(sc, 'tb_railL').width, off = (dw / 2 - 12) * s;
+      for (const [k, sgn] of [['tb_railL', -1], ['tb_railR', 1]] as const) { const p = P(0, sgn * off); add(sc.add.tileSprite(p.x, p.y, rw * s, span + 80, k).setRotation(rot).setTileScale(s).setDepth(D + 3.1), vis.intact); }
+    }
+    // 桥头：北端在上。木桥 headN 桥身在图下沿；石桥 stoneHead 桥身在图上沿（北头纵向翻转）
+    const hs = s * (stone ? 1 : 1.04), pn = P(-(half - 26), 0), pz = P(half - 26, 0);
+    if (stone && has('tb_stoneHead')) {
+      add(sc.add.image(pn.x, pn.y, 'tb_stoneHead').setOrigin(.5, 0).setScale(hs, -hs).setRotation(rot).setDepth(D + 3.2), vis.always);
+      add(sc.add.image(pz.x, pz.y, 'tb_stoneHead').setOrigin(.5, 0).setScale(hs).setRotation(rot).setDepth(D + 3.2), vis.always);
+    } else if (has('tb_headN') && has('tb_headS')) {
+      add(sc.add.image(pn.x, pn.y, 'tb_headN').setOrigin(.5, 1).setScale(hs).setRotation(rot).setDepth(D + 3.2), vis.always);
+      add(sc.add.image(pz.x, pz.y, 'tb_headS').setOrigin(.5, 0).setScale(hs).setRotation(rot).setDepth(D + 3.2), vis.always);
+    }
+    // 断口残骸：从两端桥头各伸出一截，断口朝桥心
+    if (has('tb_broken')) {
+      const bs = s * Math.min(1, span * .4 / (tex1(sc, 'tb_broken').height * s)), qn = P(-(half - 30), 0), qz = P(half - 30, 0);
+      add(sc.add.image(qn.x, qn.y, 'tb_broken').setOrigin(.5, 0).setScale(bs).setRotation(rot).setDepth(D + 3.05), vis.broken);
+      add(sc.add.image(qz.x, qz.y, 'tb_broken').setOrigin(.5, 0).setScale(-bs).setRotation(rot).setDepth(D + 3.05), vis.broken);
+    }
+    return vis;
+  }
+  private applyBridgeState(i: number) {
+    const b = this.rivers.flatMap(r => r.bridges)[i], v = this.bridgeVis[i]; if (!b || !v) return;
+    const set = (list: Phaser.GameObjects.GameObject[], on: boolean) => { for (const o of list) (o as unknown as { setVisible(v: boolean): void }).setVisible(on); };
+    set(v.always, true); set(v.intact, !b.broken); set(v.broken, b.broken);
+  }
+  /** 断桥 / 修复第 i 座桥（按 rivers 顺序、河内按 bridges 顺序数）：断了就当水处理（减速、不能走）。给 5-1 长坂断桥用。 */
+  setBridgeBroken(i: number, broken = true) { const b = this.rivers.flatMap(r => r.bridges)[i]; if (!b) return false; b.broken = broken; this.applyBridgeState(i); return true; }
+  isBridgeBroken(i: number) { return !!this.rivers.flatMap(r => r.bridges)[i]?.broken; }
+  private animateWater(now: number, dt: number) {
+    if (!this.water.length) return;
+    const v = this.scene.cameras.main.worldView, m = 500;
+    for (const w of this.water) {
+      if (w.cx + w.rad < v.x - m || w.cx - w.rad > v.right + m || w.cy + w.rad < v.y - m || w.cy - w.rad > v.bottom + m) continue;
+      for (const ts of w.flow) ts.tilePositionX -= TERRAIN.flow * dt / ts.tileScaleX * .5;
+      if (w.glint) { w.glint.tilePositionX -= TERRAIN.flow * dt / w.glint.tileScaleX * .9; w.glint.tilePositionY += 6 * dt; w.glint.setAlpha(.45 + .2 * Math.sin(now / 900 + w.ph)); }
+      for (const f of w.foam) { f.tilePositionX += 9 * dt; f.setAlpha(.38 + .3 * Math.sin(now / 650 + w.ph)); }
     }
   }
   get info() { return { cliffs: this.cliffBoxes.length, trees: this.trees.length, burnt: this.trees.filter(t => t.burnt).length, rivers: this.rivers.length, bridges: this.rivers.reduce((n, r) => n + r.bridges.length, 0) }; }
   /** 测试用：第 i 座桥的中心与桥向。 */
   bridge(i = 0) { const all = this.rivers.flatMap(r => r.bridges); return all[i] ?? null; }
-  clear() { for (const o of this.objects) o.destroy(); this.objects = []; this.water = []; }
+  clear() { for (const o of this.objects) o.destroy(); this.objects = []; this.water = []; this.bridgeVis = []; }
 }

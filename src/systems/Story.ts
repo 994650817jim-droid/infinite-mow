@@ -17,6 +17,7 @@ import { DEPTH, FONT, HEADING_FONT, GAME_WIDTH, GAME_HEIGHT, IS_DESKTOP } from '
 import { CHARACTERS, HOME_ART_HEROES, type CharacterId } from '../data/characters';
 import { STORY_CAST, STORY_CHAPTERS, type StoryChapter, type StoryLine, type StoryNode, type StoryBond, type StoryStage } from '../data/story';
 import { storyArtFile } from '../data/story/art';
+import { showBarkCard } from '../ui/StoryBarkCard';
 import { BOSS_PHASE, type BossPhaseEvent } from './BossPhase';
 import { storyScroll, type StoryLine as ScrollLine } from '../ui/StoryScroll';
 import { storyMode } from './BattleSettings';
@@ -210,7 +211,14 @@ export class StoryDirector {
     if (!storyWanted('boss')) return false;
     const lines = resolveLines(node, this.h.ctx); if (!lines.length) return false;
     this.played.push(node.id);
-    const say = (l: StoryLine): void => { const s = speaker(l.who, this.h.ctx); storyBark(this.h.scene, target, s.name ?? '', l.text); };
+    // 2026-11-18 夜：有说话人的句子出侧边立绘卡（我方左、敌方右，不暂停），头顶只冒一个「！」指明是谁在说，不重复台词；旁白句照旧头顶大字
+    const say = (l: StoryLine): void => {
+      const s = speaker(l.who, this.h.ctx);
+      if (!l.who) { storyBark(this.h.scene, target, s.name ?? '', l.text); return; }
+      const id = l.who === '{lord}' ? this.h.ctx.lord : l.who, ally = l.who === '{lord}' || !!heroName(id);
+      showBarkCard(this.h.scene, { side: ally ? 'left' : 'right', name: s.name ?? id, text: l.text, portrait: s.portrait });
+      storyBark(this.h.scene, target, '', '！');
+    };
     lines.forEach((l, i) => { if (i === 0) say(l); else this.h.scene.time.delayedCall(i * 1400, () => say(l)); }); // 第一句立即说（不受计时器暂停影响）
     return true;
   }

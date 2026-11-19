@@ -14,7 +14,9 @@ export interface WoodsSpec { x: number; y: number; rx: number; ry: number; count
 export type TreeKind = 'pine' | 'bamboo' | 'broad' | 'jungle' | 'willow' | 'cypress' | 'poplar' | 'dead' | 'palm' | 'banyan';
 export interface TreeSpec extends Pt { kind?: TreeKind; size?: number }
 /** 河：折线（points）+ 宽度；bridges 的 at 是沿河长度的比例（0～1），width 是桥面宽（垂直于桥的方向）。 */
-export interface RiverSpec { points: Pt[]; width: number; bridges: Array<{ at: number; width: number }>; flow?: number }
+/** 桥：style 木桥 wood（默认）/ 石拱桥 stone（城 / 关处）；broken 开局就是断桥（运行时用 terrain.setBridgeBroken(i, true) 断 / 复，断了当水处理）。 */
+export interface BridgeSpec { at: number; width: number; style?: 'wood' | 'stone'; broken?: boolean }
+export interface RiverSpec { points: Pt[]; width: number; bridges: BridgeSpec[]; flow?: number }
 /** 山崖 / 山坡：实心矩形（x、y 为中心），画成第七章山道的崖壁、坡上几棵松；碰撞并进场景障碍（sishuiObstacles），敌我、随行都挡，刷兵避开。 */
 export interface CliffSpec { x: number; y: number; w: number; h: number }
 export interface TerrainConfig {

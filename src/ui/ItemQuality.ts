@@ -102,7 +102,9 @@ export function ensureItemTextures(scene: Phaser.Scene): void {
 /** 行囊厚涂素材（美术风格会话 2026-11-17，public/assets/bag/README.md）：贴图键 = 'bag_' + 文件名。 */
 export const BAG_ART = ['panel_bg', 'doll_paper', 'tray_bg', 'slot_frame', 'slot_frame_hover', 'slot_frame_selected', 'q_white', 'q_green', 'q_blue', 'q_purple', 'q_orange',
   'sil_helm', 'sil_armor', 'sil_boots', 'sil_token', 'sil_mount', 'sil_relic', 'slot_tag', 'lock_tag', 'medal_frame', 'medal_frame_selected', 'tab', 'tab_selected',
-  'tab_icon_all', 'tab_icon_armor', 'tab_icon_helm', 'tab_icon_boots', 'tab_icon_token', 'tab_icon_relic', 'tooltip_card'] as const;
+  'tab_icon_all', 'tab_icon_armor', 'tab_icon_helm', 'tab_icon_boots', 'tab_icon_token', 'tab_icon_relic', 'tooltip_card',
+  // 2026-11-19 用户「行囊做成行囊的样子」：包袱按钮（常态 / 悬停）、摊开的包袱布（行囊格子铺在上面）、缝口袋格
+  'bundle', 'cloth_open', 'pocket', 'pocket_slot', 'gem_green', 'gem_blue', 'gem_purple', 'gem_orange'] as const;
 export const bagArt = (scene: Phaser.Scene, name: string): string | null => scene.textures.exists('bag_' + name) ? 'bag_' + name : null;
 /** 按需加载行囊素材（只缺的才排队）；全部到位回调 onReady。返回是否已齐。 */
 export function loadBagArt(scene: Phaser.Scene, onReady: () => void): boolean {
@@ -113,15 +115,30 @@ export function loadBagArt(scene: Phaser.Scene, onReady: () => void): boolean {
   return false;
 }
 /** 厚涂格子：槽框（空格 / 选中）+ 品质边框（四角宝石已含）；素材没加载时返回 false。 */
-export function drawQualityArt(scene: Phaser.Scene, c: Phaser.GameObjects.Container, size: number, q: ItemQuality | null, o: { selected?: boolean } = {}): boolean {
+export function drawQualityArt(scene: Phaser.Scene, c: Phaser.GameObjects.Container, size: number, q: ItemQuality | null, o: { selected?: boolean; slot?: boolean } = {}): boolean {
   const frame = bagArt(scene, o.selected ? 'slot_frame_selected' : 'slot_frame'); if (!frame) return false;
+  // 2026-11-19 用户「行囊做成行囊的样子」：格子是缝在包袱布上的口袋（行囊格赭黄、穿戴槽靛青）；品质改成口袋内一圈品质色针脚 + 右上角品质宝石（白无宝石）
+  const pocket = o.slot ? bagArt(scene, 'pocket_slot') ?? bagArt(scene, 'pocket') : bagArt(scene, 'pocket');
+  if (pocket) {
+    c.add(scene.add.image(0, 0, pocket).setDisplaySize(size, size));
+    if (q && q !== 'white') {
+      const col = QUALITIES[q].color, g = scene.add.graphics().setName('item-quality-frame'), r = size / 2 - size * .13, dash = size * .07;
+      g.fillStyle(col, .14).fillRect(-r, -r, r * 2, r * 2);
+      g.lineStyle(Math.max(1.5, size * .04), col, .95);
+      for (const [x0, y0, x1, y1] of [[-r, -r, r, -r], [r, -r, r, r], [r, r, -r, r], [-r, r, -r, -r]] as const) { const len = Math.hypot(x1 - x0, y1 - y0), n = Math.floor(len / (dash * 2)); for (let k = 0; k < n; k++) { const t0 = (k * 2 + .5) * dash / len, t1 = Math.min(1, t0 + dash / len); g.lineBetween(x0 + (x1 - x0) * t0, y0 + (y1 - y0) * t0, x0 + (x1 - x0) * t1, y0 + (y1 - y0) * t1); } }
+      c.add(g);
+      const gem = bagArt(scene, 'gem_' + q); if (gem) c.add(scene.add.image(size / 2 - size * .15, -size / 2 + size * .15, gem).setDisplaySize(size * .26, size * .26));
+    }
+    if (o.selected) c.add(scene.add.graphics().lineStyle(2.5, 0xffe7a0, 1).strokeRoundedRect(-size / 2 + 2, -size / 2 + 2, size - 4, size - 4, 4));
+    return true;
+  }
   c.add(scene.add.image(0, 0, frame).setDisplaySize(size, size));
   const qa = q && bagArt(scene, 'q_' + q); if (qa) c.add(scene.add.image(0, 0, qa).setDisplaySize(size, size).setName('item-quality-frame'));
   return true;
 }
 
 /** 道具小图块（品质框 + 图标 + 名器星），返回容器；size 为边长。 */
-export function itemTile(scene: Phaser.Scene, x: number, y: number, size: number, item: ItemInstance | null, slotHint?: IconSlot, o: { hover?: boolean; selected?: boolean } = {}): Phaser.GameObjects.Container {
+export function itemTile(scene: Phaser.Scene, x: number, y: number, size: number, item: ItemInstance | null, slotHint?: IconSlot, o: { hover?: boolean; selected?: boolean; slot?: boolean } = {}): Phaser.GameObjects.Container {
   ensureItemTextures(scene);
   const c = scene.add.container(x, y), art = drawQualityArt(scene, c, size, item?.quality ?? null, o);
   if (!art) { const g = scene.add.graphics(); drawQualityFrame(g, -size / 2, -size / 2, size, size, item?.quality ?? null, o); c.add(g); }

@@ -78,6 +78,7 @@ import { BALANCE, COLORS, DEPTH, FONT, GAME_HEIGHT, GAME_WIDTH, HEADING_FONT, IS
 import {upgradeCardTexture,inkUpgradeCardTexture,inkPlate,homeCommand,inkSkin} from '../ui/HomeCommand';
 import { RESULT_GOLD, RESULT_IVORY, RESULT_STROKE, buildRewardView, parseHeroLine, playResultAnims, wan, type ResultAnim } from '../ui/ResultRewards';
 import { loadBagArt } from '../ui/ItemQuality';
+import { bagBundle, type BagBundle } from '../ui/BagBundleButton';
 import type { EnemyDef } from '../data/enemies';
 import { WEAPON_META, weaponName, buildUpgradeOptions, canOfferRejuvenation } from '../data/upgrades';
 import { waveIndexAt } from '../data/waves';
@@ -509,6 +510,8 @@ export class GameScene extends Phaser.Scene {
   private hudChipState: Record<'pause' | 'mute' | 'music' | 'bag', LqState> = { pause: 'idle', mute: 'idle', music: 'idle', bag: 'idle' };
   private readonly hudChipRect = new Phaser.Geom.Rectangle();
   protected hudTexts!: Record<string, Phaser.GameObjects.Text>;
+  /** 右上手绘包袱（行囊）按钮。 */
+  private bagBundle?: BagBundle;
   protected passiveHud!: PassiveHud; protected passiveShout!: PassiveShout; protected heroBark!: HeroBark;
   /** 赵云被动「七进七出」：脚下龙鳞层数 + 满层白龙枪芒 / 绕身一闪 / 突进残影。 */
   zhaoyunFx!: ZhaoyunPassiveFx;
@@ -4083,6 +4086,11 @@ export class GameScene extends Phaser.Scene {
     this.hudTexts.music.setText(this.music.mutedState ? '音乐:关' : '音乐:开');
     // 2026-11-17 用户「暂停改成设置」：电脑版右上只留「设置」，音效 / 音乐挪进设置面板；行囊顶到原音效位
     if (IS_DESKTOP) { this.hudTexts.mute.setVisible(false).disableInteractive(); this.hudTexts.music.setVisible(false).disableInteractive(); this.hudTexts.bag.setY(100); }
+    // 2026-11-19 用户「行囊做成行囊的样子」：右上行囊换成手绘包袱（打结布包 + 小字「行囊」）；hud-bag 文字留作命中区（不显示字、不画漆牌）
+    {const t=this.hudTexts.bag,size=IS_DESKTOP?44:48,cx=t.x-33,cy=t.y+(IS_DESKTOP?20:22);
+     const apply=()=>{t.setText('').setFixedSize(60,IS_DESKTOP?54:58).setY(cy-size/2-2);};
+     this.bagBundle=bagBundle(this,cx,cy,size,{depth:DEPTH.hud+2,onReady:apply});if(this.bagBundle.ready())apply();
+     t.on('pointerover',()=>this.bagBundle?.setHover(true)).on('pointerout',()=>this.bagBundle?.setHover(false));}
     this.hudTexts.relics = this.add
       .text(28, 308, '', style(12, '#cfc3b0')).setWordWrapWidth(GAME_WIDTH - 56)
       .setScrollFactor(0)
@@ -4169,6 +4177,7 @@ export class GameScene extends Phaser.Scene {
     // 右上角按钮的漆金底板：暂停为金漆，音效 / 音乐为暗漆小牌（原先是无底纹的纯文字，手机上不像按钮）
     if (this.hudTexts) for (const k of ['pause', 'mute', 'music', 'bag'] as const) {
       const t = this.hudTexts[k]; if (!t?.visible) continue;
+      if (k === 'bag' && this.bagBundle?.ready()) { this.bagBundle.icon.setVisible(t.visible); this.bagBundle.caption.setVisible(t.visible); continue; } // 包袱图标代替漆牌
       const b = t.getBounds(this.hudChipRect), pause = k === 'pause';
       lqButton(g, b.centerX, pause ? b.y + 28 : b.centerY, pause ? Math.max(66, t.width - 6) : b.width, pause ? 36 : k === 'bag' ? 30 : 24, this.hudChipState[k], pause ? 'gold' : k === 'bag' ? 'cinnabar' : 'quiet');
     }

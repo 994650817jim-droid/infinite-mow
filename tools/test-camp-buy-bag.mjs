@@ -9,7 +9,7 @@ const p = await b.newPage({ viewport: { width: 1280, height: 720 } });
 p.on('pageerror', e => errors.push(e.message));
 await p.addInitScript(() => {
   window.__find = (root, name) => { const list = root.list ?? root.getChildren?.() ?? []; for (const o of list) { if (o.name === name) return o; if (o.list) { const r = window.__find(o, name); if (r) return r; } } return null; };
-  window.__mod = async part => import(performance.getEntriesByType('resource').map(e => e.name).find(n => n.includes(part)) ?? ('/src/' + part.replace(/^\//, '')));
+  window.__mod = async part => import(performance.getEntriesByType('resource').map(e => e.name).find(n => n.includes(part)) ?? ('/' + part.replace(/^\//, ''))); // 2026-11-19：传入的路径已带 /src/，原来拼成 /src/src/
   if (!sessionStorage.getItem('seeded')) { localStorage.clear(); localStorage.setItem('im_opening_seen', '1'); localStorage.setItem('im_last_hero', 'zhaoyun'); localStorage.setItem('im_items_v2', JSON.stringify({ version: 2, bag: [], loadouts: {}, autoSalvageWhite: false })); sessionStorage.setItem('seeded', '1'); }
 });
 // 正式模式（不带 ?dev=1），否则按测试战斗规则不入行囊
@@ -33,6 +33,14 @@ const r = await p.evaluate(async () => {
 ck('休整时买下的兵装立即进行囊（不再推进已结算的本局缴获）', r.inBag && r.bagDelta === 1 && r.lootDelta === 0, r);
 ck('购入提示写「已收入行囊」', /已收入行囊/.test(r.notice ?? ''), r.notice);
 ck('休整中打开行囊能看到刚买的兵装', r.bagOpen && r.shown, r);
+// 2026-11-19 用户「行囊做成行囊的样子」：休整页与战斗右上的「行囊」都是手绘包袱；截图对照
+await p.evaluate(() => { const s = window.__game.scene.getScene('GameScene'); s.children.getByName('item-bag')?.getData('ui')?.close(); });
+await p.waitForTimeout(400); await p.screenshot({ path: 'assets/review/ui-round11/camp-rest-bag-button.png' });
+const btn = await p.evaluate(() => { const s = window.__game.scene.getScene('GameScene'), ui = s.campUI, icon = window.__find(ui.root, 'bag-bundle-icon'); ui.setVisible(false); s.over = false; return { campIcon: !!icon && icon.visible && icon.texture.key === 'bag_bundle' }; });
+await p.waitForTimeout(500);
+const hud = await p.evaluate(() => { const s = window.__game.scene.getScene('GameScene'), i = s.children.getByName('bag-bundle-icon'), h = s.children.getByName('hud-bag'), hb = h?.getBounds(), ib = i?.getBounds(); return { icon: !!i && i.visible && i.texture.key === 'bag_bundle', inside: !!hb && !!ib && Math.abs(hb.centerX - ib.centerX) < 8 && ib.y >= hb.y - 4, hit: !!h?.input?.enabled }; });
+await p.screenshot({ path: 'assets/review/ui-round11/battle-hud-bag-button.png' });
+ck('「行囊」按钮是手绘包袱：休整页与战斗右上都换了图，战斗右上命中区 hud-bag 仍可点、包袱叠在它上面', btn.campIcon && hud.icon && hud.inside && hud.hit, { ...btn, ...hud });
 ck('控制台无报错', errors.length === 0, errors);
 console.log(`\n${pass} passed, ${fail} failed`);
 await b.close();

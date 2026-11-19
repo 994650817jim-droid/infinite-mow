@@ -112,7 +112,7 @@ export class MerchantShop{
   // 新学 / 精进：漆牌压在上轴中间
   const badge=this.scene.add.graphics().setScrollFactor(0);lqButton(badge,x+w/2,py-1,48,20,'on',t.level?'gold':'cinnabar');this.root.add(badge);
   this.root.add(this.scene.add.text(x+w/2,py-1,t.level?'精进':'新学',{fontFamily:HEADING_FONT,fontSize:'12px',color:'#fff1cf',resolution:2}).setOrigin(.5).setLetterSpacing(2).setScrollFactor(0).setName('camp-tactic-badge'));
-  ink(x+w/2,py+13,TAG_NAMES[d.tag]+'系 · 战法',11,'#4a2a0f').setOrigin(.5,0).setName('camp-tactic-school');
+  const school=d.tag?TAG_NAMES[d.tag]:'基础成长';ink(x+w/2,py+13,school+(d.tag?' · 战法':''),11,d.tag?'#4a2a0f':'#4d3a20').setOrigin(.5,0).setName('camp-tactic-school');
   if(this.scene.textures.exists('build_icon_'+t.id))this.root.add(this.scene.add.image(x+w/2,py+50,'build_icon_'+t.id).setDisplaySize(46,46).setScrollFactor(0).setName('camp-tactic-icon'));
   ink(x+w/2,py+75,d.name+'  '+(t.level?'Lv.'+t.level+'→'+next:'Lv.1'),15,'#1a0e05').setOrigin(.5,0).setFontFamily(HEADING_FONT).setName('camp-tactic-name');
   g.lineStyle(1,0x5e4627,.7).lineBetween(px+10,py+96,px+pw-10,py+96);
@@ -123,7 +123,7 @@ export class MerchantShop{
   for(const size of [11,10.5,10])if(desc.y+desc.height>limit)desc.setFontSize(size+'px');
   desc.setData('limit',limit).setData('full',full);
   const hover=this.scene.add.rectangle(px,py,pw,ph,0,.001).setOrigin(0).setScrollFactor(0).setInteractive().setName('camp-tactic-hover');this.root.add(hover);
-  this.tip!.attachInfo(hover,()=>({title:d.name+' '+(t.level?'Lv.'+t.level+' → Lv.'+next:'Lv.1（新学）'),sub:TAG_NAMES[d.tag]+'系 · 战法 · '+t.price+'粮',body:full,icon:'build_icon_'+t.id}));
+  this.tip!.attachInfo(hover,()=>({title:d.name+' '+(t.level?'Lv.'+t.level+' → Lv.'+next:'Lv.1（新学）'),sub:school+(d.tag?' · 战法 · ':' · ')+t.price+'粮',body:full,icon:'build_icon_'+t.id}));
   const label=t.sold?'已研习':!tac?'出征后可研习':!able?(tac.lockedText??'已无法研习'):poor?(D?'粮不足 · ':this.o.wallet.name+'不足 · ')+t.price+'粮':(t.level?'精进 · ':'研习 · ')+t.price+'粮',bw=Math.min(w-20,180);
   this.button(x+(w-bw)/2,y+h-52,label,()=>{
    const cur=this.o.stock().tactic;if(!cur||cur.sold||!tac||!tac.canBuy(cur)||this.o.wallet.get()<cur.price)return;

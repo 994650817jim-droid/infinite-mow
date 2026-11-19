@@ -1,5 +1,5 @@
 import {playMenuMusic} from '../systems/Music';
-import {defaultHero} from '../systems/RosterStore';
+import {defaultHero,loadRoster} from '../systems/RosterStore';
 import {checkWorld} from '../systems/Achievements';
 import {RENDER_SCALE,screenPoint,TITLE_FONT,HEADING_FONT} from '../config';
 import {thirdChapterUnlocked,arcUnlocked} from '../world/WorldStore';
@@ -92,7 +92,7 @@ export class WorldMapScene extends Phaser.Scene {
   this.load.once('complete',()=>{for(const key of [...Object.keys(MARKER_FILES),...Object.keys(CITY_ART_FILES)])if(this.textures.exists(key))this.textures.get(key).setFilter(Phaser.Textures.FilterMode.LINEAR);});}
  create(){playMenuMusic(this);try{checkWorld(loadWorld());}catch{/* 存档不可用 */}
   if(!worldUnlocked()&&!isChapterTestRun()){this.registry.set('loadBattle',true);this.scene.start(this.registry.get('battleReady')?'MenuScene':'BootScene');return;}const shellTitle=worldShell(this,this.registry.get('worldReveal')?'三国天下开启':'三国天下');if(W>600)shellTitle.setFontFamily(TITLE_FONT).setFontSize(22).setColor('#efd399').setOrigin(0,.5).setPosition(16,25).setStroke('#120904',4);if(this.registry.get('worldReveal')){this.registry.remove('worldReveal');this.cameras.main.fadeIn(900,0,0,0);}releaseWorldArt(this,'strategy_art');this.markers=[];this.cityMarkers=[];this.legend=undefined;this.inks=[];this.detailView=undefined;this.timelineRect=undefined;this.card=undefined;
-  this.siegeModal=undefined;this.territory=undefined;this.notice=undefined;this.pins=[];this.route=undefined;this.routeChapter=undefined;this.fogImg=undefined;this.fogStamp=undefined;this.fogKey='';this.fogVis=new Map();this.status=new Map();this.guide=undefined;this.guideLabel=undefined;this.guideEdge=undefined;this.guideTarget=undefined;this.registry.remove('hardChapter');const advance=isChapterTestRun()?null:advanceEra(),lost=isChapterTestRun()?[]:takeLostNotice();if(!isChapterTestRun())ensureIntel();const s=loadWorld();this.intel=intelEvents();this.intelMarkers=[];this.owned=s.ownedCities;this.alerts=s.alerts;this.capturedEver=s.capturedEver;this.era=!s.cleared.hulao?0:eraIndexFor({hulaoCleared:s.cleared.hulao,warlordStages:s.warlordStages,guanduStages:s.guanduStages});
+  this.siegeModal=undefined;this.territory=undefined;this.notice=undefined;this.pins=[];this.route=undefined;this.routeChapter=undefined;this.marchPts=[];this.marchFlag=undefined;this.marchProxy={t:0};this.fogImg=undefined;this.fogStamp=undefined;this.fogKey='';this.fogVis=new Map();this.status=new Map();this.guide=undefined;this.guideLabel=undefined;this.guideEdge=undefined;this.guideTarget=undefined;this.registry.remove('hardChapter');const advance=isChapterTestRun()?null:advanceEra(),lost=isChapterTestRun()?[]:takeLostNotice();if(!isChapterTestRun())ensureIntel();const s=loadWorld();this.intel=intelEvents();this.intelMarkers=[];this.owned=s.ownedCities;this.alerts=s.alerts;this.capturedEver=s.capturedEver;this.era=!s.cleared.hulao?0:eraIndexFor({hulaoCleared:s.cleared.hulao,warlordStages:s.warlordStages,guanduStages:s.guanduStages});
   const desktop=W>600;
   // 顶部资源栏（军粮 / 城池），漆底描金
   const res=resourceBar(this,desktop?shellTitle.x+shellTitle.width+12:24,desktop?25:88,[{glyph:"粮",label:"军粮",value:s.provisions,tint:0x7a5a22},{glyph:'城',label:'城池',value:this.owned.length,tint:0x2f6b45}],desktop);
@@ -309,9 +309,9 @@ export class WorldMapScene extends Phaser.Scene {
     e.setPosition(ex,ey);(e.getByName('world-next-edge-arrow') as Phaser.GameObjects.Graphics).setRotation(Math.atan2(dy,dx));}}
   const a=this.toScreen(t.from.x,t.from.y),b=b0,len=Math.hypot(b.x-a.x,b.y-a.y),show=(x:number,y:number)=>x>ar.x+60&&x<ar.x+ar.w-60&&y>ar.y+16&&y<this.viewBottom-16&&!(this.card&&x>this.card.x-60&&y>this.card.y-20);
   if(len<90){const lw=(lab.list[1] as Phaser.GameObjects.Text).width,x=b.x+lw/2+40,y=b.y-24;lab.setPosition(x,y).setVisible(show(x,y));return;} // 目标就在我方据点旁：不画线，牌子立在目标右侧
-  const ux=(b.x-a.x)/len,uy=(b.y-a.y)/len,s0=28,s1=len-36,dash=(w:number,c:number,al:number)=>{g.lineStyle(w,c,al);for(let d=s0;d<s1;d+=13)g.lineBetween(a.x+ux*d,a.y+uy*d,a.x+ux*Math.min(d+7,s1),a.y+uy*Math.min(d+7,s1));};
-  dash(3,0x1b120b,.3);dash(1.5,0xffe2a0,.7);const ex=a.x+ux*s1,ey=a.y+uy*s1;g.fillStyle(0xffe2a0,.8).fillTriangle(ex+ux*10,ey+uy*10,ex-uy*5,ey+ux*5,ex+uy*5,ey-ux*5);
-  const mx=a.x+ux*len*.5,my=a.y+uy*len*.5-14;lab.setPosition(mx,my).setVisible(show(mx,my));}
+  const ux=(b.x-a.x)/len,uy=(b.y-a.y)/len,mx=a.x+ux*len*.5,my=a.y+uy*len*.5-22;lab.setPosition(mx,my).setVisible(show(mx,my));
+  // 2026-11-18：淡金行军点、略弯、遇城名 / 牙旗留白，末端一枚笔触箭头（不再是一条直虚线横穿地图）
+  this.marchPath(g,a,b,{color:0xe8c477,alpha:.7,r:2.1,gap:13,bend:-.1,skip:this.routeObstacles().filter(r=>!r.contains(lab.x,lab.y)),arrow:true,inset:30});}
  /** 「XX 归入版图」：镜头对准新城，军旗落下插定，朱印「归」盖下，旧疆域淡出、新疆域染上；顶部漆牌横幅数秒后收起。素材：W2-5 军旗、W2-8 方印（手绘）。 */
  private playCapture(c:CityDef,now:Phaser.GameObjects.Image[],prev:Phaser.GameObjects.Image[]){
   const m=this.cityMarkers.find(x=>x.city.id===c.id);this.centerOnCity(c);
@@ -541,7 +541,7 @@ export class WorldMapScene extends Phaser.Scene {
   if(n.challenge){this.challengeDetail(n,st);return;}
   if(n.kind==='home'||!info){const next=currentChapter(save),cleared=CHAPTER_TIMELINE.filter(c=>chapterStagesDone(c.id,save)>=3).length;this.setDetail(n.name,FACTIONS.player.color,n.kind==='home'?'营':'锁',`${n.region} · ${n.kind==='home'?'玩家领地':'地区开发中'}\n从义军营寨出发，建设后再次出征。\n章节进度 ${cleared}/${CHAPTER_TIMELINE.length} · ${cleared>=CHAPTER_TIMELINE.length?'诸章皆已平定':`下一章：第${next.numeral}章「${next.title}」`}`);}
   else{const hard=hardChapterCleared(info.id),status=locked?`未解锁：${info.hint}`:st==='cleared'?`已平定（3/3 关）· ${hard?`乱世已平 · 称号「${HARD_TITLES[info.id]}」`:'可重温，或挑战乱世难度'}`:done?`进行中：已过 ${done}/3 关`:'已开放：可出征';
-   this.setDetail(`第${info.numeral}章 · ${n.name}`,st==='cleared'?0x5f8f4e:locked?0x4a4f46:0x8e2a1e,st==='cleared'?'捷':locked?'锁':'战',`公元${info.year}年（${info.era}） · ${n.region}\n${status}\n${locked?'按史事时序逐章解锁。':this.lossWarning()||'战斗中的随军粮只在本局有效，战后另结算营寨军粮。'}`);}
+   this.setDetail(`第${info.numeral}章 · ${n.name}`,st==='cleared'?0x5f8f4e:locked?0x4a4f46:0x8e2a1e,st==='cleared'?'捷':locked?'锁':'战',locked?`公元${info.year}年（${info.era}） · ${n.region}\n${status}\n按史事时序逐章解锁。`:`${status}\n${this.musterLine()}\n公元${info.year}年（${info.era}） · ${n.region}\n${this.lossWarning()||'战斗中的随军粮只在本局有效，战后另结算营寨军粮。'}`);}
   this.action.text.setText(locked?'尚未解锁':n.kind==='home'?"进入营寨":st==='cleared'?'重温 · 出征':'出征');this.action.image.setAlpha(locked?.45:1);if(locked)this.action.image.disableInteractive();else this.action.image.setInteractive({useHandCursor:true});
   this.layoutActions(st==='cleared');}
 /** 挑战关「虎牢关 · 三英战吕布」详情：开放条件、首通奖励赤兔、胜场。 */
@@ -604,8 +604,23 @@ ${city.tier==='large'?'守城大将：'+siegeBossName(city,owner):'守军：'+FA
  private enterStage(id:TimelineChapterId,stage:number|undefined,hard:boolean){
   if(hard&&chapterState(id,loadWorld())==='cleared')this.registry.set('hardChapter',id);else this.registry.remove('hardChapter');
   if(id==='qunxiong'||id==='guandu'||id==='chibi'||id==='jingnan'||id==='shu'||id==='hanzhong'||id==='xiangfan'||id==='yiling'||id==='nanzheng'||id==='beifa'){if(stage)this.registry.set('worldStagePick',stage);this.scene.start(CAMPAIGNS[id].scene);return;}
-  this.registry.set('worldCampaign',true);this.registry.set('selectedWorldChapter',id);if(stage)this.registry.set('selectedWorldStage',stage);
-  if(this.registry.get('battleReady'))this.scene.start('MenuScene');else{this.registry.set('loadBattle',true);this.scene.start('BootScene');}}
+  this.launchMain(id,stage);}
+ /**
+  * 第壹 / 贰章出征（2026-11-18 用户「应该不需要这个画面，因为只有主公可以出战」）：不再经点将页，直接以主公开战。
+  * 关：地图上点了关卡印就打那一关，否则打本章下一个未通关的关（本章全通了从第 1 关起，与原选将页同一规则）。
+  */
+ private launchMain(id:TimelineChapterId,stage?:number){
+  const save=loadWorld(),done=id==='huangjin'?save.yellowStages:save.dongzhuoStages,n=(stage&&[1,2,3].includes(stage)?stage:done>=1&&done<3?done+1:1) as 1|2|3;
+  const hero=this.lordId(),c=CHARACTERS.find(x=>x.id===hero)!;
+  if(!isChapterTestRun())try{localStorage.setItem('im_last_hero',hero);}catch{/* storage unavailable */}
+  this.registry.remove('campaignTransfer');this.registry.set('worldCampaign',true);
+  this.registry.set('runConfig',{chapter:id==='hulao'?'hulao':'huangjin',stage:id==='huangjin'?n:undefined,westStage:id==='hulao'?n:undefined,character:hero,weapon:c.startWeapon});
+  if(this.registry.get('battleReady'))this.scene.start('GameScene');else{this.registry.set('pendingWarlord','GameScene');this.registry.set('loadBattle',true);this.scene.start('BootScene');}}
+ /** 出战的主公（存档主公；老存档按最近出战的武将）。 */
+ private lordId():CharacterId{let hero:CharacterId=defaultHero(null);try{hero=defaultHero(localStorage.getItem('im_last_hero'));}catch{/* storage unavailable */}return hero;}
+ /** 「主公 赵云 · 随行 华雄、张辽」一行（出征小卡上）。 */
+ private musterLine():string{const lord=CHARACTERS.find(c=>c.id===this.lordId())?.name??'';let names:string[]=[];try{const r=loadRoster();names=r.followers.map(id=>r.owned.find(o=>o.id===id)?.name).filter((x):x is string=>!!x);}catch{/* 存档不可用 */}
+  return names.length?`主公 ${lord} · 随行 ${names.slice(0,3).join('、')}${names.length>3?' 等':''}`:`主公 ${lord} 亲征`;}
  /** 出征按钮布局：已平定章节并列显示「乱世难度」。 */
  private layoutActions(showHard:boolean){const desk=W>600,h=this.actionHome,a=this.action,b=this.hardBtn,bh=desk?48:62;
   b.image.setVisible(showHard);b.text.setVisible(showHard);if(showHard)b.image.setInteractive({useHandCursor:true});else b.image.disableInteractive();
@@ -616,8 +631,8 @@ ${city.tier==='large'?'守城大将：'+siegeBossName(city,owner):'守军：'+FA
  /** 关卡详情：史事、首领、年号与出征状态。 */
  private refreshStage(id:TimelineChapterId,stage:number){const save=loadWorld(),info=chapterById(id),d=chapterStages(id)[stage-1],done=stage<=chapterStagesDone(id,save),open=stageOpen(id,stage,save)||isChapterTestRun(),cleared=chapterState(id,save)==='cleared';
   if(!d)return;const status=done?'✓ 已告捷 · 可重打此关':open?'可出征':chapterState(id,save)==='locked'?`未解锁：${info.hint}`:'先通关前一关';
-  this.setDetail(`${d.code} ${d.name}`,done?0x5f8f4e:open?0x8e2a1e:0x4a4f46,d.seal,`${d.year} · 首领 ${d.boss}（${d.bossTitle}） · 第${info.numeral}章「${info.title}」\n${d.story}\n${status}${cleared&&open?` · 乱世：敌军生命×${HARD_MODE.enemyHp}、首领×${HARD_MODE.bossHp}`:''}`);
-  this.action.text.setText(open?(done?'重打此关 · 选将':'从此关出征'):'尚未开放');this.action.image.setAlpha(open?1:.45);if(open)this.action.image.setInteractive({useHandCursor:true});else this.action.image.disableInteractive();
+  this.setDetail(`${d.code} ${d.name}`,done?0x5f8f4e:open?0x8e2a1e:0x4a4f46,d.seal,`${status}\n${open?this.musterLine():'首领 '+d.boss+'（'+d.bossTitle+'）'}\n${open?'首领 '+d.boss+'（'+d.bossTitle+'） · ':''}${d.year} · 第${info.numeral}章「${info.title}」\n${d.story}${cleared&&open?`\n乱世：敌军生命×${HARD_MODE.enemyHp}、首领×${HARD_MODE.bossHp}`:''}`);
+  this.action.text.setText(open?(done?'重打此关':'从此关出征'):'尚未开放');this.action.image.setAlpha(open?1:.45);if(open)this.action.image.setInteractive({useHandCursor:true});else this.action.image.disableInteractive();
   this.layoutActions(cleared&&open);}
  /** 显示某章三关路线（重复调用同一章不重建）。 */
  private showRoute(id:TimelineChapterId|undefined){if(id===this.routeChapter)return;this.routeChapter=id;for(const p of this.pins)p.root.destroy();this.pins=[];
@@ -632,13 +647,46 @@ ${city.tier==='large'?'守城大将：'+siegeBossName(city,owner):'守军：'+FA
    const hit=this.add.circle(0,0,r+6,0x000000,.001).setInteractive({useHandCursor:true}).setName(`stage-pin-${id}-${n}`).setData('state',isDone?'cleared':open?'open':'locked');
    hit.on('pointerup',(pointer:Phaser.Input.Pointer)=>{if(pointer.getDistance()>10*RENDER_SCALE||this.pinching)return;this.selected={kind:'stage',chapter:id,stage:n};this.refresh();});
    root.add([MARKERS_V2?sealGraphics(this,isDone?'cleared':open?'open':'locked',r):g,glyph,label,hit]);root.setData('label',label).setData('icon',hit);this.pins.push({stage:n,x:pt.x,y:pt.y,root});});}
- /** 路线重排：关卡标记跟随地图；关卡之间画虚线与箭头。 */
+ /**
+  * 路线重排（2026-11-18 用户「这些线条需要改一下优化一下」）：关卡标记跟随地图；关卡之间画略弯的朱墨行军点，
+  * 遇到城名牌 / 牙旗 / 关卡名留白；已过的段淡去，下一关那段加粗朱红、末端一枚笔触箭头，并有小行军旗沿路慢慢走；未开的段淡墨。
+  */
  private layoutRoute(visible:(x:number,y:number)=>boolean){if(!this.route)return;this.route.clear();const sel=this.selected;
   const pts=this.pins.map(p=>{const s0=this.toScreen(p.x,p.y),s=this.liftOffCity(s0.x,s0.y,true);p.root.setPosition(s.x,s.y).setVisible(visible(s.x,s.y));const on=sel.kind==='stage'&&sel.chapter===this.routeChapter&&sel.stage===p.stage;p.root.setScale(on?1.25:1);return s;});
-  for(let i=1;i<pts.length;i++){const a=pts[i-1],b=pts[i],len=Math.hypot(b.x-a.x,b.y-a.y),ux=(b.x-a.x)/len,uy=(b.y-a.y)/len;if(len<40)continue;
-   this.route.lineStyle(3,0x1b120b,.55);for(let t=20;t<len-20;t+=14)this.route.lineBetween(a.x+ux*t,a.y+uy*t,a.x+ux*Math.min(t+8,len-20),a.y+uy*Math.min(t+8,len-20));
-   this.route.lineStyle(2,0xffd27a,.95);for(let t=20;t<len-20;t+=14)this.route.lineBetween(a.x+ux*t,a.y+uy*t,a.x+ux*Math.min(t+8,len-20),a.y+uy*Math.min(t+8,len-20));
-   const mx=a.x+ux*len*.5,my=a.y+uy*len*.5;this.route.fillStyle(0xffd27a,1).fillTriangle(mx+ux*8,my+uy*8,mx-ux*5-uy*6,my-uy*5+ux*6,mx-ux*5+uy*6,my-uy*5-ux*6);}}
+  const skip=this.routeObstacles();this.marchPts=[];
+  for(let i=1;i<pts.length;i++){const st=(this.pins[i].root.getData('icon') as Phaser.GameObjects.Arc|undefined)?.getData('state') as string,bend=(i%2?1:-1)*.12;
+   if(st==='cleared')this.marchPath(this.route,pts[i-1],pts[i],{color:0x6b5a45,alpha:.4,r:1.9,gap:12,bend,skip});
+   else if(st==='open'){const s=this.marchPath(this.route,pts[i-1],pts[i],{color:0xb5321e,alpha:.95,r:3,gap:11,bend,skip,arrow:true});if(!this.marchPts.length)this.marchPts=s;}
+   else this.marchPath(this.route,pts[i-1],pts[i],{color:0x3a3026,alpha:.45,r:2,gap:13,bend,skip});}
+  this.layoutMarch();}
+ /** 路线避让：已显示的城名牌、城郭、章节牙旗与名牌、关卡名、「下一步」牌。 */
+ private routeObstacles():Phaser.Geom.Rectangle[]{const out:Phaser.Geom.Rectangle[]=[];const add=(o:unknown,pad=4)=>{const g=o as (Phaser.GameObjects.Components.GetBounds&{visible?:boolean})|undefined|null;if(!g||g.visible===false||!g.getBounds)return;const b=g.getBounds();if(b.width>0)out.push(new Phaser.Geom.Rectangle(b.x-pad,b.y-pad,b.width+pad*2,b.height+pad*2));};
+  for(const m of this.cityMarkers)if(m.root.visible){add(m.label);add(m.root.getData('icon'),-2);}
+  for(const m of this.markers)if(m.root.visible){add(m.root.getData('label'));add(m.root.getData('icon'),-2);}
+  for(const p of this.pins)if(p.root.visible)add(p.root.getData('label'));
+  if(this.guideLabel?.visible)add(this.guideLabel);return out;}
+ /**
+  * 行军点笔触：a→b 一条略弯的二次曲线，按弧长等距点朱墨圆点（下垫一层墨影，大小略有起伏像手点的），落在避让框里的点不画；
+  * 两端各留 inset 不压关卡印。arrow：末端画一枚两笔的笔触箭头。返回端点间的曲线采样点（行军旗沿它走）。
+  */
+ private marchPath(g:Phaser.GameObjects.Graphics,a:{x:number;y:number},b:{x:number;y:number},o:{color:number;alpha:number;r:number;gap:number;bend:number;skip:Phaser.Geom.Rectangle[];arrow?:boolean;inset?:number}):Array<{x:number;y:number}>{
+  const len=Math.hypot(b.x-a.x,b.y-a.y),inset=o.inset??24;if(len<inset*2+12)return[];
+  const nx=-(b.y-a.y)/len,ny=(b.x-a.x)/len,cx=(a.x+b.x)/2+nx*len*o.bend,cy=(a.y+b.y)/2+ny*len*o.bend,q=(t:number)=>({x:(1-t)*(1-t)*a.x+2*(1-t)*t*cx+t*t*b.x,y:(1-t)*(1-t)*a.y+2*(1-t)*t*cy+t*t*b.y});
+  const N=Math.max(8,Math.ceil(len/3)),samp:Array<{x:number;y:number;s:number}>=[];let acc=0,prev=q(0);for(let i=0;i<=N;i++){const p=q(i/N);acc+=Math.hypot(p.x-prev.x,p.y-prev.y);samp.push({...p,s:acc});prev=p;}
+  const total=acc,path=samp.filter(p=>p.s>=inset&&p.s<=total-inset);let next=inset,k=0;
+  for(const p of path){if(p.s<next)continue;next+=o.gap;k++;if(o.skip.some(r=>r.contains(p.x,p.y)))continue;const rr=o.r*(.82+.3*((k*37)%10)/10);
+   g.fillStyle(0x1b120b,o.alpha*.55).fillCircle(p.x+.7,p.y+1,rr+.9);g.fillStyle(o.color,o.alpha).fillCircle(p.x,p.y,rr);}
+  if(o.arrow&&path.length>3){const e=path[path.length-1],f=path[Math.max(0,path.length-5)],d=Math.hypot(e.x-f.x,e.y-f.y)||1,ux=(e.x-f.x)/d,uy=(e.y-f.y)/d,L=10,W=7,tip={x:e.x+ux*4,y:e.y+uy*4};
+   if(!o.skip.some(r=>r.contains(tip.x,tip.y)))for(const [w,c,al] of [[5,0x1b120b,o.alpha*.6],[3,o.color,o.alpha]] as const){g.lineStyle(w,c,al);g.lineBetween(tip.x-ux*L-uy*W,tip.y-uy*L+ux*W,tip.x,tip.y);g.lineBetween(tip.x-ux*L+uy*W,tip.y-uy*L-ux*W,tip.x,tip.y);}}
+  return path;}
+ /** 下一关那段路线上的小行军旗：沿曲线慢慢往前走（循环），路线不在视野或没有下一关时藏起。 */
+ private layoutMarch(){const pts=this.marchPts;
+  if(!this.marchFlag){const g=this.add.graphics();g.lineStyle(1.6,0x2a1a0c,1).lineBetween(0,6,0,-12);g.fillStyle(0xb5321e,1).fillTriangle(0,-12,11,-8,0,-4);g.lineStyle(1,0x2a1a0c,.8).strokeTriangle(0,-12,11,-8,0,-4);g.fillStyle(0x1b120b,.35).fillEllipse(0,6,10,3);
+   this.marchFlag=this.add.container(0,0,[g]).setDepth(3).setName('route-march');if(this.mapMask)this.marchFlag.setMask(this.mapMask.createGeometryMask());
+   this.tweens.add({targets:this.marchProxy,t:1,duration:2600,repeat:-1,onUpdate:()=>this.placeMarch()});}
+  this.marchFlag.setVisible(pts.length>4);this.placeMarch();}
+ private placeMarch(){const pts=this.marchPts,f=this.marchFlag;if(!f||pts.length<5)return;const i=Math.min(pts.length-1,Math.floor(this.marchProxy.t*(pts.length-1)));f.setPosition(pts[i].x,pts[i].y).setAlpha(Math.min(1,Math.min(this.marchProxy.t,1-this.marchProxy.t)*6));}
+ private marchPts:Array<{x:number;y:number}>=[];private marchFlag?:Phaser.GameObjects.Container;private marchProxy={t:0};
  /**
   * 战争迷雾（2026-11-18 用户「还有需要做战争迷雾觉得比较好点」）：视野由「已占城池 + 已开章节」推算，不加存档字段。
   * clear：我方城池、相邻（可攻 / 章节未开）城、告急城、已开章节地区内的城；dim：clear 城的邻城（半透明、看得到城名）；hidden：其余（城名「？」、不能点攻）。
@@ -735,5 +783,5 @@ ${fail}`;
   this.registry.remove('campaignTransfer');this.registry.set('intelEvent',event.id);this.registry.set('runConfig',{character:hero});
   if(this.registry.get('battleReady'))this.scene.start('IntelGameScene');else{this.registry.set('pendingWarlord','IntelGameScene');this.registry.set('loadBattle',true);this.scene.start('BootScene');}
  }
- private enterNode(){if(this.selected.kind!=='node')return;const n=this.selected.node;if(n.campaign){const c=CAMPAIGNS[n.campaign];if(c.open()||isChapterTestRun())this.scene.start(c.scene);return;}if(n.kind==='home'){this.scene.start('CityScene');return;}if(!n.chapter||!chapterUnlocked(n.chapter))return;this.registry.set('worldCampaign',true);this.registry.set('selectedWorldChapter',n.chapter);if(this.registry.get('battleReady'))this.scene.start('MenuScene');else{this.registry.set('loadBattle',true);this.scene.start('BootScene');}}
+ private enterNode(){if(this.selected.kind!=='node')return;const n=this.selected.node;if(n.campaign){const c=CAMPAIGNS[n.campaign];if(c.open()||isChapterTestRun())this.scene.start(c.scene);return;}if(n.kind==='home'){this.scene.start('CityScene');return;}if(!n.chapter||!chapterUnlocked(n.chapter))return;this.launchMain(n.chapter as TimelineChapterId);}
 }

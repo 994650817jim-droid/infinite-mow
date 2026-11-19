@@ -177,7 +177,7 @@ export const HOME_ART_HEROES: readonly string[] = ['zhaoyun', 'guanyu', 'huangzh
 export const STARTING_WEAPONS: Array<{ id: WeaponId; name: string; icon: string; desc: string }> = [
   { id: 'spear_orbit', name: '枪影旋舞', icon: 'icon_1', desc: '环绕枪刃，近身持续伤害' },
   { id: 'crossbow', name: '连弩齐射', icon: 'icon_2', desc: '自动射击，命中后弹射' },
-  { id: 'flame_banner', name: '七星灯 · 天火', icon: 'icon_3', desc: '星位锁定，天火重创单个目标' },
+  { id: 'flame_banner', name: '七星灯 · 天火', icon: 'icon_3', desc: '星位锁定，天火重创首领精锐、砸进怪堆；算无遗策留星火焦土' },
 ];
 
 export const DEFAULT_RUN_CONFIG: RunConfig = { character: 'zhaoyun', weapon: 'spear_orbit' };

@@ -19,12 +19,40 @@ export const DONGZHUO_BOSS = {
   retreatAt: .5, retreatMs: 2500, retreatDistance: 260, retreatInfantry: 8, retreatCavalry: 3,
 } as const;
 
+/**
+ * 2-3 重做（共享笔记 luoyang-2-3-design.md，用户 2026-11-18）：开局董卓、吕布都在城头（打不到）；不分波，摧毁 5 座营寨 → 吕布跃下城头 → 战吕布（1/3 血逃）→ 董卓下城 → 20% 吕布斩董卓。
+ * 坐标都相对开局点（城墙线在 DZ_LUBU.wallY = -330）。初值，交平衡会话。
+ */
+export const LUOYANG = {
+  /** 营寨：城下两翼、场地中段两侧、开局点南边——走一圈正好扫一遍场地。 */
+  camps: [[-560, -170], [560, -170], [-720, 330], [720, 330], [0, 720]] as ReadonlyArray<readonly [number, number]>,
+  /** 城墙半长（用户「2-3只有很长一段城墙，不用把玩家困在里面」）：一道长墙、两端角楼收口；没有侧墙 / 南边界。墙北进不去（DongzhuoLubu.keepSouth 不分 x）。 */
+  wallHalf: 4200,
+  /** 吕布在城头：站在董卓右侧多远、来回踱步的幅度（像素）与一趟多久（毫秒）、走到头停多久。 */
+  lubuDx: 200, paceRange: 90, paceMs: 2600, paceRestMs: 900,
+  /** 2.5D 城墙图（用户「生成那张可以站在立体上的城墙素材」；即梦出图，public/assets/siege-v2/luoyang/）：
+   *  每张图「图内像素」标注：ground = 墙脚贴地那一行，crenel = 外侧城垛顶（从这行往下另画一层盖在城头人物前面，挡住腿）。
+   *  scale：图像素 → 世界像素；城门楼 / 角楼按墙高对齐另乘系数；overlap：墙段相邻重叠（藏住两端的斜角）。 */
+  wallArt: {
+    scale: .52, overlap: 40,
+    seg: {file: 'assets/siege-v2/luoyang/wall_seg.png', w: 1339, ground: 452, crenel: 92},
+    gate: {file: 'assets/siege-v2/luoyang/wall_gate.png', w: 836, ground: 605, crenel: 276, mul: 1.1},
+    corner: {file: 'assets/siege-v2/luoyang/wall_corner.png', w: 487, ground: 640, crenel: 205, mul: 1.05},
+  },
+  /** 吕布跃下：用时、弧顶比起点高多少、落点（相对城门）。 */
+  leapMs: 900, leapArc: 150, landDx: 110, landDy: 150,
+  /** 镜头上让：董卓还在城头时，主将离墙线 cameraNear 以内开始往上让，贴墙时最多让 cameraLift（2.5D 城墙连门楼约 330 高，城头的董卓头顶在墙线上方约 320，不让他出画面）。 */
+  cameraNear: 700, cameraLift: 240,
+} as const;
+
 export function getLuoyangChapter(): ChapterDef {
   const base = getSishuiEncounter(), elite = base.enemies.elite, wv = elite.walkVisual;
   const boss: EnemyDef = {...base.enemies.boss, texture: wv?.texture ?? elite.texture, walkVisual: wv ? {...wv, scale: wv.scale * DONGZHUO_BOSS.scale} : undefined, attackVisual: undefined, tint: DONGZHUO_BOSS.tint, hp: DONGZHUO_BOSS.hp, speed: DONGZHUO_BOSS.speed, damage: DONGZHUO_BOSS.damage, radius: 34};
   return {
-    ...base, name: '2-3 火烧洛阳', label: '讨伐董卓 · 洛阳', description: '董卓焚城西走 · 纵火、铁骑与飞熊军', bossName: '董卓', bossStyle: 'dongzhuo', westStage: 3,
-    waves: ['洛阳城外', '飞熊军压阵', '董卓焚城'].map((name, i) => ({name, start: i * 45})), recruitWaves: [1, 2],
+    ...base, name: '2-3 火烧洛阳', label: '讨伐董卓 · 洛阳', description: '董卓焚城西走 · 摧毁营寨、吕布、董卓', bossName: '董卓', bossStyle: 'dongzhuo', westStage: 3,
+    // 不分波（用户：「这里不用设计波数」）：一段持续刷兵；首领（董卓）开局就站在城头
+    waves: [{name: '洛阳城外', start: 0}], recruitWaves: [], bossAtStart: true,
+    objective: {kind: 'destroy', count: LUOYANG.camps.length, target: '营寨', label: '摧毁营寨', limit: 9999, spots: LUOYANG.camps, doneBanner: ['营寨尽毁', '吕布跃下城头！']},
     enemies: {...base.enemies, boss},
     victoryTitle: '董卓西走', victoryText: '董卓败退长安 · 讨伐董卓告捷 · 群雄并起',
   };

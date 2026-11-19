@@ -204,6 +204,8 @@ export class BootScene extends Phaser.Scene {
     this.load.spritesheet('flame_burst', 'assets/flame-banner/flame_burst.png', { frameWidth: 256, frameHeight: 256 });
     // 诸葛亮七星灯 · 天火手绘序列帧（2026-11-18 Gemini 黑底出图，tools/build-zhuge-tianhuo-fx.mjs）：8×3 每帧 256（星位 / 天火落下 / 八阵图）+ 东风火龙横条 6 帧 512×128
     this.load.spritesheet('zhuge_tianhuo', 'assets/hero-fx/zhuge_tianhuo.png', { frameWidth: 256, frameHeight: 256 }); this.load.spritesheet('zhuge_eastwind', 'assets/hero-fx/zhuge_eastwind.png', { frameWidth: 512, frameHeight: 128 });
+    this.load.spritesheet('zhuge_ember', 'assets/hero-fx/zhuge_ember.png', { frameWidth: 256, frameHeight: 256 }); // 天火余烬「星火焦土」8 帧（2026-11-18 晚，即梦手绘）
+    this.load.spritesheet('zhuge_wind', 'assets/hero-fx/zhuge_wind.png', { frameWidth: 512, frameHeight: 128 }); // 借东风「东风气流」8 帧（2026-11-18 晚，即梦手绘）
     this.load.image('portrait_zhuge', 'assets/processed/portrait_zhuge.png');
     this.load.image('spear_thrust', 'assets/processed/spear_thrust.png');
     this.load.spritesheet('guandao_slash_sheet', 'assets/processed/guandao_slash_sheet.png', { frameWidth: 256, frameHeight: 256 });
@@ -332,8 +334,9 @@ export class BootScene extends Phaser.Scene {
     this.registry.set('battleReady',true);
     // 敌我区分：部曲 / 敌军换色（与描边）贴图在浏览器空闲时逐张预生成，进战斗时不再卡顿
     warmIffTextures(this.game);
-    // 界面通用贴图（水墨按钮、小镇美术）常驻，不随战斗图集卸载
-    this.registry.set('battleTextureKeys',this.textures.getTextureKeys().filter(k=>!k.startsWith('__')&&!k.startsWith('ui_war_')&&!k.startsWith('btn_ink_')&&!k.startsWith('town_')&&!k.startsWith('ach_')&&k!=='art_panel'&&k!=='icon_guandao'));
+    // 界面通用贴图（水墨按钮、小镇美术）常驻，不随战斗图集卸载。
+    // 营寨自己的手绘图（city_* / camp_*，CityScene 载入）也不记进来：2026-11-18 用户「打完一关之后再回去营寨……出现bug」——原来营寨图被当战斗图集卸掉，回营寨退回程序画占位
+    this.registry.set('battleTextureKeys',this.textures.getTextureKeys().filter(k=>!/^(city_|camp_)/.test(k)&&!k.startsWith('__')&&!k.startsWith('ui_war_')&&!k.startsWith('btn_ink_')&&!k.startsWith('town_')&&!k.startsWith('ach_')&&k!=='art_panel'&&k!=='icon_guandao'));
     this.goNext();
   }
   /** 启动后去哪：测试入口 / 待进的战斗 / 开场 / 主页 / 天下地图。 */

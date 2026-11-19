@@ -63,7 +63,7 @@ const x = await M((R, H) => {
 ck('随行经验到上限为止：大量经验后武璋停在 10 级，读档也不会被补升', x.afterXp === 10, x);
 ck('解锁下一章后上限提高到 15，随行可以继续升到 15', x.ch === 3 && x.cap2 === 15 && x.afterXp2 === 15, x);
 
-// 招贤馆界面：主公那一行显示「主公等级随征战提升」；随行显示「Lv n / 上限 m（解锁下一章提升）」；升阶按钮已挪到讲武堂「随从操练」
+// 招贤馆界面（2026-11-18 用户「主公不应该在这里」：麾下名单不列主公）：随行显示「Lv n / 上限 m（解锁下一章提升）」；升阶按钮已挪到讲武堂「随从操练」
 // 重载：游戏那份模块的读档缓存是测试改存档之前的（存档在 localStorage 里，seeded 标记让初始化脚本不再覆盖）
 await p.reload(); await p.waitForFunction(() => window.__game?.scene.isActive('MenuScene'), null, { timeout: 120000 }); await p.waitForTimeout(600);
 await p.evaluate(() => { const g = window.__game; for (const s of g.scene.getScenes(true)) s.scene.stop(); g.scene.start('TalentHallScene', { tab: 'roster' }); });
@@ -74,10 +74,10 @@ const ui = await p.evaluate(() => {
   return { names, hint: texts.some(t => t.includes('主公等级随征战提升')), rankBtns: c.list.filter(x => /^talent-rank-/.test(x.name)).length, toDrill: texts.some(t => t.includes('讲武堂「随从操练」')) };
 });
 await p.screenshot({ path: `${out}/follower-cap-desktop.png` });
-ck('招贤馆：主公一行显示「主公等级随征战提升」；升阶按钮已移走，提示去讲武堂「随从操练」', ui.hint && ui.rankBtns === 0 && ui.toDrill, ui);
+ck('招贤馆：麾下名单没有主公（无赵云那一行、无「主公等级随征战提升」）；升阶按钮已移走，提示去讲武堂「随从操练」', !ui.names.some(t => t.startsWith('赵云')) && !ui.hint && ui.rankBtns === 0 && ui.toDrill, ui);
 ck('招贤馆：随行显示「Lv n / 上限 15（解锁下一章提升）」；新招的随行仍是 8 级（上限升了也不自动补升）', ui.names.some(t => /武璋 Lv 15 \/ 上限 15（解锁下一章提升）/.test(t)) && ui.names.some(t => t.startsWith(n.newName + ' Lv 8 / 上限 15')), ui);
 
-// 讲武堂「随从操练」：主公的两个按钮不可点；随行按钮上写花费，可升阶；升阶后将阶 +1、军粮扣对
+// 讲武堂「随从操练」：名单里没有主公（2026-11-18）；随行按钮上写花费，可升阶；升阶后将阶 +1、军粮扣对
 await p.evaluate(() => { const g = window.__game; for (const s of g.scene.getScenes(true)) s.scene.stop(); g.scene.start('CityScene'); });
 await p.waitForFunction(() => window.__game.scene.isActive('CityScene'), null, { timeout: 60000 }); await p.waitForTimeout(1200);
 const findRow = async id => p.evaluate(async id => { const s = window.__game.scene.getScene('CityScene'); s.techTab = 'drill'; for (let pg = 0; pg < 6; pg++) { s.drillPage = pg; s.openTech(); const m = s.children.getByName('town-tech'); if (m?.getByName('drill-weapon-' + id)) return pg; } return -1; }, id);
@@ -91,7 +91,7 @@ Object.assign(dr, await p.evaluate(async () => {
   const m2 = s.children.getByName('town-tech'); o.name2 = m2.getByName('drill-name-r_1')?.text; o.msg = m2.getByName('town-tech-message')?.text; return o;
 }));
 await p.screenshot({ path: `${out}/drill-hall-desktop.png` });
-ck('讲武堂「随从操练」：主公两个升阶按钮不可点，写着「主公等级随征战提升」', dr.lordPage >= 0 && dr.lordBtn.every(x => !x) && dr.lordHint, dr);
+ck('讲武堂「随从操练」：名单里没有主公（翻遍各页都找不到赵云那一行，也没有「主公等级随征战提升」）', dr.lordPage === -1 && !dr.lordHint, dr);
 ck('讲武堂「随从操练」：随行按钮上写花费「升·兵器 300粮」，旁边写升级前后（伤害 +6% → +12%），可升阶', dr.r1Btn && dr.label.some(t => t === '升·兵器 300粮') && /伤害 ?\+6%.*→.*伤害 ?\+12%/.test(dr.preview ?? '') && /武璋 Lv 15 \/ 上限 15/.test(dr.name ?? ''), dr);
 ck('讲武堂「随从操练」：点升·兵器扣 300 军粮，将阶 2 → 3', dr.p0 - dr.p1 === 300 && /将阶 3\//.test(dr.name2 ?? '') && /升到将阶 3/.test(dr.msg ?? ''), dr);
 ck('无页面 / 控制台报错', errors.length === 0, errors.slice(0, 6));

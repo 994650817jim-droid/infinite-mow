@@ -20,6 +20,9 @@ try {
   await p.waitForFunction(S0 => { const s = eval(S0); return s?.player && s.scene.isActive(); }, S, { timeout: 90000 }); await wait(1200);
   await ev(s => { s.player.damageImmune = true; window.__ph = []; s.events.on('boss-phase', e => window.__ph.push(e.phase)); const w = s.chapter.waves; s.devSetTime?.(w[w.length - 1].start + 1); });
   for (let i = 0; i < 60 && !(await snap()); i++) await wait(200);
+  // 2-3 重做（luoyang-2-3-design）：吕布先在城头，营寨全毁才跃下——这里直接拆掉五座营寨，等吕布落地后再走原来的检查（完整新流程见 test-luoyang-flow.mjs）
+  await ev(s => { for (const t of [...(s.objective?.targets ?? [])]) if (t.e.active) { t.e.hp = 0; s.killEnemy(t.e); } });
+  for (let i = 0; i < 40 && (await snap())?.phase !== 'wall'; i++) await wait(200);
   await wait(1800);
   let st = await snap();
   const pos = await ev(s => ({ py: Math.round(s.player.y), name: s.chapter.name, lubuTex: s.dzLubu?.lubu?.sprite.texture.key }));

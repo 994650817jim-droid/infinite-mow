@@ -29,6 +29,8 @@ import { WEAPON_META,weaponName } from '../data/upgrades';
 import { chapterOneCleared, chapterUnlocked, isChapterTestRun } from '../systems/ChapterProgress';
 import { FONT, TITLE_FONT, HEADING_FONT, GAME_HEIGHT as H, GAME_WIDTH as W, IS_DESKTOP as D, switchLayout } from '../config';
 import { lqDivider, lqHitBox, lqPanel, lqSkin } from '../ui/LacquerKit';
+import { buildSettingsPanel, type SettingSpec } from '../ui/SettingsPanel';
+import { BARKS_LABEL, heroBarks, setHeroBarks, type HeroBarks } from '../systems/BattleSettings';
 import { CHAPTER_SCENES, openChapterSelect } from '../ui/ChapterSelect';
 import type { TimelineChapterId } from '../world/ChapterTimeline';
 
@@ -37,7 +39,7 @@ const PASSIVE_HINTS = [
   '命中积攒龙胆，满七层强化下一次龙枪。',
   '横斩命中怪群蓄势，强化斩击范围与伤害。',
   '重箭命中积蓄势，满五层进入神射。',
-  '天火连击同一目标积星象，第四发算无遗策。',
+  '无首领时天火每发都积星象，第四发算无遗策。',
 ];
 interface ChapterCard { id: ChapterId; bg: Phaser.GameObjects.Rectangle; name: Phaser.GameObjects.Text; tag: Phaser.GameObjects.Text; hint: Phaser.GameObjects.Text; decor: Phaser.GameObjects.Graphics; }
 interface HeroCard { bg: Phaser.GameObjects.Rectangle; icon: Phaser.GameObjects.Image; badge: Phaser.GameObjects.Text; decor: Phaser.GameObjects.Graphics; }
@@ -326,7 +328,56 @@ export class MenuScene extends Phaser.Scene {
     const ok=homeCommand(this,W/2+95,H/2+48,150,46,'退出游戏',true);ok.hit.setName('quit-ok').on('pointerdown',()=>app.quit());
     modal.add([cancel.g,cancel.hit,cancel.caption,ok.g,ok.hit,ok.caption]);
   }
+  /**
+   * 军中设置（电脑版，2026-11-18 用户「这里设计ui也要优化」）：一块漆底描金面板，页签 声音 / 画面 / 战斗 / 剧情（桌面版另有「显示」），
+   * 音量滑条、开关拨钮、分段选择；重看开场 / 重看新手引导 / 快捷键 / 返回 收在底部一排漆金按钮（不用水墨笔刷）。设置区见 ui/SettingsPanel。
+   */
+  private openSettingsV2():void{
+    const modal=this.add.container(0,0).setDepth(500).setName('home-settings-panel');
+    const app=desktop,desk=IS_DESKTOP_APP&&!!app,pw=640,ph=448,x0=W/2-pw/2,y0=H/2-ph/2;
+    modal.add(this.add.rectangle(W/2,H/2,W,H,0x0c0805,.9).setInteractive());
+    {const g=this.add.graphics();lqPanel(g,x0,y0,pw,ph);modal.add(g);}
+    const t=this.add.text(W/2,y0+30,'军中设置',{fontFamily:TITLE_FONT,fontSize:'28px',color:'#efd399',resolution:2}).setOrigin(.5).setStroke('#120904',4);modal.add(t);
+    {const div=this.add.graphics();lqDivider(div,W/2,y0+56,150);modal.add(div);}
+    const ch=(list:readonly string[],labels:Record<string,string>)=>list.map(v=>({v,label:labels[v]}));
+    const music=menuMusic(),sfx=uiSfx(),art0=artStyle(),scale0=renderScaleSetting();
+    const specs:SettingSpec[]=[
+      {key:'music',name:'音乐',tab:'sound',kind:'slider',get:()=>String(music.getVolume()),set:v=>music.setVolume(Number(v))},
+      {key:'sfx',name:'音效',tab:'sound',kind:'slider',get:()=>String(sfx.getVolume()),set:v=>{sfx.setVolume(Number(v));sfx.unlock();sfx.play('uiClick');}},
+      {key:'art-style',name:'人物画风',tab:'view',kind:'choice',options:[{v:'v2',label:'新版'},{v:'v1',label:'旧版'}],get:()=>artStyle(),set:v=>setArtStyle(v as 'v1'|'v2'),note:()=>artStyle()===art0?'':desk?'重启游戏后生效':'刷新页面后生效'},
+      {key:'render-scale',name:'画面清晰度',tab:'view',kind:'choice',options:ch(['','1','2','3'],SCALE_LABEL),get:()=>renderScaleSetting(),set:v=>setRenderScaleSetting(v as RenderScaleSetting),note:()=>renderScaleSetting()===scale0?'':'刷新后生效'},
+      {key:'iff-outline',name:'敌我描边',tab:'view',kind:'choice',options:ch(['off','enemy','all'],OUTLINE_LABEL),get:()=>outlineMode(),set:v=>{setOutlineMode(v as 'off');if(v!=='off')warmIffTextures(this.game);}},
+      {key:'outline-width',name:'描边粗细',tab:'view',kind:'choice',options:ch(['thin','thick'],WIDTH_LABEL),get:()=>outlineWidth(),set:v=>setOutlineWidth(v as 'thin')},
+      {key:'shake',name:'震屏',tab:'view',kind:'choice',options:ch(['strong','weak','off'],SHAKE_LABEL),get:()=>shakeLevel(),set:v=>setShakeLevel(v as ShakeLevel)},
+      {key:'death-fx',name:'死亡特效',tab:'view',kind:'toggle',options:ch(['on','off'],DEATHFX_LABEL),get:()=>deathFxSetting(),set:v=>setDeathFx(v as DeathFxSetting)},
+      {key:'damage',name:'伤害数字',tab:'battle',kind:'choice',options:ch(['all','crit','off'],DAMAGE_LABEL),get:()=>damageNumbers(),set:v=>setDamageNumbers(v as DamageNumbers)},
+      {key:'hero-barks',name:'武将台词',tab:'battle',kind:'toggle',options:ch(['on','off'],BARKS_LABEL),get:()=>heroBarks(),set:v=>setHeroBarks(v as HeroBarks)},
+      {key:'story',name:'剧情',tab:'story',kind:'choice',options:ch(['full','chapter','off'],STORY_LABEL),get:()=>storyMode(),set:v=>setStoryMode(v as 'full')},
+      {key:'opening',name:'开场动画',tab:'story',kind:'choice',options:ch(['every','first','off'],OPENING_LABEL),get:()=>openingMode(),set:v=>setOpeningMode(v as OpeningMode)},
+    ];
+    const tabs=[{id:'sound',label:'声音'},{id:'view',label:'画面'},{id:'battle',label:'战斗'},{id:'story',label:'剧情'}];
+    if(desk&&app){
+      // 桌面版：显示模式、窗口分辨率、垂直同步
+      const disp=()=>app.display?.get();tabs.push({id:'display',label:'显示'});
+      specs.push({key:'fullscreen',name:'显示模式',tab:'display',kind:'choice',options:[{v:'full',label:'全屏'},{v:'win',label:'窗口'}],get:()=>app.isFullscreen()?'full':'win',set:v=>{if((v==='full')!==app.isFullscreen()){app.toggleFullscreen();this.time.delayedCall(260,()=>panel.refresh());}}});
+      specs.push({key:'resolution',name:'窗口分辨率',tab:'display',kind:'stepper',get:()=>{const d=disp();return d?`${d.width}×${d.height}`:'—';},set:()=>{},step:dir=>{const d=disp();if(!d||!app.display)return;const list=d.resolutions;let i=list.findIndex(([w,h])=>w===d.width&&h===d.height);i=Math.max(0,Math.min(list.length-1,(i<0?0:i)+dir));app.display.set({width:list[i][0],height:list[i][1]});},note:()=>app.isFullscreen()?'全屏时按屏幕分辨率显示；窗口模式下生效':''});
+      specs.push({key:'vsync',name:'垂直同步',tab:'display',kind:'toggle',options:[{v:'on',label:'开'},{v:'off',label:'关'}],get:()=>disp()?.vsync?'on':'off',set:v=>{const d=disp();if(d&&app.display&&(v==='on')!==d.vsync)app.display.set({vsync:v==='on'});},note:()=>{const d=disp();return d&&d.vsync!==d.vsyncActive?'重启游戏后生效':'';}});
+    }
+    const panel=buildSettingsPanel({scene:this,root:modal,x:x0+20,y:y0+66,w:pw-40,h:ph-66-66,tabs,settings:specs,memoryKey:'im_settings_tab',bare:true});
+    // 底部一排：重看开场 / 重看新手引导 / 快捷键（次要漆金钮）· 退出游戏（桌面版）· 返回（漆金主钮）
+    const fy=y0+ph-34,btn=(t:Phaser.GameObjects.Text,x:number,w:number,tone:'gold'|'quiet')=>{t.setOrigin(.5).setPosition(x,fy).setFontFamily(HEADING_FONT).setFontSize(14);const sk=lqSkin(this,t,t,()=>({w,h:34}),{tone});lqHitBox(t,w,34);modal.add([sk.gfx,t]);return t;};
+    const line=this.add.graphics();line.lineStyle(1,0xc9a35e,.35).lineBetween(x0+24,fy-26,x0+pw-24,fy-26);modal.add(line);
+    const replay=this.add.text(0,0,'重看开场',{fontFamily:HEADING_FONT,fontSize:'14px',color:'#e8d3a6',resolution:2}).setInteractive({useHandCursor:true}).setName('settings-opening-replay');
+    replay.on('pointerdown',()=>{modal.destroy();this.scene.start('OpeningScene',{next:'MenuScene'});});
+    let bx=x0+24;const place=(t:Phaser.GameObjects.Text,w:number,tone:'gold'|'quiet')=>{btn(t,bx+w/2,w,tone);bx+=w+10;};
+    place(replay,92,'quiet');place(tutorialReplayLink(this,0,0),160,'quiet');place(hotkeySettingsLink(this,0,0,600),96,'quiet');
+    if(desk&&app){const quit=this.add.text(0,0,'退出游戏',{fontFamily:HEADING_FONT,fontSize:'14px',color:'#e8d3a6',resolution:2}).setInteractive({useHandCursor:true}).setName('settings-quit');
+      quit.on('pointerdown',()=>{if(quit.getData('confirm'))app.quit();else quit.setData('confirm',true).setText('再点退出');});place(quit,90,'quiet');}
+    const close=this.add.text(0,0,'返回',{fontFamily:HEADING_FONT,fontSize:'16px',color:'#e8d3a6',resolution:2}).setInteractive({useHandCursor:true}).setName('settings-close').setData('padDefault',true).on('pointerdown',()=>modal.destroy());
+    btn(close,x0+pw-24-50,100,'gold');
+  }
   private openHomeSettings():void {
+    if(D){this.openSettingsV2();return;} // 电脑版：新军中设置（2026-11-18）；手机仍用下面的旧版
     const modal=this.add.container(0,0).setDepth(500).setName('home-settings-panel');
     const label=(x:number,y:number,value:string,size=20)=>this.add.text(x,y,value,{fontFamily:FONT,fontSize:size+'px',color:'#e8d0aa',resolution:2}).setOrigin(.5);
     const app=desktop,desk=IS_DESKTOP_APP&&!!app;

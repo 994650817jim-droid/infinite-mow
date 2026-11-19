@@ -62,19 +62,19 @@ export const SIEGE_CITY: Record<SiegeTier, CityLayout> = {
     start: { x: 0, y: -880 }, gateHalf: 200, innerGateY: -1640,
     streets: [{ x: -900, y: -1225, w: 1800, h: 190, road: 'stone' }],
     buildings: [
-      H(-260, -880), H(260, -880, 'house2', 220), { kind: 'goods', x: 800, y: -700, size: 170 },
+      H(-260, -880), H(-740, -880, 'house', 230), H(260, -880, 'house2', 220), H(740, -880, 'house', 230, true), { kind: 'goods', x: 800, y: -700, size: 170 },
       H(-260, -1240, 'shop'), { kind: 'yard', x: -820, y: -1240, size: 160 }, H(260, -1240), H(820, -1240, 'house', 170, true),
       H(-260, -1460, 'house2', 220), H(-590, -1460), H(-800, -1460, 'house', 180), H(260, -1460, 'house', 210, true), H(590, -1460, 'house2', 220), H(800, -1460, 'house', 180, true),
       { kind: 'well', x: -820, y: -720, size: 100 }, { kind: 'cheval', x: -330, y: -1180, size: 120 }, { kind: 'cheval', x: 330, y: -1080, size: 120 },
     ],
     points: [
-      P('granary', '粮仓', -610, -880),
-      P('market', '市集', 610, -880, 240),
+      P('granary', '粮仓', -470, -880),
+      P('market', '市集', 470, -880, 240),
       P('armory', '武库', -610, -1240),
       P('barracks', '兵营', 610, -1240),
     ],
     need: 3,
-    barrels: [{ x: -70, y: -800 }, { x: 80, y: -1130 }, { x: -420, y: -1120 }, { x: 430, y: -790 }],
+    barrels: [{ x: -70, y: -800 }, { x: 80, y: -1130 }, { x: -420, y: -1120 }, { x: 300, y: -750 }],
     spawns: [{ x: 0, y: -1560 }, { x: -820, y: -1130 }, { x: 820, y: -1130 }, { x: -425, y: -1520 }, { x: 425, y: -1520 }],
     roofs: [{ x: -80, y: -950 }, { x: 80, y: -950 }, { x: -80, y: -1300 }, { x: 80, y: -1300 }, { x: -80, y: -1520 }, { x: 80, y: -1520 }],
   },
@@ -100,9 +100,9 @@ export const SIEGE_CITY: Record<SiegeTier, CityLayout> = {
       P('barracks', '兵营', 610, -1015),
       P('armory', '武库', -760, -1395),
       P('market', '市集', 760, -1395, 240),
-      // 角楼就是城墙转角的那座楼，要点圈在马道脚下（占住马道 = 控住角楼）
-      { kind: 'tower', name: '西角楼', x: -740, y: -760, radius: 95, b: { x: -1100, y: -660, size: 240 } },
-      { kind: 'tower', name: '东角楼', x: 740, y: -760, radius: 95, b: { x: 1100, y: -660, size: 240, flip: true } },
+      // 角楼就是城墙转角的那座楼（马道靠着它），要点圈在马道北头的横街上
+      { kind: 'tower', name: '西角楼', x: -930, y: -890, radius: 95, b: { x: -1100, y: -660, size: 240 } },
+      { kind: 'tower', name: '东角楼', x: 930, y: -890, radius: 95, b: { x: 1100, y: -660, size: 240, flip: true } },
     ],
     need: 4,
     barrels: [{ x: -70, y: -800 }, { x: 80, y: -1150 }, { x: -420, y: -930 }, { x: 420, y: -1310 }],
@@ -137,3 +137,16 @@ export const CITY_ART: Record<CityBuildingKind, { sheet: 'street' | 'barb' | 'ci
 };
 /** 要点所在的建筑。 */
 export const POINT_BUILDING: Record<CityPointKind, CityBuildingKind> = { granary: 'granary', armory: 'armory', barracks: 'barracks', tower: 'tower', market: 'market' };
+
+/**
+ * 要点作用与守点小队（攻城城内段第二步；初值，交平衡会话）：
+ *  - squadRange：主将走到离要点多近，守点小队（小队长 + squad 名守兵）才从要点里杀出来；leaderMul：小队长活着时占领读条速度倍率；
+ *  - 粮仓 granaryProvisions：结算军粮 +30%，granaryRefill：援军阶段守军补充 −30%（第三步接结算 / 限时）；
+ *  - 武库 armoryDamage：我军伤害 ×1.08（且城内不再刷弓手）；兵营 barracksSkip：每占一座，城内刷兵少 25%；
+ *  - 角楼 tower：大城没占的角楼往城里放箭雨（两座都在：everyMs[0] / zones[0]；剩一座：[1]）；市集 marketFood：立刻随军粮 +60。
+ */
+export const CITY_FX = {
+  squadRange: 560, squad: 3, leaderMul: .5,
+  granaryProvisions: .3, granaryRefill: .3, armoryDamage: 1.08, barracksSkip: .25, marketFood: 60,
+  tower: { firstMs: 6000, everyMs: [6500, 10000], zones: [2, 1] },
+} as const;

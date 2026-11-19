@@ -9,7 +9,7 @@
  * 移动（WASD / 方向键）固定不可改，只在列表里显示。
  */
 export type HotkeyAction =
-  | 'back' | 'potion' | 'order' | 'sortie' | 'bag' | 'attributes' | 'build' | 'menu'
+  | 'back' | 'potion' | 'order' | 'sortie' | 'bag' | 'attributes' | 'build' | 'map' | 'menu'
   | 'pick1' | 'pick2' | 'pick3' | 'pick4' | 'reroll' | 'confirm';
 
 export interface HotkeyDef {
@@ -30,6 +30,8 @@ export const HOTKEYS: Record<HotkeyAction, HotkeyDef> = {
   bag: { label: '行囊', where: '战斗中开关；行营休整', key: 'KeyB', alt: ['Tab'] },
   attributes: { label: '属性加点', where: '战斗中有属性点时开关', key: 'KeyC' },
   build: { label: '战法构筑', where: '战斗中开关', key: 'KeyV' },
+  // 2026-11-18 战场地图（battle-map-design.md）：M 已给返回主菜单，Tab 给行囊，取 G
+  map: { label: '战场地图', where: '战斗中开关大地图（小地图常显）', key: 'KeyG' },
   // 2026-11-18 用户「返回主菜单按钮，三处都加」：暂停菜单里按一次待确认、再按一次执行；天下地图 / 义军营寨直接回主页
   menu: { label: '返回主菜单', where: '暂停菜单（再按一次确认）；天下地图 / 义军营寨', key: 'KeyM' },
   pick1: { label: '选第 1 项', where: '三选一 / 遗珍 / 招募；休整页签 1；劝降', key: 'Digit1', alt: ['Numpad1'] },

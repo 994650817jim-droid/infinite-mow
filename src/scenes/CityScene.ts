@@ -10,6 +10,7 @@ import {exchangeMerit,merit,scrolls} from '../systems/MasteryStore';
 import {playMenuMusic} from '../systems/Music';
 import {isChapterTestRun} from '../systems/ChapterProgress';
 import Phaser from 'phaser';
+import {lqCommand} from '../ui/LacquerKit';
 import {W,H,worldShell,worldAssets} from '../world/WorldUI';
 import {FONT,HEADING_FONT} from '../config';
 import {homeCommand,warPanelTexture} from '../ui/HomeCommand';
@@ -27,7 +28,7 @@ import {TECHS,TECH_IDS,BRANCH_NAME,BRANCH_ORDER,techBlockers,techTotals,type Tec
 import {LORD_LEVEL_HINT,followerLevel,followerLevelCap,hallLevel,loadRoster,rankCap,rankPreview,rankUp,rosterFollowers,type Recruit} from '../systems/RosterStore';
 import {COMMONER_SKILLS} from '../data/commonerSkills';
 import {QUALITIES} from '../data/items';
-import {PANO_W,PANO_H,CITY_SLOTS,LEVEL_SCALE,CITY_BG_SIZES,CITY_ART_LEVELS,ART_ALIAS} from '../town/CityLayout';
+import {PANO_ZOOM,CAMP_BARS,CAMP_PAN,PANO_W,PANO_H,CITY_SLOTS,LEVEL_SCALE,CITY_BG_SIZES,CITY_ART_LEVELS,ART_ALIAS} from '../town/CityLayout';
 import {cityById,TIER_NAME} from '../world/WorldCities';
 import {CampLife,loadCampLife,CAMP_ART_IDS} from '../town/CampLife';
 import {MountGuide} from '../systems/MountGuide';
@@ -60,8 +61,11 @@ export class CityScene extends Phaser.Scene {
  /** 讲武堂「随从操练」翻页。 */
  private drillPage=0;
  constructor(){super('CityScene');}
- init(){D=W>600;this.vr=D?{x:12,y:62,w:W-24,h:H-62-58}:{x:0,y:104,w:W,h:H-104-104};this.k=Math.max(this.vr.w/PANO_W,this.vr.h/PANO_H);this.hits=[];this.drag=null;this.campLife=null;}
- preload(){if(!worldUnlocked()&&!isChapterTestRun())return;worldAssets(this,'town_ground','assets/town/ground.webp');
+ init(){D=W>600;this.vr=D?{x:0,y:0,w:W,h:H}:{x:0,y:104,w:W,h:H-104-104};this.k=Math.max(this.vr.w/PANO_W,this.vr.h/PANO_H)*(D?PANO_ZOOM:1);this.hits=[];this.drag=null;this.campLife=null;}
+ preload(){if(!worldUnlocked()&&!isChapterTestRun())return;
+  // 先卸战斗图集、再排营寨的载入：万一营寨的图也被记进了战斗图集，卸掉后这里会重新载入，不会退回程序画占位（原来在 create 里卸，preload 已跳过「已在」的键）
+  {const keys=this.registry.get('battleTextureKeys') as string[]|undefined;if(keys){for(const key of keys)if(this.textures.exists(key))this.textures.remove(key);this.registry.remove('battleTextureKeys');this.registry.set('battleReady',false);}}
+  worldAssets(this,'town_ground','assets/town/ground.webp');
   for(const n of CITY_BG_SIZES)worldAssets(this,`city_bg_${n}`,`assets/city/bg_${n}.webp`);
   loadCampLife(this);
   for(const id of CAMP_ART_IDS)worldAssets(this,`city_camp_${id}`,`assets/city/camp_${id}.webp`);
@@ -69,9 +73,7 @@ export class CityScene extends Phaser.Scene {
   for(const lv of CITY_ART_LEVELS)for(const id of ids)if(lv<=(TOWN_BUILDINGS[id].maxLevel??3)){const a=ART_ALIAS[id]??id;worldAssets(this,`city_${a}_${lv}`,`assets/city/${a}_${lv}.webp`);}}
  create(){playMenuMusic(this);this.registry.remove('hardChapter');
   if(!worldUnlocked()&&!isChapterTestRun()){this.registry.set('loadBattle',true);this.scene.start(this.registry.get('battleReady')?'MenuScene':'BootScene');return;}
-  // 战斗图集在下次出征重新加载，不与战略界面美术同时常驻
-  const keys=this.registry.get('battleTextureKeys') as string[]|undefined;
-  if(keys){for(const key of keys)if(this.textures.exists(key))this.textures.remove(key);this.registry.remove('battleTextureKeys');this.registry.set('battleReady',false);}
+  // 战斗图集已在 preload 开头卸掉（下次出征重新加载，不与战略界面美术同时常驻）
   saveWorld();
   // 马厩随坐骑开放：第一章通关后营中自动设 1 级马厩（WorldStore.ensureStableBuilt），刚建成时提示一次
   const stableNew=ensureStableBuilt(stableUnlocked());
@@ -79,14 +81,20 @@ export class CityScene extends Phaser.Scene {
   // 全景（最底层）
   this.pano=this.add.container(0,0).setDepth(-5);
   const mask=this.make.graphics({x:0,y:0}).fillStyle(0xffffff).fillRect(this.vr.x,this.vr.y,this.vr.w,this.vr.h);this.pano.setMask(mask.createGeometryMask());this.events.once('shutdown',()=>mask.destroy());
-  // 页眉底色压住全景边缘
-  const head=this.add.graphics().setDepth(-1);head.fillStyle(0x102019,1).fillRect(0,0,W,this.vr.y).fillRect(0,this.vr.y+this.vr.h,W,H-this.vr.y-this.vr.h);
-  head.lineStyle(2,0xb3935b,.85).strokeRect(this.vr.x,this.vr.y,this.vr.w,this.vr.h);
+  // 电脑：全景铺满全屏，顶 / 底两条半透明漆底描金栏叠在全景上；手机：页眉底色压住全景边缘（照旧）
+  const head=this.add.graphics().setDepth(-1).setName('city-bars');
+  if(D){const {top,bottom}=CAMP_BARS;
+   for(let i=0;i<8;i++)head.fillStyle(0x120b06,.8-i*.07).fillRect(0,top+i*3,W,3); // 顶栏下沿渐隐
+   head.fillStyle(0x120b06,.8).fillRect(0,0,W,top).lineStyle(1,0x000000,.7).lineBetween(0,top+.5,W,top+.5).lineStyle(1,0xc9a35e,.75).lineBetween(0,top-1.5,W,top-1.5);
+   for(let i=0;i<8;i++)head.fillStyle(0x120b06,.8-i*.07).fillRect(0,H-bottom-(i+1)*3,W,3);
+   head.fillStyle(0x120b06,.82).fillRect(0,H-bottom,W,bottom).lineStyle(1,0x000000,.7).lineBetween(0,H-bottom-.5,W,H-bottom-.5).lineStyle(1,0xc9a35e,.75).lineBetween(0,H-bottom+1.5,W,H-bottom+1.5);}
+  else{head.fillStyle(0x102019,1).fillRect(0,0,W,this.vr.y).fillRect(0,this.vr.y+this.vr.h,W,H-this.vr.y-this.vr.h);
+   head.lineStyle(2,0xb3935b,.85).strokeRect(this.vr.x,this.vr.y,this.vr.w,this.vr.h);}
   worldShell(this,'义军营寨');
   // 2026-11-17 用户：「只留下天下地图，其他按钮不需要，玩家想要什么就去点击建筑物」——招贤馆、招募后备、讲武堂、出征备战都改为点建筑 / 从天下地图出征
   this.top=txt(this,D?W-24:24,D?28:72,'',D?15:14,'#efe0b4',HEADING_FONT).setOrigin(D?1:0,.5).setName('city-grain');
   // 规模牌（全景左上角）与下一步提示（全景底边）
-  this.sizeText=txt(this,this.vr.x+12,this.vr.y+10,'',D?15:14,'#f6e2ae',HEADING_FONT).setDepth(5).setShadow(0,1,'#000',4,true,true).setBackgroundColor('#1a120bcc').setPadding(8,4,8,4);
+  this.sizeText=txt(this,this.vr.x+12,this.vr.y+(D?CAMP_BARS.top+8:10),'',D?15:14,'#f6e2ae',HEADING_FONT).setDepth(5).setShadow(0,1,'#000',4,true,true).setBackgroundColor('#1a120bcc').setPadding(8,4,8,4);
   this.hint=txt(this,D?190:24,D?28:94,'',D?13:12,'#b9d2a8').setOrigin(0,.5).setName('city-hint');
   // 底栏：只有「天下地图」（出征也从天下地图选章节）；功能都在建筑里
   const mapBtn=homeCommand(this,W/2,D?H-28:H-72,D?260:W-60,D?40:52,'天下地图 · 出征',true,true,D?16:17);mapBtn.hit.setName('city-map').on('pointerdown',()=>this.scene.start('WorldMapScene'));
@@ -100,9 +108,11 @@ export class CityScene extends Phaser.Scene {
   this.input.on('pointermove',(p:Phaser.Input.Pointer)=>{const d=this.drag;if(!d||!p.isDown)return;const dx=p.x-d.x,dy=p.y-d.y;if(!d.moved&&Math.hypot(dx,dy)<8)return;d.moved=true;this.scrollTo(d.sx-dx,d.sy-dy);});
   this.input.on('pointerup',()=>{this.time.delayedCall(0,()=>{this.drag=null;});});
   this.input.on('wheel',(_p:Phaser.Input.Pointer,_o:unknown,dx:number,dy:number)=>{if(this.anyModal())return;const roomX=PANO_W*this.k-this.vr.w,roomY=PANO_H*this.k-this.vr.h;if(roomX>roomY)this.scrollTo(this.sx+(dx||dy)*.6,this.sy);else this.scrollTo(this.sx+dx*.6,this.sy+dy*.6);});
-  // 初始视角：上次的位置，或横向对准主帐、纵向贴底
+  // 初始视角：上次的位置，或对准主帐（电脑全屏版主帐居中、略偏下；手机照旧贴底）
   const saved=this.registry.get('cityScroll') as {sx:number;sy:number}|undefined,hall=CITY_SLOTS[1].hall;
-  if(saved)this.scrollTo(saved.sx,saved.sy,false);else this.scrollTo(hall.x*this.k-this.vr.w/2,PANO_H*this.k-this.vr.h,false);
+  if(saved)this.scrollTo(saved.sx,saved.sy,false);else if(D)this.scrollTo(hall.x*this.k-this.vr.w/2,hall.y*this.k-this.vr.h*.62,false);else this.scrollTo(hall.x*this.k-this.vr.w/2,PANO_H*this.k-this.vr.h,false);
+  // 方向键 / WASD 平移（电脑）
+  if(D&&this.input.keyboard)this.panKeys=this.input.keyboard.addKeys('W,A,S,D,UP,DOWN,LEFT,RIGHT',false) as Record<string,Phaser.Input.Keyboard.Key>;
   this.refresh();
   if(!this.introSeen())this.time.delayedCall(250,()=>this.openIntro());
   if(stableNew)this.time.delayedCall(400,()=>this.toast('营中已设马厩 · 点马厩换马、看已有的马'));
@@ -114,7 +124,8 @@ export class CityScene extends Phaser.Scene {
  private boonText?:Phaser.GameObjects.Text;
  private openPreparation(){if(this.registry.get('battleReady'))this.scene.start('MenuScene');else{this.registry.set('loadBattle',true);this.scene.start('BootScene');}}
  private anyModal(){return this.children.list.some(o=>(o as unknown as {depth:number}).depth>=600);}
- private inView(x:number,y:number){const r=this.vr;return x>=r.x&&x<=r.x+r.w&&y>=r.y&&y<=r.y+r.h;}
+ /** 全景可交互区：电脑全屏版去掉顶 / 底栏（栏下的建筑不可点、不从栏上开始拖动）。 */
+ private inView(x:number,y:number){const r=this.vr,t=D?CAMP_BARS.top:0,b=D?CAMP_BARS.bottom:0;return x>=r.x&&x<=r.x+r.w&&y>=r.y+t&&y<=r.y+r.h-b;}
  /** 平移全景（夹在边界内），并只让视野内的建筑可点（手柄导航也只在视野内移动）。 */
  private scrollTo(sx:number,sy:number,remember=true){
   this.sx=Phaser.Math.Clamp(sx,0,Math.max(0,PANO_W*this.k-this.vr.w));this.sy=Phaser.Math.Clamp(sy,0,Math.max(0,PANO_H*this.k-this.vr.h));
@@ -196,7 +207,17 @@ export class CityScene extends Phaser.Scene {
    this.campLife=new CampLife(this,k,blocked);this.pano.remove(this.campLife.root);this.pano.addAt(this.campLife.root,this.textures.exists(bg)?1:0);}
   this.scrollTo(this.sx,this.sy,false);
  }
- update(_t:number,dt:number){this.campLife?.update(dt);}
+ private panKeys?:Record<string,Phaser.Input.Keyboard.Key>;
+ update(_t:number,dt:number){this.campLife?.update(dt);this.panStep(dt);}
+ /** 电脑：方向键 / WASD、鼠标贴边平移（拖动和滚轮在 create 里）；有弹窗、正在拖动时不动。 */
+ private panStep(dtMs:number){
+  if(!D||!this.pano||this.drag?.moved||this.anyModal())return;
+  const dt=Math.min(.05,dtMs/1000),k=this.panKeys,on=(...n:string[])=>!!k&&n.some(x=>k[x]?.isDown);
+  let vx=(on('D','RIGHT')?1:0)-(on('A','LEFT')?1:0),vy=(on('S','DOWN')?1:0)-(on('W','UP')?1:0),sp:number=CAMP_PAN.keys;
+  if(!vx&&!vy){const p=this.input.activePointer,z=CAMP_PAN.edgeZone;
+   if(this.game.input.isOver&&!p.isDown&&p.x>0&&p.y>0){vx=p.x<=z?-1:p.x>=W-z?1:0;vy=p.y<=z?-1:p.y>=H-z?1:0;sp=CAMP_PAN.edge;}}
+  if(vx||vy){const n=Math.hypot(vx,vy);this.scrollTo(this.sx+vx/n*sp*dt,this.sy+vy/n*sp*dt);}
+ }
  /** 无底图时：程序画天空、远山、土地、街道与对应规模的寨墙。 */
  private drawFallbackBg(size:number){
   const k=this.k,g=this.add.graphics(),w=PANO_W*k,h=PANO_H*k;
@@ -222,7 +243,7 @@ export class CityScene extends Phaser.Scene {
  private toastText?:Phaser.GameObjects.Text;
  private toast(v:string){
   const warn=storageUnavailable?(incompatibleSave?'存档版本较新，本次修改不会保存':'存储不可用，修改仅保留本次会话'):'';const msg=[v,warn].filter(Boolean).join('\n');if(!msg)return;
-  this.toastText?.destroy();this.toastText=txt(this,W/2,this.vr.y+this.vr.h-18,msg,D?15:14,'#ffe7a8',HEADING_FONT).setOrigin(.5,1).setDepth(8).setAlign('center').setBackgroundColor('#1a120bdd').setPadding(12,6,12,6).setName('city-toast');
+  this.toastText?.destroy();this.toastText=txt(this,W/2,this.vr.y+this.vr.h-(D?CAMP_BARS.bottom+12:18),msg,D?15:14,'#ffe7a8',HEADING_FONT).setOrigin(.5,1).setDepth(8).setAlign('center').setBackgroundColor('#1a120bdd').setPadding(12,6,12,6).setName('city-toast');
   const tt=this.toastText;this.tweens.add({targets:tt,alpha:0,delay:2600,duration:600,onComplete:()=>tt.destroy()});
  }
  /** 建成 / 升级后播放一次：建筑弹起 + 尘土。 */
@@ -234,13 +255,13 @@ export class CityScene extends Phaser.Scene {
  }
 
  // —— 弹窗 ——
- private modal(name:string,title:string,h:number,depth=600):{root:Phaser.GameObjects.Container;x:number;y:number;w:number;h:number}{
+ private modal(name:string,title:string,h:number,depth=600,lacquer=false):{root:Phaser.GameObjects.Container;x:number;y:number;w:number;h:number}{
   this.children.getByName(name)?.destroy();
   const root=this.add.container(0,0).setDepth(depth).setName(name),w=Math.min(D?640:W-24,W-24),y=(H-h)/2;
   root.add(this.add.rectangle(W/2,H/2,W,H,0x0b0806,.78).setInteractive());
   root.add(this.add.image(W/2,H/2,warPanelTexture(this,w,h,true)).setDisplaySize(w+16,h+16));
   root.add(txt(this,W/2,y+30,title,22,'#efd399',HEADING_FONT).setOrigin(.5).setName(name+'-title'));
-  const close=homeCommand(this,W/2,y+h-34,160,40,'返回',false,true,15);close.hit.setName(name+'-close').setData('padDefault',true).on('pointerdown',()=>{root.destroy();this.refresh();});root.add([close.g,close.hit,close.caption]);
+  const close=(lacquer?lqCommand:homeCommand)(this,W/2,y+h-34,160,40,'返回',false,true,15);close.hit.setName(name+'-close').setData('padDefault',true).on('pointerdown',()=>{root.destroy();this.refresh();});root.add([close.g,close.hit,close.caption]);
   return{root,x:(W-w)/2,y,w,h};
  }
  /** 建筑面板：现状、下一级效果、花费、前提，建造 / 升级，以及建筑功能（招募、研究、换马、开仓）。 */
@@ -329,12 +350,12 @@ export class CityScene extends Phaser.Scene {
   line(qy+104,notice||(max?`现有战功最多可换 ${max} 张`:'战功不足：去战场击杀精英、首领获得战功'),13,notice?'#9fd38a':'#b9a98a','merit-msg');
  }
  private openTech(){
-  const s=loadWorld(),t=s.town,acad=levelOf(t,'academy'),h=D?Math.min(H-24,520):Math.min(H-40,780),m=this.modal('town-tech',acad?`讲武堂 Lv${acad} · 军粮 ${s.provisions}`:'讲武堂（未建）',h);
+  const s=loadWorld(),t=s.town,acad=levelOf(t,'academy'),h=D?Math.min(H-24,520):Math.min(H-40,780),m=this.modal('town-tech',acad?`讲武堂 Lv${acad} · 军粮 ${s.provisions}`:'讲武堂（未建）',h,600,true); // 2026-11-18：讲武堂弹窗按钮全用漆金（一屏最多一个水墨按钮，这里一个都不留）
   if(!acad)m.root.add(txt(this,W/2,m.y+66,'先在营中建讲武堂（军粮 '+TOWN_BUILDINGS.academy.build+'），即可研究科技。',13,'#e59a83').setOrigin(.5).setWordWrapWidth(m.w-60,true).setAlign('center').setName('town-tech-need'));
   const tabW=Math.min(140,(m.w-60)/4),tabY=m.y+(acad||this.techTab==='drill'?70:100);
   BRANCH_ORDER.forEach((b,i)=>{const on=this.techTab===b,done=TECH_IDS.filter(id=>TECHS[id].branch===b&&t.tech.includes(id)).length,all=TECH_IDS.filter(id=>TECHS[id].branch===b).length;
-   const btn=homeCommand(this,W/2+(i-1.5)*(tabW+8),tabY,tabW,38,`${BRANCH_NAME[b]} ${done}/${all}`,on,true,D?15:13);btn.hit.setName('tech-tab-'+b).on('pointerdown',()=>{this.techTab=b;this.openTech();});m.root.add([btn.g,btn.hit,btn.caption]);});
-  { const on=this.techTab==='drill',btn=homeCommand(this,W/2+1.5*(tabW+8),tabY,tabW,38,'随从操练',on,true,D?15:13);btn.hit.setName('tech-tab-drill').on('pointerdown',()=>{this.techTab='drill';this.drillPage=0;this.openTech();});m.root.add([btn.g,btn.hit,btn.caption]); }
+   const btn=lqCommand(this,W/2+(i-1.5)*(tabW+8),tabY,tabW,38,`${BRANCH_NAME[b]} ${done}/${all}`,on,true,D?15:13);btn.hit.setName('tech-tab-'+b).on('pointerdown',()=>{this.techTab=b;this.openTech();});m.root.add([btn.g,btn.hit,btn.caption]);});
+  { const on=this.techTab==='drill',btn=lqCommand(this,W/2+1.5*(tabW+8),tabY,tabW,38,'随从操练',on,true,D?15:13);btn.hit.setName('tech-tab-drill').on('pointerdown',()=>{this.techTab='drill';this.drillPage=0;this.openTech();});m.root.add([btn.g,btn.hit,btn.caption]); }
   if(this.techTab==='drill'){m.root.getByName('town-tech-need')?.destroy();this.drawDrill(m,h);return;}
   const branch:TechBranch=this.techTab;
   let padSet=false;
@@ -347,7 +368,7 @@ export class CityScene extends Phaser.Scene {
    // 2026-11-17 UI 审查：「需要…」原在说明下方，行高不够时压出行框；电脑版挪到标题同一行右侧
    if(!done&&block.length)m.root.add(txt(this,D?head.x+head.width+18:x+14,D?y+11:desc.y+desc.height+4,`需要：${block.join('、')} · 军粮 ${def.cost}`,12,'#c99a7a').setName('tech-need-'+id));
    const bw=D?140:120,label=done?'已研究':block.length?'未解锁':`研究 ${def.cost}`;
-   const btn=homeCommand(this,x+w-bw/2-10,y+(rowH-8)/2,bw,34,label,ready&&afford,ready&&afford,13);btn.hit.setName('tech-'+id).on('pointerdown',()=>{if(done)return;const res=researchTech(id);this.message=res.message;this.openTech();if(res.ok){uiSfx().play('uiClick');this.toast(res.message);}});
+   const btn=lqCommand(this,x+w-bw/2-10,y+(rowH-8)/2,bw,34,label,ready&&afford,ready&&afford,13);btn.hit.setName('tech-'+id).on('pointerdown',()=>{if(done)return;const res=researchTech(id);this.message=res.message;this.openTech();if(res.ok){uiSfx().play('uiClick');this.toast(res.message);}});
    if(ready&&afford&&!padSet){padSet=true;btn.hit.setData('padDefault',true);}
    m.root.add([btn.g,btn.hit,btn.caption]);
   });
@@ -378,7 +399,7 @@ export class CityScene extends Phaser.Scene {
     const pv=rankPreview(r,line,s),ly=y+(D?30:34)+k*(D?24:28),ok=!lord&&!pv.full&&pv.afford;
     if(!lord)m.root.add(txt(this,x+12,ly,`${line==='weapon'?'兵器':'被动'}　${pv.full?tight(pv.before):`${tight(pv.before)} → ${tight(pv.after)}`}`,D?12:11,pv.full?'#9d927c':pv.afford?'#d9ccae':'#e59a83').setWordWrapWidth(w-bw-40,true).setName(`drill-preview-${line}-${r.id}`));
     const label=lord?'主公':pv.full?(pv.capByHall?'招贤馆升级后':'已满'):`升·${line==='weapon'?'兵器':'被动'} ${pv.cost}粮`;
-    const btn=homeCommand(this,x+w-bw/2-10,ly+9,bw,D?24:26,label,false,ok,D?13:12);
+    const btn=lqCommand(this,x+w-bw/2-10,ly+9,bw,D?24:26,label,false,ok,D?13:12);
     if(!lord&&!pv.full&&!pv.afford)btn.caption.setColor('#c4523f'); // 买不起：花费标红
     btn.hit.setName(`drill-${line}-${r.id}`).on('pointerdown',()=>{const res=rankUp(r.id,line);this.message=res.message;if(res.ok){uiSfx().play('uiClick');this.toast(res.message);}this.openTech();});
     m.root.add([btn.g,btn.hit,btn.caption]);
@@ -386,8 +407,8 @@ export class CityScene extends Phaser.Scene {
   });
   if(pages>1){
    const py=m.y+h-80;
-   const prev=homeCommand(this,W/2-120,py,90,32,'上页',false,this.drillPage>0,13);prev.hit.setName('drill-prev').on('pointerdown',()=>{this.drillPage--;this.openTech();});
-   const next=homeCommand(this,W/2+120,py,90,32,'下页',false,this.drillPage<pages-1,13);next.hit.setName('drill-next').on('pointerdown',()=>{this.drillPage++;this.openTech();});
+   const prev=lqCommand(this,W/2-120,py,90,32,'上页',false,this.drillPage>0,13);prev.hit.setName('drill-prev').on('pointerdown',()=>{this.drillPage--;this.openTech();});
+   const next=lqCommand(this,W/2+120,py,90,32,'下页',false,this.drillPage<pages-1,13);next.hit.setName('drill-next').on('pointerdown',()=>{this.drillPage++;this.openTech();});
    m.root.add([prev.g,prev.hit,prev.caption,next.g,next.hit,next.caption,txt(this,W/2,py,`${this.drillPage+1}/${pages}`,13,'#cdbf9f').setOrigin(.5)]);
   }
   if(this.message)m.root.add(txt(this,W/2,m.y+h-(pages>1?104:72),this.message,13,'#e8c98a').setOrigin(.5).setName('town-tech-message'));

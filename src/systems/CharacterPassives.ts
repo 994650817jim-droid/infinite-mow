@@ -36,6 +36,8 @@ export class CharacterPassives {
   private surroundAcc = 0;
   /** 诸葛亮观星：各目标的星象层数（uid → 层数 / 最后命中），与八阵图区域（易伤）。 */
   private readonly stars = new Map<number, { spawnId: number; marks: number; last: number }>();
+  /** 观星·怪堆（2026-11-18 夜）：场上没有首领 / 精锐时，天火每发都积 1 层（不分打中谁），满层下一发算无遗策。 */
+  private crowdStar = { marks: 0, last: -Infinity };
   private bazhen: { x: number; y: number; r: number; until: number }[] = [];
   /** 本关击杀数，及黄忠神射中射杀的精锐 / 首领数（技艺「老骥伏枥」读取）。 */
   private stageKills = 0; private sharpEliteKills = 0;
@@ -52,10 +54,10 @@ export class CharacterPassives {
   constructor(character: CharacterId = 'zhaoyun', now = 0) { this.reset(character, now); }
   reset(character: CharacterId, now: number): void {
     this.character = character; this.stacks = 0; this.lastGain = -Infinity; this.charmKillAt = -Infinity; this.lastDamage = now; this.sharpUntil = -Infinity; this.sharpMs = HZ_SHARP.sharpMs; this.hurtDropAt = -Infinity; this.surroundAcc = 0; this.stars.clear(); this.bazhen = []; this.stageKills = 0; this.sharpEliteKills = 0;
-    this.generation++; this.stopped = false; this.gains = 0; this.triggers = 0; this.burns.clear(); this.charms.clear(); this.guardUntil = -Infinity; this.chargeInvulnUntil = this.chargeGuardUntil = -Infinity;
+    this.generation++; this.stopped = false; this.gains = 0; this.triggers = 0; this.burns.clear(); this.charms.clear(); this.crowdStar = { marks: 0, last: -Infinity }; this.guardUntil = -Infinity; this.chargeInvulnUntil = this.chargeGuardUntil = -Infinity;
   }
   get characterId(): CharacterId { return this.character; }
-  stop(): void { this.stopped = true; this.stacks = 0; this.generation++; this.burns.clear(); this.charms.clear(); this.stars.clear(); this.bazhen = []; this.chargeInvulnUntil = this.chargeGuardUntil = -Infinity; }
+  stop(): void { this.stopped = true; this.stacks = 0; this.generation++; this.burns.clear(); this.charms.clear(); this.stars.clear(); this.crowdStar = { marks: 0, last: -Infinity }; this.bazhen = []; this.chargeInvulnUntil = this.chargeGuardUntil = -Infinity; }
   private get maxStacks(): number { return this.character === 'huangzhong' ? HZ_SHARP.need : this.character === 'zhuge' ? ZG_TIANHUO.starNeed : CHARACTER_PASSIVES[this.character].maxStacks; }
   onDamage(now: number): void {
     if (this.stopped) return;
@@ -123,9 +125,18 @@ export class CharacterPassives {
     }
     s.marks++; s.last = now; this.gains++; return false;
   }
+  /** 观星·怪堆：场上没有首领 / 精锐时天火落地（打中谁都算，目标先死了也算）。已满 starNeed 层 → 本发算无遗策（返回 true，清层）；否则积 1 层。starDecayMs 没再落地就散。 */
+  starLandCrowd(now: number): boolean {
+    if (this.stopped || this.character !== 'zhuge') return false;
+    const c = this.crowdStar; if (now - c.last > ZG_TIANHUO.starDecayMs) c.marks = 0;
+    if (c.marks >= ZG_TIANHUO.starNeed) { c.marks = 0; c.last = now; this.triggers++; return true; }
+    c.marks++; c.last = now; this.gains++; return false;
+  }
+  /** 观星·怪堆当前层数。 */
+  crowdStarMarks(now: number): number { return now - this.crowdStar.last <= ZG_TIANHUO.starDecayMs ? this.crowdStar.marks : 0; }
   /** 某个目标当前的星象层数（测试 / HUD）。 */
   starMarks(enemy: Enemy, now: number): number { const s = this.stars.get(enemy.uid); return s && s.spawnId === enemy.spawnId && now - s.last <= ZG_TIANHUO.starDecayMs ? s.marks : 0; }
-  private starTop(now: number): number { let m = 0; for (const s of this.stars.values()) if (now - s.last <= ZG_TIANHUO.starDecayMs) m = Math.max(m, s.marks); return m; }
+  private starTop(now: number): number { let m = this.crowdStarMarks(now); for (const s of this.stars.values()) if (now - s.last <= ZG_TIANHUO.starDecayMs) m = Math.max(m, s.marks); return m; }
   /** 诸葛亮八阵图：登记易伤区域（减速 / 首领出招变慢在武器里结算）。 */
   addBazhen(x: number, y: number, r: number, until: number): void { if (!this.stopped) this.bazhen.push({ x, y, r, until }); }
   isTurned(enemy: Enemy, now: number): boolean { const c = this.charms.size ? this.charmOf(enemy) : undefined; return !!c && c.turnedUntil > now; }

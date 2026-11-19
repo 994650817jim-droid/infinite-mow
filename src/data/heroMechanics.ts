@@ -39,8 +39,17 @@ export const ZG_TIANHUO = {
   /** 2026-11-18 用户试玩：「诸葛亮的普通攻击打不到集群的怪堆」→ 没有首领 / 精锐时按通用 smartTarget 的「群怪」规则打进怪堆中心，
    *  打杂兵时溅射加大（crowdSplashRadius / crowdSplashMul）；打首领 / 精锐维持单点 + 小溅射。借东风朝怪最密的方向扫。初值，交平衡组复测。 */
   crowdSplashRadius: 90, crowdSplashMul: .4,
+  /** 天火余烬（2026-11-18 用户：「诸葛亮清小怪偏弱，需要设计」；同晚又定「只有被动触发后才触发」）：
+   *  只有算无遗策那一发（观星第 4 发）落地留一块星火焦土，半径 radius、持续 ms，每 tickMs 对里面的敌人
+   *  造成天火单发伤害 × mul（首领 / 精锐 × bossMul；不乘算无遗策 ×2）。用户：「范围天火余烬变大就好」——主要加大范围（90 → 160），时长 / 每跳只微调。画面手绘 zhuge_ember。初值。 */
+  /** 2026-11-18 夜 用户：「七星焦土谁都可以烧，留在地上烧的时间久点」——首领 / 精锐也烧（每跳 bossMul，压着首领输出 ≤ 原来 1.15 倍），持续 2 → 4.5 秒 */
+  ember: { ms: 4500, tickMs: 500, mul: .25, bossMul: .04, radius: 160 },
   starNeed: 3, starTargets: 5, starDecayMs: 4000, burstMul: 2,
-  eastWind: { every: 4, len: [300, 340, 380] as readonly number[], width: 56, mul: [.6, .75, .9] as readonly number[] },
+  /** 观星·怪堆（2026-11-18 夜，统筹定）：场上没有首领 / 精锐时，天火每发都积星象（打中谁都算），每第 4 发算无遗策 + 星火焦土；有首领 / 精锐时照旧只算同一目标。false 即关掉 */
+  crowdStars: true as boolean,
+  /** 借东风：每第 every 发；场上没有首领 / 精锐时每第 everyCrowd 发（清怪更勤，2026-11-18） */
+  /** knockback（2026-11-18 夜 用户：「借东风有吹风击退效果」）：火龙扫过时顺着风向把敌人吹开 px 像素（精锐 × eliteMul，首领 / 不受控的不推），ms 内分几步推完，碰到墙 / 障碍 / 场地边就停 */
+  eastWind: { every: 4, everyCrowd: 3, len: [300, 340, 380] as readonly number[], width: 56, mul: [.6, .75, .9] as readonly number[], knockback: { px: 100, eliteMul: .4, ms: 180 } },
   bazhen: { radius: [90, 105, 120] as readonly number[], ms: [2000, 2500, 3000] as readonly number[], slow: .4, vuln: 1.15, bossGapMul: 1.25 },
 } as const;
 /** 某武将某属性的额外说明（属性面板 / 主属性章悬停里追加）；没有返回 ''。 */

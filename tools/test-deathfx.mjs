@@ -155,7 +155,7 @@ await p.context().close();
 p = await open('?dev=1&layout=desktop'); await p.waitForFunction(() => window.__game?.scene.getScene('MenuScene')?.sys.isActive(), null, { timeout: 180000 }); await p.waitForTimeout(800);
 const r8 = await p.evaluate(async () => {
   const m = window.__game.scene.getScene('MenuScene'); localStorage.removeItem('im_death_fx'); (await window.__mod('/src/systems/BattleSettings.ts')).resetDeathFxCache(); m.openHomeSettings(); await new Promise(r => setTimeout(r, 300));
-  const panel = m.children.getByName('home-settings-panel'), val = window.__find(panel, 'settings-death-fx'), inc = window.__find(panel, 'settings-row-10-inc'), out = { has: !!val && !!inc, label0: val?.text };
+  const panel = m.children.getByName('home-settings-panel'), val = window.__find(panel, 'settings-death-fx'), inc = window.__find(panel, 'settings-death-fx-inc') /* 2026-11-18 设置改版 */, out = { has: !!val && !!inc, label0: val?.text };
   inc.emit('pointerdown'); out.label1 = val.text; out.ls1 = localStorage.getItem('im_death_fx'); inc.emit('pointerdown'); out.label2 = val.text; out.ls2 = localStorage.getItem('im_death_fx');
   const ys = []; const walk = o => { if (o.y !== undefined && o.type === 'Text') ys.push(o.y + o.height / 2); for (const c of o.list ?? []) walk(c); }; walk(panel); out.bottom = Math.max(...ys); out.H = (await window.__mod('/src/config.ts')).GAME_HEIGHT; out.close = window.__find(panel, 'settings-close')?.y;
   return out;

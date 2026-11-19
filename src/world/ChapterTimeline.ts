@@ -65,8 +65,8 @@ export function currentChapter(s: TimelineProgress): TimelineChapter {
 const ARC_OF: Record<TimelineChapterId, string> = { huangjin: 'huangjin', hulao: 'dongzhuo', qunxiong: 'qunxiong', guandu: 'guandu', chibi: 'chibi', jingnan: 'jingnan', shu: 'shu', hanzhong: 'hanzhong', xiangfan: 'xiangfan', yiling: 'yiling', nanzheng: 'nanzheng', beifa: 'beifa' };
 /** 各章三关在地图上的位置（按史事地名大致方位，避开城池徽标）。 */
 export const STAGE_POINTS: Record<TimelineChapterId, ReadonlyArray<{ x: number; y: number }>> = {
-  huangjin: [{ x: 822, y: 212 }, { x: 738, y: 158 }, { x: 905, y: 262 }],   // 广宗外围 · 下曲阳 · 广宗决战
-  hulao: [{ x: 795, y: 280 }, { x: 858, y: 405 }, { x: 612, y: 372 }],      // 汜水关 · 荥阳 · 洛阳（虎牢关吕布改为地图挑战关）
+  huangjin: [{ x: 838, y: 236 }, { x: 752, y: 128 }, { x: 905, y: 198 }],   // 广宗外围 · 下曲阳 · 广宗决战（冀州，2026-11-19 征途图拉开间距）
+  hulao: [{ x: 782, y: 318 }, { x: 858, y: 405 }, { x: 612, y: 372 }],      // 汜水关 · 荥阳 · 洛阳（虎牢关吕布改为地图挑战关）
   qunxiong: [{ x: 305, y: 365 }, { x: 605, y: 525 }, { x: 1022, y: 590 }],  // 长安 · 宛城 · 寿春
   guandu: [{ x: 975, y: 200 }, { x: 1010, y: 300 }, { x: 1052, y: 400 }],  // 白马 · 延津 · 乌巢
   chibi: [{ x: 420, y: 598 }, { x: 800, y: 790 }, { x: 360, y: 742 }],      // 长坂 · 赤壁 · 江陵

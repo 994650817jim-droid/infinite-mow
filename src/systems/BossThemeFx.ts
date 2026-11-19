@@ -8,17 +8,21 @@ import { DEPTH } from '../config';
  * 图集（ChatGPT 出，黑底，tools/prepare-black-fx.mjs 去底）：1024×1024、4×4、每格 256；行 0 斩击（0–3）、行 1 长条（4–7）、行 2 落点爆（8–11）、行 3 现身烟（12–15）。
  * 图里：斩击朝右、弧心约在格宽 0.39 处；长条贯穿整格、纵向居中；落点爆 / 现身烟以格中心为圆心。
  */
-export type BossTheme = 'blood' | 'yellow' | 'dust' | 'quake';
+export type BossTheme = 'blood' | 'yellow' | 'dust' | 'quake' | 'wall' | 'lance' | 'ink' | 'wei';
 export const BOSS_THEME_FILES: Readonly<Record<BossTheme, string>> = {
   blood: 'assets/boss-fx/themes/blood.png', yellow: 'assets/boss-fx/themes/yellow.png', dust: 'assets/boss-fx/themes/dust.png', quake: 'assets/boss-fx/themes/quake.png',
+  wall: 'assets/boss-fx/themes/wall.png', lance: 'assets/boss-fx/themes/lance.png', ink: 'assets/boss-fx/themes/ink.png', wei: 'assets/boss-fx/themes/wei.png',
 };
 /** 已出图的主题（图到一组登记一组，避免请求不存在的文件）。 */
-export const BOSS_THEME_READY: readonly BossTheme[] = ['blood', 'yellow', 'dust', 'quake'];
+export const BOSS_THEME_READY: readonly BossTheme[] = ['blood', 'yellow', 'dust', 'quake', 'wall', 'lance', 'ink', 'wei'];
 /** 首领 → 主题。 */
 export const BOSS_THEME_OF: Readonly<Record<string, BossTheme>> = {
   zhangliang: 'yellow', zhangbao: 'yellow',
-  lijue: 'blood', zhangxiu: 'blood', huaxiong: 'blood', guosi: 'blood',
-  yanliang: 'dust', wenchou: 'dust', caochun: 'dust', xiahouyuan: 'dust', zhanghe: 'dust', sunhuan: 'dust', zhangren: 'dust', zhuran: 'dust', pangde: 'dust',
+  lijue: 'blood', huaxiong: 'blood', guosi: 'blood',
+  zhangxiu: 'lance', zhanghe: 'lance', zhuran: 'lance', zhangren: 'lance', huangzhong: 'lance', caimao: 'lance',
+  liudu: 'wall', hanxuan: 'wall', yanghuai: 'wall', haozhao: 'wall', zhaofan: 'wall', liuzhang: 'wall',
+  lvmeng: 'ink', caocao: 'wei', caoren: 'wei',
+  yanliang: 'dust', wenchou: 'dust', caochun: 'dust', xiahouyuan: 'dust', sunhuan: 'dust', pangde: 'dust',
   mangyachang: 'quake', wutugu: 'quake', menghuo: 'quake',
 };
 export const BOSS_THEME_FX = {

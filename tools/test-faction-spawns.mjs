@@ -7,8 +7,9 @@ const heroRec = id => ({ id, kind: 'hero', hero: id, name: id, template: 'spear'
 const roster = { version: 1, lord: 'zhaoyun', lordFinal: true, owned: [heroRec('zhaoyun')], followers: [], offers: [], captives: [], season: -1, manual: 0, dry: 0, seq: 2, hall: 3 };
 const world = { version: 8, yellowStages: 3, dongzhuoStages: 3, warlordStages: 3, guanduStages: 3, chibiStages: 3, worldAvailable: true, cleared: { huangjin: true, hulao: true }, merits: 0, provisions: 1000, buildings: { barracks: 1, farm: 1, clinic: 1 }, reserve: {}, receipts: [], nodes: ['home', 'huangjin', 'hulao'], ownedCities: [], eraSeen: 2, capturedEver: [], alerts: [], lastLost: [], chapterSeen: 12, tutorialDone: true };
 const heroes = { version: 1, migrated: true, attrSet: 3, heroes: { zhaoyun: { level: 20, xp: 0, attributes: { strength: 10, agility: 9, intellect: 0, command: 0 } } } };
-const CH = { 1: { key: 'GameScene', cfg: st => ({ chapter: 'huangjin', stage: st }) }, 2: { key: 'GameScene', cfg: st => ({ chapter: 'hulao', westStage: st }) }, 3: { key: 'ThirdGameScene', reg: 'thirdStage' }, 4: { key: 'GuanduGameScene', reg: 'guanduStage' }, 7: { key: 'ShuGameScene', reg: 'shuStage' }, 11: { key: 'NanzhengGameScene', reg: 'nanzhengStage' } };
+const CH = { 1: { key: 'GameScene', cfg: st => ({ chapter: 'huangjin', stage: st }) }, 2: { key: 'GameScene', cfg: st => ({ chapter: 'hulao', westStage: st }) }, 3: { key: 'ThirdGameScene', reg: 'thirdStage' }, 4: { key: 'GuanduGameScene', reg: 'guanduStage' }, 7: { key: 'ShuGameScene', reg: 'shuStage' }, 11: { key: 'NanzhengGameScene', reg: 'nanzhengStage' }, 5: { key: 'ChibiGameScene', reg: 'chibiStage' }, 6: { key: 'JingnanGameScene', reg: 'jingnanStage' } };
 const STAGES = (process.argv[2] ?? '2-3,3-2,4-1,7-1,11-1').split(',');
+import('node:fs').then(f => f.mkdirSync('assets/review/faction', { recursive: true }));
 let pass = 0, fail = 0; const errors = [];
 const ck = (n, ok, d) => { ok ? pass++ : fail++; console.log((ok ? 'PASS ' : 'FAIL ') + n + (d !== undefined ? ' · ' + JSON.stringify(d).slice(0, 700) : '')); };
 const b = await chromium.launch({ channel: 'chrome', headless: true, args: ['--mute-audio'] });
@@ -29,7 +30,7 @@ for (const id of STAGES) {
     const sheets = {}, rosters = {}; let n = 0; const seen = new Set(); const t = performance.now(); s.devTimeScale = 3;
     while (performance.now() - t < 22000 && !s.over) {
       clear();
-      for (const e of s.enemies) { if (!e.active || e.isSupplySlot || e.kind === 'boss' || seen.has(e.spawnId)) continue; seen.add(e.spawnId); n++;
+      for (const e of s.enemies) { if (!e.active || e.isSupplySlot || e.kind === 'boss' || seen.has(e.spawnId) || e.sprite.alpha === 0 || !e.sprite.visible) continue; /* 首领的旗 / 柱等隐形物件敌人不算 */ seen.add(e.spawnId); n++;
         const key = (e.walkSheet || e.sprite.texture.key || '').replace(/^readable_/, ''); sheets[key] = (sheets[key] ?? 0) + 1; if (e.def.roster) rosters[e.def.roster] = (rosters[e.def.roster] ?? 0) + 1; }
       await new Promise(r => setTimeout(r, 150));
     }
@@ -40,6 +41,10 @@ for (const id of STAGES) {
   }, C.key);
   const yellow = Object.keys(r.sheets).filter(k => /yellow_/.test(k)), foreignRoster = Object.keys(r.rosters).filter(x => !r.allowed.includes(x));
   ck(`${id}（${r.stage}）：只刷本章势力的兵——没有黄巾图，新兵种都在本关配兵表里`, r.n >= 15 && (chn === 1 || yellow.length === 0) && foreignRoster.length === 0, { n: r.n, yellow, foreignRoster, rosters: r.rosters, sheets: r.sheets });
+  // 第三章敌军换色（用户 11-19 批准）：3-1 / 3-2 凉州残部黑底土黄（f_liangzhou_），3-3 袁术紫（f_yuanshu_）；不再用西凉红黑原图
+  if (chn === 3) { const want = stn === 3 ? 'f_yuanshu_' : 'f_liangzhou_', bad = Object.keys(r.sheets).filter(k => !k.startsWith(want) && !/^(third_|boss_)/.test(k) && !r.allowed.some(id => k.startsWith('enemy_' + id + '_'))); /* 本关新兵种的专属图（美术到了以后）也算本章 */
+    ck(`${id}：第三章敌军换色（${want}…），没有西凉红黑原图`, bad.length === 0, { bad, sheets: r.sheets });
+    }
   if (r.want.length) ck(`${id}：本关配兵表里的新兵种确实刷得出来（第三章起的篇章场景也算）`, r.want.some(x => r.rosters[x] > 0), { want: r.want, rosters: r.rosters });
   await p.close();
 }

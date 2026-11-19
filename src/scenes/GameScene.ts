@@ -1172,7 +1172,9 @@ export class GameScene extends Phaser.Scene {
     if(!this.traits&&this.player)this.traits=new EnemyTraits({scene:this,player:this.player,enemies:()=>this.enemies,stageKey:()=>this.hardKey()+'.'+this.hardStage(),wave:()=>waveIndexAt(this.elapsed,this.chapter.waves)+1,enabled:()=>!this.hardMode&&this.mode==='none'&&(!this.runConfig.encounter||this.achievementArc()!==undefined),/* 第三章起的篇章场景都带 encounter（qunxiong），按自己的篇章键配兵；只排除 ?encounter= 预览 */
       baseDef:k=>{const b=this.chapter.enemies[k];if(!this.yellow)return b;const v=this.yellow.variant(b,this.elapsed);return v.behavior?b:v;},spawn:(k,x,y,def)=>this.spawnEnemy(k,x,y,undefined,false,def),
       fireArrow:(e,tx,ty,d,sp)=>this.fireBolt(this.bullets,e.x,e.y,tx,ty,d*(this.env?.damageMul(e)??1),0,false,sp,enemyArrowTexture(this,e.sprite.texture.key)),hurtTroops:(x,y,r,d)=>this.legion.hurtArea(x,y,r,d,this.combatNow),
-      move:(e,nx,ny,dt)=>{e.moveVx=nx*e.def.speed;e.moveVy=ny*e.def.speed;this.advanceEnemy(e,nx,ny,dt);},sfx:k=>this.sfx.play(k)}); // 机制自己定方向（保持距离 / 绕圈）：不用群体寻路的追击速度
+      move:(e,nx,ny,dt)=>{e.moveVx=nx*e.def.speed;e.moveVy=ny*e.def.speed;this.advanceEnemy(e,nx,ny,dt);},sfx:k=>this.sfx.play(k),
+      inWater:(x,y)=>this.terrain?.inWater(x,y)??false,waterPoint:(px,py)=>{const t=this.terrain;if(!t)return null;for(let i=0;i<40;i++){const a=Math.random()*Math.PI*2,d=420+Math.random()*560,x=px+Math.cos(a)*d,y=py+Math.sin(a)*d;if(t.inWater(x,y))return{x,y};}return null;},
+      gainFood:n=>{this.legion.food+=n;},farPoint:(x,y)=>{const g=this.arena?.info.gates;if(!g?.length)return null;const p=this.player;return [...g].sort((a,b)=>Math.hypot(b.x-p.x,b.y-p.y)-Math.hypot(a.x-p.x,a.y-p.y))[0]??null;void x;void y;}}); // 机制自己定方向（保持距离 / 绕圈）：不用群体寻路的追击速度
     if(!this.arenaInit&&this.player&&this.terrainInit){this.arenaInit=true;const def=stageMapFor(this.hardKey(),this.hardStage());if(def)this.arena=new StageArena({scene:this,player:this.player,allies:()=>this.allies,enemies:()=>this.enemies,now:()=>this.combatNow,
       spawnTarget:(x,y,hp,size)=>{const e=this.supplies?.spawnGate(x,y,hp,size)??null;e?.sprite.setAlpha(0);return e;},hitEnemy:(e,d,src)=>{this.hitEnemy(e,d,this.combatNow,src??'melee',true,false);},spawnEnemy:(k,x,y)=>this.spawnEnemy(k,x,y,undefined,true),breakBridgeNear:(x,y)=>{const t=this.terrain as unknown as {rivers?:Array<{bridges:Array<{x:number;y:number}>}>;setBridgeBroken?:(i:number,b?:boolean)=>boolean}|null;const all=t?.rivers?.flatMap(r=>r.bridges)??[];let bi=-1,bd=300;all.forEach((b,i)=>{const d=Math.hypot(b.x-x,b.y-y);if(d<bd){bd=d;bi=i;}});return bi>=0&&!!t?.setBridgeBroken?.(bi,true);},
       hurtTroops:(x,y,r,d)=>this.legion.hurtArea(x,y,r,d,this.combatNow),banner:(t,d,c)=>this.showWaveBanner(t,!!d,c),sfx:k=>this.sfx.play(k),purge:pred=>{this.supplies?.purge(pred);}},def);}
@@ -2208,6 +2210,7 @@ export class GameScene extends Phaser.Scene {
     if (this.xiliang) rawDamage *= this.xiliang.incoming(enemy, source);
     if (enemy === this.boss && this.moveset) { rawDamage *= this.moveset.incoming(fromAlly); this.moveset.hit(time); }
     if (this.dzLubu && enemy === this.dzLubu.lubu) rawDamage = this.dzLubu.clampDamage(enemy, rawDamage); // 2-3 吕布锁在 1/3 血
+    if (enemy.def.trait && this.traits) rawDamage *= this.traits.damageTakenMul(enemy); // 新兵种：盾墙 / 举盾正面减伤
     if(this.yellow&&enemy.kind==='shield'&&enemy.shieldMax===0&&enemy.def.behavior!=='wall'&&!fromAlly&&source!=='fire'){const angle=enemy.direction==='left'?Math.PI:enemy.direction==='right'?0:enemy.direction==='up'?-Math.PI/2:Math.PI/2;if(Math.cos(Math.atan2(this.player.y-enemy.y,this.player.x-enemy.x)-angle)>.25)rawDamage*=.65;}
     if (source === 'arrow') this.sfx.play('hitArrow');
     else if (source === 'fire') this.sfx.play('hitFire');

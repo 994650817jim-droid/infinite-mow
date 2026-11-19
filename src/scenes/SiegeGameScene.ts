@@ -9,7 +9,8 @@ import {actorDepth, DEPTH, GAME_WIDTH} from '../config';
 import {warText} from '../ui/WarStyle';
 import {isChapterTestRun} from '../systems/ChapterProgress';
 import {beginSiege, beginDefense, loadWorld, permanentEffects, settleSiege, settleDefense, takeExpeditionReserve, abandonExpedition} from '../world/WorldStore';
-import {cityAttackable, cityAttacker, cityById, cityOwner, eraIndexFor, FACTIONS, TIER_NAME, type CityDef, type FactionId} from '../world/WorldCities';
+import {routeSiegeOpen} from '../world/RouteMap';
+import {cityAttacker, cityById, cityOwner, eraIndexFor, FACTIONS, TIER_NAME, type CityDef, type FactionId} from '../world/WorldCities';
 import {ensureFactionTextures, factionKey} from '../systems/FactionPalette';
 import {enemyArrowTexture} from '../systems/ArrowPalette';
 import {applyCitySpecialties} from '../systems/CityBonuses';
@@ -62,7 +63,7 @@ export function siegeGameSceneClass(Base: typeof GameScene) {
       const era = eraIndexFor({hulaoCleared: s.cleared.hulao, warlordStages: s.warlordStages, guanduStages: s.guanduStages});
       this.defense = this.registry.get('siegeMode') === 'defense';
       const alert = city && s.alerts.find(a => a.city === city.id);
-      if (!city || (!this.test && (this.defense ? !alert || !s.ownedCities.includes(city.id) : !cityAttackable(city.id, s.ownedCities)))) { this.scene.start('WorldMapScene'); return; }
+      if (!city || (!this.test && (this.defense ? !alert || !s.ownedCities.includes(city.id) : !routeSiegeOpen(city.id, s, s.ownedCities)))) { this.scene.start('WorldMapScene'); return; } // 天下地图 v2 规则 B / C：挂靠主线关打下即可攻、不要求相邻
       // 守城：守军配色换成来犯势力
       this.city = city; this.owner = this.defense ? alert?.attacker ?? cityAttacker(city.id, era, s.ownedCities.filter(c => c !== city.id)) ?? 'caocao' : cityOwner(city.id, era, s.ownedCities);
       // 守军配色须在敌兵生成前就绪

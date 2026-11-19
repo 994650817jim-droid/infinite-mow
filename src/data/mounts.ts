@@ -15,8 +15,8 @@ export const MOUNT_VISUAL = { visualScale: .85, enemyCavalrySpeedMul: .82 } as c
 /** 骑马的敌兵：kind 为 cavalry 且不是象兵（第十一章象兵另有体型，不在「骑马」之列）。 */
 export function isHorseCavalry(def: { kind: string; texture?: string; walkVisual?: { texture: string } }): boolean { return def.kind === 'cavalry' && !/elephant/.test(def.walkVisual?.texture ?? def.texture ?? ''); }
 export const MOUNT = {
-  /** 骑乘移速倍率：1.35 → 1.2（11-18 调慢）；名马另见 MOUNT_STYLES.speedMul */
-  speedMul: 1.2, damageTakenMul: .85,
+  /** 骑乘移速倍率：1.35 → 1.2（11-18 调慢）→ 1.1（11-19 用户「骑马还是太快」）；名马另见 MOUNT_STYLES.speedMul */
+  speedMul: 1.1, damageTakenMul: .85,
   /** 耐力 = stamina + staminaPerHp × 主将最大生命（上马时算；名将 / 名马加成另叠）；单次伤害 ≥ 主将最大生命 × heavyHitHpRatio 算重击、按 heavyMul 扣。
    *  11-18 平衡会话：落马不能再上后，固定 100 耐力 + 固定重击门槛 12 让五章以后只能骑十几秒；改随生命走，各章约能骑 50～100 秒。 */
   stamina: 100, staminaPerHp: .25, heavyHitHpRatio: .12, heavyMul: 3, lightMul: 1,
@@ -46,9 +46,9 @@ export const MOUNT_STYLES: Record<string, MountStyle> = {
   black_horse: {tint: 0x4a4650, trampleMul: 1.3, ride: '乌骓：践踏伤害 +30%'},
   white_horse: {tint: 0xffffff, stamina: 30, ride: '白马：耐力 +30'},
   red_horse: {tint: 0xc9743e},
-  west_horse: {tint: 0xd8a66a, speedMul: 1.3, ride: '大宛马：骑乘移速 ×1.3'},
-  mule: {tint: 0x8c8274, speedMul: 1.06, noTrample: true, stamina: 60, ride: '骡车：走得慢、不践踏，但耐力 +60'},
-  chitu: {tint: 0xe0462e, speedMul: 1.3, trampleMul: 2, ride: '赤兔：骑乘移速 ×1.3、践踏伤害 ×2'},
+  west_horse: {tint: 0xd8a66a, speedMul: 1.18, ride: '大宛马：骑乘移速 ×1.18'},
+  mule: {tint: 0x8c8274, speedMul: 1.03, noTrample: true, stamina: 60, ride: '骡车：走得慢、不践踏，但耐力 +60'},
+  chitu: {tint: 0xe0462e, speedMul: 1.18, trampleMul: 2, ride: '赤兔：骑乘移速 ×1.18、践踏伤害 ×2'},
   dilu: {tint: 0xf2ede2, leap: true, ride: '的卢：落马那一下免伤并向前跃出'},
   jueying: {tint: 0x2e2c34, stamina: 50, ride: '绝影：耐力 +50'},
 };

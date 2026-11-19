@@ -30,7 +30,7 @@ for (const layout of ['mobile', 'desktop']) {
   // 人物画风 v2：赤兔是专门画的红马（不染色、骑者抬高 40×0.85=34）；v1 / 缺图时是通用马染赤色（抬高 round(36×0.85)=31）；11-18 骑马整体缩到 0.85、移速调低
   // 有骑乘姿态图（ride_v2_<武将>）时整个人换成坐姿帧、不裁下半身；否则行走帧上半身拼在鞍上（裁掉下半身）
   const v2Horse = m.tex === 'horse_v2_chitu_walk', posed = /^ride_v2_/.test(m.rider ?? '');
-  ck(`[${layout}] 穿赤兔出征：骑在马上（移速 ×1.3、骑者抬高、下半身裁掉或换骑乘姿态、v2 赤兔图（朝镜头多抬一点）/ 旧马染赤色）`, m.has && m.mounted && m.name === '赤兔' && m.mul === 1.3 && m.horse && (posed || m.crop) && (v2Horse ? m.rise >= 34 && m.tint === 0xffffff : m.rise === 31 && m.tint === 0xe0462e), m);
+  ck(`[${layout}] 穿赤兔出征：骑在马上（移速 ×1.18、骑者抬高、下半身裁掉或换骑乘姿态、v2 赤兔图（朝镜头多抬一点）/ 旧马染赤色）`, m.has && m.mounted && m.name === '赤兔' && m.mul === 1.18 && m.horse && (posed || m.crop) && (v2Horse ? m.rise >= 34 && m.tint === 0xffffff : m.rise === 31 && m.tint === 0xe0462e), m);
   for (const [dx, dy, dir] of [[1, 0, 'right'], [0, 1, 'down'], [-1, 0, 'left'], [0, -1, 'up']]) {
     await walk(p, dx, dy, 450);
     const f = await p.evaluate(G0 => { const s = eval(G0); return { dir: s.player.direction, frame: s.children.getByName('hero-mount').frame.name }; }, G);
@@ -67,7 +67,7 @@ for (const layout of ['mobile', 'desktop']) {
 {
   const p = await open('desktop', 'mule', 'zhuge');
   const r = await p.evaluate(async G0 => { const s = eval(G0), pl = s.player, e = s.spawnEnemy('infantry', pl.x + 50, pl.y, 1, true); e.speed = 0; s.readMove = () => ({ x: 1, y: 0 }); await new Promise(r => setTimeout(r, 500)); delete s.readMove; return { n: s.mount.tramples, max: s.mount.maxStamina, want: Math.round(100 + .25 * pl.maxHp) + 60, mul: pl.mountSpeedMul }; }, G);
-  ck('骡车：不践踏、耐力 100 + 0.25×生命 + 60、移速 ×1.06', r.n === 0 && r.max === r.want && r.mul === 1.06, r);
+  ck('骡车：不践踏、耐力 100 + 0.25×生命 + 60、移速 ×1.03', r.n === 0 && r.max === r.want && r.mul === 1.03, r);
   await p.close();
 }
 // 没穿坐骑：步战

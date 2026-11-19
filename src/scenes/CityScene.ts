@@ -63,7 +63,7 @@ export class CityScene extends Phaser.Scene {
  /** 讲武堂「随从操练」翻页。 */
  private drillPage=0;
  constructor(){super('CityScene');}
- init(){D=W>600;this.vr=D?{x:0,y:0,w:W,h:H}:{x:0,y:104,w:W,h:H-104-104};this.k=Math.max(this.vr.w/PANO_W,this.vr.h/PANO_H)*(D?PANO_ZOOM:1);this.hits=[];this.drag=null;this.campLife=null;}
+ init(){D=W>600;this.vr=D?{x:0,y:0,w:W,h:H}:{x:0,y:104,w:W,h:H-104-104};this.k=Math.max(this.vr.w/PANO_W,this.vr.h/PANO_H)*(D?PANO_ZOOM:1);this.z=D?1/PANO_ZOOM:1;this.hits=[];this.drag=null;this.campLife=null;}
  preload(){if(!worldUnlocked()&&!isChapterTestRun())return;
   // 先卸战斗图集、再排营寨的载入：万一营寨的图也被记进了战斗图集，卸掉后这里会重新载入，不会退回程序画占位（原来在 create 里卸，preload 已跳过「已在」的键）
   {const keys=this.registry.get('battleTextureKeys') as string[]|undefined;if(keys){for(const key of keys)if(this.textures.exists(key))this.textures.remove(key);this.registry.remove('battleTextureKeys');this.registry.set('battleReady',false);}}
@@ -110,10 +110,10 @@ export class CityScene extends Phaser.Scene {
   this.input.on('pointerdown',(p:Phaser.Input.Pointer)=>{if(this.anyModal()||!this.inView(p.x,p.y))return;this.drag={x:p.x,y:p.y,sx:this.sx,sy:this.sy,moved:false};});
   this.input.on('pointermove',(p:Phaser.Input.Pointer)=>{const d=this.drag;if(!d||!p.isDown)return;const dx=p.x-d.x,dy=p.y-d.y;if(!d.moved&&Math.hypot(dx,dy)<8)return;d.moved=true;this.scrollTo(d.sx-dx,d.sy-dy);});
   this.input.on('pointerup',()=>{this.time.delayedCall(0,()=>{this.drag=null;});});
-  this.input.on('wheel',(_p:Phaser.Input.Pointer,_o:unknown,dx:number,dy:number)=>{if(this.anyModal())return;const roomX=PANO_W*this.k-this.vr.w,roomY=PANO_H*this.k-this.vr.h;if(roomX>roomY)this.scrollTo(this.sx+(dx||dy)*.6,this.sy);else this.scrollTo(this.sx+dx*.6,this.sy+dy*.6);});
+  this.input.on('wheel',(p:Phaser.Input.Pointer,_o:unknown,dx:number,dy:number)=>{if(this.anyModal())return;if(D){if(dy)this.zoomAt(this.z*(dy<0?1.15:1/1.15),p.x,p.y);return;}const roomX=PANO_W*this.ke-this.vr.w,roomY=PANO_H*this.ke-this.vr.h;if(roomX>roomY)this.scrollTo(this.sx+(dx||dy)*.6,this.sy);else this.scrollTo(this.sx+dx*.6,this.sy+dy*.6);});
   // 初始视角：上次的位置，或对准主帐（电脑全屏版主帐居中、略偏下；手机照旧贴底）
   const saved=this.registry.get('cityScroll') as {sx:number;sy:number}|undefined,hall=CITY_SLOTS[1].hall;
-  if(saved)this.scrollTo(saved.sx,saved.sy,false);else if(D)this.scrollTo(hall.x*this.k-this.vr.w/2,hall.y*this.k-this.vr.h*.62,false);else this.scrollTo(hall.x*this.k-this.vr.w/2,PANO_H*this.k-this.vr.h,false);
+  if(D){void saved;void hall;this.scrollTo(0,1e9,false);}else if(saved)this.scrollTo(saved.sx,saved.sy,false);else this.scrollTo(hall.x*this.k-this.vr.w/2,PANO_H*this.k-this.vr.h,false);
   // 方向键 / WASD 平移（电脑）
   if(D&&this.input.keyboard)this.panKeys=this.input.keyboard.addKeys('W,A,S,D,UP,DOWN,LEFT,RIGHT',false) as Record<string,Phaser.Input.Keyboard.Key>;
   this.refresh();
@@ -130,10 +130,23 @@ export class CityScene extends Phaser.Scene {
  /** 全景可交互区：电脑全屏版去掉顶 / 底栏（栏下的建筑不可点、不从栏上开始拖动）。 */
  private inView(x:number,y:number){const r=this.vr,t=D?CAMP_BARS.top:0,b=D?CAMP_BARS.bottom:0;return x>=r.x&&x<=r.x+r.w&&y>=r.y+t&&y<=r.y+r.h-b;}
  /** 平移全景（夹在边界内），并只让视野内的建筑可点（手柄导航也只在视野内移动）。 */
+ /**
+  * 电脑版缩放（用户 11-19「进入义军营寨没有全屏看到，被放大了视角」）：全景按 PANO_ZOOM 倍的细节画一次，
+  * 容器缩放 z 在 [1/PANO_ZOOM, 1] 之间：默认 1/PANO_ZOOM = 刚好铺满屏幕看全营；滚轮放大到 1（底图 1:1）再缩回，不能比铺满更小。
+  * 名牌（tag-* / ready-*）按 1/z 反缩放，任何缩放下字都一样大。手机 z 恒为 1。
+  */
+ private z=1;
+ private get ke(){return this.k*this.z;}
+ private zoomAt(z:number,px:number,py:number){
+  const nz=Phaser.Math.Clamp(z,D?1/PANO_ZOOM:1,1);if(Math.abs(nz-this.z)<1e-4)return;
+  const wx=(px-this.pano.x)/this.z,wy=(py-this.pano.y)/this.z;this.z=nz;this.pano.setScale(nz);this.labelScale();
+  this.scrollTo(wx*nz-(px-this.vr.x),wy*nz-(py-this.vr.y));
+ }
+ private labelScale(){const k=1/this.z,walk=(l:Phaser.GameObjects.GameObject[])=>{for(const o of l){if(/^(tag-|ready-)/.test(o.name))(o as Phaser.GameObjects.Text).setScale(k);else if(o instanceof Phaser.GameObjects.Container&&o.name==='merchant-stall')walk(o.list);}};if(this.pano)walk(this.pano.list);}
  private scrollTo(sx:number,sy:number,remember=true){
-  this.sx=Phaser.Math.Clamp(sx,0,Math.max(0,PANO_W*this.k-this.vr.w));this.sy=Phaser.Math.Clamp(sy,0,Math.max(0,PANO_H*this.k-this.vr.h));
-  this.pano?.setPosition(this.vr.x-this.sx,this.vr.y-this.sy);
-  for(const h of this.hits){const x=h.x+this.pano.x,y=h.y+this.pano.y;if(h.input)h.input.enabled=this.inView(x,y);}
+  this.sx=Phaser.Math.Clamp(sx,0,Math.max(0,PANO_W*this.ke-this.vr.w));this.sy=Phaser.Math.Clamp(sy,0,Math.max(0,PANO_H*this.ke-this.vr.h+(D?CAMP_BARS.bottom:0)));
+  this.pano?.setScale(this.z).setPosition(this.vr.x-this.sx,this.vr.y-this.sy);
+  for(const h of this.hits){const x=h.x*this.z+this.pano.x,y=h.y*this.z+this.pano.y;if(h.input)h.input.enabled=this.inView(x,y);}
   if(remember)this.registry.set('cityScroll',{sx:this.sx,sy:this.sy});
  }
  /** 下一步提示：还没扩建时说明扩建条件，否则提示讲武堂。 */
@@ -199,8 +212,8 @@ export class CityScene extends Phaser.Scene {
    hit.on('pointerdown',()=>{this.pressedSlot=id;});
    hit.on('pointerup',()=>{const own=this.pressedSlot===id;this.pressedSlot=null;if(!own||this.drag?.moved)return;this.openCard(id);});
    const base=art?{x:art.scaleX,y:art.scaleY}:null;
-   hit.on('pointerover',()=>{tag.setColor('#ffe08a').setScale(1.18);glow?.setFillStyle(0xffe39a,.5);if(art&&base&&this.popId!==id)art.setScale(base.x*1.04,base.y*1.04);})
-    .on('pointerout',()=>{tag.setColor(lv>0?'#fff1cf':'#f6e2ae').setScale(1);glow?.setFillStyle(0xffe39a,0);if(art&&base)art.setScale(base.x,base.y);});
+   hit.on('pointerover',()=>{tag.setColor('#ffe08a').setScale(1.18/this.z);glow?.setFillStyle(0xffe39a,.5);if(art&&base&&this.popId!==id)art.setScale(base.x*1.04,base.y*1.04);})
+    .on('pointerout',()=>{tag.setColor(lv>0?'#fff1cf':'#f6e2ae').setScale(1/this.z);glow?.setFillStyle(0xffe39a,0);if(art&&base)art.setScale(base.x,base.y);});
    if(id==='hall')hit.setData('padDefault',true);
    this.pano.add(hit);this.hits.push(hit);
   }
@@ -209,7 +222,7 @@ export class CityScene extends Phaser.Scene {
   // 营寨档：营帐、兵士填空地（画在建筑之下；按建筑点击区与贴图外框避让）
   if(size===1&&new URLSearchParams(location.search).get('camplife')!=='0'){const ox=this.pano.x,oy=this.pano.y,blocked=[...this.hits.map(h=>h.getBounds()),...this.pano.list.filter((o):o is Phaser.GameObjects.Image=>o instanceof Phaser.GameObjects.Image&&o.texture.key.startsWith('city_')&&!o.texture.key.startsWith('city_bg')).map(o=>o.getBounds())].map(b=>({l:(b.x-ox)/k,r:(b.right-ox)/k,t:(b.y-oy)/k,b:(b.bottom-oy)/k}));
    this.campLife=new CampLife(this,k,blocked);this.pano.remove(this.campLife.root);this.pano.addAt(this.campLife.root,this.textures.exists(bg)?1:0);}
-  this.scrollTo(this.sx,this.sy,false);
+  this.labelScale();this.scrollTo(this.sx,this.sy,false);
  }
  /**
   * 旅商（2026-11-18 用户「营寨增加个旅商就是军需商人」）：北路口辎重场旁一座遮棚货摊（营地道具图：遮棚、货车、木箱、钱粮袋、坛罐），
@@ -231,8 +244,8 @@ export class CityScene extends Phaser.Scene {
   hit.on('pointerdown',()=>{this.pressedSlot='merchant';});
   hit.on('pointerup',()=>{const own=this.pressedSlot==='merchant';this.pressedSlot=null;if(!own||this.drag?.moved)return;this.openMerchant();});
   const base=stall?{x:stall.scaleX,y:stall.scaleY}:null;
-  hit.on('pointerover',()=>{tag.setColor('#ffe08a').setScale(1.18);glow.setFillStyle(0xffe39a,.45);if(stall&&base)stall.setScale(base.x*1.04,base.y*1.04);})
-   .on('pointerout',()=>{tag.setColor('#fff1cf').setScale(1);glow.setFillStyle(0xffe39a,0);if(stall&&base)stall.setScale(base.x,base.y);});
+  hit.on('pointerover',()=>{tag.setColor('#ffe08a').setScale(1.18/this.z);glow.setFillStyle(0xffe39a,.45);if(stall&&base)stall.setScale(base.x*1.04,base.y*1.04);})
+   .on('pointerout',()=>{tag.setColor('#fff1cf').setScale(1/this.z);glow.setFillStyle(0xffe39a,0);if(stall&&base)stall.setScale(base.x,base.y);});
   this.pano.add(hit);this.hits.push(hit);
  }
  /** 头像牌：从军需商人立绘裁脸，圆形、描金边（画一次存成贴图）。 */
@@ -373,7 +386,7 @@ export class CityScene extends Phaser.Scene {
   if(this.textures.exists('item_icons'))open();else{this.load.atlas('item_icons','assets/items/item-icons.webp','assets/items/item-icons.json');this.load.once('complete',open);this.load.start();}
  }
  /** 把全景平移到某座建筑。 */
- focusOn(id:TownBuildingId){const sl=CITY_SLOTS[citySize(loadWorld().town) as 1|2|3][id];this.scrollTo(sl.x*this.k-this.vr.w/2,sl.y*this.k-this.vr.h*.62);}
+ focusOn(id:TownBuildingId){const sl=CITY_SLOTS[citySize(loadWorld().town) as 1|2|3][id];this.scrollTo(sl.x*this.ke-this.vr.w/2,sl.y*this.ke-this.vr.h*.62);}
 
  /** 讲武堂：三条分支分页，每页列出该分支的科技（已研究 / 可研究 / 缺军粮 / 未解锁）。 */
  /** 讲武堂 · 战功换武学残卷（2026-11-17 用户：残卷去建筑手动换）：每 MERIT.perScroll 战功换 1 张，可选数量。 */

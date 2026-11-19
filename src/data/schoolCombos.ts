@@ -49,7 +49,7 @@ export function comboOf(a: SchoolId, b: SchoolId): ComboDef | undefined { return
 /** 觉醒：每关最多 perStage 次、间隔 cooldownMs；到 6 势后至少 firstDelayMs 才第一次；身边（minRange 内）至少 minEnemies 个敌人才放。 */
 export const AWAKEN = {
   perStage: 2, cooldownMs: 45000, firstDelayMs: 2500, minEnemies: 6, minRange: 420,
-  fire: { columns: 7, sweepMs: 1400, ratio: 2.2, burnMs: 4000, takenMul: 1.3, takenBossMul: 1.15, takenMs: 6000 },
+  fire: { columns: 7, sweepMs: 1400, ratio: 2.2, burnMs: 4000, takenMul: 1.5, takenBossMul: 1.3, takenMs: 6000 },
   stratagem: { r: 150, ms: 5000, tickMs: 1000, stunMs: 700, taken: .3 },
   archery: { r: 160, waves: 3, waveMs: 450, ratio: 1.4, sunder: .15 },
   cavalry: { len: 540, width: 90, ratio: 2.6, push: 70, invulnMs: 1000 },

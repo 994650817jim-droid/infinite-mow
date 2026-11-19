@@ -16,11 +16,11 @@ const ck = (n, ok, d) => { if (!ok) fail++; console.log((ok ? 'PASS ' : 'FAIL ')
 const world = { version: 8, yellowStages: 3, dongzhuoStages: 3, warlordStages: 3, guanduStages: 3, worldAvailable: true, cleared: { huangjin: true, hulao: true }, merits: 0, provisions: 500, buildings: { barracks: 1, farm: 1, clinic: 1 }, reserve: {}, receipts: [], nodes: ['home', 'huangjin', 'hulao'], ownedCities: [], eraSeen: 2, capturedEver: [], alerts: [], lastLost: [], chapterSeen: 12, tutorialDone: true };
 const b = await chromium.launch({ channel: 'chrome', headless: true, args: ['--mute-audio'] });
 
-async function open(layout, start) {
+async function open(layout, start, opts = {}) {
   const p = await b.newPage({ viewport: { width: 1280, height: 720 } });
   p.on('pageerror', e => errors.push(e.message.slice(0, 200)));
   p.on('console', m => { if (m.type() === 'error' && !/favicon|Failed to load resource|Texture key already in use/.test(m.text())) errors.push(m.text().slice(0, 200)); });
-  await p.addInitScript(w => { if (!sessionStorage.getItem('seeded')) { localStorage.clear(); localStorage.setItem('im_world_v1', JSON.stringify(w)); localStorage.setItem('im_last_hero', 'zhaoyun'); localStorage.setItem('im_story', 'off'); sessionStorage.setItem('seeded', '1'); } }, world);
+  await p.addInitScript(w => { if (!sessionStorage.getItem('seeded')) { localStorage.clear(); localStorage.setItem('im_world_v1', JSON.stringify(w)); localStorage.setItem('im_last_hero', 'zhaoyun'); localStorage.setItem('im_story', 'off'); if (w.panel) localStorage.setItem('im_orders_panel', 'on'); sessionStorage.setItem('seeded', '1'); } }, { ...world, panel: !!opts.panel });
   await p.goto(BASE + `?dev=1&autostart=1&stage=1&layout=${layout}&story=off`);
   await p.waitForFunction(() => window.__game?.scene.getScene('GameScene')?.player && window.__IM, null, { timeout: 120000 });
   if (start) {
@@ -39,9 +39,20 @@ const settle = async (p, ms = 700) => { for (let t = 0; t < ms; t += 150) { awai
 const orders = p => p.evaluate(() => { const o = window.__S.battleOrders; return o ? o.all().map(x => ({ id: x.id, label: x.label, state: x.state, kind: x.kind, prog: x.progress ? x.progress.cur + '/' + x.progress.max : null })) : null; });
 const panel = p => p.evaluate(() => { const s = window.__S, P = s.ordersPanel; return P ? { lines: P.lines, b: P.bounds(), visible: P.container.visible } : null; });
 
-// ———— 1–4：普通关 + 首领（2-2 荥阳）————
+// ———— 0：军令面板缺省关（2026-11-19 用户「我先移除军令，有点碍眼」）————
 {
   const p = await open('desktop', { key: 'GameScene', run: { chapter: 'hulao', westStage: 2 } });
+  await settle(p, 1200);
+  const d = await p.evaluate(() => { const s = window.__S; return { panel: !!s.ordersPanel, obj: !!s.children.getByName('orders-panel'), orders: s.battleOrders?.all().map(o => o.id) ?? [], timer: s.battleOrders?.timeLeft()?.label ?? '', scroll: !!s.children.getByName('battle-map-scroll'), arrow: !!s.children.getByName('orders-arrow') }; });
+  ck('军令面板缺省关：不建面板（连收起小签都没有）；军令数据照旧（击退敌军 / 首领出阵倒计时）、舆图卷轴与屏外箭头照旧', !d.panel && !d.obj && d.orders.includes('waves') && /首领出阵/.test(d.timer) && d.scroll && d.arrow, d);
+  await p.screenshot({ path: `${OUT}/no-orders-panel.png` });
+  const t = await p.evaluate(async () => { const s = window.__S, w = () => new Promise(r => setTimeout(r, 400)); localStorage.setItem('im_orders_panel', 'on'); s.applyOrdersPanelSetting(); await w(); const on = !!s.ordersPanel && s.ordersPanel.container.visible; localStorage.removeItem('im_orders_panel'); s.applyOrdersPanelSetting(); await w(); return { on, offAgain: !s.ordersPanel && !s.children.getByName('orders-panel') }; });
+  ck('军中设置「军令面板」开 / 关：战斗中即时生效', t.on && t.offAgain, t);
+  await p.close();
+}
+// ———— 1–4：普通关 + 首领（2-2 荥阳），军令面板设为「开」————
+{
+  const p = await open('desktop', { key: 'GameScene', run: { chapter: 'hulao', westStage: 2 } }, { panel: true });
   await settle(p, 1200);
   const o = await orders(p), pn = await panel(p);
   ck('普通关：军令「击退敌军 n/3」', !!o?.find(x => x.id === 'waves' && x.state === 'active' && /\/3$/.test(x.prog ?? '')), o);
@@ -142,7 +153,8 @@ const panel = p => p.evaluate(() => { const s = window.__S, P = s.ordersPanel; r
   const p = await open('desktop', { key: 'SiegeGameScene', siege: 'chenliu' });
   await settle(p, 1500);
   const o = await orders(p), pn = await panel(p);
-  ck('攻城：阶段军令「城外 · 破城门」+ 限时', !!o?.find(x => x.id === 'siege-phase' && x.label.startsWith('城外') && x.state === 'active') && (pn?.lines ?? []).some(l => /^限时 \d+:\d\d$/.test(l)), { o, lines: pn?.lines });
+  const sg = await p.evaluate(() => ({ timer: window.__S.battleOrders?.timeLeft()?.label ?? '', goal: window.__S.children.getByName('siege-goal')?.visible ?? false }));
+  ck('攻城：阶段军令「城外 · 破城门」+ 限时（面板缺省关：读军令表；顶部目标行露出来）', !!o?.find(x => x.id === 'siege-phase' && x.label.startsWith('城外') && x.state === 'active') && /限时/.test(sg.timer) && sg.goal && !pn, { o, sg });
   await p.screenshot({ path: `${OUT}/siege.png` });
   await p.evaluate(async () => { const M = window.__S.mid; M.transition('street'); const t = performance.now(); while (performance.now() - t < 4200) { window.__calm(); await new Promise(r => setTimeout(r, 150)); } });
   await settle(p, 800);

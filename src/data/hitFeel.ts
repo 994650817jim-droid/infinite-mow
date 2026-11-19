@@ -17,6 +17,11 @@ export const HIT_FEEL = {
   skillHitTargets: 3,
   /** 震屏：[时长, 强度]（「强」档；「弱」档 ×0.5，「关」不震） */
   shake: { small: [90, .0022], medium: [170, .0045], big: [280, .008] } as Record<'small' | 'medium' | 'big', [number, number]>,
+  /**
+   * 全局震屏节流（用户 2026-11-19「屏幕触发震动太多，可以适当减少」）：所有主相机 shake（含首领特效、技能、受击）先乘 globalMul；
+   * 强度 < strongAt 的普通震动，距上次震动不足 minGapMs 就跳过（首领转阶段 / 倒下等强震照常）。
+   */
+  shakeThrottle: { globalMul: .7, strongAt: .006, minGapMs: 900 },
   /** 普通敌人受击：后仰压扁时长、击退像素 */
   recoilMs: 90, knockbackPx: 3, critKnockbackPx: 6,
   /** 暴击伤害数字 */

@@ -70,6 +70,8 @@ export class BuffHud {
   if(ready)g.lineStyle(1,0xffd879,.45+.4*Math.sin(now/150)).strokeRect(-.5,-.5,37,37);
   if(now<slot.flashUntil)g.lineStyle(2,0xfff2c8,(slot.flashUntil-now)/FLASH_MS).strokeRect(-2,-2,40,44);
  }
+ /** 合击 / 觉醒再次触发时（不出小签）：让这些流派的徽印（觉醒 / 势档图标）闪一下。 */
+ flashSchools(schools:string[]):void{const ids=new Set(schools.flatMap(s=>['awakening_'+s,'school_'+s]));for(const sl of this.slots)if(ids.has(sl.key))sl.flashUntil=this.now+FLASH_MS;}
  update(player:Player,now:number,visible:boolean,progressOf?:BuffProgressSource):void{
   this.now=now;if(!visible){this.root.setVisible(false);this.hideTip();return;}
   const g=player.growth,entries:BuffEntry[]=[];

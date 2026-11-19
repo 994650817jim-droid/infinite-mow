@@ -8,6 +8,7 @@ import { TELEGRAPH_CLASSIC, groundCracks, laneCracks, windupFlash } from '../ui/
 import { BossKit, BOSS_OLD, ensureMoves, faceDir, type BossDebug } from './BossKit';
 import { LB } from '../data/bossRedesign';
 import { bossFxImage, ensureBossFx, hasBossFx } from './BossFx';
+import { castFlourish } from './BossThemeFx';
 
 export type LubuState = 'approach' | 'sweepWindup' | 'sweep' | 'dashWindup' | 'dash' | 'recover' | 'ultTakeoff' | 'ultAirborne' | 'ultLanding'
   | 'comboWindup' | 'combo' | 'zigWindup' | 'zig' | 'hop' | 'aim' | 'shot' | 'spinWindup' | 'spin';
@@ -398,6 +399,7 @@ export class LubuBoss {
     this.state = state; this.startedAt = now; this.ox = boss.x; this.oy = boss.y;
     this.angle = Math.atan2(player.y - boss.y, player.x - boss.x); this.hitApplied = false;
     const warn = state === 'sweepWindup' ? (this.phase2 ? C.enragedSweepWarnMs : C.sweepWarnMs) : (this.phase2 ? C.enragedDashWarnMs : C.dashWarnMs);
+    castFlourish(this.host.scene, 'lubu', boss, warn, state === 'dashWindup');
     this.lastAttack = state === 'sweepWindup' ? 'sweep' : 'dash';
     if (state === 'sweepWindup') {
       this.sweepMask.clear();

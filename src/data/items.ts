@@ -288,6 +288,11 @@ export const BAG_OVERFLOW = 20;
 /** 行营军需商人道具货架价格（粮草）。 */
 export const MERCHANT_PRICE: Partial<Record<ItemQuality, number>> = { green: 60, blue: 120, purple: 260 };
 /**
+ * 军需商人偶尔捎来 1 卷战法（2026-11-18 用户「军需商人也可能会卖功法」）：每次进营按 chance 判定一次（同一次休整里不重抽）；
+ * price[已学等级]：0 = 新学 Lv.1、1 = 精进到 Lv.2、2 = 精进到 Lv.3（随军粮）。初值交平衡会话复核。逻辑在 systems/CampMarket.ts。
+ */
+export const MERCHANT_TACTIC = { chance: .35, price: [150, 190, 240] } as const;
+/**
  * 行营军需商人（2026-11-17 用户：「军需商人只可以买装备」）：每次进营 4 件兵装，甲胄 / 头盔 / 战靴 / 信物各 1 件。
  * 品质按章节档位：一章绿 / 蓝，二章蓝为主偶尔紫，三章起蓝 / 紫（白 绿 蓝 紫 橙 权重，初值交平衡会话）。
  */

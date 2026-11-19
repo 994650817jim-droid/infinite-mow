@@ -37,6 +37,11 @@ export const CAMP_PROPS: Array<{ x: number; y: number; w: number; kind: PropKind
   { x: 860, y: 905, w: 56, kind: 'brazier' }, { x: 1010, y: 925, w: 150, kind: 'tent' }, { x: 520, y: 760, w: 140, kind: 'tent', flip: true },
   // 军营门前操练用的木人桩
   { x: 1100, y: 815, w: 52, kind: 'post' },
+  // 11-18 用户「义军营寨放多点帐篷和画面整个屏幕」：全屏放大后看得到的空地补营帐、粮堆、兵器架、小旗（都避开建筑与上面已放的）
+  { x: 530, y: 430, w: 120, kind: 'tent' }, { x: 110, y: 440, w: 120, kind: 'tent', flip: true }, { x: 625, y: 465, w: 56, kind: 'sacks' },
+  { x: 660, y: 700, w: 110, kind: 'tent', flip: true }, { x: 250, y: 720, w: 130, kind: 'tent' },
+  { x: 790, y: 1015, w: 120, kind: 'tent' }, { x: 40, y: 560, w: 60, kind: 'barrels' }, { x: 420, y: 480, w: 54, kind: 'flag' },
+  { x: 160, y: 1010, w: 60, kind: 'sacks' }, { x: 410, y: 1000, w: 120, kind: 'tent', flip: true },
 ];
 /** 兵士走的路线（全景像素）；压到建筑的路线运行时去掉。巡逻 / 走动都在上面来回。 */
 export const CAMP_PATHS: Array<Array<[number, number]>> = [
@@ -47,6 +52,8 @@ export const CAMP_PATHS: Array<Array<[number, number]>> = [
   [[560, 720], [610, 860], [700, 1000]], // 前路
   [[90, 470], [200, 500], [320, 520]], // 校场
   [[930, 860], [800, 940], [700, 1000]],
+  [[400, 470], [560, 480], [620, 380]], // 西北营帐之间（全屏放大后可见）
+  [[600, 640], [760, 720], [790, 900]], // 讲武堂与主帐之间
 ];
 /** 校场操练位（对着木桩出招）与火塘边站位。 */
 const DRILL_SPOTS: Array<{ x: number; y: number; dir: 'left' | 'right' }> = [{ x: 255, y: 640, dir: 'left' }, { x: 175, y: 640, dir: 'right' }, { x: 345, y: 640, dir: 'left' },
@@ -54,7 +61,7 @@ const DRILL_SPOTS: Array<{ x: number; y: number; dir: 'left' | 'right' }> = [{ x
   { x: 1052, y: 830, dir: 'right' }, { x: 1150, y: 832, dir: 'left' }];
 const IDLE_SPOTS: Array<{ x: number; y: number; dir: 'left' | 'right' | 'down' }> = [{ x: 1205, y: 505, dir: 'right' }, { x: 1300, y: 515, dir: 'left' }];
 /** 走动的兵（11-18：加了军营门前两名操练的，走动的从 9 减到 7，总人数仍在 14 上下，不挤） */
-export const CAMP_MAX_WALKERS = 7;
+export const CAMP_MAX_WALKERS = 10; // 11-18 全屏放大、营帐变多后加到 10
 
 const SHEETS = {
   sw: { key: 'camp_sw_walk', url: 'assets/processed-v2/troops/swordsman_walk.png' },

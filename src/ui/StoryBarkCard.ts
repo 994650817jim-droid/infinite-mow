@@ -1,5 +1,5 @@
 /**
- * 首领台词侧边立绘卡（2026-11-18 夜，统筹定「方案 2：不暂停」）：首领登场 / 二阶段 / 倒下等剧情 bark 说话时，
+ * 首领台词侧边立绘卡（2026-11-18 夜，统筹定「方案 2：不暂停」；2026-11-19 用户选定「电影感」样式，见 ui/StoryBarkCardStyles.ts，下面的漆底卡只在手绘件载不到时用）：首领登场 / 二阶段 / 倒下等剧情 bark 说话时，
  * 屏幕边上滑进一张半透明黑漆描金小卡（2026-11-19 起半透明，文字带阴影）——外侧是说话人的对白水墨立绘（ink_cast / ink_hero，取头肩），内侧是名字 + 台词（标题字）。
  * - 敌方从右边滑入、我方（可玩武将 / 主公）从左边；停 HOLD 毫秒后滑出；几句挨得近就排队一张一张出。
  * - 放在侧边空带：右边在军令面板下、护阵按钮上，左边在增益图标下；不挡首领血条（底部中间）、军令、舆图、主将（屏幕中间）。
@@ -10,7 +10,7 @@ import Phaser from 'phaser';
 import { DEPTH, HEADING_FONT, GAME_WIDTH } from '../config';
 import { LQ, lqPanel, lqDiamond } from './LacquerKit';
 import { storyArtFile } from '../data/story/art';
-import { barkStyle, loadBarkUi, buildA, buildB, buildC } from './StoryBarkCardStyles';
+import { loadBarkUi, barkUiReady, buildCinematic } from './StoryBarkCardStyles';
 
 export interface BarkCardLine { side: 'left' | 'right'; name: string; text: string; portrait?: string; /** 说话人 id（设计稿 A / B / C 取阵营色与称号用） */ id?: string }
 /** 卡片尺寸与时长（毫秒）；top 是卡片顶边的 y（游戏坐标：电脑布局 960 宽，显示时放大到 1280×720；右边夹在军令面板（底 ≈271）与护阵按钮（顶 ≈405）之间，左边在增益图标（底 ≈290）下）。 */
@@ -38,10 +38,9 @@ function next(scene: Phaser.Scene, st: CardState): void {
   const line = st.queue.shift();
   if (!line || scene.sys.settings.status >= Phaser.Scenes.SHUTDOWN) { st.busy = false; return; }
   st.busy = true;
-  const after = (): void => { window.setTimeout(() => next(scene, st), BARK_CARD.gap); }, style = barkStyle();
-  // 设计稿（2026-11-19，三套给用户挑）：localStorage im_barkcard_style = A / B / C；不设时用原来的漆底卡
-  if (style !== 'classic') loadBarkUi(scene, () => withPortrait(scene, line.portrait, () => buildStyled(scene, line, style, after)));
-  else withPortrait(scene, line.portrait, () => build(scene, line, after));
+  const after = (): void => { window.setTimeout(() => next(scene, st), BARK_CARD.gap); };
+  // 2026-11-19 用户选定「电影感」样式（ui/StoryBarkCardStyles.ts）；手绘件载不到时退回原来的漆底卡
+  loadBarkUi(scene, () => withPortrait(scene, line.portrait, () => (barkUiReady(scene) ? buildStyled(scene, line, after) : build(scene, line, after))));
 }
 
 /** 立绘没载就先载（data/story/art.ts 登记的才载；StoryDirector 开局已预载本关说话人）；2.5 秒没好就先不带立绘出卡，不拖台词。 */
@@ -94,17 +93,17 @@ function build(scene: Phaser.Scene, line: BarkCardLine, done: () => void): void 
   animate(scene, root, x0, off, undefined, done);
 }
 
-/** 设计稿 A / B / C（ui/StoryBarkCardStyles.ts） */
-function buildStyled(scene: Phaser.Scene, line: BarkCardLine, style: 'A' | 'B' | 'C', done: () => void): void {
+/** 电影感台词卡（ui/StoryBarkCardStyles.ts） */
+function buildStyled(scene: Phaser.Scene, line: BarkCardLine, done: () => void): void {
   if (scene.sys.settings.status >= Phaser.Scenes.SHUTDOWN) { done(); return; }
-  const card = (style === 'A' ? buildA : style === 'B' ? buildB : buildC)(scene, line, GAME_WIDTH, BARK_CARD.margin);
+  const card = buildCinematic(scene, line, GAME_WIDTH, BARK_CARD.margin);
   const root = card.root.setDepth(DEPTH.overlay - 8).setName('story-bark-card');
-  root.setData('side', line.side).setData('name', line.name).setData('text', line.text).setData('style', style);
+  root.setData('side', line.side).setData('name', line.name).setData('text', line.text).setData('style', 'cinematic');
   if (line.portrait && scene.textures.exists(line.portrait)) root.setData('portrait', line.portrait);
   animate(scene, root, card.x0, card.off, card.onTick, done);
 }
 
-/** 滑入 → 停 → 滑出（真实时钟，不受战斗暂停影响）；onTick 给设计稿做入场动画（墨迹晕开 / 手卷展开 / 逐字打出）。 */
+/** 滑入 → 停 → 滑出（真实时钟，不受战斗暂停影响）；onTick 做入场动画（墨迹晕开）。 */
 function animate(scene: Phaser.Scene, root: Phaser.GameObjects.Container, x0: number, off: number, onTick: ((t: number) => void) | undefined, done: () => void): void {
   const C = BARK_CARD, t0 = performance.now(), total = C.slide * 2 + C.hold;
   const ease = (k: number): number => 1 - Math.pow(1 - k, 3);

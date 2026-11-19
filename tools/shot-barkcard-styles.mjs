@@ -1,5 +1,5 @@
-// 首领台词卡三套设计稿截图（2026-11-19，给用户挑）：同一片怪多的战场，华雄登场（敌方、西凉骁将、董卓军赤色）分别用 A 电影感 / B 手卷 / C 极简。
-// 输出 assets/review/barkcard-styles/style-{A,B,C}.png。用法：BASE=http://127.0.0.1:5173/ node tools/shot-barkcard-styles.mjs
+// 首领台词卡截图：同一片怪多的战场，华雄登场（敌方、西凉骁将、董卓军赤色）。2026-11-19 三套设计稿（style-{A,B,C}.png）里用户选了 A「电影感」，
+// 现在只拍定稿：输出 assets/review/barkcard-styles/final.png。用法：BASE=http://127.0.0.1:5173/ node tools/shot-barkcard-styles.mjs
 import { chromium } from 'playwright';
 import { mkdirSync } from 'node:fs';
 const base = process.env.BASE ?? 'http://127.0.0.1:5173/', out = 'assets/review/barkcard-styles';
@@ -18,13 +18,9 @@ await p.evaluate(async () => {
   await wait(3200); for (const o of s.children.list.filter(o => o.name === 'story-bark-card')) o.destroy(); s.data.set('__storyBarkCards', undefined);
   const St = await import('/src/systems/Story.ts'); window.__say = () => new St.StoryDirector({ scene: s, chapterId: 'hulao', stage: 1, ctx: { lord: 'liubei', team: () => ['liubei', 'guanyu', 'zhangfei'], recruited: () => false }, pause: () => {}, resume: () => {} }).bossIntro(s.boss?.sprite ?? s.player.sprite);
 });
-for (const st of ['A', 'B', 'C']) {
-  await p.evaluate(st => { localStorage.setItem('im_barkcard_style', st); window.__say(); }, st);
-  // 等卡出来、入场动画（墨迹 / 展开 / 逐字）走完
-  await p.waitForFunction(() => window.__game.scene.getScene('GameScene').children.list.some(o => o.name === 'story-bark-card'), null, { timeout: 8000 }).catch(() => {});
-  await p.waitForTimeout(st === 'C' ? 1500 : 1000); await p.screenshot({ path: `${out}/style-${st}.png` });
-  await p.waitForFunction(() => !window.__game.scene.getScene('GameScene').children.list.some(o => o.name === 'story-bark-card'), null, { timeout: 8000 }).catch(() => {});
-  await p.waitForTimeout(300);
-}
-await p.evaluate(() => localStorage.removeItem('im_barkcard_style'));
-console.log('→', `${out}/style-{A,B,C}.png`, 'errors', JSON.stringify(errors.slice(0, 3))); await b.close();
+// 2026-11-19 用户选定「电影感」：只拍定稿这一张；用一句长台词（约 30 字）看换行与「台词不遮立绘」
+await p.evaluate(async () => { const C = await import('/src/ui/StoryBarkCard.ts'), s = window.__game.scene.getScene('GameScene');
+  C.showBarkCard(s, { side: 'right', id: 'huaxiong', name: '华雄', portrait: 'ink_cast_huaxiong', text: '关东鼠辈，谁敢与我一战！酒尚温时——便取尔等首级来下酒！' }); });
+await p.waitForFunction(() => window.__game.scene.getScene('GameScene').children.list.some(o => o.name === 'story-bark-card'), null, { timeout: 8000 }).catch(() => {});
+await p.waitForTimeout(1000); await p.screenshot({ path: `${out}/final.png` });
+console.log('→', `${out}/final.png`, 'errors', JSON.stringify(errors.slice(0, 3))); await b.close();

@@ -1,6 +1,6 @@
 // 首领台词卡设计稿用的手绘 UI 件（2026-11-19，ChatGPT 透明底出图）→ 裁成单件透明 PNG：
-//   originals/strips_gpt.png（上下 3 条）→ brush.png（撕边墨带）、scroll.png（手卷）、bar.png（黑漆细条）
-//   originals/frames_gpt.png（左右 3 个）→ moon.png（月洞窗框）、fan.png（扇窗框）、medal.png（圆徽框）
+//   originals/strips_gpt.png（上下 3 条）→ brush.png（撕边墨带）；手卷、黑漆细条是设计稿 B、C 用的，不再输出
+//   （originals/frames_gpt.png 的月洞窗 / 扇窗 / 圆徽框是设计稿 B、C 用的，用户选了 A 之后不再输出）
 //   epic-home/opening/ink_bloom.png（白底黑墨 4×2 帧，UI 会话的墨迹扩散）→ inkbloom.png（透明底，墨色即不透明度，每格 256）
 // 切法：按不透明像素的行 / 列投影找空隙，每件裁到自己的外接框（留 4 像素）。
 // 用法：node tools/build-barkcard-ui.mjs
@@ -8,8 +8,8 @@ import { chromium } from 'playwright';
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 const DIR = 'public/assets/ui/barkcard/';
 const jobs = [
-  { src: DIR + 'originals/strips_gpt.png', axis: 'y', names: ['brush', 'scroll', 'bar'] },
-  { src: DIR + 'originals/frames_gpt.png', axis: 'x', names: ['moon', 'fan', 'medal'] },
+  // 2026-11-19 用户选定「电影感」：只用撕边墨带；手卷 / 黑漆细条 / 月洞窗 / 扇窗 / 圆徽框（设计稿 B、C）不再输出，原图留在 originals/
+  { src: DIR + 'originals/strips_gpt.png', axis: 'y', names: ['brush', null, null] },
 ].filter(j => existsSync(j.src));
 const b = await chromium.launch({ channel: 'chrome', headless: true }); const p = await b.newPage();
 for (const j of jobs) {
@@ -31,7 +31,7 @@ for (const j of jobs) {
       return { url: o.toDataURL('image/png'), w: o.width, h: o.height };
     });
   }, ['data:image/png;base64,' + readFileSync(j.src).toString('base64'), j.axis, j.names.length]);
-  outs.forEach((o, i) => { writeFileSync(DIR + j.names[i] + '.png', Buffer.from(o.url.split(',')[1], 'base64')); console.log('→', DIR + j.names[i] + '.png', o.w + '×' + o.h); });
+  outs.forEach((o, i) => { if (!j.names[i]) return; writeFileSync(DIR + j.names[i] + '.png', Buffer.from(o.url.split(',')[1], 'base64')); console.log('→', DIR + j.names[i] + '.png', o.w + '×' + o.h); });
 }
 // 墨迹扩散：白底黑墨 → 透明底墨色（不透明度 = 1 - 亮度），缩成每格 256
 const ink = 'public/assets/epic-home/opening/ink_bloom.png';

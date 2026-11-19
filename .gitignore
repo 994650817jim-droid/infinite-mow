@@ -297,3 +297,5 @@ assets/raw/*
 !/tools/record-zhurong-throw.mjs
 !/tools/shot-boss-theme.mjs
 !/tools/shot-theme-preview.mjs
+!/tools/mount-proportions.mjs
+!/tools/mount-proportions.json

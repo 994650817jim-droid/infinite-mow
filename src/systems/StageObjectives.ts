@@ -52,16 +52,17 @@ export class StageObjectives {
   }
   /** 测试用状态。 */
   get state() { return {done: this.done, failed: this.failed, destroyed: this.destroyed, hp: this.hp, held: this.held, kills: this.h.kills() - this.startKills}; }
-  private complete(): void { if (this.done) return; this.done = true; this.h.banner('目标达成', '首领出阵！'); }
+  private complete(): void { if (this.done) return; this.done = true; const b = this.o.kind === 'destroy' ? this.o.doneBanner : undefined; this.h.banner(b?.[0] ?? '目标达成', b?.[1] ?? '首领出阵！'); }
   onKill(e: Enemy): void {
     const t = this.targets.find(x => x.e === e && x.e.spawnId === x.life); if (!t) return;
     this.destroyed++; t.label?.destroy(); t.art?.destroy(); this.targets.splice(this.targets.indexOf(t), 1);
     if (this.o.kind === 'destroy' && this.destroyed >= this.o.count) this.complete();
   }
   private placeTargets(n: number, name: string): void {
-    const p = this.h.player, a0 = Math.random() * Math.PI * 2;
+    const p = this.h.player, a0 = Math.random() * Math.PI * 2, spots = this.o.kind === 'destroy' ? this.o.spots : undefined;
     for (let i = 0; i < n; i++) {
-      const a = a0 + i / n * Math.PI * 2, x = p.x + Math.cos(a) * 420, y = p.y + Math.sin(a) * 330, e = this.h.spawnCamp(x, y, STAGE_DESTROY_HP);
+      // 固定位置（数据给了 spots，如 2-3 洛阳五座营寨）；没有就绕主将随机撒一圈
+      const a = a0 + i / n * Math.PI * 2, sp = spots?.[i], x = sp ? p.x + sp[0] : p.x + Math.cos(a) * 420, y = sp ? p.y + sp[1] : p.y + Math.sin(a) * 330, e = this.h.spawnCamp(x, y, STAGE_DESTROY_HP);
       if (!e) continue;
       let art: Phaser.GameObjects.Image | undefined;
       // 第一章：张宝祭坛图替代营帐

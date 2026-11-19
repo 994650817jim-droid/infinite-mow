@@ -41,7 +41,7 @@ export interface OrdersHost {
   /** 关卡目标（data/objectives）：没有返回 null。 */
   stageObjective(): { kind: 'kills' | 'destroy' | 'hold'; cur: number; max: number; label: string; target?: string; limit: number; done: boolean; failed: boolean; points: OrderPos[] } | null;
   /** 当前在场的首领（双首领各一个）。 */
-  bosses(): Array<{ key: string; name: string; e: Enemy }>;
+  bosses(): Array<{ key: string; name: string; e: Enemy; label?: string }>;
   /** 普通关（没有关卡目标）：当前波次与首领出阵时刻（elapsed 秒）；没有返回 null。 */
   waves?(): { cur: number; total: number; name: string; bossAt: number } | null;
   /** 本关首领名（登场前也知道，用于「首领将至」）。 */
@@ -118,7 +118,7 @@ export class BattleOrders {
   }
   private onDone(o: BattleOrder): void {
     this.revision++; this.completed.push({ id: o.id, label: o.label });
-    if (!this.h.over().over && o.id !== 'waves') this.h.banner('军令完成', o.doneText ? `${o.label} · ${o.doneText}` : o.label); // 波次那条和首领登场横幅同时出，不另弹
+    if (!this.h.over().over && o.id !== 'waves' && o.id !== 'stage') this.h.banner('军令完成', o.doneText ? `${o.label} · ${o.doneText}` : o.label); // 波次那条和首领登场横幅同时出，不另弹
   }
   /** 自动来源写一条（外部推过的 id 跳过）。 */
   private auto(id: string, o: OrderInput): void { this.seen.add(id); if (this.external.has(id)) return; this.put(id, o); }
@@ -144,11 +144,12 @@ export class BattleOrders {
       if (!spawned) this.timer('首领出阵', w.bossAt); else if (this.timerLabel === '首领出阵') this.clearTimer();
       return;
     }
-    const label = s.kind === 'kills' ? '歼敌' : s.kind === 'destroy' ? (s.target ?? '摧毁目标') : '坚守军旗';
+    const label = s.kind === 'kills' ? '歼敌' : s.kind === 'destroy' ? '摧毁' + (s.target ?? '目标') : '坚守军旗';
     const pts = s.points;
     this.auto('stage', { label, kind: 'main', progress: { cur: Math.min(s.cur, s.max), max: s.max }, state: s.failed ? 'failed' : s.done ? 'done' : 'active', order: 1,
       at: pts.length ? () => { const p = this.h.stageObjective()?.points ?? []; return p.length ? this.nearest(p) : null; } : undefined });
-    if (!this.isSiege()) { if (!s.done && !s.failed) this.timer('限时', s.limit); else this.clearTimer(); }
+    // 限时：很长的（如 2-3 洛阳 9999 秒，实际不判超时）不显示
+    if (!this.isSiege()) { if (!s.done && !s.failed && s.limit < 3600) this.timer('限时', s.limit); else if (this.timerLabel === '限时') this.clearTimer(); }
     if (s.done && !this.h.bossSpawned()) this.auto('boss-wait', { label: `击败${this.h.bossName()}（即将出阵）`, kind: 'boss', order: 50 });
   }
 
@@ -178,16 +179,16 @@ export class BattleOrders {
     this.auto('breakout', { label: '冲出麦城', detail: b.exited ? undefined : `距出口 ${b.distance} 步`, kind: 'main', order: 2, state: b.exited ? 'done' : 'active', at: () => ({ x: 0, y: -2520 }) });
   }
   /** 首领：登场后每人一条「击败 XX」，跟着首领走；了结（斩杀 / 劝降 / 败退）即完成。 */
-  private bossRefs = new Map<string, { e: Enemy; life: number; name: string }>();
+  private bossRefs = new Map<string, { e: Enemy; life: number; name: string; label?: string }>();
   private syncBosses(): void {
     for (const b of this.h.bosses()) {
       // 同一个 key 换了新的首领（战线推进到下一关、首领重召）：当新首领重新记
-      const id = 'boss-' + b.key, ref = this.bossRefs.get(id); if (!ref || ref.e !== b.e || ref.life !== b.e.spawnId) this.bossRefs.set(id, { e: b.e, life: b.e.spawnId, name: b.name });
+      const id = 'boss-' + b.key, ref = this.bossRefs.get(id); if (!ref || ref.e !== b.e || ref.life !== b.e.spawnId) this.bossRefs.set(id, { e: b.e, life: b.e.spawnId, name: b.name, label: b.label });
     }
     for (const [id, r] of this.bossRefs) {
       const alive = r.e.active && r.e.spawnId === r.life && r.e.hp > 0, key = id.slice(5), out = this.h.bossOutcome(key);
       const doneText = out === 'persuaded' ? '已归降' : out === 'retreated' ? '已败退' : undefined;
-      this.auto(id, { label: '击败' + r.name, kind: 'boss', order: 60, state: alive ? 'active' : 'done', doneText, at: () => (r.e.active && r.e.spawnId === r.life ? { x: r.e.x, y: r.e.y } : null) });
+      this.auto(id, { label: r.label ?? '击败' + r.name, kind: 'boss', order: 60, state: alive ? 'active' : 'done', doneText, at: () => (r.e.active && r.e.spawnId === r.life ? { x: r.e.x, y: r.e.y } : null) });
     }
     if (this.bossRefs.size) this.seen.add('boss-wait'); // 首领已登场：「即将出阵」那条交给下面清掉
     const wait = this.list.get('boss-wait'); if (wait && this.bossRefs.size) { this.list.delete('boss-wait'); this.revision++; }

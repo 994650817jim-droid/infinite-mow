@@ -60,8 +60,9 @@ const panel = p => p.evaluate(() => { const s = window.__S, P = s.ordersPanel; r
   ck('屏外军令箭头：指向「占领武库」并标距离', !!arrow.text, arrow);
   await p.evaluate(() => window.__S.battleOrders.patch('test-armory', { progress: { cur: 2, max: 3 } })); await settle(p, 400); pn2 = await panel(p);
   ck('API patch：进度更新为 2/3', (pn2?.lines ?? []).some(l => l.includes('占领武库 2/3')), pn2?.lines);
-  await p.evaluate(() => window.__S.battleOrders.done('test-armory')); await settle(p, 400);
-  const fin = await p.evaluate(() => ({ done: window.__S.battleOrders.completed.map(c => c.label), banner: window.__S.children.list.filter(o => o.type === 'Text' && o.visible && /军令完成/.test(o.text ?? '')).length }));
+  // 横幅画在容器里，直接记录 showWaveBanner 的调用
+  await p.evaluate(() => { const s = window.__S, o = s.showWaveBanner.bind(s); window.__banners = []; s.showWaveBanner = (t, d, c) => { window.__banners.push(t + '|' + (c ?? '')); return o(t, d, c); }; window.__S.battleOrders.done('test-armory'); }); await settle(p, 400);
+  const fin = await p.evaluate(() => ({ done: window.__S.battleOrders.completed.map(c => c.label), banner: window.__banners.filter(b => b.startsWith('军令完成') && b.includes('占领武库')).length }));
   ck('API done：记入完成 + 弹「军令完成」横幅', fin.done.includes('占领武库') && fin.banner > 0, fin);
   await p.evaluate(() => window.__S.battleOrders.set('waves', { label: '外部覆盖', kind: 'main', order: 1 })); await settle(p, 600);
   const ext = await orders(p);

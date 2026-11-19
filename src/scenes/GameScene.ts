@@ -743,7 +743,8 @@ export class GameScene extends Phaser.Scene {
     this.syncRelicShips();
     this.events.once('shutdown',()=>{this.relics?.clear();this.relics=null;this.relicShips?.clear();this.relicShips=null;});
     // 酒罐 / 药篓不生成在房屋、城墙等障碍里（第三/四章、攻城在 create 之后才设置障碍，故调用时读取）
-    this.supplies.healBlocked=(x,y,r)=>!!this.sishuiObstacles?.footprints.some(b=>x>b.left-r&&x<b.right+r&&y>b.top-r&&y<b.bottom+r);
+    // 物件 / 酒罐 / 随机补给的落点：避开障碍框；2-3 洛阳另避开城墙、侧墙、洛水和场地外（原来木箱会刷进河里、城墙后面）
+    this.supplies.healBlocked=(x,y,r)=>{const hit=(fp:readonly {left:number;right:number;top:number;bottom:number}[]|undefined)=>!!fp?.some(b=>x>b.left-r&&x<b.right+r&&y>b.top-r&&y<b.bottom+r);return hit(this.sishuiObstacles?.footprints)||hit(this.dzLubu?.obstacles.footprints)||(!!this.dzLubu&&!this.dzLubu.inArena(x,y,r));};
     if(scenery==='sishui'){
       // 汜水关：关墙横在北面、关门居中、门两侧箭楼；西凉营帐在关前两翼（敌军出兵方向）；营寨杂物摆在营帐边，不挡战场中间
       const sup=this.supplies;
@@ -1182,7 +1183,8 @@ export class GameScene extends Phaser.Scene {
     // 双首领：主将 ×0.7 + 两首领中点 ×0.3（主将留在画面中间 60%）
     const dualCam = this.dual?.cameraTarget(this.player.x, this.player.y);
     const targetX = (dualCam ? dualCam.x : this.player.x - GAME_WIDTH / 2) + (look?.x ?? 0);
-    const targetY = (dualCam ? dualCam.y : this.player.y - GAME_HEIGHT / 2) + (look?.y ?? 0);
+    // 2-3 洛阳：董卓 / 吕布在城头时，主将走近城墙镜头往上让一点，城头的人才看得见（城墙图约 230 高，不让的话城头在画面外）
+    const targetY = (dualCam ? dualCam.y : this.player.y - GAME_HEIGHT / 2) + (look?.y ?? 0) + (this.dzLubu?.cameraBias(this.player.y) ?? 0);
     const k = 1 - Math.exp(-11 * dt);
     cam.scrollX += (targetX - cam.scrollX) * k;
     cam.scrollY += (targetY - cam.scrollY) * k;
@@ -1276,17 +1278,21 @@ export class GameScene extends Phaser.Scene {
       scene: this, elapsed: () => this.elapsed, over: () => ({over: this.over, victory: this.victory}),
       banner: (t, c) => this.showWaveBanner(t, false, c),
       stageObjective: () => { const o = this.objective; if (!o) return null; const p = o.progress; return {kind: o.o.kind, cur: p.cur, max: p.max, label: o.o.label, target: o.o.kind === 'destroy' ? o.o.target : undefined, limit: o.o.limit, done: o.done, failed: o.failed, points: o.points}; },
-      bosses: () => this.dual ? this.dual.alive.map(x => ({key: x.id, name: x.name, e: x.enemy})) : this.boss?.active ? [{key: 'main', name: this.chapter.bossName, e: this.boss}] : [],
+      bosses: () => [...(this.dual ? this.dual.alive.map(x => ({key: x.id, name: x.name, e: x.enemy})) : this.boss?.active ? [{key: 'main', name: this.chapter.bossName, e: this.boss}] : []), ...this.dzLubuBoss()],
       waves: () => this.objective || !this.chapter.waves?.length ? null : {cur: Math.max(1, this.waveIndex + 1), total: this.chapter.waves.length, name: this.chapter.waves[Math.max(0, this.waveIndex)]?.name ?? '', bossAt: chapterBossTime(this.chapter)},
       bossName: () => this.chapter.bossName, bossSpawned: () => this.bossSpawned, bossKilled: () => this.bossKilled,
       bossOutcome: key => this.dual?.entries.find(x => x.id === key)?.done ?? null,
     });
     if (IS_DESKTOP) {
       this.ordersPanel = new OrdersPanel(this, orders);
-      this.battleMap = new BattleMap({scene: this, player: () => this.player, enemies: () => this.enemies, followers: () => this.followers?.members ?? [], bosses: () => this.dual ? this.dual.alive.map(x => x.enemy) : this.boss?.active ? [this.boss] : []}, orders);
+      this.battleMap = new BattleMap({scene: this, player: () => this.player, enemies: () => this.enemies, followers: () => this.followers?.members ?? [], bosses: () => [...(this.dual ? this.dual.alive.map(x => x.enemy) : this.boss?.active ? [this.boss] : []), ...this.dzLubuBoss().map(x => x.e)]}, orders);
       this.objectiveText?.setVisible(false);
     }
     this.events.once('shutdown', () => { this.ordersPanel?.destroy(); this.battleMap?.destroy(); this.battleOrders?.clear(); this.ordersPanel = null; this.battleMap = null; this.battleOrders = null; });
+  }
+  /** 2-3 洛阳：吕布在城下打的那段，当成一名首领进军令（「打退吕布」，逃走即完成）和地图朱印。 */
+  private dzLubuBoss(): Array<{key: string; name: string; e: Enemy; label: string}> {
+    const z = this.dzLubu, l = z?.lubu; return z && l?.active && z.phase === 'wall' ? [{key: 'lubu', name: '吕布', e: l, label: '打退吕布'}] : [];
   }
   /** 每帧：军令同步（5 Hz）、面板、地图（8 Hz）；弹窗 / 结算时关大地图、地图停更。 */
   protected tickBattleMap(dt: number): void {
@@ -1340,7 +1346,8 @@ export class GameScene extends Phaser.Scene {
       }
     }
 
-    if (!this.bossSpawned && (this.objective ? this.objective.done : this.elapsed >= chapterBossTime(this.chapter)) && this.mode === 'none') {
+    // 首领出阵：开局就登场的关（2-3 洛阳，chapter.bossAtStart）1 秒后；有关卡目标的关等目标完成；否则按时间
+    if (!this.bossSpawned && (this.chapter.bossAtStart ? this.elapsed >= 1 : this.objective ? this.objective.done : this.elapsed >= chapterBossTime(this.chapter)) && this.mode === 'none') {
       this.spawnBoss();
     }
     void time;
@@ -1384,7 +1391,10 @@ export class GameScene extends Phaser.Scene {
       banner:(t,d,c)=>this.showWaveBanner(t,d,c),sfx:k=>this.sfx.play(k),killBoss:()=>{const b=this.boss;if(b?.active){b.invulnerable=false;b.hp=0;this.killEnemy(b);}},
       enemies:()=>this.enemies,allies:()=>this.allies,hitFeel:()=>this.hitFeel,
       cutscene:(script,anchors,done)=>this.playCutscene(script,anchors,done),heroSprite:id=>this.heroSprite(id),
+      ready:()=>!this.objective||this.objective.done, // 2-3：营寨全毁 → 吕布跃下城头
       line:(id,t)=>(this as unknown as {storyDir?:{line(id:string,t:{x:number;y:number}):boolean}}).storyDir?.line(id,t)??false},boss); // 剧情台词：故事系统（claude/story-batch1）合并后生效
+    // 2-3：城墙 / 洛水封口建好后，撤掉开局先于城墙生成、落在城墙里或场地外的布景与旗子
+    {const z=this.dzLubu;if(z)this.supplies?.purge((x,y)=>!z.inArena(x,y,0)||z.obstacles.footprints.some(b=>x>b.left&&x<b.right&&y>b.top&&y<b.bottom));}
     if(this.chapter.bossStyle==='huaxiong')this.sishuiPass?.onBoss(boss); // 汜水关：关门洞开，华雄带亲卫杀出
     if(this.chapter.bossStyle==='huaxiong'){this.huaxiong=new HuaxiongBoss({scene:this,boss,player:this.player,army:this.legion,hurtTroops:(x,y,r,d,n,a,arc)=>this.legion.hurtArea(x,y,r,d,n,a,arc),sfx:()=>this.sfx.play('allySlash')},this.combatNow);}
     // 首领招式框架（第一章张梁 / 张宝）与已有控制器首领的坐骑（吕布赤兔、华雄）

@@ -77,7 +77,7 @@ export interface RouteView {
   /** 全图唯一的「下一战」：第一个可出征而未打下的主线关（全通关时为空）。 */
   next?: string;
   /** 迷雾揭开圆（地图坐标）。 */
-  holes: Array<{ x: number; y: number; r: number }>;
+  holes: Array<{ x: number; y: number; r: number; id: string }>;
 }
 export interface RouteState { progress: TimelineProgress; owned: readonly string[]; alerts: readonly string[]; challengeOpen: boolean; challengeCleared: boolean; testRun?: boolean }
 /** 揭开半径（地图像素）：主线打下后揭开一大片，可打的点露出它周围。 */
@@ -94,22 +94,22 @@ export function routeView(st: RouteState): RouteView {
   let next: string | undefined, faintSet = false;
   for (const id of MAIN_ROUTE) {
     const n = routeNode(id)!;
-    if (n.kind === 'camp') { vis.set(id, 'cleared'); holes.push({ x: n.x, y: n.y, r: REVEAL.camp }); continue; }
-    if (stageCleared(n, s)) { vis.set(id, 'cleared'); holes.push({ x: n.x, y: n.y, r: REVEAL.cleared }); continue; }
-    if (stageAvailable(n, s) || st.testRun) { vis.set(id, 'open'); holes.push({ x: n.x, y: n.y, r: REVEAL.open }); if (!next) next = id; continue; }
+    if (n.kind === 'camp') { vis.set(id, 'cleared'); holes.push({ x: n.x, y: n.y, r: REVEAL.camp, id }); continue; }
+    if (stageCleared(n, s)) { vis.set(id, 'cleared'); holes.push({ x: n.x, y: n.y, r: REVEAL.cleared, id }); continue; }
+    if (stageAvailable(n, s) || st.testRun) { vis.set(id, 'open'); holes.push({ x: n.x, y: n.y, r: REVEAL.open, id }); if (!next) next = id; continue; }
     // 第一个还没开放的关：只在它紧挨着前一个已露出的关时淡墨显示
     const prev = n.after ? vis.get(n.after) : undefined;
-    if (!faintSet && (prev === 'open' || prev === 'cleared')) { vis.set(id, 'faint'); holes.push({ x: n.x, y: n.y, r: REVEAL.faint }); faintSet = true; continue; }
+    if (!faintSet && (prev === 'open' || prev === 'cleared')) { vis.set(id, 'faint'); holes.push({ x: n.x, y: n.y, r: REVEAL.faint, id }); faintSet = true; continue; }
     vis.set(id, 'hidden');
   }
   for (const n of ROUTE_NODES) {
     if (n.kind === 'siege' && n.city) {
       const mine = st.owned.includes(n.city), alert = st.alerts.includes(n.city);
       const v: NodeVis = mine || alert ? 'cleared' : siegeUnlocked(n.city, s) || st.testRun ? 'open' : 'hidden';
-      vis.set(n.id, v); if (v !== 'hidden') holes.push({ x: n.x, y: n.y, r: REVEAL.siege });
+      vis.set(n.id, v); if (v !== 'hidden') holes.push({ x: n.x, y: n.y, r: REVEAL.siege, id: n.id });
     } else if (n.kind === 'challenge') {
       const a = n.after ? routeNode(n.after) : undefined, v: NodeVis = st.challengeCleared ? 'cleared' : (st.challengeOpen || st.testRun) && (!a || stageCleared(a, s) || st.testRun) ? 'open' : 'hidden';
-      vis.set(n.id, v); if (v !== 'hidden') holes.push({ x: n.x, y: n.y, r: REVEAL.challenge });
+      vis.set(n.id, v); if (v !== 'hidden') holes.push({ x: n.x, y: n.y, r: REVEAL.challenge, id: n.id });
     }
   }
   return { vis, next, holes };

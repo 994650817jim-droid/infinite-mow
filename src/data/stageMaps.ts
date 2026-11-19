@@ -7,11 +7,12 @@ import type { TerrainConfig } from './terrain';
  *
  * 边：每边用一种天然边——
  *  cliff 山崖（地形层山崖，挡人）/ forest 密林（地形层树林）/ river 大河（地形层河，河对岸是边）/
- *  palisade 营栅（势力营具营栅一排，营门处留口立辕门）/ wall 城墙或关墙（攻城城墙图集）/ houses 街坊民房（攻城街巷图集，一排房背对场内）。
+ *  palisade 营栅（势力营具营栅一排，营门处留口立辕门）/ wall 城墙或关墙（攻城城墙图集）/ houses 街坊民房（攻城街巷图集，一排房背对场内）/
+ *  fire 火墙（手绘地火序列帧一圈；配 firering 互动时随时间往里收）。
  * 关口（gates）：场外刷的兵改从这里进场（离主将最远的那个）；营门、桥头、山口。
  */
 /** existing：本关原有的关墙 / 城墙 / 河（ARC_FORTS、SishuiPass、地形层已画好、已挡人），这边只管守边、不另画。 */
-export type EdgeKind = 'cliff' | 'forest' | 'river' | 'palisade' | 'wall' | 'houses' | 'existing';
+export type EdgeKind = 'cliff' | 'forest' | 'river' | 'palisade' | 'wall' | 'houses' | 'fire' | 'existing';
 export type StageMapKind = 'arena' | 'corridor' | 'ford';
 export interface Pt { x: number; y: number }
 export interface StageMapDef {
@@ -39,7 +40,10 @@ export interface StageMapDef {
   interactions?: Array<
     | { kind: 'bridge'; x: number; y: number; hp: number; killRadius: number }
     | { kind: 'campfire'; tents: Pt[]; lit: number[]; spreadMs: number; spreadRange: number; radius: number; damage: number; tickMs: number }
-    | { kind: 'logs'; fromY: number; toY: number; everyMs: number; firstMs: number; warnMs: number; count: number; width: number; speed: number; damage: number; enemyDamage: number }
+    | { kind: 'logs'; fromY: number; toY: number; everyMs: number; firstMs: number; warnMs: number; count: number; width: number; speed: number; damage: number; enemyDamage: number;
+        /** 滚的方向：y 关上往南滚（滚木，默认）；x 从两侧山坡横着滚过谷地（滚石） */ axis?: 'y' | 'x' }
+    /** 火墙收圈（火烧连营）：四面的火墙从 startMs 起、durationMs 内往里收到 shrinkTo 倍；贴着火墙站会被烧（敌我都烧）。 */
+    | { kind: 'firering'; shrinkTo: number; startMs: number; durationMs: number; tickMs: number; burn: number; damage: number; playerDamage: number }
     /** 火油车（盘蛇谷）：任何一击点燃，引信后在谷里烧出一道横贯的火带（火攻：藤甲 3 倍并引燃）。 */
     | { kind: 'firecarts'; carts: Pt[]; fuseMs: number; band: number; burnMs: number; tickMs: number; damage: number; playerDamage: number }
     /** 灌木伏兵（荥阳）：主将走近一丛灌木，伏兵杀出（每丛一次）。 */
@@ -109,6 +113,45 @@ export const STAGE_MAPS: Record<string, StageMapDef> = {
     edges: { n: 'existing', s: 'houses', w: 'houses', e: 'houses' }, openings: { s: [0] }, housesBurning: .3,
     gates: [{ x: 0, y: -470 }, { x: 0, y: 2350 }, { x: -860, y: 900 }, { x: 860, y: 900 }],
     interactions: [{ kind: 'roofs', everyMs: 10000, firstMs: 7000, count: 3, warnMs: 700 }],
+  },
+  // —— 第三批 ——
+  // 10-3 火烧连营：四面是烧起来的连营 / 林火，火墙一分钟后开始往里收（两分钟收到六成），贴着火墙会被烧
+  'yiling.3': {
+    kind: 'arena', bounds: { left: -1800, right: 1800, top: -1500, bottom: 1500 },
+    edges: { n: 'fire', s: 'fire', w: 'fire', e: 'fire' },
+    gates: [{ x: 0, y: -1400 }, { x: 0, y: 1400 }, { x: -1700, y: 0 }, { x: 1700, y: 0 }],
+    interactions: [{ kind: 'firering', shrinkTo: .6, startMs: 60000, durationMs: 120000, tickMs: 500, burn: 70, damage: 25, playerDamage: 7 }],
+  },
+  // 8-3 汉水：渡口——北边是本关原有的汉水（新河岸套件，两座桥 = 曹军渡河来路），东西林带，南边我军营栅
+  'hanzhong.3': {
+    kind: 'ford', bounds: { left: -1500, right: 1500, top: -570, bottom: 1200 },
+    edges: { n: 'existing', s: 'palisade', w: 'forest', e: 'forest' }, openings: { s: [0] },
+    gates: [{ x: -1040, y: -540 }, { x: 1040, y: -540 }, { x: -1450, y: 300 }, { x: 1450, y: 300 }], faction: 5, forest: 'pine',
+  },
+  // 11-1 泸水：渡泸——泸水从场地中间横过（本关原有，两座桥），四面丛林，北面林口（蛮兵来路）、南面林口（我军来路）；毒泉、火盆照旧
+  'nanzheng.1': {
+    kind: 'ford', bounds: { left: -1500, right: 1500, top: -1250, bottom: 1100 },
+    edges: { n: 'forest', s: 'forest', w: 'forest', e: 'forest' }, openings: { n: [0], s: [0] },
+    gates: [{ x: 0, y: -1200 }, { x: -1450, y: -700 }, { x: 1450, y: -700 }, { x: -1450, y: 600 }], forest: 'jungle',
+  },
+  // 12-3 五丈原：渡口——南边是本关原有的渭水（新河岸套件），北边魏军营栅（北营门出兵），东西稀疏林带
+  'beifa.3': {
+    kind: 'ford', bounds: { left: -1600, right: 1600, top: -1300, bottom: 600 },
+    edges: { n: 'palisade', s: 'existing', w: 'forest', e: 'forest' }, openings: { n: [0] },
+    gates: [{ x: 0, y: -1250 }, { x: -1550, y: -500 }, { x: 1550, y: -500 }], faction: 3, forest: 'dead',
+  },
+  // 1-2 下曲阳：张宝法坛营——北边法坛营（本关原有）后面是密林，东西密林，南边河滩（我军渡河来路，一座桥）；火油桶、黄巾军旗、营帐照旧
+  'huangjin.2': {
+    kind: 'arena', bounds: { left: -1500, right: 1500, top: -1150, bottom: 1100 },
+    edges: { n: 'forest', s: 'river', w: 'forest', e: 'forest' }, riverBridges: [0],
+    gates: [{ x: -1100, y: -1100 }, { x: 1100, y: -1100 }, { x: -1450, y: 200 }, { x: 1450, y: 200 }], forest: 'poplar',
+  },
+  // 6-2 零陵武陵：山谷——东西山崖（本关原有的山崖 + 补齐，留原有的两处山口），南北山口；山越从两侧山坡推滚石横扫谷地
+  'jingnan.2': {
+    kind: 'corridor', bounds: { left: -880, right: 880, top: -1300, bottom: 1300 },
+    edges: { n: 'cliff', s: 'cliff', w: 'cliff', e: 'cliff' }, openings: { n: [0], s: [0], w: [350], e: [-450] },
+    gates: [{ x: 0, y: -1250 }, { x: 0, y: 1250 }, { x: -840, y: 350 }, { x: 840, y: -450 }], forest: 'bamboo',
+    interactions: [{ kind: 'logs', axis: 'x', fromY: -880, toY: 880, everyMs: 8000, firstMs: 7000, warnMs: 1200, count: 2, width: 100, speed: 520, damage: 18, enemyDamage: 220 }],
   },
 };
 

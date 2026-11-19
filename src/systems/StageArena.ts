@@ -35,12 +35,12 @@ export interface ArenaHost {
 }
 interface Gate extends Pt { off?: boolean }
 interface Tent { x: number; y: number; img?: Phaser.GameObjects.Image; fires: Phaser.GameObjects.Sprite[]; state: 'idle' | 'burning' | 'burnt'; litAt: number; tickAt: number }
-interface Log { x: number; y: number; toY: number; at: number; rolling: boolean; img?: Phaser.GameObjects.Image; hit: Set<number>; hitPlayer: boolean; id: string }
+interface Log { x: number; y: number; toY: number; /** 横滚方向（滚石） */ dir: 1 | -1; at: number; rolling: boolean; img?: Phaser.GameObjects.Image; hit: Set<number>; hitPlayer: boolean; id: string }
 
 export class StageArena {
   readonly bounds: StageMapDef['bounds'];
   readonly gates: Gate[];
-  /** 本关边带厚度 */ private band: number = ARENA.edgeBand;
+  /** 本关边带厚度 */ private band: number = ARENA.edgeBand; private startedAt = 0;
   private objs: Phaser.GameObjects.GameObject[] = [];
   private bridge: { e: Enemy; life: number; x: number; y: number; label: Phaser.GameObjects.Text; killR: number } | null = null;
   private carts: Array<{ e: Enemy; life: number; x: number; y: number; img?: Phaser.GameObjects.Image; litAt: number; burnAt: number; fires: Phaser.GameObjects.Sprite[]; tickAt: number; done: boolean }> = [];
@@ -48,10 +48,10 @@ export class StageArena {
   private roofAt = 0; private roofPending: Array<{ x: number; y: number; at: number; kind: 'infantry' | 'shield' }> = [];
   private tents: Tent[] = []; private logs: Log[] = []; private logAt = 0; private logSeq = 0;
   /** 测试读 */
-  readonly stats = { bushAmbushers: 0, cartsLit: 0, fireBands: 0, fireHits: 0, bushesSprung: 0, roofDrops: 0, relocated: 0, clamped: 0, bridgeDown: false, bridgeDeck: false, tentsLit: 0, tentsBurnt: 0, fireTicks: 0, logs: 0, logHits: 0, logEnemyHits: 0 };
+  readonly stats = { ringScale: 1, ringClosing: false, ringHits: 0, ringPlayerHits: 0, bushAmbushers: 0, cartsLit: 0, fireBands: 0, fireHits: 0, bushesSprung: 0, roofDrops: 0, relocated: 0, clamped: 0, bridgeDown: false, bridgeDeck: false, tentsLit: 0, tentsBurnt: 0, fireTicks: 0, logs: 0, logHits: 0, logEnemyHits: 0 };
 
   constructor(private readonly h: ArenaHost, readonly def: StageMapDef) {
-    const b = this.bounds = def.bounds, P = def.band ?? ARENA.edgeBand, sc = h.scene; this.band = P;
+    const b = this.bounds = { ...def.bounds }, /* 拷一份：火墙收圈会改它 */ P = def.band ?? ARENA.edgeBand, sc = h.scene; this.band = P;
     this.gates = def.gates.map(g => ({ ...g }));
     sc.cameras.main.setBounds(b.left - P, b.top - P, b.right - b.left + P * 2, b.bottom - b.top + P * 2);
     h.purge?.((x, y) => !this.inside(x, y, 30));
@@ -59,7 +59,8 @@ export class StageArena {
     if (def.backdropWallY !== undefined) this.backdrop(def.backdropWallY);
     // 守边放在 postupdate：本帧所有系统（冲锋、击退、首领控制器带的兵…）都动完之后再挪回场内
     sc.events.on('postupdate', this.post, this);
-    const now = h.now();
+    const now = h.now(); this.startedAt = now;
+    if (def.interactions?.some(i => i.kind === 'logs' && i.axis === 'x') && !sc.textures.exists('shu_pass')) { sc.load.spritesheet('shu_pass', 'assets/shu/pass.png', { frameWidth: 384, frameHeight: 384 }); if (!sc.load.isLoading()) sc.load.start(); } // 滚石图（蜀道滚石）
     for (const it of def.interactions ?? []) {
       if (it.kind === 'bridge') this.setupBridge(it);
       if (it.kind === 'campfire') this.setupTents(it, now);
@@ -110,6 +111,7 @@ export class StageArena {
       if (k === 'palisade') palisade(dir);
       if (k === 'wall' && (dir === 'n' || dir === 's')) wall(dir);
       if (k === 'houses') this.houses(dir, isHole);
+      if (k === 'fire' && !this.ringFires.length) this.buildFireEdges();
     }
   }
 
@@ -235,24 +237,83 @@ export class StageArena {
   // ———— 关上滚木（阳平关）————
   private updateLogs(now: number) {
     const it = this.def.interactions?.find(i => i.kind === 'logs'); if (!it || it.kind !== 'logs') return;
-    const p = this.h.player, sc = this.h.scene, fx = warnFx(sc), b = this.bounds;
+    const p = this.h.player, sc = this.h.scene, fx = warnFx(sc), b = this.bounds, side = it.axis === 'x';
     if (now >= this.logAt) {
       this.logAt = now + it.everyMs;
       for (let i = 0; i < it.count; i++) {
-        const x = Phaser.Math.Clamp(i === 0 ? p.x : b.left + 80 + Math.random() * (b.right - b.left - 160), b.left + 60, b.right - 60), y = Math.max(it.fromY, p.y - 820);
-        this.logs.push({ x, y, toY: Math.min(it.toY, y + 1900), at: now + it.warnMs, rolling: false, hit: new Set(), hitPlayer: false, id: 'arena-log-' + this.logSeq++ });
+        if (side) {
+          // 滚石：从两侧山坡横着滚过谷地（第一块对准主将这一行）
+          const dir = (this.logSeq % 2 ? -1 : 1) as 1 | -1, y = Phaser.Math.Clamp(i === 0 ? p.y : p.y + (Math.random() - .5) * 700, b.top + 60, b.bottom - 60), x = dir > 0 ? b.left - 30 : b.right + 30;
+          this.logs.push({ x, y, toY: dir > 0 ? b.right + 30 : b.left - 30, dir, at: now + it.warnMs, rolling: false, hit: new Set(), hitPlayer: false, id: 'arena-log-' + this.logSeq++ });
+        } else {
+          const x = Phaser.Math.Clamp(i === 0 ? p.x : b.left + 80 + Math.random() * (b.right - b.left - 160), b.left + 60, b.right - 60), y = Math.max(it.fromY, p.y - 820);
+          this.logs.push({ x, y, toY: Math.min(it.toY, y + 1900), dir: 1, at: now + it.warnMs, rolling: false, hit: new Set(), hitPlayer: false, id: 'arena-log-' + this.logSeq++ });
+        }
       }
     }
     for (const l of [...this.logs]) {
       if (!l.rolling) {
-        fx.lane(l.id, 'charge', l.x, l.y, Math.PI / 2, l.toY - l.y, it.width, 1 - (l.at - now) / it.warnMs, now);
-        if (now >= l.at) { l.rolling = true; this.stats.logs++; l.img = sc.add.image(l.x, l.y, 'yellow_props', 27).setOrigin(.5, .6).setDisplaySize(130, 130).setDepth(actorDepth(l.y)); this.objs.push(l.img); }
+        if (side) fx.lane(l.id, 'charge', l.x, l.y, l.dir > 0 ? 0 : Math.PI, Math.abs(l.toY - l.x), it.width, 1 - (l.at - now) / it.warnMs, now);
+        else fx.lane(l.id, 'charge', l.x, l.y, Math.PI / 2, l.toY - l.y, it.width, 1 - (l.at - now) / it.warnMs, now);
+        if (now >= l.at) {
+          l.rolling = true; this.stats.logs++;
+          const stone = side && sc.textures.exists('shu_pass');
+          l.img = stone ? sc.add.image(l.x, l.y, 'shu_pass', 4).setOrigin(.5, .6).setDisplaySize(120, 120).setDepth(actorDepth(l.y)) : sc.add.image(l.x, l.y, 'yellow_props', 27).setOrigin(.5, .6).setDisplaySize(130, 130).setDepth(actorDepth(l.y));
+          this.objs.push(l.img);
+        }
         continue;
       }
-      l.y += it.speed * (1 / 60); l.img?.setPosition(l.x, l.y).setRotation(l.img.rotation + .12).setDepth(actorDepth(l.y));
-      if (!l.hitPlayer && Math.abs(p.x - l.x) <= it.width / 2 + p.radius && Math.abs(p.y - l.y) <= 40 + p.radius) { l.hitPlayer = true; this.stats.logHits++; p.takeDamage(it.damage, now); sc.cameras.main.shake(120, .005); }
-      for (const e of this.h.enemies()) if (e.active && !e.isSupplySlot && e.kind !== 'boss' && !l.hit.has(e.spawnId) && Math.abs(e.x - l.x) <= it.width / 2 + e.radius && Math.abs(e.y - l.y) <= 40 + e.radius) { l.hit.add(e.spawnId); this.stats.logEnemyHits++; this.h.hitEnemy(e, it.enemyDamage); }
-      if (l.y >= l.toY) { playSheet(sc, 'fx_collapse_dust', l.x, l.y, { size: 120, depth: DEPTH.fx, ms: 420, alpha: .7 }); l.img?.destroy(); this.logs.splice(this.logs.indexOf(l), 1); }
+      if (side) l.x += l.dir * it.speed / 60; else l.y += it.speed / 60;
+      l.img?.setPosition(l.x, l.y).setRotation(l.img.rotation + .12 * l.dir).setDepth(actorDepth(l.y));
+      const hitP = side ? Math.abs(p.y - l.y) <= it.width / 2 + p.radius && Math.abs(p.x - l.x) <= 40 + p.radius : Math.abs(p.x - l.x) <= it.width / 2 + p.radius && Math.abs(p.y - l.y) <= 40 + p.radius;
+      if (!l.hitPlayer && hitP) { l.hitPlayer = true; this.stats.logHits++; p.takeDamage(it.damage, now); sc.cameras.main.shake(120, .005); }
+      for (const e of this.h.enemies()) {
+        if (!e.active || e.isSupplySlot || e.kind === 'boss' || l.hit.has(e.spawnId)) continue;
+        const hitE = side ? Math.abs(e.y - l.y) <= it.width / 2 + e.radius && Math.abs(e.x - l.x) <= 40 + e.radius : Math.abs(e.x - l.x) <= it.width / 2 + e.radius && Math.abs(e.y - l.y) <= 40 + e.radius;
+        if (hitE) { l.hit.add(e.spawnId); this.stats.logEnemyHits++; this.h.hitEnemy(e, it.enemyDamage); }
+      }
+      const done = side ? (l.dir > 0 ? l.x >= l.toY : l.x <= l.toY) : l.y >= l.toY;
+      if (done) { playSheet(sc, 'fx_collapse_dust', l.x, l.y, { size: 120, depth: DEPTH.fx, ms: 420, alpha: .7 }); l.img?.destroy(); this.logs.splice(this.logs.indexOf(l), 1); }
+    }
+  }
+
+  // ———— 火墙收圈（火烧连营）————
+  /** 火墙：沿当前边界一圈地火（手绘序列帧）；收圈时边界往里收、火跟着挪，镜头边界、关口一起收。 */
+  private ringFires: Phaser.GameObjects.Sprite[] = []; private ring0 = { left: 0, right: 0, top: 0, bottom: 0 }; private ringTickAt = 0; private ringPlacedAt = 0;
+  private buildFireEdges() {
+    const b = this.bounds; this.ring0 = { ...b };
+    const per = 2 * ((b.right - b.left) + (b.bottom - b.top)), n = Math.round(per / 120);
+    for (let i = 0; i < n; i++) { const f = this.flame(0, 0, 150 + (i % 3) * 20, 0); if (f) this.ringFires.push(f); }
+    this.placeRing();
+  }
+  /** 地火按周长均匀摆在当前边界外侧一点（火在边线上，主将贴边站就在火里）。 */
+  private placeRing() {
+    const b = this.bounds, w = b.right - b.left, h = b.bottom - b.top, per = 2 * (w + h), n = this.ringFires.length;
+    this.ringFires.forEach((f, i) => {
+      let d = (i + .5) / n * per, x: number, y: number;
+      if (d < w) { x = b.left + d; y = b.top - 20; } else if ((d -= w) < h) { x = b.right + 20; y = b.top + d; } else if ((d -= h) < w) { x = b.right - d; y = b.bottom + 30; } else { d -= w; x = b.left - 20; y = b.bottom - d; }
+      f.setPosition(x + ((i * 37) % 30) - 15, y).setDepth(actorDepth(y) + .02);
+    });
+  }
+  private updateFireRing(now: number) {
+    const it = this.def.interactions?.find(i => i.kind === 'firering'); if (!it || it.kind !== 'firering') return;
+    const t0 = this.startedAt + it.startMs, k = Phaser.Math.Clamp((now - t0) / it.durationMs, 0, 1), s = 1 - (1 - it.shrinkTo) * k, r = this.ring0, b = this.bounds;
+    const cx = (r.left + r.right) / 2, cy = (r.top + r.bottom) / 2, hw = (r.right - r.left) / 2 * s, hh = (r.bottom - r.top) / 2 * s;
+    if (Math.abs(b.right - (cx + hw)) > .5) {
+      b.left = cx - hw; b.right = cx + hw; b.top = cy - hh; b.bottom = cy + hh;
+      if (now - this.ringPlacedAt > 200) {
+        this.ringPlacedAt = now; this.placeRing();
+        const P = this.band; this.h.scene.cameras.main.setBounds(b.left - P, b.top - P, b.right - b.left + P * 2, b.bottom - b.top + P * 2);
+        for (let i = 0; i < this.gates.length; i++) { const g0 = this.def.gates[i]; this.gates[i].x = cx + (g0.x - cx) * s; this.gates[i].y = cy + (g0.y - cy) * s; }
+        this.stats.ringScale = +s.toFixed(3);
+      }
+      if (!this.stats.ringClosing && k > 0) { this.stats.ringClosing = true; this.h.banner('火势四合！', true, '火墙往里收 · 别贴着火墙'); }
+    }
+    // 贴着火墙：敌我都烧（火攻）
+    if (now >= this.ringTickAt) {
+      this.ringTickAt = now + it.tickMs; const near = (x: number, y: number) => Math.min(x - b.left, b.right - x, y - b.top, b.bottom - y) < it.burn;
+      for (const e of this.h.enemies()) if (e.active && !e.isSupplySlot && e.kind !== 'boss' && near(e.x, e.y)) { this.h.hitEnemy(e, it.damage, 'fire'); this.stats.ringHits++; }
+      const p = this.h.player; if (near(p.x, p.y)) { p.takeDamage(it.playerDamage, now); this.stats.ringPlayerHits++; }
     }
   }
 
@@ -330,7 +391,7 @@ export class StageArena {
   }
 
   update(now: number) {
-    this.updateCarts(now); this.updateBushes(now); this.updateRoofs(now);
+    this.updateCarts(now); this.updateBushes(now); this.updateRoofs(now); this.updateFireRing(now);
     this.updateBridge(); this.updateTents(now); this.updateLogs(now);
   }
   /** 小地图 / 测试读：边界、四边类型、关口（关掉的不算）。 */

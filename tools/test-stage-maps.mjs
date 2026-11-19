@@ -9,7 +9,7 @@ const world = { version: 8, yellowStages: 3, dongzhuoStages: 3, warlordStages: 3
 const heroes = { version: 1, migrated: true, attrSet: 3, heroes: { zhaoyun: { level: 20, xp: 0, attributes: { strength: 10, agility: 9, intellect: 0, command: 0 } } } };
 
 const STAGES = (process.argv[2] ?? '5-1,3-2,4-3,8-1,11-2,4-1,2-2,3-1').split(',');
-const CH = { 2: { key: 'GameScene', cfg: st => ({ chapter: 'hulao', westStage: st }) }, 11: { key: 'NanzhengGameScene', reg: 'nanzhengStage' }, 3: { key: 'ThirdGameScene', reg: 'thirdStage' }, 4: { key: 'GuanduGameScene', reg: 'guanduStage' }, 5: { key: 'ChibiGameScene', reg: 'chibiStage' }, 8: { key: 'HanzhongGameScene', reg: 'hanzhongStage' } };
+const CH = { 1: { key: 'GameScene', cfg: st => ({ chapter: 'huangjin', stage: st }) }, 6: { key: 'JingnanGameScene', reg: 'jingnanStage' }, 10: { key: 'YilingGameScene', reg: 'yilingStage' }, 12: { key: 'BeifaGameScene', reg: 'beifaStage' }, 2: { key: 'GameScene', cfg: st => ({ chapter: 'hulao', westStage: st }) }, 11: { key: 'NanzhengGameScene', reg: 'nanzhengStage' }, 3: { key: 'ThirdGameScene', reg: 'thirdStage' }, 4: { key: 'GuanduGameScene', reg: 'guanduStage' }, 5: { key: 'ChibiGameScene', reg: 'chibiStage' }, 8: { key: 'HanzhongGameScene', reg: 'hanzhongStage' } };
 const OUT = 'assets/review/stage-maps'; mkdirSync(OUT, { recursive: true });
 let pass = 0, fail = 0; const errors = [];
 const ck = (n, ok, d) => { ok ? pass++ : fail++; console.log((ok ? 'PASS ' : 'FAIL ') + n + (d !== undefined ? ' · ' + JSON.stringify(d).slice(0, 600) : '')); };
@@ -78,6 +78,20 @@ for (const id of STAGES) {
     const r = await p.evaluate(async () => { const s = window.__S, A = s.arena, d0 = A.stats.roofDrops; s.player.sprite.setPosition(0, 900); A.roofAt = s.combatNow; for (let i = 0; i < 10; i++) { window.__clearUi(); await new Promise(r => setTimeout(r, 150)); } return { drops: A.stats.roofDrops - d0, houses: s.children.list.filter(o => o.name === 'arena-house').length, fires: s.children.list.filter(o => o.name === 'arena-fire').length }; });
     await p.screenshot({ path: `${OUT}/${id}-roofs.png` });
     ck('3-1 长安街坊：两侧民房（部分着火）、房檐伏兵跳下', r.drops >= 1 && r.houses > 10 && r.fires > 0, r);
+  }
+  if (id === '10-3') {
+    const r = await p.evaluate(async () => { const s = window.__S, A = s.arena, w0 = A.bounds.right - A.bounds.left; A.startedAt -= 150000; for (let i = 0; i < 8; i++) { window.__clearUi(); await new Promise(r => setTimeout(r, 150)); } const b = A.bounds; s.player.sprite.setPosition(b.left + 30, (b.top + b.bottom) / 2); for (let i = 0; i < 8; i++) { window.__clearUi(); await new Promise(r => setTimeout(r, 150)); } return { w0, w1: Math.round(b.right - b.left), scale: A.stats.ringScale, closing: A.stats.ringClosing, playerHits: A.stats.ringPlayerHits, cam: Math.round(s.cameras.main._bounds.width) }; });
+    await p.screenshot({ path: `${OUT}/${id}-ring.png` });
+    ck('10-3 火墙收圈：到时火墙往里收（边界 / 镜头一起收），贴着火墙会被烧', r.closing && r.w1 < r.w0 * .7 && r.playerHits > 0 && r.cam < r.w0 + 700, r);
+  }
+  if (id === '6-2') {
+    const r = await p.evaluate(async () => { const s = window.__S, A = s.arena; A.logAt = s.combatNow; for (let i = 0; i < 20; i++) { window.__clearUi(); await new Promise(r => setTimeout(r, 150)); } return { ...A.stats }; });
+    await p.screenshot({ path: `${OUT}/${id}-stones.png` });
+    ck('6-2 滚石：山越从两侧山坡横推滚石（先铺预警箭道）', r.logs >= 1, { logs: r.logs, hits: r.logEnemyHits });
+  }
+  if (['8-3', '11-1', '12-3', '1-2'].includes(id)) {
+    const r = await p.evaluate(() => { const s = window.__S; return { rivers: s.terrain?.info?.rivers ?? 0, bridges: s.terrain?.info?.bridges ?? 0, trees: s.terrain?.info?.trees ?? 0 }; });
+    ck(`${id} 渡口 / 营地：河、桥、林边都在`, r.rivers >= 1 && r.bridges >= 1 && r.trees > 20, r);
   }
   if (id === '8-1') {
     const r = await p.evaluate(async () => { const s = window.__S, A = s.arena; A.logAt = s.combatNow; await new Promise(r => setTimeout(r, 3500)); return { ...A.stats }; });

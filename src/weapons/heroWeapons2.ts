@@ -16,7 +16,7 @@ import { HINT_MOCK, SHOW_OWN_RANGE_FX, groundScar } from '../ui/HintStyle';
 const lv = (level: number): number => Math.max(0, Math.min(4, Math.floor(level) - 1));
 const sceneOf = (host: WeaponHost): Phaser.Scene => (host.add as unknown as { scene: Phaser.Scene }).scene;
 /** 选靶 / 触发用：活着且不是可破坏道具。 */
-const alive = (e: Enemy): boolean => e.active && !e.isSupplySlot;
+const alive = (e: Enemy): boolean => e.active && !(e.isSupplySlot && !e.lockTarget);
 /** 结算伤害用：道具（酒罐、木箱、油桶、军旗等）也能被打碎（2026-11-17）；状态与击退仍只对敌人。 */
 const hittable = (e: Enemy): boolean => e.active;
 /** fx_d 正式序列帧（闭月 / 重箭命中 / 当阳声浪 / 交叉斩，2026-11-16 ChatGPT 生成）是否已加载；缺图时用程序化特效。 */
@@ -42,7 +42,7 @@ export function smartTarget(host: WeaponHost, range: number, minDist = 0): Enemy
 }
 /** 普通 / 精锐被推开（首领、免控不动）。 */
 function shove(e: Enemy, ux: number, uy: number, dist: number): void {
-  if (e.kind === 'boss' || e.controlImmune || e.isSupplySlot) return;
+  if (e.kind === 'boss' || e.controlImmune || (e.isSupplySlot && !e.lockTarget)) return;
   const k = e.kind === 'elite' ? .4 : 1; e.sprite.x += ux * dist * k; e.sprite.y += uy * dist * k;
 }
 
@@ -249,7 +249,7 @@ export function dangyangBehavior(host: WeaponHost, weapon: WeaponState, dt: numb
     for (const e of host.grid.query(pl.x, pl.y, (R.roarRadius * host.player.passive.rangeMultiplier('dangyang_roar')) + 40)) {
       if (!hittable(e) || Math.hypot(e.x - pl.x, e.y - pl.y) > (R.roarRadius * host.player.passive.rangeMultiplier('dangyang_roar')) + e.radius) continue;
       host.hitEnemy(e, damage * R.roarDamageMul, time, 'melee');
-      if (!e.controlImmune && e.kind !== 'boss' && !e.isSupplySlot) e.stunUntil = Math.max(e.stunUntil, time + stun);
+      if (!e.controlImmune && e.kind !== 'boss' && !(e.isSupplySlot && !e.lockTarget)) e.stunUntil = Math.max(e.stunUntil, time + stun);
     }
     host.heroFx?.('roar', pl.x, pl.y - 10, (R.roarRadius * host.player.passive.rangeMultiplier('dangyang_roar')) * 1.7); // 2026-11-17「太夸张」：2.6 → 1.7
     const bg = host.add.graphics().setDepth(18.8).setName('zhangfei-bridge');

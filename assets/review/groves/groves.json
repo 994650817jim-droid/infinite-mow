@@ -1,0 +1,154 @@
+{
+ "1-2": {
+  "before": 0,
+  "total": 103,
+  "auto": 103,
+  "kinds": {
+   "broad": 24,
+   "poplar": 79
+  },
+  "bad": [],
+  "nBad": 0,
+  "perf": {
+   "fps": 143,
+   "worstMs": 30,
+   "enemies": 22,
+   "drawn": 3,
+   "trees": 103
+  }
+ },
+ "2-2": {
+  "before": 0,
+  "total": 98,
+  "auto": 98,
+  "kinds": {
+   "broad": 27,
+   "poplar": 55,
+   "pine": 16
+  },
+  "bad": [],
+  "nBad": 0,
+  "perf": {
+   "fps": 144,
+   "worstMs": 19,
+   "enemies": 27,
+   "drawn": 3,
+   "trees": 98
+  }
+ },
+ "4-1": {
+  "before": 0,
+  "total": 62,
+  "auto": 62,
+  "kinds": {
+   "dead": 16,
+   "willow": 12,
+   "poplar": 34
+  },
+  "bad": [],
+  "nBad": 0,
+  "perf": {
+   "fps": 140,
+   "worstMs": 30,
+   "enemies": 38,
+   "drawn": 4,
+   "trees": 62
+  }
+ },
+ "5-2": {
+  "before": 0,
+  "total": 61,
+  "auto": 61,
+  "kinds": {
+   "willow": 46,
+   "bamboo": 14,
+   "broad": 1
+  },
+  "bad": [],
+  "nBad": 0,
+  "perf": {
+   "fps": 144,
+   "worstMs": 23,
+   "enemies": 38,
+   "drawn": 2,
+   "trees": 61
+  }
+ },
+ "8-3": {
+  "before": 0,
+  "total": 53,
+  "auto": 53,
+  "kinds": {
+   "willow": 34,
+   "cypress": 12,
+   "pine": 7
+  },
+  "bad": [],
+  "nBad": 0,
+  "perf": {
+   "fps": 144,
+   "worstMs": 21,
+   "enemies": 37,
+   "drawn": 2,
+   "trees": 53
+  }
+ },
+ "11-1": {
+  "before": 30,
+  "total": 70,
+  "auto": 40,
+  "kinds": {
+   "banyan": 19,
+   "bamboo": 5,
+   "palm": 10,
+   "jungle": 6
+  },
+  "bad": [],
+  "nBad": 0,
+  "perf": {
+   "fps": 144,
+   "worstMs": 18,
+   "enemies": 18,
+   "drawn": 10,
+   "trees": 70
+  }
+ },
+ "12-1": {
+  "before": 13,
+  "total": 47,
+  "auto": 34,
+  "kinds": {
+   "cypress": 7,
+   "dead": 17,
+   "poplar": 10
+  },
+  "bad": [],
+  "nBad": 0,
+  "perf": {
+   "fps": 142,
+   "worstMs": 23,
+   "enemies": 39,
+   "drawn": 6,
+   "trees": 47
+  }
+ },
+ "2-3": {
+  "before": 0,
+  "total": 29,
+  "auto": 29,
+  "kinds": {
+   "cypress": 9,
+   "broad": 6,
+   "dead": 14
+  },
+  "bad": [],
+  "nBad": 0,
+  "perf": {
+   "fps": 142,
+   "worstMs": 43,
+   "enemies": 21,
+   "drawn": 0,
+   "trees": 29
+  }
+ }
+}

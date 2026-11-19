@@ -87,6 +87,8 @@ export function loadWorld():WorldSave {if(storageUnavailable&&memory)return stru
  }}catch{storageUnavailable=true;s=memory??defaults();}memory=s;return structuredClone(s);}
 function commit(s:WorldSave):boolean {s.revision++;if(storageUnavailable){memory=structuredClone(s);return false;}try{const old=localStorage.getItem(WORLD_KEY);if(parse(old))localStorage.setItem(BACKUP_KEY,old!);localStorage.setItem(WORLD_KEY,JSON.stringify(s));localStorage.setItem('im_slot_touched',String(Date.now()));memory=structuredClone(s);return true;}catch{storageUnavailable=true;memory=structuredClone(s);return false;}}
 export function saveWorld():void{commit(loadWorld());}
+/** 花营寨军粮（营寨旅商 town/CampMerchant 用）：够就扣下存档、返回 true。 */
+export function spendProvisions(cost:number):boolean{const s=loadWorld(),n=Math.max(0,Math.round(cost));if(s.provisions<n)return false;s.provisions-=n;commit(s);return true;}
 export function worldChapterCleared(chapter:ChapterId):boolean{return loadWorld().cleared[chapter];}
 export const BUILDINGS:Record<BuildingId,{name:string;description:(level:number)=>string}>= {
  barracks:{name:'军营',description:l=>`不限制兵力 · 开局增援 ${l-1} 人`},
@@ -364,7 +366,8 @@ export function settleIntel(id:string,result:{success:boolean;lost?:boolean;vict
 
 /* —— 天下地图挑战关「虎牢关 · 三英战吕布」（data/dongzhuo.ts LUBU_CHALLENGE）—— */
 /** 讨董第二关（荥阳）告捷后开放；旧存档已通关讨董的同样开放。 */
-export function lubuChallengeOpen():boolean{const s=loadWorld();return s.cleared.hulao||s.dongzhuoStages>=LUBU_CHALLENGE.unlockAfter||s.legacyHulaoAccess;}
+/** 挑战关是否开放：按 LUBU_CHALLENGE.unlockAfter（第二章通关）；旧版「虎牢关访问权限」只管进第二章，不再顺带开挑战关。 */
+export function lubuChallengeOpen():boolean{const s=loadWorld();return (LUBU_CHALLENGE.unlockAfter>=3&&s.cleared.hulao)||s.dongzhuoStages>=LUBU_CHALLENGE.unlockAfter;}
 export function lubuClears():number{return loadWorld().lubuClears;}
 export function beginLubuChallenge(deployed:TroopKind[]=[]):string{if(!lubuChallengeOpen())return '';const s=loadWorld(),id=createExpeditionId();refundStaleExpedition(s);loseAlerted(s);s.active={id,chapter:'hulao',arc:'lubu',stage:3,state:'active',farm:s.buildings.farm,deployed:[...deployed]};commit(s);return id;}
 /** 挑战结算：击败吕布发奖（首胜多发并返回 first，由战斗场景发赤兔）；胜利或坚持 60 秒照常过季。 */

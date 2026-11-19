@@ -199,6 +199,8 @@ assets/raw/*
 !/tools/shot-siege-hall.mjs
 !/tools/shot-yiling-body.mjs
 !/tools/prepare-scene-sheet.mjs
+!/tools/crop-terrain-kit.mjs
+!/tools/shot-river.mjs
 !/tools/resize-image.mjs
 !/tools/shot-boss-still.mjs
 !/tools/prepare-story-art.mjs
@@ -253,6 +255,8 @@ assets/raw/*
 !/tools/test-camp-buy-bag.mjs
 !/tools/test-merchant-tactic.mjs
 !/tools/prepare-merchant-art.mjs
+!/tools/shot-camp-stations.mjs
+!/tools/prepare-camp-bubble.mjs
 
 # 黄巾力士专用图测试 / 符牌抠图（2026-11-18）
 !/tools/test-lishi.mjs
@@ -278,6 +282,14 @@ assets/raw/*
 
 # 营寨回营 / 全屏截图（2026-11-18）
 !/tools/test-camp-return.mjs
+!/tools/test-camp-merchant.mjs
 !/tools/shot-camp-full.mjs
 !/tools/deathfx-horse.mjs
 !/tools/shot-academy.mjs
+!/tools/shot-mounted.mjs
+!/tools/measure-horse-size.mjs
+!/tools/prepare-boss-sheet.mjs
+!/tools/record-sheet-compare-gif.mjs
+!/tools/prepare-black-fx.mjs
+!/tools/test-knife-fx.mjs
+!/tools/record-zhurong-throw.mjs

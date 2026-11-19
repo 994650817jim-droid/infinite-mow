@@ -43,6 +43,13 @@ export const LUOYANG = {
   leapMs: 900, leapArc: 150, landDx: 110, landDy: 150,
   /** 镜头上让：董卓还在城头时，主将离墙线 cameraNear 以内开始往上让，贴墙时最多让 cameraLift（2.5D 城墙连门楼约 330 高，城头的董卓头顶在墙线上方约 320，不让他出画面）。 */
   cameraNear: 700, cameraLift: 240,
+  /**
+   * 友军攻势（systems/AllyPush；用户「从后方会有我方小兵去一路打过去会去摧毁营寨，小地图会显示这个攻势」）：
+   * 开局 firstMs 后第一队、之后每 everyMs 一队义军（squad 人，长枪 / 刀盾）从后方（镜头下沿外 rearPad）出发，走向离主将最近的营寨；
+   * 场上最多 cap 人。speed 行军速度；hp 血；dmg 砍敌兵一下、campDmg 砍营寨一下（每 hitMs 一下）；engage 多近的敌兵会去打；
+   * reach / campReach 够得着的距离；enemyDps 身边每个敌兵每秒掉多少血（最多按 3 个算）。初值，交平衡会话。
+   */
+  push: { firstMs: 6000, everyMs: 20000, squad: 5, cap: 20, sheets: ['shu_spearman_walk_sheet', 'shu_swordsman_walk_sheet'], speed: 78, hp: 150, dmg: 18, campDmg: 9, hitMs: 900, engage: 120, reach: 46, campReach: 40, enemyDps: 6, rearPad: 90 },
 } as const;
 
 export function getLuoyangChapter(): ChapterDef {
@@ -60,7 +67,8 @@ export function getLuoyangChapter(): ChapterDef {
 
 /** 天下地图挑战关「虎牢关 · 三英战吕布」：原第二章虎牢关的吕布战，压到 3 波。 */
 /** 首胜的赤兔走马厩（mounts.ts HORSES 中 reward 为 'lubu' 的马）。 */
-export const LUBU_CHALLENGE = {unlockAfter: 2, reward: {merits: 80, provisions: 120}, repeatReward: {merits: 30, provisions: 50}} as const;
+/** 天下地图挑战关「虎牢关 · 三英战吕布」：unlockAfter = 第二章讨董通过的关数（3 = 整章通关；2026-11-18 用户「三英战吕布是打完第二章才开的」，原为 2）。 */
+export const LUBU_CHALLENGE = {unlockAfter: 3, unlockHint: '通关第二章「讨伐董卓」后开放', reward: {merits: 80, provisions: 120}, repeatReward: {merits: 30, provisions: 50}} as const;
 export function lubuChallengeChapter(hulao: ChapterDef): ChapterDef {
   return {
     ...hulao, name: '虎牢关 · 三英战吕布', label: '挑战 · 虎牢关', description: '吕布横扫与蓄力冲锋 · 首通得赤兔',

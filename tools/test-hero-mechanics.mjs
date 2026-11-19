@@ -203,6 +203,37 @@ for (const hero of HEROES) {
     }, [G, MK, CLEAR]);
     const [kInf, kInf2, kEl, kIm] = r1e.push ?? [];
     ck('诸葛亮·借东风击退：火龙扫过把杂兵顺风吹开约 100（80–125）、精锐约 40（25–60）、不受控的不动（首领同理）', !!r1e.push && kInf >= 80 && kInf <= 125 && kInf2 >= 80 && kInf2 <= 125 && kEl >= 25 && kEl <= 60 && Math.abs(kIm) <= 3, r1e);
+    // 2b) 八阵图伤害（2026-11-18 夜 用户：「八阵图也会造成伤害」）：阵内每 0.5 秒受天火 × bazhen.mul（首领 / 精锐 × bossMul），每跳阵纹亮一下；
+    //     同一波杂兵 / 同样 12 秒首领，八阵图 3 级下「阵不伤人」与「阵伤人」各打一遍
+    const r2b = await p.evaluate(async ([G0, MK0, C]) => {
+      const s = eval(G0), pl = s.player, mk = eval(MK0), wait = ms => new Promise(r => setTimeout(r, ms)), w = pl.weapons[0], Z = window.__zgTuning; pl.damageImmune = true; pl.stats.critChance = -1; eval(C);
+      const noLevelUp = () => { if (s.mode === 'levelup') { s.pendingLevels = 0; s.militaryPending = 0; s.setMode('none'); } else if (s.mode === 'recruit') s.__DEV_ACTIONS.closePopup?.(); };
+      const mul0 = [...Z.bazhen.mul], ember0 = Z.ember.mul, off = () => { Z.bazhen.mul = [0, 0, 0]; }, on = () => { Z.bazhen.mul = mul0; };
+      // (a) 布阵后放进一个杂兵、一个精锐（溅射早已结算；关掉星火焦土只量阵）：都挨跳伤，精锐少；阵纹每跳提亮
+      Z.ember.mul = 0; w.level = 3; pl.growth.masteries.eight_trigrams = 3; pl.growth.masteries.wildfire = 0; w.cooldownLeft = 1e9; await wait(150); pl.passive.reset('zhuge', s.combatNow);
+      mk(pl.x + 220, pl.y, { hp: 99999 }); for (let k = 0; k < 4; k++) { w.cooldownLeft = 0; await wait(110); w.cooldownLeft = 1e9; await wait(k < 3 ? 900 : Z.delayMs + 120); }
+      const zfx = s.children.list.find(o => o.name === 'zhuge-bazhen'); let a = null;
+      if (zfx) { const zx = zfx.x, zy = zfx.y - 6, inf = mk(zx + 100, zy - 10, { hp: 99999 }), el = mk(zx - 100, zy + 10, { kind: 'elite', hp: 99999 }); let maxA = 0, minA = 1;
+        const t0 = s.combatNow; while (s.combatNow - t0 < 3200) { if (zfx.active) { maxA = Math.max(maxA, zfx.alpha); minA = Math.min(minA, zfx.alpha); } await wait(30); }
+        a = { inf: Math.round(inf.maxHp - inf.hp), el: Math.round(el.maxHp - el.hp), maxA: +maxA.toFixed(2), minA: +minA.toFixed(2) }; }
+      Z.ember.mul = ember0; eval(C);
+      // (b) 同一波 24 个杂兵（会走），八阵图 3 级 + 借东风 1 级
+      const wave = async () => { eval(C); w.level = 3; pl.growth.masteries.wildfire = 1; pl.growth.masteries.eight_trigrams = 3; w.cooldownLeft = 1e9; await wait(150); pl.passive.reset('zhuge', s.combatNow);
+        const es = []; for (const [cx, cy] of [[230, 0], [-200, 90], [40, -230]]) for (let i = 0; i < 8; i++) { const e = s.spawnEnemy('infantry', pl.x + cx + (i % 3 - 1) * 32, pl.y + cy + (Math.floor(i / 3) - 1) * 28, 1, true); e.hp = e.maxHp = 260; es.push(e); }
+        const t0 = s.combatNow, r0 = Date.now(); w.cooldownLeft = 0; while (es.some(e => e.active) && s.combatNow - t0 < 60000 && Date.now() - r0 < 120000) { noLevelUp(); await wait(50); }
+        return { ms: Math.round(s.combatNow - t0), left: es.filter(e => e.active).length }; };
+      off(); const waveOff = await wave(); on(); const waveOn = await wave();
+      // (c) 同样 12 秒首领（八阵图 3 级）
+      const bossRun = async () => { eval(C); w.cooldownLeft = 1e9; pl.growth.masteries.wildfire = 1; pl.growth.masteries.eight_trigrams = 3; await wait(150); s.bossSpawned = false; s.spawnBoss(); const b = s.boss; b.sprite.setPosition(pl.x + 220, pl.y); b.stunUntil = 1e12; b.hp = b.maxHp = 1e6; noLevelUp();
+        pl.passive.reset('zhuge', s.combatNow); const t0 = s.combatNow, r0 = Date.now(); w.cooldownLeft = 0;
+        while (s.combatNow - t0 < 12000 && Date.now() - r0 < 60000) { noLevelUp(); for (const e of s.enemies) if (e.active && e !== b && !e.isSupplySlot) e.deactivate(); b.sprite.setPosition(pl.x + 220, pl.y); await wait(50); }
+        const d = 1e6 - b.hp; b.deactivate(); return Math.round(d); };
+      off(); const bossOff = await bossRun(); on(); const bossOn = await bossRun();
+      pl.growth.masteries.wildfire = 0; pl.growth.masteries.eight_trigrams = 0; eval(C);
+      return { zone: a, waveOff, waveOn, speedup: +(waveOff.ms / Math.max(1, waveOn.ms)).toFixed(2), bossOff, bossOn, bossRatio: +(bossOn / Math.max(1, bossOff)).toFixed(3), mul: mul0, bossMul: Z.bazhen.bossMul };
+    }, [G, MK, CLEAR]);
+    ck('诸葛亮·八阵图伤害：阵内杂兵、精锐都挨跳伤（精锐按 bossMul 更少），每跳手绘阵纹提亮', !!r2b.zone && r2b.zone.inf > 0 && r2b.zone.el > 0 && r2b.zone.el < r2b.zone.inf && r2b.zone.maxA >= .95 && r2b.zone.minA <= .8, r2b);
+    ck('诸葛亮·八阵图伤害：同一波杂兵清得不比阵不伤人慢；同样 12 秒首领掉血 ≤ 1.1 倍', r2b.waveOff.left === 0 && r2b.waveOn.left === 0 && r2b.speedup >= 1 && r2b.bossRatio >= .95 && r2b.bossRatio <= 1.1, r2b);
     // 2) 八阵图 3 级：观星爆发处布阵——阵内步兵减速、受伤 +15%；阵内首领出招间隔 ×1.25（gapSlow）
     const r2 = await p.evaluate(async ([G0, MK0, C]) => {
       const s = eval(G0), pl = s.player, mk = eval(MK0), wait = ms => new Promise(r => setTimeout(r, ms)), w = pl.weapons[0]; pl.damageImmune = true; pl.stats.critChance = -1; eval(C);

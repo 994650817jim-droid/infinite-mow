@@ -24,7 +24,7 @@ import type { Enemy } from '../entities/Enemy';
 export type DeathFxMode = 'a' | 'b' | 'c';
 export const DEATH_FX = {
   capDesktop: 160, capLite: 80, flashMs: 60, fallMs: 180, fadeMs: 300, tiltRad: 1.22, backStep: 9, sink: 6,
-  propCap: 40, horseCap: 14, flightMs: 300, restMs: 500, propFadeMs: 220, turbanMs: 950, horseMs: 1700, horseSpeed: 270, horseStartleMs: 240, horseRampMs: 350, horseStride: 22, horseBob: 3.5, horseRear: .45, horsePitch: .035, heavyFlightMs: 260, heavyMin: 40, heavyMax: 70, heavyArc: 30,
+  propCap: 40, horseCap: 14, flightMs: 300, restMs: 500, propFadeMs: 220, turbanMs: 950, horseMs: 1700, horseSpeed: 270, horseStartleMs: 240, horseRampMs: 350, horseStride: 22, horseRearMs: 520, horseGallopMs: 2000, horseStrideRel: .3, horseBob: 3.5, horseRear: .45, horsePitch: .035, heavyFlightMs: 260, heavyMin: 40, heavyMax: 70, heavyArc: 30,
   dustMs: 460, dustScale: .8, dustScaleLite: .65, dustCapDesktop: 120, dustCapLite: 28, warmDesktop: 100, warmLite: 30, warmPerFrame: 4, squashMs: 150, haloMs: 420,
   /**
    * 兵器 / 盾 / 头巾脱手（2026-11-18 用户：「小怪死掉武器掉落，但是没掉武器」——甩出的兵器和身上还拿着的兵器同时出现，像多了一把；
@@ -42,6 +42,10 @@ const PROP_FRAME: Record<DeathProp | 'turban', number> = { blade: 0, spear: 1, b
 export interface DeathOpts { heavy?: boolean; turban?: boolean; weapon?: DeathProp; horse?: boolean }
 /** 放走的战马：优先用专属的暗橄榄褐敌军战马图（4×4），没有就退回通用白马图 + 乘色（HeroMount 也用这张，可能已载入）。 */
 const HORSE_BROWN = 'horse_v2_enemy_brown_walk', HORSE_GENERIC = 'horse_v2_generic_walk';
+/** 专属惊跳 + 飞奔图（4×3，每格 288，只有左向）：rear_0…3 = 受惊扬蹄（站立受惊 → 前蹄离地 → 人立 → 落蹄前压），gallop_0…7 = 一个完整飞奔循环。右向翻转。载入后自己切帧。 */
+const HORSE_GALLOP = 'horse_v2_enemy_brown_gallop', GALLOP_CELL = 288;
+/** 惊跳图里地面线（占格高比例）：扬蹄几帧后蹄贴近格底，飞奔帧整体偏上（腾空帧再高一点，贴图里本来就有这个起伏，不再另加）。 */
+const GALLOP_ORIGIN = { rear: .96, run: .84 };
 const HORSE_SHEETS: Record<string, { originY: number; size: number; tint?: number }> = { [HORSE_BROWN]: { originY: .91, size: .84 }, [HORSE_GENERIC]: { originY: .93, size: 1, tint: 0x907050 } };
 const DUST = 'fx_collapse_dust'; // 墨晕（C 调试）和尘土缺图时的兜底
 /** 专属黄土地扬尘（死亡特效 B）；缺图退回 fx_collapse_dust。originY = 贴图里的地面线（占格高比例），scale = 显示尺寸倍率（专属图内容占格宽约 3/4）。 */
@@ -55,7 +59,7 @@ interface Entry {
 /** 兵器 / 头巾 / 盾牌落地尘土：一个小对象池条目。 */
 interface Prop { img: Phaser.GameObjects.Image; dust?: Phaser.GameObjects.Image; active: boolean; kind: DeathProp | 'turban'; start: number; x: number; y: number; gy: number; dir: number; size: number; jit: number; dustOn: boolean }
 type HorseFace = 'left' | 'right' | 'up' | 'down';
-interface Horse { img: Phaser.GameObjects.Image; shadow: Phaser.GameObjects.Image; active: boolean; start: number; x: number; y: number; dir: number; vy: number; size: number; face: HorseFace; rear: number; dist: number; frame: number }
+interface Horse { gallop: boolean; img: Phaser.GameObjects.Image; shadow: Phaser.GameObjects.Image; active: boolean; start: number; x: number; y: number; dir: number; vy: number; size: number; face: HorseFace; rear: number; dist: number; frame: number }
 
 /** 当前模式：?deathfx=a|b|c 调试覆盖，缺省 B；?deathfx=off 调试关闭（返回 null）。 */
 export function deathFxMode(): DeathFxMode | null {
@@ -80,8 +84,10 @@ export class DeathFx {
   /** 兵器 / 头巾小图在不在（不在就不显示这些变化）。 */
   get hasProps(): boolean { return !this.lite && propsEnabled() && this.scene.textures.exists(PROPS); }
   /** 本场放马用哪张图：专属棕色战马优先，其次通用马；都没载入返回 null（手机 / 不是 v2 画风也是 null）。 */
-  get horseKey(): string | null { if (this.lite) return null; for (const k of [HORSE_BROWN, HORSE_GENERIC]) if (this.scene.textures.exists(k) && this.scene.textures.get(k).has('left_0')) return k; return null; }
+  get horseKey(): string | null { if (this.lite) return null; for (const k of [HORSE_BROWN, HORSE_GENERIC, HORSE_GALLOP]) if (this.scene.textures.exists(k) && (this.scene.textures.get(k).has('left_0') || this.scene.textures.get(k).has('gallop_0'))) return k; return null; }
   get hasHorse(): boolean { return this.horseKey !== null; }
+  /** 专属惊跳 + 飞奔图已载入并切好帧（没有就用行走图 + 代码补间的老动画）。 */
+  get gallopReady(): boolean { return !this.lite && this.scene.textures.exists(HORSE_GALLOP) && this.scene.textures.get(HORSE_GALLOP).has('gallop_7'); }
 
   /** 池预热：战斗开始后每帧建几个条目（含阴影 / 尘土），避免第一次大清屏时一帧里创建几百个对象。 */
   private prewarm(): void {
@@ -153,10 +159,22 @@ export class DeathFx {
   private horseLoading = false;
   /** 场上出现骑兵时调用：把通用战马行走图按需异步载入（HeroMount 也是这样按需载入）；手机 / 已载入 / 不是 v2 画风时什么都不做。 */
   warmHorse(): void {
-    if (this.lite || this.horseLoading || this.mode !== 'b' || !deathFxOn() || this.scene.textures.exists(HORSE_BROWN) || !isV2Texture(HORSE_BROWN)) return;
-    this.horseLoading = true; const s = this.scene;
-    s.load.image(HORSE_BROWN, ART_V2_FILES[HORSE_BROWN]); s.load.once('filecomplete-image-' + HORSE_BROWN, () => { regridV2(s, HORSE_BROWN); });
+    if (this.lite || this.horseLoading || this.mode !== 'b' || !deathFxOn()) return;
+    const s = this.scene, need: string[] = [];
+    if (!s.textures.exists(HORSE_BROWN) && isV2Texture(HORSE_BROWN)) need.push(HORSE_BROWN);
+    if (!s.textures.exists(HORSE_GALLOP) && isV2Texture(HORSE_GALLOP)) need.push(HORSE_GALLOP);
+    if (!need.length) return;
+    this.horseLoading = true;
+    for (const k of need) {
+      s.load.image(k, ART_V2_FILES[k]);
+      s.load.once('filecomplete-image-' + k, () => { if (k === HORSE_GALLOP) this.sliceGallop(); else regridV2(s, k); });
+    }
     if (!s.load.isLoading()) s.load.start();
+  }
+  /** 把 4×3 的惊跳 / 飞奔图切成 rear_0…3、gallop_0…7 命名帧。 */
+  private sliceGallop(): void {
+    const t = this.scene.textures.get(HORSE_GALLOP); if (!t || t.has('gallop_7')) return;
+    for (let i = 0; i < 12; i++) t.add(i < 4 ? 'rear_' + i : 'gallop_' + (i - 4), 0, (i % 4) * GALLOP_CELL, Math.floor(i / 4) * GALLOP_CELL, GALLOP_CELL, GALLOP_CELL);
   }
 
   private spawnProp(kind: DeathProp | 'turban', sp: Phaser.GameObjects.Image, dir: number, now: number): void {
@@ -176,13 +194,13 @@ export class DeathFx {
   private spawnHorse(sp: Phaser.GameObjects.Image, dir: number, now: number): void {
     let h = this.horses.find(x => !x.active);
     if (!h) {
-      if (this.horses.length < DEATH_FX.horseCap) { h = { img: this.scene.add.image(0, 0, this.horseKey ?? HORSE_GENERIC, 'left_0').setVisible(false).setName('death-fx-horse'), shadow: this.scene.add.image(0, 0, 'shadow').setVisible(false).setName('death-fx-horse-shadow'), active: false, start: 0, x: 0, y: 0, dir: 1, vy: 0, size: 60, face: 'left', rear: 1, dist: 0, frame: 0 }; this.horses.push(h); }
+      if (this.horses.length < DEATH_FX.horseCap) { h = { gallop: false, img: this.scene.add.image(0, 0, this.horseKey ?? HORSE_GENERIC, this.horseKey === HORSE_GALLOP ? 'rear_0' : 'left_0').setVisible(false).setName('death-fx-horse'), shadow: this.scene.add.image(0, 0, 'shadow').setVisible(false).setName('death-fx-horse-shadow'), active: false, start: 0, x: 0, y: 0, dir: 1, vy: 0, size: 60, face: 'left', rear: 1, dist: 0, frame: 0 }; this.horses.push(h); }
       else { h = this.horses[this.horseCursor]; this.horseCursor = (this.horseCursor + 1) % this.horses.length; }
     }
-    const key = this.horseKey ?? HORSE_GENERIC, sheet = HORSE_SHEETS[key];
-    h.active = true; h.start = now; h.dir = -dir; h.vy = (Math.random() * 2 - 1) * 70; h.face = h.dir < 0 ? 'left' : 'right'; h.x = sp.x; h.y = sp.y + 4; h.size = Math.abs(sp.displayWidth) * sheet.size; h.rear = h.dir < 0 ? 1 : -1; h.dist = 0; h.frame = 0;   // rear：受惊扬头时的旋转方向（朝左的马顺时针抬头）
+    const gallop = this.gallopReady, key = gallop ? HORSE_GALLOP : this.horseKey ?? HORSE_GENERIC, sheet = gallop ? { originY: GALLOP_ORIGIN.rear, size: .8 } as { originY: number; size: number; tint?: number } : HORSE_SHEETS[key];
+    h.gallop = gallop; h.active = true; h.start = now; h.dir = -dir; h.vy = (Math.random() * 2 - 1) * 70; h.face = h.dir < 0 ? 'left' : 'right'; h.x = sp.x; h.y = sp.y + 4; h.size = Math.abs(sp.displayWidth) * sheet.size; h.rear = h.dir < 0 ? 1 : -1; h.dist = 0; h.frame = 0;   // rear：受惊扬头时的旋转方向（朝左的马顺时针抬头）
     h.shadow.setTexture('shadow').setDisplaySize(h.size * .8, h.size * .22).setOrigin(.5, .5).setPosition(h.x, h.y + 1).setAlpha(.5).setDepth(sp.depth - .1).setVisible(true);
-    h.img.setTexture(key, h.face + '_0').setDisplaySize(h.size, h.size).setOrigin(.5, sheet.originY).setPosition(h.x, h.y).setAlpha(1).setDepth(sp.depth - .05).setVisible(true); if (sheet.tint !== undefined) h.img.setTint(sheet.tint); else h.img.clearTint();
+    h.img.setTexture(key, gallop ? 'rear_0' : h.face + '_0').setFlipX(gallop && h.dir > 0).setDisplaySize(h.size, h.size).setOrigin(.5, sheet.originY).setPosition(h.x, h.y).setAlpha(1).setDepth(sp.depth - .05).setVisible(true); if (sheet.tint !== undefined) h.img.setTint(sheet.tint); else h.img.clearTint();
   }
 
   /** 这一个要不要带尘土：手机隔一个出、同屏尘土封顶。 */
@@ -220,19 +238,26 @@ export class DeathFx {
     }
     for (const h of this.horses) {
       if (!h.active) continue;
-      const t = now - h.start, S = D.horseStartleMs, R = D.horseRampMs, V = D.horseSpeed;
-      // 1) 受惊：原地扬头 + 小跳（没有现成的人立帧，只对马自己的图做补间）；2) 加速起跑（按距离换帧：慢时腿慢、快时腿快，脚步和地面对得上）；3) 跑出去、淡出
+      const t = now - h.start, V = D.horseSpeed, R = D.horseRampMs, S = h.gallop ? D.horseRearMs : D.horseStartleMs, life = h.gallop ? D.horseGallopMs : D.horseMs;
+      // 1) 受惊（专属图：4 帧扬蹄；行走图：原地扬头 + 小跳补间）；2) 加速起跑（按距离换帧：慢时腿慢、快时腿快，脚步和地面对得上）；3) 跑出去、淡出
       let dist = 0, rot = 0, hop = 0;
-      if (t < S) { const u = t / S; rot = h.rear * D.horseRear * Math.sin(Math.PI * u) * (1 - .25 * u); hop = -4 * Math.sin(Math.PI * u); }
+      if (t < S) { const u = t / S; if (!h.gallop) { rot = h.rear * D.horseRear * Math.sin(Math.PI * u) * (1 - .25 * u); hop = -4 * Math.sin(Math.PI * u); } }
       else { const ta = t - S, u = Math.min(1, ta / R), ramp = V * R / 1000 * (u + (1 - u) ** 3 / 3 - 1 / 3); dist = ramp + (ta > R ? V * (ta - R) / 1000 : 0);
-        rot = h.rear * D.horsePitch * Math.sin(2 * Math.PI * dist / (4 * D.horseStride)); hop = -D.horseBob * Math.abs(Math.sin(Math.PI * dist / (2 * D.horseStride))); }
-      h.dist = dist; h.frame = t < S ? 0 : Math.floor(dist / D.horseStride) % 4;
-      // 朝向 = 移动方向（速度向量的主轴）：左 / 右 / 上 / 下；现在只有左右方向的速度，但按向量选，以后换方向也对
+        if (!h.gallop) { rot = h.rear * D.horsePitch * Math.sin(2 * Math.PI * dist / (4 * D.horseStride)); hop = -D.horseBob * Math.abs(Math.sin(Math.PI * dist / (2 * D.horseStride))); } }
+      h.dist = dist;
+      // 朝向 = 移动方向（速度向量的主轴）；专属图只有左向，右向翻转，斜着跑时按速度方向微倾（不拿左右帧硬凑）
       const vx = h.dir * V, vy = h.vy, face: HorseFace = Math.abs(vx) >= Math.abs(vy) ? (vx < 0 ? 'left' : 'right') : (vy < 0 ? 'up' : 'down');
-      h.face = face; const fade = t < D.horseMs - 500 ? 1 : 1 - Phaser.Math.Clamp((t - (D.horseMs - 500)) / 500, 0, 1), gx = h.x + h.dir * dist, gy = h.y + h.vy * Math.max(0, t - S) / 1000;
-      h.img.setFrame(face + '_' + h.frame).setPosition(gx, gy + hop).setRotation(rot).setAlpha(fade);
+      const fade = t < life - 500 ? 1 : 1 - Phaser.Math.Clamp((t - (life - 500)) / 500, 0, 1), gx = h.x + h.dir * dist, gy = h.y + h.vy * Math.max(0, t - S) / 1000;
+      h.face = face;
+      if (h.gallop) {
+        const stride = h.size * D.horseStrideRel;
+        if (t < S) { const u = t / S; h.frame = u < .15 ? 0 : u < .4 ? 1 : u < .7 ? 2 : 3; h.img.setFrame('rear_' + h.frame).setOrigin(.5, GALLOP_ORIGIN.rear); }
+        else { h.frame = Math.floor(dist / stride) % 8; h.img.setFrame('gallop_' + h.frame).setOrigin(.5, GALLOP_ORIGIN.run); rot = h.dir * Math.atan2(h.vy, Math.abs(vx)) * .45; }
+        h.img.setFlipX(h.dir > 0);
+      } else { h.frame = t < S ? 0 : Math.floor(dist / D.horseStride) % 4; h.img.setFrame(face + '_' + h.frame); }
+      h.img.setPosition(gx, gy + hop).setRotation(rot).setAlpha(fade);
       h.shadow.setPosition(gx, gy + 1).setAlpha(.5 * fade * (1 + hop / 14));   // 阴影贴着地面（不随起伏），马跳起来时略淡
-      if (t >= D.horseMs) { h.active = false; h.img.setVisible(false).clearTint(); h.shadow.setVisible(false); }
+      if (t >= life) { h.active = false; h.img.setVisible(false).clearTint(); h.shadow.setVisible(false); }
     }
   }
 

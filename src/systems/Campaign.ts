@@ -1,4 +1,4 @@
-import type {BuildSnapshot} from '../data/builds';
+import type {BuildSnapshot,TacticId} from '../data/builds';
 import { charmForLegacy } from '../data/charms';
 import { rollBaseItem, rollCharm, type ItemInstance } from '../data/items';
 import { statsWithoutCharms } from './CharmEffects';
@@ -48,6 +48,20 @@ export function patchCampaignHp(hero: CharacterId, hpFrac: number, followerHp?: 
 /** 行营军需商人买了战法：把存档点里的战法与随军粮一并改掉（同 patchCampaignHp，存档点在买之前）。 */
 export function patchCampaignTactics(hero: CharacterId, tactics: Record<string, number>, food: number): void {
   try { const v = JSON.parse(localStorage.getItem(CAMPAIGN_KEY) ?? 'null'); const s = v?.heroes?.[hero]; if (!s?.player || !s.army) return; s.player.build = { ...(s.player.build ?? {}), tactics: { ...tactics } }; s.army.food = food; localStorage.setItem(CAMPAIGN_KEY, JSON.stringify(v)); } catch { /* 存储不可用 */ }
+}
+/**
+ * 营寨旅商（军需商人在营寨里摆的摊）卖战法：不在战斗里，买下的写进该武将的征程构筑（下次从存档点出征时带上）。
+ * 规则同 RunBuild：最多 6 种、每种到 3 级。没有征程构筑（还没打赢过主线关）时返回 null，商人卷轴不能买。
+ */
+export function campaignTacticBook(hero: CharacterId): { canLearn(id: TacticId): boolean; level(id: TacticId): number } | null {
+  const s = loadCampaignBuild(hero); if (!s) return null; const t: Partial<Record<TacticId, number>> = { ...s.player.build?.tactics };
+  const level = (id: TacticId) => t[id] ?? 0;
+  return { level, canLearn: id => level(id) < 3 && (level(id) > 0 || Object.keys(t).filter(k => (t[k as TacticId] ?? 0) > 0).length < 6) };
+}
+/** 把一卷战法学进征程构筑：等级须与卷轴标的一致（买前没在别处升过），成功返回 true。 */
+export function learnCampaignTactic(hero: CharacterId, id: TacticId, fromLevel: number): boolean {
+  const book = campaignTacticBook(hero); if (!book || !book.canLearn(id) || book.level(id) !== fromLevel) return false;
+  try { const v = JSON.parse(localStorage.getItem(CAMPAIGN_KEY) ?? 'null'); const s = v?.heroes?.[hero]; if (!s?.player) return false; s.player.build = { ...(s.player.build ?? {}), tactics: { ...(s.player.build?.tactics ?? {}), [id]: fromLevel + 1 } }; localStorage.setItem(CAMPAIGN_KEY, JSON.stringify(v)); return true; } catch { return false; }
 }
 export function restoreCampaign(state: CampaignTransfer, player: Player, army: Legion): void {
   takeLegacyTreasures(state);

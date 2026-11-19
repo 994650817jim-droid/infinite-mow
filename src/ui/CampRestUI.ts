@@ -1,4 +1,4 @@
-import Phaser from 'phaser';import {ItemTooltip} from './ItemTooltip';import {drawBuildOverview} from './BuildOverview';import {wornTokens} from '../systems/CharmEffects';import {tokenSlots} from '../systems/ItemStore';import {loadout} from '../systems/ItemStore';import {GAME_WIDTH as W,GAME_HEIGHT as H,IS_DESKTOP as D,FONT,HEADING_FONT,DEPTH,screenPoint} from '../config';import type {Player} from '../entities/Player';import type {Legion} from '../systems/Legion';import {rollMerchantTactic,buyMerchantTactic,campOption,type CampOffer} from '../systems/CampMarket';import {CAMP_TRAINING,type CampTrainingId,type CampGroup} from '../data/camp';import {INITIAL_TROOPS,TROOPS,type TroopKind} from '../data/legion';import {TACTICS,TREASURES,TAG_NAMES,tacticDescription,type TacticId,type TreasureId,type BuildTag} from '../data/builds';import {AWAKENINGS,activeAwakenings} from '../data/awakenings';import {getCharacter} from '../data/characters';import {WEAPON_META} from '../data/upgrades';import {ATTRIBUTE_INFO,MARTIALS,type AttributeId,type MasteryId} from '../systems/RunGrowth';import {MERCHANT_PRICE,QUALITIES,formatAffix,itemName,rollMerchantGear,SLOTS,itemSlot,SPECIALS,type ItemInstance} from '../data/items';import {itemTile} from './ItemQuality';import {troopBadge} from './TroopBadge';import {loadTroopPortraits} from '../systems/TroopPortraits';
+import Phaser from 'phaser';import {ItemTooltip} from './ItemTooltip';import {drawBuildOverview} from './BuildOverview';import {wornTokens} from '../systems/CharmEffects';import {tokenSlots} from '../systems/ItemStore';import {GAME_WIDTH as W,GAME_HEIGHT as H,IS_DESKTOP as D,FONT,HEADING_FONT,DEPTH,screenPoint} from '../config';import type {Player} from '../entities/Player';import type {Legion} from '../systems/Legion';import {campOption,type CampOffer} from '../systems/CampMarket';import {merchantStockForVisit,saveMerchantStock,type MerchantStock} from '../systems/MerchantStock';import {MerchantShop} from './MerchantShop';import {MEDIC_FIGURE,drawCampFigure,type FigurePlace} from './CampFigure';import {CAMP_TRAINING,type CampTrainingId,type CampGroup} from '../data/camp';import {INITIAL_TROOPS,TROOPS,type TroopKind} from '../data/legion';import {TREASURES,type TacticId,type TreasureId,type BuildTag} from '../data/builds';import {AWAKENINGS,activeAwakenings} from '../data/awakenings';import {getCharacter} from '../data/characters';import {WEAPON_META} from '../data/upgrades';import {ATTRIBUTE_INFO,MARTIALS,type AttributeId,type MasteryId} from '../systems/RunGrowth';import type {ItemInstance} from '../data/items';import {troopBadge} from './TroopBadge';import {loadTroopPortraits} from '../systems/TroopPortraits';
 import {homeCommand,inkPlate,warPanelTexture} from './HomeCommand';
 import {lqButton,lqLabelColor,type LqState} from './LacquerKit';
 import {CAMP_MEDIC,medicPrice,type MedicKind} from '../data/campMedic';
@@ -16,7 +16,13 @@ export class CampRestUI {
  private buildSection=0;private buildOffset=0;private modal?:Phaser.GameObjects.Container;
  /** 兵装货架：每次入营一件（绿 / 蓝），买下记入本局缴获，结算带回行囊。onBuyItem 由 GameScene 设置。 */
  /** 军需商人（2026-11-17 用户：只卖装备）：每次进营 4 件兵装，甲胄 / 头盔 / 战靴 / 信物各 1 件。itemSold[i] = 第 i 件已买。 */
- itemOffers:ItemInstance[]=[];itemSold:boolean[]=[];onBuyItem?:(item:ItemInstance)=>void;private itemTip?:ItemTooltip;
+ onBuyItem?:(item:ItemInstance)=>void;private itemTip?:ItemTooltip;
+ /** 货架与营寨「旅商」共用（systems/MerchantStock）：同一份货、已售不补，来回切换不会刷新。 */
+ private stock:MerchantStock|null=null;private shop?:MerchantShop;
+ get itemOffers():ItemInstance[]{return this.stock?.items??[];}
+ get itemSold():boolean[]{return this.stock?.sold??[];}
+ get tacticOffer():CampOffer|null{return this.stock?.tactic??null;}
+ set tacticOffer(v:CampOffer|null){if(this.stock){this.stock.tactic=v;saveMerchantStock(this.stock);}}
  /** 行囊（休整时可换装、换马）。由 GameScene 设置。 */
  onOpenBag?:()=>void;
  /** 天下地图出征（营寨开放后）：休整时可回营寨。设置后显示「回营寨」按钮，点两次确认（本局成长不保留）。 */
@@ -26,7 +32,7 @@ export class CampRestUI {
  /** 电脑版水墨按钮（2026-11-17 用户「这个行囊按钮改一下」）：行囊 / 回营寨 / 页签换成手绘墨迹底，同主页与战斗内按钮。 */
  private readonly ink:boolean;private homePlate:Phaser.GameObjects.NineSlice|null=null;private tabInk:Array<Phaser.GameObjects.NineSlice|null>=[];
  /** 军需商人偶尔捎来的 1 卷战法（data/items MERCHANT_TACTIC）；null = 这次没有。onLearnTactic 由 GameScene 设置（改存档点）。 */
- tacticOffer:CampOffer|null=null;onLearnTactic?:()=>void;
+ onLearnTactic?:()=>void;
  private visit='';private tab=0;private page=0;private destination='';private notice='';
  constructor(private scene:Phaser.Scene,private player:Player,private army:Legion,depart:()=>void){
   this.root=scene.add.container(0,0).setScrollFactor(0).setDepth(DEPTH.overlay+2).setVisible(false).setName('camp-rest');
@@ -107,7 +113,7 @@ export class CampRestUI {
   return hit;
  }
 
- open(key:string,destination:string){if(this.visit!==key){this.visit=key;this.page=this.tab=0;this.itemOffers=rollMerchantGear((this.scene as unknown as {itemTier?:()=>number}).itemTier?.()??0);this.itemSold=this.itemOffers.map(()=>false);this.tacticOffer=rollMerchantTactic(this.player.growth.build);this.buildSection=this.buildOffset=0;this.notice='';}this.destination=destination;this.homeArmed=false;this.homeBtn.setText('回营寨').setBackgroundColor('rgba(0,0,0,0)').setVisible(!!this.onReturnHome);this.paintHome();this.render();
+ open(key:string,destination:string){if(this.visit!==key){this.visit=key;this.page=this.tab=0;this.stock=merchantStockForVisit(key,(this.scene as unknown as {itemTier?:()=>number}).itemTier?.()??0,this.player.growth.build);this.buildSection=this.buildOffset=0;this.notice='';}this.destination=destination;this.homeArmed=false;this.homeBtn.setText('回营寨').setBackgroundColor('rgba(0,0,0,0)').setVisible(!!this.onReturnHome);this.paintHome();this.render();
   // 招兵营圆框胸像（Q 版；缺的兵种用 v2 过渡）：加载完若还停在招兵营就重绘
   loadTroopPortraits(this.scene,()=>{if(this.root.visible&&this.tab===0)this.render();},true);}
  setVisible(visible:boolean){this.root.setVisible(visible);if(!visible){this.modal?.destroy();this.modal=undefined;}}
@@ -118,10 +124,14 @@ export class CampRestUI {
  private card(index:number){const x=D?40+index*(W-68)/3:24,y=D?158:229,w=D?(W-104)/3:W-48,h=D?246:161;return{x,y:y+(D?0:index*174),w,h};}
  private icon(x:number,y:number,key:string,size:number){if(this.scene.textures.exists(key))this.body.add(this.scene.add.image(x,y,key).setDisplaySize(size,size).setScrollFactor(0));}
  private row(y:number,title:string,description:string,icon?:string,compact=false){const x=D?40:24,w=W-(D?80:48),h=D?66:92;this.plate(x,y,w,h);if(icon)this.icon(x+28,y+27,icon,35);const offset=icon?54:16;this.body.add(this.text(x+offset,y+9,title,D?17:19).setWordWrapWidth(w-offset-16,true));this.body.add(this.text(x+16,y+(D?36:43),compact&&description.length>(D?80:44)?description.slice(0,D?80:44)+'…':description,D?12:14).setWordWrapWidth(w-32,true));return{x,y,w,h};}
+ /** 军需商人 / 军医（电脑版）：人物不加框、站在左侧帐中（2026-11-18 用户「军医和商人不要一个框框住」），右侧从 STATION_LEFT 起排卡片。 */
+ private static readonly FIGURE:FigurePlace={cx:120,bottom:500,height:300}; // 头顶留出对话气泡（2026-11-18「对话框要优化一下」）
+ private static readonly STATION_LEFT=236;
  private render(){
   this.body.removeAll(true);this.tabs.forEach((t,k)=>{const on=t.getData('tab')===this.tab;t.setColor(on?'#ffe7b0':'#bcae93').setAlpha(on?1:.78);const w=t.width;this.tabFrames[k].setTexture(warPanelTexture(this.scene,w,46,on)).setDisplaySize(w+16,46+16).setVisible(true).setAlpha(on?1:.62);this.tabIcons[k]?.setAlpha(on?1:.6);
    if(on){const to={x:t.x+18,w:w-36};if(!this.lineTo){this.tabLine.setX(to.x);this.tabLine.width=to.w;}this.lineTo=to;}});
   this.resources.setText('随军粮 '+this.army.food+'   /   当前兵力：'+this.army.count);this.next.setText('下一关 · '+this.destination);this.detail.setText(this.notice);
+  {const side=D&&(this.tab===2||this.tab===4),l=CampRestUI.STATION_LEFT;this.detail.setX(side?l+(W-40-l)/2:D?W/2:28).setWordWrapWidth(side?W-40-l-16:W-(D?120:56),true);}
   if(this.tab===0)this.renderRecruit();if(this.tab===2)this.renderMarket();if(this.tab===3)this.renderBuild(D?154:229);if(this.tab===4)this.renderMedic();
  }
  // ---------- 军医（data/campMedic.ts）----------
@@ -152,14 +162,10 @@ export class CampRestUI {
  }
  private renderMedic(){
   const st=this.medicState(),p=this.player,name=this.player.growth.character?(getCharacter(this.player.growth.character)?.name??'主将'):'主将';
-  // 左：手绘军医立绘（与招兵营卡片同尺寸；没载到就先空着，载好重绘）
-  const a=this.card(0),key='camp_medic_art';
-  if(D){this.plate(a.x,a.y,a.w,a.h);
-   if(this.scene.textures.exists(key)){const img=this.scene.add.image(a.x+a.w/2,a.y+a.h/2,key).setScrollFactor(0).setName('camp-medic-art'),src=img.texture.getSourceImage() as {width:number;height:number},bw=a.w-14,bh=a.h-14,s=Math.max(bw/src.width,bh/src.height);
-    img.setScale(s).setCrop((src.width-bw/s)/2,(src.height-bh/s)/2,bw/s,bh/s);this.body.add(img);}
-   else this.loadMedicArt();}
+  // 左：军医站在帐中（不加框；没载到就先空着，载好重绘）。施治药气特效仍用手绘序列帧 medic_herb_fx。
+  if(D){drawCampFigure(this.scene,this.body,MEDIC_FIGURE,CampRestUI.FIGURE,()=>{if(this.root.active&&this.tab===4)this.render();});this.loadMedicFx();}
   // 右：主将血量、伤兵，三档治疗
-  const x0=D?this.card(1).x:24,w0=D?W-40-x0:W-48,y0=D?158:229;
+  const x0=D?CampRestUI.STATION_LEFT:24,w0=D?W-40-x0:W-48,y0=D?158:229;
   this.plate(x0,y0,w0,84);
   this.body.add(this.text(x0+16,y0+10,'主将 '+name,D?17:18).setFontFamily(HEADING_FONT).setColor('#f1ddb5'));
   this.body.add(this.text(x0+w0-16,y0+12,'生命 '+st.hp+' / '+st.maxHp,D?16:17).setOrigin(1,0).setColor(st.hale?'#cfe3b0':'#f0b090').setName('camp-medic-hp'));
@@ -176,15 +182,14 @@ export class CampRestUI {
    const bw2=D?176:150;this.body.add(this.button(x0+w0-bw2-10,y+(h-44)/2,label,()=>this.heal(kind),bw2,st.can[kind]).setName('camp-medic-'+kind));});
   if(!this.notice)this.detail.setText('前一关所受的伤会带到下一关；军医用随军粮施治，价格随章节递增（第 '+st.chapter+' 章）。');
  }
- private medicArtLoading=false;
- private loadMedicArt(){if(this.medicArtLoading)return;this.medicArtLoading=true;const s=this.scene,L=s.load;
-  L.image('camp_medic_art','assets/camp/medic.webp');if(!s.textures.exists('medic_herb_fx'))L.spritesheet('medic_herb_fx','assets/camp/medic_herb_fx.webp',{frameWidth:256,frameHeight:256});
-  L.once(Phaser.Loader.Events.COMPLETE,()=>{if(this.root.active&&this.tab===4)this.render();});if(!L.isLoading())L.start();} /* 隐藏时（入营过场中）载完也重绘，免得揭开后立绘还是空的 */
+ private medicFxLoading=false;
+ private loadMedicFx(){const s=this.scene;if(this.medicFxLoading||s.textures.exists('medic_herb_fx'))return;this.medicFxLoading=true;const L=s.load;
+  L.spritesheet('medic_herb_fx','assets/camp/medic_herb_fx.webp',{frameWidth:256,frameHeight:256});if(!L.isLoading())L.start();}
  /** 治疗成功：立绘上飘一阵手绘淡绿药气（序列帧 medic_herb_fx，6 帧）。休整时场景补间暂停，按真实时间逐帧走。 */
  private playMedicFx(){
   const s=this.scene,key='medic_herb_fx';if(!D||!s.textures.exists(key))return;
   this.medicFx?.img.destroy();if(this.medicFx)s.events.off('postupdate',this.medicFx.run);
-  const a=this.card(0),img=s.add.image(a.x+a.w/2,a.y+a.h/2,key,0).setDisplaySize(a.w*.9,a.w*.9).setScrollFactor(0).setBlendMode(Phaser.BlendModes.ADD).setDepth(DEPTH.overlay+3).setName('camp-medic-fx');this.root.add(img);
+  const f=CampRestUI.FIGURE,img=s.add.image(f.cx,f.bottom-f.height*.55,key,0).setDisplaySize(f.height*.8,f.height*.8).setScrollFactor(0).setBlendMode(Phaser.BlendModes.ADD).setDepth(DEPTH.overlay+3).setName('camp-medic-fx');this.root.add(img);
   const fx={img,t:0,run:()=>{fx.t+=s.game.loop.delta;const f=Math.floor(fx.t/110);if(f>=6||!img.active){s.events.off('postupdate',fx.run);img.destroy();if(this.medicFx===fx)this.medicFx=undefined;return;}img.setFrame(f).setAlpha(f>=4?.8-(f-4)*.3:.85);}};
   this.medicFx=fx;s.events.on('postupdate',fx.run);
  }
@@ -202,64 +207,19 @@ export class CampRestUI {
    const buy=this.button(D?x+18:x+112,y+h-(D?60:58),poor?'随军粮不足 · '+cost+'粮':'招募 · '+cost+'粮',()=>{const ok=this.army.recruit(kind,1);if(ok)this.sound('recruit');this.notice=ok?TROOPS[kind].name+'入队 · 下一名招募价 '+this.army.recruitCost(kind)+'粮':'无法招募';this.render();},bw,!poor).setName('camp-recruit-'+kind);this.body.add(buy);
   });if(!this.notice)this.detail.setText('兵力越多，招募越贵：每名在编士兵使招募价 +20%（当前在编 '+this.army.count+' 人）。');
  }
- /** 军需商人：4 张兵装卡（品质色名字、词条、价格）+ 偶尔 1 卷战法。悬停兵装看属性与对比，点「购入」花随军粮，记入本局缴获、结算带回行囊。
-  *  电脑版左侧是手绘军需商人立绘（2026-11-18 用户「需要军需商人立绘」），卡片竖排：图标在上、名字居中、词条在下。 */
+ /** 军需商人（ui/MerchantShop，与营寨旅商共用）：电脑版左侧立绘，4 件兵装 + 偶尔 1 卷战法；用随军粮，战法学进本局构筑当场生效。 */
  private renderMarket(){
-  const t=this.tacticOffer,n=this.itemOffers.length+(t?1:0),gap=D?10:10,h=D?250:200,top=D?158:229;
+  if(!this.stock)this.stock=merchantStockForVisit(this.visit||'rest',(this.scene as unknown as {itemTier?:()=>number}).itemTier?.()??0,this.player.growth.build);
   this.itemTip??=new ItemTooltip(this.scene,DEPTH.overlay+40);
-  let left=D?40:24;if(D){const pw=150;this.renderMerchantArt(left,top,pw,h);left+=pw+12;}
-  const w=D?((W-40-left)-gap*(n-1))/n:(W-48-gap)/2;
-  const at=(i:number)=>D?{x:left+i*(w+gap),y:top}:{x:24+(i%2)*(w+gap),y:top+Math.floor(i/2)*(h+gap)};
-  this.itemOffers.forEach((item,i)=>{
-   const {x,y}=at(i),q=QUALITIES[item.quality],price=MERCHANT_PRICE[item.quality]??120,sold=this.itemSold[i];
-   this.plate(x,y,w,h);
-   const lines=item.affixes.map(a=>(a.minor?'· ':'')+formatAffix(a)).join('\n')+(item.special?'\n★ '+SPECIALS[item.special].name:'');
-   if(D){
-    this.body.add(itemTile(this.scene,x+w/2,y+38,50,item).setScrollFactor(0));
-    this.body.add(this.text(x+w/2,y+68,q.name+' · '+SLOTS[itemSlot(item)].name,12).setOrigin(.5,0).setColor('#bca579'));
-    this.body.add(this.text(x+w/2,y+84,itemName(item),15).setOrigin(.5,0).setColor(q.css).setFixedSize(0,0).setWordWrapWidth(w-12,true).setMaxLines(1).setName('camp-item-name-'+i));
-    this.body.add(this.text(x+12,y+108,lines,12).setLineSpacing(2).setWordWrapWidth(w-22,true).setMaxLines(5).setColor('#d8ccb0'));
-   }else{
-    this.body.add(itemTile(this.scene,x+40,y+42,56,item).setScrollFactor(0));
-    this.body.add(this.text(x+76,y+16,q.name+' · '+SLOTS[itemSlot(item)].name,14).setColor('#bca579'));
-    this.body.add(this.text(x+76,y+36,itemName(item),18).setColor(q.css).setName('camp-item-name-'+i));
-    this.body.add(this.text(x+16,y+78,lines,14).setLineSpacing(3).setWordWrapWidth(w-32,true).setMaxLines(4).setColor('#d8ccb0'));
-   }
-   const hover=this.scene.add.rectangle(x+4,y+4,w-8,h-64,0,.001).setOrigin(0).setScrollFactor(0).setInteractive().setName('camp-item-card-'+i);this.body.add(hover);
-   this.itemTip!.attach(hover,()=>item,()=>loadout(this.player.growth.character)[itemSlot(item)]);
-   const can=!sold&&this.army.food>=price,bw=Math.min(w-20,180);
-   const b=this.button(x+(w-bw)/2,y+h-52,sold?'已售罄':this.army.food<price?(D?'粮不足 · ':'随军粮不足 · ')+price+'粮':'购入 · '+price+'粮',()=>{if(this.itemSold[i]||this.army.food<price)return;this.army.food-=price;this.itemSold[i]=true;this.onBuyItem?.(item);this.sound('purchase');this.notice='已购入 '+itemName(item)+' · 已收入行囊，可点右上「行囊」穿戴';this.render();},bw,can).setName('camp-item-goods-'+i);b.setData('caption',this.body.list[this.body.list.length-1]);(this.body.list[this.body.list.length-1] as Phaser.GameObjects.GameObject).name='camp-item-price-'+i;
-   this.body.add(b);
-  });
-  if(t){const {x,y}=at(this.itemOffers.length);this.renderTacticCard(t,x,y,w,h);}
-  if(!this.notice)this.detail.setText(t?'今日商人还捎来一卷战法（偶尔才有）：买下当场学会或精进一级，本局生效；最多 6 种战法、每种到 3 级。':D?'每次进营 4 件兵装，甲胄、头盔、战靴、信物各一；偶尔还捎来一卷战法。鼠标移到卡片上看属性对比，买下的立即收入行囊。':'军需商人每次进营 4 件兵装，甲胄、头盔、战靴、信物各一；偶尔还捎来一卷战法。买下的兵装立即收入行囊。');
- }
- /** 战法卷轴卡：漆底描金外框里一幅宣纸手卷（上下卷轴），写战法名、流派、等级与下一级效果。 */
- private renderTacticCard(t:CampOffer,x:number,y:number,w:number,h:number){
-  const d=TACTICS[t.id],next=t.level+1,sold=t.sold,can=!sold&&this.army.food>=t.price&&!!campOption(t,this.player);
-  this.plate(x,y,w,h,true).setName('camp-tactic-card');
-  const px=x+9,pw=w-18,py=y+12,ph=h-74,g=this.scene.add.graphics().setScrollFactor(0);
-  g.fillStyle(0xe8dcc0,.96).fillRect(px,py,pw,ph).lineStyle(1,0xb59a6a,.8).strokeRect(px+3,py+3,pw-6,ph-6);
-  for(const ry of [py-3,py+ph-3]){g.fillStyle(0x3b2414,1).fillRect(px-5,ry,pw+10,6);g.fillStyle(0xc9a35a,1).fillRect(px-8,ry-1,5,8).fillRect(px+pw+3,ry-1,5,8);}
-  this.body.add(g);
-  const ink=(tx:number,ty:number,str:string,size:number,color:string)=>{const o=this.text(tx,ty,str,size).setColor(color).setStroke('#000',0);this.body.add(o);return o;};
-  this.icon(x+w/2,py+(D?28:26),'build_icon_'+t.id,D?36:34);
-  ink(x+w/2,py+50,TAG_NAMES[d.tag]+'系 · 战法',12,'#8a5a2a').setOrigin(.5,0);
-  ink(x+w/2,py+66,d.name+' '+(t.level?'Lv.'+t.level+'→'+next:'Lv.1'),D?15:17,'#2a170b').setOrigin(.5,0).setFontFamily(HEADING_FONT).setName('camp-tactic-name');
-  ink(px+8,py+90,tacticDescription(t.id,next),D?11:13,'#3b2a18').setLineSpacing(1).setWordWrapWidth(pw-16,true).setMaxLines(D?5:3).setName('camp-tactic-desc');
-  ink(px+pw-7,py+6,t.level?'精进':'新学',11,'#a3341c').setOrigin(1,0);
-  const label=sold?'已研习':!campOption(t,this.player)?'已无法研习':this.army.food<t.price?(D?'粮不足 · ':'随军粮不足 · ')+t.price+'粮':(t.level?'精进 · ':'研习 · ')+t.price+'粮',bw=Math.min(w-20,180);
-  this.body.add(this.button(x+(w-bw)/2,y+h-52,label,()=>{const lv=t.level;if(!buyMerchantTactic(t,this.player,this.army))return;this.sound('purchase');this.notice='研习战法「'+d.name+'」'+(lv?'Lv.'+lv+'→'+(lv+1):'Lv.1')+' · 本局立即生效，可在「将帅帐」查看';this.onLearnTactic?.();this.render();},bw,can).setName('camp-tactic-buy'));
- }
- /** 电脑版军需商人立绘（手绘水墨淡彩半身像，透明底）：没载到先空着，载好重绘。 */
- private merchantArtLoading=false;
- private renderMerchantArt(x:number,y:number,w:number,h:number){
-  this.plate(x,y,w,h);const key='camp_merchant_art';
-  if(!this.scene.textures.exists(key)){if(!this.merchantArtLoading){this.merchantArtLoading=true;const L=this.scene.load;L.image(key,'assets/camp/merchant.webp');L.once(Phaser.Loader.Events.COMPLETE,()=>{if(this.root.active&&this.tab===2)this.render();});if(!L.isLoading())L.start();}return;}
-  const img=this.scene.add.image(x+w/2,y+h/2,key).setScrollFactor(0).setName('camp-merchant-art'),src=img.texture.getSourceImage() as {width:number;height:number},bw=w-10,bh=h-10,s=Math.max(bw/src.width,bh/src.height);
-  img.setScale(s).setCrop((src.width-bw/s)/2,(src.height-bh/s)/2,bw/s,bh/s);this.body.add(img);
-  this.body.add(this.scene.add.rectangle(x+5,y+h-33,w-10,28,0x120c07,.62).setOrigin(0).setScrollFactor(0));
-  this.body.add(this.text(x+w/2,y+h-19,'军需商人',15).setOrigin(.5).setFontFamily(HEADING_FONT).setColor('#f1ddb5').setLetterSpacing(3));
+  this.shop??=new MerchantShop(this.scene,{tooltip:this.itemTip,
+   stock:()=>this.stock!,
+   wallet:{name:'随军粮',get:()=>this.army.food,spend:n=>{if(this.army.food<n)return false;this.army.food-=n;return true;}},
+   tactics:{canBuy:o=>!!campOption(o,this.player),learn:o=>{const op=campOption(o,this.player);if(!op)return false;op.apply(this.player,this.player.weapons,this.player.growth);return true;},afterBuy:()=>this.onLearnTactic?.(),doneText:'本局立即生效，可在「将帅帐」查看'},
+   onBuyItem:item=>this.onBuyItem?.(item),owner:()=>this.player.growth.character,
+   notice:t=>{this.notice=t;},changed:()=>this.render(),sound:k=>this.sound(k),tooltipDepth:DEPTH.overlay+40});
+  this.shop.onArtLoaded=()=>{if(this.root.active&&this.tab===2)this.render();};
+  this.shop.render(this.body,D?40:24,D?158:229,D?W-40:W-24,D?250:200,D?CampRestUI.FIGURE:undefined);
+  if(!this.notice)this.detail.setText(this.shop.hint());
  }
 
  private showDetails(title:string,description:string,confirm?:()=>void){

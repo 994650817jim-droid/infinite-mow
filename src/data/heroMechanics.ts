@@ -50,7 +50,8 @@ export const ZG_TIANHUO = {
   /** 借东风：每第 every 发；场上没有首领 / 精锐时每第 everyCrowd 发（清怪更勤，2026-11-18） */
   /** knockback（2026-11-18 夜 用户：「借东风有吹风击退效果」）：火龙扫过时顺着风向把敌人吹开 px 像素（精锐 × eliteMul，首领 / 不受控的不推），ms 内分几步推完，碰到墙 / 障碍 / 场地边就停 */
   eastWind: { every: 4, everyCrowd: 3, len: [300, 340, 380] as readonly number[], width: 56, mul: [.6, .75, .9] as readonly number[], knockback: { px: 100, eliteMul: .4, ms: 180 } },
-  bazhen: { radius: [90, 105, 120] as readonly number[], ms: [2000, 2500, 3000] as readonly number[], slow: .4, vuln: 1.15, bossGapMul: 1.25 },
+  /** 八阵图伤害（2026-11-18 夜 用户：「八阵图也会造成伤害」）：阵内敌人每 tickMs 受天火单发伤害 × mul[等级]（首领 / 精锐再 × bossMul），每跳阵纹亮一下 */
+  bazhen: { radius: [90, 105, 120] as readonly number[], ms: [2000, 2500, 3000] as readonly number[], slow: .4, vuln: 1.15, bossGapMul: 1.25, tickMs: 500, mul: [.15, .2, .25] as readonly number[], bossMul: .2 },
 } as const;
 /** 某武将某属性的额外说明（属性面板 / 主属性章悬停里追加）；没有返回 ''。 */
 export function heroAttributeExtra(hero: string, attr: string): string {

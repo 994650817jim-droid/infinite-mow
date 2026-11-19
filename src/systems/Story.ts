@@ -195,6 +195,13 @@ export class StoryDirector {
     const b = n.banner; if (b && (!b.ifFollower || this.h.ctx.team().includes(b.ifFollower))) { if (b.flag) setStoryFlag(b.flag); this.h.banner?.(b.title, b.caption); }
     return spoke;
   }
+  /** 战斗中途按 id 播一段卷轴（chapter.midScrolls；暂停战斗、显示对白立绘，每存档一次）。返回是否播了（没有 / 看过 / 剧情关掉 → false，done 立刻回调）。 */
+  midScroll(id: string, done?: () => void): boolean {
+    const n = this.chapter?.midScrolls?.find(b => b.id === id), queue: Array<(next: () => void) => void> = [];
+    this.queueScroll(queue, n, 'stage', '继续');
+    if (!queue.length) { done?.(); return false; }
+    this.runQueue(queue, () => { if (n) markStorySeen(n.id); done?.(); }); return true;
+  }
   /** 按 id 说一句（bark 节点，其他系统调用；如 'hulao-3.lubu_enter'）。返回是否说了。 */
   line(id: string, target: BarkTarget): boolean {
     const n = this.chapter?.barks?.find(b => b.id === id); return n ? this.bark(n, target) : false;

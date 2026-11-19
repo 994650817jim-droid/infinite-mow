@@ -171,9 +171,10 @@ export function siegeGameSceneClass(Base: typeof GameScene) {
     /** 敌援抵达：守军池补充、守将加强、我军士气受挫（随从伤害下降）。 */
     private startReinforce() {
       const T = this.timerTier; this.timerPhase = 'reinforce'; this.squadWaves = 0;
-      if (this.garrison) this.garrison.reinf += Math.round(this.garrison.total * T.garrisonRefill);
+      const cut = this.mid?.refillMul() ?? 1; // 城内要点：每占一处守军补充 −15%、粮仓再 −30%
+      if (this.garrison) this.garrison.reinf += Math.round(this.garrison.total * T.garrisonRefill * cut);
       this.legion.damageMul *= T.allyDamageMul;
-      this.showWaveBanner('敌援抵达', true, `守军补充 · 守将更凶 · 我军士气受挫　${T.reinforceSeconds} 秒内未破城即撤军`);
+      this.showWaveBanner('敌援抵达', true, `守军补充${cut < 1 ? `（城内要点削减 ${Math.round((1 - cut) * 100)}%）` : ''} · 守将更凶 · 我军士气受挫　${T.reinforceSeconds} 秒内未破城即撤军`);
     }
     /** 守将伤害加成（援军阶段才出的守将也补上；每个守将只加一次）。 */
     private buffBoss() {
@@ -182,7 +183,7 @@ export function siegeGameSceneClass(Base: typeof GameScene) {
     }
     /** 城外两侧援兵：阶段开始一批，之后每 waveEverySeconds 再来一批（从补充的守军池里出，给经验）。 */
     private sendSquads() {
-      const T = this.timerTier, due = Math.min(T.squadWaves, 1 + Math.floor(Math.max(0, this.elapsed - this.limit) / T.waveEverySeconds));
+      const T = this.timerTier, waves = Math.max(0, T.squadWaves - (this.mid?.squadCut() ?? 0)), due = Math.min(waves, 1 + Math.floor(Math.max(0, this.elapsed - this.limit) / T.waveEverySeconds)); // 城内每占一处要点，城外援兵少一批
       const blocks = (this.sishuiObstacles?.footprints ?? []) as unknown as Array<{left: number; right: number; top: number; bottom: number}>;
       const blocked = (x: number, y: number) => blocks.some(b => x > b.left - 30 && x < b.right + 30 && y > b.top - 30 && y < b.bottom + 30);
       const cam = this.cameras.main, half = cam.width / 2 / cam.zoom + 70, p = this.player;
@@ -196,6 +197,8 @@ export function siegeGameSceneClass(Base: typeof GameScene) {
         }
       }
     }
+    /** 城内要点给的结算军粮加成（粮仓 / 全取比例 + 市集一笔）。 */
+    private get cityBonus() { return this.mid?.provisionsBonus() ?? {share: 0, flat: 0}; }
     /** 测试用：限时状态。 */
     get siegeTimer() { return {phase: this.timerPhase, limit: this.limit, reinforceSeconds: this.timerTier.reinforceSeconds, squads: this.squadWaves, reinf: this.garrison?.reinf ?? 0, allyMul: this.legion.damageMul, bossBuffed: this.buffedBoss, speedBonus: this.speedBonus}; }
     /** 测试用状态。 */
@@ -262,7 +265,7 @@ export function siegeGameSceneClass(Base: typeof GameScene) {
         spawnTower: (x, y) => { const e = this.supplies?.spawnCamp(x, y, Math.round(SG.towerHp * this.chapter.hpScale(this.elapsed))) ?? null; e?.sprite.setTexture('sishui_props_refined', 1).setOrigin(.5, 1).setDisplaySize(140, 140).setAlpha(1); return e; },
         spawnBarrel: (x, y) => { this.env?.spawnForTest('barrel', x - this.player.x, y - this.player.y); },
         hurtTroops: (x, y, r, d) => this.legion.hurtArea(x, y, r, d, this.combatNow),
-        recruit: n => { for (let i = 0; i < n; i++) this.legion.recruit(kinds[i % 2], 1, true); }, gainFood: n => { this.legion.food += n; },
+        recruit: n => { for (let i = 0; i < n; i++) this.legion.recruit(kinds[i % 2], 1, true); }, gainFood: n => { this.legion.food += n; }, cutGarrison: share => { const g = this.garrison; if (!g) return 0; const n = Math.min(this.garrisonLeft, Math.round(g.total * share)); g.cut += n; return n; },
         banner: (t, danger, cap) => this.showWaveBanner(t, !!danger, cap), sfx: k => this.sfx.play(k),
         spawnBoss: () => this.spawnBoss(), boss: () => this.boss,
         campsAlive: () => { const c = this.enemyCamps?.camps ?? []; return [c.filter(x => !x.destroyed).length, c.length]; },
@@ -352,13 +355,13 @@ export function siegeGameSceneClass(Base: typeof GameScene) {
       if (this.defense) { this.finishDefense(victory, T.reward); return; }
       // 速攻奖励：破城时剩余时间超过限时的一半，攻城奖励（军粮 / 战功）加成
       this.speedBonus = victory && this.elapsed <= this.limit * (1 - SIEGE_TIMER.speed.remainingShare); const k = this.speedBonus ? 1 + SIEGE_TIMER.speed.rewardBonus : 1;
-      const reward = settleSiege(this.receipt, {victory, bossKilled: this.bossKilled, debug: this.test || this.debugModified || this.debugJumped || this.player.damageImmune, elapsed: this.elapsed, reward: {merits: Math.round(T.reward.merits * k), provisions: Math.round(T.reward.provisions * k)}, firstBonus: FIRST_CAPTURE_BONUS, returned: this.allies.filter(u => u.active && u.reserveSoldier).map(u => u.kind)});
+      const reward = settleSiege(this.receipt, {victory, bossKilled: this.bossKilled, debug: this.test || this.debugModified || this.debugJumped || this.player.damageImmune, elapsed: this.elapsed, reward: {merits: Math.round(T.reward.merits * k), provisions: Math.round(T.reward.provisions * (k + (victory ? this.cityBonus.share : 0))) + (victory ? this.cityBonus.flat : 0)}, firstBonus: FIRST_CAPTURE_BONUS, returned: this.allies.filter(u => u.active && u.reserveSoldier).map(u => u.kind)});
       this.controller?.clear();
       // 回天下地图时播「XX 归入版图」（插旗、朱印、疆域染色）；地图读到后清掉
       if (reward.captured) this.registry.set('mapCaptured', this.city.id);
       this.resultTexts.subtitle.setText(victory ? `${this.city.name}归入义军版图${reward.first ? ' · 首次攻占' : ''}` : (reason === 'timeout' ? '久攻不下 · 撤军' : '攻城失利 · 整军再战'));
       const caught = victory && this.bossKilled && !this.capturesBlocked() ? tryCapture('siege', factionGeneral(this.owner) ?? '', this.owner) : null;
-      this.resultTexts.body.setText(this.resultTexts.body.text + '\n永久奖励 · 军粮 +' + reward.provisions + cityIncomeLine(reward) + captureLine(caught) + (reward.captured && this.speedBonus ? `\n速攻破城 · 攻城奖励 +${Math.round(SIEGE_TIMER.speed.rewardBonus * 100)}%` : '') + (reason === 'timeout' && !victory ? '\n撤军收场 · 存档不受损失，只收本季军粮' : '') + (reward.alert ? `\n${FACTIONS[reward.alert.attacker].name}不甘失地，${this.city.name}告急！` : ''));
+      this.resultTexts.body.setText(this.resultTexts.body.text + '\n永久奖励 · 军粮 +' + reward.provisions + cityIncomeLine(reward) + captureLine(caught) + (reward.captured && this.speedBonus ? `\n速攻破城 · 攻城奖励 +${Math.round(SIEGE_TIMER.speed.rewardBonus * 100)}%` : '') + (this.mid?.settleLines().length ? '\n' + this.mid.settleLines().join('\n') : '') + (reason === 'timeout' && !victory ? '\n撤军收场 · 存档不受损失，只收本季军粮' : '') + (reward.alert ? `\n${FACTIONS[reward.alert.attacker].name}不甘失地，${this.city.name}告急！` : ''));
       this.mapButtons(victory);
     }
     private finishDefense(victory: boolean, base: {merits: number; provisions: number}) {

@@ -1,0 +1,115 @@
+import Phaser from 'phaser';
+import { actorDepth } from '../config';
+import type { Enemy } from '../entities/Enemy';
+import { visualTextureKey } from './ReadableTextures';
+
+/**
+ * 友军攻势（2-3 火烧洛阳；用户「从后方会有我方小兵去一路打过去会去摧毁营寨，小地图会显示这个攻势」）：
+ * 每隔 everyMs，一队义军（squad 人）从后方（镜头下沿外）冒出来，沿一条行军线走向最近一座还没摧毁的营寨；
+ * 路上碰到敌兵就停下来打，到了营寨就围着砍营寨，营寨塌了这队就散（淡出）。场上总人数封顶 cap。
+ * 轻量兵：不进部曲（Legion）的编制 / 军粮 / 寻路，只是一张兵种行走图 + 简单的走、打、挨打；敌兵 AI 不改（不会专门追他们），
+ * 挨打按「身边敌兵数 × enemyDps」算。伤害走 GameScene.hitEnemy（fromAlly），营寨被打塌照常算进「摧毁营寨」军令。
+ * 地图（ui/BattleMap）读 squads：行军线（后方 → 营寨的碧色箭头）、兵的碧点、正在挨打的营寨闪烁。
+ */
+export interface AllyPushConfig {
+  firstMs: number; everyMs: number; squad: number; cap: number; sheets: readonly string[];
+  speed: number; hp: number; dmg: number; campDmg: number; hitMs: number; engage: number; reach: number; campReach: number; enemyDps: number; rearPad: number;
+}
+export interface PushHost {
+  scene: Phaser.Scene; now: () => number; paused: () => boolean;
+  player: () => { x: number; y: number };
+  camps: () => Enemy[]; enemies: () => readonly Enemy[];
+  hit: (e: Enemy, dmg: number) => void;
+  push?: (x: number, y: number, r: number) => { x: number; y: number } | null;
+}
+interface Soldier { sp: Phaser.GameObjects.Sprite; shadow: Phaser.GameObjects.Ellipse; x: number; y: number; ox: number; oy: number; hp: number; sheet: string; dir: string; walk: number; nextHit: number; lunge: number; dead: number }
+export interface Squad { id: number; from: { x: number; y: number }; target: Enemy | null; life: number; members: Soldier[]; done: number }
+
+export class AllyPush {
+  readonly squads: Squad[] = [];
+  /** 营寨最近一次被友军砍的时间（地图上闪烁）。 */
+  readonly campHitAt = new Map<Enemy, number>();
+  readonly stats = { spawned: 0, campHits: 0, campDamage: 0, kills: 0, lost: 0 };
+  private nextAt: number; private seq = 0; private lastNow: number;
+  constructor(private readonly h: PushHost, private readonly c: AllyPushConfig) {
+    this.nextAt = h.now() + c.firstMs; this.lastNow = h.now();
+    h.scene.events.on('update', this.tick, this);
+    h.scene.events.once('shutdown', () => this.clear());
+  }
+  get alive(): number { let n = 0; for (const s of this.squads) for (const m of s.members) if (!m.dead) n++; return n; }
+
+  /** 出一队：营寨里离主将最近的那座；出生在它正南方、镜头下沿外 rearPad。 */
+  spawn(): Squad | null {
+    const camps = this.h.camps(); if (!camps.length) return null;
+    const free = this.c.cap - this.alive; if (free <= 0) return null;
+    const pl = this.h.player(), cam = this.h.scene.cameras.main.worldView;
+    const target = camps.slice().sort((a, b) => Math.hypot(a.x - pl.x, a.y - pl.y) - Math.hypot(b.x - pl.x, b.y - pl.y))[0];
+    const n = Math.min(this.c.squad, free), fx = Phaser.Math.Linear(target.x, pl.x, .35), fy = Math.max(cam.bottom + this.c.rearPad, target.y + 520);
+    const sq: Squad = { id: ++this.seq, from: { x: fx, y: fy }, target, life: target.spawnId, members: [], done: 0 };
+    for (let i = 0; i < n; i++) {
+      const row = Math.floor(i / 3), col = i % 3 - 1, ox = col * 34 + (row % 2) * 17, oy = row * 34;
+      const sheet = this.c.sheets[i % this.c.sheets.length], key = visualTextureKey(this.h.scene, sheet);
+      const fh = this.h.scene.textures.getFrame(key, 'up_0')?.height || 96;
+      const sp = this.h.scene.add.sprite(fx + ox, fy + oy, key, this.h.scene.textures.get(key).has('up_0') ? 'up_0' : 0).setOrigin(.5, .86).setScale(64 / fh).setName('ally-push-soldier');
+      const shadow = this.h.scene.add.ellipse(fx + ox, fy + oy + 2, 26, 9, 0x000000, .28).setDepth(actorDepth(fy + oy) - .01);
+      sq.members.push({ sp, shadow, x: fx + ox, y: fy + oy, ox, oy, hp: this.c.hp, sheet: key, dir: 'up', walk: 0, nextHit: 0, lunge: 0, dead: 0 });
+    }
+    this.squads.push(sq); this.stats.spawned += n; return sq;
+  }
+
+  private tick(): void {
+    const now = this.h.now(), dt = Math.min(.1, Math.max(0, (now - this.lastNow) / 1000)); this.lastNow = now;
+    if (this.h.paused() || dt <= 0) return;
+    if (now >= this.nextAt) { this.nextAt = now + this.c.everyMs; this.spawn(); }
+    const C = this.c, foes = this.h.enemies();
+    for (const sq of [...this.squads]) {
+      // 目标营寨塌了：改打下一座最近的；都没了就散
+      if (!sq.target || !sq.target.active || sq.target.spawnId !== sq.life || sq.target.hp <= 0) {
+        const lead = sq.members.find(m => !m.dead), camps = this.h.camps();
+        const next = lead && camps.length ? camps.slice().sort((a, b) => Math.hypot(a.x - lead.x, a.y - lead.y) - Math.hypot(b.x - lead.x, b.y - lead.y))[0] : null;
+        if (next) { sq.target = next; sq.life = next.spawnId; sq.from = { x: lead!.x, y: lead!.y }; } else { sq.target = null; if (!sq.done) sq.done = now; }
+      }
+      for (const m of sq.members) {
+        if (m.dead) continue;
+        if (sq.done) { m.sp.setAlpha(Math.max(0, 1 - (now - sq.done) / 1500)); m.shadow.setAlpha(m.sp.alpha * .28); continue; }
+        // 身边的敌兵：最近一个（不打补给物件 / 刀枪不入 / 城头的）
+        let foe: Enemy | null = null, fd = C.engage;
+        for (const e of foes) { if (!e.active || e.isSupplySlot || e.invulnerable || e.hp <= 0 || e.def.behavior === 'wall') continue; const d = Math.hypot(e.x - m.x, e.y - m.y); if (d < fd) { fd = d; foe = e; } }
+        const camp = sq.target!, cd = Math.hypot(camp.x - m.x, camp.y - m.y);
+        let tx: number, ty: number, strike: Enemy | null = null, reach: number;
+        if (foe) { tx = foe.x; ty = foe.y; reach = C.reach + foe.radius * .5; if (fd <= reach) strike = foe; }
+        else { const a = Math.atan2(m.y - camp.y, m.x - camp.x) || Math.PI / 2, rr = camp.radius + C.campReach * .6; tx = camp.x + Math.cos(a) * rr + m.ox * .4; ty = camp.y + Math.sin(a) * rr * .7; reach = camp.radius + C.campReach; if (cd <= reach) strike = camp; }
+        if (!strike) {
+          const dx = tx - m.x, dy = ty - m.y, d = Math.hypot(dx, dy);
+          if (d > 2) { const st = Math.min(d, C.speed * dt); m.x += dx / d * st; m.y += dy / d * st; m.walk += st; m.dir = Math.abs(dx) > Math.abs(dy) ? dx < 0 ? 'left' : 'right' : dy < 0 ? 'up' : 'down'; }
+        } else {
+          const dx = strike.x - m.x, dy = strike.y - m.y; m.dir = Math.abs(dx) > Math.abs(dy) ? dx < 0 ? 'left' : 'right' : dy < 0 ? 'up' : 'down';
+          if (now >= m.nextHit) {
+            m.nextHit = now + C.hitMs * (.85 + Math.random() * .3); m.lunge = now;
+            const dmg = strike === camp ? C.campDmg : C.dmg, before = strike.hp;
+            this.h.hit(strike, dmg);
+            if (strike === camp) { this.stats.campHits++; this.stats.campDamage += Math.max(0, before - Math.max(0, strike.hp)); this.campHitAt.set(camp, now); }
+            else if (!strike.active || strike.hp <= 0) this.stats.kills++;
+          }
+        }
+        const p = this.h.push?.(m.x, m.y, 14); if (p) { m.x += p.x; m.y += p.y; }
+        // 挨打：身边敌兵越多掉血越快（最多按 3 个算）
+        let near = 0; for (const e of foes) if (e.active && !e.isSupplySlot && e.hp > 0 && Math.abs(e.x - m.x) < 46 && Math.abs(e.y - m.y) < 46) { if (++near >= 3) break; }
+        if (near) { m.hp -= near * C.enemyDps * dt; if (m.hp <= 0) { m.dead = now; this.stats.lost++; } }
+        this.draw(m, now);
+      }
+      // 死的淡出、整队没了就删
+      for (const m of sq.members) if (m.dead) { const a = Math.max(0, 1 - (now - m.dead) / 600); m.sp.setAlpha(a).setTint(0x8a7a6a).setAngle(m.dir === 'left' ? -80 : 80); m.shadow.setAlpha(a * .28); }
+      if (sq.members.every(m => m.dead ? now - m.dead > 600 : sq.done && now - sq.done > 1500)) { for (const m of sq.members) { m.sp.destroy(); m.shadow.destroy(); } this.squads.splice(this.squads.indexOf(sq), 1); }
+    }
+    for (const [c, t] of this.campHitAt) if (!c.active || now - t > 4000) this.campHitAt.delete(c);
+  }
+  private draw(m: Soldier, now: number): void {
+    const fr = `${m.dir}_${Math.floor(m.walk / 14) % 4}`, tex = this.h.scene.textures.get(m.sheet);
+    if (tex.has(fr) && m.sp.frame.name !== fr) m.sp.setFrame(fr);
+    const k = now - m.lunge < 220 ? Math.sin((now - m.lunge) / 220 * Math.PI) * 7 : 0, ux = m.dir === 'left' ? -1 : m.dir === 'right' ? 1 : 0, uy = m.dir === 'up' ? -1 : m.dir === 'down' ? 1 : 0;
+    m.sp.setPosition(m.x + ux * k, m.y + uy * k - (k ? 0 : Math.abs(Math.sin(m.walk / 14 * Math.PI)) * 1.5)).setDepth(actorDepth(m.y));
+    m.shadow.setPosition(m.x, m.y + 2).setDepth(actorDepth(m.y) - .01);
+  }
+  clear(): void { this.h.scene.events.off('update', this.tick, this); for (const s of this.squads) for (const m of s.members) { m.sp.destroy(); m.shadow.destroy(); } this.squads.length = 0; }
+}

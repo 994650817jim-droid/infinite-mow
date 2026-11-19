@@ -12,7 +12,7 @@ const p = await b.newPage({ viewport: { width: 1280, height: 720 } });
 p.on('pageerror', e => errors.push(e.message));
 p.on('console', m => { if (m.type() === 'error' && !/favicon|Failed to load resource/.test(m.text())) errors.push('console ' + m.text()); });
 await p.addInitScript(() => {
-  window.__mod = async part => import(performance.getEntriesByType('resource').map(e => e.name).find(n => n.includes(part)) ?? ('/src/' + part.replace(/^\//, '')));
+  window.__mod = async part => import(performance.getEntriesByType('resource').map(e => e.name).find(n => n.includes(part)) ?? ('/src/' + part.replace(/^\/?(src\/)?/, '')));
   window.__find = (root, name) => { for (const o of root.list ?? root.getChildren?.() ?? []) { if (o.name === name) return o; if (o.list) { const r = window.__find(o, name); if (r) return r; } } return null; };
   if (!sessionStorage.getItem('seeded')) { localStorage.clear(); localStorage.setItem('im_last_hero', 'zhaoyun'); localStorage.setItem('im_items_v2', JSON.stringify({ version: 2, bag: [], loadouts: {}, autoSalvageWhite: false })); sessionStorage.setItem('seeded', '1'); }
 });
@@ -114,7 +114,7 @@ const mech = await p.evaluate(async () => {
   // 虎豹铁面：坐骑践踏 ×2、6 秒上马
   const m1 = new HM({ scene: s, player: pl, enemies: s.enemies, hit: () => {}, notice: () => {} }, { base: 'nag', name: '驽马' }, 'liubei', { trampleMul: R.hubaoTrample, remountMs: R.hubaoRemountMs });
   const m0 = new HM({ scene: s, player: pl, enemies: s.enemies, hit: () => {}, notice: () => {} }, { base: 'nag', name: '驽马' }, 'liubei');
-  out.hubao = { t: m1.trampleMul / m0.trampleMul, r: [m1.remountMs, m0.remountMs] }; m1.clear(); m0.clear(); pl.mountSpeedMul = 1; pl.riseY = 0;
+  out.hubao = { t: m1.trampleMul / m0.trampleMul, r: m1.remountMs, left: [m1.remountsLeft, m0.remountsLeft] }; m1.clear(); m0.clear(); pl.mountSpeedMul = 1; pl.riseY = 0;
   st.unequipSlot('zhaoyun', 'relic'); s.refreshGear(); clearFoes(); s.setMode('none');
   return out;
 });
@@ -127,7 +127,7 @@ ck('相国印：120 杀后升级提示「连选两张」、换一批免费；选
 ck('传国玉玺（伪）：受到伤害 ×1.15，开局送 1 张随机战法 Lv1', mech.weixi.taken === 1.15 && mech.weixi.tactics.length === 1 && mech.weixi.tactics[0] === 1, mech.weixi);
 ck('乌巢酒葫：拾取酒后伤害 ×1.4，移动方向被随机偏转', mech.jiuhu.ratio === 1.4 && mech.jiuhu.angle > 0 && mech.jiuhu.angle <= Math.PI / 12 + .001, mech.jiuhu);
 ck('楼船令旗：穿上即开 12 秒一列的火船，脱下停止', mech.louchuan.on && mech.louchuan.interval === 12000 && mech.louchuan.off, mech.louchuan);
-ck('虎豹铁面：践踏伤害 ×2，上马间隔 6 秒（原 15 秒）', mech.hubao.t === 2 && JSON.stringify(mech.hubao.r) === '[6000,15000]', mech.hubao);
+ck('虎豹铁面：践踏伤害 ×2，落马后 60 秒可再上马、每战一次（无遗珍落马后不再上马）', mech.hubao.t === 2 && mech.hubao.r === 60000 && JSON.stringify(mech.hubao.left) === '[1,0]', mech.hubao);
 await p.screenshot({ path: `${out}/desktop-battle.png` });
 
 // 5) 行囊：珍角标、详情不可分解、悬停提示

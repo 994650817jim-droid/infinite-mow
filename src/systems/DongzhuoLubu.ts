@@ -54,6 +54,8 @@ export interface DzHost {
   heroSprite?: (id: string) => { x: number; y: number } | undefined;
   /** 剧情台词（故事系统 StoryDirector.line，data/story/hulao.ts 的 barks；按剧情设置决定播不播）。没播返回 false。 */
   line?: (id: string, target: { x: number; y: number }) => boolean;
+  /** 战斗中途卷轴（StoryDirector.midScroll，data/story/hulao.ts 的 midScrolls：暂停战斗、显示对白立绘）。没播返回 false。 */
+  scroll?: (id: string) => boolean;
   /** 2-3 重做：吕布什么时候跃下城头（营寨全毁）。不传或一开始就是 true：照原来，吕布开局就在城下。 */
   ready?: () => boolean;
 }
@@ -120,6 +122,8 @@ export class DongzhuoLubu {
     if (this.lubu && !onWall) h.line?.('hulao-3.lubu_enter', this.lubu.sprite);
     this.dzLineAt = now + 2400;
     this.nextSweep = now + 2500; this.volleyAt = now + 3500;
+    // 2026-11-18 夜：董卓、吕布登上城头时播一段卷轴（对白立绘露脸），播了就不再喊城头那句 bark
+    if (h.scroll?.('hulao-3.on_wall')) this.dzLineAt = 0;
     if (onWall) h.banner('董卓 · 吕布 坐镇城头', true, '城头上打不到他们 · 先摧毁营寨');
     else h.banner('董卓 · 吕布 出阵', true, '董卓坐镇城头（打不到）· 先打退吕布');
     s.events.on('postupdate', this.tick, this);
@@ -128,6 +132,8 @@ export class DongzhuoLubu {
   /** XiliangBattle 是否该停下董卓自己的移动（城头 / 走下城 / 授首时）。 */
   get holdsDongzhuo(): boolean { return this.phase !== 'down'; }
   get lubuLeft(): boolean { return this.phase !== 'wall' && this.phase !== 'fleeing'; }
+  /** 董卓还在城头（城头对峙 / 吕布跃下 / 战吕布 / 吕布逃走）：底部首领血条、名牌、屏外箭头都不给董卓（用户「董卓吕布出来之前不要显示血条」）；小地图照常标。 */
+  get hidesBossBar(): boolean { return this.phase === 'perch' || this.phase === 'leaping' || this.phase === 'wall' || this.phase === 'fleeing'; }
   /** 用户「吕布下来应该是吕布血条」：跃下起到逃出画面，首领血条 / 名牌显示吕布；董卓下城后换回董卓。 */
   get lubuFocus(): Enemy | null { const l = this.lubu; return l?.active && (this.phase === 'leaping' || this.phase === 'wall' || this.phase === 'fleeing') ? l : null; }
 
@@ -183,6 +189,7 @@ export class DongzhuoLubu {
   /** ③ 董卓走下城：可以打了。 */
   private descend(): void {
     const s = this.h.scene, d = this.dongzhuo, P = DZ_LUBU; this.phase = 'descending';
+    this.h.scroll?.('hulao-3.dongzhuo_descend'); // 吕布败走、董卓亲自下城：卷轴（对白立绘）
     const y0 = d.y, y1 = this.perch.y + P.perchUp + 70, t0 = s.time.now;
     this.anim = now => { const k = Math.min(1, (now - t0) / P.descendMs); d.sprite.y = Phaser.Math.Linear(y0, y1, k); if (k >= 1) { this.phase = 'down'; d.invulnerable = false; emitBossPhase(s, { boss: d, phase: 2, dismount: false, name: '董卓' }); this.h.banner('董卓下城', true, '国贼亲自督战 · 打他！'); this.h.line?.('hulao-3.dongzhuo_down', d.sprite); playSheet(s, 'fx_collapse_dust', d.x, d.y + 4, { size: 160, ms: 560, depth: DEPTH.fx, originY: .8, name: 'dz-down-dust' }); return true; } return false; };
   }
@@ -232,6 +239,8 @@ export class DongzhuoLubu {
   /** 每帧（postupdate）：城墙碰撞、城头放箭、吕布横扫、动画、20% 授首。 */
   /** 场地内（城墙以南，城下一侧全开），留 r 的边：随机补给 / 物件只放在这里面。 */
   inArena(_x: number, y: number, r = 0): boolean { return y > this.gate.y + r; }
+  /** 城门位置（舆图画城门楼）。 */
+  get gatePos(): { x: number; y: number } { return this.gate; }
   /** 城墙南沿（碰撞框下沿）。以北是城里：不刷兵、不许有敌兵。 */
   get wallLine(): number { return this.gate.y - 8; }
   /** 用户「城墙那一侧不需要生成小兵」：刷兵点落在城北的，按主将南北翻过来（离主将距离不变，仍在屏外）；翻过来还在墙北就贴墙南沿。 */

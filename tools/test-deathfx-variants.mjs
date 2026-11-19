@@ -46,6 +46,33 @@ ck('步兵：刀 + 黄巾头巾；弓兵：弓 + 头巾；盾兵：藤牌或重�
   JSON.stringify(r1.infantry.kinds) === '["blade","turban"]' && JSON.stringify(r1.archer.kinds) === '["bow","turban"]' && r1.shield.kinds.length === 2 && r1.shield.kinds.includes('turban') && r1.shield.kinds.some(k => k === 'rattan' || k === 'tower')
   && r1.cavalry.horses === 1 && r1.cavalry.crop && !r1.cavalry.kinds.includes('blade') && JSON.stringify(r1.elite.kinds) === '["blade"]' && r1.infantry.chapter === 'huangjin', r1);
 
+// —— 2a) 专属「惊跳 + 飞奔」图（2026-11-18 用户：「马兵被消灭的时候马走的特效还是没做好」）：4 帧扬蹄 → 加速起跑 → 8 帧飞奔按距离换帧（右向翻转）→ 淡出 ——
+await p.evaluate(async () => { const s = window.__game.scene.getScene('GameScene'), fx = s.deathFx; fx.warmHorse(); for (let i = 0; i < 150 && !fx.gallopReady; i++) await new Promise(r => setTimeout(r, 100)); });
+const runGallop = async diag => p.evaluate(async diag => {
+  const s = window.__game.scene.getScene('GameScene'), fx = s.deathFx, out = {}; for (const h of fx.horses) { h.active = false; h.img.setVisible(false); h.shadow.setVisible(false); }
+  out.ready = fx.gallopReady; const cv = s.spawnEnemy('cavalry', s.player.x + 200, s.player.y, 1, true); cv.speed = 0; cv.hp = 0; cv.lastHitHeavy = false; cv.lastHitFromAlly = false; const liveW = Math.abs(cv.sprite.displayWidth); s.killEnemy(cv);
+  const body = fx.pool.find(x => x.active), h = fx.horses.find(x => x.active), x0 = h.x, T0 = h.start, D = (await window.__mod('/src/systems/DeathFx.ts')).DEATH_FX; if (diag) h.vy = diag;
+  out.dir = h.dir; out.gallop = h.gallop; out.texture = h.img.texture.key; out.tinted = h.img.isTinted; out.opp = h.dir === -body.dir; out.flip = h.img.flipX === (h.dir > 0); out.sizeRatio = h.img.displayWidth / liveW;   // 按「倒下那只骑兵图」当前显示宽算（含 MOUNT_VISUAL.visualScale 之后的大小），不取池里别的尸体
+  // 扬蹄 4 帧，x 不动
+  const rear = []; let rearX = 0; for (let t = 0; t < D.horseRearMs; t += 10) { fx.update(T0 + t); const n = h.img.frame.name; if (rear[rear.length - 1] !== n) rear.push(n); rearX = Math.max(rearX, Math.abs(h.img.x - x0)); } out.rear = rear; out.rearX = rearX;
+  // 飞奔：每 10ms 采样
+  const frames = [], xs = [], changes = [], tilt = []; let last = null;
+  for (let t = D.horseRearMs + 10; t <= 1800; t += 10) { fx.update(T0 + t); const n = h.img.frame.name; xs.push(h.img.x - x0); tilt.push(h.img.rotation); if (n !== last) { frames.push(n); changes.push(t); last = n; } }
+  out.seq = frames.slice(0, 20); out.sameDir = xs.every((v, i) => i === 0 || (h.dir > 0 ? v >= xs[i - 1] - 1e-6 : v <= xs[i - 1] + 1e-6)); out.dist = Math.abs(xs[xs.length - 1]);
+  const idx = frames.map(n => +n.split('_')[1]); out.order = frames.every(n => n.startsWith('gallop_')) && idx.every((v, i) => i === 0 || v === (idx[i - 1] + 1) % 8) ; out.distinct = new Set(frames).size;
+  const late = changes.map((v, i) => [v, i]).filter(([v]) => v >= 900).map(([v]) => v), gaps = late.slice(1).map((v, i) => v - late[i]); out.gapMin = Math.min(...gaps); out.gapMax = Math.max(...gaps);
+  const early = changes.filter(v => v < D.horseRearMs + 250), eg = early.slice(1).map((v, i) => v - early[i]); out.earlyGap = eg.length ? Math.min(...eg) : 999;   // 起跑时腿比全速慢
+  out.tilt = tilt[tilt.length - 1]; out.shadow = { dx: Math.abs(h.shadow.x - h.img.x), dy: h.shadow.y - (h.y + 1 + h.vy * (1800 - D.horseRearMs) / 1000) };
+  fx.update(T0 + D.horseGallopMs - 250); out.fading = h.img.alpha < 1 && h.img.alpha > 0 && h.shadow.alpha < .5 && h.shadow.alpha > 0; fx.update(T0 + D.horseGallopMs + 10); out.gone = !h.active && !h.img.visible && !h.shadow.visible;
+  return out; }, diag);
+const g1 = await runGallop(0), g2 = await runGallop(90);
+ck('马（专属惊跳 + 飞奔图）：先 4 帧扬蹄（原地不动）→ 起跑后只用飞奔帧、按顺序 0…7 循环、8 个帧都出现；方向与人倒下相反、朝右时翻转；起跑时换帧比全速慢，全速后每 60–100ms 一帧；淡出时阴影同淡、播完全隐藏',
+  g1.ready && g1.gallop && g1.texture === 'horse_v2_enemy_brown_gallop' && !g1.tinted && g1.opp && g1.flip && JSON.stringify(g1.rear) === '["rear_0","rear_1","rear_2","rear_3"]' && g1.rearX < .01 && g1.sameDir && g1.dist > 250 && g1.order && g1.distinct === 8
+  && g1.gapMin >= 60 && g1.gapMax <= 100 && g1.earlyGap > g1.gapMin && g1.shadow.dx < .01 && Math.abs(g1.shadow.dy) < .01 && g1.fading && g1.gone, g1);
+ck('马：大小按倒下的骑兵图算（马宽 ≈ 骑兵图宽 × 0.8，之后骑兵缩放马跟着缩）；斜着跑时按速度方向微倾（上下速度不改左右帧）', g1.sizeRatio > .74 && g1.sizeRatio < .86 && Math.abs(g2.tilt) > .02 && Math.abs(g2.tilt) < .2 && Math.sign(g2.tilt) === g2.dir && g2.order && g2.gone, { g1: g1.sizeRatio, g2: g2.tilt, order: g2.order, seq: g2.seq, gone: g2.gone });
+// 后面「通用 / 棕色行走图」的老动画测试：把飞奔图拿掉，走行走图路径
+await p.evaluate(() => { const s = window.__game.scene.getScene('GameScene'); s.textures.remove('horse_v2_enemy_brown_gallop'); });
+
 // —— 2) 兵器抛物线、落地停约 0.5 秒再淡出；头巾飘起淡出；盾牌落地扬尘；马反方向跑出去淡出 ——
 const r2 = await p.evaluate(() => {
   const s = window.__game.scene.getScene('GameScene'), fx = s.deathFx, out = {}; for (const x of fx.props) { x.active = false; x.img.setVisible(false); }

@@ -3,14 +3,26 @@ import type {CharacterId} from './characters';
 /**
  * 骑马系统（试玩参数，调平衡集中改这里）：武将在行囊「坐骑」槽穿上马，出征即骑马。
  * 骑马：移速 ×1.35、冲进小兵堆把普通兵撞开并造成少量践踏伤害、受到的伤害 ×0.85（马替人挡一部分）。
- * 马有耐力：被打中会掉耐力（单次伤害 ≥ 12 视为重击，按 ×3 扣；轻伤按 ×1 扣），掉光就落马；落马后约 15 秒重新上马、耐力回满。
+ * 马有耐力：被打中会掉耐力（单次伤害 ≥ 主将最大生命 12% 视为重击，按 ×3 扣；轻伤按 ×1 扣），掉光就落马（耐力与重击门槛随主将最大生命，见 MOUNT.staminaPerHp / heavyHitHpRatio）；落马后本战不能再上马（马受惊奔走，11-18 用户定）——只有遗珍「虎豹铁面」每战可在 RELIC.hubaoRemountMs 后重新上马一次。
  */
+/**
+ * 骑马整体比例与移速（用户 11-18「我觉得骑马整体的比例可以小点，和移速慢点」）：
+ * visualScale：马、骑乘姿态图与骑者抬高 / 马镫高度一起乘（主将、骑马首领、敌方骑兵同一个数），步兵不变；
+ * enemyCavalrySpeedMul：敌方骑兵（不含象兵）移速倍率，冲锋速度随之；主将骑乘移速倍率见下面 speedMul / MOUNT_STYLES。
+ * 初值 · 待平衡会话复核。
+ */
+export const MOUNT_VISUAL = { visualScale: .85, enemyCavalrySpeedMul: .82 } as const;
+/** 骑马的敌兵：kind 为 cavalry 且不是象兵（第十一章象兵另有体型，不在「骑马」之列）。 */
+export function isHorseCavalry(def: { kind: string; texture?: string; walkVisual?: { texture: string } }): boolean { return def.kind === 'cavalry' && !/elephant/.test(def.walkVisual?.texture ?? def.texture ?? ''); }
 export const MOUNT = {
-  speedMul: 1.35, damageTakenMul: .85,
-  stamina: 100, heavyHit: 12, heavyMul: 3, lightMul: 1, remountMs: 15000,
+  /** 骑乘移速倍率：1.35 → 1.2（11-18 调慢）；名马另见 MOUNT_STYLES.speedMul */
+  speedMul: 1.2, damageTakenMul: .85,
+  /** 耐力 = stamina + staminaPerHp × 主将最大生命（上马时算；名将 / 名马加成另叠）；单次伤害 ≥ 主将最大生命 × heavyHitHpRatio 算重击、按 heavyMul 扣。
+   *  11-18 平衡会话：落马不能再上后，固定 100 耐力 + 固定重击门槛 12 让五章以后只能骑十几秒；改随生命走，各章约能骑 50～100 秒。 */
+  stamina: 100, staminaPerHp: .25, heavyHitHpRatio: .12, heavyMul: 3, lightMul: 1,
   trampleRadius: 30, trampleDamage: 6, tramplePush: 26, trampleCooldownMs: 600, trampleMinSpeed: 60,
   /** 马与骑者的显示：骑者抬高（像素）、骑者下半身裁掉的比例、马的显示宽度。 */
-  riderRise: 36, riderCrop: .7, horseSize: 124,
+  riderRise: Math.round(36 * MOUNT_VISUAL.visualScale), riderCrop: .7, horseSize: Math.round(124 * MOUNT_VISUAL.visualScale),
 } as const;
 
 /** 马上名将：耐力 +40、践踏伤害 ×1.3。 */
@@ -34,9 +46,9 @@ export const MOUNT_STYLES: Record<string, MountStyle> = {
   black_horse: {tint: 0x4a4650, trampleMul: 1.3, ride: '乌骓：践踏伤害 +30%'},
   white_horse: {tint: 0xffffff, stamina: 30, ride: '白马：耐力 +30'},
   red_horse: {tint: 0xc9743e},
-  west_horse: {tint: 0xd8a66a, speedMul: 1.45, ride: '大宛马：骑乘移速 ×1.45'},
-  mule: {tint: 0x8c8274, speedMul: 1.15, noTrample: true, stamina: 60, ride: '骡车：走得慢、不践踏，但耐力 +60'},
-  chitu: {tint: 0xe0462e, speedMul: 1.45, trampleMul: 2, ride: '赤兔：骑乘移速 ×1.45、践踏伤害 ×2'},
+  west_horse: {tint: 0xd8a66a, speedMul: 1.3, ride: '大宛马：骑乘移速 ×1.3'},
+  mule: {tint: 0x8c8274, speedMul: 1.06, noTrample: true, stamina: 60, ride: '骡车：走得慢、不践踏，但耐力 +60'},
+  chitu: {tint: 0xe0462e, speedMul: 1.3, trampleMul: 2, ride: '赤兔：骑乘移速 ×1.3、践踏伤害 ×2'},
   dilu: {tint: 0xf2ede2, leap: true, ride: '的卢：落马那一下免伤并向前跃出'},
   jueying: {tint: 0x2e2c34, stamina: 50, ride: '绝影：耐力 +50'},
 };

@@ -4,6 +4,7 @@ import { MID_SIEGE as M, LARGE_SIEGE as L, SIEGE_PROFILES, SIEGE_SPAWN, ramStats
 import { SIEGE_CITY, CITY_ART, CITY_FX, POINT_BUILDING, cityBuildingBox, type CityLayout, type CityBuildingKind, type CityPointKind } from '../data/siegeCity';
 import { CapturePointView, spreadArrows } from './SiegeCityPoints';
 import { ordersOf } from './BattleOrders';
+import { SiegeCityFolk } from './SiegeCityFolk';
 import { paintV2Road } from './EnvGround';
 import { warnFx } from '../ui/WarnFx';
 import { playSheet } from './SkillFxSheets';
@@ -43,6 +44,8 @@ export interface MidSiegeHost {
   recruit: (n: number) => void;
   /** 随军粮（城内市集立刻给军粮） */
   gainFood?: (n: number) => void;
+  /** 扣守军池（占下兵营 / 粮仓：按守军总数的比例），返回实际扣掉的人数 */
+  cutGarrison?: (share: number) => number;
   banner: (text: string, danger?: boolean, caption?: string) => void;
   sfx: (k: string) => void;
   spawnBoss: () => void;
@@ -94,7 +97,7 @@ export class SiegeMidCity {
   readonly ramCfg: RamStats;
   private zones: Zone[] = []; private volleyAt = 0; private zoneSeq = 0;
   private points: Point[] = [];
-  private cityVolleyAt = 0; private gatePrompt?: Phaser.GameObjects.Text;
+  private cityVolleyAt = 0; private gatePrompt?: Phaser.GameObjects.Text; private folk?: SiegeCityFolk;
   private ambushAt = 0; private ambushPending: Array<{ x: number; y: number; at: number; kind: EnemyKind }> = [];
   private guards: Array<{ e: Enemy; life: number }> = []; private guardsAt = 0;
   private bossPhase2 = false; private skillAt = 0; private skill: { kind: 'sweep' | 'charge'; at: number; x: number; y: number; angle: number; hit: boolean } | null = null;
@@ -611,6 +614,7 @@ export class SiegeMidCity {
     this.points = c.points.map(d => ({ name: d.name, kind: d.kind, x: d.x, y: d.y, radius: d.radius, b: d.b, state: 'open' as const, progress: 0, hold: 0, lost: 0, counterAt: 0, squad: false, leader: null,
       view: new CapturePointView(sc, this.objects, d, ART.city) }));
     for (const b of c.barrels) this.h.spawnBarrel(b.x, b.y);
+    this.folk = new SiegeCityFolk(sc, this.objects, c); this.folk.flee(this.h.player);
     this.ambushAt = this.h.now() + 4000; this.cityVolleyAt = this.h.now() + CITY_FX.tower.firstMs;
     // 军令面板 / 小地图（BattleOrders）：每处要点一条（带位置、进度、作用），阶段一条「占 X/N 处」
     const O = ordersOf(sc);
@@ -699,6 +703,8 @@ export class SiegeMidCity {
   private securePoint(pt: Point) {
     pt.state = 'secured'; this.h.recruit(M.street.secureReinforce); this.h.player.heal(this.h.player.maxHp * M.street.secureHeal);
     this.taken[pt.kind]++;
+    if (pt.kind === 'barracks' || pt.kind === 'granary') this.h.cutGarrison?.(CITY_FX.garrisonCut);
+    this.folk?.secured(pt, pt.kind === 'market');
     const fx = this.pointEffect(pt), left = this.city.need - this.securedCount;
     ordersOf(this.h.scene)?.done(this.orderId(pt), '已占 · ' + fx);
     this.h.banner(`${pt.name}已守住`, false, `${fx} · ${left > 0 ? `再占 ${left} 处要点开${this.hallName}门` : `${this.hallName}门已开`}`);
@@ -715,11 +721,37 @@ export class SiegeMidCity {
       case 'armory': return `守军不再出弓手 · 我军伤害 +${Math.round((F.armoryDamage - 1) * 100)}%`;
       case 'barracks': return `城内守军少来 ${Math.round(F.barracksSkip * 100)}%`;
       case 'tower': return this.points.some(q => q.kind === 'tower' && q.state !== 'secured') ? '角楼箭雨减弱' : '城头箭雨已停';
-      case 'market': this.h.gainFood?.(F.marketFood); return `百姓归附 · 军粮 +${F.marketFood}`;
+      case 'market': this.h.gainFood?.(F.marketFood); return `百姓归附 · 随军粮 +${F.marketFood}`;
     }
   }
   /** 已占要点的累计（第三步结算用）。 */
   readonly taken: Record<CityPointKind, number> = { granary: 0, armory: 0, barracks: 0, tower: 0, market: 0 };
+  /** 已占稳的要点数（城内段之后也保留，联动 / 结算用）。 */
+  get securedTotal() { return this.points.filter(p => p.state === 'secured').length; }
+  /** 全取：城里所有要点都占下了。 */
+  get fullTake() { return this.points.length > 0 && this.securedTotal === this.points.length; }
+  /** 援军阶段守军补充倍率：每占一处 −15%，粮仓再 −30%（不低于 0）。 */
+  refillMul(): number { const F = CITY_FX; return Math.max(0, 1 - F.perPointRefill * this.securedTotal - F.granaryRefill * this.taken.granary); }
+  /** 城外援兵少来几批。 */
+  squadCut(): number { return CITY_FX.perPointSquads * this.securedTotal; }
+  /** 结算军粮加成（比例，叠加在速攻之上）：粮仓 +30%、全取 +20%；市集另给一笔。 */
+  provisionsBonus(): { share: number; flat: number } { const F = CITY_FX; return { share: (this.taken.granary ? F.granaryProvisions : 0) + (this.fullTake ? F.fullTake : 0), flat: this.taken.market ? F.marketProvisions : 0 }; }
+  /** 结算列表：占了哪些要点、各给了什么；没占的写「未占」。 */
+  settleLines(): string[] {
+    if (!this.points.length) return [];
+    const F = CITY_FX, pct = (v: number) => Math.round(v * 100);
+    const gain: Record<CityPointKind, string> = {
+      granary: `军粮 +${pct(F.granaryProvisions)}% · 敌援补兵 −${pct(F.granaryRefill)}% · 守军 −${pct(F.garrisonCut)}%`,
+      armory: `我军伤害 +${pct(F.armoryDamage - 1)}% · 断弓手`, barracks: `城内守军 −${pct(F.barracksSkip)}% · 守军 −${pct(F.garrisonCut)}%`,
+      tower: '城头箭雨减弱', market: `随军粮 +${F.marketFood} · 军粮 +${F.marketProvisions} · 百姓归附`,
+    };
+    const lines = this.points.map(p => `　${p.state === 'secured' ? '✓' : '·'} ${p.name}　${p.state === 'secured' ? gain[p.kind] : '未占'}`);
+    const n = this.securedTotal;
+    const got = this.points.filter(p => p.state === 'secured').map(p => p.name), miss = this.points.filter(p => p.state !== 'secured').map(p => p.name), b = this.provisionsBonus();
+    // 第一行是结算面板「要事」里显示的那一行（GameScene 按「城内要点」开头挑出来）；下面逐条是作用明细
+    const head = `城内要点 ${n}/${this.points.length}：${got.length ? got.join('、') + ' 已占' : '一处未占'}${miss.length && got.length ? '（' + miss.join('、') + '未占）' : ''}${this.fullTake ? ' · 全取' : ''}${b.share || b.flat ? ` · 军粮${b.share ? ' +' + pct(b.share) + '%' : ''}${b.flat ? ' +' + b.flat : ''}` : ''}${n ? ` · 敌援补兵 −${pct(1 - this.refillMul())}%、援兵少 ${this.squadCut()} 批` : ''}`;
+    return [head, ...lines];
+  }
   /** 我军（主将 + 随行 + 部曲）对敌伤害倍率：武库占下 +8%。 */
   outgoingMul(): number { return this.taken.armory ? CITY_FX.armoryDamage : 1; }
   /** 已占稳的要点数。 */

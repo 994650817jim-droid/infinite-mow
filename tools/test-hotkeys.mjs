@@ -22,7 +22,7 @@ const key = async (k, ms = 150) => { await p.keyboard.press(k); await p.waitForT
 
 // 0. 键位表本身没有冲突
 const H = await p.evaluate(async () => { const m = await import('/src/data/hotkeys.ts'); return { conflicts: m.hotkeyConflicts(), n: m.HOTKEY_ORDER.length }; });
-ck('默认键位没有冲突（14 个动作，含 2026-11-18 加的「返回主菜单」M）', H.conflicts.length === 0 && H.n === 14, H);
+ck('默认键位没有冲突（16 个动作；M 舆图与「返回主菜单」共用——分在战斗 / 天下地图营寨两处，G 收起军令）', H.conflicts.length === 0 && H.n === 16, H);
 
 // 1. 战斗中
 await p.evaluate(G0 => { const s = eval(G0); window.__potion = 0; const u = s.usePotion.bind(s); s.usePotion = () => { window.__potion++; u(); }; }, G);
@@ -100,7 +100,7 @@ await p.evaluate(G0 => { const s = eval(G0), l = s.pausePanel.getByName('setting
 const page = await p.evaluate(G0 => { const s = eval(G0), r = s.children.getByName('hotkey-settings'); return { open: !!r, rows: r ? r.list.filter(x => /^hotkey-row-/.test(x.name)).length : 0 }; }, G);
 await p.screenshot({ path: `${out}/hotkey-settings.png` });
 const rowClick = a => p.evaluate(([G0, a]) => { eval(G0).children.getByName('hotkey-settings').getByName('hotkey-row-' + a).emit('pointerdown'); }, [G, a]);
-await rowClick('potion'); await key('KeyG', 200);
+await rowClick('potion'); await key('KeyH', 200);
 const r1 = await p.evaluate(async () => { const m = await import('/src/data/hotkeys.ts'); return { potion: m.hotkeyCode('potion'), saved: localStorage.getItem('im_hotkeys_v1') }; });
 await rowClick('potion'); await key('KeyE', 200);
 const r2 = await p.evaluate(async G0 => { const m = await import('/src/data/hotkeys.ts'); return { potion: m.hotkeyCode('potion'), order: m.hotkeyCode('order'), msg: eval(G0).children.getByName('hotkey-settings').getByName('hotkey-message').text }; }, G);
@@ -112,14 +112,14 @@ await key('Escape', 150); // 取消改键
 const modeIn = (await st()).mode;
 await key('Escape', 300); // 关掉快捷键页（不关暂停）
 const after = await p.evaluate(G0 => ({ open: !!eval(G0).children.getByName('hotkey-settings'), mode: eval(G0).mode }), G);
-ck('设置页列出全部 14 个可改的键位（另列移动键固定）', page.open && page.rows === 14, page);
-ck('改键：服药改成 G，存进 localStorage', r1.potion === 'KeyG' && /KeyG/.test(r1.saved ?? ''), r1);
-ck('改键冲突：按 E 提示已被「护阵 / 出击 切换」占用、不改；再按一次 E 互换（服药 E、切换 G），无冲突', r2.potion === 'KeyG' && /已是/.test(r2.msg) && r3.potion === 'KeyE' && r3.order === 'KeyG' && r3.conflicts === 0, { r2, r3 });
+ck('设置页列出全部 16 个可改的键位（另列移动键固定）', page.open && page.rows === 16, page);
+ck('改键：服药改成 H，存进 localStorage', r1.potion === 'KeyH' && /KeyH/.test(r1.saved ?? ''), r1);
+ck('改键冲突：按 E 提示已被「护阵 / 出击 切换」占用、不改；再按一次 E 互换（服药 E、切换 H），无冲突', r2.potion === 'KeyH' && /已是/.test(r2.msg) && r3.potion === 'KeyE' && r3.order === 'KeyH' && r3.conflicts === 0, { r2, r3 });
 ck('移动键不能占用；Esc 先取消改键，再按 Esc 关掉快捷键页、仍停在暂停', r4 === 'KeyB' && modeIn === 'pause' && !after.open && after.mode === 'pause', { r4, modeIn, after });
 // 改过的键在战斗里生效
 await key('Escape', 300); await p.evaluate(() => { window.__potion = 0; });
-s0 = await st(); s1 = await key('KeyG'); const pot = await p.evaluate(() => window.__potion); s2 = await key('KeyE');
-ck('改键后战斗里生效：G 切换护阵 / 出击，E 服药', s1.order !== s0.order && pot === 0 && await p.evaluate(() => window.__potion) === 1, { o: [s0.order, s1.order], pot });
+s0 = await st(); s1 = await key('KeyH'); const pot = await p.evaluate(() => window.__potion); s2 = await key('KeyE');
+ck('改键后战斗里生效：H 切换护阵 / 出击，E 服药', s1.order !== s0.order && pot === 0 && await p.evaluate(() => window.__potion) === 1, { o: [s0.order, s1.order], pot });
 // 刷新后仍是改过的键；恢复默认
 await p.reload(); await p.waitForFunction(() => window.__game?.scene.getScene('GameScene')?.hotkeys, null, { timeout: 120000 }); await p.waitForTimeout(1200);
 const kept = await p.evaluate(async () => (await import('/src/data/hotkeys.ts')).hotkeyCode('potion'));

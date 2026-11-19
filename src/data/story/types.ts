@@ -56,16 +56,20 @@ export interface StoryChapter {
   bonds: readonly StoryBond[];
   /** 其他系统按 id 触发的台词（不自动播） */
   barks?: readonly StoryNode[];
+  /** 战斗中途的卷轴（暂停战斗、显示对白立绘；每存档一次）：其他系统按时机调 StoryDirector.midScroll(id)，如 2-3 董卓吕布上城头 / 董卓下城 */
+  midScrolls?: readonly StoryNode[];
 }
 
 /** 非武将人物：显示名；portrait 为对白半身像贴图键（还没有的先只显示名字章，清单见 MISSING_PORTRAITS）。 */
 export const STORY_CAST: Record<string, { name: string; portrait?: string }> = {
-  scout: { name: '斥候' }, jianyong: { name: '简雍' },
+  scout: { name: '斥候' },
+  // 第一、二章（2026-11-18 夜 ChatGPT 补，按游戏首领造型画：originals/sheet_l 黄巾三兄弟、sheet_m 董卓 / 吕布 / 华雄、sheet_n 徐荣 / 简雍 / 张世平）
+  jianyong: { name: '简雍', portrait: 'ink_cast_jianyong' },
   // 曹操、袁绍、蔡阳：2026-11-18 即梦 Seedream 5.5 补的水墨立绘（originals/sheet_g）
   caocao: { name: '曹操', portrait: 'ink_cast_caocao' }, yuanshao: { name: '袁绍', portrait: 'ink_cast_yuanshao' },
-  zhangliang: { name: '张梁' }, zhangbao: { name: '张宝' }, zhangjiao: { name: '张角' },
-  huaxiong: { name: '华雄' }, xurong: { name: '徐荣' }, dongzhuo: { name: '董卓' }, lubu: { name: '吕布' },
-  zhangshiping: { name: '张世平' },
+  zhangliang: { name: '张梁', portrait: 'ink_cast_zhangliang' }, zhangbao: { name: '张宝', portrait: 'ink_cast_zhangbao' }, zhangjiao: { name: '张角', portrait: 'ink_cast_zhangjiao' },
+  huaxiong: { name: '华雄', portrait: 'ink_cast_huaxiong' }, xurong: { name: '徐荣', portrait: 'ink_cast_xurong' }, dongzhuo: { name: '董卓', portrait: 'ink_cast_dongzhuo' }, lubu: { name: '吕布', portrait: 'ink_cast_lubu' },
+  zhangshiping: { name: '张世平', portrait: 'ink_cast_zhangshiping' },
   // 第三章：对白水墨立绘 assets/ink-cast/（2026-11-18，见 data/story/art.ts）
   jiaxu: { name: '贾诩', portrait: 'ink_cast_jiaxu' }, wangyun: { name: '王允', portrait: 'ink_cast_wangyun' }, lijue: { name: '李傕', portrait: 'ink_cast_lijue' }, taoqian: { name: '陶谦', portrait: 'ink_cast_taoqian' }, zhangxiu: { name: '张绣', portrait: 'ink_cast_zhangxiu' },
   dianwei: { name: '典韦', portrait: 'ink_cast_dianwei' }, yuanshu: { name: '袁术', portrait: 'ink_cast_yuanshu' }, jiling: { name: '纪灵', portrait: 'ink_cast_jiling' }, mizhu: { name: '糜竺', portrait: 'ink_cast_mizhu' },
@@ -74,14 +78,14 @@ export const STORY_CAST: Record<string, { name: string; portrait?: string }> = {
   chunyuqiong: { name: '淳于琼', portrait: 'ink_cast_chunyuqiong' }, xuyou: { name: '许攸', portrait: 'ink_cast_xuyou' }, xuchu: { name: '许褚', portrait: 'ink_cast_xuchu' }, caiyang: { name: '蔡阳', portrait: 'ink_cast_caiyang' }, qinbing: { name: '亲兵' },
   // 第五章：对白水墨立绘 assets/ink-cast/（2026-11-18 即梦 Seedream 5.5，originals/sheet_h、sheet_i、sheet_j）
   zhouyu: { name: '周瑜', portrait: 'ink_cast_zhouyu' }, caochun: { name: '曹纯', portrait: 'ink_cast_caochun' }, caimao: { name: '蔡瑁', portrait: 'ink_cast_caimao' },
-  caoren: { name: '曹仁', portrait: 'ink_cast_caoren' }, sunquan: { name: '孙权', portrait: 'ink_cast_sunquan' }, huanggai: { name: '黄盖', portrait: 'ink_cast_huanggai' }, lusu: { name: '鲁肃', portrait: 'ink_cast_lusu' }, xushu: { name: '徐庶' },
+  caoren: { name: '曹仁', portrait: 'ink_cast_caoren' }, sunquan: { name: '孙权', portrait: 'ink_cast_sunquan' }, huanggai: { name: '黄盖', portrait: 'ink_cast_huanggai' }, lusu: { name: '鲁肃', portrait: 'ink_cast_lusu' }, xushu: { name: '徐庶', portrait: 'ink_cast_xushu' }, // 徐庶 / 刘贤 / 邢道荣：originals/sheet_o
   // 第六章（originals/sheet_j、sheet_k）
   zhaofan: { name: '赵范', portrait: 'ink_cast_zhaofan' }, liudu: { name: '刘度', portrait: 'ink_cast_liudu' }, hanxuan: { name: '韩玄', portrait: 'ink_cast_hanxuan' }, fanshi: { name: '樊氏', portrait: 'ink_cast_fanshi' },
-  liuxian: { name: '刘贤' }, xingdaorong: { name: '邢道荣' }, yangling: { name: '杨龄', portrait: 'ink_cast_yangling' },
+  liuxian: { name: '刘贤', portrait: 'ink_cast_liuxian' }, xingdaorong: { name: '邢道荣', portrait: 'ink_cast_xingdaorong' }, yangling: { name: '杨龄', portrait: 'ink_cast_yangling' },
 };
-/** 第一、二章用到、还没有对白立绘的人物（交美术会话补水墨对白半身像，透明底）。曹操、袁绍 2026-11-18 已补。 */
-export const MISSING_PORTRAITS = ['旁白卷首图（通用）', '斥候（通用）', '简雍', '张梁', '张宝', '张角', '华雄', '徐荣', '董卓', '吕布', '张世平'];
+/** 第一、二章还没有对白立绘的（通用角色只显示名字章）。人物立绘 2026-11-18 夜已全部补齐。 */
+export const MISSING_PORTRAITS = ['旁白卷首图（通用）', '斥候（通用）'];
 export const MISSING_PORTRAITS_CH3: string[] = []; // 2026-11-18 九人立绘已补齐（assets/ink-cast/）
 export const MISSING_PORTRAITS_CH4: string[] = []; // 2026-11-18 十人立绘已补齐（蔡阳最后补，即梦）
-/** 第五、六章：剧本里还没说话的徐庶、刘贤、邢道荣先只显示名字章，用到时再补。 */
-export const MISSING_PORTRAITS_CH56 = ['徐庶', '刘贤', '邢道荣'];
+/** 第五、六章：徐庶、刘贤、邢道荣 2026-11-18 夜补了台词和立绘，已补齐。 */
+export const MISSING_PORTRAITS_CH56: string[] = [];

@@ -1,0 +1,572 @@
+{
+"frames": {
+"legendbox": {
+"frame": {
+"x": 0,
+"y": 0,
+"w": 133,
+"h": 159
+},
+"rotated": false,
+"trimmed": false,
+"spriteSourceSize": {
+"x": 0,
+"y": 0,
+"w": 133,
+"h": 159
+},
+"sourceSize": {
+"w": 133,
+"h": 159
+}
+},
+"tent": {
+"frame": {
+"x": 136,
+"y": 0,
+"w": 167,
+"h": 134
+},
+"rotated": false,
+"trimmed": false,
+"spriteSourceSize": {
+"x": 0,
+"y": 0,
+"w": 167,
+"h": 134
+},
+"sourceSize": {
+"w": 167,
+"h": 134
+}
+},
+"gate": {
+"frame": {
+"x": 306,
+"y": 0,
+"w": 174,
+"h": 124
+},
+"rotated": false,
+"trimmed": false,
+"spriteSourceSize": {
+"x": 0,
+"y": 0,
+"w": 174,
+"h": 124
+},
+"sourceSize": {
+"w": 174,
+"h": 124
+}
+},
+"city": {
+"frame": {
+"x": 483,
+"y": 0,
+"w": 175,
+"h": 124
+},
+"rotated": false,
+"trimmed": false,
+"spriteSourceSize": {
+"x": 0,
+"y": 0,
+"w": 175,
+"h": 124
+},
+"sourceSize": {
+"w": 175,
+"h": 124
+}
+},
+"village": {
+"frame": {
+"x": 661,
+"y": 0,
+"w": 184,
+"h": 114
+},
+"rotated": false,
+"trimmed": false,
+"spriteSourceSize": {
+"x": 0,
+"y": 0,
+"w": 184,
+"h": 114
+},
+"sourceSize": {
+"w": 184,
+"h": 114
+}
+},
+"camp": {
+"frame": {
+"x": 848,
+"y": 0,
+"w": 162,
+"h": 112
+},
+"rotated": false,
+"trimmed": false,
+"spriteSourceSize": {
+"x": 0,
+"y": 0,
+"w": 162,
+"h": 112
+},
+"sourceSize": {
+"w": 162,
+"h": 112
+}
+},
+"tree": {
+"frame": {
+"x": 0,
+"y": 162,
+"w": 119,
+"h": 110
+},
+"rotated": false,
+"trimmed": false,
+"spriteSourceSize": {
+"x": 0,
+"y": 0,
+"w": 119,
+"h": 110
+},
+"sourceSize": {
+"w": 119,
+"h": 110
+}
+},
+"mountains": {
+"frame": {
+"x": 122,
+"y": 162,
+"w": 184,
+"h": 106
+},
+"rotated": false,
+"trimmed": false,
+"spriteSourceSize": {
+"x": 0,
+"y": 0,
+"w": 184,
+"h": 106
+},
+"sourceSize": {
+"w": 184,
+"h": 106
+}
+},
+"point": {
+"frame": {
+"x": 309,
+"y": 162,
+"w": 106,
+"h": 106
+},
+"rotated": false,
+"trimmed": false,
+"spriteSourceSize": {
+"x": 0,
+"y": 0,
+"w": 106,
+"h": 106
+},
+"sourceSize": {
+"w": 106,
+"h": 106
+}
+},
+"forest": {
+"frame": {
+"x": 418,
+"y": 162,
+"w": 163,
+"h": 105
+},
+"rotated": false,
+"trimmed": false,
+"spriteSourceSize": {
+"x": 0,
+"y": 0,
+"w": 163,
+"h": 105
+},
+"sourceSize": {
+"w": 163,
+"h": 105
+}
+},
+"enemy": {
+"frame": {
+"x": 584,
+"y": 162,
+"w": 140,
+"h": 104
+},
+"rotated": false,
+"trimmed": false,
+"spriteSourceSize": {
+"x": 0,
+"y": 0,
+"w": 140,
+"h": 104
+},
+"sourceSize": {
+"w": 140,
+"h": 104
+}
+},
+"ally": {
+"frame": {
+"x": 727,
+"y": 162,
+"w": 136,
+"h": 103
+},
+"rotated": false,
+"trimmed": false,
+"spriteSourceSize": {
+"x": 0,
+"y": 0,
+"w": 136,
+"h": 103
+},
+"sourceSize": {
+"w": 136,
+"h": 103
+}
+},
+"banner": {
+"frame": {
+"x": 866,
+"y": 162,
+"w": 90,
+"h": 102
+},
+"rotated": false,
+"trimmed": false,
+"spriteSourceSize": {
+"x": 0,
+"y": 0,
+"w": 90,
+"h": 102
+},
+"sourceSize": {
+"w": 90,
+"h": 102
+}
+},
+"compass": {
+"frame": {
+"x": 0,
+"y": 275,
+"w": 122,
+"h": 101
+},
+"rotated": false,
+"trimmed": false,
+"spriteSourceSize": {
+"x": 0,
+"y": 0,
+"w": 122,
+"h": 101
+},
+"sourceSize": {
+"w": 122,
+"h": 101
+}
+},
+"elite": {
+"frame": {
+"x": 125,
+"y": 275,
+"w": 100,
+"h": 98
+},
+"rotated": false,
+"trimmed": false,
+"spriteSourceSize": {
+"x": 0,
+"y": 0,
+"w": 100,
+"h": 98
+},
+"sourceSize": {
+"w": 100,
+"h": 98
+}
+},
+"corner": {
+"frame": {
+"x": 228,
+"y": 275,
+"w": 105,
+"h": 98
+},
+"rotated": false,
+"trimmed": false,
+"spriteSourceSize": {
+"x": 0,
+"y": 0,
+"w": 105,
+"h": 98
+},
+"sourceSize": {
+"w": 105,
+"h": 98
+}
+},
+"seal": {
+"frame": {
+"x": 336,
+"y": 275,
+"w": 98,
+"h": 96
+},
+"rotated": false,
+"trimmed": false,
+"spriteSourceSize": {
+"x": 0,
+"y": 0,
+"w": 98,
+"h": 96
+},
+"sourceSize": {
+"w": 98,
+"h": 96
+}
+},
+"flag": {
+"frame": {
+"x": 437,
+"y": 275,
+"w": 108,
+"h": 96
+},
+"rotated": false,
+"trimmed": false,
+"spriteSourceSize": {
+"x": 0,
+"y": 0,
+"w": 108,
+"h": 96
+},
+"sourceSize": {
+"w": 108,
+"h": 96
+}
+},
+"fields": {
+"frame": {
+"x": 548,
+"y": 275,
+"w": 186,
+"h": 94
+},
+"rotated": false,
+"trimmed": false,
+"spriteSourceSize": {
+"x": 0,
+"y": 0,
+"w": 186,
+"h": 94
+},
+"sourceSize": {
+"w": 186,
+"h": 94
+}
+},
+"arrowhead": {
+"frame": {
+"x": 737,
+"y": 275,
+"w": 110,
+"h": 90
+},
+"rotated": false,
+"trimmed": false,
+"spriteSourceSize": {
+"x": 0,
+"y": 0,
+"w": 110,
+"h": 90
+},
+"sourceSize": {
+"w": 110,
+"h": 90
+}
+},
+"cartouche": {
+"frame": {
+"x": 0,
+"y": 379,
+"w": 239,
+"h": 90
+},
+"rotated": false,
+"trimmed": false,
+"spriteSourceSize": {
+"x": 0,
+"y": 0,
+"w": 239,
+"h": 90
+},
+"sourceSize": {
+"w": 239,
+"h": 90
+}
+},
+"bridge": {
+"frame": {
+"x": 242,
+"y": 379,
+"w": 172,
+"h": 78
+},
+"rotated": false,
+"trimmed": false,
+"spriteSourceSize": {
+"x": 0,
+"y": 0,
+"w": 172,
+"h": 78
+},
+"sourceSize": {
+"w": 172,
+"h": 78
+}
+},
+"brusharrow": {
+"frame": {
+"x": 417,
+"y": 379,
+"w": 160,
+"h": 75
+},
+"rotated": false,
+"trimmed": false,
+"spriteSourceSize": {
+"x": 0,
+"y": 0,
+"w": 160,
+"h": 75
+},
+"sourceSize": {
+"w": 160,
+"h": 75
+}
+},
+"river": {
+"frame": {
+"x": 580,
+"y": 379,
+"w": 166,
+"h": 70
+},
+"rotated": false,
+"trimmed": false,
+"spriteSourceSize": {
+"x": 0,
+"y": 0,
+"w": 166,
+"h": 70
+},
+"sourceSize": {
+"w": 166,
+"h": 70
+}
+},
+"supply": {
+"frame": {
+"x": 749,
+"y": 379,
+"w": 168,
+"h": 70
+},
+"rotated": false,
+"trimmed": false,
+"spriteSourceSize": {
+"x": 0,
+"y": 0,
+"w": 168,
+"h": 70
+},
+"sourceSize": {
+"w": 168,
+"h": 70
+}
+},
+"wall": {
+"frame": {
+"x": 0,
+"y": 472,
+"w": 166,
+"h": 64
+},
+"rotated": false,
+"trimmed": false,
+"spriteSourceSize": {
+"x": 0,
+"y": 0,
+"w": 166,
+"h": 64
+},
+"sourceSize": {
+"w": 166,
+"h": 64
+}
+},
+"hill": {
+"frame": {
+"x": 169,
+"y": 472,
+"w": 182,
+"h": 60
+},
+"rotated": false,
+"trimmed": false,
+"spriteSourceSize": {
+"x": 0,
+"y": 0,
+"w": 182,
+"h": 60
+},
+"sourceSize": {
+"w": 182,
+"h": 60
+}
+},
+"scale": {
+"frame": {
+"x": 354,
+"y": 472,
+"w": 154,
+"h": 28
+},
+"rotated": false,
+"trimmed": false,
+"spriteSourceSize": {
+"x": 0,
+"y": 0,
+"w": 154,
+"h": 28
+},
+"sourceSize": {
+"w": 154,
+"h": 28
+}
+}
+},
+"meta": {
+"image": "map_icons.png",
+"size": {
+"w": 1024,
+"h": 536
+},
+"scale": "1"
+}
+}

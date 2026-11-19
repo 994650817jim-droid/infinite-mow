@@ -7,7 +7,7 @@
 import { chromium } from 'playwright';
 import { readFileSync, writeFileSync } from 'node:fs';
 const [src = 'public/assets/fx/originals/enemy_horse_jimeng_v1.webp', out = 'public/assets/horses-v2/enemy_brown_walk.png'] = process.argv.slice(2), e = process.env;
-const P = { COLS: 4, ROWS: 4, CELL: +(e.CELL ?? 288), DIST0: +(e.DIST0 ?? 26), DIST1: +(e.DIST1 ?? 140), PATCH: 16, INSET: 8, MINAREA: +(e.MINAREA ?? 300), EDGE: +(e.EDGE ?? 2) };
+const P = { COLS: +(e.COLS ?? 4), ROWS: +(e.ROWS ?? 4), CELL: +(e.CELL ?? 288), DIST0: +(e.DIST0 ?? 26), DIST1: +(e.DIST1 ?? 140), PATCH: 16, INSET: 8, MINAREA: +(e.MINAREA ?? 300), EDGE: +(e.EDGE ?? 2) };
 const b = await chromium.launch({ channel: 'chrome', headless: true });
 try {
   const page = await b.newPage();

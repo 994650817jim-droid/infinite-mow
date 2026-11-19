@@ -26,7 +26,7 @@ try {
   // 军医页签
   await ev(s => { s.campUI.root.getByName('camp-tab-4').emit('pointerdown'); });
   for (let i = 0; i < 20 && !(await ev(s => s.campUI.root.list.some(o => o.list && o.list.some(x => x.name === 'camp-medic-art')))); i++) await p.waitForTimeout(200); // 立绘按需载入
-  const st0 = await ev(s => ({ ...s.campUI.medicState(), tab: s.campUI.tab, tex: s.textures.exists('camp_medic_art'), names: s.campUI.root.list.flatMap(o => o.list ?? []).map(o => o.name).filter(Boolean).slice(0, 12), art: !!s.campUI.root.list.find(o => o.list && o.list.some(x => x.name === 'camp-medic-art')) }));
+  const st0 = await ev(s => ({ ...s.campUI.medicState(), tab: s.campUI.tab, tex: s.textures.exists('camp_medic_figure'), names: s.campUI.root.list.flatMap(o => o.list ?? []).map(o => o.name).filter(Boolean).slice(0, 12), art: !!s.campUI.root.list.find(o => o.list && o.list.some(x => x.name === 'camp-medic-art')) }));
   await p.screenshot({ path: `${OUT}/1-medic-tab.png` });
   ck('军医页签：显示主将血量、三档治疗（价格随章节）、手绘军医立绘', Math.abs(st0.hp - rest.hp) <= 2 && st0.maxHp === rest.max && st0.chapter === 1 && st0.price.small > 0 && st0.price.full > st0.price.small && st0.price.army > 0 && st0.art, st0);
   // 小治：扣粮回 25%

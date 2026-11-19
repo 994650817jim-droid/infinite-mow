@@ -86,6 +86,78 @@ const poor = await p.evaluate(async () => {
 });
 ck('随军粮不足：按钮不可点、买不了、不扣粮', !poor.interactive && !poor.ok && poor.same && poor.food === 10, poor);
 
+// 共用货架：同一关的休整键再进不换货、已售保留；营寨旅商（openMerchantShop）打开的是同一份货，在那边买的这边也售罄
+const shared = await p.evaluate(async () => {
+  const s = window.__game.scene.getScene('GameScene'), ui = s.campUI, MS = await window.__mod('ui/MerchantShop.ts'), ST = await window.__mod('systems/MerchantStock.ts'), out = {};
+  s.legion.food = 500; ui.open('test-shared-A', '测试'); ui.tab = 2; ui.notice = ''; ui.render();
+  const uids = () => ui.itemOffers.map(i => i.uid).join(',');
+  out.a = uids(); window.__find(ui.root, 'camp-item-goods-0').emit('pointerdown');
+  ui.open('test-shared-B', '测试'); out.b = uids(); ui.open('test-shared-A', '测试'); out.back = uids(); // 换键会换货（新的一关），回到旧键不会变回旧货
+  ui.open('test-shared-C', '测试'); out.c = uids(); ui.open('test-shared-C', '测试'); out.c2 = uids(); ui.tab = 2; ui.render();
+  window.__find(ui.root, 'camp-item-goods-0').emit('pointerdown'); out.restSold = [...ui.itemSold];
+  ui.setVisible(false);
+  let grain = 1000; const bought = [];
+  const close = MS.openMerchantShop(s, { wallet: { name: '军粮', get: () => grain, spend: n => grain >= n ? (grain -= n, true) : false }, tier: 0, onBuyItem: it => bought.push(it.uid) });
+  await new Promise(r => setTimeout(r, 400));
+  const shop = s.children.getByName('merchant-shop'); out.shopOpen = !!shop; out.campItems = ST.currentMerchantStock(0).items.map(i => i.uid).join(',');
+  out.goods0Enabled = !!window.__find(shop, 'camp-item-goods-0')?.input?.enabled;
+  window.__find(shop, 'camp-item-goods-1').emit('pointerdown'); out.grain = grain; out.bought = bought.length;
+  out.purse = window.__find(s.children.getByName('merchant-shop'), 'merchant-purse')?.text;
+  out.tacticLabel = window.__find(s.children.getByName('merchant-shop'), 'camp-tactic-buy') ? 'has' : 'none';
+  window.__shotClose = close; return out;
+});
+ck('同一关的休整键再进：货不变（不能靠重进刷货），换了一关才换货', shared.c === shared.c2 && shared.a !== shared.b && shared.back !== shared.a, shared);
+ck('营寨旅商打开的是同一份货：行营卖掉的那件这边也售罄，这边能买别的', shared.shopOpen && shared.campItems === shared.c && !shared.goods0Enabled && shared.restSold[0], shared);
+ck('营寨旅商用调用方给的钱包（军粮）、买下回调收货', shared.bought === 1 && shared.grain < 1000 && /^军粮 \d+/.test(shared.purse ?? ''), shared);
+if (shots) await p.screenshot({ path: shots + '/merchant-camp-stall.png' });
+const back = await p.evaluate(async () => {
+  window.__shotClose(); const s = window.__game.scene.getScene('GameScene'), ui = s.campUI; ui.setVisible(true); ui.tab = 2; ui.render();
+  return { closed: !s.children.getByName('merchant-shop'), sold: [...ui.itemSold] };
+});
+ck('关掉旅商回到行营：营寨里买的那件在行营也是售罄', back.closed && back.sold[0] && back.sold[1], back);
+await p.reload(); await p.waitForFunction(() => window.__game?.scene.getScene('GameScene')?.campUI, null, { timeout: 60000 });
+const reload = await p.evaluate(async () => { const ST = await window.__mod('systems/MerchantStock.ts'); const st = ST.currentMerchantStock(0); return { key: st.key, sold: st.sold }; });
+ck('关页面重开：货架与已售都还在', reload.key === 'test-shared-C' && reload.sold[0] && reload.sold[1], reload);
+
+// 营寨旅商卖战法：写进征程构筑（没有征程构筑时不能买）
+const camp = await p.evaluate(async () => {
+  const s = window.__game.scene.getScene('GameScene'), MS = await window.__mod('ui/MerchantShop.ts'), ST = await window.__mod('systems/MerchantStock.ts'), C = await window.__mod('systems/Campaign.ts'), out = {};
+  localStorage.removeItem(C.CAMPAIGN_KEY); const st = ST.currentMerchantStock(0); st.tactic = { id: 'rally', kind: 'tactic', level: 0, price: 150, sold: false }; ST.saveMerchantStock(st);
+  let grain = 1000; const w = { name: '军粮', get: () => grain, spend: n => grain >= n ? (grain -= n, true) : false };
+  let close = MS.openMerchantShop(s, { wallet: w, tier: 0, hero: 'zhaoyun' }); await new Promise(r => setTimeout(r, 200));
+  let btn = window.__find(s.children.getByName('merchant-shop'), 'camp-tactic-buy'); out.noBuildEnabled = !!btn?.input?.enabled; const deep = c => (c.list ?? []).flatMap(o => [o, ...deep(o)]); out.noBuildLabel = deep(s.children.getByName('merchant-shop')).find(o => typeof o.text === 'string' && /研习/.test(o.text))?.text; close();
+  localStorage.setItem(C.CAMPAIGN_KEY, JSON.stringify({ version: 2, heroes: { zhaoyun: { character: 'zhaoyun', player: { build: { tactics: { deflect: 1 } }, weapons: [] }, army: { food: 300 } } } }));
+  close = MS.openMerchantShop(s, { wallet: w, tier: 0, hero: 'zhaoyun' }); await new Promise(r => setTimeout(r, 200));
+  window.__find(s.children.getByName('merchant-shop'), 'camp-tactic-buy').emit('pointerdown');
+  out.saved = JSON.parse(localStorage.getItem(C.CAMPAIGN_KEY)).heroes.zhaoyun.player.build.tactics; out.grain = grain; out.sold = ST.currentMerchantStock(0).tactic.sold; close(); return out;
+});
+ck('营寨旅商：武将还没有征程构筑时卷轴不能买（显示「出征后可研习」）', !camp.noBuildEnabled && /出征后可研习/.test(camp.noBuildLabel ?? ''), camp);
+ck('营寨旅商：买下战法写进征程构筑（下次出征带上）、扣军粮、标已售', camp.saved?.rally === 1 && camp.saved?.deflect === 1 && camp.grain === 850 && camp.sold, camp);
+
+// 卷轴卡排版：所有战法 × 新学 / 精进 1→2 / 2→3 都放得下（效果整句不截断、不压到冷却行、字号 ≥ 10），悬停看完整说明
+const fit = await p.evaluate(async () => {
+  const s = window.__game.scene.getScene('GameScene'), ui = s.campUI, B = await window.__mod('data/builds.ts'), MS = await window.__mod('ui/MerchantShop.ts');
+  s.legion.food = 500; ui.open('test-fit-' + Math.random(), '测试'); ui.tab = 2; const bad = []; let n = 0, tip = null;
+  for (const id of Object.keys(B.TACTICS)) for (const level of [0, 1, 2]) {
+    ui.tacticOffer = { id, kind: 'tactic', level, price: 150, sold: false }; ui.render(); n++;
+    const f = name => window.__find(ui.root, name), desc = f('camp-tactic-desc'), cd = f('camp-tactic-cd'), card = f('camp-tactic-card'), badge = f('camp-tactic-badge');
+    const want = MS.tacticCardText(id, level + 1), size = parseFloat(desc.style.fontSize), lines = desc.getWrappedText().join('');
+    const cardRight = card.x + card.displayWidth / 2;
+    const problem = [];
+    if (desc.y + desc.height > desc.getData('limit') + .5) problem.push('溢出 ' + Math.round(desc.y + desc.height - desc.getData('limit')) + 'px');
+    if (lines.replace(/\s/g, '') !== want.effect.replace(/\s/g, '')) problem.push('文字被截');
+    if (size < 10) problem.push('字号 ' + size);
+    if (desc.x + desc.width > cardRight) problem.push('超出右边');
+    if (!cd || cd.y < desc.y + desc.height) problem.push('冷却行被压');
+    if (badge?.text !== (level ? '精进' : '新学')) problem.push('漆牌');
+    if (problem.length) bad.push(id + ' Lv' + (level + 1) + '：' + problem.join('、'));
+    if (id === 'traction' && level === 0) { const h = f('camp-tactic-hover'); h.emit('pointerover', { x: 600, y: 300 }); const t = s.children.list.find(o => o.name === 'item-tooltip' && o.visible); tip = t ? t.list.filter(o => typeof o.text === 'string').map(o => o.text).join(' | ') : null; h.emit('pointerout'); }
+  }
+  return { n, bad, tip };
+});
+ck('卷轴卡：全部 ' + fit.n + ' 种（战法 × 新学 / 精进）效果整句放得下、不截断、不压冷却行、字号 ≥ 10、漆牌对', fit.n >= 75 && fit.bad.length === 0, fit.bad.slice(0, 8));
+ck('卷轴卡悬停看完整说明（牵机：含「对首领无效」）', /对首领无效/.test(fit.tip ?? '') && /牵机/.test(fit.tip ?? ''), fit.tip);
+
 // 存档点同步
 const save = await p.evaluate(async () => {
   const C = await window.__mod('systems/Campaign.ts');

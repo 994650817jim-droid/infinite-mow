@@ -72,16 +72,29 @@ const OLD = { small: { balanced: [10, 0], farm: [16, 0], military: [5, 1] }, med
   await p.screenshot({ path: `${out}/map-enter-city.png` });
   await p.evaluate(() => window.__game.scene.getScene('WorldMapScene').action.image.emit('pointerup'));
   await p.waitForFunction(() => window.__game.scene.isActive('TownScene'), null, { timeout: 30000 }); await p.waitForTimeout(1500);
-  const ui = await p.evaluate(() => { const t = window.__game.scene.getScene('TownScene'); return { blds: t.hits.map(h => h.name).sort(), header: t.children.getByName('town-header')?.text, income: t.children.getByName('town-income')?.text, grain: t.children.getByName('town-grain')?.text }; });
+  const ui = await p.evaluate(() => { const t = window.__game.scene.getScene('TownScene'); return { blds: t.hits.map(h => h.name).filter(n => !/^bld-hq-/.test(n)).sort(), hq: t.hits.map(h => h.name).filter(n => /^bld-hq-/.test(n)).sort(), header: t.children.getByName('town-header')?.text, income: t.children.getByName('town-income')?.text, grain: t.children.getByName('town-grain')?.text }; });
   ck('进入洛阳：全景里只有府衙、屯田、募兵所（城墙箭楼不做），顶栏写档次与产出', ui.blds.join() === 'bld-muster,bld-office,bld-tuntian' && ui.header.includes('大城') && ui.income.includes('每战产出') && ui.grain === '军粮 800', ui);
   await p.screenshot({ path: `${out}/town-large-desktop.png` });
+  // 营寨功能建筑分署（11-19「城市也应该有义军营寨那些功能建筑」）：招贤馆 / 讲武堂 / 军营（马厩此档已开放也画）+ 旅商；点讲武堂进营寨同一面板，关掉回城
+  ck('城里画出营寨功能建筑分署与旅商（统一大本营）', ['bld-hq-academy', 'bld-hq-barracks', 'bld-hq-merchant', 'bld-hq-talent'].every(n => ui.hq.includes(n)), ui.hq);
+  await p.evaluate(() => { const t = window.__game.scene.getScene('TownScene'), h = t.hits.find(h => h.name === 'bld-hq-academy'); h.emit('pointerdown'); h.emit('pointerup'); });
+  await p.waitForFunction(() => window.__game.scene.isActive('CityScene') && window.__game.scene.getScene('CityScene').children.getByName('town-card'), null, { timeout: 60000 });
+  const hqCard = await p.evaluate(() => window.__game.scene.getScene('CityScene').children.getByName('town-card')?.getByName('town-card-title')?.text);
+  await p.evaluate(() => window.__game.scene.getScene('CityScene').children.getByName('town-card').getByName('town-card-close').emit('pointerdown'));
+  await p.waitForFunction(() => window.__game.scene.isActive('TownScene') && window.__game.scene.getScene('TownScene').hits?.length, null, { timeout: 60000 }); await p.waitForTimeout(800);
+  const backCity = await p.evaluate(() => window.__game.scene.getScene('TownScene').cityId);
+  ck('点城里的讲武堂：打开营寨同一个讲武堂面板，返回后回到洛阳', /讲武堂/.test(hqCard ?? '') && backCity === 'luoyang', { hqCard, backCity });
+  await p.evaluate(() => { const t = window.__game.scene.getScene('TownScene'), h = t.hits.find(h => h.name === 'bld-hq-merchant'); h.emit('pointerdown'); h.emit('pointerup'); });
+  await p.waitForFunction(() => window.__game.scene.getScene('TownScene').children.getByName('merchant-shop'), null, { timeout: 30000 });
+  ck('城里的旅商打开同一个军需商人', true);
+  await p.keyboard.press('Escape'); await p.waitForTimeout(400);
   // 民居与居民：纯装饰，不可点、不挡建筑（用户 2026-11-17）
-  const life = await p.evaluate(() => { const t = window.__game.scene.getScene('TownScene'), root = t.children.getByName('town-folk'), folk = root.list.filter(o => o.visible), houses = t.pano.list.filter(o => /^house-/.test(o.name ?? ''));
-    return { folk: folk.length, houses: houses.length, folkInput: folk.some(o => o.input), houseInput: houses.some(o => o.input) }; });
-  ck('洛阳（大城、府衙 1 级）：民居 4 座、居民 10 人，都不接收点击', life.houses === 4 && life.folk === 10 && !life.folkInput && !life.houseInput, life);
+  const life = await p.evaluate(() => { const t = window.__game.scene.getScene('TownScene'), folk = [...t.folk.walkers.filter(w => w.img.visible).map(w => w.img), ...t.folk.ambient.map(a => a.img)], houses = t.pano.list.filter(o => /^house-/.test(o.name ?? ''));
+    return { folk: t.folk.count, npc: t.folk.ambient.length, houses: houses.length, folkInput: folk.some(o => o.input), houseInput: houses.some(o => o.input) }; });
+  ck('洛阳（大城、府衙 1 级）：民居店铺 4 座（另有营寨功能建筑分署）、走动居民 10 人 + 小景人物，都不接收点击（11-19 市井加密、按比例尺）', life.houses === 4 && life.folk === 10 && life.npc >= 4 && !life.folkInput && !life.houseInput, life);
   // 把一个居民挪到府衙正中，用真实鼠标点那里：仍然打开府衙面板
   const spot = await p.evaluate(() => { const t = window.__game.scene.getScene('TownScene'), h = t.hits.find(h => h.name === 'bld-office'), w = t.folk.walkers[0]; w.pause = 99; const wx = h.x, wy = h.y; w.img.setPosition(wx, wy + h.height * .3); w.img.setScale(w.img.scaleX * 3);
-    const R = window.__game.canvas.getBoundingClientRect(), k = R.width / window.__game.scale.width * t.cameras.main.zoom; return { x: R.left + (wx + t.pano.x) * k, y: R.top + (wy + t.pano.y) * k }; });
+    const R = window.__game.canvas.getBoundingClientRect(), k = R.width / window.__game.scale.width * t.cameras.main.zoom; const z = t.pano.scaleX; return { x: R.left + (wx * z + t.pano.x) * k, y: R.top + (wy * z + t.pano.y) * k }; });
   await p.waitForTimeout(100); await p.mouse.click(spot.x, spot.y); await p.waitForTimeout(400);
   const blocked = await p.evaluate(() => { const c = window.__game.scene.getScene('TownScene').children.getByName('town-build-card'); const title = c?.getByName('town-build-card-title')?.text; c?.destroy(); return title; });
   ck('居民挡在府衙上时，点击仍然打开府衙面板（居民不挡建筑）', blocked === '府衙 · Lv1', blocked);
@@ -102,7 +115,7 @@ const OLD = { small: { balanced: [10, 0], farm: [16, 0], military: [5, 1] }, med
   await p.evaluate(() => window.__game.scene.getScene('TownScene').children.getByName('town-build-card').getByName('town-build-upgrade').emit('pointerdown'));
   await p.waitForTimeout(600);
   const grown = await p.evaluate(() => { const t = window.__game.scene.getScene('TownScene'); return { h: t.pano.list.filter(o => /^house-/.test(o.name ?? '')).length, f: t.folk.count }; });
-  ck('府衙升到 2 级：民居、居民都变多（大城 4→6 座、10→12 人）', before.h === 4 && before.f === 10 && grown.h === 6 && grown.f === 12, { before, grown });
+  ck('府衙升到 2 级：民居、居民都变多（大城 4→5 座、10→12 人）', before.h === 4 && before.f === 10 && grown.h === 5 && grown.f === 12, { before, grown });
   await p.screenshot({ path: `${out}/town-large-life-desktop.png` });
   // 中城、小城各看一眼
   for (const id of ['xuchang', 'guandu']) {

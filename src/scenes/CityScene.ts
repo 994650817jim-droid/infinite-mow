@@ -63,7 +63,12 @@ export class CityScene extends Phaser.Scene {
  /** 讲武堂「随从操练」翻页。 */
  private drillPage=0;
  constructor(){super('CityScene');}
- init(){D=W>600;this.vr=D?{x:0,y:0,w:W,h:H}:{x:0,y:104,w:W,h:H-104-104};this.k=Math.max(this.vr.w/PANO_W,this.vr.h/PANO_H)*(D?PANO_ZOOM:1);this.z=D?1/PANO_ZOOM:1;this.hits=[];this.drag=null;this.campLife=null;}
+ /**
+  * 从城池点营寨功能建筑（招贤馆 / 讲武堂 / 马厩 / 军营，TownScene）：带 {open: 建筑, back: 城池 id} 进来，直接打开该建筑面板（与营寨同一个面板、同一份存档），
+  * 面板（含从它打开的讲武堂 / 换马 / 武将谱等）全部关掉后回到那座城（update 里 backStep）。不弹营寨介绍、坐骑引导。
+  */
+ private openOnStart:TownBuildingId|null=null;private backCity:string|null=null;private backIdle=0;
+ init(data?:{open?:TownBuildingId;back?:string}){this.openOnStart=data?.open??null;this.backCity=data?.back??null;this.backIdle=0;D=W>600;this.vr=D?{x:0,y:0,w:W,h:H}:{x:0,y:104,w:W,h:H-104-104};this.k=Math.max(this.vr.w/PANO_W,this.vr.h/PANO_H)*(D?PANO_ZOOM:1);this.z=D?1/PANO_ZOOM:1;this.hits=[];this.drag=null;this.campLife=null;}
  preload(){if(!worldUnlocked()&&!isChapterTestRun())return;
   // 先卸战斗图集、再排营寨的载入：万一营寨的图也被记进了战斗图集，卸掉后这里会重新载入，不会退回程序画占位（原来在 create 里卸，preload 已跳过「已在」的键）
   {const keys=this.registry.get('battleTextureKeys') as string[]|undefined;if(keys){for(const key of keys)if(this.textures.exists(key))this.textures.remove(key);this.registry.remove('battleTextureKeys');this.registry.set('battleReady',false);}}
@@ -117,6 +122,7 @@ export class CityScene extends Phaser.Scene {
   // 方向键 / WASD 平移（电脑）
   if(D&&this.input.keyboard)this.panKeys=this.input.keyboard.addKeys('W,A,S,D,UP,DOWN,LEFT,RIGHT',false) as Record<string,Phaser.Input.Keyboard.Key>;
   this.refresh();
+  if(this.openOnStart){const id=this.openOnStart;this.focusOn(id);this.openCard(id);return;}
   if(!this.introSeen())this.time.delayedCall(250,()=>this.openIntro());
   if(stableNew)this.time.delayedCall(400,()=>this.toast('营中已设马厩 · 点马厩换马、看已有的马'));
   // 坐骑引导（第一次有马：马厩 → 骑乘 → 效果说明），只出一次，设置「重看新手引导」可重看
@@ -265,7 +271,9 @@ export class CityScene extends Phaser.Scene {
   if(this.textures.exists('item_icons'))open();else{this.load.atlas('item_icons','assets/items/item-icons.webp','assets/items/item-icons.json');this.load.once('complete',open);this.load.start();}
  }
  private panKeys?:Record<string,Phaser.Input.Keyboard.Key>;
- update(_t:number,dt:number){this.campLife?.update(dt);this.panStep(dt);}
+ update(_t:number,dt:number){this.campLife?.update(dt);this.panStep(dt);this.backStep();}
+ /** 从城池来的：面板全关、没在加载（换马 / 武将谱先载图）连续几帧后回城。 */
+ private backStep(){if(!this.backCity)return;if(this.anyModal()||this.load.isLoading()){this.backIdle=0;return;}if(++this.backIdle>=3){const c=this.backCity;this.backCity=null;this.scene.start('TownScene',{city:c});}}
  /** 电脑：方向键 / WASD、鼠标贴边平移（拖动和滚轮在 create 里）；有弹窗、正在拖动时不动。 */
  private panStep(dtMs:number){
   if(!D||!this.pano||this.drag?.moved||this.anyModal())return;

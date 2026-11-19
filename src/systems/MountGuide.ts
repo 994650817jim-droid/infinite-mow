@@ -110,7 +110,7 @@ export class MountRideHint {
   }
   constructor(private scene: Phaser.Scene) {
     setMountHintSeen();
-    this.lines = [mountEffectLine().replace('骑马出征：', '骑马中：'), `脚下马力条挨打会掉，掉光落马，约 ${Math.round(MOUNT.remountMs / 1000)} 秒后再上马`];
+    this.lines = [mountEffectLine().replace('骑马出征：', '骑马中：'), '脚下马力条挨打会掉，掉光落马、马跑掉，本战只能步战'];
     this.overlay = new TutorialOverlay(scene, () => this.close());
     this.overlay.show(this.lines[0], [], 'battle'); this.at = performance.now();
     scene.events.on('postupdate', this.tick, this);

@@ -70,7 +70,7 @@ export const SPECIALS: Record<SpecialId, { name: string; desc: string }> = {
   bainiao: { name: '百鸟朝凤', desc: '连续命中同一目标 5 次后，扇形刺出 6 道枪芒（每道 60% 伤害，冷却 4 秒）' },
   weixi: { name: '伪帝玺', desc: '出征开局直接获得 1 张随机战法（Lv1，计流派件数）；代价：受到伤害 +15%' },
   jiuhu: { name: '乌巢豪饮', desc: '拾取酒罐 / 酒葫芦后 8 秒内伤害 +40%，但走路踉跄（方向随机偏转）' },
-  hubao: { name: '虎豹骑', desc: '骑马时践踏伤害 ×2；落马后 6 秒即可重新上马（原 15 秒）' },
+  hubao: { name: '虎豹骑', desc: '落马后 60 秒可重新上马（每战一次）；骑马践踏伤害 ×2' },
   louchuan: { name: '楼船火攻', desc: '每 12 秒放出一列火船，横扫主将附近的航道' },
 };
 

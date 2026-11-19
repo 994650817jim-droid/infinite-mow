@@ -28,11 +28,9 @@ import { CHARACTER_PASSIVES } from '../data/passives';
 import { WEAPON_META,weaponName } from '../data/upgrades';
 import { chapterOneCleared, chapterUnlocked, isChapterTestRun } from '../systems/ChapterProgress';
 import { FONT, TITLE_FONT, HEADING_FONT, GAME_HEIGHT as H, GAME_WIDTH as W, IS_DESKTOP as D, switchLayout } from '../config';
-import { lqDivider, lqHitBox, lqImageButton, lqPanel, lqSkin } from '../ui/LacquerKit';
-import { heroPortrait } from '../ui/BuildOverview';
+import { lqDivider, lqHitBox, lqPanel, lqSkin } from '../ui/LacquerKit';
 import { buildSettingsPanel, type SettingSpec } from '../ui/SettingsPanel';
 import { BARKS_LABEL, heroBarks, setHeroBarks, type HeroBarks } from '../systems/BattleSettings';
-import { ATTRIBUTE_INFO, primaryAttribute } from '../data/attributes';
 import { CHAPTER_SCENES, openChapterSelect } from '../ui/ChapterSelect';
 import type { TimelineChapterId } from '../world/ChapterTimeline';
 
@@ -82,7 +80,7 @@ export class MenuScene extends Phaser.Scene {
     {const w=loadWorld();this.selectedStage=(w.yellowStages>=1&&w.yellowStages<3?w.yellowStages+1:1) as YellowStage;this.selectedWestStage=(w.dongzhuoStages>=1&&w.dongzhuoStages<3?w.dongzhuoStages+1:1) as YellowStage;}
     this.stageTabs=[];
     this.westRows=[];this.westModal=undefined;this.westDeploy=undefined;this.westDeployLabel=undefined;
-    this.started = false; this.chapterButtons = []; this.charCards = []; this.muster = false;
+    this.started = false; this.chapterButtons = []; this.charCards = [];
     const params = new URLSearchParams(window.location.search), saved = this.registry.get('runConfig') as RunConfig | undefined;
     // 过场动画预览（?dev=1&cutscene=<id>[&hero=<武将>]）：直接开那一关，GameScene 推到过场处自动播
     { const cs = params.get('cutscene'), pv = cs && params.has('dev') ? CUTSCENE_PREVIEW[cs] : undefined;
@@ -104,8 +102,6 @@ export class MenuScene extends Phaser.Scene {
     let lastHero=saved?.character;try{lastHero=localStorage.getItem('im_last_hero') as RunConfig['character']||lastHero;}catch{}
     this.selectedChar = params.has('autostart') || params.has('perf') ? 0 : Math.max(0, CHARACTERS.findIndex(c => c.id === defaultHero(lastHero)));
     if(this.compactHome){if(!(isChapterTestRun()&&params.has('chapter')))this.selectedChapter=chapterOneCleared()||loadWorld().legacyHulaoAccess?'hulao':'huangjin';this.createLanding(params);return;}
-    // 电脑版从天下地图出征第壹 / 贰章：新「点将出征」页（2026-11-18）；手机与测试入口仍是原选章选将页
-    if(D&&fromWorld){this.createMuster();return;}
     this.cameras.main.resetFX(); this.cameras.main.setBackgroundColor('#101813');
     const text = (x: number, y: number, value: string, size: number, color = '#ede4cc') => this.add.text(x, y, value, { fontFamily: size>=18?HEADING_FONT:FONT, fontSize: `${size}px`, color, resolution: 2 });
     if (this.textures.exists('ground_hulao')) this.add.tileSprite(0, 0, W, H, 'ground_hulao').setOrigin(0).setAlpha(.16); // 手机精简启动时战斗图集还没载入
@@ -186,93 +182,6 @@ export class MenuScene extends Phaser.Scene {
     this.createWestPicker();this.renderSelection();
     if (params.has('autostart') || params.has('perf')) this.time.delayedCall(80, () => this.startGame());
   }
-  /**
-   * 点将出征（2026-11-18 用户「按了出征之后，显示这个画面，想要修改，这个图一是旧画面」）：电脑版从天下地图出征第壹 / 贰章时的选将页。
-   * 漆底描金：顶栏写地图上已选的章与关（‹ › 只在本章已开的关之间切换，不再重选战役）；左边 12 张武将卡用水墨头肩像（与构筑总览同一套），
-   * 名字下只一行天赋名、按卡宽缩放，不再叠字；右边是选中武将的主属性 / 专属兵器 / 天赋 / 简介；底部一个水墨「出征」主按钮（全屏只此一处笔刷），
-   * 返回回到天下地图。startButton / startLabel / charCards 沿用原字段，测试与 startGame() 不变。
-   */
-  private muster=false;private musterCards:Array<{i:number;frame:Phaser.GameObjects.Graphics;root:Phaser.GameObjects.Container;x:number;y:number;w:number;h:number}>=[];
-  private musterDetail?:Phaser.GameObjects.Container;private musterTexts:{stage?:Phaser.GameObjects.Text;sub?:Phaser.GameObjects.Text}={};
-  private createMuster():void{
-    this.muster=true;this.musterCards=[];this.musterDetail=undefined;this.musterTexts={};
-    this.cameras.main.setBackgroundColor('#140d08');
-    const bgKey=['epic_bg_'+(this.selectedChapter==='hulao'?'dongzhuo':'huangjin')+'_desktop','rest_camp'].find(k=>this.textures.exists(k));
-    if(bgKey){const bg=this.add.image(W/2,H/2,bgKey);bg.setScale(Math.max(W/bg.width,H/bg.height));}
-    this.add.graphics().fillStyle(0x0d0905,.78).fillRect(0,0,W,H);
-    const T=(x:number,y:number,v:string,size:number,color='#ead9b2',font=FONT)=>this.add.text(x,y,v,{fontFamily:font,fontSize:size+'px',color,resolution:2});
-    // 顶栏：标题 · 已选章关（可在本章已开的关之间切换）· 返回
-    const top=this.add.graphics();lqPanel(top,12,10,W-24,64);
-    T(32,42,'点将出征',26,'#f0d49a',TITLE_FONT).setOrigin(0,.5).setStroke('#120904',4).setName('muster-title');
-    this.musterTexts.stage=T(W/2,32,'',19,'#f4dfb5',HEADING_FONT).setOrigin(.5).setName('muster-stage');
-    this.musterTexts.sub=T(W/2,57,'',12,'#c9b48a').setOrigin(.5).setName('muster-sub');
-    for(const [dir,x] of [[-1,W/2-178],[1,W/2+178]] as const){const a=T(x,32,dir<0?'‹':'›',26,'#e8c47a',HEADING_FONT).setOrigin(.5).setPadding(10,0).setInteractive({useHandCursor:true}).setName(dir<0?'muster-prev':'muster-next');
-      a.on('pointerover',()=>a.setColor('#fff3d4')).on('pointerout',()=>a.setColor('#e8c47a')).on('pointerdown',()=>this.musterStage(dir));}
-    const backIm=this.add.image(W-92,42,'__DEFAULT'),backLbl=T(W-92,42,'返回天下地图',14,'#ffe9bd',HEADING_FONT).setOrigin(.5);lqImageButton(this,backIm,132,36,'gold',backLbl);
-    backIm.setInteractive({useHandCursor:true}).setName('muster-back').on('pointerup',()=>this.scene.start('WorldMapScene'));
-    // 左：12 张武将卡（6 × 2）
-    const gx=16,gy=86,gw=616,gh=386,cols=6,gap=8,cw=(gw-gap*(cols-1))/cols,ch=(gh-gap)/2;
-    CHARACTERS.forEach((c,i)=>{
-      const x=gx+(i%cols)*(cw+gap),y=gy+Math.floor(i/cols)*(ch+gap),root=this.add.container(0,0).setName('muster-card-'+c.id),frame=this.add.graphics();root.add(frame);
-      heroPortrait(this,root,c.id,x+5,y+5,cw-10,ch-62,'muster-art-'+c.id);
-      const name=T(x+cw/2,y+ch-48,c.name,16,'#f2e4c2',HEADING_FONT).setOrigin(.5,0);
-      const sub=T(x+cw/2,y+ch-25,CHARACTER_PASSIVES[c.id]?.name??'',11,'#bba57c').setOrigin(.5,0);if(sub.width>cw-12)sub.setScale((cw-12)/sub.width);
-      root.add([name,sub]);
-      if(!heroOwned(c.id)){root.setAlpha(.42);root.add(T(x+cw/2,y+ch-74,'未招募',12,'#d8c6a0').setOrigin(.5).setPadding(6,2).setBackgroundColor('#1b120bcc'));}
-      const hit=this.add.rectangle(x+cw/2,y+ch/2,cw,ch,0,.001).setInteractive({useHandCursor:heroOwned(c.id)}).setName('muster-hero-'+c.id);
-      hit.on('pointerdown',()=>{if(!heroOwned(c.id))return;this.selectedChar=i;this.renderSelection();});
-      hit.on('pointerover',()=>{if(heroOwned(c.id)&&i!==this.selectedChar)frame.setAlpha(1);this.paintMusterCard(i,true);}).on('pointerout',()=>this.paintMusterCard(i,false));
-      // 测试沿用：charCards[i].bg = 命中区
-      this.charCards.push({bg:hit,icon:this.add.image(0,0,'__DEFAULT').setVisible(false),badge:T(0,0,'',1).setVisible(false),decor:frame});
-      this.musterCards.push({i,frame,root,x,y,w:cw,h:ch});
-    });
-    // 右：选中武将详情
-    const dg=this.add.graphics();lqPanel(dg,640,86,W-656,312);
-    // 底部：出征（唯一一处水墨笔触按钮）+ 提示
-    const go=homeCommand(this,792,436,290,52,'出征',true);go.hit.setName('muster-go').on('pointerdown',()=>this.startGame());
-    this.startButton=go.hit as unknown as Phaser.GameObjects.Rectangle;this.startLabel=go.caption as unknown as Phaser.GameObjects.Text;
-    T(792,478,'主将亲征 · 第一波后招募援兵',11,'#9e8c6c').setOrigin(.5);
-    T(gx,500,'←→ 换将   Enter 出征   Esc 返回天下地图',11,'#8c7b5f');
-    if(this.registry.get('hardChapter'))T(W-24,500,'乱世难度',12,'#ff9a80',HEADING_FONT).setOrigin(1,0).setName('muster-hard');
-    const keyboard=this.input.keyboard,bind=(key:string,action:()=>void)=>{keyboard?.on(key,action);this.events.once('shutdown',()=>keyboard?.off(key,action));};
-    const step=(d:number)=>{for(let k=1;k<=CHARACTERS.length;k++){const j=(this.selectedChar+d*k+CHARACTERS.length*4)%CHARACTERS.length;if(heroOwned(CHARACTERS[j].id)){this.selectedChar=j;break;}}this.renderSelection();};
-    bind('keydown-ENTER',()=>this.startGame());bind('keydown-ESC',()=>this.scene.start('WorldMapScene'));bind('keydown-LEFT',()=>step(-1));bind('keydown-RIGHT',()=>step(1));
-    if(!CHARACTERS[this.selectedChar]||!heroOwned(CHARACTERS[this.selectedChar].id))this.selectedChar=Math.max(0,CHARACTERS.findIndex(c=>c.id===defaultHero(null)));
-    this.renderSelection();
-  }
-  /** 武将卡描框：选中描金加粗 + 金色角饰与「出战」小印，悬停提亮。 */
-  private paintMusterCard(i:number,hover=false):void{const m=this.musterCards[i];if(!m)return;const g=m.frame,on=i===this.selectedChar;g.clear();
-    g.fillStyle(0x1b120b,.9).fillRoundedRect(m.x,m.y,m.w,m.h,6).lineStyle(1,0x000000,.8).strokeRoundedRect(m.x+.5,m.y+.5,m.w-1,m.h-1,6);
-    g.lineStyle(on?2.5:1,on?0xf0cf86:hover?0xd9b46c:0x8a6d3e,on?1:hover?.9:.7).strokeRoundedRect(m.x+2,m.y+2,m.w-4,m.h-4,5);
-    g.fillStyle(0x0e0905,.75).fillRect(m.x+3,m.y+m.h-56,m.w-6,53);g.lineStyle(1,0xc9a35e,.35).lineBetween(m.x+8,m.y+m.h-56,m.x+m.w-8,m.y+m.h-56);
-    if(on){g.fillStyle(0xf0cf86,1);for(const [cx,cy] of [[m.x+4,m.y+4],[m.x+m.w-4,m.y+4],[m.x+4,m.y+m.h-4],[m.x+m.w-4,m.y+m.h-4]])g.fillRect(cx-3,cy-3,6,6);
-     g.fillStyle(0x8e2a1e,.95).fillRoundedRect(m.x+m.w-34,m.y+8,28,18,3).lineStyle(1,0xf0cf86,.9).strokeRoundedRect(m.x+m.w-34,m.y+8,28,18,3);}
-    const seal=m.root.getByName('muster-badge') as Phaser.GameObjects.Text|null;if(on&&!seal)m.root.add(this.add.text(m.x+m.w-20,m.y+17,'出战',{fontFamily:HEADING_FONT,fontSize:'11px',color:'#fff1d0',resolution:2}).setOrigin(.5).setName('muster-badge'));else if(!on&&seal)seal.destroy();}
-  /** 本章已开的关之间切换（不改章）。 */
-  private musterStage(dir:number):void{
-    const west=this.selectedChapter==='hulao',open=(n:number)=>isChapterTestRun()||(west?dongzhuoStageUnlocked(n):yellowStageUnlocked(n)),cur=west?this.selectedWestStage:this.selectedStage;
-    for(let k=1;k<=3;k++){const n=((cur-1+dir*k+9)%3)+1;if(open(n)){if(west)this.selectedWestStage=n as YellowStage;else this.selectedStage=n as YellowStage;break;}}
-    this.renderSelection();}
-  private renderMuster():void{
-    const west=this.selectedChapter==='hulao',n=west?this.selectedWestStage:this.selectedStage,info=west?DONGZHUO_STAGES[n-1]:YELLOW_STAGES[n-1],save=loadWorld(),done=west?save.dongzhuoStages:save.yellowStages;
-    this.musterTexts.stage?.setText(`${west?'第贰章 · 讨伐董卓':'第壹章 · 黄巾之乱'}　${west?2:1}-${n} ${info.name}`);
-    this.musterTexts.sub?.setText(`首领 ${info.boss} · 本章 ${Math.min(done,3)}/3 关已破${n<=done?' · 重打此关':''}`);
-    for(const [k,name] of [[-1,'muster-prev'],[1,'muster-next']] as const){const o=this.children.getByName(name) as Phaser.GameObjects.Text|null;const any=[1,2,3].some(s=>s!==n&&(isChapterTestRun()||(west?dongzhuoStageUnlocked(s):yellowStageUnlocked(s))));o?.setVisible(any);void k;}
-    this.musterCards.forEach((_,i)=>this.paintMusterCard(i));
-    // 详情面板重画
-    this.musterDetail?.destroy();const c=CHARACTERS[this.selectedChar];if(!c)return;const root=this.add.container(0,0).setName('muster-detail');this.musterDetail=root;
-    const T=(x:number,y:number,v:string,size:number,color='#ead9b2',font=FONT)=>{const t=this.add.text(x,y,v,{fontFamily:font,fontSize:size+'px',color,resolution:2});root.add(t);return t;};
-    const fg=this.add.graphics();root.add(fg);fg.lineStyle(1,0xc9a35e,.7).strokeRoundedRect(655,101,112,146,4);
-    heroPortrait(this,root,c.id,656,102,110,144,'muster-detail-art');
-    T(782,104,c.name,24,'#f6dc9a',TITLE_FONT).setStroke('#120904',3).setName('muster-hero-name');
-    T(782,140,(c.faction??'蜀')+' · '+(CHARACTER_PASSIVES[c.id]?.name??''),12,'#c9b48a');
-    const main=primaryAttribute(c.id);if(main){const a=ATTRIBUTE_INFO[main];T(782,166,'主属性',11,'#9e8c6c');T(782,182,a.name,15,'#f0d49a',HEADING_FONT).setName('muster-hero-attr');T(782,204,a.effect,10,'#b9a582').setWordWrapWidth(150,true);}
-    const lines=[['专属兵器',weaponName(c.startWeapon,c.id)],['天赋被动',CHARACTER_PASSIVES[c.id]?.name??'—']];
-    lines.forEach(([k,v],j)=>{T(656,262+j*24,k,12,'#9e8c6c');T(726,260+j*24,v,15,'#efe0bd',HEADING_FONT).setName(j?'muster-hero-passive':'muster-hero-weapon');});
-    T(656,314,c.desc,12,'#d6c7a4').setWordWrapWidth(W-656-30,true).setLineSpacing(3).setName('muster-hero-desc');
-    // 出征按钮字：出征 · 关名
-    const ready=!!c&&(chapterUnlocked(this.selectedChapter)||isChapterTestRun())&&(!west||dongzhuoStageUnlocked(n)||isChapterTestRun())&&!this.started;
-    this.startLabel.setText(this.started?'正在出征…':ready?`出征 · ${info.name}`:'尚未开放');}
   private createLanding(params:URLSearchParams):void {
     this.cameras.main.setBackgroundColor('#201710');
     const text=(x:number,y:number,value:string,size:number,color='#e8d8b2')=>this.add.text(x,y,value,{fontFamily:size>=18?HEADING_FONT:FONT,fontSize:`${size}px`,color,resolution:2}).setOrigin(.5);
@@ -551,7 +460,6 @@ export class MenuScene extends Phaser.Scene {
 
   }
   private renderSelection(): void {
-    if(this.muster){this.renderMuster();return;}
     this.chapterButtons.forEach(c => {
       const unlocked = chapterUnlocked(c.id)||isChapterTestRun(), selected = unlocked && c.id === this.selectedChapter, chapter = getChapter(c.id);
       c.bg.setFillStyle(!unlocked ? 0x161c19 : selected ? 0x2b4030 : 0x182a22,.22).setStrokeStyle(selected ? 2 : 1, selected ? 0xc6aa6c : unlocked ? 0x45604d : 0x363d34);

@@ -16,11 +16,12 @@ await p.waitForTimeout(1500);
 await p.evaluate(G0 => { const s = eval(G0); s.registry.set('runConfig', { ...s.registry.get('runConfig'), character: 'zhuge', weapon: undefined }); s.scene.restart(); }, G);
 await p.waitForTimeout(500);
 await p.waitForFunction(() => { const s = window.__game.scene.getScene('GameScene'); return s?.player && s.runConfig?.character === 'zhuge' && s.__DEV_ACTIONS; }, null, { timeout: 20000 });
-await p.evaluate(G0 => { const s = eval(G0); s.player.damageImmune = true; s.__DEV_ACTIONS.closePopup?.(); s.spawnTimer = s.eliteTimer = 1e9; s.player.stats.critChance = -1; setInterval(() => { if (s.mode === 'levelup') s.chooseUpgrade(0); }, 40); }, G);
+await p.evaluate(G0 => { const s = eval(G0); s.player.damageImmune = true; s.__DEV_ACTIONS.closePopup?.(); s.spawnTimer = s.eliteTimer = 1e9; s.player.stats.critChance = -1; setInterval(() => { if (s.mode === 'levelup') s.chooseUpgrade(0); else if (s.mode === 'recruit') s.__DEV_ACTIONS.closePopup?.(); }, 40); }, G);
 const H = `const s = ${G}, pl = s.player, w = pl.weapons[0], wait = ms => new Promise(r => setTimeout(r, ms));
   const clear = () => { for (const e of s.enemies) if (e.active && !e.isSupplySlot) e.deactivate(); };
   const mk = (kind, x, y, hp = 99999) => { const e = s.spawnEnemy(kind, x, y, 1); e.hp = e.maxHp = hp; e.stunUntil = 1e12; return e; };
   const { TIANHUO_DEF } = await import('/src/weapons/zhugeTianhuo.ts'); const { ZG_TIANHUO: Z } = await import('/src/data/heroMechanics.ts');
+  Z.ember.mul = 0; // 天火余烬（2026-11-18）另在 test-hero-mechanics 1c 测；这里只量天火本身，免得上一发的余烬烧到下一发新刷的兵
   const one = () => TIANHUO_DEF.damage(w.level, pl.stats) * pl.growth.damageMultiplier(s.combatNow) * (1 + Z.intPerPoint * pl.growth.attributes.intellect);`;
 
 // 1) 星位 → 0.8 秒后落下；单体伤害、溅射

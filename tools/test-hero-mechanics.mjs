@@ -22,7 +22,7 @@ async function open(hero) {
   await p.evaluate(([G0, id]) => { const s = eval(G0); s.registry.set('runConfig', { ...s.registry.get('runConfig'), character: id, weapon: undefined }); s.scene.restart(); }, [G, hero]);
   await sleep(400);
   await p.waitForFunction(id => { const s = window.__game.scene.getScene('GameScene'); return s?.player && s.runConfig?.character === id && s.__DEV_ACTIONS; }, hero, { timeout: 30000 });
-  await p.evaluate(([G0, C]) => { const s = eval(G0); s.__DEV_ACTIONS.closePopup?.(); s.spawnTimer = s.eliteTimer = 1e9; eval(C); setInterval(() => { if (s.mode === 'levelup') s.chooseUpgrade(0); }, 40); }, [G, CLEAR]);
+  await p.evaluate(([G0, C]) => { const s = eval(G0); s.__DEV_ACTIONS.closePopup?.(); s.spawnTimer = s.eliteTimer = 1e9; eval(C); setInterval(() => { if (s.mode === 'levelup') s.chooseUpgrade(0); else if (s.mode === 'recruit') s.__DEV_ACTIONS.closePopup?.(); /* 杀够兵会弹招募，combatNow 会停 */ }, 40); }, [G, CLEAR]);
   await sleep(300);
   return p;
 }
@@ -137,11 +137,35 @@ for (const hero of HEROES) {
       pl.growth.masteries.wildfire = 0; return { northHit: north.filter(e => e.hp < e.maxHp).length, el: el.maxHp - el.hp };
     }, [G, MK, CLEAR]);
     ck('诸葛亮·借东风：火龙朝怪最密的方向扫（天火打东边精锐，火龙扫北边一排 5 个）', r1b.northHit >= 4 && r1b.el > 0, r1b);
+    // 1c) 清杂兵（2026-11-18 用户：「诸葛亮清小怪偏弱」）：天火余烬 + 没有首领 / 精锐时借东风每第 3 发。同一波杂兵改前 / 改后各打一遍比清怪用时
+    const r1c = await p.evaluate(async ([G0, C]) => {
+      const s = eval(G0), pl = s.player, wait = ms => new Promise(r => setTimeout(r, ms)), w = pl.weapons[0]; pl.damageImmune = true; pl.stats.critChance = -1; eval(C);
+      const { ZG_TIANHUO: Z } = await import('/src/data/heroMechanics.ts');
+      const cfg = { mul: Z.ember.mul, every: Z.eastWind.everyCrowd };
+      // 杀杂兵会升级 / 弹招募：面板一开 combatNow 就停（循环永远等不完）；直接关掉、不选卡，前后两遍构筑一样
+      const noLevelUp = () => { if (s.mode === 'levelup') { s.pendingLevels = 0; s.militaryPending = 0; s.setMode('none'); } else if (s.mode === 'recruit') s.__DEV_ACTIONS.closePopup?.(); };
+      const wave = async () => { eval(C); w.level = 3; pl.growth.masteries.wildfire = 1; w.cooldownLeft = 1e9; await wait(150);
+        const es = []; for (const [cx, cy] of [[230, 0], [-200, 90], [40, -230]]) for (let i = 0; i < 8; i++) { const e = s.spawnEnemy('infantry', pl.x + cx + (i % 3 - 1) * 32, pl.y + cy + (Math.floor(i / 3) - 1) * 28, 1, true); e.hp = e.maxHp = 260; e.stunUntil = 1e12; es.push(e); }
+        const t0 = s.combatNow, r0 = Date.now(); w.cooldownLeft = 0; while (es.some(e => e.active) && s.combatNow - t0 < 60000 && Date.now() - r0 < 120000) { noLevelUp(); await wait(50); }
+        return { ms: Math.round(s.combatNow - t0), left: es.filter(e => e.active).length, embers: 0, mode: s.mode, realMs: Date.now() - r0 }; };
+      Z.ember.mul = 0; Z.eastWind.everyCrowd = 4; const before = await wave();
+      Z.ember.mul = cfg.mul; Z.eastWind.everyCrowd = cfg.every; let embers = 0; const watch = setInterval(() => { embers = Math.max(embers, s.children.list.filter(o => o.name === 'zhuge-ember').length); }, 60);
+      const after = await wave(); clearInterval(watch);
+      // 打首领：同样 12 秒，改前 / 改后首领掉血（余烬不烧首领，有首领时借东风仍每第 4 发）
+      const bossRun = async () => { eval(C); w.cooldownLeft = 1e9; await wait(150); s.bossSpawned = false; /* 同一局第二次召首领 */ s.spawnBoss(); const b = s.boss; b.sprite.setPosition(pl.x + 220, pl.y); b.stunUntil = 1e12; b.hp = b.maxHp = 1e6;
+        noLevelUp();
+        pl.passive.reset('zhuge', s.combatNow); const t0 = s.combatNow, r0 = Date.now(); w.cooldownLeft = 0; while (s.combatNow - t0 < 12000 && Date.now() - r0 < 60000) { noLevelUp(); for (const e of s.enemies) if (e.active && e !== b && !e.isSupplySlot) e.deactivate(); b.sprite.setPosition(pl.x + 220, pl.y); await wait(50); } const d = 1e6 - b.hp; modes.push(s.mode + ' ' + Math.round(s.combatNow - t0) + 'ms/' + (Date.now() - r0) + 'real'); b.deactivate(); return Math.round(d); }; const modes = [];
+      Z.ember.mul = 0; Z.eastWind.everyCrowd = 4; const bossBefore = await bossRun(); Z.ember.mul = cfg.mul; Z.eastWind.everyCrowd = cfg.every; const bossAfter = await bossRun();
+      pl.growth.masteries.wildfire = 0;
+      return { before, after: { ...after, embers }, speedup: +(before.ms / Math.max(1, after.ms)).toFixed(2), bossBefore, bossAfter, bossRatio: +(bossAfter / Math.max(1, bossBefore)).toFixed(3), modes };
+    }, [G, CLEAR]);
+    ck('诸葛亮·清杂兵：同一波 24 个杂兵，加余烬 + 借东风每第 3 发后清完明显更快（≥1.2 倍），余烬用手绘地火', r1c.before.left === 0 && r1c.after.left === 0 && r1c.speedup >= 1.2 && r1c.after.embers > 0, r1c);
+    ck('诸葛亮·打首领基本不变：同样 12 秒首领掉血改前 / 改后相差 ≤10%（余烬不烧首领、借东风有首领时仍每第 4 发）', Math.abs(r1c.bossRatio - 1) <= .1, r1c);
     // 2) 八阵图 3 级：观星爆发处布阵——阵内步兵减速、受伤 +15%；阵内首领出招间隔 ×1.25（gapSlow）
     const r2 = await p.evaluate(async ([G0, MK0, C]) => {
       const s = eval(G0), pl = s.player, mk = eval(MK0), wait = ms => new Promise(r => setTimeout(r, ms)), w = pl.weapons[0]; pl.damageImmune = true; pl.stats.critChance = -1; eval(C);
       pl.growth.masteries.eight_trigrams = 3; w.cooldownLeft = 1e9; await wait(100); pl.passive.reset('zhuge', s.combatNow);
-      s.spawnBoss(); const boss = s.boss; boss.sprite.setPosition(pl.x + 260, pl.y); boss.stunUntil = 1e12; boss.hp = boss.maxHp = 1e6;
+      s.bossSpawned = false; s.spawnBoss(); const boss = s.boss; boss.sprite.setPosition(pl.x + 260, pl.y); boss.stunUntil = 1e12; boss.hp = boss.maxHp = 1e6;
       const near = mk(pl.x + 290, pl.y + 30, { stun: false }); near.def = { ...near.def, speed: 40 };
       let casts = 0; const active = () => pl.passive.vulnerability(boss, s.combatNow) > 1; // 不读模块内部状态（热更新后测试拿到的是另一份模块）
       for (; casts < 7 && !active(); casts++) { for (const e of s.enemies) if (e.active && !e.isSupplySlot && e !== boss && e !== near) e.deactivate(); /* 首领召来的兵会抢走天火 */ boss.sprite.setPosition(pl.x + 260, pl.y); w.cooldownLeft = 0; await wait(100); w.cooldownLeft = 1e9; await wait(900); }

@@ -1,13 +1,23 @@
-import type {Player} from '../entities/Player';import type {Legion} from './Legion';import {TACTICS,tacticDescription,type TacticId} from '../data/builds';import type {UpgradeOption} from '../types';
-/** 旧的行营战法货架（2026-11-17 军需商人改为只卖兵装后已无界面使用；宝物并入信物库后只剩战法）。 */
+import type {Player} from '../entities/Player';import type {Legion} from './Legion';import {TACTICS,tacticDescription,type TacticId} from '../data/builds';import type {UpgradeOption} from '../types';import {MERCHANT_TACTIC} from '../data/items';
+/** 军需商人的战法卷轴（2026-11-18 用户「军需商人也可能会卖功法」）：level = 买时已学等级（0 = 新学）。 */
 export interface CampOffer{id:TacticId;kind:'tactic';level:number;price:number;sold:boolean;}
 export function campOption(offer:CampOffer,player:Player):UpgradeOption|null{
  const b=player.growth.build,id=offer.id;if(!b.canLearn(id)||b.level(id)!==offer.level)return null;
  return{id:'camp_'+id,name:TACTICS[id].name+' · Lv.'+offer.level+'→'+(offer.level+1),desc:tacticDescription(id,offer.level+1),kind:'tactic',icon:'build_icon_'+id,apply:()=>{b.learn(id);}};
 }
-/** Inventory is generated once per actual camp visit, not every tab open. */
-export class CampMarket{
- readonly offers:CampOffer[]=[];
- constructor(player:Player){const b=player.growth.build,pool:CampOffer[]=[];for(const id of Object.keys(TACTICS)as TacticId[])if(b.canLearn(id))pool.push({id,kind:'tactic',level:b.level(id),price:45+b.level(id)*15,sold:false});while(pool.length&&this.offers.length<4)this.offers.push(pool.splice(Math.floor(Math.random()*pool.length),1)[0]);}
- buy(index:number,player:Player,army:Legion):boolean{const o=this.offers[index];if(!o||o.sold||army.food<o.price)return false;const option=campOption(o,player);if(!option)return false;option.apply(player,player.weapons,player.growth);army.food-=o.price;o.sold=true;return true;}
+interface TacticBook{canLearn(id:TacticId):boolean;level(id:TacticId):number;}
+/**
+ * 每次进营判定一次：按 MERCHANT_TACTIC.chance 捎来 1 卷战法。规则同升级三选一：最多 6 种、每种到 3 级；
+ * 已学未满 3 级的作为「精进」出现，已满的不出；战法格已满 6 种时只从已学的里出。一卷也出不了就不摆。
+ */
+export function rollMerchantTactic(build:TacticBook,rng:()=>number=Math.random,chance:number=MERCHANT_TACTIC.chance):CampOffer|null{
+ if(!(rng()<chance))return null;
+ const pool=(Object.keys(TACTICS)as TacticId[]).filter(id=>build.canLearn(id));if(!pool.length)return null;
+ const id=pool[Math.min(pool.length-1,Math.floor(rng()*pool.length))],level=build.level(id);
+ return{id,kind:'tactic',level,price:MERCHANT_TACTIC.price[Math.max(0,Math.min(MERCHANT_TACTIC.price.length-1,level))],sold:false};
+}
+/** 买下：扣随军粮，立即学会 / 升一级（本局构筑，当场生效）。粮不够、已售、或等级已变（中途升级学了同一种）返回 false。 */
+export function buyMerchantTactic(offer:CampOffer,player:Player,army:Legion):boolean{
+ if(offer.sold||army.food<offer.price)return false;const option=campOption(offer,player);if(!option)return false;
+ option.apply(player,player.weapons,player.growth);army.food-=offer.price;offer.sold=true;return true;
 }

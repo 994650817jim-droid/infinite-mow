@@ -7,6 +7,7 @@ import { DEPTH, FONT, actorDepth } from '../config';
 import { CHENCANG, WATER } from '../data/beifaChapter';
 import { warnFx } from '../ui/WarnFx';
 import { MID_SIEGE_FILES } from './SiegeMidArt';
+import { sealCityWall } from './ChapterDressing';
 import { playSheet } from './SkillFxSheets';
 
 /** 地面落点打击（箭雨 / 落雷 / 陨星）：先手绘预警圈，到点播手绘命中序列帧并结算伤害。第十二章各处共用。 */
@@ -101,11 +102,11 @@ export interface SiegeHost { scene: Phaser.Scene; player: Player; strikes: Strik
   /** 首领到点后离攻城失利还剩几秒（基础场景：首领时间 + 60 秒没出首领判负）；没到点为 null。 */ timeLeft?: () => number | null }
 /** 陈仓攻城（复用攻城样板的城门 / 箭楼物件）：城门在前方，两侧城头箭楼；箭楼每隔几秒朝主将放一轮箭雨（手绘预警圈）。城门未破郝昭不出城。 */
 export class ChencangSiege {
-  gate: Enemy | null; towers: Enemy[] = [];
+  gate: Enemy | null; towers: Enemy[] = []; private gy = 0;
   private gateLife = 0; private volleyAt: number[] = []; private label: Phaser.GameObjects.Text;
   readonly metrics = { volleys: 0 };
   constructor(private h: SiegeHost, now: number) {
-    const p = h.player, gx = p.x, gy = p.y + CHENCANG.gateY;
+    const p = h.player, gx = p.x, gy = p.y + CHENCANG.gateY; this.gy = gy;
     this.gate = h.spawnGate(gx, gy, CHENCANG.gateHp); this.gateLife = this.gate?.spawnId ?? 0;
     for (let i = 0; i < CHENCANG.towers; i++) { const side = i % 2 ? 1 : -1, t = h.spawnTower(gx + side * CHENCANG.towerGap, gy - 10, CHENCANG.towerHp); if (t) { this.towers.push(t); this.volleyAt.push(now + 2500 + i * 1500); } }
     this.label = h.scene.add.text(gx, gy - 230, '', { fontFamily: FONT, fontSize: '15px', color: '#ffe1a0', stroke: '#1a120b', strokeThickness: 4, resolution: 2 }).setOrigin(.5).setDepth(DEPTH.fx).setName('chencang-gate-label');
@@ -120,9 +121,19 @@ export class ChencangSiege {
   private buildWalls(gx: number, gy: number): void {
     const C = CHENCANG, s = this.h.scene, K = MID_SIEGE_FILES[0];
     this.h.footprints?.push({ left: gx - C.wallHalf, right: gx - C.gateHalf, top: gy - 70, bottom: gy - 10 }, { left: gx + C.gateHalf, right: gx + C.wallHalf, top: gy - 70, bottom: gy - 10 });
-    const draw = (): void => { if (!this.label.active) return; for (let x = -C.wallHalf + C.segW / 2; x <= C.wallHalf; x += C.segW) { if (Math.abs(x) < 130 + C.segW / 2 - 10) continue; this.walls.push(s.add.image(gx + x, gy, K.key, 0).setOrigin(.5, .97).setDisplaySize(C.segW + 8, C.segW + 8).setDepth(actorDepth(gy) - .01).setName('chencang-wall')); } };
-    if (s.textures.exists(K.key)) draw(); else { s.load.spritesheet(K.key, K.file, { frameWidth: K.cell, frameHeight: K.cell }); s.load.once('filecomplete-spritesheet-' + K.key, draw); if (!s.load.isLoading()) s.load.start(); }
+    const draw = (): void => { if (!this.label.active) return; for (const side of [-1, 1]) for (let x = side * (140 + C.segW / 2 - 12); Math.abs(x) <= C.wallHalf; x += side * C.segW) { /* W6：从城门两侧往外铺，两边都紧贴城门（原来从左端起铺，左侧离城门差约 190） */ this.walls.push(s.add.image(gx + x, gy, K.key, 0).setOrigin(.5, .97).setDisplaySize(C.segW + 8, C.segW + 8).setDepth(actorDepth(gy) - .01).setName('chencang-wall')); } };
+    if (s.textures.exists(K.key)) { draw(); this.stone(); } else { s.load.spritesheet(K.key, K.file, { frameWidth: K.cell, frameHeight: K.cell }); s.load.once('filecomplete-spritesheet-' + K.key, () => { draw(); this.stone(); }); if (!s.load.isLoading()) s.load.start(); }
+    // 城墙专项检查 W6：城墙两端原来平切口、能绕过去 → 两端角楼、往南转成侧墙，南边界是我方（蜀军）营栅，整块场地封闭；城门没破之前过不去
+    if (this.h.footprints) sealCityWall(s, { cx: gx, wy: gy, half: C.wallHalf, south: this.h.player.y + 1500, boxes: this.h.footprints, south_: 'palisade', palisade: 'props_v2_shu', tag: 'chencang' });
   }
+  /** W6：城门两侧原来是营具图的木桩 + 木箭楼（夹在石城墙中间画风不搭）→ 城墙图集的城门（帧 1）、石箭楼（帧 3）。 */
+  private stone(): void {
+    const K = MID_SIEGE_FILES[0].key; if (!this.label.active || !this.h.scene.textures.exists(K)) return;
+    if (this.gateAlive) this.gate!.sprite.setTexture(K, 1).setOrigin(.5, .97).setDisplaySize(290, 290);
+    for (const t of this.towers) if (t.active) t.sprite.setTexture(K, 3).setOrigin(.5, 1).setDisplaySize(170, 170);
+  }
+  /** 城墙线（刷兵：城门没破前不刷到墙北面）。 */
+  get wallY(): number { return this.gy; }
   get gateAlive(): boolean { return !!this.gate && this.gate.active && this.gate.spawnId === this.gateLife; }
   get towersAlive(): number { return this.towers.filter(t => t.active).length; }
   update(now: number): void {

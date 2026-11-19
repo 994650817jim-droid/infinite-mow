@@ -293,6 +293,8 @@ export class GameScene extends Phaser.Scene {
       const line=plan.lines[second.id]?.intro;if(line&&storyMode()!=='off')storyBark(this,e.sprite,second.name,line);
     });
   }
+  /** 首领出场点（默认主将正北 430）；城墙封死的关覆盖，别刷到墙那边过不来（城墙专项 W5）。 */
+  protected bossSpawnPoint(x:number,y:number):{x:number;y:number}{return {x,y};}
   /** 本关敌方势力（营具 / 军旗）；篇章场景按章节.关覆盖（data/sceneLooks.ts ARC_FACTIONS），null = 照 envConfigFor。 */
   protected sceneFaction():number|null{return null;}
   /** 单首领「败退型」（8-1 张郃、5-3 曹仁、4-1 颜良）：打到底不倒地，淡出退走。子类据此不播控制器倒地帧。 */
@@ -1324,8 +1326,7 @@ export class GameScene extends Phaser.Scene {
     this.bossSpawned = true;
     { const ws = this.paceOn() ? PICK_PACE.waves : PICK_GUARANTEE.waves; this.ensurePicks(ws[ws.length - 1]); } // 保底：第 3 波后直接是首领、波次不再推进，首领登场时补到最后一档
     const angle = -Math.PI / 2;
-    const x = this.player.x + Math.cos(angle) * 430;
-    const y = this.player.y + Math.sin(angle) * 430;
+    const at = this.bossSpawnPoint(this.player.x + Math.cos(angle) * 430, this.player.y + Math.sin(angle) * 430), x = at.x, y = at.y;
     const boss = this.spawnEnemy('boss', x, y, 1, true);
     if (!boss) {
       this.bossSpawned = false;

@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { actorDepth } from '../config';
+import { DEPTH, actorDepth } from '../config';
 import { MID_SIEGE_FILES } from './SiegeMidArt';
 
 /**
@@ -54,4 +54,38 @@ export function luoyangRuins(scene: Phaser.Scene, p: Pt, boxes: Box[]): void {
       else { img(scene, x, y, MID_SIEGE_FILES[0].key, f, 240, 240, 'luoyang-ruin').setTint(0x6a5a50); fire(x + 20, y - 30, 96, y); }
     }
   }));
+}
+
+/**
+ * 城墙两端封口（城墙专项检查 W5 樊城 / W6 陈仓：城墙两端平切口、能绕过去；这两处没走 SishuiPass，单独封）：
+ * 城墙两端立角楼（瓮城套件 3 号格），城墙在角楼处转角、往南延伸成侧墙（瓮城套件 4 号格竖排），南边界画成大江（river）或我方营栅（palisade，势力营具 3 号营栅 + 营帐军旗），
+ * 整块场地围成封闭矩形；碰撞按 1000 见方切块（导航按最大半边长查询，整块太大会拖慢；同 SishuiPass.slab）。
+ * cx / wy：城墙中心与墙线；half：城墙半宽（墙端）；south：南边界 y。
+ */
+export function sealCityWall(scene: Phaser.Scene, o: { cx: number; wy: number; half: number; south: number; boxes: Box[]; south_: 'river' | 'palisade'; palisade?: string; tag: string }): void {
+  const T = 520, C = 1000, L = o.cx - o.half, R = o.cx + o.half;
+  const slab = (l: number, t: number, r: number, b: number) => { const nx = Math.max(1, Math.ceil((r - l) / C)), ny = Math.max(1, Math.ceil((b - t) / C)); for (let i = 0; i < nx; i++) for (let j = 0; j < ny; j++) o.boxes.push({ left: l + (r - l) * i / nx, right: l + (r - l) * (i + 1) / nx, top: t + (b - t) * j / ny, bottom: t + (b - t) * (j + 1) / ny }); };
+  slab(L - T, o.wy - T, L, o.south + T); slab(R, o.wy - T, R + T, o.south + T); slab(L, o.south, R, o.south + T);
+  const draw = (): void => {
+    if (scene.sys.settings.status >= Phaser.Scenes.SHUTDOWN) return;
+    const B = MID_SIEGE_FILES[5], W = MID_SIEGE_FILES[0], barb = scene.textures.exists(B.key);
+    const piece = (x: number, y: number, f: number, size: number, flip = false) => img(scene, x, y, barb ? B.key : W.key, barb ? f : 5, size, size, o.tag + '-seal').setFlipX(flip);
+    // 侧墙：从墙线往南排到南边界（压住碰撞框内沿）
+    for (let y = o.wy + 170; y < o.south + 60; y += 150) { piece(L - 40, y, 4, 230); piece(R + 40, y, 4, 230, true); }
+    // 角楼：墙端（盖住城墙段的平切口）与南角
+    for (const x of [L, R]) { piece(x, o.wy + 40, 3, 250); piece(x, o.south + 40, 3, 230); }
+    // 南边界
+    if (o.south_ === 'river') {
+      const wk = scene.textures.exists('terrain_water') ? 'terrain_water' : 'ground_v2_jiang';
+      scene.add.tileSprite(L - T, o.south, R - L + 2 * T, 1400, wk).setOrigin(0, 0).setDepth(DEPTH.ground + 2).setName(o.tag + '-seal-river');
+      if (scene.textures.exists('ground_v2_jiang')) scene.add.tileSprite(L - 20, o.south - 18, R - L + 40, 40, 'ground_v2_jiang').setOrigin(0, 0).setTint(0x5a4a30).setAlpha(.9).setDepth(DEPTH.ground + 2.5).setName(o.tag + '-seal-bank');
+    } else if (o.palisade && scene.textures.exists(o.palisade)) {
+      let k = 0; for (let x = L + 90; x < R - 60; x += 150, k++) img(scene, x, o.south + 30, o.palisade, k % 9 === 4 ? 2 : k % 9 === 7 ? 6 : 3, k % 9 === 4 ? 200 : 170, k % 9 === 4 ? 200 : 170, o.tag + '-seal-camp');
+    }
+  };
+  const need = [MID_SIEGE_FILES[5], MID_SIEGE_FILES[0]].filter(f => !scene.textures.exists(f.key));
+  if (o.south_ === 'river' && !scene.textures.exists('terrain_water')) scene.load.image('terrain_water', 'assets/terrain/water.png');
+  if (!need.length && (o.south_ !== 'river' || scene.textures.exists('terrain_water'))) { draw(); return; }
+  for (const f of need) scene.load.spritesheet(f.key, f.file, { frameWidth: f.cell, frameHeight: f.cell });
+  scene.load.once('complete', draw); if (!scene.load.isLoading()) scene.load.start();
 }

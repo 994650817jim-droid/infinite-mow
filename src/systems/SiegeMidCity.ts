@@ -132,10 +132,10 @@ export class SiegeMidCity {
     // 城墙：v2 城墙段横向拼接；缺图用汜水关木栅（第 3 帧）过渡
     // 城墙连续成一条（用户 11-17「这里的城墙没做好」）：从城门两侧往外铺，段与段互相压一点盖住接缝，伸出场地两边；城门压在最上面盖住两头
     const segW = 226, step = WALL.segStep, from = WALL.gateHalfVis + step / 2 - WALL.gateOverlap;
-    for (const side of [-1, 1]) for (let i = 0, x = side * from; Math.abs(x) < Math.max(-a.left, a.right) + WALL.beyond; i++, x += side * step)
+    for (const side of [-1, 1]) for (let i = 0, x = side * from; Math.abs(x) < Math.max(-a.left, a.right) + step / 2; i++, x += side * step) // 城墙专项检查 W8：铺到场地两边、两端交给角楼（原来伸出 520、平切口）
       this.art(x, wy + 24, [ART.walls, 0], ['sishui_props_refined', 3], segW, this.has(ART.walls) ? segW * .55 : segW * .6).setFlipX(i % 2 === 1);
     // 墙脚阴影：墙根一条柔和的暗带（贴地，压在地面上、人物之下），城墙不再像贴在地上
-    { const g = this.h.scene.add.graphics().setDepth(DEPTH.ground + 2); this.objects.push(g); const L = a.left - WALL.beyond, R = a.right + WALL.beyond;
+    { const g = this.h.scene.add.graphics().setDepth(DEPTH.ground + 2); this.objects.push(g); const L = a.left, R = a.right; // W8：墙脚阴影不伸出墙端（原来比墙长，墙端露出直角）
       for (let k = 0; k < WALL.shadowBands; k++) g.fillStyle(0x1a120a, WALL.shadowAlpha * (1 - k / WALL.shadowBands)).fillRect(L, wy + 14 + k * 4, R - L, 4); }
     // 城门用倒塌序列帧的第 1 帧（完好），破门时直接往下播，最后停在敞开的门洞
     this.gateImg = this.has(ART.gateFx) ? this.img(0, wy + 34, ART.gateFx, 0, 300, 300) : this.art(0, wy + 30, [ART.walls, 1], ['sishui_props_refined', 0], 260);
@@ -150,6 +150,7 @@ export class SiegeMidCity {
     this.art(o.camp.x - 150, o.camp.y + 30, [ART.ram, 7], ['yellow_props', 0], 150);
     this.art(o.camp.x + 140, o.camp.y + 20, [ART.ram, 6], ['zhuge_banner', 0], 110, 150);
     this.campLabel = worldText(this.h.scene, o.camp.x, o.camp.y + 70, this.prof.ram ? '营地' : '', 14, '#bfe6c8').setOrigin(.5).setDepth(36).setStroke('#1a120b', 4); this.objects.push(this.campLabel);
+    this.sealOutside(a, wy);
     if (this.tier === 'large') this.buildMoat();
     // 后面各段：瓮城（大城）、街巷（中大城）、府衙
     if (this.prof.phases.includes('barbican')) this.buildBarbican();
@@ -328,6 +329,27 @@ export class SiegeMidCity {
     for (const x of [-170, 170]) this.art(x, a.top + 130, [ART.hall, 3], ['yellow_props', 32], 90).setFlipX(x > 0);
     this.art(-330, -1900, [ART.hall, 6], ['yellow_props', 30], 110);
     this.art(330, -1900, [ART.hall, 5], ['sishui_props_refined', 6], 120, 170);
+    this.hallWalls(a);
+  }
+  /**
+   * 城墙专项检查 W8：城外段左右边界原来看不见（碰撞在 ±场地边、墙铺到外面）——外城墙两端立角楼、往南转成侧墙（瓮城套件 3 / 4 号格），
+   * 南边界一排拒马（街巷图集 5 号格），场地四面都画出来；碰撞沿用原来的场地边框。
+   */
+  private sealOutside(a: { left: number; right: number; top: number; bottom: number }, wy: number) {
+    for (const x of [a.left, a.right]) this.art(x, wy + 44, [ART.barb, 3], [ART.walls, 5], 240);
+    for (let y = wy + 190; y < a.bottom + 50; y += 150) { this.art(a.left - 40, y, [ART.barb, 4], [ART.walls, 5], 220); this.art(a.right + 40, y, [ART.barb, 4], [ART.walls, 5], 220).setFlipX(true); }
+    for (let x = a.left + 70; x <= a.right - 70; x += 140) this.art(x, a.bottom + 46, [ART.street, 5], ['yellow_props', 13], 140);
+  }
+  /**
+   * 城墙专项检查 W9：府衙院子原来两侧没有院墙（碰撞在、画面没有）——四角角楼、两侧侧墙、北墙接到大堂两侧；南面：中城 / 大城留出街巷入口，小城整排封上（加碰撞）。
+   */
+  private hallWalls(a: { left: number; right: number; top: number; bottom: number }) {
+    for (const x of [a.left, a.right]) { this.art(x, a.top + 70, [ART.barb, 3], [ART.walls, 5], 230); this.art(x, a.bottom + 50, [ART.barb, 3], [ART.walls, 5], 210); }
+    for (let y = a.top + 210; y < a.bottom + 20; y += 150) { this.art(a.left - 40, y, [ART.barb, 4], [ART.walls, 5], 220); this.art(a.right + 40, y, [ART.barb, 4], [ART.walls, 5], 220).setFlipX(true); }
+    for (let x = a.left + 120; x <= a.right - 110; x += 220) if (Math.abs(x) > 360) this.art(x, a.top + 30, [ART.barb, 2], [ART.walls, 0], 246);
+    const open = this.prof.phases.includes('street') ? M.street.arena.right + 30 : 0;
+    for (let x = a.left + 120; x <= a.right - 110; x += 220) if (!open || Math.abs(x) - 110 > open) this.art(x, a.bottom + 60, [ART.barb, 2], [ART.walls, 0], 246);
+    if (open) { this.box({ left: a.left, right: -open, top: a.bottom, bottom: a.bottom + 60 }); this.box({ left: open, right: a.right, top: a.bottom, bottom: a.bottom + 60 }); }
   }
 
   // ---------- 冲车 ----------

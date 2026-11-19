@@ -73,7 +73,8 @@ export class EnemyTraits {
     for (const id of [...ids]) { const t = ROSTER[id]; if (t?.trait.kind === 'tamer') ids.push(t.trait.beast); }
     // 专属图（美术风格会话登记在 ART_V2_FILES；没登记 / 没到的键 isV2Texture 为 false，自动跳过）
     loadV2TroopSheets(sc, ids.flatMap(id => ROSTER[id] ? [ROSTER[id].art.walk, ROSTER[id].art.attack] : []));
-    if (ids.some(id => ROSTER[id]?.trait.kind === 'lobber') && !sc.textures.exists('shu_pass')) sc.load.spritesheet('shu_pass', 'assets/shu/pass.png', { frameWidth: 384, frameHeight: 384 });
+    if (ids.some(id => ROSTER[id]?.trait.kind === 'firepot') && !sc.textures.exists('fx_firepot')) sc.load.image('fx_firepot', 'assets/processed-v2/fx/fx_firepot.png'); // 火攻兵的飞行陶罐
+    if (ids.some(id => ROSTER[id]?.trait.kind === 'lobber' || ROSTER[id]?.trait.kind === 'firepot') && !sc.textures.exists('shu_pass')) sc.load.spritesheet('shu_pass', 'assets/shu/pass.png', { frameWidth: 384, frameHeight: 384 });
     if (sc.load.list.size && !sc.load.isLoading()) sc.load.start();
   }
 
@@ -537,7 +538,7 @@ export class EnemyTraits {
       const p = this.h.player, tx = p.x + Phaser.Math.Between(-20, 20), ty = p.y + Phaser.Math.Between(-20, 20);
       e.poseUntil = now + 360; e.startAttack(now, dirOf(nx, ny));
       this.hazards.push({ id: `trait-pot-${++this.seq}`, kind: 'stone', fire: { ms: t.fireMs, r: t.fireRadius, dmg: t.fireDamage }, x: tx, y: ty, r: t.radius, from: now, at: now + t.warnMs, end: now + t.warnMs, damage: t.damage, allyDamage: t.allyDamage, tick: 0 });
-      this.flyStone(e.x, e.y - 40, tx, ty, now + RELEASE_MS, Math.max(400, t.warnMs - RELEASE_MS));
+      this.flyStone(e.x, e.y - 40, tx, ty, now + RELEASE_MS, Math.max(400, t.warnMs - RELEASE_MS), true);
     }
     return true;
   }
@@ -673,11 +674,12 @@ export class EnemyTraits {
   }
 
   /** 抛石：蜀道滚石图沿抛物线飞到落点（图没载好就只有落点圈）。 */
-  private flyStone(x0: number, y0: number, tx: number, ty: number, startAt: number, ms: number): void {
-    const sc = this.h.scene; if (!sc.textures.exists('shu_pass')) return;
+  /** pot = 火攻兵的飞行陶罐（fx_firepot，美术会话从攻击图里裁出；缺图退回滚石图）。 */
+  private flyStone(x0: number, y0: number, tx: number, ty: number, startAt: number, ms: number, pot = false): void {
+    const sc = this.h.scene, usePot = pot && sc.textures.exists('fx_firepot'); if (!usePot && !sc.textures.exists('shu_pass')) return;
     const delay = Math.max(0, startAt - this.now());
     sc.time.delayedCall(delay, () => {
-      const img = sc.add.image(x0, y0, 'shu_pass', STONE_FRAME).setDisplaySize(40, 40).setDepth(DEPTH.projectile);
+      const img = (usePot ? sc.add.image(x0, y0, 'fx_firepot') : sc.add.image(x0, y0, 'shu_pass', STONE_FRAME)).setDisplaySize(usePot ? 44 : 40, usePot ? 44 : 40).setDepth(DEPTH.projectile);
       sc.tweens.addCounter({ from: 0, to: 1, duration: ms, onUpdate: tw => { const k = tw.getValue() ?? 0; img.setPosition(x0 + (tx - x0) * k, y0 + (ty - y0) * k - Math.sin(k * Math.PI) * 140).setRotation(k * 6); }, onComplete: () => img.destroy() });
     });
   }

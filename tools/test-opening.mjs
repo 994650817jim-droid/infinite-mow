@@ -60,7 +60,7 @@ ck('默认「首次」：第二次启动不再播', (await active()).includes('M
 const noOpening = await titleProps();
 ck('开场播完进主页：标题纹理 / 帧 / 尺寸 / 位置与不播开场时完全一致（不是朱印）', same(afterOpening, noOpening) && noOpening.key === 'title_wordmark' && noOpening.frame === '__BASE' && noOpening.frames.length === 1, { afterOpening, noOpening });
 // ⑦ 主页设置改「每次」→ 每次启动都播；任意键跳过（画面淡出）
-const set = await p.evaluate(() => { const m = window.__game.scene.getScene('MenuScene'); m.openHomeSettings(); const panel = m.children.getByName('home-settings-panel'), row = panel.list.find(o => o.name === 'settings-opening'); const dec = panel.list.find(o => /^settings-row-\d+-dec$/.test(o.name) && Math.abs(o.y - row.y) < 2); const before = row.text; dec.emit('pointerdown'); return { before, after: row.text, stored: localStorage.getItem('im_opening'), replay: !!panel.list.find(o => o.name === 'settings-opening-replay') }; });
+const set = await p.evaluate(() => { const m = window.__game.scene.getScene('MenuScene'); m.openHomeSettings(); const panel = m.children.getByName('home-settings-panel'), row = panel.list.find(o => o.name === 'settings-opening'); const dec = panel.list.find(o => o.name === 'settings-opening-dec'); /* 2026-11-18 设置改版：步进钩子按设置名 */ const before = row.text; dec.emit('pointerdown'); return { before, after: row.text, stored: localStorage.getItem('im_opening'), replay: !!panel.list.find(o => o.name === 'settings-opening-replay') }; });
 ck('主页设置有「开场动画」行（首次 → 每次）并存档；有「重看开场」', set.before === '首次' && set.after === '每次' && set.stored === 'every' && set.replay, set);
 await go();
 const every = await active();

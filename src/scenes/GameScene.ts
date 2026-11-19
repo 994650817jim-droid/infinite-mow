@@ -1,4 +1,5 @@
 import { stopMenuMusic } from '../systems/Music';
+import { buildSettingsPanel, type SettingSpec } from '../ui/SettingsPanel';
 import {FollowerSquad,type Follower} from '../systems/FollowerSquad';
 import {CharacterPassives} from '../systems/CharacterPassives';
 import {FOLLOW} from '../data/recruits';
@@ -2887,44 +2888,30 @@ export class GameScene extends Phaser.Scene {
     o.exit.setPosition(lx, top + 320);
     for (const t of [o.buildLink, o.exit]) t?.setFontFamily(HEADING_FONT);
     o.keys.setText(hotkeyLabel('back') + ' / P 继续战斗').setPosition(lx, top + ph - 26);
-    // 右栏：音乐 / 音效滑条（原控件，挪到右栏）
-    const moveRow = (row: Phaser.GameObjects.GameObject[], y: number): void => { const kept = row.filter(x => x.active); for (const x of kept) x.destroy(); void y; };
-    moveRow(o.bgmRow, 0); moveRow(o.sfxRow, 0);
-    const width = 250;
-    this.pausePanel.add(this.createVolumeRow('音乐', top + 122, this.music.getVolume(), v => this.music.setVolume(v), rx, width));
-    this.pausePanel.add(this.createVolumeRow('音效', top + 180, this.sfx.getVolume(), v => this.sfx.setVolume(v), rx, width));
-    // 右栏：‹ 值 › 行
-    const rowY = (i: number) => top + 222 + i * 31; // 第 5 行「武将台词」（平衡会话），第 6 行「剧情」，第 7 行「开场动画」（2026-11-18）
-    const row = <T>(i: number, name: string, key: string, list: readonly T[], get: () => T, label: (v: T) => string, apply: (v: T) => void, note?: () => string): void => {
-      const y = rowY(i);
-      const plate = this.add.graphics().setScrollFactor(0); plate.fillStyle(0x3a2616, .4).fillRoundedRect(rx - width / 2, y - 14, width, 28, 5).lineStyle(1, 0xc9a35e, .3).strokeRoundedRect(rx - width / 2, y - 14, width, 28, 5);
-      const nameT = this.add.text(rx - width / 2 + 12, y, name, { fontFamily: FONT, fontSize: '15px', color: '#e8d8b2', resolution: 2 }).setOrigin(0, .5).setScrollFactor(0).setStroke('#120904', 3);
-      const val = this.add.text(rx + 62, y, label(get()), { fontFamily: HEADING_FONT, fontSize: '16px', color: '#efd399', resolution: 2 }).setOrigin(.5).setScrollFactor(0).setStroke('#120904', 3).setName('settings-' + key);
-      const noteT = note ? this.add.text(rx + width / 2 + 8, y, '', { fontFamily: FONT, fontSize: '11px', color: '#9d8f78', resolution: 2 }).setOrigin(0, .5).setScrollFactor(0) : null;
-      const step = (dir: number): void => { const v = cycle(list, get(), dir); apply(v); val.setText(label(get())); noteT?.setText(note?.() ?? ''); };
-      const parts: Phaser.GameObjects.GameObject[] = [plate, nameT, val];
-      for (const dir of [-1, 1]) {
-        const b = this.add.text(rx + 62 + dir * 62, y, dir < 0 ? '‹' : '›', { fontFamily: HEADING_FONT, fontSize: '20px', color: '#e8d3a6', resolution: 2 }).setOrigin(.5).setScrollFactor(0).setName('settings-' + key + (dir < 0 ? '-dec' : '-inc')).setInteractive({ useHandCursor: true });
-        b.on('pointerdown', () => step(dir)); b.setData('padAdjust', (d2: number) => step(d2));
-        const sk = lqSkin(this, b, b, () => ({ w: 28, h: 26 }), { tone: 'quiet' }); lqHitBox(b, 28, 26); sk.gfx.setScrollFactor(0); parts.push(sk.gfx, b);
-      }
-      if (noteT) parts.push(noteT);
-      this.pausePanel.add(parts);
-    };
-    row<OutlineMode>(0, '敌我描边', 'outline', ['off', 'enemy', 'all'], outlineMode, v => OUTLINE_LABEL[v], v => {
-      setOutlineMode(v); if (this.iff) { this.iff.mode.outline = v !== 'off'; this.iff.mode.enemyOnly = v === 'enemy'; } if (v !== 'off') warmIffTextures(this.game);
-    });
-    row<OutlineWidth>(1, '描边粗细', 'outline-width', ['thin', 'thick'], outlineWidth, v => WIDTH_LABEL[v], v => { setOutlineWidth(v); if (this.iff) this.iff.mode.thick = v === 'thick'; });
-    row<DamageNumbers>(2, '伤害数字', 'damage', ['all', 'crit', 'off'], damageNumbers, v => DAMAGE_LABEL[v], setDamageNumbers);
-    row<ShakeLevel>(3, '震屏', 'shake', ['strong', 'weak', 'off'], shakeLevel, v => SHAKE_LABEL[v], v => { setShakeLevel(v); if (v !== 'off') this.cameras.main.shake(140, .004); });
-    const scale0 = renderScaleSetting();
-    row<RenderScaleSetting>(4, '画面清晰度', 'render-scale', ['', '1', '2', '3'], renderScaleSetting, v => SCALE_LABEL[v], setRenderScaleSetting, () => renderScaleSetting() === scale0 ? '' : '刷新后生效');
-    row<HeroBarks>(5, '武将台词', 'hero-barks', ['on', 'off'], heroBarks, v => BARKS_LABEL[v], v => { setHeroBarks(v); if (v === 'off') this.heroBark?.clear(); });
-    row<StoryMode>(6, '剧情', 'story', ['full', 'chapter', 'off'], storyMode, v => STORY_LABEL[v], setStoryMode);
-    row<OpeningMode>(7, '开场动画', 'opening', ['every', 'first', 'off'], openingMode, v => OPENING_LABEL[v], setOpeningMode);
-    row<DeathFxSetting>(8, '死亡特效', 'death-fx', ['on', 'off'], deathFxSetting, v => DEATHFX_LABEL[v], setDeathFx);
-    const replay = tutorialReplayLink(this, rx + width / 2, top + ph - 14).setScrollFactor(0); this.pausePanel.add(replay);
-    this.pausePanel.add(hotkeySettingsLink(this, rx - width / 2 + 62, top + ph - 14, DEPTH.overlay + 40).setScrollFactor(0)); // 快捷键页（与主页设置共用）
+    // 右栏：设置区（2026-11-18 用户「这里设计ui也要优化」）：页签 声音 / 画面 / 战斗 / 剧情，音量滑条、开关拨钮、分段选择；与主页设置共用 ui/SettingsPanel
+    const moveRow = (row: Phaser.GameObjects.GameObject[]): void => { for (const x of row.filter(x => x.active)) x.destroy(); };
+    moveRow(o.bgmRow); moveRow(o.sfxRow); void rx;
+    const ch = (list: readonly string[], labels: Record<string, string>) => list.map(v => ({ v, label: labels[v] })), scale0 = renderScaleSetting();
+    const specs: SettingSpec[] = [
+      { key: 'music', name: '音乐', tab: 'sound', kind: 'slider', get: () => String(this.music.getVolume()), set: v => this.music.setVolume(Number(v)) },
+      { key: 'sfx', name: '音效', tab: 'sound', kind: 'slider', get: () => String(this.sfx.getVolume()), set: v => { this.sfx.setVolume(Number(v)); this.sfx.play('uiClick'); } },
+      { key: 'render-scale', name: '画面清晰度', tab: 'view', kind: 'choice', options: ch(['', '1', '2', '3'], SCALE_LABEL), get: () => renderScaleSetting(), set: v => setRenderScaleSetting(v as RenderScaleSetting), note: () => renderScaleSetting() === scale0 ? '' : '刷新后生效' },
+      { key: 'outline', name: '敌我描边', tab: 'view', kind: 'choice', options: ch(['off', 'enemy', 'all'], OUTLINE_LABEL), get: () => outlineMode(), set: v => { const m = v as OutlineMode; setOutlineMode(m); if (this.iff) { this.iff.mode.outline = m !== 'off'; this.iff.mode.enemyOnly = m === 'enemy'; } if (m !== 'off') warmIffTextures(this.game); } },
+      { key: 'outline-width', name: '描边粗细', tab: 'view', kind: 'choice', options: ch(['thin', 'thick'], WIDTH_LABEL), get: () => outlineWidth(), set: v => { setOutlineWidth(v as OutlineWidth); if (this.iff) this.iff.mode.thick = v === 'thick'; } },
+      { key: 'shake', name: '震屏', tab: 'view', kind: 'choice', options: ch(['strong', 'weak', 'off'], SHAKE_LABEL), get: () => shakeLevel(), set: v => { setShakeLevel(v as ShakeLevel); if (v !== 'off') this.cameras.main.shake(140, .004); } },
+      { key: 'death-fx', name: '死亡特效', tab: 'view', kind: 'toggle', options: ch(['on', 'off'], DEATHFX_LABEL), get: () => deathFxSetting(), set: v => setDeathFx(v as DeathFxSetting) },
+      { key: 'damage', name: '伤害数字', tab: 'battle', kind: 'choice', options: ch(['all', 'crit', 'off'], DAMAGE_LABEL), get: () => damageNumbers(), set: v => setDamageNumbers(v as DamageNumbers) },
+      { key: 'hero-barks', name: '武将台词', tab: 'battle', kind: 'toggle', options: ch(['on', 'off'], BARKS_LABEL), get: () => heroBarks(), set: v => { setHeroBarks(v as HeroBarks); if (v === 'off') this.heroBark?.clear(); } },
+      { key: 'story', name: '剧情', tab: 'story', kind: 'choice', options: ch(['full', 'chapter', 'off'], STORY_LABEL), get: () => storyMode(), set: v => setStoryMode(v as StoryMode) },
+      { key: 'opening', name: '开场动画', tab: 'story', kind: 'choice', options: ch(['every', 'first', 'off'], OPENING_LABEL), get: () => openingMode(), set: v => setOpeningMode(v as OpeningMode) },
+    ];
+    const sx = cx - 14, sw = cx + pw / 2 - 18 - sx;
+    buildSettingsPanel({ scene: this, root: this.pausePanel, x: sx, y: top + 84, w: sw, h: ph - 84 - 60, tabs: [{ id: 'sound', label: '声音' }, { id: 'view', label: '画面' }, { id: 'battle', label: '战斗' }, { id: 'story', label: '剧情' }], settings: specs, memoryKey: 'im_settings_tab', fixed: true, bare: true });
+    // 右栏底部：重看新手引导 / 快捷键（漆金次要钮）
+    const fy = top + ph - 32, line = this.add.graphics().setScrollFactor(0); line.lineStyle(1, 0xc9a35e, .35).lineBetween(sx + 6, fy - 24, sx + sw - 6, fy - 24); this.pausePanel.add(line);
+    const footBtn = (t: Phaser.GameObjects.Text, x: number, w: number): void => { t.setOrigin(.5).setPosition(x, fy).setFontFamily(HEADING_FONT).setFontSize(14).setScrollFactor(0); const sk = lqSkin(this, t, t, () => ({ w, h: 32 }), { tone: 'quiet' }); lqHitBox(t, w, 32); sk.gfx.setScrollFactor(0); this.pausePanel.add([sk.gfx, t]); };
+    footBtn(tutorialReplayLink(this, 0, 0), sx + 8 + 80, 160);
+    footBtn(hotkeySettingsLink(this, 0, 0, DEPTH.overlay + 40), sx + 8 + 160 + 10 + 48, 96);
   }
 
   protected createVolumeRow(label: string, y: number, initial: number, onChange: (value: number) => void, cx = GAME_WIDTH / 2, width = Math.min(330, GAME_WIDTH - 144)): Phaser.GameObjects.GameObject[] {

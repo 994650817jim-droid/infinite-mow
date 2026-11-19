@@ -121,7 +121,7 @@ export const ART_V2_FILES: Readonly<Record<string, string>> = {
   shu_yanghuai: 'assets/bosses-v2/shu_yanghuai.png', shu_zhangren: 'assets/bosses-v2/shu_zhangren.png', shu_liuzhang: 'assets/bosses-v2/shu_liuzhang.png',
   shu_dongzhou_walk: 'assets/processed-v2/enemies/shu_dongzhou_walk.png', shu_nushou_walk: 'assets/processed-v2/enemies/shu_nushou_walk.png',
   // 第九章襄樊 / 第十一章南征（Gemini 出图；场景自己载入，这里登记是为了按 v2 规格缩放）
-  xf_pangde: 'assets/bosses-v2/xf_pangde.png', xf_lvmeng: 'assets/bosses-v2/xf_lvmeng.png', nz_menghuo: 'assets/bosses-v2/nz_menghuo.png', nz_mangyachang: 'assets/bosses-v2/nz_mangyachang.png', nz_wutugu: 'assets/bosses-v2/nz_wutugu.png',
+  xf_pangde: 'assets/bosses-v2/xf_pangde.png', xf_lvmeng: 'assets/bosses-v2/xf_lvmeng.png', nz_menghuo: 'assets/bosses-v2/nz_menghuo.png', nz_zhurong: 'assets/bosses-v2/nz_zhurong.png', nz_mangyachang: 'assets/bosses-v2/nz_mangyachang.png', nz_wutugu: 'assets/bosses-v2/nz_wutugu.png',
   nz_tengjia_walk: 'assets/processed-v2/enemies/nz_tengjia_walk.png', nz_elephant_walk: 'assets/processed-v2/enemies/nz_elephant_walk.png', nz_manbing_walk: 'assets/processed-v2/enemies/nz_manbing_walk.png',
   xf_baier_walk: 'assets/processed-v2/enemies/xf_baier_walk.png', xf_jiangdong_walk: 'assets/processed-v2/enemies/xf_jiangdong_walk.png',
   // 第八章 汉中之战首领：正式 v2 图到之前借用现有首领 v2 图过渡（hanzhongChapter.HANZHONG_SHEETS 同步改）

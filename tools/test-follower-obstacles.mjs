@@ -14,6 +14,10 @@ const CASES = [
   { key: '7-2 落凤坡（山崖）', scene: 'ShuGameScene', run: { thirdStage: 2 }, reg: { shuStage: 2 }, src: 'boxes' },
   { key: '9-2 水淹七军（洪水边界）', scene: 'XiangfanGameScene', run: { thirdStage: 2 }, reg: { xiangfanStage: 2 }, src: 'boxes' },
   { key: '9-3 麦城（突围通道）', scene: 'XiangfanGameScene', run: { thirdStage: 3 }, reg: { xiangfanStage: 3 }, src: 'boxes' },
+  // 场景审查 P3 新加的实心布景（content 会话）：每个碰撞框都试一遍（框的北边缘往里 10 像素当靶）
+  { key: '1-2 下曲阳（张宝法坛营）', scene: 'GameScene', run: { chapter: 'huangjin', stage: 2 }, reg: {}, src: 'all' },
+  { key: '5-2 赤壁（连环战船）', scene: 'ChibiGameScene', run: { thirdStage: 2 }, reg: { chibiStage: 2 }, src: 'all' },
+  { key: '9-3 麦城（全部碰撞框：山崖 / 通道）', scene: 'XiangfanGameScene', run: { thirdStage: 3 }, reg: { xiangfanStage: 3 }, src: 'all' },
 ];
 const b = await chromium.launch({ channel: 'chrome', headless: true, args: ['--mute-audio'] });
 try {
@@ -40,6 +44,7 @@ try {
     const targets = await ev((s, src) => {
       const p = s.player, near = arr => arr.sort((a, b) => Math.hypot(a.x - p.x, a.y - p.y) - Math.hypot(b.x - p.x, b.y - p.y)).slice(0, 4);
       if (src === 'trees') return near((s.terrain?.trees ?? []).filter(t => !t.burnt).map(t => ({ x: t.x, y: t.y, kind: 'tree' })));
+      if (src === 'all') return (s.sishuiObstacles?.footprints ?? []).filter(b => b.right - b.left < 1400 && b.bottom - b.top < 1400).sort((a, b) => Math.hypot((a.left + a.right) / 2 - p.x, a.top - p.y) - Math.hypot((b.left + b.right) / 2 - p.x, b.top - p.y)).slice(0, 14).map(b => ({ x: (b.left + b.right) / 2, y: b.top + Math.min(10, (b.bottom - b.top) / 2), kind: 'box', w: Math.round(b.right - b.left), h: Math.round(b.bottom - b.top) }));
       const boxes = src === 'dz' ? (s.dzLubu?.obstacles.footprints ?? []) : (s.sishuiObstacles?.footprints ?? []);
       // 碰撞框里离主将最近的点往里挪 10 像素（深埋在大框里的点不现实；随行是从边上挤进去的）
       return near(boxes.map(b => { const qx = Math.max(b.left, Math.min(b.right, p.x)), qy = Math.max(b.top, Math.min(b.bottom, p.y)); return { x: qx + Math.sign((b.left + b.right) / 2 - qx) * Math.min(10, (b.right - b.left) / 2), y: qy + Math.sign((b.top + b.bottom) / 2 - qy) * Math.min(10, (b.bottom - b.top) / 2), kind: 'box' }; }));

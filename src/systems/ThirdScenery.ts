@@ -72,7 +72,7 @@ export function thirdScenery(scene:Phaser.Scene,stage:SceneryStage,spawnProp?:(f
   {x:-330,y:210,kind:'shield' as const,name:'寿春亲军营'},
   {x:340,y:-420,kind:'archer' as const,name:'旗令弓营'}
  ];
- if(fort==='pass'||fort==='city'||fort==='camp')for(const c of camps)if(c.y<0){c.x=c.x>0?620:-620;c.y=-330;}
+ if(fort==='pass'||fort==='city'||fort==='camp'||look?.campsSouth)for(const c of camps)if(c.y<0){c.x=c.x>0?620:-620;c.y=-330;}
  for(const c of camps){
   place(4,c.x+113,c.y-8,92);
   place(3,c.x-110,c.y+42,90);

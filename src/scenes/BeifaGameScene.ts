@@ -2,6 +2,7 @@ import { SishuiObstacles } from '../systems/SishuiObstacles';
 import type { GameScene } from './GameScene';
 import { thirdGameSceneClass, type ArcSceneConfig } from './ThirdGameScene';
 import type { Enemy } from '../entities/Enemy';
+import type { EnemyKind } from '../types';
 import { GAME_HEIGHT, GAME_WIDTH, IS_DESKTOP } from '../config';
 import { BEIFA_TROOP_SHEETS, SMY } from '../data/beifaChapter';
 import { loadV2TroopSheets } from '../systems/ArtStyle';
@@ -52,6 +53,16 @@ export function beifaGameSceneClass(Base: typeof GameScene, cfg: ArcSceneConfig)
         spawnTower: (x, y, hp) => { const e = sup.spawnCamp(x, y, hp); e?.sprite.setTexture('sishui_props_refined', 1).setOrigin(.5, 1).setDisplaySize(140, 140).setAlpha(1); return e; },
         banner: (t, c) => s.showWaveBanner(t, false, c), sfx: k => s.sfx.play(k),
         timeLeft: () => { const h = this as unknown as { elapsed: number; chapter: { waves: { start: number }[] } }, bt = h.chapter.waves[h.chapter.waves.length - 1].start; return h.elapsed >= bt ? Math.max(0, bt + 60 - h.elapsed) : null; } }, s.combatNow);
+    }
+    /** 城墙专项检查 W6：陈仓城墙封死后，城门没破之前城里的兵出不来——刷兵点落在城墙北面就镜像到南面。 */
+    protected spawnAroundPlayer(kind: EnemyKind, force = false): Enemy | null {
+      const s = this as unknown as { player: { x: number; y: number }; spawnEnemy(k: EnemyKind, x: number, y: number, h?: number, f?: boolean): Enemy | null };
+      if (this.arcStage === 2 && this.siege?.gateAlive) {
+        const p = s.player, a = Math.random() * Math.PI * 2, d = Math.max(GAME_WIDTH, GAME_HEIGHT) * .5 + Math.random() * 100, wy = this.siege.wallY + 60;
+        let y = p.y + Math.sin(a) * d; if (y < wy) y = wy + (wy - y);
+        return s.spawnEnemy(kind, p.x + Math.cos(a) * d, y, undefined, force);
+      }
+      return super.spawnAroundPlayer(kind, force);
     }
     update(time: number, delta: number): void {
       const s = this as unknown as Host;

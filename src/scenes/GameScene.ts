@@ -6,6 +6,7 @@ import type {PlayerStats} from '../types';
 import {followersFor,followerLevelCap,heroOwned,lordHero} from '../systems/RosterStore';
 import {Parley} from '../systems/Parley';
 import {freeSpawn} from '../systems/SpawnClear';
+import {luoyangRuins,xiaquyangAltarCamp} from '../systems/ChapterDressing';
 import {DUAL, DualBoss, retreatFade, type DualCtrl, type DualPlan} from '../systems/DualBoss';
 import type {BossMount as BossMountT} from '../systems/BossMount';
 import {SURRENDER,surrenderDef} from '../data/surrender';
@@ -110,6 +111,7 @@ import {FireShips} from '../systems/FireShips';
 import {gearFor} from '../systems/ItemEffects';
 import {addItems,claimRunLoot,depositRunLoot,grantHorse,heroHorse,ownedHorses,tokenSlots} from '../systems/ItemStore';
 import { ItemTooltip } from '../ui/ItemTooltip';
+import { primarySummary } from '../ui/PrimaryAttrInfo';
 import {STARTER_HORSE} from '../data/mounts';
 import {storyScroll} from '../ui/StoryScroll';
 import {MERCHANT_HORSE_REWARD,markMerchantStorySeen,merchantHorseLines,merchantStorySeen} from '../data/storyMerchantHorse';
@@ -119,7 +121,7 @@ import { DraggingBladeFx } from '../systems/DraggingBladeFx';
 import { FlankFx } from '../systems/FlankFx';
 import { WindstepFx } from '../systems/WindstepFx';
 import { EnvInteractions } from '../systems/EnvInteractions';
-import { envConfigFor } from '../data/envInteractions';
+import { envConfigFor, type Faction } from '../data/envInteractions';
 import { Terrain } from '../systems/Terrain';
 import { attrBadge } from '../ui/AttrBadge';
 import { PROP_LOOT, rollPropItem, type PropLootKind } from '../data/propLoot';
@@ -291,6 +293,8 @@ export class GameScene extends Phaser.Scene {
       const line=plan.lines[second.id]?.intro;if(line&&storyMode()!=='off')storyBark(this,e.sprite,second.name,line);
     });
   }
+  /** 本关敌方势力（营具 / 军旗）；篇章场景按章节.关覆盖（data/sceneLooks.ts ARC_FACTIONS），null = 照 envConfigFor。 */
+  protected sceneFaction():number|null{return null;}
   /** 单首领「败退型」（8-1 张郃、5-3 曹仁、4-1 颜良）：打到底不倒地，淡出退走。子类据此不播控制器倒地帧。 */
   protected bossRetreats(enemy:Enemy):boolean{return enemy===this.boss&&!this.dual&&surrenderDef(this.surrenderKey())?.tier==='retreat';}
   /** 败退型的退兵台词：招降表 retreat 句（8-1 张郃），没有时用剧本 bossFall（5-3 曹仁、4-1 颜良）。 */
@@ -614,11 +618,13 @@ export class GameScene extends Phaser.Scene {
   private resultTop = 0; private resultH = 0;
   protected pausePanel!: Phaser.GameObjects.Container;
   protected attributePanel!: Phaser.GameObjects.Container;
+  /** 加点面板的说明卡（主属性一行悬停 / 点按）。 */
+  protected attributeTip?: ItemTooltip;
   protected attributePauseText!: Phaser.GameObjects.Text;
   protected attributePointsText!: Phaser.GameObjects.Text;
   protected attributeWeaponText!: Phaser.GameObjects.Text;
   protected attributeSummaryText!: Phaser.GameObjects.Text;
-  protected attributeRows: Array<{ value: Phaser.GameObjects.Text; button: Phaser.GameObjects.Image; plus: Phaser.GameObjects.Text; pips: Phaser.GameObjects.Graphics; pipX: number; pipY: number; perkG?: Phaser.GameObjects.Graphics; perkX?: number; perkY?: number; ink?: { plate: Phaser.GameObjects.NineSlice | null; hover: boolean } }> = [];
+  protected attributeRows: Array<{ value: Phaser.GameObjects.Text; button: Phaser.GameObjects.Image; plus: Phaser.GameObjects.Text; pips: Phaser.GameObjects.Graphics; pipX: number; pipY: number; perks?: { prefix: Phaser.GameObjects.Text; chips: Phaser.GameObjects.Text[] }; ink?: { plate: Phaser.GameObjects.NineSlice | null; hover: boolean } }> = [];
 
   protected cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
   protected wasd!: Record<string, Phaser.Input.Keyboard.Key>;
@@ -742,6 +748,8 @@ export class GameScene extends Phaser.Scene {
       this.supplies.spawnSishui(3,-330,180,116);this.supplies.spawnSishui(5,-310,350,105);this.supplies.spawnSishui(7,230,-50,100);this.supplies.spawnSishui(4,290,210,104);this.supplies.spawnSishui(6,300,370,110);}
     // 1-3 广宗决战（全场景审查 P2：「广宗城」只有空地）：北面一道广宗城墙（攻城城墙图集，同 2-1 汜水关那套），城门紧闭，张角在城下列阵
     if(this.chapter.id==='huangjin'&&this.chapter.stage===3&&!this.runConfig.encounter&&!this.customChapter()&&!this.sishuiPass){this.sishuiPass=new SishuiPass(this.passHost(),{towers:false,tents:false,wenjiu:false,wallY:-900,tag:'guangzong'});this.sishuiObstacles=new SishuiObstacles(this.sishuiPass.footprints);}
+    // 场景审查 P3：1-2 下曲阳张宝法坛营、2-3 洛阳火城残垣（systems/ChapterDressing.ts，实心部分进场景碰撞框）
+    if(!this.runConfig.encounter&&!this.customChapter()&&((this.chapter.id==='huangjin'&&this.chapter.stage===2)||(this.chapter.id==='hulao'&&(this.chapter.westStage??3)===3&&this.chapter.bossStyle==='dongzhuo'))){if(!this.sishuiObstacles)this.sishuiObstacles=new SishuiObstacles([]);const bx=this.sishuiObstacles.footprints;if(this.chapter.id==='huangjin')xiaquyangAltarCamp(this,this.player,bx);else luoyangRuins(this,this.player,bx);}
     // 过场动画预览（MenuScene 收到 ?dev=1&cutscene=<id>）：清场、首领出阵，推到过场处自动播
     {const pv=this.registry.get('cutscenePreview') as string|undefined;if(pv){this.registry.remove('cutscenePreview');this.player.damageImmune=true;const t0=performance.now();
       const poll=():void=>{if(!this.scene.isActive()){this.events.off('postupdate',poll);return;}this.spawnTimer=this.eliteTimer=1e9;for(const e of this.enemies)if(e.active&&e.kind!=='boss'&&!e.isSupplySlot&&e!==this.dzLubu?.lubu)e.deactivate();
@@ -1086,7 +1094,7 @@ export class GameScene extends Phaser.Scene {
     if(!this.over){for(const c of this.bossChests)c.update(this.combatNow);this.itemDrops?.update();this.relics?.update(this.combatNow);this.relicShips?.update(this.combatNow);}
     this.deathFx?.update(this.combatNow);
     this.supplies?.update(dt,time,this.battlefieldDetails.props,(enemy,damage)=>this.hitEnemy(enemy,damage,time,'fire',false,false),this.allies,(ally,damage,now)=>this.legion.hurt(ally,damage,now));
-    if(!this.envInit&&this.supplies){this.envInit=true;const cfg=envConfigFor(this.scene.key,this.chapter.id,(this as unknown as {guanduStage?:number}).guanduStage);if(cfg){const sup=this.supplies;this.env=new EnvInteractions({scene:this,player:this.player,supplies:sup,enemies:()=>this.enemies,allies:()=>this.allies,hitEnemy:(e,d)=>{this.hitEnemy(e,d,this.combatNow,'fire',false,false);},hurtAlly:(a,d)=>{this.legion.hurt(a,d,this.combatNow);},spawnEnemy:(x,y)=>this.spawnEnemy('infantry',x,y,undefined,true),spawnGem:(x,y,v)=>this.spawnGem(x,y,v),spawnChest:(x,y)=>{this.itemDrops?.spawnChest(x,y);},now:()=>this.combatNow,sfx:k=>this.sfx.play(k)},cfg);this.events.once('shutdown',()=>{this.env?.destroy();this.env=null;});}}
+    if(!this.envInit&&this.supplies){this.envInit=true;const sf=this.sceneFaction(),cfg0=envConfigFor(this.scene.key,this.chapter.id,(this as unknown as {guanduStage?:number}).guanduStage),cfg=cfg0&&sf!==null&&sf<=3?{...cfg0,faction:sf as Faction}:cfg0;if(cfg){const sup=this.supplies;this.env=new EnvInteractions({scene:this,player:this.player,supplies:sup,enemies:()=>this.enemies,allies:()=>this.allies,hitEnemy:(e,d)=>{this.hitEnemy(e,d,this.combatNow,'fire',false,false);},hurtAlly:(a,d)=>{this.legion.hurt(a,d,this.combatNow);},spawnEnemy:(x,y)=>this.spawnEnemy('infantry',x,y,undefined,true),spawnGem:(x,y,v)=>this.spawnGem(x,y,v),spawnChest:(x,y)=>{this.itemDrops?.spawnChest(x,y);},now:()=>this.combatNow,sfx:k=>this.sfx.play(k)},cfg);this.events.once('shutdown',()=>{this.env?.destroy();this.env=null;});}}
     this.env?.update(dt);
     if(this.mode==='none'&&!this.over)this.sishuiPass?.update();
     this.parley?.update(); // 首领招降：残血弹窗 / 再压一压
@@ -2568,6 +2576,7 @@ export class GameScene extends Phaser.Scene {
     this.rerollButton?.setVisible(mode==='levelup');
     this.pointsButton?.setVisible(mode==='none'&&!this.over&&this.player.growth.unallocated>0);
     if (this.attributePanel) this.attributePanel.setVisible(mode === 'attributes');
+    if (mode !== 'attributes') this.attributeTip?.hide();
     if (this.recruitPanel) this.recruitPanel.setVisible(false);
     this.legionUI?.panel.setVisible(mode === 'recruit');
     this.campUI?.setVisible(mode==='rest');
@@ -3861,35 +3870,45 @@ export class GameScene extends Phaser.Scene {
     this.attributeSummaryText=this.add.text(attrCx,attrTop+133,'',{...warText(d?11:12,'#c7d6c8'),align:'center',lineSpacing:3}).setOrigin(.5).setWordWrapWidth(attrW-46);
     this.attributePanel.add([attrDim,attrFrameG,attrFrame,attrTitle,this.attributePointsText,this.attributeWeaponText,this.attributeSummaryText]);
     const rowH=d?50:66,firstY=attrTop+(d?186:206),rowW=attrW-50;
+    // 2026-11-18 用户「关于每个英雄主属性，在加点那里要说出来有什么特殊加成」：主属性一行加高一截，写三行——
+    // ①「主属性：敏捷 · 每点效果 ×1.5」②原来的每点效果 ③专精三档（已解锁点亮，未解锁写「再加 X 点」）；整行悬停 / 点按弹完整说明（ui/PrimaryAttrInfo）
+    const primaryExtra=d?22:20;
     this.attributeRows=[];
-    const perkTip=this.add.text(0,0,'',{...warText(13,'#ffe3a0'),backgroundColor:'#1b120bee',padding:{x:8,y:5}}).setOrigin(.5,1).setVisible(false).setName('attribute-perk-tip');
+    this.attributeTip?.destroy();const attrTip=this.attributeTip=new ItemTooltip(this,DEPTH.overlay+40);
+    let rowOffset=0;
     (Object.keys(ATTRIBUTE_INFO) as AttributeId[]).forEach((id,index)=>{
-      const y=firstY+index*rowH,left=attrCx-rowW/2;
-      const isPrimaryRow=primaryAttribute(this.runConfig.character)===id;
-      const row=this.add.graphics();row.fillStyle(LQ.lacquerHi,.5).fillRoundedRect(left,y-(rowH-8)/2,rowW,rowH-8,6).lineStyle(isPrimaryRow?2:1,LQ.gold,isPrimaryRow?.95:.38).strokeRoundedRect(left,y-(rowH-8)/2,rowW,rowH-8,6); // 主属性一行金边
-      const attrIconImg=this.add.image(left+30,y,attributeIcon(id)).setDisplaySize(34,34);
-      const isPrimary=primaryAttribute(this.runConfig.character)===id;
-      const label=this.add.text(left+56,y-11,ATTRIBUTE_INFO[id].name+(isPrimary?' · 主属性 ×'+PRIMARY_MUL:''),{...warText(17,isPrimary?'#ffe3a0':'#f0dfb4')}).setOrigin(0,.5);
-      // 主属性专精：三个小菱形（满 4 / 7 / 10 点点亮），悬停看说明
-      let perkG:Phaser.GameObjects.Graphics|undefined,perkX=0;
-      if(isPrimary){perkX=label.x+label.width+16;perkG=this.add.graphics().setName('attribute-perks');this.attributePanel.add(perkG);
-        for(let k=0;k<PRIMARY_TIERS.length;k++){const info=PRIMARY_PERK_INFO[id][k],z=this.add.zone(perkX+k*17,y-11,16,16).setInteractive().setName('attribute-perk-'+(k+1));
-          z.on('pointerover',()=>{perkTip.setText('满 '+PRIMARY_TIERS[k]+' 点「'+info.name+'」：'+info.desc).setPosition(z.x,y-24).setVisible(true);});z.on('pointerout',()=>perkTip.setVisible(false));this.attributePanel.add(z);}}
+      const isPrimary=primaryAttribute(this.runConfig.character)===id,H=rowH+(isPrimary?primaryExtra:0);
+      const y=firstY+index*rowH+rowOffset+(isPrimary?primaryExtra/2:0),left=attrCx-rowW/2;rowOffset+=isPrimary?primaryExtra:0;
+      const rowTop=y-(H-8)/2,lineA=isPrimary?rowTop+(d?15:16):y-11,lineB=isPrimary?lineA+(d?21:23):y+12,cy=isPrimary?(lineA+lineB)/2:y;
+      const row=this.add.graphics();row.fillStyle(LQ.lacquerHi,.5).fillRoundedRect(left,rowTop,rowW,H-8,6).lineStyle(isPrimary?2:1,LQ.gold,isPrimary?.95:.38).strokeRoundedRect(left,rowTop,rowW,H-8,6); // 主属性一行金边
+      const attrIconImg=this.add.image(left+30,cy,attributeIcon(id)).setDisplaySize(34,34);
+      const pipX=attrCx+rowW/2-(d?226:212),pipY=cy,pips=this.add.graphics();
+      const sum=isPrimary?primarySummary(this.runConfig.character,0):null;
+      const label=this.add.text(left+56,lineA,sum?sum.head:ATTRIBUTE_INFO[id].name,{...warText(sum?(d?15:14):17,isPrimary?'#ffe3a0':'#f0dfb4')}).setOrigin(0,.5).setName(isPrimary?'attribute-primary-head':'attribute-name-'+id);
+      if(sum&&label.width>pipX-label.x-10)label.setScale((pipX-label.x-10)/label.width); // 手机窄：缩到点数条前
       const heroExtra=heroAttributeExtra(this.runConfig.character,id); // 刘备统御：本人受伤也减（2026-11-18）
-      const effect=this.add.text(left+56,y+12,ATTRIBUTE_INFO[id].effect+(heroExtra?'；'+heroExtra:''),warText(12,heroExtra?'#cfe0a8':'#a9b9a3')).setOrigin(0,.5);
+      const effect=this.add.text(left+56,lineB,ATTRIBUTE_INFO[id].effect+(heroExtra?'；'+heroExtra:''),warText(12,heroExtra?'#cfe0a8':'#a9b9a3')).setOrigin(0,.5);
       // 等级：10 格，右侧数值
-      const pipX=attrCx+rowW/2-(d?226:212),pipY=y,pips=this.add.graphics();
-      const value=this.add.text(attrCx+rowW/2-80,y,`0/${ATTRIBUTE_MAX}`,warText(13,'#b6c3ab')).setOrigin(1,.5);
-      const button=this.add.image(attrCx+rowW/2-38,y,'ui_war_button').setDisplaySize(50,44).setInteractive({useHandCursor:true}).setName('attribute-add-'+id);
+      const value=this.add.text(attrCx+rowW/2-80,cy,`0/${ATTRIBUTE_MAX}`,warText(13,'#b6c3ab')).setOrigin(1,.5);
+      const button=this.add.image(attrCx+rowW/2-38,cy,'ui_war_button').setDisplaySize(50,44).setInteractive({useHandCursor:true}).setName('attribute-add-'+id);
       const plus=this.add.text(button.x,button.y-1,'+',warText(26,'#ffe9bd')).setOrigin(.5).setStroke('#2a170b',3);
       lqImageButton(this,button,50,44,'gold',plus);
       // 2026-11-18 每个界面最多 1 处水墨笔刷：「＋」用漆底描金方钮（上面的 lqImageButton），笔刷只留给底部「返回」
       button.on('pointerdown',()=>{const g=this.player.growth;if(g.allocate(this.player,id)){this.player.passive.areaMul=g.areaMultiplier();if(g.heroFree>0){g.heroFree--;if(!isChapterTestRun())allocateHeroAttr(this.runConfig.character,id);}this.renderAttributePanel();this.updateHud();}});
       this.attributePanel.add([row,attrIconImg,label,effect,pips,value,button,plus]);
-      if(isPrimary){const ab=attrBadge(this,left+56+label.width+18,y-11,this.runConfig.character,22);if(ab)this.attributePanel.add(ab);} // 主属性印（ui/AttrBadge.ts）
-      this.attributeRows.push({value,button,plus,pips,pipX,pipY,perkG,perkX,perkY:y-11});
+      let perks:{prefix:Phaser.GameObjects.Text;chips:Phaser.GameObjects.Text[]}|undefined;
+      if(isPrimary){
+        const ab=attrBadge(this,left+48,cy-15,this.runConfig.character,18);if(ab)this.attributePanel.add(ab); // 主属性印（ui/AttrBadge.ts）
+        const lineC=lineB+(d?21:24),prefix=this.add.text(left+56,lineC,'专精',warText(12,'#c9b88f')).setOrigin(0,.5);
+        const chips=PRIMARY_TIERS.map((_,k)=>this.add.text(0,lineC,'',warText(12,'#a9b9a3')).setOrigin(0,.5).setName('attribute-perk-'+(k+1)).setInteractive({useHandCursor:true}));
+        perks={prefix,chips};this.attributePanel.add([prefix,...chips]);
+        // 整行（点数条之前）悬停 / 点按：完整说明（ItemTooltip 风格）
+        const zone=this.add.zone(left,rowTop,pipX-left-6,H-8).setOrigin(0).setInteractive().setName('attribute-primary-hit');this.attributePanel.addAt(zone,this.attributePanel.getIndex(row)+1);
+        const info=()=>primarySummary(this.runConfig.character,this.player?.growth.attributes[id]??0)?.tip;
+        for(const o of [zone,...chips]){attrTip.attachInfo(o,info);o.on('pointerdown',(p:Phaser.Input.Pointer)=>{const it=info();if(!it)return;const q=screenPoint(p);attrTip.showInfo(it,q.x,q.y);});}
+      }
+      this.attributeRows.push({value,button,plus,pips,pipX,pipY,perks});
     });
-    this.attributePanel.add(perkTip);
     const attrCloseY=attrTop+attrH-38;
     const attrClose=this.add.text(attrCx,attrCloseY,'返回暂停菜单',warText(16,'#d8c9ae')).setOrigin(.5).setPadding(18,8).setInteractive({useHandCursor:true});
     attrClose.setName('attributes-close').on('pointerdown',()=>this.setMode(this.attributeReturn));
@@ -4053,7 +4072,7 @@ export class GameScene extends Phaser.Scene {
       if(can){row.button.setAlpha(1).setInteractive({useHandCursor:true});}
       else row.button.setAlpha(.38).disableInteractive();
       row.plus.setAlpha(can?1:.45);
-      if(row.perkG){row.perkG.clear();for(let k=0;k<PRIMARY_TIERS.length;k++){const on=level>=PRIMARY_TIERS[k],cx=(row.perkX??0)+k*17,cy=row.perkY??0,pts=[{x:cx,y:cy-6},{x:cx+6,y:cy},{x:cx,y:cy+6},{x:cx-6,y:cy}];row.perkG.fillStyle(on?0xe2bd6a:0x2a3328,1).fillPoints(pts,true).lineStyle(1,on?0xfff0c0:0x5d6a58,.9).strokePoints(pts,true);}}
+      if(row.perks){const sum=primarySummary(this.runConfig.character,level);let x=row.perks.prefix.x+row.perks.prefix.width+10;row.perks.chips.forEach((c,k)=>{const on=!!sum?.tiers[k]?.on;c.setText(sum?.chips[k]??'').setColor(on?'#ffe3a0':'#93a08e').setX(x);x+=c.width+(IS_DESKTOP?14:10);});}
     }
   }
 

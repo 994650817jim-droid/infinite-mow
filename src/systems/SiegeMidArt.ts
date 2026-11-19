@@ -11,6 +11,7 @@ export const MID_SIEGE_FILES: ReadonlyArray<{ key: string; file: string; cell: n
   { key: 'siege_mid_ram', file: 'assets/siege-v2/ram.png', cell: 256 }, // 冲车撞门 4 帧 / 打坏 / 残骸 / 我方大旗 / 我方营帐
   { key: 'siege_mid_street', file: 'assets/siege-v2/street.png', cell: 384 }, // 民房 ×2 / 店铺 / 粮仓 / 兵营 / 路障 / 屋脊 / 水井
   { key: 'siege_mid_hall', file: 'assets/siege-v2/hall.png', cell: 384 }, // 府衙大堂 / 台阶 / 回廊 / 石狮 / 内城门 / 帅旗 / 香炉 / 照壁
+  { key: 'siege_mid_barb', file: 'assets/siege-v2/barbican.png', cell: 384 }, // 瓮城套件（场景审查 P3，美术会话出图）：0 内门关 1 内门破 2 城墙段 3 角楼 4 侧墙段 5 滚木堆 6 礌石堆 7 残垣
 ];
 
 export function loadMidSiegeArt(scene: Phaser.Scene): void {

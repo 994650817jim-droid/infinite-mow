@@ -7,7 +7,7 @@ mkdirSync(out, { recursive: true });
 let pass = 0, fail = 0; const errors = [];
 const ck = (n, ok, d) => { ok ? pass++ : fail++; console.log((ok ? 'PASS ' : 'FAIL ') + n + (d !== undefined && !ok ? ' · ' + JSON.stringify(d).slice(0, 500) : '')); };
 const rec = (id, kind = 'hero', template = 'spear', name = id, quality = 'orange') => ({ id, kind, hero: kind === 'hero' ? id : undefined, name, template, quality, rank: 1, picks: [] });
-const world = { version: 7, yellowStages: 3, dongzhuoStages: 3, warlordStages: 3, guanduStages: 0, worldAvailable: true, cleared: { huangjin: true, hulao: true }, merits: 0, provisions: 1000, buildings: { barracks: 1, farm: 1, clinic: 1 }, reserve: {}, receipts: [], nodes: ['home'], ownedCities: [], eraSeen: 2, capturedEver: [], alerts: [], lastLost: [], chapterSeen: 4 };
+const world = { version: 8, yellowStages: 3, dongzhuoStages: 3, warlordStages: 3, guanduStages: 0, worldAvailable: true, cleared: { huangjin: true, hulao: true }, merits: 0, provisions: 1000, buildings: { barracks: 1, farm: 1, clinic: 1 }, town: { levels: { hall: 3, barracks: 1, farm: 1, talent: 3 } }, /* 随行上限读营寨招贤馆等级（fa1c773），roster.hall 已不再生效；营寨 town 只从 version ≥ 8 的存档读入；主营 hall 1 级时其他建筑都被压回 1 级（applyCampRule） */ reserve: {}, receipts: [], nodes: ['home'], ownedCities: [], eraSeen: 2, capturedEver: [], alerts: [], lastLost: [], chapterSeen: 4 };
 const roster = (fs, owned) => ({ version: 1, lord: 'zhaoyun', lordFinal: true, owned: [rec('zhaoyun'), ...owned], followers: fs, offers: [], captives: [], season: -1, manual: 0, dry: 0, seq: 2, hall: 3 });
 const b = await chromium.launch({ channel: 'chrome', headless: true });
 const p = await b.newPage({ viewport: { width: 1280, height: 720 } });

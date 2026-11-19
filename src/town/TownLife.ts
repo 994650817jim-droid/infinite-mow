@@ -28,29 +28,28 @@ export const FOLK_SHEETS: Array<{ key: string; url: string; civilian: boolean }>
   { key: 'folk_child', url: 'assets/town-city/folk/folk_child_walk.png', civilian: true },
   { key: 'folk_spearman', url: 'assets/processed-v2/troops/spearman_walk.png', civilian: false },
 ];
-/** 图集：攻城城内的民房 / 城内图集（各 4×2，每格 384）、营地道具（6×6，每格 128）、石桥桥面（竖向平铺，terrain/bridge 套件）。 */
+/** 图集：攻城城内的民房 / 城内图集（各 4×2，每格 384）、营地道具（6×6，每格 128）。 */
 const ATLAS = {
   st: { key: 'town_street', url: 'assets/siege-v2/street.png', cell: 384 },   // 0 民房 1 楼房（茶肆） 2 店铺 3 粮仓 4 兵营 5 路障 6 屋脊 7 水井
   ct: { key: 'town_cityset', url: 'assets/siege-v2/city.png', cell: 384 },   // 0 市集摊棚 1 货担 2 库房 3 兵器院
   cp: { key: 'camp_props_v2', url: 'assets/props-v2/camp-props.png', cell: 128 }, // 4 小旗 14 木箱 16 粮袋 18 坛罐 24 推车
 } as const;
-const DECK = { key: 'town_bridge_deck', url: 'assets/terrain/bridge/stoneDeckT.png' };
 /** 各帧画面底边在格子里的位置（originY），让物件「站」在地上。 */
 const FOOT: Record<string, number> = { st0: .99, st1: .99, st2: .99, st3: .99, st7: .99, ct0: .95, ct1: .93, ct2: .93, cp4: .95, cp14: .93, cp16: .9, cp18: .9, cp24: .88 };
 const BUILDING = /^(st[0-3]|ct[02])$/;
 /**
  * 比例尺（11-19 用户「注意建筑比例」）：居民身高 CITIZEN（全景像素）；门高约 1.3 个居民。各图的门高占画宽的比例量过（DOOR），
- * 宽度按门算出来（decorWidth）——所有图等比缩放、不拉伸。府衙等功能建筑图是「院落微缩」，门高约 30 全景像素（府衙 Lv1 宽 284），居民按它定为 24。
+ * 宽度按门算出来（decorWidth）——所有图等比缩放、不拉伸。府衙等功能建筑图是院落，量的是前面的门楼（居民从那里进出）：府衙 Lv1 门楼约 50 全景像素高，
+ * 居民定为 34（11-19 第二轮：原 24 太小「像蚂蚁」）。
  * 两层楼房门比例小、画面更高；摊棚、货担按人能站在棚下（棚檐约 1.3 人）定，比民房小得多。
  */
-export const CITIZEN = 24;
+export const CITIZEN = 34;
 const DOOR: Record<string, number> = { st0: .295, st1: .24, st2: .34, st3: .35, ct2: .37, ct0: .41, ct1: .52 };
 const decorWidth = (id: string, scale = 1): number => DOOR[id] ? CITIZEN * 1.3 / DOOR[id] * scale : 0;
 
 export function loadTownLife(scene: Phaser.Scene): void {
   for (const f of FOLK_SHEETS) if (!scene.textures.exists(f.key)) scene.load.image(f.key, f.url);
   for (const a of Object.values(ATLAS)) if (!scene.textures.exists(a.key)) scene.load.spritesheet(a.key, a.url, { frameWidth: a.cell, frameHeight: a.cell });
-  if (!scene.textures.exists(DECK.key)) scene.load.image(DECK.key, DECK.url);
 }
 
 type Art = keyof typeof ATLAS;
@@ -60,24 +59,24 @@ const d = (a: Art, f: number, x: number, y: number, w = 0, lv = 1, flip = false)
 /** 民居店铺（x, y = 底边中点）。不放在建筑位、路面、河上。 */
 export const TOWN_DECOR: Record<CityTier, Decor[]> = {
   small: [
-    d('st', 0, 392, 392), d('ct', 0, 620, 702), d('cp', 16, 668, 706, 26), d('cp', 24, 470, 986, 40),
-    d('st', 1, 1420, 985, 0, 2), d('st', 0, 330, 990, 0, 2, true), d('st', 2, 1380, 760, 0, 3), d('cp', 18, 1110, 690, 24),
+    d('ct', 0, 620, 702), d('cp', 16, 690, 708, 36), d('cp', 24, 455, 990, 56),
+    d('st', 1, 1420, 985, 0, 2), d('st', 0, 330, 990), d('st', 2, 1450, 772, 0, 3), d('cp', 18, 1110, 690, 34),
   ],
   medium: [
-    // 右中地基：军营旁一座民房；左上 / 右上地基：招贤馆、讲武堂旁的坛罐木箱
-    d('st', 0, 1300, 510), d('cp', 18, 500, 374, 24), d('cp', 14, 1338, 374, 28),
-    // 大道两侧草地（运河南）：小摊、货担；运河北岸水井
-    d('ct', 0, 592, 772), d('ct', 1, 600, 842, 0, 2), d('ct', 0, 1028, 772, 0, 2), d('cp', 16, 568, 570, 26), d('st', 7, 1010, 572, 42),
-    // 南边一排：民房、楼房（茶肆）、店铺
-    d('st', 0, 190, 1012), d('st', 1, 330, 1010, 0, 2), d('st', 2, 462, 1013), d('cp', 24, 572, 1000, 40, 2), d('st', 0, 1440, 1012, 0, 3, true),
+    // 左上地基（正在府衙身后：府衙升级后屋顶会挡住它，所以这里只放民居，不放功能建筑）
+    d('st', 0, 322, 372), d('st', 2, 452, 374), d('cp', 14, 1350, 374, 38), d('ct', 1, 636, 506),
+    // 运河南大道两侧：小摊、货担；运河北岸水井、粮袋
+    d('ct', 0, 572, 772), d('ct', 1, 585, 845, 0, 2), d('ct', 0, 1038, 772, 0, 2), d('cp', 16, 566, 570, 34), d('st', 7, 1010, 574, 54),
+    // 南边：招贤馆东楼房（茶肆）；马厩东民房
+    d('st', 1, 410, 998, 0, 2), d('st', 2, 548, 1002, 0, 3), d('st', 0, 1452, 1000, 0, 3, true),
   ],
   large: [
-    // 左上第一排：招贤馆旁楼房、店铺；第二排：讲武堂旁水井、民房
-    d('st', 1, 472, 370), d('st', 2, 568, 372), d('st', 7, 430, 476, 42), d('st', 0, 520, 478), d('st', 3, 405, 372, 0, 3),
-    // 右上：军营旁市集小摊、店铺
-    d('ct', 0, 1285, 373), d('st', 2, 1360, 373, 0, 2), d('ct', 1, 1335, 380, 0, 3),
-    // 横街边：推车、木箱；货担
-    d('cp', 24, 1010, 598, 40), d('cp', 14, 980, 522, 28, 2), d('cp', 16, 640, 522, 26), d('ct', 1, 1440, 600, 0, 2),
+    // 左上两排：招贤馆、讲武堂旁民房
+    d('st', 0, 545, 372), d('st', 0, 515, 478, 0, 2, true),
+    // 右上地基（正在府衙身后）：只放民居
+    d('st', 1, 1120, 370), d('st', 2, 1280, 373, 0, 2),
+    // 横街边：推车、木箱、粮袋、水井
+    d('cp', 24, 1010, 600, 56), d('cp', 14, 975, 524, 38, 2), d('cp', 16, 640, 524, 34), d('st', 7, 690, 604, 54, 2),
   ],
 };
 /**
@@ -86,9 +85,10 @@ export const TOWN_DECOR: Record<CityTier, Decor[]> = {
  */
 export type HqId = 'talent' | 'academy' | 'stable' | 'barracks';
 export const HQ_SLOTS: Record<CityTier, Record<HqId | 'merchant', { x: number; y: number; w: number }>> = {
-  small: { talent: { x: 245, y: 392, w: 196 }, academy: { x: 1262, y: 690, w: 200 }, barracks: { x: 600, y: 996, w: 200 }, stable: { x: 1160, y: 975, w: 200 }, merchant: { x: 985, y: 728, w: 70 } },
-  medium: { talent: { x: 385, y: 372, w: 196 }, academy: { x: 1215, y: 373, w: 200 }, barracks: { x: 1138, y: 509, w: 196 }, stable: { x: 1240, y: 1012, w: 200 }, merchant: { x: 632, y: 506, w: 70 } },
-  large: { talent: { x: 300, y: 372, w: 196 }, academy: { x: 290, y: 477, w: 200 }, barracks: { x: 1130, y: 373, w: 200 }, stable: { x: 1240, y: 1008, w: 200 }, merchant: { x: 1490, y: 606, w: 70 } },
+  // 功能建筑不放在府衙正后方的地基上（府衙 Lv3 屋顶会盖住）；院落宽约 250（府衙 Lv1 284、Lv3 350，仍最大）
+  small: { talent: { x: 270, y: 392, w: 250 }, academy: { x: 1262, y: 690, w: 250 }, barracks: { x: 600, y: 996, w: 240 }, stable: { x: 1160, y: 975, w: 240 }, merchant: { x: 985, y: 730, w: 130 } },
+  medium: { talent: { x: 190, y: 1000, w: 250 }, academy: { x: 1215, y: 373, w: 250 }, barracks: { x: 1145, y: 509, w: 230 }, stable: { x: 1240, y: 1004, w: 250 }, merchant: { x: 1318, y: 509, w: 130 } },
+  large: { talent: { x: 330, y: 372, w: 270 }, academy: { x: 310, y: 477, w: 260 }, barracks: { x: 1170, y: 1004, w: 230 }, stable: { x: 1410, y: 1004, w: 230 }, merchant: { x: 1420, y: 606, w: 130 } },
 };
 /** 建筑位没建时，在地基前两角插的小旗（全景像素）。 */
 const SLOT_FLAGS: Record<CityTier, Partial<Record<CityBuildingId, Array<[number, number]>>>> = {
@@ -98,7 +98,7 @@ const SLOT_FLAGS: Record<CityTier, Partial<Record<CityBuildingId, Array<[number,
 };
 /**
  * 石桥（只有中城的大道跨运河）：桥面与大道同宽，盖住底图上那座窄拱桥，桥面两端压住南北两岸的路面——桥面就用底图里桥南那段大道的石板（src 区域），
- * 天衣无缝接上路；两侧栏杆用石桥套件（terrain/bridge/stoneDeckT）左右两列的望柱栏板。全景像素：l, r, t, b；src = 取石板的底图区域 [x, y, w, h]。
+ * 天衣无缝接上路，两边的路缘石也随之过桥（11-19 第二轮：原来两侧套件栏杆在这个视角下像两根黑柱子，去掉）。全景像素：l, r, t, b；src = 取石板的底图区域 [x, y, w, h]。
  */
 const BRIDGES: Record<CityTier, Array<{ l: number; r: number; t: number; b: number; src: [number, number, number, number] }>> = {
   small: [], large: [], medium: [{ l: 666, r: 944, t: 520, b: 640, src: [666, 668, 278, 110] }],
@@ -132,8 +132,8 @@ interface Vignette { kind: SceneKind; x: number; y: number; need?: CityBuildingI
 /** 小景（全景像素，人物脚下）：农夫要建了屯田、对练要建了募兵所才有。 */
 const TOWN_SCENES: Record<CityTier, Vignette[]> = {
   small: [{ kind: 'chat', x: 520, y: 470 }, { kind: 'well', x: 1036, y: 692 }, { kind: 'buy', x: 620, y: 716 }, { kind: 'chat', x: 1050, y: 800 }, { kind: 'farm', x: 352, y: 712, need: 'tuntian' }, { kind: 'drill', x: 1275, y: 530, need: 'muster' }],
-  medium: [{ kind: 'chat', x: 600, y: 404 }, { kind: 'buy', x: 592, y: 786 }, { kind: 'well', x: 988, y: 582 }, { kind: 'chat', x: 1230, y: 552 }, { kind: 'farm', x: 292, y: 800, need: 'tuntian' }, { kind: 'drill', x: 1300, y: 812, need: 'muster' }],
-  large: [{ kind: 'chat', x: 620, y: 552 }, { kind: 'buy', x: 1285, y: 388 }, { kind: 'well', x: 430, y: 492 }, { kind: 'chat', x: 1360, y: 552 }, { kind: 'farm', x: 392, y: 740, need: 'tuntian' }, { kind: 'drill', x: 1292, y: 752, need: 'muster' }],
+  medium: [{ kind: 'chat', x: 600, y: 404 }, { kind: 'buy', x: 572, y: 788 }, { kind: 'well', x: 988, y: 582 }, { kind: 'chat', x: 985, y: 552 }, { kind: 'farm', x: 292, y: 800, need: 'tuntian' }, { kind: 'drill', x: 1300, y: 812, need: 'muster' }],
+  large: [{ kind: 'chat', x: 620, y: 552 }, { kind: 'buy', x: 1425, y: 620 }, { kind: 'well', x: 668, y: 616 }, { kind: 'chat', x: 1360, y: 552 }, { kind: 'farm', x: 392, y: 740, need: 'tuntian' }, { kind: 'drill', x: 1292, y: 752, need: 'muster' }],
 };
 /** 点居民时的话（按行走图）。 */
 const BARKS: Record<string, string[]> = {
@@ -159,13 +159,7 @@ export function drawTownDecor(scene: Phaser.Scene, pano: Phaser.GameObjects.Cont
     // 水影：桥身两侧水面上一道暗影，看起来是架在水上
     add(scene.add.rectangle(b.l * k - 4, b.t * k + h * .5, w + 8, h * .42, 0x0b1714, .4).setOrigin(0, .5).setName('town-bridge-shadow'), -1e8);
     add(scene.add.image(b.l * k, b.t * k, bgKey, fr).setOrigin(0).setDisplaySize(w, h).setName('town-bridge'), -1e8 + 1);
-    if (scene.textures.exists(DECK.key)) {
-      const dk = scene.textures.get(DECK.key), ds = dk.getSourceImage() as { width: number; height: number }, cw = 40;
-      if (!dk.has('railL')) { dk.add('railL', 0, 0, 0, cw, ds.height); dk.add('railR', 0, ds.width - cw, 0, cw, ds.height); }
-      const rw = 24 * k, sc = rw / cw;
-      for (const [fn, x] of [['railL', b.l * k - rw * .35], ['railR', b.r * k - rw * .65]] as const)
-        add(scene.add.tileSprite(x, b.t * k - 6 * k, cw, (h + 12 * k) / sc, DECK.key, fn).setOrigin(0).setScale(sc).setName('town-bridge-rail'), -1e8 + 2);
-    }
+
   }
   for (const it of TOWN_DECOR[tier]) {
     if ((it.lv ?? 1) > office) continue;

@@ -1,6 +1,7 @@
 import { stopMenuMusic } from '../systems/Music';
 import { SCHOOL_TIER, SHI_SOURCES, FOLLOWER_SCHOOL, heroAffinity, type SchoolId } from '../data/schools';
 import { playSheet } from '../systems/SkillFxSheets';
+import { HeroCastFx } from '../systems/HeroCastFx';
 import { MOUNT_VISUAL, isHorseCavalry } from '../data/mounts';
 import { buildSettingsPanel, type SettingSpec } from '../ui/SettingsPanel';
 import {FollowerSquad,type Follower} from '../systems/FollowerSquad';
@@ -336,6 +337,8 @@ export class GameScene extends Phaser.Scene {
   private cutsceneEndedAt=-Infinity;
   /** 排队中的首领台词（剧情台词之后主将接一句）；过场开播时取消。 */
   private bossBarkTimer?:Phaser.Time.TimerEvent;
+  /** 武将出招起手特效（systems/HeroCastFx.ts） */
+  heroCastFx?: HeroCastFx;
   /** 首领血条换人时淡入（bossBarKey = 当前显示的是谁）。 */
   private bossBarKey = ''; private bossBarAt = 0;
   barksMuted():boolean{return !!this.cutscene?.active||performance.now()-this.cutsceneEndedAt<1000;}
@@ -1227,6 +1230,9 @@ export class GameScene extends Phaser.Scene {
     // 游击类战法（疾行印等）的移动风痕：用户反馈「疾行」特效一直挂在身后太显眼 → 改为脚边一小团、每 1.5 秒最多一次
     if(Math.hypot(move.x,move.y)>.1&&this.player.growth.build.tags().cavalry>0&&this.combatNow>=this.skirmishPuffAt){this.skirmishPuffAt=this.combatNow+1500;vfx.emit('skirmish',this.player.x-move.x*16,this.player.y+16-move.y*10,this.combatNow,26,Math.atan2(move.y,move.x),260);}
     this.updateWeapons(dt, time);
+    // 武将出招起手特效（2026-11-19）：招牌技 / 专属武艺（skill 动作）与被动触发那一刻在身上亮一下
+    if (this.heroCastFx?.owner !== this.player) { const fx = new HeroCastFx(this, this.player, this.runConfig.character); this.heroCastFx = fx; this.player.onSkillAction = () => fx.markSkill(); } // 场景重开换了主将对象就重建
+    this.heroCastFx.update(this.combatNow);
     this.reinforcements.update(time, this.enemies, (enemy, amount, fire) => this.hitEnemy(enemy, amount, time, fire ? 'fire' : 'melee', true, false));
     if (this.over) return;
     this.updateSpawner(dt, time);

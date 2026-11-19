@@ -141,7 +141,7 @@ import { stageMapFor } from '../data/stageMaps';
 import { StageArena } from '../systems/StageArena';
 import { Tutorial } from '../systems/Tutorial';
 import { IffOverlay, readIffMode, warmIffTextures, type IffUnit } from '../systems/IffOverlay';
-import {SCHOOL_HINT_LABEL, schoolHint, setSchoolHint, type SchoolHint, BARKS_LABEL, heroBarks, setHeroBarks, type HeroBarks, STORY_LABEL, setStoryMode, storyMode, type StoryMode, OPENING_LABEL, openingMode, setOpeningMode, type OpeningMode } from '../systems/BattleSettings';
+import {ORDERS_PANEL_LABEL, ordersPanelSetting, setOrdersPanelSetting, type OrdersPanelSetting, SCHOOL_HINT_LABEL, schoolHint, setSchoolHint, type SchoolHint, BARKS_LABEL, heroBarks, setHeroBarks, type HeroBarks, STORY_LABEL, setStoryMode, storyMode, type StoryMode, OPENING_LABEL, openingMode, setOpeningMode, type OpeningMode } from '../systems/BattleSettings';
 import { HeroBark, type BarkSpeaker } from '../ui/HeroBark';
 import { ZhaoyunPassiveFx } from '../systems/ZhaoyunPassiveFx';
 import { PassiveGauge } from '../systems/PassiveGauge';
@@ -1357,14 +1357,22 @@ export class GameScene extends Phaser.Scene {
       bossOutcome: key => this.dual?.entries.find(x => x.id === key)?.done ?? null,
     });
     if (IS_DESKTOP) {
-      this.ordersPanel = new OrdersPanel(this, orders);
+      if (ordersPanelSetting() === 'on') this.ordersPanel = new OrdersPanel(this, orders);
       this.battleMap = new BattleMap({scene: this, player: () => this.player, enemies: () => this.enemies, followers: () => this.followers?.members ?? [],
         title: () => this.chapter.name ?? this.chapter.label ?? '',
         camps: () => { const z = this.allyPush, now = this.combatNow; return (this.objective?.standing ?? []).map(e => ({x: e.x, y: e.y, ratio: e.hp / Math.max(1, e.maxHp), hit: !!z && now - (z.campHitAt.get(e) ?? -1e9) < 900})); },
         pushes: () => (this.allyPush?.squads ?? []).map(q => ({from: q.from, to: q.target ? {x: q.target.x, y: q.target.y} : null, members: q.members.filter(m => !m.dead)})), bosses: () => [...(this.dual ? this.dual.alive.map(x => x.enemy) : this.boss?.active ? [this.boss] : []), ...this.dzLubuBoss().map(x => x.e)]}, orders);
-      this.objectiveText?.setVisible(false);
+      if (this.ordersPanel) this.objectiveText?.setVisible(false);
     }
     this.events.once('shutdown', () => { this.ordersPanel?.destroy(); this.battleMap?.destroy(); this.battleOrders?.clear(); this.ordersPanel = null; this.battleMap = null; this.battleOrders = null; });
+  }
+  /** 军中设置「军令面板」开关（战斗中即时生效）：开 = 建面板并收起章节名下的目标行；关 = 拆掉面板、目标行露出来。 */
+  protected applyOrdersPanelSetting(): void {
+    if (!IS_DESKTOP || !this.battleOrders) return;
+    const on = ordersPanelSetting() === 'on';
+    if (on && !this.ordersPanel) this.ordersPanel = new OrdersPanel(this, this.battleOrders);
+    if (!on && this.ordersPanel) { this.ordersPanel.destroy(); this.ordersPanel = null; }
+    this.objectiveText?.setVisible(!this.ordersPanel && !!this.objective);
   }
   /** 2-3 洛阳：吕布在城下打的那段，当成一名首领进军令（「打退吕布」，逃走即完成）和地图朱印。 */
   /**
@@ -3054,6 +3062,7 @@ export class GameScene extends Phaser.Scene {
       { key: 'shake', name: '震屏', tab: 'view', kind: 'choice', options: ch(['strong', 'weak', 'off'], SHAKE_LABEL), get: () => shakeLevel(), set: v => { setShakeLevel(v as ShakeLevel); if (v !== 'off') this.cameras.main.shake(140, .004); } },
       { key: 'death-fx', name: '死亡特效', tab: 'view', kind: 'toggle', options: ch(['on', 'off'], DEATHFX_LABEL), get: () => deathFxSetting(), set: v => setDeathFx(v as DeathFxSetting) },
       { key: 'damage', name: '伤害数字', tab: 'battle', kind: 'choice', options: ch(['all', 'crit', 'off'], DAMAGE_LABEL), get: () => damageNumbers(), set: v => setDamageNumbers(v as DamageNumbers) },
+      { key: 'orders-panel', name: '军令面板', tab: 'battle', kind: 'toggle', options: ch(['on', 'off'], ORDERS_PANEL_LABEL), get: () => ordersPanelSetting(), set: v => { setOrdersPanelSetting(v as OrdersPanelSetting); this.applyOrdersPanelSetting(); } },
       { key: 'school-hint', name: '合击觉醒提示', tab: 'battle', kind: 'choice', options: ch(['brief', 'full', 'off'], SCHOOL_HINT_LABEL), get: () => schoolHint(), set: v => setSchoolHint(v as SchoolHint) },
       { key: 'hero-barks', name: '武将台词', tab: 'battle', kind: 'toggle', options: ch(['on', 'off'], BARKS_LABEL), get: () => heroBarks(), set: v => { setHeroBarks(v as HeroBarks); if (v === 'off') this.heroBark?.clear(); } },
       { key: 'story', name: '剧情', tab: 'story', kind: 'choice', options: ch(['full', 'chapter', 'off'], STORY_LABEL), get: () => storyMode(), set: v => setStoryMode(v as StoryMode) },

@@ -8,6 +8,7 @@
  * - 武将台词 im_hero_barks：'off' 关 / 其余开（缺省开）
  * - 剧情 im_story：'full' 完整 / 'chapter' 只看章头章末 / 'off' 关闭（2026-11-17 剧情系统，缺省完整）
  * - 死亡特效 im_death_fx：'off' 关 / 其余开（2026-11-18 敌军死亡特效，缺省开）
+ * - 军令面板 im_orders_panel：'on' 开 / 其余关（缺省关）
  * - 合击觉醒提示 im_school_hint：'brief' 简洁（缺省：每关第一次出小签，之后只闪徽印）/ 'full' 完整（觉醒每次都出）/ 'off' 关（只闪徽印）
  * - 画面清晰度 im_render_scale：''（自动）/ '1' / '2' / '3'（config.pickRenderScale 启动时读，刷新后生效）
  */
@@ -37,6 +38,12 @@ export function setShakeLevel(v: ShakeLevel): void { set('im_shake', v); shakeCa
 export const SHAKE_LABEL: Record<ShakeLevel, string> = { strong: '强', weak: '弱', off: '关' };
 /** 震屏强度倍率：强 1、弱 0.5、关 0（与新增武将会话 hitFeel.shakeMul 一致）。 */
 export function shakeScale(): number { const v = shakeLevel(); return v === 'off' ? 0 : v === 'weak' ? .5 : 1; }
+
+/** 军令面板（2026-11-19 用户「我先移除军令，有点碍眼」）：缺省关；关时只留章节名下的一行目标、屏外箭头与舆图标记，军令数据照旧。 */
+export type OrdersPanelSetting = 'on' | 'off';
+export function ordersPanelSetting(): OrdersPanelSetting { return get('im_orders_panel') === 'on' ? 'on' : 'off'; }
+export function setOrdersPanelSetting(v: OrdersPanelSetting): void { set('im_orders_panel', v); }
+export const ORDERS_PANEL_LABEL: Record<OrdersPanelSetting, string> = { on: '开', off: '关' };
 
 export type SchoolHint = 'full' | 'brief' | 'off';
 export function schoolHint(): SchoolHint { const v = get('im_school_hint'); return v === 'full' || v === 'off' ? v : 'brief'; }

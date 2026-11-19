@@ -9,12 +9,14 @@ interface Item { kind: BannerKind; title: string; sub: string; schools: string[]
 /** 小签的位置与时长（游戏坐标；电脑 960×540）。 */
 export const SCHOOL_TOAST = {
   /** 电脑版：左上主将信息块右边、计时器下方那条空带（不压主将、首领血条、军令面板、舆图卷轴、台词卡、用药钮）。 */
-  x: D ? 226 : 12, y: D ? 90 : GAME_HEIGHT * .17,
+  desk: { x: 226, y: 104 }, // 章节名下的目标行（y 78–96）之下
   h: 28, hAwaken: 34, seal: 20, sealAwaken: 26,
   inMs: 160, holdMs: 1100, holdAwakenMs: 1400, outMs: 240,
   /** 同一刻连着触发的合并成一张：收集窗口。 */
   mergeMs: 140,
 } as const;
+/** 小签左上角位置：布局（电脑 / 手机）在模块加载后才定下来，所以用时再算。 */
+function toastPos(): { x: number; y: number } { return D ? SCHOOL_TOAST.desk : { x: 12, y: GAME_HEIGHT * .17 }; }
 
 /**
  * 合击 / 觉醒提示（2026-11-19 用户「关于觉醒合击提示有点碍眼」：原为屏幕上方居中的大横幅 + 排队）。
@@ -61,7 +63,7 @@ export class SchoolBanner {
   private toast(awaken: boolean, title: string, sub: string, seals: string[]): void {
     const s = this.scene, T = SCHOOL_TOAST, h = awaken ? T.hAwaken : T.h, ss = awaken ? T.sealAwaken : T.seal;
     this.live?.destroy();
-    const root = s.add.container(T.x - 10, T.y).setScrollFactor(0).setDepth(DEPTH.hud + 6).setAlpha(0).setName('school-banner');
+    const P = toastPos(), root = s.add.container(P.x - 10, P.y).setScrollFactor(0).setDepth(DEPTH.hud + 6).setAlpha(0).setName('school-banner');
     root.setData('kind', awaken ? 'awaken' : 'combo');
     const g = s.add.graphics();
     let x = 8;
@@ -81,7 +83,7 @@ export class SchoolBanner {
     // 显示中途打开了面板：先藏起来（面板关了再露出来）
     const sync = (): void => { root.setVisible(this.canShow()); }; s.events.on('update', sync);
     root.once('destroy', () => { s.events.off('update', sync); if (this.live === root) this.live = undefined; });
-    s.tweens.add({ targets: root, x: T.x, alpha: 1, duration: T.inMs, ease: 'Cubic.easeOut' });
+    s.tweens.add({ targets: root, x: P.x, alpha: 1, duration: T.inMs, ease: 'Cubic.easeOut' });
     s.tweens.add({ targets: root, alpha: 0, delay: T.inMs + (awaken ? T.holdAwakenMs : T.holdMs), duration: T.outMs, onComplete: () => root.destroy() });
   }
 }

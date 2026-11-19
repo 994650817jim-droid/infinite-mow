@@ -73,7 +73,7 @@ export class HeroMount {
     ensureHorseTextures(h.scene);
     this.style = mountStyle(item.base); this.name = item.name;
     const cav = CAVALRY_HEROES.includes(hero);
-    this.maxStamina = MOUNT.stamina + (this.style.stamina ?? 0) + (cav ? CAVALRY_BONUS.stamina : 0); this.stamina = this.maxStamina;
+    this.maxStamina = Math.round(MOUNT.stamina + MOUNT.staminaPerHp * h.player.maxHp) + (this.style.stamina ?? 0) + (cav ? CAVALRY_BONUS.stamina : 0); this.stamina = this.maxStamina;
     this.trampleMul = (this.style.trampleMul ?? 1) * (cav ? CAVALRY_BONUS.trample : 1) * (opts.trampleMul ?? 1);
     const k = MOUNT.horseSize / HORSE_FRAME;
     this.horse = h.scene.add.image(h.player.x, h.player.y, 'mount_horse', 'down_0').setOrigin(.5, HORSE_FOOT / HORSE_FRAME).setScale(k).setTint(this.style.tint).setName('hero-mount');
@@ -123,7 +123,7 @@ export class HeroMount {
   /** 受伤：骑马时马替人挡一部分并扣耐力，耐力掉光落马。返回骑者实际承受的伤害。 */
   guard(damage: number, now: number): number {
     if (!this.mounted) return damage;
-    this.stamina -= damage * (damage >= MOUNT.heavyHit ? MOUNT.heavyMul : MOUNT.lightMul);
+    this.stamina -= damage * (damage >= this.h.player.maxHp * MOUNT.heavyHitHpRatio ? MOUNT.heavyMul : MOUNT.lightMul);
     if (this.stamina <= 0) { this.dismount(now); return this.style.leap ? 0 : damage; }
     return Math.max(1, Math.round(damage * MOUNT.damageTakenMul));
   }

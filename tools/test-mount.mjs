@@ -40,11 +40,13 @@ for (const layout of ['mobile', 'desktop']) {
   // 践踏：前方普通兵被撞开受伤
   const t = await p.evaluate(async G0 => { const s = eval(G0), pl = s.player, e = s.spawnEnemy('infantry', pl.x + 50, pl.y, 1, true); e.speed = 0; const h0 = e.hp, x0 = e.x; s.readMove = () => ({ x: 1, y: 0 }); await new Promise(r => setTimeout(r, 500)); delete s.readMove; return { h0, h1: e.active ? e.hp : 0, pushed: !e.active || Math.abs(e.y - pl.y) > 4 || Math.abs(e.x - x0) > 4, n: s.mount.tramples }; }, G);
   ck(`[${layout}] 践踏：冲过普通兵把它撞开并造成伤害`, t.n >= 1 && t.h1 < t.h0 && t.pushed, t);
-  // 受伤：马挡 15%，重击扣 ×3 耐力
-  const g = await p.evaluate(G0 => { const s = eval(G0), pl = s.player, m = s.mount; pl.invulnUntil = 0; pl.hp = pl.maxHp; const hp0 = pl.hp, st0 = m.stamina; pl.takeDamage(20, s.combatNow); return { lost: hp0 - pl.hp, st: st0 - m.stamina, max: m.maxStamina }; }, G);
-  ck(`[${layout}] 重击：骑者少受伤、马耐力按 ×3 扣（赵云马上名将耐力 140）`, g.st === 60 && g.lost < 20 && g.max === 140, g);
+  // 受伤：马挡 15%；耐力 = 100 + 0.25 × 最大生命 + 马上名将 40；伤害 ≥ 最大生命 12% 算重击扣 ×3，轻伤 ×1（11-18 平衡会话）
+  const g = await p.evaluate(G0 => { const s = eval(G0), pl = s.player, m = s.mount; const heavy = Math.ceil(pl.maxHp * .12) + 1, light = Math.max(1, Math.floor(pl.maxHp * .12) - 2);
+    pl.invulnUntil = 0; pl.hp = pl.maxHp; const hp0 = pl.hp, st0 = m.stamina; pl.takeDamage(heavy, s.combatNow); const st1 = m.stamina; pl.invulnUntil = 0; pl.hp = pl.maxHp; pl.takeDamage(light, s.combatNow);
+    return { heavy, light, lost: hp0 - pl.hp, st: st0 - st1, st2: st1 - m.stamina, max: m.maxStamina, hp: pl.maxHp, want: Math.round(100 + .25 * pl.maxHp) + 40 }; }, G);
+  ck(`[${layout}] 受伤：骑者少受伤；耐力随最大生命（赵云马上名将 +40）；重击（≥ 最大生命 12%）扣 ×3、轻伤扣 ×1`, g.st === g.heavy * 3 && g.st2 === g.light && g.max === g.want, g);
   // 再挨两下重击 → 落马
-  const fall = await p.evaluate(async G0 => { const s = eval(G0), pl = s.player, m = s.mount, h = s.children.getByName('hero-mount'); const notes = []; const n0 = m.h.notice; m.h.notice = t => { notes.push(t); n0(t); }; for (let i = 0; i < 3 && m.mounted; i++) { pl.invulnUntil = 0; pl.hp = pl.maxHp; pl.takeDamage(20, s.combatNow); } const hx = h.x; await new Promise(r => setTimeout(r, 700)); return { mounted: m.mounted, mul: pl.mountSpeedMul, rise: pl.riseY, crop: pl.sprite.isCropped, falls: m.falls, label: m.label.text, remountAt: m.remountAt, left: m.remountsLeft, ran: Math.round(Math.abs(h.x - hx)), notes }; }, G);
+  const fall = await p.evaluate(async G0 => { const s = eval(G0), pl = s.player, m = s.mount, h = s.children.getByName('hero-mount'); const notes = []; const n0 = m.h.notice; m.h.notice = t => { notes.push(t); n0(t); }; for (let i = 0; i < 40 && m.mounted; i++) { pl.invulnUntil = 0; pl.hp = pl.maxHp; pl.takeDamage(Math.ceil(pl.maxHp * .12) + 1, s.combatNow); } const hx = h.x; await new Promise(r => setTimeout(r, 700)); return { mounted: m.mounted, mul: pl.mountSpeedMul, rise: pl.riseY, crop: pl.sprite.isCropped, falls: m.falls, label: m.label.text, remountAt: m.remountAt, left: m.remountsLeft, ran: Math.round(Math.abs(h.x - hx)), notes }; }, G);
   ck(`[${layout}] 耐力掉光落马：步行、恢复原速、马受惊跑开、提示「本战步战」、没有上马倒计时`, !fall.mounted && fall.mul === 1 && fall.rise === 0 && !fall.crop && fall.falls === 1 && fall.label === '' && (fall.remountAt === Infinity || fall.remountAt === null) && fall.left === 0 && fall.ran > 30 && fall.notes.some(t => /本战步战/.test(t)), fall);
   if (layout === 'mobile') await p.screenshot({ path: `${out}/${layout}-mount-fallen.png` });
   const re = await p.evaluate(async G0 => { const s = eval(G0), m = s.mount; await new Promise(r => setTimeout(r, 1600)); return { mounted: m.mounted, alpha: s.children.getByName('hero-mount').alpha }; }, G);
@@ -58,11 +60,11 @@ for (const layout of ['mobile', 'desktop']) {
   ck('的卢：落马那一下不掉血、向前跃出、短暂无敌', d.ok === false && d.lost === 0 && !d.mounted && d.moved > 40, d);
   await p.close();
 }
-// 骡车：不践踏；诸葛亮（非马上名将）耐力 100 + 60
+// 骡车：不践踏；诸葛亮（非马上名将）耐力 100 + 0.25×生命 + 60
 {
   const p = await open('desktop', 'mule', 'zhuge');
-  const r = await p.evaluate(async G0 => { const s = eval(G0), pl = s.player, e = s.spawnEnemy('infantry', pl.x + 50, pl.y, 1, true); e.speed = 0; s.readMove = () => ({ x: 1, y: 0 }); await new Promise(r => setTimeout(r, 500)); delete s.readMove; return { n: s.mount.tramples, max: s.mount.maxStamina, mul: pl.mountSpeedMul }; }, G);
-  ck('骡车：不践踏、耐力 160、移速 ×1.06', r.n === 0 && r.max === 160 && r.mul === 1.06, r);
+  const r = await p.evaluate(async G0 => { const s = eval(G0), pl = s.player, e = s.spawnEnemy('infantry', pl.x + 50, pl.y, 1, true); e.speed = 0; s.readMove = () => ({ x: 1, y: 0 }); await new Promise(r => setTimeout(r, 500)); delete s.readMove; return { n: s.mount.tramples, max: s.mount.maxStamina, want: Math.round(100 + .25 * pl.maxHp) + 60, mul: pl.mountSpeedMul }; }, G);
+  ck('骡车：不践踏、耐力 100 + 0.25×生命 + 60、移速 ×1.06', r.n === 0 && r.max === r.want && r.mul === 1.06, r);
   await p.close();
 }
 // 没穿坐骑：步战

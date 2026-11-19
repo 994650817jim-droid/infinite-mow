@@ -76,8 +76,8 @@ const shop = await p.evaluate(async () => {
 ck('军需商人：战法卷轴偏向势最高的两派（火攻、猛将各明显高于 1/6）', shop.fire > .22 && shop.warrior > .22, shop);
 
 // 5. 战法构筑面板
-await ev(s => { s.setMode('pause'); s.openBuildPanel(); }); await p.waitForTimeout(700);
-const ov = await ev(s => { const names = []; const walk = l => { for (const o of l) { if (o.name) names.push([o.name, o.text ?? '']); if (o.list) walk(o.list); } }; walk(s.children.list); const t = Object.fromEntries(names.filter(([n]) => /build-panel-tag-(fire|warrior)$|build-panel-tag-tier-fire|build-panel-next-0/.test(n))); return t; });
+await p.evaluate(() => { const s = window.__S; s.setMode('pause'); s.openBuildPanel(); }); await p.waitForTimeout(700);
+const ov = await p.evaluate(() => { const s = window.__S; const names = []; const walk = l => { for (const o of l) { if (o.name) names.push([o.name, o.text ?? '']); if (o.list) walk(o.list); } }; walk(s.children.list); const t = Object.fromEntries(names.filter(([n]) => /build-panel-tag-(fire|warrior)$|build-panel-tag-tier-fire|build-panel-next-0/.test(n))); return t; });
 await p.screenshot({ path: `${OUT}/build-panel.png` });
 ck('战法构筑面板：六派势条、档位名、下一步', /势 \d/.test(ov['build-panel-tag-fire'] ?? '') && /燎原/.test(ov['build-panel-tag-tier-fire'] ?? '') && !!ov['build-panel-next-0'], ov);
 ck('无页面报错', errors.length === 0, errors.slice(0, 3));

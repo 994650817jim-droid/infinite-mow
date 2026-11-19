@@ -64,3 +64,5 @@ export const SHI_SOURCES = { affinityStart: 1, followerCap: 2, orangeMount: 1 } 
 export const OFFER = { weightPer: .3, weightMax: 2, affinityWeight: 1.5, specialtyAt: 2, tacticCards: 2 } as const;
 /** 军需商人：战法卷轴优先出势最高的两派（权重 ×topWeight）。 */
 export const MERCHANT_SCHOOL = { topWeight: 3 } as const;
+/** 第 1 期没有新图的战法借现有图标（第 3 期出新图后删掉对应项）。 */
+export const TACTIC_ICON_ALIAS: Readonly<Record<string, string>> = { napalm: 'wildfire_lamp', gust: 'control_disk' };

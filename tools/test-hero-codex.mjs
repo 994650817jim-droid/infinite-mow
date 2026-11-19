@@ -41,7 +41,7 @@ const store = await p.evaluate(async () => {
   out.xinde = { lockedPick, unlock: u, spent: sc0 - ms.scrolls(), a: ms.toggleXinde('zhaoyun', locked).ok, b: ms.toggleXinde('zhaoyun', ms.STARTER_TACTICS[0]).ok, c: ms.toggleXinde('zhaoyun', ms.STARTER_TACTICS[1]).ok, list: ms.getXinde('zhaoyun') };
   return out;
 });
-ck('残卷存档 im_mastery_v1；老档按已通关章节补发（第一章通关 = 15 张），只补一次；起始每个流派解锁 1 个战法', store.slot && store.migrated === 15 && store.again === 15 && store.starters === 8, store);
+ck('残卷存档 im_mastery_v1；老档按已通关章节补发（第一章通关 = 15 张），只补一次；起始每个流派解锁 1 个战法', store.slot && store.migrated === 15 && store.again === 15 && store.starters === 6, store); // 2026-11-19 流派重做：六派
 ck('本命淬炼：花军粮 200 → 400，每级本命伤害 +4%；军粮不够时失败', store.temper.lv === 2 && store.temper.g0 - store.temper.g1 === 600 && JSON.stringify(store.temper.ok) === '[true,true,false]' && Math.abs(store.temper.bonus - .08) < 1e-9, store.temper);
 ck('洗点：已加的点全部退回、等级不变；本章第一次免费，第二次花 100 × 等级', store.respec.before === 2 && store.respec.after === 0 && store.respec.free === 0 && store.respec.r1 && store.respec.cost === 100 * store.respec.level, store.respec);
 ck('战法心得：未解锁的不能选；花 6 残卷解锁后可选；最多 2 个', !store.xinde.lockedPick && store.xinde.unlock && store.xinde.spent === 6 && store.xinde.a && store.xinde.b && !store.xinde.c && store.xinde.list.length === 2, store.xinde);

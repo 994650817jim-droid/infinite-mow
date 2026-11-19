@@ -12,7 +12,7 @@ export interface SynergyHost {
  nearby(x:number,y:number,r:number):Enemy[];
  deal(e:Enemy,n:number,fire:boolean):void;
  /** 合击 / 觉醒横幅（ui/SchoolBanner）。 */
- banner(kind:'combo'|'awaken',title:string,sub:string):void;
+ banner(kind:'combo'|'awaken',title:string,sub:string,schools?:string[]):void;
  controlled(e:Enemy,now:number):boolean;
  slowArea(x:number,y:number,r:number,slow:number,ms:number,now:number):number;
  /** 在 (x,y) 冒出 n 名助战兵，lifeMs 后散去；返回实际出了几个。 */
@@ -46,7 +46,7 @@ export class SchoolSynergy{
  constructor(private h:SynergyHost){}
  private combo(id:ComboId):boolean{return this.h.combat.combo(id);}
  /** 合击触发：第一次打横幅。 */
- note(id:ComboId):void{if(this.seen.has(id))return;this.seen.add(id);const c=COMBOS.find(x=>x.id===id);if(c)this.h.banner('combo','合击 · '+c.name+'！',SCHOOLS[c.a].name+' × '+SCHOOLS[c.b].name+' · 详见战法构筑');}
+ note(id:ComboId):void{const c=COMBOS.find(x=>x.id===id);if(!this.seen.has(id)){this.seen.add(id);if(c)this.h.banner('combo','合击 · '+c.name,SCHOOLS[c.a].name+' × '+SCHOOLS[c.b].name,[c.a,c.b]);}} // 2026-11-19 用户「合击提示碍眼」：小签只在每关第一次出（ui/SchoolBanner）
  private enemiesNear(x:number,y:number,r:number):Enemy[]{return this.h.nearby(x,y,r).filter(e=>e.active&&!e.isSupplySlot&&e.hp>0&&Math.hypot(e.x-x,e.y-y)<=r);}
  /** r 内敌人最密的一点（以敌人为候选）。 */
  private densest(r:number,range:number=AWAKEN.minRange):{x:number;y:number}{const p=this.h.player,near=this.enemiesNear(p.x,p.y,range);if(!near.length)return{x:p.x,y:p.y};let best=near[0],bn=-1;for(const c of near.slice(0,60)){let n=0;for(const o of near)if(Math.hypot(o.x-c.x,o.y-c.y)<=r)n++;if(n>bn){bn=n;best=c;}}return{x:best.x,y:best.y};}
@@ -99,7 +99,7 @@ export class SchoolSynergy{
  force(s:SchoolId,now:number=this.clock):void{this.fire(s,now);}
  private fire(s:SchoolId,now:number):void{
   const st=this.awake[s]??(this.awake[s]={reachedAt:now,used:0,cdUntil:0});st.used++;st.cdUntil=now+AWAKEN.cooldownMs;this.lastAwaken=now;this.stats.awaken[s]=(this.stats.awaken[s]??0)+1;
-  this.h.banner('awaken','觉醒 · '+SCHOOLS[s].tiers[6].name+'！',SCHOOLS[s].name+' 6 势 · 本关第 '+st.used+' / '+AWAKEN.perStage+' 次');this.h.shake();
+  this.h.banner('awaken','觉醒 · '+SCHOOLS[s].tiers[6].name,SCHOOLS[s].name+' 6 势 · 第 '+st.used+' / '+AWAKEN.perStage+' 次',[s]);this.h.shake();
   const raw=this.h.combat.rawBase(),p=this.h.player,cam=this.h.scene.cameras.main.worldView;
   switch(s){
   case 'fire':{const F=AWAKEN.fire,w=cam.width/F.columns,dir=Math.random()<.5?1:-1;this.h.combat.burnBoost={until:now+F.takenMs,mul:F.takenMul,bossMul:F.takenBossMul};

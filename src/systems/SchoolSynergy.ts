@@ -11,7 +11,8 @@ export interface SynergyHost {
  scene:Phaser.Scene; player:Player; combat:BuildCombat;
  nearby(x:number,y:number,r:number):Enemy[];
  deal(e:Enemy,n:number,fire:boolean):void;
- notice(text:string):void;
+ /** 合击 / 觉醒横幅（ui/SchoolBanner）。 */
+ banner(kind:'combo'|'awaken',title:string,sub:string):void;
  controlled(e:Enemy,now:number):boolean;
  slowArea(x:number,y:number,r:number,slow:number,ms:number,now:number):number;
  /** 在 (x,y) 冒出 n 名助战兵，lifeMs 后散去；返回实际出了几个。 */
@@ -21,6 +22,8 @@ export interface SynergyHost {
  flame(x:number,y:number,r:number):void;
  wind(x:number,y:number,angle:number,size:number):void;
  shake():void;
+ /** 手绘序列帧（SkillFxSheets.playSheet）：觉醒特效、风带；ground = 画在人物脚下。 */
+ sheet(key:string,x:number,y:number,o:{size:number;sizeH?:number;ms:number;rotation?:number;flipX?:boolean;originY?:number;ground?:boolean;add?:boolean;follow?:boolean;move?:{dx:number;dy:number}}):void;
 }
 interface Wake{at:number;run:()=>void}
 interface Field{x:number;y:number;r:number;until:number;next:number}
@@ -43,7 +46,7 @@ export class SchoolSynergy{
  constructor(private h:SynergyHost){}
  private combo(id:ComboId):boolean{return this.h.combat.combo(id);}
  /** 合击触发：第一次打横幅。 */
- note(id:ComboId):void{if(this.seen.has(id))return;this.seen.add(id);const c=COMBOS.find(x=>x.id===id);if(c)this.h.notice('合击 · '+c.name+'！'+SCHOOLS[c.a].name+' × '+SCHOOLS[c.b].name);}
+ note(id:ComboId):void{if(this.seen.has(id))return;this.seen.add(id);const c=COMBOS.find(x=>x.id===id);if(c)this.h.banner('combo','合击 · '+c.name+'！',SCHOOLS[c.a].name+' × '+SCHOOLS[c.b].name+' · 详见战法构筑');}
  private enemiesNear(x:number,y:number,r:number):Enemy[]{return this.h.nearby(x,y,r).filter(e=>e.active&&!e.isSupplySlot&&e.hp>0&&Math.hypot(e.x-x,e.y-y)<=r);}
  /** r 内敌人最密的一点（以敌人为候选）。 */
  private densest(r:number,range:number=AWAKEN.minRange):{x:number;y:number}{const p=this.h.player,near=this.enemiesNear(p.x,p.y,range);if(!near.length)return{x:p.x,y:p.y};let best=near[0],bn=-1;for(const c of near.slice(0,60)){let n=0;for(const o of near)if(Math.hypot(o.x-c.x,o.y-c.y)<=r)n++;if(n>bn){bn=n;best=c;}}return{x:best.x,y:best.y};}
@@ -78,7 +81,7 @@ export class SchoolSynergy{
  }
  /** 武器命中：猛将觉醒狂斗中每击带一圈小冲击波。 */
  onHit(e:Enemy,raw:number,now:number):void{
-  if(now>=this.h.player.growth.frenzyUntil||now<this.frenzyAt)return;this.frenzyAt=now+150;const W=AWAKEN.warrior;this.h.vfx('pure_combo',e.x,e.y-6,W.shockR*2,0,260);
+  if(now>=this.h.player.growth.frenzyUntil||now<this.frenzyAt)return;this.frenzyAt=now+150;const W=AWAKEN.warrior;this.h.sheet('fx_awaken_warrior',e.x,e.y,{size:W.shockR*2.6,ms:380,ground:true});
   for(const t of this.enemiesNear(e.x,e.y,W.shockR).slice(0,5)){this.h.deal(t,raw*W.shockRatio,false);if(t!==e)this.h.combat.knock(t,e,18,now);}
  }
 
@@ -96,30 +99,30 @@ export class SchoolSynergy{
  force(s:SchoolId,now:number=this.clock):void{this.fire(s,now);}
  private fire(s:SchoolId,now:number):void{
   const st=this.awake[s]??(this.awake[s]={reachedAt:now,used:0,cdUntil:0});st.used++;st.cdUntil=now+AWAKEN.cooldownMs;this.lastAwaken=now;this.stats.awaken[s]=(this.stats.awaken[s]??0)+1;
-  this.h.notice('觉醒 · '+SCHOOLS[s].tiers[6].name+'！');this.h.shake();
+  this.h.banner('awaken','觉醒 · '+SCHOOLS[s].tiers[6].name+'！',SCHOOLS[s].name+' 6 势 · 本关第 '+st.used+' / '+AWAKEN.perStage+' 次');this.h.shake();
   const raw=this.h.combat.rawBase(),p=this.h.player,cam=this.h.scene.cameras.main.worldView;
   switch(s){
   case 'fire':{const F=AWAKEN.fire,w=cam.width/F.columns,dir=Math.random()<.5?1:-1;this.h.combat.burnBoost={until:now+F.takenMs,mul:F.takenMul};
    for(let i=0;i<F.columns;i++){const col=dir>0?i:F.columns-1-i,x=cam.x+(col+.5)*w;this.wakes.push({at:now+i*F.sweepMs/F.columns,run:()=>{
-    for(let k=0;k<4;k++)this.h.flame(x+(Math.random()-.5)*w*.5,cam.y+(k+.5)*cam.height/4,w*.6);
+    for(let k=0;k<3;k++)this.h.sheet('fx_awaken_fire',x+(Math.random()-.5)*w*.25,cam.y+(k+.92)*cam.height/3,{size:Math.max(w*1.5,cam.height/2.6),ms:900,originY:.94});
     for(const e of this.h.nearby(x,cam.centerY,Math.max(w,cam.height))){if(!e.active||e.isSupplySlot||Math.abs(e.x-x)>w/2+e.radius||e.y<cam.y-20||e.y>cam.bottom+20)continue;
      const k=e.kind==='boss'?.35:e.kind==='elite'?.6:1;this.hitBy('fire',e,raw*F.ratio*k,true);this.h.combat.igniteDerived(e,raw*.15,this.clock,F.burnMs);}}});}
    break;}
-  case 'stratagem':{const S=AWAKEN.stratagem,c=this.densest(S.r);if(this.fields.length>=2)this.fields.shift();this.fields.push({x:c.x,y:c.y,r:S.r,until:now+S.ms,next:now});this.h.vfx('iron_army',c.x,c.y,S.r*1.6,0,600);break;}
+  case 'stratagem':{const S=AWAKEN.stratagem,c=this.densest(S.r);if(this.fields.length>=2)this.fields.shift();this.fields.push({x:c.x,y:c.y,r:S.r,until:now+S.ms,next:now});break;}
   case 'archery':{const A=AWAKEN.archery,c=this.densest(A.r);
    for(let i=0;i<A.waves;i++)this.wakes.push({at:now+i*A.waveMs,run:()=>{
-    for(let k=0;k<7;k++){const a=Math.random()*Math.PI*2,d=Math.sqrt(Math.random())*A.r;this.h.vfx('critical',c.x+Math.cos(a)*d,c.y+Math.sin(a)*d*.8,60,0,320);}
-    this.h.vfx('peerless',c.x,c.y,A.r*1.6,0,420);
+    this.h.sheet('fx_awaken_archery',c.x+(Math.random()-.5)*30,c.y+A.r*.45,{size:A.r*2.4,ms:600,originY:.9});
     for(const e of this.enemiesNear(c.x,c.y,A.r)){this.hitBy('archery',e,raw*A.ratio*(e.kind==='boss'?.4:1),false);this.h.combat.vulnerable(e,A.sunder,this.clock);}}});
    break;}
   case 'cavalry':{const C=AWAKEN.cavalry,c=this.densest(C.width,C.len*.8),ang=Math.atan2(c.y-p.y,c.x-p.x)||0,ux=Math.cos(ang),uy=Math.sin(ang);p.invulnUntil=Math.max(p.invulnUntil,now+C.invulnMs);
-   for(let i=0;i<6;i++)this.wakes.push({at:now+i*70,run:()=>{const d=C.len*(i+.5)/6;this.h.wind(p.x+ux*d,p.y+uy*d-12,ang,110);this.h.vfx('roaming_break',p.x+ux*d,p.y+uy*d-8,120,ang,320);}});
+   {const left=ux<0;this.h.sheet('fx_awaken_cavalry',p.x,p.y-10,{size:230,ms:620,originY:.62,flipX:left,rotation:left?ang+Math.PI:ang,move:{dx:ux*C.len,dy:uy*C.len}});
+    for(let i=0;i<3;i++)this.wakes.push({at:now+i*110,run:()=>{const d=C.len*(i+.6)/3;this.h.wind(p.x+ux*d,p.y+uy*d-12,ang,C.len*.42);}});}
    for(const e of this.enemiesNear(p.x,p.y,C.len)){const x=e.x-p.x,y=e.y-p.y,along=x*ux+y*uy,side=Math.abs(x*uy-y*ux);if(along<-20||along>C.len||side>C.width/2+e.radius)continue;
     this.wakes.push({at:now+Math.max(0,along)/C.len*420,run:()=>{if(!e.active)return;this.hitBy('cavalry',e,raw*C.ratio*(e.kind==='boss'?.4:1),false);this.h.combat.knock(e,{x:e.x-ux,y:e.y-uy},C.push,this.clock,ang);}});}
    break;}
-  case 'warrior':{const W=AWAKEN.warrior,g=p.growth;g.frenzyUntil=now+W.ms;g.frenzyHaste=W.haste;this.h.vfx('pure_combo',p.x,p.y-10,150,0,600);break;}
+  case 'warrior':{const W=AWAKEN.warrior,g=p.growth;g.frenzyUntil=now+W.ms;g.frenzyHaste=W.haste;this.h.sheet('fx_awaken_warrior',p.x,p.y,{size:300,ms:700,ground:true});break;}
   case 'formation':{const F=AWAKEN.formation;this.guardUntil=now+F.guardMs;this.allyBoost={from:now+F.guardMs,until:now+F.guardMs+F.allyDmgMs};p.invulnUntil=Math.max(p.invulnUntil,now+1000);
-   this.h.escort(p.x,p.y+40,F.soldiers,F.lifeMs);this.h.vfx('iron_army',p.x,p.y-8,180,0,700);break;}
+   this.h.escort(p.x,p.y+40,F.soldiers,F.lifeMs);this.h.sheet('fx_awaken_formation',p.x,p.y+14,{size:250,ms:F.guardMs*.5,originY:.78,follow:true});break;}
   }
  }
  update(now:number):void{this.clock=now;
@@ -129,7 +132,7 @@ export class SchoolSynergy{
    const p=this.h.player;if(this.enemiesNear(p.x,p.y,AWAKEN.minRange).length<AWAKEN.minEnemies)continue;this.fire(s,now);break;}
   if(this.wakes.length){const due=this.wakes.filter(w=>now>=w.at);this.wakes=this.wakes.filter(w=>now<w.at);for(const w of due)w.run();}
   const S=AWAKEN.stratagem;for(let i=this.fields.length-1;i>=0;i--){const f=this.fields[i];if(now>=f.until){this.fields.splice(i,1);continue;}if(now<f.next)continue;f.next=now+S.tickMs;
-   this.h.vfx('pure_control',f.x,f.y,f.r*2,0,S.tickMs);for(const e of this.enemiesNear(f.x,f.y,f.r)){this.h.combat.stun(e,S.stunMs,now);this.stats.hits.stratagem=(this.stats.hits.stratagem??0)+1;}}
+   this.h.sheet('fx_awaken_stratagem',f.x,f.y,{size:f.r*2.5,ms:S.tickMs*1.05,ground:true,add:true});for(const e of this.enemiesNear(f.x,f.y,f.r)){this.h.combat.stun(e,S.stunMs,now);this.stats.hits.stratagem=(this.stats.hits.stratagem??0)+1;}}
  }
  clear():void{this.wakes=[];this.fields=[];this.ambushes=[];this.guardUntil=0;this.allyBoost={from:0,until:0};}
 }

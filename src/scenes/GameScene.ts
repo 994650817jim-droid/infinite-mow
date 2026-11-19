@@ -31,6 +31,7 @@ import {recordHardClear,rewardGrain} from "../world/WorldStore";
 import {chapterState,openChapterCount,type TimelineChapterId} from '../world/ChapterTimeline';
 import {buildVfx} from '../systems/BuildVfx';
 import {SchoolSynergy} from '../systems/SchoolSynergy';
+import {SchoolBanner} from '../ui/SchoolBanner';
 import {BulwarkBuild} from '../systems/BulwarkBuild';
 import {ControlBuild} from '../systems/ControlBuild';
 import { SHOW_RANGE_RINGS } from '../ui/RangeRings';
@@ -819,10 +820,14 @@ export class GameScene extends Phaser.Scene {
     this.events.once('shutdown',()=>{this.bulwarkBuild?.clear();this.bulwarkBuild=undefined;this.player.damageGuard=undefined;});
     this.controlBuild=new ControlBuild(this,this.player.growth.build,(x,y,r)=>this.grid.query(x,y,r));
     this.events.once('shutdown',()=>{this.controlBuild?.clear();this.controlBuild=undefined;});
-    this.synergy=new SchoolSynergy({scene:this,player:this.player,combat:this.buildCombat,nearby:(x,y,r)=>this.grid.query(x,y,r),deal:(e,n,fire)=>{this.hitEnemy(e,n,this.combatNow,fire?'fire':'melee',false,false);},notice:t=>this.showGrowthNotice(t),
+    const schoolBanner=new SchoolBanner(this,()=>this.mode==='none'&&!this.over);
+    this.synergy=new SchoolSynergy({scene:this,player:this.player,combat:this.buildCombat,nearby:(x,y,r)=>this.grid.query(x,y,r),deal:(e,n,fire)=>{this.hitEnemy(e,n,this.combatNow,fire?'fire':'melee',false,false);},banner:(k,t,sub)=>schoolBanner.show(k,t,sub),
       controlled:(e,n)=>this.controlBuild?.isControlled(e,n)??false,slowArea:(x,y,r,k,ms,n)=>this.controlBuild?.slowArea(x,y,r,k,ms,n)??0,escort:(x,y,n,ms)=>this.reinforcePush().spawnEscortAt(x,y,n,ms)?.members.length??0,
       vfx:(st,x,y,size,a=0,ms=360)=>buildVfx(this).emit(st,x,y,this.combatNow,size,a,ms,true),flame:(x,y,r)=>this.spawnFlameFx(x,y,r),
-      wind:(x,y,a,size)=>playSheet(this,'fx_windstep_burst',x,y,{size,ms:360,depth:DEPTH.fx+.05,rotation:a,name:'awaken-wind'}),shake:()=>this.hitFeel.shake('medium')});
+      wind:(x,y,a,size)=>playSheet(this,'fx_gust_band',x,y,{size,ms:420,depth:DEPTH.fx+.05,rotation:a,name:'awaken-wind'}),shake:()=>this.hitFeel.shake('medium'),
+      // 觉醒手绘序列帧（第 3 期）：ground = 画在人物脚下；follow = 跟着主将；move = 播放中平移（单骑突阵）
+      sheet:(key,x,y,o)=>{const pl=this.player,ox=x-pl.x,oy=y-pl.y,mv=o.move;playSheet(this,key,x,y,{size:o.size,sizeH:o.sizeH,ms:o.ms,depth:o.ground?19:DEPTH.fx+.05,rotation:o.rotation,flipX:o.flipX,originY:o.originY,add:o.add,name:'awaken-'+key.slice(10),
+        onUpdate:o.follow?img=>img.setPosition(pl.x+ox,pl.y+oy):mv?(img,t)=>img.setPosition(x+mv.dx*t,y+mv.dy*t):undefined});}});
     this.legion.awakeningDefense={incoming:(_u,n)=>(this.synergy?.allyIncoming(n)??1)*(this.player.growth.build.tier('formation')>=2?1-SCHOOL_TIER.formation.allyTaken:1),onAllyHurt:()=>{}};
     this.events.once('shutdown',()=>{this.synergy?.clear();this.synergy=undefined;});
     this.buildCombat.setOrigin(()=>({x:this.player.x,y:this.player.y}));
@@ -838,7 +843,8 @@ export class GameScene extends Phaser.Scene {
     this.buildCombat.onCharge=(e,n)=>this.synergy?.onCharge(e,n);
     this.buildCombat.onStun=(e,n)=>this.synergy?.onStun(e,n);
     if(this.controlBuild)this.controlBuild.onStun=(e,n)=>this.synergy?.onStun(e,n);
-    this.buildCombat.onGust=(x,y,a,len)=>{for(let i=1;i<=3;i++)playSheet(this,'fx_windstep_burst',x+Math.cos(a)*len*i/3.4,y+Math.sin(a)*len*i/3.4-14,{size:70+i*14,ms:360,depth:DEPTH.fx+.05,rotation:a,name:'gust-burst'});};
+    // 疾风：一条手绘风带（第 3 期 fx_gust_band）沿风向铺开
+    this.buildCombat.onGust=(x,y,a,len)=>{playSheet(this,'fx_gust_band',x+Math.cos(a)*len*.5,y+Math.sin(a)*len*.5-14,{size:len*1.15,ms:520,depth:DEPTH.fx+.05,rotation:a,name:'gust-band'});};
     const cam = this.cameras.main;
     cam.setRoundPixels(false);
     cam.setScroll(this.player.x - GAME_WIDTH / 2, this.player.y - GAME_HEIGHT / 2);

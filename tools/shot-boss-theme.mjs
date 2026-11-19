@@ -16,6 +16,10 @@ const CASES = {
   sunhuan: { scene: 'YilingGameScene', run: { thirdStage: 1 }, reg: { yilingStage: 1 }, ctl: 'controller' },
   mangyachang: { scene: 'NanzhengGameScene', run: { thirdStage: 1 }, reg: { nanzhengStage: 1 }, ctl: 'controller' },
   wutugu: { scene: 'NanzhengGameScene', run: { thirdStage: 2 }, reg: { nanzhengStage: 2 }, ctl: 'controller' },
+  caocao: { scene: 'HanzhongGameScene', run: { thirdStage: 3 }, reg: { hanzhongStage: 3 }, ctl: 'controller' },
+  lvmeng: { scene: 'XiangfanGameScene', run: { thirdStage: 3 }, reg: { xiangfanStage: 3 }, ctl: 'controller' },
+  huangzhong: { scene: 'JingnanGameScene', run: { thirdStage: 3 }, reg: { jingnanStage: 3 }, ctl: 'controller' },
+  liudu: { scene: 'JingnanGameScene', run: { thirdStage: 2 }, reg: { jingnanStage: 2 }, ctl: 'controller' },
   menghuo: { scene: 'NanzhengGameScene', run: { thirdStage: 3 }, reg: { nanzhengStage: 3 }, ctl: 'controller' },
 };
 const IDS = (E.IDS ?? 'lijue').split(',').filter(Boolean), MOVES = (E.MOVES ?? '').split(',').filter(Boolean).map(Number);

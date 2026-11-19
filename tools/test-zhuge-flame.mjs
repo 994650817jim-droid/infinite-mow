@@ -18,7 +18,7 @@ await p.waitForTimeout(500);
 await p.waitForFunction(() => { const s = window.__game.scene.getScene('GameScene'); return s?.player && s.runConfig?.character === 'zhuge' && s.__DEV_ACTIONS; }, null, { timeout: 20000 });
 await p.evaluate(G0 => { const s = eval(G0); s.player.damageImmune = true; s.__DEV_ACTIONS.closePopup?.(); s.spawnTimer = s.eliteTimer = 1e9; s.player.stats.critChance = -1; setInterval(() => { if (s.mode === 'levelup') s.chooseUpgrade(0); else if (s.mode === 'recruit') s.__DEV_ACTIONS.closePopup?.(); }, 40); }, G);
 const H = `const s = ${G}, pl = s.player, w = pl.weapons[0], wait = ms => new Promise(r => setTimeout(r, ms));
-  const clear = () => { for (const e of s.enemies) if (e.active && !e.isSupplySlot) e.deactivate(); };
+  const clear = () => { for (const e of s.enemies) if (e.active && !e.isSupplySlot) e.deactivate(); pl.passive.reset('zhuge', s.combatNow); }; // 清观星层数：无首领时每发都积层，不清的话连着几个测量会撞上算无遗策
   const mk = (kind, x, y, hp = 99999) => { const e = s.spawnEnemy(kind, x, y, 1); e.hp = e.maxHp = hp; e.stunUntil = 1e12; return e; };
   const { TIANHUO_DEF } = await import('/src/weapons/zhugeTianhuo.ts'); const Z = window.__zgTuning; if (!Z) throw new Error('no __zgTuning'); /* 游戏实际在用的那份（热更新后 import 拿到的是另一份） */
   Z.ember.mul = 0; // 天火余烬（2026-11-18）另在 test-hero-mechanics 1c 测；这里只量天火本身，免得上一发的余烬烧到下一发新刷的兵
@@ -70,14 +70,21 @@ const r3b = await p.evaluate(`(async () => { ${H}
 })()`);
 ck('天火：打精锐时溅射维持 50 内 30%（40 像素的步兵挨 30%，80 像素的不挨）', r3b.el > 0 && Math.abs(r3b.ratio - .3) < .03 && r3b.far === 0, r3b);
 
-// 4) 观星：同一目标第 4 发必暴击 ×2
+// 4) 观星（2026-11-18 夜改）：有首领 / 精锐时同一目标第 4 发必暴击 ×2；没有时天火每发都积星象（打中谁都算），第 4 发算无遗策
 const r4 = await p.evaluate(`(async () => { ${H}
-  clear(); pl.passive.reset('zhuge', s.combatNow); w.cooldownLeft = 1e9; await wait(120); const { BALANCE } = await import('/src/config.ts');
-  const t = mk('infantry', pl.x + 220, pl.y), hits = [], marks = [];
-  for (let k = 0; k < 4; k++) { const h0 = t.hp; w.cooldownLeft = 0; await wait(100); w.cooldownLeft = 1e9; await wait(900); hits.push(h0 - t.hp); marks.push(pl.passive.starMarks(t, s.combatNow)); }
-  return { hits, marks, ratio: +(hits[3] / hits[0]).toFixed(2), expect: 2 * BALANCE.critMultiplier, label: pl.passive.label(s.combatNow) };
+  const { BALANCE } = await import('/src/config.ts');
+  const run = async (kind, marksOf) => { clear(); w.cooldownLeft = 1e9; await wait(120); const t = mk(kind, pl.x + 220, pl.y), hits = [], marks = [];
+    for (let k = 0; k < 4; k++) { const h0 = t.hp; w.cooldownLeft = 0; await wait(100); w.cooldownLeft = 1e9; await wait(900); hits.push(h0 - t.hp); marks.push(marksOf(t)); }
+    t.deactivate(); return { hits, marks, ratio: +(hits[3] / hits[0]).toFixed(2) }; };
+  const single = await run('elite', t => pl.passive.starMarks(t, s.combatNow));
+  // 怪堆：每发打的是不同的兵也照样积层
+  clear(); w.cooldownLeft = 1e9; await wait(120); const marks = [], hits = []; let last = null;
+  for (let k = 0; k < 4; k++) { last?.deactivate(); const t = mk('infantry', pl.x + 220, pl.y + (k % 2 ? 40 : -40)); last = t; const h0 = t.hp; w.cooldownLeft = 0; await wait(100); w.cooldownLeft = 1e9; await wait(900); hits.push(h0 - t.hp); marks.push(pl.passive.crowdStarMarks(s.combatNow)); }
+  last?.deactivate();
+  return { single, crowd: { hits, marks, ratio: +(hits[3] / hits[0]).toFixed(2) }, expect: 2 * BALANCE.critMultiplier, label: pl.passive.label(s.combatNow) };
 })()`);
-ck('观星：前三发逐层积星象 1/2/3，第 4 发算无遗策（必暴击 × 伤害 ×2）后清层', r4.marks.join() === '1,2,3,0' && Math.abs(r4.ratio - r4.expect) < .08, r4);
+ck('观星：有精锐时同一目标前三发逐层积星象 1/2/3，第 4 发算无遗策（必暴击 × 伤害 ×2）后清层', r4.single.marks.join() === '1,2,3,0' && Math.abs(r4.single.ratio - r4.expect) < .08, r4);
+ck('观星：没有首领 / 精锐时天火每发都积星象（每发打不同的兵也算）1/2/3，第 4 发算无遗策', r4.crowd.marks.join() === '1,2,3,0' && Math.abs(r4.crowd.ratio - r4.expect) < .08, r4);
 
 // 5) 智力：天火每点 +1.5%（另外法术伤害照常）
 const r5 = await p.evaluate(`(async () => { ${H}

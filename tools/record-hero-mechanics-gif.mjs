@@ -33,11 +33,11 @@ await p.evaluate(async ([G0, hero, SCENE]) => {
   }
   if (hero === 'zhuge' && SCENE === 'crowd') {
     // 2026-11-18 天火打怪堆：没有首领 / 精锐时落进怪堆中心（溅射 90 内 40%）；同晚改：算无遗策（同一目标第 4 发）留下手绘星火焦土（半径 160），借东风火龙下面卷起手绘东风。
-    // 怪堆血量给到 600：中心那个扛得住 4 发，算无遗策自然触发
+    // 怪堆血量给到 600；无首领时天火每发都积星象，第 4 发算无遗策留 4.5 秒星火焦土（谁都烧）；借东风火龙把怪堆顺风吹开
     pl.damageImmune = true; pl.weapons[0].level = 3; pl.growth.masteries.wildfire = 2;
     mk(pl.x + 60, pl.y - 190, { hp: 30000 });
     for (const [cx, cy] of [[260, -30], [-230, -10]]) /* 都放在上半屏（GIF 只裁上 470 像素） */ for (let i = 0; i < 9; i++) mk(pl.x + cx + (i % 3 - 1) * 34, pl.y + cy + (Math.floor(i / 3) - 1) * 30, { hp: 600 });
-    await wait(14000); return;
+    await wait(16000); return;
   }
   if (hero === 'zhuge') {
     // 诸葛亮七星灯 · 天火（2026-11-18 重做）：星位 → 天火落下；同一目标第 4 发算无遗策 + 八阵图；每第 4 发东风火龙扫过路上的兵

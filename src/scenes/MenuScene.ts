@@ -41,7 +41,7 @@ const PASSIVE_HINTS = [
   '命中积攒龙胆，满七层强化下一次龙枪。',
   '横斩命中怪群蓄势，强化斩击范围与伤害。',
   '重箭命中积蓄势，满五层进入神射。',
-  '天火连击同一目标积星象，第四发算无遗策。',
+  '无首领时天火每发都积星象，第四发算无遗策。',
 ];
 interface ChapterCard { id: ChapterId; bg: Phaser.GameObjects.Rectangle; name: Phaser.GameObjects.Text; tag: Phaser.GameObjects.Text; hint: Phaser.GameObjects.Text; decor: Phaser.GameObjects.Graphics; }
 interface HeroCard { bg: Phaser.GameObjects.Rectangle; icon: Phaser.GameObjects.Image; badge: Phaser.GameObjects.Text; decor: Phaser.GameObjects.Graphics; }

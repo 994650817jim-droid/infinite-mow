@@ -1949,6 +1949,7 @@ export class GameScene extends Phaser.Scene {
       hitEnemy: (...args) => scene.hitEnemy(...args),
       setCritOverride: (crit) => { scene.debugCrit = crit; },
       nearestEnemy: (...args) => scene.nearestEnemy(...args),
+      knockEnemy: (e, dx, dy, ms) => scene.knockEnemy(e, dx, dy, ms),
       priorityTarget: (range,bodyRadius)=>scene.priorityWeaponTarget(range,bodyRadius),
       fireBolt: (...args) => scene.fireBolt(...args),
       spawnGuandaoSlash: (...args) => scene.spawnGuandaoSlash(...args),
@@ -2021,6 +2022,7 @@ export class GameScene extends Phaser.Scene {
       // 刘备仁德鼓舞：以随行自己为中心、半径 FOLLOW.rallyRadius（主将版是全军）；部曲与其他随行都算
       rallyAllies: (fraction: number) => { const r = FOLLOW.rallyRadius; for (const u of scene.allies) if (u.active && Math.hypot(u.x - f.x, u.y - f.y) <= r) u.hp = Math.min(u.maxHp, u.hp + u.maxHp * fraction); for (const m of squad.members) if (!m.downed && Math.hypot(m.x - f.x, m.y - f.y) <= r) m.hp = Math.min(m.maxHp, m.hp + m.maxHp * fraction); },
       nearestEnemy: (x, y, r) => scene.nearestEnemy(x, y, r),
+      knockEnemy: (e, dx, dy, ms) => scene.knockEnemy(e, dx, dy, ms),
       fireBolt: (pool, x, y, tx, ty, damage, bounce, fromPlayer, speed) => { scene.boltAlly = ally; try { scene.fireBolt(pool, x, y, tx, ty, damage * squad.share, bounce, fromPlayer, speed); } finally { scene.boltAlly = undefined; } },
       spawnGuandaoSlash: (angle, alpha, size, duration) => scene.spawnGuandaoSlashAt(f.x, f.y, hero, angle, alpha * FOLLOW.fxAlpha, size, duration, FOLLOW.fxAlpha),
       spawnFlagSwingFx: (dx, dy) => scene.spawnFlagSwingFxAt(f.x, f.y, dx, dy),
@@ -2239,6 +2241,24 @@ export class GameScene extends Phaser.Scene {
       this.spawnBossChest(enemy.x,enemy.y,()=>{if(this.bossKilled&&this.chasingBosses.length===0){if(this.storyDir)this.storyDir.chapterClose(()=>this.finish(true,'boss'));else this.finish(true,'boss');}else{this.resumePendingChoices();if(this.bossKilled)this.showGrowthNotice('当前首领已败 · 仍有'+this.chasingBosses.length+'名追击首领');}});return;
     }
     this.spawnGem(enemy.x, enemy.y, enemy.def.xp * (this.boss?.active && enemy.kind !== 'boss' ? BALANCE.bossSpawn.xpMul : 1)); // 首领在场：杂兵经验 ×2（BALANCE.bossSpawn.xpMul）
+  }
+
+  /**
+   * 击退（2026-11-18 夜，诸葛亮借东风）：沿 (dx, dy) 分 6 步、ms 内推完。首领 / 不受控 / 城墙 / 补给位不推；
+   * 每步先看落点：碰到城墙（behavior wall）、障碍物落脚范围或场地外（supplies.healBlocked：泗水关建筑、洛阳城头场地）就停在原地。
+   */
+  knockEnemy(e: Enemy, dx: number, dy: number, ms: number): void {
+    if (!e.active || e.isSupplySlot || e.kind === 'boss' || e.controlImmune || e.def.behavior === 'wall') return;
+    const steps = 6, sx = dx / steps, sy = dy / steps, spawn = e.spawnId, blocked = this.supplies?.healBlocked;
+    const step = (): boolean => {
+      if (!e.active || e.spawnId !== spawn || this.over) return false;
+      const nx = e.x + sx, ny = e.y + sy;
+      if (blocked?.(nx, ny, e.radius)) return false;
+      for (const w of this.grid.query(nx, ny, e.radius + 80)) if (w !== e && w.active && w.def.behavior === 'wall' && Math.hypot(w.x - nx, w.y - ny) < w.radius + e.radius) return false;
+      e.sprite.setPosition(nx, ny); return true;
+    };
+    if (!step()) return;
+    let left = steps - 1; const ev = this.time.addEvent({ delay: Math.max(16, ms / steps), repeat: left - 1, callback: () => { if (!step()) ev.remove(false); if (--left <= 0) ev.remove(false); } });
   }
 
   protected nearestEnemy(x: number, y: number, range: number, exclude: Enemy | null = null, ignored?: Set<number>): Enemy | null {

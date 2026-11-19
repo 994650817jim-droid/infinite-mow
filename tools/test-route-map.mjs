@@ -20,7 +20,7 @@ const open = async (save, extra, settle = 1500) => {
   const p = await b.newPage({ viewport: { width: 1280, height: 720 } });
   p.on('pageerror', e => errors.push(e.message.slice(0, 200))); p.on('console', m => { if (m.type() === 'error' && !/favicon|Failed to load resource/.test(m.text())) errors.push(m.text().slice(0, 200)); });
   await p.addInitScript(sv => { if (!sessionStorage.getItem('seeded')) { localStorage.clear(); localStorage.setItem('im_world_v1', JSON.stringify(sv)); localStorage.setItem('im_last_hero', 'zhaoyun'); localStorage.setItem('im_home_seen', '1'); localStorage.setItem('im_tutorial_done', '1'); localStorage.setItem('im_roster_v1', JSON.stringify({ version: 1, lord: 'guanyu', lordFinal: true, owned: [], followers: [] })); sessionStorage.setItem('seeded', '1'); } }, save);
-  await p.goto(BASE + '?layout=desktop', { timeout: 180000 }); await p.waitForFunction(() => window.__game?.scene.isActive('MenuScene'), null, { timeout: 180000 });
+  await p.goto(BASE + '?layout=desktop&map=v2', { timeout: 180000 }); await p.waitForFunction(() => window.__game?.scene.isActive('MenuScene'), null, { timeout: 180000 });
   await p.evaluate(async () => (await import('/src/world/WorldStore.ts')).setWorldRandom?.(() => .99));
   if (extra) await p.evaluate(extra);
   await p.evaluate(() => window.__game.scene.getScene('MenuScene').scene.start('WorldMapScene'));

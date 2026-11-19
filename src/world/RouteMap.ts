@@ -8,8 +8,16 @@
  * - 迷雾：哪些点露出来全由进度算出（不新增存档字段），见 routeView。
  * 纯数据 / 纯函数：不读写存档（WorldStore 会 import 这里，避免循环依赖）。
  */
-import { CITIES, HOME, type CityDef } from './WorldCities';
+import { CITIES, HOME, cityAttackable, type CityDef } from './WorldCities';
 import { CHAPTER_TIMELINE, CITY_CHAPTER, STAGE_POINTS, chapterStagesDone, stageOpen, type TimelineChapterId, type TimelineProgress } from './ChapterTimeline';
+
+/**
+ * 天下地图用哪一版（2026-11-19 用户要求先回到旧版 V1 上线）：
+ * - 'v1'（缺省）：旧版天下地图 WorldMapSceneV1（注册成 'WorldMapScene'）；攻城 = 规则 B（挂靠的主线关打下）+ 与我方领地相邻；
+ * - 'v2'：「征途」路线图 WorldMapScene；攻城 = 规则 B + 规则 C（不要求相邻）。
+ * 开发时网址加 ?map=v2 可切到 v2（测试 test-route-map / test-map-depart-v2 用）。
+ */
+export const WORLD_MAP_VERSION: 'v1' | 'v2' = (() => { try { return new URLSearchParams(globalThis.location?.search ?? '').get('map') === 'v2' ? 'v2' : 'v1'; } catch { return 'v1'; } })();
 
 export type RouteKind = 'camp' | 'stage' | 'siege' | 'challenge';
 export interface RouteNode {
@@ -66,9 +74,13 @@ export function siegeUnlocked(cityId: string, s: TimelineProgress): boolean {
   const n = siegeNodeOf(cityId), a = n?.after ? routeNode(n.after) : undefined;
   return !!a && stageCleared(a, s);
 }
-/** 可出征攻城：已开放、且不是我方城池。 */
+/** 可出征攻城：已开放、且不是我方城池；V1 还要与我方领地相邻（v2 规则 C 不要求）。 */
 export function routeSiegeOpen(cityId: string, s: TimelineProgress, owned: readonly string[]): boolean {
-  return !owned.includes(cityId) && siegeUnlocked(cityId, s);
+  return !owned.includes(cityId) && siegeUnlocked(cityId, s) && (WORLD_MAP_VERSION === 'v2' || cityAttackable(cityId, owned));
+}
+/** 攻城点挂靠的主线关（显示「打下 X-Y 后开放」用）。 */
+export function siegeGateStage(cityId: string): RouteNode | undefined {
+  const n = siegeNodeOf(cityId); return n?.after ? routeNode(n.after) : undefined;
 }
 
 export type NodeVis = 'cleared' | 'open' | 'faint' | 'hidden';

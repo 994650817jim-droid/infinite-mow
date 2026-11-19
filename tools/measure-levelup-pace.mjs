@@ -23,8 +23,8 @@ const results = {};
 const run = async ch => {
   const sc = SCEN[ch], p = await b.newPage({ viewport: { width: 1280, height: 720 } }), errors = [];
   p.on('pageerror', e => errors.push(e.message));
-  await p.addInitScript(ch => { if (sessionStorage.getItem('seeded')) return; localStorage.clear(); localStorage.setItem('im_last_hero', 'zhaoyun'); sessionStorage.setItem('seeded', ch); }, ch);
-  await p.goto(base + '?layout=desktop', { timeout: 300000 }); await p.waitForFunction(() => window.__game?.scene.isActive('MenuScene'), null, { timeout: 120000 });
+  await p.addInitScript(ch => { if (sessionStorage.getItem('seeded')) return; localStorage.clear(); localStorage.setItem('im_last_hero', 'zhaoyun'); localStorage.setItem('im_home_seen', '1'); localStorage.setItem('im_tutorial_done', '1'); localStorage.setItem('im_roster_v1', JSON.stringify({ version: 1, lord: 'zhaoyun', lordFinal: true, owned: [], followers: [], offers: [], captives: [], season: -1, manual: 0, dry: 0, seq: 0, hall: 1 })); sessionStorage.setItem('seeded', ch); }, ch);
+  await p.goto(base + '?layout=desktop', { timeout: 300000 }); await p.waitForFunction(() => window.__game?.scene.isActive('MenuScene') || window.__game?.scene.isActive('OpeningScene'), null, { timeout: 120000 }); await p.evaluate(() => { const g = window.__game; if (!g.scene.isActive('MenuScene')) g.scene.getScenes(true)[0].scene.start('MenuScene'); }); await p.waitForFunction(() => window.__game.scene.isActive('MenuScene'), null, { timeout: 60000 });
   await p.evaluate(async ([lv, c, st, wv]) => {
     const h = await import('/src/systems/HeroProgress.ts'), w = await import('/src/world/WorldStore.ts');
     try { w.setTutorialSeen?.(); } catch { /* 旧版无此接口 */ }
@@ -36,9 +36,9 @@ const run = async ch => {
     for (let i = 0; i < 3; i++) { const k = find(m.children.list, 'lord-keep'); if (!k) break; k.emit('pointerdown'); k.emit('pointerup'); await new Promise(r => setTimeout(r, 300)); }
     if (c === 1) m.pickChapter('huangjin', st); else if (c === 2) m.pickChapter('hulao', st);
     else if (c === 3) { m.registry.set('thirdStage', st); m.registry.set('runConfig', { character: 'zhaoyun' }); m.scene.start('ThirdGameScene'); }
-    else m.pickChapter('guandu');
+    else { const dd = await import('/src/systems/DirectDepart.ts'); m.registry.set('worldStagePick', st); dd.requestDirectDepart(m); m.pickChapter('guandu'); }
   }, [sc.level, sc.c, sc.st, sc.world]);
-  if (sc.c === 4) { await p.waitForFunction(() => window.__game.scene.isActive('GuanduChapterScene'), null, { timeout: 60000 }); await p.waitForTimeout(800); await p.evaluate(st => { const g = window.__game.scene.getScene('GuanduChapterScene'); g.children.getByName('guandu-stage-' + st)?.emit('pointerdown'); g.children.getByName('guandu-deploy').emit('pointerup'); }, sc.st); }
+  if (false && sc.c === 4) { await p.waitForFunction(() => window.__game.scene.isActive('GuanduChapterScene'), null, { timeout: 60000 }); await p.waitForTimeout(800); await p.evaluate(st => { const g = window.__game.scene.getScene('GuanduChapterScene'); g.children.getByName('guandu-stage-' + st)?.emit('pointerdown'); g.children.getByName('guandu-deploy').emit('pointerup'); }, sc.st); }
   // 机器人：每 150ms 一拍
   const t0 = Date.now(); let done = false, stagesSeen = 0;
   while (!done && Date.now() - t0 < 30 * 60000) {
@@ -55,7 +55,7 @@ const run = async ch => {
           return d > 170 ? new V(dx / d, dy / d) : new V(-dy / d, dx / d); };
       }
       const P = s.player; if (P && !P.__inv) { P.__inv = true; P.takeDamage = () => false; }
-      const r = (window.__paceLog.stages[s.chapter.name] ??= { picks: [], start: Date.now(), lvStart: P.level, len: 0 }); r.len = Math.max(r.len, Math.round(s.elapsed)); r.lvEnd = P.level;
+      const r = (window.__paceLog.stages[s.chapter.name] ??= { picks: [], start: Date.now(), lvStart: P.level, len: 0 }); r.len = Math.max(r.len, Math.round(s.elapsed)); r.lvEnd = P.level; r.xp = Math.round(P.runXp ?? 0); r.bossAt = r.bossAt ?? (s.bossSpawned ? Math.round(s.elapsed) : undefined);
       if (s.mode === 'levelup' || s.mode === 'bossloot') s.chooseUpgrade(0);
       else if (s.mode === 'recruit') { s.recruitedWaves?.add(s.waveIndex); s.freeRecruit = false; s.pendingRecruit = false; s.resumePendingChoices?.(); if (s.mode === 'recruit') s.setMode('none'); }
       else if (s.mode === 'rest') { if (!s.__departAt) s.__departAt = Date.now() + 1500; else if (Date.now() > s.__departAt) { s.__departAt = 0; s.campUI?.root.getByName('camp-depart')?.emit('pointerdown'); } }
@@ -84,7 +84,7 @@ const mmss = t => `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`;
 const rows = [];
 for (const ch of CH) for (const [k, [name, r]] of Object.entries(results[ch].stages).entries()) {
   const ts = r.picks.map(x => x.t), gaps = ts.slice(1).map((t, i) => t - ts[i]), burst = gaps.filter(g => g <= 1).length;
-  rows.push({ ch, chained: k > 0, stage: name, len: r.len, lv: `${r.lvStart}→${r.lvEnd}`, picks: r.picks.length, mil: r.picks.filter(x => x.mil).length, burst, minGap: gaps.filter(g => g > 1).length ? Math.min(...gaps.filter(g => g > 1)) : null, times: ts.map(mmss).join(' '), pauseSec: r.picks.length * DECIDE_SEC, pausePct: r.len ? Math.round(r.picks.length * DECIDE_SEC / (r.len + r.picks.length * DECIDE_SEC) * 100) : 0 });
+  rows.push({ ch, chained: k > 0, stage: name, len: r.len, lv: `${r.lvStart}→${r.lvEnd}`, xp: r.xp, bossAt: r.bossAt, picks: r.picks.length, mil: r.picks.filter(x => x.mil).length, burst, minGap: gaps.filter(g => g > 1).length ? Math.min(...gaps.filter(g => g > 1)) : null, times: ts.map(mmss).join(' '), pauseSec: r.picks.length * DECIDE_SEC, pausePct: r.len ? Math.round(r.picks.length * DECIDE_SEC / (r.len + r.picks.length * DECIDE_SEC) * 100) : 0 });
 }
 writeFileSync(out, JSON.stringify({ rows, results }, null, 2));
 console.log('\n（「接续」= 机器人没在 90 秒内打掉首领、战线推进到下一关后继续记录的那段）\n| 场景 | 关 | 关长 | 武将等级 | 三选一 | 其中军略 | 连弹 | 最短间隔(秒) | 时刻 | 估计暂停 |');

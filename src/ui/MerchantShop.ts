@@ -38,8 +38,9 @@ export function loadMerchantArt(scene:Phaser.Scene,done?:()=>void):void{
  * 例：牵机「命中时把周围2名敌人拉向命中点（0.7秒），并减速12%。\n冷却4秒，对首领无效。」→ effect 第一句，cooldown「冷却 4 秒」。
  */
 export function tacticCardText(id:TacticId,level:number):{effect:string;cooldown:string|null;full:string}{
- const full=tacticDescription(id,level),[effect='',...rest]=full.split('\n'),m=full.match(/冷却\s*([\d.]+)\s*秒/);
- return{effect:effect.trim(),cooldown:m?'冷却 '+m[1]+' 秒':null,full:[effect,...rest].join('\n')};
+ // 效果取第一整句（到第一个「。」，跨行的接上：整军「每6秒…士兵，\n各回复…6%。」）
+ const full=tacticDescription(id,level),flat=full.replace(/\n/g,''),end=flat.indexOf('。'),m=full.match(/冷却\s*([\d.]+)\s*秒/);
+ return{effect:(end>=0?flat.slice(0,end+1):flat).trim(),cooldown:m?'冷却 '+m[1]+' 秒':null,full};
 }
 export class MerchantShop{
  private tip?:ItemTooltip;private root!:Phaser.GameObjects.Container;
@@ -62,7 +63,7 @@ export class MerchantShop{
  render(root:Phaser.GameObjects.Container,left:number,top:number,right:number,h:number,figure?:FigurePlace){
   this.root=root;const s=this.o.stock(),t=s.tactic,n=s.items.length+(t?1:0),gap=10;
   this.tip??=this.o.tooltip??new ItemTooltip(this.scene,this.o.tooltipDepth??DEPTH.overlay+40);
-  if(D){drawCampFigure(this.scene,root,MERCHANT_FIGURE,figure??{cx:left+92,bottom:top+h+18,height:h+50},()=>this.onArtLoaded?.());left=Math.max(left+196,figure?figure.cx+108:0);}
+  if(D){drawCampFigure(this.scene,root,MERCHANT_FIGURE,figure??{cx:left+80,bottom:top+h+30,height:h-10},()=>this.onArtLoaded?.());left=Math.max(left+196,figure?figure.cx+108:0);}
   const w=D?((right-left)-gap*(n-1))/n:(right-left-gap)/2;
   const at=(i:number)=>D?{x:left+i*(w+gap),y:top}:{x:left+(i%2)*(w+gap),y:top+Math.floor(i/2)*(h+gap)};
   s.items.forEach((item,i)=>this.itemCard(s,item,i,at(i).x,at(i).y,w,h));
@@ -165,7 +166,7 @@ export function openMerchantShop(scene:Phaser.Scene,opts:OpenMerchantOptions):()
  let notice='',closed=false;
  const shop=new MerchantShop(scene,{stock:()=>stock,wallet:opts.wallet,tactics,onBuyItem:opts.onBuyItem??(item=>addItems([item])),owner:()=>hero,notice:t=>{notice=t;},changed:()=>draw(),sound:opts.sound,tooltipDepth:depth+10});
  const top=py+64,h=D?250:200;
- const draw=()=>{if(closed)return;shop.hideTip();body.removeAll(true);shop.render(body,px+16,top,px+pw-16,h);purse.setText(opts.wallet.name+' '+opts.wallet.get());note.setY(D?top+h+18:H-210).setText(notice||shop.hint());};
+ const draw=()=>{if(closed)return;shop.hideTip();body.removeAll(true);shop.render(body,px+16,top,px+pw-16,h);purse.setText(opts.wallet.name+' '+opts.wallet.get());note.setPosition(D?(px+16+196+px+pw-16)/2:W/2,D?top+h+18:H-210).setWordWrapWidth(D?pw-16-196-32:pw-60,true).setText(notice||shop.hint());};
  shop.onArtLoaded=draw;
  const finish=(reason:'leave'|'shutdown')=>{if(closed)return;closed=true;scene.input.keyboard?.off('keydown-ESC',close);scene.events.off('shutdown',onShutdown);shop.destroy();root.destroy();opts.onClose?.(reason);};
  const close=()=>finish('leave'),onShutdown=()=>finish('shutdown');

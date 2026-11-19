@@ -125,7 +125,7 @@ export class CampRestUI {
  private icon(x:number,y:number,key:string,size:number){if(this.scene.textures.exists(key))this.body.add(this.scene.add.image(x,y,key).setDisplaySize(size,size).setScrollFactor(0));}
  private row(y:number,title:string,description:string,icon?:string,compact=false){const x=D?40:24,w=W-(D?80:48),h=D?66:92;this.plate(x,y,w,h);if(icon)this.icon(x+28,y+27,icon,35);const offset=icon?54:16;this.body.add(this.text(x+offset,y+9,title,D?17:19).setWordWrapWidth(w-offset-16,true));this.body.add(this.text(x+16,y+(D?36:43),compact&&description.length>(D?80:44)?description.slice(0,D?80:44)+'…':description,D?12:14).setWordWrapWidth(w-32,true));return{x,y,w,h};}
  /** 军需商人 / 军医（电脑版）：人物不加框、站在左侧帐中（2026-11-18 用户「军医和商人不要一个框框住」），右侧从 STATION_LEFT 起排卡片。 */
- private static readonly FIGURE:FigurePlace={cx:120,bottom:474,height:320};
+ private static readonly FIGURE:FigurePlace={cx:120,bottom:500,height:300}; // 头顶留出对话气泡（2026-11-18「对话框要优化一下」）
  private static readonly STATION_LEFT=236;
  private render(){
   this.body.removeAll(true);this.tabs.forEach((t,k)=>{const on=t.getData('tab')===this.tab;t.setColor(on?'#ffe7b0':'#bcae93').setAlpha(on?1:.78);const w=t.width;this.tabFrames[k].setTexture(warPanelTexture(this.scene,w,46,on)).setDisplaySize(w+16,46+16).setVisible(true).setAlpha(on?1:.62);this.tabIcons[k]?.setAlpha(on?1:.6);

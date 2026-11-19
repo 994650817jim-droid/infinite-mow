@@ -8,8 +8,8 @@ const roster = { version: 1, lord: 'zhaoyun', lordFinal: true, owned: [heroRec('
 const world = { version: 8, yellowStages: 3, dongzhuoStages: 3, warlordStages: 3, guanduStages: 3, chibiStages: 3, worldAvailable: true, cleared: { huangjin: true, hulao: true }, merits: 0, provisions: 1000, buildings: { barracks: 1, farm: 1, clinic: 1 }, reserve: {}, receipts: [], nodes: ['home', 'huangjin', 'hulao'], ownedCities: [], eraSeen: 2, capturedEver: [], alerts: [], lastLost: [], chapterSeen: 12, tutorialDone: true };
 const heroes = { version: 1, migrated: true, attrSet: 3, heroes: { zhaoyun: { level: 20, xp: 0, attributes: { strength: 10, agility: 9, intellect: 0, command: 0 } } } };
 
-const STAGES = (process.argv[2] ?? '5-1,3-2,4-3,8-1').split(',');
-const CH = { 3: { key: 'ThirdGameScene', reg: 'thirdStage' }, 4: { key: 'GuanduGameScene', reg: 'guanduStage' }, 5: { key: 'ChibiGameScene', reg: 'chibiStage' }, 8: { key: 'HanzhongGameScene', reg: 'hanzhongStage' } };
+const STAGES = (process.argv[2] ?? '5-1,3-2,4-3,8-1,11-2,4-1,2-2,3-1').split(',');
+const CH = { 2: { key: 'GameScene', cfg: st => ({ chapter: 'hulao', westStage: st }) }, 11: { key: 'NanzhengGameScene', reg: 'nanzhengStage' }, 3: { key: 'ThirdGameScene', reg: 'thirdStage' }, 4: { key: 'GuanduGameScene', reg: 'guanduStage' }, 5: { key: 'ChibiGameScene', reg: 'chibiStage' }, 8: { key: 'HanzhongGameScene', reg: 'hanzhongStage' } };
 const OUT = 'assets/review/stage-maps'; mkdirSync(OUT, { recursive: true });
 let pass = 0, fail = 0; const errors = [];
 const ck = (n, ok, d) => { ok ? pass++ : fail++; console.log((ok ? 'PASS ' : 'FAIL ') + n + (d !== undefined ? ' · ' + JSON.stringify(d).slice(0, 600) : '')); };
@@ -21,7 +21,7 @@ for (const id of STAGES) {
   await p.addInitScript(([r, w, h]) => { if (!sessionStorage.getItem('seeded')) { localStorage.clear(); localStorage.setItem('im_world_v1', JSON.stringify(w)); localStorage.setItem('im_roster_v1', JSON.stringify(r)); localStorage.setItem('im_last_hero', 'zhaoyun'); localStorage.setItem('im_heroes_v1', JSON.stringify(h)); sessionStorage.setItem('seeded', '1'); } }, [roster, world, heroes]);
   await p.goto(base + '?dev=1&autostart=1&stage=1&layout=desktop&followers=1');
   await p.waitForFunction(() => window.__game?.scene.getScene('GameScene')?.player && window.__IM, null, { timeout: 120000 });
-  await p.evaluate(([C, st]) => { const g = window.__game, s0 = g.scene.getScene('GameScene'); s0.registry.remove('campaignTransfer'); s0.registry.remove('thirdTransfer'); s0.registry.set(C.reg, st); s0.registry.set('runConfig', { character: 'zhaoyun', ...(C.reg === 'guanduStage' ? {} : { thirdStage: st }) }); s0.scene.start(C.key); }, [C, stn]);
+  await p.evaluate(([C, st]) => { const g = window.__game, s0 = g.scene.getScene('GameScene'); s0.registry.remove('campaignTransfer'); s0.registry.remove('thirdTransfer'); let cfg = {}; if (C.reg) { s0.registry.set(C.reg, st); cfg = C.reg === 'guanduStage' ? {} : { thirdStage: st }; } else cfg = C.cfgv; s0.registry.set('runConfig', { character: 'zhaoyun', ...cfg }); s0.scene.start(C.key); }, [{ key: C.key, reg: C.reg, cfgv: C.cfg?.(stn) }, stn]);
   await p.waitForFunction(k => { const s = window.__game.scene.getScene(k); return window.__game.scene.isActive(k) && s?.player && s.elapsed < 6; }, C.key, { timeout: 120000 });
   await p.evaluate(async k => {
     const s = window.__game.scene.getScene(k); window.__S = s; s.player.damageImmune = true;
@@ -36,16 +36,16 @@ for (const id of STAGES) {
   // 正常刷兵跑 25 秒（主将绕场走，碰边）
   const run = await p.evaluate(async () => {
     const s = window.__S, b = s.stageBounds.bounds, t = performance.now(); let a = 0, out = 0, maxOut = 0;
-    s.devTimeScale = 3;
+    s.devTimeScale = 3; window.__moved = []; { const A = s.arena, orig = A.spawnAt.bind(A); A.spawnAt = (x, y) => { const r = orig(x, y); if (r.x !== x || r.y !== y) window.__moved.push(Math.round(Math.hypot(r.x - s.player.x, r.y - s.player.y))); return r; }; }
     while (performance.now() - t < 25000) { window.__clearUi(); a += .07; window.__IM.setMove(Math.cos(a), Math.sin(a * .7)); await new Promise(r => setTimeout(r, 120));
       for (const e of s.enemies) if (e.active && !e.isSupplySlot && e.kind !== 'boss') { const d = Math.max(b.left - e.x, e.x - b.right, b.top - e.y, e.y - b.bottom); if (d > 30) { out++; maxOut = Math.max(maxOut, Math.round(d)); } }
       const pl = s.player; const dp = Math.max(b.left - pl.x, pl.x - b.right, b.top - pl.y, pl.y - b.bottom); if (dp > 30) { out++; maxOut = Math.max(maxOut, Math.round(dp)); } }
     window.__IM.setMove(0, 0); s.devTimeScale = 1;
     const sp = window.__spawns, outside = sp.filter(([x, y]) => x < b.left - 5 || x > b.right + 5 || y < b.top - 5 || y > b.bottom + 5), near = sp.filter(q => q[2] !== 'boss' && q[3] < 380);
-    return { spawns: sp.length, outside: outside.slice(0, 5), outsideN: outside.length, near: near.length, nearEx: near.slice(0, 4), out, maxOut, relocated: s.arena.stats.relocated, clamped: s.arena.stats.clamped };
+    const mv = window.__moved; return { movedNear: mv.filter(d => d < 500).length, moved: mv.length, spawns: sp.length, outside: outside.slice(0, 5), outsideN: outside.length, near: near.length, nearEx: near.slice(0, 4), out, maxOut, relocated: s.arena.stats.relocated, clamped: s.arena.stats.clamped };
   });
   await p.screenshot({ path: `${OUT}/${id}-fight.png` });
-  ck(`${id}：刷兵全在场内、不刷在主将脸上；主将 / 敌兵不出场`, run.spawns > 10 && run.outsideN === 0 && run.near <= Math.ceil(run.spawns * .05) && run.out === 0, run);
+  ck(`${id}：刷兵全在场内、场外改到关口的都离主将 ≥ 500；主将 / 敌兵不出场`, run.spawns > 10 && run.outsideN === 0 && run.moved > 0 && run.movedNear === 0 && run.out === 0, run);
   // 本关互动
   if (id === '5-1') {
     const r = await p.evaluate(async () => { const s = window.__S, A = s.arena, br = A.bridge; if (!br) return { none: true }; s.player.sprite.setPosition(br.x, br.y + 120); await new Promise(r => setTimeout(r, 300)); s.hitEnemy(br.e, 1e7, s.combatNow, 'melee', false, false); await new Promise(r => setTimeout(r, 450)); window.__bridgeShot = true; window.__spawns = []; s.player.sprite.setPosition(0, 600); await new Promise(r => setTimeout(r, 6000)); return { down: A.stats.bridgeDown, deck: A.stats.bridgeDeck, gates: A.info.gates, north: window.__spawns.filter(q => q[1] < -300).length, after: window.__spawns.length }; });
@@ -57,6 +57,27 @@ for (const id of STAGES) {
     await p.evaluate(() => { const s = window.__S, t = s.arena.tents.find(q => q.state === 'burning'); if (t) s.player.sprite.setPosition(t.x + 160, t.y + 40); }); await p.waitForTimeout(700);
     await p.screenshot({ path: `${OUT}/${id}-fire.png` });
     ck('3-2 营帐起火：开局两座在烧、火圈伤人；烧一阵蔓延到附近营帐', r.tents === 8 && r.lit >= 3 && r.ticks > 0, r);
+  }
+  if (id === '11-2') {
+    const r = await p.evaluate(async () => { const s = window.__S, A = s.arena, c = A.carts[1]; s.player.sprite.setPosition(c.x, c.y + 260); for (let i = 0; i < 6; i++) s.spawnEnemy('shield', -400 + i * 160, c.y, 1, true); s.hitEnemy(c.e, 50, s.combatNow, 'melee', false, false); await new Promise(r => setTimeout(r, 2600)); return { ...A.stats }; });
+    await p.screenshot({ path: `${OUT}/${id}-fire.png` });
+    ck('11-2 火油车：一击点燃 → 火带横贯山谷，烧到谷里的敌兵（火攻）', r.cartsLit >= 1 && r.fireBands >= 1 && r.fireHits > 0, r);
+  }
+  if (id === '4-1') {
+    const r = await p.evaluate(() => { const s = window.__S; return { backdrop: s.children.list.filter(o => o.name === 'arena-backdrop').length, bridges: s.terrain?.info?.bridges ?? 0, rivers: s.terrain?.info?.rivers ?? 0 }; });
+    await p.evaluate(() => { const s = window.__S; s.player.sprite.setPosition(0, -440); }); await p.waitForTimeout(900);
+    await p.screenshot({ path: `${OUT}/${id}-wall.png` });
+    ck('4-1 渡口：袁军营栅后是白马城墙（远景），南边黄河 + 浮桥', r.backdrop > 5 && r.rivers >= 1 && r.bridges >= 1, r);
+  }
+  if (id === '2-2') {
+    const r = await p.evaluate(async () => { const s = window.__S, A = s.arena; for (const e of s.enemies) if (e.active && !e.isSupplySlot && e.kind !== 'boss') e.deactivate(); for (const b of A.bushes) b.sprung = false; const a0 = A.stats.bushAmbushers, bu = A.bushes[0]; s.player.sprite.setPosition(bu.x, bu.y + 200); for (let i = 0; i < 12; i++) { window.__clearUi(); await new Promise(r => setTimeout(r, 150)); } return { sprung: A.stats.bushesSprung, came: A.stats.bushAmbushers - a0, mode: s.mode, over: s.over, d: Math.round(Math.hypot(s.player.x - bu.x, s.player.y - bu.y)), pend: A.bushPending.length }; });
+    await p.screenshot({ path: `${OUT}/${id}-bush.png` });
+    ck('2-2 灌木伏兵：主将走近灌木丛 → 预警后伏兵杀出', r.sprung >= 1 && r.came >= 3, r);
+  }
+  if (id === '3-1') {
+    const r = await p.evaluate(async () => { const s = window.__S, A = s.arena, d0 = A.stats.roofDrops; s.player.sprite.setPosition(0, 900); A.roofAt = s.combatNow; for (let i = 0; i < 10; i++) { window.__clearUi(); await new Promise(r => setTimeout(r, 150)); } return { drops: A.stats.roofDrops - d0, houses: s.children.list.filter(o => o.name === 'arena-house').length, fires: s.children.list.filter(o => o.name === 'arena-fire').length }; });
+    await p.screenshot({ path: `${OUT}/${id}-roofs.png` });
+    ck('3-1 长安街坊：两侧民房（部分着火）、房檐伏兵跳下', r.drops >= 1 && r.houses > 10 && r.fires > 0, r);
   }
   if (id === '8-1') {
     const r = await p.evaluate(async () => { const s = window.__S, A = s.arena; A.logAt = s.combatNow; await new Promise(r => setTimeout(r, 3500)); return { ...A.stats }; });

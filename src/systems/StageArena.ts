@@ -23,6 +23,8 @@ export interface ArenaHost {
   /** 可砍目标（补给槽的「门」）：贴图不显示，由场景图表现。 */
   spawnTarget: (x: number, y: number, hp: number, size: number) => Enemy | null;
   hitEnemy: (e: Enemy, dmg: number, source?: 'melee' | 'arrow' | 'fire') => void;
+  /** 断掉离 (x, y) 最近的地形层桥（Terrain.setBridgeBroken），返回是否断了。 */
+  breakBridgeNear?: (x: number, y: number) => boolean;
   spawnEnemy?: (kind: 'infantry' | 'shield' | 'archer' | 'cavalry', x: number, y: number) => Enemy | null;
   hurtTroops: (x: number, y: number, r: number, dmg: number) => void;
   banner: (t: string, danger?: boolean, caption?: string) => void;
@@ -174,10 +176,8 @@ export class StageArena {
     const sc = this.h.scene;
     // 桥面断落：扬尘、水花，桥面图倒进河里
     for (let i = -1; i <= 1; i++) playSheet(sc, 'fx_collapse_dust', br.x + i * 70, br.y - 60 - Math.abs(i) * 30, { size: 220, depth: DEPTH.fx, ms: 700 });
-    // 桥面图：地形层画的桥（terrain_bridge 图或缺图时的木板平铺）里离桥头最近的那张（地形层的桥 / 水面美术会话在重做，合进来后改用 terrain.setBridgeBroken）
-    const deck = sc.children.list.filter(o => { const im = o as Phaser.GameObjects.Image; return (im.texture?.key === 'terrain_bridge' || (o.type === 'TileSprite' && im.texture?.key === 'yellow_props')) && Math.hypot(im.x - br.x, im.y - br.y) < 260; })[0] as Phaser.GameObjects.Image | undefined;
-    this.stats.bridgeDeck = !!deck;
-    if (deck) sc.tweens.add({ targets: deck, alpha: 0, scaleY: deck.scaleY * .4, angle: deck.angle + 8, duration: 700, ease: 'Quad.In' });
+    // 桥面断落：地形层的断桥（Terrain.setBridgeBroken：断桥图、断了按水处理）
+    this.stats.bridgeDeck = !!this.h.breakBridgeNear?.(br.x, br.y);
     sc.cameras.main.shake(320, .008);
     // 桥头一带的追兵落水
     for (const e of this.h.enemies()) if (e.active && !e.isSupplySlot && e.kind !== 'boss' && Math.hypot(e.x - br.x, e.y - br.y) < br.killR) this.h.hitEnemy(e, 99999);

@@ -65,10 +65,12 @@ export function resolveLines(node: StoryNode, ctx: StoryCtx): StoryLine[] {
   const v = node.variants?.[ctx.lord] ?? (node.baseLords && !node.baseLords.includes(ctx.lord) ? node.variants?.other : undefined);
   const team = ctx.team(), lordName = heroName(ctx.lord) ?? '将军';
   return (v ?? node.lines).filter(l => (!l.ifFollower || team.includes(l.ifFollower)) && (!l.ifNotFollower || !team.includes(l.ifNotFollower)) && (!l.ifRecruited || ctx.recruited(l.ifRecruited))
-      && (!l.ifFlag || flagMatches(l.ifFlag)) && (!l.ifLord || l.ifLord.includes(ctx.lord)) && (!l.ifNotLord || !l.ifNotLord.includes(ctx.lord)))
+      && (!l.ifFlag || flagMatches(l.ifFlag)) && (!l.ifLord || l.ifLord.includes(ctx.lord)) && (!l.ifNotLord || !l.ifNotLord.includes(ctx.lord)) && (!l.ifFollowers || l.ifFollowers.every(h => team.includes(h))))
     .map(l => ({ ...l, text: l.text.split('{lord}').join(lordName) }));
 }
 function toScroll(lines: StoryLine[], ctx: StoryCtx): ScrollLine[] { return lines.map(l => { const s = speaker(l.who, ctx); return { who: s.name, text: l.text, portrait: s.portrait, seal: s.seal, tip: l.tip }; }); }
+/** 节点插画：illustrationIf 里第一条旗标成立的，没有时用 illustration。 */
+export function nodeIllustration(node: StoryNode): string | undefined { return node.illustrationIf?.find(c => flagMatches(c.cond))?.key ?? node.illustration; }
 /** 卷轴里要用到的立绘与插画先载入（主页才载入水墨立轴，战斗里按需补载；剧情人物立绘与插画见 data/story/art.ts，没登记的不载）。 */
 function loadPortraits(scene: Phaser.Scene, lines: ScrollLine[], done: () => void, illustration?: string): void {
   const keys = [...lines.map(l => l.portrait), illustration];
@@ -88,8 +90,8 @@ export function playStoryScroll(scene: Phaser.Scene, node: StoryNode, lines: Sto
     if (scene.sys.settings.status >= Phaser.Scenes.SHUTDOWN) return; // 场景已关（create 期间 isActive 仍为 false，不能用它判断）
     const finish = (): void => { markStorySeen(node.id); done(); };
     storyScroll(scene, GAME_WIDTH, GAME_HEIGHT, IS_DESKTOP, { name: 'story-' + node.id.replace(/\./g, '-'), confirmName: 'story-confirm', kicker: node.kicker ?? '', title: node.title ?? '',
-      lines: all, reward: '', confirm, background: 'rest_camp', illustration: node.illustration, onDone: finish, skip: finish });
-  }, node.illustration);
+      lines: all, reward: '', confirm, background: 'rest_camp', illustration: nodeIllustration(node), onDone: finish, skip: finish });
+  }, nodeIllustration(node));
 }
 
 // ———— 大字台词（首领登场 / 倒下、bark）————
@@ -128,6 +130,8 @@ export interface StoryHost {
   lastStage?: number;
   /** 首领倒下横幅（node.banner；如「斩颜良」） */
   banner?: (title: string, caption?: string) => void;
+  /** 当前首领 id（一关先后两位首领时用来取 bossIntros / bossPhases / bossFalls；单首领关不用给） */
+  bossId?: () => string | undefined;
 }
 /**
  * 每关一个：GameScene.create 建立（第三章起的篇章场景按自己的篇章 id 重建）。
@@ -146,7 +150,7 @@ export class StoryDirector {
     const team = h.ctx.team();
     this.bonds = (this.chapter?.bonds ?? []).filter(b => b.members.every(m => team.includes(m)));
     // 首领二阶段大字台词（各首领控制器都发 boss-phase）
-    if (this.stageNodes()?.bossPhase) {
+    if (this.stageNodes()?.bossPhase || this.stageNodes()?.bossPhases) {
       const onPhase = (e: BossPhaseEvent): void => { if (e.phase === 2) this.bossPhase(e.boss.sprite, e.bossId); };
       h.scene.events.on(BOSS_PHASE, onPhase); h.scene.events.once('shutdown', () => h.scene.events.off(BOSS_PHASE, onPhase));
     }
@@ -162,8 +166,8 @@ export class StoryDirector {
   /** 一段卷轴（幕间 / 过场 / 章头章末）：没看过且条件下有句子才排进队列。 */
   private queueScroll(queue: Array<(next: () => void) => void>, node: StoryNode | undefined, gate: 'chapter' | 'stage', confirm: string): void {
     if (!node || storySeen(node.id) || !storyWanted(gate)) return;
-    const lines = resolveLines(node, this.h.ctx); if (!lines.length) return;
-    queue.push(next => this.scroll(node, lines, confirm, next));
+    // 句子到播放时才解析：章末前面若有抉择（第五章江陵、第六章魏延去留），排队时旗标还没写
+    queue.push(next => { const lines = resolveLines(node, this.h.ctx); if (!lines.length) { next(); return; } this.scroll(node, lines, confirm, next); });
   }
   /** 关前：章头（第一关）→ before（过场 / 幕间）→ 关前军情 + 羁绊台词；都每存档一次。 */
   beginStage(done: () => void): void {
@@ -180,12 +184,12 @@ export class StoryDirector {
   }
   /** 首领登场 / 二阶段 / 倒下：大字台词（每次都说）。 */
   /** 返回是否说了（说了的话 GameScene 把主将的登场 / 倒下台词往后挪，免得一句顶掉另一句）。 */
-  bossIntro(target: BarkTarget): boolean { const n = this.stageNodes()?.bossIntro; return n ? this.bark(n, target) : false; }
+  bossIntro(target: BarkTarget): boolean { const sn = this.stageNodes(), id = this.h.bossId?.(), n = (id && sn?.bossIntros?.[id]) || sn?.bossIntro; return n ? this.bark(n, target) : false; }
   /** 双首领关：节点写了 boss 时只对这位首领说（bossId 来自 boss-phase 事件）。 */
-  bossPhase(target: BarkTarget, bossId?: string): boolean { const n = this.stageNodes()?.bossPhase; return n && (!n.boss || !bossId || n.boss === bossId) ? this.bark(n, target) : false; }
+  bossPhase(target: BarkTarget, bossId?: string): boolean { const sn = this.stageNodes(), id = this.h.bossId?.(), byId = id ? sn?.bossPhases?.[id] : undefined; if (byId) return this.bark(byId, target); const n = sn?.bossPhase; return n && (!n.boss || !bossId || n.boss === bossId) ? this.bark(n, target) : false; }
   /** bossId：双首领关按首领取 bossFalls[id]（没有时不说）。 */
   bossFall(target: BarkTarget, bossId?: string): boolean {
-    const sn = this.stageNodes(), n = bossId && sn?.bossFalls ? sn.bossFalls[bossId] : sn?.bossFall; if (!n) return false;
+    const sn = this.stageNodes(), id = bossId ?? this.h.bossId?.(), n = id && sn?.bossFalls ? (sn.bossFalls[id] ?? (bossId ? undefined : sn.bossFall)) : sn?.bossFall; if (!n) return false;
     const spoke = this.bark(n, target);
     // 横幅 + 旗标（如关羽在队「斩颜良」）：旗标是玩法结果，剧情关了也照记；横幅同温酒斩华雄，也照播
     const b = n.banner; if (b && (!b.ifFollower || this.h.ctx.team().includes(b.ifFollower))) { if (b.flag) setStoryFlag(b.flag); this.h.banner?.(b.title, b.caption); }
@@ -212,7 +216,8 @@ export class StoryDirector {
     if (this.chapter) setStoryFlag(`cleared_${this.chapterId}_${this.h.stage}`); // 「打过某关」条件用（如第四章闲话「打过 4-1」）
     for (const n of sn?.after ?? []) this.queueScroll(queue, n, 'stage', '继续');
     const choice = sn?.choice;
-    if (choice?.choices?.length && !storySeen(choice.id)) {
+    if (choice?.choices?.length && !storySeen(choice.id) && choice.skipIfLord?.includes(this.h.ctx.lord)) this.applyChoice(choice, choice.skipChoice ?? 0, false);
+    else if (choice?.choices?.length && !storySeen(choice.id)) {
       if (storyWanted('stage')) queue.push(next => this.playChoice(choice, next));
       else this.applyChoice(choice, 0, false);
     }
@@ -232,9 +237,9 @@ export class StoryDirector {
         playStoryScroll(this.h.scene, { id: node.id + '.reply', type: 'interlude', kicker: node.kicker, title: choices[k].label, lines: [] }, reply, ctx, '继续', next);
       };
       storyScroll(this.h.scene, GAME_WIDTH, GAME_HEIGHT, IS_DESKTOP, { name: 'story-' + node.id.replace(/\./g, '-'), confirmName: 'story-confirm', kicker: node.kicker ?? '', title: node.title ?? '',
-        lines, reward: '', confirm: '', background: 'rest_camp', illustration: node.illustration, onDone: () => after(0, false), skip: () => after(0, true),
+        lines, reward: '', confirm: '', background: 'rest_camp', illustration: nodeIllustration(node), onDone: () => after(0, false), skip: () => after(0, true),
         choices: choices.map(c => c.label), onChoice: k => after(k, false) });
-    }, node.illustration);
+    }, nodeIllustration(node));
   }
   /** 定下抉择结果：写旗标、记已看、给奖励；返回回应台词。 */
   private applyChoice(node: StoryNode, k: number, rewardIt: boolean): StoryLine[] {
@@ -247,6 +252,7 @@ export class StoryDirector {
   bondDamageMul(hero: CharacterId): number { let k = 1; for (const b of this.bonds) if (b.members.includes(hero)) k *= b.damageMul ?? 1; return k; }
   bondSpeedMul(hero: CharacterId): number { let k = 1; for (const b of this.bonds) if (b.members.includes(hero)) k *= b.speedMul ?? 1; return k; }
   bondCritBonus(hero: CharacterId): number { let k = 0; for (const b of this.bonds) if (b.members.includes(hero)) k += b.critBonus ?? 0; return k; }
+  bondCooldownMul(hero: CharacterId): number { let k = 1; for (const b of this.bonds) if (b.members.includes(hero)) k *= b.cooldownMul ?? 1; return k; }
 }
 
 // ———— 营中闲话（营寨 / 行军休整画面底部小对话条）————

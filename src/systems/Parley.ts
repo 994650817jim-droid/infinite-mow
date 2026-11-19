@@ -8,6 +8,7 @@ import { gainProvisions } from '../world/WorldStore';
 import { homeCommand } from '../ui/HomeCommand';
 import { lqButton, lqLabelColor, lqPanel, type LqState } from '../ui/LacquerKit';
 import { bossDeathKey } from './BossDeathArt';
+import { setStoryFlag } from './Story';
 
 /**
  * 首领招降（通用，surrender-spec.md）：第二章起，可降 / 难降 / 必降 / 宁死不降（本存档首次）的首领血量 ≤ 15% → 战斗暂停 → 弹窗：
@@ -78,7 +79,7 @@ export class Parley {
     const b = this.h.boss(); if (!b) return;
     const d = this.def, ctx = this.h.ctx(); this.log.choices.push(c);
     if (c === 'press') { if (d.tier === 'never' || d.tier === 'sure' || this.pressed) return; this.pressed = true; this.state = 'pressing'; this.pressUntil = this.h.now() + SURRENDER.pressTimeoutMs; this.close(); b.invulnerable = false; this.h.banner('再压一压', false, `打到 ${Math.round(SURRENDER.pressLine * 100)}% 再劝 · 把握 +${Math.round(SURRENDER.press * 100)}%`); return; }
-    if (c === 'execute') { this.state = 'done'; this.close(); b.invulnerable = false; b.hp = 0; this.h.kill(b); return; }
+    if (c === 'execute') { this.state = 'done'; if (d.flag) setStoryFlag(d.flag.key, d.flag.no); this.close(); b.invulnerable = false; b.hp = 0; this.h.kill(b); return; }
     // 劝降
     if (d.tier === 'never') { if (this.refused) return; this.refused = true; this.say(b, false, ctx); this.h.sfx('bossSummon'); this.render(false); return; }
     const o = this.odds(), roll = Parley.random ? Parley.random() : Math.random(), ok = o.sure || roll * 100 < o.pct;
@@ -88,6 +89,7 @@ export class Parley {
   }
   private succeed(b: Enemy, ctx: Omit<OddsCtx, 'pressed'>): void {
     const d = this.def, live = surrenderLive(); this.state = 'done'; this.persuadedOk = true;
+    if (d.flag) setStoryFlag(d.flag.key, d.flag.yes); // 剧情旗标：玩法结果，剧情关了也照记
     this.say(b, true, ctx);
     let where = '已入降将栏（四季内六折招降）';
     if (live) {
@@ -118,6 +120,7 @@ export class Parley {
   private say(b: Enemy, ok: boolean, ctx: Omit<OddsCtx, 'pressed'>): void {
     const d = this.def, at = { x: b.x, y: b.y };
     if (!ok && d.preIfHero && ctx.team.includes(d.preIfHero.id)) { this.h.bark(at, d.preIfHero.who, d.preIfHero.text); this.h.scene.time.delayedCall(1400, () => this.h.bark(at, d.name, surrenderLine(d, false, ctx))); return; }
+    if (ok && d.yesPreIfHero && ctx.team.includes(d.yesPreIfHero.id)) { this.h.bark(at, d.yesPreIfHero.who, d.yesPreIfHero.text); const sc = this.h.scene; window.setTimeout(() => { if (sc.sys.isActive()) this.h.bark(at, d.name, surrenderLine(d, true, ctx)); }, 1400); return; } // 真实时钟：归降跪地后战斗时钟会停（宝箱 / 结算）
     this.h.bark(at, d.name, surrenderLine(d, ok, ctx));
   }
   /** 宁死不降（已弹过窗）倒下：拒绝台词当临终台词。返回是否播了（播了宿主就不再播剧本 bossFall）。 */

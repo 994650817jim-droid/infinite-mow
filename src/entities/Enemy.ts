@@ -44,6 +44,8 @@ export class Enemy {
   /** 出手时长超过 360ms 时（蓄力），蓄力段停在攻击图的第几帧（张梁砍击用 1 = 抬刀）。 */
   windupCol = 0;
   attackUntil = 0;
+  /** 由专属控制器自己推着走、自己调 updateWalk 的敌人（2-3 吕布）：场景的通用步态更新跳过它，否则那一帧位移为 0 会把步态计时清零，变成定格平移。 */
+  externalWalk = false;
   poseUntil = 0;
   chargeSheet = '';
   chargeState: 'none' | 'warn' | 'charge' | 'recover' = 'none';
@@ -172,6 +174,7 @@ export class Enemy {
     this.walkDistance = 0;
     this.frameStartX = x;
     this.frameStartY = y;
+    this.externalWalk = false;
     this.intentDx = 0;
     this.intentDy = 0;
     this.moveVx = this.moveVy = this.facingVx = this.facingVy = 0;

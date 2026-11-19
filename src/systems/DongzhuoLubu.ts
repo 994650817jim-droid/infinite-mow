@@ -28,6 +28,9 @@ import { LUOYANG } from '../data/dongzhuo';
  * 每段都发 boss-phase（董卓：城下 = 2、授首 = 3），打击感会话的慢动作 / 踉跄可接。数值初值，交平衡会话。
  * 美术复用：攻城城墙图集（城墙段 / 城门）、吕布 v2 行走 / 攻击图、赤兔（horses-v2）与吕布骑乘图（有就用）、手绘扬尘 / 斩击序列帧。
  */
+/** 赤兔奔跑：帧按跑过的距离推进（每 GALLOP_STRIDE 像素换一帧），快慢都不打滑。 */
+const GALLOP_STRIDE = 56;
+const gallop = (dist: number): number => Math.floor(Math.abs(dist) / GALLOP_STRIDE) % 4;
 export const DZ_LUBU = {
   wallY: -330, wallHalf: 900, segW: 230, gateW: 270, perchUp: 200, perchDx: 210,
   /** 城内纵深：两端侧墙往北延伸多远、再用北墙合上（城墙专项检查：洛阳城墙原来两端敞着，绕过去就到了城里）。 */ cityDepth: 2000,
@@ -116,6 +119,7 @@ export class DongzhuoLubu {
     const onWall = !!h.ready && !h.ready();
     this.lubuHome = { x: p.x + P.perchDx, y: wy - P.perchUp };
     this.lubu = h.spawnLubu(def, onWall ? this.lubuHome.x : p.x + 60, onWall ? this.lubuHome.y : wy + 90);
+    if (this.lubu) this.lubu.externalWalk = true; // 城头踱步 / 城下追人都由本控制器推着走、出步态（用户「吕布下来后在平移」）
     if (this.lubu) this.lubu.controlImmune = true;
     if (onWall && this.lubu) { this.phase = 'perch'; this.lubu.invulnerable = true; this.lubu.def = { ...this.lubu.def, speed: 0 }; }
     // 登场台词：吕布先喊，董卓（城头）隔一会儿再喊
@@ -178,10 +182,10 @@ export class DongzhuoLubu {
     const t0 = s.time.now, arrive = 700, leave = 1100, ex = fromLeft ? cam.worldView.right + 200 : cam.worldView.left - 200;
     this.anim = now => {
       const t = now - t0;
-      if (t < arrive) { const k = t / arrive; horse?.setPosition(Phaser.Math.Linear(sx, l.x, k), l.y).setFrame(`${dir}_${Math.floor(t / 90) % 4}`); return false; }
-      const k = Math.min(1, (t - arrive) / leave), x = Phaser.Math.Linear(l.x, ex, k), back: 'left' | 'right' = dir === 'right' ? 'right' : 'left';
-      horse?.setPosition(x, l.y).setFrame(`${back}_${Math.floor(t / 80) % 4}`);
-      if (rider) { rider.setPosition(x, l.y).setFrame((back === 'left' ? 1 : 2) * 4 + Math.floor(t / 90) % 4); l.sprite.setAlpha(0); } else l.sprite.setPosition(x, l.y - 30);
+      if (t < arrive) { const k = t / arrive, x = Phaser.Math.Linear(sx, l.x, k); horse?.setPosition(x, l.y).setFrame(`${dir}_${gallop(x - sx)}`); return false; }
+      const k = Math.min(1, (t - arrive) / leave), x = Phaser.Math.Linear(l.x, ex, k), back: 'left' | 'right' = dir === 'right' ? 'right' : 'left', f = gallop(Math.abs(l.x - sx) + Math.abs(x - l.x));
+      horse?.setPosition(x, l.y).setFrame(`${back}_${f}`);
+      if (rider) { rider.setPosition(x, l.y).setFrame((back === 'left' ? 1 : 2) * 4 + f); l.sprite.setAlpha(0); } else l.sprite.setPosition(x, l.y - 30);
       if (k >= 1) { horse?.destroy(); rider?.destroy(); l.sprite.setAlpha(1); l.deactivate(); this.lubu = null; this.descend(); return true; } // 敌人对象会被对象池复用，离场后不再引用
       return false;
     };
@@ -218,7 +222,7 @@ export class DongzhuoLubu {
     const t0 = s.time.now, run = 650, ex = fromLeft ? cam.worldView.right + 220 : cam.worldView.left - 220; let struck = false;
     this.anim = now => {
       const t = now - t0;
-      if (t < run) { const k = t / run, x = Phaser.Math.Linear(sx, tx, k); horse?.setPosition(x, d.y + 10).setFrame(`${dir}_${Math.floor(t / 80) % 4}`); rider?.setPosition(x, d.y + 10).setFrame((dir === 'left' ? 1 : 2) * 4 + Math.floor(t / 90) % 4); fallback?.setPosition(x, d.y - 20).setFrame(`${dir}_${Math.floor(t / 90) % 4}`); return false; }
+      if (t < run) { const k = t / run, x = Phaser.Math.Linear(sx, tx, k), f = gallop(x - sx); horse?.setPosition(x, d.y + 10).setFrame(`${dir}_${f}`); rider?.setPosition(x, d.y + 10).setFrame((dir === 'left' ? 1 : 2) * 4 + f); fallback?.setPosition(x, d.y - 20).setFrame(`${dir}_${f}`); return false; }
       if (!struck) {
         struck = true;
         rider?.setFrame((dir === 'left' ? 5 : 6) * 4 + 1); // 马上出招行
@@ -230,7 +234,7 @@ export class DongzhuoLubu {
       }
       if (t < run + 900) return false;
       const k = Math.min(1, (t - run - 900) / 1000), x = Phaser.Math.Linear(tx, ex, k);
-      horse?.setPosition(x, d.y + 10).setFrame(`${dir}_${Math.floor(t / 80) % 4}`); rider?.setPosition(x, d.y + 10).setFrame((dir === 'left' ? 1 : 2) * 4 + Math.floor(t / 90) % 4); fallback?.setPosition(x, d.y - 20);
+      { const f = gallop(Math.abs(tx - sx) + Math.abs(x - tx)); horse?.setPosition(x, d.y + 10).setFrame(`${dir}_${f}`); rider?.setPosition(x, d.y + 10).setFrame((dir === 'left' ? 1 : 2) * 4 + f); fallback?.setPosition(x, d.y - 20).setFrame(`${dir}_${f}`); }
       if (k >= 1) { horse?.destroy(); rider?.destroy(); fallback?.destroy(); this.phase = 'done'; return true; }
       return false;
     };
@@ -324,10 +328,11 @@ export class DongzhuoLubu {
       if (l?.active && !this.sweep && l.attackUntil <= now) {
         const dt = this.chaseAt ? Math.min(.1, Math.max(.001, (now - this.chaseAt) / 1000)) : 1 / 60, dx = p.x - l.x, dy = p.y - l.y, dist = Math.hypot(dx, dy);
         if (dist > P.lubuReach) { const st = Math.min(dist - P.lubuReach, P.lubuSpeed * dt), mx = dx / dist * st, my = dy / dist * st; l.sprite.x += mx; l.sprite.y += my; l.intentDx = mx; l.intentDy = my; l.updateWalk(dt, mx, my); }
+        else { l.intentDx = l.intentDy = 0; l.updateWalk(dt, 0, 0); } // 贴身站定：回待机帧
       }
       this.chaseAt = now;
       if (l?.active) {
-        if (!this.sweep && now >= this.nextSweep && Math.hypot(p.x - l.x, p.y - l.y) < 260) { const a = Math.atan2(p.y - l.y, p.x - l.x); this.sweep = { at: now + P.sweepWarnMs, a, id: 'dz-lubu-sweep-' + this.metrics.sweeps }; l.startAttack(now, Math.abs(Math.cos(a)) > .7 ? (Math.cos(a) < 0 ? 'left' : 'right') : Math.sin(a) < 0 ? 'up' : 'down'); this.h.banner('方天横扫', false); }
+        if (!this.sweep && now >= this.nextSweep && Math.hypot(p.x - l.x, p.y - l.y) < 260) { const a = Math.atan2(p.y - l.y, p.x - l.x); this.sweep = { at: now + P.sweepWarnMs, a, id: 'dz-lubu-sweep-' + this.metrics.sweeps }; l.startAttack(now, Math.abs(Math.cos(a)) > .7 ? (Math.cos(a) < 0 ? 'left' : 'right') : Math.sin(a) < 0 ? 'up' : 'down'); l.attackUntil = this.sweep.at + 120; this.h.banner('方天横扫', false); }
         if (this.sweep) {
           const prog = 1 - (this.sweep.at - now) / P.sweepWarnMs;
           warnFx(s).sector(this.sweep.id, l.x, l.y, P.sweepR, this.sweep.a, prog, now);

@@ -1764,7 +1764,7 @@ export class GameScene extends Phaser.Scene {
       if (enemy.kind !== 'boss' && enemy.kind !== 'elite') enemy.sprite.setDepth(this.underHeads(enemy, actorDepth(enemy.isSupplySlot?enemy.y:enemy.y + enemy.radius * .72), heads, 0));
       // 华雄 / 徐荣由专属控制器出帧；前线推进后成为追兵首领时也不再套通用走路帧（xurong 图集没有 down_0 等帧，会持续报 no frame）
       if(((this.huaxiong||this.xurong)&&enemy===this.boss)||(enemy.kind==='boss'&&this.chasingBosses.some(t=>t.enemy===enemy&&t.life===enemy.spawnId&&(t.huaxiong||t.xurong)))){enemy.shadow.setPosition(enemy.x,enemy.y+1).setDisplaySize(74,20);continue;}
-      if (!enemy.walkSheet) continue;
+      if (!enemy.walkSheet || enemy.externalWalk) continue;
       const onScreen =
         enemy.x > view.x - margin &&
         enemy.x < view.right + margin &&

@@ -29,6 +29,12 @@ try {
   await ev(s => { s.player.sprite.setPosition(s.dzLubu.dongzhuo.x, s.dzLubu.dongzhuo.y + 260); }); await wait(500);
   await p.screenshot({ path: `${OUT}/1-together.png` });
   ck('2-3：董卓 · 吕布同时出阵（董卓在城头、吕布在城下）', st?.phase === 'wall' && st.lubu?.active && st.dzY < pos.py - 250 && /lubu/.test(String(pos.lubuTex)), { st, pos });
+  // 用户 11-19「吕布下来后在平移」：城下追人要播走路帧（随位移推进），不是定格平移
+  await ev(s => { const l = s.dzLubu.lubu; s.player.sprite.setPosition(l.x + 350, l.y); s.dzLubu.nextSweep = s.combatNow + 5000; });
+  const walk = []; for (let i = 0; i < 14; i++) { await p.waitForTimeout(110); walk.push(await ev(s => { const l = s.dzLubu.lubu; return { f: l.sprite.frame.name, x: Math.round(l.x), y: Math.round(l.y) }; })); }
+  { const moved = Math.hypot(walk.at(-1).x - walk[0].x, walk.at(-1).y - walk[0].y), frames = new Set(walk.map(w => w.f)), facing = walk.at(-1).f.split('_')[0];
+    ck('城下吕布追人：边走边换走路帧（≥3 帧）、朝向主将，不平移', moved > 40 && frames.size >= 3 && facing === 'right', { moved: Math.round(moved), frames: [...frames], facing }); }
+  await ev(s => { s.player.sprite.setPosition(s.dzLubu.dongzhuo.x, s.dzLubu.dongzhuo.y + 260); }); await wait(300);
   const hp0 = st.dzHp, wallY = st.dzY;
   await ev(s => s.hitEnemy(s.dzLubu.dongzhuo, 1e6, s.combatNow, 'melee', false, false));
   st = await snap();

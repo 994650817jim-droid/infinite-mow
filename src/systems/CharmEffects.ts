@@ -12,6 +12,7 @@ import type { ItemInstance } from '../data/items';
 import type { PlayerStats } from '../types';
 import type { Player } from '../entities/Player';
 import { loadout, type GearOwner } from './ItemStore';
+import { stripStageBuffs } from './StageBuffs';
 
 /** 加到 player.stats 上的量：damageMul / cooldownMul / damageTakenMul 为乘数，其余为加数。 */
 export interface CharmStatDelta { damageMul: number; cooldownMul: number; damageTakenMul: number; critChance: number; arrowMul: number; fireMul: number; fireAreaMul: number; meleeMul: number }
@@ -84,5 +85,5 @@ export function applyCharms(player: Player, items: readonly ItemInstance[]): Cha
 
 /** 不含信物加成的属性（征程构筑存档用）。 */
 export function statsWithoutCharms(player: Player): PlayerStats {
-  const stats = { ...player.stats }; const d = player.growth.charmDelta; if (d) unapply(stats, d); return stats;
+  const stats = { ...player.stats }; const d = player.growth.charmDelta; if (d) unapply(stats, d); return stripStageBuffs(stats, player); // 战场机缘的本关增益也不带走
 }

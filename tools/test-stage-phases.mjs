@@ -57,6 +57,32 @@ await stageCase('3-2 宛城夜袭（ThirdGameScene）', { key: 'ThirdGameScene',
   ck('第一章逐关加长：1-1 三段（0 / 45 / 90，时间同原来）、1-2 四段（无副将）；战况线下写「下一段 · 名字 · 秒数」', r.one.join() === 'vanguard@0,elite@45,boss@90' && r.two.join() === 'vanguard@0,elite@45,event@100,boss@155' && /下一段 · .+ · \d+ 秒/.test(r.caption), r);
   await p.close();
 }
+// P2 战场机缘：精锐段 20 秒后出粮车（地上圈 + 道具 + 军令箭头），站满 3 秒弹「战场机缘 · 本关有效」三选一；选了只改本关（征程构筑存档扣掉）；事件段再来一次
+{
+  const p = await open({ key: 'GameScene', run: { chapter: 'hulao', westStage: 2 } });
+  await jump(p, 66); await p.waitForTimeout(500);
+  const c = await p.evaluate(() => { const s = window.__S, f = s.fortunes, L = f.live[0]; return { spawned: f.stats.spawned, at: L && { x: Math.round(L.x - s.player.x), y: Math.round(L.y - s.player.y) }, label: L?.label.text, props: L?.props.length, order: !!s.battleOrders?.list?.get('fortune-cart') }; });
+  ck('P2 粮车：精锐段 20 秒后出现（地上圈 + 粮车道具 + 提示），军令表挂「机缘 · 敌军粮车」', c.spawned[0] === 'cart' && /敌军粮车/.test(c.label ?? '') && c.props >= 1 && c.order, c);
+  await p.evaluate(() => { const s = window.__S, L = s.fortunes.live[0]; s.player.sprite.setPosition(L.x + 60, L.y + 60); });
+  await p.waitForTimeout(600); await p.screenshot({ path: `${OUT}/fortune-cart.png` });
+  await p.evaluate(() => { const s = window.__S, L = s.fortunes.live[0]; s.player.sprite.setPosition(L.x, L.y); });
+  await p.waitForFunction(() => window.__S.mode === 'bossloot' || window.__S.mode === 'levelup', null, { timeout: 15000 }).catch(() => {});
+  for (let i = 0; i < 6 && await p.evaluate(() => window.__S.mode === 'levelup'); i++) { await p.evaluate(() => window.__S.chooseUpgrade(0)); await p.waitForTimeout(300); }
+  await p.waitForFunction(() => window.__S.mode === 'bossloot', null, { timeout: 8000 }).catch(() => {});
+  const panel = await p.evaluate(() => { const s = window.__S; return { mode: s.mode, done: s.fortunes.stats.done, title: s.levelPanel.getByName('upgrade-title')?.text, cards: s.upgradeOptions.map(o => o.name + '｜' + o.categoryLabel) }; });
+  ck('P2 站满 3 秒夺下粮车 → 「战场机缘 · 夺下粮车」三选一，三张都是本关有效增益', panel.mode === 'bossloot' && panel.done.includes('cart') && /战场机缘/.test(panel.title ?? '') && panel.cards.length === 3 && panel.cards.every(x => /本关有效/.test(x)), panel);
+  await p.waitForTimeout(1200); await p.screenshot({ path: `${OUT}/fortune-cards.png` });
+  const pick = await p.evaluate(async () => { const s = window.__S, before = { ...s.player.stats }; const o = s.upgradeOptions[0]; s.chooseUpgrade(0); const ce = await import('/src/systems/CharmEffects.ts'); const packed = ce.statsWithoutCharms(s.player); const keys = Object.keys(before).filter(k => before[k] !== s.player.stats[k]); return { name: o.name, mode: s.mode, changed: keys, packedSame: keys.every(k => Math.abs(packed[k] - before[k]) < 1e-6), taken: s.fortuneTaken }; });
+  ck('P2 选了增益：属性当场变化，征程构筑存档时扣掉（不带到下一关），回到战斗', pick.mode === 'none' && pick.changed.length > 0 && pick.packedSame && Object.values(pick.taken)[0] === 1, pick);
+  await jump(p, 109); await p.waitForTimeout(500);
+  const ev = await p.evaluate(() => { const s = window.__S, f = s.fortunes, L = f.live.find(x => !x.done); return { spawned: f.stats.spawned, kind: L?.kind, label: L?.label.text }; });
+  ck('P2 事件段 8 秒后再来一次机缘（义军被围 / 降将来投 / 烽燧之一）', ev.spawned.length === 2 && ['rescue', 'defector', 'beacon'].includes(ev.kind), ev);
+  await p.evaluate(() => { const s = window.__S, L = s.fortunes.live.find(x => !x.done); s.player.sprite.setPosition(L.x, L.y); if (L.kind === 'rescue') for (const g of L.guards) { g.e.hp = 0; s.killEnemy(g.e); } });
+  for (let i = 0; i < 40 && await p.evaluate(() => window.__S.mode !== 'bossloot'); i++) { await p.evaluate(() => { const s = window.__S; if (s.mode === 'levelup') s.chooseUpgrade(0); const L = s.fortunes.live.find(x => !x.done); if (L) s.player.sprite.setPosition(L.x, L.y); }); await p.waitForTimeout(300); }
+  const e2 = await p.evaluate(() => { const s = window.__S; return { mode: s.mode, done: s.fortunes.stats.done, title: s.levelPanel.getByName('upgrade-title')?.text }; });
+  ck('P2 完成第二次机缘 → 再弹一次机缘三选一', e2.mode === 'bossloot' && e2.done.length === 2, e2);
+  await p.close();
+}
 await b.close();
 ck('无页面报错', errors.length === 0, errors.slice(0, 4));
 console.log(fail ? `FAILED ${fail}` : 'ALL PASS');

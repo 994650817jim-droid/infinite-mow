@@ -15,7 +15,7 @@ import {W,H,worldShell,worldAssets} from '../world/WorldUI';
 import {FONT,HEADING_FONT} from '../config';
 import {homeCommand,warPanelTexture} from '../ui/HomeCommand';
 import {openStable} from '../ui/ItemBagUI';
-import {openCampMerchant} from '../ui/CampMerchantUI';
+import {openMerchantShop,MERCHANT_ART_KEY,MERCHANT_ART_PATH} from '../ui/MerchantShop';
 import {CAMP_MERCHANT_SPOT} from '../town/CityLayout';
 import {openHeroCodex} from '../ui/HeroCodexUI';
 import {GROWTH_ICON_IDS} from '../ui/GrowthIcons';
@@ -23,7 +23,7 @@ import {stableUnlocked} from '../systems/ItemStore';
 import {CHARACTERS,type CharacterId} from '../data/characters';
 import {uiSfx} from '../systems/Sfx';
 import {checkWorld} from '../systems/Achievements';
-import {loadWorld,saveWorld,worldUnlocked,ensureStableBuilt,storageUnavailable,incompatibleSave,townUpgrade,granaryLevy,researchTech,townProgress,stableCapacity,drillInfo,trainTroops,cityLevels} from '../world/WorldStore';
+import {spendProvisions,loadWorld,saveWorld,worldUnlocked,ensureStableBuilt,storageUnavailable,incompatibleSave,townUpgrade,granaryLevy,researchTech,townProgress,stableCapacity,drillInfo,trainTroops,cityLevels} from '../world/WorldStore';
 import {cityIncome} from '../data/cityBuildings';
 import {CAMP_LOCK,TOWN_BUILDINGS,FOCUS_NAME,FOCUS_INCOME,FOCUS_CHANGE_COST,CITY_SIZE,CITY_TITLE,HALL_UPGRADE,nextCost,buildBlockers,buildingOpen,citySize,focusOpen,levelOf,costText,incomeText,townArtLevel,type TownBuildingId,type TownState,type CityFocus,type TownProgress} from '../town/TownData';
 import {TECHS,TECH_IDS,BRANCH_NAME,BRANCH_ORDER,techBlockers,techTotals,type TechBranch} from '../data/tech';
@@ -70,7 +70,7 @@ export class CityScene extends Phaser.Scene {
   worldAssets(this,'town_ground','assets/town/ground.webp');
   for(const n of CITY_BG_SIZES)worldAssets(this,`city_bg_${n}`,`assets/city/bg_${n}.webp`);
   loadCampLife(this);
-  worldAssets(this,'camp_merchant_art','assets/camp/merchant.webp'); // 旅商摊位上的头像牌、旅商面板立绘（与行营军需商人同一张）
+  worldAssets(this,MERCHANT_ART_KEY,MERCHANT_ART_PATH); // 旅商摊位上的头像牌、旅商面板立绘（与行营军需商人同一张）
   for(const id of CAMP_ART_IDS)worldAssets(this,`city_camp_${id}`,`assets/city/camp_${id}.webp`);
   const ids=Object.keys(TOWN_BUILDINGS) as TownBuildingId[];
   for(const lv of CITY_ART_LEVELS)for(const id of ids)if(lv<=(TOWN_BUILDINGS[id].maxLevel??3)){const a=ART_ALIAS[id]??id;worldAssets(this,`city_${a}_${lv}`,`assets/city/${a}_${lv}.webp`);}}
@@ -213,7 +213,7 @@ export class CityScene extends Phaser.Scene {
  }
  /**
   * 旅商（2026-11-18 用户「营寨增加个旅商就是军需商人」）：北路口辎重场旁一座遮棚货摊（营地道具图：遮棚、货车、木箱、钱粮袋、坛罐），
-  * 棚顶挂军需商人头像牌，下有「旅商」名牌；点开营中的军需商人面板（ui/CampMerchantUI，每打完一仗换货，用营寨军粮买，进行囊）。
+  * 棚顶挂军需商人头像牌，下有「旅商」名牌；点开军需商人（ui/MerchantShop openMerchantShop，与行营休整同一个商人、同一份货：打赢新一关的休整才换货，营寨里不换、已售不补），用营寨军粮买，兵装进行囊、战法写进征程构筑。
   * 点击区记进 hits，营寨装饰（CampLife）按它避让。没有站立的商人小人图：头像牌用行营军需商人立绘的脸。
   */
  private drawMerchant(k:number){
@@ -244,7 +244,13 @@ export class CityScene extends Phaser.Scene {
   g.lineWidth=4;g.strokeStyle='#c9a35e';g.beginPath();g.arc(S/2,S/2,S/2-3,0,Math.PI*2);g.stroke();g.lineWidth=1.5;g.strokeStyle='#3a2616';g.beginPath();g.arc(S/2,S/2,S/2-6,0,Math.PI*2);g.stroke();
   ct.refresh();return key;
  }
- private openMerchant(){uiSfx().play('uiClick');openCampMerchant(this,600,()=>this.refresh());}
+ /** 旅商：道具图集随战斗图集在进城时释放了，缺就先载（同换马）。品质档同行营 itemTier：一章 0、虎牢关通关 1、群雄起 2。 */
+ private openMerchant(){
+  uiSfx().play('uiClick');
+  const s=loadWorld(),tier=s.warlordStages>=3?2:s.cleared.hulao?1:0;let hero='zhaoyun';try{hero=localStorage.getItem('im_last_hero')||hero;}catch{/* 存储不可用 */}
+  const open=()=>{if(!this.sys.isActive())return;openMerchantShop(this,{wallet:{name:'军粮',get:()=>loadWorld().provisions,spend:spendProvisions},tier,hero:(CHARACTERS.some(c=>c.id===hero)?hero:'zhaoyun') as CharacterId,depth:600,onClose:()=>{if(this.sys.settings.status===Phaser.Scenes.RUNNING)this.refresh();},sound:k=>uiSfx().play(k as 'uiClick')});};
+  if(this.textures.exists('item_icons'))open();else{this.load.atlas('item_icons','assets/items/item-icons.webp','assets/items/item-icons.json');this.load.once('complete',open);this.load.start();}
+ }
  private panKeys?:Record<string,Phaser.Input.Keyboard.Key>;
  update(_t:number,dt:number){this.campLife?.update(dt);this.panStep(dt);}
  /** 电脑：方向键 / WASD、鼠标贴边平移（拖动和滚轮在 create 里）；有弹窗、正在拖动时不动。 */

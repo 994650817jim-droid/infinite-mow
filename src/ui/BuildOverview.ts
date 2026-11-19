@@ -5,6 +5,7 @@ import { MARTIALS, type MasteryId } from '../systems/RunGrowth';
 import { ATTRIBUTE_IDS, ATTRIBUTE_INFO, primaryAttribute, type AttributeId } from '../data/attributes';
 import { TACTICS, TREASURES, TAG_NAMES, tacticDescription, tacticSchool, tacticGeneral, type BuildTag, type TacticId, type TreasureId } from '../data/builds';
 import { SCHOOLS, SCHOOL_IDS, TIER_STEPS, tierOf } from '../data/schools';
+import { COMBOS, COMBO_AT, activeCombos } from '../data/schoolCombos';
 import { getCharacter } from '../data/characters';
 import { WEAPON_META } from '../data/upgrades';
 import { WEAPON_DEFS } from '../weapons/registry';
@@ -20,7 +21,7 @@ import type { ItemTooltip, InfoTip } from './ItemTooltip';
  * 行营休整「将帅帐」与战斗内暂停菜单的「战法构筑」共用。一屏三栏（电脑）/ 上下三段（手机）：
  * 左 武将卡（立绘、等级、主属性印、本命武器、专属武学、四项属性）；中 战法 6 格 + 信物 / 宝物格；右 六大流派的势（2 / 4 / 6 档）+ 下一步提示（2026-11-19 流派重做）。
  * 所有格子悬停弹出完整说明（ItemTooltip 同款漆底卡片；信物直接用兵装悬停卡）。不再分页、不再一条条点开。
- * 对象名：<prefix>-hero / -weapon / -martial-<id> / -attr-<id> / -tactic-<i> / -token-<i> / -treasure-<i> / -tag-<tag> / -awake-<id> / -next-<i>。
+ * 对象名：<prefix>-hero / -weapon / -martial-<id> / -attr-<id> / -tactic-<i> / -token-<i> / -treasure-<i> / -tag-<tag> / -next-<i> / -combo-<id> / -combo-near-<i>。
  */
 
 /** 每派的颜色与一句大白话说明（data/schools.ts SCHOOLS）。 */
@@ -237,5 +238,26 @@ export function drawBuildOverview(o: BuildOverviewOpts): void {
       const line = text(R.x + pad, y, `${d.name}再 ${gp.left} 势：${gp.target === 6 ? '觉醒' : '解锁'}【${d.tiers[gp.target as 2 | 4 | 6].name}】`, 12, i ? '#c9b88f' : '#e8c98a').setWordWrapWidth(R.w - pad * 2, true).setName(P + '-next-' + i);
       y += line.height + 4;
     });
+    // 合击（第 2 期）：两派都到 2 势即生效；没有生效的就提示最近的两个（差几势）
+    const on = activeCombos(tags), near = on.length >= 4 ? [] : COMBOS.filter(c => !on.includes(c) && Math.max(tags[c.a], tags[c.b]) >= COMBO_AT).map(c => ({ c, left: Math.max(0, COMBO_AT - tags[c.a]) + Math.max(0, COMBO_AT - tags[c.b]) })).sort((a1, b1) => a1.left - b1.left).slice(0, on.length ? 1 : 2);
+    if (y < R.y + R.h - 44) {
+      y += 2; g0.lineStyle(1, GOLD, .35).lineBetween(R.x + pad, y, R.x + R.w - pad, y); y += 6;
+      text(R.x + pad, y, '合击', 13, '#f6dc9a', true).setName(P + '-combo-title'); text(R.x + R.w - pad, y + 2, on.length ? '已生效 ' + on.length : '两派都到 2 势即生效', 11, '#a8956c').setOrigin(1, 0).setName(P + '-combo-count'); y += 20;
+      on.forEach((c, i) => {
+        if (y > R.y + R.h - 18) return;
+        const ca = SCHOOLS[c.a], cb = SCHOOLS[c.b];
+        text(R.x + pad, y, c.name, 12, '#f3d48a', true).setName(P + '-combo-' + c.id);
+        text(R.x + R.w - pad, y + 1, ca.name + ' × ' + cb.name, 10, '#a8956c').setOrigin(1, 0);
+        hot(R.x + pad, y - 2, R.w - pad * 2, 18, P + '-combo-hit-' + i, () => ({ title: '合击 · ' + c.name, sub: ca.name + ' × ' + cb.name + ' · 两派都到 ' + COMBO_AT + ' 势', body: c.desc, color: ca.color, icon: ca.icon }));
+        y += 18;
+      });
+      near.forEach(({ c, left }, i) => {
+        if (y > R.y + R.h - 18) return;
+        const need = [c.a, c.b].filter(t => tags[t] < COMBO_AT).map(t => SCHOOLS[t].name).join('、');
+        const line = text(R.x + pad, y, need + '再 ' + left + ' 势：合击【' + c.name + '】', 11, '#c9b88f').setWordWrapWidth(R.w - pad * 2, true).setName(P + '-combo-near-' + i);
+        hot(R.x + pad, y - 2, R.w - pad * 2, line.height + 2, P + '-combo-near-hit-' + i, () => ({ title: '合击 · ' + c.name + '（未生效）', sub: SCHOOLS[c.a].name + ' × ' + SCHOOLS[c.b].name + ' · 两派都到 ' + COMBO_AT + ' 势', body: c.desc, color: SCHOOLS[c.a].color, icon: SCHOOLS[c.a].icon }));
+        y += line.height + 3;
+      });
+    }
   }
 }

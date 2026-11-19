@@ -115,6 +115,8 @@ export class RunGrowth {
   perk(id: AttributeId, tier: number): boolean { return primaryAttribute(this.character) === id && this.primaryTier() >= tier; }
   /** 敏捷「疾影」：暴击后攻速提升的截止时刻；力量「破阵」：武器命中计数。 */
   hasteUntil = -Infinity; crushCount = 0;
+  /** 猛将觉醒「横扫千军」：狂斗截止时刻与攻速加成（SchoolSynergy 设）。 */
+  frenzyUntil = -Infinity; frenzyHaste = 0;
   /** 本局单项上限（attributeCap(武将等级)，开局 / 升级时由 GameScene 写入）。 */
   attrMax = 10;
   get hasAttributeRoom(): boolean { return Object.values(this.attributes).reduce((n,level)=>n+this.attrMax-level,0)>this.unallocated; }
@@ -156,7 +158,7 @@ export class RunGrowth {
   attackSpeedMultiplier(now: number): number {
     const quickness = 1 + ATTRIBUTE_EFFECT.agility.attackSpeed * this.pts('agility');
     const haste = this.perk('agility', 3) && now < this.hasteUntil ? 1 + PRIMARY_PERK.agility.haste : 1, focus = this.perk('intellect', 1) ? 1 / (1 - PRIMARY_PERK.intellect.cooldown) : 1;
-    return Math.min(1.8, quickness * (now < this.berserkUntil ? 1.2 : 1) * (1 + this.gear.attackSpeed) * haste * focus);
+    return Math.min(1.8, quickness * (now < this.berserkUntil ? 1.2 : 1) * (1 + this.gear.attackSpeed) * haste * focus) * (now < this.frenzyUntil ? 1 + this.frenzyHaste : 1);
   }
 
   movementMultiplier(): number {

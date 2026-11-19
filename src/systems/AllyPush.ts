@@ -55,6 +55,11 @@ export class AllyPush {
     const sq = this.spawnAt(pl.x + (Math.random() - .5) * 120, cam.bottom + this.c.rearPad * .6, Math.min(n, free), null);
     sq.escort = { until: this.h.now() + lifeMs }; return sq;
   }
+  /** 在指定地点冒出 n 名助战兵（合击「十面埋伏」伏兵、「铁骑冲阵」骑卒、觉醒「铁壁军阵」），lifeMs 后散去。 */
+  spawnEscortAt(x: number, y: number, n: number, lifeMs: number): Squad | null {
+    const free = this.c.cap - this.alive; if (free <= 0) return null;
+    const sq = this.spawnAt(x, y, Math.min(n, free), null); sq.escort = { until: this.h.now() + lifeMs }; return sq;
+  }
   private spawnAt(fx: number, fy: number, n: number, target: Enemy | null): Squad {
     const sq: Squad = { id: ++this.seq, from: { x: fx, y: fy }, target, life: target?.spawnId ?? 0, members: [], done: 0 };
     for (let i = 0; i < n; i++) {

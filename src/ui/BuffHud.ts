@@ -1,4 +1,4 @@
-import {activeAwakenings} from '../data/awakenings';
+import {activeCombos,AWAKEN} from '../data/schoolCombos';
 import {SCHOOLS,SCHOOL_IDS,TIER_STEPS,tierOf} from '../data/schools';
 import Phaser from 'phaser';
 import type {Player} from '../entities/Player';
@@ -73,7 +73,8 @@ export class BuffHud {
  update(player:Player,now:number,visible:boolean,progressOf?:BuffProgressSource):void{
   this.now=now;if(!visible){this.root.setVisible(false);this.hideTip();return;}
   const g=player.growth,entries:BuffEntry[]=[];
-  for(const a of activeAwakenings(g.build.tags()))entries.push({id:'awakening_'+a.id,icon:a.icon,name:a.name,desc:a.desc,kind:'觉醒 · 常驻',badge:'醒',rare:true});
+  // 觉醒（6 势）：每关最多 AWAKEN.perStage 次、有冷却，图标下方进度条走冷却
+  {const t=g.build.tags();for(const sc of SCHOOL_IDS)if(t[sc]>=6){const d=SCHOOLS[sc];entries.push({id:'awakening_'+sc,icon:d.icon,name:'觉醒 · '+d.tiers[6].name,desc:d.tiers[6].desc.replace(/^觉醒：/,'')+'\n身边敌人聚多了自动释放；每关最多 '+AWAKEN.perStage+' 次，两次之间至少 '+AWAKEN.cooldownMs/1000+' 秒。',kind:'觉醒 · '+d.name+' 6 势',badge:'醒',mark:d.short,rare:true});}}
   // 流派档位（2026-11-19 流派重做）：到 2 / 4 势的派各一个图标，角标写势
   {const t=g.build.tags();for(const sc of SCHOOL_IDS){const n=t[sc],tier=tierOf(n);if(tier<2)continue;const d=SCHOOLS[sc],got=TIER_STEPS.filter(x=>n>=x);entries.push({id:'school_'+sc,icon:d.icon,name:d.name+' · 势 '+n,desc:got.map(x=>x+' 势「'+d.tiers[x].name+'」：'+d.tiers[x].desc).join('\n'),kind:'流派 · '+got.map(x=>d.tiers[x].name).join(' · '),badge:String(n),rare:tier>=4});}}
   if(g.berserkUntil>now)entries.push({id:'berserk',icon:'growth_icon_berserk',name:'狂战丹',desc:'武器伤害提高25%，攻击速度提高20%。限时效果，进入新关卡会清除。',kind:'丹药 · 限时 '+Math.ceil((g.berserkUntil-now)/1000)+' 秒',badge:Math.ceil((g.berserkUntil-now)/1000)+'s',mark:'药',remaining:Math.min(1,(g.berserkUntil-now)/10000)});
@@ -81,6 +82,8 @@ export class BuffHud {
   for(const id of g.build.treasures){const d=TREASURES[id];entries.push({id:'treasure_'+id,icon:'build_icon_'+id,name:d.name,desc:d.desc,kind:'信物 · 宝物',badge:'信',rare:true});}
   for(const id of Object.keys(g.masteries)as MasteryId[])if(g.masteries[id]>0){const d=MARTIALS[id];entries.push({id:'mastery_'+id,icon:'growth_icon_'+id,name:d.name+' Lv.'+g.masteries[id],desc:martialDescription(id,g.masteries[id]),kind:'武学 · 本命武器修习',badge:String(g.masteries[id]),mark:d.name.slice(0,2),progress:masteryProgress(id,g.masteries[id],g,now)});}
   for(const id of Object.keys(g.build.tactics)as TacticId[]){const level=g.build.level(id),d=TACTICS[id];if(level)entries.push({id:'tactic_'+id,icon:'build_icon_'+id,name:d.name+' Lv.'+level,desc:tacticDescription(id,level),kind:'战法',badge:String(level)});}
+  // 合击排在战法后面（多了会挤进「其余 N 项」，不挤掉战法图标）
+  for(const c of activeCombos(g.build.tags()))entries.push({id:'combo_'+c.id,icon:SCHOOLS[c.a].icon,name:'合击 · '+c.name,desc:c.desc,kind:'合击 · '+SCHOOLS[c.a].name+' × '+SCHOOLS[c.b].name,badge:'合',mark:SCHOOLS[c.a].short+SCHOOLS[c.b].short,rare:true});
   for(const w of player.weapons)if(w.level>1)entries.push({id:'weapon_'+w.id,icon:({spear_orbit:'icon_1',crossbow:'icon_2',guandao:'icon_guandao',flame_banner:'icon_3',zhenbei_blade:'icon_zhenbei',lianhuan_mines:'icon_lianhuan',sun_knives:'icon_sunknives',diaochan_fans:'icon_fans',baodiao_bow:'icon_baodiao',dangyang_roar:'icon_shemao',zhanjin_lance:'icon_zhanjin',shuanggu_swords:'icon_shuanggu'})[w.id],name:WEAPON_META[w.id].name+' Lv.'+w.level,desc:WEAPON_META[w.id].desc+'。已强化至 Lv.'+w.level+'，详细属性可在修习面板查看。',kind:'本命武器 · 自动攻击',badge:String(w.level),mark:'兵'});
   for(const id of Object.keys(g.attributes)as AttributeId[])if(g.attributes[id]>0)entries.push({id:'attribute_'+id,icon:attributeIcon(id),name:ATTRIBUTE_INFO[id].name+' '+g.attributes[id]+'/'+g.attrMax,desc:ATTRIBUTE_INFO[id].effect,kind:'属性 · 常驻',badge:String(g.attributes[id]),mark:ATTRIBUTE_INFO[id].name[0]});
   for(const k of Object.keys(g.charmLegend)as (keyof typeof g.charmLegend)[]){const d=charmDef('charm_'+k);if(d)entries.push({id:'relic_'+k,icon:d.icon,name:d.name,desc:d.desc(g.charmLegend[k]?'orange':'purple'),kind:'信物 · 传奇',badge:'信',rare:true});}

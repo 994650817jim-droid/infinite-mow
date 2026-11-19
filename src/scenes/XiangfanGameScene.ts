@@ -13,6 +13,7 @@ import type { Enemy } from '../entities/Enemy';
 import type { EnemyKind, RunEndReason } from '../types';
 import { YUJIN } from '../data/surrender';
 import { shuArt } from '../data/shuChapter';
+import { MID_SIEGE_FILES } from '../systems/SiegeMidArt';
 import { bossInRoster, captureBoss } from '../systems/RosterStore';
 import { markSurrender, surrenderLive } from '../systems/SurrenderStore';
 
@@ -74,7 +75,9 @@ export function xiangfanGameSceneClass(Base: typeof GameScene) {
     /** 樊城：北面一道城墙（装饰 + 碰撞），城下两座营门。 */
     private buildFancheng(footprints: Array<{ left: number; right: number; top: number; bottom: number }>) {
       const v2 = this.textures.exists('xf_props'), y = -520;
-      for (let x = -1100; x <= 1100; x += 230) this.add.image(x, y + 30, v2 ? 'xf_props' : 'sishui_props_refined', v2 ? 6 : 3).setOrigin(.5, 1).setDisplaySize(240, 240).setDepth(actorDepth(y));
+      // 场景审查 P3：樊城是城（原来退回营具图画成木栅）→ 攻城城墙图集（同 2-1 汜水关、陈仓），城门居中；襄樊专属图到了仍用它
+      const K = MID_SIEGE_FILES[0], draw = (): void => { if (this.sys.settings.status >= Phaser.Scenes.SHUTDOWN) return; for (let x = -1150; x <= 1150; x += 230) this.add.image(x, y + 30, v2 ? 'xf_props' : K.key, v2 ? 6 : Math.abs(x) < 100 ? 1 : 0).setOrigin(.5, .97).setDisplaySize(238, 238).setDepth(actorDepth(y)).setName('fancheng-wall'); };
+      if (v2 || this.textures.exists(K.key)) draw(); else { this.load.spritesheet(K.key, K.file, { frameWidth: K.cell, frameHeight: K.cell }); this.load.once('filecomplete-spritesheet-' + K.key, draw); if (!this.load.isLoading()) this.load.start(); }
       footprints.splice(0, footprints.length, { left: -1300, right: 1300, top: y - 40, bottom: y + 12 });
     }
     private story(name: string, kicker: string, title: string, lines: { who?: string; text: string }[], confirm: string) {

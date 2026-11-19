@@ -46,13 +46,19 @@ export interface WaterHost { scene: Phaser.Scene; player: Player; spawn: (k: Ene
  */
 export class BeifaWater {
   readonly springs: Spring[] = [];
+  /** 汲水点旁的石井 / 水槽布景。 */ private extras: Phaser.GameObjects.Image[] = [];
   private cutAt: number; private graceUntil: number; private drainAt = 0; private dry = false;
   readonly metrics = { captured: 0, cut: 0, drainTicks: 0 };
   constructor(private h: WaterHost, now: number) {
     const p = h.player, s = h.scene;
-    for (const [dx, dy] of [[-360, 160], [380, -170]].slice(0, WATER.count)) {
+    // 场景审查 P3：第一处汲水点原来在 (-360, 160)，正压在左下敌营的营帐底下 → 挪到营地外的空地
+    for (const [dx, dy] of [[-600, 420], [380, -170]].slice(0, WATER.count)) {
       const x = p.x + dx, y = p.y + dy;
-      const img = s.textures.exists('yellow_props') ? s.add.image(x, y, 'yellow_props', 24).setOrigin(.5, .85).setDisplaySize(84, 84).setDepth(actorDepth(y)).setName('beifa-spring') : null;
+      // 场景审查 P3：汲水点原来只有标签、用的是辎重车图 → 美术风格会话的水景图（scene-v2/waterpoints.png 2×2：泉眼 / 水潭 / 石井 / 木水槽）：
+      // 第一处泉眼 + 旁边石井，第二处水潭 + 旁边木水槽；泉 / 潭平铺在地面层（站上去取水），井 / 水槽是旁边的布景
+      const WP = { key: 'scene_v2_waterpoints', file: 'assets/scene-v2/waterpoints.png', cell: 512 }, k = this.springs.length, img = s.add.image(x, y, 'yellow_props', 24).setOrigin(.5, .85).setDisplaySize(84, 84).setDepth(actorDepth(y)).setName('beifa-spring');
+      const dress = (): void => { if (!img.active) return; img.setTexture(WP.key, k === 0 ? 0 : 1).setOrigin(.5, .55).setDisplaySize(k === 0 ? 200 : 230, k === 0 ? 200 : 230).setDepth(DEPTH.ground + 3); const side = s.add.image(x + (k === 0 ? 135 : -150), y - 40, WP.key, k === 0 ? 2 : 3).setOrigin(.5, .85).setDisplaySize(150, 150).setDepth(actorDepth(y - 40)).setName('beifa-spring-prop'); this.extras.push(side); };
+      if (s.textures.exists(WP.key)) dress(); else { s.load.spritesheet(WP.key, WP.file, { frameWidth: WP.cell, frameHeight: WP.cell }); s.load.once('filecomplete-spritesheet-' + WP.key, dress); if (!s.load.isLoading()) s.load.start(); }
       const label = s.add.text(x, y - 74, '汲水点', { fontFamily: FONT, fontSize: '14px', color: '#cfe6ff', stroke: '#0d1622', strokeThickness: 4, resolution: 2 }).setOrigin(.5).setDepth(DEPTH.fx);
       this.springs.push({ x, y, owner: 'none', take: 0, img, label, bar: s.add.graphics().setDepth(DEPTH.fx) });
     }
@@ -86,7 +92,7 @@ export class BeifaWater {
     if (dry && p.alive && now >= this.drainAt) { this.drainAt = now + 1000; p.takeDamage(Math.max(1, p.maxHp * WATER.drainRatio), now); this.metrics.drainTicks++; }
   }
   snapshot() { return { held: this.held, dry: this.dry, owners: this.springs.map(s => s.owner), metrics: { ...this.metrics } }; }
-  clear(): void { for (const s of this.springs) { s.img?.destroy(); s.label.destroy(); s.bar.destroy(); } this.springs.length = 0; }
+  clear(): void { for (const s of this.springs) { s.img?.destroy(); s.label.destroy(); s.bar.destroy(); } this.springs.length = 0; for (const e of this.extras) e.destroy(); this.extras = []; }
 }
 
 // ---------------- 陈仓：城门与箭楼 ----------------

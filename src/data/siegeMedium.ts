@@ -124,7 +124,7 @@ export const LARGE_SIEGE = {
   barbican: {
     // 瓮城：单独一块场地（转场过去，坐标在 x≈3000 一带，和城外 / 巷战 / 府衙互不相邻）
     cx: 3000, arena: { left: 2620, right: 3380, top: -520, bottom: 300 },
-    start: { x: 3000, y: 200 },
+    start: { x: 3000, y: 40 }, // 场景审查 P3：南面补了瓮城城墙（图高约 250），出生点往北挪，免得站在南墙的图上
     innerGate: { x: 3000, y: -500, hp: 1300 },
     doors: [{ x: 2640, y: -150 }, { x: 3360, y: -150 }, { x: 2640, y: 120 }, { x: 3360, y: 120 }], // 两侧藏兵洞
     volley: { everyMs: 3400, zones: 3, warnMs: 1000, radius: 64, damage: 10, allyDamage: 6 },

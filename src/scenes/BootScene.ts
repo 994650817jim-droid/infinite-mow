@@ -332,8 +332,9 @@ export class BootScene extends Phaser.Scene {
     this.registry.set('battleReady',true);
     // 敌我区分：部曲 / 敌军换色（与描边）贴图在浏览器空闲时逐张预生成，进战斗时不再卡顿
     warmIffTextures(this.game);
-    // 界面通用贴图（水墨按钮、小镇美术）常驻，不随战斗图集卸载
-    this.registry.set('battleTextureKeys',this.textures.getTextureKeys().filter(k=>!k.startsWith('__')&&!k.startsWith('ui_war_')&&!k.startsWith('btn_ink_')&&!k.startsWith('town_')&&!k.startsWith('ach_')&&k!=='art_panel'&&k!=='icon_guandao'));
+    // 界面通用贴图（水墨按钮、小镇美术）常驻，不随战斗图集卸载。
+    // 营寨自己的手绘图（city_* / camp_*，CityScene 载入）也不记进来：2026-11-18 用户「打完一关之后再回去营寨……出现bug」——原来营寨图被当战斗图集卸掉，回营寨退回程序画占位
+    this.registry.set('battleTextureKeys',this.textures.getTextureKeys().filter(k=>!/^(city_|camp_)/.test(k)&&!k.startsWith('__')&&!k.startsWith('ui_war_')&&!k.startsWith('btn_ink_')&&!k.startsWith('town_')&&!k.startsWith('ach_')&&k!=='art_panel'&&k!=='icon_guandao'));
     this.goNext();
   }
   /** 启动后去哪：测试入口 / 待进的战斗 / 开场 / 主页 / 天下地图。 */

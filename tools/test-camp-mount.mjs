@@ -65,7 +65,7 @@ const guide = p => p.evaluate(C0 => { const g = eval(C0).mountGuide; return g ? 
     const over = []; for (const pr of props) { const bb = pr.getBounds(), inner = new R(bb.x + bb.width * .2, bb.y + bb.height * .3, bb.width * .6, bb.height * .6); for (const z of zones) if (R.Overlaps(z.b, inner)) over.push(pr.name + '×' + z.n); }
     const kinds = {}; for (const pr of props) { const k = pr.name.replace('camp-prop-', ''); kinds[k] = (kinds[k] ?? 0) + 1; }
     return { props: props.length, men: men.length, kinds, over, hits: c.hits.map(h => h.name) }; }, C);
-  ck('营寨装饰：≥20 件，马厩旁有拴马桩 + 马 + 草料、主帐前「义」旗、军营前操练；兵士 8–14 人不挤', lay.props >= 20 && lay.kinds.horse === 2 && lay.kinds.rail >= 1 && lay.kinds.fodder >= 1 && lay.kinds.flag >= 3 && lay.men >= 8 && lay.men <= 14, { props: lay.props, men: lay.men, kinds: lay.kinds });
+  ck('营寨装饰：≥20 件，马厩旁有拴马桩 + 马 + 草料、主帐前「义」旗、军营前操练；兵士 8–18 人不挤（11-18 全屏放大后加多）', lay.props >= 20 && lay.kinds.horse === 2 && lay.kinds.rail >= 1 && lay.kinds.fodder >= 1 && lay.kinds.flag >= 3 && lay.men >= 8 && lay.men <= 18, { props: lay.props, men: lay.men, kinds: lay.kinds });
   ck('营寨装饰不压建筑点击区、不挡名牌', lay.over.length === 0, lay.over.slice(0, 6));
   const clicks = []; for (const n of lay.hits) { await p.evaluate(C0 => eval(C0).children.getByName('town-card')?.destroy(), C); await clickHit(p, n); await p.waitForTimeout(150); clicks.push([n, await p.evaluate(C0 => !!eval(C0).children.getByName('town-card'), C)]); }
   ck('每座建筑都能点开（含马厩）', clicks.every(c => c[1]) && clicks.some(c => c[0] === 'bld-stable'), clicks);

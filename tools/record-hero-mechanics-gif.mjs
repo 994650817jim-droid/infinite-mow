@@ -34,8 +34,8 @@ await p.evaluate(async ([G0, hero, SCENE]) => {
   if (hero === 'zhuge' && SCENE === 'crowd') {
     // 2026-11-18 天火打怪堆：没有首领 / 精锐时落进怪堆中心（溅射 90 内 40%），借东风朝怪最密的方向扫；离群的高血兵不打
     pl.damageImmune = true; pl.weapons[0].level = 3; pl.growth.masteries.wildfire = 2;
-    mk(pl.x + 120, pl.y - 120, { hp: 30000 });
-    for (const [cx, cy] of [[260, 40], [-220, 90]]) for (let i = 0; i < 9; i++) mk(pl.x + cx + (i % 3 - 1) * 34, pl.y + cy + (Math.floor(i / 3) - 1) * 30, { hp: 120 });
+    mk(pl.x + 60, pl.y - 190, { hp: 30000 });
+    for (const [cx, cy] of [[260, -30], [-230, -10]]) /* 都放在上半屏（GIF 只裁上 470 像素） */ for (let i = 0; i < 9; i++) mk(pl.x + cx + (i % 3 - 1) * 34, pl.y + cy + (Math.floor(i / 3) - 1) * 30, { hp: 120 });
     await wait(12000); return;
   }
   if (hero === 'zhuge') {

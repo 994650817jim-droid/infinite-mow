@@ -21,7 +21,7 @@ const ctx = await b.newContext({ viewport: { width: 1280, height: 720 } });
     const s = window.__game.scene.getScene('MenuScene'); s.openHomeSettings();
     await new Promise(r => setTimeout(r, 200));
     const panel = s.children.getByName('home-settings-panel'), find = n => panel.list.find(o => o.name === n);
-    const row = find('settings-iff-outline'), before = row?.text, inc = panel.list.find(o => /^settings-row-\d-inc$/.test(o.name) && Math.abs(o.y - row?.y) < 1);
+    const row = find('settings-iff-outline'), before = row?.text, inc = panel.list.find(o => o.name === 'settings-iff-outline-inc'); /* 2026-11-18 设置改版 */
     inc?.emit('pointerdown'); await new Promise(r => setTimeout(r, 100));
     // 面板不超出画面：所有子对象在 0..H 内
     const H = s.scale.gameSize.height, ys = panel.list.filter(o => o.visible && o.getBounds).map(o => o.getBounds()).map(bb => [bb.top, bb.bottom]).flat();

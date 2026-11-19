@@ -1,16 +1,24 @@
 // 剧情美术截图（2026-11-18 第三、四章）：在战斗场景里直接播指定剧情节点的卷轴，翻到指定人物说话的那一页截图，
 // 看对白水墨立绘 + 章节插画的实际效果。电脑布局 1280×720，输出 assets/review/story-art/<节点>-<人物>.png。
-// 用法：BASE=http://127.0.0.1:5173/ node tools/shot-story-art.mjs
+// 用法：BASE=http://127.0.0.1:5173/ node tools/shot-story-art.mjs（SET=ch56 拍第五、六章新立绘）
 import { chromium } from 'playwright';
 import { mkdirSync } from 'node:fs';
 const BASE = process.env.BASE ?? 'http://127.0.0.1:5173/', out = 'assets/review/story-art';
 mkdirSync(out, { recursive: true });
 // [节点 id, 说话人, 主公]
-const SHOTS = [
+const SHOTS_CH34 = [
   ['qunxiong.open', 'jiaxu', 'zhaoyun'], ['qunxiong-1.xuzhou', 'taoqian', 'liubei'], ['qunxiong-2.yuanmen', 'jiling', 'liubei'],
   ['qunxiong.zhujiu', 'caocao', 'liubei'], ['guandu-1.tushan', 'zhangliao', 'guanyu'], ['guandu-3.xuyou', 'xuyou', 'zhaoyun'],
   ['guandu.close', 'yuanshao', 'zhaoyun'], ['qunxiong.close', 'lubu', 'zhaoyun'],
 ];
+// 第五、六章（2026-11-18 即梦补的对白立绘；首领登场 / 转阶段 / 倒下节点也能拍）
+const SHOTS_CH56 = [
+  ['chibi-2.dongfeng', 'sunquan', 'liubei'], ['chibi-2.dongfeng', 'zhouyu', 'liubei'], ['chibi-2.dongfeng', 'huanggai', 'liubei'],
+  ['chibi-1.bossIntro', 'caochun', 'zhaoyun'], ['chibi-2.bossIntro', 'caimao', 'liubei'], ['chibi-3.bossIntro', 'caoren', 'guanyu'],
+  ['jingnan.open', 'lusu', 'liubei'], ['jingnan-1.bossIntro', 'zhaofan', 'zhaoyun'], ['jingnan-2.bossIntro', 'liudu', 'zhangfei'],
+  ['jingnan-3.intro.hanxuan', 'hanxuan', 'guanyu'], ['jingnan-3.intro.huangzhong', 'yangling', 'huangzhong'],
+];
+const SHOTS = process.env.SET === 'ch56' ? SHOTS_CH56 : SHOTS_CH34;
 const b = await chromium.launch({ channel: 'chrome', headless: true });
 const p = await (await b.newContext({ viewport: { width: 1280, height: 720 } })).newPage();
 const errors = []; p.on('pageerror', e => errors.push(e.message)); p.on('console', m => { if (m.type() === 'error') errors.push(m.text()); });
@@ -24,7 +32,8 @@ for (const [id, who, lord] of SHOTS) {
     for (const o of s.children.list.filter(o => o.name?.startsWith?.('story-'))) o.destroy();
     let node = null;
     for (const c of Object.values(D.STORY_CHAPTERS)) {
-      const all = [c.open, c.close, ...(c.closeAfter ?? []), ...(c.camp ?? []), ...Object.values(c.stages).flatMap(st => [...(st.before ?? []), st.brief, ...(st.after ?? []), st.choice])];
+      const all = [c.open, c.close, ...(c.closeAfter ?? []), ...(c.camp ?? []), ...Object.values(c.stages).flatMap(st => [...(st.before ?? []), st.brief, ...(st.after ?? []), st.choice, st.bossIntro, st.bossPhase, st.bossFall,
+        ...Object.values(st.bossIntros ?? {}), ...Object.values(st.bossPhases ?? {}), ...Object.values(st.bossFalls ?? {})])];
       node = all.find(n => n?.id === id) ?? node;
     }
     if (!node) return { id, err: 'no node' };

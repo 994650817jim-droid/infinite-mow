@@ -153,6 +153,8 @@ export class BattlefieldSupplies {
   return slot.enemy;
  }
  /** 该处能否放物件：不压别的物件，也不压场景障碍。 */
+ /** 撤掉满足条件的物件（2-3 洛阳：城墙 / 场地外的布景、旗子；开局先于城墙生成的）。 */
+ purge(pred:(x:number,y:number)=>boolean):number{let n=0;for(const c of this.crates)if(c.enemy.active&&c.cell&&pred(c.enemy.x,c.enemy.y)){c.enemy.deactivate();c.shadow.setVisible(false);this.broken.add(c.cell);c.cell=null;n++;}return n;}
  envClear(x:number,y:number,size:number):boolean{return this.placementClear(x,y,size)&&!this.healBlocked?.(x,y,size*.4);}
  /** 某类环境物件当前在场的个数。 */
  envCount(env:string):number{return this.crates.filter(c=>c.enemy.active&&c.env===env).length;}
@@ -203,9 +205,10 @@ export class BattlefieldSupplies {
    }
   }
   for(const f of this.breakFx)if(f.active){const age=Math.max(0,now-f.start);if(age>=560){f.active=false;f.image.setVisible(false);}else f.image.setFrame(f.row*6+Math.min(5,Math.floor(age/80))).setAlpha(Math.min(1,(560-age)/120));}
-  const desired=new Set(placements.map(p=>p.key));
+  // 场景布景物件也避开障碍 / 场地外（healBlocked；2-3 洛阳原来有木箱落在城墙后）：被挡的不放，已放的下一帧撤掉
+  const desired=new Set(placements.filter(p=>!this.healBlocked?.(p.x,p.y,p.size*.3)).map(p=>p.key));
   for(const c of this.crates)if(c.enemy.active&&c.cell?.startsWith('prop-')&&!desired.has(c.cell)){c.enemy.deactivate();c.shadow.setVisible(false);c.cell=null;}
-  for(const p of placements){if(this.broken.has(p.key)||this.crates.some(c=>c.enemy.active&&c.cell===p.key)||!this.placementClear(p.x,p.y,p.size))continue;const slot=this.freeSlot();if(!slot)break;this.place(slot,p.key,p.x,p.y,p.texture?p.frame===4?4:p.frame===5?10:14:p.frame,p.size,p.flip);
+  for(const p of placements){if(this.broken.has(p.key)||!desired.has(p.key)||this.crates.some(c=>c.enemy.active&&c.cell===p.key)||!this.placementClear(p.x,p.y,p.size))continue;const slot=this.freeSlot();if(!slot)break;this.place(slot,p.key,p.x,p.y,p.texture?p.frame===4?4:p.frame===5?10:14:p.frame,p.size,p.flip);
    if(p.texture){slot.spiked=p.frame===5;slot.enemy.sprite.setTexture(p.texture,String(p.frame)).setOrigin(.5,.92).setPosition(p.x,p.y+p.size*.17).setDepth(actorDepth(p.y+p.size*.17)).clearTint();slot.shadow.setVisible(false);slot.offsetX=p.frame===4?-p.size*.24*(p.flip?-1:1):0;slot.halfW=p.size*(p.frame===4?.08:.39);slot.halfH=p.size*(p.frame===4?.06:.13);}
   }
   if(this.healRemaining>0&&this.player.alive){const n=Math.min(this.healRemaining,this.healRate*dt);this.player.heal(n);this.healRemaining=Math.max(0,this.healRemaining-n);}
@@ -218,7 +221,7 @@ export class BattlefieldSupplies {
   const cx=Math.floor(this.player.x/CELL),cy=Math.floor(this.player.y/CELL);
   for(let y=cy-1;y<=cy+1;y++)for(let x=cx-1;x<=cx+1;x++){
    const h=this.hash(x,y),cell=`${x},${y}`;if(h%12!==3||this.broken.has(cell)||this.crates.some(c=>c.enemy.active&&c.cell===cell))continue;
-   const px=x*CELL+120+(h>>>8)%400,py=y*CELL+120+(h>>>16)%400;if(Math.hypot(px-this.player.x,py-this.player.y)>1250||!this.placementClear(px,py,92))continue;
+   const px=x*CELL+120+(h>>>8)%400,py=y*CELL+120+(h>>>16)%400;if(Math.hypot(px-this.player.x,py-this.player.y)>1250||!this.placementClear(px,py,92)||this.healBlocked?.(px,py,60))continue; // 随机补给也避开障碍 / 场地外（同酒罐）
    if(this.crates.filter(c=>c.enemy.active&&c.cell&&!c.cell.startsWith('prop-')).length>=MAX_CRATES)return;const slot=this.freeSlot();if(!slot)return;
    // 随机补给：一半仍是酒罐（回血），其余混入兵器架 / 盾牌堆 / 木箱 / 钱袋 / 粮袋 / 粮车（各按 data/propLoot.ts 掉对应的东西）
    const pick=[18,18,18,18,18,19,21,23,14,16,17,24][(h>>>5)%12];this.place(slot,cell,px,py,pick,pick===18?92:propDisplaySize(pick));

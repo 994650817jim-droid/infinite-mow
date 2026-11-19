@@ -6,6 +6,15 @@
 import type { TownBuildingId } from './TownData';
 
 export const PANO_W = 1536, PANO_H = 1024;
+/**
+ * 电脑版全屏营寨（用户 2026-11-18：「义军营寨放多点帐篷和画面整个屏幕。现在无法移动看到营寨全幕」）：
+ * 全景铺满整个画面（不再是带黑边的框），放大到「刚好铺满」的 PANO_ZOOM 倍（1.6 ≈ 底图 1:1），比一屏大、可拖动 / 方向键 / 滚轮 / 贴边平移看全营。
+ * 顶部标题栏、底部按钮栏是半透明漆底条，叠在全景上（CAMP_BARS 高度内不能拖动、建筑也不可点）。
+ */
+export const PANO_ZOOM = 1.6;
+export const CAMP_BARS = { top: 54, bottom: 58 } as const;
+/** 平移速度（逻辑像素 / 秒）：方向键 / WASD、鼠标贴边（贴边判定 CAMP_EDGE 像素）。 */
+export const CAMP_PAN = { keys: 560, edge: 380, edgeZone: 16 } as const;
 export interface Slot { x: number; y: number; w: number }
 type Layout = Record<TownBuildingId, Slot>;
 

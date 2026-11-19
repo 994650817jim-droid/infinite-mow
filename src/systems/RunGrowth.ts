@@ -26,7 +26,7 @@ export const MARTIALS = {
   // 2026-11-16：黄忠改用宝雕弓，连弩武学归黄月英
   steady_aim: {character:'huangyueying',name:'百步穿杨',desc:'站着不动每秒暴击率 +3/4/5%（最多5秒）；移动会慢慢失去'},
   pearl_volley: {character:'huangyueying',name:'连珠齐射',desc:'每射击 5/4/3 次多射一支 70% 伤害的箭'},
-  wildfire: {character:'zhuge',name:'借东风',desc:'每第 4 发天火放出东风火龙直线扫过，伤害 60%/75%/90%'},
+  wildfire: {character:'zhuge',name:'借东风',desc:'每第 4 发天火（没有首领 / 精锐时每第 3 发）放出东风火龙，朝怪最密处扫过，伤害 60%/75%/90%'},
   eight_trigrams: {character:'zhuge',name:'八阵图',desc:'观星爆发处布阵 2/2.5/3 秒：减速 40%、受伤 +15%；3 级时阵内首领出招变慢'},
   kaishan: {character:'weiyan',name:'开山',desc:'每劈 4 刀一次重劈：裂波加宽 50%，伤害 150%/170%/190%'},
   gujun: {character:'weiyan',name:'孤军深入',desc:'身边每名敌人伤害 +1.5%/2%/2.5%（最多 15 名）'},

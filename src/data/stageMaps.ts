@@ -153,6 +153,52 @@ export const STAGE_MAPS: Record<string, StageMapDef> = {
     gates: [{ x: 0, y: -1250 }, { x: 0, y: 1250 }, { x: -840, y: 350 }, { x: 840, y: -450 }], forest: 'bamboo',
     interactions: [{ kind: 'logs', axis: 'x', fromY: -880, toY: 880, everyMs: 8000, firstMs: 7000, warnMs: 1200, count: 2, width: 100, speed: 520, damage: 18, enemyDamage: 220 }],
   },
+  // —— 第四批（最后一批）——
+  // 3-3 寿春讨逆：北边寿春城墙（攻城城墙图集，城门居中）、东西柳林、南边林带；会战场地保持宽
+  'qunxiong.3': {
+    kind: 'arena', bounds: { left: -1800, right: 1800, top: -900, bottom: 1400 },
+    edges: { n: 'wall', s: 'forest', w: 'forest', e: 'forest' }, openings: { n: [0] },
+    gates: [{ x: 0, y: -860 }, { x: -1750, y: -300 }, { x: 1750, y: -300 }, { x: -1750, y: 800 }, { x: 1750, y: 800 }], forest: 'willow',
+  },
+  // 5-2 赤壁鏖兵：江岸——北边是本关原有的大江（新河岸，两座浮桥 = 曹军来路，北岸曹营水寨），东西芦苇柳林，南边孙刘联军营栅
+  'chibi.2': {
+    kind: 'ford', bounds: { left: -2000, right: 2000, top: -500, bottom: 1100 },
+    edges: { n: 'existing', s: 'palisade', w: 'forest', e: 'forest' }, openings: { s: [0] },
+    gates: [{ x: -780, y: -470 }, { x: 936, y: -470 }, { x: -1950, y: 300 }, { x: 1950, y: 300 }], faction: 4, forest: 'willow',
+  },
+  // 5-3 江陵夺城、6-3 长沙会战、10-1 猇亭：本关原有的城池 / 关隘 / 营寨（SishuiPass）已四面封好
+  'chibi.3': {
+    kind: 'arena', bounds: { left: -1220, right: 1220, top: -520, bottom: 2250 },
+    edges: { n: 'existing', s: 'existing', w: 'existing', e: 'existing' },
+    gates: [{ x: 0, y: -480 }, { x: -1180, y: -200 }, { x: 1180, y: -200 }, { x: -1180, y: 900 }, { x: 1180, y: 900 }], // 曹仁出城门；两侧林带
+  },
+  'jingnan.3': {
+    kind: 'arena', bounds: { left: -1220, right: 1220, top: -520, bottom: 2250 },
+    edges: { n: 'existing', s: 'existing', w: 'existing', e: 'existing' },
+    gates: [{ x: 0, y: -480 }, { x: -1180, y: -200 }, { x: 1180, y: -200 }, { x: -1180, y: 900 }, { x: 1180, y: 900 }], // 韩玄出城门；两侧林带
+  },
+  'yiling.1': {
+    kind: 'arena', bounds: { left: -1220, right: 1220, top: -520, bottom: 2250 },
+    edges: { n: 'existing', s: 'existing', w: 'existing', e: 'existing' },
+    gates: [{ x: 0, y: -480 }, { x: -1180, y: -200 }, { x: 1180, y: -200 }, { x: -1180, y: 900 }, { x: 1180, y: 900 }], // 孙桓出寨门；两侧林带
+  },
+  // 7-1 葭萌关、7-2 落凤坡：蜀道两侧本来就是山坡（MountainPass），这里把两端收口——葭萌关北端是关墙关门，落凤坡北端山口；南端山口
+  'shu.1': {
+    kind: 'corridor', bounds: { left: -300, right: 300, top: -4150, bottom: 2150 },
+    edges: { n: 'wall', s: 'cliff', w: 'existing', e: 'existing' }, openings: { n: [0], s: [0] },
+    gates: [{ x: 0, y: -4100 }, { x: 0, y: 2100 }],
+  },
+  'shu.2': {
+    kind: 'corridor', bounds: { left: -260, right: 260, top: -4150, bottom: 2150 },
+    edges: { n: 'cliff', s: 'cliff', w: 'existing', e: 'existing' }, openings: { n: [0], s: [0] },
+    gates: [{ x: 0, y: -4100 }, { x: 0, y: 2100 }],
+  },
+  // 12-1 街亭：当道——南边是本关原有的南山（崖 + 补齐），东西山崖各留一处山口（张郃从北口、两侧山口来断汲道），北边山口
+  'beifa.1': {
+    kind: 'corridor', bounds: { left: -1300, right: 1300, top: -1300, bottom: 740 },
+    edges: { n: 'cliff', s: 'cliff', w: 'cliff', e: 'cliff' }, openings: { n: [0], w: [-400], e: [-400] },
+    gates: [{ x: 0, y: -1250 }, { x: -1250, y: -400 }, { x: 1250, y: -400 }], forest: 'cypress',
+  },
 };
 
 export function stageMapFor(arc: string, stage: number): StageMapDef | null { return STAGE_MAPS[arc + '.' + stage] ?? null; }

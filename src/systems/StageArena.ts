@@ -147,6 +147,8 @@ export class StageArena {
   }
 
   // ———— 守边 / 刷兵 ————
+  /** 夹回场内（留 30 边距）。 */
+  clampPoint(x: number, y: number): Pt { const b = this.bounds; return { x: Phaser.Math.Clamp(x, b.left + 30, b.right - 30), y: Phaser.Math.Clamp(y, b.top + 30, b.bottom - 30) }; }
   /** 每帧：主将、随行、敌兵挪回场内（首领、补给槽除外）。 */
   keepInside() {
     const b = this.bounds, m = 22;

@@ -7,7 +7,7 @@ export interface EnemyDef {
   tint?: number;
   /** Chapter-specific walk art; presentation only. */
   /** matched：行走 / 攻击表已按同一比例绘制与对齐（如黄巾长枪兵 v5），直接用 scale，不做逐帧身高校正。 */
-  walkVisual?: { texture: string; scale: number; groundY: number; matched?: boolean };
+  walkVisual?: { texture: string; scale: number; groundY: number; matched?: boolean; /** v2 图集的额外显示倍数（默认 1；新兵种四足兽等用，Enemy.applyFrame 乘在 V2_TROOP_SCALE 上） */ v2Mul?: number };
   attackVisual?: string;
   behavior?: "spear" | "shaman" | "halberd" | "thunder" | "wall" | "supply";
   /** 章节专属兵种（不走第一章 behavior 逻辑）：feixiong = 第二章飞熊军（XiliangBattle）；hubao = 第五章虎豹骑（HubaoBattle）。 */

@@ -462,7 +462,7 @@ export class Enemy {
     if (isV2Texture(key)) {
       // 人物画风 v2：0.5 倍（1080p 像素 1:1），脚底 = 帧高-7；行走 / 攻击格子大小可以不同，按当前帧重算锚点
       const fh = this.sprite.frame.height || 96;
-      this.baseScaleY = V2_TROOP_SCALE;
+      this.baseScaleY = V2_TROOP_SCALE * (this.def.walkVisual?.v2Mul ?? 1);
       this.baseOriginY = v2TroopGround(fh) - this.def.radius * .72 / (fh * this.baseScaleY);
       this.frameScale = 1;
     } else

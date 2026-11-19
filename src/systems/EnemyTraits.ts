@@ -126,7 +126,7 @@ export class EnemyTraits {
       hp: base.hp * t.mul.hp, speed: base.speed * t.mul.speed, damage: base.damage * t.mul.damage,
       xp: Math.max(1, Math.round(base.xp * Math.max(1, Math.sqrt(t.mul.hp)) * (t.xpMul ?? 1))), radius: base.radius * (art ? Math.max(1, t.art.cell / 144) : k),
       // 专属图：同 ArtStyle.withV2Sheets（v2 4×4 表，显示 ×0.5，脚底 = (格 − 7) / 格）
-      ...(art ? { walkVisual: { texture: t.art.walk, scale: V2_TROOP_SCALE, groundY: v2TroopGround(t.art.cell) }, attackVisual: isV2Texture(t.art.attack) && sc.textures.exists(t.art.attack) ? t.art.attack : undefined, tint: 0xffffff }
+      ...(art ? { walkVisual: { texture: t.art.walk, scale: V2_TROOP_SCALE, groundY: v2TroopGround(t.art.cell), v2Mul: t.art.mul }, attackVisual: isV2Texture(t.art.attack) && sc.textures.exists(t.art.attack) ? t.art.attack : undefined, tint: 0xffffff }
         : { tint: t.fallback.tint }),
     };
     const e = this.h.spawn(t.base, x, y, def); if (!e) return null;

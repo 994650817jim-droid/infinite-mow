@@ -75,6 +75,11 @@ export const ART_V2_FILES: Readonly<Record<string, string>> = {
   yellow_shaman_walk: 'assets/processed-v2/enemies/yellow_shaman_walk.png',
   yellow_shaman_cast: 'assets/processed-v2/enemies/yellow_shaman_attack.png',
   // 小怪兵种第一批（2026-11-19 Gemini 出图，原图 enemies/originals/artv2_enemy_*）：行走 4×4、攻击 4×4，行 = 下 / 左 / 右 / 上
+  enemy_wuxi_walk: 'assets/processed-v2/enemies/enemy_wuxi_walk.png',
+  enemy_wuxi_attack: 'assets/processed-v2/enemies/enemy_wuxi_attack.png',
+  enemy_changsha_walk: 'assets/processed-v2/enemies/enemy_changsha_walk.png',
+  enemy_changsha_attack: 'assets/processed-v2/enemies/enemy_changsha_attack.png',
+  // 小怪兵种第一批（2026-11-19 Gemini 出图，原图 enemies/originals/artv2_enemy_*）：行走 4×4、攻击 4×4，行 = 下 / 左 / 右 / 上
   enemy_feishi_walk: 'assets/processed-v2/enemies/enemy_feishi_walk.png',
   enemy_feishi_attack: 'assets/processed-v2/enemies/enemy_feishi_attack.png',
   // 小怪兵种第一批（2026-11-19 Gemini 出图，原图 enemies/originals/artv2_enemy_*）：行走 4×4、攻击 4×4，行 = 下 / 左 / 右 / 上

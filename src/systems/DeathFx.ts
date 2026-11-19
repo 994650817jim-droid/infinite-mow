@@ -26,7 +26,14 @@ export const DEATH_FX = {
   capDesktop: 160, capLite: 80, flashMs: 60, fallMs: 180, fadeMs: 300, tiltRad: 1.22, backStep: 9, sink: 6,
   propCap: 40, horseCap: 14, flightMs: 300, restMs: 500, propFadeMs: 220, turbanMs: 950, horseMs: 1700, horseSpeed: 270, heavyFlightMs: 260, heavyMin: 40, heavyMax: 70, heavyArc: 30,
   dustMs: 460, dustScale: .8, dustScaleLite: .65, dustCapDesktop: 120, dustCapLite: 28, warmDesktop: 100, warmLite: 30, warmPerFrame: 4, squashMs: 150, haloMs: 420,
+  /**
+   * 兵器 / 盾 / 头巾脱手（2026-11-18 用户：「小怪死掉武器掉落，但是没掉武器」——甩出的兵器和身上还拿着的兵器同时出现，像多了一把；
+   * 改回只用倒地 + 尘土消失）。关掉后兵器图仍载入备用，?deathprops=1 可调试打开。
+   */
+  props: false,
 } as const;
+/** 兵器 / 头巾脱手是否开启：默认关（DEATH_FX.props），URL 带 ?deathprops=1 时打开（调试 / 测试用）。 */
+function propsEnabled(): boolean { if (DEATH_FX.props) return true; try { return new URLSearchParams(location.search).get('deathprops') === '1'; } catch { return false; } }
 /** 兵器 / 头巾小图集（3 列 × 2 行，每格 256）：0 刀 1 枪 2 弓 3 藤牌 4 重盾 5 头巾。 */
 export const PROPS = 'fx_death_props';
 export type DeathProp = 'blade' | 'spear' | 'bow' | 'rattan' | 'tower';
@@ -70,7 +77,7 @@ export class DeathFx {
   get propCount(): number { let n = 0; for (const p of this.props) if (p.active) n++; return n; }
   get horseCount(): number { let n = 0; for (const h of this.horses) if (h.active) n++; return n; }
   /** 兵器 / 头巾小图在不在（不在就不显示这些变化）。 */
-  get hasProps(): boolean { return !this.lite && this.scene.textures.exists(PROPS); }
+  get hasProps(): boolean { return !this.lite && propsEnabled() && this.scene.textures.exists(PROPS); }
   /** 本场放马用哪张图：专属棕色战马优先，其次通用马；都没载入返回 null（手机 / 不是 v2 画风也是 null）。 */
   get horseKey(): string | null { if (this.lite) return null; for (const k of [HORSE_BROWN, HORSE_GENERIC]) if (this.scene.textures.exists(k) && this.scene.textures.get(k).has('left_0')) return k; return null; }
   get hasHorse(): boolean { return this.horseKey !== null; }

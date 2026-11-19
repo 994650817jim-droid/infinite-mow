@@ -24,7 +24,7 @@ const open = async (q, vp = { width: 1280, height: 720 }) => {
   });
   return p;
 };
-const GAME = '?dev=1&autostart=1&stage=1&layout=desktop';
+const GAME = '?dev=1&autostart=1&stage=1&layout=desktop&deathprops=1'; // 兵器脱手默认关（2026-11-18），这里打开测它的逻辑
 
 let p = await open(GAME);
 // 马匹行走图按需载入：场上出现骑兵时触发（这里直接出一个骑兵再杀掉），等它载完

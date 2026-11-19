@@ -75,6 +75,13 @@ export const ART_V2_FILES: Readonly<Record<string, string>> = {
   yellow_shaman_walk: 'assets/processed-v2/enemies/yellow_shaman_walk.png',
   yellow_shaman_cast: 'assets/processed-v2/enemies/yellow_shaman_attack.png',
   // 小怪兵种第一批（2026-11-19 Gemini 出图，原图 enemies/originals/artv2_enemy_*）：行走 4×4、攻击 4×4，行 = 下 / 左 / 右 / 上
+  enemy_huogong_walk: 'assets/processed-v2/enemies/enemy_huogong_walk.png',
+  enemy_huogong_attack: 'assets/processed-v2/enemies/enemy_huogong_attack.png',
+  enemy_linggong_walk: 'assets/processed-v2/enemies/enemy_linggong_walk.png',
+  enemy_linggong_attack: 'assets/processed-v2/enemies/enemy_linggong_attack.png',
+  enemy_zhuranqin_walk: 'assets/processed-v2/enemies/enemy_zhuranqin_walk.png',
+  enemy_zhuranqin_attack: 'assets/processed-v2/enemies/enemy_zhuranqin_attack.png',
+  // 小怪兵种第一批（2026-11-19 Gemini 出图，原图 enemies/originals/artv2_enemy_*）：行走 4×4、攻击 4×4，行 = 下 / 左 / 右 / 上
   enemy_kuibing_walk: 'assets/processed-v2/enemies/enemy_kuibing_walk.png',
   enemy_kuibing_attack: 'assets/processed-v2/enemies/enemy_kuibing_attack.png',
   enemy_baiyi_walk: 'assets/processed-v2/enemies/enemy_baiyi_walk.png',

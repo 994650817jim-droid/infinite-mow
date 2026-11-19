@@ -85,13 +85,13 @@ function loadPortraits(scene: Phaser.Scene, lines: ScrollLine[], done: () => voi
 }
 
 /** 剧情卷轴：载入立绘 → 显示 → 读完或跳过都记为已看。 */
-export function playStoryScroll(scene: Phaser.Scene, node: StoryNode, lines: StoryLine[], ctx: StoryCtx, confirm: string, done: () => void, extra?: StoryLine[]): void {
+export function playStoryScroll(scene: Phaser.Scene, node: StoryNode, lines: StoryLine[], ctx: StoryCtx, confirm: string, done: () => void, extra?: StoryLine[], opts?: { translucent?: boolean }): void {
   const all = toScroll([...lines, ...(extra ?? [])], ctx); if (!all.length) { done(); return; }
   loadPortraits(scene, all, () => {
     if (scene.sys.settings.status >= Phaser.Scenes.SHUTDOWN) return; // 场景已关（create 期间 isActive 仍为 false，不能用它判断）
     const finish = (): void => { markStorySeen(node.id); done(); };
     storyScroll(scene, GAME_WIDTH, GAME_HEIGHT, IS_DESKTOP, { name: 'story-' + node.id.replace(/\./g, '-'), confirmName: 'story-confirm', kicker: node.kicker ?? '', title: node.title ?? '',
-      lines: all, reward: '', confirm, background: 'rest_camp', illustration: nodeIllustration(node), onDone: finish, skip: finish });
+      lines: all, reward: '', confirm, background: 'rest_camp', illustration: nodeIllustration(node), onDone: finish, skip: finish, translucent: opts?.translucent });
   }, nodeIllustration(node));
 }
 
@@ -155,6 +155,13 @@ export class StoryDirector {
       const onPhase = (e: BossPhaseEvent): void => { if (e.phase === 2) this.bossPhase(e.boss.sprite, e.bossId); };
       h.scene.events.on(BOSS_PHASE, onPhase); h.scene.events.once('shutdown', () => h.scene.events.off(BOSS_PHASE, onPhase));
     }
+    // 首领台词侧边立绘卡：这一关会说话的人（首领登场 / 二阶段 / 倒下、本章 bark）的立绘开局就先载，首领出来时卡不用等加载
+    if (storyWanted('boss')) {
+      const sn = this.stageNodes(), nodes = [sn?.bossIntro, sn?.bossPhase, sn?.bossFall, ...Object.values(sn?.bossIntros ?? {}), ...Object.values(sn?.bossPhases ?? {}), ...Object.values(sn?.bossFalls ?? {}), ...(this.chapter?.barks ?? [])];
+      const who = nodes.flatMap(n => n ? [...n.lines, ...Object.values(n.variants ?? {}).flat()] : []).map(l => l.who).filter((w): w is string => !!w);
+      const lines = [...new Set(who)].map(w => ({ text: '', portrait: speaker(w, h.ctx).portrait }));
+      if (lines.some(l => l.portrait)) loadPortraits(h.scene, lines, () => { /* 只是预载 */ });
+    }
   }
   private stageNodes(): StoryStage | undefined { return this.chapter?.stages[this.h.stage as 1 | 2 | 3]; }
   /** 依次播一串（暂停战斗，全部播完恢复）；都没有就直接 done。 */
@@ -199,7 +206,8 @@ export class StoryDirector {
   /** 战斗中途按 id 播一段卷轴（chapter.midScrolls；暂停战斗、显示对白立绘，每存档一次）。返回是否播了（没有 / 看过 / 剧情关掉 → false，done 立刻回调）。 */
   midScroll(id: string, done?: () => void): boolean {
     const n = this.chapter?.midScrolls?.find(b => b.id === id), queue: Array<(next: () => void) => void> = [];
-    this.queueScroll(queue, n, 'stage', '继续');
+    // 战斗中途：半透明卷轴（2026-11-19 用户：「对话框想半透明」），底下战场看得见
+    if (n && !storySeen(n.id) && storyWanted('stage')) queue.push(next => { const lines = resolveLines(n, this.h.ctx); if (!lines.length) { next(); return; } this.played.push(n.id); playStoryScroll(this.h.scene, n, lines, this.h.ctx, '继续', next, undefined, { translucent: true }); });
     if (!queue.length) { done?.(); return false; }
     this.runQueue(queue, () => { if (n) markStorySeen(n.id); done?.(); }); return true;
   }

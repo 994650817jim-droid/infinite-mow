@@ -1,6 +1,6 @@
 /**
  * 首领台词侧边立绘卡（2026-11-18 夜，统筹定「方案 2：不暂停」）：首领登场 / 二阶段 / 倒下等剧情 bark 说话时，
- * 屏幕边上滑进一张黑漆描金小卡——外侧是说话人的对白水墨立绘（ink_cast / ink_hero，取头肩），内侧是名字 + 台词（标题字）。
+ * 屏幕边上滑进一张半透明黑漆描金小卡（2026-11-19 起半透明，文字带阴影）——外侧是说话人的对白水墨立绘（ink_cast / ink_hero，取头肩），内侧是名字 + 台词（标题字）。
  * - 敌方从右边滑入、我方（可玩武将 / 主公）从左边；停 HOLD 毫秒后滑出；几句挨得近就排队一张一张出。
  * - 放在侧边空带：右边在军令面板下、护阵按钮上，左边在增益图标下；不挡首领血条（底部中间）、军令、舆图、主将（屏幕中间）。
  * - 用真实时钟（performance.now）推进，不受战斗暂停影响；不暂停战斗、不吃点击。
@@ -40,12 +40,12 @@ function next(scene: Phaser.Scene, st: CardState): void {
   withPortrait(scene, line.portrait, () => build(scene, line, () => window.setTimeout(() => next(scene, st), BARK_CARD.gap)));
 }
 
-/** 立绘没载就先载（data/story/art.ts 登记的才载）；1.5 秒没好就先不带立绘出卡，不拖台词。 */
+/** 立绘没载就先载（data/story/art.ts 登记的才载；StoryDirector 开局已预载本关说话人）；2.5 秒没好就先不带立绘出卡，不拖台词。 */
 function withPortrait(scene: Phaser.Scene, key: string | undefined, go: () => void): void {
   if (!key || scene.textures.exists(key) || !storyArtFile(key)) { go(); return; }
   let fired = false; const fin = (): void => { if (!fired) { fired = true; go(); } };
   scene.load.image(key, storyArtFile(key)!); scene.load.once(Phaser.Loader.Events.COMPLETE, fin); scene.load.start();
-  window.setTimeout(fin, 1500);
+  window.setTimeout(fin, 2500);
 }
 
 function build(scene: Phaser.Scene, line: BarkCardLine, done: () => void): void {
@@ -55,10 +55,12 @@ function build(scene: Phaser.Scene, line: BarkCardLine, done: () => void): void 
   const root = scene.add.container(x0 + off, y0).setScrollFactor(0).setDepth(DEPTH.overlay - 8).setName('story-bark-card');
   root.setData('side', line.side).setData('name', line.name).setData('text', line.text);
   const g = scene.add.graphics().setScrollFactor(0);
-  lqPanel(g, 0, 0, C.w, C.h, { shadow: true, alpha: .94 });
+  // 半透明漆底（2026-11-19 用户：「对话框想半透明」）：外圈约 38%、里面约 57%，边缘渐淡；描金边与菱饰照旧不透明
+  g.fillStyle(LQ.lacquer, .38).fillRoundedRect(0, 0, C.w, C.h, 10).fillStyle(LQ.lacquer, .3).fillRoundedRect(6, 6, C.w - 12, C.h - 12, 8);
+  lqPanel(g, 0, 0, C.w, C.h, { shadow: false, alpha: 0, glow: false });
   // 立绘框：外侧（右卡在右、左卡在左）
   const fx = right ? C.w - C.face - 8 : 8, fy = (C.h - C.face) / 2;
-  g.fillStyle(0x0d0906, .95).fillRect(fx, fy, C.face, C.face);
+  g.fillStyle(0x0d0906, .55).fillRect(fx, fy, C.face, C.face);
   root.add(g);
   const key = line.portrait && scene.textures.exists(line.portrait) ? line.portrait : undefined;
   if (key) {
@@ -81,8 +83,8 @@ function build(scene: Phaser.Scene, line: BarkCardLine, done: () => void): void 
   root.add(frame);
   // 名字 + 台词（标题字），在立绘内侧
   const tx = right ? 16 : C.face + 22, tw = C.w - C.face - 40;
-  const name = scene.add.text(tx, 12, line.name, { fontFamily: HEADING_FONT, fontSize: '17px', color: LQ.title, resolution: 2 }).setScrollFactor(0).setName('story-bark-card-name');
-  const say = scene.add.text(tx, 36, line.text, { fontFamily: HEADING_FONT, fontSize: '15px', color: LQ.cream, resolution: 2, lineSpacing: 2, wordWrap: { width: tw, useAdvancedWrap: true } }).setScrollFactor(0).setName('story-bark-card-text');
+  const name = scene.add.text(tx, 12, line.name, { fontFamily: HEADING_FONT, fontSize: '17px', color: LQ.title, resolution: 2 }).setShadow(0, 2, '#000000', 5, false, true).setScrollFactor(0).setName('story-bark-card-name');
+  const say = scene.add.text(tx, 36, line.text, { fontFamily: HEADING_FONT, fontSize: '15px', color: LQ.cream, resolution: 2, lineSpacing: 2, wordWrap: { width: tw, useAdvancedWrap: true } }).setShadow(0, 2, '#000000', 5, false, true).setScrollFactor(0).setName('story-bark-card-text');
   if (say.height > C.h - 42) say.setFontSize(13);
   root.add([name, say]);
   // 滑入 → 停 → 滑出（真实时钟）

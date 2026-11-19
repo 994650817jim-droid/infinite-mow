@@ -115,6 +115,11 @@ const killBoss = async p => {
   // 砍两根绳索
   const cut = await p.evaluate(async () => { const L = (await import('/src/data/siegeMedium.ts')).LARGE_SIEGE.moat; const a = window.__chop(L.ropes[0].x, L.bottom + 90); const b2 = window.__chop(L.ropes[1].x, L.bottom + 90); window.__step(5); return { a, b: b2, bridge: window.__M.bridgeDown, cut: window.__M.stats.ropesCut }; });
   ck('大城：砍断两根吊桥绳索 → 吊桥落下', cut.a && cut.b && cut.bridge && cut.cut === 2, cut);
+  // 全面检查 #5：吊桥落下、主将过了河——对岸的骑兵沿岸走到桥头过河，不贴着河岸往北挤
+  const moat = await p.evaluate(async () => { const s = window.__S, L = (await import('/src/data/siegeMedium.ts')).LARGE_SIEGE.moat; const hp = s.player.sprite; const keep = { x: s.player.x, y: s.player.y };
+    hp.setPosition(0, L.top - 60); window.__clear(); const e = s.spawnEnemy('cavalry', -260, L.bottom + 20, 1, true); if (!e) return { none: true }; e.hp = e.maxHp = 1e6;
+    const x0 = Math.round(e.x); window.__step(360); const r = { x0, x: Math.round(e.x), y: Math.round(e.y), crossed: e.y < L.bottom - 20 || Math.abs(e.x) < L.bridgeHalfW }; e.deactivate(); hp.setPosition(keep.x, keep.y); return r; });
+  ck('大城：吊桥落下后对岸骑兵沿岸走到桥头过河（不卡在河岸）', !moat.none && moat.crossed, moat);
   for (let i = 0; i < 90; i++) { const st = await p.evaluate(() => { const s = window.__S, r = window.__M.ramInfo; /* 11-19 场地加深，冲车路约 36 秒 */ window.__clear(); s.player.sprite.setPosition(r.x + 60, r.y + 40); window.__step(20); return r.state; }); if (st === 'ram') break; }
   const r2 = (await goals(p)).mid.ram;
   await p.screenshot({ path: `${OUT}/large-2-bridge.png` });

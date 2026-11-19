@@ -64,7 +64,7 @@ ck('打掉一座箭楼：箭雨减弱（每轮 2 处、间隔 4.4 秒）', weak.
 // 冲车被毁 → 回营地再领
 const wreck = await p.evaluate(() => { const s = window.__S, m = s.siegeMid; m.ram.guardUntil = 0; m.damageRam(1e6); /* 冲车受击后有 0.5 秒免伤（11-17 蒙皮顶棚），测试先清掉 */ window.__step(2); return { state: m.ramInfo.state, lost: m.stats.ramsLost }; });
 ck('冲车被打毁（变残骸、提示回营地）', wreck.state === 'wreck' && wreck.lost === 1, wreck);
-const re = await p.evaluate(() => { const s = window.__S, m = s.siegeMid, c = { x: 0, y: 250 }; s.player.sprite.setPosition(c.x, c.y); window.__step(200); const early = { state: m.ramInfo.state, readyIn: m.ramInfo.readyIn }; window.__step(360); return { early, state: m.ramInfo.state, taken: m.stats.ramsTaken, level: m.ramInfo.level }; });
+const re = await p.evaluate(async () => { const s = window.__S, m = s.siegeMid, c = (await import('/src/data/siegeMedium.ts')).MID_SIEGE.outside.camp; /* 11-19 场地加深：营地位置读数据 */ s.player.sprite.setPosition(c.x, c.y); window.__step(200); const early = { state: m.ramInfo.state, readyIn: m.ramInfo.readyIn }; window.__step(360); return { early, state: m.ramInfo.state, taken: m.stats.ramsTaken, level: m.ramInfo.level }; });
 ck('回营地重领：有冷却（8 秒内领不到，冷却后领到新冲车）；攻城器械默认 0 级', re.early.state === 'wreck' && re.early.readyIn > 0 && re.state === 'move' && re.taken === 2 && re.level === 0, re);
 const lv = await p.evaluate(async () => { const d = await import('/src/data/siegeMedium.ts'); return [0, 2, 9].map(l => d.ramStats(l)); });
 ck('攻城器械等级接口：耐久 / 撞门速度 / 撞门伤害 / 冷却 / 备用台数随等级加成，越界夹到表内', lv[1].hp > lv[0].hp && lv[1].hitEveryMs < lv[0].hitEveryMs && lv[1].gateDamage > lv[0].gateDamage && lv[1].respawnMs < lv[0].respawnMs && lv[1].spare === 1 && lv[2].level === 3, lv);
@@ -102,7 +102,7 @@ ck('据点：顶住反扑 20 秒 → 守住', s2.mid.points[0].state === 'secure
 const gc = await p.evaluate(() => ({ ...window.__S.garrisonInfo }));
 ck('联动 · 守军池：占稳粮仓直接扣守军池 8%（顶部「守军 x / y」同步）', gc.cut - cut0 === Math.round(gc.total * .08), { cut0, ...gc });
 // 市集：占下后离开、敌兵占点 5 秒 → 失守
-const lost = await p.evaluate(P => { const s = window.__S, m = s.siegeMid, [x, y] = P[1]; s.player.sprite.setPosition(x, y); window.__step(300); const st = m.points[1].state; s.player.sprite.setPosition(0, -720); const e = s.spawnEnemy('shield', x, y, 1, true); if (e) { e.def = { ...e.def, speed: 0 }; e.hp = e.maxHp = 1e6; } window.__step(380); return { before: st, after: m.points[1].state }; }, P);
+const lost = await p.evaluate(P => { const s = window.__S, m = s.siegeMid, [x, y] = P[1]; s.allyPush?.clear(); /* 11-19 起圈里有我方义军不算失守：这里只测「没人守」的情况 */ window.__clear(); m.points[1].squad = true; /* 只测「失守」：先清场、不出守点小队（小队长在时占领减半，5 秒占不下） */ s.player.sprite.setPosition(x, y); window.__step(300); const st = m.points[1].state; s.player.sprite.setPosition(0, -720); const e = s.spawnEnemy('shield', x, y, 1, true); if (e) { e.def = { ...e.def, speed: 0 }; e.hp = e.maxHp = 1e6; } window.__step(380); return { before: st, after: m.points[1].state }; }, P);
 ck('据点：主将离开、敌兵占点累计 5 秒 → 失守', lost.before === 'held' && lost.after === 'open', lost);
 // 屋顶伏兵
 const amb = await p.evaluate(() => { const s = window.__S, m = s.siegeMid; window.__clear(); const n0 = m.stats.ambushes; m.ambushAt = s.combatNow; window.__step(60); const roof = s.enemies.filter(e => e.active && !e.isSupplySlot && m.city.roofs.some(r => Math.abs(e.x - r.x) < 40 && Math.abs(e.y - r.y) < 120) /* 跳下补间期间敌兵按起跳点（房檐上方 90）移动，落地点偏北 */).length; return { ambushes: m.stats.ambushes - n0, roof, p: [Math.round(s.player.x), Math.round(s.player.y)], at: s.enemies.filter(e => e.active && !e.isSupplySlot).map(e => [Math.round(e.x), Math.round(e.y)]) }; });

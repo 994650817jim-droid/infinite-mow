@@ -61,6 +61,14 @@ const f62 = await flags(), b62 = await barks();
 ck('6-2 斩杀刘度：旗标 liudu = slain，倒下「我儿……零陵……」', f62.liudu === 'slain' && b62.some(t => t.includes('我儿')), { f62, b62 });
 const a62j = await L('stages/2/after/0', 'zhaoyun', [], { liudu: 'joined' }), a62s = await L('stages/2/after/0', 'zhaoyun', [], { liudu: 'slain' });
 ck('6-2 幕间：劝降时「刘贤缚邢道荣来献」，斩杀时「刘度死于阵中」', a62j.some(t => t.includes('缚邢道荣')) && a62s.some(t => t.includes('死于阵中')) && !a62s.some(t => t.includes('缚邢道荣')), { a62j: a62j.length, a62s: a62s.length });
+// 刘贤 / 邢道荣台词（2026-11-18 补，带对白立绘）
+const br62 = await L('stages/2/brief', 'zhaoyun', []), ph62 = await L('stages/2/bossPhase', 'zhaoyun', []), who = (arr, id, kw) => arr.some(t => t.endsWith('@' + id) && (!kw || t.includes(kw)));
+ck('6-2：军情邢道荣自称「零陵上将」、刘贤劝守；二阶段刘贤应父亲；幕间劝降时刘贤献邢道荣、邢道荣服了，斩杀时刘贤开城（邢道荣不出声）',
+  who(br62, 'xingdaorong', '零陵上将') && who(br62, 'liuxian') && who(ph62, 'liuxian') && who(a62j, 'liuxian', '邢道荣在此') && who(a62j, 'xingdaorong') && who(a62s, 'liuxian', '开城') && !who(a62s, 'xingdaorong') && !who(a62s, 'liuxian', '邢道荣在此'),
+  { br62: br62.filter(t => /@(liuxian|xingdaorong)$/.test(t)), ph62, a62j: a62j.filter(t => /@(liuxian|xingdaorong)$/.test(t)) });
+// 对白立绘补齐（2026-11-18）：第一、二章 9 人 + 徐庶 / 刘贤 / 邢道荣都有 ink_cast 立绘键
+const noFace = await p.evaluate(async () => { const T = await import('/src/data/story/types.ts'); return ['jianyong', 'zhangliang', 'zhangbao', 'zhangjiao', 'huaxiong', 'xurong', 'dongzhuo', 'lubu', 'zhangshiping', 'xushu', 'liuxian', 'xingdaorong'].filter(k => T.STORY_CAST[k]?.portrait !== 'ink_cast_' + k); });
+ck('对白立绘：第一、二章 9 人与徐庶 / 刘贤 / 邢道荣都接上 ink_cast 立绘', noFace.length === 0, noFace);
 
 // 3) 6-3（赵云主公）：黄忠登场 → 劝降 spared_huangzhong = true → 韩玄登场「黄忠通敌」→ 韩玄倒下「魏延！你——」
 await jingnan(3, 'zhaoyun'); await readAll();

@@ -1,6 +1,6 @@
 // 剧情美术截图（2026-11-18 第三、四章）：在战斗场景里直接播指定剧情节点的卷轴，翻到指定人物说话的那一页截图，
 // 看对白水墨立绘 + 章节插画的实际效果。电脑布局 1280×720，输出 assets/review/story-art/<节点>-<人物>.png。
-// 用法：BASE=http://127.0.0.1:5173/ node tools/shot-story-art.mjs（SET=ch56 拍第五、六章新立绘）
+// 用法：BASE=http://127.0.0.1:5173/ node tools/shot-story-art.mjs（SET=ch56 拍第五、六章新立绘；SET=ch12 拍第一、二章 + 徐庶 / 刘贤 / 邢道荣）
 import { chromium } from 'playwright';
 import { mkdirSync } from 'node:fs';
 const BASE = process.env.BASE ?? 'http://127.0.0.1:5173/', out = 'assets/review/story-art';
@@ -18,7 +18,13 @@ const SHOTS_CH56 = [
   ['jingnan.open', 'lusu', 'liubei'], ['jingnan-1.bossIntro', 'zhaofan', 'zhaoyun'], ['jingnan-2.bossIntro', 'liudu', 'zhangfei'],
   ['jingnan-3.intro.hanxuan', 'hanxuan', 'guanyu'], ['jingnan-3.intro.huangzhong', 'yangling', 'huangzhong'],
 ];
-const SHOTS = process.env.SET === 'ch56' ? SHOTS_CH56 : SHOTS_CH34;
+// 第一、二章 + 徐庶 / 刘贤 / 邢道荣（2026-11-18 夜补的对白立绘）；董卓只有 bark（战斗里是气泡，不出立绘），这里当卷轴播一下验立绘
+const SHOTS_CH12 = [
+  ['huangjin-2.brief', 'jianyong', 'liubei'], ['huangjin-1.bossIntro', 'zhangliang', 'liubei'], ['huangjin-2.bossIntro', 'zhangbao', 'liubei'], ['huangjin-3.bossIntro', 'zhangjiao', 'liubei'],
+  ['hulao-1.bossIntro', 'huaxiong', 'guanyu'], ['hulao-2.bossIntro', 'xurong', 'liubei'], ['hulao-3.dongzhuo_enter', 'dongzhuo', 'liubei'], ['qunxiong.open', 'lubu', 'liubei'],
+  ['chibi.open', 'xushu', 'liubei'], ['jingnan-2.brief', 'xingdaorong', 'zhaoyun'], ['jingnan-2.brief', 'liuxian', 'zhaoyun'],
+];
+const SHOTS = process.env.SET === 'ch56' ? SHOTS_CH56 : process.env.SET === 'ch12' ? SHOTS_CH12 : SHOTS_CH34;
 const b = await chromium.launch({ channel: 'chrome', headless: true });
 const p = await (await b.newContext({ viewport: { width: 1280, height: 720 } })).newPage();
 const errors = []; p.on('pageerror', e => errors.push(e.message)); p.on('console', m => { if (m.type() === 'error') errors.push(m.text()); });
@@ -32,7 +38,7 @@ for (const [id, who, lord] of SHOTS) {
     for (const o of s.children.list.filter(o => o.name?.startsWith?.('story-'))) o.destroy();
     let node = null;
     for (const c of Object.values(D.STORY_CHAPTERS)) {
-      const all = [c.open, c.close, ...(c.closeAfter ?? []), ...(c.camp ?? []), ...Object.values(c.stages).flatMap(st => [...(st.before ?? []), st.brief, ...(st.after ?? []), st.choice, st.bossIntro, st.bossPhase, st.bossFall,
+      const all = [c.open, c.close, ...(c.closeAfter ?? []), ...(c.camp ?? []), ...(c.barks ?? []), ...Object.values(c.stages).flatMap(st => [...(st.before ?? []), st.brief, ...(st.after ?? []), st.choice, st.bossIntro, st.bossPhase, st.bossFall,
         ...Object.values(st.bossIntros ?? {}), ...Object.values(st.bossPhases ?? {}), ...Object.values(st.bossFalls ?? {})])];
       node = all.find(n => n?.id === id) ?? node;
     }

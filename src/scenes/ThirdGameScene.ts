@@ -88,7 +88,7 @@ export function thirdGameSceneClass(Base:typeof GameScene,cfg:ArcSceneConfig=THI
   if(STORY_CHAPTERS[cfg.arc])this.setupStory(cfg.arc,this.thirdStage);
   /* 5-1「七进七出」：赵云在队击杀虎豹骑 77 骑（systems/ChibiStoryHooks.ts） */
   this.qijin=cfg.arc==='chibi'&&this.thirdStage===1?new QijinTracker({team:()=>[this.runConfig.character,...(this.followers?.members??[]).map(m=>m.recruit.hero??'')],banner:(t,c)=>{this.showWaveBanner(t,false,c);this.sfx.play('gong');},bark:()=>{this.storyDir?.line('chibi-1.qijin',this.player.sprite);}}):undefined;
-  this.dianwei=cfg.arc==='qunxiong'&&this.thirdStage===2?new DianweiGuard({scene:this,player:this.player,enemies:()=>this.enemies,hit:(e,d)=>{this.hitEnemy(e,d,this.combatNow,'melee',true,false);},banner:(t,d,c)=>this.showWaveBanner(t,d,c)},this.combatNow):undefined;
+  this.dianwei=cfg.arc==='qunxiong'&&this.thirdStage===2?new DianweiGuard({scene:this,player:this.player,enemies:()=>this.enemies,allies:()=>this.allies,hit:(e,d)=>{this.hitEnemy(e,d,this.combatNow,'melee',true,false);},banner:(t,d,c)=>this.showWaveBanner(t,d,c)},this.combatNow):undefined;
   this.hudTexts.chapter.setText(this.chapter.name);this.events.once('shutdown',()=>{this.dianwei?.clear();this.dianwei=undefined;this.spearWarnings?.clear();this.spearWarnings=undefined;this.enemyCamps?.clear();this.enemyCamps=undefined;this.controller?.clear();this.controller=undefined;this.fireShips?.clear();this.fireShips=undefined;});
  }
  /** 5-1「七进七出」计数（只在赤壁第一关建） */
@@ -144,7 +144,7 @@ export function thirdGameSceneClass(Base:typeof GameScene,cfg:ArcSceneConfig=THI
  protected bossHasDeathArt(){return !!this.controller;}
  protected killEnemy(enemy:Enemy){this.qijin?.onKill(enemy);this.enemyCamps?.onDestroyed(enemy,this.combatNow);if(enemy===this.boss){if(this.bossRetreats(enemy))this.controller?.clear();else this.controller?.defeat(); /* 败退型（8-1 张郃、5-3 曹仁）不倒地、淡出退走 */
   // 典韦守营结果（剧情旗标 dianwei，第四章、编年史读）：张绣倒下时典韦还活着 = saved（军功 +80），否则 fell
-  if(this.dianwei){const saved=this.dianwei.alive;setStoryFlag('dianwei',saved?'saved':'fell');if(saved){addMerit(DIANWEI.meritSaved);this.showWaveBanner('典韦得救',false,'恶来无恙 · 军功 +'+DIANWEI.meritSaved);}}}
+  if(this.dianwei){const saved=this.dianwei.alive;this.dianwei.finish();setStoryFlag('dianwei',saved?'saved':'fell');if(saved){addMerit(DIANWEI.meritSaved);this.showWaveBanner('典韦得救',false,'恶来无恙 · 军功 +'+DIANWEI.meritSaved);}}}
   super.killEnemy(enemy);}
  update(time:number,delta:number){const before=this.combatNow;super.update(time,delta);if(this.combatNow>before&&!this.over&&this.mode==='none'){if(!this.awaitingChest)this.enemyCamps?.update(this.combatNow);this.dianwei?.update((this.combatNow-before)/1000,this.combatNow);this.fireShips?.update(this.combatNow);}this.spearWarnings?.draw(this.enemies,this.spear,this.combatNow,this.player,!this.over);this.controller?.updateDeath(delta);if(this.boss?.active&&this.controller)this.hudTexts.bossEnergy.setText(this.controller.label+(this.legion.count>12?' · 军势护阵':''));}
  protected renderRecruit(){if(this.resting){this.campUI?.open(cfg.campPrefix+this.thirdStage,cfg.stages[this.thirdStage]?.name??'返回天下地图');return;}super.renderRecruit();}

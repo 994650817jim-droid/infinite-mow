@@ -113,7 +113,7 @@ export class Follower {
     let dmgLv = 1, hpLv = 1; this.level = 1;
     try { const key = (recruit.hero ?? recruit.id) as HeroKey; this.level = Math.min(heroLevel(key), followerLevelCap()); // 随行等级不超过随行上限（主公不会出现在随行里）
       if (recruit.hero) { const a = heroAttrs(key); dmgLv = 1 + FOLLOW.mightDamage * a.strength; hpLv = 1 + FOLLOW.constitutionHp * a.strength; }
-      else { const pl = pointsAt(this.level); dmgLv = 1 + FOLLOW.levelDamage * pl; hpLv = 1 + FOLLOW.levelHp * pl; } } catch { /* 等级存档不可用 */ } // 2026-11-19：招来的武将按点数等级成长（Lv20 后每 4 级算 1 级）
+      else { const pl = pointsAt(this.level); dmgLv = 1 + FOLLOW.levelDamage * pl; hpLv = 1 + FOLLOW.levelHp * pl; } } catch { /* 等级存档不可用 */ } // 2026-11-19：招来的武将按点数等级成长（Lv25 后每 2–3 级算 1 级）
     this.damage = t.damage * q * (hero?.damageMul ?? 1) * (1 + b.damage) * (1 + g.damage) * (1 + g.crit) * dmgLv;
     this.maxHp = Math.round(t.hp * q * (hero?.hpMul ?? 1) * (1 + b.hp) * (1 + g.hp) * hpLv * leaderLevelHp); this.hp = this.maxHp;
     this.speedMul = t.speed * (hero?.speedMul ?? 1) * (1 + g.move);

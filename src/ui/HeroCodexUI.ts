@@ -270,7 +270,7 @@ export class HeroCodexUI {
   /** 属性页：每项一张漆卡（图标 · 名字 · 效果 · 点数刻度 · +），主属性另起一行列专精三档。 */
   private deskAttrs(x: number, y: number, w: number, bottom: number): void {
     const a = heroAttrs(this.hero), free = heroFreePoints(this.hero), cost = respecCost(this.hero), spent = Object.values(a).reduce((n, v) => n + v, 0), cap = attributeCap(heroInfo(this.hero).level);
-    const head = this.text(x + 4, y + 8, `未分配属性点 ${free}　（Lv20 前每级 1 点、之后每 4 级 1 点，单项最多 ${cap} 点）`, 14, free ? '#f3d48a' : '#b9a57a').setOrigin(0, .5).setName('codex-free');
+    const head = this.text(x + 4, y + 8, `未分配属性点 ${free}　（Lv25 前每级 1 点、之后每 2–3 级 1 点，单项最多 ${cap} 点）`, 14, free ? '#f3d48a' : '#b9a57a').setOrigin(0, .5).setName('codex-free');
     const head0 = head.text, ids = Object.keys(ATTRIBUTE_INFO) as AttributeId[], cardH = Math.min(66, Math.floor((bottom - y - 70) / ids.length));
     ids.forEach((id, i) => {
       const ry = y + 24 + i * cardH, primary = primaryAttribute(this.hero) === id, h = cardH - 6, g = this.add(this.scene.add.graphics());
@@ -394,7 +394,7 @@ export class HeroCodexUI {
 
   private renderAttrs(x: number, y: number, w: number): void {
     const a = heroAttrs(this.hero), free = heroFreePoints(this.hero), cost = respecCost(this.hero), spent = Object.values(a).reduce((n, v) => n + v, 0);
-    const head = this.text(x, y, `未分配属性点 ${free}　（Lv20 前每级 1 点、之后每 4 级 1 点，单项最多 ${attributeCap(heroInfo(this.hero).level)} 点）`, 14, free ? '#f3d48a' : '#b9a57a').setName('codex-free');
+    const head = this.text(x, y, `未分配属性点 ${free}　（Lv25 前每级 1 点、之后每 2–3 级 1 点，单项最多 ${attributeCap(heroInfo(this.hero).level)} 点）`, 14, free ? '#f3d48a' : '#b9a57a').setName('codex-free');
     (Object.keys(ATTRIBUTE_INFO) as AttributeId[]).forEach((id, i) => {
       const ry = y + 40 + i * 44;
       if (this.scene.textures.exists(attributeIcon(id))) this.add(this.scene.add.image(x + 16, ry + 12, attributeIcon(id)).setDisplaySize(28, 28));

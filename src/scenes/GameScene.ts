@@ -3099,7 +3099,7 @@ export class GameScene extends Phaser.Scene {
       this.tweens.killTweensOf(notice); notice.destroy();
     }
     const match = /^第 (\d+)\/(\d+) 波 · (.+)$/.exec(text);
-    const label = this.add.container(GAME_WIDTH / 2, GAME_HEIGHT * .21 + (this.battleTrack?.root.visible ? 26 : 0)) // 五段关：让开顶部战况线
+    const label = this.add.container(GAME_WIDTH / 2, GAME_HEIGHT * .21 + (this.battleTrack?.root.visible ? 8 : 0)) // 五段关：计时器 / 关名下移后，横幅也略往下
       .setScrollFactor(0).setDepth(DEPTH.overlay - 10).setName('combat-notice').setVisible(this.mode === 'none');
     const caption = this.add.text(0, -21, captionText ?? (match ? `第 ${match[1]} / ${match[2]} 波` : '战场警报'), {
       fontFamily: FONT, fontSize: IS_DESKTOP ? '13px' : '14px', color: danger ? '#efb39c' : '#e1cf9d',
@@ -3628,7 +3628,7 @@ export class GameScene extends Phaser.Scene {
   /** 战斗中武将升级：每级一次三选一并给 1 个属性点（正式战斗立刻写入存档）。 */
   protected onHeroLevelUp(gained: number): void {
     const g = this.player.growth, id = this.runConfig.character;
-    const fromLv = this.heroLv, pts = attributePointsBetween(fromLv, this.player.level); // 2026-11-19：Lv20 后每 4 级才给 1 点（三选一照给）
+    const fromLv = this.heroLv, pts = attributePointsBetween(fromLv, this.player.level); // 2026-11-19：Lv25 后每 2–3 级才给 1 点（三选一照给）
     this.heroLv = this.player.level; this.picksGiven += gained; this.pendingLevels += gained; g.attrMax = attributeCap(this.player.level);
     this.player.heal(vigorHp(this.player.level) - vigorHp(fromLv)); // 体魄：升级多出的生命上限直接补满这一截
     const room = (Object.values(g.attributes) as number[]).reduce((n, v) => n + g.attrMax - v, 0) - g.unallocated;
@@ -3675,6 +3675,8 @@ export class GameScene extends Phaser.Scene {
         },
       }, plan);
       this.battleTrack = new BattleTrack(this, plan);
+      // 战况线贴着屏幕上沿：计时器、关名往下挪一截（不和战况线叠）
+      this.hudTexts.timer.setY(BattleTrack.HEIGHT + 3); this.hudTexts.chapter.setY(BattleTrack.HEIGHT + 33);
       this.fortunes = new BattleFortunes({
         scene: this, player: () => this.player, elapsed: () => this.elapsed,
         place: (x, y) => { let p = { x, y }; if (this.arena) p = this.arena.clampPoint(p.x, p.y); if (this.terrain) p = this.terrain.free(p.x, p.y, 48); return p; },
@@ -3685,7 +3687,7 @@ export class GameScene extends Phaser.Scene {
         offer: k => { this.fortuneQueue.push(k); },
       }, plan);
       this.hudTexts.wave.setVisible(false);
-    } else this.hudTexts.wave.setVisible(true);
+    } else { this.hudTexts.wave.setVisible(true); this.hudTexts.timer.setY(22); this.hudTexts.chapter.setY(56); }
     this.phasedFor = this.chapter;
   }
   /** 新卡池（五段主线关才有）：战法位按章节概率换新卡（systems/LevelCards）。 */
@@ -4460,7 +4462,7 @@ export class GameScene extends Phaser.Scene {
     if (!this.player || !this.attributePointsText) return;
     const growth=this.player.growth;
     {const close=this.attributePanel.getByName('attributes-close') as Phaser.GameObjects.Text|null;close?.setText(this.attributeReturn==='none'?'继续战斗':'返回暂停菜单');if(close&&!close.getData('hitBox')){lqHitBox(close,220,44);close.setData('hitBox',true);}}
-    this.attributePointsText.setText(growth.unallocated>0?`可分配属性点 ${growth.unallocated}`:`属性点已用完 · Lv20 前每级 1 点、之后每 4 级 1 点（当前 Lv.${this.heroLv}）`).setColor(growth.unallocated>0?(IS_DESKTOP?'#efd399':'#1c160c'):'#91ab98').setBackgroundColor(growth.unallocated>0&&!IS_DESKTOP?'#e2bd6a':'#00000000');if(IS_DESKTOP)this.attributePointsText.setFontFamily(HEADING_FONT).setFontSize(growth.unallocated>0?20:15).setStroke('#120904',growth.unallocated>0?4:0);
+    this.attributePointsText.setText(growth.unallocated>0?`可分配属性点 ${growth.unallocated}`:`属性点已用完 · Lv25 前每级 1 点、之后每 2–3 级 1 点（当前 Lv.${this.heroLv}）`).setColor(growth.unallocated>0?(IS_DESKTOP?'#efd399':'#1c160c'):'#91ab98').setBackgroundColor(growth.unallocated>0&&!IS_DESKTOP?'#e2bd6a':'#00000000');if(IS_DESKTOP)this.attributePointsText.setFontFamily(HEADING_FONT).setFontSize(growth.unallocated>0?20:15).setStroke('#120904',growth.unallocated>0?4:0);
     this.attributePauseText?.setText(`分配属性点 · ${growth.unallocated}`);
     const weapon=this.player.weapons[0];
     this.attributeWeaponText?.setText((weapon?weaponName(weapon.id,this.runConfig.character):'')+' · '+growth.masteryLabel());

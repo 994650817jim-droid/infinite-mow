@@ -8,10 +8,10 @@ const TABLE: readonly number[] = [
   120, 150, 180, 210, 240,        // Lv5–10（第一章）
 ];
 /**
- * 2026-11-19 波数 / 等级重做（wave-progression-redesign.md §3.3）：上限 10 / 18 / 26 / 34 / 42 / 48 / 54 / 60 / 66 / 72 / 78 / 84，
- * 每章可得 = 3 关 × 约 320 局内经验 × 章节倍率 + 3 × 首通，摊到本章要升的级数（二～五章 8 级、六章起 6 级）。实现后由平衡会话实测再校。
+ * 2026-11-19 波数 / 等级重做（wave-progression-redesign.md §3.3，用户选上限 B：10 / 14 / … / 54，每章 +4）：
+ * 每章可得 = 3 关 × 约 320 局内经验 × 章节倍率 + 3 × 首通，摊到本章的 4 级。实现后由平衡会话实测再校。
  */
-const BANDS: ReadonlyArray<readonly [number, number]> = [[18, 275], [26, 380], [34, 490], [42, 600], [48, 945], [54, 1090], [60, 1235], [66, 1380], [72, 1525], [78, 1670], [84, 1815]];
+const BANDS: ReadonlyArray<readonly [number, number]> = [[14, 550], [18, 765], [22, 985], [26, 1200], [30, 1420], [34, 1635], [38, 1855], [42, 2070], [46, 2290], [50, 2505], [54, 2725]];
 export function heroXpToNext(level: number): number {
   const lv = Math.max(1, Math.floor(level));
   if (lv - 1 < TABLE.length) return TABLE[lv - 1];

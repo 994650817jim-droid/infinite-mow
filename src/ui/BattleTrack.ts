@@ -13,7 +13,10 @@ const ICON: Record<PhaseKind, string> = { vanguard: 'enemy', elite: 'elite', eve
 const GLYPH: Record<PhaseKind, string> = { vanguard: '先', elite: '精', event: '伏', lieutenant: '将', boss: '帅' };
 const KIND_NAME: Record<PhaseKind, string> = { vanguard: '先锋', elite: '精锐', event: '事件', lieutenant: '副将', boss: '首领' };
 
+/** 顶部细带：高度、线的位置（地图像素，屏幕坐标）。场景按 BattleTrack.HEIGHT 把计时器 / 关名往下挪。 */
+const STRIP_H = 31, LINE_Y = 10;
 export class BattleTrack {
+  static readonly HEIGHT = STRIP_H;
   readonly root: Phaser.GameObjects.Container;
   private readonly line: Phaser.GameObjects.Graphics;
   private readonly icons: Array<{ img?: Phaser.GameObjects.Image; seal: Phaser.GameObjects.Container; x: number; kind: PhaseKind }> = [];
@@ -24,31 +27,32 @@ export class BattleTrack {
   /** 测试用。 */
   readonly stats = { phase: -1, progress: 0, iconsLit: 0 };
 
-  constructor(private readonly scene: Phaser.Scene, private readonly plan: PhasePlan, y = 83) {
-    const desktop = GAME_WIDTH >= 900; this.w = desktop ? 300 : 240;
-    this.root = scene.add.container(GAME_WIDTH / 2, y).setScrollFactor(0).setDepth(DEPTH.hud + 2).setName('battle-track');
-    const back = scene.add.graphics();
-    back.fillStyle(0x16100a, .42).fillRoundedRect(-this.w / 2 - 16, -11, this.w + 32, 22, 10);
-    back.lineStyle(1, 0xc9a86a, .35).strokeRoundedRect(-this.w / 2 - 16, -11, this.w + 32, 22, 10);
-    back.lineStyle(2, 0x6b5638, .9).lineBetween(-this.w / 2, 0, this.w / 2, 0);
+  constructor(private readonly scene: Phaser.Scene, private readonly plan: PhasePlan) {
+    // 2026-11-19 用户「顶部「战况」线放在屏幕最上面」：贴着屏幕上沿的一条细带（上边不留圆角），计时器 / 关名由场景往下挪（GameScene.applyPhases）
+    const desktop = GAME_WIDTH >= 900, L = LINE_Y; this.w = desktop ? 300 : 240;
+    this.root = scene.add.container(GAME_WIDTH / 2, 0).setScrollFactor(0).setDepth(DEPTH.hud + 2).setName('battle-track');
+    const back = scene.add.graphics(), bw = this.w + 32, r = { tl: 0, tr: 0, bl: 10, br: 10 };
+    back.fillStyle(0x16100a, .5).fillRoundedRect(-bw / 2, 0, bw, STRIP_H, r);
+    back.lineStyle(1, 0xc9a86a, .35).strokeRoundedRect(-bw / 2, -1, bw, STRIP_H + 1, r);
+    back.lineStyle(2, 0x6b5638, .9).lineBetween(-this.w / 2, L, this.w / 2, L);
     this.line = scene.add.graphics();
     this.root.add([back, this.line]);
     const bossAt = Math.max(1, plan.bossAt);
     for (const p of plan.phases) {
       const x = -this.w / 2 + this.w * Math.min(1, p.start / bossAt);
-      const seal = scene.add.container(x, 0).setName('track-' + p.kind);
-      const g = scene.add.graphics(); const r = p.kind === 'boss' ? 10 : 8;
+      const seal = scene.add.container(x, L).setName('track-' + p.kind);
+      const g = scene.add.graphics(); const r = p.kind === 'boss' ? 8 : 7;
       g.fillStyle(p.kind === 'boss' ? 0x8a1a10 : 0x2a1f14, 1).fillCircle(0, 0, r).lineStyle(1.5, p.kind === 'boss' ? 0xf0c070 : 0xc9a86a, 1).strokeCircle(0, 0, r);
       const t = scene.add.text(0, 0, GLYPH[p.kind], { fontFamily: FONT, fontSize: p.kind === 'boss' ? '12px' : '10px', color: p.kind === 'boss' ? '#ffe2a8' : '#e8d3a6', resolution: 2 }).setOrigin(.5);
       seal.add([g, t]); this.root.add(seal);
       this.icons.push({ seal, x, kind: p.kind });
     }
-    this.flag = scene.add.container(-this.w / 2, -2).setName('track-flag');
+    // 进度标：线上一枚朱红菱形（贴着屏幕上沿，旗杆会伸出屏幕外，所以不用小旗）
+    this.flag = scene.add.container(-this.w / 2, L).setName('track-flag');
     const fg = scene.add.graphics();
-    fg.lineStyle(1.5, 0x3a2412, 1).lineBetween(0, 2, 0, -16);
-    fg.fillStyle(0xc0301c, 1).fillTriangle(0, -16, 11, -12.5, 0, -9).lineStyle(1, 0x5a120a, 1).strokeTriangle(0, -16, 11, -12.5, 0, -9);
+    fg.fillStyle(0xc0301c, 1).fillPoints([{ x: 0, y: -6 }, { x: 5, y: 0 }, { x: 0, y: 6 }, { x: -5, y: 0 }], true).lineStyle(1.2, 0xf3d48a, 1).strokePoints([{ x: 0, y: -6 }, { x: 5, y: 0 }, { x: 0, y: 6 }, { x: -5, y: 0 }], true);
     this.flag.add(fg); this.root.add(this.flag);
-    this.caption = scene.add.text(0, 13, '', { fontFamily: FONT, fontSize: desktop ? '11px' : '10px', color: '#e7d6ae', resolution: 2, stroke: '#140e08', strokeThickness: 3 }).setOrigin(.5, 0).setName('track-caption');
+    this.caption = scene.add.text(0, L + 13, '', { fontFamily: FONT, fontSize: desktop ? '11px' : '10px', color: '#e7d6ae', resolution: 2, stroke: '#140e08', strokeThickness: 3 }).setOrigin(.5, .5).setName('track-caption');
     this.root.add(this.caption);
     this.loadIcons();
   }
@@ -59,7 +63,7 @@ export class BattleTrack {
       if (!this.root.active || !s.textures.exists(MAP_ICONS)) return;
       for (const ic of this.icons) {
         if (ic.img || !s.textures.get(MAP_ICONS).has(ICON[ic.kind])) continue;
-        const sz = ic.kind === 'boss' ? 24 : 19;
+        const sz = ic.kind === 'boss' ? 20 : 16;
         ic.img = s.add.image(0, 0, MAP_ICONS, ICON[ic.kind]).setDisplaySize(sz, sz);
         ic.seal.removeAll(true); ic.seal.add(ic.img);
         if (ic.kind === 'boss') ic.seal.add(s.add.text(0, 1, '帅', { fontFamily: FONT, fontSize: '11px', color: '#9a1a10', resolution: 2 }).setOrigin(.5));
@@ -88,7 +92,7 @@ export class BattleTrack {
     if (phase !== this.cur) { this.cur = phase; this.stats.phase = phase; this.paintStates(); }
     const k = Math.max(0, Math.min(1, elapsed / Math.max(1, this.plan.bossAt))); this.stats.progress = k;
     const x = -this.w / 2 + this.w * k; this.flag.x = x;
-    this.line.clear().lineStyle(2.5, 0xe8b860, .95).lineBetween(-this.w / 2, 0, x, 0);
+    this.line.clear().lineStyle(2.5, 0xe8b860, .95).lineBetween(-this.w / 2, LINE_Y, x, LINE_Y);
     const nx = this.plan.phases[phase + 1];
     if (bossOn || !nx) {
       this.caption.setText(bossOn ? '首领 · ' + bossName : '');

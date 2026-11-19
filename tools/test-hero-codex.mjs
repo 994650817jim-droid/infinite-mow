@@ -12,7 +12,7 @@ const p = await b.newPage({ viewport: { width: 1280, height: 720 } });
 p.on('pageerror', e => errors.push(e.message));
 p.on('console', m => { if (m.type() === 'error' && !/favicon|Failed to load resource/.test(m.text())) errors.push('console ' + m.text()); });
 await p.addInitScript(() => {
-  window.__mod = async part => import(performance.getEntriesByType('resource').map(e => e.name).find(n => n.includes(part)) ?? ('/src/' + part.replace(/^\//, '')));
+  window.__mod = async part => import(performance.getEntriesByType('resource').map(e => e.name).find(n => n.includes(part)) ?? ('/' + part.replace(/^\//, ''))); // 2026-11-19：传入的路径已带 /src/，原来拼成 /src/src/
   window.__find = (root, name) => { for (const o of root.list ?? root.getChildren?.() ?? []) { if (o.name === name) return o; if (o.list) { const r = window.__find(o, name); if (r) return r; } } return null; };
   if (!sessionStorage.getItem('seeded')) { localStorage.clear(); localStorage.setItem('im_last_hero', 'zhaoyun'); sessionStorage.setItem('seeded', '1'); }
 });
@@ -79,7 +79,19 @@ const ui = await p.evaluate(async () => {
 });
 ck('武将谱界面：顶部显示残卷和军粮，总览有名字和等级', /武学残卷 \d+ · 军粮 \d+/.test(ui.res ?? '') && ui.name === '赵云' && /Lv\.\d+/.test(ui.level ?? ''), ui);
 ck('属性页有未分配点数和洗点按钮；本命页显示淬炼 2/5 和下一级花费；心得页列出全部战法（≥24）', /未分配属性点/.test(ui.free ?? '') && /洗点/.test(ui.respec ?? '') && /淬炼 2 \/ 5/.test(ui.temper ?? '') && /军粮 700/.test(ui.temperBtn ?? '') && /心得 2 \/ 2/.test(ui.xinde ?? '') && ui.tactics >= 24, ui);
-for (const tab of ['overview', 'attrs', 'weapon', 'xinde']) { await p.evaluate(t => { const r = window.__game.scene.getScene('GameScene').children.getByName('hero-codex'); window.__find(r, 'codex-tab-' + t).emit('pointerdown'); }, tab); await p.waitForTimeout(150); await p.screenshot({ path: `${out}/desktop-${tab}.png` }); }
+// 2026-11-19 武将谱改版：名字两侧 ‹ › 切换上一位 / 下一位武将（循环），页签保持不变；电脑版只有一个水墨主按钮
+const nav = await p.evaluate(async () => {
+  const r = window.__game.scene.getScene('GameScene').children.getByName('hero-codex'), f = n => window.__find(r, n), w = () => new Promise(z => setTimeout(z, 80)), o = {};
+  f('codex-tab-weapon').emit('pointerdown'); await w(); o.start = f('codex-name')?.text;
+  f('codex-next').emit('pointerdown'); await w(); o.next = f('codex-name')?.text; o.tabKept = !!f('codex-temper');
+  f('codex-prev').emit('pointerdown'); await w(); f('codex-prev').emit('pointerdown'); await w(); o.wrap = f('codex-name')?.text;
+  f('codex-next').emit('pointerdown'); await w();
+  const all = []; (function walk(c) { for (const x of c.list ?? []) { all.push(x); walk(x); } })(r);
+  o.ink = all.filter(x => x.type === 'NineSlice' && x.visible && x.texture?.key !== 'codex_header').length; /* 节标题牌也是九宫，不算 */ o.portraitTab = (f('codex-tab-overview').emit('pointerdown'), await w(), !!f('codex-portrait'));
+  return o;
+});
+ck('‹ › 切换武将：赵云 → 下一位 → 回到赵云再往前绕到最后一位；页签保持在本命；电脑版至多一个水墨按钮；总览有挂轴立绘', nav.start === '赵云' && nav.next && nav.next !== '赵云' && nav.tabKept && nav.wrap && nav.wrap !== '赵云' && nav.wrap !== nav.next && nav.ink <= 1 && nav.portraitTab, nav);
+for (const tab of ['overview', 'attrs', 'weapon', 'xinde', 'schools']) { await p.evaluate(t => { const r = window.__game.scene.getScene('GameScene').children.getByName('hero-codex'); window.__find(r, 'codex-tab-' + t).emit('pointerdown'); }, tab); await p.waitForTimeout(150); await p.screenshot({ path: `${out}/desktop-${tab}.png` }); }
 
 ck('控制台无报错', errors.length === 0, errors.slice(0, 6));
 console.log(`\n${pass} passed, ${fail} failed`);

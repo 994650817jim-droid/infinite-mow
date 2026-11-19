@@ -71,6 +71,43 @@ export interface BuildOverviewOpts {
 }
 
 const GOLD = 0xc9a35e, LACQUER = 0x1b120b;
+
+/**
+ * 武将卡头像（2026-11-18 用户：「这里的武将头像改一下」——原来是行走图单帧的小像素人）：
+ * 用主页卷轴 / 图鉴同一套水墨立绘（assets/ink-scroll/<id>.webp，600×900，纹理键 ink_hero_<id>，没加载过就现场加载），
+ * 按武将裁出头肩：fx / fy = 脸中心在原图的横 / 纵比例，w = 裁切宽占原图宽的比例（高按框的比例算），脸放在框上部约 34% 处。
+ * 缺水墨立绘时退回旧的立绘贴图（CharacterDef.portrait）。
+ */
+const INK_FACE: Record<string, { fx: number; fy: number; w: number }> = {
+  zhaoyun: { fx: .47, fy: .12, w: .40 }, guanyu: { fx: .38, fy: .135, w: .44 }, zhangfei: { fx: .36, fy: .175, w: .44 }, machao: { fx: .48, fy: .165, w: .42 },
+  huangzhong: { fx: .34, fy: .145, w: .42 }, zhuge: { fx: .33, fy: .165, w: .40 }, liubei: { fx: .33, fy: .15, w: .42 }, weiyan: { fx: .52, fy: .135, w: .42 },
+  pangtong: { fx: .49, fy: .19, w: .40 }, huangyueying: { fx: .45, fy: .15, w: .40 }, sunshangxiang: { fx: .41, fy: .15, w: .40 }, diaochan: { fx: .31, fy: .195, w: .42 },
+};
+const inkKey = (id: string) => 'ink_hero_' + id;
+/** 画头像进 (x, y, w, h) 框；水墨立绘未加载时先加载、加载完再补画（root 已销毁则不画）。 */
+export function heroPortrait(s: Phaser.Scene, root: Phaser.GameObjects.Container, hero: string, x: number, y: number, w: number, h: number, name: string): void {
+  const face = INK_FACE[hero], key = inkKey(hero); let done = false;
+  const draw = () => {
+    if (done || !root.active || !root.scene) return; done = true;
+    if (face && s.textures.exists(key)) {
+      const src = s.textures.get(key).getSourceImage() as { width: number; height: number }, cw = src.width * face.w, ch = cw * h / w;
+      const cx = Phaser.Math.Clamp(src.width * face.fx - cw / 2, 0, src.width - cw), cy = Phaser.Math.Clamp(src.height * face.fy - ch * .34, 0, src.height - ch), k = w / cw;
+      const im = s.add.image(x - cx * k, y - cy * k, key).setOrigin(0).setScale(k).setCrop(cx, cy, cw, ch).setScrollFactor(0).setName(name).setData('src', 'ink');
+      root.add(im); return;
+    }
+    const c = getCharacter(hero as Parameters<typeof getCharacter>[0]);
+    if (c && s.textures.exists(c.portrait)) {
+      const im = s.add.image(x + w / 2, y, c.portrait).setOrigin(.5, 0).setScrollFactor(0).setName(name).setData('src', 'sprite'), sc = w / im.width * 1.25;
+      im.setScale(sc).setCrop((im.width - w / sc) / 2, 0, w / sc, h / sc); root.add(im);
+    }
+  };
+  if (!face || s.textures.exists(key)) { draw(); return; }
+  s.load.image(key, `assets/ink-scroll/${hero}.webp`);
+  s.load.once('filecomplete-image-' + key, draw);
+  const onErr = (file: Phaser.Loader.File) => { if (file.key === key) { s.load.off('loaderror', onErr); draw(); } };
+  s.load.on('loaderror', onErr);
+  if (!s.load.isLoading()) s.load.start();
+}
 const dots = (lv: number, max: number) => '●'.repeat(Math.max(0, Math.min(lv, max))) + '○'.repeat(Math.max(0, max - lv));
 
 /** 画构筑总览（所有对象 scrollFactor 0，加进 root）。 */
@@ -95,11 +132,9 @@ export function drawBuildOverview(o: BuildOverviewOpts): void {
   {
     frame(L.x, L.y, L.w, L.h);
     const hero = getCharacter(g.character), pad = 10, pw = 62, ph = 74;
-    g0.fillStyle(0x0b0704, .9).fillRect(L.x + pad, L.y + pad, pw, ph).lineStyle(1, GOLD, .7).strokeRect(L.x + pad + .5, L.y + pad + .5, pw - 1, ph - 1);
-    if (s.textures.exists(hero.portrait)) {
-      const im = add(s.add.image(L.x + pad + pw / 2, L.y + pad + 1, hero.portrait).setOrigin(.5, 0)), sc = (pw - 2) / im.width * 1.25;
-      im.setScale(sc).setCrop((im.width - (pw - 2) / sc) / 2, 0, (pw - 2) / sc, (ph - 2) / sc);
-    }
+    g0.fillStyle(0x0b0704, .9).fillRect(L.x + pad, L.y + pad, pw, ph);
+    heroPortrait(s, root, g.character, L.x + pad + 1, L.y + pad + 1, pw - 2, ph - 2, P + '-hero-portrait');
+    g0.lineStyle(1, GOLD, .7).strokeRect(L.x + pad + .5, L.y + pad + .5, pw - 1, ph - 1);
     const nx = L.x + pad + pw + 10;
     text(nx, L.y + pad, hero.name, D ? 19 : 20, '#f6dc9a', true).setName(P + '-hero-name');
     text(nx, L.y + pad + 26, `武将 Lv.${o.level}`, 13, '#d9c58f').setName(P + '-hero-level');

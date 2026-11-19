@@ -18,6 +18,8 @@ export interface StoryScrollOptions {
   skip?: () => void;
   /** 抉择（剧情 choice 节点，第三章起）：最后一页不显示确认按钮，改成这几个选项；点了关掉卷轴并回调 onChoice(序号)。按钮名 name+'-choice-序号'。 */
   choices?: readonly string[]; onChoice?: (index: number) => void;
+  /** 战斗中途的对白（2026-11-19 用户：「对话框想半透明」）：底下战场只压暗一点，漆底半透明、边缘渐淡，不铺营帐横幅；描金边、立绘、文字保持不透明并加阴影。章头 / 军情等整屏剧情不用。 */
+  translucent?: boolean;
 }
 
 const GOLD = 0xc9a35e, GOLD_HI = 0xf3d48a, LACQUER = 0x1b120b;
@@ -26,16 +28,18 @@ export function storyScroll(scene: Phaser.Scene, W: number, H: number, desk: boo
   const root = scene.add.container(0, 0).setScrollFactor(0).setDepth(DEPTH.overlay + 11).setName(o.name);
   const text = (x: number, y: number, value: string, size: number, color: string, heading = false) => scene.add.text(x, y, value, {
     fontFamily: heading ? HEADING_FONT : FONT, fontSize: size + 'px', color, resolution: 2,
-  }).setScrollFactor(0);
+  }).setScrollFactor(0).setShadow(0, 2, '#000000', o.translucent ? 5 : 0, false, !!o.translucent);
   const art = !!o.illustration && scene.textures.exists(o.illustration), extra = art ? (desk ? 90 : 90) : 0;
   const pw = desk ? 640 : Math.min(500, W - 32), ph = (desk ? 420 : 560) + extra, x0 = (W - pw) / 2, y0 = Math.round((H - ph) / 2), cx = W / 2;
   const bannerH = (desk ? 120 : 160) + extra;
 
-  root.add(scene.add.rectangle(W / 2, H / 2, W, H, 0x0c0805, .84).setScrollFactor(0).setInteractive());
+  const tl = !!o.translucent;
+  root.add(scene.add.rectangle(W / 2, H / 2, W, H, 0x0c0805, tl ? .3 : .84).setScrollFactor(0).setInteractive());
   const base = scene.add.graphics().setScrollFactor(0);
-  base.fillStyle(0x000000, .45).fillRoundedRect(x0 + 4, y0 + 6, pw, ph, 10).fillStyle(LACQUER, .98).fillRoundedRect(x0, y0, pw, ph, 10);
+  if (tl) base.fillStyle(LACQUER, .38).fillRoundedRect(x0, y0, pw, ph, 10).fillStyle(LACQUER, .3).fillRoundedRect(x0 + 8, y0 + 8, pw - 16, ph - 16, 8); // 半透明、边缘淡（里面约 57%）
+  else base.fillStyle(0x000000, .45).fillRoundedRect(x0 + 4, y0 + 6, pw, ph, 10).fillStyle(LACQUER, .98).fillRoundedRect(x0, y0, pw, ph, 10);
   root.add(base);
-  const banner = art ? o.illustration! : o.background;
+  const banner = art ? o.illustration! : tl ? undefined : o.background;
   if (banner && scene.textures.exists(banner)) {
     const img = scene.add.image(cx, y0 + 6 + bannerH / 2, banner).setScrollFactor(0).setName(art ? o.name + '-illustration' : o.name + '-banner');
     const bw = pw - 12, s = Math.max(bw / img.width, bannerH / img.height), cw = bw / s, ch = bannerH / s;
@@ -46,7 +50,7 @@ export function storyScroll(scene: Phaser.Scene, W: number, H: number, desk: boo
   }
   // 横幅下沿渐隐到漆底；插画只压暗下面一小段（标题文字在那里），尽量不挡画面
   const fade = scene.add.graphics().setScrollFactor(0), f0 = art ? .62 : .3;
-  for (let i = 0; i < 16; i++) fade.fillStyle(LACQUER, Math.pow((i + 1) / 16, 1.4)).fillRect(x0 + 6, y0 + 6 + bannerH * f0 + bannerH * (1 - f0) * i / 16, pw - 12, bannerH * (1 - f0) / 16 + 1);
+  if (!tl || art) for (let i = 0; i < 16; i++) fade.fillStyle(LACQUER, Math.pow((i + 1) / 16, 1.4)).fillRect(x0 + 6, y0 + 6 + bannerH * f0 + bannerH * (1 - f0) * i / 16, pw - 12, bannerH * (1 - f0) / 16 + 1);
   const trim = scene.add.graphics().setScrollFactor(0);
   trim.lineStyle(2, GOLD, .95).strokeRoundedRect(x0 + 4, y0 + 4, pw - 8, ph - 8, 8).lineStyle(1, GOLD, .45).strokeRoundedRect(x0 + 11, y0 + 11, pw - 22, ph - 22, 5);
   root.add([fade, trim]);

@@ -22,8 +22,8 @@ const guandu = async (stage, lord = 'zhaoyun', flags = {}) => {
   await p.waitForFunction(lord => { const s = window.__game.scene.getScene('GuanduGameScene'); return s?.sys.isActive() && s.player && s.player !== window.__prevT && s.runConfig?.character === lord && s.storyDir?.chapterId === 'guandu'; }, lord, { timeout: 90000 });
   await p.waitForTimeout(700);
 };
-const scroll = () => p.evaluate(T0 => { const s = eval(T0); const c = s.children.list.find(o => o.name?.startsWith('story-') && o.name !== 'story-bark' && o.type === 'Container'); if (!c) return null; return { name: c.name, texts: c.list.filter(o => o.type === 'Text').map(o => o.text).filter(Boolean), mode: s.mode }; }, T);
-const next = () => p.evaluate(T0 => { const s = eval(T0); const c = s.children.list.find(o => o.name?.startsWith('story-') && o.name !== 'story-bark' && o.type === 'Container'); c?.list.find(o => o.name?.endsWith('-next') || o.name === 'story-confirm')?.emit('pointerup'); }, T);
+const scroll = () => p.evaluate(T0 => { const s = eval(T0); const c = s.children.list.find(o => o.name?.startsWith('story-') && o.name !== 'story-bark' && o.name !== 'story-bark-card' && o.type === 'Container'); if (!c) return null; return { name: c.name, texts: c.list.filter(o => o.type === 'Text').map(o => o.text).filter(Boolean), mode: s.mode }; }, T);
+const next = () => p.evaluate(T0 => { const s = eval(T0); const c = s.children.list.find(o => o.name?.startsWith('story-') && o.name !== 'story-bark' && o.name !== 'story-bark-card' && o.type === 'Container'); c?.list.find(o => o.name?.endsWith('-next') || o.name === 'story-confirm')?.emit('pointerup'); }, T);
 /** 读完当前一串卷轴，收集每页文字 */
 const readAll = async () => { const seen = []; for (let i = 0; i < 60; i++) { const sc = await scroll(); if (!sc) { await p.waitForTimeout(400); if (!await scroll() && await p.evaluate(T0 => eval(T0).mode !== 'story', T)) return seen; continue; } seen.push(sc.texts.join('|')); await next(); await p.waitForTimeout(40); } return seen; };
 const played = () => p.evaluate(T0 => [...eval(T0).storyDir.played], T);
@@ -32,7 +32,7 @@ const L = async (node, lord, team, flags = {}) => p.evaluate(async ([node, lord,
 /** 打倒本关首领（关掉升级弹窗） */
 const killBoss = () => p.evaluate(async T0 => { const s = eval(T0), wait = ms => new Promise(r => setTimeout(r, ms)); s.player.damageImmune = true; s.spawnBoss(); for (let k = 0; k < 6 && s.mode === 'levelup'; k++) { s.chooseUpgrade(0); await wait(60); }
   await wait(100); s.boss.invulnerable = false; s.boss.hp = 1; s.debugCrit = false; s.hitEnemy(s.boss, 50, s.combatNow, 'melee', false, true); s.debugCrit = null; await wait(150);
-  return { barks: s.children.list.filter(o => o.name === 'story-bark').map(o => (function deep(x) { return x.type === 'Text' ? x.text : (x.list ?? []).map(deep).join(''); })(o)), banner: (function all(xs) { return xs.flatMap(o => o.type === 'Text' ? [o.text] : all(o.list ?? [])); })(s.children.list).filter(t => /斩颜良|诛文丑/.test(t)), flags: JSON.parse(localStorage.getItem('im_story_v1') ?? '{}').flags ?? {} }; }, T);
+  return { barks: [...s.children.list.filter(o => o.name === 'story-bark').map(o => (function deep(x) { return x.type === 'Text' ? x.text : (x.list ?? []).map(deep).join(''); })(o)), ...(s.data.get('__storyBarkCardLog')?.splice(0) ?? [])] /* 2026-11-18 夜：有说话人的首领台词改出侧边立绘卡（头顶只冒「！」），卡的台词从日志读 */, banner: (function all(xs) { return xs.flatMap(o => o.type === 'Text' ? [o.text] : all(o.list ?? [])); })(s.children.list).filter(t => /斩颜良|诛文丑/.test(t)), flags: JSON.parse(localStorage.getItem('im_story_v1') ?? '{}').flags ?? {} }; }, T);
 
 // 1) 4-1：章头（jade_seal=kept → 程昱一句）→ 幕间「土山约三事」→ 军情（dianwei=saved → 典韦一句）
 await guandu(1, 'zhaoyun', { jade_seal: 'kept', dianwei: 'saved' });
@@ -45,7 +45,7 @@ ck('旗标没有时：不出程昱、典韦那两句', !plainOpen.join().include
 
 // 2) 关羽不在队：颜良默认台词，无横幅、无旗标；二阶段台词
 const phase = await p.evaluate(async T0 => { const s = eval(T0), wait = ms => new Promise(r => setTimeout(r, ms)); s.player.damageImmune = true; s.spawnBoss(); for (let k = 0; k < 6 && s.mode === 'levelup'; k++) { s.chooseUpgrade(0); await wait(60); }
-  s.events.emit('boss-phase', { boss: s.boss, phase: 2, dismount: true, name: '颜良' }); await wait(120); return s.children.list.filter(o => o.name === 'story-bark').map(o => (function deep(x) { return x.type === 'Text' ? x.text : (x.list ?? []).map(deep).join(''); })(o)); }, T);
+  s.events.emit('boss-phase', { boss: s.boss, phase: 2, dismount: true, name: '颜良' }); await wait(120); return [...s.children.list.filter(o => o.name === 'story-bark').map(o => (function deep(x) { return x.type === 'Text' ? x.text : (x.list ?? []).map(deep).join(''); })(o)), ...(s.data.get('__storyBarkCardLog')?.splice(0) ?? [])] /* 2026-11-18 夜：有说话人的首领台词改出侧边立绘卡（头顶只冒「！」），卡的台词从日志读 */; }, T);
 await p.screenshot({ path: `${out}/boss-phase-1280x720.png` });
 ck('二阶段台词：颜良「坠马又如何？」', phase.some(t => t.includes('坠马又如何')), phase);
 const noGy = await killBoss();
@@ -56,7 +56,7 @@ await guandu(1, 'guanyu');
 const gyPages = await readAll();
 ck('关羽主公：称呼去重（张辽「云长，困守土山」、曹操「云长，可愿随我」，不出现「云长、关羽」）', gyPages.some(t => t.includes('云长，困守土山')) && gyPages.some(t => t.includes('云长，可愿随我')) && !gyPages.some(t => t.includes('云长、关羽')), { n: gyPages.length });
 const gy0 = await killBoss(); await p.waitForTimeout(1600); /* 关羽那句在颜良之后 1.4 秒 */
-const gy = { ...gy0, barks: [...gy0.barks, ...(await p.evaluate(T0 => eval(T0).children.list.filter(o => o.name === 'story-bark').map(o => (function deep(x) { return x.type === 'Text' ? x.text : (x.list ?? []).map(deep).join(''); })(o)), T))] };
+const gy = { ...gy0, barks: [...gy0.barks, ...(await p.evaluate(T0 => [...eval(T0).children.list.filter(o => o.name === 'story-bark').map(o => (function deep(x) { return x.type === 'Text' ? x.text : (x.list ?? []).map(deep).join(''); })(o)), ...(eval(T0).data.get('__storyBarkCardLog')?.splice(0) ?? [])] /* 2026-11-18 夜：有说话人的首领台词改出侧边立绘卡（头顶只冒「！」），卡的台词从日志读 */, T))] };
 await p.screenshot({ path: `${out}/yanliang-banner-1280x720.png` });
 ck('4-1 关羽在队：颜良败走时关羽「下回取你首级」，不出「斩颜良」（斩颜良挪到 4-2）', gy.barks.some(t => t.includes('下回取你首级')) && !gy.banner.length && !gy.flags.yanliang_by_guanyu, gy);
 // 首次通关后幕间
@@ -69,7 +69,7 @@ await guandu(2, 'guanyu');
 await readAll();
 const wc = await p.evaluate(async T0 => { const s = eval(T0), wait = ms => new Promise(r => setTimeout(r, ms)); s.player.damageImmune = true; s.spawnBoss(); for (let k = 0; k < 40 && (s.dual?.entries.length ?? 0) < 2; k++) { if (s.mode === 'levelup') s.chooseUpgrade(0); await wait(100); }
   const x = s.dual.entries.find(y => y.id === 'wenchou'); for (const y of s.dual.entries) if (y.parley) y.parley.state = 'skip'; x.enemy.invulnerable = false; x.enemy.hp = 1; s.hitEnemy(x.enemy, 50, s.combatNow, 'melee', false, true); await wait(150);
-  return { barks: s.children.list.filter(o => o.name === 'story-bark').map(o => (function deep(x) { return x.type === 'Text' ? x.text : (x.list ?? []).map(deep).join(''); })(o)), banner: (function all(xs) { return xs.flatMap(o => o.type === 'Text' ? [o.text] : all(o.list ?? [])); })(s.children.list).filter(t => /斩颜良|诛文丑/.test(t)), flags: JSON.parse(localStorage.getItem('im_story_v1') ?? '{}').flags ?? {} }; }, T);
+  return { barks: [...s.children.list.filter(o => o.name === 'story-bark').map(o => (function deep(x) { return x.type === 'Text' ? x.text : (x.list ?? []).map(deep).join(''); })(o)), ...(s.data.get('__storyBarkCardLog')?.splice(0) ?? [])] /* 2026-11-18 夜：有说话人的首领台词改出侧边立绘卡（头顶只冒「！」），卡的台词从日志读 */, banner: (function all(xs) { return xs.flatMap(o => o.type === 'Text' ? [o.text] : all(o.list ?? [])); })(s.children.list).filter(t => /斩颜良|诛文丑/.test(t)), flags: JSON.parse(localStorage.getItem('im_story_v1') ?? '{}').flags ?? {} }; }, T);
 ck('4-2：关羽在队「诛文丑」横幅 + 旗标 wenchou_by_guanyu', wc.banner.some(t => t.includes('诛文丑')) && wc.flags.wenchou_by_guanyu === true && wc.barks.some(t => t.includes('可识得关某')), wc);
 
 // 5) 4-3：开打前过场「许攸夜奔」；关末：章末「乌巢火起」→ 过场「千里走单骑」→ 结算

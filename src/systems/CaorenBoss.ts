@@ -4,6 +4,7 @@ import { CR } from '../data/bossRedesign';
 import { ArcBossV2, type ArcHost } from './ArcBossV2';
 import { ensureMoves, type BossDebug } from './BossKit';
 import { bossFxImage, ensureBossFx } from './BossFx';
+import { castFlourish } from './BossThemeFx';
 
 type Move = 'wall' | 'hold';
 type Gate = 'live' | 'dead' | 'none';
@@ -85,6 +86,7 @@ export class CaorenBoss extends ArcBossV2<Move> {
     this.pose(23, now); if (B.done(now)) this.toIdle(now, this.phase2 ? CR.gapMs2 : CR.gapMs);
   }
   private start(move: Move, now: number): void {
+    castFlourish(this.h.scene, 'caoren5', this.h.boss, move === 'wall' ? CR.wall.windupMs : CR.hold.windupMs, move === 'wall');
     if (move === 'wall') { this.metrics.wall++; this.beat.set('wall', 'windup', now, CR.wall.windupMs); this.h.sfx('chargeWarn'); }
     else { this.metrics.hold++; this.beat.set('hold', 'windup', now, CR.hold.windupMs); this.h.sfx('bossSummon'); }
   }

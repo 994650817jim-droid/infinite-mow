@@ -68,3 +68,60 @@ export function themeShake(scene: Phaser.Scene, heavy: boolean): void {
   const hf = (scene as unknown as { hitFeel?: { shake(k: 'small' | 'medium' | 'big'): void } }).hitFeel;
   hf?.shake(heavy ? 'medium' : 'small');
 }
+
+// ———— 出招起手（cast）特效：2026-11-19 用户「还要增加适合的攻击技能释放特效」 ————
+/**
+ * 每个主题再配一张 4×4 手绘透明图（assets/boss-fx/cast/<主题>.png，每格 256）：行 0 蓄力光（包在首领身上，循环）、行 1 脚下法阵（大招起手，压扁成地面椭圆）、
+ * 行 2 兵器闪光（出手瞬间的星芒）、行 3 狂暴爆发（换阶段）。只放在首领身上 / 脚下，不盖住地面预警（预警在判定范围里，这些只在首领自己周围一圈）。缺图什么都不画。
+ */
+export const BOSS_CAST_READY: readonly BossTheme[] = ['blood', 'yellow', 'dust', 'quake', 'wall', 'lance', 'ink', 'wei'];
+/** 有专属手绘的首领（不走 BossMoveset）借用的起手主题：只加一个贴合的起手光，不动它们原有的画面。 */
+export const CAST_THEME_EXTRA: Readonly<Record<string, BossTheme>> = { zhangjiao: 'yellow', lubu: 'blood', yuanshu: 'wei', simayi: 'ink', caoren5: 'wall', xurong: 'dust' };
+export function castThemeOf(bossId: string): BossTheme | null { return BOSS_THEME_OF[bossId] ?? CAST_THEME_EXTRA[bossId] ?? null; }
+const castKey = (t: BossTheme): string => 'bossfxcast_' + t;
+export function hasBossCast(scene: Phaser.Scene, t: BossTheme | null): t is BossTheme { return !!t && scene.textures.exists(castKey(t)); }
+export function ensureBossCast(scene: Phaser.Scene, t: BossTheme | null): void {
+  if (!t || !BOSS_CAST_READY.includes(t) || scene.textures.exists(castKey(t))) return;
+  scene.load.spritesheet(castKey(t), 'assets/boss-fx/cast/' + t + '.png', { frameWidth: 256, frameHeight: 256 });
+  if (!scene.load.isLoading()) scene.load.start();
+}
+export type CastKind = 'aura' | 'sigil' | 'glint' | 'burst';
+const CAST_ROW: Record<CastKind, number> = { aura: 0, sigil: 1, glint: 2, burst: 3 };
+export const BOSS_CAST_FX = { cap: 16, auraOy: .66, auraFrac: .86, sigilSquash: .6, sigilFrac: .9, glintFrac: .5, burstFrac: .94 } as const;
+let castLive = 0;
+/**
+ * 播一段起手特效。size = 贴图里内容的目标直径（世界像素）；aura 跟着首领（follow 返回首领当前位置，返回 null 就停）、按 ms 循环 4 帧；
+ * sigil 在 ms 内按进度走 4 帧（出现 → 亮起 → 脉冲 → 渐隐）；glint / burst 播一遍。
+ */
+export function playCastFx(scene: Phaser.Scene, t: BossTheme | null, kind: CastKind, x: number, y: number, size: number,
+  o: { ms?: number; alpha?: number; follow?: () => { x: number; y: number } | null; depth?: number } = {}): boolean {
+  if (!hasBossCast(scene, t) || castLive >= BOSS_CAST_FX.cap) return false;
+  const K = BOSS_CAST_FX, first = CAST_ROW[kind] * 4, ms = o.ms ?? (kind === 'glint' ? 300 : kind === 'burst' ? 650 : 700);
+  const img = scene.add.image(x, y, castKey(t), first).setName('boss-cast-' + kind).setAlpha(0);
+  if (kind === 'aura') { const d = size / K.auraFrac; img.setOrigin(.5, K.auraOy).setDisplaySize(d, d).setDepth(o.depth ?? DEPTH.fx); }
+  else if (kind === 'sigil') { const d = size / K.sigilFrac; img.setOrigin(.5, .5).setDisplaySize(d, d * K.sigilSquash).setDepth(o.depth ?? DEPTH.ground + 5); }
+  else if (kind === 'glint') { const d = size / K.glintFrac; img.setOrigin(.5, .5).setDisplaySize(d, d).setDepth(o.depth ?? DEPTH.fx + 1); }
+  else { const d = size / K.burstFrac; img.setOrigin(.5, .62).setDisplaySize(d, d).setDepth(o.depth ?? DEPTH.fx + 1); }
+  const peak = o.alpha ?? (kind === 'aura' ? .6 : kind === 'sigil' ? .55 : .9); castLive++;
+  const st = { u: 0 };
+  scene.tweens.add({ targets: st, u: 1, duration: ms, ease: 'Linear',
+    onUpdate: () => {
+      const u = st.u, f = kind === 'aura' ? Math.floor(u * ms / 130) % 4 : Math.min(3, Math.floor(u * 4));
+      const a = kind === 'glint' || kind === 'burst' ? peak * (1 - Math.max(0, u - .55) / .45) : peak * Math.min(1, u * 6, (1 - u) * 5 + .15);
+      img.setFrame(first + f).setAlpha(Math.max(0, Math.min(1, a)));
+      const p = o.follow?.(); if (p) img.setPosition(p.x, p.y); else if (o.follow) st.u = 1;
+    },
+    onComplete: () => { castLive--; img.destroy(); } });
+  return true;
+}
+/**
+ * 有专属手绘的首领（张角 / 吕布 / 袁术 / 司马懿 / 曹仁五 / 徐荣）起手时只加一个贴合的蓄力光（大招再加脚下法阵），不动它们原有的画面。
+ * bossId 用 CAST_THEME_EXTRA 里的键；第一次调用时才按需载入图（首个招式可能还没图，之后都有）。
+ */
+export function castFlourish(scene: Phaser.Scene, bossId: string, boss: { x: number; y: number; active: boolean }, ms: number, big = false): void {
+  const t = castThemeOf(bossId); if (!t) return;
+  if (!hasBossCast(scene, t)) { ensureBossCast(scene, t); return; }
+  const follow = (): { x: number; y: number } | null => (boss.active ? { x: boss.x, y: boss.y } : null);
+  playCastFx(scene, t, 'aura', boss.x, boss.y, 170, { ms, follow });
+  if (big) playCastFx(scene, t, 'sigil', boss.x, boss.y + 4, 150, { ms, follow: () => (boss.active ? { x: boss.x, y: boss.y + 4 } : null) });
+}

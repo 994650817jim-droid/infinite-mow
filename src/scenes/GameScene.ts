@@ -1127,7 +1127,7 @@ export class GameScene extends Phaser.Scene {
           (performance as unknown as { memory?: { usedJSHeapSize: number } }).memory
             ? Math.round(((performance as unknown as { memory: { usedJSHeapSize: number } }).memory.usedJSHeapSize / 1048576) * 10) / 10
             : '-'
-        }MB`,
+        }MB${this.traits ? ' | ' + this.traits.summary() : ''}`,
       );
     }
 
@@ -1162,7 +1162,7 @@ export class GameScene extends Phaser.Scene {
     this.parley?.update(); // 首领招降：残血弹窗 / 再压一压
     if(this.mode==='none'&&!this.over)this.dual?.update(this.combatNow); // 双首领：招降、配合技、狂怒 / 心乱、退走线
     if(!this.terrainInit&&this.player){this.terrainInit=true;const tc0=terrainConfigFor(this.hardKey(),this.hardStage()),tc=tc0?.auto&&new URLSearchParams(location.search).get('groves')==='0'?{...tc0,auto:undefined}:tc0; /* ?groves=0：关掉自动树林（前后对比截图用） */if(tc){this.terrain=new Terrain(this,tc,tc.auto?this.treeAvoid():undefined);const t=this.terrain;if(tc.auto)this.supplies?.purge((x,y)=>t.treeNear(x,y,50)); /* 自动树林种下后，已经摆在树脚下的补给箱 / 道具收掉 */Ally.terrainMul=(x,y)=>t.speedMul(x,y);this.terrainNav=[...t.navBoxes(),...t.cliffBoxes];if(t.cliffBoxes.length){if(!this.sishuiObstacles)this.sishuiObstacles=new SishuiObstacles([]);this.sishuiObstacles.footprints.push(...t.cliffBoxes);} /* 山崖碰撞并进场景障碍：挡人、刷兵避开、随行也认 */this.events.once('shutdown',()=>{t.clear();if(this.terrain===t){this.terrain=null;Ally.terrainMul=null;}});}}
-    if(!this.traits&&this.player)this.traits=new EnemyTraits({scene:this,player:this.player,enemies:()=>this.enemies,stageKey:()=>this.hardKey()+'.'+this.hardStage(),enabled:()=>!this.hardMode&&!this.runConfig.encounter&&this.mode==='none',
+    if(!this.traits&&this.player)this.traits=new EnemyTraits({scene:this,player:this.player,enemies:()=>this.enemies,stageKey:()=>this.hardKey()+'.'+this.hardStage(),wave:()=>waveIndexAt(this.elapsed,this.chapter.waves)+1,enabled:()=>!this.hardMode&&!this.runConfig.encounter&&this.mode==='none',
       baseDef:k=>{const b=this.chapter.enemies[k];if(!this.yellow)return b;const v=this.yellow.variant(b,this.elapsed);return v.behavior?b:v;},spawn:(k,x,y,def)=>this.spawnEnemy(k,x,y,undefined,false,def),
       fireArrow:(e,tx,ty,d,sp)=>this.fireBolt(this.bullets,e.x,e.y,tx,ty,d*(this.env?.damageMul(e)??1),0,false,sp,enemyArrowTexture(this,e.sprite.texture.key)),hurtTroops:(x,y,r,d)=>this.legion.hurtArea(x,y,r,d,this.combatNow),
       move:(e,nx,ny,dt)=>{e.moveVx=nx*e.def.speed;e.moveVy=ny*e.def.speed;this.advanceEnemy(e,nx,ny,dt);},sfx:k=>this.sfx.play(k)}); // 机制自己定方向（保持距离 / 绕圈）：不用群体寻路的追击速度
@@ -1434,9 +1434,10 @@ export class GameScene extends Phaser.Scene {
       const rawBurst = this.chapter.spawnBurst(paced), burst0 = easy && easy.burstDiv > 1 ? Math.max(1, Math.ceil(rawBurst / easy.burstDiv)) : rawBurst, burst = bossOn ? Math.max(1, Math.ceil(burst0 * B.burstMul)) : burst0;
       for (let i = 0; i < burst; i += 1) {
         if (this.activeEnemyCount() >= cap) break;
-        const special = this.traits?.pick(paced); // 本关新兵种按比例混进普通刷怪（data/enemyRoster STAGE_ROSTER）
-        if (special) { if (this.traits!.spawnSpecial(special)) continue; }
-        if (!this.spawnAroundPlayer(this.chapter.pickEnemy(paced))) break;
+        // 配兵表（data/enemyRoster STAGE_MIX / ROSTER_MIX）：新兵种按权重混进来、受占比和同类上限管；底层兵种不配就用本章原刷怪表
+        const mix = this.traits?.pick();
+        if (mix && 'trait' in mix) { if (this.traits!.spawnSpecial(mix.trait)) continue; }
+        if (!this.spawnAroundPlayer(mix && 'base' in mix ? mix.base : this.chapter.pickEnemy(paced))) break;
       }
     }
 

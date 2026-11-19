@@ -1,11 +1,13 @@
 import Phaser from 'phaser';
 import { actorDepth, DEPTH } from '../config';
 import type { EnemyDef } from '../data/enemies';
-import { ROSTER, STAGE_ROSTER, type RosterType, type TraitDef } from '../data/enemyRoster';
+import { ROSTER, STAGE_MIX, type RosterType, type TraitDef } from '../data/enemyRoster';
 import type { Enemy } from '../entities/Enemy';
 import type { Player } from '../entities/Player';
 import type { EnemyKind } from '../types';
 import { warnFx } from '../ui/WarnFx';
+import { isV2Texture, loadV2TroopSheets, V2_TROOP_SCALE, v2TroopGround } from './ArtStyle';
+import { addCount, canAdd, mixSummary, pickRoster, tallyRoster, type MixPick } from './RosterMix';
 import { playSheet } from './SkillFxSheets';
 
 /**
@@ -21,6 +23,8 @@ export interface TraitHost {
   enemies: () => readonly Enemy[];
   /** 'huangjin.1' 这样的关卡键（同 stageMaps）。 */
   stageKey: () => string;
+  /** 当前第几波（1 起算）。 */
+  wave: () => number;
   /** 只在普通难度、正常关卡里出新兵种。 */
   enabled: () => boolean;
   /** 本章该底层兵种的基础定义（含本章外观）。 */
@@ -51,27 +55,25 @@ export class EnemyTraits {
   readonly metrics = { spawned: 0, slams: 0, heals: 0, throws: 0, fires: 0, bursts: 0, darts: 0, poisonTicks: 0, arrows: 0, enraged: 0 };
 
   constructor(private h: TraitHost) {
-    const list = STAGE_ROSTER[h.stageKey()] ?? [];
-    if (list.some(r => ROSTER[r.id]?.trait.kind === 'lobber') && !h.scene.textures.exists('shu_pass')) {
-      h.scene.load.spritesheet('shu_pass', 'assets/shu/pass.png', { frameWidth: 384, frameHeight: 384 });
-      if (!h.scene.load.isLoading()) h.scene.load.start();
-    }
+    const ids = Object.keys(STAGE_MIX[h.stageKey()]?.traits ?? {}), sc = h.scene;
+    for (const id of [...ids]) { const t = ROSTER[id]; if (t?.trait.kind === 'tamer') ids.push(t.trait.beast); }
+    // 专属图（美术风格会话登记在 ART_V2_FILES；没登记 / 没到的键 isV2Texture 为 false，自动跳过）
+    loadV2TroopSheets(sc, ids.flatMap(id => ROSTER[id] ? [ROSTER[id].art.walk, ROSTER[id].art.attack] : []));
+    if (ids.some(id => ROSTER[id]?.trait.kind === 'lobber') && !sc.textures.exists('shu_pass')) sc.load.spritesheet('shu_pass', 'assets/shu/pass.png', { frameWidth: 384, frameHeight: 384 });
+    if (sc.load.list.size && !sc.load.isLoading()) sc.load.start();
   }
 
   // ———— 刷怪 ————
-  /** 这次普通刷怪要不要换成新兵种（paced = 加速后刷怪时间轴秒数）。 */
-  pick(paced: number): string | null {
+  /** 这次普通刷怪刷什么（data/enemyRoster 的配兵表）：{trait} 新兵种 / {base} 底层兵种 / null 交给本章原有刷怪表。 */
+  pick(): MixPick {
     if (!this.h.enabled()) return null;
-    const list = STAGE_ROSTER[this.h.stageKey()]; if (!list) return null;
-    for (const r of list) {
-      if (paced < (r.from ?? 0) || Math.random() >= r.share) continue;
-      const t = ROSTER[r.id]; if (!t || this.count(r.id) >= t.cap) continue;
-      return r.id;
-    }
-    return null;
+    return pickRoster(this.h.stageKey(), this.h.wave(), tallyRoster(this.h.enemies()));
   }
 
   count(id: string): number { let n = 0; for (const e of this.h.enemies()) if (e.active && e.def.roster === id) n += 1; return n; }
+
+  /** 测试面板：在场新兵种占比。 */
+  summary(): string { return mixSummary(tallyRoster(this.h.enemies())); }
 
   /** 在主将外圈刷一个（蜂拥成群）新兵种；返回刷出的第一个。 */
   spawnSpecial(id: string, at?: { x: number; y: number }): Enemy | null {
@@ -79,16 +81,17 @@ export class EnemyTraits {
     const p = this.h.player, a = Math.random() * Math.PI * 2, d = Math.max(1280, 720) * .5 + Math.random() * 100;
     const cx = at?.x ?? p.x + Math.cos(a) * d, cy = at?.y ?? p.y + Math.sin(a) * d;
     const n = t.group ? Phaser.Math.Between(t.group[0], t.group[1]) : 1;
-    let first: Enemy | null = null;
+    let first: Enemy | null = null; const c = tallyRoster(this.h.enemies());
     for (let i = 0; i < n; i += 1) {
-      if (this.count(id) >= t.cap) break;
+      if (!canAdd(id, c)) break;
       const e = this.spawnOne(t, cx + (i ? Phaser.Math.Between(-70, 70) : 0), cy + (i ? Phaser.Math.Between(-70, 70) : 0));
-      if (!e) break; first ??= e;
+      if (!e) break; first ??= e; addCount(id, c);
     }
     if (first && t.trait.kind === 'tamer') {
       const bt = ROSTER[t.trait.beast];
       if (bt) for (let i = 0; i < t.trait.beasts; i += 1) {
-        const b = this.spawnOne(bt, first.x + Math.cos(i * 2.1) * 50, first.y + Math.sin(i * 2.1) * 50); if (!b) break;
+        if (!canAdd(bt.id, c)) break;
+        const b = this.spawnOne(bt, first.x + Math.cos(i * 2.1) * 50, first.y + Math.sin(i * 2.1) * 50); if (!b) break; addCount(bt.id, c);
         const s = this.state(b); s.owner = first; s.ownerLife = first.spawnId;
       }
     }
@@ -96,12 +99,13 @@ export class EnemyTraits {
   }
 
   private spawnOne(t: RosterType, x: number, y: number): Enemy | null {
-    const base = this.h.baseDef(t.base), art = this.h.scene.textures.exists(t.art.walk), k = art ? 1 : t.fallback.scale;
+    const sc = this.h.scene, base = this.h.baseDef(t.base), art = isV2Texture(t.art.walk) && sc.textures.exists(t.art.walk), k = art ? 1 : t.fallback.scale;
     const def: EnemyDef = {
       ...base, behavior: undefined, variant: undefined, roster: t.id, trait: t.trait,
       hp: base.hp * t.mul.hp, speed: base.speed * t.mul.speed, damage: base.damage * t.mul.damage,
-      xp: Math.max(1, Math.round(base.xp * Math.max(1, Math.sqrt(t.mul.hp)))), radius: base.radius * k,
-      ...(art ? { walkVisual: { texture: t.art.walk, scale: t.art.scale, groundY: t.art.groundY, matched: true }, attackVisual: t.art.attack && this.h.scene.textures.exists(t.art.attack) ? t.art.attack : undefined, tint: undefined }
+      xp: Math.max(1, Math.round(base.xp * Math.max(1, Math.sqrt(t.mul.hp)))), radius: base.radius * (art ? Math.max(1, t.art.cell / 144) : k),
+      // 专属图：同 ArtStyle.withV2Sheets（v2 4×4 表，显示 ×0.5，脚底 = (格 − 7) / 格）
+      ...(art ? { walkVisual: { texture: t.art.walk, scale: V2_TROOP_SCALE, groundY: v2TroopGround(t.art.cell) }, attackVisual: isV2Texture(t.art.attack) && sc.textures.exists(t.art.attack) ? t.art.attack : undefined, tint: 0xffffff }
         : { tint: t.fallback.tint }),
     };
     const e = this.h.spawn(t.base, x, y, def); if (!e) return null;
@@ -175,7 +179,7 @@ export class EnemyTraits {
         if (!o.active || o === e || o.kind === 'boss' || o.isSupplySlot || o.hp >= o.maxHp) continue;
         if (Math.hypot(o.x - e.x, o.y - e.y) > t.radius) continue;
         o.hp = Math.min(o.maxHp, o.hp + Math.max(1, Math.round(o.maxHp * t.share))); healed += 1;
-        if (!playSheet(this.h.scene, 'fx_heal', o.x, o.y - 20, { size: 70, depth: actorDepth(o.y) + .05, ms: 600, alpha: .9 })) this.glow(o, 0xb8ffc0, now);
+        if (!playSheet(this.h.scene, 'fx_heal_fushui', o.x, o.y - 20, { size: 70, depth: actorDepth(o.y) + .05, ms: 600, alpha: .9 })) this.glow(o, 0xb8ffc0, now);
       }
       if (healed) { this.metrics.heals += healed; e.startAttack(now, dirOf(nx, ny)); this.glow(e, 0xfff0a0, now); }
     }
@@ -300,7 +304,7 @@ export class EnemyTraits {
         this.poisonTick = now + 1000; this.metrics.poisonTicks += 1;
         // 毒不致命：最多掉到 1（真正的威胁是叠毒时被围）
         if (!p.damageImmune) p.hp = Math.max(1, p.hp - this.poisonDps * this.poison.length);
-        playSheet(this.h.scene, 'fx_poison', p.x, p.y - 30, { size: 64, depth: DEPTH.fx, ms: 600, alpha: .85 });
+        playSheet(this.h.scene, 'fx_poison_mist', p.x, p.y - 30, { size: 64, depth: DEPTH.fx, ms: 600, alpha: .85 });
       }
     }
   }

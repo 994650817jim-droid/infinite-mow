@@ -133,6 +133,8 @@ import { Terrain } from '../systems/Terrain';
 import { attrBadge } from '../ui/AttrBadge';
 import { PROP_LOOT, rollPropItem, type PropLootKind } from '../data/propLoot';
 import { terrainConfigFor } from '../data/terrain';
+import { stageMapFor } from '../data/stageMaps';
+import { StageArena } from '../systems/StageArena';
 import { Tutorial } from '../systems/Tutorial';
 import { IffOverlay, readIffMode, warmIffTextures, type IffUnit } from '../systems/IffOverlay';
 import {BARKS_LABEL, heroBarks, setHeroBarks, type HeroBarks, STORY_LABEL, setStoryMode, storyMode, type StoryMode, OPENING_LABEL, openingMode, setOpeningMode, type OpeningMode } from '../systems/BattleSettings';
@@ -379,7 +381,11 @@ export class GameScene extends Phaser.Scene {
   /** 战场地形层（树 / 树林、河、桥；data/terrain.ts 按篇章与关配置） */
   /** 本关障碍物已掉的兵装件数（每关上限 PROP_LOOT.perStageItems）与掉落随机源（测试可换） */
   propItems = 0; propRng: () => number = Math.random;
-  protected terrain: Terrain | null = null; private terrainInit = false; private terrainNav: Array<{left:number;right:number;top:number;bottom:number}> = [];
+  protected terrain: Terrain | null = null; private terrainInit = false;
+  /** 有边场地（data/stageMaps，按剧情定场地）：边界、守边、刷兵关口、场景互动；没配的关为 null（无限大场地）。 */
+  protected arena: StageArena | null = null; private arenaInit = false;
+  /** 小地图 / 测试读：本关场地边界（无限大场地为 null）。 */
+  get stageBounds() { return this.arena?.info ?? null; } private terrainNav: Array<{left:number;right:number;top:number;bottom:number}> = [];
   windstepFx(): WindstepFx { if (!this.windFx) { this.windFx = new WindstepFx(this, this.player, this.sfx); this.events.once('shutdown', () => { this.windFx?.destroy(); this.windFx = undefined; }); } return this.windFx; }
   flankBladeFx(): FlankFx { if (!this.flankFx) { this.flankFx = new FlankFx(this, this.player, this.sfx); this.events.once('shutdown', () => { this.flankFx?.destroy(); this.flankFx = undefined; }); } return this.flankFx; }
   /** 敌我区分叠加层（默认阵营色；设置开启描边；?iff=0 关闭）。 */
@@ -707,7 +713,7 @@ export class GameScene extends Phaser.Scene {
     // 治疗数字：主将实际回复的量累加，每 0.4 秒合成一个绿色「+n」（药、酒、吸血、信物回血都算）
 
     { const pl = this.player, raw = pl.heal.bind(pl); this.healAcc = 0; pl.heal = (n: number) => { const h0 = pl.hp; raw(n); this.healAcc += Math.max(0, pl.hp - h0); }; }
-    this.dragFx = undefined; this.flankFx = undefined; this.windFx = undefined; this.skirmishPuffAt = 0; this.env = null; this.envInit = false; this.terrain?.clear(); this.terrain = null; this.terrainInit = false; this.terrainNav = []; Ally.terrainMul = null; this.player && (this.player.terrainSpeedMul = 1);
+    this.dragFx = undefined; this.flankFx = undefined; this.windFx = undefined; this.skirmishPuffAt = 0; this.env = null; this.envInit = false; this.terrain?.clear(); this.arena?.clear(); this.arena = null; this.arenaInit = false; this.terrain = null; this.terrainInit = false; this.terrainNav = []; Ally.terrainMul = null; this.player && (this.player.terrainSpeedMul = 1);
     this.applyRunConfig(this.runConfig);
     this.worldCampaign=!preview&&!isChapterTestRun()&&this.registry.get('worldCampaign')===true;
     this.hardMode=!preview&&this.registry.get('hardChapter')===this.hardKey()&&(chapterState(this.hardKey() as TimelineChapterId,loadWorldState())==='cleared'||isChapterTestRun());
@@ -1122,8 +1128,12 @@ export class GameScene extends Phaser.Scene {
     this.parley?.update(); // 首领招降：残血弹窗 / 再压一压
     if(this.mode==='none'&&!this.over)this.dual?.update(this.combatNow); // 双首领：招降、配合技、狂怒 / 心乱、退走线
     if(!this.terrainInit&&this.player){this.terrainInit=true;const tc0=terrainConfigFor(this.hardKey(),this.hardStage()),tc=tc0?.auto&&new URLSearchParams(location.search).get('groves')==='0'?{...tc0,auto:undefined}:tc0; /* ?groves=0：关掉自动树林（前后对比截图用） */if(tc){this.terrain=new Terrain(this,tc,tc.auto?this.treeAvoid():undefined);const t=this.terrain;if(tc.auto)this.supplies?.purge((x,y)=>t.treeNear(x,y,50)); /* 自动树林种下后，已经摆在树脚下的补给箱 / 道具收掉 */Ally.terrainMul=(x,y)=>t.speedMul(x,y);this.terrainNav=[...t.navBoxes(),...t.cliffBoxes];if(t.cliffBoxes.length){if(!this.sishuiObstacles)this.sishuiObstacles=new SishuiObstacles([]);this.sishuiObstacles.footprints.push(...t.cliffBoxes);} /* 山崖碰撞并进场景障碍：挡人、刷兵避开、随行也认 */this.events.once('shutdown',()=>{t.clear();if(this.terrain===t){this.terrain=null;Ally.terrainMul=null;}});}}
+    if(!this.arenaInit&&this.player&&this.terrainInit){this.arenaInit=true;const def=stageMapFor(this.hardKey(),this.hardStage());if(def)this.arena=new StageArena({scene:this,player:this.player,allies:()=>this.allies,enemies:()=>this.enemies,now:()=>this.combatNow,
+      spawnTarget:(x,y,hp,size)=>{const e=this.supplies?.spawnGate(x,y,hp,size)??null;e?.sprite.setAlpha(0);return e;},hitEnemy:(e,d)=>{this.hitEnemy(e,d,this.combatNow,'melee',true,false);},
+      hurtTroops:(x,y,r,d)=>this.legion.hurtArea(x,y,r,d,this.combatNow),banner:(t,d,c)=>this.showWaveBanner(t,!!d,c),sfx:k=>this.sfx.play(k),purge:pred=>{this.supplies?.purge(pred);}},def);}
     if(this.terrain){this.terrain.update(this.combatNow,dt);this.player.terrainSpeedMul=this.terrain.speedMul(this.player.x,this.player.y);}
     this.updateEnemies(dt, time);
+    if(this.arena&&this.mode==='none'&&!this.over)this.arena.update(this.combatNow); // 有边场地：断桥 / 营帐起火 / 滚木（守边在 postupdate，见 StageArena）
     this.yellow?.update(dt,time);this.xiliang?.update(dt,this.combatNow);this.shieldBars?.draw(this.enemies);if(this.objective){this.objective.update(dt);this.objectiveText?.setText(this.objective.text);}
     for(const t of this.chasingBosses){if(t.enemy.active&&t.enemy.spawnId===t.life){t.battle?.update(dt,time);t.label.setPosition(t.enemy.x,t.enemy.y-100).setText(t.name+" · 追兵 "+Math.ceil(Math.max(0,t.enemy.hp)/t.enemy.maxHp*100)+"%");}}
     this.rebuildGrid();
@@ -1244,6 +1254,7 @@ export class GameScene extends Phaser.Scene {
     force = false,
     override?:EnemyDef,
   ): Enemy | null {
+    if (this.arena) { const f = this.arena.spawnAt(x, y); x = f.x; y = f.y; } // 有边场地：场外的刷兵点改到离主将最远的关口
     if (this.terrain) { const f = this.terrain.free(x, y, kind === 'boss' ? 34 : 20); x = f.x; y = f.y; } // 不刷在水里 / 树干里
     if (kind === 'cavalry') this.deathFx?.warmHorse(); // 骑兵死亡放马：马匹行走图按需异步加载（只在场上出现骑兵时）
     // 不刷在关墙 / 营栅 / 场地边界 / 谷壁 / 崖壁里（全场景审查 F）：挪到最近的框边、朝主将那一侧；首领与城头守军按设计摆位，不挪
@@ -1319,7 +1330,11 @@ export class GameScene extends Phaser.Scene {
     for (const o of this.children.list) { const im = o as Phaser.GameObjects.Image; if (o.type !== 'Image' || !im.visible || im.scrollFactorX !== 1) continue; const k = im.texture?.key ?? '', n = o.name ?? '';
       if (/terrain|ground|road|water|shadow|fx_/i.test(k + n)) continue;
       if (/prop|camp|tent|fort|wall|barb|siege|gate|tower|altar|banner|palisade|luoyang|sishui|faction/i.test(k + ' ' + n) && im.displayWidth > 50) pts.push({x: im.x, y: im.y - im.displayHeight * .3, r: Math.max(im.displayWidth, im.displayHeight) * .55 + 70}); }
-    return (x, y) => boxes.some(b => x > b.left - 110 && x < b.right + 110 && y > b.top - 110 && y < b.bottom + 150)
+    // 有边场地：边线两侧 220 内不种（营栅 / 城墙那一圈，树不长在栅上）
+    // 营地（arena）里不种树：营里是平整过的空地；营帐起火的营帐旁也不种
+    const smd = stageMapFor(this.hardKey(), this.hardStage()), sm = smd?.bounds, camp = smd?.kind === 'arena', tents = (smd?.interactions ?? []).flatMap(i => i.kind === 'campfire' ? i.tents : []);
+    const nearEdge = (x: number, y: number) => !!sm && x > sm.left - 220 && x < sm.right + 220 && y > sm.top - 220 && y < sm.bottom + 220 && (camp || Math.min(x - sm.left, sm.right - x, y - sm.top, sm.bottom - y) < 220) || tents.some(t => Math.hypot(t.x - x, t.y - y) < 230);
+    return (x, y) => nearEdge(x, y) || boxes.some(b => x > b.left - 110 && x < b.right + 110 && y > b.top - 110 && y < b.bottom + 150)
       || walls.some(w => x > w.left - 200 && x < w.right + 200 && y < w.bottom + 180)
       || pts.some(p => Math.hypot(p.x - x, p.y - y) < p.r);
   }

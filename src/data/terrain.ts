@@ -1,3 +1,4 @@
+import { stageMapFor, arenaTerrain } from './stageMaps';
 /**
  * 战场地形层（用户 2026-11-17：「我想做更多场景比如说有树（不可摧毁）树林，河水流过，踩上去河水会减速。桥跨过河水之类的」；统筹会话定的细则）：
  * - 树 / 树林：不可摧毁的实心障碍（主将、敌兵、部曲、随从都挡住，贴着滑开不卡死）；树林 = 成簇的树，中间留能穿过的空隙；
@@ -124,8 +125,13 @@ function shuTrees(halfW: number, y0: number, y1: number, seed: number): TreeSpec
  * 没配的关返回 null（不建地形层）。
  */
 export function terrainConfigFor(arc: string, stage: number): TerrainConfig | null {
-  const base = baseTerrain(arc, stage), g = GROVES[arc + '.' + stage];
+  const base0 = baseTerrain(arc, stage), g = GROVES[arc + '.' + stage], map = stageMapFor(arc, stage);
+  // 有边场地（data/stageMaps）：边界外的山崖 / 密林 / 大河并进来；本关原来就有河的，原来的河当边，不再加
+  const base = map ? withArena(base0 ?? { clear: [C0] }, arenaTerrain(map)) : base0;
   return g ? { ...(base ?? { clear: [C0] }), auto: g } : base;
+}
+function withArena(b: TerrainConfig, a: TerrainConfig): TerrainConfig {
+  return { ...b, cliffs: [...(b.cliffs ?? []), ...(a.cliffs ?? [])], woods: [...(b.woods ?? []), ...(a.woods ?? [])], rivers: b.rivers?.length ? b.rivers : a.rivers };
 }
 function baseTerrain(arc: string, stage: number): TerrainConfig | null {
   switch (arc) {

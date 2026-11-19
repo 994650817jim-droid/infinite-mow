@@ -1,0 +1,217 @@
+import Phaser from 'phaser';
+import { actorDepth, DEPTH } from '../config';
+import { ARENA, type StageMapDef, type Pt } from '../data/stageMaps';
+import { FACTION_PROPS } from './PropsV2';
+import { MID_SIEGE_FILES } from './SiegeMidArt';
+import { playSheet } from './SkillFxSheets';
+import { warnFx } from '../ui/WarnFx';
+import { worldText } from '../world/WorldUI';
+import type { Enemy } from '../entities/Enemy';
+import type { Player } from '../entities/Player';
+import type { Ally } from '../entities/Ally';
+
+/**
+ * 有边场地（data/stageMaps.ts；设计见共享笔记 stage-maps-design.md）。
+ *  - 边：山崖 / 密林 / 大河由地形层画（terrainConfigFor 合进去）；营栅、城墙由这里摆（势力营具营栅、攻城城墙图集，营门 / 关门处立门）。
+ *  - 守边：每帧把主将、随行、敌兵挪回场内（首领、补给箱 / 目标物除外——首领由各自控制器推，双首领退走、招降不受影响）。
+ *  - 刷兵：落在场外的刷兵点改到离主将最远的关口（离主将 ≥ ARENA.minSpawnDist），场内的不动。
+ *  - 镜头：停在边界 + 边带以内。小地图读 bounds / edges / gates（只读）。
+ *  - 场景互动：断桥（长坂）、营帐起火蔓延（宛城）、关上滚木（阳平关）。
+ */
+export interface ArenaHost {
+  scene: Phaser.Scene; player: Player; allies: () => readonly Ally[]; enemies: () => Iterable<Enemy>; now: () => number;
+  /** 可砍目标（补给槽的「门」）：贴图不显示，由场景图表现。 */
+  spawnTarget: (x: number, y: number, hp: number, size: number) => Enemy | null;
+  hitEnemy: (e: Enemy, dmg: number) => void;
+  hurtTroops: (x: number, y: number, r: number, dmg: number) => void;
+  banner: (t: string, danger?: boolean, caption?: string) => void;
+  sfx: (k: string) => void;
+  /** 收掉场外的补给箱 / 道具 */
+  purge?: (pred: (x: number, y: number) => boolean) => void;
+}
+interface Gate extends Pt { off?: boolean }
+interface Tent { x: number; y: number; img?: Phaser.GameObjects.Image; fires: Phaser.GameObjects.Sprite[]; state: 'idle' | 'burning' | 'burnt'; litAt: number; tickAt: number }
+interface Log { x: number; y: number; toY: number; at: number; rolling: boolean; img?: Phaser.GameObjects.Image; hit: Set<number>; hitPlayer: boolean; id: string }
+
+export class StageArena {
+  readonly bounds: StageMapDef['bounds'];
+  readonly gates: Gate[];
+  private objs: Phaser.GameObjects.GameObject[] = [];
+  private bridge: { e: Enemy; life: number; x: number; y: number; label: Phaser.GameObjects.Text; killR: number } | null = null;
+  private tents: Tent[] = []; private logs: Log[] = []; private logAt = 0; private logSeq = 0;
+  /** 测试读 */
+  readonly stats = { relocated: 0, clamped: 0, bridgeDown: false, bridgeDeck: false, tentsLit: 0, tentsBurnt: 0, fireTicks: 0, logs: 0, logHits: 0, logEnemyHits: 0 };
+
+  constructor(private readonly h: ArenaHost, readonly def: StageMapDef) {
+    const b = this.bounds = def.bounds, P = ARENA.edgeBand, sc = h.scene;
+    this.gates = def.gates.map(g => ({ ...g }));
+    sc.cameras.main.setBounds(b.left - P, b.top - P, b.right - b.left + P * 2, b.bottom - b.top + P * 2);
+    h.purge?.((x, y) => !this.inside(x, y, 30));
+    this.buildEdges();
+    // 守边放在 postupdate：本帧所有系统（冲锋、击退、首领控制器带的兵…）都动完之后再挪回场内
+    sc.events.on('postupdate', this.post, this);
+    const now = h.now();
+    for (const it of def.interactions ?? []) {
+      if (it.kind === 'bridge') this.setupBridge(it);
+      if (it.kind === 'campfire') this.setupTents(it, now);
+      if (it.kind === 'logs') this.logAt = now + it.firstMs;
+    }
+  }
+  inside(x: number, y: number, m = 0) { const b = this.bounds; return x >= b.left + m && x <= b.right - m && y >= b.top + m && y <= b.bottom - m; }
+
+  // ———— 边（营栅 / 城墙）————
+  private buildEdges() {
+    const d = this.def, b = this.bounds, sc = this.h.scene, G = ARENA.gateWidth;
+    const fac = d.faction !== undefined ? FACTION_PROPS[d.faction] : undefined, propKey = fac && sc.textures.exists(fac.key) ? fac.key : sc.textures.exists('sishui_props_refined') ? 'sishui_props_refined' : null;
+    const img = (x: number, y: number, key: string, frame: number, size: number, flip = false) => { const im = sc.add.image(x, y, key, frame).setOrigin(.5, 1).setDisplaySize(size, size).setDepth(actorDepth(y)).setFlipX(flip).setName('arena-edge'); this.objs.push(im); return im; };
+    const isHole = (dir: 'n' | 's' | 'w' | 'e', at: number) => (d.openings?.[dir] ?? []).some(h => Math.abs(at - h) < G / 2);
+    const palisade = (dir: 'n' | 's' | 'w' | 'e') => {
+      if (!propKey) return; const horiz = dir === 'n' || dir === 's';
+      if (horiz) {
+        const y = dir === 'n' ? b.top - 10 : b.bottom + 140; // 营栅整排在场外：北边墙脚贴边线，南边墙顶贴边线（主将不会「站在栅上」）
+        for (let x = b.left - 60, k = 0; x <= b.right + 60; x += 150, k++) if (!isHole(dir, x)) img(x, y, propKey, k % 7 === 3 ? 6 : k % 11 === 6 ? 1 : 3, k % 7 === 3 ? 170 : k % 11 === 6 ? 220 : 190, k % 2 === 1);
+        for (const h of d.openings?.[dir] ?? []) img(h, y + 6, propKey, 0, 250);
+      } else {
+        const x = dir === 'w' ? b.left - 100 : b.right + 100;
+        for (let y = b.top + 20, k = 0; y <= b.bottom + 70; y += 72, k++) if (!isHole(dir, y)) img(x + (k % 2 ? 8 : -8), y, propKey, 3, 180, dir === 'e');
+        for (const h of d.openings?.[dir] ?? []) img(x + (dir === 'w' ? 30 : -30), h + 70, propKey, 0, 230);
+      }
+    };
+    const wall = (dir: 'n' | 's') => {
+      const W = MID_SIEGE_FILES[0], draw = () => {
+        if (sc.sys.settings.status >= Phaser.Scenes.SHUTDOWN) return;
+        const y = dir === 'n' ? b.top - 4 : b.bottom + 120, has = sc.textures.exists(W.key);
+        for (let x = b.left - 120; x <= b.right + 120; x += 196) if (!isHole(dir, x)) { if (has) img(x, y, W.key, 0, 230).setDisplaySize(230, 127); }
+        for (const hx of d.openings?.[dir] ?? []) if (has) img(hx, y + 14, W.key, 1, 300);
+        for (const x of [b.left - 40, b.right + 40]) if (has) img(x, y + 20, W.key, 5, 220);
+      };
+      if (sc.textures.exists(W.key)) draw(); else { sc.load.spritesheet(W.key, W.file, { frameWidth: W.cell, frameHeight: W.cell }); sc.load.once('filecomplete-spritesheet-' + W.key, draw); if (!sc.load.isLoading()) sc.load.start(); }
+    };
+    for (const dir of ['n', 's', 'w', 'e'] as const) {
+      const k = d.edges[dir];
+      if (k === 'palisade') palisade(dir);
+      if (k === 'wall' && (dir === 'n' || dir === 's')) wall(dir);
+    }
+  }
+
+  // ———— 守边 / 刷兵 ————
+  /** 每帧：主将、随行、敌兵挪回场内（首领、补给槽除外）。 */
+  keepInside() {
+    const b = this.bounds, m = 22;
+    const clamp = (o: { x: number; y: number }, set: (x: number, y: number) => void) => {
+      const x = Phaser.Math.Clamp(o.x, b.left + m, b.right - m), y = Phaser.Math.Clamp(o.y, b.top + m, b.bottom - m);
+      if (x !== o.x || y !== o.y) { set(x, y); this.stats.clamped++; }
+    };
+    const p = this.h.player; clamp(p, (x, y) => p.sprite.setPosition(x, y));
+    for (const a of this.h.allies()) if (a.active) clamp(a, (x, y) => a.setPosition(x, y));
+    for (const e of this.h.enemies()) if (e.active && !e.isSupplySlot && e.kind !== 'boss') clamp(e, (x, y) => e.sprite.setPosition(x, y));
+  }
+  /** 刷兵点在场外：改到离主将最远的那个关口附近（沿边错开一点）。场内的刷兵点不动。 */
+  spawnAt(x: number, y: number): Pt {
+    if (this.inside(x, y, 10)) return { x, y };
+    const p = this.h.player, live = this.gates.filter(g => !g.off), far = live.filter(g => Math.hypot(g.x - p.x, g.y - p.y) >= ARENA.minSpawnDist);
+    const pick = far.length ? far.sort((a, c) => Math.hypot(a.x - x, a.y - y) - Math.hypot(c.x - x, c.y - y))[0] : live.sort((a, c) => Math.hypot(c.x - p.x, c.y - p.y) - Math.hypot(a.x - p.x, a.y - p.y))[0];
+    this.stats.relocated++;
+    if (!pick) return { x: Phaser.Math.Clamp(x, this.bounds.left + 40, this.bounds.right - 40), y: Phaser.Math.Clamp(y, this.bounds.top + 40, this.bounds.bottom - 40) };
+    const j = ARENA.gateJitter, b = this.bounds;
+    return { x: Phaser.Math.Clamp(pick.x + (Math.random() - .5) * 2 * j, b.left + 30, b.right - 30), y: Phaser.Math.Clamp(pick.y + (Math.random() - .5) * 2 * j, b.top + 30, b.bottom - 30) };
+  }
+
+  // ———— 断桥（长坂）————
+  private setupBridge(it: { x: number; y: number; hp: number; killRadius: number }) {
+    const e = this.h.spawnTarget(it.x, it.y, it.hp, 220); if (!e) return;
+    e.sprite.setAlpha(0);
+    const label = worldText(this.h.scene, it.x, it.y + 40, '', 14, '#ffe1a0').setOrigin(.5).setDepth(36).setStroke('#1a120b', 4); this.objs.push(label);
+    this.bridge = { e, life: e.spawnId, x: it.x, y: it.y, label, killR: it.killRadius };
+  }
+  private updateBridge() {
+    const br = this.bridge; if (!br) return;
+    const alive = br.e.active && br.e.spawnId === br.life;
+    if (alive) { br.label.setText(`长坂桥 · 砍断 ${Math.round((1 - br.e.hp / br.e.maxHp) * 100)}%`); return; }
+    this.bridge = null; br.label.destroy(); this.stats.bridgeDown = true;
+    const sc = this.h.scene;
+    // 桥面断落：扬尘、水花，桥面图倒进河里
+    for (let i = -1; i <= 1; i++) playSheet(sc, 'fx_collapse_dust', br.x + i * 70, br.y - 60 - Math.abs(i) * 30, { size: 220, depth: DEPTH.fx, ms: 700 });
+    // 桥面图：地形层画的桥（terrain_bridge 图或缺图时的木板平铺）里离桥头最近的那张（地形层的桥 / 水面美术会话在重做，合进来后改用 terrain.setBridgeBroken）
+    const deck = sc.children.list.filter(o => { const im = o as Phaser.GameObjects.Image; return (im.texture?.key === 'terrain_bridge' || (o.type === 'TileSprite' && im.texture?.key === 'yellow_props')) && Math.hypot(im.x - br.x, im.y - br.y) < 260; })[0] as Phaser.GameObjects.Image | undefined;
+    this.stats.bridgeDeck = !!deck;
+    if (deck) sc.tweens.add({ targets: deck, alpha: 0, scaleY: deck.scaleY * .4, angle: deck.angle + 8, duration: 700, ease: 'Quad.In' });
+    sc.cameras.main.shake(320, .008);
+    // 桥头一带的追兵落水
+    for (const e of this.h.enemies()) if (e.active && !e.isSupplySlot && e.kind !== 'boss' && Math.hypot(e.x - br.x, e.y - br.y) < br.killR) this.h.hitEnemy(e, 99999);
+    for (const g of this.gates) if (Math.hypot(g.x - br.x, g.y - br.y) < 300) g.off = true;
+    this.h.banner('长坂桥断！', false, '北岸追兵过不来了 · 只剩南面山口');
+    this.h.sfx('bossSummon');
+  }
+
+  // ———— 营帐起火（宛城夜袭）————
+  private setupTents(it: { tents: Pt[]; lit: number[] }, now: number) {
+    const sc = this.h.scene, fac = this.def.faction !== undefined ? FACTION_PROPS[this.def.faction] : undefined, key = fac && sc.textures.exists(fac.key) ? fac.key : null;
+    this.tents = it.tents.map(t => ({ x: t.x, y: t.y, fires: [], state: 'idle' as const, litAt: 0, tickAt: 0,
+      img: key ? (() => { const im = sc.add.image(t.x, t.y, key, 2).setOrigin(.5, 1).setDisplaySize(200, 200).setDepth(actorDepth(t.y)).setName('arena-tent'); this.objs.push(im); return im; })() : undefined }));
+    for (const i of it.lit) if (this.tents[i]) this.ignite(this.tents[i], now);
+  }
+  private ignite(t: Tent, now: number) {
+    const sc = this.h.scene; t.state = 'burning'; t.litAt = now; t.tickAt = now + 400; this.stats.tentsLit++;
+    if (!sc.textures.exists('ground_fire')) return;
+    for (const [dx, dy, s] of [[-40, -70, 120], [45, -40, 100], [0, -10, 90]] as const) {
+      const sp = sc.add.sprite(t.x + dx, t.y + dy, 'ground_fire', 0).setOrigin(.5, .85).setDisplaySize(s, s).setDepth(actorDepth(t.y) + .02).setName('arena-fire'); this.objs.push(sp); t.fires.push(sp);
+      const st = { f: Math.random() * 7 }; sc.tweens.add({ targets: st, f: st.f + 8, duration: 1000 + Math.random() * 300, repeat: -1, onUpdate: () => { if (sp.active) sp.setFrame(Math.floor(st.f) % 8); } });
+    }
+    t.img?.setTint(0xb07a5a);
+  }
+  private updateTents(now: number) {
+    const it = this.def.interactions?.find(i => i.kind === 'campfire'); if (!it || it.kind !== 'campfire') return;
+    const p = this.h.player;
+    for (const t of this.tents) {
+      if (t.state !== 'burning') continue;
+      // 烧着的营帐：火圈里敌我都掉血
+      if (now >= t.tickAt) {
+        t.tickAt = now + it.tickMs; this.stats.fireTicks++;
+        for (const e of this.h.enemies()) if (e.active && !e.isSupplySlot && Math.hypot(e.x - t.x, e.y - (t.y - 30)) < it.radius) this.h.hitEnemy(e, it.damage * 2);
+        if (Math.hypot(p.x - t.x, p.y - (t.y - 30)) < it.radius + p.radius) p.takeDamage(it.damage, now);
+        this.h.hurtTroops(t.x, t.y - 30, it.radius, it.damage * .6);
+      }
+      // 蔓延：烧了 spreadMs 后点着最近一座没烧的
+      if (now - t.litAt >= it.spreadMs && !(t as Tent & { spread?: boolean }).spread) {
+        (t as Tent & { spread?: boolean }).spread = true;
+        const next = this.tents.filter(q => q.state === 'idle').sort((a, c) => Math.hypot(a.x - t.x, a.y - t.y) - Math.hypot(c.x - t.x, c.y - t.y))[0];
+        if (next && Math.hypot(next.x - t.x, next.y - t.y) <= it.spreadRange) { this.ignite(next, now); warnFx(this.h.scene).ambush(next.x, next.y - 40, 60); }
+      }
+      // 烧完：焦黑、火灭
+      if (now - t.litAt >= it.spreadMs * 3) { t.state = 'burnt'; this.stats.tentsBurnt++; for (const f of t.fires) this.h.scene.tweens.add({ targets: f, alpha: 0, duration: 600, onComplete: () => f.destroy() }); t.fires = []; t.img?.setTint(0x4c3c36); }
+    }
+  }
+
+  // ———— 关上滚木（阳平关）————
+  private updateLogs(now: number) {
+    const it = this.def.interactions?.find(i => i.kind === 'logs'); if (!it || it.kind !== 'logs') return;
+    const p = this.h.player, sc = this.h.scene, fx = warnFx(sc), b = this.bounds;
+    if (now >= this.logAt) {
+      this.logAt = now + it.everyMs;
+      for (let i = 0; i < it.count; i++) {
+        const x = Phaser.Math.Clamp(i === 0 ? p.x : b.left + 80 + Math.random() * (b.right - b.left - 160), b.left + 60, b.right - 60), y = Math.max(it.fromY, p.y - 820);
+        this.logs.push({ x, y, toY: Math.min(it.toY, y + 1900), at: now + it.warnMs, rolling: false, hit: new Set(), hitPlayer: false, id: 'arena-log-' + this.logSeq++ });
+      }
+    }
+    for (const l of [...this.logs]) {
+      if (!l.rolling) {
+        fx.lane(l.id, 'charge', l.x, l.y, Math.PI / 2, l.toY - l.y, it.width, 1 - (l.at - now) / it.warnMs, now);
+        if (now >= l.at) { l.rolling = true; this.stats.logs++; l.img = sc.add.image(l.x, l.y, 'yellow_props', 27).setOrigin(.5, .6).setDisplaySize(130, 130).setDepth(actorDepth(l.y)); this.objs.push(l.img); }
+        continue;
+      }
+      l.y += it.speed * (1 / 60); l.img?.setPosition(l.x, l.y).setRotation(l.img.rotation + .12).setDepth(actorDepth(l.y));
+      if (!l.hitPlayer && Math.abs(p.x - l.x) <= it.width / 2 + p.radius && Math.abs(p.y - l.y) <= 40 + p.radius) { l.hitPlayer = true; this.stats.logHits++; p.takeDamage(it.damage, now); sc.cameras.main.shake(120, .005); }
+      for (const e of this.h.enemies()) if (e.active && !e.isSupplySlot && e.kind !== 'boss' && !l.hit.has(e.spawnId) && Math.abs(e.x - l.x) <= it.width / 2 + e.radius && Math.abs(e.y - l.y) <= 40 + e.radius) { l.hit.add(e.spawnId); this.stats.logEnemyHits++; this.h.hitEnemy(e, it.enemyDamage); }
+      if (l.y >= l.toY) { playSheet(sc, 'fx_collapse_dust', l.x, l.y, { size: 120, depth: DEPTH.fx, ms: 420, alpha: .7 }); l.img?.destroy(); this.logs.splice(this.logs.indexOf(l), 1); }
+    }
+  }
+
+  update(now: number) {
+    this.updateBridge(); this.updateTents(now); this.updateLogs(now);
+  }
+  /** 小地图 / 测试读：边界、四边类型、关口（关掉的不算）。 */
+  get info() { return { kind: this.def.kind, bounds: { ...this.bounds }, edges: { ...this.def.edges }, gates: this.gates.filter(g => !g.off).map(g => ({ x: g.x, y: g.y })), edgeBand: ARENA.edgeBand }; }
+  private post = () => { const st = (this.h.scene as unknown as { mode?: string; over?: boolean }); if (st.mode === 'none' && !st.over) this.keepInside(); };
+  clear() { this.h.scene.events.off('postupdate', this.post, this); for (const o of this.objs) o.destroy(); this.objs = []; this.h.scene.cameras.main.removeBounds(); }
+}

@@ -206,7 +206,7 @@ export function buildUpgradeOptions(player: Player, weapons: WeaponState[], grow
   // 战法卡（流派重做：三选一 = 1 张本命 / 武艺 + 2 张战法）；卸力 / 以战养战是「基础成长」，不占战法卡位
   const tacticCards:UpgradeOption[]=[];
   for(const id of Object.keys(TACTICS)as TacticId[])if(b.canLearn(id)){
-    const d=TACTICS[id],n=b.level(id)+1,school=tacticSchool(id);
+    const d=TACTICS[id],n=b.rank(id)+1,school=tacticSchool(id); // 精研 Lv4 / 5（按章开放）显示实际等级
     const option:UpgradeOption={id:'tactic_'+id,name:d.name+' · Lv.'+n,desc:tacticDescription(id,n),kind:'tactic',icon:'build_icon_'+id,categoryLabel:school?schoolLabel(school,tags):'基础成长',apply:(_p,_w,g)=>{g?.build.learn(id);}};
     if(school&&!tacticGeneral(id))tacticCards.push(option);else pool.push(option);
   }

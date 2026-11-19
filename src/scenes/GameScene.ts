@@ -189,6 +189,7 @@ const HERO_FX_TONE: Record<string, { alpha: number; ms: number }> = {
 import { HIT_FEEL, BOSS_FEEL, WEAPON_HIT_TYPE } from '../data/hitFeel';
 import { GEM_FX } from '../data/gemFx';
 import { heroAttributeExtra } from '../data/heroMechanics';
+import { BuildState } from '../data/builds';
 
 interface Gem {
   img: Phaser.GameObjects.Image;
@@ -3658,6 +3659,7 @@ export class GameScene extends Phaser.Scene {
       const base = this.chapter, plan = buildPhasePlan(this.hardKey(), this.hardStage(), base.waves, base.bossName), g = base.growth;
       this.chapter = { ...base, waves: plan.waves, pace: phasedPace(base.pace, chapterBossTime(base), plan.bossAt), growth: { hp: g?.hp ?? 1, damage: g?.damage ?? 1, bossHp: (g?.bossHp ?? 1) * PHASES.bossHp } };
       this.phasePlan = plan;
+      BuildState.rankCap = BuildState.rankCapFor(plan.chapter); // 战法精研：第五章起 Lv4、第九章起 Lv5
       const hard = (n: number) => this.hardMode ? n : 1;
       this.phaseRunner = new StagePhaseRunner({
         scene: this, player: () => this.player, elapsed: () => this.elapsed,

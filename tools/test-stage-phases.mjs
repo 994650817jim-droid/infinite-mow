@@ -98,6 +98,8 @@ await stageCase('3-2 宛城夜袭（ThirdGameScene）', { key: 'ThirdGameScene',
   ck('P4 升级三选一出现新卡（战法位两张都换成新卡，类不重复）', cards.length === 3 && cards.filter(c => /战场机缘|锦囊|兵源|军资|心法/.test(c)).length >= 2 && new Set(cards.map(c => c.split('｜')[1])).size === 3, cards);
   await p.screenshot({ path: `${OUT}/new-cards.png` });
   await p.evaluate(() => { const s = window.__S; s.newCardSource = Object.getPrototypeOf(s).newCardSource.bind(s); s.chooseUpgrade(0); window.__calm(); });
+  const r5 = await p.evaluate(async () => { const B = (await import('/src/data/builds.ts')).BuildState, bd = await import('/src/data/builds.ts'); const capNow = B.rankCap, caps = [2, 5, 9].map(B.rankCapFor); const t = Object.keys(bd.TACTICS).find(id => !bd.TACTICS[id].general && !bd.TACTICS[id].hidden && bd.TACTICS[id].tag); const b = new B(); for (let i = 0; i < 5; i++) b.learn(t); const at3 = b.rank(t); B.rankCap = 4; b.learn(t); b.learn(t); const r = { capNow, caps, at3, rank: b.rank(t), level: b.level(t), shi: b.tags()[bd.TACTICS[t].tag], snap: b.snapshot().tactics[t], desc: bd.tacticDescription(t, 4).split(String.fromCharCode(10))[0] }; B.rankCap = capNow; return r; });
+  ck('P5 战法精研：第二章上限 Lv3，第五章 Lv4、第九章 Lv5；精研只加势（效果停在 Lv3），存档保留实际等级', r5.capNow === 3 && r5.caps.join() === '3,4,5' && r5.at3 === 3 && r5.rank === 4 && r5.level === 3 && r5.shi === 4 && r5.snap === 4 && /精研/.test(r5.desc), r5);
   await p.evaluate(() => { const s = window.__S; s.jinnang = 'drum'; s.paintJinnang(); });
   await p.waitForTimeout(300);
   const j0 = await p.evaluate(() => { const s = window.__S; return { shown: !!s.jinnangButton?.visible, caption: s.jinnangButton?.getByName('jinnang-caption')?.text, berserk: s.player.growth.berserkUntil > s.combatNow }; });

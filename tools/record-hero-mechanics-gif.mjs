@@ -32,11 +32,11 @@ await p.evaluate(async ([G0, hero]) => {
     await wait(1200); pl.damageImmune = false; const biter = mk(pl.x - 8, pl.y, { stun: false, dmg: 3 }); await wait(1600); biter.deactivate(); pl.damageImmune = true; await wait(600);
   }
   if (hero === 'zhuge') {
-    // Lv1 诸葛亮打 1-1 首领：战旗前期 ×1.4，首领血条明显下降；身边小兵让谋略（满 2 层）转起来
-    pl.damageImmune = true; pl.weapons[0].level = 1;
-    s.spawnBoss(); const boss = s.boss; if (boss) { boss.sprite.setPosition(pl.x + 150, pl.y); boss.stunUntil = 1e12; }
-    for (let i = 0; i < 4; i++) mk(pl.x + 130 + (i % 2) * 24, pl.y - 50 + i * 30, { hp: 300 });
-    await wait(9000);
+    // 诸葛亮七星灯 · 天火（2026-11-18 重做）：星位 → 天火落下；同一目标第 4 发算无遗策 + 八阵图；每第 4 发东风火龙扫过路上的兵
+    pl.damageImmune = true; pl.weapons[0].level = 3; pl.growth.masteries.wildfire = 2; pl.growth.masteries.eight_trigrams = 3;
+    s.spawnBoss(); const boss = s.boss; if (boss) { boss.sprite.setPosition(pl.x + 300, pl.y); boss.stunUntil = 1e12; boss.hp = boss.maxHp = 1e6; }
+    for (let i = 0; i < 6; i++) mk(pl.x + 90 + i * 34, pl.y + (i % 2 ? 18 : -18), { hp: 2000 });
+    await wait(13000);
   }
   if (hero === 'weiyan') {
     // 被 6 名敌人围住、不挨打：拒敌每秒 2 层（左上面板），满层下一刀「谁敢杀我」六向裂波；两轮

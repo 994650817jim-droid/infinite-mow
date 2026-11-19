@@ -166,6 +166,7 @@ import {preloadBossDeath} from '../systems/BossDeathArt';
 import {ItemBagUI} from '../ui/ItemBagUI';
 import { enemyArrowTexture } from '../systems/ArrowPalette';
 import { EnemyTraits } from '../systems/EnemyTraits';
+import { LuoyangCamps } from '../systems/LuoyangCamps';
 import { HitFeel, BossStagger } from '../systems/HitFeel';
 /** 武将序列帧的透明度与时长（缺省 1 / 450 毫秒）。2026-11-17 用户：「张飞攻击特效有点太夸张」「魏延也是」→ 张飞声浪 / 断桥怒吼、魏延劈地 / 裂波 / 谁敢杀我 调淡、调短。 */
 const HERO_FX_TONE: Record<string, { alpha: number; ms: number }> = {
@@ -391,6 +392,8 @@ export class GameScene extends Phaser.Scene {
   protected arena: StageArena | null = null; private arenaInit = false;
   /** 各章新兵种机制（data/enemyRoster，systems/EnemyTraits）。 */
   protected traits: EnemyTraits | null = null;
+  /** 2-3 洛阳五座营寨：营栅、守军、援兵（systems/LuoyangCamps）。 */
+  luoyangCamps: LuoyangCamps | null = null;
   /** 小地图 / 测试读：本关场地边界（无限大场地为 null）。 */
   get stageBounds() { return this.arena?.info ?? null; } private terrainNav: Array<{left:number;right:number;top:number;bottom:number}> = [];
   windstepFx(): WindstepFx { if (!this.windFx) { this.windFx = new WindstepFx(this, this.player, this.sfx); this.events.once('shutdown', () => { this.windFx?.destroy(); this.windFx = undefined; }); } return this.windFx; }
@@ -727,7 +730,7 @@ export class GameScene extends Phaser.Scene {
     // 治疗数字：主将实际回复的量累加，每 0.4 秒合成一个绿色「+n」（药、酒、吸血、信物回血都算）
 
     { const pl = this.player, raw = pl.heal.bind(pl); this.healAcc = 0; pl.heal = (n: number) => { const h0 = pl.hp; raw(n); this.healAcc += Math.max(0, pl.hp - h0); }; }
-    this.dragFx = undefined; this.flankFx = undefined; this.windFx = undefined; this.skirmishPuffAt = 0; this.env = null; this.envInit = false; this.terrain?.clear(); this.arena?.clear(); this.arena = null; this.traits?.clear(); this.traits = null; this.arenaInit = false; this.terrain = null; this.terrainInit = false; this.terrainNav = []; Ally.terrainMul = null; this.player && (this.player.terrainSpeedMul = 1);
+    this.dragFx = undefined; this.flankFx = undefined; this.windFx = undefined; this.skirmishPuffAt = 0; this.env = null; this.envInit = false; this.terrain?.clear(); this.arena?.clear(); this.arena = null; this.traits?.clear(); this.traits = null; this.luoyangCamps?.clear(); this.luoyangCamps = null; this.arenaInit = false; this.terrain = null; this.terrainInit = false; this.terrainNav = []; Ally.terrainMul = null; this.player && (this.player.terrainSpeedMul = 1);
     this.applyRunConfig(this.runConfig);
     this.worldCampaign=!preview&&!isChapterTestRun()&&this.registry.get('worldCampaign')===true;
     this.hardMode=!preview&&this.registry.get('hardChapter')===this.hardKey()&&(chapterState(this.hardKey() as TimelineChapterId,loadWorldState())==='cleared'||isChapterTestRun());
@@ -1498,9 +1501,14 @@ export class GameScene extends Phaser.Scene {
       ready:()=>!this.objective||this.objective.done, // 2-3：营寨全毁 → 吕布跃下城头
       line:(id,t)=>(this as unknown as {storyDir?:{line(id:string,t:{x:number;y:number}):boolean}}).storyDir?.line(id,t)??false,
       scroll:id=>(this as unknown as {storyDir?:{midScroll(id:string):boolean}}).storyDir?.midScroll(id)??false},boss); // 剧情台词：故事系统（claude/story-batch1）合并后生效
+    // 2-3 营寨：营栅围一圈、营里守军待命、营门出援兵（systems/LuoyangCamps；用户 11-19「营寨…有围栏围着…小怪比较多守着」）
+    if(this.dzLubu&&this.objective&&!this.objective.done&&!this.luoyangCamps){if(!this.sishuiObstacles)this.sishuiObstacles=new SishuiObstacles([]);
+      const lc=this.luoyangCamps=new LuoyangCamps({scene:this,player:this.player,now:()=>this.combatNow,tents:()=>this.objective?.standing??[],obstacles:this.sishuiObstacles.footprints,
+        pick:()=>this.traits?.pick()??null,basePick:()=>this.chapter.pickEnemy(120),spawn:(k,x,y)=>this.spawnEnemy(k,x,y,undefined,true),spawnTrait:(id,x,y)=>this.traits?.spawnSpecial(id,{x,y})??null,move:(e,nx,ny,dt)=>{e.moveVx=nx*e.def.speed;e.moveVy=ny*e.def.speed;this.advanceEnemy(e,nx,ny,dt);}});
+      this.supplies?.purge((x,y)=>lc.camps.some(c=>c.boxes.some(b=>x>b.left-40&&x<b.right+40&&y>b.top-40&&y<b.bottom+40))); /* 落在营栅上的布景收掉 */}
     // 2-3 友军攻势：义军小队从后方一路打向营寨（data/dongzhuo.ts LUOYANG.push）
     if(this.dzLubu&&this.objective&&!this.objective.done&&!this.allyPush)this.allyPush=new AllyPush({scene:this,now:()=>this.combatNow,paused:()=>this.mode!=='none'||this.over||!!this.cutscene?.active,player:()=>this.player,
-      camps:()=>this.objective?.standing??[],enemies:()=>this.enemies,hit:(e,d)=>{this.hitEnemy(e,d,this.combatNow,'melee',true,false);},push:(x,y,r)=>this.terrain?.pushCircle(x,y,r)??null},LUOYANG.push);
+      camps:()=>this.objective?.standing??[],enemies:()=>this.enemies,hit:(e,d)=>{this.hitEnemy(e,d,this.combatNow,'melee',true,false);},push:(x,y,r)=>{const t=this.terrain?.pushCircle(x,y,r)??null,c=this.luoyangCamps?.pushOut(t?.x??x,t?.y??y,r)??null;return c??t;},approach:(c,x,y)=>this.luoyangCamps?.approach(c,x,y)??null},LUOYANG.push);
     // 2-3：城墙 / 洛水封口建好后，撤掉开局先于城墙生成、落在城墙里或场地外的布景与旗子
     {const z=this.dzLubu;if(z)this.supplies?.purge((x,y)=>!z.inArena(x,y,0)||z.obstacles.footprints.some(b=>x>b.left&&x<b.right&&y>b.top&&y<b.bottom));}
     if(this.chapter.bossStyle==='huaxiong')this.sishuiPass?.onBoss(boss); // 汜水关：关门洞开，华雄带亲卫杀出
@@ -1562,6 +1570,7 @@ export class GameScene extends Phaser.Scene {
     this.rebuildGrid();
     this.enemyMovement.prepare(this.enemies, this.grid, this.legion.grid, player.x, player.y, dt, this.combatNow);
     this.traits?.update(this.combatNow); // 新兵种：落石 / 地火 / 毒箭 / 中毒
+    this.luoyangCamps?.update(dt); // 2-3 营寨：警觉 / 援兵
     for (const enemy of this.enemies) {
       if (!enemy.active) continue;
       enemy.updateVisual(time);
@@ -1583,7 +1592,8 @@ export class GameScene extends Phaser.Scene {
       const nx = dx / dist;
       const ny = dy / dist;
 
-      if(this.traits?.step(enemy,dt,this.combatNow,target)){} // 新兵种机制（重装 / 治疗 / 投掷 / 纵火 / 毒箭 / 弓骑）
+      if(this.luoyangCamps?.step(enemy,dt)){} // 2-3 营寨守军：待命 / 出营门
+      else if(this.traits?.step(enemy,dt,this.combatNow,target)){} // 新兵种机制（重装 / 治疗 / 投掷 / 纵火 / 毒箭 / 弓骑）
       else if(this.customEnemyStep(enemy,dt,this.combatNow,target)){}
       else if (this.xiliang?.handleEnemy(enemy,dt,this.combatNow)) {}
       else if (this.yellow?.handleEnemy(enemy,dt,this.combatNow,target)) {

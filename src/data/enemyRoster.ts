@@ -104,7 +104,7 @@ export const STAGE_MIX: Record<string, StageMix> = {
   'huangjin.3': { traits: { fushui: { w: 5, wave: 1 }, lishi: { w: 3 } } },
   'hulao.1': { traits: { gunshi: { w: 6 } } },
   'hulao.2': { traits: { qianghu: { w: 5 }, gunshi: { w: 4 } } },
-  'hulao.3': { traits: { qianghu: { w: 4, wave: 1 }, zonghuo: { w: 7 } } },
+  'hulao.3': { traits: { qianghu: { w: 4, wave: 1 }, zonghuo: { w: 7, wave: 1 } } }, // 2-3 火烧洛阳不分波（只有第 1 波）
   'nanzheng.1': { traits: { mantoushi: { w: 7 } } },
   'nanzheng.3': { traits: { dujian: { w: 7 }, xunshou: { w: 3 } } },
 };

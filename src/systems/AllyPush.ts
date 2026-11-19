@@ -21,6 +21,8 @@ export interface PushHost {
   camps: () => Enemy[]; enemies: () => readonly Enemy[];
   hit: (e: Enemy, dmg: number) => void;
   push?: (x: number, y: number, r: number) => { x: number; y: number } | null;
+  /** 有营栅的营寨（2-3 LuoyangCamps）：在营外时先去哪个路点（营门），null = 直接走向营帐。 */
+  approach?: (camp: Enemy, x: number, y: number) => { x: number; y: number } | null;
 }
 interface Soldier { sp: Phaser.GameObjects.Sprite; shadow: Phaser.GameObjects.Ellipse; x: number; y: number; ox: number; oy: number; hp: number; sheet: string; dir: string; walk: number; nextHit: number; lunge: number; dead: number }
 /** escort：援军小队（兵阵 4 势「援军」，没有营寨目标）——跟在主将身边打最近的敌兵，到点散去。 */
@@ -96,7 +98,7 @@ export class AllyPush {
         let tx: number, ty: number, strike: Enemy | null = null, reach: number;
         if (foe) { tx = foe.x; ty = foe.y; reach = C.reach + foe.radius * .5; if (fd <= reach) strike = foe; }
         else if (!camp) { const pl = this.h.player(); tx = pl.x + m.ox * 1.6; ty = pl.y + 70 + m.oy; reach = 0; }
-        else { const a = Math.atan2(m.y - camp.y, m.x - camp.x) || Math.PI / 2, rr = camp.radius + C.campReach * .6; tx = camp.x + Math.cos(a) * rr + m.ox * .4; ty = camp.y + Math.sin(a) * rr * .7; reach = camp.radius + C.campReach; if (cd <= reach) strike = camp; }
+        else { const a = Math.atan2(m.y - camp.y, m.x - camp.x) || Math.PI / 2, rr = camp.radius + C.campReach * .6; tx = camp.x + Math.cos(a) * rr + m.ox * .4; ty = camp.y + Math.sin(a) * rr * .7; reach = camp.radius + C.campReach; if (cd <= reach) strike = camp; else { const via = this.h.approach?.(camp, m.x, m.y); if (via) { tx = via.x + m.ox * .4; ty = via.y + m.oy * .3; } } }
         if (!strike) {
           const dx = tx - m.x, dy = ty - m.y, d = Math.hypot(dx, dy);
           if (d > 2) { const st = Math.min(d, C.speed * dt); m.x += dx / d * st; m.y += dy / d * st; m.walk += st; m.dir = Math.abs(dx) > Math.abs(dy) ? dx < 0 ? 'left' : 'right' : dy < 0 ? 'up' : 'down'; }

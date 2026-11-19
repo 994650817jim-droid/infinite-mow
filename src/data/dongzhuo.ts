@@ -24,8 +24,18 @@ export const DONGZHUO_BOSS = {
  * 坐标都相对开局点（城墙线在 DZ_LUBU.wallY = -330）。初值，交平衡会话。
  */
 export const LUOYANG = {
-  /** 营寨：城下两翼、场地中段两侧、开局点南边——走一圈正好扫一遍场地。 */
-  camps: [[-560, -170], [560, -170], [-720, 330], [720, 330], [0, 720]] as ReadonlyArray<readonly [number, number]>,
+  /**
+   * 营寨（用户 11-19「营寨可以隔着远点，然后营寨应该做些场景有围栏围着之类的然后小怪比较多守着」）：
+   * 城下东西两翼、西南 / 东南、正南——彼此隔 1100～1700，要走一段才到下一座；都在城墙以南，避开开局点附近的焦屋废墟。
+   */
+  camps: [[-1500, 60], [1500, 60], [-1150, 1100], [1150, 1100], [0, 1750]] as ReadonlyArray<readonly [number, number]>,
+  /**
+   * 每座营寨的布景与守军（systems/LuoyangCamps）。坐标相对营帐脚底：
+   * 营栅围一圈（halfW 半宽、north 北排 / south 南排的 y），南面留营门（gate 宽），营里军旗、粮草、兵器架、火盆，东北角望楼。
+   * 守军开局就在营里（garrison 个 + elites 个精锐，按本关配兵表 data/enemyRoster 抽兵种），主将走近 alertR 以内、或营里有人 / 营帐挨打就出营门迎战；
+   * 营帐没毁、主将在 nearR 以内时每 reinforceMs 从营门出 reinforceN 个援兵（本营援兵同时在场最多 reinforceLive 个）。初值，交平衡会话。
+   */
+  camp: { halfW: 280, north: -175, south: 150, gate: 150, garrison: 8, elites: 1, alertR: 520, reinforceMs: 9000, reinforceN: 3, reinforceLive: 6, nearR: 1100, exitPad: 90, clearR: 430 },
   /** 城墙半长（用户「2-3只有很长一段城墙，不用把玩家困在里面」）：一道长墙、两端角楼收口；没有侧墙 / 南边界。墙北进不去（DongzhuoLubu.keepSouth 不分 x）。 */
   wallHalf: 4200,
   /** 吕布在城头：站在董卓右侧多远、来回踱步的幅度（像素）与一趟多久（毫秒）、走到头停多久。 */

@@ -1,4 +1,5 @@
 import { stageMapFor, arenaTerrain } from './stageMaps';
+import { LUOYANG } from './dongzhuo';
 /**
  * 战场地形层（用户 2026-11-17：「我想做更多场景比如说有树（不可摧毁）树林，河水流过，踩上去河水会减速。桥跨过河水之类的」；统筹会话定的细则）：
  * - 树 / 树林：不可摧毁的实心障碍（主将、敌兵、部曲、随从都挡住，贴着滑开不卡死）；树林 = 成簇的树，中间留能穿过的空隙；
@@ -129,7 +130,9 @@ function shuTrees(halfW: number, y0: number, y1: number, seed: number): TreeSpec
 export function terrainConfigFor(arc: string, stage: number): TerrainConfig | null {
   const base0 = baseTerrain(arc, stage), g = GROVES[arc + '.' + stage], map = stageMapFor(arc, stage);
   // 有边场地（data/stageMaps）：边界外的山崖 / 密林 / 大河并进来；本关原来就有河的，原来的河当边，不再加
-  const base = map ? withArena(base0 ?? { clear: [C0] }, arenaTerrain(map)) : base0;
+  const base1 = map ? withArena(base0 ?? { clear: [C0] }, arenaTerrain(map)) : base0;
+  // 2-3 洛阳：五座营寨（营栅一圈 + 营门前）不长树
+  const base = arc === 'hulao' && stage === 3 && g ? { ...(base1 ?? {}), clear: [...(base1?.clear ?? [C0]), ...LUOYANG.camps.map(([x, y]) => ({ x, y: y - 10, r: LUOYANG.camp.clearR }))] } : base1;
   return g ? { ...(base ?? { clear: [C0] }), auto: g } : base;
 }
 function withArena(b: TerrainConfig, a: TerrainConfig): TerrainConfig {

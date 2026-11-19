@@ -45,6 +45,10 @@ export function applyCarriedHp(state: CampaignTransfer, player: Player, follower
 export function patchCampaignHp(hero: CharacterId, hpFrac: number, followerHp?: Record<string, number>): void {
   try { const v = JSON.parse(localStorage.getItem(CAMPAIGN_KEY) ?? 'null'); const s = v?.heroes?.[hero]; if (!s?.player) return; s.player.hpFrac = Math.max(0, Math.min(1, hpFrac)); if (followerHp) s.player.followerHp = { ...(s.player.followerHp ?? {}), ...followerHp }; localStorage.setItem(CAMPAIGN_KEY, JSON.stringify(v)); } catch { /* 存储不可用 */ }
 }
+/** 行营军需商人买了战法：把存档点里的战法与随军粮一并改掉（同 patchCampaignHp，存档点在买之前）。 */
+export function patchCampaignTactics(hero: CharacterId, tactics: Record<string, number>, food: number): void {
+  try { const v = JSON.parse(localStorage.getItem(CAMPAIGN_KEY) ?? 'null'); const s = v?.heroes?.[hero]; if (!s?.player || !s.army) return; s.player.build = { ...(s.player.build ?? {}), tactics: { ...tactics } }; s.army.food = food; localStorage.setItem(CAMPAIGN_KEY, JSON.stringify(v)); } catch { /* 存储不可用 */ }
+}
 export function restoreCampaign(state: CampaignTransfer, player: Player, army: Legion): void {
   takeLegacyTreasures(state);
   // Restore the saved final stats exactly once (信物加成由 GameScene 随后 applyCharms 重新加上).

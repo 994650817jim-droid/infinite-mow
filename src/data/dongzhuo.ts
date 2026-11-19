@@ -43,6 +43,13 @@ export const LUOYANG = {
   leapMs: 900, leapArc: 150, landDx: 110, landDy: 150,
   /** 镜头上让：董卓还在城头时，主将离墙线 cameraNear 以内开始往上让，贴墙时最多让 cameraLift（2.5D 城墙连门楼约 330 高，城头的董卓头顶在墙线上方约 320，不让他出画面）。 */
   cameraNear: 700, cameraLift: 240,
+  /**
+   * 友军攻势（systems/AllyPush；用户「从后方会有我方小兵去一路打过去会去摧毁营寨，小地图会显示这个攻势」）：
+   * 开局 firstMs 后第一队、之后每 everyMs 一队义军（squad 人，长枪 / 刀盾）从后方（镜头下沿外 rearPad）出发，走向离主将最近的营寨；
+   * 场上最多 cap 人。speed 行军速度；hp 血；dmg 砍敌兵一下、campDmg 砍营寨一下（每 hitMs 一下）；engage 多近的敌兵会去打；
+   * reach / campReach 够得着的距离；enemyDps 身边每个敌兵每秒掉多少血（最多按 3 个算）。初值，交平衡会话。
+   */
+  push: { firstMs: 6000, everyMs: 20000, squad: 5, cap: 20, sheets: ['shu_spearman_walk_sheet', 'shu_swordsman_walk_sheet'], speed: 78, hp: 150, dmg: 18, campDmg: 9, hitMs: 900, engage: 120, reach: 46, campReach: 40, enemyDps: 6, rearPad: 90 },
 } as const;
 
 export function getLuoyangChapter(): ChapterDef {

@@ -38,8 +38,9 @@ export function loadMerchantArt(scene:Phaser.Scene,done?:()=>void):void{
  * 例：牵机「命中时把周围2名敌人拉向命中点（0.7秒），并减速12%。\n冷却4秒，对首领无效。」→ effect 第一句，cooldown「冷却 4 秒」。
  */
 export function tacticCardText(id:TacticId,level:number):{effect:string;cooldown:string|null;full:string}{
- const full=tacticDescription(id,level),[effect='',...rest]=full.split('\n'),m=full.match(/冷却\s*([\d.]+)\s*秒/);
- return{effect:effect.trim(),cooldown:m?'冷却 '+m[1]+' 秒':null,full:[effect,...rest].join('\n')};
+ // 效果取第一整句（到第一个「。」，跨行的接上：整军「每6秒…士兵，\n各回复…6%。」）
+ const full=tacticDescription(id,level),flat=full.replace(/\n/g,''),end=flat.indexOf('。'),m=full.match(/冷却\s*([\d.]+)\s*秒/);
+ return{effect:(end>=0?flat.slice(0,end+1):flat).trim(),cooldown:m?'冷却 '+m[1]+' 秒':null,full};
 }
 export class MerchantShop{
  private tip?:ItemTooltip;private root!:Phaser.GameObjects.Container;
@@ -62,7 +63,7 @@ export class MerchantShop{
  render(root:Phaser.GameObjects.Container,left:number,top:number,right:number,h:number,figure?:FigurePlace){
   this.root=root;const s=this.o.stock(),t=s.tactic,n=s.items.length+(t?1:0),gap=10;
   this.tip??=this.o.tooltip??new ItemTooltip(this.scene,this.o.tooltipDepth??DEPTH.overlay+40);
-  if(D){drawCampFigure(this.scene,root,MERCHANT_FIGURE,figure??{cx:left+92,bottom:top+h+18,height:h+50},()=>this.onArtLoaded?.());left=Math.max(left+196,figure?figure.cx+108:0);}
+  if(D){drawCampFigure(this.scene,root,MERCHANT_FIGURE,figure??{cx:left+80,bottom:top+h+30,height:h-10},()=>this.onArtLoaded?.());left=Math.max(left+196,figure?figure.cx+108:0);}
   const w=D?((right-left)-gap*(n-1))/n:(right-left-gap)/2;
   const at=(i:number)=>D?{x:left+i*(w+gap),y:top}:{x:left+(i%2)*(w+gap),y:top+Math.floor(i/2)*(h+gap)};
   s.items.forEach((item,i)=>this.itemCard(s,item,i,at(i).x,at(i).y,w,h));
@@ -102,21 +103,23 @@ export class MerchantShop{
   const d=TACTICS[t.id],next=t.level+1,tac=this.o.tactics,able=!!tac&&tac.canBuy(t),poor=this.o.wallet.get()<t.price,{effect,cooldown,full}=tacticCardText(t.id,next);
   this.plate(x,y,w,h).setName('camp-tactic-card');
   const px=x+7,pw=w-14,py=y+14,ph=h-76,g=this.scene.add.graphics().setScrollFactor(0);
-  g.fillStyle(0xe9ddc2,.97).fillRect(px,py,pw,ph).lineStyle(1,0xb59a6a,.7).strokeRect(px+3,py+3,pw-6,ph-6);
+  // 2026-11-18 用户「白色背景看着就很突出」：纸面改成陈年旧绢的暖褐色（亮度、对比都压低，和漆底兵装卡同一档），四周再压一圈更深的旧色；战法卡靠卷轴木轴与朱漆牌区分，不靠亮
+  g.fillStyle(0x86714f,1).fillRect(px,py,pw,ph);for(let i=0;i<5;i++)g.lineStyle(2,0x5a4428,.16-i*.03).strokeRect(px+1+i*2,py+1+i*2,pw-2-i*4,ph-2-i*4);
+  g.lineStyle(1,0x5e4627,.75).strokeRect(px+4,py+4,pw-8,ph-8);
   for(const ry of [py-4,py+ph-3]){g.fillStyle(0x3b2414,1).fillRect(px-4,ry,pw+8,7);g.fillStyle(0xc9a35a,1).fillRect(px-7,ry-1,5,9).fillRect(px+pw+2,ry-1,5,9);}
   this.root.add(g);
   const ink=(tx:number,ty:number,str:string,size:number,color:string)=>this.text(tx,ty,str,size).setColor(color).setStroke('#000',0);
   // 新学 / 精进：漆牌压在上轴中间
   const badge=this.scene.add.graphics().setScrollFactor(0);lqButton(badge,x+w/2,py-1,48,20,'on',t.level?'gold':'cinnabar');this.root.add(badge);
   this.root.add(this.scene.add.text(x+w/2,py-1,t.level?'精进':'新学',{fontFamily:HEADING_FONT,fontSize:'12px',color:'#fff1cf',resolution:2}).setOrigin(.5).setLetterSpacing(2).setScrollFactor(0).setName('camp-tactic-badge'));
-  ink(x+w/2,py+13,TAG_NAMES[d.tag]+'系 · 战法',11,'#8a5a2a').setOrigin(.5,0).setName('camp-tactic-school');
+  ink(x+w/2,py+13,TAG_NAMES[d.tag]+'系 · 战法',11,'#4a2a0f').setOrigin(.5,0).setName('camp-tactic-school');
   if(this.scene.textures.exists('build_icon_'+t.id))this.root.add(this.scene.add.image(x+w/2,py+50,'build_icon_'+t.id).setDisplaySize(46,46).setScrollFactor(0).setName('camp-tactic-icon'));
-  ink(x+w/2,py+75,d.name+'  '+(t.level?'Lv.'+t.level+'→'+next:'Lv.1'),15,'#2a170b').setOrigin(.5,0).setFontFamily(HEADING_FONT).setName('camp-tactic-name');
-  g.lineStyle(1,0xa58a5c,.55).lineBetween(px+10,py+96,px+pw-10,py+96);
+  ink(x+w/2,py+75,d.name+'  '+(t.level?'Lv.'+t.level+'→'+next:'Lv.1'),15,'#1a0e05').setOrigin(.5,0).setFontFamily(HEADING_FONT).setName('camp-tactic-name');
+  g.lineStyle(1,0x5e4627,.7).lineBetween(px+10,py+96,px+pw-10,py+96);
   // 冷却行贴底；效果在名字与冷却之间，放不下就缩字号（不截断）
   const cdY=py+ph-18,descTop=py+100,limit=cdY-2;
-  ink(x+w/2,cdY,cooldown??'悬停看详情',11,cooldown?'#7a3a1c':'#9a8a6c').setOrigin(.5,0).setName('camp-tactic-cd');
-  const desc=ink(px+6,descTop,effect,12,'#33220f').setWordWrapWidth(pw-12,true).setLineSpacing(1).setName('camp-tactic-desc');
+  ink(x+w/2,cdY,cooldown??'悬停看详情',11,cooldown?'#7a1a0e':'#4d3a20').setOrigin(.5,0).setName('camp-tactic-cd');
+  const desc=ink(px+6,descTop,effect,12,'#20130a').setWordWrapWidth(pw-12,true).setLineSpacing(1).setName('camp-tactic-desc');
   for(const size of [11,10.5,10])if(desc.y+desc.height>limit)desc.setFontSize(size+'px');
   desc.setData('limit',limit).setData('full',full);
   const hover=this.scene.add.rectangle(px,py,pw,ph,0,.001).setOrigin(0).setScrollFactor(0).setInteractive().setName('camp-tactic-hover');this.root.add(hover);
@@ -165,7 +168,7 @@ export function openMerchantShop(scene:Phaser.Scene,opts:OpenMerchantOptions):()
  let notice='',closed=false;
  const shop=new MerchantShop(scene,{stock:()=>stock,wallet:opts.wallet,tactics,onBuyItem:opts.onBuyItem??(item=>addItems([item])),owner:()=>hero,notice:t=>{notice=t;},changed:()=>draw(),sound:opts.sound,tooltipDepth:depth+10});
  const top=py+64,h=D?250:200;
- const draw=()=>{if(closed)return;shop.hideTip();body.removeAll(true);shop.render(body,px+16,top,px+pw-16,h);purse.setText(opts.wallet.name+' '+opts.wallet.get());note.setY(D?top+h+18:H-210).setText(notice||shop.hint());};
+ const draw=()=>{if(closed)return;shop.hideTip();body.removeAll(true);shop.render(body,px+16,top,px+pw-16,h);purse.setText(opts.wallet.name+' '+opts.wallet.get());note.setPosition(D?(px+16+196+px+pw-16)/2:W/2,D?top+h+18:H-210).setWordWrapWidth(D?pw-16-196-32:pw-60,true).setText(notice||shop.hint());};
  shop.onArtLoaded=draw;
  const finish=(reason:'leave'|'shutdown')=>{if(closed)return;closed=true;scene.input.keyboard?.off('keydown-ESC',close);scene.events.off('shutdown',onShutdown);shop.destroy();root.destroy();opts.onClose?.(reason);};
  const close=()=>finish('leave'),onShutdown=()=>finish('shutdown');

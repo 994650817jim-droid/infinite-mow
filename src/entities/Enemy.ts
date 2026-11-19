@@ -1,4 +1,5 @@
 import {visualTextureKey} from '../systems/ReadableTextures';
+import { MOUNT_VISUAL, isHorseCavalry } from '../data/mounts';
 import {figureCorrection,sheetFigureHeight} from '../systems/SpriteMetrics';
 import {isV2Texture, V2_TROOP_SCALE, v2TroopGround} from '../systems/ArtStyle';
 import Phaser from 'phaser';
@@ -15,6 +16,8 @@ const WALK_STRIDES: Partial<Record<EnemyKind, number>> = { infantry: 11, shield:
 export class Enemy {
   static spawnSeq = 0;
   isSupplySlot=false;
+  /** 关卡锁定目标（摧毁型关卡的营寨等，StageObjectives 设）：虽然是补给槽位的物件，武器照样当敌人打。 */
+  lockTarget=false;
   readonly uid: number = (enemyUidSeq += 1);
   /** 每次 spawn 递增的实例 ID：池复用后仍能区分新旧生成。 */
   spawnId = 0;
@@ -434,14 +437,16 @@ export class Enemy {
     this.applyScale();
   }
 
+  /** 骑兵（马，不含象兵）整体缩小（MOUNT_VISUAL.visualScale，11-18 用户「骑马整体的比例可以小点」）；步兵 1。 */
+  private get mountedScale(): number { return isHorseCavalry(this.def) ? MOUNT_VISUAL.visualScale : 1; }
   /** 设置帧并按素材比例校正缩放；非行走调用会清除步伐摆动。 */
   private applyFrame(key: string, frame: string): void {
     this.sprite.setTexture(key, frame);
     if (isV2Texture(key)) {
       // 人物画风 v2：0.5 倍（1080p 像素 1:1），脚底 = 帧高-7；行走 / 攻击格子大小可以不同，按当前帧重算锚点
       const fh = this.sprite.frame.height || 96;
-      this.baseScaleY = V2_TROOP_SCALE;
-      this.baseOriginY = v2TroopGround(fh) - this.def.radius * .72 / (fh * V2_TROOP_SCALE);
+      this.baseScaleY = V2_TROOP_SCALE * this.mountedScale;
+      this.baseOriginY = v2TroopGround(fh) - this.def.radius * .72 / (fh * this.baseScaleY);
       this.frameScale = 1;
     } else
     this.frameScale = this.walkSheet && this.kind !== 'boss' && !this.def.walkVisual?.matched ? figureCorrection(this.scene, this.walkSheet, key, frame) : 1;

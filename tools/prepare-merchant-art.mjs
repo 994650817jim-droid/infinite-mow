@@ -1,6 +1,6 @@
 // 行营军需商人立绘（即梦 Seedream 5.5，水墨淡彩白底 2:3，左上角半透明「AI生成」水印）→ public/assets/camp/merchant.webp（透明底）
 //   node tools/prepare-merchant-art.mjs [原图，默认 public/assets/camp/originals/merchant_ink.png] [输出，默认 merchant.webp]
-//   WM=0 不清左上角水印区（下载的原图没有水印时）。军医：WM=0 node tools/prepare-merchant-art.mjs public/assets/camp/originals/medic_ink.png public/assets/camp/medic_figure.webp
+//   压白默认开（TONE=0 关）。WM=0 不清左上角水印区（下载的原图没有水印时）。军医：WM=0 node tools/prepare-merchant-art.mjs public/assets/camp/originals/medic_ink.png public/assets/camp/medic_figure.webp
 // 抠图：从四边洪泛「近白」像素（亮度 > 212 且低饱和）为背景，背景内按白度转半透明并反乘白色（淡墨晕染边缘自然过渡）；
 // 左上角水印区（宽 26% × 高 9%）整块清掉。输出最长边 900（游戏里电脑版约 140×240 显示，留 2–3 倍余量）。不需要开发服务器。
 import { chromium } from 'playwright';
@@ -9,7 +9,7 @@ const src = process.argv[2] ?? 'public/assets/camp/originals/merchant_ink.png', 
 const b = await chromium.launch({ channel: 'chrome', headless: true });
 try {
   const p = await b.newPage();
-  const r = await p.evaluate(async ([data, wm]) => {
+  const r = await p.evaluate(async ([data, wm, tone]) => {
     const im = new Image(); im.src = data; await im.decode();
     const W = im.width, H = im.height, cv = document.createElement('canvas'); cv.width = W; cv.height = H;
     const g = cv.getContext('2d'); g.drawImage(im, 0, 0); const img = g.getImageData(0, 0, W, H), d = img.data;
@@ -28,6 +28,14 @@ try {
       d[i + 3] = Math.round(a * 255);
     }
     const wx = wm ? Math.round(W * .26) : 0, wy = Math.round(H * .09); for (let y = 0; y < wy; y++) for (let x = 0; x < wx; x++) d[(y * W + x) * 4 + 3] = 0;
+    // 压白（2026-11-18 用户「白色背景看着就很突出」）：亮而不饱和的像素（白粮袋、白衣、四周淡墨白晕）拉向帐内暖褐、透明度降一些，
+    // 免得人物在暗帐里发白发亮；肤色、衣服颜色饱和度高，几乎不动。TONE=0 关掉。
+    if (tone) for (let i = 0; i < d.length; i += 4) {
+      if (!d[i + 3]) continue; const r = d[i], gg = d[i + 1], bb = d[i + 2], L = .299 * r + .587 * gg + .114 * bb, sat = Math.max(r, gg, bb) - Math.min(r, gg, bb);
+      const sm = (e0, e1, x) => { const t = Math.max(0, Math.min(1, (x - e0) / (e1 - e0))); return t * t * (3 - 2 * t); };
+      const w = sm(140, 235, L) * (1 - sm(28, 75, sat)); if (w <= 0) continue;
+      d[i] = r * (1 - .28 * w); d[i + 1] = gg * (1 - .36 * w); d[i + 2] = bb * (1 - .48 * w); d[i + 3] = Math.round(d[i + 3] * (1 - .3 * w));
+    }
     g.putImageData(img, 0, 0);
     // 裁到不透明外框（留 8 像素），缩到最长边 900
     let x0 = W, y0 = H, x1 = 0, y1 = 0; for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (d[(y * W + x) * 4 + 3] > 24) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
@@ -35,7 +43,7 @@ try {
     const cw = x1 - x0 + 1, ch = y1 - y0 + 1, s = Math.min(1, 900 / Math.max(cw, ch)), o = document.createElement('canvas'); o.width = Math.round(cw * s); o.height = Math.round(ch * s);
     const og = o.getContext('2d'); og.imageSmoothingQuality = 'high'; og.drawImage(cv, x0, y0, cw, ch, 0, 0, o.width, o.height);
     return { src: [W, H], crop: [x0, y0, cw, ch], size: [o.width, o.height], webp: o.toDataURL('image/webp', .9) };
-  }, ['data:image/png;base64,' + readFileSync(src).toString('base64'), process.env.WM !== '0']);
+  }, ['data:image/png;base64,' + readFileSync(src).toString('base64'), process.env.WM !== '0', process.env.TONE !== '0']);
   writeFileSync(out, Buffer.from(r.webp.split(',')[1], 'base64'));
   console.log(out, '原图', r.src.join('×'), '裁切', r.crop.join(','), '输出', r.size.join('×'));
 } finally { await b.close(); }

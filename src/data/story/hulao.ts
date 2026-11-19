@@ -56,6 +56,18 @@ export const HULAO_STORY: StoryChapter = {
     { id: 'hulao.camp2', type: 'campTalk', lines: [{ who: 'diaochan', text: '太师……不，董卓。他的死，我早已料到。', ifFollower: 'diaochan' }] },
   ],
   bonds: [],
+  // 2-3 战斗中途卷轴（2026-11-18 夜）：DongzhuoLubu 在董卓吕布登上城头、董卓亲自下城时调 StoryDirector.midScroll
+  midScrolls: [
+    { id: 'hulao-3.on_wall', type: 'interlude', kicker: '洛阳城头', title: '国贼与飞将', lines: [
+      { who: 'dongzhuo', text: '洛阳烧便烧了！天子在老夫手里，天下就在老夫手里。' },
+      { who: 'lubu', text: '义父放心。城下这些鼠辈，布一戟一个。' },
+      { who: 'dongzhuo', text: '我儿奉先，给为父斩了这些鼠辈！' },
+    ] },
+    { id: 'hulao-3.dongzhuo_descend', type: 'interlude', kicker: '洛阳城下', title: '董卓下城', lines: [
+      { who: 'dongzhuo', text: '奉先也走了？一群废物！——老夫亲自来！' },
+      { who: 'zhangfei', text: '老贼自己送下城来了！', ifFollower: 'zhangfei' },
+    ] },
+  ],
   barks: [
     // 温酒斩华雄（SishuiPass.wenjiu 成立时，Story 在华雄倒下后接这一句）
     { id: 'hulao-1.wenjiu', type: 'bark', lines: [{ who: 'caocao', text: '（举杯）酒尚温，将军已斩华雄而回！' }] },

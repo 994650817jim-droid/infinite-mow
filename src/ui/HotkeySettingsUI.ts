@@ -26,7 +26,7 @@ export function openHotkeySettings(scene: Phaser.Scene, depth = 900): Phaser.Gam
   root.add(msg);
   let capture: HotkeyAction | null = null, pending: { action: HotkeyAction; code: string } | null = null;
   const rows: Array<{ action: HotkeyAction; value: Phaser.GameObjects.Text }> = [];
-  const colW = (pw - 60) / 2, rowH = 44, top = y0 + 92;
+  const colW = (pw - 60) / 2, rowH = 40, top = y0 + 88; // 16 个可改键（加了舆图 M、军令 G）+ 移动：9 行，行高 40 才不压到底部按钮
   const slot = (i: number) => ({ x: x0 + 30 + (i % 2) * (colW + 0) + (i % 2 ? 10 : 0), y: top + Math.floor(i / 2) * rowH });
   const items: Array<{ fixed?: { label: string; keys: string }; action?: HotkeyAction }> = [...FIXED_KEYS.map(f => ({ fixed: f })), ...HOTKEY_ORDER.map(a => ({ action: a }))];
   const keysText = (a: HotkeyAction) => hotkeyCodes(a).map(keyName).join(' / ');
@@ -34,8 +34,8 @@ export function openHotkeySettings(scene: Phaser.Scene, depth = 900): Phaser.Gam
     const { x, y } = slot(i), w = colW - 10;
     const plate = scene.add.graphics(); plate.fillStyle(0x3a2616, .42).fillRoundedRect(x, y, w, rowH - 6, 5).lineStyle(1, 0xc9a35e, .3).strokeRoundedRect(x, y, w, rowH - 6, 5); root.add(plate);
     const label = it.fixed?.label ?? HOTKEYS[it.action!].label, where = it.fixed ? '固定，不可改' : HOTKEYS[it.action!].where;
-    root.add(txt(x + 10, y + 4, label, 15, '#e8d8b2'));
-    root.add(txt(x + 10, y + 22, where, 11, '#9d8f78'));
+    root.add(txt(x + 10, y + 2, label, 15, '#e8d8b2'));
+    root.add(txt(x + 10, y + 19, where, 11, '#9d8f78'));
     const value = txt(x + w - 10, y + (rowH - 6) / 2, it.fixed?.keys ?? keysText(it.action!), 15, it.fixed ? '#9d927c' : '#efd399', HEADING_FONT).setOrigin(1, .5);
     root.add(value);
     if (it.action) {

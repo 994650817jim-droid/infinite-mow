@@ -232,7 +232,7 @@ export const WEAPON_BEHAVIORS: Record<WeaponId, (host: WeaponHost, weapon: Weapo
     if (passiveCast.dash) {
       const R = PASSIVE_RULES, now = host.combatNow, d = Math.hypot(aimX, aimY) || 1, ux = aimX / d, uy = aimY / d, px = host.player.x, py = host.player.y;
       for (const e of host.grid.query(px + ux * R.dashLength / 2, py + uy * R.dashLength / 2, R.dashLength / 2 + R.dashWidth)) {
-        if (!e.active || e.isSupplySlot) continue;
+        if (!e.active || (e.isSupplySlot && !e.lockTarget)) continue;
         const dx = e.x - px, dy = e.y - py, along = dx * ux + dy * uy, side = Math.abs(-dx * uy + dy * ux);
         if (along < -e.radius || along > R.dashLength + e.radius || side > R.dashWidth / 2 + e.radius) continue;
         if (host.hitEnemy(e, damage * R.dashDamageMul, now, 'melee')) host.player.passive.recordHit(passiveCast, e, now);
@@ -247,7 +247,7 @@ export const WEAPON_BEHAVIORS: Record<WeaponId, (host: WeaponHost, weapon: Weapo
     if (passiveCast.roar) {
       const R = PASSIVE_RULES, px = host.player.x, py = host.player.y, now = host.combatNow;
       for (const e of host.grid.query(px, py, R.roarRadius + 40)) {
-        if (!e.active || e.isSupplySlot || Math.hypot(e.x - px, e.y - py) > R.roarRadius + e.radius) continue;
+        if (!e.active || (e.isSupplySlot && !e.lockTarget) || Math.hypot(e.x - px, e.y - py) > R.roarRadius + e.radius) continue;
         if (host.hitEnemy(e, damage * R.roarDamageMul, now, 'melee')) host.player.passive.recordHit(passiveCast, e, now);
         if (!e.controlImmune) e.stunUntil = Math.max(e.stunUntil, now + R.roarStunMs);
       }
@@ -321,7 +321,7 @@ export const WEAPON_BEHAVIORS: Record<WeaponId, (host: WeaponHost, weapon: Weapo
     const extra = crossbowExtraArrows(level);
     if (extra > 0) {
       const px = host.player.x, py = host.player.y;
-      const others = host.grid.query(px, py, 500 * xbAm).filter(e => e.active && !e.isSupplySlot && e !== target && e.hp > 0)
+      const others = host.grid.query(px, py, 500 * xbAm).filter(e => e.active && !(e.isSupplySlot && !e.lockTarget) && e !== target && e.hp > 0)
         .map(e => ({ e, d: Math.hypot(e.x - px, e.y - py) })).filter(o => o.d <= 500 * xbAm).sort((a, b) => a.d - b.d).slice(0, extra);
       for (let k = 0; k < extra; k += 1) {
         const t = others[k]?.e;

@@ -7,7 +7,11 @@ import type { BattleOrders, BattleOrder } from '../systems/BattleOrders';
 /**
  * 军令面板（电脑布局，右侧「行囊」下方）：漆金小匾「军令」+ 最多 4 条军令（○ 进行中 / ✓ 完成 / ✗ 失败，带进度和一行小字）+ 限时。
  * 只在军令表 revision 变化或倒计时跳秒时重设文字；背景随行数重画。设计见共享笔记 battle-map-design.md。
+ * 收起（用户「军令也可以收起来」）：点匾额或按 G，收成一行小签「军令 2/3 ▸」；收着时有军令完成，小签闪两下。收 / 展记在 localStorage（本机）。
  */
+const FOLD_KEY = 'im_orders_folded';
+function loadFolded(): boolean { try { return localStorage.getItem(FOLD_KEY) === '1'; } catch { return false; } }
+function saveFolded(v: boolean): void { try { if (v) localStorage.setItem(FOLD_KEY, '1'); else localStorage.removeItem(FOLD_KEY); } catch { /* 无痕模式等：只在本局记住 */ } }
 export const ORDERS_PANEL = { w: 196, right: 16, top: 196, lineH: 19, detailH: 14, max: 4 } as const;
 
 export class OrdersPanel {
@@ -17,6 +21,9 @@ export class OrdersPanel {
   private readonly rows: Array<{ main: Phaser.GameObjects.Text; sub: Phaser.GameObjects.Text }> = [];
   private readonly timerText: Phaser.GameObjects.Text;
   private rev = -1; private lastSec = -1; private acc = 0; private h = 0;
+  private folded = loadFolded(); private arrow: Phaser.GameObjects.Text; private flash: Phaser.GameObjects.Graphics; private doneSeen = -1;
+  /** 测试用：收起状态、收着时闪了几次。 */
+  readonly stats = { folded: false, flashes: 0 };
   /** 测试用：面板当前显示的文字（每行）。 */
   lines: string[] = [];
   constructor(private readonly scene: Phaser.Scene, private readonly orders: BattleOrders) {
@@ -25,7 +32,12 @@ export class OrdersPanel {
     this.bg = scene.add.graphics();
     this.title = scene.add.text(14, 7, '军 令', warText(14, LQ.title)).setOrigin(0, 0);
     const seal = scene.add.text(P.w - 27, 14.5, '令', warText(11, '#f6e2b8')).setOrigin(.5);
-    this.root.add([this.bg, this.title, seal]);
+    this.arrow = scene.add.text(P.w - 50, 14.5, '▾', warText(12, LQ.title)).setOrigin(.5);
+    this.flash = scene.add.graphics().setAlpha(0);
+    // 匾额（上面 26 像素）可点：收起 / 展开
+    const hit = scene.add.zone(0, 0, P.w, 28).setOrigin(0).setInteractive({ useHandCursor: true }).setName('orders-panel-head');
+    hit.on('pointerdown', () => this.toggleFold());
+    this.root.add([this.bg, this.flash, this.title, seal, this.arrow, hit]);
     for (let i = 0; i < P.max; i++) {
       const main = scene.add.text(14, 0, '', warText(13, LQ.cream)).setOrigin(0, 0);
       const sub = scene.add.text(30, 0, '', warText(11, '#b9a57a')).setOrigin(0, 0);
@@ -36,6 +48,9 @@ export class OrdersPanel {
     this.root.setVisible(false);
   }
   get container(): Phaser.GameObjects.Container { return this.root; }
+  get isFolded(): boolean { return this.folded; }
+  /** 收起 / 展开（匾额点击、G 键）。 */
+  toggleFold(): void { this.folded = !this.folded; saveFolded(this.folded); this.rev = -1; this.acc = 1; this.update(0); }
   /** 面板占的屏幕矩形（测试 / 防重叠）。 */
   bounds(): { x: number; y: number; w: number; h: number } { return { x: this.root.x, y: this.root.y, w: ORDERS_PANEL.w, h: this.h }; }
   setVisible(v: boolean): void { this.root.setVisible(v && this.rows.some(r => r.main.text !== '')); if (!v) this.root.setVisible(false); }
@@ -50,6 +65,22 @@ export class OrdersPanel {
 
   private render(list: BattleOrder[], t: ReturnType<BattleOrders['timeLeft']>): void {
     const P = ORDERS_PANEL; let y = 30; this.lines = [];
+    const done = list.filter(o => o.state === 'done').length;
+    // 收着时有军令完成：小签闪两下（展开时有横幅 / 勾，不闪）
+    if (this.doneSeen >= 0 && done > this.doneSeen && this.folded) { this.stats.flashes++; this.root.scene.tweens.killTweensOf(this.flash); this.flash.setAlpha(1); this.root.scene.tweens.add({ targets: this.flash, alpha: 0, duration: 380, yoyo: true, repeat: 1, onComplete: () => this.flash.setAlpha(0) }); }
+    this.doneSeen = done; this.stats.folded = this.folded;
+    this.title.setText(this.folded ? `军令 ${done}/${list.length}` : '军 令'); this.arrow.setText(this.folded ? '▸' : '▾').setX(this.folded ? P.w - 50 : P.w - 50);
+    if (this.folded) {
+      for (const r of this.rows) { r.main.setText('').setVisible(false); r.sub.setText('').setVisible(false); }
+      this.timerText.setVisible(false); this.h = 28; this.lines = [`军令 ${done}/${list.length}（收起）`];
+      const g = this.bg.clear();
+      g.fillStyle(0x000000, .35).fillRoundedRect(3, 4, P.w, this.h, 7);
+      g.fillStyle(LQ.lacquer, .86).fillRoundedRect(0, 0, P.w, this.h, 7);
+      g.lineStyle(1.5, LQ.gold, .9).strokeRoundedRect(3, 3, P.w - 6, this.h - 6, 5);
+      g.fillStyle(LQ.cinnabar, .95).fillRoundedRect(P.w - 40, 7, 26, 15, 3);
+      this.flash.clear().lineStyle(3, LQ.goldHi, 1).strokeRoundedRect(-2, -2, P.w + 4, this.h + 4, 8).fillStyle(LQ.goldHi, .18).fillRoundedRect(0, 0, P.w, this.h, 7);
+      this.root.setVisible(list.length > 0 || !!t); return;
+    }
     list.forEach((o, i) => {
       const r = this.rows[i], mark = o.state === 'done' ? '✓' : o.state === 'failed' ? '✗' : '○';
       const prog = o.progress ? ` ${Math.min(o.progress.cur, o.progress.max)}/${o.progress.max}` : '';

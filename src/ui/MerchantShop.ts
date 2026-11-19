@@ -8,6 +8,7 @@ import {addItems,loadout,type GearOwner} from '../systems/ItemStore';
 import {currentMerchantStock,saveMerchantStock,type MerchantStock} from '../systems/MerchantStock';
 import {campaignTacticBook,learnCampaignTactic} from '../systems/Campaign';
 import type {CampOffer} from '../systems/CampMarket';
+import {MERCHANT_FIGURE,drawCampFigure,loadCampFigure,type FigurePlace} from './CampFigure';
 
 /**
  * 军需商人（2026-11-18）：行营休整「军需商人」页与义军营寨「旅商」共用这一个货架与界面。
@@ -15,8 +16,8 @@ import type {CampOffer} from '../systems/CampMarket';
  * - 行营休整：随军粮 + 本局构筑（当场生效），见 ui/CampRestUI；
  * - 营寨旅商：openMerchantShop(scene, {wallet,…})，战法写进征程构筑（下次出征生效）。
  */
-export const MERCHANT_ART_KEY='camp_merchant_art';
-export const MERCHANT_ART_PATH='assets/camp/merchant.webp';
+export const MERCHANT_ART_KEY=MERCHANT_FIGURE.key;
+export const MERCHANT_ART_PATH=MERCHANT_FIGURE.path;
 /** 付账用的粮：name 用于按钮（「粮不足」）与提示；spend 失败返回 false。 */
 export interface MerchantWallet{name:string;get():number;spend(amount:number):boolean;}
 /** 战法卷轴怎么学：canBuy 现在能不能学（等级没变、没满）；learn 学下并返回是否成功。 */
@@ -30,11 +31,10 @@ export interface MerchantShopOptions{
 }
 /** 把立绘排进加载队列（已在 / 正在载就跳过）；载好回调。 */
 export function loadMerchantArt(scene:Phaser.Scene,done?:()=>void):void{
- if(scene.textures.exists(MERCHANT_ART_KEY)){done?.();return;}
- const L=scene.load;L.image(MERCHANT_ART_KEY,MERCHANT_ART_PATH);L.once(Phaser.Loader.Events.COMPLETE,()=>done?.());if(!L.isLoading())L.start();
+ loadCampFigure(scene,MERCHANT_FIGURE,done);
 }
 export class MerchantShop{
- private tip?:ItemTooltip;private root!:Phaser.GameObjects.Container;private artWanted=false;
+ private tip?:ItemTooltip;private root!:Phaser.GameObjects.Container;
  /** 立绘载好时调用（宿主重绘）。 */
  onArtLoaded?:()=>void;
  constructor(private scene:Phaser.Scene,private o:MerchantShopOptions){}
@@ -49,11 +49,12 @@ export class MerchantShop{
   if(enabled)hit.on('pointerdown',()=>{paint('down');this.o.sound?.('uiClick');fn();});
   paint('idle');this.root.add([g,cap,hit]);return{hit,cap};
  }
- /** 画进 root（宿主每次重绘前清空 root）：电脑版左侧立绘，右侧 4 件兵装 + 偶尔 1 卷战法。 */
- render(root:Phaser.GameObjects.Container,left:number,top:number,right:number,h:number){
+ /** 画进 root（宿主每次重绘前清空 root）：电脑版左侧军需商人（不加框，站在帐中），右侧 4 件兵装 + 偶尔 1 卷战法。
+  *  figure：人物位置（默认在 left 起 196 宽的一栏里、比卡片高出一截）。 */
+ render(root:Phaser.GameObjects.Container,left:number,top:number,right:number,h:number,figure?:FigurePlace){
   this.root=root;const s=this.o.stock(),t=s.tactic,n=s.items.length+(t?1:0),gap=10;
   this.tip??=this.o.tooltip??new ItemTooltip(this.scene,this.o.tooltipDepth??DEPTH.overlay+40);
-  if(D){this.art(left,top,150,h);left+=162;}
+  if(D){drawCampFigure(this.scene,root,MERCHANT_FIGURE,figure??{cx:left+92,bottom:top+h+18,height:h+50},()=>this.onArtLoaded?.());left=Math.max(left+196,figure?figure.cx+108:0);}
   const w=D?((right-left)-gap*(n-1))/n:(right-left-gap)/2;
   const at=(i:number)=>D?{x:left+i*(w+gap),y:top}:{x:left+(i%2)*(w+gap),y:top+Math.floor(i/2)*(h+gap)};
   s.items.forEach((item,i)=>this.itemCard(s,item,i,at(i).x,at(i).y,w,h));
@@ -105,15 +106,6 @@ export class MerchantShop{
    this.o.sound?.('purchase');this.o.notice('研习战法「'+d.name+'」'+(lv?'Lv.'+lv+'→'+(lv+1):'Lv.1')+' · '+tac.doneText);this.o.changed();
   },bw,!t.sold&&able&&!poor).hit.setName('camp-tactic-buy');
   void s;
- }
- /** 电脑版军需商人立绘（手绘水墨淡彩半身像，透明底）：没载到先空着，载好由宿主重绘。 */
- private art(x:number,y:number,w:number,h:number){
-  this.plate(x,y,w,h);
-  if(!this.scene.textures.exists(MERCHANT_ART_KEY)){if(!this.artWanted){this.artWanted=true;loadMerchantArt(this.scene,()=>this.onArtLoaded?.());}return;}
-  const img=this.scene.add.image(x+w/2,y+h/2,MERCHANT_ART_KEY).setScrollFactor(0).setName('camp-merchant-art'),src=img.texture.getSourceImage() as {width:number;height:number},bw=w-10,bh=h-10,s=Math.max(bw/src.width,bh/src.height);
-  img.setScale(s).setCrop((src.width-bw/s)/2,(src.height-bh/s)/2,bw/s,bh/s);this.root.add(img);
-  this.root.add(this.scene.add.rectangle(x+5,y+h-33,w-10,28,0x120c07,.62).setOrigin(0).setScrollFactor(0));
-  this.text(x+w/2,y+h-19,'军需商人',15).setOrigin(.5).setFontFamily(HEADING_FONT).setColor('#f1ddb5').setLetterSpacing(3);
  }
  hideTip(){this.tip?.hide();}
  destroy(){if(this.tip!==this.o.tooltip)this.tip?.destroy();this.tip=undefined;}

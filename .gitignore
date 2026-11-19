@@ -253,6 +253,7 @@ assets/raw/*
 !/tools/test-camp-buy-bag.mjs
 !/tools/test-merchant-tactic.mjs
 !/tools/prepare-merchant-art.mjs
+!/tools/shot-camp-stations.mjs
 
 # 黄巾力士专用图测试 / 符牌抠图（2026-11-18）
 !/tools/test-lishi.mjs

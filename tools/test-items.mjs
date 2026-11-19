@@ -13,7 +13,7 @@ const G = "window.__game.scene.getScene('GameScene')", M = "window.__game.scene.
 // 在场景里按名字递归找对象（容器嵌套）
 const FIND = `window.__find=(root,name)=>{const list=root.list??root.getChildren?.()??[];for(const o of list){if(o.name===name)return o;if(o.list){const r=window.__find(o,name);if(r)return r;}}return null;};
 window.__tap=o=>{o.emit('pointerdown');o.emit('pointerup');};
-window.__mod=async part=>import(performance.getEntriesByType('resource').map(e=>e.name).find(n=>n.includes(part))??('/src/'+part.replace(/^\\//,'')));`;
+window.__mod=async part=>import(performance.getEntriesByType('resource').map(e=>e.name).find(n=>n.includes(part))??('/src/'+part.replace(/^\\/?(src\\/)?/,'')));`;
 
 async function page(layout, viewport) {
   const p = await b.newPage({ viewport, deviceScaleFactor: layout === 'mobile' ? 2 : 1 });
@@ -177,7 +177,7 @@ const camp = await p.evaluate(async G0 => {
   const items = await window.__mod('/src/data/items.ts'); out.slots = ui.itemOffers.map(i => items.itemSlot(i)); out.qualities = ui.itemOffers.map(i => i.quality);
   out.tactics = !!window.__find(ui.root, 'camp-description-0'); // 旧的战法 / 宝物卡不该再出现
   const label = () => window.__find(ui.root, 'camp-item-price-0')?.text; const btn = window.__find(ui.root, 'camp-item-goods-0'); out.label = label(); out.quality = ui.itemOffers[0]?.quality;
-  const card = window.__find(ui.root, 'camp-item-card-0'), rs = s.cameras.main.zoom; card?.emit('pointerover', { x: 120 * rs, y: 120 * rs }); const tip = s.children.getByName('item-tooltip'); out.tip = !!tip?.visible && tip.list.some(o => o.name === 'item-tooltip-name' && o.text.length > 0); card?.emit('pointerout'); out.tipHidden = !tip?.visible;
+  const card = window.__find(ui.root, 'camp-item-card-0'), rs = s.cameras.main.zoom; card?.emit('pointerover', { x: 120 * rs, y: 120 * rs }); const tip = s.children.list.find(o => o.name === 'item-tooltip' && o.visible); /* 场景里可能已有加点面板等别的提示框，取弹出来的那个 */ out.tip = !!tip?.visible && tip.list.some(o => o.name === 'item-tooltip-name' && o.text.length > 0); card?.emit('pointerout'); out.tipHidden = !tip?.visible;
   const before = s.itemDrops.runLoot.length, food = s.legion.food; btn?.emit('pointerdown'); await new Promise(r => setTimeout(r, 100));
   out.bought = s.itemDrops.runLoot.length - before; out.cost = food - s.legion.food; out.sold = window.__find(ui.root, 'camp-item-price-0')?.text;
   return out;

@@ -30,7 +30,7 @@ import { chapterOneCleared, chapterUnlocked, isChapterTestRun } from '../systems
 import { FONT, TITLE_FONT, HEADING_FONT, GAME_HEIGHT as H, GAME_WIDTH as W, IS_DESKTOP as D, switchLayout } from '../config';
 import { lqDivider, lqHitBox, lqPanel, lqSkin } from '../ui/LacquerKit';
 import { buildSettingsPanel, type SettingSpec } from '../ui/SettingsPanel';
-import { BARKS_LABEL, heroBarks, setHeroBarks, type HeroBarks } from '../systems/BattleSettings';
+import { BARKS_LABEL, heroBarks, setHeroBarks, type HeroBarks, SCHOOL_HINT_LABEL, schoolHint, setSchoolHint, type SchoolHint } from '../systems/BattleSettings';
 import { CHAPTER_SCENES, openChapterSelect } from '../ui/ChapterSelect';
 import { requestDirectDepart } from '../systems/DirectDepart';
 import type { TimelineChapterId } from '../world/ChapterTimeline';
@@ -352,6 +352,7 @@ export class MenuScene extends Phaser.Scene {
       {key:'shake',name:'震屏',tab:'view',kind:'choice',options:ch(['strong','weak','off'],SHAKE_LABEL),get:()=>shakeLevel(),set:v=>setShakeLevel(v as ShakeLevel)},
       {key:'death-fx',name:'死亡特效',tab:'view',kind:'toggle',options:ch(['on','off'],DEATHFX_LABEL),get:()=>deathFxSetting(),set:v=>setDeathFx(v as DeathFxSetting)},
       {key:'damage',name:'伤害数字',tab:'battle',kind:'choice',options:ch(['all','crit','off'],DAMAGE_LABEL),get:()=>damageNumbers(),set:v=>setDamageNumbers(v as DamageNumbers)},
+      {key:'school-hint',name:'合击觉醒提示',tab:'battle',kind:'choice',options:ch(['brief','full','off'],SCHOOL_HINT_LABEL),get:()=>schoolHint(),set:v=>setSchoolHint(v as SchoolHint)},
       {key:'hero-barks',name:'武将台词',tab:'battle',kind:'toggle',options:ch(['on','off'],BARKS_LABEL),get:()=>heroBarks(),set:v=>setHeroBarks(v as HeroBarks)},
       {key:'story',name:'剧情',tab:'story',kind:'choice',options:ch(['full','chapter','off'],STORY_LABEL),get:()=>storyMode(),set:v=>setStoryMode(v as 'full')},
       {key:'opening',name:'开场动画',tab:'story',kind:'choice',options:ch(['every','first','off'],OPENING_LABEL),get:()=>openingMode(),set:v=>setOpeningMode(v as OpeningMode)},

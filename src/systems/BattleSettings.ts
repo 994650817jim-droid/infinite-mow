@@ -8,6 +8,7 @@
  * - 武将台词 im_hero_barks：'off' 关 / 其余开（缺省开）
  * - 剧情 im_story：'full' 完整 / 'chapter' 只看章头章末 / 'off' 关闭（2026-11-17 剧情系统，缺省完整）
  * - 死亡特效 im_death_fx：'off' 关 / 其余开（2026-11-18 敌军死亡特效，缺省开）
+ * - 合击觉醒提示 im_school_hint：'brief' 简洁（缺省：每关第一次出小签，之后只闪徽印）/ 'full' 完整（觉醒每次都出）/ 'off' 关（只闪徽印）
  * - 画面清晰度 im_render_scale：''（自动）/ '1' / '2' / '3'（config.pickRenderScale 启动时读，刷新后生效）
  */
 const get = (k: string): string | null => { try { return localStorage.getItem(k); } catch { return null; } };
@@ -36,6 +37,11 @@ export function setShakeLevel(v: ShakeLevel): void { set('im_shake', v); shakeCa
 export const SHAKE_LABEL: Record<ShakeLevel, string> = { strong: '强', weak: '弱', off: '关' };
 /** 震屏强度倍率：强 1、弱 0.5、关 0（与新增武将会话 hitFeel.shakeMul 一致）。 */
 export function shakeScale(): number { const v = shakeLevel(); return v === 'off' ? 0 : v === 'weak' ? .5 : 1; }
+
+export type SchoolHint = 'full' | 'brief' | 'off';
+export function schoolHint(): SchoolHint { const v = get('im_school_hint'); return v === 'full' || v === 'off' ? v : 'brief'; }
+export function setSchoolHint(v: SchoolHint): void { set('im_school_hint', v); }
+export const SCHOOL_HINT_LABEL: Record<SchoolHint, string> = { full: '完整', brief: '简洁', off: '关' };
 
 export type StoryMode = 'full' | 'chapter' | 'off';
 export function storyMode(): StoryMode { const v = get('im_story'); return v === 'chapter' || v === 'off' ? v : 'full'; }

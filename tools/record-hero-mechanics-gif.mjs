@@ -31,6 +31,17 @@ await p.evaluate(async ([G0, hero, SCENE]) => {
     while (pl.passive.isSharpshooter(s.combatNow)) await wait(50);
     await wait(1200); pl.damageImmune = false; const biter = mk(pl.x - 8, pl.y, { stun: false, dmg: 3 }); await wait(1600); biter.deactivate(); pl.damageImmune = true; await wait(600);
   }
+  if (hero === 'zhuge' && SCENE === 'ember') {
+    // 2026-11-19 天火从高空落下 + 动态星火焦土：怪堆 + 观星先叠满 3 层，下一发就是算无遗策
+    // （大号火流星从高空加速落下 → 撞地 → 4.5 秒星火焦土：火舌舔动、北斗星芒依次流过、每跳齐闪、火星上飘）
+    pl.damageImmune = true; pl.weapons[0].level = 3; pl.weapons[0].cooldownLeft = 1e9;
+    // 开局武器可能已经出过一发（打向别处的兵），先等它落完，免得那一发吃掉算无遗策
+    await wait(1200); pl.passive.reset('zhuge', s.combatNow);
+    for (let i = 0; i < 9; i++) mk(pl.x + 180 + (i % 3 - 1) * 34, pl.y - 40 + (Math.floor(i / 3) - 1) * 30, { hp: 99999 });
+    await wait(300); for (let k = 0; k < 3; k++) pl.passive.starLandCrowd(s.combatNow);
+    pl.weapons[0].cooldownLeft = 0; await wait(150); pl.weapons[0].cooldownLeft = 1e9;
+    await wait(6200); return;
+  }
   if (hero === 'zhuge' && SCENE === 'crowd') {
     // 2026-11-18 天火打怪堆：没有首领 / 精锐时落进怪堆中心（溅射 90 内 40%）；同晚改：算无遗策（同一目标第 4 发）留下手绘星火焦土（半径 160），借东风火龙下面卷起手绘东风。
     // 怪堆血量给到 600；无首领时天火每发都积星象，第 4 发算无遗策留 4.5 秒星火焦土（谁都烧）；借东风火龙把怪堆顺风吹开

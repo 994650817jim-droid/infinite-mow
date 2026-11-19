@@ -31,19 +31,19 @@ function read(): MerchantStock | null {
 export function saveMerchantStock(s: MerchantStock): void {
   memo = s; try { localStorage.setItem(KEY, JSON.stringify(s)); } catch { /* 存储不可用：只留内存 */ }
 }
-function roll(key: string, tier: number, book?: TacticBook, rng: () => number = Math.random): MerchantStock {
-  const items = rollMerchantGear(tier, rng);
+function roll(key: string, tier: number, book?: TacticBook, rng: () => number = Math.random, chapter = 1): MerchantStock {
+  const items = rollMerchantGear(tier, rng, chapter);
   return {key, items, sold: items.map(() => false), tactic: book ? rollMerchantTactic(book, rng) : null};
 }
 /** 行营休整：visit 与当前货架的键相同就沿用（含已售），不同就按本关进度换新货。 */
-export function merchantStockForVisit(visit: string, tier: number, book?: TacticBook): MerchantStock {
+export function merchantStockForVisit(visit: string, tier: number, book?: TacticBook, chapter = 1): MerchantStock {
   const cur = read(); if (cur && cur.key === visit) return cur;
-  const s = roll(visit, tier, book); saveMerchantStock(s); return s;
+  const s = roll(visit, tier, book, Math.random, chapter); saveMerchantStock(s); return s;
 }
 /** 营寨旅商：打开当前货架；从没进过行营（还没有货）时摆一份（键 'camp'，下次打赢一关的休整会换掉）。 */
-export function currentMerchantStock(tier: number, book?: TacticBook): MerchantStock {
+export function currentMerchantStock(tier: number, book?: TacticBook, chapter = 1): MerchantStock {
   const cur = read(); if (cur) return cur;
-  const s = roll('camp', tier, book); saveMerchantStock(s); return s;
+  const s = roll('camp', tier, book, Math.random, chapter); saveMerchantStock(s); return s;
 }
 /** 测试用：清空货架。 */
 export function resetMerchantStock(): void { memo = null; try { localStorage.removeItem(KEY); } catch { /* */ } }

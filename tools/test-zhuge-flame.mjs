@@ -17,7 +17,7 @@ await p.evaluate(G0 => { const s = eval(G0); s.registry.set('runConfig', { ...s.
 await p.waitForTimeout(500);
 await p.waitForFunction(() => { const s = window.__game.scene.getScene('GameScene'); return s?.player && s.runConfig?.character === 'zhuge' && s.__DEV_ACTIONS; }, null, { timeout: 20000 });
 await p.evaluate(G0 => { const s = eval(G0); s.player.damageImmune = true; s.__DEV_ACTIONS.closePopup?.(); s.spawnTimer = s.eliteTimer = 1e9; s.player.stats.critChance = -1; setInterval(() => { if (s.mode === 'levelup') s.chooseUpgrade(0); else if (s.mode === 'recruit') s.__DEV_ACTIONS.closePopup?.(); }, 40); }, G);
-const H = `const s = ${G}, pl = s.player, w = pl.weapons[0], wait = ms => new Promise(r => setTimeout(r, ms));
+const H = `const s = ${G}, pl = s.player, w = pl.weapons[0], wait = ms => new Promise(r => setTimeout(r, ms)), waitG = async ms => { const t0 = s.combatNow, r0 = Date.now(); while (s.combatNow - t0 < ms && Date.now() - r0 < ms * 6) await wait(30); }; /* 按战斗时钟等（机器忙时帧率低，真实 900 毫秒里天火 0.8 秒还没落地） */
   const clear = () => { for (const e of s.enemies) if (e.active && !e.isSupplySlot) e.deactivate(); pl.passive.reset('zhuge', s.combatNow); }; // 清观星层数：无首领时每发都积层，不清的话连着几个测量会撞上算无遗策
   const mk = (kind, x, y, hp = 99999) => { const e = s.spawnEnemy(kind, x, y, 1); e.hp = e.maxHp = hp; e.stunUntil = 1e12; return e; };
   const { TIANHUO_DEF } = await import('/src/weapons/zhugeTianhuo.ts'); const Z = window.__zgTuning; if (!Z) throw new Error('no __zgTuning'); /* 游戏实际在用的那份（热更新后 import 拿到的是另一份） */
@@ -43,7 +43,7 @@ ck('天火：打杂兵时溅射到身边敌人 40%（怪堆溅射）', Math.abs(
 // 2) 星位跟着目标走：标完后把目标挪开 120 像素，天火仍落在它身上
 const r2 = await p.evaluate(`(async () => { ${H}
   clear(); w.cooldownLeft = 1e9; await wait(120); const t = mk('infantry', pl.x + 200, pl.y);
-  w.cooldownLeft = 0; await wait(150); w.cooldownLeft = 1e9; t.sprite.y += 120; await wait(900);
+  w.cooldownLeft = 0; await wait(150); w.cooldownLeft = 1e9; t.sprite.y += 120; await waitG(900);
   return { hit: t.maxHp - t.hp };
 })()`);
 ck('天火：星位跟着目标走（标记后目标走开 120 像素仍被命中）', r2.hit > 0, r2);
@@ -51,7 +51,7 @@ ck('天火：星位跟着目标走（标记后目标走开 120 像素仍被命�
 // 3) 选靶（2026-11-18 改）：有首领 / 精锐时单点；没有时打进怪堆中心（身边 80 内同伴最多），溅射 90 内 40% 覆盖整堆
 const r3 = await p.evaluate(`(async () => { ${H}
   const shot = async (spec) => { clear(); w.cooldownLeft = 1e9; await wait(120); const es = spec.map(([k, dx, dy, hp]) => mk(k, pl.x + dx, pl.y + dy, hp));
-    w.cooldownLeft = 0; await wait(150); w.cooldownLeft = 1e9; await wait(900); return es.map(e => e.maxHp - e.hp); };
+    w.cooldownLeft = 0; await wait(150); w.cooldownLeft = 1e9; await waitG(900); return es.map(e => e.maxHp - e.hp); };
   // 怪堆：离群的高血步兵（近）+ 7 个一堆（远，中心那个在 (300, 0)）
   const heap = [[0, 0], [40, 0], [-40, 0], [0, 40], [0, -40], [30, 30], [-30, -30]];
   const crowd = await shot([['infantry', 110, 0, 9000], ...heap.map(([x, y]) => ['infantry', 300 + x, 120 + y, 3000])]);
@@ -65,7 +65,7 @@ ck('天火：有精锐时仍锁精锐单点，怪堆不挨打', r3.eliteHit > 0 
 // 打首领 / 精锐时溅射维持小范围（50 内 30%）：精锐身边 40 的步兵挨 30%，80 外的不挨
 const r3b = await p.evaluate(`(async () => { ${H}
   clear(); w.cooldownLeft = 1e9; await wait(120); const el = mk('elite', pl.x + 220, pl.y), near = mk('infantry', pl.x + 260, pl.y), far = mk('infantry', pl.x + 300, pl.y);
-  w.cooldownLeft = 0; await wait(150); w.cooldownLeft = 1e9; await wait(900);
+  w.cooldownLeft = 0; await wait(150); w.cooldownLeft = 1e9; await waitG(900);
   return { el: el.maxHp - el.hp, near: near.maxHp - near.hp, far: far.maxHp - far.hp, ratio: +((near.maxHp - near.hp) / (el.maxHp - el.hp)).toFixed(2) };
 })()`);
 ck('天火：打精锐时溅射维持 50 内 30%（40 像素的步兵挨 30%，80 像素的不挨）', r3b.el > 0 && Math.abs(r3b.ratio - .3) < .03 && r3b.far === 0, r3b);
@@ -74,12 +74,12 @@ ck('天火：打精锐时溅射维持 50 内 30%（40 像素的步兵挨 30%，8
 const r4 = await p.evaluate(`(async () => { ${H}
   const { BALANCE } = await import('/src/config.ts');
   const run = async (kind, marksOf) => { clear(); w.cooldownLeft = 1e9; await wait(120); const t = mk(kind, pl.x + 220, pl.y), hits = [], marks = [];
-    for (let k = 0; k < 4; k++) { const h0 = t.hp; w.cooldownLeft = 0; await wait(100); w.cooldownLeft = 1e9; await wait(900); hits.push(h0 - t.hp); marks.push(marksOf(t)); }
+    for (let k = 0; k < 4; k++) { const h0 = t.hp; w.cooldownLeft = 0; await wait(100); w.cooldownLeft = 1e9; await waitG(900); hits.push(h0 - t.hp); marks.push(marksOf(t)); }
     t.deactivate(); return { hits, marks, ratio: +(hits[3] / hits[0]).toFixed(2) }; };
   const single = await run('elite', t => pl.passive.starMarks(t, s.combatNow));
   // 怪堆：每发打的是不同的兵也照样积层
   clear(); w.cooldownLeft = 1e9; await wait(120); const marks = [], hits = []; let last = null;
-  for (let k = 0; k < 4; k++) { last?.deactivate(); const t = mk('infantry', pl.x + 220, pl.y + (k % 2 ? 40 : -40)); last = t; const h0 = t.hp; w.cooldownLeft = 0; await wait(100); w.cooldownLeft = 1e9; await wait(900); hits.push(h0 - t.hp); marks.push(pl.passive.crowdStarMarks(s.combatNow)); }
+  for (let k = 0; k < 4; k++) { last?.deactivate(); const t = mk('infantry', pl.x + 220, pl.y + (k % 2 ? 40 : -40)); last = t; const h0 = t.hp; w.cooldownLeft = 0; await wait(100); w.cooldownLeft = 1e9; await waitG(900); hits.push(h0 - t.hp); marks.push(pl.passive.crowdStarMarks(s.combatNow)); }
   last?.deactivate();
   return { single, crowd: { hits, marks, ratio: +(hits[3] / hits[0]).toFixed(2) }, expect: 2 * BALANCE.critMultiplier, label: pl.passive.label(s.combatNow) };
 })()`);
@@ -89,7 +89,7 @@ ck('观星：没有首领 / 精锐时天火每发都积星象（每发打不同�
 // 5) 智力：天火每点 +1.5%（另外法术伤害照常）
 const r5 = await p.evaluate(`(async () => { ${H}
   clear(); w.cooldownLeft = 1e9; await wait(120); const g = pl.growth;
-  const shot = async () => { pl.passive.reset('zhuge', s.combatNow); const t = mk('infantry', pl.x + 220, pl.y); w.cooldownLeft = 0; await wait(100); w.cooldownLeft = 1e9; await wait(900); const d = t.maxHp - t.hp; t.deactivate(); return d; };
+  const shot = async () => { pl.passive.reset('zhuge', s.combatNow); const t = mk('infantry', pl.x + 220, pl.y); w.cooldownLeft = 0; await wait(100); w.cooldownLeft = 1e9; await waitG(900); const d = t.maxHp - t.hp; t.deactivate(); return d; };
   const base = await shot(), m0 = g.damageMultiplier(s.combatNow), sp0 = g.spellWeaponMultiplier('flame_banner'); g.attributes.intellect = 10; const m10 = g.damageMultiplier(s.combatNow), sp10 = g.spellWeaponMultiplier('flame_banner'); const smart = await shot(); g.attributes.intellect = 0;
   return { base, smart, ratio: +(smart / base).toFixed(3), expect: +((m10 / m0) * (sp10 / sp0) * 1.15).toFixed(3), spell: +(sp10 / sp0).toFixed(3) };
 })()`);

@@ -29,7 +29,8 @@ import {CAMP_LOCK,TOWN_BUILDINGS,FOCUS_NAME,FOCUS_INCOME,FOCUS_CHANGE_COST,CITY_
 import {TECHS,TECH_IDS,BRANCH_NAME,BRANCH_ORDER,techBlockers,techTotals,type TechBranch} from '../data/tech';
 import {LORD_LEVEL_HINT,followerLevel,followerLevelCap,hallLevel,loadRoster,rankCap,rankPreview,rankUp,rosterFollowers,type Recruit} from '../systems/RosterStore';
 import {COMMONER_SKILLS} from '../data/commonerSkills';
-import {QUALITIES} from '../data/items';
+import {QUALITIES, lootBand} from '../data/items';
+import {chaptersOpen} from '../systems/HeroProgress';
 import {PANO_ZOOM,CAMP_BARS,CAMP_PAN,PANO_W,PANO_H,CITY_SLOTS,LEVEL_SCALE,CITY_BG_SIZES,CITY_ART_LEVELS,ART_ALIAS} from '../town/CityLayout';
 import {cityById,TIER_NAME} from '../world/WorldCities';
 import {CampLife,loadCampLife,CAMP_ART_IDS} from '../town/CampLife';
@@ -266,8 +267,8 @@ export class CityScene extends Phaser.Scene {
  /** 旅商：道具图集随战斗图集在进城时释放了，缺就先载（同换马）。品质档同行营 itemTier：一章 0、虎牢关通关 1、群雄起 2。 */
  private openMerchant(){
   uiSfx().play('uiClick');
-  const s=loadWorld(),tier=s.warlordStages>=3?2:s.cleared.hulao?1:0;let hero='zhaoyun';try{hero=localStorage.getItem('im_last_hero')||hero;}catch{/* 存储不可用 */}
-  const open=()=>{if(!this.sys.isActive())return;openMerchantShop(this,{wallet:{name:'军粮',get:()=>loadWorld().provisions,spend:spendProvisions},tier,hero:(CHARACTERS.some(c=>c.id===hero)?hero:'zhaoyun') as CharacterId,depth:600,onClose:()=>{if(this.sys.settings.status===Phaser.Scenes.RUNNING)this.refresh();},sound:k=>uiSfx().play(k as 'uiClick')});};
+  const s=loadWorld(),lootCh=chaptersOpen(),tier=lootBand(lootCh); /* 掉落品质随章节（data/items.ts lootBand）：按已开放章节 */let hero='zhaoyun';try{hero=localStorage.getItem('im_last_hero')||hero;}catch{/* 存储不可用 */}
+  const open=()=>{if(!this.sys.isActive())return;openMerchantShop(this,{wallet:{name:'军粮',get:()=>loadWorld().provisions,spend:spendProvisions},tier,chapter:lootCh,hero:(CHARACTERS.some(c=>c.id===hero)?hero:'zhaoyun') as CharacterId,depth:600,onClose:()=>{if(this.sys.settings.status===Phaser.Scenes.RUNNING)this.refresh();},sound:k=>uiSfx().play(k as 'uiClick')});};
   if(this.textures.exists('item_icons'))open();else{this.load.atlas('item_icons','assets/items/item-icons.webp','assets/items/item-icons.json');this.load.once('complete',open);this.load.start();}
  }
  private panKeys?:Record<string,Phaser.Input.Keyboard.Key>;

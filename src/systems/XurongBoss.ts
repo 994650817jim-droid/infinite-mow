@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import{warnCircle,TELEGRAPH_CLASSIC,laneCracks}from'../ui/Telegraph';
 import{HINT_MOCK}from'../ui/HintStyle';import{warnFx,type WarnFx}from'../ui/WarnFx';
 import type {Enemy} from '../entities/Enemy';
+import { castFlourish, warmCast } from './BossThemeFx';
 /** 突骑的帧（2026-11-19 全面检查：西凉骑兵图换成 ArtStyle v2 具名帧后，原来的数字帧 0 / 4 / 8 取不到，画出整张图集）。i = null 站定，否则冲锋两帧交替；旧图（数字帧，每行 4 帧）照旧。 */
 const riderFrame=(img:Phaser.GameObjects.Image,left:boolean,i:number|null):string|number=>img.texture.has('left_stand')?(i===null?(left?'left_stand':'right_stand'):`chg_${left?'left':'right'}_${i%2}`):(left?4:8)+(i??0)%4;
 import type {Player} from '../entities/Player';
@@ -15,7 +16,7 @@ export class XurongBoss{
  /** 号令节奏：前 0.3 秒抬手（起手），之后挥令（下令）——骑袭预警、箭影、伏兵都从下令这一刻才出现；伤害时间点不变。 */
  private cmdAt=0;private signaled=true;private pendingAmbush=false;private static readonly SIGNAL=300;private g:Phaser.GameObjects.Graphics;
  readonly metrics={raids:0,rains:0,ambushes:0,enrages:0};
- constructor(private h:Host,now:number){this.next=now+1800;this.g=h.scene.add.graphics().setDepth(40);}
+ constructor(private h:Host,now:number){ warmCast(h.scene, 'xurong');this.next=now+1800;this.g=h.scene.add.graphics().setDepth(40);}
  get label():string{return this.state==='dead'?'徐荣败退':this.state==='command'?'两翼伏兵 · 注意路线':this.phase2?'伏击合围 · 骑袭与箭雨':'荥阳统军 · 预警后躲避';}
  hit(now:number):void{this.hurtAt=now+120;}
  /** 徐荣专属特效（伏兵起 / 乱箭斜落 / 疾影尘线）；缺图或旧样式时为 null，走原来的画法。 */
@@ -26,7 +27,7 @@ export class XurongBoss{
  private area(x:number,y:number,r:number,d:number,now:number):void{const p=this.h.player;if(Math.hypot(p.x-x,p.y-y)<=r+p.radius)p.takeDamage(d,now);this.h.army.hurtArea(x,y,r,d,now);}
  update(dt:number,now:number):void{const {boss:b,player:p}=this.h;if(!b.active||this.state==='dead')return;this.g.clear();if(!this.phase2&&b.hp<b.maxHp*.5){this.phase2=true;this.metrics.enrages++;this.next=Math.min(this.next,now+500);}
  const dx=p.x-b.x,dy=p.y-b.y,d=Math.hypot(dx,dy)||1,dir=Math.abs(dx)>Math.abs(dy)?dx<0?1:2:dy<0?3:0;
- if(now>=this.next&&this.state==='approach'){this.state='command';this.until=now+850;this.order++;this.cmdAt=now;this.signaled=false;if(this.phase2){this.raid(now);this.arrows(now);if(this.order%2===0)this.pendingAmbush=true;}else if(this.order%3===1)this.raid(now);else if(this.order%3===2)this.arrows(now);else this.pendingAmbush=true;this.next=now+(this.phase2?3900:5200);this.h.sfx();}
+ if(now>=this.next&&this.state==='approach'){this.state='command';this.until=now+850;this.order++;castFlourish(this.h.scene,'xurong',b,850,this.phase2);/* 起手：尘土蓄力光，二阶段再加脚下法阵 */this.cmdAt=now;this.signaled=false;if(this.phase2){this.raid(now);this.arrows(now);if(this.order%2===0)this.pendingAmbush=true;}else if(this.order%3===1)this.raid(now);else if(this.order%3===2)this.arrows(now);else this.pendingAmbush=true;this.next=now+(this.phase2?3900:5200);this.h.sfx();}
  // 下令：伏兵从草里起身、两翼伏骑旗影一闪
  if(!this.signaled&&now>=this.cmdAt+XurongBoss.SIGNAL){this.signaled=true;if(this.pendingAmbush){this.pendingAmbush=false;this.ambush();}const f=this.fx();if(f)for(const l of this.lanes)if(l.at>now)f.ambush(l.x,l.y,130);}
  if(this.state==='command'&&now>=this.until)this.state='approach';if(this.state==='approach'&&d>165){b.sprite.x+=dx/d*b.def.speed*dt;b.sprite.y+=dy/d*b.def.speed*dt;}

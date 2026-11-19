@@ -7,7 +7,7 @@ import type { BossDebug } from './BossKit';
 import type { Strikes } from './BeifaSystems';
 import { warnFx } from '../ui/WarnFx';
 import { playSheet } from './SkillFxSheets';
-import { castFlourish } from './BossThemeFx';
+import { castFlourish, warmCast } from './BossThemeFx';
 
 type Move = 'surround' | 'feint' | 'thunder';
 export type SimayiPhase = 'hold' | 'battle' | 'omen';
@@ -35,7 +35,7 @@ export class SimayiBoss extends ArcBossV2<Move> {
     force: (i, now) => { this.beat.set(null, 'idle', now, 0); this.start((['surround', 'feint', 'thunder'] as const)[i] ?? 'surround', now); },
     phase2: now => { for (const f of this.forts) if (f.active) f.deactivate(); this.toBattle(now); },
   };
-  constructor(h: ArcHost, tex: string, now: number, private x: SimayiExtra) {
+  constructor(h: ArcHost, tex: string, now: number, private x: SimayiExtra) { warmCast(h.scene, 'simayi');
     super(h, tex, '司马懿', now);
     const b = h.boss;
     for (let i = 0; i < SMY.forts; i++) { const a = i / SMY.forts * Math.PI * 2 + Math.PI / 4, f = x.placeFort(b.x + Math.cos(a) * SMY.fortRadius, b.y + Math.sin(a) * SMY.fortRadius * .8, i); if (f) this.forts.push(f); }

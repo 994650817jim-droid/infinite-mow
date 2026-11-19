@@ -206,13 +206,15 @@ export class Enemy {
       const figureTarget: Partial<Record<EnemyKind, number>> = { infantry: 48, archer: 46, shield: 50 };
       const median = figureTarget[this.kind] && !def.walkVisual?.matched ? sheetFigureHeight(this.scene, sheetKey) : undefined;
       this.sprite.setScale(median ? figureTarget[this.kind]! / median : def.walkVisual?.scale ?? displayH / 96);
-      const frameH = this.scene.textures.getFrame(sheetKey, 'down_0')?.height ?? 96;
+      // 首帧：行走表都有 down_0；数字帧的首领图（徐荣等，由首领控制器接管帧）没有，取第一帧——取不到的帧 Phaser 会画整张图集（2026-11-19 全面检查 #9）
+      const sheetTex = this.scene.textures.get(sheetKey), firstFrame = sheetTex.has('down_0') ? 'down_0' : (sheetTex.getFrameNames()[0] ?? 'down_0');
+      const frameH = this.scene.textures.getFrame(sheetKey, firstFrame)?.height ?? 96;
       this.sprite.setOrigin(.5, (def.walkVisual?.groundY ?? 94 / 96) - def.radius * .72 / (frameH * this.sprite.scaleY));
       this.baseScaleY = this.sprite.scaleY;
       this.baseOriginY = this.sprite.originY;
       this.frameScale = 1;
-      this.applyFrame(this.walkSheet, 'down_0');
-      this.appliedFrame = 'down_0';
+      this.applyFrame(this.walkSheet, firstFrame);
+      this.appliedFrame = firstFrame;
     }
     if (def.texture === 'boss_lubu' && this.scene.textures.get('boss_lubu').has('down_0')) {
       // v2：288 格 × 0.5（1080p 像素 1:1），脚底 256/288；v1：256 格显示 218
@@ -383,6 +385,15 @@ export class Enemy {
     this.appliedFrame = '';
   }
 
+  /** 专属控制器推着冲锋 / 快跑时出走路帧（帧按跑过的距离推进、朝向随跑向）；配合 externalWalk（通用步态别再改帧）。11-19「张梁移动和动作有问题」：冲锋整段定格平移。 */
+  driveRun(dx: number, dy: number, stride: number): void {
+    if (!this.walkSheet) return;
+    const m = Math.hypot(dx, dy); if (m < .01) return;
+    this.direction = Math.abs(dx) > Math.abs(dy) ? (dx < 0 ? 'left' : 'right') : dy < 0 ? 'up' : 'down';
+    this.walkDistance += m; this.walking = true;
+    const tex = visualTextureKey(this.scene, this.walkSheet), key = `${this.direction}_${Math.floor(this.walkDistance / stride) % 4}`;
+    if (key !== this.appliedFrame || this.sprite.texture.key !== tex) { this.applyFrame(tex, key); this.appliedFrame = key; }
+  }
   updateWalk(dt: number, dx: number, dy: number): void {
     if (!this.walkSheet) return;
     if (this.attackUntil > 0 || this.chargeState !== 'none' || this.poseUntil > ((this.scene as Phaser.Scene & { combatNow?: number }).combatNow ?? 0)) return;

@@ -144,8 +144,8 @@ export class MerchantShop{
 export interface OpenMerchantOptions{
  /** 付账的粮（营寨用军粮）。 */
  wallet:MerchantWallet;
- /** 兵装品质档位（同 GameScene.itemTier：0 一章、1 二章、2 三章起）。只在还没有货架时用来摆货。 */
- tier:number;
+ /** 兵装品质段（同 GameScene.itemTier = data/items.ts lootBand：0 一、二章 … 4 十一、十二章）；chapter 用于词条随章节放大。只在还没有货架时用来摆货。 */
+ tier:number; chapter?:number;
  /** 当前武将：卷轴战法写进他的征程构筑；行囊对比也按他的穿戴。不给或还没有征程构筑时，卷轴显示「出征后可研习」。 */
  hero?:CharacterId;
  /** 买下的兵装（默认直接进行囊 addItems）。 */
@@ -169,7 +169,7 @@ export function openMerchantShop(scene:Phaser.Scene,opts:OpenMerchantOptions):()
  const body=scene.add.container(0,0);root.add([title,purse,body,note]);
  const hero=opts.hero,book=()=>hero?campaignTacticBook(hero):null;
  const tactics:MerchantTactics|null=hero&&book()?{canBuy:o=>{const b=book();return !!b&&(o.kind==='manual'?!b.manualsRead().includes(o.school):b.canLearn(o.id)&&b.level(o.id)===o.level);},learn:o=>o.kind==='manual'?learnCampaignManual(hero,o.school):learnCampaignTactic(hero,o.id,o.level),doneText:'已写进征程构筑，下次出征生效',lockedText:'已无法研习'}:null;
- const stock=currentMerchantStock(opts.tier,book()??undefined);
+ const stock=currentMerchantStock(opts.tier,book()??undefined,opts.chapter??1);
  let notice='',closed=false;
  const shop=new MerchantShop(scene,{stock:()=>stock,wallet:opts.wallet,tactics,onBuyItem:opts.onBuyItem??(item=>addItems([item])),owner:()=>hero,notice:t=>{notice=t;},changed:()=>draw(),sound:opts.sound,tooltipDepth:depth+10});
  const top=py+64,h=D?250:200;

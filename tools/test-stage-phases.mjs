@@ -85,6 +85,27 @@ await stageCase('3-2 宛城夜袭（ThirdGameScene）', { key: 'ThirdGameScene',
   ck('P2 完成第二次机缘 → 再弹一次机缘三选一', e2.mode === 'bossloot' && e2.done.length === 2, e2);
   await p.close();
 }
+// P4 新卡池：五段主线关的升级三选一里，战法位按章节概率换成新卡（战场机缘 / 锦囊 / 兵源 / 军资 / 心法）；锦囊 R 键使用
+{
+  const p = await open({ key: 'GameScene', run: { chapter: 'hulao', westStage: 2 } });
+  await p.evaluate(() => window.__calm());
+  const d = await p.evaluate(() => { const s = window.__S, src = s.newCardSource(); const kinds = new Set(); for (let i = 0; i < 40; i++) for (const o of src.draw(3)) kinds.add(o.categoryLabel); return { chance: src.replaceChance, kinds: [...kinds] }; });
+  ck('P4 新卡池：第二章战法位 20% 换新卡；抽得出战场机缘 / 锦囊 / 兵源 / 军资（心法要先学过该派战法）', d.chance === .2 && ['战场机缘 · 本关有效', '锦囊 · 一次性', '兵源 · 本关', '军资 · 立即'].every(k => d.kinds.includes(k)), d);
+  // 截图：把概率临时调到 1，弹一次升级三选一（三张里两张战法位都换成新卡）
+  await p.evaluate(() => { const s = window.__S, ns = s.newCardSource.bind(s); s.newCardSource = () => ({ ...ns(), replaceChance: 1 }); s.pendingLevels += 1; s.militaryPending += 1; s.openUpgrade(); });
+  await p.waitForTimeout(1200);
+  const cards = await p.evaluate(() => window.__S.upgradeOptions.map(o => o.name + '｜' + o.categoryLabel));
+  ck('P4 升级三选一出现新卡（战法位两张都换成新卡，类不重复）', cards.length === 3 && cards.filter(c => /战场机缘|锦囊|兵源|军资|心法/.test(c)).length >= 2 && new Set(cards.map(c => c.split('｜')[1])).size === 3, cards);
+  await p.screenshot({ path: `${OUT}/new-cards.png` });
+  await p.evaluate(() => { const s = window.__S; s.newCardSource = Object.getPrototypeOf(s).newCardSource.bind(s); s.chooseUpgrade(0); window.__calm(); });
+  await p.evaluate(() => { const s = window.__S; s.jinnang = 'drum'; s.paintJinnang(); });
+  await p.waitForTimeout(300);
+  const j0 = await p.evaluate(() => { const s = window.__S; return { shown: !!s.jinnangButton?.visible, caption: s.jinnangButton?.getByName('jinnang-caption')?.text, berserk: s.player.growth.berserkUntil > s.combatNow }; });
+  await p.keyboard.press('r'); await p.waitForTimeout(300);
+  const j1 = await p.evaluate(() => { const s = window.__S; return { held: s.jinnang, shown: !!s.jinnangButton?.visible, berserk: s.player.growth.berserkUntil > s.combatNow, banner: window.__banners.slice(-1)[0] }; });
+  ck('P4 锦囊：右侧锦囊钮「锦囊 · 擂鼓」，R 键使用 → 10 秒狂战，钮收起', j0.shown && /擂鼓/.test(j0.caption ?? '') && !j0.berserk && j1.held === null && !j1.shown && j1.berserk && /锦囊 · 擂鼓/.test(j1.banner ?? ''), { j0, j1 });
+  await p.close();
+}
 await b.close();
 ck('无页面报错', errors.length === 0, errors.slice(0, 4));
 console.log(fail ? `FAILED ${fail}` : 'ALL PASS');

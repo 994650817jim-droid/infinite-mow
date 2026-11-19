@@ -190,7 +190,9 @@ export function schoolLabel(tag:BuildTag,tags:Record<BuildTag,number>,_learned=f
   return goal?name+'　（'+goal+' 势：'+d.tiers[goal].name+'）':name;
 }
 /** 只从当前角色可用的局内成长中抽取三张唯一奖励；绝不授予其他武将的武器。 */
-export function buildUpgradeOptions(player: Player, weapons: WeaponState[], growth: RunGrowth = player.growth): UpgradeOption[] {
+/** 新卡来源（五段主线关由 GameScene 给，systems/LevelCards）：战法位按概率换新卡；核心位只剩固本培元时也换。 */
+export interface NewCardSource { replaceChance: number; draw: (n: number) => UpgradeOption[] }
+export function buildUpgradeOptions(player: Player, weapons: WeaponState[], growth: RunGrowth = player.growth, extra?: NewCardSource): UpgradeOption[] {
   const pool: UpgradeOption[] = [];
   const ownWeaponId = getCharacter(growth.character).startWeapon;
   const ownWeapon = weapons.find(weapon => weapon.id === ownWeaponId);
@@ -227,5 +229,9 @@ export function buildUpgradeOptions(player: Player, weapons: WeaponState[], grow
   const rest=draw(pool.filter(o=>o.id!==guaranteed.id&&!picked.includes(o)));
   for(const o of rest)if(picked.length<2)picked.push(o);
   for(const f of foundations)if(picked.length<2&&f.id!==guaranteed.id&&!picked.some(o=>o.id===f.id))picked.push(f);
-  return shuffle([guaranteed,...picked.slice(0,2)]);
+  const final=[guaranteed,...picked.slice(0,2)];
+  // 2026-11-19 新卡池（wave-progression-redesign.md §4.2）：固本培元一类的保底卡、以及按概率的战法位，换成新卡（战场机缘 / 锦囊 / 兵源 / 军资 / 心法）
+  if(extra){const slots:number[]=[];final.forEach((o,i)=>{if(o.kind==='foundation'||(i>0&&o.kind==='tactic'&&Math.random()<extra.replaceChance))slots.push(i);});
+    if(slots.length){const fresh=extra.draw(slots.length);slots.forEach((k,j)=>{if(fresh[j])final[k]=fresh[j];});}}
+  return shuffle(final);
 }

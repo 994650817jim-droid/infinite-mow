@@ -303,3 +303,5 @@ assets/raw/*
 !/tools/mount-proportions.mjs
 !/tools/mount-proportions.json
 !/tools/test-wancheng.mjs
+!/tools/gif-dianwei.mjs
+!/tools/gif-zhangliang.mjs

@@ -201,6 +201,7 @@ assets/raw/*
 !/tools/prepare-scene-sheet.mjs
 !/tools/resize-image.mjs
 !/tools/shot-boss-still.mjs
+!/tools/prepare-story-art.mjs
 !/tools/build-boss-ride.mjs
 !/tools/test-tutorial.mjs
 !/tools/test-boss-moves.mjs
@@ -275,3 +276,4 @@ assets/raw/*
 # 营寨回营 / 全屏截图（2026-11-18）
 !/tools/test-camp-return.mjs
 !/tools/shot-camp-full.mjs
+!/tools/deathfx-horse.mjs

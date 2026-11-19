@@ -24,7 +24,7 @@ import {loadWorld,saveWorld,worldUnlocked,ensureStableBuilt,storageUnavailable,i
 import {cityIncome} from '../data/cityBuildings';
 import {CAMP_LOCK,TOWN_BUILDINGS,FOCUS_NAME,FOCUS_INCOME,FOCUS_CHANGE_COST,CITY_SIZE,CITY_TITLE,HALL_UPGRADE,nextCost,buildBlockers,buildingOpen,citySize,focusOpen,levelOf,costText,incomeText,townArtLevel,type TownBuildingId,type TownState,type CityFocus,type TownProgress} from '../town/TownData';
 import {TECHS,TECH_IDS,BRANCH_NAME,BRANCH_ORDER,techBlockers,techTotals,type TechBranch} from '../data/tech';
-import {LORD_LEVEL_HINT,followerLevel,followerLevelCap,hallLevel,loadRoster,rankCap,rankPreview,rankUp,type Recruit} from '../systems/RosterStore';
+import {LORD_LEVEL_HINT,followerLevel,followerLevelCap,hallLevel,loadRoster,rankCap,rankPreview,rankUp,rosterFollowers,type Recruit} from '../systems/RosterStore';
 import {COMMONER_SKILLS} from '../data/commonerSkills';
 import {QUALITIES} from '../data/items';
 import {PANO_ZOOM,CAMP_BARS,CAMP_PAN,PANO_W,PANO_H,CITY_SLOTS,LEVEL_SCALE,CITY_BG_SIZES,CITY_ART_LEVELS,ART_ALIAS} from '../town/CityLayout';
@@ -381,7 +381,7 @@ export class CityScene extends Phaser.Scene {
   */
  private drawDrill(m:{root:Phaser.GameObjects.Container;x:number;y:number;w:number;h:number},h:number){
   const s=loadRoster(),cap=rankCap(s),lvCap=followerLevelCap(),grain=loadWorld().provisions;
-  const all:Recruit[]=[...s.owned].sort((a,b)=>(a.hero===s.lord?-1:0)-(b.hero===s.lord?-1:0)||(s.followers.includes(b.id)?1:0)-(s.followers.includes(a.id)?1:0));
+  const all:Recruit[]=rosterFollowers(s).sort((a,b)=>/* 2026-11-18 用户「主公不应该在这里」：随从操练不列主公 */(s.followers.includes(b.id)?1:0)-(s.followers.includes(a.id)?1:0));
   const top=m.y+100,rowH=D?82:96,per=Math.max(1,Math.floor((h-top+m.y-120)/rowH)),pages=Math.max(1,Math.ceil(all.length/per));
   this.drillPage=Math.min(this.drillPage,pages-1);
   m.root.add(txt(this,W/2,top-4,`将阶上限 ${cap}（招贤馆 Lv${hallLevel(s)}）· 军粮 ${grain} · 花费只收军粮`,12,'#b9ceb8').setOrigin(.5,0).setName('drill-head'));

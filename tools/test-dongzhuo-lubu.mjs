@@ -5,6 +5,7 @@ import { chromium } from 'playwright';
 import { mkdirSync } from 'node:fs';
 const BASE = process.env.BASE ?? 'http://127.0.0.1:5173/', OUT = 'assets/review/dongzhuo-lubu';
 mkdirSync(OUT, { recursive: true });
+const CHAR = process.env.CHAR ?? 'zhaoyun';
 const rows = []; const ck = (n, ok, info) => { rows.push(!!ok); console.log(ok ? 'PASS' : 'FAIL', n, ok ? '' : JSON.stringify(info)); };
 const S = "window.__game.scene.getScene('GameScene')";
 const b = await chromium.launch({ channel: 'chrome', headless: true, args: ['--mute-audio'] });
@@ -15,7 +16,7 @@ try {
   const snap = () => ev(s => s.dzLubu ? s.dzLubu.snapshot() : null);
   await p.goto(BASE + '?dev=1&layout=desktop');
   await p.waitForFunction(() => window.__game?.scene.isActive('MenuScene'), null, { timeout: 90000 });
-  await p.evaluate(() => { const g = window.__game; g.registry.remove('campaignTransfer'); g.registry.set('runConfig', { character: 'zhaoyun', chapter: 'hulao', westStage: 3 }); for (const s of g.scene.getScenes(true)) s.scene.stop(); g.scene.start('GameScene'); });
+  await p.evaluate((CHAR) => { const g = window.__game; g.registry.remove('campaignTransfer'); g.registry.set('runConfig', { character: CHAR, chapter: 'hulao', westStage: 3 }); for (const s of g.scene.getScenes(true)) s.scene.stop(); g.scene.start('GameScene'); }, CHAR);
   await p.waitForFunction(S0 => { const s = eval(S0); return s?.player && s.scene.isActive(); }, S, { timeout: 90000 }); await wait(1200);
   await ev(s => { s.player.damageImmune = true; window.__ph = []; s.events.on('boss-phase', e => window.__ph.push(e.phase)); const w = s.chapter.waves; s.devSetTime?.(w[w.length - 1].start + 1); });
   for (let i = 0; i < 60 && !(await snap()); i++) await wait(200);
@@ -33,6 +34,9 @@ try {
   st = await snap();
   ck('城头放箭雨、吕布方天横扫', st.metrics.volleys >= 1 && st.metrics.sweeps >= 1, st.metrics);
   ck('弱化吕布：血 ×0.5（基础 1600）、步战', st.lubu.baseHp === 1600, st.lubu);
+  // 用户 2026-11-19「董卓和吕布都无敌」：普攻 / 智能选靶不能锁城头刀枪不入的董卓，要打到吕布
+  const tgt = await ev(s => { const d = s.dzLubu.dongzhuo, pt = s.priorityWeaponTarget(3000, false), ne = s.nearestEnemy(d.x, d.y, 60); return { prioIsDz: pt === d, nearIsDz: ne === d }; });
+  ck('城头董卓不被选作攻击目标、吕布在自动攻击下掉血（' + CHAR + '）', !tgt.prioIsDz && !tgt.nearIsDz && st.lubu.hp < st.lubu.max, { tgt, lubu: st.lubu });
   // 吕布打到 1/3：锁血、唤赤兔逃走
   for (let i = 0; i < 6; i++) await ev(s => { const l = s.dzLubu.lubu; if (l?.active && !l.invulnerable) s.hitEnemy(l, 500, s.combatNow, 'melee', false, false); });
   await p.waitForTimeout(300);

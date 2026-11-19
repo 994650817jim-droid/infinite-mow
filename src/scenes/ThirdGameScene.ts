@@ -18,6 +18,7 @@ import { CaorenBoss } from '../systems/CaorenBoss';
 import { BossMoveset } from '../systems/BossMoveset';
 import { BOSS_MOVES } from '../data/bossMoves';
 import { STORY_CHAPTERS } from '../data/story';
+import { QijinTracker } from '../systems/ChibiStoryHooks';
 import { setStoryFlag } from '../systems/Story';
 import { DianweiGuard, DIANWEI } from '../systems/DianweiGuard';
 import { addMerit } from '../systems/MasteryStore';
@@ -85,9 +86,13 @@ export function thirdGameSceneClass(Base:typeof GameScene,cfg:ArcSceneConfig=THI
   const keys=(this.registry.get('battleTextureKeys')??[])as string[];this.registry.set('battleTextureKeys',[...new Set([...keys,...cfg.stages.map(d=>cfg.texture(d.id)),art.key,'third_road_'+this.sceneryStage])]);
   // 剧情（第三章起）：基类按 encounter 没建剧情；有该篇章剧本时按篇章 id 重建并播关前剧情
   if(STORY_CHAPTERS[cfg.arc])this.setupStory(cfg.arc,this.thirdStage);
+  /* 5-1「七进七出」：赵云在队击杀虎豹骑 77 骑（systems/ChibiStoryHooks.ts） */
+  this.qijin=cfg.arc==='chibi'&&this.thirdStage===1?new QijinTracker({team:()=>[this.runConfig.character,...(this.followers?.members??[]).map(m=>m.recruit.hero??'')],banner:(t,c)=>{this.showWaveBanner(t,false,c);this.sfx.play('gong');},bark:()=>{this.storyDir?.line('chibi-1.qijin',this.player.sprite);}}):undefined;
   this.dianwei=cfg.arc==='qunxiong'&&this.thirdStage===2?new DianweiGuard({scene:this,player:this.player,enemies:()=>this.enemies,hit:(e,d)=>{this.hitEnemy(e,d,this.combatNow,'melee',true,false);},banner:(t,d,c)=>this.showWaveBanner(t,d,c)},this.combatNow):undefined;
   this.hudTexts.chapter.setText(this.chapter.name);this.events.once('shutdown',()=>{this.dianwei?.clear();this.dianwei=undefined;this.spearWarnings?.clear();this.spearWarnings=undefined;this.enemyCamps?.clear();this.enemyCamps=undefined;this.controller?.clear();this.controller=undefined;this.fireShips?.clear();this.fireShips=undefined;});
  }
+ /** 5-1「七进七出」计数（只在赤壁第一关建） */
+ qijin?:QijinTracker;
  protected abandonRun(){if(!this.over)abandonExpedition(this.thirdReceipt,this.allies.filter(u=>u.active&&u.reserveSoldier).map(u=>u.kind));}
  protected handleBattlePointer(pointer:Phaser.Input.Pointer){return this.mode==='none'&&!this.over?(this.enemyCamps?.pointer(pointer)??false):false;}
  // 2026-11-16 修：原来营寨 / 粮仓不在射程时返回 null，首领 / 精锐优先被整个吃掉（黄忠宝雕弓在 3-3、5-3 对首领 0 伤害），改为退回基类的首领 > 精锐
@@ -137,7 +142,7 @@ export function thirdGameSceneClass(Base:typeof GameScene,cfg:ArcSceneConfig=THI
  protected hitEnemy(enemy:Enemy,raw:number,now:number,source:'melee'|'arrow'|'fire'='melee',ally=false,weaponHit=true){if(enemy===this.boss&&this.controller){raw*=this.controller.incoming(ally);this.controller.hit(now);}return super.hitEnemy(enemy,raw,now,source,ally,weaponHit);}
  /** 第三 / 五章首领控制器自己播倒地帧（4×8 图集 28~31）。 */
  protected bossHasDeathArt(){return !!this.controller;}
- protected killEnemy(enemy:Enemy){this.enemyCamps?.onDestroyed(enemy,this.combatNow);if(enemy===this.boss){if(this.bossRetreats(enemy))this.controller?.clear();else this.controller?.defeat(); /* 败退型（8-1 张郃、5-3 曹仁）不倒地、淡出退走 */
+ protected killEnemy(enemy:Enemy){this.qijin?.onKill(enemy);this.enemyCamps?.onDestroyed(enemy,this.combatNow);if(enemy===this.boss){if(this.bossRetreats(enemy))this.controller?.clear();else this.controller?.defeat(); /* 败退型（8-1 张郃、5-3 曹仁）不倒地、淡出退走 */
   // 典韦守营结果（剧情旗标 dianwei，第四章、编年史读）：张绣倒下时典韦还活着 = saved（军功 +80），否则 fell
   if(this.dianwei){const saved=this.dianwei.alive;setStoryFlag('dianwei',saved?'saved':'fell');if(saved){addMerit(DIANWEI.meritSaved);this.showWaveBanner('典韦得救',false,'恶来无恙 · 军功 +'+DIANWEI.meritSaved);}}}
   super.killEnemy(enemy);}

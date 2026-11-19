@@ -127,7 +127,16 @@ for (const hero of HEROES) {
       const one = TIANHUO_DEF.damage(w.level, pl.stats) * pl.growth.damageMultiplier(s.combatNow); pl.growth.masteries.wildfire = 0;
       return { lane: lane0, off: off.maxHp - off.hp, expect: Math.round(one * .6), wind: lane0[3][0] - lane0[2][0] };
     }, [G, MK, CLEAR]);
-    ck('诸葛亮·借东风：前三发路上的敌人不挨打，第 4 发东风火龙直线扫过（各 60%），偏离直线的不挨打', r1.lane[2].every(v => v === 0) && r1.lane[3].every(v => Math.abs(v - r1.expect) <= 2) && r1.off === 0, r1);
+    ck('诸葛亮·借东风：连续 4 发里恰好 1 发放出东风火龙，朝怪最密的直线扫过（各 60%），偏离直线的不挨打', (() => { const inc = r1.lane.map((v, i) => v.map((x, j) => x - (i ? r1.lane[i - 1][j] : 0))); const fired = inc.filter(v => v.some(x => x > 0)); return fired.length === 1 && fired[0].every(x => Math.abs(x - r1.expect) <= 2); })() && r1.off === 0 /* 连续 4 发里恰好 1 发放出火龙（第几发取决于之前打过几发） */, r1);
+    // 1b) 借东风方向：朝怪最密的方向扫（精锐在东边单个，北边一排 5 个步兵：火龙扫北边那排）
+    const r1b = await p.evaluate(async ([G0, MK0, C]) => {
+      const s = eval(G0), pl = s.player, mk = eval(MK0), wait = ms => new Promise(r => setTimeout(r, ms)), w = pl.weapons[0]; pl.damageImmune = true; pl.stats.critChance = -1; eval(C);
+      pl.growth.masteries.wildfire = 1; w.cooldownLeft = 1e9; await wait(100);
+      const el = mk(pl.x + 300, pl.y, { kind: 'elite' }), north = [1, 2, 3, 4, 5].map(k => mk(pl.x + 6, pl.y - 50 * k));
+      for (let k = 0; k < 4; k++) { w.cooldownLeft = 0; await wait(100); w.cooldownLeft = 1e9; await wait(900); }
+      pl.growth.masteries.wildfire = 0; return { northHit: north.filter(e => e.hp < e.maxHp).length, el: el.maxHp - el.hp };
+    }, [G, MK, CLEAR]);
+    ck('诸葛亮·借东风：火龙朝怪最密的方向扫（天火打东边精锐，火龙扫北边一排 5 个）', r1b.northHit >= 4 && r1b.el > 0, r1b);
     // 2) 八阵图 3 级：观星爆发处布阵——阵内步兵减速、受伤 +15%；阵内首领出招间隔 ×1.25（gapSlow）
     const r2 = await p.evaluate(async ([G0, MK0, C]) => {
       const s = eval(G0), pl = s.player, mk = eval(MK0), wait = ms => new Promise(r => setTimeout(r, ms)), w = pl.weapons[0]; pl.damageImmune = true; pl.stats.critChance = -1; eval(C);

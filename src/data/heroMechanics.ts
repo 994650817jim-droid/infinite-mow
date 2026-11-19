@@ -36,6 +36,9 @@ export const PT_RING = { slow: .2 } as const;
 export const ZG_TIANHUO = {
   base: 55, perLevel: .18, cooldown: 2.6, cdPerLevel: .05, range: 420,
   delayMs: 800, splashRadius: 50, splashMul: .3, intPerPoint: .015,
+  /** 2026-11-18 用户试玩：「诸葛亮的普通攻击打不到集群的怪堆」→ 没有首领 / 精锐时按通用 smartTarget 的「群怪」规则打进怪堆中心，
+   *  打杂兵时溅射加大（crowdSplashRadius / crowdSplashMul）；打首领 / 精锐维持单点 + 小溅射。借东风朝怪最密的方向扫。初值，交平衡组复测。 */
+  crowdSplashRadius: 90, crowdSplashMul: .4,
   starNeed: 3, starTargets: 5, starDecayMs: 4000, burstMul: 2,
   eastWind: { every: 4, len: [300, 340, 380] as readonly number[], width: 56, mul: [.6, .75, .9] as readonly number[] },
   bazhen: { radius: [90, 105, 120] as readonly number[], ms: [2000, 2500, 3000] as readonly number[], slow: .4, vuln: 1.15, bossGapMul: 1.25 },

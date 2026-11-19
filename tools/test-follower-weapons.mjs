@@ -9,7 +9,8 @@ const ALL = ['zhaoyun', 'guanyu', 'huangzhong', 'zhuge', 'zhangfei', 'machao', '
 const batches = [['zhaoyun', ['guanyu', 'huangzhong', 'zhuge']], ['zhaoyun', ['zhangfei', 'machao', 'weiyan']], ['zhaoyun', ['liubei', 'pangtong', 'huangyueying']], ['guanyu', ['sunshangxiang', 'diaochan', 'zhaoyun']]];
 const rec = id => ({ id, kind: 'hero', hero: id, name: id, template: 'spear', quality: 'orange', rank: 1, picks: [] });
 const roster = (lord, fs) => ({ version: 1, lord, lordFinal: true, owned: [rec(lord), ...fs.map(rec)], followers: fs, offers: [], captives: [], season: -1, manual: 0, dry: 0, seq: 0, hall: 3 });
-const world = { version: 7, yellowStages: 3, dongzhuoStages: 3, warlordStages: 3, guanduStages: 0, worldAvailable: true, cleared: { huangjin: true, hulao: true }, merits: 0, provisions: 1000, buildings: { barracks: 1, farm: 1, clinic: 1 }, reserve: {}, receipts: [], nodes: ['home', 'huangjin', 'hulao'], ownedCities: [], eraSeen: 2, capturedEver: [], alerts: [], lastLost: [], chapterSeen: 4 };
+// 随行上限 / 招贤馆等级读营寨（fa1c773）：营寨 town 只从 version ≥ 8 的存档读入，主营 1 级时其他建筑被压回 1 级 → 种 version 8 + 主营 3、招贤馆 3
+const world = { version: 8, town: { levels: { hall: 3, barracks: 1, farm: 1, talent: 3 } }, yellowStages: 3, dongzhuoStages: 3, warlordStages: 3, guanduStages: 0, worldAvailable: true, cleared: { huangjin: true, hulao: true }, merits: 0, provisions: 1000, buildings: { barracks: 1, farm: 1, clinic: 1 }, reserve: {}, receipts: [], nodes: ['home', 'huangjin', 'hulao'], ownedCities: [], eraSeen: 2, capturedEver: [], alerts: [], lastLost: [], chapterSeen: 4 };
 const zero = { strength: 0, agility: 0, intellect: 0, command: 0 };
 const heroes = { version: 1, migrated: true, attrSet: 3, heroes: { huangzhong: { level: 15, xp: 0, attributes: zero } } };
 const b = await chromium.launch({ channel: 'chrome', headless: true });

@@ -7,6 +7,7 @@ import { JINGNAN_BOSSES, JINGNAN_SHEETS, JINGNAN_STAGES, JINGNAN_TROOP_SHEETS, j
 import { loadBossSheet, loadV2TroopSheets } from '../systems/ArtStyle';
 import { storyScroll } from '../ui/StoryScroll';
 import { getCharacter } from '../data/characters';
+import { STORY_CHAPTERS } from '../data/story';
 
 
 
@@ -31,17 +32,22 @@ export function jingnanGameSceneClass(Base: typeof GameScene, cfg: ArcSceneConfi
     }
     create(): void { this.changshaPhase = 'huangzhong'; this.persuaded = []; this.executed = []; super.create(); }
 
+    /** 剧情台词按当前首领取（6-3 黄忠 → 韩玄；主公是黄忠时第一阶段的杨龄也记作 huangzhong，台词由剧本 variants 换）。 */
+    protected storyBossId(): string | undefined { return this.arcStage === 3 ? this.bossId : undefined; }
+    /** 主公是黄忠：6-3 第一阶段是韩玄部将杨龄（剧情首领，不弹招降窗）。 */
+    private get yangling(): boolean { return this.arcStage === 3 && this.changshaPhase === 'huangzhong' && (this as unknown as { runConfig: { character: string } }).runConfig.character === 'huangzhong'; }
+    protected surrenderKey(): string | null { return this.yangling ? null : super.surrenderKey(); }
     /** 当前出阵首领：长沙先黄忠后韩玄。 */
     private get bossId(): JingnanBossId { const st = this.arcStage; return st === 3 && this.changshaPhase === 'huangzhong' ? 'huangzhong' : JINGNAN_STAGES[st - 1].id; }
     protected stageInfo() {
       const d = super.stageInfo(); if (this.arcStage !== 3 || this.changshaPhase !== 'huangzhong') return d;
-      const b = JINGNAN_BOSSES.huangzhong; return { ...d, id: 'huangzhong', boss: b.name, behavior: b.behavior, skills: b.skills };
+      const b = JINGNAN_BOSSES.huangzhong; return { ...d, id: 'huangzhong', boss: this.yangling ? '杨龄' : b.name, behavior: b.behavior, skills: b.skills };
     }
     protected spawnBoss(): void {
       const self = this as unknown as GameScene & { chapter: GameScene['chapter'] };
       if (this.arcStage === 3) {
         const b = JINGNAN_BOSSES[this.bossId], boss = self.chapter.enemies.boss;
-        self.chapter = { ...self.chapter, bossName: b.name, bossStyle: b.id, enemies: { ...self.chapter.enemies, boss: { ...boss, texture: jingnanTexture(b.id), hp: b.id === 'huangzhong' ? 2400 : 3000 } } };
+        self.chapter = { ...self.chapter, bossName: b.id === 'huangzhong' && this.yangling ? '杨龄' : b.name, bossStyle: b.id, enemies: { ...self.chapter.enemies, boss: { ...boss, texture: jingnanTexture(b.id), hp: b.id === 'huangzhong' ? 2400 : 3000 } } };
       }
       super.spawnBoss();
     }
@@ -66,7 +72,7 @@ export function jingnanGameSceneClass(Base: typeof GameScene, cfg: ArcSceneConfi
     }
     /** 6-3 告捷前的章末剧情卷轴（其余关直接继续）。 */
     private endChapterThen(next: () => void): void {
-      if (this.arcStage !== 3) { next(); return; }
+      if (this.arcStage !== 3 || STORY_CHAPTERS.jingnan) { next(); return; } // 2026-11-18 章末（魏延献城 → 魏延去留 → 荆南四郡尽归）并进剧情系统（data/story/jingnan.ts），由宝箱后的 storyDir.chapterClose 播
       const s = this as unknown as GameScene & { setMode(m: string): void; runConfig: { character: string } };
       s.setMode('parley');
       const lord = getCharacter(s.runConfig.character as never).name, hz = this.persuaded.includes('黄忠');

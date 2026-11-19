@@ -140,6 +140,7 @@ import { IffOverlay, readIffMode, warmIffTextures, type IffUnit } from '../syste
 import {BARKS_LABEL, heroBarks, setHeroBarks, type HeroBarks, STORY_LABEL, setStoryMode, storyMode, type StoryMode, OPENING_LABEL, openingMode, setOpeningMode, type OpeningMode } from '../systems/BattleSettings';
 import { HeroBark, type BarkSpeaker } from '../ui/HeroBark';
 import { ZhaoyunPassiveFx } from '../systems/ZhaoyunPassiveFx';
+import { PassiveGauge } from '../systems/PassiveGauge';
 import { BattleHotkeys, HotkeyHints } from '../systems/BattleHotkeys';
 import { hotkeyLabel } from '../data/hotkeys';
 import { hotkeySettingsLink } from '../ui/HotkeySettingsUI';
@@ -477,6 +478,8 @@ export class GameScene extends Phaser.Scene {
   protected passiveHud!: PassiveHud; protected passiveShout!: PassiveShout; protected heroBark!: HeroBark;
   /** 赵云被动「七进七出」：脚下龙鳞层数 + 满层白龙枪芒 / 绕身一闪 / 突进残影。 */
   zhaoyunFx!: ZhaoyunPassiveFx;
+  /** 武将脚下被动刻度（赵云龙鳞也由它转发）。 */
+  passiveGauge!: PassiveGauge;
   /** 战斗快捷键与键位提示（systems/BattleHotkeys；键位表 data/hotkeys）。 */
   hotkeys!: BattleHotkeys; protected hotkeyHints!: HotkeyHints;
   private buffHud!:BuffHud;
@@ -1077,7 +1080,7 @@ export class GameScene extends Phaser.Scene {
     this.updateHud();
     // 被动满层台词每帧检测（HUD 0.1 秒一刷，孙尚香这类攒满后马上触发的会漏掉）
     this.passiveShout.update(this.player.passive, this.combatNow, this.player.x, this.player.y, this.mode === 'none' && !this.over, this.player.sprite);
-    this.zhaoyunFx.update(this.player.passive, this.combatNow, this.player.x, this.player.y, !this.over && this.player.sprite.visible);
+    this.passiveGauge.update(this.player.passive, this.combatNow, this.player.x, this.player.y, !this.over && this.player.sprite.visible);
     this.heroBark?.update(this.barkSpeakers(), this.combatNow, this.mode === 'none' && !this.over && !this.barksMuted()); // 武将台词气泡（被动大招触发时）；过场中与刚结束 1 秒内不喊
     this.artEffects.update(this.combatNow);
     this.updateRelicWaves();
@@ -3703,7 +3706,7 @@ export class GameScene extends Phaser.Scene {
     for (const k of ['pause', 'mute', 'music', 'bag'] as const) this.hudTexts[k]
       .on('pointerover', () => { this.hudChipState[k] = 'hover'; }).on('pointerout', () => { this.hudChipState[k] = 'idle'; })
       .on('pointerdown', () => { this.hudChipState[k] = 'down'; }).on('pointerup', () => { this.hudChipState[k] = 'hover'; });
-    this.passiveHud = new PassiveHud(this); this.heroBark = new HeroBark(this); this.zhaoyunFx = new ZhaoyunPassiveFx(this); this.passiveShout = new PassiveShout(this, { sfx: () => this.sfx.play('passiveFull'), nearby: (x, y, r) => this.grid.query(x, y, r).filter(e => Math.hypot(e.x - x, e.y - y) <= r) });
+    this.passiveHud = new PassiveHud(this); this.heroBark = new HeroBark(this); this.passiveGauge = new PassiveGauge(this); this.zhaoyunFx = this.passiveGauge.zhaoyun; this.passiveShout = new PassiveShout(this, { sfx: () => this.sfx.play('passiveFull'), nearby: (x, y, r) => this.grid.query(x, y, r).filter(e => Math.hypot(e.x - x, e.y - y) <= r) });
     this.buffHud=new BuffHud(this);
     this.muteText = this.hudTexts.mute;
     this.muteText.setText(this.sfx.muted ? '音效:关' : '音效:开');

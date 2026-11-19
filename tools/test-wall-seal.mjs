@@ -16,16 +16,20 @@ const CASES = [
   { key: 'jingnan-1', name: '6-1 桂阳（城池）', scene: 'JingnanGameScene', reg: { jingnanStage: 1 }, run: { thirdStage: 1 }, tag: 'fort', kind: 'pass' },
   { key: 'jingnan-3', name: '6-3 长沙', scene: 'JingnanGameScene', reg: { jingnanStage: 3 }, run: { thirdStage: 3 }, tag: 'fort', kind: 'pass' },
   { key: 'hanzhong-1', name: '8-1 阳平关', scene: 'HanzhongGameScene', reg: { hanzhongStage: 1 }, run: { thirdStage: 1 }, tag: 'fort', kind: 'pass' },
-  { key: 'yiling-1', name: '10-1 猇亭', scene: 'YilingGameScene', reg: { yilingStage: 1 }, run: { thirdStage: 1 }, tag: 'fort', kind: 'pass' },
+  { key: 'yiling-1', name: '10-1 猇亭（吴军营寨）', scene: 'YilingGameScene', reg: { yilingStage: 1 }, run: { thirdStage: 1 }, tag: 'fort', kind: 'camp' },
   { key: 'guandu-1', name: '4-1 白马（袁军大营）', scene: 'GuanduGameScene', reg: { guanduStage: 1 }, run: {}, tag: 'yuan', kind: 'camp' },
   { key: 'guandu-2', name: '4-2 延津（袁军大营）', scene: 'GuanduGameScene', reg: { guanduStage: 2 }, run: {}, tag: 'yuan', kind: 'camp' },
+  // 2-3 洛阳：董卓上城那一段才有城墙（DongzhuoLubu 自己一份碰撞框），整道墙没有可开的门
+  { key: 'luoyang', name: '2-3 洛阳（董卓城墙）', scene: 'GameScene', reg: {}, run: { chapter: 'hulao', westStage: 3 }, tag: 'luoyang', kind: 'pass', dz: true },
   { key: 'siege-medium', name: '攻城 · 中城', scene: 'SiegeGameScene', siege: true, tag: 'siege', kind: 'siege' },
 ];
 const ONLY = (process.env.ONLY ?? '').split(',').filter(Boolean);
 
 /** 页面内的检查（一次 evaluate 跑完）：返回各项结果。 */
 const INPAGE = `(s, c) => {
-  const R = 16, boxes = s.sishuiObstacles.footprints;
+  const R = 16, obs = c.dz ? s.dzLubu.obstacles : s.sishuiObstacles, boxes = obs.footprints;
+  // 2-3 洛阳：要封的是「城里」（城墙宽 ±900、往北一圈围起来）；绕着城外走到北面不算穿墙
+  const lim = c.dz ? 900 : 1e9, inCity = x => Math.abs(x - (c.siege ? 0 : s.children.getByName(c.tag + '-gate').x)) < lim - 40;
   const hit = (x, y, r = R) => boxes.some(b => x > b.left - r && x < b.right + r && y > b.top - r && y < b.bottom + r);
   const gate = c.siege ? null : s.children.getByName(c.tag + '-gate');
   const wy = c.siege ? -580 : gate.y - 2, px = c.siege ? 0 : gate.x;
@@ -40,7 +44,7 @@ const INPAGE = `(s, c) => {
   let reachedNorth = false, cells = 0;
   for (let h = 0; h < q.length; h += 2) {
     const cx = q[h], cy = q[h + 1]; cells++;
-    if (y0 + cy * step < wy - 160) reachedNorth = true;
+    if (y0 + cy * step < wy - 160 && inCity(x0 + cx * step) && (!c.dz || y0 + cy * step > wy - 1900)) reachedNorth = true; // 洛阳：城的北墙在 wy-2000，北墙外不算城里
     for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const nx = cx + dx, ny = cy + dy; if (nx < 0 || ny < 0 || nx >= W || ny >= H || seen[idx(nx, ny)]) continue; if (hit(x0 + nx * step, y0 + ny * step)) continue; seen[idx(nx, ny)] = 1; q.push(nx, ny); }
   }
   out.search = { reachedNorth, cells };
@@ -49,17 +53,17 @@ const INPAGE = `(s, c) => {
   // ---- 1. 墙线扫描
   const free = [];
   for (let x = px - 3600; x <= px + 3600; x += 10) if (!hit(x, wy - 40)) free.push(x);
-  const outside = free.filter(x => reach(x, wy + 60) && Math.abs(x - px) > gateHalf + R + 6); // 只算从开局点走得到的墙段（崖壁外侧没人到得了）
-  out.scan = { reachFree: free.filter(x => reach(x, wy + 60)).length, freeCount: free.length, outside: outside.length, firstOutside: outside.slice(0, 5), closedFree: c.kind === 'camp' ? null : free.length };
+  const outside = free.filter(x => inCity(x) && reach(x, wy + 60) && Math.abs(x - px) > gateHalf + R + 6); // 只算从开局点走得到的墙段（崖壁外侧没人到得了）
+  out.scan = { reachFree: free.filter(x => inCity(x) && reach(x, wy + 60)).length, freeCount: free.length, outside: outside.length, firstOutside: outside.slice(0, 5), closedFree: c.kind === 'camp' ? null : free.length };
 
   // ---- 3. 实际推走：沿墙线逐列从南向北走（主将、敌兵、部曲各一个）
   const walkers = []; const pl = s.player;
   const ally = s.allies.find(a => a.active), foe = s.spawnEnemy('infantry', px, wy + 200, 40);
-  const cols = []; for (let x = px - 1500; x <= px + 1500; x += 50) if (reach(x, wy + 120)) cols.push(x); out.cols = cols.length;
+  const cols = []; for (let x = px - 1500; x <= px + 1500; x += 50) if (inCity(x) && reach(x, wy + 120)) cols.push(x); out.cols = cols.length;
   const slip = { player: [], ally: [], enemy: [] };
   const run = (who, put, get, list, rad) => { for (const cx of cols) {
     put(cx, wy + 120);
-    for (let i = 0; i < 70; i++) { put(get().x, get().y - 6); s.sishuiObstacles.resolve(pl, who === 'ally' ? [ally] : [], who === 'enemy' ? [foe] : []); }
+    for (let i = 0; i < 70; i++) { put(get().x, get().y - 6); obs.resolve(pl, who === 'ally' ? [ally] : [], who === 'enemy' ? [foe] : []); }
     const y = get().y; if (y < wy - 80 && Math.abs(cx - px) > gateHalf + rad + 8) list.push([cx, Math.round(y)]); } };
   const keep = { x: pl.x, y: pl.y, ax: ally?.x, ay: ally?.y };
   const dmg = pl.damageImmune; pl.damageImmune = true;
@@ -107,15 +111,19 @@ try {
       await p.evaluate(([key, reg, run]) => { const g = window.__game; for (const k of ['campaignTransfer', 'thirdTransfer', 'guanduTransfer']) g.registry.remove(k); for (const [k, v] of Object.entries(reg)) g.registry.set(k, v); g.registry.set('runConfig', { character: 'zhaoyun', ...run }); const cur = g.scene.getScene(key); if (cur && g.scene.isActive(key)) cur.scene.restart(); else { for (const s of g.scene.getScenes(true)) s.scene.stop(); g.scene.start(key); } }, [c.scene, c.reg, c.run]);
     }
     await p.waitForTimeout(500);
-    await p.waitForFunction(([S0, siege]) => { const s = eval(S0); return s?.player && s.scene.isActive() && s.sishuiObstacles && (s.sishuiPass || siege); }, [S, !!c.siege], { timeout: 90000 });
+    await p.waitForFunction(([S0, siege]) => { const s = eval(S0); return s?.player && s.scene.isActive() && (s.sishuiObstacles || siege) && (s.sishuiPass || siege); }, [S, !!c.siege || !!c.dz], { timeout: 90000 });
     for (let t = 0; t < 1800; t += 200) { await ev(() => 0); await p.waitForTimeout(200); }
+    if (c.dz) for (let i = 0; i < 150; i++) { // 董卓上城：跳过剧情、推到首领出场
+      const ok = await ev(s => { if (s.mode === 'story' || s.mode === 'parley') { for (const o of s.children.list) { const btn = o.list?.find(q => /-(next|confirm)$/.test(q.name ?? '')); if (btn) { btn.emit('pointerup'); break; } } } if (!s.dzLubu && !s.bossSpawned) { const w = s.chapter?.waves; s.devSetTime?.(w?.length ? w[w.length - 1].start + 1 : 999); } return !!s.dzLubu && !!s.children.getByName('luoyang-gate') && s.mode === 'none'; });
+      if (ok) break; await p.waitForTimeout(250);
+    }
     await ev(s => { s.player.damageImmune = true; s.spawnTimer = s.eliteTimer = 1e9; });
     const r = await ev(eval(INPAGE), c);
     const camp = c.kind === 'camp';
     ck(`${c.name}：墙线扫描${camp ? '（只留辕门）' : '（门关着没有任何空档）'}`, camp ? r.scan.outside === 0 : r.scan.reachFree === 0, r.scan);
     ck(`${c.name}：从开局点出发绕不到墙以北${camp ? '' : '（拆掉关门框后能到）'}`, camp ? r.scan.outside === 0 : !r.search.reachedNorth && (r.openReaches === undefined || r.openReaches === true), { search: r.search, openReaches: r.openReaches });
     ck(`${c.name}：主将 / 敌兵 / 部曲沿墙线逐列硬走，一个都没越过`, r.slip.player === 0 && r.slip.ally === 0 && r.slip.enemy === 0 && r.slip.hasFoe, r.slip);
-    ck(`${c.name}：城墙画面连续（门两侧各一整条、中间无空档）`, r.art.count > 0 && r.art.gaps.length === 0 && r.art.left.ok && r.art.right.ok && r.art.span && r.art.span[0] <= r.art.px - 1200 + (c.siege ? 700 : 0) && r.art.span[1] >= r.art.px + 1200 - (c.siege ? 700 : 0), r.art);
+    ck(`${c.name}：城墙画面连续（门两侧各一整条、中间无空档）`, r.art.count > 0 && r.art.gaps.length === 0 && r.art.left.ok && r.art.right.ok && r.art.span && r.art.span[0] <= r.art.px - (c.dz ? 760 : 1200) + (c.siege ? 700 : 0) && r.art.span[1] >= r.art.px + (c.dz ? 760 : 1200) - (c.siege ? 700 : 0), r.art);
   }
   ck('无 pageerror', errs.length === 0, errs);
 } finally { await b.close(); }

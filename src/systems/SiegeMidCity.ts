@@ -221,9 +221,18 @@ export class SiegeMidCity {
     // 北墙（内门两侧）、东西侧墙竖排、南墙 + 紧闭的外门（进瓮城后外门关上——瓮中捉鳖；四面本来就有碰撞）、四角角楼、城头滚木礌石堆；缺图退回城墙图集
     if (this.has(ART.barb)) {
       const W = segW * 1.12, wallH = a.top + 40;
-      for (let x = a.left + segW / 2; x < a.right; x += segW) if (Math.abs(x - B.innerGate.x) > 150) this.art(x, wallH, [ART.barb, 2], [ART.walls, 0], W);
-      for (let x = a.left + segW / 2; x < a.right; x += segW) if (Math.abs(x - B.cx) > 150) this.art(x, a.bottom + 64, [ART.barb, 2], [ART.walls, 0], W);
-      for (let y = a.top + 170; y < a.bottom + 40; y += 150) for (const x of [a.left - 34, a.right + 34]) this.art(x, y + 40, [ART.barb, 4], [ART.walls, 5], 220).setFlipX(x > B.cx);
+      // 城墙专项检查 W7：横墙段原来铺到离右角楼还差约 60 像素就停了（露地面）——改成从两角楼之间整段铺满（两头压进角楼底下）
+      const rowXs = (): number[] => { const L0 = a.left - 34, R0 = a.right + 34, n = Math.ceil((R0 - L0) / (W - 26)); return Array.from({ length: n }, (_, i) => L0 + (R0 - L0) * (i + .5) / n); };
+      for (const x of rowXs()) if (Math.abs(x - B.innerGate.x) > 150) this.art(x, wallH, [ART.barb, 2], [ART.walls, 0], W);
+      for (const x of rowXs()) if (Math.abs(x - B.cx) > 150) this.art(x, a.bottom + 64, [ART.barb, 2], [ART.walls, 0], W);
+      // 侧墙：侧墙段图上下两头是斜的（帧内 y 163–283 这一段左右边才是直的），原来整张竖叠、每节错开成锯齿。
+      // 改为只取直的那一段竖向拼接（步长 = 这段的显示高度），最上一节保留斜顶、最下一节保留墙脚；同一列 x 对齐。
+      { const size = 220, k = size / 384, band0 = 163, band1 = 283, step = (band1 - band0) * k, y0 = a.top + 120, y1 = a.bottom + 64, n = Math.max(2, Math.ceil((y1 - y0) / step));
+        for (const x of [a.left - 34, a.right + 34]) for (let i = 0; i < n; i++) {
+          const y = y0 + i * step + (384 - band1) * k, top = i === 0 ? 19 : band0, bot = i === n - 1 ? 365 : band1;
+          const im = this.art(x, y, [ART.barb, 4], [ART.walls, 5], size).setFlipX(x > B.cx);
+          if (this.has(ART.barb)) im.setCrop(0, top, 384, bot - top);
+        } }
       for (const [x, y] of [[a.left - 34, a.top + 60], [a.right + 34, a.top + 60], [a.left - 34, a.bottom + 80], [a.right + 34, a.bottom + 80]]) this.art(x, y, [ART.barb, 3], [ART.walls, 5], 210);
       this.art(B.cx, a.bottom + 70, [ART.barb, 0], [ART.walls, 1], 290);
       this.barbGateImg = this.art(B.innerGate.x, a.top + 50, [ART.barb, 0], [ART.hall, 4], 300);

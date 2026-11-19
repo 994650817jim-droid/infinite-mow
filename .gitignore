@@ -269,3 +269,4 @@ assets/raw/*
 !/tools/test-boss-crowd.mjs
 !/tools/test-follower-obstacles.mjs
 !/tools/test-siege-large-flow.mjs
+!/tools/shot-luoyang-wall.mjs

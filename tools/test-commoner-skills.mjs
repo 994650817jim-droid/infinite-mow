@@ -7,7 +7,8 @@ mkdirSync(out, { recursive: true });
 let pass = 0, fail = 0; const errors = [];
 const ck = (n, ok, d) => { ok ? pass++ : fail++; console.log((ok ? 'PASS ' : 'FAIL ') + n + (d !== undefined && !ok ? ' · ' + JSON.stringify(d).slice(0, 700) : '')); };
 const rec = (id, kind, template, name, quality = 'green') => ({ id, kind, hero: kind === 'hero' ? id : undefined, name, template, quality, rank: 1, picks: [] });
-const world = { version: 7, yellowStages: 3, dongzhuoStages: 3, warlordStages: 3, guanduStages: 0, worldAvailable: true, cleared: { huangjin: true, hulao: true }, merits: 0, provisions: 1000, buildings: { barracks: 1, farm: 1, clinic: 1 }, reserve: {}, receipts: [], nodes: ['home'], ownedCities: [], eraSeen: 2, capturedEver: [], alerts: [], lastLost: [], chapterSeen: 4 };
+// 随行上限 / 招贤馆等级读营寨（fa1c773）：营寨 town 只从 version ≥ 8 的存档读入，主营 1 级时其他建筑被压回 1 级 → 种 version 8 + 主营 3、招贤馆 3
+const world = { version: 8, town: { levels: { hall: 3, barracks: 1, farm: 1, talent: 3 } }, yellowStages: 3, dongzhuoStages: 3, warlordStages: 3, guanduStages: 0, worldAvailable: true, cleared: { huangjin: true, hulao: true }, merits: 0, provisions: 1000, buildings: { barracks: 1, farm: 1, clinic: 1 }, reserve: {}, receipts: [], nodes: ['home'], ownedCities: [], eraSeen: 2, capturedEver: [], alerts: [], lastLost: [], chapterSeen: 4 };
 const zero = { strength: 0, agility: 0, intellect: 0, command: 0 };
 const heroes = { version: 1, migrated: true, heroes: Object.fromEntries(['zhaoyun', 'guanyu', 'r_1', 'r_2', 'r_3', 'r_4'].map(k => [k, { level: 10, xp: 0, attributes: zero }])) };
 const roster = (fs, owned) => ({ version: 1, lord: 'zhaoyun', lordFinal: true, owned: [rec('zhaoyun', 'hero', 'spear', 'zhaoyun', 'orange'), ...owned], followers: fs, offers: [], captives: [], season: -1, manual: 0, dry: 0, seq: 4, hall: 3 });

@@ -53,7 +53,14 @@ interface Host {
  * 骑马：移速加成、践踏撞开普通兵、受伤减免并扣马的耐力；耐力掉光落马，马受惊奔走，本战步战（11-18 用户：落马后不可再上马；遗珍「虎豹铁面」例外，每战可隔 RELIC.hubaoRemountMs 再上马一次）。
  */
 export class HeroMount {
-  mounted = true; stamina: number; readonly maxStamina: number; /** 下次可上马的时刻；Infinity = 本战不再上马。 */ remountAt = 0;
+  mounted = true; stamina: number;
+  /** 耐力上限实时跟主将最大生命走（11-19 平衡会话：建马在套用武将等级之前，只算一次会按裸生命算；局内加生命也要跟上）。 */
+  get maxStamina(): number { return Math.round(MOUNT.stamina + MOUNT.staminaPerHp * this.h.player.maxHp) + this.bonusStamina; }
+  /** 名将 / 名马的固定耐力加成。 */ private readonly bonusStamina: number;
+  /** 上次同步时的耐力上限：上限变了按比例换算当前耐力（满的还是满）。 */ private syncedMax = 0;
+  /** 上限变化时按比例换算当前耐力。 */
+  private syncStamina(): void { const m = this.maxStamina; if (m === this.syncedMax) return; if (this.syncedMax > 0) this.stamina = this.stamina * m / this.syncedMax; this.syncedMax = m; }
+  /** 下次可上马的时刻；Infinity = 本战不再上马。 */ remountAt = 0;
   /** 本战还能重新上马几次（只有虎豹铁面 = 1）。 */ remountsLeft: number;
   /** 落马后无人的马受惊奔走（人立一下 → 加速跑开 → 淡出；节奏同 DeathFx 敌骑坐骑）。 */ private bolt: {start: number; x: number; y: number; dir: number} | null = null;
   readonly style: MountStyle; readonly name: string;
@@ -73,7 +80,7 @@ export class HeroMount {
     ensureHorseTextures(h.scene);
     this.style = mountStyle(item.base); this.name = item.name;
     const cav = CAVALRY_HEROES.includes(hero);
-    this.maxStamina = Math.round(MOUNT.stamina + MOUNT.staminaPerHp * h.player.maxHp) + (this.style.stamina ?? 0) + (cav ? CAVALRY_BONUS.stamina : 0); this.stamina = this.maxStamina;
+    this.bonusStamina = (this.style.stamina ?? 0) + (cav ? CAVALRY_BONUS.stamina : 0); this.stamina = this.maxStamina; this.syncedMax = this.stamina;
     this.trampleMul = (this.style.trampleMul ?? 1) * (cav ? CAVALRY_BONUS.trample : 1) * (opts.trampleMul ?? 1);
     const k = MOUNT.horseSize / HORSE_FRAME;
     this.horse = h.scene.add.image(h.player.x, h.player.y, 'mount_horse', 'down_0').setOrigin(.5, HORSE_FOOT / HORSE_FRAME).setScale(k).setTint(this.style.tint).setName('hero-mount');
@@ -123,6 +130,7 @@ export class HeroMount {
   /** 受伤：骑马时马替人挡一部分并扣耐力，耐力掉光落马。返回骑者实际承受的伤害。 */
   guard(damage: number, now: number): number {
     if (!this.mounted) return damage;
+    this.syncStamina();
     this.stamina -= damage * (damage >= this.h.player.maxHp * MOUNT.heavyHitHpRatio ? MOUNT.heavyMul : MOUNT.lightMul);
     if (this.stamina <= 0) { this.dismount(now); return this.style.leap ? 0 : damage; }
     return Math.max(1, Math.round(damage * MOUNT.damageTakenMul));
@@ -142,7 +150,7 @@ export class HeroMount {
   }
   remount(now: number): void {
     if (this.mounted) return;
-    this.mounted = true; this.stamina = this.maxStamina; this.remountAt = 0;
+    this.mounted = true; this.stamina = this.syncedMax = this.maxStamina; this.remountAt = 0;
     this.bolt = null; this.h.scene.tweens.killTweensOf([this.horse, this.tack, this.front]); for (const img of [this.horse, this.tack, this.front]) img.setAlpha(0).setRotation(0);
     this.h.scene.tweens.add({targets: [this.horse, this.tack, this.front], alpha: 1, duration: 300});
     this.applyRider(true); this.h.notice(`上马 · ${this.name}`); void now;
@@ -161,6 +169,7 @@ export class HeroMount {
   }
   update(dt: number, now: number): void {
     const p = this.h.player;
+    if (this.mounted) this.syncStamina();
     const moved = Math.hypot(p.x - this.lastX, p.y - this.lastY); this.speed = dt > 0 ? moved / dt : 0; this.lastX = p.x; this.lastY = p.y;
     if (!this.mounted) {
       this.runBolt(now);

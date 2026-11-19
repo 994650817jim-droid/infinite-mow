@@ -3,6 +3,7 @@
  * 史事名将与无名之辈暂无立绘：用品质色印章 + 模板字（枪 / 刀 / 弓 / 谋）作程序化过渡；可玩名将用现有头像。
  */
 import Phaser from 'phaser';
+import { surrenderMoveLine } from '../data/surrenderMoves';
 import { heroLevel, type HeroKey } from '../systems/HeroProgress';
 import { playMenuMusic } from '../systems/Music';
 import { isChapterTestRun } from '../systems/ChapterProgress';
@@ -114,7 +115,7 @@ export class TalentHallScene extends Phaser.Scene {
     const nameT = worldText(this, tx, y - h / 2 + 8, `${captive ? '【降将】' : ''}${o.name}`, D ? 17 : 18, q.css).setName('talent-offer-name'); this.content!.add(nameT);
     // 首领降将（surrender-spec §7）：名字旁一枚「首领」小印（手绘印章图到之前用文字章）
     if (o.boss) { const sx = nameT.x + nameT.width + 22, sy = nameT.y + nameT.height / 2; if (this.textures.exists('seal_boss')) this.content!.add(this.add.image(sx, sy, 'seal_boss').setDisplaySize(32, 32).setAngle(-6).setName('talent-boss-seal')); else { const sg = this.add.graphics().lineStyle(1.5, 0xd0503a, .95).strokeRoundedRect(sx - 18, sy - 11, 36, 22, 4); this.content!.add([sg, worldText(this, sx, sy, '首领', 12, '#e0604a').setOrigin(.5).setName('talent-boss-seal')]); } }
-    this.content!.add(worldText(this, tx, y - h / 2 + (D ? 32 : 36), `${q.label} · ${kind}\n${TEMPLATES[o.template].name}：${TEMPLATES[o.template].desc}${captive && o.expires !== undefined ? ` · 剩 ${captiveSeasonsLeft(o)} 季` : ''}`, 12, '#cdbf9f').setWordWrapWidth(w - size - 150).setName('talent-offer-desc'));
+    this.content!.add(worldText(this, tx, y - h / 2 + (D ? 32 : 36), `${q.label} · ${kind}${captive && o.expires !== undefined ? ` · 剩 ${captiveSeasonsLeft(o)} 季` : ''}\n${surrenderMoveLine(o.boss) ? TEMPLATES[o.template].name + ' · ' + surrenderMoveLine(o.boss) : TEMPLATES[o.template].name + '：' + TEMPLATES[o.template].desc}`, 12, '#cdbf9f').setWordWrapWidth(w - size - 150).setName('talent-offer-desc'));
     const cost = captive ? Math.ceil(o.cost * RECRUIT.captiveDiscount) : o.cost;
     this.small(W - x0 - 70, y, 120, `${captive ? '招降' : '招募'} ${cost}粮`, () => { this.message = recruit(i, captive).message; this.render(); }, `talent-${captive ? 'captive' : 'offer'}-${i}`, true, o.kind !== 'common');
   }
@@ -128,7 +129,9 @@ export class TalentHallScene extends Phaser.Scene {
     const lv = followerLevel(r), lvCap = followerLevelCap(), lvText = `Lv ${lv} / 上限 ${lvCap}（解锁下一章提升）`;
     this.content!.add(worldText(this, tx, y - h / 2 + 8, `${r.name} ${lvText}${following ? ' · 随行' : ''}`, D ? 17 : 18, q.css).setName('talent-roster-name'));
     // 将阶升级挪到讲武堂「随从操练」（用户 2026-11-17「升级随从功能挪到讲武堂」）；这里只显示现状
-    const line = `将阶 ${r.rank}/${cap} · 去讲武堂「随从操练」升阶
+    // 降将（2026-11-18 专属招式）：第二行写专属招式，行高不变（「去讲武堂升阶」提示省掉，数值并到第一行）
+    const sig = surrenderMoveLine(r.boss);
+    const line = sig ? `将阶 ${r.rank}/${cap} · 兵器 +${Math.round(b.damage * 100)}% · 生命 +${Math.round(b.hp * 100)}% · 只能随行\n${sig}` : `将阶 ${r.rank}/${cap} · 去讲武堂「随从操练」升阶
 兵器 +${Math.round(b.damage * 100)}% · 生命 +${Math.round(b.hp * 100)}%${r.hero ? '' : ' · 只能随行'}`;
     this.content!.add(worldText(this, tx, y - h / 2 + (D ? 30 : 34), line, 12, '#cdbf9f').setWordWrapWidth(D ? w - size - 330 : w - size - 40));
     const bx = D ? W - x0 - 320 : tx + 50, by = D ? y : y + h / 2 - 24;

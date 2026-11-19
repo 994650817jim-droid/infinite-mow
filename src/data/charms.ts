@@ -78,21 +78,21 @@ export const CHARMS: readonly CharmDef[] = [
   { id: 'charm_army_jade', name: '护军玉璧', kind: 'legend', icon: 'item_armor', school: 'tiebi', minQuality: 'purple',
     desc: q => { const t = legendTier(q), d = CHARM_LEGEND.charm_army_jade; return `受到伤害 −${pct(d.reduce[t])}；击杀时为自己和受伤友军回复生命（原量 ${pct(d.heal[t])}，每秒一次）`; } },
   // B. 原本局宝物（构筑宝物 13 件 + 护心镜）
-  mech('iron_mirror', '玄铁镜', 'bulwark', p => `格挡后反震额外 +${pct(.25 * p)}；未学反震时反击 3 人 ${pct(.2 * p)}，并提供 ${pct(.15 * p)} 基础格挡（冷却 8 秒）`),
-  mech('army_seal', '守军印', 'bulwark', p => `守望多保护 1 人、减伤再 +${Math.round(10 * p * 10) / 10} 个百分点；单独触发为附近 2 人提供 ${pct(.15 + .1 * p)} 减伤（冷却 5 秒）`),
-  mech('general_tally', '点将符', 'command', p => `命中后指挥附近 2 名士兵集火该目标 ${sec(2000 * p)}；已学协击时多指挥 1 人、集火再延长 ${sec(1000 * p)}`),
-  mech('return_drum', '回军鼓', 'command', p => `每 ${sec(6000 / p)}治疗附近 2 名最低生命士兵 5% 最大生命，受治疗者 2.5 秒减伤 20%`),
-  mech('control_disk', '镇军盘', 'control', p => `命中处生成阵法 1.8 秒，阵内最多 6 名普通敌人减速 ${pct(.25 * p)} 并被吸向阵心；冷却 ${sec(6000 / p)}，首领免疫`),
-  mech('stored_jade', '沉锋玉', 'charge', p => `蓄势 2 秒后的命中释放弱冲击，0.25 秒后再冲击一次；每次 ${pct(.15 * p)} 伤害，最多 3 人，冷却 4 秒`),
-  mech('soul_bell', '追魂铃', 'combo', p => `每 8 次本命命中，追击另一目标，造成 ${pct(.4 * p)} 伤害`),
-  mech('slayer_tally', '斩将虎符', 'critical', p => `对精锐 / 首领暴击后追加 ${pct(.25 * p)} 基础伤害；每 0.5 秒一次`),
-  mech('horse_order', '走马令', 'skirmish', p => `主动移动约 4 个身位后，下次命中对周围敌人追加 ${pct(.25 * p)} 伤害`),
-  mech('wildfire_lamp', '燎原灯', 'flame', p => `命中必定附加弱灼烧（${pct(p)} 强度）；燃烧的敌人死亡时点燃附近 2 人，传出去的火不再传`),
-  mech('breaker_jade', '破军佩', 'combo', p => `每 10 次本命命中，震击目标附近 3 人，造成 ${pct(.35 * p)} 伤害`),
-  { id: 'charm_revival_jade', name: '回生玉佩', kind: 'mech', icon: 'build_icon_revival_jade', tag: 'skirmish', treasure: 'revival_jade', minQuality: 'purple',
+  mech('iron_mirror', '玄铁镜', 'warrior', p => `格挡后反震额外 +${pct(.25 * p)}；未学反震时反击 3 人 ${pct(.2 * p)}，并提供 ${pct(.15 * p)} 基础格挡（冷却 8 秒）`),
+  mech('army_seal', '守军印', 'formation', p => `守望多保护 1 人、减伤再 +${Math.round(10 * p * 10) / 10} 个百分点；单独触发为附近 2 人提供 ${pct(.15 + .1 * p)} 减伤（冷却 5 秒）`),
+  mech('general_tally', '点将符', 'formation', p => `命中后指挥附近 2 名士兵集火该目标 ${sec(2000 * p)}；已学协击时多指挥 1 人、集火再延长 ${sec(1000 * p)}`),
+  mech('return_drum', '回军鼓', 'formation', p => `每 ${sec(6000 / p)}治疗附近 2 名最低生命士兵 5% 最大生命，受治疗者 2.5 秒减伤 20%`),
+  mech('control_disk', '镇军盘', 'stratagem', p => `命中处生成阵法 1.8 秒，阵内最多 6 名普通敌人减速 ${pct(.25 * p)} 并被吸向阵心；冷却 ${sec(6000 / p)}，首领免疫`),
+  mech('stored_jade', '沉锋玉', 'cavalry', p => `攒满冲势后的命中释放弱冲击，0.25 秒后再冲击一次；每次 ${pct(.15 * p)} 伤害，最多 3 人，冷却 4 秒`),
+  mech('soul_bell', '追魂铃', 'warrior', p => `每 8 次本命命中，追击另一目标，造成 ${pct(.4 * p)} 伤害`),
+  mech('slayer_tally', '斩将虎符', 'archery', p => `对精锐 / 首领暴击后追加 ${pct(.25 * p)} 基础伤害；每 0.5 秒一次`),
+  mech('horse_order', '走马令', 'cavalry', p => `主动移动约 4 个身位后，下次命中对周围敌人追加 ${pct(.25 * p)} 伤害`),
+  mech('wildfire_lamp', '燎原灯', 'fire', p => `命中必定附加弱灼烧（${pct(p)} 强度）；燃烧的敌人死亡时点燃附近 2 人，传出去的火不再传`),
+  mech('breaker_jade', '破军佩', 'warrior', p => `每 10 次本命命中，震击目标附近 3 人，造成 ${pct(.35 * p)} 伤害`),
+  { id: 'charm_revival_jade', name: '回生玉佩', kind: 'mech', icon: 'build_icon_revival_jade', tag: 'cavalry', treasure: 'revival_jade', minQuality: 'purple',
     desc: q => `每关首次致命伤害保留 1 生命，并获得 ${sec(REVIVAL_INVULN[legendTier(q)])}无敌` },
-  mech('blood_jade', '饮血佩', 'bulwark', p => `本命武器命中时，回复造成伤害的 ${pct(.05 * p)} 生命；每秒最多回复最大生命的 3%`),
-  { id: 'charm_heart_mirror', name: '护心镜', kind: 'mech', icon: 'growth_icon_heart_mirror', tag: 'bulwark', minQuality: 'purple',
+  mech('blood_jade', '饮血佩', 'warrior', p => `本命武器命中时，回复造成伤害的 ${pct(.05 * p)} 生命；每秒最多回复最大生命的 3%`),
+  { id: 'charm_heart_mirror', name: '护心镜', kind: 'mech', icon: 'growth_icon_heart_mirror', tag: 'formation', minQuality: 'purple',
     desc: q => `武将受到伤害 −${pct(HEART_MIRROR[legendTier(q)])}` },
 ];
 const BY_ID = new Map(CHARMS.map(c => [c.id, c]));
@@ -117,5 +117,5 @@ export function charmText(item: { base: string; quality: ItemQuality }): string 
 }
 /** 虎钮印（并入虎符）主词条倍率：橙色友军伤害最高 +20%（普通词条最高约 +9.7%）。 */
 export const TIGER_SEAL_PRIMARY = 2.07;
-/** 额外计入构筑标签的普通信物（虎钮印并入虎符后计统御）。 */
-export const BASE_TOKEN_TAG: Partial<Record<string, BuildTag>> = { tiger_seal: 'command' };
+/** 额外计入流派势的普通信物（虎钮印并入虎符后计兵阵；2026-11-19 流派重做：旧「统御」标签并入兵阵）。 */
+export const BASE_TOKEN_TAG: Partial<Record<string, BuildTag>> = { tiger_seal: 'formation' };

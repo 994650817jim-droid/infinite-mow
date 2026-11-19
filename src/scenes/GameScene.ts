@@ -1,4 +1,6 @@
 import { stopMenuMusic } from '../systems/Music';
+import { SCHOOL_TIER, SHI_SOURCES, FOLLOWER_SCHOOL, heroAffinity, type SchoolId } from '../data/schools';
+import { playSheet } from '../systems/SkillFxSheets';
 import { MOUNT_VISUAL, isHorseCavalry } from '../data/mounts';
 import { buildSettingsPanel, type SettingSpec } from '../ui/SettingsPanel';
 import {FollowerSquad,type Follower} from '../systems/FollowerSquad';
@@ -28,7 +30,7 @@ import {HARD_MODE,HARD_TITLES} from '../data/hardMode';
 import {recordHardClear,rewardGrain} from "../world/WorldStore";
 import {chapterState,openChapterCount,type TimelineChapterId} from '../world/ChapterTimeline';
 import {buildVfx} from '../systems/BuildVfx';
-import {AwakeningCombat} from '../systems/AwakeningCombat';
+import {SchoolSynergy} from '../systems/SchoolSynergy';
 import {BulwarkBuild} from '../systems/BulwarkBuild';
 import {ControlBuild} from '../systems/ControlBuild';
 import { SHOW_RANGE_RINGS } from '../ui/RangeRings';
@@ -122,7 +124,7 @@ import { primarySummary } from '../ui/PrimaryAttrInfo';
 import {STARTER_HORSE} from '../data/mounts';
 import {storyScroll} from '../ui/StoryScroll';
 import {MERCHANT_HORSE_REWARD,markMerchantStorySeen,merchantHorseLines,merchantStorySeen} from '../data/storyMerchantHorse';
-import {horseForReward} from '../data/mounts';
+import {horseForReward,horseQuality} from '../data/mounts';
 import {HeroMount} from '../systems/HeroMount';
 import { DraggingBladeFx } from '../systems/DraggingBladeFx';
 import { FlankFx } from '../systems/FlankFx';
@@ -140,6 +142,7 @@ import { IffOverlay, readIffMode, warmIffTextures, type IffUnit } from '../syste
 import {BARKS_LABEL, heroBarks, setHeroBarks, type HeroBarks, STORY_LABEL, setStoryMode, storyMode, type StoryMode, OPENING_LABEL, openingMode, setOpeningMode, type OpeningMode } from '../systems/BattleSettings';
 import { HeroBark, type BarkSpeaker } from '../ui/HeroBark';
 import { ZhaoyunPassiveFx } from '../systems/ZhaoyunPassiveFx';
+import { PassiveGauge } from '../systems/PassiveGauge';
 import { BattleHotkeys, HotkeyHints } from '../systems/BattleHotkeys';
 import { hotkeyLabel } from '../data/hotkeys';
 import { hotkeySettingsLink } from '../ui/HotkeySettingsUI';
@@ -410,7 +413,11 @@ export class GameScene extends Phaser.Scene {
   /** 关卡目标（歼敌 / 摧毁 / 护送 / 坚守，data/objectives.ts）：完成后首领出阵。 */
   protected objective:StageObjectives|null=null;private objectiveText?:Phaser.GameObjects.Text;
   /** 战场地图 · 军令（battle-map-design.md）：军令表手机也有；军令面板与小地图只在电脑布局建。 */
-  battleOrders:BattleOrders|null=null;allyPush:AllyPush|null=null;private ordersPanel:OrdersPanel|null=null;/** 军令面板开着（电脑布局）：子场景据此收起自己的目标行，免得和面板重复。 */protected get ordersPanelOn():boolean{return !!this.ordersPanel;}battleMap:BattleMap|null=null;
+  battleOrders:BattleOrders|null=null;allyPush:AllyPush|null=null;
+  /** 兵阵 4 势「援军」：义军小队（AllyPush 的 escort 模式，独立于 2-3 的友军攻势），reinforceAt = 下一队的时刻。 */
+  reinforce:AllyPush|null=null;private reinforceAt=0;
+  /** 助战兵（兵阵援军、十面埋伏伏兵、铁骑冲阵骑卒、铁壁军阵）共用一个 AllyPush（escort 模式，不打营寨）。 */
+  private reinforcePush():AllyPush{return this.reinforce??=new AllyPush({scene:this,now:()=>this.combatNow,paused:()=>this.mode!=='none'||this.over||!!this.cutscene?.active,player:()=>this.player,camps:()=>[],enemies:()=>this.enemies,hit:(e,d)=>{this.hitEnemy(e,d,this.combatNow,'melee',true,false);},push:(x,y,r)=>this.terrain?.pushCircle(x,y,r)??null},{...LUOYANG.push,firstMs:1e15,everyMs:1e15});}private ordersPanel:OrdersPanel|null=null;/** 军令面板开着（电脑布局）：子场景据此收起自己的目标行，免得和面板重复。 */protected get ordersPanelOn():boolean{return !!this.ordersPanel;}battleMap:BattleMap|null=null;
   protected supplies:BattlefieldSupplies|null=null;
   /** 道具掉落与本局缴获（局外兵装，结算带回行囊）。 */
   protected itemDrops:ItemDrops|null=null;
@@ -477,6 +484,8 @@ export class GameScene extends Phaser.Scene {
   protected passiveHud!: PassiveHud; protected passiveShout!: PassiveShout; protected heroBark!: HeroBark;
   /** 赵云被动「七进七出」：脚下龙鳞层数 + 满层白龙枪芒 / 绕身一闪 / 突进残影。 */
   zhaoyunFx!: ZhaoyunPassiveFx;
+  /** 武将脚下被动刻度（赵云龙鳞也由它转发）。 */
+  passiveGauge!: PassiveGauge;
   /** 战斗快捷键与键位提示（systems/BattleHotkeys；键位表 data/hotkeys）。 */
   hotkeys!: BattleHotkeys; protected hotkeyHints!: HotkeyHints;
   private buffHud!:BuffHud;
@@ -491,7 +500,7 @@ export class GameScene extends Phaser.Scene {
   private warfeedCount=0;
   /** 增益图标的触发进度（BuffHud 读，见 ui/BuffProgress）：战法 / 宝物 / 觉醒 / 遗物里的「每 N 次 / 每 N 秒 / 攒满」计数。 */
   private buffProgress(id:string,now:number):BuffProgress|null{
-    if(id.startsWith('awakening_'))return this.awakeningCombat?.progress(id.slice(10),now)??null;
+    if(id.startsWith('awakening_'))return this.synergy?.progress(id,now)??null;
     if(id==='tactic_warfeed'){const l=this.player.growth.build.level('warfeed');if(!l)return null;const n=[12,10,8][Math.min(3,l)-1];return countProgress(this.warfeedCount,n,'再击杀 1 名回血','名');}
     if(id==='relic_heaven_ember')return timerProgress(this.relicFireAt,CHARM_LEGEND.charm_heaven_ember.cd[this.player.growth.charmLegend.heaven_ember??1],now,'下一击留残火','冷却');
     return this.buildCombat?.progress(id,now)??this.legion?.command.progress(id,now)??null;
@@ -599,7 +608,8 @@ export class GameScene extends Phaser.Scene {
   private buildCombat!:BuildCombat;
   private controlBuild?:ControlBuild;
   private bulwarkBuild?:BulwarkBuild;
-  private awakeningCombat?:AwakeningCombat;
+  /** 流派合击（部曲 / 伏兵 / 背水一战）+ 六派觉醒（2026-11-19 流派重做第 2 期）。 */
+  synergy?:SchoolSynergy;
   private relicWaveGfx!:Phaser.GameObjects.Graphics;private relicWaves:Array<{x:number;y:number;at:number}>=[];
   private firstBossAt=-1;private settledFrontlineKills=0;private frontlineNextSettlement=1;
   private frontlineVictories=new Map<number,{elapsed:number}>();private frontlineStarts=new Map<number,number>();
@@ -735,6 +745,7 @@ export class GameScene extends Phaser.Scene {
     // 兵装：开局读入该武将穿戴的道具加成（生命上限增加的部分补满）
     {const oldMax=this.player.maxHp;this.player.growth.gear=gearFor(this.runConfig.character);this.player.heal(this.player.maxHp-oldMax);}
     this.followers=null;this.followerPassives=[];{const allow=worldUnlocked()&&(!isChapterTestRun()||new URLSearchParams(location.search).get('followers')==='1');const list=allow?followersFor(this.runConfig.character):[];if(list.length)this.followers=new FollowerSquad(this,this.player,list,(x,y,r)=>this.grid.query(x,y,r),(e,d,fire)=>this.hitEnemy(e,d,this.combatNow,fire?'fire':'melee',true,false),()=>this.player.growth.damageMultiplier(this.combatNow));if(this.followers){this.followers.onHitFx=(e,k,fx,fy)=>this.followerTemplateHitFx(e,k,fx,fy);this.followers.attackSound=t=>this.sfx.play(FOLLOWER_ATTACK_SFX[t]);this.wireFollowerObstacles(this.followers);}}
+    this.applySchoolSources(); // 流派重做：开局的势（亲和 / 随行 / 名马）
     { const mode = readIffMode(); this.iff = mode ? new IffOverlay(this, mode, () => this.iffUnits()) : null; }
     this.presence = new BossPresence({ scene: this, enemies: () => this.enemies, boss: () => this.cutscene?.active || this.dzLubu?.hidesBossBar ? null : this.boss, /* 2-3 城头的董卓不出名牌 / 屏外箭头；过场时收起名牌 / 辉光 / 火环 */ bossName: () => this.chapter.bossName, player: () => this.player,
       bosses: () => this.dual ? (this.cutscene?.active ? [] : this.dual.alive.map(x => ({ e: x.enemy, name: x.name, color: x.color }))) : this.dzLubu?.lubuFocus ? (this.cutscene?.active ? [] : [{ e: this.dzLubu.lubuFocus, name: '吕布' }]) : null,
@@ -808,12 +819,26 @@ export class GameScene extends Phaser.Scene {
     this.events.once('shutdown',()=>{this.bulwarkBuild?.clear();this.bulwarkBuild=undefined;this.player.damageGuard=undefined;});
     this.controlBuild=new ControlBuild(this,this.player.growth.build,(x,y,r)=>this.grid.query(x,y,r));
     this.events.once('shutdown',()=>{this.controlBuild?.clear();this.controlBuild=undefined;});
-    this.awakeningCombat=new AwakeningCombat(this,this.player,this.allies,(x,y,r)=>this.grid.query(x,y,r),(e,n,fire)=>this.hitEnemy(e,n,this.combatNow,fire?'fire':'melee',false,false),(e,n)=>this.controlBuild?.isControlled(e,n)??false,(e,n)=>this.buildCombat.naturalBurn(e,n),(e,n,now)=>this.buildCombat.igniteDerived(e,n,now),text=>this.showGrowthNotice(text),()=>this.legion.order,(e,n)=>this.legion.command.onHit(e,n));
-    this.legion.awakeningDefense={incoming:(u,n)=>this.awakeningCombat?.allyIncoming(u,n)??1,onAllyHurt:(u,n)=>this.awakeningCombat?.onAllyHurt(u,n)};
-    this.events.once('shutdown',()=>{this.awakeningCombat?.clear();this.awakeningCombat=undefined;});
+    this.synergy=new SchoolSynergy({scene:this,player:this.player,combat:this.buildCombat,nearby:(x,y,r)=>this.grid.query(x,y,r),deal:(e,n,fire)=>{this.hitEnemy(e,n,this.combatNow,fire?'fire':'melee',false,false);},notice:t=>this.showGrowthNotice(t),
+      controlled:(e,n)=>this.controlBuild?.isControlled(e,n)??false,slowArea:(x,y,r,k,ms,n)=>this.controlBuild?.slowArea(x,y,r,k,ms,n)??0,escort:(x,y,n,ms)=>this.reinforcePush().spawnEscortAt(x,y,n,ms)?.members.length??0,
+      vfx:(st,x,y,size,a=0,ms=360)=>buildVfx(this).emit(st,x,y,this.combatNow,size,a,ms,true),flame:(x,y,r)=>this.spawnFlameFx(x,y,r),
+      wind:(x,y,a,size)=>playSheet(this,'fx_windstep_burst',x,y,{size,ms:360,depth:DEPTH.fx+.05,rotation:a,name:'awaken-wind'}),shake:()=>this.hitFeel.shake('medium')});
+    this.legion.awakeningDefense={incoming:(_u,n)=>(this.synergy?.allyIncoming(n)??1)*(this.player.growth.build.tier('formation')>=2?1-SCHOOL_TIER.formation.allyTaken:1),onAllyHurt:()=>{}};
+    this.events.once('shutdown',()=>{this.synergy?.clear();this.synergy=undefined;});
     this.buildCombat.setOrigin(()=>({x:this.player.x,y:this.player.y}));
     this.buildCombat.onFlank=targets=>this.flankBladeFx().strike(targets);
     this.buildCombat.onWindstep=e=>this.windstepFx().burst(e.x,e.y);
+    // 流派重做（data/schools.ts）：奇谋 2 势被控制加深、震荡 / 冲阵 / 燎原的一圈、火油罐火区、疾风
+    this.buildCombat.controlled=(e,n)=>this.controlBuild?.isControlled(e,n)??false;
+    this.buildCombat.onShock=(x,y,r)=>buildVfx(this).emit('pure_charge',x,y-6,this.combatNow,r*2,0,320,true);
+    this.buildCombat.onNapalm=(x,y,r,dmg,lv)=>{this.martialFields.add(x,y,r,dmg,3000,lv);this.spawnFlameFx(x,y,r);};
+    // 合击（data/schoolCombos.ts）：第一次触发打横幅；烈马脚下火；冲势打出 / 眩晕交给 SchoolSynergy（声东击西、铁骑冲阵、十面埋伏）
+    this.buildCombat.onCombo=id=>this.synergy?.note(id);
+    this.buildCombat.onFirePatch=(x,y,r,dmg,ms)=>{this.martialFields.add(x,y,r,dmg,ms,1);this.spawnFlameFx(x,y,r*.8);};
+    this.buildCombat.onCharge=(e,n)=>this.synergy?.onCharge(e,n);
+    this.buildCombat.onStun=(e,n)=>this.synergy?.onStun(e,n);
+    if(this.controlBuild)this.controlBuild.onStun=(e,n)=>this.synergy?.onStun(e,n);
+    this.buildCombat.onGust=(x,y,a,len)=>{for(let i=1;i<=3;i++)playSheet(this,'fx_windstep_burst',x+Math.cos(a)*len*i/3.4,y+Math.sin(a)*len*i/3.4-14,{size:70+i*14,ms:360,depth:DEPTH.fx+.05,rotation:a,name:'gust-burst'});};
     const cam = this.cameras.main;
     cam.setRoundPixels(false);
     cam.setScroll(this.player.x - GAME_WIDTH / 2, this.player.y - GAME_HEIGHT / 2);
@@ -1077,7 +1102,7 @@ export class GameScene extends Phaser.Scene {
     this.updateHud();
     // 被动满层台词每帧检测（HUD 0.1 秒一刷，孙尚香这类攒满后马上触发的会漏掉）
     this.passiveShout.update(this.player.passive, this.combatNow, this.player.x, this.player.y, this.mode === 'none' && !this.over, this.player.sprite);
-    this.zhaoyunFx.update(this.player.passive, this.combatNow, this.player.x, this.player.y, !this.over && this.player.sprite.visible);
+    this.passiveGauge.update(this.player.passive, this.combatNow, this.player.x, this.player.y, !this.over && this.player.sprite.visible);
     this.heroBark?.update(this.barkSpeakers(), this.combatNow, this.mode === 'none' && !this.over && !this.barksMuted()); // 武将台词气泡（被动大招触发时）；过场中与刚结束 1 秒内不喊
     this.artEffects.update(this.combatNow);
     this.updateRelicWaves();
@@ -1149,7 +1174,6 @@ export class GameScene extends Phaser.Scene {
     if(this.terrain){this.terrain.resolve(this.player,this.allies,this.enemies);this.terrain.updateCanopy(this.player,this.enemies.filter(e=>e.active&&!e.isSupplySlot&&(e.kind==='boss'||e.kind==='elite')));}
     this.player.growth.recordMovement(Math.hypot(move.x,move.y)>.1&&time>=this.player.knockedUntil?Math.hypot(this.player.x-moveX,this.player.y-moveY):0,dt);
     if(this.player.growth.masteries.dragging_blade||this.dragFx)this.dragBladeFx().update(dt,Math.hypot(move.x,move.y)>.1&&time>=this.player.knockedUntil?Math.hypot(this.player.x-moveX,this.player.y-moveY):0);
-    this.awakeningCombat?.movement(Math.hypot(move.x,move.y)>.1&&time>=this.player.knockedUntil?Math.hypot(this.player.x-moveX,this.player.y-moveY):0);
     this.buildCombat.movement(Math.hypot(move.x,move.y)>.1&&time>=this.player.knockedUntil?Math.hypot(this.player.x-moveX,this.player.y-moveY):0);
     this.drawAimIndicator();
     this.updateEnemyWalkAnimations(dt);
@@ -1158,15 +1182,18 @@ export class GameScene extends Phaser.Scene {
     if (this.over) return;
     this.martialFields.update(dt);
     this.buildCombat.update(this.combatNow);
+    // 兵阵 4 势「援军」：每 12 秒从后方冲来 3 名义军助战 10 秒（data/schools.ts SCHOOL_TIER.formation）
+    if(this.player.growth.build.tier('formation')>=4&&this.combatNow>=this.reinforceAt){const F=SCHOOL_TIER.formation;this.reinforceAt=this.combatNow+F.everyMs;
+      this.reinforcePush().spawnEscort(F.n,F.lifeMs);}
     {const fc=this.buildCombat.flankCharge();if(fc.level||this.flankFx)this.flankBladeFx().update(dt,fc.level,fc.ratio);}
     {const wc=this.buildCombat.windstepCharge();if(wc.level||this.windFx)this.windstepFx().update(dt,wc.level,wc.ratio);}
     this.controlBuild?.update(this.combatNow);
     this.bulwarkBuild?.update(this.combatNow);
-    this.awakeningCombat?.update(this.combatNow);
+    this.synergy?.update(this.combatNow);
     const vfx=buildVfx(this);vfx.update(this.combatNow);
-    if(this.buildCombat.charged()&&this.player.growth.build.tags().charge>0)vfx.emit('charge',this.player.x+14,this.player.y-14,this.combatNow,34);
+    if(this.buildCombat.charged()&&(this.player.growth.build.level('stored_edge')>0||this.player.growth.build.tier('cavalry')>=4))vfx.emit('charge',this.player.x+14,this.player.y-14,this.combatNow,34);
     // 游击类战法（疾行印等）的移动风痕：用户反馈「疾行」特效一直挂在身后太显眼 → 改为脚边一小团、每 1.5 秒最多一次
-    if(Math.hypot(move.x,move.y)>.1&&this.player.growth.build.tags().skirmish>0&&this.combatNow>=this.skirmishPuffAt){this.skirmishPuffAt=this.combatNow+1500;vfx.emit('skirmish',this.player.x-move.x*16,this.player.y+16-move.y*10,this.combatNow,26,Math.atan2(move.y,move.x),260);}
+    if(Math.hypot(move.x,move.y)>.1&&this.player.growth.build.tags().cavalry>0&&this.combatNow>=this.skirmishPuffAt){this.skirmishPuffAt=this.combatNow+1500;vfx.emit('skirmish',this.player.x-move.x*16,this.player.y+16-move.y*10,this.combatNow,26,Math.atan2(move.y,move.x),260);}
     this.updateWeapons(dt, time);
     this.reinforcements.update(time, this.enemies, (enemy, amount, fire) => this.hitEnemy(enemy, amount, time, fire ? 'fire' : 'melee', true, false));
     if (this.over) return;
@@ -1315,6 +1342,18 @@ export class GameScene extends Phaser.Scene {
     this.events.once('shutdown', () => { this.ordersPanel?.destroy(); this.battleMap?.destroy(); this.battleOrders?.clear(); this.ordersPanel = null; this.battleMap = null; this.battleOrders = null; });
   }
   /** 2-3 洛阳：吕布在城下打的那段，当成一名首领进军令（「打退吕布」，逃走即完成）和地图朱印。 */
+  /**
+   * 开局的势（2026-11-19 流派重做，data/schools.ts SHI_SOURCES）：武将第一亲和派 +1；随行每名按兵种 +1（合计最多 +2）；骑橙色名马骑突 +1。
+   * 写进 BuildState.bonus / bonusNotes（构筑总览分项显示来源）。
+   */
+  private applySchoolSources():void{
+    const b=this.player.growth.build,bonus:Partial<Record<SchoolId,number>>={},notes:Partial<Record<SchoolId,string[]>>={};
+    const add=(sc:SchoolId,n:number,note:string)=>{bonus[sc]=(bonus[sc]??0)+n;(notes[sc]??=[]).push(note);};
+    const ch=this.runConfig.character,aff=heroAffinity(ch);if(aff[0])add(aff[0],SHI_SOURCES.affinityStart,'亲和 · '+getCharacter(ch).name);
+    let f=0;for(const m of this.followers?.members??[]){if(f>=SHI_SOURCES.followerCap)break;const sc=FOLLOWER_SCHOOL[m.template];if(sc){add(sc,1,'随行 · '+m.recruit.name.replace(/（.*）/,''));f++;}}
+    const horse=heroHorse(ch);if(horse&&horseQuality(horse)==='orange')add('cavalry',SHI_SOURCES.orangeMount,'名马 · '+horse.name);
+    b.bonus=bonus;b.bonusNotes=notes;
+  }
   /**
    * 自动树林的禁区（用户「树增加多点在不同适合的场景」，不挡打仗的地方）：
    *  - 场景里所有挡人的框（关墙、营栅、山崖、陈仓城、董卓城墙…——各系统的 footprints）旁 110 以内；
@@ -2146,15 +2185,17 @@ export class GameScene extends Phaser.Scene {
     if (enemy === this.boss && this.lubu) rawDamage *= this.lubu.incomingDamageMultiplier(source, time);
     if (enemy === this.boss && this.zhangjiao) rawDamage *= this.zhangjiao.takenMul;
     { let v = this.player.passive.vulnerability(enemy, time); for (const fp of this.followerPassives) v = Math.max(v, 1 + (fp.vulnerability(enemy, time) - 1) * FOLLOW.passiveScale); rawDamage *= v; } // 貂蝉倾城：易伤（部曲伤害同样吃加成；随行貂蝉的按随行系数折算）
+    if (this.synergy) rawDamage *= this.synergy.incoming(enemy, fromAlly, time); // 八门金锁阵里加深 / 背水一战 / 铁壁军阵之后全军冲杀
     const firstStrike = !fromAlly && weaponHit && !!this.relics?.firstStrike(enemy);
-    const crit = this.debugCrit !== null && !fromAlly ? this.debugCrit : firstStrike || weaponHit && Math.random() < Math.min(0.65, this.player.stats.critChance + this.player.growth.criticalBonus() + (!fromAlly ? this.player.passive.critBonus(time) + this.player.growth.aimCriticalBonus() + this.buildCombat.criticalBonus() : 0));
+    const crit = this.debugCrit !== null && !fromAlly ? this.debugCrit : firstStrike || weaponHit && Math.random() < Math.min(0.65, this.player.stats.critChance + this.player.growth.criticalBonus() + (!fromAlly ? this.player.passive.critBonus(time) + this.player.growth.aimCriticalBonus() + this.buildCombat.criticalBonus(enemy, time) : 0))
+      || fromAlly && !!this.synergy?.allyCrit(Math.min(0.65, this.player.stats.critChance + this.player.growth.criticalBonus() + this.buildCombat.criticalBonus(enemy, time))); // 合击「弩阵」：部曲也会暴击
     enemy.lastHitHeavy = !fromAlly && (crit || this.player.passive.isInvulnerable(time) || this.player.weapons[0]?.id === 'dangyang_roar'); // 重击：暴击 / 马超冲锋中 / 张飞大喝（死亡特效击飞）
     if(!fromAlly&&weaponHit)rawDamage=this.buildCombat.damage(enemy,rawDamage,crit,time);
     if(!fromAlly)rawDamage*=this.player.growth.gearHitMultiplier(enemy.kind);
     // 智力：非武器伤害（技艺、灼烧等）按法术系数 × 智力、含主属性；法术武器（火旗 / 火雷 / 连弩 / 团扇）的武器命中再乘法术系数
     if(!fromAlly&&!weaponHit)rawDamage*=this.player.growth.skillDamageMultiplier();else if(!fromAlly)rawDamage*=this.player.growth.spellWeaponMultiplier(this.player.weapons[0]?.id);
     if(!fromAlly)rawDamage*=this.primaryPerkHit(enemy,time,weaponHit,crit); // 主属性专精（千钧 / 破阵 / 疾影 / 连珠）
-    let damage = Math.max(1, Math.round(rawDamage * (crit ? BALANCE.critMultiplier : 1) * (firstStrike ? RELIC.zhanjiangMul : 1)));
+    let damage = Math.max(1, Math.round(rawDamage * (crit ? BALANCE.critMultiplier * (fromAlly ? 1 : 1 + this.buildCombat.critDamageBonus()) : 1) * (firstStrike ? RELIC.zhanjiangMul : 1)));
     enemy.flash(time);
     if(!fromAlly&&source==='arrow')this.artEffects.show(3,enemy.x,enemy.y-8,32,time,120);
     if (!fromAlly) {
@@ -2196,8 +2237,10 @@ export class GameScene extends Phaser.Scene {
     if (enemy.kind === 'boss') this.bossFeelHit(enemy, damage, crit, bossHpBefore, time);
     this.spawnDamageText(enemy.x, enemy.y - enemy.radius, damage, crit, !fromAlly||enemy.kind==='boss', enemy.kind==='boss' ? 'boss' : fromAlly ? 'ally' : (!weaponHit || source === 'fire') ? 'spell' : 'hit');
     if (!fromAlly && weaponHit && this.player.growth.build.treasures.includes('blood_jade')) this.bloodJadeHeal(damage, time);
+    if (!fromAlly && weaponHit) this.synergy?.leech(damage, time); // 合击「背水一战」吸血
+    if (fromAlly) this.buildCombat.allyHit(enemy, time); // 合击「火牛阵」
     if (!fromAlly && weaponHit) this.relics?.onWeaponHit(enemy, rawDamage, time);
-    if(!fromAlly&&weaponHit){const tags=this.player.growth.build.tags();const vfx=buildVfx(this);const a=Math.atan2(enemy.y-this.player.y,enemy.x-this.player.x);if(tags.combo)vfx.emit('combo',enemy.x,enemy.y-8,time,42,a);if(crit&&tags.critical)vfx.emit('critical',enemy.x,enemy.y-8,time,48);if(tags.charge&&this.buildCombat.charged())vfx.emit('pure_charge',enemy.x,enemy.y-8,time,70,a);this.legion.command.onHit(enemy,time);this.controlBuild?.onHit(enemy,time);this.awakeningCombat?.onHit(enemy,rawDamage,crit,time,this.buildCombat.charged());this.buildCombat.onHit(enemy,rawDamage,crit,time);this.relicHits++;
+    if(!fromAlly&&weaponHit){const tags=this.player.growth.build.tags();const vfx=buildVfx(this);const a=Math.atan2(enemy.y-this.player.y,enemy.x-this.player.x);if(tags.warrior)vfx.emit('combo',enemy.x,enemy.y-8,time,42,a);if(crit&&tags.archery)vfx.emit('critical',enemy.x,enemy.y-8,time,48);if(tags.cavalry&&this.buildCombat.charged())vfx.emit('pure_charge',enemy.x,enemy.y-8,time,70,a);this.legion.command.onHit(enemy,time);this.controlBuild?.onHit(enemy,time);this.synergy?.onHit(enemy,rawDamage,time);this.buildCombat.onHit(enemy,rawDamage,crit,time);this.relicHits++;
       const lg=this.player.growth.charmLegend,seal=lg.human_seal;if(seal!==undefined&&this.relicHits%CHARM_LEGEND.charm_human_seal.every[seal]===0){if(this.relicWaves.length>=4)this.relicWaves.shift();this.relicWaves.push({x:enemy.x,y:enemy.y,at:time});for(const e of this.grid.query(enemy.x,enemy.y,110).filter(e=>e.active&&!e.isSupplySlot&&Math.hypot(e.x-enemy.x,e.y-enemy.y)<=110).slice(0,CHARM_LEGEND.charm_human_seal.targets[seal]))this.hitEnemy(e,rawDamage*.35,time,'melee',false,false);}
       if(lg.heaven_ember!==undefined&&time>=this.relicFireAt){this.relicFireAt=time+CHARM_LEGEND.charm_heaven_ember.cd[lg.heaven_ember];this.martialFields.add(enemy.x,enemy.y,65,rawDamage,1500,1);this.spawnFlameFx(enemy.x,enemy.y,65);}
     }
@@ -2269,7 +2312,6 @@ export class GameScene extends Phaser.Scene {
     if(this.deathFx){const from=this.hitSourceOf(enemy);this.deathFx.play(enemy,from.x,from.y,this.combatNow,this.deathOptsOf(enemy));}
     this.kills += 1;
     this.player.passive.onKill(kind, this.combatNow);
-    this.awakeningCombat?.onKill(enemy,this.combatNow);
     this.buildCombat.onKill(enemy,this.combatNow);
     this.controlBuild?.onKill(enemy,this.combatNow);
     this.legion.onKill(enemy);
@@ -3496,7 +3538,7 @@ export class GameScene extends Phaser.Scene {
     this.player.playAction(victory ? 'win' : 'die', 'down');
     this.legion.stop();
     buildVfx(this).clear();
-    this.awakeningCombat?.clear();
+    this.synergy?.clear();
     this.bulwarkBuild?.clear();
     this.controlBuild?.clear();
     this.reinforcements.clear();
@@ -3703,7 +3745,7 @@ export class GameScene extends Phaser.Scene {
     for (const k of ['pause', 'mute', 'music', 'bag'] as const) this.hudTexts[k]
       .on('pointerover', () => { this.hudChipState[k] = 'hover'; }).on('pointerout', () => { this.hudChipState[k] = 'idle'; })
       .on('pointerdown', () => { this.hudChipState[k] = 'down'; }).on('pointerup', () => { this.hudChipState[k] = 'hover'; });
-    this.passiveHud = new PassiveHud(this); this.heroBark = new HeroBark(this); this.zhaoyunFx = new ZhaoyunPassiveFx(this); this.passiveShout = new PassiveShout(this, { sfx: () => this.sfx.play('passiveFull'), nearby: (x, y, r) => this.grid.query(x, y, r).filter(e => Math.hypot(e.x - x, e.y - y) <= r) });
+    this.passiveHud = new PassiveHud(this); this.heroBark = new HeroBark(this); this.passiveGauge = new PassiveGauge(this); this.zhaoyunFx = this.passiveGauge.zhaoyun; this.passiveShout = new PassiveShout(this, { sfx: () => this.sfx.play('passiveFull'), nearby: (x, y, r) => this.grid.query(x, y, r).filter(e => Math.hypot(e.x - x, e.y - y) <= r) });
     this.buffHud=new BuffHud(this);
     this.muteText = this.hudTexts.mute;
     this.muteText.setText(this.sfx.muted ? '音效:关' : '音效:开');

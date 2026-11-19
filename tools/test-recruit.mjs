@@ -192,7 +192,8 @@ for (const layout of ['mobile', 'desktop']) {
   await p.waitForTimeout(300);
   await p.screenshot({ path: `${out}/hall-roster-${layout}.png` });
   const rn = await p.evaluate(() => { const s = window.__game.scene.getScene('TalentHallScene'), c = s.children.list.find(x => x.type === 'Container'); return c.list.filter(x => x.name === 'talent-roster-name').map(x => x.text); });
-  ck(`${layout} 麾下页列出主公与已招武将`, rn.some(t => t.includes('赵云') && t.includes('主公')) && rn.length >= 2, rn);
+  // 主公不进麾下（dcaee29 起：麾下名单与人数不含主公）：列出已招武将，不列主公赵云
+  ck(`${layout} 麾下页列出已招武将、不列主公`, !rn.some(t => t.includes('赵云')) && rn.length >= 2, rn);
   await p.close();
 }
 

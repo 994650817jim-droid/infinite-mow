@@ -74,6 +74,13 @@ export const ART_V2_FILES: Readonly<Record<string, string>> = {
   'yellow_spear-attack-v5': 'assets/processed-v2/enemies/yellow_spear_attack.png',
   yellow_shaman_walk: 'assets/processed-v2/enemies/yellow_shaman_walk.png',
   yellow_shaman_cast: 'assets/processed-v2/enemies/yellow_shaman_attack.png',
+  // 小怪兵种第一批（2026-11-19 Gemini 出图，原图 enemies/originals/artv2_enemy_*）：行走 4×4、攻击 4×4，行 = 下 / 左 / 右 / 上
+  enemy_liumin_walk: 'assets/processed-v2/enemies/enemy_liumin_walk.png',
+  enemy_liumin_attack: 'assets/processed-v2/enemies/enemy_liumin_attack.png',
+  enemy_fushui_walk: 'assets/processed-v2/enemies/enemy_fushui_walk.png',
+  enemy_fushui_attack: 'assets/processed-v2/enemies/enemy_fushui_attack.png',
+  enemy_lishi_walk: 'assets/processed-v2/enemies/enemy_lishi_walk.png',
+  enemy_lishi_attack: 'assets/processed-v2/enemies/enemy_lishi_attack.png',
   enemy_archer_walk_sheet: 'assets/processed-v2/enemies/enemy_archer_walk.png',
   enemy_archer_attack_sheet: 'assets/processed-v2/enemies/enemy_archer_attack.png',
   // 第 3 批（二）：通用敌军（黄巾装束，各章通用）+ 西凉军（第 2 章，只有行走图）

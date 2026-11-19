@@ -12,6 +12,7 @@ import type { WeaponState } from '../types';
 import type { ItemInstance } from '../data/items';
 import { itemTile } from './ItemQuality';
 import { attrBadge } from './AttrBadge';
+import { primarySummary } from './PrimaryAttrInfo';
 import type { ItemTooltip, InfoTip } from './ItemTooltip';
 
 /**
@@ -103,9 +104,20 @@ export function drawBuildOverview(o: BuildOverviewOpts): void {
     text(nx, L.y + pad, hero.name, D ? 19 : 20, '#f6dc9a', true).setName(P + '-hero-name');
     text(nx, L.y + pad + 26, `武将 Lv.${o.level}`, 13, '#d9c58f').setName(P + '-hero-level');
     const main = primaryAttribute(g.character);
-    if (main) { const seal = attrBadge(s, L.x + L.w - 22, L.y + 22, g.character, 26, { scrollFactor: 0 }); if (seal) root.add(seal); text(nx, L.y + pad + 46, `主属性 ${ATTRIBUTE_INFO[main].name}`, 12, '#c9b88f'); }
-    hot(L.x + pad, L.y + pad, L.w - pad * 2 - 30, ph, P + '-hero', () => ({ title: hero.name, sub: `武将 Lv.${o.level}${main ? ' · 主属性 ' + ATTRIBUTE_INFO[main].name : ''}`, body: hero.desc + (main ? `\n主属性：${ATTRIBUTE_INFO[main].effect}；主属性每点再 +1% 全伤害。` : ''), color: 0xc9a35e }));
+    // 主属性摘要（与加点面板同一份，ui/PrimaryAttrInfo）：「主属性：敏捷 · 每点效果 ×1.5」+ 专精进度；悬停看完整说明
+    const sum = main ? primarySummary(g.character, g.attributes[main] ?? 0) : null;
+    const fit = (t: Phaser.GameObjects.Text, max: number) => { if (t.width > max) t.setScale(max / t.width); return t; };
     let y = L.y + pad + ph + 8;
+    if (main && sum) {
+      const seal = attrBadge(s, L.x + L.w - 22, L.y + 22, g.character, 26, { scrollFactor: 0 }); if (seal) root.add(seal);
+      const colW = L.x + L.w - 32 - nx;
+      fit(text(nx, L.y + pad + 46, sum.head, 12, '#f3d48a').setName(P + '-primary-head'), colW);
+      // 电脑：武将卡窄，专精进度放到立绘下面整行；手机：卡片整宽，放名字栏
+      const next = D ? text(L.x + pad, y - 2, sum.next, 12, '#c9b88f') : text(nx, L.y + pad + 62, sum.next, 12, '#c9b88f');
+      fit(next.setName(P + '-primary-next'), D ? L.w - pad * 2 : colW);
+      if (D) { hot(L.x + pad, y - 4, L.w - pad * 2, 18, P + '-primary-hit', () => sum.tip); y += 18; }
+    }
+    hot(L.x + pad, L.y + pad, L.w - pad * 2 - 30, ph, P + '-hero', () => sum ? { ...sum.tip, title: hero.name, sub: `武将 Lv.${o.level} · ${sum.tip.sub}`, body: hero.desc + '\n\n' + sum.head + '\n' + sum.tip.body } : { title: hero.name, sub: `武将 Lv.${o.level}`, body: hero.desc, color: 0xc9a35e });
     // 本命武器
     const w = o.weapon, wmax = w ? WEAPON_DEFS[w.id]?.maxLevel ?? 5 : 5;
     text(L.x + pad, y, '本命', 12, '#a8956c');
@@ -130,7 +142,7 @@ export function drawBuildOverview(o: BuildOverviewOpts): void {
       const bx = L.x + pad + 42;
       for (let k = 0; k < ATTRIBUTE_MAX; k++) g0.fillStyle(k < v ? (isMain ? 0xe8c27a : 0xb89a66) : 0x3a2c1c, k < v ? 1 : .8).fillRect(bx + k * seg + .5, y + 3, seg - 1.5, 8);
       text(bx + bw + 6, y - 1, String(v), 12, isMain ? '#f3d48a' : '#d8c8a4').setName(P + '-attr-' + id);
-      hot(L.x + pad, y - 2, L.w - pad * 2, 16, P + '-attr-hit-' + id, () => ({ title: ATTRIBUTE_INFO[id].name + (isMain ? '（主属性）' : ''), sub: `${v} / ${ATTRIBUTE_MAX} 点`, body: ATTRIBUTE_INFO[id].effect + (isMain ? '\n主属性：每点再 +1% 全伤害，满 4 / 7 / 10 点各解锁一档专精。' : ''), color: isMain ? 0xe8c27a : 0x9a8a6a }));
+      hot(L.x + pad, y - 2, L.w - pad * 2, 16, P + '-attr-hit-' + id, () => isMain && sum ? sum.tip : ({ title: ATTRIBUTE_INFO[id].name, sub: `${v} / ${ATTRIBUTE_MAX} 点`, body: ATTRIBUTE_INFO[id].effect, color: 0x9a8a6a }));
       y += 17;
     }
     if (g.unallocated > 0) text(L.x + pad, y + 2, `还有 ${g.unallocated} 点属性未分配`, 12, '#7fd88a').setName(P + '-unallocated');

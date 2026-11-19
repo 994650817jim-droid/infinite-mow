@@ -15,6 +15,8 @@ const WALK_STRIDES: Partial<Record<EnemyKind, number>> = { infantry: 11, shield:
 export class Enemy {
   static spawnSeq = 0;
   isSupplySlot=false;
+  /** 关卡锁定目标（摧毁型关卡的营寨等，StageObjectives 设）：虽然是补给槽位的物件，武器照样当敌人打。 */
+  lockTarget=false;
   readonly uid: number = (enemyUidSeq += 1);
   /** 每次 spawn 递增的实例 ID：池复用后仍能区分新旧生成。 */
   spawnId = 0;

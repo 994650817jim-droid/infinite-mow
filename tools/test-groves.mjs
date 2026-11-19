@@ -1,7 +1,7 @@
 // 自动树林（用户「树增加多点在不同适合的场景」；data/terrain.ts GROVES）：前后对比截图 + 检查。需要开发服务器。
 // 每关：?groves=0（原样）与默认（加树林）各开一次：
-//  - 全景截图（拉远镜头，以开局点为中心）：assets/review/groves/<关>-{before,after}.png；
-//  - 游戏视角截图（主将走到一片树林边）：<关>-view.png；
+//  - 全景截图（拉远镜头，以开局点为中心）：assets/review/groves/<关>-{before,after}.jpg；
+//  - 游戏视角截图（主将走到一片树林边）：<关>-view.jpg；
 //  - 检查：自动种的树数量 > 0；没有树种在中间十字通道（|x|、|y| < 280）里、开局点 600 内、障碍框里、关卡目标 / 补给 220 内；
 //    跑 10 秒统计帧率（树多了不掉帧）、镜头外的树不画（drawn < 总数）。
 // 用法：BASE=http://127.0.0.1:5241/ node tools/test-groves.mjs [--only 1-2,5-2]
@@ -31,10 +31,9 @@ async function open(id, groves) {
   await p.evaluate(([C, st, cfgv]) => {
     const g = window.__game, s0 = g.scene.getScene('GameScene'); s0.registry.remove('campaignTransfer'); s0.registry.remove('thirdTransfer');
     let cfg = cfgv ?? {}; if (C.reg) { s0.registry.set(C.reg, st); cfg = C.reg === 'guanduStage' ? {} : { thirdStage: st }; }
-    for (const s of g.scene.getScenes(true)) s.scene.stop();
-    s0.registry.set('runConfig', { character: 'zhaoyun', ...cfg }); g.scene.start(C.key);
+    s0.registry.set('runConfig', { character: 'zhaoyun', ...cfg }); s0.scene.start(C.key);
   }, [{ reg: C.reg, key: C.key }, stn, C.cfg?.(stn)]);
-  await p.waitForFunction(k => { const s = window.__game.scene.getScene(k); return window.__game.scene.isActive(k) && s?.player && s.elapsed > .5; }, C.key, { timeout: 120000 });
+  await p.waitForFunction(k => { const s = window.__game.scene.getScene(k); return window.__game.scene.isActive(k) && s?.player && s.terrainInit !== undefined; }, C.key, { timeout: 120000 });
   await p.evaluate(k => { const s = window.__game.scene.getScene(k); window.__S = s; s.player.damageImmune = true;
     window.__calm = () => { for (let i = 0; i < 20 && s.mode !== 'none' && !s.over; i++) { if (s.mode === 'levelup' || s.mode === 'bossloot') s.chooseUpgrade?.(0); else { s.__DEV_ACTIONS?.closePopup?.(); if (s.mode !== 'none' && s.mode !== 'result') s.setMode?.('none'); else break; } } }; }, C.key);
   for (let i = 0; i < 25; i++) { await p.evaluate(() => window.__calm()); await p.waitForTimeout(100); }
@@ -48,17 +47,17 @@ async function overview(p, file) {
     for (const o of s.children.list) if (o.name === 'terrain-tree' || o.name === 'terrain-tree-auto') o.setVisible(true);
     cam.setZoom(.36); s.terrain && (s.terrain.cullAcc = -1e9); });
   for (let k = 0; k < 4; k++) { await p.waitForTimeout(120); await p.evaluate(() => { const s = window.__S, cam = s.cameras.main, v = cam.worldView, c = s.terrainStart ?? { x: 0, y: 0 }; cam.scrollX += c.x - (v.x + v.width / 2); cam.scrollY += c.y - (v.y + v.height / 2); }); }
-  await p.waitForTimeout(300); await p.screenshot({ path: file });
+  await p.waitForTimeout(300); await p.screenshot({ path: file, quality: 84 });
   await p.evaluate(() => { const s = window.__S; s.cameras.main.setZoom(window.__z0); s.updateCamera = window.__ucam; s.syncGround = window.__sg; s.terrain && (s.terrain.cullAcc = 1e9); });
 }
 
 for (const id of list) {
   // 原样
-  { const { p } = await open(id, false); await overview(p, `${OUT}/${id}-before.png`);
+  { const { p } = await open(id, false); await overview(p, `${OUT}/${id}-before.jpg`);
     report[id] = { before: await p.evaluate(() => window.__S.terrain?.trees.length ?? 0) }; await p.close(); }
   // 加树林
   const { p, errors } = await open(id, true);
-  await overview(p, `${OUT}/${id}-after.png`);
+  await overview(p, `${OUT}/${id}-after.jpg`);
   const r = await p.evaluate(() => {
     const s = window.__S, t = s.terrain; if (!t) return null;
     const auto = t.trees.filter(x => x.auto), kinds = {};
@@ -71,7 +70,7 @@ for (const id of list) {
     if (near) s.player.sprite.setPosition(near.x + (near.x > 0 ? -150 : 150), near.y + 60);
     return { total: t.trees.length, auto: auto.length, kinds, bad: bad.slice(0, 6), nBad: bad.length };
   });
-  await p.waitForTimeout(900); await p.evaluate(() => window.__calm()); await p.screenshot({ path: `${OUT}/${id}-view.png` });
+  await p.waitForTimeout(900); await p.evaluate(() => window.__calm()); await p.screenshot({ path: `${OUT}/${id}-view.jpg`, quality: 84 });
   // 帧率：正常刷怪跑 8 秒
   const perf = await p.evaluate(async () => { const s = window.__S; s.player.sprite.setPosition(0, 0); let n = 0, worst = 0, last = performance.now(); const t0 = last;
     await new Promise(res => { const f = () => { const now = performance.now(); worst = Math.max(worst, now - last); last = now; n++; window.__calm(); if (now - t0 < 8000) requestAnimationFrame(f); else res(); }; requestAnimationFrame(f); });

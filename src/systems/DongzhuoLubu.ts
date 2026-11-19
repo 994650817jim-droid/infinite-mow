@@ -128,6 +128,8 @@ export class DongzhuoLubu {
   /** XiliangBattle 是否该停下董卓自己的移动（城头 / 走下城 / 授首时）。 */
   get holdsDongzhuo(): boolean { return this.phase !== 'down'; }
   get lubuLeft(): boolean { return this.phase !== 'wall' && this.phase !== 'fleeing'; }
+  /** 董卓还在城头（城头对峙 / 吕布跃下 / 战吕布 / 吕布逃走）：底部首领血条、名牌、屏外箭头都不给董卓（用户「董卓吕布出来之前不要显示血条」）；小地图照常标。 */
+  get hidesBossBar(): boolean { return this.phase === 'perch' || this.phase === 'leaping' || this.phase === 'wall' || this.phase === 'fleeing'; }
   /** 用户「吕布下来应该是吕布血条」：跃下起到逃出画面，首领血条 / 名牌显示吕布；董卓下城后换回董卓。 */
   get lubuFocus(): Enemy | null { const l = this.lubu; return l?.active && (this.phase === 'leaping' || this.phase === 'wall' || this.phase === 'fleeing') ? l : null; }
 

@@ -168,6 +168,8 @@ export class Terrain {
     for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) { const l = this.grid.get(this.key(cx + dx, cy + dy)); if (l) for (const t of l) this.near.push(t); }
     return this.near;
   }
+  /** 附近有没有（没烧掉的）树：补给箱 / 道具不放在树脚下（自动树林把树种满了之后，物件会和树叠在一起）。 */
+  treeNear(x: number, y: number, r: number): boolean { for (const t of this.treesNear(x, y)) if (!t.burnt && Math.hypot(t.x - x, t.y - y) < TERRAIN.trunk + r) return true; return false; }
   /** 把一个圆推出树干（随行用，和主将同一套）。返回推开量（没碰到为 null）。 */
   pushCircle(x: number, y: number, r: number): Pt | null { return this.push(x, y, r); }
   /** 把一个圆推出树干。返回推开量（没碰到为 null）。 */

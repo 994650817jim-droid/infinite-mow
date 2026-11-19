@@ -9,7 +9,7 @@
  * 移动（WASD / 方向键）固定不可改，只在列表里显示。
  */
 export type HotkeyAction =
-  | 'back' | 'potion' | 'order' | 'sortie' | 'bag' | 'attributes' | 'build' | 'map' | 'menu'
+  | 'back' | 'potion' | 'order' | 'sortie' | 'bag' | 'attributes' | 'build' | 'map' | 'orders' | 'menu'
   | 'pick1' | 'pick2' | 'pick3' | 'pick4' | 'reroll' | 'confirm';
 
 export interface HotkeyDef {
@@ -30,10 +30,13 @@ export const HOTKEYS: Record<HotkeyAction, HotkeyDef> = {
   bag: { label: '行囊', where: '战斗中开关；行营休整', key: 'KeyB', alt: ['Tab'] },
   attributes: { label: '属性加点', where: '战斗中有属性点时开关', key: 'KeyC' },
   build: { label: '战法构筑', where: '战斗中开关', key: 'KeyV' },
-  // 2026-11-18 战场地图（battle-map-design.md）：M 已给返回主菜单，Tab 给行囊，取 G
-  map: { label: '战场地图', where: '战斗中开关大地图（小地图常显）', key: 'KeyG' },
+  // 2026-11-18 用户「小地图换成m快捷键」：战斗中 M 展开 / 卷起舆图卷轴；M 同时是天下地图 / 义军营寨的「返回主菜单」（不同界面，不冲突，见 SHARED_KEYS）。
+  // 战斗中回主菜单走 Esc 暂停 → 「返回主菜单」（暂停菜单里不再标 M）。
+  map: { label: '舆图（战场地图）', where: '战斗中展开 / 卷起舆图卷轴', key: 'KeyM' },
+  // 用户「军令也可以收起来」：G（原地图键，空出来了）收起 / 展开右侧军令面板
+  orders: { label: '军令 收起 / 展开', where: '战斗中', key: 'KeyG' },
   // 2026-11-18 用户「返回主菜单按钮，三处都加」：暂停菜单里按一次待确认、再按一次执行；天下地图 / 义军营寨直接回主页
-  menu: { label: '返回主菜单', where: '暂停菜单（再按一次确认）；天下地图 / 义军营寨', key: 'KeyM' },
+  menu: { label: '返回主菜单', where: '天下地图 / 义军营寨（战斗中：Esc 暂停后点「返回主菜单」）', key: 'KeyM' },
   pick1: { label: '选第 1 项', where: '三选一 / 遗珍 / 招募；休整页签 1；劝降', key: 'Digit1', alt: ['Numpad1'] },
   pick2: { label: '选第 2 项', where: '三选一 / 遗珍 / 招募；休整页签 2；斩杀', key: 'Digit2', alt: ['Numpad2'] },
   pick3: { label: '选第 3 项', where: '三选一 / 遗珍 / 招募；休整页签 3；再压一压', key: 'Digit3', alt: ['Numpad3'] },
@@ -42,6 +45,9 @@ export const HOTKEYS: Record<HotkeyAction, HotkeyDef> = {
   confirm: { label: '确认 / 出征', where: '结算主行动；休整「率军出征」；剧情确认', key: 'Enter', alt: ['Space', 'NumpadEnter'] },
 };
 export const HOTKEY_ORDER = Object.keys(HOTKEYS) as HotkeyAction[];
+/** 可以共用一个键的动作（用在不同界面、不会同时生效）：舆图只在战斗中，返回主菜单只在天下地图 / 义军营寨。改其中一个不算和另一个冲突。 */
+export const SHARED_KEYS: ReadonlyArray<readonly [HotkeyAction, HotkeyAction]> = [['map', 'menu']];
+const shares = (a: HotkeyAction, b: HotkeyAction): boolean => SHARED_KEYS.some(([x, y]) => (x === a && y === b) || (x === b && y === a));
 /** 固定键（不可改）：设置页只列出。 */
 export const FIXED_KEYS: ReadonlyArray<{ label: string; keys: string }> = [
   { label: '移动', keys: 'W A S D / 方向键' },
@@ -62,11 +68,15 @@ function save(v: Partial<Record<HotkeyAction, string>>): void { cache = v; try {
 export function hotkeyCode(a: HotkeyAction): string { return load()[a] ?? HOTKEYS[a].key; }
 /** 当前全部生效的键（主键 + 不和别的动作主键冲突的副键）。 */
 export function hotkeyCodes(a: HotkeyAction): string[] {
-  const main = hotkeyCode(a), taken = new Set(HOTKEY_ORDER.filter(x => x !== a).map(hotkeyCode));
+  const main = hotkeyCode(a), taken = new Set(HOTKEY_ORDER.filter(x => x !== a && !shares(a, x)).map(hotkeyCode));
   return [main, ...(HOTKEYS[a].alt ?? []).filter(c => c !== main && !taken.has(c))];
 }
+/** 这个键对应的全部动作（共用键时不止一个，由界面决定用哪个）。 */
+export function actionsFor(code: string): HotkeyAction[] { return HOTKEY_ORDER.filter(a => hotkeyCodes(a).includes(code)); }
 /** 这个键对应哪个动作（没有则 null）。 */
 export function actionFor(code: string): HotkeyAction | null {
+  // 共用键：舆图（map）只由战斗按键（BattleHotkeys）显式挑，其余界面拿另一个（返回主菜单）
+  const shared = HOTKEY_ORDER.filter(a => hotkeyCode(a) === code); if (shared.length > 1) return shared.find(a => a !== 'map') ?? shared[0];
   for (const a of HOTKEY_ORDER) if (hotkeyCode(a) === code) return a;
   for (const a of HOTKEY_ORDER) if (hotkeyCodes(a).includes(code)) return a;
   return null;
@@ -75,7 +85,7 @@ export function actionFor(code: string): HotkeyAction | null {
 export function setHotkey(a: HotkeyAction, code: string, force = false): { ok: boolean; conflict: HotkeyAction | null; reserved?: boolean } {
   if (RESERVED_CODES.has(code)) return { ok: false, conflict: null, reserved: true };
   // 只有别的动作的「主键」算冲突；别的动作的副键被占用时那个副键自动失效（hotkeyCodes 会排除）
-  const other = HOTKEY_ORDER.find(x => x !== a && hotkeyCode(x) === code) ?? null;
+  const other = HOTKEY_ORDER.find(x => x !== a && !shares(a, x) && hotkeyCode(x) === code) ?? null;
   if (other && !force) return { ok: false, conflict: other };
   const v = { ...load() }, mine = hotkeyCode(a);
   if (other) { if (mine === HOTKEYS[other].key) delete v[other]; else v[other] = mine; } // 互换
@@ -88,7 +98,7 @@ export function resetHotkeys(): void { save({}); }
 export function hotkeyConflicts(): HotkeyAction[][] {
   const by = new Map<string, HotkeyAction[]>();
   for (const a of HOTKEY_ORDER) for (const c of hotkeyCodes(a)) by.set(c, [...(by.get(c) ?? []), a]);
-  return [...by.values()].filter(l => l.length > 1);
+  return [...by.values()].filter(l => l.length > 1 && !(l.length === 2 && shares(l[0], l[1])));
 }
 
 /** 键在界面上的写法（短）。 */

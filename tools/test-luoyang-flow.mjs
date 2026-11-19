@@ -54,6 +54,27 @@ const crates = await ev(s => { const z = s.dzLubu, tg = new Set((s.objective?.ta
 ck('④ 随机补给 / 物件都在场地内', crates.out.length === 0, crates);
 await ev(s => { s.player.sprite.setPosition(s.dzLubu.dongzhuo.x + 150, s.dzLubu.dongzhuo.y + 330); }); await wait(700);
 await p.screenshot({ path: `${OUT}/1-perch.png` });
+// 用户「董卓吕布出来之前不要显示血条」：城头对峙时底部没有首领血条、董卓没有名牌
+{ const hb = await ev(s => ({ bar: s.hudTexts.boss.visible, plates: s.children.list.filter(o => o.name === 'boss-name-plate' && o.visible).length, phase: s.dzLubu.phase }));
+  ck('① 城头对峙：不显示首领血条、名牌（董卓吕布还没下来）', !hb.bar && hb.plates === 0 && hb.phase === 'perch', hb); }
+// 用户「武将攻击逻辑会一直不打营寨」：主将站在营寨旁（附近没别的敌兵），自动攻击会打营寨
+{ const c0 = await ev(s => { for (const e of s.enemies) if (e.active && !e.isSupplySlot && !e.invulnerable && e.kind !== 'boss') { e.hp = 0; s.killEnemy(e); } const c = s.objective.standing[0]; s.player.sprite.setPosition(c.x + 70, c.y + 60); s.player.hp = s.player.maxHp; window.__camp = c; return { hp: Math.round(c.hp), lock: c.lockTarget, top: s.priorityWeaponTarget(200, false) === c }; });
+  await wait(3500);
+  const c1 = await ev(s => ({ hp: Math.round(window.__camp.hp), active: window.__camp.active }));
+  ck('② 自动攻击打营寨（营寨是关卡锁定目标，排在最前）', c0.lock && c0.top && (c1.hp < c0.hp || !c1.active), { c0, c1 }); }
+// 用户「从后方会有我方小兵去一路打过去会去摧毁营寨」：义军小队从后方出发、走到营寨、把营寨打掉血
+{ const sq = await ev(s => { const z = s.allyPush; if (!z) return null; const camps = s.objective.standing, c = camps[camps.length - 1]; s.player.sprite.setPosition(c.x + 40, c.y + 260); const q = z.spawn(); window.__pc = q?.target; window.__pc0 = q?.target?.hp; return q ? { n: q.members.length, from: [Math.round(q.from.x), Math.round(q.from.y)], to: [Math.round(q.target.x), Math.round(q.target.y)], hp0: Math.round(q.target.hp) } : null; });
+  await wait(1200); await p.screenshot({ path: `${OUT}/7-push-march.png` });
+  let pr = null; for (let i = 0; i < 30; i++) { pr = await ev(s => ({ ...s.allyPush.stats, hp: Math.round(window.__pc.hp), active: window.__pc.active, alive: s.allyPush.alive })); if (pr.campDamage > 0 && i > 12) break; await wait(500); }
+  await p.screenshot({ path: `${OUT}/8-push-camp.png` });
+  // 舆图：攻势途中展开——碧色行军箭头、义军碧点、营寨血条（挨打的闪）、树林、城墙
+  await ev(s => { s.allyPush.spawn(); s.battleMap?.toggleBig(); }); await wait(1300);
+  await p.screenshot({ path: `${OUT}/9-map-offensive.png` });
+  const md = await ev(s => ({ ...s.battleMap.stats.detail, state: s.battleMap.stats.state, hit: [...s.allyPush.campHitAt.keys()].length }));
+  await ev(s => s.battleMap.toggleBig()); await wait(700);
+  ck('② 舆图细节：营寨（血条）、友军行军线 / 小队、树林、城墙都画在图上', md.state === 'open' && md.camps >= 1 && md.pushes >= 1 && md.trees > 0, md);
+  ck('② 友军攻势：义军小队从后方出发、走到营寨、营寨掉血', !!sq && sq.from[1] > sq.to[1] && pr.campHits > 0 && pr.campDamage > 0 && (pr.hp < sq.hp0 || !pr.active), { sq, pr }); }
+await ev(s => { s.allyPush?.clear(); }); // 后面的流程（刷兵 60 秒、逐座拆营寨）不要友军插手
 // 用户「还是有很多小兵穿过城墙，城墙那一侧不需要生成小兵」：照常刷兵 60 秒（主将站城下、满血），全程抽查没有敌兵在城墙线以北
 { const north = [], spawnedNorth = []; let peak = 0;
   await ev(s => { window.__spN = []; const orig = s.spawnEnemy.bind(s); s.spawnEnemy = (k, x, y, ...r) => { const e = orig(k, x, y, ...r); if (e && k !== 'boss' && e !== s.dzLubu?.lubu && e.def.behavior !== 'wall' && e.y < s.dzLubu.wallLine) window.__spN.push([k, Math.round(e.x), Math.round(e.y)]); return e; }; });

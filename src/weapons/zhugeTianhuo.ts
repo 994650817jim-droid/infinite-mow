@@ -30,7 +30,7 @@ interface Zone { x: number; y: number; r: number; until: number; level: number; 
 interface Ember { x: number; y: number; r: number; until: number; next: number; /** 天火单发伤害（每跳 × mul / bossMul） */ base: number; }
 const STATE = new WeakMap<Player, { strikes: Strike[]; casts: number; zones: Zone[]; embers: Ember[]; sinceWind: number }>();
 const sceneOf = (host: WeaponHost): Phaser.Scene => (host.add as unknown as { scene: Phaser.Scene }).scene;
-const alive = (e: Enemy): boolean => e.active && !e.isSupplySlot;
+const alive = (e: Enemy): boolean => e.active && !(e.isSupplySlot && !e.lockTarget);
 const art = (host: WeaponHost): boolean => sceneOf(host).textures.exists('zhuge_tianhuo');
 const cardinal = (ux: number, uy: number): 'left' | 'right' | 'up' | 'down' => Math.abs(ux) > Math.abs(uy) ? (ux < 0 ? 'left' : 'right') : (uy < 0 ? 'up' : 'down');
 
@@ -124,7 +124,7 @@ export function tianhuoBehavior(host: WeaponHost, weapon: WeaponState, dt: numbe
     if (time < em.next) continue;
     em.next += Z.ember.tickMs;
     for (const e of host.grid.query(em.x, em.y, em.r + 40)) {
-      if (!e.active || e.isSupplySlot || Math.hypot(e.x - em.x, e.y - em.y) > em.r + e.radius) continue;
+      if (!e.active || (e.isSupplySlot && !e.lockTarget) || Math.hypot(e.x - em.x, e.y - em.y) > em.r + e.radius) continue;
       host.hitEnemy(e, em.base * (e.kind === 'boss' || e.kind === 'elite' ? Z.ember.bossMul : Z.ember.mul), time, 'fire');
     }
   }

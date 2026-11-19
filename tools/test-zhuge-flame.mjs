@@ -20,7 +20,7 @@ await p.evaluate(G0 => { const s = eval(G0); s.player.damageImmune = true; s.__D
 const H = `const s = ${G}, pl = s.player, w = pl.weapons[0], wait = ms => new Promise(r => setTimeout(r, ms));
   const clear = () => { for (const e of s.enemies) if (e.active && !e.isSupplySlot) e.deactivate(); };
   const mk = (kind, x, y, hp = 99999) => { const e = s.spawnEnemy(kind, x, y, 1); e.hp = e.maxHp = hp; e.stunUntil = 1e12; return e; };
-  const { TIANHUO_DEF } = await import('/src/weapons/zhugeTianhuo.ts'); const { ZG_TIANHUO: Z } = await import('/src/data/heroMechanics.ts');
+  const { TIANHUO_DEF } = await import('/src/weapons/zhugeTianhuo.ts'); const Z = window.__zgTuning; if (!Z) throw new Error('no __zgTuning'); /* 游戏实际在用的那份（热更新后 import 拿到的是另一份） */
   Z.ember.mul = 0; // 天火余烬（2026-11-18）另在 test-hero-mechanics 1c 测；这里只量天火本身，免得上一发的余烬烧到下一发新刷的兵
   const one = () => TIANHUO_DEF.damage(w.level, pl.stats) * pl.growth.damageMultiplier(s.combatNow) * (1 + Z.intPerPoint * pl.growth.attributes.intellect);`;
 

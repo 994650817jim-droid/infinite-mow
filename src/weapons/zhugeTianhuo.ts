@@ -13,17 +13,20 @@ import { playSheet } from '../systems/SkillFxSheets';
  * 技艺：借东风（每第 4 发放东风火龙直线扫过）、八阵图（观星爆发处布阵：减速 / 易伤 / 3 级首领出招变慢）。
  * 特效：手绘序列帧 zhuge_tianhuo（星位 / 天火 / 东风 / 八阵，缺图时退回现有手绘火焰帧 flame_burst / fire_sigil，不画程序特效）。
  */
+// 测试钩子（只在开发版）：测试要改的是游戏实际在用的那份 ZG_TIANHUO。dev server 热更新过后，测试自己 import('/src/data/heroMechanics.ts')
+// 拿到的是另一份模块（游戏那份带 ?t=），改了不生效。游戏先载入，??= 保住游戏那份，测试后来 import 的不会覆盖。
+if (import.meta.env.DEV && typeof window !== 'undefined') (window as unknown as { __zgTuning?: typeof Z }).__zgTuning ??= Z;
 export const TIANHUO_DEF = {
   id: 'flame_banner' as const, name: '七星灯 · 天火', maxLevel: 5,
   damage: (level: number, stats: PlayerStats) => Z.base * (1 + Z.perLevel * (level - 1)) * stats.damageMul * stats.fireMul,
   cooldown: (level: number, stats: PlayerStats) => Z.cooldown * stats.cooldownMul / (1 + Z.cdPerLevel * (level - 1)),
-  desc: '观星定位，天火落下：首领 / 精锐单点重创；没有时落进怪堆中心，大范围溅射并留下余烬灼烧杂兵',
+  desc: '观星定位，天火落下：首领 / 精锐单点重创；没有时落进怪堆中心大范围溅射；算无遗策那一发留下星火焦土灼烧杂兵',
 };
 /** 手绘图集 zhuge_tianhuo 的行起点（每行 8 格，每格 256）：星位 6 帧、天火 8 帧、东风火龙 6 帧（横条在 zhuge_eastwind）、八阵地面 6 帧。 */
 export const ZGFX = { star: 0, fall: 8, bazhen: 16 } as const;
 interface Strike { target: Enemy; spawn: number; x: number; y: number; at: number; damage: number; mark: Phaser.GameObjects.GameObject | null; /** 打的是杂兵（怪堆）：溅射加大 */ crowd: boolean; }
 interface Zone { x: number; y: number; r: number; until: number; level: number; fx: Phaser.GameObjects.GameObject | null; }
-/** 天火余烬：杂兵堆上的灼烧地面 */
+/** 天火余烬：算无遗策落地处的星火焦土（只烧杂兵） */
 interface Ember { x: number; y: number; r: number; until: number; next: number; damage: number; }
 const STATE = new WeakMap<Player, { strikes: Strike[]; casts: number; zones: Zone[]; embers: Ember[]; sinceWind: number }>();
 const sceneOf = (host: WeaponHost): Phaser.Scene => (host.add as unknown as { scene: Phaser.Scene }).scene;
@@ -57,6 +60,25 @@ function playRow(host: WeaponHost, key: string, row: number, frames: number, x: 
   scene.tweens.add({ targets: st, t: frames - .01, duration: frames / fps * 1000, repeat: loop ? -1 : 0, onUpdate: () => { if (s.active) s.setFrame(row + Math.floor(st.t)); }, onComplete: () => { if (!loop && s.active) s.destroy(); } });
   return s;
 }
+/**
+ * 天火余烬画面：手绘 8 帧 zhuge_ember（0–1 星纹烧进地面、2–5 灼烧循环、6–7 余火熄灭），压扁贴地铺满余烬圈，持续 ms。
+ * 缺图时退回现有手绘地火 fx_ground_fire（5 簇），不画程序特效。
+ */
+function emberFx(host: WeaponHost, x: number, y: number, r: number, ms: number): void {
+  const scene = sceneOf(host);
+  if (!scene.textures.exists('zhuge_ember')) {
+    for (const [fx, fy] of [[0, 0], [.55, 0], [-.55, 0], [0, .4], [0, -.4]]) playSheet(scene, 'fx_ground_fire', x + fx * r, y + fy * r, { size: r * .75, ms, depth: 18.7, alpha: .85, originY: .75, name: 'zhuge-ember' });
+    return;
+  }
+  // 每格 256 里椭圆约宽 194、中心在 55% 高处（tools/build-zhuge-extra-fx.mjs）：统一缩放让椭圆宽 = 2r
+  const s = scene.add.sprite(x, y, 'zhuge_ember', 0).setDisplaySize(r * 2.64, r * 2.64).setOrigin(.5, .55).setDepth(18.7).setBlendMode('ADD').setName('zhuge-ember');
+  const IGNITE = 260, FADE = 420, LOOP_FRAME = 120;
+  scene.tweens.addCounter({ from: 0, to: ms, duration: ms, onUpdate: tw => {
+    if (!s.active) return; const t = tw.getValue() ?? 0;
+    s.setFrame(t < IGNITE ? (t < IGNITE / 2 ? 0 : 1) : t > ms - FADE ? (t > ms - FADE / 2 ? 7 : 6) : 2 + Math.floor((t - IGNITE) / LOOP_FRAME) % 4);
+    s.setAlpha(t > ms - FADE ? Math.max(0, (ms - t) / FADE) : 1);
+  }, onComplete: () => { if (s.active) s.destroy(); } });
+}
 /** 星位预警：跟着目标的手绘星位圈（缺图时用现有火阵地纹 fire_sigil，压扁贴地）。 */
 function starMark(host: WeaponHost, x: number, y: number): Phaser.GameObjects.GameObject | null {
   const scene = sceneOf(host);
@@ -73,11 +95,19 @@ function fallFx(host: WeaponHost, x: number, y: number, burst: boolean): void {
   if (art(host)) { const size = burst ? 190 : 150, s = playRow(host, 'zhuge_tianhuo', ZGFX.fall, 8, x, y, size, size, 20, false, 'zhuge-tianhuo-fall', 43); s.setOrigin(.5, .82); return; }
   host.spawnFlameFx(x, y, Z.splashRadius * (burst ? 1.6 : 1.25));
 }
-/** 东风火龙：手绘横条 6 帧（zhuge_eastwind，单行 6 帧、每帧 512×128）；缺图时沿线三处火焰爆发。 */
+/**
+ * 东风火龙：手绘横条 6 帧（zhuge_eastwind，单行 6 帧、每帧 512×128）；缺图时沿线三处火焰爆发。
+ * 2026-11-18 晚 用户：「借东风也加点东风特效」——火龙下面先卷起一股东风（手绘 8 帧 zhuge_wind：风痕 + 火星 + 灰烬枯叶顺着扫的方向飞），
+ * 比火龙略长略宽、早 60 毫秒起、晚一点散，火龙像乘风而出。缺这张图时只放火龙。
+ */
 function eastWindFx(host: WeaponHost, x: number, y: number, ux: number, uy: number, len: number): void {
-  const scene = sceneOf(host);
+  const scene = sceneOf(host), rot = Math.atan2(uy, ux);
+  if (scene.textures.exists('zhuge_wind')) {
+    const wl = len * 1.2, w = scene.add.sprite(x + ux * len * .45, y + uy * len * .45, 'zhuge_wind', 0).setDisplaySize(wl, wl / 4 * 1.1).setRotation(rot).setBlendMode('ADD').setDepth(41.9).setAlpha(.9).setName('zhuge-wind');
+    const wt = { t: 0 }; scene.tweens.add({ targets: wt, t: 7.99, duration: 640, onUpdate: () => { if (w.active) w.setFrame(Math.floor(wt.t)); }, onComplete: () => w.destroy() });
+  }
   if (scene.textures.exists('zhuge_eastwind')) {
-    const s = scene.add.sprite(x + ux * len / 2, y + uy * len / 2, 'zhuge_eastwind', 0).setDisplaySize(len, len / 4).setRotation(Math.atan2(uy, ux)).setBlendMode('ADD').setDepth(42).setName('zhuge-eastwind');
+    const s = scene.add.sprite(x + ux * len / 2, y + uy * len / 2, 'zhuge_eastwind', 0).setDisplaySize(len, len / 4).setRotation(rot).setBlendMode('ADD').setDepth(42).setName('zhuge-eastwind');
     const st = { t: 0 }; scene.tweens.add({ targets: st, t: 5.99, duration: 420, onUpdate: () => { if (s.active) s.setFrame(Math.floor(st.t)); }, onComplete: () => s.destroy() });
     return;
   }
@@ -128,11 +158,10 @@ export function tianhuoBehavior(host: WeaponHost, weapon: WeaponState, dt: numbe
       }
     }
     fallFx(host, s.x, s.y, burst);
-    // 落在杂兵堆上：留下余烬（手绘地火 fx_ground_fire 铺满溅射圈，缺图时只结算伤害不画）
-    if (s.crowd && Z.ember.mul > 0) { // ember.mul 填 0 即关掉余烬（不留地火、不结算）
-      const r = Z.crowdSplashRadius; st.embers.push({ x: s.x, y: s.y, r, until: time + Z.ember.ms, next: time + Z.ember.tickMs, damage: s.damage * Z.ember.mul });
-      const scene = sceneOf(host), spots = [[0, 0], [.55, 0], [-.55, 0], [0, .4], [0, -.4]];
-      for (const [fx, fy] of spots) playSheet(scene, 'fx_ground_fire', s.x + fx * r, s.y + fy * r, { size: r * .95, ms: Z.ember.ms, depth: 18.7, alpha: .85, originY: .75, name: 'zhuge-ember' });
+    // 天火余烬（2026-11-18 晚 用户：「只有被动触发后才触发」）：只有算无遗策那一发（观星第 4 发）落地留下星火焦土
+    if (burst && Z.ember.mul > 0) { // ember.mul 填 0 即关掉余烬（不留地火、不结算）
+      const r = Z.ember.radius; st.embers.push({ x: s.x, y: s.y, r, until: time + Z.ember.ms, next: time + Z.ember.tickMs, damage: s.damage * Z.ember.mul });
+      emberFx(host, s.x, s.y, r, Z.ember.ms);
     }
     host.sfx.play('atk_flame_boom');
     // 溅射：打杂兵（怪堆）时半径 / 比例加大，打首领 / 精锐维持小溅射

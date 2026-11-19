@@ -25,7 +25,7 @@ async function open(stage, hero = 'zhaoyun') {
   await p.evaluate(S0 => {
     const g = window.__game, s = eval(S0); window.__S = s; s.player.damageImmune = true; for (let i = 0; i <= s.chapter.waves.length; i++) s.recruitedWaves.add(i); s.pendingRecruit = false;
     g.loop.sleep(); window.__T = performance.now(); s.readMove = () => new Phaser.Math.Vector2(0, 0);
-    window.__step = n => { for (let i = 0; i < n; i++) { if (s.mode !== 'none' && s.mode !== 'story' && s.mode !== 'rest' && s.mode !== 'result' && !s.over) { s.__DEV_ACTIONS?.closePopup?.(); if (s.mode === 'levelup') s.chooseUpgrade?.(0); if (s.mode !== 'none') s.setMode('none'); } window.__T += 1000 / 60; g.step(window.__T, 1000 / 60); } };
+    window.__step = n => { for (let i = 0; i < n; i++) { if (s.mode === 'parley' && s.parley?.choose) s.parley.choose('execute'); if (s.mode !== 'none' && s.mode !== 'story' && s.mode !== 'rest' && s.mode !== 'result' && !s.over) { s.__DEV_ACTIONS?.closePopup?.(); if (s.mode === 'levelup') s.chooseUpgrade?.(0); if (s.mode !== 'none') s.setMode('none'); } window.__T += 1000 / 60; g.step(window.__T, 1000 / 60); } };
     window.__clear = () => { for (const e of s.enemies) if (e.active && !e.isSupplySlot && e.kind !== 'boss') e.deactivate(); };
     window.__story = name => { let n = 0; for (let i = 0; i < 20; i++) { const c = s.children.getByName(name); if (!c) break; const hit = c.list.find(o => o.name === name + '-next' || o.name === name + '-confirm'); if (!hit) break; hit.emit('pointerup'); n++; window.__step(1); } return n; };
   }, S);
@@ -66,10 +66,11 @@ const killBoss = async p => {
   await shot(p, '1-story');
   const n = await p.evaluate(() => window.__story('shu-opening'));
   const s1 = await p.evaluate(() => ({ mode: window.__S.mode, pass: window.__S.shuState.pass, foot: window.__S.sishuiObstacles.footprints.length }));
-  ck('7-1：章首剧情卷轴（冻结战斗）→ 看完继续；山道半宽 300、两侧坡壁碰撞框', s0.story && s0.mode === 'story' && n >= 2 && s1.mode === 'none' && s1.pass?.halfW === 300 && s1.foot === 2, { s0, n, s1 });
+  const HW = await p.evaluate(async () => (await import('/src/systems/MountainPass.ts')).MOUNTAIN_PASS.halfWidth);
+  ck(`7-1：章首剧情卷轴（冻结战斗）→ 看完继续；山道半宽 ${HW[0]}（MOUNTAIN_PASS）、两侧坡壁碰撞框`, s0.story && s0.mode === 'story' && n >= 2 && s1.mode === 'none' && s1.pass?.halfW === HW[0] && s1.foot === 2, { s0, n, s1 });
   // 刷兵只在山道里
   const sp = await p.evaluate(() => { const s = window.__S; window.__clear(); for (let i = 0; i < 8; i++) s.spawnAroundPlayer('infantry', true); const es = s.enemies.filter(e => e.active && !e.isSupplySlot && e.kind !== 'boss'); return { n: es.length, maxX: Math.max(...es.map(e => Math.abs(e.x))) }; });
-  ck('7-1：敌兵只从山道前后来（不在坡壁里）', sp.n >= 6 && sp.maxX <= 270, sp);
+  ck('7-1：敌兵只从山道前后来（不在坡壁里）', sp.n >= 6 && sp.maxX <= HW[0] - 30, { ...sp, halfW: HW[0] });
   // 山坡伏兵
   const amb = await p.evaluate(() => { const s = window.__S, m = s.shuPass; window.__clear(); m.ambushAt = s.combatNow; window.__step(70); const es = s.enemies.filter(e => e.active && !e.isSupplySlot && e.kind !== 'boss'); return { ambushes: m.stats.ambushes, n: es.length, edge: es.filter(e => Math.abs(e.x) > 200).length }; });
   ck('7-1：山坡伏兵——预警后从两侧坡上冲下', amb.ambushes >= 1 && amb.n >= 2 && amb.edge >= 2, amb);
@@ -92,7 +93,8 @@ const killBoss = async p => {
   const s0 = await p.evaluate(() => ({ story: !!window.__S.children.getByName('shu-luofeng') }));
   await p.evaluate(() => window.__story('shu-luofeng'));
   const s1 = await st(p);
-  ck('7-2：落凤坡开场卷轴；庞统随军（有血量）；山道更窄（260）', s0.story && s1.pass?.pangtong?.hp > 0 && s1.pass?.halfW === 260, s1);
+  const HW2 = await p.evaluate(async () => (await import('/src/systems/MountainPass.ts')).MOUNTAIN_PASS.halfWidth[1]);
+  ck(`7-2：落凤坡开场卷轴；庞统随军（有血量）；山道更窄（${HW2}）`, s0.story && s1.pass?.pangtong?.hp > 0 && s1.pass?.halfW === HW2, s1);
   const vol = await p.evaluate(() => { const s = window.__S, m = s.shuPass; window.__clear(); m.boulderAt = m.ambushAt = s.combatNow + 1e6; m.volleyAt = s.combatNow; window.__step(3); return { lanes: m.lanes.length, volleys: m.stats.volleys }; });
   await step(p, 40); await shot(p, '2-volley');
   const vol2 = await p.evaluate(() => { const s = window.__S, m = s.shuPass; return { hp: m.pangtong.hp, hits: m.stats.pangtongHits }; });

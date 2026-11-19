@@ -206,13 +206,15 @@ export class Enemy {
       const figureTarget: Partial<Record<EnemyKind, number>> = { infantry: 48, archer: 46, shield: 50 };
       const median = figureTarget[this.kind] && !def.walkVisual?.matched ? sheetFigureHeight(this.scene, sheetKey) : undefined;
       this.sprite.setScale(median ? figureTarget[this.kind]! / median : def.walkVisual?.scale ?? displayH / 96);
-      const frameH = this.scene.textures.getFrame(sheetKey, 'down_0')?.height ?? 96;
+      // 首帧：行走表都有 down_0；数字帧的首领图（徐荣等，由首领控制器接管帧）没有，取第一帧——取不到的帧 Phaser 会画整张图集（2026-11-19 全面检查 #9）
+      const sheetTex = this.scene.textures.get(sheetKey), firstFrame = sheetTex.has('down_0') ? 'down_0' : (sheetTex.getFrameNames()[0] ?? 'down_0');
+      const frameH = this.scene.textures.getFrame(sheetKey, firstFrame)?.height ?? 96;
       this.sprite.setOrigin(.5, (def.walkVisual?.groundY ?? 94 / 96) - def.radius * .72 / (frameH * this.sprite.scaleY));
       this.baseScaleY = this.sprite.scaleY;
       this.baseOriginY = this.sprite.originY;
       this.frameScale = 1;
-      this.applyFrame(this.walkSheet, 'down_0');
-      this.appliedFrame = 'down_0';
+      this.applyFrame(this.walkSheet, firstFrame);
+      this.appliedFrame = firstFrame;
     }
     if (def.texture === 'boss_lubu' && this.scene.textures.get('boss_lubu').has('down_0')) {
       // v2：288 格 × 0.5（1080p 像素 1:1），脚底 256/288；v1：256 格显示 218

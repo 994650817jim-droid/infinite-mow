@@ -122,10 +122,11 @@ for (const hero of HEROES) {
       const s = eval(G0), pl = s.player, mk = eval(MK0), wait = ms => new Promise(r => setTimeout(r, ms)), w = pl.weapons[0]; pl.damageImmune = true; pl.stats.critChance = -1; eval(C);
       const { TIANHUO_DEF } = await import('/src/weapons/zhugeTianhuo.ts');
       pl.growth.masteries.wildfire = 1; w.cooldownLeft = 1e9; await wait(100); pl.passive.reset('zhuge', s.combatNow);
+      const Zt = window.__zgTuning, kb0 = Zt.eastWind.knockback.px; Zt.crowdStars = false; Zt.eastWind.knockback.px = 0; // 只量火龙伤害：关掉怪堆积层（第 4 发的星火焦土会烧到路上的兵）和击退（吹进天火溅射圈会多挨一下；击退另在 1e 测），测完恢复
       const boss = mk(pl.x + 330, pl.y, { kind: 'elite' }), lane = [mk(pl.x + 120, pl.y + 8), mk(pl.x + 220, pl.y - 8)], off = mk(pl.x + 150, pl.y + 140);
       const lane0 = []; for (let k = 1; k <= 4; k++) { w.cooldownLeft = 0; await wait(100); w.cooldownLeft = 1e9; await wait(900); lane0.push(lane.map(e => e.maxHp - e.hp)); }
       const one = TIANHUO_DEF.damage(w.level, pl.stats) * pl.growth.damageMultiplier(s.combatNow); pl.growth.masteries.wildfire = 0;
-      return { lane: lane0, off: off.maxHp - off.hp, expect: Math.round(one * .6), wind: lane0[3][0] - lane0[2][0] };
+      Zt.crowdStars = true; Zt.eastWind.knockback.px = kb0; return { lane: lane0, off: off.maxHp - off.hp, expect: Math.round(one * .6), wind: lane0[3][0] - lane0[2][0] };
     }, [G, MK, CLEAR]);
     ck('诸葛亮·借东风：连续 4 发里恰好 1 发放出东风火龙，朝怪最密的直线扫过（各 60%），偏离直线的不挨打', (() => { const inc = r1.lane.map((v, i) => v.map((x, j) => x - (i ? r1.lane[i - 1][j] : 0))); const fired = inc.filter(v => v.some(x => x > 0)); return fired.length === 1 && fired[0].every(x => Math.abs(x - r1.expect) <= 2); })() && r1.off === 0 /* 连续 4 发里恰好 1 发放出火龙（第几发取决于之前打过几发） */, r1);
     // 1b) 借东风方向：朝怪最密的方向扫（精锐在东边单个，北边一排 5 个步兵：火龙扫北边那排）
@@ -141,50 +142,67 @@ for (const hero of HEROES) {
     const r1c = await p.evaluate(async ([G0, C]) => {
       const s = eval(G0), pl = s.player, wait = ms => new Promise(r => setTimeout(r, ms)), w = pl.weapons[0]; pl.damageImmune = true; pl.stats.critChance = -1; eval(C);
       const Z = window.__zgTuning; if (!Z) throw new Error('no __zgTuning'); // 游戏实际在用的那份（热更新后 import 拿到的是另一份）
-      const cfg = { mul: Z.ember.mul, every: Z.eastWind.everyCrowd };
+      const cfg = { mul: Z.ember.mul, every: Z.eastWind.everyCrowd, kb: Z.eastWind.knockback.px };
       // 杀杂兵会升级 / 弹招募：面板一开 combatNow 就停（循环永远等不完）；直接关掉、不选卡，前后两遍构筑一样
       const noLevelUp = () => { if (s.mode === 'levelup') { s.pendingLevels = 0; s.militaryPending = 0; s.setMode('none'); } else if (s.mode === 'recruit') s.__DEV_ACTIONS.closePopup?.(); };
       const wave = async () => { eval(C); w.level = 3; pl.growth.masteries.wildfire = 1; w.cooldownLeft = 1e9; await wait(150);
-        const es = []; for (const [cx, cy] of [[230, 0], [-200, 90], [40, -230]]) for (let i = 0; i < 8; i++) { const e = s.spawnEnemy('infantry', pl.x + cx + (i % 3 - 1) * 32, pl.y + cy + (Math.floor(i / 3) - 1) * 28, 1, true); e.hp = e.maxHp = 260; e.stunUntil = 1e12; es.push(e); }
+        const es = []; for (const [cx, cy] of [[230, 0], [-200, 90], [40, -230]]) for (let i = 0; i < 8; i++) { const e = s.spawnEnemy('infantry', pl.x + cx + (i % 3 - 1) * 32, pl.y + cy + (Math.floor(i / 3) - 1) * 28, 1, true); e.hp = e.maxHp = 260; es.push(e); } // 不定身：被东风吹开后会走回来重新扎堆（真实打法），主将免伤
         const t0 = s.combatNow, r0 = Date.now(); w.cooldownLeft = 0; while (es.some(e => e.active) && s.combatNow - t0 < 60000 && Date.now() - r0 < 120000) { noLevelUp(); await wait(50); }
         return { ms: Math.round(s.combatNow - t0), left: es.filter(e => e.active).length, embers: 0, mode: s.mode, realMs: Date.now() - r0 }; };
-      Z.ember.mul = 0; Z.eastWind.everyCrowd = 4; const before = await wave();
-      Z.ember.mul = cfg.mul; Z.eastWind.everyCrowd = cfg.every; let embers = 0; const watch = setInterval(() => { embers = Math.max(embers, s.children.list.filter(o => o.name === 'zhuge-ember').length); }, 60);
+      Z.ember.mul = 0; Z.eastWind.everyCrowd = 4; Z.crowdStars = false; Z.eastWind.knockback.px = 0; const before = await wave();
+      Z.ember.mul = cfg.mul; Z.eastWind.everyCrowd = cfg.every; Z.crowdStars = true; Z.eastWind.knockback.px = cfg.kb; let embers = 0; const watch = setInterval(() => { embers = Math.max(embers, s.children.list.filter(o => o.name === 'zhuge-ember').length); }, 60);
       const after = await wave(); clearInterval(watch);
       // 打首领：同样 12 秒，改前 / 改后首领掉血（余烬不烧首领，有首领时借东风仍每第 4 发）
       const bossRun = async () => { eval(C); w.cooldownLeft = 1e9; await wait(150); s.bossSpawned = false; /* 同一局第二次召首领 */ s.spawnBoss(); const b = s.boss; b.sprite.setPosition(pl.x + 220, pl.y); b.stunUntil = 1e12; b.hp = b.maxHp = 1e6;
         noLevelUp();
         pl.passive.reset('zhuge', s.combatNow); const t0 = s.combatNow, r0 = Date.now(); w.cooldownLeft = 0; while (s.combatNow - t0 < 12000 && Date.now() - r0 < 60000) { noLevelUp(); for (const e of s.enemies) if (e.active && e !== b && !e.isSupplySlot) e.deactivate(); b.sprite.setPosition(pl.x + 220, pl.y); await wait(50); } const d = 1e6 - b.hp; modes.push(s.mode + ' ' + Math.round(s.combatNow - t0) + 'ms/' + (Date.now() - r0) + 'real'); b.deactivate(); return Math.round(d); }; const modes = [];
-      Z.ember.mul = 0; Z.eastWind.everyCrowd = 4; const bossBefore = await bossRun(); Z.ember.mul = cfg.mul; Z.eastWind.everyCrowd = cfg.every; const bossAfter = await bossRun();
+      Z.ember.mul = 0; Z.eastWind.everyCrowd = 4; Z.crowdStars = false; Z.eastWind.knockback.px = 0; const bossBefore = await bossRun(); Z.ember.mul = cfg.mul; Z.eastWind.everyCrowd = cfg.every; Z.crowdStars = true; Z.eastWind.knockback.px = cfg.kb; const bossAfter = await bossRun();
       pl.growth.masteries.wildfire = 0;
       return { before, after: { ...after, embers }, speedup: +(before.ms / Math.max(1, after.ms)).toFixed(2), bossBefore, bossAfter, bossRatio: +(bossAfter / Math.max(1, bossBefore)).toFixed(3), modes };
     }, [G, CLEAR]);
-    ck('诸葛亮·清杂兵：同一波 24 个杂兵，余烬（只算无遗策那发）+ 借东风每第 3 发后清完更快（≥1.1 倍）', r1c.before.left === 0 && r1c.after.left === 0 && r1c.speedup >= 1.1, r1c);
-    ck('诸葛亮·打首领基本不变：同样 12 秒首领掉血改前 / 改后相差 ≤10%（余烬不烧首领、借东风有首领时仍每第 4 发）', Math.abs(r1c.bossRatio - 1) <= .1, r1c);
+    ck('诸葛亮·清杂兵：同一波 24 个杂兵，无首领时每发积星象（每第 4 发算无遗策 + 星火焦土）+ 借东风每第 3 发，清完快 1.6 倍以上', r1c.before.left === 0 && r1c.after.left === 0 && r1c.speedup >= 1.6, r1c);
+    ck('诸葛亮·打首领：同样 12 秒首领掉血改后 / 改前在 0.9–1.15 倍（星火焦土也烧首领但按 bossMul；借东风有首领时仍每第 4 发）', r1c.bossRatio >= .9 && r1c.bossRatio <= 1.15, r1c);
     // 1d) 余烬只在算无遗策那一发留下（2026-11-18 晚 用户：「只有被动触发后才触发」「范围变大就好」）：半径 160、2 秒、每 0.5 秒 天火 ×25%，只烧杂兵；
-    //     普通一发不留；借东风放火龙时下面卷起手绘东风 zhuge_wind
+    //     没有首领 / 精锐时天火每发都积星象，前三发不留、第 4 发留；借东风放火龙时下面卷起手绘东风 zhuge_wind
     const r1d = await p.evaluate(async ([G0, MK0, C]) => {
       const s = eval(G0), pl = s.player, mk = eval(MK0), wait = ms => new Promise(r => setTimeout(r, ms)), w = pl.weapons[0], Z = window.__zgTuning; pl.damageImmune = true; pl.stats.critChance = -1;
       const heap = cx => { const all = [mk(pl.x + cx, pl.y, { hp: 9000 })]; for (const [dx, dy] of [[30, 0], [-30, 0], [0, 26], [0, -26]]) all.push(mk(pl.x + cx + dx, pl.y + dy, { hp: 9000 })); return all; };
       const shoot = async () => { w.cooldownLeft = 0; await wait(120); w.cooldownLeft = 1e9; await wait(900); };
       const count = () => s.children.list.filter(o => o.name === 'zhuge-ember').length;
       eval(C); w.level = 3; pl.growth.masteries.wildfire = 0; w.cooldownLeft = 1e9; await wait(200); pl.passive.reset('zhuge', s.combatNow);
-      // 普通一发：不留余烬
-      heap(200); await shoot(); const plain = count(); eval(C); await wait(300);
-      // 算无遗策：先给整堆 5 个都叠满 3 层星象（选靶在堆里平手时不一定挑正中那个；观星最多记 5 个目标），下一发落地留余烬；圈里 120 像素的杂兵挨烧、200 像素的不挨、精锐不挨
-      const hp5 = heap(200), inside = mk(pl.x + 200 + 120, pl.y + 20, { hp: 9000 }), outside = mk(pl.x + 200 + 200, pl.y - 40, { hp: 9000 });
-      for (const e of hp5) for (let k = 0; k < Z.starNeed; k++) pl.passive.starLand(e, s.combatNow);
-      w.cooldownLeft = 0; await wait(120); w.cooldownLeft = 1e9; await wait(Z.delayMs + 120); const el = mk(pl.x + 200 - 110, pl.y + 40, { kind: 'elite', hp: 9000 }), elHp0 = el.hp; // 落地后才放精锐（有精锐时天火会锁精锐），测「余烬不烧精锐」
+      // 没有首领 / 精锐：天火每发都积星象（2026-11-18 夜），前三发不留余烬，第 4 发算无遗策留星火焦土；
+      // 圈里 150 像素的杂兵（怪堆溅射 90 够不着）挨烧、230 像素的不挨、精锐不挨
+      heap(200); const inside = mk(pl.x + 200 + 150, pl.y + 20, { hp: 9000 }), outside = mk(pl.x + 200 + 230, pl.y - 40, { hp: 9000 });
+      let plain = 0; for (let k = 0; k < Z.starNeed; k++) { await shoot(); plain = Math.max(plain, count()); }
+      const marks3 = pl.passive.crowdStarMarks(s.combatNow), in0 = inside.hp, out0 = outside.hp;
+      w.cooldownLeft = 0; await wait(120); w.cooldownLeft = 1e9; await wait(Z.delayMs + 120); const el = mk(pl.x + 200 - 110, pl.y + 40, { kind: 'elite', hp: 9000 }), elHp0 = el.hp; // 落地后才放精锐（有精锐时不按怪堆积层），测「精锐按 bossMul 烧」
       const burstEmber = count(), tex = s.children.list.find(o => o.name === 'zhuge-ember')?.texture?.key ?? null; await wait(Z.ember.ms + 300);
-      const res = { plain, burstEmber, tex, inside: Math.round(inside.maxHp - inside.hp), outside: Math.round(outside.maxHp - outside.hp), elite: Math.round(elHp0 - el.hp), after: count(), radius: Z.ember.radius, ms: Z.ember.ms };
+      const res = { plain, burstEmber, tex, marks3, inside: Math.round(in0 - inside.hp), outside: Math.round(out0 - outside.hp), elite: Math.round(elHp0 - el.hp), after: count(), radius: Z.ember.radius, ms: Z.ember.ms };
       // 借东风：没有首领 / 精锐时每第 3 发放火龙，下面卷起手绘东风
       eval(C); pl.growth.masteries.wildfire = 1; heap(200); let wind = 0, dragon = 0; const watch = setInterval(() => { wind = Math.max(wind, s.children.list.filter(o => o.name === 'zhuge-wind').length); dragon = Math.max(dragon, s.children.list.filter(o => o.name === 'zhuge-eastwind').length); }, 30);
       for (let k = 0; k < 3; k++) await shoot(); clearInterval(watch); pl.growth.masteries.wildfire = 0; eval(C);
       return { ...res, wind, dragon };
     }, [G, MK, CLEAR]);
-    ck('诸葛亮·余烬：普通一发不留余烬，算无遗策那一发留手绘星火焦土（zhuge_ember）', r1d.plain === 0 && r1d.burstEmber > 0 && r1d.tex === 'zhuge_ember' && r1d.after === 0, r1d);
-    ck('诸葛亮·余烬：半径 160 内的杂兵挨烧（溅射圈外 120 像素也烧到）、圈外 200 像素不挨、精锐不烧', r1d.inside > 0 && r1d.outside === 0 && r1d.elite === 0, r1d);
+    ck('诸葛亮·余烬：没有首领 / 精锐时天火每发都积星象，前三发不留余烬、第 4 发算无遗策留手绘星火焦土（zhuge_ember）', r1d.plain === 0 && r1d.marks3 === 3 && r1d.burstEmber > 0 && r1d.tex === 'zhuge_ember' && r1d.after === 0, r1d);
+    ck('诸葛亮·余烬：谁都烧——半径 160 内的杂兵挨烧（溅射圈外 150 像素也烧到）、精锐也烧（按 bossMul）；圈外 230 像素不挨；烧满 4.5 秒后熄', r1d.inside > 0 && r1d.outside === 0 && r1d.elite > 0 && r1d.after === 0, r1d);
     ck('诸葛亮·借东风：火龙放出时下面卷起手绘东风（zhuge_wind）', r1d.wind > 0 && r1d.dragon > 0, r1d);
+    // 1e) 借东风击退（2026-11-18 夜 用户：「借东风有吹风击退效果」）：顺着风向吹开——杂兵约 100、精锐 ×0.4、首领 / 不受控的不动
+    const r1e = await p.evaluate(async ([G0, MK0, C]) => {
+      const s = eval(G0), pl = s.player, mk = eval(MK0), wait = ms => new Promise(r => setTimeout(r, ms)), w = pl.weapons[0], Z = window.__zgTuning; pl.damageImmune = true; pl.stats.critChance = -1;
+      eval(C); w.level = 3; pl.growth.masteries.wildfire = 1; w.cooldownLeft = 1e9; await wait(200); pl.passive.reset('zhuge', s.combatNow);
+      // 东边一排（火龙朝怪最密的方向扫，就是东边）：杂兵、精锐、不受控的杂兵（与首领同一条判断）
+      const inf = mk(pl.x + 120, pl.y, { hp: 9000 }), inf2 = mk(pl.x + 160, pl.y + 10, { hp: 9000 }), el = mk(pl.x + 200, pl.y - 8, { kind: 'elite', hp: 9000 }), im = mk(pl.x + 240, pl.y + 6, { hp: 9000 }); im.controlImmune = true;
+      const list = [inf, inf2, el, im]; let out = null;
+      for (let k = 0; k < 6 && !out; k++) {
+        const before = list.map(e => e.x); let dragon = false; const watch = setInterval(() => { if (s.children.list.some(o => o.name === 'zhuge-eastwind')) dragon = true; }, 20);
+        w.cooldownLeft = 0; await wait(120); w.cooldownLeft = 1e9; await wait(500); clearInterval(watch);
+        if (dragon) out = list.map((e, i) => Math.round(e.x - before[i]));
+      }
+      pl.growth.masteries.wildfire = 0; eval(C);
+      return { push: out, px: Z.eastWind.knockback.px, eliteMul: Z.eastWind.knockback.eliteMul };
+    }, [G, MK, CLEAR]);
+    const [kInf, kInf2, kEl, kIm] = r1e.push ?? [];
+    ck('诸葛亮·借东风击退：火龙扫过把杂兵顺风吹开约 100（80–125）、精锐约 40（25–60）、不受控的不动（首领同理）', !!r1e.push && kInf >= 80 && kInf <= 125 && kInf2 >= 80 && kInf2 <= 125 && kEl >= 25 && kEl <= 60 && Math.abs(kIm) <= 3, r1e);
     // 2) 八阵图 3 级：观星爆发处布阵——阵内步兵减速、受伤 +15%；阵内首领出招间隔 ×1.25（gapSlow）
     const r2 = await p.evaluate(async ([G0, MK0, C]) => {
       const s = eval(G0), pl = s.player, mk = eval(MK0), wait = ms => new Promise(r => setTimeout(r, ms)), w = pl.weapons[0]; pl.damageImmune = true; pl.stats.critChance = -1; eval(C);

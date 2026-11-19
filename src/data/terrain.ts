@@ -220,13 +220,13 @@ function baseTerrain(arc: string, stage: number): TerrainConfig | null {
         { x: 120, y: 620, rx: 260, ry: 140, count: 9, seed: 53, kind: 'jungle' },
       ],
     } : stage === 2 ? {
-      // 盘蛇谷（P2：原来是空地）：南北向谷道（半宽约 620），两侧山崖、崖下丛林；营地在谷里
+      // 盘蛇谷（P2：原来是空地）：南北向谷道（半宽约 930；11-19 用户「战斗场地有点限制太小了」从 620 × 1.5，stageMaps nanzheng.2 同步），两侧山崖、崖下丛林；营地在谷里
       clear: [C0, { x: -330, y: 210, r: 180 }, { x: 340, y: -420, r: 180 }],
-      cliffs: [{ x: -900, y: 0, w: 560, h: 3600 }, { x: 900, y: 0, w: 560, h: 3600 }],
+      cliffs: [{ x: -1210, y: 0, w: 560, h: 3600 }, { x: 1210, y: 0, w: 560, h: 3600 }],
       woods: [
-        { x: -500, y: -720, rx: 110, ry: 280, count: 7, seed: 101, kind: 'jungle' },
-        { x: 510, y: 660, rx: 110, ry: 280, count: 7, seed: 103, kind: 'jungle' },
-        { x: -500, y: 900, rx: 110, ry: 200, count: 5, seed: 105, kind: 'bamboo' },
+        { x: -750, y: -720, rx: 110, ry: 280, count: 7, seed: 101, kind: 'jungle' },
+        { x: 765, y: 660, rx: 110, ry: 280, count: 7, seed: 103, kind: 'jungle' },
+        { x: -750, y: 900, rx: 110, ry: 200, count: 5, seed: 105, kind: 'bamboo' },
       ],
     } : stage === 3 ? {
       clear: [C0, { x: -260, y: -200, r: 110 }, { x: 280, y: 260, r: 110 }, { x: 0, y: -560, r: 110 }],

@@ -310,7 +310,7 @@ export class EnemyTraits {
         this.poisonTick = now + 1000; this.metrics.poisonTicks += 1;
         // 毒不致命：最多掉到 1（真正的威胁是叠毒时被围）
         if (!p.damageImmune) p.hp = Math.max(1, p.hp - this.poisonDps * this.poison.length);
-        playSheet(this.h.scene, 'fx_poison_mist', p.x, p.y - 30, { size: 64, depth: DEPTH.fx, ms: 600, alpha: .85 });
+        playSheet(this.h.scene, 'fx_poison_mist', p.x, p.y - 30, { size: 64, depth: DEPTH.fx, ms: 600, alpha: .55 }); // 毒雾整团偏实，叠在人物身上降到 .55（美术会话建议 .5～.6）
       }
     }
   }

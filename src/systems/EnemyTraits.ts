@@ -42,6 +42,8 @@ interface Dart { img: Phaser.GameObjects.Image; x0: number; y0: number; tx: numb
 
 const STONE_FRAME = 4; // shu_pass 第 5 格：滚石
 const MAX_FIRES = 28;
+/** 攻击表 4 帧 = 起手 / 出击 / 收招 / 复位（Enemy.updateAttackVisual 每 90ms 一帧）：弓骑第 2 帧放箭、投石第 3 帧出手。 */
+const ARROW_MS = 110, RELEASE_MS = 180;
 
 export class EnemyTraits {
   private st = new Map<Enemy, St>();
@@ -196,9 +198,10 @@ export class EnemyTraits {
     if (now >= s.next && dist < t.range + 60) {
       s.next = now + t.everyMs * (.85 + Math.random() * .3); this.metrics.throws += 1;
       const p = this.h.player, tx = p.x + Phaser.Math.Between(-24, 24), ty = p.y + Phaser.Math.Between(-24, 24);
-      e.poseUntil = now + 300; e.startAttack(now, dirOf(nx, ny));
+      // 攻击表：第 2 帧举石过顶（石头画在图里），第 3 帧出手——飞行石从出手那一刻（+RELEASE_MS）才飞
+      e.poseUntil = now + 360; e.startAttack(now, dirOf(nx, ny));
       this.hazards.push({ id: `trait-stone-${++this.seq}`, kind: 'stone', x: tx, y: ty, r: t.radius, from: now, at: now + t.warnMs, end: now + t.warnMs, damage: t.damage, allyDamage: t.allyDamage, tick: 0 });
-      this.flyStone(e.x, e.y - 30, tx, ty, now + t.warnMs - t.flightMs, t.flightMs);
+      this.flyStone(e.x, e.y - 40, tx, ty, now + RELEASE_MS, Math.max(400, t.warnMs - RELEASE_MS));
     }
     return true;
   }
@@ -239,7 +242,9 @@ export class EnemyTraits {
     if (now >= s.next && dist < t.orbit + 220) {
       s.next = now + t.everyMs * (.8 + Math.random() * .4); this.metrics.arrows += 1;
       this.h.sfx('enemyArrow');
-      this.h.fireArrow(e, this.h.player.x, this.h.player.y, e.def.damage, t.arrowSpeed);
+      // 马上张弓：第 2 帧满弓放箭——箭在那一帧射出（攻击动画最后 360ms 每 90ms 一帧）
+      e.startAttack(now, dirOf(nx, ny)); const life = e.spawnId;
+      this.h.scene.time.delayedCall(ARROW_MS, () => { if (e.active && e.spawnId === life) this.h.fireArrow(e, this.h.player.x, this.h.player.y, e.def.damage, t.arrowSpeed); });
     }
     return true;
   }

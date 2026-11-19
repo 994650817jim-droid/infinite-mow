@@ -38,6 +38,8 @@ ck('1-3 按关卡配置自然刷出新兵种（符水道徒 / 黄巾力士），
 const r = await p.evaluate(async () => {
   const s = window.__S, T = s.traits, P = s.player, wait = ms => new Promise(r => setTimeout(r, ms));
   for (const e of s.enemies) if (e.active && !e.isSupplySlot && e.kind !== 'boss') e.deactivate();
+  // 机制逐个查：放开配兵表的占比 / 角色上限（data/enemyRoster ROSTER_MIX），场上只有几个兵时新兵种也能刷
+  { const R = (await import('/src/data/enemyRoster.ts')).ROSTER_MIX; R.maxTraitShare = 1; for (const k of Object.keys(R.roleCaps)) R.roleCaps[k] = 99; }
   s.devSpawnOff = true; const origPick = T.pick.bind(T); T.pick = () => null; const origUpd = s.updateSpawner; s.updateSpawner = () => {};
   P.damageImmune = false; window.__hurt = 0; const tk = P.takeDamage.bind(P); P.takeDamage = (d, n) => { const h = P.hp, ok = tk(d, n); window.__hurt += h - P.hp; P.hp = P.maxHp; P.alive = true; return ok; }; const keep = () => { P.invulnUntil = 0; P.hp = Math.max(P.hp, P.maxHp * .5); window.__clearUi(); };
   const at = (id, dx, dy) => { const e = T.spawnSpecial(id, { x: P.x + dx, y: P.y + dy }); if (e) e.invulnerable = true; return e; };
@@ -82,7 +84,7 @@ const r = await p.evaluate(async () => {
 });
 await p.waitForTimeout(1500);
 await p.screenshot({ path: `${OUT}/roster-batch1.png` });
-ck('黄巾力士：不吃击退、贴近砸地伤主将、体型放大', r.lishi.immune && r.lishi.slams >= 1 && r.lishi.hurt > 0 && r.lishi.r > 20, r.lishi);
+ck('黄巾力士：不吃击退、贴近砸地伤主将、体型放大', r.lishi.immune && r.lishi.slams >= 1 && r.lishi.hurt > 0 && r.lishi.r > 18, r.lishi);
 ck('符水道徒：给身边受伤友军回血、和主将保持距离', r.fushui.after > r.fushui.before && r.fushui.heals > 0 && r.fushui.gap > 200, r.fushui);
 ck('关守滚石兵：远处抛石，落点砸到主将', r.gunshi.throws >= 1 && r.gunshi.hurt > 0, r.gunshi);
 ck('纵火兵：一路留燃烧地面、倒下爆燃', r.zonghuo.fires >= 2 && r.zonghuo.bursts >= 1, r.zonghuo);

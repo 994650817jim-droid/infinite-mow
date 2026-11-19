@@ -285,3 +285,4 @@ assets/raw/*
 !/tools/deathfx-horse.mjs
 !/tools/shot-academy.mjs
 !/tools/shot-mounted.mjs
+!/tools/measure-horse-size.mjs

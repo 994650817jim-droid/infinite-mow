@@ -52,7 +52,7 @@ for (const hero of Object.keys(HEROES)) {
   // 招牌技实战触发
   const real = await p.evaluate(async ([G0, hero]) => {
     const s = eval(G0), pl = s.player; const e = s.spawnEnemy('infantry', pl.x + 110, pl.y, 1); e.hp = e.maxHp = 1e6; e.speed = 0;
-    if (hero === 'huangzhong') { pl.passive.grantSharp(s.combatNow, 0); pl.nextSkillAction = 0; } else if (hero === 'zhuge') { for (let k = 0; k < 3; k++) pl.passive.starLand(e, s.combatNow); } /* 2026-11-18 诸葛亮观星：同一目标星象满 3 层，下一发天火出招牌技 */ else pl.passive.stacks = pl.passive.maxStacks;
+    if (hero === 'huangzhong') { pl.passive.grantSharp(s.combatNow, 0); pl.nextSkillAction = 0; } else if (hero === 'zhuge') { for (const o of s.enemies) if (o.active && o !== e && !o.isSupplySlot) o.deactivate(); for (let k = 0; k < 3; k++) pl.passive.starLand(e, s.combatNow); } /* 天火没有首领时打怪堆：清掉别的兵，让它打这一个 */ /* 2026-11-18 诸葛亮观星：同一目标星象满 3 层，下一发天火出招牌技 */ else pl.passive.stacks = pl.passive.maxStacks;
     pl.weapons[0].cooldownLeft = 0; const seen = new Set();
     for (let i = 0; i < 40; i++) { await new Promise(r => setTimeout(r, 25)); if (pl.currentAction) seen.add(pl.currentAction); }
     return [...seen];

@@ -22,6 +22,9 @@ export interface SurrenderDef {
   /** 某武将在队时，拒绝前先由他说一句（夏侯渊：黄忠先开口）。 */ preIfHero?: { id: string; who: string; text: string };
   /** 本存档已劝降某人时换的归降台词（文丑：颜良已降）。 */ yesIfSurrendered?: { id: string; text: string };
   /** 这个条件生效时不弹窗（华雄：温酒斩华雄优先）。 */ skipIf?: 'wenjiu';
+  /** 招降结果写剧情旗标（第五、六章起）：劝降成功写 yes、斩杀写 no（如 caimao = joined / slain、spared_huangzhong = true / false）。 */ flag?: { key: string; yes: string | boolean; no: string | boolean };
+  /** 主公是某人时换的归降台词（蔡瑁对刘备：檀溪之事）。 */ yesIfLord?: { id: string; text: string };
+  /** 某武将在队时，归降前先由他说一句、首领再换一句答（蔡瑁：魏延问襄阳放箭）。 */ yesPreIfHero?: { id: string; who: string; text: string; yes: string };
   /** 败退型（retreat）：打到底不倒地、说这句后淡出退走（没有时用剧本 bossFall）。 */ retreat?: string;
 }
 
@@ -75,12 +78,13 @@ export const SURRENDER_DEFS: readonly SurrenderDef[] = [
     yes: '粮都烧了……琼还守什么。', no: '琼与袁公同为西园校尉，岂能背他！' }),
   // 第五章
   D('chibi-1:caochun', '曹纯', '虎豹骑统领', 'never', { no: '曹氏子弟，只有战死的，没有降的！' }),
-  D('chibi-2:caimao', '蔡瑁', '荆州水军都督', 'can', { template: 'bow', camp: 'jingzhou', yes: '荆州降过一回，再降一回又何妨。', no: '丞相待我不薄，我岂能……休想！' }),
+  D('chibi-2:caimao', '蔡瑁', '荆州水军都督', 'can', { template: 'bow', camp: 'jingzhou', yes: '荆州降过一回，再降一回又何妨。', no: '丞相待我不薄，我岂能……休想！', flag: { key: 'caimao', yes: 'joined', no: 'slain' },
+    yesPreIfHero: { id: 'weiyan', who: '魏延', text: '襄阳城上放箭拦皇叔的，可是你？', yes: '……当日各为其主。今日，愿为将军执鞭。' }, yesIfLord: { id: 'liubei', text: '皇叔……当年檀溪之事，瑁实有罪。' } }),
   D('chibi-3:caoren', '曹仁', '征南将军', 'retreat', { retreat: '……弃城，退守襄阳。' }), // 败退型：9-1 还要登场
   // 第六章（赵范、刘度、黄忠必降）
-  D('jingnan-1:zhaofan', '赵范', '桂阳太守', 'sure', { template: 'bow', camp: 'jingzhou', yes: '某本无心抗拒，愿献桂阳印绶，从将军调遣。' }),
-  D('jingnan-2:liudu', '刘度', '零陵太守', 'sure', { template: 'strategist', camp: 'jingzhou', yes: '零陵小郡，岂敢逆天兵？愿举城归降。' }),
-  D('jingnan-3:huangzhong', '黄忠', '长沙老将', 'sure', { camp: 'jingzhou', hero: 'huangzhong', yes: '韩玄无道，忠岂为昏主殉身？愿随将军，以报知遇。' }),
+  D('jingnan-1:zhaofan', '赵范', '桂阳太守', 'sure', { template: 'bow', camp: 'jingzhou', yes: '某本无心抗拒，愿献桂阳印绶，从将军调遣。', flag: { key: 'zhaofan', yes: 'joined', no: 'slain' } }),
+  D('jingnan-2:liudu', '刘度', '零陵太守', 'sure', { template: 'strategist', camp: 'jingzhou', yes: '零陵小郡，岂敢逆天兵？愿举城归降。', flag: { key: 'liudu', yes: 'joined', no: 'slain' } }),
+  D('jingnan-3:huangzhong', '黄忠', '长沙老将', 'sure', { camp: 'jingzhou', hero: 'huangzhong', yes: '韩玄无道，忠岂为昏主殉身？愿随将军，以报知遇。', flag: { key: 'spared_huangzhong', yes: true, no: false } }),
   D('jingnan-3:hanxuan', '韩玄', '长沙太守', 'story'),
   // 第七章
   D('shu-1:yanghuai', '杨怀', '白水关守将', 'hard', { template: 'bow', camp: 'yizhou', bonuses: [{ kind: 'hero', id: 'pangtong', add: .15, label: '凤雏在侧' }], yes: '刘季玉暗弱……怀愿开关。', no: '白水关在，杨怀在！' }),
@@ -151,7 +155,7 @@ export function surrenderOdds(d: SurrenderDef, c: OddsCtx): Odds {
 }
 /** 归降 / 拒绝台词（按条件换句）。 */
 export function surrenderLine(d: SurrenderDef, ok: boolean, c: { lord: string; team: readonly string[]; surrendered: readonly string[] }): string {
-  if (ok) return d.yesIfSurrendered && c.surrendered.includes(d.yesIfSurrendered.id) ? d.yesIfSurrendered.text : d.yes ?? '……愿降。';
+  if (ok) { if (d.yesPreIfHero && c.team.includes(d.yesPreIfHero.id)) return d.yesPreIfHero.yes; if (d.yesIfLord && c.lord === d.yesIfLord.id) return d.yesIfLord.text; return d.yesIfSurrendered && c.surrendered.includes(d.yesIfSurrendered.id) ? d.yesIfSurrendered.text : d.yes ?? '……愿降。'; }
   if (d.noIfLord && c.lord === d.noIfLord.id) return d.noIfLord.text;
   if (d.noIfHero && c.team.includes(d.noIfHero.id)) return d.noIfHero.text;
   return d.no ?? '休想！';

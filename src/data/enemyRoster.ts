@@ -103,7 +103,7 @@ export const ROSTER: Record<string, RosterType> = {
   // —— 第二批 · 第 3 章 群雄 ——
   yexi: { id: 'yexi', name: '夜袭兵', base: 'infantry', role: 'ambush', mul: { hp: 1, speed: 1.2, damage: 1.2 }, trait: { kind: 'ambusher', dash: 2.2, dashMs: 900, fireMs: 2500 }, hide: { reveal: 260 }, art: A('yexi', 128), fallback: { tint: 0x707488, scale: 1 }, cap: 4 },
   xianzhen: { id: 'xianzhen', name: '陷阵营', base: 'shield', role: 'wall', mul: { hp: 3.5, speed: .75, damage: 1.4 }, trait: { kind: 'shieldwall', front: .6, turnDeg: 70, bashRange: 75, bashDamage: 10, everyMs: 1800 }, art: A('xianzhen', 144), fallback: { tint: 0x9aa0aa, scale: 1.15 }, group: [5, 7], cap: 7 },
-  danyang: { id: 'danyang', name: '丹阳兵', base: 'infantry', role: 'ranged', mul: { hp: 1.1, speed: 1.1, damage: 1 }, trait: { kind: 'javelin', range: 340, everyMs: 2600, speed: 330 }, art: A('danyang', 128), fallback: { tint: 0xc89a80, scale: 1 }, cap: 4 },
+  danyang: { id: 'danyang', name: '丹阳兵', base: 'infantry', role: 'ranged', mul: { hp: 1.1, speed: 1.1, damage: 1 }, trait: { kind: 'javelin', range: 340, everyMs: 2600, speed: 330 }, art: A('danyang', 144), fallback: { tint: 0xc89a80, scale: 1 }, cap: 4 },
   // —— 第 4 章 官渡 ——
   daji: { id: 'daji', name: '大戟士', base: 'shield', role: 'heavy', mul: { hp: 3, speed: .8, damage: 1.5 }, trait: { kind: 'sweeper', range: 150, arcDeg: 120, warnMs: 750, everyMs: 3000, damage: 13, allyDamage: 16 }, art: A('daji', 176), fallback: { tint: 0xd8c8a0, scale: 1.25 }, cap: 3 },
   xiandeng: { id: 'xiandeng', name: '先登死士', base: 'archer', role: 'ranged', mul: { hp: 1.6, speed: .6, damage: 1.2 }, trait: { kind: 'stance', upMs: 2500, downMs: 1200, front: .6, shots: 3, shotGapMs: 220, arrowSpeed: 300, range: 380 }, art: A('xiandeng', 144), fallback: { tint: 0x8a8070, scale: 1.05 }, cap: 4 },
@@ -114,8 +114,8 @@ export const ROSTER: Record<string, RosterType> = {
   qiangzhen: { id: 'qiangzhen', name: '曹军枪阵兵', base: 'infantry', role: 'lancer', mul: { hp: 1.5, speed: .8, damage: 1.3 }, trait: { kind: 'lancer', range: 170, width: 60, warnMs: 650, everyMs: 2600, damage: 12, allyDamage: 14 }, art: A('qiangzhen', 144), fallback: { tint: 0x8090a8, scale: 1.05 }, cap: 4 },
   // —— 第 6 章 荆南 ——
   feishi: { id: 'feishi', name: '山越飞石手', base: 'archer', role: 'artillery', mul: { hp: .9, speed: 1, damage: 1.2 }, trait: { kind: 'lobber', range: 400, everyMs: 4000, warnMs: 1000, radius: 75, damage: 10, allyDamage: 12, flightMs: 900 }, hide: { reveal: 380 }, art: A('feishi', 128), fallback: { tint: 0xb89070, scale: 1 }, cap: 3 },
-  wuxi: { id: 'wuxi', name: '五溪蛮兵', base: 'infantry', role: 'leaper', mul: { hp: 1.3, speed: 1.1, damage: 1.2 }, trait: { kind: 'leaper', range: 320, minRange: 120, warnMs: 700, flightMs: 420, everyMs: 3800, radius: 80, damage: 12 }, art: A('wuxi', 144), fallback: { tint: 0xc88860, scale: 1.05 }, cap: 4 },
-  qianggong: { id: 'qianggong', name: '长沙强弓', base: 'archer', role: 'sniper', mul: { hp: .9, speed: .6, damage: 2.2 }, trait: { kind: 'sniper', range: 620, chargeMs: 1200, everyMs: 4800, width: 36, length: 900, damage: 20 }, art: A('qianggong', 144), fallback: { tint: 0xa89878, scale: 1 }, cap: 2 },
+  wuxi: { id: 'wuxi', name: '五溪蛮兵', base: 'infantry', role: 'leaper', mul: { hp: 1.3, speed: 1.1, damage: 1.2 }, trait: { kind: 'leaper', range: 320, minRange: 120, warnMs: 700, flightMs: 420, everyMs: 3800, radius: 80, damage: 12 }, art: A('wuxi', 128), fallback: { tint: 0xc88860, scale: 1.05 }, cap: 4 },
+  changsha: { id: 'changsha', name: '长沙强弓', base: 'archer', role: 'sniper', mul: { hp: .9, speed: .6, damage: 2.2 }, trait: { kind: 'sniper', range: 620, chargeMs: 1200, everyMs: 4800, width: 36, length: 900, damage: 20 }, art: A('changsha', 144), fallback: { tint: 0xa89878, scale: 1 }, cap: 2 },
   beast: { id: 'beast', name: '猛兽', base: 'infantry', role: 'pack', mul: { hp: .6, speed: 1.5, damage: 1.2 }, trait: { kind: 'swarm' }, art: A('beast', 144), fallback: { tint: 0x7a5a38, scale: .75 }, cap: 6 },
 };
 
@@ -158,7 +158,7 @@ export const STAGE_MIX: Record<string, StageMix> = {
   'chibi.2': { traits: { shuizu: { w: 6 }, huochuan: { w: 3 } } },
   'chibi.3': { traits: { qiangzhen: { w: 6 } } },
   'jingnan.2': { traits: { feishi: { w: 5 }, wuxi: { w: 5 } } },
-  'jingnan.3': { traits: { qianggong: { w: 4 } } },
+  'jingnan.3': { traits: { changsha: { w: 4 } } },
   'nanzheng.1': { traits: { mantoushi: { w: 7 } } },
   'nanzheng.3': { traits: { dujian: { w: 7 }, xunshou: { w: 3 } } },
 };

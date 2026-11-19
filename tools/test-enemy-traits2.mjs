@@ -52,7 +52,7 @@ const r = await p.evaluate(async () => {
   // 五溪蛮兵：预警落点 → 扑跳 → 落地伤害
   { const l0 = M.leaps; const e = at('wuxi', 250, 0); e.controlImmune = true; /* 测试里不让主将的定身打断起跳计时 */ const h = await hurt(6000); out.wuxi = { leaps: M.leaps - l0, hurt: h }; wipe(); }
   // 长沙强弓：远处蓄力，一箭穿透
-  { const s0 = M.snipes; at('qianggong', 450, 0); const h = await hurt(4500); out.qianggong = { snipes: M.snipes - s0, hurt: h }; wipe(); }
+  { const s0 = M.snipes; at('changsha', 450, 0); const h = await hurt(4500); out.changsha = { snipes: M.snipes - s0, hurt: h }; wipe(); }
   return out;
 });
 ck('夜袭兵：藏着（半透明、刀枪不入）→ 主将走近现身', r.yexi.hid.alpha < .3 && r.yexi.hid.inv && r.yexi.revealed === 1 && r.yexi.alpha === 1 && !r.yexi.inv, r.yexi);
@@ -66,7 +66,7 @@ ck('火船：从江面出，冲到主将身边爆燃（没专属图时用着火�
 ck('曹军枪阵兵：直线预警后长枪贯穿', r.qiangzhen.thrusts >= 1 && r.qiangzhen.hurt > 0, r.qiangzhen);
 ck('山越飞石手：藏着 → 现身后抛飞石', r.feishi.revealed === 1 && r.feishi.throws >= 1, r.feishi);
 ck('五溪蛮兵：预警落点、扑跳、落地伤害', r.wuxi.leaps >= 1 && r.wuxi.hurt > 0, r.wuxi);
-ck('长沙强弓：蓄力后一箭穿透', r.qianggong.snipes >= 1 && r.qianggong.hurt > 0, r.qianggong);
+ck('长沙强弓：蓄力后一箭穿透', r.changsha.snipes >= 1 && r.changsha.hurt > 0, r.changsha);
 ck('全程无页面报错', errors.length === 0, errors.slice(0, 5));
 console.log(`\n${pass} passed, ${fail} failed`);
 await b.close();

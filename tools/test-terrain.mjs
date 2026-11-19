@@ -103,6 +103,15 @@ const step = (p, n) => p.evaluate(n => window.__step(n), n);
   ck('桥上不减速：沿桥过河与岸上一样快', sp.bMul === 1 && sp.bRatio > .93, sp);
   await p.evaluate(() => { const s = window.__S, bg = s.terrain.bridge(0); s.player.sprite.setPosition(bg.x, bg.y + 20); window.__step(4); });
   await shot(p, '2-river-bridge');
+  // 断桥：setBridgeBroken 后桥心不再是桥面、算水里；修复后恢复；桥件显隐跟着变
+  const brk = await p.evaluate(() => {
+    const T = window.__S.terrain, b = T.bridge(0), out = { api: typeof T.setBridgeBroken === 'function' };
+    out.before = { on: T.onBridge(b.x, b.y), water: T.inWater(b.x, b.y) };
+    T.setBridgeBroken(0, true); out.broken = { on: T.onBridge(b.x, b.y), water: T.inWater(b.x, b.y), flag: T.isBridgeBroken(0), speed: T.speedMul(b.x, b.y) };
+    T.setBridgeBroken(0, false); out.fixed = { on: T.onBridge(b.x, b.y), water: T.inWater(b.x, b.y), flag: T.isBridgeBroken(0) };
+    return out;
+  });
+  ck('断桥：断了当水处理（不能走、减速），修好恢复', brk.api && brk.before.on && !brk.before.water && !brk.broken.on && brk.broken.water && brk.broken.flag && brk.broken.speed === .6 && brk.fixed.on && !brk.fixed.water && !brk.fixed.flag, brk);
   // 敌兵：水里比岸上慢
   const en = await p.evaluate(() => {
     const s = window.__S, T = s.terrain, pl = s.player, [wx, wy] = window.__wpt, seg = T.rivers[0].segs[1]; window.__clear();

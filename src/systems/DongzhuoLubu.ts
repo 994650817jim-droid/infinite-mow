@@ -11,7 +11,7 @@ import { playSheet } from './SkillFxSheets';
 import { emitBossPhase } from './BossPhase';
 import { ART_V2_FILES, isV2Texture, regridV2 } from './ArtStyle';
 import { HORSE_V2, RIDE } from './HeroMount';
-import { BOSS_RIDE_ART, bossRideKey } from './BossMount';
+import { BOSS_RIDE, BOSS_RIDE_ART, bossRideKey } from './BossMount';
 import { warnFx } from '../ui/WarnFx';
 import { preloadCutscene } from './Cutscene';
 import { preloadBossDeath } from './BossDeathArt';
@@ -167,8 +167,8 @@ export class DongzhuoLubu {
   /** 赤兔：从画面边奔来 / 驮着吕布离去。返回马与（有骑乘图时的）骑者图。 */
   private horse(x: number, y: number, dir: 'left' | 'right'): { horse: Phaser.GameObjects.Image | null; rider: Phaser.GameObjects.Image | null } {
     const s = this.h.scene, hk = 'horse_v2_chitu_walk';
-    const horse = s.textures.exists(hk) && s.textures.get(hk).has('down_0') ? s.add.image(x, y, hk, `${dir}_0`).setOrigin(.5, HORSE_V2.foot / HORSE_V2.cell).setScale(HORSE_V2.scale).setDepth(actorDepth(y)).setName('dz-chitu') : null;
-    const rk = bossRideKey('lubu'), rider = BOSS_RIDE_ART.has('lubu') && s.textures.exists(rk) ? s.add.image(x, y, rk, (dir === 'left' ? 1 : 2) * 4).setOrigin(.5, (RIDE.foot + RIDE.stirrup / RIDE.scale) / RIDE.cell).setScale(RIDE.scale).setDepth(actorDepth(y) + .01).setName('dz-lubu-rider') : null;
+    const horse = s.textures.exists(hk) && s.textures.get(hk).has('down_0') ? s.add.image(x, y, hk, `${dir}_0`).setOrigin(.5, HORSE_V2.foot / HORSE_V2.cell).setScale(HORSE_V2.scale * BOSS_RIDE.k).setDepth(actorDepth(y)).setName('dz-chitu') : null;
+    const rk = bossRideKey('lubu'), rider = BOSS_RIDE_ART.has('lubu') && s.textures.exists(rk) ? s.add.image(x, y, rk, (dir === 'left' ? 1 : 2) * 4).setOrigin(.5, (RIDE.foot + RIDE.stirrup / RIDE.scale) / RIDE.cell).setScale(RIDE.scale * BOSS_RIDE.k).setDepth(actorDepth(y) + .01).setName('dz-lubu-rider') : null;
     return { horse, rider };
   }
   /** ② 吕布锁血：喊话、唤赤兔、骑走。 */

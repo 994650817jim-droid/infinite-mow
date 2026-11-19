@@ -52,7 +52,8 @@ export function intelGameSceneClass(Base: typeof GameScene) {
       const e = intelEvents().find(x => x.id === id) ?? (this.test && preview?.id === id ? preview : undefined), city = e && cityById(e.city);
       if (!e || !city) { this.scene.start('WorldMapScene'); return; }
       this.event = e; this.city = city; this.controller = undefined; this.cart = undefined; this.cartArrived = false; this.ambushWave = 0; this.cartStopped = false;
-      const faction = e.kind === 'bandit' ? 'yellow' : e.kind === 'escort' ? 'han' : e.faction;
+      // 2026-11-19 全面检查 #3：护送的山贼原用汉军灰白（灰白势力不做敌方染色，看着像友军）→ 与流寇同用黄巾配色，带敌方染色
+      const faction = e.kind === 'bandit' || e.kind === 'escort' ? 'yellow' : e.faction;
       const paletteKeys = ensureFactionTextures(this, faction, siegeSourceKeys());
       const saved = this.registry.get('runConfig') as RunConfig | undefined;
       this.registry.remove('campaignTransfer');

@@ -36,7 +36,9 @@ interface Host {
   /** 主将位置（屏外箭头从这里朝首领指）。 */
   player: () => { x: number; y: number };
 }
-type Saved = { o: Phaser.GameObjects.Image; x: number; y: number; sx: number; sy: number };
+type Saved = { o: Phaser.GameObjects.Image; x: number; y: number; sx: number; sy: number; d?: number };
+/** 首领渲染时的深度抬高（actorDepth 单位，约等于脚下前方 50 像素）：贴身挤在首领前面的小兵不再盖住首领；离得远的墙 / 树冠照常在前（2026-11-19 全面检查 #10）。 */
+const BOSS_DEPTH_LIFT = .12;
 /** 每位首领一份：火环、名牌（高度跟随：上升立即跟、下降慢慢收）、辉光（敌兵精灵是对象池复用的：倒下 / 换人时必须摘掉）。 */
 interface Slot { e: Enemy | null; ring: Phaser.GameObjects.Image | null; plate: Phaser.GameObjects.Container | null; plateFor: string; plateRise: number; plateBelow: boolean; glow: { sp: Phaser.GameObjects.Sprite; fx: Phaser.FX.Glow } | null }
 const ARROW = { red: [0xc8321e, 0xf2c27a], gold: [0xd8a23a, 0xfff0c0] } as const;
@@ -105,9 +107,9 @@ export class BossPresence {
       if (this.glowOff) this.dropGlow(sl);
       if (!sl.glow && !this.glowOff && s.game.renderer.type === Phaser.WEBGL) {
         const sp = boss.sprite as Phaser.GameObjects.Sprite, pre = (sp as unknown as { preFX?: Phaser.GameObjects.Components.FX }).preFX;
-        if (pre) { pre.setPadding(10); sl.glow = { sp, fx: pre.addGlow(b.color === 'gold' ? 0xffd070 : 0xffb347, 2, 0, false, .1, 10) }; }
+        if (pre) { pre.setPadding(10); sl.glow = { sp, fx: pre.addGlow(b.color === 'red' ? 0xff9a5a : 0xffd070, 2, 0, false, .1, 10) }; /* 统一金色（11-3 孟获那样）；双首领右边朱色 */ }
       }
-      if (sl.glow) { sl.glow.fx.outerStrength = 1.6 + .9 * Math.sin(s.time.now / 380 + i * 1.3); glows++; }
+      if (sl.glow) { sl.glow.fx.outerStrength = 2.4 + 1 * Math.sin(s.time.now / 380 + i * 1.3); glows++; } // 加强（原 1.6 ± .9）：人群里也看得出金边
       // 脚下火环
       if (live && s.textures.exists(RING_KEY)) {
         const r = sl.ring ?? (sl.ring = s.add.image(0, 0, RING_KEY, RING_FRAMES[0]).setName('boss-presence-ring'));
@@ -171,8 +173,10 @@ export class BossPresence {
       this.saved.push({ o: e.shadow, x: e.shadow.x, y: e.shadow.y, sx: e.shadow.scaleX, sy: e.shadow.scaleY }); e.shadow.setScale(e.shadow.scaleX * k, e.shadow.scaleY * k);
       for (const o of [sp, outline?.visible ? outline : null, ...this.h.extras(e)]) {
         if (!o || !o.active) continue;
-        this.saved.push({ o, x: o.x, y: o.y, sx: o.scaleX, sy: o.scaleY });
+        const lift = e.kind === 'boss';
+        this.saved.push({ o, x: o.x, y: o.y, sx: o.scaleX, sy: o.scaleY, d: lift ? o.depth : undefined });
         o.setPosition(px + (o.x - px) * k, py + (o.y - py) * k).setScale(o.scaleX * k, o.scaleY * k);
+        if (lift) o.setDepth(o.depth + BOSS_DEPTH_LIFT);
       }
       this.stats.scaled++;
       const si = list.findIndex(b => b.e === e), sl = si >= 0 ? this.slots[si] : undefined;
@@ -206,7 +210,7 @@ export class BossPresence {
     try { pre?.remove(sl.glow.fx); pre?.setPadding(0); } catch { /* 精灵已销毁 */ }
     sl.glow = null;
   }
-  private restore(): void { for (const v of this.saved) if (v.o.active) v.o.setPosition(v.x, v.y).setScale(v.sx, v.sy); this.saved.length = 0; }
+  private restore(): void { for (const v of this.saved) if (v.o.active) { v.o.setPosition(v.x, v.y).setScale(v.sx, v.sy); if (v.d !== undefined) v.o.setDepth(v.d); } this.saved.length = 0; }
 
   destroy(): void {
     const s = this.h.scene;

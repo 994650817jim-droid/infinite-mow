@@ -77,6 +77,7 @@ try {
       const st = await p.evaluate(S0 => {
         const s = eval(S0); if (!s || !s.scene.isActive()) return { gone: true, ending: window.__game.scene.isActive('EndingScene') };
         if (s.mode === 'levelup' || s.mode === 'recruit') s.__DEV_ACTIONS?.closePopup?.();
+        if (s.mode === 'parley' && s.parley?.choose) s.parley.choose('execute'); // 首领 15% 劝降弹窗（surrender）：选斩杀，照原流程倒地掉宝箱
         const end = s.children.getByName('story-beifa-end'); if (end && s.__endShot) (end.list.find(o => o.name === 'story-beifa-end-next' || o.name === 'story-beifa-end-confirm'))?.emit('pointerup');
         const c = s.bossChests?.find(c => !c.done && c.ready);
         if (c) { const dx = c.x - s.player.x, dy = c.y - s.player.y, d = Math.hypot(dx, dy) || 1; s.player.sprite.x += dx / d * Math.min(d, 18); s.player.sprite.y += dy / d * Math.min(d, 18); }

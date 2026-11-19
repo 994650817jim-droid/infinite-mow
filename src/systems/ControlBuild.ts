@@ -16,9 +16,13 @@ export class ControlBuild {
  private mark(e:Enemy,slow:number,until:number,spread=false):Mark|undefined{
   if(!this.valid(e))return;if(this.state.tier('stratagem')>=2)slow=Math.min(.65,slow+SCHOOL_TIER.stratagem.slowAdd);let m=this.marks.get(e.uid);if(m?.spawn!==e.spawnId){if(this.marks.size>=160)return;m={enemy:e,spawn:e.spawnId,until,slow,spread};this.marks.set(e.uid,m);}else{m.until=Math.max(m.until,until);m.slow=Math.max(m.slow,slow);m.spread=m.spread&&spread;}
   // 奇谋 4 势「乱阵」：每第 3 次控制附带眩晕（首领 / 免控已被 valid 排除）
-  if(this.state.tier('stratagem')>=4&&++this.controls%SCHOOL_TIER.stratagem.stunEvery===0){e.stunUntil=Math.max(e.stunUntil,this.now+SCHOOL_TIER.stratagem.stunMs);this.stuns++;}
+  if(this.state.tier('stratagem')>=4&&++this.controls%SCHOOL_TIER.stratagem.stunEvery===0){e.stunUntil=Math.max(e.stunUntil,this.now+SCHOOL_TIER.stratagem.stunMs);this.stuns++;this.onStun?.(e,this.now);}
   return m;
  }
+ /** 乱阵眩晕了一个敌人（合击「十面埋伏」在 SchoolSynergy 接）。 */
+ onStun?:(e:Enemy,now:number)=>void;
+ /** 一片减速（合击「声东击西」）：圈内普通敌人减速 slow、ms 毫秒（也算一次控制）。 */
+ slowArea(x:number,y:number,r:number,slow:number,ms:number,now:number):number{this.now=now;let n=0;for(const t of this.nearby(x,y,r))if(this.valid(t)&&Math.hypot(t.x-x,t.y-y)<=r&&this.mark(t,slow,now+ms))n++;return n;}
  isControlled(e:Enemy,now:number):boolean{const m=this.marks.get(e.uid);return !!m&&m.spawn===e.spawnId&&m.until>now&&this.valid(e);}
  onHit(e:Enemy,now:number):void{this.now=now;
   const n=this.state.level('snare'),p=this.state.level('traction');if((n||p)&&this.valid(e))buildVfx(this.scene).emit('control',e.x,e.y,now,48);

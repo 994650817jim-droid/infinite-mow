@@ -1,5 +1,6 @@
 import {TACTICS,TAG_NAMES,tacticDescription,tacticSchool,tacticGeneral,type TacticId,type BuildTag} from './builds';
 import {SCHOOLS,SCHOOL_IDS,OFFER,heroAffinity} from './schools';
+import {COMBOS,COMBO_AT} from './schoolCombos';
 import { BALANCE } from '../config';
 import type { Player } from '../entities/Player';
 import { WEAPON_DEFS, SPEAR_PIERCE, GUANDAO_TABLE, crossbowExtraArrows, zhenbeiCracks, lianhuanLinksPerMine, sunOrbitKnives, sunThrowCount, sunThrowPierce, diaochanFanCount } from '../weapons/registry';
@@ -181,6 +182,7 @@ export function schoolLabel(tag:BuildTag,tags:Record<BuildTag,number>,_learned=f
   const d=SCHOOLS[tag],now=tags[tag],next=now+1,step=([2,4,6] as const).find(t=>now<t&&next>=t);
   const name=d.name+' · 势 '+now+' → '+next;
   if(step===6)return name+'　觉醒【'+d.tiers[6].name+'】！';
+  if(step===2){const combo=COMBOS.find(c=>(c.a===tag&&tags[c.b]>=COMBO_AT)||(c.b===tag&&tags[c.a]>=COMBO_AT));if(combo)return name+'　解锁【'+d.tiers[2].name+'】· 合击【'+combo.name+'】';}
   if(step)return name+'　解锁【'+d.tiers[step].name+'】';
   const goal=([2,4,6] as const).find(t=>next<t);
   return goal?name+'　（'+goal+' 势：'+d.tiers[goal].name+'）':name;

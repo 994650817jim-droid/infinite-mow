@@ -92,7 +92,7 @@ export function thirdGameSceneClass(Base:typeof GameScene,cfg:ArcSceneConfig=THI
   if(STORY_CHAPTERS[cfg.arc])this.setupStory(cfg.arc,this.thirdStage);
   /* 5-1「七进七出」：赵云在队击杀虎豹骑 77 骑（systems/ChibiStoryHooks.ts） */
   this.qijin=cfg.arc==='chibi'&&this.thirdStage===1?new QijinTracker({team:()=>[this.runConfig.character,...(this.followers?.members??[]).map(m=>m.recruit.hero??'')],banner:(t,c)=>{this.showWaveBanner(t,false,c);this.sfx.play('gong');},bark:()=>{this.storyDir?.line('chibi-1.qijin',this.player.sprite);}}):undefined;
-  this.dianwei=cfg.arc==='qunxiong'&&this.thirdStage===2?new DianweiGuard({scene:this,player:this.player,enemies:()=>this.enemies,allies:()=>this.allies,hit:(e,d)=>{this.hitEnemy(e,d,this.combatNow,'melee',true,false);},banner:(t,d,c)=>this.showWaveBanner(t,d,c)},this.combatNow):undefined;
+  this.dianwei=cfg.arc==='qunxiong'&&this.thirdStage===2?new DianweiGuard({scene:this,player:this.player,enemies:()=>this.enemies,allies:()=>this.allies,line:(id,at)=>!!this.storyDir?.line(id,at),hit:(e,d)=>{this.hitEnemy(e,d,this.combatNow,'melee',true,false);},banner:(t,d,c)=>this.showWaveBanner(t,d,c)},this.combatNow):undefined;
   this.hudTexts.chapter.setText(this.chapter.name);this.events.once('shutdown',()=>{this.dianwei?.clear();this.dianwei=undefined;this.spearWarnings?.clear();this.spearWarnings=undefined;this.enemyCamps?.clear();this.enemyCamps=undefined;this.controller?.clear();this.controller=undefined;this.fireShips?.clear();this.fireShips=undefined;});
  }
  /** 5-1「七进七出」计数（只在赤壁第一关建） */

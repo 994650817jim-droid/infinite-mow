@@ -47,10 +47,24 @@ const panel = p => p.evaluate(() => { const s = window.__S, P = s.ordersPanel; r
   ck('普通关：军令「击退敌军 n/3」', !!o?.find(x => x.id === 'waves' && x.state === 'active' && /\/3$/.test(x.prog ?? '')), o);
   ck('普通关：首领出阵倒计时', (pn?.lines ?? []).some(l => /^首领出阵 \d+:\d\d$/.test(l)), pn?.lines);
   ck('军令面板显示在右侧（行囊下、用药上）', !!pn && pn.visible && pn.b.y >= 190 && pn.b.y + pn.b.h <= 360 && pn.b.x + pn.b.w <= 960 && pn.b.x >= 700, pn?.b);
-  const mini = await p.evaluate(() => { const m = window.__S.children.getByName('battle-map-mini'); return m ? { x: m.x, y: m.y, visible: m.visible } : null; });
-  ck('小地图在右上角（设置钮左侧、计时器右侧）', !!mini && mini.visible && mini.x >= 600 && mini.x + 170 <= 884 && mini.y + 110 <= 125, mini);
+  // 用户「小地图是可以打开的，平时就是卷轴的样子收缩起来，点击才放大」：平时右上角一卷收起的手卷，不画地图
+  const mini = await p.evaluate(() => { const S = window.__S, m = S.children.getByName('battle-map-scroll'), b = m?.getBounds(); return m ? { x: Math.round(b.x), y: Math.round(b.y), w: Math.round(b.width), h: Math.round(b.height), visible: m.visible, oldMini: !!S.children.getByName('battle-map-mini'), state: S.battleMap.stats.state } : null; });
+  ck('舆图平时收成卷轴，在右上角（设置钮左侧、计时器右侧），不压战场', !!mini && mini.visible && mini.x >= 600 && mini.x + mini.w <= 884 && mini.y + mini.h <= 80 && !mini.oldMini && mini.state === 'closed', mini);
   const draws0 = await p.evaluate(() => window.__S.battleMap.stats.draws); await p.waitForTimeout(1000); const draws1 = await p.evaluate(() => window.__S.battleMap.stats.draws);
-  ck('小地图约 8 Hz 重画（1 秒 4–12 次）', draws1 - draws0 >= 4 && draws1 - draws0 <= 12, draws1 - draws0);
+  ck('卷着时不重画地图', draws1 === draws0, draws1 - draws0);
+  await p.screenshot({ path: `${OUT}/scroll-closed.png` });
+  // 点卷轴：飞到中央、两轴拉开（中途截一张）→ 展开；8 Hz 重画
+  { const c = await p.evaluate(() => { const b = window.__S.children.getByName('battle-map-scroll').getBounds(), cv = document.querySelector('canvas').getBoundingClientRect(), k = cv.width / 960; return { x: cv.x + (b.x + b.width / 2) * k, y: cv.y + (b.y + b.height / 2) * k }; });
+    await p.mouse.click(c.x, c.y); await p.waitForTimeout(420);
+    const mid = await p.evaluate(() => ({ ...window.__S.battleMap.stats })); await p.screenshot({ path: `${OUT}/scroll-unrolling.png` });
+    await p.waitForTimeout(500);
+    const op = await p.evaluate(() => { const S = window.__S, l = S.children.getByName('battle-map-scroll-left'), r = S.children.getByName('battle-map-scroll-right'); return { ...S.battleMap.stats, open: S.battleMap.bigOpen, mode: S.mode, gap: Math.round(r.x - l.x), icon: S.children.getByName('battle-map-scroll').visible }; });
+    const d0 = op.draws; await p.waitForTimeout(1000); const d1 = await p.evaluate(() => window.__S.battleMap.stats.draws);
+    await p.screenshot({ path: `${OUT}/scroll-open.png` });
+    ck('点卷轴展开：先飞到中央、两轴往两边拉开（中途），展开后地图在纸上、8 Hz 重画、不暂停', mid.state === 'opening' && mid.t > 0 && mid.t < 1 && op.state === 'open' && op.t === 1 && op.gap >= 640 && !op.icon && op.mode === 'none' && d1 - d0 >= 4 && d1 - d0 <= 12, { mid, op, hz: d1 - d0 });
+    await p.mouse.click(c.x > 900 ? 480 : 480, 270); await p.waitForTimeout(800);
+    const cl = await p.evaluate(() => { const S = window.__S, m = S.children.getByName('battle-map-scroll'); return { state: S.battleMap.stats.state, open: S.battleMap.bigOpen, icon: m.visible, x: Math.round(m.x), y: Math.round(m.y), angle: m.angle }; });
+    ck('再点卷轴：卷起、飞回角上', cl.state === 'closed' && !cl.open && cl.icon && cl.x > 700 && cl.y < 60 && cl.angle === 0, cl); }
   // API
   await p.evaluate(() => { const s = window.__S, pl = s.player; s.battleOrders.set('test-armory', { label: '占领武库', kind: 'main', progress: { cur: 1, max: 3 }, order: 0, at: () => ({ x: pl.x + 1400, y: pl.y + 200 }) }); });
   await settle(p, 500);
@@ -70,14 +84,14 @@ const panel = p => p.evaluate(() => { const s = window.__S, P = s.ordersPanel; r
   await p.evaluate(() => window.__S.battleOrders.remove('waves')); await settle(p, 400);
   await p.screenshot({ path: `${OUT}/normal.png` });
   // 大地图
-  await p.keyboard.press('KeyG'); await settle(p, 500);
+  await p.keyboard.press('KeyG'); await settle(p, 900);
   const big1 = await p.evaluate(() => ({ open: window.__S.battleMap.bigOpen, mode: window.__S.mode }));
   await p.screenshot({ path: `${OUT}/big-map.png` });
-  await p.keyboard.press('KeyG'); await settle(p, 300);
+  await p.keyboard.press('KeyG'); await settle(p, 800);
   const big2 = await p.evaluate(() => window.__S.battleMap.bigOpen);
-  await p.keyboard.press('KeyG'); await settle(p, 300); await p.keyboard.press('Escape'); await settle(p, 300);
+  await p.keyboard.press('KeyG'); await settle(p, 900); await p.keyboard.press('Escape'); await settle(p, 800);
   const big3 = await p.evaluate(() => ({ open: window.__S.battleMap.bigOpen, mode: window.__S.mode }));
-  ck('G 开大地图（不暂停）/ 再按 G 关 / Esc 也能关', big1.open && big1.mode === 'none' && !big2 && !big3.open && big3.mode === 'none', { big1, big2, big3 });
+  ck('G 展开舆图（不暂停）/ 再按 G 卷起 / Esc 也能卷起', big1.open && big1.mode === 'none' && !big2 && !big3.open && big3.mode === 'none', { big1, big2, big3 });
   // 首领
   await p.evaluate(() => { const s = window.__S; s.spawnBoss(); }); await settle(p, 1500);
   const ob = await orders(p);
@@ -110,7 +124,7 @@ const panel = p => p.evaluate(() => { const s = window.__S, P = s.ordersPanel; r
 {
   const p = await open('mobile', { key: 'GameScene', run: { chapter: 'hulao', westStage: 2 } });
   await settle(p, 800);
-  const m = await p.evaluate(() => ({ map: !!window.__S.battleMap, panel: !!window.__S.ordersPanel, orders: !!window.__S.battleOrders, mini: !!window.__S.children.getByName('battle-map-mini') }));
+  const m = await p.evaluate(() => ({ map: !!window.__S.battleMap, panel: !!window.__S.ordersPanel, orders: !!window.__S.battleOrders, mini: !!window.__S.children.getByName('battle-map-mini') || !!window.__S.children.getByName('battle-map-scroll') }));
   ck('手机布局：不建小地图 / 面板，军令表照常有', !m.map && !m.panel && m.orders && !m.mini, m);
   await p.close();
 }

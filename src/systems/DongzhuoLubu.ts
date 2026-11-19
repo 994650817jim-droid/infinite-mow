@@ -17,7 +17,6 @@ import { preloadCutscene } from './Cutscene';
 import { preloadBossDeath } from './BossDeathArt';
 import { LUBU_KILLS_DONGZHUO } from '../data/cutscenes/lubuKillsDongzhuo';
 import type { CutsceneScript } from '../data/cutscenes/types';
-import { sealCityWall } from './ChapterDressing';
 import { LUOYANG } from '../data/dongzhuo';
 
 /**
@@ -66,31 +65,41 @@ export class DongzhuoLubu {
   private perch = { x: 0, y: 0 }; private gate = { x: 0, y: 0 }; private letDie = false; private dzLineAt = 0; private nextSweep = 0; private sweep: { at: number; a: number; id: string } | null = null; private volleyAt = 0;
   private anim: ((now: number) => boolean) | null = null;
   /** 吕布在城头的站位（踱步中心）。 */ private lubuHome = { x: 0, y: 0 };
-  readonly metrics = { sweeps: 0, volleys: 0, lockHits: 0, leaps: 0 };
+  readonly metrics = { sweeps: 0, volleys: 0, lockHits: 0, leaps: 0, pushedSouth: 0 };
   constructor(private h: DzHost, readonly dongzhuo: Enemy) {
     const P = DZ_LUBU, L = LUOYANG, s = h.scene, now = h.now(), p = h.player, wy = p.y + P.wallY;
     // 城头站位：董卓在城门楼左边、吕布在右边（站在门楼正后方会被门楼挡住）；脚底在前墙垛下沿，前墙挡住腿、身子露在墙头上
     this.perch = { x: p.x - P.perchDx, y: wy - P.perchUp }; this.gate = { x: p.x, y: wy };
     preloadCutscene(s, LUBU_KILLS_DONGZHUO, () => {}); preloadBossDeath(s, 'dongzhuo');
-    // 洛阳城（2-3 重做，转角城墙修正）：只画南墙（董卓所在）；两端接角楼、城墙转角往南成侧墙、南边界是洛水（ChapterDressing.sealCityWall），
-    // 整块场地封闭、城里进不去。原来往北延伸的侧墙一节节拼、最上面一节叠在角楼顶上（用户截图「塔上叠塔」），北墙也画了却看不到——都去掉。
-    const X0 = p.x - P.wallHalf, X1 = p.x + P.wallHalf;
-    // 墙线碰撞一直接到两端角楼（sealCityWall 的侧墙从 ±(wallHalf + 40) 起，原来墙框只到 ±wallHalf，转角留 40 像素缝能挤过去）
-    this.obstacles = new SishuiObstacles([{ left: X0 - 40, right: X1 + 40, top: wy - 70, bottom: wy - 8 }]);
-    sealCityWall(s, { cx: p.x, wy, half: P.wallHalf + 40, south: p.y + L.south, boxes: this.obstacles.footprints, south_: 'river', tag: 'luoyang' });
+    // 洛阳城（用户「2-3只有很长一段城墙，不用把玩家困在里面」）：北边一道很长的城墙（±LUOYANG.wallHalf，两端角楼收口），没有侧墙、没有南边界，城下一侧全开。
+    // 绕墙端走不过去：keepSouth 每帧把墙线以北的敌兵 / 主将 / 随行挪回墙南（不分 x），城墙等于无限长；墙北不刷兵（southSpawn）。
+    const X0 = p.x - L.wallHalf, X1 = p.x + L.wallHalf;
+    // 碰撞按 1000 宽切块（导航按最大半边长查询，整块太大会拖慢；同 sealCityWall.slab）
+    this.obstacles = new SishuiObstacles([]);
+    for (let x = X0 - 60; x < X1 + 60; x += 1000) this.obstacles.footprints.push({ left: x, right: Math.min(x + 1000, X1 + 60), top: wy - 70, bottom: wy - 8 });
     this.strikes = new Strikes({ scene: s, player: p, army: h.legion, now: h.now });
-    // 城墙（攻城 v2 图集：0 城墙段 · 1 城门）：前墙一排 + 后墙垛一排（缩小压暗，城头走道的远侧）——城头上的人站在两排之间，读起来是「站在城墙上」
-    const wall = MID_SIEGE_FILES[0], build = (): void => {
-      const by = wy - L.backParapetDy, bs = (P.segW + 8) * L.backParapetScale;
-      for (const side of [-1, 1]) for (let x = P.gateW / 2 + P.segW / 2 - 24; x + P.segW / 2 < P.wallHalf + 80; x += P.segW - 14) {
-        this.art.push(s.add.image(p.x + side * x, wy, wall.key, 0).setOrigin(.5, .97).setDisplaySize(P.segW + 8, P.segW + 8).setDepth(actorDepth(wy) - .01).setFlipX(side > 0).setName('luoyang-wall'));
-        this.art.push(s.add.image(p.x + side * x, by, wall.key, 0).setOrigin(.5, .97).setDisplaySize(bs, bs).setTint(L.backParapetTint).setDepth(actorDepth(by) - .03).setFlipX(side > 0).setName('luoyang-wall-back'));
+    // 城墙（用户「生成那张可以站在立体上的城墙素材」，2.5D 城墙图：后女墙 → 城头走道 → 外侧城垛 → 正立面）。
+    // 每张图画两遍：整张在城头人物身后；从外侧城垛顶往下裁一层盖在城头人物身前（挡住腿）——董卓 / 吕布就「站在走道上、城垛后面」。
+    // 层级：整张 actorDepth(wy) - .03 < 城头人物 actorDepth(wy) - .02 < 城垛层 actorDepth(wy) - .01 < 城下的人。
+    const A = L.wallArt, key = (n: string): string => 'luoyang_wall_' + n;
+    const piece = (n: 'seg' | 'gate' | 'corner', x: number, flip = false, name = 'luoyang-wall'): void => {
+      const d = A[n], k = s.textures.get(key(n)).getSourceImage() as { width: number; height: number }, sc = A.scale * ('mul' in d ? d.mul : 1);
+      for (const front of [false, true]) {
+        const im = s.add.image(x, wy, key(n)).setOrigin(.5, d.ground / k.height).setScale(sc).setFlipX(flip).setDepth(actorDepth(wy) - (front ? .01 : .03)).setName(front ? name + '-front' : name);
+        if (front) im.setCrop(0, d.crenel, k.width, k.height - d.crenel);
+        this.art.push(im);
       }
-      this.art.push(s.add.image(p.x, by, wall.key, 0).setOrigin(.5, .97).setDisplaySize(bs, bs).setTint(L.backParapetTint).setDepth(actorDepth(by) - .03).setName('luoyang-wall-back'));
-      this.art.push(s.add.image(p.x, wy + 2, wall.key, 1).setOrigin(.5, .97).setDisplaySize(P.gateW + 30, P.gateW + 30).setDepth(actorDepth(wy)).setName('luoyang-gate'));
     };
-    { const need = ([[wall.key, wall.file]] as const).filter(([k]) => !s.textures.exists(k));
-      if (!need.length) build(); else { for (const [k, f] of need) s.load.spritesheet(k, f, { frameWidth: 384, frameHeight: 384 }); s.load.once('complete', () => { if (s.textures.exists(wall.key)) build(); }); if (!s.load.isLoading()) s.load.start(); } }
+    const build = (): void => {
+      if (s.sys.settings.status >= Phaser.Scenes.SHUTDOWN) return;
+      const full = A.seg.w * A.scale, step = full - A.overlap * A.scale, gateHalf = A.gate.w * A.scale * A.gate.mul / 2, end = L.wallHalf + 40;
+      // 墙段从城门楼两侧往外排到角楼（最外一段压在角楼身后），相邻段重叠 overlap 藏住两端斜角；城门楼、角楼后画，盖住接缝
+      for (const side of [-1, 1]) for (let x = gateHalf - 4 + full / 2; x - full / 2 < end; x += step) piece('seg', p.x + side * x, side > 0);
+      piece('gate', p.x, false, 'luoyang-gate');
+      piece('corner', X0 - 40, false, 'luoyang-tower'); piece('corner', X1 + 40, true, 'luoyang-tower');
+    };
+    { const need = (['seg', 'gate', 'corner'] as const).filter(n => !s.textures.exists(key(n)));
+      if (!need.length) build(); else { for (const n of need) s.load.image(key(n), A[n].file); s.load.once('complete', build); if (!s.load.isLoading()) s.load.start(); } }
     // 赤兔（horses-v2）与吕布骑乘图（有就载）：逃走 / 杀回时用
     { const hk = 'horse_v2_chitu_walk'; if (!s.textures.exists(hk) && ART_V2_FILES[hk]) { s.load.image(hk, ART_V2_FILES[hk]); s.load.once('filecomplete-image-' + hk, () => regridV2(s, hk)); } else if (s.textures.exists(hk) && !s.textures.get(hk).has('down_0')) regridV2(s, hk);
       const rk = bossRideKey('lubu'); if (BOSS_RIDE_ART.has('lubu') && !s.textures.exists(rk)) s.load.spritesheet(rk, 'assets/ride-v2/boss_lubu_ride.png', { frameWidth: RIDE.cell, frameHeight: RIDE.cell });
@@ -119,6 +128,8 @@ export class DongzhuoLubu {
   /** XiliangBattle 是否该停下董卓自己的移动（城头 / 走下城 / 授首时）。 */
   get holdsDongzhuo(): boolean { return this.phase !== 'down'; }
   get lubuLeft(): boolean { return this.phase !== 'wall' && this.phase !== 'fleeing'; }
+  /** 用户「吕布下来应该是吕布血条」：跃下起到逃出画面，首领血条 / 名牌显示吕布；董卓下城后换回董卓。 */
+  get lubuFocus(): Enemy | null { const l = this.lubu; return l?.active && (this.phase === 'leaping' || this.phase === 'wall' || this.phase === 'fleeing') ? l : null; }
 
   /** GameScene.killEnemy 开头调用：吕布打到底不死（锁在 1/3），触发逃走。返回 true 表示拦下了这次击杀。 */
   preventKill(e: Enemy): boolean {
@@ -219,10 +230,27 @@ export class DongzhuoLubu {
   }
 
   /** 每帧（postupdate）：城墙碰撞、城头放箭、吕布横扫、动画、20% 授首。 */
-  /** 场地内（城墙以南、两端侧墙之间、洛水以北），留 r 的边：随机补给 / 物件只放在这里面。 */
-  inArena(x: number, y: number, r = 0): boolean {
-    const P = DZ_LUBU, half = P.wallHalf + 40, cx = this.gate.x, south = this.gate.y - P.wallY + LUOYANG.south;
-    return x > cx - half + r && x < cx + half - r && y > this.gate.y + r && y < south - r;
+  /** 场地内（城墙以南，城下一侧全开），留 r 的边：随机补给 / 物件只放在这里面。 */
+  inArena(_x: number, y: number, r = 0): boolean { return y > this.gate.y + r; }
+  /** 城墙南沿（碰撞框下沿）。以北是城里：不刷兵、不许有敌兵。 */
+  get wallLine(): number { return this.gate.y - 8; }
+  /** 用户「城墙那一侧不需要生成小兵」：刷兵点落在城北的，按主将南北翻过来（离主将距离不变，仍在屏外）；翻过来还在墙北就贴墙南沿。 */
+  southSpawn(x: number, y: number, r = 20): { x: number; y: number } {
+    const line = this.wallLine + r; if (y >= line) return { x, y };
+    const py = this.h.player.y; let ny = py + (py - y); if (ny < line) ny = line + 10 + Math.random() * 70;
+    return { x, y: ny };
+  }
+  /** 用户「还是有很多小兵穿过城墙」：碰撞框只推出最近的一边，快的 / 被击退的会从墙框北边出去；这里每帧把墙北的敌兵挪回墙南（城头的董卓、吕布、城头守军除外）。 */
+  private keepSouth(): void {
+    const line = this.wallLine;
+    for (const e of this.h.enemies()) {
+      if (!e.active || e.isSupplySlot || e === this.dongzhuo || e === this.lubu || e.def.behavior === 'wall' || e.y >= line + e.radius - .5) continue;
+      if (e.y < line - 90) { const f = this.southSpawn(e.x, e.y, e.radius); e.sprite.setPosition(f.x, f.y); } else e.sprite.y = line + e.radius;
+      this.metrics.pushedSouth++;
+    }
+    // 主将 / 随行：城墙两端绕过去也进不了城北（城墙等于无限长，用户「不用把玩家困在里面」——南边全开，只挡北边）
+    const p = this.h.player; if (p.y < line + p.radius) p.sprite.y = line + p.radius;
+    for (const a of this.h.allies()) if (a.active && a.y < line + a.radius) a.push(0, line + a.radius - a.y);
   }
   /** 镜头上让（GameScene.updateCamera 叠加，负数 = 往上）：董卓还在城头时，主将离城墙越近、镜头往上让得越多，最多 cameraLift（让城头的董卓 / 吕布进画面）。 */
   cameraBias(py: number): number {
@@ -266,6 +294,7 @@ export class DongzhuoLubu {
     const s = this.h.scene, now = this.h.now(), p = this.h.player, P = DZ_LUBU;
     if (this.phase === 'done') return;
     this.obstacles.resolve(p, this.h.allies(), this.h.enemies());
+    this.keepSouth();
     this.strikes.update();
     { const a = this.anim; if (a && a(s.time.now) && this.anim === a) this.anim = null; } // 动画里可能接着开下一段（逃走 → 下城），别把新的清掉
     const d = this.dongzhuo;

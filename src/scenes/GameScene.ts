@@ -1923,7 +1923,7 @@ export class GameScene extends Phaser.Scene {
   /** 武器优先目标（统一索敌，2026-11-16）：射程内首领 > 精锐，各取最近；都没有时返回 null，由武器自己找群怪 / 最近。关卡场景可覆盖（先打敌营）。 */
   protected priorityWeaponTarget(range:number,bodyRadius=true):Enemy|null{
     const px=this.player.x,py=this.player.y;let boss:Enemy|null=null,elite:Enemy|null=null,bd=Infinity,ed=Infinity;
-    for(const e of this.grid.query(px,py,range+60)){if(!e.active||e.isSupplySlot)continue;const d=Math.hypot(e.x-px,e.y-py)-(bodyRadius?e.radius:0);if(d>range)continue;
+    for(const e of this.grid.query(px,py,range+60)){if(!e.active||e.isSupplySlot||e.invulnerable)continue; /* 刀枪不入的（城头董卓、劝降中）不当首选目标 */const d=Math.hypot(e.x-px,e.y-py)-(bodyRadius?e.radius:0);if(d>range)continue;
       if(e.kind==='boss'&&d<bd){bd=d;boss=e;}else if(e.kind==='elite'&&d<ed){ed=d;elite=e;}}
     return boss??elite;
   }
@@ -2234,7 +2234,7 @@ export class GameScene extends Phaser.Scene {
     let best: Enemy | null = null;
     let bestDist = range * range;
     for (const enemy of this.enemies) {
-      if (!enemy.active || enemy === exclude || (ignored && ignored.has(enemy.spawnId))) continue;
+      if (!enemy.active || enemy.invulnerable || enemy === exclude || (ignored && ignored.has(enemy.spawnId))) continue;
       const dx = enemy.x - x, dy = enemy.y - y;
       const d = dx * dx + dy * dy;
       if (d < bestDist) {

@@ -6,6 +6,7 @@ import {thirdChapterUnlocked,arcUnlocked} from '../world/WorldStore';
 /** 群雄篇章节点：是否开放、未开放提示、进入的选关场景。 */
 const CAMPAIGNS={qunxiong:{open:()=>thirdChapterUnlocked(),hint:'通关虎牢关后解锁',scene:'ThirdChapterScene'},guandu:{open:()=>arcUnlocked('guandu'),hint:'平定群雄割据后解锁',scene:'GuanduChapterScene'},chibi:{open:()=>arcUnlocked('chibi'),hint:'官渡之战告捷后解锁',scene:'ChibiChapterScene'},yiling:{open:()=>arcUnlocked('yiling'),hint:'襄樊之战后解锁',scene:'YilingChapterScene'},nanzheng:{open:()=>arcUnlocked('nanzheng'),hint:'夷陵之战告捷后解锁',scene:'NanzhengChapterScene'},beifa:{open:()=>arcUnlocked('beifa'),hint:'南征告捷后解锁',scene:'BeifaChapterScene'},xiangfan:{open:()=>arcUnlocked('xiangfan'),hint:'汉中之战告捷后解锁',scene:'XiangfanChapterScene'},shu:{open:()=>arcUnlocked('shu'),hint:'平定荆南后解锁',scene:'ShuChapterScene'},jingnan:{open:()=>arcUnlocked('jingnan'),hint:'赤壁之战告捷后解锁',scene:'JingnanChapterScene'},hanzhong:{open:()=>arcUnlocked('hanzhong'),hint:'入蜀告捷后解锁',scene:'HanzhongChapterScene'}} as const;
 import {isChapterTestRun} from '../systems/ChapterProgress';
+import {requestDirectDepart} from '../systems/DirectDepart';
 import {worldUnlocked} from '../world/WorldStore';
 import Phaser from 'phaser';
 import {W,H,worldText,worldButton,worldShell,panel,worldAssets,releaseWorldArt} from '../world/WorldUI';
@@ -605,7 +606,7 @@ ${city.tier==='large'?'守城大将：'+siegeBossName(city,owner):'守军：'+FA
   if(this.nodeState(sel.node)==='locked')return;this.enterStage(info.id,undefined,hard);}
  private enterStage(id:TimelineChapterId,stage:number|undefined,hard:boolean){
   if(hard&&chapterState(id,loadWorld())==='cleared')this.registry.set('hardChapter',id);else this.registry.remove('hardChapter');
-  if(id==='qunxiong'||id==='guandu'||id==='chibi'||id==='jingnan'||id==='shu'||id==='hanzhong'||id==='xiangfan'||id==='yiling'||id==='nanzheng'||id==='beifa'){if(stage)this.registry.set('worldStagePick',stage);this.scene.start(CAMPAIGNS[id].scene);return;}
+  if(id==='qunxiong'||id==='guandu'||id==='chibi'||id==='jingnan'||id==='shu'||id==='hanzhong'||id==='xiangfan'||id==='yiling'||id==='nanzheng'||id==='beifa'){if(stage)this.registry.set('worldStagePick',stage);requestDirectDepart(this);this.scene.start(CAMPAIGNS[id].scene);return;}
   this.launchMain(id,stage);}
  /**
   * 第壹 / 贰章出征（2026-11-18 用户「应该不需要这个画面，因为只有主公可以出战」）：不再经点将页，直接以主公开战。
@@ -785,5 +786,5 @@ ${fail}`;
   this.registry.remove('campaignTransfer');this.registry.set('intelEvent',event.id);this.registry.set('runConfig',{character:hero});
   if(this.registry.get('battleReady'))this.scene.start('IntelGameScene');else{this.registry.set('pendingWarlord','IntelGameScene');this.registry.set('loadBattle',true);this.scene.start('BootScene');}
  }
- private enterNode(){if(this.selected.kind!=='node')return;const n=this.selected.node;if(n.campaign){const c=CAMPAIGNS[n.campaign];if(c.open()||isChapterTestRun())this.scene.start(c.scene);return;}if(n.kind==='home'){this.scene.start('CityScene');return;}if(!n.chapter||!chapterUnlocked(n.chapter))return;this.launchMain(n.chapter as TimelineChapterId);}
+ private enterNode(){if(this.selected.kind!=='node')return;const n=this.selected.node;if(n.campaign){const c=CAMPAIGNS[n.campaign];if(c.open()||isChapterTestRun()){requestDirectDepart(this);this.scene.start(c.scene);}return;}if(n.kind==='home'){this.scene.start('CityScene');return;}if(!n.chapter||!chapterUnlocked(n.chapter))return;this.launchMain(n.chapter as TimelineChapterId);}
 }

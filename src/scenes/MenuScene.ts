@@ -32,6 +32,7 @@ import { lqDivider, lqHitBox, lqPanel, lqSkin } from '../ui/LacquerKit';
 import { buildSettingsPanel, type SettingSpec } from '../ui/SettingsPanel';
 import { BARKS_LABEL, heroBarks, setHeroBarks, type HeroBarks } from '../systems/BattleSettings';
 import { CHAPTER_SCENES, openChapterSelect } from '../ui/ChapterSelect';
+import { requestDirectDepart } from '../systems/DirectDepart';
 import type { TimelineChapterId } from '../world/ChapterTimeline';
 
 const ROLES = ['游龙先锋 · 灵动突刺', '重甲武圣 · 横扫千军', '百步神射 · 远程压制', '卧龙军师 · 火阵爆发'];
@@ -222,7 +223,7 @@ export class MenuScene extends Phaser.Scene {
     this.homeSaveButton(navX(0),navRowY);
     if(IS_DESKTOP_APP)this.homeQuitButton(navX(4),navRowY);
     // 战役回顾：乱世编年（已平定的关显示史录，未打到的锁住）；“前往选关”沿用原入口。
-    text(navX(2),navRowY,'战役回顾',D?18:20,'#e5ccb0').setLetterSpacing(D?2:0).setPadding(16,16).setInteractive({useHandCursor:true}).setName('home-review').on('pointerdown',()=>{if(this.children.getByName('campaign-chronicle'))return;new CampaignChronicle(this,arc=>{if(arc==='qunxiong'){this.scene.start('ThirdChapterScene');return;}if(arc==='chibi'){this.scene.start('ChibiChapterScene');return;}if(arc==='guandu'){this.scene.start('GuanduChapterScene');return;}this.registry.set('menuChapterPicker',true);this.scene.restart();},(arc,stage)=>this.replayStage(arc,stage));});
+    text(navX(2),navRowY,'战役回顾',D?18:20,'#e5ccb0').setLetterSpacing(D?2:0).setPadding(16,16).setInteractive({useHandCursor:true}).setName('home-review').on('pointerdown',()=>{if(this.children.getByName('campaign-chronicle'))return;new CampaignChronicle(this,arc=>{if(arc==='qunxiong'){requestDirectDepart(this);this.scene.start('ThirdChapterScene');return;}if(arc==='chibi'){requestDirectDepart(this);this.scene.start('ChibiChapterScene');return;}if(arc==='guandu'){requestDirectDepart(this);this.scene.start('GuanduChapterScene');return;}this.registry.set('menuChapterPicker',true);this.scene.restart();},(arc,stage)=>this.replayStage(arc,stage));});
     text(navX(3),navRowY,'设置',D?18:20,'#e5ccb0').setLetterSpacing(4).setPadding(18,16).setInteractive({useHandCursor:true}).setName('home-settings').on('pointerdown',()=>this.openHomeSettings());
     text(navX(1),navRowY,'图鉴',D?18:20,'#e5ccb0').setLetterSpacing(4).setOrigin(.5,.5).setPadding(12,16).setInteractive({useHandCursor:true}).setName('home-codex').on('pointerdown',()=>{if(this.children.getByName('game-codex'))return;this.ensureHomeArt(true);new GameCodex(this,index=>{if(!heroOwned(CHARACTERS[index].id))return;this.selectedChar=index;this.registry.set('heroConfirmed',true);try{localStorage.setItem('im_last_hero',CHARACTERS[index].id);}catch{}this.renderSelection();});});
     // 成就入口（右上角；天下已开时排在主城 / 天下地图左侧）
@@ -272,7 +273,7 @@ export class MenuScene extends Phaser.Scene {
       this.startGame();return;
     }
     const key=CHAPTER_SCENES[id];if(!key)return;
-    this.registry.remove('campaignTransfer');if(stage)this.registry.set('worldStagePick',stage);
+    this.registry.remove('campaignTransfer');if(stage)this.registry.set('worldStagePick',stage);requestDirectDepart(this);
     this.cameras.main.fadeOut(150,0,0,0);this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE,()=>this.scene.start(key));
   }
   /** DEV-only direct entry; campaign unlocks and persistent progress stay untouched. */

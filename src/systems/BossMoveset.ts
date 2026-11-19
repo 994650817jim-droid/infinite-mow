@@ -10,6 +10,7 @@ import type { BossDebug } from './BossKit';
 import { BossMount } from './BossMount';
 import { emitBossPhase } from './BossPhase';
 import { warnFx } from '../ui/WarnFx';
+import { ensureBossTheme, playThemeFx, themeOf, themeShake, type BossTheme } from './BossThemeFx';
 
 type Shape = { kind: 'circle'; x: number; y: number; r: number; inner?: number; fx: 'slam' | 'arrows' | 'fire' }
   | { kind: 'lane'; x: number; y: number; angle: number; len: number; width: number }
@@ -33,6 +34,9 @@ export class BossMoveset extends ArcBossV2<string> {
   dmgMul = 1; gapMul = 1; summonMul = 1; readonly defDamage = true;
   readonly metrics: Record<string, number> = { moves: 0, phase2: 0, dismount: 0, playerHits: 0, troopHits: 0 };
   private moveNames: string[] = [];
+  /** 主题特效组（BossThemeFx）：按首领 id 取；没图时退回通用 shapeImpact。 */
+  private readonly theme: BossTheme | null;
+  private trailAt = 0;
   readonly debug: BossDebug = {
     moves: this.moveNames,
     force: (i, now) => { const m = this.phaseDef.moves[i % this.phaseDef.moves.length]; if (m) { this.cds.set(m.name, 0); this.beat.set(null, 'idle', now, 0); this.dash = null; this.ride = null; this.start(m, now); } },
@@ -40,6 +44,7 @@ export class BossMoveset extends ArcBossV2<string> {
   };
   constructor(h: ArcHost, tex: string, now: number, readonly def: BossMovesetDef, private mode: 'arc' | 'walk' = 'arc') {
     super(h, tex, def.name, now);
+    this.theme = themeOf(def.id); ensureBossTheme(h.scene, this.theme);
     this.moveNames.push(...def.p1.moves.map(m => m.name));
     if (def.mount) this.mount = new BossMount(h.scene, h.boss, { ...def.mount, rider: def.mount.rider ?? def.id }, () => this.state === 'warn' || this.state === 'attack');
     this.next = now + 1800;
@@ -118,9 +123,10 @@ export class BossMoveset extends ArcBossV2<string> {
   private release(now: number): void {
     const m = this.cur!, b = this.h.boss, p = this.h.player;
     switch (m.kind) {
-      case 'charge': this.dash = { ax: Math.cos(this.angle), ay: Math.sin(this.angle), t0: now, ms: m.dashMs, hitPlayer: false, back: !!m.back, len: m.len, fireAt: now, hitTroops: new Set() }; return;
+      case 'charge': playThemeFx(this.h.scene, this.theme, { kind: 'lane', x: b.x, y: b.y, angle: this.angle, len: m.len, width: m.width }, { ms: m.dashMs + 120, alpha: .8 });   // 主题冲击带：冲锋一开始铺在冲锋道上，跟着首领冲过去
+        this.dash = { ax: Math.cos(this.angle), ay: Math.sin(this.angle), t0: now, ms: m.dashMs, hitPlayer: false, back: !!m.back, len: m.len, fireAt: now, hitTroops: new Set() }; return;
       case 'ride': { const a0 = Math.atan2(b.y - p.y, b.x - p.x); this.ride = { a0, t0: now, ms: m.ms, dropAt: now, drops: 0, cx: p.x, cy: p.y, dir: Math.random() < .5 ? 1 : -1 }; return; }
-      case 'vanish': { this.hideUntil = now + m.hideMs; this.beat.set(m.name, 'release', now, m.hideMs); this.h.scene.time.delayedCall(m.hideMs, () => this.reappear(m)); return; }
+      case 'vanish': { playThemeFx(this.h.scene, this.theme, { kind: 'puff', x: b.x, y: b.y, size: 150 }); this.hideUntil = now + m.hideMs; this.beat.set(m.name, 'release', now, m.hideMs); this.h.scene.time.delayedCall(m.hideMs, () => this.reappear(m)); return; }
       case 'summon': for (let k = 0, n = this.summonCount(m.count); k < n; k++) { const c = m.around === 'player' ? p : b, ang = k / n * Math.PI * 2; this.h.spawn(m.troop, c.x + Math.cos(ang) * m.radius, c.y + Math.sin(ang) * m.radius * .8); } break;
       case 'flags': this.plantFlags(m); break;
       default: break;
@@ -131,7 +137,7 @@ export class BossMoveset extends ArcBossV2<string> {
   private reappear(m: Extract<MoveDef, { kind: 'vanish' }>): void {
     const b = this.h.boss, p = this.h.player; if (!b.active || this.gone) return;
     const side = Math.random() < .5 ? 1 : -1, a = Math.atan2(p.y - b.y, p.x - b.x) + Math.PI / 2 * side;
-    b.sprite.x = p.x + Math.cos(a) * 110; b.sprite.y = p.y + Math.sin(a) * 80;
+    b.sprite.x = p.x + Math.cos(a) * 110; b.sprite.y = p.y + Math.sin(a) * 80; playThemeFx(this.h.scene, this.theme, { kind: 'puff', x: b.sprite.x, y: b.sprite.y, size: 150 });
     const now = this.kit.now, aim = Math.atan2(p.y - b.sprite.y, p.x - b.sprite.x); this.angle = aim;
     this.add({ kind: 'sector', x: b.sprite.x, y: b.sprite.y, r: meleeReach(m.r), angle: aim, arc: m.arc }, now, now + 420, m.dmg);
     this.h.banner('现身突刺', '侧面来袭 · 快闪开');
@@ -161,6 +167,7 @@ export class BossMoveset extends ArcBossV2<string> {
       d.hitTroops.add(u);
       if (this.h.army.hurtByCharge(u, now, d.t0)) { this.metrics.troopHits++; if (u.active) { const side = (u.x - b.x) * -d.ay + (u.y - b.y) * d.ax >= 0 ? 1 : -1; u.setPosition(u.x - d.ay * side * BOSS_CHARGE.knock + d.ax * 8, u.y + d.ax * side * BOSS_CHARGE.knock + d.ay * 8); } }
     }
+    if (this.theme && now >= this.trailAt) { this.trailAt = now + 90; playThemeFx(this.h.scene, this.theme, { kind: 'puff', x: b.x - d.ax * 26, y: b.y - d.ay * 26 + 4, size: 90 }, { ms: 360, alpha: .75 }); }
     if (m.fire && now >= d.fireAt) { d.fireAt = now + 120; this.add({ kind: 'circle', x: b.x, y: b.y, r: 40, fx: 'fire' }, now, now + 380, m.dmg * .5); }
     if (now - d.t0 >= d.ms) {
       if (d.back) { const a = Math.atan2(p.y - b.y, p.x - b.x); this.angle = a; this.dash = { ...d, ax: Math.cos(a), ay: Math.sin(a), t0: now + 380, back: false, hitPlayer: false, hitTroops: new Set() }; this.add({ kind: 'lane', x: b.x, y: b.y, angle: a, len: d.len, width: m.width }, now, now + 380, 0, true); this.beat.set(m.name, 'windup', now, 380); this.dash = null; this.cur = { ...m, back: false, windupMs: 380 }; this.h.banner('折返再冲'); return; }
@@ -243,13 +250,16 @@ export class BossMoveset extends ArcBossV2<string> {
       }
       this.hazards.splice(i, 1);
       if (z.visualOnly) continue;
-      if (s.kind === 'circle') wf.shapeImpact(z.id, s.fx, s.x, s.y, s.r * 2, 0, now); else if (s.kind === 'lane') wf.shapeImpact(z.id, 'charge', s.x, s.y, s.len, s.angle, now, s.width); else wf.shapeImpact(z.id, 'sweep', s.x, s.y, s.r, s.angle, now);
+      const themed = s.kind === 'circle' ? playThemeFx(this.h.scene, this.theme, { kind: 'circle', x: s.x, y: s.y, r: s.r })
+        : s.kind === 'lane' ? playThemeFx(this.h.scene, this.theme, { kind: 'lane', x: s.x, y: s.y, angle: s.angle, len: s.len, width: s.width })
+        : playThemeFx(this.h.scene, this.theme, { kind: 'sector', x: s.x, y: s.y, r: s.r, angle: s.angle });
+      if (!themed) { if (s.kind === 'circle') wf.shapeImpact(z.id, s.fx, s.x, s.y, s.r * 2, 0, now); else if (s.kind === 'lane') wf.shapeImpact(z.id, 'charge', s.x, s.y, s.len, s.angle, now, s.width); else wf.shapeImpact(z.id, 'sweep', s.x, s.y, s.r, s.angle, now); }
       const inside = (x: number, y: number, pad: number): boolean => {
         if (s.kind === 'circle') { const d = Math.hypot(x - s.x, y - s.y); return d <= s.r + pad && d >= (s.inner ?? 0) - pad; }
         if (s.kind === 'lane') { const dx = x - s.x, dy = y - s.y, along = dx * Math.cos(s.angle) + dy * Math.sin(s.angle), across = Math.abs(-dx * Math.sin(s.angle) + dy * Math.cos(s.angle)); return along >= -pad && along <= s.len + pad && across <= s.width / 2 + pad; }
         const d = Math.hypot(x - s.x, y - s.y), da = Math.abs(Phaser.Math.Angle.Wrap(Math.atan2(y - s.y, x - s.x) - s.angle)); return d <= s.r + pad && da <= s.arc / 2;
       };
-      if (p.alive && inside(p.x, p.y, p.radius * .5)) { p.takeDamage(b.def.damage * z.dmg * this.dmgMul, now); this.metrics.playerHits++; }
+      if (p.alive && inside(p.x, p.y, p.radius * .5)) { p.takeDamage(b.def.damage * z.dmg * this.dmgMul, now); this.metrics.playerHits++; if (this.theme) themeShake(this.h.scene, z.dmg >= 1.6); }
       const cx = s.kind === 'lane' ? s.x + Math.cos(s.angle) * s.len / 2 : s.x, cy = s.kind === 'lane' ? s.y + Math.sin(s.angle) * s.len / 2 : s.y;
       this.h.army.hurtArea(cx, cy, s.kind === 'lane' ? s.len / 2 : s.r, b.def.damage * z.dmg * .6 * this.dmgMul, now, s.kind === 'sector' ? s.angle : undefined, s.kind === 'sector' ? s.arc : undefined);
     }

@@ -295,3 +295,4 @@ assets/raw/*
 !/tools/prepare-black-fx.mjs
 !/tools/test-knife-fx.mjs
 !/tools/record-zhurong-throw.mjs
+!/tools/shot-boss-theme.mjs

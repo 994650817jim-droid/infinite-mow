@@ -81,6 +81,8 @@ export class RunGrowth {
   gear: GearStats = emptyGear();
   /** 生命低于 35%（由 Player.update 每帧更新），供名器「背水 / 踏风」判断。 */
   lowHp = false;
+  /** 赌命「背嵬」（本关）：生命低于一半时伤害 ×(1 + stageDesperate)。 */
+  stageDesperate = 0;
   private xpCarry = 0;
   /** 名器「饮血」下次可触发的时刻。 */
   killHealAt = 0;
@@ -125,7 +127,16 @@ export class RunGrowth {
   get spearPierceLevel(): number { return this.masteries.cloud_pierce; }
   /** 张飞同用长枪，与赵云共用两项枪术专精。 */
   owns(id: MasteryId): boolean { const c = MARTIALS[id].character as string; return c === this.character; } // 2026-11-16 起每位武将只用自己的专属武学
-  canLearn(id: MasteryId): boolean { return this.owns(id) && this.masteries[id] < 3; }
+  /**
+   * 2026-11-19 永久成长分章开放（wave-progression-redesign.md §4.5）：武艺第六章起可精熟到 Lv4、第十章起 Lv5。
+   * 精熟不改武艺本身（各武器按 1–3 级查表），每层另给全伤害 +4%；层数记在 masteryExtra，随征程构筑保存。
+   * extraCap 由战斗场景按章节设。
+   */
+  static extraCap = 0;
+  static extraCapFor(chapter: number): number { return chapter >= 10 ? 2 : chapter >= 6 ? 1 : 0; }
+  masteryExtra: Partial<Record<MasteryId, number>> = {};
+  masteryRank(id: MasteryId): number { return this.masteries[id] + (this.masteryExtra[id] ?? 0); }
+  canLearn(id: MasteryId): boolean { return this.owns(id) && (this.masteries[id] < 3 || (this.masteryExtra[id] ?? 0) < RunGrowth.extraCap); }
 
   addAttributePoints(amount = 2): void { this.unallocated = Math.min(Object.values(this.attributes).reduce((n,level)=>n+this.attrMax-level,0),this.unallocated+Math.max(0, Math.floor(amount))); }
 
@@ -140,7 +151,7 @@ export class RunGrowth {
 
   learn(id: MasteryId): boolean {
     if (!this.canLearn(id)) return false;
-    this.masteries[id] += 1;
+    if (this.masteries[id] < 3) this.masteries[id] += 1; else this.masteryExtra[id] = (this.masteryExtra[id] ?? 0) + 1;
     return true;
   }
 
@@ -151,7 +162,8 @@ export class RunGrowth {
 
   damageMultiplier(now: number): number {
     const might = (1 + ATTRIBUTE_EFFECT.strength.damage * this.pts('strength')) * (1 + this.primaryBonus());
-    const fury = this.lowHp && this.gear.specials.includes('fury') ? 1.25 : 1;
+    const mastered = 1 + .04 * Object.values(this.masteryExtra).reduce((n: number, v) => n + (v ?? 0), 0); // 武艺精熟
+    const fury = mastered * (this.lowHp && this.gear.specials.includes('fury') ? 1.25 : 1) * (this.lowHp && this.stageDesperate ? 1 + this.stageDesperate : 1);
     const wine = now < this.wineUntil && this.gear.specials.includes('jiuhu') ? 1.4 : 1; // 遗珍「乌巢酒葫」（BossRelics.RELIC.jiuhuDamage）
     return Math.min(2, might * (now < this.berserkUntil ? 1.25 : 1) * (1 + this.permanentDamage) * (1 + this.gear.damage) * (1 + this.temperDamage)) * fury * wine;
   }

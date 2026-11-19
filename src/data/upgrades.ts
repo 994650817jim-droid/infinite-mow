@@ -151,7 +151,7 @@ export function martialDescription(id:MasteryId,level:number):string {
  return descriptions[id];
 }
 function martialOption(id:MasteryId,level:number):UpgradeOption {
- const n=level+1;return {id:'martial_'+id+'_'+n,name:MARTIALS[id].name+' · Lv.'+n,desc:martialDescription(id,n),kind:'martial',categoryLabel:'专属武艺',apply:(_p,_w,g)=>{g?.learn(id);}};
+ const n=level+1;return {id:'martial_'+id+'_'+n,name:MARTIALS[id].name+' · Lv.'+n,desc:n>=4?'精熟 Lv.'+n+'：全伤害 +4%\n（武艺效果已满，同 Lv.3）':martialDescription(id,n),kind:'martial',categoryLabel:n>=4?'专属武艺 · 精熟':'专属武艺',apply:(_p,_w,g)=>{g?.learn(id);}};
 }
 
 
@@ -197,7 +197,7 @@ export function buildUpgradeOptions(player: Player, weapons: WeaponState[], grow
   const ownWeaponId = getCharacter(growth.character).startWeapon;
   const ownWeapon = weapons.find(weapon => weapon.id === ownWeaponId);
   if (ownWeapon && ownWeapon.level < WEAPON_DEFS[ownWeaponId].maxLevel) pool.push(weaponUpgrade(ownWeapon, player));
-  for (const id of Object.keys(MARTIALS) as MasteryId[]) if (growth.canLearn(id)) pool.push(martialOption(id,growth.masteries[id]));
+  for (const id of Object.keys(MARTIALS) as MasteryId[]) if (growth.canLearn(id)) pool.push(martialOption(id,growth.masteryRank(id)));
   // 属性点改为每次升级自动 +1（Player.gainXp），三选一不再出现「通脉修习」
   // Reserve a core progression choice whenever one remains available.
   const core=pool.length?shuffle(pool)[0]:undefined;
@@ -232,6 +232,8 @@ export function buildUpgradeOptions(player: Player, weapons: WeaponState[], grow
   const final=[guaranteed,...picked.slice(0,2)];
   // 2026-11-19 新卡池（wave-progression-redesign.md §4.2）：固本培元一类的保底卡、以及按概率的战法位，换成新卡（战场机缘 / 锦囊 / 兵源 / 军资 / 心法）
   if(extra){const slots:number[]=[];final.forEach((o,i)=>{if(o.kind==='foundation'||(i>0&&o.kind==='tactic'&&Math.random()<extra.replaceChance))slots.push(i);});
+    // 不出「三张都没用的」：核心位已不是永久成长时，至少留一张战法（2026-11-19 池子深度）
+    if(final[0].kind==='foundation'){const keep=slots.filter(i=>i>0&&final[i].kind==='tactic');if(keep.length&&keep.length===final.filter((o,i)=>i>0&&o.kind==='tactic').length)slots.splice(slots.indexOf(keep[0]),1);}
     if(slots.length){const fresh=extra.draw(slots.length);slots.forEach((k,j)=>{if(fresh[j])final[k]=fresh[j];});}}
   return shuffle(final);
 }

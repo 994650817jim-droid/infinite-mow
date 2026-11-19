@@ -108,6 +108,41 @@ await stageCase('3-2 宛城夜袭（ThirdGameScene）', { key: 'ThirdGameScene',
   ck('P4 锦囊：右侧锦囊钮「锦囊 · 擂鼓」，R 键使用 → 10 秒狂战，钮收起', j0.shown && /擂鼓/.test(j0.caption ?? '') && !j0.berserk && j1.held === null && !j1.shown && j1.berserk && /锦囊 · 擂鼓/.test(j1.banner ?? ''), { j0, j1 });
   await p.close();
 }
+// P4b：更多新卡（名将来投 / 赌命 / 悬赏 / 信物 / 锦囊 8 种 / 乘胜追击）、按章权重、永久成长分章（武艺精熟、第 7 格）
+{
+  const p = await open({ key: 'GameScene', run: { chapter: 'hulao', westStage: 2 } });
+  await p.evaluate(() => window.__calm());
+  const w = await p.evaluate(async () => { const LC = await import('/src/systems/LevelCards.ts'), s = window.__S; const kinds = ch => { const set = new Set(); const plan = s.phasePlan, old = plan.chapter; plan.chapter = ch; const src = s.newCardSource(); for (let i = 0; i < 60; i++) for (const o of src.draw(3)) set.add(LC.newCardKind(o)); plan.chapter = old; return [...set]; }; return { ch2: kinds(2), ch9: kinds(9) }; });
+  ck('P4b 按章权重：第二章不出名将来投 / 悬赏，第九章出得来名将来投 / 赌命 / 悬赏', !w.ch2.includes('general') && !w.ch2.includes('bounty') && ['general', 'gamble', 'bounty'].every(k => w.ch9.includes(k)), w);
+  // 锦囊 8 种都能用
+  const jn = await p.evaluate(async () => { const s = window.__S, out = {}; for (const id of ['ambush', 'gong', 'feint', 'drum', 'fire', 'empty', 'arrows', 'chain']) { s.jinnang = id; s.paintJinnang(); out[id] = s.useJinnang(); } return { out, invuln: s.player.invulnUntil > s.combatNow, arrows: s.arrows.until > s.combatNow, chain: s.chain.set.size, held: s.jinnang }; });
+  ck('P4b 锦囊 8 种（伏兵 / 鸣金 / 疑兵 / 擂鼓 / 火计 / 空城计 / 草船借箭 / 连环计）都能用；空城计无敌、草船借箭计时、连环计连住敌兵', Object.values(jn.out).every(Boolean) && jn.invuln && jn.arrows && jn.held === null, jn);
+  await p.evaluate(() => { window.__S.arrows.until = window.__S.combatNow + 50; }); await p.waitForTimeout(400);
+  const ar = await p.evaluate(() => ({ banner: window.__banners.slice(-3).join(' / '), until: window.__S.arrows.until }));
+  ck('P4b 草船借箭期满：放箭雨', ar.until === 0 && /草船借箭 · 箭雨/.test(ar.banner), ar);
+  // 赌命：孤注一掷只在本关
+  const gm = await p.evaluate(async () => { const s = window.__S, ce = await import('/src/systems/CharmEffects.ts'); const hp0 = s.player.maxHp, packed0 = JSON.stringify(ce.statsWithoutCharms(s.player)); s.takeGamble('allin'); s.takeGamble('beiwei'); return { hpDrop: hp0 - s.player.maxHp, packedSame: JSON.stringify(ce.statsWithoutCharms(s.player)) === packed0, desperate: s.player.growth.stageDesperate }; });
+  ck('P4b 赌命：孤注一掷生命上限 −15%、伤害 +25%（征程构筑不带走）；背嵬生效', gm.hpDrop > 0 && gm.packedSame && gm.desperate === .3, gm);
+  // 悬赏破锐：接下后击杀 8 名精锐 → 随军粮 +60
+  const bt = await p.evaluate(() => { const s = window.__S, food0 = s.legion.food; s.bounties.elites = { elites: 0 }; for (let i = 0; i < 8; i++) { const e = s.spawnEnemy('elite', s.player.x + 200, s.player.y, 1, true); if (e) { e.hp = 0; s.killEnemy(e); } } return { food: s.legion.food - food0, banner: window.__banners.slice(-2).join(' / ') }; });
+  ck('P4b 悬赏 · 破锐：击杀 8 名精锐 → 随军粮 +60（另含精锐自身掉粮）、信物一件', bt.food >= 60 && /破锐 达成/.test(bt.banner), bt);
+  // 名将来投
+  const gj = await p.evaluate(() => { const s = window.__S; s.generalJoins('孙坚', 7, 45000); const tag = s.children.getByName('general-tag'); return { tag: tag?.text, banner: window.__banners.slice(-1)[0] }; });
+  ck('P4b 名将来投：一队义军 + 「来投 · 孙坚」名牌', /孙坚/.test(gj.tag ?? '') && /名将来投 · 孙坚/.test(gj.banner ?? ''), gj);
+  // 首领宝箱那次：信物卡；换一批本关免费一次
+  const ch = await p.evaluate(() => { const s = window.__S; s.chestPick = true; s.pendingLevels += 1; s.militaryPending += 1; s.openUpgrade(); const has = s.upgradeOptions.some(o => o.id === 'charm_card'); const btn = s.rerollButton?.text; s.chooseUpgrade(0); window.__calm(); return { has, btn }; });
+  ck('P4b 首领宝箱那次三选一必有一张信物；换一批本关第一次免费', ch.has && /本关免费一次/.test(ch.btn ?? ''), ch);
+  // 永久成长分章：武艺精熟、第 7 个战法格
+  const pm = await p.evaluate(async () => { const RG = (await import('/src/systems/RunGrowth.ts')).RunGrowth, bd = await import('/src/data/builds.ts'), B = bd.BuildState; const g = new RG('zhaoyun'), id = 'dragon_gallop'; const caps = [5, 6, 10].map(RG.extraCapFor), slots = [5, 6].map(B.slotCapFor);
+    for (let i = 0; i < 5; i++) g.learn(id); const at0 = { m: g.masteries[id], x: g.masteryExtra[id] ?? 0 }; const d0 = g.damageMultiplier(0); RG.extraCap = 1; g.learn(id); const d1 = g.damageMultiplier(0); RG.extraCap = 0;
+    const b = new B(), ts = Object.keys(bd.TACTICS).filter(t => !bd.TACTICS[t].general && !bd.TACTICS[t].hidden && bd.TACTICS[t].tag); for (const t of ts.slice(0, 7)) b.learn(t); const six = b.slots(); B.slotCap = 7; b.learn(ts[6]); const seven = b.slots(); B.slotCap = 6;
+    return { caps, slots, at0, rank: g.masteryRank(id), dmg: +(d1 / d0).toFixed(3), six, seven }; });
+  ck('P4b 永久成长分章：武艺第六章精熟 Lv4、第十章 Lv5（每层全伤害 +4%）；第六章起第 7 个战法格', pm.caps.join() === '0,1,2' && pm.slots.join() === '6,7' && pm.at0.m === 3 && pm.at0.x === 0 && pm.rank === 4 && pm.dmg === 1.04 && pm.six === 6 && pm.seven === 7, pm);
+  // 截图：第九章的三选一（新卡里有名将来投 / 赌命 / 悬赏）
+  await p.evaluate(() => { const s = window.__S; s.phasePlan.chapter = 9; const ns = s.newCardSource.bind(s); s.newCardSource = () => ({ ...ns(), replaceChance: 1 }); s.pendingLevels += 1; s.militaryPending += 1; s.openUpgrade(); });
+  await p.waitForTimeout(1200); await p.screenshot({ path: `${OUT}/new-cards-ch9.png` });
+  await p.close();
+}
 await b.close();
 ck('无页面报错', errors.length === 0, errors.slice(0, 4));
 console.log(fail ? `FAILED ${fail}` : 'ALL PASS');

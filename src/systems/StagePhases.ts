@@ -34,7 +34,7 @@ export class StagePhaseRunner {
   private phase = -1; private calmUntil = -1;
   private lt?: { e: Enemy; life: number; name: string; tag: Phaser.GameObjects.Text; bar: Phaser.GameObjects.Graphics; down: boolean };
   /** 测试用。 */
-  readonly stats = { phase: -1, elites: 0, ambush: 0, lieutenant: '' as string, lieutenantHp: 0, lieutenantDown: false };
+  readonly stats = { phase: -1, elites: 0, ambush: 0, lieutenant: '' as string, lieutenantHp: 0, lieutenantDown: false, lieutenantAt: -1 };
 
   constructor(private readonly h: PhaseHost, readonly plan: PhasePlan) {}
 
@@ -84,7 +84,7 @@ export class StagePhaseRunner {
     const tag = s.add.text(e.x, e.y, '副将 · ' + name, { fontFamily: FONT, fontSize: '13px', color: '#ffd98a', resolution: 2, stroke: '#2a0c06', strokeThickness: 4 }).setOrigin(.5, 1).setDepth(DEPTH.dmgText - 1).setName('lieutenant-tag');
     const bar = s.add.graphics().setDepth(DEPTH.dmgText - 1).setName('lieutenant-bar');
     this.lt = { e, life: e.spawnId, name, tag, bar, down: false };
-    this.stats.lieutenant = name; this.stats.lieutenantHp = Math.round(e.maxHp);
+    this.stats.lieutenant = name; this.stats.lieutenantHp = Math.round(e.maxHp); this.stats.lieutenantAt = this.h.elapsed();
   }
 
   /** 每帧：副将名牌 / 血条跟随；倒下时通知场景。 */

@@ -93,11 +93,14 @@ export class BuildState {
   */
  static rankCap = 3;
  static rankCapFor(chapter: number): number { return chapter >= 9 ? 5 : chapter >= 5 ? 4 : 3; }
+ /** 战法格数：第六章起 7 格（永久成长分章开放）。 */
+ static slotCap = 6;
+ static slotCapFor(chapter: number): number { return chapter >= 6 ? 7 : 6; }
  rank(id: TacticId): number { return this.tactics[id] ?? 0; }
  level(id: TacticId): number { return Math.min(3, this.rank(id)); }
  /** 占战法格的种数（基础成长不占）。 */
  slots(): number { return (Object.keys(this.tactics) as TacticId[]).filter(id => TDEF[id] && !TDEF[id].general && this.rank(id) > 0).length; }
- canLearn(id: TacticId): boolean { const d = TDEF[id]; if (!d || d.hidden) return false; const cap = d.general ? 3 : BuildState.rankCap; return this.rank(id) < cap && (this.rank(id) > 0 || !!d.general || this.slots() < 6); }
+ canLearn(id: TacticId): boolean { const d = TDEF[id]; if (!d || d.hidden) return false; const cap = d.general ? 3 : BuildState.rankCap; return this.rank(id) < cap && (this.rank(id) > 0 || !!d.general || this.slots() < BuildState.slotCap); }
  learn(id: TacticId): boolean { if (!this.canLearn(id)) return false; this.tactics[id] = this.rank(id) + 1; return true; }
  /** 各派的势。 */
  tags(): Record<BuildTag, number> {
@@ -117,7 +120,7 @@ export class BuildState {
   this.manuals = [...new Set((Array.isArray(data?.manuals) ? data.manuals : []).filter(s => SCHOOL_IDS.includes(s)))]; }
  label(): string {
   const t = this.tags();
-  return `战法 ${this.slots()}/6\n` + (Object.keys(this.tactics) as TacticId[]).map(id => TACTICS[id].name + ' Lv' + this.level(id)).join(' · ') + '\n'
+  return `战法 ${this.slots()}/${BuildState.slotCap}\n` + (Object.keys(this.tactics) as TacticId[]).map(id => TACTICS[id].name + ' Lv' + this.level(id)).join(' · ') + '\n'
    + SCHOOL_IDS.filter(s => t[s] > 0).map(s => `${SCHOOLS[s].name} 势${t[s]}`).join('  ');
  }
 }

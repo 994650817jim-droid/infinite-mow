@@ -56,11 +56,18 @@ const killBoss = async p => {
   await p.screenshot({ path: `${OUT}/small-1-outside.png` });
   ck(`小城（${city}）：城外段，1 座箭楼、没有冲车、目标「砍破木门」`, g0.mid?.tier === 'small' && g0.mid.phase === 'outside' && g0.towers === 1 && !g0.mid.ram && /木门/.test(g0.text), { mid: g0.mid && { tier: g0.mid.tier, phase: g0.mid.phase, ram: g0.mid.ram }, towers: g0.towers, text: g0.text });
   const chop = await p.evaluate(() => { window.__clear(); const ok = window.__chop(0, -470); return { ok, gate: window.__M.gateHp }; });
+  // 攻城城内段改造（用户 11-18）：小城也有城内段（丁字街），3 处要点占 2 处开县衙
+  const inSt = await waitPhase(p, 'street');
+  await step(p, 60);
+  const st = await p.evaluate(() => { const m = window.__M; return { n: m.points.length, need: m.city.need, goal: window.__S.children.getByName('siege-goal')?.text }; });
+  await p.screenshot({ path: `${OUT}/small-2-street.png` });
+  ck('小城：砍破木门 → 进城内（丁字街）：3 处要点，占 2 处开县衙', inSt && st.n === 3 && st.need === 2 && (st.goal ?? '').includes('要点 0/2'), st);
+  await p.evaluate(() => { const m = window.__M; m.points[0].state = 'secured'; m.points[1].state = 'secured'; });
   const toHall = await waitPhase(p, 'hall');
   await step(p, 80);
   const h = await p.evaluate(() => { const s = window.__S, b = s.boss; return { phase: window.__M.phase, boss: !!b?.active, hp: b?.maxHp, name: s.chapter.bossName, goal: s.children.getByName('siege-goal')?.text, py: Math.round(s.player.y) }; });
-  await p.screenshot({ path: `${OUT}/small-2-hall.png` });
-  ck('小城：主将砍破木门 → 不走巷战，直接转场到县衙，县尉出场', chop.ok && chop.gate === 0 && toHall && h.boss && /县衙/.test(h.goal) && /县尉/.test(h.goal), { chop, h });
+  await p.screenshot({ path: `${OUT}/small-3-hall.png` });
+  ck('小城：占够 2 处要点 → 县衙门开 → 转场到县衙，县尉出场', chop.ok && chop.gate === 0 && toHall && h.boss && /县衙/.test(h.goal) && /县尉/.test(h.goal), { chop, h });
   const ph2 = await p.evaluate(() => { const s = window.__S; s.boss.hp = s.boss.maxHp * .3; window.__step(30); return window.__M.bossInfo; });
   ck('小城：县尉半血以下也不进二阶段（只有横扫）', ph2.phase2 === false, ph2);
   const end = await killBoss(p);

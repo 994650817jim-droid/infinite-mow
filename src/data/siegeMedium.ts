@@ -107,7 +107,7 @@ export interface SiegeProfile {
   bossHpMul: number;
 }
 export const SIEGE_PROFILES: Record<'small' | 'medium' | 'large', SiegeProfile> = {
-  small: { phases: ['outside', 'hall'], towers: [{ x: 300 }], gateHp: 520, ram: false, volleyMul: .6, hall: { name: '县衙', guardsEveryMs: 20000, guardCount: 2, phase2: false }, limitSeconds: 240, bossHpMul: 1.4 },
+  small: { phases: ['outside', 'street', 'hall'], /* 攻城城内段改造（用户 11-18）：小城也加城内段（丁字街） */ towers: [{ x: 300 }], gateHp: 520, ram: false, volleyMul: .6, hall: { name: '县衙', guardsEveryMs: 20000, guardCount: 2, phase2: false }, limitSeconds: 240, bossHpMul: 1.4 },
   medium: { phases: ['outside', 'street', 'hall'], towers: MID_SIEGE.outside.towers, gateHp: MID_SIEGE.outside.gate.hp, ram: true, volleyMul: 1, hall: { name: '府衙', guardsEveryMs: MID_SIEGE.hall.guardsEveryMs, guardCount: MID_SIEGE.hall.guardCount, phase2: true }, limitSeconds: MID_SIEGE.limitSeconds, bossHpMul: 1 },
   large: { phases: ['outside', 'barbican', 'street', 'hall'], towers: [{ x: -440 }, { x: -250 }, { x: 330 }], gateHp: 2100, ram: true, volleyMul: 1.35, hall: { name: '内城', guardsEveryMs: 13000, guardCount: 4, phase2: true }, limitSeconds: 600, bossHpMul: 1.25 },
 };

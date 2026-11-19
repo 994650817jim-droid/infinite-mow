@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { takeDirectDepart } from '../systems/DirectDepart';
 import {defaultHero,heroOwned,LOCKED_HINT} from '../systems/RosterStore';
 import {playMenuMusic} from '../systems/Music';
 import {GUANDU_STAGES, GUANDU_PLAYABLE, GUANDU_ATLAS_FILES, type GuanduStage} from '../data/guanduChapter';
@@ -34,6 +35,8 @@ export class GuanduChapterScene extends Phaser.Scene {
     this.selected = Math.min(GUANDU_PLAYABLE, arcStages('guandu') + 1) as GuanduStage;
     { const pick = Number(this.registry.get('worldStagePick')); this.registry.remove('worldStagePick'); if ([1, 2, 3].includes(pick) && pick <= GUANDU_PLAYABLE && this.open(pick)) this.selected = pick as GuanduStage; }
     try { this.hero = defaultHero(localStorage.getItem('im_last_hero')); } catch { this.hero = defaultHero(null); }
+    // 2026-11-19：电脑版从天下地图 / 选关 / 战役回顾出征时直接以主公开战（见 systems/DirectDepart.ts）
+    if (takeDirectDepart(this)) { this.depart(); return; }
     this.cameras.main.setBackgroundColor('#1a1813');
     const g = this.add.graphics(); g.fillStyle(0x2b2619, .6);
     for (let i = 0; i < 8; i++) g.fillTriangle(i * W / 6 - 140, H * .62, i * W / 6 + 80, H * .26 + (i % 3) * 40, i * W / 6 + 290, H * .62);

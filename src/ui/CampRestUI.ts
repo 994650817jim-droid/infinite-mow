@@ -214,7 +214,7 @@ export class CampRestUI {
   this.shop??=new MerchantShop(this.scene,{tooltip:this.itemTip,
    stock:()=>this.stock!,
    wallet:{name:'随军粮',get:()=>this.army.food,spend:n=>{if(this.army.food<n)return false;this.army.food-=n;return true;}},
-   tactics:{canBuy:o=>!!campOption(o,this.player),learn:o=>{const op=campOption(o,this.player);if(!op)return false;op.apply(this.player,this.player.weapons,this.player.growth);return true;},afterBuy:()=>this.onLearnTactic?.(),doneText:'本局立即生效，可在「将帅帐」查看'},
+   tactics:{shi:sc=>this.player.growth.build.tags()[sc],canBuy:o=>!!campOption(o,this.player),learn:o=>{const op=campOption(o,this.player);if(!op)return false;op.apply(this.player,this.player.weapons,this.player.growth);return true;},afterBuy:()=>this.onLearnTactic?.(),doneText:'本局立即生效，可在「将帅帐」查看'},
    onBuyItem:item=>this.onBuyItem?.(item),owner:()=>this.player.growth.character,
    notice:t=>{this.notice=t;},changed:()=>this.render(),sound:k=>this.sound(k),tooltipDepth:DEPTH.overlay+40});
   this.shop.onArtLoaded=()=>{if(this.root.active&&this.tab===2)this.render();};

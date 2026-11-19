@@ -872,7 +872,7 @@ export class GameScene extends Phaser.Scene {
     this.campUI.onBuyItem=item=>{const debug=isChapterTestRun()||this.debugModified||this.debugJumped||!!this.player.damageImmune||!!this.runConfig.encounter;if(this.over&&!debug)addItems([item]);else this.itemDrops?.runLoot.push(item);};
     // 军医（2026-11-18）：按章定价；治疗后把存档里的征程构筑血量也改掉（存档点是打赢那一刻存的，治疗在之后；重打旧关不存档也不改）
     this.campUI.chapterNo=medicChapter(this.scene.key,this.chapter.id);
-    this.campUI.onLearnTactic=()=>{if(this.campaignReplay)return;patchCampaignTactics(this.runConfig.character,this.player.growth.build.snapshot().tactics,this.legion.food);};
+    this.campUI.onLearnTactic=()=>{if(this.campaignReplay)return;patchCampaignTactics(this.runConfig.character,this.player.growth.build.snapshot().tactics,this.legion.food,this.player.growth.build.manuals);};
     this.campUI.onHealed=()=>{if(this.campaignReplay)return;const fh:Record<string,number>={};for(const m of this.followers?.members??[])fh[m.recruit.id]=m.downed?0:m.hp/Math.max(1,m.maxHp);patchCampaignHp(this.runConfig.character,this.player.hp/Math.max(1,this.player.maxHp),fh);};
     this.campUI.onOpenBag=()=>this.openBattleBag(true);
     // 从营寨 / 天下地图出征的战役：关与关之间的休整可直接回营寨（本场奖励已在胜利时入库）

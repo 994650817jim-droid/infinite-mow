@@ -225,9 +225,9 @@ export function drawBuildOverview(o: BuildOverviewOpts): void {
       text(bx + barW + 4, y - 1, '势 ' + n, 12, tier ? '#f3d48a' : '#d8c8a4').setName(P + '-tag-' + t);
       const reached = TIER_STEPS.filter(x => n >= x).map(x => d.tiers[x].name).join(' · ');
       text(bx, y + 13, reached || ('2 势：' + d.tiers[2].name), 10, reached ? st.css : '#8e7f62').setName(P + '-tag-tier-' + t);
-      const srcLine = [src.tactics ? '战法 ' + src.tactics : '', src.treasures ? '信物 ' + src.treasures : '', src.extra ? '信物 ' + src.extra : '', ...notes].filter(Boolean).join('、') || '还没有';
+      const srcLine = [src.tactics ? '战法 ' + src.tactics : '', src.treasures ? '信物 ' + src.treasures : '', src.extra ? '信物 ' + src.extra : '', src.manual ? '心法 1' : '', ...notes].filter(Boolean).join('、') || '还没有';
       hot(R.x + pad, y - 2, R.w - pad * 2, rowH, P + '-tag-hit-' + t, () => ({ title: `〔${d.name}〕 势 ${n}`, sub: d.fantasy,
-        body: TIER_STEPS.map(x => `${n >= x ? '✓' : '○'} ${x} 势 · ${d.tiers[x].name}：${d.tiers[x].desc}`).join('\n') + `\n\n势的来源：${srcLine}\n学本派战法、或升级本派战法，每级 +1 势；亲和武将、随行兵种、机制类信物、橙色名马也给势。`, color: st.color, icon: d.icon }));
+        body: TIER_STEPS.map(x => `${n >= x ? '✓' : '○'} ${x} 势 · ${d.tiers[x].name}：${d.tiers[x].desc}`).join('\n') + `\n\n势的来源：${srcLine}\n学本派战法、或升级本派战法，每级 +1 势；亲和武将、随行兵种、机制类信物、橙色名马、军需商人的「流派心法」也给势。`, color: st.color, icon: d.icon }));
       y += rowH;
     }
     // 下一步：势最高、还没到 6 的那派，下一档是什么

@@ -63,6 +63,7 @@ export const SHI_SOURCES = { affinityStart: 1, followerCap: 1, orangeMount: 1 } 
 /** 三选一：每张战法卡权重 1 + min(weightMax, 势 × weightPer)，亲和派再 × affinityWeight；有一派到 specialtyAt 势后，两张战法卡里必有一张是势最高那派的。 */
 export const OFFER = { weightPer: .3, weightMax: 2, affinityWeight: 1.5, specialtyAt: 2, tacticCards: 2 } as const;
 /** 军需商人：战法卷轴优先出势最高的两派（权重 ×topWeight）。 */
-export const MERCHANT_SCHOOL = { topWeight: 3 } as const;
+export const MERCHANT_SCHOOL = { topWeight: 3, manualChance: .3, manualPrice: 320, manualMinShi: 2 } as const;
+/** 「流派心法」：军需商人偶尔把战法卷轴换成势最高那派的心法（那派到 manualMinShi 势、还没研读过才出），研读后本次征程该派 +1 势；比战法贵（manualPrice 粮）。 */
 /** 没有自己图标的战法借现有图标（第 3 期火油罐 / 疾风已出新图，目前为空）。 */
 export const TACTIC_ICON_ALIAS: Readonly<Record<string, string>> = {};

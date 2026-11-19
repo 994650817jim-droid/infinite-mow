@@ -3,7 +3,8 @@ import { inkSkin } from './HomeCommand';
 import { DEPTH, FONT, GAME_HEIGHT, GAME_WIDTH, HEADING_FONT, IS_DESKTOP } from '../config';
 import { CHARACTERS, type CharacterId } from '../data/characters';
 import { TACTICS, TAG_NAMES, type BuildTag, type TacticId } from '../data/builds';
-import { SCHOOLS, heroAffinity } from '../data/schools';
+import { SCHOOLS, SCHOOL_IDS, SHI_SOURCES, OFFER, TIER_STEPS, heroAffinity } from '../data/schools';
+import { COMBO_AT } from '../data/schoolCombos';
 import { WEAPON_DEFS } from '../weapons/registry';
 import { ATTRIBUTE_INFO, attributeCap, attributeIcon, type AttributeId } from '../systems/RunGrowth';
 import { allocateHeroAttr, heroAttrs, heroFreePoints, heroInfo, takeAttrNotice, type HeroKey } from '../systems/HeroProgress';
@@ -14,8 +15,8 @@ import { TACTIC_UNLOCK_SCROLLS, TEMPER, XINDE_SLOTS, getXinde, grain, respec, re
 import { lqHitBox, lqPanel, lqSkin } from './LacquerKit';
 import { attrBadge } from './AttrBadge';
 
-type Tab = 'overview' | 'attrs' | 'weapon' | 'xinde';
-const TABS: [Tab, string][] = [['overview', '总览'], ['attrs', '属性'], ['weapon', '本命'], ['xinde', '战法心得']];
+type Tab = 'overview' | 'attrs' | 'weapon' | 'xinde' | 'schools';
+const TABS: [Tab, string][] = [['overview', '总览'], ['attrs', '属性'], ['weapon', '本命'], ['xinde', '战法心得'], ['schools', '流派亲和']];
 
 /** 武将谱入口（营寨建筑「将帅府」等调用）。 */
 export function openHeroCodex(scene: Phaser.Scene, hero?: HeroKey, onClose?: () => void): HeroCodexUI { return new HeroCodexUI(scene, hero, onClose); }
@@ -76,16 +77,60 @@ export class HeroCodexUI {
     else { const per = 4, cw = (lw - 3 * 8) / per; owners.forEach((o, i) => this.button(lx + cw / 2 + (i % per) * (cw + 8), top + Math.floor(i / per) * 40, o.name, 'codex-hero-' + o.id, () => { this.hero = o.id as HeroKey; this.render(); }, { active: o.id === this.hero, w: cw - 24 })); }
     // 右：分页
     const rx = D ? x0 + 200 : x0 + 24, rw = D ? pw - 224 : pw - 48, ry = D ? top : top + Math.ceil(owners.length / 4) * 40 + 10;
-    const tw = (rw - 3 * 8) / 4;
+    const tw = (rw - (TABS.length - 1) * 8) / TABS.length;
     TABS.forEach(([id, label], i) => this.button(rx + tw / 2 + i * (tw + 8), ry, label, 'codex-tab-' + id, () => { this.tab = id; this.render(); }, { active: this.tab === id, w: tw - 24, size: 15 }));
     const cy = ry + 34;
     if (this.tab === 'overview') this.renderOverview(rx, cy, rw);
     else if (this.tab === 'attrs') this.renderAttrs(rx, cy, rw);
     else if (this.tab === 'weapon') this.renderWeapon(rx, cy, rw);
+    else if (this.tab === 'schools') this.renderSchools(rx, cy, rw, y0 + ph - 14);
     else if (D) this.renderXindeDesk(rx, cy, rw, y0 + ph - 14);
     else this.renderXinde(rx, cy, rw, y0 + ph - 50);
     // 电脑「战法心得」页：提示放进底部说明栏（见 renderXindeDesk），这里不再叠一条
     if (this.notice && !(D && this.tab === 'xinde')) { this.text(W / 2, y0 + ph - 24, this.notice, 14, '#f3d48a').setOrigin(.5).setBackgroundColor('#1b120bcc').setPadding(10, 4).setName('codex-notice'); this.notice = ''; }
+  }
+
+  /**
+   * 流派亲和（2026-11-19 流派重做第 4 期「武将谱亲和页」）：左 = 本将亲和哪几派、给什么，再列六派各档（徽印 + 2 / 4 / 6 势）；
+   * 右 = 势从哪来、十二将各自亲和（当前武将高亮）。电脑布局优先；手机布局只列本将与六派。
+   */
+  private renderSchools(x: number, y: number, w: number, bottom: number): void {
+    const c = this.playable, aff = c ? heroAffinity(c) : [], D = IS_DESKTOP;
+    const lw = D ? Math.floor(w * .62) : w, rx = x + lw + 18, rw = w - lw - 18;
+    this.text(x, y, c ? ownerName(this.hero) + ' 亲和：' + (aff.map(s => SCHOOLS[s].name).join(' · ') || '无') : '招募武将没有流派亲和（随行时按兵种给势）。', 16, '#f3d48a', true).setName('codex-schools-affinity');
+    if (c && aff.length) this.text(x, y + 24, '第一亲和派「' + SCHOOLS[aff[0]].name + '」开局 +' + SHI_SOURCES.affinityStart + ' 势；亲和派战法出现率 ×' + OFFER.affinityWeight + '（只是偏向）。', 12, '#c8b88f').setWordWrapWidth(lw);
+    const top = y + 46, rowH = Math.min(D ? 70 : 72, Math.floor((bottom - top) / 6));
+    SCHOOL_IDS.forEach((s, i) => {
+      const d = SCHOOLS[s], ry = top + i * rowH, mine = aff.includes(s), g = this.add(this.scene.add.graphics());
+      g.fillStyle(mine ? 0x3a2414 : 0x1a140d, mine ? .95 : .8).fillRoundedRect(x, ry, lw, rowH - 6, 4).lineStyle(1, mine ? 0xf3d48a : 0x5e4a2c, mine ? 1 : .8).strokeRoundedRect(x + .5, ry + .5, lw - 1, rowH - 7, 4);
+      const key = 'build_icon_school_' + s;
+      if (this.scene.textures.exists(key)) { const im = this.add(this.scene.add.image(x + 26, ry + (rowH - 6) / 2, key)); im.setScale(42 / Math.max(im.width, im.height)); }
+      this.text(x + 54, ry + 7, d.name + (mine ? ' · 亲和' : ''), 15, mine ? '#ffd98a' : d.css, true).setName('codex-school-' + s);
+      this.text(x + 54, ry + 27, d.fantasy, 10.5, '#9c8c6c').setWordWrapWidth(78).setMaxLines(2);
+      const tx = x + 138, tw = (lw - 144) / 3;
+      TIER_STEPS.forEach((t, k) => {
+        const tier = d.tiers[t];
+        this.text(tx + k * tw, ry + 6, t + ' 势 · ' + tier.name, 12, k === 2 ? '#ffd27a' : '#e8d6a4', true);
+        this.text(tx + k * tw, ry + 22, tier.desc.replace(/^觉醒：/, ''), 10.5, '#bfae8a').setWordWrapWidth(tw - 8).setLineSpacing(-1).setMaxLines(3);
+      });
+    });
+    if (!D) return;
+    const src = ['· 学 / 升本派战法：每级 +1', '· 武将亲和：第一亲和派开局 +' + SHI_SOURCES.affinityStart, '· 随行：按兵种给（刀兵→猛将、枪兵→兵阵、弓兵→弓弩、谋士→奇谋），最多 +' + SHI_SOURCES.followerCap, '· 橙色名马：骑突 +' + SHI_SOURCES.orangeMount, '· 机制类信物：对应派 +1', '· 军需商人「流派心法」：每派一次 +1', '两派都到 ' + COMBO_AT + ' 势生效合击。'];
+    this.text(rx, y, '势从哪来', 15, '#f3d48a', true);
+    const st = this.text(rx, y + 24, src.join('\n'), 11.5, '#d8ccb0').setLineSpacing(1).setWordWrapWidth(rw).setName('codex-schools-sources');
+    // 诸将亲和：一行一将；第一亲和派（开局 +1 势）带 ★、字亮
+    const ty = y + 30 + st.height + 10; this.text(rx, ty, '诸将亲和', 15, '#f3d48a', true); this.text(rx + rw, ty + 3, '★ = 开局 +1 势', 11, '#9c8c6c').setOrigin(1, 0);
+    const lineH = Math.max(15, Math.min(24, Math.floor((bottom - ty - 26) / CHARACTERS.length)));
+    CHARACTERS.forEach((ch, i) => {
+      const ay = ty + 26 + i * lineH, on = ch.id === this.hero, a = heroAffinity(ch.id);
+      if (on) this.add(this.scene.add.graphics()).fillStyle(0x7a2a1c, .6).fillRoundedRect(rx - 4, ay - 2, rw + 4, lineH - 1, 3);
+      this.text(rx, ay, ch.name, 13, on ? '#fff3d0' : '#e8d6a4', on).setName('codex-aff-' + ch.id);
+      a.forEach((s, k) => {
+        const key = 'build_icon_school_' + s, ax = rx + 60 + k * 96;
+        if (this.scene.textures.exists(key)) { const im = this.add(this.scene.add.image(ax + 8, ay + 8, key)); im.setScale(16 / Math.max(im.width, im.height)); }
+        this.text(ax + 20, ay + 1, SCHOOLS[s].name + (k === 0 ? ' ★' : ''), 12, k === 0 ? SCHOOLS[s].css : '#a8977a');
+      });
+    });
   }
 
   private renderOverview(x: number, y: number, w: number): void {

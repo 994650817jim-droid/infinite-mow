@@ -26,10 +26,10 @@ const restart = async (lord, fs = [], { chapter = 'huangjin', stage = 1, clearSe
   await p.waitForFunction(([lord, n]) => { const s = window.__game.scene.getScene('GameScene'); return s?.player && s.player !== window.__prevPlayer && s.runConfig?.character === lord && s.storyDir && (s.followers?.members.length ?? 0) === n; }, [lord, fs.length], { timeout: 60000 });
   await p.waitForTimeout(900);
 };
-const scroll = () => p.evaluate(G0 => { const s = eval(G0); const c = s.children.list.find(o => o.name?.startsWith('story-') && o.name !== 'story-bark' && o.type === 'Container'); if (!c) return null;
+const scroll = () => p.evaluate(G0 => { const s = eval(G0); const c = s.children.list.find(o => o.name?.startsWith('story-') && o.name !== 'story-bark' && o.name !== 'story-bark-card' && o.type === 'Container'); if (!c) return null;
   const texts = c.list.filter(o => o.type === 'Text').map(o => o.text).filter(Boolean); const portrait = c.list.find(o => o.name?.endsWith('-portrait')), seal = c.list.find(o => o.name?.endsWith('-seal'));
   return { name: c.name, texts, portrait: portrait?.visible ? portrait.texture.key : null, seal: seal?.visible ? seal.text : null, mode: s.mode }; }, G);
-const next = () => p.evaluate(G0 => { const s = eval(G0); const c = s.children.list.find(o => o.name?.startsWith('story-') && o.name !== 'story-bark' && o.type === 'Container'); const hit = c?.list.find(o => o.name?.endsWith('-next') || o.name === 'story-confirm'); hit?.emit('pointerup'); return !!hit; }, G);
+const next = () => p.evaluate(G0 => { const s = eval(G0); const c = s.children.list.find(o => o.name?.startsWith('story-') && o.name !== 'story-bark' && o.name !== 'story-bark-card' && o.type === 'Container'); const hit = c?.list.find(o => o.name?.endsWith('-next') || o.name === 'story-confirm'); hit?.emit('pointerup'); return !!hit; }, G);
 const readAll = async () => { for (let i = 0; i < 24; i++) { if (!await scroll()) { await p.waitForTimeout(400); if (!await scroll() && await p.evaluate(G0 => eval(G0).mode !== 'story', G)) return; continue; } await next(); await p.waitForTimeout(60); } }; // 下一段卷轴可能在等立绘载入，空档里多等一下
 
 // 1) 章头（非刘关张主公改写）+ 立绘 / 名字章 + 暂停
@@ -73,12 +73,12 @@ await p.keyboard.press('Escape'); await p.waitForTimeout(150);
 
 // 5) 首领登场 / 倒下大字台词
 const boss = await p.evaluate(async G0 => { const s = eval(G0), wait = ms => new Promise(r => setTimeout(r, ms)); s.player.damageImmune = true; s.spawnBoss(); for (let k = 0; k < 6 && s.mode === 'levelup'; k++) { s.chooseUpgrade(0); await wait(60); } s.boss.sprite.setPosition(s.player.x + 160, s.player.y - 40); await wait(250);
-  const intro = s.children.list.filter(o => o.name === 'story-bark').map(o => (function deep(x) { return x.type === 'Text' ? x.text : (x.list ?? []).map(deep).join(''); })(o));
+  const intro = [...s.children.list.filter(o => o.name === 'story-bark').map(o => (function deep(x) { return x.type === 'Text' ? x.text : (x.list ?? []).map(deep).join(''); })(o)), ...(s.data.get('__storyBarkCardLog')?.splice(0) ?? [])] /* 2026-11-18 夜：有说话人的首领台词改出侧边立绘卡（头顶只冒「！」），卡的台词从日志读 */;
   return { intro, played: [...s.storyDir.played] }; }, G);
 await p.screenshot({ path: `${out}/boss-line-1280x720.png` });
 ck('首领登场：张梁大字台词「人公将军在此」', boss.intro.some(t => t.includes('张梁') && t.includes('人公将军')), boss);
 const fall = await p.evaluate(async G0 => { const s = eval(G0), wait = ms => new Promise(r => setTimeout(r, ms)); s.debugCrit = false; s.boss.hp = 1; s.hitEnemy(s.boss, 50, s.combatNow, 'melee', false, true); await wait(150);
-  return { lines: s.children.list.filter(o => o.name === 'story-bark').map(o => (function deep(x) { return x.type === 'Text' ? x.text : (x.list ?? []).map(deep).join(''); })(o)) }; }, G);
+  return { lines: [...s.children.list.filter(o => o.name === 'story-bark').map(o => (function deep(x) { return x.type === 'Text' ? x.text : (x.list ?? []).map(deep).join(''); })(o)), ...(s.data.get('__storyBarkCardLog')?.splice(0) ?? [])] /* 2026-11-18 夜：有说话人的首领台词改出侧边立绘卡（头顶只冒「！」），卡的台词从日志读 */ }; }, G);
 ck('首领倒下：张梁「黄天……何不佑我」', fall.lines.some(t => t.includes('黄天')), fall);
 
 // 6) 旗标：写入 → 中途退出回滚时旗标回滚、已看过不回滚

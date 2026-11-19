@@ -65,9 +65,9 @@ const gi = p => p.evaluate(() => window.__S.garrisonInfo);
   // 池空 / 份额用完后必刷的兵：照出、不给经验
   const forced = await p.evaluate(() => { const s = window.__S, e = s.scriptedSpawn(() => s.spawnEnemy('infantry', s.player.x + 120, s.player.y, 1, true)), plain = s.spawnEnemy('infantry', s.player.x + 160, s.player.y, 1, true); const unpaid = s.garrisonInfo.unpaid; const r = window.__sweep(); return { spawned: !!e, plainBlocked: !plain, unpaid, xp: r.xp }; });
   ck('份额用完后剧情 / 目标必刷的兵照出但不给经验；普通强制刷兵不再出', forced.spawned && forced.plainBlocked && forced.unpaid >= 1 && forced.xp === 0, forced);
-  // 进县衙：放出后段份额（又能来人），总数仍不超过守军总数
+  // 进县衙（经城内段）：放出后段份额（又能来人），总数仍不超过守军总数
   await p.evaluate(() => { const s = window.__S, M = window.__M; s.player.sprite.setPosition(0, -470); for (let i = 0; i < 6; i++) { const t = M.priorityTarget(400); if (t) s.hitEnemy(t, 1e7, s.combatNow, 'melee', false, false); } });
-  for (let i = 0; i < 30 && (await p.evaluate(() => window.__M.phase)) !== 'hall'; i++) await step(p, 20);
+  for (let i = 0; i < 40 && (await p.evaluate(() => window.__M.phase)) !== 'hall'; i++) { await p.evaluate(() => { const M = window.__M; if (M.phase === 'street') for (const pt of M.points) pt.state = 'secured'; }); await step(p, 20); } // 小城也有城内段（攻城城内段改造）：要点直接记作占稳
   await step(p, 600); const gh = await gi(p);
   ck('进到县衙段：放出后段份额（上限 = 守军总数），已出总数不超过守军总数', (await p.evaluate(() => window.__M.phase)) === 'hall' && gh.cap === gh.total && gh.spent + gh.cut <= gh.total, gh);
   await p.close();

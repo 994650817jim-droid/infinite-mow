@@ -17,6 +17,8 @@ import { preloadCutscene } from './Cutscene';
 import { preloadBossDeath } from './BossDeathArt';
 import { LUBU_KILLS_DONGZHUO } from '../data/cutscenes/lubuKillsDongzhuo';
 import type { CutsceneScript } from '../data/cutscenes/types';
+import { sealCityWall } from './ChapterDressing';
+import { LUOYANG } from '../data/dongzhuo';
 
 /**
  * 2-3 洛阳 · 董卓与吕布同场（用户 2026-11-18 设计）：
@@ -28,15 +30,16 @@ import type { CutsceneScript } from '../data/cutscenes/types';
  * 美术复用：攻城城墙图集（城墙段 / 城门）、吕布 v2 行走 / 攻击图、赤兔（horses-v2）与吕布骑乘图（有就用）、手绘扬尘 / 斩击序列帧。
  */
 export const DZ_LUBU = {
-  wallY: -330, wallHalf: 900, segW: 230, gateW: 270, perchUp: 128,
+  wallY: -330, wallHalf: 900, segW: 230, gateW: 270, perchUp: 200, perchDx: 210,
   /** 城内纵深：两端侧墙往北延伸多远、再用北墙合上（城墙专项检查：洛阳城墙原来两端敞着，绕过去就到了城里）。 */ cityDepth: 2000,
-  lubuHpMul: .5, lubuDmgMul: .6, lubuSpeed: 74, fleeAt: 1 / 3,
+  lubuHpMul: .5, lubuDmgMul: .6, lubuSpeed: 74, lubuReach: 70, fleeAt: 1 / 3,
   sweepEveryMs: 4500, sweepR: 150, sweepArc: Math.PI * .75, sweepWarnMs: 700, sweepDmgMul: 1.3,
   wallVolleyEverySec: 7, wallVolleyPoints: 3, volleyR: 66, volleyWarnMs: 1300, playerRatio: .05, allyDamage: 12,
   descendMs: 1100, finishAt: .2, finishSlowMs: 1600, finishSlow: .35,
 } as const;
 
-export type DzPhase = 'wall' | 'fleeing' | 'descending' | 'down' | 'finale' | 'done';
+/** perch = 董卓、吕布都在城头（摧毁营寨阶段）；leaping = 吕布跃下城头；wall = 城下战吕布（原有）；之后照旧。 */
+export type DzPhase = 'perch' | 'leaping' | 'wall' | 'fleeing' | 'descending' | 'down' | 'finale' | 'done';
 export interface DzHost {
   scene: Phaser.Scene; player: Player; legion: Legion; now: () => number;
   spawnLubu: (def: EnemyDef, x: number, y: number) => Enemy | null;
@@ -52,6 +55,8 @@ export interface DzHost {
   heroSprite?: (id: string) => { x: number; y: number } | undefined;
   /** 剧情台词（故事系统 StoryDirector.line，data/story/hulao.ts 的 barks；按剧情设置决定播不播）。没播返回 false。 */
   line?: (id: string, target: { x: number; y: number }) => boolean;
+  /** 2-3 重做：吕布什么时候跃下城头（营寨全毁）。不传或一开始就是 true：照原来，吕布开局就在城下。 */
+  ready?: () => boolean;
 }
 
 export class DongzhuoLubu {
@@ -60,33 +65,31 @@ export class DongzhuoLubu {
   private art: Phaser.GameObjects.GameObject[] = []; readonly obstacles: SishuiObstacles; private strikes: Strikes;
   private perch = { x: 0, y: 0 }; private gate = { x: 0, y: 0 }; private letDie = false; private dzLineAt = 0; private nextSweep = 0; private sweep: { at: number; a: number; id: string } | null = null; private volleyAt = 0;
   private anim: ((now: number) => boolean) | null = null;
-  readonly metrics = { sweeps: 0, volleys: 0, lockHits: 0 };
+  /** 吕布在城头的站位（踱步中心）。 */ private lubuHome = { x: 0, y: 0 };
+  readonly metrics = { sweeps: 0, volleys: 0, lockHits: 0, leaps: 0 };
   constructor(private h: DzHost, readonly dongzhuo: Enemy) {
-    const P = DZ_LUBU, s = h.scene, now = h.now(), p = h.player, wy = p.y + P.wallY;
-    this.perch = { x: p.x, y: wy - P.perchUp }; this.gate = { x: p.x, y: wy };
+    const P = DZ_LUBU, L = LUOYANG, s = h.scene, now = h.now(), p = h.player, wy = p.y + P.wallY;
+    // 城头站位：董卓在城门楼左边、吕布在右边（站在门楼正后方会被门楼挡住）；脚底在前墙垛下沿，前墙挡住腿、身子露在墙头上
+    this.perch = { x: p.x - P.perchDx, y: wy - P.perchUp }; this.gate = { x: p.x, y: wy };
     preloadCutscene(s, LUBU_KILLS_DONGZHUO, () => {}); preloadBossDeath(s, 'dongzhuo');
-    // 洛阳城：南墙（董卓所在）+ 两端侧墙往北 cityDepth + 北墙，围成一圈；城里空着（董卓 / 吕布在城头上不受影响），主将在城外、绕不进去
-    const X0 = p.x - P.wallHalf, X1 = p.x + P.wallHalf, NY = wy - P.cityDepth;
-    this.obstacles = new SishuiObstacles([{ left: X0, right: X1, top: wy - 70, bottom: wy - 8 },
-      { left: X0 - 70, right: X0, top: NY, bottom: wy - 8 }, { left: X1, right: X1 + 70, top: NY, bottom: wy - 8 }, { left: X0 - 70, right: X1 + 70, top: NY - 70, bottom: NY }]);
+    // 洛阳城（2-3 重做，转角城墙修正）：只画南墙（董卓所在）；两端接角楼、城墙转角往南成侧墙、南边界是洛水（ChapterDressing.sealCityWall），
+    // 整块场地封闭、城里进不去。原来往北延伸的侧墙一节节拼、最上面一节叠在角楼顶上（用户截图「塔上叠塔」），北墙也画了却看不到——都去掉。
+    const X0 = p.x - P.wallHalf, X1 = p.x + P.wallHalf;
+    // 墙线碰撞一直接到两端角楼（sealCityWall 的侧墙从 ±(wallHalf + 40) 起，原来墙框只到 ±wallHalf，转角留 40 像素缝能挤过去）
+    this.obstacles = new SishuiObstacles([{ left: X0 - 40, right: X1 + 40, top: wy - 70, bottom: wy - 8 }]);
+    sealCityWall(s, { cx: p.x, wy, half: P.wallHalf + 40, south: p.y + L.south, boxes: this.obstacles.footprints, south_: 'river', tag: 'luoyang' });
     this.strikes = new Strikes({ scene: s, player: p, army: h.legion, now: h.now });
-    // 城墙（攻城 v2 图集：0 城墙段 · 1 城门）
-    const wall = MID_SIEGE_FILES[0], BARB = 'siege_mid_barb', build = (): void => {
-      // 城墙段从城门两侧对称往外铺到墙端（原来从 -wallHalf 起步，左右不对称，门左边露一截空缺）
-      for (const side of [-1, 1]) for (let x = P.gateW / 2 + P.segW / 2 - 24; x + P.segW / 2 < P.wallHalf + 80; x += P.segW - 14) this.art.push(s.add.image(p.x + side * x, wy, wall.key, 0).setOrigin(.5, .97).setDisplaySize(P.segW + 8, P.segW + 8).setDepth(actorDepth(wy) - .01).setFlipX(side > 0).setName('luoyang-wall'));
-      const hasB = s.textures.exists(BARB);
-      // 侧墙：瓮城套件侧墙段（帧 4）只取左右边是直的那一段（帧内 y 163–283）竖向拼接，同一列 x 对齐；北墙一排；四角角楼（帧 3）
-      if (hasB) { const size = 220, k = size / 384, b0 = 163, b1 = 283, step = (b1 - b0) * k, n = Math.ceil((P.cityDepth - 60) / step);
-        for (const [x, flip] of [[X0 - 34, false], [X1 + 34, true]] as const) for (let i = 0; i < n; i++) {
-          const y = wy - 40 - i * step, top = i === n - 1 ? 19 : b0;
-          this.art.push(s.add.image(x, y, BARB, 4).setOrigin(.5, (b1) / 384).setDisplaySize(size, size).setFlipX(flip).setCrop(0, top, 384, b1 - top).setDepth(actorDepth(y) - .02).setName('luoyang-side'));
-        }
-        for (let x = X0 + 110; x < X1; x += 216) this.art.push(s.add.image(x, NY, BARB, 2).setOrigin(.5, .97).setDisplaySize(246, 246).setDepth(actorDepth(NY)).setName('luoyang-north'));
-        for (const [x, y] of [[X0 - 20, wy + 6], [X1 + 20, wy + 6], [X0 - 20, NY + 6], [X1 + 20, NY + 6]]) this.art.push(s.add.image(x, y, BARB, 3).setOrigin(.5, .97).setDisplaySize(250, 250).setDepth(actorDepth(y) + .001).setName('luoyang-corner'));
+    // 城墙（攻城 v2 图集：0 城墙段 · 1 城门）：前墙一排 + 后墙垛一排（缩小压暗，城头走道的远侧）——城头上的人站在两排之间，读起来是「站在城墙上」
+    const wall = MID_SIEGE_FILES[0], build = (): void => {
+      const by = wy - L.backParapetDy, bs = (P.segW + 8) * L.backParapetScale;
+      for (const side of [-1, 1]) for (let x = P.gateW / 2 + P.segW / 2 - 24; x + P.segW / 2 < P.wallHalf + 80; x += P.segW - 14) {
+        this.art.push(s.add.image(p.x + side * x, wy, wall.key, 0).setOrigin(.5, .97).setDisplaySize(P.segW + 8, P.segW + 8).setDepth(actorDepth(wy) - .01).setFlipX(side > 0).setName('luoyang-wall'));
+        this.art.push(s.add.image(p.x + side * x, by, wall.key, 0).setOrigin(.5, .97).setDisplaySize(bs, bs).setTint(L.backParapetTint).setDepth(actorDepth(by) - .03).setFlipX(side > 0).setName('luoyang-wall-back'));
       }
+      this.art.push(s.add.image(p.x, by, wall.key, 0).setOrigin(.5, .97).setDisplaySize(bs, bs).setTint(L.backParapetTint).setDepth(actorDepth(by) - .03).setName('luoyang-wall-back'));
       this.art.push(s.add.image(p.x, wy + 2, wall.key, 1).setOrigin(.5, .97).setDisplaySize(P.gateW + 30, P.gateW + 30).setDepth(actorDepth(wy)).setName('luoyang-gate'));
     };
-    { const need = ([[wall.key, wall.file], [BARB, 'assets/siege-v2/barbican.png']] as const).filter(([k]) => !s.textures.exists(k));
+    { const need = ([[wall.key, wall.file]] as const).filter(([k]) => !s.textures.exists(k));
       if (!need.length) build(); else { for (const [k, f] of need) s.load.spritesheet(k, f, { frameWidth: 384, frameHeight: 384 }); s.load.once('complete', () => { if (s.textures.exists(wall.key)) build(); }); if (!s.load.isLoading()) s.load.start(); } }
     // 赤兔（horses-v2）与吕布骑乘图（有就载）：逃走 / 杀回时用
     { const hk = 'horse_v2_chitu_walk'; if (!s.textures.exists(hk) && ART_V2_FILES[hk]) { s.load.image(hk, ART_V2_FILES[hk]); s.load.once('filecomplete-image-' + hk, () => regridV2(s, hk)); } else if (s.textures.exists(hk) && !s.textures.get(hk).has('down_0')) regridV2(s, hk);
@@ -98,13 +101,18 @@ export class DongzhuoLubu {
     const base = h.lubuBase(), v2 = isV2Texture('boss_lubu');
     const def: EnemyDef = { ...base, kind: 'elite', texture: 'boss_lubu', walkVisual: { texture: 'boss_lubu', scale: v2 ? .5 : 218 / 256, groundY: v2 ? 256 / 288 : 224 / 256, matched: true }, attackVisual: 'lubu_attack',
       hp: Math.round(base.hp * P.lubuHpMul), damage: Math.round(base.damage * P.lubuDmgMul), speed: P.lubuSpeed, radius: 30, xp: 40, tint: 0xffffff, variant: undefined, behavior: undefined };
-    this.lubu = h.spawnLubu(def, p.x + 60, wy + 90);
-    // 登场台词：吕布先喊，董卓（城头）隔一会儿再喊
-    if (this.lubu) h.line?.('hulao-3.lubu_enter', this.lubu.sprite);
-    this.dzLineAt = now + 2400;
+    // 2-3 重做：营寨没摧毁完时，吕布先站在城头（董卓右边），打不到、不追人，沿城头来回踱步；营寨全毁后跃下城头
+    const onWall = !!h.ready && !h.ready();
+    this.lubuHome = { x: p.x + P.perchDx, y: wy - P.perchUp };
+    this.lubu = h.spawnLubu(def, onWall ? this.lubuHome.x : p.x + 60, onWall ? this.lubuHome.y : wy + 90);
     if (this.lubu) this.lubu.controlImmune = true;
+    if (onWall && this.lubu) { this.phase = 'perch'; this.lubu.invulnerable = true; this.lubu.def = { ...this.lubu.def, speed: 0 }; }
+    // 登场台词：吕布先喊，董卓（城头）隔一会儿再喊
+    if (this.lubu && !onWall) h.line?.('hulao-3.lubu_enter', this.lubu.sprite);
+    this.dzLineAt = now + 2400;
     this.nextSweep = now + 2500; this.volleyAt = now + 3500;
-    h.banner('董卓 · 吕布 出阵', true, '董卓坐镇城头（打不到）· 先打退吕布');
+    if (onWall) h.banner('董卓 · 吕布 坐镇城头', true, '城头上打不到他们 · 先摧毁营寨');
+    else h.banner('董卓 · 吕布 出阵', true, '董卓坐镇城头（打不到）· 先打退吕布');
     s.events.on('postupdate', this.tick, this);
     s.events.once('shutdown', () => this.clear());
   }
@@ -211,6 +219,49 @@ export class DongzhuoLubu {
   }
 
   /** 每帧（postupdate）：城墙碰撞、城头放箭、吕布横扫、动画、20% 授首。 */
+  /** 场地内（城墙以南、两端侧墙之间、洛水以北），留 r 的边：随机补给 / 物件只放在这里面。 */
+  inArena(x: number, y: number, r = 0): boolean {
+    const P = DZ_LUBU, half = P.wallHalf + 40, cx = this.gate.x, south = this.gate.y - P.wallY + LUOYANG.south;
+    return x > cx - half + r && x < cx + half - r && y > this.gate.y + r && y < south - r;
+  }
+  /** 镜头上让（GameScene.updateCamera 叠加，负数 = 往上）：董卓还在城头时，主将离城墙越近、镜头往上让得越多，最多 cameraLift（让城头的董卓 / 吕布进画面）。 */
+  cameraBias(py: number): number {
+    if (this.phase === 'down' || this.phase === 'finale' || this.phase === 'done') return 0;
+    const L = LUOYANG, d = py - this.gate.y; return -L.cameraLift * Phaser.Math.Clamp((L.cameraNear - d) / (L.cameraNear - 40), 0, 1);
+  }
+  /** 城头踱步：走（播行走帧）→ 到头停一下 → 回头；用户「吕布不会动」。 */
+  private paceAt = 0; private chaseAt = 0;
+  private pace(now: number, depth: number): void {
+    const l = this.lubu; if (!l?.active) return;
+    const L = LUOYANG, T = L.paceMs + L.paceRestMs, c = now % (2 * T);
+    const k = c < L.paceMs ? c / L.paceMs : c < T ? 1 : c < T + L.paceMs ? 1 - (c - T) / L.paceMs : 0;
+    const e = k * k * (3 - 2 * k), x = this.lubuHome.x - L.paceRange + 2 * L.paceRange * e, dx = x - l.x;
+    const dt = this.paceAt ? Math.min(.1, Math.max(.001, (now - this.paceAt) / 1000)) : 1 / 60; this.paceAt = now;
+    l.intentDx = dx; l.intentDy = 0;
+    l.sprite.setPosition(x, this.lubuHome.y).setDepth(depth);
+    l.updateWalk(dt, dx, 0);
+  }
+  /** 营寨全毁：吕布大喝一声、沿抛物线从城头跃下，落地扬尘震屏，然后照原来的城下战（1/3 血逃走）。 */
+  private startLeap(): void {
+    const l = this.lubu, s = this.h.scene, L = LUOYANG, P = DZ_LUBU;
+    if (!l?.active) { this.phase = 'wall'; return; }
+    this.phase = 'leaping'; this.metrics.leaps++;
+    if (!this.h.line?.('hulao-3.lubu_enter', l.sprite)) this.say(l, '人中吕布，马中赤兔！谁来送死？');
+    // 横幅交给关卡目标（「营寨尽毁 · 吕布跃下城头！」，data/dongzhuo.ts），这里只喊台词，不叠第二条横幅
+    this.h.sfx('bossSummon');
+    const x0 = l.x, y0 = l.y, x1 = this.gate.x + L.landDx, y1 = this.gate.y + L.landDy, t0 = s.time.now;
+    this.anim = now => {
+      const k = Math.min(1, (now - t0) / L.leapMs), x = Phaser.Math.Linear(x0, x1, k), y = Phaser.Math.Linear(y0, y1, k) - Math.sin(Math.PI * k) * L.leapArc;
+      if (l.active) { l.sprite.setPosition(x, y).setDepth(DEPTH.fx - 1); l.intentDx = x1 - x0; l.intentDy = 0; }
+      if (k < 1) return false;
+      // 落地：扬尘、震屏，吕布可以打了
+      playSheet(s, 'fx_collapse_dust', x1, y1 + 4, { size: 200, ms: 620, depth: DEPTH.fx, originY: .8, name: 'dz-lubu-land' });
+      this.h.hitFeel()?.shake('big'); this.h.sfx('hitHeavy');
+      if (l.active) { l.invulnerable = false; l.def = { ...l.def, speed: P.lubuSpeed }; }
+      this.phase = 'wall'; this.nextSweep = this.h.now() + 1800;
+      return true;
+    };
+  }
   private tick(): void {
     const s = this.h.scene, now = this.h.now(), p = this.h.player, P = DZ_LUBU;
     if (this.phase === 'done') return;
@@ -219,12 +270,24 @@ export class DongzhuoLubu {
     { const a = this.anim; if (a && a(s.time.now) && this.anim === a) this.anim = null; } // 动画里可能接着开下一段（逃走 → 下城），别把新的清掉
     const d = this.dongzhuo;
     if (this.dzLineAt && now >= this.dzLineAt) { this.dzLineAt = 0; if (d.active) this.h.line?.('hulao-3.dongzhuo_enter', d.sprite); }
-    if (this.phase === 'wall') {
-      if (d.active) d.sprite.setPosition(this.perch.x, this.perch.y).setDepth(actorDepth(this.perch.y + P.perchUp) + .05);
+    if (this.phase === 'perch' || this.phase === 'leaping' || this.phase === 'wall') {
+      // 城头上的人：层级夹在后墙垛与前墙之间（前墙挡腿），每帧压回（敌兵自己的更新会按脚底改层级）
+      const onWallDepth = actorDepth(this.gate.y) - .02;
+      if (d.active) d.sprite.setPosition(this.perch.x, this.perch.y).setDepth(onWallDepth);
       // 城头箭雨
       if (now >= this.volleyAt) { this.volleyAt = now + P.wallVolleyEverySec * 1000; this.metrics.volleys++; for (let k = 0; k < P.wallVolleyPoints; k++) { const a = Math.random() * Math.PI * 2, r = k === 0 ? 0 : 60 + Math.random() * 90; this.strikes.add('arrows', p.x + Math.cos(a) * r, p.y + Math.sin(a) * r * .7, P.volleyR, P.volleyWarnMs, P.playerRatio, P.allyDamage); } }
+      // 吕布在城头（营寨阶段）：沿城头来回踱步（走 → 停 → 回头），打不到；营寨全毁就跃下
+      if (this.phase === 'perch') { this.pace(now, onWallDepth); if (this.h.ready?.()) this.startLeap(); }
+    }
+    if (this.phase === 'wall') {
       // 吕布：追主将，定时方天横扫（扇形预警）
       const l = this.lubu;
+      // 用户「吕布不会动」根因：群体移动（EnemyMovement）把 controlImmune 的敌人速度清零，吕布一直站桩。这里自己推他走（照样免控），出手 / 横扫预警时站定
+      if (l?.active && !this.sweep && l.attackUntil <= now) {
+        const dt = this.chaseAt ? Math.min(.1, Math.max(.001, (now - this.chaseAt) / 1000)) : 1 / 60, dx = p.x - l.x, dy = p.y - l.y, dist = Math.hypot(dx, dy);
+        if (dist > P.lubuReach) { const st = Math.min(dist - P.lubuReach, P.lubuSpeed * dt), mx = dx / dist * st, my = dy / dist * st; l.sprite.x += mx; l.sprite.y += my; l.intentDx = mx; l.intentDy = my; l.updateWalk(dt, mx, my); }
+      }
+      this.chaseAt = now;
       if (l?.active) {
         if (!this.sweep && now >= this.nextSweep && Math.hypot(p.x - l.x, p.y - l.y) < 260) { const a = Math.atan2(p.y - l.y, p.x - l.x); this.sweep = { at: now + P.sweepWarnMs, a, id: 'dz-lubu-sweep-' + this.metrics.sweeps }; l.startAttack(now, Math.abs(Math.cos(a)) > .7 ? (Math.cos(a) < 0 ? 'left' : 'right') : Math.sin(a) < 0 ? 'up' : 'down'); this.h.banner('方天横扫', false); }
         if (this.sweep) {
@@ -244,7 +307,7 @@ export class DongzhuoLubu {
   }
   /** 开发预览（?dev=1&cutscene=lubu_kills_dongzhuo）：吕布已逃、董卓已下城，直接进「吕布斩董卓」。 */
   devFinale(): void {
-    if (this.phase !== 'wall' && this.phase !== 'down') return;
+    if (this.phase !== 'wall' && this.phase !== 'down' && this.phase !== 'perch') return;
     this.lubu?.deactivate(); this.lubu = null; this.anim = null; this.sweep = null;
     const d = this.dongzhuo; d.sprite.setPosition(this.perch.x, this.perch.y + DZ_LUBU.perchUp + 70); d.invulnerable = false; d.hp = Math.max(1, Math.floor(d.maxHp * .15));
     this.phase = 'down'; this.finale();

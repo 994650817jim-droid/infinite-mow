@@ -4,6 +4,8 @@ import type { Player } from '../entities/Player';
 import type { PlayerStats, WeaponState } from '../types';
 import { ZG_TIANHUO as Z } from '../data/heroMechanics';
 import type { WeaponHost } from './registry';
+import { smartTarget } from './heroWeapons2';
+import { playSheet } from '../systems/SkillFxSheets';
 
 /**
  * 诸葛亮「七星灯 · 天火」（2026-11-18 重做，用户选方案 A；参数 data/heroMechanics.ts ZG_TIANHUO）。武器 id 仍为 flame_banner（存档 / 技艺 / 随行都沿用）。
@@ -15,26 +17,35 @@ export const TIANHUO_DEF = {
   id: 'flame_banner' as const, name: '七星灯 · 天火', maxLevel: 5,
   damage: (level: number, stats: PlayerStats) => Z.base * (1 + Z.perLevel * (level - 1)) * stats.damageMul * stats.fireMul,
   cooldown: (level: number, stats: PlayerStats) => Z.cooldown * stats.cooldownMul / (1 + Z.cdPerLevel * (level - 1)),
-  desc: '观星定位，天火落下重创单个目标（首领 > 精锐 > 血最多），溅射周围',
+  desc: '观星定位，天火落下：首领 / 精锐单点重创；没有时落进怪堆中心，大范围溅射并留下余烬灼烧杂兵',
 };
 /** 手绘图集 zhuge_tianhuo 的行起点（每行 8 格，每格 256）：星位 6 帧、天火 8 帧、东风火龙 6 帧（横条在 zhuge_eastwind）、八阵地面 6 帧。 */
 export const ZGFX = { star: 0, fall: 8, bazhen: 16 } as const;
-interface Strike { target: Enemy; spawn: number; x: number; y: number; at: number; damage: number; mark: Phaser.GameObjects.GameObject | null; }
+interface Strike { target: Enemy; spawn: number; x: number; y: number; at: number; damage: number; mark: Phaser.GameObjects.GameObject | null; /** 打的是杂兵（怪堆）：溅射加大 */ crowd: boolean; }
 interface Zone { x: number; y: number; r: number; until: number; level: number; fx: Phaser.GameObjects.GameObject | null; }
-const STATE = new WeakMap<Player, { strikes: Strike[]; casts: number; zones: Zone[] }>();
+/** 天火余烬：杂兵堆上的灼烧地面 */
+interface Ember { x: number; y: number; r: number; until: number; next: number; damage: number; }
+const STATE = new WeakMap<Player, { strikes: Strike[]; casts: number; zones: Zone[]; embers: Ember[]; sinceWind: number }>();
 const sceneOf = (host: WeaponHost): Phaser.Scene => (host.add as unknown as { scene: Phaser.Scene }).scene;
 const alive = (e: Enemy): boolean => e.active && !e.isSupplySlot;
 const art = (host: WeaponHost): boolean => sceneOf(host).textures.exists('zhuge_tianhuo');
 const cardinal = (ux: number, uy: number): 'left' | 'right' | 'up' | 'down' => Math.abs(ux) > Math.abs(uy) ? (ux < 0 ? 'left' : 'right') : (uy < 0 ? 'up' : 'down');
 
-/** 选靶：关卡锁定 / 首领 / 精锐（priorityTarget）> 首领 > 精锐 > 当前血最多。 */
-export function tianhuoTarget(host: WeaponHost, range: number): Enemy | null {
-  const pl = host.player, locked = host.priorityTarget?.(range, false); if (locked) return locked;
-  let best: Enemy | null = null, score = -1;
-  for (const e of host.grid.query(pl.x, pl.y, range)) {
-    if (!alive(e) || Math.hypot(e.x - pl.x, e.y - pl.y) > range + e.radius) continue;
-    const s = (e.kind === 'boss' ? 3e6 : e.kind === 'elite' ? 2e6 : 0) + e.hp;
-    if (s > score) { score = s; best = e; }
+/**
+ * 选靶（2026-11-18 用户：「打不到集群的怪堆」后改）：关卡锁定 / 首领 / 精锐照旧单点（观星积层）；
+ * 没有首领 / 精锐时用通用 smartTarget 的「群怪」规则——身边 80 像素内同伴最多的敌人（打进怪堆中心），都落单时打最近的。
+ */
+export function tianhuoTarget(host: WeaponHost, range: number): Enemy | null { return smartTarget(host, range); }
+/** 这一发是不是打杂兵（不是首领 / 精锐 / 关卡锁定目标）：溅射按怪堆数值。 */
+const isCrowdShot = (host: WeaponHost, e: Enemy, range: number): boolean => e.kind !== 'boss' && e.kind !== 'elite' && host.priorityTarget?.(range, false) !== e;
+/** 借东风方向：16 个候选方向里，火龙直线带内敌人最多的一个（首领 / 精锐加权）；都没有时朝目标。 */
+function densestDir(host: WeaponHost, len: number, half: number, fallback: { x: number; y: number }): { x: number; y: number } {
+  const pl = host.player, near = host.grid.query(pl.x, pl.y, len + 40).filter(e => alive(e) && Math.hypot(e.x - pl.x, e.y - pl.y) <= len + e.radius);
+  let best = fallback, score = 0;
+  for (let i = 0; i < 16; i++) {
+    const a = Math.PI * 2 * i / 16, ux = Math.cos(a), uy = Math.sin(a); let n = 0;
+    for (const e of near) { const ex = e.x - pl.x, ey = e.y - pl.y, along = ex * ux + ey * uy; if (along < -e.radius || along > len + e.radius || Math.abs(ex * -uy + ey * ux) > half + e.radius) continue; n += e.kind === 'boss' ? 3 : e.kind === 'elite' ? 2 : 1; }
+    if (n > score) { score = n; best = { x: ux, y: uy }; }
   }
   return best;
 }
@@ -75,7 +86,18 @@ function eastWindFx(host: WeaponHost, x: number, y: number, ux: number, uy: numb
 
 export function tianhuoBehavior(host: WeaponHost, weapon: WeaponState, dt: number, time: number): void {
   const pl = host.player, g = pl.growth;
-  const st = STATE.get(pl) ?? { strikes: [], casts: 0, zones: [] }; STATE.set(pl, st);
+  const st = STATE.get(pl) ?? { strikes: [], casts: 0, zones: [], embers: [], sinceWind: 0 }; STATE.set(pl, st);
+  // 天火余烬：每 tickMs 烧一下圈里的杂兵（首领 / 精锐不烧）
+  for (let i = st.embers.length - 1; i >= 0; i--) {
+    const em = st.embers[i];
+    if (host.over || time > em.until + 1) { st.embers.splice(i, 1); continue; }
+    if (time < em.next) continue;
+    em.next += Z.ember.tickMs;
+    for (const e of host.grid.query(em.x, em.y, em.r + 40)) {
+      if (!e.active || e.isSupplySlot || e.kind === 'boss' || e.kind === 'elite' || Math.hypot(e.x - em.x, e.y - em.y) > em.r + e.radius) continue;
+      host.hitEnemy(e, em.damage, time, 'fire');
+    }
+  }
   // 八阵图：阵内非首领减速；3 级时阵内首领出招间隔变长（ArcBossV2 系首领读 gapSlow*）；易伤在 CharacterPassives.vulnerability
   for (let i = st.zones.length - 1; i >= 0; i--) {
     const z = st.zones[i];
@@ -106,10 +128,18 @@ export function tianhuoBehavior(host: WeaponHost, weapon: WeaponState, dt: numbe
       }
     }
     fallFx(host, s.x, s.y, burst);
+    // 落在杂兵堆上：留下余烬（手绘地火 fx_ground_fire 铺满溅射圈，缺图时只结算伤害不画）
+    if (s.crowd && Z.ember.mul > 0) { // ember.mul 填 0 即关掉余烬（不留地火、不结算）
+      const r = Z.crowdSplashRadius; st.embers.push({ x: s.x, y: s.y, r, until: time + Z.ember.ms, next: time + Z.ember.tickMs, damage: s.damage * Z.ember.mul });
+      const scene = sceneOf(host), spots = [[0, 0], [.55, 0], [-.55, 0], [0, .4], [0, -.4]];
+      for (const [fx, fy] of spots) playSheet(scene, 'fx_ground_fire', s.x + fx * r, s.y + fy * r, { size: r * .95, ms: Z.ember.ms, depth: 18.7, alpha: .85, originY: .75, name: 'zhuge-ember' });
+    }
     host.sfx.play('atk_flame_boom');
-    for (const e of host.grid.query(s.x, s.y, Z.splashRadius + 40)) {
-      if (!e.active || e === s.target || Math.hypot(e.x - s.x, e.y - s.y) > Z.splashRadius + e.radius) continue;
-      host.hitEnemy(e, s.damage * Z.splashMul, time, 'fire');
+    // 溅射：打杂兵（怪堆）时半径 / 比例加大，打首领 / 精锐维持小溅射
+    const sr = s.crowd ? Z.crowdSplashRadius : Z.splashRadius, sm = s.crowd ? Z.crowdSplashMul : Z.splashMul;
+    for (const e of host.grid.query(s.x, s.y, sr + 40)) {
+      if (!e.active || e === s.target || Math.hypot(e.x - s.x, e.y - s.y) > sr + e.radius) continue;
+      host.hitEnemy(e, s.damage * sm, time, 'fire');
     }
   }
   weapon.cooldownLeft -= dt;
@@ -123,16 +153,19 @@ export function tianhuoBehavior(host: WeaponHost, weapon: WeaponState, dt: numbe
   // 这一发会是观星爆发（目标星象已满）→ 播招牌技动作；否则普通出手
   pl.playAction(pl.passive.starMarks(target, time) >= Z.starNeed ? 'skill' : 'attack', ux < 0 ? 'left' : 'right');
   host.spawnFlagSwingFx(ux, uy); host.sfx.play('atk_flame');
-  st.strikes.push({ target, spawn: target.spawnId, x: target.x, y: target.y, at: time + Z.delayMs, damage, mark: starMark(host, target.x, target.y) });
+  st.strikes.push({ target, spawn: target.spawnId, x: target.x, y: target.y, at: time + Z.delayMs, damage, mark: starMark(host, target.x, target.y), crowd: isCrowdShot(host, target, Z.range) });
   // 借东风：每第 4 发同时放出东风火龙，朝目标方向直线扫过
-  st.casts++;
+  st.casts++; st.sinceWind++;
   const W = g.masteries.wildfire;
-  if (W && st.casts % Z.eastWind.every === 0) {
-    const len = Z.eastWind.len[W - 1], half = Z.eastWind.width / 2, hit = damage * Z.eastWind.mul[W - 1];
-    pl.playAction('skill', ux < 0 ? 'left' : 'right');
-    eastWindFx(host, pl.x, pl.y, ux, uy, len);
-    for (const e of host.grid.query(pl.x + ux * len / 2, pl.y + uy * len / 2, len / 2 + half + 40)) {
-      if (!e.active) continue; const ex = e.x - pl.x, ey = e.y - pl.y, along = ex * ux + ey * uy, side = Math.abs(ex * -uy + ey * ux);
+  // 场上没有首领 / 精锐时每第 3 发，有时每第 4 发（数自上一次火龙起的发数，换档不会跳拍）
+  const every = host.enemies.some(e => e.active && (e.kind === 'boss' || e.kind === 'elite')) ? Z.eastWind.every : Z.eastWind.everyCrowd;
+  if (W && st.sinceWind >= every) {
+    st.sinceWind = 0;
+    const len = Z.eastWind.len[W - 1], half = Z.eastWind.width / 2, hit = damage * Z.eastWind.mul[W - 1], dir = densestDir(host, len, half, { x: ux, y: uy }); // 朝怪最密的方向扫
+    pl.playAction('skill', dir.x < 0 ? 'left' : 'right');
+    eastWindFx(host, pl.x, pl.y, dir.x, dir.y, len);
+    for (const e of host.grid.query(pl.x + dir.x * len / 2, pl.y + dir.y * len / 2, len / 2 + half + 40)) {
+      if (!e.active) continue; const ex = e.x - pl.x, ey = e.y - pl.y, along = ex * dir.x + ey * dir.y, side = Math.abs(ex * -dir.y + ey * dir.x);
       if (along < -e.radius || along > len + e.radius || side > half + e.radius) continue;
       host.hitEnemy(e, hit, time, 'fire');
     }

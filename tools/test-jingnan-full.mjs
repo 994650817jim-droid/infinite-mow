@@ -49,7 +49,9 @@ try {
     if (stage === 2) ck('6-2：刘度选斩杀 → 倒地掉宝箱 → 捡完告捷', parleys === 1 && j.executed?.includes('刘度') && chest && (end.victory || end.rest), { parleys, chest, end });
     if (stage === 3) {
       ck('6-3：先战黄忠（劝降）→ 韩玄出阵', sawBosses.includes('黄忠') && sawBosses.includes('韩玄') && j.persuaded?.includes('黄忠'), { sawBosses, j });
-      ck('6-3：韩玄不可劝降（只弹一次，为黄忠）、斩杀后宝箱 → 章末剧情 → 平定荆南告捷', parleys === 1 && chest && sawEnd && end?.victory === true, { parleys, chest, sawEnd, end });
+      // 2026-11-18 章末卷轴并进剧情系统（data/story/jingnan.ts）：测试默认不播剧情，章末抉择按默认写 weiyan_trust；播剧情时仍会看到章末卷轴
+      const trust = await p.evaluate(() => JSON.parse(localStorage.getItem('im_story_v1') ?? '{}').flags?.weiyan_trust ?? null);
+      ck('6-3：韩玄不可劝降（只弹一次，为黄忠）、斩杀后宝箱 → 章末剧情（或剧情关闭时按默认写 weiyan_trust）→ 平定荆南告捷', parleys === 1 && chest && (sawEnd || trust === 'trusted') && end?.victory === true, { parleys, chest, sawEnd, trust, end });
     }
     await p.screenshot({ path: `${OUT}/stage${stage}-end.png` });
   }

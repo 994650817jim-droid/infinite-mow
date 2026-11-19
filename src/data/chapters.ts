@@ -36,6 +36,8 @@ export interface ChapterDef {
   victoryText: string;
   /** 关卡目标（data/objectives.ts）：完成后首领出阵；没有时按最后一波的时间出首领。 */
   objective?: StageObjective;
+  /** 首领开局就登场（2-3 洛阳：董卓、吕布开局站在城头），不等关卡目标 / 波次。 */
+  bossAtStart?: boolean;
 }
 
 const hulaoWaves = ['关前哨骑', '西凉列阵', '弩骑夹击', '铁甲压境', '飞骑冲阵', '虎牢精锐', '关门死战', '吕布出阵']

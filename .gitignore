@@ -201,6 +201,7 @@ assets/raw/*
 !/tools/prepare-scene-sheet.mjs
 !/tools/resize-image.mjs
 !/tools/shot-boss-still.mjs
+!/tools/prepare-story-art.mjs
 !/tools/build-boss-ride.mjs
 !/tools/test-tutorial.mjs
 !/tools/test-boss-moves.mjs
@@ -271,3 +272,9 @@ assets/raw/*
 !/tools/test-siege-large-flow.mjs
 !/tools/shot-luoyang-wall.mjs
 !/tools/shot-hero-cards.mjs
+
+# 营寨回营 / 全屏截图（2026-11-18）
+!/tools/test-camp-return.mjs
+!/tools/shot-camp-full.mjs
+!/tools/deathfx-horse.mjs
+!/tools/shot-academy.mjs

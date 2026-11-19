@@ -29,7 +29,7 @@ const cardinal = (ux: number, uy: number): 'left' | 'right' | 'up' | 'down' => M
 export function smartTarget(host: WeaponHost, range: number, minDist = 0): Enemy | null {
   const pl = host.player, locked = host.priorityTarget?.(range, false);
   if (locked && Math.hypot(locked.x - pl.x, locked.y - pl.y) >= minDist) return locked;
-  const list = host.grid.query(pl.x, pl.y, range + 30).filter(e => alive(e) && e.def.behavior !== 'wall')
+  const list = host.grid.query(pl.x, pl.y, range + 30).filter(e => alive(e) && !e.invulnerable && e.def.behavior !== 'wall')
     .map(e => ({ e, d: Math.hypot(e.x - pl.x, e.y - pl.y) })).filter(o => o.d <= range + o.e.radius && o.d >= minDist).sort((a, b) => a.d - b.d);
   // 空间网格每帧重建一次：本帧刚生成的敌人还不在网格里，此时退回逐个扫描的最近敌人（不限最小距离时）
   if (!list.length) return minDist > 0 ? null : host.nearestEnemy(pl.x, pl.y, range);

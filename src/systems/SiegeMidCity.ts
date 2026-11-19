@@ -1,6 +1,8 @@
 import Phaser from 'phaser';
 import { actorDepth, DEPTH } from '../config';
 import { MID_SIEGE as M, LARGE_SIEGE as L, SIEGE_PROFILES, SIEGE_SPAWN, ramStats, type MidSiegePhase, type RamStats, type SiegeProfile } from '../data/siegeMedium';
+import { SIEGE_CITY, CITY_ART, POINT_BUILDING, cityBuildingBox, type CityLayout, type CityBuildingKind } from '../data/siegeCity';
+import { paintV2Road } from './EnvGround';
 import { warnFx } from '../ui/WarnFx';
 import { playSheet } from './SkillFxSheets';
 import { worldText } from '../world/WorldUI';
@@ -13,12 +15,12 @@ import type { EnemyKind } from '../types';
  * 攻城战重做 · 中城样板控制器（数值见 data/siegeMedium.ts，待平衡会话复核）。
  * 第一段 城外：城墙横在上方，城头两座箭楼放箭雨（落点有手绘预警圈），箭楼毁一座箭雨就减弱；
  *   主将护送冲车（离得近才走）到城门撞门，敌兵有一半会转去打冲车，冲车毁了回营地再领；打掉城外敌营少来兵。
- * 第二段 巷战：窄街两侧民房，屋顶伏兵跳下；2 个据点，站圈占下后插旗、补员，守军反扑守住 20 秒。街上有火油桶。
+ * 第二段 城内（攻城城内段改造，布局见 data/siegeCity.ts）：整座城，主街 + 横街、街区里民居 / 商铺 / 要点建筑（实心），房檐伏兵跳下；要点（小 3 / 中 4 / 大 6），占够 N 处（小 2 / 中 3 / 大 4）开府衙门；站圈占下后插旗、补员，守军反扑守住 20 秒。街上有火油桶。
  * 第三段 府衙：守将两阶段（横扫 → 加冲锋），亲卫定时从回廊杀出，亲卫在场时守将有护盾；击败后掉宝箱、插旗占领。
  * 段与段之间：城门倒塌（手绘序列帧）/ 内城门洞开 → 黑场推进转场，主将与部曲进下一块场地。
  * 美术：有 v2 图（siege_mid_*）用 v2，没有时用现有素材过渡（汜水关城门 / 箭楼 / 营寨道具、营地道具、扬尘序列帧）。
  *
- * 三档城（data/siegeMedium.ts SIEGE_PROFILES）：小城 城外（木门主将直接砍、1 座箭楼、无冲车）→ 县衙；中城 = 上面的样板；
+ * 三档城（data/siegeMedium.ts SIEGE_PROFILES）：小城 城外（木门主将直接砍、1 座箭楼、无冲车）→ 城内（丁字街）→ 县衙；中城 = 上面的样板；
  * 大城 城外（护城河 + 吊桥：砍断两根绳索放桥，或守军到时自己放桥出城）→ 瓮城（四面放箭、滚木礌石，砍破瓮城内门）→ 巷战 → 内城（势力名将两阶段）。
  * 护城河 / 吊桥 / 瓮城的 v2 图还没要（额度恢复后补），现在用江岸地面染暗作水面、营地道具（木栅 / 木板 / 绞索架）过渡。
  */
@@ -53,7 +55,7 @@ type Box = { left: number; right: number; top: number; bottom: number };
 const WALL = { segStep: 196, gateHalfVis: 124, gateOverlap: 14, beyond: 520, shadowBands: 8, shadowAlpha: .42, houseGap: 300, gateLabelDy: 62, moatFlow: 30 } as const;
 /** 城门图上多大比例（从顶往下）画成前景层：到门洞拱顶以上、含屋顶 / 阁楼 / 垛口。 */
 const GATE_FRONT_CUT = .46;
-const ART = { walls: 'siege_mid_walls', gateFx: 'siege_mid_gatefx', ram: 'siege_mid_ram', street: 'siege_mid_street', hall: 'siege_mid_hall', barb: 'siege_mid_barb' } as const;
+const ART = { walls: 'siege_mid_walls', gateFx: 'siege_mid_gatefx', ram: 'siege_mid_ram', street: 'siege_mid_street', hall: 'siege_mid_hall', barb: 'siege_mid_barb', city: 'siege_mid_city' } as const;
 /** v2 图集帧（4×2）：城防 0 城墙段 1 城门 2 城门破 3 箭楼 4 箭楼毁 5 墩台 6 残墙 7 辕门；冲车 0–3 撞门 4 打坏 5 残骸 6 我方大旗 7 我方营帐；
  *  巷战 0 民房 1 两层民房 2 店铺 3 粮仓 4 兵营 5 路障 6 屋脊 7 水井；府衙 0 大堂 1 台阶 2 回廊 3 石狮 4 内城门 5 帅旗 6 香炉 7 照壁 */
 export const MID_SIEGE_ART = ART;
@@ -69,6 +71,8 @@ export class SiegeMidCity {
   readonly stats = { volleys: 0, zones: 0, ramHits: 0, ramsLost: 0, ramsTaken: 1, fireArrows: 0, burns: 0, putOut: 0, ambushes: 0, transitions: 0, guardWaves: 0, shieldHits: 0, bossSkills: 0, ropesCut: 0, logs: 0, logHits: 0, sally: 0 };
   /** 档位配置（小 / 中 / 大城） */
   readonly prof: SiegeProfile; readonly tier: 'small' | 'medium' | 'large';
+  /** 城内段布局（data/siegeCity.ts） */
+  readonly city: CityLayout;
   /** 小城木门 / 大城瓮城内门（可砍） */
   private woodGate: Target | null = null; private innerGate: Target | null = null;
   /** 大城护城河：吊桥是否放下、两根绳索 */
@@ -97,7 +101,7 @@ export class SiegeMidCity {
 
   constructor(private readonly h: MidSiegeHost) {
     const now = h.now();
-    this.tier = h.opts?.tier ?? 'medium'; this.prof = SIEGE_PROFILES[this.tier];
+    this.tier = h.opts?.tier ?? 'medium'; this.prof = SIEGE_PROFILES[this.tier]; this.city = SIEGE_CITY[this.tier];
     this.gateHp = this.gateMax = h.opts?.gateHp ?? this.prof.gateHp;
     this.ramCfg = ramStats(h.engineLevel ?? 0); this.spareLeft = this.ramCfg.spare;
     this.volleyAt = now + 2500; this.ramReadyAt = now; this.startAt = now;
@@ -123,8 +127,10 @@ export class SiegeMidCity {
   private buildOutside() {
     const o = M.outside, a = o.arena, wy = o.wallY;
     // 场地边界：左右、南边；城墙（城门处留口，口由城门碰撞框堵上）
-    this.box({ left: a.left - 80, right: a.left, top: a.top - 1800, bottom: a.bottom + 80 });
-    this.box({ left: a.right, right: a.right + 80, top: a.top - 1800, bottom: a.bottom + 80 });
+    // 两侧只到城墙线（原来往北伸 1800 穿过城里；城内段改成整座城之后城比城外场地宽，两侧由城内段自己围）
+    const inCity = this.prof.phases.includes('street'), half = Math.max(-a.left, a.right, inCity ? -this.city.arena.left : 0, inCity ? this.city.arena.right : 0);
+    this.box({ left: a.left - 80, right: a.left, top: inCity ? wy - 30 : a.top - 1800, bottom: a.bottom + 80 });
+    this.box({ left: a.right, right: a.right + 80, top: inCity ? wy - 30 : a.top - 1800, bottom: a.bottom + 80 });
     this.box({ left: a.left - 80, right: a.right + 80, top: a.bottom, bottom: a.bottom + 80 });
     this.box({ left: a.left, right: -o.gate.halfW, top: wy - 30, bottom: wy + 20 });
     this.box({ left: o.gate.halfW, right: a.right, top: wy - 30, bottom: wy + 20 });
@@ -132,10 +138,10 @@ export class SiegeMidCity {
     // 城墙：v2 城墙段横向拼接；缺图用汜水关木栅（第 3 帧）过渡
     // 城墙连续成一条（用户 11-17「这里的城墙没做好」）：从城门两侧往外铺，段与段互相压一点盖住接缝，伸出场地两边；城门压在最上面盖住两头
     const segW = 226, step = WALL.segStep, from = WALL.gateHalfVis + step / 2 - WALL.gateOverlap;
-    for (const side of [-1, 1]) for (let i = 0, x = side * from; Math.abs(x) < Math.max(-a.left, a.right) + step / 2; i++, x += side * step) // 城墙专项检查 W8：铺到场地两边、两端交给角楼（原来伸出 520、平切口）
+    for (const side of [-1, 1]) for (let i = 0, x = side * from; Math.abs(x) < half + (inCity ? 40 : step / 2); i++, x += side * step) // 城墙专项检查 W8：铺到场地两边、两端交给角楼（原来伸出 520、平切口）；有城内段时铺到城的两角（不伸出角楼）
       this.art(x, wy + 24, [ART.walls, 0], ['sishui_props_refined', 3], segW, this.has(ART.walls) ? segW * .55 : segW * .6).setFlipX(i % 2 === 1);
     // 墙脚阴影：墙根一条柔和的暗带（贴地，压在地面上、人物之下），城墙不再像贴在地上
-    { const g = this.h.scene.add.graphics().setDepth(DEPTH.ground + 2); this.objects.push(g); const L = a.left, R = a.right; // W8：墙脚阴影不伸出墙端（原来比墙长，墙端露出直角）
+    { const g = this.h.scene.add.graphics().setDepth(DEPTH.ground + 2); this.objects.push(g); const L = -half, R = half; // W8：墙脚阴影不伸出墙端（原来比墙长，墙端露出直角）
       for (let k = 0; k < WALL.shadowBands; k++) g.fillStyle(0x1a120a, WALL.shadowAlpha * (1 - k / WALL.shadowBands)).fillRect(L, wy + 14 + k * 4, R - L, 4); }
     // 城门用倒塌序列帧的第 1 帧（完好），破门时直接往下播，最后停在敞开的门洞
     this.gateImg = this.has(ART.gateFx) ? this.img(0, wy + 34, ART.gateFx, 0, 300, 300) : this.art(0, wy + 30, [ART.walls, 1], ['sishui_props_refined', 0], 260);
@@ -307,24 +313,47 @@ export class SiegeMidCity {
     return best;
   }
 
+  /**
+   * 城内段（攻城城内段方案 · 第一步布局，data/siegeCity.ts）：整座城——主街（场景铺好）+ 横街，街区里民居、商铺、要点建筑都是实心的；
+   * 四面围起来：南面外城墙（城门口留开）、两侧城墙（瓮城套件侧墙段 + 转角角楼）、北面内城墙 + 内城门（占够要点才开）。
+   */
   private buildStreet() {
-    const s = M.street, a = s.arena;
-    this.box({ left: a.left - 520, right: a.left, top: a.top, bottom: M.outside.wallY - 30 });
-    this.box({ left: a.right, right: a.right + 520, top: a.top, bottom: M.outside.wallY - 30 });
-    this.innerGateBox = this.box({ left: a.left, right: a.right, top: s.innerGateY - 40, bottom: s.innerGateY });
-    const houseW = 230;
-    // 民房从城墙后 WALL.houseGap 起盖（城门内留一片空场）：在城外看不到民房「坐在」城墙上
-    for (let y = M.outside.wallY - WALL.houseGap; y > s.innerGateY + 140; y -= 180) for (const side of [-1, 1]) {
-      const near = s.points.some(p => Math.abs(p.y - y) < 120 && Math.sign(p.x) === side); if (near) continue;
-      const f = (Math.abs(Math.round(y / 180)) + (side > 0 ? 1 : 0)) % 3;
-      this.art(side * (a.right + houseW / 2 - 6), y, [ART.street, f], ['sishui_props_refined', 2], houseW, this.has(ART.street) ? houseW * .9 : houseW);
+    const c = this.city, a = c.arena, wy = M.outside.wallY, gy = c.innerGateY, gw = M.outside.gate.halfW;
+    this.box({ left: a.left - 400, right: a.left, top: gy - 60, bottom: wy + 20 });
+    this.box({ left: a.right, right: a.right + 400, top: gy - 60, bottom: wy + 20 });
+    // 南面外城墙的城里一侧：框盖到墙头（墙段图顶 ≈ 墙线上 100），主将走不到墙头上
+    this.box({ left: a.left, right: -gw, top: wy - 110, bottom: wy + 20 });
+    this.box({ left: gw, right: a.right, top: wy - 110, bottom: wy + 20 });
+    this.box({ left: a.left, right: -c.gateHalf, top: gy - 40, bottom: gy + 50 });
+    this.box({ left: c.gateHalf, right: a.right, top: gy - 40, bottom: gy + 50 });
+    this.innerGateBox = this.box({ left: -c.gateHalf, right: c.gateHalf, top: gy - 40, bottom: gy + 50 });
+    // 横街：v2 手绘路面转成横向（主街由攻城场景整条铺好）
+    for (const s of c.streets) {
+      const src = s.road === 'stone' ? 'road_v2_stone' : 'road_v2_dirt', key = `siege_city_road_${s.road}_${s.h}`;
+      if (paintV2Road(this.h.scene, key, src, s.h, false)) { const t = this.h.scene.add.tileSprite(s.x, s.y, s.w, s.h, key).setOrigin(0, 0).setDepth(DEPTH.ground + 1.5); this.objects.push(t); }
     }
-    // 据点建筑（粮仓 / 兵营），贴在街边
-    s.points.forEach((p, i) => this.art(Math.sign(p.x) * (a.right + 110), p.y + 40, [ART.street, 3 + i], ['sishui_props_refined', 2], 260, this.has(ART.street) ? 240 : 260));
-    // 路障
-    for (const [x, y] of [[-150, -1100], [140, -1460]] as const) this.art(x, y, [ART.street, 5], ['yellow_props', 26], 120);
-    // 内城门
-    this.innerGateImg = this.art(0, s.innerGateY + 10, [ART.hall, 4], ['sishui_props_refined', 0], 300);
+    // 房子、水井、拒马、马道；要点建筑
+    for (const b of c.buildings) { this.cityArt(b.kind, b.x, b.y, b.size, b.flip); const bx = b.solid === false ? null : cityBuildingBox(b.kind, b.x, b.y, b.size); if (bx) this.box(bx); }
+    for (const p of c.points) { const k = POINT_BUILDING[p.kind]; this.cityArt(k, p.b.x, p.b.y, p.b.size, p.b.flip); const bx = cityBuildingBox(k, p.b.x, p.b.y, p.b.size); if (bx) this.box(bx); }
+    // 城墙：北面内城墙从内城门往两边铺；两侧侧墙段；四角角楼（南面两角在外城墙两端，城外段也看得到）
+    // 北墙：内城门两侧到两角楼之间均匀铺满（两头压进门楼 / 角楼底下，不伸出角楼）
+    { const x0 = 150, n = Math.ceil((a.right - x0) / 220); for (const side of [-1, 1]) for (let i = 0; i < n; i++) this.art(side * (x0 + (a.right - x0) * (i + .5) / n), gy + 60, [ART.barb, 2], [ART.walls, 0], 246); }
+    // 两侧侧墙；角楼要点立在南角时，侧墙收在角楼后面（角楼画在前面）
+    for (const x of [a.left - 40, a.right + 40]) { const tp = c.points.find(p => p.kind === 'tower' && Math.abs(p.b.x - x) < 240); this.sideWall(x, gy + 130, tp ? tp.b.y - 60 : wy + 30, x > 0); }
+    // 南面两角：城外段两端已有角楼（离得近，小城）或角楼要点就立在这个角（大城）时不再叠一座
+    const oa = M.outside.arena, nearTower = (x: number) => Math.abs(Math.abs(x) - Math.max(-oa.left, oa.right)) < 160 || c.points.some(p => p.kind === 'tower' && Math.abs(p.b.x - x) < 200);
+    for (const x of [a.left, a.right]) { this.art(x, gy + 70, [ART.barb, 3], [ART.walls, 5], 230); if (!nearTower(x)) this.art(x, wy + 44, [ART.barb, 3], [ART.walls, 5], 240); }
+    // 内城门（府衙图集 4 号格）
+    this.innerGateImg = this.art(0, gy + 60, [ART.hall, 4], ['sishui_props_refined', 0], 300);
+  }
+  /** 城内建筑图：城内图集（市集 / 武库 / 马道 / 角楼…）缺图时退回现成的街巷 / 瓮城图（武库用兵营图翻转，和兵营区分）；没有替身的（货担）不画。 */
+  private cityArt(kind: CityBuildingKind, x: number, y: number, size: number, flip = false) {
+    const A = CITY_ART[kind], fb = A.sheet === 'city' && !this.has(ART.city) ? A.fb : undefined;
+    const sheet = fb ? fb.sheet : A.sheet, frame = fb ? fb.frame : A.frame;
+    if (sheet === 'city' && !this.has(ART.city)) return null;
+    const im = this.art(x, y, [ART[sheet], frame], ['sishui_props_refined', 2], size);
+    if (flip !== (!!fb && kind === 'armory')) im.setFlipX(true);
+    return im;
   }
 
   private buildHall() {
@@ -346,19 +375,30 @@ export class SiegeMidCity {
    */
   private sealOutside(a: { left: number; right: number; top: number; bottom: number }, wy: number) {
     for (const x of [a.left, a.right]) this.art(x, wy + 44, [ART.barb, 3], [ART.walls, 5], 240);
-    for (let y = wy + 190; y < a.bottom + 50; y += 150) { this.art(a.left - 40, y, [ART.barb, 4], [ART.walls, 5], 220); this.art(a.right + 40, y, [ART.barb, 4], [ART.walls, 5], 220).setFlipX(true); }
+    for (const x of [a.left - 40, a.right + 40]) this.sideWall(x, wy + 104, a.bottom + 50, x > 0);
     for (let x = a.left + 70; x <= a.right - 70; x += 140) this.art(x, a.bottom + 46, [ART.street, 5], ['yellow_props', 13], 140);
   }
   /**
-   * 城墙专项检查 W9：府衙院子原来两侧没有院墙（碰撞在、画面没有）——四角角楼、两侧侧墙、北墙接到大堂两侧；南面：中城 / 大城留出街巷入口，小城整排封上（加碰撞）。
+   * 城墙专项检查 W9：府衙院子原来两侧没有院墙（碰撞在、画面没有）——四角角楼、两侧侧墙、北墙接到大堂两侧；南面由城内段的北城墙 + 内城门封（攻城城内段改造后三档都有城内段）。
    */
+  /**
+   * 竖排侧墙（瓮城套件 4 号格）：侧墙段图上下两头是斜的（帧内 y 163–283 这一段左右边才是直的），整张竖叠会错成锯齿——
+   * 只取直的那一段竖向拼接，最上一节留斜顶、最下一节留墙脚（同 W7 瓮城侧墙的做法）。y0 = 第一节直段的下沿，y1 = 墙脚。缺图退回墩台竖排。
+   */
+  private sideWall(x: number, y0: number, y1: number, flip: boolean) {
+    const size = 220, k = size / 384, band0 = 163, band1 = 283, step = (band1 - band0) * k, n = Math.max(2, Math.ceil((y1 - y0) / step));
+    if (!this.has(ART.barb)) { for (let y = y0 + 60; y < y1 + 40; y += 150) this.art(x, y, [ART.barb, 4], [ART.walls, 5], size).setFlipX(flip); return; }
+    for (let i = 0; i < n; i++) {
+      const y = y0 + i * step + (384 - band1) * k, top = i === 0 ? 19 : band0, bot = i === n - 1 ? 365 : band1;
+      this.art(x, y, [ART.barb, 4], [ART.walls, 5], size).setFlipX(flip).setCrop(0, top, 384, bot - top);
+    }
+  }
   private hallWalls(a: { left: number; right: number; top: number; bottom: number }) {
     for (const x of [a.left, a.right]) { this.art(x, a.top + 70, [ART.barb, 3], [ART.walls, 5], 230); this.art(x, a.bottom + 50, [ART.barb, 3], [ART.walls, 5], 210); }
-    for (let y = a.top + 210; y < a.bottom + 20; y += 150) { this.art(a.left - 40, y, [ART.barb, 4], [ART.walls, 5], 220); this.art(a.right + 40, y, [ART.barb, 4], [ART.walls, 5], 220).setFlipX(true); }
+    for (const x of [a.left - 40, a.right + 40]) this.sideWall(x, a.top + 130, a.bottom + 34, x > 0);
     for (let x = a.left + 120; x <= a.right - 110; x += 220) if (Math.abs(x) > 360) this.art(x, a.top + 30, [ART.barb, 2], [ART.walls, 0], 246);
-    const open = this.prof.phases.includes('street') ? M.street.arena.right + 30 : 0;
-    for (let x = a.left + 120; x <= a.right - 110; x += 220) if (!open || Math.abs(x) - 110 > open) this.art(x, a.bottom + 60, [ART.barb, 2], [ART.walls, 0], 246);
-    if (open) { this.box({ left: a.left, right: -open, top: a.bottom, bottom: a.bottom + 60 }); this.box({ left: open, right: a.right, top: a.bottom, bottom: a.bottom + 60 }); }
+    // 南面：有城内段时由城内段的北城墙 + 内城门封（攻城城内段改造），没有时整排封上
+    if (!this.prof.phases.includes('street')) for (let x = a.left + 120; x <= a.right - 110; x += 220) this.art(x, a.bottom + 60, [ART.barb, 2], [ART.walls, 0], 246);
   }
 
   // ---------- 冲车 ----------
@@ -535,9 +575,11 @@ export class SiegeMidCity {
       return { x: d.x + (d.x < L.barbican.cx ? 30 : -30), y: d.y + (Math.random() - .5) * 60 };
     }
     if (this.phase === 'street') {
-      const a = M.street.arena;
-      if (r < .55) return { x: (Math.random() - .5) * 300, y: Math.max(a.top + 50, p.y - 420) }; // 前方巷口
-      return { x: Math.random() < .5 ? a.left + 30 : a.right - 30, y: Math.max(a.top + 50, p.y - 150 - Math.random() * 200) }; // 侧巷（前方；身后是我军来路，不刷）
+      const c = this.city;
+      if (r < .35 && Math.abs(p.x) < 400) return { x: (Math.random() - .5) * 160, y: Math.max(c.innerGateY + 90, p.y - 420) }; // 主街前方
+      // 街口 / 巷口：前方与两侧（身后是我军来路，不刷），远处的不刷
+      const near = c.spawns.filter(s => s.y < p.y + 160 && Math.hypot(s.x - p.x, s.y - p.y) < 1300), list = near.length ? near : c.spawns, s = list[Math.floor(Math.random() * list.length)];
+      return { x: s.x + (Math.random() - .5) * 60, y: s.y + (Math.random() - .5) * 40 };
     }
     if (this.phase === 'hall') {
       if (kind === 'cavalry') return null;
@@ -549,17 +591,17 @@ export class SiegeMidCity {
 
   // ---------- 第二段：巷战 ----------
   private enterStreet() {
-    const s = M.street, sc = this.h.scene;
-    this.points = s.points.map(pt => ({ ...pt, state: 'open' as const, progress: 0, hold: 0, lost: 0, counterAt: 0,
-      label: (() => { const l = worldText(sc, pt.x, pt.y - pt.radius - 30, '', 15, '#ffe1a0').setOrigin(.5).setDepth(36).setStroke('#1a120b', 4); this.objects.push(l); return l; })(),
+    const c = this.city, sc = this.h.scene;
+    this.points = c.points.map(({ name, x, y, radius }) => ({ name, x, y, radius, state: 'open' as const, progress: 0, hold: 0, lost: 0, counterAt: 0,
+      label: (() => { const l = worldText(sc, x, y - radius * .65 - 24, '', 15, '#ffe1a0').setOrigin(.5).setDepth(36).setStroke('#1a120b', 4); this.objects.push(l); return l; })(),
       gfx: (() => { const g = sc.add.graphics().setDepth(DEPTH.ground + 3); this.objects.push(g); return g; })() }));
-    for (const b of s.barrels) this.h.spawnBarrel(b.x, b.y);
+    for (const b of c.barrels) this.h.spawnBarrel(b.x, b.y);
     this.ambushAt = this.h.now() + 4000;
-    this.h.banner('巷战 · 夺取据点', true, '占下粮仓、兵营，顶住守军反扑 20 秒');
+    this.h.banner('入城 · 夺取要点', true, `城中 ${c.points.length} 处要点，占下 ${c.need} 处即可攻打${this.hallName}`);
   }
   get pointsInfo() { return this.points.map(p => ({ name: p.name, state: p.state, progress: +p.progress.toFixed(2), hold: +p.hold.toFixed(1) })); }
   private updateStreet(dt: number, now: number) {
-    const s = M.street, p = this.h.player;
+    const s = M.street, p = this.h.player, ca = this.city.arena;
     for (const pt of this.points) {
       const inside = Math.hypot(p.x - pt.x, p.y - pt.y) <= pt.radius;
       let foes = 0; for (const e of this.h.enemies()) if (e.active && !e.isSupplySlot && e.kind !== 'boss' && Math.hypot(e.x - pt.x, e.y - pt.y) <= pt.radius) foes++;
@@ -569,7 +611,7 @@ export class SiegeMidCity {
       } else if (pt.state === 'held') {
         pt.hold += dt;
         if (!inside && foes) pt.lost += dt; else pt.lost = Math.max(0, pt.lost - dt * .5);
-        if (now >= pt.counterAt) { pt.counterAt = now + s.counterEveryMs; for (let i = 0; i < s.counterBurst; i++) { const a = -Math.PI / 2 + (Math.random() - .5) * 1.6; this.h.spawnEnemy(Math.random() < .25 ? 'shield' : 'infantry', pt.x + Math.cos(a) * 420, Math.max(s.arena.top + 40, pt.y + Math.sin(a) * 420)); } }
+        if (now >= pt.counterAt) { pt.counterAt = now + s.counterEveryMs; for (let i = 0; i < s.counterBurst; i++) { const a = -Math.PI / 2 + (Math.random() - .5) * 1.6; this.h.spawnEnemy(Math.random() < .25 ? 'shield' : 'infantry', Phaser.Math.Clamp(pt.x + Math.cos(a) * 420, ca.left + 40, ca.right - 40), Phaser.Math.Clamp(pt.y + Math.sin(a) * 420, this.city.innerGateY + 90, M.outside.wallY - 80)); } }
         if (pt.lost >= s.loseSeconds) { pt.state = 'open'; pt.progress = 0; pt.hold = 0; pt.lost = 0; pt.flag?.destroy(); pt.flag = undefined; this.h.banner(`${pt.name}失守`, true, '重新占领'); }
         else if (pt.hold >= s.holdSeconds) this.securePoint(pt);
       }
@@ -579,21 +621,19 @@ export class SiegeMidCity {
       if (prog > 0 && pt.state !== 'secured') { g.lineStyle(6, pt.state === 'held' ? 0xe8c76a : 0x8fe0b4, 1); g.beginPath(); g.arc(pt.x, pt.y, pt.radius * .55, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * prog); g.strokePath(); }
       pt.label.setText(pt.state === 'open' ? `${pt.name} · 占领 ${Math.round(pt.progress * 100)}%` : pt.state === 'held' ? `${pt.name} · 顶住反扑 ${Math.max(0, Math.ceil(s.holdSeconds - pt.hold))} 秒${pt.lost > 0 ? ' · 快回据点！' : ''}` : `${pt.name} · 已占`);
     }
-    // 屋顶伏兵：预警（伏兵旗影）后从两侧屋顶跳下
+    // 屋顶伏兵：预警（伏兵旗影）后从主将附近的房檐跳下（布局里的 roofs）
     if (now >= this.ambushAt) {
       this.ambushAt = now + s.ambush.everyMs; this.stats.ambushes++;
       const n = s.ambush.count[0] + Math.floor(Math.random() * (s.ambush.count[1] - s.ambush.count[0] + 1));
-      for (let i = 0; i < n; i++) {
-        const side = i % 2 ? 1 : -1, x = side * s.ambush.roofX, y = Math.max(s.arena.top + 60, Math.min(s.arena.bottom - 60, p.y - 60 - Math.random() * 220));
-        warnFx(this.h.scene).ambush(x, y, 70); this.ambushPending.push({ x, y, at: now + s.ambush.warnMs, kind: i === 0 ? 'shield' : 'infantry' });
-      }
+      const roofs = [...this.city.roofs].sort((u, v) => Math.hypot(u.x - p.x, u.y - p.y) - Math.hypot(v.x - p.x, v.y - p.y)).slice(0, n);
+      roofs.forEach(({ x, y }, i) => { warnFx(this.h.scene).ambush(x, y, 70); this.ambushPending.push({ x, y, at: now + s.ambush.warnMs, kind: i === 0 ? 'shield' : 'infantry' }); });
     }
     for (const a of [...this.ambushPending]) if (now >= a.at) {
       this.ambushPending.splice(this.ambushPending.indexOf(a), 1);
       const e = this.h.spawnEnemy(a.kind, a.x, a.y, true);
       if (e) { const s0 = e.sprite.y; e.sprite.y = s0 - 90; this.h.scene.tweens.add({ targets: e.sprite, y: s0, duration: 260, ease: 'Quad.In' }); playSheet(this.h.scene, 'fx_collapse_dust', a.x, a.y + 6, { size: 90, depth: DEPTH.fx, ms: 380, alpha: .7 }); }
     }
-    if (this.points.length && this.points.every(pt => pt.state === 'secured') && !this.transitioning && this.phase === 'street') this.openInnerGate();
+    if (this.points.length && this.securedCount >= Math.min(this.city.need, this.points.length) && !this.transitioning && this.phase === 'street') this.openInnerGate();
   }
   private takePoint(pt: Point, now: number) {
     pt.state = 'held'; pt.hold = 0; pt.lost = 0; pt.counterAt = now + 1200;
@@ -603,13 +643,15 @@ export class SiegeMidCity {
   }
   private securePoint(pt: Point) {
     pt.state = 'secured'; this.h.recruit(M.street.secureReinforce); this.h.player.heal(this.h.player.maxHp * M.street.secureHeal);
-    const left = this.points.filter(p => p.state !== 'secured').length;
-    this.h.banner(`${pt.name}已守住`, false, left ? `补员完成 · 还剩 ${left} 个据点` : '内城门已开 · 直取府衙');
+    const left = this.city.need - this.securedCount;
+    this.h.banner(`${pt.name}已守住`, false, left > 0 ? `补员完成 · 再占 ${left} 处要点开${this.hallName}门` : `${this.hallName}门已开 · 直取${this.hallName}`);
   }
+  /** 已占稳的要点数。 */
+  get securedCount() { return this.points.filter(p => p.state === 'secured').length; }
   private openInnerGate() {
     if (this.innerGateBox) { const i = this.h.footprints.indexOf(this.innerGateBox); if (i >= 0) this.h.footprints.splice(i, 1); this.innerGateBox = null; }
     this.innerGateImg?.setVisible(false); // 内城门洞开：门楼撤掉，扬尘遮住切换
-    playSheet(this.h.scene, 'fx_collapse_dust', 0, M.street.innerGateY, { size: 240, depth: DEPTH.fx, ms: 700 });
+    playSheet(this.h.scene, 'fx_collapse_dust', 0, this.city.innerGateY + 40, { size: 240, depth: DEPTH.fx, ms: 700 });
     this.h.scene.cameras.main.shake(260, .006);
     this.transitioning = true; this.h.scene.time.delayedCall(1100, () => { this.transitioning = false; this.transition(this.nextPhase('street')); });
   }
@@ -701,7 +743,7 @@ export class SiegeMidCity {
   get hallName() { return this.h.opts?.hallName ?? this.prof.hall.name; }
   transition(to: 'barbican' | 'street' | 'hall') {
     if (this.phase === 'done' || this.phase === 'hall' || this.nextPhase(this.phase) !== to) return;
-    const sc = this.h.scene, cam = sc.cameras.main, start = to === 'barbican' ? L.barbican.start : to === 'street' ? M.street.start : M.hall.start;
+    const sc = this.h.scene, cam = sc.cameras.main, start = to === 'barbican' ? L.barbican.start : to === 'street' ? this.city.start : M.hall.start;
     this.transitioning = true; this.stats.transitions++;
     this.h.player.invulnUntil = Math.max(this.h.player.invulnUntil, this.h.now() + M.transitionMs + 1200);
     cam.fadeOut(M.transitionMs * .4, 8, 6, 4);
@@ -738,7 +780,7 @@ export class SiegeMidCity {
     if (this.phase === 'outside' && this.tier === 'large' && !this.bridgeDown) return `城外 · 砍断吊桥绳索 ${2 - this.ropesLeft}/2${tw}`;
     if (this.phase === 'outside') return `城外 · 冲车撞门 ${pct}%${tw}${this.ram && this.ram.state !== 'wreck' && this.h.now() < this.ramAlertUntil ? (this.ram.burnUntil > this.h.now() ? ' · 冲车着火！' : ' · 冲车受击！') : ''}${this.ram?.state === 'wreck' ? ' · 冲车已毁 · 回营地领新车' : ''}`;
     if (this.phase === 'barbican') return `瓮城 · 砍破内门 ${Math.round((1 - this.innerGateHp / L.barbican.innerGate.hp) * 100)}% · 小心滚木`;
-    if (this.phase === 'street') return '巷战 · ' + this.points.map(p => `${p.name}${p.state === 'secured' ? '✓' : p.state === 'held' ? '守' : ''}`).join(' · ');
+    if (this.phase === 'street') return `城内 · 要点 ${this.securedCount}/${this.city.need} · ` + this.points.map(p => `${p.name}${p.state === 'secured' ? '✓' : p.state === 'held' ? '守' : ''}`).join(' · ');
     if (this.phase === 'hall') return `${this.hallName} · 击败${this.h.opts?.bossName ?? '守将'}${this.guardsAlive ? ' · 亲卫护盾中' : ''}`;
     return '占领完成';
   }

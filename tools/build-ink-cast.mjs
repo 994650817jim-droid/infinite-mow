@@ -2,6 +2,8 @@
 // 处理与 build-ink-scroll-assets.mjs 的武将立绘完全一致（与边缘连通的近白像素转透明并反算颜色、底部 14% 渐隐），
 // 人物按整列高度缩放到 900、水平居中，和 12 将立轴同比例（对白里取上 56%）。
 // 用法：SRC=public/assets/ink-cast/originals/sheet_a.png IDS=jiaxu,wangyun,lijue node tools/build-ink-cast.mjs
+//   PAD（默认 .14）：每格向两侧多裁的比例；两人在底部云雾里连在一起、邻居衣角混进来时设 PAD=0（只裁本格）。
+//   MINBLOB（默认 .01）：离人物较远、小于最大墨块这个比例的零碎墨块丢掉；画面分格底色不一留下灰块时调大（如 .06）。
 //   切分：在 W·k/N 附近 ±18% 内找「非白像素最少」的竖线当分界（人物之间的白缝）。
 import { chromium } from 'playwright';
 import fs from 'fs';
@@ -9,7 +11,7 @@ const { SRC } = process.env, IDS = (process.env.IDS ?? '').split(',').filter(Boo
 if (!SRC || !IDS.length) { console.error('需要 SRC 与 IDS'); process.exit(2); }
 fs.mkdirSync(OUT, { recursive: true });
 const b = await chromium.launch({ channel: 'chrome', headless: true }); const p = await b.newPage();
-const res = await p.evaluate(async ([src, N]) => {
+const res = await p.evaluate(async ([src, N, PAD, MINBLOB]) => {
   const im = new Image(); im.src = src; await im.decode();
   const W = im.width, H = im.height, c0 = document.createElement('canvas'); c0.width = W; c0.height = H;
   const g0 = c0.getContext('2d', { willReadFrequently: true }); g0.drawImage(im, 0, 0);
@@ -21,7 +23,7 @@ const res = await p.evaluate(async ([src, N]) => {
   const outs = [];
   for (let k = 0; k < N; k++) {
     // 向两侧多裁 pad（兵器常伸进邻居那一格）；之后只留「重心落在本格」的墨块，邻居伸过来的兵器去掉
-    const pad = Math.round(W / N * .14), x0 = Math.max(0, cuts[k] - pad), x1 = Math.min(W, cuts[k + 1] + pad), cw = x1 - x0, c = document.createElement('canvas'); c.width = cw; c.height = H;
+    const pad = Math.round(W / N * PAD), x0 = Math.max(0, cuts[k] - pad), x1 = Math.min(W, cuts[k + 1] + pad), cw = x1 - x0, c = document.createElement('canvas'); c.width = cw; c.height = H;
     const own0 = cuts[k] - x0, own1 = cuts[k + 1] - x0;
     const g = c.getContext('2d', { willReadFrequently: true }); g.fillStyle = '#fff'; g.fillRect(0, 0, cw, H); g.drawImage(im, -x0, 0);
     const img = g.getImageData(0, 0, cw, H), d = img.data, light = i => 255 - Math.min(d[i], d[i + 1], d[i + 2]);
@@ -39,7 +41,7 @@ const res = await p.evaluate(async ([src, N]) => {
       const cx = sx / n; keepLab.push(cx >= own0 && cx < own1); sizes.push(n); nl++;
     }
     // 远离人物的零碎淡墨（不到最大墨块 1%）也去掉
-    const big = Math.max(0, ...sizes.filter((_, i) => keepLab[i])); for (let i = 0; i < nl; i++) if (sizes[i] < big * .01) keepLab[i] = false;
+    const big = Math.max(0, ...sizes.filter((_, i) => keepLab[i])); for (let i = 0; i < nl; i++) if (sizes[i] < big * MINBLOB) keepLab[i] = false;
     let bx0 = cw, bx1 = 0;
     for (let j = 0; j < cw * H; j++) if (!bg[j]) { if (!keepLab[lab[j]]) bg[j] = 2; else { const x = j % cw; if (x < bx0) bx0 = x; if (x > bx1) bx1 = x; } }
     // 人物墨块向外 R 像素以内的背景才保留软边；更远处宣纸上的淡痕一律全透明（不然卷轴上会看到一道道浅灰丝）
@@ -62,7 +64,7 @@ const res = await p.evaluate(async ([src, N]) => {
     outs.push(o.toDataURL('image/webp', .86));
   }
   return { size: [W, H], cuts, outs };
-}, ['data:image/png;base64,' + fs.readFileSync(SRC).toString('base64'), IDS.length]);
+}, ['data:image/png;base64,' + fs.readFileSync(SRC).toString('base64'), IDS.length, +(process.env.PAD ?? .14), +(process.env.MINBLOB ?? .01)]);
 res.outs.forEach((u, k) => { const f = OUT + IDS[k] + '.webp', buf = Buffer.from(u.split(',')[1], 'base64'); fs.writeFileSync(f, buf); console.log('→', f, buf.length); });
 console.log('源图', res.size.join('×'), '分界', res.cuts.join(','));
 await b.close();

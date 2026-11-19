@@ -170,7 +170,7 @@ export class DianweiGuard {
     if (now >= this.rageUntil) { this.rageUntil = 0; this.rageFx?.destroy(); this.rageFx = null; return; }
     // 红气：手绘序列帧循环（每段播完再接一段）；缺图则不画
     const rk = fxKey(this.h.scene, FX.rage);
-    if (rk && now >= this.rageFxAt) { this.rageFxAt = now + 600; this.rageFx = playSheet(this.h.scene, rk, this.x, this.y - 10, { size: D.rage.fx, ms: 600, depth: actorDepth(this.y) - .01, alpha: .7, add: true, tint: rk === 'fx_awaken_fire' ? 0xff5a40 : undefined, originY: .8, name: 'dianwei-rage', onUpdate: img => img.setPosition(this.x, this.y - 10).setDepth(actorDepth(this.y) - .01) }); }
+    if (rk && now >= this.rageFxAt) { this.rageFxAt = now + 600; this.rageFx = playSheet(this.h.scene, rk, this.x, this.y - 10, { size: D.rage.fx, ms: 600, depth: actorDepth(this.y) - .01, alpha: .7, add: true, tint: rk === 'fx_awaken_fire' ? 0xff5a40 : undefined, originY: rk === 'fx_dianwei_rage' ? .55 : .8, name: 'dianwei-rage', onUpdate: img => img.setPosition(this.x, this.y - 10).setDepth(actorDepth(this.y) - .01) }); }
     if (Math.floor(now / 120) % 2 === 0 && !this.hurtFlashUntil) this.img.setTint(0xffb0a0); else if (!this.hurtFlashUntil) this.img.clearTint();
   }
   /** 双戟旋风：起手（友军色预警圈）→ 旋扫一圈 + 击退。 */
@@ -226,7 +226,7 @@ export class DianweiGuard {
       if (t.target.active) { t.tx = t.target.x; t.ty = t.target.y - 20; }
       const dx = t.tx - t.x, dy = t.ty - t.y, d = Math.hypot(dx, dy), st = T.speed * dt;
       if (d <= st + 8 || t.life <= 0) {
-        if (t.target.active && d <= st + 30) { this.h.hit(t.target, D.swingDamage * T.damageMul); this.stats.throwHits++; playSheet(sc, FX.hit, t.tx, t.ty, { size: 90, ms: 260, depth: DEPTH.fx + 1, add: true, name: 'dianwei-throw-hit' }); }
+        if (t.target.active && d <= st + 30) { this.h.hit(t.target, D.swingDamage * T.damageMul); this.stats.throwHits++; playSheet(sc, fxKey(sc, ['fx_dianwei_hit', FX.hit]) ?? FX.hit, t.tx, t.ty, { size: 90, ms: 260, depth: DEPTH.fx + 1, add: true, name: 'dianwei-throw-hit' }); }
         t.img?.destroy(); this.throws.splice(i, 1); continue;
       }
       t.x += dx / d * st; t.y += dy / d * st; t.spin += dt;

@@ -309,7 +309,7 @@ export class EnemyTraits {
     s.face = Phaser.Math.Angle.RotateTo(s.face, want, Phaser.Math.DegToRad(t.turnDeg) * dt);
     const fx = Math.cos(s.face), fy = Math.sin(s.face), along = Math.max(0, fx * nx + fy * ny);
     this.h.move(e, fx * along, fy * along, dt);
-    if (dist < t.bashRange && now >= s.next) { s.next = now + t.everyMs; this.metrics.bashes += 1; e.startAttack(now, dirOf(fx, fy)); this.hitPlayer(e.x + fx * 40, e.y + fy * 40, t.bashRange * .7, t.bashDamage, now); }
+    if (dist < t.bashRange && now >= s.next) { s.next = now + t.everyMs; this.metrics.bashes += 1; e.startAttack(now, dirOf(fx, fy)); const life = e.spawnId; this.h.scene.time.delayedCall(ARROW_MS, () => { if (e.active && e.spawnId === life) this.hitPlayer(e.x + Math.cos(s.face ?? 0) * 40, e.y + Math.sin(s.face ?? 0) * 40, t.bashRange * .7, t.bashDamage, this.now()); }); } // 盾击在出击帧（第 2 帧）打到
     return true;
   }
   /** 丹阳兵：保持距离掷标枪，被贴近就后撤。 */
@@ -335,7 +335,7 @@ export class EnemyTraits {
       }
       return true;
     }
-    if (dist < t.range * .9 && now >= s.next) { s.next = now + t.everyMs; s.phase = 'warn'; s.until = now + t.warnMs; s.face = Math.atan2(ny, nx); e.poseUntil = Math.max(e.poseUntil, now + t.warnMs + 180); e.startAttack(now, dirOf(nx, ny)); e.windupCol = 0; e.attackUntil = now + t.warnMs + 180; return true; }
+    if (dist < t.range * .9 && now >= s.next) { s.next = now + t.everyMs; s.phase = 'warn'; s.until = now + t.warnMs; s.face = Math.atan2(ny, nx); e.poseUntil = Math.max(e.poseUntil, now + t.warnMs + 270); e.startAttack(now, dirOf(nx, ny)); e.windupCol = 0; e.attackUntil = now + t.warnMs + 270; return true; } // 横扫弧光在攻击表第 2 帧：扫到那一刻播到第 2 帧
     this.h.move(e, nx, ny, dt); return true;
   }
   /** 先登死士：走到射程 → 举盾（正面减伤）↔ 放盾连射。 */
@@ -346,7 +346,7 @@ export class EnemyTraits {
     if (s.phase === 'up') { e.sprite.setTint(0xb8c0c8); if (now >= (s.until ?? 0)) { s.phase = 'down'; s.until = now + t.downMs; s.shots = 0; e.sprite.setTint(e.baseTint); } return true; }
     if ((s.shots ?? 0) < t.shots && now >= (s.until ?? 0) - t.downMs + (s.shots ?? 0) * t.shotGapMs) {
       s.shots = (s.shots ?? 0) + 1; this.metrics.volleys += 1; e.startAttack(now, dirOf(nx, ny)); this.h.sfx('enemyArrow');
-      this.h.fireArrow(e, this.h.player.x + (Math.random() - .5) * 30, this.h.player.y + (Math.random() - .5) * 30, e.def.damage, t.arrowSpeed);
+      const life = e.spawnId; this.h.scene.time.delayedCall(ARROW_MS, () => { if (e.active && e.spawnId === life) this.h.fireArrow(e, this.h.player.x + (Math.random() - .5) * 30, this.h.player.y + (Math.random() - .5) * 30, e.def.damage, t.arrowSpeed); }); // 弩箭在攻击表第 2 帧射出
     }
     if (now >= (s.until ?? 0)) { s.phase = dist > t.range * 1.2 ? 'move' : 'up'; s.until = now + t.upMs; }
     return true;

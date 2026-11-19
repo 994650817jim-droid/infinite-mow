@@ -119,11 +119,12 @@ try {
     ck('open stage pin: 2-1 汜水关 can depart', m.title.includes('汜水关') && m.detail.includes('华雄') && m.actionOn && m.action === '从此关出征', m);
     await p.screenshot({ path: `${out}/mobile-3b-stage-pin.png` });
     await p.evaluate(() => window.__game.scene.getScene('WorldMapScene').children.getByName('map-action').emit('pointerup'));
-    await p.waitForFunction(() => window.__game.scene.isActive('MenuScene'), null, { timeout: 20000 });
-    ck('出征 from stage pin goes to hero select for 讨伐董卓 2-1', await p.evaluate(() => { const m = window.__game.scene.getScene('MenuScene'); return m.selectedChapter === 'hulao' && m.selectedWestStage === 1 && window.__game.registry.get('worldCampaign') === true && !window.__game.registry.get('hardChapter'); }));
-    await p.waitForTimeout(500); await p.screenshot({ path: `${out}/mobile-4-hulao-hero-select.png` });
+    // 2026-11-18 用户「应该不需要这个画面，因为只有主公可以出战」：出征直接以主公开战，不经选将页
+    await p.waitForFunction(() => window.__game.scene.isActive('GameScene') && window.__game.scene.getScene('GameScene').player, null, { timeout: 60000 });
+    ck('出征 from stage pin starts 讨伐董卓 2-1 directly with the lord (no hero select)', await p.evaluate(() => { const g = window.__game, rc = g.registry.get('runConfig'); return rc?.chapter === 'hulao' && rc?.westStage === 1 && g.registry.get('worldCampaign') === true && !g.registry.get('hardChapter') && !g.scene.isActive('MenuScene'); }));
+    await p.waitForTimeout(500); await p.screenshot({ path: `${out}/mobile-4-hulao-battle.png` });
     // 再次进图：新篇提示不重复
-    await p.evaluate(() => { window.__game.scene.getScene('MenuScene').scene.start('WorldMapScene'); }); await p.waitForFunction(() => window.__game.scene.isActive('WorldMapScene')); await p.waitForTimeout(300);
+    await p.evaluate(() => { const g = window.__game; for (const sc of g.scene.getScenes(true)) sc.scene.stop(); g.scene.start('WorldMapScene'); }); await p.waitForFunction(() => window.__game.scene.isActive('WorldMapScene')); await p.waitForTimeout(300);
     ck('banner not repeated on revisit', !(await mapState(p)).banner);
     await p.close();
   }

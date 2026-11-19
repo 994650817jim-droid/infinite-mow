@@ -1,5 +1,5 @@
 import {playMenuMusic} from '../systems/Music';
-import {defaultHero} from '../systems/RosterStore';
+import {defaultHero,loadRoster} from '../systems/RosterStore';
 import {checkWorld} from '../systems/Achievements';
 import {RENDER_SCALE,screenPoint,TITLE_FONT,HEADING_FONT} from '../config';
 import {thirdChapterUnlocked,arcUnlocked} from '../world/WorldStore';
@@ -541,7 +541,7 @@ export class WorldMapScene extends Phaser.Scene {
   if(n.challenge){this.challengeDetail(n,st);return;}
   if(n.kind==='home'||!info){const next=currentChapter(save),cleared=CHAPTER_TIMELINE.filter(c=>chapterStagesDone(c.id,save)>=3).length;this.setDetail(n.name,FACTIONS.player.color,n.kind==='home'?'营':'锁',`${n.region} · ${n.kind==='home'?'玩家领地':'地区开发中'}\n从义军营寨出发，建设后再次出征。\n章节进度 ${cleared}/${CHAPTER_TIMELINE.length} · ${cleared>=CHAPTER_TIMELINE.length?'诸章皆已平定':`下一章：第${next.numeral}章「${next.title}」`}`);}
   else{const hard=hardChapterCleared(info.id),status=locked?`未解锁：${info.hint}`:st==='cleared'?`已平定（3/3 关）· ${hard?`乱世已平 · 称号「${HARD_TITLES[info.id]}」`:'可重温，或挑战乱世难度'}`:done?`进行中：已过 ${done}/3 关`:'已开放：可出征';
-   this.setDetail(`第${info.numeral}章 · ${n.name}`,st==='cleared'?0x5f8f4e:locked?0x4a4f46:0x8e2a1e,st==='cleared'?'捷':locked?'锁':'战',`公元${info.year}年（${info.era}） · ${n.region}\n${status}\n${locked?'按史事时序逐章解锁。':this.lossWarning()||'战斗中的随军粮只在本局有效，战后另结算营寨军粮。'}`);}
+   this.setDetail(`第${info.numeral}章 · ${n.name}`,st==='cleared'?0x5f8f4e:locked?0x4a4f46:0x8e2a1e,st==='cleared'?'捷':locked?'锁':'战',locked?`公元${info.year}年（${info.era}） · ${n.region}\n${status}\n按史事时序逐章解锁。`:`${status}\n${this.musterLine()}\n公元${info.year}年（${info.era}） · ${n.region}\n${this.lossWarning()||'战斗中的随军粮只在本局有效，战后另结算营寨军粮。'}`);}
   this.action.text.setText(locked?'尚未解锁':n.kind==='home'?"进入营寨":st==='cleared'?'重温 · 出征':'出征');this.action.image.setAlpha(locked?.45:1);if(locked)this.action.image.disableInteractive();else this.action.image.setInteractive({useHandCursor:true});
   this.layoutActions(st==='cleared');}
 /** 挑战关「虎牢关 · 三英战吕布」详情：开放条件、首通奖励赤兔、胜场。 */
@@ -604,8 +604,23 @@ ${city.tier==='large'?'守城大将：'+siegeBossName(city,owner):'守军：'+FA
  private enterStage(id:TimelineChapterId,stage:number|undefined,hard:boolean){
   if(hard&&chapterState(id,loadWorld())==='cleared')this.registry.set('hardChapter',id);else this.registry.remove('hardChapter');
   if(id==='qunxiong'||id==='guandu'||id==='chibi'||id==='jingnan'||id==='shu'||id==='hanzhong'||id==='xiangfan'||id==='yiling'||id==='nanzheng'||id==='beifa'){if(stage)this.registry.set('worldStagePick',stage);this.scene.start(CAMPAIGNS[id].scene);return;}
-  this.registry.set('worldCampaign',true);this.registry.set('selectedWorldChapter',id);if(stage)this.registry.set('selectedWorldStage',stage);
-  if(this.registry.get('battleReady'))this.scene.start('MenuScene');else{this.registry.set('loadBattle',true);this.scene.start('BootScene');}}
+  this.launchMain(id,stage);}
+ /**
+  * 第壹 / 贰章出征（2026-11-18 用户「应该不需要这个画面，因为只有主公可以出战」）：不再经点将页，直接以主公开战。
+  * 关：地图上点了关卡印就打那一关，否则打本章下一个未通关的关（本章全通了从第 1 关起，与原选将页同一规则）。
+  */
+ private launchMain(id:TimelineChapterId,stage?:number){
+  const save=loadWorld(),done=id==='huangjin'?save.yellowStages:save.dongzhuoStages,n=(stage&&[1,2,3].includes(stage)?stage:done>=1&&done<3?done+1:1) as 1|2|3;
+  const hero=this.lordId(),c=CHARACTERS.find(x=>x.id===hero)!;
+  if(!isChapterTestRun())try{localStorage.setItem('im_last_hero',hero);}catch{/* storage unavailable */}
+  this.registry.remove('campaignTransfer');this.registry.set('worldCampaign',true);
+  this.registry.set('runConfig',{chapter:id==='hulao'?'hulao':'huangjin',stage:id==='huangjin'?n:undefined,westStage:id==='hulao'?n:undefined,character:hero,weapon:c.startWeapon});
+  if(this.registry.get('battleReady'))this.scene.start('GameScene');else{this.registry.set('pendingWarlord','GameScene');this.registry.set('loadBattle',true);this.scene.start('BootScene');}}
+ /** 出战的主公（存档主公；老存档按最近出战的武将）。 */
+ private lordId():CharacterId{let hero:CharacterId=defaultHero(null);try{hero=defaultHero(localStorage.getItem('im_last_hero'));}catch{/* storage unavailable */}return hero;}
+ /** 「主公 赵云 · 随行 华雄、张辽」一行（出征小卡上）。 */
+ private musterLine():string{const lord=CHARACTERS.find(c=>c.id===this.lordId())?.name??'';let names:string[]=[];try{const r=loadRoster();names=r.followers.map(id=>r.owned.find(o=>o.id===id)?.name).filter((x):x is string=>!!x);}catch{/* 存档不可用 */}
+  return names.length?`主公 ${lord} · 随行 ${names.slice(0,3).join('、')}${names.length>3?' 等':''}`:`主公 ${lord} 亲征`;}
  /** 出征按钮布局：已平定章节并列显示「乱世难度」。 */
  private layoutActions(showHard:boolean){const desk=W>600,h=this.actionHome,a=this.action,b=this.hardBtn,bh=desk?48:62;
   b.image.setVisible(showHard);b.text.setVisible(showHard);if(showHard)b.image.setInteractive({useHandCursor:true});else b.image.disableInteractive();
@@ -616,8 +631,8 @@ ${city.tier==='large'?'守城大将：'+siegeBossName(city,owner):'守军：'+FA
  /** 关卡详情：史事、首领、年号与出征状态。 */
  private refreshStage(id:TimelineChapterId,stage:number){const save=loadWorld(),info=chapterById(id),d=chapterStages(id)[stage-1],done=stage<=chapterStagesDone(id,save),open=stageOpen(id,stage,save)||isChapterTestRun(),cleared=chapterState(id,save)==='cleared';
   if(!d)return;const status=done?'✓ 已告捷 · 可重打此关':open?'可出征':chapterState(id,save)==='locked'?`未解锁：${info.hint}`:'先通关前一关';
-  this.setDetail(`${d.code} ${d.name}`,done?0x5f8f4e:open?0x8e2a1e:0x4a4f46,d.seal,`${d.year} · 首领 ${d.boss}（${d.bossTitle}） · 第${info.numeral}章「${info.title}」\n${d.story}\n${status}${cleared&&open?` · 乱世：敌军生命×${HARD_MODE.enemyHp}、首领×${HARD_MODE.bossHp}`:''}`);
-  this.action.text.setText(open?(done?'重打此关 · 选将':'从此关出征'):'尚未开放');this.action.image.setAlpha(open?1:.45);if(open)this.action.image.setInteractive({useHandCursor:true});else this.action.image.disableInteractive();
+  this.setDetail(`${d.code} ${d.name}`,done?0x5f8f4e:open?0x8e2a1e:0x4a4f46,d.seal,`${status}\n${open?this.musterLine():'首领 '+d.boss+'（'+d.bossTitle+'）'}\n${open?'首领 '+d.boss+'（'+d.bossTitle+'） · ':''}${d.year} · 第${info.numeral}章「${info.title}」\n${d.story}${cleared&&open?`\n乱世：敌军生命×${HARD_MODE.enemyHp}、首领×${HARD_MODE.bossHp}`:''}`);
+  this.action.text.setText(open?(done?'重打此关':'从此关出征'):'尚未开放');this.action.image.setAlpha(open?1:.45);if(open)this.action.image.setInteractive({useHandCursor:true});else this.action.image.disableInteractive();
   this.layoutActions(cleared&&open);}
  /** 显示某章三关路线（重复调用同一章不重建）。 */
  private showRoute(id:TimelineChapterId|undefined){if(id===this.routeChapter)return;this.routeChapter=id;for(const p of this.pins)p.root.destroy();this.pins=[];
@@ -768,5 +783,5 @@ ${fail}`;
   this.registry.remove('campaignTransfer');this.registry.set('intelEvent',event.id);this.registry.set('runConfig',{character:hero});
   if(this.registry.get('battleReady'))this.scene.start('IntelGameScene');else{this.registry.set('pendingWarlord','IntelGameScene');this.registry.set('loadBattle',true);this.scene.start('BootScene');}
  }
- private enterNode(){if(this.selected.kind!=='node')return;const n=this.selected.node;if(n.campaign){const c=CAMPAIGNS[n.campaign];if(c.open()||isChapterTestRun())this.scene.start(c.scene);return;}if(n.kind==='home'){this.scene.start('CityScene');return;}if(!n.chapter||!chapterUnlocked(n.chapter))return;this.registry.set('worldCampaign',true);this.registry.set('selectedWorldChapter',n.chapter);if(this.registry.get('battleReady'))this.scene.start('MenuScene');else{this.registry.set('loadBattle',true);this.scene.start('BootScene');}}
+ private enterNode(){if(this.selected.kind!=='node')return;const n=this.selected.node;if(n.campaign){const c=CAMPAIGNS[n.campaign];if(c.open()||isChapterTestRun())this.scene.start(c.scene);return;}if(n.kind==='home'){this.scene.start('CityScene');return;}if(!n.chapter||!chapterUnlocked(n.chapter))return;this.launchMain(n.chapter as TimelineChapterId);}
 }

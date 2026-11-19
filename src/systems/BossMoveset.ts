@@ -10,7 +10,7 @@ import type { BossDebug } from './BossKit';
 import { BossMount } from './BossMount';
 import { emitBossPhase } from './BossPhase';
 import { warnFx } from '../ui/WarnFx';
-import { ensureBossTheme, playThemeFx, themeOf, themeShake, type BossTheme } from './BossThemeFx';
+import { ensureBossCast, ensureBossTheme, playCastFx, playThemeFx, themeOf, themeShake, type BossTheme } from './BossThemeFx';
 
 type Shape = { kind: 'circle'; x: number; y: number; r: number; inner?: number; fx: 'slam' | 'arrows' | 'fire' }
   | { kind: 'lane'; x: number; y: number; angle: number; len: number; width: number }
@@ -23,6 +23,9 @@ interface Hazard { id: string; shape: Shape; from: number; at: number; dmg: numb
  *  - 骑马首领：一阶段 BossMount 画马、骑者上半身；半血发 boss-phase（dismount）→ 坠马、换二阶段步战招式。
  *  - 阶段切换统一走 emitBossPhase（顿帧 / 慢动作由武将会话接这个事件，这里不做）。
  */
+/** 'walk' 画面（第一章首领：行走 / 攻击两张 4×4 表）的出招对位：命中后多留 hitLeadMs 收招；冲锋奔跑每 dashStride 像素换一帧。 */
+export const MOVESET_WALK = { hitLeadMs: 120, dashStride: 40 } as const;
+
 export class BossMoveset extends ArcBossV2<string> {
   phase: 1 | 2 = 1;
   private cds = new Map<string, number>(); private hazards: Hazard[] = []; private seq = 0; private order = 0;
@@ -44,7 +47,7 @@ export class BossMoveset extends ArcBossV2<string> {
   };
   constructor(h: ArcHost, tex: string, now: number, readonly def: BossMovesetDef, private mode: 'arc' | 'walk' = 'arc') {
     super(h, tex, def.name, now);
-    this.theme = themeOf(def.id); ensureBossTheme(h.scene, this.theme);
+    this.theme = themeOf(def.id); ensureBossTheme(h.scene, this.theme); ensureBossCast(h.scene, this.theme);
     this.moveNames.push(...def.p1.moves.map(m => m.name));
     if (def.mount) this.mount = new BossMount(h.scene, h.boss, { ...def.mount, rider: def.mount.rider ?? def.id }, () => this.state === 'warn' || this.state === 'attack');
     this.next = now + 1800;
@@ -75,6 +78,7 @@ export class BossMoveset extends ArcBossV2<string> {
     b.sprite.setAlpha(now < this.hideUntil ? .12 : 1);
     if (this.kit.inShift) { this.pose(25, now); return; }
     if (this.dash) { this.updateDash(dt, now); return; }
+    if (this.mode === 'walk' && b.externalWalk) b.externalWalk = false; // 冲锋结束（或被打断）：步态交回通用走路
     if (this.ride) { this.updateRide(now); return; }
     const B = this.beat, p = this.h.player;
     if (B.phase === 'idle') {
@@ -98,10 +102,11 @@ export class BossMoveset extends ArcBossV2<string> {
     this.cur = m; this.cds.set(m.name, now + m.cd); this.metrics.moves++; this.metrics[m.name] = (this.metrics[m.name] ?? 0) + 1;
     const b = this.h.boss, p = this.h.player, t = o.aim ?? p, a = Math.atan2(t.y - b.y, t.x - b.x); this.angle = a;
     const windup = m.windupMs * (o.warnMul ?? 1);
-    this.h.banner(m.name);
+    this.h.banner(m.name); this.castStart(m, windup);
     this.h.sfx(m.kind === 'summon' || m.kind === 'flags' ? 'bossSummon' : 'chargeWarn');
-    if (this.mode === 'walk') b.startAttack(now, Math.abs(Math.cos(a)) > .7 ? (Math.cos(a) < 0 ? 'left' : 'right') : Math.sin(a) < 0 ? 'up' : 'down');
     const at = now + windup;
+    // 'walk' 画面（第一章首领）：攻击图起手时持起手帧，最后 360ms 播 起手 → 挥 → 刺 → 收，刚好在命中（at）时挥到第三帧；冲锋在起冲那一刻收招、接奔跑帧
+    if (this.mode === 'walk') { b.startAttack(now, Math.abs(Math.cos(a)) > .7 ? (Math.cos(a) < 0 ? 'left' : 'right') : Math.sin(a) < 0 ? 'up' : 'down'); b.attackUntil = m.kind === 'charge' ? at : at + MOVESET_WALK.hitLeadMs; }
     switch (m.kind) {
       case 'charge': {
         this.add({ kind: 'lane', x: b.x, y: b.y, angle: a, len: m.len, width: m.width }, now, at, 0, true);
@@ -119,9 +124,18 @@ export class BossMoveset extends ArcBossV2<string> {
     }
     this.beat.set(m.name, 'windup', now, windup);
   }
+  /** 出招起手特效（BossThemeFx cast）：蓄力光包在首领身上，大招再加脚下法阵；只在首领周围，不盖地面预警。 */
+  private castStart(m: MoveDef, windup: number): void {
+    if (!this.theme) return;
+    const b = this.h.boss, sc = this.h.scene, follow = (): { x: number; y: number } | null => (b.active && !this.gone ? { x: b.x, y: b.y } : null);
+    const big = m.kind === 'charge' || m.kind === 'rings' || m.kind === 'thrust' || m.kind === 'ride' || (m.kind === 'volley' && m.fx === 'slam') || (m.kind !== 'summon' && m.kind !== 'flags' && m.dmg >= 1.5);
+    playCastFx(sc, this.theme, 'aura', b.x, b.y, 170, { ms: windup, follow });
+    if (big) playCastFx(sc, this.theme, 'sigil', b.x, b.y + 4, 150, { ms: windup, follow: () => (follow() ? { x: b.x, y: b.y + 4 } : null) });
+  }
   private summonCount(n: number): number { return Math.max(1, Math.ceil(n * this.summonMul)); }
   private release(now: number): void {
     const m = this.cur!, b = this.h.boss, p = this.h.player;
+    if (this.theme && m.kind !== 'summon' && m.kind !== 'flags') playCastFx(this.h.scene, this.theme, 'glint', b.x + Math.cos(this.angle) * 44, b.y - 30 + Math.sin(this.angle) * 18, 90);   // 兵器闪光：出手瞬间
     switch (m.kind) {
       case 'charge': playThemeFx(this.h.scene, this.theme, { kind: 'lane', x: b.x, y: b.y, angle: this.angle, len: m.len, width: m.width }, { ms: m.dashMs + 120, alpha: .8 });   // 主题冲击带：冲锋一开始铺在冲锋道上，跟着首领冲过去
         this.dash = { ax: Math.cos(this.angle), ay: Math.sin(this.angle), t0: now, ms: m.dashMs, hitPlayer: false, back: !!m.back, len: m.len, fireAt: now, hitTroops: new Set() }; return;
@@ -160,6 +174,8 @@ export class BossMoveset extends ArcBossV2<string> {
   private updateDash(dt: number, now: number): void {
     const d = this.dash!, b = this.h.boss, p = this.h.player, m = this.cur as Extract<MoveDef, { kind: 'charge' }>;
     const sp = d.len / d.ms * 1000; b.sprite.x += d.ax * sp * dt; b.sprite.y += d.ay * sp * dt;
+    // 'walk' 画面：冲锋时自己出奔跑帧（按跑过的距离），否则一帧十来像素被通用步态当成击退、整段定格平移
+    if (this.mode === 'walk') { b.externalWalk = true; b.attackUntil = 0; b.driveRun(d.ax * sp * dt, d.ay * sp * dt, MOVESET_WALK.dashStride); }
     this.state = 'attack'; this.pose((Math.abs(d.ax) > Math.abs(d.ay) ? (d.ax < 0 ? 1 : 2) : d.ay < 0 ? 3 : 0) * 4 + Math.floor(now / 70) % 4, now);
     if (!d.hitPlayer && p.alive && Math.hypot(p.x - b.x, p.y - b.y) < 44 + p.radius) { d.hitPlayer = true; p.takeDamage(b.def.damage * m.dmg * this.dmgMul, now); this.metrics.playerHits++; }
     // 冲过部曲：每名士兵每次冲锋判定一次（Legion.hurtByCharge：约半管血、按当前时间结算、不吃士兵自身受击间隔；「一次冲锋最多打死 3 个」按冲锋起点算），并往冲锋道两侧推开一点
@@ -187,6 +203,7 @@ export class BossMoveset extends ArcBossV2<string> {
   private enterPhase2(now: number): void {
     if (this.phase === 2) return;
     const dismount = this.mounted;
+    playCastFx(this.h.scene, this.theme, 'burst', this.h.boss.x, this.h.boss.y + 6, 300);   // 换阶段爆发
     this.phase = 2; this.phase2 = true; this.metrics.phase2++; if (dismount) this.metrics.dismount++;
     this.dash = null; this.ride = null; this.cur = null; this.hideUntil = 0; this.beat.set(null, 'idle', now, 0); this.next = now + 2200;
     // 一阶段的旗阵随换阶段撤掉（不带进二阶段减伤）；步战首领的狂暴演出里旗帜是倒下的

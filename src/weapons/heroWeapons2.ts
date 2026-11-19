@@ -29,10 +29,14 @@ const cardinal = (ux: number, uy: number): 'left' | 'right' | 'up' | 'down' => M
 export function smartTarget(host: WeaponHost, range: number, minDist = 0): Enemy | null {
   const pl = host.player, locked = host.priorityTarget?.(range, false);
   if (locked && Math.hypot(locked.x - pl.x, locked.y - pl.y) >= minDist) return locked;
+  // 打障碍物（用户 11-19）：挡在主将前进方向上的可破坏物件先打；没敌人时打最近的可破坏物件（Enemy.breakable）
+  if (minDist <= 0) { const block = host.obstacleTarget?.(pl.x, pl.y, range, true); if (block) return block; }
   const list = host.grid.query(pl.x, pl.y, range + 30).filter(e => alive(e) && !e.invulnerable && e.def.behavior !== 'wall')
     .map(e => ({ e, d: Math.hypot(e.x - pl.x, e.y - pl.y) })).filter(o => o.d <= range + o.e.radius && o.d >= minDist).sort((a, b) => a.d - b.d);
   // 空间网格每帧重建一次：本帧刚生成的敌人还不在网格里，此时退回逐个扫描的最近敌人（不限最小距离时）
-  if (!list.length) return minDist > 0 ? null : host.nearestEnemy(pl.x, pl.y, range);
+  if (!list.length) { if (minDist > 0) return null; const ne = host.nearestEnemy(pl.x, pl.y, range); return ne && !ne.isSupplySlot ? ne : host.obstacleTarget?.(pl.x, pl.y, range, false) ?? null; }
+  // 敌人优先：有真敌人就不在物件里挑（挡路的物件上面已经先返回了）
+  { const real = list.filter(o => !o.e.isSupplySlot); if (real.length && real.length < list.length) list.splice(0, list.length, ...real); }
   let best = list[0].e, most = 0;
   for (const { e } of list.slice(0, 40)) {
     let n = 0; for (const o of host.grid.query(e.x, e.y, 80)) if (o !== e && alive(o) && Math.hypot(o.x - e.x, o.y - e.y) <= 80) n++;

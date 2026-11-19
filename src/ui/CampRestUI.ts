@@ -113,7 +113,7 @@ export class CampRestUI {
   return hit;
  }
 
- open(key:string,destination:string){if(this.visit!==key){this.visit=key;this.page=this.tab=0;this.stock=merchantStockForVisit(key,(this.scene as unknown as {itemTier?:()=>number}).itemTier?.()??0,this.player.growth.build);this.buildSection=this.buildOffset=0;this.notice='';}this.destination=destination;this.homeArmed=false;this.homeBtn.setText('回营寨').setBackgroundColor('rgba(0,0,0,0)').setVisible(!!this.onReturnHome);this.paintHome();this.render();
+ open(key:string,destination:string){if(this.visit!==key){this.visit=key;this.page=this.tab=0;this.stock=merchantStockForVisit(key,(this.scene as unknown as {itemTier?:()=>number}).itemTier?.()??0,this.player.growth.build,(this.scene as unknown as {lootChapter?:()=>number}).lootChapter?.()??1);this.buildSection=this.buildOffset=0;this.notice='';}this.destination=destination;this.homeArmed=false;this.homeBtn.setText('回营寨').setBackgroundColor('rgba(0,0,0,0)').setVisible(!!this.onReturnHome);this.paintHome();this.render();
   // 招兵营圆框胸像（Q 版；缺的兵种用 v2 过渡）：加载完若还停在招兵营就重绘
   loadTroopPortraits(this.scene,()=>{if(this.root.visible&&this.tab===0)this.render();},true);}
  setVisible(visible:boolean){this.root.setVisible(visible);if(!visible){this.modal?.destroy();this.modal=undefined;}}
@@ -209,7 +209,7 @@ export class CampRestUI {
  }
  /** 军需商人（ui/MerchantShop，与营寨旅商共用）：电脑版左侧立绘，4 件兵装 + 偶尔 1 卷战法；用随军粮，战法学进本局构筑当场生效。 */
  private renderMarket(){
-  if(!this.stock)this.stock=merchantStockForVisit(this.visit||'rest',(this.scene as unknown as {itemTier?:()=>number}).itemTier?.()??0,this.player.growth.build);
+  if(!this.stock)this.stock=merchantStockForVisit(this.visit||'rest',(this.scene as unknown as {itemTier?:()=>number}).itemTier?.()??0,this.player.growth.build,(this.scene as unknown as {lootChapter?:()=>number}).lootChapter?.()??1);
   this.itemTip??=new ItemTooltip(this.scene,DEPTH.overlay+40);
   this.shop??=new MerchantShop(this.scene,{tooltip:this.itemTip,
    stock:()=>this.stock!,

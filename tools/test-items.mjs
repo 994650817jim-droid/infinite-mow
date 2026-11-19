@@ -105,9 +105,9 @@ const data = await p.evaluate(async () => {
   return out;
 });
 ck('32 种基础道具 + 15 件橙色名器、4 个兵装槽 + 「Boss遗物」槽（无兵刃、坐骑）', data.base === 32 && data.legends === 15 && data.slots === 5, data);
-ck('第一章普通敌品质约 白55 / 绿35 / 蓝9 / 紫1 / 橙0%', Math.abs(data.normal0.white / 40000 - .55) < .02 && Math.abs(data.normal0.blue / 40000 - .09) < .01 && data.normal0.orange === 0, data.normal0);
+ck('第一章普通敌品质约 白70 / 绿28 / 蓝2 / 无紫橙（2026-11-19 掉落随章节）', Math.abs(data.normal0.white / 40000 - .70) < .02 && Math.abs(data.normal0.blue / 40000 - .02) < .01 && data.normal0.purple === 0 && data.normal0.orange === 0, data.normal0);
 ck('后期章节品质上浮（橙 / 紫更多）', data.normal3.purple > data.normal0.purple * 1.5 && data.normal3.white < data.normal0.white, data.normal3);
-ck('首领只出蓝及以上', data.boss.white === 0 && data.boss.green === 0, data.boss);
+ck('首领不出白；一二章首领最多蓝', data.boss.white === 0 && data.boss.purple === 0 && data.boss.orange === 0, data.boss);
 ck('词条数：白1 绿2 蓝3 紫4 橙4 + 专属特效', JSON.stringify(data.affixCounts) === '[1,2,3,4,4]' && data.orangeSpecial, data);
 
 // 4) 结算入行囊

@@ -41,6 +41,8 @@ export interface WeaponHost {
   /** 把敌人沿 (dx, dy) 推开（ms 内分几步推完；首领 / 不受控 / 城墙不推；碰到城墙、障碍、场地边就停）。诸葛亮借东风用。 */
   knockEnemy?(enemy: Enemy, dx: number, dy: number, ms: number): void;
   priorityTarget?(range:number,bodyRadius?:boolean):Enemy|null;
+  /** 可破坏障碍（Enemy.breakable）里离 (x, y) 最近、在 range 内的；blocking = 只要挡在主将移动方向前方 ~80 像素内的（随行没有移动方向，blocking 时返回 null）。 */
+  obstacleTarget?(x: number, y: number, range: number, blocking: boolean): Enemy | null;
   fireBolt(pool: WeaponBolt[], x: number, y: number, tx: number, ty: number, damage: number, bounce: number, fromPlayer: boolean, speed: number): void;
   spawnGuandaoSlash(angle: number, alpha: number, size: number, duration: number): void;
   spawnFlagSwingFx(x: number, y: number): void;

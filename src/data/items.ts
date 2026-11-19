@@ -178,48 +178,62 @@ export function itemName(item: ItemInstance): string { return itemDef(item.base)
 
 // —— 掉落 ——
 /**
- * 掉落来源与档位（平衡会话 balance-feedback-proposal.md「4 补充」，用户已批准）：
- * 档位 0 黄巾 / 1 讨董 / 2 群雄·攻守城 / 3 官渡 / 4 赤壁。finalBoss = 章末首领（掉 2 件）。
+ * 掉落品质按章节（2026-11-19 用户：「前期不应该掉落这么好的装备，随着章节推动才会增加掉落品级」）：
+ * 章节 1–12 分五段（LOOT_BAND_OF_CHAPTER）：0 = 一、二章；1 = 三、四章；2 = 五～七章；3 = 八～十章；4 = 十一、十二章。
+ * 每段一张品质表（WEIGHTS，按来源）+ 品质封顶（LOOT_CAP：一、二章最多蓝，三、四章最多紫，五章起才有橙）。
+ * 首领 / 章末首领用自己那一行（相当于比小兵高一档，仍不过封顶）；保底（PITY）只在本段封顶允许的品质上攒、上触发。
+ * 乱世难度：段 +1（lootBand(章, true)）。攻城 / 军情 / 城中旅商按已开放的章节数（HeroProgress.chaptersOpen）。
+ * finalBoss = 章末首领（掉 2 件）。函数参数 tier 指的就是这里的「段」。
  */
+export const LOOT_BAND_OF_CHAPTER: readonly number[] = [0, 0, 0, 1, 1, 2, 2, 2, 3, 3, 3, 4, 4]; // 下标 = 章节（0 不用）
+export const LOOT_CAP: readonly ItemQuality[] = ['blue', 'purple', 'orange', 'orange', 'orange'];
+/** 章节 → 段（乱世 +1，封到最高段）。 */
+export function lootBand(chapter: number, hard = false): number { const c = Math.max(1, Math.min(12, Math.round(chapter) || 1)); return Math.min(MAX_TIER, LOOT_BAND_OF_CHAPTER[c] + (hard ? 1 : 0)); }
+/** 品质封到本段上限。 */
+export function capLootQuality(q: ItemQuality, tier: number): ItemQuality { const cap = LOOT_CAP[Math.max(0, Math.min(MAX_TIER, Math.floor(tier)))]; return QUALITY_ORDER.indexOf(q) > QUALITY_ORDER.indexOf(cap) ? cap : q; }
+/** 词条数值随章节：每章 +2.5%（十二章 ×1.275）。 */
+export function affixChapterMul(chapter = 1): number { return 1 + .025 * (Math.max(1, Math.min(12, chapter)) - 1); }
 export type DropSource = 'normal' | 'elite' | 'boss' | 'finalBoss' | 'chest' | 'merchant';
 export const DROP_CHANCE: Record<'normal' | 'elite', number> = { normal: .004, elite: .06 };
 export const MAX_TIER = 4;
-/** 品质权重（%）：白 绿 蓝 紫 橙；每档一行。宝箱与精锐同表；首领表第一档必蓝，章末首领第二档必紫。 */
+/** 品质权重（%）：白 绿 蓝 紫 橙；每段一行（段 0 一、二章 … 段 4 十一、十二章）。宝箱与精锐同表；首领 / 章末首领高一档。都不超过 LOOT_CAP。 */
 const WEIGHTS: Record<Exclude<DropSource, 'merchant'>, readonly (readonly number[])[]> = {
-  normal: [[55, 35, 9, 1, 0], [25, 45, 25, 4.5, .5], [8, 32, 42, 15, 3], [0, 18, 45, 30, 7], [0, 8, 40, 40, 12]],
-  elite: [[0, 70, 25, 4.5, .5], [0, 45, 40, 13, 2], [0, 20, 48, 25, 7], [0, 5, 40, 42, 13], [0, 0, 30, 50, 20]],
-  chest: [[0, 70, 25, 4.5, .5], [0, 45, 40, 13, 2], [0, 20, 48, 25, 7], [0, 5, 40, 42, 13], [0, 0, 30, 50, 20]],
-  boss: [[0, 0, 85, 14, 1], [0, 0, 45, 50, 5], [0, 0, 25, 60, 15], [0, 0, 10, 65, 25], [0, 0, 0, 70, 30]],
-  finalBoss: [[0, 0, 85, 14, 1], [0, 0, 0, 90, 10], [0, 0, 25, 60, 15], [0, 0, 10, 65, 25], [0, 0, 0, 70, 30]],
+  normal: [[70, 28, 2, 0, 0], [35, 50, 14, 1, 0], [10, 40, 40, 9, 1], [0, 25, 45, 25, 5], [0, 10, 40, 38, 12]],
+  elite: [[30, 60, 10, 0, 0], [5, 55, 35, 5, 0], [0, 30, 50, 17, 3], [0, 10, 45, 37, 8], [0, 0, 35, 48, 17]],
+  chest: [[30, 60, 10, 0, 0], [5, 55, 35, 5, 0], [0, 30, 50, 17, 3], [0, 10, 45, 37, 8], [0, 0, 35, 48, 17]],
+  boss: [[0, 55, 45, 0, 0], [0, 15, 65, 20, 0], [0, 0, 55, 40, 5], [0, 0, 30, 58, 12], [0, 0, 10, 65, 25]],
+  finalBoss: [[0, 30, 70, 0, 0], [0, 0, 60, 40, 0], [0, 0, 35, 55, 10], [0, 0, 15, 65, 20], [0, 0, 0, 65, 35]],
 };
-const MERCHANT_WEIGHTS = [0, 65, 35, 0, 0];
+/** 行营 / 城中军需商人：约比小兵掉落高半档；不出橙（商人没有橙装价格）。 */
+const MERCHANT_WEIGHTS: readonly (readonly number[])[] = [[0, 75, 25, 0, 0], [0, 40, 55, 5, 0], [0, 10, 60, 30, 0], [0, 0, 45, 55, 0], [0, 0, 25, 75, 0]];
 export const CHESTS_PER_STAGE: readonly number[] = [45, 110]; // 每关开打后第 45 / 110 秒各刷一个宝箱
 /** 保底（按掉落件数计，跨局累计、分存档位，计数存在 ItemStore 的 pity）：连续 15 件没出紫 → 下一件必紫；连续 40 件没出橙 → 下一件必橙。 */
 export const PITY = { purple: 15, orange: 40 } as const;
 export interface PityState { sincePurple: number; sinceOrange: number }
 
 export function rollQuality(source: DropSource, tier: number, rng: () => number = Math.random): ItemQuality {
-  const w = source === 'merchant' ? MERCHANT_WEIGHTS : WEIGHTS[source][Math.max(0, Math.min(MAX_TIER, Math.floor(tier)))];
+  const t = Math.max(0, Math.min(MAX_TIER, Math.floor(tier))), w = source === 'merchant' ? MERCHANT_WEIGHTS[t] : WEIGHTS[source][t];
   const total = w.reduce((a, b) => a + b, 0); let r = rng() * total;
-  for (let i = 0; i < w.length; i++) { r -= w[i]; if (r < 0) return QUALITY_ORDER[i]; }
-  return QUALITY_ORDER[w.length - 1];
+  for (let i = 0; i < w.length; i++) { r -= w[i]; if (r < 0) return capLootQuality(QUALITY_ORDER[i], t); }
+  return capLootQuality(QUALITY_ORDER[w.length - 1], t);
 }
-/** 掉落品质 + 保底：先按权重抽，再看保底计数，最后更新计数（会改 pity）。商人货架不走这里。 */
+/** 掉落品质 + 保底：先按权重抽，再看保底计数，最后更新计数（会改 pity）。保底只在本段封顶允许紫 / 橙时才攒、才触发（一、二章不会被保底送出紫橙）。商人货架不走这里。 */
 export function rollDropQuality(source: Exclude<DropSource, 'merchant'>, tier: number, pity: PityState, rng: () => number = Math.random): ItemQuality {
   let q = rollQuality(source, tier, rng);
-  const at = (x: ItemQuality) => QUALITY_ORDER.indexOf(x);
-  if (pity.sinceOrange + 1 >= PITY.orange) q = 'orange';
-  else if (pity.sincePurple + 1 >= PITY.purple && at(q) < at('purple')) q = 'purple';
-  pity.sincePurple = at(q) >= at('purple') ? 0 : pity.sincePurple + 1;
-  pity.sinceOrange = q === 'orange' ? 0 : pity.sinceOrange + 1;
+  const at = (x: ItemQuality) => QUALITY_ORDER.indexOf(x), cap = at(LOOT_CAP[Math.max(0, Math.min(MAX_TIER, Math.floor(tier)))]);
+  const purpleOk = cap >= at('purple'), orangeOk = cap >= at('orange');
+  if (orangeOk && pity.sinceOrange + 1 >= PITY.orange) q = 'orange';
+  else if (purpleOk && pity.sincePurple + 1 >= PITY.purple && at(q) < at('purple')) q = 'purple';
+  if (purpleOk) pity.sincePurple = at(q) >= at('purple') ? 0 : pity.sincePurple + 1;
+  if (orangeOk) pity.sinceOrange = q === 'orange' ? 0 : pity.sinceOrange + 1;
   return q;
 }
 
 function pick<T>(list: readonly T[], rng: () => number): T { return list[Math.floor(rng() * list.length) % list.length]; }
 const round3 = (v: number) => Math.round(v * 1000) / 1000;
 /** 词条数值：基础值 × 品质倍率 × 0.85–1.15 浮动；小词条减半。 */
-export function affixValue(id: AffixId, quality: ItemQuality, rng: () => number, minor = false): number {
-  return round3(AFFIXES[id].base * QUALITIES[quality].mult * (.85 + rng() * .3) * (minor ? .5 : 1));
+export function affixValue(id: AffixId, quality: ItemQuality, rng: () => number, minor = false, chapter = 1): number {
+  return round3(AFFIXES[id].base * QUALITIES[quality].mult * (.85 + rng() * .3) * (minor ? .5 : 1) * affixChapterMul(chapter));
 }
 
 let uidSeq = 0;
@@ -231,36 +245,37 @@ export const CHARM_SHARE = .5;
  * 生成一件信物库新信物（data/charms.ts）：固定效果按品质取值（不存在词条里），外加品质规定条数的随机小词条（白 1 … 橙 3）。
  * id 不填时从这一品质能出的里随机；品质不够时返回 null。
  */
-export function rollCharm(quality: ItemQuality, rng: () => number = Math.random, id?: string): ItemInstance | null {
+export function rollCharm(quality: ItemQuality, rng: () => number = Math.random, id?: string, chapter = 1): ItemInstance | null {
   const def = id ? charmDef(id) : pick(charmsFor(quality), rng); if (!def || !charmAllowed(def, quality)) return null;
   const ids: AffixId[] = [], pool = SLOTS.token.affixes;
   while (ids.length < QUALITIES[quality].affixes) ids.push(pick(pool.filter(a => !ids.includes(a)), rng));
-  return { uid: newItemUid(), base: def.id, quality, affixes: ids.map(a => ({ id: a, value: affixValue(a, quality, rng, true), minor: true })) };
+  return { uid: newItemUid(), base: def.id, quality, affixes: ids.map(a => ({ id: a, value: affixValue(a, quality, rng, true, chapter), minor: true })) };
 }
 /** 生成一件道具。橙色优先出名器（同槽位随机一件），slot 可指定。信物栏一半出信物库新信物（CHARM_SHARE）。 */
-export function rollItem(quality: ItemQuality, rng: () => number = Math.random, slot?: ItemSlot): ItemInstance {
+/** chapter：词条数值随章节放大（affixChapterMul；不填 = 第一章）。 */
+export function rollItem(quality: ItemQuality, rng: () => number = Math.random, slot?: ItemSlot, chapter = 1): ItemInstance {
   if (quality === 'orange') {
     const pool = LEGENDS.filter(l => !slot || l.slot === slot), l = pick(pool, rng);
-    if (l.slot === 'token' && rng() < CHARM_SHARE) { const c = rollCharm(quality, rng); if (c) return c; }
-    const affixes: ItemAffix[] = l.affixes.map(id => ({ id, value: affixValue(id, quality, rng) }));
+    if (l.slot === 'token' && rng() < CHARM_SHARE) { const c = rollCharm(quality, rng, undefined, chapter); if (c) return c; }
+    const affixes: ItemAffix[] = l.affixes.map(id => ({ id, value: affixValue(id, quality, rng, false, chapter) }));
     const extra = AFFIX_IDS.filter(id => !l.affixes.includes(id));
-    const m = pick(extra, rng); affixes.push({ id: m, value: affixValue(m, quality, rng, true), minor: true });
+    const m = pick(extra, rng); affixes.push({ id: m, value: affixValue(m, quality, rng, true, chapter), minor: true });
     return { uid: newItemUid(), base: l.id, quality, affixes, special: l.special };
   }
   const base = pick(BASE_ITEMS.filter(b => !slot || b.slot === slot), rng);
-  if (base.slot === 'token' && rng() < CHARM_SHARE) { const c = rollCharm(quality, rng); if (c) return c; }
-  return rollBase(base, quality, rng);
+  if (base.slot === 'token' && rng() < CHARM_SHARE) { const c = rollCharm(quality, rng, undefined, chapter); if (c) return c; }
+  return rollBase(base, quality, rng, chapter);
 }
 /** 按指定的基础道具生成一件（旧档迁移用，如虎符 → 橙色虎钮印）。不是基础道具时返回 null。 */
-export function rollBaseItem(id: string, quality: ItemQuality, rng: () => number = Math.random): ItemInstance | null { const b = BASE_BY_ID.get(id); return b ? rollBase(b, quality, rng) : null; }
-function rollBase(base: BaseItemDef, quality: ItemQuality, rng: () => number): ItemInstance {
+export function rollBaseItem(id: string, quality: ItemQuality, rng: () => number = Math.random, chapter = 1): ItemInstance | null { const b = BASE_BY_ID.get(id); return b ? rollBase(b, quality, rng, chapter) : null; }
+function rollBase(base: BaseItemDef, quality: ItemQuality, rng: () => number, chapter = 1): ItemInstance {
   const q = QUALITIES[quality];
   const ids: AffixId[] = [base.primary];
   const pool = SLOTS[base.slot].affixes.filter(id => id !== base.primary), rest = AFFIX_IDS.filter(id => id !== base.primary);
   while (ids.length < q.affixes) { const from = pool.filter(id => !ids.includes(id)).length ? pool.filter(id => !ids.includes(id)) : rest.filter(id => !ids.includes(id)); ids.push(pick(from, rng)); }
   // 虎钮印并入虎符：主词条友军伤害上限提到 +20%（橙）
-  const affixes: ItemAffix[] = ids.map(id => ({ id, value: round3(affixValue(id, quality, rng) * (base.id === 'tiger_seal' && id === base.primary ? TIGER_SEAL_PRIMARY : 1)) }));
-  if (q.minor) { const m = pick(rest.filter(id => !ids.includes(id)), rng); affixes.push({ id: m, value: affixValue(m, quality, rng, true), minor: true }); }
+  const affixes: ItemAffix[] = ids.map(id => ({ id, value: round3(affixValue(id, quality, rng, false, chapter) * (base.id === 'tiger_seal' && id === base.primary ? TIGER_SEAL_PRIMARY : 1)) }));
+  if (q.minor) { const m = pick(rest.filter(id => !ids.includes(id)), rng); affixes.push({ id: m, value: affixValue(m, quality, rng, true, chapter), minor: true }); }
   return { uid: newItemUid(), base: base.id, quality, affixes };
 }
 
@@ -294,10 +309,8 @@ export const MERCHANT_PRICE: Partial<Record<ItemQuality, number>> = { green: 60,
 export const MERCHANT_TACTIC = { chance: .35, price: [150, 190, 240] } as const;
 /**
  * 行营军需商人（2026-11-17 用户：「军需商人只可以买装备」）：每次进营 4 件兵装，甲胄 / 头盔 / 战靴 / 信物各 1 件。
- * 品质按章节档位：一章绿 / 蓝，二章蓝为主偶尔紫，三章起蓝 / 紫（白 绿 蓝 紫 橙 权重，初值交平衡会话）。
+ * 品质按章节段（同掉落的 lootBand，表在 MERCHANT_WEIGHTS：约比小兵掉落高半档、不出白和橙）；tier = 段。
  */
-const MERCHANT_TIER_WEIGHTS: readonly (readonly number[])[] = [[0, 65, 35, 0, 0], [0, 20, 65, 15, 0], [0, 0, 55, 45, 0]];
-export function rollMerchantGear(tier: number, rng: () => number = Math.random): ItemInstance[] {
-  const w = MERCHANT_TIER_WEIGHTS[Math.max(0, Math.min(MERCHANT_TIER_WEIGHTS.length - 1, Math.floor(tier)))], total = w.reduce((a, b) => a + b, 0);
-  return GEAR_SLOTS.map(slot => { let r = rng() * total, q: ItemQuality = 'blue'; for (let i = 0; i < w.length; i++) { r -= w[i]; if (r < 0) { q = QUALITY_ORDER[i]; break; } } return rollItem(q, rng, slot); });
+export function rollMerchantGear(tier: number, rng: () => number = Math.random, chapter = 1): ItemInstance[] {
+  return GEAR_SLOTS.map(slot => rollItem(rollQuality('merchant', tier, rng), rng, slot, chapter));
 }

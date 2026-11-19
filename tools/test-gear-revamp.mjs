@@ -78,14 +78,14 @@ ck('只剩紫 / 橙时可超出上限，最多超 20 格（再多才分解最低
 // 3) 品级表与保底
 const pity = await p.evaluate(async () => {
   const m = await window.__mod('/src/data/items.ts'), out = {};
-  const ps = { sincePurple: 0, sinceOrange: 0 }, seq = []; for (let i = 0; i < 40; i++) seq.push(m.rollDropQuality('normal', 0, ps, () => 0));
+  const ps = { sincePurple: 0, sinceOrange: 0 }, seq = []; for (let i = 0; i < 40; i++) seq.push(m.rollDropQuality('normal', 2, ps, () => 0)); /* 2026-11-19 掉落随章节：保底只在封顶允许紫橙的段里生效，用第 2 段（五～七章） */
   out.p15 = seq[14]; out.before = seq.slice(0, 14).every(q => q === 'white'); out.p30 = seq[29]; out.o40 = seq[39]; out.state = ps;
   const cnt = (src, tier) => { const c = {}; for (let i = 0; i < 20000; i++) { const q = m.rollQuality(src, tier); c[q] = (c[q] ?? 0) + 1; } return c; };
   out.final1 = cnt('finalBoss', 1); out.boss0 = cnt('boss', 0); out.normal4 = cnt('normal', 4);
   return out;
 });
 ck('保底：连续 14 件没出紫，第 15 件必紫；第 40 件必橙', pity.before && pity.p15 === 'purple' && pity.p30 === 'purple' && pity.o40 === 'orange' && pity.state.sinceOrange === 0, pity);
-ck('第一章首领必蓝；第二章章末首领必紫；第五章单独一档（无白）', !pity.boss0.white && !pity.boss0.green && !pity.final1.blue && !pity.final1.green && !pity.normal4.white && pity.normal4.orange > 1800, pity);
+ck('一二章首领最多蓝（绿 / 蓝）；三四章章末首领蓝紫无橙；十一十二章小兵无白（2026-11-19 掉落随章节）', !pity.boss0.white && !pity.boss0.purple && !pity.boss0.orange && !pity.final1.green && !pity.final1.orange && !pity.normal4.white && pity.normal4.orange > 1800, pity);
 
 // 4) 马厩：解锁、赠马、加成
 const stable = await p.evaluate(async () => {

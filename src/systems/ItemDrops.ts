@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { actorDepth, FONT } from '../config';
-import { QUALITY_ORDER, relicsForStage, rollRelic } from '../data/items';
+import { QUALITY_ORDER, capLootQuality, relicsForStage, rollRelic } from '../data/items';
 import { CHESTS_PER_STAGE, DROP_CHANCE, QUALITIES, itemName, rollDropQuality, rollItem, type ItemInstance, type ItemQuality, type PityState } from '../data/items';
 import { loadItems, loadPity } from './ItemStore';
 import { SCROLL } from './MasteryStore';
@@ -31,7 +31,7 @@ export class ItemDrops {
   /** 首领遗珍改由「首领宝箱」发放时设为 true：击杀首领不再自动发，由宝箱拾取时调用 claimBossRelic()。 */
   deferBossRelic = false;
 
-  constructor(private readonly scene: Phaser.Scene, private readonly player: Player, private readonly tier: number, private readonly elapsed: () => number, private readonly finalBoss: () => boolean, private readonly onPickup?: (item: ItemInstance) => void, private readonly relicStage: () => string | null = () => null) {
+  constructor(private readonly scene: Phaser.Scene, private readonly player: Player, private readonly tier: number, private readonly chapter: number, private readonly elapsed: () => number, private readonly finalBoss: () => boolean, private readonly onPickup?: (item: ItemInstance) => void, private readonly relicStage: () => string | null = () => null) {
     ensureItemTextures(scene);
     ensureLootBeam(scene); // 手绘品质光柱（LootBeam.ts；未载入时 drop() 仍画旧光柱）
   }
@@ -48,13 +48,13 @@ export class ItemDrops {
     else if (enemy.kind === 'elite' && this.rng() < SCROLL.eliteChance) this.gainScrolls(1);
     if (enemy.kind === 'boss') {
       const n = this.finalBoss() ? 2 : 1;
-      for (let i = 0; i < n; i++) this.collect(rollItem(rollDropQuality(n > 1 ? 'finalBoss' : 'boss', this.tier, this.pity, this.rng), this.rng));
+      for (let i = 0; i < n; i++) this.collect(rollItem(rollDropQuality(n > 1 ? 'finalBoss' : 'boss', this.tier, this.pity, this.rng), this.rng, undefined, this.chapter));
       if (!this.deferBossRelic) this.claimBossRelic();
       return;
     }
     const elite = enemy.kind === 'elite';
     if (this.rng() >= DROP_CHANCE[elite ? 'elite' : 'normal']) return;
-    this.drop(rollItem(rollDropQuality(elite ? 'elite' : 'normal', this.tier, this.pity, this.rng), this.rng), enemy.x, enemy.y);
+    this.drop(rollItem(rollDropQuality(elite ? 'elite' : 'normal', this.tier, this.pity, this.rng), this.rng, undefined, this.chapter), enemy.x, enemy.y);
   }
 
   /**
@@ -74,11 +74,11 @@ export class ItemDrops {
     if (missing.length && missing[0] === defs[0]) return rollRelic(defs[0].id, this.rng);
     if (missing.length) return this.rng() < .15 ? rollRelic(missing[0].id, this.rng) : null;
     const q = rollDropQuality('boss', this.tier, this.pity, this.rng);
-    return rollItem(QUALITY_ORDER.indexOf(q) < QUALITY_ORDER.indexOf('purple') ? 'purple' : q, this.rng);
+    return rollItem(capLootQuality(QUALITY_ORDER.indexOf(q) < QUALITY_ORDER.indexOf('purple') ? 'purple' : q, this.tier), this.rng, undefined, this.chapter); // 遗珍都有了：至少紫，但不过本段封顶
   }
 
   /** 双将宝箱的额外一次兵装（品质按本关首领掉落规则）。 */
-  rollBossItem(): ItemInstance { return rollItem(rollDropQuality('boss', this.tier, this.pity, this.rng), this.rng); }
+  rollBossItem(): ItemInstance { return rollItem(rollDropQuality('boss', this.tier, this.pity, this.rng), this.rng, undefined, this.chapter); }
 
   /** 在地上放一件道具（品质光柱 + 图标，轻微浮动）。 */
   drop(item: ItemInstance, x: number, y: number): GroundItem {
@@ -114,7 +114,7 @@ export class ItemDrops {
     } else c.img.destroy();
     const n = this.rng() < .4 ? 2 : 1;
     if (this.rng() < SCROLL.chestChance) this.gainScrolls(1);
-    for (let k = 0; k < n; k++) this.drop(rollItem(rollDropQuality('chest', this.tier, this.pity, this.rng), this.rng), c.x + (k ? 26 : -10), c.y + 18);
+    for (let k = 0; k < n; k++) this.drop(rollItem(rollDropQuality('chest', this.tier, this.pity, this.rng), this.rng, undefined, this.chapter), c.x + (k ? 26 : -10), c.y + 18);
   }
 
   private collect(item: ItemInstance): void {

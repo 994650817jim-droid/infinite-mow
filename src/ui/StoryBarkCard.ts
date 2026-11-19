@@ -2,7 +2,9 @@
  * 首领台词侧边立绘卡（2026-11-18 夜，统筹定「方案 2：不暂停」；2026-11-19 用户选定「电影感」样式，见 ui/StoryBarkCardStyles.ts，下面的漆底卡只在手绘件载不到时用）：首领登场 / 二阶段 / 倒下等剧情 bark 说话时，
  * 屏幕边上滑进一张半透明黑漆描金小卡（2026-11-19 起半透明，文字带阴影）——外侧是说话人的对白水墨立绘（ink_cast / ink_hero，取头肩），内侧是名字 + 台词（标题字）。
  * - 敌方从右边滑入、我方（可玩武将 / 主公）从左边；停 HOLD 毫秒后滑出；几句挨得近就排队一张一张出。
- * - 放在侧边空带：右边在军令面板下、护阵按钮上，左边在增益图标下；不挡首领血条（底部中间）、军令、舆图、主将（屏幕中间）。
+ * - 电脑布局（2026-11-19 用户「剧情对话挪到左下角」）：敌我都在左下角——增益图标列右边（增益最多 10 个、5 行，到 y≈408、x≈100）、首领血条（x ≥ 260、y ≈ 450–484）上面、
+ *   左下 FPS 调试行上面，不挡主将（屏幕中间）；立绘在左、台词在右、从左滑入，同一位置排队。手机仍按旧摆法：敌方右边、我方左边（左下是摇杆）。
+ * - 旧摆法放在侧边空带：右边在军令面板下、护阵按钮上，左边在增益图标下；不挡首领血条（底部中间）、军令、舆图、主将（屏幕中间）。
  * - 用真实时钟（performance.now）推进，不受战斗暂停影响；不暂停战斗、不吃点击。
  * - 没有立绘时画一枚朱文名字章代替（与剧情卷轴一致）。
  */
@@ -16,6 +18,8 @@ export interface BarkCardLine { side: 'left' | 'right'; name: string; text: stri
 /** 卡片尺寸与时长（毫秒）；top 是卡片顶边的 y（游戏坐标：电脑布局 960 宽，显示时放大到 1280×720；右边夹在军令面板（底 ≈271）与护阵按钮（顶 ≈405）之间，左边在增益图标（底 ≈290）下）。 */
 // 2026-11-19 用户「用药和军令重叠了」：右边的卡让开最右一列圆钮（用药 / 加点 / 护阵，x ≥ 864）——电脑版右缘留 rightClear
 export const BARK_CARD = { w: 330, h: 100, face: 86, hold: 2700, slide: 260, gap: 140, top: { right: 290, left: 300 }, margin: 10, rightClear: 104 } as const;
+/** 电脑布局左下角：卡的左边 x、底边 y（游戏坐标） */
+export const BARK_CORNER = { x: 106, bottom: 446 } as const;
 const sideMargin = (side: 'left' | 'right'): number => side === 'right' && IS_DESKTOP ? BARK_CARD.rightClear : BARK_CARD.margin;
 const STATE_KEY = '__storyBarkCards';
 /** 出过的卡（名字 + 台词）记一笔，最多 50 条（测试读：scene.data.get('__storyBarkCardLog')）。 */
@@ -55,7 +59,7 @@ function withPortrait(scene: Phaser.Scene, key: string | undefined, go: () => vo
 
 function build(scene: Phaser.Scene, line: BarkCardLine, done: () => void): void {
   if (scene.sys.settings.status >= Phaser.Scenes.SHUTDOWN) { done(); return; }
-  const C = BARK_CARD, right = line.side === 'right', x0 = right ? GAME_WIDTH - sideMargin('right') - C.w : C.margin, y0 = C.top[line.side];
+  const C = BARK_CARD, right = line.side === 'right' && !IS_DESKTOP, x0 = IS_DESKTOP ? BARK_CORNER.x : right ? GAME_WIDTH - sideMargin('right') - C.w : C.margin, y0 = IS_DESKTOP ? BARK_CORNER.bottom - C.h : C.top[line.side];
   const off = right ? C.w + C.margin + 20 : -(C.w + C.margin + 20);
   const root = scene.add.container(x0 + off, y0).setScrollFactor(0).setDepth(DEPTH.overlay - 8).setName('story-bark-card');
   root.setData('side', line.side).setData('name', line.name).setData('text', line.text);
@@ -98,7 +102,7 @@ function build(scene: Phaser.Scene, line: BarkCardLine, done: () => void): void 
 /** 电影感台词卡（ui/StoryBarkCardStyles.ts） */
 function buildStyled(scene: Phaser.Scene, line: BarkCardLine, done: () => void): void {
   if (scene.sys.settings.status >= Phaser.Scenes.SHUTDOWN) { done(); return; }
-  const card = buildCinematic(scene, line, GAME_WIDTH, sideMargin(line.side));
+  const card = buildCinematic(scene, line, GAME_WIDTH, sideMargin(line.side), IS_DESKTOP ? BARK_CORNER : undefined);
   const root = card.root.setDepth(DEPTH.overlay - 8).setName('story-bark-card');
   root.setData('side', line.side).setData('name', line.name).setData('text', line.text).setData('style', 'cinematic');
   if (line.portrait && scene.textures.exists(line.portrait)) root.setData('portrait', line.portrait);

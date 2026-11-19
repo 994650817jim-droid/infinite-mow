@@ -203,7 +203,7 @@ export class StageArena {
     for (const e of this.h.enemies()) if (e.active && !e.isSupplySlot && e.kind !== 'boss' && Math.hypot(e.x - br.x, e.y - br.y) < br.killR) this.h.hitEnemy(e, 99999);
     for (const g of this.gates) if (Math.hypot(g.x - br.x, g.y - br.y) < 300) g.off = true;
     this.h.banner('长坂桥断！', false, '北岸追兵过不来了 · 只剩南面山口');
-    this.h.sfx('bossSummon');
+    this.h.sfx('bridge_break');
   }
 
   // ———— 营帐起火（宛城夜袭）————

@@ -91,7 +91,7 @@ export class MerchantShop{
   const bw=Math.min(w-20,180),poor=purse<price;
   const {hit,cap}=this.button(x+(w-bw)/2,y+h-52,sold?'已售罄':poor?(D?'粮不足 · ':this.o.wallet.name+'不足 · ')+price+'粮':'购入 · '+price+'粮',()=>{
    const cur=this.o.stock();if(cur.sold[i]||!this.o.wallet.spend(price))return;cur.sold[i]=true;saveMerchantStock(cur);
-   this.o.onBuyItem(item);this.o.sound?.('purchase');this.o.notice('已购入 '+itemName(item)+' · 已收入行囊，可点「行囊」穿戴');this.o.changed();
+   this.o.onBuyItem(item);this.o.sound?.('shop_buy');this.o.notice('已购入 '+itemName(item)+' · 已收入行囊，可点「行囊」穿戴');this.o.changed();
   },bw,!sold&&!poor);
   hit.setName('camp-item-goods-'+i).setData('caption',cap);cap.setName('camp-item-price-'+i);
  }
@@ -133,7 +133,7 @@ export class MerchantShop{
   this.button(x+(w-bw)/2,y+h-52,label,()=>{
    const cur=this.o.stock().tactic;if(!cur||cur.sold||!tac||!tac.canBuy(cur)||this.o.wallet.get()<cur.price)return;
    const lv=cur.level;if(!tac.learn(cur))return;this.o.wallet.spend(cur.price);cur.sold=true;saveMerchantStock(this.o.stock());tac.afterBuy?.();
-   this.o.sound?.('purchase');this.o.notice(cur.kind==='manual'?'研读「'+v.name+'」，'+SCHOOLS[cur.school].name+'势 +1 · '+tac.doneText:'研习战法「'+v.name+'」'+(lv?'Lv.'+lv+'→'+(lv+1):'Lv.1')+' · '+tac.doneText);this.o.changed();
+   this.o.sound?.('shop_buy');this.o.notice(cur.kind==='manual'?'研读「'+v.name+'」，'+SCHOOLS[cur.school].name+'势 +1 · '+tac.doneText:'研习战法「'+v.name+'」'+(lv?'Lv.'+lv+'→'+(lv+1):'Lv.1')+' · '+tac.doneText);this.o.changed();
   },bw,!t.sold&&able&&!poor).hit.setName('camp-tactic-buy');
   void s;
  }

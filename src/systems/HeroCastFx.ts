@@ -11,6 +11,7 @@ import Phaser from 'phaser';
 import type { Player } from '../entities/Player';
 import { playSheet } from './SkillFxSheets';
 import { DEPTH } from '../config';
+import { sceneSfx } from './ContentSfx';
 
 export const HERO_CAST = { skillCd: 900, ms: 420, skillSize: 150, passiveSize: 196, sigilSize: 210, sigilFlat: .42 } as const;
 
@@ -40,6 +41,7 @@ export class HeroCastFx {
     const key = 'fx_cast_' + this.hero, s = this.scene, p = this.player;
     if (!s.textures.exists(key) || !p.alive) return;
     this.stats[kind]++;
+    sceneSfx(s, 'cast_' + this.hero); if (kind === 'passive') sceneSfx(s, 'cast_sigil'); // 出招起手音（ContentSfx）
     const follow = (y: number) => (img: Phaser.GameObjects.Image): void => { if (p.sprite.active) img.setPosition(p.x, p.y + y); };
     const size = kind === 'passive' ? HERO_CAST.passiveSize : HERO_CAST.skillSize;
     playSheet(s, key, p.x, p.y - 18, { size, ms: HERO_CAST.ms, depth: DEPTH.fx + .2, add: true, name: 'hero-cast-' + kind, onUpdate: follow(-18) });

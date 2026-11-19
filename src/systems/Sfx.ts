@@ -1,5 +1,6 @@
 /** 轻量音效：WebAudio 合成；分类节流 + 并发上限 + 优先级 + 静音持久化。 */
 import { ATTACK_SFX, ATTACK_SFX_CONFIG, GROUP_MAX, type SfxGroup } from './HeroSfx';
+import { CONTENT_SFX, CONTENT_SFX_CONFIG } from './ContentSfx';
 export type SfxPriority = 0 | 1 | 2; // 0 低 / 1 中 / 2 高
 
 interface SfxConfig {
@@ -68,7 +69,7 @@ const CONFIG: Record<string, SfxConfig> = {
 };
 
 // 武将 / 兵种出手音效（HeroSfx.ts）并入同一张表
-for (const [k, c] of Object.entries(ATTACK_SFX_CONFIG)) CONFIG[k] = { freq: 0, type: 'sine', gain: 0, ...c };
+for (const [k, c] of Object.entries({ ...ATTACK_SFX_CONFIG, ...CONTENT_SFX_CONFIG })) CONFIG[k] = { freq: 0, type: 'sine', gain: 0, ...c };
 
 const GLOBAL_MAX = 14;
 
@@ -115,6 +116,7 @@ const D5 = 587.33, F5 = 698.46, A5 = 880, C6 = 1046.5, D6 = 1174.66;
 /** 分层音效配方（返回时长秒）；未列出的沿用 CONFIG 单振荡器。 */
 const RECIPES: Record<string, (v: Voice, t: number, p: number) => number> = {
   ...ATTACK_SFX,
+  ...CONTENT_SFX,
   hitLight: (v, t, p) => { v.noise(t, .045, 'bandpass', 1900 * p, .06, 900, 1.2); v.tone(t, .06, 'sine', 190 * p, .05, 90); return .07; },
   hitHeavy: (v, t, p) => { v.noise(t, .08, 'lowpass', 1200 * p, .08, 300); v.tone(t, .11, 'sine', 140 * p, .07, 55); return .12; },
   hitArrow: (v, t, p) => { v.noise(t, .03, 'highpass', 3200 * p, .05); v.tone(t, .03, 'triangle', 1500 * p, .025, 900); return .04; },

@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { DEPTH } from '../config';
+import { bossCastSfx, bossHitSfx, sceneSfx } from './ContentSfx';
 
 /**
  * 首领「主题特效组」（2026-11-19 用户：「强化 boss 攻击技能特效，主要是那些看起来比较简单普通的 boss」）：
@@ -58,7 +59,7 @@ export function playThemeFx(scene: Phaser.Scene, t: BossTheme | null, s: ThemeSh
   else if (s.kind === 'circle') { const d = s.r * 2 / K.ringFrac; img.setOrigin(.5, .5).setDisplaySize(d, d).setDepth(DEPTH.ground + 6); }
   else { img.setOrigin(.5, .62).setDisplaySize(s.size / K.puffFrac, s.size / K.puffFrac).setDepth(DEPTH.fx); }
   if (o.flip) img.setFlipY(true);
-  live++;
+  live++; sceneSfx(scene, bossHitSfx(t)); // 主题命中音（ContentSfx，按主题分音色、自带节流）
   scene.tweens.addCounter({ from: 0, to: 3.99, duration: o.ms ?? K.ms, onUpdate: tw => img.setFrame(first + Math.floor(tw.getValue() ?? 0)),
     onComplete: () => scene.tweens.add({ targets: img, alpha: 0, duration: K.fade, onComplete: () => { live--; img.destroy(); } }) });
   return true;
@@ -103,6 +104,7 @@ export function playCastFx(scene: Phaser.Scene, t: BossTheme | null, kind: CastK
   else if (kind === 'glint') { const d = size / K.glintFrac; img.setOrigin(.5, .5).setDisplaySize(d, d).setDepth(o.depth ?? DEPTH.fx + 1); }
   else { const d = size / K.burstFrac; img.setOrigin(.5, .62).setDisplaySize(d, d).setDepth(o.depth ?? DEPTH.fx + 1); }
   const peak = o.alpha ?? (kind === 'aura' ? .6 : kind === 'sigil' ? .55 : .9); castLive++;
+  if (kind === 'burst') sceneSfx(scene, 'bburst'); else if (kind !== 'glint') sceneSfx(scene, bossCastSfx(t)); // 起手音（蓄力 / 法阵；狂暴爆发另一声）
   const st = { u: 0 };
   scene.tweens.add({ targets: st, u: 1, duration: ms, ease: 'Linear',
     onUpdate: () => {

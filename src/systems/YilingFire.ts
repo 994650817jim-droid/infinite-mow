@@ -129,7 +129,7 @@ export class YilingFire {
   /** 营帐着火：塌掉，周围几格一起窜火（连营一烧一片）。 */
   private burnTent(t: Enemy, now: number): void {
     const cx = Math.floor(t.x / FIRE.cell), cy = Math.floor(t.y / FIRE.cell), R = FIRE.tentBurst; this.metrics.tentsBurnt++;
-    this.h.breakTent(t);
+    this.h.breakTent(t); this.h.sfx('tent_fire');
     playSheet(this.h.scene, 'fx_explosion', t.x, t.y + 6, { size: 200, ms: 620, depth: DEPTH.fx, originY: .84, name: 'yiling-tent-flare' });
     for (let dy = -R; dy <= R; dy++) for (let dx = -R; dx <= R; dx++) if (dx * dx + dy * dy <= R * R + 1) this.ignite(cx + dx, cy + dy, 2, now);
   }

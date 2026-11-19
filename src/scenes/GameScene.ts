@@ -842,7 +842,7 @@ export class GameScene extends Phaser.Scene {
     this.controlBuild=new ControlBuild(this,this.player.growth.build,(x,y,r)=>this.grid.query(x,y,r));
     this.events.once('shutdown',()=>{this.controlBuild?.clear();this.controlBuild=undefined;});
     const schoolBanner=new SchoolBanner(this,()=>this.mode==='none'&&!this.over,sch=>this.buffHud?.flashSchools(sch));this.schoolBanner=schoolBanner;
-    this.synergy=new SchoolSynergy({scene:this,player:this.player,combat:this.buildCombat,nearby:(x,y,r)=>this.grid.query(x,y,r),deal:(e,n,fire)=>{this.hitEnemy(e,n,this.combatNow,fire?'fire':'melee',false,false);},banner:(k,t,sub,sch)=>schoolBanner.show(k,t,sub,sch),
+    this.synergy=new SchoolSynergy({scene:this,player:this.player,combat:this.buildCombat,nearby:(x,y,r)=>this.grid.query(x,y,r),deal:(e,n,fire)=>{this.hitEnemy(e,n,this.combatNow,fire?'fire':'melee',false,false);},banner:(k,t,sub,sch)=>{schoolBanner.show(k,t,sub,sch);this.sfx.play(k==='combo'?'toast_combo':'toast_awaken');},
       controlled:(e,n)=>this.controlBuild?.isControlled(e,n)??false,slowArea:(x,y,r,k,ms,n)=>this.controlBuild?.slowArea(x,y,r,k,ms,n)??0,escort:(x,y,n,ms)=>this.reinforcePush().spawnEscortAt(x,y,n,ms)?.members.length??0,
       vfx:(st,x,y,size,a=0,ms=360)=>buildVfx(this).emit(st,x,y,this.combatNow,size,a,ms,true),flame:(x,y,r)=>this.spawnFlameFx(x,y,r),
       wind:(x,y,a,size)=>playSheet(this,'fx_gust_band',x,y,{size,ms:420,depth:DEPTH.fx+.05,rotation:a,name:'awaken-wind'}),shake:()=>this.hitFeel.shake('medium'),

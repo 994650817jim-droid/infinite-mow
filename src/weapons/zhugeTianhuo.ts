@@ -176,7 +176,7 @@ export function tianhuoBehavior(host: WeaponHost, weapon: WeaponState, dt: numbe
     const em = st.embers[i];
     if (host.over || time > em.until + 1) { st.embers.splice(i, 1); continue; }
     if (time < em.next) continue;
-    em.next += Z.ember.tickMs;
+    em.next += Z.ember.tickMs; host.sfx.play('zg_crackle');
     for (const e of host.grid.query(em.x, em.y, em.r + 40)) {
       if (!e.active || (e.isSupplySlot && !e.lockTarget) || Math.hypot(e.x - em.x, e.y - em.y) > em.r + e.radius) continue;
       host.hitEnemy(e, em.base * (e.kind === 'boss' || e.kind === 'elite' ? Z.ember.bossMul : Z.ember.mul), time, 'fire');
@@ -193,7 +193,7 @@ export function tianhuoBehavior(host: WeaponHost, weapon: WeaponState, dt: numbe
         if (!alive(e) || Math.hypot(e.x - z.x, e.y - z.y) > z.r + e.radius) continue;
         host.hitEnemy(e, hit * (e.kind === 'boss' || e.kind === 'elite' ? Z.bazhen.bossMul : 1), time, 'fire');
       }
-      bazhenPulse(host, z.fx);
+      bazhenPulse(host, z.fx); host.sfx.play('zg_bazhen_tick');
     }
     for (const e of host.grid.query(z.x, z.y, z.r + 40)) {
       if (!alive(e) || Math.hypot(e.x - z.x, e.y - z.y) > z.r + e.radius) continue;
@@ -219,13 +219,13 @@ export function tianhuoBehavior(host: WeaponHost, weapon: WeaponState, dt: numbe
     if (burst && g.masteries.eight_trigrams) {
       const L = g.masteries.eight_trigrams, r = Z.bazhen.radius[L - 1], until = time + Z.bazhen.ms[L - 1];
       const fx = art(host) ? playRow(host, 'zhuge_tianhuo', ZGFX.bazhen, 6, s.x, s.y + 6, r * 2.2, r * 1.25, 8, true, 'zhuge-bazhen', 18.6).setAlpha(.75) : null;
-      st.zones.push({ x: s.x, y: s.y, r, until, level: L, fx, base: s.damage, next: time + Z.bazhen.tickMs }); pl.passive.addBazhen(s.x, s.y, r, until);
+      st.zones.push({ x: s.x, y: s.y, r, until, level: L, fx, base: s.damage, next: time + Z.bazhen.tickMs }); pl.passive.addBazhen(s.x, s.y, r, until); host.sfx.play('zg_bazhen');
     }
     fallFx(host, s.x, s.y, burst, !!s.fall);
     // 天火余烬（2026-11-18 晚 用户：「只有被动触发后才触发」）：只有算无遗策那一发（观星第 4 发）落地留下星火焦土
     if (burst && Z.ember.mul > 0) { // ember.mul 填 0 即关掉余烬（不留地火、不结算）
       const r = Z.ember.radius; st.embers.push({ x: s.x, y: s.y, r, until: time + Z.ember.ms, next: time + Z.ember.tickMs, base: s.damage });
-      emberFx(host, s.x, s.y, r, Z.ember.ms);
+      emberFx(host, s.x, s.y, r, Z.ember.ms); host.sfx.play('zg_ignite');
     }
     host.sfx.play('atk_flame_boom');
     // 溅射：打杂兵（怪堆）时半径 / 比例加大，打首领 / 精锐维持小溅射
@@ -258,7 +258,7 @@ export function tianhuoBehavior(host: WeaponHost, weapon: WeaponState, dt: numbe
     st.sinceWind = 0;
     const len = Z.eastWind.len[W - 1], half = Z.eastWind.width / 2, hit = damage * Z.eastWind.mul[W - 1], dir = target.kind === 'boss' ? { x: ux, y: uy } : densestDir(host, len, half, { x: ux, y: uy }); // 打首领时朝首领扫（2026-11-18 平衡：一律朝怪最密方向时 1-1 首领段 12 → 34 秒；精锐也朝目标时 5-2 清杂掉回去，所以只限首领）；其余朝怪最密的方向扫
     pl.playAction('skill', dir.x < 0 ? 'left' : 'right');
-    eastWindFx(host, pl.x, pl.y, dir.x, dir.y, len);
+    eastWindFx(host, pl.x, pl.y, dir.x, dir.y, len); host.sfx.play('zg_wind');
     for (const e of host.grid.query(pl.x + dir.x * len / 2, pl.y + dir.y * len / 2, len / 2 + half + 40)) {
       if (!e.active) continue; const ex = e.x - pl.x, ey = e.y - pl.y, along = ex * dir.x + ey * dir.y, side = Math.abs(ex * -dir.y + ey * dir.x);
       if (along < -e.radius || along > len + e.radius || side > half + e.radius) continue;

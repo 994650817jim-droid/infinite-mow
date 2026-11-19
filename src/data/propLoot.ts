@@ -18,6 +18,8 @@ export const PROP_LOOT = {
   qualityCap: 'blue' as ItemQuality,
   /** 障碍物掉兵装的品质分布（再按 qualityCap 封顶）：白 / 绿 / 蓝 */
   quality: [['white', .3], ['green', .5], ['blue', .2]] as Array<[ItemQuality, number]>,
+  /** 按掉落品质段（data/items.ts lootBand）：一、二章蓝很少，三、四章起同上（2026-11-19 掉落随章节）。 */
+  qualityByBand: [[['white', .45], ['green', .5], ['blue', .05]], [['white', .25], ['green', .55], ['blue', .2]]] as Array<Array<[ItemQuality, number]>>,
   weapons: { itemChance: .08, gems: 2, buffChance: .3, buffMs: 6000 },
   armor: { itemChance: .08, gems: 1, buffChance: .35, buffMs: 8000, guardMul: .7 },
   crate: { itemChance: .04, gems: 3 },
@@ -45,18 +47,18 @@ export function propLootKind(texture: string, frame: number, heal = false): Prop
   return 'none';
 }
 export function capQuality(q: ItemQuality, cap: ItemQuality = PROP_LOOT.qualityCap): ItemQuality { return QUALITY_ORDER.indexOf(q) > QUALITY_ORDER.indexOf(cap) ? cap : q; }
-export function rollPropQuality(rng: () => number = Math.random): ItemQuality {
-  let r = rng(); for (const [q, p] of PROP_LOOT.quality) { if (r < p) return capQuality(q); r -= p; } return 'white';
+export function rollPropQuality(rng: () => number = Math.random, band = 2): ItemQuality {
+  let r = rng(); for (const [q, p] of PROP_LOOT.qualityByBand[band] ?? PROP_LOOT.quality) { if (r < p) return capQuality(q); r -= p; } return 'white';
 }
 /** 按障碍物类别出一件兵装（封顶蓝）：兵器架只出攻击类、甲胄架只出护具。别的类别返回 null。 */
-export function rollPropItem(kind: PropLootKind, rng: () => number = Math.random, quality: ItemQuality = rollPropQuality(rng)): ItemInstance | null {
+export function rollPropItem(kind: PropLootKind, rng: () => number = Math.random, quality: ItemQuality = rollPropQuality(rng), chapter = 1): ItemInstance | null {
   const q = capQuality(quality);
   if (kind === 'weapons') {
     // 直接在攻击类基础道具里挑一种再按它出件（不靠反复重抽）
     const bases = BASE_ITEMS.filter(b => ATTACK_AFFIXES.includes(b.primary));
-    return rollBaseItem(bases[Math.min(bases.length - 1, Math.floor(rng() * bases.length))].id, q, rng);
+    return rollBaseItem(bases[Math.min(bases.length - 1, Math.floor(rng() * bases.length))].id, q, rng, chapter);
   }
-  if (kind === 'armor') return rollItem(q, rng, ARMOR_SLOTS[Math.floor(rng() * ARMOR_SLOTS.length)]);
-  if (kind === 'crate' || kind === 'coins') return rollItem(q, rng, (['armor', 'helm', 'boots', 'token'] as ItemSlot[])[Math.floor(rng() * 4)]);
+  if (kind === 'armor') return rollItem(q, rng, ARMOR_SLOTS[Math.floor(rng() * ARMOR_SLOTS.length)], chapter);
+  if (kind === 'crate' || kind === 'coins') return rollItem(q, rng, (['armor', 'helm', 'boots', 'token'] as ItemSlot[])[Math.floor(rng() * 4)], chapter);
   return null;
 }

@@ -103,21 +103,23 @@ export class MerchantShop{
   const d=TACTICS[t.id],next=t.level+1,tac=this.o.tactics,able=!!tac&&tac.canBuy(t),poor=this.o.wallet.get()<t.price,{effect,cooldown,full}=tacticCardText(t.id,next);
   this.plate(x,y,w,h).setName('camp-tactic-card');
   const px=x+7,pw=w-14,py=y+14,ph=h-76,g=this.scene.add.graphics().setScrollFactor(0);
-  g.fillStyle(0xe9ddc2,.97).fillRect(px,py,pw,ph).lineStyle(1,0xb59a6a,.7).strokeRect(px+3,py+3,pw-6,ph-6);
+  // 2026-11-18 用户「白色背景看着就很突出」：纸面改成陈年旧绢的暖褐色（亮度、对比都压低，和漆底兵装卡同一档），四周再压一圈更深的旧色；战法卡靠卷轴木轴与朱漆牌区分，不靠亮
+  g.fillStyle(0x86714f,1).fillRect(px,py,pw,ph);for(let i=0;i<5;i++)g.lineStyle(2,0x5a4428,.16-i*.03).strokeRect(px+1+i*2,py+1+i*2,pw-2-i*4,ph-2-i*4);
+  g.lineStyle(1,0x5e4627,.75).strokeRect(px+4,py+4,pw-8,ph-8);
   for(const ry of [py-4,py+ph-3]){g.fillStyle(0x3b2414,1).fillRect(px-4,ry,pw+8,7);g.fillStyle(0xc9a35a,1).fillRect(px-7,ry-1,5,9).fillRect(px+pw+2,ry-1,5,9);}
   this.root.add(g);
   const ink=(tx:number,ty:number,str:string,size:number,color:string)=>this.text(tx,ty,str,size).setColor(color).setStroke('#000',0);
   // 新学 / 精进：漆牌压在上轴中间
   const badge=this.scene.add.graphics().setScrollFactor(0);lqButton(badge,x+w/2,py-1,48,20,'on',t.level?'gold':'cinnabar');this.root.add(badge);
   this.root.add(this.scene.add.text(x+w/2,py-1,t.level?'精进':'新学',{fontFamily:HEADING_FONT,fontSize:'12px',color:'#fff1cf',resolution:2}).setOrigin(.5).setLetterSpacing(2).setScrollFactor(0).setName('camp-tactic-badge'));
-  ink(x+w/2,py+13,TAG_NAMES[d.tag]+'系 · 战法',11,'#8a5a2a').setOrigin(.5,0).setName('camp-tactic-school');
+  ink(x+w/2,py+13,TAG_NAMES[d.tag]+'系 · 战法',11,'#4a2a0f').setOrigin(.5,0).setName('camp-tactic-school');
   if(this.scene.textures.exists('build_icon_'+t.id))this.root.add(this.scene.add.image(x+w/2,py+50,'build_icon_'+t.id).setDisplaySize(46,46).setScrollFactor(0).setName('camp-tactic-icon'));
-  ink(x+w/2,py+75,d.name+'  '+(t.level?'Lv.'+t.level+'→'+next:'Lv.1'),15,'#2a170b').setOrigin(.5,0).setFontFamily(HEADING_FONT).setName('camp-tactic-name');
-  g.lineStyle(1,0xa58a5c,.55).lineBetween(px+10,py+96,px+pw-10,py+96);
+  ink(x+w/2,py+75,d.name+'  '+(t.level?'Lv.'+t.level+'→'+next:'Lv.1'),15,'#1a0e05').setOrigin(.5,0).setFontFamily(HEADING_FONT).setName('camp-tactic-name');
+  g.lineStyle(1,0x5e4627,.7).lineBetween(px+10,py+96,px+pw-10,py+96);
   // 冷却行贴底；效果在名字与冷却之间，放不下就缩字号（不截断）
   const cdY=py+ph-18,descTop=py+100,limit=cdY-2;
-  ink(x+w/2,cdY,cooldown??'悬停看详情',11,cooldown?'#7a3a1c':'#9a8a6c').setOrigin(.5,0).setName('camp-tactic-cd');
-  const desc=ink(px+6,descTop,effect,12,'#33220f').setWordWrapWidth(pw-12,true).setLineSpacing(1).setName('camp-tactic-desc');
+  ink(x+w/2,cdY,cooldown??'悬停看详情',11,cooldown?'#7a1a0e':'#4d3a20').setOrigin(.5,0).setName('camp-tactic-cd');
+  const desc=ink(px+6,descTop,effect,12,'#20130a').setWordWrapWidth(pw-12,true).setLineSpacing(1).setName('camp-tactic-desc');
   for(const size of [11,10.5,10])if(desc.y+desc.height>limit)desc.setFontSize(size+'px');
   desc.setData('limit',limit).setData('full',full);
   const hover=this.scene.add.rectangle(px,py,pw,ph,0,.001).setOrigin(0).setScrollFactor(0).setInteractive().setName('camp-tactic-hover');this.root.add(hover);

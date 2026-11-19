@@ -50,9 +50,9 @@ export function drawCampFigure(scene:Phaser.Scene,root:Phaser.GameObjects.Contai
  const sealChar=scene.add.text(sx,sy,spec.seal,{fontFamily:HEADING_FONT,fontSize:'13px',color:'#a3261c',fontStyle:'bold',resolution:2}).setOrigin(.5).setAngle(-8).setScrollFactor(0);
  root.add([g,name,seal,sealChar]);
  // 对话气泡：在头顶偏右，尾巴（左下）指向人物头部
- const bw=150,bub=scene.add.image(cx-35,top-52,BUBBLE.key).setOrigin(0).setScrollFactor(0).setName(spec.objName+'-bubble');bub.setScale(bw/bub.width);
+ const bw=150,bub=scene.add.image(cx-35,top-52,BUBBLE.key).setOrigin(0).setScrollFactor(0).setName(spec.objName+'-bubble').setTint(0xb3a07e);bub.setScale(bw/bub.width); // 气泡压暗成陈年旧纸色（「白色背景看着就很突出」），不刺眼
  const tx=bub.x+bw*.52,ty=bub.y+bub.displayHeight*.42;
- const line=scene.add.text(tx,ty,spec.lines[(saying.get(spec.objName)??0)%Math.max(1,spec.lines.length)]??'',{fontFamily:FONT,fontSize:'12px',color:'#2e1d0e',resolution:2,align:'center',lineSpacing:1,wordWrap:{width:bw*.78,useAdvancedWrap:true}}).setOrigin(.5).setScrollFactor(0).setName(spec.objName+'-line');
+ const line=scene.add.text(tx,ty,spec.lines[(saying.get(spec.objName)??0)%Math.max(1,spec.lines.length)]??'',{fontFamily:FONT,fontSize:'12px',color:'#1e1208',resolution:2,align:'center',lineSpacing:1,wordWrap:{width:bw*.78,useAdvancedWrap:true}}).setOrigin(.5).setScrollFactor(0).setName(spec.objName+'-line');
  root.add([bub,line]);
  // 台词轮换：按真实时间走（休整时场景补间暂停），淡出 → 换句 → 淡入；鼠标移到人物上立刻换下一句
  let idx=(saying.get(spec.objName)??0)%Math.max(1,spec.lines.length),t=0,next=-1;const show=(i:number)=>{idx=(i+spec.lines.length)%spec.lines.length;saying.set(spec.objName,idx);next=-1;t=0;line.setText(spec.lines[idx]);};

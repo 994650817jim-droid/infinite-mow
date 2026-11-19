@@ -270,3 +270,4 @@ assets/raw/*
 !/tools/test-follower-obstacles.mjs
 !/tools/test-siege-large-flow.mjs
 !/tools/shot-luoyang-wall.mjs
+!/tools/shot-hero-cards.mjs

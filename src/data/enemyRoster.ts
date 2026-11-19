@@ -87,7 +87,7 @@ export interface RosterType {
    * 专属图（美术风格会话出图，登记在 ArtStyle.ART_V2_FILES，键 enemy_<id>_walk / enemy_<id>_attack；4×4，行 = 下 / 左 / 右 / 上）。
    * cell = 行走表格边长（128 / 144 / 176），脚底 = (cell − 7) / cell，显示倍数 V2_TROOP_SCALE。图没到就退回底层兵种图 + fallback。
    */
-  art: { walk: string; attack: string; cell: number };
+  art: { walk: string; attack: string; cell: number; /** 专属图显示倍数（在 V2_TROOP_SCALE 之上；四足兽等画面里显矮的才用） */ mul?: number };
   /** 没有专属图时：底层兵种图染色 + 缩放。 */
   fallback: { tint: number; scale: number };
   /** 一次刷几个（蜂拥）。 */
@@ -155,7 +155,7 @@ export const ROSTER: Record<string, RosterType> = {
   huwei: { id: 'huwei', name: '魏国虎卫', base: 'shield', role: 'heavy', mul: { hp: 4, speed: .8, damage: 1.6 }, trait: { kind: 'guard', radius: 200, mul: .5, engage: 260 }, art: A('huwei', 176), fallback: { tint: 0x6a6a78, scale: 1.25 }, cap: 4 },
   qiangbing: { id: 'qiangbing', name: '西凉羌兵', base: 'infantry', role: 'leaper', mul: { hp: 1, speed: 1.3, damage: 1.1 }, trait: { kind: 'leaper', range: 340, minRange: 120, warnMs: 600, flightMs: 380, everyMs: 3200, radius: 75, damage: 11 }, art: A('qiangbing', 128), fallback: { tint: 0xc0a888, scale: 1 }, cap: 4 },
   huojian: { id: 'huojian', name: '火箭手', base: 'archer', role: 'ranged', mul: { hp: .9, speed: .6, damage: 1 }, trait: { kind: 'firearrow', range: 420, everyMs: 3200, speed: 300, fireMs: 2000, fireRadius: 50, fireDamage: 4 }, art: A('huojian', 144), fallback: { tint: 0xb89070, scale: 1 }, cap: 4 },
-  beast: { id: 'beast', name: '猛兽', base: 'infantry', role: 'pack', mul: { hp: .6, speed: 1.5, damage: 1.2 }, trait: { kind: 'swarm' }, art: A('beast', 144), fallback: { tint: 0x7a5a38, scale: .75 }, cap: 6 },
+  beast: { id: 'beast', name: '猛兽', base: 'infantry', role: 'pack', mul: { hp: .6, speed: 1.5, damage: 1.2 }, trait: { kind: 'swarm' }, art: { ...A('beast', 144), mul: 1.25 } /* 猛虎四足、画面里只有步兵的 0.76 高，放大到 ~0.95（11-19 比例总览）*/, fallback: { tint: 0x7a5a38, scale: .75 }, cap: 6 },
 };
 
 // ———— 配兵比例（用户 11-19「控制一下配兵比例」；现在没有难度分级，traitMul 留给以后接难度）————

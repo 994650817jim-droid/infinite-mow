@@ -8,6 +8,9 @@ import {Parley} from '../systems/Parley';
 import {freeSpawn} from '../systems/SpawnClear';
 import {luoyangRuins,xiaquyangAltarCamp} from '../systems/ChapterDressing';
 import {DUAL, DualBoss, retreatFade, type DualCtrl, type DualPlan} from '../systems/DualBoss';
+import {BattleOrders} from '../systems/BattleOrders';
+import {OrdersPanel} from '../ui/OrdersPanel';
+import {BattleMap} from '../ui/BattleMap';
 import type {BossMount as BossMountT} from '../systems/BossMount';
 import {SURRENDER,surrenderDef} from '../data/surrender';
 import {markSurrender,surrenderedIds,surrenderLive} from '../systems/SurrenderStore';
@@ -394,6 +397,8 @@ export class GameScene extends Phaser.Scene {
   private shieldBars:ShieldBars|null=null;
   /** 关卡目标（歼敌 / 摧毁 / 护送 / 坚守，data/objectives.ts）：完成后首领出阵。 */
   protected objective:StageObjectives|null=null;private objectiveText?:Phaser.GameObjects.Text;
+  /** 战场地图 · 军令（battle-map-design.md）：军令表手机也有；军令面板与小地图只在电脑布局建。 */
+  battleOrders:BattleOrders|null=null;private ordersPanel:OrdersPanel|null=null;battleMap:BattleMap|null=null;
   protected supplies:BattlefieldSupplies|null=null;
   /** 道具掉落与本局缴获（局外兵装，结算带回行囊）。 */
   protected itemDrops:ItemDrops|null=null;
@@ -730,6 +735,7 @@ export class GameScene extends Phaser.Scene {
       }) as typeof cam.shake; }
     this.shieldBars=new ShieldBars(this);this.events.once('shutdown',()=>{this.shieldBars?.clear();this.shieldBars=null;this.objective?.clear();this.objective=null;this.objectiveText=undefined;});
     this.setupObjective();
+    this.setupBattleMap();
     // 坐骑：马厩里给该武将分配的马（第一章通关后马厩开放；换马只在休整时，下一关出征生效）
     {const horse=heroHorse(this.runConfig.character);this.mount=horse?new HeroMount({scene:this,player:this.player,enemies:this.enemies,hit:(e,d,now)=>this.hitEnemy(e,d,now,'melee',false,false),notice:t=>this.showGrowthNotice(t)},{base:horse.id,name:horse.name},this.runConfig.character,this.player.growth.gear.specials.includes('hubao')?{trampleMul:RELIC.hubaoTrample,remountMs:RELIC.hubaoRemountMs}:{}):null;this.player.mountGuard=this.mount?(n,now)=>this.mount?.guard(n,now)??n:undefined;this.mountHint=MountRideHint.maybeShow(this,!!this.mount);this.events.once('shutdown',()=>{this.mount?.clear();this.mount=null;});}
     this.itemDrops=new ItemDrops(this,this.player,this.itemTier(),()=>this.elapsed,()=>this.isFinalBoss(),()=>this.sfx.play('pickup'),()=>this.bossRelicKey());this.itemDrops.deferBossRelic=true; // 首领遗珍由首领宝箱发（BossChest）
@@ -1010,6 +1016,7 @@ export class GameScene extends Phaser.Scene {
       openBag: () => this.openBattleBag(), canAttributes: () => this.player.growth.unallocated > 0,
       openAttributes: (from: 'none' | 'pause') => { this.attributeReturn = from; this.renderAttributePanel(); this.setMode('attributes'); },
       openBuild: () => this.openBuildPanel(), chooseUpgrade: (i: number) => this.chooseUpgrade(i),
+      ...(IS_DESKTOP ? {toggleMap: () => this.battleMap?.toggleBig(), mapOpen: () => !!this.battleMap?.bigOpen} : {}),
     };
     this.hotkeys = new BattleHotkeys(hotkeyHost); this.hotkeyHints = new HotkeyHints(hotkeyHost);
   }
@@ -1080,6 +1087,7 @@ export class GameScene extends Phaser.Scene {
     this.huaxiong?.updateDeath(delta);this.xurong?.updateDeath(delta);for(const controller of this.deadBossControllers)controller.updateDeath(delta);
     this.animateUpgradeCards();
     this.hotkeyHints?.update(delta / 1000);
+    this.tickBattleMap(delta / 1000);
     if (this.mode !== 'none' || this.over) return;
     if (this.pendingLevels > 0 && this.pickGapOk()) this.openUpgrade();
 
@@ -1254,11 +1262,38 @@ export class GameScene extends Phaser.Scene {
 
   /** 关卡目标：按当前关的 chapter.objective 建立（战线推进到下一关时重建）；HUD 在章节名下方显示一行。 */
   protected setupObjective(): void {
-    this.objective?.clear(); this.objective = null;
+    this.objective?.clear(); this.objective = null; this.battleOrders?.resetAuto();
     const o = this.chapter.objective; if (!o) { this.objectiveText?.setVisible(false); return; }
     this.objective = new StageObjectives({scene: this, player: this.player, enemies: this.enemies, spawn: (k, x, y) => this.spawnEnemy(k, x, y, undefined, true), spawnCamp: (x, y, hp) => this.supplies?.spawnCamp(x, y, Math.round(hp * this.chapter.hpScale(this.elapsed))) ?? null, kills: () => this.kills, elapsed: () => this.elapsed, banner: (t, c) => this.showWaveBanner(t, false, c)}, o);
     if (!this.objectiveText?.active) this.objectiveText = this.add.text(GAME_WIDTH / 2, 78, '', warText(14, '#ffd98a')).setOrigin(.5, 0).setScrollFactor(0).setDepth(DEPTH.hud + 1).setStroke('#1a120b', 4).setName('objective-text');
-    this.objectiveText.setVisible(true).setText(this.objective.text);
+    this.objectiveText.setVisible(!this.ordersPanel).setText(this.objective.text);
+  }
+
+  /** 战场地图 · 军令（battle-map-design.md）：军令表（自动读关卡目标 / 首领 / 攻城 / 突围；其他系统用 ordersOf(scene) 推）+ 电脑布局的军令面板、小地图、G 键大地图。 */
+  protected setupBattleMap(): void {
+    this.ordersPanel?.destroy(); this.battleMap?.destroy(); this.ordersPanel = null; this.battleMap = null;
+    const orders = this.battleOrders = new BattleOrders({
+      scene: this, elapsed: () => this.elapsed, over: () => ({over: this.over, victory: this.victory}),
+      banner: (t, c) => this.showWaveBanner(t, false, c),
+      stageObjective: () => { const o = this.objective; if (!o) return null; const p = o.progress; return {kind: o.o.kind, cur: p.cur, max: p.max, label: o.o.label, target: o.o.kind === 'destroy' ? o.o.target : undefined, limit: o.o.limit, done: o.done, failed: o.failed, points: o.points}; },
+      bosses: () => this.dual ? this.dual.alive.map(x => ({key: x.id, name: x.name, e: x.enemy})) : this.boss?.active ? [{key: 'main', name: this.chapter.bossName, e: this.boss}] : [],
+      waves: () => this.objective || !this.chapter.waves?.length ? null : {cur: Math.max(1, this.waveIndex + 1), total: this.chapter.waves.length, name: this.chapter.waves[Math.max(0, this.waveIndex)]?.name ?? '', bossAt: chapterBossTime(this.chapter)},
+      bossName: () => this.chapter.bossName, bossSpawned: () => this.bossSpawned, bossKilled: () => this.bossKilled,
+      bossOutcome: key => this.dual?.entries.find(x => x.id === key)?.done ?? null,
+    });
+    if (IS_DESKTOP) {
+      this.ordersPanel = new OrdersPanel(this, orders);
+      this.battleMap = new BattleMap({scene: this, player: () => this.player, enemies: () => this.enemies, followers: () => this.followers?.members ?? [], bosses: () => this.dual ? this.dual.alive.map(x => x.enemy) : this.boss?.active ? [this.boss] : []}, orders);
+      this.objectiveText?.setVisible(false);
+    }
+    this.events.once('shutdown', () => { this.ordersPanel?.destroy(); this.battleMap?.destroy(); this.battleOrders?.clear(); this.ordersPanel = null; this.battleMap = null; this.battleOrders = null; });
+  }
+  /** 每帧：军令同步（5 Hz）、面板、地图（8 Hz）；弹窗 / 结算时关大地图、地图停更。 */
+  protected tickBattleMap(dt: number): void {
+    this.battleOrders?.update(dt); this.ordersPanel?.update(dt);
+    if (!this.battleMap) return;
+    if (this.mode !== 'none' && this.battleMap.bigOpen) this.battleMap.toggleBig();
+    if (this.mode === 'none' && !this.over) this.battleMap.update(dt);
   }
 
   /** 盾碎：碎片效果，换成同章步兵造型（飞熊军等专属造型保留原样）。 */

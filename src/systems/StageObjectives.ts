@@ -38,6 +38,18 @@ export class StageObjectives {
     if (o.kind === 'destroy') return `目标 · ${o.target} ${this.destroyed}/${o.count}`;
     return `目标 · 坚守 ${Math.floor(this.held)}/${o.seconds} 秒 · 军旗 ${Math.ceil(this.hp)}/${HD.hp}`;
   }
+  /** 战场地图（ui/BattleMap）用：还没摧毁的目标 / 坚守军旗的位置。 */
+  get points(): Array<{x: number; y: number}> {
+    if (this.done || this.failed) return [];
+    if (this.o.kind === 'destroy') return this.targets.filter(t => t.e.active && t.e.spawnId === t.life).map(t => ({x: t.e.x, y: t.e.y}));
+    if (this.o.kind === 'hold' && this.cart?.active) return [{x: this.cart.x, y: this.cart.y + 40}];
+    return [];
+  }
+  /** 战场地图用：当前进度（歼敌 / 摧毁个数 / 坚守秒数）。 */
+  get progress(): {cur: number; max: number} {
+    const o = this.o;
+    return o.kind === 'kills' ? {cur: this.h.kills() - this.startKills, max: o.count} : o.kind === 'destroy' ? {cur: this.destroyed, max: o.count} : {cur: Math.floor(this.held), max: o.seconds};
+  }
   /** 测试用状态。 */
   get state() { return {done: this.done, failed: this.failed, destroyed: this.destroyed, hp: this.hp, held: this.held, kills: this.h.kills() - this.startKills}; }
   private complete(): void { if (this.done) return; this.done = true; this.h.banner('目标达成', '首领出阵！'); }

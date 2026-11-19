@@ -28,6 +28,9 @@ export interface HotkeyHost {
   openAttributes(from: 'none' | 'pause'): void;
   openBuild(): void;
   chooseUpgrade(i: number): void;
+  /** 战场地图（大地图）开关；没有地图（手机布局）时不传。 */
+  toggleMap?(): void;
+  mapOpen?(): boolean;
 }
 
 type GO = Phaser.GameObjects.GameObject & { visible?: boolean; parentContainer?: Phaser.GameObjects.Container | null; getBounds?: () => Phaser.Geom.Rectangle };
@@ -98,8 +101,11 @@ export class BattleHotkeys {
       if (a === 'build' || a === 'back') { const back = this.buildFromBattle; this.buildFromBattle = false; click(s, 'build-panel-back'); if (back && h.mode() === 'pause') h.togglePause(); return true; }
       return false;
     }
+    // 大地图开着：G / Esc 关掉（其余键照常）
+    if (h.mapOpen?.() && (a === 'map' || a === 'back')) { h.toggleMap?.(); return true; }
     if (playing) {
       switch (a) {
+        case 'map': if (!h.toggleMap) return false; h.toggleMap(); return true;
         case 'back': h.togglePause(); return true;
         case 'potion': h.usePotion(); return true;
         case 'order': h.cycleOrder(); return true;

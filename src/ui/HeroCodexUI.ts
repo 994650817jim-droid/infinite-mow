@@ -4,7 +4,7 @@ import { DEPTH, FONT, GAME_HEIGHT, GAME_WIDTH, HEADING_FONT, IS_DESKTOP } from '
 import { CHARACTERS, type CharacterId } from '../data/characters';
 import { TACTICS, TAG_NAMES, type BuildTag, type TacticId } from '../data/builds';
 import { WEAPON_DEFS } from '../weapons/registry';
-import { ATTRIBUTE_INFO, ATTRIBUTE_MAX, attributeIcon, type AttributeId } from '../systems/RunGrowth';
+import { ATTRIBUTE_INFO, attributeCap, attributeIcon, type AttributeId } from '../systems/RunGrowth';
 import { allocateHeroAttr, heroAttrs, heroFreePoints, heroInfo, takeAttrNotice, type HeroKey } from '../systems/HeroProgress';
 import { primaryAttribute, PRIMARY_MUL, PRIMARY_PERK_INFO, PRIMARY_TIERS } from '../data/attributes';
 import { gearFor, gearSummary } from '../systems/ItemEffects';
@@ -111,7 +111,7 @@ export class HeroCodexUI {
 
   private renderAttrs(x: number, y: number, w: number): void {
     const a = heroAttrs(this.hero), free = heroFreePoints(this.hero), cost = respecCost(this.hero), spent = Object.values(a).reduce((n, v) => n + v, 0);
-    const head = this.text(x, y, `未分配属性点 ${free}　（武将每升 1 级得 1 点，单项最多 ${ATTRIBUTE_MAX} 点）`, 14, free ? '#f3d48a' : '#b9a57a').setName('codex-free');
+    const head = this.text(x, y, `未分配属性点 ${free}　（武将每升 1 级得 1 点，单项最多 ${attributeCap(heroInfo(this.hero).level)} 点）`, 14, free ? '#f3d48a' : '#b9a57a').setName('codex-free');
     (Object.keys(ATTRIBUTE_INFO) as AttributeId[]).forEach((id, i) => {
       const ry = y + 40 + i * 44;
       if (this.scene.textures.exists(attributeIcon(id))) this.add(this.scene.add.image(x + 16, ry + 12, attributeIcon(id)).setDisplaySize(28, 28));
@@ -125,8 +125,8 @@ export class HeroCodexUI {
         const head0 = head.text; // 悬停时把说明写在顶上那行，不压住下面的属性行
         t.on('pointerover', () => head.setText(perks.map((p, k) => '满 ' + PRIMARY_TIERS[k] + ' 点「' + p.name + '」' + p.desc).join('；')).setWordWrapWidth(w)); t.on('pointerout', () => head.setText(head0));
       }
-      this.text(x + w - 110, ry + 2, `${a[id]} / ${ATTRIBUTE_MAX}`, 14, '#e5d4ab').setOrigin(1, 0).setName('codex-attr-' + id);
-      this.button(x + w - 50, ry + 12, '+', 'codex-add-' + id, () => this.act(allocateHeroAttr(this.hero, id) ? { ok: true, message: `${ATTRIBUTE_INFO[id].name} +1` } : { ok: false, message: '没有可分配的点，或这一项已满' }), { disabled: free <= 0 || a[id] >= ATTRIBUTE_MAX, size: 18 });
+      this.text(x + w - 110, ry + 2, `${a[id]} / ${attributeCap(heroInfo(this.hero).level)}`, 14, '#e5d4ab').setOrigin(1, 0).setName('codex-attr-' + id);
+      this.button(x + w - 50, ry + 12, '+', 'codex-add-' + id, () => this.act(allocateHeroAttr(this.hero, id) ? { ok: true, message: `${ATTRIBUTE_INFO[id].name} +1` } : { ok: false, message: '没有可分配的点，或这一项已满' }), { disabled: free <= 0 || a[id] >= attributeCap(heroInfo(this.hero).level), size: 18 });
     });
     const by = y + 40 + Object.keys(ATTRIBUTE_INFO).length * 44 + 10;
     this.button(x + 110, by, cost ? `洗点 · 军粮 ${cost}` : '洗点 · 本章首次免费', 'codex-respec', () => this.act(respec(this.hero)), { disabled: spent === 0, size: 14 });

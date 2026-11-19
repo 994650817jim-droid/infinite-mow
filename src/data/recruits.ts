@@ -10,8 +10,8 @@ export type RecruitKind = 'hero' | 'named' | 'common';
 export type FollowerTemplate = 'spear' | 'blade' | 'bow' | 'strategist';
 
 export const TEMPLATES: Record<FollowerTemplate, { name: string; desc: string; range: number; cooldown: number; damage: number; hp: number; speed: number }> = {
-  spear: { name: '枪', desc: '近身扫击，打身边一圈', range: 70, cooldown: 900, damage: 16, hp: 220, speed: 1.05 },
-  blade: { name: '刀', desc: '前方扇形劈砍', range: 85, cooldown: 1100, damage: 22, hp: 260, speed: 1 },
+  spear: { name: '枪', desc: '近身扫击，打身边一圈', range: 70, cooldown: 900, damage: 12, hp: 220, speed: 1.05 },
+  blade: { name: '刀', desc: '前方扇形劈砍', range: 85, cooldown: 1100, damage: 16, hp: 260, speed: 1 },
   bow: { name: '弓', desc: '单发远射', range: 230, cooldown: 950, damage: 18, hp: 160, speed: 1 },
   strategist: { name: '谋', desc: '在敌群落下小范围火点', range: 200, cooldown: 1600, damage: 26, hp: 150, speed: .98 },
 };
@@ -77,6 +77,8 @@ export const FOLLOW = {
   hitFxPerFrame: 4,
   /** 可玩名将跟随时专属武器的倍率；吃主将全局伤害加成的比例。 */
   heroDamageMul: .45, heroCooldownMul: 1.3, shareLeaderDamage: .5,
+  /** 刀 / 枪群伤（2026-11-18 平衡：同 10 级刀卫 6 秒 1343 > 关羽本命 536）：一下最多打 groupMax 人，第 groupFalloffFrom 人起每人 ×groupFalloffMul；刀 22 → 16、枪 16 → 12。 */
+  groupMax: 4, groupFalloffFrom: 3, groupFalloffMul: .5,
   /** 首领打跟随武将的倍率（同后备兵）。 */
   bossMul: 3,
   /** 武将等级（HeroProgress，用户批准方案 A）：招来的 r_ 武将按等级成长，每级生命 +4%、伤害 +3%；

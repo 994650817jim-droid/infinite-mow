@@ -11,7 +11,8 @@ const TABLE: readonly number[] = [
 export function heroXpToNext(level: number): number {
   const lv = Math.max(1, Math.floor(level));
   if (lv - 1 < TABLE.length) return TABLE[lv - 1];
-  return lv < 20 ? 1750 : lv < 25 ? 2250 : 2700;
+  // 第六～十二章（Lv30 起，每章约 4 级）：2026-11-18 平衡，按每章约 3 关 × 4500 经验 + 首通估
+  return lv < 20 ? 1750 : lv < 25 ? 2250 : lv < 30 ? 2700 : lv < 38 ? 3800 : lv < 46 ? 4200 : lv < 54 ? 4600 : 5000;
 }
 
 /** 经验倍率：主线首次打 1.0；攻城 / 军情 / 挑战 / 重打旧关 0.5。首次通关经验另加，不乘。 */

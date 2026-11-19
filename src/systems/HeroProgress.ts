@@ -1,6 +1,6 @@
 import { OVERFLOW_XP_PER_GRAIN } from '../data/heroLevels';
 import type { CharacterId } from '../data/characters';
-import { ATTRIBUTE_IDS, ATTRIBUTE_MAX, ATTRIBUTE_POINT_EVERY, xpToNext, type AttributeId } from './RunGrowth';
+import { ATTRIBUTE_IDS, ATTRIBUTE_MAX, ATTRIBUTE_POINT_EVERY, attributeCap, xpToNext, type AttributeId } from './RunGrowth';
 import { chapterOneCleared } from './ChapterProgress';
 import { arcUnlocked } from '../world/WorldStore';
 
@@ -13,7 +13,8 @@ import { arcUnlocked } from '../world/WorldStore';
  * - 第一次出战的武将：只开第一章时 Lv1，之后从「当前上限 − 5」起步（避免后期才用的武将打不动）。
  */
 export const HEROES_KEY = 'im_heroes_v1';
-export const LEVEL_CAPS: readonly number[] = [10, 15, 20, 25, 30];
+/** 各章开放时的武将等级上限（第 n 章 = LEVEL_CAPS[n−1]）。2026-11-18 平衡：第六～十二章每章 +4，到 58（属性单项上限 14、共 56 点）。 */
+export const LEVEL_CAPS: readonly number[] = [10, 15, 20, 25, 30, 34, 38, 42, 46, 50, 54, 58];
 export type HeroKey = CharacterId | `r_${number}`;
 export interface HeroRecord { level: number; xp: number; attributes: Record<AttributeId, number> }
 /**
@@ -27,9 +28,14 @@ const zeroAttrs = (): Record<AttributeId, number> => ({ strength: 0, agility: 0,
 const int = (v: unknown, max: number, min = 0) => Number.isSafeInteger(v) ? Math.max(min, Math.min(max, v as number)) : min;
 const isKey = (k: string) => /^r_\d{1,9}$/.test(k) || /^[a-z]{2,20}$/.test(k);
 
-/** 已开放的章节数（1–5）。 */
+/** 已开放的章节数（1–12）。 */
 export function chaptersOpen(): number {
-  try { return !chapterOneCleared() ? 1 : arcUnlocked('chibi') ? 5 : arcUnlocked('guandu') ? 4 : arcUnlocked('qunxiong') ? 3 : 2; } catch { return 1; }
+  try {
+    if (!chapterOneCleared()) return 1;
+    const later = ['qunxiong', 'guandu', 'chibi', 'jingnan', 'shu', 'hanzhong', 'xiangfan', 'yiling', 'nanzheng', 'beifa'] as const; // 第三～十二章
+    let n = 2; for (let i = 0; i < later.length; i++) if (arcUnlocked(later[i])) n = i + 3;
+    return n;
+  } catch { return 1; }
 }
 export function levelCap(): number { return LEVEL_CAPS[chaptersOpen() - 1]; }
 /** 第一次出战的武将的起始等级。 */
@@ -96,9 +102,9 @@ export function heroLevel(id: HeroKey): number { return record(id, false).level;
 export function heroInfo(id: HeroKey): { level: number; xp: number; next: number; cap: number } { const r = record(id, false), cap = levelCap(); return { level: r.level, xp: r.xp, next: xpToNext(r.level), cap }; }
 /** 已加的属性点（副本）。 */
 export function heroAttrs(id: HeroKey): Record<AttributeId, number> { return { ...record(id, false).attributes }; }
-/** 还没分配的永久属性点（受每项 5 点上限约束）。 */
+/** 还没分配的永久属性点（受单项上限 attributeCap(等级) 约束）。 */
 export function heroFreePoints(id: HeroKey): number {
-  const r = record(id, false), spent = ATTRS.reduce((n, a) => n + r.attributes[a], 0), room = ATTRS.reduce((n, a) => n + ATTRIBUTE_MAX - r.attributes[a], 0);
+  const r = record(id, false), spent = ATTRS.reduce((n, a) => n + r.attributes[a], 0), room = ATTRS.reduce((n, a) => n + attributeCap(r.level) - r.attributes[a], 0);
   return Math.max(0, Math.min(room, pointsAt(r.level) - spent));
 }
 /** 出战时调用：确保有记录（第一次出战即写入），返回记录副本。 */
@@ -108,14 +114,14 @@ export function enlistHero(id: HeroKey): HeroRecord { const r = record(id, true)
 export function resetHeroAttrs(id: HeroKey): void { const r = record(id, true); r.attributes = zeroAttrs(); commit(); }
 export function allocateHeroAttr(id: HeroKey, attr: AttributeId): boolean {
   if (heroFreePoints(id) <= 0) return false;
-  const r = record(id, true); if (r.attributes[attr] >= ATTRIBUTE_MAX) return false;
+  const r = record(id, true); if (r.attributes[attr] >= attributeCap(r.level)) return false;
   r.attributes[attr]++; commit(); return true;
 }
 /**
  * 主线关首次通关经验（平衡会话实测后提议、用户批准）：一章每关 120、二章 250，之后每章 +130（380 / 510 / 640）。
  * 关卡键同马厩赠马：huangjin-N / hulao-N / third-N / guandu-N / chibi-N。每个存档每关只给一次（任何武将打通都算）。
  */
-export const FIRST_CLEAR_XP: Record<string, number> = { huangjin: 120, hulao: 250, third: 380, guandu: 510, chibi: 640, jingnan: 770, hanzhong: 1030, yiling: 1290, beifa: 1550 };
+export const FIRST_CLEAR_XP: Record<string, number> = { huangjin: 120, hulao: 250, third: 380, guandu: 510, chibi: 640, jingnan: 770, shu: 900, hanzhong: 1030, xiangfan: 1160, yiling: 1290, nanzheng: 1420, beifa: 1550 };
 /** 这一关是否已首次通关过（征程构筑：重打旧关用空构筑）。 */
 export function stageCleared(stageKey: string | null): boolean { return !!stageKey && read().firstClears.includes(stageKey); }
 export function claimFirstClear(stageKey: string | null): number {

@@ -116,7 +116,8 @@ export const BALANCE = {
   enemyCap: 150,
   enemyCapLow: 100,
   /** 首领在场时刷杂兵（2026-11-18 用户：boss 出来后减少小兵生成）：同屏上限、刷兵间隔、每次数量的倍率。 */
-  bossSpawn: { capMul: .5, intervalMul: 2, burstMul: .5 },
+  // xpMul：首领在场时杂兵经验倍率（2026-11-18 平衡方案 A：少刷兵后首领战经验约少一半，×2 补回）
+  bossSpawn: { capMul: .5, intervalMul: 2, burstMul: .5, xpMul: 2 },
   eliteFirst: 55,
   eliteInterval: 60,
   critMultiplier: 1.8,

@@ -84,7 +84,7 @@ import { Legion } from '../systems/Legion';
 import { LegionUI } from '../ui/LegionUI';
 import { Reinforcements } from '../systems/Reinforcements';
 import { MartialFields } from '../systems/MartialFields';
-import { RunGrowth, ATTRIBUTE_INFO, ATTRIBUTE_MAX, attributeIcon, type AttributeId } from '../systems/RunGrowth';
+import { RunGrowth, ATTRIBUTE_INFO, attributeCap, attributeIcon, type AttributeId } from '../systems/RunGrowth';
 import { addMerit, addScrolls, getXinde, SCROLL, temperBonus } from '../systems/MasteryStore';
 import { primaryAttribute, PRIMARY_PERK, PRIMARY_PERK_INFO, PRIMARY_TIERS, PRIMARY_MUL, SPELL_WEAPONS } from '../data/attributes';
 import { stageCleared, takeAttrNotice } from '../systems/HeroProgress';
@@ -2141,7 +2141,7 @@ export class GameScene extends Phaser.Scene {
       // 倒地后原地掉宝箱，主将捡起遗物才进下一阶段（原来的三选一遗物卡改成宝箱）
       this.spawnBossChest(enemy.x,enemy.y,()=>{if(this.bossKilled&&this.chasingBosses.length===0){if(this.storyDir)this.storyDir.chapterClose(()=>this.finish(true,'boss'));else this.finish(true,'boss');}else{this.resumePendingChoices();if(this.bossKilled)this.showGrowthNotice('当前首领已败 · 仍有'+this.chasingBosses.length+'名追击首领');}});return;
     }
-    this.spawnGem(enemy.x, enemy.y, enemy.def.xp);
+    this.spawnGem(enemy.x, enemy.y, enemy.def.xp * (this.boss?.active && enemy.kind !== 'boss' ? BALANCE.bossSpawn.xpMul : 1)); // 首领在场：杂兵经验 ×2（BALANCE.bossSpawn.xpMul）
   }
 
   protected nearestEnemy(x: number, y: number, range: number, exclude: Enemy | null = null, ignored?: Set<number>): Enemy | null {
@@ -3253,9 +3253,10 @@ export class GameScene extends Phaser.Scene {
     this.heroLv = heroLevel(this.runConfig.character);
     const id = this.runConfig.character, g = this.player.growth, r = enlistHero(id), ratio = this.player.hp / Math.max(1, this.player.maxHp);
     const bonusLeft = Math.max(0, g.unallocated - g.heroFree);
-    for (const a of Object.keys(g.attributes) as AttributeId[]) g.attributes[a] = Math.min(ATTRIBUTE_MAX, r.attributes[a] + Math.max(0, (carried ? g.attributes[a] : 0) - r.attributes[a]));
+    g.attrMax = attributeCap(this.heroLv);
+    for (const a of Object.keys(g.attributes) as AttributeId[]) g.attributes[a] = Math.min(g.attrMax, r.attributes[a] + Math.max(0, (carried ? g.attributes[a] : 0) - r.attributes[a]));
     g.heroFree = heroFreePoints(id);
-    const room = (Object.values(g.attributes) as number[]).reduce((n, v) => n + ATTRIBUTE_MAX - v, 0);
+    const room = (Object.values(g.attributes) as number[]).reduce((n, v) => n + g.attrMax - v, 0);
     g.unallocated = Math.min(room, g.heroFree + (carried ? bonusLeft : 0));
     // 武将谱：本命淬炼、战法心得（新开一场时开局第一次升级保证出一张心得卡）
     g.temperDamage = temperBonus(id); g.xinde = getXinde(id); if (!carried) g.xindeFirst = g.xinde.length > 0;
@@ -3285,8 +3286,8 @@ export class GameScene extends Phaser.Scene {
   /** 战斗中武将升级：每级一次三选一并给 1 个属性点（正式战斗立刻写入存档）。 */
   protected onHeroLevelUp(gained: number): void {
     const g = this.player.growth, id = this.runConfig.character;
-    this.heroLv = this.player.level; this.picksGiven += gained; this.pendingLevels += gained;
-    const room = (Object.values(g.attributes) as number[]).reduce((n, v) => n + ATTRIBUTE_MAX - v, 0) - g.unallocated;
+    this.heroLv = this.player.level; this.picksGiven += gained; this.pendingLevels += gained; g.attrMax = attributeCap(this.player.level);
+    const room = (Object.values(g.attributes) as number[]).reduce((n, v) => n + g.attrMax - v, 0) - g.unallocated;
     if (!this.debugRun()) { setHeroProgress(id, this.player.level, this.player.xp); g.heroFree += gained; }
     g.unallocated += Math.max(0, Math.min(gained, room));
     if (this.mode === 'none' && this.pickGapOk()) this.openUpgrade();
@@ -3840,7 +3841,7 @@ export class GameScene extends Phaser.Scene {
       const effect=this.add.text(left+56,y+12,ATTRIBUTE_INFO[id].effect,warText(12,'#a9b9a3')).setOrigin(0,.5);
       // 等级：10 格，右侧数值
       const pipX=attrCx+rowW/2-(d?226:212),pipY=y,pips=this.add.graphics();
-      const value=this.add.text(attrCx+rowW/2-80,y,`0/${ATTRIBUTE_MAX}`,warText(13,'#b6c3ab')).setOrigin(1,.5);
+      const value=this.add.text(attrCx+rowW/2-80,y,`0/${this.player.growth.attrMax}`,warText(13,'#b6c3ab')).setOrigin(1,.5);
       const button=this.add.image(attrCx+rowW/2-38,y,'ui_war_button').setDisplaySize(50,44).setInteractive({useHandCursor:true}).setName('attribute-add-'+id);
       const plus=this.add.text(button.x,button.y-1,'+',warText(26,'#ffe9bd')).setOrigin(.5).setStroke('#2a170b',3);
       lqImageButton(this,button,50,44,'gold',plus);
@@ -4010,9 +4011,9 @@ export class GameScene extends Phaser.Scene {
     for(let i=0;i<ids.length;i++){
       const id=ids[i],level=growth.attributes[id],row=this.attributeRows[i];
       if(!row)continue;
-      row.value.setText(level>=ATTRIBUTE_MAX?'已满':`${level}/${ATTRIBUTE_MAX}`).setColor(level>=ATTRIBUTE_MAX?'#e2bd6a':'#e5d4ab');
-      row.pips.clear();for(let k=0;k<ATTRIBUTE_MAX;k++){const x=row.pipX+k*11;if(IS_DESKTOP){const cx=x+4,cy=row.pipY,pts=[{x:cx,y:cy-5},{x:cx+4,y:cy},{x:cx,y:cy+5},{x:cx-4,y:cy}];row.pips.fillStyle(k<level?0xe2bd6a:0x241a10,1).fillPoints(pts,true).lineStyle(1,k<level?0xfff0c0:0x7a6440,.9).strokePoints(pts,true);continue;}row.pips.fillStyle(k<level?0xe2bd6a:0x2a3328,1).fillRect(x,row.pipY-5,8,10).lineStyle(1,k<level?0xfff0c0:0x5d6a58,.9).strokeRect(x+.5,row.pipY-4.5,7,9);}
-      const can=growth.unallocated>0&&level<ATTRIBUTE_MAX;
+      const cap=growth.attrMax;row.value.setText(level>=cap?'已满':`${level}/${cap}`).setColor(level>=cap?'#e2bd6a':'#e5d4ab');
+      row.pips.clear();const step=Math.min(11,110/cap),rh=Math.min(4,step/2-.5);/* 单项上限超过 10（Lv42 起）时格子收窄，总宽仍是 110 */for(let k=0;k<cap;k++){const x=row.pipX+k*step;if(IS_DESKTOP){const cx=x+4,cy=row.pipY,pts=[{x:cx,y:cy-5},{x:cx+rh,y:cy},{x:cx,y:cy+5},{x:cx-rh,y:cy}];row.pips.fillStyle(k<level?0xe2bd6a:0x241a10,1).fillPoints(pts,true).lineStyle(1,k<level?0xfff0c0:0x7a6440,.9).strokePoints(pts,true);continue;}row.pips.fillStyle(k<level?0xe2bd6a:0x2a3328,1).fillRect(x,row.pipY-5,step-3,10).lineStyle(1,k<level?0xfff0c0:0x5d6a58,.9).strokeRect(x+.5,row.pipY-4.5,step-4,9);}
+      const can=growth.unallocated>0&&level<cap;
       if(can){row.button.setAlpha(1).setInteractive({useHandCursor:true});}
       else row.button.setAlpha(.38).disableInteractive();
       row.plus.setAlpha(can?1:.45);

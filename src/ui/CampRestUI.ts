@@ -3,6 +3,7 @@ import {homeCommand,inkPlate,warPanelTexture} from './HomeCommand';
 import {lqButton,lqLabelColor,type LqState} from './LacquerKit';
 import {CAMP_MEDIC,medicPrice,type MedicKind} from '../data/campMedic';
 import {loadBagArt} from './ItemQuality';
+import {bagBundle} from './BagBundleButton';
 import {visualTextureKey} from '../systems/ReadableTextures';
 export class CampRestUI {
  readonly root:Phaser.GameObjects.Container;
@@ -63,7 +64,9 @@ export class CampRestUI {
    if(!icon.visible)loadBagArt(scene,()=>{if(icon.scene&&scene.textures.exists('bag_tab_icon_all'))icon.setTexture('bag_tab_icon_all').setDisplaySize(24,24).setVisible(true);});
    const cap=scene.add.text(cx+12,cy,'行囊',{fontFamily:HEADING_FONT,fontSize:'16px',color:'#ffe9bd',resolution:2}).setOrigin(.5).setLetterSpacing(3).setScrollFactor(0);
    const hit=scene.add.rectangle(cx,cy,bw,bh,0,.001).setScrollFactor(0).setInteractive({useHandCursor:true}).setName('camp-bag');
-   const paint=(st:LqState)=>{g.clear();const d=lqButton(g,cx,cy,bw,bh,st,'gold');cap.setY(cy+d).setColor(lqLabelColor(st));icon.setY(cy+d);};
+   // 2026-11-19 用户「行囊做成行囊的样子」：手绘包袱到位后不画漆牌，包袱大图标代替小图标（字仍在右边）
+   const bundle=bagBundle(scene,cx-bw/2+20,cy-2,D?40:40,{caption:false,onReady:()=>paint('idle')});this.root.add(bundle.icon);
+   const paint=(st:LqState)=>{g.clear();if(bundle.ready()){icon.setVisible(false);bundle.setHover(st==='hover'||st==='down');cap.setY(cy).setColor(st==='idle'?'#f6e2b8':'#fff3d6').setStroke('#1a0f08',3);return;}const d=lqButton(g,cx,cy,bw,bh,st,'gold');cap.setY(cy+d).setColor(lqLabelColor(st));icon.setY(cy+d);};
    hit.on('pointerover',()=>paint('hover')).on('pointerout',()=>paint('idle')).on('pointerdown',()=>{paint('down');this.sound('uiClick');this.onOpenBag?.();}).on('pointerup',()=>paint('hover'));paint('idle');
    this.root.add([g,icon,cap,hit]);bagLeft=cx-bw/2-12;}
   // 回营寨：电脑在「行囊」左侧，手机在它下方

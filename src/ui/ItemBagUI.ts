@@ -334,7 +334,7 @@ export class ItemBagUI {
     for (const slot of LOADOUT_KEYS) {
       const [sx, sy] = place[slot], item = worn[slot] ?? null, locked = slot === 'token2' && !twoTokens, base = keySlot(slot);
       lead(sx, sy, slot);
-      const tile = this.add(itemTile(sc, sx, sy, size, item, base, { selected: !!item && item.uid === this.selected }));
+      const tile = this.add(itemTile(sc, sx, sy, size, item, base, { selected: !!item && item.uid === this.selected, slot: true }));
       if (locked) { const lk = bagArt(sc, 'lock_tag'); tile.add(lk ? sc.add.image(size / 2 - 9, size / 2 - 9, lk).setDisplaySize(20, 20) : sc.add.text(size / 2 - 3, size / 2 - 3, '锁', { fontFamily: FONT, fontSize: '12px', color: '#1c140a', backgroundColor: '#b9a57a', resolution: 2 }).setOrigin(1, 1).setPadding(2, 0)); tile.setAlpha(.8); }
       tile.setName('item-slot-' + slot).setData('uid', item?.uid ?? null).setSize(size, size).setInteractive({ useHandCursor: true });
       this.onTap(tile, () => { if (item) this.select(item.uid); else if (locked) { this.notice = '第二信物位：第二章通关后开放'; this.render(); } else { this.filter = base; this.page = 0; this.notice = `行囊已筛选 · ${SLOTS[base].name}（点道具穿戴）`; this.render(); } });
@@ -363,15 +363,17 @@ export class ItemBagUI {
     if (!list.length) this.text(dx + 14, sy0 + 32, '尚未穿戴兵装 · 点行囊中的道具穿戴', 12, '#9c8c6c').setName('item-gear-summary');
     else {
       const cols = 3, per = Math.ceil(list.length / cols), cw = (dw - 28) / cols;
-      for (let k = 0; k < cols; k++) { const part = list.slice(k * per, k * per + per); if (part.length) this.text(dx + 14 + k * cw, sy0 + 30, part.join('\n'), 12, '#d8ccb0').setLineSpacing(2).setName(k ? 'item-gear-summary-' + (k + 1) : 'item-gear-summary'); }
+      for (let k = 0; k < cols; k++) { const part = list.slice(k * per, k * per + per); if (part.length) this.text(dx + 14 + k * cw, sy0 + (per > 3 ? 27 : 30), part.join('\n'), per > 3 ? 11 : 12, '#d8ccb0').setLineSpacing(per > 3 ? -1 : 2) /* 词条多（每列 4 行）时字小一号、行距收紧，不出框 */.setName(k ? 'item-gear-summary-' + (k + 1) : 'item-gear-summary'); }
     }
     // —— 行囊盘：漆木托盘 + 带图标的筛选页签 + 网格
-    const trayArt = bagArt(sc, 'tray_bg');
+    // 2026-11-19 用户「行囊做成行囊的样子」：行囊格子铺在摊开的包袱布上（靛蓝粗布、折痕、一角打结）；缺图回退漆木托盘
+    const cloth = bagArt(sc, 'cloth_open'), trayArt = cloth ? null : bagArt(sc, 'tray_bg');
+    if (cloth) { const img = this.add(sc.add.image(tx + tw / 2, ty + th / 2, cloth)).setName('item-bag-cloth'); img.setDisplaySize(tw + 16, th + 12); }
     if (trayArt) this.add(sc.add.nineslice(tx, ty, trayArt, undefined, tw * 2, th * 2, 60, 60, 60, 60).setOrigin(0).setScale(.5));
     const tray = this.add(sc.add.graphics());
-    if (!trayArt) tray.fillStyle(0x1c120b, 1).fillRoundedRect(tx, ty, tw, th, 6).fillStyle(0x2a1a10, .5).fillRoundedRect(tx + 4, ty + 4, tw - 8, 40, { tl: 4, tr: 4, bl: 0, br: 0 });
-    if (!trayArt) for (let yy = ty + 50; yy < ty + th - 50; yy += 9) tray.lineStyle(1, 0x24170e, .55).lineBetween(tx + 8, yy, tx + tw - 8, yy); // 木纹
-    if (!trayArt) tray.lineStyle(1, 0x6b5a40, 1).strokeRoundedRect(tx + .5, ty + .5, tw - 1, th - 1, 6).lineStyle(1, 0x000000, .6).strokeRoundedRect(tx + 3.5, ty + 3.5, tw - 7, th - 7, 4);
+    if (!trayArt && !cloth) tray.fillStyle(0x1c120b, 1).fillRoundedRect(tx, ty, tw, th, 6).fillStyle(0x2a1a10, .5).fillRoundedRect(tx + 4, ty + 4, tw - 8, 40, { tl: 4, tr: 4, bl: 0, br: 0 });
+    if (!trayArt && !cloth) for (let yy = ty + 50; yy < ty + th - 50; yy += 9) tray.lineStyle(1, 0x24170e, .55).lineBetween(tx + 8, yy, tx + tw - 8, yy); // 木纹
+    if (!trayArt && !cloth) tray.lineStyle(1, 0x6b5a40, 1).strokeRoundedRect(tx + .5, ty + .5, tw - 1, th - 1, 6).lineStyle(1, 0x000000, .6).strokeRoundedRect(tx + 3.5, ty + 3.5, tw - 7, th - 7, 4);
     const filters: Array<ItemSlot | 'all'> = ['all', ...SLOT_ORDER], fgap = 6, fw = (tw - 20 - (filters.length - 1) * fgap) / filters.length, fy = ty + 24;
     filters.forEach((fl, i) => {
       const x = tx + 10 + fw / 2 + i * (fw + fgap), label = fl === 'all' ? '全部' : fl === 'relic' ? '遗珍' : SLOTS[fl].name;
@@ -392,8 +394,8 @@ export class ItemBagUI {
     const offX = tx + (tw - (gcols * cell + (gcols - 1) * gap)) / 2;
     // 空凹格：整页铺满，物品放在上面
     const wells = this.add(sc.add.graphics());
-    const wellArt = bagArt(sc, 'slot_frame');
-    for (let i = 0; i < per; i++) { const ix = offX + (i % gcols) * (cell + gap), iy = gridTop + Math.floor(i / gcols) * (cell + gap); if (wellArt) { this.add(sc.add.image(ix + cell / 2, iy + cell / 2, wellArt).setDisplaySize(cell, cell).setAlpha(.45)); continue; } wells.fillStyle(0x000000, .28).fillRoundedRect(ix, iy, cell, cell, 5).lineStyle(1, 0xc9a45c, .14).strokeRoundedRect(ix + .5, iy + .5, cell - 1, cell - 1, 5); }
+    const wellArt = bagArt(sc, 'pocket') ?? bagArt(sc, 'slot_frame'), wellAlpha = bagArt(sc, 'pocket') ? .7 : .45;
+    for (let i = 0; i < per; i++) { const ix = offX + (i % gcols) * (cell + gap), iy = gridTop + Math.floor(i / gcols) * (cell + gap); if (wellArt) { this.add(sc.add.image(ix + cell / 2, iy + cell / 2, wellArt).setDisplaySize(cell, cell).setAlpha(wellAlpha)); continue; } wells.fillStyle(0x000000, .28).fillRoundedRect(ix, iy, cell, cell, 5).lineStyle(1, 0xc9a45c, .14).strokeRoundedRect(ix + .5, iy + .5, cell - 1, cell - 1, 5); }
     items.slice(this.page * per, this.page * per + per).forEach((item, i) => {
       const ix = offX + cell / 2 + (i % gcols) * (cell + gap), iy = gridTop + cell / 2 + Math.floor(i / gcols) * (cell + gap);
       const tile = this.add(itemTile(sc, ix, iy, cell, item, undefined, { selected: item.uid === this.selected }));

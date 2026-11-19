@@ -201,6 +201,7 @@ assets/raw/*
 !/tools/prepare-scene-sheet.mjs
 !/tools/resize-image.mjs
 !/tools/shot-boss-still.mjs
+!/tools/prepare-story-art.mjs
 !/tools/build-boss-ride.mjs
 !/tools/test-tutorial.mjs
 !/tools/test-boss-moves.mjs

@@ -4,7 +4,7 @@ import { CR } from '../data/bossRedesign';
 import { ArcBossV2, type ArcHost } from './ArcBossV2';
 import { ensureMoves, type BossDebug } from './BossKit';
 import { bossFxImage, ensureBossFx } from './BossFx';
-import { castFlourish } from './BossThemeFx';
+import { castFlourish, warmCast } from './BossThemeFx';
 
 type Move = 'wall' | 'hold';
 type Gate = 'live' | 'dead' | 'none';
@@ -31,7 +31,7 @@ export class CaorenBoss extends ArcBossV2<Move> {
     force: (i, now) => { if (i === 2) { this.rotateAt = now; return; } this.beat.set(null, 'idle', now, 0); this.start((['wall', 'hold'] as const)[i] ?? 'wall', now); },
     phase2: (now) => { const b = this.h.boss; if (b.hp > b.maxHp * CR.phase2At) b.hp = Math.floor(b.maxHp * CR.phase2At); this.enterPhase2(now); },
   };
-  constructor(h: ArcHost, tex: string, now: number) {
+  constructor(h: ArcHost, tex: string, now: number) { warmCast(h.scene, 'caoren5');
     super(h, tex, '曹仁', now);
     this.arena = h.scene.add.graphics().setDepth(DEPTH.ground + 3).setName('caoren-gates');
     ensureBossFx(h.scene, ['cr_bagua', 'kit_shift', 'kit_recover']); ensureMoves(h.scene, 'caoren_moves');

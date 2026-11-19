@@ -304,3 +304,4 @@ assets/raw/*
 !/tools/mount-proportions.json
 !/tools/test-wancheng.mjs
 !/tools/shot-cast-preview.mjs
+!/tools/test-xurong-cast.mjs

@@ -7,7 +7,8 @@ mkdirSync(out, { recursive: true });
 let pass = 0, fail = 0; const errors = [];
 const ck = (n, ok, d) => { ok ? pass++ : fail++; console.log((ok ? 'PASS ' : 'FAIL ') + n + (d !== undefined && !ok ? ' · ' + JSON.stringify(d).slice(0, 500) : '')); };
 // 第一章已通关、虎牢关未通关：已开放 2 章 → 随行上限 10
-const world = { version: 7, yellowStages: 3, dongzhuoStages: 0, warlordStages: 0, guanduStages: 0, worldAvailable: true, cleared: { huangjin: true, hulao: false }, merits: 0, provisions: 100000, buildings: { barracks: 1, farm: 1, clinic: 1 }, reserve: {}, receipts: [], nodes: ['home', 'huangjin'], ownedCities: [], eraSeen: 1, capturedEver: [], alerts: [], lastLost: [], chapterSeen: 2 };
+// 随行上限 / 招贤馆等级读营寨（fa1c773）：营寨 town 只从 version ≥ 8 的存档读入，主营 1 级时其他建筑被压回 1 级 → 种 version 8 + 主营 3、招贤馆 3
+const world = { version: 8, town: { levels: { hall: 3, barracks: 1, farm: 1, talent: 3 } }, yellowStages: 3, dongzhuoStages: 0, warlordStages: 0, guanduStages: 0, worldAvailable: true, cleared: { huangjin: true, hulao: false }, merits: 0, provisions: 100000, buildings: { barracks: 1, farm: 1, clinic: 1 }, reserve: {}, receipts: [], nodes: ['home', 'huangjin'], ownedCities: [], eraSeen: 1, capturedEver: [], alerts: [], lastLost: [], chapterSeen: 2 };
 const rec = (id, kind = 'hero', name = id) => ({ id, kind, hero: kind === 'hero' ? id : undefined, name, template: 'spear', quality: kind === 'hero' ? 'orange' : 'green', rank: 1, picks: [] });
 // 老存档：r_1 已 30 级（超上限），关羽随行 25 级；主公赵云 30 级（主公不受随行上限）
 const roster = { version: 1, lord: 'zhaoyun', lordFinal: true, owned: [rec('zhaoyun'), rec('guanyu'), rec('r_1', 'common', '武璋')], followers: ['guanyu', 'r_1'], offers: [], captives: [], season: -1, manual: 0, dry: 0, seq: 1, hall: 3 };

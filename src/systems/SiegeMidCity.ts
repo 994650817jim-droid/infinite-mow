@@ -1,7 +1,9 @@
 import Phaser from 'phaser';
 import { actorDepth, DEPTH } from '../config';
 import { MID_SIEGE as M, LARGE_SIEGE as L, SIEGE_PROFILES, SIEGE_SPAWN, ramStats, type MidSiegePhase, type RamStats, type SiegeProfile } from '../data/siegeMedium';
-import { SIEGE_CITY, CITY_ART, POINT_BUILDING, cityBuildingBox, type CityLayout, type CityBuildingKind } from '../data/siegeCity';
+import { SIEGE_CITY, CITY_ART, CITY_FX, POINT_BUILDING, cityBuildingBox, type CityLayout, type CityBuildingKind, type CityPointKind } from '../data/siegeCity';
+import { CapturePointView, spreadArrows } from './SiegeCityPoints';
+import { ordersOf } from './BattleOrders';
 import { paintV2Road } from './EnvGround';
 import { warnFx } from '../ui/WarnFx';
 import { playSheet } from './SkillFxSheets';
@@ -39,6 +41,8 @@ export interface MidSiegeHost {
   spawnBarrel: (x: number, y: number) => void;
   hurtTroops: (x: number, y: number, r: number, dmg: number) => void;
   recruit: (n: number) => void;
+  /** 随军粮（城内市集立刻给军粮） */
+  gainFood?: (n: number) => void;
   banner: (text: string, danger?: boolean, caption?: string) => void;
   sfx: (k: string) => void;
   spawnBoss: () => void;
@@ -55,20 +59,23 @@ type Box = { left: number; right: number; top: number; bottom: number };
 const WALL = { segStep: 196, gateHalfVis: 124, gateOverlap: 14, beyond: 520, shadowBands: 8, shadowAlpha: .42, houseGap: 300, gateLabelDy: 62, moatFlow: 30 } as const;
 /** 城门图上多大比例（从顶往下）画成前景层：到门洞拱顶以上、含屋顶 / 阁楼 / 垛口。 */
 const GATE_FRONT_CUT = .46;
+/** 军令面板里每种要点的一句话作用。 */
+const POINT_BRIEF: Record<CityPointKind, string> = { granary: '结算军粮 +30%', armory: '我军伤害 +8% · 断弓手', barracks: '城内守军 −25%', tower: '停城头箭雨', market: '军粮 +60 · 百姓归附' };
 const ART = { walls: 'siege_mid_walls', gateFx: 'siege_mid_gatefx', ram: 'siege_mid_ram', street: 'siege_mid_street', hall: 'siege_mid_hall', barb: 'siege_mid_barb', city: 'siege_mid_city' } as const;
 /** v2 图集帧（4×2）：城防 0 城墙段 1 城门 2 城门破 3 箭楼 4 箭楼毁 5 墩台 6 残墙 7 辕门；冲车 0–3 撞门 4 打坏 5 残骸 6 我方大旗 7 我方营帐；
  *  巷战 0 民房 1 两层民房 2 店铺 3 粮仓 4 兵营 5 路障 6 屋脊 7 水井；府衙 0 大堂 1 台阶 2 回廊 3 石狮 4 内城门 5 帅旗 6 香炉 7 照壁 */
 export const MID_SIEGE_ART = ART;
 
 interface Ram { img: Phaser.GameObjects.Image; x: number; y: number; hp: number; state: 'move' | 'ram' | 'wreck'; hitAt: number; frame: number; label: Phaser.GameObjects.Text; contact: Map<number, number>; guardUntil: number; burnUntil: number; burnFxAt: number; flashUntil: number; }
-interface Point { name: string; x: number; y: number; radius: number; state: 'open' | 'held' | 'secured'; progress: number; hold: number; lost: number; counterAt: number; flag?: Phaser.GameObjects.Image; label: Phaser.GameObjects.Text; gfx: Phaser.GameObjects.Graphics; }
+interface Point { name: string; kind: CityPointKind; x: number; y: number; radius: number; b: { x: number; y: number; size: number }; state: 'open' | 'held' | 'secured'; progress: number; hold: number; lost: number; counterAt: number;
+  /** 守点小队是否已杀出、小队长（精锐） */ squad: boolean; leader: { e: Enemy; life: number } | null; leaderTag?: Phaser.GameObjects.Text; view: CapturePointView; }
 interface Zone { x: number; y: number; at: number; id: string; fire?: boolean }
 interface Target { e: Enemy; life: number; x: number; y: number; }
 interface Log { x: number; y: number; at: number; rolling: boolean; id: string; img?: Phaser.GameObjects.Image; hitPlayer: boolean; hit: Set<number>; }
 
 export class SiegeMidCity {
   phase: MidSiegePhase = 'outside';
-  readonly stats = { volleys: 0, zones: 0, ramHits: 0, ramsLost: 0, ramsTaken: 1, fireArrows: 0, burns: 0, putOut: 0, ambushes: 0, transitions: 0, guardWaves: 0, shieldHits: 0, bossSkills: 0, ropesCut: 0, logs: 0, logHits: 0, sally: 0 };
+  readonly stats = { volleys: 0, zones: 0, ramHits: 0, ramsLost: 0, ramsTaken: 1, fireArrows: 0, burns: 0, putOut: 0, ambushes: 0, transitions: 0, guardWaves: 0, shieldHits: 0, bossSkills: 0, ropesCut: 0, logs: 0, logHits: 0, sally: 0, leaders: 0, cityVolleys: 0 };
   /** 档位配置（小 / 中 / 大城） */
   readonly prof: SiegeProfile; readonly tier: 'small' | 'medium' | 'large';
   /** 城内段布局（data/siegeCity.ts） */
@@ -87,6 +94,7 @@ export class SiegeMidCity {
   readonly ramCfg: RamStats;
   private zones: Zone[] = []; private volleyAt = 0; private zoneSeq = 0;
   private points: Point[] = [];
+  private cityVolleyAt = 0; private gatePrompt?: Phaser.GameObjects.Text;
   private ambushAt = 0; private ambushPending: Array<{ x: number; y: number; at: number; kind: EnemyKind }> = [];
   private guards: Array<{ e: Enemy; life: number }> = []; private guardsAt = 0;
   private bossPhase2 = false; private skillAt = 0; private skill: { kind: 'sweep' | 'charge'; at: number; x: number; y: number; angle: number; hit: boolean } | null = null;
@@ -324,6 +332,8 @@ export class SiegeMidCity {
     // 南面外城墙的城里一侧：框盖到墙头（墙段图顶 ≈ 墙线上 100），主将走不到墙头上
     this.box({ left: a.left, right: -gw, top: wy - 110, bottom: wy + 20 });
     this.box({ left: gw, right: a.right, top: wy - 110, bottom: wy + 20 });
+    // 外城墙上的两座角楼（城外段两端那两座）往城里伸出一截：楼身也挡人，主将不会「站在楼上」
+    { const ox = Math.max(-M.outside.arena.left, M.outside.arena.right); for (const x of [-ox, ox]) this.box({ left: x - 85, right: x + 85, top: wy - 200, bottom: wy + 20 }); }
     this.box({ left: a.left, right: -c.gateHalf, top: gy - 40, bottom: gy + 50 });
     this.box({ left: c.gateHalf, right: a.right, top: gy - 40, bottom: gy + 50 });
     this.innerGateBox = this.box({ left: -c.gateHalf, right: c.gateHalf, top: gy - 40, bottom: gy + 50 });
@@ -526,7 +536,11 @@ export class SiegeMidCity {
         this.zones.push({ x: target.x + jx, y, at: now + V.warnMs, id: 'mid-volley-' + (this.zoneSeq++), fire }); this.stats.zones++; if (fire) this.stats.fireArrows++;
       }
     }
-    const fx = warnFx(this.h.scene);
+    this.processZones(now);
+  }
+  /** 箭雨落点：预警圈 → 落下（伤主将 / 部曲 / 冲车）。 */
+  private processZones(now: number) {
+    const V = M.outside.volley, p = this.h.player, fx = warnFx(this.h.scene);
     for (const z of [...this.zones]) {
       const prog = 1 - (z.at - now) / V.warnMs;
       if (now < z.at) { fx.circle(z.id, z.fire ? 'fire' : 'arrows', z.x, z.y, V.radius, prog, now); continue; }
@@ -576,6 +590,8 @@ export class SiegeMidCity {
     }
     if (this.phase === 'street') {
       const c = this.city;
+      if (kind === 'archer' && this.taken.armory) return null; // 武库已占：守军不再出弓手
+      if (this.taken.barracks && Math.random() < CITY_FX.barracksSkip * this.taken.barracks) return null; // 兵营已占：城内守军少来
       if (r < .35 && Math.abs(p.x) < 400) return { x: (Math.random() - .5) * 160, y: Math.max(c.innerGateY + 90, p.y - 420) }; // 主街前方
       // 街口 / 巷口：前方与两侧（身后是我军来路，不刷），远处的不刷
       const near = c.spawns.filter(s => s.y < p.y + 160 && Math.hypot(s.x - p.x, s.y - p.y) < 1300), list = near.length ? near : c.spawns, s = list[Math.floor(Math.random() * list.length)];
@@ -592,35 +608,65 @@ export class SiegeMidCity {
   // ---------- 第二段：巷战 ----------
   private enterStreet() {
     const c = this.city, sc = this.h.scene;
-    this.points = c.points.map(({ name, x, y, radius }) => ({ name, x, y, radius, state: 'open' as const, progress: 0, hold: 0, lost: 0, counterAt: 0,
-      label: (() => { const l = worldText(sc, x, y - radius * .65 - 24, '', 15, '#ffe1a0').setOrigin(.5).setDepth(36).setStroke('#1a120b', 4); this.objects.push(l); return l; })(),
-      gfx: (() => { const g = sc.add.graphics().setDepth(DEPTH.ground + 3); this.objects.push(g); return g; })() }));
+    this.points = c.points.map(d => ({ name: d.name, kind: d.kind, x: d.x, y: d.y, radius: d.radius, b: d.b, state: 'open' as const, progress: 0, hold: 0, lost: 0, counterAt: 0, squad: false, leader: null,
+      view: new CapturePointView(sc, this.objects, d, ART.city) }));
     for (const b of c.barrels) this.h.spawnBarrel(b.x, b.y);
-    this.ambushAt = this.h.now() + 4000;
+    this.ambushAt = this.h.now() + 4000; this.cityVolleyAt = this.h.now() + CITY_FX.tower.firstMs;
+    // 军令面板 / 小地图（BattleOrders）：每处要点一条（带位置、进度、作用），阶段一条「占 X/N 处」
+    const O = ordersOf(sc);
+    this.points.forEach((q, i) => O?.set(this.orderId(q), { label: '占领' + q.name, kind: 'main', order: 3 + i, progress: { cur: 0, max: 100 }, detail: POINT_BRIEF[q.kind], at: () => ({ x: q.x, y: q.y }) }));
+    O?.set('siege-phase', { label: '城内 · 夺取要点', kind: 'main', order: 2, progress: { cur: 0, max: c.need }, detail: `再占 ${c.need} 处开${this.hallName}门` });
+    // 府衙门前：「再占 X 处要点」
+    this.gatePrompt = worldText(sc, 0, c.innerGateY + 84, '', 16, '#ffd9a0').setOrigin(.5).setDepth(36).setStroke('#1a0c06', 4); this.objects.push(this.gatePrompt);
     this.h.banner('入城 · 夺取要点', true, `城中 ${c.points.length} 处要点，占下 ${c.need} 处即可攻打${this.hallName}`);
   }
-  get pointsInfo() { return this.points.map(p => ({ name: p.name, state: p.state, progress: +p.progress.toFixed(2), hold: +p.hold.toFixed(1) })); }
+  private orderId(pt: { name: string }) { return 'siege-point-' + pt.name; }
+  /** 要点的小队长还活着。 */
+  private leaderAlive(pt: Point) { const l = pt.leader; return !!l && l.e.active && l.e.spawnId === l.life; }
+  get pointsInfo() { return this.points.map(p => ({ name: p.name, kind: p.kind, state: p.state, progress: +p.progress.toFixed(2), hold: +p.hold.toFixed(1), squad: p.squad, leader: this.leaderAlive(p), view: { ...p.view.view } })); }
+  /** 守点小队：主将走近（CITY_FX.squadRange）才从要点里杀出来——一名小队长（精锐）+ 几名守兵；小队长倒下前占领读条减半。 */
+  private spawnSquad(pt: Point) {
+    pt.squad = true; const F = CITY_FX;
+    const e = this.h.spawnEnemy('elite', pt.x, pt.y - 16, true);
+    if (e) {
+      pt.leader = { e, life: e.spawnId }; this.stats.leaders++;
+      pt.leaderTag = worldText(this.h.scene, e.x, e.y - 96, `${pt.name}小队长`, 13, '#ffcf9a').setOrigin(.5).setDepth(36).setStroke('#2a0d06', 4); this.objects.push(pt.leaderTag);
+    }
+    for (let i = 0; i < F.squad; i++) { const a = Math.PI * 2 * (i + .5) / F.squad; this.h.spawnEnemy(i === 0 ? 'shield' : 'infantry', pt.x + Math.cos(a) * 80, pt.y + Math.sin(a) * 50, true); }
+  }
   private updateStreet(dt: number, now: number) {
-    const s = M.street, p = this.h.player, ca = this.city.arena;
+    const s = M.street, F = CITY_FX, p = this.h.player, ca = this.city.arena, open = this.securedCount < this.city.need;
     for (const pt of this.points) {
-      const inside = Math.hypot(p.x - pt.x, p.y - pt.y) <= pt.radius;
+      const d = Math.hypot(p.x - pt.x, p.y - pt.y), inside = d <= pt.radius;
+      if (!pt.squad && pt.state === 'open' && d < F.squadRange) this.spawnSquad(pt);
+      const leader = this.leaderAlive(pt);
+      if (pt.leaderTag) { if (leader) pt.leaderTag.setPosition(pt.leader!.e.x, pt.leader!.e.y - 96); else { pt.leaderTag.destroy(); pt.leaderTag = undefined; } }
       let foes = 0; for (const e of this.h.enemies()) if (e.active && !e.isSupplySlot && e.kind !== 'boss' && Math.hypot(e.x - pt.x, e.y - pt.y) <= pt.radius) foes++;
+      const slowLeader = pt.state === 'open' && leader;
       if (pt.state === 'open') {
-        if (inside) pt.progress = Math.min(1, pt.progress + dt / s.captureSeconds * (foes ? s.contestedMul : 1));
+        if (inside) pt.progress = Math.min(1, pt.progress + dt / s.captureSeconds * (foes ? s.contestedMul : 1) * (slowLeader ? F.leaderMul : 1));
         if (pt.progress >= 1) this.takePoint(pt, now);
       } else if (pt.state === 'held') {
         pt.hold += dt;
         if (!inside && foes) pt.lost += dt; else pt.lost = Math.max(0, pt.lost - dt * .5);
-        if (now >= pt.counterAt) { pt.counterAt = now + s.counterEveryMs; for (let i = 0; i < s.counterBurst; i++) { const a = -Math.PI / 2 + (Math.random() - .5) * 1.6; this.h.spawnEnemy(Math.random() < .25 ? 'shield' : 'infantry', Phaser.Math.Clamp(pt.x + Math.cos(a) * 420, ca.left + 40, ca.right - 40), Phaser.Math.Clamp(pt.y + Math.sin(a) * 420, this.city.innerGateY + 90, M.outside.wallY - 80)); } }
-        if (pt.lost >= s.loseSeconds) { pt.state = 'open'; pt.progress = 0; pt.hold = 0; pt.lost = 0; pt.flag?.destroy(); pt.flag = undefined; this.h.banner(`${pt.name}失守`, true, '重新占领'); }
+        if (now >= pt.counterAt) { pt.counterAt = now + s.counterEveryMs; for (let i = 0; i < s.counterBurst; i++) { const a = -Math.PI / 2 + (Math.random() - .5) * 1.6; this.h.spawnEnemy(Math.random() < .25 ? 'shield' : 'infantry', Phaser.Math.Clamp(pt.x + Math.cos(a) * 420, ca.left + 40, ca.right - 40), Phaser.Math.Clamp(pt.y + Math.sin(a) * 420, this.city.innerGateY + 90, M.outside.wallY - 120)); } }
+        if (pt.lost >= s.loseSeconds) { pt.state = 'open'; pt.progress = 0; pt.hold = 0; pt.lost = 0; pt.view.lowerFlag(); this.h.banner(`${pt.name}失守`, true, '我方旗倒 · 重新占领'); }
         else if (pt.hold >= s.holdSeconds) this.securePoint(pt);
       }
-      const g = pt.gfx.clear(), col = pt.state === 'secured' ? 0x8fe0b4 : pt.state === 'held' ? 0xe8c76a : 0xd8b07a;
-      g.fillStyle(col, inside ? .18 : .1).fillEllipse(pt.x, pt.y, pt.radius * 2, pt.radius * 1.3).lineStyle(3, foes && pt.state !== 'secured' ? 0xd65a3f : col, .9).strokeEllipse(pt.x, pt.y, pt.radius * 2, pt.radius * 1.3);
+      // 占领圈（手绘石板环 + 水墨笔圈，见 SiegeCityPoints）
       const prog = pt.state === 'open' ? pt.progress : pt.state === 'held' ? pt.hold / s.holdSeconds : 1;
-      if (prog > 0 && pt.state !== 'secured') { g.lineStyle(6, pt.state === 'held' ? 0xe8c76a : 0x8fe0b4, 1); g.beginPath(); g.arc(pt.x, pt.y, pt.radius * .55, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * prog); g.strokePath(); }
-      pt.label.setText(pt.state === 'open' ? `${pt.name} · 占领 ${Math.round(pt.progress * 100)}%` : pt.state === 'held' ? `${pt.name} · 顶住反扑 ${Math.max(0, Math.ceil(s.holdSeconds - pt.hold))} 秒${pt.lost > 0 ? ' · 快回据点！' : ''}` : `${pt.name} · 已占`);
+      const label = pt.state === 'open' ? `${pt.name} · 占领 ${Math.floor(pt.progress * 100)}%` : pt.state === 'held' ? `${pt.name} · 顶住反扑 ${Math.max(0, Math.ceil(s.holdSeconds - pt.hold))} 秒` : `${pt.name} · 已占`;
+      const reason = pt.state === 'open' ? (slowLeader && (inside || pt.progress > 0 || d < F.squadRange) ? '小队长在 · 占领减半，先击败他' : inside && foes ? '敌兵在圈内 · 占领变慢' : '')
+        : pt.state === 'held' ? (pt.lost > 0 ? `主将离开、敌兵占点 · ${Math.max(0, Math.ceil(s.loseSeconds - pt.lost))} 秒后失守` : foes ? '守军反扑 · 守在圈里' : '') : '';
+      pt.view.update({ state: pt.state, prog, foes: pt.state === 'secured' ? 0 : foes, leader: slowLeader, label, reason }, p, now, open);
+      if (pt.state !== 'secured') ordersOf(this.h.scene)?.patch(this.orderId(pt), { state: 'active', progress: { cur: pt.state === 'held' ? 100 : Math.floor(pt.progress * 100), max: 100 }, detail: pt.state === 'held' ? `已插旗 · 守住 ${Math.max(0, Math.ceil(s.holdSeconds - pt.hold))} 秒` : slowLeader ? '小队长在 · 先击败他' : POINT_BRIEF[pt.kind] });
     }
+    spreadArrows(this.points.map(q => q.view));
+    // 府衙门前提示
+    const left = this.city.need - this.securedCount;
+    ordersOf(this.h.scene)?.patch('siege-phase', { progress: { cur: this.securedCount, max: this.city.need }, detail: left > 0 ? `再占 ${left} 处开${this.hallName}门` : `${this.hallName}门已开` });
+    this.gatePrompt?.setText(left > 0 ? `${this.hallName}门紧闭 · 再占 ${left} 处要点` : '').setVisible(Math.hypot(p.x, p.y - this.city.innerGateY) < 900);
+    this.updateCityVolley(now);
     // 屋顶伏兵：预警（伏兵旗影）后从主将附近的房檐跳下（布局里的 roofs）
     if (now >= this.ambushAt) {
       this.ambushAt = now + s.ambush.everyMs; this.stats.ambushes++;
@@ -635,22 +681,55 @@ export class SiegeMidCity {
     }
     if (this.points.length && this.securedCount >= Math.min(this.city.need, this.points.length) && !this.transitioning && this.phase === 'street') this.openInnerGate();
   }
+  /** 大城角楼：没占下的角楼往城里放箭雨（落点先显示预警圈，同城外箭雨）；占一座减弱，两座都占箭雨停。 */
+  private updateCityVolley(now: number) {
+    const T = CITY_FX.tower, alive = this.points.filter(q => q.kind === 'tower' && q.state !== 'secured').length, total = this.points.filter(q => q.kind === 'tower').length;
+    if (alive && now >= this.cityVolleyAt) {
+      const idx = alive >= total ? 0 : 1, p = this.h.player; this.cityVolleyAt = now + T.everyMs[idx]; this.stats.cityVolleys++;
+      for (let i = 0; i < T.zones[idx]; i++) { const jx = i ? (Math.random() - .5) * 260 : 0, jy = i ? (Math.random() - .5) * 160 : 0; this.zones.push({ x: p.x + jx, y: p.y + jy, at: now + M.outside.volley.warnMs, id: 'city-volley-' + (this.zoneSeq++) }); this.stats.zones++; }
+    }
+    this.processZones(now);
+  }
   private takePoint(pt: Point, now: number) {
     pt.state = 'held'; pt.hold = 0; pt.lost = 0; pt.counterAt = now + 1200;
-    pt.flag = this.art(pt.x + 40, pt.y + 10, [ART.ram, 6], ['zhuge_banner', 0], 90, 130);
+    pt.view.raiseFlag(); playSheet(this.h.scene, 'fx_collapse_dust', pt.x + pt.radius * .78, pt.y - 4, { size: 110, depth: DEPTH.fx, ms: 420, alpha: .6 });
     this.h.recruit(M.street.reinforce); this.h.sfx('bossSummon');
     this.h.banner(`占领${pt.name} · 插旗`, false, `守军反扑！守住 ${M.street.holdSeconds} 秒`);
   }
   private securePoint(pt: Point) {
     pt.state = 'secured'; this.h.recruit(M.street.secureReinforce); this.h.player.heal(this.h.player.maxHp * M.street.secureHeal);
-    const left = this.city.need - this.securedCount;
-    this.h.banner(`${pt.name}已守住`, false, left > 0 ? `补员完成 · 再占 ${left} 处要点开${this.hallName}门` : `${this.hallName}门已开 · 直取${this.hallName}`);
+    this.taken[pt.kind]++;
+    const fx = this.pointEffect(pt), left = this.city.need - this.securedCount;
+    ordersOf(this.h.scene)?.done(this.orderId(pt), '已占 · ' + fx);
+    this.h.banner(`${pt.name}已守住`, false, `${fx} · ${left > 0 ? `再占 ${left} 处要点开${this.hallName}门` : `${this.hallName}门已开`}`);
   }
+  /**
+   * 要点作用（攻城城内段方案第二节；数值见 data/siegeCity.ts CITY_FX，交平衡会话）：
+   * 粮仓 结算军粮 +30%、敌援补兵 −30%（第三步接结算 / 限时）；武库 守军不再出弓手、我军伤害 +8%；兵营 城内守军少来 25%；
+   * 角楼 角楼箭雨减弱 / 停；市集 立刻军粮 +60、百姓归附（动画第三步）。返回横幅副标题。
+   */
+  private pointEffect(pt: Point): string {
+    const F = CITY_FX;
+    switch (pt.kind) {
+      case 'granary': return `结算军粮 +${Math.round(F.granaryProvisions * 100)}% · 敌援补兵 −${Math.round(F.granaryRefill * 100)}%`;
+      case 'armory': return `守军不再出弓手 · 我军伤害 +${Math.round((F.armoryDamage - 1) * 100)}%`;
+      case 'barracks': return `城内守军少来 ${Math.round(F.barracksSkip * 100)}%`;
+      case 'tower': return this.points.some(q => q.kind === 'tower' && q.state !== 'secured') ? '角楼箭雨减弱' : '城头箭雨已停';
+      case 'market': this.h.gainFood?.(F.marketFood); return `百姓归附 · 军粮 +${F.marketFood}`;
+    }
+  }
+  /** 已占要点的累计（第三步结算用）。 */
+  readonly taken: Record<CityPointKind, number> = { granary: 0, armory: 0, barracks: 0, tower: 0, market: 0 };
+  /** 我军（主将 + 随行 + 部曲）对敌伤害倍率：武库占下 +8%。 */
+  outgoingMul(): number { return this.taken.armory ? CITY_FX.armoryDamage : 1; }
   /** 已占稳的要点数。 */
   get securedCount() { return this.points.filter(p => p.state === 'secured').length; }
   private openInnerGate() {
     if (this.innerGateBox) { const i = this.h.footprints.indexOf(this.innerGateBox); if (i >= 0) this.h.footprints.splice(i, 1); this.innerGateBox = null; }
     this.innerGateImg?.setVisible(false); // 内城门洞开：门楼撤掉，扬尘遮住切换
+    for (const pt of this.points) pt.view.hideMarkers(); this.gatePrompt?.setVisible(false);
+    // 军令：没占的要点撤掉；阶段军令交回自动同步（府衙段由 BattleOrders 读 goalLine）
+    { const O = ordersOf(this.h.scene); for (const pt of this.points) if (pt.state !== 'secured') O?.remove(this.orderId(pt)); O?.remove('siege-phase'); }
     playSheet(this.h.scene, 'fx_collapse_dust', 0, this.city.innerGateY + 40, { size: 240, depth: DEPTH.fx, ms: 700 });
     this.h.scene.cameras.main.shake(260, .006);
     this.transitioning = true; this.h.scene.time.delayedCall(1100, () => { this.transitioning = false; this.transition(this.nextPhase('street')); });

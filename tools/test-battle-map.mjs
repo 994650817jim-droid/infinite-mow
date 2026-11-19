@@ -116,7 +116,7 @@ const panel = p => p.evaluate(() => { const s = window.__S, P = s.ordersPanel; r
   await p.evaluate(async () => { const M = window.__S.mid; M.transition('street'); const t = performance.now(); while (performance.now() - t < 4200) { window.__calm(); await new Promise(r => setTimeout(r, 150)); } });
   await settle(p, 800);
   const o2 = await orders(p);
-  ck('攻城巷战：据点军令出现，阶段军令换成「巷战」', !!o2?.find(x => x.id.startsWith('siege-point-')) && !!o2?.find(x => x.id === 'siege-phase' && x.label.startsWith('巷战')), o2);
+  ck('攻城城内段：每处要点一条军令（带进度 / 位置），阶段军令换成「城内 · 夺取要点」并计「占 X/N」', o2?.filter(x => x.id.startsWith('siege-point-')).length === 4 && !!o2?.find(x => x.id === 'siege-phase' && /^(城内|巷战)/.test(x.label) && x.prog === '0/3'), o2);
   await p.screenshot({ path: `${OUT}/siege-street.png` });
   await p.close();
 }

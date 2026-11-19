@@ -69,7 +69,7 @@ export function shuGameSceneClass(Base: typeof GameScene) {
           spawnTower: (x, y) => { const e = this.supplies?.spawnCamp(x, y, Math.round(SIEGE_GOALS.towerHp * 1.3)) ?? null; e?.sprite.setTexture('sishui_props_refined', 1).setOrigin(.5, 1).setDisplaySize(140, 140).setAlpha(1); return e; },
           spawnBarrel: (x, y) => { this.env?.spawnForTest('barrel', x - this.player.x, y - this.player.y); },
           hurtTroops: (x, y, r, d) => this.legion.hurtArea(x, y, r, d, this.combatNow),
-          recruit: n => { for (let i = 0; i < n; i++) this.legion.recruit(kinds[i % 2], 1, true); },
+          recruit: n => { for (let i = 0; i < n; i++) this.legion.recruit(kinds[i % 2], 1, true); }, gainFood: n => { this.legion.food += n; },
           banner: (t, danger, c) => this.showWaveBanner(t, !!danger, c), sfx: k => this.sfx.play(k),
           spawnBoss: () => this.spawnBoss(), boss: () => this.boss, campsAlive: () => [0, 0],
           engineLevel: Number(this.registry.get('siegeEngineLevel') ?? 0),
@@ -106,7 +106,7 @@ export function shuGameSceneClass(Base: typeof GameScene) {
     /** 成都：守将只在州府段出场。 */
     protected spawnBoss() { if (this.mid && this.mid.phase !== 'hall') return; super.spawnBoss(); }
     protected hitEnemy(enemy: Enemy, raw: number, now: number, source: 'melee' | 'arrow' | 'fire' = 'melee', ally = false, weaponHit = true) {
-      if (enemy === this.boss && this.mid) raw *= this.mid.bossDamageMul();
+      if (enemy === this.boss && this.mid) raw *= this.mid.bossDamageMul(); if (this.mid) raw *= this.mid.outgoingMul(); // 城内武库已占：我军伤害 +8%
       return super.hitEnemy(enemy, raw, now, source, ally, weaponHit);
     }
     protected killEnemy(enemy: Enemy) { this.mid?.onKilled(enemy); super.killEnemy(enemy); }

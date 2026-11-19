@@ -399,7 +399,7 @@ export class GameScene extends Phaser.Scene {
   /** 关卡目标（歼敌 / 摧毁 / 护送 / 坚守，data/objectives.ts）：完成后首领出阵。 */
   protected objective:StageObjectives|null=null;private objectiveText?:Phaser.GameObjects.Text;
   /** 战场地图 · 军令（battle-map-design.md）：军令表手机也有；军令面板与小地图只在电脑布局建。 */
-  battleOrders:BattleOrders|null=null;private ordersPanel:OrdersPanel|null=null;battleMap:BattleMap|null=null;
+  battleOrders:BattleOrders|null=null;private ordersPanel:OrdersPanel|null=null;/** 军令面板开着（电脑布局）：子场景据此收起自己的目标行，免得和面板重复。 */protected get ordersPanelOn():boolean{return !!this.ordersPanel;}battleMap:BattleMap|null=null;
   protected supplies:BattlefieldSupplies|null=null;
   /** 道具掉落与本局缴获（局外兵装，结算带回行囊）。 */
   protected itemDrops:ItemDrops|null=null;

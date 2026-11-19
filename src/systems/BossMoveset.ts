@@ -10,12 +10,15 @@ import type { BossDebug } from './BossKit';
 import { BossMount } from './BossMount';
 import { emitBossPhase } from './BossPhase';
 import { warnFx } from '../ui/WarnFx';
+import { KnifeFx } from './KnifeFx';
 import { ensureBossCast, ensureBossTheme, playCastFx, playThemeFx, themeOf, themeShake, type BossTheme } from './BossThemeFx';
 
 type Shape = { kind: 'circle'; x: number; y: number; r: number; inner?: number; fx: 'slam' | 'arrows' | 'fire' }
   | { kind: 'lane'; x: number; y: number; angle: number; len: number; width: number }
   | { kind: 'sector'; x: number; y: number; r: number; angle: number; arc: number };
-interface Hazard { id: string; shape: Shape; from: number; at: number; dmg: number; hit: boolean; visualOnly?: boolean }
+interface Hazard { id: string; shape: Shape; from: number; at: number; dmg: number; hit: boolean; visualOnly?: boolean; /** 飞刀道：到点不当场结算，改飞出一把刀（速度 px/s） */ knife?: number }
+/** 飞在半空的飞刀（判定跟着刀走）。 */
+interface FlyingKnife { x: number; y: number; angle: number; len: number; width: number; t0: number; speed: number; dmg: number; hit: boolean }
 
 /**
  * 首领招式框架（配置见 data/bossMoves.ts）：招式表 + 起手预警（现成手绘 WarnFx）+ 冷却 + 半血换阶段。
@@ -29,6 +32,8 @@ export const MOVESET_WALK = { hitLeadMs: 120, dashStride: 40 } as const;
 export class BossMoveset extends ArcBossV2<string> {
   phase: 1 | 2 = 1;
   private cds = new Map<string, number>(); private hazards: Hazard[] = []; private seq = 0; private order = 0;
+  private knives: FlyingKnife[] = []; private knifeFx: KnifeFx | null = null;
+  /** 测试读：飞刀放出 / 命中主将次数。 */ readonly knifeStats = { thrown: 0, hits: 0 };
   private cur: MoveDef | null = null; private dash: { ax: number; ay: number; t0: number; ms: number; hitPlayer: boolean; back: boolean; len: number; fireAt: number; hitTroops: Set<unknown> } | null = null;
   private ride: { a0: number; t0: number; ms: number; dropAt: number; drops: number; cx: number; cy: number; dir: number } | null = null;
   private hideUntil = 0; private flags: { e: Enemy; img: Phaser.GameObjects.Image | null }[] = []; private flagMul = 1;
@@ -71,7 +76,7 @@ export class BossMoveset extends ArcBossV2<string> {
   update(dt: number, now: number): void {
     const b = this.h.boss; if (this.gone || !b.active || this.state === 'dead') return;
     this.kit.update(now); this.gfx.clear();
-    this.updateHazards(now);
+    this.updateHazards(now); this.updateKnives(now);
     this.updateFlags();
     if (this.phase === 1 && b.hp <= b.maxHp * this.def.phaseAt) this.enterPhase2(now);
     this.updateRage(now);
@@ -114,7 +119,7 @@ export class BossMoveset extends ArcBossV2<string> {
         for (let k = 1; k < (m.lanes ?? 1); k++) { const side = k % 2 ? 1 : -1, off = Math.ceil(k / 2) * (m.width + 26) * side; this.add({ kind: 'lane', x: b.x - Math.sin(a) * off, y: b.y + Math.cos(a) * off, angle: a, len: m.len, width: m.width }, now, at + m.dashMs * .5, m.dmg); }
         break;
       }
-      case 'fan': for (let k = 0; k < m.count; k++) { const ang = a + (m.count > 1 ? (k / (m.count - 1) - .5) * m.spread : 0); this.add({ kind: 'lane', x: b.x, y: b.y, angle: ang, len: m.len, width: m.width }, now, at + k * 70, m.dmg); } break;
+      case 'fan': for (let k = 0; k < m.count; k++) { const ang = a + (m.count > 1 ? (k / (m.count - 1) - .5) * m.spread : 0); this.add({ kind: 'lane', x: b.x, y: b.y, angle: ang, len: m.len, width: m.width }, now, at + k * 70, m.dmg, false, m.knives); } break;
       case 'sweep': this.add({ kind: 'sector', x: b.x, y: b.y, r: meleeReach(m.r), angle: a, arc: m.arc }, now, at, m.dmg); for (let k = 1; k < (m.times ?? 1); k++) this.add({ kind: 'sector', x: b.x, y: b.y, r: meleeReach(m.r), angle: a + (k % 2 ? .35 : -.35), arc: m.arc }, now, at + k * 320, m.dmg); break;
       case 'rings': m.radii.forEach((r, k) => this.add({ kind: 'circle', x: b.x, y: b.y, r, inner: Math.max(0, r - m.band), fx: 'slam' }, now, at + k * m.gapMs, m.dmg)); break;
       case 'volley': for (let k = 0; k < m.count; k++) { const ang = Math.random() * Math.PI * 2, d = k === 0 ? 0 : 40 + Math.random() * m.spread; this.add({ kind: 'circle', x: p.x + Math.cos(ang) * d, y: p.y + Math.sin(ang) * d * .7, r: m.r, fx: m.fx }, now, at + k * 90, m.dmg); } break;
@@ -254,7 +259,18 @@ export class BossMoveset extends ArcBossV2<string> {
   }
 
   // ---------- 地面预警与结算 ----------
-  private add(shape: Shape, now: number, at: number, dmg: number, visualOnly = false): void { this.hazards.push({ id: `bm-${this.def.id}-${++this.seq}`, shape, from: now, at, dmg, hit: false, visualOnly }); }
+  private add(shape: Shape, now: number, at: number, dmg: number, visualOnly = false, knife?: number): void { this.hazards.push({ id: `bm-${this.def.id}-${++this.seq}`, shape, from: now, at, dmg, hit: false, visualOnly, knife }); }
+  /** 飞刀：刀尖到哪判到哪（刀尖前后 26 像素、道宽内）；飞完整条道消失。友军按整条道受一次 0.6 倍（同其他长条招）。 */
+  private updateKnives(now: number): void {
+    const p = this.h.player, b = this.h.boss;
+    for (let i = this.knives.length - 1; i >= 0; i--) {
+      const k = this.knives[i], d = (now - k.t0) / 1000 * k.speed;
+      if (d > k.len + 30) { this.knives.splice(i, 1); continue; }
+      if (k.hit || !p.alive) continue;
+      const dx = p.x - k.x, dy = p.y - k.y, along = dx * Math.cos(k.angle) + dy * Math.sin(k.angle), across = Math.abs(-dx * Math.sin(k.angle) + dy * Math.cos(k.angle));
+      if (Math.abs(along - d) <= 26 + p.radius * .5 && along <= k.len && across <= k.width / 2 + p.radius * .5) { k.hit = true; this.knifeStats.hits++; p.takeDamage(b.def.damage * k.dmg * this.dmgMul, now); this.metrics.playerHits++; }
+    }
+  }
   private updateHazards(now: number): void {
     const wf = warnFx(this.h.scene), p = this.h.player, b = this.h.boss;
     for (let i = this.hazards.length - 1; i >= 0; i--) {
@@ -267,6 +283,13 @@ export class BossMoveset extends ArcBossV2<string> {
       }
       this.hazards.splice(i, 1);
       if (z.visualOnly) continue;
+      if (z.knife && s.kind === 'lane') {
+        // 飞刀道：飞出一把手绘飞刀（KnifeFx），判定跟着刀尖走（updateKnives）；友军整条道受一次
+        this.knives.push({ x: s.x, y: s.y, angle: s.angle, len: s.len, width: s.width, t0: now, speed: z.knife, dmg: z.dmg, hit: false }); this.knifeStats.thrown++;
+        (this.knifeFx ??= new KnifeFx(this.h.scene)).fire(s.x, s.y - 30, s.x + Math.cos(s.angle) * s.len, s.y + Math.sin(s.angle) * s.len - 30, { speed: z.knife });
+        this.h.army.hurtArea(s.x + Math.cos(s.angle) * s.len / 2, s.y + Math.sin(s.angle) * s.len / 2, s.len / 2, b.def.damage * z.dmg * .6 * this.dmgMul, now);
+        continue;
+      }
       const themed = s.kind === 'circle' ? playThemeFx(this.h.scene, this.theme, { kind: 'circle', x: s.x, y: s.y, r: s.r })
         : s.kind === 'lane' ? playThemeFx(this.h.scene, this.theme, { kind: 'lane', x: s.x, y: s.y, angle: s.angle, len: s.len, width: s.width })
         : playThemeFx(this.h.scene, this.theme, { kind: 'sector', x: s.x, y: s.y, r: s.r, angle: s.angle });
@@ -302,7 +325,7 @@ export class BossMoveset extends ArcBossV2<string> {
     this.beat.set(name, 'windup', now, windupMs);
   }
   defeat(): void { if (this.mode === 'arc') super.defeat(); else { this.state = 'dead'; this.gfx.clear(); this.onDefeat(); } }
-  protected onDefeat(): void { this.hazards = []; for (const f of this.flags) f.img?.destroy(); this.flags = []; this.mount?.destroy(); this.mount = undefined; this.h.boss.sprite.setAlpha(1); }
+  protected onDefeat(): void { this.hazards = []; this.knives = []; for (const f of this.flags) f.img?.destroy(); this.flags = []; this.mount?.destroy(); this.mount = undefined; this.h.boss.sprite.setAlpha(1); }
   snapshot() { return { phase: this.phase, mounted: this.mounted, horse: !!this.mount?.hasHorse, state: this.state, cur: this.cur?.name ?? null, hazards: this.hazards.length, flags: this.flags.filter(f => f.e.active).length, guards: this.guards.filter(g => g.active).length, metrics: { ...this.metrics }, label: this.label }; }
   /** 当前打击判定用（DEV / 测试）。 */
   get depthHint(): number { return DEPTH.fx; }

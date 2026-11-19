@@ -1,0 +1,72 @@
+// 双首领第二批演示 GIF（2026-11-19）：SCENE=changan 李郭内讧（挑拨到满 → 互砍 → 破绽）/ SCENE=nanzhong 夫妻同心（冲阵 + 飞刀）+ 祝融七刀。
+// 用法：BASE=http://127.0.0.1:5173/ SCENE=changan node tools/record-dual-boss-2-gif.mjs → assets/review/dual-boss-2/<SCENE>.gif
+import { chromium } from 'playwright';
+import { mkdirSync, readdirSync, rmSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+const SCENE = process.env.SCENE ?? 'changan';
+const BASE = process.env.BASE ?? 'http://127.0.0.1:5173/', OUT = 'assets/review/dual-boss-2';
+mkdirSync(OUT, { recursive: true });
+const ONLY = (process.env.ONLY ?? '').split(',').filter(Boolean), want = k => !ONLY.length || ONLY.includes(k);
+const ck = () => {};
+let t0 = Date.now(), dur = 0; const vid = 'assets/review/dual-boss-2/video-' + SCENE; rmSync(vid, { recursive: true, force: true }); mkdirSync(vid, { recursive: true });
+const b = await chromium.launch({ channel: 'chrome', headless: true, args: ['--mute-audio'] });
+try {
+  var ctx = await b.newContext({ viewport: { width: 1280, height: 720 }, recordVideo: { dir: vid, size: { width: 1280, height: 720 } } }); var p = await ctx.newPage(); const errs = []; p.on('pageerror', e => errs.push(String(e)));
+  await p.addInitScript(() => { if (!sessionStorage.getItem('dual-seeded')) { for (const k of ['im_story_v1', 'im_roster_v1']) localStorage.removeItem(k); sessionStorage.setItem('dual-seeded', '1'); } window.__IM_PARLEY_LIVE = true; });
+  await p.goto(BASE + '?dev=1&layout=desktop&story=full');
+  await p.waitForFunction(() => window.__game?.scene.isActive('MenuScene'), null, { timeout: 90000 });
+  const unlocked = await p.evaluate(async () => { const W = await import('/src/world/WorldStore.ts'); const s = W.loadWorld(); s.yellowStages = 3; s.worldAvailable = true; s.cleared.huangjin = true; s.provisions = (s.provisions ?? 0) + 500; localStorage.setItem('im_world_v1', JSON.stringify(s)); return W.worldUnlocked(); });
+  if (!unlocked) throw new Error('天下地图没能开放（测试存档）');
+
+  const S = scene => `window.__game.scene.getScene('${scene}')`;
+  /** 开某关、跳过剧情卷轴、首领出场；dual：等第二位登场。 */
+  const open = async (scene, reg, run, dual = true) => {
+    // 每关前清掉上一例留下的降将 / 招降斩杀旗标（否则已在降将栏的首领不弹窗）
+    await p.evaluate(() => { const v = JSON.parse(localStorage.getItem('im_story_v1') ?? '{}'); if (v.flags) for (const k of Object.keys(v.flags)) if (/^(surrendered|executed|neverSeen|hebei_|yanliang_by|wenchou_by)/.test(k)) delete v.flags[k]; localStorage.setItem('im_story_v1', JSON.stringify(v)); const r = JSON.parse(localStorage.getItem('im_roster_v1') ?? '{}'); if (r.captives) r.captives = []; localStorage.setItem('im_roster_v1', JSON.stringify(r)); });
+    await p.evaluate(([key, reg, run]) => { const g = window.__game; for (const k of ['campaignTransfer', 'thirdTransfer', 'guanduTransfer', 'hanzhongTransfer']) g.registry.remove(k); for (const [k, v] of Object.entries(reg)) g.registry.set(k, v); g.registry.set('runConfig', { character: 'zhaoyun', ...run }); const cur = g.scene.getScene(key); if (cur && g.scene.isActive(key)) cur.scene.restart(); else { for (const s of g.scene.getScenes(true)) s.scene.stop(); g.scene.start(key); } }, [scene, reg, run]);
+    await p.waitForTimeout(500);
+    await p.waitForFunction(S0 => { const s = eval(S0); return s?.player && s.scene.isActive(); }, S(scene), { timeout: 90000 }); await p.waitForTimeout(800);
+    const ev = (fn, arg) => p.evaluate(([S0, f, a]) => { const s = eval(S0); if (s && (s.mode === 'levelup' || s.mode === 'recruit')) s.__DEV_ACTIONS?.closePopup?.(); return eval('(' + f + ')')(s, a); }, [S(scene), String(fn), arg]);
+    await ev(s => { s.player.damageImmune = true; for (const k of ['grantBossChest', 'spawnBossChest']) if (Object.prototype.hasOwnProperty.call(s, k)) delete s[k]; /* restart 复用同一场景对象：去掉上一例装的包装 */ });
+    for (let i = 0; i < 150 && !(await ev(s => !!s.boss?.active)); i++) { await ev(s => { if (s.mode === 'story') { for (const st of s.children.list) { const btn = st.list?.find(o => /-(next|confirm)$/.test(o.name ?? '')); if (btn) { btn.emit('pointerup'); break; } } } if (!s.boss?.active && !s.bossSpawned && s.mode === 'none') s.spawnBoss(); }); await p.waitForTimeout(150); }
+    if (!(await ev(s => !!s.boss?.active))) await ev(s => { for (const o of [...s.children.list]) if (/^story/.test(o.name ?? '')) o.destroy(); if (s.mode === 'story') s.setMode('none'); s.spawnBoss(); });
+    if (dual) for (let i = 0; i < 40 && !(await ev(s => (s.dual?.entries.length ?? 0) >= 2)); i++) { await ev(s => { if (s.mode === 'story') { for (const o of [...s.children.list]) if (/^story/.test(o.name ?? '')) o.destroy(); s.setMode('none'); } }); await p.waitForTimeout(150); }
+    await ev(s => { s.spawnTimer = 1e9; s.eliteTimer = 1e9; for (const e of s.enemies) if (e.active && e.kind !== 'boss' && !e.isSupplySlot) e.deactivate(); });
+    return ev;
+  };
+  const snap = ev => ev(s => s.dual?.snapshot());
+  /** 把某位首领打到 frac（不致死时直接改血，致死时走 hitEnemy → killEnemy）。 */
+  const hurtE = (ev, id, frac) => ev((s, a) => { const x = s.dual.entries.find(y => y.id === a.id); const e = x.enemy; if (!e.active) return null; e.invulnerable = false; x.invulnUntil = 0; if (a.frac > 0) { e.hp = Math.max(1, Math.floor(e.maxHp * a.frac)); s.hitEnemy(e, 1, s.combatNow, 'melee', false, false); } else s.hitEnemy(e, 1e7, s.combatNow, 'melee', false, false); return { hp: e.hp / e.maxHp, mode: s.mode }; }, { id, frac });
+  const waitPanel = async ev => { for (let i = 0; i < 25; i++) { const r = await ev(s => s.mode === 'parley' && !!s.children.getByName('parley-panel')); if (r) return true; await p.waitForTimeout(120); } return false; };
+  const roll = (ev, v) => ev((s, v) => { const P = s.dual.entries.find(x => x.parley)?.parley?.constructor; if (P) P.random = () => v; }, v);
+  /** 让某位首领了结：execute / persuade（劝降掷骰先设好）。 */
+  const finish = async (ev, id, how) => { await hurtE(ev, id, .12); const ok = await waitPanel(ev); if (!ok) { console.log('  [finish] 没弹窗', id, JSON.stringify(await ev(s => ({ roster: (() => { const r = JSON.parse(localStorage.getItem('im_roster_v1') ?? '{}'); return { owned: (r.owned ?? []).map(o => o.name + ':' + (o.boss ?? '')), cap: (r.captives ?? []).map(o => o.name) }; })(), mode: s.mode, story: s.children.list.filter(o => /^story/.test(o.name ?? '')).map(o => o.name), e: s.dual.entries.map(x => ({ id: x.id, hp: Math.round(x.enemy.hp), active: x.enemy.active, done: x.done, parley: x.parley?.state, inv: x.enemy.invulnerable })) })))); return false; } await ev((s, c) => s.choose(c), how); await p.waitForTimeout(how === 'persuade' ? 1700 : 600); return true; };
+  // 横幅按字排（一个字一个 Text）：容器里的字连起来也算一条
+  const texts = ev => ev(s => { const out = []; const walk = o => { if (!o || !o.visible) return; if (o.type === 'Text' && o.text) out.push(o.text); if (o.list) { const j = o.list.filter(c => c.type === 'Text' && c.visible).map(c => c.text).join(''); if (j) out.push(j); for (const c of o.list) walk(c); } }; for (const o of s.children.list) walk(o); return out; });
+  const flags = () => p.evaluate(() => (JSON.parse(localStorage.getItem('im_story_v1') ?? '{}').flags ?? {}));
+  const G42 = ['GuanduGameScene', { guanduStage: 2 }], H82 = ['HanzhongGameScene', { hanzhongStage: 2 }, { thirdStage: 2 }];
+
+  const gwait = async (ev, ms) => { const t0 = await ev(s => s.combatNow), r0 = Date.now(); while ((await ev(s => s.combatNow)) - t0 < ms && Date.now() - r0 < ms * 6) await p.waitForTimeout(60); };
+  const hit = (ev, id, raw) => ev((s, a) => { const x = s.dual.entries.find(y => y.id === a.id); if (!x?.enemy.active) return false; x.enemy.invulnerable = false; s.hitEnemy(x.enemy, a.raw, s.combatNow, 'melee', false, false); return true; }, { id, raw });
+  const ev = SCENE === 'changan' ? await open('ThirdGameScene', { thirdStage: 1 }, {}) : await open('NanzhengGameScene', { nanzhengStage: 3, nzNoStory: 'all' }, {});
+  await ev(s => { s.dual.comboNow(s.combatNow + 1e9); for (const w of s.player.weapons) w.cooldownLeft = 1e9; const [a, b] = s.dual.entries; a.enemy.sprite.setPosition(s.player.x + 150, s.player.y - 60); b.enemy.sprite.setPosition(s.player.x + 300, s.player.y + 40); });
+  await gwait(ev, 600);
+  t0 = Date.now();
+  if (SCENE === 'changan') {
+    // 李郭内讧：主将轮流挑拨两人（猜忌涨到满）→ 两人冲向对方互砍 → 各愣 2.6 秒
+    for (let k = 0; k < 10 && !(await ev(s => s.dual.plan.feudState().feuds)); k++) { await hit(ev, k % 2 ? 'guosi' : 'lijue', 4); await gwait(ev, 900); }
+    await gwait(ev, 3200);
+  } else {
+    // 夫妻同心：孟获一侧冲阵 + 祝融另一侧扇射飞刀；再看祝融七刀
+    await ev(s => { s.dual.comboNow(s.combatNow); });
+    await gwait(ev, 4200);
+    await ev(async s => { const { BOSS_MOVES } = await import('/src/data/bossMoves.ts'); const z = s.dual.entries[1]; z.ctrl.combo(BOSS_MOVES.zhurong.p2.moves.find(m => m.kind === 'fan'), s.combatNow, { aim: { x: s.player.x, y: s.player.y } }); });
+    await gwait(ev, 2400);
+  }
+} finally { dur = (Date.now() - t0) / 1000; await p.close(); await ctx.close(); await b.close(); }
+const webm = readdirSync(vid).filter(f => f.endsWith('.webm')).map(f => vid + '/' + f).pop();
+const gif = `${OUT}/${SCENE}.gif`;
+const CUT = +(process.env.CUT ?? 0); // 跳过开头几秒（内讧要先挑拨一阵）
+execFileSync('ffmpeg', ['-y', '-sseof', String(-dur - .3 + CUT), '-i', webm, '-vf', 'fps=10,scale=720:-1:flags=lanczos,split[a][b];[a]palettegen=max_colors=128:stats_mode=full[p];[b][p]paletteuse=dither=bayer:bayer_scale=5:diff_mode=rectangle', gif], { stdio: 'ignore' });
+// 视频留在 video-<SCENE>/（重新压 GIF 不用再录）
+console.log('GIF:', gif, dur.toFixed(1), 's');

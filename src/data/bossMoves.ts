@@ -10,7 +10,7 @@ export type MoveDef =
   /** 直线冲锋：先出长条预警，再沿线冲过去，撞到主将掉血；back 折返再冲一次；fire 冲过的路上留地火。 */
   | { kind: 'charge'; name: string; windupMs: number; cd: number; dmg: number; len: number; width: number; dashMs: number; back?: boolean; fire?: boolean; /** 两侧并行的骑兵道（虎豹冲阵）：只出预警与伤害，首领冲中间。 */ lanes?: number }
   /** 扇形多道箭（连珠箭阵）：从首领朝主将张开 count 道长条。 */
-  | { kind: 'fan'; name: string; windupMs: number; cd: number; dmg: number; count: number; spread: number; len: number; width: number }
+  | { kind: 'fan'; name: string; windupMs: number; cd: number; dmg: number; count: number; spread: number; len: number; width: number; /** 飞刀（祝融）：出手后每道飞出一把手绘飞刀（KnifeFx），刀飞过谁就伤谁（出手后还能躲）；值 = 飞行速度 px/s。 */ knives?: number }
   /** 扇形横扫（朝主将）。 */
   | { kind: 'sweep'; name: string; windupMs: number; cd: number; dmg: number; r: number; arc: number; times?: number }
   /** 以首领为圆心一圈圈向外的地裂（每圈一段延迟）。 */
@@ -81,6 +81,18 @@ export const BOSS_MOVES: Record<string, BossMovesetDef> = {
     p2: { name: '困兽之斗', caption: '坠马步战 · 西凉亲兵护卫时李傕减伤', gapMs: 2000, speedMul: 1, guards: { troop: 'infantry', count: 4, takenMul: .45 }, moves: [
       { kind: 'sweep', name: '困兽连劈', windupMs: 600, cd: 2800, dmg: 1.3, r: 125, arc: Math.PI * .9, times: 3 },
       { kind: 'summon', name: '西凉残部', windupMs: 800, cd: 10000, dmg: 0, troop: 'cavalry', count: 3, radius: 260, around: 'player' },
+    ] },
+  },
+  // 3-1 郭汜（双首领第二批，李傕的同伙）：步战厚背砍刀（v2 图 third_guosi 是步战）；纵兵劫掠召西凉骑 → 二阶段「亡命狂刀」三连劈 + 拖刀突进
+  guosi: {
+    id: 'guosi', name: '郭汜', phaseAt: .5,
+    p1: { name: '西凉悍将', caption: '厚背砍刀 · 纵兵劫掠', gapMs: 2400, speedMul: 1.1, moves: [
+      { kind: 'sweep', name: '厚背砍刀', windupMs: 650, cd: 3200, dmg: 1.3, r: 130, arc: Math.PI * .8, times: 2 },
+      { kind: 'summon', name: '纵兵劫掠', windupMs: 800, cd: 9000, dmg: 0, troop: 'cavalry', count: 3, radius: 240, around: 'player' },
+    ] },
+    p2: { name: '亡命狂刀', caption: '三连劈 · 拖刀突进', gapMs: 2000, speedMul: 1.15, moves: [
+      { kind: 'sweep', name: '亡命狂刀', windupMs: 600, cd: 2800, dmg: 1.3, r: 135, arc: Math.PI * .9, times: 3 },
+      { kind: 'thrust', name: '拖刀突进', windupMs: 800, cd: 4200, dmg: 1.6, len: 420, width: 62 },
     ] },
   },
   // 3-2 张绣（北地枪王）：骑白马；百鸟朝凤枪 + 宛城夜袭（隐身突刺）→ 坠马「枪出如龙」：贯穿一线 + 二连扇刺
@@ -345,6 +357,18 @@ export const BOSS_MOVES: Record<string, BossMovesetDef> = {
     p2: { name: '藤甲狂怒', caption: '兀突骨狂怒 · 三重震地', gapMs: 1900, speedMul: 1.2, moves: [
       { kind: 'rings', name: '三重震地', windupMs: 850, cd: 4200, dmg: 1.4, radii: [110, 210, 310], gapMs: 380, band: 70 },
       { kind: 'charge', name: '狂怒践踏', windupMs: 800, cd: 4200, dmg: 1.8, len: 400, width: 80, dashMs: 500, back: true },
+    ] },
+  },
+  // 11-3 祝融夫人（双首领第二批，孟获之妻，v2 图 nz_zhurong）：飞刀扇射（手绘旋转飞刀，出手后还能侧身躲）+ 火神落刀 →「火神之后」七刀连射 + 双刀旋舞
+  zhurong: {
+    id: 'zhurong', name: '祝融', phaseAt: .5,
+    p1: { name: '祝融夫人', caption: '飞刀扇射 · 火神落刀', gapMs: 2300, speedMul: 1.15, moves: [
+      { kind: 'fan', name: '飞刀', windupMs: 750, cd: 3400, dmg: 1.1, count: 5, spread: .9, len: 520, width: 40, knives: 620 },
+      { kind: 'volley', name: '火神落刀', windupMs: 950, cd: 6000, dmg: 1.2, count: 4, r: 60, spread: 130, fx: 'fire' },
+    ] },
+    p2: { name: '火神之后', caption: '七刀连射 · 双刀旋舞', gapMs: 1900, speedMul: 1.25, moves: [
+      { kind: 'fan', name: '七刀连射', windupMs: 700, cd: 3000, dmg: 1.2, count: 7, spread: 1.3, len: 560, width: 40, knives: 680 },
+      { kind: 'sweep', name: '双刀旋舞', windupMs: 550, cd: 3200, dmg: 1.2, r: 120, arc: Math.PI * 1.4, times: 2 },
     ] },
   },
   // 11-3 孟获（南蛮王）：象的骑乘图未到先步战；蛮王冲阵 + 蛮王怒吼 →「七擒不服」：召象兵 + 震地（场景里另有七擒七纵）

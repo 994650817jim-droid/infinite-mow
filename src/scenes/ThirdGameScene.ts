@@ -20,6 +20,8 @@ import { YuanshuBoss } from '../systems/YuanshuBoss';
 import { CaorenBoss } from '../systems/CaorenBoss';
 import { BossMoveset } from '../systems/BossMoveset';
 import { BOSS_MOVES } from '../data/bossMoves';
+import { changanPlan } from '../data/dualBossPlans';
+import { dualOff } from '../systems/DualBoss';
 import { STORY_CHAPTERS } from '../data/story';
 import { QijinTracker } from '../systems/ChibiStoryHooks';
 import { setStoryFlag } from '../systems/Story';
@@ -68,7 +70,7 @@ export function thirdGameSceneClass(Base:typeof GameScene,cfg:ArcSceneConfig=THI
  protected surrenderKey():string|null{return cfg.arc+'-'+this.thirdStage+':'+this.stageInfo().id;}
  private get sceneryStage():SceneryStage{return cfg.stages[this.thirdStage-1]?.scenery??this.thirdStage;}
  constructor(){super(cfg.key);}
- preload(){for(const d of cfg.stages)if(!this.textures.exists(cfg.texture(d.id)))loadBossSheet(this.load,cfg.texture(d.id),cfg.sheet(d.id));}
+ preload(){for(const d of cfg.stages)if(!this.textures.exists(cfg.texture(d.id)))loadBossSheet(this.load,cfg.texture(d.id),cfg.sheet(d.id));/* 3-1 双首领第二位郭汜（v2 专属图；v1 没有郭汜图，借李傕） */if(cfg.arc==='qunxiong'&&!this.textures.exists('third_guosi'))loadBossSheet(this.load,'third_guosi',cfg.sheet('lijue'));}
  create(){
   this.thirdStage=(this.registry.get(cfg.stageKey)??1)as ThirdStage;this.thirdTest=isChapterTestRun();if(!cfg.stages[this.thirdStage-1]||!this.thirdTest&&!arcStageUnlocked(cfg.arc,this.thirdStage)){this.scene.start('WorldMapScene');return;}
   const saved=this.registry.get('runConfig')as RunConfig|undefined,transfer=this.registry.get(cfg.transferKey)as CampaignTransfer|undefined;this.registry.remove(cfg.transferKey);this.registry.remove('campaignTransfer');if(transfer&&transfer.character===saved?.character)this.registry.set('campaignTransfer',transfer);
@@ -111,7 +113,13 @@ export function thirdGameSceneClass(Base:typeof GameScene,cfg:ArcSceneConfig=THI
  /** 首领招式框架的宿主（双首领关第二位首领也用）。 */
  protected arcHost(boss:Enemy):ArcHost{return {scene:this,boss,player:this.player,army:this.legion,spawn:(kind,x,y,def)=>this.spawnEnemy(kind,x,y,1,true,def),def:k=>this.chapter.enemies[k],banner:(t,c)=>this.showWaveBanner(t,true,c),sfx:k=>this.sfx.play(k)};}
  /** 双首领关：子类在第一位首领的招式控制器建好后接手（返回 true = 控制器交给 DualBoss）。 */
- protected dualSetup(_first:BossMoveset):boolean{return false;}
+ protected dualSetup(first:BossMoveset):boolean{
+  // 3-1 长安 · 李傕（骑西凉马）+ 郭汜（步战）双首领，「李郭内讧」（data/dualBossPlans.ts changanPlan）；8-2 等子类各自覆写
+  const b=this.boss;if(cfg.arc!=='qunxiong'||this.thirdStage!==1||!b||dualOff())return false;
+  this.startDual(changanPlan(),{id:'lijue',name:'李傕',enemy:b,ctrl:first,mount:first.mount??null,key:'qunxiong-1:lijue'},
+   {id:'guosi',name:'郭汜',at:{x:b.x+220,y:b.y-20},def:{texture:'third_guosi'},key:null,make:e=>({ctrl:new BossMoveset(this.arcHost(e),'third_guosi',this.combatNow,BOSS_MOVES.guosi,'arc'),mount:null})});
+  return true;
+ }
  protected sceneFaction():number|null{return ARC_FACTIONS[cfg.arc+'.'+this.thirdStage]??null;}
  protected customBossStep(enemy:Enemy,dt:number,now:number){if(enemy!==this.boss||!this.controller)return false;this.controller.update(dt,now);return true;}
 

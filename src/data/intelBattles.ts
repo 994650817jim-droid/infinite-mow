@@ -12,11 +12,15 @@ import type {IntelEvent} from '../world/WorldIntel';
  * - 商队护送：三波来袭、不出首领，商车抵达即胜（IntelGameScene 处理商车）。
  */
 export const ESCORT = {hp: 100, distance: 1500, speed: 17, near: 220, raidRadius: 72, raidDps: 1.6, raidCap: 8, timeLimit: 200} as const;
+/** 有专属首领图的悬赏名将（2026-11-19：郭汜 v2 图 third_guosi，原先借淳于琼 / 颜良 / 文丑的图）。键 → 文件（IntelGameScene 预载）。 */
+export const BOUNTY_OWN_ATLAS: Record<string, string> = {郭汜: 'third_guosi'};
+export const BOUNTY_ATLAS_FILES: Record<string, string> = {third_guosi: 'assets/phase23/lijue.png'};
 /** 名将借用的首领招式组与图集（GuanduBoss 1 / 2 / 3）。 */
 export function bountyKit(general: string): {stage: 1 | 2 | 3; atlas: string} {
   let h = 0; for (const ch of general) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
   const stage = ((h % 3) + 1) as 1 | 2 | 3;
-  return {stage, atlas: ['guandu_yanliang', 'guandu_wenchou', 'guandu_chunyuqiong'][stage - 1]};
+  // 有专属 v2 首领图的名将用自己的图（同为 4×8、每格 288 的首领动作图集）；招式仍按名字轮换
+  return {stage, atlas: BOUNTY_OWN_ATLAS[general] ?? ['guandu_yanliang', 'guandu_wenchou', 'guandu_chunyuqiong'][stage - 1]};
 }
 
 export function intelBattle(e: IntelEvent, city: CityDef): ChapterDef {

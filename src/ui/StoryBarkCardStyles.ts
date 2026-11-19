@@ -38,18 +38,18 @@ const FACTIONS: Record<string, Faction> = {
   ally: F('义', 0x2f8a56, '#f3d48a', '#0a1e14'),
 };
 const MEMBERS: Record<string, string[]> = {
-  huangjin: ['zhangjiao', 'zhangbao', 'zhangliang'], dong: ['dongzhuo', 'lubu', 'huaxiong', 'xurong', 'lijue', 'zhangxiu'],
+  huangjin: ['zhangjiao', 'zhangbao', 'zhangliang'], dong: ['dongzhuo', 'lubu', 'huaxiong', 'xurong', 'lijue', 'guosi', 'zhangxiu'],
   yuan: ['yuanshao', 'yuanshu', 'yanliang', 'wenchou', 'chunyuqiong', 'jiling'],
   wei: ['caocao', 'caochun', 'caoren', 'xuchu', 'zhangliao', 'dianwei', 'xiahouyuan', 'zhanghe', 'simayi', 'haozhao', 'pangde', 'chengyu', 'xunyou', 'jiaxu'],
   jing: ['caimao', 'liudu', 'zhaofan', 'hanxuan', 'liuxian', 'xingdaorong', 'yangling'], wu: ['sunquan', 'zhouyu', 'huanggai', 'lusu', 'lvmeng', 'luxun', 'sunhuan', 'zhuran'],
-  yi: ['liuzhang', 'zhangren', 'yanghuai'], man: ['menghuo', 'wutugu', 'mangyachang'],
+  yi: ['liuzhang', 'zhangren', 'yanghuai'], man: ['menghuo', 'zhurong', 'wutugu', 'mangyachang'],
 };
 export function factionOf(id: string | undefined, ally: boolean): Faction {
   if (ally) return FACTIONS.ally;
   for (const [k, ids] of Object.entries(MEMBERS)) if (id && ids.includes(id)) return FACTIONS[k];
   return FACTIONS.qun;
 }
-const EXTRA_TITLES: Record<string, string> = { zhangliang: '人公将军', zhangbao: '地公将军', zhangjiao: '天公将军', lubu: '飞将', yangling: '长沙管军校尉', xingdaorong: '零陵上将', liuxian: '零陵少将军' };
+const EXTRA_TITLES: Record<string, string> = { zhangliang: '人公将军', zhangbao: '地公将军', zhangjiao: '天公将军', lubu: '飞将', yangling: '长沙管军校尉', xingdaorong: '零陵上将', liuxian: '零陵少将军', guosi: '西凉悍将', zhurong: '火神之后' };
 export function titleOf(id: string | undefined): string { if (!id) return ''; return EXTRA_TITLES[id] ?? SURRENDER_DEFS.find(d => d.id === id)?.title ?? ''; }
 
 /** 头肩胸：从立绘取宽 64%、上 1%–40% 一块，画进小画布缓存成贴图（不用遮罩）；最下 22% 渐隐，像墨色化开 */

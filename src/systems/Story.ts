@@ -99,6 +99,18 @@ export function playStoryScroll(scene: Phaser.Scene, node: StoryNode, lines: Sto
 interface BarkTarget { x: number; y: number; active?: boolean; displayHeight?: number }
 interface BarkHost { heroBark?: { sayLine?: (target: BarkTarget, name: string, text: string) => boolean } }
 /** 大字台词：跟着说话人走，弹出 → 停 1.8 秒 → 淡出；同时最多 2 句（新的顶掉最旧的）。HeroBark 合入后由它接管。 */
+/**
+ * 首领 / 人物台词（剧情节点以外的系统用，如双首领 DualBoss）：登记过的说话人（STORY_CAST 或可玩武将）→ 侧边台词卡 + 头顶「！」
+ * （有对白立绘带立绘，没有时卡上画名字章）；不认识的说话人 → 头顶大字（同 storyBark）。id 不给时按名字找。剧情设置关掉时调用方自己不调。
+ */
+export function castBark(scene: Phaser.Scene, target: BarkTarget, name: string, text: string, id?: string): void {
+  const who = id ?? (heroIdByName(name) ?? Object.keys(STORY_CAST).find(k => STORY_CAST[k].name === name));
+  if (!who || !(STORY_CAST[who] || heroName(who))) { storyBark(scene, target, name, text); return; }
+  const s: { portrait?: string } = speaker(who, { lord: '' } as unknown as StoryCtx);
+  showBarkCard(scene, { side: heroName(who) ? 'left' : 'right', name, text, portrait: s.portrait, id: who });
+  storyBark(scene, target, '', '！');
+}
+const heroIdByName = (name: string): string | undefined => CHARACTERS.find(c => c.name === name)?.id;
 export function storyBark(scene: Phaser.Scene, target: BarkTarget, name: string, text: string): void {
   const host = scene as unknown as BarkHost;
   if (host.heroBark?.sayLine?.(target, name, text)) return;

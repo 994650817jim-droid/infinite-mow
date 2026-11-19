@@ -24,6 +24,7 @@ export const BOSS_THEME_OF: Readonly<Record<string, BossTheme>> = {
   lvmeng: 'ink', caocao: 'wei', caoren: 'wei',
   yanliang: 'dust', wenchou: 'dust', caochun: 'dust', xiahouyuan: 'dust', sunhuan: 'dust', pangde: 'dust',
   mangyachang: 'quake', wutugu: 'quake', menghuo: 'quake',
+  zhurong: 'blood', // 祝融夫人：火神之后，红橙刀气配飞刀（2026-11-19 双首领第二批）
 };
 export const BOSS_THEME_FX = {
   /** 每段播放时长（毫秒）；各形状在贴图里的内容占比（用来把图里的内容对到真实判定范围）。 */

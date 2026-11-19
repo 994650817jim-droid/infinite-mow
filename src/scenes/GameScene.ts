@@ -19,7 +19,7 @@ import {BattleMap} from '../ui/BattleMap';
 import type {BossMount as BossMountT} from '../systems/BossMount';
 import {SURRENDER,surrenderDef} from '../data/surrender';
 import {markSurrender,surrenderedIds,surrenderLive} from '../systems/SurrenderStore';
-import { StoryDirector, campTalkStrip, setStoryFlag, storyBark, type StoryCtx } from '../systems/Story';
+import { StoryDirector, campTalkStrip, setStoryFlag, storyBark, castBark, type StoryCtx } from '../systems/Story';
 import { warnCircle, TELEGRAPH_CLASSIC, groundCracks, windupFlash } from '../ui/Telegraph';
 import { HINT_MOCK, SHOW_OWN_RANGE_FX, groundScar, keyOutline } from '../ui/HintStyle';
 import { warnFx } from '../ui/WarnFx';
@@ -292,24 +292,26 @@ export class GameScene extends Phaser.Scene {
     this.parley?.clear();this.parley=null;this.bossMount?.destroy();this.bossMount=null;
     const now=this.combatNow,s=this;
     const d=this.dual=new DualBoss({scene:this,player:()=>this.player,banner:(t,danger,c)=>this.showWaveBanner(t,danger,c),sfx:k=>this.sfx.play(k),
-      bark:(t,name,text)=>{if(storyMode()!=='off')storyBark(this,t,name,text);},
+      // 双首领台词：说话人有对白立绘 → 侧边立绘卡（2026-11-19 双首领第二批），没有 → 头顶大字
+      bark:(t,name,text)=>{if(storyMode()!=='off')castBark(this,t,name,text,d.entries.find(x=>x.name===name)?.id);},
       storyFall:(id,at)=>!!this.storyDir?.bossFall(at,id),
       retire:e=>{if(!e.active)return;e.invulnerable=false;e.hp=0;this.killEnemy(e);},
       setPrimary:(e,p)=>{s.boss=e;if(p!==undefined)s.parley=p;},
       trail:(()=>{const last=new Map<number,number>();return (id:number,ratio:number)=>{const rn=performance.now(),dt=Math.min(.25,(rn-(last.get(id)??rn))/1000);last.set(id,rn);this.bossStagger.track(id,ratio);return this.bossStagger.trailRatio(ratio,rn,dt);};})(),
       live:()=>surrenderLive(),setFlag:(k,v)=>setStoryFlag(k,v),
+      hurt:(e,dmg)=>{this.hitEnemy(e,dmg,this.combatNow,'melee',true,false);},
       doubleSurrender:g=>{if(surrenderLive())gainProvisions(DUAL.doubleProvisions);this.showWaveBanner(g+' · 同归麾下',false,'双双归降 · 军粮 +'+DUAL.doubleProvisions);this.sfx.play('gong');},
       spawn:(k,x,y)=>this.spawnEnemy(k,x,y,1,true)},plan,now);
     const mk=(e:Enemy,key:string|null)=>{const ref:{x?:ReturnType<DualBoss['entryOf']>}={};const p=this.makeParley(()=>ref.x&&!ref.x.done&&e.active?e:null,surrenderDef(key),{partner:()=>ref.x?d.partnerOdds(ref.x):undefined});return {p,ref};};
     {const {p,ref}=mk(first.enemy,first.key);ref.x=d.add({id:first.id,name:first.name,enemy:first.enemy,ctrl:first.ctrl,parley:p,mount:first.mount??null,ownKit:first.ownKit},now);}
-    if(plan.lines[first.id]?.intro)this.time.delayedCall(200,()=>{if(first.enemy.active&&storyMode()!=='off')storyBark(this,first.enemy.sprite,first.name,plan.lines[first.id].intro!);});
+    if(plan.lines[first.id]?.intro)this.time.delayedCall(200,()=>{if(first.enemy.active&&storyMode()!=='off')castBark(this,first.enemy.sprite,first.name,plan.lines[first.id].intro!,first.id);});
     this.announceBoss(plan.group,first.name+' · '+second.name);
     d.later(now+DUAL.entranceGapMs,()=>{
       const e=this.spawnEnemy('boss',second.at.x,second.at.y,1,true,{...this.chapter.enemies.boss,...second.def} as EnemyDef);if(!e)return;
       const made=second.make(e),{p,ref}=mk(e,second.key);
       ref.x=d.add({id:second.id,name:second.name,enemy:e,ctrl:made.ctrl,parley:p,mount:made.mount??null,ownKit:made.ownKit},this.combatNow);
       this.presence?.entrance(e,.5);this.sfx.boss();
-      const line=plan.lines[second.id]?.intro;if(line&&storyMode()!=='off')storyBark(this,e.sprite,second.name,line);
+      const line=plan.lines[second.id]?.intro;if(line&&storyMode()!=='off')castBark(this,e.sprite,second.name,line,second.id);
     });
   }
   /** 首领出场点（默认主将正北 430）；城墙封死的关覆盖，别刷到墙那边过不来（城墙专项 W5）。 */

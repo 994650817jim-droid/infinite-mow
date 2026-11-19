@@ -1,4 +1,6 @@
-import type { DualPlan } from '../systems/DualBoss';
+import type { DualPlan, DualCombo, DualHost } from '../systems/DualBoss';
+import { playSheet } from '../systems/SkillFxSheets';
+import { DEPTH } from '../config';
 import type { GuanduBoss } from '../systems/GuanduBoss';
 import type { BossMoveset } from '../systems/BossMoveset';
 import { BOSS_MOVES, type BossMovesetDef, type MoveDef } from './bossMoves';
@@ -95,3 +97,152 @@ export const DINGJUN_DUAL = {
   zhangheRetreat: .15, retreatMs: 30000, guards: 4, guardMul: .45,
   wall: { count: 5, gap: 58, r: 34, dist: 110, windupMs: 850, dmg: 1.0, times: 3, every: 700 },
 } as const;
+
+/**
+ * 3-1 长安 · 李傕（左、骑西凉马）+ 郭汜（右、步战厚背砍刀）：双首领第二批。
+ * 「内讧」（史载贾诩、杨奉离间，李郭相攻于长安）：两人互不信任，「猜忌」满了就反目互斗——
+ *  - 主将在 CHANGAN_FEUD.pairWindowMs 内先后打到两人（挑拨）：猜忌 +pairGain；
+ *  - 任一人 heavyWindowMs 内掉了 heavyFrac 以上的血（怪同伴不救）：猜忌 +heavyGain，挨打的那个骂一句；
+ *  - 猜忌慢慢回落；满 100 → 「李郭内讧」：两人冲向对方互砍一刀（各掉 friendly 的血），然后各愣 stunMs（收招破绽），这期间受伤 ×vuln；
+ *    之后 cooldownMs 内猜忌不涨。血条下方的小字显示「猜忌 NN%」/「内讧」。
+ * 一人了结后内讧作废（剩下那个照常狂怒 / 心乱）。数值初值，交平衡会话。
+ */
+export const CHANGAN_FEUD = {
+  pairWindowMs: 2500, pairGain: 22, pairCdMs: 900,
+  heavyFrac: .1, heavyWindowMs: 4000, heavyGain: 34, heavyCdMs: 5000,
+  decayPerSec: 3, cooldownMs: 14000, stunMs: 2600, friendly: .06, vuln: 1.25, comboDelayMs: 8000,
+} as const;
+const FEUD_LINES: Record<string, { blame: string; feud: string }> = {
+  lijue: { blame: '郭阿多！你在一旁看戏么？！', feud: '郭汜！你竟敢暗算于我——' },
+  guosi: { blame: '李稚然，你袖手旁观，是要借刀杀我？', feud: '李傕！长安是我的，休想独吞！' },
+};
+export type ChanganPlan = DualPlan & { feudState(): { meter: number; feuds: number; vulnUntil: number; quietUntil: number } };
+export function changanPlan(): ChanganPlan {
+  const F = CHANGAN_FEUD, lastHit: Record<string, number> = {}, hpLog: Record<string, Array<[number, number]>> = {};
+  let pending = false, meter = 0, lastPair = -1e9, lastHeavy = -1e9, quietUntil = 0, vulnUntil = 0, prev = 0, feuds = 0;
+  const L = BOSS_MOVES.lijue, G = BOSS_MOVES.guosi;
+  const mv = (d: BossMovesetDef, ph: 'p1' | 'p2', kind: MoveDef['kind']): MoveDef | undefined => d[ph].moves.find(m => m.kind === kind);
+  const feudCombo: DualCombo = {
+    id: 'neihong', name: '李郭内讧', caption: `反目互斗 · ${(F.stunMs / 1000).toFixed(1)} 秒破绽、受伤 +${Math.round((F.vuln - 1) * 100)}%`,
+    lines: [['lijue', FEUD_LINES.lijue.feud], ['guosi', FEUD_LINES.guosi.feud]],
+    // 两人冲向对方（各停在中点外 40）
+    place: (a, b) => { const mx = (a.enemy.x + b.enemy.x) / 2, my = (a.enemy.y + b.enemy.y) / 2, t = Math.atan2(b.enemy.y - a.enemy.y, b.enemy.x - a.enemy.x), c = Math.cos(t) * 40, s = Math.sin(t) * 40; return [{ x: mx - c, y: my - s }, { x: mx + c, y: my + s }]; },
+    fire: (a, b, _p, now) => {
+      const h = a.enemy.scene, mx = (a.enemy.x + b.enemy.x) / 2, my = (a.enemy.y + b.enemy.y) / 2;
+      for (const x of [a, b]) { x.ctrl.forceRecover(now, F.stunMs); x.kit?.recover(now, F.stunMs); }
+      vulnUntil = now + F.stunMs; feuds++;
+      // 互砍一刀：走宿主的友军伤害（飘字、倒地、招降都照常）
+      for (const x of [a, b]) host?.hurt?.(x.enemy, Math.round(x.enemy.maxHp * F.friendly));
+      h.cameras.main.shake(260, .006);
+      playSheet(h, 'fx_strike_glint', mx, my - 40, { size: 220, ms: 420, depth: DEPTH.fx + .3, add: true, name: 'dual-feud-clash' });
+      playSheet(h, 'fx_drag_sparks', mx, my - 20, { size: 180, ms: 520, depth: DEPTH.fx + .2, add: true, name: 'dual-feud-sparks' });
+    },
+  };
+  let host: DualHost | undefined;
+  return {
+    group: '李郭',
+    lines: {
+      lijue: { intro: '长安是我西凉儿郎的！谁敢挡路？', fall: '郭汜……你为何不来救我……', rage: '郭阿多死了？——那长安就是我一个人的！', shaken: '郭汜你个软骨头……也罢，我李傕自己来！' },
+      guosi: { intro: '李稚然，城中金帛，你我对半分！', fall: '李傕……你这竖子……又不救我……', rage: '李傕！哈哈——今日之后，长安归我郭汜！', shaken: '稚然降了？……天下哪有我郭汜的容身之处！' },
+    },
+    combos: [
+      // 西凉劫掠：李傕绕主将半圈落箭雨（坠马后改连劈），郭汜从侧面拖刀突进——别站在突进线上，也别在箭雨圈里停
+      { id: 'jielue', name: '西凉劫掠', caption: '绕阵箭雨 + 拖刀突进 · 别站在突进线上',
+        lines: [['guosi', '抢！给我抢！'], ['lijue', '围住他！']],
+        place: (_a, _b, p) => [null, { x: p.x + 230, y: p.y - 30 }],
+        fire: (a, b, p, now, warnMul) => {
+          const ride = a.ctrl.phase2 ? mv(L, 'p2', 'sweep') : mv(L, 'p1', 'ride'), thrust = mv(G, 'p2', 'thrust');
+          if (ride) (a.ctrl as unknown as BossMoveset).combo(ride, now, { warnMul });
+          if (thrust) (b.ctrl as unknown as BossMoveset).combo(thrust, now, { aim: { x: p.x, y: p.y }, warnMul });
+        } },
+      // 分掠两翼（任一人进二阶段后）：两人从主将左右各连劈三刀——往上下走出夹缝
+      { id: 'liangyi', name: '分掠两翼', caption: '左右夹砍 · 往上下走',
+        lines: [['lijue', '左翼归我！'], ['guosi', '右翼的金帛是我的！']],
+        place: (_a, _b, p) => [{ x: p.x - 110, y: p.y }, { x: p.x + 110, y: p.y }],
+        fire: (a, b, p, now, warnMul) => {
+          const sa = mv(L, 'p2', 'sweep'), sb = mv(G, 'p2', 'sweep');
+          if (sa) (a.ctrl as unknown as BossMoveset).combo(sa, now, { aim: { x: p.x, y: p.y }, warnMul });
+          if (sb) (b.ctrl as unknown as BossMoveset).combo(sb, now, { aim: { x: p.x, y: p.y }, warnMul });
+        } },
+    ],
+    pick: (d, n) => d.entries.some(x => x.ctrl.phase2) ? d.plan.combos[n % 2] : d.plan.combos[0],
+    tick: (d, now) => {
+      host = d.h;
+      const dt = prev ? Math.min(.25, (now - prev) / 1000) : 0; prev = now;
+      const al = d.alive, both = al.length === 2 && d.entries.length === 2;
+      if (!both) { for (const x of d.entries) if (/^(猜忌|内讧)/.test(x.status)) x.status = ''; return; }
+      // 掉血太快（同伴不救）
+      for (const x of al) {
+        const log = hpLog[x.id] ??= []; log.push([now, x.enemy.hp]); while (log.length && now - log[0][0] > F.heavyWindowMs) log.shift();
+        if (now >= quietUntil && now - lastHeavy >= F.heavyCdMs && log.length && log[0][1] - x.enemy.hp >= x.enemy.maxHp * F.heavyFrac) {
+          lastHeavy = now; meter = Math.min(100, meter + F.heavyGain); log.length = 0; d.h.bark(x.enemy, x.name, FEUD_LINES[x.id]?.blame ?? '');
+        }
+      }
+      if (meter >= 100) pending = true;
+      if (now >= quietUntil && !pending) meter = Math.max(0, meter - F.decayPerSec * dt);
+      // 满了：反目互斗——等两人手上的招放完（期间不起新招、不放配合技），再冲向对方
+      if (pending) {
+        for (const x of al) x.ctrl.holdUntil(now + 120);
+        if (!d.comboActive && al.every(x => !x.ctrl.busy())) { pending = false; meter = 0; quietUntil = now + F.cooldownMs; d.delayCombo(now + F.comboDelayMs); d.startCombo(feudCombo, now); }
+      }
+      const st = now < vulnUntil ? '内讧' : meter >= 1 ? `猜忌 ${Math.round(meter)}%` : '';
+      for (const x of al) x.status = st;
+    },
+    incomingMul: (d, x, ally, now) => {
+      if (d.alive.length < 2) return 1;
+      if (!ally) {
+        lastHit[x.id] = now; const o = d.partner(x);
+        if (o && now >= quietUntil && now - (lastHit[o.id] ?? -1e9) <= F.pairWindowMs && now - lastPair >= F.pairCdMs) { lastPair = now; meter = Math.min(100, meter + F.pairGain); }
+      }
+      return now < vulnUntil && !ally ? F.vuln : 1;
+    },
+    // 测试读：猜忌、内讧次数、破绽到点
+    feudState: () => ({ meter, feuds, vulnUntil, quietUntil }),
+  };
+}
+
+/**
+ * 11-3 南中 · 孟获（左、步战）+ 祝融夫人（右、飞刀）：双首领第二批。七擒照旧由 NanzhengGameScene 管：
+ * 孟获前两次被击倒 → 逃回蛮洞（DualBoss.setAway：不出招、不当主目标、不放配合技），祝融喊一句断后、马上补一轮飞刀；过一会儿孟获从别处杀回来。
+ *  - 配合技「夫妻同心」：孟获从一侧蛮王冲阵、祝融从另一侧（与冲锋道垂直）扇射飞刀——斜着躲；
+ *    二阶段起与「火神助阵」轮流：孟获原地震地三圈、祝融七刀从圈外射进来——从刀缝出圈。
+ *  - 孟获第三擒真倒（心服）而祝融还在：祝融「随夫归降」——不狂怒，放下兵刃退走（宝箱 / 心服照旧按最后一人走）；
+ *    祝融先被打倒：孟获照常狂怒（「夫人！」），七擒照旧。
+ */
+export function nanzhongPlan(): DualPlan {
+  const M = BOSS_MOVES.menghuo, Z = BOSS_MOVES.zhurong;
+  const mv = (d: BossMovesetDef, ph: 'p1' | 'p2', kind: MoveDef['kind']): MoveDef | undefined => d[ph].moves.find(m => m.kind === kind);
+  return {
+    group: '南中夫妇',
+    lines: {
+      menghuo: { intro: '我乃南蛮王孟获！夫人，随我杀出去！', rage: '夫人——！蛮兵听令，给我杀！一个不留！', shaken: '……夫人降了？' },
+      zhurong: { intro: '大王且看妾身飞刀！', fall: '大王……妾身先去了……', rage: '大王！——你们这些汉人，还我大王来！', shaken: '大王都服了……罢了，妾身也降。', retreat: '大王既已心服，妾身也放下兵刃。' },
+    },
+    combos: [
+      { id: 'fuqi', name: '夫妻同心', caption: '一侧冲阵 · 一侧飞刀 · 斜着躲',
+        lines: [['zhurong', '大王，我来掩护！'], ['menghuo', '冲！']],
+        place: (a, _b, p) => { const t = Math.atan2(p.y - a.enemy.y, p.x - a.enemy.x), c = Math.cos(t), s = Math.sin(t); return [{ x: p.x - c * 280, y: p.y - s * 280 }, { x: p.x + s * 230, y: p.y - c * 230 }]; },
+        fire: (a, b, p, now, warnMul) => {
+          const charge = mv(M, 'p1', 'charge'), fan = mv(Z, b.ctrl.phase2 ? 'p2' : 'p1', 'fan');
+          if (charge) (a.ctrl as unknown as BossMoveset).combo(charge, now, { aim: { x: p.x, y: p.y }, warnMul });
+          if (fan) (b.ctrl as unknown as BossMoveset).combo(fan, now, { aim: { x: p.x, y: p.y }, warnMul });
+        } },
+      { id: 'huoshen', name: '火神助阵', caption: '震地三圈 + 七刀 · 从刀缝出圈',
+        lines: [['menghuo', '大地都要在我脚下颤抖！'], ['zhurong', '七刀——走！']],
+        place: (_a, _b, p) => [{ x: p.x - 40, y: p.y - 10 }, { x: p.x + 260, y: p.y - 60 }],
+        fire: (a, b, p, now, warnMul) => {
+          const rings = mv(M, 'p2', 'rings'), fan = mv(Z, 'p2', 'fan');
+          if (rings) (a.ctrl as unknown as BossMoveset).combo(rings, now, { warnMul });
+          if (fan) (b.ctrl as unknown as BossMoveset).combo(fan, now, { aim: { x: p.x, y: p.y }, warnMul });
+        } },
+    ],
+    pick: (d, n) => d.entries.some(x => x.ctrl.phase2) ? d.plan.combos[n % 2] : d.plan.combos[0],
+    react: (d, fallen, other, how, now) => {
+      if (fallen.id !== 'menghuo' || how !== 'killed') return false; // 祝融先倒 → 孟获照常狂怒
+      // 孟获心服（第三擒）：祝融随夫归降，1.6 秒后放下兵刃退走
+      other.status = '随夫归降'; other.retreatAt = now + 1600; other.ctrl.holdUntil(now + 5000);
+      d.h.scene.time.delayedCall(500, () => { if (!other.done && other.enemy.active) d.h.bark(other.enemy, other.name, d.plan.lines.zhurong.shaken ?? ''); });
+      return true;
+    },
+  };
+}

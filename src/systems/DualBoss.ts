@@ -61,6 +61,7 @@ export interface DualEntry {
   /** 登场时刻（战斗时钟）。 */ spawnedAt: number;
   /** 了结时刻（真实时间，血条灰掉淡出用）。 */ doneReal: number;
   /** 单挑时的生命上限（×0.65 之前）。 */ baseMaxHp: number;
+  /** 暂时离场（11-3 孟获被擒逃回蛮洞）：不出招、不当主目标、不参与配合技与取景，血条小字写 status。 */ away: boolean;
 }
 export interface DualCombo {
   id: string; name: string; caption: string;
@@ -82,6 +83,10 @@ export interface DualPlan {
   retreatAt?: Record<string, number>;
   /** 结果旗标（剧情分支）：值 = 两人结果首字母（k 斩 / p 降 / r 退），按左右顺序。 */
   outcomeFlag?: string;
+  /** 每帧（战斗中，配合技调度之前）：组合自己的机制（3-1 李傕郭汜「内讧」）。 */
+  tick?: (d: DualBoss, now: number) => void;
+  /** 这位首领挨打时调（ally = 友军打的）：返回额外受伤倍数（内讧互斗时 +25%）；也用来记谁挨了打。 */
+  incomingMul?: (d: DualBoss, x: DualEntry, ally: boolean, now: number) => number;
 }
 export interface DualHost {
   scene: Phaser.Scene;
@@ -101,6 +106,8 @@ export interface DualHost {
   setFlag: (k: string, v: string) => void;
   doubleSurrender: (group: string) => void;
   spawn: (kind: EnemyKind, x: number, y: number) => Enemy | null;
+  /** 首领之间的「友军」伤害（3-1 李郭内讧互砍）：宿主走 hitEnemy（飘字、倒地、招降照常）。 */
+  hurt?: (e: Enemy, dmg: number) => void;
 }
 
 /** 关掉双首领（对比 / 单首领招式测试用）：?dual=0 或 window.__IM_DUAL_OFF。 */
@@ -143,7 +150,7 @@ export class DualBoss {
     const c = spec.ctrl; c.dmgMul = DUAL.dmgMul; c.gapMul = DUAL.gapMul; c.summonMul = DUAL.summonMul;
     const kit = spec.ownKit ? new BossKit({ scene: this.h.scene, boss: e, banner: (t, cap) => this.banner(t, true, cap), sfx: k => this.h.sfx(k) }) : null;
     const entry: DualEntry = { id: spec.id, name: spec.name, color: side === 0 ? 'gold' : 'red', side, enemy: e, spawnId: e.spawnId, ctrl: c, parley: spec.parley, mount: spec.mount, kit,
-      done: null, doneAt: 0, rage: false, shakenUntil: 0, sigAt: 0, auraAt: 0, invulnUntil: 0, lastStart: -1e9, wasBusy: false, phase2Sent: false, baseSpeed: e.def.speed, retreatAt: 0, status: '', guards: [], guardMul: 1, spawnedAt: now, doneReal: 0, baseMaxHp };
+      done: null, doneAt: 0, rage: false, shakenUntil: 0, sigAt: 0, auraAt: 0, invulnUntil: 0, lastStart: -1e9, wasBusy: false, phase2Sent: false, baseSpeed: e.def.speed, retreatAt: 0, status: '', guards: [], guardMul: 1, spawnedAt: now, doneReal: 0, away: false, baseMaxHp };
     this.entries.push(entry);
     if (side === 1) this.nextCombo = Math.max(this.nextCombo, now + DUAL.combo.firstMs);
     return entry;
@@ -152,8 +159,12 @@ export class DualBoss {
   owns(e: Enemy | null | undefined): boolean { return !!this.entryOf(e); }
   partner(x: DualEntry): DualEntry | undefined { return this.entries.find(y => y !== x); }
   get alive(): DualEntry[] { return this.entries.filter(x => !x.done && x.enemy.active && x.enemy.spawnId === x.spawnId); }
-  /** 主目标：离主将最近、还活着的那个。 */
-  nearest(): DualEntry | undefined { const p = this.h.player(); return this.alive.sort((a, b) => Math.hypot(a.enemy.x - p.x, a.enemy.y - p.y) - Math.hypot(b.enemy.x - p.x, b.enemy.y - p.y))[0]; }
+  /** 暂时离场 / 回场（孟获逃回蛮洞）：离场时收掉正在放的配合技。 */
+  setAway(e: Enemy, on: boolean, status = ''): void { const x = this.entryOf(e); if (!x) return; x.away = on; x.status = on ? status : ''; if (on && this.combo) this.combo = null; }
+  /** 在场（没了结、没离场）。 */
+  get present(): DualEntry[] { return this.alive.filter(x => !x.away); }
+  /** 主目标：离主将最近、还在场的那个。 */
+  nearest(): DualEntry | undefined { const p = this.h.player(); return this.present.sort((a, b) => Math.hypot(a.enemy.x - p.x, a.enemy.y - p.y) - Math.hypot(b.enemy.x - p.x, b.enemy.y - p.y))[0]; }
   get comboActive(): boolean { return !!this.combo; }
   /** 首领在场时本关小怪刷新间隔倍数（×0.7 → 间隔 ÷0.7）。 */
   get spawnIntervalMul(): number { return this.alive.length ? 1 / DUAL.spawnMul : 1; }
@@ -168,7 +179,7 @@ export class DualBoss {
   /** 敌人循环里每个首领调一次（返回 true = 归双将框架管）。 */
   step(e: Enemy, dt: number, now: number): boolean {
     const x = this.entryOf(e); if (!x) return false;
-    if (x.done) return true;
+    if (x.done || x.away) return true;
     const o = this.partner(x), c = x.ctrl;
     // 配合技摆位：两人快步到位（不出招）
     if (this.combo && !this.combo.fired) {
@@ -211,11 +222,12 @@ export class DualBoss {
       if ((line !== undefined && e.hp <= e.maxHp * line) || (x.retreatAt && now >= x.retreatAt)) { this.h.retire(e); continue; }
     }
     this.h.setPrimary(this.nearest()?.enemy ?? null, undefined);
+    this.plan.tick?.(this, now);
     this.updateCombo(now);
   }
   private updateCombo(now: number): void {
     const [a, b] = this.entries; if (!a || !b) return;
-    const both = !a.done && !b.done && a.enemy.active && b.enemy.active;
+    const both = !a.done && !b.done && a.enemy.active && b.enemy.active && !a.away && !b.away;
     if (this.combo) {
       const cb = this.combo;
       if (!both || now - cb.at > DUAL.combo.timeoutMs) { this.combo = null; this.nextCombo = now + this.every(); return; }
@@ -311,12 +323,12 @@ export class DualBoss {
     s.tweens.add({ targets: st, t: 5.99, duration: 6000 / fps, onUpdate: () => { if (!sp.active) return; sp.setFrame(row * 6 + Math.floor(st.t)).setPosition(e.x, e.y + 4); if (row) sp.setDepth(actorDepth(e.y) + .05); }, onComplete: () => sp.destroy() });
   }
   /** 受伤倍数（控制器自己的预警减伤 / 军势分摊 × 狂怒转场无敌由 invulnerable 管）。 */
-  incoming(e: Enemy, ally: boolean, now: number): number { const x = this.entryOf(e); if (!x || x.done) return 1; x.ctrl.hit(now); return x.ctrl.incoming(ally) * (x.guards.some(g => g.active) ? x.guardMul : 1); }
+  incoming(e: Enemy, ally: boolean, now: number): number { const x = this.entryOf(e); if (!x || x.done) return 1; x.ctrl.hit(now); return x.ctrl.incoming(ally) * (x.guards.some(g => g.active) ? x.guardMul : 1) * (this.plan.incomingMul?.(this, x, ally, now) ?? 1); }
 
   // ———— 镜头 ————
   /** 双首领取景：主将 ×0.7 + 两首领中点 ×0.3；主将始终在画面中间 60%；两人相距超过 0.8 屏宽就不偏（靠屏外箭头）。返回镜头左上角目标。 */
   cameraTarget(px: number, py: number): P | null {
-    const al = this.alive; if (al.length < 2) return null;
+    const al = this.present; if (al.length < 2) return null;
     const [a, b] = al;
     if (Math.hypot(a.enemy.x - b.enemy.x, a.enemy.y - b.enemy.y) > GAME_WIDTH * .8) return null;
     const mx = (a.enemy.x + b.enemy.x) / 2, my = (a.enemy.y + b.enemy.y) / 2;
@@ -371,6 +383,8 @@ export class DualBoss {
   }
   /** 测试：下一次配合技马上可放。 */
   comboNow(now: number): void { this.nextCombo = now; }
+  /** 配合技推迟到不早于 at（内讧之后别马上接配合技）。 */
+  delayCombo(at: number): void { this.nextCombo = Math.max(this.nextCombo, at); }
   clear(): void {
     const s = this.h.scene; s.events.off('postupdate', this.post, this);
     for (const t of this.hudTexts) t.destroy(); this.hudTexts = [];

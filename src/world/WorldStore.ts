@@ -366,7 +366,8 @@ export function settleIntel(id:string,result:{success:boolean;lost?:boolean;vict
 
 /* —— 天下地图挑战关「虎牢关 · 三英战吕布」（data/dongzhuo.ts LUBU_CHALLENGE）—— */
 /** 讨董第二关（荥阳）告捷后开放；旧存档已通关讨董的同样开放。 */
-export function lubuChallengeOpen():boolean{const s=loadWorld();return s.cleared.hulao||s.dongzhuoStages>=LUBU_CHALLENGE.unlockAfter||s.legacyHulaoAccess;}
+/** 挑战关是否开放：按 LUBU_CHALLENGE.unlockAfter（第二章通关）；旧版「虎牢关访问权限」只管进第二章，不再顺带开挑战关。 */
+export function lubuChallengeOpen():boolean{const s=loadWorld();return (LUBU_CHALLENGE.unlockAfter>=3&&s.cleared.hulao)||s.dongzhuoStages>=LUBU_CHALLENGE.unlockAfter;}
 export function lubuClears():number{return loadWorld().lubuClears;}
 export function beginLubuChallenge(deployed:TroopKind[]=[]):string{if(!lubuChallengeOpen())return '';const s=loadWorld(),id=createExpeditionId();refundStaleExpedition(s);loseAlerted(s);s.active={id,chapter:'hulao',arc:'lubu',stage:3,state:'active',farm:s.buildings.farm,deployed:[...deployed]};commit(s);return id;}
 /** 挑战结算：击败吕布发奖（首胜多发并返回 first，由战斗场景发赤兔）；胜利或坚持 60 秒照常过季。 */

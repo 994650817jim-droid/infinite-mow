@@ -46,13 +46,14 @@ const quiet = (p, S) => p.evaluate(S0 => { const s = eval(S0); s.spawnTimer = s.
 }
 // —— 天下地图挑战关：锁定 / 开放 / 首胜赤兔 / 再胜无赤兔 ——
 {
-  const p = await page('mobile', mk({ dongzhuoStages: 1 }));
+  // 2026-11-18 用户「三英战吕布是打完第二章才开的」：2-2 荥阳告捷也不开，整章（2-3）通关才开
+  const p = await page('mobile', mk({ dongzhuoStages: 2 }));
   const lock = await p.evaluate(async () => (await import('/src/world/WorldStore.ts')).lubuChallengeOpen());
-  ck('荥阳未告捷：挑战关未开放', lock === false, lock);
+  ck('第二章未通关（2-2 已过）：挑战关未开放', lock === false, lock);
   await p.close();
 }
 for (const layout of ['mobile', 'desktop']) {
-  const p = await page(layout, mk());
+  const p = await page(layout, mk({ dongzhuoStages: 3, cleared: { huangjin: true, hulao: true } }));
   await p.evaluate(() => { const g = window.__game; for (const s of g.scene.getScenes(true)) s.scene.start('WorldMapScene'); }); await p.waitForFunction(() => window.__game.scene.isActive('WorldMapScene')); await p.waitForTimeout(600);
   const node = await p.evaluate(M0 => { const s = eval(M0), m = s.markers.find(x => x.node.id === 'lubu'); s.selected = { kind: 'node', node: m.node }; s.centerOn(m.node); s.refresh(); return { title: s.detailTitle.text, body: s.detail.text, action: s.action.text.text, state: s.nodeState(m.node) }; }, M);
   ck(`[${layout}] 天下地图「三英战吕布」节点：可挑战、写明首胜得赤兔`, node.state === 'open' && /三英战吕布/.test(node.title) && /赤兔/.test(node.body) && node.action === '挑战吕布', node);

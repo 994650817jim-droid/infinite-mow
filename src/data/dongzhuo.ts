@@ -67,7 +67,8 @@ export function getLuoyangChapter(): ChapterDef {
 
 /** 天下地图挑战关「虎牢关 · 三英战吕布」：原第二章虎牢关的吕布战，压到 3 波。 */
 /** 首胜的赤兔走马厩（mounts.ts HORSES 中 reward 为 'lubu' 的马）。 */
-export const LUBU_CHALLENGE = {unlockAfter: 2, reward: {merits: 80, provisions: 120}, repeatReward: {merits: 30, provisions: 50}} as const;
+/** 天下地图挑战关「虎牢关 · 三英战吕布」：unlockAfter = 第二章讨董通过的关数（3 = 整章通关；2026-11-18 用户「三英战吕布是打完第二章才开的」，原为 2）。 */
+export const LUBU_CHALLENGE = {unlockAfter: 3, unlockHint: '通关第二章「讨伐董卓」后开放', reward: {merits: 80, provisions: 120}, repeatReward: {merits: 30, provisions: 50}} as const;
 export function lubuChallengeChapter(hulao: ChapterDef): ChapterDef {
   return {
     ...hulao, name: '虎牢关 · 三英战吕布', label: '挑战 · 虎牢关', description: '吕布横扫与蓄力冲锋 · 首通得赤兔',

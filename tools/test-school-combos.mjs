@@ -63,7 +63,9 @@ await ev(s => { const b = s.player.growth.build; b.bonus = { fire: 6, stratagem:
 const aw = {};
 // 火烧连天：火浪扫过之后，屏上的普通敌人在烧；截图一张
 await ev(s => { window.crowd(s, 300); window.__hp0 = s.enemies.filter(e => e.active && !e.isSupplySlot).reduce((a, e) => a + e.hp, 0); s.synergy.force('fire'); return true; });
-await p.waitForTimeout(700); await p.screenshot({ path: `${OUT}/awaken-fire.png` }); await p.waitForTimeout(900);
+await p.waitForTimeout(700); await p.screenshot({ path: `${OUT}/awaken-fire.png` }); const liveFire = await ev(s => s.children.list.filter(o => o.name === 'awaken-fire').length); await p.waitForTimeout(900);
+const art = await ev(s => ({ tex: ['fire', 'stratagem', 'archery', 'cavalry', 'warrior', 'formation'].every(k => s.textures.exists('fx_awaken_' + k) && s.textures.exists('build_icon_school_' + k)) && ['fx_gust_band', 'school_banner_combo', 'school_banner_awaken', 'build_icon_napalm', 'build_icon_gust'].every(k => s.textures.exists(k)), banner: s.children.list.filter(o => o.name === 'school-banner').map(o => o.list.find(c => c.name === 'school-banner-title')?.text) }));
+ck('第 3 期美术：六派觉醒序列帧、徽印、风带、横幅、火油罐 / 疾风图标都已加载；火浪用手绘火墙帧；觉醒打横幅', art.tex && liveFire >= 3 && art.banner.some(t => /觉醒 · 火烧连天/.test(t ?? '')), { ...art, liveFire });
 aw.fire = await ev(s => ({ hits: s.synergy.stats.hits.fire ?? 0, burning: s.enemies.filter(e => e.active && !e.isSupplySlot && s.buildCombat.isBurning(e, s.combatNow)).length, boost: s.buildCombat.burnBoost.until > s.combatNow }));
 ck('觉醒「火烧连天」：火浪扫过全屏，打到 3 个以上敌人（活下来的着火），之后灼烧更痛', aw.fire.hits >= 3 && aw.fire.boost, aw.fire);
 aw.strat = await ev(s => { window.crowd(s, 120); s.synergy.force('stratagem'); return true; }).then(() => p.waitForTimeout(1200)).then(() => ev(s => ({ stunned: s.enemies.filter(e => e.active && e.stunUntil > s.combatNow).length, fields: s.synergy.fields.length })));

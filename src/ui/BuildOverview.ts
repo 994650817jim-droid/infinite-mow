@@ -211,14 +211,15 @@ export function drawBuildOverview(o: BuildOverviewOpts): void {
   // ── 右：六大流派的势 + 下一步（2026-11-19 流派重做）──
   {
     frame(R.x, R.y, R.w, R.h);
-    const pad = 10, rowH = D ? 30 : 34, nameW = 34, barW = R.w - pad * 2 - nameW - 46, sw = barW / 6;
+    const pad = 10, rowH = D ? 30 : 34, sealW = 22, nameW = 34, barW = R.w - pad * 2 - sealW - nameW - 46, sw = barW / 6;
     text(R.x + pad, R.y + 7, '流派 · 势', 15, '#f6dc9a', true);
     text(R.x + R.w - pad, R.y + 10, '2 / 4 / 6 势各一档', 11, '#a8956c').setOrigin(1, 0);
     let y = R.y + 32;
     for (const t of TAG_ORDER) {
       const n = tags[t], st = TAG_STYLE[t], d = SCHOOLS[t], tier = tierOf(n), src = b.sources(t), notes = b.bonusNotes[t] ?? [];
-      text(R.x + pad, y - 1, d.name, 12, n ? st.css : '#8e7f62', true);
-      const bx = R.x + pad + nameW;
+      icon(R.x + pad + 9, y + 6, d.icon, 20); // 流派徽印（第 3 期）
+      text(R.x + pad + sealW, y - 1, d.name, 12, n ? st.css : '#8e7f62', true);
+      const bx = R.x + pad + sealW + nameW;
       for (let k = 0; k < 6; k++) g0.fillStyle(k < n ? st.color : 0x3a2c1c, k < n ? 1 : .85).fillRect(bx + k * sw + .5, y + 3, sw - 2, 8);
       for (const m of [2, 4]) g0.lineStyle(1, 0xf3d48a, .8).lineBetween(bx + m * sw - 1, y + 1, bx + m * sw - 1, y + 13);
       text(bx + barW + 4, y - 1, '势 ' + n, 12, tier ? '#f3d48a' : '#d8c8a4').setName(P + '-tag-' + t);

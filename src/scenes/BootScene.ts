@@ -1,5 +1,5 @@
 import { shouldPlayOpening } from '../systems/BattleSettings';
-import { TACTIC_ICON_ALIAS } from '../data/schools';
+import { TACTIC_ICON_ALIAS, SCHOOL_IDS } from '../data/schools';
 import { LOW_RES } from '../systems/LowResTextures';
 let openingTried = false;
 import { BOOT_TO_KEY } from '../systems/BattleSnapshot';
@@ -46,6 +46,7 @@ export class BootScene extends Phaser.Scene {
     // 旧像素图标仍保留在 growth-icons / build 目录，未被删除。
     if(!lean)for(const id of GROWTH_ICON_IDS)this.load.image('growth_icon_'+id,'assets/upgrade-icons/'+id+'.webp');
     if(!lean)for(const id of [...Object.keys(TACTICS),...Object.keys(TREASURES)])this.load.image('build_icon_'+id,'assets/upgrade-icons/'+(TACTIC_ICON_ALIAS[id]??id)+'.webp'); // 流派重做新战法第 1 期借现有图标（火油罐 → 燎原灯、疾风 → 镇军盘），第 3 期出新图
+    if(!lean){for(const sc of SCHOOL_IDS)this.load.image('build_icon_school_'+sc,'assets/schools/seal_'+sc+'.png');this.load.image('school_banner_combo','assets/schools/banner_combo.png');this.load.image('school_banner_awaken','assets/schools/banner_awaken.png');} // 流派重做第 3 期：六派徽印、合击 / 觉醒横幅
     // 水墨按钮底板（ChatGPT 生成，tools/prepare-button-art.mjs 切图）；homeCommand 有图即用，缺图退回程序画底板
     // 成就图标（解锁提示与成就面板用，约 200 KB）
     for(const id of ['first_win','zhangjiao','lubu','qunxiong','guandu','kills_1000','kills_10000','level_20','all_heroes','chaser','first_siege','cities_5','luoyang','defense','focus','town_build','town_all','town_lv3','money_500','caravan','events_10','year_190','potions_10','reserve_20'])this.load.image('ach_'+id,'assets/achievements/'+id+'.webp');

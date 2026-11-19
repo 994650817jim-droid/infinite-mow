@@ -19,7 +19,7 @@ export function tallyRoster(list: Iterable<{ active: boolean; isSupplySlot?: boo
   return c;
 }
 
-export const isFodder = (role: RosterRole): boolean => role === 'fodder' || role === 'pack';
+export const isFodder = (role: RosterRole): boolean => role === 'fodder' || role === 'pack' || role === 'swim'; // 水卒也是普通兵（只是会游水）
 
 /** 新兵种上限：在场敌军 × maxTraitShare（至少 1）。 */
 export function specialRoom(c: MixCounts): number { return Math.max(1, Math.floor((c.total + 1) * ROSTER_MIX.maxTraitShare)) - c.special; }

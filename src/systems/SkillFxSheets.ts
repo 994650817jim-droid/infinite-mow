@@ -20,6 +20,8 @@ export const SKILL_FX: Readonly<Record<string, { file: string; cell: number; fra
   fx_death_dust: { file: 'assets/fx/death_dust.png', cell: 256, frames: 6 },
   // 敌军死亡特效的兵器 / 头巾小图（即梦 Seedream 5.5，tools/prepare-death-props.mjs 处理；3 列 × 2 行，帧 0–5：刀 枪 弓 / 藤牌 重盾 头巾）。手机不用；缺图时兵器 / 头巾自动不显示
   fx_death_props: { file: 'assets/fx/death_props.png', cell: 256, frames: 6 },
+  // 祝融夫人飞刀（ChatGPT 手绘序列帧，tools/prepare-black-fx.mjs 去黑底）：4×4，帧 0–7 旋转飞刀 + 火焰拖尾、帧 8–13 命中火花；KnifeFx 按帧号直接取，frames 只对 playSheet 有意义（这里不用）
+  fx_zhurong_knife: { file: 'assets/zhurong-fx/knife_fx.png', cell: 256, frames: 8 },
 };
 
 export function loadSkillFx(load: Phaser.Loader.LoaderPlugin): void {

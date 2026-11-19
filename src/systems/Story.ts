@@ -224,7 +224,7 @@ export class StoryDirector {
       const s = speaker(l.who, this.h.ctx);
       if (!l.who) { storyBark(this.h.scene, target, s.name ?? '', l.text); return; }
       const id = l.who === '{lord}' ? this.h.ctx.lord : l.who, ally = l.who === '{lord}' || !!heroName(id);
-      showBarkCard(this.h.scene, { side: ally ? 'left' : 'right', name: s.name ?? id, text: l.text, portrait: s.portrait });
+      showBarkCard(this.h.scene, { side: ally ? 'left' : 'right', name: s.name ?? id, text: l.text, portrait: s.portrait, id });
       storyBark(this.h.scene, target, '', '！');
     };
     lines.forEach((l, i) => { if (i === 0) say(l); else this.h.scene.time.delayedCall(i * 1400, () => say(l)); }); // 第一句立即说（不受计时器暂停影响）

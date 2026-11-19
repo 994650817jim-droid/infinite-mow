@@ -247,6 +247,9 @@ export class DianweiGuard {
     // 技能优先（起手 / 出手期间站定）
     const casting = this.updateWhirl(now, enemies) || this.updateThrow(now, enemies);
     const target = this.move(dt, enemies, casting || now < this.attackUntil);
+    // 主将不被推：典韦自己让开（走位时会走到主将身上；11-20 test-wancheng「没人站在典韦身上」onDw = 1），仍不出守区
+    { const pdx = this.x - p.x, pdy = this.y - p.y, pd = Math.hypot(pdx, pdy), min = D.body + 14;
+      if (pd < min) { const a = pd > .5 ? Math.atan2(pdy, pdx) : Math.atan2(this.home.y - p.y, this.home.x - p.x); let nx = p.x + Math.cos(a) * min, ny = p.y + Math.sin(a) * min; const hx = nx - this.home.x, hy = ny - this.home.y, hd = Math.hypot(hx, hy); if (hd > D.zone) { nx = this.home.x + hx / hd * D.zone; ny = this.home.y + hy / hd * D.zone; } this.x = nx; this.y = ny; this.stats.pushed++; } }
     for (const e of enemies) if (e.active && !e.isSupplySlot && e.kind !== 'boss') this.pushOut(e, e.radius * .7, (x, y) => e.sprite.setPosition(x, y));
     for (const a of this.h.allies?.() ?? []) if (a.active) this.pushOut(a, 12, (x, y) => a.setPosition(x, y));
     // 贴身敌兵砍典韦

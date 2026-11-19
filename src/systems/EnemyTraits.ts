@@ -372,12 +372,18 @@ export class EnemyTraits {
   private fireship(e: Enemy, s: St, t: Extract<TraitDef, { kind: 'fireship' }>, dt: number, now: number, dist: number, nx: number, ny: number): boolean {
     const w = this.h.inWater?.(e.x, e.y) ? 1.3 / WATER_MUL : 1; this.h.move(e, nx * w, ny * w, dt);
     // 碰到主将（两者身体互相挤开，按两边半径 + 40 算碰到）就爆燃
-    if (dist < this.h.player.radius + e.radius + 40) { this.shipBoom(e, s, t, now); e.hp = 0; e.deactivate(); }
+    if (s.phase === 'warn') { e.moveVx = e.moveVy = 0; return true; } // 爆燃动画播着
+    if (dist < this.h.player.radius + e.radius + 40) {
+      // 有专属图：攻击表就是爆燃（第 2 帧大火球）——撞上先播，火球那一帧才炸；没图直接炸
+      if (e.def.attackVisual) { s.phase = 'warn'; e.startAttack(now, dirOf(nx, ny)); const life = e.spawnId; this.h.scene.time.delayedCall(ARROW_MS, () => { if (e.active && e.spawnId === life) { this.shipBoom(e, s, t, this.now()); e.hp = 0; this.h.scene.time.delayedCall(250, () => { if (e.active && e.spawnId === life) e.deactivate(); }); } }); }
+      else { this.shipBoom(e, s, t, now); e.hp = 0; e.deactivate(); }
+    }
     return true;
   }
   private shipBoom(e: Enemy, s: St, t: Extract<TraitDef, { kind: 'fireship' }>, now: number): void {
     if (s.boom) return; s.boom = true; this.metrics.shipBooms += 1;
-    playSheet(this.h.scene, 'fx_explosion', e.x, e.y - 20, { size: t.radius * 2.2, depth: DEPTH.fx, ms: 520 }); this.h.sfx('hitHeavy'); this.h.scene.cameras.main.shake(160, .005);
+    if (!e.def.attackVisual) playSheet(this.h.scene, 'fx_explosion', e.x, e.y - 20, { size: t.radius * 2.2, depth: DEPTH.fx, ms: 520 }); // 有专属图时爆燃画在攻击表里，不再叠
+    this.h.sfx('hitHeavy'); this.h.scene.cameras.main.shake(160, .005);
     this.hitPlayer(e.x, e.y, t.radius, t.damage, now); this.h.hurtTroops(e.x, e.y, t.radius, t.allyDamage);
     for (let i = 0; i < 3; i++) { const a = i * 2.1; this.addFire(e.x + Math.cos(a) * 50, e.y + Math.sin(a) * 30, t.fireRadius, now, t.fireMs, t.fireDamage); }
     for (const im of s.imgs ?? []) (im as unknown as Phaser.GameObjects.GameObject).destroy(); s.imgs = [];

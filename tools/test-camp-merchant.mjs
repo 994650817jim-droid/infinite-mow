@@ -1,0 +1,80 @@
+// 营寨旅商（用户 2026-11-18：「营寨增加个旅商就是军需商人」）：营寨里有「旅商」货摊，点开是军需商人面板；
+// 用营寨军粮买、买下进行囊；每打完一仗换一批货，同一仗之间反复进出营寨不换（刷不出货）。电脑布局 960×540，截图到 assets/review/camp-full/merchant-*.png。
+// 用法：BASE=http://127.0.0.1:5173/ node tools/test-camp-merchant.mjs
+import { chromium } from 'playwright';
+import { mkdirSync } from 'node:fs';
+const base = process.env.BASE ?? 'http://127.0.0.1:5173/', out = 'assets/review/camp-full';
+mkdirSync(out, { recursive: true });
+const b = await chromium.launch({ channel: 'chrome', headless: true, args: ['--mute-audio'] });
+const p = await b.newPage({ viewport: { width: 960, height: 540 } }); const errors = [];
+p.on('pageerror', e => errors.push(e.message));
+let pass = 0, fail = 0; const ok = (c, m) => { (c ? pass++ : fail++); console.log((c ? 'PASS ' : 'FAIL ') + m); };
+await p.addInitScript(() => { if (sessionStorage.getItem('seeded')) return; localStorage.clear(); localStorage.setItem('im_last_hero', 'zhaoyun'); localStorage.setItem('im_city_intro_v3', '1'); localStorage.setItem('im_mount_guide_v1', '1'); sessionStorage.setItem('seeded', '1'); });
+await p.goto(base + '?layout=desktop', { timeout: 180000 });
+await p.waitForFunction(() => window.__game?.scene.isActive('MenuScene'), null, { timeout: 120000 });
+const world = patch => p.evaluate(async patch => { const w = await import('/src/world/WorldStore.ts'); const s = w.loadWorld(); Object.assign(s, patch.set ?? {}); if (patch.huangjin) s.cleared.huangjin = true; if (patch.hulao) s.cleared.hulao = true; if (patch.receipt) s.receipts.push({ id: patch.receipt, merits: 0, provisions: 0 }); localStorage.setItem('im_world_v1', JSON.stringify(s)); localStorage.removeItem('im_world_backup_v1'); }, patch);
+const enterCamp = async () => {
+  await p.evaluate(() => window.__game.scene.getScenes(true).forEach(sc => sc.scene.start('CityScene')));
+  await p.waitForFunction(() => window.__game.scene.isActive('CityScene') && window.__game.scene.getScene('CityScene').hits?.length, null, { timeout: 60000 }); await p.waitForTimeout(1500);
+  await p.evaluate(() => { const c = window.__game.scene.getScene('CityScene'); for (const o of [...c.children.list]) if ((o.depth ?? 0) >= 600 && o.type === 'Container') o.destroy(); c.mountGuide?.stop?.(); });
+};
+const stock = () => p.evaluate(() => JSON.parse(localStorage.getItem('im_camp_merchant_v1') ?? 'null'));
+const food = () => p.evaluate(async () => (await import('/src/world/WorldStore.ts')).loadWorld().provisions);
+const bagUids = () => p.evaluate(async () => (await import('/src/systems/ItemStore.ts')).loadItems().bag.map(i => i.uid));
+const openStall = () => p.evaluate(() => { const c = window.__game.scene.getScene('CityScene'), h = c.hits.find(x => x.name === 'bld-merchant'); h.emit('pointerdown'); h.emit('pointerup'); });
+const panel = () => p.evaluate(() => { const c = window.__game.scene.getScene('CityScene'), m = c.children.getByName('camp-merchant'); if (!m) return null; const all = []; const walk = l => { for (const o of l) { all.push(o); if (o.list) walk(o.list); } }; walk(m.list);
+  return { names: all.filter(o => /camp-merchant-name-/.test(o.name)).map(o => o.text), buy: all.filter(o => /camp-merchant-buy-/.test(o.name)).map(o => o.input?.enabled ?? false), art: !!all.find(o => o.name === 'camp-merchant-art'), notice: all.find(o => o.name === 'camp-merchant-notice')?.text }; });
+const buy = i => p.evaluate(i => { const c = window.__game.scene.getScene('CityScene'), m = c.children.getByName('camp-merchant'); const all = []; const walk = l => { for (const o of l) { all.push(o); if (o.list) walk(o.list); } }; walk(m.list); all.find(o => o.name === 'camp-merchant-buy-' + i).emit('pointerdown'); }, i);
+
+// 1) 营寨档（第一章通关、未占城），军粮 800，还没打过仗
+await world({ set: { yellowStages: 3, worldAvailable: true, provisions: 800, tutorialSeen: true, receipts: [] }, huangjin: true });
+await enterCamp();
+const stall = await p.evaluate(() => { const c = window.__game.scene.getScene('CityScene'), h = c.hits.find(x => x.name === 'bld-merchant'), tag = c.pano.getByName('merchant-stall')?.getByName('tag-merchant'), badge = c.pano.getByName('merchant-stall')?.getByName('merchant-badge');
+  const hb = h?.getBounds(), cl = c.campLife, props = cl ? cl.root.list.filter(o => o.type === 'Image' && o.texture?.key === 'camp_props_v2') : [];
+  const overlap = hb ? props.filter(o => { const r = o.getBounds(), dx = Math.min(r.right, hb.right) - Math.max(r.x, hb.x), dy = Math.min(r.bottom, hb.bottom) - Math.max(r.y, hb.y); return dx > 20 && dy > 20; }).length : -1;
+  return { hit: !!h, tag: tag?.text, badge: !!badge, overlap, x: h?.x, y: h?.y }; });
+ok(stall.hit && stall.tag === '旅商', '营寨有「旅商」货摊（点击区 bld-merchant + 名牌）' + JSON.stringify(stall));
+ok(stall.badge, '货摊上挂军需商人头像牌（立绘裁脸）');
+ok(stall.overlap === 0, '营寨装饰不压货摊（重叠件数 ' + stall.overlap + '）');
+await p.evaluate(({ x, y }) => { const c = window.__game.scene.getScene('CityScene'); c.scrollTo(x - c.vr.w / 2, y - c.vr.h * .55, false); }, stall); await p.waitForTimeout(400);
+await p.screenshot({ path: `${out}/merchant-stall.png` });
+await openStall(); await p.waitForFunction(() => window.__game.scene.getScene('CityScene').children.getByName('camp-merchant'), null, { timeout: 15000 }); await p.waitForTimeout(500);
+let pn = await panel(), st = await stock();
+ok(pn && pn.names.length === 4 && pn.art, '点货摊打开军需商人面板：4 件兵装 + 立绘 ' + JSON.stringify(pn?.names));
+ok(st && st.stamp === 'none' && st.offers.length === 4 && st.tier === 0, '库存存档：凭据 none、第一章品质档 0');
+await p.screenshot({ path: `${out}/merchant-panel.png` });
+// 2) 买第 1 件：扣营寨军粮、进行囊、按钮变「已售罄」
+const f0 = await food(), price = { green: 60, blue: 120, purple: 260 }[st.offers[0].quality];
+await buy(0); await p.waitForTimeout(300);
+const f1 = await food(), bag1 = await bagUids(); st = await stock(); pn = await panel();
+ok(f1 === f0 - price, `扣营寨军粮 ${f0} → ${f1}（价 ${price}）`);
+ok(bag1.includes(st.offers[0].uid), '买下的兵装进了行囊');
+ok(st.sold[0] && !pn.buy[0], '第 1 件标为售罄、按钮不可点');
+await buy(0); await p.waitForTimeout(200); ok(await food() === f1 && (await bagUids()).length === bag1.length, '再点售罄的不扣粮、不重复进包');
+await p.screenshot({ path: `${out}/merchant-bought.png` });
+// 3) 同一仗之间反复进出营寨：同一批货、卖掉的不补
+const uids = st.offers.map(o => o.uid);
+await p.evaluate(() => window.__game.scene.getScene('CityScene').children.getByName('camp-merchant')?.getByName?.('camp-merchant-close'));
+await enterCamp(); await openStall(); await p.waitForTimeout(600);
+let st2 = await stock(); pn = await panel();
+ok(JSON.stringify(st2.offers.map(o => o.uid)) === JSON.stringify(uids) && st2.sold[0], '重进营寨：同一批货，售出的仍售罄');
+await p.reload(); await p.waitForFunction(() => window.__game?.scene.isActive('MenuScene') || window.__game?.scene.isActive('CityScene'), null, { timeout: 120000 });
+await enterCamp(); await openStall(); await p.waitForTimeout(600); st2 = await stock();
+ok(JSON.stringify(st2.offers.map(o => o.uid)) === JSON.stringify(uids) && st2.sold[0], '刷新页面再进：仍是同一批货');
+// 4) 军粮不够：按钮禁用、点了不扣
+await world({ set: { provisions: 30 } }); await enterCamp(); await openStall(); await p.waitForTimeout(600); pn = await panel();
+ok(pn.buy.every(x => !x), '军粮 30：所有购入按钮禁用');
+await buy(1); await p.waitForTimeout(200); ok(await food() === 30 && !(await stock()).sold[1], '军粮不足时点击不扣粮、不售出');
+await p.screenshot({ path: `${out}/merchant-poor.png` });
+// 5) 打完一仗（世界存档多一条 receipt）：换一批货，全部可买；打过虎牢关品质档升 1
+await world({ set: { provisions: 800 }, receipt: 'exp-test-1', hulao: true }); await enterCamp(); await openStall(); await p.waitForTimeout(600);
+const st3 = await stock(); pn = await panel();
+ok(st3.stamp === 'exp-test-1' && st3.offers.every(o => !uids.includes(o.uid)) && st3.sold.every(x => !x), '打完一仗：换了新货、都没卖');
+ok(st3.tier === 1, '虎牢关通关后品质档 1（与行营第二章同档）');
+// 6) 关闭面板后能继续拖动全景（弹窗层级不残留）
+await p.evaluate(() => { const c = window.__game.scene.getScene('CityScene'), m = c.children.getByName('camp-merchant'); const all = []; const walk = l => { for (const o of l) { all.push(o); if (o.list) walk(o.list); } }; walk(m.list); all.find(o => o.name === 'camp-merchant-close').emit('pointerdown'); });
+await p.waitForTimeout(200);
+ok(await p.evaluate(() => !window.__game.scene.getScene('CityScene').children.getByName('camp-merchant') && !window.__game.scene.getScene('CityScene').anyModal()), '「返回」关闭面板，营寨恢复可平移');
+ok(errors.length === 0, '无页面报错 ' + JSON.stringify(errors.slice(0, 3)));
+console.log(`\n${pass}/${pass + fail} passed`);
+await b.close(); process.exit(fail ? 1 : 0);

@@ -15,6 +15,8 @@ import {W,H,worldShell,worldAssets} from '../world/WorldUI';
 import {FONT,HEADING_FONT} from '../config';
 import {homeCommand,warPanelTexture} from '../ui/HomeCommand';
 import {openStable} from '../ui/ItemBagUI';
+import {openCampMerchant} from '../ui/CampMerchantUI';
+import {CAMP_MERCHANT_SPOT} from '../town/CityLayout';
 import {openHeroCodex} from '../ui/HeroCodexUI';
 import {GROWTH_ICON_IDS} from '../ui/GrowthIcons';
 import {stableUnlocked} from '../systems/ItemStore';
@@ -68,6 +70,7 @@ export class CityScene extends Phaser.Scene {
   worldAssets(this,'town_ground','assets/town/ground.webp');
   for(const n of CITY_BG_SIZES)worldAssets(this,`city_bg_${n}`,`assets/city/bg_${n}.webp`);
   loadCampLife(this);
+  worldAssets(this,'camp_merchant_art','assets/camp/merchant.webp'); // 旅商摊位上的头像牌、旅商面板立绘（与行营军需商人同一张）
   for(const id of CAMP_ART_IDS)worldAssets(this,`city_camp_${id}`,`assets/city/camp_${id}.webp`);
   const ids=Object.keys(TOWN_BUILDINGS) as TownBuildingId[];
   for(const lv of CITY_ART_LEVELS)for(const id of ids)if(lv<=(TOWN_BUILDINGS[id].maxLevel??3)){const a=ART_ALIAS[id]??id;worldAssets(this,`city_${a}_${lv}`,`assets/city/${a}_${lv}.webp`);}}
@@ -202,11 +205,46 @@ export class CityScene extends Phaser.Scene {
    this.pano.add(hit);this.hits.push(hit);
   }
   this.popId=null;
+  if(size===1)this.drawMerchant(k);
   // 营寨档：营帐、兵士填空地（画在建筑之下；按建筑点击区与贴图外框避让）
   if(size===1&&new URLSearchParams(location.search).get('camplife')!=='0'){const ox=this.pano.x,oy=this.pano.y,blocked=[...this.hits.map(h=>h.getBounds()),...this.pano.list.filter((o):o is Phaser.GameObjects.Image=>o instanceof Phaser.GameObjects.Image&&o.texture.key.startsWith('city_')&&!o.texture.key.startsWith('city_bg')).map(o=>o.getBounds())].map(b=>({l:(b.x-ox)/k,r:(b.right-ox)/k,t:(b.y-oy)/k,b:(b.bottom-oy)/k}));
    this.campLife=new CampLife(this,k,blocked);this.pano.remove(this.campLife.root);this.pano.addAt(this.campLife.root,this.textures.exists(bg)?1:0);}
   this.scrollTo(this.sx,this.sy,false);
  }
+ /**
+  * 旅商（2026-11-18 用户「营寨增加个旅商就是军需商人」）：北路口辎重场旁一座遮棚货摊（营地道具图：遮棚、货车、木箱、钱粮袋、坛罐），
+  * 棚顶挂军需商人头像牌，下有「旅商」名牌；点开营中的军需商人面板（ui/CampMerchantUI，每打完一仗换货，用营寨军粮买，进行囊）。
+  * 点击区记进 hits，营寨装饰（CampLife）按它避让。没有站立的商人小人图：头像牌用行营军需商人立绘的脸。
+  */
+ private drawMerchant(k:number){
+  const sp=CAMP_MERCHANT_SPOT,x=sp.x*k,y=sp.y*k,P='camp_props_v2',c=this.add.container(0,0).setName('merchant-stall');this.pano.add(c);
+  const prop=(fr:number,dx:number,dy:number,w:number,flip=false)=>{if(!this.textures.exists(P))return null;const im=this.add.image(x+dx*k,y+dy*k,P,fr).setOrigin(.5,1).setFlipX(flip);im.setScale(w*k/128);c.add(im);return im;};
+  prop(24,-112,2,88,true);          // 货车（摊位点击区挡掉了辎重场原来那辆，这里补一辆）
+  const stall=prop(2,0,0,sp.w);      // 遮棚
+  prop(15,-78,6,46);prop(17,-40,10,46);prop(18,40,12,42);prop(16,78,8,40,true); // 木箱、钱粮袋、坛罐、粮袋
+  const roofY=y-sp.w*.62*k,badge=this.merchantBadge();
+  const glow=this.add.ellipse(x,y-6*k,sp.w*1.1*k,sp.w*.32*k,0xffe39a,0);c.addAt(glow,0);
+  let face:Phaser.GameObjects.Image|null=null;
+  if(badge){face=this.add.image(x,roofY-22*k,badge).setDisplaySize(44*k,44*k).setName('merchant-badge');c.add(face);this.tweens.add({targets:face,y:face.y-3*k,yoyo:true,repeat:-1,duration:900,ease:'Sine.easeInOut'});}
+  const tag=txt(this,x,y+2,'旅商',D?12:13,'#fff1cf').setOrigin(.5,1).setBackgroundColor('#5a1f14dd').setPadding(8,2,8,2).setName('tag-merchant');c.add(tag);
+  const w=sp.w*k*1.35,h=Math.max(sp.w*.9*k,60),hit=this.add.rectangle(x-12*k,y-h/2,w,h,0xffffff,.001).setName('bld-merchant').setInteractive({useHandCursor:true});
+  hit.on('pointerdown',()=>{this.pressedSlot='merchant';});
+  hit.on('pointerup',()=>{const own=this.pressedSlot==='merchant';this.pressedSlot=null;if(!own||this.drag?.moved)return;this.openMerchant();});
+  const base=stall?{x:stall.scaleX,y:stall.scaleY}:null;
+  hit.on('pointerover',()=>{tag.setColor('#ffe08a').setScale(1.18);glow.setFillStyle(0xffe39a,.45);if(stall&&base)stall.setScale(base.x*1.04,base.y*1.04);})
+   .on('pointerout',()=>{tag.setColor('#fff1cf').setScale(1);glow.setFillStyle(0xffe39a,0);if(stall&&base)stall.setScale(base.x,base.y);});
+  this.pano.add(hit);this.hits.push(hit);
+ }
+ /** 头像牌：从军需商人立绘裁脸，圆形、描金边（画一次存成贴图）。 */
+ private merchantBadge():string|null{
+  const key='camp_merchant_badge',src='camp_merchant_art';if(this.textures.exists(key))return key;if(!this.textures.exists(src))return null;
+  const img=this.textures.get(src).getSourceImage() as HTMLImageElement,S=96,ct=this.textures.createCanvas(key,S,S);if(!ct)return null;const g=ct.getContext();
+  g.save();g.beginPath();g.arc(S/2,S/2,S/2-4,0,Math.PI*2);g.closePath();g.fillStyle='#efe4cc';g.fill();g.clip();
+  const fx=img.width*.47,fy=img.height*.26,r=img.width*.2;g.drawImage(img,fx-r,fy-r,r*2,r*2,4,4,S-8,S-8);g.restore();
+  g.lineWidth=4;g.strokeStyle='#c9a35e';g.beginPath();g.arc(S/2,S/2,S/2-3,0,Math.PI*2);g.stroke();g.lineWidth=1.5;g.strokeStyle='#3a2616';g.beginPath();g.arc(S/2,S/2,S/2-6,0,Math.PI*2);g.stroke();
+  ct.refresh();return key;
+ }
+ private openMerchant(){uiSfx().play('uiClick');openCampMerchant(this,600,()=>this.refresh());}
  private panKeys?:Record<string,Phaser.Input.Keyboard.Key>;
  update(_t:number,dt:number){this.campLife?.update(dt);this.panStep(dt);}
  /** 电脑：方向键 / WASD、鼠标贴边平移（拖动和滚轮在 create 里）；有弹窗、正在拖动时不动。 */

@@ -51,3 +51,5 @@ export const LEVEL_SCALE = [0, .86, .96, 1.06];
 /** 已导入的主城全景美术（城池规模 → 是否有底图；建筑等级列表）。 */
 export const CITY_BG_SIZES: number[] = [1, 2, 3];
 export const CITY_ART_LEVELS: number[] = [1, 2, 3];
+/** 营寨旅商的货摊（全景像素，底边中点；w 为遮棚宽）：北路口辎重场东侧，城门进来就看得见；点击区右缘须在火塘（x≈1218 起）之西，否则火塘被避让掉。只在营寨档（规模 1）摆。 */
+export const CAMP_MERCHANT_SPOT = { x: 1105, y: 455, w: 150 } as const;

@@ -5,7 +5,9 @@
  */
 export type StageObjective =
   | {kind: 'kills'; count: number; label: string; limit: number}
-  | {kind: 'destroy'; count: number; target: string; label: string; limit: number}
+  | {kind: 'destroy'; count: number; target: string; label: string; limit: number;
+     /** 固定位置（相对开局点；没有就绕主将随机撒一圈）。 */ spots?: ReadonlyArray<readonly [number, number]>;
+     /** 完成时的横幅（默认「目标达成 · 首领出阵！」）。 */ doneBanner?: readonly [string, string]}
   | {kind: 'hold'; seconds: number; label: string; limit: number};
 
 /** 坚守军旗：旗有耐久，旗旁 70px 内每个敌兵持续扣耐久；守满秒数即完成。 */

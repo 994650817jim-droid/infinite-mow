@@ -12,13 +12,16 @@ import { FACTIONS } from '../world/WorldCities';
 import { QUALITIES } from '../data/items';
 import { CHARACTERS, getCharacter } from '../data/characters';
 import { RECRUIT, TEMPLATES, TEMPLATE_ORDER, type FollowerTemplate } from '../data/recruits';
-import { LORD_LEVEL_HINT, captiveSeasonsLeft, followerLevel, hallOdds, followerLevelCap, hallInTown, hallLevel, dismiss, followerCap, loadRoster, manualRefresh, rankBonus, rankCap, recruit, refreshCost, toggleFollower, upgradeHall, type Offer, type Recruit } from '../systems/RosterStore';
+import { captiveSeasonsLeft, followerLevel, hallOdds, followerLevelCap, hallInTown, hallLevel, dismiss, followerCap, loadRoster, manualRefresh, rankBonus, rankCap, recruit, refreshCost, rosterFollowers, toggleFollower, upgradeHall, type Offer, type Recruit } from '../systems/RosterStore';
 import { attrBadge } from '../ui/AttrBadge';
 import { homeCommand } from '../ui/HomeCommand';
-import { lqPanel } from '../ui/LacquerKit';
+import { lqHitBox, lqPanel, lqSkin } from '../ui/LacquerKit';
+import { HEADING_FONT } from '../config';
 
 /** 普通招募武将（内部 kind = 'common'）对玩家显示的称呼（用户 2026-11-17：不叫「大众脸」，改三国风；候选 无名之辈 / 偏裨之将 / 庸碌之将，待用户定）。 */
 export const COMMON_LABEL = '无名之辈';
+/** 电脑版左右边距（2026-11-18 用户截图：标题、军粮、行框、页签贴着左边）：行框从 MX 起，文字再往里。 */
+const MX = 32;
 type Tab = 'offers' | 'roster';
 export class TalentHallScene extends Phaser.Scene {
   private tab: Tab = 'offers'; private page = 0; private message = ''; private content?: Phaser.GameObjects.Container; private status!: Phaser.GameObjects.Text;
@@ -39,13 +42,19 @@ export class TalentHallScene extends Phaser.Scene {
     const D = W > 600;
     if (D) { this.cameras.main.setBackgroundColor('#0e0a07'); const fr = this.add.graphics(); lqPanel(fr, 8, 8, W - 16, H - 16, { shadow: false }); }
     worldShell(this, '招贤馆');
-    this.status = worldText(this, 24, 64, '', 13, D ? '#e8d8b2' : '#cfdcc6').setWordWrapWidth(W - 48);
+    this.status = worldText(this, D ? MX + 4 : 24, 64, '', 13, D ? '#e8d8b2' : '#cfdcc6').setWordWrapWidth(W - 48);
     if (D) { const back = homeCommand(this, W / 2, H - 34, 220, 42, '返回营寨'); back.hit.setName('talent-home').on('pointerdown', () => this.scene.start('CityScene')); }
     else worldButton(this, W / 2, H - (W > 600 ? 34 : 62), '返回营寨', () => this.scene.start('CityScene'), 220).image.setName('talent-home');
     this.render();
   }
   private small(x: number, y: number, w: number, label: string, fn: () => void, name: string, enabled = true, gold = false) {
-    if (W > 600) { const c = homeCommand(this, x, y, w, 30, label, gold, enabled, 14); c.hit.setName(name); if (enabled) c.hit.on('pointerup', () => fn()); this.content!.add([c.g, c.caption, c.hit]); return c.hit; }
+    // 2026-11-18 每个界面最多 1 处水墨笔刷：页签 / 升级 / 招募 / 刷新 / 随行 / 留守 / 遣散都用漆底描金（gold = 选中的页签或要紧的操作）
+    if (W > 600) {
+      const t = worldText(this, x, y, label, 14, '#ffe9bd').setOrigin(.5).setFontFamily(HEADING_FONT).setName(name);
+      if (enabled) { t.setInteractive({ useHandCursor: true }); lqHitBox(t, w, 30); t.on('pointerup', () => fn()); }
+      const sk = lqSkin(this, t, t, () => ({ w, h: 30 }), { tone: gold ? 'gold' : 'quiet', enabled: () => enabled });
+      this.content!.add([sk.gfx, t]); return t;
+    }
     const h = W > 600 ? 30 : 38;
     const bg = this.add.rectangle(x, y, w, h, gold ? 0x6a4526 : 0x2a221a, enabled ? .96 : .5).setStrokeStyle(1, gold ? 0xd7b778 : 0x7a6a50).setName(name);
     const t = worldText(this, x, y, label, W > 600 ? 13 : 14, enabled ? '#f2dfb2' : '#8a7e68').setOrigin(.5);
@@ -66,9 +75,10 @@ export class TalentHallScene extends Phaser.Scene {
     this.status.setText(`军粮 ${w.provisions}\n${hall > 0 ? `招贤馆 ${hall} 级 · 席位 ${RECRUIT.seats[hall - 1]}` : '营寨尚未建造招贤馆 · 暂不能招募'} · 随行 ${s.followers.length}/${cap} · 将阶上限 ${rankCap(s)}`);
     // 页签
     const tabY = D ? 112 : 124;
-    this.small(D ? 90 : 90, tabY, 140, `人才（${s.offers.length + s.captives.length}）`, () => { this.tab = 'offers'; this.page = 0; this.render(); }, 'talent-tab-offers', true, this.tab === 'offers');
-    this.small(D ? 240 : 240, tabY, 140, `麾下（${s.owned.length}）`, () => { this.tab = 'roster'; this.page = 0; this.render(); }, 'talent-tab-roster', true, this.tab === 'roster');
-    if (hall < 3) { const c = RECRUIT.hallUpgrade[Math.max(1, hall) - 1]; this.small(W - (D ? 130 : 110), tabY, D ? 220 : 180, `升级招贤馆（${c.provisions} 军粮）`, () => { this.message = upgradeHall().message; this.render(); }, 'talent-hall-up'); }
+    this.small(D ? MX + 70 : 90, tabY, 140, `人才（${s.offers.length + s.captives.length}）`, () => { this.tab = 'offers'; this.page = 0; this.render(); }, 'talent-tab-offers', true, this.tab === 'offers');
+    const men = rosterFollowers(s); // 2026-11-18 用户「主公不应该在这里」：麾下不含主公
+    this.small(D ? MX + 70 + 150 : 240, tabY, 140, `麾下（${men.length}）`, () => { this.tab = 'roster'; this.page = 0; this.render(); }, 'talent-tab-roster', true, this.tab === 'roster');
+    if (hall < 3) { const c = RECRUIT.hallUpgrade[Math.max(1, hall) - 1]; this.small(W - (D ? MX + 110 : 110), tabY, D ? 220 : 180, `升级招贤馆（${c.provisions} 军粮）`, () => { this.message = upgradeHall().message; this.render(); }, 'talent-hall-up'); }
     const top = tabY + (D ? 26 : 34), bottom = H - (D ? 64 : 104) - 30, rowH = D ? 74 : this.tab === 'roster' ? 118 : 104;
     const per = Math.max(1, Math.floor((bottom - top) / rowH));
     const rows: Array<() => void> = [];
@@ -79,11 +89,11 @@ export class TalentHallScene extends Phaser.Scene {
       for (const it of list) rows.push(() => this.offerRow(it.o, it.i, it.captive, at(), rowH - 8));
       // 名将出现率（用户 2026-11-17：Lv1 基本不出名将，升级招贤馆后提高）
       const cost = refreshCost(s), odds = hallOdds(s), pct = (v: number) => `${+(v * 100).toFixed(1)}%`;
-      this.content.add(worldText(this, 24, bottom + 6, `名将出现率：每席 ${pct(odds.seat)}（可玩名将 ${pct(odds.hero)}）` + (odds.pity ? ` · 再刷 ${odds.pityLeft} 次内必出未归附名将` : ' · 升级招贤馆后提高'), 12, '#b9ceb8').setName('talent-odds'));
-      this.small(W - (D ? 110 : 100), bottom + 14, D ? 190 : 170, `刷新（${cost} 军粮）`, () => { this.message = manualRefresh().message; this.page = 0; this.render(); }, 'talent-refresh', w.provisions >= cost, true);
+      this.content.add(worldText(this, D ? MX + 4 : 24, bottom + 6, `名将出现率：每席 ${pct(odds.seat)}（可玩名将 ${pct(odds.hero)}）` + (odds.pity ? ` · 再刷 ${odds.pityLeft} 次内必出未归附名将` : ' · 升级招贤馆后提高'), 12, '#b9ceb8').setName('talent-odds'));
+      this.small(W - (D ? MX + 95 : 100), bottom + 14, D ? 190 : 170, `刷新（${cost} 军粮）`, () => { this.message = manualRefresh().message; this.page = 0; this.render(); }, 'talent-refresh', w.provisions >= cost, true);
     } else {
-      for (const r of s.owned) rows.push(() => this.rosterRow(r, s.lord === r.hero, s.followers.includes(r.id), at(), rowH - 8, rankCap(s)));
-      this.content.add(worldText(this, 24, bottom + 6, `随行 ${s.followers.length}/${cap} · 出战时与主将同名的随行自动留守`, 12, '#b9ceb8'));
+      for (const r of men) rows.push(() => this.rosterRow(r, s.followers.includes(r.id), at(), rowH - 8, rankCap(s)));
+      this.content.add(worldText(this, D ? MX + 4 : 24, bottom + 6, `随行 ${s.followers.length}/${cap} · 出战时与主将同名的随行自动留守`, 12, '#b9ceb8'));
     }
     const pages = Math.max(1, Math.ceil(rows.length / per)); this.page = Math.min(this.page, pages - 1);
     for (const draw of rows.slice(this.page * per, this.page * per + per)) { draw(); y += rowH; }
@@ -93,10 +103,10 @@ export class TalentHallScene extends Phaser.Scene {
       this.content.add(worldText(this, W / 2, bottom - 4, `${this.page + 1}/${pages}`, 13, '#e6c88e').setOrigin(.5));
       this.small(W / 2 + 90, bottom - 4, 70, '下页', () => { this.page = (this.page + 1) % pages; this.render(); }, 'talent-next');
     }
-    this.content.add(worldText(this, 24, bottom + 28, this.message, 13, '#ffd98a').setWordWrapWidth(W - 48).setName('talent-message'));
+    this.content.add(worldText(this, D ? MX + 4 : 24, bottom + 28, this.message, 13, '#ffd98a').setWordWrapWidth(W - 48).setName('talent-message'));
   }
   private offerRow(o: Offer, i: number, captive: boolean, y: number, h: number) {
-    const D = W > 600, x0 = 16, w = W - 32, q = QUALITIES[o.quality];
+    const D = W > 600, x0 = D ? MX : 16, w = W - x0 * 2, q = QUALITIES[o.quality];
     if (D) { const g = this.add.graphics(); g.fillStyle(0x000000, .35).fillRoundedRect(x0 + 2, y - h / 2 + 3, w, h, 8).fillStyle(0x1b120b, .96).fillRoundedRect(x0, y - h / 2, w, h, 8).lineStyle(1.5, 0xc9a35e, .8).strokeRoundedRect(x0, y - h / 2, w, h, 8); this.content!.add(g); } else this.content!.add(panel(this, W / 2, y, w, h)); // 电脑版漆底单描金边（双层边会压到第三行字）
     const size = h - 16; this.seal(x0 + 12 + size / 2, y, size, o.quality, TEMPLATES[o.template].name, o.hero ? getCharacter(o.hero).portrait : undefined, o.template);
     { const b = o.hero ? attrBadge(this, x0 + 12 + size - 6, y - h / 2 + 16, o.hero, 22) : null; if (b) this.content!.add(b); }
@@ -106,23 +116,23 @@ export class TalentHallScene extends Phaser.Scene {
     if (o.boss) { const sx = nameT.x + nameT.width + 22, sy = nameT.y + nameT.height / 2; if (this.textures.exists('seal_boss')) this.content!.add(this.add.image(sx, sy, 'seal_boss').setDisplaySize(32, 32).setAngle(-6).setName('talent-boss-seal')); else { const sg = this.add.graphics().lineStyle(1.5, 0xd0503a, .95).strokeRoundedRect(sx - 18, sy - 11, 36, 22, 4); this.content!.add([sg, worldText(this, sx, sy, '首领', 12, '#e0604a').setOrigin(.5).setName('talent-boss-seal')]); } }
     this.content!.add(worldText(this, tx, y - h / 2 + (D ? 32 : 36), `${q.label} · ${kind}\n${TEMPLATES[o.template].name}：${TEMPLATES[o.template].desc}${captive && o.expires !== undefined ? ` · 剩 ${captiveSeasonsLeft(o)} 季` : ''}`, 12, '#cdbf9f').setWordWrapWidth(w - size - 150).setName('talent-offer-desc'));
     const cost = captive ? Math.ceil(o.cost * RECRUIT.captiveDiscount) : o.cost;
-    this.small(W - 16 - 70, y, 120, `${captive ? '招降' : '招募'} ${cost}粮`, () => { this.message = recruit(i, captive).message; this.render(); }, `talent-${captive ? 'captive' : 'offer'}-${i}`, true, o.kind !== 'common');
+    this.small(W - x0 - 70, y, 120, `${captive ? '招降' : '招募'} ${cost}粮`, () => { this.message = recruit(i, captive).message; this.render(); }, `talent-${captive ? 'captive' : 'offer'}-${i}`, true, o.kind !== 'common');
   }
-  private rosterRow(r: Recruit, lord: boolean, following: boolean, y: number, h: number, cap: number) {
-    const D = W > 600, x0 = 16, w = W - 32, q = QUALITIES[r.quality];
+  private rosterRow(r: Recruit, following: boolean, y: number, h: number, cap: number) {
+    const D = W > 600, x0 = D ? MX : 16, w = W - x0 * 2, q = QUALITIES[r.quality];
     if (D) { const g = this.add.graphics(); g.fillStyle(0x000000, .35).fillRoundedRect(x0 + 2, y - h / 2 + 3, w, h, 8).fillStyle(0x1b120b, .96).fillRoundedRect(x0, y - h / 2, w, h, 8).lineStyle(1.5, 0xc9a35e, .8).strokeRoundedRect(x0, y - h / 2, w, h, 8); this.content!.add(g); } else this.content!.add(panel(this, W / 2, y, w, h)); // 电脑版漆底单描金边（双层边会压到第三行字）
     const size = h - 16; this.seal(x0 + 12 + size / 2, y, size, r.quality, TEMPLATES[r.template].name, r.hero ? getCharacter(r.hero).portrait : undefined, r.template);
     { const ab = r.hero ? attrBadge(this, x0 + 12 + size - 6, y - h / 2 + 16, r.hero, 22) : null; if (ab) this.content!.add(ab); }
     const tx = x0 + 24 + size, b = rankBonus(r);
-    // 等级：主公随征战提升（不受随行上限）；随行显示「Lv 3 / 上限 5（解锁下一章提升）」
-    const lv = followerLevel(r), lvCap = followerLevelCap(), lvText = lord ? `Lv ${lv}` : `Lv ${lv} / 上限 ${lvCap}（解锁下一章提升）`;
-    this.content!.add(worldText(this, tx, y - h / 2 + 8, `${r.name} ${lvText}${lord ? ' · 主公' : ''}${following ? ' · 随行' : ''}`, D ? 17 : 18, q.css).setName('talent-roster-name'));
+    // 等级：随行显示「Lv 3 / 上限 5（解锁下一章提升）」（主公不在麾下名单里）
+    const lv = followerLevel(r), lvCap = followerLevelCap(), lvText = `Lv ${lv} / 上限 ${lvCap}（解锁下一章提升）`;
+    this.content!.add(worldText(this, tx, y - h / 2 + 8, `${r.name} ${lvText}${following ? ' · 随行' : ''}`, D ? 17 : 18, q.css).setName('talent-roster-name'));
     // 将阶升级挪到讲武堂「随从操练」（用户 2026-11-17「升级随从功能挪到讲武堂」）；这里只显示现状
-    const line = lord ? `${LORD_LEVEL_HINT}，不能在随行系统里升级\n将阶 ${r.rank} · 兵器 +${Math.round(b.damage * 100)}% · 生命 +${Math.round(b.hp * 100)}%` : `将阶 ${r.rank}/${cap} · 去讲武堂「随从操练」升阶
+    const line = `将阶 ${r.rank}/${cap} · 去讲武堂「随从操练」升阶
 兵器 +${Math.round(b.damage * 100)}% · 生命 +${Math.round(b.hp * 100)}%${r.hero ? '' : ' · 只能随行'}`;
     this.content!.add(worldText(this, tx, y - h / 2 + (D ? 30 : 34), line, 12, '#cdbf9f').setWordWrapWidth(D ? w - size - 330 : w - size - 40));
-    const bx = D ? W - 16 - 320 : tx + 50, by = D ? y : y + h / 2 - 24;
+    const bx = D ? W - x0 - 320 : tx + 50, by = D ? y : y + h / 2 - 24;
     this.small(bx + (D ? 204 : 196), by, D ? 82 : 82, following ? '留守' : '随行', () => { this.message = toggleFollower(r.id).message; this.render(); }, `talent-follow-${r.id}`, true, following);
-    if (!lord) this.small(bx + (D ? 280 : 276), by, 60, '遣散', () => { this.message = dismiss(r.id).message; this.render(); }, `talent-dismiss-${r.id}`);
+    this.small(bx + (D ? 280 : 276), by, 60, '遣散', () => { this.message = dismiss(r.id).message; this.render(); }, `talent-dismiss-${r.id}`);
   }
 }

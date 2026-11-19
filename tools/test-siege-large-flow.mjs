@@ -65,10 +65,10 @@ try {
   await p.screenshot({ path: `${OUT}/2-barbican-done.png` });
   ck('大城 · 瓮城：站在内门前，武器自动砍破内门 → 进巷战', barb.ok, barb);
   if (!barb.ok) throw new Error('stuck barbican');
-  // ③ 巷战：依次站进两个据点（占领 + 守 20 秒）
+  // ③ 城内：依次站进要点（占领 + 守 20 秒），占够 4 处开内城门
   const street = await run('street', (s, m) => { const pt = m.points.find(q => q.state !== 'secured'); return pt ? [pt.x, pt.y] : null; }, (s, m) => m.phase !== 'street', 300);
   await p.screenshot({ path: `${OUT}/3-street-done.png` });
-  ck('大城 · 巷战：两个据点占领并守住 → 内城门开、进府衙', street.ok, street);
+  ck('大城 · 城内：依次占领并守住要点，占够 4 处 → 内城门开、进府衙', street.ok, street);
   if (!street.ok) throw new Error('stuck street');
   // ④ 府衙：首领出场；先用武器打 90 秒
   const appear = await run('hall-boss', () => null, s => !!s.boss?.active, 60);

@@ -208,7 +208,7 @@ export const WEAPON_BEHAVIORS: Record<WeaponId, (host: WeaponHost, weapon: Weapo
     const reachBase = pierce.len * host.player.growth.spearLengthMultiplier() * longSpear * spearAm + pierce.width / 2;
     const ox = host.player.x, oy = host.player.y - 6;
     const targets = host.grid.query(host.player.x, host.player.y, Math.min(220, reachBase) + 60)
-      .filter((e) => e.active && Math.hypot(e.x - ox, e.y - oy) <= Math.min(220, reachBase) + e.radius)
+      .filter((e) => e.active && !e.invulnerable && Math.hypot(e.x - ox, e.y - oy) <= Math.min(220, reachBase) + e.radius)
       .sort((a, b) => Math.hypot(a.x - host.player.x, a.y - host.player.y) - Math.hypot(b.x - host.player.x, b.y - host.player.y));
     if(priority){const index=targets.indexOf(priority);if(index>=0)targets.splice(index,1);targets.unshift(priority);}
     // 首领 / 精锐优先：每轮至少一枪留给刺程内最近的首领（没有首领时为精锐）。

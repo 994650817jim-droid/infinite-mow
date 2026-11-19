@@ -1,4 +1,7 @@
 import {ARC_FACTIONS,SCENE_LOOKS} from '../data/sceneLooks';
+import {ensureFactionTextures} from '../systems/FactionPalette';
+import {siegeSourceKeys} from '../data/siege';
+import {thirdPalette} from '../data/thirdChapter';
 import {architecturalSurface} from '../systems/SceneSurfaces';
 import {FACTION_PROPS} from '../systems/PropsV2';
 import {chibiRiverCamp} from '../systems/ChibiRiverCamp';
@@ -71,6 +74,7 @@ export function thirdGameSceneClass(Base:typeof GameScene,cfg:ArcSceneConfig=THI
   const saved=this.registry.get('runConfig')as RunConfig|undefined,transfer=this.registry.get(cfg.transferKey)as CampaignTransfer|undefined;this.registry.remove(cfg.transferKey);this.registry.remove('campaignTransfer');if(transfer&&transfer.character===saved?.character)this.registry.set('campaignTransfer',transfer);
   this.registry.set('runConfig',{...saved,character:saved?.character??'zhaoyun',chapter:'hulao',westStage:3,encounter:'qunxiong'});super.create();
   this.controller=undefined;this.spear=new WeakMap();this.chapter=cfg.battle(this.thirdStage);this.runConfig={...this.runConfig,thirdStage:this.thirdStage,encounter:'qunxiong'};
+  /* 第三章敌军换色贴图（thirdPalette：李傕 / 张绣黑底土黄、袁术紫），须在任何敌兵生成前就绪 */const paletteKeys=cfg.arc==='qunxiong'?ensureFactionTextures(this,thirdPalette(this.thirdStage as 1|2|3),siegeSourceKeys()):[];
   {const fac=ARC_FACTIONS[cfg.arc+'.'+this.thirdStage];if(fac!==undefined&&FACTION_PROPS[fac]&&this.textures.exists(FACTION_PROPS[fac].key))architecturalSurface(this,fac);} /* 场景审查 P3：营具按本关敌方势力（原来一律西凉红黑帐篷）；吴 / 蜀 / 蛮的营具图没到之前照旧 */
   this.hubao=cfg.arc==='chibi'?new HubaoBattle({scene:this,player:this.player,army:this.legion,enemies:this.enemies,spawn:(kind,x,y,def)=>this.spawnEnemy(kind,x,y,undefined,true,def),stage:()=>this.thirdStage,elapsed:()=>this.elapsed,def:k=>this.chapter.enemies[k],banner:(t,c)=>this.showWaveBanner(t,true,c||undefined),sfx:k=>this.sfx.play(k),move:(e,nx,ny,dt)=>this.advanceEnemy(e,nx,ny,dt),boss:()=>this.boss,obstacles:()=>this.sishuiObstacles?.footprints??[]}):undefined;this.xiliang=this.hubao??null;
   this.thirdReceipt=this.thirdTest?'':beginArcExpedition(cfg.arc,this.thirdStage,this.allies.filter(u=>u.active&&u.reserveSoldier).map(u=>u.kind));const effect=permanentEffects();this.legion.healingMultiplier=effect.healMultiplier;applyCitySpecialties(this.player,effect,!transfer,{legion:this.legion,supplies:this.supplies});if(!transfer){for(let i=0;i<effect.reinforcements;i++)this.legion.recruit(i===0?'swordsman':'spearman',1,true);if(!this.thirdTest)for(const kind of takeExpeditionReserve(effect.reserveSlots)){this.legion.recruit(kind,1,true);this.allies[this.allies.length-1].reserveSoldier=true;}}
@@ -83,7 +87,7 @@ export function thirdGameSceneClass(Base:typeof GameScene,cfg:ArcSceneConfig=THI
   this.legion.campTarget=u=>this.enemyCamps?.assist(u)??null;
   if(cfg.arc==='chibi'&&this.thirdStage===2){if(!this.sishuiObstacles)this.sishuiObstacles=new SishuiObstacles([]);chibiRiverCamp(this,this.sishuiObstacles.footprints);} /* 5-2 赤壁：北岸曹军水寨布景、江北连环战船（船身挡人；江面是 Terrain 的河） */
   this.fireShips=cfg.fireShips?.includes(this.thirdStage)?new FireShips({scene:this,enemies:()=>this.enemies,player:()=>this.player,boss:()=>this.boss??undefined,burn:(e,dmg,now)=>{this.hitEnemy(e,dmg,now,'fire',true,false);},announce:t=>this.showWaveBanner(t,false)},this.combatNow):undefined;
-  const keys=(this.registry.get('battleTextureKeys')??[])as string[];this.registry.set('battleTextureKeys',[...new Set([...keys,...cfg.stages.map(d=>cfg.texture(d.id)),art.key,'third_road_'+this.sceneryStage])]);
+  const keys=(this.registry.get('battleTextureKeys')??[])as string[];this.registry.set('battleTextureKeys',[...new Set([...keys,...paletteKeys,...cfg.stages.map(d=>cfg.texture(d.id)),art.key,'third_road_'+this.sceneryStage])]);
   // 剧情（第三章起）：基类按 encounter 没建剧情；有该篇章剧本时按篇章 id 重建并播关前剧情
   if(STORY_CHAPTERS[cfg.arc])this.setupStory(cfg.arc,this.thirdStage);
   /* 5-1「七进七出」：赵云在队击杀虎豹骑 77 骑（systems/ChibiStoryHooks.ts） */

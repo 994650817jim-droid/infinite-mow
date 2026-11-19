@@ -6,6 +6,7 @@ import { ArcBossV2, type ArcHost } from './ArcBossV2';
 import { ensureMoves, type BossDebug } from './BossKit';
 import { groundCracks } from '../ui/Telegraph';
 import { bossFxImage, ensureBossFx, fxFrame, playBossFx } from './BossFx';
+import { castFlourish, warmCast } from './BossThemeFx';
 
 type Move = 'flags' | 'coins' | 'guards';
 interface Flag { e: Enemy; life: number; x: number; y: number; nextSpawn: number; label: Phaser.GameObjects.Text }
@@ -28,7 +29,7 @@ export class YuanshuBoss extends ArcBossV2<Move> {
     force: (i, now) => { this.beat.set(null, 'idle', now, 0); this.start((['flags', 'coins', 'guards'] as const)[i] ?? 'flags', now); },
     phase2: (now) => { const b = this.h.boss; if (b.hp > b.maxHp * YS.honey.at) b.hp = Math.floor(b.maxHp * YS.honey.at); this.enterHoney(now); },
   };
-  constructor(h: ArcHost, tex: string, now: number) {
+  constructor(h: ArcHost, tex: string, now: number) { warmCast(h.scene, 'yuanshu');
     super(h, tex, '袁术', now);
     this.propGfx = h.scene.add.graphics().setDepth(DEPTH.enemy + 1).setName('yuanshu-props');
     ensureMoves(h.scene, 'yuanshu_moves');
@@ -78,6 +79,7 @@ export class YuanshuBoss extends ArcBossV2<Move> {
   }
   private start(move: Move, now: number): void {
     const ms = move === 'flags' ? YS.flags.windupMs : move === 'coins' ? YS.coins.windupMs : YS.guards.windupMs;
+    castFlourish(this.h.scene, 'yuanshu', this.h.boss, ms, move === 'coins');
     this.beat.set(move, 'windup', now, ms); this.h.sfx(move === 'coins' ? 'chargeWarn' : 'bossSummon');
     if (move === 'flags') this.h.banner('玉玺号令', '打掉「伪诏」旗，援兵才会停');
   }

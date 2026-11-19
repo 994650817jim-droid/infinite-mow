@@ -81,6 +81,7 @@ export class BattlefieldSupplies {
   flip=flip&&mayMirrorProp(frame);
   slot.spiked=false;slot.offsetY=undefined;slot.heal=undefined;slot.env=undefined;
   slot.enemy.spawn(x,y,{...ENEMY_DEFS.shield,behavior:'supply',texture:'yellow_props',hp:frame===18?24:frame<4?80:frame<10?18:frame<14?45:frame>=24&&frame<=28?50:36,speed:0,damage:0,xp:0,radius:Math.max(14,size*.32)},1,this.now());
+  slot.enemy.breakable=true; // 物件都可打碎：没敌人时武将自动去打（Enemy.breakable）
   slot.enemy.walkSheet='';slot.enemy.attackSheet='';slot.enemy.sprite.setTexture(frame===35?'brazier_burning':'yellow_props',frame===35?0:frame).setOrigin(.5,.9375).setDisplaySize(size,size).setFlipX(flip);
   slot.enemy.shadow.setVisible(false);
   slot.shadow.setTexture('yellow_contact_shadow',frame===35?30:frame).setPosition(x,y+Math.min(1,size*.008)).setOrigin(.5,.9375).setDisplaySize(size,size).setFlipX(flip).setAlpha(1).setDepth(actorDepth(y)-.01).setVisible(!NO_PROP_SHADOW.has(frame));

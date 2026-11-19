@@ -159,4 +159,17 @@ export const QUNXIONG_STORY: StoryChapter = {
       { who: 'zhaoyun', text: '公孙将军许我暂随玄德公。此战，云为先锋！' }, { tip: true, text: '羁绊「借将」：刘备、赵云同队，本关移速 +6%' },
     ] },
   ],
+  // 3-2 宛城夜袭 · 典韦守营（systems/DianweiGuard.ts 按时机调 story.line(id)；数值 / id 见 data/dianweiGuard.ts）。用户 11-19「也要增加剧情台词」
+  barks: [
+    { id: 'qunxiong-2.dw_start', type: 'bark', external: true, lines: [{ who: 'dianwei', text: '营门在此，某也在此——哪个敢近一步！' }] },
+    { id: 'qunxiong-2.dw_cao', type: 'bark', external: true, lines: [{ who: 'caocao', text: '典韦！替孤守住营门！' }] },
+    { id: 'qunxiong-2.dw_hp50', type: 'bark', external: true, lines: [{ who: 'dianwei', text: '这点伤，算个甚！' }] },
+    { id: 'qunxiong-2.dw_hp20', type: 'bark', external: true, lines: [{ who: 'dianwei', text: '双戟尚在，营门便在！' }] },
+    { id: 'qunxiong-2.dw_help', type: 'bark', external: true, lines: [{ who: 'dianwei', text: '好！{lord}来得正好！' }] },
+    { id: 'qunxiong-2.dw_whirl', type: 'bark', external: true, lines: [{ who: 'dianwei', text: '都给某滚开！' }] },
+    { id: 'qunxiong-2.dw_throw', type: 'bark', external: true, lines: [{ who: 'dianwei', text: '着！' }] },
+    { id: 'qunxiong-2.dw_rage', type: 'bark', external: true, lines: [{ who: 'dianwei', text: '恶来在此——今夜死战！' }] },
+    { id: 'qunxiong-2.dw_saved', type: 'bark', external: true, lines: [{ who: 'dianwei', text: '营门还在！张绣小儿，便宜你了！' }] },
+    { id: 'qunxiong-2.dw_fall', type: 'bark', external: true, lines: [{ who: 'dianwei', text: '主公……快走……' }] },
+  ],
 };

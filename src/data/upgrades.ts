@@ -8,6 +8,7 @@ import type { UpgradeOption, WeaponId, WeaponState } from '../types';
 import { getCharacter } from './characters';
 import { ATTRIBUTE_INFO, dragBodyLengths, type AttributeId, type PotionId, type RunGrowth, MARTIALS, type MasteryId } from '../systems/RunGrowth';
 import { applyStageBuff } from '../systems/StageBuffs';
+import { WEAPON_OVER, branchById, branchesFor, type WeaponBranch } from './weaponBranches';
 
 export const WEAPON_META: Record<WeaponId, { name: string; desc: string }> = {
   spear_orbit: { name: '七探盘龙枪', desc: '银枪自动索敌，向不同敌人突刺' },
@@ -91,6 +92,17 @@ function weaponUpgrade(weapon: WeaponState, player: Player): UpgradeOption {
   };
 }
 
+/** 兵器专职卡（二选一，选定后本次征程锁定）。 */
+function branchOption(weapon: WeaponState, b: WeaponBranch): UpgradeOption {
+  return { id: 'branch_' + b.id, name: '专职 · ' + b.name, desc: SCHOOLS[b.school].name + '派 · ' + b.desc + '\n（二选一，选定后本次征程锁定）', kind: 'weapon', weaponId: weapon.id, categoryLabel: '兵器专职 · 二选一', icon: b.icon,
+    apply: (_p, weapons) => { const w = weapons.find(x => x.id === weapon.id); if (w && !w.branch) w.branch = b.id; } };
+}
+/** 本命 Lv6 / 7（沿所选分支加深；第四章 / 第八章开放）。 */
+function overOption(weapon: WeaponState, b: WeaponBranch, character: string): UpgradeOption {
+  const lv = 5 + (weapon.over ?? 0) + 1;
+  return { id: 'weapon_over_' + lv, name: weaponName(weapon.id, character) + ' · Lv.' + lv, desc: b.name + '：' + (lv === 6 ? b.lv6 : b.lv7) + '\n本命伤害 +10%' + (lv === 7 ? '\n（该派 4 势时进阶「' + b.finalName + '」）' : ''), kind: 'weapon', weaponId: weapon.id, categoryLabel: '本命 · ' + b.name,
+    apply: (_p, weapons) => { const w = weapons.find(x => x.id === weapon.id); if (w && (w.over ?? 0) < 2) w.over = (w.over ?? 0) + 1; } };
+}
 function newWeaponOption(id: WeaponId): UpgradeOption {
   return {
     id: `new_${id}`,
@@ -197,6 +209,9 @@ export function buildUpgradeOptions(player: Player, weapons: WeaponState[], grow
   const ownWeaponId = getCharacter(growth.character).startWeapon;
   const ownWeapon = weapons.find(weapon => weapon.id === ownWeaponId);
   if (ownWeapon && ownWeapon.level < WEAPON_DEFS[ownWeaponId].maxLevel) pool.push(weaponUpgrade(ownWeapon, player));
+  // 兵器专职：已选分支且本章开放了 Lv6 / 7 → 沿分支加深
+  const myBranch = ownWeapon ? branchById(ownWeapon.branch) : undefined;
+  if (ownWeapon && myBranch && (ownWeapon.over ?? 0) < WEAPON_OVER.cap) pool.push(overOption(ownWeapon, myBranch, growth.character));
   for (const id of Object.keys(MARTIALS) as MasteryId[]) if (growth.canLearn(id)) pool.push(martialOption(id,growth.masteryRank(id)));
   // 属性点改为每次升级自动 +1（Player.gainXp），三选一不再出现「通脉修习」
   // Reserve a core progression choice whenever one remains available.
@@ -218,7 +233,7 @@ export function buildUpgradeOptions(player: Player, weapons: WeaponState[], grow
   const isXinde=(option:UpgradeOption)=>option.kind==='tactic'&&growth.xinde.includes(option.id.replace('tactic_','')as TacticId);
   // 权重：1 + min(上限, 势 × 系数)，亲和派 ×1.5，心得 ×2（data/schools.ts OFFER）
   const affinity=heroAffinity(growth.character),schoolOf=(o:UpgradeOption)=>tacticSchool(o.id.replace('tactic_','')as TacticId);
-  const weight=(o:UpgradeOption):number=>{const sc=o.kind==='tactic'?schoolOf(o):null;if(!sc)return 1;return (1+Math.min(OFFER.weightMax,tags[sc]*OFFER.weightPer))*(affinity.includes(sc)?OFFER.affinityWeight:1)*(isXinde(o)?2:1);};
+  const weight=(o:UpgradeOption):number=>{const sc=o.kind==='tactic'?schoolOf(o):null;if(!sc)return 1;return (1+Math.min(OFFER.weightMax,tags[sc]*OFFER.weightPer))*(affinity.includes(sc)?OFFER.affinityWeight:1)*(myBranch&&myBranch.school===sc?2:1)*(isXinde(o)?2:1);};
   const draw=(list:UpgradeOption[])=>list.map(o=>({o,key:Math.pow(Math.random(),1/weight(o))})).sort((x,y)=>y.key-x.key).map(v=>v.o);
   // 专精卡位：有一派到 OFFER.specialtyAt 势后，两张战法卡里必有一张是势最高那派的
   const top=[...SCHOOL_IDS].sort((x,y)=>tags[y]-tags[x])[0],picked:UpgradeOption[]=[];
@@ -230,6 +245,8 @@ export function buildUpgradeOptions(player: Player, weapons: WeaponState[], grow
   for(const o of rest)if(picked.length<2)picked.push(o);
   for(const f of foundations)if(picked.length<2&&f.id!==guaranteed.id&&!picked.some(o=>o.id===f.id))picked.push(f);
   const final=[guaranteed,...picked.slice(0,2)];
+  // 兵器专职二选一：本命 Lv5、还没选分支、分支派任一到 2 势 → 两张专职卡占前两格
+  if(ownWeapon&&ownWeapon.level>=WEAPON_DEFS[ownWeaponId].maxLevel&&!ownWeapon.branch){const bs=branchesFor(ownWeaponId);if(bs.length===2&&bs.every(x=>x.ready)&&bs.some(x=>tags[x.school]>=2))return shuffle([branchOption(ownWeapon,bs[0]),branchOption(ownWeapon,bs[1])]).concat(final.filter(o=>o.kind!=='weapon').slice(-1));}
   // 2026-11-19 新卡池（wave-progression-redesign.md §4.2）：固本培元一类的保底卡、以及按概率的战法位，换成新卡（战场机缘 / 锦囊 / 兵源 / 军资 / 心法）
   if(extra){const slots:number[]=[];final.forEach((o,i)=>{if(o.kind==='foundation'||(i>0&&o.kind==='tactic'&&Math.random()<extra.replaceChance))slots.push(i);});
     // 不出「三张都没用的」：核心位已不是永久成长时，至少留一张战法（2026-11-19 池子深度）

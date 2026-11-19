@@ -9,6 +9,10 @@ export interface WeaponState {
   id: WeaponId;
   level: number;
   cooldownLeft: number;
+  /** 兵器专职分支（data/weaponBranches，本命 Lv5 后二选一，随征程构筑保存）。 */
+  branch?: string;
+  /** 本命超出 Lv5 的级数（Lv6 = 1、Lv7 = 2；level 本身停在 5，原武器查表不越界）。 */
+  over?: number;
 }
 
 export interface PlayerStats {

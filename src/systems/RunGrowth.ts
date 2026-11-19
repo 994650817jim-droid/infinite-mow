@@ -83,6 +83,8 @@ export class RunGrowth {
   lowHp = false;
   /** 赌命「背嵬」（本关）：生命低于一半时伤害 ×(1 + stageDesperate)。 */
   stageDesperate = 0;
+  /** 本命 Lv6 / 7（兵器专职加深）：每级全伤害 +10%（由场景按本命武器 over 写入）。 */
+  weaponOver = 0;
   private xpCarry = 0;
   /** 名器「饮血」下次可触发的时刻。 */
   killHealAt = 0;
@@ -162,7 +164,7 @@ export class RunGrowth {
 
   damageMultiplier(now: number): number {
     const might = (1 + ATTRIBUTE_EFFECT.strength.damage * this.pts('strength')) * (1 + this.primaryBonus());
-    const mastered = 1 + .04 * Object.values(this.masteryExtra).reduce((n: number, v) => n + (v ?? 0), 0); // 武艺精熟
+    const mastered = (1 + .04 * Object.values(this.masteryExtra).reduce((n: number, v) => n + (v ?? 0), 0)) * (1 + .1 * this.weaponOver); // 武艺精熟、本命 Lv6 / 7
     const fury = mastered * (this.lowHp && this.gear.specials.includes('fury') ? 1.25 : 1) * (this.lowHp && this.stageDesperate ? 1 + this.stageDesperate : 1);
     const wine = now < this.wineUntil && this.gear.specials.includes('jiuhu') ? 1.4 : 1; // 遗珍「乌巢酒葫」（BossRelics.RELIC.jiuhuDamage）
     return Math.min(2, might * (now < this.berserkUntil ? 1.25 : 1) * (1 + this.permanentDamage) * (1 + this.gear.damage) * (1 + this.temperDamage)) * fury * wine;

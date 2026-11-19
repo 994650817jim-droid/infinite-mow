@@ -143,6 +143,38 @@ await stageCase('3-2 宛城夜袭（ThirdGameScene）', { key: 'ThirdGameScene',
   await p.waitForTimeout(1200); await p.screenshot({ path: `${OUT}/new-cards-ch9.png` });
   await p.close();
 }
+// 兵器专职（wave-progression-redesign §4.7）：本命 Lv5 + 分支派 2 势 → 两张专职卡二选一；Lv6 / 7 沿分支加深；第一批 8 个分支在战斗里都会触发
+{
+  const p = await open({ key: 'GameScene', run: { chapter: 'hulao', westStage: 2 } });
+  await p.evaluate(() => window.__calm());
+  const ch = await p.evaluate(async () => { const s = window.__S, up = await import('/src/data/upgrades.ts'), bd = await import('/src/data/builds.ts'); const w = s.player.weapons[0]; w.level = 5; w.branch = undefined; w.over = 0;
+    const b = s.player.growth.build; const cav = Object.keys(bd.TACTICS).filter(t => bd.TACTICS[t].tag === 'cavalry' && !bd.TACTICS[t].hidden); b.learn(cav[0]); b.learn(cav[0]);
+    const opts = up.buildUpgradeOptions(s.player, s.player.weapons, s.player.growth); return { ids: opts.map(o => o.id), labels: opts.map(o => o.categoryLabel) }; });
+  ck('专职卡：赵云本命 Lv5、骑突 2 势 → 三选一里两张「兵器专职 · 二选一」（龙胆 · 七进七出 / 百鸟朝凤）', ch.ids.includes('branch_zy_longdan') && ch.ids.includes('branch_zy_bainiao') && ch.labels.filter(l => /兵器专职/.test(l)).length === 2, ch);
+  // 截图：专职二选一面板
+  await p.evaluate(() => { const s = window.__S; s.pendingLevels += 1; s.militaryPending += 1; s.openUpgrade(); }); await p.waitForTimeout(1200);
+  await p.screenshot({ path: `${OUT}/branch-choice.png` });
+  const pick = await p.evaluate(async () => { const s = window.__S, i = s.upgradeOptions.findIndex(o => o.id === 'branch_zy_longdan'); s.chooseUpgrade(i); window.__calm(); const up = await import('/src/data/upgrades.ts'), wb = await import('/src/data/weaponBranches.ts'); wb.WEAPON_OVER.cap = 1; let over; for (let i = 0; i < 30 && !over; i++) over = up.buildUpgradeOptions(s.player, s.player.weapons, s.player.growth).find(o => o.id === 'weapon_over_6'); const d0 = s.player.growth.damageMultiplier(0); over?.apply(s.player, s.player.weapons, s.player.growth); s.tickBranch(); const d1 = s.player.growth.damageMultiplier(0); return { branch: s.player.weapons[0].branch, over6: !!over, overNow: s.player.weapons[0].over, dmg: +(d1 / d0).toFixed(2), level: s.player.weapons[0].level }; });
+  ck('选「龙胆 · 七进七出」锁定；第四章起出本命 Lv.6（沿分支加深，伤害 +10%）；HUD 写分支名', pick.branch === 'zy_longdan' && pick.over6 && pick.overNow === 1 && pick.dmg === 1.1, pick);
+  await p.close();
+}
+const branchFire = async (hero, branches) => {
+  const out = {};
+  for (const br of branches) {
+    const p = await open({ key: 'GameScene', run: { chapter: 'hulao', westStage: 2, character: hero } });
+    await p.evaluate(br => { const s = window.__S; window.__calm(); const w = s.player.weapons[0]; w.level = 5; w.branch = br; w.over = 0; s.player.stats.cooldownMul = .5; for (const a of s.allies) if (a.active) a.hp = Math.max(1, a.maxHp * .4); }, br);
+    for (let k = 0; k < 4; k++) { await p.evaluate(() => { const s = window.__S; for (let i = 0; i < 10; i++) { const a = i / 10 * Math.PI * 2; s.spawnEnemy(i % 3 ? 'infantry' : 'shield', s.player.x + Math.cos(a) * 110, s.player.y + Math.sin(a) * 110, 3, true); } if (s.player.sprite) s.player.sprite.x += 90; window.__calm(); }); await p.waitForTimeout(1400); }
+    out[br] = await p.evaluate(() => { const r = window.__S.branchRt; return r ? { ...r.stats } : null; });
+    if (br === 'gy_qinglong') await p.screenshot({ path: `${OUT}/branch-gy-qinglong.png` });
+    await p.close();
+  }
+  return out;
+};
+{
+  const r = { ...(await branchFire('zhaoyun', ['zy_longdan', 'zy_bainiao'])), ...(await branchFire('guanyu', ['gy_qinglong', 'gy_danqi'])), ...(await branchFire('zhangfei', ['zf_duanqiao', 'zf_nuhou'])), ...(await branchFire('liubei', ['lb_rende', 'lb_sanying'])) };
+  const bad = Object.entries(r).filter(([k, v]) => !v || v.procs < 1 || (!['zf_nuhou', 'lb_rende'].includes(k) && v.hits < 1)).map(([k]) => k);
+  ck('第一批 8 个分支在战斗里都会触发（赵云 龙胆 / 百鸟，关羽 青龙出水 / 单骑，张飞 断桥 / 怒吼，刘备 仁德 / 三英）', bad.length === 0, { bad, r });
+}
 await b.close();
 ck('无页面报错', errors.length === 0, errors.slice(0, 4));
 console.log(fail ? `FAILED ${fail}` : 'ALL PASS');

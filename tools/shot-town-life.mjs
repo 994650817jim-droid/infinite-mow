@@ -20,8 +20,16 @@ for (const t of tiers) {
   await p.evaluate(id => window.__game.scene.getScenes(true).forEach(sc => sc.scene.start('TownScene', { city: id })), CITY[t]);
   await p.waitForFunction(() => window.__game.scene.isActive('TownScene') && window.__game.scene.getScene('TownScene').hits?.length, null, { timeout: 60000 }); await p.waitForTimeout(2500);
   for (const [name, y] of [['top', 0], ['bottom', 1e4]]) { await p.evaluate(y => window.__game.scene.getScene('TownScene').scrollTo(0, y), y); await p.waitForTimeout(1200); await p.screenshot({ path: `${out}/${tag}-${t}-${name}.png` }); }
+  if (process.env.REF) { // 比例参照：每种建筑旁站一个居民（同走动居民的大小），放大到 1:1 截两处
+    await p.evaluate(() => { const s = window.__game.scene.getScene('TownScene'), w = s.folk.walkers[0].img, list = [...s.pano.list];
+      for (const o of list) { if (o.type !== 'Image' || !(/^(house-|hq-(talent|academy|stable|barracks)$)/.test(o.name) || /^town_(office|tuntian|muster)_/.test(o.texture.key))) continue;
+        const m = s.add.image(o.x - o.displayWidth * .38, o.y + 2, 'folk_man', 'down_0').setOrigin(.5, .92).setScale(w.scaleX).setName('ref-folk'); m.zy = o.y + 3; s.pano.add(m); }
+      s.folk.sortPano(); });
+    for (const [name, x, y] of process.env.REF.split(';').map(v => v.split(','))) { await p.evaluate(([x, y]) => { const s = window.__game.scene.getScene('TownScene'); s.zoomAt(1, 480, 300); s.scrollTo(+x, +y); }, [x, y]); await p.waitForTimeout(400); await p.screenshot({ path: `${out}/${tag}-${t}-ref-${name}.png` }); }
+    await p.evaluate(() => window.__game.scene.getScene('TownScene').zoomAt(0.1, 480, 300));
+  }
   if (process.env.BARK) {
-    const r = await p.evaluate(() => { const s = window.__game.scene.getScene('TownScene'), w = s.folk?.walkers?.find(w => w.img.visible); if (!w) return null; const R = window.__game.canvas.getBoundingClientRect(), k = R.width / window.__game.scale.width; return { x: R.left + (w.img.x + s.pano.x) * k, y: R.top + (w.img.y - 14 + s.pano.y) * k }; });
+    const r = await p.evaluate(() => { const s = window.__game.scene.getScene('TownScene'), w = s.folk?.walkers?.find(w => w.img.visible); if (!w) return null; const R = window.__game.canvas.getBoundingClientRect(), k = R.width / window.__game.scale.width, z = s.pano.scaleX; return { x: R.left + (w.img.x * z + s.pano.x) * k, y: R.top + ((w.img.y - 10) * z + s.pano.y) * k }; });
     if (r) { await p.mouse.click(r.x, r.y); await p.waitForTimeout(300); await p.screenshot({ path: `${out}/${tag}-${t}-bark.png` }); }
   }
 }

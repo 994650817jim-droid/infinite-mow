@@ -11,12 +11,15 @@ import {W,H,worldShell,worldAssets} from '../world/WorldUI';
 import {FONT,HEADING_FONT} from '../config';
 import {homeCommand,warPanelTexture} from '../ui/HomeCommand';
 import {uiSfx} from '../systems/Sfx';
-import {loadWorld,worldUnlocked,storageUnavailable,incompatibleSave,cityLevels,cityBuild} from '../world/WorldStore';
+import {loadWorld,worldUnlocked,storageUnavailable,incompatibleSave,cityLevels,cityBuild,spendProvisions} from '../world/WorldStore';
+import {openMerchantShop} from '../ui/MerchantShop';
+import {CHARACTERS,type CharacterId} from '../data/characters';
+import {CAMP_ART_IDS} from '../town/CampLife';
 import {cityById,SPECIALTIES,TIER_NAME,type CityTier} from '../world/WorldCities';
 import {CITY_BUILDINGS,CITY_BUILDING_IDS,cityBuildCost,cityBuildBlockers,cityIncome,type CityBuildingId} from '../data/cityBuildings';
-import {incomeText} from '../town/TownData';
-import {PANO_W,PANO_H,LEVEL_SCALE} from '../town/CityLayout';
-import {TownFolk,folkCount,loadTownLife,drawTownDecor,zy} from '../town/TownLife';
+import {incomeText,TOWN_BUILDINGS,buildingOpen,citySize,levelOf} from '../town/TownData';
+import {PANO_W,PANO_H,LEVEL_SCALE,PANO_ZOOM,CAMP_BARS} from '../town/CityLayout';
+import {TownFolk,folkCount,loadTownLife,drawTownDecor,zy,HQ_SLOTS,type HqId} from '../town/TownLife';
 
 /** 城池正式美术是否已导入（assets/town-city/bg_<档>.webp、<建筑>_<级>.webp）。未导入时借营寨图。 */
 export const TOWN_ART_READY = true;
@@ -26,17 +29,20 @@ interface Slot {x: number; y: number; w: number}
 /** 建筑位置（全景像素，建筑底边中心，落在底图画好的地基上）。借营寨图时用 BORROW_SLOTS。多出来的地基留作空地。 */
 const SLOTS: Record<CityTier, Record<CityBuildingId, Slot>> = {
  // 小城：4 处地基——正中靠后放府衙，左前放屯田，右中放募兵所，左后空着
- small: {office: {x: 772, y: 474, w: 300}, tuntian: {x: 352, y: 760, w: 400}, muster: {x: 1275, y: 570, w: 330}},
+ small: {office: {x: 772, y: 474, w: 300}, tuntian: {x: 352, y: 760, w: 400}, muster: {x: 1275, y: 570, w: 280}},
  // 中城：6 处地基——左中府衙，左下屯田，右下募兵所
- medium: {office: {x: 418, y: 516, w: 330}, tuntian: {x: 292, y: 842, w: 430}, muster: {x: 1300, y: 842, w: 440}},
+ medium: {office: {x: 418, y: 516, w: 330}, tuntian: {x: 292, y: 842, w: 430}, muster: {x: 1300, y: 842, w: 320}},
  // 大城：6 处地基——右上第二块府衙，左下大地基屯田，右下大地基募兵所
- large: {office: {x: 1265, y: 482, w: 390}, tuntian: {x: 392, y: 784, w: 400}, muster: {x: 1292, y: 784, w: 460}},
+ large: {office: {x: 1265, y: 482, w: 390}, tuntian: {x: 392, y: 784, w: 400}, muster: {x: 1292, y: 784, w: 340}},
 };
 const BORROW_SLOTS: Record<CityTier, Record<CityBuildingId, Slot>> = {
  small: {office: {x: 950, y: 720, w: 360}, tuntian: {x: 170, y: 930, w: 290}, muster: {x: 1090, y: 1010, w: 280}},
  medium: {office: {x: 950, y: 720, w: 380}, tuntian: {x: 170, y: 930, w: 290}, muster: {x: 1090, y: 1010, w: 290}},
  large: {office: {x: 768, y: 475, w: 400}, tuntian: {x: 180, y: 960, w: 280}, muster: {x: 1240, y: 1010, w: 280}},
 };
+const HQ_IDS: HqId[] = ['talent', 'academy', 'stable', 'barracks'];
+/** 电脑版顶 / 底栏高度（顶栏放城名、档次与产出两行）。 */
+const TOWN_BARS = {top: 62, bottom: CAMP_BARS.bottom} as const;
 const txt = (s: Phaser.Scene, x: number, y: number, v: string, size = 15, color = '#ede3c9', font = FONT) => s.add.text(x, y, v, {fontFamily: font, fontSize: size + 'px', color, resolution: 2});
 let D = false;
 
@@ -52,7 +58,8 @@ export class TownScene extends Phaser.Scene {
  constructor() { super('TownScene'); }
  init(data: {city?: string}) {
   D = W > 600; this.cityId = data?.city ?? (this.registry.get('townCity') as string | undefined) ?? ''; this.registry.set('townCity', this.cityId);
-  this.vr = D ? {x: 12, y: 74, w: W - 24, h: H - 74 - 58} : {x: 0, y: 116, w: W, h: H - 116 - 104}; this.k = Math.max(this.vr.w / PANO_W, this.vr.h / PANO_H); this.hits = []; this.drag = null;
+  // 电脑：全景铺满全屏（11-19 用户「城市也应该填充整个屏幕不要绿边」），同营寨：按 PANO_ZOOM 倍细节画，进城缩到刚好铺满，滚轮放大；手机照旧
+  this.vr = D ? {x: 0, y: 0, w: W, h: H} : {x: 0, y: 116, w: W, h: H - 116 - 104}; this.k = Math.max(this.vr.w / PANO_W, this.vr.h / PANO_H) * (D ? PANO_ZOOM : 1); this.z = D ? 1 / PANO_ZOOM : 1; this.hits = []; this.drag = null;
  }
  private tier(): CityTier { return cityById(this.cityId)?.tier ?? 'small'; }
  private slots(): Record<CityBuildingId, Slot> { return (TOWN_ART_READY ? SLOTS : BORROW_SLOTS)[this.tier()]; }
@@ -63,6 +70,8 @@ export class TownScene extends Phaser.Scene {
   const t = this.tier();
   // 民居店铺（攻城城内图集）、石桥、居民行走图：纯装饰（town/TownLife）
   loadTownLife(this);
+  // 营寨功能建筑（招贤馆 / 讲武堂 / 马厩 / 军营）在城里的分署：同营寨的图
+  for (const id of HQ_IDS) { for (let l = 1; l <= 3; l++) worldAssets(this, `city_${id}_${l}`, `assets/city/${id}_${l}.webp`); if ((CAMP_ART_IDS as readonly string[]).includes(id)) worldAssets(this, `city_camp_${id}`, `assets/city/camp_${id}.webp`); }
   worldAssets(this, 'town_badge_upgrade', 'assets/town-city/badge_upgrade.png'); worldAssets(this, 'town_badge_build', 'assets/town-city/badge_build.png');
   if (TOWN_ART_READY) { worldAssets(this, `town_bg_${t}`, `assets/town-city/bg_${t}.webp`); for (const id of CITY_BUILDING_IDS) for (let l = 1; l <= 3; l++) worldAssets(this, `town_${id}_${l}`, `assets/town-city/${id}_${l}.webp`); }
   else { const n = BORROW_BG[t]; worldAssets(this, `city_bg_${n}`, `assets/city/bg_${n}.webp`); for (const id of CITY_BUILDING_IDS) for (let l = 1; l <= 3; l++) worldAssets(this, `city_${BORROW_BUILDING[id]}_${l}`, `assets/city/${BORROW_BUILDING[id]}_${l}.webp`); }
@@ -76,11 +85,16 @@ export class TownScene extends Phaser.Scene {
   // 居民与全景同一容器（按脚下 y 排前后，走到屋后被屋子挡住）；精灵不接收点击，不挡建筑
   this.folk = new TownFolk(this, this.pano, this.k, this.tier());
   const tick = (_t: number, dt: number) => this.folk?.update(dt); this.events.on('update', tick); this.events.once('shutdown', () => { this.events.off('update', tick); this.folk = undefined; }); this.events.once('shutdown', () => mask.destroy());
-  const head = this.add.graphics().setDepth(-1); head.fillStyle(0x102019, 1).fillRect(0, 0, W, this.vr.y).fillRect(0, this.vr.y + this.vr.h, W, H - this.vr.y - this.vr.h);
-  head.lineStyle(2, 0xb3935b, .85).strokeRect(this.vr.x, this.vr.y, this.vr.w, this.vr.h);
+  const head = this.add.graphics().setDepth(-1).setName('town-bars');
+  if (D) { const {top, bottom} = TOWN_BARS; // 顶 / 底两条半透明漆底描金栏叠在全景上（同营寨）
+   for (let i = 0; i < 8; i++) head.fillStyle(0x120b06, .8 - i * .07).fillRect(0, top + i * 3, W, 3);
+   head.fillStyle(0x120b06, .8).fillRect(0, 0, W, top).lineStyle(1, 0x000000, .7).lineBetween(0, top + .5, W, top + .5).lineStyle(1, 0xc9a35e, .75).lineBetween(0, top - 1.5, W, top - 1.5);
+   for (let i = 0; i < 8; i++) head.fillStyle(0x120b06, .8 - i * .07).fillRect(0, H - bottom - (i + 1) * 3, W, 3);
+   head.fillStyle(0x120b06, .82).fillRect(0, H - bottom, W, bottom).lineStyle(1, 0x000000, .7).lineBetween(0, H - bottom - .5, W, H - bottom - .5).lineStyle(1, 0xc9a35e, .75).lineBetween(0, H - bottom + 1.5, W, H - bottom + 1.5); }
+  else { head.fillStyle(0x102019, 1).fillRect(0, 0, W, this.vr.y).fillRect(0, this.vr.y + this.vr.h, W, H - this.vr.y - this.vr.h); head.lineStyle(2, 0xb3935b, .85).strokeRect(this.vr.x, this.vr.y, this.vr.w, this.vr.h); }
   worldShell(this, c.name);
-  this.header = txt(this, D ? 150 : 24, D ? 26 : 62, '', D ? 15 : 13, '#e7c98a', HEADING_FONT).setOrigin(0, .5).setName('town-header');
-  this.income = txt(this, D ? 150 : 24, D ? 52 : 86, '', D ? 13 : 12, '#b9d2a8').setOrigin(0, .5).setName('town-income');
+  this.header = txt(this, D ? 150 : 24, D ? 20 : 62, '', D ? 15 : 13, '#e7c98a', HEADING_FONT).setOrigin(0, .5).setName('town-header');
+  this.income = txt(this, D ? 150 : 24, D ? 44 : 86, '', D ? 13 : 12, '#b9d2a8').setOrigin(0, .5).setName('town-income');
   this.grain = txt(this, W - 24, D ? 26 : 30, '', D ? 15 : 14, '#efe0b4', HEADING_FONT).setOrigin(1, .5).setName('town-grain');
   const back = homeCommand(this, W / 2, D ? H - 28 : H - 72, D ? 260 : W - 60, D ? 40 : 52, '返回天下地图', true, true, D ? 16 : 17);
   back.hit.setName('town-back').on('pointerdown', () => { this.registry.set('mapFocusCity', this.cityId); this.scene.start('WorldMapScene'); });
@@ -89,21 +103,31 @@ export class TownScene extends Phaser.Scene {
   this.input.on('pointermove', (p: Phaser.Input.Pointer) => { const d = this.drag; if (!d || !p.isDown) return; const dx = p.x - d.x, dy = p.y - d.y; if (!d.moved && Math.hypot(dx, dy) < 8) return; d.moved = true; this.scrollTo(d.sx - dx, d.sy - dy); });
   this.input.on('pointerup', (p: Phaser.Input.Pointer, over: Phaser.GameObjects.GameObject[]) => {
    // 点居民：没点到建筑、没在拖动时，最近的居民冒一句话
-   if (!this.drag?.moved && !this.anyModal() && this.inView(p.x, p.y) && !over.some(o => /^bld-/.test(o.name))) this.folk?.barkAt(p.x - this.pano.x, p.y - this.pano.y);
+   if (!this.drag?.moved && !this.anyModal() && this.inView(p.x, p.y) && !over.some(o => /^bld-/.test(o.name))) this.folk?.barkAt((p.x - this.pano.x) / this.z, (p.y - this.pano.y) / this.z);
    this.time.delayedCall(0, () => { this.drag = null; });
   });
-  this.input.on('wheel', (_p: Phaser.Input.Pointer, _o: unknown, dx: number, dy: number) => { if (this.anyModal()) return; this.scrollTo(this.sx + (dx || dy) * .6, this.sy + dy * .3); });
+  this.input.on('wheel', (p: Phaser.Input.Pointer, _o: unknown, dx: number, dy: number) => { if (this.anyModal()) return; if (D) { if (dy) this.zoomAt(this.z * (dy < 0 ? 1.15 : 1 / 1.15), p.x, p.y); return; } this.scrollTo(this.sx + (dx || dy) * .6, this.sy + dy * .3); });
   // 初始视角：横向对准府衙；大城府衙在城内深处，纵向也对准它，小 / 中城贴底
   // 初始视角：横向居中，纵向对准三座建筑的中间（城门与远景在上方，可往上拖着看）
-  const sl = Object.values(this.slots()), cy = sl.reduce((n, s) => n + s.y, 0) / sl.length - 80; this.scrollTo((PANO_W * this.k - this.vr.w) / 2, cy * this.k - this.vr.h / 2, false);
+  // 电脑：全城铺满、底边贴底栏（城墙在顶栏下）；手机照旧对准三座建筑
+  if (D) this.scrollTo(0, 1e9, false); else { const sl = Object.values(this.slots()), cy = sl.reduce((n, s) => n + s.y, 0) / sl.length - 80; this.scrollTo((PANO_W * this.k - this.vr.w) / 2, cy * this.k - this.vr.h / 2, false); }
   this.refresh();
  }
  private anyModal() { return this.children.list.some(o => (o as unknown as {depth: number}).depth >= 600); }
- private inView(x: number, y: number) { const r = this.vr; return x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h; }
+ private inView(x: number, y: number) { const r = this.vr, t = D ? TOWN_BARS.top : 0, b = D ? TOWN_BARS.bottom : 0; return x >= r.x && x <= r.x + r.w && y >= r.y + t && y <= r.y + r.h - b; }
+ /** 缩放（同营寨 CityScene.zoomAt）：容器缩放 z 在 [1/PANO_ZOOM, 1]，默认刚好铺满；名牌 / 气泡按 1/z 反缩放，字一样大。 */
+ private z = 1;
+ private get ke() { return this.k * this.z; }
+ private zoomAt(z: number, px: number, py: number) {
+  const nz = Phaser.Math.Clamp(z, D ? 1 / PANO_ZOOM : 1, 1); if (Math.abs(nz - this.z) < 1e-4) return;
+  const wx = (px - this.pano.x) / this.z, wy = (py - this.pano.y) / this.z; this.z = nz; this.pano.setScale(nz); this.labelScale();
+  this.scrollTo(wx * nz - (px - this.vr.x), wy * nz - (py - this.vr.y));
+ }
+ private labelScale() { const k = 1 / this.z; if (this.folk) this.folk.labelK = k; for (const o of this.pano?.list ?? []) if (/^(tag-|ready-|folk-b)/.test(o.name)) (o as Phaser.GameObjects.Text).setScale(k); }
  private scrollTo(sx: number, sy: number, _remember = true) {
-  this.sx = Phaser.Math.Clamp(sx, 0, Math.max(0, PANO_W * this.k - this.vr.w)); this.sy = Phaser.Math.Clamp(sy, 0, Math.max(0, PANO_H * this.k - this.vr.h));
-  this.pano?.setPosition(this.vr.x - this.sx, this.vr.y - this.sy);
-  for (const h of this.hits) { const x = h.x + this.pano.x, y = h.y + this.pano.y; if (h.input) h.input.enabled = this.inView(x, y); }
+  this.sx = Phaser.Math.Clamp(sx, 0, Math.max(0, PANO_W * this.ke - this.vr.w)); this.sy = Phaser.Math.Clamp(sy, 0, Math.max(0, PANO_H * this.ke - this.vr.h + (D ? TOWN_BARS.bottom : 0)));
+  this.pano?.setScale(this.z).setPosition(this.vr.x - this.sx, this.vr.y - this.sy);
+  for (const h of this.hits) { const x = h.x * this.z + this.pano.x, y = h.y * this.z + this.pano.y; if (h.input) h.input.enabled = this.inView(x, y); }
  }
  private refresh() {
   const s = loadWorld(), c = cityById(this.cityId)!, lv = cityLevels(this.cityId, s), sp = SPECIALTIES[c.id];
@@ -142,15 +166,60 @@ export class TownScene extends Phaser.Scene {
    hit.on('pointerdown', () => { this.pressed = id; });
    hit.on('pointerup', () => { const own = this.pressed === id; this.pressed = null; if (!own || this.drag?.moved) return; this.openCard(id); });
    const base = art ? {x: art.scaleX, y: art.scaleY} : null, color = tag.style.color as string;
-   hit.on('pointerover', () => { tag.setColor('#ffe08a').setScale(1.18); glow?.setFillStyle(0xffe39a, .5); if (art && base) art.setScale(base.x * 1.04, base.y * 1.04); })
-    .on('pointerout', () => { tag.setColor(color).setScale(1); glow?.setFillStyle(0xffe39a, 0); if (art && base) art.setScale(base.x, base.y); });
+   hit.on('pointerover', () => { tag.setColor('#ffe08a').setScale(1.18 / this.z); glow?.setFillStyle(0xffe39a, .5); if (art && base) art.setScale(base.x * 1.04, base.y * 1.04); })
+    .on('pointerout', () => { tag.setColor(color).setScale(1 / this.z); glow?.setFillStyle(0xffe39a, 0); if (art && base) art.setScale(base.x, base.y); });
    if (id === 'office') hit.setData('padDefault', true);
    this.pano.add(hit); this.hits.push(hit);
   }
+  this.drawHq(k);
   // 排前后：名牌、徽记、点击区总在最上；建筑与民居按底边 y；居民放回来一起排
   for (const o of this.pano.list) if ((o as unknown as {zy?: number}).zy === undefined && (o instanceof Phaser.GameObjects.Text || o instanceof Phaser.GameObjects.Rectangle || o instanceof Phaser.GameObjects.Container)) zy(o, 1e8);
   if (this.folk) this.folk.attach(); else this.pano.list.sort((p, q) => ((p as unknown as {zy?: number}).zy ?? (p as unknown as {y: number}).y) - ((q as unknown as {zy?: number}).zy ?? (q as unknown as {y: number}).y));
-  this.scrollTo(this.sx, this.sy);
+  this.labelScale(); this.scrollTo(this.sx, this.sy);
+ }
+ /**
+  * 营寨功能建筑（11-19 用户「城市也应该有义军营寨那些功能建筑」）：统一大本营——招贤馆 / 讲武堂 / 马厩 / 军营只有一套（世界存档 town.levels，同一份武将、科技、马匹），
+  * 每座我方城池画一处分署，点了进营寨打开同一个面板（CityScene {open, back}），面板关掉回到这座城；建造 / 升级仍按营寨规则（营寨升为县城后才能升级等）。
+  * 府衙对应主帐、屯田对应农田（城池自己的），不重复画；旅商摊点开同一个军需商人（同一份货）。营寨没有的建筑（还没开放的）不画。
+  */
+ private drawHq(k: number) {
+  const s = loadWorld(), t = s.town, size = citySize(t), slots = HQ_SLOTS[this.tier()];
+  for (const id of HQ_IDS) {
+   if (!buildingOpen(t, id)) continue;
+   const sl = slots[id], lv = levelOf(t, id), x = sl.x * k, y = sl.y * k, w = sl.w * k * LEVEL_SCALE[Math.min(3, Math.max(1, lv))];
+   const camp = size === 1 && (CAMP_ART_IDS as readonly string[]).includes(id) && this.textures.exists('city_camp_' + id), key = camp ? 'city_camp_' + id : 'city_' + id + '_' + Math.min(3, Math.max(1, lv));
+   let h = w * .6, art: Phaser.GameObjects.Image | undefined;
+   if (this.textures.exists(key)) { art = this.add.image(x, y, key).setOrigin(.5, 1).setName('hq-' + id); art.setScale(w / art.width); if (!lv) art.setAlpha(.45); h = art.displayHeight; this.pano.add(art); }
+   const name = TOWN_BUILDINGS[id].name, tag = txt(this, x, y - 4, lv > 0 ? name + ' Lv' + lv : '＋ ' + name, D ? 12 : 13, lv > 0 ? '#fff1cf' : '#f6e2ae').setOrigin(.5, 1).setBackgroundColor(lv > 0 ? '#20150dcc' : '#20150d99').setPadding(6, 2, 6, 2).setName('tag-hq-' + id);
+   this.pano.add(tag);
+   const hit = this.add.rectangle(x, y - h / 2, Math.max(w * .8, 60), Math.max(h, 50), 0xffffff, .001).setName('bld-hq-' + id).setInteractive({useHandCursor: true});
+   hit.on('pointerdown', () => { this.pressed = 'hq-' + id; });
+   hit.on('pointerup', () => { const own = this.pressed === 'hq-' + id; this.pressed = null; if (!own || this.drag?.moved) return; uiSfx().play('uiClick'); this.scene.start('CityScene', {open: id, back: this.cityId}); });
+   const base = art ? {x: art.scaleX, y: art.scaleY} : null, color = tag.style.color as string;
+   hit.on('pointerover', () => { tag.setColor('#ffe08a').setScale(1.18 / this.z); if (art && base) art.setScale(base.x * 1.04, base.y * 1.04); })
+    .on('pointerout', () => { tag.setColor(color).setScale(1 / this.z); if (art && base) art.setScale(base.x, base.y); });
+   this.pano.add(hit); this.hits.push(hit);
+  }
+  // 旅商摊：遮棚 + 推车 + 坛罐（营地道具），点开军需商人
+  const m = slots.merchant, mx = m.x * k, my = m.y * k, P = 'camp_props_v2';
+  if (this.textures.exists(P)) {
+   const prop = (fr: number, dx: number, dy: number, w: number, flip = false) => { const im = this.add.image(mx + dx * k, my + dy * k, P, fr).setOrigin(.5, .9).setFlipX(flip).setName('hq-merchant-prop'); im.setScale(w * k / 128 * 1.15); zy(im, my + dy * k); this.pano.add(im); return im; };
+   const stall = prop(2, 0, 0, m.w); prop(24, -m.w * .62, 3, 40, true); prop(18, m.w * .42, 4, 22);
+   const tag = txt(this, mx, my + 2, '旅商', D ? 12 : 13, '#fff1cf').setOrigin(.5, 1).setBackgroundColor('#5a1f14dd').setPadding(8, 2, 8, 2).setName('tag-hq-merchant'); this.pano.add(tag);
+   const hit = this.add.rectangle(mx - 8 * k, my - m.w * .3 * k, m.w * 1.8 * k, Math.max(m.w * .7 * k, 46), 0xffffff, .001).setName('bld-hq-merchant').setInteractive({useHandCursor: true});
+   hit.on('pointerdown', () => { this.pressed = 'hq-merchant'; });
+   hit.on('pointerup', () => { const own = this.pressed === 'hq-merchant'; this.pressed = null; if (!own || this.drag?.moved) return; this.openMerchant(); });
+   const base = {x: stall.scaleX, y: stall.scaleY};
+   hit.on('pointerover', () => { tag.setColor('#ffe08a').setScale(1.18 / this.z); stall.setScale(base.x * 1.05, base.y * 1.05); }).on('pointerout', () => { tag.setColor('#fff1cf').setScale(1 / this.z); stall.setScale(base.x, base.y); });
+   this.pano.add(hit); this.hits.push(hit);
+  }
+ }
+ /** 旅商：同营寨（ui/MerchantShop，同一份货，用军粮买，兵装进行囊）；道具图集按需载入。 */
+ private openMerchant() {
+  uiSfx().play('uiClick');
+  const s = loadWorld(), tier = s.warlordStages >= 3 ? 2 : s.cleared.hulao ? 1 : 0; let hero = 'zhaoyun'; try { hero = localStorage.getItem('im_last_hero') || hero; } catch { /* 存储不可用 */ }
+  const open = () => { if (!this.sys.isActive()) return; openMerchantShop(this, {wallet: {name: '军粮', get: () => loadWorld().provisions, spend: spendProvisions}, tier, hero: (CHARACTERS.some(c => c.id === hero) ? hero : 'zhaoyun') as CharacterId, depth: 600, onClose: () => { if (this.sys.settings.status === Phaser.Scenes.RUNNING) this.refresh(); }, sound: k => uiSfx().play(k as 'uiClick')}); };
+  if (this.textures.exists('item_icons')) open(); else { this.load.atlas('item_icons', 'assets/items/item-icons.webp', 'assets/items/item-icons.json'); this.load.once('complete', open); this.load.start(); }
  }
  private toast(v: string) {
   const warn = storageUnavailable ? (incompatibleSave ? '存档版本较新，本次修改不会保存' : '存储不可用，修改仅保留本次会话') : '', msg = [v, warn].filter(Boolean).join('\n'); if (!msg) return;

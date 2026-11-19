@@ -38,6 +38,14 @@ const DECK = { key: 'town_bridge_deck', url: 'assets/terrain/bridge/stoneDeckT.p
 /** 各帧画面底边在格子里的位置（originY），让物件「站」在地上。 */
 const FOOT: Record<string, number> = { st0: .99, st1: .99, st2: .99, st3: .99, st7: .99, ct0: .95, ct1: .93, ct2: .93, cp4: .95, cp14: .93, cp16: .9, cp18: .9, cp24: .88 };
 const BUILDING = /^(st[0-3]|ct[02])$/;
+/**
+ * 比例尺（11-19 用户「注意建筑比例」）：居民身高 CITIZEN（全景像素）；门高约 1.3 个居民。各图的门高占画宽的比例量过（DOOR），
+ * 宽度按门算出来（decorWidth）——所有图等比缩放、不拉伸。府衙等功能建筑图是「院落微缩」，门高约 30 全景像素（府衙 Lv1 宽 284），居民按它定为 24。
+ * 两层楼房门比例小、画面更高；摊棚、货担按人能站在棚下（棚檐约 1.3 人）定，比民房小得多。
+ */
+export const CITIZEN = 24;
+const DOOR: Record<string, number> = { st0: .295, st1: .24, st2: .34, st3: .35, ct2: .37, ct0: .41, ct1: .52 };
+const decorWidth = (id: string, scale = 1): number => DOOR[id] ? CITIZEN * 1.3 / DOOR[id] * scale : 0;
 
 export function loadTownLife(scene: Phaser.Scene): void {
   for (const f of FOLK_SHEETS) if (!scene.textures.exists(f.key)) scene.load.image(f.key, f.url);
@@ -47,38 +55,40 @@ export function loadTownLife(scene: Phaser.Scene): void {
 
 type Art = keyof typeof ATLAS;
 interface Decor { a: Art; f: number; x: number; y: number; w: number; lv?: number; flip?: boolean }
-const d = (a: Art, f: number, x: number, y: number, w: number, lv = 1, flip = false): Decor => ({ a, f, x, y, w, lv, flip });
+/** w = 0：按比例尺（门高）算宽；道具、水井给定宽。 */
+const d = (a: Art, f: number, x: number, y: number, w = 0, lv = 1, flip = false): Decor => ({ a, f, x, y, w, lv, flip });
 /** 民居店铺（x, y = 底边中点）。不放在建筑位、路面、河上。 */
 export const TOWN_DECOR: Record<CityTier, Decor[]> = {
   small: [
-    // 左上空地基：一排民房、店铺、粮仓
-    d('st', 0, 205, 390, 100), d('st', 2, 305, 392, 104), d('st', 3, 398, 392, 82, 2),
-    // 右侧空地、井边
-    d('ct', 1, 1185, 672, 84, 2), d('st', 0, 1290, 760, 104, 2, true), d('st', 1, 1410, 790, 104, 3),
-    d('ct', 0, 1130, 935, 116, 2), d('st', 0, 560, 990, 104, 3), d('cp', 24, 470, 990, 52), d('cp', 16, 1000, 720, 34),
+    d('st', 0, 392, 392), d('ct', 0, 620, 702), d('cp', 16, 668, 706, 26), d('cp', 24, 470, 986, 40),
+    d('st', 1, 1420, 985, 0, 2), d('st', 0, 330, 990, 0, 2, true), d('st', 2, 1380, 760, 0, 3), d('cp', 18, 1110, 690, 24),
   ],
   medium: [
-    // 左上地基：茶肆楼房、店铺、民房
-    d('st', 1, 318, 368, 104), d('st', 2, 418, 371, 106), d('st', 0, 486, 373, 70, 2),
-    // 右上地基：市集摊棚、民房
-    d('ct', 0, 1160, 371, 124), d('st', 0, 1262, 372, 96), d('cp', 18, 1318, 374, 30, 2),
-    // 右中地基：茶肆、粮仓、水井、货担
-    d('st', 1, 1098, 507, 112), d('st', 7, 1196, 509, 66), d('st', 3, 1272, 509, 92, 2), d('ct', 1, 1338, 511, 70, 3),
-    // 大道左侧草地：货担；河边粮袋、坛罐
-    d('ct', 1, 632, 498, 66), d('cp', 16, 568, 570, 30), d('cp', 18, 1004, 570, 28),
-    // 南边：民房、库房、店铺（府衙升级后）
-    d('st', 0, 250, 1012, 112), d('ct', 2, 440, 1014, 104, 3), d('st', 0, 1190, 1012, 112, 1, true), d('st', 2, 1380, 1014, 104, 3), d('cp', 24, 600, 1000, 56, 2),
+    // 右中地基：军营旁一座民房；左上 / 右上地基：招贤馆、讲武堂旁的坛罐木箱
+    d('st', 0, 1300, 510), d('cp', 18, 500, 374, 24), d('cp', 14, 1338, 374, 28),
+    // 大道两侧草地（运河南）：小摊、货担；运河北岸水井
+    d('ct', 0, 592, 772), d('ct', 1, 600, 842, 0, 2), d('ct', 0, 1028, 772, 0, 2), d('cp', 16, 568, 570, 26), d('st', 7, 1010, 572, 42),
+    // 南边一排：民房、楼房（茶肆）、店铺
+    d('st', 0, 190, 1012), d('st', 1, 330, 1010, 0, 2), d('st', 2, 462, 1013), d('cp', 24, 572, 1000, 40, 2), d('st', 0, 1440, 1012, 0, 3, true),
   ],
   large: [
-    // 左上第一排：楼房、店铺、市集
-    d('st', 1, 282, 370, 116), d('st', 2, 392, 372, 112), d('ct', 0, 520, 373, 124, 2),
-    // 左上第二排：民房、水井、粮仓、民房
-    d('st', 0, 255, 476, 112), d('st', 7, 352, 474, 66), d('st', 3, 445, 477, 104, 2), d('st', 0, 540, 478, 92, 3, true),
-    // 右上第一排：市集摊棚、楼房、店铺
-    d('ct', 0, 1090, 372, 124), d('st', 1, 1208, 370, 112), d('st', 2, 1320, 373, 100, 2),
-    // 大道两侧、横街边：货担、推车、木箱
-    d('ct', 1, 650, 600, 70, 2), d('cp', 24, 1010, 598, 52), d('cp', 14, 980, 520, 34, 2), d('cp', 16, 630, 522, 30),
+    // 左上第一排：招贤馆旁楼房、店铺；第二排：讲武堂旁水井、民房
+    d('st', 1, 472, 370), d('st', 2, 568, 372), d('st', 7, 430, 476, 42), d('st', 0, 520, 478), d('st', 3, 405, 372, 0, 3),
+    // 右上：军营旁市集小摊、店铺
+    d('ct', 0, 1285, 373), d('st', 2, 1360, 373, 0, 2), d('ct', 1, 1335, 380, 0, 3),
+    // 横街边：推车、木箱；货担
+    d('cp', 24, 1010, 598, 40), d('cp', 14, 980, 522, 28, 2), d('cp', 16, 640, 522, 26), d('ct', 1, 1440, 600, 0, 2),
   ],
+};
+/**
+ * 营寨功能建筑在城里的位置（11-19 用户「城市也应该有义军营寨那些功能建筑」）。同一套建筑、同一份等级（世界存档 town.levels），
+ * 每座城画一处「分署」，点了打开营寨同一个面板（TownScene → CityScene {open, back}）。宽度与营寨同比例（府衙最大）。merchant = 旅商摊。
+ */
+export type HqId = 'talent' | 'academy' | 'stable' | 'barracks';
+export const HQ_SLOTS: Record<CityTier, Record<HqId | 'merchant', { x: number; y: number; w: number }>> = {
+  small: { talent: { x: 245, y: 392, w: 196 }, academy: { x: 1262, y: 690, w: 200 }, barracks: { x: 600, y: 996, w: 200 }, stable: { x: 1160, y: 975, w: 200 }, merchant: { x: 985, y: 728, w: 70 } },
+  medium: { talent: { x: 385, y: 372, w: 196 }, academy: { x: 1215, y: 373, w: 200 }, barracks: { x: 1138, y: 509, w: 196 }, stable: { x: 1240, y: 1012, w: 200 }, merchant: { x: 632, y: 506, w: 70 } },
+  large: { talent: { x: 300, y: 372, w: 196 }, academy: { x: 290, y: 477, w: 200 }, barracks: { x: 1130, y: 373, w: 200 }, stable: { x: 1240, y: 1008, w: 200 }, merchant: { x: 1490, y: 606, w: 70 } },
 };
 /** 建筑位没建时，在地基前两角插的小旗（全景像素）。 */
 const SLOT_FLAGS: Record<CityTier, Partial<Record<CityBuildingId, Array<[number, number]>>>> = {
@@ -121,9 +131,9 @@ type SceneKind = 'chat' | 'buy' | 'well' | 'farm' | 'drill';
 interface Vignette { kind: SceneKind; x: number; y: number; need?: CityBuildingId }
 /** 小景（全景像素，人物脚下）：农夫要建了屯田、对练要建了募兵所才有。 */
 const TOWN_SCENES: Record<CityTier, Vignette[]> = {
-  small: [{ kind: 'chat', x: 520, y: 470 }, { kind: 'well', x: 1036, y: 692 }, { kind: 'chat', x: 1180, y: 860 }, { kind: 'farm', x: 352, y: 712, need: 'tuntian' }, { kind: 'drill', x: 1275, y: 530, need: 'muster' }],
-  medium: [{ kind: 'chat', x: 600, y: 404 }, { kind: 'buy', x: 1160, y: 392 }, { kind: 'well', x: 1196, y: 528 }, { kind: 'chat', x: 1010, y: 552 }, { kind: 'farm', x: 292, y: 800, need: 'tuntian' }, { kind: 'drill', x: 1300, y: 812, need: 'muster' }],
-  large: [{ kind: 'chat', x: 620, y: 552 }, { kind: 'buy', x: 1090, y: 392 }, { kind: 'well', x: 352, y: 492 }, { kind: 'chat', x: 1360, y: 552 }, { kind: 'farm', x: 392, y: 740, need: 'tuntian' }, { kind: 'drill', x: 1292, y: 752, need: 'muster' }],
+  small: [{ kind: 'chat', x: 520, y: 470 }, { kind: 'well', x: 1036, y: 692 }, { kind: 'buy', x: 620, y: 716 }, { kind: 'chat', x: 1050, y: 800 }, { kind: 'farm', x: 352, y: 712, need: 'tuntian' }, { kind: 'drill', x: 1275, y: 530, need: 'muster' }],
+  medium: [{ kind: 'chat', x: 600, y: 404 }, { kind: 'buy', x: 592, y: 786 }, { kind: 'well', x: 988, y: 582 }, { kind: 'chat', x: 1230, y: 552 }, { kind: 'farm', x: 292, y: 800, need: 'tuntian' }, { kind: 'drill', x: 1300, y: 812, need: 'muster' }],
+  large: [{ kind: 'chat', x: 620, y: 552 }, { kind: 'buy', x: 1285, y: 388 }, { kind: 'well', x: 430, y: 492 }, { kind: 'chat', x: 1360, y: 552 }, { kind: 'farm', x: 392, y: 740, need: 'tuntian' }, { kind: 'drill', x: 1292, y: 752, need: 'muster' }],
 };
 /** 点居民时的话（按行走图）。 */
 const BARKS: Record<string, string[]> = {
@@ -160,13 +170,13 @@ export function drawTownDecor(scene: Phaser.Scene, pano: Phaser.GameObjects.Cont
   for (const it of TOWN_DECOR[tier]) {
     if ((it.lv ?? 1) > office) continue;
     const A = ATLAS[it.a]; if (!scene.textures.exists(A.key)) continue;
-    const id = it.a + it.f, img = scene.add.image(it.x * k, it.y * k, A.key, it.f).setOrigin(.5, FOOT[id] ?? .95).setFlipX(!!it.flip);
-    img.setScale(it.w * k / A.cell * (it.a === 'cp' ? 1.15 : 1.08));
+    const id = it.a + it.f, w = it.w || decorWidth(id) || 80, img = scene.add.image(it.x * k, it.y * k, A.key, it.f).setOrigin(.5, FOOT[id] ?? .95).setFlipX(!!it.flip);
+    img.setScale(w * k / A.cell * (it.a === 'cp' ? 1.15 : 1.08));
     img.setName(BUILDING.test(id) ? 'house-' + houses++ : 'prop-' + props++); zy(img, it.y * k); pano.add(img);
   }
   for (const [id, pts] of Object.entries(SLOT_FLAGS[tier]) as Array<[CityBuildingId, Array<[number, number]>]>) {
     if ((built[id] ?? 0) > 0 || !scene.textures.exists(ATLAS.cp.key)) continue;
-    pts.forEach(([x, y], i) => { const f = scene.add.image(x * k, y * k, ATLAS.cp.key, 4).setOrigin(.5, .95).setScale(38 * k / 128 * 1.6).setFlipX(i === 1).setName(`slot-flag-${id}-${i}`); zy(f, y * k); pano.add(f); });
+    pts.forEach(([x, y], i) => { const f = scene.add.image(x * k, y * k, ATLAS.cp.key, 4).setOrigin(.5, .95).setScale(CITIZEN * 1.9 * k / 128).setFlipX(i === 1).setName(`slot-flag-${id}-${i}`); zy(f, y * k); pano.add(f); });
   }
   return houses;
 }
@@ -187,6 +197,8 @@ export class TownFolk {
   readonly walkers: Walker[] = [];
   readonly ambient: Ambient[] = [];
   private active = 0; private sortIn = 0;
+  /** 气泡反缩放（全景容器缩小时字仍一样大），由 TownScene 设。 */
+  labelK = 1;
   private adj: number[][] = [];
   constructor(private scene: Phaser.Scene, readonly pano: Phaser.GameObjects.Container, private k: number, private tier: CityTier) {
     for (const s of FOLK_SHEETS) {
@@ -197,7 +209,7 @@ export class TownFolk {
     const net = TOWN_ROADS[tier]; this.adj = net.nodes.map(() => []);
     for (const [a, b] of net.edges) { this.adj[a].push(b); this.adj[b].push(a); }
   }
-  private scale(img: Phaser.GameObjects.Image) { img.setScale(this.k * 46 / img.frame.height * 1.6); }
+  private scale(img: Phaser.GameObjects.Image) { img.setScale(this.k * CITIZEN / .75 / img.frame.height); }
   /** 所有要放进全景的对象（全景重画前摘下、画完再放回）。 */
   objects(): Phaser.GameObjects.GameObject[] { return [...this.walkers.flatMap(w => w.cart ? [w.img, w.cart] : [w.img]), ...this.ambient.flatMap(a => [a.img, ...a.extra])]; }
   detach(): void { for (const o of this.objects()) this.pano.remove(o, false); }
@@ -212,7 +224,7 @@ export class TownFolk {
       this.scale(img); this.pano.add(img);
       const from = Math.floor(Math.random() * N), nb = this.adj[from], to = nb[Math.floor(Math.random() * nb.length)] ?? from, kid = sheet.key === 'folk_child';
       const w: Walker = { img, key: sheet.key, from, to, prev: -1, t: Math.random(), lane: Math.random() * 2 - 1, speed: kid ? 62 + Math.random() * 14 : 24 + Math.random() * 16, pause: Math.random() * 2, frame: 0, kid };
-      if (sheet.key === 'folk_porter' && !this.walkers.some(x => x.cart) && this.scene.textures.exists(ATLAS.cp.key)) { w.cart = this.scene.add.image(0, 0, ATLAS.cp.key, 24).setOrigin(.5, .88).setScale(this.k * 52 / 128 * 1.15).setName('folk-cart'); this.pano.add(w.cart); w.speed = 20; }
+      if (sheet.key === 'folk_porter' && !this.walkers.some(x => x.cart) && this.scene.textures.exists(ATLAS.cp.key)) { w.cart = this.scene.add.image(0, 0, ATLAS.cp.key, 24).setOrigin(.5, .88).setScale(this.k * 34 / 128 * 1.15).setName('folk-cart'); this.pano.add(w.cart); w.speed = 20; }
       this.walkers.push(w);
     }
     this.active = want;
@@ -232,25 +244,25 @@ export class TownFolk {
     for (const v of TOWN_SCENES[this.tier]) {
       if (v.need && !(built[v.need] > 0)) continue;
       if (v.kind === 'chat') {
-        const a = put('folk_man', v.x - 13, v.y, 'right'), b = put('folk_woman', v.x + 13, v.y, 'left');
-        if (a && b) { const dots = this.bubble(v.x * this.k, (v.y - 66) * this.k, '……', 11).setAlpha(0); a.extra.push(dots); this.scene.tweens.add({ targets: dots, alpha: { from: 0, to: 1 }, yoyo: true, hold: 1400, repeatDelay: 2600 + Math.random() * 2000, repeat: -1, duration: 260 }); }
+        const a = put('folk_man', v.x - 7, v.y, 'right'), b = put('folk_woman', v.x + 7, v.y, 'left');
+        if (a && b) { const dots = this.bubble(v.x * this.k, (v.y - CITIZEN * 1.4) * this.k, '……', 11).setAlpha(0); a.extra.push(dots); this.scene.tweens.add({ targets: dots, alpha: { from: 0, to: 1 }, yoyo: true, hold: 1400, repeatDelay: 2600 + Math.random() * 2000, repeat: -1, duration: 260 }); }
       } else if (v.kind === 'buy') put('folk_woman', v.x, v.y, 'up');
       else if (v.kind === 'well') { const a = put('folk_woman', v.x, v.y, 'up'); if (a) this.scene.tweens.add({ targets: a.img, scaleY: a.img.scaleY * .93, yoyo: true, repeat: -1, duration: 700, hold: 300, ease: 'Sine.easeInOut' }); }
       else if (v.kind === 'farm') { const a = put('folk_man', v.x, v.y, 'down', true); if (a) this.scene.tweens.add({ targets: a.img, scaleY: a.img.scaleY * .9, yoyo: true, repeat: -1, duration: 520, hold: 200, repeatDelay: 300 }); }
       else if (v.kind === 'drill') {
-        for (const [dx, dir] of [[-16, 'right'], [16, 'left']] as const) { const a = put('folk_spearman', v.x + dx, v.y, dir, true); if (a) this.scene.tweens.add({ targets: a.img, x: a.img.x + (dx < 0 ? 5 : -5) * this.k * 1.6, yoyo: true, repeat: -1, duration: 260, repeatDelay: 500, onYoyo: () => a.img.setFrame(dir + '_2'), onRepeat: () => a.img.setFrame(dir + '_0') }); }
+        for (const [dx, dir] of [[-10, 'right'], [10, 'left']] as const) { const a = put('folk_spearman', v.x + dx, v.y, dir, true); if (a) this.scene.tweens.add({ targets: a.img, x: a.img.x + (dx < 0 ? 3 : -3) * this.k, yoyo: true, repeat: -1, duration: 260, repeatDelay: 500, onYoyo: () => a.img.setFrame(dir + '_2'), onRepeat: () => a.img.setFrame(dir + '_0') }); }
       }
     }
     this.sortPano();
   }
   private bubble(x: number, y: number, s: string, size = 12): Phaser.GameObjects.Text {
-    const t = this.scene.add.text(x, y, s, { fontFamily: '"Noto Serif SC","SimSun",serif', fontSize: size + 'px', color: '#2a1a0c', backgroundColor: '#f6ecd2ee', padding: { x: 6, y: 3 }, resolution: 2 }).setOrigin(.5, 1).setName('folk-bubble');
+    const t = this.scene.add.text(x, y, s, { fontFamily: '"Noto Serif SC","SimSun",serif', fontSize: size + 'px', color: '#2a1a0c', backgroundColor: '#f6ecd2ee', padding: { x: 6, y: 3 }, resolution: 2 }).setOrigin(.5, 1).setName('folk-bubble').setScale(this.labelK);
     zy(t, 1e8 + 10); this.pano.add(t); return t;
   }
   /** 点到全景 (x, y)（全景内坐标）：最近的居民冒一句话；没人就返回 false。 */
   barkAt(x: number, y: number): boolean {
     const cand = [...this.walkers.slice(0, this.active).map(w => ({ img: w.img, key: w.key, w })), ...this.ambient.map(a => ({ img: a.img, key: a.key, w: undefined as Walker | undefined }))];
-    const r = 26 * this.k * 1.6, h = 64 * this.k * 1.6; let best: typeof cand[number] | null = null, bd = Infinity;
+    const r = CITIZEN * .8 * this.k, h = CITIZEN * 1.5 * this.k; let best: typeof cand[number] | null = null, bd = Infinity;
     for (const c of cand) { if (!c.img.visible) continue; const dx = Math.abs(c.img.x - x), dy = c.img.y - y; if (dx > r || dy < -8 || dy > h) continue; const dd = dx + Math.abs(dy - h / 2) * .5; if (dd < bd) { bd = dd; best = c; } }
     if (!best) return false;
     const lines = BARKS[best.key] ?? BARKS.folk_man, line = lines[Math.floor(Math.random() * lines.length)];
@@ -268,7 +280,7 @@ export class TownFolk {
   }
   private place(w: Walker) {
     const [x, y] = this.pos(w); w.img.setPosition(x * this.k, y * this.k); zy(w.img, y * this.k);
-    if (w.cart) { const n = TOWN_ROADS[this.tier].nodes, dx = n[w.to][0] - n[w.from][0], dy = n[w.to][1] - n[w.from][1], len = Math.hypot(dx, dy) || 1, back = 20 * this.k * 1.6;
+    if (w.cart) { const n = TOWN_ROADS[this.tier].nodes, dx = n[w.to][0] - n[w.from][0], dy = n[w.to][1] - n[w.from][1], len = Math.hypot(dx, dy) || 1, back = CITIZEN * .7 * this.k;
       w.cart.setPosition(w.img.x - dx / len * back, w.img.y - dy / len * back * .6).setFlipX(dx < 0); zy(w.cart, w.cart.y); }
   }
   update(dtMs: number): void {

@@ -104,18 +104,21 @@ await startAs('liubei', { command: 10 });
 const lb = await p.evaluate(() => { const s = window.__game.scene.getScene('GameScene'); const base = s.legion.freeRecruitCount; s.waveIndex = 1; s.recruitedWaves.clear(); s.openRecruit(); /* 招兵只在第 2 波起开 */ const n = s.legion.freeRecruitCount; s.__DEV_ACTIONS?.closePopup?.(); if (s.mode !== 'none') s.setMode('none'); return { base, n }; });
 ck('统御·募众：开招兵时免费人数比基础多 1', lb.n === lb.base + 1, lb);
 
-// 3) 加点面板：主属性金边 ×1.5 文案、三个菱形（诸葛亮智力 7 点 → 亮两个）
+// 3) 加点面板（2026-11-18 改版）：主属性一行写「主属性：智力 · 每点效果 ×倍率」、专精三档（诸葛亮智力 7 点 → 亮两档，第三档写「再加 3 点」），悬停弹完整说明
 await startAs('zhuge', { intellect: 7 });
 const ui = await p.evaluate(async () => {
   const s = window.__game.scene.getScene('GameScene'); s.attributeReturn = 'none'; s.renderAttributePanel(); s.setMode('attributes'); await new Promise(r => setTimeout(r, 200));
+  const mul = (await import('/src/data/attributes.ts')).PRIMARY_MUL;
   const all = s.attributePanel.list.flatMap(o => [o, ...(o.list ?? [])]);
-  const label = all.find(o => o.type === 'Text' && /智力 · 主属性 ×1\.25/.test(o.text));
-  const zones = [1, 2, 3].map(k => all.find(o => o.name === 'attribute-perk-' + k));
-  const tip = all.find(o => o.name === 'attribute-perk-tip'); zones[1].emit('pointerover'); const tipText = tip.text, tipVis = tip.visible; zones[1].emit('pointerout');
-  return { label: !!label, zones: zones.every(Boolean), tipText, tipVis, tipHidden: !tip.visible, tier: s.player.growth.primaryTier() };
+  const head = all.find(o => o.name === 'attribute-primary-head')?.text;
+  const chips = [1, 2, 3].map(k => all.find(o => o.name === 'attribute-perk-' + k)?.text);
+  const chip = all.find(o => o.name === 'attribute-perk-2'); chip.emit('pointerover', { x: chip.x, y: chip.y, worldX: chip.x, worldY: chip.y });
+  const tip = s.children.list.find(o => o.name === 'item-tooltip' && o.visible), title = tip?.getByName('info-tooltip-title')?.text, body = tip?.getByName('info-tooltip-body')?.text ?? '';
+  chip.emit('pointerout'); const hidden = !s.children.list.some(o => o.name === 'item-tooltip' && o.visible);
+  return { mul, head, chips, title, body, hidden, tier: s.player.growth.primaryTier() };
 });
-ck('加点面板：主属性一行写「智力 · 主属性 ×1.25」，有三个专精菱形', ui.label && ui.zones && ui.tier === 2, ui);
-ck('悬停第二个菱形：显示「满 7 点「连珠」：法术伤害 15% 几率翻倍」，移开隐藏', ui.tipVis && ui.tipText === '满 7 点「连珠」：法术伤害 15% 几率翻倍' && ui.tipHidden, ui.tipText);
+ck('加点面板：主属性一行写「主属性：智力 · 每点效果 ×' + ui.mul + '」，专精前两档点亮、第三档「再加 3 点」', ui.head === '主属性：智力 · 每点效果 ×' + ui.mul && ui.chips[0] === '◆ 凝神' && ui.chips[1] === '◆ 连珠' && ui.chips[2] === '◇ 广域 · 再加 3 点' && ui.tier === 2, ui);
+ck('悬停专精：弹完整说明（主属性、每点效果、三档，已解锁 / 再加 X 点），移开隐藏', ui.title === '主属性：智力' && ui.body.includes('满 7 点「连珠」法术伤害 15% 几率翻倍（已解锁）') && ui.body.includes('满 10 点「广域」范围再 +6%（再加 3 点）') && ui.hidden, { title: ui.title, body: ui.body });
 await p.screenshot({ path: `${out}/desktop-attr-panel.png` });
 
 ck('没有页面错误', errors.length === 0, errors.slice(0, 3));

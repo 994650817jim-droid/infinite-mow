@@ -151,6 +151,8 @@ export const ART_V2_FILES: Readonly<Record<string, string>> = {
   horse_v2_jueying_walk: 'assets/horses-v2/jueying_walk.png',
   horse_v2_dawan_walk: 'assets/horses-v2/dawan_walk.png',
   horse_v2_generic_walk: 'assets/horses-v2/generic_walk.png',
+  // 敌军骑兵放走的暗橄榄褐战马（死亡特效 DeathFx 按需载入；即梦出图，tools/prepare-enemy-horse.mjs 处理；4×4 同 generic_walk）
+  horse_v2_enemy_brown_walk: 'assets/horses-v2/enemy_brown_walk.png',
   horse_v2_mule_walk: 'assets/horses-v2/mule_walk.png',
   // 骑乘姿态图（只画人，4×8：骑行 + 马上出招；HeroMount 按需载入，没有的武将退回拼接）
   ride_v2_zhaoyun: 'assets/ride-v2/zhaoyun_ride.png',

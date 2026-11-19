@@ -69,8 +69,8 @@ const killBoss = async p => {
 }
 {
   const { p } = await open('small');
-  const t = await p.evaluate(() => { const s = window.__S; s.elapsed = 241; window.__step(10); return { over: s.over, victory: s.victory, limit: window.__M.prof.limitSeconds }; });
-  ck('小城：限时 240 秒未破城 → 失败', t.over && t.victory === false && t.limit === 240, t);
+  const t = await p.evaluate(() => { const s = window.__S; s.elapsed = 241 + 45; /* 限时 + 援军阶段（data/siegeTimer） */ window.__step(10); return { over: s.over, victory: s.victory, limit: window.__M.prof.limitSeconds }; });
+  ck('小城：限时 240 秒 + 援军阶段 45 秒仍未破城 → 撤军（失败）', t.over && t.victory === false && t.limit === 240, t);
   await p.close();
 }
 
@@ -122,8 +122,8 @@ const killBoss = async p => {
   const { p } = await open('large');
   const r = await p.evaluate(() => { const s = window.__S, m = window.__M; window.__clear(); m.startAt = s.combatNow - 121000; window.__step(5); const sally = s.enemies.filter(e => e.active && !e.isSupplySlot).length; return { bridge: m.bridgeDown, sally: m.stats.sally, n: sally }; });
   ck('大城：一直不砍绳索，守军到时自己放桥出城（多一波出城兵）', r.bridge && r.sally === 1 && r.n >= 4, r);
-  const t = await p.evaluate(() => { const s = window.__S; s.elapsed = 601; window.__step(10); return { over: s.over, victory: s.victory }; });
-  ck('大城：限时 600 秒未破城 → 失败', t.over && t.victory === false, t);
+  const t = await p.evaluate(() => { const s = window.__S; s.elapsed = 601 + 75; /* 限时 + 援军阶段 */ window.__step(10); return { over: s.over, victory: s.victory }; });
+  ck('大城：限时 600 秒 + 援军阶段 75 秒仍未破城 → 撤军（失败）', t.over && t.victory === false, t);
   await p.close();
 }
 ck('全程无 pageerror / console error', errors.length === 0, errors.slice(0, 6));

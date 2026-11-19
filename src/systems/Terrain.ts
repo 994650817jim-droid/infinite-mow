@@ -125,6 +125,8 @@ export class Terrain {
     for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) { const l = this.grid.get(this.key(cx + dx, cy + dy)); if (l) for (const t of l) this.near.push(t); }
     return this.near;
   }
+  /** 把一个圆推出树干（随行用，和主将同一套）。返回推开量（没碰到为 null）。 */
+  pushCircle(x: number, y: number, r: number): Pt | null { return this.push(x, y, r); }
   /** 把一个圆推出树干。返回推开量（没碰到为 null）。 */
   private push(x: number, y: number, r: number): Pt | null {
     let px = 0, py = 0, hit = false;
@@ -146,14 +148,18 @@ export class Terrain {
   }
   /** 部曲寻路用：树干当作小方块。 */
   navBoxes(): Array<{ left: number; right: number; top: number; bottom: number }> { const r = TERRAIN.trunk; return this.trees.filter(t => !t.burnt).map(t => ({ left: t.x - r, right: t.x + r, top: t.y - r, bottom: t.y + r })); }
-  /** 树冠遮挡：主将走到树后面时树冠变半透明（只查主将附近的树）。 */
-  updateCanopy(player: Player) {
-    // 只看主将附近的树，加上上一帧已经变透明的树（离开后恢复）——不扫全图
-    const check = new Set<Tree>([...this.treesNear(player.x, player.y), ...this.faded]);
+  /**
+   * 树冠遮挡：主将、首领、精英走到树后面时树冠变半透明（只查他们附近的树）。
+   * 首领 / 精英也算（用户 2026-11-18 场景审查：11-3 孟获、10-2 大批人物被丛林树冠整个盖住）。
+   */
+  updateCanopy(player: Player, others: ReadonlyArray<{ x: number; y: number }> = []) {
+    // 只看这几人附近的树，加上上一帧已经变透明的树（离开后恢复）——不扫全图
+    const who = [player, ...others], check = new Set<Tree>(this.faded);
+    for (const w of who) for (const t of this.treesNear(w.x, w.y)) check.add(t);
     this.faded.clear();
     for (const t of check) {
       if (!t.img) continue;
-      const behind = player.y < t.y - 4 && t.y - player.y < t.size * .85 && Math.abs(player.x - t.x) < t.size * .38;
+      const behind = who.some(w => w.y < t.y - 4 && t.y - w.y < t.size * .85 && Math.abs(w.x - t.x) < t.size * .38);
       if (behind) this.faded.add(t);
       if (behind !== t.behind) { t.behind = behind; t.img.setAlpha(behind ? TERRAIN.behindAlpha : t.burnt ? .9 : 1); }
     }

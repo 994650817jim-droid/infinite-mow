@@ -5,6 +5,7 @@ import type { SpatialGrid } from '../systems/SpatialGrid';
 import type { Sfx } from '../systems/Sfx';
 import type { PlayerStats, WeaponId, WeaponState } from '../types';
 import { PASSIVE_RULES } from '../data/passives';
+import { ZG_EARLY } from '../data/heroMechanics';
 import { HERO_TINT } from '../data/characters';
 import { BAODIAO_DEF, DANGYANG_DEF, ZHANJIN_DEF, SHUANGGU_DEF, baodiaoBehavior, dangyangBehavior, zhanjinBehavior, shuangguBehavior, smartTarget } from './heroWeapons2';
 import { HINT_MOCK, groundScar } from '../ui/HintStyle';
@@ -455,7 +456,8 @@ export const WEAPON_BEHAVIORS: Record<WeaponId, (host: WeaponHost, weapon: Weapo
     if (weapon.cooldownLeft > 0) return;
     const level = weapon.level;
     const def = WEAPON_DEFS.flame_banner;
-    const damage = def.damage(level, host.player.stats) * host.player.growth.damageMultiplier(host.combatNow);
+    // 前期补强（2026-11-18 平衡审查，data/heroMechanics.ts ZG_EARLY）：Lv1–3 伤害 ×1.4 / 1.25 / 1.12
+    const damage = def.damage(level, host.player.stats) * host.player.growth.damageMultiplier(host.combatNow) * (ZG_EARLY.earlyMul[level - 1] ?? 1);
     const passiveCast = host.player.passive.beginCast('flame_banner');
     const radius = (120 + (level - 1) * 8) * host.player.stats.fireAreaMul * passiveCast.radiusMul;
     let dirX = 0;

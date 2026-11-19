@@ -17,11 +17,15 @@ export const PROPS_V2: ReadonlyArray<{ key: string; file: string; frame?: number
   { key: 'prop_break_fx', file: 'assets/props-v2/prop-break-fx.png', frame: 96 }, // 碎裂序列帧 6×4（木 / 深木铁 / 陶石 / 布草）
   { key: 'prop_debris', file: 'assets/props-v2/prop-debris.png', frame: 96 }, // 残骸 4 个
 ];
-/** 关隘营寨道具（4×2、256 格），势力：1 董卓西凉 2 袁绍河北 3 曹军；0 黄巾不用这套 */
+/** 关隘营寨道具（4×2、256 格），势力：1 董卓西凉 2 袁绍河北 3 曹军 4 东吴 5 蜀（益州）6 南蛮；0 黄巾不用这套 */
 export const FACTION_PROPS: Readonly<Record<number, { key: string; file: string }>> = {
   1: { key: 'props_v2_xiliang', file: 'assets/props-v2/fort-xiliang.png' },
   2: { key: 'props_v2_yuan', file: 'assets/props-v2/fort-yuan.png' },
   3: { key: 'props_v2_cao', file: 'assets/props-v2/fort-cao.png' },
+  // 场景审查 P3（美术会话出图，版式同上）：吴紫（猇亭、连营、麦城）、蜀翠绿金（刘璋益州军）、蛮族棕（南征）
+  4: { key: 'props_v2_wu', file: 'assets/props-v2/fort-wu.png' },
+  5: { key: 'props_v2_shu', file: 'assets/props-v2/fort-shu.png' },
+  6: { key: 'props_v2_man', file: 'assets/props-v2/fort-man.png' },
 };
 
 let enabled: boolean | undefined;

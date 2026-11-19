@@ -22,9 +22,8 @@ try {
   const tabs = await ev(s => s.campUI.root.list.filter(o => /^camp-tab-\d$/.test(o.name ?? '')).map(o => o.name));
   for (const t of tabs) {
     await ev((s, n) => { s.campUI.root.getByName(n).emit('pointerdown'); }, t); await p.waitForTimeout(700);
-    if (t === 'camp-tab-3') {
-      for (let k = 0; k < 4; k++) { await ev((s, k) => { s.campUI.root.list.flatMap(o => o.list ?? []).find(o => o.name === 'camp-build-section-' + k)?.emit('pointerdown'); }, k); await p.waitForTimeout(500); await p.screenshot({ path: `${OUT}/${TAG}-${t}-${k}.png` }); }
-    } else await p.screenshot({ path: `${OUT}/${TAG}-${t}.png` });
+    // 2026-11-18：将帅帐改为一屏构筑总览（ui/BuildOverview），不再有四个子页
+    await p.screenshot({ path: `${OUT}/${TAG}-${t}.png` });
   }
   console.log('shots', TAG, tabs.join(' '));
 } finally { await b.close(); }

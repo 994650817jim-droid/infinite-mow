@@ -93,6 +93,7 @@ assets/raw/*
 !/tools/deathfx-mixed.mjs
 !/tools/prepare-death-dust.mjs
 !/tools/prepare-death-props.mjs
+!/tools/prepare-enemy-horse.mjs
 !/tools/test-merit.mjs
 !/tools/test-level-merge.mjs
 !/tools/test-hero-codex.mjs
@@ -181,6 +182,7 @@ assets/raw/*
 !/tools/test-zhangjiao-alive.mjs
 !/tools/shot-camp-pano.mjs
 !/tools/test-camp-mount.mjs
+!/tools/prepare-camp-hay.mjs
 !/tools/test-jingnan-art.mjs
 !/tools/test-hanzhong-art.mjs
 !/tools/test-yiling-full.mjs
@@ -195,6 +197,8 @@ assets/raw/*
 !/tools/prepare-siege-hall.mjs
 !/tools/shot-siege-hall.mjs
 !/tools/shot-yiling-body.mjs
+!/tools/prepare-scene-sheet.mjs
+!/tools/resize-image.mjs
 !/tools/build-boss-ride.mjs
 !/tools/test-tutorial.mjs
 !/tools/test-boss-moves.mjs
@@ -250,8 +254,15 @@ assets/raw/*
 !/tools/test-zhaoyun-fx.mjs
 !/tools/test-camp-medic.mjs
 !/tools/shot-camp-rest.mjs
+
+# 构筑总览测试（2026-11-18）
+!/tools/test-build-overview.mjs
 !/tools/test-surrender.mjs
 !/tools/test-dual-boss.mjs
 !/tools/test-scene-p1.mjs
 !/tools/test-hotkeys.mjs
 !/tools/test-build-persist.mjs
+!/tools/test-wall-seal.mjs
+!/tools/shot-wall-seal.mjs
+!/tools/test-boss-crowd.mjs
+!/tools/test-follower-obstacles.mjs

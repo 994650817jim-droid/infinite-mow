@@ -114,7 +114,7 @@ export function terrainConfigFor(arc: string, stage: number): TerrainConfig | nu
     } : null;
     // 第十二章 街亭（P2：马谡上的「南山」没有）：南面一座山（崖壁 + 坡前松林）；五丈原（P2：渭水没体现）：南面渭水、两座桥
     case 'beifa': return stage === 1 ? {
-      clear: [C0, { x: -360, y: 160, r: 160 }, { x: 380, y: -170, r: 160 }, { x: -340, y: 200, r: 180 }],
+      clear: [C0, { x: -600, y: 420, r: 170 }, { x: 380, y: -170, r: 160 }, { x: -340, y: 200, r: 180 }],
       cliffs: [{ x: -100, y: 980, w: 1700, h: 440 }],
       woods: [{ x: -880, y: 680, rx: 220, ry: 120, count: 7, seed: 107, kind: 'pine' }, { x: 760, y: 700, rx: 220, ry: 120, count: 7, seed: 109, kind: 'pine' }],
     } : stage === 3 ? {

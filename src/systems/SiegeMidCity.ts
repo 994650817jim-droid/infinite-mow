@@ -53,7 +53,7 @@ type Box = { left: number; right: number; top: number; bottom: number };
 const WALL = { segStep: 196, gateHalfVis: 124, gateOverlap: 14, beyond: 520, shadowBands: 8, shadowAlpha: .42, houseGap: 300, gateLabelDy: 62, moatFlow: 30 } as const;
 /** 城门图上多大比例（从顶往下）画成前景层：到门洞拱顶以上、含屋顶 / 阁楼 / 垛口。 */
 const GATE_FRONT_CUT = .46;
-const ART = { walls: 'siege_mid_walls', gateFx: 'siege_mid_gatefx', ram: 'siege_mid_ram', street: 'siege_mid_street', hall: 'siege_mid_hall' } as const;
+const ART = { walls: 'siege_mid_walls', gateFx: 'siege_mid_gatefx', ram: 'siege_mid_ram', street: 'siege_mid_street', hall: 'siege_mid_hall', barb: 'siege_mid_barb' } as const;
 /** v2 图集帧（4×2）：城防 0 城墙段 1 城门 2 城门破 3 箭楼 4 箭楼毁 5 墩台 6 残墙 7 辕门；冲车 0–3 撞门 4 打坏 5 残骸 6 我方大旗 7 我方营帐；
  *  巷战 0 民房 1 两层民房 2 店铺 3 粮仓 4 兵营 5 路障 6 屋脊 7 水井；府衙 0 大堂 1 台阶 2 回廊 3 石狮 4 内城门 5 帅旗 6 香炉 7 照壁 */
 export const MID_SIEGE_ART = ART;
@@ -216,10 +216,24 @@ export class SiegeMidCity {
     this.box({ left: a.left, right: B.innerGate.x - 90, top: a.top - 200, bottom: a.top + 20 });
     this.box({ left: B.innerGate.x + 90, right: a.right, top: a.top - 200, bottom: a.top + 20 });
     this.barbGateBox = this.box({ left: B.innerGate.x - 90, right: B.innerGate.x + 90, top: a.top - 200, bottom: a.top + 20 });
-    // 四面城墙：北墙（内门两侧）、东西墙竖排墩台、南面是破开的外门
-    for (let x = a.left + segW / 2; x < a.right; x += segW) if (Math.abs(x - B.innerGate.x) > 150) this.art(x, a.top + 40, [ART.walls, 0], ['sishui_props_refined', 3], segW + 6, this.has(ART.walls) ? (segW + 6) * .55 : segW * .6);
-    for (let y = a.top + 160; y < a.bottom; y += 170) for (const x of [a.left - 30, a.right + 30]) this.art(x, y + 40, [ART.walls, 5], ['sishui_props_refined', 3], 150);
-    this.art(B.innerGate.x, a.top + 46, [ART.hall, 4], ['sishui_props_refined', 0], 280);
+    // 场景审查 P3「瓮城没有围合感」：四面围墙的小院——美术会话出的瓮城套件 siege_mid_barb（0 内门关 1 内门破 2 城墙段 3 角楼 4 侧墙段 5 滚木堆 6 礌石堆 7 残垣），
+    // 北墙（内门两侧）、东西侧墙竖排、南墙 + 紧闭的外门（进瓮城后外门关上——瓮中捉鳖；四面本来就有碰撞）、四角角楼、城头滚木礌石堆；缺图退回城墙图集
+    if (this.has(ART.barb)) {
+      const W = segW * 1.12, wallH = a.top + 40;
+      for (let x = a.left + segW / 2; x < a.right; x += segW) if (Math.abs(x - B.innerGate.x) > 150) this.art(x, wallH, [ART.barb, 2], [ART.walls, 0], W);
+      for (let x = a.left + segW / 2; x < a.right; x += segW) if (Math.abs(x - B.cx) > 150) this.art(x, a.bottom + 64, [ART.barb, 2], [ART.walls, 0], W);
+      for (let y = a.top + 170; y < a.bottom + 40; y += 150) for (const x of [a.left - 34, a.right + 34]) this.art(x, y + 40, [ART.barb, 4], [ART.walls, 5], 220).setFlipX(x > B.cx);
+      for (const [x, y] of [[a.left - 34, a.top + 60], [a.right + 34, a.top + 60], [a.left - 34, a.bottom + 80], [a.right + 34, a.bottom + 80]]) this.art(x, y, [ART.barb, 3], [ART.walls, 5], 210);
+      this.art(B.cx, a.bottom + 70, [ART.barb, 0], [ART.walls, 1], 290);
+      this.barbGateImg = this.art(B.innerGate.x, a.top + 50, [ART.barb, 0], [ART.hall, 4], 300);
+      for (const [x, f] of [[a.left + 150, 5], [a.right - 150, 6], [a.left + 330, 6], [a.right - 330, 5]] as const) this.art(x, wallH - 70, [ART.barb, f], [ART.walls, 6], 110, undefined, 1, actorDepth(wallH) + .05);
+    } else {
+      for (let x = a.left + segW / 2; x < a.right; x += segW) if (Math.abs(x - B.innerGate.x) > 150) this.art(x, a.top + 40, [ART.walls, 0], ['sishui_props_refined', 3], segW + 6, this.has(ART.walls) ? (segW + 6) * .55 : segW * .6);
+      for (let y = a.top + 150; y < a.bottom + 40; y += 112) for (const x of [a.left - 30, a.right + 30]) this.art(x, y + 40, [ART.walls, 5], ['sishui_props_refined', 3], 150);
+      for (let x = a.left + segW / 2; x < a.right; x += segW) if (Math.abs(x - B.cx) > 150) this.art(x, a.bottom + 64, [ART.walls, 0], ['sishui_props_refined', 3], segW + 6, this.has(ART.walls) ? (segW + 6) * .55 : segW * .6);
+      this.art(B.cx, a.bottom + 70, [ART.walls, 1], ['sishui_props_refined', 0], 270);
+      this.barbGateImg = this.art(B.innerGate.x, a.top + 46, [ART.hall, 4], ['sishui_props_refined', 0], 280);
+    }
     for (const d of B.doors) this.art(d.x + (d.x < B.cx ? 20 : -20), d.y + 40, [ART.walls, 7], ['yellow_props', 13], 110).setFlipX(d.x > B.cx);
   }
   private enterBarbican() {
@@ -264,7 +278,10 @@ export class SiegeMidCity {
       if (l.y >= a.bottom) { l.img?.destroy(); this.logs.splice(this.logs.indexOf(l), 1); playSheet(this.h.scene, 'fx_collapse_dust', l.x, l.y, { size: 120, depth: DEPTH.fx, ms: 420, alpha: .7 }); }
     }
   }
+  /** 瓮城内门的图（瓮城套件：破门换 1 号格）。 */
+  private barbGateImg?: Phaser.GameObjects.Image;
   private breakInnerGate() {
+    if (this.barbGateImg?.texture.key === ART.barb) this.barbGateImg.setFrame(1);
     if (this.barbGateBox) { const i = this.h.footprints.indexOf(this.barbGateBox); if (i >= 0) this.h.footprints.splice(i, 1); this.barbGateBox = null; }
     for (const l of this.logs) l.img?.destroy(); this.logs.length = 0;
     playSheet(this.h.scene, 'fx_collapse_dust', L.barbican.innerGate.x, L.barbican.innerGate.y + 20, { size: 260, depth: DEPTH.fx, ms: 700 });

@@ -43,6 +43,16 @@ export interface NanmanHost {
 interface Charge { state: 'idle' | 'warn' | 'charge' | 'recover'; at: number; angle: number; sx: number; sy: number; moved: number; hit: boolean; id: string }
 interface Brazier { x: number; y: number; img: Phaser.GameObjects.Image; lit: boolean; relightAt: number }
 
+/** 毒泉底色：江岸地面 v2 图羽化成椭圆柔边（径向渐隐），只做一次。缺图返回 null。 */
+function softPatch(sc: Phaser.Scene): string | null {
+  const K = 'nz_pool_soft'; if (sc.textures.exists(K)) return K; if (!sc.textures.exists('ground_v2_jiang')) return null;
+  const S = 256, tex = sc.textures.createCanvas(K, S, S); if (!tex) return null; const g = tex.context;
+  g.drawImage(sc.textures.get('ground_v2_jiang').getSourceImage() as HTMLImageElement, 0, 0, S, S);
+  const r = g.createRadialGradient(S / 2, S / 2, S * .18, S / 2, S / 2, S / 2); r.addColorStop(0, 'rgba(0,0,0,1)'); r.addColorStop(.7, 'rgba(0,0,0,.55)'); r.addColorStop(1, 'rgba(0,0,0,0)');
+  g.globalCompositeOperation = 'destination-in'; g.fillStyle = r; g.fillRect(0, 0, S, S); g.globalCompositeOperation = 'source-over'; tex.refresh();
+  return K;
+}
+
 export class Nanman {
   readonly stats = { rattanHits: 0, rattanFireHits: 0, ignites: 0, burnTicks: 0, charges: 0, chargeHits: 0, poisonTicks: 0, fireBuffs: 0 };
   /** 「火攻」持续到（战斗时钟）。 */
@@ -64,7 +74,8 @@ export class Nanman {
         const i = sc.add.image(p.x + dx * p.rx, p.y + dy * p.ry, 'fx_collapse_dust', f).setDisplaySize(p.rx * 2.1 * s, p.ry * 2.6 * s).setTint(0x6f9a3a).setAlpha(.5).setDepth(DEPTH.ground + 2);
         this.objects.push(i);
       }
-      if (sc.textures.exists('ground_v2_jiang')) { const t = sc.add.image(p.x, p.y, 'ground_v2_jiang').setDisplaySize(p.rx * 1.7, p.ry * 1.5).setTint(0x4e6b2a).setAlpha(.35).setDepth(DEPTH.ground + 1); this.objects.push(t); }
+      // 场景审查 P3：原来整张江岸地面图方方正正叠上去（毒区方形硬边）→ 同一张图羽化成椭圆柔边
+      const soft = softPatch(sc); if (soft) { const t = sc.add.image(p.x, p.y, soft).setDisplaySize(p.rx * 2.2, p.ry * 2).setTint(0x4e6b2a).setAlpha(.42).setDepth(DEPTH.ground + 1); this.objects.push(t); }
     }
     // 火盆
     for (const b of NANMAN.braziers[stage - 1]) {

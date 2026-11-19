@@ -25,6 +25,7 @@ import {SiegeMidCity} from '../systems/SiegeMidCity';
 import {MID_SIEGE, SIEGE_GARRISON as GAR, SIEGE_PROFILES} from '../data/siegeMedium';
 import {loadMidSiegeArt} from '../systems/SiegeMidArt';
 import type {EnemyKind} from '../types';
+import {SIEGE_TIMER} from '../data/siegeTimer';
 
 /**
  * 攻城战（WORLD_MAP_PLAN.md · W2）：按城市档位的短战。胜利（击败守将 / 大将）即占领该城。
@@ -46,7 +47,9 @@ export function siegeGameSceneClass(Base: typeof GameScene) {
     private mid?: SiegeMidCity;
     private capturing = false; private captured = false; private captureProgress = 0; private captureG?: Phaser.GameObjects.Graphics; private captureLabel?: Phaser.GameObjects.Text; private goalText?: Phaser.GameObjects.Text;
     /** 守军池（攻城有限守军，data/siegeMedium SIEGE_GARRISON）：spent 已出、cut 拆营扣掉；守城为 null。 */
-    private garrison: {total: number; spent: number; cut: number} | null = null;
+    private garrison: {total: number; spent: number; cut: number; reinf: number} | null = null;
+    /** 攻城限时（data/siegeTimer）：normal → warn（剩 60 秒预警）→ reinforce（援军抵达，仍可破城）→ 到点撤军。 */
+    private timerPhase: 'normal' | 'warn' | 'reinforce' = 'normal'; private squadWaves = 0; private buffedBoss = -1; private speedBonus = false;
     /** 池空后仍必刷的兵（目标 / 剧情）：不给经验、不掉落、不记战功。 */
     private unpaid = new Set<number>(); private noLoot = false; private scripted = false; private garrisonText?: Phaser.GameObjects.Text;
     constructor() { super('SiegeGameScene'); }
@@ -68,7 +71,8 @@ export function siegeGameSceneClass(Base: typeof GameScene) {
       this.registry.set('runConfig', {...saved, character: saved?.character ?? 'zhaoyun', chapter: 'hulao', westStage: 3, encounter: 'qunxiong'});
       this.gate = null; this.gateLabel = undefined; this.gateWarned = false; this.controller = undefined;
       this.unpaid = new Set(); this.noLoot = false; this.garrisonText = undefined;
-      this.garrison = this.defense ? null : {total: Math.round(GAR.total[city.tier] * (1 + GAR.eraStep * (era - 1))), spent: 0, cut: 0};
+      this.garrison = this.defense ? null : {total: Math.round(GAR.total[city.tier] * (1 + GAR.eraStep * (era - 1))), spent: 0, cut: 0, reinf: 0};
+      this.timerPhase = 'normal'; this.squadWaves = 0; this.buffedBoss = -1; this.speedBonus = false;
       super.create();
       this.chapter = this.battleDef(); this.runConfig = {...this.runConfig, encounter: 'qunxiong'};
       this.receipt = this.test ? '' : this.defense ? beginDefense(city.id) : beginSiege(city.id, true);
@@ -152,27 +156,64 @@ export function siegeGameSceneClass(Base: typeof GameScene) {
       if (this.city.tier === 'large') { if (this.gateAlive) parts.push('破城门'); if (!this.bossKilled) parts.push('败大将'); }
       return '目标 · ' + (parts.join(' · ') || '占领府衙');
     }
-    /** 攻城：限时内未破城判失败；守城沿用原规则。 */
+    /** 攻城限时（各档城 limitSeconds）。 */
+    private get limit() { return this.mid ? this.mid.prof.limitSeconds : SG.limit[this.city.tier]; }
+    private get timerTier() { return SIEGE_TIMER.tiers[this.city.tier]; }
+    /** 攻城：剩 60 秒预警 → 限时到「敌援抵达」（仍可破城）→ 援军阶段结束未破城则撤军（失败）；守城沿用原规则。 */
     protected checkEnd() {
       if (this.defense || this.over) { super.checkEnd(); return; }
-      if (!this.player.alive) this.finish(false);
-      else if (this.elapsed >= (this.mid ? this.mid.prof.limitSeconds : SG.limit[this.city.tier])) this.finish(false, 'timeout');
+      if (!this.player.alive) { this.finish(false); return; }
+      const L = this.limit, T = this.timerTier;
+      if (this.timerPhase === 'normal' && this.elapsed >= L - SIEGE_TIMER.warnSeconds) { this.timerPhase = 'warn'; if (this.elapsed < L) this.showWaveBanner('敌援将至', true, `${Math.ceil(L - this.elapsed)} 秒后敌军援兵抵达 · 速破城池`); }
+      if (this.timerPhase !== 'reinforce' && this.elapsed >= L) this.startReinforce();
+      if (this.timerPhase === 'reinforce') { this.sendSquads(); this.buffBoss(); if (this.elapsed >= L + T.reinforceSeconds) this.finish(false, 'timeout'); }
     }
+    /** 敌援抵达：守军池补充、守将加强、我军士气受挫（随从伤害下降）。 */
+    private startReinforce() {
+      const T = this.timerTier; this.timerPhase = 'reinforce'; this.squadWaves = 0;
+      if (this.garrison) this.garrison.reinf += Math.round(this.garrison.total * T.garrisonRefill);
+      this.legion.damageMul *= T.allyDamageMul;
+      this.showWaveBanner('敌援抵达', true, `守军补充 · 守将更凶 · 我军士气受挫　${T.reinforceSeconds} 秒内未破城即撤军`);
+    }
+    /** 守将伤害加成（援军阶段才出的守将也补上；每个守将只加一次）。 */
+    private buffBoss() {
+      const b = this.boss as Enemy | null; if (!b?.active || this.buffedBoss === b.spawnId) return;
+      this.buffedBoss = b.spawnId; b.def = {...b.def, damage: b.def.damage * this.timerTier.bossDamageMul};
+    }
+    /** 城外两侧援兵：阶段开始一批，之后每 waveEverySeconds 再来一批（从补充的守军池里出，给经验）。 */
+    private sendSquads() {
+      const T = this.timerTier, due = Math.min(T.squadWaves, 1 + Math.floor(Math.max(0, this.elapsed - this.limit) / T.waveEverySeconds));
+      const blocks = (this.sishuiObstacles?.footprints ?? []) as unknown as Array<{left: number; right: number; top: number; bottom: number}>;
+      const blocked = (x: number, y: number) => blocks.some(b => x > b.left - 30 && x < b.right + 30 && y > b.top - 30 && y < b.bottom + 30);
+      const cam = this.cameras.main, half = cam.width / 2 / cam.zoom + 70, p = this.player;
+      while (this.squadWaves < due) {
+        this.squadWaves++;
+        for (const side of [-1, 1]) for (let i = 0; i < T.squadSize; i++) {
+          const kind: EnemyKind = i === 0 ? 'cavalry' : i % 3 === 2 ? 'archer' : 'infantry';
+          let x = p.x + side * half, y = p.y + (i - (T.squadSize - 1) / 2) * 46;
+          if (blocked(x, y)) { const pt = this.mid?.spawnPoint(kind); if (pt) { x = pt.x; y = pt.y; } }
+          this.scriptedSpawn(() => this.spawnEnemy(kind, x, y, 1, true));
+        }
+      }
+    }
+    /** 测试用：限时状态。 */
+    get siegeTimer() { return {phase: this.timerPhase, limit: this.limit, reinforceSeconds: this.timerTier.reinforceSeconds, squads: this.squadWaves, reinf: this.garrison?.reinf ?? 0, allyMul: this.legion.damageMul, bossBuffed: this.buffedBoss, speedBonus: this.speedBonus}; }
     /** 测试用状态。 */
     get siegeGoals() { return {flag: !!this.flag, towers: this.mid ? this.mid.towersAlive : this.towers.length, capturing: this.capturing, progress: this.captureProgress, captured: this.captured, mid: this.mid ? {tier: this.mid.tier, bridge: this.mid.bridgeDown, ropes: this.mid.ropesLeft, inner: this.mid.innerGateHp, phase: this.mid.phase, gate: Math.round(this.mid.gateHp), ram: this.mid.ramInfo, points: this.mid.pointsInfo, boss: this.mid.bossInfo, stats: {...this.mid.stats}, zones: this.mid.volleyZones} : null}; }
     /** 守军还剩多少（总数 − 已出 − 拆营扣掉）。 */
-    get garrisonLeft() { const g = this.garrison; return g ? Math.max(0, g.total - g.spent - g.cut) : Infinity; }
+    get garrisonLeft() { const g = this.garrison; return g ? Math.max(0, g.total + g.reinf - g.spent - g.cut) : Infinity; }
     /** 当前段放出的份额上限（累计到当前段）。 */
     private get garrisonCap() {
       const g = this.garrison; if (!g) return Infinity; const P = SIEGE_PROFILES[this.city.tier].phases, sum = P.reduce((n, p) => n + GAR.share[p], 0);
       const at = this.mid ? Math.max(0, P.indexOf(this.mid.phase as typeof P[number])) : P.length - 1, reached = this.mid?.phase === 'done' ? P.length - 1 : at;
-      return Math.round(g.total * P.slice(0, reached + 1).reduce((n, p) => n + GAR.share[p], 0) / sum);
+      return Math.round(g.total * P.slice(0, reached + 1).reduce((n, p) => n + GAR.share[p], 0) / sum) + g.reinf;
     }
     /** 测试用：守军池状态。 */
     get garrisonInfo() { const g = this.garrison; return g ? {...g, left: this.garrisonLeft, cap: this.garrisonCap, unpaid: this.unpaid.size} : null; }
     private paintGarrison() {
-      if (!this.garrison || !this.garrisonText) return; const lim = this.mid ? this.mid.prof.limitSeconds : SG.limit[this.city.tier], left = Math.max(0, Math.ceil(lim - this.elapsed));
-      this.garrisonText.setText(`守军 ${this.garrisonLeft}/${this.garrison.total}${this.garrisonLeft ? '' : ' · 援兵已尽'}　·　限时 ${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}`).setColor(left <= 30 ? '#ff8a70' : '#e8c99a');
+      if (!this.garrison || !this.garrisonText) return; const g = this.garrison, reinforce = this.timerPhase === 'reinforce', left = Math.max(0, Math.ceil(this.limit + (reinforce ? this.timerTier.reinforceSeconds : 0) - this.elapsed));
+      // 剩 60 秒起计时变红；援军阶段改为「敌援已至 · 撤军」倒计时
+      this.garrisonText.setText(`守军 ${this.garrisonLeft}/${g.total + g.reinf}${this.garrisonLeft ? '' : ' · 援兵已尽'}　·　${reinforce ? '敌援已至 · 撤军' : '限时'} ${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}`).setColor(reinforce || left <= SIEGE_TIMER.warnSeconds ? '#ff8a70' : '#e8c99a');
     }
     /** 攻城守军有限：首领以外的兵从守军池出；池空（或本段份额用完）后普通刷兵停止，必刷的兵照出但不给经验 / 掉落。 */
     protected spawnEnemy(kind: EnemyKind, x: number, y: number, hpScale?: number, force = false, override?: Parameters<GameScene['spawnEnemy']>[5]): Enemy | null {
@@ -309,13 +350,15 @@ export function siegeGameSceneClass(Base: typeof GameScene) {
       super.finish(victory, reason);
       const T = SIEGE[this.city.tier];
       if (this.defense) { this.finishDefense(victory, T.reward); return; }
-      const reward = settleSiege(this.receipt, {victory, bossKilled: this.bossKilled, debug: this.test || this.debugModified || this.debugJumped || this.player.damageImmune, elapsed: this.elapsed, reward: T.reward, firstBonus: FIRST_CAPTURE_BONUS, returned: this.allies.filter(u => u.active && u.reserveSoldier).map(u => u.kind)});
+      // 速攻奖励：破城时剩余时间超过限时的一半，攻城奖励（军粮 / 战功）加成
+      this.speedBonus = victory && this.elapsed <= this.limit * (1 - SIEGE_TIMER.speed.remainingShare); const k = this.speedBonus ? 1 + SIEGE_TIMER.speed.rewardBonus : 1;
+      const reward = settleSiege(this.receipt, {victory, bossKilled: this.bossKilled, debug: this.test || this.debugModified || this.debugJumped || this.player.damageImmune, elapsed: this.elapsed, reward: {merits: Math.round(T.reward.merits * k), provisions: Math.round(T.reward.provisions * k)}, firstBonus: FIRST_CAPTURE_BONUS, returned: this.allies.filter(u => u.active && u.reserveSoldier).map(u => u.kind)});
       this.controller?.clear();
       // 回天下地图时播「XX 归入版图」（插旗、朱印、疆域染色）；地图读到后清掉
       if (reward.captured) this.registry.set('mapCaptured', this.city.id);
-      this.resultTexts.subtitle.setText(victory ? `${this.city.name}归入义军版图${reward.first ? ' · 首次攻占' : ''}` : (reason === 'timeout' && this.gateAlive ? '城门未破 · 攻城失利' : '攻城失利 · 整军再战'));
+      this.resultTexts.subtitle.setText(victory ? `${this.city.name}归入义军版图${reward.first ? ' · 首次攻占' : ''}` : (reason === 'timeout' ? '久攻不下 · 撤军' : '攻城失利 · 整军再战'));
       const caught = victory && this.bossKilled && !this.capturesBlocked() ? tryCapture('siege', factionGeneral(this.owner) ?? '', this.owner) : null;
-      this.resultTexts.body.setText(this.resultTexts.body.text + '\n永久奖励 · 军粮 +' + reward.provisions + cityIncomeLine(reward) + captureLine(caught) + (reward.alert ? `\n${FACTIONS[reward.alert.attacker].name}不甘失地，${this.city.name}告急！` : ''));
+      this.resultTexts.body.setText(this.resultTexts.body.text + '\n永久奖励 · 军粮 +' + reward.provisions + cityIncomeLine(reward) + captureLine(caught) + (reward.captured && this.speedBonus ? `\n速攻破城 · 攻城奖励 +${Math.round(SIEGE_TIMER.speed.rewardBonus * 100)}%` : '') + (reason === 'timeout' && !victory ? '\n撤军收场 · 存档不受损失，只收本季军粮' : '') + (reward.alert ? `\n${FACTIONS[reward.alert.attacker].name}不甘失地，${this.city.name}告急！` : ''));
       this.mapButtons(victory);
     }
     private finishDefense(victory: boolean, base: {merits: number; provisions: number}) {

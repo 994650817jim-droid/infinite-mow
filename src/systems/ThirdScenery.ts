@@ -1,24 +1,27 @@
 import {paintCampRoad} from './CampRoad';
 import {paintV2Ground,paintV2Road} from './EnvGround';
+import type {SceneLook} from '../data/sceneLooks';
 import Phaser from 'phaser';import {actorDepth}from'../config';import type{ThirdStage}from'../data/thirdChapter';import type{FortKind}from'../data/arcForts';
 /** Existing art, four distinct layouts (4 = 江陵城下：石板广场、城门箭楼、十字大道); no illustrated camp image is tiled. */
 export type SceneryStage=ThirdStage|4;
 /** fort：本关在 data/arcForts.ts 里登记过（关隘 / 城池由 SishuiPass 画关墙；clear = 去掉场中城门）→ 不再摆场中城门 / 箭楼，北面敌营让出关墙前的位置。 */
-export function thirdScenery(scene:Phaser.Scene,stage:SceneryStage,spawnProp?:(frame:number,x:number,y:number,size:number)=>void,arc='third',fort?:FortKind){
- const key=(arc==='chibi'?'chibi_ground_':'third_ground_')+stage;
+/** look / lookId：场景审查 P3 按关换地面、路面、路怎么铺（data/sceneLooks.ts）；纹理键带上关号，免得同一底图组的各章互相串。 */
+export function thirdScenery(scene:Phaser.Scene,stage:SceneryStage,spawnProp?:(frame:number,x:number,y:number,size:number)=>void,arc='third',fort?:FortKind,look?:SceneLook,lookId=''){
+ const lk=look?'_'+lookId:'';
+ const key=(arc==='chibi'?'chibi_ground_':'third_ground_')+stage+lk;
  // 地面 v2（环境互动第一批 ④）：第三章长安夯土、第五章江岸湿地；各关原来的夜色 / 灰调叠色保留（减淡）；缺图退回下面的程序调色版
- paintV2Ground(scene,key,arc==='chibi'?'ground_v2_jiang':'ground_v2_changan',stage===2?'rgba(8,18,32,.55)':stage===4?'rgba(72,70,66,.2)':arc==='chibi'?undefined:'rgba(52,38,24,.2)');if(!scene.textures.exists(key)){const tex=scene.textures.createCanvas(key,512,512)!;const g=tex.context;g.imageSmoothingEnabled=false;const source=scene.textures.get(stage===2?'xingyang_ground':stage===1||stage===4?'ground_hulao':'ground_ai2').getSourceImage()as HTMLImageElement;g.drawImage(source,0,0,512,512);
+ paintV2Ground(scene,key,look?.ground??(arc==='chibi'?'ground_v2_jiang':'ground_v2_changan'),look&&look.overlay!==undefined?(look.overlay??undefined):stage===2?'rgba(8,18,32,.55)':stage===4?'rgba(72,70,66,.2)':arc==='chibi'?undefined:'rgba(52,38,24,.2)');if(!scene.textures.exists(key)){const tex=scene.textures.createCanvas(key,512,512)!;const g=tex.context;g.imageSmoothingEnabled=false;const source=scene.textures.get(stage===2?'xingyang_ground':stage===1||stage===4?'ground_hulao':'ground_ai2').getSourceImage()as HTMLImageElement;g.drawImage(source,0,0,512,512);
 
  if(stage===2){g.fillStyle='rgba(8,18,32,.66)';g.fillRect(0,0,512,512);}
  if(stage===3){g.fillStyle='rgba(114,96,48,.16)';g.fillRect(0,0,512,512);}
  if(stage===4){g.fillStyle='rgba(72,70,66,.34)';g.fillRect(0,0,512,512);}
  tex.refresh();tex.setFilter(Phaser.Textures.FilterMode.NEAREST);}
  // Roads are world layout strips, not intersections repeated in every ground tile.
- const roadKey=(arc==='chibi'?'chibi_road_':'third_road_')+stage;
+ const roadKey=(arc==='chibi'?'chibi_road_':'third_road_')+stage+lk;
  const roadWidth=stage===1||stage===4?172:stage===2?124:164;
  // 路面 v2：替换程序画的灰色石板路（第 3 关为横向营中木板道，第 2 关夜色土路，其余石板官道）；缺图退回下面的程序版
  // 第 3 关的横向营道原来是军营木板道：竖条木板横着铺，看上去像一道木栅栏却不挡人（全场景审查 C：3-3 寿春）→ 改土路
- paintV2Road(scene,roadKey,stage===3||stage===2||arc==='chibi'?'road_v2_dirt':'road_v2_stone',stage===3?164:roadWidth,stage!==3,stage===2?'rgba(8,18,32,.5)':undefined);
+ paintV2Road(scene,roadKey,look?.road??(stage===3||stage===2||arc==='chibi'?'road_v2_dirt':'road_v2_stone'),stage===3?164:roadWidth,stage!==3,stage===2?'rgba(8,18,32,.5)':undefined);
  if(!scene.textures.exists(roadKey)){
   const road=scene.textures.createCanvas(roadKey,stage===3?512:roadWidth,stage===3?164:512)!;
   const ctx=road.context;ctx.imageSmoothingEnabled=false;
@@ -41,7 +44,13 @@ export function thirdScenery(scene:Phaser.Scene,stage:SceneryStage,spawnProp?:(f
   }
   ctx.putImageData(image,0,0);road.refresh().setFilter(Phaser.Textures.FilterMode.NEAREST);
  }
- if(stage===3)scene.add.tileSprite(0,-190,8192,164,roadKey).setDepth(1);
+ const lay=look?.roads;
+ if(lay==='none'){/* 草地，不铺路 */}
+ else if(lay&&stage!==3){ // 竖路纹理：横路就转 90°
+  if(lay==='v'||lay==='cross')scene.add.tileSprite(0,0,roadWidth,8192,roadKey).setDepth(1);
+  if(lay==='h'||lay==='cross')scene.add.tileSprite(0,0,roadWidth,8192,roadKey).setRotation(Math.PI/2).setDepth(1);
+ }
+ else if(stage===3)scene.add.tileSprite(0,-190,8192,164,roadKey).setDepth(1);
  else{
   scene.add.tileSprite(0,0,roadWidth,8192,roadKey).setDepth(1);
   if(stage===2||stage===4)scene.add.tileSprite(0,0,roadWidth,8192,roadKey).setRotation(Math.PI/2).setDepth(1);

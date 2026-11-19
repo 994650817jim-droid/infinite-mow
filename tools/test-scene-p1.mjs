@@ -147,7 +147,66 @@ try {
     ev = await open('YilingGameScene', { yilingStage: 1 }, { thirdStage: 1 });
     r = await ev(s => ({ fort: s.fort?.kind, walls: s.children.list.filter(o => o.name === 'fort-wall').map(o => o.texture.key), towers: s.sishuiPass?.snapshot().towers }));
     await ev(s => { s.player.sprite.y = -420; }); await p.waitForTimeout(900); await p.screenshot({ path: `${OUT}/p2-10-1.png` });
-    ck('10-1 猇亭：营栅 + 辕门（不是砖城墙、无箭楼）', r.fort === 'camp' && r.walls.length >= 8 && r.walls.every(k => k === 'props_v2_cao') && r.towers === 0, { ...r, walls: [...new Set(r.walls)] });
+    ck('10-1 猇亭：吴军营栅 + 辕门（不是砖城墙、无箭楼）', r.fort === 'camp' && r.walls.length >= 8 && r.walls.every(k => k === 'props_v2_wu') && r.towers === 0, { ...r, walls: [...new Set(r.walls)] });
+  }
+  // P3（用户同意）：野战关去模板（地面 / 路面 / 路怎么铺）、营具按势力、樊城城墙、毒区柔边、1-2 法坛营、2-3 洛阳火城、12-1 水井
+  if (want('p3')) {
+    const L = [
+      ['8-3 汉水', 'HanzhongGameScene', { hanzhongStage: 3 }, 'ground_v2_grass', 'road_v2_dirt', 1, 3, 'hanzhong3'],
+      ['10-1 猇亭', 'YilingGameScene', { yilingStage: 1 }, 'ground_v2_jiang', 'road_v2_dirt', 1, 4, 'yiling1'],
+      ['10-3 火烧连营', 'YilingGameScene', { yilingStage: 3 }, 'ground_v2_dirt', 'road_v2_dirt', 2, 4, 'yiling3'],
+      ['12-1 街亭', 'BeifaGameScene', { beifaStage: 1 }, 'ground_v2_grass', null, 0, 3, 'beifa1'],
+      ['12-3 五丈原', 'BeifaGameScene', { beifaStage: 3 }, 'ground_v2_dirt', 'road_v2_dirt', 1, 3, 'beifa3'],
+      ['6-2 零陵武陵', 'JingnanGameScene', { jingnanStage: 2 }, 'ground_v2_jiang', 'road_v2_dirt', 1, null, 'jingnan2'],
+      ['3-3 寿春（袁术）', 'ThirdGameScene', { thirdStage: 3 }, null, 'road_v2_dirt', 1, 2, null],
+    ];
+    for (const [name, key, reg, ground, road, roads, faction, lookId] of L) {
+      const ev = await open(key, reg, { thirdStage: Object.values(reg)[0] });
+      const r = await ev((s, id) => {
+        const gk = id ? s.textures.getTextureKeys().find(k => /_ground_\d+_/.test(k) && k.endsWith('_' + id)) : null, g = gk ? s.textures.get(gk).customData?.source ?? null : null;
+        const strips = s.children.list.filter(o => o.type === 'TileSprite' && o.depth === 1 && (Math.round(o.height) === 8192 || Math.round(o.width) === 8192));
+        const keys = s.textures.getTextureKeys().filter(k => /^(third|chibi)_road_\d+_/.test(k)).map(k => s.textures.get(k).customData?.source ?? null);
+        return { ground: g, strips: strips.length, roadKeys: keys, from: s.registry.get('sishuiRefinedFrom') };
+      }, lookId);
+      const roadOk = road === null ? r.strips === 0 : r.strips === roads && r.roadKeys.includes(road);
+      const facOk = faction === null || r.from === ['', 'props_v2_xiliang', 'props_v2_yuan', 'props_v2_cao', 'props_v2_wu', 'props_v2_shu', 'props_v2_man'][faction];
+      await p.waitForTimeout(700); await p.screenshot({ path: `${OUT}/p3-${name.split(' ')[0]}.png` });
+      ck(`${name}：${ground ? '地面 ' + ground.replace('ground_v2_', '') + '、' : ''}${road ? roads + ' 条' + road.replace('road_v2_', '') + '路' : '不铺路（草地）'}${faction ? '、营具势力 ' + faction : ''}`, (ground === null || r.ground === ground) && roadOk && facOk, r);
+    }
+    // 营具按势力：南蛮（棕）、刘璋益州（蜀绿）、麦城（吴紫）——美术会话新出的三套
+    for (const [name, key, reg, want] of [['11-1 泸水', 'NanzhengGameScene', { nanzhengStage: 1 }, 'props_v2_man'], ['7-1 葭萌关', 'ShuGameScene', { shuStage: 1 }, 'props_v2_shu'], ['9-3 麦城', 'XiangfanGameScene', { xiangfanStage: 3 }, 'props_v2_wu']]) {
+      const ev0 = await open(key, reg, { thirdStage: Object.values(reg)[0] });
+      const from = await ev0(s => s.registry.get('sishuiRefinedFrom'));
+      ck(`${name}：营具用 ${want}`, from === want, from);
+    }
+    let ev = await open('XiangfanGameScene', { xiangfanStage: 1 }, { thirdStage: 1 });
+    await p.waitForTimeout(800);
+    let r = await ev(s => ({ walls: s.children.list.filter(o => o.name === 'fancheng-wall').map(o => o.texture.key) }));
+    await ev(s => { s.player.sprite.y = -380; }); await p.waitForTimeout(700); await p.screenshot({ path: `${OUT}/p3-9-1.png` });
+    ck('9-1 樊城：城墙图（攻城城墙图集），不再是木栅', r.walls.length >= 9 && r.walls.every(k => k === 'siege_mid_walls'), { n: r.walls.length, keys: [...new Set(r.walls)] });
+    ev = await open('NanzhengGameScene', { nanzhengStage: 1 }, { thirdStage: 1 });
+    r = await ev(s => ({ soft: s.textures.exists('nz_pool_soft'), used: s.children.list.filter(o => o.texture?.key === 'nz_pool_soft').length, hard: s.children.list.filter(o => o.type === 'Image' && o.texture?.key === 'ground_v2_jiang').length }));
+    ck('11-1 毒泉：底色换成羽化柔边（不再整张方图）', r.soft && r.used >= 1 && r.hard === 0, r);
+    ev = await open('GameScene', {}, { chapter: 'huangjin', stage: 2 });
+    r = await ev(s => ({ altar: !!s.children.getByName('xiaquyang-altar'), fence: s.children.list.filter(o => o.name === 'xiaquyang-fence').length, boxes: s.sishuiObstacles?.footprints.length ?? 0 }));
+    await ev(s => { s.player.sprite.y = -420; }); await p.waitForTimeout(700); await p.screenshot({ path: `${OUT}/p3-1-2.png` });
+    ck('1-2 下曲阳：开局就有张宝法坛营（法坛 + 木栅实心）', r.altar && r.fence === 8 && r.boxes >= 3, r);
+    ev = await open('GameScene', {}, { chapter: 'hulao', westStage: 3 });
+    for (let i = 0; i < 20 && !(await ev(s => s.children.list.some(o => o.name === 'luoyang-ruin'))); i++) await p.waitForTimeout(200);
+    r = await ev(s => ({ ruins: s.children.list.filter(o => o.name === 'luoyang-ruin').length, fires: s.children.list.filter(o => o.name === 'luoyang-fire').length, boxes: s.sishuiObstacles?.footprints.length ?? 0 }));
+    await ev(s => { s.player.sprite.x = -620; s.player.sprite.y = 200; }); await p.waitForTimeout(800); await p.screenshot({ path: `${OUT}/p3-2-3.png` });
+    ck('2-3 洛阳：两翼烧毁民居 / 残墙（实心）+ 房上地火', r.ruins === 8 && r.fires >= 10 && r.boxes >= 8, r);
+    ev = await open('BeifaGameScene', { beifaStage: 1 }, { thirdStage: 1 });
+    for (let i = 0; i < 20 && !(await ev(s => s.children.list.some(o => o.name === 'beifa-spring' && o.texture.key === 'scene_v2_waterpoints'))); i++) await p.waitForTimeout(200);
+    r = await ev(s => ({ springs: s.children.list.filter(o => o.name === 'beifa-spring').map(o => o.texture.key + ':' + o.frame.name), props: s.children.list.filter(o => o.name === 'beifa-spring-prop').map(o => o.frame.name) }));
+    await ev(s => { s.player.sprite.x = -600; s.player.sprite.y = 520; }); await p.waitForTimeout(700); await p.screenshot({ path: `${OUT}/p3-12-1-well.png` });
+    ck('12-1 街亭：汲水点水景——泉眼 + 石井、水潭 + 木水槽（美术会话出图）', r.springs.join() === 'scene_v2_waterpoints:0,scene_v2_waterpoints:1' && [...r.props].sort().join() === '2,3', r);
+    ev = await open('ChibiGameScene', { chibiStage: 2 }, { thirdStage: 2 });
+    for (let i = 0; i < 25 && !(await ev(s => s.children.list.some(o => o.name === 'chibi-warship'))); i++) await p.waitForTimeout(200);
+    for (let i = 0; i < 20 && !(await ev(s => !!s.terrain)); i++) await p.waitForTimeout(150);
+    r = await ev(s => { const ships = s.children.list.filter(o => o.name === 'chibi-warship'), boxes = s.sishuiObstacles?.footprints ?? [], t = s.terrain; const br = [0, 1].map(i => t.bridge(i)); return { ships: ships.length, frames: [...new Set(ships.map(o => o.frame.name))].sort().join(), inBoxes: ships.every(o => boxes.some(b => o.x > b.left && o.x < b.right && o.y > b.top && o.y < b.bottom)), onWater: ships.every(o => t.inWater(o.x, o.y)), bridgeFree: br.every(b => !boxes.some(x => b.x > x.left && b.x < x.right && b.y > x.top && b.y < x.bottom)) }; });
+    await ev(s => { s.player.sprite.x = 300; s.player.sprite.y = -440; }); await p.waitForTimeout(800); await p.screenshot({ path: `${OUT}/p3-5-2-warships.png` });
+    ck('5-2 赤壁：江北连环战船（四种船都有、泊在江上、船身挡人、不挡浮桥）', r.ships >= 8 && r.frames === '0,1,2,3' && r.inBoxes && r.onWater && r.bridgeFree, r);
   }
   ck('无页面报错', !errs.length, errs.slice(0, 5));
 } finally { await b.close(); }

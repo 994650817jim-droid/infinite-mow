@@ -55,6 +55,16 @@ const killBoss = async p => {
   const g0 = await goals(p);
   await p.screenshot({ path: `${OUT}/small-1-outside.png` });
   ck(`小城（${city}）：城外段，1 座箭楼、没有冲车、目标「砍破木门」`, g0.mid?.tier === 'small' && g0.mid.phase === 'outside' && g0.towers === 1 && !g0.mid.ram && /木门/.test(g0.text), { mid: g0.mid && { tier: g0.mid.tier, phase: g0.mid.phase, ram: g0.mid.ram }, towers: g0.towers, text: g0.text });
+  // 11-19 用户「攻城战的场地和小兵生成方式和总体优化一下，我感觉小怪生成在我脸上，而且感觉攻城场地好小，也需要点我方小兵一起进攻」
+  const big = await p.evaluate(() => { const m = window.__M, o = m.oa, c = m.city.arena; return { o, c, start: { x: window.__S.player.x, y: window.__S.player.y } }; });
+  ck('11-19 城外场地加大：南北 ≥ 1500、左右跟城内段同宽（城墙、角楼、侧墙一条线）', big.o.bottom - big.o.top >= 1500 && big.o.left === big.c.left && big.o.right === big.c.right && big.o.right >= 800, big);
+  // 刷兵审计：普通刷兵（spawnPoint）一律离主将 ≥ 450 或在镜头外
+  await p.evaluate(() => { const m = window.__M, s = window.__S, orig = m.spawnPoint.bind(m); window.__sp = []; m.spawnPoint = k => { const q = orig(k); if (q) { const v = s.cameras.main.worldView, d = Math.hypot(q.x - s.player.x, q.y - s.player.y), off = q.x < v.left || q.x > v.right || q.y < v.top || q.y > v.bottom; window.__sp.push({ d: Math.round(d), off, ph: m.phase }); } return q; }; });
+  await p.evaluate(() => { window.__S.player.sprite.setPosition(0, -240); }); // 主将贴近城门，最容易「刷到脸上」的位置
+  await step(p, 900);
+  const al = await p.evaluate(() => { const z = window.__S.allyPush, sq = z?.squads ?? []; const lead = sq.flatMap(q => q.members.filter(m => !m.dead)); return { alive: z?.alive ?? 0, squads: sq.length, rally: window.__M.rallyPoint(), ys: lead.map(m => Math.round(m.y)).slice(0, 6), map: !!window.__S.battleMap }; });
+  await p.screenshot({ path: `${OUT}/small-0-assault-allies.png` });
+  ck('11-19 我方义军：开局几秒后从后方出队，向城门推进（集结在木门前）', al.alive >= 4 && al.squads >= 1 && al.ys.some(y => y < 400) && al.rally && al.rally.y < -300, al);
   const chop = await p.evaluate(() => { window.__clear(); const ok = window.__chop(0, -470); return { ok, gate: window.__M.gateHp }; });
   // 攻城城内段改造（用户 11-18）：小城也有城内段（丁字街），3 处要点占 2 处开县衙
   const inSt = await waitPhase(p, 'street');
@@ -62,6 +72,14 @@ const killBoss = async p => {
   const st = await p.evaluate(() => { const m = window.__M; return { n: m.points.length, need: m.city.need, goal: window.__S.children.getByName('siege-goal')?.text }; });
   await p.screenshot({ path: `${OUT}/small-2-street.png` });
   ck('小城：砍破木门 → 进城内（丁字街）：3 处要点，占 2 处开县衙', inSt && st.n === 3 && st.need === 2 && (st.goal ?? '').includes('要点 0/2'), st);
+  {
+    await step(p, 600);
+    const r = await p.evaluate(() => { const m = window.__M, z = window.__S.allyPush, pts = m.points.map(q => ({ x: q.x, y: q.y, r: q.radius })), sp = window.__sp; const near = sp.filter(q => q.d < 450 && !q.off);
+      return { spawns: sp.length, near: near.slice(0, 5), nearN: near.length, phases: [...new Set(sp.map(q => q.ph))], allies: z?.alive ?? 0, inCity: (z?.squads ?? []).flatMap(q => q.members.filter(mm => !mm.dead)).filter(mm => mm.y < -620).length, rally: m.rallyPoint(), plaza: pts.map(q => q.r) }; });
+    await p.screenshot({ path: `${OUT}/small-2b-street-allies.png` });
+    ck('11-19 刷兵不刷到脸上：城外 + 城内所有普通刷兵离主将 ≥ 450 或在镜头外', r.spawns > 10 && r.nearN === 0 && r.phases.includes('outside') && r.phases.includes('street'), r);
+    ck('11-19 破门后义军涌进城、去最近的要点（要点圈加大成小广场）', r.allies >= 3 && r.inCity >= 3 && r.plaza.every(x => x >= 120), r);
+  }
   // 全取：三处要点都占 → 结算军粮 +20%，结算列表写「全取」
   const ft = await p.evaluate(() => { const m = window.__M; for (const q of m.points) q.state = 'secured'; return { full: m.fullTake, share: m.provisionsBonus().share, line: m.settleLines()[0] }; });
   ck('小城：三处要点全占 → 「全取」结算军粮 +20%', ft.full && ft.share === .2 && /全取/.test(ft.line), ft);
@@ -78,8 +96,8 @@ const killBoss = async p => {
 }
 {
   const { p } = await open('small');
-  const t = await p.evaluate(() => { const s = window.__S; s.elapsed = 241 + 45; /* 限时 + 援军阶段（data/siegeTimer） */ window.__step(10); return { over: s.over, victory: s.victory, limit: window.__M.prof.limitSeconds }; });
-  ck('小城：限时 240 秒 + 援军阶段 45 秒仍未破城 → 撤军（失败）', t.over && t.victory === false && t.limit === 240, t);
+  const t = await p.evaluate(() => { const s = window.__S; s.elapsed = window.__M.prof.limitSeconds + 1 + 45; /* 限时 + 援军阶段（data/siegeMedium · siegeTimer） */ window.__step(10); return { over: s.over, victory: s.victory, limit: window.__M.prof.limitSeconds }; });
+  ck('小城：限时 270 秒 + 援军阶段 45 秒仍未破城 → 撤军（失败）', t.over && t.victory === false && t.limit === 270, t);
   await p.close();
 }
 
@@ -97,7 +115,7 @@ const killBoss = async p => {
   // 砍两根绳索
   const cut = await p.evaluate(async () => { const L = (await import('/src/data/siegeMedium.ts')).LARGE_SIEGE.moat; const a = window.__chop(L.ropes[0].x, L.bottom + 90); const b2 = window.__chop(L.ropes[1].x, L.bottom + 90); window.__step(5); return { a, b: b2, bridge: window.__M.bridgeDown, cut: window.__M.stats.ropesCut }; });
   ck('大城：砍断两根吊桥绳索 → 吊桥落下', cut.a && cut.b && cut.bridge && cut.cut === 2, cut);
-  for (let i = 0; i < 30; i++) { const st = await p.evaluate(() => { const s = window.__S, r = window.__M.ramInfo; window.__clear(); s.player.sprite.setPosition(r.x + 60, r.y + 40); window.__step(20); return r.state; }); if (st === 'ram') break; }
+  for (let i = 0; i < 90; i++) { const st = await p.evaluate(() => { const s = window.__S, r = window.__M.ramInfo; /* 11-19 场地加深，冲车路约 36 秒 */ window.__clear(); s.player.sprite.setPosition(r.x + 60, r.y + 40); window.__step(20); return r.state; }); if (st === 'ram') break; }
   const r2 = (await goals(p)).mid.ram;
   await p.screenshot({ path: `${OUT}/large-2-bridge.png` });
   ck('大城：吊桥落下后冲车过桥、到城门撞门', r2.state === 'ram', r2);
@@ -135,8 +153,8 @@ const killBoss = async p => {
   const { p } = await open('large');
   const r = await p.evaluate(() => { const s = window.__S, m = window.__M; window.__clear(); m.startAt = s.combatNow - 121000; window.__step(5); const sally = s.enemies.filter(e => e.active && !e.isSupplySlot).length; return { bridge: m.bridgeDown, sally: m.stats.sally, n: sally }; });
   ck('大城：一直不砍绳索，守军到时自己放桥出城（多一波出城兵）', r.bridge && r.sally === 1 && r.n >= 4, r);
-  const t = await p.evaluate(() => { const s = window.__S; s.elapsed = 601 + 75; /* 限时 + 援军阶段 */ window.__step(10); return { over: s.over, victory: s.victory }; });
-  ck('大城：限时 600 秒 + 援军阶段 75 秒仍未破城 → 撤军（失败）', t.over && t.victory === false, t);
+  const t = await p.evaluate(() => { const s = window.__S; s.elapsed = window.__M.prof.limitSeconds + 1 + 75; /* 限时 + 援军阶段 */ window.__step(10); return { over: s.over, victory: s.victory }; });
+  ck('大城：限时 650 秒 + 援军阶段 75 秒仍未破城 → 撤军（失败）', t.over && t.victory === false, t);
   await p.close();
 }
 ck('全程无 pageerror / console error', errors.length === 0, errors.slice(0, 6));

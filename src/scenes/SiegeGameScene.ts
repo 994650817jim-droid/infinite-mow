@@ -22,7 +22,8 @@ import type {RunEndReason} from '../types';
 import type {RunConfig} from '../data/characters';
 import { loadBossSheet } from '../systems/ArtStyle';
 import {SiegeMidCity} from '../systems/SiegeMidCity';
-import {MID_SIEGE, SIEGE_GARRISON as GAR, SIEGE_PROFILES} from '../data/siegeMedium';
+import {MID_SIEGE, SIEGE_GARRISON as GAR, SIEGE_PROFILES, SIEGE_ALLIES} from '../data/siegeMedium';
+import {AllyPush, pushOutBoxes} from '../systems/AllyPush';
 import {loadMidSiegeArt} from '../systems/SiegeMidArt';
 import type {EnemyKind} from '../types';
 import {SIEGE_TIMER} from '../data/siegeTimer';
@@ -269,9 +270,18 @@ export function siegeGameSceneClass(Base: typeof GameScene) {
         banner: (t, danger, cap) => this.showWaveBanner(t, !!danger, cap), sfx: k => this.sfx.play(k),
         spawnBoss: () => this.spawnBoss(), boss: () => this.boss,
         campsAlive: () => { const c = this.enemyCamps?.camps ?? []; return [c.filter(x => !x.destroyed).length, c.length]; },
+        allyNear: (x, y, r) => this.allyPush?.near(x, y, r) ?? 0, moveAllies: (x, y) => this.allyPush?.relocate(x, y),
         // 攻城器械等级：讲武堂科技预留（存档字段 siegeEngineLevel，暂无升级入口，默认 0；测试可用 registry siegeEngineLevel 覆盖）
         engineLevel: Number(this.registry.get('siegeEngineLevel') ?? (loadWorld() as {siegeEngineLevel?: number}).siegeEngineLevel ?? 0),
       });
+      // 我方义军攻势（用户 11-19「也需要点我方小兵一起进攻」；data/siegeMedium SIEGE_ALLIES，复用 2-3 的 AllyPush）：城外跟着冲车推进、城内去要点帮着占 / 守、府衙跟主将；
+      // 军营等级（城建 reinforcements）每级每队多 1 人。地图上的行军线 / 碧点由 BattleMap 读 allyPush.squads。
+      const A = SIEGE_ALLIES, lv = permanentEffects().reinforcements;
+      this.allyPush?.clear();
+      this.allyPush = new AllyPush({scene: this, now: () => this.combatNow, paused: () => this.mode !== 'none' || this.over, player: () => this.player,
+        camps: () => this.mid?.allyTargets() ?? [], enemies: () => this.enemies, hit: (e, d) => { this.hitEnemy(e, d, this.combatNow, 'melee', true, false); },
+        push: (x, y, r) => pushOutBoxes((this.sishuiObstacles?.footprints ?? []) as unknown as Array<{left: number; right: number; top: number; bottom: number}>, x, y, r),
+        rally: () => this.mid?.rallyPoint() ?? null, origin: () => this.mid?.allyOrigin() ?? null}, {...A, squad: Math.min(A.maxSquad, A.squad + A.perLevel * lv)});
     }
     /** 守将称呼：小城县尉、中城守将、大城为势力名将（RosterStore 的势力武将名单里抽一位）。 */
     private siegeBossLabel(): string | undefined {

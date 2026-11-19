@@ -4,6 +4,7 @@ import { LUOYANG } from '../data/dongzhuo';
 import type { Enemy } from '../entities/Enemy';
 import type { EnemyKind } from '../types';
 import { FACTION_PROPS } from './PropsV2';
+import { pushOutBoxes } from './AllyPush';
 import type { MixPick } from './RosterMix';
 import { drawSidePalisade, sideWallReady, whenSideWallReady } from './SideWall';
 
@@ -156,19 +157,8 @@ export class LuoyangCamps {
     return g;
   }
 
-  /** 圆（义军小队）挤出营栅。 */
-  pushOut(x: number, y: number, r: number): { x: number; y: number } | null {
-    let moved = false;
-    for (const c of this.camps) for (const b of c.boxes) {
-      if (x < b.left - r || x > b.right + r || y < b.top - r || y > b.bottom + r) continue;
-      const qx = Phaser.Math.Clamp(x, b.left, b.right), qy = Phaser.Math.Clamp(y, b.top, b.bottom), dx = x - qx, dy = y - qy, d = Math.hypot(dx, dy);
-      if (d >= r) continue;
-      if (d > .001) { x += dx / d * (r - d); y += dy / d * (r - d); }
-      else { const up = y - b.top, dn = b.bottom - y; y = up < dn ? b.top - r : b.bottom + r; }
-      moved = true;
-    }
-    return moved ? { x, y } : null;
-  }
+  /** 圆（义军小队）挤出营栅：返回推开量（同 Terrain.pushCircle）。 */
+  pushOut(x: number, y: number, r: number): { x: number; y: number } | null { return pushOutBoxes(this.camps.flatMap(c => c.boxes), x, y, r); }
 
   /** 测试 / 调试：各营待命 / 出营人数。 */
   report(): Array<{ x: number; y: number; alerted: boolean; destroyed: boolean; idle: number; garrison: number; reinforce: number }> {

@@ -30,9 +30,22 @@ export interface CityLayout {
 }
 
 const H = (x: number, y: number, kind: CityBuildingKind = 'house', size = 210, flip = false): CityBuilding => ({ kind, x, y, size, flip });
+/** 城内段加宽（用户 11-19「攻城场地好小」）：所有 x 往两边推 SPREAD；要点圈 × PLAZA（门前成一片小广场）。城外段左右跟城内同宽（SiegeMidCity.oa）。 */
+export const CITY_WIDEN = { spread: 180, plaza: 1.25 } as const;
+const sx = (x: number) => x === 0 ? 0 : x + Math.sign(x) * CITY_WIDEN.spread;
+function widen(c: CityLayout): CityLayout {
+  const S = CITY_WIDEN.spread, pt = <T extends { x: number }>(o: T): T => ({ ...o, x: sx(o.x) });
+  return {
+    ...c, arena: { ...c.arena, left: c.arena.left - S, right: c.arena.right + S },
+    streets: c.streets.map(s => ({ ...s, x: s.x - S, w: s.w + 2 * S })),
+    buildings: c.buildings.map(pt), barrels: c.barrels.map(pt), spawns: c.spawns.map(pt),
+    roofs: c.roofs.map(pt), // 房檐伏兵落点跟着两边的房子外移
+    points: c.points.map(p => ({ ...p, x: sx(p.x), radius: Math.round(p.radius * CITY_WIDEN.plaza), b: { ...p.b, x: sx(p.b.x) } })),
+  };
+}
 const P = (kind: CityPointKind, name: string, bx: number, by: number, size = 250, radius = 100, dy = 90): CityPoint => ({ kind, name, x: bx, y: by + dy, radius, b: { x: bx, y: by, size } });
 
-export const SIEGE_CITY: Record<SiegeTier, CityLayout> = {
+const BASE_CITY: Record<SiegeTier, CityLayout> = {
   // 县城（和城外段同宽，两侧城墙接着城外段的侧墙）：主街直通县衙，半路往西一条横街（丁字）。粮仓在横街北、市集在城门内西侧（摊棚 + 货担）、兵营在主街东。房子成排相连，排与排之间留巷子
   small: {
     arena: { left: -640, right: 640, top: -1640, bottom: -620 },
@@ -110,6 +123,8 @@ export const SIEGE_CITY: Record<SiegeTier, CityLayout> = {
     roofs: [{ x: -80, y: -760 }, { x: 80, y: -760 }, { x: -80, y: -1080 }, { x: 80, y: -1080 }, { x: -80, y: -1460 }, { x: 80, y: -1460 }],
   },
 };
+
+export const SIEGE_CITY: Record<SiegeTier, CityLayout> = { small: widen(BASE_CITY.small), medium: widen(BASE_CITY.medium), large: widen(BASE_CITY.large) };
 
 const BOX: Partial<Record<CityBuildingKind, [number, number]>> = {
   house: [.45, .68], house2: [.45, .86], shop: [.45, .74], granary: [.43, .8], barracks: [.45, .72], armory: [.44, .8], market: [.45, .62], yard: [.45, .5],

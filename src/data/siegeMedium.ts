@@ -9,12 +9,13 @@ import { meleeReach } from './bossReach';
 export const MID_SIEGE = {
   /** 第一段 · 城外：场地、城墙、城门、箭楼、冲车 */
   outside: {
-    arena: { left: -640, right: 640, top: -600, bottom: 340 },
+    // 场地（用户 11-19「攻城场地好小」）：往南加深 560（我方营地、冲车来路拉长，能绕着冲车周旋）；左右实际宽度跟城内段同宽（SiegeMidCity.oa，城内段在 siegeCity 里整体加宽）
+    arena: { left: -640, right: 640, top: -600, bottom: 900 },
     wallY: -580, // 城墙中线（城墙碰撞框 y ∈ [wallY-30, wallY+20]）
     gate: { x: 0, halfW: 86, hp: 1400 }, // 待平衡会话复核
     towers: [{ x: -330 }, { x: 330 }], // 城头两座箭楼（可摧毁，HP 用 SIEGE_GOALS.towerHp × hpScale）
-    start: { x: 0, y: 120 },
-    camp: { x: 0, y: 250, radius: 95 }, // 我方营地：冲车在此领取
+    start: { x: 0, y: 560 },
+    camp: { x: 0, y: 700, radius: 95 }, // 我方营地：冲车在此领取
     /** 城头箭雨：每轮落 N 处，按箭楼存活数取（2 / 1 / 0 座）；有落点预警 */
     volley: { everyMs: [3600, 4400, 6000], zones: [3, 2, 1], warnMs: 1100, radius: 62, damage: 9, allyDamage: 6, ramDamage: 30 }, // 待平衡会话复核
     /** 城外敌营每座存活时刷兵量的加成（全毁时为 1 − bonus×座数 的折扣） */
@@ -45,7 +46,7 @@ export const MID_SIEGE = {
     captureSeconds: 4, contestedMul: .35, holdSeconds: 20, loseSeconds: 5, // 占下后守军反扑：守 20 秒；主将离开、敌兵占点累计 5 秒则失守 · 待平衡会话复核
     counterEveryMs: 2600, counterBurst: 4, // 反扑刷兵
     reinforce: 2, secureReinforce: 2, secureHeal: .15, // 插旗补员 2 名，守住后再补 2 名并回 15% 生命 · 待平衡会话复核
-    ambush: { everyMs: 9000, count: [2, 3], warnMs: 700, roofX: 228 }, // 屋顶伏兵
+    ambush: { everyMs: 9000, count: [2, 3], warnMs: 950, roofX: 228 }, // 屋顶伏兵（11-19：预警 700 → 950ms，看得清再跳）
     barrels: [{ x: -150, y: -820 }, { x: 160, y: -1090 }, { x: -150, y: -1210 }, { x: 150, y: -1520 }],
     innerGateY: -1640,
   },
@@ -62,7 +63,7 @@ export const MID_SIEGE = {
     flagMs: 1600, // 击败守将后插旗占领的动画时长
   },
   transitionMs: 1400,
-  limitSeconds: 480, // 中城限时（原 210 秒是一段式，三段推进约 5 分钟）· 待平衡会话复核
+  limitSeconds: 520, // 中城限时（11-19 场地加大、冲车路拉长 +40）（原 210 秒是一段式，三段推进约 5 分钟）· 待平衡会话复核
 } as const;
 
 /**
@@ -107,9 +108,9 @@ export interface SiegeProfile {
   bossHpMul: number;
 }
 export const SIEGE_PROFILES: Record<'small' | 'medium' | 'large', SiegeProfile> = {
-  small: { phases: ['outside', 'street', 'hall'], /* 攻城城内段改造（用户 11-18）：小城也加城内段（丁字街） */ towers: [{ x: 300 }], gateHp: 520, ram: false, volleyMul: .6, hall: { name: '县衙', guardsEveryMs: 20000, guardCount: 2, phase2: false }, limitSeconds: 240, bossHpMul: 1.4 },
+  small: { phases: ['outside', 'street', 'hall'], /* 攻城城内段改造（用户 11-18）：小城也加城内段（丁字街） */ towers: [{ x: 300 }], gateHp: 520, ram: false, volleyMul: .6, hall: { name: '县衙', guardsEveryMs: 20000, guardCount: 2, phase2: false }, limitSeconds: 270, bossHpMul: 1.4 },
   medium: { phases: ['outside', 'street', 'hall'], towers: MID_SIEGE.outside.towers, gateHp: MID_SIEGE.outside.gate.hp, ram: true, volleyMul: 1, hall: { name: '府衙', guardsEveryMs: MID_SIEGE.hall.guardsEveryMs, guardCount: MID_SIEGE.hall.guardCount, phase2: true }, limitSeconds: MID_SIEGE.limitSeconds, bossHpMul: 1 },
-  large: { phases: ['outside', 'barbican', 'street', 'hall'], towers: [{ x: -440 }, { x: -250 }, { x: 330 }], gateHp: 2100, ram: true, volleyMul: 1.35, hall: { name: '内城', guardsEveryMs: 13000, guardCount: 4, phase2: true }, limitSeconds: 600, bossHpMul: 1.25 },
+  large: { phases: ['outside', 'barbican', 'street', 'hall'], towers: [{ x: -440 }, { x: -250 }, { x: 330 }], gateHp: 2100, ram: true, volleyMul: 1.35, hall: { name: '内城', guardsEveryMs: 13000, guardCount: 4, phase2: true }, limitSeconds: 650, bossHpMul: 1.25 },
 };
 
 /** 大城：护城河、吊桥、瓮城（待平衡会话复核）。 */
@@ -149,4 +150,23 @@ export const SIEGE_GARRISON = {
 } as const;
 
 /** 攻城刷兵方向：城门出城占比；场地下方 rearCut 比例是我方后方（营地 / 冲车来路），不刷兵。敌营挪到左右两翼上半段。 */
-export const SIEGE_SPAWN = { gateShare: .6, rearCut: .3, flankCamps: [{ x: -470, y: -170 }, { x: 470, y: -300 }] } as const;
+export const SIEGE_SPAWN = {
+  gateShare: .6, rearCut: .3, flankCamps: [{ x: -650, y: -80 }, { x: 650, y: -260 }],
+  /** 用户 11-19「小怪生成在我脸上」：普通刷兵离主将至少 minDist，且在镜头外（或镜头边缘外 offPad）；找不到这样的点就从离主将最远的来路出，再不行这次不刷。 */
+  minDist: 450, offPad: 40, tries: 8,
+  /** 屋顶伏兵只挑离主将 [roofMin, roofMax] 之间的房檐（不跳到脸上，也不在屏幕外白等）；守点小队从要点建筑门口出。 */
+  roofMin: 240, roofMax: 720,
+} as const;
+
+/**
+ * 攻城我方义军（用户 11-19「也需要点我方小兵一起进攻」）：复用 2-3 的友军攻势（systems/AllyPush）。
+ * 城外：小队跟着冲车推进（集结点 = 冲车前方），路上打敌兵；小城没冲车 → 集结在木门前。破门后：涌进城、集结到最近一处没拿下的要点帮着占 / 守
+ * （主将不在圈里时，圈里有义军也能占，速度 × pointRate；守点时圈里有义军不算失守）；府衙：跟着主将打亲卫。
+ * 场上最多 cap 人；军营等级（城建 reinforcements）每级多 perLevel 人 / 队，上限 maxSquad。初值，交平衡会话。
+ */
+export const SIEGE_ALLIES = {
+  firstMs: 4000, everyMs: 16000, squad: 4, perLevel: 1, maxSquad: 6, cap: 20,
+  sheets: ['shu_spearman_walk_sheet', 'shu_swordsman_walk_sheet'], speed: 80, hp: 170, dmg: 16, campDmg: 10, hitMs: 900, engage: 200, reach: 46, campReach: 40, enemyDps: 6, rearPad: 90,
+  /** 集结点：冲车前方多远；城内要点圈里算几成主将。 */
+  ramLead: 90, pointRate: .5,
+} as const;

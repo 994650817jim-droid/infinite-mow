@@ -21,7 +21,7 @@ export function siegeScenery(scene: Phaser.Scene, city: CityDef, spawnProp?: (fr
     tex.refresh(); tex.setFilter(Phaser.Textures.FilterMode.NEAREST);
   }
   // 冲车路：v2 手绘路面（用户 11-17「这里的路不符合画风」）——小城夯土车辙路，中 / 大城半埋泥草的旧石板官道；缺图才退回程序画的石板路
-  const v2Road = city.tier === 'small' ? 'road_v2_dirt' : 'road_v2_stone', v2Width = 220;
+  const v2Road = city.tier === 'small' ? 'road_v2_dirt' : 'road_v2_stone', v2Width = 300; // 11-19 城内主街加宽（siegeCity CITY_WIDEN），路面 220 → 300
   if (paintV2Road(scene, 'siege_road_' + v2Road, v2Road, v2Width)) {
     const roadKey = 'siege_road_' + v2Road, h = scene.textures.get(roadKey).getSourceImage().height;
     scene.add.tileSprite(0, 0, v2Width, Math.ceil(8192 / h) * h, roadKey).setDepth(1);

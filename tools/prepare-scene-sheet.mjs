@@ -10,12 +10,13 @@ if (!SRC || !OUT) { console.error('需要 SRC 和 OUT'); process.exit(2); }
 const COLS = +(E.COLS ?? 4), ROWS = +(E.ROWS ?? 2), CELL = +(E.CELL ?? 256), MARGIN = +(E.MARGIN ?? .06), ANCHOR = E.ANCHOR ?? 'bottom', SHARE = E.SCALE_SHARE === '1';
 const XSPLIT = E.XSPLIT ? E.XSPLIT.split(',').map(Number) : null, YSPLIT = E.YSPLIT ? E.YSPLIT.split(',').map(Number) : null;
 const WIN = E.WIN ? E.WIN.split(';').map(s => s.split(',').map(Number)) : null; // 每件物件的搜索窗口 x0,y0,x1,y1（占原图宽 / 高的比例），按输出格序；不规则排列时用
+const EXCL = E.EXCL ? E.EXCL.split(';').map(s => { const [k, r] = s.split(':'); return [+k, r.split(',').map(Number)]; }) : null; // 每格要忽略的矩形 k:x0,y0,x1,y1（占原图比例；窗口里混进邻居的碎片时用）
 const [by0, by1] = (E.BAND ?? '0,1').split(',').map(Number), KH = +(E.KEYHARD ?? 140), KS = +(E.KEYSOFT ?? 60);
 const mime = { '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.jfif': 'image/jpeg', '.webp': 'image/webp' }[extname(SRC).toLowerCase()] ?? 'image/png';
 const b = await chromium.launch({ channel: 'chrome', headless: true });
 try {
   const p = await b.newPage();
-  const res = await p.evaluate(async ([data, COLS, ROWS, CELL, MARGIN, ANCHOR, SHARE, by0, by1, KH, KS, XSPLIT, YSPLIT, WIN, SPILLALL]) => {
+  const res = await p.evaluate(async ([data, COLS, ROWS, CELL, MARGIN, ANCHOR, SHARE, by0, by1, KH, KS, XSPLIT, YSPLIT, WIN, SPILLALL, EXCL]) => {
     const im = new Image(); im.src = data; await im.decode();
     const W = im.width, H = im.height, cv = document.createElement('canvas'); cv.width = W; cv.height = H;
     const g = cv.getContext('2d', { willReadFrequently: true }); g.drawImage(im, 0, 0); const img = g.getImageData(0, 0, W, H), d = img.data;
@@ -31,8 +32,8 @@ try {
       const ci = k % COLS, ri = Math.floor(k / COLS), xs = [0, ...(XSPLIT ?? Array.from({ length: COLS - 1 }, (_, i) => (i + 1) / COLS)), 1], ys = [0, ...(YSPLIT ?? Array.from({ length: ROWS - 1 }, (_, i) => (i + 1) / ROWS)), 1];
       let x0 = Math.round(xs[ci] * W), x1 = Math.round(xs[ci + 1] * W), y0 = Math.round(H * (by0 + (by1 - by0) * ys[ri])), y1 = Math.round(H * (by0 + (by1 - by0) * ys[ri + 1]));
       if (WIN) { const w = WIN[k]; x0 = Math.round(w[0] * W); y0 = Math.round(w[1] * H); x1 = Math.round(w[2] * W); y1 = Math.round(w[3] * H); }
-      let bx0 = 1e9, bx1 = -1, bY0 = 1e9, bY1 = -1;
-      for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) if (d[(y * W + x) * 4 + 3] > 40) { if (x < bx0) bx0 = x; if (x > bx1) bx1 = x; if (y < bY0) bY0 = y; if (y > bY1) bY1 = y; }
+      let bx0 = 1e9, bx1 = -1, bY0 = 1e9, bY1 = -1; const ex = (EXCL ?? []).filter(e => e[0] === k).map(e => e[1]);
+      for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) if (d[(y * W + x) * 4 + 3] > 40 && !ex.some(r => x >= r[0] * W && x < r[2] * W && y >= r[1] * H && y < r[3] * H)) { if (x < bx0) bx0 = x; if (x > bx1) bx1 = x; if (y < bY0) bY0 = y; if (y > bY1) bY1 = y; }
       boxes.push(bx1 < 0 ? null : { x: bx0, y: bY0, w: bx1 - bx0 + 1, h: bY1 - bY0 + 1 });
     }
     const inner = CELL * (1 - 2 * MARGIN), sAll = Math.min(...boxes.filter(Boolean).map(o => Math.min(inner / o.w, inner / o.h)));
@@ -40,10 +41,12 @@ try {
     boxes.forEach((o, k) => {
       if (!o) { info.push(k + ': 空'); return; }
       const s = SHARE ? sAll : Math.min(inner / o.w, inner / o.h), dw = o.w * s, dh = o.h * s, cx = (k % COLS) * CELL, cy = Math.floor(k / COLS) * CELL;
-      og.drawImage(cv, o.x, o.y, o.w, o.h, cx + (CELL - dw) / 2, ANCHOR === 'center' ? cy + (CELL - dh) / 2 : cy + CELL - CELL * MARGIN - dh, dw, dh);
+      const exs = (EXCL ?? []).filter(e => e[0] === k).map(e => e[1]); let srcCv = cv, sx0 = o.x, sy0 = o.y;
+      if (exs.length) { const tc = document.createElement('canvas'); tc.width = o.w; tc.height = o.h; const tg = tc.getContext('2d'); tg.drawImage(cv, o.x, o.y, o.w, o.h, 0, 0, o.w, o.h); for (const r of exs) tg.clearRect(r[0] * W - o.x, r[1] * H - o.y, (r[2] - r[0]) * W, (r[3] - r[1]) * H); srcCv = tc; sx0 = 0; sy0 = 0; }
+      og.drawImage(srcCv, sx0, sy0, o.w, o.h, cx + (CELL - dw) / 2, ANCHOR === 'center' ? cy + (CELL - dh) / 2 : cy + CELL - CELL * MARGIN - dh, dw, dh);
       info.push(`${k}: ${o.w}×${o.h} → ${Math.round(dw)}×${Math.round(dh)}`);
     });
     return { url: out.toDataURL('image/png'), info };
-  }, [`data:${mime};base64,` + readFileSync(SRC).toString('base64'), COLS, ROWS, CELL, MARGIN, ANCHOR, SHARE, by0, by1, KH, KS, XSPLIT, YSPLIT, WIN, E.SPILL === 'all']);
+  }, [`data:${mime};base64,` + readFileSync(SRC).toString('base64'), COLS, ROWS, CELL, MARGIN, ANCHOR, SHARE, by0, by1, KH, KS, XSPLIT, YSPLIT, WIN, E.SPILL === 'all', EXCL]);
   writeFileSync(OUT, Buffer.from(res.url.split(',')[1], 'base64')); console.log(OUT, res.info.join(' | '));
 } finally { await b.close(); }

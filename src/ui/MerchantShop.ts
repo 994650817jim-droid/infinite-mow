@@ -120,8 +120,8 @@ export interface OpenMerchantOptions{
  hero?:CharacterId;
  /** 买下的兵装（默认直接进行囊 addItems）。 */
  onBuyItem?:(item:ItemInstance)=>void;
- /** 关闭后回调。 */
- onClose?:()=>void;
+ /** 关闭后回调。reason：'leave' = 玩家点「离开」/ Esc / 调用返回的关闭函数；'shutdown' = 场景正在关闭（这时别重绘场景，否则重进同一场景会卡住）。 */
+ onClose?:(reason:'leave'|'shutdown')=>void;
  title?:string;depth?:number;sound?:(kind:string)=>void;
 }
 /**
@@ -145,7 +145,8 @@ export function openMerchantShop(scene:Phaser.Scene,opts:OpenMerchantOptions):()
  const top=py+64,h=D?250:200;
  const draw=()=>{if(closed)return;shop.hideTip();body.removeAll(true);shop.render(body,px+16,top,px+pw-16,h);purse.setText(opts.wallet.name+' '+opts.wallet.get());note.setY(D?top+h+18:H-210).setText(notice||shop.hint());};
  shop.onArtLoaded=draw;
- const close=()=>{if(closed)return;closed=true;scene.input.keyboard?.off('keydown-ESC',close);shop.destroy();root.destroy();opts.onClose?.();};
+ const finish=(reason:'leave'|'shutdown')=>{if(closed)return;closed=true;scene.input.keyboard?.off('keydown-ESC',close);scene.events.off('shutdown',onShutdown);shop.destroy();root.destroy();opts.onClose?.(reason);};
+ const close=()=>finish('leave'),onShutdown=()=>finish('shutdown');
  // 离开
  const bw=180,bx=W/2-bw/2,by=py+ph-56,g=scene.add.graphics().setScrollFactor(0);
  const cap=scene.add.text(W/2,by+22,'离开',{fontFamily:HEADING_FONT,fontSize:'16px',color:'#ffe9bd',resolution:2}).setOrigin(.5).setLetterSpacing(4).setScrollFactor(0);
@@ -153,6 +154,6 @@ export function openMerchantShop(scene:Phaser.Scene,opts:OpenMerchantOptions):()
  const paint=(st:LqState)=>{g.clear();const d=lqButton(g,W/2,by+22,bw,38,st,'gold');cap.setY(by+22+d).setColor(lqLabelColor(st));};
  hit.on('pointerover',()=>paint('hover')).on('pointerout',()=>paint('idle')).on('pointerdown',()=>{paint('down');opts.sound?.('uiClick');close();});paint('idle');void bx;
  root.add([g,cap,hit]);
- scene.input.keyboard?.on('keydown-ESC',close);scene.events.once('shutdown',close);
+ scene.input.keyboard?.on('keydown-ESC',close);scene.events.once('shutdown',onShutdown);
  draw();return close;
 }

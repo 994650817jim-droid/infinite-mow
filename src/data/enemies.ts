@@ -1,4 +1,5 @@
 import type { EnemyKind } from '../types';
+import type { TraitDef } from './enemyRoster';
 
 export interface EnemyDef {
   kind: EnemyKind;
@@ -11,6 +12,9 @@ export interface EnemyDef {
   behavior?: "spear" | "shaman" | "halberd" | "thunder" | "wall" | "supply";
   /** 章节专属兵种（不走第一章 behavior 逻辑）：feixiong = 第二章飞熊军（XiliangBattle）；hubao = 第五章虎豹骑（HubaoBattle）。 */
   variant?: "feixiong" | "hubao";
+  /** 各章新兵种（data/enemyRoster）：机制与兵种 id，由 systems/EnemyTraits 驱动。 */
+  trait?: TraitDef;
+  roster?: string;
   hp: number;
   speed: number;
   damage: number;

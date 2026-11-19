@@ -93,7 +93,7 @@ export class Enemy {
   private recoilUntil = 0;
   private recoilMs = 90;
   private squash = 0;
-  private baseTint = 0xffffff;
+  baseTint = 0xffffff;
   contactCd = 0;
   shootCd = 0;
   dashCd = 0;

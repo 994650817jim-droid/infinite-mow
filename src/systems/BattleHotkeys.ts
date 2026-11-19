@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { DEPTH, FONT, IS_DESKTOP } from '../config';
-import { HOTKEYS, actionFor, eventCode, hotkeyCode, hotkeyLabel, typingTarget, type HotkeyAction } from '../data/hotkeys';
+import { HOTKEYS, actionFor, actionsFor, eventCode, hotkeyCode, hotkeyLabel, typingTarget, type HotkeyAction } from '../data/hotkeys';
 import { gamepad } from '../platform/gamepad';
 import { hotkeyUiOpen } from '../ui/HotkeySettingsUI';
 
@@ -31,6 +31,8 @@ export interface HotkeyHost {
   /** 战场地图（大地图）开关；没有地图（手机布局）时不传。 */
   toggleMap?(): void;
   mapOpen?(): boolean;
+  /** 军令面板收起 / 展开（G）；没有面板（手机布局）时不传。 */
+  toggleOrders?(): void;
 }
 
 type GO = Phaser.GameObjects.GameObject & { visible?: boolean; parentContainer?: Phaser.GameObjects.Container | null; getBounds?: () => Phaser.Geom.Rectangle };
@@ -82,7 +84,8 @@ export class BattleHotkeys {
 
   private key(e: KeyboardEvent): void {
     if (typingTarget(e) || hotkeyUiOpen()) return;
-    const code = eventCode(e), action = actionFor(code);
+    // 共用键（M：战斗中 = 舆图；天下地图 / 营寨 = 返回主菜单）：战斗场景里优先舆图
+    const code = eventCode(e), all = actionsFor(code), action = all.includes('map') && this.h.toggleMap ? 'map' : actionFor(code);
     if (code === 'Tab' || (code === 'Space' && action)) e.preventDefault?.(); // Tab 不让浏览器挪焦点；空格不滚页
     if (!action) return;
     if (gamepad.synthetic && action !== 'back') return; // 手柄合成的 Enter 不触发新键（保持手柄原行为）
@@ -101,11 +104,12 @@ export class BattleHotkeys {
       if (a === 'build' || a === 'back') { const back = this.buildFromBattle; this.buildFromBattle = false; click(s, 'build-panel-back'); if (back && h.mode() === 'pause') h.togglePause(); return true; }
       return false;
     }
-    // 大地图开着：G / Esc 关掉（其余键照常）
+    // 舆图开着：M / Esc 卷起（其余键照常）
     if (h.mapOpen?.() && (a === 'map' || a === 'back')) { h.toggleMap?.(); return true; }
     if (playing) {
       switch (a) {
         case 'map': if (!h.toggleMap) return false; h.toggleMap(); return true;
+        case 'orders': if (!h.toggleOrders) return false; h.toggleOrders(); return true;
         case 'back': h.togglePause(); return true;
         case 'potion': h.usePotion(); return true;
         case 'order': h.cycleOrder(); return true;
@@ -121,7 +125,6 @@ export class BattleHotkeys {
       case 'pause':
         if (a === 'back') { h.togglePause(); return true; }
         if (a === 'confirm') return click(s, 'pause-resume');
-        if (a === 'menu') return click(s, 'pause-menu'); // 第一次进待确认，第二次执行
         if (a === 'bag') { h.openBag(); return true; }
         if (a === 'build') { h.openBuild(); this.buildFromBattle = false; return true; }
         if (a === 'attributes' && h.canAttributes()) { h.openAttributes('pause'); return true; }
@@ -172,7 +175,7 @@ export class BattleHotkeys {
 /** 每个界面要标键位的对象（名字 → 动作）。 */
 const HINTS: Record<string, Array<[string | RegExp, HotkeyAction | ((i: number) => HotkeyAction)]>> = {
   none: [['potion-button', 'potion'], ['attribute-plus', 'attributes'], ['hud-bag', 'bag'], ['hud-pause', 'back']],
-  pause: [['pause-resume', 'back'], ['pause-build', 'build'], ['pause-menu', 'menu']],
+  pause: [['pause-resume', 'back'], ['pause-build', 'build']], // 「返回主菜单」不标键：战斗中 M 是舆图
   levelup: [[/^upgrade-card-[0-2]$/, i => (['pick1', 'pick2', 'pick3'] as const)[i]], ['upgrade-reroll', 'reroll']],
   bossloot: [[/^upgrade-card-[0-2]$/, i => (['pick1', 'pick2', 'pick3'] as const)[i]]],
   attributes: [['attributes-close', 'back']],

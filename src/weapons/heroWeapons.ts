@@ -80,14 +80,14 @@ function releaseCracks(host: WeaponHost, angles: number[], damage: number, len: 
 
 export function zhenbeiBehavior(host: WeaponHost, weapon: WeaponState, dt: number, time: number): void {
   // 拒敌：被围也积层（2026-11-18，data/heroMechanics.ts WY_SURROUND）——每帧数身边敌人，冷却中也算
-  { const p0 = host.player, r0 = WY_SURROUND.radius; p0.passive.onSurrounded(time, dt, host.grid.query(p0.x, p0.y, r0 + 30).filter(e => e.active && !e.isSupplySlot && Math.hypot(e.x - p0.x, e.y - p0.y) <= r0 + e.radius).length); }
+  { const p0 = host.player, r0 = WY_SURROUND.radius; p0.passive.onSurrounded(time, dt, host.grid.query(p0.x, p0.y, r0 + 30).filter(e => e.active && !(e.isSupplySlot && !e.lockTarget) && Math.hypot(e.x - p0.x, e.y - p0.y) <= r0 + e.radius).length); }
   weapon.cooldownLeft -= dt;
   if (weapon.cooldownLeft > 0) return;
   const pl = host.player, growth = pl.growth, level = weapon.level;
   const kaishan = growth.masteries.kaishan, heavy = kaishan > 0 && growth.slashCount >= 4;
   const am = host.player.passive.rangeMultiplier('zhenbei_blade'), len = R.crackLen * am, width = R.crackWidth * (heavy ? 1.5 : 1) * am; // 智力范围加成
   // 选裂波方向：16 个候选方向里，直线带内敌人最多（精锐 / 首领加权）的一个；有优先目标时直指目标
-  const near = host.grid.query(pl.x, pl.y, len + 40).filter(e => e.active && !e.isSupplySlot && Math.hypot(e.x - pl.x, e.y - pl.y) <= len + e.radius);
+  const near = host.grid.query(pl.x, pl.y, len + 40).filter(e => e.active && !(e.isSupplySlot && !e.lockTarget) && Math.hypot(e.x - pl.x, e.y - pl.y) <= len + e.radius);
   if (!near.length) return; // 没有敌人不出刀、不耗冷却
   let best = 0, bestScore = -1;
   for (let i = 0; i < 16; i++) {
@@ -100,7 +100,7 @@ export function zhenbeiBehavior(host: WeaponHost, weapon: WeaponState, dt: numbe
   const cast = pl.passive.beginCast('zhenbei_blade');
   if (kaishan) growth.slashCount = heavy ? 0 : growth.slashCount + 1;
   // 孤军深入：身边 160 像素内每名敌人伤害 +1.5/2/2.5%（最多 15 名）
-  const gujun = growth.masteries.gujun ? 1 + Math.min(15, host.grid.query(pl.x, pl.y, 160).filter(e => e.active && !e.isSupplySlot && Math.hypot(e.x - pl.x, e.y - pl.y) <= 160).length) * [.015, .02, .025][growth.masteries.gujun - 1] : 1;
+  const gujun = growth.masteries.gujun ? 1 + Math.min(15, host.grid.query(pl.x, pl.y, 160).filter(e => e.active && !(e.isSupplySlot && !e.lockTarget) && Math.hypot(e.x - pl.x, e.y - pl.y) <= 160).length) * [.015, .02, .025][growth.masteries.gujun - 1] : 1;
   const damage = ZHENBEI_DEF.damage(level, pl.stats) * growth.damageMultiplier(time) * gujun * (heavy ? [1.5, 1.7, 1.9][kaishan - 1] : 1);
   const ux = Math.cos(best), uy = Math.sin(best);
   pl.faceDirection(Math.abs(ux) > Math.abs(uy) ? (ux < 0 ? 'left' : 'right') : (uy < 0 ? 'up' : 'down'), 160);
@@ -330,7 +330,7 @@ const RING_SLOW = new WeakMap<object, { x: number; y: number; r: number; until: 
 export function lianhuanBehavior(host: WeaponHost, weapon: WeaponState, dt: number, time: number): void {
   const pl = host.player, s = stateOf(pl), growth = pl.growth, level = weapon.level;
   { const zs = (RING_SLOW.get(pl) ?? []).filter(z => z.until > time); RING_SLOW.set(pl, zs);
-    for (const z of zs) for (const e of host.grid.query(z.x, z.y, z.r + 40)) { if (!e.active || e.isSupplySlot || e.kind === 'boss' || Math.hypot(e.x - z.x, e.y - z.y) > z.r + e.radius) continue;
+    for (const z of zs) for (const e of host.grid.query(z.x, z.y, z.r + 40)) { if (!e.active || (e.isSupplySlot && !e.lockTarget) || e.kind === 'boss' || Math.hypot(e.x - z.x, e.y - z.y) > z.r + e.radius) continue;
       e.martialSlow = Math.min(time >= e.martialSlowUntil ? 1 : e.martialSlow, 1 - PT_RING.slow); e.martialSlowUntil = time + 120; } }
   const damage = LIANHUAN_DEF.damage(level, pl.stats) * growth.damageMultiplier(time), radius = mineRadius(level) * host.player.passive.rangeMultiplier('lianhuan_mines'); // 智力范围加成
   const chainRange = R.mineChainRange * (1 + .15 * growth.masteries.lianying), len = tetherLen(pl);
@@ -343,7 +343,7 @@ export function lianhuanBehavior(host: WeaponHost, weapon: WeaponState, dt: numb
       continue;
     }
     if (time >= m.until) { explode(host, s, m, damage, radius, null, 0, false, time, level); continue; }
-    if (host.grid.query(m.x, m.y, R.mineTrigger + 30).some(e => e.active && !e.isSupplySlot && Math.hypot(e.x - m.x, e.y - m.y) <= R.mineTrigger + e.radius)) {
+    if (host.grid.query(m.x, m.y, R.mineTrigger + 30).some(e => e.active && !(e.isSupplySlot && !e.lockTarget) && Math.hypot(e.x - m.x, e.y - m.y) <= R.mineTrigger + e.radius)) {
       m.fuseAt = time + R.mineFuseMs; warnMine(m);
     }
   }
@@ -351,7 +351,7 @@ export function lianhuanBehavior(host: WeaponHost, weapon: WeaponState, dt: numb
   for (const t of s.tethers) {
     for (const e of host.grid.query((t.a.x + t.b.x) / 2, (t.a.y + t.b.y) / 2, Math.hypot(t.b.x - t.a.x, t.b.y - t.a.y) / 2 + 40)) {
       if (!e.active || segDist(e.x, e.y, t.a, t.b) > R.tetherWidth / 2 + e.radius) continue;
-      if (e.kind !== 'boss' && !e.isSupplySlot) { e.martialSlow = Math.min(time >= e.martialSlowUntil ? 1 : e.martialSlow, 1 - R.tetherSlow); e.martialSlowUntil = time + 150; }
+      if (e.kind !== 'boss' && !(e.isSupplySlot && !e.lockTarget)) { e.martialSlow = Math.min(time >= e.martialSlowUntil ? 1 : e.martialSlow, 1 - R.tetherSlow); e.martialSlowUntil = time + 150; }
       if (level < 2) continue;
       const b = s.burnAt.get(e.uid);
       if (b && b.spawn === e.spawnId && time < b.at) continue;
@@ -368,7 +368,7 @@ export function lianhuanBehavior(host: WeaponHost, weapon: WeaponState, dt: numb
       for (const e of host.grid.query(cx, cy, r)) {
         if (!e.active || !inPoly(e.x, e.y, lp.poly)) continue;
         host.hitEnemy(e, damage * R.loopMul, time, 'fire');
-        if (e.kind !== 'boss' && !e.isSupplySlot) { e.martialSlow = Math.min(time >= e.martialSlowUntil ? 1 : e.martialSlow, 1 - R.loopSlow); e.martialSlowUntil = time + R.loopTickMs + 60; }
+        if (e.kind !== 'boss' && !(e.isSupplySlot && !e.lockTarget)) { e.martialSlow = Math.min(time >= e.martialSlowUntil ? 1 : e.martialSlow, 1 - R.loopSlow); e.martialSlowUntil = time + R.loopTickMs + 60; }
       }
     }
     if (time >= lp.until - 800) for (const m of lp.mines) warnMine(m);
@@ -382,7 +382,7 @@ export function lianhuanBehavior(host: WeaponHost, weapon: WeaponState, dt: numb
   }
   // 火烧连环：2 秒后整圈齐爆；敌人踏入圈内则改为再烧一段引信（不晚于原定时间）。满级先化作整片地火
   for (const g of [...s.rings]) {
-    const inside = host.grid.query(g.x, g.y, R.ringRadius + 30).some(e => e.active && !e.isSupplySlot && Math.hypot(e.x - g.x, e.y - g.y) <= R.ringRadius - 10);
+    const inside = host.grid.query(g.x, g.y, R.ringRadius + 30).some(e => e.active && !(e.isSupplySlot && !e.lockTarget) && Math.hypot(e.x - g.x, e.y - g.y) <= R.ringRadius - 10);
     if (inside && time >= g.mines[0].armAt) g.fuseAt = Math.min(g.fuseAt, time + R.mineFuseMs);
     if (level < 5 && g.fuseAt - time <= R.mineFuseMs * .4) for (const m of g.mines) warnMine(m, true); // 满级这一圈先化作地火，示警留给地火收尾
     if (time >= g.fuseAt) fireRing(host, s, g, damage, radius, time, level);
@@ -399,10 +399,10 @@ export function lianhuanBehavior(host: WeaponHost, weapon: WeaponState, dt: numb
   }
   weapon.cooldownLeft -= dt;
   if (weapon.cooldownLeft > 0) return;
-  const foes = host.grid.query(pl.x, pl.y, 320).filter(e => e.active && !e.isSupplySlot && Math.hypot(e.x - pl.x, e.y - pl.y) <= 320)
+  const foes = host.grid.query(pl.x, pl.y, 320).filter(e => e.active && !(e.isSupplySlot && !e.lockTarget) && Math.hypot(e.x - pl.x, e.y - pl.y) <= 320)
     .sort((a, b) => Math.hypot(a.x - pl.x, a.y - pl.y) - Math.hypot(b.x - pl.x, b.y - pl.y));
+  const priority = host.priorityTarget?.(320) ?? null; if (priority) { const i = foes.indexOf(priority); if (i >= 0) foes.splice(i, 1); foes.unshift(priority); }
   if (!foes.length) return; // 没有敌人不布雷、不耗冷却
-  const priority = host.priorityTarget?.(320) ?? null; if (priority) { foes.splice(foes.indexOf(priority), 1); foes.unshift(priority); }
   const cast = pl.passive.beginCast('lianhuan_mines');
   if (cast.formation) {
     // 火烧连环：身边一圈 6 枚火雷，以锁链连成环
@@ -552,7 +552,7 @@ export function sunKnivesBehavior(host: WeaponHost, weapon: WeaponState, dt: num
     if (m.img.texture.key === 'sun_maid_walk') { const dir = Math.abs(mvx) > Math.abs(mvy) ? (mvx < 0 ? 'left' : 'right') : (mvy < 0 ? 'up' : 'down'); m.img.setFrame(`${dir}_${Math.floor(time / 140) % 4}`); }
     if (time < m.nextSlash) continue;
     let best: Enemy | null = null, bd: number = (R.maidRange * host.player.passive.rangeMultiplier('sun_knives'));
-    for (const e of host.grid.query(m.img.x, m.img.y, (R.maidRange * host.player.passive.rangeMultiplier('sun_knives')))) { if (!e.active || e.isSupplySlot) continue; const d = Math.hypot(e.x - m.img.x, e.y - m.img.y); if (d < bd) { bd = d; best = e; } }
+    for (const e of host.grid.query(m.img.x, m.img.y, (R.maidRange * host.player.passive.rangeMultiplier('sun_knives')))) { if (!e.active || (e.isSupplySlot && !e.lockTarget)) continue; const d = Math.hypot(e.x - m.img.x, e.y - m.img.y); if (d < bd) { bd = d; best = e; } }
     if (!best) continue;
     m.nextSlash = time + R.maidSlashMs; m.img.setFlipX(best.x < m.img.x);
     host.hitEnemy(best, maidDamage, time, 'melee');
@@ -588,7 +588,7 @@ export function sunKnivesBehavior(host: WeaponHost, weapon: WeaponState, dt: num
   // 每次掷几把随等级 1/1/2/2/3：第一把打主目标，其余飞向主目标以外的近敌（伤害 60%）；没有别的敌人时散射在主目标两侧
   const base = SUN_KNIVES_DEF.damage(level, pl.stats) * growth.damageMultiplier(time), pierce = R.knifePierceByLevel[lv(level)] + (moving ? growth.masteries.huishen : 0);
   const count = Math.min(ready.length, R.knifeCountByLevel[lv(level)]);
-  const others = host.grid.query(pl.x, pl.y, (R.knifeRange * host.player.passive.rangeMultiplier('sun_knives'))).filter(e => e.active && !e.isSupplySlot && e !== target && Math.hypot(e.x - pl.x, e.y - pl.y) <= (R.knifeRange * host.player.passive.rangeMultiplier('sun_knives')))
+  const others = host.grid.query(pl.x, pl.y, (R.knifeRange * host.player.passive.rangeMultiplier('sun_knives'))).filter(e => e.active && !(e.isSupplySlot && !e.lockTarget) && e !== target && Math.hypot(e.x - pl.x, e.y - pl.y) <= (R.knifeRange * host.player.passive.rangeMultiplier('sun_knives')))
     .sort((a, b) => Math.hypot(a.x - pl.x, a.y - pl.y) - Math.hypot(b.x - pl.x, b.y - pl.y));
   for (let k = 0; k < count; k++) {
     const knife = ready[k], sx = knife.img.x, sy = knife.img.y, t = k === 0 ? target : others[k - 1];
@@ -706,7 +706,7 @@ export function diaochanFansBehavior(host: WeaponHost, weapon: WeaponState, dt: 
       const turnMs = R.turnMs + 500 * growth.masteries.meirenji;
       for (const e of host.grid.query(pl.x, pl.y, (R.moonRadius * host.player.passive.rangeMultiplier('diaochan_fans')) + 30)) {
         if (!e.active || Math.hypot(e.x - pl.x, e.y - pl.y) > (R.moonRadius * host.player.passive.rangeMultiplier('diaochan_fans')) + e.radius) continue;
-        host.hitEnemy(e, damage * R.moonDamageMul, time, 'arrow'); if (!e.isSupplySlot) pl.passive.forceTurn(e, time, turnMs);
+        host.hitEnemy(e, damage * R.moonDamageMul, time, 'arrow'); if (!(e.isSupplySlot && !e.lockTarget)) pl.passive.forceTurn(e, time, turnMs);
       }
     }
     return;

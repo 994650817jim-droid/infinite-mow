@@ -9,7 +9,8 @@
 export interface Pt { x: number; y: number }
 /** 一簇树林：在椭圆里撒 count 棵树（固定随机种子，每次一样），树与树至少隔 gap，自然留出可穿行的空隙。 */
 export interface WoodsSpec { x: number; y: number; rx: number; ry: number; count: number; seed: number; kind?: TreeKind; gap?: number }
-export type TreeKind = 'pine' | 'bamboo' | 'broad' | 'jungle';
+/** 树种：第一张图集 terrain/trees.png（松 / 竹 / 阔叶 / 雨林）+ 第二张 terrain/trees2.png（即梦出图，用户「树增加多点在不同适合的场景」：垂柳 / 侧柏 / 白杨 / 枯树 / 棕榈 / 榕树）。 */
+export type TreeKind = 'pine' | 'bamboo' | 'broad' | 'jungle' | 'willow' | 'cypress' | 'poplar' | 'dead' | 'palm' | 'banyan';
 export interface TreeSpec extends Pt { kind?: TreeKind; size?: number }
 /** 河：折线（points）+ 宽度；bridges 的 at 是沿河长度的比例（0～1），width 是桥面宽（垂直于桥的方向）。 */
 export interface RiverSpec { points: Pt[]; width: number; bridges: Array<{ at: number; width: number }>; flow?: number }
@@ -17,6 +18,8 @@ export interface RiverSpec { points: Pt[]; width: number; bridges: Array<{ at: n
 export interface CliffSpec { x: number; y: number; w: number; h: number }
 export interface TerrainConfig {
   woods?: WoodsSpec[]; trees?: TreeSpec[]; rivers?: RiverSpec[]; cliffs?: CliffSpec[];
+  /** 自动成片的树林（GROVES 表，按地域选树种）：Terrain 在开局点四周的环带里撒成簇，避开中间十字通道、障碍、营寨 / 目标。 */
+  auto?: AutoGroves;
   /** 这些圆里不长树（主将出生点、首领出场点、玩法要用的空地）。 */
   clear?: Array<Pt & { r: number }>;
 }
@@ -25,7 +28,11 @@ export const TERRAIN = {
   /** 树干碰撞半径（树冠画得大，碰撞只算树干，不挡视线） */
   trunk: 22,
   /** 树的显示尺寸（世界像素）：pine / bamboo / broad */
-  treeSize: { pine: 190, bamboo: 170, broad: 210, jungle: 220 } as Record<TreeKind, number>,
+  treeSize: { pine: 190, bamboo: 170, broad: 210, jungle: 220, willow: 220, cypress: 205, poplar: 235, dead: 185, palm: 225, banyan: 250 } as Record<TreeKind, number>,
+  /** 每棵树的大小浮动（±）、色调浮动（压暗 / 偏暖的最大比例）——成片的树不像复制粘贴。 */
+  sizeJitter: .16, tintJitter: .22,
+  /** 树图离开镜头多远就不画（每 250 毫秒按镜头开关一次可见）。 */
+  cullPad: 320,
   /** 主将走到树冠后面时树冠透明度 */
   behindAlpha: .42,
   /** 在水里的移动倍率（敌我一样）：减速 40% */
@@ -39,6 +46,63 @@ export const TERRAIN = {
 } as const;
 
 const C0 = { x: 0, y: 0, r: 260 };
+
+/**
+ * 自动树林（用户 2026-11-18「树增加多点在不同适合的场景」）：
+ * - 成簇：在开局点四周 ring 环带里放 groves 簇（每簇 per 棵，椭圆里撒、彼此隔开留穿行缝），一簇以一种树为主（按 mix 权重抽主树种，七成是主树种）。
+ * - 路边林带 rows：沿中间十字通道两侧种一行（有缺口），像官道两旁的行道树；riverside：沿河两岸一行（垂柳 / 棕榈），避开桥头。
+ * - 不挡打仗的地方：中间十字通道（半宽 corridor）、开局点附近、关卡目标 / 营寨 / 补给附近、各种障碍框（关墙、营栅、山崖）旁边都不种；
+ *   minY：只在这条线以南种（城池的关：只在城外有几棵树）；城墙一类的长障碍北边（城里）一律不种。
+ * - 每棵树大小 ±16%、色调略有深浅、随机左右翻。
+ */
+export interface AutoGroves {
+  mix: Partial<Record<TreeKind, number>>; groves: number; per: [number, number]; seed: number;
+  ring?: [number, number]; corridor?: number; rows?: TreeKind | false; riverside?: TreeKind; minY?: number;
+}
+const N_PLAIN = { poplar: 4, broad: 3, willow: 1 }, N_HILL = { pine: 3, cypress: 3, broad: 1 }, RIVER = { willow: 3, broad: 2, poplar: 1 };
+const JING = { bamboo: 3, broad: 2, willow: 1 }, SOUTH = { palm: 3, banyan: 2, jungle: 2, bamboo: 1 }, WEST = { dead: 3, cypress: 2, poplar: 1 };
+/** 各关自动树林（键 = 篇章.第几关）。没列的关不加：山道 7-1 / 7-2、方形场地 9-2、突围通道 9-3、成都 7-3、盘蛇谷 11-2、林中连营 10-2 / 10-3（已经够密）、攻城 / 守城。 */
+export const GROVES: Readonly<Record<string, AutoGroves>> = {
+  // 第一章 冀州平原：白杨、阔叶（1-1 原有四簇树林，再补几簇）
+  'huangjin.1': { mix: N_PLAIN, groves: 4, per: [5, 8], seed: 101, rows: 'poplar' },
+  'huangjin.2': { mix: N_PLAIN, groves: 8, per: [6, 10], seed: 102, rows: 'poplar' },
+  'huangjin.3': { mix: N_PLAIN, groves: 7, per: [6, 9], seed: 103 },
+  // 第二章 司隶：汜水关、虎牢一带的丘陵——松柏；荥阳野战；洛阳城外（城墙以南）焦枯的树
+  'hulao.1': { mix: N_HILL, groves: 6, per: [5, 8], seed: 201 },
+  'hulao.2': { mix: { broad: 3, pine: 2, poplar: 2 }, groves: 8, per: [6, 10], seed: 202, rows: 'poplar' },
+  'hulao.3': { mix: { dead: 3, broad: 2, cypress: 1 }, groves: 5, per: [4, 7], seed: 203, minY: -60, ring: [900, 2600] },
+  // 第三章：长安城外柏树、宛城、寿春淮南水乡
+  'qunxiong.1': { mix: { cypress: 3, poplar: 2 }, groves: 4, per: [4, 6], seed: 301 },
+  'qunxiong.2': { mix: { broad: 3, willow: 1 }, groves: 4, per: [3, 6], seed: 302 },
+  'qunxiong.3': { mix: { willow: 3, broad: 2, bamboo: 1 }, groves: 7, per: [5, 9], seed: 303, rows: 'willow' },
+  // 第四章 官渡（河北、黄河南岸）：白杨、柳、几棵枯树
+  'guandu.1': { mix: { poplar: 4, willow: 2, dead: 1 }, groves: 7, per: [5, 9], seed: 401, rows: 'poplar' },
+  'guandu.2': { mix: { poplar: 3, willow: 3, broad: 1 }, groves: 7, per: [5, 9], seed: 402 },
+  'guandu.3': { mix: { poplar: 3, broad: 2, dead: 1 }, groves: 6, per: [5, 8], seed: 403 },
+  // 第五章 荆州：长坂、赤壁江岸柳树竹子；江陵城外
+  'chibi.1': { mix: RIVER, groves: 7, per: [5, 9], seed: 501, riverside: 'willow' },
+  'chibi.2': { mix: { willow: 3, bamboo: 2, broad: 1 }, groves: 7, per: [5, 9], seed: 502, riverside: 'willow' },
+  'chibi.3': { mix: JING, groves: 4, per: [4, 6], seed: 503 },
+  // 第六章 荆南：竹、阔叶
+  'jingnan.1': { mix: JING, groves: 4, per: [4, 6], seed: 601 },
+  'jingnan.2': { mix: { bamboo: 3, broad: 2, pine: 1 }, groves: 5, per: [5, 8], seed: 602 },
+  'jingnan.3': { mix: JING, groves: 4, per: [4, 6], seed: 603 },
+  // 第八章 汉中：阳平关、定军山松柏；汉水岸柳
+  'hanzhong.1': { mix: N_HILL, groves: 6, per: [5, 8], seed: 801 },
+  'hanzhong.2': { mix: { cypress: 3, pine: 3 }, groves: 4, per: [4, 7], seed: 802 },
+  'hanzhong.3': { mix: { pine: 2, willow: 2, cypress: 1 }, groves: 6, per: [5, 8], seed: 803, riverside: 'willow' },
+  // 第九章 樊城：汉水支流两岸柳树
+  'xiangfan.1': { mix: RIVER, groves: 5, per: [4, 7], seed: 901, riverside: 'willow' },
+  // 第十章 猇亭：江边湿地竹林、阔叶
+  'yiling.1': { mix: { bamboo: 3, broad: 2, willow: 2 }, groves: 7, per: [5, 9], seed: 1001 },
+  // 第十一章 南中：棕榈、榕树、雨林
+  'nanzheng.1': { mix: SOUTH, groves: 6, per: [4, 8], seed: 1101, riverside: 'palm' },
+  'nanzheng.3': { mix: { palm: 3, banyan: 2 }, groves: 4, per: [3, 6], seed: 1103, ring: [1100, 2600] },
+  // 第十二章 陇右 / 关中：街亭、五丈原稀疏枯树、柏、白杨；陈仓城外
+  'beifa.1': { mix: WEST, groves: 6, per: [3, 6], seed: 1201 },
+  'beifa.2': { mix: WEST, groves: 3, per: [3, 5], seed: 1202 },
+  'beifa.3': { mix: { dead: 3, poplar: 2, willow: 1 }, groves: 6, per: [3, 6], seed: 1203, riverside: 'willow' },
+};
 
 /** 第七章入蜀：山道两侧坡下的松林 / 竹林（不挡中间的路，留穿插空隙）。 */
 function shuTrees(halfW: number, y0: number, y1: number, seed: number): TreeSpec[] {
@@ -60,6 +124,10 @@ function shuTrees(halfW: number, y0: number, y1: number, seed: number): TreeSpec
  * 没配的关返回 null（不建地形层）。
  */
 export function terrainConfigFor(arc: string, stage: number): TerrainConfig | null {
+  const base = baseTerrain(arc, stage), g = GROVES[arc + '.' + stage];
+  return g ? { ...(base ?? { clear: [C0] }), auto: g } : base;
+}
+function baseTerrain(arc: string, stage: number): TerrainConfig | null {
   switch (arc) {
     // 第一章 广宗外围：城外树林（四簇，中间空地开打）
     case 'huangjin': return stage === 1 ? {

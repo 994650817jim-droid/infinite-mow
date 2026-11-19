@@ -38,6 +38,17 @@ export class StageObjectives {
     if (o.kind === 'destroy') return `目标 · ${o.target} ${this.destroyed}/${o.count}`;
     return `目标 · 坚守 ${Math.floor(this.held)}/${o.seconds} 秒 · 军旗 ${Math.ceil(this.hp)}/${HD.hp}`;
   }
+  /** 还没摧毁的目标（营寨等，摧毁型关卡）：友军攻势、地图用。 */
+  get standing(): Enemy[] { return this.done || this.failed || this.o.kind !== 'destroy' ? [] : this.targets.filter(t => t.e.active && t.e.spawnId === t.life && t.e.hp > 0).map(t => t.e); }
+  /**
+   * 关卡锁定目标（用户「武将攻击逻辑会一直不打营寨」）：主将 range 内最近的未摧毁目标（按营寨的身体半径算）。
+   * GameScene.priorityWeaponTarget 把它排在首领、精锐前面——各武将的索敌（smartTarget / 优先目标）都会去打。
+   */
+  lockedTarget(px: number, py: number, range: number): Enemy | null {
+    let best: Enemy | null = null, bd = Infinity;
+    for (const e of this.standing) { const d = Math.hypot(e.x - px, e.y - py) - e.radius; if (d <= range && d < bd) { bd = d; best = e; } }
+    return best;
+  }
   /** 战场地图（ui/BattleMap）用：还没摧毁的目标 / 坚守军旗的位置。 */
   get points(): Array<{x: number; y: number}> {
     if (this.done || this.failed) return [];
@@ -55,7 +66,7 @@ export class StageObjectives {
   private complete(): void { if (this.done) return; this.done = true; const b = this.o.kind === 'destroy' ? this.o.doneBanner : undefined; this.h.banner(b?.[0] ?? '目标达成', b?.[1] ?? '首领出阵！'); }
   onKill(e: Enemy): void {
     const t = this.targets.find(x => x.e === e && x.e.spawnId === x.life); if (!t) return;
-    this.destroyed++; t.label?.destroy(); t.art?.destroy(); this.targets.splice(this.targets.indexOf(t), 1);
+    this.destroyed++; t.e.lockTarget = false; t.label?.destroy(); t.art?.destroy(); this.targets.splice(this.targets.indexOf(t), 1);
     if (this.o.kind === 'destroy' && this.destroyed >= this.o.count) this.complete();
   }
   private placeTargets(n: number, name: string): void {
@@ -68,6 +79,7 @@ export class StageObjectives {
       // 第一章：张宝祭坛图替代营帐
       if (name.includes('祭坛') && this.h.scene.textures.exists('zhang_bao_altar')) { e.sprite.setAlpha(0); art = this.h.scene.add.image(x, y, 'zhang_bao_altar').setOrigin(.5, .85).setDisplaySize(150, 122).setDepth(actorDepth(y)); }
       const label = worldText(this.h.scene, x, y - 150, name, 15, '#ffd28a').setOrigin(.5).setStroke('#1a120b', 4).setDepth(36);
+      e.lockTarget = true; // 武器把营寨当敌人打（用户「武将攻击逻辑会一直不打营寨」）
       this.targets.push({e, life: e.spawnId, label, art});
     }
   }
@@ -97,5 +109,5 @@ export class StageObjectives {
     this.bar.clear().setDepth(DEPTH.fx).fillStyle(0x140d08, .85).fillRect(c.x - w / 2 - 1, c.y - top, w + 2, 7).fillStyle(r > .5 ? 0x6fcf7a : r > .25 ? 0xe2b14a : 0xd65a3f).fillRect(c.x - w / 2, c.y - top + 1, w * r, 5);
     this.tag.setPosition(c.x, c.y - top - 12).setDepth(DEPTH.fx);
   }
-  clear(): void { for (const t of this.targets) { t.label?.destroy(); t.art?.destroy(); } this.targets = []; this.cart?.destroy(); this.bar?.destroy(); this.tag?.destroy(); }
+  clear(): void { for (const t of this.targets) { t.e.lockTarget = false; t.label?.destroy(); t.art?.destroy(); } this.targets = []; this.cart?.destroy(); this.bar?.destroy(); this.tag?.destroy(); }
 }

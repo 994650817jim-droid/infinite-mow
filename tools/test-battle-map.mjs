@@ -84,14 +84,25 @@ const panel = p => p.evaluate(() => { const s = window.__S, P = s.ordersPanel; r
   await p.evaluate(() => window.__S.battleOrders.remove('waves')); await settle(p, 400);
   await p.screenshot({ path: `${OUT}/normal.png` });
   // 大地图
-  await p.keyboard.press('KeyG'); await settle(p, 900);
+  await p.keyboard.press('KeyM'); await settle(p, 900);
   const big1 = await p.evaluate(() => ({ open: window.__S.battleMap.bigOpen, mode: window.__S.mode }));
   await p.screenshot({ path: `${OUT}/big-map.png` });
-  await p.keyboard.press('KeyG'); await settle(p, 800);
+  await p.keyboard.press('KeyM'); await settle(p, 800);
   const big2 = await p.evaluate(() => window.__S.battleMap.bigOpen);
-  await p.keyboard.press('KeyG'); await settle(p, 900); await p.keyboard.press('Escape'); await settle(p, 800);
+  await p.keyboard.press('KeyM'); await settle(p, 900); await p.keyboard.press('Escape'); await settle(p, 800);
   const big3 = await p.evaluate(() => ({ open: window.__S.battleMap.bigOpen, mode: window.__S.mode }));
-  ck('G 展开舆图（不暂停）/ 再按 G 卷起 / Esc 也能卷起', big1.open && big1.mode === 'none' && !big2 && !big3.open && big3.mode === 'none', { big1, big2, big3 });
+  ck('M 展开舆图（不暂停）/ 再按 M 卷起 / Esc 也能卷起（用户「小地图换成m快捷键」）', big1.open && big1.mode === 'none' && !big2 && !big3.open && big3.mode === 'none', { big1, big2, big3 });
+  // 用户「军令也可以收起来」：G 收起成小签「军令 n/m」、记在 localStorage；收着时有军令完成，小签闪；点匾额展开
+  { await p.keyboard.press('KeyG'); await settle(p, 500);
+    const f1 = await p.evaluate(() => { const o = window.__S.ordersPanel; return { folded: o.isFolded, lines: o.lines, store: localStorage.getItem('im_orders_folded'), h: o.bounds().h }; });
+    await p.screenshot({ path: `${OUT}/orders-folded.png` });
+    await p.evaluate(() => window.__S.battleOrders.set('fold-test', { label: '测试军令', kind: 'main', order: 5 })); await settle(p, 400);
+    await p.evaluate(() => window.__S.battleOrders.done('fold-test')); await settle(p, 500);
+    const f2 = await p.evaluate(() => window.__S.ordersPanel.stats.flashes);
+    await p.evaluate(() => window.__S.ordersPanel.container.getByName('orders-panel-head').emit('pointerdown')); await settle(p, 400);
+    const f3 = await p.evaluate(() => { const o = window.__S.ordersPanel; return { folded: o.isFolded, store: localStorage.getItem('im_orders_folded'), h: o.bounds().h, n: o.lines.length }; });
+    await p.evaluate(() => window.__S.battleOrders.remove('fold-test'));
+    ck('军令可收起：G 收成「军令 n/m」小签并记住；收着时完成一条会闪；点匾额展开', f1.folded && /^军令 \d+\/\d+/.test(f1.lines[0] ?? '') && f1.store === '1' && f1.h <= 30 && f2 >= 1 && !f3.folded && f3.store === null && f3.h > 30, { f1, f2, f3 }); }
   // 首领
   await p.evaluate(() => { const s = window.__S; s.spawnBoss(); }); await settle(p, 1500);
   const ob = await orders(p);

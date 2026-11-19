@@ -50,9 +50,9 @@ ck('步兵：刀 + 黄巾头巾；弓兵：弓 + 头巾；盾兵：藤牌或重�
 await p.evaluate(async () => { const s = window.__game.scene.getScene('GameScene'), fx = s.deathFx; fx.warmHorse(); for (let i = 0; i < 150 && !fx.gallopReady; i++) await new Promise(r => setTimeout(r, 100)); });
 const runGallop = async diag => p.evaluate(async diag => {
   const s = window.__game.scene.getScene('GameScene'), fx = s.deathFx, out = {}; for (const h of fx.horses) { h.active = false; h.img.setVisible(false); h.shadow.setVisible(false); }
-  out.ready = fx.gallopReady; const cv = s.spawnEnemy('cavalry', s.player.x + 200, s.player.y, 1, true); cv.speed = 0; cv.hp = 0; cv.lastHitHeavy = false; cv.lastHitFromAlly = false; const liveW = Math.abs(cv.displayWidth ?? cv.sprite?.displayWidth ?? 0); s.killEnemy(cv);
+  out.ready = fx.gallopReady; const cv = s.spawnEnemy('cavalry', s.player.x + 200, s.player.y, 1, true); cv.speed = 0; cv.hp = 0; cv.lastHitHeavy = false; cv.lastHitFromAlly = false; const liveW = Math.abs(cv.sprite.displayWidth); s.killEnemy(cv);
   const body = fx.pool.find(x => x.active), h = fx.horses.find(x => x.active), x0 = h.x, T0 = h.start, D = (await window.__mod('/src/systems/DeathFx.ts')).DEATH_FX; if (diag) h.vy = diag;
-  out.dir = h.dir; out.gallop = h.gallop; out.texture = h.img.texture.key; out.tinted = h.img.isTinted; out.opp = h.dir === -body.dir; out.flip = h.img.flipX === (h.dir > 0); out.sizeRatio = h.img.displayWidth / (Math.abs(body.img.displayWidth) || 1);
+  out.dir = h.dir; out.gallop = h.gallop; out.texture = h.img.texture.key; out.tinted = h.img.isTinted; out.opp = h.dir === -body.dir; out.flip = h.img.flipX === (h.dir > 0); out.sizeRatio = h.img.displayWidth / liveW;   // 按「倒下那只骑兵图」当前显示宽算（含 MOUNT_VISUAL.visualScale 之后的大小），不取池里别的尸体
   // 扬蹄 4 帧，x 不动
   const rear = []; let rearX = 0; for (let t = 0; t < D.horseRearMs; t += 10) { fx.update(T0 + t); const n = h.img.frame.name; if (rear[rear.length - 1] !== n) rear.push(n); rearX = Math.max(rearX, Math.abs(h.img.x - x0)); } out.rear = rear; out.rearX = rearX;
   // 飞奔：每 10ms 采样

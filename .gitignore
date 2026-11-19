@@ -271,3 +271,4 @@ assets/raw/*
 !/tools/test-siege-large-flow.mjs
 !/tools/shot-luoyang-wall.mjs
 !/tools/deathfx-horse.mjs
+!/tools/measure-horse-size.mjs

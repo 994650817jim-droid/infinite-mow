@@ -380,6 +380,15 @@ export class Enemy {
     this.appliedFrame = '';
   }
 
+  /** 专属控制器推着冲锋 / 快跑时出走路帧（帧按跑过的距离推进、朝向随跑向）；配合 externalWalk（通用步态别再改帧）。11-19「张梁移动和动作有问题」：冲锋整段定格平移。 */
+  driveRun(dx: number, dy: number, stride: number): void {
+    if (!this.walkSheet) return;
+    const m = Math.hypot(dx, dy); if (m < .01) return;
+    this.direction = Math.abs(dx) > Math.abs(dy) ? (dx < 0 ? 'left' : 'right') : dy < 0 ? 'up' : 'down';
+    this.walkDistance += m; this.walking = true;
+    const tex = visualTextureKey(this.scene, this.walkSheet), key = `${this.direction}_${Math.floor(this.walkDistance / stride) % 4}`;
+    if (key !== this.appliedFrame || this.sprite.texture.key !== tex) { this.applyFrame(tex, key); this.appliedFrame = key; }
+  }
   updateWalk(dt: number, dx: number, dy: number): void {
     if (!this.walkSheet) return;
     if (this.attackUntil > 0 || this.chargeState !== 'none' || this.poseUntil > ((this.scene as Phaser.Scene & { combatNow?: number }).combatNow ?? 0)) return;

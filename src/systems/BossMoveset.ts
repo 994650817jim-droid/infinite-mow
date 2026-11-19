@@ -23,6 +23,9 @@ interface Hazard { id: string; shape: Shape; from: number; at: number; dmg: numb
  *  - 骑马首领：一阶段 BossMount 画马、骑者上半身；半血发 boss-phase（dismount）→ 坠马、换二阶段步战招式。
  *  - 阶段切换统一走 emitBossPhase（顿帧 / 慢动作由武将会话接这个事件，这里不做）。
  */
+/** 'walk' 画面（第一章首领：行走 / 攻击两张 4×4 表）的出招对位：命中后多留 hitLeadMs 收招；冲锋奔跑每 dashStride 像素换一帧。 */
+export const MOVESET_WALK = { hitLeadMs: 120, dashStride: 40 } as const;
+
 export class BossMoveset extends ArcBossV2<string> {
   phase: 1 | 2 = 1;
   private cds = new Map<string, number>(); private hazards: Hazard[] = []; private seq = 0; private order = 0;
@@ -75,6 +78,7 @@ export class BossMoveset extends ArcBossV2<string> {
     b.sprite.setAlpha(now < this.hideUntil ? .12 : 1);
     if (this.kit.inShift) { this.pose(25, now); return; }
     if (this.dash) { this.updateDash(dt, now); return; }
+    if (this.mode === 'walk' && b.externalWalk) b.externalWalk = false; // 冲锋结束（或被打断）：步态交回通用走路
     if (this.ride) { this.updateRide(now); return; }
     const B = this.beat, p = this.h.player;
     if (B.phase === 'idle') {
@@ -100,8 +104,9 @@ export class BossMoveset extends ArcBossV2<string> {
     const windup = m.windupMs * (o.warnMul ?? 1);
     this.h.banner(m.name); this.castStart(m, windup);
     this.h.sfx(m.kind === 'summon' || m.kind === 'flags' ? 'bossSummon' : 'chargeWarn');
-    if (this.mode === 'walk') b.startAttack(now, Math.abs(Math.cos(a)) > .7 ? (Math.cos(a) < 0 ? 'left' : 'right') : Math.sin(a) < 0 ? 'up' : 'down');
     const at = now + windup;
+    // 'walk' 画面（第一章首领）：攻击图起手时持起手帧，最后 360ms 播 起手 → 挥 → 刺 → 收，刚好在命中（at）时挥到第三帧；冲锋在起冲那一刻收招、接奔跑帧
+    if (this.mode === 'walk') { b.startAttack(now, Math.abs(Math.cos(a)) > .7 ? (Math.cos(a) < 0 ? 'left' : 'right') : Math.sin(a) < 0 ? 'up' : 'down'); b.attackUntil = m.kind === 'charge' ? at : at + MOVESET_WALK.hitLeadMs; }
     switch (m.kind) {
       case 'charge': {
         this.add({ kind: 'lane', x: b.x, y: b.y, angle: a, len: m.len, width: m.width }, now, at, 0, true);
@@ -169,6 +174,8 @@ export class BossMoveset extends ArcBossV2<string> {
   private updateDash(dt: number, now: number): void {
     const d = this.dash!, b = this.h.boss, p = this.h.player, m = this.cur as Extract<MoveDef, { kind: 'charge' }>;
     const sp = d.len / d.ms * 1000; b.sprite.x += d.ax * sp * dt; b.sprite.y += d.ay * sp * dt;
+    // 'walk' 画面：冲锋时自己出奔跑帧（按跑过的距离），否则一帧十来像素被通用步态当成击退、整段定格平移
+    if (this.mode === 'walk') { b.externalWalk = true; b.attackUntil = 0; b.driveRun(d.ax * sp * dt, d.ay * sp * dt, MOVESET_WALK.dashStride); }
     this.state = 'attack'; this.pose((Math.abs(d.ax) > Math.abs(d.ay) ? (d.ax < 0 ? 1 : 2) : d.ay < 0 ? 3 : 0) * 4 + Math.floor(now / 70) % 4, now);
     if (!d.hitPlayer && p.alive && Math.hypot(p.x - b.x, p.y - b.y) < 44 + p.radius) { d.hitPlayer = true; p.takeDamage(b.def.damage * m.dmg * this.dmgMul, now); this.metrics.playerHits++; }
     // 冲过部曲：每名士兵每次冲锋判定一次（Legion.hurtByCharge：约半管血、按当前时间结算、不吃士兵自身受击间隔；「一次冲锋最多打死 3 个」按冲锋起点算），并往冲锋道两侧推开一点

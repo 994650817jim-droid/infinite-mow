@@ -207,6 +207,8 @@ interface DmgFx {
   active: boolean;
 }
 type DmgKind = 'hit' | 'crit' | 'spell' | 'boss' | 'heal' | 'ally';
+/** 打障碍物：主将身边这么远内没有敌人时，去打这么远内最近的可破坏物件（挡路的不论有没有敌人都打）。 */
+const OBSTACLE_REACH = 300;
 /** 数字字体：粗黑体（小字号也清楚，不用书法体），深色描边 + 细投影。 */
 const DMG_FONT = '"Bahnschrift","Arial Black","Segoe UI Black","Helvetica Neue",Arial,sans-serif';
 const DMG_STYLE: Record<DmgKind, { size: number; color: string; stroke: string; sw: number }> = {
@@ -1153,6 +1155,8 @@ export class GameScene extends Phaser.Scene {
     if (this.combatNow >= this.healShowAt) { this.healShowAt = this.combatNow + 400; if (this.healAcc >= 1) { this.spawnDamageText(this.player.x, this.player.y - 56, Math.round(this.healAcc), false, true, 'heal'); this.healAcc = 0; } }
     time = this.combatNow;
     const move = this.readMove();
+    { const l = Math.hypot(move.x, move.y); this.moveDir = l > .1 ? { x: move.x / l, y: move.y / l } : null; }
+    this.updateObstacleLocks(); // 打障碍物：给挡路的 / 身边没敌人时最近的可破坏物件加锁（武器出手前）
     this.relics?.sway(move, this.combatNow);
     const moveX=this.player.x,moveY=this.player.y;
     const driven=Math.hypot(move.x,move.y)>.1;
@@ -2064,6 +2068,38 @@ export class GameScene extends Phaser.Scene {
       if(e.kind==='boss'&&d<bd){bd=d;boss=e;}else if(e.kind==='elite'&&d<ed){ed=d;elite=e;}}
     return boss??elite;
   }
+  /** 主将这一帧的移动方向（单位向量；没在走为 null）：挡路的障碍物判定用。 */
+  private moveDir: { x: number; y: number } | null = null;
+  /**
+   * 自动索敌打障碍物（用户 11-19「攻击逻辑也要加上打障碍物」）：可破坏物件（Enemy.breakable、活着、不是刀枪不入）里离 (x, y) 最近、在 range 内的。
+   * blocking：只要挡在主将前进方向上的（沿移动方向 0～80 + 两边半径、横向不超过两边半径）。
+   */
+  obstacleTarget(x: number, y: number, range: number, blocking: boolean, dir: { x: number; y: number } | null = this.moveDir): Enemy | null {
+    if (blocking && !dir) return null;
+    let best: Enemy | null = null, bd = Infinity; const pr = this.player.radius;
+    for (const e of this.enemies) {
+      if (!e.active || !e.isSupplySlot || !e.breakable || e.invulnerable || e.hp <= 0) continue;
+      const dx = e.x - x, dy = e.y - y, d = Math.hypot(dx, dy);
+      if (d > range + e.radius || d >= bd) continue;
+      if (blocking && dir) { const along = dx * dir.x + dy * dir.y, side = Math.abs(-dx * dir.y + dy * dir.x); if (along < 0 || along > 80 + e.radius + pr || side > e.radius + pr) continue; }
+      bd = d; best = e;
+    }
+    return best;
+  }
+  /** 本帧给哪些可破坏物件加了 lockTarget（只放自己加的，关卡目标的锁不动）。 */
+  private obstacleLocks = new Set<Enemy>();
+  /**
+   * 每帧（武器出手前）：挡在主将前进方向上的可破坏物件、以及「主将身边 OBSTACLE_REACH 内没有敌人」时最近的可破坏物件，临时加 lockTarget——
+   * 各武器的出手 / 选靶条件本来就把「带锁的物件」当敌人（同 2-3 营寨），这样所有武器、随行都会去打；有敌人在身边时只打挡路的。
+   */
+  private updateObstacleLocks(): void {
+    for (const e of this.obstacleLocks) e.lockTarget = false; this.obstacleLocks.clear();
+    if (this.over || this.mode !== 'none' || !this.player?.alive) return;
+    const p = this.player, R = OBSTACLE_REACH, add = (e: Enemy | null) => { if (e && !e.lockTarget) { e.lockTarget = true; this.obstacleLocks.add(e); } };
+    add(this.obstacleTarget(p.x, p.y, R, true));
+    for (const e of this.grid.query(p.x, p.y, R + 60)) if (e.active && !e.isSupplySlot && !e.invulnerable && e.hp > 0 && Math.hypot(e.x - p.x, e.y - p.y) <= R + e.radius) return;
+    add(this.obstacleTarget(p.x, p.y, R, false));
+  }
   protected createWeaponHost(): WeaponHost {
     const scene = this;
     return {
@@ -2077,6 +2113,7 @@ export class GameScene extends Phaser.Scene {
       nearestEnemy: (...args) => scene.nearestEnemy(...args),
       knockEnemy: (e, dx, dy, ms) => scene.knockEnemy(e, dx, dy, ms),
       priorityTarget: (range,bodyRadius)=>scene.priorityWeaponTarget(range,bodyRadius),
+      obstacleTarget: (x, y, r, blocking) => scene.obstacleTarget(x, y, r, blocking),
       fireBolt: (...args) => scene.fireBolt(...args),
       spawnGuandaoSlash: (...args) => scene.spawnGuandaoSlash(...args),
       spawnFlagSwingFx: (...args) => scene.spawnFlagSwingFx(...args),
@@ -2149,6 +2186,9 @@ export class GameScene extends Phaser.Scene {
       rallyAllies: (fraction: number) => { const r = FOLLOW.rallyRadius; for (const u of scene.allies) if (u.active && Math.hypot(u.x - f.x, u.y - f.y) <= r) u.hp = Math.min(u.maxHp, u.hp + u.maxHp * fraction); for (const m of squad.members) if (!m.downed && Math.hypot(m.x - f.x, m.y - f.y) <= r) m.hp = Math.min(m.maxHp, m.hp + m.maxHp * fraction); },
       nearestEnemy: (x, y, r) => scene.nearestEnemy(x, y, r),
       knockEnemy: (e, dx, dy, ms) => scene.knockEnemy(e, dx, dy, ms),
+      // 随行同主将的索敌规则：关卡锁定目标（敌营等）优先；没敌人时打最近的可破坏物件（随行没有「挡路」判定）
+      priorityTarget: (range: number) => scene.objective?.lockedTarget(f.x, f.y, range) ?? null,
+      obstacleTarget: (x: number, y: number, r: number, blocking: boolean) => scene.obstacleTarget(x, y, r, blocking, null),
       fireBolt: (pool, x, y, tx, ty, damage, bounce, fromPlayer, speed) => { scene.boltAlly = ally; try { scene.fireBolt(pool, x, y, tx, ty, damage * squad.share, bounce, fromPlayer, speed); } finally { scene.boltAlly = undefined; } },
       spawnGuandaoSlash: (angle, alpha, size, duration) => scene.spawnGuandaoSlashAt(f.x, f.y, hero, angle, alpha * FOLLOW.fxAlpha, size, duration, FOLLOW.fxAlpha),
       spawnFlagSwingFx: (dx, dy) => scene.spawnFlagSwingFxAt(f.x, f.y, dx, dy),

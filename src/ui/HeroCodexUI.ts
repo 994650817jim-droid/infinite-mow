@@ -12,10 +12,12 @@ import { primaryAttribute, PRIMARY_MUL, PRIMARY_PERK_INFO, PRIMARY_TIERS } from 
 import { gearFor, gearSummary } from '../systems/ItemEffects';
 import { gearOwners, ownerName } from '../systems/RosterStore';
 import { TACTIC_UNLOCK_SCROLLS, TEMPER, XINDE_SLOTS, getXinde, grain, respec, respecCost, scrolls, tacticUnlocked, temperCost, temperLevel, temperUp, toggleXinde, unlockTactic } from '../systems/MasteryStore';
-import { lqHitBox, lqPanel, lqSkin } from './LacquerKit';
+import { LQ, lqDiamond, lqHitBox, lqPanel, lqSkin } from './LacquerKit';
 import { attrBadge } from './AttrBadge';
 
 type Tab = 'overview' | 'attrs' | 'weapon' | 'xinde' | 'schools';
+/** 电脑版手绘素材（public/assets/ui/codex/codex_*.png）：页签三态、箭头四态、朱印、节标题牌、立绘挂轴框。 */
+const CODEX_ART = ['tab_n', 'tab_h', 'tab_s', 'arrow_l', 'arrow_lh', 'arrow_r', 'arrow_rh', 'seal', 'header', 'scroll'];
 const TABS: [Tab, string][] = [['overview', '总览'], ['attrs', '属性'], ['weapon', '本命'], ['xinde', '战法心得'], ['schools', '流派亲和']];
 
 /** 武将谱入口（营寨建筑「将帅府」等调用）。 */
@@ -33,6 +35,7 @@ export class HeroCodexUI {
   private hero: HeroKey;
   private tab: Tab = 'overview';
   private notice = '';
+  private artLoading = false;
 
   constructor(private readonly scene: Phaser.Scene, hero?: HeroKey, private readonly onClose?: () => void) {
     const list = gearOwners();
@@ -48,13 +51,13 @@ export class HeroCodexUI {
   private text(x: number, y: number, v: string, size: number, color = '#e9dcbc', heading = false): Phaser.GameObjects.Text {
     return this.add(this.scene.add.text(x, y, v, { fontFamily: heading ? HEADING_FONT : FONT, fontSize: size + 'px', color, resolution: 2 }));
   }
-  private button(x: number, y: number, label: string, name: string, onClick: () => void, o: { size?: number; active?: boolean; disabled?: boolean; w?: number } = {}): Phaser.GameObjects.Text {
+  private button(x: number, y: number, label: string, name: string, onClick: () => void, o: { size?: number; active?: boolean; disabled?: boolean; w?: number; ink?: boolean } = {}): Phaser.GameObjects.Text {
     const t = this.text(x, y, label, o.size ?? 14, o.disabled ? '#8d7d60' : '#ffe9bd').setOrigin(.5).setPadding(12, 7).setName(name);
     const bw = o.w ? o.w + 24 : Math.max(t.width, 44), bh = Math.max(30, t.height);
     if (t.width > bw - 6) t.setScale((bw - 6) / t.width);
     if (!o.disabled) t.setInteractive({ useHandCursor: true }).on('pointerdown', (_p: unknown, _x: unknown, _y: unknown, e?: Phaser.Types.Input.EventData) => { e?.stopPropagation?.(); onClick(); });
     lqHitBox(t, bw, bh);
-    const skin = (IS_DESKTOP ? inkSkin(this.scene, t, () => ({ w: bw, h: bh }), { active: () => !!o.active, enabled: () => !o.disabled }) : null) ?? lqSkin(this.scene, t, t, () => ({ w: bw, h: bh }), { tone: o.active ? 'cinnabar' : 'quiet', on: () => !!o.active, enabled: () => !o.disabled }); // 电脑版水墨（2026-11-17 UI 审查 N）
+    const skin = (IS_DESKTOP && o.ink ? inkSkin(this.scene, t, () => ({ w: bw, h: bh }), { active: () => !!o.active, enabled: () => !o.disabled }) : null) ?? lqSkin(this.scene, t, t, () => ({ w: bw, h: bh }), { tone: o.active ? 'cinnabar' : 'quiet', on: () => !!o.active, enabled: () => !o.disabled }); // 电脑版水墨（2026-11-17 UI 审查 N）
     skin.gfx.setScrollFactor(0); this.body.addAt(skin.gfx, this.body.getIndex(t));
     return t;
   }
@@ -63,6 +66,7 @@ export class HeroCodexUI {
   render(): void {
     this.body?.destroy();
     this.body = this.scene.add.container(0, 0).setScrollFactor(0); this.root.add(this.body);
+    if (IS_DESKTOP) { this.renderDesk(); return; }
     const W = GAME_WIDTH, H = GAME_HEIGHT, D = IS_DESKTOP;
     this.add(this.scene.add.rectangle(0, 0, W, H, 0x0b0805, .86).setOrigin(0).setInteractive()).on('pointerdown', (_p: unknown, _x: unknown, _y: unknown, e?: Phaser.Types.Input.EventData) => e?.stopPropagation?.());
     const x0 = D ? 18 : 10, y0 = D ? 12 : 14, pw = W - x0 * 2, ph = H - y0 * 2;
@@ -90,37 +94,270 @@ export class HeroCodexUI {
     if (this.notice && !(D && this.tab === 'xinde')) { this.text(W / 2, y0 + ph - 24, this.notice, 14, '#f3d48a').setOrigin(.5).setBackgroundColor('#1b120bcc').setPadding(10, 4).setName('codex-notice'); this.notice = ''; }
   }
 
+  // ───────────── 电脑版版式（2026-11-19 用户「武将谱ui优化一下」） ─────────────
+  // 左：武将名册（漆金行）；右上：‹ 武将名 › + 等级经验条；其下手绘漆金页签栏；内容区各节用「朱印节标题牌」。
+  // 全屏只有一个水墨笔触按钮（本页主操作：洗点 / 淬炼），其余一律漆金。素材：public/assets/ui/codex/（Gemini 洋红底 → crop-terrain-kit 抠图）。
+
+  /** 手绘素材按需加载（第一次打开武将谱时），载完重画。 */
+  private ensureArt(): boolean {
+    const missing = CODEX_ART.filter(k => !this.scene.textures.exists('codex_' + k));
+    if (!missing.length) return true;
+    if (!this.artLoading) {
+      this.artLoading = true;
+      for (const k of missing) this.scene.load.image('codex_' + k, 'assets/ui/codex/codex_' + k + '.png');
+      this.scene.load.once('complete', () => { if (this.root.active) this.render(); });
+      this.scene.load.start();
+    }
+    return false;
+  }
+  private has(k: string): boolean { return this.scene.textures.exists('codex_' + k); }
+
+  /** 页签 / 名册行这类「图片底 + 文字」的按钮：常态 / 悬停 / 选中三张图；缺图时退回漆金按钮。 */
+  private plate(x: number, y: number, w: number, h: number, label: string, name: string, active: boolean, onClick: () => void, size = 15): Phaser.GameObjects.Image | Phaser.GameObjects.Text {
+    if (!this.has('tab_n')) return this.button(x, y, label, name, onClick, { active, w: w - 24, size });
+    const img = this.add(this.scene.add.image(x, y, active ? 'codex_tab_s' : 'codex_tab_n').setDisplaySize(w, h).setName(name));
+    const t = this.text(x, y, label, size, active ? '#fff3d6' : '#e8d6a4', true).setOrigin(.5);
+    if (t.width > w - 26) t.setScale((w - 26) / t.width);
+    img.setInteractive({ useHandCursor: true })
+      .on('pointerover', () => { if (!active) { img.setTexture('codex_tab_h').setDisplaySize(w, h * 1.08); t.setColor('#fff3d6'); } })
+      .on('pointerout', () => { if (!active) { img.setTexture('codex_tab_n').setDisplaySize(w, h); t.setColor('#e8d6a4'); } })
+      .on('pointerdown', (_p: unknown, _x: unknown, _y: unknown, e?: Phaser.Types.Input.EventData) => { e?.stopPropagation?.(); onClick(); });
+    return img;
+  }
+
+  /** 圆形箭头按钮（上一位 / 下一位武将）。 */
+  private arrow(x: number, y: number, dir: 'l' | 'r', name: string, onClick: () => void): void {
+    const size = 30;
+    if (!this.has('arrow_' + dir)) { this.button(x, y, dir === 'l' ? '‹' : '›', name, onClick, { size: 18 }); return; }
+    const img = this.add(this.scene.add.image(x, y, 'codex_arrow_' + dir).setDisplaySize(size, size).setName(name));
+    img.setInteractive({ useHandCursor: true })
+      .on('pointerover', () => img.setTexture('codex_arrow_' + dir + 'h').setDisplaySize(size + 3, size + 3))
+      .on('pointerout', () => img.setTexture('codex_arrow_' + dir).setDisplaySize(size, size))
+      .on('pointerdown', (_p: unknown, _x: unknown, _y: unknown, e?: Phaser.Types.Input.EventData) => { e?.stopPropagation?.(); onClick(); });
+  }
+
+  /** 节标题：左端朱印 + 漆底窄条（手绘标题牌），标题字压在印右边。返回节内容起始 y。 */
+  private section(x: number, y: number, w: number, title: string, right = ''): number {
+    // 九宫拉伸：左端朱印与右端收边保持原比例，只拉中段（标题牌原图 866×82）
+    if (this.has('header')) { const k = 24 / 82; this.add(this.scene.add.nineslice(x, y, 'codex_header', undefined, w / k, 82, 90, 40).setOrigin(0, .5).setScale(k).setAlpha(.95)); }
+    else { const g = this.add(this.scene.add.graphics()); g.fillStyle(0x9a2a1c, 1).fillRect(x + 4, y - 7, 14, 14); g.lineStyle(1, LQ.gold, .7).lineBetween(x + 24, y, x + w, y); }
+    this.text(x + 32, y, title, 14, '#f3d48a', true).setOrigin(0, .5);
+    if (right) this.text(x + w - 10, y, right, 11.5, '#c8b88f').setOrigin(1, .5);
+    return y + 18;
+  }
+
+  /** 点数刻度条：cap 格，前 v 格亮金；主属性用朱红底。 */
+  private pips(x: number, y: number, v: number, cap: number, w: number, primary = false): void {
+    const g = this.add(this.scene.add.graphics()), n = Math.max(1, cap), gap = 2, cw = (w - gap * (n - 1)) / n, h = 8;
+    for (let i = 0; i < n; i++) {
+      const px = x + i * (cw + gap);
+      g.fillStyle(i < v ? (primary ? 0xf3c46a : 0xd9b36a) : 0x2b2117, 1).fillRoundedRect(px, y, cw, h, 2);
+      g.lineStyle(1, i < v ? 0xfff0c0 : 0x5e4a2c, i < v ? .55 : .9).strokeRoundedRect(px + .5, y + .5, cw - 1, h - 1, 2);
+    }
+  }
+
+  private renderDesk(): void {
+    const W = GAME_WIDTH, H = GAME_HEIGHT; this.ensureArt();
+    this.add(this.scene.add.rectangle(0, 0, W, H, 0x0b0805, .86).setOrigin(0).setInteractive()).on('pointerdown', (_p: unknown, _x: unknown, _y: unknown, e?: Phaser.Types.Input.EventData) => e?.stopPropagation?.());
+    const x0 = 18, y0 = 12, pw = W - 36, ph = H - 24, bottom = y0 + ph - 18;
+    lqPanel(this.add(this.scene.add.graphics()), x0, y0, pw, ph);
+    // 顶栏：标题 · 资源 · 返回
+    this.text(x0 + 28, y0 + 16, '武将谱', 26, '#f2ddae', true);
+    this.text(x0 + 128, y0 + 27, `武学残卷 ${scrolls()} · 军粮 ${grain()}`, 13, '#e8d6a4').setName('codex-resources');
+    this.button(x0 + pw - 52, y0 + 32, '返回', 'codex-close', () => this.close(), { size: 15 });
+    { const g = this.add(this.scene.add.graphics()); g.lineStyle(1, LQ.gold, .45).lineBetween(x0 + 22, y0 + 56, x0 + pw - 22, y0 + 56); }
+
+    // 左：武将名册（主公在前；降将 / 招募将同列），行高按人数收紧
+    const owners = gearOwners(), lx = x0 + 22, lw = 152, top = y0 + 66, listH = bottom - top;
+    const rowH = Math.max(24, Math.min(36, Math.floor(listH / Math.max(1, owners.length))));
+    const lg = this.add(this.scene.add.graphics());
+    lg.fillStyle(0x0d0906, .55).fillRoundedRect(lx - 4, top - 4, lw + 8, Math.min(listH, owners.length * rowH) + 6, 6);
+    owners.forEach((o, i) => {
+      const y = top + i * rowH, on = o.id === this.hero, lv = heroInfo(o.id as HeroKey).level, h = rowH - 4;
+      const g = this.add(this.scene.add.graphics());
+      const paint = (hover: boolean) => {
+        g.clear();
+        if (on) g.fillStyle(0x7a2a1c, .95).fillRoundedRect(lx, y, lw, h, 4).lineStyle(1.5, 0xf3d48a, 1).strokeRoundedRect(lx + .5, y + .5, lw - 1, h - 1, 4).fillStyle(0xf3d48a, 1).fillTriangle(lx + lw + 1, y + h / 2 - 5, lx + lw + 7, y + h / 2, lx + lw + 1, y + h / 2 + 5);
+        else if (hover) g.fillStyle(0x3a2616, .9).fillRoundedRect(lx, y, lw, h, 4).lineStyle(1, 0xc9a35e, .9).strokeRoundedRect(lx + .5, y + .5, lw - 1, h - 1, 4);
+        else g.lineStyle(1, 0x5e4a2c, .55).lineBetween(lx + 8, y + h + 1.5, lx + lw - 8, y + h + 1.5);
+      };
+      paint(false);
+      const b = attrBadge(this.scene, lx + 15, y + h / 2, o.id, 18); if (b) this.add(b);
+      this.text(lx + 30, y + h / 2, o.name, 15, on ? '#fff3d6' : '#efe0bb', true).setOrigin(0, .5);
+      this.text(lx + lw - 10, y + h / 2, 'Lv.' + lv, 12, on ? '#ffe2a0' : '#a8977a').setOrigin(1, .5);
+      this.add(this.scene.add.rectangle(lx, y, lw, h, 0, .001).setOrigin(0)).setName('codex-hero-' + o.id).setInteractive({ useHandCursor: true })
+        .on('pointerover', () => paint(true)).on('pointerout', () => paint(false))
+        .on('pointerdown', (_p: unknown, _x: unknown, _y: unknown, e?: Phaser.Types.Input.EventData) => { e?.stopPropagation?.(); this.hero = o.id as HeroKey; this.render(); });
+    });
+
+    // 右上：‹ 名字 · 主属性印 · 等级与经验条 ›
+    const rx = x0 + 196, rw = x0 + pw - 24 - rx, info = heroInfo(this.hero), idx = owners.findIndex(o => o.id === this.hero);
+    const go = (d: number) => { if (!owners.length) return; this.hero = owners[(idx + d + owners.length) % owners.length].id as HeroKey; this.render(); };
+    this.arrow(rx + 15, top + 14, 'l', 'codex-prev', () => go(-1));
+    const nm = this.text(rx + 38, top + 14, ownerName(this.hero), 24, '#f6dc9a', true).setOrigin(0, .5).setName('codex-name');
+    { const b = attrBadge(this.scene, nm.x + nm.width + 18, top + 14, this.hero, 24); if (b) this.add(b); }
+    const ex = nm.x + nm.width + 40;
+    this.text(ex, top + 4, `Lv.${info.level}`, 15, '#ffe9bd', true).setName('codex-level-num');
+    this.text(ex + 46, top + 6, `本章上限 Lv.${info.cap}${info.level >= info.cap ? ' · 已到上限，经验暂存' : ''}`, 11.5, '#a8977a');
+    const bw = Math.min(260, rx + rw - 70 - ex), bg = this.add(this.scene.add.graphics()), k = Math.max(0, Math.min(1, info.xp / Math.max(1, info.next)));
+    bg.fillStyle(0x0d0906, .9).fillRoundedRect(ex, top + 22, bw, 7, 3).fillStyle(0xd9b36a, 1).fillRoundedRect(ex, top + 22, Math.max(4, bw * k), 7, 3).lineStyle(1, 0x7d6640, .9).strokeRoundedRect(ex + .5, top + 22.5, bw - 1, 6, 3);
+    this.text(ex + bw + 8, top + 25, `${info.xp} / ${info.next}`, 11, '#c8b88f').setOrigin(0, .5);
+    // 测试 / 旧代码用：等级整行文字
+    this.text(-999, -999, `等级 Lv.${info.level}（本章上限 Lv.${info.cap}）· 经验 ${info.xp} / ${info.next}`, 10).setName('codex-level').setVisible(false);
+    this.text(rx + rw - 54, top + 14, `${idx + 1} / ${owners.length}`, 11, '#8d7d60').setOrigin(.5);
+    this.arrow(rx + rw - 15, top + 14, 'r', 'codex-next', () => go(1));
+
+    // 页签栏
+    const ty = top + 56, gap = 6, tw = (rw - gap * (TABS.length - 1)) / TABS.length;
+    TABS.forEach(([id, label], i) => this.plate(rx + tw / 2 + i * (tw + gap), ty, tw, 30, label, 'codex-tab-' + id, this.tab === id, () => { this.tab = id; this.render(); }));
+    { const g = this.add(this.scene.add.graphics()); g.lineStyle(1, LQ.gold, .5).lineBetween(rx, ty + 21, rx + rw, ty + 21); }
+    const cy = ty + 32;
+    if (this.tab === 'overview') this.deskOverview(rx, cy, rw, bottom);
+    else if (this.tab === 'attrs') this.deskAttrs(rx, cy, rw, bottom);
+    else if (this.tab === 'weapon') this.deskWeapon(rx, cy, rw, bottom);
+    else if (this.tab === 'schools') this.renderSchools(rx, cy, rw, bottom);
+    else this.renderXindeDesk(rx, cy, rw, bottom);
+    if (this.notice && this.tab !== 'xinde') { this.text(rx + rw / 2, bottom - 4, this.notice, 13, '#f3d48a').setOrigin(.5, 1).setBackgroundColor('#1b120bdd').setPadding(10, 4).setName('codex-notice'); this.notice = ''; }
+  }
+
+  /** 总览：左列四节（属性 / 本命 / 战法心得 / 兵装），右边挂轴立绘。 */
+  private deskOverview(x: number, y: number, w: number, bottom: number): void {
+    const c = this.playable, a = heroAttrs(this.hero), cap = attributeCap(heroInfo(this.hero).level), prim = primaryAttribute(this.hero);
+    const sw = 214, lw = c ? w - sw - 18 : w;
+    let yy = this.section(x, y + 10, lw, '属性', `未分配 ${heroFreePoints(this.hero)} 点 · 单项上限 ${cap}`);
+    (Object.keys(ATTRIBUTE_INFO) as AttributeId[]).forEach((id, i) => {
+      const ry = yy + 4 + i * 22, isP = prim === id;
+      if (this.scene.textures.exists(attributeIcon(id))) this.add(this.scene.add.image(x + 12, ry + 6, attributeIcon(id)).setDisplaySize(18, 18));
+      this.text(x + 26, ry + 6, ATTRIBUTE_INFO[id].name + (isP ? '（主）' : ''), 13, isP ? '#ffd27a' : '#efe0bb', isP).setOrigin(0, .5);
+      this.pips(x + 96, ry + 2, a[id], cap, lw - 150, isP);
+      this.text(x + lw - 4, ry + 6, `${a[id]}`, 13, isP ? '#ffd27a' : '#e5d4ab').setOrigin(1, .5);
+    });
+    // 旧版一行文字（测试按名字读）
+    this.text(-999, -999, `属性：${(Object.keys(ATTRIBUTE_INFO) as AttributeId[]).map(id => `${ATTRIBUTE_INFO[id].name}${prim === id ? '（主）' : ''} ${a[id]}`).join('　')}　· 未分配 ${heroFreePoints(this.hero)} 点`, 10).setVisible(false).setName('codex-attrline');
+    yy += 4 + 4 * 22 + 8;
+    if (!c) { yy = this.section(x, yy + 6, lw, '随行'); this.text(x + 8, yy + 2, '招募武将：随行时按等级成长（每级生命、伤害提高），将阶请到讲武堂「随从操练」提升。', 13, '#bfae8a').setWordWrapWidth(lw - 16); return; }
+    const weapon = WEAPON_DEFS[CHARACTERS.find(h => h.id === c)!.startWeapon], lv = temperLevel(c);
+    yy = this.section(x, yy + 6, lw, '本命', `淬炼 ${lv} / ${TEMPER.max}`);
+    this.text(x + 8, yy + 8, weapon?.name ?? '', 15, '#f2ddae', true).setOrigin(0, .5);
+    this.pips(x + 130, yy + 4, lv, TEMPER.max, 120);
+    this.text(x + 262, yy + 8, `本命伤害 +${Math.round(lv * TEMPER.step * 100)}%`, 12.5, '#e8d6a4').setOrigin(0, .5);
+    yy += 24;
+    const xd = getXinde(c);
+    yy = this.section(x, yy + 6, lw, '战法心得', `${xd.length} / ${XINDE_SLOTS}`);
+    if (xd.length) { let cx = x + 8; xd.forEach(t => { const tt = this.text(cx + 10, yy + 8, TACTICS[t].name, 13, '#fff3d0', true).setOrigin(0, .5), g = this.add(this.scene.add.graphics()); g.fillStyle(0x7a2a1c, .95).fillRoundedRect(cx, yy - 2, tt.width + 20, 20, 4).lineStyle(1, 0xf3d48a, .9).strokeRoundedRect(cx + .5, yy - 1.5, tt.width + 19, 19, 4); this.body.bringToTop(tt); cx += tt.width + 28; }); }
+    else this.text(x + 8, yy + 8, '未选（到「战法心得」页预选 2 个）', 13, '#a8977a').setOrigin(0, .5);
+    yy += 24;
+    const gear = gearSummary(gearFor(c));
+    yy = this.section(x, yy + 6, lw, '兵装加成');
+    this.text(x + 8, yy + 2, gear.length ? gear.join('　') : '尚未穿戴兵装', 13, '#d8ccb0').setWordWrapWidth(lw - 16).setLineSpacing(4).setMaxLines(Math.max(1, Math.floor((bottom - yy) / 21)));
+    this.deskPortrait(c, x + w - sw, y + 2, sw, bottom - y - 2);
+  }
+
+  /** 挂轴立绘：手绘卷轴框，人物画在画心上（缺图时按需加载）。 */
+  private deskPortrait(c: CharacterId, x: number, y: number, w: number, h: number): void {
+    const art = 'epic_hero_' + c;
+    if (!this.scene.textures.exists(art)) { this.scene.load.image(art, 'assets/epic-home/' + c + '.webp'); this.scene.load.once('filecomplete-image-' + art, () => { if (this.root.active && this.tab === 'overview') this.render(); }); this.scene.load.start(); }
+    const fw = Math.min(w, h * 595 / 881), fh = fw * 881 / 595, fx = x + (w - fw) / 2, fy = y + (h - fh) / 2;
+    if (this.has('scroll')) this.add(this.scene.add.image(fx, fy, 'codex_scroll').setOrigin(0).setDisplaySize(fw, fh).setName('codex-scroll'));
+    // 画心：卷轴图里约 x 10%–90%、y 16%–84%
+    const ix = fx + fw * .1, iy = fy + fh * .155, iw = fw * .8, ih = fh * .69;
+    if (!this.scene.textures.exists(art)) return;
+    // 整幅放进画心（不用遮罩：局内镜头有滚动，几何遮罩会错位）
+    const img = this.add(this.scene.add.image(ix + iw / 2, iy + ih - 2, art).setOrigin(.5, 1)), src = img.texture.getSourceImage() as { width: number; height: number };
+    img.setScale(Math.min((iw - 6) / src.width, (ih - 6) / src.height)).setName('codex-portrait');
+  }
+
+  /** 属性页：每项一张漆卡（图标 · 名字 · 效果 · 点数刻度 · +），主属性另起一行列专精三档。 */
+  private deskAttrs(x: number, y: number, w: number, bottom: number): void {
+    const a = heroAttrs(this.hero), free = heroFreePoints(this.hero), cost = respecCost(this.hero), spent = Object.values(a).reduce((n, v) => n + v, 0), cap = attributeCap(heroInfo(this.hero).level);
+    const head = this.text(x + 4, y + 8, `未分配属性点 ${free}　（武将每升 1 级得 1 点，单项最多 ${cap} 点）`, 14, free ? '#f3d48a' : '#b9a57a').setOrigin(0, .5).setName('codex-free');
+    const head0 = head.text, ids = Object.keys(ATTRIBUTE_INFO) as AttributeId[], cardH = Math.min(66, Math.floor((bottom - y - 70) / ids.length));
+    ids.forEach((id, i) => {
+      const ry = y + 24 + i * cardH, primary = primaryAttribute(this.hero) === id, h = cardH - 6, g = this.add(this.scene.add.graphics());
+      g.fillStyle(primary ? 0x2e1d10 : 0x18120c, .92).fillRoundedRect(x, ry, w, h, 5).lineStyle(primary ? 1.5 : 1, primary ? 0xf3d48a : 0x5e4a2c, primary ? .95 : .8).strokeRoundedRect(x + .5, ry + .5, w - 1, h - 1, 5);
+      if (this.scene.textures.exists(attributeIcon(id))) this.add(this.scene.add.image(x + 26, ry + h / 2, attributeIcon(id)).setDisplaySize(32, 32));
+      if (primary) { const b = attrBadge(this.scene, x + 26, ry + h / 2, this.hero, 32); if (b) this.add(b.setName('attr-badge-row')); }
+      this.text(x + 52, ry + 8, ATTRIBUTE_INFO[id].name, 17, primary ? '#ffd27a' : '#f0dfb4', true).setName('codex-attr-name-' + id);
+      if (primary) this.text(x + 96, ry + 11, '主属性', 11, '#1b120b').setBackgroundColor('#e0b860').setPadding(4, 1);
+      const effW = w - 52 - (primary ? 296 : 250);
+      this.text(x + 52, ry + 32, ATTRIBUTE_INFO[id].effect + (primary ? `；主属性每点 ×${PRIMARY_MUL}，另 +1% 全伤害` : ''), 12, primary ? '#e8d6a4' : '#a9b9a3').setWordWrapWidth(effW).setMaxLines(2);
+      if (primary) { // 专精三档：满 4 / 7 / 10 点，实心菱 = 已解锁；悬停在顶行显示说明
+        const perks = PRIMARY_PERK_INFO[id], px0 = x + w - 236;
+        perks.forEach((p, k) => {
+          const got = a[id] >= PRIMARY_TIERS[k], px = px0 + k * 72, pg = this.add(this.scene.add.graphics());
+          pg.fillStyle(got ? 0xf3d48a : 0x2b2117, 1); lqDiamond(pg, px + 6, ry + h - 13, 5);
+          const t = this.text(px + 15, ry + h - 13, p.name, 11.5, got ? '#ffd27a' : '#8d7d60').setOrigin(0, .5).setInteractive();
+          t.on('pointerover', () => head.setText(`满 ${PRIMARY_TIERS[k]} 点「${p.name}」${p.desc}`).setWordWrapWidth(w)).on('pointerout', () => head.setText(head0));
+        });
+        this.text(x + w - 236 - 6, ry + h - 13, '专精', 11, '#c8a46a').setOrigin(1, .5).setName('codex-perks').setData('line', perks.map((p, k) => (a[id] >= PRIMARY_TIERS[k] ? '◆' : '◇') + p.name).join(' '));
+      }
+      this.pips(x + w - 236, ry + 12, a[id], cap, 140, primary);
+      this.text(x + w - 64, ry + 16, `${a[id]} / ${cap}`, 13, '#e5d4ab').setOrigin(1, .5).setName('codex-attr-' + id);
+      this.button(x + w - 28, ry + h / 2, '+', 'codex-add-' + id, () => this.act(allocateHeroAttr(this.hero, id) ? { ok: true, message: `${ATTRIBUTE_INFO[id].name} +1` } : { ok: false, message: '没有可分配的点，或这一项已满' }), { disabled: free <= 0 || a[id] >= cap, size: 18 });
+    });
+    const by = y + 24 + ids.length * cardH + 18;
+    this.button(x + 96, by, cost ? `洗点 · 军粮 ${cost}` : '洗点 · 本章首次免费', 'codex-respec', () => this.act(respec(this.hero)), { disabled: spent === 0, size: 14, ink: true });
+    this.text(x + 200, by, '洗点：已加的属性点全部退回，等级不变。', 12, '#9c8c6c').setOrigin(0, .5);
+  }
+
+  /** 本命页：武器名 + 淬炼五格 + 每级效果 + 淬炼（本页唯一水墨主按钮）。 */
+  private deskWeapon(x: number, y: number, w: number, _bottom: number): void {
+    const c = this.playable;
+    if (!c) { this.section(x, y + 10, w, '本命'); this.text(x + 8, y + 34, '招募武将没有本命淬炼。', 14, '#9c8c6c'); return; }
+    const weapon = WEAPON_DEFS[CHARACTERS.find(h => h.id === c)!.startWeapon], lv = temperLevel(c), cost = temperCost(c);
+    let yy = this.section(x, y + 10, w, '本命兵刃', `淬炼 ${lv} / ${TEMPER.max}`);
+    this.text(x + 8, yy + 14, weapon?.name ?? '本命武器', 24, '#f6dc9a', true).setOrigin(0, .5);
+    this.text(x + 8, yy + 46, `淬炼 ${lv} / ${TEMPER.max}　· 本命伤害 +${Math.round(lv * TEMPER.step * 100)}%（每级 +${Math.round(TEMPER.step * 100)}%）`, 14, '#e8d6a4').setOrigin(0, .5).setName('codex-temper');
+    yy += 66;
+    // 五级刻度：每格写等级和累计加成
+    const cw = Math.min(110, (w - 16 - 4 * 10) / TEMPER.max), g = this.add(this.scene.add.graphics());
+    for (let i = 0; i < TEMPER.max; i++) {
+      const px = x + 8 + i * (cw + 10), got = i < lv, next = i === lv;
+      g.fillStyle(got ? 0x7a2a1c : 0x18120c, .95).fillRoundedRect(px, yy, cw, 46, 5).lineStyle(got || next ? 1.5 : 1, got ? 0xf3d48a : next ? 0xc9a35e : 0x5e4a2c, 1).strokeRoundedRect(px + .5, yy + .5, cw - 1, 45, 5);
+      this.text(px + cw / 2, yy + 14, `${i + 1} 级`, 13, got ? '#fff3d0' : next ? '#ecd49a' : '#8d7d60', true).setOrigin(.5);
+      this.text(px + cw / 2, yy + 33, `+${Math.round((i + 1) * TEMPER.step * 100)}% · ${TEMPER.cost[i]} 粮`, 11, got ? '#ffe2a0' : '#9c8c6c').setOrigin(.5);
+    }
+    yy += 78;
+    this.button(x + 100, yy, cost === null ? '已满级' : `淬炼 · 军粮 ${cost}`, 'codex-temper-up', () => this.act(temperUp(c)), { disabled: cost === null, size: 15, ink: true });
+    this.text(x + 210, yy, `现有军粮 ${grain()}`, 12.5, '#c8b88f').setOrigin(0, .5);
+    this.text(x + 8, yy + 34, '淬炼满 5 级后，局内本命武器将开放第 6 级「突破」（第三批上线）。', 12, '#9c8c6c').setWordWrapWidth(w - 16);
+  }
+
   /**
    * 流派亲和（2026-11-19 流派重做第 4 期「武将谱亲和页」）：左 = 本将亲和哪几派、给什么，再列六派各档（徽印 + 2 / 4 / 6 势）；
    * 右 = 势从哪来、十二将各自亲和（当前武将高亮）。电脑布局优先；手机布局只列本将与六派。
    */
   private renderSchools(x: number, y: number, w: number, bottom: number): void {
     const c = this.playable, aff = c ? heroAffinity(c) : [], D = IS_DESKTOP;
-    const lw = D ? Math.floor(w * .62) : w, rx = x + lw + 18, rw = w - lw - 18;
+    const lw = D ? Math.floor(w * .66) : w, rx = x + lw + 18, rw = w - lw - 18;
     this.text(x, y, c ? ownerName(this.hero) + ' 亲和：' + (aff.map(s => SCHOOLS[s].name).join(' · ') || '无') : '招募武将没有流派亲和（随行时按兵种给势）。', 16, '#f3d48a', true).setName('codex-schools-affinity');
     if (c && aff.length) this.text(x, y + 24, '第一亲和派「' + SCHOOLS[aff[0]].name + '」开局 +' + SHI_SOURCES.affinityStart + ' 势；亲和派战法出现率 ×' + OFFER.affinityWeight + '（只是偏向）。', 12, '#c8b88f').setWordWrapWidth(lw);
     const top = y + 46, rowH = Math.min(D ? 70 : 72, Math.floor((bottom - top) / 6));
+    const sub = this.body.list[this.body.list.length - 1] as Phaser.GameObjects.Text | undefined, sub0 = c && aff.length ? sub?.text ?? '' : ''; // 悬停某派时把它的说明写在这行
     SCHOOL_IDS.forEach((s, i) => {
       const d = SCHOOLS[s], ry = top + i * rowH, mine = aff.includes(s), g = this.add(this.scene.add.graphics());
       g.fillStyle(mine ? 0x3a2414 : 0x1a140d, mine ? .95 : .8).fillRoundedRect(x, ry, lw, rowH - 6, 4).lineStyle(1, mine ? 0xf3d48a : 0x5e4a2c, mine ? 1 : .8).strokeRoundedRect(x + .5, ry + .5, lw - 1, rowH - 7, 4);
       const key = 'build_icon_school_' + s;
       if (this.scene.textures.exists(key)) { const im = this.add(this.scene.add.image(x + 26, ry + (rowH - 6) / 2, key)); im.setScale(42 / Math.max(im.width, im.height)); }
-      this.text(x + 54, ry + 7, d.name + (mine ? ' · 亲和' : ''), 15, mine ? '#ffd98a' : d.css, true).setName('codex-school-' + s);
-      this.text(x + 54, ry + 27, d.fantasy, 10.5, '#9c8c6c').setWordWrapWidth(78).setMaxLines(2);
-      const tx = x + 138, tw = (lw - 144) / 3;
+      this.text(x + 54, ry + 7, d.name + (mine && !D ? ' · 亲和' : ''), 15, mine ? '#ffd98a' : d.css, true).setName('codex-school-' + s);
+      if (D) { const hit = this.add(this.scene.add.rectangle(x, ry, 100, rowH - 6, 0, .001).setOrigin(0)).setInteractive(); if (sub && sub0) hit.on('pointerover', () => sub.setText(d.name + '：' + d.fantasy)).on('pointerout', () => sub.setText(sub0)); this.text(x + 54, ry + 28, mine ? '本将亲和' : '悬停看说明', 10.5, mine ? '#ffd98a' : '#7d6e55'); }
+      else this.text(x + 54, ry + 27, d.fantasy, 10.5, '#9c8c6c').setWordWrapWidth(78).setMaxLines(2);
+      const tx = D ? x + 116 : x + 138, tw = (lw - (D ? 120 : 144)) / 3;
       TIER_STEPS.forEach((t, k) => {
         const tier = d.tiers[t];
         this.text(tx + k * tw, ry + 6, t + ' 势 · ' + tier.name, 12, k === 2 ? '#ffd27a' : '#e8d6a4', true);
-        this.text(tx + k * tw, ry + 22, tier.desc.replace(/^觉醒：/, ''), 10.5, '#bfae8a').setWordWrapWidth(tw - 8).setLineSpacing(-1).setMaxLines(3);
+        const dt = this.text(tx + k * tw, ry + 20, tier.desc.replace(/^觉醒：/, ''), D ? 10 : 10.5, '#bfae8a').setWordWrapWidth(tw - 8).setLineSpacing(-1).setMaxLines(D ? 2 : 3);
+        // 电脑版每档只显示两行，悬停这一档时把全文写在顶上说明行
+        if (D && sub && sub0) this.add(this.scene.add.rectangle(tx + k * tw, ry, tw - 4, rowH - 6, 0, .001).setOrigin(0)).setInteractive().on('pointerover', () => { sub.setText(`${d.name} ${t} 势「${tier.name}」：${tier.desc.replace(/^觉醒：/, '')}`); dt.setColor('#f0e2c8'); }).on('pointerout', () => { sub.setText(sub0); dt.setColor('#bfae8a'); });
       });
     });
     if (!D) return;
     const src = ['· 学 / 升本派战法：每级 +1', '· 武将亲和：第一亲和派开局 +' + SHI_SOURCES.affinityStart, '· 随行：按兵种给（刀兵→猛将、枪兵→兵阵、弓兵→弓弩、谋士→奇谋），最多 +' + SHI_SOURCES.followerCap, '· 橙色名马：骑突 +' + SHI_SOURCES.orangeMount, '· 机制类信物：对应派 +1', '· 军需商人「流派心法」：每派一次 +1', '两派都到 ' + COMBO_AT + ' 势生效合击。'];
     this.text(rx, y, '势从哪来', 15, '#f3d48a', true);
-    const st = this.text(rx, y + 24, src.join('\n'), 11.5, '#d8ccb0').setLineSpacing(1).setWordWrapWidth(rw).setName('codex-schools-sources');
+    const st = this.text(rx, y + 24, src.join('\n'), 11, '#d8ccb0').setLineSpacing(0).setWordWrapWidth(rw).setName('codex-schools-sources');
     // 诸将亲和：一行一将；第一亲和派（开局 +1 势）带 ★、字亮
     const ty = y + 30 + st.height + 10; this.text(rx, ty, '诸将亲和', 15, '#f3d48a', true); this.text(rx + rw, ty + 3, '★ = 开局 +1 势', 11, '#9c8c6c').setOrigin(1, 0);
-    const lineH = Math.max(15, Math.min(24, Math.floor((bottom - ty - 26) / CHARACTERS.length)));
+    const lineH = Math.max(13, Math.min(24, Math.floor((bottom - ty - 24) / CHARACTERS.length)));
     CHARACTERS.forEach((ch, i) => {
       const ay = ty + 26 + i * lineH, on = ch.id === this.hero, a = heroAffinity(ch.id);
       if (on) this.add(this.scene.add.graphics()).fillStyle(0x7a2a1c, .6).fillRoundedRect(rx - 4, ay - 2, rw + 4, lineH - 1, 3);

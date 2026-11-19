@@ -159,12 +159,14 @@ export class Player {
 
   /** 地形减速（第九章洪水涉水等），场景每帧设置，默认 1。 */
   envSpeedMul = 1;
+  /** 被绳网缠住时的移速倍率（巴蜀猎户，systems/EnemyTraits 管）。 */
+  snareSpeedMul = 1;
   /** 地形（河水）移动倍率：GameScene 每帧按所站位置设，水里 0.6（data/terrain.ts） */
   terrainSpeedMul = 1;
   /** 打碎甲胄架 / 盾牌堆偶得的短时减伤：截止时间与受伤倍率（data/propLoot.ts PROP_LOOT.armor） */
   propGuardUntil = 0; propGuardMul = 1;
   get speed(): number {
-    return BALANCE.player.speed * Math.min(1.6, this.stats.moveMul * this.growth.movementMultiplier()*(this.growth.build.tier('cavalry')>=2?1+SCHOOL_TIER.cavalry.move:1)) * this.mountSpeedMul * this.envSpeedMul * this.terrainSpeedMul;
+    return BALANCE.player.speed * Math.min(1.6, this.stats.moveMul * this.growth.movementMultiplier()*(this.growth.build.tier('cavalry')>=2?1+SCHOOL_TIER.cavalry.move:1)) * this.mountSpeedMul * this.envSpeedMul * this.terrainSpeedMul * this.snareSpeedMul;
   }
 
   /** 被外力击退 / 挑起；self 为自己的突进（冲锋、龙胆突刺）。马超冲锋无敌中不被外力击退。 */

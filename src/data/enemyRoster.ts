@@ -48,7 +48,24 @@ export type TraitDef =
   /** M10 扑跳：minRange～range 之间预警落点，warnMs 后一跃（flightMs）落地 radius 内伤害 */
   | { kind: 'leaper'; range: number; minRange: number; warnMs: number; flightMs: number; everyMs: number; radius: number; damage: number }
   /** 蓄力狙击：远处站定，蓄力 chargeMs（预警线），一箭穿透 length 长、width 宽 */
-  | { kind: 'sniper'; range: number; chargeMs: number; everyMs: number; width: number; length: number; damage: number };
+  | { kind: 'sniper'; range: number; chargeMs: number; everyMs: number; width: number; length: number; damage: number }
+  // —— 第三批（第 7～10、12 章）——
+  /** M11 绳网：保持距离投网，中了主将移速 × (1 − slow) 持续 slowMs */
+  | { kind: 'net'; range: number; everyMs: number; slow: number; slowMs: number; hitDamage: number }
+  /** M3 增益光环：躲在友军后面念咒，半径内友军移速 × speedMul、伤害 × damageMul（首领不吃）；倒下光环消失 */
+  | { kind: 'aura'; radius: number; speedMul: number; damageMul: number; keepAway: number }
+  /** 箭雨区：站远处，在主将脚下标一圈，warnMs 后落箭 */
+  | { kind: 'volley'; range: number; everyMs: number; warnMs: number; radius: number; damage: number; allyDamage: number }
+  /** 擂木：贴近后沿直线预警，滚木从脚下滚出 length（速度 speed），碾到就伤 */
+  | { kind: 'roller'; range: number; length: number; width: number; warnMs: number; everyMs: number; speed: number; damage: number; allyDamage: number }
+  /** 火罐：同投掷，落点留燃烧地面；倒下爆燃 */
+  | { kind: 'firepot'; range: number; everyMs: number; warnMs: number; radius: number; damage: number; allyDamage: number; flightMs: number; fireMs: number; fireRadius: number; fireDamage: number; burstRadius: number; burstDamage: number }
+  /** 连射：保持距离，每 everyMs 连射 shots 支（伏弓现身后的三连射） */
+  | { kind: 'burst'; range: number; everyMs: number; shots: number; gapMs: number; arrowSpeed: number }
+  /** 护主：离首领 radius 内受伤 × mul，没事时跟在首领身边；主将近了就上前打 */
+  | { kind: 'guard'; radius: number; mul: number; engage: number }
+  /** 火箭：保持距离放火箭，箭落处留火 */
+  | { kind: 'firearrow'; range: number; everyMs: number; speed: number; fireMs: number; fireRadius: number; fireDamage: number };
 
 export type TraitKind = TraitDef['kind'];
 
@@ -56,7 +73,7 @@ export type TraitKind = TraitDef['kind'];
  * 配兵角色：同一角色的兵种共用一个「同时在场」上限（ROSTER_MIX.roleCaps），免得满屏都是治疗或满屏投石。
  * fodder（流民）和 pack（驯兽师带的猛兽）算杂兵，不计入「新兵种占比」。
  */
-export type RosterRole = 'fodder' | 'support' | 'heavy' | 'artillery' | 'ranged' | 'raider' | 'beast' | 'pack' | 'ambush' | 'wall' | 'courier' | 'swim' | 'ship' | 'lancer' | 'leaper' | 'sniper';
+export type RosterRole = 'fodder' | 'support' | 'heavy' | 'artillery' | 'ranged' | 'raider' | 'beast' | 'pack' | 'ambush' | 'wall' | 'courier' | 'swim' | 'ship' | 'lancer' | 'leaper' | 'sniper' | 'aura' | 'engine' | 'cavalry';
 
 export interface RosterType {
   id: string; name: string;
@@ -80,7 +97,9 @@ export interface RosterType {
   /** 底层是骑兵但不要冲锋（弓骑自己绕圈）。 */
   noCharge?: boolean;
   /** M7 伏击：刷在主将附近（暗处）、半透明且刀枪不入、不动；主将走进 reveal 以内现身（伏兵旗影预警）。 */
-  hide?: { reveal: number };
+  hide?: { reveal: number; /** 伪装（白衣商旅）：看得见、白衣、不攻击、刀枪不入；走近才露刀 */ disguise?: boolean };
+  /** 从哪边来：north = 从高处（北面山头）刷出（山地轻骑） */
+  from?: 'north';
   /** 经验倍数（运粮卒等「截住有赏」的兵）。 */
   xpMul?: number;
 }
@@ -116,6 +135,26 @@ export const ROSTER: Record<string, RosterType> = {
   feishi: { id: 'feishi', name: '山越飞石手', base: 'archer', role: 'artillery', mul: { hp: .9, speed: 1, damage: 1.2 }, trait: { kind: 'lobber', range: 400, everyMs: 4000, warnMs: 1000, radius: 75, damage: 10, allyDamage: 12, flightMs: 900 }, hide: { reveal: 380 }, art: A('feishi', 128), fallback: { tint: 0xb89070, scale: 1 }, cap: 3 },
   wuxi: { id: 'wuxi', name: '五溪蛮兵', base: 'infantry', role: 'leaper', mul: { hp: 1.3, speed: 1.1, damage: 1.2 }, trait: { kind: 'leaper', range: 320, minRange: 120, warnMs: 700, flightMs: 420, everyMs: 3800, radius: 80, damage: 12 }, art: A('wuxi', 128), fallback: { tint: 0xc88860, scale: 1.05 }, cap: 4 },
   changsha: { id: 'changsha', name: '长沙强弓', base: 'archer', role: 'sniper', mul: { hp: .9, speed: .6, damage: 2.2 }, trait: { kind: 'sniper', range: 620, chargeMs: 1200, everyMs: 4800, width: 36, length: 900, damage: 20 }, art: A('changsha', 144), fallback: { tint: 0xa89878, scale: 1 }, cap: 2 },
+  // —— 第三批 · 第 7 章 入蜀 ——
+  liehu: { id: 'liehu', name: '巴蜀猎户', base: 'infantry', role: 'ranged', mul: { hp: .9, speed: 1.1, damage: .5 }, trait: { kind: 'net', range: 320, everyMs: 4200, slow: .4, slowMs: 3000, hitDamage: 3 }, art: A('liehu', 128), fallback: { tint: 0xb0a080, scale: 1 }, cap: 4 },
+  dongzhou: { id: 'dongzhou', name: '东州兵', base: 'shield', role: 'wall', mul: { hp: 2.5, speed: .7, damage: 1.3 }, trait: { kind: 'shieldwall', front: .55, turnDeg: 75, bashRange: 80, bashDamage: 11, everyMs: 1900 }, art: A('dongzhou', 144), fallback: { tint: 0xb08870, scale: 1.1 }, group: [3, 5], cap: 6 },
+  funu: { id: 'funu', name: '伏弩手', base: 'archer', role: 'ambush', mul: { hp: .8, speed: .5, damage: 1.5 }, trait: { kind: 'volley', range: 460, everyMs: 4200, warnMs: 1000, radius: 85, damage: 11, allyDamage: 10 }, hide: { reveal: 400 }, art: A('funu', 144), fallback: { tint: 0x8a9a80, scale: 1 }, cap: 3 },
+  // —— 第 8 章 汉中 ——
+  jijiu: { id: 'jijiu', name: '五斗米祭酒', base: 'infantry', role: 'aura', mul: { hp: 1.2, speed: .7, damage: .5 }, trait: { kind: 'aura', radius: 220, speedMul: 1.25, damageMul: 1.25, keepAway: 300 }, art: A('jijiu', 144), fallback: { tint: 0xc8a868, scale: 1 }, cap: 2 },
+  shanqi: { id: 'shanqi', name: '魏军山地轻骑', base: 'cavalry', role: 'cavalry', mul: { hp: 1.2, speed: 1.2, damage: 1.3 }, trait: { kind: 'swarm' }, from: 'north', art: A('shanqi', 176), fallback: { tint: 0x9aa0a8, scale: 1 }, cap: 4 },
+  pili: { id: 'pili', name: '霹雳车', base: 'shield', role: 'engine', mul: { hp: 6, speed: .25, damage: 3 }, trait: { kind: 'lobber', range: 620, everyMs: 6000, warnMs: 1400, radius: 110, damage: 22, allyDamage: 26, flightMs: 1300 }, art: A('pili', 176), fallback: { tint: 0xa08060, scale: 1.4 }, cap: 1 },
+  // —— 第 9 章 襄樊 ——
+  kuibing: { id: 'kuibing', name: '七军溃兵', base: 'infantry', role: 'fodder', mul: { hp: .4, speed: 1.1, damage: .6 }, trait: { kind: 'amphibious', waterSpeed: 1 }, art: A('kuibing', 128), fallback: { tint: 0x9a9a98, scale: .9 }, group: [5, 7], cap: 28 },
+  baiyi: { id: 'baiyi', name: '白衣商旅兵', base: 'infantry', role: 'ambush', mul: { hp: 1, speed: 1.2, damage: 1.4 }, trait: { kind: 'ambusher', dash: 2, dashMs: 800, fireMs: 0 }, hide: { reveal: 200, disguise: true }, art: A('baiyi', 128), fallback: { tint: 0xd8c8b8, scale: 1 }, cap: 4 },
+  leimu: { id: 'leimu', name: '樊城擂木兵', base: 'shield', role: 'artillery', mul: { hp: 1.5, speed: .5, damage: 1.5 }, trait: { kind: 'roller', range: 320, length: 520, width: 90, warnMs: 1000, everyMs: 5000, speed: 560, damage: 16, allyDamage: 20 }, art: A('leimu', 144), fallback: { tint: 0x9a9890, scale: 1 }, cap: 3 },
+  // —— 第 10 章 夷陵 ——
+  huogong: { id: 'huogong', name: '吴军火攻兵', base: 'infantry', role: 'artillery', mul: { hp: 1, speed: 1, damage: .8 }, trait: { kind: 'firepot', range: 380, everyMs: 4200, warnMs: 900, radius: 75, damage: 9, allyDamage: 10, flightMs: 800, fireMs: 2500, fireRadius: 60, fireDamage: 4, burstRadius: 90, burstDamage: 12 }, art: A('huogong', 128), fallback: { tint: 0xb07058, scale: 1 }, cap: 3 },
+  linfu: { id: 'linfu', name: '林中伏弓', base: 'archer', role: 'ambush', mul: { hp: .9, speed: .6, damage: 1 }, trait: { kind: 'burst', range: 400, everyMs: 3800, shots: 3, gapMs: 200, arrowSpeed: 300 }, hide: { reveal: 380 }, art: A('linfu', 128), fallback: { tint: 0x8aa078, scale: 1 }, cap: 3 },
+  zhuran: { id: 'zhuran', name: '朱然亲军', base: 'shield', role: 'heavy', mul: { hp: 3, speed: .8, damage: 1.5 }, trait: { kind: 'sweeper', range: 150, arcDeg: 120, warnMs: 750, everyMs: 3000, damage: 13, allyDamage: 16 }, art: A('zhuran', 176), fallback: { tint: 0xc07060, scale: 1.25 }, cap: 2 },
+  // —— 第 12 章 北伐 ——
+  huwei: { id: 'huwei', name: '魏国虎卫', base: 'shield', role: 'heavy', mul: { hp: 4, speed: .8, damage: 1.6 }, trait: { kind: 'guard', radius: 200, mul: .5, engage: 260 }, art: A('huwei', 176), fallback: { tint: 0x6a6a78, scale: 1.25 }, cap: 4 },
+  qiangbing: { id: 'qiangbing', name: '西凉羌兵', base: 'infantry', role: 'leaper', mul: { hp: 1, speed: 1.3, damage: 1.1 }, trait: { kind: 'leaper', range: 340, minRange: 120, warnMs: 600, flightMs: 380, everyMs: 3200, radius: 75, damage: 11 }, art: A('qiangbing', 128), fallback: { tint: 0xc0a888, scale: 1 }, cap: 4 },
+  huojian: { id: 'huojian', name: '火箭手', base: 'archer', role: 'ranged', mul: { hp: .9, speed: .6, damage: 1 }, trait: { kind: 'firearrow', range: 420, everyMs: 3200, speed: 300, fireMs: 2000, fireRadius: 50, fireDamage: 4 }, art: A('huojian', 128), fallback: { tint: 0xb89070, scale: 1 }, cap: 4 },
   beast: { id: 'beast', name: '猛兽', base: 'infantry', role: 'pack', mul: { hp: .6, speed: 1.5, damage: 1.2 }, trait: { kind: 'swarm' }, art: A('beast', 144), fallback: { tint: 0x7a5a38, scale: .75 }, cap: 6 },
 };
 
@@ -135,7 +174,7 @@ export const ROSTER_MIX = {
   /** 场上新兵种（不算 fodder / pack 杂兵）最多占在场敌军的比例；在场敌军很少时至少允许 1 个。 */
   maxTraitShare: .2,
   /** 各角色同时在场上限。 */
-  roleCaps: { fodder: 32, support: 2, heavy: 2, artillery: 3, ranged: 4, raider: 4, beast: 2, pack: 6, ambush: 4, wall: 7, courier: 3, swim: 10, ship: 2, lancer: 4, leaper: 4, sniper: 2 } as Record<RosterRole, number>,
+  roleCaps: { fodder: 32, support: 2, heavy: 2, artillery: 3, ranged: 4, raider: 4, beast: 2, pack: 6, ambush: 4, wall: 7, courier: 3, swim: 10, ship: 2, lancer: 4, leaper: 4, sniper: 2, aura: 2, engine: 1, cavalry: 4 } as Record<RosterRole, number>,
   /** 没写 wave 的新兵种从第几波起出。 */
   firstWave: 2,
 };
@@ -159,6 +198,22 @@ export const STAGE_MIX: Record<string, StageMix> = {
   'chibi.3': { traits: { qiangzhen: { w: 6 } } },
   'jingnan.2': { traits: { feishi: { w: 5 }, wuxi: { w: 5 } } },
   'jingnan.3': { traits: { changsha: { w: 4 } } },
+  // 第三批（第 7～10、12 章）
+  'shu.1': { traits: { liehu: { w: 6 } } },
+  'shu.2': { traits: { liehu: { w: 5 }, funu: { w: 4 } } },
+  'shu.3': { traits: { dongzhou: { w: 4 } } },
+  'hanzhong.1': { traits: { jijiu: { w: 4 } } },
+  'hanzhong.2': { traits: { shanqi: { w: 6 } } },
+  'hanzhong.3': { traits: { pili: { w: 2 } } },
+  'xiangfan.1': { traits: { leimu: { w: 4 } } },
+  'xiangfan.2': { traits: { kuibing: { w: 6 } } },
+  'xiangfan.3': { traits: { baiyi: { w: 5 } } },
+  'yiling.1': { traits: { linfu: { w: 5 } } },
+  'yiling.2': { traits: { huogong: { w: 5 }, linfu: { w: 4 }, zhuran: { w: 3 } } },
+  'yiling.3': { traits: { huogong: { w: 6 } } },
+  'beifa.1': { traits: { qiangbing: { w: 6 } } },
+  'beifa.2': { traits: { huojian: { w: 5 } } },
+  'beifa.3': { traits: { huwei: { w: 4 } } },
   'nanzheng.1': { traits: { mantoushi: { w: 7 } } },
   'nanzheng.3': { traits: { dujian: { w: 7 }, xunshou: { w: 3 } } },
 };

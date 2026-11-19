@@ -39,13 +39,15 @@ export interface TraitHost {
   waterPoint?: (x: number, y: number) => { x: number; y: number } | null;
   gainFood?: (n: number) => void;
   farPoint?: (x: number, y: number) => { x: number; y: number } | null;
+  /** 当前首领（虎卫护主）。 */
+  boss?: () => Enemy | null;
 }
 
 interface St { life: number; next: number; drop: number; slamAt: number; sx: number; sy: number; owner?: Enemy; ownerLife?: number; ang: number;
   /** 第二批：朝向（盾墙 / 举盾）、两态 / 预警 / 腾空、伏兵是否还藏着、目标点、出生时间、跟随的布景（火船）、冲刺到何时、腾空起点 */
-  face?: number; phase?: 'up' | 'down' | 'move' | 'warn' | 'air'; until?: number; shots?: number; hidden?: boolean; tx?: number; ty?: number; born?: number; imgs?: Phaser.GameObjects.Components.Transform[]; dashUntil?: number; air?: { x0: number; y0: number; from: number }; boom?: boolean }
-interface Hazard { id: string; kind: 'stone' | 'fire'; x: number; y: number; r: number; from: number; at: number; end: number; damage: number; allyDamage: number; tick: number; img?: Phaser.GameObjects.Image | Phaser.GameObjects.Sprite }
-interface Dart { img: Phaser.GameObjects.Image; x0: number; y0: number; tx: number; ty: number; from: number; at: number; t: Extract<TraitDef, { kind: 'poison' }> }
+  disguised?: boolean; face?: number; phase?: 'up' | 'down' | 'move' | 'warn' | 'air' | 'roll'; until?: number; shots?: number; hidden?: boolean; tx?: number; ty?: number; born?: number; imgs?: Phaser.GameObjects.Components.Transform[]; dashUntil?: number; air?: { x0: number; y0: number; from: number }; boom?: boolean }
+interface Hazard { look?: 'slam' | 'arrows'; fire?: { ms: number; r: number; dmg: number }; id: string; kind: 'stone' | 'fire'; x: number; y: number; r: number; from: number; at: number; end: number; damage: number; allyDamage: number; tick: number; img?: Phaser.GameObjects.Image | Phaser.GameObjects.Sprite }
+interface Dart { img: Phaser.GameObjects.Image; x0: number; y0: number; tx: number; ty: number; from: number; at: number; dmg: number; hit: (now: number) => void }
 
 const STONE_FRAME = 4; // shu_pass 第 5 格：滚石
 const MAX_FIRES = 28;
@@ -64,7 +66,7 @@ export class EnemyTraits {
   private seq = 0;
   /** 测试 / 调试用计数。 */
   readonly metrics = { spawned: 0, slams: 0, heals: 0, throws: 0, fires: 0, bursts: 0, darts: 0, poisonTicks: 0, arrows: 0, enraged: 0,
-    fromWater: 0, reveals: 0, blocked: 0, bashes: 0, javelins: 0, sweeps: 0, volleys: 0, delivered: 0, intercepted: 0, shipBooms: 0, thrusts: 0, leaps: 0, snipes: 0 };
+    fromWater: 0, nets: 0, snared: 0, auraPulses: 0, volleyZones: 0, rolls: 0, firepots: 0, bursts3: 0, guarded: 0, fireArrows: 0, reveals: 0, blocked: 0, bashes: 0, javelins: 0, sweeps: 0, volleys: 0, delivered: 0, intercepted: 0, shipBooms: 0, thrusts: 0, leaps: 0, snipes: 0 };
 
   constructor(private h: TraitHost) {
     const ids = Object.keys(STAGE_MIX[h.stageKey()]?.traits ?? {}), sc = h.scene;
@@ -95,6 +97,7 @@ export class EnemyTraits {
     let c0: { x: number; y: number } | null = at ?? null;
     if (!c0 && t.hide) { const a2 = Math.random() * Math.PI * 2, d2 = 380 + Math.random() * 260; c0 = { x: p.x + Math.cos(a2) * d2, y: p.y + Math.sin(a2) * d2 }; }
     // 水面在场地外（如 5-2 江面是北边界）时，刷兵会被挪到岸边——等于「从江里上岸」
+    if (!c0 && t.from === 'north') c0 = { x: p.x + (Math.random() - .5) * 700, y: p.y - 760 - Math.random() * 120 }; // 山地轻骑从北面高处冲下
     if (!c0 && (t.trait.kind === 'amphibious' || t.trait.kind === 'fireship')) { c0 = this.h.waterPoint?.(p.x, p.y) ?? null; if (c0) this.metrics.fromWater += 1; }
     const cx = c0?.x ?? p.x + Math.cos(a) * d, cy = c0?.y ?? p.y + Math.sin(a) * d;
     const n = t.group ? Phaser.Math.Between(t.group[0], t.group[1]) : 1;
@@ -131,7 +134,7 @@ export class EnemyTraits {
     if (t.noCharge) e.dashCd = 1e9;
     const s = this.state(e); s.born = this.now();
     // 伏兵：半透明、刀枪不入（自动索敌跳过 invulnerable）、不动，等主将走近
-    if (t.hide) { s.hidden = true; e.invulnerable = true; e.sprite.setAlpha(.16); }
+    if (t.hide) { s.hidden = true; e.invulnerable = true; if (t.hide.disguise) { s.disguised = true; e.sprite.setTint(0xf4efe4); } else e.sprite.setAlpha(.16); }
     // 火船没有专属图时：本体隐去，用辎重车 + 地火序列帧当一条着火的船（图到了换成 enemy_huochuan_walk）
     if (t.trait.kind === 'fireship' && !art) this.fireshipLook(e, s);
     this.metrics.spawned += 1;
@@ -169,6 +172,14 @@ export class EnemyTraits {
       case 'lancer': return this.lancer(e, s, t, dt, now, dist, nx, ny);
       case 'leaper': return this.leaper(e, s, t, dt, now, dist, nx, ny);
       case 'sniper': return this.sniper(e, s, t, dt, now, dist, nx, ny);
+      case 'net': return this.net(e, s, t, dt, now, dist, nx, ny);
+      case 'aura': return this.aura(e, s, t, dt, now, dist, nx, ny);
+      case 'volley': return this.volleyStep(e, s, t, dt, now, dist, nx, ny);
+      case 'roller': return this.roller(e, s, t, dt, now, dist, nx, ny);
+      case 'firepot': return this.firepot(e, s, t, dt, now, dist, nx, ny);
+      case 'burst': return this.burstStep(e, s, t, dt, now, dist, nx, ny);
+      case 'guard': return this.guard(e, s, t, dt, now, dist, nx, ny);
+      case 'firearrow': return this.firearrow(e, s, t, dt, now, dist, nx, ny);
       default: return false; // swarm / tamer：普通追击
     }
   }
@@ -260,7 +271,7 @@ export class EnemyTraits {
       if (!key) return true;
       const flight = Math.max(260, Math.hypot(p.x - e.x, p.y - e.y) / .42);
       const img = this.h.scene.add.image(e.x, e.y - 18, key).setDepth(DEPTH.projectile).setScale(.55).setTint(0x9ed27a).setRotation(Math.atan2(p.y - e.y, p.x - e.x));
-      this.darts.push({ img, x0: e.x, y0: e.y - 18, tx: p.x, ty: p.y - 10, from: now, at: now + flight, t });
+      this.darts.push({ img, x0: e.x, y0: e.y - 18, tx: p.x, ty: p.y - 10, from: now, at: now + flight, dmg: t.hitDamage, hit: n => this.addPoison(t, n) });
     }
     return true;
   }
@@ -288,6 +299,7 @@ export class EnemyTraits {
     const t = ROSTER[e.def.roster ?? '']; const reveal = t?.hide?.reveal ?? 260;
     if (Math.hypot(this.h.player.x - e.x, this.h.player.y - e.y) > reveal) return true;
     s.hidden = false; e.invulnerable = false; e.sprite.setAlpha(1); this.metrics.reveals += 1;
+    if (s.disguised) { s.disguised = false; e.sprite.setTint(e.baseTint); }
     warnFx(this.h.scene).ambush(e.x, e.y, 70); this.h.sfx('bossSummon');
     const tr = e.def.trait;
     if (tr?.kind === 'ambusher') { s.dashUntil = now + tr.dashMs; this.addFire(e.x, e.y + 4, 46, now, tr.fireMs, 4); }
@@ -301,6 +313,7 @@ export class EnemyTraits {
     const s = this.st.get(e); if (!s || s.life !== e.spawnId) return 1;
     if (t.kind === 'shieldwall' && s.face !== undefined && this.frontDiff(e, s.face) < Math.PI / 3) { this.metrics.blocked += 1; return 1 - t.front; }
     if (t.kind === 'stance' && s.phase === 'up' && s.face !== undefined && this.frontDiff(e, s.face) < Math.PI / 3) { this.metrics.blocked += 1; return 1 - t.front; }
+    if (t.kind === 'guard') { const b = this.h.boss?.(); if (b?.active && Math.hypot(b.x - e.x, b.y - e.y) <= t.radius) { this.metrics.guarded += 1; return t.mul; } }
     return 1;
   }
   /** 陷阵营：慢慢转身对准主将（绕到侧后就破防），顺着朝向推进；贴近盾击。 */
@@ -447,6 +460,113 @@ export class EnemyTraits {
     return true;
   }
 
+  // ———— 第三批 ————
+  /** 毒镖命中：叠一层毒。 */
+  private addPoison(t: Extract<TraitDef, { kind: 'poison' }>, now: number): void {
+    this.poison = this.poison.filter(x => x > now);
+    if (this.poison.length >= t.maxStacks) this.poison.shift();
+    this.poison.push(now + t.seconds * 1000); this.poisonDps = t.dps;
+    if (!this.poisonTick) this.poisonTick = now + 1000;
+  }
+  /** 主将被网住：移速 × (1 − slow)，slowMs 后恢复（Player.snareSpeedMul）。 */
+  private snareUntil = 0;
+  /** 巴蜀猎户：保持距离投网（飞的是网——缺专属图时用箭矢图染麻色），中了减速。 */
+  private net(e: Enemy, s: St, t: Extract<TraitDef, { kind: 'net' }>, dt: number, now: number, dist: number, nx: number, ny: number): boolean {
+    if (dist > t.range) this.h.move(e, nx, ny, dt); else if (dist < t.range * .55) this.h.move(e, -nx, -ny, dt); else this.h.move(e, -ny * .35, nx * .35, dt);
+    if (now >= s.next && dist < t.range + 80 && e.attackUntil <= now) {
+      s.next = now + t.everyMs * (.85 + Math.random() * .3); this.metrics.nets += 1; e.startAttack(now, dirOf(nx, ny));
+      const p = this.h.player, key = this.h.scene.textures.exists('arrow') ? 'arrow' : ''; if (!key) return true;
+      const flight = Math.max(280, Math.hypot(p.x - e.x, p.y - e.y) / .4);
+      const img = this.h.scene.add.image(e.x, e.y - 18, key).setDepth(DEPTH.projectile).setScale(.6).setTint(0xc8b080).setRotation(Math.atan2(p.y - e.y, p.x - e.x));
+      this.darts.push({ img, x0: e.x, y0: e.y - 18, tx: p.x, ty: p.y - 10, from: now, at: now + flight, dmg: t.hitDamage, hit: n => { this.snareUntil = n + t.slowMs; this.h.player.snareSpeedMul = 1 - t.slow; this.metrics.snared += 1; } });
+    }
+    return true;
+  }
+  /** 增益光环：每 250ms 给半径内友军（首领除外）记一笔「到何时、加多少」，GameScene 移动 / 伤害时乘上。 */
+  private auraTill = new Map<Enemy, { until: number; speed: number; damage: number }>();
+  private aura(e: Enemy, s: St, t: Extract<TraitDef, { kind: 'aura' }>, dt: number, now: number, dist: number, nx: number, ny: number): boolean {
+    if (dist < t.keepAway) this.h.move(e, -nx * .9, -ny * .9, dt); else if (dist > t.keepAway + 160) this.h.move(e, nx, ny, dt); else this.h.move(e, -ny * .3, nx * .3, dt);
+    if (now >= s.next) {
+      s.next = now + 250; let n = 0;
+      for (const o of this.h.enemies()) { if (!o.active || o === e || o.kind === 'boss' || o.isSupplySlot || Math.hypot(o.x - e.x, o.y - e.y) > t.radius) continue; this.auraTill.set(o, { until: now + 400, speed: t.speedMul, damage: t.damageMul }); n++; }
+      if (n && now >= (s.until ?? 0)) { s.until = now + 1800; e.startAttack(now, dirOf(nx, ny)); this.metrics.auraPulses += 1; playSheet(this.h.scene, 'fx_heal_fushui', e.x, e.y - 20, { size: t.radius * .9, depth: actorDepth(e.y) - .05, ms: 700, alpha: .45, tint: 0xffb070 }); }
+    }
+    return true;
+  }
+  /** 光环中的友军：移速倍率（GameScene.advanceEnemy 乘）。 */
+  speedMul(e: Enemy): number { const a = this.auraTill.get(e); return a && a.until > this.now() ? a.speed : 1; }
+  /** 光环中的友军：伤害倍率（接触伤害 / 放箭乘）。 */
+  damageMul(e: Enemy): number { const a = this.auraTill.get(e); return a && a.until > this.now() ? a.damage : 1; }
+  /** 伏弩手：远处站定，在主将脚下标一圈，落箭。 */
+  private volleyStep(e: Enemy, s: St, t: Extract<TraitDef, { kind: 'volley' }>, dt: number, now: number, dist: number, nx: number, ny: number): boolean {
+    if (dist > t.range) this.h.move(e, nx, ny, dt); else if (dist < t.range * .5) this.h.move(e, -nx, -ny, dt); else e.moveVx = e.moveVy = 0;
+    if (now >= s.next && dist < t.range + 80) {
+      s.next = now + t.everyMs * (.85 + Math.random() * .3); this.metrics.volleyZones += 1; e.startAttack(now, dirOf(nx, ny));
+      const p = this.h.player; this.hazards.push({ id: `trait-volley-${++this.seq}`, kind: 'stone', look: 'arrows', x: p.x, y: p.y, r: t.radius, from: now, at: now + t.warnMs, end: now + t.warnMs, damage: t.damage, allyDamage: t.allyDamage, tick: 0 });
+    }
+    return true;
+  }
+  /** 樊城擂木兵：沿直线预警，滚木从脚下滚出，碾到就伤。 */
+  private roller(e: Enemy, s: St, t: Extract<TraitDef, { kind: 'roller' }>, dt: number, now: number, dist: number, nx: number, ny: number): boolean {
+    const id = `trait-roll-${e.spawnId}`, wf = warnFx(this.h.scene), a = s.face ?? 0;
+    if (s.phase === 'warn') {
+      e.moveVx = e.moveVy = 0; wf.lane(id, 'charge', e.x, e.y, a, t.length, t.width, 1 - ((s.until ?? now) - now) / t.warnMs, now);
+      if (now >= (s.until ?? 0)) {
+        s.phase = undefined; this.metrics.rolls += 1; this.h.sfx('hitHeavy');
+        const x0 = e.x, y0 = e.y, ms = t.length / t.speed * 1000, sc = this.h.scene, key = sc.textures.exists('siege_mid_barb') ? 'siege_mid_barb' : null;
+        const img = key ? sc.add.image(x0, y0, key, 5).setDisplaySize(t.width * 1.3, t.width * 1.3).setDepth(DEPTH.projectile).setRotation(a + Math.PI / 2) : null;
+        let hit = false; const t0 = now;
+        sc.tweens.addCounter({ from: 0, to: 1, duration: ms, onUpdate: tw => { const k = tw.getValue() ?? 0, x = x0 + Math.cos(a) * t.length * k, y = y0 + Math.sin(a) * t.length * k; img?.setPosition(x, y);
+          const p = this.h.player; if (!hit && p.alive && Math.hypot(p.x - x, p.y - y) < t.width / 2 + p.radius) { hit = true; if (p.takeDamage(t.damage, this.now())) sc.cameras.main.flash(90, 180, 40, 40, false); } },
+          onComplete: () => { img?.destroy(); this.h.hurtTroops(x0 + Math.cos(a) * t.length * .5, y0 + Math.sin(a) * t.length * .5, t.width, t.allyDamage); void t0; } });
+      }
+      return true;
+    }
+    if (dist < t.range && now >= s.next) { s.next = now + t.everyMs; s.phase = 'warn'; s.until = now + t.warnMs; s.face = Math.atan2(ny, nx); e.startAttack(now, dirOf(nx, ny)); e.windupCol = 0; e.attackUntil = now + t.warnMs + 270; return true; }
+    if (dist > t.range * .9) this.h.move(e, nx, ny, dt); else e.moveVx = e.moveVy = 0;
+    return true;
+  }
+  /** 吴军火攻兵：同投掷，落点留火；倒下爆燃（onKilled）。 */
+  private firepot(e: Enemy, s: St, t: Extract<TraitDef, { kind: 'firepot' }>, dt: number, now: number, dist: number, nx: number, ny: number): boolean {
+    if (e.poseUntil > now) { e.moveVx = e.moveVy = 0; return true; }
+    if (dist > t.range) this.h.move(e, nx, ny, dt); else if (dist < t.range * .55) this.h.move(e, -nx * .8, -ny * .8, dt); else e.moveVx = e.moveVy = 0;
+    if (now >= s.next && dist < t.range + 60) {
+      s.next = now + t.everyMs * (.85 + Math.random() * .3); this.metrics.throws += 1;
+      const p = this.h.player, tx = p.x + Phaser.Math.Between(-20, 20), ty = p.y + Phaser.Math.Between(-20, 20);
+      e.poseUntil = now + 360; e.startAttack(now, dirOf(nx, ny));
+      this.hazards.push({ id: `trait-pot-${++this.seq}`, kind: 'stone', fire: { ms: t.fireMs, r: t.fireRadius, dmg: t.fireDamage }, x: tx, y: ty, r: t.radius, from: now, at: now + t.warnMs, end: now + t.warnMs, damage: t.damage, allyDamage: t.allyDamage, tick: 0 });
+      this.flyStone(e.x, e.y - 40, tx, ty, now + RELEASE_MS, Math.max(400, t.warnMs - RELEASE_MS));
+    }
+    return true;
+  }
+  /** 林中伏弓：现身后保持距离，连射 shots 支。 */
+  private burstStep(e: Enemy, s: St, t: Extract<TraitDef, { kind: 'burst' }>, dt: number, now: number, dist: number, nx: number, ny: number): boolean {
+    if (dist > t.range) this.h.move(e, nx, ny, dt); else if (dist < t.range * .5) this.h.move(e, -nx, -ny, dt); else e.moveVx = e.moveVy = 0;
+    if (now >= s.next && dist < t.range + 80) {
+      s.next = now + t.everyMs; this.metrics.bursts3 += 1; const life = e.spawnId;
+      for (let i = 0; i < t.shots; i++) this.h.scene.time.delayedCall(i * t.gapMs, () => { if (!e.active || e.spawnId !== life) return; e.startAttack(this.now(), dirOf(nx, ny)); this.h.sfx('enemyArrow'); this.h.scene.time.delayedCall(ARROW_MS, () => { if (e.active && e.spawnId === life) this.h.fireArrow(e, this.h.player.x, this.h.player.y, e.def.damage, t.arrowSpeed); }); });
+    }
+    return true;
+  }
+  /** 魏国虎卫：主将近了就上前打（普通追击）；否则回到首领身边（离首领 radius 内受伤减半）。 */
+  private guard(e: Enemy, s: St, t: Extract<TraitDef, { kind: 'guard' }>, dt: number, now: number, dist: number, nx: number, ny: number): boolean {
+    const b = this.h.boss?.(); if (!b?.active || dist < t.engage) return false;
+    const a = s.ang + now / 3000, gx = b.x + Math.cos(a) * t.radius * .6, gy = b.y + Math.sin(a) * t.radius * .4, dx = gx - e.x, dy = gy - e.y, d = Math.hypot(dx, dy) || 1;
+    if (d < 20) e.moveVx = e.moveVy = 0; else this.h.move(e, dx / d, dy / d, dt);
+    void nx; void ny; return true;
+  }
+  /** 火箭手：保持距离放火箭，箭落处留火。 */
+  private firearrow(e: Enemy, s: St, t: Extract<TraitDef, { kind: 'firearrow' }>, dt: number, now: number, dist: number, nx: number, ny: number): boolean {
+    if (dist > t.range) this.h.move(e, nx, ny, dt); else if (dist < t.range * .5) this.h.move(e, -nx, -ny, dt); else e.moveVx = e.moveVy = 0;
+    if (now >= s.next && dist < t.range + 80 && e.attackUntil <= now) {
+      s.next = now + t.everyMs * (.85 + Math.random() * .3); this.metrics.fireArrows += 1; e.startAttack(now, dirOf(nx, ny)); this.h.sfx('enemyArrow');
+      const p = this.h.player, tx = p.x, ty = p.y, life = e.spawnId, fly = Math.hypot(tx - e.x, ty - e.y) / t.speed * 1000;
+      this.h.scene.time.delayedCall(ARROW_MS, () => { if (e.active && e.spawnId === life) this.h.fireArrow(e, tx, ty, e.def.damage, t.speed); });
+      this.h.scene.time.delayedCall(ARROW_MS + fly, () => this.addFire(tx, ty, t.fireRadius, this.now(), t.fireMs, t.fireDamage));
+    }
+    return true;
+  }
+
   // ———— 倒下 ————
   /** GameScene.killEnemy 调：纵火兵爆燃、驯兽师倒下猛兽狂暴。 */
   onKilled(e: Enemy): void {
@@ -459,6 +579,9 @@ export class EnemyTraits {
       this.hitPlayer(e.x, e.y, t.burstRadius, t.burstDamage, now);
       this.h.hurtTroops(e.x, e.y, t.burstRadius, t.burstDamage);
       this.addFire(e.x, e.y, t.fireRadius * 1.3, now, t.fireMs, t.fireDamage);
+    } else if (t.kind === 'firepot') {
+      this.metrics.bursts += 1; playSheet(this.h.scene, 'fx_explosion', e.x, e.y - 16, { size: t.burstRadius * 2, depth: DEPTH.fx, ms: 480 }); this.h.sfx('hitHeavy');
+      this.hitPlayer(e.x, e.y, t.burstRadius, t.burstDamage, now); this.h.hurtTroops(e.x, e.y, t.burstRadius, t.burstDamage); this.addFire(e.x, e.y, t.fireRadius, now, t.fireMs, t.fireDamage);
     } else if (t.kind === 'courier') {
       this.h.gainFood?.(t.food); this.metrics.intercepted += 1;
     } else if (t.kind === 'fireship') {
@@ -477,15 +600,19 @@ export class EnemyTraits {
   // ———— 每帧：落石、地火、毒箭、中毒 ————
   update(now: number): void {
     const p = this.h.player, wf = warnFx(this.h.scene);
+    if (this.snareUntil && now >= this.snareUntil) { this.snareUntil = 0; p.snareSpeedMul = 1; } // 绳网到时松开
+    if (this.auraTill.size > 200) for (const [e, a] of this.auraTill) if (a.until < now || !e.active) this.auraTill.delete(e);
     // 跟着本体走的布景（火船）；本体没了就收掉
     for (const [e, s] of this.st) { if (!s.imgs?.length) continue; if (!e.active || e.spawnId !== s.life) { for (const im of s.imgs) (im as unknown as Phaser.GameObjects.GameObject).destroy(); s.imgs = []; continue; } s.imgs[0]?.setPosition(e.x, e.y + 10); (s.imgs[0] as unknown as Phaser.GameObjects.Image)?.setDepth?.(actorDepth(e.y)); s.imgs[1]?.setPosition(e.x, e.y - 18); (s.imgs[1] as unknown as Phaser.GameObjects.Image)?.setDepth?.(actorDepth(e.y) + .02); }
     for (let i = this.hazards.length - 1; i >= 0; i -= 1) {
       const z = this.hazards[i];
       if (z.kind === 'stone') {
-        if (now < z.at) { wf.circle(z.id, 'slam', z.x, z.y, z.r, (now - z.from) / (z.at - z.from), now); continue; }
-        wf.shapeImpact(z.id, 'slam', z.x, z.y, z.r, 0, now);
-        playSheet(this.h.scene, 'fx_collapse_dust', z.x, z.y - 14, { size: z.r * 2.4, depth: DEPTH.fx, ms: 480, alpha: .85 });
-        this.h.sfx('hitHeavy');
+        const look = z.look ?? 'slam';
+        if (now < z.at) { wf.circle(z.id, look, z.x, z.y, z.r, (now - z.from) / (z.at - z.from), now); continue; }
+        wf.shapeImpact(z.id, look, z.x, z.y, z.r, 0, now);
+        if (look === 'slam') playSheet(this.h.scene, 'fx_collapse_dust', z.x, z.y - 14, { size: z.r * 2.4, depth: DEPTH.fx, ms: 480, alpha: .85 });
+        this.h.sfx(look === 'arrows' ? 'enemyArrow' : 'hitHeavy');
+        if (z.fire) { this.addFire(z.x, z.y, z.fire.r, now, z.fire.ms, z.fire.dmg); this.metrics.firepots += 1; }
         this.hitPlayer(z.x, z.y, z.r, z.damage, now);
         this.h.hurtTroops(z.x, z.y, z.r, z.allyDamage);
         this.hazards.splice(i, 1);
@@ -500,12 +627,7 @@ export class EnemyTraits {
       d.img.setPosition(d.x0 + (d.tx - d.x0) * k, d.y0 + (d.ty - d.y0) * k);
       if (k < 1) continue;
       d.img.destroy(); this.darts.splice(i, 1);
-      if (p.alive && Math.hypot(p.x - d.tx, p.y - 10 - d.ty) < p.radius + 18 && p.takeDamage(d.t.hitDamage, now)) {
-        this.poison = this.poison.filter(x => x > now);
-        if (this.poison.length >= d.t.maxStacks) this.poison.shift();
-        this.poison.push(now + d.t.seconds * 1000); this.poisonDps = d.t.dps;
-        if (!this.poisonTick) this.poisonTick = now + 1000;
-      }
+      if (p.alive && Math.hypot(p.x - d.tx, p.y - 10 - d.ty) < p.radius + 18 && p.takeDamage(d.dmg, now)) d.hit(now);
     }
     if (this.poisonTick && now >= this.poisonTick) {
       this.poison = this.poison.filter(x => x > now - 1);
@@ -526,7 +648,7 @@ export class EnemyTraits {
     for (const z of this.hazards) z.img?.destroy();
     for (const d of this.darts) d.img.destroy();
     for (const s of this.st.values()) for (const im of s.imgs ?? []) (im as unknown as Phaser.GameObjects.GameObject).destroy();
-    this.hazards = []; this.darts = []; this.poison = []; this.poisonTick = 0; this.st.clear();
+    this.hazards = []; this.darts = []; this.poison = []; this.poisonTick = 0; this.st.clear(); this.auraTill.clear(); this.snareUntil = 0; this.h.player.snareSpeedMul = 1;
   }
 
   // ———— 小工具 ————

@@ -70,7 +70,8 @@ function read(): RosterSave | null {
     const seen = new Set<string>();
     for (const r of Array.isArray(v.owned) ? v.owned.slice(0, RECRUIT.maxOwned + 5) : []) { const p = parseRecruit(r); if (p && !seen.has(p.id)) { seen.add(p.id); s.owned.push(p); } }
     if (s.lord && !seen.has(s.lord)) s.owned.unshift(heroRecruit(s.lord));
-    s.followers = Array.isArray(v.followers) ? [...new Set((v.followers as unknown[]).filter((x): x is string => typeof x === 'string' && seen.has(x)))].slice(0, 3) : [];
+    // 2026-11-18 用户「主公不应该在这里」：主公不是随行，老存档里被点成随行的去掉
+    s.followers = Array.isArray(v.followers) ? [...new Set((v.followers as unknown[]).filter((x): x is string => typeof x === 'string' && seen.has(x) && !(s.lord && s.owned.some(r => r.id === x && r.hero === s.lord))))].slice(0, 3) : [];
     s.offers = (Array.isArray(v.offers) ? v.offers : []).map(parseOffer).filter((o: Offer | null): o is Offer => !!o).slice(0, 6);
     s.captives = (Array.isArray(v.captives) ? v.captives : []).map(parseOffer).filter((o: Offer | null): o is Offer => !!o).slice(0, SURRENDER.captiveSlots);
     s.season = Number.isSafeInteger(v.season) ? v.season : -1; s.manual = int(v.manual, 999); s.dry = int(v.dry, 999); s.seq = int(v.seq, 1e9); s.hall = int(v.hall, 3, 1);
@@ -138,6 +139,8 @@ export const LOCKED_HINT = '主公已定，本存档不可更换';
 /** 主公的等级只随征战（自己出战的经验）提升，不能在招贤馆 / 随行系统里升级。 */
 export const LORD_LEVEL_HINT = '主公等级随征战提升';
 const isLordRecruit = (s: RosterSave, r: Recruit): boolean => !!r.hero && r.hero === s.lord;
+/** 麾下（招贤馆「麾下」页、讲武堂「随从操练」、随行候选）：不含主公本人（2026-11-18 用户「主公不应该在这里」）。 */
+export function rosterFollowers(s: RosterSave = loadRoster()): Recruit[] { return s.owned.filter(r => !isLordRecruit(s, r)); }
 /** 当前章节下随行的等级上限（第一章 5 级，每开一章 +5，见 FOLLOWER_LEVEL）。 */
 export function followerLevelCap(): number { return followerLevelCapFor(chaptersOpen()); }
 /** 随行的实际等级（不超过随行上限；主公返回自己的武将等级）。 */
@@ -365,6 +368,7 @@ export function setFollowers(ids: string[]): void {
 }
 export function toggleFollower(id: string): RosterResult {
   const s = loadRoster(), r = s.owned.find(x => x.id === id); if (!r) return { ok: false, message: '不在麾下' };
+  if (isLordRecruit(s, r)) return { ok: false, message: '主公亲自出征，不作随行' };
   if (s.followers.includes(id)) { s.followers = s.followers.filter(f => f !== id); write(s); return { ok: true, message: `${r.name}留守` }; }
   if (s.followers.length >= followerCap(s)) return { ok: false, message: `随行已满 ${followerCap(s)} 人（升级招贤馆可多带）` };
   s.followers.push(id); write(s); return { ok: true, message: `${r.name}随行` };

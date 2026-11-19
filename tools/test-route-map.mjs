@@ -4,7 +4,8 @@
 //  2. 入口都在：主线（壹贰章直接开战 / 叁章起进各章选关页并带关号）、乱世、攻城（规则 C：不相邻也能攻，真进 SiegeGameScene 不被弹回）、
 //     守城（告急）、入城（我方城池 → TownScene）、军情、三英战吕布（虎牢关，通关讨董后）、营寨；
 //  3. 攻城归来：「某城 归入版图」横幅、选中该城；
-//  4. 截图 2 张：章节视角、全图视角。
+//  4. 第 2 期动效：上次没露出的点 → 路线描画、迷雾散开、节点浮现；「下一战」在镜头外时边上出旗牌，点它飞回去；
+//  5. 截图 3 张：章节视角、全图视角、下一战旗牌。
 // 用法：BASE=http://127.0.0.1:5241/ node tools/test-route-map.mjs   → assets/review/route-map/*.png
 import { chromium } from 'playwright';
 import { mkdirSync } from 'node:fs';
@@ -95,6 +96,28 @@ const modalGo = async (p, name, go) => { await p.evaluate(([M0, n, g]) => { cons
     const P = Object.getPrototypeOf(window.__game.scene.getScene('WorldMapScene')), pc = P.playCapture; P.playCapture = function (c) { const r = pc.call(this, c), root = this.children.getByName('capture-reveal'); window.__cap = { title: root?.getByName('capture-banner')?.getByName('capture-banner-title')?.text, seal: !!root?.getByName('capture-seal') }; return r; }; }, 700);
   const c = await p.evaluate(M0 => { const s = eval(M0); return { ...window.__cap, sel: s.selected.node?.id, vis: s.view.vis.get('siege-sishui') }; }, M);
   ck('攻城归来：「汜水关 归入版图」横幅 + 朱印「归」，选中汜水关，节点变我方', c.title === '汜水关 归入版图' && c.seal && c.sel === 'siege-sishui' && c.vis === 'cleared', c);
+  await p.close();
+}
+// ④ 第 2 期动效：上次进地图只露出到 2-1 → 这次 2-2 / 2-3 / 新攻城点算新露出，播描画、散雾、浮现；「下一战」旗牌
+{
+  const p = await open(MID, () => localStorage.setItem('im_route_seen_v1', JSON.stringify(['camp', 'huangjin-1', 'huangjin-2', 'huangjin-3', 'hulao-1'])), 3200);
+  const f = await p.evaluate(M0 => { const s = eval(M0); return { fresh: [...s.fresh], fx: { ...s.fx }, a2: s.nodes.get('hulao-2')?.root.alpha, seen: JSON.parse(localStorage.getItem('im_route_seen_v1')).includes('hulao-2') }; }, M);
+  ck('新露出的点：2-2、2-3 算新露出；路线描画完、迷雾散开、节点全部浮现（alpha 回到 1）；这次露出的点已记下', f.fresh.includes('hulao-2') && f.fresh.includes('hulao-3') && !f.fresh.includes('hulao-1') && f.fx.drawn >= 2 && f.fx.holes >= 2 && f.fx.popped === f.fresh.length && f.a2 === 1 && f.seen, f);
+  // 镜头拉到西南角，下一战（2-2）在镜头外 → 边上出旗牌
+  await p.evaluate(M0 => { const s = eval(M0); s.centerOn(150, 900); }, M); await p.waitForTimeout(300);
+  const a = await p.evaluate(M0 => { const s = eval(M0), c = s.children.getByName('next-arrow'); return { vis: c?.visible, x: Math.round(c?.x ?? 0), y: Math.round(c?.y ?? 0), text: c?.getByName('next-arrow-text')?.text, area: s.area }; }, M);
+  ck('「下一战」在镜头外：地图边上出「下一战 · 2-2」旗牌（在地图区内）', a.vis && /下一战 · 2-2/.test(a.text ?? '') && a.x > a.area.x && a.x < a.area.x + a.area.w && a.y > a.area.y && a.y < a.area.y + a.area.h, a);
+  await p.screenshot({ path: `${OUT}/next-arrow.png` });
+  await p.evaluate(M0 => eval(M0).children.getByName('next-arrow').getByName('next-arrow-hit').emit('pointerup'), M); await p.waitForTimeout(1000);
+  const b2 = await p.evaluate(M0 => { const s = eval(M0); return { sel: s.selected?.node?.id, vis: s.children.getByName('next-arrow').visible }; }, M);
+  ck('点旗牌：选中 2-2 并飞过去，旗牌收起', b2.sel === 'hulao-2' && b2.vis === false, b2);
+  await p.close();
+}
+// ⑤ 第一次进地图（没有记录）不播动效
+{
+  const p = await open(MID);
+  const f = await p.evaluate(M0 => { const s = eval(M0); return { fresh: s.fresh.size, a2: s.nodes.get('hulao-2')?.root.alpha }; }, M);
+  ck('第一次进地图：不播动效，节点直接露出', f.fresh === 0 && f.a2 === 1, f);
   await p.close();
 }
 await b.close();

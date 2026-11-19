@@ -3,6 +3,7 @@ import { DEPTH, GAME_HEIGHT, GAME_WIDTH } from '../config';
 import { LQ, lqDiamond } from './LacquerKit';
 import { warText } from './WarStyle';
 import { hotkeyLabel } from '../data/hotkeys';
+import { PaintedMap, MAP_ICONS, MAP_ICONS_FILES, type PaintLayout } from './PaintedMap';
 import type { BattleOrders } from '../systems/BattleOrders';
 import type { Enemy } from '../entities/Enemy';
 
@@ -35,6 +36,8 @@ export interface MapHost {
   bosses(): readonly Enemy[];
   /** 摧毁型关卡的营寨（血量比例；最近被友军砍过的闪烁）。 */
   camps?(): ReadonlyArray<{ x: number; y: number; ratio: number; hit: boolean }>;
+  /** 舆图题签上的关名。 */
+  title?(): string;
   /** 友军攻势（2-3）：每队的出发点、目标营寨、兵的位置。 */
   pushes?(): ReadonlyArray<{ from: { x: number; y: number }; to: { x: number; y: number } | null; members: ReadonlyArray<{ x: number; y: number }> }>;
 }
@@ -77,8 +80,11 @@ class MapView {
   private readonly seals: Phaser.GameObjects.Image[] = [];
   private readonly names: Phaser.GameObjects.Text[] = [];
   /** bare：只画地图内容（卷轴画心当底，框与纸由 BattleMap 的卷轴画）。 */
-  constructor(scene: Phaser.Scene, readonly x: number, readonly y: number, readonly w: number, readonly h: number, readonly range: number, big: boolean, bare = false) {
+  /** 手绘舆图（图集 map_icons 载到了就用；没载到退回简画）。 */
+  painted: PaintedMap | null = null;
+  constructor(scene: Phaser.Scene, readonly x: number, readonly y: number, readonly w: number, readonly h: number, readonly range: number, big: boolean, bare = false, title = '') {
     this.root = scene.add.container(x, y).setScrollFactor(0).setDepth(big ? DEPTH.overlay + 5 : DEPTH.hud + 2).setName(big ? 'battle-map-big' : 'battle-map-mini');
+    if (bare && scene.textures.exists(MAP_ICONS)) { this.painted = new PaintedMap(scene, w, h, range, title); this.root.add(this.painted.root); this.g = scene.add.graphics(); return; }
     if (bare) { this.g = scene.add.graphics(); this.root.add(this.g); this.root.add(legend(scene, h)); for (let i = 0; i < 3; i++) { const s = scene.add.image(0, 0, 'seal_boss').setDisplaySize(26, 26).setVisible(false); this.seals.push(s); this.root.add(s); } for (let i = 0; i < 6; i++) { const t = scene.add.text(0, 0, '', warText(12, '#3a1a0e')).setOrigin(.5, 1).setStroke('#f3e6c4', 3).setVisible(false); this.names.push(t); this.root.add(t); } return; }
     const frame = scene.add.graphics();
     if (big) frame.fillStyle(0x000000, .5).fillRect(-x, -y, GAME_WIDTH, GAME_HEIGHT);
@@ -103,7 +109,8 @@ class MapView {
   private map(c: { x: number; y: number }, wx: number, wy: number): [number, number] { const k = this.w / this.range; return [this.w / 2 + (wx - c.x) * k, this.h / 2 + (wy - c.y) * k]; }
   private inside(px: number, py: number, pad = 3): boolean { return px >= pad && py >= pad && px <= this.w - pad && py <= this.h - pad; }
 
-  draw(h: MapHost, orders: BattleOrders, boxes: readonly Box[], rivers: ReadonlyArray<{ ax: number; ay: number; bx: number; by: number; half: number }>, big: boolean, roads: readonly Road[] = [], trees: readonly TreeDot[] = []): void {
+  draw(h: MapHost, orders: BattleOrders, boxes: readonly Box[], rivers: ReadonlyArray<{ ax: number; ay: number; bx: number; by: number; half: number }>, big: boolean, roads: readonly Road[] = [], trees: readonly TreeDot[] = [], layout?: PaintLayout): void {
+    if (this.painted) { if (layout) this.painted.bake(layout); this.painted.draw(h, orders); return; }
     const c = h.player(), g = this.g.clear(), k = this.w / this.range, W = this.w, H = this.h, now = performance.now();
     // 路：浅褐色宽带（裁到框内）
     for (const r of roads) {
@@ -188,6 +195,7 @@ export class BattleMap {
   private big: MapView | null = null;
   private readonly arrow: Phaser.GameObjects.Graphics;
   private readonly arrowText: Phaser.GameObjects.Text;
+  private gates: Array<{ x: number; y: number }> = []; private bridges: Array<{ x: number; y: number; ang: number; len: number }> = [];
   private acc = 0; private boxAcc = 1e9; private boxes: Box[] = []; private rivers: Array<{ ax: number; ay: number; bx: number; by: number; half: number }> = []; private roads: Road[] = []; private trees: TreeDot[] = [];
   /** 卷轴：角上收起的那卷（icon）、展开的三段（左轴 / 画心 / 右轴）、暗场、标题。 */
   private icon: Phaser.GameObjects.Image | null = null; private iconHint: Phaser.GameObjects.Text | null = null;
@@ -199,6 +207,7 @@ export class BattleMap {
     const s = h.scene;
     this.arrow = s.add.graphics().setScrollFactor(0).setDepth(DEPTH.hud + 1).setName('orders-arrow');
     this.arrowText = s.add.text(0, 0, '', warText(12, '#ffd9a0')).setOrigin(.5).setScrollFactor(0).setDepth(DEPTH.hud + 1).setStroke('#1a0e08', 3).setVisible(false);
+    if (!s.textures.exists(MAP_ICONS)) { s.load.atlas(MAP_ICONS, MAP_ICONS_FILES.png, MAP_ICONS_FILES.json); if (!s.load.isLoading()) s.load.start(); }
     const need = Object.values(SCROLL_FILES).filter(k => !s.textures.exists(k));
     if (!need.length) this.makeIcon();
     else {
@@ -235,7 +244,7 @@ export class BattleMap {
     const title = s.add.text(cx, top + (T.paperTop - 23) * sy, '战 场 舆 图', warText(17, LQ.title)).setOrigin(.5).setStroke('#1a0e08', 4).setScrollFactor(0).setDepth(d + 2);
     const hint = s.add.text(cx, top + (T.paperBot + 23) * sy, '点卷轴 / ' + hotkeyLabel('map') + ' / Esc 卷起舆图', warText(11, '#f3e6c4')).setOrigin(.5).setStroke('#1a0e08', 3).setScrollFactor(0).setDepth(d + 2);
     this.open3 = { left, mid, right, dim, title, hint };
-    this.big = new MapView(s, (GAME_WIDTH - B.w) / 2, (GAME_HEIGHT - B.h) / 2 + 6, B.w, B.h, B.range, true, true);
+    this.big = new MapView(s, (GAME_WIDTH - B.w) / 2, (GAME_HEIGHT - B.h) / 2 + 6, B.w, B.h, B.range, true, true, this.h.title?.() ?? '');
     this.big.root.setDepth(d + 1);
     this.layout(0);
   }
@@ -287,7 +296,7 @@ export class BattleMap {
     this.boxAcc += dt * 1000; if (this.boxAcc >= BATTLE_MAP.obstacleRefreshMs) { this.boxAcc = 0; this.collectObstacles(); }
     this.drawArrow();
     this.acc += dt; if (this.acc < 1 / BATTLE_MAP.hz) return; this.acc = 0;
-    if (this.big && this.state !== 'closed') { this.big.draw(this.h, this.orders, this.boxes, this.rivers, true, this.roads, this.trees); this.stats.draws++; this.stats.detail = { roads: this.roads.length, trees: this.trees.length, rivers: this.rivers.length, camps: this.h.camps?.().length ?? 0, pushes: this.h.pushes?.().length ?? 0 }; }
+    if (this.big && this.state !== 'closed') { this.big.draw(this.h, this.orders, this.boxes, this.rivers, true, this.roads, this.trees, { boxes: this.boxes, rivers: this.rivers, roads: this.roads, trees: this.trees, gates: this.gates, bridges: this.bridges }); this.stats.draws++; this.stats.detail = { roads: this.roads.length, trees: this.trees.length, rivers: this.rivers.length, camps: this.h.camps?.().length ?? 0, pushes: this.h.pushes?.().length ?? 0 }; }
   }
 
   /** 场景里所有「挡人的框」：各系统的 footprints（关墙 / 山道 / 洪水 / 突围 / 陈仓…）+ 攻城的场地 / 城门框。只读。 */
@@ -295,12 +304,14 @@ export class BattleMap {
     const sc = this.h.scene as unknown as Any, out: Box[] = [], seen = new Set<unknown>();
     const add = (list: unknown) => { if (!Array.isArray(list) || seen.has(list)) return; seen.add(list); for (const b of list) if (b && typeof b.left === 'number') out.push(b as Box); };
     for (const k of Object.keys(sc)) { const v = sc[k]; if (!v || typeof v !== 'object') continue; add(v.footprints); if (v.obstacles && typeof v.obstacles === 'object') add(v.obstacles.footprints); }
-    const m = sc.mid; if (m) { add(m.arenaBoxes); for (const b of [m.gateBox, m.innerGateBox]) if (b && typeof b.left === 'number') out.push(b); }
+    const m = sc.mid; this.gates = []; if (m) { add(m.arenaBoxes); for (const b of [m.gateBox, m.innerGateBox]) if (b && typeof b.left === 'number') { out.push(b); this.gates.push({ x: (b.left + b.right) / 2, y: b.bottom }); } }
+    const dz = sc.dzLubu as { gatePos?: { x: number; y: number } } | undefined; if (dz?.gatePos) this.gates.push(dz.gatePos);
     this.boxes = out.length > 400 ? out.slice(0, 400) : out; this.stats.boxes = this.boxes.length;
     // 路：场景里铺路的平铺图（纹理名带 road、贴地层）；树：地形层的树（烧掉的不算）
     this.roads = []; for (const o of this.h.scene.children.list) { const ts = o as Phaser.GameObjects.TileSprite; if (o.type !== 'TileSprite' || !/road/i.test(ts.texture?.key ?? '') || ts.depth > 5) continue; const horiz = ts.width >= ts.height; this.roads.push({ x: ts.x + (ts.originX === 0 ? ts.width / 2 : 0), y: ts.y + (ts.originY === 0 ? ts.height / 2 : 0), len: Math.max(ts.width, ts.height), w: Math.min(ts.width, ts.height), ang: (horiz ? 0 : Math.PI / 2) + ts.rotation }); }
     const tt = (sc.terrain as { trees?: Array<{ x: number; y: number; kind: string; burnt: boolean }> } | undefined)?.trees ?? []; this.trees = tt.filter(x => !x.burnt).map(x => ({ x: x.x, y: x.y, dead: x.kind === 'dead' }));
     const t = sc.terrain; this.rivers = [];
+    this.bridges = []; if (t && Array.isArray(t.rivers)) for (const r of t.rivers) for (const b of r.bridges ?? []) this.bridges.push({ x: b.x, y: b.y, ang: Math.atan2(b.uy, b.ux), len: b.halfLen * 2 });
     if (t && Array.isArray(t.rivers)) for (const r of t.rivers) for (const s of r.segs ?? []) this.rivers.push({ ax: s.ax, ay: s.ay, bx: s.bx, by: s.by, half: r.half ?? 30 });
   }
 

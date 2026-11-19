@@ -234,6 +234,8 @@ export class DongzhuoLubu {
   /** 每帧（postupdate）：城墙碰撞、城头放箭、吕布横扫、动画、20% 授首。 */
   /** 场地内（城墙以南，城下一侧全开），留 r 的边：随机补给 / 物件只放在这里面。 */
   inArena(_x: number, y: number, r = 0): boolean { return y > this.gate.y + r; }
+  /** 城门位置（舆图画城门楼）。 */
+  get gatePos(): { x: number; y: number } { return this.gate; }
   /** 城墙南沿（碰撞框下沿）。以北是城里：不刷兵、不许有敌兵。 */
   get wallLine(): number { return this.gate.y - 8; }
   /** 用户「城墙那一侧不需要生成小兵」：刷兵点落在城北的，按主将南北翻过来（离主将距离不变，仍在屏外）；翻过来还在墙北就贴墙南沿。 */

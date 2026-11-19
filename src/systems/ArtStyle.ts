@@ -96,7 +96,7 @@ export const ART_V2_FILES: Readonly<Record<string, string>> = {
   icon_shu_spearman: 'assets/troop-portraits-v2/icon_spearman.png',
   icon_shu_archer: 'assets/troop-portraits-v2/icon_archer.png',
   // 第 4 批：第 3~5 章首领（4×8 动作图集，每格 288；由 loadBossSheet 在章节场景 preload 里载入）
-  third_lijue: 'assets/bosses-v2/third_lijue.png',
+  third_lijue: 'assets/bosses-v2/third_lijue.png', third_guosi: 'assets/bosses-v2/third_guosi.png', // 郭汜（3-1 双首领第二批，Gemini 出图，步战）
   third_yuanshu: 'assets/bosses-v2/third_yuanshu.png',
   third_zhangxiu: 'assets/bosses-v2/third_zhangxiu.png',
   guandu_yanliang: 'assets/bosses-v2/guandu_yanliang.png',

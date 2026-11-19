@@ -134,6 +134,21 @@ const camp = await p.evaluate(async () => {
 ck('营寨旅商：武将还没有征程构筑时卷轴不能买（显示「出征后可研习」）', !camp.noBuildEnabled && /出征后可研习/.test(camp.noBuildLabel ?? ''), camp);
 ck('营寨旅商：买下战法写进征程构筑（下次出征带上）、扣军粮、标已售', camp.saved?.rally === 1 && camp.saved?.deflect === 1 && camp.grain === 850 && camp.sold, camp);
 
+// 人物名牌与对话气泡（「对话框要优化一下」）：漆匾名牌 + 朱印 + 头顶宣纸气泡，台词几秒一换，鼠标移到人物上换下一句
+const talk = await p.evaluate(async () => {
+  const s = window.__game.scene.getScene('GameScene'), ui = s.campUI; ui.open('test-talk-' + Math.random(), '测试'); ui.setVisible(true); ui.tab = 2; ui.tacticOffer = null; ui.render();
+  await new Promise(r => setTimeout(r, 600)); ui.render();
+  const f = n => window.__find(ui.root, n), line = f('camp-merchant-art-line'), out = { plate: !!f('camp-merchant-art-plate'), seal: !!f('camp-merchant-art-seal'), bubble: !!f('camp-merchant-art-bubble'), name: f('camp-merchant-art-name')?.text, first: line?.text };
+  const art = f('camp-merchant-art'), bub = f('camp-merchant-art-bubble'); out.bubbleAboveHead = bub && art && bub.y < art.y - art.displayHeight + 40; out.bubbleClearOfCards = bub && bub.x + bub.displayWidth <= 236;
+  await new Promise(r => setTimeout(r, 6400)); out.later = f('camp-merchant-art-line')?.text; out.alpha = f('camp-merchant-art-line')?.alpha;
+  f('camp-merchant-art').emit('pointerover'); await new Promise(r => setTimeout(r, 1200)); out.hovered = f('camp-merchant-art-line')?.text;
+  out.lines = f('camp-merchant-art-line')?.getData('lines');
+  ui.tab = 4; ui.render(); await new Promise(r => setTimeout(r, 600)); ui.render(); out.medic = { plate: !!f('camp-medic-art-plate'), bubble: !!f('camp-medic-art-bubble'), line: f('camp-medic-art-line')?.text };
+  return out;
+});
+ck('人物名牌：漆匾 + 朱印 + 名字；头顶有宣纸对话气泡（不压到卡片）', talk.plate && talk.seal && talk.bubble && talk.name === '军需商人' && talk.bubbleAboveHead && talk.bubbleClearOfCards, talk);
+ck('台词几秒一换（淡出淡入后完全显示），鼠标移到人物上换下一句；军医同款', talk.lines?.includes(talk.first) && talk.later !== talk.first && talk.alpha === 1 && talk.hovered !== talk.later && talk.medic.plate && talk.medic.bubble && !!talk.medic.line, talk);
+
 // 卷轴卡排版：所有战法 × 新学 / 精进 1→2 / 2→3 都放得下（效果整句不截断、不压到冷却行、字号 ≥ 10），悬停看完整说明
 const fit = await p.evaluate(async () => {
   const s = window.__game.scene.getScene('GameScene'), ui = s.campUI, B = await window.__mod('data/builds.ts'), MS = await window.__mod('ui/MerchantShop.ts');
@@ -147,6 +162,7 @@ const fit = await p.evaluate(async () => {
     if (desc.y + desc.height > desc.getData('limit') + .5) problem.push('溢出 ' + Math.round(desc.y + desc.height - desc.getData('limit')) + 'px');
     if (lines.replace(/\s/g, '') !== want.effect.replace(/\s/g, '')) problem.push('文字被截');
     if (size < 10) problem.push('字号 ' + size);
+    if (!/。$/.test(want.effect) && /。/.test(B.tacticDescription(id, level + 1))) problem.push('效果不是整句');
     if (desc.x + desc.width > cardRight) problem.push('超出右边');
     if (!cd || cd.y < desc.y + desc.height) problem.push('冷却行被压');
     if (badge?.text !== (level ? '精进' : '新学')) problem.push('漆牌');

@@ -2,7 +2,7 @@ import type { Enemy } from '../entities/Enemy';
 import type { CharacterId } from '../data/characters';
 import type { WeaponId } from '../types';
 import { CHARACTER_PASSIVES, PASSIVE_RULES as R } from '../data/passives';
-import { HZ_SHARP, WY_SURROUND, ZG_EARLY } from '../data/heroMechanics';
+import { HZ_SHARP, WY_SURROUND, ZG_TIANHUO } from '../data/heroMechanics';
 export interface PassiveCast {
   owner: CharacterId; generation: number; weapon: WeaponId; empowered: boolean;
   radiusMul: number; damageMul: number; extraSpear: boolean; spearLengthMul: number;
@@ -34,6 +34,9 @@ export class CharacterPassives {
   private sharpUntil = -Infinity; private sharpMs: number = HZ_SHARP.sharpMs; private hurtDropAt = -Infinity;
   /** 魏延：被围积层的进度（满 1 积 1 层）。 */
   private surroundAcc = 0;
+  /** 诸葛亮观星：各目标的星象层数（uid → 层数 / 最后命中），与八阵图区域（易伤）。 */
+  private readonly stars = new Map<number, { spawnId: number; marks: number; last: number }>();
+  private bazhen: { x: number; y: number; r: number; until: number }[] = [];
   /** 本关击杀数，及黄忠神射中射杀的精锐 / 首领数（技艺「老骥伏枥」读取）。 */
   private stageKills = 0; private sharpEliteKills = 0;
   private generation = 0; private stopped = false;
@@ -48,12 +51,12 @@ export class CharacterPassives {
   private lastMoveAt = -Infinity;
   constructor(character: CharacterId = 'zhaoyun', now = 0) { this.reset(character, now); }
   reset(character: CharacterId, now: number): void {
-    this.character = character; this.stacks = 0; this.lastGain = -Infinity; this.charmKillAt = -Infinity; this.lastDamage = now; this.sharpUntil = -Infinity; this.sharpMs = HZ_SHARP.sharpMs; this.hurtDropAt = -Infinity; this.surroundAcc = 0; this.stageKills = 0; this.sharpEliteKills = 0;
+    this.character = character; this.stacks = 0; this.lastGain = -Infinity; this.charmKillAt = -Infinity; this.lastDamage = now; this.sharpUntil = -Infinity; this.sharpMs = HZ_SHARP.sharpMs; this.hurtDropAt = -Infinity; this.surroundAcc = 0; this.stars.clear(); this.bazhen = []; this.stageKills = 0; this.sharpEliteKills = 0;
     this.generation++; this.stopped = false; this.gains = 0; this.triggers = 0; this.burns.clear(); this.charms.clear(); this.guardUntil = -Infinity; this.chargeInvulnUntil = this.chargeGuardUntil = -Infinity;
   }
   get characterId(): CharacterId { return this.character; }
-  stop(): void { this.stopped = true; this.stacks = 0; this.generation++; this.burns.clear(); this.charms.clear(); this.chargeInvulnUntil = this.chargeGuardUntil = -Infinity; }
-  private get maxStacks(): number { return this.character === 'huangzhong' ? HZ_SHARP.need : this.character === 'zhuge' ? ZG_EARLY.stratagemMax : CHARACTER_PASSIVES[this.character].maxStacks; }
+  stop(): void { this.stopped = true; this.stacks = 0; this.generation++; this.burns.clear(); this.charms.clear(); this.stars.clear(); this.bazhen = []; this.chargeInvulnUntil = this.chargeGuardUntil = -Infinity; }
+  private get maxStacks(): number { return this.character === 'huangzhong' ? HZ_SHARP.need : this.character === 'zhuge' ? ZG_TIANHUO.starNeed : CHARACTER_PASSIVES[this.character].maxStacks; }
   onDamage(now: number): void {
     if (this.stopped) return;
     this.lastDamage = now;
@@ -100,12 +103,31 @@ export class CharacterPassives {
   /** 最近 0.15 秒内是否在移动（孙尚香掷刀加速、回身飞刀）。 */
   isMoving(now: number): boolean { return now - this.lastMoveAt <= 150; }
   private charmOf(enemy: Enemy): Charm | undefined { const c = this.charms.get(enemy.uid); return c && c.spawnId === enemy.spawnId ? c : undefined; }
-  /** 貂蝉离间：倒戈的敌人受伤 +20%，被魅惑满层的首领受伤 +25%。 */
+  /** 貂蝉离间：倒戈的敌人受伤 +20%，被魅惑满层的首领受伤 +25%；诸葛亮八阵图：阵内敌人受伤 ×1.15。 */
   vulnerability(enemy: Enemy, now: number): number {
-    if (!this.charms.size) return 1;
-    const c = this.charmOf(enemy); if (!c) return 1;
-    return c.turnedUntil > now ? R.turnVulnerability : c.vulnUntil > now ? R.charmVulnerability : 1;
+    let v = 1;
+    if (this.bazhen.length) { this.bazhen = this.bazhen.filter(z => z.until > now); if (this.bazhen.some(z => Math.hypot(enemy.x - z.x, enemy.y - z.y) <= z.r + enemy.radius)) v = ZG_TIANHUO.bazhen.vuln; }
+    if (!this.charms.size) return v;
+    const c = this.charmOf(enemy); if (!c) return v;
+    return v * (c.turnedUntil > now ? R.turnVulnerability : c.vulnUntil > now ? R.charmVulnerability : 1);
   }
+  /** 诸葛亮观星：天火落到目标身上。已满 starNeed 层 → 本发爆发（返回 true，清层）；否则积 1 层。最多记 starTargets 个目标，starDecayMs 没再打中就散。 */
+  starLand(enemy: Enemy, now: number): boolean {
+    if (this.stopped || this.character !== 'zhuge' || !enemy.active) return false;
+    for (const [uid, s] of this.stars) if (now - s.last > ZG_TIANHUO.starDecayMs) this.stars.delete(uid);
+    let s = this.stars.get(enemy.uid); if (s && s.spawnId !== enemy.spawnId) { this.stars.delete(enemy.uid); s = undefined; }
+    if (s && s.marks >= ZG_TIANHUO.starNeed) { this.stars.delete(enemy.uid); this.triggers++; return true; }
+    if (!s) {
+      if (this.stars.size >= ZG_TIANHUO.starTargets) { let old = -1, t = Infinity; for (const [uid, x] of this.stars) if (x.last < t) { t = x.last; old = uid; } this.stars.delete(old); }
+      s = { spawnId: enemy.spawnId, marks: 0, last: now }; this.stars.set(enemy.uid, s);
+    }
+    s.marks++; s.last = now; this.gains++; return false;
+  }
+  /** 某个目标当前的星象层数（测试 / HUD）。 */
+  starMarks(enemy: Enemy, now: number): number { const s = this.stars.get(enemy.uid); return s && s.spawnId === enemy.spawnId && now - s.last <= ZG_TIANHUO.starDecayMs ? s.marks : 0; }
+  private starTop(now: number): number { let m = 0; for (const s of this.stars.values()) if (now - s.last <= ZG_TIANHUO.starDecayMs) m = Math.max(m, s.marks); return m; }
+  /** 诸葛亮八阵图：登记易伤区域（减速 / 首领出招变慢在武器里结算）。 */
+  addBazhen(x: number, y: number, r: number, until: number): void { if (!this.stopped) this.bazhen.push({ x, y, r, until }); }
   isTurned(enemy: Enemy, now: number): boolean { const c = this.charms.size ? this.charmOf(enemy) : undefined; return !!c && c.turnedUntil > now; }
   /** 扇子命中：加 1 层魅惑；满 need 层时普通敌人倒戈 turnMs（精锐减半），首领改为易伤。返回是否刚好倒戈。 */
   addCharm(enemy: Enemy, now: number, need: number, turnMs: number): boolean {
@@ -219,8 +241,6 @@ export class CharacterPassives {
       c.empowered = c.bridge = true;
     } else if (this.character === 'guanyu' && weapon === 'guandao' && this.stacks === this.maxStacks) {
       c.empowered = true; c.damageMul = R.guandaoDamageMul;
-    } else if (this.character === 'zhuge' && weapon === 'flame_banner' && this.stacks === this.maxStacks) {
-      c.empowered = true; c.radiusMul = R.fireRadiusMul;
     }
     if (c.empowered) { this.stacks = 0; this.triggers++; }
     return c;
@@ -228,21 +248,11 @@ export class CharacterPassives {
   recordHit(cast: PassiveCast, enemy: Enemy, now: number, explosionDamage = 0): void {
     if (this.stopped || cast.owner !== this.character || cast.generation !== this.generation || cast.hits.has(enemy.spawnId)) return;
     cast.hits.add(enemy.spawnId);
-    if (this.character === 'zhuge' && cast.weapon === 'flame_banner' && cast.empowered && enemy.active) this.refreshBurn(enemy, explosionDamage, now);
-    const qualifying = this.character === 'guanyu' && cast.weapon === 'guandao' || this.character === 'zhuge' && cast.weapon === 'flame_banner' || this.character === 'liubei' && cast.weapon === 'shuanggu_swords';
+    const qualifying = this.character === 'guanyu' && cast.weapon === 'guandao' || this.character === 'liubei' && cast.weapon === 'shuanggu_swords';
     // 刘备双股剑一剑最多砍两人：砍中 2 人即积仁德；其余扇形 / 爆发类为 3 人
     if (qualifying && !cast.empowered && !cast.awarded && cast.hits.size >= (cast.weapon === 'shuanggu_swords' ? 2 : R.coneThreshold)) {
       cast.awarded = true; this.stacks = Math.min(this.maxStacks, this.stacks + 1); this.gains++;
     }
-  }
-  private refreshBurn(enemy: Enemy, explosionDamage: number, now: number): void {
-    const previous = this.burns.get(enemy.uid);
-    if (previous?.spawnId === enemy.spawnId && previous.until >= now) {
-      previous.until = now + R.burnMs;
-      return; // Refresh duration only: preserve both potency and the next tick.
-    }
-    this.burns.set(enemy.uid, { enemy, spawnId: enemy.spawnId, until: now + R.burnMs,
-      nextTick: now + R.burnTickMs, damage: explosionDamage * R.burnDamageFraction });
   }
   update(now: number, damage: (enemy: Enemy, amount: number) => void): void {
     if (this.stopped) return;
@@ -260,15 +270,16 @@ export class CharacterPassives {
     }
   }
   snapshot(now: number) {
-    return { character: this.character, stacks: this.stacks, maxStacks: this.maxStacks,
-      ready: !this.stopped && (this.character === 'huangzhong' ? this.isSharpshooter(now) : this.stacks === this.maxStacks),
+    return { character: this.character, stacks: this.character === 'zhuge' ? this.starTop(now) : this.stacks, maxStacks: this.maxStacks,
+      ready: !this.stopped && (this.character === 'huangzhong' ? this.isSharpshooter(now) : (this.character === 'zhuge' ? this.starTop(now) : this.stacks) === this.maxStacks),
       // 黄忠：神射中为剩余时间比例，否则为蓄势比例（PassiveHud 进度条）
       calmProgress: this.stopped || this.character !== 'huangzhong' ? 0 : this.isSharpshooter(now) ? this.sharpLeft(now) / this.sharpMs : this.stacks / HZ_SHARP.need,
       critBonus: this.critBonus(now), guandaoRangeMul: this.rangeMultiplier('guandao'), burns: this.burns.size, charms: this.charms.size, turned: [...this.charms.values()].filter(c => c.turnedUntil > now).length, gains: this.gains, triggers: this.triggers, stopped: this.stopped };
   }
   label(now: number): string {
     const name = CHARACTER_PASSIVES[this.character].name;
+    if (this.character === 'zhuge') return `${name} · 星象 ${this.starTop(now)}/${ZG_TIANHUO.starNeed}${this.starTop(now) >= ZG_TIANHUO.starNeed ? ' · 下一发算无遗策' : ''}`;
     if (this.character === 'huangzhong') return this.isSharpshooter(now) ? `${name} · 神射 ${(this.sharpLeft(now) / 1000).toFixed(1)}秒：暴击+10% / 重箭爆裂` : `${name} · 蓄势 ${this.stacks}/${HZ_SHARP.need}`;
-    return `${name} · ${this.character === 'zhaoyun' ? '龙胆' : this.character === 'guanyu' ? '武势' : this.character === 'zhangfei' ? '怒气' : this.character === 'huangyueying' ? '机括' : this.character === 'pangtong' ? '计策' : this.character === 'liubei' ? '仁德' : this.character === 'weiyan' ? '拒敌' : this.character === 'machao' ? '铁骑' : this.character === 'sunshangxiang' ? '疾步' : this.character === 'diaochan' ? '舞势' : '谋略'} ${this.stacks}/${this.maxStacks}${this.snapshot(now).ready ? ' · 下次强化' : ''}${this.character === 'zhuge' && this.burns.size ? ` · 灼烧${this.burns.size}` : ''}${this.character === 'diaochan' && this.snapshot(now).turned ? ` · 离间${this.snapshot(now).turned}` : ''}${this.character === 'weiyan' && this.damageTakenMultiplier(now) < 1 ? ' · 谁敢杀我' : ''}`;
+    return `${name} · ${this.character === 'zhaoyun' ? '龙胆' : this.character === 'guanyu' ? '武势' : this.character === 'zhangfei' ? '怒气' : this.character === 'huangyueying' ? '机括' : this.character === 'pangtong' ? '计策' : this.character === 'liubei' ? '仁德' : this.character === 'weiyan' ? '拒敌' : this.character === 'machao' ? '铁骑' : this.character === 'sunshangxiang' ? '疾步' : this.character === 'diaochan' ? '舞势' : '星象'} ${this.stacks}/${this.maxStacks}${this.snapshot(now).ready ? ' · 下次强化' : ''}${this.character === 'diaochan' && this.snapshot(now).turned ? ` · 离间${this.snapshot(now).turned}` : ''}${this.character === 'weiyan' && this.damageTakenMultiplier(now) < 1 ? ' · 谁敢杀我' : ''}`;
   }
 }

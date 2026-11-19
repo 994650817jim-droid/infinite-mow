@@ -5,7 +5,7 @@ import type { SpatialGrid } from '../systems/SpatialGrid';
 import type { Sfx } from '../systems/Sfx';
 import type { PlayerStats, WeaponId, WeaponState } from '../types';
 import { PASSIVE_RULES } from '../data/passives';
-import { ZG_EARLY } from '../data/heroMechanics';
+import { TIANHUO_DEF, tianhuoBehavior } from './zhugeTianhuo';
 import { HERO_TINT } from '../data/characters';
 import { BAODIAO_DEF, DANGYANG_DEF, ZHANJIN_DEF, SHUANGGU_DEF, baodiaoBehavior, dangyangBehavior, zhanjinBehavior, shuangguBehavior, smartTarget } from './heroWeapons2';
 import { HINT_MOCK, groundScar } from '../ui/HintStyle';
@@ -35,6 +35,8 @@ export interface WeaponHost {
   readonly combatNow: number; readonly cameras: Phaser.Cameras.Scene2D.CameraManager;
   readonly sfx: Sfx; readonly over: boolean; readonly spearShots: SpearShot[]; readonly bolts: WeaponBolt[];
   hitEnemy(enemy: Enemy, damage: number, now: number, source: 'melee' | 'arrow' | 'fire'): boolean;
+  /** 接下来这次 hitEnemy 必定暴击（true）/ 恢复正常（null）；诸葛亮观星爆发用。随行 host 没有（友军命中本就不暴击）。 */
+  setCritOverride?(crit: boolean | null): void;
   nearestEnemy(x: number, y: number, range: number): Enemy | null;
   priorityTarget?(range:number,bodyRadius?:boolean):Enemy|null;
   fireBolt(pool: WeaponBolt[], x: number, y: number, tx: number, ty: number, damage: number, bounce: number, fromPlayer: boolean, speed: number): void;
@@ -101,14 +103,7 @@ export const WEAPON_DEFS: Record<WeaponId, WeaponDef> = {
     cooldown: (level, stats) => GUANDAO_TABLE[levelIndex(level)].cooldown * stats.cooldownMul,
     desc: '自动朝怪群最密处挥砍，最多命中 8 人，升级加范围',
   },
-  flame_banner: {
-    id: 'flame_banner',
-    name: '烈焰战旗',
-    maxLevel: 5,
-    damage: (level, stats) => 22 * (1 + 0.18 * (level - 1)) * stats.damageMul * stats.fireMul,
-    cooldown: (level, stats) => (3.2 * stats.cooldownMul) / (1 + 0.05 * (level - 1)),
-    desc: '挥旗后引爆火焰范围',
-  },
+  flame_banner: TIANHUO_DEF, // 2026-11-18 重做：七星灯 · 天火（weapons/zhugeTianhuo.ts）
   zhenbei_blade: ZHENBEI_DEF,
   lianhuan_mines: LIANHUAN_DEF,
   sun_knives: SUN_KNIVES_DEF,
@@ -451,61 +446,7 @@ export const WEAPON_BEHAVIORS: Record<WeaponId, (host: WeaponHost, weapon: Weapo
     }
     weapon.cooldownLeft = Math.max(.25, def.cooldown(level, host.player.stats) / host.player.growth.attackSpeedMultiplier(time));
   },
-  flame_banner: (host, weapon, dt) => {
-    weapon.cooldownLeft -= dt;
-    if (weapon.cooldownLeft > 0) return;
-    const level = weapon.level;
-    const def = WEAPON_DEFS.flame_banner;
-    // 前期补强（2026-11-18 平衡审查，data/heroMechanics.ts ZG_EARLY）：Lv1–3 伤害 ×1.4 / 1.25 / 1.12
-    const damage = def.damage(level, host.player.stats) * host.player.growth.damageMultiplier(host.combatNow) * (ZG_EARLY.earlyMul[level - 1] ?? 1);
-    const passiveCast = host.player.passive.beginCast('flame_banner');
-    const radius = (120 + (level - 1) * 8) * host.player.stats.fireAreaMul * passiveCast.radiusMul;
-    let dirX = 0;
-    let dirY = -1;
-    const nearest = host.priorityTarget?.(radius*1.45) ?? host.nearestEnemy(host.player.x, host.player.y, 300);
-    if (nearest) {
-      const d = Math.hypot(nearest.x - host.player.x, nearest.y - host.player.y) || 1;
-      dirX = (nearest.x - host.player.x) / d;
-      dirY = (nearest.y - host.player.y) / d;
-    }
-    // 出手时面向目标（同时播放普攻动作）
-    host.player.faceDirection(Math.abs(dirX) > Math.abs(dirY) ? (dirX < 0 ? 'left' : 'right') : (dirY < 0 ? 'up' : 'down'), 200);
-    if (passiveCast.empowered) host.player.playAction('skill', dirX < 0 ? 'left' : 'right');
-    const growth=host.player.growth,formation=growth.masteries.eight_trigrams;
-    if(formation)growth.flagCount=Math.min(3,growth.flagCount+1);
-    if(formation&&growth.flagCount>=3&&host.combatNow>=growth.formationReadyAt){
-      growth.flagCount=0;growth.formationReadyAt=host.combatNow+10000;
-      const candidates=host.grid.query(host.player.x,host.player.y,450).filter(e=>e.active&&!e.isSupplySlot);
-      let center=candidates[0],score=-1;
-      for(const e of candidates.slice(0,32)){const n=host.grid.query(e.x,e.y,140).filter(t=>t.active&&!t.isSupplySlot&&Math.hypot(t.x-e.x,t.y-e.y)<=140).length;if(n>score){score=n;center=e;}}
-      if(center){host.martialField(center.x,center.y,[105,125,140][formation-1],damage,1600,formation,true);host.player.playAction('skill',center.x<host.player.x?'left':'right');}
-    }
-    const cx = host.player.x + dirX * radius * 0.45;
-    const cy = host.player.y + dirY * radius * 0.45;
-    host.sfx.play('atk_flame');
-    host.spawnFlagSwingFx(dirX, dirY);
-    host.time.delayedCall(250, () => {
-      if (host.over) return;
-      host.spawnFlameGatherFx(cx, cy, radius);
-    });
-    host.time.delayedCall(400, () => {
-      if (host.over) return;
-      host.spawnFlameFx(cx, cy, radius);
-      const burn=growth.masteries.wildfire;
-      if(burn)host.martialField(cx,cy,radius*(burn===3?1.1:1),damage,[1000,1800,2500][burn-1],burn);
-      host.sfx.play('atk_flame_boom');
-      // 2026-11-14 用户要求：诸葛亮战旗爆炸不再震屏（高频普攻震屏易疲劳）；爆炸特效与音效保留。
-      const candidates = host.grid.query(cx, cy, radius + 30);
-      for (const enemy of candidates) {
-        if (!enemy.active) continue;
-        const dist = Math.hypot(enemy.x - cx, enemy.y - cy);
-        // 火攻焚将：首领 / 精锐 ×1.8（灼烧仍按基础爆炸伤害算，不跟着翻倍）
-        const hit = enemy.kind === 'boss' || enemy.kind === 'elite' ? damage * PASSIVE_RULES.flameEliteMul : damage;
-        if (dist <= radius + enemy.radius && host.hitEnemy(enemy, hit, host.combatNow, 'fire')) host.player.passive.recordHit(passiveCast, enemy, host.combatNow, damage);
-      }
-    });
-    weapon.cooldownLeft = Math.max(.25, def.cooldown(level, host.player.stats) / host.player.growth.attackSpeedMultiplier(host.combatNow));
-  },
+  flame_banner: tianhuoBehavior,
   zhenbei_blade: zhenbeiBehavior,
   lianhuan_mines: lianhuanBehavior,
   sun_knives: sunKnivesBehavior,

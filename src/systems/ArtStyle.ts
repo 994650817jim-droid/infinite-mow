@@ -75,6 +75,13 @@ export const ART_V2_FILES: Readonly<Record<string, string>> = {
   yellow_shaman_walk: 'assets/processed-v2/enemies/yellow_shaman_walk.png',
   yellow_shaman_cast: 'assets/processed-v2/enemies/yellow_shaman_attack.png',
   // 小怪兵种第一批（2026-11-19 Gemini 出图，原图 enemies/originals/artv2_enemy_*）：行走 4×4、攻击 4×4，行 = 下 / 左 / 右 / 上
+  enemy_yexi_walk: 'assets/processed-v2/enemies/enemy_yexi_walk.png',
+  enemy_yexi_attack: 'assets/processed-v2/enemies/enemy_yexi_attack.png',
+  enemy_xianzhen_walk: 'assets/processed-v2/enemies/enemy_xianzhen_walk.png',
+  enemy_xianzhen_attack: 'assets/processed-v2/enemies/enemy_xianzhen_attack.png',
+  enemy_danyang_walk: 'assets/processed-v2/enemies/enemy_danyang_walk.png',
+  enemy_danyang_attack: 'assets/processed-v2/enemies/enemy_danyang_attack.png',
+  // 小怪兵种第一批（2026-11-19 Gemini 出图，原图 enemies/originals/artv2_enemy_*）：行走 4×4、攻击 4×4，行 = 下 / 左 / 右 / 上
   enemy_mantoushi_walk: 'assets/processed-v2/enemies/enemy_mantoushi_walk.png',
   enemy_mantoushi_attack: 'assets/processed-v2/enemies/enemy_mantoushi_attack.png',
   enemy_dujian_walk: 'assets/processed-v2/enemies/enemy_dujian_walk.png',

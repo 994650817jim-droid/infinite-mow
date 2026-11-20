@@ -5,7 +5,8 @@ import {ACTION_MS, HERO_ACTIONS, IDLE_FRAME_MS, ZHUGE_FALLBACK, type ActionFrame
 import type {CharacterId} from '../data/characters';
 import Phaser from 'phaser';
 import { CharacterPassives } from '../systems/CharacterPassives';
-import { RunGrowth, xpToNext } from '../systems/RunGrowth';
+import { RunGrowth } from '../systems/RunGrowth';
+import { SOFT_CAP, heroXpNeed } from '../data/heroLevels';
 import { vigorHp } from '../data/attributes';
 import { BALANCE, DEPTH, FONT, actorDepth } from '../config';
 import type { PlayerStats, WeaponState } from '../types';
@@ -54,6 +55,10 @@ export class Player {
   /** 到武将等级上限后多出来的经验（超过「再存 1 级」的部分，结算时每 50 折 1 军粮）。 */
   overflowXp = 0;
   xpNext = 16;
+  /** 本关建议等级（软上限：越过后每级经验 ×1.45，data/heroLevels.ts SOFT_CAP）；Infinity = 不加成。 */
+  softLevel = Infinity;
+  /** 还没发的「小成」（经验条每满 1/4、不到整级）。 */
+  smallSteps = 0;
   alive = true;
   invulnUntil = 0;
   damageImmune = false;
@@ -441,17 +446,22 @@ export class Player {
     this.hp = Math.min(this.maxHp, this.hp + amount);
   }
 
-  /** 返回本次获得的等级数。cap = 武将等级上限（到上限后经验最多再存 1 级的量）。 */
-  gainXp(amount: number, cap = Infinity): number {
+  /** 返回本次获得的整级数（软上限：越过建议等级 softLevel 后每级 ×1.45，不封顶）；经验条每跨 1/4 记一次 smallSteps。 */
+  /** 本级升级所需（软上限后）。 */
+  needFor(level: number): number { return heroXpNeed(level, this.softLevel); }
+  gainXp(amount: number): number {
+    const steps = SOFT_CAP.steps, q0 = Math.floor(this.xp * steps / Math.max(1, this.xpNext));
     this.xp += amount; this.runXp += amount;
     let gained = 0;
-    while (this.level < cap && this.xp >= this.xpNext) {
+    // 软上限（2026-11-20）：不再封顶，越过建议等级后每级 ×1.45
+    while (this.xp >= this.xpNext) {
       this.xp -= this.xpNext;
       this.level += 1;
       gained += 1;
-      this.xpNext = xpToNext(this.level);
+      this.xpNext = this.needFor(this.level);
     }
-    if (this.level >= cap && this.xp > this.xpNext) { this.overflowXp += this.xp - this.xpNext; this.xp = this.xpNext; }
+    // 小成：本级经验条跨过 1/4、2/4、3/4（同一下升了整级就不另算）
+    if (!gained) this.smallSteps += Math.max(0, Math.floor(this.xp * steps / Math.max(1, this.xpNext)) - q0);
     // 2026-11-17：等级即武将等级，每升 1 级一次三选一并给 1 个属性点（GameScene.onHeroLevelUp）
     return gained;
   }

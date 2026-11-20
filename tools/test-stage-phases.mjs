@@ -105,6 +105,20 @@ await stageCase('3-2 宛城夜袭（ThirdGameScene）', { key: 'ThirdGameScene',
   const pick = await p.evaluate(async () => { const s = window.__S, ce = await import('/src/systems/CharmEffects.ts'), before = { ...s.player.stats }, packed0 = ce.statsWithoutCharms(s.player); s.chooseUpgrade(0); const packed = ce.statsWithoutCharms(s.player); const keys = Object.keys(before).filter(k => before[k] !== s.player.stats[k]); return { mode: s.mode, changed: keys, packedSame: keys.every(k => Math.abs(packed[k] - packed0[k]) < 1e-6) }; });
   ck('P2 选了增益：属性当场变化，征程构筑存档时扣掉（不带到下一关）', pick.changed.length > 0 && pick.packedSame, pick);
   await p.evaluate(() => { const s = window.__S; window.__calm(); const f = s.followers?.members.find(m => m.label?.text?.startsWith('降将 · ')); s.player.sprite.setPosition(0, 0); if (f) f.sprite.setPosition(70, 20); }); await p.waitForTimeout(1600); await p.evaluate(() => window.__calm()); await p.screenshot({ path: OUT + '/defector-ally.png' });
+  // 等级软上限 + 小成（level-curve-redesign.md）：经验条每满 1/4 → 头顶「小成」+ 上方 3 个小图标，不暂停；1 / 2 / 3 选，5 秒自动给第一个；HUD 写建议等级
+  const gemFor = frac => p.evaluate(f => { const s = window.__S; window.__calm(); s.player.xp = Math.floor(s.player.xpNext * .02); const per = s.player.growth.scaleXp(1, s.heroXpRate()); s.spawnGem(s.player.x, s.player.y, Math.ceil(s.player.xpNext * f / per)); s.gemMagnetUntil = s.combatNow + 4000; }, frac);
+  const lvl0 = await p.evaluate(() => ({ lv: window.__S.player.level }));
+  await gemFor(.3); await p.waitForTimeout(700);
+  const ss = await p.evaluate(() => { const s = window.__S, root = s.children.getByName('small-step'); return { open: !!s.smallStep?.open, mode: s.mode, y: root?.y, icons: root?.list.filter(o => o.type === 'Image').length ?? 0, title: root?.getByName?.('small-step-title')?.text, float: s.children.list.some(o => o.name === 'small-step-float'), soft: s.player.softLevel, sug: s.stageSuggestedLevel(), hud: s.hudTexts.level.text, lv: s.player.level }; });
+  await p.screenshot({ path: OUT + '/small-step.png' });
+  ck('小成：经验条满 1/4（不到整级）→ 头顶「小成」、上方战况线下滑出 3 个小图标（按 1 / 2 / 3），战斗不暂停；HUD 写建议等级', ss.open && ss.mode === 'none' && ss.icons === 3 && ss.y > 60 && ss.y < 200 && /1 \/ 2 \/ 3/.test(ss.title ?? '') && ss.float && ss.soft === ss.sug && /建议|越级/.test(ss.hud) && ss.lv === lvl0.lv, ss);
+  await p.keyboard.press('Digit2'); await p.waitForTimeout(400);
+  const k2 = await p.evaluate(() => ({ picked: [...window.__S.smallStep.stats.picked], open: window.__S.smallStep.open, mode: window.__S.mode }));
+  await gemFor(.3); for (let i = 0; i < 16 && await p.evaluate(() => window.__S.smallStep.stats.auto === 0); i++) { await p.evaluate(() => window.__calm()); await p.waitForTimeout(500); }
+  const au = await p.evaluate(() => ({ auto: window.__S.smallStep.stats.auto, picked: [...window.__S.smallStep.stats.picked] }));
+  ck('小成快选：按 2 选第二个（不进三选一面板）；5 秒没选自动给第一个（军资）', k2.picked.length === 1 && !k2.open && k2.mode === 'none' && au.auto >= 1 && au.picked[au.picked.length - 1] === 'ss_supply', { k2, au });
+  const soft = await p.evaluate(async () => { const H = await import('/src/data/heroLevels.ts'), P = await import('/src/systems/HeroProgress.ts'); return { at: H.heroXpNeed(20, 20), over1: H.heroXpNeed(21, 20), over3: H.heroXpNeed(23, 20), base21: H.heroXpToNext(21), base23: H.heroXpToNext(23), sug: [P.suggestedLevel(1, 1), P.suggestedLevel(1, 3), P.suggestedLevel(3, 1), P.suggestedLevel(3, 3), P.suggestedLevel(12, 3)] }; });
+  ck('软上限：越过建议等级每级 ×1.45（+1 级 ×1.45、+3 级 ×3.05）；建议等级 1-1 Lv4、1-3 Lv10、3-1 Lv15、3-3 Lv18、12-3 Lv54', soft.over1 === Math.round(soft.base21 * 1.45) && Math.abs(soft.over3 / soft.base23 - 1.45 ** 3) < .01 && JSON.stringify(soft.sug) === '[4,10,15,18,54]', soft);
   await p.close();
 }
 // P4 新卡池：五段主线关的升级三选一里，战法位按章节概率换成新卡（战场机缘 / 锦囊 / 兵源 / 军资 / 心法）；锦囊 R 键使用

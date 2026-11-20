@@ -47,3 +47,22 @@ export const PICK_PACE = {
   /** 保底节点：第 1 / 2 / 3 波清完（首领登场按最后一项）至少给几张；宝箱时补到 PICK_GUARANTEE.main / side。 */
   waves: [1, 1, 2],
 } as const;
+
+/**
+ * 等级软上限（2026-11-20 用户「等级有上限不太行……可以慢慢提升在那一关适合的需要升级的经验」，统筹定 A+C；共享笔记 level-curve-redesign.md）：
+ * - 没有硬上限：每关有「建议等级」（HeroProgress.suggestedLevel，原上限表当参考），越过之后每级所需经验 ×overMul（逐级相乘）。
+ * - 经验条分 steps 段：每满一段（不到整级）一次「小成」——不暂停，屏幕上方滑出 3 个小图标（心法 / 军资 / 体魄 / 回血），按 1 / 2 / 3 或点击选，autoMs 没选自动给第一个。
+ *   满一整级照旧暂停弹三选一、给属性点。
+ */
+export const SOFT_CAP = { overMul: 1.45, steps: 4, autoMs: 5000 } as const;
+/**
+ * 经验挪进关内（统筹 2026-11-20：关内大升级从约 1 次变成 1–2 次，总经验与长期曲线基本不变）：
+ * 宝石经验（击杀 / 精锐 / 副将 / 首领 / 机缘宝石）×gem，首次通关经验 ×firstClear。实测（tools/measure-stage-xp.mjs，捡满）一关局内 650–1150：
+ * 按 ×1.4 / ×0.35 一章总经验约 −10%～+11%，交平衡会话（local_1085cd6a）模拟复核。
+ */
+export const XP_SHIFT = { gem: 1.4, firstClear: .35 } as const;
+/** 升到下一级所需经验（软上限后）：soft = 建议等级（不给 = 不加成）。 */
+export function heroXpNeed(level: number, soft = Infinity): number {
+  const lv = Math.max(1, Math.floor(level)), over = Math.max(0, lv - soft);
+  return Math.round(heroXpToNext(lv) * Math.pow(SOFT_CAP.overMul, over));
+}

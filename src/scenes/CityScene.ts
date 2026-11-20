@@ -174,7 +174,7 @@ export class CityScene extends Phaser.Scene {
   // 2026-11-18：攻下的城在营寨也看得到——城池数与每战城池产出（各城建筑合计）
   {const inc={grain:0,troops:0};for(const id of s.ownedCities){const c=cityById(id);if(!c)continue;const r=cityIncome(c.tier,cityLevels(id,s));inc.grain+=r.grain;inc.troops+=r.troops;}
    this.domainText?.destroy();this.domainText=s.ownedCities.length?txt(this,D?this.top.x-this.top.width-18:24,D?28:92,`城池 ${s.ownedCities.length} · 每战 ${incomeText(inc)}`,12,'#bff0c8').setOrigin(D?1:0,.5).setName('city-domain'):undefined;}
-  this.sizeText.setText(`${CITY_TITLE[size]}`);
+  this.sizeText.setText(`${CITY_TITLE[size]}`).setVisible(CITY_TITLE[size] !== '义军营寨'); // 与左上标题同名时不再重复写一遍（2026-11-20 夜间 UI 审查）
   this.hint.setText(this.nextHint(s));
   const tech=techTotals(t.tech),pav=levelOf(t,'pavilion')>0?1:0,pts=tech.attributePoints+pav,dmg=Math.round((tech.damage+pav*.06)*100),hp=Math.round((tech.maxHp+pav*.06)*100);
   this.boonText?.destroy();const drill=drillInfo(s),parts=[drill.level?`部曲 ×${drill.multiplier.toFixed(2)}`:'',tech.potions?`回血药 ${tech.potions.count}`:'',pts?`属性点 +${pts}`:'',dmg?`伤害 +${dmg}%`:'',hp?`生命 +${hp}%`:''].filter(Boolean);

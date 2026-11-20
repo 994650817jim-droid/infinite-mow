@@ -27,7 +27,7 @@ try {
     // 公共：采样器
     await p.evaluate(() => {
       const s = window.__game.scene.getScene('GameScene');
-      s.__DEV_ACTIONS.closePopup?.(); s.player.damageImmune = true; s.spawnTimer = s.eliteTimer = 1e9; s.player.stats.critChance = 0;
+      s.__DEV_ACTIONS.closePopup?.(); s.player.damageImmune = true; s.spawnTimer = s.eliteTimer = 1e9; s.player.stats.critChance = 0; s.player.gainXp = () => 0; // 不升级：免得升级 / 专职面板盖住画面、暂停特效
       setInterval(() => { if (s.mode === 'levelup') s.chooseUpgrade(0); else if (s.mode === 'recruit') s.__DEV_ACTIONS.closePopup?.(); }, 40);
       const GROUND = /field|zone|sigil|ring|pin|route|banner|dust|aura|trail|scar|mark-ground|ember|fire-ground|shadow|qin|circle|area|floor|decal|crack|puddle/i;
       const isFx = o => o.visible && o.alpha > .05 && o.texture && /^(fx_|branch_fx|bvfx|school_fx|jn_|spear_thrust|fx)/.test(o.texture.key ?? '');
@@ -66,20 +66,19 @@ try {
       await p.waitForTimeout(Math.max(0, ms - shotAt));
       return p.evaluate(() => window.__audit.stop());
     };
-    const clear = `const s = window.__game.scene.getScene('GameScene'), pl = s.player, w = pl.weapons[0];
+    const clear = `const s = window.__game.scene.getScene('GameScene'), pl = s.player, w = pl.weapons[0]; s.__DEV_ACTIONS.closePopup?.(); if (s.mode !== 'none') s.setMode('none');
       for (const e of s.enemies) if (e.active && !e.isSupplySlot) e.deactivate();
-      const ring = (n, r, stun = true) => { for (let i = 0; i < n; i++) { const a = i / n * Math.PI * 2 + Math.random() * .2; const e = s.spawnEnemy('infantry', pl.x + Math.cos(a) * r, pl.y + Math.sin(a) * r, 1, true); if (e) { e.hp = e.maxHp = 400; if (stun) e.stunUntil = s.combatNow + 1e7; } } };`;
+      const ring = (n, r, stun = true) => { for (let i = 0; i < n; i++) { const a = i / n * Math.PI * 2 + Math.random() * .2; const e = s.spawnEnemy('infantry', pl.x + Math.cos(a) * r, pl.y + Math.sin(a) * r, 1, true); if (e) { e.hp = e.maxHp = 400; if (stun) { e.speed = 0; e.def = { ...e.def, speed: 0 }; } } } }; /* 定住不用眩晕（眩晕会给每个兵挂星星，盖住要看的特效） */`;
     const R = {};
     // ① 普攻 + 起手特效（招牌技 / 被动触发的手绘起手）
-    R.basic = await runScenario('basic', `${clear} w.level = 3; w.branch = undefined; w.over = 0; ring(6, 110); ring(5, 200); setTimeout(() => { s.heroCastFx?.markSkill(); pl.playAction?.('skill', 'right'); }, 500);`, 2200, 650);
+    R.basic = await runScenario('basic', `${clear} w.level = 3; w.over = 0; ring(6, 110); ring(5, 200); setTimeout(() => { s.heroCastFx?.markSkill(); pl.playAction?.('skill', 'right'); }, 500);`, 2200, 650);
     // ②③ 两个专职进阶（老 12 人走 branchRt.final；P2 走 build.tags ≥ 4）
     const branches = await p.evaluate(async () => { const s = window.__game.scene.getScene('GameScene'); const B = await import('/src/data/weaponBranches.ts'); return B.branchesFor(s.player.weapons[0].id).map(b => ({ id: b.id, school: b.school })); });
     for (const [i, br] of branches.entries()) {
       R['branch' + (i ? 'B' : 'A')] = await runScenario(br.id, `const br = ${JSON.stringify(br)}; ${clear} w.level = 5; w.branch = br.id; w.over = 2; const tags = { fire: 0, stratagem: 0, archery: 0, cavalry: 0, warrior: 0, formation: 0 }; tags[br.school] = 5; pl.growth.build.tags = () => tags; if (s.branchRt) s.branchRt.final = () => true; ring(7, 120); ring(6, 230);`, 2600, 1300);
-      await p.evaluate("(() => { const s = window.__game.scene.getScene('GameScene'); s.player.weapons[0].branch = undefined; s.player.weapons[0].over = 0; })()");
     }
     // ④ 满场混战：学本命两派各两门战法（Lv3），60 个会动的敌兵，看叠加 / 帧率
-    R.melee = await runScenario('melee', `${clear} w.level = 5; w.branch = undefined; w.over = 0; delete pl.growth.build.tags; if (s.branchRt) s.branchRt.final = () => false;
+    R.melee = await runScenario('melee', `${clear} w.level = 5; w.over = 0; delete pl.growth.build.tags; if (s.branchRt) s.branchRt.final = () => false; /* 留着最后一个专职（清掉会立刻弹专职二选一面板） */
       return import('/src/data/builds.ts').then(B => import('/src/data/schools.ts').then(S => { const aff = S.HERO_AFFINITY?.[s.runConfig.character] ?? []; const T = B.TACTICS; for (const sc of aff) { let n = 0; for (const id of Object.keys(T)) { if (T[id].tag !== sc || n >= 2) continue; n++; for (let k = 0; k < 3; k++) pl.growth.build.learn(id); } } for (let i = 0; i < 60; i++) { const a = Math.random() * Math.PI * 2, r = 90 + Math.random() * 330; const e = s.spawnEnemy('infantry', pl.x + Math.cos(a) * r, pl.y + Math.sin(a) * r, 1, true); if (e) e.hp = e.maxHp = 220; } }));`, 4500, 2600);
     R.errors = errs.slice(0, 5);
     report[hero] = R;

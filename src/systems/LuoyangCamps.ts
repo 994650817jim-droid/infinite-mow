@@ -139,7 +139,7 @@ export class LuoyangCamps {
       const ch = this.h.tent?.chapter() ?? 2, cap = SPAWN_TENT.live(ch), g = this.gateOut(c);
       if (c.alerted && d < C.nearR && !c.mustered && now >= c.next - SPAWN_TENT.musterMs && this.live(c) < cap) { c.mustered = true; tentMuster(this.h.scene, g.x, g.y, SPAWN_TENT.musterMs); } // 营门扬尘：要出兵了
       if (c.alerted && d < C.nearR && now >= c.next && this.live(c) < cap && (this.h.tent?.crowd() ?? 0) < SPAWN_TENT.crowdCap) {
-        c.next = now + tentIntervalMs(ch, c.tent.hp / Math.max(1, c.tent.maxHp), this.h.tent?.bossOn() ?? false); c.mustered = false; this.stats.squads += 1;
+        c.next = now + tentIntervalMs(ch, c.tent.hp / Math.max(1, c.tent.maxHp), this.h.tent?.bossOn() ?? false) * (this.h.tent?.campMul?.(c.tent) ?? 1); c.mustered = false; this.stats.squads += 1;
         const n = SPAWN_TENT.squad(ch);
         for (let i = 0; i < n && this.live(c) < cap; i++) {
           const k = this.kindOf(), x = g.x + (i - (n - 1) / 2) * 46, y = g.y + 10;
@@ -150,6 +150,8 @@ export class LuoyangCamps {
     }
   }
 
+  /** 附近营寨被烧到半血（CampSiege）：这座营马上出兵。 */
+  alarm(tent: Enemy): void { const c = this.camps.find(o => o.tent === tent && !o.destroyed); if (c) { this.alert(c); c.next = 0; } }
   private alert(c: Camp): void { if (c.alerted) return; c.alerted = true; this.stats.alerts += 1; for (const m of this.members.values()) if (m.camp === c && m.state === 'idle') m.state = 'sally'; }
 
   /** 敌兵每帧：待命的站着；出营的先走到营门外（主将在营里就直接放开）；之后返回 false 交给普通逻辑。 */

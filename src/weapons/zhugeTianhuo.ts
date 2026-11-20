@@ -271,4 +271,6 @@ export function tianhuoBehavior(host: WeaponHost, weapon: WeaponState, dt: numbe
   weapon.cooldownLeft = Math.max(.4, TIANHUO_DEF.cooldown(level, pl.stats) / g.attackSpeedMultiplier(time));
 }
 /** 测试用：当前星位 / 八阵数量。 */
+// 开发版：测试按游戏实际在用的那份读出手次数（热更新后测试 import 拿到的是另一份模块，同 __zgTuning）
+if (import.meta.env.DEV && typeof window !== 'undefined') (window as unknown as { __zgState?: typeof tianhuoState }).__zgState ??= tianhuoState;
 export function tianhuoState(pl: Player): { strikes: number; zones: number; casts: number } { const s = STATE.get(pl); return { strikes: s?.strikes.length ?? 0, zones: s?.zones.length ?? 0, casts: s?.casts ?? 0 }; }

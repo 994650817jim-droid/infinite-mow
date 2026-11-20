@@ -1,4 +1,5 @@
-import { ATTRIBUTE_EFFECT, ATTRIBUTE_INFO, PRIMARY_BONUS, PRIMARY_MUL, PRIMARY_PERK_INFO, PRIMARY_TIERS, primaryAttribute, type AttributeId } from '../data/attributes';
+import { statMultiplier, statSource } from '../data/heroStats';
+import { ATTRIBUTE_EFFECT, ATTRIBUTE_INFO, PRIMARY_BONUS, PRIMARY_PERK_INFO, PRIMARY_TIERS, primaryAttribute, type AttributeId } from '../data/attributes';
 import { getCharacter, type CharacterId } from '../data/characters';
 import type { InfoTip } from './ItemTooltip';
 
@@ -32,12 +33,14 @@ const PARTS: Record<AttributeId, Array<[string, number]>> = {
   intellect: [['法术伤害', E.intellect.skill], ['范围', E.intellect.area]],
   command: [['部曲伤害', E.command.allyDamage], ['部曲生命', E.command.allyHp]],
 };
-export const primaryMulText = (): string => '×' + +PRIMARY_MUL.toFixed(2);
+/** 主属性的每点倍率（擅长 ×1.25 / 熟练 ×1.1 / ×1，按该武将本色）。 */
+export const primaryMulNum = (hero: string, attr: AttributeId): number => statMultiplier(statSource(hero), attr);
+export const primaryMulText = (hero: string, attr: AttributeId): string => '×' + +primaryMulNum(hero, attr).toFixed(2);
 
 /** cap = 本局 / 该武将的单项上限（attributeCap(等级)，Lv41 前 10）。 */
 export function primarySummary(hero: string, points: number, cap = 10): PrimarySummary | null {
   const attr = primaryAttribute(hero); if (!attr) return null;
-  const name = ATTRIBUTE_INFO[attr].name, mul = primaryMulText(), info = PRIMARY_PERK_INFO[attr];
+  const name = ATTRIBUTE_INFO[attr].name, mul = primaryMulText(hero, attr), info = PRIMARY_PERK_INFO[attr];
   const tiers: PrimaryTier[] = PRIMARY_TIERS.map((at, k) => ({ at, name: info[k]?.name ?? '', desc: info[k]?.desc ?? '', on: points >= at, left: Math.max(0, at - points) }));
   const chips = tiers.map(t => t.on ? `◆ ${t.name}` : `◇ ${t.name} · 再加 ${t.left} 点`);
   const lit = tiers.filter(t => t.on).length, up = tiers.find(t => !t.on);
@@ -45,7 +48,7 @@ export function primarySummary(hero: string, points: number, cap = 10): PrimaryS
   let heroName = '';
   try { heroName = getCharacter(hero as CharacterId).name; } catch { /* 未知武将 */ }
   // 每项单独一行（说明卡窄，写在一行会把「+4.5%」折断）
-  const each = PARTS[attr].map(([l, v]) => `· ${l} +${pct(v)} → +${pct(v * PRIMARY_MUL)}`);
+  const each = PARTS[attr].map(([l, v]) => `· ${l} +${pct(v)} → +${pct(v * primaryMulNum(hero, attr))}`);
   const body = [
     `每点效果 ${mul}：`,
     ...each,

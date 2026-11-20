@@ -15,9 +15,9 @@ export const ATTRIBUTE_IDS: readonly AttributeId[] = ['strength', 'agility', 'in
  * 这样第五～十章主属性仍是 10 点（主属性 ×1.25 的下调不被「多加 4 点」抵消），第六～十二章新等级的点数也有地方加。
  * ATTRIBUTE_MAX = 绝对上限（读档夹取、格子排版）；实际上限看 attributeCap(武将等级)。主属性专精门槛 4 / 7 / 10 不变。
  */
-export const ATTRIBUTE_MAX = 15;
+export const ATTRIBUTE_MAX = 99; // 2026-11-20 取消单项上限（属性改版）：这里只作读档夹取 / 排版的绝对上限
 /** 2026-11-19 波数 / 等级重做（wave-progression-redesign.md §3）：点数不跟等级一起涨，第十二章末约 35 点，单项上限固定 10。 */
-export function attributeCap(_level: number): number { return Math.min(ATTRIBUTE_MAX, 10); }
+export function attributeCap(_level: number): number { return ATTRIBUTE_MAX; }
 /**
  * 某等级累计属性点（2026-11-19 用户定上限 B：10 / 14 / … / 54，每章 +4；点数和等级脱钩）：
  * Lv25 前每级 1 点，Lv25–38 每 2 级 1 点，Lv38 起每 3 级 1 点。

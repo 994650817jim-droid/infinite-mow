@@ -1,3 +1,4 @@
+import { scaleFor } from '../data/heroStats';
 import Phaser from 'phaser';
 import { FONT, HEADING_FONT } from '../config';
 import type { RunGrowth } from '../systems/RunGrowth';
@@ -169,14 +170,14 @@ export function drawBuildOverview(o: BuildOverviewOpts): void {
     }
     // 四项属性：10 格小条，主属性描金
     y += 4; g0.lineStyle(1, GOLD, .35).lineBetween(L.x + pad, y, L.x + L.w - pad, y); y += 7;
-    const bw = L.w - pad * 2 - 74, seg = bw / g.attrMax;
+    const bw = L.w - pad * 2 - 74;
     for (const id of ATTRIBUTE_IDS as readonly AttributeId[]) {
-      const v = g.attributes[id] ?? 0, isMain = id === main;
+      const v = g.attributes[id] ?? 0, isMain = id === main, cellN = scaleFor(v), seg = bw / cellN;
       text(L.x + pad, y - 1, ATTRIBUTE_INFO[id].name, 12, isMain ? '#f3d48a' : '#c9b88f');
       const bx = L.x + pad + 42;
-      for (let k = 0; k < g.attrMax; k++) g0.fillStyle(k < v ? (isMain ? 0xe8c27a : 0xb89a66) : 0x3a2c1c, k < v ? 1 : .8).fillRect(bx + k * seg + .5, y + 3, seg - 1.5, 8);
+      for (let k = 0; k < cellN; k++) g0.fillStyle(k < v ? (isMain ? 0xe8c27a : 0xb89a66) : 0x3a2c1c, k < v ? 1 : .8).fillRect(bx + k * seg + .5, y + 3, seg - 1.5, 8);
       text(bx + bw + 6, y - 1, String(v), 12, isMain ? '#f3d48a' : '#d8c8a4').setName(P + '-attr-' + id);
-      hot(L.x + pad, y - 2, L.w - pad * 2, 16, P + '-attr-hit-' + id, () => isMain && sum ? sum.tip : ({ title: ATTRIBUTE_INFO[id].name, sub: `${v} / ${g.attrMax} 点`, body: ATTRIBUTE_INFO[id].effect, color: 0x9a8a6a }));
+      hot(L.x + pad, y - 2, L.w - pad * 2, 16, P + '-attr-hit-' + id, () => isMain && sum ? sum.tip : ({ title: ATTRIBUTE_INFO[id].name, sub: `${v} 点（单项不封顶）`, body: ATTRIBUTE_INFO[id].effect, color: 0x9a8a6a }));
       y += 17;
     }
     if (g.unallocated > 0) text(L.x + pad, y + 2, `还有 ${g.unallocated} 点属性未分配`, 12, '#7fd88a').setName(P + '-unallocated');

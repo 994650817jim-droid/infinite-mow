@@ -328,3 +328,4 @@ assets/raw/*
 !/tools/audio-density.mjs
 !/tools/shot-attr-panel.mjs
 !/tools/test-attr-panel-view.mjs
+!/tools/test-stat-curve.mjs

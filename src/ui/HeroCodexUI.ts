@@ -8,7 +8,8 @@ import { COMBO_AT } from '../data/schoolCombos';
 import { WEAPON_DEFS } from '../weapons/registry';
 import { ATTRIBUTE_INFO, attributeCap, attributeIcon, type AttributeId } from '../systems/RunGrowth';
 import { allocateHeroAttr, heroAttrs, heroFreePoints, heroInfo, takeAttrNotice, type HeroKey } from '../systems/HeroProgress';
-import { primaryAttribute, PRIMARY_MUL, PRIMARY_PERK_INFO, PRIMARY_TIERS } from '../data/attributes';
+import { primaryAttribute, PRIMARY_PERK_INFO, PRIMARY_TIERS } from '../data/attributes';
+import { scaleFor, statMultiplier, statSource } from '../data/heroStats';
 import { gearFor, gearSummary } from '../systems/ItemEffects';
 import { gearOwners, ownerName } from '../systems/RosterStore';
 import { TACTIC_UNLOCK_SCROLLS, TEMPER, XINDE_SLOTS, getXinde, grain, respec, respecCost, scrolls, tacticUnlocked, temperCost, temperLevel, temperUp, toggleXinde, unlockTactic } from '../systems/MasteryStore';
@@ -237,12 +238,12 @@ export class HeroCodexUI {
   private deskOverview(x: number, y: number, w: number, bottom: number): void {
     const c = this.playable, a = heroAttrs(this.hero), cap = attributeCap(heroInfo(this.hero).level), prim = primaryAttribute(this.hero);
     const sw = 214, lw = c ? w - sw - 18 : w;
-    let yy = this.section(x, y + 10, lw, '属性', `未分配 ${heroFreePoints(this.hero)} 点 · 单项上限 ${cap}`);
+    let yy = this.section(x, y + 10, lw, '属性', `未分配 ${heroFreePoints(this.hero)} 点 · 单项不封顶`);
     (Object.keys(ATTRIBUTE_INFO) as AttributeId[]).forEach((id, i) => {
       const ry = yy + 4 + i * 22, isP = prim === id;
       if (this.scene.textures.exists(attributeIcon(id))) this.add(this.scene.add.image(x + 12, ry + 6, attributeIcon(id)).setDisplaySize(18, 18));
       this.text(x + 26, ry + 6, ATTRIBUTE_INFO[id].name + (isP ? '（主）' : ''), 13, isP ? '#ffd27a' : '#efe0bb', isP).setOrigin(0, .5);
-      this.pips(x + 96, ry + 2, a[id], cap, lw - 150, isP);
+      this.pips(x + 96, ry + 2, a[id], scaleFor(a[id]), lw - 150, isP);
       this.text(x + lw - 4, ry + 6, `${a[id]}`, 13, isP ? '#ffd27a' : '#e5d4ab').setOrigin(1, .5);
     });
     // 旧版一行文字（测试按名字读）
@@ -283,7 +284,7 @@ export class HeroCodexUI {
   /** 属性页：每项一张漆卡（图标 · 名字 · 效果 · 点数刻度 · +），主属性另起一行列专精三档。 */
   private deskAttrs(x: number, y: number, w: number, bottom: number): void {
     const a = heroAttrs(this.hero), free = heroFreePoints(this.hero), cost = respecCost(this.hero), spent = Object.values(a).reduce((n, v) => n + v, 0), cap = attributeCap(heroInfo(this.hero).level);
-    const head = this.text(x + 4, y + 8, `未分配属性点 ${free}　（Lv25 前每级 1 点、之后每 2–3 级 1 点，单项最多 ${cap} 点）`, 14, free ? '#f3d48a' : '#b9a57a').setOrigin(0, .5).setName('codex-free');
+    const head = this.text(x + 4, y + 8, `未分配属性点 ${free}　（Lv25 前每级 1 点、之后每 2–3 级 1 点，单项不封顶，超过 10 点收益递减）`, 14, free ? '#f3d48a' : '#b9a57a').setOrigin(0, .5).setName('codex-free');
     const head0 = head.text, ids = Object.keys(ATTRIBUTE_INFO) as AttributeId[], cardH = Math.min(66, Math.floor((bottom - y - 70) / ids.length));
     ids.forEach((id, i) => {
       const ry = y + 24 + i * cardH, primary = primaryAttribute(this.hero) === id, h = cardH - 6, g = this.add(this.scene.add.graphics());
@@ -293,7 +294,7 @@ export class HeroCodexUI {
       this.text(x + 52, ry + 8, ATTRIBUTE_INFO[id].name, 17, primary ? '#ffd27a' : '#f0dfb4', true).setName('codex-attr-name-' + id);
       if (primary) this.text(x + 96, ry + 11, '主属性', 11, '#1b120b').setBackgroundColor('#e0b860').setPadding(4, 1);
       const effW = w - 52 - (primary ? 296 : 250);
-      this.text(x + 52, ry + 32, ATTRIBUTE_INFO[id].effect + (primary ? `；主属性每点 ×${PRIMARY_MUL}，另 +1% 全伤害` : ''), 12, primary ? '#e8d6a4' : '#a9b9a3').setWordWrapWidth(effW).setMaxLines(2);
+      this.text(x + 52, ry + 32, ATTRIBUTE_INFO[id].effect + (primary ? `；主属性每点 ×${statMultiplier(statSource(this.hero), id)}，另 +1% 全伤害` : ''), 12, primary ? '#e8d6a4' : '#a9b9a3').setWordWrapWidth(effW).setMaxLines(2);
       if (primary) { // 专精三档：满 4 / 7 / 10 点，实心菱 = 已解锁；悬停在顶行显示说明
         const perks = PRIMARY_PERK_INFO[id], px0 = x + w - 236;
         perks.forEach((p, k) => {
@@ -304,8 +305,8 @@ export class HeroCodexUI {
         });
         this.text(x + w - 236 - 6, ry + h - 13, '专精', 11, '#c8a46a').setOrigin(1, .5).setName('codex-perks').setData('line', perks.map((p, k) => (a[id] >= PRIMARY_TIERS[k] ? '◆' : '◇') + p.name).join(' '));
       }
-      this.pips(x + w - 236, ry + 12, a[id], cap, 140, primary);
-      this.text(x + w - 64, ry + 16, `${a[id]} / ${cap}`, 13, '#e5d4ab').setOrigin(1, .5).setName('codex-attr-' + id);
+      this.pips(x + w - 236, ry + 12, a[id], scaleFor(a[id]), 140, primary);
+      this.text(x + w - 64, ry + 16, `${a[id]} 点`, 13, '#e5d4ab').setOrigin(1, .5).setName('codex-attr-' + id);
       this.button(x + w - 28, ry + h / 2, '+', 'codex-add-' + id, () => this.act(allocateHeroAttr(this.hero, id) ? { ok: true, message: `${ATTRIBUTE_INFO[id].name} +1` } : { ok: false, message: '没有可分配的点，或这一项已满' }), { disabled: free <= 0 || a[id] >= cap, size: 18 });
     });
     const by = y + 24 + ids.length * cardH + 18;
@@ -425,7 +426,7 @@ export class HeroCodexUI {
       const primary = primaryAttribute(this.hero) === id;
       this.text(x + 40, ry, ATTRIBUTE_INFO[id].name + (primary ? ' · 主属性' : ''), 16, primary ? '#ffd27a' : '#f0dfb4').setName('codex-attr-name-' + id);
       if (primary) { const b = attrBadge(this.scene, x + 16, ry + 12, this.hero, 30); if (b) this.add(b.setName('attr-badge-row')); }
-      this.text(x + (primary ? 150 : 100), ry + 3, ATTRIBUTE_INFO[id].effect + (primary ? '；主属性每点 ×' + PRIMARY_MUL + '，另 +1% 全伤害' : ''), 12, primary ? '#e8d6a4' : '#a9b9a3');
+      this.text(x + (primary ? 150 : 100), ry + 3, ATTRIBUTE_INFO[id].effect + (primary ? '；主属性每点 ×' + statMultiplier(statSource(this.hero), id) + '，另 +1% 全伤害' : ''), 12, primary ? '#e8d6a4' : '#a9b9a3');
       if (primary) { // 主属性专精：满 4 / 7 / 10 点各一档（◆ 已解锁 / ◇ 未解锁），悬停看说明
         const perks = PRIMARY_PERK_INFO[id], line = '专精　' + perks.map((p, k) => (a[id] >= PRIMARY_TIERS[k] ? '◆' : '◇') + p.name).join('　');
         const t = this.text(x + 150, ry + 20, line, 12, '#ffd27a').setName('codex-perks').setInteractive();

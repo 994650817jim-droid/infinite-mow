@@ -3779,7 +3779,7 @@ export class GameScene extends Phaser.Scene {
     this.heroLv = heroLevel(this.runConfig.character);
     const id = this.runConfig.character, g = this.player.growth, r = enlistHero(id), ratio = this.player.hp / Math.max(1, this.player.maxHp);
     const bonusLeft = Math.max(0, g.unallocated - g.heroFree);
-    g.attrMax = attributeCap(this.heroLv);
+    g.attrMax = attributeCap(this.heroLv); g.heroLevel = this.heroLv;
     for (const a of Object.keys(g.attributes) as AttributeId[]) g.attributes[a] = Math.min(g.attrMax, r.attributes[a] + Math.max(0, (carried ? g.attributes[a] : 0) - r.attributes[a]));
     g.heroFree = heroFreePoints(id);
     const room = (Object.values(g.attributes) as number[]).reduce((n, v) => n + g.attrMax - v, 0);
@@ -3788,7 +3788,7 @@ export class GameScene extends Phaser.Scene {
     g.temperDamage = temperBonus(id); g.xinde = getXinde(id); if (!carried) g.xindeFirst = g.xinde.length > 0;
     this.player.passive.areaMul = g.areaMultiplier();
     // 属性改版（四项）：老存档的点数已全部退回，提示一次
-    if (takeAttrNotice()) this.time.delayedCall(1200, () => this.showGrowthNotice('属性已改版：点数已全部返还，暂停 →「分配属性点」重新分配'));
+    if (takeAttrNotice()) this.time.delayedCall(1200, () => this.showGrowthNotice('属性已改版（武将自带四维）：点数已全部返还，暂停 →「分配属性点」重新分配'));
     this.player.hp = carried ? Math.max(1, Math.min(this.player.maxHp, Math.round(this.player.maxHp * ratio))) : this.player.maxHp;
   }
   /** 经验倍率（2026-11-17 只留武将等级）：主线首次打 1.0；攻城 / 军情 / 挑战 / 重打旧关 0.5。 */
@@ -3818,7 +3818,7 @@ export class GameScene extends Phaser.Scene {
   protected onHeroLevelUp(gained: number): void {
     const g = this.player.growth, id = this.runConfig.character;
     const fromLv = this.heroLv, pts = attributePointsBetween(fromLv, this.player.level); // 2026-11-19：Lv25 后每 2–3 级才给 1 点（三选一照给）
-    this.heroLv = this.player.level; this.picksGiven += gained; this.pendingLevels += gained; g.attrMax = attributeCap(this.player.level);
+    this.heroLv = this.player.level; this.picksGiven += gained; this.pendingLevels += gained; g.attrMax = attributeCap(this.player.level); g.heroLevel = this.player.level;
     this.player.heal(vigorHp(this.player.level) - vigorHp(fromLv)); // 体魄：升级多出的生命上限直接补满这一截
     const room = (Object.values(g.attributes) as number[]).reduce((n, v) => n + g.attrMax - v, 0) - g.unallocated;
     if (!this.debugRun()) { setHeroProgress(id, this.player.level, this.player.xp); g.heroFree += pts; }

@@ -1,3 +1,4 @@
+import { statEffective, statSource } from '../data/heroStats';
 import { SCHOOL_TIER } from '../data/schools';
 import { heroXpToNext } from '../data/heroLevels';
 import {BuildState,type TacticId} from '../data/builds';
@@ -126,7 +127,9 @@ export class RunGrowth {
   constructor(readonly character: CharacterId) {}
 
   /** 属性生效点数：主属性每点按 PRIMARY_MUL 倍计算。 */
-  pts(id: AttributeId): number { return this.attributes[id] * (primaryAttribute(this.character) === id ? PRIMARY_MUL : 1); }
+  pts(id: AttributeId): number { return statEffective(statSource(this.character), id, this.attributes[id], this.heroLevel); }
+  /** 当前武将等级（本色自动成长要用；GameScene 开局 / 升级时写入）。 */
+  heroLevel = 1;
   /** 主属性专精档位（0–3）：主属性满 4 / 7 / 10 点各一档。 */
   primaryTier(): number { const p = primaryAttribute(this.character); return p ? PRIMARY_TIERS.filter(n => this.attributes[p] >= n).length : 0; }
   /** 是否已解锁某属性的第 tier 档专精（只看主属性）。 */

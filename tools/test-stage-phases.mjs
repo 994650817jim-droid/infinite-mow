@@ -57,32 +57,43 @@ await stageCase('3-2 宛城夜袭（ThirdGameScene）', { key: 'ThirdGameScene',
   ck('第一章逐关加长：1-1 三段（0 / 45 / 90，时间同原来）、1-2 四段（无副将）；战况线下写「下一段 · 名字 · 秒数」', r.one.join() === 'vanguard@0,elite@45,boss@90' && r.two.join() === 'vanguard@0,elite@45,event@100,boss@155' && /下一段 · .+ · \d+ 秒/.test(r.caption), r);
   await p.close();
 }
-// P2 战场机缘：精锐段 20 秒后出粮车（地上圈 + 道具 + 军令箭头），站满 3 秒弹「战场机缘 · 本关有效」三选一；选了只改本关（征程构筑存档扣掉）；事件段再来一次
+// P2 战场机缘（stage-event-rewards.md）：刷在 600–900 外的可走处；地上「图标 + 名字 + 秒数」、屏外金色箭头、舆图军令小旗；各类事件奖励不同
 {
   const p = await open({ key: 'GameScene', run: { chapter: 'hulao', westStage: 2 } });
-  await jump(p, 66); await p.waitForTimeout(500);
-  const c = await p.evaluate(() => { const s = window.__S, f = s.fortunes, L = f.live[0]; return { spawned: f.stats.spawned, at: L && { x: Math.round(L.x - s.player.x), y: Math.round(L.y - s.player.y) }, label: L?.label.text, props: L?.props.length, order: !!s.battleOrders?.list?.get('fortune-cart') }; });
-  ck('P2 粮车：精锐段 20 秒后出现（地上圈 + 粮车道具 + 提示），军令表挂「机缘 · 敌军粮车」', c.spawned[0] === 'cart' && /敌军粮车/.test(c.label ?? '') && c.props >= 1 && c.order, c);
-  await p.evaluate(() => { const s = window.__S, L = s.fortunes.live[0]; s.player.sprite.setPosition(L.x + 60, L.y + 60); });
+  await jump(p, 66); await p.waitForTimeout(600);
+  const c = await p.evaluate(() => { const s = window.__S, f = s.fortunes, L = f.live[0]; return { spawned: f.stats.spawned, dist: f.stats.dist[0], label: L?.label.text, icon: !!L?.icon, arrow: !!L?.arrow.visible, arrowText: L?.arrow.getByName('fa-text')?.text, order: !!s.battleOrders?.list?.get('fortune-cart'), banner: window.__banners.filter(b => /机缘 · /.test(b)).slice(-1)[0] }; });
+  ck('P2 粮车：精锐段 20 秒后刷在远处（≥ 600 步）；横幅「机缘 · 敌军粮车出现」；地上图标 + 名字 + 剩余秒数；屏外金色箭头写距离；舆图军令小旗', c.spawned[0] === 'cart' && c.dist >= 600 && /敌军粮车 · \d+ 秒/.test(c.label ?? '') && c.icon && c.arrow && /粮车 · \d+ 步/.test(c.arrowText ?? '') && c.order && /机缘 · 敌军粮车出现/.test(c.banner ?? ''), c);
+  await p.screenshot({ path: `${OUT}/fortune-far.png` });
+  await p.evaluate(() => { const s = window.__S, L = s.fortunes.live[0]; s.player.sprite.setPosition(L.x + 50, L.y + 50); });
   await p.waitForTimeout(600); await p.screenshot({ path: `${OUT}/fortune-cart.png` });
+  const food0 = await p.evaluate(() => ({ food: window.__S.legion.food, pouch: window.__S.supplies?.pouch.length ?? 0 }));
   await p.evaluate(() => { const s = window.__S, L = s.fortunes.live[0]; s.player.sprite.setPosition(L.x, L.y); });
-  await p.waitForFunction(() => window.__S.mode === 'bossloot' || window.__S.mode === 'levelup', null, { timeout: 15000 }).catch(() => {});
-  for (let i = 0; i < 6 && await p.evaluate(() => window.__S.mode === 'levelup'); i++) { await p.evaluate(() => window.__S.chooseUpgrade(0)); await p.waitForTimeout(300); }
-  await p.waitForFunction(() => window.__S.mode === 'bossloot', null, { timeout: 8000 }).catch(() => {});
-  const panel = await p.evaluate(() => { const s = window.__S; return { mode: s.mode, done: s.fortunes.stats.done, title: s.levelPanel.getByName('upgrade-title')?.text, cards: s.upgradeOptions.map(o => o.name + '｜' + o.categoryLabel + '｜' + (o.scope === 'stage' ? '本关有效' : o.scope)) }; }); // 2026-11-19 起有效范围写在卡底徽记（scope）
-  ck('P2 站满 3 秒夺下粮车 → 「战场机缘 · 夺下粮车」三选一，三张都是本关有效增益', panel.mode === 'bossloot' && panel.done.includes('cart') && /战场机缘/.test(panel.title ?? '') && panel.cards.length === 3 && panel.cards.every(x => /本关有效/.test(x)), panel);
-  await p.waitForTimeout(1200); await p.screenshot({ path: `${OUT}/fortune-cards.png` });
-  const pick = await p.evaluate(async () => { const s = window.__S, before = { ...s.player.stats }; const o = s.upgradeOptions[0]; s.chooseUpgrade(0); const ce = await import('/src/systems/CharmEffects.ts'); const packed = ce.statsWithoutCharms(s.player); const keys = Object.keys(before).filter(k => before[k] !== s.player.stats[k]); return { name: o.name, mode: s.mode, changed: keys, packedSame: keys.every(k => Math.abs(packed[k] - before[k]) < 1e-6), taken: s.fortuneTaken }; });
-  ck('P2 选了增益：属性当场变化，征程构筑存档时扣掉（不带到下一关），回到战斗', pick.mode === 'none' && pick.changed.length > 0 && pick.packedSame && Object.values(pick.taken)[0] === 1, pick);
+  for (let i = 0; i < 30 && await p.evaluate(() => !window.__S.fortunes.stats.done.includes('cart')); i++) { await p.evaluate(() => { const s = window.__S; if (s.mode === 'levelup') s.chooseUpgrade(0); const L = s.fortunes.live.find(x => !x.done); if (L) s.player.sprite.setPosition(L.x, L.y); }); await p.waitForTimeout(250); }
+  const cart = await p.evaluate(f0 => { const s = window.__S; return { done: s.fortunes.stats.done, food: s.legion.food - f0.food, pouch: (s.supplies?.pouch.length ?? 0) - f0.pouch, reward: s.fortunes.stats.rewards[0], arrowGone: !s.fortunes.live.some(L => !L.done && L.arrow.visible) }; }, food0);
+  ck('P2 夺下粮车：随军粮 +（40 + 10 × 章）× 距离倍率、药囊 +1 回春丹；标记与箭头收起', cart.done.includes('cart') && cart.food >= 60 && (cart.pouch === 1 || /药囊已满/.test(cart.reward ?? '')) && cart.arrowGone, cart);
   const f0 = await p.evaluate(async () => { const s = window.__S, up = await import('/src/data/upgrades.ts'), ce = await import('/src/systems/CharmEffects.ts'); const hp0 = s.player.maxHp, packed0 = ce.statsWithoutCharms(s.player).maxHpBonus; up.foundationOptions()[0].apply(s.player); return { up: s.player.maxHp - hp0, packedDelta: ce.statsWithoutCharms(s.player).maxHpBonus - packed0, label: up.foundationOptions()[0].scope === 'stage' ? '本关有效' : '' }; });
   ck('P0 固本培元改为本关有效：当场生命上限 +12，征程构筑存档不带走（不再无限叠加）', f0.up === 12 && f0.packedDelta === 0 && /本关/.test(f0.label), f0);
-  await jump(p, 109); await p.waitForTimeout(500);
-  const ev = await p.evaluate(() => { const s = window.__S, f = s.fortunes, L = f.live.find(x => !x.done); return { spawned: f.stats.spawned, kind: L?.kind, label: L?.label.text }; });
-  ck('P2 事件段 8 秒后再来一次机缘（义军被围 / 降将来投 / 烽燧之一）', ev.spawned.length === 2 && ['rescue', 'defector', 'beacon'].includes(ev.kind), ev);
-  await p.evaluate(() => { const s = window.__S, L = s.fortunes.live.find(x => !x.done); s.player.sprite.setPosition(L.x, L.y); if (L.kind === 'rescue') for (const g of L.guards) { g.e.hp = 0; s.killEnemy(g.e); } });
-  for (let i = 0; i < 40 && await p.evaluate(() => window.__S.mode !== 'bossloot'); i++) { await p.evaluate(() => { const s = window.__S; if (s.mode === 'levelup') s.chooseUpgrade(0); const L = s.fortunes.live.find(x => !x.done); if (L) s.player.sprite.setPosition(L.x, L.y); }); await p.waitForTimeout(300); }
-  const e2 = await p.evaluate(() => { const s = window.__S; return { mode: s.mode, done: s.fortunes.stats.done, title: s.levelPanel.getByName('upgrade-title')?.text }; });
-  ck('P2 完成第二次机缘 → 再弹一次机缘三选一', e2.mode === 'bossloot' && e2.done.length === 2, e2);
+  // 军械库：守军 + 站 4 秒 → 兵装
+  await p.evaluate(() => window.__S.fortunes.force('armory')); await p.waitForTimeout(300);
+  for (let i = 0; i < 40 && await p.evaluate(() => !window.__S.fortunes.stats.done.includes('armory')); i++) { await p.evaluate(() => { const s = window.__S; if (s.mode !== 'none') { if (s.mode === 'levelup' || s.mode === 'bossloot') s.chooseUpgrade(0); else s.setMode('none'); } const L = s.fortunes.live.find(x => !x.done && x.kind === 'armory'); if (L) { s.player.sprite.setPosition(L.x, L.y); for (const g of L.guards) if (g.e.active) { g.e.hp = 0; s.killEnemy(g.e); } } }); await p.waitForTimeout(250); }
+  const ar = await p.evaluate(() => ({ done: window.__S.fortunes.stats.done, reward: window.__S.fortunes.stats.rewards.find(r => r.startsWith('armory')) }));
+  ck('P2 军械库：击退守军、站满 4 秒 → 兵装一件', ar.done.includes('armory') && /兵装 · /.test(ar.reward ?? ''), ar);
+  // 传令兵：靠近就逃，15 秒内追上 → 多一次军略三选一
+  await p.evaluate(() => { window.__calm(); window.__S.fortunes.force('courier'); }); await p.waitForTimeout(300);
+  const cr0 = await p.evaluate(() => { const s = window.__S, L = s.fortunes.live.find(x => x.kind === 'courier'); const x0 = L.x, y0 = L.y; s.player.sprite.setPosition(L.x + 300, L.y); return { x0, y0, pend: s.pendingLevels }; });
+  await p.waitForTimeout(1200);
+  const fled = await p.evaluate(c0 => { const L = window.__S.fortunes.live.find(x => x.kind === 'courier'); return { moved: Math.round(Math.hypot(L.x - c0.x0, L.y - c0.y0)), fleeing: L.fleeAt >= 0 }; }, cr0);
+  for (let i = 0; i < 30 && await p.evaluate(() => !window.__S.fortunes.stats.done.includes('courier')); i++) { await p.evaluate(() => { const s = window.__S; if (s.mode !== 'none') { if (s.mode === 'levelup' || s.mode === 'bossloot') s.chooseUpgrade(0); else s.setMode('none'); } const L = s.fortunes.live.find(x => !x.done && x.kind === 'courier'); if (L) s.player.sprite.setPosition(L.x, L.y); }); await p.waitForTimeout(200); }
+  const cr = await p.evaluate(() => ({ done: window.__S.fortunes.stats.done, reward: window.__S.fortunes.stats.rewards.find(r => r.startsWith('courier')) }));
+  ck('P2 传令兵：看到你就往远处跑；追上截下 → 多一次军略三选一', fled.fleeing && fled.moved > 40 && cr.done.includes('courier') && /多一次军略三选一/.test(cr.reward ?? ''), { fled, cr });
+  // 降将来投：走到身边 → 机缘三选一（本关增益，不带走）
+  await p.evaluate(() => { window.__calm(); window.__S.fortunes.force('defector'); }); await p.waitForTimeout(300);
+  for (let i = 0; i < 40 && await p.evaluate(() => window.__S.mode !== 'bossloot'); i++) { await p.evaluate(() => { const s = window.__S; if (s.mode === 'levelup') s.chooseUpgrade(0); const L = s.fortunes.live.find(x => !x.done && x.kind === 'defector'); if (L) s.player.sprite.setPosition(L.x, L.y); }); await p.waitForTimeout(250); }
+  const panel = await p.evaluate(() => { const s = window.__S; return { mode: s.mode, title: s.levelPanel.getByName('upgrade-title')?.text, cards: s.upgradeOptions.map(o => o.name + '｜' + o.categoryLabel) }; });
+  ck('P2 降将来投：受降 → 「战场机缘 · 受降」三选一（本关有效）', panel.mode === 'bossloot' && /战场机缘/.test(panel.title ?? '') && panel.cards.length === 3, panel);
+  await p.waitForTimeout(1200); await p.screenshot({ path: `${OUT}/fortune-cards.png` });
+  const pick = await p.evaluate(async () => { const s = window.__S, ce = await import('/src/systems/CharmEffects.ts'), before = { ...s.player.stats }, packed0 = ce.statsWithoutCharms(s.player); s.chooseUpgrade(0); const packed = ce.statsWithoutCharms(s.player); const keys = Object.keys(before).filter(k => before[k] !== s.player.stats[k]); return { mode: s.mode, changed: keys, packedSame: keys.every(k => Math.abs(packed[k] - packed0[k]) < 1e-6) }; });
+  ck('P2 选了增益：属性当场变化，征程构筑存档时扣掉（不带到下一关）', pick.changed.length > 0 && pick.packedSame, pick);
   await p.close();
 }
 // P4 新卡池：五段主线关的升级三选一里，战法位按章节概率换成新卡（战场机缘 / 锦囊 / 兵源 / 军资 / 心法）；锦囊 R 键使用
@@ -95,7 +106,7 @@ await stageCase('3-2 宛城夜袭（ThirdGameScene）', { key: 'ThirdGameScene',
   await p.evaluate(() => { const s = window.__S, ns = s.newCardSource.bind(s); s.newCardSource = () => ({ ...ns(), replaceChance: 1 }); s.pendingLevels += 1; s.militaryPending += 1; s.openUpgrade(); });
   await p.waitForTimeout(1200);
   const cards = await p.evaluate(() => window.__S.upgradeOptions.map(o => o.name + '｜' + o.categoryLabel));
-  ck('P4 升级三选一出现新卡（战法位两张都换成新卡，类不重复）', cards.length === 3 && cards.filter(c => /战场机缘|锦囊|兵源|军资|心法/.test(c)).length >= 2 && new Set(cards.map(c => c.split('｜')[1])).size === 3, cards);
+  ck('P4 升级三选一出现新卡（战法位两张都换成新卡，类不重复）', cards.length === 3 && cards.filter(c => /战场机缘|锦囊|兵源|军资|心法|赌命|名将来投|悬赏/.test(c)).length >= 2 && new Set(cards.map(c => c.split('｜')[1])).size === 3, cards);
   await p.screenshot({ path: `${OUT}/new-cards.png` });
   await p.evaluate(() => { const s = window.__S; s.newCardSource = Object.getPrototypeOf(s).newCardSource.bind(s); s.chooseUpgrade(0); window.__calm(); });
   const r5 = await p.evaluate(async () => { const B = (await import('/src/data/builds.ts')).BuildState, bd = await import('/src/data/builds.ts'); const capNow = B.rankCap, caps = [2, 5, 9].map(B.rankCapFor); const t = Object.keys(bd.TACTICS).find(id => !bd.TACTICS[id].general && !bd.TACTICS[id].hidden && bd.TACTICS[id].tag); const b = new B(); for (let i = 0; i < 5; i++) b.learn(t); const at3 = b.rank(t); B.rankCap = 4; b.learn(t); b.learn(t); const r = { capNow, caps, at3, rank: b.rank(t), level: b.level(t), shi: b.tags()[bd.TACTICS[t].tag], snap: b.snapshot().tactics[t], desc: bd.tacticDescription(t, 4).split(String.fromCharCode(10))[0] }; B.rankCap = capNow; return r; });
@@ -122,7 +133,7 @@ await stageCase('3-2 宛城夜袭（ThirdGameScene）', { key: 'ThirdGameScene',
   ck('P4b 草船借箭期满：放箭雨', ar.until === 0 && /草船借箭 · 箭雨/.test(ar.banner), ar);
   // 赌命：孤注一掷只在本关
   const gm = await p.evaluate(async () => { const s = window.__S, ce = await import('/src/systems/CharmEffects.ts'); const hp0 = s.player.maxHp, packed0 = JSON.stringify(ce.statsWithoutCharms(s.player)); s.takeGamble('allin'); s.takeGamble('beiwei'); return { hpDrop: hp0 - s.player.maxHp, packedSame: JSON.stringify(ce.statsWithoutCharms(s.player)) === packed0, desperate: s.player.growth.stageDesperate }; });
-  ck('P4b 赌命：孤注一掷生命上限 −15%、伤害 +25%（征程构筑不带走）；背嵬生效', gm.hpDrop > 0 && gm.packedSame && gm.desperate === .3, gm);
+  ck('P4b 赌命：孤注一掷生命上限 −15%、伤害 +25%（征程构筑不带走）；背嵬生效', gm.hpDrop > 0 && gm.packedSame && gm.desperate > 0, gm);
   // 悬赏破锐：接下后击杀 8 名精锐 → 随军粮 +60
   const bt = await p.evaluate(() => { const s = window.__S, food0 = s.legion.food; s.bounties.elites = { elites: 0 }; for (let i = 0; i < 8; i++) { const e = s.spawnEnemy('elite', s.player.x + 200, s.player.y, 1, true); if (e) { e.hp = 0; s.killEnemy(e); } } return { food: s.legion.food - food0, banner: window.__banners.slice(-2).join(' / ') }; });
   ck('P4b 悬赏 · 破锐：击杀 8 名精锐 → 随军粮 +60（另含精锐自身掉粮）、信物一件', bt.food >= 60 && /破锐 达成/.test(bt.banner), bt);

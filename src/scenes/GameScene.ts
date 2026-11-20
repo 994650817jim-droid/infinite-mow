@@ -110,7 +110,7 @@ import { vigorHp } from '../data/attributes';
 import { CHAPTER_INDEX, PHASES, buildPhasePlan, phasedPace, type PhaseKind, type PhasePlan } from '../data/stagePhases';
 import { StagePhaseRunner } from '../systems/StagePhases';
 import { BattleFortunes } from '../systems/BattleFortunes';
-import { FORTUNE_EVENT, rollFortuneBuffs, type FortuneEventKind } from '../data/fortunes';
+import { FORTUNE, FORTUNE_EVENT, rollFortuneBuffs, type FortuneEventKind } from '../data/fortunes';
 import { applyStageBuff, clearStageBuffs } from '../systems/StageBuffs';
 import { BOUNTIES, GAMBLES, JINNANG, NEW_CARDS, chestCharmCard, drawNewCards, type BountyId, type GambleId, type JinnangId } from '../systems/LevelCards';
 import { rollCharm } from '../data/items';
@@ -686,6 +686,8 @@ export class GameScene extends Phaser.Scene {
   protected fortunes: BattleFortunes | null = null;
   private fortuneQueue: FortuneEventKind[] = [];
   private fortuneTaken: Record<string, number> = {};
+  /** 机缘「烽燧」：到这个时刻前刷兵减半。 */
+  private beaconCalmUntil = 0;
   /** 锦囊（新卡池，一次性主动技；身上最多 1 个）。 */
   private jinnang: JinnangId | null = null; private jinnangButton?: Phaser.GameObjects.Container;
   /** P4b 新卡的本关状态：乘胜追击、赌命、悬赏、连环计、草船借箭、首领宝箱信物、本关免费换一批。 */
@@ -1012,7 +1014,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   protected resetState(): void {
-    this.phaseRunner?.clear();this.battleTrack?.destroy();this.phaseRunner=null;this.battleTrack=null;this.phasePlan=null;this.phasedFor=null;this.fortunes?.clear();this.fortunes=null;this.fortuneQueue=[];this.fortuneTaken={};this.jinnang=null;this.jinnangButton=undefined;this.resetStageCards();this.branchRt?.clear();this.branchRt=null;this.branchFor=null;
+    this.phaseRunner?.clear();this.battleTrack?.destroy();this.phaseRunner=null;this.battleTrack=null;this.phasePlan=null;this.phasedFor=null;this.fortunes?.clear();this.fortunes=null;this.fortuneQueue=[];this.fortuneTaken={};this.beaconCalmUntil=0;this.jinnang=null;this.jinnangButton=undefined;this.resetStageCards();this.branchRt?.clear();this.branchRt=null;this.branchFor=null;
     this.relicWaves=[];this.runMerit={elite:0,boss:0};this.picksGiven=0;this.militaryPending=0; // 场景实例会被重复使用：每场重置
     this.firstBossAt=-1;this.settledFrontlineKills=0;this.frontlineNextSettlement=1;this.frontlineVictories.clear();this.frontlineStarts.clear();this.chasingBosses=[];this.deadBossControllers=[];for(const c of this.bossChests)c.clear();this.bossChests=[];this.lootContinue=null;this.relicHits=0;this.relicFireAt=0;this.relicHealAt=0;
     this.rerolls=0;this.warfeedCount=0;this.pointsButton=undefined;this.pointsBadge=undefined;this.potionButton=undefined;this.potionBadge=undefined;this.potionIcon=undefined;this.potionGlow=undefined;this.rerollButton=undefined;
@@ -1524,7 +1526,7 @@ export class GameScene extends Phaser.Scene {
       // 刷怪时间轴按关卡节奏加速（stageTuning.pace）：原来第 N 波的刷怪强度在新的第 N 波出现
       const paced = this.elapsed * (this.chapter.pace ?? 1);
       const easy = this.tutorial?.easy(this.elapsed); // 新手引导：开局 30 秒刷兵放缓
-      this.spawnTimer = this.chapter.spawnInterval(paced) * (this.phaseRunner?.calm() ? PHASES.calmIntervalMul : 1) * (easy?.interval ?? 1) * (this.sishuiPass?.spawnMul ?? 1) * (bossOn ? B.intervalMul : 1) * (this.dual?.spawnIntervalMul ?? 1); // 汜水关西凉营帐全塌后变稀；双首领在场再 ×0.7
+      this.spawnTimer = this.chapter.spawnInterval(paced) * (this.phaseRunner?.calm() || this.combatNow < this.beaconCalmUntil ? PHASES.calmIntervalMul : 1) * (easy?.interval ?? 1) * (this.sishuiPass?.spawnMul ?? 1) * (bossOn ? B.intervalMul : 1) * (this.dual?.spawnIntervalMul ?? 1); // 汜水关西凉营帐全塌后变稀；双首领在场再 ×0.7
       const rawBurst = this.chapter.spawnBurst(paced), burst0 = easy && easy.burstDiv > 1 ? Math.max(1, Math.ceil(rawBurst / easy.burstDiv)) : rawBurst, burst = bossOn ? Math.max(1, Math.ceil(burst0 * B.burstMul)) : burst0;
       for (let i = 0; i < burst; i += 1) {
         if (this.activeEnemyCount() >= cap) break;
@@ -3717,13 +3719,15 @@ export class GameScene extends Phaser.Scene {
       // 战况线贴着屏幕上沿：计时器、关名往下挪一截（不和战况线叠）
       this.hudTexts.timer.setY(BattleTrack.HEIGHT + 3); this.hudTexts.chapter.setY(BattleTrack.HEIGHT + 33);
       this.fortunes = new BattleFortunes({
-        scene: this, player: () => this.player, elapsed: () => this.elapsed,
-        place: (x, y) => { let p = { x, y }; if (this.arena) p = this.arena.clampPoint(p.x, p.y); if (this.terrain) p = this.terrain.free(p.x, p.y, 48); return p; },
+        scene: this, player: () => this.player, elapsed: () => this.elapsed, chapter: () => plan.chapter,
+        // 远处刷点：夹进场地、挪出墙 / 营栅 / 房子，再避开水与树（2026-11-19 用户「不可以太近……不刷进墙里」）
+        place: (x, y) => { let p = { x, y }; if (this.arena) p = this.arena.clampPoint(p.x, p.y); const fp = this.sishuiObstacles?.footprints; if (fp?.length) { const f = freeSpawn(fp, p.x, p.y, 48, this.player); p = { x: f.x, y: f.y }; if (this.arena) p = this.arena.clampPoint(p.x, p.y); } if (this.terrain) p = this.terrain.free(p.x, p.y, 48); return p; },
         spawn: (kind, x, y) => this.spawnEnemy(kind, x, y, this.chapter.hpScale(this.elapsed), true),
-        escort: (x, y, n, ms) => this.reinforcePush().spawnEscortAt(x, y, n, ms)?.members.length ?? 0,
         officerTexture: () => this.chapter.enemies.elite.walkVisual?.texture ?? 'enemy_officer_walk_sheet',
+        riderTexture: () => this.chapter.enemies.cavalry.walkVisual?.texture ?? 'enemy_cavalry_walk_sheet',
         banner: (t, d, c) => this.showWaveBanner(t, d, c), sfx: k => this.sfx.play(k),
-        offer: k => { this.fortuneQueue.push(k); },
+        reward: (k, mult, x, y) => this.fortuneReward(k, mult, x, y),
+        overlay: () => this.mode !== 'none' || this.over,
       }, plan);
       this.hudTexts.wave.setVisible(false);
     } else { this.hudTexts.wave.setVisible(true); this.hudTexts.timer.setY(22); this.hudTexts.chapter.setY(56); }
@@ -3859,6 +3863,29 @@ export class GameScene extends Phaser.Scene {
     this.jinnang = null; this.jinnangButton?.setVisible(false);
     this.showWaveBanner('锦囊 · ' + JINNANG[id].name, false, JINNANG[id].desc.split('\n')[0]); this.sfx.play('gong');
     return true;
+  }
+  /** 战场机缘各类事件的奖励（stage-event-rewards.md）；mult = 距离倍率 1–1.25。返回横幅小字。 */
+  private fortuneReward(kind: FortuneEventKind, mult: number, x: number, y: number): string {
+    const P = this.player, ch = this.phasePlan?.chapter ?? 2;
+    if (kind === 'cart') {
+      const g = Math.round(FORTUNE.cartGrain(ch) * mult); this.legion.food += g;
+      if (this.supplies && this.supplies.pouch.length < POUCH_MAX) { this.supplies.pouch.push({ amount: Math.round(P.maxHp * .3), texture: this.textures.exists('heal_props') ? 'heal_props' : 'healing_potion', frame: this.textures.exists('heal_props') ? 1 : undefined, name: '回春丹' }); return '随军粮 +' + g + ' · 回春丹已入药囊（Q）'; }
+      P.heal(Math.round(P.maxHp * .2)); return '随军粮 +' + g + ' · 药囊已满，回复 20% 生命';
+    }
+    if (kind === 'armory') {
+      const q = capLootQuality(ch <= 4 ? 'blue' : ch <= 8 ? 'purple' : 'orange', this.itemTier()), item = rollItem(q, Math.random, undefined, this.lootChapter());
+      if (!this.debugRun()) addItems([item]); return '兵装 · ' + itemName(item) + '（已入行囊）';
+    }
+    if (kind === 'courier') {
+      for (let i = 0; i < 8; i++) { const a = i / 8 * Math.PI * 2; this.spawnGem(x + Math.cos(a) * 30, y + Math.sin(a) * 18, Math.round(4 * mult)); }
+      this.pendingLevels += 1; this.militaryPending += 1; if (this.mode === 'none') this.openUpgrade(); return '截获军情：多一次军略三选一';
+    }
+    if (kind === 'rescue') {
+      this.reinforcePush().spawnEscortAt(x, y, FORTUNE.rescueEscort, FORTUNE.rescueEscortMs); this.legion.recruit('swordsman', FORTUNE.rescueRecruits, true);
+      return '义军随你冲阵 ' + FORTUNE.rescueEscortMs / 1000 + ' 秒 · 部曲补员 ' + FORTUNE.rescueRecruits + ' 人';
+    }
+    if (kind === 'beacon') { this.beaconCalmUntil = this.combatNow + FORTUNE.beaconCalmMs; P.heal(Math.round(P.maxHp * FORTUNE.beaconHeal)); return '烽火示警：' + FORTUNE.beaconCalmMs / 1000 + ' 秒内刷兵减半 · 回复 ' + Math.round(FORTUNE.beaconHeal * 100) + '% 生命'; }
+    this.fortuneQueue.push(kind); return '降将献策：战场机缘三选一';
   }
   /** 战场机缘三选一：三张「本关有效」增益（走 bossloot 面板：选完即回战斗，不占保底次数）。 */
   protected openFortune(kind: FortuneEventKind): void {

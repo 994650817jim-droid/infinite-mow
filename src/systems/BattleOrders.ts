@@ -93,7 +93,8 @@ export class BattleOrders {
   }
   /** 当前首要军令（进行中、有位置；首领排在主线目标之后）。 */
   current(): (BattleOrder & { pos: OrderPos }) | null {
-    for (const o of this.all()) { if (o.state !== 'active' || !o.at) continue; const pos = o.at(); if (pos) return { ...o, pos }; }
+    // 战场机缘（fortune-*）有自己的金色屏外箭头（BattleFortunes），这里跳过，免得两支箭头叠在一起
+    for (const o of this.all()) { if (o.state !== 'active' || !o.at || o.id.startsWith('fortune-')) continue; const pos = o.at(); if (pos) return { ...o, pos }; }
     return null;
   }
   /** 倒计时：剩余秒数（没有返回 null）。 */

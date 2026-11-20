@@ -230,7 +230,7 @@ export function openMerchantShop(scene:Phaser.Scene,opts:OpenMerchantOptions):()
  const note=scene.add.text(W/2,0,'',{fontFamily:FONT,fontSize:(D?13:15)+'px',color:'#dfd4bd',resolution:2,align:'center',wordWrap:{width:pw-60,useAdvancedWrap:true}}).setOrigin(.5,0).setScrollFactor(0);
  const body=scene.add.container(0,0);root.add([title,purse,body,note]);
  const hero=opts.hero,book=()=>hero?campaignTacticBook(hero):null;
- const tactics:MerchantTactics|null=hero&&book()?{canBuy:o=>{const b=book();return !!b&&(o.kind==='manual'?!b.manualsRead().includes(o.school):b.canLearn(o.id)&&b.level(o.id)===o.level);},learn:o=>o.kind==='manual'?learnCampaignManual(hero,o.school):learnCampaignTactic(hero,o.id,o.level),doneText:'已写进征程构筑，下次出征生效',lockedText:'已无法研习'}:null;
+ const tactics:MerchantTactics|null=hero&&book()?{canBuy:o=>{const b=book();return !!b&&(o.kind==='manual'?b.canManual(o.school):b.canLearn(o.id)&&b.level(o.id)===o.level);},learn:o=>o.kind==='manual'?learnCampaignManual(hero,o.school):learnCampaignTactic(hero,o.id,o.level),doneText:'已写进征程构筑，下次出征生效',lockedText:'已无法研习'}:null;
  const stock=currentMerchantStock(opts.tier,book()??undefined,opts.chapter??1);
  let notice='',closed=false;
  const shop=new MerchantShop(scene,{chapter:()=>opts.chapter??1,stock:()=>stock,wallet:opts.wallet,tactics,onBuyItem:opts.onBuyItem??(item=>addItems([item])),owner:()=>hero,notice:t=>{notice=t;},changed:()=>draw(),sound:opts.sound,tooltipDepth:depth+10});

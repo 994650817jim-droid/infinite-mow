@@ -51,7 +51,7 @@ export class BuildCombat {
  private has(id:string):boolean{return this.state.treasures.includes(id as never);}
  private tier(s:'fire'|'stratagem'|'archery'|'cavalry'|'warrior'|'formation'):number{return this.state.tier(s);}
  /** 合击生效没有（两派都到 COMBO_AT 势）；每帧刷新一次，测试改了构筑后也会在下一次查询时刷新。 */
- combo(id:ComboId):boolean{if(this.comboStamp!==this.clock){this.comboStamp=this.clock;this.combos=new Set(activeCombos(this.state.tags()).map(c=>c.id));}return this.combos.has(id);}
+ combo(id:ComboId):boolean{if(this.comboStamp!==this.clock){this.comboStamp=this.clock;this.combos=new Set(activeCombos(this.state.tags(),this.state.majors()).map(c=>c.id));}return this.combos.has(id);}
  /** 记一次合击触发（统计 + 首次横幅）。 */
  noteCombo(id:ComboId):void{this.comboStats[id]=(this.comboStats[id]??0)+1;this.onCombo?.(id);}
  /** 冲势满了没有（骑突）。 */

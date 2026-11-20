@@ -10,7 +10,7 @@ import { lqButton, lqLabelColor, lqPanel, type LqState } from './LacquerKit';
  * 写清选定效果、Lv6 / Lv7 加深（第四 / 第八章开放）、进阶形态（Lv7 + 本派 4 势）名与效果；与当前流派契合的那条盖「契合」印（效果 ×BRANCH_FIT.fitMul）。
  * 漆金风格、没有水墨按钮；按 1 / 2 或点卡片 / 按钮选。选定后本次征程锁定（行营「重整构筑」花军粮可重选）。
  */
-export interface BranchPanelOpts { hero: string; heroName: string; weaponName: string; branches: readonly WeaponBranch[]; fitId?: string; onPick: (b: WeaponBranch, i: number) => void }
+export interface BranchPanelOpts { hero: string; heroName: string; weaponName: string; branches: readonly WeaponBranch[]; fitId?: string; /** 每条专职下方的主修提示（GameScene.openBranch：占主修 / 不在主修没有契合）。 */ notes?: Readonly<Record<string, string>>; onPick: (b: WeaponBranch, i: number) => void }
 export function openBranchPanel(scene: Phaser.Scene, o: BranchPanelOpts): Phaser.GameObjects.Container {
   const W = GAME_WIDTH, H = GAME_HEIGHT, pw = Math.min(W - 40, 860), ph = Math.min(H - 40, 470), x0 = (W - pw) / 2, y0 = (H - ph) / 2;
   const root = scene.add.container(0, 0).setScrollFactor(0).setDepth(DEPTH.overlay + 14).setName('branch-panel');
@@ -41,6 +41,7 @@ export function openBranchPanel(scene: Phaser.Scene, o: BranchPanelOpts): Phaser
     for (const [ds, ls, gap] of [[14, 12, 8], [13, 12, 5], [13, 11, 4], [12, 11, 3]] as const) {
       let y = fit ? cy + 156 : cy + 142; const made: Phaser.GameObjects.Text[] = [];
       const line = (label: string, body: string, color: string, size: number) => { const tx = t(mid, y, (label ? label + '　' : '') + body.replace(/\n/g, '，'), size, color, false, cw - 22); made.push(tx); y += tx.height + gap; };
+      { const nt = o.notes?.[b.id]; if (nt) line('主修', nt, /没有/.test(nt) ? '#d08a6a' : '#a8d08a', ls); } // 主修两派提示（GameScene.openBranch）
       line('', b.desc, '#f1e3c2', ds);
       line('Lv6（第四章开放）', b.lv6, '#c9b88f', ls);
       line('Lv7（第八章开放）', b.lv7, '#c9b88f', ls);

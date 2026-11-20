@@ -1,4 +1,4 @@
-import { SCHOOLS, SCHOOL_IDS, tierOf, type SchoolId } from './schools';
+import { SCHOOLS, SCHOOL_IDS, tierOf, type SchoolId, MAX_SCHOOLS } from './schools';
 /**
  * 战法（2026-11-19 流派重做，设计稿 tactic-schools-redesign.md）：标签 = 六大流派（data/schools.ts）。
  * - 每派 4 个战法；卸力、以战养战改成「基础成长」（general：不占 6 个战法格、不算任何流派）；反震只留在信物「玄铁镜」里（hidden：不再出卡）。
@@ -84,9 +84,26 @@ export class BuildState {
  manuals: BuildTag[] = [];
  /** 军需商人花粮买的：战法各买了几级、研读了哪几派心法（重整构筑时保留这些，只退三选一选来的）。 */
  bought: Partial<Record<TacticId, number>> = {}; boughtManuals: BuildTag[] = [];
+ /** 本命专职的流派（GameScene 开局按本命武器的专职写入、选专职时写入；不单独存档）：主修有空位时占一派。 */
+ branchSchool: BuildTag | null = null;
+ /**
+  * 主修两派（用户 11-20「关于流派也是最多往两个流派发展」）：学过战法（基础成长不算）、研读过心法的流派，再加上专职那派（还有空位时）。
+  * 开局亲和、随行、名马、信物给的势不算主修（那些开局就可能散在三派）。最多 MAX_SCHOOLS 派；旧档超过两派时取势最高的两派。
+  * 主修满两派后：第三派的战法 / 心法一律不出（canLearn / canManual），合击只算主修两派之间（schoolCombos.activeCombos）。想换派走行营「重整构筑」。
+  */
+ majors(): BuildTag[] {
+  const t: Partial<Record<BuildTag, number>> = {};
+  for (const id of Object.keys(this.tactics) as TacticId[]) { const d = TDEF[id]; if (d && !d.general && d.tag && this.rank(id) > 0) t[d.tag] = (t[d.tag] ?? 0) + this.rank(id); }
+  for (const s of this.manuals) t[s] = (t[s] ?? 0) + 1;
+  const out = (Object.keys(t) as BuildTag[]).sort((a, b) => (t[b] ?? 0) - (t[a] ?? 0)).slice(0, MAX_SCHOOLS);
+  if (this.branchSchool && !out.includes(this.branchSchool) && out.length < MAX_SCHOOLS) out.push(this.branchSchool);
+  return out;
+ }
+ /** 这一派还能不能往里学（是主修，或主修还没满两派）。 */
+ schoolOpen(s: BuildTag): boolean { const m = this.majors(); return m.includes(s) || m.length < MAX_SCHOOLS; }
  /** 这一派还能不能研读心法。 */
  manualsRead(): readonly BuildTag[] { return this.manuals; }
- canManual(s: BuildTag): boolean { return SCHOOL_IDS.includes(s) && !this.manuals.includes(s); }
+ canManual(s: BuildTag): boolean { return SCHOOL_IDS.includes(s) && !this.manuals.includes(s) && this.schoolOpen(s); }
  power(id: TreasureId): number { return this.treasurePower[id] ?? 1; }
  /**
   * 2026-11-19 构筑上限随章节开放（wave-progression-redesign.md §4.4）：战法第五章起可精研到 Lv4、第九章起 Lv5。
@@ -102,7 +119,7 @@ export class BuildState {
  level(id: TacticId): number { return Math.min(3, this.rank(id)); }
  /** 占战法格的种数（基础成长不占）。 */
  slots(): number { return (Object.keys(this.tactics) as TacticId[]).filter(id => TDEF[id] && !TDEF[id].general && this.rank(id) > 0).length; }
- canLearn(id: TacticId): boolean { const d = TDEF[id]; if (!d || d.hidden) return false; const cap = d.general ? 3 : BuildState.rankCap; return this.rank(id) < cap && (this.rank(id) > 0 || !!d.general || this.slots() < BuildState.slotCap); }
+ canLearn(id: TacticId): boolean { const d = TDEF[id]; if (!d || d.hidden) return false; if (!d.general && d.tag && !this.schoolOpen(d.tag)) return false; /* 主修两派之外不出 */ const cap = d.general ? 3 : BuildState.rankCap; return this.rank(id) < cap && (this.rank(id) > 0 || !!d.general || this.slots() < BuildState.slotCap); }
  learn(id: TacticId): boolean { if (!this.canLearn(id)) return false; this.tactics[id] = this.rank(id) + 1; return true; }
  /** 各派的势。 */
  tags(): Record<BuildTag, number> {

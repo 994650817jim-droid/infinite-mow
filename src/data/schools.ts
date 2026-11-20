@@ -9,6 +9,8 @@ import type { CharacterId } from './characters';
 import type { FollowerTemplate } from './recruits';
 
 export type SchoolId = 'fire' | 'stratagem' | 'archery' | 'cavalry' | 'warrior' | 'formation';
+/** 一次征程最多发展几派（用户 11-20「关于流派也是最多往两个流派发展」；BuildState.majors）。 */
+export const MAX_SCHOOLS = 2;
 export const SCHOOL_IDS: readonly SchoolId[] = ['fire', 'stratagem', 'archery', 'cavalry', 'warrior', 'formation'];
 
 export interface SchoolDef {

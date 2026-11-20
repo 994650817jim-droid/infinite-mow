@@ -24,7 +24,7 @@ await p.evaluate(() => { const g = window.__game, s0 = g.scene.getScene('GameSce
 await p.waitForFunction(() => { const s = window.__game.scene.getScene('GameScene'); return window.__game.scene.isActive('GameScene') && s?.player && s.buildCombat; }, null, { timeout: 120000 });
 await p.waitForTimeout(1500);
 const ev = (fn, a) => p.evaluate(([f, a]) => { const s = window.__game.scene.getScene('GameScene'); window.__S = s; for (let i = 0; i < 8 && s.mode !== 'none' && !s.over; i++) { if (s.mode === 'levelup' || s.mode === 'bossloot') s.chooseUpgrade?.(0); else { s.__DEV_ACTIONS?.closePopup?.(); if (s.mode !== 'none' && s.mode !== 'result' && s.mode !== 'story') s.setMode?.('none'); } } return eval('(' + f + ')')(s, a); }, [String(fn), a]);
-const fresh = () => ev(s => { const b = s.player.growth.build; b.tactics = {}; b.treasures = []; b.extraTags = []; s.player.damageImmune = true; return true; });
+const fresh = () => ev(s => { const b = s.player.growth.build; b.tactics = {}; b.treasures = []; b.extraTags = []; b.manuals = []; b.branchSchool = null; s.player.damageImmune = true; return true; });
 
 // 1. 势
 await fresh();
@@ -49,9 +49,29 @@ await ev(s => { s.pendingLevels = 1; s.openUpgrade(); }); await p.waitForTimeout
 await p.screenshot({ path: `${OUT}/levelup-cards.png` });
 await ev(s => { s.chooseUpgrade(0); });
 
+// 2b. 主修两派（11-20「关于流派也是最多往两个流派发展」）：火攻、弓弩各学一招后，第三派的战法 / 心法一律不出；三选一不空不重
+await fresh();
+const maj = await p.evaluate(async () => {
+  const s = window.__S, b = s.player.growth.build, up = await window.__mod('data/upgrades.ts'), SC = await window.__mod('data/schools.ts');
+  const before = { open: b.schoolOpen('stratagem'), majors: b.majors() };
+  b.learn('ember'); b.learn('eagle');
+  const majors = b.majors(), outNames = SC.SCHOOL_IDS.filter(x => !majors.includes(x)).map(x => SC.SCHOOLS[x].name);
+  const r = { before, majors, gust: b.canLearn('gust'), snare: b.learn('snare'), manStrat: b.canManual('stratagem'), manFire: b.canManual('fire'), third: 0, bad: [], hands: 0 };
+  for (let i = 0; i < 300; i++) { const h = up.buildUpgradeOptions(s.player, s.player.weapons, s.player.growth); r.hands++;
+    if (h.length !== 3 || new Set(h.map(o => o.id)).size !== h.length || h.some(o => !o.id || !o.name)) r.bad.push(h.map(o => o.id + ':' + (o.name ?? '')));
+    for (const o of h) if (o.kind === 'tactic' && outNames.some(n => (o.categoryLabel ?? '').startsWith(n))) r.third++; }
+  b.tactics = {}; r.respec = b.majors().length === 0 && b.schoolOpen('stratagem'); /* 重整构筑把战法清掉后又能选派 */
+  b.branchSchool = 'cavalry'; b.learn('ember'); r.branch = b.majors(); r.branchBlocks = !b.canLearn('gust'); b.branchSchool = null;
+  return r;
+});
+ck('主修两派：没学战法时六派都能选；火攻、弓弩各学一招 → 主修「火攻 · 弓弩」', maj.before.open && maj.before.majors.length === 0 && maj.majors.join() === 'fire,archery', maj);
+ck('第三派：战法学不了（疾风 / 绊阵）、心法不能研读；主修派心法照常', !maj.gust && !maj.snare && !maj.manStrat && maj.manFire, maj);
+ck('300 次三选一：没有第三派战法卡；每手 3 张、不空、不重复', maj.third === 0 && maj.bad.length === 0, { third: maj.third, bad: maj.bad.slice(0, 3) });
+ck('重整构筑清掉战法后又能选派；专职那派占一个主修（骑突 + 火攻 → 奇谋学不了）', maj.respec && maj.branch.includes('cavalry') && maj.branch.includes('fire') && maj.branchBlocks, maj);
+
 // 3. 档位效果：六派都给到 4 势（bonus 模拟），学火油罐 / 疾风 / 绊阵 / 鹰眼 / 蓄势冲锋 / 火种
 await fresh();
-await ev(s => { const b = s.player.growth.build; for (const id of ['ember', 'napalm', 'gust', 'snare', 'eagle', 'stored_edge']) b.learn(id);
+await ev(s => { const b = s.player.growth.build; for (const id of ['ember', 'napalm', 'gust', 'snare', 'eagle', 'stored_edge']) b.tactics[id] = 1; /* 档位效果烟测：直接写入（主修两派规则下正常学不到六派，相当于旧档） */
   b.bonus = { fire: 3, stratagem: 3, archery: 3, cavalry: 3, warrior: 4, formation: 4 }; b.bonusNotes = {};
   window.__t0 = { ...s.buildCombat.stats }; window.__st0 = s.controlBuild?.stuns ?? 0; return b.tags(); });
 const tags4 = await ev(s => s.player.growth.build.tags());

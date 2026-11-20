@@ -3105,16 +3105,19 @@ export class GameScene extends Phaser.Scene {
   protected openBranch(): void {
     if (this.branchPanel || this.over || !this.needBranch()) return; // 已选专职：本次征程锁定，只有行营「重整构筑」能洗掉
     const ch = this.runConfig.character, hero = getCharacter(ch), own = this.player.weapons.find(w => w.id === hero.startWeapon)!, tags = this.player.growth.build.tags();
-    this.branchOpts = [...branchesFor(own.id)]; this.branchFitId = fitBranch(this.branchOpts, s => tags[s] ?? 0, heroAffinity(ch))?.id ?? '';
+    // 主修两派：主修已满时，第三派那条专职照样能选，但不算契合（也不占主修）
+    const bd = this.player.growth.build;
+    this.branchOpts = [...branchesFor(own.id)]; this.branchFitId = fitBranch(this.branchOpts.filter(x => bd.schoolOpen(x.school)), s => tags[s] ?? 0, heroAffinity(ch))?.id ?? '';
+    const majors = bd.majors(), notes = Object.fromEntries(this.branchOpts.map(x => [x.id, majors.includes(x.school) ? '' : bd.schoolOpen(x.school) ? `选定后「${SCHOOLS[x.school].name}」成为主修之一` : `「${SCHOOLS[x.school].name}」不在主修两派：没有契合加成`]));
     this.setMode('branch'); this.sfx.play('gong');
     playSheet(this, 'fx_awaken_' + (branchById(this.branchFitId)?.school ?? 'warrior'), this.player.x, this.player.y - 20, { size: 260, ms: 900, depth: DEPTH.fx, add: true });
-    this.branchPanel = openBranchPanel(this, { hero: ch, heroName: hero.name, weaponName: weaponName(own.id, ch), branches: this.branchOpts, fitId: this.branchFitId, onPick: (b) => this.chooseBranch(this.branchOpts.indexOf(b)) });
+    this.branchPanel = openBranchPanel(this, { hero: ch, heroName: hero.name, weaponName: weaponName(own.id, ch), branches: this.branchOpts, fitId: this.branchFitId, notes, onPick: (b) => this.chooseBranch(this.branchOpts.indexOf(b)) });
   }
   /** 选第 i 条专职（按钮 / 1 2 键 / 测试）。 */
   chooseBranch(i: number): boolean {
     const b = this.branchOpts[i]; if (!b || !this.branchPanel) return false;
     const own = this.player.weapons.find(w => w.id === getCharacter(this.runConfig.character).startWeapon); if (!own || own.branch) return false; // 已锁定不能改
-    own.branch = b.id; own.attuned = b.id === this.branchFitId;
+    own.branch = b.id; own.attuned = b.id === this.branchFitId; this.player.growth.build.branchSchool = b.school; // 主修：专职那派（有空位时）占一派
     this.branchPanel.destroy(); this.branchPanel = null; this.setMode('none');
     this.sfx.play('gong'); playSheet(this, 'fx_awaken_' + b.school, this.player.x, this.player.y - 20, { size: 300, ms: 1000, depth: DEPTH.fx, add: true });
     this.showWaveBanner('兵器专职 · ' + b.name, false, own.attuned ? `契合流派 · 专职效果 +${Math.round((BRANCH_FIT.fitMul - 1) * 100)}%` : '本次征程锁定');

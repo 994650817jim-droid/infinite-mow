@@ -57,11 +57,12 @@ const arrow = await p.evaluate(async () => {
   const far = H.forceSpot(1500, 0, 'well'); P.hp = P.maxHp * .5; await wait(300);
   const shown = far.arrow.visible, text = far.arrow.getByName('ha-text').text;
   P.hp = P.maxHp * .95; await wait(300); const hiddenWhenHealthy = !far.arrow.visible;
-  P.hp = P.maxHp * .45; H.forceSpot(0, 40, 'spring'); H.dropFood(P.x + 120, P.y + 70, .05, '干粮'); P.hp = P.maxHp * .45; await wait(700);
-  return { shown, text, hiddenWhenHealthy };
+  P.hp = P.maxHp * .45; H.forceSpot(0, 40, 'herb'); H.dropFood(P.x + 130, P.y + 80, .05, '干粮'); H.dropFood(P.x - 140, P.y + 70, .06, '酒肉'); P.hp = P.maxHp * .45; await wait(700);
+  const herb = H.liveSpots.find(q => q.kind === 'herb'), foods = H.foods.filter(f => f.active).map(f => f.img.texture.key + ':' + f.img.frame.name); P.hp = P.maxHp * .95; return { shown, text, hiddenWhenHealthy, herb: herb && herb.img.texture.key + ':' + herb.img.frame.name, foods };
 });
 await p.screenshot({ path: `${OUT}/spot-healing.png` });
 ck('泉眼在屏外、主将受伤时屏幕边缘有箭头（满血不出）', arrow.shown && /水井/.test(arrow.text) && arrow.hiddenWhenHealthy, arrow);
+ck('新图：药草丛（heal_spot_herb）、干粮 / 酒肉（heal_food 0 / 1）', arrow.herb === 'heal_spot_herb:0' && arrow.foods.includes('heal_food:0') && arrow.foods.includes('heal_food:1'), arrow);
 
 // 4 军中伤药：副将必掉 15%，精锐保底
 const med = await p.evaluate(async () => {

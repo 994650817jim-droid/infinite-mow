@@ -53,7 +53,7 @@ export const BATTLE_HEAL = {
 export type HealSpotKind = 'spring' | 'well' | 'herb';
 export const HEAL_SPOT_ART = {
   water: { key: 'scene_v2_waterpoints', file: 'assets/scene-v2/waterpoints.png', cell: 512 },
-  /** 药草丛（新图，heal-spots 图集帧 0 茂盛 / 1 采过）：没载到就不刷这种。 */
-  herb: { key: 'heal_spot_herb', file: 'assets/heal-props/herb_patch.png', cell: 256 },
+  /** 药草丛（美术会话 11-19，帧 0 茂盛 / 1 采过）：没载到就不刷这种。 */
+  herb: { key: 'heal_spot_herb', file: 'assets/heal-props/herb_patch.png', cell: 256 }, // BootScene 载
 } as const;
 export const HEAL_SPOT_NAME: Record<HealSpotKind, string> = { spring: '泉眼', well: '水井', herb: '药草丛' };

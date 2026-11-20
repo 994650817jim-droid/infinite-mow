@@ -78,11 +78,11 @@ export class BattleHeal {
     if (!f) { if (this.foods.length >= F.max) return null; f = { img: s.add.image(0, 0, 'yellow_props', 16).setName('heal-food'), x: 0, y: 0, until: 0, ratio, name, active: false, flying: false, born: 0 }; this.foods.push(f); }
     const grain = name === BATTLE_HEAL.food.grain.name;
     // 图：新图（heal_food 0 干粮 / 1 酒肉）到了用新图；先借营地粮袋（干粮）、酒葫芦（酒肉）
-    if (s.textures.exists('heal_food')) f.img.setTexture('heal_food', grain ? 0 : 1).setDisplaySize(40, 40);
+    if (s.textures.exists('heal_food')) f.img.setTexture('heal_food', grain ? 0 : 1).setDisplaySize(58, 58); // 物件约占格子六成宽
     else if (grain || !s.textures.exists('heal_props')) f.img.setTexture('yellow_props', 16).setDisplaySize(42, 42);
     else f.img.setTexture('heal_props', 2).setDisplaySize(36, 36);
     Object.assign(f, { x, y, until: this.h.now() + F.lifeMs, ratio, name, active: true, flying: false, born: this.h.now() });
-    f.img.setPosition(x, y).setOrigin(.5, .8).setAlpha(1).setVisible(true).setDepth(DEPTH.gem + 1);
+    f.img.setPosition(x, y).setOrigin(.5, f.img.texture.key === 'heal_food' ? .74 : .8).setAlpha(1).setVisible(true).setDepth(DEPTH.gem + 1);
     this.stats.foodDropped++;
     return f;
   }
@@ -129,7 +129,7 @@ export class BattleHeal {
     if (!water && !herb) return null; // 图还没载到：这一处先不放（不画替代图形）
     if (this.spots.length >= BATTLE_HEAL.spot.maxLive) this.removeSpot(this.spots[0]);
     if (kind === 'herb' && !herb) kind = 'spring';
-    const img = kind === 'herb' ? s.add.image(x, y, HEAL_SPOT_ART.herb.key, 0).setOrigin(.5, .7).setDisplaySize(150, 150).setDepth(actorDepth(y))
+    const img = kind === 'herb' ? s.add.image(x, y, HEAL_SPOT_ART.herb.key, 0).setOrigin(.5, .62).setDisplaySize(176, 176).setDepth(DEPTH.ground + 3) // 药草丛贴地：碎石圈中心对着回血圈
       : kind === 'well' ? s.add.image(x, y, W.key, 2).setOrigin(.5, .82).setDisplaySize(150, 150).setDepth(actorDepth(y))
         : s.add.image(x, y, W.key, 0).setOrigin(.5, .55).setDisplaySize(170, 170).setDepth(DEPTH.ground + 3);
     img.setName('heal-spot-' + kind);
@@ -137,7 +137,7 @@ export class BattleHeal {
     const cy = kind === 'well' ? y + 52 : y;
     const ring = s.add.graphics().setDepth(DEPTH.ground + 3.5).setName('heal-spot-ring');
     // 字：泉眼写在泉下面（主将站在泉上，头顶是「主将」名牌），水井 / 药草丛写在上面
-    const label = s.add.text(x, kind === 'spring' ? y + 74 : y - 132, '', { fontFamily: FONT, fontSize: '13px', color: '#c8ffd8', align: 'center', resolution: 2, stroke: '#08180e', strokeThickness: 4 }).setOrigin(.5, kind === 'spring' ? 0 : 1).setDepth(DEPTH.dmgText - 2).setName('heal-spot-label');
+    const label = s.add.text(x, kind !== 'well' ? y + 74 : y - 132, '', { fontFamily: FONT, fontSize: '13px', color: '#c8ffd8', align: 'center', resolution: 2, stroke: '#08180e', strokeThickness: 4 }).setOrigin(.5, kind !== 'well' ? 0 : 1).setDepth(DEPTH.dmgText - 2).setName('heal-spot-label');
     const spot: Spot = { kind, x, y: cy, img, ring, label, arrow: this.makeArrow(), left: 1, readyAt: 0, fxAt: 0, boss };
     this.spots.push(spot); this.stats.spotsSpawned++;
     return spot;

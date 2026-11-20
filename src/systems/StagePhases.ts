@@ -115,6 +115,8 @@ export class StagePhaseRunner {
   }
   /** 体型：专属图已在 def 里定好（lieutenantArtMul）；回退的精锐图放大 lieutenantScale（Enemy.sizeMul：以前直接 setScale，v2 图下一帧就被冲掉，副将其实没变大）。 */
   private enlarge(e: Enemy): void { if (!/^lt_/.test(e.def.walkVisual?.texture ?? '')) e.setSizeMul(PHASES.lieutenantScale); }
+  /** 营寨守将（CampSiege：营寨快拆完时出营拼命）：副将形象、精锐 ×3 血（不是副将那么厚）。 */
+  captainDef(): EnemyDef { return { ...this.lieutenantDef(), hp: this.h.def('elite').hp * 3 }; }
   /** 刷一个副将一档的精锐（体型放大）。 */
   spawnLieutenant(x: number, y: number): Enemy | null { const e = this.h.spawn('elite', x, y, this.lieutenantDef()); if (e) this.enlarge(e); return e; }
   private lieutenant(name: string): void {

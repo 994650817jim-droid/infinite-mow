@@ -129,6 +129,7 @@ import { BattleHeal } from '../systems/BattleHeal';
 import { BATTLE_HEAL } from '../data/battleHeal';
 import { TentEdgeHints, tentMarks, type TentCtx } from '../systems/SpawnTents';
 import { GATE_SPAWN, isRangedSpawn } from '../data/gateSpawn';
+import { CampSiege } from '../systems/CampSiege';
 import { FORTUNE, FORTUNE_EVENT, rollFortuneBuffs, type FortuneEventKind } from '../data/fortunes';
 import { applyStageBuff, clearStageBuffs } from '../systems/StageBuffs';
 import { BOUNTIES, GAMBLES, JINNANG, NEW_CARDS, chestCharmCard, drawNewCards, type BountyId, type GambleId, type JinnangId } from '../systems/LevelCards';
@@ -493,8 +494,10 @@ export class GameScene extends Phaser.Scene {
   battleHeal:BattleHeal|null=null;
   /** 刷兵帐篷的屏外边缘提示（systems/SpawnTents）。 */
   tentHints:TentEdgeHints|null=null;
+  /** 营寨攻坚（systems/CampSiege，用户 11-20「营寨太容易被摧毁了」）。 */
+  campSiege:CampSiege|null=null;
   /** 刷兵帐篷统一规则的上下文（data/spawnTents）：章节、首领是否出场、同屏敌兵数、拆营奖励（随军粮 + 干粮）。 */
-  tentCtx():TentCtx{return{chapter:()=>this.phasePlan?.chapter??CHAPTER_INDEX[this.hardKey()]??2,bossOn:()=>this.bossSpawned,crowd:()=>this.activeEnemyCount(),sfx:k=>this.sfx.play(k),reward:(x,y,g,food)=>{this.legion.food+=g;if(food)this.battleHeal?.dropFood(x+24,y+18,BATTLE_HEAL.food.grain.ratio,BATTLE_HEAL.food.grain.name);}};}
+  tentCtx():TentCtx{return{chapter:()=>this.phasePlan?.chapter??CHAPTER_INDEX[this.hardKey()]??2,bossOn:()=>this.bossSpawned,crowd:()=>this.activeEnemyCount(),sfx:k=>this.sfx.play(k),reward:(x,y,g,food)=>{this.legion.food+=g;if(food)this.battleHeal?.dropFood(x+24,y+18,BATTLE_HEAL.food.grain.ratio,BATTLE_HEAL.food.grain.name);},armor:(e,tier,o)=>this.campSiege?.add(e,tier,o),campMul:e=>this.campSiege?.intervalMul(e)??1};}
   /** 场景可放东西的位置：夹进场地、挪出墙 / 营栅 / 房子，再避开水与树（机缘、回血点共用）。 */
   /**
    * 这一点是不是在关闭的城墙 / 关墙后面（城门还没破）：是就返回墙线（世界 y，墙内 = y 小于墙线）。
@@ -878,6 +881,10 @@ export class GameScene extends Phaser.Scene {
         return orig(duration, typeof intensity === 'number' ? intensity * k * T.globalMul : intensity, force, callback, context);
       }) as typeof cam.shake; }
     this.shieldBars=new ShieldBars(this);this.events.once('shutdown',()=>{this.shieldBars?.clear();this.shieldBars=null;this.objective?.clear();this.objective=null;this.objectiveText=undefined;});
+    // 营寨攻坚要在关卡目标之前建好（破营目标的营寨一放下就登记）
+    this.campSiege?.clear();this.campSiege=new CampSiege({scene:this,player:()=>this.player,now:()=>this.combatNow,eliteHp:()=>this.chapter.enemies.elite.hp*this.chapter.hpScale(this.elapsed)*(this.chapter.growth?.hp??1), /* 同 spawnEnemy 的小怪成长 */chapter:()=>this.tentCtx().chapter(),spawn:(k,x,y)=>this.spawnEnemy(k,x,y,undefined,true),
+      captain:(x,y)=>{const pr=this.phaseRunner,e=this.spawnEnemy('elite',x,y,undefined,true,pr?pr.captainDef():{...this.chapter.enemies.elite,hp:this.chapter.enemies.elite.hp*3});if(e&&!pr?.ltArt())e.setSizeMul(1.3);return e;},
+      sfx:k=>this.sfx.play(k),gem:(x,y,v)=>this.spawnGem(x,y,v),shake:()=>this.cameras.main.shake(220,.005)});this.events.once('shutdown',()=>{this.campSiege?.clear();this.campSiege=null;});
     this.setupObjective();
     this.setupBattleMap();
     // 坐骑：马厩里给该武将分配的马（第一章通关后马厩开放；换马只在休整时，下一关出征生效）
@@ -1297,7 +1304,7 @@ export class GameScene extends Phaser.Scene {
 
     this.player.update(time, dt);this.mount?.update(dt,this.combatNow);
 
-    if(!this.over){for(const c of this.bossChests)c.update(this.combatNow);this.itemDrops?.update();this.battleHeal?.update(dt,this.bossSpawned);(this.tentHints??=new TentEdgeHints(this)).update(this.mode!=='none'||this.over);this.relics?.update(this.combatNow);this.relicShips?.update(this.combatNow);}
+    if(!this.over){for(const c of this.bossChests)c.update(this.combatNow);this.itemDrops?.update();this.battleHeal?.update(dt,this.bossSpawned);this.campSiege?.update();(this.tentHints??=new TentEdgeHints(this)).update(this.mode!=='none'||this.over);this.relics?.update(this.combatNow);this.relicShips?.update(this.combatNow);}
     this.deathFx?.update(this.combatNow);
     this.supplies?.update(dt,time,this.battlefieldDetails.props,(enemy,damage)=>this.hitEnemy(enemy,damage,time,'fire',false,false),this.allies,(ally,damage,now)=>this.legion.hurt(ally,damage,now));
     if(!this.envInit&&this.supplies){this.envInit=true;const sf=this.sceneFaction(),cfg0=envConfigFor(this.scene.key,this.chapter.id,(this as unknown as {guanduStage?:number}).guanduStage),cfg=cfg0&&sf!==null&&sf<=3?{...cfg0,faction:sf as Faction}:cfg0;if(cfg){const sup=this.supplies;this.env=new EnvInteractions({scene:this,player:this.player,supplies:sup,enemies:()=>this.enemies,allies:()=>this.allies,hitEnemy:(e,d)=>{this.hitEnemy(e,d,this.combatNow,'fire',false,false);},hurtAlly:(a,d)=>{this.legion.hurt(a,d,this.combatNow);},spawnEnemy:(x,y)=>this.spawnEnemy('infantry',x,y,undefined,true),spawnGem:(x,y,v)=>this.spawnGem(x,y,v),spawnChest:(x,y)=>{this.itemDrops?.spawnChest(x,y);},now:()=>this.combatNow,sfx:k=>this.sfx.play(k)},cfg);this.events.once('shutdown',()=>{this.env?.destroy();this.env=null;});}}
@@ -1488,7 +1495,7 @@ export class GameScene extends Phaser.Scene {
   protected setupObjective(): void {
     this.objective?.clear(); this.objective = null; this.battleOrders?.resetAuto();
     const o = this.chapter.objective; if (!o) { this.objectiveText?.setVisible(false); return; }
-    this.objective = new StageObjectives({scene: this, player: this.player, enemies: this.enemies, spawn: (k, x, y) => this.spawnEnemy(k, x, y, undefined, true), spawnCamp: (x, y, hp) => this.supplies?.spawnCamp(x, y, Math.round(hp * this.chapter.hpScale(this.elapsed))) ?? null, kills: () => this.kills, elapsed: () => this.elapsed, banner: (t, c) => this.showWaveBanner(t, false, c)}, o);
+    this.objective = new StageObjectives({scene: this, player: this.player, enemies: this.enemies, spawn: (k, x, y) => this.spawnEnemy(k, x, y, undefined, true), spawnCamp: (x, y, hp) => { const e = this.supplies?.spawnCamp(x, y, Math.round(hp * this.chapter.hpScale(this.elapsed))) ?? null; if (e) this.campSiege?.add(e, 'camp', { guards: !this.luoyangCamps && !this.dzLubu, onAlarm: () => this.luoyangCamps?.alarm(e) }); return e; }, /* 破营目标：营寨攻坚（2-3 营寨自带守军） */ kills: () => this.kills, elapsed: () => this.elapsed, banner: (t, c) => this.showWaveBanner(t, false, c)}, o);
     if (!this.objectiveText?.active) this.objectiveText = this.add.text(GAME_WIDTH / 2, 78, '', warText(14, '#ffd98a')).setOrigin(.5, 0).setScrollFactor(0).setDepth(DEPTH.hud + 1).setStroke('#1a120b', 4).setName('objective-text');
     this.objectiveText.setVisible(!this.ordersPanel).setText(this.objective.text);
   }
@@ -2450,7 +2457,7 @@ export class GameScene extends Phaser.Scene {
     if (weaponHit && !fromAlly && this.branchRt && !enemy.isSupplySlot) this.branchRt.onWeaponHit(enemy, rawDamage); // 兵器专职（仁德 / 三英）
     if (this.chain.until > time && !this.chain.sharing && this.chain.set.get(enemy) === enemy.spawnId) { this.chain.sharing = true; for (const [o, life] of this.chain.set) if (o !== enemy && o.active && o.spawnId === life) this.hitEnemy(o, rawDamage * .3, time, source, fromAlly, false); this.chain.sharing = false; } // 锦囊「连环计」
     enemy.lastHitFromAlly = fromAlly;
-    if(enemy.isSupplySlot){enemy.hp-=Math.max(1,Math.round(rawDamage));enemy.flash(time);this.sfx.play('hitHeavy');if(enemy.hp<=0)this.killEnemy(enemy);return false;}
+    if(enemy.isSupplySlot){if(this.campSiege?.isCamp(enemy)){const d=this.campSiege.incoming(enemy,rawDamage,source,fromAlly,time);enemy.hp-=d;if(d>0)enemy.flash(time);this.sfx.play(d>0?'hitHeavy':'hitLight');if(enemy.hp<=0)this.killEnemy(enemy);return false;} /* 营寨攻坚：耐久 / 每秒上限 / 火攻 / 远打（systems/CampSiege） */enemy.hp-=Math.max(1,Math.round(rawDamage));enemy.flash(time);this.sfx.play('hitHeavy');if(enemy.hp<=0)this.killEnemy(enemy);return false;}
     if (enemy === this.boss) this.ensureBossPhase2();
     if (this.xiliang) rawDamage *= this.xiliang.incoming(enemy, source);
     if (enemy === this.boss && this.moveset) { rawDamage *= this.moveset.incoming(fromAlly); this.moveset.hit(time); }

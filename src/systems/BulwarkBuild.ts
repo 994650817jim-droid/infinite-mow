@@ -20,7 +20,7 @@ export class BulwarkBuild {
  incoming(u:Ally,now:number):number{const m=this.guards.get(u);return m&&m.life===u.lifeId&&now<m.until?m.multiplier:1;}
  onAllyHurt(u:Ally,now:number):void{
   const n=this.state.level('watch'),seal=this.has('army_seal');if((!n&&!seal)||now<this.watchAt||Math.hypot(u.x-this.player.x,u.y-this.player.y)>220)return;
-  this.watchAt=now+5000;const candidates=this.units.filter(a=>a.active&&Math.hypot(a.x-u.x,a.y-u.y)<=120).sort((a,b)=>a.hp/a.maxHp-b.hp/b.maxHp).slice(0,(n?[1,2,3][n-1]:1)+(seal?1:0));
+  this.watchAt=now+5000;buildVfx(this.player.scene).emit('watch',u.x,u.y-8,now,72,0,520);const candidates=this.units.filter(a=>a.active&&Math.hypot(a.x-u.x,a.y-u.y)<=120).sort((a,b)=>a.hp/a.maxHp-b.hp/b.maxHp).slice(0,(n?[1,2,3][n-1]:1)+(seal?1:0));
   for(const a of candidates)this.guards.set(a,{life:a.lifeId,until:now+(n?[1500,1800,2100][n-1]:1500),multiplier:1-((n?[.15,.20,.25][n-1]:.15)+(seal?.1*this.state.power('army_seal'):0))});
  }
  update(now:number):void{

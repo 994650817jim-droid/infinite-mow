@@ -30,7 +30,8 @@ import {chapterVictoryNotice} from '../ui/ChapterVictoryNotice';
 import {HARD_MODE,HARD_TITLES} from '../data/hardMode';
 import {recordHardClear,rewardGrain} from "../world/WorldStore";
 import {chapterState,openChapterCount,type TimelineChapterId} from '../world/ChapterTimeline';
-import {buildVfx} from '../systems/BuildVfx';
+import {buildVfx,comboFx} from '../systems/BuildVfx';
+import {COMBOS} from '../data/schoolCombos';
 import {SchoolSynergy} from '../systems/SchoolSynergy';
 import {SchoolBanner} from '../ui/SchoolBanner';
 import {BulwarkBuild} from '../systems/BulwarkBuild';
@@ -196,6 +197,8 @@ import { WEAPON_OVER, branchById } from '../data/weaponBranches';
 import { WeaponBranches } from '../systems/WeaponBranches';
 import { layoutRich, SCOPE_BADGE, cardScope } from '../ui/CardRichText';
 import { checkHeroJoins } from '../ui/HeroJoinReveal';
+import {StatusFx} from '../systems/StatusFx';
+import {JinnangFx} from '../systems/JinnangFx';
 
 interface Gem {
   img: Phaser.GameObjects.Image;
@@ -646,7 +649,7 @@ export class GameScene extends Phaser.Scene {
   protected spearShots: SpearShot[] = [];
   protected weaponHost!: WeaponHost;
   private martialFields!: MartialFields;
-  private buildCombat!:BuildCombat;
+  private buildCombat!:BuildCombat;private statusFx?:StatusFx;private jinnangFx?:JinnangFx;
   private controlBuild?:ControlBuild;
   private bulwarkBuild?:BulwarkBuild;
   /** 流派合击（部曲 / 伏兵 / 背水一战）+ 六派觉醒（2026-11-19 流派重做第 2 期）。 */
@@ -895,15 +898,16 @@ export class GameScene extends Phaser.Scene {
         onUpdate:o.follow?img=>img.setPosition(pl.x+ox,pl.y+oy):mv?(img,t)=>img.setPosition(x+mv.dx*t,y+mv.dy*t):undefined});}});
     this.legion.awakeningDefense={incoming:(_u,n)=>(this.synergy?.allyIncoming(n)??1)*(this.player.growth.build.tier('formation')>=2?1-SCHOOL_TIER.formation.allyTaken:1),onAllyHurt:()=>{}};
     this.events.once('shutdown',()=>{this.synergy?.clear();this.synergy=undefined;});
-    this.buildCombat.setOrigin(()=>({x:this.player.x,y:this.player.y}));
+    this.buildCombat.setOrigin(()=>({x:this.player.x,y:this.player.y}));this.statusFx=new StatusFx(this,this.buildCombat);this.jinnangFx=new JinnangFx(this,()=>({x:this.player.x,y:this.player.y}));   // 敌人身上的灼烧 / 迟滞 / 眩晕 / 破甲标记（手绘序列帧）
     this.buildCombat.onFlank=targets=>this.flankBladeFx().strike(targets);
     this.buildCombat.onWindstep=e=>this.windstepFx().burst(e.x,e.y);
     // 流派重做（data/schools.ts）：奇谋 2 势被控制加深、震荡 / 冲阵 / 燎原的一圈、火油罐火区、疾风
     this.buildCombat.controlled=(e,n)=>this.controlBuild?.isControlled(e,n)??false;
+    this.buildCombat.onFx=(st,x,y,sz)=>buildVfx(this).emit(st,x,y,this.combatNow,sz,0,420);
     this.buildCombat.onShock=(x,y,r)=>buildVfx(this).emit('pure_charge',x,y-6,this.combatNow,r*2,0,320,true);
     this.buildCombat.onNapalm=(x,y,r,dmg,lv)=>{this.martialFields.add(x,y,r,dmg,3000,lv);this.spawnFlameFx(x,y,r);};
     // 合击（data/schoolCombos.ts）：第一次触发打横幅；烈马脚下火；冲势打出 / 眩晕交给 SchoolSynergy（声东击西、铁骑冲阵、十面埋伏）
-    this.buildCombat.onCombo=id=>this.synergy?.note(id);
+    this.buildCombat.onCombo=id=>{this.synergy?.note(id);const c=COMBOS.find(x=>x.id===id);if(c)comboFx(this,c.a,c.b,id,this.player.x,this.player.y,this.combatNow);};
     this.buildCombat.onFirePatch=(x,y,r,dmg,ms)=>{this.martialFields.add(x,y,r,dmg,ms,1);this.spawnFlameFx(x,y,r*.8);};
     this.buildCombat.onCharge=(e,n)=>this.synergy?.onCharge(e,n);
     this.buildCombat.onStun=(e,n)=>this.synergy?.onStun(e,n);
@@ -1276,10 +1280,10 @@ export class GameScene extends Phaser.Scene {
     this.applyContactDamage();
     if (this.over) return;
     this.martialFields.update(dt);
-    this.buildCombat.update(this.combatNow);
+    this.buildCombat.update(this.combatNow);this.statusFx?.update(this.combatNow,this.enemies);this.jinnangFx?.update(this.combatNow,this.chain);
     // 兵阵 4 势「援军」：每 12 秒从后方冲来 3 名义军助战 10 秒（data/schools.ts SCHOOL_TIER.formation）
     if(this.player.growth.build.tier('formation')>=4&&this.combatNow>=this.reinforceAt){const F=SCHOOL_TIER.formation;this.reinforceAt=this.combatNow+F.everyMs;
-      this.reinforcePush().spawnEscort(F.n,F.lifeMs);}
+      this.reinforcePush().spawnEscort(F.n,F.lifeMs);buildVfx(this).emit('reinforce',this.player.x,this.player.y-8,this.combatNow,150,0,800,true);}
     {const fc=this.buildCombat.flankCharge();if(fc.level||this.flankFx)this.flankBladeFx().update(dt,fc.level,fc.ratio);}
     {const wc=this.buildCombat.windstepCharge();if(wc.level||this.windFx)this.windstepFx().update(dt,wc.level,wc.ratio);}
     this.controlBuild?.update(this.combatNow);
@@ -2155,6 +2159,8 @@ export class GameScene extends Phaser.Scene {
   protected priorityWeaponTarget(range:number,bodyRadius=true):Enemy|null{
     const px=this.player.x,py=this.player.y;let boss:Enemy|null=null,elite:Enemy|null=null,bd=Infinity,ed=Infinity;
     { const lock=this.objective?.lockedTarget(px,py,range); if(lock)return lock; } // 关卡锁定目标（敌营等）排第一：用户「武将攻击逻辑会一直不打营寨」
+    // 首领的护法符柱（1-2 张宝，Enemy.ward）：符柱没碎时首领几乎不受伤，射程内有符柱就先打最近的符柱
+    { let ward:Enemy|null=null,wd=Infinity;for(const e of this.grid.query(px,py,range+60)){if(!e.active||!e.ward||e.hp<=0)continue;const d=Math.hypot(e.x-px,e.y-py)-(bodyRadius?e.radius:0);if(d<=range&&d<wd){wd=d;ward=e;}}if(ward)return ward; }
     for(const e of this.grid.query(px,py,range+60)){if(!e.active||e.isSupplySlot||e.invulnerable)continue; /* 刀枪不入的（城头董卓、劝降中）不当首选目标 */const d=Math.hypot(e.x-px,e.y-py)-(bodyRadius?e.radius:0);if(d>range)continue;
       if(e.kind==='boss'&&d<bd){bd=d;boss=e;}else if(e.kind==='elite'&&d<ed){ed=d;elite=e;}}
     return boss??elite;
@@ -3820,7 +3826,7 @@ export class GameScene extends Phaser.Scene {
         query: (x, y, r) => this.grid.query(x, y, r), damage: (e, n, fire) => { this.hitEnemy(e, n, this.combatNow, fire ? 'fire' : 'melee', false, false); },
         shi: s => this.player.growth.build.tags()[s] ?? 0, allies: () => this.allies,
         troopBoost: (mul, ms) => { this.legion.drillMultiplier *= mul; this.time.delayedCall(ms, () => { this.legion.drillMultiplier /= mul; }); },
-        escort: (x, y, n, ms) => { this.reinforcePush().spawnEscortAt(x, y, n, ms); },
+        escort: (x, y, n, ms) => { this.reinforcePush().spawnEscortAt(x, y, n, ms); buildVfx(this).emit('reinforce', x, y - 8, this.combatNow, 150, 0, 800, true); },
         slow: (x, y, r, sl, ms) => { this.controlBuild?.slowArea(x, y, r, sl, ms, this.combatNow); },
         followerHeroes: () => (this.followers?.members ?? []).map(m => m.recruit.hero).filter((h): h is NonNullable<typeof h> => !!h),
         banner: (t, sub) => this.showWaveBanner(t, false, sub), sfx: k => this.sfx.play(k),
@@ -3837,6 +3843,7 @@ export class GameScene extends Phaser.Scene {
   /** 名将来投：一队义军 + 领头的名将名牌（本关）。 */
   private generalJoins(name: string, n: number, ms: number): void {
     const sq = this.reinforcePush().spawnEscortAt(this.player.x, this.player.y, n, ms); if (!sq) return;
+    buildVfx(this).emit('reinforce', this.player.x, this.player.y - 8, this.combatNow, 160, 0, 800, true);
     const tag = this.add.text(this.player.x, this.player.y, '来投 · ' + name, { fontFamily: FONT, fontSize: '13px', color: '#bfe8ff', resolution: 2, stroke: '#0c1a26', strokeThickness: 4 }).setOrigin(.5, 1).setDepth(DEPTH.dmgText - 1).setName('general-tag');
     const until = this.combatNow + ms, follow = () => { const lead = sq.members.find(m => !m.dead); if (!lead || this.combatNow > until || !tag.active) { tag.destroy(); this.events.off('update', follow); return; } tag.setPosition(lead.x, lead.y - 58); };
     this.events.on('update', follow); this.events.once('shutdown', () => { this.events.off('update', follow); });
@@ -3847,7 +3854,7 @@ export class GameScene extends Phaser.Scene {
     if (id === 'allin') applyStageBuff(P, s => { s.maxHpBonus -= Math.round(P.maxHp * .15); s.damageMul *= 1.25; });
     else if (id === 'beiwei') P.growth.stageDesperate = .2; // 2026-11-19 平衡：.3 → .2（另两张赌命都有代价，这张没有，还和合击「背水一战」叠）
     else applyStageBuff(P, s => { s.damageTakenMul *= 1.15; s.moveMul *= 1.2; s.cooldownMul *= .9; });
-    P.hp = Math.min(P.hp, P.maxHp); this.showWaveBanner('赌命 · ' + GAMBLES[id].name, true, GAMBLES[id].desc.split(String.fromCharCode(10)).join('，'));
+    P.hp = Math.min(P.hp, P.maxHp); buildVfx(this).emit(id === 'allin' ? 'heavy' : id === 'beiwei' ? 'bulwark' : 'skirmish', P.x, P.y - 10, this.combatNow, 150, 0, 700, true); this.showWaveBanner('赌命 · ' + GAMBLES[id].name, true, GAMBLES[id].desc.split(String.fromCharCode(10)).join('，'));
   }
   private bountyOpen(id: BountyId): boolean {
     if (this.bounties[id]) return false;
@@ -3858,7 +3865,7 @@ export class GameScene extends Phaser.Scene {
   private grantCharm(): string {
     // 品质按掉落段的首领那一行（2026-11-19 平衡：原来第九章起悬赏必橙，比首领掉落还好；data/items.ts lootBand / LOOT_CAP）
     const ch = this.phasePlan?.chapter ?? this.lootChapter(), q = rollQuality('boss', this.itemTier()), item = rollCharm(q, Math.random, undefined, ch) ?? rollItem(q, Math.random, 'token', ch);
-    if (!item) return ''; if (!this.debugRun()) addItems([item]); const name = itemName(item); this.showWaveBanner('信物 · ' + name, false, '已入行囊'); return name;
+    if (!item) return ''; if (!this.debugRun()) addItems([item]); const name = itemName(item); buildVfx(this).emit('combo', this.player.x, this.player.y - 10, this.combatNow, 130, 0, 700, true); this.showWaveBanner('信物 · ' + name, false, '已入行囊'); return name;
   }
   private onStageCardKill(enemy: Enemy): void {
     const m = this.momentum, M = NEW_CARDS.momentum;
@@ -3880,7 +3887,7 @@ export class GameScene extends Phaser.Scene {
   private bountyLieutenant(): void {
     if (!this.bounties.lieutenant || !this.phaseRunner) return; this.bounties.lieutenant = undefined;
     const at = this.phaseRunner.stats.lieutenantAt; if (at < 0 || this.elapsed - at > 30) { this.showWaveBanner('悬赏 · 斩将 未达成', false, '超过 30 秒'); return; }
-    this.pendingLevels += 1; this.militaryPending += 1; this.showWaveBanner('悬赏 · 斩将 达成', false, '再来一次军略三选一');
+    buildVfx(this).emit('peerless', this.player.x, this.player.y - 10, this.combatNow, 150, 0, 800, true); this.pendingLevels += 1; this.militaryPending += 1; this.showWaveBanner('悬赏 · 斩将 达成', false, '再来一次军略三选一');
     if (this.mode === 'none') this.openUpgrade();
   }
   /** 使用锦囊（R 键 / 锦囊钮）。 */
@@ -3891,10 +3898,11 @@ export class GameScene extends Phaser.Scene {
     else if (id === 'gong') { this.gemMagnetUntil = now + 2500; P.heal(Math.round(P.maxHp * .2)); }
     else if (id === 'feint') this.controlBuild?.slowArea(P.x, P.y, 260, .6, 5000, now);
     else if (id === 'drum') P.growth.berserkUntil = Math.max(P.growth.berserkUntil, now) + 10000;
-    else if (id === 'fire') { const hit = this.weaponHit() * 4; for (const e of this.grid.query(P.x, P.y, 220)) if (e.active && !e.isSupplySlot && Math.hypot(e.x - P.x, e.y - P.y) <= 220) this.hitEnemy(e, hit, now, 'fire', false, false); this.artEffects.show(5, P.x, P.y - 10, 220, now, 700); }
+    else if (id === 'fire') { const hit = this.weaponHit() * 4; for (const e of this.grid.query(P.x, P.y, 220)) if (e.active && !e.isSupplySlot && Math.hypot(e.x - P.x, e.y - P.y) <= 220) this.hitEnemy(e, hit, now, 'fire', false, false); if (!this.jinnangFx?.has('fx_jn2')) this.artEffects.show(5, P.x, P.y - 10, 220, now, 700); }
     else if (id === 'empty') P.invulnUntil = Math.max(P.invulnUntil, now + 2500);
     else if (id === 'arrows') { this.arrows = { until: now + 6000, absorbed: 0 }; const prev = P.damageGuard; P.damageGuard = (n, t) => { const m = prev ? prev(n, t) : n; if (t < this.arrows.until) { this.arrows.absorbed += m * .5; return m * .5; } return m; }; }
     else { this.chain.set.clear(); const near = this.grid.query(P.x, P.y, 260).filter(e => e.active && !e.isSupplySlot && e.kind !== 'boss').sort((a, b) => Math.hypot(a.x - P.x, a.y - P.y) - Math.hypot(b.x - P.x, b.y - P.y)).slice(0, 8); for (const e of near) this.chain.set.set(e, e.spawnId); this.chain.until = now + 8000; }
+    this.jinnangFx?.cast(id, P.x, P.y, now);   // 手绘激活特效（伏兵 / 鸣金 / 疑兵 / 擂鼓 / 火计 / 空城计 / 草船借箭 / 连环计）
     this.jinnang = null; this.jinnangButton?.setVisible(false);
     this.showWaveBanner('锦囊 · ' + JINNANG[id].name, false, JINNANG[id].desc.split('\n')[0]); this.sfx.play('gong');
     return true;
@@ -4333,7 +4341,7 @@ export class GameScene extends Phaser.Scene {
       const stageBoss=!!chaser||!!dzLb||!!this.xurong||!!this.huaxiong||!!this.chapter.stage&&this.chapter.stage<3;
       const energy = this.lubu ? this.lubu.energy : this.bossEnergy;
       this.hudTexts.bossEnergy.setVisible(!chaser).setPosition(left + barW, barY + 31)
-        .setText(dzLb?(this.dzLubu?.phase==='fleeing'?'吕布败走':'打到三分之一，吕布败走'):this.zhangjiao?this.zhangjiao.label:this.xurong?this.xurong.label+' · 推进 '+Math.max(0,Math.ceil(90-(this.combatNow-this.firstBossAt)/1000))+'秒':this.huaxiong?this.huaxiong.label+' · 推进 '+Math.max(0,Math.ceil(90-(this.combatNow-this.firstBossAt)/1000))+'秒':this.lubu ? `${this.lubu.phase2 ? `魔神 ${Math.floor(energy)}%` : '半血解锁大招'} · ${this.lubu.statusLabel}` : stageBoss?`${boss.hp<=boss.maxHp*.5?'半血强化 · ':''}${this.battleStage()<3?'战线推进倒计时 '+Math.max(0,Math.ceil(90-(this.combatNow-this.firstBossAt)/1000))+'秒':'注意地裂与环形预警'}`:`⚡ ${Math.floor(energy)}%`);
+        .setText(dzLb?(this.dzLubu?.phase==='fleeing'?'吕布败走':'打到三分之一，吕布败走'):this.zhangjiao?this.zhangjiao.label:this.xurong?this.xurong.label+' · 推进 '+Math.max(0,Math.ceil(90-(this.combatNow-this.firstBossAt)/1000))+'秒':this.huaxiong?this.huaxiong.label+' · 推进 '+Math.max(0,Math.ceil(90-(this.combatNow-this.firstBossAt)/1000))+'秒':this.lubu ? `${this.lubu.phase2 ? `魔神 ${Math.floor(energy)}%` : '半血解锁大招'} · ${this.lubu.statusLabel}` : stageBoss?`${this.moveset?.wardInfo?this.moveset.wardInfo+' · 先打碎符柱 · ':''}${boss.hp<=boss.maxHp*.5?'半血强化 · ':''}${this.battleStage()<3?'战线推进倒计时 '+Math.max(0,Math.ceil(90-(this.combatNow-this.firstBossAt)/1000))+'秒':'注意地裂与环形预警'}`:`⚡ ${Math.floor(energy)}%`);
       g.fillStyle(0x000000, 0.72 * fk);
       g.fillRect(left, barY, barW, 12);
       // 白色残血条：受击的那一截先显示成白色，停一下再慢慢缩到当前血量（按真实时间，不跟顿帧慢动作走）

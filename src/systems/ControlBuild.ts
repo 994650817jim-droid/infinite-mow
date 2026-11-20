@@ -27,7 +27,7 @@ export class ControlBuild {
  onHit(e:Enemy,now:number):void{this.now=now;
   const n=this.state.level('snare'),p=this.state.level('traction');if((n||p)&&this.valid(e))buildVfx(this.scene).emit('control',e.x,e.y,now,48);
   if(n)this.mark(e,[.18,.26,.34][n-1],now+[1000,1300,1600][n-1]);
-  if(p&&now>=this.pullAt){this.pullAt=now+[4000,3500,3000][p-1];for(const t of this.nearby(e.x,e.y,100).filter(t=>this.valid(t)&&Math.hypot(t.x-e.x,t.y-e.y)<=100).slice(0,[2,3,4][p-1])){const m=this.mark(t,.12,now+900);if(m)m.pull={x:e.x,y:e.y,until:now+700,speed:[18,24,30][p-1]};}}
+  if(p&&now>=this.pullAt){this.pullAt=now+[4000,3500,3000][p-1];buildVfx(this.scene).emit('pull',e.x,e.y,now,130,0,450,true);for(const t of this.nearby(e.x,e.y,100).filter(t=>this.valid(t)&&Math.hypot(t.x-e.x,t.y-e.y)<=100).slice(0,[2,3,4][p-1])){const m=this.mark(t,.12,now+900);if(m)m.pull={x:e.x,y:e.y,until:now+700,speed:[18,24,30][p-1]};}}
   if(this.state.treasures.includes('control_disk')&&now>=this.diskAt){this.diskAt=now+6000/this.state.power('control_disk');if(this.fields.length>=2)this.fields.shift()!.gfx.destroy();const gfx=this.scene.add.graphics().setDepth(19);/* 镇场盘：柔和光晕替代硬描边圆与刻度 */if(!HINT_MOCK){const aura=softField(this.scene,e.x,e.y,85,0x9cbea8,.4);gfx.once('destroy',()=>aura.destroy());}this.fields.push({x:e.x,y:e.y,r:85,until:now+1800,next:now,gfx});buildVfx(this.scene).emit('pure_control',e.x,e.y,now,170,0,500);}
  }
  onKill(e:Enemy,now:number):void{

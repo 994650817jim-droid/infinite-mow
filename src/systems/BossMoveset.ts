@@ -11,6 +11,7 @@ import { BossMount } from './BossMount';
 import { emitBossPhase } from './BossPhase';
 import { warnFx } from '../ui/WarnFx';
 import { KnifeFx } from './KnifeFx';
+import { bossFxImage, ensureBossFx, fxFrame } from './BossFx';
 import { ensureBossCast, ensureBossTheme, playCastFx, playThemeFx, themeOf, themeShake, type BossTheme } from './BossThemeFx';
 
 type Shape = { kind: 'circle'; x: number; y: number; r: number; inner?: number; fx: 'slam' | 'arrows' | 'fire' }
@@ -37,6 +38,8 @@ export class BossMoveset extends ArcBossV2<string> {
   private cur: MoveDef | null = null; private dash: { ax: number; ay: number; t0: number; ms: number; hitPlayer: boolean; back: boolean; len: number; fireAt: number; hitTroops: Set<unknown> } | null = null;
   private ride: { a0: number; t0: number; ms: number; dropAt: number; drops: number; cx: number; cy: number; dir: number } | null = null;
   private hideUntil = 0; private flags: { e: Enemy; img: Phaser.GameObjects.Image | null }[] = []; private flagMul = 1;
+  /** 护法符柱（PhaseDef.wards）：手绘 zj_pillar（升起 0–1 → 发光 1–2 → 碎裂 3–4 → 残骸 5），碎了留残骸到换阶段 / 倒下。 */
+  private wards: { e: Enemy; life: number; x: number; y: number; img: Phaser.GameObjects.Image | null; born: number; brokeAt: number }[] = []; private wardMul = 1;
   private guards: Enemy[] = []; mount?: BossMount;
   /** 双首领关（DualBoss）：伤害 / 招式间隔 / 召兵数量倍数。 */
   dmgMul = 1; gapMul = 1; summonMul = 1; readonly defDamage = true;
@@ -57,18 +60,21 @@ export class BossMoveset extends ArcBossV2<string> {
     if (def.mount) this.mount = new BossMount(h.scene, h.boss, { ...def.mount, rider: def.mount.rider ?? def.id }, () => this.state === 'warn' || this.state === 'attack');
     this.next = now + 1800;
     h.banner(def.p1.name, def.p1.caption);
+    if (def.p1.wards || def.p2.wards) ensureBossFx(h.scene, ['zj_pillar']);
+    if (def.p1.wards) this.raiseWards(def.p1.wards, now);
   }
   get phaseDef(): PhaseDef { return this.phase === 1 ? this.def.p1 : this.def.p2; }
   get mounted(): boolean { return !!this.mount?.mounted; }
   protected takenMul(): number {
     if (this.kit.now < this.hideUntil) return 0;
     const guardMul = this.phaseDef.guards && this.guards.some(g => g.active) ? this.phaseDef.guards.takenMul : 1;
-    return guardMul * (this.flags.some(f => f.e.active) ? this.flagMul : 1);
+    return guardMul * (this.flags.some(f => f.e.active) ? this.flagMul : 1) * (this.wardsLeft > 0 ? this.wardMul : 1);
   }
   get label(): string {
     if (this.state === 'dead') return this.def.name + '败退';
     const b = this.beat, guard = this.phaseDef.guards && this.guards.some(g => g.active) ? ' · 亲卫护体（先打亲卫）' : '', flag = this.flags.some(f => f.e.active) ? ' · 旗在减伤（砍旗）' : '';
-    return (b.phase === 'recover' ? '收势 · 反击机会' : this.cur ? this.cur.name : this.phaseDef.name) + guard + flag + (this.mounted ? ' · 马上' : '');
+    const ward = this.wards.length && this.wardsLeft > 0 ? ` · 护法符柱 ${this.wardsLeft}/${this.wards.length}（先打碎符柱）` : '';
+    return (b.phase === 'recover' ? '收势 · 反击机会' : this.cur ? this.cur.name : this.phaseDef.name) + guard + flag + ward + (this.mounted ? ' · 马上' : '');
   }
   /** 'walk' 画面：姿势交给 Enemy 的行走 / 攻击表，不改贴图。 */
   protected pose(frame: number, now: number): void { if (this.mode === 'arc') super.pose(frame, now); }
@@ -77,7 +83,7 @@ export class BossMoveset extends ArcBossV2<string> {
     const b = this.h.boss; if (this.gone || !b.active || this.state === 'dead') return;
     this.kit.update(now); this.gfx.clear();
     this.updateHazards(now); this.updateKnives(now);
-    this.updateFlags();
+    this.updateFlags(); this.updateWards(now);
     if (this.phase === 1 && b.hp <= b.maxHp * this.def.phaseAt) this.enterPhase2(now);
     this.updateRage(now);
     b.sprite.setAlpha(now < this.hideUntil ? .12 : 1);
@@ -174,6 +180,37 @@ export class BossMoveset extends ArcBossV2<string> {
     this.h.banner(m.name, '旗在时首领减伤 · 先砍旗');
   }
   private updateFlags(): void { for (const f of this.flags) if (!f.e.active && f.img) { f.img.destroy(); f.img = null; } }
+  /** 血条下的小字：「护法符柱 3/4」（符柱全碎 / 没有时为空）。 */
+  get wardInfo(): string { const n = this.wardsLeft; return n > 0 && this.wards.length ? `护法符柱 ${n}/${this.wards.length}` : ''; }
+  /** 还立着的符柱数。 */
+  get wardsLeft(): number { return this.wards.filter(w => !w.brokeAt && w.e.active && w.e.spawnId === w.life).length; }
+  /** 立一轮护法符柱（首领四周一圈，同 1-3 张角的手绘符柱）。 */
+  private raiseWards(w: NonNullable<PhaseDef['wards']>, now: number): void {
+    this.clearWards(); this.wardMul = w.takenMul;
+    const b = this.h.boss;
+    for (let k = 0; k < w.count; k++) {
+      const a = k / w.count * Math.PI * 2 + Math.PI / 4, x = b.x + Math.cos(a) * w.radius, y = b.y + Math.sin(a) * w.radius * .8;
+      const e = this.spawnProp(x, y, w.hp, 0xffd36b); if (!e) continue;
+      e.ward = true;
+      const img = bossFxImage(this.h.scene, 'zj_pillar', actorDepth(y))?.setOrigin(.5, .82).setPosition(x, y).setDisplaySize(130, 130).setName('boss-ward') ?? null;
+      this.wards.push({ e, life: e.spawnId, x, y, img, born: now, brokeAt: 0 });
+    }
+    this.h.banner('护法符柱', `符柱不碎，${this.def.name}几乎不受伤 · 先打碎符柱`); this.h.sfx('bossSummon');
+  }
+  /** 每帧：符柱碎了播碎裂帧、震一下；本体保持隐身。 */
+  private updateWards(now: number): void {
+    const before = this.wardsLeft;
+    for (const w of this.wards) {
+      if (!w.brokeAt && (!w.e.active || w.e.spawnId !== w.life)) { w.brokeAt = now; this.h.scene.cameras.main.shake(80, .003); this.h.sfx('hitHeavy'); }
+      if (!w.brokeAt) w.e.sprite.setAlpha(0);
+      // 符柱图是开场才开始载的：载好了再补上（同 1-3 张角的手绘符柱）
+      if (!w.img) w.img = bossFxImage(this.h.scene, 'zj_pillar', actorDepth(w.y))?.setOrigin(.5, .82).setPosition(w.x, w.y).setDisplaySize(130, 130).setName('boss-ward') ?? null;
+      if (w.img) { const a = now - w.born, br = now - w.brokeAt; w.img.setFrame(w.brokeAt ? (br < 360 ? fxFrame(br / 360, 3, 4) : 5) : a < 450 ? fxFrame(a / 450, 0, 1) : 1 + Math.floor(now / 150) % 2); }
+    }
+    if (before > 0 && this.wardsLeft === 0 && this.wards.length && !this.wardsDownShown) { this.wardsDownShown = true; this.h.banner('符柱尽碎', `${this.def.name}护体已破 · 全力进攻`); }
+  }
+  private wardsDownShown = false;
+  private clearWards(): void { for (const w of this.wards) { w.img?.destroy(); if (!w.brokeAt && w.e.active && w.e.spawnId === w.life) { w.e.hp = 0; w.e.deactivate(); } } this.wards = []; this.wardsDownShown = false; }
 
   // ---------- 冲锋 / 绕阵 ----------
   private updateDash(dt: number, now: number): void {
@@ -217,6 +254,7 @@ export class BossMoveset extends ArcBossV2<string> {
     emitBossPhase(this.h.scene, { boss: this.h.boss, phase: 2, dismount, name: this.def.name, bossId: this.def.id }); // 坐骑在 BossMount 里收到事件后坠马
     this.kit.phaseShift(now, dismount ? '坠马！' + this.def.p2.name : this.def.p2.name, this.def.p2.caption, 0x8a4a2a, .1);
     this.moveNames.length = 0; this.moveNames.push(...this.def.p2.moves.map(m => m.name));
+    if (this.def.p2.wards) this.raiseWards(this.def.p2.wards, now); else this.clearWards();
     const g = this.def.p2.guards, b = this.h.boss;
     if (g) for (let k = 0, n = this.summonCount(g.count); k < n; k++) { const a = k / n * Math.PI * 2; const e = this.h.spawn(g.troop, b.x + Math.cos(a) * 90, b.y + Math.sin(a) * 70); if (e) this.guards.push(e); }
   }
@@ -325,7 +363,7 @@ export class BossMoveset extends ArcBossV2<string> {
     this.beat.set(name, 'windup', now, windupMs);
   }
   defeat(): void { if (this.mode === 'arc') super.defeat(); else { this.state = 'dead'; this.gfx.clear(); this.onDefeat(); } }
-  protected onDefeat(): void { this.hazards = []; this.knives = []; for (const f of this.flags) f.img?.destroy(); this.flags = []; this.mount?.destroy(); this.mount = undefined; this.h.boss.sprite.setAlpha(1); }
+  protected onDefeat(): void { this.clearWards(); this.hazards = []; this.knives = []; for (const f of this.flags) f.img?.destroy(); this.flags = []; this.mount?.destroy(); this.mount = undefined; this.h.boss.sprite.setAlpha(1); }
   snapshot() { return { phase: this.phase, mounted: this.mounted, horse: !!this.mount?.hasHorse, state: this.state, cur: this.cur?.name ?? null, hazards: this.hazards.length, flags: this.flags.filter(f => f.e.active).length, guards: this.guards.filter(g => g.active).length, metrics: { ...this.metrics }, label: this.label }; }
   /** 当前打击判定用（DEV / 测试）。 */
   get depthHint(): number { return DEPTH.fx; }

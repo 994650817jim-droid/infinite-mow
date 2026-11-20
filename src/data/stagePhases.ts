@@ -14,7 +14,8 @@ export interface PhasePlan { chapter: number; stage: number; phases: StagePhase[
 
 export const PHASES = {
   /** 各段开始时刻（秒，关内时间）。首领段开始 = 首领登场。 */
-  starts: { vanguard: 0, elite: 45, event: 100, lieutenant: 155, boss: 205 } as Record<PhaseKind, number>,
+  // 2026-11-19 用户「每一关拉长一点时间」：0 / 45 / 100 / 155 / 205 → 0 / 55 / 120 / 185 / 245（各段约 ×1.2，关长约 4.5～5 分；1-1 三段仍用原时刻 0 / 45 / 90）
+  starts: { vanguard: 0, elite: 55, event: 120, lieutenant: 185, boss: 245 } as Record<PhaseKind, number>,
   /** 段间喘息：换段后这几秒内刷兵间隔 ×calmIntervalMul（刷得更稀）。 */
   calmSec: 2.5, calmIntervalMul: 2,
   /** 精锐小队人数（按章）。 */
@@ -36,10 +37,18 @@ export const PHASES = {
    * 从接战到首领倒下比旧三波关快约 2.7 倍（5-2）、3.5 倍（10-3）。按章节线性补回到旧的首领战用时：
    * 段数 ≤ 3（1-1，首领时刻同旧）×1；第一章 4 / 5 段 ×1.6；第二章起 1.9 + 0.16 × 章，封顶 3.8（5-2 ≈ 2.7、10-3 ≈ 3.5、12 章 3.8）。
    */
-  bossHpMul: (chapter: number, phases: number): number => phases <= 3 ? 1 : chapter <= 1 ? 1.6 : Math.min(3.8, 1.9 + .16 * chapter),
+  bossHpMul: (chapter: number, phases: number): number => phases <= 3 ? 1 : chapter <= 1 ? 1.6 : (1.9 + .16 * chapter) * PHASES_LONGER(chapter),
   /** 三选一保底：进第 2 / 3 / 4 / 5 段时至少 1 / 2 / 3 / 4 次，首领宝箱补到 5 次。 */
   picks: { waves: [1, 2, 3, 4] as readonly number[], main: 5 },
 } as const;
+
+/**
+ * 首领生命的追加倍率（2026-11-19 平衡，用户「每一关拉长一点时间」）：
+ * - 首领晚 40 秒登场（205 → 245），局内经验 / 升级多一截：第二章起 ×1.08；
+ * - 兵器专职（第四章起本命 Lv6、第八章 Lv7）：实测带分支时首领段 5-2 短约 30%、10-3 短约 10%：第五章 ×1.30，逐章降到第十章起 ×1.15。
+ * 合起来：第二～四章 ×1.08；第五章 ×1.40，每章 −0.032，第十章起 ×1.24。
+ */
+export function PHASES_LONGER(chapter: number): number { return chapter < 5 ? 1.08 : Math.max(1.24, 1.40 - .032 * (chapter - 5)); }
 
 /** 章节序号（hardKey → 1–12）。 */
 export const CHAPTER_INDEX: Record<string, number> = { huangjin: 1, hulao: 2, qunxiong: 3, guandu: 4, chibi: 5, jingnan: 6, shu: 7, hanzhong: 8, xiangfan: 9, yiling: 10, nanzheng: 11, beifa: 12 };

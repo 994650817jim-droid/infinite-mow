@@ -1,5 +1,6 @@
 import type { EnemyKind } from '../types';
 import type { BossMountDef } from '../systems/BossMount';
+import { sideMoves } from './sideRoutes';
 
 /**
  * 首领专属招式 · 二阶段 · 骑马（设计表见共享笔记 boss-moves-plan.md；用户 2026-11-17「给boss设计首领专属招式和2阶段，还想boss也有骑马」）。
@@ -34,6 +35,11 @@ export interface PhaseDef {
   /** 招式间隔（毫秒）。 */ gapMs: number;
   /** 移速倍率（步战 / 骑马）。 */ speedMul: number;
   /** 进入此阶段时召的亲卫：在场时首领受伤 ×takenMul。 */ guards?: { troop: EnemyKind; count: number; takenMul: number };
+  /**
+   * 进入此阶段时在首领四周立「护法符柱」（2026-11-19 用户：1-2 军情「先打掉护法符柱，张宝才会受伤」——「这个玩法要应用到这一关」）：
+   * 符柱没全碎时首领受伤 ×takenMul；手绘符柱图同 1-3 张角（zj_pillar）；符柱被自动索敌优先打（Enemy.ward）。
+   */
+  wards?: { count: number; radius: number; hp: number; takenMul: number };
 }
 export interface BossMovesetDef {
   id: string; name: string;
@@ -61,12 +67,13 @@ export const BOSS_MOVES: Record<string, BossMovesetDef> = {
   // 1-2 张宝（地公将军，术士不骑）：地公裂土 + 撒豆成兵 → 妖术护体（符兵护体减伤）、裂土三圈
   zhangbao: {
     id: 'zhangbao', name: '张宝', phaseAt: .5,
-    p1: { name: '地公将军', caption: '地公裂土 · 撒豆成兵', gapMs: 2800, speedMul: 1, moves: [
+    p1: { name: '地公将军', caption: '护法符柱 · 先打碎符柱', gapMs: 2800, speedMul: 1, wards: { count: 4, radius: 130, hp: 110, takenMul: .15 }, moves: [
       { kind: 'rings', name: '地公裂土', windupMs: 900, cd: 5000, dmg: 1.2, radii: [110, 200], gapMs: 420, band: 60 },
       { kind: 'summon', name: '撒豆成兵', windupMs: 800, cd: 9000, dmg: 0, troop: 'infantry', count: 5, radius: 150, around: 'boss' },
       { kind: 'volley', name: '黄沙符落', windupMs: 1100, cd: 4600, dmg: 1, count: 3, r: 62, spread: 120, fx: 'slam' },
     ] },
-    p2: { name: '妖术护体', caption: '道兵护体时张宝几乎不受伤 · 先打道兵', gapMs: 2200, speedMul: 1, guards: { troop: 'shield', count: 4, takenMul: .2 }, moves: [
+    // 二阶段：再立一轮符柱（代替原来的道兵护体，与军情提示一致）
+    p2: { name: '妖术护体', caption: '符柱再起 · 打碎符柱张宝才会受伤', gapMs: 2200, speedMul: 1, wards: { count: 4, radius: 150, hp: 150, takenMul: .15 }, moves: [
       { kind: 'rings', name: '地公裂土 · 三重', windupMs: 900, cd: 4800, dmg: 1.3, radii: [100, 190, 280], gapMs: 380, band: 60 },
       { kind: 'volley', name: '黄沙符落', windupMs: 1000, cd: 3800, dmg: 1.1, count: 5, r: 62, spread: 150, fx: 'slam' },
     ] },
@@ -385,6 +392,8 @@ export const BOSS_MOVES: Record<string, BossMovesetDef> = {
     ] },
   },
 };
+// 其他势力支线（data/sideRoutes.ts）：借现成首领的招式改名，登记为「支线.首领」
+Object.assign(BOSS_MOVES, sideMoves(BOSS_MOVES));
 /** 已有专属控制器的首领只补骑马（半血坠马跟着统一的 boss-phase 事件）。 */
 export const BOSS_MOUNTS: Record<string, BossMountDef> = {
   lubu: { horse: 'chitu', cut: .6, rider: 'lubu' },

@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import {HINT_MOCK,groundScar} from '../ui/HintStyle';
 /** 阵纹 / 火门 / 石环这类「画出范围」的样式；默认（只保留关键提示）不播放；?hints=old 恢复，?mock=b 换成一闪而过的地面痕迹。 */
 const RANGE_STYLES=new Set(['control','pure_control','fire_gate','pure_bulwark']);
-export const VFX_STYLES=['combo','critical','skirmish','flame','charge','control','command','bulwark','pure_combo','pure_critical','pure_skirmish','pure_flame','pure_charge','pure_control','pure_command','pure_bulwark','fire_gate','peerless','roaming_break','iron_army'] as const;
+export const VFX_STYLES=['combo','critical','skirmish','flame','charge','control','command','bulwark','pure_combo','pure_critical','pure_skirmish','pure_flame','pure_charge','pure_control','pure_command','pure_bulwark','fire_gate','peerless','roaming_break','iron_army','ember','pull','stun_burst','sunder_hit','heavy','reinforce','watch','breakout'] as const;
 interface Slot{image:Phaser.GameObjects.Image;start:number;end:number;row:number;core:boolean;alpha:number;}
 export function buildVfx(scene:Phaser.Scene):BuildVfx{const host=scene as Phaser.Scene&{buildVfxPool?:BuildVfx};if(!host.buildVfxPool){const pool=new BuildVfx(scene);host.buildVfxPool=pool;scene.events.once('shutdown',()=>{pool.clear();delete host.buildVfxPool;});}return host.buildVfxPool;}
 /** One pre-rendered atlas, fixed slot budget, no emit-time Graphics/Tweens/Timers. */
@@ -23,3 +23,14 @@ export class BuildVfx{
  clear():void{for(const s of this.slots){s.end=0;s.image.setVisible(false);}this.gate.clear();}
 }
 
+
+/**
+ * 合击触发特效（2026-11-19 用户「关于流派和道具特效做一下」）：15 个合击原来只弹横幅，触发时没有各自的画面。
+ * 用手绘图集里两个流派各自的样式并排叠成一对（15 种组合各不相同，读得出是哪两派）：每个合击每 2 秒最多一次，比单战法特效略大，核心样式（不被密度丢弃）。
+ */
+export const COMBO_STYLE: Readonly<Record<string, string>> = { fire: 'pure_flame', stratagem: 'pull', archery: 'pure_critical', cavalry: 'pure_skirmish', warrior: 'pure_combo', formation: 'pure_command' };
+const comboAt = new Map<string, number>();
+export function comboFx(scene: Phaser.Scene, a: string, b: string, id: string, x: number, y: number, now: number): void {
+  if (now < (comboAt.get(id) ?? 0)) return; comboAt.set(id, now + 2000);
+  const v = buildVfx(scene); v.emit(COMBO_STYLE[a], x - 34, y - 16, now, 112, 0, 700, true); v.emit(COMBO_STYLE[b], x + 34, y - 16, now, 112, 0, 700, true);
+}

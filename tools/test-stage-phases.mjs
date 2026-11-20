@@ -13,7 +13,7 @@ async function open(start) {
   const p = await b.newPage({ viewport: { width: 1280, height: 720 } });
   p.on('pageerror', e => errors.push(e.message.slice(0, 200)));
   p.on('console', m => { if (m.type() === 'error' && !/favicon|Failed to load resource|Texture key already in use/.test(m.text())) errors.push(m.text().slice(0, 200)); });
-  await p.addInitScript(w => { if (!sessionStorage.getItem('seeded')) { localStorage.clear(); localStorage.setItem('im_world_v1', JSON.stringify(w)); localStorage.setItem('im_last_hero', 'zhaoyun'); localStorage.setItem('im_story', 'off'); sessionStorage.setItem('seeded', '1'); } }, world);
+  await p.addInitScript(w => { performance.setResourceTimingBufferSize?.(5000); /* 让测试能找到热更新后带 ?t= 的模块 */ if (!sessionStorage.getItem('seeded')) { localStorage.clear(); localStorage.setItem('im_world_v1', JSON.stringify(w)); localStorage.setItem('im_last_hero', 'zhaoyun'); localStorage.setItem('im_story', 'off'); sessionStorage.setItem('seeded', '1'); } }, world);
   await p.goto(BASE + '?dev=1&autostart=1&stage=1&layout=desktop&story=off');
   await p.waitForFunction(() => window.__game?.scene.getScene('GameScene')?.player && window.__IM, null, { timeout: 120000 });
   await p.evaluate(st => { const g = window.__game, s0 = g.scene.getScene('GameScene'); s0.registry.remove('campaignTransfer'); for (const [k, v] of Object.entries(st.reg ?? {})) s0.registry.set(k, v);
@@ -30,19 +30,19 @@ const state = p => p.evaluate(() => { const s = window.__S, r = s.phaseRunner, t
 async function stageCase(label, start, shot) {
   const p = await open(start);
   const a = await state(p);
-  ck(`${label}：五段（先锋 / 精锐 / 事件 / 副将 / 首领），首领 205 秒登场；不显示「第 x 波」，顶部战况线；保底 5 次；首领生命按章节加倍（PHASES.bossHpMul，2-1 ≈ ×2.2）`, a.kinds?.join() === 'vanguard,elite,event,lieutenant,boss' && a.starts.join() === '0,45,100,155,205' && !a.waveText && a.track?.visible && a.cap === 5 && a.bossHpMul > 0, a);
-  await jump(p, 46); const e = await state(p);
+  ck(`${label}：五段（先锋 / 精锐 / 事件 / 副将 / 首领），首领 245 秒登场；不显示「第 x 波」，顶部战况线；保底 5 次；首领生命按章节加倍（PHASES.bossHpMul，2-1 ≈ ×2.2）`, a.kinds?.join() === 'vanguard,elite,event,lieutenant,boss' && a.starts.join() === '0,55,120,185,245' && !a.waveText && a.track?.visible && a.cap === 5 && a.bossHpMul > 0, a);
+  await jump(p, 56); const e = await state(p);
   ck(`${label}：精锐段——横幅写段落故事名（不带「第 x 波」）+「精锐来袭」，精锐小队压上，战况线点亮 2 个图标，保底补到 1`, e.phase === 1 && e.run.elites >= 2 && /精锐来袭/.test(e.banners.join()) && !/第 \d/.test(e.banners.join()) && e.track.iconsLit === 2 && e.picks >= 1, e);
-  await jump(p, 101); const v = await state(p);
+  await jump(p, 121); const v = await state(p);
   ck(`${label}：事件段——伏兵一圈冲阵，保底 2`, v.phase === 2 && v.run.ambush >= 8 && v.picks >= 2 && /伏兵四起/.test(v.banners.join()), v);
-  await jump(p, 156); await p.waitForTimeout(600); const l = await state(p);
+  await jump(p, 186); await p.waitForTimeout(600); const l = await state(p);
   const bossHp = await p.evaluate(async () => { const s = window.__S, m = await import('/src/data/stagePhases.ts'); /* 副将按「参考首领生命」夹（去掉章节加倍、×bossRef，P6 平衡） */ return Math.round(s.chapter.enemies.boss.hp * s.chapter.growth.bossHp / m.PHASES.bossHpMul(s.phasePlan.chapter, s.phasePlan.phases.length) * m.PHASES.lieutenantHp.bossRef); });
   ck(`${label}：副将段——副将（名牌 + 小血条），生命为参考首领 35%–60%（精锐 ×3 夹在其间），保底 3`, l.phase === 3 && !!l.run.lieutenant && l.run.lieutenantHp / bossHp >= .33 && l.run.lieutenantHp / bossHp <= .62 && l.picks >= 3 && /副将出阵/.test(l.banners.join()), { ...l, bossHp });
   if (shot) { await p.evaluate(() => window.__calm()); await p.waitForTimeout(900); await p.evaluate(() => window.__calm()); await p.waitForTimeout(300); await p.screenshot({ path: `${OUT}/${shot}-lieutenant.png` }); }
   await p.evaluate(() => { const s = window.__S, e = s.phaseRunner.lt.e; e.hp = 0; s.killEnemy(e); }); await p.waitForTimeout(400); await p.evaluate(() => window.__calm()); const d = await state(p);
   ck(`${label}：副将倒下——「X 授首」横幅，保底补到 4`, d.run.lieutenantDown && d.picks >= 4 && /授首/.test(d.banners.join()), d);
-  await jump(p, 206); await p.waitForTimeout(800); await p.evaluate(() => window.__calm()); await p.waitForTimeout(400); const z = await state(p);
-  ck(`${label}：首领段——205 秒首领登场，战况线淡出让位给首领血条`, z.phase === 4 && z.boss && z.run.phase === 4, z);
+  await jump(p, 246); await p.waitForTimeout(800); await p.evaluate(() => window.__calm()); await p.waitForTimeout(400); const z = await state(p);
+  ck(`${label}：首领段——245 秒首领登场，战况线淡出让位给首领血条`, z.phase === 4 && z.boss && z.run.phase === 4, z);
   await p.close();
 }
 await stageCase('2-1 汜水关（GameScene）', { key: 'GameScene', run: { chapter: 'hulao', westStage: 1 } }, null);
@@ -51,16 +51,16 @@ await stageCase('3-2 宛城夜袭（ThirdGameScene）', { key: 'ThirdGameScene',
 // 战况线截图（事件段中途）+ 1-1 只有三段
 {
   const p = await open({ key: 'GameScene', run: { chapter: 'hulao', westStage: 2 } });
-  await jump(p, 120); await p.waitForTimeout(300);
+  await jump(p, 150); await p.waitForTimeout(300);
   await p.screenshot({ path: `${OUT}/track-2-2.png` });
   const r = await p.evaluate(async () => { const m = await import('/src/data/stagePhases.ts'); const one = m.buildPhasePlan('huangjin', 1, [{ start: 0, name: 'a' }, { start: 45, name: 'b' }, { start: 90, name: 'c' }], '张梁'), two = m.buildPhasePlan('huangjin', 2, [{ start: 0, name: 'a' }, { start: 45, name: 'b' }, { start: 90, name: 'c' }], '张宝'); return { one: one.phases.map(x => x.kind + '@' + x.start), two: two.phases.map(x => x.kind + '@' + x.start), cap: window.__S.pickCap(), caption: window.__S.battleTrack.caption.text }; });
-  ck('第一章逐关加长：1-1 三段（0 / 45 / 90，时间同原来）、1-2 四段（无副将）；战况线下写「下一段 · 名字 · 秒数」', r.one.join() === 'vanguard@0,elite@45,boss@90' && r.two.join() === 'vanguard@0,elite@45,event@100,boss@155' && /下一段 · .+ · \d+ 秒/.test(r.caption), r);
+  ck('第一章逐关加长：1-1 三段（0 / 45 / 90，时间同原来）、1-2 四段（无副将）；战况线下写「下一段 · 名字 · 秒数」', r.one.join() === 'vanguard@0,elite@45,boss@90' && r.two.join() === 'vanguard@0,elite@55,event@120,boss@185' && /下一段 · .+ · \d+ 秒/.test(r.caption), r);
   await p.close();
 }
 // P2 战场机缘（stage-event-rewards.md）：刷在 600–900 外的可走处；地上「图标 + 名字 + 秒数」、屏外金色箭头、舆图军令小旗；各类事件奖励不同
 {
   const p = await open({ key: 'GameScene', run: { chapter: 'hulao', westStage: 2 } });
-  await jump(p, 66); await p.waitForTimeout(600);
+  await jump(p, 76); await p.waitForTimeout(600);
   const c = await p.evaluate(() => { const s = window.__S, f = s.fortunes, L = f.live[0]; return { spawned: f.stats.spawned, dist: f.stats.dist[0], label: L?.label.text, icon: !!L?.icon, arrow: !!L?.arrow.visible, arrowText: L?.arrow.getByName('fa-text')?.text, order: !!s.battleOrders?.list?.get('fortune-cart'), banner: window.__banners.filter(b => /机缘 · /.test(b)).slice(-1)[0] }; });
   ck('P2 粮车：精锐段 20 秒后刷在远处（≥ 600 步）；横幅「机缘 · 敌军粮车出现」；地上图标 + 名字 + 剩余秒数；屏外金色箭头写距离；舆图军令小旗', c.spawned[0] === 'cart' && c.dist >= 600 && /敌军粮车 · \d+ 秒/.test(c.label ?? '') && c.icon && c.arrow && /粮车 · \d+ 步/.test(c.arrowText ?? '') && c.order && /机缘 · 敌军粮车出现/.test(c.banner ?? ''), c);
   await p.screenshot({ path: `${OUT}/fortune-far.png` });
@@ -165,7 +165,7 @@ await stageCase('3-2 宛城夜袭（ThirdGameScene）', { key: 'ThirdGameScene',
   // 截图：专职二选一面板
   await p.evaluate(() => { const s = window.__S; s.pendingLevels += 1; s.militaryPending += 1; s.openUpgrade(); }); await p.waitForTimeout(1200);
   await p.screenshot({ path: `${OUT}/branch-choice.png` });
-  const pick = await p.evaluate(async () => { const s = window.__S, i = s.upgradeOptions.findIndex(o => o.id === 'branch_zy_longdan'); s.chooseUpgrade(i); window.__calm(); const up = await import('/src/data/upgrades.ts'), wb = await import('/src/data/weaponBranches.ts'); wb.WEAPON_OVER.cap = 1; let over; for (let i = 0; i < 30 && !over; i++) over = up.buildUpgradeOptions(s.player, s.player.weapons, s.player.growth).find(o => o.id === 'weapon_over_6'); const d0 = s.player.growth.damageMultiplier(0); over?.apply(s.player, s.player.weapons, s.player.growth); s.tickBranch(); const d1 = s.player.growth.damageMultiplier(0); return { branch: s.player.weapons[0].branch, over6: !!over, overNow: s.player.weapons[0].over, dmg: +(d1 / d0).toFixed(2), level: s.player.weapons[0].level }; });
+  const pick = await p.evaluate(async () => { const s = window.__S, i = s.upgradeOptions.findIndex(o => o.id === 'branch_zy_longdan'); s.chooseUpgrade(i); window.__calm(); /* 开发服务器热更新过的模块带 ?t= 时，upgrades.ts 引用的是带时间戳那份 weaponBranches：所有已载入的份都设 cap、每份 upgrades 都试（原来只改了 import 进来的那份，长跑的 5173 上会误报「Lv6 出不来」） */ const urls = p => [p, ...performance.getEntriesByType('resource').map(e => e.name).filter(n => n.includes(p))]; const wbs = await Promise.all(urls('/src/data/weaponBranches.ts').map(u => import(u))), ups = await Promise.all(urls('/src/data/upgrades.ts').map(u => import(u))); for (const wb of wbs) wb.WEAPON_OVER.cap = 1; let over; for (let i = 0; i < 30 && !over; i++) for (const up of ups) { over = over ?? up.buildUpgradeOptions(s.player, s.player.weapons, s.player.growth).find(o => o.id === 'weapon_over_6'); } const d0 = s.player.growth.damageMultiplier(0); over?.apply(s.player, s.player.weapons, s.player.growth); s.tickBranch(); const d1 = s.player.growth.damageMultiplier(0); return { branch: s.player.weapons[0].branch, over6: !!over, overNow: s.player.weapons[0].over, dmg: +(d1 / d0).toFixed(2), level: s.player.weapons[0].level }; });
   ck('选「龙胆 · 七进七出」锁定；第四章起出本命 Lv.6（沿分支加深，伤害 +10%）；HUD 写分支名', pick.branch === 'zy_longdan' && pick.over6 && pick.overNow === 1 && pick.dmg === 1.1, pick);
   await p.close();
 }

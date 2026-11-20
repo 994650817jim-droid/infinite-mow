@@ -27,10 +27,14 @@ import { QijinTracker } from '../systems/ChibiStoryHooks';
 import { setStoryFlag } from '../systems/Story';
 import { DianweiGuard, DIANWEI } from '../systems/DianweiGuard';
 import { addMerit } from '../systems/MasteryStore';
+import { loadV2TroopSheets } from '../systems/ArtStyle';
+import type { SideRouteId } from '../data/sideRoutes';
 
 /** 第三章式三关篇章的配置（第三章群雄割据、第五章赤壁之战共用同一套战场与首领招式框架）。 */
 export interface ArcSceneConfig{
- key:string;arc:WarlordArc;
+ key:string;arc:WarlordArc|SideRouteId;
+ /** 其他势力支线（data/sideRoutes.ts）：开放判定、出征 / 结算换成支线的（不走篇章进度）；额外载入的兵种图。 */
+ gate?:(stage:number)=>boolean;begin?:(stage:number)=>string;settle?:(receipt:string,stage:number,r:{victory:boolean;debug:boolean})=>{provisions:number;line:string};troopSheets?:readonly string[];
  /** registry 键：当前关、关间继承。 */
  stageKey:string;transferKey:string;
  stages:readonly{id:string;name:string;boss:string;behavior?:ThirdStage;scenery?:SceneryStage;skills?:[string,string,string];signature?:string;
@@ -68,18 +72,20 @@ export function thirdGameSceneClass(Base:typeof GameScene,cfg:ArcSceneConfig=THI
  protected stableRewardKey():string|null{return (cfg.arc==='qunxiong'?'third':cfg.arc)+'-'+this.thirdStage;}
  /** 首领招降表的键（data/surrender.ts）：章节 arc-关:首领 id（6-3 黄忠 / 韩玄按当前出阵的首领）。 */
  protected surrenderKey():string|null{return cfg.arc+'-'+this.thirdStage+':'+this.stageInfo().id;}
+ /** 这一关能不能进（篇章：WorldStore 进度；支线：cfg.gate）。 */
+ protected stageGate(stage:number):boolean{return cfg.gate?cfg.gate(stage):arcStageUnlocked(cfg.arc as WarlordArc,stage);}
  private get sceneryStage():SceneryStage{return cfg.stages[this.thirdStage-1]?.scenery??this.thirdStage;}
  constructor(){super(cfg.key);}
- preload(){for(const d of cfg.stages)if(!this.textures.exists(cfg.texture(d.id)))loadBossSheet(this.load,cfg.texture(d.id),cfg.sheet(d.id));/* 3-1 双首领第二位郭汜（v2 专属图；v1 没有郭汜图，借李傕） */if(cfg.arc==='qunxiong'&&!this.textures.exists('third_guosi'))loadBossSheet(this.load,'third_guosi',cfg.sheet('lijue'));}
+ preload(){for(const d of cfg.stages)if(!this.textures.exists(cfg.texture(d.id)))loadBossSheet(this.load,cfg.texture(d.id),cfg.sheet(d.id));if(cfg.troopSheets)loadV2TroopSheets(this,cfg.troopSheets);/* 3-1 双首领第二位郭汜（v2 专属图；v1 没有郭汜图，借李傕） */if(cfg.arc==='qunxiong'&&!this.textures.exists('third_guosi'))loadBossSheet(this.load,'third_guosi',cfg.sheet('lijue'));}
  create(){
-  this.thirdStage=(this.registry.get(cfg.stageKey)??1)as ThirdStage;this.thirdTest=isChapterTestRun();if(!cfg.stages[this.thirdStage-1]||!this.thirdTest&&!arcStageUnlocked(cfg.arc,this.thirdStage)){this.scene.start('WorldMapScene');return;}
+  this.thirdStage=(this.registry.get(cfg.stageKey)??1)as ThirdStage;this.thirdTest=isChapterTestRun();if(!cfg.stages[this.thirdStage-1]||!this.thirdTest&&!this.stageGate(this.thirdStage)){this.scene.start('WorldMapScene');return;}
   const saved=this.registry.get('runConfig')as RunConfig|undefined,transfer=this.registry.get(cfg.transferKey)as CampaignTransfer|undefined;this.registry.remove(cfg.transferKey);this.registry.remove('campaignTransfer');if(transfer&&transfer.character===saved?.character)this.registry.set('campaignTransfer',transfer);
   this.registry.set('runConfig',{...saved,character:saved?.character??'zhaoyun',chapter:'hulao',westStage:3,encounter:'qunxiong'});super.create();
   this.controller=undefined;this.spear=new WeakMap();this.chapter=cfg.battle(this.thirdStage);this.runConfig={...this.runConfig,thirdStage:this.thirdStage,encounter:'qunxiong'};
   /* 第三章敌军换色贴图（thirdPalette：李傕 / 张绣黑底土黄、袁术紫），须在任何敌兵生成前就绪 */const paletteKeys=cfg.arc==='qunxiong'?ensureFactionTextures(this,thirdPalette(this.thirdStage as 1|2|3),siegeSourceKeys()):[];
   {const fac=ARC_FACTIONS[cfg.arc+'.'+this.thirdStage];if(fac!==undefined&&FACTION_PROPS[fac]&&this.textures.exists(FACTION_PROPS[fac].key))architecturalSurface(this,fac);} /* 场景审查 P3：营具按本关敌方势力（原来一律西凉红黑帐篷）；吴 / 蜀 / 蛮的营具图没到之前照旧 */
   this.hubao=cfg.arc==='chibi'?new HubaoBattle({scene:this,player:this.player,army:this.legion,enemies:this.enemies,spawn:(kind,x,y,def)=>this.spawnEnemy(kind,x,y,undefined,true,def),stage:()=>this.thirdStage,elapsed:()=>this.elapsed,def:k=>this.chapter.enemies[k],banner:(t,c)=>this.showWaveBanner(t,true,c||undefined),sfx:k=>this.sfx.play(k),move:(e,nx,ny,dt)=>this.advanceEnemy(e,nx,ny,dt),boss:()=>this.boss,obstacles:()=>this.sishuiObstacles?.footprints??[]}):undefined;this.xiliang=this.hubao??null;
-  this.thirdReceipt=this.thirdTest?'':beginArcExpedition(cfg.arc,this.thirdStage,this.allies.filter(u=>u.active&&u.reserveSoldier).map(u=>u.kind));const effect=permanentEffects();this.legion.healingMultiplier=effect.healMultiplier;applyCitySpecialties(this.player,effect,!transfer,{legion:this.legion,supplies:this.supplies});if(!transfer){for(let i=0;i<effect.reinforcements;i++)this.legion.recruit(i===0?'swordsman':'spearman',1,true);if(!this.thirdTest)for(const kind of takeExpeditionReserve(effect.reserveSlots)){this.legion.recruit(kind,1,true);this.allies[this.allies.length-1].reserveSoldier=true;}}
+  this.thirdReceipt=this.thirdTest?'':cfg.begin?cfg.begin(this.thirdStage):beginArcExpedition(cfg.arc as WarlordArc,this.thirdStage,this.allies.filter(u=>u.active&&u.reserveSoldier).map(u=>u.kind));const effect=permanentEffects();this.legion.healingMultiplier=effect.healMultiplier;applyCitySpecialties(this.player,effect,!transfer,{legion:this.legion,supplies:this.supplies});if(!transfer){for(let i=0;i<effect.reinforcements;i++)this.legion.recruit(i===0?'swordsman':'spearman',1,true);if(!this.thirdTest)for(const kind of takeExpeditionReserve(effect.reserveSlots)){this.legion.recruit(kind,1,true);this.allies[this.allies.length-1].reserveSoldier=true;}}
   this.spearWarnings=new ThirdSpearWarnings(this);
   this.battlefieldDetails.useStructuredLayout();if(this.supplies)this.supplies.randomGeneration=false;
   const art=cfg.scenery?.(this,this.thirdStage)??thirdScenery(this,this.sceneryStage,(frame,x,y,size)=>this.spawnSceneProp(frame,x,y,size),cfg.arc,this.fort?.kind,SCENE_LOOKS[cfg.arc+'.'+this.thirdStage],cfg.arc+this.thirdStage);this.ground.setTexture(art.key).setTileScale(1);this.sishuiObstacles=new SishuiObstacles();this.sishuiObstacles.footprints.splice(0,this.sishuiObstacles.footprints.length,...art.boxes);
@@ -160,12 +166,12 @@ export function thirdGameSceneClass(Base:typeof GameScene,cfg:ArcSceneConfig=THI
   super.killEnemy(enemy);}
  update(time:number,delta:number){const before=this.combatNow;super.update(time,delta);if(this.combatNow>before&&!this.over&&this.mode==='none'){if(!this.awaitingChest)this.enemyCamps?.update(this.combatNow);this.dianwei?.update((this.combatNow-before)/1000,this.combatNow);this.fireShips?.update(this.combatNow);}this.spearWarnings?.draw(this.enemies,this.spear,this.combatNow,this.player,!this.over);this.controller?.updateDeath(delta);if(this.boss?.active&&this.controller)this.hudTexts.bossEnergy.setText(this.controller.label+(this.legion.count>12?' · 军势护阵':''));}
  protected renderRecruit(){if(this.resting){this.campUI?.open(cfg.campPrefix+this.thirdStage,cfg.stages[this.thirdStage]?.name??'返回天下地图');return;}super.renderRecruit();}
- protected continueCampaign(){if(!this.resting||this.mode!=='rest'||this.thirdStage>=3)return;const next=(this.thirdStage+1)as ThirdStage;if(!this.thirdTest&&!arcStageUnlocked(cfg.arc,next))return;const transfer=packCampaign(this.runConfig.character,this.player,this.legion,this.followers);transfer.chapter='hulao';this.registry.set(cfg.transferKey,transfer);this.registry.set(cfg.stageKey,next);this.registry.set('runConfig',{...this.runConfig,thirdStage:next});this.resting=false;this.scene.restart();}
+ protected continueCampaign(){if(!this.resting||this.mode!=='rest'||this.thirdStage>=cfg.stages.length)return;const next=(this.thirdStage+1)as ThirdStage;if(!this.thirdTest&&!this.stageGate(next))return;const transfer=packCampaign(this.runConfig.character,this.player,this.legion,this.followers);transfer.chapter='hulao';this.registry.set(cfg.transferKey,transfer);this.registry.set(cfg.stageKey,next);this.registry.set('runConfig',{...this.runConfig,thirdStage:next});this.resting=false;this.scene.restart();}
  protected finish(victory:boolean,reason:RunEndReason='death'){
-  if(this.over)return;super.finish(victory,reason);const reward=settleArcExpedition(cfg.arc,this.thirdReceipt,{victory,bossKilled:this.bossKilled,kills:this.kills,elapsed:this.elapsed,debug:this.thirdTest||this.debugModified||this.debugJumped||this.player.damageImmune,returned:!victory||this.thirdStage===3?this.allies.filter(u=>u.active&&u.reserveSoldier).map(u=>u.kind):[]});
-  this.controller?.clear();this.resultTexts.subtitle.setText(victory?this.chapter.victoryText:'率部退守，整军再战');this.resultTexts.body.setText(this.resultTexts.body.text+'\n永久奖励 · 军粮 +'+reward.provisions+cityIncomeLine(reward));
+  if(this.over)return;super.finish(victory,reason);const last=cfg.stages.length,debug=this.thirdTest||this.debugModified||this.debugJumped||!!this.player.damageImmune,side=cfg.settle?cfg.settle(this.thirdReceipt,this.thirdStage,{victory,debug}):null,reward=side?{provisions:side.provisions}:settleArcExpedition(cfg.arc as WarlordArc,this.thirdReceipt,{victory,bossKilled:this.bossKilled,kills:this.kills,elapsed:this.elapsed,debug,returned:!victory||this.thirdStage===last?this.allies.filter(u=>u.active&&u.reserveSoldier).map(u=>u.kind):[]});
+  this.controller?.clear();this.resultTexts.subtitle.setText(victory?this.chapter.victoryText:'率部退守，整军再战');this.resultTexts.body.setText(this.resultTexts.body.text+'\n永久奖励 · 军粮 +'+reward.provisions+(side?side.line:cityIncomeLine(reward as Parameters<typeof cityIncomeLine>[0])));
   const home=this.resultPanel.getByName('result-home')as Phaser.GameObjects.Text;home?.setText(victory?'返回天下地图':'返回主菜单').removeAllListeners('pointerdown').on('pointerdown',()=>{this.registry.remove('campaignTransfer');this.registry.remove(cfg.transferKey);this.scene.start(victory?'WorldMapScene':'MenuScene');});
   const restart=this.resultPanel.getByName('result-restart')as Phaser.GameObjects.Image;restart?.removeAllListeners('pointerdown').on('pointerdown',()=>{this.registry.remove(cfg.transferKey);this.registry.remove('campaignTransfer');this.scene.restart();});
-  if(victory&&this.thirdStage<3){this.pendingLevels=0;this.pendingRecruit=false;this.freeRecruit=false;this.resting=true;/* 受伤跨关继承，休整不自动回满，改由军医治疗 */this.renderRecruit();this.setMode('rest');}
+  if(victory&&this.thirdStage<last){this.pendingLevels=0;this.pendingRecruit=false;this.freeRecruit=false;this.resting=true;/* 受伤跨关继承，休整不自动回满，改由军医治疗 */this.renderRecruit();this.setMode('rest');}
  }
 };}

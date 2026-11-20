@@ -181,39 +181,52 @@ export const ROSTER_MIX = {
 
 /** 各关配兵表：键 = 章节 arc + '.' + 第几关（同 stageMaps）。 */
 export const STAGE_MIX: Record<string, StageMix> = {
-  'huangjin.1': { traits: { liumin: { w: 10 } } },
-  'huangjin.2': { traits: { liumin: { w: 8 }, fushui: { w: 5 } } },
-  'huangjin.3': { traits: { fushui: { w: 5, wave: 1 }, lishi: { w: 3 } } },
-  'hulao.1': { traits: { gunshi: { w: 6 } } },
-  'hulao.2': { traits: { qianghu: { w: 5 }, gunshi: { w: 4 } } },
-  'hulao.3': { traits: { qianghu: { w: 4, wave: 1 }, zonghuo: { w: 7, wave: 1 } } }, // 2-3 火烧洛阳不分波（只有第 1 波）
-  // 第二批（第 3～6 章）
-  'qunxiong.1': { traits: { xianzhen: { w: 3 } } }, // 陷阵营一次一队 5～7 人
-  'qunxiong.2': { traits: { yexi: { w: 6 } } },
-  'qunxiong.3': { traits: { danyang: { w: 7 } } },
-  'guandu.1': { traits: { daji: { w: 4 }, xiandeng: { w: 4 } } },
-  'guandu.2': { traits: { daji: { w: 4 } } },
-  'guandu.3': { traits: { xiandeng: { w: 4 }, yaliang: { w: 5 } } },
-  'chibi.2': { traits: { shuizu: { w: 6 }, huochuan: { w: 3 } } },
-  'chibi.3': { traits: { qiangzhen: { w: 6 } } },
-  'jingnan.2': { traits: { feishi: { w: 5 }, wuxi: { w: 5 } } },
-  'jingnan.3': { traits: { changsha: { w: 4 } } },
-  // 第三批（第 7～10、12 章）；专属图键按美术风格会话定的名字（巴蜀猎户 lieshou、祭酒 jisi、山地轻骑 shanji、霹雳车 pilie、林中伏弓 linggong、朱然亲军 zhuranqin），兵种 id 不变
-  'shu.1': { traits: { liehu: { w: 6 } } },
-  'shu.2': { traits: { liehu: { w: 5 }, funu: { w: 4 } } },
-  'shu.3': { traits: { dongzhou: { w: 4 } } },
-  'hanzhong.1': { traits: { jijiu: { w: 4 } } },
-  'hanzhong.2': { traits: { shanqi: { w: 6 } } },
-  'hanzhong.3': { traits: { pili: { w: 2 } } },
-  'xiangfan.1': { traits: { leimu: { w: 4 } } },
-  'xiangfan.2': { traits: { kuibing: { w: 6 } } },
-  'xiangfan.3': { traits: { baiyi: { w: 5 } } },
-  'yiling.1': { traits: { linfu: { w: 5 } } },
-  'yiling.2': { traits: { huogong: { w: 5 }, linfu: { w: 4 }, zhuran: { w: 3 } } },
-  'yiling.3': { traits: { huogong: { w: 6 } } },
-  'beifa.1': { traits: { qiangbing: { w: 6 } } },
-  'beifa.2': { traits: { huojian: { w: 5 } } },
-  'beifa.3': { traits: { huwei: { w: 4 } } },
-  'nanzheng.1': { traits: { mantoushi: { w: 7 } } },
-  'nanzheng.3': { traits: { dujian: { w: 7 }, xunshou: { w: 3 } } },
+  // 2026-11-19 平衡会话审查（用户「每一关敌军兵种配比也要检查调整一下」）：wave = 五段里第几段起出（1 先锋 · 2 精锐 · 3 事件 · 4 副将 · 5 首领）。
+  // 原则：先锋只出本章底层兵 + 最多一种轻量新兵；第 2 段起出本关主题兵；第 3～4 段再加一种本章兵加码；新兵种合计权重约 10～13（场上占比另有 20% 上限）。
+  'huangjin.1': { traits: { liumin: { w: 10 } } }, // 1-1 新手关：只有流民（成群、很脆）
+  'huangjin.2': { traits: { liumin: { w: 8 }, fushui: { w: 5, wave: 3 } } }, // 符水道徒挪到事件段：先学会打人群，再学先杀治疗
+  'huangjin.3': { traits: { fushui: { w: 4, wave: 2 }, lishi: { w: 3, wave: 3 }, liumin: { w: 4, wave: 1 } } }, // 原 fushui 第 1 波就出 → 第 2 段；先锋补流民
+  'hulao.1': { traits: { gunshi: { w: 6 }, qianghu: { w: 3, wave: 4 } } }, // 汜水关：关守滚石兵 + 副将段西凉弓骑
+  'hulao.2': { traits: { qianghu: { w: 5 }, gunshi: { w: 4, wave: 3 } } },
+  'hulao.3': { traits: { qianghu: { w: 4, wave: 1 }, zonghuo: { w: 7, wave: 1 } } }, // 2-3 火烧洛阳不分段（只有第 1 波），不动
+  // 第 3 章 群雄
+  'qunxiong.1': { traits: { qianghu: { w: 4 }, xianzhen: { w: 3, wave: 3 } } }, // 3-1 李傕郭汜：西凉弓骑打底，事件段陷阵营压上（原只有陷阵营）
+  'qunxiong.2': { traits: { yexi: { w: 6 }, zonghuo: { w: 3, wave: 3 } } }, // 3-2 宛城夜袭：夜袭兵 + 营中纵火
+  'qunxiong.3': { traits: { danyang: { w: 6 }, xianzhen: { w: 3, wave: 4 } } }, // 3-3 寿春：丹阳兵投矛 + 副将段盾阵
+  // 第 4 章 官渡
+  'guandu.1': { traits: { xiandeng: { w: 4 }, daji: { w: 4, wave: 3 } } }, // 原两种同时第 2 段出 → 大戟士挪到事件段
+  'guandu.2': { traits: { daji: { w: 4 }, xiandeng: { w: 3, wave: 3 } } }, // 原只有大戟士
+  'guandu.3': { traits: { yaliang: { w: 5 }, xiandeng: { w: 4, wave: 3 } } }, // 乌巢：押粮卒先出（截住有赏），再加先登
+  // 第 5 章 赤壁
+  'chibi.1': { traits: { qiangzhen: { w: 5 }, shuizu: { w: 3, wave: 4 } } }, // 5-1 长坂（原无新兵）：曹军枪阵追击，副将段水卒过河
+  'chibi.2': { traits: { shuizu: { w: 6 }, huochuan: { w: 3, wave: 3 } } }, // 火船挪到事件段（原第 2 段就出）
+  'chibi.3': { traits: { qiangzhen: { w: 6 }, shuizu: { w: 3, wave: 3 } } }, // 江陵：原只有枪阵兵
+  // 第 6 章 荆南
+  'jingnan.1': { traits: { wuxi: { w: 5 }, feishi: { w: 3, wave: 3 } } }, // 6-1（原无新兵）：五溪蛮扑跳 + 山越飞石
+  'jingnan.2': { traits: { feishi: { w: 4 }, wuxi: { w: 4, wave: 3 } } },
+  'jingnan.3': { traits: { changsha: { w: 3 }, wuxi: { w: 4, wave: 3 } } }, // 长沙：强弓（上限 2）+ 五溪蛮（原只有强弓）
+  // 第 7 章 入蜀
+  'shu.1': { traits: { liehu: { w: 6 }, dongzhou: { w: 3, wave: 4 } } },
+  'shu.2': { traits: { liehu: { w: 4 }, funu: { w: 4, wave: 3 } } }, // 落凤坡：伏弩挪到事件段
+  'shu.3': { traits: { dongzhou: { w: 4 }, funu: { w: 3, wave: 3 } } }, // 原只有东州兵
+  // 第 8 章 汉中
+  'hanzhong.1': { traits: { jijiu: { w: 3 }, shanqi: { w: 4, wave: 3 } } }, // 阳平关：祭酒（上限 2）+ 魏军山地轻骑
+  'hanzhong.2': { traits: { shanqi: { w: 6 }, jijiu: { w: 3, wave: 4 } } }, // 定军山：原只有山地轻骑
+  'hanzhong.3': { traits: { shanqi: { w: 4 }, pili: { w: 2, wave: 3 } } }, // 汉水：霹雳车（上限 1）挪到事件段，先锋 / 精锐出轻骑（原只有霹雳车）
+  // 第 9 章 襄樊
+  'xiangfan.1': { traits: { leimu: { w: 4 }, kuibing: { w: 4, wave: 4 } } }, // 樊城擂木 + 副将段溃兵
+  'xiangfan.2': { traits: { kuibing: { w: 6 }, leimu: { w: 3, wave: 3 } } }, // 水淹七军：原只有溃兵（杂兵）
+  'xiangfan.3': { traits: { baiyi: { w: 4 }, huogong: { w: 3, wave: 4 } } }, // 白衣渡江：吴军火攻兵在副将段接上（原只有白衣）
+  // 第 10 章 夷陵
+  'yiling.1': { traits: { linfu: { w: 4 }, huogong: { w: 3, wave: 3 } } },
+  'yiling.2': { traits: { huogong: { w: 4 }, linfu: { w: 3, wave: 2 }, zhuran: { w: 3, wave: 4 } } }, // 原三种第 2 段同时出 → 朱然亲军留到副将段
+  'yiling.3': { traits: { huogong: { w: 5 }, zhuran: { w: 2, wave: 4 } } }, // 火烧连营：原只有火攻兵
+  // 第 11 章 南征
+  'nanzheng.1': { traits: { mantoushi: { w: 5 }, dujian: { w: 3, wave: 3 } } }, // 原投石手权重 7 一种
+  'nanzheng.2': { traits: { dujian: { w: 4 }, xunshou: { w: 2, wave: 3 }, mantoushi: { w: 3, wave: 4 } } }, // 11-2（原无新兵）
+  'nanzheng.3': { traits: { dujian: { w: 6 }, xunshou: { w: 3, wave: 3 } } }, // 驯兽兵挪到事件段
+  // 第 12 章 北伐
+  'beifa.1': { traits: { qiangbing: { w: 5 }, huojian: { w: 3, wave: 3 } } }, // 街亭：原只有羌兵
+  'beifa.2': { traits: { huojian: { w: 5 }, qiangbing: { w: 3, wave: 3 } } }, // 陈仓：原只有火箭手
+  'beifa.3': { traits: { huwei: { w: 3 }, huojian: { w: 3, wave: 3 }, qiangbing: { w: 2, wave: 4 } } }, // 五丈原：原只有虎卫
 };

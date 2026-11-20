@@ -1,7 +1,10 @@
 import type {ChapterId} from '../data/chapters';
+import {SIDE_ROUTES,type SideRouteId} from '../data/sideRoutes';
 export interface WorldNode{id:string;name:string;x:number;y:number;kind:'home'|'battle'|'future';chapter?:ChapterId;campaign?:'qunxiong'|'guandu'|'chibi'|'jingnan'|'shu'|'hanzhong'|'xiangfan'|'yiling'|'nanzheng'|'beifa';
  /** 天下地图挑战关（可选、可反复挑战），如「虎牢关 · 三英战吕布」。 */
- challenge?:'lubu';region:string;owner:'player'|'neutral';}
+ challenge?:'lubu';
+ /** 其他势力支线的「讨伐令」（data/sideRoutes.ts）：开放后才画在地图上。 */
+ side?:SideRouteId;region:string;owner:'player'|'neutral';}
 /** Coordinates are normalized. 战役节点避开 WorldCities 城池标记（讨董卓移至洛阳与汜水关之间，官渡移至官渡城东南）。 */
 export const WORLD_NODES:readonly WorldNode[]=[
  {id:'home',name:'义军营寨',x:.52,y:.56,kind:'home',region:'中原',owner:'player'},
@@ -18,4 +21,5 @@ export const WORLD_NODES:readonly WorldNode[]=[
  {id:'yiling',name:'夷陵之战',x:.47,y:.62,kind:'battle',campaign:'yiling',region:'猇亭 · 连营 · 火烧连营',owner:'neutral'},
  {id:'beifa',name:'北伐',x:.25,y:.36,kind:'battle',campaign:'beifa',region:'街亭 · 陈仓 · 五丈原',owner:'neutral'},
  {id:'lubu',name:'三英战吕布',x:.417,y:.488,kind:'battle',challenge:'lubu',region:'虎牢关',owner:'neutral'},
+ ...SIDE_ROUTES.map(r=>({id:'side-'+r.id,name:'讨伐 · '+r.faction,x:r.x,y:r.y,kind:'battle' as const,side:r.id,region:r.region,owner:'neutral' as const})),
 ];

@@ -4,6 +4,7 @@ import { ZHANGLIAO } from '../data/zhangliao';
 import { ZHOUYU } from '../data/zhouyu';
 import { TAISHICI } from '../data/taishici';
 import { MENGDE } from '../data/mengde';
+import { DIANWEI } from '../data/dianwei';
 /** P3 第二批可玩武将（共用量表 p3*）。 */
 const P3_HEROES = new Set<string>(['ganning', 'dianwei', 'sunquan', 'menghuo', 'zhurong']);
 /** P3 限时状态的名字（被动条显示）。 */
@@ -115,6 +116,8 @@ export class CharacterPassives {
     this.lastDamage = now;
     // 黄忠：受伤掉 1 层蓄势（每 0.5 秒最多掉 1 层）；神射中受伤不掉层、不退出
     if (this.character === 'huangzhong' && !this.isSharpshooter(now) && this.stacks > 0 && now - this.hurtDropAt + 1e-6 >= HZ_SHARP.hurtDropGapMs) { this.hurtDropAt = now; this.stacks--; }
+    // 典韦·恶来：每次受伤积 1 层（gainGapMs 内最多 1 层；古之恶来中照攒，结束后下一轮更快）
+    if ((this.character as string) === 'dianwei' && now - this.lastGain + 1e-6 >= DIANWEI.gainGapMs) this.p3Gain(now);
     // 魏延·镇守汉中：每次受伤积 1 层拒敌（每 0.5 秒最多 1 层）
     if (this.character === 'weiyan' && this.stacks < this.maxStacks && now - this.lastGain + 1e-6 >= R.guardStepMs) { this.lastGain = now; this.stacks++; this.gains++; }
   }

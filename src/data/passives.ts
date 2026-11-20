@@ -12,6 +12,7 @@ export const CHARACTER_PASSIVES: Record<CharacterId, { name: string; maxStacks: 
   machao: { name: '西凉铁骑', maxStacks: 6 },
   sunshangxiang: { name: '侍婢执刀', maxStacks: 6 },
   diaochan: { name: '离间', maxStacks: 5 },
+  dianwei: { name: '恶来', maxStacks: 10 }, // P3：受伤攒，满了「古之恶来」（data/dianwei.ts）
   ganning: { name: '锦帆', maxStacks: 12 }, // P3：被钩过的敌兵被击杀攒，满了「百骑劫营」（data/ganning.ts）
   mengde: { name: '奸雄', maxStacks: 8 }, // P2：部曲阵亡攒、回血，满了召「虎豹骑」（data/mengde.ts）
   taishici: { name: '信义', maxStacks: 15 }, // P2：身边部曲挨打攒，满了「单骑突围」（data/taishici.ts）

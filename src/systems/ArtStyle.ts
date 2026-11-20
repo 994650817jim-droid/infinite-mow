@@ -53,6 +53,8 @@ export const ART_V2_FILES: Readonly<Record<string, string>> = sideBossFiles({
   // P3 第二批：行走 / 动作由首领 v2 图拼成（tools/boss-to-hero-sheets.py），不另出图
   ganning_walk_sheet: 'assets/processed-v2/ganning_walk_sheet.png',
   ganning_actions: 'assets/hero-actions-v2/ganning.png',
+  dianwei_walk_sheet: 'assets/processed-v2/dianwei_walk_sheet.png',
+  dianwei_actions: 'assets/hero-actions-v2/dianwei.png',
   // 第 2 批：我方兵种（4×4，见 V2_TROOP_KEYS / applyV2TroopFrames）
   shu_swordsman_walk_sheet: 'assets/processed-v2/troops/swordsman_walk.png',
   shu_swordsman_attack_sheet: 'assets/processed-v2/troops/swordsman_attack.png',

@@ -52,6 +52,7 @@ export const SKILL_FX: Readonly<Record<string, { file: string; cell: number; fra
     .map(h => ['fx_cast_' + h, { file: `assets/hero-fx/cast/cast_${h}.png`, cell: 256, frames: 6 }])),
   // P3 第二批：出招起手专属图没出之前借现成的（缺图清单 p3-heroes-plan.md）——甘宁借周瑜（火）
   fx_cast_ganning: { file: 'assets/hero-fx/cast/cast_zhouyu.png', cell: 256, frames: 6 },
+  fx_cast_dianwei: { file: 'assets/dianwei-fx/rage.png', cell: 256, frames: 6 }, // 典韦借随军典韦狂怒
   // 吕布方天画戟（ChatGPT 黑底 6×4，tools/build-lvbu-fx.mjs 切条；weapons/lvbuWeapon.ts 用）：戟刺朝右、横扫环、旋转飞戟（循环）
   fx_lvbu_thrust: { file: 'assets/hero-fx/lvbu/thrust.png', cell: 256, frames: 6 },
   fx_lvbu_sweep: { file: 'assets/hero-fx/lvbu/sweep.png', cell: 256, frames: 6 },

@@ -28,6 +28,11 @@ export interface HeroBarkLines {
 }
 
 export const HERO_BARKS: Record<CharacterId, HeroBarkLines> = {
+  dianwei: {
+    trigger: ['古之恶来在此！', '主公退后，某来挡！', '谁敢近前一步！'],
+    bossAppear: ['来，吃某一戟！'], bossDown: ['不过如此。'],
+    vsBoss: { 张绣: '张绣！宛城那夜的账，今日一并算了！', 许褚: '仲康，比比谁的力气大！' },
+  },
   ganning: {
     trigger: ['锦帆贼甘宁在此！', '百骑劫营，随我来！', '听见铃声了吗？'],
     bossAppear: ['水寨里的铃声，就是你们的丧钟。'], bossDown: ['痛快！'],

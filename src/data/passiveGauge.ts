@@ -39,6 +39,7 @@ export const PASSIVE_GAUGE_LOOKS: Partial<Record<CharacterId, GaugeLook>> = {
   mengde: { tex: 'passive_gauge_c', row: 4, slots: 4, size: 16, unit: '奸雄（虎符）' },
   // P3 第二批：专属刻度没出之前借相近的一行（缺图清单 p3-heroes-plan.md）
   ganning: { tex: 'passive_gauge_c', row: 2, slots: 6, size: 14, unit: '锦帆（借周瑜小火船）' },
+  dianwei: { tex: 'passive_gauge_c', row: 3, slots: 5, size: 15, unit: '恶来（借太史慈短戟）' },
 };
 
 /**

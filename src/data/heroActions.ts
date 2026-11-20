@@ -43,13 +43,16 @@ export const HERO_ACTIONS: Partial<Record<CharacterId, HeroActionSet>> = {
   taishici: fullSet('taishici_actions'),
   mengde: fullSet('mengde_actions'),
   ganning: fullSet('ganning_actions'), // P3：由首领 v2 图拼成（tools/boss-to-hero-sheets.py）
+  dianwei: partialSet('dianwei_actions'), // P3：随军典韦图拼成，没有受伤 / 胜利 / 倒地帧
 };
 /** 诸葛亮旧攻击图（过渡素材，正式图集缺失时退回）。 */
 export const ZHUGE_FALLBACK: HeroActionSet = {texture: 'zhuge_attack_sheet', attack: {down: [0, 1], right: [4, 5], up: [6, 7]}};
+/** 只有待机 / 出招 / 招牌技的图集（P3 典韦：随军图没有受伤 / 倒地帧；同 fullSet 帧序，缺的行不登记）。 */
+function partialSet(texture: string): HeroActionSet { const f = fullSet(texture); return { texture, idle: f.idle, attack: f.attack, skill: f.skill }; }
 /** 正式动作图集（tools/prepare-hero-actions.mjs，4 列 × 7 行、128×128）的标准帧序。 */
 function fullSet(texture: string): HeroActionSet {
   const row = (r: number, from = 0, n = 4) => Array.from({length: n}, (_, i) => r * 4 + from + i);
   return {texture, idle: row(0), attack: {down: row(1), right: row(2), up: row(3)}, skill: row(4), hurt: row(5, 0, 2), win: row(5, 2, 2), die: row(6)};
 }
 /** 需加载的正式动作图集（key → 文件）。 */
-export const HERO_ACTION_FILES: Record<string, string> = {lvbu_actions: 'assets/hero-actions-v2/lvbu.png', zhangliao_actions: 'assets/hero-actions-v2/zhangliao.png', zhouyu_actions: 'assets/hero-actions-v2/zhouyu.png', taishici_actions: 'assets/hero-actions-v2/taishici.png', mengde_actions: 'assets/hero-actions-v2/mengde.png', ganning_actions: 'assets/hero-actions-v2/ganning.png', sunshangxiang_actions: 'assets/hero-actions/sunshangxiang.png', diaochan_actions: 'assets/hero-actions/diaochan.png', zhaoyun_actions: 'assets/hero-actions/zhaoyun.png', guanyu_actions: 'assets/hero-actions/guanyu.png', huangzhong_actions: 'assets/hero-actions/huangzhong.png', zhangfei_actions: 'assets/hero-actions/zhangfei.png', huangyueying_actions: 'assets/hero-actions/huangyueying.png', pangtong_actions: 'assets/hero-actions/pangtong.png', liubei_actions: 'assets/hero-actions/liubei.png', weiyan_actions: 'assets/hero-actions/weiyan.png', machao_actions: 'assets/hero-actions/machao.png', zhuge_actions: 'assets/hero-actions/zhuge.png'};
+export const HERO_ACTION_FILES: Record<string, string> = {lvbu_actions: 'assets/hero-actions-v2/lvbu.png', zhangliao_actions: 'assets/hero-actions-v2/zhangliao.png', zhouyu_actions: 'assets/hero-actions-v2/zhouyu.png', taishici_actions: 'assets/hero-actions-v2/taishici.png', mengde_actions: 'assets/hero-actions-v2/mengde.png', ganning_actions: 'assets/hero-actions-v2/ganning.png', dianwei_actions: 'assets/hero-actions-v2/dianwei.png', sunshangxiang_actions: 'assets/hero-actions/sunshangxiang.png', diaochan_actions: 'assets/hero-actions/diaochan.png', zhaoyun_actions: 'assets/hero-actions/zhaoyun.png', guanyu_actions: 'assets/hero-actions/guanyu.png', huangzhong_actions: 'assets/hero-actions/huangzhong.png', zhangfei_actions: 'assets/hero-actions/zhangfei.png', huangyueying_actions: 'assets/hero-actions/huangyueying.png', pangtong_actions: 'assets/hero-actions/pangtong.png', liubei_actions: 'assets/hero-actions/liubei.png', weiyan_actions: 'assets/hero-actions/weiyan.png', machao_actions: 'assets/hero-actions/machao.png', zhuge_actions: 'assets/hero-actions/zhuge.png'};

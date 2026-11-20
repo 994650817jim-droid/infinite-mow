@@ -48,6 +48,9 @@ export const WEAPON_BRANCHES: readonly WeaponBranch[] = [
   // P2 曹操（效果在 weapons/mengdeWeapon.ts 里结算）
   B('yitian_jian', 'cc_xietianzi', 'formation', '挟天子以令诸侯', '每 8 秒插令旗成阵地 6 秒：\n阵内部曲攻速 +25%、每秒回血 2%', '部曲攻速加成提高', '部曲攻速加成再提高', '魏王', '阵地范围 +30%', true),
   B('yitian_jian', 'cc_hubao', 'cavalry', '虎豹骑', '奸雄只需 5 层，铁骑冲撞眩晕 0.8 秒\n冲过留下尘浪 4 秒（敌兵减速）', '铁骑伤害 +30%', '铁骑伤害再 +30%', '虎豹骑 · 极', '铁骑 7 骑', true),
+  // P3 典韦（效果在 weapons/dianweiWeapon.ts 里结算；设计会话：专职乙改兵阵，两条同派等于没得选）
+  B('shuang_tieji', 'dw_sizhan', 'warrior', '宛城死战', '半血以下旋风范围 +30%\n旋风伤害的 4% 回血', '旋风伤害 +30%', '旋风伤害再 +30%', '古之恶来', '不看血量常驻，每第 3 击就旋风', true),
+  B('shuang_tieji', 'dw_huzhu', 'formation', '护主', '每 5 秒护主：身边部曲得护盾（最大生命 12%）\n身边部曲攻速 +15%', '护盾与攻速 +30%', '护盾与攻速再 +30%', '宿卫', '护盾更厚、每 4 秒一次', true),
   // P3 甘宁（效果在 weapons/ganningWeapon.ts 里结算）
   B('jinfan_gou', 'gn_yexi', 'fire', '夜袭点火', '每一钩铁索都烧红、沿索留火\n着火的敌兵被拉到身边时爆燃', '钩与爆燃伤害 +30%', '钩与爆燃伤害再 +30%', '夜袭点火 · 燎原', '火烧得更久、爆燃更大', true),
   B('jinfan_gou', 'gn_jieying', 'cavalry', '百骑劫魏营', '不再拉敌兵：甘宁顺着铁索飞身扑过去\n扑过去时无敌，落地横扫（范围 +25%）', '扑斩伤害 +30%', '扑斩伤害再 +30%', '百骑劫营 · 不折一人', '落地后再扫一次', true),
@@ -70,7 +73,7 @@ export const WEAPON_BRANCHES: readonly WeaponBranch[] = [
  */
 export const BENXI = { dropStep: 90, dropMul: .4, recallMs: 2500, fullCount: 8, stillMs: 500, recallWidth: 44, recallMul: .45, recallFinalMul: .6, maxHitsPerEnemy: 3, keepMax: 8 } as const;
 /** P3 第二批可玩武将的分支图标还没出图（缺图清单 p3-heroes-plan.md）：不去载，卡面退回本命武器图标。 */
-export const BRANCH_ICON_PENDING: ReadonlySet<string> = new Set(['gn_yexi', 'gn_jieying']);
+export const BRANCH_ICON_PENDING: ReadonlySet<string> = new Set(['gn_yexi', 'gn_jieying', 'dw_sizhan', 'dw_huzhu']);
 export const BRANCH_ICON_READY: readonly string[] = WEAPON_BRANCHES.map(b => b.id).filter(id => !BRANCH_ICON_PENDING.has(id)); // 老 12 人 + P2 已出图
 export function branchesFor(weapon: WeaponId): WeaponBranch[] { return WEAPON_BRANCHES.filter(b => b.weapon === weapon); }
 export function branchById(id: string | undefined): WeaponBranch | undefined { return id ? WEAPON_BRANCHES.find(b => b.id === id) : undefined; }

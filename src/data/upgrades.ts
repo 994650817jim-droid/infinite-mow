@@ -16,6 +16,7 @@ import { zhouyuBlast } from '../weapons/zhouyuWeapon';
 import { taishiciReach } from '../weapons/taishiciWeapon';
 import { mengdeReach } from '../weapons/mengdeWeapon';
 import { ganningReach, ganningSweepR } from '../weapons/ganningWeapon';
+import { dianweiWhirlR } from '../weapons/dianweiWeapon';
 
 export const WEAPON_META: Record<WeaponId, { name: string; desc: string }> = {
   spear_orbit: { name: '七探盘龙枪', desc: '银枪自动索敌，向不同敌人突刺' },
@@ -34,6 +35,7 @@ export const WEAPON_META: Record<WeaponId, { name: string; desc: string }> = {
   huochuan_ling: { name: '火船令', desc: '朝敌群放出 2 艘小火船，撞上敌兵或到尽头爆燃，留下短火场' },
   donglai_ji: { name: '东莱双戟', desc: '近身双戟交叉斩；每第 4 击射出短戟，钉住敌兵 1 秒、留下减速圈' },
   yitian_jian: { name: '倚天剑', desc: '中距离扇形剑斩，命中挂「军令」6 秒：受伤 +20%，部曲集火' },
+  shuang_tieji: { name: '双铁戟', desc: '朝最近两个敌兵各掷一支短戟（穿透），每第 4 击原地旋风' },
   jinfan_gou: { name: '锦帆铁索钩', desc: '朝敌群甩出铁索钩，钩中的敌兵拉到身边再横扫；每第 3 钩铁索烧红，沿索留火' },
   diaochan_fans: { name: '双花扇', desc: '掷出回旋团扇，去回各打一次；被扇中 2 次的敌人倒戈（3 秒内转而攻击同伴）' },
 };
@@ -95,6 +97,7 @@ export function weaponUpgrade(weapon: WeaponState, player: Player): UpgradeOptio
     if (sunThrowCount(next) !== sunThrowCount(L)) desc += `\n每次掷 ${sunThrowCount(L)} → ${sunThrowCount(next)} 把（多的 60%）`;
   }
   if (weapon.id === 'yitian_jian') desc += `\n剑斩距离 ${mengdeReach(weapon.level)} → ${mengdeReach(next)}`;
+  if (weapon.id === 'shuang_tieji') desc += `\n旋风半径 ${dianweiWhirlR(weapon.level)} → ${dianweiWhirlR(next)}`;
   if (weapon.id === 'jinfan_gou') desc += `\n钩长 ${ganningReach(weapon.level)} → ${ganningReach(next)} · 横扫半径 ${ganningSweepR(weapon.level)} → ${ganningSweepR(next)}`;
   if (weapon.id === 'donglai_ji') desc += `\n双戟距离 ${taishiciReach(weapon.level)} → ${taishiciReach(next)}`;
   if (weapon.id === 'huochuan_ling') desc += `\n爆燃半径 ${zhouyuBlast(weapon.level)} → ${zhouyuBlast(next)}`;
@@ -192,6 +195,8 @@ export function martialDescription(id:MasteryId,level:number):string {
  wangmei:'奸雄回血 +'+(2*n)+'%\n（每阵亡一人回 '+(4+2*n)+'%）',
  lingxiang:'持续移动 0.8 秒后\n下一钩与横扫伤害 +'+(15*n)+'%',
  tiesuo:'钩长 +'+(10*n)+'%',
+ tieji:'每次多掷 '+[0,1,1,2][n]+' 支短戟',
+ huwei:'旋风半径 +'+(12*n)+'%',
  shenshe:'射戟射程 +'+(15*n)+'%',
  qichi:'双戟伤害 +'+(8*n)+'%',
  yaliang:'英发少攒 '+(15*n)+'%\n（满 '+Math.round(20*(1-.15*n))+' 层刮东风）',

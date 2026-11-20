@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { burningDecor } from './FireProps';
 import { actorDepth } from '../config';
 import { terrainConfigFor, type Pt } from '../data/terrain';
 
@@ -38,6 +39,8 @@ export function chibiRiverCamp(scene: Phaser.Scene, boxes?: Array<{ left: number
   for (let x = -1700; x <= 1700; x += 210) {
     if (landings.some(l => Math.abs(x - l) < 170)) continue; // 浮桥桥头留空
     const r = ROW[i++ % ROW.length], y = riverY(river.points, x) - river.width / 2 - 70 + r.dy;
+    // 火盆：燃烧序列帧循环（江北够不着，只放动画；用户 11-19「火盘也要做那种燃烧的动画」）
+    const fire = r.f === 7 ? burningDecor(scene, x, y, r.size, 'brazier', 'chibi-river-camp') : null; if (fire) { out.push(fire); continue; }
     const img = v2 ? scene.add.image(x, y, CAO, r.f) : scene.add.image(x, y, 'yellow_props', FALLBACK[r.f] ?? 12).setTint(0xc89080);
     img.setOrigin(.5, 1).setDisplaySize(r.size, r.size).setDepth(actorDepth(y)).setName('chibi-river-camp');
     out.push(img);

@@ -258,7 +258,9 @@ export class BattleMap {
   get bigOpen(): boolean { return this.state === 'open' || this.state === 'opening'; }
   /** G / 点卷轴：收起 → 飞到中央竖起 → 两轴拉开；展开 → 两轴合拢 → 横回去飞回角上。 */
   toggleBig(): void {
-    const s = this.h.scene; (s as unknown as { sfx?: { play(k: string): void } }).sfx?.play(this.bigOpen ? 'mapClose' : 'mapOpen'); // 卷轴展开 / 卷起 if (!this.icon) this.makeIcon(); this.makeOpen();
+    // 卷轴展开 / 卷起的音效（音效审计）；注意别把后面的 makeIcon / makeOpen 写进注释里（2026-11-20 用户「我打不开小地图」就是这样坏的）
+    const s = this.h.scene; (s as unknown as { sfx?: { play(k: string): void } }).sfx?.play(this.bigOpen ? 'mapClose' : 'mapOpen');
+    if (!this.icon) this.makeIcon(); this.makeOpen();
     const icon = this.icon, S = BATTLE_MAP.scroll, k = (icon?.getData('k') as number | undefined) ?? 1, o = this.open3!;
     const rollH = SCROLL_TEX.h * o.mid.scaleY, cy = o.mid.y;
     this.anim = null; if (icon) s.tweens.killTweensOf(icon);

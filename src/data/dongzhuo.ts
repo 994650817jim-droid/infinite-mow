@@ -71,7 +71,7 @@ export function getLuoyangChapter(): ChapterDef {
     waves: [{name: '洛阳城外', start: 0}], recruitWaves: [], bossAtStart: true,
     objective: {kind: 'destroy', count: LUOYANG.camps.length, target: '营寨', label: '摧毁营寨', limit: 9999, spots: LUOYANG.camps, doneBanner: ['营寨尽毁', '吕布跃下城头！']},
     enemies: {...base.enemies, boss},
-    victoryTitle: '董卓西走', victoryText: '董卓败退长安 · 讨伐董卓告捷 · 群雄并起',
+    victoryTitle: '国贼伏诛', victoryText: '吕布斩董卓 · 讨伐董卓告捷 · 群雄并起', // 本作 2-3 末段吕布倒戈斩董卓（原写「董卓败退长安」，与流程不符）
   };
 }
 

@@ -193,7 +193,7 @@ try {
       await page.waitForFunction(() => { const s = window.__game.scene.getScene('GameScene'); while (s.mode === 'levelup') { window.__picks.afterChest++; s.chooseUpgrade(0); } return s.mode === 'result'; }, null, { polling: 100 });
       console.log(`  chapter2 boss picks ${width}:`, JSON.stringify(await page.evaluate(() => window.__picks)));
       const victory = await page.evaluate(() => { const s = window.__game.scene.getScene('GameScene'); return { mode: s.mode, title: s.resultTexts.title.text, text: s.resultTexts.subtitle.text }; });
-      check(`chapter2_victory_text_${width}`, victory.mode === 'result' && victory.title === '董卓西走' && victory.text.includes('董卓'), victory);
+      check(`chapter2_victory_text_${width}`, victory.mode === 'result' && victory.title === '国贼伏诛' && victory.text.includes('董卓'), victory);
       await page.screenshot({ path: `${out}/hulao-victory-${width}.png` });
       // Actual result-panel input returns to the menu, then actual chapter-tab input switches back.
       await page.evaluate(() => window.__game.scene.getScene('GameScene').resultPanel.getByName('result-home').emit('pointerdown'));

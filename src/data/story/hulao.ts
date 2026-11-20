@@ -38,21 +38,22 @@ export const HULAO_STORY: StoryChapter = {
       brief: { id: 'hulao-3.brief', type: 'stageBrief', kicker: '2-3 · 军情', title: '洛阳', lines: [
         { who: 'scout', text: '董卓劫天子西迁长安，临行纵火焚烧洛阳！' },
         { who: '{lord}', text: '吕布护在城头——先破吕布，再擒国贼。' },
-        { tip: true, text: '董卓在城墙上放技能，打不到；先打退吕布，董卓才会下城。' },
+        { tip: true, text: '先摧毁城下 5 座营寨，吕布才会跃下城头；打退吕布，董卓才会下城——他在城头时打不到。' },
       ] },
       // 2-3 首领登场 / 倒下走下面的 barks（由首领战流程触发），这里不自动播
     },
   },
   close: {
     id: 'hulao.close', type: 'chapterClose', kicker: '第二章 · 讨伐董卓 · 终', title: '国贼伏诛', illustration: 'story_hulao_close', lines: [
-      { text: '董卓伏诛，长安城中百姓歌舞于道。然洛阳已成焦土。' },
+      { text: '董卓伏诛于洛阳城下，百姓闻之，歌舞于道。然洛阳已成焦土。' },
       { who: 'caocao', text: '诸侯各怀异心，盟约已散。天下自此多事矣。' },
       { who: 'liubei', text: '汉室倾颓，备虽力微，此志不改。', ifLord: ['liubei'] },
       { text: '群雄割据，各据一方。' },
     ],
   },
   camp: [
-    { id: 'hulao.camp1', type: 'campTalk', lines: [{ who: 'zhangfei', text: '那吕布好生了得，俺三人合战才逼退他。' }, { who: 'guanyu', text: '此人有勇无谋，终非大器。' }] },
+    // 原「俺三人合战才逼退他」：三英战吕布是第二章通关后的天下地图挑战，章内营中还没发生
+    { id: 'hulao.camp1', type: 'campTalk', lines: [{ who: 'zhangfei', text: '那华雄号称西凉骁将，也不过如此！' }, { who: 'guanyu', text: '董贼兵势尚大，不可轻敌。' }] },
     { id: 'hulao.camp2', type: 'campTalk', lines: [{ who: 'diaochan', text: '太师……不，董卓。他的死，我早已料到。', ifFollower: 'diaochan' }] },
   ],
   bonds: [],

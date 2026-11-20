@@ -69,7 +69,7 @@ export class HeroStatusFrame {
   setVisible(v: boolean): void { for (const o of [this.back, this.bars, this.name, this.seal, this.sealG, this.portrait]) o?.setVisible(v); }
 
   /** 每帧：hp / xp 比例、等级、真实时间（毫秒）；hpText 是场景的 HP 数字（摆到条中央）；badge 是主属性印。 */
-  update(o: { hp: number; maxHp: number; xp: number; xpNext: number; level: number; now: number; hpText?: Phaser.GameObjects.Text; badge?: Phaser.GameObjects.Image | null }): void {
+  update(o: { hp: number; maxHp: number; xp: number; xpNext: number; level: number; now: number; hpText?: Phaser.GameObjects.Text; badge?: Phaser.GameObjects.Image | null; /** 已越过本关建议等级（软上限）：经验条换暗金、右端一道金色小刻度。 */ over?: boolean }): void {
     const F = STATUS_FRAME, ratio = Phaser.Math.Clamp(o.hp / Math.max(1, o.maxHp), 0, 1), xr = Phaser.Math.Clamp(o.xp / Math.max(1, o.xpNext), 0, 1), now = o.now;
     // 残血拖尾：掉血时停一会儿再追上；回血时直接跟上
     if (ratio < this.lastRatio - 1e-4) this.hitAt = now;
@@ -102,7 +102,8 @@ export class HeroStatusFrame {
     // 经验条（细金条）；升级闪一下
     const xy = F.y + F.xpY, xh = F.xpH;
     g.fillStyle(0x140d06, 1).fillRect(x0, xy, w, xh).lineStyle(1, 0x7a5a2c, .9).strokeRect(x0 - .5, xy - .5, w + 1, xh + 1);
-    if (xr > 0) g.fillStyle(0xd9b35c, 1).fillRect(x0, xy, w * xr, xh).fillStyle(0xfff0b8, .5).fillRect(x0, xy, w * xr, 1.5);
+    if (xr > 0) g.fillStyle(o.over ? 0x9a7428 : 0xd9b35c, 1).fillRect(x0, xy, w * xr, xh).fillStyle(o.over ? 0xd8b060 : 0xfff0b8, .5).fillRect(x0, xy, w * xr, 1.5);
+    if (o.over) g.fillStyle(0xf0c870, 1).fillRect(x0 + w - 2, xy - 3, 2, xh + 6); // 越级小刻度
     const fk = (now - this.flashAt) / F.flashMs;
     if (fk >= 0 && fk < 1) g.fillStyle(0xfff6d8, .85 * (1 - fk)).fillRect(x0 - 2, xy - 2, w + 4, xh + 4);
     this.stats.trail = this.trail; this.stats.ratio = ratio;

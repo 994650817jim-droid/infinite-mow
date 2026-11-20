@@ -11,6 +11,8 @@ export interface WeaponState {
   cooldownLeft: number;
   /** 兵器专职分支（data/weaponBranches，本命 Lv5 后二选一，随征程构筑保存）。 */
   branch?: string;
+  /** 选的是「契合」那条专职（分支效果 ×BRANCH_FIT.fitMul）。 */
+  attuned?: boolean;
   /** 本命超出 Lv5 的级数（Lv6 = 1、Lv7 = 2；level 本身停在 5，原武器查表不越界）。 */
   over?: number;
 }

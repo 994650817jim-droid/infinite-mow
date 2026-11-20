@@ -72,4 +72,16 @@ export function branchById(id: string | undefined): WeaponBranch | undefined { r
 /** 本命 Lv6 / 7 的章节门槛（超出 Lv5 的级数上限）。 */
 export const WEAPON_OVER = { cap: 0, capFor: (chapter: number): number => chapter >= 8 ? 2 : chapter >= 4 ? 1 : 0, damagePer: .1 };
 /** 分支强度档：0 未选；1 选定；2 = Lv6；3 = Lv7。 */
+/**
+ * 专职面板（2026-11-20 用户「可以按照你建议去开发」）：本命 Lv5 时单独弹「兵器专职」面板（ui/BranchPickPanel），两条都能选（去掉「分支派 2 势」门槛）。
+ * 契合：两条里该派「势」更高的那条（同势按武将第一亲和派）；选契合的那条，分支效果 ×fitMul（初值 +10%，交平衡会话）。
+ */
+export const BRANCH_FIT = { fitMul: 1.1 } as const;
+export function fitBranch(bs: readonly WeaponBranch[], shi: (s: SchoolId) => number, affinity: readonly SchoolId[]): WeaponBranch | undefined {
+  if (bs.length !== 2) return bs[0];
+  const [a, b] = bs, sa = shi(a.school), sb = shi(b.school);
+  if (sa !== sb) return sa > sb ? a : b;
+  const ia = affinity.indexOf(a.school), ib = affinity.indexOf(b.school);
+  return ia < 0 && ib < 0 ? a : ib < 0 || (ia >= 0 && ia <= ib) ? a : b;
+}
 export function branchTier(w: { branch?: string; over?: number }): number { return w.branch ? 1 + (w.over ?? 0) : 0; }

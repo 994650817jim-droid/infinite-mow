@@ -100,12 +100,12 @@ export class Parley {
       if (first) gainProvisions(SURRENDER.persuadeProvisions);
     } else where = '试炼不入册';
     this.h.banner(`${d.name}归降`, false, where + (live ? ` · 军粮 +${SURRENDER.persuadeProvisions}` : ''));
-    this.h.sfx('gong');
+    this.h.sfx('parleyYes');
     this.kneel(b);
   }
   private fail(b: Enemy, ctx: Omit<OddsCtx, 'pressed'>): void {
     this.state = 'failed'; this.say(b, false, ctx);
-    this.h.banner(`劝降不成 · ${this.def.name}怒而再战`, true, `伤害 +${Math.round((SURRENDER.failDamageMul - 1) * 100)}% · 劝降只有这一次`); this.h.sfx('bossSummon');
+    this.h.banner(`劝降不成 · ${this.def.name}怒而再战`, true, `伤害 +${Math.round((SURRENDER.failDamageMul - 1) * 100)}% · 劝降只有这一次`); this.h.sfx('parleyNo');
     b.invulnerable = false; b.hp = Math.max(b.hp, Math.round(b.maxHp * SURRENDER.failHeal));
     b.def = { ...b.def, damage: b.def.damage * SURRENDER.failDamageMul };
     b.sprite.setTint(0xff7060); this.h.scene.time.delayedCall(220, () => { if (b.active) b.sprite.clearTint(); });

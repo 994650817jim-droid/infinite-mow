@@ -168,8 +168,42 @@ export const CONTENT_SFX: Record<string, Recipe> = {
   lubu_land: (v, t, p) => { thud(v, t, 45 * p, .12, 1); v.swell(t, 1.1, 'lowpass', 1200, 150, .06, .6, .03); crackle(v, t + .05, 8, .5, .025); return 1.2; },
 };
 
+// ———— 音效审计补齐（2026-11-19，用户「关于音效看看有什么需要优化提升的」；审计见共享笔记 audio-audit.md）————
+Object.assign(CONTENT_SFX_CONFIG, {
+  // 首领：转阶段 / 倒下（原来转阶段无声、倒下只借一声受击）
+  bossPhase: F(1.4, 2000, 1, 2, 0), bossFall: F(2.4, 3000, 1, 2, 0),
+  // 割草多杀分层：0.18 秒内 ≥4 杀 / ≥10 杀（GameScene.killEnemy 计数）
+  killBurst: F(.45, 220, 1, 1, .05), killSweep: F(.8, 450, 1, 2, .04),
+  // 新功能
+  brazierBreak: F(.7, 160, 2, 1, .06), healPickup: F(.6, 200, 1, 2, .03), promote: F(1.6, 1500, 1, 2, 0),
+  parleyYes: F(1.6, 1500, 1, 2, 0), parleyNo: F(1.2, 1500, 1, 2, 0), shop_sell: F(.6, 120, 2, 2, .03),
+  mapOpen: F(.45, 200, 1, 2, .03), mapClose: F(.35, 200, 1, 2, .03), uiHover: F(.04, 70, 1, 0, .04),
+  // 天下地图环境声（远号角 / 远鼓 / 旗声）
+  amb_horn: A(1.8), amb_drum: A(1.2), amb_flag: A(.9),
+});
+Object.assign(CONTENT_SFX, <Record<string, Recipe>>{
+  bossPhase: (v, t, p) => { bell(v, t, 110 * p, .05, 1.4); for (let i = 0; i < 4; i++) drum(v, t + .12 + i * .1, .07 + i * .01, 95); v.swell(t, 1.2, 'lowpass', 120, 900, .05, .8, .5); return 1.4; },
+  bossFall: (v, t, p) => { thud(v, t, 42 * p, .12, 1.4); drum(v, t, .1, 70); drum(v, t + .28, .09, 65); bell(v, t + .05, 98 * p, .06, 2.3); v.swell(t, 2, 'lowpass', 900, 120, .05, .6, .02); return 2.4; },
+  killBurst: (v, t, p) => { thud(v, t, 88 * p, .06, .3); v.noise(t, .08, 'bandpass', 1300 * p, .05, 500, 1.1); crackle(v, t + .02, 3, .12, .025); return .45; },
+  killSweep: (v, t, p) => { thud(v, t, 60 * p, .09, .6); drum(v, t + .06, .07, 105); v.swell(t, .7, 'bandpass', 2400 * p, 500, .05, .9, .05); crackle(v, t + .03, 6, .3, .03); return .8; },
+  brazierBreak: (v, t, p) => { v.metal(t, 380 * p, .022, .25); v.noise(t, .12, 'bandpass', 2200, .05, 900, 1.3); flare(v, t + .05, .55, .045, 250, 1500); crackle(v, t + .1, 5, .4, .02); return .7; },
+  healPickup: (v, t, p) => { v.tone(t, .35, 'sine', 523 * p, .03); v.tone(t + .09, .45, 'sine', 784 * p, .03); v.swell(t, .3, 'bandpass', 900, 2200, .015, 1.5, .4); return .6; },
+  promote: (v, t, p) => { for (let i = 0; i < 3; i++) drum(v, t + i * .16, .08, 100); for (let i = 0; i < 4; i++) v.tone(t + .5 + i * .1, .8, 'triangle', [392, 523, 659, 784][i] * p, .03); bell(v, t + .9, 1047 * p, .025, .7); return 1.6; },
+  parleyYes: (v, t, p) => { for (const [d, f] of [[0, 262], [.06, 330], [.12, 392], [.2, 523]] as const) bell(v, t + d, f * p, .025, 1.3); return 1.6; },
+  parleyNo: (v, t, p) => { drum(v, t, .1, 70); drum(v, t + .22, .1, 66); v.tone(t + .1, .9, 'sawtooth', 110 * p, .015, 104 * p, .1); v.tone(t + .1, .9, 'sawtooth', 117 * p, .013, 110 * p, .1); return 1.2; },
+  shop_sell: (v, t, p) => { for (let i = 0; i < 5; i++) { const f = (1700 + Math.random() * 900) * p; v.tone(t + i * .055, .12, 'sine', f, .018); v.noise(t + i * .055, .015, 'highpass', 4000, .01); } v.noise(t + .28, .2, 'lowpass', 600, .02, 300); return .6; },
+  mapOpen: (v, t, p) => { v.swell(t, .4, 'bandpass', 900 * p, 2600 * p, .035, .9, .5); v.noise(t + .3, .05, 'lowpass', 700, .025, 400); return .45; },
+  mapClose: (v, t, p) => { v.swell(t, .3, 'bandpass', 2400 * p, 800 * p, .03, .9, .4); v.noise(t + .25, .05, 'lowpass', 600, .025, 300); return .35; },
+  uiHover: (v, t, p) => { v.tone(t, .03, 'sine', 1500 * p, .008, 1300 * p); return .04; },
+  amb_horn: (v, t, p) => { v.tone(t, 1.6, 'sawtooth', 147 * p, .006, 147 * p, .4); v.tone(t, 1.6, 'sine', 73 * p, .008, 73 * p, .4); return 1.8; },
+  amb_drum: (v, t) => { for (let i = 0; i < 3; i++) drum(v, t + i * .35, .02, 80); return 1.2; },
+  amb_flag: (v, t, p) => { for (let i = 0; i < 3; i++) v.swell(t + i * .22, .25, 'bandpass', 700 * p, 1400 * p, .01, .8, .3); return .9; },
+});
+
 /** 响度校准倍数（tools/render-sfx.mjs 实测后填；未列出的 = 1）。 */
 const LEVEL: Record<string, number> = {
+  // 音效审计补齐（2026-11-19）
+  bossPhase: 1.60, bossFall: 1.29, killBurst: 1.10, killSweep: 0.94, brazierBreak: 1.70, healPickup: 1.95, promote: 1.76, parleyYes: 1.76, parleyNo: 1.20, shop_sell: 2.85, mapOpen: 3.05, mapClose: 2.92, uiHover: 1.80, amb_horn: 1.58, amb_drum: 0.92, amb_flag: 3.20,
   cast_guanyu: 2.57, cast_zhangfei: 1.20, cast_zhaoyun: 2.72, cast_zhuge: 3.13, cast_huangzhong: 2.04, cast_machao: 1.93,
   cast_weiyan: 1.68, cast_liubei: 2.02, cast_pangtong: 2.6, cast_huangyueying: 3.80, cast_sunshangxiang: 3.67, cast_diaochan: 3.43,
   cast_sigil: 1.60, bcast_blood: 1.57, bcast_yellow: 1.82, bcast_dust: 1.72, bcast_quake: 1.15, bcast_wall: 0.90,
@@ -193,8 +227,7 @@ export const bossHitSfx = (theme: string): string => 'bhit_' + theme;
 export function sceneSfx(scene: unknown, key: string): void { (scene as { sfx?: { play(k: string): void } } | null)?.sfx?.play(key); }
 
 /** 城池 / 营寨环境声：每 3.5–7 秒随机一声（鸟、打铁、车轮、远钟、风），轻轻的；场景关闭自动停。 */
-export function startCityAmbient(scene: { time: { addEvent(o: object): { remove(): void } }; events: { once(e: string, f: () => void): void } }, play: (k: string) => void): void {
-  const keys = ['amb_bird', 'amb_bird', 'amb_hammer', 'amb_cart', 'amb_bell', 'amb_wind'];
+export function startCityAmbient(scene: { time: { addEvent(o: object): { remove(): void } }; events: { once(e: string, f: () => void): void } }, play: (k: string) => void, keys: readonly string[] = ['amb_bird', 'amb_bird', 'amb_hammer', 'amb_cart', 'amb_bell', 'amb_wind']): void {
   let ev: { remove(): void } | null = null;
   const next = (): void => { ev = scene.time.addEvent({ delay: 3500 + Math.random() * 3500, callback: () => { play(pick(keys)); next(); } }); };
   next(); scene.events.once('shutdown', () => ev?.remove());

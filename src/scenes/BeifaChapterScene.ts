@@ -1,3 +1,4 @@
+import { sortieBlocked } from '../ui/SortieGuard';
 import {playMenuMusic,menuMusic} from '../systems/Music';
 import {startCityAmbient} from '../systems/ContentSfx';
 import {uiSfx} from '../systems/Sfx';
@@ -72,6 +73,6 @@ export class BeifaChapterScene extends Phaser.Scene {
     {who:lord,text:'出祁山，取街亭，下陈仓——与司马懿决于五丈原！'},
     {text:'街亭要守住水源；陈仓先破城门、拆城头箭楼；五丈原司马懿三阶段：坚守不出 → 出营决战 → 天象异变。打赢之后，按占下的城池进入结局。'}],
    reward:'最终章 · 打赢进入结局',confirm:'北伐中原',background:'rest_camp',onDone:()=>{try{localStorage.setItem(OPEN_KEY,'1');}catch{}}});}
- private depart(){if(!stageOpen(this.selected)&&!isChapterTestRun())return;if(!isChapterTestRun())try{localStorage.setItem('im_last_hero',this.hero);}catch{}this.registry.remove('campaignTransfer');this.registry.remove('beifaTransfer');this.registry.set('beifaStage',this.selected);this.registry.set('runConfig',{character:this.hero,thirdStage:this.selected});this.scene.start('BeifaGameScene');}
+ private depart(){if(sortieBlocked(this,()=>this.depart()))return; /* 出征确认：会让告急城池失守时先问（ui/SortieGuard） */if(!stageOpen(this.selected)&&!isChapterTestRun())return;if(!isChapterTestRun())try{localStorage.setItem('im_last_hero',this.hero);}catch{}this.registry.remove('campaignTransfer');this.registry.remove('beifaTransfer');this.registry.set('beifaStage',this.selected);this.registry.set('runConfig',{character:this.hero,thirdStage:this.selected});this.scene.start('BeifaGameScene');}
  private refresh(){const save=loadWorld(),test=isChapterTestRun();this.cards.forEach((c,i)=>{const open=stageOpen(i+1)||test,chosen=this.selected===i+1;c.bg.setFillStyle(chosen?0x413020:0x29231d).setStrokeStyle(chosen?2:1,chosen?0xd7b778:0x65543f);c.strip.setVisible(chosen);c.status.setText(save.beifaStages>=i+1?'✓ 已告捷':!open?!beifaOpen()?'锁定 · 南征告捷':'锁定 · 完成前关':chosen?'◆ 当前出征':'可出征').setColor(chosen?'#f0ce8f':'#a99c86');});this.heroButtons.forEach((h,i)=>h.setFillStyle(CHARACTERS[i].id===this.hero?0x51402b:0x241e1a).setStrokeStyle(1,CHARACTERS[i].id===this.hero?0xd7b778:0x70604b).setAlpha(h.getData('locked')?.35:1));this.deployText.setText('出征  ·  '+BEIFA_STAGES[this.selected-1].name);}
 }

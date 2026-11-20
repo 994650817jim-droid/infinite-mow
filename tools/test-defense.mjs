@@ -14,7 +14,7 @@ await p.addInitScript(sv => { if (!sessionStorage.getItem('seeded')) { localStor
 await p.goto(base + '?layout=desktop'); await p.waitForFunction(() => window.__game?.scene.isActive('MenuScene'), null, { timeout: 180000 });
 const M = "window.__game.scene.getScene('WorldMapScene')", G = "window.__game.scene.getScene('SiegeGameScene')";
 const world = () => p.evaluate(() => { const w = JSON.parse(localStorage.getItem('im_world_v1')); return { owned: w.ownedCities, alerts: (w.alerts ?? []).map(a => a.city), provisions: w.provisions }; });
-const toMap = async () => { await p.evaluate(() => { const g = window.__game; for (const s of g.scene.getScenes(true)) s.scene.stop(); g.scene.start('WorldMapScene'); }); await p.waitForFunction(() => window.__game.scene.isActive('WorldMapScene'), null, { timeout: 60000 }); await p.waitForTimeout(1200); };
+const toMap = async () => { await p.evaluate(() => { const g = window.__game, m = g.scene.getScene('WorldMapScene'); if (m && g.scene.isActive('WorldMapScene')) { m.scene.restart(); return; } /* 已在地图上：同一帧 stop + start 同一场景会起不来，改 restart */ for (const s of g.scene.getScenes(true)) s.scene.stop(); g.scene.start('WorldMapScene'); }); await p.waitForFunction(() => window.__game.scene.isActive('WorldMapScene'), null, { timeout: 60000 }); await p.waitForTimeout(1200); };
 /** 天下地图（缺省 V1）：点告急的陈留 → 主按钮「亲征 · 守城」→ 弹窗「出征守城」。 */
 const defend = async () => {
   await toMap();
@@ -51,11 +51,20 @@ await p.evaluate(G0 => { const s = eval(G0); s.player.damageImmune = false; s.fi
 const lose = await p.evaluate(G0 => { const s = eval(G0), home = s.resultPanel?.getByName('result-home'); return { sub: s.resultTexts.subtitle.text, body: s.resultTexts.body.text.split('\n').slice(-3).join(' | '), home: home?.text, retreat: s.defeatRetreat?.name ?? null }; }, G);
 const w1 = await world();
 const coreOf = j => { const h = JSON.parse(j).heroes.zhaoyun.player; return JSON.stringify({ b: h.build, w: h.weapons.map(x => [x.id, x.level]) }); };
-ck('守城战败：结算「守城失利 · 陈留仍在告急」，按钮写退守去处（最近的另一座我方城 / 营寨，不是陈留本身）；城还在、告急还在', /守城失利/.test(lose.sub) && /仍在告急/.test(lose.sub) && w1.owned.includes('chenliu') && w1.alerts.includes('chenliu') && !!lose.retreat && lose.retreat !== '陈留' && /退守/.test(lose.home ?? ''), { lose, w1 }); // 不退回刚没守住的陈留
+ck('守城战败：结算「守城失利 · 陈留已被围」（守城重做：守城输了 = 被围），按钮写退守去处（最近的另一座我方城 / 营寨，不是陈留本身）；城还在、告急还在', /守城失利/.test(lose.sub) && /已被围/.test(lose.sub) && w1.owned.includes('chenliu') && w1.alerts.includes('chenliu') && !!lose.retreat && lose.retreat !== '陈留' && /退守/.test(lose.home ?? ''), { lose, w1 }); // 不退回刚没守住的陈留
 const shown = await p.evaluate(G0 => { const n = eval(G0).resultPanel.getByName('result-notes'); return n?.visible ? n.text : ''; }, G);
 ck('守城战败：结算面板显示「城池尚在；若改去别处出征，此城将失守」', /城池尚在/.test(shown), shown);
 ck('守城战败：征程构筑内容不写回（战法 / 本命不变）', coreOf(await p.evaluate(() => localStorage.getItem('im_campaign_v1'))) === coreOf(camp0));
 await p.screenshot({ path: `${out}/defense-lose-1280x720.png` });
+
+// ②b 出征确认（守城重做 ②，用户 11-20 批准先做）：有告急时出征别处先弹窗；「先去守城」留在地图、城和告急都还在
+await toMap();
+const gd = await p.evaluate(async M0 => { const s = eval(M0), N = await import('/src/world/WorldNodes.ts'); s.registry.remove('sortieConfirmedAt'); s.selected = { kind: 'node', node: N.WORLD_NODES.find(n => n.id === 'qunxiong') }; s.refresh(); s.launch(false);
+  const g = s.children.getByName('sortie-guard'); const texts = []; const walk = l => { for (const o of l) { if (o.type === 'Text') texts.push(o.text); if (o.list) walk(o.list); } }; if (g) walk(g.list); return { shown: !!g, go: !!g?.getByName('sortie-guard-go'), text: texts.join('|') }; }, M);
+await p.screenshot({ path: out + '/sortie-guard.png' });
+await p.evaluate(M0 => { const s = eval(M0), g = s.children.getByName('sortie-guard'); g?.getByName('sortie-guard-cancel')?.emit('pointerup'); }, M); await p.waitForTimeout(400);
+const gd2 = { active: await p.evaluate(() => window.__game.scene.isActive('WorldMapScene')), guard: await p.evaluate(M0 => !!eval(M0).children.getByName('sortie-guard'), M), ...(await world()) };
+ck('出征确认：有告急时从天下地图出征别处先弹窗（写明陈留将失守，两个按钮）；「先去守城」后留在地图，陈留与告急都还在', gd.shown && gd.go && /陈留/.test(gd.text) && /失守/.test(gd.text) && gd2.active && !gd2.guard && gd2.owned.includes('chenliu') && gd2.alerts.includes('chenliu'), { gd, gd2 });
 
 // ③ 再守一次、打赢：告急解除、城还在、军粮增加
 const before = await world();

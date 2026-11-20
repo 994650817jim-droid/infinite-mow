@@ -5,7 +5,7 @@ import {HeroWarCard} from './HeroWarCard';
 import {CHARACTERS} from '../data/characters';
 import {homeCommand} from './HomeCommand';
 import {heroUnlocked} from '../systems/HeroUnlocks';
-import {HERO_JOIN} from '../data/heroUnlocks';
+import {LOCKED_HINT,LOCKED_TITLE,LOCKED_HOW} from '../data/heroUnlocks';
 /** 每页 4 名武将（电脑一行 4 张、手机 2×2），武将多于 4 名时用 ‹ › 翻页。
  *  2026-11-17 用户「这里ui也需要调整字体美术不统一」（电脑版）：一个大标题（与主页标题同字体同金色）、提示移到标题下（象牙白描边、无暗底、短句）、
  *  页码只写「1 / 3」放在卷轴与按钮之间；字体统一 TITLE / HEADING / FONT 三档，金 #efd399 / 象牙 #e8d8b2，描边 #120904。 */
@@ -42,7 +42,7 @@ export class HomeHeroPicker{
  }
  /** 择主公：主公规则生效、且这一下会定下（或改选）主公时，要点两次「确认出战」。 */
  private tryConfirm():void{const c=CHARACTERS[this.order[this.candidate]];if(!c)return;
-  if(!heroUnlocked(c.id)){this.hint?.setText(`${c.name} · ${HERO_JOIN[c.id]?.hint??'尚未来投'}`).setVisible(true);return;}
+  if(!heroUnlocked(c.id)){this.hint?.setText(`${c.name} · ${LOCKED_HINT}`).setVisible(true);return;}
   if(!canPickLord(c.id)){this.hint?.setText(this.lockText()).setVisible(true);return;}
   const decides=lordRules()&&(!lordHero()||!lordFinal());
   if(decides&&this.armed!==this.candidate){this.armed=this.candidate;this.hint?.setColor(D?GOLD:'#ffd98a').setText(D?`再点一次「确认出战」· 定 ${c.name} 为主公，选定后不可更改`:`主公选定后本存档不可更改 · 再点一次「确认出战」，以 ${c.name} 为主公`).setVisible(true);return;}
@@ -52,11 +52,11 @@ export class HomeHeroPicker{
  open(index:number):void{this.order=CHARACTERS.map((c,i)=>({i,u:heroUnlocked(c.id)})).sort((a,b)=>Number(b.u)-Number(a.u)||a.i-b.i).map(o=>o.i); /* 打开时按当前解锁重排 */index=Math.max(0,this.order.indexOf(index));if(!heroUnlocked(CHARACTERS[this.order[index]].id))index=0;this.candidate=index;this.page=Math.floor(index/PER);this.root.setVisible(true);this.refreshArt();}
  refreshArt(_animate=false):void{
   this.cards.forEach((c,i)=>{const on=Math.floor(i/PER)===this.page;c.root.setVisible(on);c.hit.setVisible(on);if(c.hit.input)c.hit.input.enabled=on;if(on){const id=CHARACTERS[this.order[i]].id,locked=!heroUnlocked(id);c.setHero(this.order[i]);c.setSelected(i===this.candidate);c.root.setAlpha(locked?1:canPickLord(id)?1:.4);
-   // 没来投：立绘压成墨色剪影 + 来投提示
-   if(locked)c.art.setTintFill(0x17120c);else c.art.clearTint();this.lockTexts[i]?.setName('pick-lock-'+id).setText(locked?'未来投\n'+(HERO_JOIN[id]?.hint??''):'').setVisible(locked);}});
+   // 没归附：立绘压成墨色剪影 + 通用提示（用户：不写哪一章来投，只说需劝降招募）
+   if(locked)c.art.setTintFill(0x17120c);else c.art.clearTint();this.lockTexts[i]?.setName('pick-lock-'+id).setText(locked?LOCKED_TITLE+'\n'+LOCKED_HOW:'').setVisible(locked);}});
   if(this.armed!==this.candidate)this.armed=-1;
   const cid=CHARACTERS[this.order[this.candidate]]?.id??'zhaoyun',lock=!canPickLord(cid);
-  if(!heroUnlocked(cid)&&this.armed<0){this.hint?.setColor(D?IVORY:'#ff9a72').setText(`${CHARACTERS[this.order[this.candidate]].name} · ${HERO_JOIN[cid]?.hint??'尚未来投'}`);this.pageText?.setText(D?`${this.page+1} / ${this.pages}`:`第 ${this.page+1} / ${this.pages} 页 · 共 ${CHARACTERS.length} 将`);return;}if(this.armed<0)this.hint?.setColor(D?IVORY:'#ff9a72').setText(lock?this.lockText():lordRules()&&!lordHero()?(D?'选定即为主公 · 不可更改':'择一良将为主公 · 选定后本存档不可更改'):'');this.hint?.setVisible(!!this.hint.text);
+  if(!heroUnlocked(cid)&&this.armed<0){this.hint?.setColor(D?IVORY:'#ff9a72').setText(`${CHARACTERS[this.order[this.candidate]].name} · ${LOCKED_HINT}`);this.pageText?.setText(D?`${this.page+1} / ${this.pages}`:`第 ${this.page+1} / ${this.pages} 页 · 共 ${CHARACTERS.length} 将`);return;}if(this.armed<0)this.hint?.setColor(D?IVORY:'#ff9a72').setText(lock?this.lockText():lordRules()&&!lordHero()?(D?'选定即为主公 · 不可更改':'择一良将为主公 · 选定后本存档不可更改'):'');this.hint?.setVisible(!!this.hint.text);
   this.pageText?.setText(D?`${this.page+1} / ${this.pages}`:`第 ${this.page+1} / ${this.pages} 页 · 共 ${CHARACTERS.length} 将`);
  }
 }

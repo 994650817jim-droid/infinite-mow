@@ -64,7 +64,7 @@ const pick = await p.evaluate(async () => {
   return { lt };
 });
 await p.screenshot({ path: `${OUT}/picker-silhouettes.png` });
-ck('主页选将：没来投的立绘压成剪影、写来投提示（第二页）', pick.lt.length >= 2 && pick.lt.every(t => /未来投/.test(t)) && pick.lt.every(t => { const [id, h] = t.split(':'); return ({ huangzhong: /长沙/, machao: /成都/, weiyan: /献城/, pangtong: /入蜀/, huangyueying: /赤壁/, sunshangxiang: /联姻/ })[id]?.test(h); }), pick);
+ck('主页选将：没归附的立绘压成剪影，只写「尚未归附 · 需劝降招募」（不透露哪一章、哪一关）', pick.lt.length >= 2 && pick.lt.every(t => /尚未归附 需劝降招募/.test(t) && !/章|关|白门|赤壁|长沙|成都|入蜀|联姻|吕布/.test(t)), pick);
 await p.evaluate(() => { const s = window.__game.scene.getScene('MenuScene'); s.heroPicker.root.setVisible(false); });
 
 // ⑤ 揭幕：「新武将 · 来投」
@@ -87,7 +87,7 @@ const codex = await p.evaluate(async () => {
   return { rows: all.filter(n => /^codex-locked-/.test(n)), hint };
 }).catch(e => ({ err: String(e) }));
 await p.screenshot({ path: `${OUT}/codex-locked.png` });
-ck('武将谱：没来投的列在名册末尾，点开写来投提示（马超：第七章 成都之战后来投）', (codex.rows ?? []).length >= 6 && /成都/.test(codex.hint ?? ''), codex);
+ck('武将谱：没归附的列在名册末尾「未归附」，点开只写「尚未归附 · 需劝降招募」（不透露章节）', (codex.rows ?? []).length >= 6 && codex.hint === '需劝降招募' && !/章|关|成都/.test(JSON.stringify(codex)), codex);
 await p.evaluate(() => { window.__codex?.root?.destroy?.(); });
 
 // ⑦ 老存档补齐：主公 / 已在麾下 / 练过级的都算解锁，且不弹揭幕

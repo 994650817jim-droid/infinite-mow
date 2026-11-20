@@ -15,7 +15,7 @@ import { TACTIC_UNLOCK_SCROLLS, TEMPER, XINDE_SLOTS, getXinde, grain, respec, re
 import { LQ, lqDiamond, lqHitBox, lqPanel, lqSkin } from './LacquerKit';
 import { attrBadge } from './AttrBadge';
 import { lockedHeroes } from '../systems/HeroUnlocks';
-import { HERO_JOIN } from '../data/heroUnlocks';
+import { LOCKED_TITLE, LOCKED_HOW, LOCKED_TAG } from '../data/heroUnlocks';
 
 type Tab = 'overview' | 'attrs' | 'weapon' | 'xinde' | 'schools';
 /** 电脑版手绘素材（public/assets/ui/codex/codex_*.png）：页签三态、箭头四态、朱印、节标题牌、立绘挂轴框。 */
@@ -197,7 +197,7 @@ export class HeroCodexUI {
       const y = top + (owners.length + j) * rowH, h = rowH - 4, on = id === this.hero, nm = CHARACTERS.find(c => c.id === id)?.name ?? id;
       if (on) this.add(this.scene.add.graphics()).fillStyle(0x2a2016, .95).fillRoundedRect(lx, y, lw, h, 4).lineStyle(1, 0x8a7a5a, .9).strokeRoundedRect(lx + .5, y + .5, lw - 1, h - 1, 4);
       this.text(lx + 30, y + h / 2, nm, 15, on ? '#b8a888' : '#6f6452', true).setOrigin(0, .5);
-      this.text(lx + lw - 10, y + h / 2, '未来投', 12, '#6f6452').setOrigin(1, .5);
+      this.text(lx + lw - 10, y + h / 2, LOCKED_TAG, 12, '#6f6452').setOrigin(1, .5);
       this.add(this.scene.add.rectangle(lx, y, lw, h, 0, .001).setOrigin(0)).setName('codex-locked-' + id).setInteractive({ useHandCursor: true })
         .on('pointerdown', (_p: unknown, _x: unknown, _y: unknown, e?: Phaser.Types.Input.EventData) => { e?.stopPropagation?.(); this.hero = id as HeroKey; this.render(); });
     });
@@ -383,13 +383,13 @@ export class HeroCodexUI {
     });
   }
 
-  /** 没来投的武将：墨色剪影 + 来投提示（不显示等级 / 兵装 / 心得）。 */
+  /** 没归附的武将：墨色剪影 + 通用提示「尚未归附 · 需劝降招募」（不显示等级 / 兵装 / 心得）。 */
   private deskLocked(x: number, y: number, w: number, bottom: number): void {
-    const id = this.hero as CharacterId, c = CHARACTERS.find(h => h.id === id), info = HERO_JOIN[id], art = 'ink_hero_' + id;
+    const id = this.hero as CharacterId, c = CHARACTERS.find(h => h.id === id), art = 'ink_hero_' + id;
     this.text(x + 6, y + 4, c?.name ?? id, 28, '#b8a888', true).setName('codex-locked-name');
-    this.text(x + 6, y + 46, '尚未来投', 16, '#c9a35e', true);
-    this.text(x + 6, y + 76, info?.hint ?? '', 18, '#efd399', true).setName('codex-locked-hint');
-    this.text(x + 6, y + 112, '来投后可查看属性、本命兵器与战法心得。', 14, '#9c8c6c');
+    this.text(x + 6, y + 46, LOCKED_TITLE, 16, '#c9a35e', true);
+    this.text(x + 6, y + 76, LOCKED_HOW, 18, '#efd399', true).setName('codex-locked-hint');
+    this.text(x + 6, y + 112, '归附后可查看属性、本命兵器与战法心得。', 14, '#9c8c6c');
     if (!this.scene.textures.exists(art)) { this.scene.load.image(art, 'assets/ink-scroll/' + id + '.webp'); this.scene.load.once('filecomplete-image-' + art, () => { if (this.root.active && this.hero === id) this.render(); }); this.scene.load.start(); return; }
     const img = this.add(this.scene.add.image(x + w - 170, bottom, art).setOrigin(.5, 1)); img.setScale(Math.min(300 / img.width, (bottom - y) / img.height)).setTintFill(0x17120c).setAlpha(.92).setName('codex-locked-silhouette');
   }

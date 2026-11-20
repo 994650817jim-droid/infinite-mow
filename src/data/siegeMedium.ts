@@ -45,7 +45,7 @@ export const MID_SIEGE = {
     ],
     captureSeconds: 4, contestedMul: .35, holdSeconds: 20, loseSeconds: 5, // 占下后守军反扑：守 20 秒；主将离开、敌兵占点累计 5 秒则失守 · 待平衡会话复核
     counterEveryMs: 2600, counterBurst: 4, // 反扑刷兵
-    reinforce: 2, secureReinforce: 2, secureHeal: .15, // 插旗补员 2 名，守住后再补 2 名并回 15% 生命 · 待平衡会话复核
+    reinforce: 1, secureReinforce: 0, secureHeal: .15, // 插旗补员 1 名，守住后回 15% 生命（2026-11-20 用户「攻城战我方兵生成太快了」：原插旗 2 + 守住 2 名，大城城内同屏友军峰值 27；改 1 + 0）
     ambush: { everyMs: 9000, count: [2, 3], warnMs: 950, roofX: 228 }, // 屋顶伏兵（11-19：预警 700 → 950ms，看得清再跳）
     barrels: [{ x: -150, y: -820 }, { x: 160, y: -1090 }, { x: -150, y: -1210 }, { x: 150, y: -1520 }],
     innerGateY: -1640,
@@ -164,8 +164,12 @@ export const SIEGE_SPAWN = {
  * （主将不在圈里时，圈里有义军也能占，速度 × pointRate；守点时圈里有义军不算失守）；府衙：跟着主将打亲卫。
  * 场上最多 cap 人；军营等级（城建 reinforcements）每级多 perLevel 人 / 队，上限 maxSquad。初值，交平衡会话。
  */
+/**
+ * 2026-11-20 用户「攻城战我方兵生成太快了」：友军是陪衬、主力是玩家。第一队 4 秒 → 20 秒、间隔 16 → 28 秒（×1.75）、每队 4 → 3 人（军营每级 +1，最多 6 → 4）、
+ * 同屏上限 20 → 10；城门 / 吊桥一破再来 gateWave 队援军（SiegeGameScene），有「破城后援军跟进」的节奏。
+ */
 export const SIEGE_ALLIES = {
-  firstMs: 4000, everyMs: 16000, squad: 4, perLevel: 1, maxSquad: 6, cap: 20,
+  firstMs: 20000, everyMs: 28000, squad: 3, perLevel: 1, maxSquad: 4, cap: 10, gateWave: 2,
   sheets: ['shu_spearman_walk_sheet', 'shu_swordsman_walk_sheet'], speed: 80, hp: 170, dmg: 16, campDmg: 10, hitMs: 900, engage: 200, reach: 46, campReach: 40, enemyDps: 6, rearPad: 90,
   /** 集结点：冲车前方多远；城内要点圈里算几成主将。 */
   ramLead: 90, pointRate: .5,

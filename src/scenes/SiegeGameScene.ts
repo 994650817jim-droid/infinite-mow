@@ -55,6 +55,7 @@ export function siegeGameSceneClass(Base: typeof GameScene) {
     private garrison: {total: number; spent: number; cut: number; reinf: number} | null = null;
     /** 攻城限时（data/siegeTimer）：normal → warn（剩 60 秒预警）→ reinforce（援军抵达，仍可破城）→ 到点撤军。 */
     private timerPhase: 'normal' | 'warn' | 'reinforce' = 'normal'; private squadWaves = 0; private buffedBoss = -1; private speedBonus = false;
+    /** 上一帧的攻城段（城外 → 瓮城 / 城内时发破门援军）。 */ private lastMidPhase: string | undefined;
     /** 池空后仍必刷的兵（目标 / 剧情）：不给经验、不掉落、不记战功。 */
     private unpaid = new Set<number>(); private noLoot = false; private scripted = false; private garrisonText?: Phaser.GameObjects.Text;
     constructor() { super('SiegeGameScene'); }
@@ -75,7 +76,7 @@ export function siegeGameSceneClass(Base: typeof GameScene) {
       this.registry.remove('campaignTransfer');
       this.registry.set('runConfig', {...saved, character: saved?.character ?? 'zhaoyun', chapter: 'hulao', westStage: 3, encounter: 'qunxiong'});
       this.gate = null; this.gateLabel = undefined; this.gateWarned = false; this.controller = undefined;
-      this.unpaid = new Set(); this.noLoot = false; this.garrisonText = undefined;
+      this.lastMidPhase = undefined; this.unpaid = new Set(); this.noLoot = false; this.garrisonText = undefined;
       this.garrison = this.defense ? null : {total: Math.round(GAR.total[city.tier] * (1 + GAR.eraStep * (era - 1))), spent: 0, cut: 0, reinf: 0};
       this.timerPhase = 'normal'; this.squadWaves = 0; this.buffedBoss = -1; this.speedBonus = false;
       super.create();
@@ -350,6 +351,8 @@ export function siegeGameSceneClass(Base: typeof GameScene) {
     }
     update(time: number, delta: number) {
       const before = this.combatNow; super.update(time, delta);
+      // 城门 / 吊桥一破（城外段结束）：援军跟进 SIEGE_ALLIES.gateWave 队（2026-11-20 用户「攻城战我方兵生成太快了」：平时少、破城后再加一波）
+      const midPhase = this.mid?.phase; if (midPhase && midPhase !== this.lastMidPhase) { if (this.lastMidPhase === 'outside' && this.allyPush) { for (let i = 0; i < SIEGE_ALLIES.gateWave; i++) this.allyPush.spawn(); this.showWaveBanner('援军跟进', false, '城门已破 · 义军随后杀入'); } this.lastMidPhase = midPhase; }
       if (this.combatNow > before && !this.over && this.mode === 'none') { if (!this.awaitingChest) this.enemyCamps?.update(this.combatNow); if (!this.defense) this.updateGoals((this.combatNow - before) / 1000); }
       this.controller?.updateDeath(delta);
       if (this.gateLabel && this.gateAlive) {

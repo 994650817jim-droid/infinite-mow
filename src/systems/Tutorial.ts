@@ -28,7 +28,7 @@ interface StepDef { show: () => void; ready?: () => boolean; done: () => boolean
 
 /**
  * 新手引导（情境式，不做单独教学关）：第一次进 1-1（黄巾 · 广宗外围）边打边教；看完 / 跳过后在当前存档记标记，不再出现，
- * 设置「重看新手引导」可清掉标记。① 移动 → ② 自动攻击 → ③ 拾取军功 → ④ 首次升级三选一（插入）→ ⑤ 首次战斗支援（插入）
+ * 设置「重看新手引导」可清掉标记。① 移动 → ② 自动攻击 → ③ 拾取经验 → ④ 首次升级三选一（插入）→ ⑤ 首次战斗支援（插入）
  * → ⑥ 出击号令 → ⑦ 首领出阵 / 倒地后捡宝箱 → ⑧ 告捷进行营：营中建筑、行囊、率军出征。
  * 每帧只读场景状态推进（GameScene 里只有构造一行、刷兵一行）；升级 / 支援弹窗本身已暂停，其余步骤边玩边看。
  */
@@ -62,7 +62,7 @@ export class Tutorial {
     this.steps = {
       move: { show: () => { o.show(pad() ? '左摇杆移动' : '移动', pad() ? [] : ['W', 'A', 'S', 'D']); o.point(null); this.moved = 0; this.lastPos = { x: h.player.x, y: h.player.y }; }, done: () => this.moved >= 2 },
       attack: { show: () => { o.show('武将自动攻击，靠近敌人即可', [], 'battle', INFO_MS); o.point(null); this.kills0 = h.kills; }, done: () => h.kills - this.kills0 >= 3 },
-      gem: { show: () => { o.show('拾取军功，攒满升级'); o.point(null); this.xp0 = this.xpTotal(); }, done: () => this.xpTotal() > this.xp0 },
+      gem: { show: () => { o.show('拾取经验，攒满升级'); o.point(null); this.xp0 = this.xpTotal(); }, done: () => this.xpTotal() > this.xp0 },
       levelup: { show: () => { o.show('升级：三选一强化', [], 'popup'); this.pointCards(); }, done: () => h.mode !== 'levelup', minMs: 0 },
       recruit: { show: () => { o.show('战斗支援：选一队兵随行', [], 'popup'); this.pointObj(h.legionUI.rows?.[0]?.root ?? null); }, done: () => h.mode !== 'recruit', minMs: 0 },
       sortie: { ready: () => h.legion.count > 0, show: () => { o.show('部曲出击 / 护阵', [key('E', 'Ⓨ')]); this.pointObj(h.legionUI.order ?? null); }, done: () => h.legion.order === 'sortie' },

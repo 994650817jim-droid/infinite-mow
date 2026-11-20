@@ -1,5 +1,5 @@
 // 招贤馆（2026-11-18 用户「主公不应该在这里」+ 截图排版问题）：
-// ① 主公不在「麾下」名单、不能点随行、不计入麾下人数；老存档里被点成随行的读档时去掉；人才 / 降将里也没有主公；讲武堂「随从操练」名单也没有主公。
+// ① 主公不在「麾下」名单、不能点随行、不计入麾下人数；老存档里被点成随行的读档时去掉；人才 / 降将里也没有主公；讲武堂「随行操练」名单也没有主公。
 // ② 电脑版排版：内容留边距（不贴左边）、页签与行按钮改漆底描金，整页水墨笔刷最多 1 处（只给「返回营寨」）。
 // 正式存档（天下已开，主公诸葛亮，麾下赵云 + 一位无名之辈；老存档里主公被点成随行）。电脑布局 1280×720。
 // 用法：BASE=http://127.0.0.1:5187/ node tools/test-talent-hall.mjs     SHOT=before 只截图（给改前对比用）
@@ -56,7 +56,7 @@ ck('麾下页：内容不贴左边（最左的字 / 按钮 x ≥ 24 画面像素
 ck('人才页：内容不贴左边', o0.minLeft >= 24, o0.leftest);
 ck('整页水墨笔刷最多 1 处（页签、升级、随行 / 留守 / 遣散、招募、刷新都改漆底描金）', r1.ink <= 1 && o0.ink <= 1, { roster: r1.ink, offers: o0.ink });
 
-// ③ 讲武堂「随从操练」：名单里没有主公
+// ③ 讲武堂「随行操练」：名单里没有主公
 await p.evaluate(() => { const g = window.__game, cur = g.scene.getScenes(true)[0]; cur.scene.start('CityScene'); });
 await p.waitForFunction(() => window.__game.scene.isActive('CityScene') && window.__game.scene.getScene('CityScene').children.list.length > 5, null, { timeout: 60000 }); await p.waitForTimeout(1500);
 const dr = await p.evaluate(async () => {
@@ -64,7 +64,7 @@ const dr = await p.evaluate(async () => {
   const all = []; const walk = l => { for (const o of l) { all.push(o); if (o.list) walk(o.list); } }; walk(s.children.list);
   return { lord: all.some(o => /^drill-lord-/.test(o.name ?? '')), rows: all.filter(o => /^drill-preview-weapon-/.test(o.name ?? '')).map(o => o.name.replace('drill-preview-weapon-', '')), texts: all.filter(o => o.type === 'Text' && /主公/.test(o.text)).map(o => o.text) };
 });
-ck('讲武堂「随从操练」：名单只有赵云、李校尉，没有主公', !dr.lord && !dr.texts.length && JSON.stringify(dr.rows.sort()) === '["r_1","zhaoyun"]', dr);
+ck('讲武堂「随行操练」：名单只有赵云、李校尉，没有主公', !dr.lord && !dr.texts.length && JSON.stringify(dr.rows.sort()) === '["r_1","zhaoyun"]', dr);
 await p.screenshot({ path: `${out}/after-drill-1280x720.png` });
 
 ck('无页面报错', errors.length === 0, errors.slice(0, 5));

@@ -3488,7 +3488,7 @@ export class GameScene extends Phaser.Scene {
     const noteText = this.resultPanel.getByName('result-notes') as Phaser.GameObjects.Text;
     noteText.setText(notes.length > 3 ? [notes.slice(0, 2).join(' · '), notes.slice(2).join(' · ')].join('\n') : notes.join('\n')).setVisible(notes.length > 0);
     const stats = this.resultPanel.getByName('result-stats') as Phaser.GameObjects.Text;
-    stats.setText(['击杀 ' + this.kills, '用时 ' + this.formatTime(this.elapsed), '伤害 ' + wan(this.damageDealt), '军团 ' + this.legion.count + ' 存活' + (this.legion.dead ? ' / ' + this.legion.dead + ' 阵亡' : '')].join('　·　')).setVisible(true);
+    stats.setText(['击杀 ' + this.kills, '用时 ' + this.formatTime(this.elapsed), '伤害 ' + wan(this.damageDealt), '部曲 ' + this.legion.count + ' 存活' + (this.legion.dead ? ' / ' + this.legion.dead + ' 阵亡' : '')].join('　·　')).setVisible(true);
     // 奖励区在分隔线与要事之间居中
     const areaTop = top + 142, areaBottom = (notes.length ? noteText.y - noteText.height - 6 : stats.y - 16);
     view.root.setPosition(cx, areaTop + Math.max(0, (areaBottom - areaTop - view.height) / 2));
@@ -3935,7 +3935,7 @@ export class GameScene extends Phaser.Scene {
         row('击杀敌军', String(stats.kills)),
         row('等级', `Lv.${stats.level}`),
         row('造成伤害', String(Math.round(stats.damageDealt))),
-        row('军团战损', `${this.legion.count}存活 / ${this.legion.dead}阵亡`),
+        row('部曲战损', `${this.legion.count}存活 / ${this.legion.dead}阵亡`),
         row(this.chapter.bossName, stats.bossKilled ? '已击败' : '未击败'),
         row('结局', victory ? '讨伐成功' : reason === 'timeout' ? '超时' : '阵亡'),
       ].join('\n'),
@@ -4058,7 +4058,7 @@ export class GameScene extends Phaser.Scene {
       bossEnergy: this.add.text(GAME_WIDTH / 2, 100, '', style(11, '#c9a8ff')).setOrigin(1, 0).setScrollFactor(0).setDepth(DEPTH.hud + 1).setVisible(false),
       mute: this.add
         // 2026-11-15：音效 / 音乐开关常驻右上（原藏在「战况」下拉里）
-        .text(GAME_WIDTH - 24, 100, '音效:开', style(13, '#e3d3b0'))
+        .text(GAME_WIDTH - 24, 100, '音效：开', style(13, '#e3d3b0'))
         .setOrigin(1, 0)
         .setScrollFactor(0)
         .setDepth(DEPTH.hud + 1)
@@ -4066,10 +4066,10 @@ export class GameScene extends Phaser.Scene {
         .setInteractive({ useHandCursor: true })
         .on('pointerdown', () => {
           const muted = this.sfx.toggle();
-          this.muteText?.setText(muted ? '音效:关' : '音效:开');
+          this.muteText?.setText(muted ? '音效：关' : '音效：开');
         }),
       music: this.add
-        .text(GAME_WIDTH - 24, 132, '音乐:开', style(13, '#e3d3b0'))
+        .text(GAME_WIDTH - 24, 132, '音乐：开', style(13, '#e3d3b0'))
         .setOrigin(1, 0)
         .setScrollFactor(0)
         .setDepth(DEPTH.hud + 1)
@@ -4077,7 +4077,7 @@ export class GameScene extends Phaser.Scene {
         .setInteractive({ useHandCursor: true })
         .on('pointerdown', () => {
           const muted = this.music.toggle();
-          this.hudTexts.music.setText(muted ? '音乐:关' : '音乐:开');
+          this.hudTexts.music.setText(muted ? '音乐：关' : '音乐：开');
         }),
       bag: this.add
         // 2026-11-16：行囊常驻右上（用户反馈「背包需要放出来」），点开即暂停，可换装
@@ -4110,8 +4110,8 @@ export class GameScene extends Phaser.Scene {
     this.passiveHud = new PassiveHud(this); this.heroBark = new HeroBark(this); this.passiveGauge = new PassiveGauge(this); this.zhaoyunFx = this.passiveGauge.zhaoyun; this.passiveShout = new PassiveShout(this, { sfx: () => this.sfx.play('passiveFull'), nearby: (x, y, r) => this.grid.query(x, y, r).filter(e => Math.hypot(e.x - x, e.y - y) <= r) });
     this.buffHud=new BuffHud(this);
     this.muteText = this.hudTexts.mute;
-    this.muteText.setText(this.sfx.muted ? '音效:关' : '音效:开');
-    this.hudTexts.music.setText(this.music.mutedState ? '音乐:关' : '音乐:开');
+    this.muteText.setText(this.sfx.muted ? '音效：关' : '音效：开');
+    this.hudTexts.music.setText(this.music.mutedState ? '音乐：关' : '音乐：开');
     // 2026-11-17 用户「暂停改成设置」：电脑版右上只留「设置」，音效 / 音乐挪进设置面板；行囊顶到原音效位
     if (IS_DESKTOP) { this.hudTexts.mute.setVisible(false).disableInteractive(); this.hudTexts.music.setVisible(false).disableInteractive(); this.hudTexts.bag.setY(100); }
     // 2026-11-19 用户「行囊做成行囊的样子」：右上行囊换成手绘包袱（打结布包 + 小字「行囊」）；hud-bag 文字留作命中区（不显示字、不画漆牌）

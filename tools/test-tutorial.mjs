@@ -1,4 +1,4 @@
-// 新手引导冒烟：第一次进 1-1 按顺序出 ① 移动 → ② 自动攻击 → ③ 拾取军功 → ④ 升级三选一（插入）→ ⑤ 战斗支援（插入）→ ⑥ 出击
+// 新手引导冒烟：第一次进 1-1 按顺序出 ① 移动 → ② 自动攻击 → ③ 拾取经验 → ④ 升级三选一（插入）→ ⑤ 战斗支援（插入）→ ⑥ 出击
 // → ⑦ 首领 / 捡宝箱 → ⑧ 行营（建筑 / 行囊 / 出征）；看完存档记标记、再进 1-1 不再出现；设置「重看新手引导」后重新出现、「跳过引导」可跳过。
 // 不带 ?dev=1（走正式的存档标记逻辑）。每步 1280×720 截图到 assets/review/tutorial/。
 // 用法：BASE=http://127.0.0.1:5188/ node tools/test-tutorial.mjs
@@ -50,7 +50,7 @@ try {
   ck('② 移动 2 秒后 →「武将自动攻击」', t?.step === 'attack' && t.line.includes('自动攻击'), t);
   t = await until(v => v.step === 'gem' && v.shown, 10000, s => { s.player.damageImmune = true; const e = s.enemies.find(e => e.active && !e.isSupplySlot && e.kind !== 'boss'); if (e) s.hitEnemy(e, 9999, s.combatNow, 'melee', false, false); else s.spawnEnemy('infantry', s.player.x + 60, s.player.y, 1, true); });
   await shot('3-gem');
-  ck('③ 杀敌后 →「拾取军功」', t?.step === 'gem' && t.line.includes('军功'), t);
+  ck('③ 杀敌后 →「拾取经验」', t?.step === 'gem' && t.line.includes('经验'), t);
   // 捡宝石（走到掉落处）
   t = await until(v => v.step === 'sortie' || v.interrupt === 'levelup', 10000, s => { const g = s.gems.find(g => g.active); if (g) { s.player.sprite.x = g.img.x; s.player.sprite.y = g.img.y; } else { const e = s.spawnEnemy('infantry', s.player.x + 40, s.player.y, 1, true); if (e) s.hitEnemy(e, 9999, s.combatNow, 'melee', false, false); } });
   ck('③ 捡到军功 → 下一步', t && (t.step === 'sortie' || t.interrupt === 'levelup'), t);

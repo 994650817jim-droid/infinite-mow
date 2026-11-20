@@ -133,7 +133,7 @@ export class CampRestUI {
  private render(){
   this.body.removeAll(true);this.tabs.forEach((t,k)=>{const on=t.getData('tab')===this.tab;t.setColor(on?'#ffe7b0':'#bcae93').setAlpha(on?1:.78);const w=t.width;this.tabFrames[k].setTexture(warPanelTexture(this.scene,w,46,on)).setDisplaySize(w+16,46+16).setVisible(true).setAlpha(on?1:.62);this.tabIcons[k]?.setAlpha(on?1:.6);
    if(on){const to={x:t.x+18,w:w-36};if(!this.lineTo){this.tabLine.setX(to.x);this.tabLine.width=to.w;}this.lineTo=to;}});
-  this.resources.setText('随军粮 '+this.army.food+'   /   当前兵力：'+this.army.count);this.next.setText('下一关 · '+this.destination);this.detail.setText(this.notice);
+  this.resources.setText('随军粮 '+this.army.food+' · 兵力 '+this.army.count);this.next.setText('下一关 · '+this.destination);this.detail.setText(this.notice);
   {const side=D&&(this.tab===2||this.tab===4),l=CampRestUI.STATION_LEFT;this.detail.setX(side?l+(W-40-l)/2:D?W/2:28).setWordWrapWidth(side?W-40-l-16:W-(D?120:56),true);}
   if(this.tab===0)this.renderRecruit();if(this.tab===2)this.renderMarket();if(this.tab===3)this.renderBuild(D?154:229);if(this.tab===4)this.renderMedic();
  }
@@ -160,7 +160,7 @@ export class CampRestUI {
   else if(kind==='full')p.hp=p.maxHp;
   else{for(const u of this.army.units)if(u.active)u.hp=u.maxHp;const sq=this.squad();for(const m of sq?.members??[]){if(m.downed)sq!.revive(m,(this.scene as unknown as {combatNow?:number}).combatNow??0);m.hp=m.maxHp;}}
   this.sound('medic_heal');
-  this.notice=kind==='army'?'军医为全军疗伤 · 部曲与随从伤兵皆已痊愈':'军医施治 · 主将生命 '+Math.ceil(p.hp)+' / '+p.maxHp;
+  this.notice=kind==='army'?'军医为全军疗伤 · 部曲与随行伤兵皆已痊愈':'军医施治 · 主将生命 '+Math.ceil(p.hp)+' / '+p.maxHp;
   this.onHealed?.();this.render();this.playMedicFx();return true;
  }
  private renderMedic(){
@@ -175,7 +175,7 @@ export class CampRestUI {
   const bw=w0-32,ratio=Math.max(0,Math.min(1,st.hp/st.maxHp));
   this.body.add(this.scene.add.rectangle(x0+16,y0+40,bw,8,0x1a120b,.9).setOrigin(0).setScrollFactor(0));
   this.body.add(this.scene.add.rectangle(x0+16,y0+40,Math.max(2,bw*ratio),8,st.hale?0x7f9a52:0xa8442c,1).setOrigin(0).setScrollFactor(0));
-  this.body.add(this.text(x0+16,y0+56,'部曲伤兵 '+st.hurtUnits+' 人 · 随从带伤 '+st.hurtFollowers+' 人',D?13:14).setColor('#c9b38a'));
+  this.body.add(this.text(x0+16,y0+56,'部曲伤兵 '+st.hurtUnits+' 人 · 随行带伤 '+st.hurtFollowers+' 人',D?13:14).setColor('#c9b38a'));
   const rows:Array<[MedicKind,string,string]>=[['small',CAMP_MEDIC.small.name,CAMP_MEDIC.small.desc],['full',CAMP_MEDIC.full.name,CAMP_MEDIC.full.desc],['army',CAMP_MEDIC.army.name,CAMP_MEDIC.army.desc]];
   rows.forEach(([kind,title,desc],i)=>{const y=y0+92+i*(D?52:62),h=D?48:56;this.plate(x0,y,w0,h);
    this.body.add(this.text(x0+16,y+6,title,D?16:17).setFontFamily(HEADING_FONT).setColor('#ecd6a8'));

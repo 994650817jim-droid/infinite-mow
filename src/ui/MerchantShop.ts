@@ -89,7 +89,7 @@ export class MerchantShop{
   const hover=this.scene.add.rectangle(x+4,y+4,w-8,h-64,0,.001).setOrigin(0).setScrollFactor(0).setInteractive().setName('camp-item-card-'+i);this.root.add(hover);
   const owner=this.o.owner();this.tip!.attach(hover,()=>item,()=>owner?loadout(owner)[itemSlot(item)]:undefined);
   const bw=Math.min(w-20,180),poor=purse<price;
-  const {hit,cap}=this.button(x+(w-bw)/2,y+h-52,sold?'已售罄':poor?(D?'粮不足 · ':this.o.wallet.name+'不足 · ')+price+'粮':'购入 · '+price+'粮',()=>{
+  const {hit,cap}=this.button(x+(w-bw)/2,y+h-52,sold?'已售罄':poor?(this.o.wallet.name+'不足 · ')+price+'粮':'购入 · '+price+'粮',()=>{
    const cur=this.o.stock();if(cur.sold[i]||!this.o.wallet.spend(price))return;cur.sold[i]=true;saveMerchantStock(cur);
    this.o.onBuyItem(item);this.o.sound?.('shop_buy');this.o.notice('已购入 '+itemName(item)+' · 已收入行囊，可点「行囊」穿戴');this.o.changed();
   },bw,!sold&&!poor);
@@ -129,7 +129,7 @@ export class MerchantShop{
   desc.setData('limit',limit).setData('full',full);
   const hover=this.scene.add.rectangle(px,py,pw,ph,0,.001).setOrigin(0).setScrollFactor(0).setInteractive().setName('camp-tactic-hover');this.root.add(hover);
   this.tip!.attachInfo(hover,()=>({title:v.tipTitle,sub:v.tipSub,body:full,icon:v.icon}));
-  const label=t.sold?v.doneVerb:!tac?'出征后可'+v.verb:!able?(tac.lockedText??'已无法'+v.verb):poor?(D?'粮不足 · ':this.o.wallet.name+'不足 · ')+t.price+'粮':v.verb+' · '+t.price+'粮',bw=Math.min(w-20,180);
+  const label=t.sold?v.doneVerb:!tac?'出征后可'+v.verb:!able?(tac.lockedText??'已无法'+v.verb):poor?(this.o.wallet.name+'不足 · ')+t.price+'粮':v.verb+' · '+t.price+'粮',bw=Math.min(w-20,180);
   this.button(x+(w-bw)/2,y+h-52,label,()=>{
    const cur=this.o.stock().tactic;if(!cur||cur.sold||!tac||!tac.canBuy(cur)||this.o.wallet.get()<cur.price)return;
    const lv=cur.level;if(!tac.learn(cur))return;this.o.wallet.spend(cur.price);cur.sold=true;saveMerchantStock(this.o.stock());tac.afterBuy?.();

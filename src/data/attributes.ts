@@ -72,14 +72,14 @@ export const PRIMARY_PERK = {
   agility: { move: .08, crit: .05, dodge: .1, hasteMs: 2000, haste: .1 },
   /** 智力：凝神（法术武器冷却 −10%）/ 连珠（法术伤害 15% 几率翻倍）/ 广域（范围再 +6%）。 */
   intellect: { cooldown: .1, echoChance: .15, area: .06 },
-  /** 统御：励军（部曲伤害 +15%）/ 募众（每次免费招兵多 1 人）/ 同袍（随从救起快 20%，救起带 55% 生命）。 */
+  /** 统御：励军（部曲伤害 +15%）/ 募众（每次免费招兵多 1 人）/ 同袍（随行救起快 20%，救起带 55% 生命）。 */
   command: { allyDamage: .15, freeRecruit: 1, reviveFaster: .2, reviveHp: .55 },
 } as const;
 export const PRIMARY_PERK_INFO: Record<AttributeId, readonly { name: string; desc: string }[]> = {
   strength: [{ name: '千钧', desc: '武器命中把小兵推开' }, { name: '破阵', desc: '每 5 次武器命中一次重击：伤害 ×2，定身 0.5 秒' }, { name: '斩将', desc: '对精英、首领伤害 +10%' }],
   agility: [{ name: '轻骑', desc: '移速 +8%' }, { name: '游刃', desc: '暴击 +5%，10% 几率闪避伤害' }, { name: '疾影', desc: '暴击后 2 秒内攻速 +10%' }],
   intellect: [{ name: '凝神', desc: '法术武器冷却 −10%' }, { name: '连珠', desc: '法术伤害 15% 几率翻倍' }, { name: '广域', desc: '范围再 +6%' }],
-  command: [{ name: '励军', desc: '部曲伤害 +15%' }, { name: '募众', desc: '每次免费招兵多 1 人' }, { name: '同袍', desc: '随从救起快 20%，救起带 55% 生命' }],
+  command: [{ name: '励军', desc: '部曲伤害 +15%' }, { name: '募众', desc: '每次免费招兵多 1 人' }, { name: '同袍', desc: '随行救起快 20%，救起带 55% 生命' }],
 };
 /** 武将主属性。 */
 export const PRIMARY_ATTRIBUTE: Record<CharacterId, AttributeId> = {

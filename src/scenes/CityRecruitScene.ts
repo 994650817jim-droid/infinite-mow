@@ -1,6 +1,6 @@
 import {playMenuMusic} from '../systems/Music';
 import {homeCommand} from '../ui/HomeCommand';
-import {lqPanel} from '../ui/LacquerKit';
+import {lqPanel,lqSkin,lqHitBox} from '../ui/LacquerKit';
 import Phaser from 'phaser';
 import {W,H,worldText,worldButton,worldShell,panel,worldAssets,releaseWorldArt} from '../world/WorldUI';
 import {loadWorld,worldUnlocked,recruitReserve,recruitCost,barracksLevel,troopUnlockLevel} from '../world/WorldStore';
@@ -85,9 +85,16 @@ export class CityRecruitScene extends Phaser.Scene{
    const sub=worldText(this,tx,y+62,note,12,'#bfcab6').setWordWrapWidth(tw);
    const stock=worldText(this,tx,y+90,`后备 ${have} 人`,13,have?'#e9dcc0':'#9da592').setName(`reserve-have-${kind}`);
    const price=worldText(this,tx,y+110,`${cost} 军粮 / 人`,13,s.provisions>=cost?'#e8cf8f':'#d4887a').setName(`reserve-cost-${kind}`);
-   const btn=homeCommand(this,tx+tw/2-4,y+ch-28,tw-18,38,locked?`军营 Lv.${need} 解锁`:'招募 1 人',!locked,!locked,15);btn.hit.setName(`reserve-buy-${kind}`);if(!locked)btn.hit.on('pointerdown',()=>this.buy(kind));
-   if(locked){btn.caption.setName(`reserve-lock-${kind}`);frame.setAlpha(.6);[title,role,sub,stock,price].forEach(o=>o.setColor("#8c8a80"));}
-   this.content!.add([frame,icon,title,role,sub,stock,price,btn.g,btn.caption,btn.hit]);
+   // 2026-11-20 夜间 UI 审查：一屏只留一个水墨按钮（底部「返回」）——卡上「招募 1 人」改漆金小按钮；未解锁不画按钮、只写一行暗字（原来灰色水墨底把字盖住看不清）
+   const bx=tx+tw/2-4,by=y+ch-28,bw=tw-24,bh=32,parts:Phaser.GameObjects.GameObject[]=[];
+   if(locked){
+    parts.push(worldText(this,bx,by,`军营 Lv.${need} 解锁`,13,'#b8a882').setOrigin(.5).setName(`reserve-lock-${kind}`),this.add.rectangle(bx,by,bw,bh,0,0).setName(`reserve-buy-${kind}`));
+    frame.setAlpha(.6);[title,role,sub,stock,price].forEach(o=>o.setColor("#8c8a80"));
+   }else{
+    const cap=worldText(this,bx,by,'招募 1 人',15,'#ffe9bd').setOrigin(.5).setName(`reserve-buy-${kind}`).setInteractive({useHandCursor:true});lqHitBox(cap,bw,bh);
+    const skin=lqSkin(this,cap,cap,()=>({w:bw,h:bh}),{tone:'cinnabar'});cap.on('pointerup',()=>this.buy(kind));parts.push(skin.gfx,cap);
+   }
+   this.content!.add([frame,icon,title,role,sub,stock,price,...parts]);
   });
  }
  private buy(kind:TroopKind){this.message=recruitReserve(kind).message;this.render();}

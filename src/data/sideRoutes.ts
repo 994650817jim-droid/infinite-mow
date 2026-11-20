@@ -10,7 +10,7 @@ import type { Specialty } from '../world/WorldCities';
  * 战斗复用对应时期的章节战场（第三章式三关框架 / 三英战吕布挑战关）；还没有专属形象的首领先借现有首领图（ART_V2_FILES 的 side_* 键）。
  * 数值都是初值，交平衡会话。
  */
-export type SideRouteId = 'xiapi' | 'nanjun' | 'caowei' | 'gongsun' | 'hebei' | 'jiangxia';
+export type SideRouteId = 'xiapi' | 'nanjun' | 'caowei' | 'gongsun' | 'hebei' | 'jiangxia' | 'zhanglu' | 'xiliang';
 export type SideStageKind = 'siege' | 'field' | 'final';
 /** 借兵种 / 数值 / 外观的基础章节。 */
 export type SideBaseId = 'qunxiong' | 'guandu' | 'chibi' | 'jingnan' | 'hanzhong' | 'yiling' | 'nanzheng' | 'huangjin';
@@ -119,6 +119,29 @@ export const SIDE_ROUTES: readonly SideRouteDef[] = [
         partner: B('wenpin', '文聘', '荆州大将', 'jingnan_zhaofan', 'chibi/caochun', 'zhaofan') },
     ],
     annex: ['jiangxia'], specialty: { title: '锦帆水寨', text: '最大生命 +5%', maxHp: .05 }, lord: 'huangzu' },
+  // —— P1b 第二批（第七、九章后）——
+  { id: 'zhanglu', name: '张鲁 · 汉中', faction: '张鲁', region: '汉中 · 南郑', x: .07, y: .42, props: 5,
+    open: { arc: 'shu', stages: 3, hint: '第七章「入蜀」平定后开放' }, base: 'hanzhong', look: 'huangjin',
+    stages: [
+      { name: '五斗米道坛', kind: 'field', behavior: 2, scenery: 2, waves: ['道坛外围', '五斗米祭酒', '杨任出阵'], story: '张鲁以五斗米道治汉中，鬼卒、祭酒层层设坛。先破道坛，再下南郑。',
+        boss: B('yangren', '杨任', '张鲁部将', 'shu_zhangren', 'phase23/lijue', 'zhangren') },
+      { name: '南郑', kind: 'final', behavior: 3, scenery: 4, waves: ['南郑城下', '鬼卒道兵', '张鲁亲至'], story: '南郑城下，张鲁与阎圃出城。师君本无死战之心。',
+        boss: B('zhanglu', '张鲁', '五斗米师君', 'shu_liuzhang', 'phase23/yuanshu', 'liuzhang'),
+        partner: B('yanpu', '阎圃', '汉中功曹', 'jingnan_liudu', 'phase23/yuanshu', 'liudu') },
+    ],
+    annex: ['hanzhong'], specialty: { title: '五斗米义舍', text: '每次出征开局获得 1 点属性点', attributePoints: 1 }, lord: 'zhanglu' },
+  { id: 'xiliang', name: '西凉 · 马韩', faction: '西凉', region: '凉州 · 陇右', x: .1, y: .24, props: 1,
+    open: { arc: 'xiangfan', stages: 3, hint: '第九章「襄樊之战」平定后开放' }, base: 'hanzhong', look: 'qunxiong',
+    stages: [
+      { name: '天水', kind: 'siege', city: 'tianshui', behavior: 1, scenery: 1, waves: ['天水城外', '羌胡骑兵', '梁兴守城'], story: '韩遂聚关西诸将据守陇右。先拔天水，打通西凉道。',
+        boss: B('liangxing', '梁兴', '关西军阀', 'third_lijue', 'phase23/lijue', 'lijue') },
+      { name: '渭水', kind: 'field', behavior: 2, scenery: 2, waves: ['渭水河畔', '西凉铁骑', '阎行出阵'], story: '渭水河畔，西凉铁骑往来冲突。阎行挺矛来战。',
+        boss: B('yanxing', '阎行', '西凉猛将', 'xf_pangde', 'phase23/zhangxiu', 'pangde') },
+      { name: '金城', kind: 'final', behavior: 1, scenery: 4, waves: ['金城城下', '羌兵助阵', '韩遂亲至'], story: '九曲黄河韩文约退守金城，马岱领兵助阵。西凉一战而定。',
+        boss: B('hansui', '韩遂', '九曲黄河', 'third_guosi', 'phase23/lijue', 'guosi'),
+        partner: B('madai', '马岱', '西凉骁将', 'third_zhangxiu', 'phase23/zhangxiu', 'zhangxiu') },
+    ],
+    annex: [], specialty: { title: '西凉铁骑', text: '本命武器伤害 +3%', damage: .03 }, lord: 'hansui' },
 ];
 
 export function sideRoute(id: string | null | undefined): SideRouteDef | undefined { return SIDE_ROUTES.find(r => r.id === id); }
@@ -158,6 +181,13 @@ const SIDE_STYLE: Record<string, { p1: [string, string]; p2: [string, string]; m
   shenpei: { p1: ['河北忠臣', '严令督战 · 城头弓阵'], p2: ['宁死不降', '亲兵护体时审配减伤 · 先打亲兵'], moves: { 严刑督战: '严令督战' } },
   ganning: { p1: ['锦帆贼', '锦帆夜袭 · 铃声为号'], p2: ['百骑劫营', '连斩 · 步战突进'], moves: { 宗室锐气: '锦帆夜袭', 夷道死守: '铃声为号' } },
   huangzu: { p1: ['江夏太守', '楼船箭雨 · 水军旗令'], p2: ['江夏火起', '火箭雨落处起火 · 水军增援'], moves: {} },
+  yangren: { p1: ['张鲁部将', '道坛伏弩 · 冲阵'], p2: ['死守道坛', '弓手护体时杨任减伤 · 先打弓手'], moves: { 落凤伏弩: '道坛伏弩', 张任冲阵: '杨任冲阵', 宁死不降: '死守道坛' } },
+  zhanglu: { p1: ['五斗米师君', '闭城自守 · 城头弓阵'], p2: ['困守南郑', '鬼卒护体时张鲁减伤 · 先破鬼卒'], moves: { 州府箭雨: '南郑箭雨', 益州援兵: '鬼卒援兵' } },
+  yanpu: { p1: ['汉中功曹', '伏兵四起 · 盾阵推进'], p2: ['据城死守', '盾兵护体时阎圃减伤 · 先破盾兵'], moves: { 山越伏林: '伏兵四起', 藤牌推进: '盾阵推进', 山越毒箭: '城头冷箭' } },
+  liangxing: { p1: ['关西军阀', '羌骑冲锋 · 劫掠陇右'], p2: ['困守天水', '亲兵护卫时梁兴减伤 · 先打亲兵'], moves: { 西凉铁骑: '羌骑冲锋', 劫掠长安: '劫掠陇右', 西凉残部: '关西残部' } },
+  yanxing: { p1: ['西凉猛将', '铁骑冲锋 · 刺马一矛'], p2: ['死战不退', '狂暴连斩 · 步战冲杀'], moves: { 抬榇冲锋: '铁骑冲锋', 额前一箭: '刺马一矛' } },
+  hansui: { p1: ['九曲黄河', '厚背砍刀 · 纵兵劫掠'], p2: ['困守金城', '三连劈 · 拖刀突进'], moves: {} },
+  madai: { p1: ['西凉骁将', '马家枪阵 · 金城夜袭'], p2: ['枪出如龙', '一线贯穿长枪'], moves: { 百鸟朝凤枪: '马家枪阵', 宛城夜袭: '金城夜袭', 白马突阵: '西凉突阵' } },
   wenpin: { p1: ['荆州大将', '亲军护驾 · 弓阵齐射'], p2: ['江夏死守', '文聘绕城奔逃 · 身后落下绊索'], moves: {} },
 };
 /** 招式组：借现成首领的招式，改名登记（mount 去掉：借来的图没有骑乘姿态）。 */

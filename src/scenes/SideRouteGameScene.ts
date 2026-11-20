@@ -86,6 +86,8 @@ export function pairPlan(group: string, a: SideBoss, b: SideBoss, lines: DualPla
   };
 }
 const PAIR_LINES: Record<string, DualPlan['lines']> = {
+  zhanglu: { zhanglu: { intro: '五斗米道，诸祭酒随我出城！', rage: '阎圃——！鬼卒们，给我挡住！', shaken: '……阎圃也降了。' }, yanpu: { intro: '师君莫急，圃来断后！', rage: '师君！圃与你们拼了！', shaken: '师君都降了……' } },
+  xiliang: { hansui: { intro: '九曲黄河韩文约在此！', rage: '伯瞻——！羌兵，给我杀！', shaken: '伯瞻也降了么……' }, madai: { intro: '马岱在此，谁敢一战！', rage: '韩公！岱与你们拼了！', shaken: '韩公都降了……' } },
   gongsun: { gongsunzan: { intro: '白马义从，随我出楼！', rage: '国让——！白马义从，死战！', shaken: '……国让也降了么。' }, tianyu: { intro: '主公且看豫的伏弩！', rage: '主公！豫与你们拼了！', shaken: '主公都降了……豫也降了罢。' } },
   hebei: { yuanshao: { intro: '四世三公，岂容尔等放肆！', rage: '正南——！河北儿郎，给我杀！', shaken: '正南……' }, shenpei: { intro: '审配在此，誓守冀州！', rage: '主公！配今日与你们同死！', shaken: '主公都降了……' } },
   jiangxia: { huangzu: { intro: '江夏是我黄祖的地盘！', rage: '仲业——！放箭！放箭！', shaken: '仲业也降了？' }, wenpin: { intro: '文聘在此，休犯江夏！', rage: '太守！聘与你们拼了！', shaken: '太守都降了……罢了。' } },

@@ -8,7 +8,7 @@ import type { CharacterId } from './characters';
  */
 export type SurrenderTier = 'can' | 'hard' | 'never' | 'sure' | 'story' | 'silent' | 'meng' | 'retreat';
 /** 同阵营降将在队（现身说法）用的阵营。 */
-export type SurrenderCamp = 'dongzhuo' | 'zhangxiu' | 'yuan' | 'jingzhou' | 'yizhou' | 'wu' | 'nanzhong' | 'lubu' | 'wei' | 'gongsun' | 'hebei';
+export type SurrenderCamp = 'dongzhuo' | 'zhangxiu' | 'yuan' | 'jingzhou' | 'yizhou' | 'wu' | 'nanzhong' | 'lubu' | 'wei' | 'gongsun' | 'hebei' | 'zhanglu' | 'xiliang';
 /** 关系 / 旗标加成：某武将在队（主将或随行）、主公是谁、本存档已劝降过谁、本关的旗标。 */
 export interface SurrenderBonus { kind: 'hero' | 'lord' | 'surrendered' | 'flag'; id: string; add: number; label: string }
 export interface SurrenderDef {
@@ -147,6 +147,15 @@ export const SURRENDER_DEFS: readonly SurrenderDef[] = [
   D('jiangxia-1:ganning', '甘宁', '锦帆贼', 'can', { template: 'bow', camp: 'jingzhou', yes: '黄祖不识人，宁早想另投明主——愿随将军！', no: '锦帆甘兴霸，岂是你劝得动的！' }),
   D('jiangxia-2:huangzu', '黄祖', '江夏太守', 'hard', { template: 'bow', camp: 'jingzhou', bonuses: [...RETRY], yes: '江夏……保不住了。祖，降。', no: '江夏是我的！谁也别想拿走！' }),
   D('jiangxia-2:wenpin', '文聘', '荆州大将', 'hard', { template: 'blade', camp: 'jingzhou', bonuses: [{ kind: 'surrendered', id: 'huangzu', add: .2, label: '黄祖已降' }], yes: '聘守不住江夏，愧对刘荆州……愿降。', no: '聘受刘荆州厚恩，宁死不降！' }),
+  // 张鲁 · 汉中（第七章后）：张鲁史上封库归降 → 必降
+  D('zhanglu-1:yangren', '杨任', '张鲁部将', 'can', { template: 'bow', camp: 'zhanglu', yes: '道坛已破……任愿降。', no: '师君待我不薄，休想！' }),
+  D('zhanglu-2:zhanglu', '张鲁', '五斗米师君', 'sure', { template: 'strategist', camp: 'zhanglu', yes: '宝货仓库，国家之有……鲁封库以待，愿归附。' }),
+  D('zhanglu-2:yanpu', '阎圃', '汉中功曹', 'can', { template: 'strategist', camp: 'zhanglu', bonuses: [{ kind: 'surrendered', id: 'zhanglu', add: .2, label: '师君已降' }], yes: '圃早劝师君归顺……愿随将军。', no: '圃事师君，不事二主！' }),
+  // 西凉 · 马韩（第九章后）：马岱，马超在队必成（+100，仍受 90% 上限）
+  D('xiliang-1:liangxing', '梁兴', '关西军阀', 'can', { template: 'spear', camp: 'xiliang', yes: '天水丢了……兴愿降。', no: '关西男儿，不跪外人！' }),
+  D('xiliang-2:yanxing', '阎行', '西凉猛将', 'hard', { template: 'spear', camp: 'xiliang', yes: '……行服了。韩公那边，行也不回了。', no: '阎彦明只认韩公！' }),
+  D('xiliang-3:hansui', '韩遂', '九曲黄河', 'hard', { template: 'blade', camp: 'xiliang', bonuses: [{ kind: 'surrendered', id: 'yanxing', add: .1, label: '阎行已降' }, ...RETRY], yes: '九曲黄河，到头了……遂，降。', no: '老夫纵横西凉三十年，岂肯低头！' }),
+  D('xiliang-3:madai', '马岱', '西凉骁将', 'can', { template: 'spear', camp: 'xiliang', bonuses: [{ kind: 'hero', id: 'machao', add: 1, label: '孟起在侧' }], yes: '兄长在此，岱还打什么——愿随兄长！', no: '岱身在西凉，不能弃韩公而去！' }),
   D('caowei-4:xiahoudun', '夏侯惇', '独眼将军', 'hard', { template: 'blade', camp: 'wei', bonuses: [{ kind: 'surrendered', id: 'caocao', add: .3, label: '孟德已降' }],
     yes: '孟德都降了……惇随他便是。', yesIfSurrendered: { id: 'caocao', text: '孟德既已归附，惇岂敢独违。' }, no: '父精母血，不可弃也——惇宁死不降！' }),
 ];

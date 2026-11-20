@@ -54,7 +54,7 @@ const toBoss = async p => { for (let i = 0; i < 24 && !(await p.evaluate(() => !
 // ④ P1b 各支线终局（ROUTES=逗号分隔，默认当前批次）：首领、借来的首领图、双首领同伴、招式名已改成本人、敌兵贴图都在
 {
   const ROUTES = (process.env.ROUTES ?? 'gongsun,hebei,jiangxia').split(',').filter(Boolean);
-  const BORROWED = /白衣|昭武|桂阳|零陵|益州牧|长沙|荆州水军|西凉|北地枪王|白水|落凤|南蛮王|乌戈|蛮将|抬榇|宗室|巧变|疾行之将/;
+  const BORROWED = /白衣|昭武|桂阳|零陵|益州牧|长沙|荆州水军|西凉铁骑|西凉悍将|北地枪王|白水|落凤|南蛮王|乌戈|蛮将|抬榇|宗室|巧变|疾行之将/;
   let shot = false;
   for (const id of ROUTES) {
     const info = await (async () => { const p0 = await page(); await p0.goto(BASE + '?dev=1&layout=desktop'); await p0.waitForFunction(() => window.__game, null, { timeout: 120000 }); const r = await p0.evaluate(async id => { const m = await import('/src/data/sideRoutes.ts'), rt = m.sideRoute(id); return { n: rt.stages.length, key: m.SIDE_SCENE_KEY(id), stage: rt.stages[rt.stages.length - 1] }; }, id); await p0.close(); return r; })();

@@ -22,7 +22,7 @@ import { siegeSourceKeys } from '../data/siege';
 import { isChapterTestRun } from '../systems/ChapterProgress';
 import { applyCitySpecialties } from '../systems/CityBonuses';
 import { permanentEffects } from '../world/WorldStore';
-import { settleSideStage, sideRetries, sideStageOpen, type SideSettle } from '../world/SideRouteStore';
+import { settleSideStage, sideStageOpen, type SideSettle } from '../world/SideRouteStore';
 import type { RunEndReason } from '../types';
 import type { RunConfig } from '../data/characters';
 
@@ -31,7 +31,7 @@ import type { RunConfig } from '../data/characters';
  *  - 攻城 / 野战 / 终局关套第三章式三关框架（ThirdGameScene + 支线 cfg：开放、结算换成 SideRouteStore）；兵种与数值借对应时期的章节，首领换成本关。
  *  - 终局双首领（南郡周瑜 + 太史慈、许都曹操 + 夏侯惇）走 DualBoss，配合技用两人借来的招式（一人冲阵 / 横扫、一人箭雨 / 扇射）。
  *  - 下邳终局「白门楼」交给三英战吕布的吕布战（SideLubuGameScene）：吕布有完整招式与大招。
- * 每关首领都可劝降（data/surrender.ts）；终局胜了没劝降势力之主，下次再战劝降 +15%（parleyFlags sideRetry<N>）。
+ * 首领能否劝降见 data/surrender.ts（surrender-rules.md）；打过的关不能再打，劝降一次性（data/replayRules.ts）。
  */
 
 const st3 = (n: number): ThirdStage => Math.max(1, Math.min(3, n)) as ThirdStage;
@@ -111,8 +111,6 @@ export function sideGameSceneClass(Base: typeof GameScene, r: SideRouteDef) {
       if (r.base === 'guandu' || r.look === 'guandu') ensureYuanTextures(this, guanduYuanSourceKeys());
       super.create();
     }
-    /** 终局再战：第 N 回劝降 +15% × N。 */
-    protected parleyFlags(): Record<string, boolean> { const n = this.arcStage === cfg.stages.length ? sideRetries(r.id) : 0; return n > 0 ? { ['sideRetry' + n]: true } : {}; }
     protected dualSetup(first: BossMoveset): boolean {
       const d = r.stages[this.arcStage - 1], b = this.boss, p = d?.partner;
       if (!d || !p || !b || dualOff()) return false;
@@ -137,7 +135,6 @@ export function sideLubuGameSceneClass(Base: typeof GameScene) {
     constructor() { super('SideLubuGameScene'); }
     protected achievementArc() { return 'lubu'; }
     protected surrenderKey(): string | null { return `xiapi-${stage}:lubu`; }
-    protected parleyFlags(): Record<string, boolean> { const n = sideRetries('xiapi'); return n > 0 ? { ['sideRetry' + n]: true } : {}; }
     protected customChapter() { return this.sideChapter(); }
     private sideChapter(): ChapterDef {
       const c = lubuChallengeChapter(getChapter('hulao'));

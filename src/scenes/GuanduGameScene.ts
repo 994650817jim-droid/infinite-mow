@@ -9,7 +9,7 @@ import {BOSS_MOUNTS} from '../data/bossMoves';
 import {BOSS_OLD} from '../systems/BossKit';
 import {guanduBattle, GUANDU_STAGES, GUANDU_PLAYABLE, GUANDU_ATLAS_FILES, type GuanduStage} from '../data/guanduChapter';
 import {isChapterTestRun} from '../systems/ChapterProgress';
-import {abandonExpedition, arcStageUnlocked, beginArcExpedition, settleArcExpedition, permanentEffects, takeExpeditionReserve} from '../world/WorldStore';
+import {abandonExpedition, arcStagePlayable, beginArcExpedition, settleArcExpedition, permanentEffects, takeExpeditionReserve} from '../world/WorldStore';
 import {packCampaign, type CampaignTransfer} from '../systems/Campaign';
 import {applyCitySpecialties} from '../systems/CityBonuses';
 import {cityIncomeLine} from '../world/WorldStore';
@@ -61,7 +61,7 @@ export function guanduGameSceneClass(Base: typeof GameScene) {
       this.guanduStage = (this.registry.get('guanduStage') ?? 1) as GuanduStage; this.test = isChapterTestRun();
       // 袁军配色贴图须在任何敌兵生成前就绪
       const yuanKeys = ensureYuanTextures(this, guanduYuanSourceKeys());
-      if (!GUANDU_STAGES[this.guanduStage - 1] || !this.test && (this.guanduStage > LAST_PLAYABLE || !arcStageUnlocked('guandu', this.guanduStage))) { this.scene.start('WorldMapScene'); return; }
+      if (!GUANDU_STAGES[this.guanduStage - 1] || !this.test && (this.guanduStage > LAST_PLAYABLE || !arcStagePlayable('guandu', this.guanduStage))) { this.scene.start('WorldMapScene'); return; }
       const saved = this.registry.get('runConfig') as RunConfig | undefined, transfer = this.registry.get('guanduTransfer') as CampaignTransfer | undefined;
       this.registry.remove('guanduTransfer'); this.registry.remove('campaignTransfer');
       if (transfer && transfer.character === saved?.character) this.registry.set('campaignTransfer', transfer);
@@ -134,7 +134,7 @@ export function guanduGameSceneClass(Base: typeof GameScene) {
     protected renderRecruit() { if (this.resting) { this.campUI?.open('guandu-' + this.guanduStage, GUANDU_STAGES[this.guanduStage]?.name ?? '返回天下地图'); return; } super.renderRecruit(); }
     protected continueCampaign() {
       if (!this.resting || this.mode !== 'rest' || this.guanduStage >= LAST_PLAYABLE) return;
-      const next = (this.guanduStage + 1) as GuanduStage; if (!this.test && !arcStageUnlocked('guandu', next)) return;
+      const next = (this.guanduStage + 1) as GuanduStage; if (!this.test && !arcStagePlayable('guandu', next)) return;
       const transfer = packCampaign(this.runConfig.character, this.player, this.legion, this.followers); transfer.chapter = 'hulao';
       this.registry.set('guanduTransfer', transfer); this.registry.set('guanduStage', next); this.resting = false; this.scene.restart();
     }

@@ -1,5 +1,6 @@
 import {armyCapacity,TROOPS,TROOP_KINDS,type TroopKind} from '../data/legion';
 import {sideSpecialties} from './SideRouteStore';
+import {REPLAY_CLEARED} from '../data/replayRules';
 import {rosterFreshUnlock} from '../systems/RosterStore';
 import type {ChapterId} from '../data/chapters';
 import {LUBU_CHALLENGE} from '../data/dongzhuo';
@@ -308,6 +309,10 @@ function hanzhongPrereq(s:WorldSave):boolean{const shu=(s as unknown as {shuStag
 /** 第十一章南征接在第十章夷陵之后。 */
 export function nanzhengPrereq(s:WorldSave):boolean{return s.yilingStages>=3;}
 export function arcUnlocked(arc:WarlordArc):boolean{const s=loadWorld();return arc==='qunxiong'?s.cleared.hulao:arc==='guandu'?s.cleared.hulao&&s.warlordStages>=3:arc==='jingnan'?s.cleared.hulao&&s.chibiStages>=3:arc==='shu'?shuPrereqCleared(s):arc==='hanzhong'?s.cleared.hulao&&hanzhongPrereq(s):arc==='xiangfan'?s.cleared.hulao&&s.hanzhongStages>=3:arc==='yiling'?s.cleared.hulao&&s.xiangfanStages>=3:arc==='nanzheng'?s.cleared.hulao&&nanzhengPrereq(s):arc==='beifa'?s.cleared.hulao&&s.nanzhengStages>=3:s.cleared.hulao&&s.guanduStages>=3;}
+/** 能出征（打过的关不能再打，data/replayRules.ts）。arcStageUnlocked 仍表示「已走到」（选关卡片显示用）。 */
+export function arcStagePlayable(arc:WarlordArc,stage:number):boolean{return arcStageUnlocked(arc,stage)&&(REPLAY_CLEARED||stage>arcStages(arc));}
+export function yellowStagePlayable(stage:number):boolean{return yellowStageUnlocked(stage)&&(REPLAY_CLEARED||stage>loadWorld().yellowStages);}
+export function dongzhuoStagePlayable(stage:number):boolean{return dongzhuoStageUnlocked(stage)&&(REPLAY_CLEARED||stage>loadWorld().dongzhuoStages);}
 export function arcStageUnlocked(arc:WarlordArc,stage:number):boolean{return Number.isInteger(stage)&&stage>=1&&stage<=3&&arcUnlocked(arc)&&stage<=arcStages(arc)+1;}
 export function beginArcExpedition(arc:WarlordArc,stage:number,deployed:TroopKind[]=[]):string{if(!arcStageUnlocked(arc,stage))return '';const s=loadWorld(),id=createExpeditionId();refundStaleExpedition(s);loseAlerted(s);s.active={id,chapter:'hulao',arc,stage,state:'active',farm:s.buildings.farm,deployed:[...deployed]};commit(s);return id;}
 export function settleArcExpedition(arc:WarlordArc,id:string,result:{victory:boolean;bossKilled:boolean;kills:number;elapsed:number;debug:boolean;returned?:TroopKind[]}):{merits:number;provisions:number;cityMerits?:number;cityProvisions?:number;season?:SeasonReport|null;message:string}{
@@ -371,6 +376,8 @@ export function settleIntel(id:string,result:{success:boolean;lost?:boolean;vict
 /** 挑战关是否开放：按 LUBU_CHALLENGE.unlockAfter（第二章通关）；旧版「虎牢关访问权限」只管进第二章，不再顺带开挑战关。 */
 export function lubuChallengeOpen():boolean{const s=loadWorld();return (LUBU_CHALLENGE.unlockAfter>=3&&s.cleared.hulao)||s.dongzhuoStages>=LUBU_CHALLENGE.unlockAfter;}
 export function lubuClears():number{return loadWorld().lubuClears;}
+/** 三英战吕布：胜过一次就「已平定」，不能再打（data/replayRules.ts）。 */
+export function lubuChallengePlayable():boolean{return lubuChallengeOpen()&&(REPLAY_CLEARED||loadWorld().lubuClears===0);}
 export function beginLubuChallenge(deployed:TroopKind[]=[]):string{if(!lubuChallengeOpen())return '';const s=loadWorld(),id=createExpeditionId();refundStaleExpedition(s);loseAlerted(s);s.active={id,chapter:'hulao',arc:'lubu',stage:3,state:'active',farm:s.buildings.farm,deployed:[...deployed]};commit(s);return id;}
 /** 挑战结算：击败吕布发奖（首胜多发并返回 first，由战斗场景发赤兔）；胜利或坚持 60 秒照常过季。 */
 export function settleLubuChallenge(id:string,result:{victory:boolean;bossKilled:boolean;debug:boolean;elapsed:number;returned?:TroopKind[]}):{merits:number;provisions:number;first:boolean;cityMerits?:number;cityProvisions?:number;season?:SeasonReport|null;message:string}{

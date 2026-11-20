@@ -64,6 +64,7 @@ import {BattlefieldSupplies,MAX_PROP_SLOTS,POUCH_MAX,potionTexture} from '../sys
 import {YellowBattle} from '../systems/YellowBattle';
 import {XiliangBattle} from '../systems/XiliangBattle';
 import {dongzhuoStageUnlocked,yellowStageUnlocked,unlockedTroopKinds} from '../world/WorldStore';
+import {REPLAY_CLEARED} from '../data/replayRules';
 import {abandonExpedition,beginExpedition,settleExpedition,permanentEffects,worldUnlocked,worldChapterCleared,takeExpeditionReserve} from '../world/WorldStore';
 import Phaser from 'phaser';
 import { PAD, PAD_LABEL, gamepad, keyHint } from '../platform/gamepad';
@@ -4066,7 +4067,7 @@ export class GameScene extends Phaser.Scene {
     const canAdvance=!!nextWest&&dongzhuoStageUnlocked(nextWest);
     const openedMap=victory&&this.worldCampaign&&this.chapter.id==='hulao'&&(this.chapter.westStage??3)===3&&worldUnlocked();
     const homeLink=this.resultPanel.getByName('result-home') as Phaser.GameObjects.Text|null;
-    this.resultPanel.getByName('result-restart')?.setActive(victory);(this.resultPanel.getByName('result-restart') as Phaser.GameObjects.Image)?.setVisible(victory);(this.resultPanel.getByName('result-restart-text') as Phaser.GameObjects.Text)?.setVisible(victory);
+    {const again=victory&&(REPLAY_CLEARED||isChapterTestRun());/* 打过的关不能再打（data/replayRules.ts） */this.resultPanel.getByName('result-restart')?.setActive(again);(this.resultPanel.getByName('result-restart') as Phaser.GameObjects.Image)?.setVisible(again);(this.resultPanel.getByName('result-restart-text') as Phaser.GameObjects.Text)?.setVisible(again);}
     homeLink?.setText(!victory?'返回主菜单':canAdvance?`下一关 · ${nextWest===1?'汜水关':nextWest===2?'荥阳':'虎牢关'}`:openedMap?(openChapterCount(loadWorldState())>loadWorldState().chapterSeen?'天下地图 · 新篇解锁':'返回天下地图'):this.worldCampaign&&worldUnlocked()?"返回营寨":'返回选关');
     homeLink?.removeAllListeners('pointerdown').on('pointerdown',()=>{
       if(!victory){this.registry.remove('campaignTransfer');this.registry.remove('menuChapterPicker');this.scene.start('MenuScene');return;}

@@ -5,7 +5,7 @@ import type { Specialty } from '../world/WorldCities';
 /**
  * 其他势力支线 P1（设计稿 共享笔记 other-factions-design.md，用户 2026-11-19「批准开工」）：
  * 主线打到某章后，天下地图上该势力亮起「讨伐令」，按关推进；终局打完该势力的城池并入我方领地，并给一项势力特产。
- * 各关首领都能劝降（data/surrender.ts 里的 '<支线>-<关>:<首领>' 键）；终局没劝降成功可在地图上「再战」，每次再战劝降把握 +15%（最多 90%）。
+ * 各关首领能不能劝降见 data/surrender.ts（'<支线>-<关>:<首领>' 键，surrender-rules.md）；打过的关不能再打，劝降一次性，错过就错过（data/replayRules.ts）。
  * 第一批可玩武将（吕布、张辽、周瑜、太史慈、曹操）P2 才做：P1 劝降成功先进降将栏，并记下「已劝降」，P2 的解锁条件读它（systems/HeroUnlocks persuaded）。
  * 战斗复用对应时期的章节战场（第三章式三关框架 / 三英战吕布挑战关）；还没有专属形象的首领先借现有首领图（ART_V2_FILES 的 side_* 键）。
  * 数值都是初值，交平衡会话。
@@ -39,7 +39,7 @@ export interface SideRouteDef {
   stages: readonly SideStage[];
   /** 终局通关后并入的城池（攻城关已并入的不重复）。 */ annex: readonly string[];
   specialty: Specialty;
-  /** 打完后归附的「势力之主」（再战只为劝降他）。 */ lord: string;
+  /** 势力之主（终局首领）。 */ lord: string;
   /** 场景营具势力（sceneLooks ARC_FACTIONS）：1 西凉 · 3 曹军 · 4 东吴。 */ props: number;
 }
 
@@ -178,8 +178,7 @@ export const sideTexture = (id: string): string => 'side_' + id;
 /** 每关奖励（初值）：军粮按开放章节档位；终局多发。 */
 export const SIDE_REWARD = {
   provisions: { xiapi: 120, nanjun: 180, caowei: 240 } as Record<SideRouteId, number>,
-  finalMul: 2, replayMul: .35,
-  /** 再战劝降：每次 +15%，最多 5 次（上限仍是 SURRENDER.cap 90%）。 */ retryAdd: .15, retryMax: 5,
+  finalMul: 2,
 } as const;
 
 /** 借来的招式改成本人的名号：两阶段标题 / 小字、招式名（旧名 → 新名）。曹操用本人招式不改。 */

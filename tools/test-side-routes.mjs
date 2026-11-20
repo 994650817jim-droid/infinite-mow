@@ -1,5 +1,5 @@
 // 其他势力支线 P1（other-factions-design.md，用户 2026-11-19「批准开工」）：讨伐令开放 → 地图节点 / 详情 / 出征 → 支线战斗（首领、劝降键、终局双首领、白门楼吕布战）
-// → 结算（攻城关并城、终局并入领地 + 势力特产、没劝降势力之主 → 再战 +15%）→ 解锁钩子 persuaded。
+// → 结算（攻城关并城、终局并入领地 + 势力特产、劝降一次性、打过的关不能再打）→ 解锁钩子 persuaded。
 // 用法：BASE=http://127.0.0.1:5241/ node tools/test-side-routes.mjs   截图在 assets/review/side-routes/
 import { chromium } from 'playwright';
 import { mkdirSync } from 'node:fs';
@@ -68,7 +68,7 @@ const toBoss = async p => { for (let i = 0; i < 24 && !(await p.evaluate(() => !
     await p.close();
   }
 }
-// ③ 天下地图（真实进度：第三章已平定）→ 讨伐令节点、详情、出征；结算并城、特产、再战加成、解锁钩子
+// ③ 天下地图（真实进度：第三章已平定）→ 讨伐令节点、详情、出征；结算并城、特产、打过不能再打、解锁钩子
 {
   const p = await page();
   await p.goto(BASE + '?layout=desktop'); await p.waitForFunction(() => window.__game?.scene.isActive('MenuScene'), null, { timeout: 180000 });
@@ -81,18 +81,20 @@ const toBoss = async p => { for (let i = 0; i < 24 && !(await p.evaluate(() => !
   const r = await p.evaluate(async () => {
     const S = await import('/src/world/SideRouteStore.ts'), W = await import('/src/world/WorldStore.ts'), U = await import('/src/data/surrender.ts'), H = await import('/src/systems/HeroUnlocks.ts');
     const dmg0 = W.permanentEffects().damageBonus, prov0 = W.loadWorld().provisions;
-    const s1 = S.settleSideStage('xiapi', 1, { victory: true, debug: false }), open2 = S.sideStageOpen('xiapi', 2), open3 = S.sideStageOpen('xiapi', 3);
+    const s1 = S.settleSideStage('xiapi', 1, { victory: true, debug: false }), open1 = S.sideStageOpen('xiapi', 1), open2 = S.sideStageOpen('xiapi', 2), open3 = S.sideStageOpen('xiapi', 3);
     S.settleSideStage('xiapi', 2, { victory: true, debug: false }); const s3 = S.settleSideStage('xiapi', 3, { victory: true, debug: false }), s4 = S.settleSideStage('xiapi', 4, { victory: true, debug: false });
-    const st = S.sideState('xiapi'), odds = U.surrenderOdds(U.surrenderDef('xiapi-4:lubu'), { lord: 'zhaoyun', team: ['zhaoyun'], surrendered: [], followerBosses: [], flags: { sideRetry1: true }, pressed: false });
-    return { s1: s1.provisions, open2, open3, s3: s3.annexed, s4: { done: s4.done, msg: s4.message }, st, owned: W.ownedCities(), dmg: +(W.permanentEffects().damageBonus - dmg0).toFixed(3), prov: W.loadWorld().provisions - prov0, odds: odds.parts, persuaded: H.realProgress().persuaded?.('lubu') };
+    const st = S.sideState('xiapi'), again = S.settleSideStage('xiapi', 4, { victory: true, debug: false }), reopen = [1, 2, 3, 4].some(n => S.sideStageOpen('xiapi', n));
+    const w = W.loadWorld(); w.lubuClears = 1; localStorage.setItem('im_world_v1', JSON.stringify(w));
+    return { s1: s1.provisions, open1, open2, open3, s3: s3.annexed, s4: { done: s4.done, msg: s4.message }, st, again: again.provisions, reopen, owned: W.ownedCities(), dmg: +(W.permanentEffects().damageBonus - dmg0).toFixed(3), prov: W.loadWorld().provisions - prov0, persuaded: H.realProgress().persuaded?.('lubu'), lubuPlay: W.lubuChallengePlayable(), arc1: W.arcStagePlayable('qunxiong', 1) };
   });
-  ck('结算：首关军粮、顺序开放（第 2 关开、第 3 关未开）；下邳关并入下邳；终局「讨伐告成」、并州狼骑伤害 +3%', r.s1 > 0 && r.open2 && !r.open3 && r.s3.includes('下邳') && r.owned.includes('xiapi') && r.s4.done && /讨伐告成/.test(r.s4.msg) && r.dmg === .03 && r.prov > 0, r);
-  ck('终局没劝降吕布：再战次数 +1，劝降把握多「再战第 1 回 +15」；解锁钩子 persuaded(lubu) = false', r.st.done && r.st.retries === 1 && r.odds.some(x => /再战第 1 回/.test(x.label) && x.add === 15) && r.persuaded === false, r);
+  ck('结算：首关军粮、顺序开放（打过的第 1 关不能再进、第 2 关开、第 3 关未开）；下邳关并入下邳；终局「讨伐告成」、并州狼骑伤害 +3%', r.s1 > 0 && !r.open1 && r.open2 && !r.open3 && r.s3.includes('下邳') && r.owned.includes('xiapi') && r.s4.done && /讨伐告成/.test(r.s4.msg) && r.dmg === .03 && r.prov > 0, r);
+  ck('打过的关不能再打：支线四关全部关闭、再结算不发奖励；三英战吕布胜过一次不能再打；第三章已平定的关不能再进；劝降一次性（没有再战加成），persuaded(lubu) = false', r.st.done && r.st.retries === undefined && !r.reopen && r.again === 0 && !r.lubuPlay && !r.arc1 && r.persuaded === false, r);
   await p.evaluate(() => { const s = window.__game.scene.getScene('WorldMapScene'); s.scene.restart(); }); await p.waitForTimeout(2200);
-  const m2 = await p.evaluate(() => { const s = window.__game.scene.getScene('WorldMapScene'), mk = s.markers.find(x => x.node.id === 'side-xiapi'); s.selected = { kind: 'node', node: mk.node }; s.refresh(); return { state: s.nodeState(mk.node), detail: s.detail.text, action: s.action.text.text }; });
-  ck('讨平后地图：讨伐令变「捷」，详情写再战劝降 +15%，按钮「再战 · 白门楼」', m2.state === 'cleared' && /再战终局劝降把握 \+15%/.test(m2.detail) && m2.action === '再战 · 白门楼', m2);
-  const go = await p.evaluate(() => { const g = window.__game, s = g.scene.getScene('WorldMapScene'), st = g.scene.start.bind(g.scene); let started = null; const sp = s.scene.start.bind(s.scene); s.scene.start = (k, d) => { started = k; return sp(k, d); }; s.launch(false); return g.registry.get('pendingWarlord') ?? started; });
-  ck('再战出征进白门楼吕布战（SideLubuGameScene）', go === 'SideLubuGameScene', go);
+  const m2 = await p.evaluate(() => { const s = window.__game.scene.getScene('WorldMapScene'), pick = id => { const mk = s.markers.find(x => x.node.id === id); s.selected = { kind: 'node', node: mk.node }; s.refresh(); return { state: s.nodeState(mk.node), detail: s.detail.text, action: s.action.text.text, on: !!s.action.image.input?.enabled }; }; return { side: pick('side-xiapi'), lubu: pick('lubu'), ch3: pick('qunxiong') }; });
+  ck('天下地图：讨平的讨伐令、三英战吕布、已平定的第三章都写「已平定」、按钮置灰（讨伐令写势力之主远走）', m2.side.state === 'cleared' && /已平定/.test(m2.side.detail) && /远走/.test(m2.side.detail) && m2.side.action === '已平定' && !m2.side.on && m2.lubu.action === '已平定' && !m2.lubu.on && m2.ch3.action === '已平定' && !m2.ch3.on && /不再出征/.test(m2.ch3.detail), m2);
+  await p.screenshot({ path: OUT + '/map-sealed.png' });
+  const go = await p.evaluate(() => { const g = window.__game, s = g.scene.getScene('WorldMapScene'); let started = null; const sp = s.scene.start.bind(s.scene); s.scene.start = (k, d) => { started = k; return sp(k, d); }; for (const id of ['side-xiapi', 'lubu', 'qunxiong']) { s.selected = { kind: 'node', node: s.markers.find(x => x.node.id === id).node }; s.launch(false); } return g.registry.get('pendingWarlord') ?? started; });
+  ck('已平定的点不能出征（讨伐令 / 三英战吕布 / 第三章都进不去）', go === null, go);
   await p.close();
 }
 await b.close();

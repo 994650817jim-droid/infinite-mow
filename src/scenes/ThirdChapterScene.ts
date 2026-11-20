@@ -3,7 +3,7 @@ import {takeDirectDepart} from '../systems/DirectDepart';
 import {defaultHero,heroOwned,LOCKED_HINT} from '../systems/RosterStore';
 import Phaser from 'phaser';
 import {THIRD_STAGES,type ThirdStage} from '../data/thirdChapter';
-import {thirdChapterUnlocked,thirdStageUnlocked,loadWorld,alertLossWarning} from '../world/WorldStore';
+import {thirdChapterUnlocked,thirdStageUnlocked,arcStagePlayable,loadWorld,alertLossWarning} from '../world/WorldStore';
 import {isChapterTestRun} from '../systems/ChapterProgress';
 import {CHARACTERS,type CharacterId} from '../data/characters';
 import {worldText,W,H} from '../world/WorldUI';
@@ -32,7 +32,7 @@ export class ThirdChapterScene extends Phaser.Scene {
   if(test)this.text(W-30,desk?91:116,'试炼模式 · 全关可选',11,'#b09573').setOrigin(1,0);
   const cardY=desk?135:166,cw=desk?(W-84)/3:W-56,ch=desk?248:170;
   THIRD_STAGES.forEach((d,i)=>{
-   const x=desk?28+i*(cw+14):28,y=desk?cardY:cardY+i*(ch+14),open=thirdStageUnlocked(d.stage)||test;
+   const x=desk?28+i*(cw+14):28,y=desk?cardY:cardY+i*(ch+14),open=(thirdStageUnlocked(d.stage)&&arcStagePlayable('qunxiong',d.stage))||test;
    const bg=this.add.rectangle(x+cw/2,y+ch/2,cw,ch,0x29231d,.94).setStrokeStyle(1,0x6a5740).setName('third-stage-'+d.stage).setInteractive({useHandCursor:open});
    const strip=this.add.rectangle(x+2,y+ch/2,3,ch-4,0xc8a468).setOrigin(0,.5);
    this.add.rectangle(x+cw/2,y+ch-22,cw-2,42,0x120f0d,.48);
@@ -54,6 +54,6 @@ export class ThirdChapterScene extends Phaser.Scene {
   if(desk)this.text(30,488,'军旗所向 · 率众再征',15,'#b8a17d');
   this.text(desk?30:W/2,desk?512:934,'关间可休整 · 成长与部队随军继承',11,'#8f8473').setOrigin(desk?0:.5,0);this.refresh();
  }
- private depart(){if(!thirdStageUnlocked(this.selected)&&!isChapterTestRun())return;if(!isChapterTestRun())try{localStorage.setItem('im_last_hero',this.hero);}catch{}this.registry.remove('campaignTransfer');this.registry.remove('thirdTransfer');this.registry.set('thirdStage',this.selected);this.registry.set('runConfig',{character:this.hero,thirdStage:this.selected});this.scene.start('ThirdGameScene');}
- private refresh(){const save=loadWorld(),test=isChapterTestRun();this.cards.forEach((c,i)=>{const open=thirdStageUnlocked(i+1)||test,chosen=this.selected===i+1;c.bg.setFillStyle(chosen?0x413020:0x29231d).setStrokeStyle(chosen?2:1,chosen?0xd7b778:0x65543f);c.strip.setVisible(chosen);c.status.setText(save.warlordStages>=i+1?'✓ 已告捷':!open?!thirdChapterUnlocked()?'锁定 · 通关虎牢关':'锁定 · 完成前关':chosen?'◆ 当前出征':'可出征').setColor(chosen?'#f0ce8f':'#a99c86');});this.heroButtons.forEach((h,i)=>h.setFillStyle(CHARACTERS[i].id===this.hero?0x51402b:0x241e1a).setStrokeStyle(1,CHARACTERS[i].id===this.hero?0xd7b778:0x70604b).setAlpha(h.getData('locked')?.35:1));this.deployText.setText('出征  ·  '+THIRD_STAGES[this.selected-1].name);}
+ private depart(){if(!arcStagePlayable('qunxiong',this.selected)&&!isChapterTestRun())return;if(!isChapterTestRun())try{localStorage.setItem('im_last_hero',this.hero);}catch{}this.registry.remove('campaignTransfer');this.registry.remove('thirdTransfer');this.registry.set('thirdStage',this.selected);this.registry.set('runConfig',{character:this.hero,thirdStage:this.selected});this.scene.start('ThirdGameScene');}
+ private refresh(){const save=loadWorld(),test=isChapterTestRun();this.cards.forEach((c,i)=>{const open=arcStagePlayable('qunxiong',i+1)||test,chosen=this.selected===i+1;c.bg.setFillStyle(chosen?0x413020:0x29231d).setStrokeStyle(chosen?2:1,chosen?0xd7b778:0x65543f);c.strip.setVisible(chosen);c.status.setText(save.warlordStages>=i+1?'✓ 已告捷':!open?!thirdChapterUnlocked()?'锁定 · 通关虎牢关':'锁定 · 完成前关':chosen?'◆ 当前出征':'可出征').setColor(chosen?'#f0ce8f':'#a99c86');});this.heroButtons.forEach((h,i)=>h.setFillStyle(CHARACTERS[i].id===this.hero?0x51402b:0x241e1a).setStrokeStyle(1,CHARACTERS[i].id===this.hero?0xd7b778:0x70604b).setAlpha(h.getData('locked')?.35:1));this.deployText.setText('出征  ·  '+THIRD_STAGES[this.selected-1].name);}
 }

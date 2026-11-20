@@ -29,8 +29,8 @@ export interface SurrenderDef {
   /** 史实 / 演义依据（surrender-rules.md）；宁死不降的人在面板上照写。 */ reason?: string;
   /** 劝降前要先满足的条件（没满足时「劝降」置灰）。 */ need?: SurrenderNeed;
 }
-/** 前置条件：某武将在队 / 某人已归附（同伴本场已降也算）/ 本关旗标 / 支线终局已胜过 n 回。 */
-export interface SurrenderNeed { kind: 'hero' | 'surrendered' | 'flag' | 'retry'; id?: string; n?: number; label: string }
+/** 前置条件：某武将在队 / 某人已归附（同伴本场已降也算）/ 本关旗标。 */
+export interface SurrenderNeed { kind: 'hero' | 'surrendered' | 'flag'; id?: string; label: string }
 
 export const SURRENDER_TIERS: Record<SurrenderTier, { seal: string; color: string; base: number }> = {
   can: { seal: '可降', color: '#7fd0b0', base: .55 },
@@ -56,8 +56,6 @@ export const SURRENDER = {
 
 /** 双首领关同伴加减（dual-boss-spec §3，初值）。 */
 export const PARTNER_ODDS = { persuaded: .2, executed: -.1 } as const;
-/** 支线终局再战：第 N 次再战劝降 +15% × N（场景 parleyFlags 只给当前那一档）。 */
-const RETRY: SurrenderBonus[] = [1, 2, 3, 4, 5].map(n => ({ kind: 'flag', id: 'sideRetry' + n, add: .15 * n, label: '再战第 ' + n + ' 回' }));
 const D = (key: string, name: string, title: string, tier: SurrenderTier, o: Partial<SurrenderDef> = {}): SurrenderDef => ({ key, id: key.split(':')[1], name, title, tier, ...o });
 
 const RAW_DEFS: readonly SurrenderDef[] = [
@@ -116,17 +114,17 @@ const RAW_DEFS: readonly SurrenderDef[] = [
   D('beifa-1:zhanghe', '张郃', '魏国名将', 'never', { no: '郃受魏国厚恩，今日唯有一死！' }),
   D('beifa-2:haozhao', '郝昭', '陈仓守将', 'never', { no: '我受国恩多而门户重，但有必死耳！' }),
   D('beifa-3:simayi', '司马懿', '魏大都督', 'story'),
-  // 其他势力支线（data/sideRoutes.ts，other-factions-design.md）：键 '<支线>-<关>:<首领>'；终局再战每次 +15%（RETRY）
+  // 其他势力支线（data/sideRoutes.ts，other-factions-design.md）：键 '<支线>-<关>:<首领>'；劝降一次性（打过的关不能再打）
   // 吕布 · 下邳（第三章后）
   D('xiapi-1:caoxing', '曹性', '吕布部将', 'can', { template: 'bow', camp: 'lubu', yes: '小沛守不住了……曹性愿降。', no: '温侯待我不薄，休想！' }),
   D('xiapi-2:gaoshun', '高顺', '陷阵营', 'never', { template: 'blade', camp: 'lubu', bonuses: [{ kind: 'surrendered', id: 'lubu', add: .3, label: '温侯已降' }],
     yes: '温侯都降了……陷阵营，听将军调遣。', yesIfSurrendered: { id: 'lubu', text: '温侯既已归顺，高顺岂敢独违。' }, no: '陷阵营只有战死的，没有降的！' }),
   D('xiapi-3:zhangliao', '张辽', '吕布骁将', 'can', { template: 'spear', camp: 'lubu', yes: '辽素闻将军仁义……愿效犬马之劳。', no: '大丈夫死则死耳，何惧之有！' }),
-  D('xiapi-4:lubu', '吕布', '飞将', 'hard', { template: 'spear', camp: 'lubu', bonuses: [{ kind: 'hero', id: 'diaochan', add: .2, label: '貂蝉在侧' }, { kind: 'lord', id: 'liubei', add: -.2, label: '大耳儿最叵信' }, ...RETRY],
+  D('xiapi-4:lubu', '吕布', '飞将', 'hard', { template: 'spear', camp: 'lubu', bonuses: [{ kind: 'hero', id: 'diaochan', add: .2, label: '貂蝉在侧' }, { kind: 'lord', id: 'liubei', add: -.2, label: '大耳儿最叵信' }],
     yes: '明公得布，天下不足定也！', no: '白门楼上，吕奉先宁死不跪！', noIfLord: { id: 'liubei', text: '大耳儿最叵信，你也配劝我？' } }),
   // 江东 · 南郡（第五章后）
   D('nanjun-1:chengpu', '程普', '江东老将', 'can', { template: 'blade', camp: 'wu', yes: '与公瑾共事，如饮醇醪……罢了，普愿降。', no: '老夫随孙破虏起兵，岂能降你！' }),
-  D('nanjun-2:zhouyu', '周瑜', '江东都督', 'hard', { template: 'strategist', camp: 'wu', bonuses: [{ kind: 'hero', id: 'sunshangxiang', add: .2, label: '孙夫人在侧' }, { kind: 'hero', id: 'zhuge', add: -.1, label: '既生瑜，何生亮' }, ...RETRY],
+  D('nanjun-2:zhouyu', '周瑜', '江东都督', 'hard', { template: 'strategist', camp: 'wu', bonuses: [{ kind: 'hero', id: 'sunshangxiang', add: .2, label: '孙夫人在侧' }, { kind: 'hero', id: 'zhuge', add: -.1, label: '既生瑜，何生亮' }],
     yes: '……曲有误，周郎顾。今日这一曲，瑜输了。', no: '大丈夫处世，遇知己之主，岂能背之！', noIfHero: { id: 'zhuge', text: '既生瑜，何生亮！' } }),
   D('nanjun-2:taishici', '太史慈', '东莱信义之将', 'can', { template: 'bow', camp: 'wu', bonuses: [{ kind: 'surrendered', id: 'zhouyu', add: .2, label: '公瑾已降' }],
     yes: '大丈夫当带七尺之剑，以升天子之阶——慈愿随将军！', no: '慈许孙将军以死，不可失信！' }),
@@ -138,7 +136,7 @@ const RAW_DEFS: readonly SurrenderDef[] = [
   // 公孙瓒 · 幽州（第三章后）
   D('gongsun-1:tiankai', '田楷', '青州刺史', 'can', { template: 'bow', camp: 'gongsun', yes: '平原守不住了……楷愿降。', no: '公孙将军待我恩重，休想！' }),
   D('gongsun-2:yangang', '严纲', '白马义从统领', 'never', { template: 'spear', camp: 'gongsun', yes: '白马义从……听将军调遣。', no: '白马义从，只有战死的！' }),
-  D('gongsun-3:gongsunzan', '公孙瓒', '白马将军', 'never', { template: 'spear', camp: 'gongsun', bonuses: [{ kind: 'hero', id: 'zhaoyun', add: .25, label: '子龙在侧' }, ...RETRY],
+  D('gongsun-3:gongsunzan', '公孙瓒', '白马将军', 'never', { template: 'spear', camp: 'gongsun', bonuses: [{ kind: 'hero', id: 'zhaoyun', add: .25, label: '子龙在侧' }],
     yes: '……子龙，你选的主公，果然不错。瓒，降了。', no: '易京楼在，公孙瓒在！', noIfHero: { id: 'zhaoyun', text: '子龙……你也来劝我？我公孙瓒岂是降人！' } }),
   D('gongsun-3:tianyu', '田豫', '幽州从事', 'can', { template: 'bow', camp: 'gongsun', bonuses: [{ kind: 'surrendered', id: 'gongsunzan', add: .2, label: '伯珪已降' }], yes: '豫早知易京难守……愿随将军。', no: '豫既事公孙，不改其志！' }),
   // 袁绍 · 河北（第四章后）
@@ -149,7 +147,7 @@ const RAW_DEFS: readonly SurrenderDef[] = [
   D('hebei-4:shenpei', '审配', '河北忠臣', 'never', { no: '吾主在北，岂可南面而降！' }),
   // 荆州 · 江夏（第四章后）
   D('jiangxia-1:ganning', '甘宁', '锦帆贼', 'can', { template: 'bow', camp: 'jingzhou', yes: '黄祖不识人，宁早想另投明主——愿随将军！', no: '锦帆甘兴霸，岂是你劝得动的！' }),
-  D('jiangxia-2:huangzu', '黄祖', '江夏太守', 'never', { template: 'bow', camp: 'jingzhou', bonuses: [...RETRY], yes: '江夏……保不住了。祖，降。', no: '江夏是我的！谁也别想拿走！' }),
+  D('jiangxia-2:huangzu', '黄祖', '江夏太守', 'never', { template: 'bow', camp: 'jingzhou', bonuses: [], yes: '江夏……保不住了。祖，降。', no: '江夏是我的！谁也别想拿走！' }),
   D('jiangxia-2:wenpin', '文聘', '荆州大将', 'hard', { template: 'blade', camp: 'jingzhou', bonuses: [{ kind: 'surrendered', id: 'huangzu', add: .2, label: '黄祖已降' }], yes: '聘守不住江夏，愧对刘荆州……愿降。', no: '聘受刘荆州厚恩，宁死不降！' }),
   // 张鲁 · 汉中（第七章后）：张鲁史上封库归降 → 必降
   D('zhanglu-1:yangren', '杨任', '张鲁部将', 'never', { template: 'bow', camp: 'zhanglu', yes: '道坛已破……任愿降。', no: '师君待我不薄，休想！' }),
@@ -158,7 +156,7 @@ const RAW_DEFS: readonly SurrenderDef[] = [
   // 西凉 · 马韩（第九章后）：马岱，马超在队必成（+100，仍受 90% 上限）
   D('xiliang-1:liangxing', '梁兴', '关西军阀', 'can', { template: 'spear', camp: 'xiliang', yes: '天水丢了……兴愿降。', no: '关西男儿，不跪外人！' }),
   D('xiliang-2:yanxing', '阎行', '西凉猛将', 'hard', { template: 'spear', camp: 'xiliang', yes: '……行服了。韩公那边，行也不回了。', no: '阎彦明只认韩公！' }),
-  D('xiliang-3:hansui', '韩遂', '九曲黄河', 'hard', { template: 'blade', camp: 'xiliang', bonuses: [{ kind: 'surrendered', id: 'yanxing', add: .1, label: '阎行已降' }, ...RETRY], yes: '九曲黄河，到头了……遂，降。', no: '老夫纵横西凉三十年，岂肯低头！' }),
+  D('xiliang-3:hansui', '韩遂', '九曲黄河', 'hard', { template: 'blade', camp: 'xiliang', bonuses: [{ kind: 'surrendered', id: 'yanxing', add: .1, label: '阎行已降' }], yes: '九曲黄河，到头了……遂，降。', no: '老夫纵横西凉三十年，岂肯低头！' }),
   D('xiliang-3:madai', '马岱', '西凉骁将', 'can', { template: 'spear', camp: 'xiliang', bonuses: [{ kind: 'hero', id: 'machao', add: 1, label: '孟起在侧' }], yes: '兄长在此，岱还打什么——愿随兄长！', no: '岱身在西凉，不能弃韩公而去！' }),
   // 东吴 · 江东（第十章后）：孙权归附（江东城全下）
   D('dongwu-1:jiangqin', '蒋钦', '江东水将', 'can', { template: 'spear', camp: 'wu', yes: '庐江丢了……钦愿降。', no: '吴侯待我恩重，休想！' }),
@@ -222,7 +220,7 @@ export const SURRENDER_RULES: Readonly<Record<string, { reason: string; need?: S
   'xiapi-3:zhangliao': { reason: '史上下邳城破后降曹，后成名将' },
   'xiapi-4:lubu': { reason: '白门楼上自请归降、愿为明公平天下' },
   'nanjun-1:chengpu': { reason: '江东老将，与周瑜不睦，可以一劝' },
-  'nanjun-2:zhouyu': { reason: '蒋干说之不动；须先在南郡胜他一回，才肯坐下来谈', need: { kind: 'retry', n: 1, label: '先在南郡胜他一回（再战时可劝）' } },
+  'nanjun-2:zhouyu': { reason: '蒋干说之不动；老将程普素敬公瑾（「若饮醇醪」），程普先降并现身说法，周瑜才肯坐下来谈', need: { kind: 'surrendered', id: 'chengpu', label: '程普已降（江陵外围劝降程普）' } },
   'nanjun-2:taishici': { reason: '神亭酣战后降孙策，信义之将，服人不服势' },
   'caowei-1:lidian': { reason: '曹营儒将，城破可降' },
   'caowei-2:xuchu': { reason: '只护曹公一人；曹公归附，他才肯随', need: { kind: 'surrendered', id: 'caocao', label: '曹操已归附' } },
@@ -268,8 +266,7 @@ export function needMet(d: SurrenderDef, c: Pick<OddsCtx, 'team' | 'surrendered'
   const n = d.need; if (!n) return true;
   if (n.kind === 'hero') return c.team.includes(n.id ?? '');
   if (n.kind === 'surrendered') return c.surrendered.includes(n.id ?? '') || (c.partner?.id === n.id && !!c.partner?.persuaded);
-  if (n.kind === 'flag') return !!c.flags[n.id ?? ''];
-  return Object.keys(c.flags).some(k => c.flags[k] && /^sideRetry(\d+)$/.test(k) && Number(k.slice(9)) >= (n.n ?? 1));
+  return !!c.flags[n.id ?? ''];
 }
 /** 剧情附送：9-2 胜利后于禁乞降（不掷骰，进降将栏）。 */
 export const YUJIN = { id: 'yujin', name: '于禁', template: 'blade' as FollowerTemplate, camp: 'yuan' as SurrenderCamp, yes: '禁……禁愿降。', banner: '于禁七军尽没 · 于禁乞降' };

@@ -87,6 +87,7 @@ import {upgradeCardTexture,inkUpgradeCardTexture,inkPlate,homeCommand,inkSkin} f
 import { RESULT_GOLD, RESULT_IVORY, RESULT_STROKE, buildRewardView, parseHeroLine, playResultAnims, wan, type ResultAnim } from '../ui/ResultRewards';
 import { loadBagArt } from '../ui/ItemQuality';
 import { bagBundle, type BagBundle } from '../ui/BagBundleButton';
+import { HeroStatusFrame } from '../ui/HeroStatusFrame';
 import type { EnemyDef } from '../data/enemies';
 import { WEAPON_META, weaponName, buildUpgradeOptions, canOfferRejuvenation } from '../data/upgrades';
 import { waveIndexAt } from '../data/waves';
@@ -118,6 +119,7 @@ import { vigorHp } from '../data/attributes';
 import { CHAPTER_INDEX, PHASES, buildPhasePlan, phasedPace, type PhaseKind, type PhasePlan } from '../data/stagePhases';
 import { StagePhaseRunner } from '../systems/StagePhases';
 import { BattleFortunes } from '../systems/BattleFortunes';
+import { BattleHeal } from '../systems/BattleHeal';
 import { FORTUNE, FORTUNE_EVENT, rollFortuneBuffs, type FortuneEventKind } from '../data/fortunes';
 import { applyStageBuff, clearStageBuffs } from '../systems/StageBuffs';
 import { BOUNTIES, GAMBLES, JINNANG, NEW_CARDS, chestCharmCard, drawNewCards, type BountyId, type GambleId, type JinnangId } from '../systems/LevelCards';
@@ -468,6 +470,10 @@ export class GameScene extends Phaser.Scene {
   protected supplies:BattlefieldSupplies|null=null;
   /** 道具掉落与本局缴获（局外兵装，结算带回行囊）。 */
   protected itemDrops:ItemDrops|null=null;
+  /** 战场回血：干粮 / 酒肉、泉眼 / 水井、军中伤药、低血保护（systems/BattleHeal，用户 2026-11-19「地图上也需要更多回血手段」）。 */
+  battleHeal:BattleHeal|null=null;
+  /** 场景可放东西的位置：夹进场地、挪出墙 / 营栅 / 房子，再避开水与树（机缘、回血点共用）。 */
+  protected fieldPlace(x:number,y:number):{x:number;y:number}{ let p = { x, y }; if (this.arena) p = this.arena.clampPoint(p.x, p.y); const fp = this.sishuiObstacles?.footprints; if (fp?.length) { const f = freeSpawn(fp, p.x, p.y, 48, this.player); p = { x: f.x, y: f.y }; if (this.arena) p = this.arena.clampPoint(p.x, p.y); } if (this.terrain) p = this.terrain.free(p.x, p.y, 48); return p; }
   /** 征程构筑：本关是否为重打 / 非主线（不读不存）；本关是否从存档恢复了构筑。 */
   protected campaignReplay=false;protected campaignLoaded=false;
   /** 战功（存档货币，data/merit.ts）：本场击杀的精英 / 首领数。 */
@@ -530,6 +536,9 @@ export class GameScene extends Phaser.Scene {
   protected hudTexts!: Record<string, Phaser.GameObjects.Text>;
   /** 右上手绘包袱（行囊）按钮。 */
   private bagBundle?: BagBundle;
+  /** 左上主将状态框（电脑布局；ui/HeroStatusFrame.ts）。 */
+  statusFrame?: HeroStatusFrame;
+  private hudAttrBadge?: Phaser.GameObjects.Image;
   protected passiveHud!: PassiveHud; protected passiveShout!: PassiveShout; protected heroBark!: HeroBark;
   /** 赵云被动「七进七出」：脚下龙鳞层数 + 满层白龙枪芒 / 绕身一闪 / 突进残影。 */
   zhaoyunFx!: ZhaoyunPassiveFx;
@@ -842,6 +851,7 @@ export class GameScene extends Phaser.Scene {
     {const horse=heroHorse(this.runConfig.character);this.mount=horse?new HeroMount({scene:this,player:this.player,enemies:this.enemies,hit:(e,d,now)=>this.hitEnemy(e,d,now,'melee',false,false),notice:t=>this.showGrowthNotice(t)},{base:horse.id,name:horse.name},this.runConfig.character,this.player.growth.gear.specials.includes('hubao')?{trampleMul:RELIC.hubaoTrample,remountMs:RELIC.hubaoRemountMs}:{}):null;this.player.mountGuard=this.mount?(n,now)=>this.mount?.guard(n,now)??n:undefined;this.mountHint=MountRideHint.maybeShow(this,!!this.mount);this.events.once('shutdown',()=>{this.mount?.clear();this.mount=null;});}
     this.bossPace=new BossPace(this as unknown as ConstructorParameters<typeof BossPace>[0]); // 首领走路提速 / 追击（BALANCE.bossPace）
     this.itemDrops=new ItemDrops(this,this.player,this.itemTier(),this.lootChapter(),()=>this.elapsed,()=>this.isFinalBoss(),()=>this.sfx.play('pickup'),()=>this.bossRelicKey());this.itemDrops.deferBossRelic=true; // 首领遗珍由首领宝箱发（BossChest）
+    this.battleHeal?.clear();this.battleHeal=new BattleHeal({scene:this,player:()=>this.player,enemies:()=>this.enemies,elapsed:()=>this.elapsed,now:()=>this.combatNow,place:(x,y)=>this.fieldPlace(x,y),dropPotion:(x,y,a,n)=>this.supplies?.dropPotion(x,y,a,n)??false,overlay:()=>this.mode!=='none'||this.over,sfx:k=>this.sfx.play(k),notice:t=>this.showGrowthNotice(t)});this.battleHeal.setPlan(this.phasePlan);this.events.once('shutdown',()=>{this.battleHeal?.clear();this.battleHeal=null;});
     this.relics=new BossRelics({scene:this,player:this.player,enemies:()=>this.enemies,hit:(e,d,now)=>{this.hitEnemy(e,d,now,'melee',false,false);},notice:t=>this.showGrowthNotice(t)},this.player.growth.gear.specials,this.combatNow);
     this.syncRelicShips();
     this.events.once('shutdown',()=>{this.relics?.clear();this.relics=null;this.relicShips?.clear();this.relicShips=null;});
@@ -1124,7 +1134,7 @@ export class GameScene extends Phaser.Scene {
       this.music.dispose();
       this.sfx.dispose();
       this.disposeDevelopment();
-      this.followers?.clear();this.followers=null;this.legion.stop(); this.reinforcements.clear();this.yellow?.clear();this.xiliang?.clear();this.clearChasingBosses();this.supplies?.clear();this.itemDrops?.clear();
+      this.followers?.clear();this.followers=null;this.legion.stop(); this.reinforcements.clear();this.yellow?.clear();this.xiliang?.clear();this.clearChasingBosses();this.supplies?.clear();this.itemDrops?.clear();this.battleHeal?.clear();
     });
     this.input.on('pointermove', (pointer: Phaser.Input.Pointer) => this.joystick.handleMove(pointer));
     this.input.on('pointerup', (pointer: Phaser.Input.Pointer) => this.joystick.handleUp(pointer));
@@ -1202,6 +1212,7 @@ export class GameScene extends Phaser.Scene {
     this.updateHud();
     // 被动满层台词每帧检测（HUD 0.1 秒一刷，孙尚香这类攒满后马上触发的会漏掉）
     this.passiveShout.update(this.player.passive, this.combatNow, this.player.x, this.player.y, this.mode === 'none' && !this.over, this.player.sprite);
+    this.statusFrame?.update({ hp: this.player.hp, maxHp: this.player.maxHp, xp: this.player.xp, xpNext: this.player.xpNext, level: this.player.level, now: this.time.now, hpText: this.hudTexts?.hp, badge: this.hudAttrBadge ??= (this.children.getByName('hud-attr-badge') as Phaser.GameObjects.Image | null) ?? undefined });
     this.passiveGauge.update(this.player.passive, this.combatNow, this.player.x, this.player.y, !this.over && this.player.sprite.visible);
     this.heroBark?.update(this.barkSpeakers(), this.combatNow, this.mode === 'none' && !this.over && !this.barksMuted()); // 武将台词气泡（被动大招触发时）；过场中与刚结束 1 秒内不喊
     this.artEffects.update(this.combatNow);
@@ -1248,7 +1259,7 @@ export class GameScene extends Phaser.Scene {
 
     this.player.update(time, dt);this.mount?.update(dt,this.combatNow);
 
-    if(!this.over){for(const c of this.bossChests)c.update(this.combatNow);this.itemDrops?.update();this.relics?.update(this.combatNow);this.relicShips?.update(this.combatNow);}
+    if(!this.over){for(const c of this.bossChests)c.update(this.combatNow);this.itemDrops?.update();this.battleHeal?.update(dt,this.bossSpawned);this.relics?.update(this.combatNow);this.relicShips?.update(this.combatNow);}
     this.deathFx?.update(this.combatNow);
     this.supplies?.update(dt,time,this.battlefieldDetails.props,(enemy,damage)=>this.hitEnemy(enemy,damage,time,'fire',false,false),this.allies,(ally,damage,now)=>this.legion.hurt(ally,damage,now));
     if(!this.envInit&&this.supplies){this.envInit=true;const sf=this.sceneFaction(),cfg0=envConfigFor(this.scene.key,this.chapter.id,(this as unknown as {guanduStage?:number}).guanduStage),cfg=cfg0&&sf!==null&&sf<=3?{...cfg0,faction:sf as Faction}:cfg0;if(cfg){const sup=this.supplies;this.env=new EnvInteractions({scene:this,player:this.player,supplies:sup,enemies:()=>this.enemies,allies:()=>this.allies,hitEnemy:(e,d)=>{this.hitEnemy(e,d,this.combatNow,'fire',false,false);},hurtAlly:(a,d)=>{this.legion.hurt(a,d,this.combatNow);},spawnEnemy:(x,y)=>this.spawnEnemy('infantry',x,y,undefined,true),spawnGem:(x,y,v)=>this.spawnGem(x,y,v),spawnChest:(x,y)=>{this.itemDrops?.spawnChest(x,y);},now:()=>this.combatNow,sfx:k=>this.sfx.play(k)},cfg);this.events.once('shutdown',()=>{this.env?.destroy();this.env=null;});}}
@@ -2545,6 +2556,7 @@ export class GameScene extends Phaser.Scene {
     this.controlBuild?.onKill(enemy,this.combatNow);
     this.legion.onKill(enemy);
     this.itemDrops?.onKill(enemy);
+    if(kind==='elite')this.battleHeal?.onEliteDown(enemy.x,enemy.y); // 精锐：概率掉军中伤药（保底）
     if(enemy.kind==='boss')this.runMerit.boss++;else if(enemy.kind==='elite')this.runMerit.elite++; // 战功：精英 / 首领
     this.relics?.onKill();
     if(this.player.growth.gear.specials.includes('bloodthirst')&&this.combatNow>=this.player.growth.killHealAt){this.player.growth.killHealAt=this.combatNow+500;this.player.heal(this.player.maxHp*.01);}
@@ -3333,6 +3345,7 @@ export class GameScene extends Phaser.Scene {
   /** 障碍物按类别掉落（data/propLoot.ts）：兵器架只出攻击类兵装、甲胄架只出护具，封顶蓝色、每关上限；粮袋粮车给随军粮；军旗 / 营帐 / 景物不会走到这里。 */
   protected propLoot(kind: PropLootKind, x: number, y: number): void {
     const L = PROP_LOOT, rng = this.propRng, now = this.combatNow;
+    this.battleHeal?.onPropBroken(kind, x, y, rng); // 粮袋 / 木箱：概率掉干粮 / 酒肉（data/battleHeal）
     if (kind === 'grain') { this.legion.food += L.grain.food; this.showGrowthNotice('缴获粮草 · 随军粮 +' + L.grain.food); return; }
     if (kind !== 'weapons' && kind !== 'armor' && kind !== 'crate' && kind !== 'coins') return;
     const c = L[kind];
@@ -3777,6 +3790,7 @@ export class GameScene extends Phaser.Scene {
           this.showWaveBanner(name + ' 授首', false, '副将倒下 · 军略 +1'); this.sfx.play('gong');
           for (let i = 0; i < 6; i++) { const a = i / 6 * Math.PI * 2; this.spawnGem(x + Math.cos(a) * 26, y + Math.sin(a) * 16, 4); }
           if (this.phasePlan) this.ensurePicks(this.phasePlan.phases.length - 1);
+          this.battleHeal?.onLieutenantDown(x, y); // 副将必掉一份军中伤药
           this.bountyLieutenant();
         },
       }, plan);
@@ -3786,7 +3800,7 @@ export class GameScene extends Phaser.Scene {
       this.fortunes = new BattleFortunes({
         scene: this, player: () => this.player, elapsed: () => this.elapsed, chapter: () => plan.chapter,
         // 远处刷点：夹进场地、挪出墙 / 营栅 / 房子，再避开水与树（2026-11-19 用户「不可以太近……不刷进墙里」）
-        place: (x, y) => { let p = { x, y }; if (this.arena) p = this.arena.clampPoint(p.x, p.y); const fp = this.sishuiObstacles?.footprints; if (fp?.length) { const f = freeSpawn(fp, p.x, p.y, 48, this.player); p = { x: f.x, y: f.y }; if (this.arena) p = this.arena.clampPoint(p.x, p.y); } if (this.terrain) p = this.terrain.free(p.x, p.y, 48); return p; },
+        place: (x, y) => this.fieldPlace(x, y),
         spawn: (kind, x, y) => this.spawnEnemy(kind, x, y, this.chapter.hpScale(this.elapsed), true),
         officerTexture: () => this.chapter.enemies.elite.walkVisual?.texture ?? 'enemy_officer_walk_sheet',
         riderTexture: () => this.chapter.enemies.cavalry.walkVisual?.texture ?? 'enemy_cavalry_walk_sheet',
@@ -3803,6 +3817,7 @@ export class GameScene extends Phaser.Scene {
       }, plan);
       this.hudTexts.wave.setVisible(false);
     } else { this.hudTexts.wave.setVisible(true); this.hudTexts.timer.setY(22); this.hudTexts.chapter.setY(56); }
+    this.battleHeal?.setPlan(this.phasePlan);
     this.phasedFor = this.chapter;
   }
   /** 新卡池（五段主线关才有）：战法位按章节概率换新卡（systems/LevelCards）。 */
@@ -4225,6 +4240,9 @@ export class GameScene extends Phaser.Scene {
         .on('pointerdown', () => this.togglePause()),
     };
     attrBadge(this, 196, 31, this.runConfig.character, 20, { scrollFactor: 0, depth: DEPTH.hud + 2 })?.setName('hud-attr-badge'); // 主将主属性印（ui/AttrBadge.ts）
+    // 2026-11-19 用户「这里ui做一下」：电脑版左上换成漆金状态框（头像 / 名字 + 等级印 + 主属性印 / 铜框朱红血条 + 残血拖尾 / 细金经验条）；
+    // 旧的「赵云 Lv.N」文字留作数据（测试读），不再显示；HP 数字摆进新血条中央
+    this.hudAttrBadge = undefined; if (IS_DESKTOP) { this.statusFrame?.destroy(); this.statusFrame = new HeroStatusFrame(this, this.runConfig.character, getCharacter(this.runConfig.character).name, DEPTH.hud); this.events.once('shutdown', () => { this.statusFrame?.destroy(); this.statusFrame = undefined; }); }
     this.hudTexts.details = this.add.text(GAME_WIDTH - 24, 94, '战况 ▾', style(13, '#dfcfab'))
       .setOrigin(1,0).setFixedSize(96,62).setAlign('center').setPadding(10,12).setScrollFactor(0).setDepth(DEPTH.hud+1)
       .setVisible(false); // 「战况」下拉已取消（用户反馈不需要）；音效 / 音乐开关改为常驻
@@ -4305,6 +4323,7 @@ export class GameScene extends Phaser.Scene {
     this.buffHud.update(this.player,this.combatNow,!overlay&&!this.over&&!this.relicExpanded,(id,now)=>this.buffProgress(id,now));
     this.hudGfx.setVisible(!overlay);
     if (this.hudTexts) for (const t of Object.values(this.hudTexts)) t.setVisible(!overlay);
+    if (this.statusFrame) { this.statusFrame.setVisible(!overlay); this.hudTexts?.level.setVisible(false); }
     if (this.phasePlan && this.hudTexts) this.hudTexts.wave.setVisible(false);
     this.jinnangButton?.setVisible(!overlay && !this.over && !!this.jinnang); // 五段关不显示「第 x 波」，看顶部战况线
     this.battleTrack?.show(!overlay);
@@ -4316,18 +4335,20 @@ export class GameScene extends Phaser.Scene {
     const xpRatio = this.player ? Phaser.Math.Clamp(this.player.xp / this.player.xpNext, 0, 1) : 0;
     g.clear();
     // Small neutral health backing only; never a screen-wide green curtain.
-    g.fillStyle(0x100e09,.35).fillRoundedRect(20,18,194,60,4);
+    if (!this.statusFrame) g.fillStyle(0x100e09,.35).fillRoundedRect(20,18,194,60,4);
     if(this.relicExpanded) {
       g.fillStyle(0x17150f,.9).fillRoundedRect(20,190,Math.min(410,GAME_WIDTH-40),180,4);
       g.lineStyle(1,WAR.gold,.45).strokeRoundedRect(20,190,Math.min(410,GAME_WIDTH-40),180,4);
     }
     // Stable HUD regions: health, clock, touch controls, then wave/resources.
 
+    if (!this.statusFrame) { // 手机布局：原扁平条
     g.fillStyle(0x07120d,.95).fillRect(27,42,180,18);
     g.fillStyle(WAR.danger,.95).fillRect(29,44,Math.round(176*hpRatio),14);
     g.lineStyle(1,0xd5b887,.55).strokeRect(27,42,180,18);
     g.fillStyle(0x07120d,.9).fillRect(27,66,180,6);
     g.fillStyle(WAR.jade,.95).fillRect(28,67,Math.round(178*xpRatio),4);
+    }
     // 右上角按钮的漆金底板：暂停为金漆，音效 / 音乐为暗漆小牌（原先是无底纹的纯文字，手机上不像按钮）
     if (this.hudTexts) for (const k of ['pause', 'mute', 'music', 'bag'] as const) {
       const t = this.hudTexts[k]; if (!t?.visible) continue;

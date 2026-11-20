@@ -18,12 +18,16 @@ import { attrBadge } from '../ui/AttrBadge';
 import { homeCommand } from '../ui/HomeCommand';
 import { lqHitBox, lqPanel, lqSkin } from '../ui/LacquerKit';
 import { HEADING_FONT } from '../config';
+import { heroHireCost, heroHired, hireHero } from '../systems/RosterStore';
+import { heroUnlocked } from '../systems/HeroUnlocks';
+import { LOCKED_HINT as UNJOINED_HINT } from '../data/heroUnlocks';
+import type { CharacterId } from '../data/characters';
 
 /** 普通招募武将（内部 kind = 'common'）对玩家显示的称呼（用户 2026-11-17：不叫「大众脸」，改三国风；候选 无名之辈 / 偏裨之将 / 庸碌之将，待用户定）。 */
 export const COMMON_LABEL = '无名之辈';
 /** 电脑版左右边距（2026-11-18 用户截图：标题、军粮、行框、页签贴着左边）：行框从 MX 起，文字再往里。 */
 const MX = 32;
-type Tab = 'offers' | 'roster';
+type Tab = 'offers' | 'roster' | 'heroes';
 export class TalentHallScene extends Phaser.Scene {
   private tab: Tab = 'offers'; private page = 0; private message = ''; private content?: Phaser.GameObjects.Container; private status!: Phaser.GameObjects.Text;
   constructor() { super('TalentHallScene'); }
@@ -79,6 +83,9 @@ export class TalentHallScene extends Phaser.Scene {
     this.small(D ? MX + 70 : 90, tabY, 140, `人才（${s.offers.length + s.captives.length}）`, () => { this.tab = 'offers'; this.page = 0; this.render(); }, 'talent-tab-offers', true, this.tab === 'offers');
     const men = rosterFollowers(s); // 2026-11-18 用户「主公不应该在这里」：麾下不含主公
     this.small(D ? MX + 70 + 150 : 240, tabY, 140, `麾下（${men.length}）`, () => { this.tab = 'roster'; this.page = 0; this.render(); }, 'talent-tab-roster', true, this.tab === 'roster');
+    // 名将（2026-11-20 用户「解锁是指可以玩到的角色，不是解锁就可以跟随了，需要去招贤那里招」）：可玩武将在这里花军粮招为随从
+    const heroList = CHARACTERS.filter(c => c.id !== s.lord), hirable = heroList.filter(c => heroUnlocked(c.id) && !heroHired(c.id, s)).length;
+    this.small(D ? MX + 70 + 300 : 390, tabY, 140, `名将（可招 ${hirable}）`, () => { this.tab = 'heroes'; this.page = 0; this.render(); }, 'talent-tab-heroes', true, this.tab === 'heroes');
     if (hall < 3) { const c = RECRUIT.hallUpgrade[Math.max(1, hall) - 1]; this.small(W - (D ? MX + 110 : 110), tabY, D ? 220 : 180, `升级招贤馆（${c.provisions} 军粮）`, () => { this.message = upgradeHall().message; this.render(); }, 'talent-hall-up'); }
     const top = tabY + (D ? 26 : 34), bottom = H - (D ? 64 : 104) - 30, rowH = D ? 74 : this.tab === 'roster' ? 118 : 104;
     const per = Math.max(1, Math.floor((bottom - top) / rowH));
@@ -90,8 +97,13 @@ export class TalentHallScene extends Phaser.Scene {
       for (const it of list) rows.push(() => this.offerRow(it.o, it.i, it.captive, at(), rowH - 8));
       // 名将出现率（用户 2026-11-17：Lv1 基本不出名将，升级招贤馆后提高）
       const cost = refreshCost(s), odds = hallOdds(s), pct = (v: number) => `${+(v * 100).toFixed(1)}%`;
-      this.content.add(worldText(this, D ? MX + 4 : 24, bottom + 6, `名将出现率：每席 ${pct(odds.seat)}（可玩名将 ${pct(odds.hero)}）` + (odds.pity ? ` · 再刷 ${odds.pityLeft} 次内必出未归附名将` : ' · 升级招贤馆后提高'), 12, '#b9ceb8').setName('talent-odds'));
+      this.content.add(worldText(this, D ? MX + 4 : 24, bottom + 6, `史事名将出现率：每席 ${pct(odds.seat)} · 升级招贤馆后提高 · 可玩武将在「名将」页直接招募`, 12, '#b9ceb8').setName('talent-odds'));
       this.small(W - (D ? MX + 95 : 100), bottom + 14, D ? 190 : 170, `刷新（${cost} 军粮）`, () => { this.message = manualRefresh().message; this.page = 0; this.render(); }, 'talent-refresh', w.provisions >= cost, true);
+    } else if (this.tab === 'heroes') {
+      // 已解锁未招的排前面，其次已在麾下，最后未归附
+      const rank = (id: CharacterId) => !heroUnlocked(id) ? 2 : heroHired(id, s) ? 1 : 0;
+      for (const c of [...heroList].sort((a, b) => rank(a.id) - rank(b.id))) rows.push(() => this.heroRow(c.id, at(), rowH - 8, s.followers.length, cap, w.provisions));
+      this.content.add(worldText(this, D ? MX + 4 : 24, bottom + 20, '解锁的武将可以选为主将；要当随从（跟着出战）得在这里招募。招到后随行名额有空就直接随行。', 12, '#b9ceb8').setName('talent-heroes-note'));
     } else {
       for (const r of men) rows.push(() => this.rosterRow(r, s.followers.includes(r.id), at(), rowH - 8, rankCap(s)));
       this.content.add(worldText(this, D ? MX + 4 : 24, bottom + 6, `随行 ${s.followers.length}/${cap} · 出战时与主将同名的随行自动留守`, 12, '#b9ceb8'));
@@ -118,6 +130,20 @@ export class TalentHallScene extends Phaser.Scene {
     this.content!.add(worldText(this, tx, y - h / 2 + (D ? 32 : 36), `${q.label} · ${kind}${captive && o.expires !== undefined ? ` · 剩 ${captiveSeasonsLeft(o)} 季` : ''}\n${surrenderMoveLine(o.boss) ? TEMPLATES[o.template].name + ' · ' + surrenderMoveLine(o.boss) : TEMPLATES[o.template].name + '：' + TEMPLATES[o.template].desc}`, 12, '#cdbf9f').setWordWrapWidth(w - size - 150).setName('talent-offer-desc'));
     const cost = captive ? Math.ceil(o.cost * RECRUIT.captiveDiscount) : o.cost;
     this.small(W - x0 - 70, y, 120, `${captive ? '招降' : '招募'} ${cost}粮`, () => { this.message = recruit(i, captive).message; this.render(); }, `talent-${captive ? 'captive' : 'offer'}-${i}`, true, o.kind !== 'common');
+  }
+  /** 「名将」页一行：头像、名字与状态；未归附 → 剪影 + 「尚未归附 · 需劝降招募」；已归附未招 → 「招募 · N 军粮」；已在麾下 → 灰按钮。 */
+  private heroRow(id: CharacterId, y: number, h: number, following: number, cap: number, grain: number) {
+    const D = W > 600, x0 = D ? MX : 16, w = W - x0 * 2, c = getCharacter(id), unlocked = heroUnlocked(id), hired = unlocked && heroHired(id), cost = heroHireCost(id);
+    if (D) { const g = this.add.graphics(); g.fillStyle(0x000000, .35).fillRoundedRect(x0 + 2, y - h / 2 + 3, w, h, 8).fillStyle(0x1b120b, .96).fillRoundedRect(x0, y - h / 2, w, h, 8).lineStyle(1.5, unlocked && !hired ? 0xe0b25a : 0xc9a35e, unlocked ? .9 : .4).strokeRoundedRect(x0, y - h / 2, w, h, 8); this.content!.add(g); } else this.content!.add(panel(this, W / 2, y, w, h));
+    const size = h - 16; this.seal(x0 + 12 + size / 2, y, size, 'orange', c.name.slice(0, 1), unlocked ? c.portrait : undefined);
+    if (!unlocked) { const sh = this.content!.list[this.content!.list.length - 1] as Phaser.GameObjects.Text; sh?.setColor?.('#5a4a36'); }
+    const tx = x0 + 24 + size;
+    this.content!.add(worldText(this, tx, y - h / 2 + 8, unlocked ? c.name : '？？？', D ? 17 : 18, unlocked ? '#f2a24e' : '#8a7a62').setName('talent-hero-name-' + id));
+    const status = !unlocked ? UNJOINED_HINT : hired ? '已在麾下 · 去「麾下」页设随行' : '已归附 · 可选为主将 · 需在此招募才会随行出战';
+    this.content!.add(worldText(this, tx, y - h / 2 + (D ? 32 : 36), status, 12, unlocked ? '#cdbf9f' : '#8a7a62').setName('talent-hero-status-' + id));
+    const label = !unlocked ? '未归附' : hired ? '已在麾下' : `招募 · ${cost} 军粮`, can = unlocked && !hired && grain >= cost;
+    this.small(W - x0 - 90, y, 160, label, () => { const r = hireHero(id); this.message = r.message; this.render(); }, 'talent-hire-' + id, can, unlocked && !hired);
+    void following; void cap;
   }
   private rosterRow(r: Recruit, following: boolean, y: number, h: number, cap: number) {
     const D = W > 600, x0 = D ? MX : 16, w = W - x0 * 2, q = QUALITIES[r.quality];

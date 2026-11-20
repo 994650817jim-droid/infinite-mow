@@ -42,9 +42,10 @@ const n = await M((R, H) => {
   const o = {}; R.setRosterRandom(() => .99); R.manualRefresh(); // 全是无名之辈
   const s0 = R.loadRoster(); o.offer = s0.offers[0]?.kind; o.rec = R.recruit(0); const s1 = R.loadRoster(), nr = s1.owned[s1.owned.length - 1];
   o.newId = nr.id; o.newLv = H.lv(nr.id); o.newName = nr.name; o.cap = R.followerLevelCap();
-  // 可玩名将应募（保底：连刷直到出现可玩名将）
-  let k = 0; while (k < 12 && !R.loadRoster().offers.some(x => x.kind === 'hero')) { R.manualRefresh(); k++; }
-  const s2 = R.loadRoster(), hi = s2.offers.findIndex(x => x.kind === 'hero'), hero = s2.offers[hi]?.hero; o.hero = hero; o.heroRec = R.recruit(hi); o.heroLv = H.lv(hero);
+  // 可玩名将招募（2026-11-20 起不再随机挂牌，改在招贤馆「名将」页直接招：hireHero）；?dev=1 全解锁，挑一位还没在麾下的
+  const hero = ['zhuge', 'huangzhong', 'machao', 'weiyan', 'pangtong', 'huangyueying', 'sunshangxiang', 'diaochan'].find(id => !R.heroHired(id) && !H.hasHeroRecord?.(id)) ?? 'diaochan'; o.hero = hero; // 挑一位还没练过级的（练过的保留原等级）
+  { const w = JSON.parse(localStorage.getItem('im_world_v1')); w.provisions = 99999; localStorage.setItem('im_world_v1', JSON.stringify(w)); }
+  o.heroRec = R.hireHero(hero); o.heroLv = H.lv(hero);
   R.setRosterRandom(); return o;
 });
 ck('新招的无名之辈定在「上限 − 2」级（8 级，不再一来就 20 级）', n.rec.ok && n.newLv === n.cap - 2 && n.newLv === 8, n);
@@ -70,7 +71,9 @@ await p.evaluate(() => { const g = window.__game; for (const s of g.scene.getSce
 await p.waitForFunction(() => window.__game.scene.isActive('TalentHallScene'), null, { timeout: 60000 }); await p.waitForTimeout(700);
 const ui = await p.evaluate(() => {
   const s = window.__game.scene.getScene('TalentHallScene'), c = s.children.list.find(x => x.type === 'Container');
-  const names = c.list.filter(x => x.name === 'talent-roster-name').map(x => x.text), texts = c.list.filter(x => x.type === 'Text').map(x => x.text);
+  const texts = c.list.filter(x => x.type === 'Text').map(x => x.text), names = [];
+  // 开局刘关张赵默认在麾下（2026-11-20）后名单会分页：逐页收集
+  for (let pg = 0; pg < 4; pg++) { s.page = pg; s.render(); const cc = s.children.list.find(x => x.type === 'Container'); for (const x of cc.list) if (x.name === 'talent-roster-name' && !names.includes(x.text)) names.push(x.text); }
   return { names, hint: texts.some(t => t.includes('主公等级随征战提升')), rankBtns: c.list.filter(x => /^talent-rank-/.test(x.name)).length, toDrill: texts.some(t => t.includes('讲武堂「随行操练」')) };
 });
 await p.screenshot({ path: `${out}/follower-cap-desktop.png` });

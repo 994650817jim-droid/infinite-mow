@@ -5,7 +5,6 @@ import { heroAffinity, SCHOOLS } from '../data/schools';
 import { weaponName } from '../data/upgrades';
 import { FONT, HEADING_FONT, TITLE_FONT, GAME_WIDTH as W, GAME_HEIGHT as H, IS_DESKTOP as D } from '../config';
 import { joinedByFallback, markRevealSeen, pendingReveals, realProgress, refreshUnlocks } from '../systems/HeroUnlocks';
-import { grantHero } from '../systems/RosterStore';
 
 /**
  * 「新武将 · 来投」揭幕（hero-unlock-design.md 第三节）：黑底，水墨立轴从墨晕里显出 → 朱印「来投」盖下 →
@@ -16,7 +15,8 @@ const GOLD = '#efd399', IVORY = '#e8d8b2', STROKE = '#120904';
 
 /** 按进度补查来投（本档免费入麾下）并把没看过的揭幕依次弹出。各场景进来 / 告捷时调。 */
 export function checkHeroJoins(scene: Phaser.Scene, done?: () => void): void {
-  try { refreshUnlocks(realProgress(), id => grantHero(id)); } catch { /* 存档不可读：不挡流程 */ }
+  // 2026-11-20 用户：解锁只代表可选为主将；要当随从去招贤馆「名将」页招募（不再免费入麾下）
+  try { refreshUnlocks(realProgress()); } catch { /* 存档不可读：不挡流程 */ }
   showPendingJoins(scene, done);
 }
 /** 依次弹出还没看过的揭幕。 */
@@ -66,11 +66,11 @@ function build(scene: Phaser.Scene, id: CharacterId, onClose: () => void): void 
   const body = txt(x0, D ? 268 : 690, lines.join('\n'), D ? 17 : 17, IVORY).setOrigin(align, 0).setLineSpacing(10).setWordWrapWidth(D ? W * .44 : W - 60).setAlign(D ? 'left' : 'center').setAlpha(0).setName('hero-join-lines');
   root.add(body);
   const aff = heroAffinity(id).map(s => SCHOOLS[s].name).join(' / ');
-  const meta = txt(x0, (D ? 268 : 690) + body.height + 22, `本命：${weaponName(hero.startWeapon, id)}${aff ? '　亲和：' + aff : ''}`, D ? 14 : 14, '#b9a57a').setOrigin(align, 0).setAlpha(0).setName('hero-join-meta');
+  const meta = txt(x0, (D ? 268 : 690) + body.height + 22, `本命：${weaponName(hero.startWeapon, id)}${aff ? '　亲和：' + aff : ''}\n已可选为主将 · 要当随从，往招贤馆「名将」页招募`, D ? 14 : 14, '#b9a57a').setOrigin(align, 0).setAlpha(0).setName('hero-join-meta');
   root.add(meta);
-  // 收入麾下（点按钮 / 回车 / 空格；入场 0.9 秒内不收，免得误点）
+  // 确认（点按钮 / 回车 / 空格；入场 0.9 秒内不收，免得误点）。2026-11-20 起归附 = 可选为主将，不再直接入麾下
   const bx = D ? cx - 20 : W / 2, by = D ? H - 64 : H - 120;
-  const btn = txt(bx, by, '收入麾下', 20, '#f6e6c2', HEADING_FONT).setOrigin(.5).setPadding(26, 10).setBackgroundColor('#5a2418').setStroke(STROKE, 0).setInteractive({ useHandCursor: true }).setAlpha(0).setName('hero-join-ok');
+  const btn = txt(bx, by, '准其归附', 20, '#f6e6c2', HEADING_FONT).setOrigin(.5).setPadding(26, 10).setBackgroundColor('#5a2418').setStroke(STROKE, 0).setInteractive({ useHandCursor: true }).setAlpha(0).setName('hero-join-ok');
   root.add(btn);
   const t0 = performance.now(); let closed = false;
   const close = (): void => {

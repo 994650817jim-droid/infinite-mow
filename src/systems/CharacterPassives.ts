@@ -1,4 +1,5 @@
 import type { Enemy } from '../entities/Enemy';
+import { LVBU } from '../data/lvbu';
 import type { CharacterId } from '../data/characters';
 import type { WeaponId } from '../types';
 import { CHARACTER_PASSIVES, PASSIVE_RULES as R } from '../data/passives';
@@ -51,12 +52,18 @@ export class CharacterPassives {
   private guardUntil = -Infinity;
   /** 马超锦马冲锋：冲锋中无敌截止、冲锋后「铁骑余威」减伤截止。 */
   private chargeInvulnUntil = -Infinity; chargeGuardUntil = -Infinity;
+  /** 吕布「无双」：人中吕布截止；分支「人中吕布」时每次击杀延长多少（武器每帧写入）。 */
+  private wsUntil = -Infinity; private wsStart = -Infinity; lvbuExtendMs = 0;
+  isWushuang(now: number): boolean { return !this.stopped && this.character === 'lvbu' && now < this.wsUntil; }
+  wushuangLeft(now: number): number { return this.isWushuang(now) ? this.wsUntil - now : 0; }
+  /** 测试 / 开发：立刻进入人中吕布。 */
+  grantWushuang(now: number): void { if (this.stopped || this.character !== 'lvbu') return; this.stacks = 0; this.wsStart = now; this.wsUntil = now + LVBU.frenzyMs; this.triggers++; }
   /** 孙尚香最近一次移动的时间（移动中掷刀更快）。 */
   private lastMoveAt = -Infinity;
   constructor(character: CharacterId = 'zhaoyun', now = 0) { this.reset(character, now); }
   reset(character: CharacterId, now: number): void {
     this.character = character; this.stacks = 0; this.lastGain = -Infinity; this.charmKillAt = -Infinity; this.lastDamage = now; this.sharpUntil = -Infinity; this.sharpMs = HZ_SHARP.sharpMs; this.hurtDropAt = -Infinity; this.surroundAcc = 0; this.stars.clear(); this.bazhen = []; this.stageKills = 0; this.sharpEliteKills = 0;
-    this.generation++; this.stopped = false; this.gains = 0; this.triggers = 0; this.burns.clear(); this.charms.clear(); this.crowdStar = { marks: 0, last: -Infinity }; this.guardUntil = -Infinity; this.chargeInvulnUntil = this.chargeGuardUntil = -Infinity;
+    this.generation++; this.stopped = false; this.gains = 0; this.triggers = 0; this.burns.clear(); this.charms.clear(); this.crowdStar = { marks: 0, last: -Infinity }; this.guardUntil = -Infinity; this.wsUntil = this.wsStart = -Infinity; this.chargeInvulnUntil = this.chargeGuardUntil = -Infinity;
   }
   get characterId(): CharacterId { return this.character; }
   stop(): void { this.stopped = true; this.stacks = 0; this.generation++; this.burns.clear(); this.charms.clear(); this.stars.clear(); this.crowdStar = { marks: 0, last: -Infinity }; this.bazhen = []; this.chargeInvulnUntil = this.chargeGuardUntil = -Infinity; }
@@ -212,6 +219,11 @@ export class CharacterPassives {
     if (this.stopped) return;
     this.stageKills++;
     if ((kind === 'elite' || kind === 'boss') && this.isSharpshooter(now)) this.sharpEliteKills++;
+    // 吕布「无双」：击杀积战意；满了人中吕布；人中吕布中（分支「人中吕布」）击杀延长，最多延到开始后 frenzyMs + extendCap
+    if (this.character === 'lvbu') {
+      if (this.isWushuang(now)) { if (this.lvbuExtendMs > 0) this.wsUntil = Math.min(this.wsUntil + this.lvbuExtendMs, this.wsStart + LVBU.frenzyMs + LVBU.renzhong.extendCapMs); }
+      else { this.stacks++; this.gains++; if (this.stacks >= LVBU.need) this.grantWushuang(now); }
+    }
   }
   get kills(): number { return this.stageKills; }
   get sharpEliteKillCount(): number { return this.sharpEliteKills; }
@@ -284,7 +296,7 @@ export class CharacterPassives {
   }
   snapshot(now: number) {
     return { character: this.character, stacks: this.character === 'zhuge' ? this.starTop(now) : this.stacks, maxStacks: this.maxStacks,
-      ready: !this.stopped && (this.character === 'huangzhong' ? this.isSharpshooter(now) : (this.character === 'zhuge' ? this.starTop(now) : this.stacks) === this.maxStacks),
+      ready: !this.stopped && (this.character === 'lvbu' ? this.isWushuang(now) : this.character === 'huangzhong' ? this.isSharpshooter(now) : (this.character === 'zhuge' ? this.starTop(now) : this.stacks) === this.maxStacks),
       // 黄忠：神射中为剩余时间比例，否则为蓄势比例（PassiveHud 进度条）
       calmProgress: this.stopped || this.character !== 'huangzhong' ? 0 : this.isSharpshooter(now) ? this.sharpLeft(now) / this.sharpMs : this.stacks / HZ_SHARP.need,
       critBonus: this.critBonus(now), guandaoRangeMul: this.rangeMultiplier('guandao'), burns: this.burns.size, charms: this.charms.size, turned: [...this.charms.values()].filter(c => c.turnedUntil > now).length, gains: this.gains, triggers: this.triggers, stopped: this.stopped };
@@ -292,6 +304,7 @@ export class CharacterPassives {
   label(now: number): string {
     const name = CHARACTER_PASSIVES[this.character].name;
     if (this.character === 'zhuge') return `${name} · 星象 ${this.starTop(now)}/${ZG_TIANHUO.starNeed}${this.starTop(now) >= ZG_TIANHUO.starNeed ? ' · 下一发算无遗策' : ''}`;
+    if (this.character === 'lvbu') return this.isWushuang(now) ? `${name} · 人中吕布 ${(this.wushuangLeft(now) / 1000).toFixed(1)}秒：每击两次 · 移速攻速 +40%` : `${name} · 战意 ${this.stacks}/${LVBU.need}`;
     if (this.character === 'huangzhong') return this.isSharpshooter(now) ? `${name} · 神射 ${(this.sharpLeft(now) / 1000).toFixed(1)}秒：暴击+10% / 重箭爆裂` : `${name} · 蓄势 ${this.stacks}/${HZ_SHARP.need}`;
     return `${name} · ${this.character === 'zhaoyun' ? '龙胆' : this.character === 'guanyu' ? '武势' : this.character === 'zhangfei' ? '怒气' : this.character === 'huangyueying' ? '机括' : this.character === 'pangtong' ? '计策' : this.character === 'liubei' ? '仁德' : this.character === 'weiyan' ? '拒敌' : this.character === 'machao' ? '铁骑' : this.character === 'sunshangxiang' ? '疾步' : this.character === 'diaochan' ? '舞势' : '星象'} ${this.stacks}/${this.maxStacks}${this.snapshot(now).ready ? ' · 下次强化' : ''}${this.character === 'diaochan' && this.snapshot(now).turned ? ` · 离间${this.snapshot(now).turned}` : ''}${this.character === 'weiyan' && this.damageTakenMultiplier(now) < 1 ? ' · 谁敢杀我' : ''}`;
   }

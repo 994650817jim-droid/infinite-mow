@@ -117,7 +117,12 @@ const D5 = 587.33, F5 = 698.46, A5 = 880, C6 = 1046.5, D6 = 1174.66;
 const RECIPES: Record<string, (v: Voice, t: number, p: number) => number> = {
   ...ATTACK_SFX,
   ...CONTENT_SFX,
-  hitLight: (v, t, p) => { v.noise(t, .045, 'bandpass', 1900 * p, .06, 900, 1.2); v.tone(t, .06, 'sine', 190 * p, .05, 90); return .07; },
+  // 音效审计（2026-11-19）：割草最常响的一声，原来只有一种，长时间听单调——三种质感随机挑（短刃 / 钝击 / 皮甲），各自再叠随机音高
+  hitLight: (v, t, p) => { const k = Math.floor(Math.random() * 3);
+    if (k === 0) { v.noise(t, .045, 'bandpass', 1900 * p, .06, 900, 1.2); v.tone(t, .06, 'sine', 190 * p, .05, 90); }
+    else if (k === 1) { v.noise(t, .05, 'lowpass', 1100 * p, .06, 400); v.tone(t, .07, 'sine', 150 * p, .055, 75); }
+    else { v.noise(t, .035, 'bandpass', 2600 * p, .045, 1400, 1.6); v.noise(t + .01, .04, 'lowpass', 700 * p, .04, 300); v.tone(t, .05, 'triangle', 210 * p, .03, 120); }
+    return .07; },
   hitHeavy: (v, t, p) => { v.noise(t, .08, 'lowpass', 1200 * p, .08, 300); v.tone(t, .11, 'sine', 140 * p, .07, 55); return .12; },
   hitArrow: (v, t, p) => { v.noise(t, .03, 'highpass', 3200 * p, .05); v.tone(t, .03, 'triangle', 1500 * p, .025, 900); return .04; },
   hitFire: (v, t, p) => { v.noise(t, .14, 'bandpass', 700 * p, .07, 1600, .8); v.noise(t + .03, .08, 'highpass', 2500, .03); return .17; },
@@ -147,7 +152,8 @@ const RECIPES: Record<string, (v: Voice, t: number, p: number) => number> = {
   level: (v, t) => { [D5, F5, A5, D6].forEach((f, i) => v.pluck(t + i * .07, f, .05, .45)); return .7; },
   win: (v, t) => { v.metal(t, 130, .06, 2); [D5, F5, A5, C6, D6].forEach((f, i) => v.pluck(t + .15 + i * .09, f, .05, .6)); return 2; },
   lose: (v, t) => { v.drum(t, 90, 40, .2, .7); [A5, F5, D5].forEach((f, i) => v.pluck(t + .2 + i * .22, f / 2, .05, .8)); return 1.1; },
-  uiClick: (v, t) => { v.tone(t, .035, 'sine', 1150, .045, 900); v.noise(t, .015, 'highpass', 3500, .025); return .04; },
+  // 音效审计：原来是电子「嘀」，改成木鱼 / 竹板质感（短促木头声 + 一点空腔共鸣），贴古风
+  uiClick: (v, t) => { v.tone(t, .05, 'sine', 820, .05, 700); v.tone(t, .03, 'triangle', 1640, .015, 1500); v.noise(t, .012, 'bandpass', 2200, .025, 2200, 2.5); return .06; },
   recruit: (v, t) => { v.drum(t, 150, 70, .16, .25); v.drum(t + .13, 150, 70, .12, .2); v.metal(t + .1, 1180, .012, .3); return .5; },
   purchase: (v, t) => { v.metal(t, 1560, .018, .25); v.metal(t + .09, 2080, .016, .3); return .45; },
   wallRise: (v, t) => { v.noise(t, .55, 'lowpass', 260, .16, 120); v.tone(t, .45, 'sine', 70, .1, 38); v.noise(t + .08, .2, 'bandpass', 900, .05, 500, 1.2); return .56; },
@@ -212,7 +218,9 @@ export class Sfx {
       this.ctx = new Ctor();
       this.master = this.ctx.createGain();
       this.master.gain.value = this.volume * 1.25;
-      this.master.connect(this.ctx.destination);
+      // 音效总线轻压缩（音效审计：多个重击同一刻叠加时只压峰值、不削波；平时几乎不动作）
+      const comp = this.ctx.createDynamicsCompressor(); comp.threshold.value = -10; comp.knee.value = 6; comp.ratio.value = 4; comp.attack.value = .003; comp.release.value = .12;
+      this.master.connect(comp); comp.connect(this.ctx.destination);
     }
     void this.ctx.resume();
   }

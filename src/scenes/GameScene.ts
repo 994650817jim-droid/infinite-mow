@@ -2490,7 +2490,7 @@ export class GameScene extends Phaser.Scene {
   protected bossFeelHit(boss: Enemy, damage: number, crit: boolean, hpBefore: number, time: number): void {
     const st = this.bossStagger, after = boss.hp / boss.maxHp;
     st.track(boss.spawnId, hpBefore); st.hold(performance.now());
-    if (hpBefore > .5 && after <= .5 && boss.hp > 0) this.hitFeel.bossPhase();
+    if (hpBefore > .5 && after <= .5 && boss.hp > 0) { this.hitFeel.bossPhase(); this.sfx.play('bossPhase'); } // 音效审计：转阶段原来无声
     if (boss.hp > 0 && st.hit(damage, boss.maxHp, crit)) this.bossBreak(boss, time);
   }
   /** 破势：硬直 BOSS_FEEL.breakMs、朝远离主将方向后退、盔甲抖动、「破势！」字样、短顿帧 + 中震。 */
@@ -2527,6 +2527,7 @@ export class GameScene extends Phaser.Scene {
     }
     return this.player;
   }
+  private killWindowAt = 0; private killWindowN = 0;
   protected killEnemy(enemy: Enemy): void {
     if (this.dzLubu?.preventKill(enemy)) return; // 2-3 吕布打到底不死：锁血逃走
     if (!this.persuadeKill && this.fortunes?.preventKill(enemy)) return; // 机缘降将：试阵中打到底不死，跪地请降
@@ -2564,8 +2565,11 @@ export class GameScene extends Phaser.Scene {
     if(this.player.growth.gear.specials.includes('bloodthirst')&&this.combatNow>=this.player.growth.killHealAt){this.player.growth.killHealAt=this.combatNow+500;this.player.heal(this.player.maxHp*.01);}
     const jade=this.player.growth.charmLegend.army_jade;if(jade!==undefined&&this.combatNow>=this.relicHealAt){const k=CHARM_LEGEND.charm_army_jade.heal[jade];this.relicHealAt=this.combatNow+1000;this.player.heal(k);this.artEffects.show(5,this.player.x,this.player.y-12,35,this.combatNow,260);for(const u of this.allies.filter(u=>u.active&&u.hp<u.maxHp).slice(0,2)){u.hp=Math.min(u.maxHp,u.hp+2*k);this.artEffects.show(5,u.x,u.y-10,30,this.combatNow,260);}}
     this.sfx.play('enemyDie'); this.sfx.play('killThud'); // 击杀加一层闷响（节流）
+    // 割草多杀分层（音效审计：一刀砍倒 8 个和 1 个原来一个声）：0.18 秒内累计 ≥4 杀加 killBurst、≥10 杀加 killSweep（各自节流）
+    { const nowMs = performance.now(); if (nowMs - this.killWindowAt > 180) { this.killWindowAt = nowMs; this.killWindowN = 0; } this.killWindowN++;
+      if (this.killWindowN === 10) this.sfx.play('killSweep'); else if (this.killWindowN === 4) this.sfx.play('killBurst'); }
     if (kind === 'elite') { this.hitFeel.hitStop(HIT_FEEL.eliteKillStopMs); this.hitFeel.shake('small'); }
-    if (kind === 'boss' && !this.persuadeKill && !retreat) { this.hitFeel.bossDeath(); this.sfx.play('bossHit'); } // 击杀首领：0.5 秒慢动作 + 强震，之后照常倒地 / 宝箱
+    if (kind === 'boss' && !this.persuadeKill && !retreat) { this.hitFeel.bossDeath(); this.sfx.play('bossFall'); } // 击杀首领：0.5 秒慢动作 + 强震，之后照常倒地 / 宝箱
     if (dualRes?.order === 'first') { this.persuadeKill = false; return; } // 双首领先了结的一位：不掉宝箱、不结算
     if (kind === 'boss') {
       const index=this.chasingBosses.findIndex(t=>t.enemy===enemy&&t.life===enemy.spawnId);
@@ -4005,7 +4009,7 @@ export class GameScene extends Phaser.Scene {
     playSheet(this, 'fx_awaken_' + b.school, P.x, P.y - 20, { size: 340, ms: 1100, depth: DEPTH.fx, add: true });
     const t = this.add.text(GAME_WIDTH / 2, GAME_HEIGHT * .36, b.finalName, { fontFamily: HEADING_FONT, fontSize: '46px', color: '#ffe08a', stroke: '#2a1206', strokeThickness: 7, resolution: 2 }).setOrigin(.5).setScrollFactor(0).setDepth(DEPTH.overlay - 2).setName('branch-final-title').setScale(1.4).setAlpha(0);
     this.tweens.add({ targets: t, scale: 1, alpha: 1, duration: 260, ease: 'Back.easeOut', onComplete: () => this.tweens.add({ targets: t, alpha: 0, delay: 1400, duration: 500, onComplete: () => t.destroy() }) });
-    this.hitFeel.shake('medium'); this.sfx.play('gong');
+    this.hitFeel.shake('medium'); this.sfx.play('promote');
   }
   /** 战场机缘各类事件的奖励（stage-event-rewards.md）；mult = 距离倍率 1–1.25。返回横幅小字。 */
   private fortuneReward(kind: FortuneEventKind, mult: number, x: number, y: number): string {

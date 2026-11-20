@@ -204,7 +204,7 @@ export class BattleHeal {
         f.flying = true; const step = Math.min(d, F.flySpeed * dt); f.x += (P.x - f.x) / (d || 1) * step; f.y += (P.y - 10 - f.y) / (d || 1) * step;
         if (d <= F.eatR) {
           const amount = P.maxHp * f.ratio; P.heal(amount); this.stats.food += f.ratio; this.stats.foodEaten++;
-          f.active = false; f.img.setVisible(false); this.h.sfx('pickup');
+          f.active = false; f.img.setVisible(false); this.h.sfx('healPickup');
           playSheet(this.h.scene, 'fx_heal_fushui', P.x, P.y - 16, { size: 64, depth: actorDepth(P.y) + .1, ms: 520, alpha: .85, tint: 0xd8ffc8 });
           continue;
         }

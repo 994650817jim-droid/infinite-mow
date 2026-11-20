@@ -189,7 +189,7 @@ export class BattlefieldSupplies {
   if(crate.env){const env=crate.env;crate.env=undefined;this.onEnvBroken?.(enemy,env);return;}
   {const kind=propLootKind(enemy.sprite.texture.key,Number(enemy.sprite.frame.name),!!crate.heal);if(kind!=='none'&&kind!=='heal')this.onPropLoot?.(kind,enemy.x,enemy.y);}
   const material=crate.heal==='herb'?0:crate.frame===18?1:crate.frame===29||crate.frame===30||crate.frame===32||crate.frame===33?2:crate.frame<10||crate.frame===34?3:0;
-  if(crate.frame===35||crate.frame===30){const index=this.fires.findIndex(f=>!f.active);if(index>=0){const fire=this.fires[index];fire.x=enemy.x;fire.y=enemy.y;fire.started=this.now();fire.nextHit=this.now()+640;fire.active=true;fire.tripod=enemy.sprite.texture.key.startsWith('sishui_props')||crate.frame===30;
+  if(crate.frame===35||crate.frame===30){(this.scene as unknown as {sfx?:{play(k:string):void}}).sfx?.play('brazierBreak');const index=this.fires.findIndex(f=>!f.active);if(index>=0){const fire=this.fires[index];fire.x=enemy.x;fire.y=enemy.y;fire.started=this.now();fire.nextHit=this.now()+640;fire.active=true;fire.tripod=enemy.sprite.texture.key.startsWith('sishui_props')||crate.frame===30;
     if(fire.tripod){this.remains.push({x:enemy.x,y:enemy.y,size:enemy.sprite.displayWidth*.8,row:2,at:this.now()+440});this.nextDebrisCheck=0;const fx=this.breakFx.find(f=>!f.active);if(fx){fx.active=true;fx.start=this.now();fx.row=2;fx.image.setTexture('prop_break_fx',12).setPosition(enemy.x,enemy.y).setOrigin(.5,.85).setDisplaySize(85,85).setAlpha(1).setVisible(true);}this.brazierBreak[index].setVisible(false);}
     else this.brazierBreak[index].setTexture('brazier_breaking',0).setPosition(enemy.x,enemy.y).setOrigin(.5,.92).setDisplaySize(92,92).setVisible(true);
   }return;}

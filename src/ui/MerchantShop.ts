@@ -197,7 +197,7 @@ export class MerchantShop{
  private doSell(uids:string[]){
   const ch=this.chapterNo(),sold=sellItems(uids),m=sold.reduce((n,i)=>n+sellPrice(i,ch),0);
   if(m)this.o.wallet.gain!(m);for(const u of uids)this.sel.delete(u);
-  this.o.sound?.('purchase');this.o.notice(sold.length?'卖出 '+sold.length+' 件兵装 · '+this.o.wallet.name+' +'+m:'没有卖出（穿着的或首领遗珍不收）');this.o.changed();
+  this.o.sound?.('shop_sell');this.o.notice(sold.length?'卖出 '+sold.length+' 件兵装 · '+this.o.wallet.name+' +'+m:'没有卖出（穿着的或首领遗珍不收）');this.o.changed();
  }
  hideTip(){this.tip?.hide();}
  destroy(){if(this.tip!==this.o.tooltip)this.tip?.destroy();this.tip=undefined;}

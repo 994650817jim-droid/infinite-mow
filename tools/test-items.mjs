@@ -65,7 +65,7 @@ const hint2 = await p.evaluate(async G0 => {
   return out;
 }, G);
 ck('武将 Lv.4 面板提示', /武将 Lv.4/.test(hint2.even), hint2);
-ck('属性面板：点数用完时提示「武将每升 1 级获得 1 点」', /武将每升 1 级获得 1 点/.test(hint2.panel), hint2);
+ck('属性面板：点数用完时提示怎么得点（2026-11-20：现为「Lv25 前每级 1 点、之后每 2–3 级 1 点」）', /属性点已用完/.test(hint2.panel) && /每级 1 点/.test(hint2.panel), hint2);
 
 // 2) 掉落与拾取
 const drops = await p.evaluate(async G0 => {
@@ -91,7 +91,7 @@ const drops = await p.evaluate(async G0 => {
 }, G);
 ck('普通敌必定掉落（rng=0）：地上出现带光柱的白色道具', drops.ground === 1 && drops.groundQ === 'white' && drops.dropVisible, drops);
 ck('走近自动拾取：收入本局缴获，弹出品质色名字', drops.picked === 1 && drops.groundAfter === 0 && /^获得 · 白 · /.test(drops.text ?? ''), drops);
-ck('首领击杀必得至少蓝色兵装（直接收入）', drops.boss.length >= 1 && drops.boss.every(q => ['blue', 'purple', 'orange'].includes(q)), drops);
+ck('首领击杀必得兵装（直接收入），不出白（第一档首领表 55% 绿 / 45% 蓝，data/items WEIGHTS.boss）', drops.boss.length >= 1 && drops.boss.every(q => q !== 'white'), drops);
 ck('宝箱：走近打开，掉 1–2 件至少绿色，再走近拾取', drops.chestVisible && drops.chestOpened && drops.chestItems.length >= 1 && drops.chestItems.length <= 2 && drops.chestItems.every(q => q !== 'white') && drops.total === 1 + drops.boss.length + drops.chestItems.length, drops);
 await p.screenshot({ path: `${out}/mobile-battle-pickup.png` });
 
@@ -214,9 +214,11 @@ await p.screenshot({ path: `${out}/mobile-home-bag.png` });
 await p.evaluate(async M0 => { const m = eval(M0), bag = m.children.getByName('item-bag'); const c1 = window.__find(bag, 'item-cell-1'); c1 && window.__tap(c1); await new Promise(r => setTimeout(r, 150)); }, M);
 await p.screenshot({ path: `${out}/mobile-home-bag-detail.png` });
 const salv = await p.evaluate(async M0 => { const m = eval(M0), st = await window.__mod('/src/systems/ItemStore.ts'); let bag = m.children.getByName('item-bag'); window.__find(bag, 'item-detail')?.list[0]?.emit('pointerdown'); await new Promise(r => setTimeout(r, 100));
-  const before = st.loadItems().bag.length; bag = m.children.getByName('item-bag'); window.__find(bag, 'item-salvage-low').emit('pointerdown'); await new Promise(r => setTimeout(r, 150));
-  const after = st.loadItems(); return { before, after: after.bag.length, low: after.bag.filter(i => (i.quality === 'white' || i.quality === 'green') && !st.equippedBy(after, i.uid)).length, notice: window.__find(m.children.getByName('item-bag'), 'item-notice')?.text }; }, M);
-ck('一键分解白 / 绿（已穿戴的保留），返还军粮', salv.after < salv.before && salv.low === 0 && /军粮 \+\d+/.test(salv.notice ?? ''), salv);
+  // 2026-11-19 用户「分解不需要背包，可以去军需商人卖装备」：行囊里没有分解按钮；卖白 / 绿走商人出售（界面流程见 test-merchant-sell）
+  bag = m.children.getByName('item-bag'); const names = []; const walk = l => { for (const o of l) { if (o.name) names.push(o.name); if (o.list) walk(o.list); } }; walk(bag.list);
+  const s0 = st.loadItems(), before = s0.bag.length, low = st.sellableItems(s0).filter(i => i.quality === 'white' || i.quality === 'green').map(i => i.uid), worn = s0.bag.filter(i => st.equippedBy(s0, i.uid)).length;
+  const sold = st.sellItems(low), after = st.loadItems(); return { noSalvage: !names.some(n => /^item-salvage/.test(n)) /* 旧物卡的「全部分解」（item-legacy-salvage）另算 */, before, after: after.bag.length, sold: sold.length, wanted: low.length, worn, wornAfter: after.bag.filter(i => st.equippedBy(after, i.uid)).length, low: after.bag.filter(i => (i.quality === 'white' || i.quality === 'green') && !st.equippedBy(after, i.uid)).length }; }, M);
+ck('行囊里没有「分解」；白 / 绿改为卖给军需商人：卖出后离开行囊，已穿戴的不在出售之列', salv.noSalvage && salv.wanted > 0 && salv.sold === salv.wanted && salv.after === salv.before - salv.sold && salv.low === 0 && salv.wornAfter === salv.worn, salv);
 await p.evaluate(M0 => window.__find(eval(M0).children.getByName('item-bag'), 'item-bag-close').emit('pointerdown'), M);
 ck('关闭行囊', await p.evaluate(M0 => !eval(M0).children.getByName('item-bag'), M));
 await p.screenshot({ path: `${out}/mobile-home.png` });

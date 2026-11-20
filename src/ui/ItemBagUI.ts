@@ -217,7 +217,7 @@ export class ItemBagUI {
       const owner = loot ? undefined : equippedBy(s, item.uid);
       if (owner) this.text(ix - cell / 2 + 3, iy + cell / 2 - 3, (ownerName(owner).slice(0, 1) || '装'), 11, '#1c140a').setOrigin(0, 1).setBackgroundColor('#d7b46a').setPadding(2, 0);
     });
-    if (!list.length) this.text(gx + gw / 2, gridTop + 60, '行囊空空\n战斗中击败精锐、首领、打开宝箱可得兵装', 15, '#9c8c6c').setOrigin(.5).setAlign('center');
+    // 行囊为空时不在格子上写提示（用户：「不需要这个字」）
     const pageY = y0 + ph - (D ? 36 : 44);
     this.button(gx + 30, pageY, '‹', 'item-page-prev', () => { this.page = Math.max(0, this.page - 1); this.render(); }, { disabled: this.page === 0, size: 16 });
     this.text(gx + 82, pageY, `${this.page + 1} / ${pages}`, 14, '#cdb98a').setOrigin(.5).setName('item-page');
@@ -408,7 +408,7 @@ export class ItemBagUI {
       const owner = loot ? undefined : equippedBy(s, item.uid);
       if (owner) tile.add(sc.add.text(-cell / 2 + 3, cell / 2 - 3, (ownerName(owner).slice(0, 1) || '装'), { fontFamily: FONT, fontSize: '11px', color: '#1c140a', backgroundColor: '#d7b46a', resolution: 2 }).setOrigin(0, 1).setPadding(2, 0));
     });
-    if (!items.length) this.text(tx + tw / 2, gridTop + 90, '行囊空空\n战斗中击败精锐、首领、打开宝箱可得兵装', 15, '#9c8c6c').setOrigin(.5).setAlign('center');
+    // 行囊为空时不在格子上写提示（用户：「不需要这个字」）
     this.button(tx + 30, pageY, '‹', 'item-page-prev', () => { this.page = Math.max(0, this.page - 1); this.render(); }, { disabled: this.page === 0, size: 16 });
     this.text(tx + 80, pageY, `${this.page + 1} / ${pages}`, 14, '#cdb98a').setOrigin(.5).setName('item-page');
     this.button(tx + 130, pageY, '›', 'item-page-next', () => { this.page = Math.min(pages - 1, this.page + 1); this.render(); }, { disabled: this.page >= pages - 1, size: 16 });

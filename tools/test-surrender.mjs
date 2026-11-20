@@ -35,6 +35,9 @@ try {
         zhouyu0: M.surrenderOdds(d('nanjun-2:zhouyu'), base).blocked, zhouyu1: pct('nanjun-2:zhouyu', { surrendered: ['chengpu'] }),
         neverTiers: ['hulao-1:huaxiong', 'guandu-2:yanliang', 'guandu-2:wenchou', 'xiapi-2:gaoshun', 'hebei-4:yuanshao', 'gongsun-3:gongsunzan'].map(k => d(k).tier),
         reasons: M.SURRENDER_DEFS.filter(x => !x.reason).map(x => x.key),
+        // 2026-11-20 统筹定：宁死不降的人不配加成、不写愿降台词（成功率恒 0，写了也不生效）
+        neverDirty: M.SURRENDER_DEFS.filter(x => x.tier === 'never' && (x.yes || x.yesIfSurrendered || x.yesIfLord || x.yesPreIfHero || (x.bonuses ?? []).length)).map(x => x.key),
+        neverNo: ['guandu-2:yanliang', 'guandu-2:wenchou', 'xiapi-2:gaoshun', 'nanzheng-2:wutugu', 'gongsun-3:gongsunzan'].map(k => !!d(k).no),
         recruit: ['典韦', '陈宫', '张任', '庞德', '高览', '太史慈'].map(n => M.recruitableName(n)),
         chunyuBurn: pct('guandu-3:chunyuqiong', { flags: { depotsAllBurned: true } }),
         lubuDiao: pct('lubu-1:lubu', { team: ['zhaoyun', 'diaochan'] }), lubuLiubei: pct('lubu-1:lubu', { lord: 'liubei', team: ['liubei'] }),
@@ -50,6 +53,7 @@ try {
     ck('关系 / 旗标：曹操已降劝夏侯惇 +30、粮仓尽焚劝淳于琼 +15、貂蝉在侧劝吕布 +20、刘备主公劝吕布（+10 −20）', o.wenchouYan === 45 + 2 && o.chunyuBurn === 30 && o.lubuDiao === 35 && o.lubuLiubei === 5, o);
     ck('前置条件（surrender-rules）：夏侯惇要曹操先归附（本场同伴已降也算）、淳于琼要先焚尽粮仓、周瑜要程普先降——没满足时把握 0 并写条件', o.dunBlocked.pct === 0 && /曹操已归附/.test(o.dunBlocked.blocked) && /粮仓/.test(o.chunyuBlocked.blocked) && o.dunPartner && /程普已降/.test(o.zhouyu0) && o.zhouyu1 > 0, o);
     ck('宁死不降改档：华雄、颜良、文丑、高顺、袁绍、公孙瓒；每个首领都写了依据；典韦 / 陈宫 / 张任 / 庞德不进招贤馆，高览 / 太史慈可以', o.neverTiers.every(t => t === 'never') && o.reasons.length === 0 && o.recruit.join() === 'false,false,false,false,true,true', o);
+    ck('宁死不降的人没有加成、没有愿降台词（颜良、文丑、高顺、兀突骨、公孙瓒删去「同伴已降 / 丞相攻心 / 子龙在侧」），只留拒降台词', o.neverDirty.length === 0 && o.neverNo.every(Boolean), { dirty: o.neverDirty, no: o.neverNo });
     ck('上限 90%；必降 100% 不掷骰；宁死不降 0', o.cap === 90 && o.sure.pct === 100 && o.sure.sure && o.never === 0, o);
     ck('主线招降表：39 个首领（含挑战关吕布），可降 3 / 必降 3 / 难降 6 / 宁死不降 13（华雄、颜良、文丑、兀突骨改宁死不降）+ 败退型 3 + 第一章 3 / 剧情 7 / 孟获 1', o.count === 39 && o.tiers.retreat === 3 && o.tiers.can === 3 && o.tiers.sure === 3 && o.tiers.hard === 6 && o.tiers.never === 13 && o.tiers.story === 7 && o.tiers.silent === 3 && o.tiers.meng === 1, o.tiers);
   }

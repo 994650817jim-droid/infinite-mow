@@ -60,10 +60,10 @@ export const SIDE_ROUTES: readonly SideRouteDef[] = [
     open: { arc: 'chibi', stages: 3, hint: '第五章「赤壁之战」平定后开放' }, base: 'chibi', look: 'yiling',
     stages: [
       { name: '江陵外围', kind: 'field', behavior: 2, scenery: 2, waves: ['江岸吴营', '水军跳帮', '程普出阵'], story: '赤壁之后，周瑜移兵来争南郡。江陵城外，吴军水军登岸。',
-        boss: B('chengpu', '程普', '江东老将', 'yiling_sunhuan', 'chibi/caimao', 'sunhuan') },
+        boss: B('chengpu', '程普', '江东老将', 'side_chengpu', 'chibi/caimao', 'sunhuan') },
       { name: '南郡', kind: 'final', behavior: 3, scenery: 3, waves: ['南郡城下', '江东精兵', '周瑜亲至'], story: '周瑜亲督诸军，太史慈为先锋。南郡一战，定荆州归属。',
-        boss: B('zhouyu', '周瑜', '江东都督', 'yiling_luxun', 'chibi/caimao', 'lvmeng', true),
-        partner: B('taishici', '太史慈', '东莱信义之将', 'yiling_zhuran', 'chibi/caochun', 'zhuran', true) },
+        boss: B('zhouyu', '周瑜', '江东都督', 'side_zhouyu', 'chibi/caimao', 'lvmeng', true),
+        partner: B('taishici', '太史慈', '东莱信义之将', 'side_taishici', 'chibi/caochun', 'zhuran', true) },
     ],
     annex: [], specialty: { title: '江东水军', text: '战后粮草收益 +10%', provisions: .1 }, lord: 'zhouyu' },
   { id: 'caowei', name: '中原 · 曹魏', faction: '曹魏', region: '兖州 · 豫州', x: .585, y: .43, props: 3,

@@ -49,7 +49,7 @@ export function beifaGameSceneClass(Base: typeof GameScene, cfg: ArcSceneConfig)
       // 陈仓城墙要进场景碰撞（这关 arcForts 登记是 clear：城门 / 城墙由 ChencangSiege 自己摆，城门可攻破）
       const so = this as unknown as { sishuiObstacles: SishuiObstacles | null }; if (!so.sishuiObstacles) so.sishuiObstacles = new SishuiObstacles([]);
       this.siege = new ChencangSiege({ scene: this, player: s.player, strikes: this.strikes, footprints: so.sishuiObstacles.footprints,
-        spawnGate: (x, y, hp) => sup.spawnGate(x, y, hp, 260),
+        spawnGate: (x, y, hp) => { const g = sup.spawnGate(x, y, hp, 260); if (g) (this as unknown as GameScene).markGate(g); return g; }, // 陈仓城门：所有武器都打、舆图 / 屏外提示
         spawnTower: (x, y, hp) => { const e = sup.spawnCamp(x, y, hp); e?.sprite.setTexture('sishui_props_refined', 1).setOrigin(.5, 1).setDisplaySize(140, 140).setAlpha(1); return e; },
         banner: (t, c) => s.showWaveBanner(t, false, c), sfx: k => s.sfx.play(k),
         timeLeft: () => { const h = this as unknown as { elapsed: number; chapter: { waves: { start: number }[] } }, bt = h.chapter.waves[h.chapter.waves.length - 1].start; return h.elapsed >= bt ? Math.max(0, bt + 60 - h.elapsed) : null; } }, s.combatNow);
@@ -99,7 +99,7 @@ export function beifaGameSceneClass(Base: typeof GameScene, cfg: ArcSceneConfig)
       if (!s.boss || had) return;
       if (this.arcStage === 3 && this.strikes) {
         const host: ArcHost = { scene: this, boss: s.boss, player: s.player, army: s.legion, spawn: (k, x, y, def) => s.spawnEnemy(k, x, y, 1, true, def), def: k => s.chapter.enemies[k] as never, banner: (t, c) => s.showWaveBanner(t, true, c), sfx: k => s.sfx.play(k) };
-        this.simayi = new SimayiBoss(host, cfg.texture('simayi'), s.combatNow, { strikes: this.strikes, placeFort: (x, y, i) => s.env?.placeTent(x, y, `fixed-beifa-fort-${i}`, SMY.fortHp, 3) ?? null });
+        this.simayi = new SimayiBoss(host, cfg.texture('simayi'), s.combatNow, { strikes: this.strikes, placeFort: (x, y, i) => { const f = s.env?.placeTent(x, y, `fixed-beifa-fort-${i}`, SMY.fortHp, 3) ?? null; if (f) (this as unknown as GameScene).markGate(f, 'tent'); return f; } }); // 营垒：所有武器都打、舆图 / 屏外提示、营寨攻坚小营帐档（11-20 平衡模拟 7/17 将拆不完）
         const self = this as unknown as { controller?: { clear(): void } };
         self.controller?.clear(); self.controller = this.simayi; // 换掉 ThirdGameScene 默认挂的 ThirdBoss
       }

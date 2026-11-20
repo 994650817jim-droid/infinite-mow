@@ -30,7 +30,7 @@ export interface BattleHealHost {
 }
 interface Food { img: Phaser.GameObjects.Image; x: number; y: number; until: number; ratio: number; name: string; active: boolean; flying: boolean; born: number }
 interface Spot {
-  kind: HealSpotKind; x: number; y: number; img: Phaser.GameObjects.Image; ring: Phaser.GameObjects.Graphics; label: Phaser.GameObjects.Text;
+  kind: HealSpotKind; x: number; y: number; img: Phaser.GameObjects.Image; ring: Phaser.GameObjects.Graphics; ambAt?: number; label: Phaser.GameObjects.Text;
   arrow: Phaser.GameObjects.Container;
   /** 剩余水量（0–1，乘 spot.charge 的最大生命比例）；冷却到什么时刻（elapsed 秒）。 */
   left: number; readyAt: number; fxAt: number; boss: boolean;
@@ -228,12 +228,11 @@ export class BattleHeal {
       const cool = !ready, R = S.radius, pulse = .45 + .25 * Math.sin(t * 3.4);
       sp.img.setTint(cool ? 0x7f8a90 : 0xffffff).setAlpha(cool ? .82 : 1);
       if (sp.kind === 'herb') sp.img.setFrame(cool ? 1 : 0);
-      const g = sp.ring.clear(), col = cool ? 0x8fa6a0 : 0x7fe0a0;
-      g.fillStyle(col, cool ? .04 : using ? .14 : .08).fillEllipse(sp.x, sp.y, R * 2, R * 1.44).lineStyle(2, col, cool ? .35 : pulse).strokeEllipse(sp.x, sp.y, R * 2, R * 1.44);
-      // 弧：可用时 = 剩余水量，冷却时 = 回满进度
-      const k = cool ? 1 - (sp.readyAt - t) / S.cooldownSec : sp.left;
-      if (k > 0) { g.lineStyle(4, cool ? 0xb8c8c0 : 0xa8ffc8, .9).beginPath(); for (let i = 0; i <= Math.ceil(40 * k); i++) { const a = -Math.PI / 2 + Math.min(i / 40, k) * Math.PI * 2, px = sp.x + Math.cos(a) * R, py = sp.y + Math.sin(a) * R * .72; if (i === 0) g.moveTo(px, py); else g.lineTo(px, py); } g.strokePath(); }
-      sp.label.setText(HEAL_SPOT_NAME[sp.kind] + (cool ? ' · ' + Math.ceil(sp.readyAt - t) + ' 秒后水满' : using ? ' · 回血中' : ' · 站上去回血')).setColor(cool ? '#b8c4c0' : '#c8ffd8');
+      // 用户 2026-11-20「不要这些圈 / 或者换个特效」：不画地面圈和进度弧，改为水面上偶尔泛起手绘符水微光（可用时），剩余水量写在名签上
+      sp.ring.clear();
+      if (!cool && !using && now >= (sp.ambAt ?? 0)) { sp.ambAt = now + 1700; playSheet(this.h.scene, 'fx_heal_fushui', sp.x, sp.y - 6, { size: Math.round(R * 1.1), depth: DEPTH.ground + 3.6, ms: 900, alpha: .45, tint: 0xbff0e0 }); }
+      const left = Math.round(sp.left * 100);
+      sp.label.setText(HEAL_SPOT_NAME[sp.kind] + (cool ? ' · ' + Math.ceil(sp.readyAt - t) + ' 秒后水满' : using ? ' · 回血中 ' + left + '%' : left < 100 ? ' · 站上去回血 · 余 ' + left + '%' : ' · 站上去回血')).setColor(cool ? '#b8c4c0' : '#c8ffd8');
       this.drawArrow(sp, ready && P.alive && P.hp < P.maxHp * S.arrowBelow);
     }
     this.lowHpCheck(t);

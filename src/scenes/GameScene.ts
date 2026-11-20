@@ -159,6 +159,7 @@ import { EnvInteractions } from '../systems/EnvInteractions';
 import { envConfigFor, type Faction } from '../data/envInteractions';
 import { Terrain } from '../systems/Terrain';
 import { attrBadge } from '../ui/AttrBadge';
+import { AttributePanelView } from '../ui/AttributePanelView';
 import { PROP_LOOT, rollPropItem, rollPropQuality, type PropLootKind } from '../data/propLoot';
 import { terrainConfigFor } from '../data/terrain';
 import { stageMapFor } from '../data/stageMaps';
@@ -737,6 +738,8 @@ export class GameScene extends Phaser.Scene {
   protected attributePointsText!: Phaser.GameObjects.Text;
   protected attributeWeaponText!: Phaser.GameObjects.Text;
   protected attributeSummaryText!: Phaser.GameObjects.Text;
+  /** 电脑版「武将修习」面板的新视图（ui/AttributePanelView）；手机仍用旧的四条长条。 */
+  protected attributeView?: AttributePanelView;
   protected attributeRows: Array<{ value: Phaser.GameObjects.Text; button: Phaser.GameObjects.Image; plus: Phaser.GameObjects.Text; pips: Phaser.GameObjects.Graphics; pipX: number; pipY: number; perks?: { prefix: Phaser.GameObjects.Text; chips: Phaser.GameObjects.Text[] }; ink?: { plate: Phaser.GameObjects.NineSlice | null; hover: boolean } }> = [];
 
   protected cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
@@ -1670,9 +1673,11 @@ export class GameScene extends Phaser.Scene {
     // 首领出场：专属锣鼓出场段 + 主题曲（data/bossMusic.ts），并显示名号标题（不暂停战斗）
     const profile = bossProfile(this.chapter.bossName);
     this.music.setBoss(profile);
-    this.announceBoss(profile.title, this.chapter.bossName);
     this.presence?.entrance(boss);
-    this.lordBossBark('bossAppear', !!this.storyDir?.bossIntro(boss.sprite)); // 剧情：首领登场大字台词；主将（HeroBark）接一句
+    // 剧情：首领登场大卡（立绘 + 名号，短暂停顿）；说了就不再弹中间的名号牌，免得名字出两遍（2026-11-20）
+    const introSpoke = !!this.storyDir?.bossIntro(boss.sprite);
+    if (!introSpoke) this.announceBoss(profile.title, this.chapter.bossName);
+    this.lordBossBark('bossAppear', introSpoke); // 主将（HeroBark）接一句
   }
 
   /** 首领名号标题：画面上部一道短墨痕，墨上名号小字 + 名字，约 2.6 秒淡出；不拦截点击、不暂停。
@@ -4595,7 +4600,7 @@ export class GameScene extends Phaser.Scene {
     }
     this.attributePanel=this.add.container(0,0).setScrollFactor(0).setDepth(DEPTH.overlay+1).setVisible(false);
     const attrDim=this.add.rectangle(0,0,GAME_WIDTH,GAME_HEIGHT,0x07120d,.76).setOrigin(0).setInteractive();
-    const attrW=d?600:GAME_WIDTH-32,attrH=d?Math.min(580,GAME_HEIGHT-16):700,attrTop=(GAME_HEIGHT-attrH)/2,attrCx=GAME_WIDTH/2;
+    const attrW=d?880:GAME_WIDTH-32,attrH=d?Math.min(512,GAME_HEIGHT-16):700,attrTop=(GAME_HEIGHT-attrH)/2,attrCx=GAME_WIDTH/2;
     const attrFrameG=this.add.graphics();lqPanel(attrFrameG,attrCx-attrW/2,attrTop,attrW,attrH);
     const attrFrame=this.add.rectangle(attrCx,GAME_HEIGHT/2,attrW,attrH,0x000000,.001).setInteractive();
     const attrTitle=this.add.text(attrCx,attrTop+34,'武将修习 · 属性分配',warText(24,'#e8cf91')).setOrigin(.5);
@@ -4604,6 +4609,7 @@ export class GameScene extends Phaser.Scene {
     this.attributeWeaponText=this.add.text(attrCx,attrTop+104,'',warText(13,'#d3bd86')).setOrigin(.5);
     this.attributeSummaryText=this.add.text(attrCx,attrTop+133,'',{...warText(d?11:12,'#c7d6c8'),align:'center',lineSpacing:3}).setOrigin(.5).setWordWrapWidth(attrW-46);
     this.attributePanel.add([attrDim,attrFrameG,attrFrame,attrTitle,this.attributePointsText,this.attributeWeaponText,this.attributeSummaryText]);
+    this.attributeView=undefined;if(d)for(const o of [attrTitle,this.attributePointsText,this.attributeWeaponText,this.attributeSummaryText])o.setVisible(false); // 电脑版换新视图，旧文字只留着给手机分支用
     const rowH=d?50:66,firstY=attrTop+(d?186:206),rowW=attrW-50;
     // 2026-11-18 用户「关于每个英雄主属性，在加点那里要说出来有什么特殊加成」：主属性一行加高一截，写三行——
     // ①「主属性：敏捷 · 每点效果 ×1.5」②原来的每点效果 ③专精三档（已解锁点亮，未解锁写「再加 X 点」）；整行悬停 / 点按弹完整说明（ui/PrimaryAttrInfo）
@@ -4611,7 +4617,8 @@ export class GameScene extends Phaser.Scene {
     this.attributeRows=[];
     this.attributeTip?.destroy();const attrTip=this.attributeTip=new ItemTooltip(this,DEPTH.overlay+40);
     let rowOffset=0;
-    (Object.keys(ATTRIBUTE_INFO) as AttributeId[]).forEach((id,index)=>{
+    if(d)this.attributeView=new AttributePanelView(this,this.attributePanel,attrTip,{x0:attrCx-attrW/2,y0:attrTop,w:attrW,h:attrH,hero:this.runConfig.character,onAdd:id=>this.attributeAdd(id)});
+    (d?[]:(Object.keys(ATTRIBUTE_INFO) as AttributeId[])).forEach((id,index)=>{
       const isPrimary=primaryAttribute(this.runConfig.character)===id,H=rowH+(isPrimary?primaryExtra:0);
       const y=firstY+index*rowH+rowOffset+(isPrimary?primaryExtra/2:0),left=attrCx-rowW/2;rowOffset+=isPrimary?primaryExtra:0;
       const rowTop=y-(H-8)/2,lineA=isPrimary?rowTop+(d?15:16):y-11,lineB=isPrimary?lineA+(d?21:23):y+12,cy=isPrimary?(lineA+lineB)/2:y;
@@ -4629,7 +4636,7 @@ export class GameScene extends Phaser.Scene {
       const plus=this.add.text(button.x,button.y-1,'+',warText(26,'#ffe9bd')).setOrigin(.5).setStroke('#2a170b',3);
       lqImageButton(this,button,50,44,'gold',plus);
       // 2026-11-18 每个界面最多 1 处水墨笔刷：「＋」用漆底描金方钮（上面的 lqImageButton），笔刷只留给底部「返回」
-      button.on('pointerdown',()=>{const g=this.player.growth;if(g.allocate(this.player,id)){this.player.passive.areaMul=g.areaMultiplier();if(g.heroFree>0){g.heroFree--;if(!isChapterTestRun())allocateHeroAttr(this.runConfig.character,id);}this.renderAttributePanel();this.updateHud();}});
+      button.on('pointerdown',()=>{this.attributeAdd(id);});
       this.attributePanel.add([row,attrIconImg,label,effect,pips,value,button,plus]);
       let perks:{prefix:Phaser.GameObjects.Text;chips:Phaser.GameObjects.Text[]}|undefined;
       if(isPrimary){
@@ -4774,6 +4781,12 @@ export class GameScene extends Phaser.Scene {
     if(D){const back=homeCommand(this,GAME_WIDTH/2,GAME_HEIGHT-46,200,42,'返回');for(const o of [back.g,back.caption,back.hit]){(o as unknown as {setScrollFactor:(n:number)=>void}).setScrollFactor(0);root.add(o);}back.hit.setName('build-panel-back').setData('padDefault',true).on('pointerdown',close);}
     else root.add(text(GAME_WIDTH/2-70,GAME_HEIGHT-46,'返回暂停菜单',17).setPadding(12,8).setInteractive({useHandCursor:true}).on('pointerdown',close));
   }
+  /** 加一点属性（手机长条 / 电脑新视图共用）：成功返回 true。 */
+  protected attributeAdd(id: AttributeId): boolean {
+    const g=this.player.growth;if(!g.allocate(this.player,id))return false;
+    this.player.passive.areaMul=g.areaMultiplier();if(g.heroFree>0){g.heroFree--;if(!isChapterTestRun())allocateHeroAttr(this.runConfig.character,id);}
+    this.renderAttributePanel();this.updateHud();return true;
+  }
   protected renderAttributePanel(): void {
     if (!this.player || !this.attributePointsText) return;
     const growth=this.player.growth;
@@ -4797,6 +4810,10 @@ export class GameScene extends Phaser.Scene {
     const baseHp=BALANCE.player.maxHp*character.hpMul,baseSpeed=BALANCE.player.speed*character.speedMul;
     const hpBonus=Math.round((this.player.maxHp/baseHp-1)*100),moveBonus=Math.round((this.player.speed/baseSpeed-1)*100);
     this.attributeSummaryText?.setText(`实际属性　伤害 +${damageBonus}% · 攻速 +${attackBonus}% · 暴击 ${(crit*100).toFixed(0)}%\n生命 ${Math.round(this.player.hp)}/${Math.round(this.player.maxHp)}（上限 +${hpBonus}%） · 移速 ${Math.round(this.player.speed)}（+${moveBonus}%）`);
+    if(this.attributeView){
+      this.attributeView.render({hero:this.runConfig.character,heroName:character.name,level:this.heroLv,free:growth.unallocated,cap:growth.attrMax,points:{...growth.attributes},primary:primaryAttribute(this.runConfig.character),weaponName:weapon?weaponName(weapon.id,this.runConfig.character):'',mastery:growth.masteryLabel(),stats:{damage:damageBonus,attack:attackBonus,crit,hp:Math.round(this.player.hp),maxHp:Math.round(this.player.maxHp),hpBonus,speed:Math.round(this.player.speed),moveBonus}});
+      return;
+    }
     const ids=Object.keys(ATTRIBUTE_INFO) as AttributeId[];
     for(let i=0;i<ids.length;i++){
       const id=ids[i],level=growth.attributes[id],row=this.attributeRows[i];

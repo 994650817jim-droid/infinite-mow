@@ -12,9 +12,12 @@ import Phaser from 'phaser';
 import { DEPTH, HEADING_FONT, GAME_WIDTH, IS_DESKTOP } from '../config';
 import { LQ, lqPanel, lqDiamond } from './LacquerKit';
 import { storyArtFile } from '../data/story/art';
-import { loadBarkUi, barkUiReady, buildCinematic } from './StoryBarkCardStyles';
+import { loadBarkUi, barkUiReady, buildCinematic, BARK_TYPE } from './StoryBarkCardStyles';
 
-export interface BarkCardLine { side: 'left' | 'right'; name: string; text: string; portrait?: string; /** 说话人 id（设计稿 A / B / C 取阵营色与称号用） */ id?: string }
+export interface BarkCardLine { side: 'left' | 'right'; name: string; text: string; portrait?: string; /** 说话人 id（设计稿 A / B / C 取阵营色与称号用） */ id?: string;
+  /** 首领出场大卡（2026-11-20）：立绘与名号放大；给了 pause / resume 时出卡先停战斗 INTRO_PAUSE 毫秒再开打 */ intro?: boolean; pause?: () => void; resume?: () => void }
+/** 首领出场大卡停顿战斗的毫秒（真实时钟） */
+export const INTRO_PAUSE = 1500;
 /** 卡片尺寸与时长（毫秒）；top 是卡片顶边的 y（游戏坐标：电脑布局 960 宽，显示时放大到 1280×720；右边夹在军令面板（底 ≈271）与护阵按钮（顶 ≈405）之间，左边在增益图标（底 ≈290）下）。 */
 // 2026-11-19 用户「用药和军令重叠了」：右边的卡让开最右一列圆钮（用药 / 加点 / 护阵，x ≥ 864）——电脑版右缘留 rightClear
 export const BARK_CARD = { w: 330, h: 100, face: 86, hold: 2700, slide: 260, gap: 140, top: { right: 290, left: 300 }, margin: 10, rightClear: 104 } as const;
@@ -102,16 +105,22 @@ function build(scene: Phaser.Scene, line: BarkCardLine, done: () => void): void 
 /** 电影感台词卡（ui/StoryBarkCardStyles.ts） */
 function buildStyled(scene: Phaser.Scene, line: BarkCardLine, done: () => void): void {
   if (scene.sys.settings.status >= Phaser.Scenes.SHUTDOWN) { done(); return; }
-  const card = buildCinematic(scene, line, GAME_WIDTH, sideMargin(line.side), IS_DESKTOP ? BARK_CORNER : undefined);
+  const st = scene.data.get(STATE_KEY) as CardState | undefined, more = (): boolean => !!st && st.queue.length > 0;
+  const card = buildCinematic(scene, line, GAME_WIDTH, sideMargin(line.side), IS_DESKTOP ? BARK_CORNER : undefined, { intro: line.intro, more });
   const root = card.root.setDepth(DEPTH.overlay - 8).setName('story-bark-card');
   root.setData('side', line.side).setData('name', line.name).setData('text', line.text).setData('style', 'cinematic');
   if (line.portrait && scene.textures.exists(line.portrait)) root.setData('portrait', line.portrait);
-  animate(scene, root, card.x0, card.off, card.onTick, done);
+  root.setData('intro', !!line.intro);
+  // 逐字打完再留 readMs 读；首领出场大卡多停一会
+  const hold = Math.max(BARK_CARD.hold, card.typeMs + BARK_TYPE.readMs + 180) + (line.intro ? 600 : 0);
+  let resumed = !line.pause; if (line.pause) line.pause();
+  const resume = (): void => { if (!resumed) { resumed = true; line.resume?.(); } };
+  animate(scene, root, card.x0, card.off, t => { card.onTick?.(t); root.setData('more', more()); if (t >= INTRO_PAUSE) resume(); }, () => { resume(); done(); }, hold);
 }
 
 /** 滑入 → 停 → 滑出（真实时钟，不受战斗暂停影响）；onTick 做入场动画（墨迹晕开）。 */
-function animate(scene: Phaser.Scene, root: Phaser.GameObjects.Container, x0: number, off: number, onTick: ((t: number) => void) | undefined, done: () => void): void {
-  const C = BARK_CARD, t0 = performance.now(), total = C.slide * 2 + C.hold;
+function animate(scene: Phaser.Scene, root: Phaser.GameObjects.Container, x0: number, off: number, onTick: ((t: number) => void) | undefined, done: () => void, hold: number = BARK_CARD.hold): void {
+  const C = { slide: BARK_CARD.slide, hold }, t0 = performance.now(), total = C.slide * 2 + C.hold;
   const ease = (k: number): number => 1 - Math.pow(1 - k, 3);
   root.setX(x0 + off).setAlpha(0);
   const tick = (): void => {

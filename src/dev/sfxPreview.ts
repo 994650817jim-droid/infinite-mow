@@ -58,4 +58,13 @@ section('对照', [MIX], false);
     by('场景事件 · 提示', '断桥 / 营帐起火 / 吕布跃下 / 据点 / 插旗 / 合击 / 觉醒', k => /^(bridge_|tent_|lubu_|cap_|flag_|toast_)/.test(k)),
     by('营寨 · 城池', '旅商购买 / 军医 / 环境声', k => /^(shop_|medic_|amb_)/.test(k)),
   ], false); }
+// 音效审计第一批（2026-11-20，用户「声音我想听听」）：放在最前面方便试听
+{ const sec = document.getElementById('app')!.lastElementChild; section('本次新增 · 音效审计第一批', [
+    { title: '首领', sub: '半血转阶段 · 倒下', sounds: [['bossPhase', '转阶段'], ['bossFall', '倒下']] },
+    { title: '割草击杀分层', sub: '单杀 → 0.18 秒内 ≥4 杀 → ≥10 杀', sounds: [['killThud', '单杀'], ['killBurst', '多杀'], ['killSweep', '横扫一片']] },
+    { title: '战场', sub: '火盆碎裂 · 回血拾取 · 兵器进阶', sounds: [['brazierBreak', '火盆碎裂'], ['healPickup', '回血拾取'], ['promote', '兵器进阶']] },
+    { title: '劝降 · 招募 · 商人', sub: '劝降成功 / 宁死不降 · 招贤馆招募 · 卖装备', sounds: [['parleyYes', '劝降成功'], ['parleyNo', '宁死不降'], ['recruit', '招募'], ['shop_sell', '出售兵装']] },
+    { title: '界面', sub: '舆图开 / 合 · 按钮悬停 · 点击', sounds: [['mapOpen', '舆图展开'], ['mapClose', '舆图卷起'], ['uiHover', '悬停'], ['uiClick', '点击']] },
+  ], false);
+  const app = document.getElementById('app')!, added = app.lastElementChild; if (added && sec !== added) app.prepend(added); }
 (window as unknown as { __sfxPreview?: Sfx }).__sfxPreview = sfx;

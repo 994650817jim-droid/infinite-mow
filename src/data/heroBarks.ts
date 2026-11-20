@@ -28,6 +28,11 @@ export interface HeroBarkLines {
 }
 
 export const HERO_BARKS: Record<CharacterId, HeroBarkLines> = {
+  zhurong: {
+    trigger: ['火神后裔，岂是浪得虚名！', '看我飞刀！', '烧吧！'],
+    bossAppear: ['哪来的胆子，敢挡本夫人的路？'], bossDown: ['哼，不过如此。'],
+    vsBoss: { 孟获: '夫君，这回换我护着你！', 兀突骨: '兀突骨，你的藤甲最怕火！' },
+  },
   menghuo: {
     trigger: ['南中的猛兽，给我冲！', '孟获在此，谁敢来战！', '这回，俺服了你，可不服他们！'],
     bossAppear: ['好大的胆子！'], bossDown: ['哈哈，痛快！'],

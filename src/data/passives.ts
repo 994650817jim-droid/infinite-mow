@@ -12,6 +12,7 @@ export const CHARACTER_PASSIVES: Record<CharacterId, { name: string; maxStacks: 
   machao: { name: '西凉铁骑', maxStacks: 6 },
   sunshangxiang: { name: '侍婢执刀', maxStacks: 6 },
   diaochan: { name: '离间', maxStacks: 5 },
+  zhurong: { name: '火神后裔', maxStacks: 12 }, // P3：着火的敌兵被击杀攒，满了「烈焰飞刀阵」（data/zhurong.ts）
   menghuo: { name: '南蛮王', maxStacks: 20 }, // P3：任意击杀攒，满了「驱兽冲阵」（data/menghuo.ts）
   sunquan: { name: '制衡', maxStacks: 15 }, // P3：任意击杀攒，满了切下一阵势（data/sunquan.ts）
   dianwei: { name: '恶来', maxStacks: 10 }, // P3：受伤攒，满了「古之恶来」（data/dianwei.ts）

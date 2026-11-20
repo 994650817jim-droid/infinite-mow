@@ -39,6 +39,8 @@ export const HERO_JOIN: Readonly<Partial<Record<CharacterId, HeroJoinInfo>>> = {
     lines: ['白门楼下，吕布卸甲解缚。', '「明公所患不过于布，今已服矣——天下不足忧！」', '方天画戟，从此为公所用。'] },
   mengde: { kicker: '许都', epithet: '魏王',
     lines: ['中原尽失，曹操卸下魏王冠冕，独自出城。', '「天下英雄，唯使君与操耳。」', '「操，愿归附——这天下，便看你我如何收拾。」'] },
+  zhurong: { kicker: '南中 · 秃龙洞', epithet: '火神后裔',
+    lines: ['秃龙洞一平，祝融夫人背着飞刀，骑象而来。', '「带来是我弟弟——他服了，我便也服了。」', '「南中的火，从今往后为明公烧！」'] },
   menghuo: { kicker: '南中 · 银坑洞', epithet: '南蛮王',
     lines: ['银坑洞一破，孟获亲率诸洞洞主出山相迎。', '「七擒七纵，俺孟获心服口服。」', '「南中的猛兽、象兵，都听俺的——借给明公！」'] },
   sunquan: { kicker: '吴郡', epithet: '碧眼儿',

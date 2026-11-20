@@ -50,6 +50,7 @@ export const UNLOCK_RULES: Readonly<Partial<Record<CharacterId, (p: UnlockProgre
   zhangliao: p => !!p.persuaded?.('zhangliao'),                               // P2：劝降张辽（下邳支线白门楼）
   zhouyu: p => !!p.persuaded?.('zhouyu'),                                     // P2：劝降周瑜（江东南郡支线；须程普先降）
   taishici: p => !!p.persuaded?.('taishici'),                                 // P2：劝降太史慈（江东南郡支线）
+  zhurong: p => (p.side?.('nanzhong') ?? 0) >= 2,                             // P3：南中支线秃龙洞打下（带来洞主是祝融之弟）
   menghuo: p => (p.side?.('nanzhong') ?? 0) >= 1,                             // P3：南中支线银坑洞打下（11-3 七擒已心服，支线第十一章后才开）
   sunquan: p => !!p.persuaded?.('sunquan'),                                  // P3：孙权归附（东吴支线终局吴郡，城全下必降）
   dianwei: p => !!p.persuaded?.('caocao'),                                   // P3：曹操归附时随曹公来投（3-2 救下 / 没救下都来，只换台词）

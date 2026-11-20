@@ -1,7 +1,7 @@
 import type { ChapterId } from './chapters';
 import type { WeaponId } from '../types';
 
-export type CharacterId = 'zhaoyun' | 'guanyu' | 'huangzhong' | 'zhuge' | 'zhangfei' | 'machao' | 'weiyan' | 'liubei' | 'pangtong' | 'huangyueying' | 'sunshangxiang' | 'diaochan' | 'lvbu' | 'zhangliao' | 'zhouyu' | 'taishici' | 'mengde' | 'ganning' | 'dianwei' | 'sunquan' | 'menghuo';
+export type CharacterId = 'zhaoyun' | 'guanyu' | 'huangzhong' | 'zhuge' | 'zhangfei' | 'machao' | 'weiyan' | 'liubei' | 'pangtong' | 'huangyueying' | 'sunshangxiang' | 'diaochan' | 'lvbu' | 'zhangliao' | 'zhouyu' | 'taishici' | 'mengde' | 'ganning' | 'dianwei' | 'sunquan' | 'menghuo' | 'zhurong';
 
 export interface CharacterDef {
   id: CharacterId;
@@ -277,11 +277,23 @@ export const CHARACTERS: CharacterDef[] = [
     startWeapon: 'nanman_dao',
     faction: '群', // 南蛮：势力只有魏 / 蜀 / 吴 / 群，归群
   },
+  // P3 第二批：祝融（南蛮）——火焰飞枪、被动「火神后裔」（data/zhurong.ts）；南中支线秃龙洞打下后来投
+  {
+    id: 'zhurong',
+    name: '祝融',
+    desc: '火神后裔 · 远掷火枪、飞刀成阵',
+    hpMul: .96,
+    speedMul: 1.04,
+    damageMul: 1.04,
+    portrait: 'zhurong_portrait',
+    startWeapon: 'huoyan_feiqiang',
+    faction: '群', // 南蛮
+  },
 
 ];
 
 /** 有主页大幅立绘（epic-home）与水墨立轴（ink-scroll）的武将；其余用 portrait。 */
-export const HOME_ART_HEROES: readonly string[] = ['zhaoyun', 'guanyu', 'huangzhong', 'zhuge', 'zhangfei', 'machao', 'weiyan', 'liubei', 'pangtong', 'huangyueying', 'sunshangxiang', 'diaochan', 'lvbu', 'zhangliao', 'zhouyu', 'taishici', 'mengde', 'ganning', 'dianwei', 'sunquan', 'menghuo'];
+export const HOME_ART_HEROES: readonly string[] = ['zhaoyun', 'guanyu', 'huangzhong', 'zhuge', 'zhangfei', 'machao', 'weiyan', 'liubei', 'pangtong', 'huangyueying', 'sunshangxiang', 'diaochan', 'lvbu', 'zhangliao', 'zhouyu', 'taishici', 'mengde', 'ganning', 'dianwei', 'sunquan', 'menghuo', 'zhurong'];
 
 export const STARTING_WEAPONS: Array<{ id: WeaponId; name: string; icon: string; desc: string }> = [
   { id: 'spear_orbit', name: '枪影旋舞', icon: 'icon_1', desc: '环绕枪刃，近身持续伤害' },

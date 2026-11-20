@@ -11,6 +11,7 @@ import type { BranchStatus } from '../data/weaponBranches';
 
 /** 被动技能完整说明（悬停 / 点按弹出）。数值见 data/passives.ts 的 PASSIVE_RULES。 */
 export const PASSIVE_DETAILS: Record<CharacterId, string> = {
+  zhurong: '火神后裔：着火的敌兵被击杀积 1 层，满 12 层「烈焰飞刀阵」：8 把燃火飞刀绕身一圈，随后朝四周射出。',
   menghuo: '南蛮王：每击杀 1 名敌人积 1 层，满 20 层「驱兽冲阵」：4 头南中猛兽从身后沿最密的敌群一线冲过，撞飞沿途敌兵。',
   sunquan: '制衡：每击杀 1 名敌人积 1 层，满 15 层切下一阵势（守 → 攻 → 疾，开局守势）。守势：受伤 −15%、身边部曲每秒回血 1%；攻势：每第 3 斩就齐射、齐射伤害 +25%；疾势：移速、出手 +15%。',
   dianwei: '恶来：每次受伤积 1 层（0.4 秒内最多 1 层），满 10 层「古之恶来」6 秒：受伤 −40%，每 0.8 秒原地旋风一次。',
@@ -112,11 +113,11 @@ export class PassiveHud {
     if (!visible) { this.renderTip(now, false); return; }
     const s = passive.snapshot(now);
     this.character = s.character; this.ready = s.ready;
-    const colors = { menghuo: 0xd88a4a, sunquan: 0x7fc89a, dianwei: 0xc8503a, ganning: 0xe0a050, mengde: 0x9a7cc8, taishici: 0x7fb08a, zhouyu: 0xe8884a, zhangliao: 0x8fa0b8, lvbu: 0xe0604a, zhaoyun: 0x70cbdc, guanyu: 0x88c88b, huangzhong: 0xe8c16a, zhuge: 0xe49a6d, zhangfei: 0xd8645a, huangyueying: 0x7fc4a8, pangtong: 0xd9824a, liubei: 0xe0c37a, weiyan: 0xc8885a, machao: 0x9fc6e8, sunshangxiang: 0xe88a7a, diaochan: 0xd9a0e8 };
+    const colors = { zhurong: 0xf07a4a, menghuo: 0xd88a4a, sunquan: 0x7fc89a, dianwei: 0xc8503a, ganning: 0xe0a050, mengde: 0x9a7cc8, taishici: 0x7fb08a, zhouyu: 0xe8884a, zhangliao: 0x8fa0b8, lvbu: 0xe0604a, zhaoyun: 0x70cbdc, guanyu: 0x88c88b, huangzhong: 0xe8c16a, zhuge: 0xe49a6d, zhangfei: 0xd8645a, huangyueying: 0x7fc4a8, pangtong: 0xd9824a, liubei: 0xe0c37a, weiyan: 0xc8885a, machao: 0x9fc6e8, sunshangxiang: 0xe88a7a, diaochan: 0xd9a0e8 };
     const tint = s.ready ? 0xf5d780 : colors[s.character];
     const g = this.graphics.clear();
     g.fillStyle(tint, 1).fillRect(0, 10, 3, 22);
-    this.emblem.setText({ menghuo: '蛮', sunquan: '衡', dianwei: '恶', ganning: '帆', mengde: '雄', taishici: '义', zhouyu: '风', zhangliao: '啼', lvbu: '戟', zhaoyun: '龙', guanyu: '势', huangzhong: '弓', zhuge: '策', zhangfei: '怒', huangyueying: '巧', pangtong: '凤', liubei: '仁', weiyan: '战', machao: '骑', sunshangxiang: '姬', diaochan: '月' }[s.character]);
+    this.emblem.setText({ zhurong: '焰', menghuo: '蛮', sunquan: '衡', dianwei: '恶', ganning: '帆', mengde: '雄', taishici: '义', zhouyu: '风', zhangliao: '啼', lvbu: '戟', zhaoyun: '龙', guanyu: '势', huangzhong: '弓', zhuge: '策', zhangfei: '怒', huangyueying: '巧', pangtong: '凤', liubei: '仁', weiyan: '战', machao: '骑', sunshangxiang: '姬', diaochan: '月' }[s.character]);
     this.emblem.setColor(`#${tint.toString(16).padStart(6, '0')}`);
     this.title.setText(CHARACTER_PASSIVES[s.character].name);
     this.counter.setText(s.ready ? (s.character === 'huangzhong' ? '神射中' : '已就绪') : s.maxStacks ? `${s.stacks} / ${s.maxStacks}` : `${(s.calmProgress * 5).toFixed(1)}秒`);
@@ -131,6 +132,7 @@ export class PassiveHud {
       }
     }
     const hints = {
+      zhurong: '着火的敌兵被击杀积火神 · 满 12 层烈焰飞刀阵',
       menghuo: '击杀积南蛮王 · 满 20 层驱兽冲阵',
       sunquan: '击杀积制衡 · 满 15 层切下一阵势（守 / 攻 / 疾）',
       dianwei: s.ready ? '古之恶来：受伤 −40% · 旋风不停' : '受伤积恶来 · 满 10 层古之恶来',

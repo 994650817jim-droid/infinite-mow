@@ -72,7 +72,7 @@ export class BootScene extends Phaser.Scene {
     if(lean){ // 手机精简启动到此为止：另外只带上主页 / 选将 / 章节卡会用到的小图（立绘头像、章节首领小像），走同一套 v2 画风换图
       this.load.image('rest_camp','assets/world/rest-camp.webp');this.load.image('hero_zhaoyun','assets/processed/hero_zhaoyun.png');
       this.load.image('portrait_zhuge','assets/processed/portrait_zhuge.png');
-      for(const id of ['huangzhong','guanyu','machao','weiyan','liubei','pangtong','huangyueying','sunshangxiang','diaochan','zhangfei','lvbu','zhangliao','zhouyu','taishici','mengde','ganning','dianwei','sunquan','menghuo'])this.load.image(id+'_portrait','assets/processed/'+id+'_portrait.png');
+      for(const id of ['huangzhong','guanyu','machao','weiyan','liubei','pangtong','huangyueying','sunshangxiang','diaochan','zhangfei','lvbu','zhangliao','zhouyu','taishici','mengde','ganning','dianwei','sunquan','menghuo','zhurong'])this.load.image(id+'_portrait','assets/processed/'+id+'_portrait.png');
       this.load.image('huaxiong_portrait','assets/phase17/huaxiong/portrait.png');
       this.load.spritesheet('xurong','assets/phase17/xurong/sheet.png',{frameWidth:128,frameHeight:128});
       this.load.spritesheet('boss_lubu','assets/processed/hulao/lubu-walk.png',{frameWidth:256,frameHeight:256});
@@ -169,6 +169,7 @@ export class BootScene extends Phaser.Scene {
     this.load.spritesheet('dianwei_walk_sheet', 'assets/processed-v2/dianwei_walk_sheet.png', { frameWidth: 176, frameHeight: 176 });
     this.load.spritesheet('sunquan_walk_sheet', 'assets/processed-v2/sunquan_walk_sheet.png', { frameWidth: 176, frameHeight: 176 });
     this.load.spritesheet('menghuo_walk_sheet', 'assets/processed-v2/menghuo_walk_sheet.png', { frameWidth: 176, frameHeight: 176 });
+    this.load.spritesheet('zhurong_walk_sheet', 'assets/processed-v2/zhurong_walk_sheet.png', { frameWidth: 176, frameHeight: 176 });
     // P3 孟获「驱兽冲阵」：借第十一章南中猛兽 / 象兵行走图（另起键，不和章节里按 v2 帧名切的同一张图撞）
     this.load.spritesheet('mh_beast_sheet', 'assets/processed-v2/enemies/enemy_beast_walk.png', { frameWidth: 144, frameHeight: 144 });
     this.load.spritesheet('mh_elephant_sheet', 'assets/processed-v2/enemies/nz_elephant_walk.png', { frameWidth: 176, frameHeight: 176 });
@@ -256,6 +257,7 @@ export class BootScene extends Phaser.Scene {
     this.load.image('dianwei_portrait', 'assets/processed/dianwei_portrait.png');
     this.load.image('sunquan_portrait', 'assets/processed/sunquan_portrait.png');
     this.load.image('menghuo_portrait', 'assets/processed/menghuo_portrait.png');
+    this.load.image('zhurong_portrait', 'assets/processed/zhurong_portrait.png');
     this.load.image('item_drum', 'assets/processed/item_drum.png');
     this.load.image('item_whetstone', 'assets/processed/item_whetstone.png');
     this.load.image('item_armor', 'assets/processed/item_armor.png');

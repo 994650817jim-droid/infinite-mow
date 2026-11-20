@@ -39,6 +39,7 @@ export const HERO_STATS: Record<CharacterId, { base: Stat4; growth: Stat4 }> = {
   dianwei: { base: [98, 66, 28, 70], growth: [.6, .2, 0, .2] }, // P3：attribute-redesign §1.2
   sunquan: { base: [62, 68, 86, 94], growth: [0, .2, .3, .5] }, // P3：拟值（表里没有），交平衡会话
   menghuo: { base: [92, 62, 28, 86], growth: [.5, .1, 0, .4] }, // P3：attribute-redesign 第二批备注
+  zhurong: { base: [82, 85, 50, 70], growth: [.3, .5, 0, .2] }, // P3：attribute-redesign 第二批备注
 };
 
 /** 无名随从模板底子（力 / 敏 / 智 / 统）与成长权重；品质加成：白 +0 / 蓝 +6 / 紫 +12（四项）。 */

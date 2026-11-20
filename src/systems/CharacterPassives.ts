@@ -107,6 +107,7 @@ export class CharacterPassives {
     if (this.stopped || !this.isP3) return false;
     const c = this.character as string;
     if (c === 'ganning') return enemy.hookedUntil > now;
+    if (c === 'zhurong') return enemy.p3BurnUntil > now; // 祝融「火神后裔」：着火的敌兵
     if (c === 'sunquan' || c === 'menghuo') return true; // 孙权「制衡」、孟获「南蛮王」：任意击杀
     return false;
   }

@@ -331,7 +331,7 @@ export class CharacterPassives {
     if (this.character === 'taishici') return `${name} ${this.stacks}/${this.tscNeed}`;
     if (this.character === 'zhouyu') return `${name} ${this.stacks}/${this.zyNeed}`;
     if (this.character === 'zhangliao') return `${name} ${this.stacks}/${ZHANGLIAO.need}`;
-    if (this.character === 'lvbu') return this.isWushuang(now) ? `${name} · 人中吕布 ${(this.wushuangLeft(now) / 1000).toFixed(1)}秒：每击两次 · 移速攻速 +40%` : `${name} · 战意 ${this.stacks}/${LVBU.need}`;
+    if (this.character === 'lvbu') return this.isWushuang(now) ? `${name} · 人中吕布 ${(this.wushuangLeft(now) / 1000).toFixed(1)}秒：每击两次 · 移速 +40% · 攻速 +25%` : `${name} · 战意 ${this.stacks}/${LVBU.need}`;
     if (this.character === 'huangzhong') return this.isSharpshooter(now) ? `${name} · 神射 ${(this.sharpLeft(now) / 1000).toFixed(1)}秒：暴击+10% / 重箭爆裂` : `${name} · 蓄势 ${this.stacks}/${HZ_SHARP.need}`;
     return `${name} · ${this.character === 'zhaoyun' ? '龙胆' : this.character === 'guanyu' ? '武势' : this.character === 'zhangfei' ? '怒气' : this.character === 'huangyueying' ? '机括' : this.character === 'pangtong' ? '计策' : this.character === 'liubei' ? '仁德' : this.character === 'weiyan' ? '拒敌' : this.character === 'machao' ? '铁骑' : this.character === 'sunshangxiang' ? '疾步' : this.character === 'diaochan' ? '舞势' : '星象'} ${this.stacks}/${this.maxStacks}${this.snapshot(now).ready ? ' · 下次强化' : ''}${this.character === 'diaochan' && this.snapshot(now).turned ? ` · 离间${this.snapshot(now).turned}` : ''}${this.character === 'weiyan' && this.damageTakenMultiplier(now) < 1 ? ' · 谁敢杀我' : ''}`;
   }

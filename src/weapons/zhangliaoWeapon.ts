@@ -20,7 +20,7 @@ const cardinal = (ux: number, uy: number): 'left' | 'right' | 'up' | 'down' => M
 
 export const ZHANGLIAO_DEF = {
   id: 'pozhen_shuangji' as const, name: '破阵双戟', maxLevel: 5,
-  damage: (level: number, stats: PlayerStats) => [10, 11, 13, 15, 17][lv(level)] * stats.damageMul * stats.meleeMul,
+  damage: (level: number, stats: PlayerStats) => [12, 13, 15, 18, 20][lv(level)] * stats.damageMul * stats.meleeMul, // 2026-11-20 平衡第一轮：原 [10, 11, 13, 15, 17]，首领用时为中位数的 1.4～2.6 倍（溃逃易伤打不到首领），伤害 +20%
   cooldown: (level: number, stats: PlayerStats) => [.42, .4, .38, .36, .33][lv(level)] * stats.cooldownMul,
   desc: '左右双戟极快连斩身前一扇；每击叠 1 层震慑，3 层的敌兵溃逃 2 秒（逃跑时受伤 +25%）',
 };

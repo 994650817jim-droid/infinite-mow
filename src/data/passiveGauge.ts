@@ -10,7 +10,7 @@ import type { CharacterId } from './characters';
  */
 export interface GaugeLook {
   /** 图集键与行号。 */
-  tex: 'passive_gauge_a' | 'passive_gauge_b'; row: number;
+  tex: 'passive_gauge_a' | 'passive_gauge_b' | 'passive_gauge_c'; row: number;
   /** 脚下显示几枚（层数多的按比例折算，如黄月英 12 层 = 6 枚齿轮、每枚 2 层）。 */
   slots: number;
   /** 图标边长（电脑版像素）。 */
@@ -31,6 +31,12 @@ export const PASSIVE_GAUGE_LOOKS: Partial<Record<CharacterId, GaugeLook>> = {
   machao: { tex: 'passive_gauge_b', row: 2, slots: 6, size: 14, unit: '铁骑（马蹄铁）' },
   sunshangxiang: { tex: 'passive_gauge_b', row: 3, slots: 6, size: 14, unit: '疾步（飞刀）' },
   diaochan: { tex: 'passive_gauge_b', row: 4, slots: 5, size: 15, unit: '舞势（弯月花瓣）' },
+  // passive_gauge_c 4×5（2026-11-20 P2 五人补图）：吕布 · 张辽 · 周瑜 · 太史慈 · 曹操；满层数会随分支 / 武艺变（snapshot.maxStacks 已按实际满层）
+  lvbu: { tex: 'passive_gauge_c', row: 0, slots: 5, size: 16, unit: '战意（方天戟头）' },
+  zhangliao: { tex: 'passive_gauge_c', row: 1, slots: 6, size: 14, unit: '止啼（黑缨铁盔）' },
+  zhouyu: { tex: 'passive_gauge_c', row: 2, slots: 5, size: 15, unit: '英发（小火船）' },
+  taishici: { tex: 'passive_gauge_c', row: 3, slots: 5, size: 15, unit: '信义（绿缨短戟）' },
+  mengde: { tex: 'passive_gauge_c', row: 4, slots: 4, size: 16, unit: '奸雄（虎符）' },
 };
 
 /**

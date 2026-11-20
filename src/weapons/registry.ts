@@ -12,6 +12,11 @@ import { ZHANGLIAO_DEF, zhangliaoBehavior } from './zhangliaoWeapon';
 import { ZHOUYU_DEF, zhouyuBehavior } from './zhouyuWeapon';
 import { TAISHICI_DEF, taishiciBehavior } from './taishiciWeapon';
 import { MENGDE_DEF, mengdeBehavior } from './mengdeWeapon';
+import { GANNING_DEF, ganningBehavior } from './ganningWeapon';
+import { DIANWEI_DEF, dianweiBehavior } from './dianweiWeapon';
+import { SUNQUAN_DEF, sunquanBehavior } from './sunquanWeapon';
+import { MENGHUO_DEF, menghuoBehavior } from './menghuoWeapon';
+import { ZHURONG_DEF, zhurongBehavior } from './zhurongWeapon';
 import { BAODIAO_DEF, DANGYANG_DEF, ZHANJIN_DEF, SHUANGGU_DEF, baodiaoBehavior, dangyangBehavior, zhanjinBehavior, shuangguBehavior, smartTarget } from './heroWeapons2';
 import { HINT_MOCK, groundScar } from '../ui/HintStyle';
 import { DRAG_TRAVEL, DRAG_WAVE_MUL, DRAG_SPIN_MUL } from '../systems/RunGrowth';
@@ -136,6 +141,11 @@ export const WEAPON_DEFS: Record<WeaponId, WeaponDef> = {
   huochuan_ling: ZHOUYU_DEF, // P2 周瑜（weapons/zhouyuWeapon.ts）
   donglai_ji: TAISHICI_DEF, // P2 太史慈（weapons/taishiciWeapon.ts）
   yitian_jian: MENGDE_DEF, // P2 曹操（weapons/mengdeWeapon.ts）
+  jinfan_gou: GANNING_DEF, // P3 甘宁（weapons/ganningWeapon.ts）
+  shuang_tieji: DIANWEI_DEF, // P3 典韦（weapons/dianweiWeapon.ts）
+  guding_dao: SUNQUAN_DEF, // P3 孙权（weapons/sunquanWeapon.ts）
+  nanman_dao: MENGHUO_DEF, // P3 孟获（weapons/menghuoWeapon.ts）
+  huoyan_feiqiang: ZHURONG_DEF, // P3 祝融（weapons/zhurongWeapon.ts）
 };
 
 export const WEAPON_ORDER: WeaponId[] = ['spear_orbit', 'crossbow', 'flame_banner', 'guandao'];
@@ -484,5 +494,10 @@ export const WEAPON_BEHAVIORS: Record<WeaponId, (host: WeaponHost, weapon: Weapo
   huochuan_ling: zhouyuBehavior,
   donglai_ji: taishiciBehavior,
   yitian_jian: mengdeBehavior,
+  jinfan_gou: ganningBehavior,
+  shuang_tieji: dianweiBehavior,
+  guding_dao: sunquanBehavior,
+  nanman_dao: menghuoBehavior,
+  huoyan_feiqiang: zhurongBehavior,
 };
 

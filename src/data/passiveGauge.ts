@@ -37,6 +37,12 @@ export const PASSIVE_GAUGE_LOOKS: Partial<Record<CharacterId, GaugeLook>> = {
   zhouyu: { tex: 'passive_gauge_c', row: 2, slots: 5, size: 15, unit: '英发（小火船）' },
   taishici: { tex: 'passive_gauge_c', row: 3, slots: 5, size: 15, unit: '信义（绿缨短戟）' },
   mengde: { tex: 'passive_gauge_c', row: 4, slots: 4, size: 16, unit: '奸雄（虎符）' },
+  // P3 第二批：专属刻度没出之前借相近的一行（缺图清单 p3-heroes-plan.md）
+  ganning: { tex: 'passive_gauge_c', row: 2, slots: 6, size: 14, unit: '锦帆（借周瑜小火船）' },
+  dianwei: { tex: 'passive_gauge_c', row: 3, slots: 5, size: 15, unit: '恶来（借太史慈短戟）' },
+  sunquan: { tex: 'passive_gauge_c', row: 4, slots: 5, size: 15, unit: '制衡（借曹操虎符）' },
+  menghuo: { tex: 'passive_gauge_b', row: 2, slots: 6, size: 14, unit: '南蛮王（借马超马蹄铁）' },
+  zhurong: { tex: 'passive_gauge_b', row: 3, slots: 6, size: 14, unit: '火神后裔（借孙尚香飞刀）' },
 };
 
 /**

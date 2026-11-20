@@ -3,6 +3,8 @@ import { STARTER_HEROES } from '../data/heroUnlocks';
 import { isChapterTestRun, chapterOneCleared } from './ChapterProgress';
 import { arcStages, arcUnlocked, lubuClears, type WarlordArc } from '../world/WorldStore';
 import { surrenderedIds } from './SurrenderStore';
+import { sideState } from '../world/SideRouteStore';
+import type { SideRouteId } from '../data/sideRoutes';
 
 /**
  * 可玩武将解锁（设计稿 hero-unlock-design.md，用户 2026-11-19 批准）：
@@ -24,12 +26,14 @@ export interface UnlockProgress {
   /** 剧情旗标（本存档）。 */ flag: (k: string) => unknown;
   /** 其他势力支线（other-factions-design §1.3）：这位首领本存档劝降过没（支线各关 / 三英战吕布挑战关都算）。P2 新可玩武将（吕布、张辽、周瑜、太史慈、曹操）的来投条件读它。 */
   persuaded?: (bossId: string) => boolean;
+  /** 其他势力支线打下了几关（SideRouteStore.sideState().stage）。P3 孟获 / 祝融读南中支线。 */
+  side?: (routeId: string) => number;
 }
 const isHero = (v: unknown): v is CharacterId => typeof v === 'string' && CHARACTERS.some(c => c.id === v);
 const readJson = <T,>(k: string, fb: T): T => { try { const v = JSON.parse(localStorage.getItem(k) ?? 'null'); return v ?? fb; } catch { return fb; } };
 const storyFlagOf = (k: string): unknown => readJson<{ flags?: Record<string, unknown> }>('im_story_v1', {}).flags?.[k];
 export function realProgress(): UnlockProgress {
-  return { ch1: chapterOneCleared(), arc: a => arcStages(a), arcOpen: a => arcUnlocked(a), lubu: lubuClears(), flag: storyFlagOf, persuaded: id => surrenderedIds().includes(id) };
+  return { ch1: chapterOneCleared(), arc: a => arcStages(a), arcOpen: a => arcUnlocked(a), lubu: lubuClears(), flag: storyFlagOf, persuaded: id => surrenderedIds().includes(id), side: id => sideState(id as SideRouteId).stage };
 }
 
 /** 每位锁定武将的来投条件（主节点 || 保底）；没列的就是开局可玩。 */
@@ -46,10 +50,15 @@ export const UNLOCK_RULES: Readonly<Partial<Record<CharacterId, (p: UnlockProgre
   zhangliao: p => !!p.persuaded?.('zhangliao'),                               // P2：劝降张辽（下邳支线白门楼）
   zhouyu: p => !!p.persuaded?.('zhouyu'),                                     // P2：劝降周瑜（江东南郡支线；须程普先降）
   taishici: p => !!p.persuaded?.('taishici'),                                 // P2：劝降太史慈（江东南郡支线）
+  zhurong: p => (p.side?.('nanzhong') ?? 0) >= 2,                             // P3：南中支线秃龙洞打下（带来洞主是祝融之弟）
+  menghuo: p => (p.side?.('nanzhong') ?? 0) >= 1,                             // P3：南中支线银坑洞打下（11-3 七擒已心服，支线第十一章后才开）
+  sunquan: p => !!p.persuaded?.('sunquan'),                                  // P3：孙权归附（东吴支线终局吴郡，城全下必降）
+  dianwei: p => !!p.persuaded?.('caocao'),                                   // P3：曹操归附时随曹公来投（3-2 救下 / 没救下都来，只换台词）
+  ganning: p => !!p.persuaded?.('ganning'),                                   // P3：劝降甘宁（荆州江夏支线第 1 关江夏外围）
   mengde: p => !!p.persuaded?.('caocao'),                                    // P2：曹操归附（中原曹魏支线许都决战，城全下必降）
 };
 /** 黄忠走的是不是保底（长沙没放过）——揭幕换文案。 */
-export function joinedByFallback(id: CharacterId, p: UnlockProgress = realProgress()): boolean { return id === 'huangzhong' && !p.flag('spared_huangzhong'); }
+export function joinedByFallback(id: CharacterId, p: UnlockProgress = realProgress()): boolean { return id === 'huangzhong' ? !p.flag('spared_huangzhong') : id === 'dianwei' ? p.flag('dianwei') !== 'saved' : false; } // 典韦：3-2 没救下 → 宛城伤愈来投（设计会话 11-20）
 
 /** 开发测试默认全解锁（?unlock=real 看真实锁定）。 */
 export function unlockDev(): boolean {

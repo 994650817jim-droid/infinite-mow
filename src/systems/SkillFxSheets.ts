@@ -50,6 +50,12 @@ export const SKILL_FX: Readonly<Record<string, { file: string; cell: number; fra
   // 武将出招起手特效（2026-11-19 ChatGPT 黑底 6×4 三张，tools/build-hero-cast-fx.mjs 去底切条；systems/HeroCastFx.ts 用）：每人 6 帧
   ...Object.fromEntries(['guanyu', 'zhangfei', 'zhaoyun', 'huangzhong', 'machao', 'weiyan', 'liubei', 'zhuge', 'pangtong', 'huangyueying', 'sunshangxiang', 'diaochan', 'lvbu', 'zhangliao', 'zhouyu', 'taishici', 'mengde']
     .map(h => ['fx_cast_' + h, { file: `assets/hero-fx/cast/cast_${h}.png`, cell: 256, frames: 6 }])),
+  // P3 第二批：出招起手专属图没出之前借现成的（缺图清单 p3-heroes-plan.md）——甘宁借周瑜（火）
+  fx_cast_ganning: { file: 'assets/hero-fx/cast/cast_zhouyu.png', cell: 256, frames: 6 },
+  fx_cast_dianwei: { file: 'assets/dianwei-fx/rage.png', cell: 256, frames: 6 }, // 典韦借随军典韦狂怒
+  fx_cast_sunquan: { file: 'assets/hero-fx/cast/cast_liubei.png', cell: 256, frames: 6 }, // 孙权借刘备（主公起手）
+  fx_cast_menghuo: { file: 'assets/hero-fx/cast/cast_zhangfei.png', cell: 256, frames: 6 }, // 孟获借张飞（咆哮冲击环）
+  fx_cast_zhurong: { file: 'assets/hero-fx/cast/cast_sunshangxiang.png', cell: 256, frames: 6 }, // 祝融借孙尚香（飞刀起手）
   // 吕布方天画戟（ChatGPT 黑底 6×4，tools/build-lvbu-fx.mjs 切条；weapons/lvbuWeapon.ts 用）：戟刺朝右、横扫环、旋转飞戟（循环）
   fx_lvbu_thrust: { file: 'assets/hero-fx/lvbu/thrust.png', cell: 256, frames: 6 },
   fx_lvbu_sweep: { file: 'assets/hero-fx/lvbu/sweep.png', cell: 256, frames: 6 },

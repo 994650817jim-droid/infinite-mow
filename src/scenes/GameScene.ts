@@ -6,6 +6,7 @@ import { ZHANGLIAO } from '../data/zhangliao';
 import { FOOT_HUD } from '../data/passiveGauge';
 import { TAISHICI } from '../data/taishici';
 import { MENGDE } from '../data/mengde';
+import { zhurongSpread } from '../weapons/zhurongWeapon';
 import { HeroCastFx } from '../systems/HeroCastFx';
 import { MOUNT_VISUAL, isHorseCavalry } from '../data/mounts';
 import { buildSettingsPanel, type SettingSpec } from '../ui/SettingsPanel';
@@ -2622,6 +2623,8 @@ export class GameScene extends Phaser.Scene {
     const retreat = dualRes ? dualRes.how === 'retreated' : this.bossRetreats(enemy);
     this.objective?.onKill(enemy);
     const routed = enemy.routUntil > this.combatNow; // 张辽「止啼」：击杀溃逃中的敌兵才攒
+    if (this.runConfig.character === 'zhurong') zhurongSpread(this.weaponHost, enemy, this.combatNow); // 祝融「火神祝融」：着火的敌兵倒下时火蔓延
+    const p3Kill = this.player.passive.p3KillCounts(enemy, this.combatNow); // P3 第二批：甘宁被钩过的 / 祝融着火的 / 孙权、孟获任意击杀
     const kind = enemy.kind;
     // 吕布倒地改由 playBossFall（倒地 4 帧）播，不再叠旧的通用死亡闪影
     if(kind==='boss'){const old=this.chasingBosses.find(t=>t.enemy===enemy&&t.life===enemy.spawnId),h=old?old.huaxiong:this.huaxiong,x=old?old.xurong:this.xurong;h?.defeat();x?.defeat();if(enemy===this.boss){this.sishuiPass?.onBossDown();{const at={x:enemy.x,y:enemy.y,displayHeight:enemy.sprite.displayHeight};if(retreat&&!dualRes)retreatFade(this,enemy,this.player);this.storyBossFell=dualRes||this.persuadeKill?true:retreat?this.retreatLine(at):(this.parley?.dyingLine(at)??false)||!!this.storyDir?.bossFall(at);if(this.sishuiPass?.wenjiu){setStoryFlag('wenjiu_huaxiong');this.time.delayedCall(1600,()=>this.storyDir?.line('hulao-1.wenjiu',this.player.sprite));}}this.moveset?.defeat();this.moveset=null;this.bossMount?.destroy();this.bossMount=null;}if(old){if(h)this.deadBossControllers.push(h);if(x)this.deadBossControllers.push(x);}
@@ -2635,6 +2638,7 @@ export class GameScene extends Phaser.Scene {
     this.kills += 1;
     this.player.passive.onKill(kind, this.combatNow);
     if (routed) this.player.passive.onRoutKill(this.combatNow);
+    if (p3Kill) this.player.passive.p3Gain(this.combatNow);
     this.buildCombat.onKill(enemy,this.combatNow);
     this.controlBuild?.onKill(enemy,this.combatNow);
     this.legion.onKill(enemy);
@@ -3214,7 +3218,7 @@ export class GameScene extends Phaser.Scene {
       // 水墨预览：标签统一朱砂底（类别色只在现版用）
       if (GameScene.INK_LEVELUP) view.tag.setBackgroundColor('#8a2a1c').setColor('#fff0d6'); else view.tag.setBackgroundColor(style.bg).setColor(style.color);
       const iconKey = option.kind === 'potion' ? 'icon_rare' : option.kind === 'weapon' ? ({
-        spear_orbit:'icon_1',crossbow:'icon_2',flame_banner:'icon_3',guandao:'icon_guandao',zhenbei_blade:'icon_zhenbei',lianhuan_mines:'icon_lianhuan',sun_knives:'icon_sunknives',diaochan_fans:'icon_fans',baodiao_bow:'icon_baodiao',dangyang_roar:'icon_shemao',zhanjin_lance:'icon_zhanjin',shuanggu_swords:'icon_shuanggu',fangtian_ji:'icon_fangtian',pozhen_shuangji:'icon_pozhen',huochuan_ling:'icon_huochuan',donglai_ji:'icon_donglai',yitian_jian:'icon_yitian',
+        spear_orbit:'icon_1',crossbow:'icon_2',flame_banner:'icon_3',guandao:'icon_guandao',zhenbei_blade:'icon_zhenbei',lianhuan_mines:'icon_lianhuan',sun_knives:'icon_sunknives',diaochan_fans:'icon_fans',baodiao_bow:'icon_baodiao',dangyang_roar:'icon_shemao',zhanjin_lance:'icon_zhanjin',shuanggu_swords:'icon_shuanggu',fangtian_ji:'icon_fangtian',pozhen_shuangji:'icon_pozhen',huochuan_ling:'icon_huochuan',donglai_ji:'icon_donglai',yitian_jian:'icon_yitian',jinfan_gou:'icon_lianhuan',shuang_tieji:'icon_zhenbei',guding_dao:'icon_yitian',nanman_dao:'icon_guandao',huoyan_feiqiang:'icon_sunknives',
       } as const)[option.weaponId!] : option.weaponId === 'spear_orbit'
         ? 'icon_1'
         : option.weaponId === 'crossbow'

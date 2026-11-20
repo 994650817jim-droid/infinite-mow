@@ -4,7 +4,7 @@ import type { Player } from '../entities/Player';
 import type { PlayerStats, WeaponState } from '../types';
 import type { WeaponHost } from './registry';
 import { MENGDE as MD } from '../data/mengde';
-import { smartTarget } from './heroWeapons2';
+import { meleeTarget } from './heroWeapons2';
 import { playSheet } from '../systems/SkillFxSheets';
 import { branchTier } from '../data/weaponBranches';
 
@@ -118,9 +118,10 @@ export function mengdeBehavior(host: WeaponHost, weapon: WeaponState, dt: number
   }
   weapon.cooldownLeft -= dt;
   if (weapon.cooldownLeft > 0) return;
-  const target = smartTarget(host, MD.range);
-  if (!target) return;
   const reach = mengdeReach(weapon.level) * pl.passive.rangeMultiplier('yitian_jian');
+  // 只挑剑够得着的（2026-11-20 P3 孙权同款修）：原来按 MD.range 170 找「最密处」，挑中够不着的那个时整把剑卡住不砍身边的兵
+  const target = meleeTarget(host, reach);
+  if (!target) return;
   const dx = target.x - pl.x, dy = target.y - pl.y, d = Math.hypot(dx, dy) || 1, rot = Math.atan2(dy, dx);
   if (d > reach + target.radius + 10) return;
   const dmg = MENGDE_DEF.damage(weapon.level, pl.stats) * g.damageMultiplier(time);

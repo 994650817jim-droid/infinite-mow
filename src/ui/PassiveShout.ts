@@ -52,6 +52,11 @@ export const PASSIVE_FULL_SHOUTS: Partial<Record<CharacterId, PassiveFullShout>>
   sunshangxiang: { lines: ['侍婢何在，随我执刀！', '弓腰姬在此，谁敢近前！', '江东孙尚香，岂输男儿！'], color: '#ffc8b0' },
   // P2：吕布「无双」进狂暴、张辽「止啼」召八百虎贲时喊一句
   lvbu: { lines: ['人中吕布，马中赤兔！', '天下谁人能挡我！', '无双之名，岂是虚传！'], color: '#ff9c8a' },
+  zhurong: { lines: ['烈焰飞刀阵！', '火神后裔在此！', '烧吧！'], color: '#ffa070' },
+  menghuo: { lines: ['南中的猛兽，冲啊！', '孟获在此！', '不服！再来！'], color: '#ffb070' },
+  sunquan: { lines: ['阵势已变，随孤再战！', '江东子弟，齐射！', '制衡之道，审时度势。'], color: '#a8e8b0' },
+  dianwei: { lines: ['古之恶来在此！', '谁敢伤我主公！', '来！都来！'], color: '#ff9a7a' },
+  ganning: { lines: ['百骑劫营，随我来！', '锦帆贼甘宁在此！', '铃声一响，取尔首级！'], color: '#ffc890' },
   mengde: { lines: ['虎豹骑，随我冲阵！', '宁教我负天下人！', '天下英雄，唯使君与操耳！'], color: '#d0b8f0' },
   taishici: { lines: ['随我杀出重围！', '东莱太史慈在此！', '信义所在，万死不辞！'], color: '#b8e0c0' },
   zhouyu: { lines: ['万事俱备，东风已至！', '火船齐发！', '樯橹灰飞烟灭！'], color: '#ffb080' },

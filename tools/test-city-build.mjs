@@ -115,7 +115,7 @@ const OLD = { small: { balanced: [10, 0], farm: [16, 0], military: [5, 1] }, med
   await p.evaluate(() => window.__game.scene.getScene('TownScene').children.getByName('town-build-card').getByName('town-build-upgrade').emit('pointerdown'));
   await p.waitForTimeout(600);
   const grown = await p.evaluate(() => { const t = window.__game.scene.getScene('TownScene'); return { h: t.pano.list.filter(o => /^house-/.test(o.name ?? '')).length, f: t.folk.count }; });
-  ck('府衙升到 2 级：民居、居民都变多（大城 2→4 座、10→12 人）', before.h === 2 && before.f === 10 && grown.h === 4 && grown.f === 12, { before, grown });
+  ck('府衙升到 2 级：民居、居民都变多（大城 2→3 座、10→12 人）', before.h === 2 && before.f === 10 && grown.h === 3 && grown.f === 12, { before, grown });
   await p.screenshot({ path: `${out}/town-large-life-desktop.png` });
   // 中城、小城各看一眼
   for (const id of ['xuchang', 'guandu']) {

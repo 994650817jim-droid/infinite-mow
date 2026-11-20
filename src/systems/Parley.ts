@@ -100,7 +100,7 @@ export class Parley {
       if (first) gainProvisions(SURRENDER.persuadeProvisions);
     } else where = '试炼不入册';
     this.h.banner(`${d.name}归降`, false, where + (live ? ` · 军粮 +${SURRENDER.persuadeProvisions}` : ''));
-    this.h.sfx('parleyYes');
+    this.h.sfx('parleyYes'); this.h.sfx('kneel');
     this.kneel(b);
   }
   private fail(b: Enemy, ctx: Omit<OddsCtx, 'pressed'>): void {

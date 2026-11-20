@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { DEPTH, FONT, HEADING_FONT } from '../config';
 import { inkPlate } from './HomeCommand';
 import { cnPunct } from './StoryBarkCardStyles';
+import { playIn } from '../systems/Sfx';
 
 /**
  * 剧情卷轴（漆金卷轴同款，见 ChapterVictoryNotice）：逐句对白，点一下翻下一句，最后一页显示奖励和确认按钮。
@@ -45,6 +46,7 @@ const GOLD = 0xc9a35e, GOLD_HI = 0xf3d48a, LACQUER = 0x1b120b;
 
 export function storyScroll(scene: Phaser.Scene, W: number, H: number, desk: boolean, o: StoryScrollOptions): Phaser.GameObjects.Container {
   const root = scene.add.container(0, 0).setScrollFactor(0).setDepth(DEPTH.overlay + 11).setName(o.name);
+  playIn(scene, 'scroll_open'); // 卷轴展开（战败剧情卡、玩法解锁卡、关前 / 关后剧情）
   const text = (x: number, y: number, value: string, size: number, color: string, heading = false) => scene.add.text(x, y, value, {
     fontFamily: heading ? HEADING_FONT : FONT, fontSize: size + 'px', color, resolution: 2,
   }).setScrollFactor(0).setShadow(0, 2, '#000000', o.translucent ? 5 : 0, false, !!o.translucent);
@@ -196,7 +198,7 @@ export function storyScroll(scene: Phaser.Scene, W: number, H: number, desk: boo
     root.add(skipText);
   }
   hit.on('pointerover', () => paint(true)).on('pointerout', () => paint(false)).on('pointerup', () => {
-    if (i < o.lines.length - 1) { i++; show(); return; }
+    if (i < o.lines.length - 1) { i++; playIn(scene, 'uiPage'); show(); return; }
     root.destroy(); o.onDone();
   });
   show();

@@ -141,7 +141,7 @@ export class FortuneDefector {
       e.invulnerable = true; e.stunUntil = this.h.now() + DEFECTOR.kneelMs + 400; this.x = e.x; this.y = e.y;
       const sp = e.sprite, sy = sp.scaleY; s.tweens.add({ targets: sp, scaleY: sy * .78, duration: 220, ease: 'Quad.easeOut' }); // 跪地：身子一矮
     }
-    this.say(pick(DEFECTOR_LINES.yield)); this.h.sfx('gong');
+    this.say(pick(DEFECTOR_LINES.yield)); this.h.sfx('kneel');
   }
   private join(): 'yield' {
     this.phase = 'ally';

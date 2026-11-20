@@ -52,10 +52,10 @@ export const ATTRIBUTE_EFFECT = {
 /** 主属性每点额外全伤害，最多计 10 点。 */
 export const PRIMARY_BONUS = { perPoint: .01, maxPoints: 10 } as const;
 export const ATTRIBUTE_INFO: Record<AttributeId, { name: string; effect: string; icon: string }> = {
-  strength: { name: '力量', effect: '伤害 +1.5%、生命上限 +3% / 点', icon: 'growth_icon_might' },
-  agility: { name: '敏捷', effect: '攻速 +1.5%、移速 +1%、暴击 +0.5% / 点', icon: 'growth_icon_agility' },
-  intellect: { name: '智力', effect: '法术伤害 +2.5%、范围 +0.8% / 点', icon: 'growth_icon_points' },
-  command: { name: '统御', effect: '部曲伤害 +3%、部曲生命 +3% / 点', icon: 'growth_icon_tiger_tally' },
+  strength: { name: '力量', effect: '伤害 +1.5%、生命上限 +3%/点', icon: 'growth_icon_might' },
+  agility: { name: '敏捷', effect: '攻速 +1.5%、移速 +1%、暴击 +0.5%/点', icon: 'growth_icon_agility' },
+  intellect: { name: '智力', effect: '法术伤害 +2.5%、范围 +0.8%/点', icon: 'growth_icon_points' },
+  command: { name: '统御', effect: '部曲伤害 +3%、部曲生命 +3%/点', icon: 'growth_icon_tiger_tally' },
 };
 /**
  * 主属性加成（2026-11-17 用户：「属性点点武将的主属性，有更多加成或者有特殊加成」；主管理定方案，初值待平衡）：

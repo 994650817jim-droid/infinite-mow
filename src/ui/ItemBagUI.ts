@@ -171,7 +171,7 @@ export class ItemBagUI {
       tile.setName('item-slot-' + slot).setData('uid', item?.uid ?? null).setSize(size, size).setInteractive({ useHandCursor: true });
       this.onTap(tile, () => { if (item) this.select(item.uid); else if (locked) { this.notice = '第二信物位：第二章通关后开放'; this.render(); } else { this.filter = base; this.page = 0; this.notice = `行囊已筛选 · ${SLOTS[base].name}（点道具穿戴）`; this.render(); } });
       if (item) this.tip.attach(tile, () => item, () => item);
-      const name = slot === 'token2' ? (locked ? '信物·二 · 二章通关开放' : '信物·二') : SLOTS[slot].name;
+      const name = slot === 'token2' ? (locked ? '二章通关开放' : '信物·二') : SLOTS[slot].name;
       this.text(sx, sy + size / 2 + 10, item ? itemName(item) : name, 12, item ? QUALITIES[item.quality].css : '#8d7d60').setOrigin(.5).setName('item-slot-label-' + slot);
     }
     // 坐骑位
@@ -182,7 +182,7 @@ export class ItemBagUI {
     else mountTile.add(this.scene.add.image(0, 0, itemIconKey('mount')).setDisplaySize(size * .72, size * .72).setAlpha(.22));
     if (!unlocked || !this.canChangeHorse || this.hero.startsWith('r_')) mountTile.add(this.scene.add.text(size / 2 - 3, size / 2 - 3, '锁', { fontFamily: FONT, fontSize: '12px', color: '#1c140a', backgroundColor: '#b9a57a', resolution: 2 }).setOrigin(1, 1).setPadding(2, 0));
     mountTile.setName('item-slot-mount').setSize(size, size).setInteractive({ useHandCursor: true }); this.onTap(mountTile, () => this.select('stable'));
-    this.text(lx, my + size / 2 + 10, !unlocked ? '坐骑 · 一章通关开放' : horse ? horse.name : '坐骑', 12, horse ? '#f3c37a' : '#8d7d60').setOrigin(.5).setName('item-slot-label-mount');
+    this.text(lx, my + size / 2 + 10, !unlocked ? '一章通关开放' : horse ? horse.name : '坐骑', 12, horse ? '#f3c37a' : '#8d7d60').setOrigin(.5).setName('item-slot-label-mount');
     // 加成汇总
     const gear = gearFromItems(Object.values(worn).filter((i): i is ItemInstance => !!i), horse);
     const sumX = x0 + 28, sumY = my + size / 2 + (D ? 26 : 30), lines = gearSummary(gear);
@@ -338,7 +338,7 @@ export class ItemBagUI {
       tile.setName('item-slot-' + slot).setData('uid', item?.uid ?? null).setSize(size, size).setInteractive({ useHandCursor: true });
       this.onTap(tile, () => { if (item) this.select(item.uid); else if (locked) { this.notice = '第二信物位：第二章通关后开放'; this.render(); } else { this.filter = base; this.page = 0; this.notice = `行囊已筛选 · ${SLOTS[base].name}（点道具穿戴）`; this.render(); } });
       if (item) this.tip.attach(tile, () => item, () => item);
-      const name = slot === 'token2' ? (locked ? '信物·二 · 二章通关开放' : '信物·二') : SLOTS[slot].name;
+      const name = slot === 'token2' ? (locked ? '二章通关开放' : '信物·二') : SLOTS[slot].name;
       this.slotTag(sx < dx + dw / 2 ? sx - size / 2 - 12 : sx + size / 2 + 12, sy, slot === 'relic' ? '遗珍' : slot === 'token2' ? '信物' : SLOTS[slot].name);
       this.text(sx, sy + size / 2 + 8, item ? itemName(item) : name, 11, item ? QUALITIES[item.quality].css : '#6b5a40').setOrigin(.5).setName('item-slot-label-' + slot).setStroke(item ? '#140d07' : '#e8d9b8', item ? 3 : 2);
     }
@@ -353,7 +353,7 @@ export class ItemBagUI {
     if (!unlocked || !this.canChangeHorse || this.hero.startsWith('r_')) { const lk = bagArt(sc, 'lock_tag'); mountTile.add(lk ? sc.add.image(size / 2 - 9, size / 2 - 9, lk).setDisplaySize(20, 20) : sc.add.text(size / 2 - 3, size / 2 - 3, '锁', { fontFamily: FONT, fontSize: '12px', color: '#1c140a', backgroundColor: '#b9a57a', resolution: 2 }).setOrigin(1, 1).setPadding(2, 0)); }
     mountTile.setName('item-slot-mount').setSize(size, size).setInteractive({ useHandCursor: true }); this.onTap(mountTile, () => this.select('stable'));
     this.slotTag(lx - size / 2 - 12, my, '坐骑');
-    this.text(lx, my + size / 2 + 8, !unlocked ? '坐骑 · 一章通关开放' : horse ? horse.name : '坐骑', 11, horse ? '#f3c37a' : '#6b5a40').setOrigin(.5).setName('item-slot-label-mount').setStroke(horse ? '#140d07' : '#e8d9b8', horse ? 3 : 2);
+    this.text(lx, my + size / 2 + 8, !unlocked ? '一章通关开放' : horse ? horse.name : '坐骑', 11, horse ? '#f3c37a' : '#6b5a40').setOrigin(.5).setName('item-slot-label-mount').setStroke(horse ? '#140d07' : '#e8d9b8', horse ? 3 : 2);
     // —— 兵装加成横幅（三列词条 + 右上 ★ 特效）
     const gear = gearFromItems(Object.values(worn).filter((i): i is ItemInstance => !!i), horse), sy0 = dy + dh + 8, list = gearSummary(gear);
     const band = this.add(sc.add.graphics()); band.fillStyle(0x140d08, .9).fillRoundedRect(dx, sy0, dw, bottom - sy0, 6).lineStyle(1, 0x6b5a40, 1).strokeRoundedRect(dx + .5, sy0 + .5, dw - 1, bottom - sy0 - 1, 6);
@@ -411,7 +411,7 @@ export class ItemBagUI {
     this.button(tx + 30, pageY, '‹', 'item-page-prev', () => { this.page = Math.max(0, this.page - 1); this.render(); }, { disabled: this.page === 0, size: 16 });
     this.text(tx + 80, pageY, `${this.page + 1} / ${pages}`, 14, '#cdb98a').setOrigin(.5).setName('item-page');
     this.button(tx + 130, pageY, '›', 'item-page-next', () => { this.page = Math.min(pages - 1, this.page + 1); this.render(); }, { disabled: this.page >= pages - 1, size: 16 });
-    this.text(tx + tw, pageY, '要换粮？去军需商人「出售兵装」', 12, '#9c8c6c').setOrigin(1, .5).setName('item-sell-hint'); // 2026-11-19 用户「分解不需要背包，可以去军需商人卖装备」：行囊里不再分解
+    this.text(tx + tw - 28, pageY, '要换粮？去军需商人「出售兵装」', 12, '#e6d6b0').setOrigin(1, .5).setStroke('#140d07', 3).setName('item-sell-hint'); /* 2026-11-20 夜间 UI 审查：原来贴右边被布边裁掉、灰字在蓝布上看不清 */ // 2026-11-19 用户「分解不需要背包，可以去军需商人卖装备」：行囊里不再分解
 
     return pageY;
   }

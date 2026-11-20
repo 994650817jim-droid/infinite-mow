@@ -1,3 +1,4 @@
+import { defenseWaveStarts } from './defenseBattle';
 import {getSishuiEncounter} from './sishui';
 import type {ChapterDef} from './chapters';
 import type {EnemyDef} from './enemies';
@@ -60,12 +61,19 @@ export function defenseBossName(city: CityDef, attacker: FactionId): string {
   const f = FACTIONS[attacker].name;
   return city.tier === 'large' ? `${f}大将` : `${f}先锋`;
 }
-export function defenseBattle(city: CityDef, attacker: FactionId): ChapterDef {
+export function defenseBattle(city: CityDef, attacker: FactionId, intercept = false, waveCount?: number): ChapterDef {
   const base = siegeBattle(city, attacker);
+  if (intercept) return { // 迎击（守城重做）：集结期间出城野战——三波（约 2 分钟）、击败敌军先锋将
+    ...base, name: `迎击 · ${city.name}`, label: `${TIER_NAME[city.tier]} · ${city.region} · 迎击${FACTIONS[attacker].name}先锋`, description: `迎击${FACTIONS[attacker].name}`,
+    bossName: FACTIONS[attacker].name + '先锋', waves: DEFENSE_WAVES.medium.map((name, i) => ({name, start: i * 45})),
+    victoryTitle: '迎击告捷', victoryText: `击退${FACTIONS[attacker].name}先锋，${city.name}告急解除`,
+  };
   return {
     ...base,
     name: `守城 · ${city.name}`, label: `${TIER_NAME[city.tier]} · ${city.region} · ${FACTIONS[attacker].name}来犯`, description: `守住${city.name}`,
-    bossName: defenseBossName(city, attacker), waves: DEFENSE_WAVES[city.tier].map((name, i) => ({name, start: i * 45})),
+    bossName: defenseBossName(city, attacker),
+    // 守城重做：波数按守城档（data/defenseBattle），每波 = 攻 + 喘息，末波开始即攻城主将出阵
+    waves: waveCount ? defenseWaveStarts(waveCount).map((start, i) => ({name: i === waveCount - 1 ? '敌将来攻' : i === 0 ? '敌军压城' : '敌军再攻', start})) : DEFENSE_WAVES[city.tier].map((name, i) => ({name, start: i * 45})),
     victoryTitle: `${city.name}守住了`, victoryText: `击退${FACTIONS[attacker].name}，${city.name}转危为安`,
   };
 }

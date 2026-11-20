@@ -57,6 +57,10 @@ section('对照', [MIX], false);
     by('新杂兵 · 滚石滚木', '投石 / 强弩 / 扑跳 / 纵火罐 / 火船 / 地火', k => /^(mn_|fire_ignite|ship_boom|roll_)/.test(k)),
     by('场景事件 · 提示', '断桥 / 营帐起火 / 吕布跃下 / 据点 / 插旗 / 合击 / 觉醒', k => /^(bridge_|tent_|lubu_|cap_|flag_|toast_)/.test(k)),
     by('营寨 · 城池', '旅商购买 / 军医 / 环境声', k => /^(shop_|medic_|amb_)/.test(k)),
+    // 音效审计补齐（第一批 / 第二批）：首领转阶段与倒下、割草多杀、新功能、营寨攻坚、回血泉、跪降、新手提示、剧情卷轴、首领血条
+    by('首领 · 割草', '转阶段 / 倒下 / 多杀分层 / 血条登场与碎裂', k => /^(bossPhase|bossFall|killBurst|killSweep|bossbar_)/.test(k)),
+    by('营寨攻坚 · 战场', '营寨起火伏兵 / 守将出营 / 倒塌 / 火盆 / 回血 / 泉眼', k => /^(camp_|brazierBreak|healPickup|heal_spring)/.test(k)),
+    by('功能 · 界面', '兵器进阶 / 劝降 / 跪降 / 出售 / 舆图 / 新手提示 / 剧情卷轴 / 翻页 / 悬停', k => /^(promote|parley|kneel|shop_sell|map(Open|Close)|tutorial_tip|scroll_open|uiPage|uiHover)/.test(k)),
   ], false); }
 // 音效审计第一批（2026-11-20，用户「声音我想听听」）：放在最前面方便试听
 { const sec = document.getElementById('app')!.lastElementChild; section('本次新增 · 音效审计第一批', [

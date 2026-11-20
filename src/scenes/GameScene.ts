@@ -1,4 +1,5 @@
 import { playMenuMusic, stopMenuMusic } from '../systems/Music';
+import { startCityAmbient } from '../systems/ContentSfx';
 import { SCHOOLS, SCHOOL_TIER, SHI_SOURCES, FOLLOWER_SCHOOL, heroAffinity, type SchoolId } from '../data/schools';
 import { playSheet } from '../systems/SkillFxSheets';
 import { ZHANGLIAO } from '../data/zhangliao';
@@ -172,6 +173,7 @@ import { envConfigFor, type Faction } from '../data/envInteractions';
 import { Terrain } from '../systems/Terrain';
 import { attrBadge } from '../ui/AttrBadge';
 import { AttributePanelView } from '../ui/AttributePanelView';
+import { dmgFontKey } from '../ui/DamageFont';
 import { baseEquiv, baseStat, statMultiplier, statSource } from '../data/heroStats';
 import { ATTRIBUTE_IDS } from '../data/attributes';
 import { PROP_LOOT, rollPropItem, rollPropQuality, type PropLootKind } from '../data/propLoot';
@@ -246,7 +248,7 @@ interface DmgFx {
   crit: boolean;
   /** 伤害数字样式（2026-11-17 用户：「造成伤害字体也改优化一下」）：普通 / 暴击 / 技艺法术 / 首领 / 治疗 / 部曲随行 */
   kind: DmgKind;
-  text: Phaser.GameObjects.Text;
+  text: Phaser.GameObjects.BitmapText;
   /** 暴击时数字左侧的小「暴」字 */
   tag?: Phaser.GameObjects.Text;
   life: number;
@@ -710,7 +712,7 @@ export class GameScene extends Phaser.Scene {
   private relicWaveGfx!:Phaser.GameObjects.Graphics;private relicWaves:Array<{x:number;y:number;at:number}>=[];
   private firstBossAt=-1;private settledFrontlineKills=0;private frontlineNextSettlement=1;
   private frontlineVictories=new Map<number,{elapsed:number}>();private frontlineStarts=new Map<number,number>();
-  private chasingBosses:ChasingBoss[]=[];private deadBossControllers:Array<HuaxiongBoss|XurongBoss>=[];
+  private chasingBosses:ChasingBoss[]=[];/** 剧情卷轴占用计数（StoryDirector pause / resume）。 */protected storyHolds=0;private deadBossControllers:Array<HuaxiongBoss|XurongBoss>=[];
   private get trailingBoss():ChasingBoss|null{return this.chasingBosses[0]??null;}
   /** 首领倒地后掉的宝箱（捡起遗物才进下一阶段）。 */
   protected bossChests:BossChest[]=[];
@@ -793,6 +795,7 @@ export class GameScene extends Phaser.Scene {
     // 中途退出不算：进关先记下存档，告捷 / 战败才丢掉（systems/BattleSnapshot.ts）
     beginBattle(this.scene.key);
     stopMenuMusic();
+    startCityAmbient(this, k => this.sfx?.play(k), ['amb_wind', 'amb_wind', 'amb_flag'], [9000, 16000]); // 战斗环境声：很稀的风 / 旗声（音效审计第二批）
     this.hadStarterHorse = ownedHorses().some(h => h.id === STARTER_HORSE);
     this.resetState();
     ensureWarTextures(this);
@@ -1046,7 +1049,8 @@ export class GameScene extends Phaser.Scene {
    */
   protected setupStory(chapterId: string, stage: number, done: () => void = () => {}): void {
     this.storyDir = new StoryDirector({ scene: this, chapterId, stage, ctx: this.storyCtx(),
-      pause: () => { if (this.mode === 'none' && !this.over) this.setMode('story'); }, resume: () => { if (this.mode === 'story' && !this.over) this.setMode('none'); },
+      // 剧情卷轴播放期间记一个「剧情占用」：卷轴开播时正在三选一（首领宝箱补发的升级）也要记上，选完回到剧情暂停而不是回战斗（2026-11-20 夜间回归：1-3 章末卷轴在场时战斗照打、升级弹在卷轴上）
+      pause: () => { this.storyHolds++; if (this.mode === 'none' && !this.over) this.setMode('story'); }, resume: () => { this.storyHolds = Math.max(0, this.storyHolds - 1); if (this.mode === 'story' && !this.over && !this.storyHolds) this.setMode('none'); },
       reward: r => { if (r.merit) addMerit(r.merit); if (r.grain) addProvisions(r.grain); }, banner: (t, c) => { this.showWaveBanner(t, true, c); this.sfx.play('gong'); }, bossId: () => this.storyBossId() });
     { const lord = this.runConfig.character, k = this.storyDir.bondDamageMul(lord), v = this.storyDir.bondSpeedMul(lord); if (k !== 1) this.player.stats.damageMul *= k; if (v !== 1) this.player.stats.moveMul *= v; this.player.stats.critChance += this.storyDir.bondCritBonus(lord); // 羁绊（「桃园」伤害、「借将」移速、「古城」暴击）
       for (const m of this.followers?.members ?? []) if (m.recruit.hero) m.weaponDamageMul *= this.storyDir.bondDamageMul(m.recruit.hero);
@@ -1085,7 +1089,7 @@ export class GameScene extends Phaser.Scene {
   protected resetState(): void {
     this.phaseRunner?.clear();this.battleTrack?.destroy();this.phaseRunner=null;this.battleTrack=null;this.phasePlan=null;this.phasedFor=null;this.fortunes?.clear();this.fortunes=null;this.fortuneQueue=[];this.fortuneTaken={};this.beaconCalmUntil=0;this.jinnang=null;this.jinnangButton=undefined;this.resetStageCards();this.branchRt?.clear();this.branchRt=null;this.branchFor=null;
     this.relicWaves=[];this.runMerit={elite:0,boss:0};this.picksGiven=0;this.militaryPending=0; // 场景实例会被重复使用：每场重置
-    this.firstBossAt=-1;this.settledFrontlineKills=0;this.frontlineNextSettlement=1;this.frontlineVictories.clear();this.frontlineStarts.clear();this.chasingBosses=[];this.deadBossControllers=[];for(const c of this.bossChests)c.clear();this.bossChests=[];this.lootContinue=null;this.relicHits=0;this.relicFireAt=0;this.relicHealAt=0;
+    this.firstBossAt=-1;this.settledFrontlineKills=0;this.frontlineNextSettlement=1;this.frontlineVictories.clear();this.frontlineStarts.clear();this.chasingBosses=[];this.storyHolds=0;this.deadBossControllers=[];for(const c of this.bossChests)c.clear();this.bossChests=[];this.lootContinue=null;this.relicHits=0;this.relicFireAt=0;this.relicHealAt=0;
     this.rerolls=0;this.warfeedCount=0;this.pointsButton=undefined;this.pointsBadge=undefined;this.potionButton=undefined;this.potionBadge=undefined;this.potionIcon=undefined;this.potionGlow=undefined;this.rerollButton=undefined;
     this.crowdSteering = true; this.freeRecruit = false; this.resting = false; this.restIntroPlayed = false; this.restIntroSkip = undefined; this.recruitedWaves.clear();
     this.pendingGrowthNotices.length = 0;
@@ -2818,11 +2822,11 @@ export class GameScene extends Phaser.Scene {
     if(!fx&&(crit||priority)&&this.dmgFx.length>=40)fx=this.dmgFx.filter(f=>!f.crit).sort((a,b)=>a.life-b.life)[0];
     if (!fx) {
       if (this.dmgFx.length >= 40) return;
-      fx = { crit, kind: k, text: this.add.text(0, 0, '', { fontFamily: DMG_FONT, fontStyle: 'bold', fontSize: '15px' }).setOrigin(0.5).setDepth(DEPTH.dmgText).setShadow(1, 2, '#000000', 2, true, true), life: 0, vx: 0, vy: 0, active: false };
+      fx = { crit, kind: k, text: this.add.bitmapText(0, 0, dmgFontKey(this, k, DMG_FONT, DMG_STYLE[k]), '', DMG_STYLE[k].size).setOrigin(0.5).setDepth(DEPTH.dmgText), life: 0, vx: 0, vy: 0, active: false };
       fx.kind = '' as DmgKind; // 强制下面套用样式
       this.dmgFx.push(fx);
     }
-    if (fx.kind !== k) { const st = DMG_STYLE[k]; fx.kind = k; fx.text.setStyle({ fontSize: st.size + 'px', color: st.color, stroke: st.stroke, strokeThickness: st.sw }); }
+    if (fx.kind !== k) { const st = DMG_STYLE[k]; fx.kind = k; fx.text.setFont(dmgFontKey(this, k, DMG_FONT, st), st.size); }
     fx.crit = crit;
     fx.tag?.setVisible(false); // 2026-11-18 用户：暴击不再显示「暴」字，只靠更大的金色数字区分
     fx.active = true;
@@ -3032,6 +3036,8 @@ export class GameScene extends Phaser.Scene {
   // ---------------- 升级 / 结算 ----------------
 
   protected setMode(mode: Mode): void {
+    // 剧情卷轴还在播（storyHolds）时，三选一 / 招募等收起后回到剧情暂停
+    if (mode === 'none' && this.storyHolds > 0 && !this.over) mode = 'story';
     // 所有战斗 Timer / Tween 一起冻结；绝对期限使用 combatNow。
     this.mode = mode;
     if(mode!=='pause')this.children.getByName('build-panel')?.destroy();if(mode!=='pause')this.children.getByName('item-bag')?.destroy();
@@ -4128,7 +4134,7 @@ export class GameScene extends Phaser.Scene {
   protected runDefeatFlow(): void {
     const key = this.hardKey(), stage = this.hardStage(), city = this.scene.key === 'SiegeGameScene' ? String(this.registry.get('siegeCity') ?? '') : null;
     // 守城战败：退到最近的「另一座」我方城池或营寨（原来退回刚没守住、仍在告急的那座城本身）
-    const defending = !!city && this.registry.get('siegeMode') === 'defense';
+    const defending = !!city && (this.registry.get('siegeMode') === 'defense' || this.registry.get('siegeMode') === 'intercept');
     this.defeatRetreat = worldUnlocked() && !this.encounterPreview ? retreatTarget(battlePoint(key, city), defending ? city : null) : null;
     const notes: string[] = [];
     if (this.defeatLive()) {

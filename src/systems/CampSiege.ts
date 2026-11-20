@@ -87,14 +87,14 @@ export class CampSiege {
       if (!r.guarded && d < C.guardR) { r.guarded = true; this.stats.guards += this.squad(r, this.h.chapter() >= 5 ? ['elite', 'shield', 'shield', 'infantry'] : ['elite', 'shield', 'shield'], 120); }
       // 半血：起火 + 号角 + 伏兵 + 附近营寨马上出兵
       if (!r.burned && k <= C.burnAt) {
-        r.burned = true; this.stats.burns++; this.h.sfx('chargeWarn'); this.h.sfx('tent_fire');
+        r.burned = true; this.stats.burns++; this.h.sfx('camp_burn'); this.h.sfx('tent_fire');
         const kinds: EnemyKind[] = this.h.chapter() >= 4 ? ['shield', 'shield', 'infantry', 'elite'] : ['shield', 'shield', 'infantry', 'infantry'];
         this.stats.ambush += this.squad(r, kinds.slice(0, C.ambush), C.ambushR);
         for (const o of this.recs) if (o !== r && Math.hypot(o.x - r.x, o.y - r.y) < C.nearbyR && o.opts.onAlarm) { o.opts.onAlarm(); this.stats.alarms++; }
         r.opts.onAlarm?.();
       }
       // 快拆完：守将出营拼命（一座营一次）
-      if (!r.captain && k <= C.captainAt) { r.captain = true; if (this.h.captain(r.x + (P.x < r.x ? -70 : 70), r.y + 40)) this.stats.captains++; this.h.sfx('gong'); }
+      if (!r.captain && k <= C.captainAt) { r.captain = true; if (this.h.captain(r.x + (P.x < r.x ? -70 : 70), r.y + 40)) this.stats.captains++; this.h.sfx('camp_captain'); }
       // 起火后营帐上一直烧（手绘地火序列帧，镜头外不放）
       if (r.burned && now >= r.fireAt) { r.fireAt = now + 1300; const v = this.h.scene.cameras.main.worldView; if (r.x > v.left - 150 && r.x < v.right + 150 && r.y > v.top - 150 && r.y < v.bottom + 250) playSheet(this.h.scene, 'fx_ground_fire', r.x + (Math.random() - .5) * 50, r.y - 20, { size: 130, ms: 1400, depth: actorDepth(r.y) + .2, originY: .8, alpha: .9, name: 'camp-siege-fire' }); }
       // 头顶细耐久条（挨过打才显示）
@@ -105,7 +105,7 @@ export class CampSiege {
   private collapse(r: Rec): void {
     this.recs = this.recs.filter(o => o !== r); r.bar?.destroy(); this.stats.collapses++;
     playSheet(this.h.scene, 'fx_collapse_dust', r.x, r.y + 10, { size: r.tier === 'camp' ? 260 : 190, ms: 800, depth: actorDepth(r.y) + .4, originY: .8, name: 'camp-siege-collapse' });
-    this.h.shake(); this.h.sfx('propBreak');
+    this.h.shake(); this.h.sfx('camp_collapse');
     for (let i = 0; i < C.gems; i++) { const a = i / C.gems * Math.PI * 2; this.h.gem(r.x + Math.cos(a) * 40, r.y + 14 + Math.sin(a) * 20, C.gemXp); }
   }
   clear(): void { for (const r of this.recs) r.bar?.destroy(); this.recs = []; }

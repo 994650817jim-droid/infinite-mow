@@ -2651,7 +2651,7 @@ export class GameScene extends Phaser.Scene {
         this.recordFrontlineVictory(old.stage);
       }else{this.bossKilled=true;this.boss=null;this.recordFrontlineVictory(this.battleStage());this.lordBossBark('bossDown',this.storyBossFell);this.storyBossFell=false;}
       // 倒地后原地掉宝箱，主将捡起遗物才进下一阶段（原来的三选一遗物卡改成宝箱）
-      this.spawnBossChest(enemy.x,enemy.y,()=>{if(this.bossKilled&&this.chasingBosses.length===0){if(this.storyDir)this.storyDir.chapterClose(()=>this.finish(true,'boss'));else this.finish(true,'boss');}else{this.resumePendingChoices();if(this.bossKilled)this.showGrowthNotice('当前首领已败 · 仍有'+this.chasingBosses.length+'名追击首领');}});return;
+      this.spawnBossChest(enemy.x,enemy.y,()=>{if(this.bossKilled&&this.chasingBosses.length===0){this.afterPendingPicks(()=>{if(this.storyDir)this.storyDir.chapterClose(()=>this.finish(true,'boss'));else this.finish(true,'boss');});}else{this.resumePendingChoices();if(this.bossKilled)this.showGrowthNotice('当前首领已败 · 仍有'+this.chasingBosses.length+'名追击首领');}});return;
     }
     this.spawnGem(enemy.x, enemy.y, enemy.def.xp * (this.boss?.active && enemy.kind !== 'boss' ? BALANCE.bossSpawn.xpMul : 1)); // 首领在场：杂兵经验 ×2（BALANCE.bossSpawn.xpMul）
   }
@@ -3747,6 +3747,28 @@ export class GameScene extends Phaser.Scene {
     hit.on('pointerdown', close).on('destroy', () => { if (card.active) card.destroy(); if (held && notice?.active) notice.setVisible(true); });
     if (view.levelUp) this.sfx.level();
     window.setTimeout(() => { if (hit.active) close(); }, 5600);
+  }
+  /**
+   * 首领宝箱补发的三选一（grantBossChest → ensurePicks force）先选完再往下走（2026-11-20 夜间回归：三选一原来盖在章末卷轴上）。
+   * 战斗模式回到 none 且没有待选时调 go；有待选就立刻开三选一（开不出来——例如没有可选项——就不等）。场景关闭时撤掉监听。
+   */
+  protected afterPendingPicks(go:()=>void):void{
+    const ready=():boolean=>{if(this.over||!this.sys.isActive())return true;if(this.mode!=='none')return false;if(this.pendingLevels>0){this.forcePickNow=true;this.openUpgrade();return this.mode==='none';}return true;};
+    if(ready()){if(this.sys.isActive())go();return;}
+    const off=():void=>{this.events.off('postupdate',poll);this.events.off('shutdown',off);};
+    const poll=():void=>{if(!ready())return;off();if(this.sys.isActive())go();};
+    this.events.on('postupdate',poll);this.events.once('shutdown',off);
+  }
+  /**
+   * 篇章章末卷轴（第 6 / 8 / 10 / 12 章等，宝箱后、结算前）：先选完宝箱补发的三选一，再以剧情暂停播卷轴（计入 storyHolds，期间三选一 / 招募收起回到剧情）。
+   * 原来各篇借 setMode('parley') 暂停（劝降窗其实没开，手柄 / 测试按劝降处理）。open 里建卷轴，卷轴收起时调 close()，再走下一步。
+   */
+  endScroll(open:(close:()=>void)=>void):void{
+    this.afterPendingPicks(()=>{
+      if(this.over){open(()=>{});return;}
+      this.storyHolds++;this.setMode('story');let closed=false;
+      open(()=>{if(closed)return;closed=true;this.storyHolds=Math.max(0,this.storyHolds-1);if(!this.over)this.setMode('none');});
+    });
   }
   /** 测试 / 调试：直接打开所有等待中的首领宝箱。 */
   collectBossChests():void{for(const c of [...this.bossChests])c.collectNow();}

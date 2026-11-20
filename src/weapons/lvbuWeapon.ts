@@ -86,6 +86,7 @@ export function lvbuBehavior(host: WeaponHost, weapon: WeaponState, dt: number, 
   const level = weapon.level, damage = LVBU_DEF.damage(level, pl.stats) * g.damageMultiplier(time), sweep = st.step % 3 === 2;
   const act = (n: number): void => {
     if (host.over || !pl.alive) return;
+    const bm = (e: { kind: string }): number => n === 1 && e.kind === 'boss' ? LVBU.bossDoubleMul : 1; // 无双第二击打首领减半
     const now = host.combatNow, tx = target.active ? target.x : pl.x + 1, ty = target.active ? target.y : pl.y, d = Math.hypot(tx - pl.x, ty - pl.y) || 1, ux = (tx - pl.x) / d, uy = (ty - pl.y) / d;
     pl.faceDirection(cardinal(ux, uy), 200);
     if (sweep) {
@@ -95,7 +96,7 @@ export function lvbuBehavior(host: WeaponHost, weapon: WeaponState, dt: number, 
         if (host.over) return; const t = host.combatNow, px = pl.x, py = pl.y;
         for (const e of host.grid.query(px, py, r + 40)) {
           if (!hittable(e) || Math.hypot(e.x - px, e.y - py) > r + e.radius) continue;
-          host.hitEnemy(e, damage * LVBU.sweepMul * (renzhong ? k : 1), t, 'melee');
+          host.hitEnemy(e, damage * LVBU.sweepMul * (renzhong ? k : 1) * bm(e), t, 'melee');
           const dd = Math.hypot(e.x - px, e.y - py) || 1; shove(e, (e.x - px) / dd, (e.y - py) / dd, LVBU.sweepShove);
         }
         sweepFx(host, px, py, r, renzhong);
@@ -107,7 +108,7 @@ export function lvbuBehavior(host: WeaponHost, weapon: WeaponState, dt: number, 
     } else {
       // 长突：一线穿透
       const len = lvbuThrustLen(level) * pl.passive.rangeMultiplier('fangtian_ji');
-      for (const e of lane(host, pl.x, pl.y, ux, uy, len, LVBU.thrustWidth)) host.hitEnemy(e, damage * LVBU.thrustMul, now, 'melee');
+      for (const e of lane(host, pl.x, pl.y, ux, uy, len, LVBU.thrustWidth)) host.hitEnemy(e, damage * LVBU.thrustMul * bm(e), now, 'melee');
       thrustFx(host, pl.x, pl.y, ux, uy, len);
       pl.playAction('attack', ux < 0 ? 'left' : ux > 0 ? 'right' : uy < 0 ? 'up' : 'down');
       host.sfx.play('atk_lance');

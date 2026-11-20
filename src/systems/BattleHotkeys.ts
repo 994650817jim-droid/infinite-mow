@@ -35,8 +35,6 @@ export interface HotkeyHost {
   mapOpen?(): boolean;
   /** 军令面板收起 / 展开（G）；没有面板（手机布局）时不传。 */
   toggleOrders?(): void;
-  /** 战斗中的「小成」快选（1 / 2 / 3，不暂停）；没开时返回 false。 */
-  quickPick?(i: number): boolean;
 }
 
 type GO = Phaser.GameObjects.GameObject & { visible?: boolean; parentContainer?: Phaser.GameObjects.Container | null; getBounds?: () => Phaser.Geom.Rectangle };
@@ -122,7 +120,6 @@ export class BattleHotkeys {
         case 'bag': h.openBag(); return true;
         case 'attributes': if (!h.canAttributes()) return false; h.openAttributes('none'); return true;
         case 'build': h.togglePause(); h.openBuild(); this.buildFromBattle = true; return true;
-        case 'pick1': case 'pick2': case 'pick3': return h.quickPick?.(PICK[a] ?? 0) ?? false;
         default: return false;
       }
     }

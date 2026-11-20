@@ -196,6 +196,12 @@ export function foundationOptions():UpgradeOption[]{
   ];
 }
 
+/** 越级兜底「军资」（2026-11-20 等级软上限，level-curve-redesign.md）：随军粮 +(30 + 8 × 章)，一次性。 */
+export function supplyOption(chapter: number): UpgradeOption {
+  const n = 30 + 8 * Math.max(1, Math.floor(chapter));
+  return { id: 'supply_grain', name: '军资 · 粮秣', desc: '随军粮 +' + n + '\n越级时补给：卡池抽空也有得选', kind: 'foundation', categoryLabel: '军资', scope: 'once', icon: 'growth_icon_pickup',
+    apply: p => { const sc = p.scene as unknown as { legion?: { food: number } }; if (sc.legion) sc.legion.food += n; } };
+}
 /**
  * 战法卡上的流派说明（2026-11-19 流派重做）：「火攻 · 势 3 → 4　解锁【燎原】」。
  * 势 = 本派战法等级之和（学新战法、升级都 +1）+ 亲和 / 随行 / 信物 / 名马；2 / 4 / 6 势各解锁一档（6 势 = 觉醒）。
@@ -260,5 +266,7 @@ export function buildUpgradeOptions(player: Player, weapons: WeaponState[], grow
     // 不出「三张都没用的」：核心位已不是永久成长时，至少留一张战法（2026-11-19 池子深度）
     if(final[0].kind==='foundation'){const keep=slots.filter(i=>i>0&&final[i].kind==='tactic');if(keep.length&&keep.length===final.filter((o,i)=>i>0&&o.kind==='tactic').length)slots.splice(slots.indexOf(keep[0]),1);}
     if(slots.length){const fresh=extra.draw(slots.length);slots.forEach((k,j)=>{if(fresh[j])final[k]=fresh[j];});}}
+  // 越级（软上限）：剩下的保底卡（固本培元一类）换一张「军资」兜底
+  if(player.level>=player.softLevel){const k=final.findIndex(o=>o.kind==='foundation'&&o.id!=='supply_grain');if(k>=0)final[k]=supplyOption((player.scene as unknown as {phasePlan?:{chapter:number}}).phasePlan?.chapter??2);}
   return shuffle(final);
 }

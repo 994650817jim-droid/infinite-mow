@@ -6,7 +6,7 @@ import type {CharacterId} from '../data/characters';
 import Phaser from 'phaser';
 import { CharacterPassives } from '../systems/CharacterPassives';
 import { RunGrowth } from '../systems/RunGrowth';
-import { SOFT_CAP, heroXpNeed } from '../data/heroLevels';
+import { heroXpNeed } from '../data/heroLevels';
 import { vigorHp } from '../data/attributes';
 import { BALANCE, DEPTH, FONT, actorDepth } from '../config';
 import type { PlayerStats, WeaponState } from '../types';
@@ -57,8 +57,6 @@ export class Player {
   xpNext = 16;
   /** 本关建议等级（软上限：越过后每级经验 ×1.45，data/heroLevels.ts SOFT_CAP）；Infinity = 不加成。 */
   softLevel = Infinity;
-  /** 还没发的「小成」（经验条每满 1/4、不到整级）。 */
-  smallSteps = 0;
   alive = true;
   invulnUntil = 0;
   damageImmune = false;
@@ -446,11 +444,10 @@ export class Player {
     this.hp = Math.min(this.maxHp, this.hp + amount);
   }
 
-  /** 返回本次获得的整级数（软上限：越过建议等级 softLevel 后每级 ×1.45，不封顶）；经验条每跨 1/4 记一次 smallSteps。 */
+  /** 返回本次获得的等级数（软上限：越过建议等级 softLevel 后每级 ×1.45，不封顶）。 */
   /** 本级升级所需（软上限后）。 */
   needFor(level: number): number { return heroXpNeed(level, this.softLevel); }
   gainXp(amount: number): number {
-    const steps = SOFT_CAP.steps, q0 = Math.floor(this.xp * steps / Math.max(1, this.xpNext));
     this.xp += amount; this.runXp += amount;
     let gained = 0;
     // 软上限（2026-11-20）：不再封顶，越过建议等级后每级 ×1.45
@@ -460,8 +457,6 @@ export class Player {
       gained += 1;
       this.xpNext = this.needFor(this.level);
     }
-    // 小成：本级经验条跨过 1/4、2/4、3/4（同一下升了整级就不另算）
-    if (!gained) this.smallSteps += Math.max(0, Math.floor(this.xp * steps / Math.max(1, this.xpNext)) - q0);
     // 2026-11-17：等级即武将等级，每升 1 级一次三选一并给 1 个属性点（GameScene.onHeroLevelUp）
     return gained;
   }

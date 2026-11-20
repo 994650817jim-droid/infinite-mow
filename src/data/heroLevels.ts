@@ -51,10 +51,10 @@ export const PICK_PACE = {
 /**
  * 等级软上限（2026-11-20 用户「等级有上限不太行……可以慢慢提升在那一关适合的需要升级的经验」，统筹定 A+C；共享笔记 level-curve-redesign.md）：
  * - 没有硬上限：每关有「建议等级」（HeroProgress.suggestedLevel，原上限表当参考），越过之后每级所需经验 ×overMul（逐级相乘）。
- * - 经验条分 steps 段：每满一段（不到整级）一次「小成」——不暂停，屏幕上方滑出 3 个小图标（心法 / 军资 / 体魄 / 回血），按 1 / 2 / 3 或点击选，autoMs 没选自动给第一个。
- *   满一整级照旧暂停弹三选一、给属性点。
+ * - 2026-11-20 用户「我觉得太多东西了关于这个升级，不像一直点」：不做「小成」（经验条分段、额外的快选），只有整级升级弹三选一。
+ * - 越级时三选一里的保底卡（固本培元一类）换一张「军资」（data/upgrades.ts supplyOption），卡池不会被抽空。
  */
-export const SOFT_CAP = { overMul: 1.45, steps: 4, autoMs: 5000 } as const;
+export const SOFT_CAP = { overMul: 1.45 } as const;
 /**
  * 经验挪进关内（统筹 2026-11-20：关内大升级从约 1 次变成 1–2 次，总经验与长期曲线基本不变）：
  * 宝石经验（击杀 / 精锐 / 副将 / 首领 / 机缘宝石）×gem，首次通关经验 ×firstClear。实测（tools/measure-stage-xp.mjs，捡满）一关局内 650–1150：

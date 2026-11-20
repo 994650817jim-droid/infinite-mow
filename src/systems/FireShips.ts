@@ -35,10 +35,24 @@ export class FireShips {
     if (!h.scene.textures.exists('fireship_spark')) { const g = h.scene.make.graphics({x: 0, y: 0}, false); g.fillStyle(0xffd27a, 1).fillCircle(4, 4, 4); g.generateTexture('fireship_spark', 8, 8); g.destroy(); }
     this.sparks = h.scene.add.particles(0, 0, 'fireship_spark', {lifespan: 650, speedY: {min: -90, max: -30}, speedX: {min: -40, max: 40}, scale: {start: 1.1, end: 0}, alpha: {start: .95, end: 0}, tint: [0xffe08a, 0xff9a3c, 0xe04a1c], blendMode: 'ADD', emitting: false, maxAliveParticles: 90}).setDepth(24);
   }
+  private flames: Phaser.GameObjects.Image[] = [];
+  /** 火带上铺一排手绘火苗（池化，最多 28 个）：前沿最亮、身后渐熄；返回是否用了手绘图。 */
+  private drawFlames(x0: number, x1: number, top: number, now: number, sweep: number, dir: number): boolean {
+    const sc = this.h.scene; if (!sc.textures.exists('fx_ground_fire')) return false;
+    const step = 64, n = Math.min(28, Math.max(1, Math.ceil((x1 - x0) / step))), size = FIRE_SHIP.laneH * 1.25;
+    for (let i = 0; i < n; i++) {
+      let im = this.flames[i]; if (!im) { im = sc.add.image(0, 0, 'fx_ground_fire', 0).setOrigin(.5, .7).setDepth(24); this.flames.push(im); }
+      const t = n > 1 ? i / (n - 1) : 1, fromFront = dir > 0 ? t : 1 - t; // 0 = 尾 1 = 前沿
+      const x = x0 + (x1 - x0) * (n > 1 ? i / (n - 1) : .5), fade = Math.min(1, .25 + fromFront * .9) * (sweep > 1 ? Math.max(0, 1 - (sweep - 1) / .4) : 1);
+      im.setVisible(true).setPosition(x, top + FIRE_SHIP.laneH * .72).setDisplaySize(size, size).setAlpha(.9 * fade).setFrame((Math.floor(now / 90) + i * 2) % 6);
+    }
+    for (let i = n; i < this.flames.length; i++) this.flames[i].setVisible(false);
+    return true;
+  }
   /** 立即发动（测试 / 调试用）。 */
   force(now: number) { this.next = now; }
   update(now: number) {
-    const g = this.gfx; g.clear();
+    const g = this.gfx; g.clear(); if (!this.lane) for (const im of this.flames) im.setVisible(false);
     if (!this.lane && now >= this.next) {
       const p = this.h.player();
       this.lane = {y: p.y + Phaser.Math.Between(-60, 60), dir: Math.random() < .5 ? 1 : -1, start: now};
@@ -59,12 +73,15 @@ export class FireShips {
       return;
     }
     const sweep = (age - FIRE_SHIP.warnMs) / FIRE_SHIP.sweepMs;
-    if (sweep >= 1.4) { this.lane = null; this.next = now + this.interval; return; }
+    if (sweep >= 1.4) { this.lane = null; this.next = now + this.interval; for (const im of this.flames) im.setVisible(false); return; }
     // 火墙前沿从上风处推到下风处，身后留一段渐熄的火带
     const span = right - left, front = L.dir > 0 ? left + span * Math.min(1, sweep) : right - span * Math.min(1, sweep), tail = 260;
     const x0 = L.dir > 0 ? Math.max(left, front - tail) : front, x1 = L.dir > 0 ? front : Math.min(right, front + tail);
-    g.fillStyle(0xff7a2a, .32).fillRect(x0, top, x1 - x0, FIRE_SHIP.laneH);
-    g.fillStyle(0xffd27a, .5).fillRect(L.dir > 0 ? front - 26 : front, top + 6, 26, FIRE_SHIP.laneH - 12);
+    // 手绘地火（fx_ground_fire）沿火带铺成火墙；缺图才退回原来的色块（2026-11-20 特效收尾：火墙不再是纯色矩形）
+    if (!this.drawFlames(x0, x1, top, now, sweep, L.dir)) {
+      g.fillStyle(0xff7a2a, .32).fillRect(x0, top, x1 - x0, FIRE_SHIP.laneH);
+      g.fillStyle(0xffd27a, .5).fillRect(L.dir > 0 ? front - 26 : front, top + 6, 26, FIRE_SHIP.laneH - 12);
+    }
     if (sweep <= 1) for (let i = 0; i < 4; i++) this.sparks?.emitParticleAt(front + Phaser.Math.Between(-14, 14), top + Math.random() * FIRE_SHIP.laneH, 1);
     // 伤害：每艘火船对每名敌人只烧一次
     const boss = this.h.boss();
@@ -75,5 +92,5 @@ export class FireShips {
       this.h.burn(e, e === boss ? Math.round(FIRE_SHIP.damage * FIRE_SHIP.bossShare) : FIRE_SHIP.damage, now);
     }
   }
-  clear() { this.gfx.destroy(); this.sparks?.destroy(); this.sparks = null; }
+  clear() { this.gfx.destroy(); this.sparks?.destroy(); this.sparks = null; for (const im of this.flames) im.destroy(); this.flames = []; }
 }

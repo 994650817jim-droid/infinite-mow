@@ -7,8 +7,9 @@ import type { Enemy } from '../entities/Enemy';
  * 手绘序列帧 fx_status（ChatGPT，黑底转透明；1536×1024，6 列 × 4 行，每格 256；行 0 灼烧火苗（套在身上）/ 行 1 迟滞墨印（脚下地面）/ 行 2 眩晕旋星（头顶）/ 行 3 破甲裂纹（套在身上），每行 6 帧循环）。
  * 池化 + 同屏上限（STATUS_FX.cap）：只给镜头里的敌人画，一个敌人同时多个状态最多各一个；手机（lite）不画；缺图什么都不画。
  */
+// 2026-11-20「流派特效太小太快」：标记放大约 1.2 倍、动画 10 → 7 帧 / 秒、略透明（不糊成一片）、同屏上限 28 → 24。
 // 2026-11-20 攻击特效检查：眩晕星环 .6 → .46、迟滞地环 .8 → .66（混战时每个兵都比本人还宽的一圈，糊成一片）
-export const STATUS_FX = { key: 'fx_status', cap: 28, fps: 10, bodyFrac: .74, groundFrac: .66, stunFrac: .46, alpha: .85 } as const;
+export const STATUS_FX = { key: 'fx_status', cap: 24, fps: 7, bodyFrac: .62, groundFrac: .55, stunFrac: .38, alpha: .75 } as const;
 export type StatusKind = 'burn' | 'slow' | 'stun' | 'sunder';
 const ROW: Record<StatusKind, number> = { burn: 0, slow: 1, stun: 2, sunder: 3 };
 export interface StatusProbe { isBurning(e: Enemy, now: number): boolean; isSundered(e: Enemy, now: number): boolean }

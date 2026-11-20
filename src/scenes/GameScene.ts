@@ -30,7 +30,8 @@ import {chapterVictoryNotice} from '../ui/ChapterVictoryNotice';
 import {HARD_MODE,HARD_TITLES} from '../data/hardMode';
 import {recordHardClear,rewardGrain} from "../world/WorldStore";
 import {chapterState,openChapterCount,type TimelineChapterId} from '../world/ChapterTimeline';
-import {buildVfx} from '../systems/BuildVfx';
+import {buildVfx,comboFx} from '../systems/BuildVfx';
+import {COMBOS} from '../data/schoolCombos';
 import {SchoolSynergy} from '../systems/SchoolSynergy';
 import {SchoolBanner} from '../ui/SchoolBanner';
 import {BulwarkBuild} from '../systems/BulwarkBuild';
@@ -197,6 +198,7 @@ import { WeaponBranches } from '../systems/WeaponBranches';
 import { layoutRich, SCOPE_BADGE, cardScope } from '../ui/CardRichText';
 import { checkHeroJoins } from '../ui/HeroJoinReveal';
 import {StatusFx} from '../systems/StatusFx';
+import {JinnangFx} from '../systems/JinnangFx';
 
 interface Gem {
   img: Phaser.GameObjects.Image;
@@ -647,7 +649,7 @@ export class GameScene extends Phaser.Scene {
   protected spearShots: SpearShot[] = [];
   protected weaponHost!: WeaponHost;
   private martialFields!: MartialFields;
-  private buildCombat!:BuildCombat;private statusFx?:StatusFx;
+  private buildCombat!:BuildCombat;private statusFx?:StatusFx;private jinnangFx?:JinnangFx;
   private controlBuild?:ControlBuild;
   private bulwarkBuild?:BulwarkBuild;
   /** 流派合击（部曲 / 伏兵 / 背水一战）+ 六派觉醒（2026-11-19 流派重做第 2 期）。 */
@@ -895,7 +897,7 @@ export class GameScene extends Phaser.Scene {
         onUpdate:o.follow?img=>img.setPosition(pl.x+ox,pl.y+oy):mv?(img,t)=>img.setPosition(x+mv.dx*t,y+mv.dy*t):undefined});}});
     this.legion.awakeningDefense={incoming:(_u,n)=>(this.synergy?.allyIncoming(n)??1)*(this.player.growth.build.tier('formation')>=2?1-SCHOOL_TIER.formation.allyTaken:1),onAllyHurt:()=>{}};
     this.events.once('shutdown',()=>{this.synergy?.clear();this.synergy=undefined;});
-    this.buildCombat.setOrigin(()=>({x:this.player.x,y:this.player.y}));this.statusFx=new StatusFx(this,this.buildCombat);   // 敌人身上的灼烧 / 迟滞 / 眩晕 / 破甲标记（手绘序列帧）
+    this.buildCombat.setOrigin(()=>({x:this.player.x,y:this.player.y}));this.statusFx=new StatusFx(this,this.buildCombat);this.jinnangFx=new JinnangFx(this,()=>({x:this.player.x,y:this.player.y}));   // 敌人身上的灼烧 / 迟滞 / 眩晕 / 破甲标记（手绘序列帧）
     this.buildCombat.onFlank=targets=>this.flankBladeFx().strike(targets);
     this.buildCombat.onWindstep=e=>this.windstepFx().burst(e.x,e.y);
     // 流派重做（data/schools.ts）：奇谋 2 势被控制加深、震荡 / 冲阵 / 燎原的一圈、火油罐火区、疾风
@@ -903,7 +905,7 @@ export class GameScene extends Phaser.Scene {
     this.buildCombat.onShock=(x,y,r)=>buildVfx(this).emit('pure_charge',x,y-6,this.combatNow,r*2,0,320,true);
     this.buildCombat.onNapalm=(x,y,r,dmg,lv)=>{this.martialFields.add(x,y,r,dmg,3000,lv);this.spawnFlameFx(x,y,r);};
     // 合击（data/schoolCombos.ts）：第一次触发打横幅；烈马脚下火；冲势打出 / 眩晕交给 SchoolSynergy（声东击西、铁骑冲阵、十面埋伏）
-    this.buildCombat.onCombo=id=>this.synergy?.note(id);
+    this.buildCombat.onCombo=id=>{this.synergy?.note(id);const c=COMBOS.find(x=>x.id===id);if(c)comboFx(this,c.a,c.b,id,this.player.x,this.player.y,this.combatNow);};
     this.buildCombat.onFirePatch=(x,y,r,dmg,ms)=>{this.martialFields.add(x,y,r,dmg,ms,1);this.spawnFlameFx(x,y,r*.8);};
     this.buildCombat.onCharge=(e,n)=>this.synergy?.onCharge(e,n);
     this.buildCombat.onStun=(e,n)=>this.synergy?.onStun(e,n);
@@ -1276,7 +1278,7 @@ export class GameScene extends Phaser.Scene {
     this.applyContactDamage();
     if (this.over) return;
     this.martialFields.update(dt);
-    this.buildCombat.update(this.combatNow);this.statusFx?.update(this.combatNow,this.enemies);
+    this.buildCombat.update(this.combatNow);this.statusFx?.update(this.combatNow,this.enemies);this.jinnangFx?.update(this.combatNow,this.chain);
     // 兵阵 4 势「援军」：每 12 秒从后方冲来 3 名义军助战 10 秒（data/schools.ts SCHOOL_TIER.formation）
     if(this.player.growth.build.tier('formation')>=4&&this.combatNow>=this.reinforceAt){const F=SCHOOL_TIER.formation;this.reinforceAt=this.combatNow+F.everyMs;
       this.reinforcePush().spawnEscort(F.n,F.lifeMs);}
@@ -3857,10 +3859,11 @@ export class GameScene extends Phaser.Scene {
     else if (id === 'gong') { this.gemMagnetUntil = now + 2500; P.heal(Math.round(P.maxHp * .2)); }
     else if (id === 'feint') this.controlBuild?.slowArea(P.x, P.y, 260, .6, 5000, now);
     else if (id === 'drum') P.growth.berserkUntil = Math.max(P.growth.berserkUntil, now) + 10000;
-    else if (id === 'fire') { const hit = this.weaponHit() * 4; for (const e of this.grid.query(P.x, P.y, 220)) if (e.active && !e.isSupplySlot && Math.hypot(e.x - P.x, e.y - P.y) <= 220) this.hitEnemy(e, hit, now, 'fire', false, false); this.artEffects.show(5, P.x, P.y - 10, 220, now, 700); }
+    else if (id === 'fire') { const hit = this.weaponHit() * 4; for (const e of this.grid.query(P.x, P.y, 220)) if (e.active && !e.isSupplySlot && Math.hypot(e.x - P.x, e.y - P.y) <= 220) this.hitEnemy(e, hit, now, 'fire', false, false); if (!this.jinnangFx?.has('fx_jn2')) this.artEffects.show(5, P.x, P.y - 10, 220, now, 700); }
     else if (id === 'empty') P.invulnUntil = Math.max(P.invulnUntil, now + 2500);
     else if (id === 'arrows') { this.arrows = { until: now + 6000, absorbed: 0 }; const prev = P.damageGuard; P.damageGuard = (n, t) => { const m = prev ? prev(n, t) : n; if (t < this.arrows.until) { this.arrows.absorbed += m * .5; return m * .5; } return m; }; }
     else { this.chain.set.clear(); const near = this.grid.query(P.x, P.y, 260).filter(e => e.active && !e.isSupplySlot && e.kind !== 'boss').sort((a, b) => Math.hypot(a.x - P.x, a.y - P.y) - Math.hypot(b.x - P.x, b.y - P.y)).slice(0, 8); for (const e of near) this.chain.set.set(e, e.spawnId); this.chain.until = now + 8000; }
+    this.jinnangFx?.cast(id, P.x, P.y, now);   // 手绘激活特效（伏兵 / 鸣金 / 疑兵 / 擂鼓 / 火计 / 空城计 / 草船借箭 / 连环计）
     this.jinnang = null; this.jinnangButton?.setVisible(false);
     this.showWaveBanner('锦囊 · ' + JINNANG[id].name, false, JINNANG[id].desc.split('\n')[0]); this.sfx.play('gong');
     return true;

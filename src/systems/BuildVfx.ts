@@ -23,3 +23,14 @@ export class BuildVfx{
  clear():void{for(const s of this.slots){s.end=0;s.image.setVisible(false);}this.gate.clear();}
 }
 
+
+/**
+ * 合击触发特效（2026-11-19 用户「关于流派和道具特效做一下」）：15 个合击原来只弹横幅，触发时没有各自的画面。
+ * 用手绘图集里两个流派各自的样式并排叠成一对（15 种组合各不相同，读得出是哪两派）：每个合击每 2 秒最多一次，比单战法特效略大，核心样式（不被密度丢弃）。
+ */
+export const COMBO_STYLE: Readonly<Record<string, string>> = { fire: 'pure_flame', stratagem: 'pull', archery: 'pure_critical', cavalry: 'pure_skirmish', warrior: 'pure_combo', formation: 'pure_command' };
+const comboAt = new Map<string, number>();
+export function comboFx(scene: Phaser.Scene, a: string, b: string, id: string, x: number, y: number, now: number): void {
+  if (now < (comboAt.get(id) ?? 0)) return; comboAt.set(id, now + 2000);
+  const v = buildVfx(scene); v.emit(COMBO_STYLE[a], x - 34, y - 16, now, 112, 0, 700, true); v.emit(COMBO_STYLE[b], x + 34, y - 16, now, 112, 0, 700, true);
+}

@@ -51,9 +51,10 @@ export function siegeBattle(city: CityDef, owner: FactionId): ChapterDef {
 
 /** W4 守城战：敌军来犯我方城池。波次同档位攻城战，无城门；胜利奖励为攻城的一半（WorldStore.settleDefense）。 */
 const DEFENSE_WAVES: Record<CityTier, readonly string[]> = {
-  small: ['敌军压境', '敌将叩关'],
-  medium: ['敌军压境', '云梯攀城', '敌将叩关'],
-  large: ['敌军压境', '云梯攀城', '冲车撞门', '敌军大将'],
+  // 2026-11-20 守城排查：守城场地没有城墙城门，原「云梯攀城 / 冲车撞门 / 敌将叩关」与画面不符
+  small: ['敌军压境', '敌将来攻'],
+  medium: ['敌军压境', '敌军增援', '敌将来攻'],
+  large: ['敌军压境', '敌军增援', '敌军强攻', '敌军大将'],
 };
 export function defenseBossName(city: CityDef, attacker: FactionId): string {
   const f = FACTIONS[attacker].name;

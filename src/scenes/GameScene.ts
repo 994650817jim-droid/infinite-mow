@@ -3664,7 +3664,7 @@ export class GameScene extends Phaser.Scene {
     const notes: string[] = [];
     for (const l of lines) {
       const t = l.replace(/\s{2,}/g, ' ');
-      if (/^(首次通关|随行|获得坐骑|乱世首通|屯田供粮|城池产出|流寇未平|成都归入|速攻破城|撤军收场|城内要点 )/.test(l)) notes.push(t);
+      if (/^(首次通关|随行|获得坐骑|乱世首通|屯田供粮|城池产出|流寇未平|成都归入|速攻破城|撤军收场|城内要点 |城池尚在)/.test(l)) notes.push(t);
       else if (/^营寨 · 农田 \+\d+ · /.test(l)) { const rest = t.replace(/^营寨 · 农田 \+\d+ · /, ''); if (rest !== '口粮 −0') notes.push('营寨 · ' + rest); }
       else if (/^缴获兵装/.test(l) && /测试战斗不入行囊|败退遗失/.test(l)) notes.push('兵装' + (l.match(/· (测试战斗不入行囊|败退遗失 \d+ 件)/)?.[1] ?? ''));
     }
@@ -4115,7 +4115,9 @@ export class GameScene extends Phaser.Scene {
   /** 战败：惩罚（存档点主将 / 随行负伤、部曲折损，营寨军粮）、撤回目标、慢动作压暗 + 对话卡、结算面板晚出、按钮改「退守 X」。 */
   protected runDefeatFlow(): void {
     const key = this.hardKey(), stage = this.hardStage(), city = this.scene.key === 'SiegeGameScene' ? String(this.registry.get('siegeCity') ?? '') : null;
-    this.defeatRetreat = worldUnlocked() && !this.encounterPreview ? retreatTarget(battlePoint(key, city)) : null;
+    // 守城战败：退到最近的「另一座」我方城池或营寨（原来退回刚没守住、仍在告急的那座城本身）
+    const defending = !!city && this.registry.get('siegeMode') === 'defense';
+    this.defeatRetreat = worldUnlocked() && !this.encounterPreview ? retreatTarget(battlePoint(key, city), defending ? city : null) : null;
     const notes: string[] = [];
     if (this.defeatLive()) {
       const fids = (this.followers?.members ?? []).map(m => m.recruit.id), camp = patchCampaignDefeat(this.runConfig.character, { hpFrac: DEFEAT.hpFrac, followerFrac: DEFEAT.followerFrac, troopLoss: DEFEAT.troopLoss, followerIds: fids });

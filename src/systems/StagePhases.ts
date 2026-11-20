@@ -119,13 +119,18 @@ export class StagePhaseRunner {
   spawnLieutenant(x: number, y: number): Enemy | null { const e = this.h.spawn('elite', x, y, this.lieutenantDef()); if (e) this.enlarge(e); return e; }
   private lieutenant(name: string): void {
     const P = this.h.player(), at = { x: P.x + (Math.random() < .5 ? -340 : 340), y: P.y - 80 }; // 从侧面进场（电脑版视野左右各 480，一出来就看得到）
-    const e = this.h.spawn('elite', at.x, at.y, this.lieutenantDef()); if (!e) return;
+    this.spawnLieutenantAt(name, at.x, at.y);
+  }
+  /** 在指定位置放一名副将（名牌 label + 名字、小血条；倒下同样走 onLieutenantDown）。2-3 洛阳营寨守将李傕也用它。 */
+  spawnLieutenantAt(name: string, x: number, y: number, label = '副将 · '): Enemy | null {
+    const e = this.h.spawn('elite', x, y, this.lieutenantDef()); if (!e) return null;
     this.enlarge(e);
     const s = this.h.scene;
-    const tag = s.add.text(e.x, e.y, '副将 · ' + name, { fontFamily: FONT, fontSize: '13px', color: '#ffd98a', resolution: 2, stroke: '#2a0c06', strokeThickness: 4 }).setOrigin(.5, 1).setDepth(DEPTH.dmgText - 1).setName('lieutenant-tag');
+    const tag = s.add.text(e.x, e.y, label + name, { fontFamily: FONT, fontSize: '13px', color: '#ffd98a', resolution: 2, stroke: '#2a0c06', strokeThickness: 4 }).setOrigin(.5, 1).setDepth(DEPTH.dmgText - 1).setName('lieutenant-tag');
     const bar = s.add.graphics().setDepth(DEPTH.dmgText - 1).setName('lieutenant-bar');
     this.lt = { e, life: e.spawnId, name, tag, bar, down: false };
     this.stats.lieutenant = name; this.stats.lieutenantHp = Math.round(e.maxHp); this.stats.lieutenantAt = this.h.elapsed();
+    return e;
   }
 
   /** 每帧：副将名牌 / 血条跟随；倒下时通知场景。 */

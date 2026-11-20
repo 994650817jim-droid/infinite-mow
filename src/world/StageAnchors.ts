@@ -10,7 +10,7 @@ import { STAGE_POINTS, type TimelineChapterId } from './ChapterTimeline';
  */
 type Anchor = { city: string } | { x: number; y: number };
 const ANCHORS: Partial<Record<TimelineChapterId, ReadonlyArray<Anchor | null>>> = {
-  hulao: [{ city: 'sishui' }, { x: 842, y: 352 }, { city: 'luoyang' }],          // 汜水关 · 荥阳（汜水关以东、陈留以西的战场）· 火烧洛阳
+  hulao: [{ city: 'sishui' }, { x: 842, y: 352 }, { x: 700, y: 440 }],         // 汜水关 · 荥阳（汜水关以东、陈留以西的战场）· 火烧洛阳（统筹 11-20：挪到洛阳城东南城外，与城牌错开；关名写全「2-3 火烧洛阳」）
   qunxiong: [{ city: 'changan' }, { city: 'wancheng' }, { city: 'shouchun' }],    // 长安突围 · 宛城夜袭 · 寿春讨逆
   guandu: [{ city: 'baima' }, null, { city: 'wuchao' }],                          // 白马解围 · （延津渡口，沿用）· 乌巢焚粮
   shu: [null, null, { city: 'chengdu' }],                                          // 葭萌关 · 落凤坡 ·（成都）

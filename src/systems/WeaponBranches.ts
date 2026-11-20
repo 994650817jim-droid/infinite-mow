@@ -73,7 +73,7 @@ export class WeaponBranches {
   private tier(): number { const w = this.h.weapon(); return w ? branchTier(w) : 0; }
   private k(): number { return (1 + .3 * (this.tier() - 1)) * (this.h.weapon()?.attuned ? BRANCH_FIT.fitMul : 1); } // 契合 ×BRANCH_FIT.fitMul
   private final(): boolean { const b = this.branch; return !!b && this.tier() >= 3 && this.h.shi(b.school) >= 4; }
-  private nearest(r: number): Enemy | null { const P = this.h.player; let best: Enemy | null = null, d0 = r; for (const e of this.h.query(P.x, P.y, r)) { if (!e.active || e.isSupplySlot) continue; const d = Math.hypot(e.x - P.x, e.y - P.y); if (d < d0) { d0 = d; best = e; } } return best; }
+  private nearest(r: number): Enemy | null { const P = this.h.player; let best: Enemy | null = null, d0 = r; for (const e of this.h.query(P.x, P.y, r)) { if (!e.active || (e.isSupplySlot && !e.lockTarget)) continue; const d = Math.hypot(e.x - P.x, e.y - P.y); if (d < d0) { d0 = d; best = e; } } return best; }
   private fx(key: string, x: number, y: number, size: number, ms: number, tint: number, rotation = 0): void { playSheet(this.h.scene, key, x, y, { size, ms, depth: DEPTH.fx, tint, rotation, add: true }); }
 
   update(): void {
@@ -124,7 +124,7 @@ export class WeaponBranches {
   guard(n: number): number {
     const b = this.branch; if (b?.id === 'wy_hanzhong' && this.inCamp()) return n * .8;
     if (!b || b.id !== 'zf_nuhou' || this.h.now() >= this.guardUntil) return n;
-    if (this.final()) { const P = this.h.player; for (const e of this.h.query(P.x, P.y, 120)) if (e.active && !e.isSupplySlot) this.deal(e, .5); }
+    if (this.final()) { const P = this.h.player; for (const e of this.h.query(P.x, P.y, 120)) if (e.active && !(e.isSupplySlot && !e.lockTarget)) this.deal(e, .5); }
     return n * .7;
   }
   /** 本命武器命中（仁德 / 三英）。 */
@@ -134,7 +134,7 @@ export class WeaponBranches {
     if (b.id === 'dc_biyue' && Math.random() < Math.min(.45, .15 * k) && e.kind !== 'boss' && (e.kind !== 'elite' || this.final()) && !this.charmed.some(c => c.e === e)) { this.charmed.push({ e, life: e.spawnId, until: now + 2000 * (this.tier() >= 3 ? 1.5 : 1), nextTick: now }); e.stunUntil = Math.max(e.stunUntil, now + 2000); this.fx('fx_heal_fushui', e.x, e.y - 20, 70, 600, 0xffa0d0); this.stats.procs++; return; }
     if (b.id === 'hz_huoshi' && now >= this.fieldAt) { this.fieldAt = now + 400; this.field(e.x, e.y, 65, 2000 * (1 + .25 * (this.tier() - 1)), this.final() ? .34 : .26, false); return; } // 2026-11-19 平衡：半径 55 → 65、灼烧 .2 / .26 → .26 / .34
     if (b.id === 'mc_weishui' && now >= this.slamAt) { this.slamAt = now + 500; const r = 90 * (1 + .15 * (this.tier() - 1));
-      for (const o of this.h.query(e.x, e.y, r)) if (o.active && !o.isSupplySlot && Math.hypot(o.x - e.x, o.y - e.y) <= r + o.radius) this.deal(o, .5);
+      for (const o of this.h.query(e.x, e.y, r)) if (o.active && !(o.isSupplySlot && !o.lockTarget) && Math.hypot(o.x - e.x, o.y - e.y) <= r + o.radius) this.deal(o, .5);
       this.fx('fx_collapse_dust', e.x, e.y, r * 2.2, 500, 0xc8a878); this.stats.procs++;
       if (this.final()) { const g = this.h.player.growth; g.berserkUntil = Math.max(g.berserkUntil, now) + 3000; } return; }
     if (b.id === 'lb_rende' && now >= this.healAt) {
@@ -144,7 +144,7 @@ export class WeaponBranches {
       else if (P.hp < P.maxHp && now >= this.healFxAt) { this.healFxAt = now + 1000; P.heal(Math.round(P.maxHp * .015)); this.stats.procs++; } // 身边没有受伤的部曲：给主将回一点（2026-11-19：没部曲时仁德不再是空的）
     } else if (b.id === 'lb_sanying' && now >= this.thirdAt && Math.random() < Math.min(.8, .35 * k)) {
       this.thirdAt = now + 120;
-      const other = this.h.query(e.x, e.y, 120).find(o => o !== e && o.active && !o.isSupplySlot); if (!other) return;
+      const other = this.h.query(e.x, e.y, 120).find(o => o !== e && o.active && !(o.isSupplySlot && !o.lockTarget)); if (!other) return;
       const fol = this.h.followerHeroes(), brothers = this.final() && (fol.includes('guanyu') || fol.includes('zhangfei')) ? 1.3 : 1;
       this.h.damage(other, dmg * .5 * brothers); this.stats.procs++; this.stats.hits++;
       this.fx('fx_strike_glint', other.x, other.y - 12, 80, 300, 0xe8e0ff, Math.random() * Math.PI);
@@ -197,7 +197,7 @@ export class WeaponBranches {
       const step = (): void => {
         const cx = P.x, cy = P.y, len = Math.hypot(cx - lx, cy - ly) || 1;
         for (const e of this.h.query((lx + cx) / 2, (ly + cy) / 2, len / 2 + 50)) {
-          if (!e.active || e.isSupplySlot || hit.has(e) || segDist(e.x, e.y, lx, ly, cx, cy) > 30 + e.radius) continue;
+          if (!e.active || (e.isSupplySlot && !e.lockTarget) || hit.has(e) || segDist(e.x, e.y, lx, ly, cx, cy) > 30 + e.radius) continue;
           hit.add(e); this.deal(e, mul);
           if (e.active && e.kind !== 'boss') { const side = Math.sign(-uy * (e.x - cx) + ux * (e.y - cy)) || 1; e.hitRecoil(this.h.now(), a + side * Math.PI / 2, D.pathPush, 160); } // 往两侧挑开
           if (!stopped) { stopped = true; this.h.hitStop?.(D.hitStopMs); }
@@ -216,7 +216,7 @@ export class WeaponBranches {
       run(ux * L, uy * L, D.outMs, D.outMul, dirOut, () => {
         // ③ 回马枪：最远点转身横扫一圈
         mark('turn'); const fx0 = P.x, fy0 = P.y; P.knockUp(this.h.now(), D.turnMs, 0, 0, true); P.endAction(); P.playAction('attack', dirBack); P.faceDirection?.(dirBack, D.turnMs);
-        for (const e of this.h.query(fx0, fy0, D.turnR + 30)) if (e.active && !e.isSupplySlot && Math.hypot(e.x - fx0, e.y - fy0) <= D.turnR + e.radius) { this.deal(e, D.turnMul); if (e.active && e.kind !== 'boss') e.hitRecoil(this.h.now(), Math.atan2(e.y - fy0, e.x - fx0), D.pathPush, 160); }
+        for (const e of this.h.query(fx0, fy0, D.turnR + 30)) if (e.active && !(e.isSupplySlot && !e.lockTarget) && Math.hypot(e.x - fx0, e.y - fy0) <= D.turnR + e.radius) { this.deal(e, D.turnMul); if (e.active && e.kind !== 'boss') e.hitRecoil(this.h.now(), Math.atan2(e.y - fy0, e.x - fx0), D.pathPush, 160); }
         this.fx('fx_dianwei_whirl', fx0, fy0, D.turnR * 2.1, D.turnMs + 120, 0xdcecff); this.h.sfx('atk_spear'); this.stats.turns = (this.stats.turns ?? 0) + 1;
         s.time.delayedCall(D.turnMs, () => {
           // ④ 杀回锚点（冲阵时推摇杆锚点跟着走，不推就是出发点）；回程每帧按锚点修正
@@ -225,7 +225,7 @@ export class WeaponBranches {
           run(A.x - P.x, A.y - P.y, D.backMs, D.outMul * D.backMul, dirBack, () => {
             // 落地收枪：推开贴身的敌兵（首领不推）、扬尘
             mark('land'); P.endAction(); const t3 = this.h.now(); this.backing = false; const lx = P.x, ly = P.y; if (this.lastDash) this.lastDash.anchor = this.anchor ? { x: Math.round(this.anchor.x), y: Math.round(this.anchor.y) } : undefined; this.anchor = null;
-            for (const e of this.h.query(lx, ly, D.pushR)) if (e.active && !e.isSupplySlot && e.kind !== 'boss') e.hitRecoil(t3, Math.atan2(e.y - ly, e.x - lx), D.push, 140);
+            for (const e of this.h.query(lx, ly, D.pushR)) if (e.active && !(e.isSupplySlot && !e.lockTarget) && e.kind !== 'boss') e.hitRecoil(t3, Math.atan2(e.y - ly, e.x - lx), D.push, 140);
             this.fx('fx_windstep_burst', lx, ly + 6, D.pushR * 2.2, 380, 0xdcecff); dust(lx, ly, 150);
             if (this.lastDash) this.lastDash.back = { x: Math.round(P.x), y: Math.round(P.y) };
           }, true);
@@ -252,7 +252,7 @@ export class WeaponBranches {
     if (this.final()) this.h.slow(P.x, P.y, 260, .5, 2000);
   }
   private sweep(r: number, mul: number, tint: number): void {
-    const P = this.h.player; for (const e of this.h.query(P.x, P.y, r)) if (e.active && !e.isSupplySlot && Math.hypot(e.x - P.x, e.y - P.y) <= r + e.radius) this.deal(e, mul);
+    const P = this.h.player; for (const e of this.h.query(P.x, P.y, r)) if (e.active && !(e.isSupplySlot && !e.lockTarget) && Math.hypot(e.x - P.x, e.y - P.y) <= r + e.radius) this.deal(e, mul);
     this.fx('fx_dianwei_whirl', P.x, P.y, r * 2.2, 420, tint); this.stats.procs++;
   }
   private crescent(): void {
@@ -260,7 +260,7 @@ export class WeaponBranches {
     const ang = Math.atan2(t.y - P.y, t.x - P.x), range = this.tier() >= 3 ? 440 : 360, sx = P.x, sy = P.y, hit = new Set<Enemy>(), fin = this.final(); let lastSlow = 0;
     playSheet(this.h.scene, 'fx_drag_wave', sx, sy, { size: 150, ms: 450, depth: DEPTH.fx, tint: 0x7fe0c0, rotation: ang, add: true, onUpdate: (img, t2) => {
       const x = sx + Math.cos(ang) * range * t2, y = sy + Math.sin(ang) * range * t2; img.setPosition(x, y);
-      for (const e of this.h.query(x, y, 70)) if (e.active && !e.isSupplySlot && !hit.has(e) && Math.hypot(e.x - x, e.y - y) <= 60 + e.radius) { hit.add(e); this.deal(e, .68); } // 2026-11-19 平衡：青龙月牙 .8 → .68（−15%）
+      for (const e of this.h.query(x, y, 70)) if (e.active && !(e.isSupplySlot && !e.lockTarget) && !hit.has(e) && Math.hypot(e.x - x, e.y - y) <= 60 + e.radius) { hit.add(e); this.deal(e, .68); } // 2026-11-19 平衡：青龙月牙 .8 → .68（−15%）
       if (fin && t2 - lastSlow > .2) { lastSlow = t2; this.h.slow(x, y, 80, .5, 1500); }
     } });
     this.stats.procs++;
@@ -273,18 +273,18 @@ export class WeaponBranches {
     if (b.id === 'hz_chuanyang') {
       const far = this.farthest(520); if (!far) return true; this.shots++;
       const ang = Math.atan2(far.y - P.y, far.x - P.x), L = 520, ex = P.x + Math.cos(ang) * L, ey = P.y + Math.sin(ang) * L, crit = this.tier() >= 3 ? 1.5 : 1, fifth = this.final() && this.shots % 5 === 0;
-      for (const e of this.h.query((P.x + ex) / 2, (P.y + ey) / 2, L / 2 + 30)) { if (!e.active || e.isSupplySlot || segDist(e.x, e.y, P.x, P.y, ex, ey) > 18 + e.radius) continue;
+      for (const e of this.h.query((P.x + ex) / 2, (P.y + ey) / 2, L / 2 + 30)) { if (!e.active || (e.isSupplySlot && !e.lockTarget) || segDist(e.x, e.y, P.x, P.y, ex, ey) > 18 + e.radius) continue;
         const d = Math.hypot(e.x - P.x, e.y - P.y); this.deal(e, .32 * (1 + d / 400) * crit /* 2026-11-19 平衡：.6 → .32（10-3 分支伤害占 56%、总 DPS 是火矢 1.65 倍） */ * (fifth && (e.kind === 'boss' || e.kind === 'elite') ? 3 : 1)); }
       this.fx('fx_flank_streak', (P.x + ex) / 2, (P.y + ey) / 2, L, 320, 0xf0f8ff, ang); this.stats.procs++; return true; }
     if (b.id === 'mc_tieqi') {
       if (!t) return true; const ang = Math.atan2(t.y - P.y, t.x - P.x), L = 300, ex = P.x + Math.cos(ang) * L, ey = P.y + Math.sin(ang) * L;
-      for (const e of this.h.query((P.x + ex) / 2, (P.y + ey) / 2, L / 2 + 50)) if (e.active && !e.isSupplySlot && segDist(e.x, e.y, P.x, P.y, ex, ey) <= 40 + e.radius) this.deal(e, .7);
+      for (const e of this.h.query((P.x + ex) / 2, (P.y + ey) / 2, L / 2 + 50)) if (e.active && !(e.isSupplySlot && !e.lockTarget) && segDist(e.x, e.y, P.x, P.y, ex, ey) <= 40 + e.radius) this.deal(e, .7);
       this.fx('fx_flank_streak', (P.x + ex) / 2, (P.y + ey) / 2, L + 60, 380, 0xbfe0ff, ang);
       if (this.final()) for (let i = 1; i <= 3; i++) this.field(P.x + Math.cos(ang) * L * i / 4, P.y + Math.sin(ang) * L * i / 4, 50, 1800, .2, false);
       this.stats.procs++; return true; }
     if (b.id === 'wy_ziwu') {
       if (!t) return true; const ang = Math.atan2(t.y - P.y, t.x - P.x), L = Math.min(260, Math.hypot(t.x - P.x, t.y - P.y) + 30), x = P.x + Math.cos(ang) * L, y = P.y + Math.sin(ang) * L, twice = this.final() && P.hp < P.maxHp / 2;
-      const blast = () => { for (const e of this.h.query(x, y, 100)) if (e.active && !e.isSupplySlot && Math.hypot(e.x - x, e.y - y) <= 90 + e.radius) this.deal(e, .9); this.fx('fx_explosion', x, y, 200, 500, 0xff9a7a); };
+      const blast = () => { for (const e of this.h.query(x, y, 100)) if (e.active && !(e.isSupplySlot && !e.lockTarget) && Math.hypot(e.x - x, e.y - y) <= 90 + e.radius) this.deal(e, .9); this.fx('fx_explosion', x, y, 200, 500, 0xff9a7a); };
       this.h.scene.time.delayedCall(500, blast); if (twice) this.h.scene.time.delayedCall(800, blast); this.stats.procs++; return true; }
     if (b.id === 'wy_hanzhong') {
       if (now < this.campAt) return true; this.campAt = now + 5000; const max = this.final() ? 2 : 1; if (this.camps.length >= max) { const old = this.camps.shift(); old?.props.forEach(p => p.destroy()); }
@@ -300,9 +300,9 @@ export class WeaponBranches {
     if (b.id === 'pt_lianhuan') { if (!t) return true; this.chained.clear(); const n = 4 + 2 * (this.tier() - 1);
       for (const e of this.h.query(t.x, t.y, 200).filter(o => o.active && !o.isSupplySlot && o.kind !== 'boss').slice(0, n)) { this.chained.set(e, e.spawnId); this.fx('fx_strike_glint', e.x, e.y - 10, 60, 400, 0xc8d0e0); }
       this.chainUntil = now + 6000; this.stats.procs++; return true; }
-    if (b.id === 'hy_liannu') { const n = 2 + (this.tier() - 1), pool = this.h.query(P.x, P.y, 380).filter(e => e.active && !e.isSupplySlot);
+    if (b.id === 'hy_liannu') { const n = 2 + (this.tier() - 1), pool = this.h.query(P.x, P.y, 380).filter(e => e.active && !(e.isSupplySlot && !e.lockTarget));
       for (let i = 0; i < n && pool.length; i++) { const e = pool.splice(Math.floor(Math.random() * pool.length), 1)[0]; this.deal(e, .5); this.fx('fx_strike_glint', e.x, e.y - 10, 60, 300, 0xf0e8c8);
-        if (this.final() && Math.random() < .2) { const o = this.h.query(e.x, e.y, 120).find(x => x !== e && x.active && !x.isSupplySlot); if (o) this.deal(o, .35); } }
+        if (this.final() && Math.random() < .2) { const o = this.h.query(e.x, e.y, 120).find(x => x !== e && x.active && !(x.isSupplySlot && !x.lockTarget)); if (o) this.deal(o, .35); } }
       this.stats.procs++; return true; }
     if (b.id === 'dc_meirenji') { if (!t) return true; this.rings.push({ x: t.x, y: t.y, until: now + 4000, nextTick: now }); if (this.rings.length > 4) this.rings.shift(); this.fx('fx_heal_fushui', t.x, t.y, 200 * (this.tier() >= 2 ? 1.2 : 1), 4000, 0xffb0d8); this.stats.procs++; return true; }
     return false;
@@ -315,12 +315,12 @@ export class WeaponBranches {
       if (now >= this.oxAt && this.oxen.length < max) { this.oxAt = now + 10000; const s = this.h.scene, x = P.x + 40, y = P.y + 20;
         const img = s.textures.exists('yellow_props') ? s.add.image(x, y, 'yellow_props', 24).setOrigin(.5, .9).setDisplaySize(70, 70).setDepth(y / 10 + 20).setTint(0xe8c890) : undefined;
         this.oxen.push({ x, y, until: now + 8000 * (this.tier() >= 3 ? 1.3 : 1), nextShot: now, img }); this.stats.procs++; }
-      for (const o of this.oxen) if (now < o.until && now >= o.nextShot) { o.nextShot = now + 600 / k; let best: Enemy | null = null, d0 = 300; for (const e of this.h.query(o.x, o.y, 300)) { if (!e.active || e.isSupplySlot) continue; const d = Math.hypot(e.x - o.x, e.y - o.y); if (d < d0) { d0 = d; best = e; } }
+      for (const o of this.oxen) if (now < o.until && now >= o.nextShot) { o.nextShot = now + 600 / k; let best: Enemy | null = null, d0 = 300; for (const e of this.h.query(o.x, o.y, 300)) { if (!e.active || (e.isSupplySlot && !e.lockTarget)) continue; const d = Math.hypot(e.x - o.x, e.y - o.y); if (d < d0) { d0 = d; best = e; } }
         if (best) { this.deal(best, .4); this.fx('fx_flank_streak', (o.x + best.x) / 2, (o.y + best.y) / 2, d0 + 30, 200, 0xf0e0b0, Math.atan2(best.y - o.y, best.x - o.x)); } }
-      for (const o of this.oxen.filter(x => now >= x.until)) { o.img?.destroy(); if (this.final()) { for (const e of this.h.query(o.x, o.y, 110)) if (e.active && !e.isSupplySlot && Math.hypot(e.x - o.x, e.y - o.y) <= 100 + e.radius) this.deal(e, .8); this.fx('fx_explosion', o.x, o.y, 180, 450, 0xffc080); } }
+      for (const o of this.oxen.filter(x => now >= x.until)) { o.img?.destroy(); if (this.final()) { for (const e of this.h.query(o.x, o.y, 110)) if (e.active && !(e.isSupplySlot && !e.lockTarget) && Math.hypot(e.x - o.x, e.y - o.y) <= 100 + e.radius) this.deal(e, .8); this.fx('fx_explosion', o.x, o.y, 180, 450, 0xffc080); } }
       this.oxen = this.oxen.filter(x => now < x.until);
     }
-    if (b.id === 'ss_wanren' && now >= this.volleyAt && this.nearest(260)) { this.volleyAt = now + 3000 / k; const volley = () => { const near = this.h.query(P.x, P.y, 260).filter(e => e.active && !e.isSupplySlot).slice(0, 8); for (const e of near) { this.deal(e, .5); this.fx('fx_strike_glint', e.x, e.y - 10, 56, 260, 0xffd0d0); } this.fx('fx_dianwei_whirl', P.x, P.y, 300, 380, 0xffc0c0); };
+    if (b.id === 'ss_wanren' && now >= this.volleyAt && this.nearest(260)) { this.volleyAt = now + 3000 / k; const volley = () => { const near = this.h.query(P.x, P.y, 260).filter(e => e.active && !(e.isSupplySlot && !e.lockTarget)).slice(0, 8); for (const e of near) { this.deal(e, .5); this.fx('fx_strike_glint', e.x, e.y - 10, 56, 260, 0xffd0d0); } this.fx('fx_dianwei_whirl', P.x, P.y, 300, 380, 0xffc0c0); };
       volley(); if (this.final()) this.h.scene.time.delayedCall(400, volley); this.stats.procs++; }
     if (b.id === 'ss_benxi') {
       // 奔袭（data/weaponBranches BENXI）：走动撒刀；定时 / 撒满 / 站定，先到先收；收刀时刀飞回主将、沿途割
@@ -329,7 +329,7 @@ export class WeaponBranches {
         if (!this.knives.length) this.recallAt = now + B.recallMs;
         this.knives.push({ x: this.moveX, y: this.moveY }); if (this.knives.length > B.keepMax + 2 * this.tier()) this.knives.shift();
         this.fx('fx_strike_glint', this.moveX, this.moveY, 50, 400, 0xe0e8ff);
-        for (const e of this.h.query(this.moveX, this.moveY, 60)) if (e.active && !e.isSupplySlot && Math.hypot(e.x - this.moveX, e.y - this.moveY) <= 50 + e.radius) this.deal(e, B.dropMul);
+        for (const e of this.h.query(this.moveX, this.moveY, 60)) if (e.active && !(e.isSupplySlot && !e.lockTarget) && Math.hypot(e.x - this.moveX, e.y - this.moveY) <= 50 + e.radius) this.deal(e, B.dropMul);
         this.moveX = P.x; this.moveY = P.y; this.still = now;
       }
       if (this.knives.length && (now >= this.recallAt || this.knives.length >= B.fullCount || now - this.still > B.stillMs)) {
@@ -337,7 +337,7 @@ export class WeaponBranches {
         for (const kn of this.knives) {
           const vx = P.x - kn.x, vy = P.y - kn.y, len = Math.hypot(vx, vy) || 1, ux = vx / len, uy = vy / len;
           for (const e of this.h.query((kn.x + P.x) / 2, (kn.y + P.y) / 2, len / 2 + B.recallWidth + 20)) {
-            if (!e.active || e.isSupplySlot) continue;
+            if (!e.active || (e.isSupplySlot && !e.lockTarget)) continue;
             const ex = e.x - kn.x, ey = e.y - kn.y, along = ex * ux + ey * uy, side = Math.abs(-ex * uy + ey * ux);
             if (along < -e.radius || along > len + e.radius || side > B.recallWidth + e.radius) continue;
             const n = hits.get(e) ?? 0; if (n >= B.maxHitsPerEnemy) continue; hits.set(e, n + 1); this.deal(e, mul);
@@ -350,12 +350,12 @@ export class WeaponBranches {
     for (const c of this.charmed) if (now < c.until && now >= c.nextTick && c.e.active && c.e.spawnId === c.life) { c.nextTick = now + 500; for (const o of this.h.query(c.e.x, c.e.y, 90)) if (o !== c.e && o.active && !o.isSupplySlot && o.kind !== 'boss' && Math.hypot(o.x - c.e.x, o.y - c.e.y) <= 80 + o.radius) this.deal(o, .3); }
     this.charmed = this.charmed.filter(c => now < c.until && c.e.active && c.e.spawnId === c.life);
     for (const r of this.rings) if (now < r.until && now >= r.nextTick) { r.nextTick = now + 500; const rr = 90 * (this.tier() >= 2 ? 1.2 : 1);
-      for (const e of this.h.query(r.x, r.y, rr + 20)) if (e.active && !e.isSupplySlot && Math.hypot(e.x - r.x, e.y - r.y) <= rr + e.radius) this.deal(e, .25 * (this.tier() >= 3 ? 1.3 : 1)); this.h.slow(r.x, r.y, rr, .2, 700);
-      if (this.final()) for (const o of this.rings) if (o !== r && now < o.until && Math.hypot(o.x - r.x, o.y - r.y) < rr * 1.6) { const mx = (o.x + r.x) / 2, my = (o.y + r.y) / 2; for (const e of this.h.query(mx, my, 70)) if (e.active && !e.isSupplySlot) this.deal(e, .4); this.fx('fx_heal_fushui', mx, my, 120, 400, 0xff90c0); } }
+      for (const e of this.h.query(r.x, r.y, rr + 20)) if (e.active && !(e.isSupplySlot && !e.lockTarget) && Math.hypot(e.x - r.x, e.y - r.y) <= rr + e.radius) this.deal(e, .25 * (this.tier() >= 3 ? 1.3 : 1)); this.h.slow(r.x, r.y, rr, .2, 700);
+      if (this.final()) for (const o of this.rings) if (o !== r && now < o.until && Math.hypot(o.x - r.x, o.y - r.y) < rr * 1.6) { const mx = (o.x + r.x) / 2, my = (o.y + r.y) / 2; for (const e of this.h.query(mx, my, 70)) if (e.active && !(e.isSupplySlot && !e.lockTarget)) this.deal(e, .4); this.fx('fx_heal_fushui', mx, my, 120, 400, 0xff90c0); } }
     this.rings = this.rings.filter(r => now < r.until);
     if (b.id === 'pt_lianhuan' && this.final() && now < this.chainUntil) for (const [e, life] of this.chained) if (e.active && e.spawnId === life && Math.random() < .1) this.h.slow(e.x, e.y, 20, .7, 600);
   }
-  private farthest(r: number): Enemy | null { const P = this.h.player; let best: Enemy | null = null, d0 = 0; for (const e of this.h.query(P.x, P.y, r)) { if (!e.active || e.isSupplySlot) continue; const d = Math.hypot(e.x - P.x, e.y - P.y); if (d <= r && d > d0) { d0 = d; best = e; } } return best; }
+  private farthest(r: number): Enemy | null { const P = this.h.player; let best: Enemy | null = null, d0 = 0; for (const e of this.h.query(P.x, P.y, r)) { if (!e.active || (e.isSupplySlot && !e.lockTarget)) continue; const d = Math.hypot(e.x - P.x, e.y - P.y); if (d <= r && d > d0) { d0 = d; best = e; } } return best; }
   /** 火场：每 0.5 秒灼烧圈内敌兵；天火燎原的火场会向 160 内相邻火场蔓延（中点再起一片），进阶后三片以上爆燃。 */
   private field(x: number, y: number, r: number, ms: number, mul: number, spread: boolean): void {
     const now = this.h.now(); this.fields.push({ x, y, r, until: now + ms, nextTick: now, mul, spread }); if (this.fields.length > 10) this.fields.shift();
@@ -366,12 +366,12 @@ export class WeaponBranches {
   /** 2026-11-20 平衡第二轮：首领上次被分支火场烧的时刻——叠着的火场（天火燎原蔓延 / 火矢等）打首领不叠加，每 500ms 只烧一次。 */
   private bossFieldAt = new WeakMap<Enemy, number>();
   private tickZones(now: number): void {
-    for (const f of this.fields) if (now < f.until && now >= f.nextTick) { f.nextTick = now + 500; for (const e of this.h.query(f.x, f.y, f.r + 20)) if (e.active && !e.isSupplySlot && Math.hypot(e.x - f.x, e.y - f.y) <= f.r + e.radius) { if (e.kind === 'boss') { if (now - (this.bossFieldAt.get(e) ?? -1e9) < 500) continue; this.bossFieldAt.set(e, now); } this.deal(e, f.mul, true); } }
+    for (const f of this.fields) if (now < f.until && now >= f.nextTick) { f.nextTick = now + 500; for (const e of this.h.query(f.x, f.y, f.r + 20)) if (e.active && !(e.isSupplySlot && !e.lockTarget) && Math.hypot(e.x - f.x, e.y - f.y) <= f.r + e.radius) { if (e.kind === 'boss') { if (now - (this.bossFieldAt.get(e) ?? -1e9) < 500) continue; this.bossFieldAt.set(e, now); } this.deal(e, f.mul, true); } }
     this.fields = this.fields.filter(f => now < f.until);
-    if (this.branch?.id === 'zg_liaoyuan' && this.final() && now >= this.burstAt) { const sp = this.fields.filter(f => f.spread); if (sp.length >= 3) { this.burstAt = now + 4000; const cx = sp.reduce((a, f) => a + f.x, 0) / sp.length, cy = sp.reduce((a, f) => a + f.y, 0) / sp.length; for (const e of this.h.query(cx, cy, 160)) if (e.active && !e.isSupplySlot && Math.hypot(e.x - cx, e.y - cy) <= 140 + e.radius) this.deal(e, 1.5, true); this.fx('fx_explosion', cx, cy, 300, 600, 0xffa060); } }
+    if (this.branch?.id === 'zg_liaoyuan' && this.final() && now >= this.burstAt) { const sp = this.fields.filter(f => f.spread); if (sp.length >= 3) { this.burstAt = now + 4000; const cx = sp.reduce((a, f) => a + f.x, 0) / sp.length, cy = sp.reduce((a, f) => a + f.y, 0) / sp.length; for (const e of this.h.query(cx, cy, 160)) if (e.active && !(e.isSupplySlot && !e.lockTarget) && Math.hypot(e.x - cx, e.y - cy) <= 140 + e.radius) this.deal(e, 1.5, true); this.fx('fx_explosion', cx, cy, 300, 600, 0xffa060); } }
     for (const tp of this.traps) { if (now >= tp.until) continue;
-      if (!tp.armed) { const hit = this.h.query(tp.x, tp.y, 70).filter(e => e.active && !e.isSupplySlot && e.kind !== 'boss' && Math.hypot(e.x - tp.x, e.y - tp.y) <= 60 + e.radius); if (hit.length) { tp.armed = now + 1000; for (const e of hit) e.stunUntil = Math.max(e.stunUntil, now + 1000 * (this.tier() >= 3 ? 1.5 : 1)); } }
-      else if (now >= tp.armed) { tp.until = 0; for (const e of this.h.query(tp.x, tp.y, 100)) if (e.active && !e.isSupplySlot && Math.hypot(e.x - tp.x, e.y - tp.y) <= 90 + e.radius) this.deal(e, .8); this.fx('fx_explosion', tp.x, tp.y, 180, 450, 0x9fc8ff); } }
+      if (!tp.armed) { const hit = this.h.query(tp.x, tp.y, 70).filter(e => e.active && !(e.isSupplySlot && !e.lockTarget) && e.kind !== 'boss' && Math.hypot(e.x - tp.x, e.y - tp.y) <= 60 + e.radius); if (hit.length) { tp.armed = now + 1000; for (const e of hit) e.stunUntil = Math.max(e.stunUntil, now + 1000 * (this.tier() >= 3 ? 1.5 : 1)); } }
+      else if (now >= tp.armed) { tp.until = 0; for (const e of this.h.query(tp.x, tp.y, 100)) if (e.active && !(e.isSupplySlot && !e.lockTarget) && Math.hypot(e.x - tp.x, e.y - tp.y) <= 90 + e.radius) this.deal(e, .8); this.fx('fx_explosion', tp.x, tp.y, 180, 450, 0x9fc8ff); } }
     this.traps = this.traps.filter(tp => now < tp.until);
     for (const c of this.camps) if (now < c.until && now >= c.nextTick) { c.nextTick = now + 500; this.h.slow(c.x, c.y, c.r, .4, 700); }
     const gone = this.camps.filter(c => now >= c.until); for (const c of gone) c.props.forEach(p => p.destroy()); this.camps = this.camps.filter(c => now < c.until);

@@ -89,7 +89,7 @@ function updateHuben(host: WeaponHost, st: ZlState, time: number): void {
     const a = h.a0 + i * Math.PI * 2 / h.n + t / H.lapMs * Math.PI * 2, x = pl.x + Math.cos(a) * H.radius, y = pl.y + Math.sin(a) * H.radius * .8;
     r.img?.setPosition(x, y - 10).setFrame(frame).setFlipX(-Math.sin(a) < 0).setDepth(y > pl.y ? 42 : 39);
     for (const e of host.grid.query(x, y, H.hitR + 30)) {
-      if (!e.active || e.isSupplySlot || Math.hypot(e.x - x, e.y - y) > H.hitR + e.radius) continue;
+      if (!e.active || (e.isSupplySlot && !e.lockTarget) || Math.hypot(e.x - x, e.y - y) > H.hitR + e.radius) continue;
       const key = e.uid + ':' + e.spawnId + ':' + i + ':' + lap; if (h.hit.has(key)) continue; h.hit.set(key, true);
       host.hitEnemy(e, h.dmg, time, 'melee');
       if (h.stun && e.kind !== 'boss' && !e.controlImmune) e.stunUntil = Math.max(e.stunUntil, time + h.stun);
@@ -107,7 +107,7 @@ function updateRouted(host: WeaponHost, st: ZlState, time: number, xiaoyao: bool
   for (const e of host.grid.query(host.player.x, host.player.y, 700)) {
     if (!e.active || e.routUntil <= time || time < e.trampleAt) continue;
     let n = 0;
-    for (const o of host.grid.query(e.x, e.y, X.trampleR + 30)) { if (o === e || !o.active || o.isSupplySlot || Math.hypot(o.x - e.x, o.y - e.y) > X.trampleR + o.radius + e.radius) continue; host.hitEnemy(o, dmg * X.trampleMul, time, 'melee'); if (++n >= 2) break; }
+    for (const o of host.grid.query(e.x, e.y, X.trampleR + 30)) { if (o === e || !o.active || (o.isSupplySlot && !o.lockTarget) || Math.hypot(o.x - e.x, o.y - e.y) > X.trampleR + o.radius + e.radius) continue; host.hitEnemy(o, dmg * X.trampleMul, time, 'melee'); if (++n >= 2) break; }
     if (n) e.trampleAt = time + X.trampleCdMs;
   }
 }
@@ -139,7 +139,7 @@ export function zhangliaoBehavior(host: WeaponHost, weapon: WeaponState, dt: num
   dx = target.x - pl.x; dy = target.y - pl.y; d = Math.hypot(dx, dy) || 1;
   const rot = Math.atan2(dy, dx);
   for (const e of host.grid.query(pl.x, pl.y, reach + 40)) {
-    if (!e.active || e.isSupplySlot) continue;
+    if (!e.active || (e.isSupplySlot && !e.lockTarget)) continue;
     const ex = e.x - pl.x, ey = e.y - pl.y, ed = Math.hypot(ex, ey);
     if (ed > reach + e.radius) continue;
     if (ed > e.radius && Math.abs(Math.atan2(Math.sin(Math.atan2(ey, ex) - rot), Math.cos(Math.atan2(ey, ex) - rot))) > ZL.arc) continue;

@@ -71,6 +71,21 @@ export const WEAPON_OVER = { cap: 0, capFor: (chapter: number): number => chapte
  * 契合：两条里该派「势」更高的那条（同势按武将第一亲和派）；选契合的那条，分支效果 ×fitMul（初值 +10%，交平衡会话）。
  */
 export const BRANCH_FIT = { fitMul: 1.1 } as const;
+/**
+ * 赵云「龙胆 · 七进七出」冲刺（2026-11-20 用户「很容易冲击怪堆被打死」→ 定案「冲进去再杀回原位我觉得可以」）：
+ * 杀进去再杀出来——朝移动方向（站定时朝最近的敌兵）冲进去 len，沿途敌兵受创；随即折返回出发点，回程同样受创；
+ * 往返全程无敌，回到原位后把身边贴身的敌兵推开。去 / 回各 outMs / backMs。初值，交平衡会话。
+ */
+export const LONGDAN = { len: 150, moveMin: 40, outMs: 170, holdMs: 30, backMs: 170, backMul: .9, pushR: 90, push: 46 } as const;
+/** 专职状态（HUD 专职行与构筑总览专职栏共用）：当前 Lv（5–7）、进阶进度、是否已进阶、悬停全文。 */
+export interface BranchStatus { b: WeaponBranch; lv: number; over: number; shi: number; final: boolean; attuned: boolean; progress: string; tip: string }
+export function branchStatus(w: { branch?: string; over?: number; attuned?: boolean } | undefined, shi: (s: SchoolId) => number, schoolName: (s: SchoolId) => string): BranchStatus | null {
+  const b = branchById(w?.branch); if (!b || !w) return null;
+  const over = Math.max(0, w.over ?? 0), n = shi(b.school), final = over >= 2 && n >= 4;
+  return { b, lv: 5 + over, over, shi: n, final, attuned: !!w.attuned,
+    progress: final ? '进阶「' + b.finalName + '」' : '进阶 ' + Math.min(n, 4) + '/4 势' + (over >= 2 ? '' : ' · 需 Lv7'),
+    tip: b.desc + '\n\nLv6：' + b.lv6 + '\nLv7：' + b.lv7 + '\n\n进阶「' + b.finalName + '」（Lv7 + ' + schoolName(b.school) + '派 4 势）：' + b.finalDesc + (w.attuned ? '\n\n契合当前流派：专职效果 +' + Math.round((BRANCH_FIT.fitMul - 1) * 100) + '%' : '') };
+}
 export function fitBranch(bs: readonly WeaponBranch[], shi: (s: SchoolId) => number, affinity: readonly SchoolId[]): WeaponBranch | undefined {
   if (bs.length !== 2) return bs[0];
   const [a, b] = bs, sa = shi(a.school), sb = shi(b.school);

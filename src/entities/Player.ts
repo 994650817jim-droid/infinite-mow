@@ -264,6 +264,8 @@ export class Player {
    */
   /** 放招牌技 / 专属武艺时（playAction('skill')）回调：出招起手特效（systems/HeroCastFx.ts），动作没播成也算出手 */
   onSkillAction?: () => void;
+  /** 立刻结束当前动作（回到行走 / 待机帧）；连段招式换姿势时用（七进七出：蓄势 → 突刺）。 */
+  endAction(): void { if (this.action && !this.action.hold) { this.action = null; this.renderAction(false); } }
   playAction(kind: HeroActionKind, dir: 'down' | 'up' | 'left' | 'right' = this.direction): boolean {
     if (kind === 'skill') this.onSkillAction?.();
     const set = this.actionSet; if (!set) return false;

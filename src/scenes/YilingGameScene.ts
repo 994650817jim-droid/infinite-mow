@@ -157,6 +157,10 @@ export function yilingGameSceneClass(Base: typeof GameScene, cfg: ArcSceneConfig
           { who: '陆逊', text: '先主用兵，非不善也。只是连营依林，正犯火攻之忌。' },
           { who: lord, text: '此仇未报，又折了这许多将士……传令：收兵白帝，与民休息。' },
           { who: '诸葛亮', text: '主公，蜀中尚存，大事可图。待国力恢复，北伐中原，仍有可为。' },
+          { text: '白帝城中，先主一病数月。一夜召丞相入内。' },
+          { who: '刘备', text: '君才十倍曹丕，必能安国，终定大事。朕年老多病，国事，今后尽托丞相。' },
+          { who: '诸葛亮', text: '（泣拜）臣敢不竭股肱之力，效忠贞之节，继之以死！' },
+          { text: '先主留镇永安，休养将士；军国大事，自此尽决于丞相。' },
           { text: '南中诸郡乘乱生变，孟获起兵……（第十一章 · 南征）' },
         ], reward: '火海突围 · 退守白帝', confirm: '收兵 · 退守白帝', background: 'rest_camp', onDone: () => { s.setMode('none'); next(); } });
     }

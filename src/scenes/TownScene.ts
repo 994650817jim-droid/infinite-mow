@@ -83,7 +83,7 @@ export class TownScene extends Phaser.Scene {
   else { const n = BORROW_BG[t]; worldAssets(this, `city_bg_${n}`, `assets/city/bg_${n}.webp`); for (const id of CITY_BUILDING_IDS) for (let l = 1; l <= 3; l++) worldAssets(this, `city_${BORROW_BUILDING[id]}_${l}`, `assets/city/${BORROW_BUILDING[id]}_${l}.webp`); }
  }
  create() {
-  playMenuMusic(this);
+  playMenuMusic(this, 'camp');
   const c = cityById(this.cityId), s = loadWorld();
   if ((!worldUnlocked() && !isChapterTestRun()) || !c || !s.ownedCities.includes(this.cityId)) { this.scene.start('WorldMapScene'); return; }
   startCityAmbient(this, k => uiSfx().play(k)); // 城池环境声（鸟鸣、打铁、车轮、远钟、风）

@@ -42,7 +42,7 @@ export class TalentHallScene extends Phaser.Scene {
     this.events.once('shutdown', () => { for (const k of added) if (this.textures.exists(k)) this.textures.remove(k); });
   }
   create() {
-    playMenuMusic(this);
+    playMenuMusic(this, 'hall');
     if (!worldUnlocked() && !isChapterTestRun()) { this.scene.start('MenuScene'); return; }
     // 2026-11-17 用户批准 UI 审查 A：电脑版整页改漆底描金 + 水墨按钮（原深绿底、扁平矩形按钮、绿木纹行，像网页）
     const D = W > 600;

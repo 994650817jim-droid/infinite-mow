@@ -334,6 +334,8 @@ export function alertLossWarning():string{const names=loadWorld().alerts.map(a=>
 /** 道具分解所得（旧称“钱”）折成军粮记入营寨（ItemStore 调用）。 */
 /** 招贤馆等花费：一律扣军粮。旧参数 merits / money 按折算系数并入军粮（招贤馆已只传 provisions）；不够返回 false 且不扣。 */
 /** 直接加军粮（第六章劝降：降城府库）。 */
+/** 战败：营寨军粮扣 pct（最多 cap），返回扣了多少。 */
+export function loseProvisionsPct(pct:number,cap:number):number{const s=loadWorld(),n=Math.min(cap,Math.floor(s.provisions*pct));if(n<=0)return 0;s.provisions-=n;commit(s);return n;}
 export function gainProvisions(n:number):void{if(!(n>0))return;const s=loadWorld();s.provisions+=Math.floor(n);commit(s);}
 export function spendWorld(c:{provisions?:number;merits?:number;money?:number}):boolean{const need=Math.max(0,Math.floor(c.provisions??0))+grainOf(Math.max(0,Math.floor(c.merits??0)),Math.max(0,Math.floor(c.money??0)));const s=loadWorld();if(s.provisions<need)return false;s.provisions-=need;commit(s);return true;}
 /** 直接发军粮（如武将经验满级折军粮）。返回发放数。 */

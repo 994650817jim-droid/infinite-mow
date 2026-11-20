@@ -31,7 +31,7 @@ export class CityRecruitScene extends Phaser.Scene{
  constructor(){super('CityRecruitScene');}
  preload(){if(!worldUnlocked()&&!isChapterTestRun())return;worldAssets(this,'city_recruit_art','assets/world/rest-camp.webp');this.owned=[];
   for(const kind of TROOP_KINDS){const key=v2Key(kind);if(!this.textures.exists(key)){this.load.image(key,v2Url(kind));this.owned.push(key);}}}
- create(){playMenuMusic(this);if(!worldUnlocked()&&!isChapterTestRun()){this.scene.start('MenuScene');return;}
+ create(){playMenuMusic(this, 'camp');if(!worldUnlocked()&&!isChapterTestRun()){this.scene.start('MenuScene');return;}
   const D=W>600;worldShell(this,'营寨招募');releaseWorldArt(this,'city_recruit_art');
   this.add.image(W/2,H/2,'city_recruit_art').setDisplaySize(Math.max(W,H*1.5),Math.max(H,W/1.5)).setAlpha(.35).setDepth(-1);
   for(const kind of TROOP_KINDS)this.standFrame(v2Key(kind));

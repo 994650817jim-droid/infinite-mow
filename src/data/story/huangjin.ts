@@ -34,8 +34,8 @@ export const HUANGJIN_STORY: StoryChapter = {
   stages: {
     1: {
       brief: { id: 'huangjin-1.brief', type: 'stageBrief', kicker: '1-1 · 军情', title: '广宗外围', lines: [
-        { who: 'scout', text: '报！黄巾前哨散布广宗城外，营帐连绵，旗号「黄天」。' },
-        { who: '{lord}', text: '先扫外围，断其耳目。' },
+        { who: 'luzhi', text: '玄德来得正好。广宗城外黄巾营帐连绵，先替我扫清外围。' },
+        { who: 'liubei', text: '学生领命！' },
         { tip: true, text: '打碎营帐与军旗可削弱黄巾士气。' },
       ] },
       bossIntro: { id: 'huangjin-1.bossIntro', type: 'bossIntro', lines: [{ who: 'zhangliang', text: '人公将军在此！苍天已死，黄天当立！' }] },
@@ -43,8 +43,9 @@ export const HUANGJIN_STORY: StoryChapter = {
     },
     2: {
       brief: { id: 'huangjin-2.brief', type: 'stageBrief', kicker: '1-2 · 军情', title: '下曲阳', lines: [
-        { who: 'jianyong', text: '张宝据守地公营，能撒豆成兵、呼风唤雨——多半是妖术障眼。' },
-        { who: '{lord}', text: '管他妖术，破阵便知。' },
+        { who: 'zhangfei', text: '卢师父被那宦官诬陷，囚车都过去了！俺去劫——' },
+        { who: 'guanyu', text: '三弟！先破张宝，再向朝廷讨个公道。' },
+        { who: 'jianyong', text: '张宝据守地公营，撒豆成兵、呼风唤雨——多半是妖术障眼。' },
         { tip: true, text: '先打掉护法符柱，张宝才会受伤。' },
       ] },
       bossIntro: { id: 'huangjin-2.bossIntro', type: 'bossIntro', lines: [{ who: 'zhangbao', text: '地公将军施法，看你如何近我！' }] },
@@ -52,12 +53,12 @@ export const HUANGJIN_STORY: StoryChapter = {
     },
     3: {
       brief: { id: 'huangjin-3.brief', type: 'stageBrief', kicker: '1-3 · 军情', title: '广宗决战', lines: [
-        { who: 'liubei', text: '张角病笃，广宗城内军心已乱。此战若胜，黄巾可平。' },
+        { who: 'huangfusong', text: '张角病笃，城中军心已乱。诸君随我合围广宗！' },
         { who: 'guanyu', text: '大哥放心，某愿为前锋。' },
         { tip: true, text: '张角的天雷会提前落下预警圈，看准再闪。' },
       ] },
       bossIntro: { id: 'huangjin-3.bossIntro', type: 'bossIntro', lines: [{ who: 'zhangjiao', text: '天公将军代天行道——苍天已死！' }] },
-      bossFall: { id: 'huangjin-3.bossFall', type: 'bossFall', lines: [{ who: 'zhangjiao', text: '大贤良师……也会死么……' }] },
+      bossFall: { id: 'huangjin-3.bossFall', type: 'bossFall', lines: [{ who: 'zhangjiao', text: '大贤良师……也会死么……' }, { who: 'huangfusong', text: '张角已死，黄巾可平！' }] },
     },
   },
   close: {

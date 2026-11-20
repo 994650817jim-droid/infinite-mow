@@ -213,6 +213,7 @@ export class BootScene extends Phaser.Scene {
     // 其余 11 将脚下被动刻度（2026-11-18 用户「每个角色都加类似于赵云脚下那个被动」；说明见 src/data/passiveGauge.ts）
     this.load.spritesheet('passive_gauge_a', 'assets/hero-fx/passive_gauge_a.png', { frameWidth: 128, frameHeight: 128 });
     this.load.spritesheet('passive_gauge_b', 'assets/hero-fx/passive_gauge_b.png', { frameWidth: 128, frameHeight: 128 });
+    this.load.spritesheet('passive_gauge_c', 'assets/hero-fx/passive_gauge_c.png', { frameWidth: 128, frameHeight: 128 });
     // 马超虎头湛金枪手绘特效（6×4，每帧 256，透明底；2026-11-17 Gemini 出图替换原像素图集 machao_fx，旧文件保留不再加载）：上挑弧光 / 落地砸地 / 冲锋尘土拖影 / 枪尖破风
     this.load.spritesheet('machao_paint', 'assets/hero-fx/machao_paint.png', { frameWidth: 256, frameHeight: 256 });
     // 2026-11-16 专属武器贴图（tools/prepare-hero-icon-sheet.mjs 切出）与执刀侍婢行走图

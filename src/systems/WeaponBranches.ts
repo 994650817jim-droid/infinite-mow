@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { DEPTH } from '../config';
-import { BRANCH_FIT, LONGDAN, branchById, branchTier, BENXI, type WeaponBranch } from '../data/weaponBranches';
+import { BRANCH_FIT, LONGDAN, LONGDAN_GUARD, longdanInvulnMs, longdanTotalMs, branchById, branchTier, BENXI, type WeaponBranch } from '../data/weaponBranches';
 import type { SchoolId } from '../data/schools';
 import type { Enemy } from '../entities/Enemy';
 import type { Player } from '../entities/Player';
@@ -36,6 +36,8 @@ export interface BranchHost {
   /** 进阶形态第一次达成（宿主播短演出）。 */
   onFinal?: (b: WeaponBranch) => void;
   sfx: (k: string) => void;
+  /** 顿帧（毫秒）：七进七出冲刺首次命中用。 */
+  hitStop?: (ms: number) => void;
 }
 interface Seg { x: number; y: number; until: number; nextTick: number }
 
@@ -45,7 +47,7 @@ export class WeaponBranches {
   /** 主将移动速度（像素 / 秒，平滑后；七进七出冲刺方向用）。 */
   private vx = 0; private vy = 0; private vAt = -1; private vpx = 0; private vpy = 0;
   /** 测试用：最近一次七进七出冲刺（方向来源、距离、落点敌数）。 */
-  lastDash: { mode: 'move' | 'target'; len: number; ox: number; oy: number; ux: number; uy: number; back?: { x: number; y: number } } | null = null;
+  lastDash: { mode: 'move' | 'target'; len: number; ox: number; oy: number; ux: number; uy: number; back?: { x: number; y: number }; phases?: Record<string, number>; total?: number } | null = null;
   private barrier?: { ax: number; ay: number; bx: number; by: number; until: number; nextTick: number };
   /** 火场（天火燎原 / 火矢 / 铁骑蹄火）、八阵陷阱、营栅区。 */
   private fields: Array<{ x: number; y: number; r: number; until: number; nextTick: number; mul: number; spread: boolean }> = [];
@@ -58,7 +60,7 @@ export class WeaponBranches {
   private rings: Array<{ x: number; y: number; until: number; nextTick: number }> = [];
   private stunned = new Map<Enemy, number>(); private guardUntil = 0; private healAt = 0; private healFxAt = 0; private thirdAt = 0;
   /** 测试用。 */
-  readonly stats = { fires: 0, procs: 0, hits: 0, final: false };
+  readonly stats: { fires: number; procs: number; hits: number; final: boolean; turns?: number } = { fires: 0, procs: 0, hits: 0, final: false };
 
   /** 进阶形态专属手绘特效（BranchFinalFx）：final() 时出手爆发 + 常驻光环。 */
   private readonly fin: BranchFinalFx;
@@ -103,7 +105,7 @@ export class WeaponBranches {
   private onFire(b: WeaponBranch, now: number): void {
     const P = this.h.player, k = this.k();
     if (this.onFire2(b, now) || this.onFire3(b, now)) return;
-    if (b.id === 'zy_longdan' && now >= this.nextAt) { this.nextAt = now + 3000 / k; this.dash(); if (this.final()) this.dashQueue.push(now + 420, now + 840); } // 进阶：再进出两次（一次往返约 0.4 秒）
+    if (b.id === 'zy_longdan' && now >= this.nextAt) { const T = longdanTotalMs() + 120, n = this.final() ? 3 : 1; this.nextAt = now + Math.max(LONGDAN.cdMs / k, n * T + 800, n * longdanInvulnMs() / (n > 1 ? LONGDAN_GUARD.finalShare : LONGDAN_GUARD.invulnShare)); this.dash(); if (n > 1) this.dashQueue.push(now + T, now + 2 * T); } // 进阶：再进出两次（一次约 1.1 秒，接着来）；冷却按新时长放宽
     else if (b.id === 'gy_qinglong') this.crescent();
     else if (b.id === 'zf_duanqiao') {
       const t = this.nearest(320), ang = t ? Math.atan2(t.y - P.y, t.x - P.x) : 0, w = 200 * (1 + .15 * (this.tier() - 1)), cx = P.x + Math.cos(ang) * 150, cy = P.y + Math.sin(ang) * 150, px = -Math.sin(ang), py = Math.cos(ang);
@@ -152,26 +154,78 @@ export class WeaponBranches {
   }
 
   private deal(e: Enemy, mul: number, fire = false): void { this.h.damage(e, this.h.hit() * mul * this.k(), fire); this.stats.hits++; }
-  /** 七进七出：杀进去再杀回原位（data/weaponBranches.ts LONGDAN）。 */
+  /**
+   * 七进七出：杀进去再杀回原位（data/weaponBranches.ts LONGDAN；2026-11-20 改四段约 1.1 秒，原来 0.37 秒像瞬移）。
+   * ① 起手 windMs：原地压枪蓄势（招牌技姿势）、脚下扬尘；② 冲入 outMs：持枪突刺姿势，每 ghostMs 一道残影，沿途枪影、挑开敌兵，首次命中顿帧；
+   * ③ 回马枪 turnMs：最远点转身横扫一圈；④ 杀回 backMs：突刺回出发点，落地收枪、推开贴身敌兵、扬尘。全程无敌、全程锁定移动。
+   * 骑马时残影把马也带上（只拷骑手会剩一个漂在半空的白人影）。用计时器而不是 tween：顿帧时战斗时钟变慢，各段跟着变慢。
+   */
   private dash(): void {
     const P = this.h.player, t = this.nearest(300); if (!t) return; const now = this.h.now(), D = LONGDAN, s = this.h.scene;
     let ux = 0, uy = 0, mode: 'move' | 'target' = 'move'; const sp = Math.hypot(this.vx, this.vy);
     if (sp > D.moveMin) { ux = this.vx / sp; uy = this.vy / sp; } // 在走：沿玩家走的方向
     else { mode = 'target'; const dx = t.x - P.x, dy = t.y - P.y, d = Math.hypot(dx, dy) || 1; ux = dx / d; uy = dy / d; } // 站定：朝最近的敌兵
-    const L = D.len, ox = P.x, oy = P.y;
-    this.lastDash = { mode, len: L, ox: Math.round(ox), oy: Math.round(oy), ux: +ux.toFixed(2), uy: +uy.toFixed(2) };
-    P.invulnUntil = Math.max(P.invulnUntil, now + D.outMs + D.holdMs + D.backMs + 120); // 往返全程无敌
-    const strike = (x0: number, y0: number, x1: number, y1: number, mul: number) => { const len = Math.hypot(x1 - x0, y1 - y0) || 1, mx = (x0 + x1) / 2, my = (y0 + y1) / 2;
-      for (const e of this.h.query(mx, my, len / 2 + 40)) if (e.active && !e.isSupplySlot && segDist(e.x, e.y, x0, y0, x1, y1) <= 26 + e.radius) this.deal(e, mul);
-      const a = Math.atan2(y1 - y0, x1 - x0);
-      if (s.textures.exists('spear_thrust')) { const img = s.add.image(mx, my - 6, 'spear_thrust', 'tight').setRotation(a).setDisplaySize(len + 50, 30).setTint(0xeef6ff).setAlpha(.92).setDepth(DEPTH.fx); s.tweens.add({ targets: img, alpha: 0, scaleY: img.scaleY * 1.7, duration: 280, onComplete: () => img.destroy() }); }
-      this.fx('fx_flank_streak', mx, my, len + 40, 260, 0xeef6ff, a); }; // 白龙枪影 + 残影（手绘）
-    // 去：冲进去
-    P.knockUp(now, D.outMs, ux * L, uy * L, true); strike(ox, oy, ox + ux * L, oy + uy * L, .9); this.h.sfx('atk_charge');
-    // 回：折返回出发点（按此刻实际位置算回程，落点就是原位）
-    s.time.delayedCall(D.outMs + D.holdMs, () => { const t2 = this.h.now(), bx = P.x, by = P.y; P.knockUp(t2, D.backMs, ox - bx, oy - by, true); strike(bx, by, ox, oy, .9 * D.backMul); this.h.sfx('atk_charge');
-      // 回到原位：把贴身的敌兵推开（首领不推）
-      s.time.delayedCall(D.backMs, () => { const t3 = this.h.now(); for (const e of this.h.query(ox, oy, D.pushR)) if (e.active && !e.isSupplySlot && e.kind !== 'boss') e.hitRecoil(t3, Math.atan2(e.y - oy, e.x - ox), D.push, 140); this.fx('fx_windstep_burst', ox, oy + 6, D.pushR * 2.2, 380, 0xdcecff); if (this.lastDash) this.lastDash.back = { x: Math.round(P.x), y: Math.round(P.y) }; }); });
+    const L = D.len, ox = P.x, oy = P.y, total = longdanTotalMs(), card = (x: number, y: number): 'left' | 'right' | 'up' | 'down' => Math.abs(x) > Math.abs(y) ? (x < 0 ? 'left' : 'right') : (y < 0 ? 'up' : 'down');
+    const dirOut = card(ux, uy), dirBack = card(-ux, -uy), t0 = now;
+    const phases: Record<string, number> = {};
+    const mark = (k: string): void => { phases[k] = Math.round(this.h.now() - t0); };
+    this.lastDash = { mode, len: L, ox: Math.round(ox), oy: Math.round(oy), ux: +ux.toFixed(2), uy: +uy.toFixed(2), phases, total };
+    P.invulnUntil = Math.max(P.invulnUntil, now + longdanInvulnMs()); // 起手 + 冲入 + 回马枪无敌；杀回那段要挨打（LONGDAN_GUARD）
+    const dust = (x: number, y: number, size: number): void => this.fx('fx_windstep_burst', x, y + (P.riseY > 0 ? 30 : 8), size, 380, 0xe8dcc0);
+    // 残影：主将当前这一帧（骑马时连同马）染淡青白，原地淡出
+    const ghost = (): void => {
+      const parts: Array<Phaser.GameObjects.Image | Phaser.GameObjects.Sprite> = [P.sprite];
+      if (P.riseY > 0) for (const o of s.children.list) if ((o as Phaser.GameObjects.Image).name === 'hero-mount' && (o as Phaser.GameObjects.Image).visible) parts.unshift(o as Phaser.GameObjects.Image);
+      for (const b of parts) {
+        if (!b.visible || !b.texture) continue;
+        const g = s.add.image(b.x, b.y, b.texture.key, b.frame.name).setOrigin(b.originX, b.originY).setDisplaySize(b.displayWidth, b.displayHeight).setFlipX(b.flipX)
+          .setTintFill(0xdcecff).setAlpha(.5).setDepth(b.depth - .01).setName('longdan-ghost');
+        s.tweens.add({ targets: g, alpha: 0, duration: 260, onComplete: () => g.destroy() });
+      }
+    };
+    // 一段突刺：从 (x0, y0) 冲到 (x0 + dx, y0 + dy)，途中每 ghostMs 结算这一小段路上的敌兵（同一个兵一段只挨一次）
+    const run = (dx: number, dy: number, ms: number, mul: number, dir: 'left' | 'right' | 'up' | 'down', done: () => void): void => {
+      const start = this.h.now(), sx = P.x, sy = P.y, hit = new Set<Enemy>(), a = Math.atan2(dy, dx); let lx = sx, ly = sy, stopped = false;
+      P.endAction(); P.playAction('attack', dir); P.faceDirection?.(dir, ms);
+      P.knockUp(start, ms, dx, dy, true);
+      this.fx('fx_flank_streak', sx + dx / 2, sy + dy / 2 - 6, Math.hypot(dx, dy) + 60, ms + 120, 0xeef6ff, a); // 沿途白龙枪影
+      const step = (): void => {
+        const cx = P.x, cy = P.y, len = Math.hypot(cx - lx, cy - ly) || 1;
+        for (const e of this.h.query((lx + cx) / 2, (ly + cy) / 2, len / 2 + 50)) {
+          if (!e.active || e.isSupplySlot || hit.has(e) || segDist(e.x, e.y, lx, ly, cx, cy) > 30 + e.radius) continue;
+          hit.add(e); this.deal(e, mul);
+          if (e.active && e.kind !== 'boss') { const side = Math.sign(-uy * (e.x - cx) + ux * (e.y - cy)) || 1; e.hitRecoil(this.h.now(), a + side * Math.PI / 2, D.pathPush, 160); } // 往两侧挑开
+          if (!stopped) { stopped = true; this.h.hitStop?.(D.hitStopMs); }
+        }
+        ghost(); lx = cx; ly = cy;
+        if (this.h.now() - start < ms - 1) { s.time.delayedCall(D.ghostMs, step); return; }
+        done();
+      };
+      s.time.delayedCall(D.ghostMs, step);
+    };
+    // ① 起手：压枪蓄势 + 扬尘，原地站定
+    mark('wind'); P.knockUp(now, D.windMs, 0, 0, true); P.playAction('skill', dirOut); P.faceDirection?.(dirOut, D.windMs); dust(ox, oy, 120); this.h.sfx('atk_charge');
+    s.time.delayedCall(D.windMs, () => {
+      // ② 冲入
+      mark('out');
+      run(ux * L, uy * L, D.outMs, .9, dirOut, () => {
+        // ③ 回马枪：最远点转身横扫一圈
+        mark('turn'); const fx0 = P.x, fy0 = P.y; P.knockUp(this.h.now(), D.turnMs, 0, 0, true); P.endAction(); P.playAction('attack', dirBack); P.faceDirection?.(dirBack, D.turnMs);
+        for (const e of this.h.query(fx0, fy0, D.turnR + 30)) if (e.active && !e.isSupplySlot && Math.hypot(e.x - fx0, e.y - fy0) <= D.turnR + e.radius) { this.deal(e, D.turnMul); if (e.active && e.kind !== 'boss') e.hitRecoil(this.h.now(), Math.atan2(e.y - fy0, e.x - fx0), D.pathPush, 160); }
+        this.fx('fx_dianwei_whirl', fx0, fy0, D.turnR * 2.1, D.turnMs + 120, 0xdcecff); this.h.sfx('atk_spear'); this.stats.turns = (this.stats.turns ?? 0) + 1;
+        s.time.delayedCall(D.turnMs, () => {
+          // ④ 杀回原位（按此刻实际位置算回程，落点就是出发点）
+          mark('back'); this.h.sfx('atk_charge');
+          run(ox - P.x, oy - P.y, D.backMs, .9 * D.backMul, dirBack, () => {
+            // 落地收枪：推开贴身的敌兵（首领不推）、扬尘
+            mark('land'); P.endAction(); const t3 = this.h.now();
+            for (const e of this.h.query(ox, oy, D.pushR)) if (e.active && !e.isSupplySlot && e.kind !== 'boss') e.hitRecoil(t3, Math.atan2(e.y - oy, e.x - ox), D.push, 140);
+            this.fx('fx_windstep_burst', ox, oy + 6, D.pushR * 2.2, 380, 0xdcecff); dust(ox, oy, 150);
+            if (this.lastDash) this.lastDash.back = { x: Math.round(P.x), y: Math.round(P.y) };
+          });
+        });
+      });
+    });
     this.stats.procs++;
   }
   private storm(): void {

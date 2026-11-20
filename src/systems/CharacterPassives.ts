@@ -316,8 +316,10 @@ export class CharacterPassives {
     }
   }
   snapshot(now: number) {
-    return { character: this.character, stacks: this.character === 'zhuge' ? this.starTop(now) : this.stacks, maxStacks: this.maxStacks,
-      ready: !this.stopped && (this.character === 'lvbu' ? this.isWushuang(now) : this.character === 'huangzhong' ? this.isSharpshooter(now) : (this.character === 'zhuge' ? this.starTop(now) : this.stacks) === this.maxStacks),
+    // P2：分支 / 武艺会改满层数（周瑜雅量、太史慈北海突围、曹操虎豹骑），被动条和脚下刻度都按实际满层显示
+    const need = this.character === 'zhouyu' ? this.zyNeed : this.character === 'taishici' ? this.tscNeed : this.character === 'mengde' ? this.mdNeed : this.maxStacks;
+    return { character: this.character, stacks: this.character === 'zhuge' ? this.starTop(now) : this.character === 'lvbu' && this.isWushuang(now) ? need : this.stacks, maxStacks: need,
+      ready: !this.stopped && (this.character === 'lvbu' ? this.isWushuang(now) : this.character === 'huangzhong' ? this.isSharpshooter(now) : (this.character === 'zhuge' ? this.starTop(now) : this.stacks) >= need),
       // 黄忠：神射中为剩余时间比例，否则为蓄势比例（PassiveHud 进度条）
       calmProgress: this.stopped || this.character !== 'huangzhong' ? 0 : this.isSharpshooter(now) ? this.sharpLeft(now) / this.sharpMs : this.stacks / HZ_SHARP.need,
       critBonus: this.critBonus(now), guandaoRangeMul: this.rangeMultiplier('guandao'), burns: this.burns.size, charms: this.charms.size, turned: [...this.charms.values()].filter(c => c.turnedUntil > now).length, gains: this.gains, triggers: this.triggers, stopped: this.stopped };

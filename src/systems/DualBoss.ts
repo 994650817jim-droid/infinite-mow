@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import type { Enemy } from '../entities/Enemy';
 import type { EnemyKind } from '../types';
 import { DEPTH, FONT, GAME_HEIGHT, GAME_WIDTH, actorDepth } from '../config';
+import type { BossHud } from '../ui/BossHud';
 import type { Parley } from './Parley';
 import type { BossMount } from './BossMount';
 import { BossKit } from './BossKit';
@@ -340,13 +341,14 @@ export class DualBoss {
 
   // ———— 血条（屏幕下方两条并排） ————
   get hudActive(): boolean { const rn = performance.now(); return this.entries.some(x => !x.done || rn - x.doneReal < DUAL.hud.fadeMs); }
-  drawHud(g: Phaser.GameObjects.Graphics, hpBarColor: number, danger: number): void {
-    const s = this.h.scene, H = DUAL.hud, barY = GAME_HEIGHT - 68, rn = performance.now();
+  drawHud(hud: BossHud, hpBarColor: number, danger: number): void {
+    const s = this.h.scene, H = DUAL.hud, top = GAME_HEIGHT - 30 - 44, rn = performance.now(); // 2026-11-20 漆金框（ui/BossHud.ts）：两块紧凑框并排，底边同单首领框
     if (!this.hudTexts.length) for (let i = 0; i < 6; i++) this.hudTexts.push(s.add.text(0, 0, '', { fontFamily: FONT, fontSize: i % 3 === 0 ? '15px' : '13px', color: i % 3 === 0 ? '#e8c76a' : '#f5efe6', stroke: '#140c06', strokeThickness: 3, resolution: 2 }).setScrollFactor(0).setDepth(DEPTH.hud + 1).setName('dual-hud-' + i));
     const two = H.barW * 2 + H.gap, left0 = (GAME_WIDTH - two) / 2;
     const alive = this.entries.filter(x => !x.done), merged = alive.length === 1 && this.entries.length === 2;
     // 了结那条灰着留 3 秒、最后三成时间淡出；剩下那条等它开始淡出再滑到中间放宽
     const slide = merged ? Phaser.Math.Clamp((rn - this.mergedAt - H.fadeMs * .7) / H.slideMs, 0, 1) : 0, ease = slide * slide * (3 - 2 * slide);
+    let drawn = 0;
     this.entries.forEach((x, i) => {
       const [nameT, pctT, stT] = this.hudTexts.slice(i * 3, i * 3 + 3);
       const e = x.enemy, ratio = x.done ? 0 : Phaser.Math.Clamp(e.hp / e.maxHp, 0, 1);
@@ -355,19 +357,15 @@ export class DualBoss {
       else if (merged) { const cx = (GAME_WIDTH - H.mergedW) / 2; bx = bx + (cx - bx) * ease; bw = H.barW + (H.mergedW - H.barW) * ease; }
       const show = a > .02;
       const word = x.done === 'killed' ? '授首' : x.done === 'persuaded' ? '归降' : x.done === 'retreated' ? '退走' : '';
-      nameT.setVisible(show).setAlpha(a).setPosition(bx, barY - 24).setText(x.name + (word ? ' · ' + word : '')).setColor(x.done ? '#9a9088' : x.color === 'gold' ? '#e8c76a' : '#f0a890');
-      pctT.setVisible(show).setAlpha(a).setOrigin(1, 0).setPosition(bx + bw, barY - 24).setText(x.done ? '' : Math.round(ratio * 100) + '%');
+      if (!show) { nameT.setVisible(false); pctT.setVisible(false); stT.setVisible(false); return; }
+      const tr = x.done ? 0 : this.h.trail(x.spawnId, ratio);
+      const bar = hud.drawDualPanel(drawn++, { id: x.id, x: bx, y: top, w: bw, ratio, trail: tr, a, done: !!x.done, fill: x.rage ? danger : 0xa82e1c, rage: !!x.rage, ring: x.color === 'gold' ? 0xd8a23a : 0xc8321e }, rn);
+      nameT.setVisible(true).setAlpha(a).setOrigin(0, 0).setFontSize(15).setPosition(bar.barX, top + 5).setText(x.name + (word ? ' · ' + word : '')).setColor(x.done ? '#9a9088' : x.color === 'gold' ? '#f0d488' : '#f4b8a0').setStroke('#140c06', 4).setShadow(1, 2, '#000000', 3, true, true);
+      pctT.setVisible(true).setAlpha(a).setOrigin(1, 0).setPosition(bar.barX + bar.barW, top + 7).setText(x.done ? '' : Math.round(ratio * 100) + '%').setStroke('#140c06', 4).setShadow(1, 2, '#000000', 3, true, true);
       const st = x.done ? '' : [x.rage ? '狂怒' : x.status === '心乱' && this.nowOf() < x.shakenUntil ? '心乱 ' + Math.ceil((x.shakenUntil - this.nowOf()) / 1000) + '秒' : x.status && x.status !== '心乱' ? x.status : '', x.ctrl.label].filter(Boolean).join(' · ');
-      stT.setVisible(show && !!st).setAlpha(a).setOrigin(i === 0 && !merged ? 0 : 1, 0).setPosition(i === 0 && !merged ? bx : bx + bw, barY + 16).setText(st).setColor(x.rage ? '#ff6a4a' : '#d8c8a8');
-      if (!show) return;
-      g.fillStyle(0x000000, .72 * a).fillRect(bx, barY, bw, 12);
-      if (!x.done) {
-        const tr = this.h.trail(x.spawnId, ratio);
-        if (tr > ratio) g.fillStyle(0xfff4e0, .92 * a).fillRect(bx + 2 + (bw - 4) * ratio, barY + 2, (bw - 4) * (tr - ratio), 8);
-        g.fillStyle(x.rage ? danger : hpBarColor, .95 * a).fillRect(bx + 2, barY + 2, Math.max(0, (bw - 4) * ratio), 8);
-        g.lineStyle(1, x.color === 'gold' ? 0xd8a23a : 0xc8321e, .7 * a).strokeRect(bx, barY, bw, 12);
-      } else g.fillStyle(0x6a6460, .5 * a).fillRect(bx + 2, barY + 2, bw - 4, 8);
+      stT.setVisible(!!st).setAlpha(a).setOrigin(i === 0 && !merged ? 0 : 1, 0).setPosition(i === 0 && !merged ? bx + 4 : bx + bw - 4, top + 47).setText(st).setColor(x.rage ? '#ff6a4a' : '#d8c8a8').setStroke('#140c06', 4).setShadow(1, 2, '#000000', 3, true, true);
     });
+    hud.endDual(drawn);
   }
   hideHud(): void { for (const t of this.hudTexts) t.setVisible(false); }
   private nowOf(): number { return (this.h.scene as unknown as { combatNow?: number }).combatNow ?? 0; }

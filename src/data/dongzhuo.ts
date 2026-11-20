@@ -66,7 +66,7 @@ export function getLuoyangChapter(): ChapterDef {
   const base = getSishuiEncounter(), elite = base.enemies.elite, wv = elite.walkVisual;
   const boss: EnemyDef = {...base.enemies.boss, texture: wv?.texture ?? elite.texture, walkVisual: wv ? {...wv, scale: wv.scale * DONGZHUO_BOSS.scale} : undefined, attackVisual: undefined, tint: DONGZHUO_BOSS.tint, hp: DONGZHUO_BOSS.hp, speed: DONGZHUO_BOSS.speed, damage: DONGZHUO_BOSS.damage, radius: 34};
   return {
-    ...base, name: '2-3 火烧洛阳', label: '讨伐董卓 · 洛阳', description: '董卓焚城西走 · 摧毁营寨、吕布、董卓', bossName: '董卓', bossStyle: 'dongzhuo', westStage: 3,
+    ...base, name: '2-3 火烧洛阳', label: '第二章 · 讨伐董卓 · 洛阳', description: '董卓焚城西走 · 摧毁营寨、吕布、董卓', bossName: '董卓', bossStyle: 'dongzhuo', westStage: 3,
     // 不分波（用户：「这里不用设计波数」）：一段持续刷兵；首领（董卓）开局就站在城头
     waves: [{name: '洛阳城外', start: 0}], recruitWaves: [], bossAtStart: true,
     objective: {kind: 'destroy', count: LUOYANG.camps.length, target: '营寨', label: '摧毁营寨', limit: 9999, spots: LUOYANG.camps, doneBanner: ['营寨尽毁', '吕布跃下城头！']},

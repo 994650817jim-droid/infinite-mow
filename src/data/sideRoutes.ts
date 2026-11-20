@@ -55,7 +55,7 @@ export const SIDE_ROUTES: readonly SideRouteDef[] = [
         boss: B('gaoshun', '高顺', '陷阵营', 'side_gaoshun', 'guandu/yanliang', 'zhuran') },
       { name: '下邳', kind: 'siege', city: 'xiapi', behavior: 3, scenery: 4, waves: ['下邳外郭', '泗水决堤', '张辽守城'], story: '围下邳，决泗水。张辽据城而守，城破在即。',
         boss: B('zhangliao', '张辽', '吕布骁将', 'side_zhangliao', 'phase23/zhangxiu', 'zhanghe', true) },
-      { name: '白门楼', kind: 'final', scene: 'lubu', behavior: 1, scenery: 1, waves: ['白门楼下', '吕布亲军', '吕布出阵'], story: '下邳城破，吕布退守白门楼。飞将末路，劝降还是斩杀？',
+      { name: '白门楼', kind: 'final', scene: 'lubu', behavior: 1, scenery: 1, waves: ['白门楼下', '吕布亲军', '吕布出阵'], story: '下邳城破，吕布与陈宫退守白门楼。飞将末路，劝降还是斩杀？',
         boss: B('lubu', '吕布', '飞将', 'lubu_walk', 'phase23/lijue', 'lijue', true),
         // 陈宫：后排军师（专属图 side_chengong，美术 5dc8d5f），火攻 / 号令伏兵 / 给吕布献计；拒降就义（surrender-rules）
         partner: B('chengong', '陈宫', '公台', 'side_chengong', 'phase23/yuanshu', 'chengong') },

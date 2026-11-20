@@ -46,6 +46,7 @@ export const UNLOCK_RULES: Readonly<Partial<Record<CharacterId, (p: UnlockProgre
   zhangliao: p => !!p.persuaded?.('zhangliao'),                               // P2：劝降张辽（下邳支线白门楼）
   zhouyu: p => !!p.persuaded?.('zhouyu'),                                     // P2：劝降周瑜（江东南郡支线；须程普先降）
   taishici: p => !!p.persuaded?.('taishici'),                                 // P2：劝降太史慈（江东南郡支线）
+  sunquan: p => !!p.persuaded?.('sunquan'),                                  // P3：孙权归附（东吴支线终局吴郡，城全下必降）
   dianwei: p => !!p.persuaded?.('caocao'),                                   // P3：曹操归附时随曹公来投（3-2 救下 / 没救下都来，只换台词）
   ganning: p => !!p.persuaded?.('ganning'),                                   // P3：劝降甘宁（荆州江夏支线第 1 关江夏外围）
   mengde: p => !!p.persuaded?.('caocao'),                                    // P2：曹操归附（中原曹魏支线许都决战，城全下必降）

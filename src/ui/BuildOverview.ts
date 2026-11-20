@@ -68,7 +68,7 @@ const INK_FACE: Record<string, { fx: number; fy: number; w: number }> = {
   zhaoyun: { fx: .47, fy: .12, w: .40 }, guanyu: { fx: .38, fy: .135, w: .44 }, zhangfei: { fx: .36, fy: .175, w: .44 }, machao: { fx: .48, fy: .165, w: .42 },
   huangzhong: { fx: .34, fy: .145, w: .42 }, zhuge: { fx: .33, fy: .165, w: .40 }, liubei: { fx: .33, fy: .15, w: .42 }, weiyan: { fx: .52, fy: .135, w: .42 },
   pangtong: { fx: .49, fy: .19, w: .40 }, huangyueying: { fx: .45, fy: .15, w: .40 }, sunshangxiang: { fx: .41, fy: .15, w: .40 }, diaochan: { fx: .31, fy: .195, w: .42 },
-  lvbu: { fx: .47, fy: .19, w: .42 }, zhangliao: { fx: .37, fy: .19, w: .42 }, zhouyu: { fx: .43, fy: .22, w: .42 }, taishici: { fx: .4, fy: .2, w: .42 }, mengde: { fx: .39, fy: .15, w: .42 }, ganning: { fx: .5, fy: .43, w: .42 }, dianwei: { fx: .45, fy: .17, w: .44 },
+  lvbu: { fx: .47, fy: .19, w: .42 }, zhangliao: { fx: .37, fy: .19, w: .42 }, zhouyu: { fx: .43, fy: .22, w: .42 }, taishici: { fx: .4, fy: .2, w: .42 }, mengde: { fx: .39, fy: .15, w: .42 }, ganning: { fx: .5, fy: .43, w: .42 }, dianwei: { fx: .45, fy: .17, w: .44 }, sunquan: { fx: .5, fy: .14, w: .4 },
 };
 const inkKey = (id: string) => 'ink_hero_' + id;
 /** 画头像进 (x, y, w, h) 框；水墨立绘未加载时先加载、加载完再补画（root 已销毁则不画）。 */

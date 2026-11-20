@@ -28,6 +28,11 @@ export interface HeroBarkLines {
 }
 
 export const HERO_BARKS: Record<CharacterId, HeroBarkLines> = {
+  sunquan: {
+    trigger: ['江东子弟，随孤齐射！', '制衡之道，在于审时度势。', '坐断东南，战未休！'],
+    bossAppear: ['来者何人？报上名来。'], bossDown: ['不过如此。'],
+    vsBoss: { 曹操: '孟德，濡须口那一战可还记得？', 关羽: '云长，荆州之事，今日了断。', 陆逊: '伯言，你可是孤的大都督。' },
+  },
   dianwei: {
     trigger: ['古之恶来在此！', '主公退后，某来挡！', '谁敢近前一步！'],
     bossAppear: ['来，吃某一戟！'], bossDown: ['不过如此。'],

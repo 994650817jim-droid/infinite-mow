@@ -55,6 +55,8 @@ export const ART_V2_FILES: Readonly<Record<string, string>> = sideBossFiles({
   ganning_actions: 'assets/hero-actions-v2/ganning.png',
   dianwei_walk_sheet: 'assets/processed-v2/dianwei_walk_sheet.png',
   dianwei_actions: 'assets/hero-actions-v2/dianwei.png',
+  sunquan_walk_sheet: 'assets/processed-v2/sunquan_walk_sheet.png',
+  sunquan_actions: 'assets/hero-actions-v2/sunquan.png',
   // 第 2 批：我方兵种（4×4，见 V2_TROOP_KEYS / applyV2TroopFrames）
   shu_swordsman_walk_sheet: 'assets/processed-v2/troops/swordsman_walk.png',
   shu_swordsman_attack_sheet: 'assets/processed-v2/troops/swordsman_attack.png',

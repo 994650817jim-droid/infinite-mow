@@ -44,6 +44,17 @@ export function smartTarget(host: WeaponHost, range: number, minDist = 0): Enemy
   }
   return most >= 2 ? best : list[0].e;
 }
+/**
+ * 近身武器选目标（2026-11-20）：smartTarget 挑「身边同伴最多」的那个，可能刚好在刀够不着的地方（距离 ≤ 范围 + 体型）；
+ * 近身武器拿到够不着的目标就整把卡住不砍。够不着时退回刀够得着的最近敌兵（没有就 null）。
+ */
+export function meleeTarget(host: WeaponHost, reach: number): Enemy | null {
+  const pl = host.player, t = smartTarget(host, reach + 20), inReach = (e: Enemy): boolean => Math.hypot(e.x - pl.x, e.y - pl.y) <= reach + e.radius + 10;
+  if (t && inReach(t)) return t;
+  let best: Enemy | null = null, bd = Infinity;
+  for (const e of host.grid.query(pl.x, pl.y, reach + 50)) { if (!alive(e) || e.isSupplySlot || e.invulnerable || e.def.behavior === 'wall' || !inReach(e)) continue; const d = Math.hypot(e.x - pl.x, e.y - pl.y); if (d < bd) { bd = d; best = e; } }
+  return best;
+}
 /** 普通 / 精锐被推开（首领、免控不动）。 */
 function shove(e: Enemy, ux: number, uy: number, dist: number): void {
   if (e.kind === 'boss' || e.controlImmune || (e.isSupplySlot && !e.lockTarget)) return;

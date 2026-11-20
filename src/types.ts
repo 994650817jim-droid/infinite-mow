@@ -3,7 +3,7 @@ import type { RunGrowth } from './systems/RunGrowth';
 
 export type EnemyKind = 'infantry' | 'shield' | 'archer' | 'cavalry' | 'elite' | 'boss';
 
-export type WeaponId = 'spear_orbit' | 'crossbow' | 'flame_banner' | 'guandao' | 'zhenbei_blade' | 'lianhuan_mines' | 'sun_knives' | 'diaochan_fans' | 'baodiao_bow' | 'dangyang_roar' | 'zhanjin_lance' | 'shuanggu_swords' | 'fangtian_ji' | 'pozhen_shuangji' | 'huochuan_ling' | 'donglai_ji' | 'yitian_jian' | 'jinfan_gou' | 'shuang_tieji';
+export type WeaponId = 'spear_orbit' | 'crossbow' | 'flame_banner' | 'guandao' | 'zhenbei_blade' | 'lianhuan_mines' | 'sun_knives' | 'diaochan_fans' | 'baodiao_bow' | 'dangyang_roar' | 'zhanjin_lance' | 'shuanggu_swords' | 'fangtian_ji' | 'pozhen_shuangji' | 'huochuan_ling' | 'donglai_ji' | 'yitian_jian' | 'jinfan_gou' | 'shuang_tieji' | 'guding_dao';
 
 export interface WeaponState {
   id: WeaponId;

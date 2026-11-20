@@ -45,6 +45,9 @@ export const WEAPON_BRANCHES: readonly WeaponBranch[] = [
   B('zhenbei_blade', 'wy_hanzhong', 'formation', '镇守汉中', '重劈处插下营栅区 5 秒：部曲在区内减伤、敌兵减速', '营栅区更大', '营栅区更久', '汉中太守', '营栅区可同时存在 2 处', true),
   // P2 吕布（效果在 weapons/lvbuWeapon.ts 里结算）
   B('fangtian_ji', 'lb_renzhong', 'warrior', '人中吕布', '横扫变旋戟风暴：转两圈、范围更大\n无双狂暴中每次击杀延长狂暴 0.4 秒', '风暴伤害 +30%', '风暴伤害再 +30%', '无双', '狂暴中击杀延长 0.8 秒、旋戟转三圈', true),
+  // P2 曹操（效果在 weapons/mengdeWeapon.ts 里结算）
+  B('yitian_jian', 'cc_xietianzi', 'formation', '挟天子以令诸侯', '每 8 秒插令旗成阵地 6 秒：\n阵内部曲攻速 +25%、每秒回血 2%', '部曲攻速加成提高', '部曲攻速加成再提高', '魏王', '阵地范围 +30%', true),
+  B('yitian_jian', 'cc_hubao', 'cavalry', '虎豹骑', '奸雄只需 5 层，铁骑冲撞眩晕 0.8 秒\n冲过留下尘浪 4 秒（敌兵减速）', '铁骑伤害 +30%', '铁骑伤害再 +30%', '虎豹骑 · 极', '铁骑 7 骑', true),
   // P2 太史慈（效果在 weapons/taishiciWeapon.ts 里结算）
   B('donglai_ji', 'tsc_shenting', 'archery', '神亭酣战', '射戟一次 2 支\n钉住的敌兵 3 秒后爆裂', '射戟伤害 +30%', '射戟伤害再 +30%', '神亭', '爆裂范围更大', true),
   B('donglai_ji', 'tsc_beihai', 'formation', '北海突围', '信义只需 10 层、护盾更厚\n突围路线留下阵地 4 秒（敌兵减速）', '突围伤害 +30%', '突围伤害再 +30%', '北海', '护盾再厚 30%', true),

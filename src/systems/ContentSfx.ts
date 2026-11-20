@@ -22,7 +22,7 @@ export const CONTENT_SFX_CONFIG: Record<string, Cfg> = {
   // 武将出招起手（招牌技 / 被动触发）；被动版另叠 cast_sigil
   cast_guanyu: F(.7, 500, 1, 2), cast_zhangfei: F(.7, 500, 1, 2), cast_zhaoyun: F(.6, 500, 1, 2), cast_zhuge: F(.8, 500, 1, 2),
   cast_huangzhong: F(.6, 500, 1, 2), cast_machao: F(.6, 500, 1, 2), cast_weiyan: F(.7, 500, 1, 2), cast_liubei: F(.8, 500, 1, 2),
-  cast_pangtong: F(.7, 500, 1, 2), cast_huangyueying: F(.6, 500, 1, 2), cast_sunshangxiang: F(.6, 500, 1, 2), cast_diaochan: F(.8, 500, 1, 2), cast_lvbu: F(.7, 500, 1, 2), cast_zhangliao: F(.7, 500, 1, 2), cast_zhouyu: F(.8, 500, 1, 2), cast_taishici: F(.7, 500, 1, 2),
+  cast_pangtong: F(.7, 500, 1, 2), cast_huangyueying: F(.6, 500, 1, 2), cast_sunshangxiang: F(.6, 500, 1, 2), cast_diaochan: F(.8, 500, 1, 2), cast_lvbu: F(.7, 500, 1, 2), cast_zhangliao: F(.7, 500, 1, 2), cast_zhouyu: F(.8, 500, 1, 2), cast_taishici: F(.7, 500, 1, 2), cast_mengde: F(.8, 500, 1, 2),
   cast_sigil: F(.9, 600, 1, 2, .02),
   // 首领主题：起手（蓄力 / 法阵）与命中
   bcast_blood: F(.7, 350, 1), bcast_yellow: F(.8, 350, 1), bcast_dust: F(.7, 350, 1), bcast_quake: F(.8, 350, 1),
@@ -91,6 +91,7 @@ export const CONTENT_SFX: Record<string, Recipe> = {
   cast_huangyueying: (v, t, p) => { for (let i = 0; i < 4; i++) v.noise(t + i * .045, .012, 'bandpass', (2600 + i * 300) * p, .035, 2600, 4); v.tone(t + .2, .25, 'triangle', 520 * p, .03, 780 * p); glint(v, t + .35, 1560 * p, .02); return .6; },
   cast_sunshangxiang: (v, t, p) => { for (let i = 0; i < 3; i++) glint(v, t + i * .06, (1980 + i * 240) * p, .02); whoosh(v, t, .2, 2600 * p, 6000 * p, .03, 2.5); return .6; },
   cast_diaochan: (v, t, p) => { v.swell(t, .7, 'bandpass', 900 * p, 2400 * p, .03, 1.2, .4); for (let i = 0; i < 3; i++) bell(v, t + .08 + i * .1, (1320 + i * 220) * p, .012, .5); return .8; },
+  cast_mengde: (v, t, p) => { for (let i = 0; i < 5; i++) drum(v, t + i * .06, .05, (100 + i * 6) * p); whoosh(v, t + .25, .5, 400 * p, 1800 * p, .05, 1); return .8; },
   cast_taishici: (v, t, p) => { drum(v, t, .07, 110 * p); whoosh(v, t + .05, .4, 500 * p, 2400 * p, .05, 1.4); thud(v, t + .32, 80 * p, .06, .3); return .7; },
   cast_zhouyu: (v, t, p) => { for (let i = 0; i < 3; i++) bell(v, t + i * .09, (523 + i * 131) * p, .02, .6); whoosh(v, t + .15, .6, 300 * p, 1600 * p, .05, .7); return .8; },
   cast_zhangliao: (v, t, p) => { for (let i = 0; i < 4; i++) drum(v, t + i * .07, .05, (120 + i * 8) * p); whoosh(v, t + .2, .4, 600 * p, 2200 * p, .05, 1.2); return .7; },

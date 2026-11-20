@@ -48,6 +48,8 @@ export const ART_V2_FILES: Readonly<Record<string, string>> = sideBossFiles({
   zhouyu_actions: 'assets/hero-actions-v2/zhouyu.png',
   taishici_walk_sheet: 'assets/processed-v2/taishici_walk_sheet.png',
   taishici_actions: 'assets/hero-actions-v2/taishici.png',
+  mengde_walk_sheet: 'assets/processed-v2/mengde_walk_sheet.png',
+  mengde_actions: 'assets/hero-actions-v2/mengde.png',
   // 第 2 批：我方兵种（4×4，见 V2_TROOP_KEYS / applyV2TroopFrames）
   shu_swordsman_walk_sheet: 'assets/processed-v2/troops/swordsman_walk.png',
   shu_swordsman_attack_sheet: 'assets/processed-v2/troops/swordsman_attack.png',

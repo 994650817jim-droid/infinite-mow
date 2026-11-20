@@ -23,6 +23,10 @@ export interface LegionState { training?:CampTraining;groups?:Partial<Record<Tro
 export class Legion {
   /** 部曲挨了一次打（扣血之后）：太史慈「信义」攒量用（GameScene 接）。 */
   onHurt?: (u: Ally, now: number) => void;
+  /** 部曲阵亡：曹操「奸雄」攒量 + 回血用（GameScene 接）。 */
+  onDeath?: (u: Ally, now: number) => void;
+  /** 部曲集火目标：曹操倚天剑这一剑的目标（host.focusAllies 设；目标死了 / 换了一条命就失效）。 */
+  focus: Enemy | null = null; focusLife = 0;
   training=freshTraining();groups:Partial<Record<TroopKind,CampGroup>>={};
   purchaseCampTraining(id:CampTrainingId):boolean{const def=CAMP_TRAINING[id],lv=this.training[id];if(!def||lv>=3||this.food<def.costs[lv])return false;this.food-=def.costs[lv];this.training[id]++;if(id==='hp')for(const u of this.units)if(u.active)u.applyCampaignHp(this.hpMultiplier());return true;}
   campTarget?:(u:Ally)=>Enemy|null;
@@ -77,7 +81,7 @@ export class Legion {
     this.formation=new LegionFormation(player);this.artEffects=new ArtEffects(scene);
     this.command=new CommandBuild(scene,player.growth.build,units,player,(u,now)=>this.fx(u,u.x,u.y,now,true));
     this.gfx = scene.add.graphics().setDepth(DEPTH.fx);
-    this.projectiles = new LegionProjectiles(scene); this.tactics = new LegionTactics(player,u=>this.command.target(u)??this.campTarget?.(u)??null,u=>this.formation.position(u),()=>this.formation.extent,(u,x,y,now)=>this.navigation.steer(u.id,u.x,u.y,x,y,u.radius,now));
+    this.projectiles = new LegionProjectiles(scene); this.tactics = new LegionTactics(player,u=>this.command.target(u)??(this.focus?.active&&this.focus.spawnId===this.focusLife?this.focus:null)??this.campTarget?.(u)??null,u=>this.formation.position(u),()=>this.formation.extent,(u,x,y,now)=>this.navigation.steer(u.id,u.x,u.y,x,y,u.radius,now));
   }
   get count(): number { let n = 0; for (const u of this.units) if (u.active) n++; return n; }
   recover(): void { for (const u of this.units) if (u.active) u.hp = u.maxHp; }
@@ -152,6 +156,7 @@ export class Legion {
     this.onHurt?.(u, now);
     this.defense?.onAllyHurt(u,now);this.awakeningDefense?.onAllyHurt(u,now);
     if (!u.hp) {
+      this.onDeath?.(u, now);
       this.corpses.spawn(u, u.view?.sprite, now);
       u.active = false; this.dead++; u.deathsReported = true; const v = u.release(); if (v) this.views.push(v); this.regroup();
      

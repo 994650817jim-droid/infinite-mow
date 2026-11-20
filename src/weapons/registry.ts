@@ -11,6 +11,7 @@ import { LVBU_DEF, lvbuBehavior } from './lvbuWeapon';
 import { ZHANGLIAO_DEF, zhangliaoBehavior } from './zhangliaoWeapon';
 import { ZHOUYU_DEF, zhouyuBehavior } from './zhouyuWeapon';
 import { TAISHICI_DEF, taishiciBehavior } from './taishiciWeapon';
+import { MENGDE_DEF, mengdeBehavior } from './mengdeWeapon';
 import { BAODIAO_DEF, DANGYANG_DEF, ZHANJIN_DEF, SHUANGGU_DEF, baodiaoBehavior, dangyangBehavior, zhanjinBehavior, shuangguBehavior, smartTarget } from './heroWeapons2';
 import { HINT_MOCK, groundScar } from '../ui/HintStyle';
 import { DRAG_TRAVEL, DRAG_WAVE_MUL, DRAG_SPIN_MUL } from '../systems/RunGrowth';
@@ -59,6 +60,10 @@ export interface WeaponHost {
   hasteAllies?(x: number, y: number, r: number, dt: number, frac: number): void;
   /** 线段 (ax, ay)→(bx, by) 两侧 r 内的部曲得护盾：最大生命 × frac，until 前有效（太史慈「单骑突围」）。 */
   shieldAllies?(ax: number, ay: number, bx: number, by: number, r: number, frac: number, until: number): void;
+  /** 部曲集火这个敌兵（曹操「军令」）。 */
+  focusAllies?(enemy: Enemy): void;
+  /** (x, y) 半径 r 内的部曲各回 frac × 最大生命（曹操「挟天子以令诸侯」阵地）。 */
+  healAlliesIn?(x: number, y: number, r: number, frac: number): void;
   /** 武将招牌技序列帧特效（缺图时什么都不做）。 */
   heroFx?(id: string, x: number, y: number, size: number, rotation?: number): void;
   /** 赵云「七进七出」满层那一枪的手绘特效（只有主将的 host 有；随行没有）。 */
@@ -128,6 +133,7 @@ export const WEAPON_DEFS: Record<WeaponId, WeaponDef> = {
   pozhen_shuangji: ZHANGLIAO_DEF, // P2 张辽（weapons/zhangliaoWeapon.ts）
   huochuan_ling: ZHOUYU_DEF, // P2 周瑜（weapons/zhouyuWeapon.ts）
   donglai_ji: TAISHICI_DEF, // P2 太史慈（weapons/taishiciWeapon.ts）
+  yitian_jian: MENGDE_DEF, // P2 曹操（weapons/mengdeWeapon.ts）
 };
 
 export const WEAPON_ORDER: WeaponId[] = ['spear_orbit', 'crossbow', 'flame_banner', 'guandao'];
@@ -475,5 +481,6 @@ export const WEAPON_BEHAVIORS: Record<WeaponId, (host: WeaponHost, weapon: Weapo
   pozhen_shuangji: zhangliaoBehavior,
   huochuan_ling: zhouyuBehavior,
   donglai_ji: taishiciBehavior,
+  yitian_jian: mengdeBehavior,
 };
 

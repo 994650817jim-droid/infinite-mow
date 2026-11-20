@@ -91,5 +91,6 @@ export const PRIMARY_ATTRIBUTE: Record<CharacterId, AttributeId> = {
   zhangliao: 'agility', // P2 张辽
   zhouyu: 'intellect', // P2 周瑜
   taishici: 'agility', // P2 太史慈
+  mengde: 'command', // P2 曹操
 };
 export function primaryAttribute(hero: string): AttributeId | undefined { return (PRIMARY_ATTRIBUTE as Record<string, AttributeId>)[hero]; }

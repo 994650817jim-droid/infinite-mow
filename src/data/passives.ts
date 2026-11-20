@@ -12,6 +12,7 @@ export const CHARACTER_PASSIVES: Record<CharacterId, { name: string; maxStacks: 
   machao: { name: '西凉铁骑', maxStacks: 6 },
   sunshangxiang: { name: '侍婢执刀', maxStacks: 6 },
   diaochan: { name: '离间', maxStacks: 5 },
+  zhouyu: { name: '英发', maxStacks: 20 }, // P2：火船 / 火场烧死敌兵攒，满了刮「东风」（data/zhouyu.ts）
   zhangliao: { name: '止啼', maxStacks: 12 }, // P2：击杀溃逃中的敌兵攒，满了召「八百虎贲」（data/zhangliao.ts）
   lvbu: { name: '无双', maxStacks: 25 }, // P2：击杀攒战意，满了「人中吕布」（data/lvbu.ts）
 };

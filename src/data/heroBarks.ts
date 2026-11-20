@@ -28,6 +28,11 @@ export interface HeroBarkLines {
 }
 
 export const HERO_BARKS: Record<CharacterId, HeroBarkLines> = {
+  zhouyu: {
+    trigger: ['万事俱备，只欠东风！', '火船齐发，烧！', '曲有误，周郎顾。'],
+    bossAppear: ['来得正好，且看我火攻之计。'], bossDown: ['樯橹灰飞烟灭。'],
+    vsBoss: { 曹操: '孟德，赤壁之火可还记得？', 诸葛亮: '孔明……既生瑜，何生亮！' },
+  },
   zhangliao: {
     trigger: ['八百虎贲，随我破阵！', '张文远在此，谁敢一战！', '辽来辽来！'],
     bossAppear: ['敌众我寡，正好破之！'], bossDown: ['敌胆已破。'],

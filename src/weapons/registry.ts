@@ -9,6 +9,7 @@ import { TIANHUO_DEF, tianhuoBehavior } from './zhugeTianhuo';
 import { HERO_TINT } from '../data/characters';
 import { LVBU_DEF, lvbuBehavior } from './lvbuWeapon';
 import { ZHANGLIAO_DEF, zhangliaoBehavior } from './zhangliaoWeapon';
+import { ZHOUYU_DEF, zhouyuBehavior } from './zhouyuWeapon';
 import { BAODIAO_DEF, DANGYANG_DEF, ZHANJIN_DEF, SHUANGGU_DEF, baodiaoBehavior, dangyangBehavior, zhanjinBehavior, shuangguBehavior, smartTarget } from './heroWeapons2';
 import { HINT_MOCK, groundScar } from '../ui/HintStyle';
 import { DRAG_TRAVEL, DRAG_WAVE_MUL, DRAG_SPIN_MUL } from '../systems/RunGrowth';
@@ -53,6 +54,8 @@ export interface WeaponHost {
   spawnFlameFx(x: number, y: number, radius: number): void;
   /** 为身边部曲回复最大生命的比例（刘备仁德）。 */
   rallyAllies?(fraction: number): void;
+  /** (x, y) 半径 r 内的部曲出手冷却额外走 dt × frac 秒（周瑜「曲有误」琴音环加攻速）。 */
+  hasteAllies?(x: number, y: number, r: number, dt: number, frac: number): void;
   /** 武将招牌技序列帧特效（缺图时什么都不做）。 */
   heroFx?(id: string, x: number, y: number, size: number, rotation?: number): void;
   /** 赵云「七进七出」满层那一枪的手绘特效（只有主将的 host 有；随行没有）。 */
@@ -120,6 +123,7 @@ export const WEAPON_DEFS: Record<WeaponId, WeaponDef> = {
   shuanggu_swords: SHUANGGU_DEF,
   fangtian_ji: LVBU_DEF, // P2 吕布（weapons/lvbuWeapon.ts）
   pozhen_shuangji: ZHANGLIAO_DEF, // P2 张辽（weapons/zhangliaoWeapon.ts）
+  huochuan_ling: ZHOUYU_DEF, // P2 周瑜（weapons/zhouyuWeapon.ts）
 };
 
 export const WEAPON_ORDER: WeaponId[] = ['spear_orbit', 'crossbow', 'flame_banner', 'guandao'];
@@ -465,5 +469,6 @@ export const WEAPON_BEHAVIORS: Record<WeaponId, (host: WeaponHost, weapon: Weapo
   shuanggu_swords: shuangguBehavior,
   fangtian_ji: lvbuBehavior,
   pozhen_shuangji: zhangliaoBehavior,
+  huochuan_ling: zhouyuBehavior,
 };
 

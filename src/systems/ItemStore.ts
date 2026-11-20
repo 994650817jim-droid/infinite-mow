@@ -189,12 +189,13 @@ export function looseCount(s: ItemSave = loadItems()): number { const worn = new
 
 const qIndex = (q: ItemQuality) => QUALITY_ORDER.indexOf(q);
 /**
- * 放入行囊。自动分解白色开着时，白色直接折钱；未穿戴超过 BAG_CAPACITY 时分解最低品质的白 / 绿 / 蓝；
- * 紫 / 橙不自动分解，超出 BAG_CAPACITY + BAG_OVERFLOW 时才分解最低的那件。返回被自动分解的道具。
+ * 放入行囊。未穿戴超过 BAG_CAPACITY 时，最低品质的白 / 绿 / 蓝自动折成营寨军粮（行囊满了的保护；平时卖装备去军需商人「出售兵装」）；
+ * 紫 / 橙不自动折，超出 BAG_CAPACITY + BAG_OVERFLOW 时才折最低的那件。返回被自动折掉的道具。
+ * 2026-11-19 行囊去掉「分解」后，「自动分解白」开关没了，旧档里开着的也不再生效（白色照常入囊）。
  */
 function addToBag(s: ItemSave, items: ItemInstance[]): ItemInstance[] {
   const auto: ItemInstance[] = [];
-  for (const i of items.filter(valid)) { if (s.autoSalvageWhite && i.quality === 'white') auto.push(i); else s.bag.push(structuredClone(i)); }
+  for (const i of items.filter(valid)) s.bag.push(structuredClone(i));
   const loose = () => { const worn = new Set(Object.values(s.loadouts).flatMap(l => Object.values(l ?? {}))); return s.bag.filter(i => !worn.has(i.uid)).sort((a, b) => qIndex(a.quality) - qIndex(b.quality)); };
   for (let l = loose(); l.length > BAG_CAPACITY; l = loose()) {
     // 首领遗珍永不分解（超出上限也不动）
@@ -258,6 +259,20 @@ export function salvageLegacy(): number {
   const s = loadItems(), money = legacyValue(s); if (!money) return 0;
   s.legacy = []; s.salvaged += money; commit(s); addTownMoney(money); return money;
 }
+/**
+ * 卖给军需商人（data/items sellPrice）：只收未穿戴、非首领遗珍的；返回真卖掉的道具（钱由商人那边的钱包发：行营随军粮 / 营寨军粮）。
+ * 行囊里已不再有「分解」按钮（2026-11-19）。
+ */
+export function sellItems(uids: readonly string[]): ItemInstance[] {
+  const s = loadItems(), sold: ItemInstance[] = [];
+  for (const uid of uids) { const i = s.bag.findIndex(x => x.uid === uid); if (i < 0 || equippedBy(s, uid) || isRelic(s.bag[i])) continue; sold.push(s.bag[i]); s.bag.splice(i, 1); }
+  if (sold.length) commit(s);
+  return sold;
+}
+/** 可出售的：行囊里未穿戴、非首领遗珍的兵装。 */
+export function sellableItems(s: ItemSave = loadItems()): ItemInstance[] { return s.bag.filter(i => !equippedBy(s, i.uid) && !isRelic(i)); }
+/** 旧物（旧档的兵刃挂饰、重复的马）整批卖给军需商人；返回卖掉的件。 */
+export function sellLegacy(): ItemInstance[] { const s = loadItems(), sold = [...s.legacy]; if (sold.length) { s.legacy = []; commit(s); } return sold; }
 /** 一键分解：品质不高于 maxQuality 的未穿戴道具。 */
 export function salvageUpTo(maxQuality: ItemQuality): number {
   const s = loadItems(); return salvageItems(s.bag.filter(i => qIndex(i.quality) <= qIndex(maxQuality) && !equippedBy(s, i.uid)).map(i => i.uid));

@@ -124,6 +124,7 @@ export class WeaponBranches {
       this.healAt = now + 300; const P = this.h.player;
       const hurt = this.h.allies().filter(a => a.active && a.hp < a.maxHp && Math.hypot(a.x - P.x, a.y - P.y) <= 220).sort((x, y) => x.hp / x.maxHp - y.hp / y.maxHp)[0];
       if (hurt) { hurt.hp = Math.min(hurt.maxHp, hurt.hp + hurt.maxHp * (.03 + .01 * (this.tier() - 1))); this.stats.procs++; if (now >= this.healFxAt) { this.healFxAt = now + 900; this.fx('fx_heal_fushui', hurt.x, hurt.y - 10, 70, 600, 0xbff0c0); } }
+      else if (P.hp < P.maxHp && now >= this.healFxAt) { this.healFxAt = now + 1000; P.heal(Math.round(P.maxHp * .015)); this.stats.procs++; } // 身边没有受伤的部曲：给主将回一点（2026-11-19：没部曲时仁德不再是空的）
     } else if (b.id === 'lb_sanying' && now >= this.thirdAt && Math.random() < Math.min(.8, .35 * k)) {
       this.thirdAt = now + 120;
       const other = this.h.query(e.x, e.y, 120).find(o => o !== e && o.active && !o.isSupplySlot); if (!other) return;

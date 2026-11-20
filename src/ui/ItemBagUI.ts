@@ -5,10 +5,9 @@ import { gearOwners, ownerName } from '../systems/RosterStore';
 import { DEPTH, FONT, GAME_HEIGHT, GAME_WIDTH, HEADING_FONT, IS_DESKTOP } from '../config';
 import { CHARACTERS, HOME_ART_HEROES, type CharacterId } from '../data/characters';
 import { AFFIXES, BAG_CAPACITY, LEGENDS, QUALITIES, QUALITY_ORDER, SLOTS, SLOT_ORDER, SPECIALS, formatAffix, itemDef, itemName, itemSlot, type AffixId, type ItemInstance, type ItemSlot } from '../data/items';
-import { rewardGrain } from '../world/WorldStore';
 import { HORSES, horseQuality, mountStyle } from '../data/mounts';
 import { gearFromItems, gearSummary, horseBonusText } from '../systems/ItemEffects';
-import { type GearOwner, type LoadoutKey, LOADOUT_KEYS, equipTarget, keySlot, tokenSlots, equipItem, equippedBy, heroHorse, horseRider, legacyValue, loadItems, salvageLegacy, loadout, looseCount, markBagSeen, rideHorse, salvageItems, salvageUpTo, setAutoSalvageWhite, stableUnlocked, takeItemNotice, takeStableAnnouncement, unequipSlot } from '../systems/ItemStore';
+import { type GearOwner, type LoadoutKey, LOADOUT_KEYS, equipTarget, keySlot, tokenSlots, equipItem, equippedBy, heroHorse, horseRider, loadItems, loadout, looseCount, markBagSeen, rideHorse, stableUnlocked, takeItemNotice, takeStableAnnouncement, unequipSlot } from '../systems/ItemStore';
 import { bagArt, drawQualityArt, drawQualityFrame, ensureItemTextures, horseIcon, itemIconKey, itemTile, loadBagArt, type IconSlot } from './ItemQuality';
 import { lqHitBox, lqPanel, lqSkin } from './LacquerKit';
 import { padNavigator } from './PadNavigator';
@@ -39,7 +38,7 @@ export function openStable(scene: Phaser.Scene, hero: CharacterId, onClose?: () 
  * 行囊面板（2026-11-16 改版，RPG 纸娃娃）：
  * - 左 / 上：武将立绘，四周 4 个兵装槽（头盔、甲胄、战靴、信物）+ 坐骑位 + 本局宝物 2 格，下方加成汇总；
  * - 右 / 下：行囊网格（槽位筛选、翻页；战斗中可切「本局缴获」）。
- * 点道具弹详情卡（穿戴 / 卸下 / 分解 / 对比）；鼠标悬停显示属性提示框（含与当前穿戴的对比）；2026-11-16 起去掉拖拽穿戴。
+ * 点道具弹详情卡（穿戴 / 卸下 / 对比；出售在军需商人）；鼠标悬停显示属性提示框（含与当前穿戴的对比）；2026-11-16 起去掉拖拽穿戴。
  * 坐骑位打开马厩：第一章通关后开放，只在休整时（主页、行营休整）可换马。
  * 电脑 960×540 左右分栏，手机 540×H 上下排列。命名的命中区供测试与手柄使用。
  */
@@ -128,9 +127,9 @@ export class ItemBagUI {
     // 标题 + 计数（只算未穿戴的）+ 关闭
     this.text(x0 + 28, y0 + (D ? 18 : 22), '行囊', D ? 26 : 30, '#f2ddae', true);
     const loose = looseCount(s), over = loose > BAG_CAPACITY;
-    this.text(x0 + (D ? 100 : 108), y0 + (D ? 28 : 34), `未穿戴 ${loose} / ${BAG_CAPACITY}${over ? ' · 已超出，请分解' : ''}${this.battle ? (this.o.atRest ? ' · 休整中' : ' · 战斗中可换装') : ''}`, 13, over ? '#f08a6a' : '#b9a57a').setName('item-bag-count');
+    this.text(x0 + (D ? 100 : 108), y0 + (D ? 28 : 34), `未穿戴 ${loose} / ${BAG_CAPACITY}${over ? ' · 已超出，可去军需商人出售' : ''}${this.battle ? (this.o.atRest ? ' · 休整中' : ' · 战斗中可换装') : ''}`, 13, over ? '#f08a6a' : '#b9a57a').setName('item-bag-count');
     this.button(x0 + pw - (D ? 52 : 56), y0 + (D ? 32 : 40), '返回', 'item-bag-close', () => this.close(), { size: D ? 15 : 17 });
-    // 旧物（旧档的兵刃挂饰、重复的马）：原样保留，点开可按双倍价分解
+    // 旧物（旧档的兵刃挂饰、重复的马）：原样保留，可在军需商人「出售兵装」里整批卖掉
     if (s.legacy.length) this.button(x0 + pw - (D ? 170 : 176), y0 + (D ? 32 : 40), `旧物 ${s.legacy.length}`, 'item-legacy', () => this.select('legacy'), { size: D ? 14 : 15 });
 
     const pageY = D ? this.renderDesk(s, x0, y0, pw, ph) : this.renderMobile(s, x0, y0, pw, ph);
@@ -223,8 +222,8 @@ export class ItemBagUI {
     this.text(gx + 82, pageY, `${this.page + 1} / ${pages}`, 14, '#cdb98a').setOrigin(.5).setName('item-page');
     this.button(gx + 134, pageY, '›', 'item-page-next', () => { this.page = Math.min(pages - 1, this.page + 1); this.render(); }, { disabled: this.page >= pages - 1, size: 16 });
     {
-      this.button(gx + gw - (D ? 196 : 208), pageY, `自动分解白：${s.autoSalvageWhite ? '开' : '关'}`, 'item-auto-white', () => { setAutoSalvageWhite(!s.autoSalvageWhite); this.notice = s.autoSalvageWhite ? '已关闭：白色兵装照常收入行囊' : '已开启：之后的白色兵装收入时直接折成军粮'; this.render(); }, { size: 13, active: s.autoSalvageWhite });
-      this.button(gx + gw - 62, pageY, '分解白 / 绿', 'item-salvage-low', () => { const m = salvageUpTo('green'); this.notice = m ? `分解完成 · 军粮 +${rewardGrain(0, 0, m)}` : '没有可分解的白 / 绿兵装（已穿戴的不会分解）'; this.selected = null; this.render(); }, { size: 13, primary: true });
+      this.text(gx + gw, pageY, '要换粮？去军需商人「出售兵装」', 12, '#9c8c6c').setOrigin(1, .5).setName('item-sell-hint'); // 2026-11-19 用户「分解不需要背包，可以去军需商人卖装备」：行囊里不再分解
+
     }
     return pageY;
   }
@@ -412,8 +411,8 @@ export class ItemBagUI {
     this.button(tx + 30, pageY, '‹', 'item-page-prev', () => { this.page = Math.max(0, this.page - 1); this.render(); }, { disabled: this.page === 0, size: 16 });
     this.text(tx + 80, pageY, `${this.page + 1} / ${pages}`, 14, '#cdb98a').setOrigin(.5).setName('item-page');
     this.button(tx + 130, pageY, '›', 'item-page-next', () => { this.page = Math.min(pages - 1, this.page + 1); this.render(); }, { disabled: this.page >= pages - 1, size: 16 });
-    this.button(tx + tw - 182, pageY, `自动分解白：${s.autoSalvageWhite ? '开' : '关'}`, 'item-auto-white', () => { setAutoSalvageWhite(!s.autoSalvageWhite); this.notice = s.autoSalvageWhite ? '已关闭：白色兵装照常收入行囊' : '已开启：之后的白色兵装收入时直接折成军粮'; this.render(); }, { size: 13, active: s.autoSalvageWhite });
-    this.button(tx + tw - 56, pageY, '分解白 / 绿', 'item-salvage-low', () => { const m = salvageUpTo('green'); this.notice = m ? `分解完成 · 军粮 +${rewardGrain(0, 0, m)}` : '没有可分解的白 / 绿兵装（已穿戴的不会分解）'; this.selected = null; this.render(); }, { size: 13, primary: true });
+    this.text(tx + tw, pageY, '要换粮？去军需商人「出售兵装」', 12, '#9c8c6c').setOrigin(1, .5).setName('item-sell-hint'); // 2026-11-19 用户「分解不需要背包，可以去军需商人卖装备」：行囊里不再分解
+
     return pageY;
   }
 
@@ -476,16 +475,16 @@ export class ItemBagUI {
   }
 
 
-  /** 旧物：旧档里已下架的兵刃挂饰和重复的马，原样保留；可一键按双倍分解价折钱。 */
+  /** 旧物：旧档里已下架的兵刃挂饰和重复的马，原样保留；可在军需商人「出售兵装」里整批卖掉。 */
   private renderLegacy(): void {
     const s = loadItems(), cw = IS_DESKTOP ? 460 : 480, names = s.legacy.map(i => `${QUALITIES[i.quality].label} · ${({ sword_tassel: '剑穗', blade_ring: '刀环', spear_tassel: '枪缨', bow_tip: '弓弭', whet_charm: '砺石佩', bronze_guard: '青铜剑格', iron_pommel: '铁首环', jade_hilt: '玉具剑璏' } as Record<string, string>)[i.base] ?? HORSES.find(h => h.id === i.base)?.name ?? i.base}`);
     const { card, x, y, g } = this.card(cw, 220);
     this.text(x + 26, y + 20, '旧物', 22, '#f2ddae', true, card).setName('item-detail-name');
     this.text(x + 26, y + 54, '兵装改版前的兵刃挂饰和重复的马，已原样保留（不能穿戴）。', 13, '#b9a57a', false, card).setWordWrapWidth(cw - 90);
     const list = this.text(x + 26, y + 84, names.join('　'), 14, '#e9dcbc', false, card).setWordWrapWidth(cw - 52).setLineSpacing(4).setName('item-legacy-list');
-    const by = list.y + list.height + 34, money = legacyValue(s);
+    const by = list.y + list.height + 34;
     this.plainFrame(g, x, y, cw, by - y + 30);
-    this.button(x + cw / 2, by, `全部分解 · 军粮 +${rewardGrain(0, 0, money)}`, 'item-legacy-salvage', () => { const m = salvageLegacy(); this.notice = `旧物已分解 · 军粮 +${rewardGrain(0, 0, m)}`; this.selected = null; this.render(); }, { parent: card, size: 15 });
+    this.text(x + cw / 2, by, '旧物可在军需商人「出售兵装」里整批卖掉', 14, '#c9b38a', false, card).setOrigin(.5).setName('item-legacy-hint');
     this.button(x + cw - 30, y + 28, '×', 'item-detail-close', () => this.closeDetail(), { parent: card, size: 16 });
   }
 
@@ -559,7 +558,7 @@ export class ItemBagUI {
       if (wornHere) this.takeOff(target); else this.wear(item);
       this.lastUid = item.uid; this.selected = null; this.render();
     }, { parent: card, size: 16 });
-    this.button(x + cw * .7, by, def?.relic ? '遗珍不可分解' : owner ? '已穿戴不可分解' : `分解 · 军粮 +${rewardGrain(0, 0, q.salvage)}`, 'item-salvage', () => { const m = salvageItems([item.uid]); this.notice = `分解 ${itemName(item)} · 军粮 +${rewardGrain(0, 0, m)}`; this.selected = null; this.render(); }, { parent: card, size: 14, disabled: !!owner || !!def?.relic });
+    this.text(x + cw * .7, by, def?.relic ? '首领遗珍不可出售' : owner ? '已穿戴 · 卸下后可出售' : '可在军需商人处出售', 13, '#9c8c6c', false, card).setOrigin(.5).setName('item-sell-note');
   }
 
   /** 与当前同槽装备的词条差，如「▲ 生命上限 +2.1%」「▼ 暴击率 −1.0%」。 */

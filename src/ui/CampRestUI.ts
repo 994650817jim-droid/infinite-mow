@@ -120,7 +120,7 @@ export class CampRestUI {
   return hit;
  }
 
- open(key:string,destination:string){if(this.visit!==key){this.visit=key;this.page=this.tab=0;this.stock=merchantStockForVisit(key,(this.scene as unknown as {itemTier?:()=>number}).itemTier?.()??0,this.player.growth.build,(this.scene as unknown as {lootChapter?:()=>number}).lootChapter?.()??1);this.buildSection=this.buildOffset=0;this.notice='';}this.destination=destination;this.homeArmed=false;this.homeBtn.setText('回营寨').setBackgroundColor('rgba(0,0,0,0)').setVisible(!!this.onReturnHome);this.paintHome();this.render();
+ open(key:string,destination:string){if(this.visit!==key){this.visit=key;this.page=this.tab=0;if(this.shop)this.shop.mode='buy';this.stock=merchantStockForVisit(key,(this.scene as unknown as {itemTier?:()=>number}).itemTier?.()??0,this.player.growth.build,(this.scene as unknown as {lootChapter?:()=>number}).lootChapter?.()??1);this.buildSection=this.buildOffset=0;this.notice='';}this.destination=destination;this.homeArmed=false;this.homeBtn.setText('回营寨').setBackgroundColor('rgba(0,0,0,0)').setVisible(!!this.onReturnHome);this.paintHome();this.render();
   // 招兵营圆框胸像（Q 版；缺的兵种用 v2 过渡）：加载完若还停在招兵营就重绘
   loadTroopPortraits(this.scene,()=>{if(this.root.visible&&this.tab===0)this.render();},true);}
  setVisible(visible:boolean){this.root.setVisible(visible);if(!visible){this.modal?.destroy();this.modal=undefined;}}
@@ -220,12 +220,13 @@ export class CampRestUI {
   this.itemTip??=new ItemTooltip(this.scene,DEPTH.overlay+40);
   this.shop??=new MerchantShop(this.scene,{tooltip:this.itemTip,
    stock:()=>this.stock!,
-   wallet:{name:'随军粮',get:()=>this.army.food,spend:n=>{if(this.army.food<n)return false;this.army.food-=n;return true;}},
+   wallet:{name:'随军粮',get:()=>this.army.food,spend:n=>{if(this.army.food<n)return false;this.army.food-=n;return true;},gain:n=>{this.army.food+=Math.max(0,Math.floor(n));}},chapter:()=>this.chapterNo,
    tactics:{shi:sc=>this.player.growth.build.tags()[sc],canBuy:o=>!!campOption(o,this.player),learn:o=>{const op=campOption(o,this.player);if(!op)return false;op.apply(this.player,this.player.weapons,this.player.growth);return true;},afterBuy:()=>this.onLearnTactic?.(),doneText:'本局立即生效，可在「将帅帐」查看'},
    onBuyItem:item=>this.onBuyItem?.(item),owner:()=>this.player.growth.character,
    notice:t=>{this.notice=t;},changed:()=>this.render(),sound:k=>this.sound(k),tooltipDepth:DEPTH.overlay+40});
   this.shop.onArtLoaded=()=>{if(this.root.active&&this.tab===2)this.render();};
   this.shop.render(this.body,D?40:24,D?158:229,D?W-40:W-24,D?250:200,D?CampRestUI.FIGURE:undefined);
+  this.shop.modeToggle(this.body,D?W-40-158:W-24-158,D?104:190); // 「购入 / 出售兵装」：页签行右边（2026-11-19 出售代替行囊分解）
   if(!this.notice)this.detail.setText(this.shop.hint());
  }
 

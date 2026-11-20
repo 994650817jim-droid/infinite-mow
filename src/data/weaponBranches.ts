@@ -84,7 +84,7 @@ export function branchStatus(w: { branch?: string; over?: number; attuned?: bool
   const over = Math.max(0, w.over ?? 0), n = shi(b.school), final = over >= 2 && n >= 4;
   return { b, lv: 5 + over, over, shi: n, final, attuned: !!w.attuned,
     progress: final ? '进阶「' + b.finalName + '」' : '进阶 ' + Math.min(n, 4) + '/4 势' + (over >= 2 ? '' : ' · 需 Lv7'),
-    tip: b.desc + '\n\nLv6：' + b.lv6 + '\nLv7：' + b.lv7 + '\n\n进阶「' + b.finalName + '」（Lv7 + ' + schoolName(b.school) + '派 4 势）：' + b.finalDesc + (w.attuned ? '\n\n契合当前流派：专职效果 +' + Math.round((BRANCH_FIT.fitMul - 1) * 100) + '%' : '') };
+    tip: b.desc + '\n\nLv6：' + b.lv6 + '\nLv7：' + b.lv7 + '\n\n进阶「' + b.finalName + '」（Lv7 + ' + schoolName(b.school) + '派 4 势）：' + b.finalDesc + (w.attuned ? '\n\n契合当前流派：专职效果 +' + Math.round((BRANCH_FIT.fitMul - 1) * 100) + '%' : '') + '\n\n已锁定 · 需行营「重整构筑」才能更换（花军粮洗掉后本命留在 Lv5，下一场开战时重选）' };
 }
 export function fitBranch(bs: readonly WeaponBranch[], shi: (s: SchoolId) => number, affinity: readonly SchoolId[]): WeaponBranch | undefined {
   if (bs.length !== 2) return bs[0];

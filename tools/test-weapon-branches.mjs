@@ -53,9 +53,9 @@ const branchFire = async (hero, branches) => {
   const p = await open({ key: 'GameScene', run: { chapter: 'hulao', westStage: 2, character: 'zhaoyun' } });
   await p.evaluate(() => { const s = window.__S; window.__calm(); const w = s.player.weapons[0]; w.level = 5; delete w.branch; delete w.attuned; w.over = 0; s.pendingLevels = 1; s.lastPickAt = -1e9; s.openUpgrade(); });
   await p.waitForTimeout(1500);
-  const pn = await p.evaluate(() => { const s = window.__S, root = s.children.getByName('branch-panel'); const texts = root ? root.list.filter(o => o.type === 'Text').map(o => o.text) : []; return { mode: s.mode, panel: !!root, cards: root ? root.list.filter(o => /^branch-card-/.test(o.name ?? '')).length : 0, fit: s.branchFitId, fitSeal: texts.includes('契合'), portrait: !!root?.getByName?.('branch-portrait') || !s.textures.exists('ink_hero_zhaoyun'), final: texts.some(t => /进阶形态「/.test(t)), lv6: texts.some(t => /Lv6（第四章开放）/.test(t)), pending: s.pendingLevels }; });
+  const pn = await p.evaluate(() => { const s = window.__S, root = s.children.getByName('branch-panel'); const texts = root ? root.list.filter(o => o.type === 'Text').map(o => o.text) : []; return { mode: s.mode, panel: !!root, cards: root ? root.list.filter(o => /^branch-card-/.test(o.name ?? '')).length : 0, fit: s.branchFitId, fitSeal: texts.includes('契合'), portrait: !!root?.getByName?.('branch-portrait') || !s.textures.exists('ink_hero_zhaoyun'), final: texts.some(t => /进阶形态「/.test(t)), lv6: texts.some(t => /Lv6（第四章开放）/.test(t)), lockText: texts.some(t => /选定即锁定 · 需行营「重整构筑」才能更换/.test(t)), pending: s.pendingLevels }; });
   await p.screenshot({ path: OUT + '/branch-panel.png' });
-  ck('本命 Lv5：单独弹「兵器专职」面板（暂停、两张大卡、契合印、写 Lv6 / 进阶形态），三选一排在后面', pn.mode === 'branch' && pn.panel && pn.cards === 2 && pn.fitSeal && pn.final && pn.lv6 && pn.pending === 1, pn);
+  ck('本命 Lv5：单独弹「兵器专职」面板（暂停、两张大卡、契合印、写 Lv6 / 进阶形态），三选一排在后面', pn.mode === 'branch' && pn.panel && pn.cards === 2 && pn.fitSeal && pn.final && pn.lv6 && pn.pending === 1 && pn.lockText, pn);
   const idx = await p.evaluate(() => { const s = window.__S; return s.branchOpts ? s.branchOpts.findIndex(b => b.id === s.branchFitId) : 0; });
   await p.keyboard.press(idx === 0 ? 'Digit1' : 'Digit2'); await p.waitForTimeout(600);
   const pk = await p.evaluate(() => { const s = window.__S, w = s.player.weapons[0]; return { branch: w.branch, attuned: w.attuned, mode: s.mode, panel: !!s.children.getByName('branch-panel'), opts: (s.upgradeOptions ?? []).map(o => o.id), banner: window.__banners.slice(-2) }; });
@@ -63,9 +63,20 @@ const branchFire = async (hero, branches) => {
   await p.evaluate(() => { const s = window.__S; window.__calm(); s.togglePause(); s.openBuildPanel(); }); await p.waitForTimeout(900);
   const ov = await p.evaluate(() => { const s = window.__S, all = []; const walk = l => { for (const o of l) { if (o.type === 'Text' && o.visible !== false) all.push({ n: o.name, t: o.text }); if (o.list) walk(o.list); } }; walk(s.children.list); return all.filter(x => /-branch/.test(x.n ?? '')).map(x => x.t); });
   await p.screenshot({ path: OUT + '/branch-overview.png' });
-  ck('构筑总览：专职栏写分支名 + 契合、Lv6 / Lv7 进度、进阶条件（Lv7 + 本派 4 势）', ov.some(t => /契合/.test(t)) && ov.some(t => /Lv6 · （第四章）|Lv6 ·（第四章）|Lv6 .（第四章）/.test(t) || /Lv6/.test(t)) && ov.some(t => /进阶「/.test(t) && /4 势/.test(t)), ov);
+  ck('构筑总览：专职栏写分支名 + 契合、Lv6 / Lv7 进度、进阶条件（Lv7 + 本派 4 势）、「已锁定 · 需重整构筑才能更换」', ov.some(t => /契合/.test(t)) && ov.some(t => /Lv6 · （第四章）|Lv6 ·（第四章）|Lv6 .（第四章）/.test(t) || /Lv6/.test(t)) && ov.some(t => /进阶「/.test(t) && /4 势/.test(t)) && ov.some(t => t === '已锁定 · 需重整构筑才能更换'), ov);
   await p.evaluate(async () => { const s = window.__S, wb = await import('/src/data/weaponBranches.ts'); s.click?.('build-panel-back'); s.children.getByName('build-panel')?.destroy(); s.setMode('none'); s.branchFinalShow(wb.branchById(s.player.weapons[0].branch)); }); await p.waitForTimeout(300);
   const fin = await p.evaluate(() => ({ title: window.__S.children.getByName('branch-final-title')?.text }));
+  // 锁定（2026-11-20 用户「选定一个转职之后就选不了另外一个了，除非去洗掉」）：另一条在三选一 / 新卡池 / 锦囊里都不出；面板不再开、不能改；跨关 / 存档读档后依然锁定
+  const lock = await p.evaluate(async () => { const s = window.__S, U = await import('/src/data/upgrades.ts'), C = await import('/src/systems/Campaign.ts'), own = s.player.weapons[0], chosen = own.branch, other = s.branchOpts.find(b => b.id !== chosen).id;
+    window.__calm(); const seen = new Set(); own.over = 0;
+    for (let i = 0; i < 60; i++) { for (const o of U.buildUpgradeOptions(s.player, s.player.weapons, s.player.growth, s.newCardSource())) seen.add(o.id + '|' + (o.desc ?? '')); }
+    for (const o of s.newCardSource()?.draw(12) ?? []) seen.add(o.id + '|' + (o.desc ?? ''));
+    const ids = [...seen], otherSeen = ids.some(x => x.includes(other)), branchCards = ids.filter(x => x.startsWith('branch_'));
+    s.openBranch(); const reopened = !!s.branchPanel || s.mode === 'branch'; s.branchOpts = s.branchOpts.length ? s.branchOpts : []; const changed = s.chooseBranch(s.branchOpts.findIndex(b => b.id === other));
+    const pack = C.packCampaign(s.runConfig.character, s.player, s.legion, s.followers), round = JSON.parse(JSON.stringify(pack)), w2 = round.player.weapons[0];
+    return { chosen, other, otherSeen, branchCards, reopened, changed, still: own.branch, carried: { branch: w2.branch, attuned: w2.attuned }, need: s.needBranch() }; });
+  ck('锁定：选定后另一条分支在三选一 / 新卡池 / 锦囊里都不出、没有专职卡；面板不再弹、也改不了', !lock.otherSeen && lock.branchCards.length === 0 && !lock.reopened && lock.changed === false && lock.still === lock.chosen && !lock.need, lock);
+  ck('锁定跨关 / 存档读档：征程构筑打包（JSON 往返）后分支与契合原样', lock.carried.branch === lock.chosen && lock.carried.attuned === true, lock.carried);
   // HUD 专职行（被动栏下）：图标、分支名 + Lv、进阶进度；增益栏往下让
   const hud = await p.evaluate(() => { const s = window.__S; window.__calm(); s.click?.('build-panel-back'); s.children.getByName('build-panel')?.destroy(); s.setMode('none'); return null; });
   await p.waitForTimeout(500);

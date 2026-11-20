@@ -154,7 +154,8 @@ export function drawBuildOverview(o: BuildOverviewOpts): void {
       text(L.x + pad + 34, y - 1, `Lv6 ${mk(ov >= 1)}（第四章）  Lv7 ${mk(ov >= 2)}（第八章）`, 12, '#c9b88f').setName(P + '-branch-over');
       y += 17;
       text(L.x + pad + 34, y - 1, `进阶「${br.finalName}」${fin ? ' · 已达成' : `：Lv7 ${mk(ov >= 2)}  ${SCHOOLS[br.school].name}派 ${Math.min(shi, 4)}/4 势`}`, 12, fin ? '#f0c060' : '#b9a57a').setName(P + '-branch-final');
-      hot(L.x + pad, y - 37, L.w - pad * 2, 54, P + '-branch-hit', () => ({ title: '兵器专职 · ' + br.name, sub: SCHOOLS[br.school].name + '派' + (w.attuned ? ' · 契合' : ''), body: st.tip + '\n\n想换分支：行营「重整构筑」花军粮重选，本命重练到 Lv5 时再弹专职面板。', color: 0xd8a85a }));
+      y += 17; text(L.x + pad + 34, y - 1, '已锁定 · 需重整构筑才能更换', 12, '#a8956c').setName(P + '-branch-lock');
+      hot(L.x + pad, y - 54, L.w - pad * 2, 71, P + '-branch-hit', () => ({ title: '兵器专职 · ' + br.name, sub: SCHOOLS[br.school].name + '派' + (w.attuned ? ' · 契合' : ''), body: st.tip, color: 0xd8a85a }));
       y += 19;
     } else if (w && w.level >= wmax) { text(L.x + pad, y, '专职', 12, '#a8956c'); text(L.x + pad + 34, y - 1, '本命已满 Lv5 · 下一场开战时选兵器专职', 12, '#b9a57a').setName(P + '-branch'); y += 19; }
     // 专属武学

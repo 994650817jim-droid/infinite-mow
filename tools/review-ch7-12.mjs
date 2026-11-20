@@ -158,7 +158,7 @@ try {
   if (MODE === 'stages' && only.includes('7-3')) await chengduLimit();
   if (MODE === 'heroes') {
     const heroes = E.HEROES ? E.HEROES.split(',') : await (async () => { const { p } = await open('7-1', 'zhaoyun', false); const ids = await p.evaluate(async () => (await import('/src/data/characters.ts')).CHARACTERS.filter(c => c.playable !== false).map(c => c.id)); await p.close(); return ids; })();
-    for (const [i, h] of heroes.entries()) { try { await runHero(h, ALL[i % ALL.length], i); } catch (e) { report.push({ hero: h, error: e.message.slice(0, 200) }); console.log(h, '打不开', e.message.split('\n')[0].slice(0, 160)); } }
+    for (const [i, h] of heroes.entries()) { try { await runHero(h, E.STAGE ?? ALL[i % ALL.length], i); } catch (e) { report.push({ hero: h, error: e.message.slice(0, 200) }); console.log(h, '打不开', e.message.split('\n')[0].slice(0, 160)); } }
   } else {
     for (const t of only) { try { await runStage(t); } catch (e) { report.push({ tag: t, error: e.message.slice(0, 200) }); console.log(t, '打不开', e.message.split('\n')[0].slice(0, 160)); } }
   }

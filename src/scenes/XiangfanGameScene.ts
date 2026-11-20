@@ -113,6 +113,8 @@ export function xiangfanGameSceneClass(Base: typeof GameScene) {
         if (this.breakout) {
           this.breakout.update();
           this.timerText?.setText(`突围 · 剩 ${Math.ceil(this.breakout.timeLeft)} 秒 · 距出口 ${this.breakout.distance} 步${this.breakout.gateOpen ? '' : this.breakout.bossCalled ? ' · 吕蒙截道' : ''}`);
+          // 关名（五段关的计时 / 关名下移了）在 y 78 附近：突围行原来固定 y 78 压在「9-3 麦城突围」上（2026-11-20 第 7–12 章检查），改为跟在关名下面
+          { const w = this.hudTexts?.wave; if (this.timerText && w?.visible && w.text) { const bd = w.getBounds(); if (Math.abs(bd.centerX - GAME_WIDTH / 2) < 240) this.timerText.setY(Math.max(78, bd.bottom + 2)); } }
           if (this.pendingWin && this.breakout.exited) { this.pendingWin = false; this.finish(true, 'boss'); }
         }
         this.updateRage();

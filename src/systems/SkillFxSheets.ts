@@ -39,6 +39,10 @@ export const SKILL_FX: Readonly<Record<string, { file: string; cell: number; fra
   fx_dianwei_hit: { file: 'assets/dianwei-fx/hit.png', cell: 256, frames: 6 },
   // 敌人身上的状态标记（ChatGPT，StatusFx 用）：1536×1024，6 列 × 4 行，行 0 灼烧 / 行 1 迟滞 / 行 2 眩晕 / 行 3 破甲，每行 6 帧循环
   fx_status: { file: 'assets/school-fx/status.png', cell: 256, frames: 6 },
+  // 锦囊激活特效（ChatGPT，JinnangFx 用）：1536×1024，6 列 × 4 行，每行 6 帧
+  fx_jn1: { file: 'assets/jinnang-fx/jn1.png', cell: 256, frames: 6 },
+  fx_jn2: { file: 'assets/jinnang-fx/jn2.png', cell: 256, frames: 6 },
+  fx_jn3: { file: 'assets/jinnang-fx/jn3.png', cell: 256, frames: 6 },
   fx_zhurong_knife: { file: 'assets/zhurong-fx/knife_fx.png', cell: 256, frames: 8 },
   // 武将出招起手特效（2026-11-19 ChatGPT 黑底 6×4 三张，tools/build-hero-cast-fx.mjs 去底切条；systems/HeroCastFx.ts 用）：每人 6 帧
   ...Object.fromEntries(['guanyu', 'zhangfei', 'zhaoyun', 'huangzhong', 'machao', 'weiyan', 'liubei', 'zhuge', 'pangtong', 'huangyueying', 'sunshangxiang', 'diaochan']

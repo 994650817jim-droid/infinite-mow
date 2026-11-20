@@ -97,12 +97,12 @@ export function mengdeBehavior(host: WeaponHost, weapon: WeaponState, dt: number
   if (xie && time >= st.bannerAt) {
     st.bannerAt = time + X.everyMs; st.banners++;
     const r = X.r * (final ? X.finalRMul : 1);
-    const img = s.textures.exists('fx_md_banner') ? host.add.image(pl.x, pl.y, 'fx_md_banner', 0).setDisplaySize(r * 2.3, r * 2.3).setOrigin(.5, .62).setDepth(3).setAlpha(.9).setBlendMode(1).setName('md-banner') : null;
+    const img = s.textures.exists('fx_md_banner') ? host.add.image(pl.x, pl.y, 'fx_md_banner', 0).setDisplaySize(r * 2, r * 2).setOrigin(.5, .62).setDepth(3).setAlpha(.75).setBlendMode(1).setName('md-banner') : null;
     st.zones.push({ x: pl.x, y: pl.y, r, until: time + X.ms, img, kind: 'banner' });
   }
   for (const z of st.zones) {
     if (z.kind === 'dust' && time < (st.charge?.start ?? -1e9) + MD.chargeMs) { z.img?.setAlpha(0); continue; } // 尘浪等骑兵冲过再起
-    z.img?.setFrame(Math.floor(time / 90) % 6).setAlpha(Math.min(.9, (z.until - time) / 400));
+    z.img?.setFrame(Math.floor(time / 90) % 6).setAlpha(Math.min(z.kind === 'banner' ? .75 : .9, (z.until - time) / 400));
     if (z.kind === 'banner') { host.hasteAllies?.(z.x, z.y, z.r, dt, X.haste * k); host.healAlliesIn?.(z.x, z.y, z.r, X.healPct * dt); continue; }
     for (const e of host.grid.query(z.x, z.y, MD.chargeLen / 2 + 40)) {
       if (!e.active || e.isSupplySlot || e.kind === 'boss' || e.controlImmune || !inZone(z, e)) continue;

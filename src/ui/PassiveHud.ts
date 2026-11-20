@@ -7,6 +7,7 @@ import Phaser from 'phaser';
 import { DEPTH, FONT, IS_DESKTOP } from '../config';
 import { CHARACTER_PASSIVES } from '../data/passives';
 import type { CharacterPassives } from '../systems/CharacterPassives';
+import type { BranchStatus } from '../data/weaponBranches';
 
 /** 被动技能完整说明（悬停 / 点按弹出）。数值见 data/passives.ts 的 PASSIVE_RULES。 */
 export const PASSIVE_DETAILS: Record<CharacterId, string> = {
@@ -41,6 +42,9 @@ export class PassiveHud {
   private readonly tipTitle: Phaser.GameObjects.Text;
   private readonly tipText: Phaser.GameObjects.Text;
   private tipUntil = 0; private hovering = false; private character: keyof typeof PASSIVE_DETAILS = 'zhaoyun'; private ready = false;
+  /** 兵器专职行（2026-11-20 用户「武器转职完也要显示在被动下面」）：图标、分支名 + Lv、进阶进度；悬停全文（与构筑总览专职栏同一份数据 branchStatus）。 */
+  private readonly brG: Phaser.GameObjects.Graphics; private readonly brIcon: Phaser.GameObjects.Image; private readonly brName: Phaser.GameObjects.Text; private readonly brProg: Phaser.GameObjects.Text; private readonly brHit: Phaser.GameObjects.Rectangle;
+  private branch: BranchStatus | null = null; private brHover = false; private brTipUntil = 0;
 
   constructor(scene: Phaser.Scene) {
     this.root = scene.add.container(22, 136).setScale(.68).setScrollFactor(0).setDepth(DEPTH.hud + 1);
@@ -61,6 +65,14 @@ export class PassiveHud {
       .on('pointerout', () => { this.hovering = false; if (IS_DESKTOP) this.tipUntil = 0; })
       .on('pointerdown', (_p: Phaser.Input.Pointer, _x: number, _y: number, event: Phaser.Types.Input.EventData) => { event?.stopPropagation?.(); this.tipUntil = scene.time.now + 3000; });
     this.root.add(hit);
+    // 专职行（被动栏下面；没选专职时整行隐藏）
+    this.brG = scene.add.graphics(); this.brIcon = scene.add.image(24, 88, 'icon_passive').setDisplaySize(32, 32).setScrollFactor(0);
+    this.brName = text(47, 68, 16, '#f0dcae').setFontStyle('bold').setName('passive-branch-name'); this.brProg = text(47, 90, 14, '#c4b59e').setName('passive-branch-progress');
+    this.brHit = scene.add.rectangle(130, 88, 270, 44, 0, .001).setScrollFactor(0).setInteractive({ useHandCursor: true }).setName('passive-branch-hit');
+    this.brHit.on('pointerover', (ptr: Phaser.Input.Pointer) => { if (ptr.wasTouch) return; this.brHover = true; }).on('pointerout', () => { this.brHover = false; if (IS_DESKTOP) this.brTipUntil = 0; })
+      .on('pointerdown', (_p: Phaser.Input.Pointer, _x: number, _y: number, event: Phaser.Types.Input.EventData) => { event?.stopPropagation?.(); this.brTipUntil = scene.time.now + 3000; });
+    this.root.add([this.brG, this.brIcon, this.brName, this.brProg, this.brHit]);
+    for (const o of [this.brG, this.brIcon, this.brName, this.brProg, this.brHit]) o.setVisible(false);
     const label = (x: number, y: number, size: number, color: string) => scene.add.text(x, y, '', { fontFamily: FONT, fontSize: `${size}px`, color, resolution: 2 });
     this.tip = scene.add.container(22, 176).setScrollFactor(0).setDepth(DEPTH.hud + 6).setVisible(false).setName('passive-tip');
     this.tipBg = scene.add.graphics(); this.tipTitle = label(10, 8, 15, '#f5d780'); this.tipText = label(10, 34, 13, '#d4c7ad').setWordWrapWidth(258, true).setLineSpacing(3);
@@ -68,15 +80,28 @@ export class PassiveHud {
   }
   get tipVisible(): boolean { return this.tip.visible; }
   private renderTip(now: number, visible: boolean): void {
-    const show = visible && (this.hovering || now < this.tipUntil);
+    const br = !!this.branch && (this.brHover || now < this.brTipUntil), show = visible && (br || this.hovering || now < this.tipUntil);
     this.tip.setVisible(show); if (!show) return;
-    this.tipTitle.setText(`${CHARACTER_PASSIVES[this.character].name} · 被动${this.ready ? ' · 已就绪' : ''}`);
-    this.tipText.setText(PASSIVE_DETAILS[this.character] + '\n当前：' + this.hint.text);
+    if (br && this.branch) { const st = this.branch; this.tip.setY(216); this.tipTitle.setText('兵器专职 · ' + st.b.name + ' · Lv.' + st.lv + (st.final ? ' · 已进阶' : '')); this.tipText.setText(st.tip + '\n当前：' + st.progress); }
+    else { this.tip.setY(176); this.tipTitle.setText(`${CHARACTER_PASSIVES[this.character].name} · 被动${this.ready ? ' · 已就绪' : ''}`); this.tipText.setText(PASSIVE_DETAILS[this.character] + '\n当前：' + this.hint.text); }
     const h = this.tipText.height + 46;
     this.tipBg.clear().fillStyle(0x17140d, .94).fillRect(0, 0, 278, h).lineStyle(1, 0xb09056, .7).strokeRect(0, 0, 278, h);
   }
 
   get description(): string { return this.hint.text; }
+  /** 专职行显示着没（GameScene 据此把增益栏往下让）。 */
+  get branchShown(): boolean { return !!this.branch; }
+  /** 每帧：专职状态（null = 没选专职，整行隐藏）。达成进阶后名字与进度换金色、写进阶形态名。 */
+  updateBranch(st: BranchStatus | null): void {
+    this.branch = st; const on = !!st;
+    for (const o of [this.brG, this.brIcon, this.brName, this.brProg, this.brHit]) o.setVisible(on);
+    if (!st) return;
+    const gold = st.final, g = this.brG.clear();
+    g.fillStyle(0x000000, .22).fillRect(0, 62, 256, 1).fillStyle(gold ? 0xf5d780 : 0xb08a3a, 1).fillRect(0, 70, 3, 38);
+    if (this.brIcon.texture.key !== st.b.icon && this.brIcon.scene.textures.exists(st.b.icon)) this.brIcon.setTexture(st.b.icon).setDisplaySize(30, 30);
+    this.brName.setText(st.b.name + ' · Lv.' + st.lv).setColor(gold ? '#f5d780' : '#f0dcae');
+    this.brProg.setText(st.progress).setColor(gold ? '#f5d780' : st.shi >= 4 || st.over >= 2 ? '#e7c474' : '#c4b59e');
+  }
 
   update(passive: CharacterPassives, now: number, visible: boolean): void {
     this.root.setVisible(visible);

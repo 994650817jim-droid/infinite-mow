@@ -1,5 +1,5 @@
 import { stopMenuMusic } from '../systems/Music';
-import { SCHOOL_TIER, SHI_SOURCES, FOLLOWER_SCHOOL, heroAffinity, type SchoolId } from '../data/schools';
+import { SCHOOLS, SCHOOL_TIER, SHI_SOURCES, FOLLOWER_SCHOOL, heroAffinity, type SchoolId } from '../data/schools';
 import { playSheet } from '../systems/SkillFxSheets';
 import { ZHANGLIAO } from '../data/zhangliao';
 import { FOOT_HUD } from '../data/passiveGauge';
@@ -210,7 +210,7 @@ import { HIT_FEEL, BOSS_FEEL, WEAPON_HIT_TYPE } from '../data/hitFeel';
 import { GEM_FX } from '../data/gemFx';
 import { heroAttributeExtra } from '../data/heroMechanics';
 import { BuildState } from '../data/builds';
-import { WEAPON_OVER, branchById, branchesFor, fitBranch, BRANCH_FIT, type WeaponBranch } from '../data/weaponBranches';
+import { WEAPON_OVER, branchById, branchesFor, branchStatus, fitBranch, BRANCH_FIT, type WeaponBranch } from '../data/weaponBranches';
 import { openBranchPanel } from '../ui/BranchPickPanel';
 import { WeaponBranches } from '../systems/WeaponBranches';
 import { layoutRich, SCOPE_BADGE, cardScope } from '../ui/CardRichText';
@@ -3056,7 +3056,7 @@ export class GameScene extends Phaser.Scene {
   /** 兵器专职面板（ui/BranchPickPanel）：暂停战斗，两条大卡二选一；契合当前流派的那条效果 ×BRANCH_FIT.fitMul。 */
   branchPanel: Phaser.GameObjects.Container | null = null; private branchOpts: WeaponBranch[] = []; branchFitId = '';
   protected openBranch(): void {
-    if (this.branchPanel || this.over) return;
+    if (this.branchPanel || this.over || !this.needBranch()) return; // 已选专职：本次征程锁定，只有行营「重整构筑」能洗掉
     const ch = this.runConfig.character, hero = getCharacter(ch), own = this.player.weapons.find(w => w.id === hero.startWeapon)!, tags = this.player.growth.build.tags();
     this.branchOpts = [...branchesFor(own.id)]; this.branchFitId = fitBranch(this.branchOpts, s => tags[s] ?? 0, heroAffinity(ch))?.id ?? '';
     this.setMode('branch'); this.sfx.play('gong');
@@ -3066,7 +3066,7 @@ export class GameScene extends Phaser.Scene {
   /** 选第 i 条专职（按钮 / 1 2 键 / 测试）。 */
   chooseBranch(i: number): boolean {
     const b = this.branchOpts[i]; if (!b || !this.branchPanel) return false;
-    const own = this.player.weapons.find(w => w.id === getCharacter(this.runConfig.character).startWeapon); if (!own) return false;
+    const own = this.player.weapons.find(w => w.id === getCharacter(this.runConfig.character).startWeapon); if (!own || own.branch) return false; // 已锁定不能改
     own.branch = b.id; own.attuned = b.id === this.branchFitId;
     this.branchPanel.destroy(); this.branchPanel = null; this.setMode('none');
     this.sfx.play('gong'); playSheet(this, 'fx_awaken_' + b.school, this.player.x, this.player.y - 20, { size: 300, ms: 1000, depth: DEPTH.fx, add: true });
@@ -4403,6 +4403,7 @@ export class GameScene extends Phaser.Scene {
     this.pointsBadge?.setText(String(Math.min(99,this.player.growth.unallocated)));if(this.pointsButton)this.pointsButton.setVisible(!overlay&&!this.over&&this.player.growth.unallocated>0).setData('points',this.player.growth.unallocated);
     this.legionUI?.update(this.legion, !overlay && !this.over);
     this.passiveHud.update(this.player.passive, this.combatNow, !overlay);
+    { const st = branchStatus(this.player.weapons[0], s => this.player.growth.build.tags()[s] ?? 0, s => SCHOOLS[s].name); this.passiveHud.updateBranch(st); this.buffHud?.root.setY(st ? 214 : 180); } // 专职行在被动栏下，增益栏往下让
     buildVfx(this).density=this.enemies.filter(e=>e.active&&!e.isSupplySlot).length+this.legion.count;
     this.buffHud.update(this.player,this.combatNow,!overlay&&!this.over&&!this.relicExpanded,(id,now)=>this.buffProgress(id,now));
     this.hudGfx.setVisible(!overlay);

@@ -16,7 +16,7 @@ import { itemTile } from './ItemQuality';
 import { attrBadge } from './AttrBadge';
 import { primarySummary } from './PrimaryAttrInfo';
 import type { ItemTooltip, InfoTip } from './ItemTooltip';
-import { BRANCH_FIT, branchById } from '../data/weaponBranches';
+import { BRANCH_FIT, branchById, branchStatus } from '../data/weaponBranches';
 import { lqButton, lqLabelColor, type LqState } from './LacquerKit';
 
 /**
@@ -148,14 +148,15 @@ export function drawBuildOverview(o: BuildOverviewOpts): void {
     y += 20;
     // 兵器专职（2026-11-20）：已选分支、契合、Lv6 / Lv7 加深进度、进阶条件（Lv7 + 本派 4 势）完成情况；换分支走行营「重整构筑」
     if (w && br) {
-      const ov = w.over ?? 0, shi = tags[br.school] ?? 0, mk = (ok: boolean) => ok ? '✓' : '○', fin = ov >= 2 && shi >= 4;
+      const st = branchStatus(w, s2 => tags[s2] ?? 0, s2 => SCHOOLS[s2].name)!, ov = st.over, shi = st.shi, mk = (ok: boolean) => ok ? '✓' : '○', fin = st.final; // 与 HUD 专职行同一份数据
       text(L.x + pad, y, '专职', 12, '#a8956c');
       text(L.x + pad + 34, y - 1, br.name + (w.attuned ? ' · 契合' : ''), 13, w.attuned ? '#f0c060' : '#ffe2a0').setName(P + '-branch');
       y += 18;
       text(L.x + pad + 34, y - 1, `Lv6 ${mk(ov >= 1)}（第四章）  Lv7 ${mk(ov >= 2)}（第八章）`, 12, '#c9b88f').setName(P + '-branch-over');
       y += 17;
       text(L.x + pad + 34, y - 1, `进阶「${br.finalName}」${fin ? ' · 已达成' : `：Lv7 ${mk(ov >= 2)}  ${SCHOOLS[br.school].name}派 ${Math.min(shi, 4)}/4 势`}`, 12, fin ? '#f0c060' : '#b9a57a').setName(P + '-branch-final');
-      hot(L.x + pad, y - 37, L.w - pad * 2, 54, P + '-branch-hit', () => ({ title: '兵器专职 · ' + br.name, sub: SCHOOLS[br.school].name + '派' + (w.attuned ? ' · 契合（效果 +' + Math.round((BRANCH_FIT.fitMul - 1) * 100) + '%）' : ''), body: br.desc + '\n\nLv6：' + br.lv6 + '\nLv7：' + br.lv7 + '\n\n进阶「' + br.finalName + '」（Lv7 + 本派 4 势）：' + br.finalDesc + '\n\n想换分支：行营「重整构筑」花军粮重选，本命重练到 Lv5 时再弹专职面板。', color: 0xd8a85a }));
+      y += 17; text(L.x + pad + 34, y - 1, '已锁定 · 需重整构筑才能更换', 12, '#a8956c').setName(P + '-branch-lock');
+      hot(L.x + pad, y - 54, L.w - pad * 2, 71, P + '-branch-hit', () => ({ title: '兵器专职 · ' + br.name, sub: SCHOOLS[br.school].name + '派' + (w.attuned ? ' · 契合（效果 +' + Math.round((BRANCH_FIT.fitMul - 1) * 100) + '%）' : ''), body: st.tip, color: 0xd8a85a }));
       y += 19;
     } else if (w && w.level >= wmax) { text(L.x + pad, y, '专职', 12, '#a8956c'); text(L.x + pad + 34, y - 1, '本命已满 Lv5 · 下一场开战时选兵器专职', 12, '#b9a57a').setName(P + '-branch'); y += 19; }
     // 专属武学

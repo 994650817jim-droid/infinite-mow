@@ -22,6 +22,7 @@ const snap = () => p.evaluate(() => {
   const by = n => s.children.getByName(n);
   const bm = s.battleMap, big = bm?.big?.root;
   return {
+    legend: bm?.big?.painted?.stats.legend ?? null, hint: bm?.open3?.hint ? { text: bm.open3.hint.text, l: Math.round(bm.open3.hint.x - bm.open3.hint.width / 2), r: Math.round(bm.open3.hint.x + bm.open3.hint.width / 2), axL: Math.round(bm.open3.left.x), axR: Math.round(bm.open3.right.x) } : null,
     mode: s.mode, state: bm?.stats.state, t: bm?.stats.t, now: s.combatNow, timer: s.hudTexts.timer.text,
     mapMid: drawn(by('battle-map-scroll-mid')), mapView: drawn(big), dim: drawn(by('battle-map-dim')),
     hud: { status: drawn(by('hud-status-frame')), track: drawn(by('battle-track')), timer: drawn(s.hudTexts.timer), bag: drawn(by('bag-bundle-icon')), scroll: drawn(by('battle-map-scroll')), settings: !!s.settingsButton ? drawn(s.settingsButton) : null },
@@ -36,6 +37,10 @@ const round = async (how, openFn, closeFn) => {
   const a = await snap(); await p.waitForTimeout(1200); const a2 = await snap();
   await p.screenshot({ path: `${out}/open-${how}.png` });
   ck(`${how} 开：舆图画面出现（卷轴、地图、暗底），进入 map 模式`, a.state === 'open' && a.mode === 'map' && a.mapMid && a.mapView && a.dim, a);
+  if (how === 'key-m') { // 2026-11-20 用户「左下角标识太大了，也没做好后面的框」
+    ck('图例：紧凑（宽 ≤ 240、高 ≤ 36，原来 292×46），无拉伸框', !!a.legend && a.legend.w > 100 && a.legend.w <= 240 && a.legend.h <= 36, a.legend);
+    ck('卷起提示缩短、在两根画轴之间', !!a.hint && a.hint.l > a.hint.axL && a.hint.r < a.hint.axR && a.hint.text.length <= 12, a.hint);
+  }
   ck(`${how} 开着：计时不走`, Math.abs(a2.now - a.now) < 1, { a: a.now, a2: a2.now });
   await closeFn(); await waitState('closed'); await p.waitForTimeout(400);
   const c = await snap(); await p.waitForTimeout(1500); const c2 = await snap();

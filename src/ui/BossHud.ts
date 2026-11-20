@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { GAME_WIDTH, GAME_HEIGHT, HEADING_FONT, FONT } from '../config';
 import { LQ, lqDiamond } from './LacquerKit';
 import { factionOf, titleOf } from './StoryBarkCardStyles';
+import { STORY_CAST } from '../data/story/types';
 
 /**
  * 首领血条（2026-11-20 用户「还有ui boss血条优化一下」；风格同左上主将状态框 HeroStatusFrame：漆底金边、铜框朱红）。
@@ -65,7 +66,8 @@ export class BossHud {
     const s = this.scene, key = 'bosshud_medal_' + id, src = 'ink_cast_' + id;
     if (s.textures.exists(key)) return key;
     if (!s.textures.exists(src)) {
-      if (!/^[a-z]+$/.test(id) || s.registry.get('bosshud_try_' + id)) return null;
+      // 只载剧情人物表里登记过水墨立绘的（攻城 / 守城的通用首领 id 'siege' 等没有图：原来每场都去请求 ink_cast_siege，控制台报错、头像圈空着；2026-11-20 守城排查）
+      if (!/^[a-z]+$/.test(id) || STORY_CAST[id]?.portrait !== src || s.registry.get('bosshud_try_' + id)) return null;
       s.registry.set('bosshud_try_' + id, true);
       s.load.image(src, 'assets/ink-cast/' + id + '.webp'); s.load.start();
       return null;

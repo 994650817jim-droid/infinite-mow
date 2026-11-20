@@ -55,7 +55,7 @@ export class PaintedMap {
   private readonly icons: Phaser.GameObjects.Image[] = []; private iconN = 0;
   private readonly labels: Phaser.GameObjects.Text[] = []; private labelN = 0;
   private sig = '';
-  readonly stats = { bakes: 0, icons: 0, labels: 0, stamps: 0, dots: 0 };
+  readonly stats = { bakes: 0, icons: 0, labels: 0, stamps: 0, dots: 0, legend: { w: 0, h: 0 } };
   constructor(private readonly scene: Phaser.Scene, private readonly w: number, private readonly h: number, private readonly range: number, title: string) {
     const k = this.k;
     this.root = scene.add.container(0, 0).setName('painted-map');
@@ -70,16 +70,23 @@ export class PaintedMap {
     ic('compass', w - 34, 34, 44); deco.add(scene.add.text(w - 34, 7, '北', { fontFamily: TITLE_FONT, fontSize: '13px', color: '#8a1e14', resolution: 2 }).setOrigin(.5, 0));
     const bar = 1000 * k; ic('scale', w - 16 - bar / 2, h - 18, bar).setScale(bar / 154, .55);
     deco.add(scene.add.text(w - 16 - bar / 2, h - 30, '千 步', { fontFamily: TITLE_FONT, fontSize: '12px', color: '#2a1608', resolution: 2 }).setOrigin(.5, 1));
-    // 图例：纸框，四列两行（压在画心左下，不挡中间）
-    const LW = 292, LH = 46, lg = scene.add.nineslice(6, h - 6, MAP_ICONS, 'legendbox', LW, LH, 16, 16, 16, 16).setOrigin(0, 1).setAlpha(.95).setName('painted-map-legend'); deco.add(lg);
-    const items: Array<[string, string, number]> = [['主将', '', 0], ['敌营', 'camp', 20], ['我军攻势', 'brusharrow', 22], ['敌军', 'dot', 0], ['首领', 'seal', 15], ['军令', 'flag', 15], ['树林', 'forest', 20], ['城墙', 'wall', 20]];
-    items.forEach(([label, f, sz], i) => {
-      const x = 6 + 20 + (i % 4) * 69, y = h - 6 - LH + 14 + Math.floor(i / 4) * 17;
-      if (f === 'dot') { const g = scene.add.graphics(); g.lineStyle(1, ENEMY_DOTS.edge, .8).fillStyle(ENEMY_DOTS.color, 1).fillCircle(x - 3, y + 1, ENEMY_DOTS.r).strokeCircle(x - 3, y + 1, ENEMY_DOTS.r).fillCircle(x + 4, y - 1, ENEMY_DOTS.eliteR * .9).strokeCircle(x + 4, y - 1, ENEMY_DOTS.eliteR * .9); deco.add(g); } // 小点兵、大点精锐
-      else if (f) { const im = ic(f, x, y, sz * .7); if (im.height * im.scaleY > 12) im.setScale(12 / im.height); }
-      else { const g = scene.add.graphics(); g.fillStyle(LQ.lacquer, 1); lqDiamond(g, x, y, 6); g.fillStyle(LQ.goldHi, 1); lqDiamond(g, x, y, 4.2); deco.add(g); }
-      deco.add(scene.add.text(x + 10, y, label, { fontFamily: TITLE_FONT, fontSize: '11px', color: '#2a1608', resolution: 2 }).setOrigin(0, .5));
+    // 图例（2026-11-20 用户「左下角标识太大了，也没做好后面的框」）：不用横向拉伸的卷轴框（两头变形、边糊），改成很淡的半透明宣纸底；
+    // 两行紧凑排（字 11px、图标约 12px，按字宽往后排），贴画心左下角；「首领」用地图上同样的「帅」字朱印
+    const items: Array<[string, string]> = [['主将', ''], ['敌营', 'camp'], ['我军攻势', 'brusharrow'], ['敌军', 'dot'], ['首领', 'seal'], ['军令', 'flag'], ['树林', 'forest'], ['城墙', 'wall']];
+    const LG = { icon: 12, gap: 3, pad: 5, row: 14, font: 11, x: 8, bottom: 6 }, lgBack = scene.add.graphics().setName('painted-map-legend'); deco.add(lgBack);
+    const rows: number[] = [LG.pad, LG.pad], y0 = h - LG.bottom - LG.pad - LG.row * 2 + LG.row / 2;
+    items.forEach(([label, fr], i) => {
+      const r = Math.floor(i / 4), x = LG.x + rows[r] + LG.icon / 2, y = y0 + r * LG.row;
+      if (fr === 'dot') { const g = scene.add.graphics(); g.lineStyle(1, ENEMY_DOTS.edge, .8).fillStyle(ENEMY_DOTS.color, 1).fillCircle(x - 2.5, y + 1, ENEMY_DOTS.r * .85).strokeCircle(x - 2.5, y + 1, ENEMY_DOTS.r * .85).fillCircle(x + 3, y - 1, ENEMY_DOTS.eliteR * .75).strokeCircle(x + 3, y - 1, ENEMY_DOTS.eliteR * .75); deco.add(g); } // 小点 + 精锐大点
+      else if (fr === 'seal') { ic('seal', x, y, LG.icon + 1); deco.add(scene.add.text(x, y + .5, '帅', { fontFamily: TITLE_FONT, fontSize: '9px', color: '#9a1a10', resolution: 2 }).setOrigin(.5)); }
+      else if (fr) { const im = ic(fr, x, y, LG.icon); if (im.height * im.scaleY > LG.icon) im.setScale(LG.icon / im.height); }
+      else { const g = scene.add.graphics(); g.fillStyle(LQ.lacquer, 1); lqDiamond(g, x, y, 5); g.fillStyle(LQ.goldHi, 1); lqDiamond(g, x, y, 3.4); deco.add(g); }
+      const t = scene.add.text(x + LG.icon / 2 + LG.gap, y, label, { fontFamily: TITLE_FONT, fontSize: LG.font + 'px', color: '#2a1608', resolution: 2, stroke: '#f6ead0', strokeThickness: 2 }).setOrigin(0, .5);
+      deco.add(t); rows[r] += LG.icon + LG.gap + t.width + 8;
     });
+    const lw = Math.max(...rows) - 8 + LG.pad, lh = LG.row * 2 + LG.pad * 2 - 4;
+    lgBack.fillStyle(0xf6ecd2, .5).fillRoundedRect(LG.x, h - LG.bottom - lh, lw, lh, 5);
+    this.stats.legend = { w: Math.round(lw), h: Math.round(lh) };
     this.deco = deco;
     this.root.add(deco);
   }

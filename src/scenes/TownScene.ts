@@ -32,7 +32,7 @@ const BORROW_BG: Record<CityTier, number> = {small: 1, medium: 2, large: 3};
 const BORROW_BUILDING: Record<CityBuildingId, string> = {office: 'hall', tuntian: 'farm', muster: 'barracks'};
 interface Slot {x: number; y: number; w: number}
 /** 建筑位置（全景像素，建筑底边中心，落在底图画好的地基上）。借营寨图时用 BORROW_SLOTS。多出来的地基留作空地。 */
-const SLOTS: Record<CityTier, Record<CityBuildingId, Slot>> = {
+export const SLOTS: Record<CityTier, Record<CityBuildingId, Slot>> = {
  // 小城：4 处地基——正中靠后放府衙，左前放屯田，右中放募兵所，左后空着
  small: {office: {x: 772, y: 474, w: 300}, tuntian: {x: 352, y: 760, w: 400}, muster: {x: 1275, y: 570, w: 280}},
  // 中城：6 处地基——左中府衙，左下屯田，右下募兵所
@@ -152,7 +152,7 @@ export class TownScene extends Phaser.Scene {
  private drawPano() {
   this.folk?.detach(); this.pano.removeAll(true); this.hits = [];
   const s = loadWorld(), t = this.tier(), lv = cityLevels(this.cityId, s), k = this.k, slots = this.slots();
-  if (this.textures.exists(this.bgKey())) { const bg = this.add.image(0, 0, this.bgKey()).setOrigin(0).setDisplaySize(PANO_W * k, PANO_H * k).setName('town-bg'); zy(bg, -1e9); this.pano.add(bg); }
+  if (this.textures.exists(this.bgKey())) { const bg = this.add.image(0, 0, this.bgKey(), '__BASE').setOrigin(0).setDisplaySize(PANO_W * k, PANO_H * k).setName('town-bg'); zy(bg, -1e9); this.pano.add(bg); }
   else { const g = this.add.graphics(); g.fillStyle(0x7a6544, 1).fillRect(0, 0, PANO_W * k, PANO_H * k); this.pano.add(g); }
   // 民居店铺、空建筑位小旗、石桥（数量随档次与府衙等级；只是图片，不接收点击）
   drawTownDecor(this, this.pano, k, t, lv.office, lv, TOWN_ART_READY ? this.bgKey() : undefined);

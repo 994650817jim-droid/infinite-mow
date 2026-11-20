@@ -13,10 +13,11 @@ export function battlePoint(key: string, city?: string | null): { x: number; y: 
   const n = WORLD_NODES.find(x => x.chapter === key || x.campaign === key || x.side === key || x.challenge === key);
   return n ? { x: n.x * MAP_W, y: n.y * MAP_H } : null;
 }
-export function retreatTarget(at: { x: number; y: number } | null): RetreatTarget {
+/** exclude：不退到这座城（守城战败：刚没守住的城不算退守去处，2026-11-20）。 */
+export function retreatTarget(at: { x: number; y: number } | null, exclude?: string | null): RetreatTarget {
   const home: RetreatTarget = { kind: 'home', id: HOME.id, name: '义军营寨' };
   if (!at) return home;
   let best = home, bd = Math.hypot(HOME.x - at.x, HOME.y - at.y);
-  for (const id of ownedCities()) { const c = CITIES.find(x => x.id === id); if (!c) continue; const d = Math.hypot(c.x - at.x, c.y - at.y); if (d < bd) { bd = d; best = { kind: 'city', id: c.id, name: c.name }; } }
+  for (const id of ownedCities()) { if (id === exclude) continue; const c = CITIES.find(x => x.id === id); if (!c) continue; const d = Math.hypot(c.x - at.x, c.y - at.y); if (d < bd) { bd = d; best = { kind: 'city', id: c.id, name: c.name }; } }
   return best;
 }

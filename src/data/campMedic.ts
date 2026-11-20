@@ -24,5 +24,6 @@ export function medicPrice(kind: MedicKind, chapter: number, missing = 1): numbe
   if (kind === 'small') return CAMP_MEDIC.small.base + CAMP_MEDIC.small.perChapter * c;
   if (kind === 'army') return CAMP_MEDIC.army.base + CAMP_MEDIC.army.perChapter * c;
   const full = CAMP_MEDIC.full.base + CAMP_MEDIC.full.perChapter * c, small = medicPrice('small', c);
-  return Math.max(small, Math.round(full * Math.max(0, Math.min(1, missing))));
+  // 用户：「大治和小治区加区分价钱」——大治永远明显比小治贵（至少小治 ×1.8），缺血多时按缺血比例收到满价
+  return Math.max(Math.round(small * 1.8), Math.round(full * Math.max(0, Math.min(1, missing))));
 }

@@ -3940,6 +3940,7 @@ export class GameScene extends Phaser.Scene {
     if (!this.branchRt || this.branchFor !== P) {
       this.branchRt?.clear(); this.branchFor = P;
       this.branchRt = new WeaponBranches({
+        hitStop: ms => { this.hitFeel.hitStop(ms); },
         scene: this, player: P, now: () => this.combatNow, weapon: () => this.player.weapons[0], hit: () => this.weaponHit(),
         query: (x, y, r) => this.grid.query(x, y, r), damage: (e, n, fire) => { this.hitEnemy(e, n, this.combatNow, fire ? 'fire' : 'melee', false, false); },
         shi: s => this.player.growth.build.tags()[s] ?? 0, allies: () => this.allies,

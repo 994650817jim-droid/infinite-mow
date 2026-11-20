@@ -83,7 +83,13 @@ export const BRANCH_FIT = { fitMul: 1.2 } as const;
  * 杀进去再杀出来——朝移动方向（站定时朝最近的敌兵）冲进去 len，沿途敌兵受创；随即折返回出发点，回程同样受创；
  * 往返全程无敌，回到原位后把身边贴身的敌兵推开。去 / 回各 outMs / backMs。初值，交平衡会话。
  */
-export const LONGDAN = { len: 150, moveMin: 40, outMs: 170, holdMs: 30, backMs: 170, backMul: .9, pushR: 90, push: 46 } as const;
+/**
+ * 七进七出（定案「冲进去再杀回原位」）。2026-11-20 用户「关于赵云七进七出 不要这么快 要有个动作」：原来去 / 回各 0.17 秒像瞬移，
+ * 改成四段约 1.1 秒：起手 windMs（压枪蓄势、脚下扬尘）→ 冲入 outMs（持枪突刺、沿途枪影残影、挑开敌兵、首次命中顿帧）
+ * → 回马枪 turnMs（最远点转身横扫 turnR）→ 杀回 backMs（回到原位、落地收枪、推开贴身敌兵）。全程无敌。冷却按新时长放宽（交平衡会话复核）。
+ */
+export const LONGDAN = { len: 170, moveMin: 40, windMs: 200, outMs: 350, turnMs: 200, backMs: 350, backMul: .9, turnR: 95, turnMul: .8, pathPush: 26, ghostMs: 70, hitStopMs: 45, pushR: 90, push: 46, cdMs: 3800 } as const;
+export const longdanTotalMs = (): number => LONGDAN.windMs + LONGDAN.outMs + LONGDAN.turnMs + LONGDAN.backMs;
 /** 专职状态（HUD 专职行与构筑总览专职栏共用）：当前 Lv（5–7）、进阶进度、是否已进阶、悬停全文。 */
 export interface BranchStatus { b: WeaponBranch; lv: number; over: number; shi: number; final: boolean; attuned: boolean; progress: string; tip: string }
 export function branchStatus(w: { branch?: string; over?: number; attuned?: boolean } | undefined, shi: (s: SchoolId) => number, schoolName: (s: SchoolId) => string): BranchStatus | null {

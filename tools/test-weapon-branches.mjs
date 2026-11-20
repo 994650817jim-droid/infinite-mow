@@ -83,18 +83,19 @@ const branchFire = async (hero, branches) => {
   const hr = await p.evaluate(() => { const s = window.__S, all = []; const walk = l => { for (const o of l) { if (o.name && /^passive-branch-/.test(o.name)) all.push({ n: o.name, t: o.text, v: o.visible }); if (o.list) walk(o.list); } }; walk(s.children.list); return { rows: all, buffY: s.buffHud?.root.y }; });
   await p.screenshot({ path: OUT + '/hud-branch.png', clip: { x: 0, y: 0, width: 520, height: 420 } });
   ck('HUD：被动栏下多一行专职（分支名 · Lv.5、进阶 x/4 势），增益栏往下让', hr.rows.some(r => r.n === 'passive-branch-name' && r.v && /龙胆 · 七进七出 · Lv\.5/.test(r.t)) && hr.rows.some(r => r.n === 'passive-branch-progress' && /进阶 \d\/4 势/.test(r.t)) && hr.buffY === 214, hr);
-  // 七进七出（定案「冲进去再杀回原位」）：站定朝最近敌兵、在走沿走的方向；冲进去 150 再折返回出发点，往返无敌，回原位推开贴身敌兵
+  // 七进七出（定案「冲进去再杀回原位」；2026-11-20 改四段约 1.1 秒：起手 → 冲入 → 回马枪 → 杀回）：站定朝最近敌兵、在走沿走的方向；冲进去 170 再折返回出发点，全程无敌，回原位推开贴身敌兵
   const dz = await p.evaluate(() => { const s = window.__S, P = s.player, rt = s.branchRt; window.__calm();
     for (const e of s.enemies) if (e.active && e.kind !== 'boss') { e.hp = 0; s.killEnemy(e); }
     for (let i = 0; i < 6; i++) s.spawnEnemy('infantry', P.x + 120 + (i % 3) * 22, P.y - 11 + Math.floor(i / 3) * 22, 3, true); rt.lastDash = null; rt.nextAt = 1e12; });
   await p.waitForTimeout(150);
   const dz2 = await p.evaluate(() => { const s = window.__S, P = s.player, rt = s.branchRt; rt.vx = 0; rt.vy = 0; const now = s.combatNow; rt.dash(); return { ...rt.lastDash, inv: P.invulnUntil - now }; });
-  await p.waitForTimeout(110); await p.screenshot({ path: OUT + '/longdan-dash.png' });
-  await p.waitForTimeout(700);
+  await p.waitForTimeout(420); await p.screenshot({ path: OUT + '/longdan-dash.png' });
+  await p.waitForTimeout(1300);
   const back = await p.evaluate(() => { const s = window.__S, d = s.branchRt.lastDash; return { d, at: { x: Math.round(s.player.x), y: Math.round(s.player.y) } }; });
   await p.evaluate(() => { const s = window.__S, P = s.player; for (let i = 0; i < 3; i++) s.spawnEnemy('infantry', P.x - 100, P.y - 20 + i * 20, 3, true); }); await p.waitForTimeout(150);
   const mv = await p.evaluate(() => { const s = window.__S, rt = s.branchRt; rt.vx = 0; rt.vy = 220; rt.dash(); return { ...rt.lastDash }; });
-  ck('七进七出：站定时朝最近的敌兵冲进去，随即杀回出发点（误差 ≤ 24），往返全程无敌（≥ 0.4 秒）', dz2.mode === 'target' && dz2.ux > .9 && dz2.inv >= 400 && back.d?.back && Math.hypot(back.at.x - back.d.ox, back.at.y - back.d.oy) <= 24, { dz2, back });
+  ck('七进七出：四段（起手 → 冲入 → 回马枪 → 杀回）依次发生，整套约 1–1.3 秒', ['wind', 'out', 'turn', 'back', 'land'].every(k => typeof back.d?.phases?.[k] === 'number') && back.d.phases.out >= 150 && back.d.phases.turn - back.d.phases.out >= 250 && back.d.phases.back - back.d.phases.turn >= 150 && back.d.phases.land >= 950 && back.d.phases.land <= 1500, back.d?.phases);
+  ck('七进七出：站定时朝最近的敌兵冲进去，随即杀回出发点（误差 ≤ 24），全程无敌（≥ 1 秒）', dz2.mode === 'target' && dz2.ux > .9 && dz2.inv >= 1000 && back.d?.back && Math.hypot(back.at.x - back.d.ox, back.at.y - back.d.oy) <= 24, { dz2, back });
   ck('七进七出：在走时沿走的方向冲（玩家控制）', mv.mode === 'move' && mv.uy === 1, mv);
   ck('进阶形态短演出：分支进阶名大字（+ BranchFinalFx 手绘爆发、本派觉醒光、震屏）', !!fin.title, fin);
   await p.close();

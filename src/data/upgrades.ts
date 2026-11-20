@@ -275,7 +275,7 @@ export function buildUpgradeOptions(player: Player, weapons: WeaponState[], grow
   for(const f of foundations)if(picked.length<2&&f.id!==guaranteed.id&&!picked.some(o=>o.id===f.id))picked.push(f);
   const final=[guaranteed,...picked.slice(0,2)];
   // 兵器专职二选一：本命 Lv5、还没选分支、分支派任一到 2 势 → 两张专职卡占前两格
-  if(ownWeapon&&ownWeapon.level>=WEAPON_DEFS[ownWeaponId].maxLevel&&!ownWeapon.branch){const bs=branchesFor(ownWeaponId);if(bs.length===2&&bs.every(x=>x.ready)&&bs.some(x=>tags[x.school]>=2))return shuffle([branchOption(ownWeapon,bs[0]),branchOption(ownWeapon,bs[1])]).concat(final.filter(o=>o.kind!=='weapon').slice(-1));}
+  // 兵器专职不再混在三选一里：本命 Lv5 时单独弹「兵器专职」面板（ui/BranchPickPanel，GameScene.openBranchPanel）
   // 2026-11-19 新卡池（wave-progression-redesign.md §4.2）：固本培元一类的保底卡、以及按概率的战法位，换成新卡（战场机缘 / 锦囊 / 兵源 / 军资 / 心法）
   if(extra){const slots:number[]=[];final.forEach((o,i)=>{if(o.kind==='foundation'||(i>0&&o.kind==='tactic'&&Math.random()<extra.replaceChance))slots.push(i);});
     // 不出「三张都没用的」：核心位已不是永久成长时，至少留一张战法（2026-11-19 池子深度）

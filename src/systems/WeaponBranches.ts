@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { DEPTH } from '../config';
-import { branchById, branchTier, BENXI, type WeaponBranch } from '../data/weaponBranches';
+import { BRANCH_FIT, branchById, branchTier, BENXI, type WeaponBranch } from '../data/weaponBranches';
 import type { SchoolId } from '../data/schools';
 import type { Enemy } from '../entities/Enemy';
 import type { Player } from '../entities/Player';
@@ -33,6 +33,8 @@ export interface BranchHost {
   /** 随行武将（可玩名将 id）。 */
   followerHeroes: () => readonly string[];
   banner: (title: string, sub: string) => void;
+  /** 进阶形态第一次达成（宿主播短演出）。 */
+  onFinal?: (b: WeaponBranch) => void;
   sfx: (k: string) => void;
 }
 interface Seg { x: number; y: number; until: number; nextTick: number }
@@ -61,7 +63,7 @@ export class WeaponBranches {
 
   get branch(): WeaponBranch | undefined { return branchById(this.h.weapon()?.branch); }
   private tier(): number { const w = this.h.weapon(); return w ? branchTier(w) : 0; }
-  private k(): number { return 1 + .3 * (this.tier() - 1); }
+  private k(): number { return (1 + .3 * (this.tier() - 1)) * (this.h.weapon()?.attuned ? BRANCH_FIT.fitMul : 1); } // 契合 +10%
   private final(): boolean { const b = this.branch; return !!b && this.tier() >= 3 && this.h.shi(b.school) >= 4; }
   private nearest(r: number): Enemy | null { const P = this.h.player; let best: Enemy | null = null, d0 = r; for (const e of this.h.query(P.x, P.y, r)) { if (!e.active || e.isSupplySlot) continue; const d = Math.hypot(e.x - P.x, e.y - P.y); if (d < d0) { d0 = d; best = e; } } return best; }
   private fx(key: string, x: number, y: number, size: number, ms: number, tint: number, rotation = 0): void { playSheet(this.h.scene, key, x, y, { size, ms, depth: DEPTH.fx, tint, rotation, add: true }); }
@@ -69,7 +71,7 @@ export class WeaponBranches {
   update(): void {
     const b = this.branch, w = this.h.weapon(); if (!b || !w) return;
     const now = this.h.now(), P = this.h.player;
-    if (!this.finalShown && this.final()) { this.finalShown = true; this.stats.final = true; this.h.banner('兵器进阶 · ' + b.finalName, b.finalDesc); }
+    if (!this.finalShown && this.final()) { this.finalShown = true; this.stats.final = true; this.h.banner('兵器进阶 · ' + b.finalName, b.finalDesc); this.h.onFinal?.(b); }
     // 「出手」：冷却被重置（跳回较大的值）
     const fired = w.cooldownLeft > this.lastCd + .05; this.lastCd = w.cooldownLeft;
     if (fired) { this.stats.fires++; this.onFire(b, now); if (this.final()) { const t = this.nearest(300); this.fin.burst(b.id, P.x, P.y, t ? Math.atan2(t.y - P.y, t.x - P.x) : 0); } }

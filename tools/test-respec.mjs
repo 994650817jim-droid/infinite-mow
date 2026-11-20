@@ -114,6 +114,16 @@ const cap = await p.evaluate(async () => {
   const left = R.respecLeft(s.player, 2), ok = ui.respecDo(); return { left, ok, used: s.player.growth.respecN };
 });
 ck('每章最多重整 2 次：第三次不能重整', cap.left === 0 && cap.ok === false && cap.used === 2, cap);
+// 6 兵器专职（2026-11-20）：重整构筑退掉分支和「契合」；重选卡里不出专职卡（本命重练到 Lv5 时单独弹专职面板）
+const br = await p.evaluate(async () => {
+  const s = window.__game.scene.getScene('GameScene'), R = await window.__mod('systems/Respec.ts'), own = s.player.weapons[0];
+  own.level = 5; own.branch = 'zy_longdan'; own.attuned = true; own.over = 0;
+  const count = R.countRespecPicks(s.player).branch; R.resetBuild(s.player, 3);
+  const after = { level: own.level, branch: own.branch ?? null, attuned: own.attuned ?? null };
+  own.level = 5; const opts = R.respecOptions(s.player).map(o => o.id); own.level = 1;
+  return { count, after, opts, need: (() => { own.level = 5; const n = s.needBranch(); own.level = 1; return n; })() };
+});
+ck('重整构筑：专职算 1 次退回，分支与「契合」一起清掉；重选卡不出专职卡，本命再到 Lv5 时会重新弹专职面板', br.count === 1 && br.after.level === 1 && br.after.branch === null && br.after.attuned === null && !br.opts.some(id => id.startsWith('branch_')) && br.need === true, br);
 ck('控制台无报错', errors.length === 0, errors.slice(0, 5));
 console.log(`\n${pass} passed, ${fail} failed`);
 await b.close();

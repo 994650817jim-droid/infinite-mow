@@ -26,7 +26,7 @@ export function respecPrice(player: Player, chapter: number): number { return re
 /** 退回初始：本命兵器 Lv1、去掉专职与加深、武艺全退、战法只留商人买的级、心法只留商人买的派。返回退回的次数（同时记进 respecPending）。 */
 export function resetBuild(player: Player, chapter: number): number {
   const g = player.growth, b = g.build, n = countRespecPicks(player).picks, own = player.weapons.find(w => w.id === getCharacter(g.character).startWeapon);
-  if (own) { own.level = 1; delete own.branch; own.over = 0; }
+  if (own) { own.level = 1; delete own.branch; delete own.attuned; own.over = 0; } // 换专职：重整后重升到 Lv5 会再弹专职面板
   g.weaponOver = 0;
   for (const id of Object.keys(g.masteries) as Array<keyof typeof g.masteries>) g.masteries[id] = 0;
   g.masteryExtra = {};

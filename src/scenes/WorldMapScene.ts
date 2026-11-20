@@ -1,5 +1,7 @@
 import Phaser from 'phaser';
 import { playMenuMusic } from '../systems/Music';
+import { startCityAmbient } from '../systems/ContentSfx';
+import { uiSfx } from '../systems/Sfx';
 import { defaultHero, loadRoster } from '../systems/RosterStore';
 import { checkWorld } from '../systems/Achievements';
 import { RENDER_SCALE, screenPoint, TITLE_FONT, HEADING_FONT } from '../config';
@@ -83,7 +85,7 @@ export class WorldMapScene extends Phaser.Scene {
   }
 
   create() { /* 武将来投（systems/HeroUnlocks）：按进度补查、弹没看过的揭幕 */this.time.delayedCall(500,()=>checkHeroJoins(this));
-    playMenuMusic(this); try { checkWorld(loadWorld()); } catch { /* 存档不可用 */ }
+    playMenuMusic(this); startCityAmbient(this, k => uiSfx().play(k), ['amb_wind', 'amb_wind', 'amb_horn', 'amb_drum', 'amb_flag']); try { checkWorld(loadWorld()); } catch { /* 存档不可用 */ }
     if (!worldUnlocked() && !isChapterTestRun()) { this.registry.set('loadBattle', true); this.scene.start(this.registry.get('battleReady') ? 'MenuScene' : 'BootScene'); return; }
     this.desktop = W > 600; this.nodes.clear(); this.tiles = []; this.modal = undefined; this.registry.remove('hardChapter');
     const test = isChapterTestRun(), advance = test ? null : advanceEra(), lost = test ? [] : takeLostNotice(); if (!test) ensureIntel();

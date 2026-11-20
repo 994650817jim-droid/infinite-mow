@@ -6,6 +6,7 @@ import Phaser from 'phaser';
 import { surrenderMoveLine } from '../data/surrenderMoves';
 import { heroLevel, type HeroKey } from '../systems/HeroProgress';
 import { playMenuMusic } from '../systems/Music';
+import { uiSfx } from '../systems/Sfx';
 import { isChapterTestRun } from '../systems/ChapterProgress';
 import { W, H, worldText, worldButton, worldShell, panel } from '../world/WorldUI';
 import { loadWorld, worldUnlocked } from '../world/WorldStore';
@@ -129,7 +130,7 @@ export class TalentHallScene extends Phaser.Scene {
     if (o.boss) { const sx = nameT.x + nameT.width + 22, sy = nameT.y + nameT.height / 2; if (this.textures.exists('seal_boss')) this.content!.add(this.add.image(sx, sy, 'seal_boss').setDisplaySize(32, 32).setAngle(-6).setName('talent-boss-seal')); else { const sg = this.add.graphics().lineStyle(1.5, 0xd0503a, .95).strokeRoundedRect(sx - 18, sy - 11, 36, 22, 4); this.content!.add([sg, worldText(this, sx, sy, '首领', 12, '#e0604a').setOrigin(.5).setName('talent-boss-seal')]); } }
     this.content!.add(worldText(this, tx, y - h / 2 + (D ? 32 : 36), `${q.label} · ${kind}${captive && o.expires !== undefined ? ` · 剩 ${captiveSeasonsLeft(o)} 季` : ''}\n${surrenderMoveLine(o.boss) ? TEMPLATES[o.template].name + ' · ' + surrenderMoveLine(o.boss) : TEMPLATES[o.template].name + '：' + TEMPLATES[o.template].desc}`, 12, '#cdbf9f').setWordWrapWidth(w - size - 150).setName('talent-offer-desc'));
     const cost = captive ? Math.ceil(o.cost * RECRUIT.captiveDiscount) : o.cost;
-    this.small(W - x0 - 70, y, 120, `${captive ? '招降' : '招募'} ${cost}粮`, () => { this.message = recruit(i, captive).message; this.render(); }, `talent-${captive ? 'captive' : 'offer'}-${i}`, true, o.kind !== 'common');
+    this.small(W - x0 - 70, y, 120, `${captive ? '招降' : '招募'} ${cost}粮`, () => { const r = recruit(i, captive); this.message = r.message; if (r.ok) uiSfx().play('recruit'); this.render(); }, `talent-${captive ? 'captive' : 'offer'}-${i}`, true, o.kind !== 'common');
   }
   /** 「名将」页一行：头像、名字与状态；未归附 → 剪影 + 「尚未归附 · 需劝降招募」；已归附未招 → 「招募 · N 军粮」；已在麾下 → 灰按钮。 */
   private heroRow(id: CharacterId, y: number, h: number, following: number, cap: number, grain: number) {

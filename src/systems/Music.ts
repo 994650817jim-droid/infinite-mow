@@ -104,8 +104,8 @@ export class Music {
     }
     void (this.ctx as AudioContext).resume();
     if (this.fadeTimer !== null) { window.clearTimeout(this.fadeTimer); this.fadeTimer = null; }
-    // 界面曲淡入；战斗曲直接到位。
-    if (this.theme === 'menu') { this.applyGain(0); this.applyGain(this.level(), .9); } else this.applyGain(this.level());
+    // 界面曲淡入 0.9 秒；战斗曲淡入 0.6 秒（音效审计：原来战斗曲直接满音量，第一拍就是战鼓，开局有点冲）。
+    this.applyGain(0); this.applyGain(this.level(), this.theme === 'menu' ? .9 : .6);
     this.playing = true;
     this.step = 0;
     this.nextTime = this.ctx!.currentTime + 0.12;

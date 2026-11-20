@@ -69,7 +69,7 @@ export class WeaponBranches {
   update(): void {
     const b = this.branch, w = this.h.weapon(); if (!b || !w) return;
     const now = this.h.now(), P = this.h.player;
-    if (!this.finalShown && this.final()) { this.finalShown = true; this.stats.final = true; this.h.banner('兵器进阶 · ' + b.finalName, b.finalDesc); }
+    if (!this.finalShown && this.final()) { this.finalShown = true; this.stats.final = true; this.h.banner('兵器进阶 · ' + b.finalName, b.finalDesc); (this.h.scene as unknown as { sfx?: { play(k: string): void } }).sfx?.play('promote'); }
     // 「出手」：冷却被重置（跳回较大的值）
     const fired = w.cooldownLeft > this.lastCd + .05; this.lastCd = w.cooldownLeft;
     if (fired) { this.stats.fires++; this.onFire(b, now); if (this.final()) { const t = this.nearest(300); this.fin.burst(b.id, P.x, P.y, t ? Math.atan2(t.y - P.y, t.x - P.x) : 0); } }

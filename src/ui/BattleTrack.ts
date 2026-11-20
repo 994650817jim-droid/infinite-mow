@@ -31,10 +31,10 @@ export class BattleTrack {
     // 2026-11-19 用户「顶部「战况」线放在屏幕最上面」：贴着屏幕上沿的一条细带（上边不留圆角），计时器 / 关名由场景往下挪（GameScene.applyPhases）
     const desktop = GAME_WIDTH >= 900, L = LINE_Y; this.w = desktop ? 300 : 240;
     this.root = scene.add.container(GAME_WIDTH / 2, 0).setScrollFactor(0).setDepth(DEPTH.hud + 2).setName('battle-track');
-    const back = scene.add.graphics(), bw = this.w + 32, r = { tl: 0, tr: 0, bl: 10, br: 10 };
-    back.fillStyle(0x16100a, .5).fillRoundedRect(-bw / 2, 0, bw, STRIP_H, r);
-    back.lineStyle(1, 0xc9a86a, .35).strokeRoundedRect(-bw / 2, -1, bw, STRIP_H + 1, r);
-    back.lineStyle(2, 0x6b5638, .9).lineBetween(-this.w / 2, L, this.w / 2, L);
+    // 2026-11-19 用户「不要黑框」：去掉线后面的半透明黑底圆角框；只留一道细墨线（下面垫一道柔和暗影，压在亮地面上也看得清）
+    const back = scene.add.graphics();
+    back.lineStyle(5, 0x000000, .28).lineBetween(-this.w / 2 - 1, L + 1, this.w / 2 + 1, L + 1);
+    back.lineStyle(2, 0x5a4630, .95).lineBetween(-this.w / 2, L, this.w / 2, L);
     this.line = scene.add.graphics();
     this.root.add([back, this.line]);
     const bossAt = Math.max(1, plan.bossAt);
@@ -52,7 +52,7 @@ export class BattleTrack {
     const fg = scene.add.graphics();
     fg.fillStyle(0xc0301c, 1).fillPoints([{ x: 0, y: -6 }, { x: 5, y: 0 }, { x: 0, y: 6 }, { x: -5, y: 0 }], true).lineStyle(1.2, 0xf3d48a, 1).strokePoints([{ x: 0, y: -6 }, { x: 5, y: 0 }, { x: 0, y: 6 }, { x: -5, y: 0 }], true);
     this.flag.add(fg); this.root.add(this.flag);
-    this.caption = scene.add.text(0, L + 13, '', { fontFamily: FONT, fontSize: desktop ? '11px' : '10px', color: '#e7d6ae', resolution: 2, stroke: '#140e08', strokeThickness: 3 }).setOrigin(.5, .5).setName('track-caption');
+    this.caption = scene.add.text(0, L + 13, '', { fontFamily: FONT, fontSize: desktop ? '11px' : '10px', color: '#f0e2bc', resolution: 2, stroke: '#140e08', strokeThickness: 3 }).setOrigin(.5, .5).setShadow(0, 1, '#000000', 3, true, true).setName('track-caption'); // 没有底框：描边 + 柔影保证可读
     this.root.add(this.caption);
     this.loadIcons();
   }

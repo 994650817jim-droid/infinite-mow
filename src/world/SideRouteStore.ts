@@ -4,16 +4,19 @@ import { cityById } from './WorldCities';
 import { addProvisions, arcStages, grantCity, ownedCities } from './WorldStore';
 import { isChapterTestRun } from '../systems/ChapterProgress';
 import { surrenderedIds } from '../systems/SurrenderStore';
+import { surrenderDef } from '../data/surrender';
+import { REPLAY_CLEARED } from '../data/replayRules';
 
 /**
  * 其他势力支线的存档（other-factions-design.md §1.2）：键 im_side_routes_v1，在存档位里（SaveSlots.PROGRESS_KEYS）；开发期不做老档兼容。
- *   stage：已打过第几关（顺序打）；done：终局已胜（城池并入、特产生效）；retries：终局之后没劝降势力之主、又来再战的次数（每次劝降 +15%）。
+ *   stage：已打过第几关（顺序打）；done：终局已胜（城池并入、特产生效）。
+ * 打过的关不能再打（data/replayRules.ts）：劝降一次性，终局没劝降势力之主就是错过了（地图写「已率残部远走」），没有再战。
  * 「已劝降」不另存：读招降名单（SurrenderStore.surrenderedIds，三英战吕布挑战关劝降的吕布也算）。
  */
 export const SIDE_KEY = 'im_side_routes_v1';
-export interface SideRouteState { stage: number; done: boolean; retries: number }
+export interface SideRouteState { stage: number; done: boolean }
 type SideSave = Partial<Record<SideRouteId, SideRouteState>>;
-const fresh = (): SideRouteState => ({ stage: 0, done: false, retries: 0 });
+const fresh = (): SideRouteState => ({ stage: 0, done: false });
 let memory: SideSave | null = null;
 function read(): SideSave {
   try { const v = JSON.parse(localStorage.getItem(SIDE_KEY) ?? 'null'); if (v && typeof v === 'object') return v as SideSave; } catch { /* 存储不可用：用会话内存 */ }
@@ -23,7 +26,7 @@ function write(s: SideSave): void { memory = s; try { localStorage.setItem(SIDE_
 export function sideState(id: SideRouteId): SideRouteState {
   const r = sideRoute(id), v = read()[id]; if (!r || !v) return fresh();
   const n = (x: unknown, max: number) => Math.max(0, Math.min(max, Math.floor(Number(x) || 0)));
-  return { stage: n(v.stage, r.stages.length), done: !!v.done, retries: n(v.retries, SIDE_REWARD.retryMax) };
+  return { stage: n(v.stage, r.stages.length), done: !!v.done };
 }
 function put(id: SideRouteId, st: SideRouteState): void { const s = read(); s[id] = st; write(s); }
 
@@ -32,23 +35,20 @@ export function sideRouteOpen(id: SideRouteId): boolean {
   const r = sideRoute(id); if (!r) return false;
   return isChapterTestRun() || arcStages(r.open.arc) >= r.open.stages;
 }
-/** 这一关能不能打：顺序打；打完整条支线后每关都能重温（终局「再战」劝降）。 */
+/** 这一关能不能打：顺序打，打过的关不能再打（data/replayRules.ts）。 */
 export function sideStageOpen(id: SideRouteId, stage: number): boolean {
   const r = sideRoute(id); if (!r || !Number.isInteger(stage) || stage < 1 || stage > r.stages.length || !sideRouteOpen(id)) return false;
-  const st = sideState(id); return st.done || stage <= st.stage + 1;
+  const st = sideState(id); return REPLAY_CLEARED ? st.done || stage <= st.stage + 1 : !st.done && stage === st.stage + 1;
 }
-/** 下一关（全打完 = 终局，再战用）。 */
+/** 下一关（全打完时返回终局，只用于显示）。 */
 export function sideNextStage(id: SideRouteId): number { const r = sideRoute(id)!, st = sideState(id); return st.done ? r.stages.length : Math.min(r.stages.length, st.stage + 1); }
 /** 这位首领本存档劝降了没。 */
 export function sidePersuaded(bossId: string): boolean { return surrenderedIds().includes(bossId); }
-/** 终局再战的劝降加成次数（招降表用旗标 sideRetry<N>）。 */
-export function sideRetries(id: SideRouteId): number { return sideState(id).retries; }
+/** 势力之主能不能劝（宁死不降的袁绍、公孙瓒、黄祖：终局没有再战劝降加成，改为厚葬奖励，surrender-rules.md）。 */
+export function sideLordPersuadable(id: SideRouteId): boolean { const r = sideRoute(id); if (!r) return false; const t = surrenderDef(`${id}-${r.stages.length}:${r.lord}`)?.tier; return t === 'can' || t === 'hard' || t === 'sure'; }
 
 export interface SideSettle { provisions: number; first: boolean; done: boolean; annexed: string[]; message: string }
-/**
- * 一关结算：胜利发军粮（首通全额、重温 ×0.35、终局 ×2）；攻城关并入该城；终局首通并入支线全部城池、特产生效；
- * 终局胜了却没劝降势力之主 → 再战次数 +1（下次劝降 +15%）。测试 / 调试战斗不写进度。
- */
+/** 一关结算：胜利发军粮（终局 ×2）；攻城关并入该城；终局并入支线全部城池、特产生效。测试 / 调试战斗不写进度。 */
 export function settleSideStage(id: SideRouteId, stage: number, result: { victory: boolean; debug: boolean }): SideSettle {
   const r = sideRoute(id), zero: SideSettle = { provisions: 0, first: false, done: false, annexed: [], message: '' };
   if (!r) return { ...zero, message: '未知支线' };
@@ -63,10 +63,10 @@ export function settleSideStage(id: SideRouteId, stage: number, result: { victor
   let done = false;
   if (final) {
     if (!st.done) { st.done = true; done = true; for (const c of r.annex) take(c); }
-    if (!sidePersuaded(r.lord)) st.retries = Math.min(SIDE_REWARD.retryMax, st.retries + 1);
   }
   put(id, st);
-  const base = SIDE_REWARD.provisions[id] * (final ? SIDE_REWARD.finalMul : 1) * (first ? 1 : SIDE_REWARD.replayMul);
+  if (!first) return { ...zero, message: '此关已平定' };
+  const base = SIDE_REWARD.provisions[id] * (final ? SIDE_REWARD.finalMul : 1);
   const provisions = addProvisions(Math.round(base));
   return { provisions, first, done, annexed, message: done ? `${r.name} · 讨伐告成` : first ? `${d.name}告捷` : `重温 ${d.name}` };
 }

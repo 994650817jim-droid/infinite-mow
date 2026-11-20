@@ -1,7 +1,7 @@
 import type { ChapterId } from './chapters';
 import type { WeaponId } from '../types';
 
-export type CharacterId = 'zhaoyun' | 'guanyu' | 'huangzhong' | 'zhuge' | 'zhangfei' | 'machao' | 'weiyan' | 'liubei' | 'pangtong' | 'huangyueying' | 'sunshangxiang' | 'diaochan';
+export type CharacterId = 'zhaoyun' | 'guanyu' | 'huangzhong' | 'zhuge' | 'zhangfei' | 'machao' | 'weiyan' | 'liubei' | 'pangtong' | 'huangyueying' | 'sunshangxiang' | 'diaochan' | 'lvbu';
 
 export interface CharacterDef {
   id: CharacterId;
@@ -169,10 +169,23 @@ export const CHARACTERS: CharacterDef[] = [
     startWeapon: 'diaochan_fans',
     faction: '群',
   },
+  // P2 第一批：吕布（群）——方天画戟、被动「无双」（data/lvbu.ts）
+  {
+    id: 'lvbu',
+    name: '吕布',
+    desc: '无双 · 越打越疯的单骑猛将',
+    hpMul: 1.1,
+    speedMul: 1,
+    damageMul: 1.12,
+    portrait: 'lvbu_portrait',
+    startWeapon: 'fangtian_ji',
+    faction: '群',
+  },
+
 ];
 
 /** 有主页大幅立绘（epic-home）与水墨立轴（ink-scroll）的武将；其余用 portrait。 */
-export const HOME_ART_HEROES: readonly string[] = ['zhaoyun', 'guanyu', 'huangzhong', 'zhuge', 'zhangfei', 'machao', 'weiyan', 'liubei', 'pangtong', 'huangyueying', 'sunshangxiang', 'diaochan'];
+export const HOME_ART_HEROES: readonly string[] = ['zhaoyun', 'guanyu', 'huangzhong', 'zhuge', 'zhangfei', 'machao', 'weiyan', 'liubei', 'pangtong', 'huangyueying', 'sunshangxiang', 'diaochan', 'lvbu'];
 
 export const STARTING_WEAPONS: Array<{ id: WeaponId; name: string; icon: string; desc: string }> = [
   { id: 'spear_orbit', name: '枪影旋舞', icon: 'icon_1', desc: '环绕枪刃，近身持续伤害' },
@@ -182,6 +195,7 @@ export const STARTING_WEAPONS: Array<{ id: WeaponId; name: string; icon: string;
 
 export const DEFAULT_RUN_CONFIG: RunConfig = { character: 'zhaoyun', weapon: 'spear_orbit' };
 
+/** P2 第一批可玩武将（other-factions-design.md）：随支线劝降来投（systems/HeroUnlocks）。id 用表字（吕布 lvbu），不和首领 / 剧情人物 id 撞。 */
 export function getCharacter(id: CharacterId): CharacterDef {
   return CHARACTERS.find((c) => c.id === id) ?? CHARACTERS[0];
 }

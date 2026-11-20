@@ -16,10 +16,8 @@ type InkBtn={btn:ReturnType<typeof worldButton>;plate:Phaser.GameObjects.NineSli
 import {WORLD_NODES,type WorldNode} from '../world/WorldNodes';
 import {loadWorld,rewardGrain} from '../world/WorldStore';
 import {sideRoute,type SideRouteId} from '../data/sideRoutes';
-import {sideNextStage,sidePersuaded,sideRetries,sideRouteOpen,sideStageOpen,sideState} from '../world/SideRouteStore';
+import {sideLordPersuadable,sideNextStage,sidePersuaded,sideRouteOpen,sideStageOpen,sideState} from '../world/SideRouteStore';
 import {SIDE_STAGE_KEY,sideSceneFor} from '../data/sideRoutes';
-import {SIDE_REWARD} from '../data/sideRoutes';
-import {SURRENDER} from '../data/surrender';
 import {citySize,CITY_TITLE} from '../town/TownData';
 import {incomeText} from "../town/TownData";
 import {cityIncome,emptyCityLevels} from "../data/cityBuildings";
@@ -37,7 +35,8 @@ import {hardChapterCleared} from '../world/WorldStore';
 import {defenseBossName} from '../data/siege';
 import {SIEGE,FIRST_CAPTURE_BONUS,siegeBossName} from '../data/siege';
 import {CHARACTERS,type CharacterId} from '../data/characters';
-import {ensureIntel,intelEvents,lubuChallengeOpen,lubuClears} from '../world/WorldStore';
+import {ensureIntel,intelEvents,lubuChallengeOpen,lubuChallengePlayable,lubuClears} from '../world/WorldStore';
+import {REPLAY_CLEARED} from '../data/replayRules';
 import {siegeGateStage,siegeUnlocked} from '../world/RouteMap';
 import {LUBU_CHALLENGE} from '../data/dongzhuo';
 import {INTEL_INFO,intelBrief,intelReward,intelTitle,seasonIndex,type IntelEvent} from '../world/WorldIntel';
@@ -155,8 +154,8 @@ export class WorldMapSceneV1 extends Phaser.Scene {
    const icon=v2?null:worldText(this,0,0,glyphText,13,st==='cleared'?'#ffe7a8':active?'#f5dc9e':'#a4aa9c').setOrigin(.5);
    const label=v2?null:worldText(this,0,25,labelText,13,active?'#fff0cd':'#b6b8aa').setOrigin(.5).setStroke('#142016',3);
    circle.on('pointerup',(pointer:Phaser.Input.Pointer)=>{if(pointer.getDistance()>10*RENDER_SCALE||this.pinching)return;this.selected={kind:'node',node};this.refresh();});
-   if(node.side&&W>600){const r=sideRoute(node.side)!;circle.on('pointerover',()=>{const s2=sideState(node.side!);this.showTip(`讨伐令 · ${r.name}\n${s2.done?(sidePersuaded(r.lord)?'已讨平 · 势力之主已归附':'已讨平 · 可再战劝降'):`已过 ${s2.stage}/${r.stages.length} 关 · 下一关「${r.stages[sideNextStage(node.side!)-1].name}」`}\n势力特产「${r.specialty.title}」${r.specialty.text}`,marker.x,marker.y-40,.5);}).on('pointerout',()=>this.hideTip());}
-   if(node.challenge&&W>600)circle.on('pointerover',()=>{const locked=this.nodeState(node)==='locked';this.showTip(`挑战 · ${node.region} · ${node.name}\n${locked?LUBU_CHALLENGE.unlockHint:lubuClears()?`已胜 ${lubuClears()} 场 · 可反复挑战`:'首胜得名马「赤兔」'}`,marker.x,marker.y-40,.5);}).on('pointerout',()=>this.hideTip());marker.add(v2?[...v2.parts,circle]:[circle,icon!,label!]);if(v2)marker.setData('label',v2.label).setData('plate',v2.plate).setData('icon',v2.icon);marker.setData('locked',st==='locked');
+   if(node.side&&W>600){const r=sideRoute(node.side)!;circle.on('pointerover',()=>{const s2=sideState(node.side!);this.showTip(`讨伐令 · ${r.name}\n${s2.done?(sidePersuaded(r.lord)?'已平定 · 势力之主已归附':sideLordPersuadable(node.side!)?'已平定 · 势力之主远走':'已平定 · 势力之主宁死不降'):`已过 ${s2.stage}/${r.stages.length} 关 · 下一关「${r.stages[sideNextStage(node.side!)-1].name}」`}\n势力特产「${r.specialty.title}」${r.specialty.text}`,marker.x,marker.y-40,.5);}).on('pointerout',()=>this.hideTip());}
+   if(node.challenge&&W>600)circle.on('pointerover',()=>{const locked=this.nodeState(node)==='locked';this.showTip(`挑战 · ${node.region} · ${node.name}\n${locked?LUBU_CHALLENGE.unlockHint:lubuClears()?(REPLAY_CLEARED?`已胜 ${lubuClears()} 场 · 可反复挑战`:'已平定 · 吕布败走'):'首胜得名马「赤兔」'}`,marker.x,marker.y-40,.5);}).on('pointerout',()=>this.hideTip());marker.add(v2?[...v2.parts,circle]:[circle,icon!,label!]);if(v2)marker.setData('label',v2.label).setData('plate',v2.plate).setData('icon',v2.icon);marker.setData('locked',st==='locked');
    {const ch=this.chapterOf(node)?.id,role=st==='home'?'home':st==='cleared'?'cleared':st==='locked'?(ch&&ch===nextLocked?'next-locked':'far-locked'):'open';marker.setData('role',role).setName('world-node-'+node.id);
     if(role==='cleared')marker.setScale(.74).setAlpha(.7);else if(role==='next-locked')marker.setAlpha(.78);}
    this.markers.push({node,root:marker});
@@ -565,30 +564,34 @@ export class WorldMapSceneV1 extends Phaser.Scene {
   if(n.side){this.sideDetail(n.side,st);return;}
   if(n.challenge){this.challengeDetail(n,st);return;}
   if(n.kind==='home'||!info){const next=currentChapter(save),cleared=CHAPTER_TIMELINE.filter(c=>chapterStagesDone(c.id,save)>=3).length;this.setDetail(n.name,FACTIONS.player.color,n.kind==='home'?'营':'锁',`${n.region} · ${n.kind==='home'?'玩家领地':'地区开发中'}\n从义军营寨出发，建设后再次出征。\n章节进度 ${cleared}/${CHAPTER_TIMELINE.length} · ${cleared>=CHAPTER_TIMELINE.length?'诸章皆已平定':`下一章：第${next.numeral}章「${next.title}」`}`);}
-  else{const hard=hardChapterCleared(info.id),status=locked?`未解锁：${info.hint}`:st==='cleared'?`已平定（3/3 关）· ${hard?`乱世已平 · 称号「${HARD_TITLES[info.id]}」`:'可重温，或挑战乱世难度'}`:done?`进行中：已过 ${done}/3 关`:'已开放：可出征';
+  else{const hard=hardChapterCleared(info.id),status=locked?`未解锁：${info.hint}`:st==='cleared'?`已平定（3/3 关）${hard?` · 乱世已平 · 称号「${HARD_TITLES[info.id]}」`:REPLAY_CLEARED?' · 可重温，或挑战乱世难度':' · 史事已定，不再出征'}`:done?`进行中：已过 ${done}/3 关`:'已开放：可出征';
    this.setDetail(`第${info.numeral}章 · ${n.name}`,st==='cleared'?0x5f8f4e:locked?0x4a4f46:0x8e2a1e,st==='cleared'?'捷':locked?'锁':'战',locked?`公元${info.year}年（${info.era}） · ${n.region}\n${status}\n按史事时序逐章解锁。`:`${status}\n${this.musterLine()}\n公元${info.year}年（${info.era}） · ${n.region}\n${this.lossWarning()||'战斗中的随军粮只在本局有效，战后另结算营寨军粮。'}`);}
-  this.action.text.setText(locked?'尚未解锁':n.kind==='home'?"进入营寨":st==='cleared'?'重温 · 出征':'出征');this.action.image.setAlpha(locked?.45:1);if(locked)this.action.image.disableInteractive();else this.action.image.setInteractive({useHandCursor:true});
-  this.layoutActions(st==='cleared');}
+  // 打过的章不能再打（data/replayRules.ts）：已平定的章节按钮写「已平定」并置灰，不给乱世难度
+  const sealed=st==='cleared'&&!REPLAY_CLEARED&&n.kind!=='home'&&!isChapterTestRun(),noGo=locked||sealed;
+  this.action.text.setText(locked?'尚未解锁':n.kind==='home'?"进入营寨":st==='cleared'?(sealed?'已平定':'重温 · 出征'):'出征');this.action.image.setAlpha(noGo?.45:1);if(noGo)this.action.image.disableInteractive();else this.action.image.setInteractive({useHandCursor:true});
+  this.layoutActions(st==='cleared'&&!sealed);}
 /** 讨伐令（其他势力支线）详情：各关进度、劝降情况、并入领地与特产、再战劝降加成。 */
  private sideDetail(id:SideRouteId,st:'home'|ChapterState){const r=sideRoute(id)!,s=sideState(id),locked=st==='locked',next=sideNextStage(id),nd=r.stages[next-1];
   // 详情面板电脑版只显示两行：本关（第几关、攻城 / 野战 / 终局、首领）+ 讨平后（并城、特产）或再战加成；各关一览在悬停提示里
   const kind=(k:string)=>k==='siege'?'攻城':k==='final'?'终局':'野战',bosses=[nd.boss,...(nd.partner?[nd.partner]:[])].map(b=>b.name+(sidePersuaded(b.id)?'（已降）':'')).join(' + ');
-  const rows=`第 ${next}/${r.stages.length} 关「${nd.name}」${kind(nd.kind)} · 首领 ${bosses} · 可劝降`;
+  const rows=s.done?`已平定 · ${r.stages.length} 关皆捷 · 史事已定，不再出征`:`第 ${next}/${r.stages.length} 关「${nd.name}」${kind(nd.kind)} · 首领 ${bosses}`;
   const cities=[...new Set([...r.stages.map(d=>d.city).filter((c):c is string=>!!c),...r.annex])].map(c=>cityById(c)?.name??c);
-  const retry=s.done&&!sidePersuaded(r.lord)?Math.min(SURRENDER.cap*100,Math.round(SIDE_REWARD.retryAdd*100*sideRetries(id))):0;
-  const tail=s.done?(sidePersuaded(r.lord)?'已讨平 · 势力之主已归附':`已讨平 · 再战终局劝降把握 +${retry}%`):`讨平后：${cities.length?'并入 '+(cities.length>2?cities.slice(0,2).join('、')+` 等 ${cities.length} 城`:cities.join('、'))+' · ':''}特产「${r.specialty.title}」`;
+  // 劝降一次性（打过的关不能再打）：错过的势力之主另投他处，不再有再战
+  const tail=s.done?(!sideLordPersuadable(id)?'势力之主宁死不降，已以礼厚葬':sidePersuaded(r.lord)?'势力之主已归附':'势力之主未降，已率残部远走'):`讨平后：${cities.length?'并入 '+(cities.length>2?cities.slice(0,2).join('、')+` 等 ${cities.length} 城`:cities.join('、'))+' · ':''}特产「${r.specialty.title}」`;
   this.setDetail(`讨伐令 · ${r.name}`,locked?0x4a4f46:s.done?0x5f8f4e:0x8c2a2a,locked?'锁':s.done?'捷':'讨',locked?`未开放：${r.open.hint}`:`${rows}\n${tail}${this.lossWarning()?'\n'+this.lossWarning():''}`);
-  this.action.text.setText(locked?'尚未开放':s.done?`再战 · ${nd.name}`:`出征 · ${nd.name}`);this.action.image.setAlpha(locked?.45:1);if(locked)this.action.image.disableInteractive();else this.action.image.setInteractive({useHandCursor:true});this.layoutActions(false);}
+  const noGo=locked||s.done;
+  this.action.text.setText(locked?'尚未开放':s.done?'已平定':`出征 · ${nd.name}`);this.action.image.setAlpha(noGo?.45:1);if(noGo)this.action.image.disableInteractive();else this.action.image.setInteractive({useHandCursor:true});this.layoutActions(false);}
  /** 讨伐令出征：下一关（打完后为终局再战），主公亲征。 */
  private launchSide(id:SideRouteId){const stage=sideNextStage(id);if(!sideStageOpen(id,stage))return;let hero:CharacterId=defaultHero(null);try{hero=defaultHero(localStorage.getItem('im_last_hero'));}catch{/* storage unavailable */}
   this.registry.remove('campaignTransfer');this.registry.set(SIDE_STAGE_KEY(id),stage);this.registry.set('runConfig',{character:hero});const key=sideSceneFor(id,stage);
   if(this.registry.get('battleReady'))this.scene.start(key);else{this.registry.set('pendingWarlord',key);this.registry.set('loadBattle',true);this.scene.start('BootScene');}}
 /** 挑战关「虎牢关 · 三英战吕布」详情：开放条件、首通奖励赤兔、胜场。 */
  private challengeDetail(n:WorldNode,st:'home'|ChapterState){const locked=st==='locked',wins=lubuClears(),r=LUBU_CHALLENGE.reward,rr=LUBU_CHALLENGE.repeatReward;
-  this.setDetail(`挑战 · ${n.region} · ${n.name}`,locked?0x4a4f46:0x8c2a2a,locked?'锁':'布',`${locked?`未解锁：${LUBU_CHALLENGE.unlockHint}`:wins?`已胜 ${wins} 场 · 可反复挑战`:'可选挑战 · 不影响讨董进度'}
+  this.setDetail(`挑战 · ${n.region} · ${n.name}`,locked?0x4a4f46:0x8c2a2a,locked?'锁':'布',`${locked?`未解锁：${LUBU_CHALLENGE.unlockHint}`:wins?(REPLAY_CLEARED?`已胜 ${wins} 场 · 可反复挑战`:'已平定 · 吕布败走，不再出战'):'可选挑战 · 不影响讨董进度 · 只能打一次'}
 吕布横扫与蓄力冲锋 · 三波后吕布出阵
-奖励：${wins?`军粮 +${rewardGrain(rr.merits,rr.provisions)}`:`首胜得名马「赤兔」（入马厩）· 军粮 +${rewardGrain(r.merits,r.provisions)}`}${this.lossWarning()?'\n'+this.lossWarning():''}`);
-  this.action.text.setText(locked?'尚未解锁':'挑战吕布');this.action.image.setAlpha(locked?.45:1);if(locked)this.action.image.disableInteractive();else this.action.image.setInteractive({useHandCursor:true});this.layoutActions(false);}
+奖励：${wins?(REPLAY_CLEARED?`军粮 +${rewardGrain(rr.merits,rr.provisions)}`:'已得名马「赤兔」'):`首胜得名马「赤兔」（入马厩）· 军粮 +${rewardGrain(r.merits,r.provisions)}`}${this.lossWarning()?'\n'+this.lossWarning():''}`);
+  const noGo=locked||(!!wins&&!REPLAY_CLEARED&&!isChapterTestRun());
+  this.action.text.setText(locked?'尚未解锁':noGo?'已平定':'挑战吕布');this.action.image.setAlpha(noGo?.45:1);if(noGo)this.action.image.disableInteractive();else this.action.image.setInteractive({useHandCursor:true});this.layoutActions(false);}
  private launchChallenge(){let hero:CharacterId=defaultHero(null);try{hero=defaultHero(localStorage.getItem('im_last_hero'));}catch{/* storage unavailable */} // 挑战关也只用主公出战（用户规则 2026-11-16）
   this.registry.remove('campaignTransfer');this.registry.set('runConfig',{character:hero});
   if(this.registry.get('battleReady'))this.scene.start('LubuGameScene');else{this.registry.set('pendingWarlord','LubuGameScene');this.registry.set('loadBattle',true);this.scene.start('BootScene');}}
@@ -637,10 +640,10 @@ ${city.tier==='large'?'守城大将：'+siegeBossName(city,owner):'守军：'+FA
  /** 出征：主按钮（hard=false）或「乱世难度」（hard=true）。章节节点从下一关出征，关卡标记从该关出征。 */
  private launch(hard:boolean){const sel=this.selected;if(sel.kind==='city'||sel.kind==='intel')return;
   if(sel.kind==='node'&&sel.node.side){if(this.nodeState(sel.node)!=='locked')this.launchSide(sel.node.side);return;}
-  if(sel.kind==='node'&&sel.node.challenge){if(this.nodeState(sel.node)!=='locked')this.launchChallenge();return;}
+  if(sel.kind==='node'&&sel.node.challenge){if(lubuChallengePlayable()||isChapterTestRun())this.launchChallenge();return;}
   if(sel.kind==='stage'){if(!stageOpen(sel.chapter,sel.stage,loadWorld())&&!isChapterTestRun())return;this.enterStage(sel.chapter,sel.stage,hard);return;}
   const info=this.chapterOf(sel.node);if(!info||sel.node.kind==='home'){this.enterNode();return;}
-  if(this.nodeState(sel.node)==='locked')return;this.enterStage(info.id,undefined,hard);}
+  const st=this.nodeState(sel.node);if(st==='locked'||(st==='cleared'&&!REPLAY_CLEARED&&!isChapterTestRun()))return;this.enterStage(info.id,undefined,hard);} // 已平定的章不能再打（data/replayRules.ts）
  private enterStage(id:TimelineChapterId,stage:number|undefined,hard:boolean){
   if(hard&&chapterState(id,loadWorld())==='cleared')this.registry.set('hardChapter',id);else this.registry.remove('hardChapter');
   if(id==='qunxiong'||id==='guandu'||id==='chibi'||id==='jingnan'||id==='shu'||id==='hanzhong'||id==='xiangfan'||id==='yiling'||id==='nanzheng'||id==='beifa'){if(stage)this.registry.set('worldStagePick',stage);requestDirectDepart(this);this.scene.start(CAMPAIGNS[id].scene);return;}
@@ -670,9 +673,9 @@ ${city.tier==='large'?'守城大将：'+siegeBossName(city,owner):'守军：'+FA
   if(desk&&!this.card){place(b,h.x,h.y-27,h.w);place(a,h.x,h.y+27,h.w);}else{const half=(h.w-12)/2;place(b,h.x-h.w/2+half/2,h.y,half);place(a,h.x+h.w/2-half/2,h.y,half);}}
  /** 关卡详情：史事、首领、年号与出征状态。 */
  private refreshStage(id:TimelineChapterId,stage:number){const save=loadWorld(),info=chapterById(id),d=chapterStages(id)[stage-1],done=stage<=chapterStagesDone(id,save),open=stageOpen(id,stage,save)||isChapterTestRun(),cleared=chapterState(id,save)==='cleared';
-  if(!d)return;const status=done?'✓ 已告捷 · 可重打此关':open?'可出征':chapterState(id,save)==='locked'?`未解锁：${info.hint}`:'先通关前一关';
+  if(!d)return;const status=done?(REPLAY_CLEARED?'✓ 已告捷 · 可重打此关':'✓ 已平定 · 史事已定，不再出征'):open?'可出征':chapterState(id,save)==='locked'?`未解锁：${info.hint}`:'先通关前一关';
   this.setDetail(`${d.code} ${d.name}`,done?0x5f8f4e:open?0x8e2a1e:0x4a4f46,d.seal,`${status}\n${open?this.musterLine():'首领 '+d.boss+'（'+d.bossTitle+'）'}\n${open?'首领 '+d.boss+'（'+d.bossTitle+'） · ':''}${d.year} · 第${info.numeral}章「${info.title}」\n${d.story}${cleared&&open?`\n乱世：敌军生命×${HARD_MODE.enemyHp}、首领×${HARD_MODE.bossHp}`:''}`);
-  this.action.text.setText(open?(done?'重打此关':'从此关出征'):'尚未开放');this.action.image.setAlpha(open?1:.45);if(open)this.action.image.setInteractive({useHandCursor:true});else this.action.image.disableInteractive();
+  this.action.text.setText(open?(done?'重打此关':'从此关出征'):done?'已平定':'尚未开放');this.action.image.setAlpha(open?1:.45);if(open)this.action.image.setInteractive({useHandCursor:true});else this.action.image.disableInteractive();
   this.layoutActions(cleared&&open);}
  /** 显示某章三关路线（重复调用同一章不重建）。 */
  private showRoute(id:TimelineChapterId|undefined){if(id===this.routeChapter)return;this.routeChapter=id;for(const p of this.pins)p.root.destroy();this.pins=[];

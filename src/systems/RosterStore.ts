@@ -8,7 +8,7 @@ import { loadWorld, spendWorld, townUpgrade, worldUnlocked } from '../world/Worl
 import { TOWN_BUILDINGS, levelOf, type TownBuildingId } from '../town/TownData';
 import { loadItems, loadout, resetItemCache, unequipSlot, type GearOwner } from './ItemStore';
 import { isChapterTestRun } from './ChapterProgress';
-import { SURRENDER } from '../data/surrender';
+import { SURRENDER, recruitableName } from '../data/surrender';
 import { activeValue, passiveValue } from '../data/commonerSkills';
 import { heroUnlocked } from './HeroUnlocks';
 
@@ -232,7 +232,7 @@ function commonOffer(s: RosterSave): Offer {
 function namedOffer(s: RosterSave): Offer | null {
   const taken = new Set([...s.owned.map(r => r.name), ...s.offers.map(o => o.name), ...s.captives.map(o => o.name)]);
   const pool: Array<[FactionId, string]> = [];
-  for (const f of MAJOR_FACTIONS) for (const n of BOUNTY_GENERALS[f] ?? []) if (!taken.has(n)) pool.push([f, n]);
+  for (const f of MAJOR_FACTIONS) for (const n of BOUNTY_GENERALS[f] ?? []) if (!taken.has(n) && recruitableName(n)) pool.push([f, n]); // 宁死不降之将不进招贤馆（surrender-rules.md）
   if (!pool.length) return null;
   const [faction, name] = pick(pool);
   return { kind: 'named', name, faction, template: pick(TEMPLATE_ORDER), quality: 'purple', cost: RECRUIT.cost.named };
@@ -309,7 +309,7 @@ export function factionGeneral(faction: FactionId | undefined): string | null { 
 export const captureLine = (name: string | null): string => name ? `\n俘获敌将${name} · 两季内可在招贤馆招降` : '';
 /** 击败敌将后按概率进入降将栏；返回被俘者名字。测试 / 调试战斗不调用。 */
 export function tryCapture(source: keyof typeof RECRUIT.capture, name: string, faction: FactionId | undefined): string | null {
-  if (!worldUnlocked() || !name || name === '敌将') return null;
+  if (!worldUnlocked() || !name || name === '敌将' || !recruitableName(name)) return null;
   if (rand() >= RECRUIT.capture[source]) return null;
   const s = loadRoster();
   if (s.owned.some(r => r.name === name) || s.captives.some(o => o.name === name)) return null;

@@ -51,6 +51,18 @@ export interface BossMovesetDef {
 
 /** 第一批（第 1–3 章）：张梁、张宝、李傕、张绣。 */
 export const BOSS_MOVES: Record<string, BossMovesetDef> = {
+  // 支线白门楼 · 陈宫（后排军师，data/sideRoutes.ts）：步战、走得慢；火攻落点 + 号令伏兵，二阶段亲兵护体
+  chengong: {
+    id: 'chengong', name: '陈宫', phaseAt: .5,
+    p1: { name: '公台献策', caption: '火攻落点 · 号令伏兵', gapMs: 3000, speedMul: .55, moves: [
+      { kind: 'volley', name: '火攻', windupMs: 1100, cd: 5200, dmg: 1.1, count: 5, r: 62, spread: 200, fx: 'fire' },
+      { kind: 'summon', name: '号令伏兵', windupMs: 900, cd: 11000, dmg: 0, troop: 'archer', count: 4, radius: 200, around: 'player' },
+    ] },
+    p2: { name: '困守白门', caption: '连环火计 · 亲兵护体时陈宫减伤', gapMs: 2600, speedMul: .5, guards: { troop: 'shield', count: 3, takenMul: .5 }, moves: [
+      { kind: 'volley', name: '连环火计', windupMs: 1000, cd: 4400, dmg: 1.2, count: 7, r: 62, spread: 240, fx: 'fire' },
+      { kind: 'summon', name: '号令伏兵', windupMs: 900, cd: 12000, dmg: 0, troop: 'infantry', count: 4, radius: 220, around: 'player' },
+    ] },
+  },
   // 1-1 张梁（人公将军）：步战（用户 2026-11-18：第一章首领都不骑马）；黄天旗阵 + 徒步冲阵 → 半血「旗倒人狂」（旗倒、大吼、黄色气焰）：折返连冲、冲过留地火
   zhangliang: {
     id: 'zhangliang', name: '张梁', phaseAt: .5, rage: { color: 0xffd25a, roar: '苍天已死！' },

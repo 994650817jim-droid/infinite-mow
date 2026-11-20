@@ -35,7 +35,7 @@ export const FORTUNE_EVENT: Record<FortuneEventKind, FortuneEventDef> = {
   armory: { name: '敌军军械库', hint: '击退守军，站进圈里 4 秒', reward: '兵装一件', done: '夺下军械', icon: 'growth_icon_heart_mirror' },
   courier: { name: '敌军传令兵', hint: '追上他截下军情（15 秒）', reward: '多一次军略三选一', done: '截获军情', icon: 'growth_icon_wind_boots' },
   rescue: { name: '义军被围', hint: '击退围困的敌兵', reward: '义军随冲 + 部曲补员', done: '义军脱困', icon: 'growth_icon_gujun' },
-  defector: { name: '降将来投', hint: '走到他身边受降', reward: '降将献策（三选一）', done: '受降', icon: 'growth_icon_wanrendi' },
+  defector: { name: '降将来投', hint: '走近应战，击败后他随你作战', reward: '降将本关随战 + 献策三选一', done: '受降', icon: 'growth_icon_wanrendi' },
   beacon: { name: '烽燧', hint: '站进圈里 3 秒点燃烽火', reward: '20 秒刷兵减半 + 回血', done: '烽火燃起', icon: 'growth_icon_wildfire' },
 };
 
@@ -65,3 +65,39 @@ export function rollFortuneBuffs(taken: Readonly<Record<string, number>>, rnd: (
 export function firstFortunes(chapter: number): readonly FortuneEventKind[] { return chapter >= 3 ? ['cart', 'armory', 'courier'] : ['cart']; }
 /** 第 2 次机缘（事件段）从这几种里随机。 */
 export const EVENT_FORTUNES: readonly FortuneEventKind[] = ['rescue', 'defector', 'beacon'];
+
+/**
+ * 机缘「降将来投」（2026-11-19 用户「关于地图随机事件的降将来投也做个动画和击败后会跟着你一起打，也做个小台词」）：
+ * 降将带亲兵从远处走到事件点、插旗、头顶「来投」→ 主将走近 → 他先要「以一战相试」（小首领：副将一档的生命，带 3 名亲兵，名牌 + 血条）
+ * → 打到残血跪地请降 → 本关作为临时随从随你作战（复用随行系统：名牌、普攻、无名之辈招式；本关有效，不入人才库）+ 原来的机缘三选一保留。
+ * 降将是本章敌方阵营的无名将领（随机姓名），不用史实名将，免得和劝降规则冲突。台词走左下角电影感对话卡。
+ */
+export const DEFECTOR = {
+  /** 出场：从事件点再往外多远走过来、走多久（毫秒）；靠近多少开打。 */
+  approach: 320, walkMs: 2600, duelRange: 180,
+  /** 亲兵数（出场跟着走的、开打时刷的）。 */
+  guards: 3,
+  /** 打到多少血跪地请降；跪多久后归附（毫秒）。 */
+  kneelAt: .12, kneelMs: 1400,
+  /** 随战台词：最短间隔（秒）、一关最多几句。 */
+  barkGap: 32, barkMax: 3,
+} as const;
+/** 各章敌方阵营（降将的出身）。 */
+export const DEFECTOR_CAMP: Record<number, string> = { 1: '黄巾', 2: '董卓军', 3: '西凉军', 4: '袁军', 5: '曹军', 6: '荆南军', 7: '益州军', 8: '曹军', 9: '曹军', 10: '吴军', 11: '南蛮', 12: '魏军' };
+const SURNAMES = ['王', '陈', '杨', '吴', '徐', '朱', '胡', '何', '林', '罗', '梁', '宋', '郑', '谢', '韩', '唐', '冯', '董', '萧', '程'];
+const GIVEN = ['勇', '恒', '冲', '略', '奋', '茂', '邈', '凯', '谦', '肃', '武', '彪', '毅', '烈', '诚', '远', '昭', '弘', '翊', '骏'];
+const RANKS = ['校尉', '司马', '都尉', '牙门将'];
+/** 降将台词（简短）：出场、被打败、随战、告别。 */
+export const DEFECTOR_LINES = {
+  intro: ['久闻将军威名，愿以一战相试！', '某欲投明主——先过我这一关！', '将军若胜我，某愿执鞭随镫！'],
+  yield: ['将军神勇，某心服口服，愿效犬马之劳！', '服了！某愿随将军破敌！', '某输得心服——这条命，交给将军了！'],
+  fight: ['某来助阵！', '将军且看某的手段！', '杀！随将军破敌！', '后路有某，将军放心冲！'],
+  farewell: ['能随将军一战，此生无憾。就此别过！', '将军保重，他日江湖再会！'],
+} as const;
+export interface DefectorInfo { name: string; title: string; camp: string; template: 'blade' | 'spear' | 'bow' }
+/** 抽一名无名降将（本章敌方阵营 + 随机姓名 + 兵器）。 */
+export function rollDefector(chapter: number, rnd: () => number = Math.random): DefectorInfo {
+  const pick = <T,>(a: readonly T[]): T => a[Math.floor(rnd() * a.length)];
+  const camp = DEFECTOR_CAMP[chapter] ?? '敌军', name = pick(SURNAMES) + pick(GIVEN.filter(Boolean));
+  return { name, title: camp + pick(RANKS), camp, template: pick(['blade', 'spear', 'bow'] as const) };
+}

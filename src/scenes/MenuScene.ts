@@ -18,7 +18,7 @@ import {AchievementsUI} from '../ui/AchievementsUI';
 import {homePlaque} from '../ui/HomePlaque';
 import {checkWorld,ACHIEVEMENTS,unlockedMap} from '../systems/Achievements';
 import {HomeHeroPicker} from '../ui/HomeHeroPicker';
-import {dongzhuoStageUnlocked,nextDongzhuoStage,yellowStageUnlocked,loadWorld,worldUnlocked,alertLossWarning} from '../world/WorldStore';
+import {dongzhuoStageUnlocked,dongzhuoStagePlayable,nextDongzhuoStage,yellowStageUnlocked,yellowStagePlayable,loadWorld,worldUnlocked,alertLossWarning} from '../world/WorldStore';
 import Phaser from 'phaser';
 import {CUTSCENE_PREVIEW} from '../data/cutscenes';
 import { WAR, ensureWarTextures, warFrame } from '../ui/WarStyle';
@@ -553,13 +553,14 @@ export class MenuScene extends Phaser.Scene {
   /** 战役回顾“再战/出征”：以当前武将直接出征指定关（只允许已解锁的关；通关进度只增不减）。 */
   private replayStage(arc:'huangjin'|'dongzhuo'|'qunxiong'|'guandu'|'chibi'|'jingnan'|'shu'|'hanzhong'|'xiangfan'|'yiling'|'nanzheng'|'beifa',stage:number):void{
     if((arc!=='huangjin'&&arc!=='dongzhuo')||![1,2,3].includes(stage))return;
-    if(arc==='huangjin'){if(!yellowStageUnlocked(stage)&&!isChapterTestRun())return;this.selectedChapter='huangjin';this.selectedStage=stage as YellowStage;}
-    else{if(!dongzhuoStageUnlocked(stage)&&!isChapterTestRun())return;this.selectedChapter='hulao';this.selectedWestStage=stage as YellowStage;}
+    if(arc==='huangjin'){if(!yellowStagePlayable(stage)&&!isChapterTestRun())return;this.selectedChapter='huangjin';this.selectedStage=stage as YellowStage;}
+    else{if(!dongzhuoStagePlayable(stage)&&!isChapterTestRun())return;this.selectedChapter='hulao';this.selectedWestStage=stage as YellowStage;}
     this.startGame();
   }
   private startGame(): void {
     if (this.heroModal?.visible||this.westModal?.visible||this.children.getByName('home-settings-panel')||this.children.getByName('game-codex')) return;
-    if(this.selectedChapter==='hulao'&&!dongzhuoStageUnlocked(this.selectedWestStage)&&!isChapterTestRun())return;
+    if(this.selectedChapter==='hulao'&&!dongzhuoStagePlayable(this.selectedWestStage)&&!isChapterTestRun())return;
+    if(this.selectedChapter==='huangjin'&&!yellowStagePlayable(this.selectedStage)&&!isChapterTestRun()&&loadWorld().yellowStages>0)return; // 打过的关不能再打（data/replayRules.ts）
     if (this.started || (!chapterUnlocked(this.selectedChapter)&&!isChapterTestRun()) || !CHARACTERS[this.selectedChar]) return;
     if (!heroOwned(CHARACTERS[this.selectedChar].id)) this.selectedChar = Math.max(0, CHARACTERS.findIndex(c => c.id === defaultHero(null)));
     this.started = true; this.renderSelection();

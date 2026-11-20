@@ -3,6 +3,7 @@
  * 只读存档字段（纯函数），不写存档；解锁规则与 WorldStore.arcUnlocked / ChapterProgress.chapterUnlocked 一致：
  *   黄巾之乱（始终开放）→ 讨伐董卓（通关黄巾）→ 群雄割据（通关讨董）→ 官渡之战（群雄三关）→ 赤壁之战（官渡三关）。
  */
+import { REPLAY_CLEARED } from '../data/replayRules';
 import { CHRONICLE, type ChronicleStage } from '../data/chronicle';
 export type TimelineChapterId = 'huangjin' | 'hulao' | 'qunxiong' | 'guandu' | 'chibi' | 'jingnan' | 'shu' | 'hanzhong' | 'xiangfan' | 'yiling' | 'nanzheng' | 'beifa';
 export type ChapterState = 'cleared' | 'open' | 'locked';
@@ -87,8 +88,10 @@ export function chapterIntro(id: TimelineChapterId): string {
 /** 第 n 关是否可出征：本章已开放，且前一关已告捷（讨董旧存档保留全关权限）。 */
 export function stageOpen(id: TimelineChapterId, stage: number, s: TimelineProgress): boolean {
   if (chapterState(id, s) === 'locked') return false;
+  const done = chapterStagesDone(id, s);
+  if (!REPLAY_CLEARED && stage <= done) return false; // 打过的关不能再打（data/replayRules.ts）
   if (id === 'hulao' && s.legacyHulaoAccess) return true;
-  return stage <= chapterStagesDone(id, s) + 1;
+  return stage <= done + 1;
 }
 
 // ———— 地图揭开：每章开放时揭去该地区的「天下未定」纸雾 ————

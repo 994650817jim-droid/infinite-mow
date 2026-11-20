@@ -3,7 +3,7 @@ import { takeDirectDepart } from '../systems/DirectDepart';
 import {defaultHero,heroOwned,LOCKED_HINT} from '../systems/RosterStore';
 import {playMenuMusic} from '../systems/Music';
 import {GUANDU_STAGES, GUANDU_PLAYABLE, GUANDU_ATLAS_FILES, type GuanduStage} from '../data/guanduChapter';
-import {arcUnlocked, arcStageUnlocked, arcStages, alertLossWarning} from '../world/WorldStore';
+import {arcUnlocked, arcStagePlayable, arcStages, alertLossWarning} from '../world/WorldStore';
 import {isChapterTestRun} from '../systems/ChapterProgress';
 import {CHARACTERS, type CharacterId} from '../data/characters';
 import {worldText, W, H} from '../world/WorldUI';
@@ -26,7 +26,7 @@ export class GuanduChapterScene extends Phaser.Scene {
     return {bg, t};
   }
   /** 已实装且已解锁（试炼模式下只要已实装）。 */
-  private open(stage: number) { return stage <= GUANDU_PLAYABLE && (arcStageUnlocked('guandu', stage) || isChapterTestRun()); }
+  private open(stage: number) { return stage <= GUANDU_PLAYABLE && (arcStagePlayable('guandu', stage) || isChapterTestRun()); }
   create() {
     playMenuMusic(this);
     if (!this.registry.get('battleReady')) { this.registry.set('pendingWarlord', 'GuanduChapterScene'); this.registry.set('loadBattle', true); this.scene.start('BootScene'); return; }

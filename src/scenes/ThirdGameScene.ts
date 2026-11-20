@@ -11,7 +11,7 @@ import type {CampPoint} from '../systems/EnemyCamps';
 import {HubaoBattle} from '../systems/HubaoBattle';
 import {FireShips} from '../systems/FireShips';
 import {applyCitySpecialties} from '../systems/CityBonuses';
-import {rewardGrain,cityIncomeLine,beginArcExpedition,settleArcExpedition,arcStageUnlocked,type WarlordArc} from '../world/WorldStore';
+import {rewardGrain,cityIncomeLine,beginArcExpedition,settleArcExpedition,arcStageUnlocked,arcStagePlayable,type WarlordArc} from '../world/WorldStore';
 import Phaser from 'phaser';import{GameScene}from'./GameScene';import{ThirdBoss}from'../systems/ThirdBoss';import{thirdBattle,THIRD_STAGES,type ThirdStage}from'../data/thirdChapter';import{isChapterTestRun}from'../systems/ChapterProgress';import{abandonExpedition,permanentEffects,takeExpeditionReserve}from'../world/WorldStore';import{packCampaign,type CampaignTransfer}from'../systems/Campaign';import{thirdScenery,type SceneryStage}from'../systems/ThirdScenery';import{SishuiObstacles}from'../systems/SishuiObstacles';import{SishuiPass}from'../systems/SishuiPass';import{ARC_FORTS,ARC_FORT_WALL_Y,type ArcFort}from'../data/arcForts';import type{Enemy}from'../entities/Enemy';import type{RunEndReason}from'../types';import type{RunConfig}from'../data/characters';import type{ChapterDef}from'../data/chapters';
 import { loadBossSheet } from '../systems/ArtStyle';
 import { BOSS_OLD } from '../systems/BossKit';
@@ -73,7 +73,7 @@ export function thirdGameSceneClass(Base:typeof GameScene,cfg:ArcSceneConfig=THI
  /** 首领招降表的键（data/surrender.ts）：章节 arc-关:首领 id（6-3 黄忠 / 韩玄按当前出阵的首领）。 */
  protected surrenderKey():string|null{return cfg.arc+'-'+this.thirdStage+':'+this.stageInfo().id;}
  /** 这一关能不能进（篇章：WorldStore 进度；支线：cfg.gate）。 */
- protected stageGate(stage:number):boolean{return cfg.gate?cfg.gate(stage):arcStageUnlocked(cfg.arc as WarlordArc,stage);}
+ protected stageGate(stage:number):boolean{return cfg.gate?cfg.gate(stage):arcStagePlayable(cfg.arc as WarlordArc,stage);}
  private get sceneryStage():SceneryStage{return cfg.stages[this.thirdStage-1]?.scenery??this.thirdStage;}
  constructor(){super(cfg.key);}
  preload(){for(const d of cfg.stages)if(!this.textures.exists(cfg.texture(d.id)))loadBossSheet(this.load,cfg.texture(d.id),cfg.sheet(d.id));if(cfg.troopSheets)loadV2TroopSheets(this,cfg.troopSheets);/* 3-1 双首领第二位郭汜（v2 专属图；v1 没有郭汜图，借李傕） */if(cfg.arc==='qunxiong'&&!this.textures.exists('third_guosi'))loadBossSheet(this.load,'third_guosi',cfg.sheet('lijue'));}

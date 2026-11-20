@@ -3,7 +3,7 @@ import {GameScene} from './GameScene';
 import {getChapter} from '../data/chapters';
 import {LUBU_CHALLENGE, lubuChallengeChapter} from '../data/dongzhuo';
 import {isChapterTestRun} from '../systems/ChapterProgress';
-import {beginLubuChallenge, cityIncomeLine, lubuChallengeOpen, permanentEffects, settleLubuChallenge, takeExpeditionReserve, abandonExpedition} from '../world/WorldStore';
+import {beginLubuChallenge, cityIncomeLine, lubuChallengePlayable, permanentEffects, settleLubuChallenge, takeExpeditionReserve, abandonExpedition} from '../world/WorldStore';
 import {applyCitySpecialties} from '../systems/CityBonuses';
 import {grantHorse} from '../systems/ItemStore';
 import {horseForReward} from '../data/mounts';
@@ -23,7 +23,7 @@ export function lubuGameSceneClass(Base: typeof GameScene) {
     constructor() { super('LubuGameScene'); }
     create() {
       this.test = isChapterTestRun();
-      if (!this.test && !lubuChallengeOpen()) { this.scene.start('WorldMapScene'); return; }
+      if (!this.test && !lubuChallengePlayable()) { this.scene.start('WorldMapScene'); return; } // 胜过一次即「已平定」（data/replayRules.ts）
       const saved = this.registry.get('runConfig') as RunConfig | undefined;
       this.registry.remove('campaignTransfer'); this.registry.remove('worldCampaign');
       this.registry.set('runConfig', {...saved, character: saved?.character ?? 'zhaoyun', chapter: 'hulao', westStage: 3});

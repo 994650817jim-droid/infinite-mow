@@ -5,6 +5,9 @@ import { HeroCastFx } from '../systems/HeroCastFx';
 import { MOUNT_VISUAL, isHorseCavalry } from '../data/mounts';
 import { buildSettingsPanel, type SettingSpec } from '../ui/SettingsPanel';
 import {FollowerSquad,type Follower} from '../systems/FollowerSquad';
+import {showBarkCard} from '../ui/StoryBarkCard';
+import type {DefectorInfo} from '../data/fortunes';
+import type {Recruit} from '../systems/RosterStore';
 import {CharacterPassives} from '../systems/CharacterPassives';
 import {FOLLOW} from '../data/recruits';
 import type {PlayerStats} from '../types';
@@ -18,7 +21,7 @@ import {OrdersPanel} from '../ui/OrdersPanel';
 import {BattleMap} from '../ui/BattleMap';
 import type {BossMount as BossMountT} from '../systems/BossMount';
 import {SURRENDER,surrenderDef} from '../data/surrender';
-import {markSurrender,surrenderedIds,surrenderLive} from '../systems/SurrenderStore';
+import {honoredIds,markSurrender,surrenderedIds,surrenderLive} from '../systems/SurrenderStore';
 import { StoryDirector, campTalkStrip, setStoryFlag, storyBark, castBark, type StoryCtx } from '../systems/Story';
 import { warnCircle, TELEGRAPH_CLASSIC, groundCracks, windupFlash } from '../ui/Telegraph';
 import { HINT_MOCK, SHOW_OWN_RANGE_FX, groundScar, keyOutline } from '../ui/HintStyle';
@@ -64,6 +67,7 @@ import {BattlefieldSupplies,MAX_PROP_SLOTS,POUCH_MAX,potionTexture} from '../sys
 import {YellowBattle} from '../systems/YellowBattle';
 import {XiliangBattle} from '../systems/XiliangBattle';
 import {dongzhuoStageUnlocked,yellowStageUnlocked,unlockedTroopKinds} from '../world/WorldStore';
+import {REPLAY_CLEARED} from '../data/replayRules';
 import {abandonExpedition,beginExpedition,settleExpedition,permanentEffects,worldUnlocked,worldChapterCleared,takeExpeditionReserve} from '../world/WorldStore';
 import Phaser from 'phaser';
 import { PAD, PAD_LABEL, gamepad, keyHint } from '../platform/gamepad';
@@ -265,7 +269,7 @@ const UPGRADE_ACCENT: Record<string, number> = { weapon: 0xc9973a, martial: 0x2f
 interface ChasingBoss {enemy:Enemy;life:number;stage:number;name:string;battle:YellowBattle|null;huaxiong:HuaxiongBoss|null;xurong:XurongBoss|null;label:Phaser.GameObjects.Text;}
 
 /** story：战中剧情卷轴（第七章落凤坡等），只冻结战斗、不显示其他面板。 */
-type Mode = 'none' | 'levelup' | 'pause' | 'attributes' | 'result' | 'recruit' | 'aid' | 'rest' | 'bossloot' | 'parley' | 'story';
+type Mode = 'none' | 'map' | 'levelup' | 'pause' | 'attributes' | 'result' | 'recruit' | 'aid' | 'rest' | 'bossloot' | 'parley' | 'story';
 
 export class GameScene extends Phaser.Scene {
   protected player!: Player;
@@ -299,7 +303,7 @@ export class GameScene extends Phaser.Scene {
   /** 建一个招降控制器（单首领：本关首领；双首领：每人一个，partner = 同伴结果加减把握）。 */
   protected makeParley(boss:()=>Enemy|null,def:ReturnType<typeof surrenderDef>,dual?:{partner:()=>{id:string;persuaded:boolean;executed:boolean}|undefined}):Parley|null{
     return Parley.for({scene:this,boss,mode:()=>this.mode,setMode:m=>this.setMode(m as Mode),over:()=>this.over,now:()=>this.combatNow,
-      ctx:()=>({lord:lordHero()??this.runConfig.character,team:[this.runConfig.character,...(this.followers?.members??[]).map(m=>m.recruit.hero??'').filter(Boolean)],surrendered:surrenderedIds(),followerBosses:(this.followers?.members??[]).map(m=>(m.recruit as {boss?:string}).boss??'').filter(Boolean),flags:this.parleyFlags(),partner:dual?.partner()}),
+      ctx:()=>({honored:honoredIds(),lord:lordHero()??this.runConfig.character,team:[this.runConfig.character,...(this.followers?.members??[]).map(m=>m.recruit.hero??'').filter(Boolean)],surrendered:surrenderedIds(),followerBosses:(this.followers?.members??[]).map(m=>(m.recruit as {boss?:string}).boss??'').filter(Boolean),flags:this.parleyFlags(),partner:dual?.partner()}),
       wenjiu:()=>!!this.sishuiPass?.wenjiuLive(),banner:(t,d,c)=>this.showWaveBanner(t,d,c),sfx:k=>this.sfx.play(k),
       bark:(t,name,text)=>{if(storyMode()==='off')return false;storyBark(this,t,name,text);return true;},
       kill:b=>this.killEnemy(b),persuaded:b=>{this.persuadeKill=true;b.invulnerable=false;b.hp=0;this.killEnemy(b);},
@@ -354,6 +358,8 @@ export class GameScene extends Phaser.Scene {
     gainProvisions(SURRENDER.executeProvisions);const first=markSurrender('executed',p.def.id);
     if(first){const q=capLootQuality('purple',this.itemTier()),item=rollItem(q,Math.random,undefined,this.lootChapter());addItems([item]);out.push({name:`${QUALITIES[q].label}兵装一件 · 军粮 +${SURRENDER.executeProvisions}`,desc:'首次斩杀此将所得 · 已入行囊',tag:'斩杀'});}
     else out.push({name:`军粮 +${SURRENDER.executeProvisions}`,desc:'斩将所得',tag:'斩杀'});
+    // 宁死不降之将不能白打（surrender-rules.md）：本存档首次斩杀后以礼厚葬，军粮 +60、仁名 +1（仁名算进以后的劝降把握）
+    if(p.def.tier==='never'&&markSurrender('honored',p.def.id)){gainProvisions(SURRENDER.persuadeProvisions);out.push({name:`厚葬${p.def.name} · 军粮 +${SURRENDER.persuadeProvisions} · 仁名 +1`,desc:p.def.reason??'忠烈之士，以礼厚葬',tag:'厚葬'});}
   }
   /** 正在播的过场动画（systems/Cutscene.ts）。 */
   cutscene:Cutscene|null=null;
@@ -1450,6 +1456,8 @@ export class GameScene extends Phaser.Scene {
       if (ordersPanelSetting() === 'on') this.ordersPanel = new OrdersPanel(this, orders);
       this.battleMap = new BattleMap({scene: this, player: () => this.player, enemies: () => this.enemies, followers: () => this.followers?.members ?? [],
         title: () => this.chapter.name ?? this.chapter.label ?? '',
+        // 2026-11-19 用户「打开小地图会暂停是我要要求的」：舆图展开时战斗暂停，卷回后恢复
+        pause: on => { if (on) { if (this.mode === 'none' && !this.over) this.setMode('map'); } else if (this.mode === 'map') this.setMode('none'); },
         camps: () => { const z = this.allyPush, now = this.combatNow; return (this.objective?.standing ?? []).map(e => ({x: e.x, y: e.y, ratio: e.hp / Math.max(1, e.maxHp), hit: !!z && now - (z.campHitAt.get(e) ?? -1e9) < 900})); },
         pushes: () => (this.allyPush?.squads ?? []).map(q => ({from: q.from, to: q.target ? {x: q.target.x, y: q.target.y} : null, members: q.members.filter(m => !m.dead)})), bosses: () => [...(this.dual ? this.dual.alive.map(x => x.enemy) : this.boss?.active ? [this.boss] : []), ...this.dzLubuBoss().map(x => x.e)]}, orders);
       if (this.ordersPanel) this.objectiveText?.setVisible(false);
@@ -1508,8 +1516,10 @@ export class GameScene extends Phaser.Scene {
   protected tickBattleMap(dt: number): void {
     this.battleOrders?.update(dt); this.ordersPanel?.update(dt);
     if (!this.battleMap) return;
-    if (this.mode !== 'none' && this.battleMap.bigOpen) this.battleMap.toggleBig();
-    if (this.mode === 'none' && !this.over) this.battleMap.update(dt);
+    this.battleMap.stepAnim(dt); // 舆图展开 / 卷回动画用真实帧时间（战斗暂停时也播）
+    // 展开舆图本身就是 'map' 模式（战斗暂停）；其余面板 / 弹窗打开时收起舆图
+    if (this.mode !== 'none' && this.mode !== 'map' && this.battleMap.bigOpen) this.battleMap.toggleBig();
+    if ((this.mode === 'none' || this.mode === 'map') && !this.over) this.battleMap.update(dt);
   }
 
   /** 盾碎：碎片效果，换成同章步兵造型（飞熊军等专属造型保留原样）。 */
@@ -2501,6 +2511,7 @@ export class GameScene extends Phaser.Scene {
   }
   protected killEnemy(enemy: Enemy): void {
     if (this.dzLubu?.preventKill(enemy)) return; // 2-3 吕布打到底不死：锁血逃走
+    if (!this.persuadeKill && this.fortunes?.preventKill(enemy)) return; // 机缘降将：试阵中打到底不死，跪地请降
     if (!this.persuadeKill && this.parley?.preventKill(enemy)) return; // 首领招降：没表态前不死
     if (!this.persuadeKill && this.dual?.preventKill(enemy)) return; // 双首领：每人一个招降窗
     if (!enemy.active) return;
@@ -3058,7 +3069,7 @@ export class GameScene extends Phaser.Scene {
       // 水墨预览：标签统一朱砂底（类别色只在现版用）
       if (GameScene.INK_LEVELUP) view.tag.setBackgroundColor('#8a2a1c').setColor('#fff0d6'); else view.tag.setBackgroundColor(style.bg).setColor(style.color);
       const iconKey = option.kind === 'potion' ? 'icon_rare' : option.kind === 'weapon' ? ({
-        spear_orbit:'icon_1',crossbow:'icon_2',flame_banner:'icon_3',guandao:'icon_guandao',zhenbei_blade:'icon_zhenbei',lianhuan_mines:'icon_lianhuan',sun_knives:'icon_sunknives',diaochan_fans:'icon_fans',baodiao_bow:'icon_baodiao',dangyang_roar:'icon_shemao',zhanjin_lance:'icon_zhanjin',shuanggu_swords:'icon_shuanggu',
+        spear_orbit:'icon_1',crossbow:'icon_2',flame_banner:'icon_3',guandao:'icon_guandao',zhenbei_blade:'icon_zhenbei',lianhuan_mines:'icon_lianhuan',sun_knives:'icon_sunknives',diaochan_fans:'icon_fans',baodiao_bow:'icon_baodiao',dangyang_roar:'icon_shemao',zhanjin_lance:'icon_zhanjin',shuanggu_swords:'icon_shuanggu',fangtian_ji:'icon_fangtian',
       } as const)[option.weaponId!] : option.weaponId === 'spear_orbit'
         ? 'icon_1'
         : option.weaponId === 'crossbow'
@@ -3777,6 +3788,13 @@ export class GameScene extends Phaser.Scene {
         riderTexture: () => this.chapter.enemies.cavalry.walkVisual?.texture ?? 'enemy_cavalry_walk_sheet',
         banner: (t, d, c) => this.showWaveBanner(t, d, c), sfx: k => this.sfx.play(k),
         reward: (k, mult, x, y) => this.fortuneReward(k, mult, x, y),
+        // 降将来投（systems/FortuneDefector.ts）：副将一档的试阵对手、跪降后撤下、本关临时随从、左下角对话卡
+        duelist: (x, y) => this.phaseRunner?.spawnLieutenant(x, y) ?? this.spawnEnemy('elite', x, y, this.chapter.hpScale(this.elapsed), true),
+        troopTexture: () => this.chapter.enemies.infantry.walkVisual?.texture ?? 'enemy_infantry_walk_sheet',
+        now: () => this.combatNow,
+        retire: e => { e.invulnerable = false; e.hp = 0; this.persuadeKill = true; this.killEnemy(e); this.persuadeKill = false; },
+        joinAlly: (d, x, y) => this.joinDefector(d, x, y),
+        card: (name, text) => { if (storyMode() !== 'off') showBarkCard(this, { side: 'left', name, text }); },
         overlay: () => this.mode !== 'none' || this.over,
       }, plan);
       this.hudTexts.wave.setVisible(false);
@@ -3917,6 +3935,12 @@ export class GameScene extends Phaser.Scene {
     this.showWaveBanner('锦囊 · ' + JINNANG[id].name, false, JINNANG[id].desc.split('\n')[0]); this.sfx.play('gong');
     return true;
   }
+  /** 机缘降将归附：本关临时随从（随行系统；没有随行时现建一支），名牌「降将 · 名字」。不进人才库。 */
+  private joinDefector(d: DefectorInfo, x: number, y: number): Follower | null {
+    if (!this.followers) { this.followers = new FollowerSquad(this, this.player, [], (qx, qy, r) => this.grid.query(qx, qy, r), (e, dmg, fire) => this.hitEnemy(e, dmg, this.combatNow, fire ? 'fire' : 'melee', true, false), () => this.player.growth.damageMultiplier(this.combatNow)); this.followers.onHitFx = (e, k, fx, fy) => this.followerTemplateHitFx(e, k, fx, fy); this.followers.attackSound = t => this.sfx.play(FOLLOWER_ATTACK_SFX[t]); this.wireFollowerObstacles(this.followers); }
+    const r: Recruit = { id: 'fortune_defector_' + this.combatNow, kind: 'named', name: d.name, template: d.template, quality: 'purple', rank: 0, picks: [] };
+    const f = this.followers.addTemp(r, x, y); f.label.setText('降将 · ' + d.name); return f;
+  }
   /** 战场机缘各类事件的奖励（stage-event-rewards.md）；mult = 距离倍率 1–1.25。返回横幅小字。 */
   private fortuneReward(kind: FortuneEventKind, mult: number, x: number, y: number): string {
     const P = this.player, ch = this.phasePlan?.chapter ?? 2;
@@ -3992,6 +4016,7 @@ export class GameScene extends Phaser.Scene {
   protected finish(victory: boolean, reason: RunEndReason = 'death'): void {
     if (this.over) return;
     this.over = true;
+    if (victory) this.fortunes?.farewell(); // 机缘降将：本关结束告别一句
     commitBattle(); // 告捷（战报）与战败都按现行规则结算，本场写入生效
     this.player.passive.stop();
     // 动作层：胜利举兵器 / 战败倒地（有素材的武将才播放，播完定格）
@@ -4074,7 +4099,7 @@ export class GameScene extends Phaser.Scene {
     const canAdvance=!!nextWest&&dongzhuoStageUnlocked(nextWest);
     const openedMap=victory&&this.worldCampaign&&this.chapter.id==='hulao'&&(this.chapter.westStage??3)===3&&worldUnlocked();
     const homeLink=this.resultPanel.getByName('result-home') as Phaser.GameObjects.Text|null;
-    this.resultPanel.getByName('result-restart')?.setActive(victory);(this.resultPanel.getByName('result-restart') as Phaser.GameObjects.Image)?.setVisible(victory);(this.resultPanel.getByName('result-restart-text') as Phaser.GameObjects.Text)?.setVisible(victory);
+    {const again=victory&&(REPLAY_CLEARED||isChapterTestRun());/* 打过的关不能再打（data/replayRules.ts） */this.resultPanel.getByName('result-restart')?.setActive(again);(this.resultPanel.getByName('result-restart') as Phaser.GameObjects.Image)?.setVisible(again);(this.resultPanel.getByName('result-restart-text') as Phaser.GameObjects.Text)?.setVisible(again);}
     homeLink?.setText(!victory?'返回主菜单':canAdvance?`下一关 · ${nextWest===1?'汜水关':nextWest===2?'荥阳':'虎牢关'}`:openedMap?(openChapterCount(loadWorldState())>loadWorldState().chapterSeen?'天下地图 · 新篇解锁':'返回天下地图'):this.worldCampaign&&worldUnlocked()?"返回营寨":'返回选关');
     homeLink?.removeAllListeners('pointerdown').on('pointerdown',()=>{
       if(!victory){this.registry.remove('campaignTransfer');this.registry.remove('menuChapterPicker');this.scene.start('MenuScene');return;}

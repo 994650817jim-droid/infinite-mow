@@ -10,6 +10,7 @@ import { ATTRIBUTE_INFO, dragBodyLengths, type AttributeId, type PotionId, type 
 import { applyStageBuff } from '../systems/StageBuffs';
 import { WEAPON_OVER, branchById, branchesFor, type WeaponBranch } from './weaponBranches';
 import { hotkeyLabel } from './hotkeys';
+import { lvbuThrustLen, lvbuSweepRadius } from '../weapons/lvbuWeapon';
 
 export const WEAPON_META: Record<WeaponId, { name: string; desc: string }> = {
   spear_orbit: { name: '七探盘龙枪', desc: '银枪自动索敌，向不同敌人突刺' },
@@ -23,6 +24,7 @@ export const WEAPON_META: Record<WeaponId, { name: string; desc: string }> = {
   dangyang_roar: { name: '丈八蛇矛·当阳喝断', desc: '朝前大喝，越推越宽的弧形声浪向前推进，伤害并一路推后敌人' },
   zhanjin_lance: { name: '虎头湛金枪', desc: '一枪把敌人挑飞，落地时砸出范围伤害；铁骑满层后向前冲锋破阵' },
   shuanggu_swords: { name: '双股剑', desc: '双剑同时出手，分别在两名敌人身上斩出「×」形交叉斩；仁德满层时攻速提高' },
+  fangtian_ji: { name: '方天画戟', desc: '两次长突穿透一线，接一次 360° 横扫，循环；无双狂暴时每次出手打两次' },
   diaochan_fans: { name: '双花扇', desc: '掷出回旋团扇，去回各打一次；被扇中 2 次的敌人倒戈（3 秒内转而攻击同伴）' },
 };
 /** 武器显示名：张飞用同一套长枪，叫丈八蛇矛。 */
@@ -82,6 +84,7 @@ export function weaponUpgrade(weapon: WeaponState, player: Player): UpgradeOptio
     if (parts.length) desc += '\n' + parts.join(' · ');
     if (sunThrowCount(next) !== sunThrowCount(L)) desc += `\n每次掷 ${sunThrowCount(L)} → ${sunThrowCount(next)} 把（多的 60%）`;
   }
+  if (weapon.id === 'fangtian_ji') desc += `\n长突 ${lvbuThrustLen(weapon.level)} → ${lvbuThrustLen(next)} · 横扫半径 ${lvbuSweepRadius(weapon.level, 0)} → ${lvbuSweepRadius(next, 0)}`;
   if (weapon.id === 'diaochan_fans' && diaochanFanCount(next) !== diaochanFanCount(weapon.level)) desc += `\n每次掷扇 ${diaochanFanCount(weapon.level)} → ${diaochanFanCount(next)} 柄`;
   if (weapon.id === 'guandao') desc += `\n范围 ${GUANDAO_TABLE[weapon.level - 1].radius} → ${GUANDAO_TABLE[next - 1].radius}${weapon.level < 3 && next >= 3 ? '\n解锁二段刀气' : ''}`;
   return {
@@ -167,6 +170,8 @@ export function martialDescription(id:MasteryId,level:number):string {
  tieqi:'铁骑冲锋距离 +'+(20*n)+'%\n冲锋伤害 +'+(10*n)+'%',
  taoyuan:'交叉斩溅射范围 +'+(10*n)+'（基础 30）'+(n===3?'\n三剑分击，同时斩三人':''),
  xiemin:'仁德回复量 +'+(25*n)+'%\n自身与部曲都算',
+ chitu:'无双狂暴时每 '+[3.5,3,2.5][i]+' 秒朝前冲刺\n穿过沿途敌兵造成 '+[60,80,100][i]+'% 伤害',
+ huaji:'横扫范围 +'+(15*n)+'%',
  };
  return descriptions[id];
 }

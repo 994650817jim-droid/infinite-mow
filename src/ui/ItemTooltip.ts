@@ -66,6 +66,12 @@ export class ItemTooltip {
     this.move(px, py);
   }
   /** 放在鼠标右下方；靠右 / 靠下时翻到另一侧，始终留在屏幕内。 */
+  /** 放在区域 r 的旁边：先右侧、放不下放左侧，上沿与 r 对齐（不盖住 r）。 */
+  beside(r: { x: number; y: number; w: number; h: number }): void {
+    const w = this.root.getData('w') as number ?? 0, h = this.root.getData('h') as number ?? 0, gap = 10;
+    let x = r.x + r.w + gap; if (x + w > GAME_WIDTH - 4) x = r.x - gap - w;
+    this.root.setPosition(Math.max(4, Math.min(GAME_WIDTH - w - 4, x)), Math.max(4, Math.min(GAME_HEIGHT - h - 4, r.y)));
+  }
   move(px: number, py: number): void {
     const w = this.root.getData('w') as number ?? 0, h = this.root.getData('h') as number ?? 0, gap = 16;
     let x = px + gap, y = py + gap;
@@ -105,10 +111,11 @@ export class ItemTooltip {
   hide(): void { this.root.setVisible(false); }
   destroy(): void { this.root.destroy(); }
   /** 挂到可交互对象上：悬停显示、移动跟随、移出隐藏。getItem / getCurrent 在悬停时取（便于读最新穿戴）。 */
-  attach(obj: Phaser.GameObjects.GameObject, getItem: () => ItemInstance | null | undefined, getCurrent: () => ItemInstance | undefined): void {
+  /** anchor：给了就把提示框放在这块区域旁边（右侧，放不下放左侧），不跟鼠标走、不挡住悬停的格子（2026-11-20 行囊）。 */
+  attach(obj: Phaser.GameObjects.GameObject, getItem: () => ItemInstance | null | undefined, getCurrent: () => ItemInstance | undefined, anchor?: () => { x: number; y: number; w: number; h: number }): void {
     // 指针坐标换成界面坐标（电脑版相机按 RENDER_SCALE 缩放，见 config.screenPoint）
-    obj.on('pointerover', (p: Phaser.Input.Pointer) => { const it = getItem(); if (!it) return; const q = screenPoint(p); this.show(it, getCurrent(), q.x, q.y); });
-    obj.on('pointermove', (p: Phaser.Input.Pointer) => { if (!this.root.visible) return; const q = screenPoint(p); this.move(q.x, q.y); });
+    obj.on('pointerover', (p: Phaser.Input.Pointer) => { const it = getItem(); if (!it) return; const q = screenPoint(p); this.show(it, getCurrent(), q.x, q.y); if (anchor) this.beside(anchor()); });
+    obj.on('pointermove', (p: Phaser.Input.Pointer) => { if (!this.root.visible || anchor) return; const q = screenPoint(p); this.move(q.x, q.y); });
     obj.on('pointerout', () => this.hide());
     obj.once('destroy', () => this.hide());
   }

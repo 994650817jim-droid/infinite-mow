@@ -39,6 +39,9 @@ export const ART_V2_FILES: Readonly<Record<string, string>> = sideBossFiles({
   // 孙尚香：新增可玩武将会话出图（分支 claude/new-heroes-46a60c 提交 24916eb，两边合并后文件才齐；缺文件时加载失败自动沿用 v1）
   sunshangxiang_walk_sheet: 'assets/processed-v2/sunshangxiang_walk_sheet.png',
   sunshangxiang_actions: 'assets/hero-actions-v2/sunshangxiang.png',
+  // P2 第一批可玩武将：吕布（只有 v2 图；v1 也直接用这张）
+  lvbu_walk_sheet: 'assets/processed-v2/lvbu_walk_sheet.png',
+  lvbu_actions: 'assets/hero-actions-v2/lvbu.png',
   // 第 2 批：我方兵种（4×4，见 V2_TROOP_KEYS / applyV2TroopFrames）
   shu_swordsman_walk_sheet: 'assets/processed-v2/troops/swordsman_walk.png',
   shu_swordsman_attack_sheet: 'assets/processed-v2/troops/swordsman_attack.png',
@@ -324,7 +327,7 @@ export function applyArtStyleUrls(load: Phaser.Loader.LoaderPlugin): string[] {
 
 /** 其他势力支线（data/sideRoutes.ts）：首领图键 side_<id>，专属图到之前借现有首领 v2 图。 */
 function sideBossFiles(base: Record<string, string>): Record<string, string> {
-  for (const r of SIDE_ROUTES) for (const st of r.stages) for (const b of [st.boss, st.partner]) if (b && !st.scene) base[sideTexture(b.id)] = b.v2;
+  for (const r of SIDE_ROUTES) for (const st of r.stages) for (const b of [st.boss, st.partner]) if (b && !(st.scene && b === st.boss)) base[sideTexture(b.id)] = b.v2;
   return base;
 }
 /** BootScene 里按固定格子载入的首领表，v2 版的格边长（v1 华雄 / 徐荣 128、吕布 256）。 */

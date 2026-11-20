@@ -1,15 +1,28 @@
 import Phaser from 'phaser';
 import { GameScene } from './GameScene';
 import { thirdGameSceneClass, type ArcSceneConfig } from './ThirdGameScene';
-import { SIDE_ROUTES, SIDE_SCENE_KEY, SIDE_STAGE_KEY, sideBattle, sideRoute, sideTexture, type SideBoss, type SideRouteDef, type SideRouteId } from '../data/sideRoutes';
+import { SIDE_ROUTES, SIDE_SCENE_KEY, SIDE_STAGE_KEY, sideBattle, sideRoute, sideTexture, type SideBaseId, type SideBoss, type SideRouteDef, type SideRouteId } from '../data/sideRoutes';
 import { thirdBattle, thirdPalette, type ThirdStage } from '../data/thirdChapter';
 import { chibiBattle } from '../data/chibiChapter';
 import { hanzhongBattle, HANZHONG_TROOP_SHEETS } from '../data/hanzhongChapter';
 import { yilingBattle, YILING_TROOP_SHEETS } from '../data/yilingChapter';
+import { guanduBattle, guanduYuanSourceKeys } from '../data/guanduChapter';
+import { jingnanBattle, JINGNAN_TROOP_SHEETS } from '../data/jingnanChapter';
+import { nanzhengBattle, NZ_TROOPS, nzArt } from '../data/nanzhengChapter';
+import { ensureYuanTextures } from '../systems/YuanPalette';
 import { BOSS_MOVES, type BossMovesetDef, type MoveDef } from '../data/bossMoves';
 import type { ChapterDef } from '../data/chapters';
 import { getChapter } from '../data/chapters';
 import { lubuChallengeChapter } from '../data/dongzhuo';
+import type { Enemy } from '../entities/Enemy';
+import { DEPTH, FONT } from '../config';
+import { castBark } from '../systems/Story';
+import { storyMode } from '../systems/BattleSettings';
+import { markSurrender, surrenderLive } from '../systems/SurrenderStore';
+import { gainProvisions } from '../world/WorldStore';
+import { SURRENDER } from '../data/surrender';
+/** 白门楼陈宫（初值，交平衡）：生命 = 吕布 ×hpMul、伤害 ×dmgMul、移速 ×speedMul；献计：首次 plotFirstMs 后、每 plotEveryMs 一次，吕布伤害 +plotDmg 持续 plotMs。 */
+export const CHENGONG = { hpMul: .35, dmgMul: .6, speedMul: .6, plotFirstMs: 8000, plotEveryMs: 16000, plotDmg: .15, plotMs: 6000 } as const;
 import { BossMoveset } from '../systems/BossMoveset';
 import { dualOff, type DualPlan } from '../systems/DualBoss';
 import { loadBossSheet } from '../systems/ArtStyle';
@@ -18,7 +31,7 @@ import { siegeSourceKeys } from '../data/siege';
 import { isChapterTestRun } from '../systems/ChapterProgress';
 import { applyCitySpecialties } from '../systems/CityBonuses';
 import { permanentEffects } from '../world/WorldStore';
-import { settleSideStage, sideRetries, sideStageOpen, type SideSettle } from '../world/SideRouteStore';
+import { settleSideStage, sideStageOpen, type SideSettle } from '../world/SideRouteStore';
 import type { RunEndReason } from '../types';
 import type { RunConfig } from '../data/characters';
 
@@ -27,15 +40,24 @@ import type { RunConfig } from '../data/characters';
  *  - 攻城 / 野战 / 终局关套第三章式三关框架（ThirdGameScene + 支线 cfg：开放、结算换成 SideRouteStore）；兵种与数值借对应时期的章节，首领换成本关。
  *  - 终局双首领（南郡周瑜 + 太史慈、许都曹操 + 夏侯惇）走 DualBoss，配合技用两人借来的招式（一人冲阵 / 横扫、一人箭雨 / 扇射）。
  *  - 下邳终局「白门楼」交给三英战吕布的吕布战（SideLubuGameScene）：吕布有完整招式与大招。
- * 每关首领都可劝降（data/surrender.ts）；终局胜了没劝降势力之主，下次再战劝降 +15%（parleyFlags sideRetry<N>）。
+ * 首领能否劝降见 data/surrender.ts（surrender-rules.md）；打过的关不能再打，劝降一次性（data/replayRules.ts）。
  */
 
 const st3 = (n: number): ThirdStage => Math.max(1, Math.min(3, n)) as ThirdStage;
 /** 支线第 stage 关的战斗：借基础章节（兵种 / 节奏 / 成长）+ 外观章节（江东借第十章吴军），首领与文案换成本关。 */
+/** 各基础章节的第 n 关（兵种 / 节奏 / 成长）；第三章按招式组取关。 */
+const BASES: Record<SideBaseId, (n: ThirdStage, beh: ThirdStage) => ChapterDef> = {
+  qunxiong: (_n, beh) => thirdBattle(beh), guandu: n => guanduBattle(n), chibi: n => chibiBattle(n), jingnan: n => jingnanBattle(n),
+  hanzhong: n => hanzhongBattle(n), yiling: n => yilingBattle(n), nanzheng: n => nanzhengBattle(n), huangjin: () => getChapter('huangjin'),
+};
+/** 各基础章节要额外载入的兵种 v2 图（场景自己载的那几张）。 */
+const BASE_SHEETS: Partial<Record<SideBaseId, readonly string[]>> = {
+  hanzhong: [...HANZHONG_TROOP_SHEETS.qingzhou, ...HANZHONG_TROOP_SHEETS.crossbow], yiling: [...YILING_TROOP_SHEETS.jiefan, ...YILING_TROOP_SHEETS.crossbow],
+  jingnan: [...JINGNAN_TROOP_SHEETS.archer, ...JINGNAN_TROOP_SHEETS.shield],
+};
 export function sideChapter(r: SideRouteDef, stage: number): ChapterDef {
-  const d = r.stages[stage - 1], beh = st3(d.behavior);
-  const base = r.base === 'chibi' ? chibiBattle(st3(stage)) : r.base === 'hanzhong' ? hanzhongBattle(st3(stage)) : thirdBattle(beh);
-  return sideBattle(r, stage, base, r.look === 'yiling' ? yilingBattle(beh) : undefined);
+  const d = r.stages[stage - 1], beh = st3(d.behavior), n = st3(stage);
+  return sideBattle(r, stage, BASES[r.base](n, beh), r.look ? BASES[r.look](beh, beh) : undefined);
 }
 function sideLine(r: SideSettle, route: SideRouteDef): string {
   let s = r.message ? '\n' + r.message : '';
@@ -52,13 +74,13 @@ function sideConfig(r: SideRouteDef): ArcSceneConfig {
     battle: s => sideChapter(r, s), campPrefix: r.id + '-',
     gate: s => sideStageOpen(r.id, s), begin: () => '',
     settle: (_receipt, stage, res) => { const out = settleSideStage(r.id, stage, res); return { provisions: out.provisions, line: sideLine(out, r) }; },
-    troopSheets: r.look === 'yiling' ? [...YILING_TROOP_SHEETS.jiefan, ...YILING_TROOP_SHEETS.crossbow] : r.base === 'hanzhong' ? [...HANZHONG_TROOP_SHEETS.qingzhou, ...HANZHONG_TROOP_SHEETS.crossbow] : undefined,
+    troopSheets: [...(BASE_SHEETS[r.base] ?? []), ...(r.look ? BASE_SHEETS[r.look] ?? [] : [])],
   };
 }
 
 /** 双首领通用配合技：一人冲阵 / 横扫，另一人箭雨 / 扇射 / 贯射；没有就各放各的第一招。 */
-export function pairPlan(group: string, a: SideBoss, b: SideBoss, lines: DualPlan['lines']): DualPlan {
-  const A = BOSS_MOVES[a.moves], Bm = BOSS_MOVES[b.moves];
+export function pairPlan(group: string, a: SideBoss, b: SideBoss, lines: DualPlan['lines'], rid = ''): DualPlan {
+  const A = BOSS_MOVES[rid + '.' + a.id] ?? BOSS_MOVES[a.moves], Bm = BOSS_MOVES[rid + '.' + b.id] ?? BOSS_MOVES[b.moves];
   const pick = (d: BossMovesetDef | undefined, kinds: MoveDef['kind'][]): MoveDef | undefined => d && (kinds.map(k => [...d.p1.moves, ...d.p2.moves].find(m => m.kind === k)).find(Boolean) ?? d.p1.moves[0]);
   const ma = pick(A, ['charge', 'sweep', 'thrust']), mb = pick(Bm, ['volley', 'fan', 'thrust', 'sweep']);
   return {
@@ -73,6 +95,13 @@ export function pairPlan(group: string, a: SideBoss, b: SideBoss, lines: DualPla
   };
 }
 const PAIR_LINES: Record<string, DualPlan['lines']> = {
+  dongwu: { sunquan: { intro: '江东子弟，随孤出城！', rage: '幼平——！诸军死战！', shaken: '……幼平也降了么。' }, zhoutai: { intro: '周泰在此，谁敢近主公！', rage: '主公！泰与你们拼了！', shaken: '主公都降了……' } },
+  nanzhong: { dailai: { intro: '秃龙洞的象兵，出洞！', rage: '朵思大王——！象兵，给我踩！', shaken: '朵思也服了？' }, duosi: { intro: '朵思大王在此，毒泉等着你们！', rage: '洞主！朵思与你们拼了！', shaken: '洞主都服了……' } },
+  zhanglu: { zhanglu: { intro: '五斗米道，诸祭酒随我出城！', rage: '阎圃——！鬼卒们，给我挡住！', shaken: '……阎圃也降了。' }, yanpu: { intro: '师君莫急，圃来断后！', rage: '师君！圃与你们拼了！', shaken: '师君都降了……' } },
+  xiliang: { hansui: { intro: '九曲黄河韩文约在此！', rage: '伯瞻——！羌兵，给我杀！', shaken: '伯瞻也降了么……' }, madai: { intro: '马岱在此，谁敢一战！', rage: '韩公！岱与你们拼了！', shaken: '韩公都降了……' } },
+  gongsun: { gongsunzan: { intro: '白马义从，随我出楼！', rage: '国让——！白马义从，死战！', shaken: '……国让也降了么。' }, tianyu: { intro: '主公且看豫的伏弩！', rage: '主公！豫与你们拼了！', shaken: '主公都降了……豫也降了罢。' } },
+  hebei: { yuanshao: { intro: '四世三公，岂容尔等放肆！', rage: '正南——！河北儿郎，给我杀！', shaken: '正南……' }, shenpei: { intro: '审配在此，誓守冀州！', rage: '主公！配今日与你们同死！', shaken: '主公都降了……' } },
+  jiangxia: { huangzu: { intro: '江夏是我黄祖的地盘！', rage: '仲业——！放箭！放箭！', shaken: '仲业也降了？' }, wenpin: { intro: '文聘在此，休犯江夏！', rage: '太守！聘与你们拼了！', shaken: '太守都降了……罢了。' } },
   nanjun: { zhouyu: { intro: '曹军已破，荆州岂容他人染指！', rage: '子义——！诸军死战！', shaken: '……子义降了？' }, taishici: { intro: '东莱太史慈在此！', rage: '都督！慈与你们拼了！', shaken: '都督都降了……罢了。' } },
   caowei: { caocao: { intro: '宁我负人，毋人负我——诸将随我出城！', rage: '元让！虎豹骑，给我踏平他们！', shaken: '元让……也降了么。' }, xiahoudun: { intro: '夏侯元让在此，谁敢犯我主！', rage: '孟德——！惇今日与你们同归于尽！', shaken: '孟德……' } },
 };
@@ -80,20 +109,22 @@ const PAIR_LINES: Record<string, DualPlan['lines']> = {
 export function sideGameSceneClass(Base: typeof GameScene, r: SideRouteDef) {
   const cfg = sideConfig(r), Arc = thirdGameSceneClass(Base, cfg);
   return class SideRouteGameScene extends Arc {
-    preload() { super.preload(); for (const s of r.stages) if (s.partner && !this.textures.exists(sideTexture(s.partner.id))) loadBossSheet(this.load, sideTexture(s.partner.id), s.partner.v1); }
+    preload() {
+      super.preload();
+      if (r.base === 'nanzheng' || r.look === 'nanzheng') for (const t of Object.values(NZ_TROOPS)) if (nzArt(t.walk) && !this.textures.exists(t.walk)) this.load.spritesheet(t.walk, t.file, { frameWidth: 176, frameHeight: 176 });
+      for (const s of r.stages) if (s.partner && !this.textures.exists(sideTexture(s.partner.id))) loadBossSheet(this.load, sideTexture(s.partner.id), s.partner.v1); }
     create() {
       // 借来的第三章兵种是凉州换色贴图（thirdPalette）：第三章场景只在群雄篇里生成，这里先备好
       const beh = st3(r.stages[((this.registry.get(cfg.stageKey) as number | undefined) ?? 1) - 1]?.behavior ?? 1);
       ensureFactionTextures(this, thirdPalette(beh), siegeSourceKeys());
+      if (r.base === 'guandu' || r.look === 'guandu') ensureYuanTextures(this, guanduYuanSourceKeys());
       super.create();
     }
-    /** 终局再战：第 N 回劝降 +15% × N。 */
-    protected parleyFlags(): Record<string, boolean> { const n = this.arcStage === cfg.stages.length ? sideRetries(r.id) : 0; return n > 0 ? { ['sideRetry' + n]: true } : {}; }
     protected dualSetup(first: BossMoveset): boolean {
       const d = r.stages[this.arcStage - 1], b = this.boss, p = d?.partner;
       if (!d || !p || !b || dualOff()) return false;
       const mv = BOSS_MOVES[r.id + '.' + p.id] ?? BOSS_MOVES[p.moves];
-      this.startDual(pairPlan(r.faction + '双将', d.boss, p, PAIR_LINES[r.id] ?? {}),
+      this.startDual(pairPlan(r.faction + '双将', d.boss, p, PAIR_LINES[r.id] ?? {}, r.id),
         { id: d.boss.id, name: d.boss.name, enemy: b, ctrl: first, mount: first.mount ?? null, key: `${r.id}-${this.arcStage}:${d.boss.id}` },
         { id: p.id, name: p.name, at: { x: b.x + 220, y: b.y - 20 }, def: { texture: sideTexture(p.id) }, key: `${r.id}-${this.arcStage}:${p.id}`,
           make: e => ({ ctrl: new BossMoveset(this.arcHost(e), sideTexture(p.id), this.combatNow, mv, 'arc'), mount: null }) });
@@ -108,12 +139,70 @@ export function sideGameScenes(Base: typeof GameScene): Array<typeof GameScene> 
 /** 下邳终局「白门楼」：三英战吕布的吕布战（完整招式与大招），结算走支线；劝降成功记进招降名单（P2 吕布可玩时读）。 */
 export function sideLubuGameSceneClass(Base: typeof GameScene) {
   const route = sideRoute('xiapi')!, stage = route.stages.length, d = route.stages[stage - 1];
+  const cg = d.partner!;
   return class SideLubuGameScene extends Base {
     private test = false;
+    /** 陈宫（后排军师）：招式控制器、名牌 / 血条、献计计时。 */
+    chengong: Enemy | null = null; private cgLife = 0; private cgCtrl: BossMoveset | null = null; private cgTag?: Phaser.GameObjects.Text; private cgBar?: Phaser.GameObjects.Graphics; private cgPlotAt = 0; private cgBuffUntil = 0; private cgBaseDmg = 0;
+    /** 测试用。 */ readonly cgStats = { plots: 0, fell: false };
     constructor() { super('SideLubuGameScene'); }
+    preload() { if (!this.textures.exists(sideTexture(cg.id))) loadBossSheet(this.load, sideTexture(cg.id), cg.v1); }
+    /** 吕布出阵 1.5 秒后陈宫在他身后现身。 */
+    protected spawnBoss(): void {
+      const had = this.boss?.active; super.spawnBoss();
+      if (!had && this.boss?.active && !this.chengong) this.time.delayedCall(1500, () => this.spawnChengong());
+    }
+    private spawnChengong(): void {
+      const b = this.boss; if (!b?.active || this.over || this.chengong) return;
+      const base = this.chapter.enemies.boss, def = { ...base, texture: sideTexture(cg.id), walkVisual: undefined, attackVisual: undefined, hp: base.hp * CHENGONG.hpMul, damage: base.damage * CHENGONG.dmgMul, speed: base.speed * CHENGONG.speedMul };
+      const P = this.player, side = b.x >= P.x ? 1 : -1, e = this.spawnEnemy('boss', b.x + side * 200, b.y + 70, 1, true, def); if (!e) return; // 吕布身侧略后，进得了画面
+      this.chengong = e; this.cgLife = e.spawnId; this.cgPlotAt = this.combatNow + CHENGONG.plotFirstMs;
+      this.cgCtrl = new BossMoveset({ scene: this, boss: e, player: this.player, army: this.legion, spawn: (k, x, y, df) => this.spawnEnemy(k, x, y, 1, true, df), def: k => this.chapter.enemies[k], banner: (t, c) => this.showWaveBanner(t, true, c), sfx: k => this.sfx.play(k) }, sideTexture(cg.id), this.combatNow, BOSS_MOVES['xiapi.' + cg.id] ?? BOSS_MOVES.chengong, 'arc');
+      this.cgTag = this.add.text(e.x, e.y, cg.title + ' · ' + cg.name, { fontFamily: FONT, fontSize: '14px', color: '#ffd98a', resolution: 2, stroke: '#2a0c06', strokeThickness: 4 }).setOrigin(.5, 1).setDepth(DEPTH.dmgText - 1).setName('chengong-tag');
+      this.cgBar = this.add.graphics().setDepth(DEPTH.dmgText - 1).setName('chengong-bar');
+      if (storyMode() !== 'off') castBark(this, e.sprite, cg.name, '奉先！公台在此，为将军设谋！', 'chengong');
+      this.showWaveBanner('陈宫随吕布出阵', true, '后排火攻、号令伏兵、给吕布献计——先除陈宫，吕布势孤');
+    }
+    protected customBossStep(enemy: Enemy, dt: number, now: number): boolean {
+      if (enemy === this.chengong && this.cgCtrl) { this.cgCtrl.update(dt, now); return true; }
+      return super.customBossStep(enemy, dt, now);
+    }
+    protected hitEnemy(enemy: Enemy, raw: number, now: number, source: 'melee' | 'arrow' | 'fire' = 'melee', ally = false, weaponHit = true) {
+      if (enemy === this.chengong && this.cgCtrl) { raw *= this.cgCtrl.incoming(ally); this.cgCtrl.hit(now); }
+      return super.hitEnemy(enemy, raw, now, source, ally, weaponHit);
+    }
+    /** 陈宫倒下：不结算本关（吕布才是本关首领）；拒降就义——临终一句、以礼厚葬（军粮 + 仁名，本存档首次）。 */
+    protected killEnemy(enemy: Enemy): void {
+      if (enemy !== this.chengong) { super.killEnemy(enemy); return; }
+      const at = { x: enemy.x, y: enemy.y }; this.cgCtrl?.clear(); this.cgCtrl = null; this.cgTag?.destroy(); this.cgBar?.destroy(); this.chengong = null; this.cgStats.fell = true;
+      this.endPlot();
+      if (this.deathFx) this.deathFx.play(enemy, this.player.x, this.player.y, this.combatNow, this.deathOptsOf(enemy));
+      enemy.deactivate(); this.kills += 1;
+      if (storyMode() !== 'off') castBark(this, at, cg.name, '今日有死而已！请出就戮，以明军法。', 'chengong');
+      let cap = '吕布势孤';
+      if (surrenderLive() && markSurrender('honored', cg.id)) { gainProvisions(SURRENDER.persuadeProvisions); cap = '以礼厚葬 · 军粮 +' + SURRENDER.persuadeProvisions + ' · 仁名 +1'; }
+      this.showWaveBanner('陈宫拒降就义', false, cap); this.sfx.play('gong');
+    }
+    update(time: number, delta: number) {
+      super.update(time, delta);
+      const e = this.chengong; if (!e) return;
+      if (!e.active || e.spawnId !== this.cgLife) { this.cgTag?.destroy(); this.cgBar?.destroy(); this.chengong = null; return; }
+      const sp = e.sprite, top = sp.y - sp.displayHeight * sp.originY - 12, w = 70, k = Math.max(0, e.hp / Math.max(1, e.maxHp));
+      this.cgTag?.setPosition(e.x, top); this.cgBar?.clear().fillStyle(0x140a06, .8).fillRect(e.x - w / 2 - 1, top + 2, w + 2, 7).fillStyle(0xd8432a, 1).fillRect(e.x - w / 2, top + 3, w * k, 5);
+      this.cgCtrl?.updateDeath(delta);
+      // 献计：每 plotEveryMs 一次，吕布伤害 +plotDmg，持续 plotMs
+      if (this.mode === 'none' && !this.over && this.boss?.active && this.combatNow >= this.cgPlotAt) {
+        this.cgPlotAt = this.combatNow + CHENGONG.plotEveryMs; this.cgStats.plots++;
+        if (this.cgBuffUntil <= this.combatNow) { this.cgBaseDmg = this.boss.def.damage; this.boss.def = { ...this.boss.def, damage: this.cgBaseDmg * (1 + CHENGONG.plotDmg) }; }
+        this.cgBuffUntil = this.combatNow + CHENGONG.plotMs; this.boss.sprite.setTint(0xffb080);
+        if (storyMode() !== 'off') castBark(this, e.sprite, cg.name, '奉先，左翼空虚，可从侧击！', 'chengong');
+        this.showWaveBanner('陈宫献计', true, '吕布伤害 +' + Math.round(CHENGONG.plotDmg * 100) + '% · ' + CHENGONG.plotMs / 1000 + ' 秒');
+      }
+      if (this.cgBuffUntil && this.combatNow >= this.cgBuffUntil) this.endPlot();
+    }
+    private endPlot(): void { if (!this.cgBuffUntil) return; this.cgBuffUntil = 0; if (this.boss?.active && this.cgBaseDmg) { this.boss.def = { ...this.boss.def, damage: this.cgBaseDmg }; this.boss.sprite.clearTint(); } }
     protected achievementArc() { return 'lubu'; }
     protected surrenderKey(): string | null { return `xiapi-${stage}:lubu`; }
-    protected parleyFlags(): Record<string, boolean> { const n = sideRetries('xiapi'); return n > 0 ? { ['sideRetry' + n]: true } : {}; }
     protected customChapter() { return this.sideChapter(); }
     private sideChapter(): ChapterDef {
       const c = lubuChallengeChapter(getChapter('hulao'));

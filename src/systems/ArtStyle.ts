@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { RENDER_SCALE } from '../config';
+import { SIDE_ROUTES, sideTexture } from '../data/sideRoutes';
 
 /**
  * 人物画风开关（共享笔记 art-style-v2-spec.md）。
@@ -12,7 +13,7 @@ export const DEFAULT_ART_STYLE: ArtStyle = 'v2';
 const STORE_KEY = 'im_art_style';
 
 /** v2 图集：纹理键 → 文件（行走 4×4、动作 4×7，原生格 176 / 232，人物约 152 美术像素高，160 色）。 */
-export const ART_V2_FILES: Readonly<Record<string, string>> = {
+export const ART_V2_FILES: Readonly<Record<string, string>> = sideBossFiles({
   hero_walk_sheet: 'assets/processed-v2/zhaoyun_walk_sheet.png',
   zhaoyun_actions: 'assets/hero-actions-v2/zhaoyun.png',
   guanyu_walk_sheet: 'assets/processed-v2/guanyu_walk_sheet.png',
@@ -259,7 +260,7 @@ export const ART_V2_FILES: Readonly<Record<string, string>> = {
   ride_v2_huangyueying: 'assets/ride-v2/huangyueying_ride.png',
   ride_v2_sunshangxiang: 'assets/ride-v2/sunshangxiang_ride.png',
   ride_v2_diaochan: 'assets/ride-v2/diaochan_ride.png',
-};
+});
 /** v2 主将行走整格的显示高度（逻辑像素）：原生格 176 → 88，即 1080p 全屏（渲染 2 倍）下 1 美术像素 = 1 屏幕像素。
  * 人物约 76 逻辑像素高（用户要求比 v1 大一些）。 */
 export const V2_WALK_DISPLAY = 88;
@@ -321,6 +322,11 @@ export function applyArtStyleUrls(load: Phaser.Loader.LoaderPlugin): string[] {
   return swapped;
 }
 
+/** 其他势力支线（data/sideRoutes.ts）：首领图键 side_<id>，专属图到之前借现有首领 v2 图。 */
+function sideBossFiles(base: Record<string, string>): Record<string, string> {
+  for (const r of SIDE_ROUTES) for (const st of r.stages) for (const b of [st.boss, st.partner]) if (b && !st.scene) base[sideTexture(b.id)] = b.v2;
+  return base;
+}
 /** BootScene 里按固定格子载入的首领表，v2 版的格边长（v1 华雄 / 徐荣 128、吕布 256）。 */
 export const V2_SHEET_CELL: Record<string, number> = {
   huaxiong_walk: 288, huaxiong_attack: 288, huaxiong_actions: 288, xurong: 288, boss_lubu: 288, lubu_attack: 288,

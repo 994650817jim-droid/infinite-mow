@@ -10,6 +10,7 @@ import {loadGameFonts} from './ui/GameFonts';
 import Phaser from 'phaser';
 import { GAME_HEIGHT, GAME_WIDTH, IS_DESKTOP, RENDER_SCALE, initLayout, switchLayout } from './config';
 import { BootScene } from './scenes/BootScene';
+import { sideGameScenes, sideLubuGameSceneClass } from './scenes/SideRouteGameScene';
 import { GameScene } from './scenes/GameScene';
 import { CityRecruitScene } from './scenes/CityRecruitScene';
 import { TownScene } from './scenes/TownScene';
@@ -83,6 +84,8 @@ async function startGame(): Promise<void> {
   const SiegeBattleScene=siegeGameSceneClass(BattleScene);
   const IntelBattleScene=intelGameSceneClass(BattleScene);
   const LubuBattleScene=lubuGameSceneClass(BattleScene);
+  // 其他势力支线（data/sideRoutes.ts）：每条支线一个三关框架场景 + 下邳白门楼的吕布战
+  const SideBattleScenes=sideGameScenes(BattleScene),SideLubuBattleScene=sideLubuGameSceneClass(BattleScene);
   const game = new Phaser.Game({
     type: Phaser.AUTO,
     parent: 'game',
@@ -100,7 +103,7 @@ async function startGame(): Promise<void> {
     input: {
       activePointers: 3,
     },
-    scene: [BootScene, OpeningScene, CityScene, CityRecruitScene, TownScene, TalentHallScene, WorldMapScene, MenuScene, BattleScene, ThirdChapterScene, ThirdBattleScene, GuanduChapterScene, GuanduBattleScene, ChibiChapterScene, ChibiBattleScene, JingnanChapterScene, JingnanBattleScene, ShuChapterScene, ShuBattleScene, HanzhongChapterScene, HanzhongBattleScene, XiangfanChapterScene, XiangfanBattleScene, YilingChapterScene, YilingBattleScene, NanzhengChapterScene, NanzhengBattleScene, BeifaChapterScene, BeifaBattleScene, EndingScene, SiegeBattleScene, IntelBattleScene, LubuBattleScene],
+    scene: [BootScene, OpeningScene, CityScene, CityRecruitScene, TownScene, TalentHallScene, WorldMapScene, MenuScene, BattleScene, ThirdChapterScene, ThirdBattleScene, GuanduChapterScene, GuanduBattleScene, ChibiChapterScene, ChibiBattleScene, JingnanChapterScene, JingnanBattleScene, ShuChapterScene, ShuBattleScene, HanzhongChapterScene, HanzhongBattleScene, XiangfanChapterScene, XiangfanBattleScene, YilingChapterScene, YilingBattleScene, NanzhengChapterScene, NanzhengBattleScene, BeifaChapterScene, BeifaBattleScene, EndingScene, SiegeBattleScene, IntelBattleScene, LubuBattleScene, ...SideBattleScenes, SideLubuBattleScene],
   });
 
   // 手柄：每帧轮询 + 界面焦点导航（STEAM_PLAN.md · S2）

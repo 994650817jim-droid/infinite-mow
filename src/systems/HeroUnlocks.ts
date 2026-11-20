@@ -2,6 +2,7 @@ import { CHARACTERS, type CharacterId } from '../data/characters';
 import { STARTER_HEROES } from '../data/heroUnlocks';
 import { isChapterTestRun, chapterOneCleared } from './ChapterProgress';
 import { arcStages, arcUnlocked, lubuClears, type WarlordArc } from '../world/WorldStore';
+import { surrenderedIds } from './SurrenderStore';
 
 /**
  * 可玩武将解锁（设计稿 hero-unlock-design.md，用户 2026-11-19 批准）：
@@ -21,12 +22,14 @@ export interface UnlockProgress {
   /** 篇章是否已开放。 */ arcOpen: (a: WarlordArc) => boolean;
   /** 天下地图挑战「三英战吕布」胜场。 */ lubu: number;
   /** 剧情旗标（本存档）。 */ flag: (k: string) => unknown;
+  /** 其他势力支线（other-factions-design §1.3）：这位首领本存档劝降过没（支线各关 / 三英战吕布挑战关都算）。P2 新可玩武将（吕布、张辽、周瑜、太史慈、曹操）的来投条件读它。 */
+  persuaded?: (bossId: string) => boolean;
 }
 const isHero = (v: unknown): v is CharacterId => typeof v === 'string' && CHARACTERS.some(c => c.id === v);
 const readJson = <T,>(k: string, fb: T): T => { try { const v = JSON.parse(localStorage.getItem(k) ?? 'null'); return v ?? fb; } catch { return fb; } };
 const storyFlagOf = (k: string): unknown => readJson<{ flags?: Record<string, unknown> }>('im_story_v1', {}).flags?.[k];
 export function realProgress(): UnlockProgress {
-  return { ch1: chapterOneCleared(), arc: a => arcStages(a), arcOpen: a => arcUnlocked(a), lubu: lubuClears(), flag: storyFlagOf };
+  return { ch1: chapterOneCleared(), arc: a => arcStages(a), arcOpen: a => arcUnlocked(a), lubu: lubuClears(), flag: storyFlagOf, persuaded: id => surrenderedIds().includes(id) };
 }
 
 /** 每位锁定武将的来投条件（主节点 || 保底）；没列的就是开局可玩。 */

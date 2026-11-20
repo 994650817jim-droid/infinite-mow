@@ -1,5 +1,6 @@
 import type { EnemyKind } from '../types';
 import type { BossMountDef } from '../systems/BossMount';
+import { sideMoves } from './sideRoutes';
 
 /**
  * 首领专属招式 · 二阶段 · 骑马（设计表见共享笔记 boss-moves-plan.md；用户 2026-11-17「给boss设计首领专属招式和2阶段，还想boss也有骑马」）。
@@ -385,6 +386,8 @@ export const BOSS_MOVES: Record<string, BossMovesetDef> = {
     ] },
   },
 };
+// 其他势力支线（data/sideRoutes.ts）：借现成首领的招式改名，登记为「支线.首领」
+Object.assign(BOSS_MOVES, sideMoves(BOSS_MOVES));
 /** 已有专属控制器的首领只补骑马（半血坠马跟着统一的 boss-phase 事件）。 */
 export const BOSS_MOUNTS: Record<string, BossMountDef> = {
   lubu: { horse: 'chitu', cut: .6, rider: 'lubu' },

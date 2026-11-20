@@ -1,6 +1,8 @@
 import Phaser from 'phaser';import {ItemTooltip} from './ItemTooltip';import {drawBuildOverview} from './BuildOverview';import {wornTokens} from '../systems/CharmEffects';import {tokenSlots} from '../systems/ItemStore';import {GAME_WIDTH as W,GAME_HEIGHT as H,IS_DESKTOP as D,FONT,HEADING_FONT,DEPTH,screenPoint} from '../config';import type {Player} from '../entities/Player';import type {Legion} from '../systems/Legion';import {campOption,type CampOffer} from '../systems/CampMarket';import {merchantStockForVisit,saveMerchantStock,type MerchantStock} from '../systems/MerchantStock';import {MerchantShop} from './MerchantShop';import {MEDIC_FIGURE,drawCampFigure,type FigurePlace} from './CampFigure';import {CAMP_TRAINING,type CampTrainingId,type CampGroup} from '../data/camp';import {INITIAL_TROOPS,TROOPS,type TroopKind} from '../data/legion';import {TREASURES,type TacticId,type TreasureId,type BuildTag} from '../data/builds';import {getCharacter} from '../data/characters';import {WEAPON_META} from '../data/upgrades';import {ATTRIBUTE_INFO,MARTIALS,type AttributeId,type MasteryId} from '../systems/RunGrowth';import type {ItemInstance} from '../data/items';import {troopBadge} from './TroopBadge';import {loadTroopPortraits} from '../systems/TroopPortraits';
 import {homeCommand,inkPlate,warPanelTexture} from './HomeCommand';
-import {lqButton,lqLabelColor,type LqState} from './LacquerKit';
+import {lqButton,lqLabelColor,lqPanel,type LqState} from './LacquerKit';
+import {countRespecPicks,resetBuild,respecLeft,respecOptions,respecPick,respecPrice} from '../systems/Respec';
+import type {UpgradeOption} from '../types';
 import {CAMP_MEDIC,medicPrice,type MedicKind} from '../data/campMedic';
 import {loadBagArt} from './ItemQuality';
 import {bagBundle} from './BagBundleButton';
@@ -34,6 +36,8 @@ export class CampRestUI {
  private readonly ink:boolean;private homePlate:Phaser.GameObjects.NineSlice|null=null;private tabInk:Array<Phaser.GameObjects.NineSlice|null>=[];
  /** 军需商人偶尔捎来的 1 卷战法（data/items MERCHANT_TACTIC）；null = 这次没有。onLearnTactic 由 GameScene 设置（改存档点）。 */
  onLearnTactic?:()=>void;
+ /** 重整构筑后（退回、每次重选）由 GameScene 把存档点改成当前构筑。 */
+ onRespecSave?:()=>void;
  private visit='';private tab=0;private page=0;private destination='';private notice='';
  constructor(private scene:Phaser.Scene,private player:Player,private army:Legion,depart:()=>void){
   this.root=scene.add.container(0,0).setScrollFactor(0).setDepth(DEPTH.overlay+2).setVisible(false).setName('camp-rest');
@@ -242,5 +246,66 @@ export class CampRestUI {
   const g=this.player.growth,x=D?40:24,w=W-(D?80:48),h=D?H-110-top:H-top-210;
   drawBuildOverview({scene:this.scene,root:this.body,x,y:top+4,w,h,desktop:D,prefix:'camp-build',growth:g,level:this.player.level,weapon:this.player.weapons[0],tokens:wornTokens(g.character),tokenSlots:tokenSlots(),tooltip:this.itemTip,training:this.army.training});
   if(!this.notice)this.detail.setText('鼠标移到任意格子上看完整说明：战法看效果和下一级，流派条看还差几个来源能觉醒。');
+  this.respecButton();
+ }
+
+ // ---------- 重整构筑（data/respec · systems/Respec；用户 2026-11-19「选了之后就不可以改，只有返回休整才可以花费军粮改回初始」）----------
+ /** 将帅帐右上（页签行右边）：「重整构筑」；有没选完的重选时改成「继续重选」。 */
+ private respecButton(){
+  const g=this.player.growth,pending=g.respecPending>0,bw=D?150:136,bx=D?W-40-bw:W-24-bw,by=D?96:200;
+  const hit=this.button(bx,by,pending?'继续重选 · 剩 '+g.respecPending:'重整构筑',()=>pending?this.respecDraft():this.respecConfirm(),bw,true,38).setName('camp-respec');this.body.add(hit);
+  if(pending)(hit.getData('paint') as (s:string)=>void)('selected');
+ }
+ /** 漆底描金对话框（无水墨按钮）：返回内容容器与关闭函数。 */
+ private lqModal(name:string,w:number,h:number):{m:Phaser.GameObjects.Container;x:number;y:number;close:()=>void}{
+  this.modal?.destroy();const m=this.scene.add.container(0,0).setScrollFactor(0).setName(name);this.modal=m;this.root.add(m);
+  m.add(this.scene.add.rectangle(0,0,W,H,0x080604,.78).setOrigin(0).setScrollFactor(0).setInteractive());
+  const x=(W-w)/2,y=(H-h)/2,g=this.scene.add.graphics().setScrollFactor(0);lqPanel(g,x,y,w,h);m.add(g);
+  return{m,x,y,close:()=>{m.destroy();if(this.modal===m)this.modal=undefined;}};
+ }
+ /** 确认框：退回什么、保留什么、花多少粮、本章还剩几次。 */
+ private respecConfirm(){
+  const c=countRespecPicks(this.player),ch=this.chapterNo,cost=respecPrice(this.player,ch),left=respecLeft(this.player,ch),food=this.army.food;
+  const {m,x,y,close}=this.lqModal('camp-respec-dialog',D?640:W-32,D?350:500),w=D?640:W-32,h=D?350:500;
+  m.add(this.text(x+28,y+24,'重整构筑',D?24:24).setFontFamily(HEADING_FONT).setColor('#f6dc9a'));
+  const parts=[c.weapon?'本命兵器 '+c.weapon+' 级':'',c.branch?'兵器专职':'',c.over?'专职加深 '+c.over+' 级':'',c.martial?'武艺 '+c.martial+' 级':'',c.tactic?'战法 '+c.tactic+' 级':'',c.manual?'心法 '+c.manual+' 派':''].filter(Boolean);
+  const body='退回初始：'+(parts.length?parts.join('、'):'（暂无三选一选来的强化）')+'，共 '+c.picks+' 次强化。\n'+
+   '保留：武将等级与属性点、兵装信物、随从、军需商人买的战法与心法。\n'+
+   '退回的 '+c.picks+' 次强化马上在这里一张张重选（三选一，只出永久构筑卡）；选不完的下一关开打时补上，关掉游戏也不会丢。\n\n'+
+   '花费：随军粮 '+cost+'（现有 '+food+'）　·　本章还可重整 '+left+' 次';
+  const t=this.text(x+28,y+72,body,D?15:16).setLineSpacing(6).setWordWrapWidth(w-56,true).setColor('#e6d3ad').setName('camp-respec-body');m.add(t);
+  const why=c.picks<=0?'没有可退回的强化':left<=0?'本章重整次数已用完':food<cost?'随军粮不足':'';
+  const bw=D?200:150;
+  m.add(this.button(x+w/2-bw-14,y+h-62,'取消',close,bw,true,38,m).setName('camp-respec-cancel'));
+  const ok=this.button(x+w/2+14,y+h-62,why||'确认重整 · '+cost+'粮',()=>{close();this.respecDo();},bw,!why,38,m).setName('camp-respec-confirm');m.add(ok);if(!why)(ok.getData('paint') as (s:string)=>void)('selected');
+ }
+ /** 扣粮、退回初始、记次数、写存档点，然后进重选。 */
+ respecDo():boolean{
+  const ch=this.chapterNo,c=countRespecPicks(this.player),cost=respecPrice(this.player,ch);
+  if(c.picks<=0||respecLeft(this.player,ch)<=0||this.army.food<cost)return false;
+  this.army.food-=cost;const n=resetBuild(this.player,ch);this.onRespecSave?.();this.sound('purchase');
+  this.notice='重整构筑 · 花费随军粮 '+cost+'，退回 '+n+' 次强化，请重选';this.render();this.respecDraft();return true;
+ }
+ /** 重选面板：三张永久构筑卡，选一张生效、存档，接着下一张；「稍后再选」留到下一关开打时补。 */
+ respecDraft(){
+  const g=this.player.growth;if(g.respecPending<=0){this.modal?.destroy();this.modal=undefined;this.render();return;}
+  const opts:UpgradeOption[]=respecOptions(this.player);
+  if(!opts.length){this.notice='已没有可选的永久构筑卡 · 剩 '+g.respecPending+' 次强化下一关开打时补选';this.modal?.destroy();this.modal=undefined;this.render();return;}
+  const w=D?820:W-24,h=D?400:620,{m,x,y,close}=this.lqModal('camp-respec-draft',w,h),total=g.respecPending;
+  m.add(this.text(x+28,y+22,'重整构筑 · 重选强化',D?23:23).setFontFamily(HEADING_FONT).setColor('#f6dc9a'));
+  m.add(this.text(x+w-28,y+28,'还剩 '+total+' 次',D?16:16).setOrigin(1,0).setColor('#e6c894').setName('camp-respec-left'));
+  const n=opts.length,gap=16,cw=D?(w-56-gap*(n-1))/n:w-40,ch=D?250:150;
+  opts.forEach((o,i)=>{
+   const cx=D?x+28+i*(cw+gap):x+20,cy=D?y+70:y+66+i*(ch+12);
+   m.add(this.scene.add.image(cx+cw/2,cy+ch/2,warPanelTexture(this.scene,cw,ch,i===0)).setDisplaySize(cw+16,ch+16).setScrollFactor(0));
+   if(o.icon&&this.scene.textures.exists(o.icon))m.add(this.scene.add.image(cx+cw/2,cy+44,o.icon).setDisplaySize(52,52).setScrollFactor(0));
+   if(o.categoryLabel)m.add(this.text(cx+cw/2,cy+78,o.categoryLabel,12).setOrigin(.5,0).setColor('#c9a76a').setWordWrapWidth(cw-20,true).setMaxLines(2).setAlign('center'));
+   m.add(this.text(cx+cw/2,cy+(o.categoryLabel?112:84),o.name,D?17:17).setOrigin(.5,0).setFontFamily(HEADING_FONT).setColor('#f6e3b8'));
+   m.add(this.text(cx+14,cy+(o.categoryLabel?140:112),o.desc,13).setLineSpacing(3).setWordWrapWidth(cw-28,true).setMaxLines(5).setColor('#dccbac'));
+   const hit=this.scene.add.rectangle(cx+cw/2,cy+ch/2,cw,ch,0,.001).setScrollFactor(0).setInteractive({useHandCursor:true}).setName('camp-respec-card-'+i)
+    .on('pointerdown',()=>{this.sound('uiClick');respecPick(this.player,o);this.onRespecSave?.();close();this.notice='重选 · '+o.name;this.render();this.respecDraft();});
+   m.add(hit);
+  });
+  const bw=D?280:220;m.add(this.button(x+w/2-bw/2,y+h-60,'稍后再选（下一关开打时补上）',()=>{close();this.notice='还剩 '+g.respecPending+' 次强化，下一关开打时补选';this.render();},bw,true,38,m).setName('camp-respec-later'));
  }
 }

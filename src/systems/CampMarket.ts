@@ -15,9 +15,9 @@ export function manualText(school:SchoolId,shi?:number):{title:string;effect:str
 export function campOption(offer:CampOffer,player:Player):UpgradeOption|null{
  const b=player.growth.build;
  if(offer.kind==='manual'){const sc=offer.school;if(!b.canManual(sc))return null;const m=manualText(sc,b.tags()[sc]);
-  return{id:'camp_manual_'+sc,name:m.title,desc:m.full,kind:'tactic',icon:'build_icon_school_'+sc,apply:()=>{if(b.canManual(sc))b.manuals.push(sc);}};}
+  return{id:'camp_manual_'+sc,name:m.title,desc:m.full,kind:'tactic',icon:'build_icon_school_'+sc,apply:()=>{if(b.canManual(sc)){b.manuals.push(sc);b.boughtManuals.push(sc);}}};} // 记账：重整构筑不退商人卖的
  const id=offer.id;if(!b.canLearn(id)||rk(b,id)!==offer.level)return null;
- return{id:'camp_'+id,name:TACTICS[id].name+' · Lv.'+offer.level+'→'+(offer.level+1),desc:tacticDescription(id,offer.level+1),kind:'tactic',icon:'build_icon_'+id,apply:()=>{b.learn(id);}};
+ return{id:'camp_'+id,name:TACTICS[id].name+' · Lv.'+offer.level+'→'+(offer.level+1),desc:tacticDescription(id,offer.level+1),kind:'tactic',icon:'build_icon_'+id,apply:()=>{if(b.learn(id))b.bought[id]=(b.bought[id]??0)+1;}};
 }
 interface TacticBook{canLearn(id:TacticId):boolean;level(id:TacticId):number;/** 研读过的心法（没有 = 都没研读）。 */manualsRead?():readonly SchoolId[];}
 /** 势（按已学战法等级 + 心法；营寨里读出的征程构筑没有亲和等加成）。 */

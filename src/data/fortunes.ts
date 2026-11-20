@@ -1,33 +1,42 @@
 import type { PlayerStats } from '../types';
 
 /**
- * 战场机缘（wave-progression-redesign.md §2.1b，2026-11-19 用户批准「可以加入战场机缘」）：
- * 每关 2 次关内事件，做完弹一次「本关有效」的三选一。增益只改本关：记在 player.stageDelta，征程构筑存档时扣掉（CharmEffects.statsWithoutCharms），
- * 战线推进到下一关时撤销。数值是初值，交平衡会话复核。
+ * 战场机缘（wave-progression-redesign.md §2.1b；2026-11-19 用户「需要远，不可以太近……根据不同随机事件会奖励不同奖励」，设计表 stage-event-rewards.md）：
+ * 每关 2 次关内事件，刷在离主将 600–900 的可走处（小场地取最远处），各类事件给不同奖励，越远奖励越多（×1–1.25）。
+ * 本关增益（降将献策的三选一）记在 StageBuffs，征程构筑存档时扣掉、换关撤销。数值是初值，交平衡会话复核。
  */
-export type FortuneEventKind = 'cart' | 'rescue' | 'defector' | 'beacon';
+export type FortuneEventKind = 'cart' | 'armory' | 'courier' | 'rescue' | 'defector' | 'beacon';
 export const FORTUNE = {
-  /** 第 1 次：精锐段开始后多少秒出现粮车；第 2 次：事件段开始后多少秒出现本关事件。 */
+  /** 第 1 次：精锐段开始后多少秒；第 2 次：事件段开始后多少秒。 */
   cartDelay: 20, eventDelay: 8,
-  /** 离主将的距离（地图像素）。 */
-  distance: [240, 320] as readonly [number, number],
-  /** 互动圈半径；站满秒数（粮车 / 烽火）。 */
-  radius: 70, holdSec: 3,
-  /** 没去理会：多少秒后消失（「机缘已失」）。 */
-  lifeSec: 40,
-  /** 粮车守卫 / 被围义军外的敌兵数。 */
-  cartGuards: 3, rescueGuards: 6,
-  /** 解救义军：随你冲阵的人数与时长。 */
-  rescueEscort: 5, rescueEscortMs: 30000,
+  /** 刷点：目标距离、至少多远（小场地取能到的最远处）、试几个方向；距离奖励倍率（600 → ×1，900 → ×1.25）。 */
+  far: { target: 900, min: 600, tries: 16, bonusMax: 1.25 },
+  /** 互动圈半径；站满秒数（粮车 / 烽燧 3 秒、军械库 4 秒）。 */
+  radius: 70, holdSec: 3, armoryHoldSec: 4,
+  /** 没去理会：多少秒后消失（「机缘已失」）；军械库 45 秒。 */
+  lifeSec: 40, armoryLifeSec: 45,
+  /** 守卫：粮车 3、被围义军外 6；军械库 2 精锐 + 4 盾兵。 */
+  cartGuards: 3, rescueGuards: 6, armoryElites: 2, armoryShields: 4,
+  /** 解救义军：随你冲阵的人数与时长；另补部曲人数。 */
+  rescueEscort: 5, rescueEscortMs: 30000, rescueRecruits: 2,
+  /** 传令兵：主将进到 spot 内就开跑（速度），之后 chaseSec 秒内追到 catch 内截下。 */
+  courier: { spot: 520, speed: 125, chaseSec: 15, catch: 60 },
+  /** 烽燧：之后多少毫秒刷兵减半；立即回血比例。 */
+  beaconCalmMs: 20000, beaconHeal: .25,
+  /** 粮车：随军粮 40 + 10 × 章（× 距离倍率）。 */
+  cartGrain: (chapter: number): number => 40 + 10 * chapter,
   /** 同一张增益本关最多拿几次。 */
   maxSame: 2,
 } as const;
 
-export const FORTUNE_EVENT: Record<FortuneEventKind, { name: string; hint: string; done: string }> = {
-  cart: { name: '敌军粮车', hint: '站进圈里 3 秒夺下粮车', done: '夺下粮车' },
-  rescue: { name: '义军被围', hint: '击退围困的敌兵', done: '义军脱困 · 随你冲阵' },
-  defector: { name: '降将来投', hint: '走到他身边受降', done: '受降' },
-  beacon: { name: '烽燧', hint: '站进圈里 3 秒点燃烽火', done: '烽火燃起' },
+export interface FortuneEventDef { name: string; hint: string; reward: string; done: string; icon: string }
+export const FORTUNE_EVENT: Record<FortuneEventKind, FortuneEventDef> = {
+  cart: { name: '敌军粮车', hint: '站进圈里 3 秒夺下粮车', reward: '随军粮 + 回春丹', done: '夺下粮车', icon: 'growth_icon_pickup' },
+  armory: { name: '敌军军械库', hint: '击退守军，站进圈里 4 秒', reward: '兵装一件', done: '夺下军械', icon: 'growth_icon_heart_mirror' },
+  courier: { name: '敌军传令兵', hint: '追上他截下军情（15 秒）', reward: '多一次军略三选一', done: '截获军情', icon: 'growth_icon_wind_boots' },
+  rescue: { name: '义军被围', hint: '击退围困的敌兵', reward: '义军随冲 + 部曲补员', done: '义军脱困', icon: 'growth_icon_gujun' },
+  defector: { name: '降将来投', hint: '走到他身边受降', reward: '降将献策（三选一）', done: '受降', icon: 'growth_icon_wanrendi' },
+  beacon: { name: '烽燧', hint: '站进圈里 3 秒点燃烽火', reward: '20 秒刷兵减半 + 回血', done: '烽火燃起', icon: 'growth_icon_wildfire' },
 };
 
 export interface FortuneBuff {
@@ -52,5 +61,7 @@ export function rollFortuneBuffs(taken: Readonly<Record<string, number>>, rnd: (
   const pool = FORTUNE_BUFFS.filter(b => (taken[b.id] ?? 0) < FORTUNE.maxSame).map(b => ({ b, k: rnd() }));
   return pool.sort((x, y) => x.k - y.k).slice(0, 3).map(x => x.b);
 }
+/** 第 1 次（精锐段）候选：军械库、传令兵第三章起才出。 */
+export function firstFortunes(chapter: number): readonly FortuneEventKind[] { return chapter >= 3 ? ['cart', 'armory', 'courier'] : ['cart']; }
 /** 第 2 次机缘（事件段）从这几种里随机。 */
 export const EVENT_FORTUNES: readonly FortuneEventKind[] = ['rescue', 'defector', 'beacon'];

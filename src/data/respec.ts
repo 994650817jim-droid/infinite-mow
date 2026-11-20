@@ -5,7 +5,8 @@
  * 不退：武将等级与属性点、兵装信物、随从、军需商人花粮买的战法 / 心法。
  * 价格 = (base + perPick × 退回次数) × (1 + chapterMul × (章 − 1))，每章最多 perChapter 次。初值，交平衡会话。
  */
-export const RESPEC = { base: 40, perPick: 10, chapterMul: .25, perChapter: 2 } as const;
+// 2026-11-19 平衡：perPick 10 → 6、chapterMul .25 → .15（原第五章 40 次构筑要 880 粮，约一整章的随军粮；现约 450，第十章约 770）
+export const RESPEC = { base: 40, perPick: 6, chapterMul: .15, perChapter: 2 } as const;
 export function respecCost(picks: number, chapter: number): number {
   return Math.round((RESPEC.base + RESPEC.perPick * Math.max(0, picks)) * (1 + RESPEC.chapterMul * Math.max(0, chapter - 1)));
 }

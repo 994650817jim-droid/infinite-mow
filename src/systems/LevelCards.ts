@@ -47,7 +47,7 @@ export const ERA_GENERALS: readonly (readonly string[])[] = [
 export type GambleId = 'allin' | 'beiwei' | 'light';
 export const GAMBLES: Record<GambleId, { name: string; desc: string; icon: string }> = {
   allin: { name: '孤注一掷', desc: '伤害 +25%\n代价：生命上限 −15%', icon: 'growth_icon_berserk' },
-  beiwei: { name: '背嵬', desc: '生命低于一半时\n伤害 +30%', icon: 'growth_icon_might' },
+  beiwei: { name: '背嵬', desc: '生命低于一半时\n伤害 +20%', icon: 'growth_icon_might' },
   light: { name: '轻装', desc: '移速 +20%、武器冷却 −10%\n代价：受到伤害 +15%', icon: 'growth_icon_quickness' },
 };
 export type BountyId = 'lieutenant' | 'elites';

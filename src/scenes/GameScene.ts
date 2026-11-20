@@ -175,7 +175,7 @@ import { BOSS_MOUNTS, BOSS_MOVES } from '../data/bossMoves';
 import type {ItemInstance} from '../data/items';
 import {armShield,absorbShield,ShieldBars} from '../systems/ShieldGuard';
 import {StageObjectives} from '../systems/StageObjectives';
-import {capLootQuality,itemName,lootBand,QUALITIES,relicDef,rollItem,SPECIALS} from '../data/items';
+import {capLootQuality,itemName,lootBand,QUALITIES,relicDef,rollItem,rollQuality,SPECIALS} from '../data/items';
 import {BossChest,playBossFall,type ChestLoot} from '../systems/BossChest';
 import {preloadBossDeath} from '../systems/BossDeathArt';
 import {ItemBagUI} from '../ui/ItemBagUI';
@@ -3803,7 +3803,7 @@ export class GameScene extends Phaser.Scene {
   private takeGamble(id: GambleId): void {
     this.gambles.add(id); const P = this.player;
     if (id === 'allin') applyStageBuff(P, s => { s.maxHpBonus -= Math.round(P.maxHp * .15); s.damageMul *= 1.25; });
-    else if (id === 'beiwei') P.growth.stageDesperate = .3;
+    else if (id === 'beiwei') P.growth.stageDesperate = .2; // 2026-11-19 平衡：.3 → .2（另两张赌命都有代价，这张没有，还和合击「背水一战」叠）
     else applyStageBuff(P, s => { s.damageTakenMul *= 1.15; s.moveMul *= 1.2; s.cooldownMul *= .9; });
     P.hp = Math.min(P.hp, P.maxHp); this.showWaveBanner('赌命 · ' + GAMBLES[id].name, true, GAMBLES[id].desc.split(String.fromCharCode(10)).join('，'));
   }
@@ -3814,7 +3814,8 @@ export class GameScene extends Phaser.Scene {
     return li >= 0 && this.waveIndex < li;
   }
   private grantCharm(): string {
-    const ch = this.phasePlan?.chapter ?? 2, q = ch <= 4 ? 'blue' : ch <= 8 ? 'purple' : 'orange', item = rollCharm(q, Math.random, undefined, ch);
+    // 品质按掉落段的首领那一行（2026-11-19 平衡：原来第九章起悬赏必橙，比首领掉落还好；data/items.ts lootBand / LOOT_CAP）
+    const ch = this.phasePlan?.chapter ?? this.lootChapter(), q = rollQuality('boss', this.itemTier()), item = rollCharm(q, Math.random, undefined, ch) ?? rollItem(q, Math.random, 'token', ch);
     if (!item) return ''; if (!this.debugRun()) addItems([item]); const name = itemName(item); this.showWaveBanner('信物 · ' + name, false, '已入行囊'); return name;
   }
   private onStageCardKill(enemy: Enemy): void {

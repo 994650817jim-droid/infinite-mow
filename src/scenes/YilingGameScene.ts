@@ -149,9 +149,8 @@ export function yilingGameSceneClass(Base: typeof GameScene, cfg: ArcSceneConfig
     protected spawnBossChest(x: number, y: number, done: () => void): void { super.spawnBossChest(x, y, this.arcStage === 3 ? () => this.endChapter(done) : done); }
     private endChapter(next: () => void): void {
       const s = this as unknown as Host;
-      s.setMode('parley');
       const lord = getCharacter(s.runConfig.character as never).name;
-      storyScroll(this, GAME_WIDTH, GAME_HEIGHT, IS_DESKTOP, { name: 'story-yiling-end', confirmName: 'story-yiling-end-confirm', kicker: '第十章 · 夷陵之战 · 终', title: '退守白帝',
+      (this as unknown as GameScene).endScroll(close => storyScroll(this, GAME_WIDTH, GAME_HEIGHT, IS_DESKTOP, { name: 'story-yiling-end', confirmName: 'story-yiling-end-confirm', kicker: '第十章 · 夷陵之战 · 终', title: '退守白帝',
         lines: [
           { text: '火光连营七百里。陆逊虽退，我军元气大伤，只得收拾残兵，退守白帝城。' },
           { who: '陆逊', text: '先主用兵，非不善也。只是连营依林，正犯火攻之忌。' },
@@ -162,7 +161,7 @@ export function yilingGameSceneClass(Base: typeof GameScene, cfg: ArcSceneConfig
           { who: '诸葛亮', text: '（泣拜）臣敢不竭股肱之力，效忠贞之节，继之以死！' },
           { text: '先主留镇永安，休养将士；军国大事，自此尽决于丞相。' },
           { text: '南中诸郡乘乱生变，孟获起兵……（第十一章 · 南征）' },
-        ], reward: '火海突围 · 退守白帝', confirm: '收兵 · 退守白帝', background: 'rest_camp', onDone: () => { s.setMode('none'); next(); } });
+        ], reward: '火海突围 · 退守白帝', confirm: '收兵 · 退守白帝', background: 'rest_camp', onDone: () => { close(); next(); } }));
     }
     snapshotYiling() { return { mazes: this.mazes, double: !!this.fire?.double, stage: this.arcStage, camps: this.camps.length, campsDown: this.camps.filter(t => !t.active).length, fire: this.fire?.snapshot() ?? null, rage: this.rageShown }; }
   };

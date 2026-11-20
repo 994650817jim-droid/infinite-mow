@@ -78,16 +78,15 @@ export function hanzhongGameSceneClass(Base: typeof GameScene, cfg: ArcSceneConf
     protected spawnBossChest(x: number, y: number, done: () => void): void { super.spawnBossChest(x, y, this.arcStage === 3 ? () => this.endChapter(done) : done); }
     private endChapter(next: () => void): void {
       const s = this as unknown as GameScene & { setMode(m: string): void; runConfig: { character: string } };
-      s.setMode('parley');
       const lord = getCharacter(s.runConfig.character as never).name, hz = this.huangzhongInTeam;
-      storyScroll(this, GAME_WIDTH, GAME_HEIGHT, IS_DESKTOP, { name: 'story-hanzhong-end', confirmName: 'story-hanzhong-end-confirm', kicker: '第八章 · 汉中之战 · 告捷', title: '汉中王',
+      (this as unknown as GameScene).endScroll(close => storyScroll(this, GAME_WIDTH, GAME_HEIGHT, IS_DESKTOP, { name: 'story-hanzhong-end', confirmName: 'story-hanzhong-end-confirm', kicker: '第八章 · 汉中之战 · 告捷', title: '汉中王',
         lines: [
           { text: '曹操以「鸡肋」为令，引兵北还。汉中之地，尽归我军。' },
           ...(hz ? [{ who: '黄忠', text: '定军山一刀，斩得夏侯妙才。老夫这把年纪，也算不负此生！' }] : [{ text: '定军山一役，夏侯渊战殁，曹军自此气夺。' }]),
           { who: '法正', text: '汉中者，益州之咽喉。今既得之，进可窥关中，退可守巴蜀。' },
           { who: lord, text: '传令诸将：据险而守，养兵蓄锐。' },
           { text: '东边荆州，关羽镇守襄阳、樊城。曹魏与东吴，都在看着……（第九章 · 襄樊之战）' },
-        ], reward: '汉中尽归 · 天下三分', confirm: '收兵 · 告捷', background: 'rest_camp', onDone: () => { s.setMode('none'); next(); } });
+        ], reward: '汉中尽归 · 天下三分', confirm: '收兵 · 告捷', background: 'rest_camp', onDone: () => { close(); next(); } }));
     }
     snapshotHanzhong() { return { stage: this.arcStage, hills: this.hills?.snapshot(), huangzhong: this.huangzhongInTeam, jilei: this.jileiShown }; }
   };

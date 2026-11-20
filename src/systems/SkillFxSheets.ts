@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { BRANCH_FX_READY, branchFxKey, branchFxFile } from './BranchFinalFx';
 
 /**
  * 技艺 / 战法手绘特效序列帧（用户 2026-11-16：「不要再做像素特效了」，改用像诸葛亮 flame_burst 那样的手绘透明序列帧）。
@@ -68,6 +69,8 @@ export const SKILL_FX: Readonly<Record<string, { file: string; cell: number; fra
 
 export function loadSkillFx(load: Phaser.Loader.LoaderPlugin): void {
   for (const [key, d] of Object.entries(SKILL_FX)) load.spritesheet(key, d.file, { frameWidth: d.cell, frameHeight: d.cellH ?? d.cell });
+  // 兵器专职进阶形态专属图（每位武将 1 张 6×4，已出图的才加载；BranchFinalFx 用）
+  for (const h of BRANCH_FX_READY) load.spritesheet(branchFxKey(h), branchFxFile(h), { frameWidth: 256, frameHeight: 256 });
 }
 
 export interface SheetOpts {

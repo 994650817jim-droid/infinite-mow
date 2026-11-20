@@ -45,7 +45,7 @@ export function shuGameSceneClass(Base: typeof GameScene) {
       loadMidSiegeArt(this);
     }
     create() {
-      this.pass = undefined; this.mid = undefined; this.pangtongFell = false; this.storyDone = false;
+      this.pass = undefined; this.mid = undefined; this.pangtongFell = false; this.storyDone = false; this.midWarned = false;
       super.create();
       if (!this.player || this.scene.key !== 'ShuGameScene' || !this.chapter) return;
       this.shuStage = (Number(this.registry.get('shuStage')) || 1) as ShuStage;
@@ -76,6 +76,7 @@ export function shuGameSceneClass(Base: typeof GameScene) {
           engineLevel: Number(this.registry.get('siegeEngineLevel') ?? 0),
           opts: { externalBoss: true, gateHp: 1900, hallName: '州府', cityName: '成都' },
         });
+        this.bossWarned = true; // 基类在五段首领时刻前 10 秒报「刘璋即将登场！」，成都守将要打进州府才出：不报（进州府有分段横幅）
       }
       // 剧情卷轴：章首 / 落凤坡开场（测试可用 registry shuNoStory 跳过）
       if (!this.registry.get('shuNoStory')) {
@@ -106,6 +107,20 @@ export function shuGameSceneClass(Base: typeof GameScene) {
     }
     /** 成都：守将只在州府段出场。 */
     protected spawnBoss() { if (this.mid && this.mid.phase !== 'hall') return; super.spawnBoss(); }
+    private midWarned = false;
+    /**
+     * 成都限时（2026-11-20 第 7–12 章检查）：守将要打进州府才出场，但基类按五段时间轴「首领时刻 + 60 秒（约 5:05）首领还没出 = 超时」判负——
+     * 破门 → 街巷 → 州府还没走完就「刘璋未破，退守待援」。没出守将之前改按中城攻城限时（MID_SIEGE.limitSeconds），剩 60 秒横幅预警。
+     */
+    protected checkEnd() {
+      if (this.mid && !this.over && this.player.alive && !this.bossSpawned) {
+        const L = MID_SIEGE.limitSeconds;
+        if (!this.midWarned && this.elapsed >= L - 60) { this.midWarned = true; this.showWaveBanner('敌援将至', true, '60 秒内攻进州府'); }
+        if (this.elapsed >= L) this.finish(false, 'timeout');
+        return;
+      }
+      super.checkEnd();
+    }
     protected hitEnemy(enemy: Enemy, raw: number, now: number, source: 'melee' | 'arrow' | 'fire' = 'melee', ally = false, weaponHit = true) {
       if (enemy === this.boss && this.mid) raw *= this.mid.bossDamageMul(); if (this.mid) raw *= this.mid.outgoingMul(); // 城内武库已占：我军伤害 +8%
       return super.hitEnemy(enemy, raw, now, source, ally, weaponHit);

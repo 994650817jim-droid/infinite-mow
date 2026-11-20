@@ -23,7 +23,7 @@ await p.evaluate(() => {
 });
 const wait = ms => p.waitForTimeout(ms);
 
-// 1 干粮 / 酒肉：从掉落处蹦出去，落在离主将 150 以外、画面里；受伤也不远远飞过来，走近 60 内才吸过来吃
+// 1 干粮 / 酒肉：从掉落处蹦出去，落在离主将 250 以外、画面里；受伤也不远远飞过来，走近 60 内才吸过来吃
 const food = await p.evaluate(async () => {
   const s = window.__game.scene.getScene('GameScene'), P = s.player, H = s.battleHeal, wait = ms => new Promise(r => setTimeout(r, ms));
   const v = () => s.cameras.main.worldView, inView = (x, y) => x > v().left && x < v().right && y > v().top && y < v().bottom;
@@ -36,7 +36,7 @@ const food = await p.evaluate(async () => {
   const noDrop = (H.onPropBroken('grain', P.x, P.y, () => .99), H.foods.filter(f => f.active).length);
   return { gd, gView, stay, ate, cd, ate2, noDrop, eaten: H.stats.foodEaten, magnet: (await import('/src/data/battleHeal.ts')).BATTLE_HEAL.food.magnetR };
 });
-ck('干粮 / 酒肉：落在离主将 150 以外、画面里，不远远飞过来；走近 60 内才吸过来吃，回 5% / 6%', food.gd >= 150 && food.gd <= 260 && food.gView && food.stay && food.cd >= 150 && food.magnet <= 60 && Math.abs(food.ate - 5) < .6 && Math.abs(food.ate2 - 6) < .6 && food.noDrop === 0 && food.eaten === 2, food);
+ck('干粮 / 酒肉：落在离主将 250 以外、画面里，不远远飞过来；走近 60 内才吸过来吃，回 5% / 6%', food.gd >= 250 && food.gd <= 360 && food.gView && food.stay && food.cd >= 250 && food.magnet <= 60 && Math.abs(food.ate - 5) < .6 && Math.abs(food.ate2 - 6) < .6 && food.noDrop === 0 && food.eaten === 2, food);
 
 // 2 泉眼：站上去回血、水量用完冷却（冷却中变暗、不回血；没有名签）
 const spot = await p.evaluate(async () => {
@@ -80,9 +80,9 @@ const med = await p.evaluate(async () => {
   const rolls = [0, 1, 2, 3].map(() => H.onEliteDown(P.x + 400, P.y, () => .99));
   return { d, side, notPicked, lt, rolls };
 });
-ck('军中伤药：副将必掉一份，从尸体处蹦到离主将 150 以外（不砸在脸上）；走过去拾取进药囊（15%）；精锐连 3 个没掉第 4 个必掉', med.d >= 150 && med.d <= 260 && med.side && med.notPicked && med.lt?.name === '军中伤药' && med.lt.pct === 15 && med.rolls.join() === 'false,false,false,true', med);
+ck('军中伤药：副将必掉一份，从尸体处蹦到离主将 250 以外（不砸在脸上）；走过去拾取进药囊（15%）；精锐连 3 个没掉第 4 个必掉', med.d >= 250 && med.d <= 360 && med.side && med.notPicked && med.lt?.name === '军中伤药' && med.lt.pct === 15 && med.rolls.join() === 'false,false,false,true', med);
 
-// 5 低血保护：生命跌破 30% → 在 150–290、画面里放一份伤药；药囊满了走过去直接服下
+// 5 低血保护：生命跌破 30% → 在 250–360、画面里放一份伤药；药囊满了走过去直接服下
 const low = await p.evaluate(async () => {
   const s = window.__game.scene.getScene('GameScene'), P = s.player, H = s.battleHeal, S = s.supplies, wait = ms => new Promise(r => setTimeout(r, ms));
   const v = s.cameras.main.worldView;
@@ -94,7 +94,7 @@ const low = await p.evaluate(async () => {
   if (pot) P.sprite.setPosition(pot.image.x, pot.image.y); /* 走到药旁边 */ const h0 = P.hp; await wait(3000);
   return { drops: H.stats.lowHpDrops, d, view, healed: Math.round((P.hp - h0) / P.maxHp * 100) };
 });
-ck('低血保护：跌破 30% 时在 150–290、画面里放一份伤药，药囊满了走过去直接服下（12%）', low.drops === 1 && low.d >= 150 && low.d <= 290 && low.view && Math.abs(low.healed - 12) <= 1, low);
+ck('低血保护：跌破 30% 时在 250–360、画面里放一份伤药，药囊满了走过去直接服下（12%）', low.drops === 1 && low.d >= 250 && low.d <= 360 && low.view && Math.abs(low.healed - 12) <= 1, low);
 
 // 5b 不打说明文字：场上没有回血相关的说明字（只有第一次见回血点的一次提示）
 const words = await p.evaluate(() => { const s = window.__game.scene.getScene('GameScene'); const all = []; const walk = o => { if (o.type === 'Text' && o.visible && o.text) all.push(o.text); for (const c of o.list ?? []) walk(c); }; for (const o of s.children.list) walk(o); return all.filter(t => /水满|回血中|站上去回血 ·|余 \d+%|军医送来|首领将至 · 附近|干粮|酒肉|军中伤药/.test(t)); });

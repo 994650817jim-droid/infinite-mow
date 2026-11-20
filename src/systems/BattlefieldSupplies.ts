@@ -19,7 +19,7 @@ interface Crate {enemy:Enemy;shadow:Phaser.GameObjects.Image;cell:string|null;li
 export type HealProp='wine'|'herb';
 /** 回血道具（heal_props 图集帧：0 酒罐 / 1 药篓 / 2 酒葫芦 / 3 草药包）；回复量按最大生命比例，2.5 秒内回完。 */
 export const HEAL_PROPS:Record<HealProp,{name:string;frame:number;drop:number;ratio:number;size:number}>={wine:{name:'酒罐',frame:0,drop:2,ratio:.08,size:70},herb:{name:'药篓',frame:1,drop:3,ratio:.12,size:66}};
-interface Potion {image:Phaser.GameObjects.Image;until:number;active:boolean;amount?:number;/** 药名（军中伤药等）；没写按贴图认。 */name?:string;/** 药囊满了、主将受伤时直接服下（军中伤药）。 */instant?:boolean;}
+interface Potion {image:Phaser.GameObjects.Image;until:number;active:boolean;amount?:number;/** 药名（军中伤药等）；没写按贴图认。 */name?:string;/** 药囊满了、主将受伤时直接服下（军中伤药）。 */instant?:boolean;/** 正从掉落处蹦向落点：落地前不能捡（原来掉落处贴着主将时，第一帧就被捡走，等于还是砸在脸上）。 */landAt?:number;}
 /** 药囊里的一份药：回复量（未设则为原药瓶的固定 10 点）与图标。 */
 /** 回血药的手绘图（2026-11-17 用户「用药的ui图标也改一下」：不用程序画的像素药瓶）。缺图时退回旧的 healing_potion。 */
 export const POTION_ART='potion_jar';
@@ -38,6 +38,10 @@ export class BattlefieldSupplies {
  onPropLoot?:(kind:PropLootKind,x:number,y:number)=>void;
  /** 场景障碍（房屋、城墙等）；回血道具不放进去。 */
  healBlocked?:(x:number,y:number,r:number)=>boolean;
+ /** 回血掉落的落点（BattleHeal.landing：离主将不足 250 就从掉落处蹦出去）；不给就落在原处。 */
+ landing?:(x:number,y:number)=>{x:number;y:number;moved:boolean};
+ /** 把地上的药放到落点：要挪就从掉落处蹦过去。 */
+ private landPotion(potion:Potion,x:number,y:number):void{const img=potion.image,at=this.landing?.(x,y)??{x,y,moved:false};img.setPosition(at.x,at.y);potion.landAt=at.moved?this.now()+BATTLE_HEAL.drop.hopMs+60:0;if(at.moved){img.setPosition(x,y);this.scene.tweens.addCounter({from:0,to:1,duration:BATTLE_HEAL.drop.hopMs,onUpdate:tw=>{const k=tw.getValue()??0;img.setPosition(x+(at.x-x)*k,y+(at.y-y)*k-Math.sin(k*Math.PI)*46);}});}}
  private healRate=HEAL_RATE;
  /** 药囊：拾取的药先收起，玩家按“用药”按钮（或 Q 键）才回血。 */
  readonly pouch:PouchItem[]=[];
@@ -174,6 +178,7 @@ export class BattlefieldSupplies {
   if(!potion){if(this.potions.length>=12)return false;potion={image:this.scene.add.image(0,0,potionTexture(this.scene)).setDepth(DEPTH.gem+1),until:0,active:false};this.potions.push(potion);}
   potion.active=true;potion.until=this.now()+60000;potion.amount=amount;potion.name=name;potion.instant=true;
   potion.image.setTexture(potionTexture(this.scene)).setPosition(x,y).setDisplaySize(...this.potionSize()).setAlpha(1).setVisible(true);
+  potion.landAt=from?this.now()+BATTLE_HEAL.drop.hopMs+60:0;
   if(from){const img=potion.image;img.setPosition(from.x,from.y);this.scene.tweens.addCounter({from:0,to:1,duration:BATTLE_HEAL.drop.hopMs,onUpdate:tw=>{const k=tw.getValue()??0;img.setPosition(from.x+(x-from.x)*k,from.y+(y-from.y)*k-Math.sin(k*Math.PI)*46);}});} // 从尸体 / 掉落处蹦出去（不砸在主将脸上）
   return true;
  }
@@ -183,6 +188,7 @@ export class BattlefieldSupplies {
   potion.active=true;potion.until=this.now()+60000;potion.name=undefined;potion.instant=false;
   if(this.healArt){const heal=HEAL_PROPS[kind];potion.amount=this.player.maxHp*heal.ratio;potion.image.setTexture('heal_props',heal.drop).setPosition(x,y).setDisplaySize(34,34).setAlpha(1).setVisible(true);}
   else{potion.amount=undefined;potion.image.setTexture(potionTexture(this.scene)).setPosition(x,y).setDisplaySize(...this.potionSize()).setAlpha(1).setVisible(true);}
+  this.landPotion(potion,x,y); // 营帐等掉的回血：不砸在脸上
  }
  onBroken(enemy:Enemy):void {
   const crate=this.crates.find(c=>c.enemy===enemy&&c.life===enemy.spawnId);if(!crate||!crate.cell||this.broken.has(crate.cell))return;
@@ -203,6 +209,7 @@ export class BattlefieldSupplies {
   potion.active=true;potion.until=this.now()+60000;potion.name=undefined;potion.instant=false;
   if(heal){potion.amount=this.player.maxHp*heal.ratio;potion.image.setTexture('heal_props',heal.drop).setPosition(enemy.x,enemy.y+6).setDisplaySize(34,34).setAlpha(1).setVisible(true);}
   else{potion.amount=this.player.maxHp*BATTLE_HEAL.wineJarRatio;potion.name='酒葫芦';potion.image.setTexture(potionTexture(this.scene)).setPosition(enemy.x,enemy.y+10).setDisplaySize(...this.potionSize()).setAlpha(1).setVisible(true);}
+  this.landPotion(potion,potion.image.x,potion.image.y); // 酒罐 / 药篓掉的回血：不砸在脸上
  }
  update(dt:number,now:number,placements:readonly BattlefieldProp[]=[],burn:(enemy:Enemy,damage:number)=>void=()=>{},allies:readonly Ally[]=[],hurtAlly:(ally:Ally,damage:number,now:number)=>void=()=>{}):void {
   this.updateDebris(now);
@@ -227,7 +234,7 @@ export class BattlefieldSupplies {
   }
   if(this.healRemaining>0&&this.player.alive){const n=Math.min(this.healRemaining,this.healRate*dt);this.player.heal(n);this.healRemaining=Math.max(0,this.healRemaining-n);}
   for(const p of this.potions){if(!p.active)continue;if(now>=p.until){p.active=false;p.image.setVisible(false);continue;}
-   const near=this.player.alive&&Math.hypot(p.image.x-this.player.x,p.image.y-this.player.y)<30;
+   const near=this.player.alive&&!(p.landAt&&this.now()<p.landAt)&&Math.hypot(p.image.x-this.player.x,p.image.y-this.player.y)<30; // 还在蹦的药不能捡
    if(near&&p.instant&&this.pouch.length>=POUCH_MAX&&this.player.hp<this.player.maxHp-.5){p.active=false;p.image.setVisible(false);this.healRemaining+=p.amount??HEAL_TOTAL;this.healRate=Math.max(this.healRate,(p.amount??HEAL_TOTAL)/2.5);this.onPickup('other');continue;} // 军中伤药：药囊满了直接服下
    if(near&&this.pouch.length<POUCH_MAX){p.active=false;p.image.setVisible(false);const heal=p.image.texture.key==='heal_props';this.pouch.push({amount:p.amount,texture:p.image.texture.key,frame:heal?Number(p.image.frame.name):undefined,name:p.name??(heal?(Number(p.image.frame.name)===2?'酒葫芦':'草药包'):'疗伤药')});this.onPickup(heal&&[0,2].includes(Number(p.image.frame.name))?'wine':'other');}
   }
@@ -257,7 +264,7 @@ export class BattlefieldSupplies {
   for(let y=cy-1;y<=cy+1;y++)for(let x=cx-1;x<=cx+1;x++){
    const h=this.hash(x+9173,y-4421),cell='heal-'+x+','+y;if(h%every!==5||this.broken.has(cell)||this.crates.some(c=>c.enemy.active&&c.cell===cell))continue;
    const px=x*CELL+120+(h>>>8)%400,py=y*CELL+120+(h>>>16)%400,kind:HealProp=(h>>>4)%5<3?'wine':'herb';
-   if(Math.hypot(px-this.player.x,py-this.player.y)>1250||Math.hypot(px-this.player.x,py-this.player.y)<160||!this.placementClear(px,py,80)||this.healBlocked?.(px,py,48))continue;
+   if(Math.hypot(px-this.player.x,py-this.player.y)>1250||Math.hypot(px-this.player.x,py-this.player.y)<250||!this.placementClear(px,py,80)||this.healBlocked?.(px,py,48))continue;
    if(this.crates.filter(c=>c.enemy.active&&c.heal).length>=4)return;const slot=this.freeSlot();if(!slot)return;this.placeHeal(slot,cell,px,py,kind);
   }
  }

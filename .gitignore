@@ -321,3 +321,5 @@ assets/raw/*
 !/tools/test-third-boss-fx.mjs
 !/tools/test-dongzhuo-fx.mjs
 !/tools/test-branch-final-fx.mjs
+!/tools/shot-attr-panel.mjs
+!/tools/test-attr-panel-view.mjs

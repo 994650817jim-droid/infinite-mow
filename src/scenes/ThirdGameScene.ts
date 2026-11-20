@@ -1,7 +1,7 @@
 import {ARC_FACTIONS,SCENE_LOOKS} from '../data/sceneLooks';
 import {ensureFactionTextures} from '../systems/FactionPalette';
 import {siegeSourceKeys} from '../data/siege';
-import {thirdPalette} from '../data/thirdChapter';
+import {arcPalette,repaintChapter} from '../data/thirdChapter';
 import {architecturalSurface} from '../systems/SceneSurfaces';
 import {FACTION_PROPS} from '../systems/PropsV2';
 import {chibiRiverCamp} from '../systems/ChibiRiverCamp';
@@ -82,7 +82,7 @@ export function thirdGameSceneClass(Base:typeof GameScene,cfg:ArcSceneConfig=THI
   const saved=this.registry.get('runConfig')as RunConfig|undefined,transfer=this.registry.get(cfg.transferKey)as CampaignTransfer|undefined;this.registry.remove(cfg.transferKey);this.registry.remove('campaignTransfer');if(transfer&&transfer.character===saved?.character)this.registry.set('campaignTransfer',transfer);
   this.registry.set('runConfig',{...saved,character:saved?.character??'zhaoyun',chapter:'hulao',westStage:3,encounter:'qunxiong'});super.create();
   this.controller=undefined;this.spear=new WeakMap();this.chapter=cfg.battle(this.thirdStage);this.runConfig={...this.runConfig,thirdStage:this.thirdStage,encounter:'qunxiong'};
-  /* 第三章敌军换色贴图（thirdPalette：李傕 / 张绣黑底土黄、袁术紫），须在任何敌兵生成前就绪 */const paletteKeys=cfg.arc==='qunxiong'?ensureFactionTextures(this,thirdPalette(this.thirdStage as 1|2|3),siegeSourceKeys()):[];
+  /* 敌军换色贴图（arcPalette：第三章李傕 / 张绣凉州深铁灰、袁术紫；第五、八、十二章曹 / 魏蓝青；第六章荆南守军），须在任何敌兵生成前就绪；借第三章底兵的各篇把换色键换成本篇配色 */const pal=arcPalette(cfg.arc,this.thirdStage as 1|2|3),paletteKeys=pal?ensureFactionTextures(this,pal,siegeSourceKeys()):[];if(pal)this.chapter=repaintChapter(this.chapter,pal);
   {const fac=ARC_FACTIONS[cfg.arc+'.'+this.thirdStage];if(fac!==undefined&&FACTION_PROPS[fac]&&this.textures.exists(FACTION_PROPS[fac].key))architecturalSurface(this,fac);} /* 场景审查 P3：营具按本关敌方势力（原来一律西凉红黑帐篷）；吴 / 蜀 / 蛮的营具图没到之前照旧 */
   this.hubao=cfg.arc==='chibi'?new HubaoBattle({scene:this,player:this.player,army:this.legion,enemies:this.enemies,spawn:(kind,x,y,def)=>this.spawnEnemy(kind,x,y,undefined,true,def),stage:()=>this.thirdStage,elapsed:()=>this.elapsed,def:k=>this.chapter.enemies[k],banner:(t,c)=>this.showWaveBanner(t,true,c||undefined),sfx:k=>this.sfx.play(k),move:(e,nx,ny,dt)=>this.advanceEnemy(e,nx,ny,dt),boss:()=>this.boss,obstacles:()=>this.sishuiObstacles?.footprints??[]}):undefined;this.xiliang=this.hubao??null;
   this.thirdReceipt=this.thirdTest?'':cfg.begin?cfg.begin(this.thirdStage):beginArcExpedition(cfg.arc as WarlordArc,this.thirdStage,this.allies.filter(u=>u.active&&u.reserveSoldier).map(u=>u.kind));const effect=permanentEffects();this.legion.healingMultiplier=effect.healMultiplier;applyCitySpecialties(this.player,effect,!transfer,{legion:this.legion,supplies:this.supplies});if(!transfer){for(let i=0;i<effect.reinforcements;i++)this.legion.recruit(i===0?'swordsman':'spearman',1,true);if(!this.thirdTest)for(const kind of takeExpeditionReserve(effect.reserveSlots)){this.legion.recruit(kind,1,true);this.allies[this.allies.length-1].reserveSoldier=true;}}
@@ -110,7 +110,7 @@ export function thirdGameSceneClass(Base:typeof GameScene,cfg:ArcSceneConfig=THI
  // 2026-11-16 修：原来营寨 / 粮仓不在射程时返回 null，首领 / 精锐优先被整个吃掉（黄忠宝雕弓在 3-3、5-3 对首领 0 伤害），改为退回基类的首领 > 精锐
  protected priorityWeaponTarget(range:number,bodyRadius=true){return this.enemyCamps?.target(range,bodyRadius)??super.priorityWeaponTarget(range,bodyRadius);}
  protected tryCustomBossSkill(){if(!this.controller||!this.boss?.active)return false;this.controller.forceSkill(this.combatNow);return true;}
- protected customChapter(){return cfg.battle(this.thirdStage);}
+ protected customChapter(){const c=cfg.battle(this.thirdStage),p=arcPalette(cfg.arc,this.thirdStage as 1|2|3);return p?repaintChapter(c,p):c;} /* 同 create：本篇配色 */
  bossDebug(){return (this.controller as ArcController|undefined)?.debug??null;}
  /** 本关的关隘 / 城池登记（data/arcForts.ts），没登记 = 原样。 */
  get fort():ArcFort|undefined{return ARC_FORTS[cfg.arc+'.'+this.thirdStage];}

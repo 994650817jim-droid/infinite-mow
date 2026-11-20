@@ -122,6 +122,7 @@ import { BattleFortunes } from '../systems/BattleFortunes';
 import { BattleHeal } from '../systems/BattleHeal';
 import { BATTLE_HEAL } from '../data/battleHeal';
 import { TentEdgeHints, tentMarks, type TentCtx } from '../systems/SpawnTents';
+import { GATE_SPAWN, isRangedSpawn } from '../data/gateSpawn';
 import { FORTUNE, FORTUNE_EVENT, rollFortuneBuffs, type FortuneEventKind } from '../data/fortunes';
 import { applyStageBuff, clearStageBuffs } from '../systems/StageBuffs';
 import { BOUNTIES, GAMBLES, JINNANG, NEW_CARDS, chestCharmCard, drawNewCards, type BountyId, type GambleId, type JinnangId } from '../systems/LevelCards';
@@ -481,7 +482,15 @@ export class GameScene extends Phaser.Scene {
   /** 刷兵帐篷统一规则的上下文（data/spawnTents）：章节、首领是否出场、同屏敌兵数、拆营奖励（随军粮 + 干粮）。 */
   tentCtx():TentCtx{return{chapter:()=>this.phasePlan?.chapter??CHAPTER_INDEX[this.hardKey()]??2,bossOn:()=>this.bossSpawned,crowd:()=>this.activeEnemyCount(),sfx:k=>this.sfx.play(k),reward:(x,y,g,food)=>{this.legion.food+=g;if(food)this.battleHeal?.dropFood(x+24,y+18,BATTLE_HEAL.food.grain.ratio,BATTLE_HEAL.food.grain.name);}};}
   /** 场景可放东西的位置：夹进场地、挪出墙 / 营栅 / 房子，再避开水与树（机缘、回血点共用）。 */
-  protected fieldPlace(x:number,y:number):{x:number;y:number}{ let p = { x, y }; if (this.arena) p = this.arena.clampPoint(p.x, p.y); const fp = this.sishuiObstacles?.footprints; if (fp?.length) { const f = freeSpawn(fp, p.x, p.y, 48, this.player); p = { x: f.x, y: f.y }; if (this.arena) p = this.arena.clampPoint(p.x, p.y); } if (this.terrain) p = this.terrain.free(p.x, p.y, 48); return p; }
+  /**
+   * 这一点是不是在关闭的城墙 / 关墙后面（城门还没破）：是就返回墙线（世界 y，墙内 = y 小于墙线）。
+   * 基类管 SishuiPass 关墙（2-1 汜水关、1-3 广宗、第三章起城池 / 关隘型营寨关）；陈仓、樊城在子类里补（data/gateSpawn、共享笔记 siege-spawn-audit.md）。
+   */
+  protected behindClosedWall(x:number,y:number):{line:number}|null{const s=this.sishuiPass;return s&&s.behind(x,y)?{line:s.wallLine}:null;}
+  /** 「城门没破前墙内只刷远程」的计数（测试读）。 */
+  readonly wallSpawn={inside:0,mirrored:0,capped:0};
+  private wallRangedCount(line:number):number{let n=0;for(const e of this.enemies)if(e.active&&!e.isSupplySlot&&e.kind!=='boss'&&e.y<line&&isRangedSpawn(e.kind,e.def))n++;return n;}
+  protected fieldPlace(x:number,y:number):{x:number;y:number}{ {const w=this.behindClosedWall(x,y);if(w)y=w.line+Math.max(GATE_SPAWN.outsideMin,w.line-y);} /* 机缘 / 回血点不放进还关着门的城里 */ let p = { x, y }; if (this.arena) p = this.arena.clampPoint(p.x, p.y); const fp = this.sishuiObstacles?.footprints; if (fp?.length) { const f = freeSpawn(fp, p.x, p.y, 48, this.player); p = { x: f.x, y: f.y }; if (this.arena) p = this.arena.clampPoint(p.x, p.y); } if (this.terrain) p = this.terrain.free(p.x, p.y, 48); return p; }
   /** 征程构筑：本关是否为重打 / 非主线（不读不存）；本关是否从存档恢复了构筑。 */
   protected campaignReplay=false;protected campaignLoaded=false;
   /** 战功（存档货币，data/merit.ts）：本场击杀的精英 / 首领数。 */
@@ -1429,6 +1438,11 @@ export class GameScene extends Phaser.Scene {
       // 还在墙里（两排房子的拐角）：改到离主将最远的关口（关口都是空地）
       if (!ok && freeSpawn(this.sishuiObstacles.footprints, x, y, 20, this.player).moved) { const g = [...(this.arena.info.gates ?? [])].sort((u, v) => Math.hypot(v.x - this.player.x, v.y - this.player.y) - Math.hypot(u.x - this.player.x, u.y - this.player.y))[0]; if (g) { x = g.x; y = g.y; } } }
     if (kind !== 'boss' && override?.behavior !== 'wall' && this.dzLubu) { const f = this.dzLubu.southSpawn(x, y); x = f.x; y = f.y; } // 2-3 洛阳：城北（城里）不刷兵
+    // 城门没破之前墙内只刷远程（用户 11-20；data/gateSpawn）：近战 / 超上限的远程镜像到墙外，墙内远程挪到墙后能射到的一条带里
+    if (kind !== 'boss' && override?.behavior !== 'wall') { const w = this.behindClosedWall(x, y); if (w) {
+      if (isRangedSpawn(kind, override ?? this.chapter.enemies[kind]) && this.wallRangedCount(w.line) < GATE_SPAWN.rangedCap) { y = Math.max(w.line - GATE_SPAWN.band.far, Math.min(w.line - GATE_SPAWN.band.near, y)); this.wallSpawn.inside++; }
+      else { if (isRangedSpawn(kind, override ?? this.chapter.enemies[kind])) this.wallSpawn.capped++; y = w.line + Math.max(GATE_SPAWN.outsideMin, w.line - y); this.wallSpawn.mirrored++; const fp = this.sishuiObstacles?.footprints; if (fp?.length) { const f = freeSpawn(fp, x, y, 20, this.player); x = f.x; y = f.y; } }
+    } }
     const poolLimit = BALANCE.enemyCap;
     const bossReserve = this.bossSpawned ? 0 : 1;
     const activeLimit = kind === 'boss' ? BALANCE.enemyCap : BALANCE.enemyCap - bossReserve;
@@ -1654,6 +1668,7 @@ export class GameScene extends Phaser.Scene {
     // 2-3：城墙 / 洛水封口建好后，撤掉开局先于城墙生成、落在城墙里或场地外的布景与旗子
     {const z=this.dzLubu;if(z)this.supplies?.purge((x,y)=>!z.inArena(x,y,0)||z.obstacles.footprints.some(b=>x>b.left&&x<b.right&&y>b.top&&y<b.bottom));}
     if(this.chapter.bossStyle==='huaxiong')this.sishuiPass?.onBoss(boss); // 汜水关：关门洞开，华雄带亲卫杀出
+    else if(this.chapter.id==='huangjin'&&this.chapter.stage===3)this.sishuiPass?.openGate(); // 1-3 广宗：张角出场城门破开（原来一直不开，城里的兵出不来）
     if(this.chapter.bossStyle==='huaxiong'){this.huaxiong=new HuaxiongBoss({scene:this,boss,player:this.player,army:this.legion,hurtTroops:(x,y,r,d,n,a,arc)=>this.legion.hurtArea(x,y,r,d,n,a,arc),sfx:()=>this.sfx.play('allySlash')},this.combatNow);}
     // 首领招式框架（第一章张梁 / 张宝）与已有控制器首领的坐骑（吕布赤兔、华雄）
     {const mv=BOSS_MOVES[this.chapter.bossStyle];if(mv&&!BOSS_OLD&&(this.chapter.bossStyle==='zhangliang'||this.chapter.bossStyle==='zhangbao'))this.moveset=new BossMoveset({scene:this,boss,player:this.player,army:this.legion,spawn:(kind,x,y,def)=>this.spawnEnemy(kind,x,y,1,true,def),def:k=>this.chapter.enemies[k],banner:(t,c)=>this.showWaveBanner(t,true,c),sfx:k=>this.sfx.play(k)},boss.sprite.texture.key,this.combatNow,mv,'walk');

@@ -54,6 +54,8 @@ export function beifaGameSceneClass(Base: typeof GameScene, cfg: ArcSceneConfig)
         banner: (t, c) => s.showWaveBanner(t, false, c), sfx: k => s.sfx.play(k),
         timeLeft: () => { const h = this as unknown as { elapsed: number; chapter: { waves: { start: number }[] } }, bt = h.chapter.waves[h.chapter.waves.length - 1].start; return h.elapsed >= bt ? Math.max(0, bt + 60 - h.elapsed) : null; } }, s.combatNow);
     }
+    /** 陈仓：城门没破之前城墙北面算墙内（只刷远程；GameScene.behindClosedWall、data/gateSpawn）。 */
+    protected behindClosedWall(x: number, y: number): { line: number } | null { return this.arcStage === 2 && this.siege?.gateAlive && y < this.siege.wallY - 10 ? { line: this.siege.wallY } : super.behindClosedWall(x, y); }
     /** 城墙专项检查 W6：陈仓城墙封死后，城门没破之前城里的兵出不来——刷兵点落在城墙北面就镜像到南面。 */
     protected spawnAroundPlayer(kind: EnemyKind, force = false): Enemy | null {
       const s = this as unknown as { player: { x: number; y: number }; spawnEnemy(k: EnemyKind, x: number, y: number, h?: number, f?: boolean): Enemy | null };

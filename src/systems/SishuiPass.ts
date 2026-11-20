@@ -72,11 +72,15 @@ export class SishuiPass {
   private tentsPlaced = false; private allTentsDown = false;
   private strikes: Strikes; private buffUntil = 0; private buffed = false;
   gateOpen = false; bossAt = -1; wenjiu = false;
+  /** 关墙线（世界 y，开局主将 y + wallY）。 */
+  wallLine = 0;
+  /** 开局主将位置：关墙碰撞、关墙画面、营帐都按它摆（画面等贴图载完才建，那时主将可能已经走开了——原来按当时的主将位置摆，画面和碰撞会错开）。 */
+  private start = { x: 0, y: 0 };
   readonly metrics = { volleys: 0, towersDown: 0, rides: 0, tentsDown: 0, warns: 0 };
   constructor(private h: PassHost, private o: PassOpts = {}) {
     // 舆图小帐 + 屏外边缘提示（systems/SpawnTents）
     this.unregister = registerTents(h.scene, () => this.tents.filter(t => !t.down && t.e?.active).map(t => ({ x: t.x, y: t.y, ratio: t.e!.hp / Math.max(1, t.e!.maxHp), hit: false, awake: t.at > 0 && Math.hypot(h.player.x - t.x, h.player.y - t.y) < 1400 })));
-    const P = SISHUI_PASS, p = h.player, wy = p.y + this.wallY;
+    const P = SISHUI_PASS, p = h.player, wy = p.y + this.wallY; this.wallLine = wy; this.start = { x: p.x, y: p.y };
     // 关墙碰撞：左右两段城墙 + 关门（开门后移除）
     if (o.wall !== false) this.footprints.push({ left: p.x - P.wallHalf, right: p.x - P.gateW / 2, top: wy - 70, bottom: wy - 10 }, { left: p.x + P.gateW / 2, right: p.x + P.wallHalf, top: wy - 70, bottom: wy - 10 });
     this.gateFoot = { left: p.x - P.gateW / 2, right: p.x + P.gateW / 2, top: wy - 70, bottom: wy - 10 }; if (!this.o.palisade && o.wall !== false) this.footprints.push(this.gateFoot);
@@ -108,7 +112,7 @@ export class SishuiPass {
   private get wallY(): number { return this.o.wallY ?? SISHUI_PASS.wallY; }
   private get tag(): string { return this.o.tag ?? 'sishui'; }
   private build(): void {
-    const P = SISHUI_PASS, s = this.h.scene, p = this.h.player, wy = p.y + this.wallY, K = MID_SIEGE_FILES[0].key, T = this.tag;
+    const P = SISHUI_PASS, s = this.h.scene, p = this.start, wy = this.wallLine, K = MID_SIEGE_FILES[0].key, T = this.tag;
     const pal = this.o.palisade && s.textures.exists(this.o.palisade) ? this.o.palisade : null, seg = pal ? 150 : P.segW, segSize = pal ? 190 : P.segW + 8;
     // 城墙段从门两侧往外对称铺（段与段略压一点盖缝）一直铺到崖壁；原来按 -wallHalf 起点铺，左右不对称，门与箭楼之间漏出一截空缺
     for (const side of [-1, 1]) for (let x = P.gateW / 2 + seg / 2 - 24; this.ends === 'tower' ? x + seg / 2 < P.wallHalf + 80 : x - seg / 2 < P.wallHalf; x += seg - 14) this.art.push(s.add.image(p.x + side * x, wy, pal ?? K, pal ? 3 : 0).setOrigin(.5, .97).setDisplaySize(segSize, segSize).setDepth(actorDepth(wy) - .01).setName(T + '-wall').setFlipX(side > 0 && !pal));
@@ -149,7 +153,7 @@ export class SishuiPass {
   update(): void {
     const now = this.h.now(), P = SISHUI_PASS, p = this.h.player;
     this.strikes.update();
-    if (!this.tentsPlaced && this.o.tents !== false && this.h.envReady()) { this.tentsPlaced = true; (this.o.tentSpots ?? P.tents).forEach(([dx, dy], i) => { const x = p.x + dx, y = p.y + dy, e = this.h.placeTent(x, y, `fixed-${this.tag}-tent-${i}`, P.tentHp, this.o.tentFaction); this.tents.push({ e, x, y, at: 0, down: !e, members: [] }); }); }
+    if (!this.tentsPlaced && this.o.tents !== false && this.h.envReady()) { this.tentsPlaced = true; (this.o.tentSpots ?? P.tents).forEach(([dx, dy], i) => { const x = this.start.x + dx, y = this.start.y + dy, e = this.h.placeTent(x, y, `fixed-${this.tag}-tent-${i}`, P.tentHp, this.o.tentFaction); this.tents.push({ e, x, y, at: 0, down: !e, members: [] }); }); }
     // 箭楼：放箭雨；被打塌换毁坏帧、掉战功、主将短时攻击加成
     for (const t of this.towers) {
       if (t.down) continue;
@@ -184,10 +188,28 @@ export class SishuiPass {
     this.buffUntil = this.h.now() + P.buffSec * 1000;
     this.h.banner('箭楼已毁', false, `箭雨停了 · 战功 +1 · 攻击 +${Math.round((P.buffMul - 1) * 100)}%（${P.buffSec} 秒）`);
   }
+  /**
+   * 这一点在关闭的关墙后面（关内 / 城里）吗？关门开了、营栅（辕门一直能过）、没有关墙都不算。
+   * 用于「城门没破之前墙内只刷远程」（data/gateSpawn，用户 11-20）。
+   */
+  behind(x: number, y: number): boolean {
+    if (this.gateOpen || this.o.palisade || this.o.wall === false) return false;
+    return y < this.wallLine - 10 && (!this.cliff || (x > this.cliff.x0 && x < this.cliff.x1));
+  }
+  /** 只开关门（城门倒塌 + 去掉门的碰撞），不挪首领、不出亲卫、不打横幅：1-3 广宗张角出场时用（原来广宗城门一直不开，城里的兵永远出不来）。 */
+  openGate(): void {
+    if (this.gateOpen || this.o.palisade || this.o.wall === false) return;
+    this.gateOpen = true; this.bossAt = this.h.now();
+    const i = this.footprints.indexOf(this.gateFoot); if (i >= 0) this.footprints.splice(i, 1);
+    this.gateImg?.setFrame(2);
+    const p = this.h.player, gx = this.gateImg?.x ?? p.x, gy = (this.gateImg?.y ?? this.wallLine) + 40;
+    playSheet(this.h.scene, 'fx_collapse_dust', gx, gy, { size: 260, ms: 700, depth: DEPTH.fx, originY: .8, name: this.tag + '-gate-dust' });
+    this.h.sfx('propBreak');
+  }
   /** 华雄出阵：关门洞开（城门倒塌序列帧），华雄带亲卫从门里杀出。 */
   onBoss(boss: Enemy): void {
     if (this.gateOpen) return;
-    const s = this.h.scene, P = SISHUI_PASS, p = this.h.player, gx = this.gateImg?.x ?? p.x, gy = (this.gateImg?.y ?? p.y + this.wallY) + 40;
+    const s = this.h.scene, P = SISHUI_PASS, p = this.h.player, gx = this.gateImg?.x ?? p.x, gy = (this.gateImg?.y ?? this.wallLine) + 40;
     this.gateOpen = true; this.bossAt = this.h.now();
     const i = this.footprints.indexOf(this.gateFoot); if (i >= 0) this.footprints.splice(i, 1);
     if (!this.o.palisade) this.gateImg?.setFrame(2);

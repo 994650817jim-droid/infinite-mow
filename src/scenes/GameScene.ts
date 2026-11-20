@@ -268,7 +268,7 @@ const UPGRADE_ACCENT: Record<string, number> = { weapon: 0xc9973a, martial: 0x2f
 interface ChasingBoss {enemy:Enemy;life:number;stage:number;name:string;battle:YellowBattle|null;huaxiong:HuaxiongBoss|null;xurong:XurongBoss|null;label:Phaser.GameObjects.Text;}
 
 /** story：战中剧情卷轴（第七章落凤坡等），只冻结战斗、不显示其他面板。 */
-type Mode = 'none' | 'levelup' | 'pause' | 'attributes' | 'result' | 'recruit' | 'aid' | 'rest' | 'bossloot' | 'parley' | 'story';
+type Mode = 'none' | 'map' | 'levelup' | 'pause' | 'attributes' | 'result' | 'recruit' | 'aid' | 'rest' | 'bossloot' | 'parley' | 'story';
 
 export class GameScene extends Phaser.Scene {
   protected player!: Player;
@@ -1450,6 +1450,8 @@ export class GameScene extends Phaser.Scene {
       if (ordersPanelSetting() === 'on') this.ordersPanel = new OrdersPanel(this, orders);
       this.battleMap = new BattleMap({scene: this, player: () => this.player, enemies: () => this.enemies, followers: () => this.followers?.members ?? [],
         title: () => this.chapter.name ?? this.chapter.label ?? '',
+        // 2026-11-19 用户「打开小地图会暂停是我要要求的」：舆图展开时战斗暂停，卷回后恢复
+        pause: on => { if (on) { if (this.mode === 'none' && !this.over) this.setMode('map'); } else if (this.mode === 'map') this.setMode('none'); },
         camps: () => { const z = this.allyPush, now = this.combatNow; return (this.objective?.standing ?? []).map(e => ({x: e.x, y: e.y, ratio: e.hp / Math.max(1, e.maxHp), hit: !!z && now - (z.campHitAt.get(e) ?? -1e9) < 900})); },
         pushes: () => (this.allyPush?.squads ?? []).map(q => ({from: q.from, to: q.target ? {x: q.target.x, y: q.target.y} : null, members: q.members.filter(m => !m.dead)})), bosses: () => [...(this.dual ? this.dual.alive.map(x => x.enemy) : this.boss?.active ? [this.boss] : []), ...this.dzLubuBoss().map(x => x.e)]}, orders);
       if (this.ordersPanel) this.objectiveText?.setVisible(false);
@@ -1508,8 +1510,10 @@ export class GameScene extends Phaser.Scene {
   protected tickBattleMap(dt: number): void {
     this.battleOrders?.update(dt); this.ordersPanel?.update(dt);
     if (!this.battleMap) return;
-    if (this.mode !== 'none' && this.battleMap.bigOpen) this.battleMap.toggleBig();
-    if (this.mode === 'none' && !this.over) this.battleMap.update(dt);
+    this.battleMap.stepAnim(dt); // 舆图展开 / 卷回动画用真实帧时间（战斗暂停时也播）
+    // 展开舆图本身就是 'map' 模式（战斗暂停）；其余面板 / 弹窗打开时收起舆图
+    if (this.mode !== 'none' && this.mode !== 'map' && this.battleMap.bigOpen) this.battleMap.toggleBig();
+    if ((this.mode === 'none' || this.mode === 'map') && !this.over) this.battleMap.update(dt);
   }
 
   /** 盾碎：碎片效果，换成同章步兵造型（飞熊军等专属造型保留原样）。 */

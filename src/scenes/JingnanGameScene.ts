@@ -79,7 +79,7 @@ export function jingnanGameSceneClass(Base: typeof GameScene, cfg: ArcSceneConfi
       storyScroll(this, GAME_WIDTH, GAME_HEIGHT, IS_DESKTOP, { name: 'story-jingnan-end', confirmName: 'story-jingnan-end-confirm', kicker: '第六章 · 平定荆南 · 告捷', title: '荆南四郡尽归',
         lines: [
           { text: '长沙城破，韩玄伏诛。桂阳、零陵、武陵、长沙四郡相继归附，荆州以南尽入版图。' },
-          ...(hz ? [{ who: '黄忠', text: '忠年近六旬，今日方遇明主。愿以残年，为将军前驱！' }] : [{ text: '老将黄忠战殁城下，军中无不惋惜。' }]),
+          ...(hz ? [{ who: '黄忠', text: '忠年近六旬，今日方遇明主。愿以残年，为将军前驱！' }] : [{ text: '老将黄忠负伤，引残兵遁去。' }]),
           { who: '魏延', text: '韩玄残暴寡恩，长沙百姓苦之久矣。某愿投将军帐下！' },
           { who: lord, text: '兵精粮足，可图大事。传令诸将，整军西望。' },
           { text: '西川刘璋暗弱，张鲁窥其北。益州天府之国，正在眼前……（第七章 · 入蜀）' },

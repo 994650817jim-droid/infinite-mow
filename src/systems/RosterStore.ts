@@ -10,6 +10,7 @@ import { loadItems, loadout, resetItemCache, unequipSlot, type GearOwner } from 
 import { isChapterTestRun } from './ChapterProgress';
 import { SURRENDER } from '../data/surrender';
 import { activeValue, passiveValue } from '../data/commonerSkills';
+import { heroUnlocked } from './HeroUnlocks';
 
 /**
  * 人才库与已招武将（RECRUIT_PLAN.md，用户选 A 方案）：独立存档键 im_roster_v1（在 SaveSlots.PROGRESS_KEYS 里，随存档位切换）。
@@ -114,6 +115,7 @@ export function loadRoster(): RosterSave {
   if (!worldUnlocked()) return empty();
   let s = read() ?? migrate();
   clampFollowerLevels(s);
+  { const n = s.offers.length; s.offers = s.offers.filter(o => !o.hero || heroUnlocked(o.hero)); if (s.offers.length !== n) write(s); } // 老档里挂着的还没来投的武将撤牌
   const now = currentSeason();
   if (s.season !== now) {
     s.captives = s.captives.filter(o => (o.expires ?? now) > now);
@@ -124,7 +126,7 @@ export function loadRoster(): RosterSave {
 function currentSeason(): number { try { return seasonIndex(loadWorld().town); } catch { return 0; } }
 
 /** 能不能当主将出战：主公规则生效且已有主公时只有主公；新存档还没选时都能选（这一步就是择主公）。 */
-export function heroOwned(hero: CharacterId): boolean { if (!lordRules()) return true; const lord = lordHero(); return !lord || lord === hero; }
+export function heroOwned(hero: CharacterId): boolean { if (!heroUnlocked(hero)) return false; /* 还没来投（systems/HeroUnlocks） */ if (!lordRules()) return true; const lord = lordHero(); return !lord || lord === hero; }
 /** 可选作主将的武将（天下开放前为全部）。 */
 export function ownedHeroes(): CharacterId[] { return CHARACTERS.map(c => c.id).filter(id => heroOwned(id)); }
 /** 选将面板的默认武将：上次出战的若未拥有，换成主公。 */
@@ -165,7 +167,7 @@ export function lordRules(): boolean {
 export function lordHero(): CharacterId | null { return read()?.lord ?? null; }
 export function lordFinal(): boolean { return read()?.lordFinal === true; }
 /** 选将界面能不能选这名武将当主公：还没主公、或老存档还有一次改选机会时都能选；主公已定后只有主公本人。 */
-export function canPickLord(hero: CharacterId): boolean { if (!lordRules()) return true; const s = read(); return !s?.lord || !s.lordFinal || s.lord === hero; }
+export function canPickLord(hero: CharacterId): boolean { if (!heroUnlocked(hero)) return false; if (!lordRules()) return true; const s = read(); return !s?.lord || !s.lordFinal || s.lord === hero; }
 /** 定下主公（最终确定）。已最终确定时不能再改（测试模式除外）。 */
 export function setLord(hero: CharacterId): RosterResult {
   if (!isHero(hero)) return { ok: false, message: '无效武将' };
@@ -195,7 +197,7 @@ export function ensureLegacyLord(): boolean {
 }
 /** 行囊里可以换装的人：天下开放前为全部可玩武将；之后为麾下所有武将（含招来的 r_ 编号）。 */
 export function gearOwners(): Array<{ id: GearOwner; name: string }> {
-  if (!rosterEnforced()) { const lord = lordRules() ? lordHero() : null; return (lord ? CHARACTERS.filter(c => c.id === lord) : CHARACTERS).map(c => ({ id: c.id, name: c.name })); }
+  if (!rosterEnforced()) { const lord = lordRules() ? lordHero() : null; return (lord ? CHARACTERS.filter(c => c.id === lord) : CHARACTERS.filter(c => heroUnlocked(c.id))).map(c => ({ id: c.id, name: c.name })); }
   return loadRoster().owned.map(r => ({ id: (r.hero ?? r.id) as GearOwner, name: r.name.replace(/（.*）/, '') }));
 }
 /** 武将显示名（含招来的人）。 */
@@ -221,7 +223,7 @@ const hallIdx = (s: RosterSave): number => Math.max(1, hallLevel(s)) - 1;
 /** 旧存档里在招贤馆界面升过的等级（给营寨迁移用：talent 设为 max(1, 它)）。 */
 export function legacyHallLevel(): number { return read()?.hall ?? 1; }
 
-function unownedHeroes(s: RosterSave): CharacterId[] { return CHARACTERS.map(c => c.id).filter(id => !s.owned.some(r => r.hero === id) && !s.offers.some(o => o.hero === id) && !s.captives.some(o => o.hero === id)); }
+function unownedHeroes(s: RosterSave): CharacterId[] { return CHARACTERS.map(c => c.id).filter(id => heroUnlocked(id) /* 没来投的不进招贤馆 */ && !s.owned.some(r => r.hero === id) && !s.offers.some(o => o.hero === id) && !s.captives.some(o => o.hero === id)); }
 function commonOffer(s: RosterSave): Offer {
   const w = RECRUIT.commonQuality[hallIdx(s)], total = Object.values(w).reduce((a, b) => a + (b ?? 0), 0); let r = rand() * total, q: ItemQuality = 'white';
   for (const k of ['white', 'green', 'blue'] as const) { r -= w[k] ?? 0; if (r < 0) { q = k; break; } }
@@ -374,6 +376,17 @@ export function toggleFollower(id: string): RosterResult {
   s.followers.push(id); write(s); return { ok: true, message: `${r.name}随行` };
 }
 /** 本局出战的随行武将：去掉主将本人，最多 cap 人。 */
+/**
+ * 武将来投（systems/HeroUnlocks）：免费直接进本档麾下（不进降将栏、不花军粮），顺手撤掉招贤馆里同一人的挂牌。
+ * 天下还没开放（没有人才库）时返回 false——等开放后下次补查再入。已在麾下也算 true。
+ */
+export function grantHero(hero: CharacterId): boolean {
+  if (!worldUnlocked()) return false;
+  const s = loadRoster();
+  if (!s.owned.some(r => r.hero === hero)) s.owned.push(heroRecruit(hero));
+  s.offers = s.offers.filter(o => o.hero !== hero); s.captives = s.captives.filter(o => o.hero !== hero);
+  write(s); return true;
+}
 export function followersFor(lead: CharacterId): Recruit[] {
   if (!worldUnlocked()) return [];
   const s = loadRoster(); return s.followers.map(id => s.owned.find(r => r.id === id)).filter((r): r is Recruit => !!r && r.hero !== lead).slice(0, followerCap(s));

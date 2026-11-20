@@ -34,6 +34,7 @@ import { BARKS_LABEL, heroBarks, setHeroBarks, type HeroBarks, SCHOOL_HINT_LABEL
 import { CHAPTER_SCENES, openChapterSelect } from '../ui/ChapterSelect';
 import { requestDirectDepart } from '../systems/DirectDepart';
 import type { TimelineChapterId } from '../world/ChapterTimeline';
+import { checkHeroJoins } from '../ui/HeroJoinReveal';
 
 const ROLES = ['游龙先锋 · 灵动突刺', '重甲武圣 · 横扫千军', '百步神射 · 远程压制', '卧龙军师 · 火阵爆发'];
 const PASSIVE_HINTS = [
@@ -71,7 +72,7 @@ export class MenuScene extends Phaser.Scene {
   private startButton!: Phaser.GameObjects.Rectangle;
   private startLabel!: Phaser.GameObjects.Text;
   constructor() { super('MenuScene'); }
-  create(): void {playMenuMusic(this);
+  create(): void {playMenuMusic(this); /* 武将来投（systems/HeroUnlocks）：按进度补查、弹没看过的揭幕 */this.time.delayedCall(500,()=>checkHeroJoins(this));
     ensureWarTextures(this);
     this.cameras.main.fadeIn(180,0,0,0);
     // 2026-11-15 用户要求：开局每次从本章第 1 关打起（原为“下一个未通关”）。

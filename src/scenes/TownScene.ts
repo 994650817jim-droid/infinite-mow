@@ -13,7 +13,7 @@ import {homeCommand,warPanelTexture} from '../ui/HomeCommand';
 import {lqCommand,lqPanel} from '../ui/LacquerKit';
 import {uiSfx} from '../systems/Sfx';
 import {startCityAmbient} from '../systems/ContentSfx';
-import {loadWorld,worldUnlocked,storageUnavailable,incompatibleSave,cityLevels,cityBuild,spendProvisions} from '../world/WorldStore';
+import {loadWorld,worldUnlocked,storageUnavailable,incompatibleSave,cityLevels,cityBuild,spendProvisions,gainProvisions} from '../world/WorldStore';
 import {openMerchantShop} from '../ui/MerchantShop';
 import {CHARACTERS,type CharacterId} from '../data/characters';
 import {CAMP_ART_IDS} from '../town/CampLife';
@@ -227,7 +227,7 @@ export class TownScene extends Phaser.Scene {
  private openMerchant() {
   uiSfx().play('uiClick');
   const s = loadWorld(), lootCh = chaptersOpen(), tier = lootBand(lootCh); /* 掉落品质随章节（data/items.ts lootBand） */ let hero = 'zhaoyun'; try { hero = localStorage.getItem('im_last_hero') || hero; } catch { /* 存储不可用 */ }
-  const open = () => { if (!this.sys.isActive()) return; openMerchantShop(this, {wallet: {name: '军粮', get: () => loadWorld().provisions, spend: spendProvisions}, tier, chapter: lootCh, hero: (CHARACTERS.some(c => c.id === hero) ? hero : 'zhaoyun') as CharacterId, depth: 600, onClose: () => { if (this.sys.settings.status === Phaser.Scenes.RUNNING) this.refresh(); }, sound: k => uiSfx().play(k as 'uiClick')}); };
+  const open = () => { if (!this.sys.isActive()) return; openMerchantShop(this, {wallet: {name: '军粮', get: () => loadWorld().provisions, spend: spendProvisions, gain: gainProvisions}, tier, chapter: lootCh, hero: (CHARACTERS.some(c => c.id === hero) ? hero : 'zhaoyun') as CharacterId, depth: 600, onClose: () => { if (this.sys.settings.status === Phaser.Scenes.RUNNING) this.refresh(); }, sound: k => uiSfx().play(k as 'uiClick')}); };
   if (this.textures.exists('item_icons')) open(); else { this.load.atlas('item_icons', 'assets/items/item-icons.webp', 'assets/items/item-icons.json'); this.load.once('complete', open); this.load.start(); }
  }
  /** 统一名牌（功能建筑 / 分署 / 旅商）：漆底描金字、同字号、底边中点对齐建筑底边。state：built 已建 / open 可建 / blocked 未满足条件。 */

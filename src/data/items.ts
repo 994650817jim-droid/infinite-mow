@@ -303,6 +303,13 @@ export const BAG_OVERFLOW = 20;
 /** 行营军需商人道具货架价格（粮草）。 */
 export const MERCHANT_PRICE: Partial<Record<ItemQuality, number>> = { green: 60, blue: 120, purple: 260 };
 /**
+ * 卖给军需商人（2026-11-19 用户「分解不需要背包，可以去军需商人卖装备」，代替行囊里的「分解」）：
+ * 卖价 ≈ 商人同档买价的 1/3（绿 20 / 蓝 40 / 紫 90；白、橙商人不卖，按同比例补 8 / 200），每章 +15%。首领遗珍不收。初值，交平衡会话。
+ */
+export const SELL_PRICE: Record<ItemQuality, number> = { white: 8, green: 20, blue: 40, purple: 90, orange: 200 };
+export const SELL_CHAPTER_MUL = .15;
+export function sellPrice(item: { quality: ItemQuality }, chapter: number): number { return Math.round(SELL_PRICE[item.quality] * (1 + SELL_CHAPTER_MUL * Math.max(0, Math.floor(chapter) - 1))); }
+/**
  * 军需商人偶尔捎来 1 卷战法（2026-11-18 用户「军需商人也可能会卖功法」）：每次进营按 chance 判定一次（同一次休整里不重抽）；
  * price[已学等级]：0 = 新学 Lv.1、1 = 精进到 Lv.2、2 = 精进到 Lv.3（随军粮）。初值交平衡会话复核。逻辑在 systems/CampMarket.ts。
  */

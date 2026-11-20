@@ -310,3 +310,5 @@ assets/raw/*
 !/tools/test-xurong-cast.mjs
 !/tools/prepare-fx-strips.mjs
 !/tools/test-status-fx.mjs
+!/tools/build-vfx-atlas.mjs
+!/tools/shot-build-vfx.mjs

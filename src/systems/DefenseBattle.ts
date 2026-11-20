@@ -28,6 +28,7 @@ export interface DefenseHost {
   /** 城门破了：把门的碰撞框撤掉、换破门图。 */ openGate: () => void;
   /** 跳过喘息：把关内时间拨到下一波。 */ skipTo: (sec: number) => void;
   /** 小兵成长（弓手伤害跟着涨一点）。 */ hpScale: () => number;
+  /** 登城：主将在城头带里时武器范围加成（1 = 没有）。 */ rampart?: (mul: number) => void;
   win: () => void; lose: () => void;
 }
 export interface DefenseOpts { tier: CityTier; dtier: DefenseTier; office: number; muster: number; start: { x: number; y: number }; wallLine: number; gateX: number }
@@ -44,7 +45,9 @@ export class DefenseBattle {
   private facility = { logs: { charges: DEFENSE.logs.charges as number, cd: 0, x: 0, y: 0 }, oil: { charges: DEFENSE.oil.charges as number, cd: 0, x: 0, y: 0 } };
   private rolling: { img: Phaser.GameObjects.Image; t0: number; x0: number; dir: number; hit: Set<Enemy> } | null = null;
   private burning: { until: number; next: number; fires: Phaser.GameObjects.Sprite[] } | null = null;
-  private done = false; private spaceKey?: Phaser.Input.Keyboard.Key;
+  private done = false; private spaceKey?: Phaser.Input.Keyboard.Key; private onRampart = false;
+  /** 正在砍城门 / 府衙的人（最后一次贴上来的时刻）：超过 gateCap / keepCap 的在后面排着。 */
+  private atGate = new Map<Enemy, number>(); private atKeep = new Map<Enemy, number>();
   /** 测试用。 */
   readonly stats = { archerShots: 0, gateHits: 0, keepHits: 0, rams: 0, ladders: 0, climbers: 0, logs: 0, oil: 0, repairs: 0, phaseLog: [] as string[] };
 
@@ -97,6 +100,7 @@ export class DefenseBattle {
     this.wave = idx; this.phase = phase;
     const key = phase + idx;
     if (key !== this.lastPhase) { this.lastPhase = key; this.enterPhase(phase, idx); }
+    { const P = this.h.player(), R = DEFENSE.rampart, on = P.y > this.o.wallLine + R.top - 10 && P.y < this.o.wallLine + R.bottom + 10; if (on !== this.onRampart) { this.onRampart = on; this.h.rampart?.(on ? 1 + R.rangeBonus : 1); } }
     if (!this.h.paused()) {
       this.fireArchers(now);
       this.useFacilities(now);
@@ -127,8 +131,10 @@ export class DefenseBattle {
     const D = DEFENSE, s = this.h.scene, dmg = D.archerDamage * Math.sqrt(Math.max(1, this.h.hpScale()));
     for (const a of this.archers) {
       if (a.hp <= 0 || now < a.next) continue;
-      let best: Enemy | null = null, bd: number = D.archerRange;
-      for (const e of this.h.enemies()) { if (!e.active || e.isSupplySlot || e.hp <= 0) continue; const d = Math.hypot(e.x - a.x, e.y - a.y); if (d < bd) { bd = d; best = e; } }
+      // 先射砍城门的（门前 gateFocus 以内），没有再射最近的
+      let best: Enemy | null = null, bd: number = D.archerRange, focus: Enemy | null = null, fd = Infinity;
+      for (const e of this.h.enemies()) { if (!e.active || e.isSupplySlot || e.hp <= 0) continue; const d = Math.hypot(e.x - a.x, e.y - a.y); if (d > D.archerRange) continue; if (d < bd) { bd = d; best = e; } const g = Math.hypot(e.x - this.o.gateX, e.y - this.o.wallLine); if (!this.gate.open && g < D.gateFocus && g < fd) { fd = g; focus = e; } }
+      best = focus ?? best;
       if (!best) continue;
       a.next = now + D.archerMs; this.stats.archerShots++;
       const t = best, life = t.spawnId, arrow = s.add.image(a.x, a.y - 30, 'arrow').setDisplaySize(26, 5).setRotation(Math.atan2(t.y - a.y + 30, t.x - a.x)).setTint(0xffe0a3).setDepth(DEPTH.projectile);
@@ -240,14 +246,26 @@ export class DefenseBattle {
       if (isRangedSpawn(e.kind, e.def)) return false;
       const spread = ((e.spawnId % 9) - 4) * 22, gx = this.o.gateX + spread, gy = this.gate.open ? this.o.wallLine + 80 : this.o.wallLine - 46;
       const dx = gx - e.x, dy = gy - e.y, d = Math.hypot(dx, dy) || 1;
-      if (!this.gate.open && d <= D.gateReach) { this.gate.hp -= e.def.damage * D.contactMul * dt; this.stats.gateHits++; e.moveVx = e.moveVy = 0; this.h.advance(e, 0, 0, dt); return true; }
+      if (!this.gate.open && d <= D.gateReach + 60 && !this.slot(this.atGate, e, D.gateCap) && d > D.gateReach) { e.moveVx = e.moveVy = 0; this.h.advance(e, 0, 0, dt); return true; } // 门前挤满了：在后面等
+      if (!this.gate.open && d <= D.gateReach) { if (!this.slot(this.atGate, e, D.gateCap)) { e.moveVx = e.moveVy = 0; this.h.advance(e, 0, 0, dt); return true; } this.atGate.set(e, this.h.now()); this.gate.hp -= e.def.damage * D.contactMul * dt; this.stats.gateHits++; e.moveVx = e.moveVy = 0; this.h.advance(e, 0, 0, dt); return true; }
       e.moveVx = dx / d * e.def.speed; e.moveVy = dy / d * e.def.speed; this.h.advance(e, dx / d, dy / d, dt); return true;
     }
     const K = this.keepPos, pd = Math.hypot(P.x - e.x, P.y - e.y);
     if (pd <= D.raidDist) return false;
+    // 城门还没破：爬上城头的兵去城门内侧砍门（想从里面开门），不直奔府衙
+    if (!this.gate.open) { const gx = this.o.gateX + ((e.spawnId % 5) - 2) * 24, gy = this.o.wallLine + 40, dx = gx - e.x, dy = gy - e.y, d = Math.hypot(dx, dy) || 1;
+      if (d <= D.gateReach && this.slot(this.atGate, e, D.gateCap)) { this.atGate.set(e, this.h.now()); this.gate.hp -= e.def.damage * D.contactMul * dt; this.stats.gateHits++; e.moveVx = e.moveVy = 0; this.h.advance(e, 0, 0, dt); return true; }
+      if (d <= D.gateReach) { e.moveVx = e.moveVy = 0; this.h.advance(e, 0, 0, dt); return true; }
+      e.moveVx = dx / d * e.def.speed; e.moveVy = dy / d * e.def.speed; this.h.advance(e, dx / d, dy / d, dt); return true; }
     const dx = K.x - e.x, dy = K.y - e.y, d = Math.hypot(dx, dy) || 1;
-    if (d <= D.keepReach) { this.keep.hp -= e.def.damage * D.contactMul * dt; this.stats.keepHits++; e.moveVx = e.moveVy = 0; this.h.advance(e, 0, 0, dt); return true; }
+    if (d <= D.keepReach) { if (this.slot(this.atKeep, e, D.keepCap)) { this.atKeep.set(e, this.h.now()); this.keep.hp -= e.def.damage * D.contactMul * dt; this.stats.keepHits++; } e.moveVx = e.moveVy = 0; this.h.advance(e, 0, 0, dt); return true; }
     e.moveVx = dx / d * e.def.speed; e.moveVy = dy / d * e.def.speed; this.h.advance(e, dx / d, dy / d, dt); return true;
+  }
+  /** 还有没有位子砍（已经在砍的算有）：最近 250 毫秒内贴上来过的算在砍。 */
+  private slot(m: Map<Enemy, number>, e: Enemy, cap: number): boolean {
+    const now = this.h.now(); if (m.has(e) && now - (m.get(e) ?? 0) < 250) return true;
+    let n = 0; for (const [k, t] of m) { if (!k.active || now - t >= 250) m.delete(k); else n++; }
+    return n < cap;
   }
   /** 攻城主将：门没破先来砍门（×bossMul），破了穿门洞进城，进城后照常（返回 false 交给原招式控制器）。 */
   bossStep(e: Enemy, dt: number): boolean {
@@ -270,5 +288,5 @@ export class DefenseBattle {
   /** 测试 / 舆图用。 */
   snapshot() { return { phase: this.phase, wave: this.wave, waves: this.waves, gate: Math.round(this.gate.hp), gateMax: this.gate.max, gateOpen: this.gate.open, keep: Math.round(this.keep.hp), keepMax: this.keep.max, archers: this.archers.filter(a => a.hp > 0).length, engines: this.engines.map(g => g.kind), charges: { logs: this.facility.logs.charges, oil: this.facility.oil.charges }, stats: { ...this.stats, phaseLog: [...this.stats.phaseLog] } }; }
   get facilities() { return { logs: { x: this.facility.logs.x, y: this.facility.logs.y }, oil: { x: this.facility.oil.x, y: this.facility.oil.y } }; }
-  clear(): void { this.done = true; for (const o of this.objs) o.destroy(); for (const a of this.archers) a.img.destroy(); for (const g of this.engines) g.label.destroy(); this.ui?.destroy(); this.rolling?.img.destroy(); for (const f of this.burning?.fires ?? []) f.destroy(); this.objs = []; this.archers = []; this.engines = []; }
+  clear(): void { if (this.onRampart) this.h.rampart?.(1); this.done = true; for (const o of this.objs) o.destroy(); for (const a of this.archers) a.img.destroy(); for (const g of this.engines) g.label.destroy(); this.ui?.destroy(); this.rolling?.img.destroy(); for (const f of this.burning?.fires ?? []) f.destroy(); this.objs = []; this.archers = []; this.engines = []; }
 }

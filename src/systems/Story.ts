@@ -91,7 +91,7 @@ export function playStoryScroll(scene: Phaser.Scene, node: StoryNode, lines: Sto
     if (scene.sys.settings.status >= Phaser.Scenes.SHUTDOWN) return; // 场景已关（create 期间 isActive 仍为 false，不能用它判断）
     const finish = (): void => { markStorySeen(node.id); done(); };
     storyScroll(scene, GAME_WIDTH, GAME_HEIGHT, IS_DESKTOP, { name: 'story-' + node.id.replace(/\./g, '-'), confirmName: 'story-confirm', kicker: node.kicker ?? '', title: node.title ?? '',
-      lines: all, reward: '', confirm, background: 'rest_camp', illustration: nodeIllustration(node), onDone: finish, skip: finish, translucent: opts?.translucent });
+      lines: all, reward: '', confirm, background: 'rest_camp', illustration: nodeIllustration(node), onDone: finish, skip: finish, translucent: opts?.translucent, dialogue: node.type === 'stageBrief' });
   }, nodeIllustration(node));
 }
 
@@ -204,7 +204,7 @@ export class StoryDirector {
   }
   /** 首领登场 / 二阶段 / 倒下：大字台词（每次都说）。 */
   /** 返回是否说了（说了的话 GameScene 把主将的登场 / 倒下台词往后挪，免得一句顶掉另一句）。 */
-  bossIntro(target: BarkTarget): boolean { const sn = this.stageNodes(), id = this.h.bossId?.(), n = (id && sn?.bossIntros?.[id]) || sn?.bossIntro; return n ? this.bark(n, target) : false; }
+  bossIntro(target: BarkTarget): boolean { const sn = this.stageNodes(), id = this.h.bossId?.(), n = (id && sn?.bossIntros?.[id]) || sn?.bossIntro; return n ? this.bark(n, target, true) : false; }
   /** 双首领关：节点写了 boss 时只对这位首领说（bossId 来自 boss-phase 事件）。 */
   bossPhase(target: BarkTarget, bossId?: string): boolean { const sn = this.stageNodes(), id = this.h.bossId?.(), byId = id ? sn?.bossPhases?.[id] : undefined; if (byId) return this.bark(byId, target); const n = sn?.bossPhase; return n && (!n.boss || !bossId || n.boss === bossId) ? this.bark(n, target) : false; }
   /** bossId：双首领关按首领取 bossFalls[id]（没有时不说）。 */
@@ -227,19 +227,22 @@ export class StoryDirector {
   line(id: string, target: BarkTarget): boolean {
     const n = this.chapter?.barks?.find(b => b.id === id); return n ? this.bark(n, target) : false;
   }
-  private bark(node: StoryNode, target: BarkTarget): boolean {
+  /** intro：首领登场——第一句出大卡并短暂停顿战斗（2026-11-20） */
+  private bark(node: StoryNode, target: BarkTarget, intro = false): boolean {
     if (!storyWanted('boss')) return false;
     const lines = resolveLines(node, this.h.ctx); if (!lines.length) return false;
     this.played.push(node.id);
     // 2026-11-18 夜：有说话人的句子出侧边立绘卡（我方左、敌方右，不暂停），头顶只冒一个「！」指明是谁在说，不重复台词；旁白句照旧头顶大字
-    const say = (l: StoryLine): void => {
+    const say = (l: StoryLine, i: number): void => {
       const s = speaker(l.who, this.h.ctx);
       if (!l.who) { storyBark(this.h.scene, target, s.name ?? '', l.text); return; }
       const id = l.who === '{lord}' ? this.h.ctx.lord : l.who, ally = l.who === '{lord}' || !!heroName(id);
-      showBarkCard(this.h.scene, { side: ally ? 'left' : 'right', name: s.name ?? id, text: l.text, portrait: s.portrait, id });
-      storyBark(this.h.scene, target, '', '！');
+      const big = intro && i === 0;
+      showBarkCard(this.h.scene, { side: ally ? 'left' : 'right', name: s.name ?? id, text: l.text, portrait: s.portrait, id, intro: big, pause: big ? () => this.h.pause?.() : undefined, resume: big ? () => this.h.resume?.() : undefined });
+      if (i === 0) storyBark(this.h.scene, target, '', '！');
     };
-    lines.forEach((l, i) => { if (i === 0) say(l); else this.h.scene.time.delayedCall(i * 1400, () => say(l)); }); // 第一句立即说（不受计时器暂停影响）
+    // 2026-11-20：几句一起排进台词卡队列（一张一张出，卡上有「下一句 ▸」）；旁白句仍按 1.4 秒错开冒头顶大字
+    lines.forEach((l, i) => { if (i === 0 || l.who) say(l, i); else this.h.scene.time.delayedCall(i * 1400, () => say(l, i)); });
     return true;
   }
   /**

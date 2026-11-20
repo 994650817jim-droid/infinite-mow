@@ -14,4 +14,7 @@ export const ZHOUYU = {
   chibi: { ropeTickMs: 250, ropeW: 26, ropeMul: .2, fieldMul: 1.3, finalExtraMs: 1500 },
   qu: { everyMs: 6000, ms: 3000, r: 200, slow: .3, haste: .15, finalBurn: .15, finalTickMs: 500 },
   yaliang: .15,
+  /** 2026-11-20 平衡第一轮：首领体型大，两艘火船爆燃 + 叠着的 3～4 片火场全打在首领身上，首领用时只有中位数的 0.15～0.3 倍（清杂输出与关羽相当；
+   *  实测首领掉血 81～93% 来自火船令）。火船 / 火场打首领 ×0.25（先试 ×0.4 + 不叠加仍约 0.43 倍），且叠着的火场打首领不叠加（每 tickMs 只烧一次，zhouyuWeapon.updateFields）；清杂不变。 */
+  bossMul: .25,
 } as const;

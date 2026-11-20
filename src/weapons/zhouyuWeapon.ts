@@ -38,7 +38,7 @@ export function zhouyuWindLeft(pl: Player, now: number): number { const s = STAT
 /** 伤害一个敌兵（火），烧死了给「英发」攒量。 */
 function burn(host: WeaponHost, e: Enemy, dmg: number, time: number): void {
   if (!e.active || e.isSupplySlot) return;
-  host.hitEnemy(e, dmg, time, 'fire');
+  host.hitEnemy(e, e.kind === 'boss' ? dmg * ZY.bossMul : dmg, time, 'fire');
   if (!e.active) host.player.passive.onFireKill(time);
 }
 
@@ -87,6 +87,8 @@ function updateShips(host: WeaponHost, st: ZyState, weapon: WeaponState, dt: num
   }
 }
 
+/** 首领上一次被火场烧的时刻（2026-11-20 平衡：火场打首领不叠加）。 */
+const BOSS_FIELD_AT = new WeakMap<Enemy, number>();
 function updateFields(host: WeaponHost, st: ZyState, dt: number, time: number): void {
   const wind = time < st.windUntil, mul = wind ? ZY.windMul : 1;
   if (!wind && st.windUntil) st.windUntil = 0;
@@ -95,7 +97,11 @@ function updateFields(host: WeaponHost, st: ZyState, dt: number, time: number): 
     f.img?.setPosition(f.x, f.y).setFrame(Math.floor(time / 90) % 6).setAlpha(Math.min(.9, (f.until - time) / 400));
     if (time < f.nextTick) continue;
     f.nextTick = time + ZY.tickMs;
-    for (const e of host.grid.query(f.x, f.y, f.r + 30)) if (Math.hypot(e.x - f.x, e.y - f.y) <= f.r + e.radius) burn(host, e, f.dmg * mul, time);
+    for (const e of host.grid.query(f.x, f.y, f.r + 30)) {
+      if (Math.hypot(e.x - f.x, e.y - f.y) > f.r + e.radius) continue;
+      if (e.kind === 'boss') { if (time - (BOSS_FIELD_AT.get(e) ?? -1e9) < ZY.tickMs) continue; BOSS_FIELD_AT.set(e, time); } // 叠着的火场打首领不叠加：每 tickMs 只烧一次
+      burn(host, e, f.dmg * mul, time);
+    }
   }
   for (const f of st.fields) if (time >= f.until) f.img?.destroy();
   st.fields = st.fields.filter(f => time < f.until);

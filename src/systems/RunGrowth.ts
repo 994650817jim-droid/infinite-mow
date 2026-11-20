@@ -85,6 +85,8 @@ export class RunGrowth {
   stageDesperate = 0;
   /** 本命 Lv6 / 7（兵器专职加深）：每级全伤害 +10%（由场景按本命武器 over 写入）。 */
   weaponOver = 0;
+  /** 重整构筑（data/respec）：退回后还没重选的强化次数（下一关开打时补选）；respecCh / respecN = 本章用过几次。随征程构筑保存。 */
+  respecPending = 0; respecCh = 0; respecN = 0;
   private xpCarry = 0;
   /** 名器「饮血」下次可触发的时刻。 */
   killHealAt = 0;

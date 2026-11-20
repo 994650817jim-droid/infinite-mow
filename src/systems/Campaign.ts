@@ -13,7 +13,7 @@ import type { Legion, LegionState } from './Legion';
 export interface CampaignTransfer {
   character: CharacterId; chapter: 'hulao' | 'huangjin'; stage?:1|2|3; army: LegionState;
   /** 2026-11-17 本局遗物 / 宝物并入信物库：不再存 relics、trinkets、build.treasures（旧档里有的读档时换成信物，见 takeLegacyTreasures）。stats 不含信物加成。 */
-  player: { build?: BuildSnapshot; growth?: Pick<RunGrowth,'attributes'|'masteries'|'unallocated'> & {heroFree?: number; masteryExtra?: RunGrowth['masteryExtra']}; stats: PlayerStats; weapons: WeaponState[];
+  player: { build?: BuildSnapshot; growth?: Pick<RunGrowth,'attributes'|'masteries'|'unallocated'> & {heroFree?: number; masteryExtra?: RunGrowth['masteryExtra']; respecPending?: number; respecCh?: number; respecN?: number}; stats: PlayerStats; weapons: WeaponState[];
     /** 2026-11-18 用户「前一关受的伤会继承到下一关」：主将剩余血量比例（0–1；旧档没有 = 满血）。 */ hpFrac?: number;
     /** 名将随从剩余血量比例（按随从 recruit.id；倒地的记 0，下一关以救起血量开局）。 */ followerHp?: Record<string, number> };
 }
@@ -34,7 +34,7 @@ export function takeLegacyTreasures(state: CampaignTransfer): number {
 export function packCampaign(character: CharacterId, player: Player, army: Legion, followers?: FollowerHpSource | null): CampaignTransfer {
   const followerHp: Record<string, number> = {};
   for (const m of followers?.members ?? []) followerHp[m.recruit.id] = m.downed ? 0 : Math.max(0, Math.min(1, m.hp / Math.max(1, m.maxHp)));
-  return { character, chapter: 'hulao', army: army.exportState(), player: { build:player.growth.build.snapshot(), growth: {attributes:{...player.growth.attributes},masteries:{...player.growth.masteries},masteryExtra:{...player.growth.masteryExtra},unallocated:player.growth.unallocated,heroFree:player.growth.heroFree}, stats: statsWithoutCharms(player), weapons: player.weapons.map(w => ({ ...w, cooldownLeft: 0 })),
+  return { character, chapter: 'hulao', army: army.exportState(), player: { build:player.growth.build.snapshot(), growth: {attributes:{...player.growth.attributes},masteries:{...player.growth.masteries},masteryExtra:{...player.growth.masteryExtra},unallocated:player.growth.unallocated,heroFree:player.growth.heroFree,respecPending:player.growth.respecPending||undefined,respecCh:player.growth.respecCh||undefined,respecN:player.growth.respecN||undefined}, stats: statsWithoutCharms(player), weapons: player.weapons.map(w => ({ ...w, cooldownLeft: 0 })),
     hpFrac: Math.max(0, Math.min(1, player.hp / Math.max(1, player.maxHp))), followerHp } };
 }
 /** 血量继承：主将（按比例，至少 1 血）与名将随从（倒地的以救起血量开局）。在等级 / 信物改完上限之后调用。 */
@@ -48,6 +48,10 @@ export function patchCampaignHp(hero: CharacterId, hpFrac: number, followerHp?: 
   try { const v = JSON.parse(localStorage.getItem(CAMPAIGN_KEY) ?? 'null'); const s = v?.heroes?.[hero]; if (!s?.player) return; s.player.hpFrac = Math.max(0, Math.min(1, hpFrac)); if (followerHp) s.player.followerHp = { ...(s.player.followerHp ?? {}), ...followerHp }; localStorage.setItem(CAMPAIGN_KEY, JSON.stringify(v)); } catch { /* 存储不可用 */ }
 }
 /** 行营军需商人买了战法：把存档点里的战法与随军粮一并改掉（同 patchCampaignHp，存档点在买之前）。 */
+/** 行营军需商人买了战法 / 心法：把存档点的整份构筑快照（含商人记账）与随军粮写回（存档点在买之前）。 */
+export function patchCampaignBuild(hero: CharacterId, build: BuildSnapshot, food: number): void {
+  try { const v = JSON.parse(localStorage.getItem(CAMPAIGN_KEY) ?? 'null'); const s = v?.heroes?.[hero]; if (!s?.player || !s.army) return; s.player.build = { ...(s.player.build ?? {}), ...build }; s.army.food = food; localStorage.setItem(CAMPAIGN_KEY, JSON.stringify(v)); } catch { /* 存储不可用 */ }
+}
 export function patchCampaignTactics(hero: CharacterId, tactics: Record<string, number>, food: number, manuals?: readonly string[]): void {
   try { const v = JSON.parse(localStorage.getItem(CAMPAIGN_KEY) ?? 'null'); const s = v?.heroes?.[hero]; if (!s?.player || !s.army) return; s.player.build = { ...(s.player.build ?? {}), tactics: { ...tactics }, ...(manuals ? { manuals: [...manuals] } : {}) }; s.army.food = food; localStorage.setItem(CAMPAIGN_KEY, JSON.stringify(v)); } catch { /* 存储不可用 */ }
 }
@@ -64,12 +68,12 @@ export function campaignTacticBook(hero: CharacterId): { canLearn(id: TacticId):
 /** 营寨旅商卖的「流派心法」：写进征程构筑（下次出征生效）；没有征程构筑或已研读过返回 false。 */
 export function learnCampaignManual(hero: CharacterId, school: SchoolId): boolean {
   const book = campaignTacticBook(hero); if (!book || book.manualsRead().includes(school)) return false;
-  try { const v = JSON.parse(localStorage.getItem(CAMPAIGN_KEY) ?? 'null'); const s = v?.heroes?.[hero]; if (!s?.player) return false; s.player.build = { ...(s.player.build ?? { tactics: {} }), manuals: [...book.manualsRead(), school] }; localStorage.setItem(CAMPAIGN_KEY, JSON.stringify(v)); return true; } catch { return false; }
+  try { const v = JSON.parse(localStorage.getItem(CAMPAIGN_KEY) ?? 'null'); const s = v?.heroes?.[hero]; if (!s?.player) return false; s.player.build = { ...(s.player.build ?? { tactics: {} }), manuals: [...book.manualsRead(), school], boughtManuals: [...new Set([...(s.player.build?.boughtManuals ?? []), school])] }; localStorage.setItem(CAMPAIGN_KEY, JSON.stringify(v)); return true; } catch { return false; }
 }
 /** 把一卷战法学进征程构筑：等级须与卷轴标的一致（买前没在别处升过），成功返回 true。 */
 export function learnCampaignTactic(hero: CharacterId, id: TacticId, fromLevel: number): boolean {
   const book = campaignTacticBook(hero); if (!book || !book.canLearn(id) || book.level(id) !== fromLevel) return false;
-  try { const v = JSON.parse(localStorage.getItem(CAMPAIGN_KEY) ?? 'null'); const s = v?.heroes?.[hero]; if (!s?.player) return false; s.player.build = { ...(s.player.build ?? {}), tactics: { ...(s.player.build?.tactics ?? {}), [id]: fromLevel + 1 } }; localStorage.setItem(CAMPAIGN_KEY, JSON.stringify(v)); return true; } catch { return false; }
+  try { const v = JSON.parse(localStorage.getItem(CAMPAIGN_KEY) ?? 'null'); const s = v?.heroes?.[hero]; if (!s?.player) return false; s.player.build = { ...(s.player.build ?? {}), tactics: { ...(s.player.build?.tactics ?? {}), [id]: fromLevel + 1 }, bought: { ...(s.player.build?.bought ?? {}), [id]: (s.player.build?.bought?.[id] ?? 0) + 1 } }; localStorage.setItem(CAMPAIGN_KEY, JSON.stringify(v)); return true; } catch { return false; }
 }
 export function restoreCampaign(state: CampaignTransfer, player: Player, army: Legion): void {
   takeLegacyTreasures(state);
@@ -79,7 +83,7 @@ export function restoreCampaign(state: CampaignTransfer, player: Player, army: L
   player.growth = new RunGrowth(state.character);
   player.growth.build.restore(state.player.build);
   const growth=state.player.growth;
-  if(growth){Object.assign(player.growth.attributes,growth.attributes);Object.assign(player.growth.masteries,growth.masteries);if(growth.masteryExtra)player.growth.masteryExtra={...growth.masteryExtra};player.growth.unallocated=growth.unallocated;player.growth.heroFree=growth.heroFree??0;}
+  if(growth){Object.assign(player.growth.attributes,growth.attributes);Object.assign(player.growth.masteries,growth.masteries);if(growth.masteryExtra)player.growth.masteryExtra={...growth.masteryExtra};player.growth.unallocated=growth.unallocated;player.growth.heroFree=growth.heroFree??0;player.growth.respecPending=Math.max(0,Math.min(99,Math.floor(growth.respecPending??0)));player.growth.respecCh=growth.respecCh??0;player.growth.respecN=growth.respecN??0;}
   player.weapons = state.player.weapons.map(w => ({ ...w, cooldownLeft: 0 })); player.hp = player.maxHp;
   army.restore(state.army);
 }

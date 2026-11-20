@@ -10,6 +10,10 @@ import { MOUNT_VISUAL, isHorseCavalry } from '../data/mounts';
 import { buildSettingsPanel, type SettingSpec } from '../ui/SettingsPanel';
 import {FollowerSquad,type Follower} from '../systems/FollowerSquad';
 import {showBarkCard} from '../ui/StoryBarkCard';
+import { DEFEAT, defeatLines } from '../data/defeatFlow';
+import { battlePoint, retreatTarget, type RetreatTarget } from '../world/DefeatRetreat';
+import { patchCampaignDefeat } from '../systems/Campaign';
+import { loseProvisionsPct } from '../world/WorldStore';
 import type {DefectorInfo} from '../data/fortunes';
 import type {Recruit} from '../systems/RosterStore';
 import {CharacterPassives} from '../systems/CharacterPassives';
@@ -791,7 +795,7 @@ export class GameScene extends Phaser.Scene {
     const registryConfig = this.registry.get('runConfig') as RunConfig | undefined;
     const requested = getBattleChapter(registryConfig?.chapter, registryConfig?.stage,registryConfig?.westStage);
     this.chapter = (chapterUnlocked(requested.id) && (!requested.stage || yellowStageUnlocked(requested.stage)) && (!requested.westStage||dongzhuoStageUnlocked(requested.westStage))) || isChapterTestRun() ? requested : getBattleChapter('huangjin',1);
-    const encounter=new URLSearchParams(location.search).get('encounter')||registryConfig?.encounter;const preview=encounter==='sishui'||encounter==='xingyang'||encounter==='qunxiong'&&!!this.customChapter();
+    const encounter=new URLSearchParams(location.search).get('encounter')||registryConfig?.encounter;const preview=encounter==='sishui'||encounter==='xingyang'||encounter==='qunxiong'&&!!this.customChapter();this.encounterPreview=!!new URLSearchParams(location.search).get('encounter'); /* 只有网址 ?encounter= 才是预览；篇章场景的 preview 也为真 */
     if(preview)this.chapter=encounter==='xingyang'?getXingyangEncounter():getSishuiEncounter();
     this.chapter=this.customChapter()??this.chapter;
     this.runConfig = { ...DEFAULT_RUN_CONFIG, ...registryConfig, chapter: this.chapter.id, stage:this.chapter.stage,westStage:this.chapter.westStage };
@@ -4041,6 +4045,50 @@ export class GameScene extends Phaser.Scene {
     this.tweens.add({ targets: t, scale: 1, alpha: 1, duration: 260, ease: 'Back.easeOut', onComplete: () => this.tweens.add({ targets: t, alpha: 0, delay: 1400, duration: 500, onComplete: () => t.destroy() }) });
     this.hitFeel.shake('medium'); this.sfx.play('promote');
   }
+  // ———— 战败流程（data/defeatFlow.ts，共享笔记 defeat-flow.md） ————
+  /** 这一仗退到哪（最近的我方城池 / 营寨）；战败惩罚的说明行。 */
+  defeatRetreat: RetreatTarget | null = null; defeatNotes: string[] = [];
+  /** 遭遇战预览（?encounter= 汜水 / 荥阳 / 自定关）：不算正式出征。注意篇章场景的 runConfig 都带 encounter，不能拿它判断。 */
+  encounterPreview = false;
+  /** 惩罚生效：正式战斗（测试战斗只有 __IM_DEFEAT_LIVE 时）、天下已开放、不是遭遇战预览。 */
+  protected defeatLive(): boolean {
+    const debug = isChapterTestRun() || this.debugModified || this.debugJumped || !!this.player.damageImmune;
+    return (!debug || !!(globalThis as Record<string, unknown>).__IM_DEFEAT_LIVE) && !this.encounterPreview && worldUnlocked();
+  }
+  /** 战败：惩罚（存档点主将 / 随行负伤、部曲折损，营寨军粮）、撤回目标、慢动作压暗 + 对话卡、结算面板晚出、按钮改「退守 X」。 */
+  protected runDefeatFlow(): void {
+    const key = this.hardKey(), stage = this.hardStage(), city = this.scene.key === 'SiegeGameScene' ? String(this.registry.get('siegeCity') ?? '') : null;
+    this.defeatRetreat = worldUnlocked() && !this.encounterPreview ? retreatTarget(battlePoint(key, city)) : null;
+    const notes: string[] = [];
+    if (this.defeatLive()) {
+      const fids = (this.followers?.members ?? []).map(m => m.recruit.id), camp = patchCampaignDefeat(this.runConfig.character, { hpFrac: DEFEAT.hpFrac, followerFrac: DEFEAT.followerFrac, troopLoss: DEFEAT.troopLoss, followerIds: fids });
+      if (camp) { notes.push('主将负伤 · 下次出征生命 ' + Math.round(DEFEAT.hpFrac * 100) + '%（军医可治）'); if (fids.length) notes.push('随行负伤 · 生命 ' + Math.round(DEFEAT.followerFrac * 100) + '%'); if (camp.troops) notes.push('部曲折损 ' + camp.troops + ' 人'); }
+      const g = loseProvisionsPct(DEFEAT.grainPct, DEFEAT.grainCap); if (g) notes.push('营寨军粮 −' + g);
+    }
+    this.defeatNotes = notes;
+    if (notes.length) this.resultTexts.body.setText(this.resultTexts.body.text + '\n战败惩罚  ' + notes.join(' · '));
+    // 演出：慢动作 + 压暗 + 左下角电影感对话卡（部将护主突围）；结算面板晚 resultDelayMs 出
+    this.devTimeScale = DEFEAT.slowMul; window.setTimeout(() => { if (this.sys?.isActive()) this.devTimeScale = 1; }, DEFEAT.slowMs);
+    this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, 0x07040a, 1).setScrollFactor(0).setDepth(DEPTH.overlay - 30).setAlpha(DEFEAT.dim).setName('defeat-dim'); // 结算时场景 tween 停了，压暗直接到位
+    if (storyMode() !== 'off') {
+      const hero = getCharacter(this.runConfig.character).name, guard = this.followers?.members.find(m => !m.downed)?.recruit.name.replace(/（.*）/, '') ?? '亲兵';
+      for (const l of defeatLines(key, stage)) showBarkCard(this, { side: 'left', name: l.who === '@lord' ? hero : l.who || guard, text: l.text });
+    }
+    this.resultPanel.setVisible(false);
+    window.setTimeout(() => { if (!this.sys?.isActive() || this.mode !== 'result') return; this.resultPanel.setVisible(true); this.presentResult(false); }, DEFEAT.resultDelayMs);
+    queueMicrotask(() => this.wireDefeatButton());
+  }
+  /** 结算按钮改成「退守 X」：回天下地图，选中并居中那座城（或营寨），弹败退告示；关卡没平定，照样能再出征。 */
+  protected wireDefeatButton(): void {
+    const t = this.defeatRetreat, home = this.resultPanel.getByName('result-home') as Phaser.GameObjects.Text | null; if (!t || !home) return;
+    home.setText('退守 ' + t.name).removeAllListeners('pointerdown').on('pointerdown', () => {
+      for (const k of Object.keys(this.registry.getAll())) if (/Transfer$/.test(k)) this.registry.remove(k);
+      this.registry.set('defeatRetreat', { name: t.name, kind: t.kind, stage: this.chapter.name, notes: [...this.defeatNotes] });
+      if (t.kind === 'city') this.registry.set('mapFocusCity', t.id); // 营寨：地图那边按 defeatRetreat 居中营寨
+      this.scene.start('WorldMapScene');
+    });
+    this.layoutResultButtons?.();
+  }
   /** 战场机缘各类事件的奖励（stage-event-rewards.md）；mult = 距离倍率 1–1.25。返回横幅小字。 */
   private fortuneReward(kind: FortuneEventKind, mult: number, x: number, y: number): string {
     const P = this.player, ch = this.phasePlan?.chapter ?? 2;
@@ -4164,7 +4212,7 @@ export class GameScene extends Phaser.Scene {
       ].join('\n'),
     );
     // 兵装缴获：胜利或坚持 60 秒带回全部，速败只带回一半；测试 / 调试战斗不入行囊
-    {const loot=this.itemDrops?.runLoot??[],debug=isChapterTestRun()||this.debugModified||this.debugJumped||!!this.player.damageImmune||!!this.runConfig.encounter,dep=depositRunLoot(loot,{victory,elapsed:this.elapsed,debug,pity:this.itemDrops?.pity});
+    {const loot=this.itemDrops?.runLoot??[],debug=isChapterTestRun()||this.debugModified||this.debugJumped||!!this.player.damageImmune||!!this.runConfig.encounter,dep=depositRunLoot(loot,{victory,elapsed:victory?this.elapsed:0,debug,pity:this.itemDrops?.pity}); /* 战败（data/defeatFlow.ts）：只带回一半，品质高的留下 */
      if(loot.length)this.resultTexts.body.setText(this.resultTexts.body.text+'\n缴获兵装  '+loot.length+' 件（'+this.itemDrops!.summary()+'）'+(debug?' · 测试战斗不入行囊':dep.lost?' · 败退遗失 '+dep.lost+' 件':' · 已收入行囊'));}
     if(this.worldCampaign){const reward=settleExpedition(this.expeditionId,{...stats,kills:Math.max(0,stats.kills-this.settledFrontlineKills),chapter:this.chapter.id,returned:this.allies.filter(a=>a.active&&a.reserveSoldier).map(a=>a.kind),debug:isChapterTestRun()||this.debugModified||this.debugJumped||this.player.damageImmune});
       this.resultTexts.body.setFontSize(IS_DESKTOP?14:16).setLineSpacing(IS_DESKTOP?5:8).setText(this.resultTexts.body.text+`\n永久奖励  军粮 +${reward.provisions}`+cityIncomeLine(reward));
@@ -4207,6 +4255,7 @@ export class GameScene extends Phaser.Scene {
       if(this.worldCampaign&&worldUnlocked())this.scene.start(openedMap||this.registry.get('worldReveal')?'WorldMapScene':'CityScene');
       else {this.registry.set('menuChapterPicker',true);this.scene.start('MenuScene');}
     });
+    if (!victory) this.runDefeatFlow();
     this.layoutResultButtons?.();
     // 电脑版结算展示：子类 finish 还会追加结算文字，等本轮调用结束再解析
     if (IS_DESKTOP) queueMicrotask(() => { if (this.sys?.isActive() && this.mode === 'result') this.presentResult(victory); });

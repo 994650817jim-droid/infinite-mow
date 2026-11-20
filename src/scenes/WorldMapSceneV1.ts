@@ -23,6 +23,8 @@ import {incomeText} from "../town/TownData";
 import {cityIncome,emptyCityLevels} from "../data/cityBuildings";
 import {cityLevels} from "../world/WorldStore";
 import {chapterUnlocked} from '../systems/ChapterProgress';
+/** 战败退守的告示（GameScene.wireDefeatButton 写进 registry 'defeatRetreat'）。 */
+interface DefeatRetreatNote{name:string;kind:'city'|'home';stage:string;notes:string[]}
 import {CITIES,CITY_LINKS,CITY_INCOME,FACTIONS,HOME,SPECIALTIES,TIER_NAME,cityAttackable,cityById,cityOwner,eraDef,eraIndexFor,territorySummary,type CityDef,type EraId} from '../world/WorldCities';
 import {cityMarker,factionLegend,markAlert,paintSelection,MARKER_FILES,type CityMarker} from '../world/WorldMapLayers';
 import {CITY_ART_FILES,MARKERS_V2,cityMarkerV2,siegeArtV2,intelGlyphPos,intelPennant,nodeMarkerV2,paintSelectionV2,sealGraphics} from '../world/WorldMarkers';
@@ -223,6 +225,9 @@ export class WorldMapSceneV1 extends Phaser.Scene {
   const fresh=isChapterTestRun()?0:takeNewChapters();
   if(fresh>0)this.revealChapter();
   if(advance||lost.length)this.showNotice(advance,lost);
+  // 战败退守（data/defeatFlow.ts）：选中 / 居中退守的城池或营寨，弹败退告示（叠在时局告示之上）
+  const retreat=this.registry.get('defeatRetreat') as DefeatRetreatNote|undefined;this.registry.remove('defeatRetreat');
+  if(retreat){if(retreat.kind==='home'&&!focus){this.layer.setPosition(this.area.x+this.area.w/2-HOME.x*this.zoom,(this.area.y+this.viewBottom)/2-HOME.y*this.zoom);this.clampMap();}this.showRetreat(retreat);}
   if(captured){this.selected={kind:'city',city:captured};this.refresh();this.playCapture(captured,nowRealm,prevRealm);}
   this.buildAmbient();
   this.tilesArmed=true;this.updateTiles();
@@ -411,6 +416,16 @@ export class WorldMapSceneV1 extends Phaser.Scene {
  /** 有告急城池时出征别处的警示（空串表示无告急）。 */
  private lossWarning(){const names=this.alerts.map(a=>cityById(a.city)?.name).filter(Boolean);return names.length?`⚠ ${names.join('、')}告急：此时出征别处，${names.length>1?'这些城池':'该城'}将失守！`:'';}
  /** W4 时局变化 / 城池失守 提示面板。 */
+ /** 战败退守告示：退到哪、受了什么惩罚、关卡未平定可再出征。 */
+ private showRetreat(r:DefeatRetreatNote){
+  const desk=W>600,pw=Math.min(W-40,500),root=this.add.container(0,0).setDepth(71).setName('defeat-modal');
+  root.add(this.add.rectangle(W/2,H/2,W,H,0x07100b,.72).setInteractive());
+  const lines=[`【${r.stage}】失利，全军退守${r.name}。`,...(r.notes.length?['战败惩罚：\n· '+r.notes.join('\n· ')]:[]),r.kind==='home'?'营寨军医可治伤、补部曲；整顿之后，这一仗照样可以再出征。':'城中军医可治伤、补部曲；整顿之后，这一仗照样可以再出征。','关卡未平定 · 等级、属性点、已招武将都不受影响。'];
+  const text=worldText(this,0,0,lines.join('\n\n'),desk?15:16,'#e4dcc4').setWordWrapWidth(pw-48,true).setLineSpacing(5);
+  const ph=Math.min(H-80,text.height+150),px=W/2-pw/2,py=H/2-ph/2;root.add(this.modalPanel(pw,ph));
+  root.add(worldText(this,px+24,py+20,'败退 · 退守'+r.name,24,'#e8a08a'));text.setPosition(px+24,py+64);root.add(text);
+  this.modalButton(root,W/2,py+ph-(desk?44:54),pw*.5,'整军再战',true,'defeat-ok',()=>root.destroy());
+ }
  private showNotice(advance:EraAdvance|null,lost:string[]){
   const desk=W>600,pw=Math.min(W-40,540),root=this.add.container(0,0).setDepth(70).setName('era-modal');this.notice=root;
   root.add(this.add.rectangle(W/2,H/2,W,H,0x07100b,.78).setInteractive());

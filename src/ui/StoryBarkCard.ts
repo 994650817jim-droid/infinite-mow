@@ -22,7 +22,7 @@ export const INTRO_PAUSE = 1500;
 // 2026-11-19 用户「用药和军令重叠了」：右边的卡让开最右一列圆钮（用药 / 加点 / 护阵，x ≥ 864）——电脑版右缘留 rightClear
 export const BARK_CARD = { w: 330, h: 100, face: 86, hold: 2700, slide: 260, gap: 140, top: { right: 290, left: 300 }, margin: 10, rightClear: 104 } as const;
 /** 电脑布局左下角：卡的左边 x、底边 y（游戏坐标） */
-export const BARK_CORNER = { x: 106, bottom: 446 } as const;
+export const BARK_CORNER = { x: 106, bottom: 446, /** 新手引导条在时上移（游戏坐标） */ tutorialLift: 74 } as const;
 const sideMargin = (side: 'left' | 'right'): number => side === 'right' && IS_DESKTOP ? BARK_CARD.rightClear : BARK_CARD.margin;
 const STATE_KEY = '__storyBarkCards';
 /** 出过的卡（名字 + 台词）记一笔，最多 50 条（测试读：scene.data.get('__storyBarkCardLog')）。 */
@@ -106,7 +106,9 @@ function build(scene: Phaser.Scene, line: BarkCardLine, done: () => void): void 
 function buildStyled(scene: Phaser.Scene, line: BarkCardLine, done: () => void): void {
   if (scene.sys.settings.status >= Phaser.Scenes.SHUTDOWN) { done(); return; }
   const st = scene.data.get(STATE_KEY) as CardState | undefined, more = (): boolean => !!st && st.queue.length > 0;
-  const card = buildCinematic(scene, line, GAME_WIDTH, sideMargin(line.side), IS_DESKTOP ? BARK_CORNER : undefined, { intro: line.intro, more });
+  // 新手引导条（底部中间墨迹条）在显示时，左下卡整体上移，不压在引导条上（第一章分课后两者常同时出现）
+  const tov = scene.children.getByName('tutorial-overlay') as Phaser.GameObjects.Container | null, tutUp = !!tov?.visible && tov.alpha > .01;
+  const card = buildCinematic(scene, line, GAME_WIDTH, sideMargin(line.side), IS_DESKTOP ? (tutUp ? { x: BARK_CORNER.x, bottom: BARK_CORNER.bottom - BARK_CORNER.tutorialLift } : BARK_CORNER) : undefined, { intro: line.intro, more });
   const root = card.root.setDepth(DEPTH.overlay - 8).setName('story-bark-card');
   root.setData('side', line.side).setData('name', line.name).setData('text', line.text).setData('style', 'cinematic');
   if (line.portrait && scene.textures.exists(line.portrait)) root.setData('portrait', line.portrait);

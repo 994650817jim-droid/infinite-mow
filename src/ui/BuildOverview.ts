@@ -1,3 +1,4 @@
+import { mechOpen } from '../data/mechanicUnlocks';
 import { scaleFor } from '../data/heroStats';
 import Phaser from 'phaser';
 import { FONT, HEADING_FONT } from '../config';
@@ -280,7 +281,7 @@ export function drawBuildOverview(o: BuildOverviewOpts): void {
       y += line.height + 4;
     });
     // 合击（第 2 期）：两派都到 2 势即生效；没有生效的就提示最近的两个（差几势）
-    const on = activeCombos(tags), near = on.length >= 4 ? [] : COMBOS.filter(c => !on.includes(c) && Math.max(tags[c.a], tags[c.b]) >= COMBO_AT).map(c => ({ c, left: Math.max(0, COMBO_AT - tags[c.a]) + Math.max(0, COMBO_AT - tags[c.b]) })).sort((a1, b1) => a1.left - b1.left).slice(0, on.length ? 1 : 2);
+    const on = activeCombos(tags), near = on.length >= 4 || !mechOpen('combo') ? [] : COMBOS.filter(c => !on.includes(c) && Math.max(tags[c.a], tags[c.b]) >= COMBO_AT).map(c => ({ c, left: Math.max(0, COMBO_AT - tags[c.a]) + Math.max(0, COMBO_AT - tags[c.b]) })).sort((a1, b1) => a1.left - b1.left).slice(0, on.length ? 1 : 2);
     if (y < R.y + R.h - 44) {
       y += 2; g0.lineStyle(1, GOLD, .35).lineBetween(R.x + pad, y, R.x + R.w - pad, y); y += 6;
       text(R.x + pad, y, '合击', 13, '#f6dc9a', true).setName(P + '-combo-title'); text(R.x + R.w - pad, y + 2, on.length ? '已生效 ' + on.length : '两派都到 2 势即生效', 11, '#a8956c').setOrigin(1, 0).setName(P + '-combo-count'); y += 20;

@@ -94,7 +94,7 @@ const endPages = await readAll(); const f63b = await flags(), pEnd = await playe
 ck('6-3 关末：过场「魏延献城」（黄忠「愿以残年」、诸葛亮「脑后有反骨」）→ 抉择「魏延去留」', wy?.name === 'story-jingnan-3-weiyan' && wyPages.some(t => t.includes('愿以残年')) && wyPages.some(t => t.includes('反骨')) && choice?.name === 'story-jingnan-3-weiyan_trust', { wy: wy?.name, choice: choice?.name });
 ck('选「留用，但须提防」→ weiyan_trust = watched（不给数值）→ 章末「刘琦病卒」→ 才结算', f63b.weiyan_trust === 'watched' && endPages.some(t => t.includes('刘琦病卒')) && pEnd.includes('jingnan.close') && fin === true, { f63b, pEnd, fin });
 const killedHz = await L('stages/3/after/0', 'zhaoyun', [], { spared_huangzhong: false });
-ck('黄忠被斩：献城一段改为「老将黄忠战殁城下」', killedHz.some(t => t.includes('战殁城下')) && !killedHz.some(t => t.includes('愿以残年')), killedHz.length);
+ck('黄忠被斩：献城一段改为「老将黄忠负伤遁去」（11-19 武将解锁：被击杀则负伤遁去，第八章前来投）', killedHz.some(t => t.includes('负伤，引残兵遁去')) && !killedHz.some(t => t.includes('愿以残年')), killedHz.length);
 
 // 4) 魏延主公：献城由主公提首级，不出抉择（weiyan_trust 固定 trusted）
 await jingnan(3, 'weiyan'); await readAll();

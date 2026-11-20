@@ -4,6 +4,7 @@
  * - 觉醒：某派到 6 势后自动释放（身边有一堆敌人时），每关最多 AWAKEN.perStage 次、两次之间至少 AWAKEN.cooldownMs（用户：「觉醒每关 1～2 次、有冷却，不刷屏」）。
  * 数值为开发期初值，平衡会话再调。
  */
+import { mechOpen } from './mechanicUnlocks';
 import type { SchoolId } from './schools';
 
 export const COMBO_AT = 2;
@@ -43,7 +44,8 @@ export const COMBO_VALUES = {
   ironCavalryN: 2, ironCavalryLifeMs: 4000,
   lastStandHp: .4, lastStandDmg: .15, lastStandLeech: .03, lastStandLeechCapPerSec: .015, // 11-19 平衡复核：原 .5 / .25 / .05 / .03 偏强
 } as const;
-export function activeCombos(tags: Record<SchoolId, number>): ComboDef[] { return COMBOS.filter(c => tags[c.a] >= COMBO_AT && tags[c.b] >= COMBO_AT); }
+/** 合击 3-2 开放（data/mechanicUnlocks.ts）：之前一律不生效、不显示。 */
+export function activeCombos(tags: Record<SchoolId, number>): ComboDef[] { if (!mechOpen('combo')) return []; return COMBOS.filter(c => tags[c.a] >= COMBO_AT && tags[c.b] >= COMBO_AT); }
 export function comboOf(a: SchoolId, b: SchoolId): ComboDef | undefined { return COMBOS.find(c => (c.a === a && c.b === b) || (c.a === b && c.b === a)); }
 
 /** 觉醒：每关最多 perStage 次、间隔 cooldownMs；到 6 势后至少 firstDelayMs 才第一次；身边（minRange 内）至少 minEnemies 个敌人才放。 */

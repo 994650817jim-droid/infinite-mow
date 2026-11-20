@@ -15,7 +15,7 @@ import { GUANDU_ATLAS_FILES } from './guanduChapter';
 export type XiangfanStage = 1 | 2 | 3;
 export interface XiangfanStageInfo { stage: XiangfanStage; name: string; boss: string; id: 'caoren' | 'pangde' | 'lvmeng'; tag: string; feature: string; story: string; behavior: ThirdStage; scenery: ThirdStage; skills: [string, string, string] }
 export const XIANGFAN_STAGES: readonly XiangfanStageInfo[] = [
-  { stage: 1, name: '樊城', boss: '曹仁', id: 'caoren', tag: '围城', feature: '曹仁固守 · 白耳精兵', story: '关羽北伐，围曹仁于樊城。城中坚守，白耳精兵屡出逆击。', behavior: 2, scenery: 1, skills: ['坚阵连枪', '突阵追击', '伏兵四起'] },
+  { stage: 1, name: '樊城', boss: '曹仁', id: 'caoren', tag: '围城', feature: '曹仁固守 · 樊城精兵', story: '关羽北伐，围曹仁于樊城。城中坚守，城中精兵屡出逆击。', behavior: 2, scenery: 1, skills: ['坚阵连枪', '突阵追击', '伏兵四起'] },
   { stage: 2, name: '水淹七军', boss: '庞德', id: 'pangde', tag: '洪水', feature: '汉水暴涨 · 庞德抬棺', story: '秋雨连绵，汉水暴涨。于禁七军屯于低地，庞德抬棺立誓死战。', behavior: 1, scenery: 2, skills: ['抬棺冲阵', '号令死士', '大刀横扫'] },
   { stage: 3, name: '麦城突围', boss: '吕蒙', id: 'lvmeng', tag: '突围', feature: '四面吴兵 · 限时冲出', story: '吕蒙白衣渡江，荆州尽失。困守麦城，唯有杀开一条血路。', behavior: 3, scenery: 3, skills: ['旗令合围', '江东亲军', '白衣弓阵'] },
 ];
@@ -31,12 +31,12 @@ export const XF_ART_READY: ReadonlySet<string> = new Set<string>(['xf_pangde', '
 export const xfArt = (key: string): boolean => XF_ART_READY.has(key) && artStyle() === 'v2';
 export function xfBossTexture(id: string): string { const o = OWN[id]; if (!o.key.startsWith('xf_')) return o.key; return xfArt(o.key) ? o.key : FALLBACK[o.key]; }
 export function xfBossSheet(id: string): string { const k = xfBossTexture(id); return k.startsWith('xf_') ? OWN[id].sheet : k === OWN[id].key ? OWN[id].sheet : GUANDU_ATLAS_FILES[k]; }
-/** 新敌兵（v2）：白耳兵（曹军精兵，替换盾兵）、江东水军（吴军，麦城替换刀兵）。 */
+/** 新敌兵（v2）：樊城精兵（曹军，图键沿用 xf_baier；原称白耳兵——白毦兵是刘备亲兵，2026-11-20 改名）、江东水军（吴军，麦城替换刀兵）。 */
 export const XF_TROOPS = {
   baier: { walk: 'xf_baier_walk', file: 'assets/processed-v2/enemies/xf_baier_walk.png' },
   jiangdong: { walk: 'xf_jiangdong_walk', file: 'assets/processed-v2/enemies/xf_jiangdong_walk.png' },
 } as const;
-const WAVE_NAMES: string[][] = [['樊城城下', '白耳逆击', '曹仁出城'], ['汉水秋雨', '七军被淹', '庞德死战'], ['麦城被围', '吴兵四合', '吕蒙截道']];
+const WAVE_NAMES: string[][] = [['樊城城下', '精兵逆击', '曹仁出城'], ['汉水秋雨', '七军被淹', '庞德死战'], ['麦城被围', '吴兵四合', '吕蒙截道']];
 
 export function xiangfanBattle(stage: XiangfanStage): ChapterDef {
   const d = XIANGFAN_STAGES[stage - 1], base = thirdBattle(d.behavior), t = stageTuning('chibi', stage), e = base.enemies;
@@ -66,6 +66,8 @@ export const XF_OPENING: StoryLine[] = [
   { who: '王甫', text: '将军，东吴吕蒙称病还建业，陆逊书来卑辞——此中恐怕有诈。' },
   { who: '关羽', text: '江东鼠辈，何足挂齿！传令：围樊城！' },
   { text: '建安二十四年秋，关羽自江陵北伐，围曹仁于樊城。' },
+  { who: '关羽', text: '某夜读春秋，兵法读到深处，自有一层新天地。' },
+  { text: '新：战法精研第九章起可到 Lv5。' },
 ];
 export const XF_FLOOD_OPENING: StoryLine[] = [
   { who: '关羽', text: '秋雨连旬，汉水将溢。于禁七军屯在罾口川低地——此天亡之也。' },

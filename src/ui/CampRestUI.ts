@@ -1,3 +1,6 @@
+import { MECHANICS, mechLockText, mechOpen, type MechId } from '../data/mechanicUnlocks';
+/** 行营页签 → 玩法（未开放时锁住，点了只提示「第 X 章开放」）：商人随兵装 2-1、将帅帐四维 2-3、军医第一章通关后。 */
+const CAMP_TAB_MECH: Record<number, MechId | undefined> = { 2: 'gear', 3: 'attributes', 4: 'medic' };
 import Phaser from 'phaser';import {ItemTooltip} from './ItemTooltip';import {drawBuildOverview} from './BuildOverview';import {wornTokens} from '../systems/CharmEffects';import {tokenSlots} from '../systems/ItemStore';import {GAME_WIDTH as W,GAME_HEIGHT as H,IS_DESKTOP as D,FONT,HEADING_FONT,DEPTH,screenPoint} from '../config';import type {Player} from '../entities/Player';import type {Legion} from '../systems/Legion';import {campOption,type CampOffer} from '../systems/CampMarket';import {merchantStockForVisit,saveMerchantStock,type MerchantStock} from '../systems/MerchantStock';import {MerchantShop} from './MerchantShop';import {MEDIC_FIGURE,drawCampFigure,type FigurePlace} from './CampFigure';import {CAMP_TRAINING,type CampTrainingId,type CampGroup} from '../data/camp';import {INITIAL_TROOPS,TROOPS,type TroopKind} from '../data/legion';import {TREASURES,type TacticId,type TreasureId,type BuildTag} from '../data/builds';import {getCharacter} from '../data/characters';import {WEAPON_META} from '../data/upgrades';import {ATTRIBUTE_INFO,MARTIALS,type AttributeId,type MasteryId} from '../systems/RunGrowth';import type {ItemInstance} from '../data/items';import {troopBadge} from './TroopBadge';import {loadTroopPortraits} from '../systems/TroopPortraits';
 import {homeCommand,inkPlate,warPanelTexture} from './HomeCommand';
 import {lqButton,lqLabelColor,lqPanel,type LqState} from './LacquerKit';
@@ -59,7 +62,7 @@ export class CampRestUI {
    const cap=scene.add.text(cx+13,cy,'行囊',{fontFamily:HEADING_FONT,fontSize:'17px',fontStyle:'bold',color:'#f8e6bf',resolution:2}).setOrigin(.5).setLetterSpacing(4).setStroke('#2a0c06',3).setShadow(0,1,'#120a05',3,true,true).setScrollFactor(0);
    const hit=scene.add.rectangle(cx,cy,bw,bh,0,.001).setScrollFactor(0).setInteractive({useHandCursor:true}).setName('camp-bag');
    const paint=(st:'normal'|'hover'|'pressed')=>{plate=inkPlate(scene,plate,cx,cy,bw,bh,true,st);cap.setY(cy+(st==='pressed'?1:0)).setColor(st==='hover'?'#fff3d4':'#f8e6bf');icon.setY(cy+(st==='pressed'?1:0));};
-   hit.on('pointerover',()=>paint('hover')).on('pointerout',()=>paint('normal')).on('pointerdown',()=>{paint('pressed');this.onOpenBag?.();}).on('pointerup',()=>paint('hover'));
+   hit.on('pointerover',()=>paint('hover')).on('pointerout',()=>paint('normal')).on('pointerdown',()=>{paint('pressed');if(!mechOpen('gear')){this.notice='行囊 · '+mechLockText('gear');this.render();return;}this.onOpenBag?.();}).on('pointerup',()=>paint('hover'));
    this.root.add([...(plate?[plate]:[]),icon,cap,hit]);bagLeft=cx-bw/2-18;
   }else{
    // 行囊：漆底描金小按钮 + 手绘行囊图标（对象名 camp-bag 不变）
@@ -71,7 +74,7 @@ export class CampRestUI {
    // 2026-11-19 用户「行囊做成行囊的样子」：手绘包袱到位后不画漆牌，包袱大图标代替小图标（字仍在右边）
    const bundle=bagBundle(scene,cx-bw/2+20,cy-2,D?40:40,{caption:false,onReady:()=>paint('idle')});this.root.add(bundle.icon);
    const paint=(st:LqState)=>{g.clear();if(bundle.ready()){icon.setVisible(false);bundle.setHover(st==='hover'||st==='down');cap.setY(cy).setColor(st==='idle'?'#f6e2b8':'#fff3d6').setStroke('#1a0f08',3);return;}const d=lqButton(g,cx,cy,bw,bh,st,'gold');cap.setY(cy+d).setColor(lqLabelColor(st));icon.setY(cy+d);};
-   hit.on('pointerover',()=>paint('hover')).on('pointerout',()=>paint('idle')).on('pointerdown',()=>{paint('down');this.sound('uiClick');this.onOpenBag?.();}).on('pointerup',()=>paint('hover'));paint('idle');
+   hit.on('pointerover',()=>paint('hover')).on('pointerout',()=>paint('idle')).on('pointerdown',()=>{paint('down');this.sound('uiClick');if(!mechOpen('gear')){this.notice='行囊 · '+mechLockText('gear');this.render();return;}this.onOpenBag?.();}).on('pointerup',()=>paint('hover'));paint('idle');
    this.root.add([g,icon,cap,hit]);bagLeft=cx-bw/2-12;}
   // 回营寨：电脑在「行囊」左侧，手机在它下方
   this.homeGfx=scene.add.graphics().setScrollFactor(0);this.root.add(this.homeGfx);
@@ -88,7 +91,7 @@ export class CampRestUI {
    this.tabInk.push(null);
    if(scene.textures.exists(icon)){const ic=scene.add.image(x+21,tabY+(D?22:21),icon).setDisplaySize(D?29:27,D?29:27).setScrollFactor(0);this.tabIcons.push(ic);this.root.add(ic);}else this.tabIcons.push(null);
    const hit=this.text(x,tabY,label,D?17:16).setPadding(D?43:39,D?12:13,0,0).setFixedSize(tabW-6,46).setInteractive({useHandCursor:true}).setName('camp-tab-'+i);
-   hit.setData('tab',i).setData('slot',slot).on('pointerdown',()=>{this.tab=i;this.page=0;this.notice='';this.render();}).on('pointerover',()=>hit.setColor('#fff0cd')).on('pointerout',()=>hit.setColor(i===this.tab?'#f6dfb0':'#bcae93'));this.tabs.push(hit);this.root.add(hit);
+   hit.setData('tab',i).setData('slot',slot).on('pointerdown',()=>{const lk=CAMP_TAB_MECH[i];if(lk&&!mechOpen(lk)){this.notice=MECHANICS[lk].name+' · '+mechLockText(lk);this.render();return;}this.tab=i;this.page=0;this.notice='';this.render();}).on('pointerover',()=>hit.setColor('#fff0cd')).on('pointerout',()=>hit.setColor(i===this.tab?'#f6dfb0':'#bcae93'));this.tabs.push(hit);this.root.add(hit);
   });
   this.tabLine=scene.add.rectangle(0,tabY+43,10,2,0xe8c27a,1).setOrigin(0,.5).setScrollFactor(0).setName('camp-tab-line');this.root.add(this.tabLine);
   // 页签切换：金色细线滑到选中页签下（休整时场景补间暂停，按真实时间插值）
@@ -135,7 +138,7 @@ export class CampRestUI {
  private static readonly FIGURE:FigurePlace={cx:120,bottom:500,height:300}; // 头顶留出对话气泡（2026-11-18「对话框要优化一下」）
  private static readonly STATION_LEFT=236;
  private render(){
-  this.body.removeAll(true);this.tabs.forEach((t,k)=>{const on=t.getData('tab')===this.tab;t.setColor(on?'#ffe7b0':'#bcae93').setAlpha(on?1:.78);const w=t.width;this.tabFrames[k].setTexture(warPanelTexture(this.scene,w,46,on)).setDisplaySize(w+16,46+16).setVisible(true).setAlpha(on?1:.62);this.tabIcons[k]?.setAlpha(on?1:.6);
+  this.body.removeAll(true);this.tabs.forEach((t,k)=>{const on=t.getData('tab')===this.tab;const lk=CAMP_TAB_MECH[t.getData('tab') as number],locked=!!lk&&!mechOpen(lk);t.setColor(on?'#ffe7b0':'#bcae93').setAlpha(on?1:locked?.38:.78);this.tabIcons[k]?.setAlpha(locked?.38:1);const w=t.width;this.tabFrames[k].setTexture(warPanelTexture(this.scene,w,46,on)).setDisplaySize(w+16,46+16).setVisible(true).setAlpha(on?1:.62);this.tabIcons[k]?.setAlpha(on?1:.6);
    if(on){const to={x:t.x+18,w:w-36};if(!this.lineTo){this.tabLine.setX(to.x);this.tabLine.width=to.w;}this.lineTo=to;}});
   this.resources.setText('随军粮 '+this.army.food+' · 兵力 '+this.army.count);this.next.setText('下一关 · '+this.destination);this.detail.setText(this.notice);
   {const side=D&&(this.tab===2||this.tab===4),l=CampRestUI.STATION_LEFT;this.detail.setX(side?l+(W-40-l)/2:D?W/2:28).setWordWrapWidth(side?W-40-l-16:W-(D?120:56),true);}

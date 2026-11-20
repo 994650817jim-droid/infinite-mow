@@ -25,16 +25,17 @@ const r = await p.evaluate(async () => {
   const N = 6000; let hit = 0; const kinds = new Set(); for (let i = 0; i < N; i++) { const o = M.rollMerchantTactic(book({}), rng); if (o) { hit++; kinds.add(o.id); } }
   const ids = Object.keys(B.TACTICS);
   const six = Object.fromEntries(ids.slice(0, 6).map((id, k) => [id, k < 3 ? 3 : k - 2])); // 前 3 种满级，后 3 种 1 / 2 / 3 级
-  const fromSix = new Set(), lvls = new Set(); for (let i = 0; i < 2000; i++) { const o = M.rollMerchantTactic(book(six), rng, 1); if (o) { fromSix.add(o.id); lvls.add(o.level); } }
-  const full = Object.fromEntries(ids.slice(0, 6).map(id => [id, 3])); let fullHit = 0; for (let i = 0; i < 500; i++) if (M.rollMerchantTactic(book(full), rng, 1)) fullHit++;
+  const fromSix = new Set(), lvls = new Set(); let sixManual = 0; for (let i = 0; i < 2000; i++) { const o = M.rollMerchantTactic(book(six), rng, 1); if (o?.kind === 'manual') sixManual++; else if (o) { fromSix.add(o.id); lvls.add(o.level); } }
+  const full = Object.fromEntries(ids.slice(0, 6).map(id => [id, 3])); let fullHit = 0, fullManual = 0; for (let i = 0; i < 500; i++) { const o = M.rollMerchantTactic(book(full), rng, 1); if (o?.kind === 'manual') fullManual++; else if (o) fullHit++; }
   const one = M.rollMerchantTactic(book({ [ids[0]]: 1 }), () => .0, 1);
-  return { chance: I.MERCHANT_TACTIC.chance, price: I.MERCHANT_TACTIC.price, rate: hit / N, kinds: kinds.size, total: ids.length, fromSix: [...fromSix], lvls: [...lvls], six, fullHit, one };
+  return { chance: I.MERCHANT_TACTIC.chance, price: I.MERCHANT_TACTIC.price, rate: hit / N, kinds: kinds.size, total: ids.length, fromSix: [...fromSix], lvls: [...lvls], six, fullHit, fullManual, sixManual, one };
 });
 ck('出现概率按配置（' + r.chance + '）：6000 次进营实测 ' + (r.rate * 100).toFixed(1) + '%', Math.abs(r.rate - r.chance) < .025, { rate: r.rate, chance: r.chance });
 ck('空构筑时所有战法都可能出现', r.kinds === r.total, { kinds: r.kinds, total: r.total });
 const sixOk = r.fromSix.length === 2 && r.fromSix.every(id => r.six[id] < 3) && r.lvls.every(l => l === 1 || l === 2);
-ck('已学满 6 种：只出已学且未满 3 级的（精进），不出新战法、不出满级的', sixOk, { fromSix: r.fromSix, lvls: r.lvls });
-ck('6 种都满 3 级：一卷也不出', r.fullHit === 0, r.fullHit);
+// 2026-11-20：流派重做后，势够高时货架可能是「流派心法」（kind manual），不算战法卷轴，单独统计
+ck('已学满 6 种：战法卷轴只出已学且未满 3 级的（精进），不出新战法、不出满级的（另可出流派心法）', sixOk, { fromSix: r.fromSix, lvls: r.lvls, manual: r.sixManual });
+ck('6 种都满 3 级：不再出战法卷轴（只可能出流派心法）', r.fullHit === 0, { tactic: r.fullHit, manual: r.fullManual });
 ck('价格按已学等级取 price[等级]（精进 Lv.1→2 收 price[1]）', r.one?.level === 1 && r.one?.price === r.price[1], r.one);
 
 // 3–6 游戏内：开行营军需商人

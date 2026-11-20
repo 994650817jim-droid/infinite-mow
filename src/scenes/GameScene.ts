@@ -165,6 +165,8 @@ import { envConfigFor, type Faction } from '../data/envInteractions';
 import { Terrain } from '../systems/Terrain';
 import { attrBadge } from '../ui/AttrBadge';
 import { AttributePanelView } from '../ui/AttributePanelView';
+import { baseEquiv, baseStat, statMultiplier, statSource } from '../data/heroStats';
+import { ATTRIBUTE_IDS } from '../data/attributes';
 import { PROP_LOOT, rollPropItem, rollPropQuality, type PropLootKind } from '../data/propLoot';
 import { terrainConfigFor } from '../data/terrain';
 import { stageMapFor } from '../data/stageMaps';
@@ -4834,7 +4836,8 @@ export class GameScene extends Phaser.Scene {
     const hpBonus=Math.round((this.player.maxHp/baseHp-1)*100),moveBonus=Math.round((this.player.speed/baseSpeed-1)*100);
     this.attributeSummaryText?.setText(`实际属性　伤害 +${damageBonus}% · 攻速 +${attackBonus}% · 暴击 ${(crit*100).toFixed(0)}%\n生命 ${Math.round(this.player.hp)}/${Math.round(this.player.maxHp)}（上限 +${hpBonus}%） · 移速 ${Math.round(this.player.speed)}（+${moveBonus}%）`);
     if(this.attributeView){
-      this.attributeView.render({hero:this.runConfig.character,heroName:character.name,level:this.heroLv,free:growth.unallocated,cap:growth.attrMax,points:{...growth.attributes},primary:primaryAttribute(this.runConfig.character),weaponName:weapon?weaponName(weapon.id,this.runConfig.character):'',mastery:growth.masteryLabel(),stats:{damage:damageBonus,attack:attackBonus,crit,hp:Math.round(this.player.hp),maxHp:Math.round(this.player.maxHp),hpBonus,speed:Math.round(this.player.speed),moveBonus}});
+      const ssrc=statSource(this.runConfig.character),statOf=Object.fromEntries(ATTRIBUTE_IDS.map(a=>[a,{base:baseStat(ssrc,a,this.heroLv),baseEquiv:baseEquiv(ssrc,a,this.heroLv),mult:statMultiplier(ssrc,a)}])) as Record<AttributeId,{base:number;baseEquiv:number;mult:number}>;
+      this.attributeView.render({stat:statOf,hero:this.runConfig.character,heroName:character.name,level:this.heroLv,free:growth.unallocated,cap:growth.attrMax,points:{...growth.attributes},primary:primaryAttribute(this.runConfig.character),weaponName:weapon?weaponName(weapon.id,this.runConfig.character):'',mastery:growth.masteryLabel(),stats:{damage:damageBonus,attack:attackBonus,crit,hp:Math.round(this.player.hp),maxHp:Math.round(this.player.maxHp),hpBonus,speed:Math.round(this.player.speed),moveBonus}});
       return;
     }
     const ids=Object.keys(ATTRIBUTE_INFO) as AttributeId[];

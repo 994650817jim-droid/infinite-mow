@@ -96,6 +96,8 @@ export function statMultiplier(src: StatSource, id: AttributeId): number {
 export function statTag(src: StatSource, id: AttributeId): '擅' | '熟' | '' {
   const b = src.base[idx(id)]; return b >= STAT_MASTER.expert ? '擅' : b >= STAT_MASTER.skilled ? '熟' : '';
 }
+/** 灯格刻度的格数：等效点 ≤10 画 10 格，≤20 画 20 格，之后 30 格（不封顶，只是换一把尺）。 */
+export function scaleFor(e: number): number { return e <= 10 ? 10 : e <= 20 ? 20 : 30; }
 /** 等效点（未折扣）与折扣后的生效点数。 */
 export function statEquiv(src: StatSource, id: AttributeId, points: number, level: number): number { return Math.max(0, points) + baseEquiv(src, id, level); }
 export function statEffective(src: StatSource, id: AttributeId, points: number, level: number): number {

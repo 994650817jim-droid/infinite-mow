@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
-import { ATTRIBUTE_EFFECT, ATTRIBUTE_IDS, ATTRIBUTE_INFO, PRIMARY_BONUS, PRIMARY_MUL, type AttributeId } from '../data/attributes';
+import { ATTRIBUTE_EFFECT, ATTRIBUTE_IDS, ATTRIBUTE_INFO, PRIMARY_BONUS, type AttributeId } from '../data/attributes';
+import { discount, scaleFor, statSource, statTag } from '../data/heroStats';
 import { HEADING_FONT, FONT, TITLE_FONT } from '../config';
 import { LQ, lqImageButton } from './LacquerKit';
 import { heroPortrait } from './BuildOverview';
@@ -17,6 +18,8 @@ export interface AttrStats { damage: number; attack: number; crit: number; hp: n
 export interface AttrViewState {
   hero: string; heroName: string; level: number; free: number; cap: number;
   points: Record<AttributeId, number>; primary?: AttributeId; weaponName: string; mastery: string; stats: AttrStats;
+  /** 各项本色（当前等级，含自动成长）、本色折算的等效点、擅长 / 熟练倍率（heroStats 算好传入）。 */
+  stat: Record<AttributeId, { base: number; baseEquiv: number; mult: number }>;
 }
 export interface AttrViewOpts { x0: number; y0: number; w: number; h: number; hero: string; onAdd: (id: AttributeId) => boolean }
 
@@ -24,15 +27,15 @@ const GOLD = LQ.gold, GOLD_HI = LQ.goldHi, CREAM = '#eadcbd';
 const ATTR_COLOR: Record<AttributeId, number> = { strength: 0xc8573d, agility: 0x5aa86a, intellect: 0x5b86c8, command: 0xc89a3c };
 const fmt = (v: number): string => `${+v.toFixed(1)}`;
 
-/** 悬停「+」时各属性块的预览增量（百分点，近似：主属性按 ×PRIMARY_MUL，主属性再 +1% 全伤害）。 */
-export function attrPreview(id: AttributeId, primary: boolean, pointsNow: number): { damage?: number; attack?: number; crit?: number; hp?: number; move?: number } {
-  const m = primary ? PRIMARY_MUL : 1, E = ATTRIBUTE_EFFECT, bonus = primary && pointsNow < PRIMARY_BONUS.maxPoints ? PRIMARY_BONUS.perPoint * 100 : 0;
+/** 悬停「+」时各属性块的预览增量（百分点）：多加 1 点的折扣后增量 × 擅长倍率 × 每点效果；主属性再 +1% 全伤害。 */
+export function attrPreview(id: AttributeId, stat: { mult: number; baseEquiv: number }, primary: boolean, pointsNow: number): { damage?: number; attack?: number; crit?: number; hp?: number; move?: number } {
+  const e0 = pointsNow + stat.baseEquiv, m = stat.mult * (discount(e0 + 1) - discount(e0)), E = ATTRIBUTE_EFFECT, bonus = primary && pointsNow < PRIMARY_BONUS.maxPoints ? PRIMARY_BONUS.perPoint * 100 : 0;
   if (id === 'strength') return { damage: E.strength.damage * m * 100 + bonus, hp: E.strength.hp * m * 100 };
   if (id === 'agility') return { attack: E.agility.attackSpeed * m * 100, move: E.agility.move * m * 100, crit: E.agility.crit * m * 100, damage: bonus || undefined };
   return bonus ? { damage: bonus } : {};
 }
 
-interface Card { id: AttributeId; y: number; icon: Phaser.GameObjects.Image; name: Phaser.GameObjects.Text; effect: Phaser.GameObjects.Text; value: Phaser.GameObjects.Text; button: Phaser.GameObjects.Image; plus: Phaser.GameObjects.Text; chips: Phaser.GameObjects.Text[]; glow: Phaser.GameObjects.Graphics; badge?: Phaser.GameObjects.GameObject }
+interface Card { id: AttributeId; y: number; icon: Phaser.GameObjects.Image; name: Phaser.GameObjects.Text; effect: Phaser.GameObjects.Text; value: Phaser.GameObjects.Text; button: Phaser.GameObjects.Image; plus: Phaser.GameObjects.Text; chips: Phaser.GameObjects.Text[]; glow: Phaser.GameObjects.Graphics; badge?: Phaser.GameObjects.GameObject; tag?: Phaser.GameObjects.Text }
 interface Tile { label: Phaser.GameObjects.Text; value: Phaser.GameObjects.Text; sub: Phaser.GameObjects.Text; delta: Phaser.GameObjects.Text }
 
 export class AttributePanelView {
@@ -95,7 +98,7 @@ export class AttributePanelView {
 
   private rulesTip(): InfoTip {
     const st = this.state;
-    return { title: '属性点规则', sub: st ? `当前 Lv.${st.level} · 单项上限 ${st.cap} 点` : undefined, body: 'Lv25 前每级 1 点，之后每 2–3 级 1 点。\n点数按武将永久保存，随时可在此加点。\n主属性每点效果 ×' + +PRIMARY_MUL.toFixed(2) + '，另加全伤害；满 4 / 7 / 10 点解锁专精。' };
+    return { title: '属性点规则', sub: st ? `当前 Lv.${st.level} · 单项不封顶` : undefined, body: 'Lv25 前每级 1 点，之后每 2–3 级 1 点。\n本色是武将自带的底子（每级还会自己长一点），折算成等效点：(本色−45)÷12。\n等效点超过 10 收益五折，超过 20 再打折。\n本色 ≥90 擅长 ×1.25，75–89 熟练 ×1.1。\n主属性加点满 4 / 7 / 10 点解锁专精，另加全伤害。' };
   }
 
   private makeCard(id: AttributeId, i: number): Card {
@@ -105,7 +108,7 @@ export class AttributePanelView {
     const icon = add(s.add.image(x + 38, cy - 2, ATTRIBUTE_INFO[id].icon).setDisplaySize(52, 52));
     const name = add(s.add.text(x + 74, y + 8, ATTRIBUTE_INFO[id].name, { fontFamily: HEADING_FONT, fontSize: '18px', color: '#f3dfb0', resolution: 2 }));
     const effect = add(s.add.text(x + 74, y + 31, '', { fontFamily: FONT, fontSize: '11px', color: '#a9b9a3', resolution: 2, lineSpacing: 2 }).setWordWrapWidth(214));
-    const value = add(s.add.text(x + 74 + 184, y + this.cardH - 19, '', { fontFamily: FONT, fontSize: '12px', color: '#e5d4ab', resolution: 2 }));
+    const value = add(s.add.text(x + 74 + 160, y + this.cardH - 19, '', { fontFamily: FONT, fontSize: '12px', color: '#e5d4ab', resolution: 2 }));
     const button = add(s.add.image(x + w - 38, cy, 'ui_war_button').setDisplaySize(50, 44).setInteractive({ useHandCursor: true }).setName('attribute-add-' + id));
     const plus = add(s.add.text(button.x, button.y - 1, '+', { fontFamily: FONT, fontSize: '26px', color: '#ffe9bd', resolution: 2, stroke: '#2a170b', strokeThickness: 3 }).setOrigin(.5));
     lqImageButton(s, button, 50, 44, 'gold', plus);
@@ -114,25 +117,38 @@ export class AttributePanelView {
     button.on('pointerover', () => { this.preview = id; this.renderTiles(); });
     button.on('pointerout', () => { if (this.preview === id) { this.preview = null; this.renderTiles(); } });
     if (this.isPrimaryId(id)) this.buildPrimaryExtras(card);
+    else { const zone = s.add.zone(x, y, w - 62, this.cardH).setOrigin(0).setInteractive().setName('attribute-card-hit-' + id); root.add(zone); root.sendToBack(zone); this.tip.attachInfo(zone, () => this.statTip(id)); }
+    this.addTag(card, id);
     return card;
+  }
+  /** 名字后的「擅 / 熟」小字（本色 ≥90 / 75–89，静态）。 */
+  private addTag(card: Card, id: AttributeId): void {
+    const t = statTag(statSource(this.o.hero), id); if (!t) return;
+    const tx = this.scene.add.text(this.mx + 74 + card.name.width + 6, card.y + 11, t, { fontFamily: HEADING_FONT, fontSize: '12px', color: t === '擅' ? '#2a170b' : '#e7d9b0', resolution: 2, backgroundColor: t === '擅' ? '#e8c27a' : '#4a3a22' }).setPadding(3, 1).setName('attribute-tag-' + id);
+    this.root.add(tx); card.tag = tx;
+  }
+  private statTip(id: AttributeId): InfoTip | null {
+    const st = this.state; if (!st) return null; const k = st.stat[id], p = st.points[id], e = p + k.baseEquiv, eff = k.mult * discount(e);
+    return { title: `${ATTRIBUTE_INFO[id].name} · 本色 ${Math.round(k.base)}`, sub: `加点 ${p} · 等效 ${+e.toFixed(1)} 点`, body: `本色折算 ${+k.baseEquiv.toFixed(1)} 点 + 加点 ${p} 点\n${e > 10 ? '超过 10 点的部分收益打折，' : ''}折扣后 ${+discount(e).toFixed(1)} 点${k.mult > 1 ? ' ×' + k.mult + '（' + (k.mult >= 1.25 ? '擅长' : '熟练') + '）' : ''} = 生效 ${+eff.toFixed(1)} 点\n${ATTRIBUTE_INFO[id].effect}` };
   }
   private isPrimaryId(id: AttributeId): boolean { return id === primaryOf(this.o.hero); }
   private buildPrimaryExtras(card: Card): void {
     const s = this.scene, root = this.root, x = this.mx, y = card.y;
     card.name.setName('attribute-primary-head');
-    const ab = attrBadge(s, x + 74 + card.name.width + 16, y + 18, this.o.hero, 20); if (ab) { root.add(ab); card.badge = ab; }
-    let cxp = x + 74 + card.name.width + 38;
+    const tagW = statTag(statSource(this.o.hero), card.id) ? 24 : 0;
+    const ab = attrBadge(s, x + 74 + card.name.width + 16 + tagW, y + 18, this.o.hero, 20); if (ab) { root.add(ab); card.badge = ab; }
+    let cxp = x + 74 + card.name.width + 32 + tagW;
     for (let k = 0; k < 3; k++) {
-      const chip = s.add.text(cxp, y + 18, '', { fontFamily: FONT, fontSize: '11px', color: '#93a08e', resolution: 2 }).setOrigin(0, .5).setPadding(5, 3).setInteractive({ useHandCursor: false }).setName('attribute-perk-' + (k + 1));
+      const chip = s.add.text(cxp, y + 18, '', { fontFamily: FONT, fontSize: '10.5px', color: '#93a08e', resolution: 2 }).setOrigin(0, .5).setPadding(2, 3).setInteractive({ useHandCursor: false }).setName('attribute-perk-' + (k + 1));
       root.add(chip); card.chips.push(chip);
-      this.tip.attachInfo(chip, () => this.perkTip(k)); cxp += 48;
+      this.tip.attachInfo(chip, () => this.perkTip(k)); cxp += 38;
     }
     const zone = s.add.zone(x, y, this.mw - 62, this.cardH).setOrigin(0).setInteractive().setName('attribute-primary-hit'); root.add(zone);
     root.sendToBack(zone); // 整张卡悬停出完整说明；不挡「+」和徽记
-    this.tip.attachInfo(zone, () => primarySummary(this.o.hero, this.state?.points[card.id] ?? 0, this.state?.cap)?.tip);
+    this.tip.attachInfo(zone, () => { const t = primarySummary(this.o.hero, this.state?.points[card.id] ?? 0)?.tip, a = this.statTip(card.id); return t && a ? { ...t, body: a.sub + '\n' + a.body + '\n\n' + t.body } : t; });
   }
   private perkTip(k: number): InfoTip | null {
-    const st = this.state, sum = st?.primary ? primarySummary(this.o.hero, st.points[st.primary], st.cap) : null, t = sum?.tiers[k]; if (!t) return null;
+    const st = this.state, sum = st?.primary ? primarySummary(this.o.hero, st.points[st.primary]) : null, t = sum?.tiers[k]; if (!t) return null;
     return { title: `${t.name}（专精 ${k + 1}/3）`, sub: `主属性满 ${t.at} 点解锁`, body: t.desc + (t.on ? '\n已解锁' : `\n还差 ${t.left} 点`) };
   }
 
@@ -151,37 +167,32 @@ export class AttributePanelView {
     this.paintSeal(st.free);
     const cardsG = this.cardsGfx; cardsG.clear();
     for (const c of this.cards) {
-      const lv = st.points[c.id], cap = st.cap, full = lv >= cap, can = st.free > 0 && !full, primary = c.id === st.primary, x = this.mx, y = c.y, w = this.mw, h = this.cardH;
+      const lv = st.points[c.id], k = st.stat[c.id], e = lv + k.baseEquiv, can = st.free > 0, primary = c.id === st.primary, x = this.mx, y = c.y, w = this.mw, h = this.cardH;
       cardsG.fillStyle(primary ? 0x2c1d0e : LQ.lacquerHi, primary ? .9 : .5).fillRoundedRect(x, y, w, h, 7).lineStyle(primary ? 2 : 1, GOLD, primary ? .95 : .38).strokeRoundedRect(x, y, w, h, 7);
       if (primary) cardsG.lineStyle(1, GOLD_HI, .35).strokeRoundedRect(x + 3, y + 3, w - 6, h - 6, 5);
-      // 灯格刻度：cap 格，点亮的按属性色，主属性在 4 / 7 / 10 格上方画专精刻度
-      const px = x + 74, py = y + h - 15, cell = Math.min(16, (178 - (cap - 1) * 3) / cap);
-      for (let k = 0; k < cap; k++) {
-        const cx = px + k * (cell + 3), on = k < lv, col = ATTR_COLOR[c.id];
-        cardsG.fillStyle(on ? col : 0x1b130b, 1).fillRoundedRect(cx, py, cell, 9, 2).lineStyle(1, on ? 0xfff0c0 : 0x6e5a3a, on ? .8 : .9).strokeRoundedRect(cx, py, cell, 9, 2);
-        if (on) cardsG.fillStyle(0xffffff, .28).fillRoundedRect(cx + 1, py + 1, cell - 2, 3, 1);
+      // 灯格刻度（不封顶）：先灰青格 = 本色折算的等效点，再属性色格 = 加点；10 / 20 点处画红色折扣线，之后每格半亮（收益打折）
+      const n = scaleFor(e), px = x + 74, py = y + h - 15, cell = Math.min(16, (150 - (n - 1) * 2) / n), step = cell + 2, baseCells = Math.floor(k.baseEquiv);
+      for (let i = 0; i < n; i++) {
+        const cx = px + i * step, isBase = i < baseCells, isPts = !isBase && i < baseCells + lv, on = isBase || isPts, col = isBase ? 0x6f8794 : ATTR_COLOR[c.id], dim = i >= 10 ? .6 : 1;
+        cardsG.fillStyle(on ? col : 0x1b130b, on ? dim : 1).fillRoundedRect(cx, py, cell, 9, 2).lineStyle(1, on ? 0xfff0c0 : 0x6e5a3a, on ? .7 * dim : .9).strokeRoundedRect(cx, py, cell, 9, 2);
+        if (on) cardsG.fillStyle(0xffffff, .26 * dim).fillRoundedRect(cx + 1, py + 1, cell - 2, 3, 1);
       }
-      if (primary) for (const at of [4, 7, 10]) { if (at > cap) continue; const cx = px + (at - 1) * (cell + 3) + cell / 2, on = lv >= at; cardsG.fillStyle(on ? GOLD_HI : 0x6e5a3a, 1); cardsG.fillTriangle(cx - 3, py - 6, cx + 3, py - 6, cx, py - 1); }
-      c.effect.setText(ATTRIBUTE_INFO[c.id].effect + (primary ? `\n主属性 每点 ×${+PRIMARY_MUL.toFixed(2)}` : '')).setColor(primary ? '#d8c78e' : '#a9b9a3');
-      c.value.setText(full ? '已满' : `${lv}/${cap}`).setColor(full ? '#f3d48a' : '#e5d4ab');
-      // 「+」三态：可点 / 没点数（暗、不可点）/ 已满（印「满」、不可点）
-      if (full) { c.button.setVisible(false).disableInteractive(); c.plus.setText('满').setFontSize(20).setColor('#f3d48a').setAlpha(1).setStroke('#2a170b', 3); this.drawFullSeal(cardsG, c); }
-      else {
-        c.button.setVisible(true); c.plus.setText('+').setFontSize(26);
-        if (can) { c.button.setAlpha(1).setInteractive({ useHandCursor: true }); c.plus.setAlpha(1).setColor('#ffe9bd'); }
-        else { c.button.setAlpha(.32).disableInteractive(); c.plus.setAlpha(.4).setColor('#9d927a'); }
-      }
-      if (primary) { const sum = primarySummary(this.o.hero, lv, cap); c.chips.forEach((ch, k) => { const on = !!sum?.tiers[k]?.on; ch.setText(`${on ? '◆' : '◇'} ${sum?.tiers[k]?.name ?? ''}`).setColor(on ? '#ffe3a0' : '#8f9b8b'); }); }
+      for (const at of [10, 20]) if (n > at) { const cx = px + at * step - 1; cardsG.lineStyle(2, 0xd9503a, .9).lineBetween(cx, py - 3, cx, py + 12); }
+      if (primary) for (const at of [4, 7, 10]) { const cx = px + (baseCells + at - 1) * step + cell / 2, on = lv >= at; if (baseCells + at > n) continue; cardsG.fillStyle(on ? GOLD_HI : 0x6e5a3a, 1); cardsG.fillTriangle(cx - 3, py - 6, cx + 3, py - 6, cx, py - 1); }
+      const disc = e > 10 ? ' · 已折扣' : '';
+      c.effect.setText(ATTRIBUTE_INFO[c.id].effect + `\n等效 ${+e.toFixed(1)} 点${k.mult > 1 ? ' · ' + (k.mult >= 1.25 ? '擅长' : '熟练') + ' ×' + k.mult : ''}${disc}`).setColor(primary ? '#d8c78e' : '#a9b9a3');
+      c.value.setText(`${Math.round(k.base)}＋${lv}`).setColor('#e5d4ab');
+      // 「+」两态：可点 / 没点数（暗、不可点）；不再有「已满」
+      c.button.setVisible(true); c.plus.setText('+').setFontSize(26);
+      if (can) { c.button.setAlpha(1).setInteractive({ useHandCursor: true }); c.plus.setAlpha(1).setColor('#ffe9bd'); }
+      else { c.button.setAlpha(.32).disableInteractive(); c.plus.setAlpha(.4).setColor('#9d927a'); }
+      if (primary) { const sum = primarySummary(this.o.hero, lv); c.chips.forEach((ch, i) => { const on = !!sum?.tiers[i]?.on; ch.setText(`${on ? '◆' : '◇'}${sum?.tiers[i]?.name ?? ''}`).setColor(on ? '#ffe3a0' : '#8f9b8b'); }); }
     }
     void g; this.renderTiles();
     this.weaponName.setText(st.weaponName || '—'); this.weaponNote.setText(st.mastery);
   }
   private readonly cardsGfx: Phaser.GameObjects.Graphics;
 
-  private drawFullSeal(g: Phaser.GameObjects.Graphics, c: Card): void {
-    const x = c.button.x, y = c.button.y;
-    g.fillStyle(0x7a2418, 1).fillRoundedRect(x - 21, y - 21, 42, 42, 4).lineStyle(2, GOLD_HI, .9).strokeRoundedRect(x - 21, y - 21, 42, 42, 4).lineStyle(1, 0xf3e2c4, .5).strokeRoundedRect(x - 17, y - 17, 34, 34, 2);
-  }
   private paintSeal(free: number): void {
     const g = this.sealG, cx = this.freeNum.x, cy = this.freeNum.y; g.clear();
     const has = free > 0;
@@ -191,8 +202,8 @@ export class AttributePanelView {
   }
   private renderTiles(): void {
     const st = this.state; if (!st) return; const S = st.stats, T = this.tiles;
-    const pv = this.preview ? attrPreview(this.preview, this.preview === st.primary, st.points[this.preview]) : {};
-    const can = !!this.preview && st.free > 0 && st.points[this.preview] < st.cap, d = (v: number | undefined): string => can && v ? `+${fmt(v)}%` : '';
+    const pv = this.preview ? attrPreview(this.preview, st.stat[this.preview], this.preview === st.primary, st.points[this.preview]) : {};
+    const can = !!this.preview && st.free > 0, d = (v: number | undefined): string => can && v ? `+${fmt(v)}%` : '';
     T.damage.value.setText(`+${S.damage}%`); T.damage.delta.setText(d(pv.damage));
     T.attack.value.setText(`+${S.attack}%`); T.attack.delta.setText(d(pv.attack));
     T.crit.value.setText(`${Math.round(S.crit * 100)}%`); T.crit.delta.setText(d(pv.crit));

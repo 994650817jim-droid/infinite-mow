@@ -10,10 +10,12 @@
 import Phaser from 'phaser';
 import type { Player } from '../entities/Player';
 import { playSheet } from './SkillFxSheets';
+import { lastBranchBurst } from './BranchFinalFx';
 import { DEPTH } from '../config';
 import { sceneSfx } from './ContentSfx';
 
-export const HERO_CAST = { skillCd: 900, ms: 420, skillSize: 150, passiveSize: 196, sigilSize: 210, sigilFlat: .42 } as const;
+// 2026-11-20 攻击特效检查：被动触发版 196 → 176（白色 / 金色光柱整块盖住主将）；yieldMs：兵器专职进阶爆发刚播过就不再叠招牌技起手
+export const HERO_CAST = { skillCd: 900, ms: 420, skillSize: 150, passiveSize: 176, sigilSize: 200, sigilFlat: .42, passiveAlpha: .85, yieldMs: 400 } as const;
 
 export class HeroCastFx {
   private pendingSkill = false;
@@ -34,7 +36,7 @@ export class HeroCastFx {
     const tr = this.player.passive.triggerCount(), passive = tr > this.lastTriggers;
     this.lastTriggers = tr;
     if (passive) { this.play('passive'); this.lastSkillAt = now; }
-    else if (this.pendingSkill && now - this.lastSkillAt >= HERO_CAST.skillCd) { this.play('skill'); this.lastSkillAt = now; }
+    else if (this.pendingSkill && now - this.lastSkillAt >= HERO_CAST.skillCd && this.scene.time.now - lastBranchBurst.at >= HERO_CAST.yieldMs) { this.play('skill'); this.lastSkillAt = now; } // 进阶爆发刚播过：让路，不在同一点叠两层
     this.pendingSkill = false;
   }
   private play(kind: 'skill' | 'passive'): void {
@@ -44,7 +46,7 @@ export class HeroCastFx {
     sceneSfx(s, 'cast_' + this.hero); if (kind === 'passive') sceneSfx(s, 'cast_sigil'); // 出招起手音（ContentSfx）
     const follow = (y: number) => (img: Phaser.GameObjects.Image): void => { if (p.sprite.active) img.setPosition(p.x, p.y + y); };
     const size = kind === 'passive' ? HERO_CAST.passiveSize : HERO_CAST.skillSize;
-    playSheet(s, key, p.x, p.y - 18, { size, ms: HERO_CAST.ms, depth: DEPTH.fx + .2, add: true, name: 'hero-cast-' + kind, onUpdate: follow(-18) });
+    playSheet(s, key, p.x, p.y - 18, { size, ms: HERO_CAST.ms, depth: DEPTH.fx + .2, add: true, alpha: kind === 'passive' ? HERO_CAST.passiveAlpha : 1, name: 'hero-cast-' + kind, onUpdate: follow(-18) });
     if (kind === 'passive') {
       // 被动触发：脚下再铺一圈压扁的同款光，当法阵
       playSheet(s, key, p.x, p.y + 8, { size: HERO_CAST.sigilSize, sizeH: HERO_CAST.sigilSize * HERO_CAST.sigilFlat, ms: HERO_CAST.ms + 120, depth: DEPTH.ground + 3, add: true, alpha: .8, name: 'hero-cast-sigil', onUpdate: follow(8) });

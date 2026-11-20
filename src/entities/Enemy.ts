@@ -12,8 +12,18 @@ import { presenceScale } from '../systems/BossPresence';
 let enemyUidSeq = 0;
 const WALK_STRIDES: Partial<Record<EnemyKind, number>> = { infantry: 11, shield: 13, archer: 12, cavalry: 12, elite: 15 };
 
-/** 受击闪白：一次多久、闪完多久才能再闪（连击时不再一直是白剪影）。 */
-export const HIT_FLASH = { ms: 60, gapMs: 160 } as const;
+/**
+ * 受击闪白：一次多久、闪完多久才能再闪（连击时不再一直是白剪影）；
+ * 全场每 windowMs 最多 budget 个敌人闪白（含 DeathFx 死亡闪白）——范围技一下打中一大片时不会整群变成白剪影（2026-11-20 攻击特效检查）。
+ */
+export const HIT_FLASH = { ms: 60, gapMs: 160, budget: 6, windowMs: 100 } as const;
+let flashWindowAt = -Infinity, flashUsed = 0;
+/** 申请一个闪白名额（受击闪白 / 死亡闪白共用）；本窗口用完返回 false。 */
+export function takeFlashSlot(now: number): boolean {
+  if (now - flashWindowAt >= HIT_FLASH.windowMs || now < flashWindowAt) { flashWindowAt = now; flashUsed = 0; }
+  if (flashUsed >= HIT_FLASH.budget) return false;
+  flashUsed++; return true;
+}
 
 export class Enemy {
   static spawnSeq = 0;
@@ -504,7 +514,7 @@ export class Enemy {
    * 连击每 50ms 一下时旧写法每下都重新闪白，敌人 97% 的帧都是一整块白剪影）。
    */
   flash(now: number): void {
-    if (now < this.flashReadyAt) return;
+    if (now < this.flashReadyAt || !takeFlashSlot(now)) return;
     this.flashUntil = now + HIT_FLASH.ms; this.flashReadyAt = now + HIT_FLASH.ms + HIT_FLASH.gapMs;
     this.sprite.setTintFill(this.kind === 'elite' ? 0xffdddd : 0xffffff);
   }

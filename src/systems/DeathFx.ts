@@ -3,7 +3,7 @@ import { IS_DESKTOP } from '../config';
 import { SKILL_FX } from './SkillFxSheets';
 import { ART_V2_FILES, isV2Texture, regridV2 } from './ArtStyle';
 import { deathFxOn } from './BattleSettings';
-import type { Enemy } from '../entities/Enemy';
+import { takeFlashSlot, type Enemy } from '../entities/Enemy';
 
 /**
  * 敌军死亡特效（2026-11-18 用户选定 B「脚下尘土」，样片见分支 claude/death-fx-proto）。默认对所有普通敌人生效；
@@ -134,7 +134,8 @@ export class DeathFx {
     e.start = now; e.x = sp.x; e.y = sp.y; e.dir = dx === 0 ? (sp.flipX ? -1 : 1) : Math.sign(dx);
     e.sx = sp.scaleX; e.sy = sp.scaleY; e.size = Math.max(28, Math.abs(sp.displayWidth)); e.elite = enemy.kind === 'elite'; e.dustOn = false; e.dustWanted = this.mode === 'b' && this.wantDust(); if (e.dustWanted) this.liveDust++;
     e.img.setTexture(sp.texture.key, sp.frame.name).setOrigin(sp.originX, sp.originY).setScale(e.sx, e.sy).setFlipX(sp.flipX).setPosition(e.x, e.y).setRotation(0)
-      .setAlpha(1).setDepth(sp.depth).setVisible(true).setTintFill(0xffffff);
+      .setAlpha(1).setDepth(sp.depth).setVisible(true);
+    if (takeFlashSlot(now)) e.img.setTintFill(0xffffff); else e.img.clearTint(); // 全场闪白名额（Enemy.HIT_FLASH）：一下打死一大片时不整群变白
     // 脚下阴影：和身体一起淡出（敌人自己的阴影在 deactivate 时已隐藏，这里用同一张手绘阴影图接着画）
     const sh = enemy.shadow;
     e.shadow ??= this.scene.add.image(0, 0, 'shadow').setName('death-fx-shadow');

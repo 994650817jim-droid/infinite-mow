@@ -28,9 +28,12 @@ export const PHASES = {
    */
   lieutenantHp: { eliteMul: 3, minBoss: .35, maxBoss: .6, bossRef: 1.6 }, lieutenantScale: 1.3,
   /** 副将专属图（lieutenantArt）的显示倍率：不再乘 lieutenantScale；目标比本章精锐大 1.2–1.3 倍（不比首领大）。 */
-  lieutenantArtMul: 1.4, // 实测（tools/test-lieutenant-art）：×1 时比第 1、4 章精锐还矮（67 对 75 像素），×1.4 ≈ 精锐 1.25 倍
-  /** 同一章三关的副将共用一套图：按关序轻微换色（第 1 关原色、第 2 关暖、第 3 关冷），头顶另有「副将 · 名字」名牌。 */
-  lieutenantTints: [0xffffff, 0xffe2cc, 0xdfe6ff] as readonly number[],
+  // 副将人物的目标显示身高（像素）= 本章精锐人物身高 × 1.25。实测（tools/test-lieutenant-art）：第 1–4 章精锐是本章专属精锐图（约 75 像素），
+  // 第 5–12 章是通用 enemy_elite（约 68 像素）。各章 lt 图人物高矮不一（吴军将校画得矮），所以按图里实际人物身高（SpriteMetrics）算倍率。精锐图换了要重量。
+  lieutenantFigure: (chapter: number): number => chapter <= 4 ? 94 : 85,
+  /** 同一章三关的副将共用一套图：按关序轻微换色（第 1 关原色、第 2 关略灰绿、第 3 关略冷蓝），头顶另有「副将 · 名字」名牌。
+   *  不用暖色：吴军将校（朱红）和益州将校（红褐）本来就接近，再往红偏更分不清（统筹 11-19）。 */
+  lieutenantTints: [0xffffff, 0xe6eedd, 0xdfe6ff] as readonly number[],
   /** 副将段起小兵生命 ×（首领段不再乘：首领在场本来就少刷兵）。 */
   lieutenantWaveHp: 1.1,
   /** 首领生命 ×（玩家多一次三选一 + 关内机缘增益）。初值 1.15，见 bossHpMul（P6 平衡按章节）。 */

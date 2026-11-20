@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { DEPTH, FONT } from '../config';
 import { PHASES, lieutenantArt, type PhaseKind, type PhasePlan } from '../data/stagePhases';
 import { isV2Texture, loadV2TroopSheets, V2_TROOP_SCALE, v2TroopGround } from './ArtStyle';
+import { sheetFigureHeight } from './SpriteMetrics';
 import type { EnemyDef } from '../data/enemies';
 import type { Enemy } from '../entities/Enemy';
 import type { EnemyKind } from '../types';
@@ -90,8 +91,13 @@ export class StagePhaseRunner {
     const def: EnemyDef = { ...base, hp, damage: base.damage * 1.4, xp: base.xp * 6, radius: Math.round(base.radius * 1.2), speed: base.speed * .95 };
     const art = this.ltArt(), T = this.h.scene.textures;
     // 专属图：v2 4×4（显示 ×0.5 × lieutenantArtMul，脚底 = (格 − 7) / 格），按关序轻微换色
-    if (art) return { ...def, walkVisual: { texture: art.walk, scale: V2_TROOP_SCALE, groundY: v2TroopGround(art.cell), v2Mul: PHASES.lieutenantArtMul }, attackVisual: isV2Texture(art.attack) && T.exists(art.attack) ? art.attack : undefined, tint: PHASES.lieutenantTints[Math.max(0, Math.min(2, this.plan.stage - 1))] ?? 0xffffff };
+    if (art) return { ...def, walkVisual: { texture: art.walk, scale: V2_TROOP_SCALE, groundY: v2TroopGround(art.cell), v2Mul: this.ltMul(art.walk) }, attackVisual: isV2Texture(art.attack) && T.exists(art.attack) ? art.attack : undefined, tint: PHASES.lieutenantTints[Math.max(0, Math.min(2, this.plan.stage - 1))] ?? 0xffffff };
     return def; // 回退：本章精锐图，spawn 后 enlarge 放大
+  }
+  /** 专属图的显示倍率：目标身高 / 图里人物中位身高（×0.5 显示），夹在 1.1–1.7；量不到按 132 美术像素算。 */
+  private ltMul(walk: string): number {
+    const fig = sheetFigureHeight(this.h.scene, walk) ?? 132;
+    return Math.max(1.1, Math.min(1.7, PHASES.lieutenantFigure(this.plan.chapter) / (fig * V2_TROOP_SCALE)));
   }
   /** 体型：专属图已在 def 里定好（lieutenantArtMul）；回退的精锐图放大 lieutenantScale（Enemy.sizeMul：以前直接 setScale，v2 图下一帧就被冲掉，副将其实没变大）。 */
   private enlarge(e: Enemy): void { if (!/^lt_/.test(e.def.walkVisual?.texture ?? '')) e.setSizeMul(PHASES.lieutenantScale); }

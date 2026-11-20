@@ -1,13 +1,14 @@
 // 副将专属形象（统筹 11-19；美术会话 009bf2c 第 1 批：lt_huangjin / lt_hulao / lt_qunxiong / lt_guandu）：
-// 1-3（卜己）、4-x（袁军副将）用 lt_<章节键> 专属图，人物比本章普通精锐大约 1.2–1.3 倍；第 5 章起没有图，回退「精锐 ×1.3」（v2 也要真的放大）。
-// 用法：BASE=http://127.0.0.1:5188/ node tools/test-lieutenant-art.mjs [1-3,4-1,5-1]   截图 assets/review/lieutenant/
+// 12 章副将都用 lt_<章节键> 专属图（美术会话 009bf2c 第 1–4 章、9fc4234 第 5–8 章、ecc1d88 第 9–12 章），人物比本章普通精锐大约 1.2–1.3 倍，头顶有名牌。
+// 缺图回退「精锐 ×1.3」（Enemy.sizeMul）在 0eb3700 用 5-1 验过（当时第 5 章还没图）。
+// 用法：BASE=http://127.0.0.1:5188/ node tools/test-lieutenant-art.mjs [1-3,2-2,…]   截图 assets/review/lieutenant/
 import { chromium } from 'playwright';
 import { mkdirSync } from 'node:fs';
 const base = process.env.BASE ?? 'http://127.0.0.1:5173/', OUT = 'assets/review/lieutenant'; mkdirSync(OUT, { recursive: true });
-const ONLY = process.argv[2]?.split(',') ?? ['1-3', '4-1', '5-1'];
+const ONLY = process.argv[2]?.split(',') ?? ['1-3', '2-2', '3-2', '4-1', '5-1', '6-2', '7-2', '8-1', '9-2', '10-2', '11-1', '12-1'];
 let pass = 0, fail = 0; const errors = [];
 const ck = (n, ok, d) => { ok ? pass++ : fail++; console.log((ok ? 'PASS ' : 'FAIL ') + n + (d !== undefined ? ' · ' + JSON.stringify(d).slice(0, 500) : '')); };
-const CH = { 1: { key: 'GameScene', cfg: st => ({ chapter: 'huangjin', stage: st }) }, 4: { key: 'GuanduGameScene', reg: 'guanduStage' }, 5: { key: 'ChibiGameScene', reg: 'chibiStage' } };
+const CH = { 1: { key: 'GameScene', cfg: st => ({ chapter: 'huangjin', stage: st }) }, 2: { key: 'GameScene', cfg: st => ({ chapter: 'hulao', westStage: st }) }, 3: { key: 'ThirdGameScene', reg: 'thirdStage' }, 4: { key: 'GuanduGameScene', reg: 'guanduStage' }, 5: { key: 'ChibiGameScene', reg: 'chibiStage' }, 6: { key: 'JingnanGameScene', reg: 'jingnanStage' }, 7: { key: 'ShuGameScene', reg: 'shuStage' }, 8: { key: 'HanzhongGameScene', reg: 'hanzhongStage' }, 9: { key: 'XiangfanGameScene', reg: 'xiangfanStage' }, 10: { key: 'YilingGameScene', reg: 'yilingStage' }, 11: { key: 'NanzhengGameScene', reg: 'nanzhengStage' }, 12: { key: 'BeifaGameScene', reg: 'beifaStage' } };
 const b = await chromium.launch({ channel: 'chrome', headless: true, args: ['--mute-audio'] });
 for (const id of ONLY) {
   const [chn, stn] = id.split('-').map(Number), C = CH[chn];
@@ -36,8 +37,7 @@ for (const id of ONLY) {
     return { stage: s.hardKey() + '.' + s.hardStage(), chapter: s.phasePlan.chapter, name, ltTex: lt.sprite.texture.key, elTex: el.sprite.texture.key, ltH: Math.round(fig(lt)), elH: Math.round(fig(el)), ratio: Math.round(fig(lt) / fig(el) * 100) / 100, tint: lt.sprite.tintTopLeft.toString(16), tag: tag?.text, want: art.walk };
   }, C.key);
   await p.screenshot({ path: `${OUT}/lieutenant-${id}.png` });
-  if (chn <= 4) ck(`${id}（${r.stage}）副将用专属图 ${r.want}，人物比本章精锐大 1.2–1.3 倍，头顶有名牌`, r.ltTex.endsWith(r.want) && r.ratio >= 1.15 && r.ratio <= 1.35 && /副将/.test(r.tag ?? ''), r);
-  else ck(`${id}（${r.stage}）没有专属图：回退精锐图，且真的放大约 1.3 倍`, !/lt_/.test(r.ltTex) && r.ltTex === r.elTex && r.ratio >= 1.2 && r.ratio <= 1.4, r);
+  ck(`${id}（${r.stage}）副将用专属图 ${r.want}，人物比本章精锐大 1.2–1.3 倍，头顶有名牌`, r.ltTex.endsWith(r.want) && r.ratio >= 1.15 && r.ratio <= 1.35 && /副将/.test(r.tag ?? ''), r);
   await p.close();
 }
 ck('全程无页面报错', errors.length === 0, errors.slice(0, 5));

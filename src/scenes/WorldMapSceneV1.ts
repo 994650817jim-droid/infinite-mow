@@ -88,7 +88,7 @@ export class WorldMapSceneV1 extends Phaser.Scene {
  private card?:{x:number;y:number;w:number;h:number};private tip?:Phaser.GameObjects.Container;private detailFull='';private factionStripC?:Phaser.GameObjects.Container;private timelineRect?:Phaser.Geom.Rectangle;private inks:InkBtn[]=[];private detailView?:Phaser.GameObjects.Text;
  private area={x:20,y:110,w:W-40,h:H-360};private viewBottom=0;private timelineY=0;private detailPh=0;private minZoom=1;private zoom=1;private pointerX=0;private pointerY=0;private pinch=0;private pinching=false;private readonly mapW=1536;private readonly mapH=1024;
  /** 可攻标记 / 不可攻原因 / 「下一步」引导（2026-11-18）。 */
- private status=new Map<string,CityStatus>();private guide?:Phaser.GameObjects.Graphics;private guideLabel?:Phaser.GameObjects.Container;private guideEdge?:Phaser.GameObjects.Container;private guideTarget?:{x:number;y:number;from:{x:number;y:number};text:string;id:string};
+ private status=new Map<string,CityStatus>();private guide?:Phaser.GameObjects.Graphics;private guideLabel?:Phaser.GameObjects.Container;private guideMark?:Phaser.GameObjects.Image;private guideEdge?:Phaser.GameObjects.Container;private guideTarget?:{x:number;y:number;from:{x:number;y:number};text:string;id:string};
  constructor(){super('WorldMapScene');}
  preload(){if(!worldUnlocked()&&!isChapterTestRun())return;worldAssets(this,'strategy_art',GRAND_MAP?'assets/world/grand/overview.webp':'assets/world/strategy-map.webp');if(GRAND_MAP)worldAssets(this,'world_water','assets/world/grand/water_mask.png');if(GRAND_MAP&&!this.textures.exists('wgrand_ambient'))this.load.spritesheet('wgrand_ambient','assets/world/grand/ambient.png',{frameWidth:256,frameHeight:256});if(GRAND_MAP&&!this.textures.exists('wgrand_banner'))this.load.spritesheet('wgrand_banner','assets/world/grand/banner_wave.png',{frameWidth:192,frameHeight:128});
   // W5 城池徽框与军旗（缩小显示，用线性过滤）
@@ -99,7 +99,7 @@ export class WorldMapSceneV1 extends Phaser.Scene {
   this.load.once('complete',()=>{for(const key of [...Object.keys(MARKER_FILES),...Object.keys(CITY_ART_FILES)])if(this.textures.exists(key))this.textures.get(key).setFilter(Phaser.Textures.FilterMode.LINEAR);});}
  create(){playMenuMusic(this);try{checkWorld(loadWorld());}catch{/* 存档不可用 */}
   if(!worldUnlocked()&&!isChapterTestRun()){this.registry.set('loadBattle',true);this.scene.start(this.registry.get('battleReady')?'MenuScene':'BootScene');return;}const shellTitle=worldShell(this,this.registry.get('worldReveal')?'三国天下开启':'三国天下');if(W>600)shellTitle.setFontFamily(TITLE_FONT).setFontSize(22).setColor('#efd399').setOrigin(0,.5).setPosition(16,25).setStroke('#120904',4);if(this.registry.get('worldReveal')){this.registry.remove('worldReveal');this.cameras.main.fadeIn(900,0,0,0);}releaseWorldArt(this,'strategy_art');this.markers=[];this.cityMarkers=[];this.legend=undefined;this.inks=[];this.detailView=undefined;this.timelineRect=undefined;this.card=undefined;
-  this.siegeModal=undefined;this.territory=undefined;this.notice=undefined;this.pins=[];this.route=undefined;this.routeChapter=undefined;this.marchPts=[];this.marchFlag=undefined;this.marchProxy={t:0};this.fogImg=undefined;this.fogStamp=undefined;this.fogKey='';this.fogVis=new Map();this.status=new Map();this.guide=undefined;this.guideLabel=undefined;this.guideEdge=undefined;this.guideTarget=undefined;this.registry.remove('hardChapter');const advance=isChapterTestRun()?null:advanceEra(),lost=isChapterTestRun()?[]:takeLostNotice();if(!isChapterTestRun())ensureIntel();const s=loadWorld();this.intel=intelEvents();this.intelMarkers=[];this.owned=s.ownedCities;this.alerts=s.alerts;this.capturedEver=s.capturedEver;this.era=!s.cleared.hulao?0:eraIndexFor({hulaoCleared:s.cleared.hulao,warlordStages:s.warlordStages,guanduStages:s.guanduStages});
+  this.siegeModal=undefined;this.guideMark=undefined;this.territory=undefined;this.notice=undefined;this.pins=[];this.route=undefined;this.routeChapter=undefined;this.marchPts=[];this.marchFlag=undefined;this.marchProxy={t:0};this.fogImg=undefined;this.fogStamp=undefined;this.fogKey='';this.fogVis=new Map();this.status=new Map();this.guide=undefined;this.guideLabel=undefined;this.guideEdge=undefined;this.guideTarget=undefined;this.registry.remove('hardChapter');const advance=isChapterTestRun()?null:advanceEra(),lost=isChapterTestRun()?[]:takeLostNotice();if(!isChapterTestRun())ensureIntel();const s=loadWorld();this.intel=intelEvents();this.intelMarkers=[];this.owned=s.ownedCities;this.alerts=s.alerts;this.capturedEver=s.capturedEver;this.era=!s.cleared.hulao?0:eraIndexFor({hulaoCleared:s.cleared.hulao,warlordStages:s.warlordStages,guanduStages:s.guanduStages});
   const desktop=W>600;
   // 顶部资源栏（军粮 / 城池），漆底描金
   const res=resourceBar(this,desktop?shellTitle.x+shellTitle.width+12:24,desktop?25:88,[{glyph:"粮",label:"军粮",value:s.provisions,tint:0x7a5a22},{glyph:'城',label:'城池',value:this.owned.length,tint:0x2f6b45}],desktop);
@@ -149,7 +149,7 @@ export class WorldMapSceneV1 extends Phaser.Scene {
    if(st==='home'&&homeIntro){const ring=(MARKERS_V2?this.add.ellipse(0,6,46,16):this.add.circle(0,0,20)).setStrokeStyle(3,0x9fe0b4,.95).setName('home-pulse');marker.add(ring);this.tweens.add({targets:ring,scale:1.9,alpha:0,duration:1200,repeat:-1,ease:'Sine.easeOut'});
     const tip=worldText(this,0,-56,'你的营寨 · 点此进入',13,'#eaffd8').setOrigin(.5).setBackgroundColor('#1d3a26e6').setPadding(8,4,8,4).setName('home-intro-tip');marker.add(tip);this.tweens.add({targets:tip,y:-61,yoyo:true,repeat:-1,duration:700,ease:'Sine.easeInOut'});}
    // v2：牙旗 / 营帐 + 名牌；命中区沿用 node-<id>
-   const v2=MARKERS_V2?nodeMarkerV2(this,st,glyphText,labelText,active):null;
+   const v2=MARKERS_V2?nodeMarkerV2(this,st,glyphText,labelText,active,node.challenge?'challenge':node.side?'side':'chapter'):null;
    const circle=(v2?v2.hit:this.add.circle(0,0,18,st==='cleared'?0x3a2a12:0x16271e,.94).setStrokeStyle(2,color)).setInteractive({useHandCursor:true}).setName(`node-${node.id}`).setData('state',st);
    const icon=v2?null:worldText(this,0,0,glyphText,13,st==='cleared'?'#ffe7a8':active?'#f5dc9e':'#a4aa9c').setOrigin(.5);
    const label=v2?null:worldText(this,0,25,labelText,13,active?'#fff0cd':'#b6b8aa').setOrigin(.5).setStroke('#142016',3);
@@ -289,8 +289,9 @@ export class WorldMapSceneV1 extends Phaser.Scene {
    else if(fog==='dim'){icon?.setAlpha(.45);for(const f of flag)(f as unknown as Phaser.GameObjects.Components.Alpha).setAlpha(.45);}
    if(st.kind==='far'||st.kind==='gate'){icon?.setAlpha(.55).setTint(0xb8b2a4);for(const f of flag)(f as unknown as Phaser.GameObjects.Components.Visible).setVisible(false);(m.root.getData('plate') as Phaser.GameObjects.Components.Alpha|undefined)?.setAlpha(.75);m.label.setAlpha(.75);}
    if(st.kind==='attack'&&MARKERS_V2){const ring=this.add.graphics().setName('attack-ring-'+m.city.id);ring.lineStyle(1.6,0xd2462c,1).strokeEllipse(0,3,m.outer*2.2,13);m.root.addAt(ring,0);this.tweens.add({targets:ring,alpha:{from:.95,to:.3},duration:1100,yoyo:true,repeat:-1,ease:'Sine.easeInOut'});
-    const tt=worldText(this,0,0,'可攻',11,'#ffe2a0').setOrigin(.5).setFontFamily(HEADING_FONT),g=this.add.graphics();lacquerPlate(g,-tt.width/2-6,-tt.height/2-2,tt.width+12,tt.height+4,.92,0xd2462c);
-    m.root.add(this.add.container(m.outer*.62,-m.top*.62,[g,tt]).setName('attack-tag-'+m.city.id));}
+    const tt=worldText(this,0,0,'可攻',11,'#ffe2a0').setOrigin(.5).setFontFamily(HEADING_FONT);
+    if(this.textures.exists('wm2_attack_tag')){const fr=this.textures.getFrame('wm2_attack_tag'),h=40,w=h*fr.width/fr.height,img=this.add.image(0,-3,'wm2_attack_tag').setOrigin(.5,.46).setDisplaySize(w,h);/* 挂绳与穗子在上下，字落在牌面中心（图高约 46%） */tt.setStroke('#3a0e08',3);m.root.add(this.add.container(m.outer*.62,-m.top*.62,[img,tt]).setName('attack-tag-'+m.city.id));} // W2-13 讨伐朱牌
+    else{const g=this.add.graphics();lacquerPlate(g,-tt.width/2-6,-tt.height/2-2,tt.width+12,tt.height+4,.92,0xd2462c);m.root.add(this.add.container(m.outer*.62,-m.top*.62,[g,tt]).setName('attack-tag-'+m.city.id));}}
    if(W>600)m.hit.on('pointerover',()=>{const p=this.toScreen(m.city.x,m.city.y);this.showTip(this.cityTip(m.city),p.x,p.y-m.top-4,.5);}).on('pointerout',()=>this.hideTip());}}
  /** 城池悬停提示。 */
  private cityTip(c:CityDef):string{const st=this.status.get(c.id),owner=cityOwner(c.id,this.era,this.owned),inc=cityIncome(c.tier,owner==='player'?cityLevels(c.id):emptyCityLevels()),head=`${c.name} · ${TIER_NAME[c.tier]} · ${c.region}`;
@@ -315,6 +316,9 @@ export class WorldMapSceneV1 extends Phaser.Scene {
   this.guide=this.add.graphics().setDepth(2).setName('world-next-guide');if(this.mapMask)this.guide.setMask(this.mapMask.createGeometryMask());
   const t=worldText(this,0,0,text,12,'#ffe2a0').setOrigin(.5).setName('world-next-text'),g=this.add.graphics();lacquerPlate(g,-t.width/2-8,-t.height/2-3,t.width+16,t.height+6,.85);
   this.guideLabel=this.add.container(0,0,[g,t]).setDepth(4).setName('world-next-label');
+  // W2-14 下一战令箭：插在目标头上、轻轻上下浮（缺图不画）
+  this.guideMark?.destroy();this.guideMark=undefined;
+  if(this.textures.exists('wm2_next_arrow')){const fr=this.textures.getFrame('wm2_next_arrow'),h=40;this.guideMark=this.add.image(0,0,'wm2_next_arrow').setOrigin(.5,1).setDisplaySize(h*fr.width/fr.height,h).setDepth(6).setName('world-next-mark').setVisible(false);this.tweens.add({targets:this.guideMark,y:'-=6',yoyo:true,repeat:-1,duration:800,ease:'Sine.easeInOut'});}
   // 目标在视野外：屏幕边缘一枚漆底小牌 + 金色箭头指向它（点一下镜头过去）
   const ep=this.add.graphics(),arrow=this.add.graphics().setName('world-next-edge-arrow'),et=worldText(this,0,17,'下一步',10,'#ffe2a0').setOrigin(.5);
   ep.fillStyle(0x1a110a,.88).fillCircle(0,0,14).lineStyle(1.5,0xc9a35e,.95).strokeCircle(0,0,14);arrow.fillStyle(0xffd27a,1).fillTriangle(9,0,-5,-6,-5,6).lineStyle(1,0x2a170b,.9).strokeTriangle(9,0,-5,-6,-5,6);
@@ -322,6 +326,7 @@ export class WorldMapSceneV1 extends Phaser.Scene {
   this.guideEdge=this.add.container(0,0,[ep,arrow,et,hit]).setDepth(7).setName('world-next-edge').setVisible(false);}
  private layoutGuide(){const g=this.guide,t=this.guideTarget,lab=this.guideLabel;if(!g||!t||!lab)return;g.clear();
   const ar=this.area,b0=this.toScreen(t.x,t.y),e=this.guideEdge;
+  if(this.guideMark){const mk=this.guideMark,inView=b0.x>ar.x+24&&b0.x<ar.x+ar.w-24&&b0.y-70>ar.y&&b0.y<this.viewBottom-24;this.tweens.killTweensOf(mk);mk.setPosition(b0.x+14,b0.y-44).setVisible(inView);if(inView)this.tweens.add({targets:mk,y:b0.y-50,yoyo:true,repeat:-1,duration:800,ease:'Sine.easeInOut'});}
   if(e){const inView=b0.x>ar.x+24&&b0.x<ar.x+ar.w-24&&b0.y>ar.y+24&&b0.y<this.viewBottom-24;e.setVisible(!inView);
    if(!inView){const cx=ar.x+ar.w/2,cy=(ar.y+this.viewBottom)/2,dx=b0.x-cx,dy=b0.y-cy,k=Math.min((ar.w/2-34)/Math.max(1,Math.abs(dx)),((this.viewBottom-ar.y)/2-34)/Math.max(1,Math.abs(dy)));
     let ex=cx+dx*k,ey=cy+dy*k;if(this.card&&ex>this.card.x-30&&ey>this.card.y-30)ey=this.card.y-34; // 别压右下小卡

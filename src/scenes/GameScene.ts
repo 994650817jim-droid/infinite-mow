@@ -85,6 +85,7 @@ import {upgradeCardTexture,inkUpgradeCardTexture,inkPlate,homeCommand,inkSkin} f
 import { RESULT_GOLD, RESULT_IVORY, RESULT_STROKE, buildRewardView, parseHeroLine, playResultAnims, wan, type ResultAnim } from '../ui/ResultRewards';
 import { loadBagArt } from '../ui/ItemQuality';
 import { bagBundle, type BagBundle } from '../ui/BagBundleButton';
+import { HeroStatusFrame } from '../ui/HeroStatusFrame';
 import type { EnemyDef } from '../data/enemies';
 import { WEAPON_META, weaponName, buildUpgradeOptions, canOfferRejuvenation } from '../data/upgrades';
 import { waveIndexAt } from '../data/waves';
@@ -528,6 +529,9 @@ export class GameScene extends Phaser.Scene {
   protected hudTexts!: Record<string, Phaser.GameObjects.Text>;
   /** 右上手绘包袱（行囊）按钮。 */
   private bagBundle?: BagBundle;
+  /** 左上主将状态框（电脑布局；ui/HeroStatusFrame.ts）。 */
+  statusFrame?: HeroStatusFrame;
+  private hudAttrBadge?: Phaser.GameObjects.Image;
   protected passiveHud!: PassiveHud; protected passiveShout!: PassiveShout; protected heroBark!: HeroBark;
   /** 赵云被动「七进七出」：脚下龙鳞层数 + 满层白龙枪芒 / 绕身一闪 / 突进残影。 */
   zhaoyunFx!: ZhaoyunPassiveFx;
@@ -1198,6 +1202,7 @@ export class GameScene extends Phaser.Scene {
     this.updateHud();
     // 被动满层台词每帧检测（HUD 0.1 秒一刷，孙尚香这类攒满后马上触发的会漏掉）
     this.passiveShout.update(this.player.passive, this.combatNow, this.player.x, this.player.y, this.mode === 'none' && !this.over, this.player.sprite);
+    this.statusFrame?.update({ hp: this.player.hp, maxHp: this.player.maxHp, xp: this.player.xp, xpNext: this.player.xpNext, level: this.player.level, now: this.time.now, hpText: this.hudTexts?.hp, badge: this.hudAttrBadge ??= (this.children.getByName('hud-attr-badge') as Phaser.GameObjects.Image | null) ?? undefined });
     this.passiveGauge.update(this.player.passive, this.combatNow, this.player.x, this.player.y, !this.over && this.player.sprite.visible);
     this.heroBark?.update(this.barkSpeakers(), this.combatNow, this.mode === 'none' && !this.over && !this.barksMuted()); // 武将台词气泡（被动大招触发时）；过场中与刚结束 1 秒内不喊
     this.artEffects.update(this.combatNow);
@@ -4218,6 +4223,9 @@ export class GameScene extends Phaser.Scene {
         .on('pointerdown', () => this.togglePause()),
     };
     attrBadge(this, 196, 31, this.runConfig.character, 20, { scrollFactor: 0, depth: DEPTH.hud + 2 })?.setName('hud-attr-badge'); // 主将主属性印（ui/AttrBadge.ts）
+    // 2026-11-19 用户「这里ui做一下」：电脑版左上换成漆金状态框（头像 / 名字 + 等级印 + 主属性印 / 铜框朱红血条 + 残血拖尾 / 细金经验条）；
+    // 旧的「赵云 Lv.N」文字留作数据（测试读），不再显示；HP 数字摆进新血条中央
+    this.hudAttrBadge = undefined; if (IS_DESKTOP) { this.statusFrame?.destroy(); this.statusFrame = new HeroStatusFrame(this, this.runConfig.character, getCharacter(this.runConfig.character).name, DEPTH.hud); this.events.once('shutdown', () => { this.statusFrame?.destroy(); this.statusFrame = undefined; }); }
     this.hudTexts.details = this.add.text(GAME_WIDTH - 24, 94, '战况 ▾', style(13, '#dfcfab'))
       .setOrigin(1,0).setFixedSize(96,62).setAlign('center').setPadding(10,12).setScrollFactor(0).setDepth(DEPTH.hud+1)
       .setVisible(false); // 「战况」下拉已取消（用户反馈不需要）；音效 / 音乐开关改为常驻
@@ -4298,6 +4306,7 @@ export class GameScene extends Phaser.Scene {
     this.buffHud.update(this.player,this.combatNow,!overlay&&!this.over&&!this.relicExpanded,(id,now)=>this.buffProgress(id,now));
     this.hudGfx.setVisible(!overlay);
     if (this.hudTexts) for (const t of Object.values(this.hudTexts)) t.setVisible(!overlay);
+    if (this.statusFrame) { this.statusFrame.setVisible(!overlay); this.hudTexts?.level.setVisible(false); }
     if (this.phasePlan && this.hudTexts) this.hudTexts.wave.setVisible(false);
     this.jinnangButton?.setVisible(!overlay && !this.over && !!this.jinnang); // 五段关不显示「第 x 波」，看顶部战况线
     this.battleTrack?.show(!overlay);
@@ -4309,18 +4318,20 @@ export class GameScene extends Phaser.Scene {
     const xpRatio = this.player ? Phaser.Math.Clamp(this.player.xp / this.player.xpNext, 0, 1) : 0;
     g.clear();
     // Small neutral health backing only; never a screen-wide green curtain.
-    g.fillStyle(0x100e09,.35).fillRoundedRect(20,18,194,60,4);
+    if (!this.statusFrame) g.fillStyle(0x100e09,.35).fillRoundedRect(20,18,194,60,4);
     if(this.relicExpanded) {
       g.fillStyle(0x17150f,.9).fillRoundedRect(20,190,Math.min(410,GAME_WIDTH-40),180,4);
       g.lineStyle(1,WAR.gold,.45).strokeRoundedRect(20,190,Math.min(410,GAME_WIDTH-40),180,4);
     }
     // Stable HUD regions: health, clock, touch controls, then wave/resources.
 
+    if (!this.statusFrame) { // 手机布局：原扁平条
     g.fillStyle(0x07120d,.95).fillRect(27,42,180,18);
     g.fillStyle(WAR.danger,.95).fillRect(29,44,Math.round(176*hpRatio),14);
     g.lineStyle(1,0xd5b887,.55).strokeRect(27,42,180,18);
     g.fillStyle(0x07120d,.9).fillRect(27,66,180,6);
     g.fillStyle(WAR.jade,.95).fillRect(28,67,Math.round(178*xpRatio),4);
+    }
     // 右上角按钮的漆金底板：暂停为金漆，音效 / 音乐为暗漆小牌（原先是无底纹的纯文字，手机上不像按钮）
     if (this.hudTexts) for (const k of ['pause', 'mute', 'music', 'bag'] as const) {
       const t = this.hudTexts[k]; if (!t?.visible) continue;

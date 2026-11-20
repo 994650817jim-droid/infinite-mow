@@ -18,7 +18,7 @@ const M = "import('/src/systems/HeroUnlocks.ts')";
 // ① 新存档：只有四人
 const fresh = await p.evaluate(async () => { const U = await import('/src/systems/HeroUnlocks.ts'), R = await import('/src/systems/RosterStore.ts');
   return { total: (await import('/src/data/characters.ts')).CHARACTERS.length, locked: U.lockedHeroes(), starters: ['liubei', 'guanyu', 'zhangfei', 'zhaoyun'].every(U.heroUnlocked), owned: R.heroOwned('zhuge'), lord: R.canPickLord('zhuge'), pending: U.pendingReveals() }; });
-ck('新存档：只有刘备、关羽、张飞、赵云可玩，其余全部锁定（含 P2 吕布、张辽；不能选主将 / 主公）', fresh.locked.length >= 10 && fresh.locked.length === fresh.total - 4 && fresh.locked.includes('lvbu') && fresh.locked.includes('zhangliao') && fresh.starters && !fresh.owned && !fresh.lord && fresh.pending.length === 0, fresh);
+ck('新存档：只有刘备、关羽、张飞、赵云可玩，其余全部锁定（含 P2 吕布、张辽、周瑜、太史慈、曹操；不能选主将 / 主公）', fresh.locked.length >= 13 && fresh.locked.length === fresh.total - 4 && ['lvbu', 'zhangliao', 'zhouyu', 'taishici', 'mengde'].every(id => fresh.locked.includes(id)) && fresh.starters && !fresh.owned && !fresh.lord && fresh.pending.length === 0, fresh);
 
 // ② 各节点：差一步不解锁、到了就解锁（纯规则，进度整份注入）
 const rules = await p.evaluate(async () => {

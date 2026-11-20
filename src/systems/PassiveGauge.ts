@@ -37,12 +37,16 @@ export class PassiveGauge {
 
   constructor(private readonly scene: Phaser.Scene) { this.zhaoyun = new ZhaoyunPassiveFx(scene); }
 
+  /** 脚下现在有没有刻度（赵云龙鳞或通用刻度）：骑马耐力条据此决定贴马蹄还是让到刻度下面。 */
+  get showing(): boolean { return this.on; }
+  private on = false;
   /** 每帧调用。x / y 为主将原点，now 为战斗时间（毫秒）。 */
   update(passive: CharacterPassives, now: number, x: number, y: number, visible: boolean): void {
     this.zhaoyun.update(passive, now, x, y, visible);
     const id = passive.characterId, look = id === 'zhaoyun' ? undefined : PASSIVE_GAUGE_LOOKS[id];
     if (id !== this.hero) this.reset(id, look);
     const on = visible && !!look && this.scene.textures.exists(look.tex) && !passive.snapshot(now).stopped;
+    this.on = on || (id === 'zhaoyun' && visible);
     if (!on || !look) { for (const s of this.icons) s.setVisible(false); this.shown = -1; return; }
     const r = gaugeReading(passive, now); this.last = r;
     const n = Math.max(0, Math.min(look.slots, Math.floor(r.value * look.slots / r.max + 1e-6)));

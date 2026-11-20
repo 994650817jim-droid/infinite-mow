@@ -33,6 +33,13 @@ export const PASSIVE_GAUGE_LOOKS: Partial<Record<CharacterId, GaugeLook>> = {
   diaochan: { tex: 'passive_gauge_b', row: 4, slots: 5, size: 15, unit: '舞势（弯月花瓣）' },
 };
 
+/**
+ * 主将脚下 HUD 排布（2026-11-20 用户「被动叠成数和马耐力条重叠一起」）：马蹄在主将原点下方 30。
+ * 步行：被动刻度在 footDy；骑马：被动刻度整排下移 mountDy，落到马蹄下面；马的耐力条（HeroMount）在刻度再下面 barBelowGauge，
+ * 没有刻度（P2 武将暂无刻度图）时耐力条贴在马蹄下 bar。
+ */
+export const FOOT_HUD = { mountDy: 12, bar: 34, barBelowGauge: 62 } as const;
+
 export const PASSIVE_GAUGE = {
   /** 与赵云龙鳞同位置：主将原点下方 footDy 处的前半椭圆。 */
   footDy: 29, rx: 30, ry: 9,

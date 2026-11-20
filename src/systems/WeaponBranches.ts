@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { DEPTH } from '../config';
-import { BRANCH_FIT, LONGDAN, longdanTotalMs, branchById, branchTier, BENXI, type WeaponBranch } from '../data/weaponBranches';
+import { BRANCH_FIT, LONGDAN, LONGDAN_GUARD, longdanInvulnMs, longdanTotalMs, branchById, branchTier, BENXI, type WeaponBranch } from '../data/weaponBranches';
 import type { SchoolId } from '../data/schools';
 import type { Enemy } from '../entities/Enemy';
 import type { Player } from '../entities/Player';
@@ -105,7 +105,7 @@ export class WeaponBranches {
   private onFire(b: WeaponBranch, now: number): void {
     const P = this.h.player, k = this.k();
     if (this.onFire2(b, now) || this.onFire3(b, now)) return;
-    if (b.id === 'zy_longdan' && now >= this.nextAt) { const T = longdanTotalMs() + 120, n = this.final() ? 3 : 1; this.nextAt = now + Math.max(LONGDAN.cdMs / k, n * T + 800); this.dash(); if (n > 1) this.dashQueue.push(now + T, now + 2 * T); } // 进阶：再进出两次（一次约 1.1 秒，接着来）；冷却按新时长放宽
+    if (b.id === 'zy_longdan' && now >= this.nextAt) { const T = longdanTotalMs() + 120, n = this.final() ? 3 : 1; this.nextAt = now + Math.max(LONGDAN.cdMs / k, n * T + 800, n * longdanInvulnMs() / (n > 1 ? LONGDAN_GUARD.finalShare : LONGDAN_GUARD.invulnShare)); this.dash(); if (n > 1) this.dashQueue.push(now + T, now + 2 * T); } // 进阶：再进出两次（一次约 1.1 秒，接着来）；冷却按新时长放宽
     else if (b.id === 'gy_qinglong') this.crescent();
     else if (b.id === 'zf_duanqiao') {
       const t = this.nearest(320), ang = t ? Math.atan2(t.y - P.y, t.x - P.x) : 0, w = 200 * (1 + .15 * (this.tier() - 1)), cx = P.x + Math.cos(ang) * 150, cy = P.y + Math.sin(ang) * 150, px = -Math.sin(ang), py = Math.cos(ang);
@@ -170,7 +170,7 @@ export class WeaponBranches {
     const phases: Record<string, number> = {};
     const mark = (k: string): void => { phases[k] = Math.round(this.h.now() - t0); };
     this.lastDash = { mode, len: L, ox: Math.round(ox), oy: Math.round(oy), ux: +ux.toFixed(2), uy: +uy.toFixed(2), phases, total };
-    P.invulnUntil = Math.max(P.invulnUntil, now + total + 150); // 全程无敌
+    P.invulnUntil = Math.max(P.invulnUntil, now + longdanInvulnMs()); // 起手 + 冲入 + 回马枪无敌；杀回那段要挨打（LONGDAN_GUARD）
     const dust = (x: number, y: number, size: number): void => this.fx('fx_windstep_burst', x, y + (P.riseY > 0 ? 30 : 8), size, 380, 0xe8dcc0);
     // 残影：主将当前这一帧（骑马时连同马）染淡青白，原地淡出
     const ghost = (): void => {

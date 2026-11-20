@@ -95,7 +95,7 @@ const branchFire = async (hero, branches) => {
   await p.evaluate(() => { const s = window.__S, P = s.player; for (let i = 0; i < 3; i++) s.spawnEnemy('infantry', P.x - 100, P.y - 20 + i * 20, 3, true); }); await p.waitForTimeout(150);
   const mv = await p.evaluate(() => { const s = window.__S, rt = s.branchRt; rt.vx = 0; rt.vy = 220; rt.dash(); return { ...rt.lastDash }; });
   ck('七进七出：四段（起手 → 冲入 → 回马枪 → 杀回）依次发生，整套约 1–1.3 秒', ['wind', 'out', 'turn', 'back', 'land'].every(k => typeof back.d?.phases?.[k] === 'number') && back.d.phases.out >= 150 && back.d.phases.turn - back.d.phases.out >= 250 && back.d.phases.back - back.d.phases.turn >= 150 && back.d.phases.land >= 950 && back.d.phases.land <= 1500, back.d?.phases);
-  ck('七进七出：站定时朝最近的敌兵冲进去，随即杀回出发点（误差 ≤ 24），全程无敌（≥ 1 秒）', dz2.mode === 'target' && dz2.ux > .9 && dz2.inv >= 1000 && back.d?.back && Math.hypot(back.at.x - back.d.ox, back.at.y - back.d.oy) <= 24, { dz2, back });
+  ck('七进七出：站定时朝最近的敌兵冲进去，随即杀回出发点（误差 ≤ 24），冲入到回马枪无敌（约 0.85 秒，杀回那段不无敌）', dz2.mode === 'target' && dz2.ux > .9 && dz2.inv >= 800 && dz2.inv <= 900 /* 2026-11-20 平衡：只有起手 + 冲入 + 回马枪无敌（约 0.85 秒），杀回那段不无敌 */ && back.d?.back && Math.hypot(back.at.x - back.d.ox, back.at.y - back.d.oy) <= 24, { dz2, back });
   ck('七进七出：在走时沿走的方向冲（玩家控制）', mv.mode === 'move' && mv.uy === 1, mv);
   ck('进阶形态短演出：分支进阶名大字（+ BranchFinalFx 手绘爆发、本派觉醒光、震屏）', !!fin.title, fin);
   await p.close();

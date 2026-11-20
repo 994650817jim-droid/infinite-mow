@@ -19,7 +19,7 @@ const B = (weapon: WeaponId, id: string, school: SchoolId, name: string, desc: s
   ({ id, weapon, school, name, desc, lv6, lv7, finalName, finalDesc, icon: 'branch_icon_' + id, ready });
 
 export const WEAPON_BRANCHES: readonly WeaponBranch[] = [
-  B('spear_orbit', 'zy_longdan', 'cavalry', '龙胆 · 七进七出', '每 3 秒出枪带一次短冲刺\n沿途敌兵受创\n冲刺中无敌 0.25 秒', '冲刺伤害 +30%、间隔缩短', '冲刺伤害再 +30%、间隔再缩短', '七进七出', '冲刺可连 3 次，路径留银白枪痕', true),
+  B('spear_orbit', 'zy_longdan', 'cavalry', '龙胆 · 七进七出', '约每 4 秒杀进敌阵、回马一枪再杀回原位\n沿途与回马枪下的敌兵受创\n杀进去时无敌，杀回那段要小心', '冲刺伤害 +30%、间隔缩短', '冲刺伤害再 +30%、间隔再缩短', '七进七出', '冲刺可连 3 次，路径留银白枪痕', true),
   B('spear_orbit', 'zy_bainiao', 'warrior', '百鸟朝凤', '每 6 秒一次 360° 枪风暴\n重创身边一圈敌兵', '风暴伤害 +30%、更频繁', '风暴伤害再 +30%、更频繁', '百鸟朝凤 · 极', '风暴后把周围敌兵吸向身边、减速 2 秒', true),
   B('guandao', 'gy_qinglong', 'warrior', '青龙出水', '每次扇形斩，额外放出\n一道向前穿透的青龙月牙', '月牙伤害 +30%', '月牙伤害再 +30%、飞得更远', '水淹七军', '月牙落地化水浪，沿路敌兵减速', true),
   B('guandao', 'gy_danqi', 'cavalry', '千里走单骑', '移动时身后留下刀痕带\n敌兵踩上持续受创', '刀痕伤害 +30%', '刀痕伤害再 +30%、更长', '过五关', '每走一段路自动横扫一圈', true),
@@ -90,6 +90,13 @@ export const BRANCH_FIT = { fitMul: 1.2 } as const;
  */
 export const LONGDAN = { len: 170, moveMin: 40, windMs: 200, outMs: 350, turnMs: 200, backMs: 350, backMul: .9, turnR: 95, turnMul: .8, pathPush: 26, ghostMs: 70, hitStopMs: 45, pushR: 90, push: 46, cdMs: 3800 } as const;
 export const longdanTotalMs = (): number => LONGDAN.windMs + LONGDAN.outMs + LONGDAN.turnMs + LONGDAN.backMs;
+/**
+ * 七进七出的无敌与节奏（2026-11-20 平衡会话）：原来全程无敌 1.31 秒、冷却 3.8 秒 ÷ k（Lv6 / 7、契合会把 k 推到 ~1.9），
+ * Lv7 + 契合时无敌约占 63%，进阶连三次约 85%。改为：只有起手 + 冲入 + 回马枪无敌（约 0.85 秒），杀回那段要挨打；
+ * 一轮至少隔「无敌时长 ÷ invulnShare」（普通 25% → 3.4 秒，进阶连三次 40% → 6.4 秒），k 只让冷却在此之上缩短。
+ */
+export const LONGDAN_GUARD = { graceMs: 100, invulnShare: .25, finalShare: .4 } as const;
+export const longdanInvulnMs = (): number => LONGDAN.windMs + LONGDAN.outMs + LONGDAN.turnMs + LONGDAN_GUARD.graceMs;
 /** 专职状态（HUD 专职行与构筑总览专职栏共用）：当前 Lv（5–7）、进阶进度、是否已进阶、悬停全文。 */
 export interface BranchStatus { b: WeaponBranch; lv: number; over: number; shi: number; final: boolean; attuned: boolean; progress: string; tip: string }
 export function branchStatus(w: { branch?: string; over?: number; attuned?: boolean } | undefined, shi: (s: SchoolId) => number, schoolName: (s: SchoolId) => string): BranchStatus | null {

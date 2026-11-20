@@ -58,7 +58,7 @@ export function beifaGameSceneClass(Base: typeof GameScene, cfg: ArcSceneConfig)
     protected spawnAroundPlayer(kind: EnemyKind, force = false): Enemy | null {
       const s = this as unknown as { player: { x: number; y: number }; spawnEnemy(k: EnemyKind, x: number, y: number, h?: number, f?: boolean): Enemy | null };
       if (this.arcStage === 2 && this.siege?.gateAlive) {
-        const p = s.player, a = Math.random() * Math.PI * 2, d = Math.max(GAME_WIDTH, GAME_HEIGHT) * .5 + Math.random() * 100, wy = this.siege.wallY + 60;
+        const p = s.player, a = Math.random() * Math.PI * 2, d = this.spawnRingDistance(), wy = this.siege.wallY + 60; // 刷在屏幕外更远处（GameScene.spawnRingDistance）
         let y = p.y + Math.sin(a) * d; if (y < wy) y = wy + (wy - y);
         return s.spawnEnemy(kind, p.x + Math.cos(a) * d, y, undefined, force);
       }

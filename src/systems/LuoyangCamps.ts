@@ -31,6 +31,8 @@ export interface LuoyangCampsHost {
   spawn: (kind: EnemyKind, x: number, y: number) => Enemy | null;
   spawnTrait: (id: string, x: number, y: number) => Enemy | null;
   move: (e: Enemy, nx: number, ny: number, dt: number) => void;
+  /** 放一个可打的燃烧火盆（BattlefieldSupplies，打烂后地上留火）；放不了返回 false。 */
+  brazier?: (x: number, y: number, size: number) => boolean;
 }
 interface Member { e: Enemy; life: number; camp: Camp; state: 'idle' | 'sally'; reinforce: boolean }
 interface Camp { x: number; y: number; tent: Enemy; life: number; alerted: boolean; destroyed: boolean; next: number; objs: Phaser.GameObjects.GameObject[]; boxes: Box[]; reinf: Array<{ e: Enemy; life: number }> }
@@ -77,7 +79,7 @@ export class LuoyangCamps {
     img(c.x - 175, c.y - 70, 6, 150); img(c.x + 120, N + 50, 6, 130, true);
     img(c.x + 185, c.y - 10, 4, 125); img(c.x - 190, c.y + 95, 4, 110, true);
     img(c.x + 175, c.y + 105, 5, 120);
-    img(c.x - 205, c.y + 15, 7, 88);
+    if (!this.h.brazier?.(c.x - 205, c.y + 15, 96)) img(c.x - 205, c.y + 15, 7, 88); // 火盆：可打的燃烧火盆（用户 11-19），放不了才用静态图
   }
 
   // ———— 守军 ————

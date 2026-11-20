@@ -1,4 +1,5 @@
 import { shouldPlayOpening } from '../systems/BattleSettings';
+import { FIREPIT_ART } from '../data/fireProps';
 import { TACTIC_ICON_ALIAS, SCHOOL_IDS } from '../data/schools';
 import { LOW_RES } from '../systems/LowResTextures';
 let openingTried = false;
@@ -93,6 +94,7 @@ export class BootScene extends Phaser.Scene {
     // 黄巾长枪兵 v5：128 帧、行走 / 刺击同一比例（tools/prepare-yellow-spear.mjs）
     for(const key of ['spear-walk-v5','spear-attack-v5'])this.load.spritesheet(`yellow_${key}`,`assets/processed/yellow/${key}.png`,{frameWidth:128,frameHeight:128});
     for(const key of ['swordsman-walk-v4','swordsman-attack-v4','shield-walk-v4','shield-attack-v4','spear-walk-v2'])this.load.spritesheet(`yellow_${key}`,`assets/processed/yellow/${key}.png`,{frameWidth:96,frameHeight:96});
+    if(!this.textures.exists(FIREPIT_ART.key))this.load.spritesheet(FIREPIT_ART.key,FIREPIT_ART.file,{frameWidth:FIREPIT_ART.cell,frameHeight:FIREPIT_ART.cell}); // 篝火燃烧 8 帧（战场石圈篝火也用）
     for(const [key,file] of [['brazier_burning','brazier_burning-v4.png'],['brazier_breaking','brazier_breaking-v4.png'],['ground_fire','ground_fire-v4.png']] as const)this.load.spritesheet(key,`assets/processed/yellow/${file}`,{frameWidth:444,frameHeight:444});
     for(let i=1;i<=3;i++)this.load.image(`yellow_ground_${i}`,`assets/processed/yellow/ground-${i}.png`);
     for(const key of ['yellow_shaman_ground_sigil_warning','zhangbao_earth_rift_warning_and_burst','zhangbao_earth_shockwave','zhangbao_earth_wall_spawn','zhangbao_ritual_circle','zhangliang_call_reinforcements','zhangliang_charge_warning','zhangliang_slash','yellow_archer_arrow','yellow_shield_short_stab'])this.load.spritesheet(key,`assets/processed/yellow/${key}.png`,{frameWidth:128,frameHeight:128});

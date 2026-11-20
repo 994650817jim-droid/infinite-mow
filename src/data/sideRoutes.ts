@@ -162,10 +162,10 @@ export const SIDE_ROUTES: readonly SideRouteDef[] = [
     open: { arc: 'nanzheng', stages: 3, hint: '第十一章「南征」平定后开放' }, base: 'nanzheng',
     stages: [
       { name: '银坑洞', kind: 'field', behavior: 2, scenery: 2, waves: ['银坑山口', '藤甲兵', '孟优出阵'], story: '孟获虽已心服，银坑洞仍有余部不肯归顺。孟优领藤甲兵据洞而守。',
-        boss: B('mengyou', '孟优', '孟获之弟', 'nz_mangyachang', 'guandu/chunyuqiong', 'mangyachang') },
+        boss: B('mengyou', '孟优', '孟获之弟', 'side_mengyou', 'guandu/chunyuqiong', 'mangyachang') },
       { name: '秃龙洞', kind: 'final', behavior: 3, scenery: 3, waves: ['秃龙洞外', '象兵冲阵', '带来洞主亲至'], story: '秃龙洞毒泉密布，带来洞主与朵思大王驱象兵出洞。南中一定，再无后顾之忧。',
-        boss: B('dailai', '带来洞主', '祝融之弟', 'nz_menghuo', 'guandu/chunyuqiong', 'menghuo'),
-        partner: B('duosi', '朵思大王', '秃龙洞主', 'nz_mangyachang', 'guandu/chunyuqiong', 'wutugu') },
+        boss: B('dailai', '带来洞主', '祝融之弟', 'side_dailai', 'guandu/chunyuqiong', 'menghuo'),
+        partner: B('duosi', '朵思大王', '秃龙洞主', 'side_duosi', 'guandu/chunyuqiong', 'wutugu') },
     ],
     annex: [], specialty: { title: '南中象兵', text: '最大生命 +6%', maxHp: .06 }, lord: 'dailai' },
 ];

@@ -91,6 +91,8 @@ export function xiangfanGameSceneClass(Base: typeof GameScene) {
       };
       if (this.over) show(); else this.time.delayedCall(60, show);
     }
+    /** 樊城（9-1）城墙封死、没有城门：城墙北面一直算墙内（只刷远程；GameScene.behindClosedWall、data/gateSpawn）。 */
+    protected behindClosedWall(x: number, y: number): { line: number } | null { return this.xfStage === 1 && y < -530 ? { line: -520 } : super.behindClosedWall(x, y); }
     /** W5：樊城城墙封死，曹仁出场点不越过城墙线。 */
     protected bossSpawnPoint(x: number, y: number): { x: number; y: number } { return this.xfStage === 1 ? { x: Math.max(-1200, Math.min(1200, x)), y: Math.max(-470, y) } : { x, y }; }
     protected spawnAroundPlayer(kind: EnemyKind, force = false): Enemy | null {

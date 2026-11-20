@@ -7,7 +7,7 @@ import { lqButton, lqLabelColor, lqPanel, type LqState } from './LacquerKit';
 
 /**
  * 兵器专职面板（2026-11-20 用户「可以按照你建议去开发」）：本命练到 Lv5 时单独弹出（暂停战斗），两条分支并排大卡、中间武将立绘；
- * 写清选定效果、Lv6 / Lv7 加深（第四 / 第八章开放）、进阶形态（Lv7 + 本派 4 势）名与效果；与当前流派契合的那条盖「契合」印（效果 +10%）。
+ * 写清选定效果、Lv6 / Lv7 加深（第四 / 第八章开放）、进阶形态（Lv7 + 本派 4 势）名与效果；与当前流派契合的那条盖「契合」印（效果 ×BRANCH_FIT.fitMul）。
  * 漆金风格、没有水墨按钮；按 1 / 2 或点卡片 / 按钮选。选定后本次征程锁定（行营「重整构筑」花军粮可重选）。
  */
 export interface BranchPanelOpts { hero: string; heroName: string; weaponName: string; branches: readonly WeaponBranch[]; fitId?: string; onPick: (b: WeaponBranch, i: number) => void }

@@ -29,7 +29,7 @@ await p.evaluate(() => { const s = window.__game.scene.getScene('GameScene'); s.
 // 升级闪
 await p.evaluate(() => { const s = window.__game.scene.getScene('GameScene'); s.player.level += 1; }); await p.waitForTimeout(120); const lv = await f(); await crop('level-flash');
 if (tag === 'after') {
-  ck('状态框建好：头像、名字「赵云」、等级印「N级」，旧的「赵云 Lv.N」文字仍可读（测试兼容）', !!a && a.portrait && a.name === '赵云' && /^\d+级$/.test(a.level ?? '') && /^赵云 Lv\.\d+$/.test(a.legacy ?? ''), a);
+  ck('状态框建好：头像、名字「赵云」、等级印「N级」，旧的「赵云 Lv.N」文字仍可读（测试兼容）', !!a && a.portrait && a.name === '赵云' && /^\d+级$/.test(a.level ?? '') && /^赵云 Lv\.\d+( · 建议 \d+)?$/.test(a.legacy ?? '') /* 2026-11-20：后面带推荐等级「· 建议 N」 */, a);
   ck('血条数字压在条中央（框内）', !!a && /^\d+\/\d+$/.test(a.hpText) && a.hpPos[0] > 100 && a.hpPos[0] < 240 && a.hpPos[1] > 40 && a.hpPos[1] < 62, a?.hpPos);
   ck('掉血后残血拖尾停在旧血量，之后追上', !!hit && hit.trail > hit.ratio + .2 && !!settled && Math.abs(settled.trail - settled.ratio) < .02, { hit: [hit?.trail, hit?.ratio], settled: [settled?.trail, settled?.ratio] });
   ck('低于 30% 血：低血脉动', !!low && low.low, low);

@@ -69,7 +69,7 @@ export function intelGameSceneClass(Base: typeof GameScene) {
       const art = siegeScenery(this, {...city, tier: 'small'}, (frame, x, y, size) => this.spawnSceneProp(frame, x, y, size));
       this.ground.setTexture(art.key).setTileScale(1);
       this.sishuiObstacles = new SishuiObstacles(); this.sishuiObstacles.footprints.splice(0, this.sishuiObstacles.footprints.length, ...art.boxes);
-      this.enemyCamps = new EnemyCamps({scene: this, player: this.player, create: (x, y, hp) => this.supplies?.spawnCamp(x, y, hp) ?? null, spawn: (kind, x, y) => this.spawnEnemy(kind, x, y, 1), support: () => this.legion.grid.query(this.player.x, this.player.y, 260), reward: n => { this.legion.food += n; }}, this.escort ? [] : art.camps, this.combatNow);
+      this.enemyCamps = new EnemyCamps({scene: this, player: this.player, create: (x, y, hp) => this.supplies?.spawnCamp(x, y, hp) ?? null, spawn: (kind, x, y) => this.spawnEnemy(kind, x, y, 1), support: () => this.legion.grid.query(this.player.x, this.player.y, 260), reward: n => { this.legion.food += n; }, tent: this.tentCtx()}, this.escort ? [] : art.camps, this.combatNow);
       this.legion.campTarget = u => this.enemyCamps?.assist(u) ?? null;
       const keys = (this.registry.get('battleTextureKeys') ?? []) as string[];
       this.registry.set('battleTextureKeys', [...new Set([...keys, ...Object.keys(GUANDU_ATLAS_FILES), art.key, art.roadKey, ...paletteKeys])]);

@@ -60,7 +60,7 @@ const d = (a: Art, f: number, x: number, y: number, w = 0, lv = 1, flip = false)
 export const TOWN_DECOR: Record<CityTier, Decor[]> = {
   small: [
     d('ct', 0, 620, 702), d('cp', 16, 690, 708, 36), d('cp', 24, 455, 990, 56),
-    d('st', 1, 1420, 985, 0, 2), d('st', 0, 330, 990), d('st', 2, 1450, 772, 0, 3), d('cp', 18, 1110, 690, 34),
+    d('st', 1, 1420, 985, 0, 2), d('st', 0, 330, 990), d('cp', 18, 1110, 690, 34),
   ],
   medium: [
     // 左上地基（正在府衙身后：府衙升级后屋顶会挡住它，所以这里只放民居，不放功能建筑）
@@ -68,11 +68,11 @@ export const TOWN_DECOR: Record<CityTier, Decor[]> = {
     // 运河南大道两侧：小摊、货担；运河北岸水井、粮袋
     d('ct', 0, 572, 772), d('ct', 1, 585, 845, 0, 2), d('ct', 0, 1038, 772, 0, 2), d('cp', 16, 566, 570, 34), d('st', 7, 1010, 574, 54),
     // 南边：招贤馆东楼房（茶肆）；马厩东民房
-    d('st', 1, 410, 998, 0, 2), d('st', 2, 548, 1002, 0, 3), d('st', 0, 1452, 1000, 0, 3, true),
+    d('st', 1, 410, 998, 0, 2), d('st', 2, 548, 1002, 0, 3),
   ],
   large: [
     // 左上两排：招贤馆、讲武堂旁民房
-    d('st', 0, 545, 372), d('st', 0, 515, 478, 0, 2, true),
+    d('st', 0, 545, 372),
     // 右上地基（正在府衙身后）：只放民居
     d('st', 1, 1120, 370), d('st', 2, 1280, 373, 0, 2),
     // 横街边：推车、木箱、粮袋、水井
@@ -84,11 +84,12 @@ export const TOWN_DECOR: Record<CityTier, Decor[]> = {
  * 每座城画一处「分署」，点了打开营寨同一个面板（TownScene → CityScene {open, back}）。宽度与营寨同比例（府衙最大）。merchant = 旅商摊。
  */
 export type HqId = 'talent' | 'academy' | 'stable' | 'barracks';
-export const HQ_SLOTS: Record<CityTier, Record<HqId | 'merchant', { x: number; y: number; w: number }>> = {
+/** medic = 军医（医馆：店铺图，与民居同比例；与旅商分开）。 */
+export const HQ_SLOTS: Record<CityTier, Record<HqId | 'merchant' | 'medic', { x: number; y: number; w: number }>> = {
   // 功能建筑不放在府衙正后方的地基上（府衙 Lv3 屋顶会盖住）；院落宽约 250（府衙 Lv1 284、Lv3 350，仍最大）
-  small: { talent: { x: 270, y: 392, w: 250 }, academy: { x: 1262, y: 690, w: 250 }, barracks: { x: 600, y: 996, w: 240 }, stable: { x: 1160, y: 975, w: 240 }, merchant: { x: 985, y: 730, w: 130 } },
-  medium: { talent: { x: 190, y: 1000, w: 250 }, academy: { x: 1215, y: 373, w: 250 }, barracks: { x: 1145, y: 509, w: 230 }, stable: { x: 1240, y: 1004, w: 250 }, merchant: { x: 1318, y: 509, w: 130 } },
-  large: { talent: { x: 330, y: 372, w: 270 }, academy: { x: 310, y: 477, w: 260 }, barracks: { x: 1170, y: 1004, w: 230 }, stable: { x: 1410, y: 1004, w: 230 }, merchant: { x: 1420, y: 606, w: 130 } },
+  small: { talent: { x: 270, y: 392, w: 250 }, academy: { x: 1262, y: 690, w: 250 }, barracks: { x: 600, y: 996, w: 240 }, stable: { x: 1160, y: 975, w: 240 }, merchant: { x: 985, y: 730, w: 130 }, medic: { x: 1450, y: 772, w: 130 } },
+  medium: { talent: { x: 190, y: 1000, w: 250 }, academy: { x: 1215, y: 373, w: 250 }, barracks: { x: 1145, y: 509, w: 230 }, stable: { x: 1240, y: 1004, w: 250 }, merchant: { x: 1318, y: 509, w: 130 }, medic: { x: 1452, y: 1000, w: 130 } },
+  large: { talent: { x: 330, y: 372, w: 270 }, academy: { x: 310, y: 477, w: 260 }, barracks: { x: 1170, y: 1004, w: 230 }, stable: { x: 1410, y: 1004, w: 230 }, merchant: { x: 1420, y: 606, w: 130 }, medic: { x: 515, y: 478, w: 130 } },
 };
 /** 建筑位没建时，在地基前两角插的小旗（全景像素）。 */
 const SLOT_FLAGS: Record<CityTier, Partial<Record<CityBuildingId, Array<[number, number]>>>> = {

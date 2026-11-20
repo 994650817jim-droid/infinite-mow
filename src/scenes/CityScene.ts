@@ -16,7 +16,8 @@ import {FONT,HEADING_FONT} from '../config';
 import {homeCommand,warPanelTexture} from '../ui/HomeCommand';
 import {openStable} from '../ui/ItemBagUI';
 import {openMerchantShop,MERCHANT_ART_KEY,MERCHANT_ART_PATH} from '../ui/MerchantShop';
-import {CAMP_MERCHANT_SPOT} from '../town/CityLayout';
+import {CAMP_MERCHANT_SPOT,CAMP_MEDIC_SPOT} from '../town/CityLayout';
+import {openMedicPanel} from '../ui/MedicPanel';
 import {openHeroCodex} from '../ui/HeroCodexUI';
 import {GROWTH_ICON_IDS} from '../ui/GrowthIcons';
 import {stableUnlocked} from '../systems/ItemStore';
@@ -151,7 +152,7 @@ export class CityScene extends Phaser.Scene {
   const wx=(px-this.pano.x)/this.z,wy=(py-this.pano.y)/this.z;this.z=nz;this.pano.setScale(nz);this.labelScale();
   this.scrollTo(wx*nz-(px-this.vr.x),wy*nz-(py-this.vr.y));
  }
- private labelScale(){const k=1/this.z,walk=(l:Phaser.GameObjects.GameObject[])=>{for(const o of l){if(/^(tag-|ready-)/.test(o.name))(o as Phaser.GameObjects.Text).setScale(k);else if(o instanceof Phaser.GameObjects.Container&&o.name==='merchant-stall')walk(o.list);}};if(this.pano)walk(this.pano.list);}
+ private labelScale(){const k=1/this.z,walk=(l:Phaser.GameObjects.GameObject[])=>{for(const o of l){if(/^(tag-|ready-)/.test(o.name))(o as Phaser.GameObjects.Text).setScale(k);else if(o instanceof Phaser.GameObjects.Container&&(o.name==='merchant-stall'||o.name==='medic-tent'))walk(o.list);}};if(this.pano)walk(this.pano.list);}
  private scrollTo(sx:number,sy:number,remember=true){
   this.sx=Phaser.Math.Clamp(sx,0,Math.max(0,PANO_W*this.ke-this.vr.w));this.sy=Phaser.Math.Clamp(sy,0,Math.max(0,PANO_H*this.ke-this.vr.h+(D?CAMP_BARS.bottom:0)));
   this.pano?.setScale(this.z).setPosition(this.vr.x-this.sx,this.vr.y-this.sy);
@@ -227,7 +228,8 @@ export class CityScene extends Phaser.Scene {
    this.pano.add(hit);this.hits.push(hit);
   }
   this.popId=null;
-  if(size===1)this.drawMerchant(k);
+  // 旅商、军医：营寨 / 县城（同一套布局）摆在原处；州府底图中间是横街，挪到城门东侧广场（11-20：占了城镇营寨升县城后旅商不该消失）
+  {const big=size===3;this.drawMerchant(k,big?{x:1100,y:445,w:150}:CAMP_MERCHANT_SPOT);this.drawMedic(k,big?{x:1340,y:447,w:128}:CAMP_MEDIC_SPOT);}
   // 营寨档：营帐、兵士填空地（画在建筑之下；按建筑点击区与贴图外框避让）
   if(size===1&&new URLSearchParams(location.search).get('camplife')!=='0'){const ox=this.pano.x,oy=this.pano.y,blocked=[...this.hits.map(h=>h.getBounds()),...this.pano.list.filter((o):o is Phaser.GameObjects.Image=>o instanceof Phaser.GameObjects.Image&&o.texture.key.startsWith('city_')&&!o.texture.key.startsWith('city_bg')).map(o=>o.getBounds())].map(b=>({l:(b.x-ox)/k,r:(b.right-ox)/k,t:(b.y-oy)/k,b:(b.bottom-oy)/k}));
    this.campLife=new CampLife(this,k,blocked);this.pano.remove(this.campLife.root);this.pano.addAt(this.campLife.root,this.textures.exists(bg)?1:0);}
@@ -238,8 +240,8 @@ export class CityScene extends Phaser.Scene {
   * 棚顶挂军需商人头像牌，下有「旅商」名牌；点开军需商人（ui/MerchantShop openMerchantShop，与行营休整同一个商人、同一份货：打赢新一关的休整才换货，营寨里不换、已售不补），用营寨军粮买，兵装进行囊、战法写进征程构筑。
   * 点击区记进 hits，营寨装饰（CampLife）按它避让。没有站立的商人小人图：头像牌用行营军需商人立绘的脸。
   */
- private drawMerchant(k:number){
-  const sp=CAMP_MERCHANT_SPOT,x=sp.x*k,y=sp.y*k,P='camp_props_v2',c=this.add.container(0,0).setName('merchant-stall');this.pano.add(c);
+ private drawMerchant(k:number,sp:{x:number;y:number;w:number}=CAMP_MERCHANT_SPOT){
+  const x=sp.x*k,y=sp.y*k,P='camp_props_v2',c=this.add.container(0,0).setName('merchant-stall');this.pano.add(c);
   const prop=(fr:number,dx:number,dy:number,w:number,flip=false)=>{if(!this.textures.exists(P))return null;const im=this.add.image(x+dx*k,y+dy*k,P,fr).setOrigin(.5,1).setFlipX(flip);im.setScale(w*k/128);c.add(im);return im;};
   prop(24,-112,2,88,true);          // 货车（摊位点击区挡掉了辎重场原来那辆，这里补一辆）
   const stall=prop(2,0,0,sp.w);      // 遮棚
@@ -255,6 +257,24 @@ export class CityScene extends Phaser.Scene {
   const base=stall?{x:stall.scaleX,y:stall.scaleY}:null;
   hit.on('pointerover',()=>{tag.setColor('#ffe08a').setScale(1.18/this.z);glow.setFillStyle(0xffe39a,.45);if(stall&&base)stall.setScale(base.x*1.04,base.y*1.04);})
    .on('pointerout',()=>{tag.setColor('#fff1cf').setScale(1/this.z);glow.setFillStyle(0xffe39a,0);if(stall&&base)stall.setScale(base.x,base.y);});
+  this.pano.add(hit);this.hits.push(hit);
+ }
+ /**
+  * 营寨军医帐（2026-11-19 用户「军医再营寨城市也有」）：营地道具图的小营帐 + 药罐 + 煎药锅，名牌「军医」；与旅商分开摆（用户「军医和商人不要一个框框住」）。
+  * 点开军医面板（ui/MedicPanel：同行营军医立绘与三档治疗、同一套价格，章节取天下进度），扣营寨军粮，治存档点里的伤。点击区记进 hits，营寨装饰按它避让。
+  */
+ private drawMedic(k:number,sp:{x:number;y:number;w:number}=CAMP_MEDIC_SPOT){
+  const x=sp.x*k,y=sp.y*k,P='camp_props_v2',c=this.add.container(0,0).setName('medic-tent');this.pano.add(c);
+  const prop=(fr:number,dx:number,dy:number,w:number,flip=false)=>{if(!this.textures.exists(P))return null;const im=this.add.image(x+dx*k,y+dy*k,P,fr).setOrigin(.5,1).setFlipX(flip);im.setScale(w*k/128);c.add(im);return im;};
+  const tent=prop(3,0,0,sp.w);prop(18,-sp.w*.52,4,40);prop(31,sp.w*.5,6,44); // 营帐、药罐、煎药锅
+  const glow=this.add.ellipse(x,y-6*k,sp.w*1.1*k,sp.w*.3*k,0xffe39a,0);c.addAt(glow,0);
+  const tag=txt(this,x,y+2,'军医',D?12:13,'#fff1cf').setOrigin(.5,1).setBackgroundColor('#20150dcc').setPadding(8,2,8,2).setName('tag-medic');c.add(tag);
+  const w=sp.w*k*1.5,h=Math.max(sp.w*.8*k,60),hit=this.add.rectangle(x,y-h/2,w,h,0xffffff,.001).setName('bld-medic').setInteractive({useHandCursor:true});
+  hit.on('pointerdown',()=>{this.pressedSlot='medic';});
+  hit.on('pointerup',()=>{const own=this.pressedSlot==='medic';this.pressedSlot=null;if(!own||this.drag?.moved)return;uiSfx().play('uiClick');openMedicPanel(this,{wallet:{name:'军粮',get:()=>loadWorld().provisions,spend:spendProvisions},depth:600,onClose:()=>{if(this.sys.settings.status===Phaser.Scenes.RUNNING)this.refresh();}});});
+  const base=tent?{x:tent.scaleX,y:tent.scaleY}:null;
+  hit.on('pointerover',()=>{tag.setColor('#ffe08a').setScale(1.18/this.z);glow.setFillStyle(0xffe39a,.45);if(tent&&base)tent.setScale(base.x*1.04,base.y*1.04);})
+   .on('pointerout',()=>{tag.setColor('#fff1cf').setScale(1/this.z);glow.setFillStyle(0xffe39a,0);if(tent&&base)tent.setScale(base.x,base.y);});
   this.pano.add(hit);this.hits.push(hit);
  }
  /** 头像牌：从军需商人立绘裁脸，圆形、描金边（画一次存成贴图）。 */

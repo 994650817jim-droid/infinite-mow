@@ -82,7 +82,7 @@ export function guanduGameSceneClass(Base: typeof GameScene) {
       // 4-1 白马 / 4-2 延津：北面袁军大营——木栅横在北面、辕门居中、营帐在辕门两翼（第 2 波起出兵，可烧毁；全毁后刷兵变稀）；颜良 / 文丑出阵时从辕门杀出
       const yc = YUAN_CAMP[this.guanduStage];
       if (yc) { this.sishuiPass = new SishuiPass(this.passHost(), {towers: false, wenjiu: false, wallY: YUAN_CAMP.wallY, palisade: FACTION_PROPS[2].key, tentSpots: YUAN_CAMP.tents, tentRider: yc.rider, tentFaction: 2, tentName: '袁军营帐', campName: '袁军大营', gateText: yc.gate, tag: 'yuan'}); this.sishuiObstacles = new SishuiObstacles(this.sishuiPass.footprints); }
-      this.enemyCamps = new EnemyCamps({scene: this, player: this.player, create: (x, y, hp) => this.supplies?.spawnCamp(x, y, hp) ?? null, spawn: (kind, x, y) => this.spawnEnemy(kind, x, y, 1), support: () => this.legion.grid.query(this.player.x, this.player.y, 260), reward: n => { this.legion.food += n; }}, art.camps, this.combatNow);
+      this.enemyCamps = new EnemyCamps({scene: this, player: this.player, create: (x, y, hp) => this.supplies?.spawnCamp(x, y, hp) ?? null, spawn: (kind, x, y) => this.spawnEnemy(kind, x, y, 1), support: () => this.legion.grid.query(this.player.x, this.player.y, 260), reward: n => { this.legion.food += n; }, tent: this.tentCtx()}, art.camps, this.combatNow);
       this.legion.campTarget = u => this.enemyCamps?.assist(u) ?? null;
       this.depots = new GrainDepots({scene: this, player: this.player, create: (x, y, hp, frame, size) => this.supplies?.spawnDepot(x, y, hp, frame, size) ?? null, reward: n => { this.legion.food += n; }}, art.depots);
       const keys = (this.registry.get('battleTextureKeys') ?? []) as string[];

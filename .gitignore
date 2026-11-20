@@ -256,6 +256,7 @@ assets/raw/*
 !/tools/test-boss-charge-troops.mjs
 !/tools/render-opening.mjs
 !/tools/test-camp-buy-bag.mjs
+!/tools/shot-story-cards.mjs
 !/tools/shot-bag-cells.mjs
 !/tools/test-merchant-sell.mjs
 !/tools/test-respec.mjs
@@ -291,6 +292,7 @@ assets/raw/*
 !/tools/test-camp-return.mjs
 !/tools/test-camp-merchant.mjs
 !/tools/shot-town-life.mjs
+!/tools/test-medic-anywhere.mjs
 !/tools/shot-camp-full.mjs
 !/tools/deathfx-horse.mjs
 !/tools/shot-academy.mjs
@@ -324,3 +326,5 @@ assets/raw/*
 !/tools/test-branch-final-fx.mjs
 !/tools/test-audio.mjs
 !/tools/audio-density.mjs
+!/tools/shot-attr-panel.mjs
+!/tools/test-attr-panel-view.mjs

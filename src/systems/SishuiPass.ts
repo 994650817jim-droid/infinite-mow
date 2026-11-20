@@ -7,6 +7,8 @@ import { DEPTH, actorDepth } from '../config';
 import { MID_SIEGE_FILES } from './SiegeMidArt';
 import { Strikes } from './BeifaSystems';
 import { playSheet } from './SkillFxSheets';
+import { SPAWN_TENT, tentIntervalMs } from '../data/spawnTents';
+import { registerTents, tentMuster, type TentCtx } from './SpawnTents';
 
 /**
  * 2-1 汜水关（用户 2026-11-18：「这里障碍物很奇怪也没什么用联动和这章节，设计一下」）：
@@ -39,6 +41,7 @@ export interface PassHost {
   banner: (t: string, danger: boolean, c?: string) => void; sfx: (k: string) => void;
   /** 战功：记几名精英 / 首领（结算时按击杀折算）。 */ merit: (elite: number, boss: number) => void;
   /** 关羽在不在队（主将或随行）。 */ guanyu: () => boolean;
+  /** 刷兵帐篷统一规则（data/spawnTents；GameScene.tentCtx）。 */ tent?: TentCtx;
 }
 
 /** 关墙选项（第 3~12 章的关隘 / 城池复用 2-1 这套；不传 = 2-1 汜水关原样）。 */
@@ -64,12 +67,15 @@ export class SishuiPass {
   private gateFoot: { left: number; right: number; top: number; bottom: number };
   private art: Phaser.GameObjects.Image[] = []; private gateImg: Phaser.GameObjects.Image | null = null;
   towers: { e: Enemy | null; x: number; y: number; at: number; down: boolean }[] = [];
-  tents: { e: Enemy | null; x: number; y: number; at: number; down: boolean; warned?: boolean }[] = [];
+  tents: { e: Enemy | null; x: number; y: number; at: number; down: boolean; warned?: boolean; members: Array<{ e: Enemy; life: number }> }[] = [];
+  private unregister: () => void = () => {};
   private tentsPlaced = false; private allTentsDown = false;
   private strikes: Strikes; private buffUntil = 0; private buffed = false;
   gateOpen = false; bossAt = -1; wenjiu = false;
   readonly metrics = { volleys: 0, towersDown: 0, rides: 0, tentsDown: 0, warns: 0 };
   constructor(private h: PassHost, private o: PassOpts = {}) {
+    // 舆图小帐 + 屏外边缘提示（systems/SpawnTents）
+    this.unregister = registerTents(h.scene, () => this.tents.filter(t => !t.down && t.e?.active).map(t => ({ x: t.x, y: t.y, ratio: t.e!.hp / Math.max(1, t.e!.maxHp), hit: false, awake: t.at > 0 && Math.hypot(h.player.x - t.x, h.player.y - t.y) < 1400 })));
     const P = SISHUI_PASS, p = h.player, wy = p.y + this.wallY;
     // 关墙碰撞：左右两段城墙 + 关门（开门后移除）
     if (o.wall !== false) this.footprints.push({ left: p.x - P.wallHalf, right: p.x - P.gateW / 2, top: wy - 70, bottom: wy - 10 }, { left: p.x + P.gateW / 2, right: p.x + P.wallHalf, top: wy - 70, bottom: wy - 10 });
@@ -143,20 +149,25 @@ export class SishuiPass {
   update(): void {
     const now = this.h.now(), P = SISHUI_PASS, p = this.h.player;
     this.strikes.update();
-    if (!this.tentsPlaced && this.o.tents !== false && this.h.envReady()) { this.tentsPlaced = true; (this.o.tentSpots ?? P.tents).forEach(([dx, dy], i) => { const x = p.x + dx, y = p.y + dy, e = this.h.placeTent(x, y, `fixed-${this.tag}-tent-${i}`, P.tentHp, this.o.tentFaction); this.tents.push({ e, x, y, at: 0, down: !e }); }); }
+    if (!this.tentsPlaced && this.o.tents !== false && this.h.envReady()) { this.tentsPlaced = true; (this.o.tentSpots ?? P.tents).forEach(([dx, dy], i) => { const x = p.x + dx, y = p.y + dy, e = this.h.placeTent(x, y, `fixed-${this.tag}-tent-${i}`, P.tentHp, this.o.tentFaction); this.tents.push({ e, x, y, at: 0, down: !e, members: [] }); }); }
     // 箭楼：放箭雨；被打塌换毁坏帧、掉战功、主将短时攻击加成
     for (const t of this.towers) {
       if (t.down) continue;
       if (t.e && !t.e.active) { t.down = true; this.metrics.towersDown++; this.towerDown(t); continue; }
       if (now >= t.at) { t.at = now + P.volleyEverySec * 1000; this.metrics.volleys++; for (let k = 0; k < P.volleyPoints; k++) { const a = Math.random() * Math.PI * 2, r = k === 0 ? 0 : 60 + Math.random() * 90; this.strikes.add('arrows', p.x + Math.cos(a) * r, p.y + Math.sin(a) * r * .7, P.volleyR, P.warnMs, P.playerRatio, P.allyDamage); } this.h.sfx('chargeWarn'); }
     }
-    // 西凉营帐：「西凉列阵」（第 2 波）起每顶定时出骑；打塌后余火、不再出兵；全塌后余下刷兵变稀
+    // 西凉营帐：「西凉列阵」（第 2 波）起每顶一直定时出兵，直到被打塌（用户 11-19「生成兵的帐篷应该会多刷新兵直到被摧毁」）：
+    // 间隔 / 存活上限按 data/spawnTents（受损更急，首领出场 / 开关门后速度减半，不再停）；打塌后余火、给粮、不再出兵；全塌后余下刷兵变稀
     for (const t of this.tents) {
       if (t.down) continue;
-      if (t.e && !t.e.active) { t.down = true; this.metrics.tentsDown++; this.h.sfx('tent_fire'); playSheet(this.h.scene, 'fx_ground_fire', t.x, t.y + 6, { size: 150, ms: 1400, depth: actorDepth(t.y) + .2, originY: .8, name: 'sishui-tent-fire' }); this.h.banner((this.o.tentName ?? '西凉营帐') + '已焚', false, this.tents.every(x => x.down) ? '' : '此处不再出' + ((this.o.tentRider ?? 'cavalry') === 'cavalry' ? '骑' : '兵')); continue; }
-      if (this.h.wave() >= (this.o.tentFromWave ?? 1) && !this.gateOpen) { if (!t.at) t.at = now + 1500 + this.tents.indexOf(t) * 900; const warn = this.o.tentWarnMs ?? 0;
+      if (t.e && !t.e.active) { t.down = true; this.metrics.tentsDown++; this.h.tent?.reward?.(t.x, t.y, SPAWN_TENT.grain, false); this.h.sfx('tent_fire'); playSheet(this.h.scene, 'fx_ground_fire', t.x, t.y + 6, { size: 150, ms: 1400, depth: actorDepth(t.y) + .2, originY: .8, name: 'sishui-tent-fire' }); this.h.banner((this.o.tentName ?? '西凉营帐') + '已焚', false, this.tents.every(x => x.down) ? '' : '此处不再出' + ((this.o.tentRider ?? 'cavalry') === 'cavalry' ? '骑' : '兵')); continue; }
+      t.members = t.members.filter(m => m.e.active && m.e.spawnId === m.life);
+      const ch = this.h.tent?.chapter() ?? 2, cap = SPAWN_TENT.live(ch), full = t.members.length >= cap;
+      if (this.h.wave() >= (this.o.tentFromWave ?? 1)) { if (!t.at) t.at = now + 1500 + this.tents.indexOf(t) * 900; const warn = this.o.tentWarnMs ?? 0;
+        if (full || (this.h.tent?.crowd() ?? 0) >= SPAWN_TENT.crowdCap) { if (now >= t.at - SPAWN_TENT.musterMs) t.at = now + 1000; continue; } // 本帐兵满 / 同屏太多：先不出，被杀了再补
+        if (!warn && !t.warned && now >= t.at - SPAWN_TENT.musterMs) { t.warned = true; tentMuster(this.h.scene, t.x, t.y + 40, SPAWN_TENT.musterMs); } // 帐篷口扬尘：要出兵了
         if (warn && !t.warned && now >= t.at - warn) { t.warned = true; this.metrics.warns++; playSheet(this.h.scene, 'fx_collapse_dust', t.x, t.y + 10, { size: 170, ms: warn, depth: actorDepth(t.y) + .3, originY: .8, name: this.tag + '-tent-warn' }); this.h.sfx('chargeWarn'); if (this.metrics.warns === 1) this.h.banner('营中有伏兵', true, '看到营帐扬尘就是伏兵要冲出 · 烧掉营帐断其伏兵'); }
-        if (now >= t.at) { t.at = now + P.tentEverySec * 1000; t.warned = false; const n = this.o.tentCount ?? P.tentRiders, p0 = this.h.player, a = Math.atan2(p0.y - t.y, p0.x - t.x); for (let k = 0; k < n; k++) { const o = (k - (n - 1) / 2) * 44; if (this.h.spawn(this.o.tentRider ?? 'cavalry', t.x + Math.cos(a) * 60 - Math.sin(a) * o, t.y + 30 + Math.sin(a) * 60 + Math.cos(a) * o)) this.metrics.rides++; } } }
+        if (now >= t.at) { t.at = now + tentIntervalMs(ch, t.e ? t.e.hp / Math.max(1, t.e.maxHp) : 1, this.gateOpen || (this.h.tent?.bossOn() ?? false)); t.warned = false; const n = this.o.tentCount ?? P.tentRiders, p0 = this.h.player, a = Math.atan2(p0.y - t.y, p0.x - t.x); for (let k = 0; k < n && t.members.length < cap; k++) { const o = (k - (n - 1) / 2) * 44, u = this.h.spawn(this.o.tentRider ?? 'cavalry', t.x + Math.cos(a) * 60 - Math.sin(a) * o, t.y + 30 + Math.sin(a) * 60 + Math.cos(a) * o); if (u) { this.metrics.rides++; t.members.push({ e: u, life: u.spawnId }); } } } }
     }
     if (!this.allTentsDown && this.tents.length && this.tents.every(t => t.down)) { this.allTentsDown = true; this.h.banner((this.o.campName ?? '西凉营寨') + '尽毁', true, '敌军后继乏力 · 余下来兵变稀'); }
     if (this.buffed && now >= this.buffUntil) { this.buffed = false; p.stats.damageMul /= P.buffMul; }
@@ -197,5 +208,5 @@ export class SishuiPass {
     if (this.h.guanyu() && this.h.now() - this.bossAt <= SISHUI_PASS.wenjiuSec * 1000) { this.wenjiu = true; this.h.merit(0, 2); this.h.banner('温酒斩华雄', true, '其酒尚温 · 战功加赏'); this.h.sfx('gong'); }
   }
   snapshot() { return { gateOpen: this.gateOpen, towers: this.towers.filter(t => !t.down).length, tents: this.tents.filter(t => !t.down).length, tentsPlaced: this.tentsPlaced, spawnMul: this.spawnMul, buffed: this.buffed, wenjiu: this.wenjiu, foot: this.footprints.length - this.flank, metrics: { ...this.metrics }, pending: this.strikes.pending }; }
-  clear(): void { for (const a of this.art) a.destroy(); this.gateImg?.destroy(); this.strikes.clear(); if (this.buffed) { this.buffed = false; this.h.player.stats.damageMul /= SISHUI_PASS.buffMul; } }
+  clear(): void { this.unregister(); for (const a of this.art) a.destroy(); this.gateImg?.destroy(); this.strikes.clear(); if (this.buffed) { this.buffed = false; this.h.player.stats.damageMul /= SISHUI_PASS.buffMul; } }
 }

@@ -7,6 +7,8 @@ import { FACTION_PROPS } from './PropsV2';
 import { pushOutBoxes } from './AllyPush';
 import type { MixPick } from './RosterMix';
 import { drawSidePalisade, sideWallReady, whenSideWallReady } from './SideWall';
+import { SPAWN_TENT, tentIntervalMs } from '../data/spawnTents';
+import { registerTents, tentBurn, tentMuster, type TentCtx } from './SpawnTents';
 
 /**
  * 2-3 火烧洛阳的五座西凉营寨（用户 11-19「营寨可以隔着远点，然后营寨应该做些场景有围栏围着之类的然后小怪比较多守着」）：
@@ -33,16 +35,21 @@ export interface LuoyangCampsHost {
   move: (e: Enemy, nx: number, ny: number, dt: number) => void;
   /** 放一个可打的燃烧火盆（BattlefieldSupplies，打烂后地上留火）；放不了返回 false。 */
   brazier?: (x: number, y: number, size: number) => boolean;
+  /** 刷兵帐篷统一规则（data/spawnTents；GameScene.tentCtx）：间隔 / 每队人数 / 存活上限按章节，受损更急、首领出场后减半。 */
+  tent?: TentCtx;
 }
 interface Member { e: Enemy; life: number; camp: Camp; state: 'idle' | 'sally'; reinforce: boolean }
-interface Camp { x: number; y: number; tent: Enemy; life: number; alerted: boolean; destroyed: boolean; next: number; objs: Phaser.GameObjects.GameObject[]; boxes: Box[]; reinf: Array<{ e: Enemy; life: number }> }
+interface Camp { x: number; y: number; tent: Enemy; life: number; alerted: boolean; destroyed: boolean; next: number; mustered?: boolean; objs: Phaser.GameObjects.GameObject[]; boxes: Box[]; reinf: Array<{ e: Enemy; life: number }> }
 
 export class LuoyangCamps {
   readonly camps: Camp[] = [];
   private members = new Map<Enemy, Member>();
-  readonly stats = { garrison: 0, reinforcements: 0, alerts: 0, sallied: 0 };
+  readonly stats = { garrison: 0, reinforcements: 0, alerts: 0, sallied: 0, squads: 0, burned: 0 };
+  private unregister: () => void = () => {};
 
   constructor(private h: LuoyangCampsHost) {
+    // 舆图（营寨本来就是破营目标，已画）之外：屏外边缘提示正在出兵的营寨（systems/SpawnTents）
+    this.unregister = registerTents(h.scene, () => this.camps.filter(c => !c.destroyed).map(c => ({ x: c.x, y: c.y, ratio: c.tent.hp / Math.max(1, c.tent.maxHp), hit: false, awake: c.alerted && Math.hypot(h.player.x - c.x, h.player.y - c.y) < LUOYANG.camp.nearR, objective: true })));
     const now = h.now();
     for (const t of h.tents()) {
       const c: Camp = { x: t.x, y: t.y, tent: t, life: t.spawnId, alerted: false, destroyed: false, next: now + LUOYANG.camp.reinforceMs, objs: [], boxes: [], reinf: [] };
@@ -117,19 +124,23 @@ export class LuoyangCamps {
     for (const [e, m] of this.members) if (!e.active || e.spawnId !== m.life) this.members.delete(e);
     for (const c of this.camps) {
       if (!c.destroyed && (!c.tent.active || c.tent.spawnId !== c.life || c.tent.hp <= 0)) {
-        c.destroyed = true; this.alert(c);
+        c.destroyed = true; this.alert(c); this.stats.burned += 1;
+        // 拆营：起火 + 给粮 / 干粮（破营目标照旧由 StageObjectives 数，这里不碰）
+        tentBurn(this.h.scene, c.x, c.y, this.h.tent?.sfx); this.h.tent?.reward?.(c.x, c.y + 40, SPAWN_TENT.grain, Math.random() < SPAWN_TENT.foodChance);
         for (const o of c.objs) (o as Phaser.GameObjects.Image).setTint?.(0x6a5850); // 营帐毁了：营栅焦黑
         continue;
       }
       if (c.destroyed) continue;
       const d = Math.hypot(p.x - c.x, p.y - c.y);
       if (!c.alerted && (d < C.alertR || c.tent.hp < c.tent.maxHp || [...this.members.values()].some(m => m.camp === c && m.e.hp < m.e.maxHp))) this.alert(c);
-      // 援兵：主将在附近、营帐还在，按时从营门出
-      if (c.alerted && d < C.nearR && now >= c.next) {
-        c.next = now + C.reinforceMs;
-        const g = this.gateOut(c);
-        for (let i = 0; i < C.reinforceN && this.live(c) < C.reinforceLive; i++) {
-          const k = this.kindOf(), x = g.x + (i - 1) * 46, y = g.y + 10;
+      // 援兵：主将在附近、营帐还在，就一直按时从营门出（不拆营没完没了；data/spawnTents）。到存活上限暂停，被杀了再补
+      const ch = this.h.tent?.chapter() ?? 2, cap = SPAWN_TENT.live(ch), g = this.gateOut(c);
+      if (c.alerted && d < C.nearR && !c.mustered && now >= c.next - SPAWN_TENT.musterMs && this.live(c) < cap) { c.mustered = true; tentMuster(this.h.scene, g.x, g.y, SPAWN_TENT.musterMs); } // 营门扬尘：要出兵了
+      if (c.alerted && d < C.nearR && now >= c.next && this.live(c) < cap && (this.h.tent?.crowd() ?? 0) < SPAWN_TENT.crowdCap) {
+        c.next = now + tentIntervalMs(ch, c.tent.hp / Math.max(1, c.tent.maxHp), this.h.tent?.bossOn() ?? false); c.mustered = false; this.stats.squads += 1;
+        const n = SPAWN_TENT.squad(ch);
+        for (let i = 0; i < n && this.live(c) < cap; i++) {
+          const k = this.kindOf(), x = g.x + (i - (n - 1) / 2) * 46, y = g.y + 10;
           if (Math.hypot(p.x - x, p.y - y) < 70) continue;
           this.add(c, k.trait ? this.h.spawnTrait(k.trait, x, y) : this.h.spawn(k.kind, x, y), true);
         }
@@ -170,5 +181,5 @@ export class LuoyangCamps {
     });
   }
 
-  clear(): void { for (const c of this.camps) for (const o of c.objs) o.destroy(); this.camps.length = 0; this.members.clear(); }
+  clear(): void { this.unregister(); for (const c of this.camps) for (const o of c.objs) o.destroy(); this.camps.length = 0; this.members.clear(); }
 }

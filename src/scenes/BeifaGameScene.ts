@@ -108,9 +108,8 @@ export function beifaGameSceneClass(Base: typeof GameScene, cfg: ArcSceneConfig)
     protected spawnBossChest(x: number, y: number, done: () => void): void { super.spawnBossChest(x, y, this.arcStage === 3 ? () => this.endChapter(done) : done); }
     private endChapter(next: () => void): void {
       const s = this as unknown as Host;
-      s.setMode('parley');
       const lord = getCharacter(s.runConfig.character as never).name;
-      storyScroll(this, GAME_WIDTH, GAME_HEIGHT, IS_DESKTOP, { name: 'story-beifa-end', confirmName: 'story-beifa-end-confirm', kicker: '第十二章 · 北伐 · 终', title: '五丈原',
+      (this as unknown as GameScene).endScroll(close => storyScroll(this, GAME_WIDTH, GAME_HEIGHT, IS_DESKTOP, { name: 'story-beifa-end', confirmName: 'story-beifa-end-confirm', kicker: '第十二章 · 北伐 · 终', title: '五丈原',
         lines: [
           { text: '将星坠而复明。司马懿望见我军阵势不乱，叹曰：「吾能料生，不能料死。」遂引兵退去。' },
           { who: '司马懿', text: '此人用兵，吾不及也。传令：收兵，坚守关中。' },
@@ -118,10 +117,10 @@ export function beifaGameSceneClass(Base: typeof GameScene, cfg: ArcSceneConfig)
           { text: '乱世百年，至此将终。天下大势，就看这些年攻下的城池了……' },
         ], reward: '北伐功成 · 进入结局', confirm: '观天下大势', background: 'rest_camp',
         onDone: () => {
-          s.setMode('none'); next();
+          close(); next();
           // 结算后场景时钟会暂停（setMode 冻结 Timer），用真实时间切到结局
           const lord = s.runConfig.character; window.setTimeout(() => { if (this.sys.isActive()) this.scene.start('EndingScene', { lord }); }, 1500);
-        } });
+        } }));
     }
     snapshotBeifa() { return { stage: this.arcStage, water: this.water?.snapshot() ?? null, siege: this.siege?.snapshot() ?? null, simayi: this.simayi?.snapshot() ?? null, strikes: this.strikes?.pending ?? 0 }; }
   };

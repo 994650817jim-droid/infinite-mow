@@ -74,16 +74,15 @@ export function jingnanGameSceneClass(Base: typeof GameScene, cfg: ArcSceneConfi
     private endChapterThen(next: () => void): void {
       if (this.arcStage !== 3 || STORY_CHAPTERS.jingnan) { next(); return; } // 2026-11-18 章末（魏延献城 → 魏延去留 → 荆南四郡尽归）并进剧情系统（data/story/jingnan.ts），由宝箱后的 storyDir.chapterClose 播
       const s = this as unknown as GameScene & { setMode(m: string): void; runConfig: { character: string } };
-      s.setMode('parley');
       const lord = getCharacter(s.runConfig.character as never).name, hz = this.persuaded.includes('黄忠');
-      storyScroll(this, GAME_WIDTH, GAME_HEIGHT, IS_DESKTOP, { name: 'story-jingnan-end', confirmName: 'story-jingnan-end-confirm', kicker: '第六章 · 平定荆南 · 告捷', title: '荆南四郡尽归',
+      (this as unknown as GameScene).endScroll(close => storyScroll(this, GAME_WIDTH, GAME_HEIGHT, IS_DESKTOP, { name: 'story-jingnan-end', confirmName: 'story-jingnan-end-confirm', kicker: '第六章 · 平定荆南 · 告捷', title: '荆南四郡尽归',
         lines: [
           { text: '长沙城破，韩玄伏诛。桂阳、零陵、武陵、长沙四郡相继归附，荆州以南尽入版图。' },
           ...(hz ? [{ who: '黄忠', text: '忠年近六旬，今日方遇明主。愿以残年，为将军前驱！' }] : [{ text: '老将黄忠负伤，引残兵遁去。' }]),
           { who: '魏延', text: '韩玄残暴寡恩，长沙百姓苦之久矣。某愿投将军帐下！' },
           { who: lord, text: '兵精粮足，可图大事。传令诸将，整军西望。' },
           { text: '西川刘璋暗弱，张鲁窥其北。益州天府之国，正在眼前……（第七章 · 入蜀）' },
-        ], reward: `本章劝降 ${this.persuaded.length} 人 · 斩杀 ${this.executed.length} 人`, confirm: '收兵 · 告捷', background: 'rest_camp', onDone: () => { s.setMode('none'); next(); } });
+        ], reward: `本章劝降 ${this.persuaded.length} 人 · 斩杀 ${this.executed.length} 人`, confirm: '收兵 · 告捷', background: 'rest_camp', onDone: () => { close(); next(); } }));
     }
     snapshotJingnan() { const p = (this as unknown as GameScene).parley; return { stage: this.arcStage, phase: this.changshaPhase, parley: p?.state ?? 'none', bossId: this.bossId, persuaded: [...this.persuaded], executed: [...this.executed], metrics: { ...this.jnMetrics } }; }
   };

@@ -240,7 +240,8 @@ export class BattleMap {
     const left = mk(SCROLL_FILES.left, 1, BATTLE_MAP.endSx).setName('battle-map-scroll-left'), right = mk(SCROLL_FILES.right, 0, BATTLE_MAP.endSx).setName('battle-map-scroll-right');
     const top = cy - T.h * sy / 2;
     const title = s.add.text(cx, top + (T.paperTop - 23) * sy, '战 场 舆 图', warText(17, LQ.title)).setOrigin(.5).setStroke('#1a0e08', 4).setScrollFactor(0).setDepth(d + 2);
-    const hint = s.add.text(cx, top + (T.paperBot + 23) * sy, '点卷轴 / ' + hotkeyLabel('map') + ' / Esc 卷起舆图', warText(11, '#f3e6c4')).setOrigin(.5).setStroke('#1a0e08', 3).setScrollFactor(0).setDepth(d + 2);
+    // 用户：提示原来「点卷轴 / M / Esc 卷起舆图」太长、被画轴截断 → 缩短（点卷轴本身也能卷起）
+    const hint = s.add.text(cx, top + (T.paperBot + 23) * sy, hotkeyLabel('map') + ' / Esc 卷起', warText(11, '#f3e6c4')).setOrigin(.5).setStroke('#1a0e08', 3).setScrollFactor(0).setDepth(d + 2);
     this.open3 = { left, mid, right, dim, title, hint };
     this.big = new MapView(s, (GAME_WIDTH - B.w) / 2, (GAME_HEIGHT - B.h) / 2 + 6, B.w, B.h, B.range, true, true, this.h.title?.() ?? '');
     this.big.root.setDepth(d + 1);

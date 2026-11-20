@@ -3789,7 +3789,7 @@ export class GameScene extends Phaser.Scene {
         query: (x, y, r) => this.grid.query(x, y, r), damage: (e, n, fire) => { this.hitEnemy(e, n, this.combatNow, fire ? 'fire' : 'melee', false, false); },
         shi: s => this.player.growth.build.tags()[s] ?? 0, allies: () => this.allies,
         troopBoost: (mul, ms) => { this.legion.drillMultiplier *= mul; this.time.delayedCall(ms, () => { this.legion.drillMultiplier /= mul; }); },
-        escort: (x, y, n, ms) => { this.reinforcePush().spawnEscortAt(x, y, n, ms); },
+        escort: (x, y, n, ms) => { this.reinforcePush().spawnEscortAt(x, y, n, ms); buildVfx(this).emit('reinforce', x, y - 8, this.combatNow, 150, 0, 800, true); },
         slow: (x, y, r, sl, ms) => { this.controlBuild?.slowArea(x, y, r, sl, ms, this.combatNow); },
         followerHeroes: () => (this.followers?.members ?? []).map(m => m.recruit.hero).filter((h): h is NonNullable<typeof h> => !!h),
         banner: (t, sub) => this.showWaveBanner(t, false, sub), sfx: k => this.sfx.play(k),
@@ -3806,6 +3806,7 @@ export class GameScene extends Phaser.Scene {
   /** 名将来投：一队义军 + 领头的名将名牌（本关）。 */
   private generalJoins(name: string, n: number, ms: number): void {
     const sq = this.reinforcePush().spawnEscortAt(this.player.x, this.player.y, n, ms); if (!sq) return;
+    buildVfx(this).emit('reinforce', this.player.x, this.player.y - 8, this.combatNow, 160, 0, 800, true);
     const tag = this.add.text(this.player.x, this.player.y, '来投 · ' + name, { fontFamily: FONT, fontSize: '13px', color: '#bfe8ff', resolution: 2, stroke: '#0c1a26', strokeThickness: 4 }).setOrigin(.5, 1).setDepth(DEPTH.dmgText - 1).setName('general-tag');
     const until = this.combatNow + ms, follow = () => { const lead = sq.members.find(m => !m.dead); if (!lead || this.combatNow > until || !tag.active) { tag.destroy(); this.events.off('update', follow); return; } tag.setPosition(lead.x, lead.y - 58); };
     this.events.on('update', follow); this.events.once('shutdown', () => { this.events.off('update', follow); });
@@ -3816,7 +3817,7 @@ export class GameScene extends Phaser.Scene {
     if (id === 'allin') applyStageBuff(P, s => { s.maxHpBonus -= Math.round(P.maxHp * .15); s.damageMul *= 1.25; });
     else if (id === 'beiwei') P.growth.stageDesperate = .2; // 2026-11-19 平衡：.3 → .2（另两张赌命都有代价，这张没有，还和合击「背水一战」叠）
     else applyStageBuff(P, s => { s.damageTakenMul *= 1.15; s.moveMul *= 1.2; s.cooldownMul *= .9; });
-    P.hp = Math.min(P.hp, P.maxHp); this.showWaveBanner('赌命 · ' + GAMBLES[id].name, true, GAMBLES[id].desc.split(String.fromCharCode(10)).join('，'));
+    P.hp = Math.min(P.hp, P.maxHp); buildVfx(this).emit(id === 'allin' ? 'heavy' : id === 'beiwei' ? 'bulwark' : 'skirmish', P.x, P.y - 10, this.combatNow, 150, 0, 700, true); this.showWaveBanner('赌命 · ' + GAMBLES[id].name, true, GAMBLES[id].desc.split(String.fromCharCode(10)).join('，'));
   }
   private bountyOpen(id: BountyId): boolean {
     if (this.bounties[id]) return false;
@@ -3827,7 +3828,7 @@ export class GameScene extends Phaser.Scene {
   private grantCharm(): string {
     // 品质按掉落段的首领那一行（2026-11-19 平衡：原来第九章起悬赏必橙，比首领掉落还好；data/items.ts lootBand / LOOT_CAP）
     const ch = this.phasePlan?.chapter ?? this.lootChapter(), q = rollQuality('boss', this.itemTier()), item = rollCharm(q, Math.random, undefined, ch) ?? rollItem(q, Math.random, 'token', ch);
-    if (!item) return ''; if (!this.debugRun()) addItems([item]); const name = itemName(item); this.showWaveBanner('信物 · ' + name, false, '已入行囊'); return name;
+    if (!item) return ''; if (!this.debugRun()) addItems([item]); const name = itemName(item); buildVfx(this).emit('combo', this.player.x, this.player.y - 10, this.combatNow, 130, 0, 700, true); this.showWaveBanner('信物 · ' + name, false, '已入行囊'); return name;
   }
   private onStageCardKill(enemy: Enemy): void {
     const m = this.momentum, M = NEW_CARDS.momentum;
@@ -3849,7 +3850,7 @@ export class GameScene extends Phaser.Scene {
   private bountyLieutenant(): void {
     if (!this.bounties.lieutenant || !this.phaseRunner) return; this.bounties.lieutenant = undefined;
     const at = this.phaseRunner.stats.lieutenantAt; if (at < 0 || this.elapsed - at > 30) { this.showWaveBanner('悬赏 · 斩将 未达成', false, '超过 30 秒'); return; }
-    this.pendingLevels += 1; this.militaryPending += 1; this.showWaveBanner('悬赏 · 斩将 达成', false, '再来一次军略三选一');
+    buildVfx(this).emit('peerless', this.player.x, this.player.y - 10, this.combatNow, 150, 0, 800, true); this.pendingLevels += 1; this.militaryPending += 1; this.showWaveBanner('悬赏 · 斩将 达成', false, '再来一次军略三选一');
     if (this.mode === 'none') this.openUpgrade();
   }
   /** 使用锦囊（R 键 / 锦囊钮）。 */

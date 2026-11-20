@@ -317,3 +317,4 @@ assets/raw/*
 !/tools/test-combo-fx.mjs
 !/tools/test-extra-vfx.mjs
 !/tools/test-treasure-fx.mjs
+!/tools/test-event-fx.mjs

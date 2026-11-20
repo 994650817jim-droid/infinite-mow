@@ -45,7 +45,7 @@ function throwJi(host: WeaponHost, st: TscState, weapon: WeaponState, target: En
     // 沿直线找第一个碰到的敌兵
     let first: Enemy | null = null, fd = range;
     for (const e of host.grid.query(pl.x + ux * range / 2, pl.y + uy * range / 2, range / 2 + 40)) {
-      if (!e.active || e.isSupplySlot) continue;
+      if (!e.active || (e.isSupplySlot && !e.lockTarget)) continue;
       const dx = e.x - pl.x, dy = e.y - pl.y, along = dx * ux + dy * uy, side = Math.abs(-dx * uy + dy * ux);
       if (along > 0 && along < fd && side <= TS.throwW / 2 + e.radius) { fd = along; first = e; }
     }
@@ -72,8 +72,8 @@ function breakout(host: WeaponHost, st: TscState, weapon: WeaponState, time: num
   // 最密的敌群：360 内每个敌兵数 90 内的邻居，取最多的那个方向
   let best: Enemy | null = null, bestN = -1;
   for (const e of host.grid.query(pl.x, pl.y, 360)) {
-    if (!e.active || e.isSupplySlot) continue;
-    let n = 0; for (const o of host.grid.query(e.x, e.y, 90)) if (o.active && !o.isSupplySlot) n++;
+    if (!e.active || (e.isSupplySlot && !e.lockTarget)) continue;
+    let n = 0; for (const o of host.grid.query(e.x, e.y, 90)) if (o.active && !(o.isSupplySlot && !o.lockTarget)) n++;
     if (n > bestN) { bestN = n; best = e; }
   }
   const hd = Math.hypot(pl.heading.x, pl.heading.y) || 1;
@@ -85,7 +85,7 @@ function breakout(host: WeaponHost, st: TscState, weapon: WeaponState, time: num
   pl.playAction('skill', ux < 0 ? 'left' : 'right');
   const dmg = TAISHICI_DEF.damage(weapon.level, pl.stats) * g.damageMultiplier(time) * TS.dashMul * (beihai ? k : 1);
   for (const e of host.grid.query((ax + bx) / 2, (ay + by) / 2, TS.dashLen / 2 + 50)) {
-    if (!e.active || e.isSupplySlot) continue;
+    if (!e.active || (e.isSupplySlot && !e.lockTarget)) continue;
     const dx = e.x - ax, dy = e.y - ay, along = dx * ux + dy * uy, side = Math.abs(-dx * uy + dy * ux);
     if (along >= -e.radius && along <= TS.dashLen + e.radius && side <= TS.dashW / 2 + e.radius) host.hitEnemy(e, dmg, time, 'melee');
   }
@@ -147,7 +147,7 @@ export function taishiciBehavior(host: WeaponHost, weapon: WeaponState, dt: numb
   if (d > reach + target.radius + 10) return;
   const dmg = TAISHICI_DEF.damage(weapon.level, pl.stats) * g.damageMultiplier(time) * (1 + TS.qichi * g.masteries.qichi);
   for (const e of host.grid.query(pl.x, pl.y, reach + 40)) {
-    if (!e.active || e.isSupplySlot) continue;
+    if (!e.active || (e.isSupplySlot && !e.lockTarget)) continue;
     const ex = e.x - pl.x, ey = e.y - pl.y, ed = Math.hypot(ex, ey);
     if (ed > reach + e.radius) continue;
     if (ed > e.radius && Math.abs(Math.atan2(Math.sin(Math.atan2(ey, ex) - rot), Math.cos(Math.atan2(ey, ex) - rot))) > TS.arc) continue;

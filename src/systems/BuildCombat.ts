@@ -100,10 +100,10 @@ export class BuildCombat {
   if(this.tier('stratagem')>=2&&this.controlled?.(e,now))bonus+=T.stratagem.controlledTaken;
   return raw*(1+Math.min(1.5,bonus));
  }
- private targets(e:{x:number;y:number},r:number,except?:Enemy):Enemy[]{return this.nearby(e.x,e.y,r).filter(t=>t.active&&!t.isSupplySlot&&t!==except&&Math.hypot(t.x-e.x,t.y-e.y)<=r);}
+ private targets(e:{x:number;y:number},r:number,except?:Enemy):Enemy[]{return this.nearby(e.x,e.y,r).filter(t=>t.active&&!(t.isSupplySlot && !t.lockTarget)&&t!==except&&Math.hypot(t.x-e.x,t.y-e.y)<=r);}
  private burnMs():number{return 3000+(this.tier('fire')>=2?T.fire.burnExtraMs:0);}
  private burn(e:Enemy,damage:number,now:number,spread=false,ms=this.burnMs()):void{
-  if(!e.active||e.isSupplySlot)return;const old=this.burns.get(e.spawnId);if(!old&&this.burns.size>=160)return;if(!old)this.onFx?.('ember',e.x,e.y-6,56);
+  if(!e.active||(e.isSupplySlot && !e.lockTarget))return;const old=this.burns.get(e.spawnId);if(!old&&this.burns.size>=160)return;if(!old)this.onFx?.('ember',e.x,e.y-6,56);
   this.burns.set(e.spawnId,{enemy:e,spawn:e.spawnId,until:Math.max(old?.until??0,now+ms),next:old?.next??now+500,damage:Math.max(old?.damage??0,damage),spread:old?old.spread&&spread:spread});
  }
  /** 震退（不对首领、免控、城头的）：0.25 秒滑开 push 像素（不瞬移），update 里逐帧推。 */

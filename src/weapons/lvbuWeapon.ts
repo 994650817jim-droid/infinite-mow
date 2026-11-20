@@ -126,7 +126,7 @@ export function lvbuBehavior(host: WeaponHost, weapon: WeaponState, dt: number, 
 function throwHalberd(host: WeaponHost, damage: number, time: number, range: number): void {
   const Y = LVBU.yuanmen, pl = host.player, s = sceneOf(host);
   let far: Enemy | null = null, fd = 0;
-  for (const e of host.grid.query(pl.x, pl.y, range)) { if (!e.active || e.isSupplySlot) continue; const d = Math.hypot(e.x - pl.x, e.y - pl.y); if (d <= range && d > fd) { fd = d; far = e; } }
+  for (const e of host.grid.query(pl.x, pl.y, range)) { if (!e.active || (e.isSupplySlot && !e.lockTarget)) continue; const d = Math.hypot(e.x - pl.x, e.y - pl.y); if (d <= range && d > fd) { fd = d; far = e; } }
   if (!far) return;
   const ux = (far.x - pl.x) / (fd || 1), uy = (far.y - pl.y) / (fd || 1), x0 = pl.x, y0 = pl.y, len = range;
   for (const e of lane(host, x0, y0, ux, uy, len, Y.width)) { host.hitEnemy(e, damage * Y.mul, time, 'melee'); if (e.kind !== 'boss' && !e.controlImmune) e.stunUntil = Math.max(e.stunUntil, time + Y.stunMs); }

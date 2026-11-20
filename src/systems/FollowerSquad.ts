@@ -374,7 +374,7 @@ export class FollowerSquad {
     if (cur && cur.active && !cur.invulnerable && Math.hypot(cur.x - this.player.x, cur.y - this.player.y) <= FOLLOW.sortieSeek + 40 && now < f.sortieUntil) return cur;
     let best: Enemy | null = null, score = Infinity;
     for (const e of this.query(this.player.x, this.player.y, FOLLOW.sortieSeek)) {
-      if (!e.active || e.invulnerable || e.isSupplySlot) continue;
+      if (!e.active || e.invulnerable || (e.isSupplySlot && !e.lockTarget)) continue;
       const rank = e.kind === 'boss' ? 0 : e.kind === 'elite' ? 1 : 2, d = Math.hypot(e.x - f.x, e.y - f.y), sc = rank * 10000 + (rank === 0 ? e.hp / Math.max(1, e.maxHp) * 5000 : 0) + d; // 双首领关：先集火血少的那个（dual-boss-spec 2.7）
       if (sc < score) { score = sc; best = e; }
     }

@@ -11,12 +11,19 @@ mkdirSync('assets/review/perf', { recursive: true });
 const b = await chromium.launch({ channel: 'chrome', headless: true, args: ['--mute-audio', '--disable-background-timer-throttling', '--disable-renderer-backgrounding'] });
 try {
   const ctx = await b.newContext({ viewport: { width: 1280, height: 720 } }), p = await ctx.newPage(); const errs = []; p.on('pageerror', e => errs.push(String(e)));
-  await p.addInitScript(() => { if (!sessionStorage.getItem('seeded')) { localStorage.clear(); localStorage.setItem('im_story', 'off'); sessionStorage.setItem('seeded', '1'); } });
-  await p.goto(`${BASE}?dev=1&autostart=1&stage=1&layout=desktop&story=off`, { timeout: 180000, waitUntil: 'domcontentloaded' });
-  await p.waitForFunction(() => { const s = window.__game?.scene.getScene('GameScene'); return s?.player && s.__DEV_ACTIONS && window.__IM; }, null, { timeout: 180000, polling: 500 }); await p.waitForTimeout(1500);
+  await p.addInitScript(k => { window.__KEY = k; if (!sessionStorage.getItem('seeded')) { localStorage.clear(); localStorage.setItem('im_story', 'off'); sessionStorage.setItem('seeded', '1'); } }, SCENE);
+  const START = { YilingGameScene: { yilingStage: 3, run: { thirdStage: 3 }, drop: 'yilingTransfer' }, BeifaGameScene: { beifaStage: 3, run: { thirdStage: 3 }, drop: 'beifaTransfer' }, HanzhongGameScene: { hanzhongStage: 3, run: { thirdStage: 3 }, drop: 'hanzhongTransfer' }, ThirdGameScene: { thirdStage: 3, run: { thirdStage: 3 }, drop: 'thirdTransfer' } };
+  if (SCENE === 'GameScene') await p.goto(`${BASE}?dev=1&autostart=1&stage=1&layout=desktop&story=off`, { timeout: 180000, waitUntil: 'domcontentloaded' });
+  else {
+    await p.goto(`${BASE}?dev=1&layout=desktop&story=off`, { timeout: 180000, waitUntil: 'domcontentloaded' });
+    await p.waitForFunction(() => window.__game?.scene.getScenes(true).length, null, { timeout: 120000, polling: 500 }); await p.waitForTimeout(2500);
+    await p.evaluate(([k, st, city]) => { const g = window.__game; if (st) { for (const [a, v] of Object.entries(st)) if (a !== 'run' && a !== 'drop') g.registry.set(a, v); g.registry.set('runConfig', { character: 'zhaoyun', ...(st.run ?? {}) }); if (st.drop) g.registry.remove(st.drop); } else { g.registry.set('siegeCity', city); g.registry.remove('siegeMode'); g.registry.set('runConfig', { character: 'zhaoyun' }); }
+      for (const s of g.scene.getScenes(true)) s.scene.stop(); if (g.registry.get('battleReady') || st) g.scene.start(k); else { g.registry.set('pendingWarlord', k); g.registry.set('loadBattle', true); g.scene.start('BattleLoadScene' in g.scene.keys ? 'BattleLoadScene' : k); } }, [SCENE, START[SCENE] ?? null, E.CITY ?? 'luoyang']);
+  }
+  await p.waitForFunction(() => { const s = window.__game?.scene.getScene(window.__KEY ?? 'GameScene'); return s?.player && s.__DEV_ACTIONS && window.__IM; }, null, { timeout: 180000, polling: 500 }); await p.waitForTimeout(1500);
   const setup = await p.evaluate(async ([N, ALLIES, OFF]) => {
-    const s = window.__game.scene.getScene('GameScene'), IM = window.__IM; s.__DEV_ACTIONS.closePopup?.(); IM.god(); IM.clearWeapons(); IM.killAllEnemies(); s.spawnTimer = s.eliteTimer = 1e9;
-    for (const id of ['spear_orbit', 'crossbow', 'guandao', 'flame_banner']) { IM.giveWeapon(id); s.player.weapons.at(-1).level = 4; }
+    const s = window.__game.scene.getScene(window.__KEY ?? 'GameScene'), IM = window.__IM; s.__DEV_ACTIONS.closePopup?.(); IM.god(); IM.clearWeapons(); IM.killAllEnemies(); s.spawnTimer = s.eliteTimer = 1e9;
+    for (const id of ['spear_orbit', 'crossbow', 'guandao', 'flame_banner']) { try { IM.giveWeapon(id); s.player.weapons.at(-1).level = 4; } catch { /* 部分场景没有该武器 */ } }
     const b = s.player.growth.build; b.tactics = { ember: 3, spread: 2, hotwind: 2, napalm: 2, snare: 2, traction: 2, confinement: 2, gust: 2, eagle: 2, sunder: 2, reap: 2, concentration: 2, windstep: 2, flank: 2, swift: 2, stored_edge: 2, chain: 2, pursuit: 2, momentum: 2, heavy_break: 2, coordination: 2, rally: 2, breakout: 2, watch: 2 };
     b.bonus = { fire: 4, stratagem: 4, archery: 4, cavalry: 4, warrior: 4, formation: 4 }; s.player.stats.cooldownMul = .45;
     for (let i = 0; i < N; i++) { const a = i / N * Math.PI * 2, r = 70 + (i % 7) * 48, kind = i % 12 === 0 ? 'elite' : i % 3 === 0 ? 'archer' : 'infantry'; const e = s.spawnEnemy(kind, s.player.x + Math.cos(a) * r, s.player.y + Math.sin(a) * r, 3, true); if (e) { e.speed = 0; e.hp = e.maxHp = 1e9; } }
@@ -35,7 +42,7 @@ try {
   await cdp.send('HeapProfiler.collectGarbage'); const heap0 = (await cdp.send('Runtime.getHeapUsage')).usedSize;
   await p.waitForTimeout(1500);
   const sample = await p.evaluate(seconds => new Promise(resolve => {
-    const s = window.__game.scene.getScene('GameScene'), start = performance.now(); let last = start, nextPump = start; const frames = [], stamps = [], upd = [], rnd = [], g = window.__game; let tU = 0, tR = 0, cu = 0, cr = 0;
+    const s = window.__game.scene.getScene(window.__KEY ?? 'GameScene'), start = performance.now(); let last = start, nextPump = start; const frames = [], stamps = [], upd = [], rnd = [], g = window.__game; let tU = 0, tR = 0, cu = 0, cr = 0;
     g.events.on('prestep', () => { tU = performance.now(); }); g.events.on('poststep', () => { cu = performance.now() - tU; });
     g.events.on('prerender', () => { tR = performance.now(); }); g.events.on('postrender', () => { cr = performance.now() - tR; });
     const tick = now => { frames.push(now - last); stamps.push(now - start); upd.push(cu); rnd.push(cr); last = now; if (now >= nextPump) { window.__pump(); nextPump = now + 700; }

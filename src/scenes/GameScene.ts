@@ -360,12 +360,14 @@ export class GameScene extends Phaser.Scene {
   /** 败退型的退兵台词：招降表 retreat 句（8-1 张郃），没有时用剧本 bossFall（5-3 曹仁、4-1 颜良）。 */
   protected retreatLine(at:{x:number;y:number;displayHeight:number}):boolean{const d=surrenderDef(this.surrenderKey());if(d?.retreat){if(storyMode()==='off')return false;storyBark(this,at,d.name,d.retreat);return true;}return !!this.storyDir?.bossFall(at);}
   /** 测试 / 调试：直接做选择（旧接口，第六章测试沿用）。 */
-  choose(c:'persuade'|'execute'|'press'):void{this.parley?.choose(c);}
+  /** 正开着劝降面板的那一份 Parley：双首领关面板属于各首领自己的 Parley（DualBoss entries），this.parley 可能是另一位或空（2026-11-20 修：手柄 / choose 在双首领关点不动）。 */
+  protected openParley():Parley|null{if(this.parley?.state==='open')return this.parley;for(const x of this.dual?.entries??[])if(x.parley?.state==='open')return x.parley;return this.parley;}
+  choose(c:'persuade'|'execute'|'press'):void{this.openParley()?.choose(c);}
   /** 斩杀奖励（含劝降失败后斩杀、宁死不降）：军粮 +25；本存档首次斩杀此人额外一件紫色兵装（spec §6，防刷）。 */
   protected parleyExecuteRewards(out:ChestLoot[]):void{
     const p=this.parley;if(!p||p.persuadedOk||!surrenderLive())return;
     gainProvisions(SURRENDER.executeProvisions);const first=markSurrender('executed',p.def.id);
-    if(first){const q=capLootQuality('purple',this.itemTier()),item=rollItem(q,Math.random,undefined,this.lootChapter());addItems([item]);out.push({name:`${QUALITIES[q].label}兵装一件 · 军粮 +${SURRENDER.executeProvisions}`,desc:'首次斩杀此将所得 · 已入行囊',tag:'斩杀'});}
+    if(first){const q=capLootQuality('purple',this.itemTier()),item=rollItem(q,Math.random,undefined,this.lootChapter());addItems([item]);out.push({name:`${QUALITIES[q].label}色兵装一件 · 军粮 +${SURRENDER.executeProvisions}`,desc:'首次斩杀此将所得 · 已入行囊',tag:'斩杀'});}
     else out.push({name:`军粮 +${SURRENDER.executeProvisions}`,desc:'斩将所得',tag:'斩杀'});
     // 宁死不降之将不能白打（surrender-rules.md）：本存档首次斩杀后以礼厚葬，军粮 +60、仁名 +1（仁名算进以后的劝降把握）
     if(p.def.tier==='never'&&markSurrender('honored',p.def.id)){gainProvisions(SURRENDER.persuadeProvisions);out.push({name:`厚葬${p.def.name} · 军粮 +${SURRENDER.persuadeProvisions} · 仁名 +1`,desc:p.def.reason??'忠烈之士，以礼厚葬',tag:'厚葬'});}
@@ -3047,7 +3049,7 @@ export class GameScene extends Phaser.Scene {
     const own = this.player?.weapons.find(w => w.id === getCharacter(this.runConfig.character).startWeapon); if (!own || own.branch) return false;
     const bs = branchesFor(own.id); return own.level >= (WEAPON_DEFS[own.id]?.maxLevel ?? 5) && bs.length === 2 && bs.every(b => b.ready);
   }
-  /** 兵器专职面板（ui/BranchPickPanel）：暂停战斗，两条大卡二选一；契合当前流派的那条效果 +10%。 */
+  /** 兵器专职面板（ui/BranchPickPanel）：暂停战斗，两条大卡二选一；契合当前流派的那条效果 ×BRANCH_FIT.fitMul。 */
   branchPanel: Phaser.GameObjects.Container | null = null; private branchOpts: WeaponBranch[] = []; branchFitId = '';
   protected openBranch(): void {
     if (this.branchPanel || this.over) return;
@@ -3465,7 +3467,7 @@ export class GameScene extends Phaser.Scene {
   padCapture(): boolean { return this.mode === 'none' && !this.over; }
   /** ☰ 暂停 / 继续，⧉ 行囊，Ⓧ 用药，Ⓨ 护阵 / 出击；暂停中 Ⓑ 继续战斗。 */
   padButton(button: number): boolean {
-    if (this.mode === 'parley' && this.parley?.pad(button === PAD.A ? 0 : button === PAD.B ? 1 : button === PAD.X ? 2 : -1)) return true;
+    if (this.mode === 'parley' && this.openParley()?.pad(button === PAD.A ? 0 : button === PAD.B ? 1 : button === PAD.X ? 2 : -1)) return true;
     if (this.restIntroSkip && (button === PAD.A || button === PAD.B || button === PAD.START)) { this.restIntroSkip(); return true; }
     if (button === PAD.START && ((this.mode === 'none' && !this.over) || this.mode === 'pause')) { this.togglePause(); return true; }
     if (button === PAD.BACK && this.mode === 'none' && !this.over) { this.openBattleBag(); return true; }

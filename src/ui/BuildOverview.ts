@@ -15,7 +15,7 @@ import { itemTile } from './ItemQuality';
 import { attrBadge } from './AttrBadge';
 import { primarySummary } from './PrimaryAttrInfo';
 import type { ItemTooltip, InfoTip } from './ItemTooltip';
-import { branchById } from '../data/weaponBranches';
+import { BRANCH_FIT, branchById } from '../data/weaponBranches';
 import { lqButton, lqLabelColor, type LqState } from './LacquerKit';
 
 /**
@@ -154,7 +154,7 @@ export function drawBuildOverview(o: BuildOverviewOpts): void {
       text(L.x + pad + 34, y - 1, `Lv6 ${mk(ov >= 1)}（第四章）  Lv7 ${mk(ov >= 2)}（第八章）`, 12, '#c9b88f').setName(P + '-branch-over');
       y += 17;
       text(L.x + pad + 34, y - 1, `进阶「${br.finalName}」${fin ? ' · 已达成' : `：Lv7 ${mk(ov >= 2)}  ${SCHOOLS[br.school].name}派 ${Math.min(shi, 4)}/4 势`}`, 12, fin ? '#f0c060' : '#b9a57a').setName(P + '-branch-final');
-      hot(L.x + pad, y - 37, L.w - pad * 2, 54, P + '-branch-hit', () => ({ title: '兵器专职 · ' + br.name, sub: SCHOOLS[br.school].name + '派' + (w.attuned ? ' · 契合（效果 +10%）' : ''), body: br.desc + '\n\nLv6：' + br.lv6 + '\nLv7：' + br.lv7 + '\n\n进阶「' + br.finalName + '」（Lv7 + 本派 4 势）：' + br.finalDesc + '\n\n想换分支：行营「重整构筑」花军粮重选，本命重练到 Lv5 时再弹专职面板。', color: 0xd8a85a }));
+      hot(L.x + pad, y - 37, L.w - pad * 2, 54, P + '-branch-hit', () => ({ title: '兵器专职 · ' + br.name, sub: SCHOOLS[br.school].name + '派' + (w.attuned ? ' · 契合（效果 +' + Math.round((BRANCH_FIT.fitMul - 1) * 100) + '%）' : ''), body: br.desc + '\n\nLv6：' + br.lv6 + '\nLv7：' + br.lv7 + '\n\n进阶「' + br.finalName + '」（Lv7 + 本派 4 势）：' + br.finalDesc + '\n\n想换分支：行营「重整构筑」花军粮重选，本命重练到 Lv5 时再弹专职面板。', color: 0xd8a85a }));
       y += 19;
     } else if (w && w.level >= wmax) { text(L.x + pad, y, '专职', 12, '#a8956c'); text(L.x + pad + 34, y - 1, '本命已满 Lv5 · 下一场开战时选兵器专职', 12, '#b9a57a').setName(P + '-branch'); y += 19; }
     // 专属武学

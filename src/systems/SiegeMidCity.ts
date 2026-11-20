@@ -938,7 +938,7 @@ export class SiegeMidCity {
       const p = this.h.player; p.sprite.setPosition(start.x, start.y);
       this.h.allies().forEach((a, i) => { if (a.active) a.setPosition(start.x + ((i % 5) - 2) * 34, start.y + 50 + Math.floor(i / 5) * 30); });
       this.h.moveAllies?.(start.x, start.y + 120);
-      cam.scrollX = start.x - cam.width / 2; cam.scrollY = start.y - cam.height / 2;
+      cam.scrollX = start.x - cam.width / (2 * cam.zoom); cam.scrollY = start.y - cam.height / (2 * cam.zoom);
       this.phase = to;
       if (to === 'barbican') this.enterBarbican(); else if (to === 'street') this.enterStreet(); else this.enterHall();
       cam.fadeIn(M.transitionMs * .45, 8, 6, 4);

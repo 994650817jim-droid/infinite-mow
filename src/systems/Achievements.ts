@@ -4,7 +4,7 @@
  * 触发点：战斗结束（onBattleEnd）、追兵首领被击败、城镇 / 天下状态检查（checkWorld，进主城、天下地图、主页时调用）。
  */
 import Phaser from 'phaser';
-import { FONT, HEADING_FONT } from '../config';
+import { GAME_WIDTH, FONT, HEADING_FONT } from '../config';
 import type { WorldSave } from '../world/WorldStore';
 import { TOWN_BUILDINGS } from '../town/TownData';
 
@@ -112,7 +112,7 @@ function toast(def: AchievementDef): void {
   const scene = game?.scene.getScenes(true).at(-1); if (!scene) return;
   // 同时解锁多个时往下排，不重叠
   const stack = scene.children.list.filter(o => o.name === 'achievement-toast').length;
-  const W = scene.scale.width / (scene.cameras.main.zoom || 1), w = 260, x = W - w / 2 - 14, y = 52 + stack * 68;
+  const W = GAME_WIDTH, /* HUD 在 UI 镜头上，按设计宽度排（主镜头可拉远） */ w = 260, x = W - w / 2 - 14, y = 52 + stack * 68;
   const root = scene.add.container(x, y - 20).setScrollFactor(0).setDepth(1e6).setAlpha(0).setName('achievement-toast');
   root.add(scene.add.rectangle(0, 0, w, 60, 0x1a120b, .94).setStrokeStyle(1.5, 0xd9b46a));
   // 有成就图标时用图标，否则用“功”字印

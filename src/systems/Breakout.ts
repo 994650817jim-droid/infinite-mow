@@ -37,7 +37,7 @@ export class Breakout {
       { left: a.left, right: a.right, top: a.bottom, bottom: a.bottom + 300 },
       { left: a.left, right: -160, top: a.top - 300, bottom: E.y + 90 }, { left: 160, right: a.right, top: a.top - 300, bottom: E.y + 90 }, this.gateBox);
     h.player.sprite.setPosition(BREAKOUT.start.x, BREAKOUT.start.y);
-    sc.cameras.main.scrollX = BREAKOUT.start.x - sc.cameras.main.width / 2; sc.cameras.main.scrollY = BREAKOUT.start.y - sc.cameras.main.height / 2;
+    { const c = sc.cameras.main; c.scrollX = BREAKOUT.start.x - c.width / (2 * c.zoom); c.scrollY = BREAKOUT.start.y - c.height / (2 * c.zoom); }
     // 出口城门、两侧谷壁上的吴军旗
     this.img(0, E.y + 60, v2 ? PROPS : 'sishui_props_refined', v2 ? 4 : 0, 360);
     for (let y = a.bottom - 200; y > a.top + 400; y -= 420) for (const s of [-1, 1]) this.img(s * (a.right - 30), y, v2 ? PROPS : 'yellow_props', v2 ? 7 : 4, v2 ? 120 : 80);

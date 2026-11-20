@@ -103,6 +103,9 @@ export const COLORS = {
 } as const;
 
 /** 数值平衡：集中在此处，方便改数值不碰逻辑。 */
+/** 电脑布局战场镜头倍数（用户「镜头拉远 10–15%」，统筹定 0.88）：只缩战场，HUD 分到 UI 镜头保持原大小（GameScene.setupUiCamera）。手机布局不缩。 */
+export const BATTLE_ZOOM_DESKTOP = .88;
+
 export const BALANCE = {
   player: {
     maxHp: 100,

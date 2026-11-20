@@ -135,7 +135,7 @@ export class Tutorial {
     this.overlay.point(b && b.width > 0 ? { x: b.x, y: b.y, w: b.width, h: b.height } : null, o);
   }
   /** 世界坐标 → 屏幕坐标（宝箱）。 */
-  private worldRect(x: number, y: number, w: number, h: number): ScreenRect { const c = this.scene.cameras.main; return { x: x - c.worldView.x - w / 2, y: y - c.worldView.y - h, w, h }; } // 界面坐标即逻辑坐标（画布按 RENDER_SCALE 放大、相机 zoom 同步），不乘 zoom
+  private worldRect(x: number, y: number, w: number, h: number): ScreenRect { const v = this.scene.cameras.main.worldView, k = v.width > 0 ? GAME_W / v.width : 1; return { x: (x - v.x - w / 2) * k, y: (y - v.y - h) * k, w: w * k, h: h * k }; } /* 战场镜头可拉远（BATTLE_ZOOM_DESKTOP）：世界 → 界面按可见范围换算 */ // 界面坐标即逻辑坐标（画布按 RENDER_SCALE 放大、相机 zoom 同步），不乘 zoom
 
   /** 看完或跳过：存档记标记，收起界面。 */
   finish(skipped: boolean): void {

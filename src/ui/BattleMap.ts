@@ -32,6 +32,8 @@ type Box = { left: number; right: number; top: number; bottom: number };
 type Any = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
 export interface MapHost {
   scene: Phaser.Scene;
+  /** 玩法逐章解锁：舆图未开放（1-1）时卷轴不显示、M 无反应。 */
+  locked?(): boolean;
   /** 大舆图展开（true）/ 卷回角上（false）时暂停 / 恢复战斗。 */
   pause?(on: boolean): void;
   player(): { x: number; y: number };
@@ -216,12 +218,12 @@ export class BattleMap {
   private makeIcon(): void {
     if (this.icon || !this.h.scene.textures.exists(SCROLL_FILES.closed)) return;
     const s = this.h.scene, S = BATTLE_MAP.scroll, tex = s.textures.get(SCROLL_FILES.closed).getSourceImage() as { width: number; height: number }, k = S.w / tex.width;
-    this.icon = s.add.image(S.x, S.y, SCROLL_FILES.closed).setScale(k).setScrollFactor(0).setDepth(DEPTH.hud + 2).setName('battle-map-scroll').setInteractive({ useHandCursor: true }).setVisible(this.shown);
+    this.icon = s.add.image(S.x, S.y, SCROLL_FILES.closed).setScale(k).setScrollFactor(0).setDepth(DEPTH.hud + 2).setName('battle-map-scroll').setInteractive({ useHandCursor: true }).setVisible(this.vis);
     this.icon.setData('k', k);
     this.icon.on('pointerover', () => { if (this.state === 'closed') this.icon?.setScale(k * 1.06); });
     this.icon.on('pointerout', () => { if (this.state === 'closed') this.icon?.setScale(k); });
     this.icon.on('pointerdown', () => this.toggleBig());
-    this.iconHint = s.add.text(S.x, S.y + tex.height * k / 2 + 1, '舆图 · ' + hotkeyLabel('map'), warText(11, '#e8d6a8')).setOrigin(.5, 0).setStroke('#1a0e08', 3).setScrollFactor(0).setDepth(DEPTH.hud + 2).setName('battle-map-scroll-hint').setVisible(this.shown);
+    this.iconHint = s.add.text(S.x, S.y + tex.height * k / 2 + 1, '舆图 · ' + hotkeyLabel('map'), warText(11, '#e8d6a8')).setOrigin(.5, 0).setStroke('#1a0e08', 3).setScrollFactor(0).setDepth(DEPTH.hud + 2).setName('battle-map-scroll-hint').setVisible(this.vis);
   }
   /** 展开的卷轴（第一次打开时建）：画心纸面中心 = 地图中心；左右轴竖着，按 t 往两边拉开。 */
   private makeOpen(): void {
@@ -255,9 +257,12 @@ export class BattleMap {
     const a = Phaser.Math.Clamp((t - .65) / .35, 0, 1);
     this.big?.root.setVisible(a > 0).setAlpha(a); o.title.setVisible(a > 0).setAlpha(a); o.hint.setVisible(a > 0).setAlpha(a);
   }
+  /** 卷轴该不该显示：没被收起、且舆图已开放。 */
+  private get vis(): boolean { return this.shown && !this.h.locked?.(); }
   get bigOpen(): boolean { return this.state === 'open' || this.state === 'opening'; }
   /** G / 点卷轴：收起 → 飞到中央竖起 → 两轴拉开；展开 → 两轴合拢 → 横回去飞回角上。 */
   toggleBig(): void {
+    if (this.h.locked?.() && !this.bigOpen) return;
     const s = this.h.scene; (s as unknown as { sfx?: { play(k: string): void } }).sfx?.play(this.bigOpen ? 'mapClose' : 'mapOpen'); // 卷轴展开 / 卷起 if (!this.icon) this.makeIcon(); this.makeOpen();
     const icon = this.icon, S = BATTLE_MAP.scroll, k = (icon?.getData('k') as number | undefined) ?? 1, o = this.open3!;
     const rollH = SCROLL_TEX.h * o.mid.scaleY, cy = o.mid.y;
@@ -284,9 +289,9 @@ export class BattleMap {
       const fromT = this.t;
       this.anim = { t: 0, dur: Math.max(1, BATTLE_MAP.rollMs * fromT), ease: Phaser.Math.Easing.Cubic.In, step: q => this.layout(fromT * (1 - q)), done: () => {
         this.layout(0);
-        const closed = (): void => { this.state = 'closed'; this.stats.state = 'closed'; this.iconHint?.setVisible(this.shown); this.h.pause?.(false); };
+        const closed = (): void => { this.state = 'closed'; this.stats.state = 'closed'; this.iconHint?.setVisible(this.vis); this.h.pause?.(false); };
         if (!icon) { closed(); return; }
-        icon.setVisible(this.shown).setPosition(GAME_WIDTH / 2, cy).setAngle(90).setScale(rollH / icon.width);
+        icon.setVisible(this.vis).setPosition(GAME_WIDTH / 2, cy).setAngle(90).setScale(rollH / icon.width);
         fly({ x: GAME_WIDTH / 2, y: cy, angle: 90, scale: rollH / icon.width }, { x: S.x, y: S.y, angle: 0, scale: k }, closed);
       } };
     }
@@ -298,7 +303,7 @@ export class BattleMap {
     if (q >= 1 && this.anim === a) { this.anim = null; a.done(); }
   }
   setVisible(v: boolean): void {
-    this.shown = v; if (this.state === 'closed') { this.icon?.setVisible(v); this.iconHint?.setVisible(v); }
+    this.shown = v; if (this.state === 'closed') { this.icon?.setVisible(this.vis); this.iconHint?.setVisible(this.vis); }
     if (!v) { if (this.bigOpen) this.toggleBig(); this.arrow.clear(); this.arrowText.setVisible(false); }
   }
 

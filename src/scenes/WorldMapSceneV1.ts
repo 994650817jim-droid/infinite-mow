@@ -23,6 +23,7 @@ import {incomeText} from "../town/TownData";
 import {cityIncome,emptyCityLevels} from "../data/cityBuildings";
 import {cityLevels} from "../world/WorldStore";
 import {chapterUnlocked} from '../systems/ChapterProgress';
+import {MECHANICS,mechLockText,mechOpen,takeMechIntros,type MechId} from '../data/mechanicUnlocks';
 /** 战败退守的告示（GameScene.wireDefeatButton 写进 registry 'defeatRetreat'）。 */
 interface DefeatRetreatNote{name:string;kind:'city'|'home';stage:string;notes:string[]}
 import {CITIES,CITY_LINKS,CITY_INCOME,FACTIONS,HOME,SPECIALTIES,TIER_NAME,cityAttackable,cityById,cityOwner,eraDef,eraIndexFor,territorySummary,type CityDef,type EraId} from '../world/WorldCities';
@@ -227,6 +228,7 @@ export class WorldMapSceneV1 extends Phaser.Scene {
   if(advance||lost.length)this.showNotice(advance,lost);
   // 战败退守（data/defeatFlow.ts）：选中 / 居中退守的城池或营寨，弹败退告示（叠在时局告示之上）
   const retreat=this.registry.get('defeatRetreat') as DefeatRetreatNote|undefined;this.registry.remove('defeatRetreat');
+  const intros=takeMechIntros('map');if(intros.length)this.showMechIntro(intros);
   if(retreat){if(retreat.kind==='home'&&!focus){this.layer.setPosition(this.area.x+this.area.w/2-HOME.x*this.zoom,(this.area.y+this.viewBottom)/2-HOME.y*this.zoom);this.clampMap();}this.showRetreat(retreat);}
   if(captured){this.selected={kind:'city',city:captured};this.refresh();this.playCapture(captured,nowRealm,prevRealm);}
   this.buildAmbient();
@@ -279,7 +281,8 @@ export class WorldMapSceneV1 extends Phaser.Scene {
  private cityStatusOf(c:CityDef):CityStatus{
   if(this.alertFor(c.id))return{kind:'alert',reason:'告急：守住可解除'};
   if(this.owned.includes(c.id))return{kind:'own',reason:'你的城池'};
-  if(cityAttackable(c.id,this.owned)){if(!siegeUnlocked(c.id,loadWorld())&&!isChapterTestRun()){const a=siegeGateStage(c.id),d=a?.chapter&&a.stage?chapterStages(a.chapter)[a.stage-1]:undefined,g=chapterById(a?.chapter??CITY_CHAPTER[c.id]??'hulao');return{kind:'gate',reason:d?`未解锁：打下 ${d.code}「${d.name}」后开放攻城`:`未解锁：第${g.numeral}章「${g.title}」中开放攻城`};}return{kind:'attack',reason:'与你的领地相邻，可以攻打'};}
+  if(cityAttackable(c.id,this.owned)){if(!mechOpen('siege'))return{kind:'gate',reason:'未解锁：攻城'+mechLockText('siege')}; // 玩法逐章解锁：攻城第二章通关后 + 相邻（用户 11-20）
+   if(!siegeUnlocked(c.id,loadWorld())&&!isChapterTestRun()){const a=siegeGateStage(c.id),d=a?.chapter&&a.stage?chapterStages(a.chapter)[a.stage-1]:undefined,g=chapterById(a?.chapter??CITY_CHAPTER[c.id]??'hulao');return{kind:'gate',reason:d?`未解锁：打下 ${d.code}「${d.name}」后开放攻城`:`未解锁：第${g.numeral}章「${g.title}」中开放攻城`};}return{kind:'attack',reason:'与你的领地相邻，可以攻打'};}
   const step=this.firstStep(c.id);return{kind:'far',reason:step?`尚不相邻：需先攻下${step}`:'尚不相邻：先攻下相邻城池'};}
  /** 通往某城最近一步：从目标沿道路倒推，取与我方领地相邻、离目标最近的城（至多两座）。 */
  private firstStep(target:string):string{const dist=new Map<string,number>([[target,0]]),q=[target];
@@ -416,6 +419,16 @@ export class WorldMapSceneV1 extends Phaser.Scene {
  /** 有告急城池时出征别处的警示（空串表示无告急）。 */
  private lossWarning(){const names=this.alerts.map(a=>cityById(a.city)?.name).filter(Boolean);return names.length?`⚠ ${names.join('、')}告急：此时出征别处，${names.length>1?'这些城池':'该城'}将失守！`:'';}
  /** W4 时局变化 / 城池失守 提示面板。 */
+ /** 玩法逐章解锁（data/mechanicUnlocks.ts）：刚开放的玩法——人物一两句引子 + 一行说明。 */
+ private showMechIntro(ids:MechId[]){
+  const desk=W>600,pw=Math.min(W-40,540),root=this.add.container(0,0).setDepth(69).setName('mech-intro-modal');
+  root.add(this.add.rectangle(W/2,H/2,W,H,0x07100b,.72).setInteractive());
+  const parts=ids.map(id=>{const m=MECHANICS[id];return `【${m.name}】\n`+m.lines.map(l=>`${l.who}：「${l.text}」`).join('\n')+'\n· '+m.tip;});
+  const text=worldText(this,0,0,parts.join('\n\n'),desk?15:16,'#e4dcc4').setWordWrapWidth(pw-48,true).setLineSpacing(5);
+  const ph=Math.min(H-80,text.height+150),px=W/2-pw/2,py=H/2-ph/2;root.add(this.modalPanel(pw,ph));
+  root.add(worldText(this,px+24,py+20,'新玩法开放',24,'#f0d79e'));text.setPosition(px+24,py+64);root.add(text);
+  this.modalButton(root,W/2,py+ph-(desk?44:54),pw*.5,'知道了',true,'mech-ok',()=>root.destroy());
+ }
  /** 战败退守告示：退到哪、受了什么惩罚、关卡未平定可再出征。 */
  private showRetreat(r:DefeatRetreatNote){
   const desk=W>600,pw=Math.min(W-40,500),root=this.add.container(0,0).setDepth(71).setName('defeat-modal');

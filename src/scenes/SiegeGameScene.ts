@@ -1,3 +1,4 @@
+import { mechOpen } from '../data/mechanicUnlocks';
 import Phaser from 'phaser';
 import {captureLine, factionGeneral, tryCapture} from '../systems/RosterStore';
 import {EnemyCamps} from '../systems/EnemyCamps';
@@ -63,7 +64,7 @@ export function siegeGameSceneClass(Base: typeof GameScene) {
       const era = eraIndexFor({hulaoCleared: s.cleared.hulao, warlordStages: s.warlordStages, guanduStages: s.guanduStages});
       this.defense = this.registry.get('siegeMode') === 'defense';
       const alert = city && s.alerts.find(a => a.city === city.id);
-      if (!city || (!this.test && (this.defense ? !alert || !s.ownedCities.includes(city.id) : !routeSiegeOpen(city.id, s, s.ownedCities)))) { this.scene.start('WorldMapScene'); return; } // 天下地图 v2 规则 B / C：挂靠主线关打下即可攻、不要求相邻
+      if (!city || (!this.test && (this.defense ? !alert || !s.ownedCities.includes(city.id) : !mechOpen('siege') || !routeSiegeOpen(city.id, s, s.ownedCities)))) { this.scene.start('WorldMapScene'); return; } // 天下地图 v2 规则 B / C：挂靠主线关打下即可攻、不要求相邻
       // 守城：守军配色换成来犯势力
       this.city = city; this.owner = this.defense ? alert?.attacker ?? cityAttacker(city.id, era, s.ownedCities.filter(c => c !== city.id)) ?? 'caocao' : cityOwner(city.id, era, s.ownedCities);
       // 守军配色须在敌兵生成前就绪

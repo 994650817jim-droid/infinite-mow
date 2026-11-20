@@ -213,35 +213,35 @@ try {
   }
   // ⑩ 「斩颜良」横幅 / 旗标只在斩杀时出现（关羽在队）
   if (want('yanliang')) {
-    // 双首领方案 A：斩颜良在 4-2 延津（颜良是双首领的第一位）
-    const yan = s => s.dual.entries.find(x => x.id === 'yanliang');
-    let ev = await open('GuanduGameScene', { guanduStage: 2 }, { character: 'guanyu' });
-    await ev((s, f) => { const y = s.dual.entries[0]; y.parley.constructor.random = () => .01; const e = y.enemy; e.invulnerable = false; e.hp = Math.floor(e.maxHp * .12); s.hitEnemy(e, 1, s.combatNow, 'melee', false, false); }); await waitPanel(ev); await ev(s => s.choose('persuade')); await p.waitForTimeout(1600);
-    const f1 = await p.evaluate(() => (JSON.parse(localStorage.getItem('im_story_v1') ?? '{}').flags ?? {}).yanliang_by_guanyu ?? null);
-    ev = await open('GuanduGameScene', { guanduStage: 2 }, { character: 'guanyu' });
-    await ev(s => { const e = s.dual.entries[0].enemy; e.invulnerable = false; s.hitEnemy(e, 1e7, s.combatNow, 'melee', false, false); }); await p.waitForTimeout(800);
-    void yan;
-    const f2 = await p.evaluate(() => (JSON.parse(localStorage.getItem('im_story_v1') ?? '{}').flags ?? {}).yanliang_by_guanyu ?? null);
-    const dbg = await ev(s => ({ e: s.dual?.snapshot().entries.map(x => x.id + ':' + x.done + ':' + x.parley), cap: (JSON.parse(localStorage.getItem('im_roster_v1') ?? '{}').captives ?? []).map(o => o.boss) }));
-    ck('关羽劝降颜良：不记「斩颜良」；颜良已在降将栏后再打死：才记「斩颜良」', !f1 && !!f2, { f1, f2, dbg });
+    // 2026-11-20 更新：4-2 颜良现在是「宁死不降」（surrender.ts guandu-2:yanliang tier never）；「斩颜良」旗标改由官渡剧情在关羽随行打赢时写（story/guandu.ts），不再走劝降。
+    // 这里查：双首领关的劝降面板写「宁死不降」、点劝降没反应（面板仍开）、斩杀能结束（顺带验 GameScene.openParley：双首领的面板属于各首领自己的 Parley）。
+    const ev = await open('GuanduGameScene', { guanduStage: 2 }, { character: 'guanyu' });
+    await ev(s => { const y = s.dual.entries.find(x => x.id === 'yanliang') ?? s.dual.entries[0]; const e = y.enemy; e.invulnerable = false; e.hp = Math.floor(e.maxHp * .12); s.hitEnemy(e, 1, s.combatNow, 'melee', false, false); });
+    const panel = await waitPanel(ev), never = await ev(s => s.children.getByName('parley-panel')?.list?.some(o => o.type === 'Text' && /宁死不降/.test(o.text)) ?? false);
+    await ev(s => s.choose('persuade')); await p.waitForTimeout(300);
+    const afterPersuade = await ev(s => ({ mode: s.mode, e: s.dual?.snapshot().entries.map(x => x.id + ':' + x.done + ':' + x.parley) }));
+    await ev(s => s.choose('execute')); await p.waitForTimeout(800);
+    const afterExecute = await ev(s => ({ mode: s.mode, e: s.dual?.snapshot().entries.map(x => x.id + ':' + x.done + ':' + x.parley) }));
+    ck('4-2 颜良宁死不降：面板写「宁死不降」、点劝降没反应；斩杀（双首领面板也能用 choose / 手柄）后颜良倒下', panel && never && afterPersuade.mode === 'parley' && afterExecute.mode !== 'parley' && afterExecute.e.some(x => x.startsWith('yanliang:killed')), { panel, never, afterPersuade, afterExecute });
   }
   // ⑪ 试炼 / 调试战斗不改人才库；⑫ 中途退出回滚旗标与降将栏
   if (want('rollback')) {
+    // 2026-11-20：3-1 改成双首领（李傕 + 郭汜，劝降走各首领自己的 Parley），回滚检查换到单首领的 5-2 蔡瑁（4-3 淳于琼要先焚尽粮仓才可劝）
     const snap = () => p.evaluate(() => ({ cap: (JSON.parse(localStorage.getItem('im_roster_v1') ?? '{}').captives ?? []).map(o => o.boss).filter(Boolean).sort().join(','), sur: (JSON.parse(localStorage.getItem('im_story_v1') ?? '{}').flags ?? {}).surrendered ?? '' }));
-    let ev = await open('ThirdGameScene', { thirdStage: 1 }, { thirdStage: 1 });
+    let ev = await open('ChibiGameScene', { chibiStage: 2 }, { thirdStage: 2 });
     await p.evaluate(() => { window.__IM_PARLEY_LIVE = false; });
     await ev(s => { s.parley.constructor.random = () => .01; });
     const a0 = await snap(); await hurtTo(ev, .12); await waitPanel(ev); await ev(s => s.choose('persuade')); await p.waitForTimeout(1500); const a1 = await snap();
-    ck('试炼 / 调试战斗劝降成功：不改人才库、不记旗标', a0.cap === a1.cap && a0.sur === a1.sur && !a1.cap.includes('lijue'), { a0, a1 });
+    ck('试炼 / 调试战斗劝降成功：不改人才库、不记旗标', a0.cap === a1.cap && a0.sur === a1.sur && !a1.cap.includes('caimao'), { a0, a1 });
     await p.evaluate(() => { window.__IM_PARLEY_LIVE = true; });
-    ev = await open('ThirdGameScene', { thirdStage: 1 }, { thirdStage: 1 });
+    ev = await open('ChibiGameScene', { chibiStage: 2 }, { thirdStage: 2 });
     await p.evaluate(async () => { (await import('/src/systems/BattleSnapshot.ts')).beginBattle('test-surrender'); });
     await ev(s => { s.parley.constructor.random = () => .01; });
     // 劝降结果在选择当下就写进存档；跪降 1 秒 + 0.5 秒后告捷进营会 commitBattle（快照作废），所以要在告捷前回滚（原来等 1.5 秒正好卡在边上，偶发失败）
     const b0 = await snap(); await hurtTo(ev, .12); await waitPanel(ev); await ev(s => s.choose('persuade')); await p.waitForTimeout(300); const b1 = await snap();
     await p.evaluate(async () => { (await import('/src/systems/BattleSnapshot.ts')).rollbackBattle(); });
     const b2 = await snap();
-    ck('中途退出回滚：劝降李傕进栏 + surrendered 旗标，回滚后一起撤销', b1.cap.includes('lijue') && b1.sur.includes('lijue') && b2.cap === b0.cap && b2.sur === b0.sur, { b0, b1, b2 });
+    ck('中途退出回滚：劝降蔡瑁进栏 + surrendered 旗标，回滚后一起撤销', b1.cap.includes('caimao') && b1.sur.includes('caimao') && b2.cap === b0.cap && b2.sur === b0.sur, { b0, b1, b2 });
   }
   // ⑬ 降将栏卡片截图（招贤馆）
   if (want('hall')) {

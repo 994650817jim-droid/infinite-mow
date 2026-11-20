@@ -47,7 +47,7 @@ export class ItemDrops {
   onKill(enemy: KilledEnemy): void {
     if (enemy.kind === 'boss') this.gainScrolls(SCROLL.boss);
     else if (enemy.kind === 'elite' && this.rng() < SCROLL.eliteChance) this.gainScrolls(1);
-    if (!mechOpen('gear')) return; // 玩法逐章解锁：兵装 2-1 开放（之前首领宝箱只出宝石与三选一）
+    if (!mechOpen('gear')) return; // 玩法逐章解锁：行囊 / 兵装 1-1 开放（11-20 用户「第一章就可以开发背包」）
     if (enemy.kind === 'boss') {
       const n = this.finalBoss() ? 2 : 1;
       for (let i = 0; i < n; i++) this.collect(rollItem(rollDropQuality(n > 1 ? 'finalBoss' : 'boss', this.tier, this.pity, this.rng), this.rng, undefined, this.chapter));
@@ -55,6 +55,7 @@ export class ItemDrops {
       return;
     }
     const elite = enemy.kind === 'elite';
+    if (!mechOpen('merchant')) return; // 第一章只有首领掉兵装；杂兵 / 精英掉兵装随军需商人（第二章）开放，多余的有地方卖
     if (this.rng() >= DROP_CHANCE[elite ? 'elite' : 'normal']) return;
     this.drop(rollItem(rollDropQuality(elite ? 'elite' : 'normal', this.tier, this.pity, this.rng), this.rng, undefined, this.chapter), enemy.x, enemy.y);
   }

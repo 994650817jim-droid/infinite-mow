@@ -37,6 +37,15 @@ const sixOk = r.fromSix.length === 2 && r.fromSix.every(id => r.six[id] < 3) && 
 ck('已学满 6 种：战法卷轴只出已学且未满 3 级的（精进），不出新战法、不出满级的（另可出流派心法）', sixOk, { fromSix: r.fromSix, lvls: r.lvls, manual: r.sixManual });
 ck('6 种都满 3 级：不再出战法卷轴（只可能出流派心法）', r.fullHit === 0, { tactic: r.fullHit, manual: r.fullManual });
 ck('价格按已学等级取 price[等级]（精进 Lv.1→2 收 price[1]）', r.one?.level === 1 && r.one?.price === r.price[1], r.one);
+// 主修两派（11-20「关于流派也是最多往两个流派发展」）：真构筑学了火攻、弓弩后，商人不再捎第三派的战法卷轴 / 心法
+const mj = await p.evaluate(async () => {
+  const M = await window.__mod('systems/CampMarket.ts'), B = await window.__mod('data/builds.ts');
+  const b = new B.BuildState(); b.learn('ember'); b.learn('ember'); b.learn('eagle'); b.learn('eagle');
+  const book = { level: id => b.rank(id), canLearn: id => b.canLearn(id), manualsRead: () => b.manuals, canManual: sc => b.canManual(sc) };
+  const seen = {}; let n = 0; for (let i = 0; i < 3000; i++) { const o = M.rollMerchantTactic(book, Math.random, 1); if (!o) continue; n++; const sc = o.kind === 'manual' ? 'manual:' + o.school : B.tacticSchool(o.id) ?? 'general'; seen[sc] = (seen[sc] ?? 0) + 1; }
+  return { majors: b.majors(), seen, n };
+});
+ck('主修火攻 · 弓弩：3000 次进营，商人只捎这两派（或通用）的战法 / 心法，没有第三派', mj.n > 0 && Object.keys(mj.seen).every(k => /^(manual:)?(fire|archery|general)$/.test(k)), mj);
 
 // 3–6 游戏内：开行营军需商人
 const open = (withTactic, food) => p.evaluate(async ([withTactic, food]) => {

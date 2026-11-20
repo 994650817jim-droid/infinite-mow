@@ -227,7 +227,7 @@ import { layoutRich, SCOPE_BADGE, cardScope } from '../ui/CardRichText';
 import { checkHeroJoins } from '../ui/HeroJoinReveal';
 import {StatusFx} from '../systems/StatusFx';
 import {JinnangFx} from '../systems/JinnangFx';
-import { MECHANICS, mechOpen, mechRefresh, takeMechIntros } from '../data/mechanicUnlocks';
+import { MECHANICS, mechOpen, mechRefresh, mechShown, takeMechEvent, takeMechIntros, type MechId } from '../data/mechanicUnlocks';
 
 interface Gem {
   img: Phaser.GameObjects.Image;
@@ -902,7 +902,7 @@ export class GameScene extends Phaser.Scene {
     // 坐骑：马厩里给该武将分配的马（第一章通关后马厩开放；换马只在休整时，下一关出征生效）
     {const horse=heroHorse(this.runConfig.character);this.mount=horse?new HeroMount({barDy:()=>this.passiveGauge?.showing?FOOT_HUD.barBelowGauge:FOOT_HUD.bar,scene:this,player:this.player,enemies:this.enemies,hit:(e,d,now)=>this.hitEnemy(e,d,now,'melee',false,false),notice:t=>this.showGrowthNotice(t)},{base:horse.id,name:horse.name},this.runConfig.character,this.player.growth.gear.specials.includes('hubao')?{trampleMul:RELIC.hubaoTrample,remountMs:RELIC.hubaoRemountMs}:{}):null;this.player.mountGuard=this.mount?(n,now)=>this.mount?.guard(n,now)??n:undefined;this.mountHint=MountRideHint.maybeShow(this,!!this.mount);this.events.once('shutdown',()=>{this.mount?.clear();this.mount=null;});}
     this.bossPace=new BossPace(this as unknown as ConstructorParameters<typeof BossPace>[0]); // 首领走路提速 / 追击（BALANCE.bossPace）
-    this.itemDrops=new ItemDrops(this,this.player,this.itemTier(),this.lootChapter(),()=>this.elapsed,()=>this.isFinalBoss(),()=>this.sfx.play('pickup'),()=>this.bossRelicKey());this.itemDrops.deferBossRelic=true; // 首领遗珍由首领宝箱发（BossChest）
+    this.itemDrops=new ItemDrops(this,this.player,this.itemTier(),this.lootChapter(),()=>this.elapsed,()=>this.isFinalBoss(),()=>{this.sfx.play('pickup');this.mechEvent('gear');},()=>this.bossRelicKey());this.itemDrops.deferBossRelic=true; // 首领遗珍由首领宝箱发（BossChest）
     this.tentHints?.destroy();this.tentHints=null;this.battleHeal?.clear();this.battleHeal=new BattleHeal({scene:this,player:()=>this.player,enemies:()=>this.enemies,elapsed:()=>this.elapsed,now:()=>this.combatNow,place:(x,y)=>this.fieldPlace(x,y),dropPotion:(x,y,a,n,f)=>this.supplies?.dropPotion(x,y,a,n,f)??false,overlay:()=>this.mode!=='none'||this.over,sfx:k=>this.sfx.play(k),notice:t=>this.showGrowthNotice(t),moveDir:()=>this.moveDir});if(this.supplies)this.supplies.landing=(x,y)=>this.battleHeal?.landing(x,y)??{x,y,moved:false};this.battleHeal.setPlan(this.phasePlan);this.events.once('shutdown',()=>{this.battleHeal?.clear();this.battleHeal=null;});
     this.relics=new BossRelics({scene:this,player:this.player,enemies:()=>this.enemies,hit:(e,d,now)=>{this.hitEnemy(e,d,now,'melee',false,false);},notice:t=>this.showGrowthNotice(t)},this.player.growth.gear.specials,this.combatNow);
     this.syncRelicShips();
@@ -3113,16 +3113,19 @@ export class GameScene extends Phaser.Scene {
   protected openBranch(): void {
     if (this.branchPanel || this.over || !this.needBranch()) return; // 已选专职：本次征程锁定，只有行营「重整构筑」能洗掉
     const ch = this.runConfig.character, hero = getCharacter(ch), own = this.player.weapons.find(w => w.id === hero.startWeapon)!, tags = this.player.growth.build.tags();
-    this.branchOpts = [...branchesFor(own.id)]; this.branchFitId = fitBranch(this.branchOpts, s => tags[s] ?? 0, heroAffinity(ch))?.id ?? '';
+    // 主修两派：主修已满时，第三派那条专职照样能选，但不算契合（也不占主修）
+    const bd = this.player.growth.build;
+    this.branchOpts = [...branchesFor(own.id)]; this.branchFitId = fitBranch(this.branchOpts.filter(x => bd.schoolOpen(x.school)), s => tags[s] ?? 0, heroAffinity(ch))?.id ?? '';
+    const majors = bd.majors(), notes = Object.fromEntries(this.branchOpts.map(x => [x.id, majors.includes(x.school) ? '' : bd.schoolOpen(x.school) ? `选定后「${SCHOOLS[x.school].name}」成为主修之一` : `「${SCHOOLS[x.school].name}」不在主修两派：没有契合加成`]));
     this.setMode('branch'); this.sfx.play('gong');
     playSheet(this, 'fx_awaken_' + (branchById(this.branchFitId)?.school ?? 'warrior'), this.player.x, this.player.y - 20, { size: 260, ms: 900, depth: DEPTH.fx, add: true });
-    this.branchPanel = openBranchPanel(this, { hero: ch, heroName: hero.name, weaponName: weaponName(own.id, ch), branches: this.branchOpts, fitId: this.branchFitId, onPick: (b) => this.chooseBranch(this.branchOpts.indexOf(b)) });
+    this.branchPanel = openBranchPanel(this, { hero: ch, heroName: hero.name, weaponName: weaponName(own.id, ch), branches: this.branchOpts, fitId: this.branchFitId, notes, onPick: (b) => this.chooseBranch(this.branchOpts.indexOf(b)) });
   }
   /** 选第 i 条专职（按钮 / 1 2 键 / 测试）。 */
   chooseBranch(i: number): boolean {
     const b = this.branchOpts[i]; if (!b || !this.branchPanel) return false;
     const own = this.player.weapons.find(w => w.id === getCharacter(this.runConfig.character).startWeapon); if (!own || own.branch) return false; // 已锁定不能改
-    own.branch = b.id; own.attuned = b.id === this.branchFitId;
+    own.branch = b.id; own.attuned = b.id === this.branchFitId; this.player.growth.build.branchSchool = b.school; // 主修：专职那派（有空位时）占一派
     this.branchPanel.destroy(); this.branchPanel = null; this.setMode('none');
     this.sfx.play('gong'); playSheet(this, 'fx_awaken_' + b.school, this.player.x, this.player.y - 20, { size: 300, ms: 1000, depth: DEPTH.fx, add: true });
     this.showWaveBanner('兵器专职 · ' + b.name, false, own.attuned ? `契合流派 · 专职效果 +${Math.round((BRANCH_FIT.fitMul - 1) * 100)}%` : '本次征程锁定');
@@ -4162,6 +4165,14 @@ export class GameScene extends Phaser.Scene {
       showBarkCard(this, { side: 'left', name: '新玩法 · ' + m.name, text: m.tip });
     }
   }
+  /** 事件引子（at 'event'）：第一次发生时播人物一句 + 「新玩法 · X」提示（行囊：1-1 首领掉第一件兵装）。 */
+  mechEvent(id: MechId): void {
+    if (!takeMechEvent(id)) return;
+    const m = MECHANICS[id];
+    for (const l of m.lines) showBarkCard(this, { side: 'left', name: l.who, text: l.text, id: l.id });
+    showBarkCard(this, { side: 'left', name: '新玩法 · ' + m.name, text: m.tip });
+    this.updateHud?.();
+  }
   // ———— 战败流程（data/defeatFlow.ts，共享笔记 defeat-flow.md） ————
   /** 这一仗退到哪（最近的我方城池 / 营寨）；战败惩罚的说明行。 */
   defeatRetreat: RetreatTarget | null = null; defeatNotes: string[] = [];
@@ -4265,7 +4276,7 @@ export class GameScene extends Phaser.Scene {
   }
   /** 战斗中打开行囊：自动暂停，关掉后恢复（从暂停菜单进来则回到暂停菜单）。atRest = 行营休整中，可换马。 */
   protected openBattleBag(atRest = false): void {
-    if (!mechOpen('gear')) return; // 玩法逐章解锁：兵装 / 行囊 2-1 开放（行营里由 CampRestUI 提示「第二章开放」）
+    if (!mechShown('gear')) return; // 玩法逐章解锁：行囊 1-1 开放，首领掉第一件兵装、张飞那句之后才出现
     // 行营休整发生在本关结算之后（this.over 已为真）：休整时照样能开行囊（2026-11-17 用户报「休整时行囊点不了」）
     if ((this.over && !atRest) || this.children.getByName('item-bag')) return;
     const fromPlay = this.mode === 'none';
@@ -4579,7 +4590,7 @@ export class GameScene extends Phaser.Scene {
     buildVfx(this).density=this.enemies.filter(e=>e.active&&!e.isSupplySlot).length+this.legion.count;
     this.buffHud.update(this.player,this.combatNow,!overlay&&!this.over&&!this.relicExpanded,(id,now)=>this.buffProgress(id,now));
     this.hudGfx.setVisible(!overlay);
-    if (this.hudTexts) for (const t of Object.values(this.hudTexts)) t.setVisible(!overlay && (t !== this.hudTexts.bag || mechOpen('gear')));
+    if (this.hudTexts) for (const t of Object.values(this.hudTexts)) t.setVisible(!overlay && (t !== this.hudTexts.bag || mechShown('gear')));
     if (this.statusFrame) { this.statusFrame.setVisible(!overlay); this.hudTexts?.level.setVisible(false); }
     if (this.phasePlan && this.hudTexts) this.hudTexts.wave.setVisible(false);
     this.jinnangButton?.setVisible(!overlay && !this.over && !!this.jinnang); // 五段关不显示「第 x 波」，看顶部战况线

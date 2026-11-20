@@ -1,3 +1,4 @@
+import { branchById } from '../data/weaponBranches';
 import type {BuildSnapshot,TacticId} from '../data/builds';
 import {BuildState} from '../data/builds';
 import { charmForLegacy } from '../data/charms';
@@ -73,11 +74,11 @@ export function patchCampaignTactics(hero: CharacterId, tactics: Record<string, 
  * 营寨旅商（军需商人在营寨里摆的摊）卖战法：不在战斗里，买下的写进该武将的征程构筑（下次从存档点出征时带上）。
  * 规则同 RunBuild：最多 6 种、每种到 3 级。没有征程构筑（还没打赢过主线关）时返回 null，商人卷轴不能买。
  */
-export function campaignTacticBook(hero: CharacterId): { canLearn(id: TacticId): boolean; level(id: TacticId): number; manualsRead(): readonly SchoolId[] } | null {
+export function campaignTacticBook(hero: CharacterId): { canLearn(id: TacticId): boolean; level(id: TacticId): number; manualsRead(): readonly SchoolId[]; canManual(s: SchoolId): boolean } | null {
   const s = loadCampaignBuild(hero); if (!s) return null;
   // 同 BuildState（2026-11-19 流派重做）：读档丢掉已删除的旧 id；基础成长不占战法格；反震不再出卡
-  const b = new BuildState(); b.restore(s.player.build);
-  return { level: id => b.rank(id), canLearn: id => b.canLearn(id), manualsRead: () => b.manuals };
+  const b = new BuildState(); b.restore(s.player.build); b.branchSchool = branchById(s.player.weapons?.find(w => w.branch)?.branch)?.school ?? null; // 专职那派占主修
+  return { level: id => b.rank(id), canLearn: id => b.canLearn(id), manualsRead: () => b.manuals, canManual: sc => b.canManual(sc) };
 }
 /** 营寨旅商卖的「流派心法」：写进征程构筑（下次出征生效）；没有征程构筑或已研读过返回 false。 */
 export function learnCampaignManual(hero: CharacterId, school: SchoolId): boolean {
@@ -99,6 +100,7 @@ export function restoreCampaign(state: CampaignTransfer, player: Player, army: L
   const growth=state.player.growth;
   if(growth){Object.assign(player.growth.attributes,growth.attributes);Object.assign(player.growth.masteries,growth.masteries);if(growth.masteryExtra)player.growth.masteryExtra={...growth.masteryExtra};player.growth.unallocated=growth.unallocated;player.growth.heroFree=growth.heroFree??0;player.growth.respecPending=Math.max(0,Math.min(99,Math.floor(growth.respecPending??0)));player.growth.respecCh=growth.respecCh??0;player.growth.respecN=growth.respecN??0;}
   player.weapons = state.player.weapons.map(w => ({ ...w, cooldownLeft: 0 })); player.hp = player.maxHp;
+  player.growth.build.branchSchool = branchById(player.weapons.find(w => w.branch)?.branch)?.school ?? null; // 主修两派：专职那派占一派
   army.restore(state.army);
 }
 

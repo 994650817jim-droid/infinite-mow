@@ -67,10 +67,12 @@ export class MerchantShop{
  }
  /** 画进 root（宿主每次重绘前清空 root）：电脑版左侧军需商人（不加框，站在帐中），右侧 4 件兵装 + 偶尔 1 卷战法。
   *  figure：人物位置（默认在 left 起 196 宽的一栏里、比卡片高出一截）。 */
+ /** 人物头顶气泡只说这一句（行营里张世平来投的引子，CampRestUI 设置）；没有 = 平常台词轮换。 */
+ figureLine?:string;
  render(root:Phaser.GameObjects.Container,left:number,top:number,right:number,h:number,figure?:FigurePlace){
   this.root=root;const s=this.o.stock(),t=s.tactic,n=s.items.length+(t?1:0),gap=10;
   this.tip??=this.o.tooltip??new ItemTooltip(this.scene,this.o.tooltipDepth??DEPTH.overlay+40);
-  if(D){drawCampFigure(this.scene,root,MERCHANT_FIGURE,figure??{cx:left+80,bottom:top+h+30,height:h-10},()=>this.onArtLoaded?.());left=Math.max(left+196,figure?figure.cx+108:0);}
+  if(D){drawCampFigure(this.scene,root,this.figureLine?{...MERCHANT_FIGURE,lines:[this.figureLine]}:MERCHANT_FIGURE,figure??{cx:left+80,bottom:top+h+30,height:h-10},()=>this.onArtLoaded?.());left=Math.max(left+196,figure?figure.cx+108:0);}
   if(this.mode==='sell'&&this.canSell()){this.renderSell(left,top,right,h);return;}
   const w=D?((right-left)-gap*(n-1))/n:(right-left-gap)/2;
   const at=(i:number)=>D?{x:left+i*(w+gap),y:top}:{x:left+(i%2)*(w+gap),y:top+Math.floor(i/2)*(h+gap)};
@@ -230,7 +232,7 @@ export function openMerchantShop(scene:Phaser.Scene,opts:OpenMerchantOptions):()
  const note=scene.add.text(W/2,0,'',{fontFamily:FONT,fontSize:(D?13:15)+'px',color:'#dfd4bd',resolution:2,align:'center',wordWrap:{width:pw-60,useAdvancedWrap:true}}).setOrigin(.5,0).setScrollFactor(0);
  const body=scene.add.container(0,0);root.add([title,purse,body,note]);
  const hero=opts.hero,book=()=>hero?campaignTacticBook(hero):null;
- const tactics:MerchantTactics|null=hero&&book()?{canBuy:o=>{const b=book();return !!b&&(o.kind==='manual'?!b.manualsRead().includes(o.school):b.canLearn(o.id)&&b.level(o.id)===o.level);},learn:o=>o.kind==='manual'?learnCampaignManual(hero,o.school):learnCampaignTactic(hero,o.id,o.level),doneText:'已写进征程构筑，下次出征生效',lockedText:'已无法研习'}:null;
+ const tactics:MerchantTactics|null=hero&&book()?{canBuy:o=>{const b=book();return !!b&&(o.kind==='manual'?b.canManual(o.school):b.canLearn(o.id)&&b.level(o.id)===o.level);},learn:o=>o.kind==='manual'?learnCampaignManual(hero,o.school):learnCampaignTactic(hero,o.id,o.level),doneText:'已写进征程构筑，下次出征生效',lockedText:'已无法研习'}:null;
  const stock=currentMerchantStock(opts.tier,book()??undefined,opts.chapter??1);
  let notice='',closed=false;
  const shop=new MerchantShop(scene,{chapter:()=>opts.chapter??1,stock:()=>stock,wallet:opts.wallet,tactics,onBuyItem:opts.onBuyItem??(item=>addItems([item])),owner:()=>hero,notice:t=>{notice=t;},changed:()=>draw(),sound:opts.sound,tooltipDepth:depth+10});

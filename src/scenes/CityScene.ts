@@ -5,6 +5,7 @@
  * 顶部军粮与下一步提示，底部 天下地图 / 讲武堂 /（州府）城池 / 出征备战。
  * 美术：assets/city（全景与建筑，CityLayout；讲武堂、马厩暂复用校场、驿站图）；缺图时退回旧小镇像素画与程序画。
  */
+import { mechOpen } from '../data/mechanicUnlocks';
 import {MERIT} from '../data/merit';
 import {exchangeMerit,merit,scrolls} from '../systems/MasteryStore';
 import {playMenuMusic} from '../systems/Music';
@@ -229,7 +230,7 @@ export class CityScene extends Phaser.Scene {
   }
   this.popId=null;
   // 旅商、军医：营寨 / 县城（同一套布局）摆在原处；州府底图中间是横街，挪到城门东侧广场（11-20：占了城镇营寨升县城后旅商不该消失）
-  {const big=size===3;this.drawMerchant(k,big?{x:1100,y:445,w:150}:CAMP_MERCHANT_SPOT);this.drawMedic(k,big?{x:1340,y:447,w:128}:CAMP_MEDIC_SPOT);}
+  {const big=size===3;if(mechOpen('merchant'))this.drawMerchant(k,big?{x:1100,y:445,w:150}:CAMP_MERCHANT_SPOT);if(mechOpen('medic'))this.drawMedic(k,big?{x:1340,y:447,w:128}:CAMP_MEDIC_SPOT);} // 玩法逐章解锁：旅商第二章、军医 1-1 后（开放前不摆）
   // 营寨档：营帐、兵士填空地（画在建筑之下；按建筑点击区与贴图外框避让）
   if(size===1&&new URLSearchParams(location.search).get('camplife')!=='0'){const ox=this.pano.x,oy=this.pano.y,blocked=[...this.hits.map(h=>h.getBounds()),...this.pano.list.filter((o):o is Phaser.GameObjects.Image=>o instanceof Phaser.GameObjects.Image&&o.texture.key.startsWith('city_')&&!o.texture.key.startsWith('city_bg')).map(o=>o.getBounds())].map(b=>({l:(b.x-ox)/k,r:(b.right-ox)/k,t:(b.y-oy)/k,b:(b.bottom-oy)/k}));
    this.campLife=new CampLife(this,k,blocked);this.pano.remove(this.campLife.root);this.pano.addAt(this.campLife.root,this.textures.exists(bg)?1:0);}

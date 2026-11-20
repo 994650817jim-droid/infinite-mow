@@ -4581,7 +4581,7 @@ export class GameScene extends Phaser.Scene {
     const head=text(36,24,'本局构筑',22);if(D)head.setFontFamily(TITLE_FONT).setColor('#efd399').setStroke('#120904',4).setPosition(44,26);root.add(head);
     // 2026-11-18：和行营「将帅帐」共用构筑总览（武将卡 / 战法格 / 流派与觉醒），悬停看说明
     const tip=new ItemTooltip(this,DEPTH.overlay+40);root.once('destroy',()=>tip.destroy());
-    drawBuildOverview({scene:this,root,x:D?44:24,y:D?66:70,w:GAME_WIDTH-(D?88:48),h:GAME_HEIGHT-(D?66+82:70+120),desktop:D,prefix:'build-panel',growth:this.player.growth,level:this.player.level,weapon:this.player.weapons[0],tokens:wornTokens(this.runConfig.character),tokenSlots:tokenSlots(),tooltip:tip,training:this.legion.training});
+    drawBuildOverview({scene:this,root,x:D?44:24,y:D?66:70,w:GAME_WIDTH-(D?88:48),h:GAME_HEIGHT-(D?66+82:70+120),desktop:D,prefix:'build-panel',growth:this.player.growth,level:this.player.level,weapon:this.player.weapons[0],tokens:wornTokens(this.runConfig.character),tokenSlots:tokenSlots(),tooltip:tip,training:this.legion.training,respec:{hint:'战斗中不可更改，返回行营休整时可重整'}});
     void b;
     const close=()=>{root.destroy();if(this.mode==='pause')this.pausePanel.setVisible(true);};
     if(D){const back=homeCommand(this,GAME_WIDTH/2,GAME_HEIGHT-46,200,42,'返回');for(const o of [back.g,back.caption,back.hit]){(o as unknown as {setScrollFactor:(n:number)=>void}).setScrollFactor(0);root.add(o);}back.hit.setName('build-panel-back').setData('padDefault',true).on('pointerdown',close);}

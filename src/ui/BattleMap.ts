@@ -12,7 +12,9 @@ import type { Enemy } from '../entities/Enemy';
  *  - 舆图卷轴（用户「小地图是可以打开的，平时就是卷轴的样子收缩起来，点击才放大」）：平时右上角（设置钮左侧）一卷收起的手卷，不挡战场；
  *    点它或按 M（用户「小地图换成m快捷键」）：卷轴飞到屏幕中央、竖起来，两根画轴往两边拉开（画心宣纸跟着展开），地图在纸上淡入；再点 / M / Esc 卷回去、飞回角上。
  *    手卷图：即梦出图（public/assets/ui/map_scroll_*.webp，原图 ui/originals/map_scroll_jimeng.webp）。
- *  - 地图：画心 640×262，以主将为中心，约 5200 宽，军令目标标名字；不暂停。
+ *  - 地图：画心 640×262，以主将为中心，约 5200 宽，军令目标标名字。
+ *  - 2026-11-19 用户「打开小地图会暂停是我要要求的」：展开大舆图时整场战斗暂停（host.pause(true)，场景进 'map' 模式：战斗时钟、刷兵、敌人、弹道、冷却、机缘倒计时都停），
+ *    卷回角上后恢复（host.pause(false)）。舆图自己的飞出 / 展开 / 卷回补间在暂停之后才建，照常播放；角上收起的小卷轴平时照常显示，不影响战斗。
  *  - 屏外军令箭头：当前首要军令（不含首领——首领箭头 BossPresence 已有）在屏外时，屏幕边缘画朱红小箭头 + 距离。
  * 图层：墨色障碍框、青色河道、敌军红点（每兵一点、精锐大一号，最多 ENEMY_DOTS.max 个）、首领朱印（对象池 2）、随行碧点、主将金菱、军令朱旗菱。
  * 小 / 大地图 8 Hz 重画（一个 Graphics clear 重画）；障碍框每 2 秒重取一次。
@@ -30,6 +32,8 @@ type Box = { left: number; right: number; top: number; bottom: number };
 type Any = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
 export interface MapHost {
   scene: Phaser.Scene;
+  /** 大舆图展开（true）/ 卷回角上（false）时暂停 / 恢复战斗。 */
+  pause?(on: boolean): void;
   player(): { x: number; y: number };
   enemies(): readonly Enemy[];
   followers(): ReadonlyArray<{ x: number; y: number; active?: boolean }>;
@@ -192,7 +196,7 @@ export class BattleMap {
   /** 卷轴：角上收起的那卷（icon）、展开的三段（左轴 / 画心 / 右轴）、暗场、标题。 */
   private icon: Phaser.GameObjects.Image | null = null; private iconHint: Phaser.GameObjects.Text | null = null;
   private open3: { left: Phaser.GameObjects.Image; mid: Phaser.GameObjects.Image; right: Phaser.GameObjects.Image; dim: Phaser.GameObjects.Rectangle; title: Phaser.GameObjects.Text; hint: Phaser.GameObjects.Text } | null = null;
-  private state: ScrollState = 'closed'; private t = 0; private tween: Phaser.Tweens.Tween | null = null; private shown = true;
+  private state: ScrollState = 'closed'; private t = 0; private anim: { t: number; dur: number; ease: (k: number) => number; step: (q: number) => void; done: () => void } | null = null; private shown = true;
   /** 测试用：重画次数、障碍框数；卷轴状态、展开程度（0–1）。 */
   readonly stats = { draws: 0, boxes: 0, state: 'closed' as ScrollState, t: 0, detail: { roads: 0, trees: 0, rivers: 0, camps: 0, pushes: 0 } };
   constructor(private readonly h: MapHost, private readonly orders: BattleOrders) {
@@ -257,27 +261,41 @@ export class BattleMap {
     const s = this.h.scene; if (!this.icon) this.makeIcon(); this.makeOpen();
     const icon = this.icon, S = BATTLE_MAP.scroll, k = (icon?.getData('k') as number | undefined) ?? 1, o = this.open3!;
     const rollH = SCROLL_TEX.h * o.mid.scaleY, cy = o.mid.y;
-    this.tween?.stop(); this.tween = null; if (icon) s.tweens.killTweensOf(icon);
+    this.anim = null; if (icon) s.tweens.killTweensOf(icon);
+    // 舆图开着时战斗暂停（场景补间整体冻结），所以舆图自己的动画不用场景补间，改由 stepAnim（真实帧时间）推进
+    const fly = (from: { x: number; y: number; angle: number; scale: number }, to: { x: number; y: number; angle: number; scale: number }, done: () => void): void => {
+      if (!icon) { done(); return; }
+      this.anim = { t: 0, dur: BATTLE_MAP.flyMs, ease: Phaser.Math.Easing.Sine.InOut, done, step: q => icon.setPosition(from.x + (to.x - from.x) * q, from.y + (to.y - from.y) * q).setAngle(from.angle + (to.angle - from.angle) * q).setScale(from.scale + (to.scale - from.scale) * q) };
+    };
     if (!this.bigOpen) {
+      this.h.pause?.(true);
       this.state = 'opening'; this.stats.state = this.state; this.acc = 1e9;
       const fromT = this.t, unroll = (): void => {
         icon?.setVisible(false); this.iconHint?.setVisible(false);
-        this.tween = s.tweens.addCounter({ from: fromT, to: 1, duration: Math.max(1, BATTLE_MAP.unrollMs * (1 - fromT)), ease: 'Cubic.easeOut', onUpdate: tw => this.layout(tw.getValue() ?? 1),
-          onComplete: () => { this.layout(1); this.state = 'open'; this.stats.state = 'open'; this.tween = null; } });
+        this.anim = { t: 0, dur: Math.max(1, BATTLE_MAP.unrollMs * (1 - fromT)), ease: Phaser.Math.Easing.Cubic.Out, step: q => this.layout(fromT + (1 - fromT) * q),
+          done: () => { this.layout(1); this.state = 'open'; this.stats.state = 'open'; } };
       };
       if (icon && fromT === 0) { // 收起的卷轴飞到中央、转成竖的（长度 = 画轴高），再拉开
         this.iconHint?.setVisible(false);
-        s.tweens.add({ targets: icon, x: GAME_WIDTH / 2, y: cy, angle: 90, scale: rollH / icon.width, duration: BATTLE_MAP.flyMs, ease: 'Sine.easeInOut', onComplete: unroll });
+        fly({ x: icon.x, y: icon.y, angle: icon.angle, scale: icon.scale }, { x: GAME_WIDTH / 2, y: cy, angle: 90, scale: rollH / icon.width }, unroll);
       } else unroll();
     } else {
       this.state = 'closing'; this.stats.state = this.state;
-      this.tween = s.tweens.addCounter({ from: this.t, to: 0, duration: Math.max(1, BATTLE_MAP.rollMs * this.t), ease: 'Cubic.easeIn', onUpdate: tw => this.layout(tw.getValue() ?? 0), onComplete: () => {
-        this.layout(0); this.tween = null;
-        if (!icon) { this.state = 'closed'; this.stats.state = 'closed'; return; }
+      const fromT = this.t;
+      this.anim = { t: 0, dur: Math.max(1, BATTLE_MAP.rollMs * fromT), ease: Phaser.Math.Easing.Cubic.In, step: q => this.layout(fromT * (1 - q)), done: () => {
+        this.layout(0);
+        const closed = (): void => { this.state = 'closed'; this.stats.state = 'closed'; this.iconHint?.setVisible(this.shown); this.h.pause?.(false); };
+        if (!icon) { closed(); return; }
         icon.setVisible(this.shown).setPosition(GAME_WIDTH / 2, cy).setAngle(90).setScale(rollH / icon.width);
-        s.tweens.add({ targets: icon, x: S.x, y: S.y, angle: 0, scale: k, duration: BATTLE_MAP.flyMs, ease: 'Sine.easeInOut', onComplete: () => { this.state = 'closed'; this.stats.state = 'closed'; this.iconHint?.setVisible(this.shown); } });
-      } });
+        fly({ x: GAME_WIDTH / 2, y: cy, angle: 90, scale: rollH / icon.width }, { x: S.x, y: S.y, angle: 0, scale: k }, closed);
+      } };
     }
+  }
+  /** 舆图展开 / 卷回动画：每帧由场景用真实帧时间推进（战斗暂停时也走）。 */
+  stepAnim(dt: number): void {
+    const a = this.anim; if (!a) return;
+    a.t += dt * 1000; const q = Math.min(1, a.t / a.dur); a.step(a.ease(q));
+    if (q >= 1 && this.anim === a) { this.anim = null; a.done(); }
   }
   setVisible(v: boolean): void {
     this.shown = v; if (this.state === 'closed') { this.icon?.setVisible(v); this.iconHint?.setVisible(v); }
@@ -325,5 +343,5 @@ export class BattleMap {
     const pl = this.h.player(), dist = Math.round(Math.hypot(cur.pos.x - pl.x, cur.pos.y - pl.y));
     this.arrowText.setText(`${cur.label} · ${dist} 步`).setPosition(Phaser.Math.Clamp(ax - dx * 34, 70, GAME_WIDTH - 70), Phaser.Math.Clamp(ay - dy * 30, top + 10, bottom - 10)).setVisible(true);
   }
-  destroy(): void { this.tween?.stop(); this.big?.destroy(); this.icon?.destroy(); this.iconHint?.destroy(); const o = this.open3; if (o) for (const x of [o.left, o.mid, o.right, o.dim, o.title, o.hint]) x.destroy(); this.arrow.destroy(); this.arrowText.destroy(); }
+  destroy(): void { this.anim = null; this.big?.destroy(); this.icon?.destroy(); this.iconHint?.destroy(); const o = this.open3; if (o) for (const x of [o.left, o.mid, o.right, o.dim, o.title, o.hint]) x.destroy(); this.arrow.destroy(); this.arrowText.destroy(); }
 }

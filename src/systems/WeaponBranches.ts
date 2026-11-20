@@ -58,7 +58,7 @@ export class WeaponBranches {
   private shots = 0; private slamAt = 0; private fieldAt = 0; private campAt = 0; private burstAt = 0;
   /** 第三批：连环计锁链、木牛、飞刀、魅惑、舞圈。 */
   private chained = new Map<Enemy, number>(); private chainUntil = 0; private oxen: Array<{ x: number; y: number; until: number; nextShot: number; img?: Phaser.GameObjects.Image }> = []; private oxAt = 0;
-  private volleyAt = 0; private knives: Array<{ x: number; y: number }> = []; private still = 0; private recallAt = 0; private charmed: Array<{ e: Enemy; life: number; until: number; nextTick: number }> = [];
+  private volleyAt = 0; private knives: Array<{ x: number; y: number }> = []; private still = 0; private recallAt = 0;
   private rings: Array<{ x: number; y: number; until: number; nextTick: number }> = [];
   private stunned = new Map<Enemy, number>(); private guardUntil = 0; private healAt = 0; private healFxAt = 0; private thirdAt = 0;
   /** 测试用。 */
@@ -131,7 +131,13 @@ export class WeaponBranches {
   onWeaponHit(e: Enemy, dmg: number): void {
     const b = this.branch; if (!b) return; const now = this.h.now(), k = this.k();
     if (b.id === 'pt_lianhuan' && now < this.chainUntil && this.chained.get(e) === e.spawnId) { for (const [o, life] of this.chained) if (o !== e && o.active && o.spawnId === life) this.h.damage(o, dmg * (this.tier() >= 3 ? .4 : .3)); this.stats.hits++; return; }
-    if (b.id === 'dc_biyue' && Math.random() < Math.min(.45, .15 * k) && e.kind !== 'boss' && (e.kind !== 'elite' || this.final()) && !this.charmed.some(c => c.e === e)) { this.charmed.push({ e, life: e.spawnId, until: now + 2000 * (this.tier() >= 3 ? 1.5 : 1), nextTick: now }); e.stunUntil = Math.max(e.stunUntil, now + 2000); this.fx('fx_heal_fushui', e.x, e.y - 20, 70, 600, 0xffa0d0); this.stats.procs++; return; }
+    // 闭月：魅惑的敌兵倒戈（走被动的倒戈驱动：转身走向、出手打身边同伴，有行走 / 攻击动作与倒戈标记）；出手时对落点周围结算分支伤害。
+    // 进阶「被魅惑的精锐会攻击首领」：精锐倒戈先找首领、伤害也算首领（原来眩晕原地 + 伤害排除首领，兵没动作、进阶不生效）
+    if (b.id === 'dc_biyue' && Math.random() < Math.min(.45, .15 * k) && e.kind !== 'boss' && (e.kind !== 'elite' || this.final())) {
+      const elite = e.kind === 'elite', strike = (t: Enemy): void => { for (const o of this.h.query(t.x, t.y, 90)) if (o !== e && o.active && !o.isSupplySlot && (o.kind !== 'boss' || elite) && Math.hypot(o.x - t.x, o.y - t.y) <= 80 + o.radius) this.deal(o, .3); };
+      if (this.h.player.passive.charmTurn(e, now, 2000 * (this.tier() >= 3 ? 1.5 : 1), { huntBoss: elite, strike })) { this.fx('fx_heal_fushui', e.x, e.y - 20, 70, 600, 0xffa0d0); this.stats.procs++; }
+      return;
+    }
     if (b.id === 'hz_huoshi' && now >= this.fieldAt) { this.fieldAt = now + 400; this.field(e.x, e.y, 65, 2000 * (1 + .25 * (this.tier() - 1)), this.final() ? .34 : .26, false); return; } // 2026-11-19 平衡：半径 55 → 65、灼烧 .2 / .26 → .26 / .34
     if (b.id === 'mc_weishui' && now >= this.slamAt) { this.slamAt = now + 500; const r = 90 * (1 + .15 * (this.tier() - 1));
       for (const o of this.h.query(e.x, e.y, r)) if (o.active && !(o.isSupplySlot && !o.lockTarget) && Math.hypot(o.x - e.x, o.y - e.y) <= r + o.radius) this.deal(o, .5);
@@ -347,8 +353,6 @@ export class WeaponBranches {
         this.knives = []; this.recallAt = 0; this.stats.procs++;
       }
     }
-    for (const c of this.charmed) if (now < c.until && now >= c.nextTick && c.e.active && c.e.spawnId === c.life) { c.nextTick = now + 500; for (const o of this.h.query(c.e.x, c.e.y, 90)) if (o !== c.e && o.active && !o.isSupplySlot && o.kind !== 'boss' && Math.hypot(o.x - c.e.x, o.y - c.e.y) <= 80 + o.radius) this.deal(o, .3); }
-    this.charmed = this.charmed.filter(c => now < c.until && c.e.active && c.e.spawnId === c.life);
     for (const r of this.rings) if (now < r.until && now >= r.nextTick) { r.nextTick = now + 500; const rr = 90 * (this.tier() >= 2 ? 1.2 : 1);
       for (const e of this.h.query(r.x, r.y, rr + 20)) if (e.active && !(e.isSupplySlot && !e.lockTarget) && Math.hypot(e.x - r.x, e.y - r.y) <= rr + e.radius) this.deal(e, .25 * (this.tier() >= 3 ? 1.3 : 1)); this.h.slow(r.x, r.y, rr, .2, 700);
       if (this.final()) for (const o of this.rings) if (o !== r && now < o.until && Math.hypot(o.x - r.x, o.y - r.y) < rr * 1.6) { const mx = (o.x + r.x) / 2, my = (o.y + r.y) / 2; for (const e of this.h.query(mx, my, 70)) if (e.active && !(e.isSupplySlot && !e.lockTarget)) this.deal(e, .4); this.fx('fx_heal_fushui', mx, my, 120, 400, 0xff90c0); } }
@@ -378,7 +382,7 @@ export class WeaponBranches {
   }
   /** 镇守汉中：主将在营栅区内减伤 20%。 */
   inCamp(): boolean { const P = this.h.player, now = this.h.now(); return this.camps.some(c => now < c.until && Math.hypot(P.x - c.x, P.y - c.y) <= c.r); }
-  clear(): void { this.anchor = null; this.backing = false; this.segs = []; this.barrier = undefined; this.dashQueue = []; this.stunned.clear(); this.fields = []; this.traps = []; for (const c of this.camps) c.props.forEach(p => p.destroy()); this.camps = []; for (const o of this.oxen) o.img?.destroy(); this.oxen = []; this.chained.clear(); this.charmed = []; this.rings = []; this.knives = []; }
+  clear(): void { this.anchor = null; this.backing = false; this.segs = []; this.barrier = undefined; this.dashQueue = []; this.stunned.clear(); this.fields = []; this.traps = []; for (const c of this.camps) c.props.forEach(p => p.destroy()); this.camps = []; for (const o of this.oxen) o.img?.destroy(); this.oxen = []; this.chained.clear(); this.rings = []; this.knives = []; }
 }
 function segDist(px: number, py: number, ax: number, ay: number, bx: number, by: number): number {
   const dx = bx - ax, dy = by - ay, l2 = dx * dx + dy * dy || 1, t = Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / l2));

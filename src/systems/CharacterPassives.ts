@@ -28,7 +28,9 @@ export interface PassiveCast {
   hits: Set<number>; awarded: boolean;
 }
 /** 貂蝉离间：魅惑层数（4 秒没被扇中就消散）、倒戈截止、首领易伤截止。 */
-interface Charm { enemy: Enemy; spawnId: number; marks: number; lastMark: number; turnedUntil: number; vulnUntil: number; }
+interface Charm { enemy: Enemy; spawnId: number; marks: number; lastMark: number; turnedUntil: number; vulnUntil: number;
+  /** 闭月分支进阶「被魅惑的精锐会攻击首领」：倒戈时先找首领。 */ huntBoss?: boolean;
+  /** 闭月分支的魅惑：出手用分支自己的伤害（替代接触伤害）。 */ strike?: (target: Enemy) => void; }
 export type CharmView = Readonly<Charm>;
 interface Burn { enemy: Enemy; spawnId: number; until: number; nextTick: number; damage: number; }
 /** Character-only state. No Phaser timers, permanent stat mutations or extra equipment slots. */
@@ -203,27 +205,45 @@ export class CharacterPassives {
     // 闭月造成的倒戈不叠「离间」层数：否则一次闭月就把层数叠满，下一次出手又是闭月，循环下去再也不掷扇子
     return this.turn(c, now, enemy.kind === 'elite' ? turnMs / 2 : turnMs, false);
   }
+  /**
+   * 闭月分支（团扇几率魅惑，WeaponBranches dc_biyue）：直接倒戈 ms（不叠离间层数、精锐不减半），和离间同一套倒戈驱动（行走 / 出手动作、倒戈标记）。
+   * 原来分支只把敌兵眩晕原地、每 0.5 秒对周围结算伤害，兵本人没有任何动作；进阶「被魅惑的精锐会攻击首领」也因伤害排除首领而没生效。
+   */
+  charmTurn(enemy: Enemy, now: number, ms: number, opts: { huntBoss?: boolean; strike?: (target: Enemy) => void } = {}): boolean {
+    if (this.stopped || !enemy.active || enemy.isSupplySlot || enemy.kind === 'boss' || enemy.controlImmune) return false;
+    let c = this.charmOf(enemy);
+    if (!c) { if (this.charms.size >= 200) return false; c = { enemy, spawnId: enemy.spawnId, marks: 0, lastMark: now, turnedUntil: 0, vulnUntil: 0 }; this.charms.set(enemy.uid, c); }
+    if (c.turnedUntil > now) return false;
+    c.turnedUntil = now + ms; c.marks = 0; c.huntBoss = !!opts.huntBoss; c.strike = opts.strike;
+    return true;
+  }
   private turn(c: Charm, now: number, ms: number, gainStack = true): boolean {
-    c.turnedUntil = now + ms; c.marks = 0;
+    c.turnedUntil = now + ms; c.marks = 0; c.huntBoss = false; c.strike = undefined;
     if (gainStack && this.character === 'diaochan' && this.stacks < this.maxStacks) { this.stacks++; this.gains++; }
     return true;
   }
   /**
    * 倒戈中的敌人：不追主将，转身冲向最近的同伴，碰到后每 0.5 秒用自己的接触伤害打它。
-   * 由 GameScene 的敌人行动循环调用；返回 true 表示本帧已接管该敌人的行动。
+   * 由 GameScene 的敌人行动循环调用；返回 true 表示本帧已接管该敌人的行动（行走 / 攻击帧仍由 GameScene 照常更新）。
+   * 2026-11-20 用户「貂蝉离间后，离间的兵没有动作」：原来只改坐标，不给移动意图、出手不播攻击帧——现在移动写 intentDx/Dy（朝向跟着目标走），贴身出手 startAttack 朝向目标。
    */
   driveTurned(enemy: Enemy, dt: number, now: number, nearby: (x: number, y: number, r: number) => Enemy[], hit: (target: Enemy, amount: number) => void): boolean {
-    if (!this.isTurned(enemy, now)) return false;
+    const c = this.charms.size ? this.charmOf(enemy) : undefined; if (!c || c.turnedUntil <= now) return false;
     let best: Enemy | null = null, bd: number = R.turnSeek;
-    for (const o of nearby(enemy.x, enemy.y, R.turnSeek)) {
+    // 进阶：被魅惑的精锐先找首领（找得远一些）
+    if (c.huntBoss) for (const o of nearby(enemy.x, enemy.y, R.turnSeek * 2.5)) { if (o.kind !== 'boss' || !o.active) continue; const d = Math.hypot(o.x - enemy.x, o.y - enemy.y); if (d < R.turnSeek * 2.5 && (!best || d < bd)) { bd = d; best = o; } }
+    if (!best) for (const o of nearby(enemy.x, enemy.y, R.turnSeek)) {
       if (o === enemy || !o.active || o.isSupplySlot || o.def.behavior === 'wall') continue;
       const d = Math.hypot(o.x - enemy.x, o.y - enemy.y); if (d < bd) { bd = d; best = o; }
     }
     enemy.moveVx = enemy.moveVy = 0;
-    if (!best) return true;
-    const reach = enemy.radius + best.radius + 4;
-    if (bd > reach) { const s = Math.min(bd - reach, enemy.def.speed * dt); enemy.sprite.x += (best.x - enemy.x) / bd * s; enemy.sprite.y += (best.y - enemy.y) / bd * s; }
-    else if (enemy.contactCd <= 0) { enemy.contactCd = R.turnHitMs / 1000; hit(best, enemy.def.damage); }
+    if (!best) { enemy.intentDx = enemy.intentDy = 0; return true; }
+    const reach = enemy.radius + best.radius + 4, dx = best.x - enemy.x, dy = best.y - enemy.y;
+    if (bd > reach) { const s = Math.min(bd - reach, enemy.def.speed * dt), mx = dx / bd * s, my = dy / bd * s; enemy.sprite.x += mx; enemy.sprite.y += my; enemy.intentDx = mx; enemy.intentDy = my; }
+    else {
+      enemy.intentDx = dx / bd * .01; enemy.intentDy = dy / bd * .01; // 贴身：朝向同伴站定
+      if (enemy.contactCd <= 0) { enemy.contactCd = R.turnHitMs / 1000; enemy.startAttack(now, Math.abs(dx) > Math.abs(dy) ? (dx < 0 ? 'left' : 'right') : dy < 0 ? 'up' : 'down'); if (c.strike) { c.strike(best); hit(best, 0); } else hit(best, enemy.def.damage); }
+    }
     return true;
   }
   /** 测试 / 表现用：当前魅惑与倒戈状态。 */

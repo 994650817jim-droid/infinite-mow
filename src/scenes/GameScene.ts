@@ -902,6 +902,7 @@ export class GameScene extends Phaser.Scene {
     this.buildCombat.onWindstep=e=>this.windstepFx().burst(e.x,e.y);
     // 流派重做（data/schools.ts）：奇谋 2 势被控制加深、震荡 / 冲阵 / 燎原的一圈、火油罐火区、疾风
     this.buildCombat.controlled=(e,n)=>this.controlBuild?.isControlled(e,n)??false;
+    this.buildCombat.onFx=(st,x,y,sz)=>buildVfx(this).emit(st,x,y,this.combatNow,sz,0,420);
     this.buildCombat.onShock=(x,y,r)=>buildVfx(this).emit('pure_charge',x,y-6,this.combatNow,r*2,0,320,true);
     this.buildCombat.onNapalm=(x,y,r,dmg,lv)=>{this.martialFields.add(x,y,r,dmg,3000,lv);this.spawnFlameFx(x,y,r);};
     // 合击（data/schoolCombos.ts）：第一次触发打横幅；烈马脚下火；冲势打出 / 眩晕交给 SchoolSynergy（声东击西、铁骑冲阵、十面埋伏）
@@ -1281,7 +1282,7 @@ export class GameScene extends Phaser.Scene {
     this.buildCombat.update(this.combatNow);this.statusFx?.update(this.combatNow,this.enemies);this.jinnangFx?.update(this.combatNow,this.chain);
     // 兵阵 4 势「援军」：每 12 秒从后方冲来 3 名义军助战 10 秒（data/schools.ts SCHOOL_TIER.formation）
     if(this.player.growth.build.tier('formation')>=4&&this.combatNow>=this.reinforceAt){const F=SCHOOL_TIER.formation;this.reinforceAt=this.combatNow+F.everyMs;
-      this.reinforcePush().spawnEscort(F.n,F.lifeMs);}
+      this.reinforcePush().spawnEscort(F.n,F.lifeMs);buildVfx(this).emit('reinforce',this.player.x,this.player.y-8,this.combatNow,150,0,800,true);}
     {const fc=this.buildCombat.flankCharge();if(fc.level||this.flankFx)this.flankBladeFx().update(dt,fc.level,fc.ratio);}
     {const wc=this.buildCombat.windstepCharge();if(wc.level||this.windFx)this.windstepFx().update(dt,wc.level,wc.ratio);}
     this.controlBuild?.update(this.combatNow);

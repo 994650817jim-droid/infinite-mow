@@ -31,6 +31,8 @@ export class BuildCombat {
  controlled?:(e:Enemy,now:number)=>boolean;
  /** 表现层回调（只管画面）：震荡 / 冲阵一圈、火油罐落点、疾风一阵、燎原爆火。 */
  onShock?:(x:number,y:number,r:number)=>void;
+ /** 手绘特效钩子（GameScene 接 BuildVfx）：style = 图集里的额外样式 ember / stun_burst / sunder_hit / heavy。 */
+ onFx?:(style:string,x:number,y:number,size:number)=>void;
  onNapalm?:(x:number,y:number,r:number,tickDamage:number,level:number)=>void;
  onGust?:(x:number,y:number,angle:number,len:number)=>void;
  /** 合击「烈马」：脚下一小团火（GameScene 用 MartialFields 画火、扣血）。 */
@@ -101,7 +103,7 @@ export class BuildCombat {
  private targets(e:{x:number;y:number},r:number,except?:Enemy):Enemy[]{return this.nearby(e.x,e.y,r).filter(t=>t.active&&!t.isSupplySlot&&t!==except&&Math.hypot(t.x-e.x,t.y-e.y)<=r);}
  private burnMs():number{return 3000+(this.tier('fire')>=2?T.fire.burnExtraMs:0);}
  private burn(e:Enemy,damage:number,now:number,spread=false,ms=this.burnMs()):void{
-  if(!e.active||e.isSupplySlot)return;const old=this.burns.get(e.spawnId);if(!old&&this.burns.size>=160)return;
+  if(!e.active||e.isSupplySlot)return;const old=this.burns.get(e.spawnId);if(!old&&this.burns.size>=160)return;if(!old)this.onFx?.('ember',e.x,e.y-6,56);
   this.burns.set(e.spawnId,{enemy:e,spawn:e.spawnId,until:Math.max(old?.until??0,now+ms),next:old?.next??now+500,damage:Math.max(old?.damage??0,damage),spread:old?old.spread&&spread:spread});
  }
  /** 震退（不对首领、免控、城头的）：0.25 秒滑开 push 像素（不瞬移），update 里逐帧推。 */
@@ -110,9 +112,9 @@ export class BuildCombat {
   if(t.kind==='boss'||t.controlImmune||t.def.behavior==='wall'||!t.active||(!this.shoves.has(t)&&this.shoves.size>=80))return;
   const v=2*push/.25;this.shoves.set(t,{spawn:t.spawnId,vx:Math.cos(ang)*v,vy:Math.sin(ang)*v,until:now+250});t.hitRecoil(now,ang,0,180);
  }
- stun(t:Enemy,ms:number,now:number):void{if(t.kind==='boss'||t.controlImmune||t.def.behavior==='wall'||!t.active)return;t.stunUntil=Math.max(t.stunUntil,now+ms);this.onStun?.(t,now);}
+ stun(t:Enemy,ms:number,now:number):void{if(t.kind==='boss'||t.controlImmune||t.def.behavior==='wall'||!t.active)return;t.stunUntil=Math.max(t.stunUntil,now+ms);this.onFx?.('stun_burst',t.x,t.y-8,64);this.onStun?.(t,now);}
  /** 破甲：受到的伤害 +amt（3 秒）；没被主将打过的敌人也能挂上（觉醒「万箭齐发」）。 */
- vulnerable(e:Enemy,amt:number,now:number,ms:number=T.archery.sunderMs):void{let m=this.marks.get(e);if(!m||m.spawn!==e.spawnId){m={spawn:e.spawnId,chain:0,last:0,vulnerable:0,vulnAmt:0};this.marks.set(e,m);}if(amt>=m.vulnAmt||m.vulnerable<=now)m.vulnAmt=amt;m.vulnerable=Math.max(m.vulnerable,now+ms);this.stats.sunder++;}
+ vulnerable(e:Enemy,amt:number,now:number,ms:number=T.archery.sunderMs):void{let m=this.marks.get(e);if(!m||m.spawn!==e.spawnId){m={spawn:e.spawnId,chain:0,last:0,vulnerable:0,vulnAmt:0};this.marks.set(e,m);}if(m.vulnerable<=now)this.onFx?.('sunder_hit',e.x,e.y-8,64);if(amt>=m.vulnAmt||m.vulnerable<=now)m.vulnAmt=amt;m.vulnerable=Math.max(m.vulnerable,now+ms);this.stats.sunder++;}
  /** 合击「爆燃」：震荡 / 重击打到燃烧的敌人，炸开再受一次伤并点燃身边的人。 */
  private burst(t:Enemy,raw:number,now:number,hot:boolean):void{
   if(!hot||!this.combo('fire_burst'))return;this.noteCombo('fire_burst');this.onShock?.(t.x,t.y,CV.burstR*.8);
@@ -135,7 +137,7 @@ export class BuildCombat {
    }
   }
   // 破阵重击：每 8/7/6 次命中一次重击（震伤 + 震退）
-  const hb=this.lv('heavy_break');if(hb&&this.hits%[8,7,6][hb-1]===0){this.stats.heavy++;for(const t of this.targets(e,80,e).slice(0,1+hb)){const hot=this.isBurning(t,now);this.fx(t,false);this.deal(t,raw*[.3,.4,.5][hb-1],false);this.knock(t,e,30,now);this.burst(t,raw,now,hot);}}
+  const hb=this.lv('heavy_break');if(hb&&this.hits%[8,7,6][hb-1]===0){this.stats.heavy++;this.onFx?.('heavy',e.x,e.y,120);for(const t of this.targets(e,80,e).slice(0,1+hb)){const hot=this.isBurning(t,now);this.fx(t,false);this.deal(t,raw*[.3,.4,.5][hb-1],false);this.knock(t,e,30,now);this.burst(t,raw,now,hot);}}
   // 猛将 4 势「震荡」：每第 6 次命中一圈冲击波（眩晕 + 震退）
   if(this.tier('warrior')>=4&&++this.shockHits>=T.warrior.every&&now-this.shockAt>=T.warrior.minGapMs){this.shockHits=0;this.shockAt=now;this.stats.shock++;const W=T.warrior;this.onShock?.(e.x,e.y,W.r);for(const t of this.targets(e,W.r).slice(0,W.targets)){const hot=this.isBurning(t,now);if(t!==e)this.fx(t,false);this.deal(t,raw*W.ratio,false);this.stun(t,W.stunMs,now);if(t!==e)this.knock(t,e,W.push,now);this.burst(t,raw,now,hot);}}
   // 凝神：站定 1 秒（或每 2.5 秒）下一击沿攻击方向贯穿

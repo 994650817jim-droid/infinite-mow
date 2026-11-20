@@ -8,7 +8,7 @@ import type { WaveDef } from './waves';
  * - 攻城 / 守城 / 军情 / 挑战、带关卡目标的关（2-3 洛阳）、开场即首领的关不套用（GameScene.phaseEligible）。
  * 数值是初值，交平衡会话校（§平衡会话意见）。
  */
-export type PhaseKind = 'vanguard' | 'elite' | 'event' | 'lieutenant' | 'boss';
+export type PhaseKind = 'vanguard' | 'elite' | 'event' | 'lieutenant' | 'surge' | 'boss';
 export interface StagePhase { kind: PhaseKind; start: number; name: string }
 export interface PhasePlan { chapter: number; stage: number; phases: StagePhase[]; waves: WaveDef[]; bossAt: number; lieutenant?: string; event?: string }
 
@@ -16,6 +16,11 @@ export const PHASES = {
   /** 各段开始时刻（秒，关内时间）。首领段开始 = 首领登场。 */
   // 2026-11-19 用户「每一关拉长一点时间」：0 / 45 / 100 / 155 / 205 → 0 / 55 / 120 / 185 / 245（各段约 ×1.2，关长约 4.5～5 分；1-1 三段仍用原时刻 0 / 45 / 90）
   starts: { vanguard: 0, elite: 55, event: 120, lieutenant: 185, boss: 245 } as Record<PhaseKind, number>,
+  /**
+   * 「大军压境」段（chapter1-redesign.md v2，用户 11-20 批准）：没有副将的五段关（第一章、2-1）用它补第四段——
+   * 段内刷兵间隔 ×intervalMul（更密），开段一队精锐 + 一圈 ring(章) 个兵。初值，交平衡会话。
+   */
+  surge: { intervalMul: 1 / 1.5, ring: (chapter: number): number => 6 + chapter },
   /** 段间喘息：换段后这几秒内刷兵间隔 ×calmIntervalMul（刷得更稀）。 */
   calmSec: 2.5, calmIntervalMul: 2,
   /** 精锐小队人数（按章）。 */
@@ -44,7 +49,8 @@ export const PHASES = {
    * 从接战到首领倒下比旧三波关快约 2.7 倍（5-2）、3.5 倍（10-3）。按章节线性补回到旧的首领战用时：
    * 段数 ≤ 3（1-1，首领时刻同旧）×1；第一章 4 / 5 段 ×1.6；第二章起 1.9 + 0.16 × 章，封顶 3.8（5-2 ≈ 2.7、10-3 ≈ 3.5、12 章 3.8）。
    */
-  bossHpMul: (chapter: number, phases: number): number => phases <= 3 ? 1 : chapter <= 1 ? 1.6 : (1.9 + .16 * chapter) * PHASES_LONGER(chapter),
+  // 第一章 v2（11-20）：1-1 改 4 段（首领 1:30 → 2:35）先给 ×1.3，1-2 / 1-3 五段 ×1.6；交平衡会话量
+  bossHpMul: (chapter: number, phases: number): number => phases <= 3 ? 1 : chapter <= 1 ? (phases === 4 ? 1.3 : 1.6) : (1.9 + .16 * chapter) * PHASES_LONGER(chapter),
   /** 三选一保底：进第 2 / 3 / 4 / 5 段时至少 1 / 2 / 3 / 4 次，首领宝箱补到 5 次。 */
   picks: { waves: [1, 2, 3, 4] as readonly number[], main: 5 },
 } as const;
@@ -67,7 +73,8 @@ export const EVENT_NAMES: Record<string, string> = {
 };
 /** 各关副将（避开本关首领；空 = 该关没有副将段）。 */
 export const LIEUTENANTS: Record<string, readonly string[]> = {
-  huangjin: ['', '', '卜己'], hulao: ['胡轸', '李肃', '李傕'], qunxiong: ['樊稠', '胡车儿', '纪灵'], guandu: ['郭图', '韩猛', '眭元进'],
+  // 玩法逐章解锁（mechanic-rollout.md）：副将 2-2 才登场——第一章三关与 2-1 不设副将，第四段改「大军压境」（原 1-3 卜己、2-1 胡轸）
+  huangjin: ['', '', ''], hulao: ['', '李肃', '李傕'], qunxiong: ['樊稠', '胡车儿', '纪灵'], guandu: ['郭图', '韩猛', '眭元进'],
   chibi: ['夏侯恩', '张允', '牛金'], jingnan: ['鲍隆', '邢道荣', '杨龄'], shu: ['高沛', '泠苞', '刘循'], hanzhong: ['夏侯德', '夏侯尚', '徐晃'],
   xiangfan: ['满宠', '于禁', '马忠'], yiling: ['谢旌', '潘璋', '韩当'], nanzheng: ['董荼那', '阿会喃', '金环三结'], beifa: ['戴陵', '王双', '郭淮'],
 };
@@ -78,11 +85,23 @@ export function lieutenantArt(chapter: number): { walk: string; attack: string; 
   return key ? { walk: `lt_${key}_walk`, attack: `lt_${key}_attack`, cell: 176 } : null;
 }
 
-/** 本关有几段：第一章 3 / 4 / 5，其余 5。 */
+/** 本关有几段：第一章 4 / 5 / 5（v2：1-1 四段约 3.5 分、1-2 五段约 4 分、1-3 五段约 4.5–5 分），其余 5。 */
 export function phaseCount(chapter: number, stage: number): 3 | 4 | 5 {
-  if (chapter === 1) return stage <= 1 ? 3 : stage === 2 ? 4 : 5;
+  if (chapter === 1) return stage <= 1 ? 4 : 5;
   return 5;
 }
+/** 第一章各关的段落时刻（秒）；1-3 同第二章起的标准时刻。 */
+export const CH1_STARTS: Readonly<Record<number, readonly number[]>> = { 1: [0, 45, 100, 155], 2: [0, 50, 105, 160, 215] };
+/** 按关的事件段名（第一章没有机缘，事件段是本关的场景事件）。 */
+export const STAGE_EVENT_NAMES: Record<string, string> = { 'huangjin-1': '黄巾营寨', 'huangjin-2': '法坛伏兵', 'huangjin-3': '城下伏兵' };
+/** 「大军压境」段名（没有就叫「大军压境」）。 */
+export const SURGE_NAMES: Record<string, string> = { 'huangjin-2': '黄巾大军', 'huangjin-3': '城门死战', 'hulao-1': '西凉大军' };
+/** 段落开始时的一句台词（左下对话卡；剧情关闭时不出）。键：章节 id-关。 */
+export const PHASE_BARKS: Record<string, Partial<Record<PhaseKind, { who: string; id?: string; text: string }>>> = {
+  'huangjin-1': { elite: { who: '张飞', id: 'zhangfei', text: '这些拿盾的倒有几分硬！' }, event: { who: '刘备', id: 'liubei', text: '烧了他们的营帐、砍倒黄天旗，乱其军心！' } },
+  'huangjin-2': { event: { who: '简雍', id: 'jianyong', text: '法坛两边有动静——先打那些摇符水的道徒！' }, surge: { who: '张飞', id: 'zhangfei', text: '来得好，俺正杀得手顺！' } },
+  'huangjin-3': { elite: { who: '斥候', text: '黄天骑来了！' }, surge: { who: '关羽', id: 'guanyu', text: '城门已开——杀进去！' } },
+};
 
 /**
  * 由原来的波次（名字）排出五段：先锋 = 原第 1 波名，精锐 = 原第 2 波名，事件 = 本章事件名，副将 = 「X 压阵」，首领 = 原最后一波名。
@@ -92,11 +111,13 @@ export function buildPhasePlan(key: string, stage: number, waves: readonly WaveD
   const chapter = CHAPTER_INDEX[key] ?? 2, n = phaseCount(chapter, stage), names = waves.map(w => w.name);
   const first = names[0] ?? '先锋', second = names[1] ?? '精锐来袭', last = names[names.length - 1] ?? bossName + '决战';
   const lt0 = LIEUTENANTS[key]?.[Math.max(0, Math.min(2, stage - 1))] ?? '', lieutenant = lt0 && lt0 !== bossName ? lt0 : '';
-  const event = EVENT_NAMES[key] ?? '伏兵四起', S = PHASES.starts;
+  const sk = key + '-' + stage, event = STAGE_EVENT_NAMES[sk] ?? EVENT_NAMES[key] ?? '伏兵四起', S = PHASES.starts;
+  const st = (chapter === 1 ? CH1_STARTS[stage] : undefined) ?? [S.vanguard, S.elite, S.event, S.lieutenant, S.boss];
   let phases: StagePhase[];
   if (n === 3) phases = [{ kind: 'vanguard', start: 0, name: first }, { kind: 'elite', start: 45, name: second }, { kind: 'boss', start: 90, name: last }];
-  else if (n === 4 || !lieutenant) phases = [{ kind: 'vanguard', start: S.vanguard, name: first }, { kind: 'elite', start: S.elite, name: second }, { kind: 'event', start: S.event, name: event }, { kind: 'boss', start: S.lieutenant, name: last }];
-  else phases = [{ kind: 'vanguard', start: S.vanguard, name: first }, { kind: 'elite', start: S.elite, name: second }, { kind: 'event', start: S.event, name: event }, { kind: 'lieutenant', start: S.lieutenant, name: lieutenant + '压阵' }, { kind: 'boss', start: S.boss, name: last }];
+  else if (n === 4) phases = [{ kind: 'vanguard', start: st[0], name: first }, { kind: 'elite', start: st[1], name: second }, { kind: 'event', start: st[2], name: event }, { kind: 'boss', start: st[3], name: last }];
+  else phases = [{ kind: 'vanguard', start: st[0], name: first }, { kind: 'elite', start: st[1], name: second }, { kind: 'event', start: st[2], name: event },
+    lieutenant ? { kind: 'lieutenant', start: st[3], name: lieutenant + '压阵' } : { kind: 'surge', start: st[3], name: SURGE_NAMES[sk] ?? '大军压境' }, { kind: 'boss', start: st[4], name: last }];
   const bossAt = phases[phases.length - 1].start;
   return { chapter, stage, phases, waves: phases.map(p => ({ start: p.start, name: p.name })), bossAt, lieutenant: phases.some(p => p.kind === 'lieutenant') ? lieutenant : undefined, event: phases.some(p => p.kind === 'event') ? event : undefined };
 }

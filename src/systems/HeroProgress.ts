@@ -1,3 +1,4 @@
+import { statEffective, statSource } from '../data/heroStats';
 import { XP_SHIFT, heroXpNeed } from '../data/heroLevels';
 import { attributePointsAt } from '../data/attributes';
 import type { CharacterId } from '../data/characters';
@@ -21,7 +22,7 @@ export const LEVEL_CAPS: readonly number[] = [10, 14, 18, 22, 26, 30, 34, 38, 42
 export type HeroKey = CharacterId | `r_${number}`;
 export interface HeroRecord { level: number; xp: number; attributes: Record<AttributeId, number> }
 /**
- * attrSet = 3：属性已是 2026-11-17 改版的四项（力量 / 敏捷 / 智力 / 统御）。旧记录（六项）读档时全部退回、不换算，
+ * attrSet = 4（2026-11-20 起：四维本色 + 取消单项上限，旧点数全部返还）；3 = 2026-11-17 的四项（力量 / 敏捷 / 智力 / 统御）。旧记录（六项）读档时全部退回、不换算，
  * attrNotice 置位，进游戏提示一次「属性已改版，点数已返还」（takeAttrNotice）。
  */
 interface HeroSave { version: 1; heroes: Record<string, HeroRecord>; migrated: boolean; firstClears: string[]; attrSet?: number; attrNotice?: boolean }
@@ -57,26 +58,26 @@ export function pointsAt(level: number): number { return attributePointsAt(level
 let memory: HeroSave | null = null;
 function read(): HeroSave {
   if (memory) return memory;
-  let s: HeroSave = { version: 1, heroes: {}, migrated: false, firstClears: [], attrSet: 3 };
+  let s: HeroSave = { version: 1, heroes: {}, migrated: false, firstClears: [], attrSet: 4 };
   try {
     const v = JSON.parse(localStorage.getItem(HEROES_KEY) ?? 'null');
     if (v && v.version === 1 && v.heroes && typeof v.heroes === 'object') {
-      s.migrated = v.migrated === true; s.attrSet = v.attrSet === 3 ? 3 : 1; s.attrNotice = v.attrNotice === true;
+      s.migrated = v.migrated === true; s.attrSet = v.attrSet === 4 ? 4 : 1; s.attrNotice = v.attrNotice === true;
       // 旧六项：有没有加过点（决定要不要提示）
-      if (s.attrSet !== 3) s.attrNotice = Object.values(v.heroes as Record<string, { attributes?: Record<string, unknown> }>).some(r => Object.values(r?.attributes ?? {}).some(n => Number(n) > 0));
+      if (s.attrSet !== 4) s.attrNotice = Object.values(v.heroes as Record<string, { attributes?: Record<string, unknown> }>).some(r => Object.values(r?.attributes ?? {}).some(n => Number(n) > 0));
       s.firstClears = Array.isArray(v.firstClears) ? [...new Set((v.firstClears as unknown[]).filter((k): k is string => typeof k === 'string' && /^[a-z]+-\d$/.test(k)))].slice(0, 60) : [];
       for (const [k, r] of Object.entries(v.heroes as Record<string, Partial<HeroRecord>>)) {
         if (!isKey(k) || !r) continue;
-        const attributes = zeroAttrs(); if (s.attrSet === 3) for (const a of ATTRS) attributes[a] = int(r.attributes?.[a], ATTRIBUTE_MAX);
+        const attributes = zeroAttrs(); if (s.attrSet === 4) for (const a of ATTRS) attributes[a] = int(r.attributes?.[a], ATTRIBUTE_MAX);
         s.heroes[k] = { level: int(r.level, 99, 1), xp: int(r.xp, 1e8), attributes };
         // 2026-11-19 点数改版（Lv20 后每 4 级 1 点、单项上限 10）：已加的点超过新规则就全部退回重加（提示一次）
         { const h = s.heroes[k], spent = ATTRS.reduce((n, a) => n + h.attributes[a], 0); if (spent > attributePointsAt(h.level) || ATTRS.some(a => h.attributes[a] > attributeCap(h.level))) { h.attributes = zeroAttrs(); s.attrNotice = true; } }
       }
     }
-  } catch { s = { version: 1, heroes: {}, migrated: false, firstClears: [], attrSet: 3 }; }
+  } catch { s = { version: 1, heroes: {}, migrated: false, firstClears: [], attrSet: 4 }; }
   memory = s;
   // 属性改版（四项）：旧记录的点数上面已全部退回（不换算），等级不变，可用点按每级 1 点重算
-  if (s.attrSet !== 3) { s.attrSet = 3; commit(); }
+  if (s.attrSet !== 4) { s.attrSet = 4; commit(); }
   if (!s.migrated) migrate(s);
   return s;
 }
@@ -172,4 +173,9 @@ export function hasHeroRecord(id: HeroKey): boolean { return !!read().heroes[id]
 /** 战斗中升级：直接写入武将等级与当前经验（软上限：不封顶；经验压到「差 1 点升级」以内，读档时不会按存档的软上限自动补升）。 */
 export function setHeroProgress(id: HeroKey, level: number, xp: number): void {
   const r = record(id, true); r.level = Math.max(r.level, Math.floor(level)); r.xp = Math.max(0, Math.min(need(r.level) - 1, Math.round(xp))); commit();
+}
+
+/** 武将某项属性的生效点数（本色折算 + 加点，折扣与擅长倍率之后）；武将谱 / 随从 / 面板共用（2026-11-20 属性改版）。 */
+export function heroStatE(id: HeroKey, attr: AttributeId): number {
+  const r = record(id, false); return statEffective(statSource(id), attr, r.attributes[attr], r.level);
 }

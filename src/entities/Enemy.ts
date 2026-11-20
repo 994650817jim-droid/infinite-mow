@@ -12,6 +12,19 @@ import { presenceScale } from '../systems/BossPresence';
 let enemyUidSeq = 0;
 const WALK_STRIDES: Partial<Record<EnemyKind, number>> = { infantry: 11, shield: 13, archer: 12, cavalry: 12, elite: 15 };
 
+/**
+ * 受击闪白：一次多久、闪完多久才能再闪（连击时不再一直是白剪影）；
+ * 全场每 windowMs 最多 budget 个敌人闪白（含 DeathFx 死亡闪白）——范围技一下打中一大片时不会整群变成白剪影（2026-11-20 攻击特效检查）。
+ */
+export const HIT_FLASH = { ms: 60, gapMs: 160, budget: 6, windowMs: 100 } as const;
+let flashWindowAt = -Infinity, flashUsed = 0;
+/** 申请一个闪白名额（受击闪白 / 死亡闪白共用）；本窗口用完返回 false。 */
+export function takeFlashSlot(now: number): boolean {
+  if (now - flashWindowAt >= HIT_FLASH.windowMs || now < flashWindowAt) { flashWindowAt = now; flashUsed = 0; }
+  if (flashUsed >= HIT_FLASH.budget) return false;
+  flashUsed++; return true;
+}
+
 export class Enemy {
   static spawnSeq = 0;
   isSupplySlot=false;
@@ -101,7 +114,7 @@ export class Enemy {
   gapSlowMul = 1;
   gapSlowUntil = 0;
 
-  flashUntil = 0;
+  flashUntil = 0; flashReadyAt = 0;
   /** 受击后仰（打击感 2026-11-17）：压扁结束时间与强度 0–1 */
   private recoilUntil = 0;
   private recoilMs = 90;
@@ -151,7 +164,7 @@ export class Enemy {
     this.stunUntil = 0;
     this.zhenshe = 0; this.zhensheAt = 0; this.routUntil = 0; this.trampleAt = 0; this.junlingUntil = 0;
     this.targetAlly = null; this.targetLife = 0;
-    this.flashUntil = 0;
+    this.flashUntil = 0; this.flashReadyAt = 0;
     this.recoilUntil = 0; this.squash = 0;
     this.contactCd = 0;
     this.shootCd = 1 + Math.random();
@@ -496,10 +509,14 @@ export class Enemy {
     this.sprite.setOrigin(this.sprite.originX, this.baseOriginY);
   }
 
+  /**
+   * 受击闪白：整张图涂白 HIT_FLASH.ms；闪完要隔 HIT_FLASH.gapMs 才能再闪（2026-11-20 用户截图「敌将旁边一大块白色剪影」：
+   * 连击每 50ms 一下时旧写法每下都重新闪白，敌人 97% 的帧都是一整块白剪影）。
+   */
   flash(now: number): void {
-    this.flashUntil = now + 70;
-    this.sprite.setTintFill(0xffffff);
-    if (this.kind === 'elite') this.sprite.setTintFill(0xffdddd);
+    if (now < this.flashReadyAt || !takeFlashSlot(now)) return;
+    this.flashUntil = now + HIT_FLASH.ms; this.flashReadyAt = now + HIT_FLASH.ms + HIT_FLASH.gapMs;
+    this.sprite.setTintFill(this.kind === 'elite' ? 0xffdddd : 0xffffff);
   }
 
   /** 受击后仰：横向压扁一下再弹回；push 像素沿 angle 方向轻推（首领 / 不受控的单位只压扁不推）。 */

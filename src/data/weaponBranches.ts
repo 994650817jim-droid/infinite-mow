@@ -19,7 +19,7 @@ const B = (weapon: WeaponId, id: string, school: SchoolId, name: string, desc: s
   ({ id, weapon, school, name, desc, lv6, lv7, finalName, finalDesc, icon: 'branch_icon_' + id, ready });
 
 export const WEAPON_BRANCHES: readonly WeaponBranch[] = [
-  B('spear_orbit', 'zy_longdan', 'cavalry', '龙胆 · 七进七出', '每 3 秒出枪带一次短冲刺\n沿途敌兵受创\n冲刺中无敌 0.25 秒', '冲刺伤害 +30%、间隔缩短', '冲刺伤害再 +30%、间隔再缩短', '七进七出', '冲刺可连 3 次，路径留银白枪痕', true),
+  B('spear_orbit', 'zy_longdan', 'cavalry', '龙胆 · 七进七出', '约每 6 秒杀进敌阵、回马一枪\n再杀回你所在之处（冲阵时照常移动）\n杀进去时无敌，杀回那段要小心', '冲刺伤害 +30%、间隔缩短（最短约 5 秒）', '冲刺伤害再 +30%、间隔再缩短', '七进七出', '冲刺连 3 次（约每 9 秒），路径留银白枪痕', true),
   B('spear_orbit', 'zy_bainiao', 'warrior', '百鸟朝凤', '每 6 秒一次 360° 枪风暴\n重创身边一圈敌兵', '风暴伤害 +30%、更频繁', '风暴伤害再 +30%、更频繁', '百鸟朝凤 · 极', '风暴后把周围敌兵吸向身边、减速 2 秒', true),
   B('guandao', 'gy_qinglong', 'warrior', '青龙出水', '每次扇形斩，额外放出\n一道向前穿透的青龙月牙', '月牙伤害 +30%', '月牙伤害再 +30%、飞得更远', '水淹七军', '月牙落地化水浪，沿路敌兵减速', true),
   B('guandao', 'gy_danqi', 'cavalry', '千里走单骑', '移动时身后留下刀痕带\n敌兵踩上持续受创', '刀痕伤害 +30%', '刀痕伤害再 +30%、更长', '过五关', '每走一段路自动横扫一圈', true),
@@ -74,10 +74,45 @@ export const WEAPON_OVER = { cap: 0, capFor: (chapter: number): number => chapte
 /** 分支强度档：0 未选；1 选定；2 = Lv6；3 = Lv7。 */
 /**
  * 专职面板（2026-11-20 用户「可以按照你建议去开发」）：本命 Lv5 时单独弹「兵器专职」面板（ui/BranchPickPanel），两条都能选（去掉「分支派 2 势」门槛）。
- * 契合：两条里该派「势」更高的那条（同势按武将第一亲和派）；选契合的那条，分支效果 ×fitMul（初值 +10%，交平衡会话）。
+ * 契合：两条里该派「势」更高的那条（同势按武将第一亲和派）；选契合的那条，分支效果 ×fitMul（平衡会话 2026-11-20 定 ×1.2）。
  */
 // 2026-11-20 平衡：1.1 → 1.2。分支伤害约占武将总伤害 16～43%（10-3 实测），k 同时乘伤害和部分分支的频率，×1.1 只折合总 DPS +2～4%，几乎无感；×1.2 约 +4～8%，仍小于一张机缘增益（+15%）
 export const BRANCH_FIT = { fitMul: 1.2 } as const;
+/**
+ * 赵云「龙胆 · 七进七出」冲刺（2026-11-20 用户「很容易冲击怪堆被打死」→ 定案「冲进去再杀回原位我觉得可以」）：
+ * 杀进去再杀出来——朝移动方向（站定时朝最近的敌兵）冲进去 len，沿途敌兵受创；随即折返回出发点，回程同样受创；
+ * 往返全程无敌，回到原位后把身边贴身的敌兵推开。去 / 回各 outMs / backMs。初值，交平衡会话。
+ */
+/**
+ * 七进七出（定案「冲进去再杀回原位」）。2026-11-20 用户「关于赵云七进七出 不要这么快 要有个动作」：原来去 / 回各 0.17 秒像瞬移，
+ * 改成四段约 1.1 秒：起手 windMs（压枪蓄势、脚下扬尘）→ 冲入 outMs（持枪突刺、沿途枪影残影、挑开敌兵、首次命中顿帧）
+ * → 回马枪 turnMs（最远点转身横扫 turnR）→ 杀回 backMs（回到原位、落地收枪、推开贴身敌兵）。全程无敌。冷却按新时长放宽（交平衡会话复核）。
+ */
+/*
+ * 2026-11-20 用户「七进七出，返回的位置是移动的位置，而且触发不要太频繁」：
+ *  - 杀回的落点改为「锚点」：冲刺期间玩家照常推摇杆，锚点按主将移速跟着走（不进障碍），回程每帧朝锚点修正；不推摇杆就是原位。
+ *  - 间隔 max(minMs, cdMs ÷ k)：基础约 6.5 秒，Lv6 / 7、契合最多缩到 5 秒；进阶连三次 max(finalMinMs, finalCdMs ÷ k)。
+ *  - 频率降了单次伤害提高（outMul / turnMul，原 .9 / .8）：按「伤害 × 覆盖面积 ÷ 间隔」估算约为百鸟朝凤的 92%（原约 58%）。交平衡会话复核。
+ */
+export const LONGDAN = { len: 170, moveMin: 40, windMs: 200, outMs: 350, turnMs: 200, backMs: 350, outMul: 2.4, backMul: .9, turnR: 95, turnMul: 2.2, pathPush: 26, ghostMs: 70, hitStopMs: 45, pushR: 90, push: 46, cdMs: 6500, minMs: 5000, finalCdMs: 9500, finalMinMs: 7500, anchorR: 16 } as const;
+export const longdanTotalMs = (): number => LONGDAN.windMs + LONGDAN.outMs + LONGDAN.turnMs + LONGDAN.backMs;
+/**
+ * 七进七出的无敌与节奏（2026-11-20 平衡会话）：原来全程无敌 1.31 秒、冷却 3.8 秒 ÷ k（Lv6 / 7、契合会把 k 推到 ~1.9），
+ * Lv7 + 契合时无敌约占 63%，进阶连三次约 85%。改为：只有起手 + 冲入 + 回马枪无敌（约 0.85 秒），杀回那段要挨打；
+ * 一轮至少隔「无敌时长 ÷ invulnShare」（普通 25% → 3.4 秒，进阶连三次 40% → 6.4 秒），k 只让冷却在此之上缩短。
+ */
+// 2026-11-20 七进七出放慢（约每 6 秒）：无敌占比下限随之调到普通 17%（≈ 5 秒）、进阶连三次 34%（≈ 7.5 秒），与 LONGDAN.minMs / finalMinMs 一致
+export const LONGDAN_GUARD = { graceMs: 100, invulnShare: .17, finalShare: .34 } as const;
+export const longdanInvulnMs = (): number => LONGDAN.windMs + LONGDAN.outMs + LONGDAN.turnMs + LONGDAN_GUARD.graceMs;
+/** 专职状态（HUD 专职行与构筑总览专职栏共用）：当前 Lv（5–7）、进阶进度、是否已进阶、悬停全文。 */
+export interface BranchStatus { b: WeaponBranch; lv: number; over: number; shi: number; final: boolean; attuned: boolean; progress: string; tip: string }
+export function branchStatus(w: { branch?: string; over?: number; attuned?: boolean } | undefined, shi: (s: SchoolId) => number, schoolName: (s: SchoolId) => string): BranchStatus | null {
+  const b = branchById(w?.branch); if (!b || !w) return null;
+  const over = Math.max(0, w.over ?? 0), n = shi(b.school), final = over >= 2 && n >= 4;
+  return { b, lv: 5 + over, over, shi: n, final, attuned: !!w.attuned,
+    progress: final ? '进阶「' + b.finalName + '」' : '进阶 ' + Math.min(n, 4) + '/4 势' + (over >= 2 ? '' : ' · 需 Lv7'),
+    tip: b.desc + '\n\nLv6：' + b.lv6 + '\nLv7：' + b.lv7 + '\n\n进阶「' + b.finalName + '」（Lv7 + ' + schoolName(b.school) + '派 4 势）：' + b.finalDesc + (w.attuned ? '\n\n契合当前流派：专职效果 +' + Math.round((BRANCH_FIT.fitMul - 1) * 100) + '%' : '') + '\n\n已锁定 · 需行营「重整构筑」才能更换（花军粮洗掉后本命留在 Lv5，下一场开战时重选）' };
+}
 export function fitBranch(bs: readonly WeaponBranch[], shi: (s: SchoolId) => number, affinity: readonly SchoolId[]): WeaponBranch | undefined {
   if (bs.length !== 2) return bs[0];
   const [a, b] = bs, sa = shi(a.school), sb = shi(b.school);

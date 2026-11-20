@@ -47,6 +47,20 @@ export function applyCarriedHp(state: CampaignTransfer, player: Player, follower
 export function patchCampaignHp(hero: CharacterId, hpFrac: number, followerHp?: Record<string, number>): void {
   try { const v = JSON.parse(localStorage.getItem(CAMPAIGN_KEY) ?? 'null'); const s = v?.heroes?.[hero]; if (!s?.player) return; s.player.hpFrac = Math.max(0, Math.min(1, hpFrac)); if (followerHp) s.player.followerHp = { ...(s.player.followerHp ?? {}), ...followerHp }; localStorage.setItem(CAMPAIGN_KEY, JSON.stringify(v)); } catch { /* 存储不可用 */ }
 }
+/**
+ * 战败（data/defeatFlow.ts）：存档点里主将生命压到 hpFrac、随行压到 followerFrac、部曲折损 troopLoss（营寨 / 城池 / 行营军医可治）。
+ * 返回折损的部曲人数；没有存档点（这位武将还没打赢过主线关）时返回 null。
+ */
+export function patchCampaignDefeat(hero: CharacterId, o: { hpFrac: number; followerFrac: number; troopLoss: number; followerIds: readonly string[] }): { troops: number } | null {
+  try {
+    const v = JSON.parse(localStorage.getItem(CAMPAIGN_KEY) ?? 'null'); const s = v?.heroes?.[hero]; if (!s?.player) return null;
+    s.player.hpFrac = Math.min(s.player.hpFrac ?? 1, o.hpFrac);
+    const fh: Record<string, number> = s.player.followerHp ?? {}; for (const id of o.followerIds) fh[id] = Math.min(fh[id] ?? 1, o.followerFrac); s.player.followerHp = fh; // 逐个写进 followerHp：营寨 / 城池军医按这张表治
+    const soldiers = Array.isArray(s.army?.soldiers) ? s.army.soldiers : [], lose = Math.floor(soldiers.length * o.troopLoss);
+    if (lose > 0) s.army.soldiers = soldiers.slice(0, soldiers.length - lose);
+    localStorage.setItem(CAMPAIGN_KEY, JSON.stringify(v)); return { troops: lose };
+  } catch { return null; }
+}
 /** 行营军需商人买了战法：把存档点里的战法与随军粮一并改掉（同 patchCampaignHp，存档点在买之前）。 */
 /** 行营军需商人买了战法 / 心法：把存档点的整份构筑快照（含商人记账）与随军粮写回（存档点在买之前）。 */
 export function patchCampaignBuild(hero: CharacterId, build: BuildSnapshot, food: number): void {

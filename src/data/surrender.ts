@@ -62,7 +62,7 @@ const RAW_DEFS: readonly SurrenderDef[] = [
   // 第一章：新手章，三人宁死不降、不弹窗（倒下播剧本 bossFall）
   D('huangjin-1:zhangliang', '张梁', '人公将军', 'silent'), D('huangjin-2:zhangbao', '张宝', '地公将军', 'silent'), D('huangjin-3:zhangjiao', '张角', '大贤良师', 'silent'),
   // 第二章
-  D('hulao-1:huaxiong', '华雄', '西凉骁将', 'never', { template: 'blade', camp: 'dongzhuo', skipIf: 'wenjiu', yes: '……某服了。董卓不仁，某不再替他卖命。', no: '关东鼠辈，也配劝我？' }),
+  D('hulao-1:huaxiong', '华雄', '西凉骁将', 'never', { template: 'blade', camp: 'dongzhuo', skipIf: 'wenjiu', no: '关东鼠辈，也配劝我？' }),
   D('hulao-2:xurong', '徐荣', '玄菟猛将', 'hard', { template: 'blade', camp: 'dongzhuo', yes: '太师已不可辅……荣愿随将军。', no: '荣受太师厚恩，休得多言！' }),
   D('hulao-3:dongzhuo', '董卓', '太师', 'story'),
   D('lubu-1:lubu', '吕布', '飞将', 'hard', { template: 'spear', camp: 'lubu', bonuses: [{ kind: 'hero', id: 'diaochan', add: .2, label: '貂蝉在侧' }, { kind: 'lord', id: 'liubei', add: -.2, label: '大耳儿最叵信' }],
@@ -74,10 +74,8 @@ const RAW_DEFS: readonly SurrenderDef[] = [
   // 第四章
   // 双首领方案 A（dual-boss-spec，用户 2026-11-18）：4-1 白马颜良负伤败走（不弹窗）；4-2 延津颜良文丑同台，两人互为「已降 +20%」
   D('guandu-1:yanliang', '颜良', '河北上将', 'retreat'),
-  D('guandu-2:yanliang', '颜良', '河北上将', 'never', { template: 'blade', camp: 'yuan', bonuses: [{ kind: 'surrendered', id: 'wenchou', add: .2, label: '文丑已降' }],
-    yes: '袁公不能用人……良愿降。', yesIfSurrendered: { id: 'wenchou', text: '文丑兄弟都降了……良也降了罢。' }, no: '河北上将，只有战死，没有投降！' }),
-  D('guandu-2:wenchou', '文丑', '河北上将', 'never', { template: 'spear', camp: 'yuan', bonuses: [{ kind: 'surrendered', id: 'yanliang', add: .2, label: '颜良已降' }],
-    yes: '……文丑认栽。', yesIfSurrendered: { id: 'yanliang', text: '颜良兄弟都降了……罢，罢！' }, no: '要我降？先问我手中这杆枪！' }),
+  D('guandu-2:yanliang', '颜良', '河北上将', 'never', { template: 'blade', camp: 'yuan', no: '河北上将，只有战死，没有投降！' }),
+  D('guandu-2:wenchou', '文丑', '河北上将', 'never', { template: 'spear', camp: 'yuan', no: '要我降？先问我手中这杆枪！' }),
   D('guandu-3:chunyuqiong', '淳于琼', '乌巢守将', 'hard', { template: 'blade', camp: 'yuan', bonuses: [{ kind: 'flag', id: 'depotsAllBurned', add: .15, label: '粮仓尽焚' }],
     yes: '粮都烧了……琼还守什么。', no: '琼与袁公同为西园校尉，岂能背他！' }),
   // 第五章
@@ -108,7 +106,7 @@ const RAW_DEFS: readonly SurrenderDef[] = [
   D('yiling-3:luxun', '陆逊', '东吴大都督', 'story'),
   // 第十一章（孟获七擒：不弹窗，章末心服，直接入麾下）
   D('nanzheng-1:mangyachang', '忙牙长', '南蛮大将', 'can', { template: 'blade', camp: 'nanzhong', bonuses: [{ kind: 'hero', id: 'zhuge', add: .15, label: '丞相攻心' }], yes: '丞相不杀，忙牙长服了！', no: '南人只服大王！' }),
-  D('nanzheng-2:wutugu', '兀突骨', '乌戈国主', 'never', { template: 'blade', camp: 'nanzhong', bonuses: [{ kind: 'hero', id: 'zhuge', add: .15, label: '丞相攻心' }], yes: '火……藤甲怕火……乌戈国降了！', no: '藤甲刀枪不入，降什么！' }),
+  D('nanzheng-2:wutugu', '兀突骨', '乌戈国主', 'never', { template: 'blade', camp: 'nanzhong', no: '藤甲刀枪不入，降什么！' }),
   D('nanzheng-3:menghuo', '孟获', '南蛮王', 'meng', { template: 'blade', camp: 'nanzhong', yes: '公，天威也！南人不复反矣。' }),
   // 第十二章
   D('beifa-1:zhanghe', '张郃', '魏国名将', 'never', { no: '郃受魏国厚恩，今日唯有一死！' }),
@@ -117,8 +115,7 @@ const RAW_DEFS: readonly SurrenderDef[] = [
   // 其他势力支线（data/sideRoutes.ts，other-factions-design.md）：键 '<支线>-<关>:<首领>'；劝降一次性（打过的关不能再打）
   // 吕布 · 下邳（第三章后）
   D('xiapi-1:caoxing', '曹性', '吕布部将', 'can', { template: 'bow', camp: 'lubu', yes: '小沛守不住了……曹性愿降。', no: '温侯待我不薄，休想！' }),
-  D('xiapi-2:gaoshun', '高顺', '陷阵营', 'never', { template: 'blade', camp: 'lubu', bonuses: [{ kind: 'surrendered', id: 'lubu', add: .3, label: '温侯已降' }],
-    yes: '温侯都降了……陷阵营，听将军调遣。', yesIfSurrendered: { id: 'lubu', text: '温侯既已归顺，高顺岂敢独违。' }, no: '陷阵营只有战死的，没有降的！' }),
+  D('xiapi-2:gaoshun', '高顺', '陷阵营', 'never', { template: 'blade', camp: 'lubu', no: '陷阵营只有战死的，没有降的！' }),
   D('xiapi-3:zhangliao', '张辽', '吕布骁将', 'can', { template: 'spear', camp: 'lubu', yes: '辽素闻将军仁义……愿效犬马之劳。', no: '大丈夫死则死耳，何惧之有！' }),
   D('xiapi-4:chengong', '陈宫', '公台', 'never', { no: '今日有死而已！请出就戮，以明军法。' }),
   D('xiapi-4:lubu', '吕布', '飞将', 'hard', { template: 'spear', camp: 'lubu', bonuses: [{ kind: 'hero', id: 'diaochan', add: .2, label: '貂蝉在侧' }, { kind: 'lord', id: 'liubei', add: -.2, label: '大耳儿最叵信' }],
@@ -136,22 +133,21 @@ const RAW_DEFS: readonly SurrenderDef[] = [
   D('caowei-4:caocao', '曹操', '魏王', 'sure', { template: 'strategist', camp: 'wei', yes: '中原尽失，大势已去……天下英雄，唯使君与操耳。操，愿归附。', yesIfLord: { id: 'liubei', text: '玄德……煮酒论英雄，今日方知是你。操，归附。' } }),
   // 公孙瓒 · 幽州（第三章后）
   D('gongsun-1:tiankai', '田楷', '青州刺史', 'can', { template: 'bow', camp: 'gongsun', yes: '平原守不住了……楷愿降。', no: '公孙将军待我恩重，休想！' }),
-  D('gongsun-2:yangang', '严纲', '白马义从统领', 'never', { template: 'spear', camp: 'gongsun', yes: '白马义从……听将军调遣。', no: '白马义从，只有战死的！' }),
-  D('gongsun-3:gongsunzan', '公孙瓒', '白马将军', 'never', { template: 'spear', camp: 'gongsun', bonuses: [{ kind: 'hero', id: 'zhaoyun', add: .25, label: '子龙在侧' }],
-    yes: '……子龙，你选的主公，果然不错。瓒，降了。', no: '易京楼在，公孙瓒在！', noIfHero: { id: 'zhaoyun', text: '子龙……你也来劝我？我公孙瓒岂是降人！' } }),
+  D('gongsun-2:yangang', '严纲', '白马义从统领', 'never', { template: 'spear', camp: 'gongsun', no: '白马义从，只有战死的！' }),
+  D('gongsun-3:gongsunzan', '公孙瓒', '白马将军', 'never', { template: 'spear', camp: 'gongsun', no: '易京楼在，公孙瓒在！', noIfHero: { id: 'zhaoyun', text: '子龙……你也来劝我？我公孙瓒岂是降人！' } }),
   D('gongsun-3:tianyu', '田豫', '幽州从事', 'can', { template: 'bow', camp: 'gongsun', bonuses: [{ kind: 'surrendered', id: 'gongsunzan', add: .2, label: '伯珪已降' }], yes: '豫早知易京难守……愿随将军。', no: '豫既事公孙，不改其志！' }),
   // 袁绍 · 河北（第四章后）
   D('hebei-1:gaolan', '高览', '河北名将', 'can', { template: 'blade', camp: 'hebei', yes: '袁公不能用人……览愿降。', no: '河北男儿，岂肯投降！' }),
   D('hebei-2:quyi', '麴义', '先登营', 'hard', { template: 'bow', camp: 'hebei', yes: '先登营服了你……愿听调遣。', no: '先登死士，宁死不退！' }),
-  D('hebei-3:jushou', '沮授', '河北谋主', 'never', { template: 'strategist', camp: 'hebei', yes: '袁氏气数已尽……授愿为将军献策。', no: '授生为袁氏之臣，死为袁氏之鬼！' }),
+  D('hebei-3:jushou', '沮授', '河北谋主', 'never', { template: 'strategist', camp: 'hebei', no: '授生为袁氏之臣，死为袁氏之鬼！' }),
   D('hebei-4:yuanshao', '袁绍', '四世三公', 'never', { template: 'strategist', camp: 'hebei', no: '我袁本初四世三公，岂向你低头！' }),
   D('hebei-4:shenpei', '审配', '河北忠臣', 'never', { no: '吾主在北，岂可南面而降！' }),
   // 荆州 · 江夏（第四章后）
   D('jiangxia-1:ganning', '甘宁', '锦帆贼', 'can', { template: 'bow', camp: 'jingzhou', yes: '黄祖不识人，宁早想另投明主——愿随将军！', no: '锦帆甘兴霸，岂是你劝得动的！' }),
-  D('jiangxia-2:huangzu', '黄祖', '江夏太守', 'never', { template: 'bow', camp: 'jingzhou', bonuses: [], yes: '江夏……保不住了。祖，降。', no: '江夏是我的！谁也别想拿走！' }),
+  D('jiangxia-2:huangzu', '黄祖', '江夏太守', 'never', { template: 'bow', camp: 'jingzhou', bonuses: [], no: '江夏是我的！谁也别想拿走！' }),
   D('jiangxia-2:wenpin', '文聘', '荆州大将', 'hard', { template: 'blade', camp: 'jingzhou', bonuses: [{ kind: 'surrendered', id: 'huangzu', add: .2, label: '黄祖已降' }], yes: '聘守不住江夏，愧对刘荆州……愿降。', no: '聘受刘荆州厚恩，宁死不降！' }),
   // 张鲁 · 汉中（第七章后）：张鲁史上封库归降 → 必降
-  D('zhanglu-1:yangren', '杨任', '张鲁部将', 'never', { template: 'bow', camp: 'zhanglu', yes: '道坛已破……任愿降。', no: '师君待我不薄，休想！' }),
+  D('zhanglu-1:yangren', '杨任', '张鲁部将', 'never', { template: 'bow', camp: 'zhanglu', no: '师君待我不薄，休想！' }),
   D('zhanglu-2:zhanglu', '张鲁', '五斗米师君', 'sure', { template: 'strategist', camp: 'zhanglu', yes: '宝货仓库，国家之有……鲁封库以待，愿归附。' }),
   D('zhanglu-2:yanpu', '阎圃', '汉中功曹', 'can', { template: 'strategist', camp: 'zhanglu', bonuses: [{ kind: 'surrendered', id: 'zhanglu', add: .2, label: '师君已降' }], yes: '圃早劝师君归顺……愿随将军。', no: '圃事师君，不事二主！' }),
   // 西凉 · 马韩（第九章后）：马岱，马超在队必成（+100，仍受 90% 上限）

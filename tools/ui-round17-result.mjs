@@ -40,7 +40,7 @@ for (const [w, h] of [[1280, 720], [1920, 1080]]) {
     const info = await p.evaluate(G0 => { const s = eval(G0), r = s.resultPanel; return { mode: s.mode, title: s.resultTexts.title.text, home: r.getByName('result-home')?.text, body: s.resultTexts.body.text.split('\n'), kicker: window.__find(r, 'result-kicker')?.text, rewards: !!window.__find(r, 'result-rewards'), relic: !!window.__find(r, 'result-relic'), xp: !!window.__find(r, 'result-xp-bar'), stats: window.__find(r, 'result-stats')?.text, done: s.resultAnimDone }; }, G);
     console.log(w, JSON.stringify(info).slice(0, 900));
     if (after) {
-      ck(`${w}：2-3 告捷 · 结算面板：书法大标题 + 「2-3 告捷」+ 奖励图标格 + 首领遗珍卡 + 经验条 + 一行战况`, mode === 'result' && info.title === '董卓西走' && /2-3 告捷/.test(info.kicker ?? '') && info.rewards && info.relic && info.xp && /击杀/.test(info.stats ?? ''), info);
+      ck(`${w}：2-3 告捷 · 结算面板：书法大标题 + 「2-3 告捷」+ 奖励图标格 + 首领遗珍卡 + 经验条 + 一行战况`, mode === 'result' && info.title === '国贼伏诛' && /2-3 告捷/.test(info.kicker ?? '') && info.rewards && info.relic && info.xp && /击杀/.test(info.stats ?? ''), info);
       ck(`${w}：动画 2 秒内放完`, info.done === true, info.done);
       ck(`${w}：原结算文字仍在（测试 / 逻辑读取）、按钮文字不变`, info.body.some(l => l.startsWith('武将等级')) && /天下地图/.test(info.home ?? ''), info.home);
     }

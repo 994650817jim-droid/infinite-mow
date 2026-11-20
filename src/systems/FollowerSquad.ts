@@ -22,6 +22,8 @@ import type { ItemInstance } from '../data/items';
 import { ALLY_WINDUP_MS, FRIENDLY_TINT, surrenderMove, type SurrenderMove } from '../data/surrenderMoves';
 import { warnFx } from '../ui/WarnFx';
 import { pointsAt } from './HeroProgress';
+import { statEffective, statSource } from '../data/heroStats';
+import { ATTRIBUTE_EFFECT } from '../data/attributes';
 
 /**
  * 随行武将（RECRUIT_PLAN.md §4，参考《战锤：幸存者》的随从）：一直紧贴主公，不离阵去追敌人。
@@ -110,14 +112,18 @@ export class Follower {
     let g = emptyGear(); try { g = gearFromItems(Object.values(loadout((recruit.hero ?? recruit.id) as GearOwner)).filter((i): i is ItemInstance => !!i)); } catch { /* 行囊不可用 */ }
     this.gear = g;
     // 武将等级：可玩名将用自己加过的属性点（武力 / 体魄），招来的 r_ 武将按等级直接成长
-    let dmgLv = 1, hpLv = 1; this.level = 1;
+    let dmgLv = 1, hpLv = 1, agiE = 0; this.level = 1;
     try { const key = (recruit.hero ?? recruit.id) as HeroKey; this.level = Math.min(heroLevel(key), followerLevelCap()); // 随行等级不超过随行上限（主公不会出现在随行里）
-      if (recruit.hero) { const a = heroAttrs(key); dmgLv = 1 + FOLLOW.mightDamage * a.strength; hpLv = 1 + FOLLOW.constitutionHp * a.strength; }
-      else { const pl = pointsAt(this.level); dmgLv = 1 + FOLLOW.levelDamage * pl; hpLv = 1 + FOLLOW.levelHp * pl; } } catch { /* 等级存档不可用 */ } // 2026-11-19：招来的武将按点数等级成长（Lv25 后每 2–3 级算 1 级）
+      // 2026-11-20 属性改版：随从也用四维本色（data/heroStats）——可玩名将 = 自己的本色 + 自己加的点；史事名将 = 名将表本色；无名随从 = 模板本色 + 品质。
+      // 无名 / 史事名将没有加点，等级成长仍走原来的 levelDamage / levelHp（保持随从强度不变），本色另乘一份差异。
+      const src = statSource(recruit.hero ?? (recruit.kind === 'named' ? recruit.name : recruit.template), { quality: recruit.quality }), pts = recruit.hero ? heroAttrs(key) : { strength: 0, agility: 0, intellect: 0, command: 0 };
+      const str = statEffective(src, 'strength', pts.strength, this.level); agiE = statEffective(src, 'agility', pts.agility, this.level);
+      if (recruit.hero) { dmgLv = 1 + FOLLOW.mightDamage * str; hpLv = 1 + FOLLOW.constitutionHp * str; }
+      else { const pl = pointsAt(this.level); dmgLv = (1 + FOLLOW.levelDamage * pl) * (1 + FOLLOW.mightDamage * str); hpLv = (1 + FOLLOW.levelHp * pl) * (1 + FOLLOW.constitutionHp * str); } } catch { /* 等级存档不可用 */ } // 2026-11-19：招来的武将按点数等级成长（Lv25 后每 2–3 级算 1 级）
     this.damage = t.damage * q * (hero?.damageMul ?? 1) * (1 + b.damage) * (1 + g.damage) * (1 + g.crit) * dmgLv;
     this.maxHp = Math.round(t.hp * q * (hero?.hpMul ?? 1) * (1 + b.hp) * (1 + g.hp) * hpLv * leaderLevelHp); this.hp = this.maxHp;
-    this.speedMul = t.speed * (hero?.speedMul ?? 1) * (1 + g.move);
-    this.haste = (1 + b.haste) * (1 + g.attackSpeed);
+    this.speedMul = t.speed * (hero?.speedMul ?? 1) * (1 + g.move) * (1 + ATTRIBUTE_EFFECT.agility.move * agiE);
+    this.haste = (1 + b.haste) * (1 + g.attackSpeed) * (1 + ATTRIBUTE_EFFECT.agility.attackSpeed * agiE);
     if (hero) {
       this.weaponLevel = Math.max(1, FOLLOW.weaponLevelAt.filter(lv => this.level >= lv).length);
       this.weaponDamageMul = FOLLOW.heroDamageMul * hero.damageMul * (1 + b.damage) * (1 + g.damage) * (1 + g.crit) * dmgLv;

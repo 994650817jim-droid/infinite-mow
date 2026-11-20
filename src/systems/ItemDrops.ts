@@ -7,6 +7,7 @@ import { SCROLL } from './MasteryStore';
 import type { Player } from '../entities/Player';
 import { ensureItemTextures, itemIcon } from '../ui/ItemQuality';
 import { ensureLootBeam, lootBeam } from './LootBeam';
+import { mechOpen } from '../data/mechanicUnlocks';
 
 interface GroundItem { item: ItemInstance; root: Phaser.GameObjects.Container; x: number; y: number }
 interface Chest { img: Phaser.GameObjects.Image; glow: Phaser.GameObjects.Ellipse; x: number; y: number }
@@ -46,6 +47,7 @@ export class ItemDrops {
   onKill(enemy: KilledEnemy): void {
     if (enemy.kind === 'boss') this.gainScrolls(SCROLL.boss);
     else if (enemy.kind === 'elite' && this.rng() < SCROLL.eliteChance) this.gainScrolls(1);
+    if (!mechOpen('gear')) return; // 玩法逐章解锁：兵装 2-1 开放（之前首领宝箱只出宝石与三选一）
     if (enemy.kind === 'boss') {
       const n = this.finalBoss() ? 2 : 1;
       for (let i = 0; i < n; i++) this.collect(rollItem(rollDropQuality(n > 1 ? 'finalBoss' : 'boss', this.tier, this.pity, this.rng), this.rng, undefined, this.chapter));
@@ -68,7 +70,7 @@ export class ItemDrops {
   claimBossRelic(): ItemInstance | null { const r = this.bossRelicDrop(); if (r) this.collect(r); return r; }
 
   bossRelicDrop(): ItemInstance | null {
-    const defs = relicsForStage(this.relicStage()); if (!defs.length) return null;
+    const defs = relicsForStage(this.relicStage()); if (!defs.length || !mechOpen('gear')) return null;
     let owned: Set<string>; try { owned = new Set([...loadItems().bag, ...this.runLoot].map(i => i.base)); } catch { owned = new Set(this.runLoot.map(i => i.base)); }
     const missing = defs.filter(d => !owned.has(d.id));
     if (missing.length && missing[0] === defs[0]) return rollRelic(defs[0].id, this.rng);
@@ -113,6 +115,7 @@ export class ItemDrops {
       this.scene.tweens.add({ targets: c.img, alpha: 0, delay: 900, duration: 500, onComplete: () => c.img.destroy() });
     } else c.img.destroy();
     const n = this.rng() < .4 ? 2 : 1;
+    if (!mechOpen('gear')) { this.gainScrolls(1); return; } // 兵装未开放：宝箱只给武学残卷
     if (this.rng() < SCROLL.chestChance) this.gainScrolls(1);
     for (let k = 0; k < n; k++) this.drop(rollItem(rollDropQuality('chest', this.tier, this.pity, this.rng), this.rng, undefined, this.chapter), c.x + (k ? 26 : -10), c.y + 18);
   }

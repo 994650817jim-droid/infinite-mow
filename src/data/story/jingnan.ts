@@ -107,7 +107,7 @@ export const JINGNAN_STORY: StoryChapter = {
       },
       bossFalls: {
         // 黄忠：只在斩杀时播（劝降走招降台词）；主公是黄忠时是杨龄倒下
-        huangzhong: { id: 'jingnan-3.fall.huangzhong', type: 'bossFall', lines: [{ who: 'huangzhong', text: '老夫……死得其所……' }],
+        huangzhong: { id: 'jingnan-3.fall.huangzhong', type: 'bossFall', lines: [{ who: 'huangzhong', text: '老夫……今日负伤，且退！来日再会将军！' }],
           variants: { huangzhong: [{ who: 'yangling', text: '黄……汉升，你竟反了！' }] } },
         hanxuan: { id: 'jingnan-3.fall.hanxuan', type: 'bossFall', lines: [{ who: 'hanxuan', text: '魏延！你——' }] },
       },

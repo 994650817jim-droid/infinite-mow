@@ -1,4 +1,5 @@
 import { FORTUNE_BUFFS, FORTUNE, type FortuneBuff } from '../data/fortunes';
+import { mechOpen } from '../data/mechanicUnlocks';
 import { SCHOOLS, type SchoolId } from '../data/schools';
 import type { UpgradeOption } from '../types';
 import { hotkeyLabel } from '../data/hotkeys';
@@ -81,6 +82,7 @@ const card = (id: string, name: string, desc: string, label: string, icon: strin
 const pickOf = <T,>(a: readonly T[], rnd: () => number): T => a[Math.floor(rnd() * a.length) % a.length];
 
 export function make(kind: NewCardKind, h: CardHost, rnd: () => number): UpgradeOption | null {
+  if (kind === 'fortune' && !mechOpen('fortune')) return null; // 「战场机缘」卡随机缘事件一起 2-1 开放
   if (kind === 'fortune') {
     const pool = FORTUNE_BUFFS.filter(b => (h.taken[b.id] ?? 0) < FORTUNE.maxSame);
     if (!h.momentum() && rnd() < .2) { const M = NEW_CARDS.momentum; return card('new_momentum', '乘胜追击', `每杀 ${M.per} 敌，伤害 +${Math.round(M.step * 100)}%\n最多 +${Math.round(M.max * M.step * 100)}%`, '战场机缘', 'growth_icon_might', 'stage', () => h.startMomentum()); }
@@ -89,7 +91,7 @@ export function make(kind: NewCardKind, h: CardHost, rnd: () => number): Upgrade
     return card('new_' + b.id, b.name, b.desc, '战场机缘', b.icon, 'stage', () => h.applyBuff(b));
   }
   if (kind === 'jinnang') {
-    if (h.jinnangHeld()) return null;
+    if (h.jinnangHeld() || !mechOpen('jinnang')) return null; // 玩法逐章解锁：锦囊第一章通关（诸葛亮来信）后开放
     const id = pickOf(Object.keys(JINNANG) as JinnangId[], rnd), j = JINNANG[id];
     return card('jinnang_' + id, '锦囊 · ' + j.name, j.desc + '\n按 ' + hotkeyLabel('reroll') + ' 使用 · 限持 1 个', '锦囊', j.icon, 'once', () => h.giveJinnang(id));
   }

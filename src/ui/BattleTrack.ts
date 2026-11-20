@@ -9,9 +9,9 @@ import type { PhaseKind, PhasePlan } from '../data/stagePhases';
  * 走过的图标点亮、下一个轻轻呼吸；线下一行小字写「下一段 · 名字 · 剩余秒数」。首领登场后整条淡出（让位给首领血条）。
  * 每帧只挪小旗与进度线（Graphics 重画一条线，成本很低）；图标只在换段时改状态。
  */
-const ICON: Record<PhaseKind, string> = { vanguard: 'enemy', elite: 'elite', event: 'supply', lieutenant: 'banner', boss: 'seal' };
-const GLYPH: Record<PhaseKind, string> = { vanguard: '先', elite: '精', event: '伏', lieutenant: '将', boss: '帅' };
-const KIND_NAME: Record<PhaseKind, string> = { vanguard: '先锋', elite: '精锐', event: '事件', lieutenant: '副将', boss: '首领' };
+const ICON: Record<PhaseKind, string> = { vanguard: 'enemy', elite: 'elite', event: 'supply', lieutenant: 'banner', surge: 'enemy', boss: 'seal' };
+const GLYPH: Record<PhaseKind, string> = { vanguard: '先', elite: '精', event: '伏', lieutenant: '将', surge: '军', boss: '帅' };
+const KIND_NAME: Record<PhaseKind, string> = { vanguard: '先锋', elite: '精锐', event: '事件', lieutenant: '副将', surge: '大军', boss: '首领' };
 
 /** 顶部细带：高度、线的位置（地图像素，屏幕坐标）。场景按 BattleTrack.HEIGHT 把计时器 / 关名往下挪。 */
 const STRIP_H = 31, LINE_Y = 10;

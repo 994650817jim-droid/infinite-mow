@@ -101,6 +101,8 @@ export function luofengEnding(saved: boolean, isPangtong: boolean, hero: string)
   ];
 }
 export const SHU_ENDING: StoryLine[] = [
+  { text: '西凉马超弃张鲁来投，屯兵成都城北。城中闻之，无不震恐。' },
+  { who: '马超', text: '马超久闻皇叔仁德。今弃张鲁来投，愿为前驱！' },
   { who: '刘璋', text: '父子在州二十余年，无恩德以加百姓。百姓攻战三年，肌膏草野者，以璋故也，何心能安！' },
   { text: '刘璋开城出降。益州归附，天府之国自此为根基。' },
   { who: '主将', text: '取成都、定益州。北可图汉中，东可望荆襄——三分之势，至此方成。' },

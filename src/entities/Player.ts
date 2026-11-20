@@ -181,7 +181,10 @@ export class Player {
     this.knockedAt = now; this.knockedUntil = now + duration;
     this.knockVx = dx / (duration / 1000); this.knockVy = dy / (duration / 1000);
   }
+  /** 当前移动输入方向（单位向量，没推摇杆为 0）；被击退 / 冲刺锁定时也照记（七进七出的锚点跟着它走）。 */
+  readonly moveInput = { x: 0, y: 0 };
   move(dt: number, vx: number, vy: number): void {
+    { const il = Math.hypot(vx, vy); this.moveInput.x = il > .001 ? vx / il : 0; this.moveInput.y = il > .001 ? vy / il : 0; }
     // Keep the identification marker above crowds, but let the body pass behind buildings.
     this.sprite.setDepth(actorDepth(this.y + 26) + .002);
     const now = (this.scene as Phaser.Scene & { combatNow?: number }).combatNow ?? this.scene.time.now;
@@ -264,6 +267,8 @@ export class Player {
    */
   /** 放招牌技 / 专属武艺时（playAction('skill')）回调：出招起手特效（systems/HeroCastFx.ts），动作没播成也算出手 */
   onSkillAction?: () => void;
+  /** 立刻结束当前动作（回到行走 / 待机帧）；连段招式换姿势时用（七进七出：蓄势 → 突刺）。 */
+  endAction(): void { if (this.action && !this.action.hold) { this.action = null; this.renderAction(false); } }
   playAction(kind: HeroActionKind, dir: 'down' | 'up' | 'left' | 'right' = this.direction): boolean {
     if (kind === 'skill') this.onSkillAction?.();
     const set = this.actionSet; if (!set) return false;

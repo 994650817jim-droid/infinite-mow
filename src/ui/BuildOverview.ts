@@ -1,3 +1,5 @@
+import { mechOpen } from '../data/mechanicUnlocks';
+import { scaleFor } from '../data/heroStats';
 import Phaser from 'phaser';
 import { FONT, HEADING_FONT } from '../config';
 import type { RunGrowth } from '../systems/RunGrowth';
@@ -15,7 +17,7 @@ import { itemTile } from './ItemQuality';
 import { attrBadge } from './AttrBadge';
 import { primarySummary } from './PrimaryAttrInfo';
 import type { ItemTooltip, InfoTip } from './ItemTooltip';
-import { BRANCH_FIT, branchById } from '../data/weaponBranches';
+import { BRANCH_FIT, branchById, branchStatus } from '../data/weaponBranches';
 import { lqButton, lqLabelColor, type LqState } from './LacquerKit';
 
 /**
@@ -147,14 +149,15 @@ export function drawBuildOverview(o: BuildOverviewOpts): void {
     y += 20;
     // 兵器专职（2026-11-20）：已选分支、契合、Lv6 / Lv7 加深进度、进阶条件（Lv7 + 本派 4 势）完成情况；换分支走行营「重整构筑」
     if (w && br) {
-      const ov = w.over ?? 0, shi = tags[br.school] ?? 0, mk = (ok: boolean) => ok ? '✓' : '○', fin = ov >= 2 && shi >= 4;
+      const st = branchStatus(w, s2 => tags[s2] ?? 0, s2 => SCHOOLS[s2].name)!, ov = st.over, shi = st.shi, mk = (ok: boolean) => ok ? '✓' : '○', fin = st.final; // 与 HUD 专职行同一份数据
       text(L.x + pad, y, '专职', 12, '#a8956c');
       text(L.x + pad + 34, y - 1, br.name + (w.attuned ? ' · 契合' : ''), 13, w.attuned ? '#f0c060' : '#ffe2a0').setName(P + '-branch');
       y += 18;
       text(L.x + pad + 34, y - 1, `Lv6 ${mk(ov >= 1)}（第四章）  Lv7 ${mk(ov >= 2)}（第八章）`, 12, '#c9b88f').setName(P + '-branch-over');
       y += 17;
       text(L.x + pad + 34, y - 1, `进阶「${br.finalName}」${fin ? ' · 已达成' : `：Lv7 ${mk(ov >= 2)}  ${SCHOOLS[br.school].name}派 ${Math.min(shi, 4)}/4 势`}`, 12, fin ? '#f0c060' : '#b9a57a').setName(P + '-branch-final');
-      hot(L.x + pad, y - 37, L.w - pad * 2, 54, P + '-branch-hit', () => ({ title: '兵器专职 · ' + br.name, sub: SCHOOLS[br.school].name + '派' + (w.attuned ? ' · 契合（效果 +' + Math.round((BRANCH_FIT.fitMul - 1) * 100) + '%）' : ''), body: br.desc + '\n\nLv6：' + br.lv6 + '\nLv7：' + br.lv7 + '\n\n进阶「' + br.finalName + '」（Lv7 + 本派 4 势）：' + br.finalDesc + '\n\n想换分支：行营「重整构筑」花军粮重选，本命重练到 Lv5 时再弹专职面板。', color: 0xd8a85a }));
+      y += 17; text(L.x + pad + 34, y - 1, '已锁定 · 需重整构筑才能更换', 12, '#a8956c').setName(P + '-branch-lock');
+      hot(L.x + pad, y - 54, L.w - pad * 2, 71, P + '-branch-hit', () => ({ title: '兵器专职 · ' + br.name, sub: SCHOOLS[br.school].name + '派' + (w.attuned ? ' · 契合（效果 +' + Math.round((BRANCH_FIT.fitMul - 1) * 100) + '%）' : ''), body: st.tip, color: 0xd8a85a }));
       y += 19;
     } else if (w && w.level >= wmax) { text(L.x + pad, y, '专职', 12, '#a8956c'); text(L.x + pad + 34, y - 1, '本命已满 Lv5 · 下一场开战时选兵器专职', 12, '#b9a57a').setName(P + '-branch'); y += 19; }
     // 专属武学
@@ -168,14 +171,14 @@ export function drawBuildOverview(o: BuildOverviewOpts): void {
     }
     // 四项属性：10 格小条，主属性描金
     y += 4; g0.lineStyle(1, GOLD, .35).lineBetween(L.x + pad, y, L.x + L.w - pad, y); y += 7;
-    const bw = L.w - pad * 2 - 74, seg = bw / g.attrMax;
+    const bw = L.w - pad * 2 - 74;
     for (const id of ATTRIBUTE_IDS as readonly AttributeId[]) {
-      const v = g.attributes[id] ?? 0, isMain = id === main;
+      const v = g.attributes[id] ?? 0, isMain = id === main, cellN = scaleFor(v), seg = bw / cellN;
       text(L.x + pad, y - 1, ATTRIBUTE_INFO[id].name, 12, isMain ? '#f3d48a' : '#c9b88f');
       const bx = L.x + pad + 42;
-      for (let k = 0; k < g.attrMax; k++) g0.fillStyle(k < v ? (isMain ? 0xe8c27a : 0xb89a66) : 0x3a2c1c, k < v ? 1 : .8).fillRect(bx + k * seg + .5, y + 3, seg - 1.5, 8);
+      for (let k = 0; k < cellN; k++) g0.fillStyle(k < v ? (isMain ? 0xe8c27a : 0xb89a66) : 0x3a2c1c, k < v ? 1 : .8).fillRect(bx + k * seg + .5, y + 3, seg - 1.5, 8);
       text(bx + bw + 6, y - 1, String(v), 12, isMain ? '#f3d48a' : '#d8c8a4').setName(P + '-attr-' + id);
-      hot(L.x + pad, y - 2, L.w - pad * 2, 16, P + '-attr-hit-' + id, () => isMain && sum ? sum.tip : ({ title: ATTRIBUTE_INFO[id].name, sub: `${v} / ${g.attrMax} 点`, body: ATTRIBUTE_INFO[id].effect, color: 0x9a8a6a }));
+      hot(L.x + pad, y - 2, L.w - pad * 2, 16, P + '-attr-hit-' + id, () => isMain && sum ? sum.tip : ({ title: ATTRIBUTE_INFO[id].name, sub: `${v} 点（单项不封顶）`, body: ATTRIBUTE_INFO[id].effect, color: 0x9a8a6a }));
       y += 17;
     }
     if (g.unallocated > 0) text(L.x + pad, y + 2, `还有 ${g.unallocated} 点属性未分配`, 12, '#7fd88a').setName(P + '-unallocated');
@@ -278,7 +281,7 @@ export function drawBuildOverview(o: BuildOverviewOpts): void {
       y += line.height + 4;
     });
     // 合击（第 2 期）：两派都到 2 势即生效；没有生效的就提示最近的两个（差几势）
-    const on = activeCombos(tags), near = on.length >= 4 ? [] : COMBOS.filter(c => !on.includes(c) && Math.max(tags[c.a], tags[c.b]) >= COMBO_AT).map(c => ({ c, left: Math.max(0, COMBO_AT - tags[c.a]) + Math.max(0, COMBO_AT - tags[c.b]) })).sort((a1, b1) => a1.left - b1.left).slice(0, on.length ? 1 : 2);
+    const on = activeCombos(tags), near = on.length >= 4 || !mechOpen('combo') ? [] : COMBOS.filter(c => !on.includes(c) && Math.max(tags[c.a], tags[c.b]) >= COMBO_AT).map(c => ({ c, left: Math.max(0, COMBO_AT - tags[c.a]) + Math.max(0, COMBO_AT - tags[c.b]) })).sort((a1, b1) => a1.left - b1.left).slice(0, on.length ? 1 : 2);
     if (y < R.y + R.h - 44) {
       y += 2; g0.lineStyle(1, GOLD, .35).lineBetween(R.x + pad, y, R.x + R.w - pad, y); y += 6;
       text(R.x + pad, y, '合击', 13, '#f6dc9a', true).setName(P + '-combo-title'); text(R.x + R.w - pad, y + 2, on.length ? '已生效 ' + on.length : '两派都到 2 势即生效', 11, '#a8956c').setOrigin(1, 0).setName(P + '-combo-count'); y += 20;

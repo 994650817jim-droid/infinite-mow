@@ -292,6 +292,7 @@ assets/raw/*
 !/tools/test-camp-return.mjs
 !/tools/test-camp-merchant.mjs
 !/tools/shot-town-life.mjs
+!/tools/test-medic-anywhere.mjs
 !/tools/shot-camp-full.mjs
 !/tools/deathfx-horse.mjs
 !/tools/shot-academy.mjs
@@ -327,3 +328,7 @@ assets/raw/*
 !/tools/audio-density.mjs
 !/tools/shot-attr-panel.mjs
 !/tools/test-attr-panel-view.mjs
+!/tools/test-stat-curve.mjs
+!/tools/gif-school-fx.mjs
+!/tools/test-vfx-tune.mjs
+!/tools/render-ui-bgm.mjs

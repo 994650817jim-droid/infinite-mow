@@ -1668,9 +1668,11 @@ export class GameScene extends Phaser.Scene {
     // 首领出场：专属锣鼓出场段 + 主题曲（data/bossMusic.ts），并显示名号标题（不暂停战斗）
     const profile = bossProfile(this.chapter.bossName);
     this.music.setBoss(profile);
-    this.announceBoss(profile.title, this.chapter.bossName);
     this.presence?.entrance(boss);
-    this.lordBossBark('bossAppear', !!this.storyDir?.bossIntro(boss.sprite)); // 剧情：首领登场大字台词；主将（HeroBark）接一句
+    // 剧情：首领登场大卡（立绘 + 名号，短暂停顿）；说了就不再弹中间的名号牌，免得名字出两遍（2026-11-20）
+    const introSpoke = !!this.storyDir?.bossIntro(boss.sprite);
+    if (!introSpoke) this.announceBoss(profile.title, this.chapter.bossName);
+    this.lordBossBark('bossAppear', introSpoke); // 主将（HeroBark）接一句
   }
 
   /** 首领名号标题：画面上部一道短墨痕，墨上名号小字 + 名字，约 2.6 秒淡出；不拦截点击、不暂停。

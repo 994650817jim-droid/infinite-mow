@@ -2150,6 +2150,8 @@ export class GameScene extends Phaser.Scene {
   protected priorityWeaponTarget(range:number,bodyRadius=true):Enemy|null{
     const px=this.player.x,py=this.player.y;let boss:Enemy|null=null,elite:Enemy|null=null,bd=Infinity,ed=Infinity;
     { const lock=this.objective?.lockedTarget(px,py,range); if(lock)return lock; } // 关卡锁定目标（敌营等）排第一：用户「武将攻击逻辑会一直不打营寨」
+    // 首领的护法符柱（1-2 张宝，Enemy.ward）：符柱没碎时首领几乎不受伤，射程内有符柱就先打最近的符柱
+    { let ward:Enemy|null=null,wd=Infinity;for(const e of this.grid.query(px,py,range+60)){if(!e.active||!e.ward||e.hp<=0)continue;const d=Math.hypot(e.x-px,e.y-py)-(bodyRadius?e.radius:0);if(d<=range&&d<wd){wd=d;ward=e;}}if(ward)return ward; }
     for(const e of this.grid.query(px,py,range+60)){if(!e.active||e.isSupplySlot||e.invulnerable)continue; /* 刀枪不入的（城头董卓、劝降中）不当首选目标 */const d=Math.hypot(e.x-px,e.y-py)-(bodyRadius?e.radius:0);if(d>range)continue;
       if(e.kind==='boss'&&d<bd){bd=d;boss=e;}else if(e.kind==='elite'&&d<ed){ed=d;elite=e;}}
     return boss??elite;
@@ -4302,7 +4304,7 @@ export class GameScene extends Phaser.Scene {
       const stageBoss=!!chaser||!!dzLb||!!this.xurong||!!this.huaxiong||!!this.chapter.stage&&this.chapter.stage<3;
       const energy = this.lubu ? this.lubu.energy : this.bossEnergy;
       this.hudTexts.bossEnergy.setVisible(!chaser).setPosition(left + barW, barY + 31)
-        .setText(dzLb?(this.dzLubu?.phase==='fleeing'?'吕布败走':'打到三分之一，吕布败走'):this.zhangjiao?this.zhangjiao.label:this.xurong?this.xurong.label+' · 推进 '+Math.max(0,Math.ceil(90-(this.combatNow-this.firstBossAt)/1000))+'秒':this.huaxiong?this.huaxiong.label+' · 推进 '+Math.max(0,Math.ceil(90-(this.combatNow-this.firstBossAt)/1000))+'秒':this.lubu ? `${this.lubu.phase2 ? `魔神 ${Math.floor(energy)}%` : '半血解锁大招'} · ${this.lubu.statusLabel}` : stageBoss?`${boss.hp<=boss.maxHp*.5?'半血强化 · ':''}${this.battleStage()<3?'战线推进倒计时 '+Math.max(0,Math.ceil(90-(this.combatNow-this.firstBossAt)/1000))+'秒':'注意地裂与环形预警'}`:`⚡ ${Math.floor(energy)}%`);
+        .setText(dzLb?(this.dzLubu?.phase==='fleeing'?'吕布败走':'打到三分之一，吕布败走'):this.zhangjiao?this.zhangjiao.label:this.xurong?this.xurong.label+' · 推进 '+Math.max(0,Math.ceil(90-(this.combatNow-this.firstBossAt)/1000))+'秒':this.huaxiong?this.huaxiong.label+' · 推进 '+Math.max(0,Math.ceil(90-(this.combatNow-this.firstBossAt)/1000))+'秒':this.lubu ? `${this.lubu.phase2 ? `魔神 ${Math.floor(energy)}%` : '半血解锁大招'} · ${this.lubu.statusLabel}` : stageBoss?`${this.moveset?.wardInfo?this.moveset.wardInfo+' · 先打碎符柱 · ':''}${boss.hp<=boss.maxHp*.5?'半血强化 · ':''}${this.battleStage()<3?'战线推进倒计时 '+Math.max(0,Math.ceil(90-(this.combatNow-this.firstBossAt)/1000))+'秒':'注意地裂与环形预警'}`:`⚡ ${Math.floor(energy)}%`);
       g.fillStyle(0x000000, 0.72 * fk);
       g.fillRect(left, barY, barW, 12);
       // 白色残血条：受击的那一截先显示成白色，停一下再慢慢缩到当前血量（按真实时间，不跟顿帧慢动作走）

@@ -252,7 +252,7 @@ export class BattleHeal {
       if (ready && inside && hurt && sp.left > 0) {
         using = true;
         const want = Math.min(S.rate * dt, sp.left * S.charge, (P.maxHp - P.hp) / P.maxHp);
-        P.heal(want * P.maxHp); sp.left -= want / S.charge; this.stats.spot += want;
+        P.heal(want * P.maxHp); sp.left -= want / S.charge; this.stats.spot += want; this.h.sfx('heal_spring'); // 站着回血：咕嘟水声（自带 1.2 秒节流）
         if (now >= sp.fxAt) { sp.fxAt = now + 650; playSheet(this.h.scene, 'fx_heal_fushui', P.x, P.y - 14, { size: 84, depth: actorDepth(P.y) + .1, ms: 640, alpha: .8, tint: 0xbff0e0 }); }
         if (sp.left <= .001) { sp.left = 0; sp.readyAt = t + S.cooldownSec; this.stats.spotUses++; this.h.sfx('pickup'); } // 水用完：变暗（不打字）
       }

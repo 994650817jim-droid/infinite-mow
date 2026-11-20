@@ -358,3 +358,5 @@ export function renderSfxInto(ctx: BaseAudioContext, out: AudioNode, kind: strin
 /** 菜单、营帐等没有战斗音效实例时使用的共享 UI 音效（首次点击后解锁）。 */
 let shared: Sfx | null = null;
 export function uiSfx(): Sfx { return shared ??= new Sfx(); }
+/** 场景有自己的 Sfx（战斗场景）就用它，否则用界面共用的（剧情卷轴等两边都会出现的界面用）。 */
+export function playIn(scene: unknown, key: string): void { const s = (scene as { sfx?: { play(k: string): void } } | null)?.sfx; if (s?.play) s.play(key); else uiSfx().play(key); }

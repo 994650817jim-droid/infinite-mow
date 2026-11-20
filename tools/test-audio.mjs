@@ -14,7 +14,8 @@ const bundle = await build({
     contents: `
       import { Sfx, renderSfxInto } from './src/systems/Sfx';
       import { GROUP_MAX } from './src/systems/HeroSfx';
-      window.__T = { Sfx, renderSfxInto, GROUP_MAX };
+      import { Music, MENU_MOODS } from './src/systems/Music';
+      window.__T = { Sfx, renderSfxInto, GROUP_MAX, Music, MENU_MOODS };
     `, resolveDir: process.cwd(), loader: 'ts',
   },
   bundle: true, write: false, format: 'iife', platform: 'browser', define: { 'import.meta.env.DEV': 'false' },
@@ -61,6 +62,43 @@ const synth = await page.evaluate(async list => {
   return bad;
 }, [...used.keys()]);
 ck(`合成：代码里用到的 ${used.size} 个键都能离线合成（无 NaN / 非静音）`, synth.length === 0, synth);
+// ———— 界面 BGM（2026-11-20 用户「检查界面bgm」）————
+// 4. 静态：每个非战斗界面都开界面曲，情绪是有效的；战斗场景暂停压低、结算后接「静」
+const MOODS = await page.evaluate(() => [...window.__T.MENU_MOODS]);
+const UI_SCENES = { MenuScene: 'home', WorldMapScene: 'map', WorldMapSceneV1: 'map', TownScene: 'camp', CityScene: 'camp', CityRecruitScene: 'camp', TalentHallScene: 'hall', EndingScene: 'home',
+  BeifaChapterScene: 'map', ChibiChapterScene: 'map', GuanduChapterScene: 'map', HanzhongChapterScene: 'map', JingnanChapterScene: 'map', NanzhengChapterScene: 'map', ShuChapterScene: 'map', ThirdChapterScene: 'map', XiangfanChapterScene: 'map', YilingChapterScene: 'map' };
+const badScene = [];
+for (const [sc, want] of Object.entries(UI_SCENES)) {
+  const src = readFileSync(`src/scenes/${sc}.ts`, 'utf8'), m = src.match(/playMenuMusic\(this(?:,\s*'([a-z]+)')?\)/);
+  const got = m ? (m[1] ?? 'home') : null; if (got !== want || !MOODS.includes(got)) badScene.push(`${sc}: ${got ?? '没有界面曲'}（应为 ${want}）`);
+}
+ck(`界面 BGM：${Object.keys(UI_SCENES).length} 个非战斗界面都开界面曲、情绪对`, badScene.length === 0, badScene);
+const gs = readFileSync('src/scenes/GameScene.ts', 'utf8');
+ck('界面 BGM：战斗暂停 / 面板时压低音乐（setPaused），结算短曲后接界面曲「静」', /music\?\.setPaused\(mode !== 'none'\)/.test(gs) && /playMenuMusic\(this, 'rest'\)/.test(gs), null);
+// 5. 各情绪都能合成，响度与主页相差 ≤ 4 dB，不削波
+const moods = await page.evaluate(async list => {
+  const { Music } = window.__T, out = {};
+  for (const m of list) { const mu = new Music('menu'); mu.setMood(m, true); const buf = await mu.renderOffline(12, null); let sum = 0, n = 0, peak = 0, nan = 0;
+    for (let c = 0; c < buf.numberOfChannels; c++) { const d = buf.getChannelData(c); for (let i = 0; i < d.length; i++) { const v = d[i]; if (!Number.isFinite(v)) { nan++; continue; } sum += v * v; n++; peak = Math.max(peak, Math.abs(v)); } }
+    out[m] = { rmsDb: +(20 * Math.log10(Math.sqrt(sum / n) + 1e-9)).toFixed(1), peakDb: +(20 * Math.log10(peak + 1e-9)).toFixed(1), nan }; }
+  return out;
+}, MOODS);
+console.log('INFO 界面曲各情绪 12 秒响度', JSON.stringify(moods));
+const home = moods.home.rmsDb, badMood = Object.entries(moods).filter(([, v]) => v.nan || v.peakDb > 0 || v.rmsDb < -60 || Math.abs(v.rmsDb - home) > 4);
+ck(`界面 BGM：${MOODS.length} 种情绪都能合成、不削波、响度与主页相差 ≤ 4 dB`, badMood.length === 0, badMood);
+// 6. 切换：同一情绪再进不从头播；换情绪先压低再换编制；暂停压到一半
+const sw = await page.evaluate(async () => {
+  const { Music } = window.__T, m = new Music('menu'), wait = ms => new Promise(r => setTimeout(r, ms)), g = () => m.master?.gain.value ?? -1;
+  m.setMood('home', true); m.start(); m.unlock(); for (let i = 0; i < 40 && m.ctx?.state !== 'running'; i++) await wait(25);
+  await wait(1500); const full = g(), s0 = m.step; m.setMood('home'); await wait(300); const sameKept = m.step > s0 && m.mood === 'home';
+  m.setMood('map'); await wait(250); const dip = g(); await wait(500); const changed = m.mood === 'map', stepReset = m.step < 40; await wait(2500); const back = g();
+  m.setPaused(true); await wait(900); const paused = g(); m.setPaused(false); await wait(900); const resumed = g();
+  m.dispose();
+  return { state: 'ok', full: +full.toFixed(3), sameKept, dip: +dip.toFixed(3), changed, stepReset, back: +back.toFixed(3), paused: +paused.toFixed(3), resumed: +resumed.toFixed(3) };
+});
+ck('界面 BGM：同一情绪再进不从头播（共用实例续播）', sw.sameKept, sw);
+ck('界面 BGM：换情绪先淡出（音量明显降）、再换编制从乐段开头起、再淡入回原音量', sw.dip < sw.full * .6 && sw.changed && sw.stepReset && Math.abs(sw.back - sw.full) < sw.full * .15, sw);
+ck('界面 BGM：暂停压到一半、恢复回原音量', Math.abs(sw.paused - sw.full * .5) < sw.full * .12 && Math.abs(sw.resumed - sw.full) < sw.full * .12, sw);
 ck('无页面报错', errs.length === 0, errs);
 await b.close();
 console.log(fail ? `TEST-AUDIO FAIL ${fail}` : 'TEST-AUDIO OK');

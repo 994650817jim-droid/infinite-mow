@@ -289,8 +289,9 @@ export class EpicBgm {
    * 主城 / 营寨 / 天下地图 / 选将选关共用。旋律与和声沿用旧版（Music.ts 的 MENU_PHRASES / MENU_ROOTS），只换音色：
    * 古琴低音拨弦（偶带滑音）、竹笛（前半）与二胡（后半）吟唱、男声“哦”长音铺底、远处战鼓与轻锣、风铃，大厅混响更深。
    */
-  menuStep(step: number, t: number, sd: number, mel: Array<[number, number] | null>, roots: number[], arp: Record<number, number[]>): void {
+  menuStep(step: number, t: number, sd: number, mel: Array<[number, number] | null>, roots: number[], arp: Record<number, number[]>, mood: 'home' | 'map' | 'camp' | 'hall' | 'rest' = 'home'): void {
     const bar = Math.floor(step / 16) % 32, pos = step % 16, root = roots[bar % 8], notes = arp[root], bar16 = sd * 16;
+    if (mood !== 'home') { this.menuMood(mood, bar, pos, t, sd, mel, root, notes, bar16); return; }
     if (pos === 0) {
       this.bassDrone(mtof(root - 12), t, bar16 * 1.15, .06);
       if (bar % 2 === 0) this.choir([notes[0], notes[1] + 12, notes[2] + 12].map(n => n - 12), t, bar16 * 2.02, .018, 'o');
@@ -301,6 +302,46 @@ export class EpicBgm {
     if (pos === 14 && bar % 4 === 1) for (let k = 0; k < 3; k++) this.bell(mtof(notes[(k + 1) % 4] + 24), t + k * .11, .008);
     const n = mel[(bar * 16 + pos) % mel.length];
     if (n) { if (bar < 16) this.dizi(mtof(n[0]), t, n[1] * sd * .97, .05); else this.erhu(mtof(n[0]), t, n[1] * sd, .055); }
+  }
+  /** 界面曲各情绪的编制（旋律同《营火望乡》）。 */
+  private menuMood(mood: 'map' | 'camp' | 'hall' | 'rest', bar: number, pos: number, t: number, sd: number, mel: Array<[number, number] | null>, root: number, notes: number[], bar16: number): void {
+    const n = mel[(bar * 16 + pos) % mel.length];
+    if (mood === 'map') {
+      // 天下地图：大气——低音更深、合唱「啊」两小节一铺、每小节大鼓、八小节一锣；上半曲竹笛、下半曲号角吹旋律
+      if (pos === 0) {
+        this.bassDrone(mtof(root - 12), t, bar16 * 1.2, .075);
+        if (bar % 2 === 0) this.choir([notes[0], notes[1] + 12, notes[2] + 12].map(x => x - 12), t, bar16 * 2.02, .028, 'a');
+        this.warDrum(t, .2); if (bar % 8 === 0) this.gong(t, .1);
+      }
+      if (pos === 8) this.warDrum(t, .09);
+      if (pos % 8 === 0) { const i = pos / 8; this.qin(mtof(notes[i * 2] - (i === 0 ? 12 : 0)), t, .06, false); }
+      if (n) { if (bar < 16) this.dizi(mtof(n[0]), t, n[1] * sd * .97, .05); else this.horn(mtof(n[0] - 12), t, n[1] * sd * .95, .045); }
+      return;
+    }
+    if (mood === 'camp') {
+      // 营寨 / 城池：暖——古琴拨弦八分、小鼓轻点二四拍、竹笛吹旋律；底下远处人声嘈嘈（带通噪声慢涌）与营火噼啪
+      if (pos === 0) { this.bassDrone(mtof(root - 12), t, bar16 * 1.1, .045); this.noiseHit(t, bar16 * 1.05, 'bandpass', 420 + (bar % 3) * 80, .012, this.bus(.4), .7, bar16 * .45); }
+      if (pos % 2 === 0) this.pluck(mtof(notes[(pos / 2) % 4] + (pos >= 8 ? 12 : 0)), t, pos % 4 === 0 ? .045 : .03);
+      if (pos === 4 || pos === 12) this.smallDrum(t, .1);
+      if (pos % 3 === 0 && Math.random() < .35) this.noiseHit(t + Math.random() * sd, .02, 'highpass', 2800 + Math.random() * 2000, .006 + Math.random() * .006, this.bus(.2));
+      if (n) this.dizi(mtof(n[0]), t, n[1] * sd * .97, .045);
+      return;
+    }
+    if (mood === 'hall') {
+      // 招贤馆 / 名将堂：雅——古琴只在一、三拍，箫（竹笛低八度、轻）吹旋律，乐句处编钟两响，极轻的合唱「哦」；无鼓
+      if (pos === 0) {
+        this.bassDrone(mtof(root - 12), t, bar16 * 1.1, .035);
+        if (bar % 2 === 0) for (let k = 0; k < 2; k++) this.bell(mtof(notes[k * 2] + 12), t + k * sd * 2, .014);
+        if (bar % 4 === 0) this.choir([notes[0], notes[2] + 12].map(x => x - 12), t, bar16 * 4.02, .012, 'o');
+      }
+      if (pos === 0 || pos === 8) this.qin(mtof(notes[pos / 4] - (pos === 0 ? 12 : 0)), t, .07, pos === 8 && bar % 4 === 3);
+      if (n) this.dizi(mtof(n[0] - 12), t, n[1] * sd * .97, .04);
+      return;
+    }
+    // rest（战斗结算 / 战败退守）：静——古琴四分琶音、二胡吹旋律（轻），四小节一铺合唱；无鼓
+    if (pos === 0) { this.bassDrone(mtof(root - 12), t, bar16 * 1.1, .04); if (bar % 4 === 0) this.choir([notes[0], notes[1] + 12].map(x => x - 12), t, bar16 * 4.02, .015, 'o'); }
+    if (pos % 4 === 0) { const i = pos / 4; this.qin(mtof(notes[i] - (i === 0 ? 12 : 0)), t, i === 0 ? .06 : .045, false); }
+    if (n) this.erhu(mtof(n[0]), t, n[1] * sd, .04);
   }
   /** 古琴：较低泛音、长余音，滑音从下方小二度进入。 */
   private qin(freq: number, t: number, v: number, slide: boolean): void {

@@ -1,4 +1,4 @@
-import { stopMenuMusic } from '../systems/Music';
+import { playMenuMusic, stopMenuMusic } from '../systems/Music';
 import { SCHOOLS, SCHOOL_TIER, SHI_SOURCES, FOLLOWER_SCHOOL, heroAffinity, type SchoolId } from '../data/schools';
 import { playSheet } from '../systems/SkillFxSheets';
 import { ZHANGLIAO } from '../data/zhangliao';
@@ -3014,6 +3014,7 @@ export class GameScene extends Phaser.Scene {
     if(mode!=='pause')this.children.getByName('build-panel')?.destroy();if(mode!=='pause')this.children.getByName('item-bag')?.destroy();
     const canPlay = mode === 'none' && !this.over;
     this.time.paused = !canPlay;
+    if (!this.over) this.music?.setPaused(mode !== 'none'); // 界面 BGM 检查：暂停 / 升级 / 招募 / 舆图 / 行营面板打开时战斗曲压到一半
     if (canPlay) this.tweens.resumeAll();
     else this.tweens.pauseAll();
     if (canPlay && this.pendingGrowthNotices.length) this.showGrowthNotice(this.pendingGrowthNotices.shift()!);
@@ -4184,6 +4185,8 @@ export class GameScene extends Phaser.Scene {
     if(victory&&this.chapter.stage===3)this.finaleFadeMs=800;
     this.feedback.clearAttacks();
     if (!jingle) { if (victory) this.sfx.win(); else this.sfx.lose(); }
+    // 界面 BGM 检查：结算 / 战败退守原来短曲（约 4 秒）后就没声了——短曲之后接界面曲「静」（古琴 + 二胡），回营寨 / 地图时同一实例淡入换情绪
+    this.music.setPaused(false); this.time.delayedCall(jingle ? 4400 : 300, () => { if (this.over && this.sys.isActive()) playMenuMusic(this, 'rest'); });
     this.cameras.main.flashEffect.reset();this.cameras.main.shakeEffect.reset();
     this.setMode('result');
     const stats: RunStats = {

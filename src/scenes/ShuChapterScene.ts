@@ -18,7 +18,7 @@ export class ShuChapterScene extends Phaser.Scene {
  preload(){for(const d of SHU_STAGES){const key=shuBossTexture(d.id);if(!this.textures.exists(key))loadBossSheet(this.load,key,shuBossSheet(d.id));}}
  private text(x:number,y:number,s:string,size=16,color='#ded2b9'){return worldText(this,x,y,s,size,color);}
  private action(x:number,y:number,w:number,h:number,label:string,fn:()=>void,primary=false){const bg=this.add.rectangle(x,y,w,h,primary?0x744530:0x241e1a,.96).setStrokeStyle(1,primary?0xc39b61:0x70604b).setInteractive({useHandCursor:true});const t=this.text(x,y,label,primary?22:17,primary?'#ffdf9d':'#d1c2a7').setOrigin(.5);bg.on('pointerover',()=>bg.setFillStyle(primary?0x8b5438:0x3a2c23)).on('pointerout',()=>bg.setFillStyle(primary?0x744530:0x241e1a)).on('pointerdown',()=>bg.setAlpha(bg.getData('locked')?.3:.7)).on('pointerup',()=>{bg.setAlpha(bg.getData('locked')?.35:1);fn();});return{bg,t};}
- create(){playMenuMusic(this);
+ create(){playMenuMusic(this, 'map');
   if(!this.registry.get('battleReady')){this.registry.set('pendingWarlord','ShuChapterScene');this.registry.set('loadBattle',true);this.scene.start('BootScene');return;}
   this.cards=[];this.heroButtons=[];const desk=W>600,state=loadWorld(),test=isChapterTestRun();this.selected=Math.min(3,state.shuStages+1)as ShuStage;{const pick=Number(this.registry.get('worldStagePick'));this.registry.remove('worldStagePick');if([1,2,3].includes(pick)&&(stageOpen(pick)||test))this.selected=pick as ShuStage;}
   try{this.hero=defaultHero(localStorage.getItem('im_last_hero'));}catch{this.hero=defaultHero(null);}

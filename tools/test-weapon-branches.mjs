@@ -48,7 +48,7 @@ const branchFire = async (hero, branches) => {
   ck('24 枚分支卡面图标都已载入（branch_icon_*）', ic.length === 0, ic);
   await p.close();
 }
-// 兵器专职面板（2026-11-20）：本命 Lv5 单独弹面板（暂停、两张大卡、立绘、契合印），不再混在三选一；先专职再三选一；选契合那条效果 +10%；构筑总览显示分支栏；进阶短演出
+// 兵器专职面板（2026-11-20）：本命 Lv5 单独弹面板（暂停、两张大卡、立绘、契合印），不再混在三选一；先专职再三选一；选契合那条效果 ×fitMul；构筑总览显示分支栏；进阶短演出
 {
   const p = await open({ key: 'GameScene', run: { chapter: 'hulao', westStage: 2, character: 'zhaoyun' } });
   await p.evaluate(() => { const s = window.__S; window.__calm(); const w = s.player.weapons[0]; w.level = 5; delete w.branch; delete w.attuned; w.over = 0; s.pendingLevels = 1; s.lastPickAt = -1e9; s.openUpgrade(); });
@@ -59,7 +59,7 @@ const branchFire = async (hero, branches) => {
   const idx = await p.evaluate(() => { const s = window.__S; return s.branchOpts ? s.branchOpts.findIndex(b => b.id === s.branchFitId) : 0; });
   await p.keyboard.press(idx === 0 ? 'Digit1' : 'Digit2'); await p.waitForTimeout(600);
   const pk = await p.evaluate(() => { const s = window.__S, w = s.player.weapons[0]; return { branch: w.branch, attuned: w.attuned, mode: s.mode, panel: !!s.children.getByName('branch-panel'), opts: (s.upgradeOptions ?? []).map(o => o.id), banner: window.__banners.slice(-2) }; });
-  ck('按键选契合那条：锁定分支、记「契合」（效果 +10%）、面板关；接着弹排队的三选一，里面不再有专职卡', pk.branch === pn.fit && pk.attuned === true && !pk.panel && pk.mode === 'levelup' && !pk.opts.some(id => id.startsWith('branch_')) && pk.banner.some(b => /兵器专职 · .*契合流派/.test(b)), pk);
+  ck('按键选契合那条：锁定分支、记「契合」（效果 ×BRANCH_FIT.fitMul）、面板关；接着弹排队的三选一，里面不再有专职卡', pk.branch === pn.fit && pk.attuned === true && !pk.panel && pk.mode === 'levelup' && !pk.opts.some(id => id.startsWith('branch_')) && pk.banner.some(b => /兵器专职 · .*契合流派/.test(b)), pk);
   await p.evaluate(() => { const s = window.__S; window.__calm(); s.togglePause(); s.openBuildPanel(); }); await p.waitForTimeout(900);
   const ov = await p.evaluate(() => { const s = window.__S, all = []; const walk = l => { for (const o of l) { if (o.type === 'Text' && o.visible !== false) all.push({ n: o.name, t: o.text }); if (o.list) walk(o.list); } }; walk(s.children.list); return all.filter(x => /-branch/.test(x.n ?? '')).map(x => x.t); });
   await p.screenshot({ path: OUT + '/branch-overview.png' });

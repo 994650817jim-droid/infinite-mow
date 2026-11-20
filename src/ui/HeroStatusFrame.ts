@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { HEADING_FONT, FONT } from '../config';
 import { LQ, lqDiamond } from './LacquerKit';
+import { MEDAL_SIZE, drawHeroMedal } from './HeroMedal';
 
 /**
  * 战斗左上主将状态框（电脑布局；2026-11-19 用户「这里ui做一下」：原为透明暗底 + 纯色扁平血条 / 经验条）。
@@ -32,22 +33,21 @@ export class HeroStatusFrame {
     this.ensurePortrait();
   }
 
-  /** 头像：水墨立绘（assets/ink-scroll/<id>.webp）裁成圆，按需加载。 */
+  /** 头像：主页厚涂立绘（assets/epic-home/<id>.webp，高清）按每将裁切画成头肩特写（ui/HeroMedal.ts），墨色晕染底；按需加载。 */
   private ensurePortrait(): void {
-    const s = this.scene, key = 'hud_medal_' + this.hero, src = 'ink_hero_' + this.hero, F = STATUS_FRAME;
+    const s = this.scene, key = 'hud_medal2_' + this.hero, src = 'epic_hero_' + this.hero, F = STATUS_FRAME;
     const make = (): void => {
       if (!s.textures.exists(key)) {
         if (!s.textures.exists(src)) return;
-        const img = s.textures.get(src).getSourceImage() as HTMLImageElement, S = 128, c = document.createElement('canvas'); c.width = c.height = S;
-        const g = c.getContext('2d')!; g.beginPath(); g.arc(S / 2, S / 2, S / 2, 0, Math.PI * 2); g.clip();
-        const side = img.width * .62; g.drawImage(img, (img.width - side) / 2, img.height * .1, side, side, 0, 0, S, S);
-        s.textures.addCanvas(key, c);
+        const img = s.textures.get(src).getSourceImage() as HTMLImageElement, S = MEDAL_SIZE, c = document.createElement('canvas'); c.width = c.height = S;
+        drawHeroMedal(c.getContext('2d')!, img, this.hero, S);
+        s.textures.addCanvas(key, c); s.textures.get(key).setFilter(Phaser.Textures.FilterMode.LINEAR);
       }
-      if (!this.portrait) this.portrait = s.add.image(F.x + 38, F.y + F.h / 2, key).setDisplaySize(F.r * 2 - 4, F.r * 2 - 4).setScrollFactor(0).setDepth(this.depth + .1).setName('hud-status-portrait');
+      if (!this.portrait) this.portrait = s.add.image(F.x + 38, F.y + F.h / 2, key).setDisplaySize(F.r * 2, F.r * 2).setScrollFactor(0).setDepth(this.depth + .1).setName('hud-status-portrait');
       this.stats.portrait = true;
     };
     if (s.textures.exists(src) || s.textures.exists(key)) { make(); return; }
-    s.load.image(src, 'assets/ink-scroll/' + this.hero + '.webp');
+    s.load.image(src, 'assets/epic-home/' + this.hero + '.webp');
     s.load.once('filecomplete-image-' + src, () => { if (this.back.active) make(); });
     s.load.start();
   }
@@ -60,10 +60,10 @@ export class HeroStatusFrame {
     g.fillStyle(LQ.lacquerHi, .35).fillRoundedRect(F.x + 4, F.y + 4, F.w - 8, F.h * .42, { tl: 6, tr: 6, bl: 0, br: 0 });
     g.lineStyle(1.6, LQ.gold, .95).strokeRoundedRect(F.x + 2.5, F.y + 2.5, F.w - 5, F.h - 5, 7);
     g.lineStyle(1, LQ.gold, .35).strokeRoundedRect(F.x + 6.5, F.y + 6.5, F.w - 13, F.h - 13, 5);
-    g.fillStyle(LQ.goldHi, 1); for (const [px, py] of [[F.x + 2.5, F.y + 2.5], [F.x + F.w - 2.5, F.y + 2.5], [F.x + 2.5, F.y + F.h - 2.5], [F.x + F.w - 2.5, F.y + F.h - 2.5]]) lqDiamond(g, px, py, 4);
+    g.fillStyle(LQ.goldHi, 1); for (const [px, py] of [[F.x + F.w - 2.5, F.y + 2.5], [F.x + F.w - 2.5, F.y + F.h - 2.5]]) lqDiamond(g, px, py, 4); // 左侧两角紧挨头像金圈，不放菱饰
     // 头像金圈：外金、内朱一细线、底暗
     g.fillStyle(0x0d0806, 1).fillCircle(cx, cy, F.r + 1);
-    g.lineStyle(3, LQ.gold, 1).strokeCircle(cx, cy, F.r + 1.5).lineStyle(1, LQ.goldHi, .8).strokeCircle(cx, cy, F.r + 3.5).lineStyle(1.2, LQ.cinnabar, .9).strokeCircle(cx, cy, F.r - .5);
+    g.lineStyle(3, LQ.gold, 1).strokeCircle(cx, cy, F.r + 1.5).lineStyle(1, LQ.goldHi, .8).strokeCircle(cx, cy, F.r + 3.5);
   }
 
   setVisible(v: boolean): void { for (const o of [this.back, this.bars, this.name, this.seal, this.sealG, this.portrait]) o?.setVisible(v); }

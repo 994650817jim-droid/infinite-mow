@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { DEPTH, IS_DESKTOP, actorDepth } from '../config';
 import { WEAPON_BRANCHES } from '../data/weaponBranches';
+import { CHARACTERS } from '../data/characters';
 
 /**
  * 兵器专职「进阶形态」专属手绘序列帧（2026-11-19 用户「做美术」）：Lv7 + 该派 4 势（WeaponBranches.final()）后，24 个分支各有自己的出手爆发 + 常驻光环，
@@ -19,7 +20,8 @@ export const BRANCH_FX = { burstSize: 230, burstMs: 650, auraSize: 170, auraAlph
 /** 分支 → { 贴图 key, 第几个分支（0 / 1，按 WEAPON_BRANCHES 同武器内顺序） }；没图返回 null。 */
 export function branchFxOf(scene: Phaser.Scene, branchId: string): { key: string; slot: number } | null {
   const b = WEAPON_BRANCHES.find(x => x.id === branchId); if (!b) return null;
-  const hero = BRANCH_FX_HERO[branchId.split('_')[0]]; if (!hero) return null;
+  // 按分支的本命武器找武将（不能按 id 前缀：P2 吕布 lb_* 撞刘备、周瑜 zy_* 撞赵云，会播别人的进阶图）
+  const hero = CHARACTERS.find(c => c.startWeapon === b.weapon)?.id; if (!hero || !BRANCH_FX_READY.includes(hero)) return null;
   const key = branchFxKey(hero); if (!scene.textures.exists(key)) return null;
   return { key, slot: WEAPON_BRANCHES.filter(x => x.weapon === b.weapon).findIndex(x => x.id === branchId) };
 }

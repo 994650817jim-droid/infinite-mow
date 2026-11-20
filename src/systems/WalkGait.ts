@@ -30,7 +30,7 @@ const NORMAL: GaitStyle = { stride: 62, bob: 2.3, squash: .04, lean: .055, dust:
 const LIGHT: GaitStyle = { stride: 56, bob: 2.0, squash: .03, lean: .045, dust: .6 };
 /** 按武将体型分组：披甲猛将步子沉、文官与女将步子轻快。 */
 export const GAIT_STYLES: Record<CharacterId, GaitStyle> = {
-  guanyu: HEAVY, zhangfei: HEAVY, weiyan: HEAVY, huangzhong: HEAVY, lvbu: HEAVY, zhangliao: NORMAL, zhouyu: LIGHT,
+  guanyu: HEAVY, zhangfei: HEAVY, weiyan: HEAVY, huangzhong: HEAVY, lvbu: HEAVY, zhangliao: NORMAL, zhouyu: LIGHT, taishici: NORMAL, mengde: NORMAL,
   zhaoyun: NORMAL, machao: NORMAL, liubei: NORMAL,
   zhuge: LIGHT, pangtong: LIGHT, huangyueying: LIGHT, sunshangxiang: LIGHT, diaochan: { ...LIGHT, bob: 1.7, squash: .025, dust: .45 },
 } as Record<CharacterId, GaitStyle>;

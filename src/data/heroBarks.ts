@@ -28,6 +28,16 @@ export interface HeroBarkLines {
 }
 
 export const HERO_BARKS: Record<CharacterId, HeroBarkLines> = {
+  mengde: {
+    trigger: ['宁教我负天下人！', '虎豹骑，随我冲阵！', '天下英雄，唯使君与操耳。'],
+    bossAppear: ['来者何人？报上名来。'], bossDown: ['吾好梦中杀人。'],
+    vsBoss: { 刘备: '玄德，煮酒论英雄可还记得？', 吕布: '奉先，白门楼下再会了。', 袁绍: '本初，官渡之后你还剩几兵？' },
+  },
+  taishici: {
+    trigger: ['大丈夫当带七尺之剑，以升天子之阶！', '东莱太史慈在此！', '随我杀出重围！'],
+    bossAppear: ['神亭一战，还未尽兴！'], bossDown: ['信义所在，岂容宵小！'],
+    vsBoss: { 孙策: '伯符，再战三百合！', 周瑜: '公瑾，得罪了。' },
+  },
   zhouyu: {
     trigger: ['万事俱备，只欠东风！', '火船齐发，烧！', '曲有误，周郎顾。'],
     bossAppear: ['来得正好，且看我火攻之计。'], bossDown: ['樯橹灰飞烟灭。'],

@@ -12,6 +12,9 @@ import { presenceScale } from '../systems/BossPresence';
 let enemyUidSeq = 0;
 const WALK_STRIDES: Partial<Record<EnemyKind, number>> = { infantry: 11, shield: 13, archer: 12, cavalry: 12, elite: 15 };
 
+/** 受击闪白：一次多久、闪完多久才能再闪（连击时不再一直是白剪影）。 */
+export const HIT_FLASH = { ms: 60, gapMs: 160 } as const;
+
 export class Enemy {
   static spawnSeq = 0;
   isSupplySlot=false;
@@ -33,6 +36,8 @@ export class Enemy {
   kind: EnemyKind = 'infantry';
   /** 普通杂兵临时步动：记录基础缩放与相位。 */
   baseScaleY = 1;
+  /** 额外体型倍率（副将放大等）：v2 图每帧按 V2_TROOP_SCALE 重算缩放，单改 setScale 会被冲掉，所以记在这里。spawn 时归 1。 */
+  sizeMul = 1;
   /** 素材比例校正倍数（按行走表标准身高统一攻击表与个别画小的帧）。 */
   frameScale = 1;
   private stepStretch = 0;
@@ -91,13 +96,15 @@ export class Enemy {
   stunUntil = 0;
   /** 张辽「震慑」层数 / 最后叠层时间、「溃逃」到期时间、溃兵踩踏冷却（weapons/zhangliaoWeapon.ts）。 */
   zhenshe = 0; zhensheAt = 0; routUntil = 0; trampleAt = 0;
+  /** 曹操「军令」标记到期时间（weapons/mengdeWeapon.ts；受伤加成在 CharacterPassives.vulnerability）。 */
+  junlingUntil = 0;
   martialSlow = 1;
   martialSlowUntil = 0;
   /** 首领出招间隔倍率与截止（诸葛亮八阵图 3 级；ArcBossV2 系首领在 toIdle 时读）。 */
   gapSlowMul = 1;
   gapSlowUntil = 0;
 
-  flashUntil = 0;
+  flashUntil = 0; flashReadyAt = 0;
   /** 受击后仰（打击感 2026-11-17）：压扁结束时间与强度 0–1 */
   private recoilUntil = 0;
   private recoilMs = 90;
@@ -145,9 +152,9 @@ export class Enemy {
     this.invulnerable = false;
     this.controlImmune = false;
     this.stunUntil = 0;
-    this.zhenshe = 0; this.zhensheAt = 0; this.routUntil = 0; this.trampleAt = 0;
+    this.zhenshe = 0; this.zhensheAt = 0; this.routUntil = 0; this.trampleAt = 0; this.junlingUntil = 0;
     this.targetAlly = null; this.targetLife = 0;
-    this.flashUntil = 0;
+    this.flashUntil = 0; this.flashReadyAt = 0;
     this.recoilUntil = 0; this.squash = 0;
     this.contactCd = 0;
     this.shootCd = 1 + Math.random();
@@ -176,7 +183,7 @@ export class Enemy {
     this.baseTint = def.tint ?? 0xffffff;
     if (this.baseTint !== 0xffffff) this.sprite.setTint(this.baseTint);
     this.sprite.setRotation(0);
-    this.baseScaleY = visualScale;
+    this.baseScaleY = visualScale; this.sizeMul = 1;
     this.walkPhase = Math.random() * Math.PI * 2;
     this.direction = 'down';
     this.frameElapsed = 0;
@@ -467,7 +474,7 @@ export class Enemy {
     if (isV2Texture(key)) {
       // 人物画风 v2：0.5 倍（1080p 像素 1:1），脚底 = 帧高-7；行走 / 攻击格子大小可以不同，按当前帧重算锚点
       const fh = this.sprite.frame.height || 96;
-      this.baseScaleY = V2_TROOP_SCALE * (this.def.walkVisual?.v2Mul ?? 1);
+      this.baseScaleY = V2_TROOP_SCALE * (this.def.walkVisual?.v2Mul ?? 1) * this.sizeMul;
       this.baseOriginY = v2TroopGround(fh) - this.def.radius * .72 / (fh * this.baseScaleY);
       this.frameScale = 1;
     } else
@@ -475,6 +482,13 @@ export class Enemy {
     this.stepStretch = 0;
     this.sprite.setRotation(0);
     this.applyScale();
+  }
+
+  /** 设额外体型倍率（v1 / v2 图都持久；spawn 后调用）。 */
+  setSizeMul(k: number): void {
+    const r = k / this.sizeMul; this.sizeMul = k;
+    if (!this.walkSheet) { this.sprite.setScale(this.sprite.scaleX * r, this.sprite.scaleY * r); return; }
+    this.baseScaleY *= r; this.applyScale();
   }
 
   private applyScale(): void {
@@ -485,10 +499,14 @@ export class Enemy {
     this.sprite.setOrigin(this.sprite.originX, this.baseOriginY);
   }
 
+  /**
+   * 受击闪白：整张图涂白 HIT_FLASH.ms；闪完要隔 HIT_FLASH.gapMs 才能再闪（2026-11-20 用户截图「敌将旁边一大块白色剪影」：
+   * 连击每 50ms 一下时旧写法每下都重新闪白，敌人 97% 的帧都是一整块白剪影）。
+   */
   flash(now: number): void {
-    this.flashUntil = now + 70;
-    this.sprite.setTintFill(0xffffff);
-    if (this.kind === 'elite') this.sprite.setTintFill(0xffdddd);
+    if (now < this.flashReadyAt) return;
+    this.flashUntil = now + HIT_FLASH.ms; this.flashReadyAt = now + HIT_FLASH.ms + HIT_FLASH.gapMs;
+    this.sprite.setTintFill(this.kind === 'elite' ? 0xffdddd : 0xffffff);
   }
 
   /** 受击后仰：横向压扁一下再弹回；push 像素沿 angle 方向轻推（首领 / 不受控的单位只压扁不推）。 */

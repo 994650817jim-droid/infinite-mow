@@ -87,7 +87,7 @@ export function siegeGameSceneClass(Base: typeof GameScene) {
       const art = siegeScenery(this, city, (frame, x, y, size) => this.spawnSceneProp(frame, x, y, size), {liveTowers: !this.defense, mid: midCity});
       this.ground.setTexture(art.key).setTileScale(1);
       this.sishuiObstacles = new SishuiObstacles(); this.sishuiObstacles.footprints.splice(0, this.sishuiObstacles.footprints.length, ...art.boxes);
-      this.enemyCamps = new EnemyCamps({scene: this, player: this.player, create: (x, y, hp) => this.supplies?.spawnCamp(x, y, hp) ?? null, spawn: (kind, x, y) => this.spawnEnemy(kind, x, y, 1), support: () => this.legion.grid.query(this.player.x, this.player.y, 260), reward: n => { this.legion.food += n; }, ...(this.garrison ? {maxBatches: GAR.campBatches, onCut: (n: number) => { const g = this.garrison!; g.cut += Math.min(n, this.garrisonLeft); }} : {})}, art.camps, this.combatNow);
+      this.enemyCamps = new EnemyCamps({scene: this, player: this.player, create: (x, y, hp) => this.supplies?.spawnCamp(x, y, hp) ?? null, spawn: (kind, x, y) => this.spawnEnemy(kind, x, y, 1), support: () => this.legion.grid.query(this.player.x, this.player.y, 260), reward: n => { this.legion.food += n; }, tent: this.tentCtx(), ...(this.garrison ? {maxBatches: GAR.campBatches, onCut: (n: number) => { const g = this.garrison!; g.cut += Math.min(n, this.garrisonLeft); }} : {})}, art.camps, this.combatNow);
       this.legion.campTarget = u => this.enemyCamps?.assist(u) ?? null;
       if (city.tier === 'large' && !this.defense && !midCity) {
         this.gate = this.supplies?.spawnGate(SIEGE_GATE.x, SIEGE_GATE.y, SIEGE[city.tier].gateHp, SIEGE_GATE.size) ?? null; this.gateLife = this.gate?.spawnId ?? 0;

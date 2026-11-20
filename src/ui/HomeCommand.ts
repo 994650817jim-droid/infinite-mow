@@ -79,7 +79,7 @@ export function homeCommand(scene:Phaser.Scene,x:number,y:number,width:number,he
  };
  paint();
  if(enabled)hit.on('pointerdown',()=>{const battle=(scene as unknown as {sfx?:{play(k:string):void}}).sfx;if(battle)battle.play('uiClick');else{const s=uiSfx();s.unlock();s.play('uiClick');}});
- hit.on('pointerover',()=>{if(current!=='selected')paint('hover');}).on('pointerout',()=>{if(current!=='selected')paint();}).on('pointerdown',()=>paint('pressed')).on('pointerup',()=>paint('hover'));
+ hit.on('pointerover',()=>{if(current!=='selected'){paint('hover');uiSfx().play('uiHover');}}).on('pointerout',()=>{if(current!=='selected')paint();}).on('pointerdown',()=>paint('pressed')).on('pointerup',()=>paint('hover'));
  /** 整体移到新的纵坐标（按钮、文字、点击区一起），保留当前状态。 */
  const setY=(ny:number)=>{y=ny;hit.setY(ny);paint(current);};
  return{g,hit,caption,paint,setY,get y(){return y;}};

@@ -1,6 +1,8 @@
 import Phaser from 'phaser';
 import { DEPTH, FONT } from '../config';
-import { PHASES, type PhaseKind, type PhasePlan } from '../data/stagePhases';
+import { PHASES, lieutenantArt, type PhaseKind, type PhasePlan } from '../data/stagePhases';
+import { isV2Texture, loadV2TroopSheets, V2_TROOP_SCALE, v2TroopGround } from './ArtStyle';
+import { sheetFigureHeight } from './SpriteMetrics';
 import type { EnemyDef } from '../data/enemies';
 import type { Enemy } from '../entities/Enemy';
 import type { EnemyKind } from '../types';
@@ -36,7 +38,16 @@ export class StagePhaseRunner {
   /** 测试用。 */
   readonly stats = { phase: -1, elites: 0, ambush: 0, lieutenant: '' as string, lieutenantHp: 0, lieutenantDown: false, lieutenantAt: -1 };
 
-  constructor(private readonly h: PhaseHost, readonly plan: PhasePlan) {}
+  constructor(private readonly h: PhaseHost, readonly plan: PhasePlan) {
+    // 副将专属图（第 1–4 章已出，其余章登记了才载）：按需加载
+    const art = lieutenantArt(plan.chapter), sc = h.scene;
+    if (art && sc?.load) { loadV2TroopSheets(sc, [art.walk, art.attack]); if (sc.load.list.size && !sc.load.isLoading()) sc.load.start(); }
+  }
+  /** 本章副将专属图（已登记且已载好）；没有就回退「精锐 ×lieutenantScale」。 */
+  ltArt(): { walk: string; attack: string; cell: number } | null {
+    const a = lieutenantArt(this.plan.chapter), T = this.h.scene?.textures;
+    return a && T && isV2Texture(a.walk) && T.exists(a.walk) && T.get(a.walk).has('down_0') ? a : null;
+  }
 
   get index(): number { return this.phase; }
   kind(i = this.phase): PhaseKind | undefined { return this.plan.phases[i]?.kind; }
@@ -77,14 +88,25 @@ export class StagePhaseRunner {
   lieutenantDef(): EnemyDef {
     const base = this.h.def('elite'), L = PHASES.lieutenantHp, g = Math.max(.1, this.h.growthHp()), boss = this.h.bossHp();
     const hp = Math.min(boss * L.maxBoss, Math.max(boss * L.minBoss, base.hp * g * L.eliteMul)) / g; // 最终生命 = hp × g（spawnEnemy 乘小兵成长）
-    return { ...base, hp, damage: base.damage * 1.4, xp: base.xp * 6, radius: Math.round(base.radius * 1.2), speed: base.speed * .95 };
+    const def: EnemyDef = { ...base, hp, damage: base.damage * 1.4, xp: base.xp * 6, radius: Math.round(base.radius * 1.2), speed: base.speed * .95 };
+    const art = this.ltArt(), T = this.h.scene.textures;
+    // 专属图：v2 4×4（显示 ×0.5 × lieutenantArtMul，脚底 = (格 − 7) / 格），按关序轻微换色
+    if (art) return { ...def, walkVisual: { texture: art.walk, scale: V2_TROOP_SCALE, groundY: v2TroopGround(art.cell), v2Mul: this.ltMul(art.walk) }, attackVisual: isV2Texture(art.attack) && T.exists(art.attack) ? art.attack : undefined, tint: PHASES.lieutenantTints[Math.max(0, Math.min(2, this.plan.stage - 1))] ?? 0xffffff };
+    return def; // 回退：本章精锐图，spawn 后 enlarge 放大
   }
+  /** 专属图的显示倍率：目标身高 / 图里人物中位身高（×0.5 显示），夹在 1.1–1.7；量不到按 132 美术像素算。 */
+  private ltMul(walk: string): number {
+    const fig = sheetFigureHeight(this.h.scene, walk) ?? 132;
+    return Math.max(1.1, Math.min(1.7, PHASES.lieutenantFigure(this.plan.chapter) / (fig * V2_TROOP_SCALE)));
+  }
+  /** 体型：专属图已在 def 里定好（lieutenantArtMul）；回退的精锐图放大 lieutenantScale（Enemy.sizeMul：以前直接 setScale，v2 图下一帧就被冲掉，副将其实没变大）。 */
+  private enlarge(e: Enemy): void { if (!/^lt_/.test(e.def.walkVisual?.texture ?? '')) e.setSizeMul(PHASES.lieutenantScale); }
   /** 刷一个副将一档的精锐（体型放大）。 */
-  spawnLieutenant(x: number, y: number): Enemy | null { const e = this.h.spawn('elite', x, y, this.lieutenantDef()); if (e) e.sprite.setScale(e.sprite.scaleX * PHASES.lieutenantScale); return e; }
+  spawnLieutenant(x: number, y: number): Enemy | null { const e = this.h.spawn('elite', x, y, this.lieutenantDef()); if (e) this.enlarge(e); return e; }
   private lieutenant(name: string): void {
     const P = this.h.player(), at = { x: P.x + (Math.random() < .5 ? -340 : 340), y: P.y - 80 }; // 从侧面进场（电脑版视野左右各 480，一出来就看得到）
     const e = this.h.spawn('elite', at.x, at.y, this.lieutenantDef()); if (!e) return;
-    e.sprite.setScale(e.sprite.scaleX * PHASES.lieutenantScale);
+    this.enlarge(e);
     const s = this.h.scene;
     const tag = s.add.text(e.x, e.y, '副将 · ' + name, { fontFamily: FONT, fontSize: '13px', color: '#ffd98a', resolution: 2, stroke: '#2a0c06', strokeThickness: 4 }).setOrigin(.5, 1).setDepth(DEPTH.dmgText - 1).setName('lieutenant-tag');
     const bar = s.add.graphics().setDepth(DEPTH.dmgText - 1).setName('lieutenant-bar');

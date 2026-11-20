@@ -17,7 +17,7 @@
 // 同时输出原生 1 倍预览 <OUT 所在目录>/originals/<名>_1x.png（不打包）与逐帧统计。
 import { chromium } from 'playwright';
 import { writeFileSync, readFileSync, mkdirSync } from 'node:fs';
-import { dirname, join, basename } from 'node:path';
+import { dirname, join, basename, resolve } from 'node:path';
 
 const env = process.env;
 const SRC = env.SRC, OUT = env.OUT;
@@ -164,7 +164,7 @@ try {
   writeFileSync(OUT, Buffer.from(res.big.split(',')[1], 'base64'));
   const PREV = join(dirname(OUT), 'originals', basename(OUT).replace(/\.png$/, '_1x.png'));
   mkdirSync(dirname(PREV), { recursive: true });
-  writeFileSync(PREV, Buffer.from(res.one.split(',')[1], 'base64'));
+  if (resolve(SRC) === resolve(PREV)) console.log('（原图与预览同名，不覆盖原图）'); else writeFileSync(PREV, Buffer.from(res.one.split(',')[1], 'base64'));
   const clipped = res.stats.filter(s => s.clipped), empty = res.stats.filter(s => s.empty);
   console.log(`${OUT} ${res.size.join('×')}  缩放 ${res.scale.toFixed(4)}（参照中位身高 ${res.medH}px → ${FIG}）  调色板 ${res.palette} 色`);
   console.log('逐帧 宽×高：' + res.stats.map(s => s.empty ? '空' : `${s.w}×${s.h}`).join(' '));

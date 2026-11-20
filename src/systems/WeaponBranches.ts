@@ -67,7 +67,7 @@ export class WeaponBranches {
 
   get branch(): WeaponBranch | undefined { return branchById(this.h.weapon()?.branch); }
   private tier(): number { const w = this.h.weapon(); return w ? branchTier(w) : 0; }
-  private k(): number { return (1 + .3 * (this.tier() - 1)) * (this.h.weapon()?.attuned ? BRANCH_FIT.fitMul : 1); } // 契合 +10%
+  private k(): number { return (1 + .3 * (this.tier() - 1)) * (this.h.weapon()?.attuned ? BRANCH_FIT.fitMul : 1); } // 契合 ×BRANCH_FIT.fitMul
   private final(): boolean { const b = this.branch; return !!b && this.tier() >= 3 && this.h.shi(b.school) >= 4; }
   private nearest(r: number): Enemy | null { const P = this.h.player; let best: Enemy | null = null, d0 = r; for (const e of this.h.query(P.x, P.y, r)) { if (!e.active || e.isSupplySlot) continue; const d = Math.hypot(e.x - P.x, e.y - P.y); if (d < d0) { d0 = d; best = e; } } return best; }
   private fx(key: string, x: number, y: number, size: number, ms: number, tint: number, rotation = 0): void { playSheet(this.h.scene, key, x, y, { size, ms, depth: DEPTH.fx, tint, rotation, add: true }); }

@@ -18,7 +18,7 @@ const M = "import('/src/systems/HeroUnlocks.ts')";
 // ① 新存档：只有四人
 const fresh = await p.evaluate(async () => { const U = await import('/src/systems/HeroUnlocks.ts'), R = await import('/src/systems/RosterStore.ts');
   return { total: (await import('/src/data/characters.ts')).CHARACTERS.length, locked: U.lockedHeroes(), starters: ['liubei', 'guanyu', 'zhangfei', 'zhaoyun'].every(U.heroUnlocked), owned: R.heroOwned('zhuge'), lord: R.canPickLord('zhuge'), pending: U.pendingReveals() }; });
-ck('新存档：只有刘备、关羽、张飞、赵云可玩，其余全部锁定（含 P2 吕布、张辽；不能选主将 / 主公）', fresh.locked.length >= 10 && fresh.locked.length === fresh.total - 4 && fresh.locked.includes('lvbu') && fresh.locked.includes('zhangliao') && fresh.starters && !fresh.owned && !fresh.lord && fresh.pending.length === 0, fresh);
+ck('新存档：只有刘备、关羽、张飞、赵云可玩，其余全部锁定（含 P2 吕布、张辽、周瑜、太史慈、曹操；不能选主将 / 主公）', fresh.locked.length >= 13 && fresh.locked.length === fresh.total - 4 && ['lvbu', 'zhangliao', 'zhouyu', 'taishici', 'mengde'].every(id => fresh.locked.includes(id)) && fresh.starters && !fresh.owned && !fresh.lord && fresh.pending.length === 0, fresh);
 
 // ② 各节点：差一步不解锁、到了就解锁（纯规则，进度整份注入）
 const rules = await p.evaluate(async () => {
@@ -38,9 +38,12 @@ const rules = await p.evaluate(async () => {
     t('machao', { arc: { shu: 2 } }, { arc: { shu: 3 } }),
     t('lvbu', { top: { lubu: 1, persuaded: id => id === 'chengong' } }, { top: { persuaded: id => id === 'lubu' } }), // P2：打赢吕布不算，劝降吕布才来投
     t('zhangliao', { top: { persuaded: id => id === 'lubu' } }, { top: { persuaded: id => id === 'zhangliao' } }), // P2：劝降张辽才来投
+    t('zhouyu', { top: { persuaded: id => id === 'chengpu' } }, { top: { persuaded: id => id === 'zhouyu' } }), // P2：劝降周瑜才来投（程普先降只是前置）
+    t('taishici', { top: { persuaded: id => id === 'zhouyu' } }, { top: { persuaded: id => id === 'taishici' } }), // P2：劝降太史慈
+    t('mengde', { top: { persuaded: id => id === 'xiahoudun' } }, { top: { persuaded: id => id === 'caocao' } }), // P2：曹操归附（首领 id 仍是 caocao）
   ];
 });
-ck('各节点：诸葛亮第一章后、貂蝉第三章白门楼、黄月英 5-2、孙尚香 5-3、魏延 / 黄忠 6-3、庞统 7-1、马超 7-3、吕布 / 张辽劝降——差一步不解锁、到了就解锁', rules.every(r => !r.before && r.at), rules);
+ck('各节点：诸葛亮第一章后、貂蝉第三章白门楼、黄月英 5-2、孙尚香 5-3、魏延 / 黄忠 6-3、庞统 7-1、马超 7-3、吕布 / 张辽 / 周瑜 / 太史慈劝降、曹操归附——差一步不解锁、到了就解锁', rules.every(r => !r.before && r.at), rules);
 ck('貂蝉挑战线：「三英战吕布」赢一次就来投（先于白门楼）', rules[2].at && !rules[2].before, rules[2]);
 ck('黄忠保底：长沙打死（未放过）→ 第八章开放前伤愈来投', rules[7].at && !rules[7].before, rules[7]);
 

@@ -21,6 +21,12 @@ export const ARRIVAL = { speedMul: 1.25, maxSeconds: 3, joinDist: 34, dustEvery:
 export interface LegionState { training?:CampTraining;groups?:Partial<Record<TroopKind,CampGroup>>; food: number; dead: number; recruited: number; levels: Record<TroopKind, number>; soldiers: Array<{ kind: TroopKind; hp: number;reserveSoldier?:boolean }> }
 
 export class Legion {
+  /** 部曲挨了一次打（扣血之后）：太史慈「信义」攒量用（GameScene 接）。 */
+  onHurt?: (u: Ally, now: number) => void;
+  /** 部曲阵亡：曹操「奸雄」攒量 + 回血用（GameScene 接）。 */
+  onDeath?: (u: Ally, now: number) => void;
+  /** 部曲集火目标：曹操倚天剑这一剑的目标（host.focusAllies 设；目标死了 / 换了一条命就失效）。 */
+  focus: Enemy | null = null; focusLife = 0;
   training=freshTraining();groups:Partial<Record<TroopKind,CampGroup>>={};
   purchaseCampTraining(id:CampTrainingId):boolean{const def=CAMP_TRAINING[id],lv=this.training[id];if(!def||lv>=3||this.food<def.costs[lv])return false;this.food-=def.costs[lv];this.training[id]++;if(id==='hp')for(const u of this.units)if(u.active)u.applyCampaignHp(this.hpMultiplier());return true;}
   campTarget?:(u:Ally)=>Enemy|null;
@@ -75,7 +81,7 @@ export class Legion {
     this.formation=new LegionFormation(player);this.artEffects=new ArtEffects(scene);
     this.command=new CommandBuild(scene,player.growth.build,units,player,(u,now)=>this.fx(u,u.x,u.y,now,true));
     this.gfx = scene.add.graphics().setDepth(DEPTH.fx);
-    this.projectiles = new LegionProjectiles(scene); this.tactics = new LegionTactics(player,u=>this.command.target(u)??this.campTarget?.(u)??null,u=>this.formation.position(u),()=>this.formation.extent,(u,x,y,now)=>this.navigation.steer(u.id,u.x,u.y,x,y,u.radius,now));
+    this.projectiles = new LegionProjectiles(scene); this.tactics = new LegionTactics(player,u=>this.command.target(u)??(this.focus?.active&&this.focus.spawnId===this.focusLife?this.focus:null)??this.campTarget?.(u)??null,u=>this.formation.position(u),()=>this.formation.extent,(u,x,y,now)=>this.navigation.steer(u.id,u.x,u.y,x,y,u.radius,now));
   }
   get count(): number { let n = 0; for (const u of this.units) if (u.active) n++; return n; }
   recover(): void { for (const u of this.units) if (u.active) u.hp = u.maxHp; }
@@ -143,10 +149,14 @@ export class Legion {
       if (frontal && u.kind === 'swordsman' && now >= u.ai.blockReady) { mitigation *= .5; u.ai.blockReady = now + TACTICS.blockMs; u.ai.blockUntil = now + 180; }
     }
     mitigation*=1-CAMP_TRAINING.armor.perLevel*this.training.armor;
-    u.hp = Math.max(Math.min(floor, u.hp), u.hp - Math.max(1, Math.round(Math.max(1, raw - armor) * mitigation)));
+    let dmg = Math.max(1, Math.round(Math.max(1, raw - armor) * mitigation));
+    if (u.shield > 0 && now < u.shieldUntil) { const a = Math.min(u.shield, dmg); u.shield -= a; dmg -= a; } // 太史慈突围护盾先扣
+    u.hp = Math.max(Math.min(floor, u.hp), u.hp - dmg);
     u.hurtUntil = now + 350;
+    this.onHurt?.(u, now);
     this.defense?.onAllyHurt(u,now);this.awakeningDefense?.onAllyHurt(u,now);
     if (!u.hp) {
+      this.onDeath?.(u, now);
       this.corpses.spawn(u, u.view?.sprite, now);
       u.active = false; this.dead++; u.deathsReported = true; const v = u.release(); if (v) this.views.push(v); this.regroup();
      

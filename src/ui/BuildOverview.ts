@@ -15,7 +15,7 @@ import { itemTile } from './ItemQuality';
 import { attrBadge } from './AttrBadge';
 import { primarySummary } from './PrimaryAttrInfo';
 import type { ItemTooltip, InfoTip } from './ItemTooltip';
-import { branchById, branchStatus } from '../data/weaponBranches';
+import { BRANCH_FIT, branchById, branchStatus } from '../data/weaponBranches';
 import { lqButton, lqLabelColor, type LqState } from './LacquerKit';
 
 /**
@@ -66,7 +66,7 @@ const INK_FACE: Record<string, { fx: number; fy: number; w: number }> = {
   zhaoyun: { fx: .47, fy: .12, w: .40 }, guanyu: { fx: .38, fy: .135, w: .44 }, zhangfei: { fx: .36, fy: .175, w: .44 }, machao: { fx: .48, fy: .165, w: .42 },
   huangzhong: { fx: .34, fy: .145, w: .42 }, zhuge: { fx: .33, fy: .165, w: .40 }, liubei: { fx: .33, fy: .15, w: .42 }, weiyan: { fx: .52, fy: .135, w: .42 },
   pangtong: { fx: .49, fy: .19, w: .40 }, huangyueying: { fx: .45, fy: .15, w: .40 }, sunshangxiang: { fx: .41, fy: .15, w: .40 }, diaochan: { fx: .31, fy: .195, w: .42 },
-  lvbu: { fx: .47, fy: .19, w: .42 }, zhangliao: { fx: .37, fy: .19, w: .42 }, zhouyu: { fx: .43, fy: .22, w: .42 },
+  lvbu: { fx: .47, fy: .19, w: .42 }, zhangliao: { fx: .37, fy: .19, w: .42 }, zhouyu: { fx: .43, fy: .22, w: .42 }, taishici: { fx: .4, fy: .2, w: .42 }, mengde: { fx: .39, fy: .15, w: .42 },
 };
 const inkKey = (id: string) => 'ink_hero_' + id;
 /** 画头像进 (x, y, w, h) 框；水墨立绘未加载时先加载、加载完再补画（root 已销毁则不画）。 */
@@ -155,7 +155,7 @@ export function drawBuildOverview(o: BuildOverviewOpts): void {
       y += 17;
       text(L.x + pad + 34, y - 1, `进阶「${br.finalName}」${fin ? ' · 已达成' : `：Lv7 ${mk(ov >= 2)}  ${SCHOOLS[br.school].name}派 ${Math.min(shi, 4)}/4 势`}`, 12, fin ? '#f0c060' : '#b9a57a').setName(P + '-branch-final');
       y += 17; text(L.x + pad + 34, y - 1, '已锁定 · 需重整构筑才能更换', 12, '#a8956c').setName(P + '-branch-lock');
-      hot(L.x + pad, y - 54, L.w - pad * 2, 71, P + '-branch-hit', () => ({ title: '兵器专职 · ' + br.name, sub: SCHOOLS[br.school].name + '派' + (w.attuned ? ' · 契合' : ''), body: st.tip, color: 0xd8a85a }));
+      hot(L.x + pad, y - 54, L.w - pad * 2, 71, P + '-branch-hit', () => ({ title: '兵器专职 · ' + br.name, sub: SCHOOLS[br.school].name + '派' + (w.attuned ? ' · 契合（效果 +' + Math.round((BRANCH_FIT.fitMul - 1) * 100) + '%）' : ''), body: st.tip, color: 0xd8a85a }));
       y += 19;
     } else if (w && w.level >= wmax) { text(L.x + pad, y, '专职', 12, '#a8956c'); text(L.x + pad + 34, y - 1, '本命已满 Lv5 · 下一场开战时选兵器专职', 12, '#b9a57a').setName(P + '-branch'); y += 19; }
     // 专属武学

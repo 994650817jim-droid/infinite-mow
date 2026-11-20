@@ -27,6 +27,13 @@ export const PHASES = {
    * 否则首领一加倍副将也翻倍）。P6 平衡（2026-11-19）：原 ×2、按实际首领夹，5-2 / 10-3 副将约 25 秒倒（段长 50 秒）；改 ×3、参考 ×1.6 后约 35 秒。体型 ×lieutenantScale。
    */
   lieutenantHp: { eliteMul: 3, minBoss: .35, maxBoss: .6, bossRef: 1.6 }, lieutenantScale: 1.3,
+  /** 副将专属图（lieutenantArt）的显示倍率：不再乘 lieutenantScale；目标比本章精锐大 1.2–1.3 倍（不比首领大）。 */
+  // 副将人物的目标显示身高（像素）= 本章精锐人物身高 × 1.25。实测（tools/test-lieutenant-art）：第 1–4 章精锐是本章专属精锐图（约 75 像素），
+  // 第 5–12 章是通用 enemy_elite（约 68 像素）。各章 lt 图人物高矮不一（吴军将校画得矮），所以按图里实际人物身高（SpriteMetrics）算倍率。精锐图换了要重量。
+  lieutenantFigure: (chapter: number): number => chapter <= 4 ? 94 : 85,
+  /** 同一章三关的副将共用一套图：按关序轻微换色（第 1 关原色、第 2 关略灰绿、第 3 关略冷蓝），头顶另有「副将 · 名字」名牌。
+   *  不用暖色：吴军将校（朱红）和益州将校（红褐）本来就接近，再往红偏更分不清（统筹 11-19）。 */
+  lieutenantTints: [0xffffff, 0xe6eedd, 0xdfe6ff] as readonly number[],
   /** 副将段起小兵生命 ×（首领段不再乘：首领在场本来就少刷兵）。 */
   lieutenantWaveHp: 1.1,
   /** 首领生命 ×（玩家多一次三选一 + 关内机缘增益）。初值 1.15，见 bossHpMul（P6 平衡按章节）。 */
@@ -64,6 +71,12 @@ export const LIEUTENANTS: Record<string, readonly string[]> = {
   chibi: ['夏侯恩', '张允', '牛金'], jingnan: ['鲍隆', '邢道荣', '杨龄'], shu: ['高沛', '泠苞', '刘循'], hanzhong: ['夏侯德', '夏侯尚', '徐晃'],
   xiangfan: ['满宠', '于禁', '马忠'], yiling: ['谢旌', '潘璋', '韩当'], nanzheng: ['董荼那', '阿会喃', '金环三结'], beifa: ['戴陵', '王双', '郭淮'],
 };
+
+/** 副将专属图（美术会话，ArtStyle 的 lt_<章节键>_walk / _attack，4×4 每格 176）。登记 / 载到与否由调用处查（isV2Texture + textures.exists）。 */
+export function lieutenantArt(chapter: number): { walk: string; attack: string; cell: number } | null {
+  const key = Object.keys(CHAPTER_INDEX).find(k => CHAPTER_INDEX[k] === chapter);
+  return key ? { walk: `lt_${key}_walk`, attack: `lt_${key}_attack`, cell: 176 } : null;
+}
 
 /** 本关有几段：第一章 3 / 4 / 5，其余 5。 */
 export function phaseCount(chapter: number, stage: number): 3 | 4 | 5 {

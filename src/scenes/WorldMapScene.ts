@@ -22,6 +22,7 @@ import { LUBU_CHALLENGE } from '../data/dongzhuo';
 import { INTEL_INFO, intelBrief, intelReward, intelTitle, seasonIndex, type IntelEvent } from '../world/WorldIntel';
 import { QUALITIES } from '../data/items';
 import { MAIN_ROUTE, ROUTE_NODES, nodeChapter, routeNode, routeSiegeOpen, routeView, siegeNodeOf, stageNode, type NodeVis, type RouteNode, type RouteView } from '../world/RouteMap';
+import { checkHeroJoins } from '../ui/HeroJoinReveal';
 
 /** 第叁章起各章有自己的选关页（worldStagePick 指定关号）。 */
 const CAMPAIGNS = { qunxiong: { open: () => thirdChapterUnlocked(), scene: 'ThirdChapterScene' }, guandu: { open: () => arcUnlocked('guandu'), scene: 'GuanduChapterScene' }, chibi: { open: () => arcUnlocked('chibi'), scene: 'ChibiChapterScene' }, jingnan: { open: () => arcUnlocked('jingnan'), scene: 'JingnanChapterScene' }, shu: { open: () => arcUnlocked('shu'), scene: 'ShuChapterScene' }, hanzhong: { open: () => arcUnlocked('hanzhong'), scene: 'HanzhongChapterScene' }, xiangfan: { open: () => arcUnlocked('xiangfan'), scene: 'XiangfanChapterScene' }, yiling: { open: () => arcUnlocked('yiling'), scene: 'YilingChapterScene' }, nanzheng: { open: () => arcUnlocked('nanzheng'), scene: 'NanzhengChapterScene' }, beifa: { open: () => arcUnlocked('beifa'), scene: 'BeifaChapterScene' } } as const;
@@ -81,7 +82,7 @@ export class WorldMapScene extends Phaser.Scene {
     });
   }
 
-  create() {
+  create() { /* 武将来投（systems/HeroUnlocks）：按进度补查、弹没看过的揭幕 */this.time.delayedCall(500,()=>checkHeroJoins(this));
     playMenuMusic(this); try { checkWorld(loadWorld()); } catch { /* 存档不可用 */ }
     if (!worldUnlocked() && !isChapterTestRun()) { this.registry.set('loadBattle', true); this.scene.start(this.registry.get('battleReady') ? 'MenuScene' : 'BootScene'); return; }
     this.desktop = W > 600; this.nodes.clear(); this.tiles = []; this.modal = undefined; this.registry.remove('hardChapter');

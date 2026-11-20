@@ -195,6 +195,7 @@ import { BuildState } from '../data/builds';
 import { WEAPON_OVER, branchById } from '../data/weaponBranches';
 import { WeaponBranches } from '../systems/WeaponBranches';
 import { layoutRich, SCOPE_BADGE, cardScope } from '../ui/CardRichText';
+import { checkHeroJoins } from '../ui/HeroJoinReveal';
 
 interface Gem {
   img: Phaser.GameObjects.Image;
@@ -2919,6 +2920,8 @@ export class GameScene extends Phaser.Scene {
       if(this.pauseKeysText?.getData('warn')){this.pauseKeysText.setData('warn',false).setColor('#7f9987');this.refreshInputHints();}
     }
     if (this.resultPanel) this.resultPanel.setVisible(mode === 'result');
+    // 告捷：按进度补查武将来投（第一章通关诸葛亮、白门楼 / 三英战吕布貂蝉……），揭幕压在结算上面
+    if (mode === 'result' && this.victory) window.setTimeout(() => { if (this.scene.isActive() && this.mode === 'result') checkHeroJoins(this); }, 700);
     if (mode === 'rest') commitBattle(); // 关卡告捷进行营：本场所得生效
     if (mode === 'rest' && !this.restIntroPlayed) { this.restIntroPlayed = true; this.playRestIntro(); }
   }

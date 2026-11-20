@@ -114,7 +114,7 @@ export const JINGNAN_STORY: StoryChapter = {
       after: [{ id: 'jingnan-3.weiyan', type: 'interlude', cutscene: 'weiyan_xiancheng', kicker: '过场', title: '魏延献城', illustration: 'story_weiyan_2', lines: [
         { text: '长沙城破，韩玄伏诛。桂阳、零陵、武陵、长沙四郡相继归附，荆州以南尽入版图。' },
         { who: 'huangzhong', text: '忠年近六旬，今日方遇明主。愿以残年，为将军前驱！', ifFlag: 'spared_huangzhong' },
-        { text: '老将黄忠战殁城下，军中无不惋惜。', ifFlag: '!spared_huangzhong' },
+        { text: '老将黄忠负伤，引残兵遁去。', ifFlag: '!spared_huangzhong' },
         { who: 'weiyan', text: '韩玄残暴寡恩，长沙百姓苦之久矣。某愿投将军帐下！' },
         { who: 'zhuge', text: '（喝令）推出斩之！此人食其禄而杀其主，是不忠；居其土而献其地，是不义。吾观魏延脑后有反骨，久后必反！' },
       ], variants: {
@@ -127,7 +127,7 @@ export const JINGNAN_STORY: StoryChapter = {
         weiyan: [
           { text: '长沙城破，韩玄伏诛。桂阳、零陵、武陵、长沙四郡相继归附，荆州以南尽入版图。' },
           { who: 'huangzhong', text: '忠年近六旬，今日方遇明主。愿以残年，为将军前驱！', ifFlag: 'spared_huangzhong' },
-          { text: '老将黄忠战殁城下，军中无不惋惜。', ifFlag: '!spared_huangzhong' },
+          { text: '老将黄忠负伤，引残兵遁去。', ifFlag: '!spared_huangzhong' },
           { who: '{lord}', text: '（提韩玄首级）某魏文长，献长沙！' },
           { who: 'zhuge', text: '此人脑后有反骨……' },
           { who: 'liubei', text: '文长以首级来献，有功无罪。军师不必多言。' },

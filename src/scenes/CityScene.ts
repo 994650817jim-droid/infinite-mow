@@ -39,6 +39,7 @@ import {MountGuide} from '../systems/MountGuide';
 import {campTalkStrip} from '../systems/Story';
 import {followersFor,heroOwned} from '../systems/RosterStore';
 import {addMainMenuButton} from '../ui/MainMenuButton';
+import { checkHeroJoins } from '../ui/HeroJoinReveal';
 
 /** 是否电脑布局：在场景构造时读取（模块加载时布局尚未初始化）。 */
 let D=false;
@@ -81,7 +82,7 @@ export class CityScene extends Phaser.Scene {
   for(const id of CAMP_ART_IDS)worldAssets(this,`city_camp_${id}`,`assets/city/camp_${id}.webp`);
   const ids=Object.keys(TOWN_BUILDINGS) as TownBuildingId[];
   for(const lv of CITY_ART_LEVELS)for(const id of ids)if(lv<=(TOWN_BUILDINGS[id].maxLevel??3)){const a=ART_ALIAS[id]??id;worldAssets(this,`city_${a}_${lv}`,`assets/city/${a}_${lv}.webp`);}}
- create(){playMenuMusic(this);startCityAmbient(this,k=>uiSfx().play(k));this.registry.remove('hardChapter');
+ create(){playMenuMusic(this); /* 武将来投（systems/HeroUnlocks）：按进度补查、弹没看过的揭幕 */this.time.delayedCall(500,()=>checkHeroJoins(this));startCityAmbient(this,k=>uiSfx().play(k));this.registry.remove('hardChapter');
   if(!worldUnlocked()&&!isChapterTestRun()){this.registry.set('loadBattle',true);this.scene.start(this.registry.get('battleReady')?'MenuScene':'BootScene');return;}
   // 战斗图集已在 preload 开头卸掉（下次出征重新加载，不与战略界面美术同时常驻）
   saveWorld();

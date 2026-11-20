@@ -137,9 +137,9 @@ export const SIDE_ROUTES: readonly SideRouteDef[] = [
     open: { arc: 'xiangfan', stages: 3, hint: '第九章「襄樊之战」平定后开放' }, base: 'hanzhong', look: 'qunxiong',
     stages: [
       { name: '天水', kind: 'siege', city: 'tianshui', behavior: 1, scenery: 1, waves: ['天水城外', '羌胡骑兵', '梁兴守城'], story: '韩遂聚关西诸将据守陇右。先拔天水，打通西凉道。',
-        boss: B('liangxing', '梁兴', '关西军阀', 'third_lijue', 'phase23/lijue', 'lijue') },
+        boss: B('liangxing', '梁兴', '关西军阀', 'side_liangxing', 'phase23/lijue', 'lijue') },
       { name: '渭水', kind: 'field', behavior: 2, scenery: 2, waves: ['渭水河畔', '西凉铁骑', '阎行出阵'], story: '渭水河畔，西凉铁骑往来冲突。阎行挺矛来战。',
-        boss: B('yanxing', '阎行', '西凉猛将', 'xf_pangde', 'phase23/zhangxiu', 'pangde') },
+        boss: B('yanxing', '阎行', '西凉猛将', 'side_yanxing', 'phase23/zhangxiu', 'pangde') },
       { name: '金城', kind: 'final', behavior: 1, scenery: 4, waves: ['金城城下', '羌兵助阵', '韩遂亲至'], story: '九曲黄河韩文约退守金城，马岱领兵助阵。西凉一战而定。',
         boss: B('hansui', '韩遂', '九曲黄河', 'side_hansui', 'phase23/lijue', 'guosi'),
         partner: B('madai', '马岱', '西凉骁将', 'side_madai', 'phase23/zhangxiu', 'zhangxiu') },
@@ -150,7 +150,7 @@ export const SIDE_ROUTES: readonly SideRouteDef[] = [
     open: { arc: 'yiling', stages: 3, hint: '第十章「夷陵之战」平定后开放' }, base: 'yiling',
     stages: [
       { name: '庐江', kind: 'siege', city: 'lujiang', behavior: 1, scenery: 1, waves: ['庐江城外', '江东弓手', '蒋钦守城'], story: '夷陵之仇未报，挥师东下。先取庐江，兵临濡须。',
-        boss: B('jiangqin', '蒋钦', '江东水将', 'yiling_zhuran', 'chibi/caochun', 'zhuran') },
+        boss: B('jiangqin', '蒋钦', '江东水将', 'side_jiangqin', 'chibi/caochun', 'zhuran') },
       { name: '濡须口', kind: 'field', behavior: 2, scenery: 2, waves: ['濡须坞前', '吴军水师', '黄盖出阵'], story: '濡须口坞堡坚固，吴军水师往来。老将黄盖亲自督战。',
         boss: B('huanggai', '黄盖', '江东老将', 'side_huanggai', 'chibi/caimao', 'sunhuan') },
       { name: '吴郡', kind: 'final', behavior: 3, scenery: 3, waves: ['吴郡城下', '江东子弟', '孙权亲至'], story: '江东诸城尽下，孙权与周泰出城。坐断东南的碧眼儿，今日当如何？',

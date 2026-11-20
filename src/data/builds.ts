@@ -65,7 +65,7 @@ export const TREASURES = {
 } as const satisfies Record<string, { name: string; tag: BuildTag; desc: string }>;
 export type TreasureId = keyof typeof TREASURES;
 /** 构筑存档：只存战法（宝物由穿着的信物注入）。2026-11-19 流派重做：开发期不兼容旧档，读档时丢掉已删除的旧 id。 */
-export interface BuildSnapshot { tactics: Partial<Record<TacticId, number>>; treasures?: TreasureId[]; /** 军需商人「流派心法」研读过的派（每派一次，各 +1 势，本次征程有效）。 */ manuals?: BuildTag[]; }
+export interface BuildSnapshot { tactics: Partial<Record<TacticId, number>>; /** 军需商人花粮买的战法等级 / 心法（重整构筑保留，2026-11-19）。 */ bought?: Partial<Record<TacticId, number>>; boughtManuals?: BuildTag[]; treasures?: TreasureId[]; /** 军需商人「流派心法」研读过的派（每派一次，各 +1 势，本次征程有效）。 */ manuals?: BuildTag[]; }
 /** 一派势的来源（构筑总览分项显示）。 */
 export interface ShiSources { tactics: number; treasures: number; extra: number; bonus: number; manual: number }
 export class BuildState {
@@ -82,6 +82,8 @@ export class BuildState {
  bonusNotes: Partial<Record<BuildTag, string[]>> = {};
  /** 研读过的「流派心法」（军需商人卖，每派一次 +1 势，随征程构筑存档）。 */
  manuals: BuildTag[] = [];
+ /** 军需商人花粮买的：战法各买了几级、研读了哪几派心法（重整构筑时保留这些，只退三选一选来的）。 */
+ bought: Partial<Record<TacticId, number>> = {}; boughtManuals: BuildTag[] = [];
  /** 这一派还能不能研读心法。 */
  manualsRead(): readonly BuildTag[] { return this.manuals; }
  canManual(s: BuildTag): boolean { return SCHOOL_IDS.includes(s) && !this.manuals.includes(s); }
@@ -115,9 +117,11 @@ export class BuildState {
  }
  /** 某派当前档位（0 / 2 / 4 / 6）。 */
  tier(s: BuildTag): 0 | 2 | 4 | 6 { return tierOf(this.tags()[s]); }
- snapshot(): BuildSnapshot { return { tactics: { ...this.tactics }, ...(this.manuals.length ? { manuals: [...this.manuals] } : {}) }; }
+ snapshot(): BuildSnapshot { return { tactics: { ...this.tactics }, ...(this.manuals.length ? { manuals: [...this.manuals] } : {}), ...(Object.keys(this.bought).length ? { bought: { ...this.bought } } : {}), ...(this.boughtManuals.length ? { boughtManuals: [...this.boughtManuals] } : {}) }; }
  restore(data?: BuildSnapshot): void { this.tactics = {}; for (const [id, lv] of Object.entries(data?.tactics ?? {})) if (id in TACTICS && typeof lv === 'number') this.tactics[id as TacticId] = Math.max(0, Math.min(5, lv));
-  this.manuals = [...new Set((Array.isArray(data?.manuals) ? data.manuals : []).filter(s => SCHOOL_IDS.includes(s)))]; }
+  this.manuals = [...new Set((Array.isArray(data?.manuals) ? data.manuals : []).filter(s => SCHOOL_IDS.includes(s)))];
+  this.bought = {}; for (const [id, lv] of Object.entries(data?.bought ?? {})) if (id in TACTICS && typeof lv === 'number' && lv > 0) this.bought[id as TacticId] = Math.min(5, lv);
+  this.boughtManuals = [...new Set((Array.isArray(data?.boughtManuals) ? data.boughtManuals : []).filter(s => SCHOOL_IDS.includes(s)))]; }
  label(): string {
   const t = this.tags();
   return `战法 ${this.slots()}/${BuildState.slotCap}\n` + (Object.keys(this.tactics) as TacticId[]).map(id => TACTICS[id].name + ' Lv' + this.level(id)).join(' · ') + '\n'

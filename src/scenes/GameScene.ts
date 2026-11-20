@@ -1221,6 +1221,7 @@ export class GameScene extends Phaser.Scene {
       if (nextWave > 0 && this.chapter.recruitWaves.includes(nextWave)) this.scheduleRecruit();
       if (nextWave > 0) { const ws = this.pickWaves(); this.ensurePicks(ws[Math.min(nextWave, ws.length) - 1]); }
     }
+    this.luoyangLt?.update(); // 2-3 营寨守将李傕：名牌 / 血条跟随、倒下结算
     if (this.phasePlan) {
       this.phaseRunner?.update(); this.battleTrack?.update(this.elapsed, Math.max(0, this.waveIndex), this.bossSpawned, this.chapter.bossName);
       if (this.mode === 'none' && !this.over) this.fortunes?.update(this.bossSpawned);
@@ -1678,7 +1679,8 @@ export class GameScene extends Phaser.Scene {
     if(this.dzLubu&&this.objective&&!this.objective.done&&!this.luoyangCamps){if(!this.sishuiObstacles)this.sishuiObstacles=new SishuiObstacles([]);
       const lc=this.luoyangCamps=new LuoyangCamps({scene:this,player:this.player,now:()=>this.combatNow,tents:()=>this.objective?.standing??[],obstacles:this.sishuiObstacles.footprints,
         pick:()=>this.traits?.pick()??null,basePick:()=>this.chapter.pickEnemy(120),spawn:(k,x,y)=>this.spawnEnemy(k,x,y,undefined,true),spawnTrait:(id,x,y)=>this.traits?.spawnSpecial(id,{x,y})??null,brazier:(x,y,s)=>this.supplies?.spawnSishui(7,x,y,s)??false,move:(e,nx,ny,dt)=>{e.moveVx=nx*e.def.speed;e.moveVy=ny*e.def.speed;this.advanceEnemy(e,nx,ny,dt);},tent:this.tentCtx()});
-      this.supplies?.purge((x,y)=>lc.camps.some(c=>c.boxes.some(b=>x>b.left-40&&x<b.right+40&&y>b.top-40&&y<b.bottom+40))); /* 落在营栅上的布景收掉 */}
+      this.supplies?.purge((x,y)=>lc.camps.some(c=>c.boxes.some(b=>x>b.left-40&&x<b.right+40&&y>b.top-40&&y<b.bottom+40))); /* 落在营栅上的布景收掉 */
+      this.spawnLuoyangCommander(lc);}
     // 2-3 友军攻势：义军小队从后方一路打向营寨（data/dongzhuo.ts LUOYANG.push）
     if(this.dzLubu&&this.objective&&!this.objective.done&&!this.allyPush)this.allyPush=new AllyPush({scene:this,now:()=>this.combatNow,paused:()=>this.mode!=='none'||this.over||!!this.cutscene?.active,player:()=>this.player,
       camps:()=>this.objective?.standing??[],enemies:()=>this.enemies,hit:(e,d)=>{this.hitEnemy(e,d,this.combatNow,'melee',true,false);},push:(x,y,r)=>{const t=this.terrain?.pushCircle(x,y,r)??null,c=this.luoyangCamps?.pushOut(x+(t?.x??0),y+(t?.y??0),r)??null;return t||c?{x:(t?.x??0)+(c?.x??0),y:(t?.y??0)+(c?.y??0)}:null;} /* 推开量相加（树 + 营栅） */,approach:(c,x,y)=>this.luoyangCamps?.approach(c,x,y)??null},LUOYANG.push);
@@ -3296,7 +3298,7 @@ export class GameScene extends Phaser.Scene {
       this.tweens.killTweensOf(notice); notice.destroy();
     }
     const match = /^第 (\d+)\/(\d+) 波 · (.+)$/.exec(text);
-    const label = this.add.container(GAME_WIDTH / 2, GAME_HEIGHT * .21 + (this.battleTrack?.root.visible ? 8 : 0)) // 五段关：计时器 / 关名下移后，横幅也略往下
+    const label = this.add.container(GAME_WIDTH / 2, GAME_HEIGHT * .21 + (this.battleTrack?.root.visible ? 8 : 0) + (this.objectiveText?.active && this.objectiveText.visible ? 24 : 0)) // 五段关：计时器 / 关名下移后，横幅也略往下；有关卡目标行（2-3「目标 · 营寨」）时再下移一行，不叠
       .setScrollFactor(0).setDepth(DEPTH.overlay - 10).setName('combat-notice').setVisible(this.mode === 'none');
     const caption = this.add.text(0, -21, captionText ?? (match ? `第 ${match[1]} / ${match[2]} 波` : '战场警报'), {
       fontFamily: FONT, fontSize: IS_DESKTOP ? '13px' : '14px', color: danger ? '#efb39c' : '#e1cf9d',
@@ -4058,6 +4060,31 @@ export class GameScene extends Phaser.Scene {
     const t = this.add.text(GAME_WIDTH / 2, GAME_HEIGHT * .36, b.finalName, { fontFamily: HEADING_FONT, fontSize: '46px', color: '#ffe08a', stroke: '#2a1206', strokeThickness: 7, resolution: 2 }).setOrigin(.5).setScrollFactor(0).setDepth(DEPTH.overlay - 2).setName('branch-final-title').setScale(1.4).setAlpha(0);
     this.tweens.add({ targets: t, scale: 1, alpha: 1, duration: 260, ease: 'Back.easeOut', onComplete: () => this.tweens.add({ targets: t, alpha: 0, delay: 1400, duration: 500, onComplete: () => t.destroy() }) });
     this.hitFeel.shake('medium'); this.sfx.play('promote');
+  }
+  /** 2-3 营寨守将（data/dongzhuo.ts LUOYANG.commander）：借副将的生成与名牌（第二章副将专属形象、按第 3 关换色），编进正南大营守军。 */
+  luoyangLt: StagePhaseRunner | null = null;
+  private spawnLuoyangCommander(lc: LuoyangCamps): void {
+    const C = LUOYANG.commander, camp = lc.camps[C.camp]; if (!camp) return;
+    this.luoyangLt?.clear();
+    const plan = { chapter: 2, stage: 3, phases: [], waves: [], bossAt: 0 };
+    const r = this.luoyangLt = new StagePhaseRunner({
+      scene: this, player: () => this.player, elapsed: () => this.elapsed,
+      spawn: (kind, x, y, def) => this.spawnEnemy(kind, x, y, 1, true, def), def: kind => this.chapter.enemies[kind],
+      bossHp: () => this.chapter.enemies.boss.hp * (this.chapter.growth?.bossHp ?? 1) * PHASES.lieutenantHp.bossRef,
+      growthHp: () => this.chapter.growth?.hp ?? 1,
+      banner: (t, d, c) => this.showWaveBanner(t, d, c), sfx: k => this.sfx.play(k),
+      onLieutenantDown: (name, x, y) => {
+        this.showWaveBanner(name + ' 授首', false, '营寨守将倒下 · 军略 +1'); this.sfx.play('gong');
+        for (let i = 0; i < 6; i++) { const a = i / 6 * Math.PI * 2; this.spawnGem(x + Math.cos(a) * 26, y + Math.sin(a) * 16, 4); }
+        this.battleHeal?.onLieutenantDown(x, y);
+      },
+    }, plan);
+    // 专属形象按需加载（runner 构造时发起）：载好再放人，免得先用了通用精锐图；最多等 4 秒
+    let done = false; const go = (): void => { if (done || !this.sys.isActive() || this.luoyangLt !== r) return; done = true; lc.enlist(C.camp, r.spawnLieutenantAt(C.name, camp.x + C.dx, camp.y + C.dy, C.label)); };
+    // 载入完成事件可能先被别的一批触发：每 250 毫秒看一次图好了没有，最多等 12 秒（营寨在远处，晚几秒放人看不出来）
+    let waited = 0; const poll = (): void => { if (done) return; if (r.ltArt() || waited >= 12000) { go(); return; } waited += 250; window.setTimeout(poll, 250); }; // 真实时间（开局三选一会冻住场景计时器）
+    if (!this.load.isLoading() && this.load.list.size) this.load.start(); poll();
+    this.events.once('shutdown', () => { r.clear(); if (this.luoyangLt === r) this.luoyangLt = null; });
   }
   // ———— 玩法逐章解锁（data/mechanicUnlocks.ts，共享笔记 mechanic-rollout.md） ————
   private mechIntroDone = false;

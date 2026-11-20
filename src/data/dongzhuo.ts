@@ -36,6 +36,11 @@ export const LUOYANG = {
    * 营帐没毁、主将在 nearR 以内时每 reinforceMs 从营门出 reinforceN 个援兵（本营援兵同时在场最多 reinforceLive 个）。初值，交平衡会话。
    */
   camp: { halfW: 280, north: -175, south: 150, gate: 150, garrison: 8, elites: 1, alertR: 520, reinforceMs: 9000, reinforceN: 3, reinforceLive: 6, nearR: 1100, exitPad: 90, clearR: 430 },
+  /**
+   * 营寨守将（统筹 11-20：第二章副将「李傕」原来用不上——2-3 不分段）：李傕是董卓部将，守正南大营（camps 第 camp 座，0 起），
+   * 副将一档的生命、第二章副将专属形象（lt_hulao_*）、头顶名牌「营寨守将 · 李傕」；开局在营里，和守军一起出营迎战；倒下同副将（军略、伤药）。
+   */
+  commander: { name: '李傕', camp: 4, label: '营寨守将 · ', dx: 0, dy: 70 },
   /** 城墙半长（用户「2-3只有很长一段城墙，不用把玩家困在里面」）：一道长墙、两端角楼收口；没有侧墙 / 南边界。墙北进不去（DongzhuoLubu.keepSouth 不分 x）。 */
   wallHalf: 4200,
   /** 吕布在城头：站在董卓右侧多远、来回踱步的幅度（像素）与一趟多久（毫秒）、走到头停多久。 */

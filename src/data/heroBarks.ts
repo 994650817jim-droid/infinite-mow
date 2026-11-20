@@ -28,6 +28,11 @@ export interface HeroBarkLines {
 }
 
 export const HERO_BARKS: Record<CharacterId, HeroBarkLines> = {
+  menghuo: {
+    trigger: ['南中的猛兽，给我冲！', '孟获在此，谁敢来战！', '这回，俺服了你，可不服他们！'],
+    bossAppear: ['好大的胆子！'], bossDown: ['哈哈，痛快！'],
+    vsBoss: { 兀突骨: '兀突骨，你那藤甲挡得住俺这刀吗！', 诸葛亮: '先生……这回俺是来帮你的！' },
+  },
   sunquan: {
     trigger: ['江东子弟，随孤齐射！', '制衡之道，在于审时度势。', '坐断东南，战未休！'],
     bossAppear: ['来者何人？报上名来。'], bossDown: ['不过如此。'],

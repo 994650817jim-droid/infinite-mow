@@ -41,6 +41,7 @@ export const PASSIVE_GAUGE_LOOKS: Partial<Record<CharacterId, GaugeLook>> = {
   ganning: { tex: 'passive_gauge_c', row: 2, slots: 6, size: 14, unit: '锦帆（借周瑜小火船）' },
   dianwei: { tex: 'passive_gauge_c', row: 3, slots: 5, size: 15, unit: '恶来（借太史慈短戟）' },
   sunquan: { tex: 'passive_gauge_c', row: 4, slots: 5, size: 15, unit: '制衡（借曹操虎符）' },
+  menghuo: { tex: 'passive_gauge_b', row: 2, slots: 6, size: 14, unit: '南蛮王（借马超马蹄铁）' },
 };
 
 /**

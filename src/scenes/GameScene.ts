@@ -3202,7 +3202,7 @@ export class GameScene extends Phaser.Scene {
       // 水墨预览：标签统一朱砂底（类别色只在现版用）
       if (GameScene.INK_LEVELUP) view.tag.setBackgroundColor('#8a2a1c').setColor('#fff0d6'); else view.tag.setBackgroundColor(style.bg).setColor(style.color);
       const iconKey = option.kind === 'potion' ? 'icon_rare' : option.kind === 'weapon' ? ({
-        spear_orbit:'icon_1',crossbow:'icon_2',flame_banner:'icon_3',guandao:'icon_guandao',zhenbei_blade:'icon_zhenbei',lianhuan_mines:'icon_lianhuan',sun_knives:'icon_sunknives',diaochan_fans:'icon_fans',baodiao_bow:'icon_baodiao',dangyang_roar:'icon_shemao',zhanjin_lance:'icon_zhanjin',shuanggu_swords:'icon_shuanggu',fangtian_ji:'icon_fangtian',pozhen_shuangji:'icon_pozhen',huochuan_ling:'icon_huochuan',donglai_ji:'icon_donglai',yitian_jian:'icon_yitian',jinfan_gou:'icon_lianhuan',shuang_tieji:'icon_zhenbei',guding_dao:'icon_yitian',
+        spear_orbit:'icon_1',crossbow:'icon_2',flame_banner:'icon_3',guandao:'icon_guandao',zhenbei_blade:'icon_zhenbei',lianhuan_mines:'icon_lianhuan',sun_knives:'icon_sunknives',diaochan_fans:'icon_fans',baodiao_bow:'icon_baodiao',dangyang_roar:'icon_shemao',zhanjin_lance:'icon_zhanjin',shuanggu_swords:'icon_shuanggu',fangtian_ji:'icon_fangtian',pozhen_shuangji:'icon_pozhen',huochuan_ling:'icon_huochuan',donglai_ji:'icon_donglai',yitian_jian:'icon_yitian',jinfan_gou:'icon_lianhuan',shuang_tieji:'icon_zhenbei',guding_dao:'icon_yitian',nanman_dao:'icon_guandao',
       } as const)[option.weaponId!] : option.weaponId === 'spear_orbit'
         ? 'icon_1'
         : option.weaponId === 'crossbow'

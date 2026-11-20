@@ -5,6 +5,7 @@ import { ZHOUYU } from '../data/zhouyu';
 import { TAISHICI } from '../data/taishici';
 import { MENGDE } from '../data/mengde';
 import { DIANWEI } from '../data/dianwei';
+import { MENGHUO } from '../data/menghuo';
 /** P3 第二批可玩武将（共用量表 p3*）。 */
 const P3_HEROES = new Set<string>(['ganning', 'dianwei', 'sunquan', 'menghuo', 'zhurong']);
 /** P3 限时状态的名字（被动条显示）。 */
@@ -91,6 +92,11 @@ export class CharacterPassives {
   p3Need = 10; private p3Pending = 0; p3Until = -Infinity; p3SpeedMul = 1; p3GuardMul = 1;
   /** 孙权「制衡」当前阵势名（武器写入，被动条显示）。 */
   p3StanceName = '';
+  /** P3 常驻减伤（孟获武艺「藤甲」，武器每帧写入）。 */
+  p3Armor = 1;
+  /** 孟获分支「七擒不服」：受伤攒不服层（gapMs 内最多 1 层，decayMs 没挨打清空），伤害加成在武器里算。 */
+  mhBufuOn = false; private mhStacks = 0; private mhLastHit = -Infinity;
+  mhBufuStacks(now: number): number { if (now - this.mhLastHit > MENGHUO.bufu.decayMs) this.mhStacks = 0; return this.mhStacks; }
   get isP3(): boolean { return P3_HEROES.has(this.character); }
   p3Gain(now: number, n = 1): void { if (this.stopped || !this.isP3) return; this.stacks += n; this.gains++; this.lastGain = now; if (this.stacks >= this.p3Need) { this.stacks = 0; this.triggers++; this.p3Pending++; } }
   takeP3(): boolean { if (this.p3Pending <= 0 || this.stopped) return false; this.p3Pending--; return true; }
@@ -109,7 +115,7 @@ export class CharacterPassives {
   constructor(character: CharacterId = 'zhaoyun', now = 0) { this.reset(character, now); }
   reset(character: CharacterId, now: number): void {
     this.character = character; this.stacks = 0; this.lastGain = -Infinity; this.charmKillAt = -Infinity; this.lastDamage = now; this.sharpUntil = -Infinity; this.sharpMs = HZ_SHARP.sharpMs; this.hurtDropAt = -Infinity; this.surroundAcc = 0; this.stars.clear(); this.bazhen = []; this.stageKills = 0; this.sharpEliteKills = 0;
-    this.generation++; this.stopped = false; this.gains = 0; this.triggers = 0; this.burns.clear(); this.charms.clear(); this.crowdStar = { marks: 0, last: -Infinity }; this.guardUntil = -Infinity; this.wsUntil = this.wsStart = -Infinity; this.hubenPending = 0; this.dongfengPending = 0; this.breakoutPending = 0; this.hubaoPending = 0; this.chargeInvulnUntil = this.chargeGuardUntil = -Infinity; this.p3Pending = 0; this.p3Until = -Infinity; this.p3SpeedMul = this.p3GuardMul = 1; this.p3StanceName = '';
+    this.generation++; this.stopped = false; this.gains = 0; this.triggers = 0; this.burns.clear(); this.charms.clear(); this.crowdStar = { marks: 0, last: -Infinity }; this.guardUntil = -Infinity; this.wsUntil = this.wsStart = -Infinity; this.hubenPending = 0; this.dongfengPending = 0; this.breakoutPending = 0; this.hubaoPending = 0; this.chargeInvulnUntil = this.chargeGuardUntil = -Infinity; this.p3Pending = 0; this.p3Until = -Infinity; this.p3SpeedMul = this.p3GuardMul = 1; this.p3StanceName = ''; this.p3Armor = 1; this.mhBufuOn = false; this.mhStacks = 0; this.mhLastHit = -Infinity;
   }
   get characterId(): CharacterId { return this.character; }
   stop(): void { this.stopped = true; this.stacks = 0; this.generation++; this.burns.clear(); this.charms.clear(); this.stars.clear(); this.crowdStar = { marks: 0, last: -Infinity }; this.bazhen = []; this.chargeInvulnUntil = this.chargeGuardUntil = -Infinity; }
@@ -119,6 +125,7 @@ export class CharacterPassives {
     this.lastDamage = now;
     // 黄忠：受伤掉 1 层蓄势（每 0.5 秒最多掉 1 层）；神射中受伤不掉层、不退出
     if (this.character === 'huangzhong' && !this.isSharpshooter(now) && this.stacks > 0 && now - this.hurtDropAt + 1e-6 >= HZ_SHARP.hurtDropGapMs) { this.hurtDropAt = now; this.stacks--; }
+    if ((this.character as string) === 'menghuo' && this.mhBufuOn && now - this.mhLastHit + 1e-6 >= MENGHUO.bufu.gapMs) { this.mhStacks = Math.min(MENGHUO.bufu.max, this.mhBufuStacks(now) + 1); this.mhLastHit = now; }
     // 典韦·恶来：每次受伤积 1 层（gainGapMs 内最多 1 层；古之恶来中照攒，结束后下一轮更快）
     if ((this.character as string) === 'dianwei' && now - this.lastGain + 1e-6 >= DIANWEI.gainGapMs) this.p3Gain(now);
     // 魏延·镇守汉中：每次受伤积 1 层拒敌（每 0.5 秒最多 1 层）
@@ -133,7 +140,7 @@ export class CharacterPassives {
     while (this.surroundAcc >= 1 && this.stacks < this.maxStacks) { this.surroundAcc -= 1; this.stacks++; this.gains++; }
   }
   /** 魏延「谁敢杀我」期间受到伤害的倍率。 */
-  damageTakenMultiplier(now: number): number { if (this.stopped) return 1; return (now < this.guardUntil ? R.whoDaresGuardMul : 1) * (now < this.chargeGuardUntil && now >= this.chargeInvulnUntil ? R.chargeGuardMul : 1) * (now < this.p3Until ? this.p3GuardMul : 1); }
+  damageTakenMultiplier(now: number): number { if (this.stopped) return 1; return (now < this.guardUntil ? R.whoDaresGuardMul : 1) * (now < this.chargeGuardUntil && now >= this.chargeInvulnUntil ? R.chargeGuardMul : 1) * (now < this.p3Until ? this.p3GuardMul : 1) * (this.isP3 ? this.p3Armor : 1); }
   /** P3 限时状态的移速倍数（甘宁百骑劫营）。 */
   speedMultiplier(now: number): number { return this.p3Active(now) ? this.p3SpeedMul : 1; }
   /** 马超锦马冲锋：invulnMs 内无敌（不吃伤害、不被外力击退），之后 guardMs 内受伤减免。 */

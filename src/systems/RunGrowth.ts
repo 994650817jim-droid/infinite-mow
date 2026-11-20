@@ -64,6 +64,9 @@ export const MARTIALS = {
   // P3 孙权（weapons/sunquanWeapon.ts）
   biyan: {character:'sunquan',name:'碧眼',desc:'每级齐射伤害 +15%'},
   ziran: {character:'sunquan',name:'紫髯',desc:'每级刀斩距离 +10%'},
+  // P3 孟获（weapons/menghuoWeapon.ts）
+  manli: {character:'menghuo',name:'蛮力',desc:'每级重劈距离 +10%'},
+  tengjia: {character:'menghuo',name:'藤甲',desc:'每级受伤 −4%'},
   shenshe: {character:'taishici',name:'神射',desc:'射戟射程每级 +15%'},
   qichi: {character:'taishici',name:'七尺之剑',desc:'双戟伤害每级 +8%'},
   yaliang: {character:'zhouyu',name:'雅量',desc:'英发每级少攒 15%'},
@@ -89,7 +92,7 @@ export class RunGrowth {
   revivalUsed=false;
   awakenRescueUsed=false;
   readonly attributes: Record<AttributeId, number> = { strength: 0, agility: 0, intellect: 0, command: 0 };
-  readonly masteries: Record<MasteryId, number> = { dragon_gallop: 0, cloud_pierce: 0, dragon_charge:0, dragging_blade:0, steady_aim:0, pearl_volley:0, wildfire:0, eight_trigrams:0, kaishan:0, gujun:0, fulei:0, lianying:0, huishen:0, baibi:0, nichang:0, meirenji:0, jingxin:0, laoji:0, wanrendi:0, dahe:0, jinma:0, tieqi:0, taoyuan:0, xiemin:0, chitu:0, huaji:0, xiandeng:0, weiming:0, yaliang:0, lianchuan:0, shenshe:0, qichi:0, weicai:0, wangmei:0, lingxiang:0, tiesuo:0, tieji:0, huwei:0, biyan:0, ziran:0 };
+  readonly masteries: Record<MasteryId, number> = { dragon_gallop: 0, cloud_pierce: 0, dragon_charge:0, dragging_blade:0, steady_aim:0, pearl_volley:0, wildfire:0, eight_trigrams:0, kaishan:0, gujun:0, fulei:0, lianying:0, huishen:0, baibi:0, nichang:0, meirenji:0, jingxin:0, laoji:0, wanrendi:0, dahe:0, jinma:0, tieqi:0, taoyuan:0, xiemin:0, chitu:0, huaji:0, xiandeng:0, weiming:0, yaliang:0, lianchuan:0, shenshe:0, qichi:0, weicai:0, wangmei:0, lingxiang:0, tiesuo:0, tieji:0, huwei:0, biyan:0, ziran:0, manli:0, tengjia:0 };
   /** 信物库新信物（CharmEffects）：本局加到 player.stats 上的量、铁壁套装生命、传奇信物档位、回生玉佩无敌时长。 */
   charmDelta?: CharmStatDelta;
   charmHp = 0;

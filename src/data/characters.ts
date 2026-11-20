@@ -1,7 +1,7 @@
 import type { ChapterId } from './chapters';
 import type { WeaponId } from '../types';
 
-export type CharacterId = 'zhaoyun' | 'guanyu' | 'huangzhong' | 'zhuge' | 'zhangfei' | 'machao' | 'weiyan' | 'liubei' | 'pangtong' | 'huangyueying' | 'sunshangxiang' | 'diaochan' | 'lvbu' | 'zhangliao' | 'zhouyu' | 'taishici' | 'mengde' | 'ganning' | 'dianwei' | 'sunquan';
+export type CharacterId = 'zhaoyun' | 'guanyu' | 'huangzhong' | 'zhuge' | 'zhangfei' | 'machao' | 'weiyan' | 'liubei' | 'pangtong' | 'huangyueying' | 'sunshangxiang' | 'diaochan' | 'lvbu' | 'zhangliao' | 'zhouyu' | 'taishici' | 'mengde' | 'ganning' | 'dianwei' | 'sunquan' | 'menghuo';
 
 export interface CharacterDef {
   id: CharacterId;
@@ -265,11 +265,23 @@ export const CHARACTERS: CharacterDef[] = [
     startWeapon: 'guding_dao',
     faction: '吴',
   },
+  // P3 第二批：孟获（南蛮）——南蛮大刀、被动「南蛮王」（data/menghuo.ts）；南中支线银坑洞打下后来投
+  {
+    id: 'menghuo',
+    name: '孟获',
+    desc: '南蛮王 · 重劈裂地、驱兽冲阵',
+    hpMul: 1.14,
+    speedMul: .95,
+    damageMul: 1.06,
+    portrait: 'menghuo_portrait',
+    startWeapon: 'nanman_dao',
+    faction: '群', // 南蛮：势力只有魏 / 蜀 / 吴 / 群，归群
+  },
 
 ];
 
 /** 有主页大幅立绘（epic-home）与水墨立轴（ink-scroll）的武将；其余用 portrait。 */
-export const HOME_ART_HEROES: readonly string[] = ['zhaoyun', 'guanyu', 'huangzhong', 'zhuge', 'zhangfei', 'machao', 'weiyan', 'liubei', 'pangtong', 'huangyueying', 'sunshangxiang', 'diaochan', 'lvbu', 'zhangliao', 'zhouyu', 'taishici', 'mengde', 'ganning', 'dianwei', 'sunquan'];
+export const HOME_ART_HEROES: readonly string[] = ['zhaoyun', 'guanyu', 'huangzhong', 'zhuge', 'zhangfei', 'machao', 'weiyan', 'liubei', 'pangtong', 'huangyueying', 'sunshangxiang', 'diaochan', 'lvbu', 'zhangliao', 'zhouyu', 'taishici', 'mengde', 'ganning', 'dianwei', 'sunquan', 'menghuo'];
 
 export const STARTING_WEAPONS: Array<{ id: WeaponId; name: string; icon: string; desc: string }> = [
   { id: 'spear_orbit', name: '枪影旋舞', icon: 'icon_1', desc: '环绕枪刃，近身持续伤害' },

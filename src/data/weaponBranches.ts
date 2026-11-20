@@ -48,6 +48,9 @@ export const WEAPON_BRANCHES: readonly WeaponBranch[] = [
   // P2 曹操（效果在 weapons/mengdeWeapon.ts 里结算）
   B('yitian_jian', 'cc_xietianzi', 'formation', '挟天子以令诸侯', '每 8 秒插令旗成阵地 6 秒：\n阵内部曲攻速 +25%、每秒回血 2%', '部曲攻速加成提高', '部曲攻速加成再提高', '魏王', '阵地范围 +30%', true),
   B('yitian_jian', 'cc_hubao', 'cavalry', '虎豹骑', '奸雄只需 5 层，铁骑冲撞眩晕 0.8 秒\n冲过留下尘浪 4 秒（敌兵减速）', '铁骑伤害 +30%', '铁骑伤害再 +30%', '虎豹骑 · 极', '铁骑 7 骑', true),
+  // P3 孟获（效果在 weapons/menghuoWeapon.ts 里结算）
+  B('nanman_dao', 'mh_bufu', 'warrior', '七擒不服', '每挨一下攒 1 层「不服」（最多 7 层）\n每层伤害 +6%，6 秒没挨打清空', '不服加成 +30%', '不服加成再 +30%', '七擒七纵', '满 7 层时重劈裂地两次', true),
+  B('nanman_dao', 'mh_xiangzhen', 'formation', '南中象阵', '驱兽冲阵改为 6 头象兵，撞中眩晕 0.8 秒\n南蛮王只需 16 层', '象兵伤害 +30%', '象兵伤害再 +30%', '象阵 · 踏平', '象兵冲过去再冲回来', true),
   // P3 孙权（效果在 weapons/sunquanWeapon.ts 里结算）
   B('guding_dao', 'sq_zuoduan', 'formation', '坐断东南', '制衡的三种阵势效果加倍\n切换阵势时身边部曲得护盾（最大生命 12%）', '阵势效果再强', '阵势效果再强', '坐断东南 · 江东', '切换阵势时再朝最密处齐射一轮', true),
   B('guding_dao', 'sq_gongnu', 'archery', '江东弓弩', '齐射范围 +30%、每第 3 斩就齐射\n落点留减速 2 秒', '齐射伤害 +30%', '齐射伤害再 +30%', '江东弓弩 · 连射', '每次齐射连发两轮', true),
@@ -76,7 +79,7 @@ export const WEAPON_BRANCHES: readonly WeaponBranch[] = [
  */
 export const BENXI = { dropStep: 90, dropMul: .4, recallMs: 2500, fullCount: 8, stillMs: 500, recallWidth: 44, recallMul: .45, recallFinalMul: .6, maxHitsPerEnemy: 3, keepMax: 8 } as const;
 /** P3 第二批可玩武将的分支图标还没出图（缺图清单 p3-heroes-plan.md）：不去载，卡面退回本命武器图标。 */
-export const BRANCH_ICON_PENDING: ReadonlySet<string> = new Set(['gn_yexi', 'gn_jieying', 'dw_sizhan', 'dw_huzhu', 'sq_zuoduan', 'sq_gongnu']);
+export const BRANCH_ICON_PENDING: ReadonlySet<string> = new Set(['gn_yexi', 'gn_jieying', 'dw_sizhan', 'dw_huzhu', 'sq_zuoduan', 'sq_gongnu', 'mh_bufu', 'mh_xiangzhen']);
 export const BRANCH_ICON_READY: readonly string[] = WEAPON_BRANCHES.map(b => b.id).filter(id => !BRANCH_ICON_PENDING.has(id)); // 老 12 人 + P2 已出图
 export function branchesFor(weapon: WeaponId): WeaponBranch[] { return WEAPON_BRANCHES.filter(b => b.weapon === weapon); }
 export function branchById(id: string | undefined): WeaponBranch | undefined { return id ? WEAPON_BRANCHES.find(b => b.id === id) : undefined; }

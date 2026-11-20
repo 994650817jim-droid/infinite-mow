@@ -1,4 +1,5 @@
 import { playMenuMusic, stopMenuMusic } from '../systems/Music';
+import { startCityAmbient } from '../systems/ContentSfx';
 import { SCHOOLS, SCHOOL_TIER, SHI_SOURCES, FOLLOWER_SCHOOL, heroAffinity, type SchoolId } from '../data/schools';
 import { playSheet } from '../systems/SkillFxSheets';
 import { ZHANGLIAO } from '../data/zhangliao';
@@ -792,6 +793,7 @@ export class GameScene extends Phaser.Scene {
     // 中途退出不算：进关先记下存档，告捷 / 战败才丢掉（systems/BattleSnapshot.ts）
     beginBattle(this.scene.key);
     stopMenuMusic();
+    startCityAmbient(this, k => this.sfx?.play(k), ['amb_wind', 'amb_wind', 'amb_flag'], [9000, 16000]); // 战斗环境声：很稀的风 / 旗声（音效审计第二批）
     this.hadStarterHorse = ownedHorses().some(h => h.id === STARTER_HORSE);
     this.resetState();
     ensureWarTextures(this);

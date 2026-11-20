@@ -6,6 +6,7 @@ import Phaser from 'phaser';
 import { surrenderMoveLine } from '../data/surrenderMoves';
 import { heroLevel, type HeroKey } from '../systems/HeroProgress';
 import { playMenuMusic } from '../systems/Music';
+import {startCityAmbient} from '../systems/ContentSfx';
 import { uiSfx } from '../systems/Sfx';
 import { isChapterTestRun } from '../systems/ChapterProgress';
 import { W, H, worldText, worldButton, worldShell, panel } from '../world/WorldUI';
@@ -42,7 +43,7 @@ export class TalentHallScene extends Phaser.Scene {
     this.events.once('shutdown', () => { for (const k of added) if (this.textures.exists(k)) this.textures.remove(k); });
   }
   create() {
-    playMenuMusic(this, 'hall');
+    playMenuMusic(this, 'hall'); startCityAmbient(this, k => uiSfx().play(k), ["amb_bird","amb_bird","amb_bell","amb_wind"], [5000,10000]);
     if (!worldUnlocked() && !isChapterTestRun()) { this.scene.start('MenuScene'); return; }
     // 2026-11-17 用户批准 UI 审查 A：电脑版整页改漆底描金 + 水墨按钮（原深绿底、扁平矩形按钮、绿木纹行，像网页）
     const D = W > 600;

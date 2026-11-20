@@ -30,8 +30,10 @@ const has = async list => page.evaluate(l => { const s = new window.__T.Sfx(); f
 
 // 1. 静态扫描
 const files = []; const walk = d => { for (const f of readdirSync(d)) { const p = join(d, f); if (statSync(p).isDirectory()) walk(p); else if (p.endsWith('.ts')) files.push(p); } }; walk('src');
-const used = new Map(), RX = /(?:\bsfx\.play|\bsfx\??\.?|\bsound\??\.?|\buiSfx\(\)\.play|\bsceneSfx\([^,()]+,)\s*\(?\s*'([a-zA-Z_][a-zA-Z0-9_]*)'(?!\s*\+)/g; // 拼接出来的动态键（'cast_' + 武将）不算
+const used = new Map(), RX = /(?:\bsfx\.play|\bsfx\??\.?|\bsound\??\.?|\buiSfx\(\)\.play|\bsceneSfx\([^,()]+,|\bplayIn\([^,()]+,)\s*\(?\s*'([a-zA-Z_][a-zA-Z0-9_]*)'(?!\s*\+)/g; // 拼接出来的动态键（'cast_' + 武将）不算
 for (const f of files) { const s = readFileSync(f, 'utf8'); for (const m of s.matchAll(RX)) { if (!used.has(m[1])) used.set(m[1], new Set()); used.get(m[1]).add(f.replace(/\\/g, '/').replace(/^src\//, '')); } }
+// 环境声列表（startCityAmbient(…, [键…])）里的键也算
+for (const f of files) { const src = readFileSync(f, 'utf8'); for (const m of src.matchAll(/startCityAmbient\([^;\[]*\[([^\]]*)\]/g)) for (const k of m[1].matchAll(/'([a-zA-Z_][a-zA-Z0-9_]*)'/g)) { if (!used.has(k[1])) used.set(k[1], new Set()); used.get(k[1]).add(f.replace(/\\/g, '/').replace(/^src\//, '') + '（环境声）'); } }
 const missing = await has([...used.keys()]);
 ck(`静态：代码里播放的 ${used.size} 个音效键都存在`, missing.length === 0, missing.map(k => k + ' ← ' + [...used.get(k)].join(',')));
 

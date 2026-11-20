@@ -3,6 +3,7 @@ import { GAME_WIDTH, GAME_HEIGHT, HEADING_FONT, FONT } from '../config';
 import { LQ, lqDiamond } from './LacquerKit';
 import { factionOf, titleOf } from './StoryBarkCardStyles';
 import { STORY_CAST } from '../data/story/types';
+import { playIn } from '../systems/Sfx';
 
 /**
  * 首领血条（2026-11-20 用户「还有ui boss血条优化一下」；风格同左上主将状态框 HeroStatusFrame：漆底金边、铜框朱红）。
@@ -125,8 +126,8 @@ export class BossHud {
     if (!this.visible) return;
     const key = v ? v.id + ':' + v.name : '';
     if (key !== this.key) {
-      if (!v && this.last) { this.dieAt = now; this.stats.deaths++; }
-      if (v) { this.openAt = now; this.stats.opens++; this.lastRatio = v.ratio; this.lastBreaks = v.breaks ?? 0; }
+      if (!v && this.last) { this.dieAt = now; this.stats.deaths++; playIn(this.scene, 'bossbar_shatter'); }
+      if (v) { this.openAt = now; this.stats.opens++; playIn(this.scene, 'bossbar_open'); this.lastRatio = v.ratio; this.lastBreaks = v.breaks ?? 0; }
       this.key = key;
     }
     const R = this.rect(), x0 = R.x, y0 = R.y;

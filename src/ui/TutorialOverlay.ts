@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { DEPTH, FONT, GAME_HEIGHT, GAME_WIDTH, HEADING_FONT } from '../config';
 import { setTutorialSeen, tutorialSeen } from '../world/WorldStore';
+import { playIn } from '../systems/Sfx';
 
 /** 屏幕坐标里的一块区域（界面元素的包围盒，或世界物件换算到屏幕后的位置）。 */
 export interface ScreenRect { x: number; y: number; w: number; h: number }
@@ -46,6 +47,7 @@ export class TutorialOverlay {
   /** 显示一行提示（keys：按键图标，如 ['W','A','S','D']）；at：'battle' 底部 / 'camp' 营地底部偏上 / 'top' 顶部。 */
   /** fadeMs：提示型步骤（只说一句、不等操作）几毫秒后自动淡出；popup：升级 / 支援那两步盖在弹窗上。 */
   show(line: string, keys: string[] = [], at: 'battle' | 'camp' | 'popup' = 'battle', fadeMs?: number): void {
+    playIn(this.scene, 'tutorial_tip'); // 第一章新手引导提示音（自带 0.8 秒节流）
     this.active = true; this.fadeAt = fadeMs ? performance.now() + fadeMs : null;
     this.root.setDepth(at === 'popup' ? TutorialOverlay.DEPTH_TOP : TutorialOverlay.DEPTH_UNDER);
     // 战场：底部；行营：顶部居中（标题与「下一关」之间的空处）；弹窗（升级 / 支援）：卡片下沿之下

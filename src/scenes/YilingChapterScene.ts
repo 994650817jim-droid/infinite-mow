@@ -65,9 +65,9 @@ export class YilingChapterScene extends Phaser.Scene {
  /** 第十章开篇：为关羽报仇，先主东征；交代「火势蔓延」玩法。 */
  openStory(){const lord=CHARACTERS.find(c=>c.id===this.hero)?.name??'主公';
   storyScroll(this,W,H,IS_DESKTOP,{name:'story-yiling-open',confirmName:'story-yiling-open-confirm',kicker:'第十章 · 夷陵之战',title:'东征孙吴',
-   lines:[{text:'章武元年，关羽败走麦城，荆州尽归东吴。张飞又遭部将所害，先主悲愤，倾国东征。'},
+   lines:[{text:'章武元年，荆州尽归东吴。关羽虽杀出麦城，荆襄将士死伤殆尽。先主悲愤，倾国东征。'},
     {who:'秦宓',text:'国贼是曹丕，非孙权也。主公三思！'},
-    {who:lord,text:'二弟、三弟之仇不报，何以立于天地之间？传令：顺江东下，直取猇亭！'},
+    {who:lord,text:'荆州之失、麦城之辱不雪，何以立于天地之间？传令：顺江东下，直取猇亭！'},
     {text:'本章前两关我军攻势：砍倒吴军军旗、拆掉吴军营帐。第三关陆逊「火烧连营」：看风向箭头，火往箭头方向烧，往上风口退；营帐着火会一烧一片。'}],
    reward:'本章玩法：火势蔓延',confirm:'东征孙吴',background:'rest_camp',onDone:()=>{try{localStorage.setItem(OPEN_KEY,'1');}catch{}}});}
  private depart(){if(!stageOpen(this.selected)&&!isChapterTestRun())return;if(!isChapterTestRun())try{localStorage.setItem('im_last_hero',this.hero);}catch{}this.registry.remove('campaignTransfer');this.registry.remove('yilingTransfer');this.registry.set('yilingStage',this.selected);this.registry.set('runConfig',{character:this.hero,thirdStage:this.selected});this.scene.start('YilingGameScene');}

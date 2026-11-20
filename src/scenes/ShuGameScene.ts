@@ -1,3 +1,4 @@
+import { setStoryFlag } from '../systems/Story';
 import Phaser from 'phaser';
 import { GameScene } from './GameScene';
 import { thirdGameSceneClass, type ArcSceneConfig } from './ThirdGameScene';
@@ -121,6 +122,7 @@ export function shuGameSceneClass(Base: typeof GameScene) {
       super.finish(victory, reason);
       if (!victory || this.registry.get('shuNoStory') === 'all') return;
       const hero = getCharacter(this.runConfig.character);
+      if (this.shuStage === 2) setStoryFlag('luofeng', this.pangtongFell && hero.id !== 'pangtong' ? 'fell' : 'saved'); // 剧本 data/story/shu.ts 以后的庞统台词看这个
       if (this.shuStage === 2) this.story('shu-luofeng-end', '第七章 · 入蜀 · 落凤坡', this.pangtongFell ? '凤雏陨落' : '凤雏得救', luofengEnding(!this.pangtongFell, hero.id === 'pangtong', hero.name), '继续进军');
       if (this.shuStage === 3) {
         const fresh = grantCity('chengdu');

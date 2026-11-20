@@ -66,6 +66,8 @@ export const XF_OPENING: StoryLine[] = [
   { who: '王甫', text: '将军，东吴吕蒙称病还建业，陆逊书来卑辞——此中恐怕有诈。' },
   { who: '关羽', text: '江东鼠辈，何足挂齿！传令：围樊城！' },
   { text: '建安二十四年秋，关羽自江陵北伐，围曹仁于樊城。' },
+  { who: '关羽', text: '某夜读春秋，兵法读到深处，自有一层新天地。' },
+  { text: '新：战法精研第九章起可到 Lv5。' },
 ];
 export const XF_FLOOD_OPENING: StoryLine[] = [
   { who: '关羽', text: '秋雨连旬，汉水将溢。于禁七军屯在罾口川低地——此天亡之也。' },

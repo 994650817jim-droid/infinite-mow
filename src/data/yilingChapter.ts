@@ -14,7 +14,7 @@ export type YilingBossId = 'sunhuan' | 'zhuran' | 'luxun';
 export interface YilingStageInfo { stage: YilingStage; name: string; boss: string; id: YilingBossId; tag: string; feature: string; story: string; behavior: ThirdStage; scenery: ThirdStage | 4; skills: [string, string, string]; signature?: string; signatureId?: 'caochun' | 'caimao' | 'caoren' }
 
 export const YILING_STAGES: readonly YilingStageInfo[] = [
-  { stage: 1, name: '猇亭', boss: '孙桓', id: 'sunhuan', tag: '顺江东下', feature: '我军推进 · 砍倒吴军军旗', story: '为报关羽之仇，先主亲率大军顺江东下，连破吴军前哨，兵锋直抵猇亭。', behavior: 1, scenery: 1, skills: ['疾行突袭', '号令援军', '军刀横扫'] },
+  { stage: 1, name: '猇亭', boss: '孙桓', id: 'sunhuan', tag: '顺江东下', feature: '我军推进 · 砍倒吴军军旗', story: '为雪荆州之耻，先主亲率大军顺江东下，连破吴军前哨，兵锋直抵猇亭。', behavior: 1, scenery: 1, skills: ['疾行突袭', '号令援军', '军刀横扫'] },
   { stage: 2, name: '连营', boss: '朱然', id: 'zhuran', tag: '拆营破寨', feature: '拆掉吴军营帐 · 营帐尽破敌将出营', story: '吴军依山结寨，营帐相连。拆其营寨，逼朱然出营决战。', behavior: 2, scenery: 2, skills: ['连环枪击', '突刺追击', '伏兵包围'] },
   { stage: 3, name: '火烧连营', boss: '陆逊', id: 'luxun', tag: '火势蔓延', feature: '陆逊放火 · 看风向躲火线', story: '我军连营七百里，暑热移营林中。陆逊等的就是这一刻——东南风起，一把火烧了过来。', behavior: 3, scenery: 4, skills: ['旗令轰击', '伏兵四起', '弓阵齐射'] },
 ];

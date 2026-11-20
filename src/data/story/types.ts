@@ -84,6 +84,13 @@ export const STORY_CAST: Record<string, { name: string; portrait?: string }> = {
   // 第六章（originals/sheet_j、sheet_k）
   zhaofan: { name: '赵范', portrait: 'ink_cast_zhaofan' }, liudu: { name: '刘度', portrait: 'ink_cast_liudu' }, hanxuan: { name: '韩玄', portrait: 'ink_cast_hanxuan' }, fanshi: { name: '樊氏', portrait: 'ink_cast_fanshi' },
   liuxian: { name: '刘贤', portrait: 'ink_cast_liuxian' }, xingdaorong: { name: '邢道荣', portrait: 'ink_cast_xingdaorong' }, yangling: { name: '杨龄', portrait: 'ink_cast_yangling' },
+  // 第七–十二章（2026-11-20 补剧本）：立绘待补，先只显示名字章（清单 MISSING_PORTRAITS_CH712）
+  yanghuai: { name: '杨怀' }, zhangren: { name: '张任' }, liuzhang: { name: '刘璋' }, liuxun: { name: '刘循' },
+  fazheng: { name: '法正' }, zhanghe: { name: '张郃' }, xiahouyuan: { name: '夏侯渊' },
+  pangde: { name: '庞德' }, lvmeng: { name: '吕蒙' }, wangfu: { name: '王甫' }, guanping: { name: '关平' },
+  huangquan: { name: '黄权' }, sunhuan: { name: '孙桓' }, zhuran: { name: '朱然' }, luxun: { name: '陆逊' },
+  mangyachang: { name: '忙牙长' }, wutugu: { name: '兀突骨' }, masu: { name: '马谡' },
+  wangping: { name: '王平' }, jiangwei: { name: '姜维' }, haozhao: { name: '郝昭' }, simayi: { name: '司马懿' },
 };
 /** 第一、二章还没有对白立绘的（通用角色只显示名字章）。人物立绘 2026-11-18 夜已全部补齐。 */
 export const MISSING_PORTRAITS = ['旁白卷首图（通用）', '斥候（通用）', '卢植', '皇甫嵩'];
@@ -91,3 +98,5 @@ export const MISSING_PORTRAITS_CH3: string[] = []; // 2026-11-18 九人立绘已
 export const MISSING_PORTRAITS_CH4: string[] = []; // 2026-11-18 十人立绘已补齐（蔡阳最后补，即梦）
 /** 第五、六章：徐庶、刘贤、邢道荣 2026-11-18 夜补了台词和立绘，已补齐。 */
 export const MISSING_PORTRAITS_CH56: string[] = [];
+/** 第七–十二章剧本里说话、还没有对白立绘的（2026-11-20）。曹操、曹仁、孟获、祝融已有。 */
+export const MISSING_PORTRAITS_CH712 = ['杨怀', '张任', '刘璋', '刘循', '法正', '张郃', '夏侯渊', '庞德', '吕蒙', '王甫', '关平', '黄权', '孙桓', '朱然', '陆逊', '忙牙长', '兀突骨', '马谡', '王平', '姜维', '郝昭', '司马懿'];

@@ -42,6 +42,8 @@ export interface UpgradeOption {
   desc: string;
   kind: 'tactic' | 'treasure' | 'weapon' | 'passive' | 'rare' | 'relic' | 'martial' | 'attribute' | 'potion' | 'trinket' | 'foundation';
   categoryLabel?: string;
+  /** 有效范围（卡底徽记）：本关有效 / 本次征程 / 一次性 / 永久；不写按 kind 推（ui/CardRichText cardScope）。 */
+  scope?: 'stage' | 'run' | 'once' | 'forever';
   weaponId?: WeaponId;
   relicId?: string;
   school?: string;

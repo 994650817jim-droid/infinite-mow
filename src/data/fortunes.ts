@@ -38,13 +38,14 @@ export interface FortuneBuff {
   now?: 'heal15';
 }
 export const FORTUNE_BUFFS: readonly FortuneBuff[] = [
-  { id: 'f_morale', icon: 'growth_icon_might', name: '士气如虹', desc: '本关伤害 +15%', apply: s => { s.damageMul *= 1.15; } },
-  { id: 'f_swift', icon: 'growth_icon_wind_boots', name: '疾行', desc: '本关移速 +12%\n拾取范围 +40%', apply: s => { s.moveMul *= 1.12; s.pickupRadius *= 1.4; } },
-  { id: 'f_vigor', icon: 'growth_icon_constitution', name: '固本培元', desc: '本关生命上限 +15%\n并立即回复 15% 生命', apply: (s, hp) => { s.maxHpBonus += Math.round(hp * .15); }, now: 'heal15' },
-  { id: 'f_fire', icon: 'growth_icon_wildfire', name: '火攻之机', desc: '本关火焰伤害 +25%\n火焰范围 +15%', apply: s => { s.fireMul *= 1.25; s.fireAreaMul *= 1.15; } },
-  { id: 'f_orders', icon: 'growth_icon_quickness', name: '军令如山', desc: '本关技能冷却 −10%', apply: s => { s.cooldownMul *= .9; } },
-  { id: 'f_armor', icon: 'growth_icon_heart_mirror', name: '披坚', desc: '本关受到伤害 −12%', apply: s => { s.damageTakenMul *= .88; } },
-  { id: 'f_eagle', icon: 'growth_icon_critical', name: '鹰眼', desc: '本关暴击率 +8%', apply: s => { s.critChance += .08; } },
+  // 2026-11-19 三选一文案审校：卡底徽记已写「本关有效」，说明里不再重复「本关」；与保底卡「固本培元」、战法「鹰眼」重名的两张改名（养精蓄锐、洞察）
+  { id: 'f_morale', icon: 'growth_icon_might', name: '士气如虹', desc: '伤害 +15%', apply: s => { s.damageMul *= 1.15; } },
+  { id: 'f_swift', icon: 'growth_icon_wind_boots', name: '疾行', desc: '移速 +12%\n拾取范围 +40%', apply: s => { s.moveMul *= 1.12; s.pickupRadius *= 1.4; } },
+  { id: 'f_vigor', icon: 'growth_icon_constitution', name: '养精蓄锐', desc: '生命上限 +15%\n立即回复 15% 生命', apply: (s, hp) => { s.maxHpBonus += Math.round(hp * .15); }, now: 'heal15' },
+  { id: 'f_fire', icon: 'growth_icon_wildfire', name: '火攻之机', desc: '火焰伤害 +25%\n火焰范围 +15%', apply: s => { s.fireMul *= 1.25; s.fireAreaMul *= 1.15; } },
+  { id: 'f_orders', icon: 'growth_icon_quickness', name: '军令如山', desc: '武器冷却 −10%', apply: s => { s.cooldownMul *= .9; } },
+  { id: 'f_armor', icon: 'growth_icon_heart_mirror', name: '披坚', desc: '受到伤害 −12%', apply: s => { s.damageTakenMul *= .88; } },
+  { id: 'f_eagle', icon: 'growth_icon_critical', name: '洞察', desc: '暴击率 +8%', apply: s => { s.critChance += .08; } },
 ];
 /** 从可选的增益里抽 3 张不同的（同一张本关已拿满 maxSame 次的不出）。 */
 export function rollFortuneBuffs(taken: Readonly<Record<string, number>>, rnd: () => number = Math.random): FortuneBuff[] {

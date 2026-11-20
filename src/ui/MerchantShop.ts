@@ -39,9 +39,10 @@ export function loadMerchantArt(scene:Phaser.Scene,done?:()=>void):void{
  * 例：牵机「命中时把周围2名敌人拉向命中点（0.7秒），并减速12%。\n冷却4秒，对首领无效。」→ effect 第一句，cooldown「冷却 4 秒」。
  */
 export function tacticCardText(id:TacticId,level:number):{effect:string;cooldown:string|null;full:string}{
- // 效果取第一整句（到第一个「。」，跨行的接上：整军「每6秒…士兵，\n各回复…6%。」）
- const full=tacticDescription(id,level),flat=full.replace(/\n/g,''),end=flat.indexOf('。'),m=full.match(/冷却\s*([\d.]+)\s*秒/);
- return{effect:(end>=0?flat.slice(0,end+1):flat).trim(),cooldown:m?'冷却 '+m[1]+' 秒':null,full};
+ // 2026-11-19 卡面文案改成分行短句（不带句号）：效果 = 各行用空格接起来，「冷却 N 秒」单独拿出来显示
+ const full=tacticDescription(id,level),m=full.match(/冷却\s*([\d.]+)\s*秒/);
+ const effect=full.split('\n').map(l=>l.replace(/^冷却\s*[\d.]+\s*秒[，,、]?/,'').trim()).filter(Boolean).join(' ');
+ return{effect,cooldown:m?'冷却 '+m[1]+' 秒':null,full};
 }
 export class MerchantShop{
  private tip?:ItemTooltip;private root!:Phaser.GameObjects.Container;

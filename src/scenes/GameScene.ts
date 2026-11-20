@@ -194,6 +194,7 @@ import { heroAttributeExtra } from '../data/heroMechanics';
 import { BuildState } from '../data/builds';
 import { WEAPON_OVER, branchById } from '../data/weaponBranches';
 import { WeaponBranches } from '../systems/WeaponBranches';
+import { layoutRich, SCOPE_BADGE, cardScope } from '../ui/CardRichText';
 
 interface Gem {
   img: Phaser.GameObjects.Image;
@@ -248,6 +249,8 @@ interface CardView {
   root: Phaser.GameObjects.Container;
   rule: Phaser.GameObjects.Graphics;
   hint: Phaser.GameObjects.Text;
+  /** 说明正文（数字高亮，ui/CardRichText）；desc 只留纯文本给测试读、不显示。 */ rich: Phaser.GameObjects.Container;
+  /** 有效范围徽记：本关有效 / 本次征程 / 一次性 / 永久。 */ scope: Phaser.GameObjects.Text;
   w: number; h: number; baseY: number; medal: { x: number; y: number; r: number };
   accent: number; rare: boolean; hover: boolean; lift: number;
 }
@@ -2953,6 +2956,7 @@ export class GameScene extends Phaser.Scene {
         view.name.setVisible(false);
         view.desc.setVisible(false);
         view.tag.setVisible(false);
+        view.rich.setVisible(false); view.scope.setVisible(false);
         continue;
       }
       view.root.setVisible(true);
@@ -2964,14 +2968,19 @@ export class GameScene extends Phaser.Scene {
       this.paintUpgradeCard(view);
       view.name.setText(option.name);
       // 卡片说明统一称“首领”：中英混排时“Boss”会被拆成两行。
-      view.desc.setText(option.desc.replace(/Boss/g,'首领')).setFontSize(IS_DESKTOP?16:17);
-      while(view.desc.height>(IS_DESKTOP?view.h-246:view.h-104)&&parseInt(String(view.desc.style.fontSize))>13)view.desc.setFontSize(parseInt(String(view.desc.style.fontSize))-1);
+      const plain=option.desc.replace(/Boss/g,'首领');view.desc.setText(plain).setVisible(false);
       view.name.setFontSize(IS_DESKTOP?21:21);
       while(view.name.height>(IS_DESKTOP?50:30)&&parseInt(String(view.name.style.fontSize))>15)view.name.setFontSize(parseInt(String(view.name.style.fontSize))-1);
       // 名称与说明之间的分隔线（带菱形），随名称高度下移。
       const ruleY=view.name.y+view.name.height+(IS_DESKTOP?10:6),rx0=IS_DESKTOP?-view.w/2+30:104-view.w/2,rx1=IS_DESKTOP?view.w/2-30:view.w/2-18,accentLight=0xe0c58a;
       view.rule.clear().lineStyle(1,accentLight,.4).lineBetween(rx0,ruleY,rx1,ruleY).fillStyle(accentLight,.8).fillRect((rx0+rx1)/2-3,ruleY-3,6,6);
       view.desc.setY(ruleY+(IS_DESKTOP?10:7));
+      // 说明正文：数字高亮、自己换行；放不下就逐级缩字号（最小 13）
+      { const INK=GameScene.INK_LEVELUP,maxH=IS_DESKTOP?view.h-246:view.h-104;let size=IS_DESKTOP?16:17;
+        const style=(sz:number)=>({maxW:IS_DESKTOP?view.w-40:view.w-122,size:sz,lineSpacing:IS_DESKTOP?3:5,family:FONT,color:INK?'#33281d':IS_DESKTOP?'#e8d8b2':'#dacfba',hi:INK?'#8a2a1c':'#ffd76a',stroke:INK?'#efe4c9':'#120904',strokeW:IS_DESKTOP?2:0,align:(IS_DESKTOP?'center':'left') as 'center'|'left'});
+        let hgt=layoutRich(this,view.rich,plain,style(size));while(hgt>maxH&&size>13){size--;hgt=layoutRich(this,view.rich,plain,style(size));}
+        view.rich.setPosition(view.desc.x,view.desc.y).setVisible(true).setData('size',size).setData('h',hgt).setData('maxH',maxH); }
+      { const sc=SCOPE_BADGE[cardScope(option)];view.scope.setText(sc.text).setBackgroundColor(sc.bg).setColor(sc.color).setVisible(true); }
       let tagText = '被动';
       if (option.categoryLabel) tagText = option.categoryLabel;
       else if (option.kind === 'rare') tagText = '稀有';
@@ -3009,6 +3018,7 @@ export class GameScene extends Phaser.Scene {
         view.icon.setTexture(iconKey).setDisplaySize(52, 52).setVisible(true);
       }
     }
+    (this.levelPanel.getByName('upgrade-lock-note') as Phaser.GameObjects.Text|null)?.setVisible(this.upgradeOptions.some(o=>{const sc=cardScope(o);return sc==='run'||sc==='forever';}));
     this.upgradeAnimAt = performance.now();
   }
 
@@ -3847,7 +3857,7 @@ export class GameScene extends Phaser.Scene {
     this.sfx.level();
     (this.levelPanel.getByName('upgrade-title') as Phaser.GameObjects.Text)?.setText('战场机缘 · ' + FORTUNE_EVENT[kind].done);
     (this.levelPanel.getByName('upgrade-points-hint') as Phaser.GameObjects.Text)?.setVisible(true).setText('三选一 · 只在本关有效');
-    this.upgradeOptions = buffs.map(b => ({ id: b.id, name: b.name, desc: b.desc, kind: 'foundation' as const, icon: b.icon, categoryLabel: '战场机缘 · 本关有效',
+    this.upgradeOptions = buffs.map(b => ({ id: b.id, name: b.name, desc: b.desc, kind: 'foundation' as const, icon: b.icon, categoryLabel: '战场机缘', scope: 'stage' as const,
       apply: () => { applyStageBuff(this.player, s => b.apply(s, this.player.maxHp)); if (b.now === 'heal15') this.player.heal(Math.round(this.player.maxHp * .15)); this.fortuneTaken[b.id] = (this.fortuneTaken[b.id] ?? 0) + 1; } }));
     this.lootContinue = () => { this.setMode('none'); this.resumePendingChoices(); };
     this.renderCards(); this.setMode('bossloot');
@@ -4308,6 +4318,8 @@ export class GameScene extends Phaser.Scene {
     const subRule=this.add.graphics().lineStyle(1,0xc9a96a,.45).lineBetween(GAME_WIDTH/2-170,sub.y,GAME_WIDTH/2-110,sub.y).lineBetween(GAME_WIDTH/2+110,sub.y,GAME_WIDTH/2+170,sub.y);
     if (d) { sub.setVisible(false); subRule.setVisible(false); } // 电脑版去掉「三择其一 · 点击卡片获得强化」（少字）
     this.levelPanel.add([sub,subRule]);
+    // 2026-11-19 用户「关于技能3选一描述需要检查优化一下」：本次征程的成长选定后不可更改（行营休整可花军粮重整）
+    this.levelPanel.add(this.add.text(GAME_WIDTH/2,d?510:292+Math.max(0,Math.round((GAME_HEIGHT-960)/2))+2*192+120,'选定后本次征程不可更改（可在行营休整花费军粮重整）',{fontFamily:FONT,fontSize:'14px',color:d?'#c9b48a':'#bfae8a',resolution:2}).setOrigin(.5).setStroke(STROKE,d?3:0).setScrollFactor(0).setName('upgrade-lock-note'));
     // 三选一卡片：每张卡是一个容器（入场滑入、悬停上浮），卡面按类别着色。电脑横排、手机竖排。
     const pad=d?0:Math.max(0,Math.round((GAME_HEIGHT-960)/2));
     for(let i=0;i<3;i++){
@@ -4322,6 +4334,9 @@ export class GameScene extends Phaser.Scene {
       const name=this.add.text(d?0:104-w/2,d?148-h/2:42-h/2,'',{...warText(d?21:21,'#f6e8c8'),fontFamily:HEADING_FONT,align:d?'center':'left',wordWrap:{width:d?w-36:w-122,useAdvancedWrap:true}}).setOrigin(d?.5:0,0).setShadow(0,1,'#0a0603',3,true,true);
       const desc=this.add.text(d?0:104-w/2,d?204-h/2:88-h/2,'',{...warText(d?16:17,'#dacfba'),align:d?'center':'left',lineSpacing:5,wordWrap:{width:d?w-40:w-122,useAdvancedWrap:true}}).setOrigin(d?.5:0,0);
       const rule=this.add.graphics();
+      const rich=this.add.container(desc.x,desc.y).setName('upgrade-card-desc-'+i);
+      // 有效范围徽记：电脑版卡片左上角、手机版右上角（不占说明区）
+      const scope=this.add.text(d?16-w/2:w/2-16,d?16-h/2:14-h/2,'',{fontFamily:HEADING_FONT,fontSize:'12px',color:'#ffffff',resolution:2}).setPadding(8,2).setOrigin(d?0:1,0).setName('upgrade-card-scope-'+i);
       const hint=this.add.text(d?0:w/2-16,d?h/2-22:h/2-14,d?'按 '+hotkeyLabel((['pick1','pick2','pick3'] as const)[i]??'pick1')+' 选择':'点击选择',warText(11,'#9d8f78')).setOrigin(d?.5:1,1).setAlpha(.85);
       if(d){ // 统一字体：卡名 / 标签 / 提示用标题字，正文用正文字；水墨版换深墨色 + 朱砂标签
         name.setFontFamily(HEADING_FONT).setColor(INK?'#1f1710':GOLD).setStroke(INK?'#efe4c9':STROKE,3);
@@ -4330,8 +4345,8 @@ export class GameScene extends Phaser.Scene {
         hint.setFontFamily(HEADING_FONT).setFontSize(12).setColor(INK?'#5b4630':'#b9a57a').setStroke(INK?'#efe4c9':STROKE,2).setAlpha(1);
       }
       // 子元素也必须固定在屏幕上，否则命中检测按相机滚动偏移（点不中卡片）。
-      for(const o of [bg,rule,icon,tag,name,desc,hint])o.setScrollFactor(0);root.add([bg,rule,icon,tag,name,desc,hint]);root.setScrollFactor(0);this.levelPanel.add(root);
-      const view:CardView={bg,icon,name,desc,tag,root,rule,hint,w,h,baseY:y,medal,accent:UPGRADE_ACCENT.passive,rare:false,hover:false,lift:0};
+      for(const o of [bg,rule,icon,tag,name,desc,hint,rich,scope])o.setScrollFactor(0);root.add([bg,rule,icon,tag,name,desc,rich,scope,hint]);root.setScrollFactor(0);this.levelPanel.add(root);
+      const view:CardView={bg,icon,name,desc,tag,root,rule,hint,rich,scope,w,h,baseY:y,medal,accent:UPGRADE_ACCENT.passive,rare:false,hover:false,lift:0};
       bg.on('pointerdown',()=>bg.setTint(0xe0cfa8)).on('pointerup',()=>{bg.clearTint();this.chooseUpgrade(i);}).on('pointerover',()=>{view.hover=true;this.paintUpgradeCard(view);}).on('pointerout',()=>{bg.clearTint();view.hover=false;this.paintUpgradeCard(view);});
       this.cardViews.push(view);
     }

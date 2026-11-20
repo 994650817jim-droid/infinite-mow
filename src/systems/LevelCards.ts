@@ -1,6 +1,7 @@
 import { FORTUNE_BUFFS, FORTUNE, type FortuneBuff } from '../data/fortunes';
 import { SCHOOLS, type SchoolId } from '../data/schools';
 import type { UpgradeOption } from '../types';
+import { hotkeyLabel } from '../data/hotkeys';
 
 /**
  * 升级三选一的新卡池（wave-progression-redesign.md §4.6，2026-11-19 用户「3选一里面加入更多东西」「我想往3选一池子加更多东西」）：
@@ -30,13 +31,13 @@ export const NEW_CARDS = {
 export type JinnangId = 'ambush' | 'gong' | 'feint' | 'drum' | 'fire' | 'empty' | 'arrows' | 'chain';
 export const JINNANG: Record<JinnangId, { name: string; desc: string; icon: string }> = {
   ambush: { name: '伏兵', desc: '召 6 名伏兵随你冲阵 20 秒', icon: 'growth_icon_gujun' },
-  gong: { name: '鸣金', desc: '收拢全场经验\n并立即回复 20% 生命', icon: 'growth_icon_recovery' },
-  feint: { name: '疑兵', desc: '周围敌兵惊疑：减速 60%，持续 5 秒', icon: 'growth_icon_dahe' },
-  drum: { name: '擂鼓', desc: '10 秒内武器伤害 +25%、攻速 +20%', icon: 'growth_icon_berserk' },
-  fire: { name: '火计', desc: '周围 220 内敌兵受一次火攻重创\n（武器伤害 ×4，火焰）', icon: 'growth_icon_wildfire' },
+  gong: { name: '鸣金', desc: '收拢全场经验、回复 20% 生命', icon: 'growth_icon_recovery' },
+  feint: { name: '疑兵', desc: '周围敌兵减速 60%，持续 5 秒', icon: 'growth_icon_dahe' },
+  drum: { name: '擂鼓', desc: '10 秒内伤害 +25%、攻速 +20%', icon: 'growth_icon_berserk' },
+  fire: { name: '火计', desc: '火攻身边 220 内的敌兵\n伤害为武器一击 ×4', icon: 'growth_icon_wildfire' },
   empty: { name: '空城计', desc: '2.5 秒内不受任何伤害', icon: 'growth_icon_heart_mirror' },
-  arrows: { name: '草船借箭', desc: '6 秒内受到的伤害减半，期满把挡下的伤害\n化作箭雨射向周围敌兵', icon: 'growth_icon_steady_aim' },
-  chain: { name: '连环计', desc: '周围 8 名敌兵连在一起 8 秒：\n打一个，连着的各受 30%', icon: 'growth_icon_lianying' },
+  arrows: { name: '草船借箭', desc: '6 秒内受到的伤害减半\n期满化作箭雨还击周围敌兵', icon: 'growth_icon_steady_aim' },
+  chain: { name: '连环计', desc: '连住身边 8 名敌兵 8 秒\n打一个，其余各受 30%', icon: 'growth_icon_lianying' },
 };
 /** 名将来投：各章同时代、不是可玩武将的助战名将（第 n 章 = [n−1]）。 */
 export const ERA_GENERALS: readonly (readonly string[])[] = [
@@ -45,14 +46,14 @@ export const ERA_GENERALS: readonly (readonly string[])[] = [
 ];
 export type GambleId = 'allin' | 'beiwei' | 'light';
 export const GAMBLES: Record<GambleId, { name: string; desc: string; icon: string }> = {
-  allin: { name: '孤注一掷', desc: '本关生命上限 −15%\n伤害 +25%', icon: 'growth_icon_berserk' },
-  beiwei: { name: '背嵬', desc: '本关生命低于一半时\n伤害 +30%', icon: 'growth_icon_might' },
-  light: { name: '轻装', desc: '本关受到伤害 +15%\n移速 +20%、技能冷却 −10%', icon: 'growth_icon_quickness' },
+  allin: { name: '孤注一掷', desc: '伤害 +25%\n代价：生命上限 −15%', icon: 'growth_icon_berserk' },
+  beiwei: { name: '背嵬', desc: '生命低于一半时\n伤害 +30%', icon: 'growth_icon_might' },
+  light: { name: '轻装', desc: '移速 +20%、武器冷却 −10%\n代价：受到伤害 +15%', icon: 'growth_icon_quickness' },
 };
 export type BountyId = 'lieutenant' | 'elites';
 export const BOUNTIES: Record<BountyId, { name: string; desc: string; icon: string }> = {
-  lieutenant: { name: '悬赏 · 斩将', desc: '副将出阵后 30 秒内斩之\n赏：再来一次军略三选一', icon: 'growth_icon_tiger_tally' },
-  elites: { name: '悬赏 · 破锐', desc: '本关再击杀 8 名精锐\n赏：随军粮 +60、信物一件', icon: 'growth_icon_critical' },
+  lieutenant: { name: '悬赏 · 斩将', desc: '副将出阵 30 秒内斩之\n赏：再来一次三选一', icon: 'growth_icon_tiger_tally' },
+  elites: { name: '悬赏 · 破锐', desc: '再击杀 8 名精锐\n赏：随军粮 +60、信物一件', icon: 'growth_icon_critical' },
 };
 
 export interface CardHost {
@@ -75,41 +76,42 @@ export interface CardHost {
   bountyOpen: (id: BountyId) => boolean; bounty: (id: BountyId) => void;
 }
 
-const card = (id: string, name: string, desc: string, label: string, icon: string, apply: () => void): UpgradeOption => ({ id, name, desc, kind: 'foundation', categoryLabel: label, icon, apply: () => apply() });
+/** 新卡：categoryLabel 只写类别，有效范围走卡底徽记（scope：本关有效 / 本次征程 / 一次性）。 */
+const card = (id: string, name: string, desc: string, label: string, icon: string, scope: NonNullable<UpgradeOption['scope']>, apply: () => void): UpgradeOption => ({ id, name, desc, kind: 'foundation', categoryLabel: label, scope, icon, apply: () => apply() });
 const pickOf = <T,>(a: readonly T[], rnd: () => number): T => a[Math.floor(rnd() * a.length) % a.length];
 
-function make(kind: NewCardKind, h: CardHost, rnd: () => number): UpgradeOption | null {
+export function make(kind: NewCardKind, h: CardHost, rnd: () => number): UpgradeOption | null {
   if (kind === 'fortune') {
     const pool = FORTUNE_BUFFS.filter(b => (h.taken[b.id] ?? 0) < FORTUNE.maxSame);
-    if (!h.momentum() && rnd() < .2) { const M = NEW_CARDS.momentum; return card('new_momentum', '乘胜追击', `本关每击杀 ${M.per} 敌伤害 +${M.step * 100}%\n（最多 +${M.max}%）`, '战场机缘 · 本关有效', 'growth_icon_might', () => h.startMomentum()); }
+    if (!h.momentum() && rnd() < .2) { const M = NEW_CARDS.momentum; return card('new_momentum', '乘胜追击', `每杀 ${M.per} 敌，伤害 +${Math.round(M.step * 100)}%\n最多 +${Math.round(M.max * M.step * 100)}%`, '战场机缘', 'growth_icon_might', 'stage', () => h.startMomentum()); }
     if (!pool.length) return null;
     const b = pickOf(pool, rnd);
-    return card('new_' + b.id, b.name, b.desc, '战场机缘 · 本关有效', b.icon, () => h.applyBuff(b));
+    return card('new_' + b.id, b.name, b.desc, '战场机缘', b.icon, 'stage', () => h.applyBuff(b));
   }
   if (kind === 'jinnang') {
     if (h.jinnangHeld()) return null;
     const id = pickOf(Object.keys(JINNANG) as JinnangId[], rnd), j = JINNANG[id];
-    return card('jinnang_' + id, '锦囊 · ' + j.name, j.desc + '\n（R 键使用，限 1 个）', '锦囊 · 一次性', j.icon, () => h.giveJinnang(id));
+    return card('jinnang_' + id, '锦囊 · ' + j.name, j.desc + '\n按 ' + hotkeyLabel('reroll') + ' 使用 · 限持 1 个', '锦囊', j.icon, 'once', () => h.giveJinnang(id));
   }
-  if (kind === 'troops') { const T = NEW_CARDS.troops; return card('new_troops', '援军', `一队义军（${T.n} 人）随你冲阵 ${T.ms / 1000} 秒`, '兵源 · 本关', 'growth_icon_tiger_tally', () => h.escort(T.n, T.ms)); }
+  if (kind === 'troops') { const T = NEW_CARDS.troops; return card('new_troops', '援军', `义军 ${T.n} 人随你冲阵 ${T.ms / 1000} 秒`, '兵源', 'growth_icon_tiger_tally', 'once', () => h.escort(T.n, T.ms)); }
   if (kind === 'general') {
     const names = ERA_GENERALS[Math.max(0, Math.min(11, h.chapter - 1))], name = pickOf(names, rnd), G = NEW_CARDS.general, n = G.n(h.chapter);
-    return card('new_general', '名将来投 · ' + name, `${name}率 ${n} 名部众来投，\n随你冲阵 ${G.ms / 1000} 秒`, '名将来投 · 本关', 'growth_icon_wanrendi', () => h.general(name, n, G.ms));
+    return card('new_general', '名将来投 · ' + name, `${name}率 ${n} 名部众来投\n随你冲阵 ${G.ms / 1000} 秒`, '名将来投', 'growth_icon_wanrendi', 'once', () => h.general(name, n, G.ms));
   }
-  if (kind === 'supply') { const g = NEW_CARDS.supply.grain(h.chapter); return card('new_supply', '军资', `随军粮 +${g}\n并立即回复 ${Math.round(NEW_CARDS.supply.heal * 100)}% 生命`, '军资 · 立即', 'growth_icon_pickup', () => { h.addGrain(g); h.healFrac(NEW_CARDS.supply.heal); }); }
+  if (kind === 'supply') { const g = NEW_CARDS.supply.grain(h.chapter); return card('new_supply', '军资', `随军粮 +${g}\n立即回复 ${Math.round(NEW_CARDS.supply.heal * 100)}% 生命`, '军资', 'growth_icon_pickup', 'once', () => { h.addGrain(g); h.healFrac(NEW_CARDS.supply.heal); }); }
   if (kind === 'gamble') {
     const ids = (Object.keys(GAMBLES) as GambleId[]).filter(id => !h.gambleTaken(id)); if (!ids.length) return null;
     const id = pickOf(ids, rnd), g = GAMBLES[id];
-    return card('gamble_' + id, '赌命 · ' + g.name, g.desc, '赌命 · 本关', g.icon, () => h.gamble(id));
+    return card('gamble_' + id, '赌命 · ' + g.name, g.desc, '赌命', g.icon, 'stage', () => h.gamble(id));
   }
   if (kind === 'bounty') {
     const ids = (Object.keys(BOUNTIES) as BountyId[]).filter(id => h.bountyOpen(id)); if (!ids.length) return null;
     const id = pickOf(ids, rnd), b = BOUNTIES[id];
-    return card('bounty_' + id, b.name, b.desc, '悬赏军令 · 本关', b.icon, () => h.bounty(id));
+    return card('bounty_' + id, b.name, b.desc, '悬赏军令', b.icon, 'stage', () => h.bounty(id));
   }
   const ss = h.manualSchools(); if (!ss.length) return null;
   const s = pickOf(ss, rnd), d = SCHOOLS[s];
-  return card('new_manual_' + s, '研读心法 · ' + d.name, `${d.name}势 +1（本次征程有效，每派一次）`, '心法 · 本次征程', 'growth_icon_eight_trigrams', () => h.readManual(s));
+  return card('new_manual_' + s, '研读心法 · ' + d.name, `${d.name}势 +1\n每派限研读一次`, '心法', 'growth_icon_eight_trigrams', 'run', () => h.readManual(s));
 }
 
 /** 抽 n 张新卡（按本章权重、类不重复；某类出不了就跳过）。 */
@@ -132,5 +134,5 @@ export function newCardKind(o: UpgradeOption): NewCardKind | null {
 /** 信物卡（首领宝箱那次三选一固定一张）：按章节档次掷一件信物，进行囊。 */
 export function chestCharmCard(chapter: number, grant: () => string): UpgradeOption {
   const q = chapter <= 4 ? '蓝' : chapter <= 8 ? '紫' : '橙';
-  return { id: 'charm_card', name: '信物', desc: `从首领宝箱里挑一件${q}色信物\n（进行囊，永久）`, kind: 'trinket', categoryLabel: '信物 · 永久', icon: 'growth_icon_heart_mirror', apply: () => { grant(); } };
+  return { id: 'charm_card', name: '信物', desc: `从首领宝箱取一件${q}色信物\n收入行囊`, kind: 'trinket', categoryLabel: '信物', scope: 'forever', icon: 'growth_icon_heart_mirror', apply: () => { grant(); } };
 }

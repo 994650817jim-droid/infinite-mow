@@ -69,12 +69,12 @@ await stageCase('3-2 宛城夜袭（ThirdGameScene）', { key: 'ThirdGameScene',
   await p.waitForFunction(() => window.__S.mode === 'bossloot' || window.__S.mode === 'levelup', null, { timeout: 15000 }).catch(() => {});
   for (let i = 0; i < 6 && await p.evaluate(() => window.__S.mode === 'levelup'); i++) { await p.evaluate(() => window.__S.chooseUpgrade(0)); await p.waitForTimeout(300); }
   await p.waitForFunction(() => window.__S.mode === 'bossloot', null, { timeout: 8000 }).catch(() => {});
-  const panel = await p.evaluate(() => { const s = window.__S; return { mode: s.mode, done: s.fortunes.stats.done, title: s.levelPanel.getByName('upgrade-title')?.text, cards: s.upgradeOptions.map(o => o.name + '｜' + o.categoryLabel) }; });
+  const panel = await p.evaluate(() => { const s = window.__S; return { mode: s.mode, done: s.fortunes.stats.done, title: s.levelPanel.getByName('upgrade-title')?.text, cards: s.upgradeOptions.map(o => o.name + '｜' + o.categoryLabel + '｜' + (o.scope === 'stage' ? '本关有效' : o.scope)) }; }); // 2026-11-19 起有效范围写在卡底徽记（scope）
   ck('P2 站满 3 秒夺下粮车 → 「战场机缘 · 夺下粮车」三选一，三张都是本关有效增益', panel.mode === 'bossloot' && panel.done.includes('cart') && /战场机缘/.test(panel.title ?? '') && panel.cards.length === 3 && panel.cards.every(x => /本关有效/.test(x)), panel);
   await p.waitForTimeout(1200); await p.screenshot({ path: `${OUT}/fortune-cards.png` });
   const pick = await p.evaluate(async () => { const s = window.__S, before = { ...s.player.stats }; const o = s.upgradeOptions[0]; s.chooseUpgrade(0); const ce = await import('/src/systems/CharmEffects.ts'); const packed = ce.statsWithoutCharms(s.player); const keys = Object.keys(before).filter(k => before[k] !== s.player.stats[k]); return { name: o.name, mode: s.mode, changed: keys, packedSame: keys.every(k => Math.abs(packed[k] - before[k]) < 1e-6), taken: s.fortuneTaken }; });
   ck('P2 选了增益：属性当场变化，征程构筑存档时扣掉（不带到下一关），回到战斗', pick.mode === 'none' && pick.changed.length > 0 && pick.packedSame && Object.values(pick.taken)[0] === 1, pick);
-  const f0 = await p.evaluate(async () => { const s = window.__S, up = await import('/src/data/upgrades.ts'), ce = await import('/src/systems/CharmEffects.ts'); const hp0 = s.player.maxHp, packed0 = ce.statsWithoutCharms(s.player).maxHpBonus; up.foundationOptions()[0].apply(s.player); return { up: s.player.maxHp - hp0, packedDelta: ce.statsWithoutCharms(s.player).maxHpBonus - packed0, label: up.foundationOptions()[0].categoryLabel }; });
+  const f0 = await p.evaluate(async () => { const s = window.__S, up = await import('/src/data/upgrades.ts'), ce = await import('/src/systems/CharmEffects.ts'); const hp0 = s.player.maxHp, packed0 = ce.statsWithoutCharms(s.player).maxHpBonus; up.foundationOptions()[0].apply(s.player); return { up: s.player.maxHp - hp0, packedDelta: ce.statsWithoutCharms(s.player).maxHpBonus - packed0, label: up.foundationOptions()[0].scope === 'stage' ? '本关有效' : '' }; });
   ck('P0 固本培元改为本关有效：当场生命上限 +12，征程构筑存档不带走（不再无限叠加）', f0.up === 12 && f0.packedDelta === 0 && /本关/.test(f0.label), f0);
   await jump(p, 109); await p.waitForTimeout(500);
   const ev = await p.evaluate(() => { const s = window.__S, f = s.fortunes, L = f.live.find(x => !x.done); return { spawned: f.stats.spawned, kind: L?.kind, label: L?.label.text }; });
@@ -90,7 +90,7 @@ await stageCase('3-2 宛城夜袭（ThirdGameScene）', { key: 'ThirdGameScene',
   const p = await open({ key: 'GameScene', run: { chapter: 'hulao', westStage: 2 } });
   await p.evaluate(() => window.__calm());
   const d = await p.evaluate(() => { const s = window.__S, src = s.newCardSource(); const kinds = new Set(); for (let i = 0; i < 40; i++) for (const o of src.draw(3)) kinds.add(o.categoryLabel); return { chance: src.replaceChance, kinds: [...kinds] }; });
-  ck('P4 新卡池：第二章战法位 20% 换新卡；抽得出战场机缘 / 锦囊 / 兵源 / 军资（心法要先学过该派战法）', d.chance === .2 && ['战场机缘 · 本关有效', '锦囊 · 一次性', '兵源 · 本关', '军资 · 立即'].every(k => d.kinds.includes(k)), d);
+  ck('P4 新卡池：第二章战法位 20% 换新卡；抽得出战场机缘 / 锦囊 / 兵源 / 军资（心法要先学过该派战法）', d.chance === .2 && ['战场机缘', '锦囊', '兵源', '军资'].every(k => d.kinds.includes(k)), d);
   // 截图：把概率临时调到 1，弹一次升级三选一（三张里两张战法位都换成新卡）
   await p.evaluate(() => { const s = window.__S, ns = s.newCardSource.bind(s); s.newCardSource = () => ({ ...ns(), replaceChance: 1 }); s.pendingLevels += 1; s.militaryPending += 1; s.openUpgrade(); });
   await p.waitForTimeout(1200);

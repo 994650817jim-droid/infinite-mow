@@ -195,7 +195,7 @@ export class BossPresence {
     const rise = py - top;
     // 上升立即跟上（不遮头），下降慢慢收（不抖）
     sl.plateRise = rise > sl.plateRise ? rise : sl.plateRise + (rise - sl.plateRise) * .15;
-    const cam = this.h.scene.cameras.main, view = cam.worldView, z = cam.zoom || 1, gap = 10, plateH = 17;
+    const cam = this.h.scene.cameras.main, view = cam.worldView, z = view.width > 0 ? GAME_WIDTH / view.width : 1, gap = 10, plateH = 17; // 世界 → 设计像素（和 hudRects 同一单位；镜头可拉远）
     let y = py - sl.plateRise - gap;
     // 2026-11-20：原来「离屏幕顶边不足 67 设计像素就放脚下」——骑马的吕布身高 ×1.4 后头顶很高，站在屏幕中线略上方时名牌就被挪到脚下。
     // 改为只在名牌真的会出屏、或压到顶部 HUD（计时 / 章节名 / 武将卡 / 右上按钮，按场上实际 HUD 对象的范围）时才放脚下；迟滞 16 像素避免来回跳

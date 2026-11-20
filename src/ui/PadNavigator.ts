@@ -136,8 +136,8 @@ export class PadNavigator {
     }
     let root: GO = obj; while (root.parentContainer) root = root.parentContainer as unknown as GO;
     const sfx = root.scrollFactorX ?? obj.scrollFactorX ?? 1, sfy = root.scrollFactorY ?? obj.scrollFactorY ?? 1;
-    const k = cam.zoom / RENDER_SCALE;
-    const x = (b.x - cam.scrollX * sfx) * k + cam.x / RENDER_SCALE, y = (b.y - cam.scrollY * sfy) * k + cam.y / RENDER_SCALE;
+    const hud = sfx === 0 && sfy === 0, k = hud ? 1 : cam.zoom / RENDER_SCALE; // HUD 在 UI 镜头上（原倍数），不跟主镜头拉远
+    const x = (b.x - cam.scrollX * sfx) * k + (hud ? 0 : cam.x / RENDER_SCALE), y = (b.y - cam.scrollY * sfy) * k + (hud ? 0 : cam.y / RENDER_SCALE);
     return { x, y, w: b.width * k, h: b.height * k };
   }
 

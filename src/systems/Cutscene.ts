@@ -77,7 +77,7 @@ export class Cutscene {
   private get z(): number { return this.cam.zoom / this.base; }
   /** 镜头中心（世界坐标）与相对缩放。 */
   private center(): { x: number; y: number } { const z = this.z; return { x: this.cam.scrollX + GAME_WIDTH / (2 * z), y: this.cam.scrollY + GAME_HEIGHT / (2 * z) }; }
-  private setView(x: number, y: number, z: number): void { this.cam.setZoom(this.base * z); this.cam.setScroll(x - GAME_WIDTH / (2 * z), y - GAME_HEIGHT / (2 * z)); }
+  private setView(x: number, y: number, z: number): void { this.cam.setZoom(this.base * z); this.cam.setScroll(x - this.cam.width / (2 * this.cam.zoom), y - this.cam.height / (2 * this.cam.zoom)); } // 按实际可见范围居中（战场镜头可拉远）
   private readonly onEsc = (): void => this.skip();
   constructor(private h: CutHost, readonly script: CutsceneScript, private onDone: (skipped: boolean) => void) {
     const s = h.scene; this.cam = s.cameras.main; this.base = this.cam.zoom || 1;

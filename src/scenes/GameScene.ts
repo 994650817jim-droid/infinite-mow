@@ -75,7 +75,7 @@ import { BattlefieldDetails } from '../systems/BattlefieldDetails';
 import { WAR, warText, ensureWarTextures } from '../ui/WarStyle';
 import { LQ, lqButton, lqDivider, lqHitBox, lqImageButton, lqPanel, lqSkin, type LqState } from '../ui/LacquerKit';
 import { chapterUnlocked, isChapterTestRun, recordChapterVictory } from '../systems/ChapterProgress';
-import { BALANCE, COLORS, DEPTH, FONT, GAME_HEIGHT, GAME_WIDTH, HEADING_FONT, IS_DESKTOP, TITLE_FONT, actorDepth, screenPoint } from '../config';
+import { BALANCE, BATTLE_ZOOM_DESKTOP, COLORS, DEPTH, FONT, GAME_HEIGHT, GAME_WIDTH, HEADING_FONT, IS_DESKTOP, RENDER_SCALE, TITLE_FONT, actorDepth, screenPoint } from '../config';
 import {upgradeCardTexture,inkUpgradeCardTexture,inkPlate,homeCommand,inkSkin} from '../ui/HomeCommand';
 import { RESULT_GOLD, RESULT_IVORY, RESULT_STROKE, buildRewardView, parseHeroLine, playResultAnims, wan, type ResultAnim } from '../ui/ResultRewards';
 import { loadBagArt } from '../ui/ItemQuality';
@@ -759,6 +759,7 @@ export class GameScene extends Phaser.Scene {
     this.frontlineNextSettlement=this.battleStage();this.frontlineStarts.set(this.battleStage(),this.combatNow);
     const scenery=this.chapter.bossStyle==='huaxiong'?'sishui':this.chapter.bossStyle==='xurong'?'xingyang':null;
     this.cameras.main.setBackgroundColor(COLORS.bg);
+    this.setupUiCamera(); // 电脑布局：战场镜头拉远、HUD 分到 UI 镜头
     this.chargeGfx = this.add.graphics().setDepth(DEPTH.fx);
     this.relicWaveGfx=this.add.graphics().setDepth(DEPTH.fx);
     this.bossUltGfx = this.add.graphics().setDepth(DEPTH.fx + 1);
@@ -1248,7 +1249,7 @@ export class GameScene extends Phaser.Scene {
       baseDef:k=>{const b=this.chapter.enemies[k];if(!this.yellow)return b;const v=this.yellow.variant(b,this.elapsed);return v.behavior?b:v;},spawn:(k,x,y,def)=>this.spawnEnemy(k,x,y,undefined,false,def),
       fireArrow:(e,tx,ty,d,sp)=>this.fireBolt(this.bullets,e.x,e.y,tx,ty,d*(this.env?.damageMul(e)??1),0,false,sp,enemyArrowTexture(this,e.sprite.texture.key)),hurtTroops:(x,y,r,d)=>this.legion.hurtArea(x,y,r,d,this.combatNow),
       move:(e,nx,ny,dt)=>{e.moveVx=nx*e.def.speed;e.moveVy=ny*e.def.speed;this.advanceEnemy(e,nx,ny,dt);},sfx:k=>this.sfx.play(k),
-      inWater:(x,y)=>this.terrain?.inWater(x,y)??false,waterPoint:(px,py)=>{const t=this.terrain;if(!t)return null;for(let i=0;i<40;i++){const a=Math.random()*Math.PI*2,d=420+Math.random()*560,x=px+Math.cos(a)*d,y=py+Math.sin(a)*d;if(t.inWater(x,y))return{x,y};}return null;},
+      ringDistance:()=>this.spawnRingDistance(),inWater:(x,y)=>this.terrain?.inWater(x,y)??false,waterPoint:(px,py)=>{const t=this.terrain;if(!t)return null;for(let i=0;i<40;i++){const a=Math.random()*Math.PI*2,d=420+Math.random()*560,x=px+Math.cos(a)*d,y=py+Math.sin(a)*d;if(t.inWater(x,y))return{x,y};}return null;},
       gainFood:n=>{this.legion.food+=n;},boss:()=>this.boss,farPoint:(x,y)=>{const g=this.arena?.info.gates;if(!g?.length)return null;const p=this.player;return [...g].sort((a,b)=>Math.hypot(b.x-p.x,b.y-p.y)-Math.hypot(a.x-p.x,a.y-p.y))[0]??null;void x;void y;}}); // 机制自己定方向（保持距离 / 绕圈）：不用群体寻路的追击速度
     if(!this.arenaInit&&this.player&&this.terrainInit){this.arenaInit=true;const def=stageMapFor(this.hardKey(),this.hardStage());if(def)this.arena=new StageArena({scene:this,player:this.player,allies:()=>this.allies,enemies:()=>this.enemies,now:()=>this.combatNow,
       spawnTarget:(x,y,hp,size)=>{const e=this.supplies?.spawnGate(x,y,hp,size)??null;e?.sprite.setAlpha(0);return e;},hitEnemy:(e,d,src)=>{this.hitEnemy(e,d,this.combatNow,src??'melee',true,false);},spawnEnemy:(k,x,y)=>this.spawnEnemy(k,x,y,undefined,true),breakBridgeNear:(x,y)=>{const t=this.terrain as unknown as {rivers?:Array<{bridges:Array<{x:number;y:number}>}>;setBridgeBroken?:(i:number,b?:boolean)=>boolean}|null;const all=t?.rivers?.flatMap(r=>r.bridges)??[];let bi=-1,bd=300;all.forEach((b,i)=>{const d=Math.hypot(b.x-x,b.y-y);if(d<bd){bd=d;bi=i;}});return bi>=0&&!!t?.setBridgeBroken?.(bi,true);},
@@ -1326,9 +1327,11 @@ export class GameScene extends Phaser.Scene {
     const look = this.presence?.look;
     // 双首领：主将 ×0.7 + 两首领中点 ×0.3（主将留在画面中间 60%）
     const dualCam = this.dual?.cameraTarget(this.player.x, this.player.y);
-    const targetX = (dualCam ? dualCam.x : this.player.x - GAME_WIDTH / 2) + (look?.x ?? 0);
+    // 可见范围半宽 / 半高（世界像素）：电脑布局战场镜头拉远后比设计分辨率大（BATTLE_ZOOM_DESKTOP），按实际可见范围居中
+    const hw = cam.width / (2 * cam.zoom), hh = cam.height / (2 * cam.zoom);
+    const targetX = (dualCam ? dualCam.x + GAME_WIDTH / 2 - hw : this.player.x - hw) + (look?.x ?? 0);
     // 2-3 洛阳：董卓 / 吕布在城头时，主将走近城墙镜头往上让一点，城头的人才看得见（城墙图约 230 高，不让的话城头在画面外）
-    const targetY = (dualCam ? dualCam.y : this.player.y - GAME_HEIGHT / 2) + (look?.y ?? 0) + (this.dzLubu?.cameraBias(this.player.y) ?? 0);
+    const targetY = (dualCam ? dualCam.y + GAME_HEIGHT / 2 - hh : this.player.y - hh) + (look?.y ?? 0) + (this.dzLubu?.cameraBias(this.player.y) ?? 0);
     const k = 1 - Math.exp(-11 * dt);
     cam.scrollX += (targetX - cam.scrollX) * k;
     cam.scrollY += (targetY - cam.scrollY) * k;
@@ -1510,9 +1513,14 @@ export class GameScene extends Phaser.Scene {
     enemy.dropShield(enemy.def.walkVisual && !look.walkVisual ? null : look);
   }
 
+  /** 普通刷兵的环形距离：按镜头可见范围算（镜头拉远也在屏幕外），再往外留 BALANCE.spawnRing。 */
+  protected spawnRingDistance(): number {
+    const v = this.cameras.main.worldView, half = v.width > 0 ? Math.hypot(v.width, v.height) / 2 : Math.hypot(GAME_WIDTH, GAME_HEIGHT) / 2, R = BALANCE.spawnRing;
+    return half + R.pad + Math.random() * R.jitter;
+  }
   protected spawnAroundPlayer(kind: EnemyDef['kind'], force = false): Enemy | null {
     const angle = Math.random() * Math.PI * 2;
-    const distance = Math.max(GAME_WIDTH, GAME_HEIGHT) * 0.5 + Math.random() * 100;
+    const distance = this.spawnRingDistance();
     const x = this.player.x + Math.cos(angle) * distance;
     const y = this.player.y + Math.sin(angle) * distance;
     return this.spawnEnemy(kind, x, y, undefined, force);
@@ -2187,6 +2195,33 @@ export class GameScene extends Phaser.Scene {
     add(this.obstacleTarget(p.x, p.y, R, true));
     for (const e of this.grid.query(p.x, p.y, R + 60)) if (e.active && !e.isSupplySlot && !e.invulnerable && e.hp > 0 && Math.hypot(e.x - p.x, e.y - p.y) <= R + e.radius) return;
     add(this.obstacleTarget(p.x, p.y, R, false));
+  }
+  /** HUD 镜头（只在电脑布局建）：渲染 scrollFactor 0 的对象（HUD、面板、横幅、弹窗），保持原大小；主镜头只渲染战场、按 BATTLE_ZOOM_DESKTOP 拉远。 */
+  private uiCam: Phaser.Cameras.Scene2D.Camera | null = null;
+  /**
+   * 镜头拉远（用户「镜头拉远 10–15%」）：主镜头 × BATTLE_ZOOM_DESKTOP；另加一个 UI 镜头（同画布大小、原倍数）。
+   * 每帧渲染前把顶层对象分两拨：scrollFactor 0 的（含整层都是 HUD 的 Layer）只给 UI 镜头画，其余只给主镜头画——新建的 HUD 自动归位，各系统不用改。
+   * 震屏 / 闪屏 / 淡入淡出都只作用在主镜头（HUD 不跟着抖）。
+   */
+  private setupUiCamera(): void {
+    this.uiCam = null;
+    if (!IS_DESKTOP) return;
+    const main = this.cameras.main;
+    main.setZoom(RENDER_SCALE * BATTLE_ZOOM_DESKTOP);
+    const ui = this.cameras.add(0, 0, main.width, main.height, false, 'ui'); // CameraManager.add 已在 main.ts 统一设为左上原点、× RENDER_SCALE
+    this.uiCam = ui;
+    const route = () => {
+      if (!this.uiCam) return;
+      const mid = main.id, uid = ui.id, both = mid | uid;
+      for (const o of this.children.list as Array<Phaser.GameObjects.GameObject & { scrollFactorX?: number; cameraFilter: number; list?: Array<{ scrollFactorX?: number }> }>) {
+        let sf = o.scrollFactorX; if (sf === undefined && o.type === 'Layer') sf = o.list?.[0]?.scrollFactorX;
+        const want = (o.cameraFilter & ~both) | (sf === 0 ? mid : uid);
+        if (o.cameraFilter !== want) o.cameraFilter = want;
+      }
+    };
+    route();
+    this.events.on('prerender', route);
+    this.events.once('shutdown', () => { this.events.off('prerender', route); this.uiCam = null; });
   }
   protected createWeaponHost(): WeaponHost {
     const scene = this;

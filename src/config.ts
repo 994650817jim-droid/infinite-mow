@@ -103,6 +103,9 @@ export const COLORS = {
 } as const;
 
 /** 数值平衡：集中在此处，方便改数值不碰逻辑。 */
+/** 电脑布局战场镜头倍数（用户「镜头拉远 10–15%」，统筹定 0.88）：只缩战场，HUD 分到 UI 镜头保持原大小（GameScene.setupUiCamera）。手机布局不缩。 */
+export const BATTLE_ZOOM_DESKTOP = .88;
+
 export const BALANCE = {
   player: {
     maxHp: 100,
@@ -114,6 +117,8 @@ export const BALANCE = {
   gameTime: 360,
   bossTime: 300,
   enemyCap: 150,
+  /** 普通刷兵离主将多远（用户：「敌军刷在屏幕外更远处」）：镜头可见范围半对角线 + pad + 0～jitter 随机；帐篷 / 城门 / 伏兵等固定来路不走这里。 */
+  spawnRing: { pad: 140, jitter: 160 },
   enemyCapLow: 100,
   /** 首领在场时刷杂兵（2026-11-18 用户：boss 出来后减少小兵生成）：同屏上限、刷兵间隔、每次数量的倍率。 */
   // xpMul：首领在场时杂兵经验倍率（2026-11-18 平衡方案 A：少刷兵后首领战经验约少一半，×2 补回）

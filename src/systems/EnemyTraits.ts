@@ -35,6 +35,8 @@ export interface TraitHost {
   move: (e: Enemy, nx: number, ny: number, dt: number) => void;
   sfx: (key: string) => void;
   /** 第二批：是否在水里 / 附近找一处水面（水卒、火船从江面出）/ 加军粮（截住运粮卒）/ 远处的去处（运粮卒往那跑）。 */
+  /** 普通刷兵离主将多远（GameScene.spawnRingDistance：镜头半对角线 + 留白）。 */
+  ringDistance?: () => number;
   inWater?: (x: number, y: number) => boolean;
   waterPoint?: (x: number, y: number) => { x: number; y: number } | null;
   gainFood?: (n: number) => void;
@@ -93,7 +95,7 @@ export class EnemyTraits {
   /** 在主将外圈刷一个（蜂拥成群）新兵种；返回刷出的第一个。 */
   spawnSpecial(id: string, at?: { x: number; y: number }): Enemy | null {
     const t = ROSTER[id]; if (!t) return null;
-    const p = this.h.player, a = Math.random() * Math.PI * 2, d = Math.max(1280, 720) * .5 + Math.random() * 100;
+    const p = this.h.player, a = Math.random() * Math.PI * 2, d = this.h.ringDistance?.() ?? 700 + Math.random() * 120;
     // 伏兵刷在主将附近的暗处（380～640），水卒 / 火船从附近水面出；其余在主将外圈
     let c0: { x: number; y: number } | null = at ?? null;
     if (!c0 && t.hide) { const a2 = Math.random() * Math.PI * 2, d2 = 380 + Math.random() * 260; c0 = { x: p.x + Math.cos(a2) * d2, y: p.y + Math.sin(a2) * d2 }; }

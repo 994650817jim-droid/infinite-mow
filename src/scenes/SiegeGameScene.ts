@@ -254,7 +254,7 @@ export function siegeGameSceneClass(Base: typeof GameScene) {
     }
     private setupMid() {
       const O = MID_SIEGE.outside; this.player.sprite.setPosition(O.start.x, O.start.y);
-      this.cameras.main.scrollX = O.start.x - this.cameras.main.width / 2; this.cameras.main.scrollY = O.start.y - this.cameras.main.height / 2;
+      { const c = this.cameras.main; c.scrollX = O.start.x - c.width / (2 * c.zoom); c.scrollY = O.start.y - c.height / (2 * c.zoom); }
       this.allies.forEach((a, i) => { if (a.active) a.setPosition(O.start.x + ((i % 5) - 2) * 34, O.start.y + 50 + Math.floor(i / 5) * 30); });
       const kinds: Array<'swordsman' | 'spearman'> = ['swordsman', 'spearman'];
       this.mid = new SiegeMidCity({

@@ -18,6 +18,16 @@ await p.goto(base + '?autostart=1&stage=1&layout=desktop&dev=1');
 await p.waitForFunction(() => window.__game?.scene.getScene('GameScene')?.campUI && window.__game.scene.getScene('GameScene').player, null, { timeout: 90000 });
 await p.waitForTimeout(1500);
 
+// 战斗中打开构筑总览：没有重整按钮，只写「战斗中不可更改，返回行营休整时可重整」
+const battlePanel = await p.evaluate(async () => {
+  const s = window.__game.scene.getScene('GameScene'); s.__DEV_ACTIONS?.closePopup?.(); if (s.mode !== 'none') s.setMode('none');
+  s.setMode('pause'); s.openBuildPanel(); await new Promise(r => setTimeout(r, 300)); // 战斗内构筑面板从暂停页打开
+  const all = []; const walk = c => { for (const o of c.list ?? []) { if (o.name) all.push(o); if (o.list) walk(o); } }; walk(s.children);
+  const hint = all.find(o => o.name === 'build-panel-respec-hint')?.text, btn = all.some(o => o.name === 'build-panel-respec');
+  s.setMode('none'); return { hint, btn };
+});
+ck('战斗中打开构筑总览：不能重整，只提示「战斗中不可更改，返回行营休整时可重整」', battlePanel.hint?.replace(/\s/g, '') === '战斗中不可更改，返回行营休整时可重整' && !battlePanel.btn, battlePanel);
+
 // 1 战斗中三选一：选了就生效，再点同一张 / 别的卡都不会改（没有撤回）
 const lock = await p.evaluate(async () => {
   const s = window.__game.scene.getScene('GameScene'), R = await window.__mod('systems/Respec.ts');
@@ -47,9 +57,10 @@ const rest = await p.evaluate(async () => {
   s.over = true; s.legion.food = 2000; ui.open('test-respec-' + Date.now(), '测试'); ui.setVisible(true); ui.chapterNo = 2; ui.tab = 3; ui.notice = ''; ui.render();
   await new Promise(r => setTimeout(r, 200));
   const before = R.countRespecPicks(s.player), cost = D.respecCost(before.picks, 2), food0 = s.legion.food;
-  window.__find(ui.root, 'camp-respec').emit('pointerdown'); await new Promise(r => setTimeout(r, 120));
+  const entry = window.__find(ui.root, 'camp-build-respec-label')?.text; // 入口在构筑总览（将帅帐）里
+  window.__find(ui.root, 'camp-build-respec').emit('pointerdown'); await new Promise(r => setTimeout(r, 120));
   const dialog = !!s.children.getByName?.('camp-respec-dialog') || !!window.__find(ui.root, 'camp-respec-dialog'), body = window.__find(ui.root, 'camp-respec-body')?.text;
-  return { before, cost, food0, dialog, body };
+  return { before, cost, food0, dialog, body, entry };
 });
 if (shots) await p.screenshot({ path: shots + '/respec-confirm.png' });
 const reset = await p.evaluate(async boughtId => {
@@ -58,7 +69,7 @@ const reset = await p.evaluate(async boughtId => {
   return { food: s.legion.food, weapon: s.player.weapons[0].level, masteries: Object.values(g.masteries).reduce((a, v) => a + v, 0), tactics: { ...g.build.tactics }, keptBought: g.build.tactics[boughtId] === 1,
     pending: g.respecPending, count: R.countRespecPicks(s.player).picks, draft: !!window.__find(ui.root, 'camp-respec-draft'), left: window.__find(ui.root, 'camp-respec-left')?.text };
 }, setup.boughtId);
-ck('确认框写清退回什么、保留什么、花多少粮（漆底对话框）', rest.dialog && /退回初始/.test(rest.body ?? '') && /保留/.test(rest.body ?? '') && new RegExp('随军粮 ' + rest.cost).test(rest.body ?? ''), rest);
+ck('构筑总览里有「重整构筑 · N 军粮」入口，点开漆底确认框写清退回什么、保留什么、花多少粮', rest.entry === '重整构筑 · ' + rest.cost + ' 军粮' && rest.dialog && /退回初始/.test(rest.body ?? '') && /保留/.test(rest.body ?? '') && new RegExp('随军粮 ' + rest.cost).test(rest.body ?? ''), rest);
 ck('重整：扣随军粮 = 标价；本命回 Lv1、武艺清零、战法只剩商人买的那 1 级', rest.food0 - reset.food === rest.cost && reset.weapon === 1 && reset.masteries === 0 && Object.keys(reset.tactics).length === 1 && reset.keptBought, { cost: rest.cost, ...reset });
 ck('退回的次数 = 重整前三选一选来的强化次数（' + rest.before.picks + '），当场弹出重选面板', reset.pending === rest.before.picks && reset.count === 0 && reset.draft, { before: rest.before, reset });
 if (shots) await p.screenshot({ path: shots + '/respec-draft.png' });
@@ -81,9 +92,9 @@ ck('存档点（打包 / 读回）：已选的强化、待补选次数、商人�
 const redo = await p.evaluate(async () => {
   const s = window.__game.scene.getScene('GameScene'), ui = s.campUI, R = await window.__mod('systems/Respec.ts'); let clicks = 0;
   while (s.player.growth.respecPending > 0 && clicks < 60) { const c = window.__find(ui.root, 'camp-respec-card-0'); if (!c) break; c.emit('pointerdown'); clicks++; await new Promise(r => setTimeout(r, 40)); }
-  return { clicks, pending: s.player.growth.respecPending, count: R.countRespecPicks(s.player).picks, draftOpen: !!window.__find(ui.root, 'camp-respec-draft') };
+  return { clicks, pending: s.player.growth.respecPending, count: R.countRespecPicks(s.player).picks, draftOpen: !!window.__find(ui.root, 'camp-respec-draft'), entry: window.__find(ui.root, 'camp-build-respec-label')?.text, tactics: window.__find(ui.root, 'camp-build-tactic-count')?.text };
 });
-ck('当场重选到底：强化次数回到重整前（' + rest.before.picks + '），面板关闭', redo.pending === 0 && redo.count === rest.before.picks && !redo.draftOpen, redo);
+ck('当场重选到底：强化次数回到重整前（' + rest.before.picks + '），面板关闭，构筑总览刷新成新构筑', redo.pending === 0 && redo.count === rest.before.picks && !redo.draftOpen && /^重整构筑 · [0-9]+ 军粮$/.test(redo.entry ?? '') && /^战法/.test(redo.tactics ?? ''), redo);
 
 // 「稍后再选」：留到下一关开打时补成三选一
 const later = await p.evaluate(async () => {

@@ -16,6 +16,7 @@ import { attrBadge } from './AttrBadge';
 import { primarySummary } from './PrimaryAttrInfo';
 import type { ItemTooltip, InfoTip } from './ItemTooltip';
 import { branchById } from '../data/weaponBranches';
+import { lqButton, lqLabelColor, type LqState } from './LacquerKit';
 
 /**
  * 构筑总览（2026-11-18 用户：「这个玩家看自己 build 不清楚，需要优化一下」）：
@@ -46,6 +47,11 @@ export interface BuildOverviewOpts {
   tooltip: ItemTooltip;
   /** 部曲训练（行营才有）。 */
   training?: { hp: number; attack: number; armor: number };
+  /**
+   * 重整构筑入口（用户 2026-11-19「重整构筑可以在查看构造哪里修改」）：行营休整打开时给 onClick（「重整构筑 · N 军粮」，有没选完的重选时「继续重选 · 剩 N」）；
+   * 战斗中打开时只给 hint（「战斗中不可更改，返回行营休整时可重整」），不出按钮。写在战法栏标题右侧。
+   */
+  respec?: { label?: string; onClick?: () => void; hint?: string; active?: boolean };
 }
 
 const GOLD = 0xc9a35e, LACQUER = 0x1b120b;
@@ -188,7 +194,24 @@ export function drawBuildOverview(o: BuildOverviewOpts): void {
       hot(cx, cy, cw, ch, P + '-tactic-' + i, () => ({ title: t.name, sub: `〔${TAG_NAMES[sc]}〕战法 · Lv.${lv}/3 · 本派势 +${lv}`, body: tacticDescription(id, lv) + (lv < 3 ? `\n下一级：${tacticDescription(id, lv + 1)}` : ''), color: st.color, icon: 'build_icon_' + id }));
     }
     // 基础成长（卸力 / 以战养战：不占战法格、不算流派）
-    if (general.length) text(M.x + M.w - pad, M.y + 10, '基础成长：' + general.map(id => TACTICS[id].name + ' Lv.' + b.level(id)).join(' · '), 11, '#b9a57a').setOrigin(1, 0).setName(P + '-general');
+    // 重整构筑入口（战法栏标题右侧）：行营里是漆金按钮，战斗中只写一行提示
+    let generalRight = M.x + M.w - pad;
+    if (o.respec?.onClick && o.respec.label) {
+      const r = o.respec, bw = 176, bh = 26, cx = M.x + M.w - pad - bw / 2, cy = M.y + 4 + bh / 2, rg = add(s.add.graphics());
+      const cap = text(cx, cy, r.label!, 13, '#ffe9bd', true).setOrigin(.5).setName(P + '-respec-label');
+      const paint = (st: LqState) => { rg.clear(); const d = lqButton(rg, cx, cy, bw, bh, st, r.active ? 'cinnabar' : 'gold'); cap.setY(cy + d).setColor(lqLabelColor(st)); };
+      const hitR = add(s.add.rectangle(cx, cy, bw, bh, 0, .001).setInteractive({ useHandCursor: true }).setName(P + '-respec'));
+      hitR.on('pointerover', () => paint('hover')).on('pointerout', () => paint('idle')).on('pointerdown', () => { paint('down'); r.onClick!(); });
+      paint('idle'); generalRight = cx - bw / 2 - 10;
+    } else if (o.respec?.hint) { const h = text(M.x + M.w - pad, M.y + 3, o.respec.hint.replace('，', '，\n'), 10, '#9c8a68').setOrigin(1, 0).setAlign('right').setLineSpacing(0).setName(P + '-respec-hint'); generalRight = h.x - h.width - 12; }
+    if (general.length) {
+      const gt = text(generalRight, M.y + 10, '基础成长：' + general.map(id => TACTICS[id].name + ' Lv.' + b.level(id)).join(' · '), 11, '#b9a57a').setOrigin(1, 0).setName(P + '-general');
+      // 有重整入口 / 提示时：紧跟在「战法 n / 6」后面，放不下就截短（不压标题、不压按钮）
+      const cnt = root.getByName(P + '-tactic-count') as Phaser.GameObjects.Text | null;
+      if (o.respec && cnt) { const left = cnt.x + cnt.width + 10, room = generalRight - left; gt.setOrigin(0, 0).setX(left);
+        if (gt.width > room) gt.setText(gt.text.replace('基础成长：', '基础：')); // 先换短标签
+        let str = gt.text; while (gt.width > room && str.length > 4) { str = str.slice(0, -1); gt.setText(str + '…'); } if (gt.width > room) gt.setVisible(false); }
+    }
     // 信物格（穿戴的信物）+ 宝物（由信物注入的机制）
     let y = gy + 2 * ch + cg + 8;
     text(M.x + pad, y, '信物', 13, '#f6dc9a', true); y += 20;

@@ -244,17 +244,15 @@ export class CampRestUI {
  private renderBuild(top:number){
   this.itemTip??=new ItemTooltip(this.scene,DEPTH.overlay+40);
   const g=this.player.growth,x=D?40:24,w=W-(D?80:48),h=D?H-110-top:H-top-210;
-  drawBuildOverview({scene:this.scene,root:this.body,x,y:top+4,w,h,desktop:D,prefix:'camp-build',growth:g,level:this.player.level,weapon:this.player.weapons[0],tokens:wornTokens(g.character),tokenSlots:tokenSlots(),tooltip:this.itemTip,training:this.army.training});
+  drawBuildOverview({scene:this.scene,root:this.body,x,y:top+4,w,h,desktop:D,prefix:'camp-build',growth:g,level:this.player.level,weapon:this.player.weapons[0],tokens:wornTokens(g.character),tokenSlots:tokenSlots(),tooltip:this.itemTip,training:this.army.training,respec:this.respecEntry()});
   if(!this.notice)this.detail.setText('鼠标移到任意格子上看完整说明：战法看效果和下一级，流派条看还差几个来源能觉醒。');
-  this.respecButton();
  }
 
  // ---------- 重整构筑（data/respec · systems/Respec；用户 2026-11-19「选了之后就不可以改，只有返回休整才可以花费军粮改回初始」）----------
- /** 将帅帐右上（页签行右边）：「重整构筑」；有没选完的重选时改成「继续重选」。 */
- private respecButton(){
-  const g=this.player.growth,pending=g.respecPending>0,bw=D?150:136,bx=D?W-40-bw:W-24-bw,by=D?96:200;
-  const hit=this.button(bx,by,pending?'继续重选 · 剩 '+g.respecPending:'重整构筑',()=>pending?this.respecDraft():this.respecConfirm(),bw,true,38).setName('camp-respec');this.body.add(hit);
-  if(pending)(hit.getData('paint') as (s:string)=>void)('selected');
+ /** 构筑总览里的重整入口（行营休整）：价格按当前可退回的次数算；有没选完的重选时改成「继续重选」。 */
+ private respecEntry():{label:string;onClick:()=>void;active:boolean}{
+  const g=this.player.growth,pending=g.respecPending>0;
+  return{label:pending?'继续重选 · 剩 '+g.respecPending:'重整构筑 · '+respecPrice(this.player,this.chapterNo)+' 军粮',active:pending,onClick:()=>{this.sound('uiClick');if(this.player.growth.respecPending>0)this.respecDraft();else this.respecConfirm();}};
  }
  /** 漆底描金对话框（无水墨按钮）：返回内容容器与关闭函数。 */
  private lqModal(name:string,w:number,h:number):{m:Phaser.GameObjects.Container;x:number;y:number;close:()=>void}{

@@ -45,6 +45,8 @@ interface Host {
   scene: Phaser.Scene; player: Player; enemies: Enemy[];
   hit: (e: Enemy, damage: number, now: number) => void;
   notice: (text: string) => void;
+  /** 耐力条离主将原点多远（脚下有被动刻度时让到刻度下面，见 data/passiveGauge FOOT_HUD）。 */
+  barDy?: () => number;
 }
 
 /**
@@ -194,7 +196,7 @@ export class HeroMount {
     this.label.setText('');
     // 耐力条（不满时显示在马蹄下）
     this.bar.clear().setDepth(p.sprite.depth + .001);
-    if (this.stamina < this.maxStamina) { const w = 40, r = Math.max(0, this.stamina / this.maxStamina); this.bar.fillStyle(0x140d08, .8).fillRect(p.x - w / 2 - 1, p.y + 34, w + 2, 5).fillStyle(r > .5 ? 0xe2c06a : r > .25 ? 0xe28a3a : 0xd65a3f).fillRect(p.x - w / 2, p.y + 35, w * r, 3); }
+    if (this.stamina < this.maxStamina) { const w = 40, r = Math.max(0, this.stamina / this.maxStamina), by = p.y + (this.h.barDy?.() ?? 34); this.bar.fillStyle(0x140d08, .8).fillRect(p.x - w / 2 - 1, by, w + 2, 5).fillStyle(r > .5 ? 0xe2c06a : r > .25 ? 0xe28a3a : 0xd65a3f).fillRect(p.x - w / 2, by + 1, w * r, 3); }
     if (running && !this.style.noTrample) this.trample(now);
   }
   /** 骑乘姿态帧：骑行行随马步换帧，武将出招时（当前帧不在行走表上）换马上出招行；脚底对到马镫高度。 */

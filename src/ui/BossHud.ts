@@ -5,6 +5,7 @@ import { factionOf, titleOf } from './StoryBarkCardStyles';
 
 /**
  * 首领血条（2026-11-20 用户「还有ui boss血条优化一下」；风格同左上主将状态框 HeroStatusFrame：漆底金边、铜框朱红）。
+ * 2026-11-20 用户「不要拿框住」：不要漆底面板 / 外框，血条、头像圆、名字、称号印直接浮在战场上（文字描边 + 投影、血条细铜边 + 底下一道淡影保证可读）。
  * 位置：屏幕下方居中——顶部已经有战况进度线、计时、关名与首领招式字幕，吕布等的出场墨幅也在上半屏，下方中间是空的。
  * 单首领：左边圆形首领头像（水墨立绘 assets/ink-cast/<id>.webp 取头肩，金圈；没有立绘时画阵营印字）、名字（大字）+ 朱砂称号印（「天公将军」）、右上百分比；
  *   血条：铜框朱红，受击米白残血拖尾（场景的 BossStagger.trailRatio，顿帧时也按真实时间走），半血处一道金色阶段刻度（越过时闪一下），低于 25% 外框朱红脉动；
@@ -98,6 +99,7 @@ export class BossHud {
   /** 铜框朱红血条（单 / 双首领共用）。 */
   private hpBar(x: number, y: number, w: number, h: number, ratio: number, trail: number, a: number, fill = 0xa82e1c): void {
     const g = this.g;
+    g.fillStyle(0x000000, .32 * a).fillRoundedRect(x - 1, y + 2, w + 4, h + 4, 4);
     g.fillStyle(0x2a1a0e, a).fillRoundedRect(x - 2, y - 2, w + 4, h + 4, 3).lineStyle(1.2, LQ.gold, .95 * a).strokeRoundedRect(x - 2.5, y - 2.5, w + 5, h + 5, 3);
     g.fillStyle(0x140806, a).fillRect(x, y, w, h);
     if (trail > ratio) g.fillStyle(0xf6ead0, .9 * a).fillRect(x + w * ratio, y, w * (trail - ratio), h).fillStyle(0xffffff, .5 * a).fillRect(x + w * ratio, y, w * (trail - ratio), 2);
@@ -107,17 +109,6 @@ export class BossHud {
       g.fillStyle(0x5a120a, .55 * a).fillRect(x, y + h - 3, w * ratio, 3);
     }
     g.lineStyle(1, 0x000000, .22 * a); for (const k of [.25, .75]) g.lineBetween(x + w * k, y + 2, x + w * k, y + h - 2);
-  }
-
-  /** 漆底金边框。 */
-  private panel(x: number, y: number, w: number, h: number, a: number): void {
-    const g = this.g;
-    g.fillStyle(0x000000, .35 * a).fillRoundedRect(x + 3, y + 4, w, h, 9);
-    g.fillStyle(LQ.lacquer, .82 * a).fillRoundedRect(x, y, w, h, 9);
-    g.fillStyle(LQ.lacquerHi, .35 * a).fillRoundedRect(x + 4, y + 4, w - 8, h * .42, { tl: 6, tr: 6, bl: 0, br: 0 });
-    g.lineStyle(1.6, LQ.gold, .95 * a).strokeRoundedRect(x + 2.5, y + 2.5, w - 5, h - 5, 7);
-    g.lineStyle(1, LQ.gold, .35 * a).strokeRoundedRect(x + 6.5, y + 6.5, w - 13, h - 13, 5);
-    g.fillStyle(LQ.goldHi, a); for (const [px, py] of [[x + w - 2.5, y + 2.5], [x + w - 2.5, y + h - 2.5]]) lqDiamond(g, px, py, 4);
   }
 
   /** 重新播放登场展开（测试用）。 */
@@ -145,7 +136,6 @@ export class BossHud {
       if (!L || t >= 1) { this.portrait.setVisible(false); this.last = null; return; }
       // 授首：血条从中间裂开，两半向外滑开、淡出；头像跟着淡出
       const a = 1 - t, e = Phaser.Math.Easing.Cubic.Out(t), off = 34 * e, bx = x0 + B.barX, bw = R.w - B.barX - 14, by = y0 + B.hpY, half = bw / 2;
-      this.panel(x0 - off * .3, y0, R.w + off * .6, R.h, a * .8);
       this.hpBar(bx - off, by + 6 * e, half - 3, B.hpH, 0, 1 - t * .6, a);
       this.hpBar(bx + half + 3 + off, by - 4 * e, half - 3, B.hpH, 0, 1 - t * .6, a);
       this.drawMedal(this.portrait, L.id, x0 + 30, y0 + R.h / 2, B.r, a);
@@ -160,24 +150,23 @@ export class BossHud {
     if ((v.breaks ?? 0) > this.lastBreaks) { this.breakAt = now; this.stats.breakFlashes++; }
     this.lastBreaks = v.breaks ?? 0;
     // 框：从中间向两边展开
-    const pw = R.w * ko, px = GAME_WIDTH / 2 - pw / 2;
-    this.panel(px, y0, pw, R.h, Math.min(1, ko * 1.6));
     this.drawMedal(this.portrait, v.id, x0 + 30, y0 + R.h / 2, B.r, ta, .4 + .6 * ko);
     const bx = x0 + B.barX, bw = R.w - B.barX - 14, by = y0 + B.hpY;
     // 名字 · 称号印 · 百分比
-    T.name.setVisible(true).setAlpha(ta).setOrigin(0, 0).setPosition(bx, y0 + 4).setFontFamily(HEADING_FONT).setFontSize(18).setColor(LQ.title).setStroke('#140c06', 3);
+    T.name.setVisible(true).setAlpha(ta).setOrigin(0, 0).setPosition(bx, y0 + 4).setFontFamily(HEADING_FONT).setFontSize(18).setColor(LQ.title).setStroke('#140c06', 4).setShadow(1, 2, '#000000', 3, true, true);
     if (title) {
       if (this.seal.text !== title) this.seal.setText(title);
       const sx = bx + T.name.width + 8, sw = this.seal.width + 10, sh = 17, sy = y0 + 6;
       this.seal.setVisible(ta > .02).setAlpha(ta).setPosition(sx + sw / 2, sy + sh / 2);
       g.fillStyle(0x000000, .3 * ta).fillRoundedRect(sx + 1, sy + 1, sw, sh, 3).fillStyle(LQ.cinnabar, ta).fillRoundedRect(sx, sy, sw, sh, 3).lineStyle(1, LQ.goldHi, .9 * ta).strokeRoundedRect(sx + 1.5, sy + 1.5, sw - 3, sh - 3, 2);
     } else this.seal.setVisible(false);
-    T.pct.setVisible(true).setAlpha(ta).setOrigin(1, 0).setPosition(x0 + R.w - 14, y0 + 8).setFontSize(13).setColor('#f5e6c8').setStroke('#140c06', 3);
-    T.status.setVisible(T.status.text !== '' && T.status.visible).setAlpha(ta).setOrigin(1, 0).setPosition(x0 + R.w - 10, y0 + R.h + 3).setColor('#e6cf9a').setStroke('#140c06', 3);
+    T.pct.setVisible(true).setAlpha(ta).setOrigin(1, 0).setPosition(x0 + R.w - 14, y0 + 8).setFontSize(13).setColor('#f5e6c8').setStroke('#140c06', 4).setShadow(1, 2, '#000000', 3, true, true);
+    T.status.setVisible(T.status.text !== '' && T.status.visible).setAlpha(ta).setOrigin(1, 0).setPosition(x0 + R.w - 10, y0 + R.h + 3).setColor('#e6cf9a').setStroke('#140c06', 4).setShadow(1, 2, '#000000', 3, true, true);
+    if (ko <= 0) return;
+    // 血条（登场时从中间向两边展开）
+    const low = v.ratio > 0 && v.ratio < B.low, ow = bw * ko, ox = bx + (bw - ow) / 2;
+    this.hpBar(ox, by, ow, B.hpH, v.ratio, v.trail, Math.min(1, ko * 1.6));
     if (ta <= 0) return;
-    // 血条
-    const low = v.ratio > 0 && v.ratio < B.low;
-    this.hpBar(bx, by, bw, B.hpH, v.ratio, v.trail, ta);
     if (v.shield && v.shield > 0) g.fillStyle(0x66d9ff, .95 * ta).fillRect(bx, by + B.hpH - 3, bw * Math.min(1, v.shield), 3);
     // 半血阶段刻度（金色小菱 + 竖线）；越过时放大发光
     const tx = bx + bw * B.phaseAt, pf = (now - this.phaseAt) / B.phaseFlashMs, flashing = pf >= 0 && pf < 1;
@@ -207,7 +196,6 @@ export class BossHud {
     if (i === 0) { g.clear(); this.dualNames = []; }
     while (this.dualImgs.length <= i) this.dualImgs.push(this.scene.add.image(0, 0, '__DEFAULT').setScrollFactor(0).setDepth(this.depth + .2).setName('boss-hud-dual-portrait-' + this.dualImgs.length).setVisible(false));
     this.mode = 'dual'; this.dualNames[i] = o.id;
-    this.panel(o.x, o.y, o.w, h, o.a);
     const im = this.dualImgs[i];
     this.drawMedal(im, o.id, o.x + 24, o.y + h / 2, D.r, o.a);
     if (o.done) im.setTint(0x777066); else im.clearTint();
@@ -215,8 +203,8 @@ export class BossHud {
     this.hpBar(bx, by, bw, D.hpH, o.done ? 0 : o.ratio, o.done ? 0 : o.trail, o.a, o.fill);
     if (o.done) g.fillStyle(0x6a6460, .5 * o.a).fillRect(bx, by, bw, D.hpH);
     if (o.rage && !o.done) { const a = .35 + .3 * Math.sin(now / 120); g.lineStyle(2, 0xff5a3a, a * o.a).strokeRoundedRect(bx - 4, by - 4, bw + 8, D.hpH + 8, 4); }
-    // 阵营色细边：区分两人（金 / 朱）
-    g.lineStyle(1, o.ring, .8 * o.a).strokeRoundedRect(o.x + 6.5, o.y + 6.5, o.w - 13, h - 13, 5);
+    // 阵营色：头像外再一圈细线区分两人（金 / 朱）
+    g.lineStyle(1.5, o.ring, .9 * o.a).strokeCircle(o.x + 24, o.y + h / 2, D.r + 6);
     return { barX: bx, barY: by, barW: bw };
   }
   /** 双首领画完：隐藏多出来的头像槽。 */

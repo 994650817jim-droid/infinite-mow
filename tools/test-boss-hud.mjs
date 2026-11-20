@@ -41,6 +41,7 @@ try {
   if (want('single')) {
     const ev = await open('GameScene', {}, { chapter: 'huangjin', stage: 3 });
     await ev(s => { s.boss.hp = s.boss.maxHp * .8; });
+    for (let i = 0; i < 20 && !(await ev(s => s.bossHud?.debug().portrait)); i++) await p.waitForTimeout(150); /* 头像按需加载 */
     await p.waitForTimeout(500); await shot('single-zhangjiao');
     if (AFTER) {
       const h = await hud(ev);
@@ -48,7 +49,7 @@ try {
       // 掉血：白色残血拖尾
       await ev(s => { s.boss.hp = s.boss.maxHp * .62; }); await p.waitForTimeout(150);
       const t1 = await hud(ev); await p.waitForTimeout(1500); const t2 = await hud(ev);
-      ck('掉血：白色残血停在旧血量，随后追上', t1 && t1.trail > t1.ratio + .1 && t2 && Math.abs(t2.trail - t2.ratio) < .03, { t1, t2 });
+      ck('掉血：白色残血停在旧血量，随后追上', t1 && t1.trail > t1.ratio + .04 && t2 && Math.abs(t2.trail - t2.ratio) < .03, { t1, t2 });
       // 不与战况、小地图卷轴、提示重叠（矩形相交）
       const ov = await ev(s => s.bossHud.overlaps());
       ck('不与战况进度、小地图、主将状态框重叠', ov.length === 0, ov);

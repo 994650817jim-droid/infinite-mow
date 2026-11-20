@@ -1,0 +1,84 @@
+// 其他势力支线 P1（other-factions-design.md，用户 2026-11-19「批准开工」）：讨伐令开放 → 地图节点 / 详情 / 出征 → 支线战斗（首领、劝降键、终局双首领、白门楼吕布战）
+// → 结算（攻城关并城、终局并入领地 + 势力特产、没劝降势力之主 → 再战 +15%）→ 解锁钩子 persuaded。
+// 用法：BASE=http://127.0.0.1:5241/ node tools/test-side-routes.mjs   截图在 assets/review/side-routes/
+import { chromium } from 'playwright';
+import { mkdirSync } from 'node:fs';
+const BASE = process.env.BASE ?? 'http://127.0.0.1:5173/', OUT = 'assets/review/side-routes'; mkdirSync(OUT, { recursive: true });
+let fail = 0; const errors = [];
+const ck = (n, ok, d) => { if (!ok) fail++; console.log((ok ? 'PASS ' : 'FAIL ') + n + (d !== undefined ? ' · ' + JSON.stringify(d).slice(0, 360) + (ok ? '' : ' … ' + JSON.stringify(d).slice(360, 900)) : '')); };
+const world = { version: 8, yellowStages: 3, dongzhuoStages: 3, warlordStages: 3, guanduStages: 0, worldAvailable: true, cleared: { huangjin: true, hulao: true }, merits: 0, provisions: 500, buildings: { barracks: 1, farm: 1, clinic: 1 }, reserve: {}, receipts: [], nodes: ['home', 'huangjin', 'hulao'], ownedCities: [], eraSeen: 2, capturedEver: [], alerts: [], lastLost: [], chapterSeen: 12, tutorialDone: true };
+const b = await chromium.launch({ channel: 'chrome', headless: true, args: ['--mute-audio'] });
+const page = async () => {
+  const p = await b.newPage({ viewport: { width: 1280, height: 720 } });
+  p.on('pageerror', e => errors.push(e.message.slice(0, 200)));
+  p.on('console', m => { if (m.type() === 'error' && !/favicon|Failed to load resource|Texture key already in use/.test(m.text())) errors.push(m.text().slice(0, 200)); });
+  await p.addInitScript(w => { if (!sessionStorage.getItem('seeded')) { localStorage.clear(); localStorage.setItem('im_world_v1', JSON.stringify(w)); localStorage.setItem('im_last_hero', 'zhaoyun'); localStorage.setItem('im_story', 'off'); localStorage.setItem('im_home_seen', '1'); sessionStorage.setItem('seeded', '1'); } }, world);
+  return p;
+};
+async function battle(key, reg) {
+  const p = await page();
+  await p.goto(BASE + '?dev=1&autostart=1&stage=1&layout=desktop&story=off');
+  await p.waitForFunction(() => window.__game?.scene.getScene('GameScene')?.player && window.__IM, null, { timeout: 120000 });
+  await p.evaluate(st => { const g = window.__game, s0 = g.scene.getScene('GameScene'); s0.registry.remove('campaignTransfer'); for (const [k, v] of Object.entries(st.reg)) s0.registry.set(k, v);
+    s0.registry.set('runConfig', { character: 'zhaoyun' }); for (const sc of g.scene.getScenes(true)) if (sc.scene.key !== 'GameScene') sc.scene.stop(); s0.scene.start(st.key); }, { key, reg });
+  await p.waitForFunction(k => { const s = window.__game.scene.getScene(k); return window.__game.scene.isActive(k) && s?.player && s.elapsed > .5; }, key, { timeout: 120000 });
+  await p.evaluate(k => { const s = window.__game.scene.getScene(k); window.__S = s; s.player.damageImmune = true;
+    window.__calm = () => { for (let i = 0; i < 16 && s.mode !== 'none' && !s.over; i++) { if (s.mode === 'levelup' || s.mode === 'bossloot') s.chooseUpgrade?.(0); else if (s.mode === 'recruit') { s.chooseRecruit?.(0); s.__DEV_ACTIONS?.closePopup?.(); } else if (s.mode === 'parley') return; else { s.__DEV_ACTIONS?.closePopup?.(); if (s.mode !== 'none') s.setMode?.('none'); } } }; }, key);
+  return p;
+}
+const toBoss = async p => { for (let i = 0; i < 24 && !(await p.evaluate(() => !!window.__S.boss?.active)); i++) { await p.evaluate(() => { const s = window.__S; if (s.elapsed < 200) { s.elapsed = 212; s.lastPickAt = -1e9; } window.__calm(); }); await p.waitForTimeout(500); } };
+
+// ① 江东 · 南郡终局：周瑜 + 太史慈双首领（借吴将图），劝降键
+{
+  const p = await battle('SideNanjunGameScene', { side_nanjunStage: 2 });
+  const c = await p.evaluate(() => { const s = window.__S; return { name: s.chapter.name, boss: s.chapter.bossName, key: s.surrenderKey(), tex: s.textures.exists('side_zhouyu'), partnerTex: s.textures.exists('side_taishici') }; });
+  await toBoss(p); await p.waitForTimeout(2200); await p.evaluate(() => window.__calm());
+  const d = await p.evaluate(() => { const s = window.__S; return { labels: s.dual?.entries.map(e => e.ctrl.label) ?? [], dual: s.dual?.entries.map(e => e.name) ?? [], keys: s.dual?.entries.map(e => e.parley?.def?.key ?? null) ?? [], group: s.dual?.plan.group }; });
+  await p.screenshot({ path: `${OUT}/nanjun-dual.png` });
+  ck('南郡终局：章节名「江东 · 南郡」、首领周瑜、劝降键 nanjun-2:zhouyu、首领图已载入', /江东 · 南郡/.test(c.name) && c.boss === '周瑜' && c.key === 'nanjun-2:zhouyu' && c.tex && c.partnerTex, c);
+  ck('南郡终局双首领：周瑜 + 太史慈同场，各有劝降窗（nanjun-2:zhouyu / nanjun-2:taishici）', d.dual.includes('周瑜') && d.dual.includes('太史慈') && d.keys.includes('nanjun-2:taishici') && !d.labels.some(l => /白衣|昭武|吕蒙|朱然/.test(l)), d);
+  await p.close();
+}
+// ② 吕布 · 下邳第一关小沛（攻城关：城墙 + 城门）与白门楼吕布战
+{
+  const p = await battle('SideXiapiGameScene', { side_xiapiStage: 1 });
+  await toBoss(p);
+  const c = await p.evaluate(() => { const s = window.__S; return { name: s.chapter.name, boss: s.boss?.def?.texture, bossName: s.chapter.bossName, key: s.surrenderKey(), parley: !!s.parley }; });
+  ck('下邳 · 小沛：首领曹性（side_caoxing 图）出阵、劝降键 xiapi-1:caoxing、有招降窗', /小沛/.test(c.name) && c.bossName === '曹性' && c.boss === 'side_caoxing' && c.key === 'xiapi-1:caoxing' && c.parley, c);
+  await p.close();
+  const q = await battle('SideLubuGameScene', {});
+  const l = await q.evaluate(() => { const s = window.__S; return { name: s.chapter.name, key: s.surrenderKey(), style: s.chapter.bossStyle }; });
+  ck('下邳终局「白门楼」：三英战吕布的吕布战（bossStyle lubu）、劝降键 xiapi-4:lubu', /白门楼/.test(l.name) && l.key === 'xiapi-4:lubu' && l.style === 'lubu', l);
+  await q.close();
+}
+// ③ 天下地图（真实进度：第三章已平定）→ 讨伐令节点、详情、出征；结算并城、特产、再战加成、解锁钩子
+{
+  const p = await page();
+  await p.goto(BASE + '?layout=desktop'); await p.waitForFunction(() => window.__game?.scene.isActive('MenuScene'), null, { timeout: 180000 });
+  await p.evaluate(() => window.__game.scene.getScene('MenuScene').scene.start('WorldMapScene')); await p.waitForFunction(() => window.__game.scene.isActive('WorldMapScene')); await p.waitForTimeout(1800);
+  const m = await p.evaluate(() => { const s = window.__game.scene.getScene('WorldMapScene'), mk = s.markers.find(x => x.node.id === 'side-xiapi'); if (mk) { s.centerOn(mk.node); s.selected = { kind: 'node', node: mk.node }; s.refresh(); }
+    return { xiapi: !!mk, state: mk && s.nodeState(mk.node), nanjun: s.markers.some(x => x.node.id === 'side-nanjun'), caowei: s.markers.some(x => x.node.id === 'side-caowei'), pulse: !!mk?.root.list.find(o => o.name === 'node-pulse-side-xiapi'), detail: s.detail.text, title: s.detailTitle?.text, action: s.action.text.text }; });
+  await p.screenshot({ path: `${OUT}/map-xiapi.png` });
+  ck('第三章已平定：地图出现「讨伐 · 吕布」讨伐令（开放 + 红色脉冲）；江东、曹魏未开放不画', m.xiapi && m.state === 'open' && m.pulse && !m.nanjun && !m.caowei, m);
+  ck('讨伐令详情（两行）：第 1/4 关「小沛」攻城 · 首领曹性 · 可劝降；讨平后并入下邳 + 特产；按钮「出征 · 小沛」', /第 1\/4 关「小沛」攻城 · 首领 曹性 · 可劝降/.test(m.detail) && m.detail.split(String.fromCharCode(10)).length === 2 && /并入 下邳/.test(m.detail) && /并州狼骑/.test(m.detail) && m.action === '出征 · 小沛', m);
+  const r = await p.evaluate(async () => {
+    const S = await import('/src/world/SideRouteStore.ts'), W = await import('/src/world/WorldStore.ts'), U = await import('/src/data/surrender.ts'), H = await import('/src/systems/HeroUnlocks.ts');
+    const dmg0 = W.permanentEffects().damageBonus, prov0 = W.loadWorld().provisions;
+    const s1 = S.settleSideStage('xiapi', 1, { victory: true, debug: false }), open2 = S.sideStageOpen('xiapi', 2), open3 = S.sideStageOpen('xiapi', 3);
+    S.settleSideStage('xiapi', 2, { victory: true, debug: false }); const s3 = S.settleSideStage('xiapi', 3, { victory: true, debug: false }), s4 = S.settleSideStage('xiapi', 4, { victory: true, debug: false });
+    const st = S.sideState('xiapi'), odds = U.surrenderOdds(U.surrenderDef('xiapi-4:lubu'), { lord: 'zhaoyun', team: ['zhaoyun'], surrendered: [], followerBosses: [], flags: { sideRetry1: true }, pressed: false });
+    return { s1: s1.provisions, open2, open3, s3: s3.annexed, s4: { done: s4.done, msg: s4.message }, st, owned: W.ownedCities(), dmg: +(W.permanentEffects().damageBonus - dmg0).toFixed(3), prov: W.loadWorld().provisions - prov0, odds: odds.parts, persuaded: H.realProgress().persuaded?.('lubu') };
+  });
+  ck('结算：首关军粮、顺序开放（第 2 关开、第 3 关未开）；下邳关并入下邳；终局「讨伐告成」、并州狼骑伤害 +3%', r.s1 > 0 && r.open2 && !r.open3 && r.s3.includes('下邳') && r.owned.includes('xiapi') && r.s4.done && /讨伐告成/.test(r.s4.msg) && r.dmg === .03 && r.prov > 0, r);
+  ck('终局没劝降吕布：再战次数 +1，劝降把握多「再战第 1 回 +15」；解锁钩子 persuaded(lubu) = false', r.st.done && r.st.retries === 1 && r.odds.some(x => /再战第 1 回/.test(x.label) && x.add === 15) && r.persuaded === false, r);
+  await p.evaluate(() => { const s = window.__game.scene.getScene('WorldMapScene'); s.scene.restart(); }); await p.waitForTimeout(2200);
+  const m2 = await p.evaluate(() => { const s = window.__game.scene.getScene('WorldMapScene'), mk = s.markers.find(x => x.node.id === 'side-xiapi'); s.selected = { kind: 'node', node: mk.node }; s.refresh(); return { state: s.nodeState(mk.node), detail: s.detail.text, action: s.action.text.text }; });
+  ck('讨平后地图：讨伐令变「捷」，详情写再战劝降 +15%，按钮「再战 · 白门楼」', m2.state === 'cleared' && /再战终局劝降把握 \+15%/.test(m2.detail) && m2.action === '再战 · 白门楼', m2);
+  const go = await p.evaluate(() => { const g = window.__game, s = g.scene.getScene('WorldMapScene'), st = g.scene.start.bind(g.scene); let started = null; const sp = s.scene.start.bind(s.scene); s.scene.start = (k, d) => { started = k; return sp(k, d); }; s.launch(false); return g.registry.get('pendingWarlord') ?? started; });
+  ck('再战出征进白门楼吕布战（SideLubuGameScene）', go === 'SideLubuGameScene', go);
+  await p.close();
+}
+await b.close();
+ck('无控制台 / 页面错误', errors.length === 0, errors.slice(0, 6));
+console.log(fail ? `FAILED ${fail}` : 'ALL PASS');
+process.exit(fail ? 1 : 0);

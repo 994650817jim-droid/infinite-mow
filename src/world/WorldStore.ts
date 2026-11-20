@@ -1,4 +1,5 @@
 import {armyCapacity,TROOPS,TROOP_KINDS,type TroopKind} from '../data/legion';
+import {sideSpecialties} from './SideRouteStore';
 import {rosterFreshUnlock} from '../systems/RosterStore';
 import type {ChapterId} from '../data/chapters';
 import {LUBU_CHALLENGE} from '../data/dongzhuo';
@@ -150,7 +151,7 @@ export function granaryLevy():TownResult{const s=loadWorld(),t=s.town,lv=levelOf
  return townCommit(s,`开仓募兵：后备兵 +${n}（${costText(cost)}）`);}
 export type {TownState,TownBuildingId,CityFocus,SeasonReport};
 /** 营寨建筑、讲武堂科技 + W3 大城特产的出征开局效果。 */
-export function permanentEffects(){const s=loadWorld(),b=s.buildings,be=buildingBattleEffects(s.town),tech=techTotals(s.town.tech),sp=territorySummary(s.ownedCities).specialties.map(x=>x.specialty),sum=(k:'damage'|'maxHp'|'reserveSlots'|'attributePoints'|'provisions'|'reinforcements')=>sp.reduce((n,x)=>n+(x[k]??0),0);
+export function permanentEffects(){const s=loadWorld(),b=s.buildings,be=buildingBattleEffects(s.town),tech=techTotals(s.town.tech),sp=[...territorySummary(s.ownedCities).specialties.map(x=>x.specialty),...sideSpecialties()],sum=(k:'damage'|'maxHp'|'reserveSlots'|'attributePoints'|'provisions'|'reinforcements')=>sp.reduce((n,x)=>n+(x[k]??0),0);
  return{armyCapacity:armyCapacity(b.barracks),reinforcements:barracksReinforcements(b.barracks)+sum('reinforcements'),healMultiplier:1+tech.heal,provisionsMultiplier:1+(b.farm-1)*.08,
   damageBonus:sum('damage')+be.damage+tech.damage,maxHpBonus:Math.max(-.2,sum('maxHp')+be.maxHp+tech.maxHp),reserveSlots:2+sum('reserveSlots'),attributePoints:sum('attributePoints')+be.attributePoints+tech.attributePoints,provisionsBonus:sum('provisions'),
   /** 讲武堂：开局药囊里的回血药、开局即升级的兵种。 */

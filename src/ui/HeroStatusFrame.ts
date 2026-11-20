@@ -1,13 +1,14 @@
 import Phaser from 'phaser';
 import { HEADING_FONT, FONT } from '../config';
-import { LQ, lqDiamond } from './LacquerKit';
+import { LQ } from './LacquerKit';
 import { MEDAL_SIZE, drawHeroMedal } from './HeroMedal';
 
 /**
  * 战斗左上主将状态框（电脑布局；2026-11-19 用户「这里ui做一下」：原为透明暗底 + 纯色扁平血条 / 经验条）。
  * 漆底金边框；左边圆形主将头像（水墨立绘裁圆 + 金圈）；名字 + 朱砂等级印 + 主属性印（hud-attr-badge，由场景建，这里只摆位置）；
  * 血条：铜框朱红、上沿高光，受伤时米白残血拖尾（停 0.25 秒后 0.6 秒追上，同首领血条的 trail），低于 30% 时外框朱红脉动；数字压在条中央；
- * 经验条：细的金色条，与血条分开；升级时闪一下。每帧由场景调用 update（不受 HUD 10 Hz 节流）。
+ * 经验条：细的金色条，与血条分开；升级时闪一下。
+ * 2026-11-20 用户「还有ui血条那里也不要用大框框住」：去掉整块漆底大框（同首领血条去框），只留头像金圈、名字 + 等级印、血条（细铜边）与经验条，浮在画面上；文字描边 + 投影、条下一道淡影保证可读。每帧由场景调用 update（不受 HUD 10 Hz 节流）。
  */
 export const STATUS_FRAME = { x: 14, y: 12, w: 238, h: 72, r: 27, barX: 74, hpY: 36, hpH: 15, xpY: 58, xpH: 5, trailHoldMs: 250, trailMs: 600, flashMs: 520, lowHp: .3 } as const;
 
@@ -27,7 +28,7 @@ export class HeroStatusFrame {
     this.back = scene.add.graphics().setScrollFactor(0).setDepth(depth).setName('hud-status-frame');
     this.bars = scene.add.graphics().setScrollFactor(0).setDepth(depth + .2).setName('hud-status-bars');
     this.sealG = scene.add.graphics().setScrollFactor(0).setDepth(depth + .3);
-    this.name = scene.add.text(F.x + F.barX, F.y + 9, heroName, { fontFamily: HEADING_FONT, fontSize: '17px', color: LQ.title, resolution: 2 }).setStroke('#140c06', 3).setScrollFactor(0).setDepth(depth + .4).setName('hud-status-name');
+    this.name = scene.add.text(F.x + F.barX, F.y + 9, heroName, { fontFamily: HEADING_FONT, fontSize: '17px', color: LQ.title, resolution: 2 }).setStroke('#140c06', 4).setShadow(1, 2, '#000000', 3, true, true).setScrollFactor(0).setDepth(depth + .4).setName('hud-status-name');
     this.seal = scene.add.text(0, F.y + 18, '', { fontFamily: FONT, fontSize: '11px', color: '#fff1d0', fontStyle: 'bold', resolution: 2 }).setOrigin(.5).setScrollFactor(0).setDepth(depth + .5).setName('hud-status-level');
     this.drawBack();
     this.ensurePortrait();
@@ -52,16 +53,11 @@ export class HeroStatusFrame {
     s.load.start();
   }
 
-  /** 框与头像圈（静态，建一次）。 */
+  /** 头像圈（静态，建一次）；不画整块大框。 */
   private drawBack(): void {
     const F = STATUS_FRAME, g = this.back, cx = F.x + 38, cy = F.y + F.h / 2;
-    g.fillStyle(0x000000, .35).fillRoundedRect(F.x + 3, F.y + 4, F.w, F.h, 9);
-    g.fillStyle(LQ.lacquer, .8).fillRoundedRect(F.x, F.y, F.w, F.h, 9);
-    g.fillStyle(LQ.lacquerHi, .35).fillRoundedRect(F.x + 4, F.y + 4, F.w - 8, F.h * .42, { tl: 6, tr: 6, bl: 0, br: 0 });
-    g.lineStyle(1.6, LQ.gold, .95).strokeRoundedRect(F.x + 2.5, F.y + 2.5, F.w - 5, F.h - 5, 7);
-    g.lineStyle(1, LQ.gold, .35).strokeRoundedRect(F.x + 6.5, F.y + 6.5, F.w - 13, F.h - 13, 5);
-    g.fillStyle(LQ.goldHi, 1); for (const [px, py] of [[F.x + F.w - 2.5, F.y + 2.5], [F.x + F.w - 2.5, F.y + F.h - 2.5]]) lqDiamond(g, px, py, 4); // 左侧两角紧挨头像金圈，不放菱饰
-    // 头像金圈：外金、内朱一细线、底暗
+    g.fillStyle(0x000000, .35).fillCircle(cx + 2, cy + 3, F.r + 4); // 头像投影
+    // 头像金圈：外金、底暗
     g.fillStyle(0x0d0806, 1).fillCircle(cx, cy, F.r + 1);
     g.lineStyle(3, LQ.gold, 1).strokeCircle(cx, cy, F.r + 1.5).lineStyle(1, LQ.goldHi, .8).strokeCircle(cx, cy, F.r + 3.5);
   }
@@ -87,6 +83,7 @@ export class HeroStatusFrame {
     o.badge?.setPosition(sx + sw + 14, F.y + 19);
     // 血条
     const g = this.bars.clear(), x0 = F.x + F.barX, w = F.w - F.barX - 12, y = F.y + F.hpY, h = F.hpH;
+    g.fillStyle(0x000000, .32).fillRoundedRect(x0 - 1, y + 2, w + 4, h + 4, 4); // 条下淡影（代替大框）
     g.fillStyle(0x2a1a0e, 1).fillRoundedRect(x0 - 2, y - 2, w + 4, h + 4, 3).lineStyle(1.2, LQ.gold, .95).strokeRoundedRect(x0 - 2.5, y - 2.5, w + 5, h + 5, 3);
     g.fillStyle(0x140806, 1).fillRect(x0, y, w, h);
     if (this.trail > ratio) g.fillStyle(0xf3e2bc, .85).fillRect(x0 + w * ratio, y, w * (this.trail - ratio), h);
@@ -101,6 +98,7 @@ export class HeroStatusFrame {
     o.hpText?.setOrigin(.5, .5).setPosition(x0 + w / 2, y + h / 2 + .5).setFontSize(12).setStroke('#1a0a05', 3).setColor(low ? '#ffe0d0' : '#fff3dc');
     // 经验条（细金条）；升级闪一下
     const xy = F.y + F.xpY, xh = F.xpH;
+    g.fillStyle(0x000000, .3).fillRect(x0 - 1, xy + 1, w + 3, xh + 2);
     g.fillStyle(0x140d06, 1).fillRect(x0, xy, w, xh).lineStyle(1, 0x7a5a2c, .9).strokeRect(x0 - .5, xy - .5, w + 1, xh + 1);
     if (xr > 0) g.fillStyle(o.over ? 0x9a7428 : 0xd9b35c, 1).fillRect(x0, xy, w * xr, xh).fillStyle(o.over ? 0xd8b060 : 0xfff0b8, .5).fillRect(x0, xy, w * xr, 1.5);
     if (o.over) g.fillStyle(0xf0c870, 1).fillRect(x0 + w - 2, xy - 3, 2, xh + 6); // 越级小刻度

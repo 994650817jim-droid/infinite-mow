@@ -256,6 +256,7 @@ assets/raw/*
 !/tools/test-boss-charge-troops.mjs
 !/tools/render-opening.mjs
 !/tools/test-camp-buy-bag.mjs
+!/tools/shot-bag-cells.mjs
 !/tools/test-merchant-sell.mjs
 !/tools/test-respec.mjs
 !/tools/test-surrender-moves.mjs
@@ -320,3 +321,4 @@ assets/raw/*
 !/tools/test-event-fx.mjs
 !/tools/test-third-boss-fx.mjs
 !/tools/test-dongzhuo-fx.mjs
+!/tools/test-branch-final-fx.mjs

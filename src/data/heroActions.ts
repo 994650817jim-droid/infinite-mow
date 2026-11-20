@@ -37,6 +37,9 @@ export const HERO_ACTIONS: Partial<Record<CharacterId, HeroActionSet>> = {
   machao: fullSet('machao_actions'),
   sunshangxiang: fullSet('sunshangxiang_actions'),
   diaochan: fullSet('diaochan_actions'),
+  lvbu: fullSet('lvbu_actions'), // P2：只有 v2 图
+  zhangliao: fullSet('zhangliao_actions'),
+  zhouyu: fullSet('zhouyu_actions'),
 };
 /** 诸葛亮旧攻击图（过渡素材，正式图集缺失时退回）。 */
 export const ZHUGE_FALLBACK: HeroActionSet = {texture: 'zhuge_attack_sheet', attack: {down: [0, 1], right: [4, 5], up: [6, 7]}};
@@ -46,4 +49,4 @@ function fullSet(texture: string): HeroActionSet {
   return {texture, idle: row(0), attack: {down: row(1), right: row(2), up: row(3)}, skill: row(4), hurt: row(5, 0, 2), win: row(5, 2, 2), die: row(6)};
 }
 /** 需加载的正式动作图集（key → 文件）。 */
-export const HERO_ACTION_FILES: Record<string, string> = {sunshangxiang_actions: 'assets/hero-actions/sunshangxiang.png', diaochan_actions: 'assets/hero-actions/diaochan.png', zhaoyun_actions: 'assets/hero-actions/zhaoyun.png', guanyu_actions: 'assets/hero-actions/guanyu.png', huangzhong_actions: 'assets/hero-actions/huangzhong.png', zhangfei_actions: 'assets/hero-actions/zhangfei.png', huangyueying_actions: 'assets/hero-actions/huangyueying.png', pangtong_actions: 'assets/hero-actions/pangtong.png', liubei_actions: 'assets/hero-actions/liubei.png', weiyan_actions: 'assets/hero-actions/weiyan.png', machao_actions: 'assets/hero-actions/machao.png', zhuge_actions: 'assets/hero-actions/zhuge.png'};
+export const HERO_ACTION_FILES: Record<string, string> = {lvbu_actions: 'assets/hero-actions-v2/lvbu.png', zhangliao_actions: 'assets/hero-actions-v2/zhangliao.png', zhouyu_actions: 'assets/hero-actions-v2/zhouyu.png', sunshangxiang_actions: 'assets/hero-actions/sunshangxiang.png', diaochan_actions: 'assets/hero-actions/diaochan.png', zhaoyun_actions: 'assets/hero-actions/zhaoyun.png', guanyu_actions: 'assets/hero-actions/guanyu.png', huangzhong_actions: 'assets/hero-actions/huangzhong.png', zhangfei_actions: 'assets/hero-actions/zhangfei.png', huangyueying_actions: 'assets/hero-actions/huangyueying.png', pangtong_actions: 'assets/hero-actions/pangtong.png', liubei_actions: 'assets/hero-actions/liubei.png', weiyan_actions: 'assets/hero-actions/weiyan.png', machao_actions: 'assets/hero-actions/machao.png', zhuge_actions: 'assets/hero-actions/zhuge.png'};

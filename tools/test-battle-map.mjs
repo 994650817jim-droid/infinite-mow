@@ -2,7 +2,7 @@
 //  1. 普通关：军令表有「击退敌军 n/3」+「首领出阵」倒计时，面板显示；小地图、军令面板不压设置 / 行囊 / 用药 / 首领血条。
 //  2. API：ordersOf(scene).set / patch / done —— 面板实时更新、完成弹横幅、外部同 id 优先于自动来源；屏外军令箭头出现。
 //  3. 首领：首领登场后加「击败 XX」，波次那条完成；击败后首领军令完成。
-//  4. G 键开关大地图，Esc 也能关；大地图开着时战斗不暂停。
+//  4. G 键开关大地图，Esc 也能关；大地图开着时战斗暂停（2026-11-19 用户「打开小地图会暂停是我要要求的」），卷回后恢复。
 //  5. 攻城（中城）：「城外 · 破城门」阶段军令 + 攻城限时；切到巷战后据点军令出现、阶段军令换成「巷战 · 占据点」。
 //  6. 手机布局：不建小地图 / 面板，军令表照常有。
 //  截图：assets/review/battle-map/{normal,boss,siege,big-map}.png
@@ -31,7 +31,7 @@ async function open(layout, start, opts = {}) {
   }
   const key = start?.key ?? 'GameScene';
   await p.evaluate(k => { const s = window.__game.scene.getScene(k); window.__S = s; s.player.damageImmune = true; document.querySelectorAll('[data-dev-panel],.dev-panel').forEach(x => x.style.display = 'none');
-    window.__calm = () => { for (let i = 0; i < 12 && s.mode !== 'none' && !s.over; i++) { if (s.mode === 'levelup' || s.mode === 'bossloot') s.chooseUpgrade?.(0); else if (s.mode === 'recruit') { s.chooseRecruit?.(0); s.__DEV_ACTIONS?.closePopup?.(); } else if (s.mode === 'parley') s.parley?.choose?.('execute'); else { s.__DEV_ACTIONS?.closePopup?.(); if (s.mode !== 'none') s.setMode?.('none'); } } }; }, key);
+    window.__calm = () => { for (let i = 0; i < 12 && s.mode !== 'none' && s.mode !== 'map' && !s.over; i++) { if (s.mode === 'levelup' || s.mode === 'bossloot') s.chooseUpgrade?.(0); else if (s.mode === 'recruit') { s.chooseRecruit?.(0); s.__DEV_ACTIONS?.closePopup?.(); } else if (s.mode === 'parley') s.parley?.choose?.('execute'); else { s.__DEV_ACTIONS?.closePopup?.(); if (s.mode !== 'none') s.setMode?.('none'); } } }; }, key);
   for (let i = 0; i < 10; i++) { await p.evaluate(() => window.__calm()); await p.waitForTimeout(200); }
   return p;
 }
@@ -55,7 +55,7 @@ const panel = p => p.evaluate(() => { const s = window.__S, P = s.ordersPanel; r
   const p = await open('desktop', { key: 'GameScene', run: { chapter: 'hulao', westStage: 2 } }, { panel: true });
   await settle(p, 1200);
   const o = await orders(p), pn = await panel(p);
-  ck('普通关：军令「击退敌军 n/3」', !!o?.find(x => x.id === 'waves' && x.state === 'active' && /\/3$/.test(x.prog ?? '')), o);
+  ck('普通关：军令「击退敌军 n/段数」（主线关改五段后为 n/5）', !!o?.find(x => x.id === 'waves' && x.state === 'active' && /^\d+\/\d+$/.test(x.prog ?? '')), o);
   ck('普通关：首领出阵倒计时', (pn?.lines ?? []).some(l => /^首领出阵 \d+:\d\d$/.test(l)), pn?.lines);
   ck('军令面板显示在右侧（舆图卷轴下、右列圆钮左边）', !!pn && pn.visible && pn.b.y >= 72 && pn.b.x + pn.b.w <= 860 && pn.b.x >= 600, pn?.b);
   // 2026-11-19 用户「用药和军令重叠了」：6 条军令 + 用药 / 加点可用 + 右侧台词卡同时出现，右侧 HUD 互不重叠（军令展开 / 收起都查）
@@ -93,7 +93,7 @@ const panel = p => p.evaluate(() => { const s = window.__S, P = s.ordersPanel; r
     const pm = await p.evaluate(() => { const v = window.__S.battleMap.big; const P = v?.painted; return P ? { ...P.stats, base: !!window.__S.children.list.length, title: P.root.getByName('painted-map-deco')?.getByName?.('painted-map-title')?.text ?? (P.root.list.find(o => o.name === 'painted-map-deco')?.list.find(o => o.name === 'painted-map-title')?.text) } : null; });
     ck('手绘舆图（用户「小地图还是有点太简陋」）：底图画进 RenderTexture（一次）、标记有（敌军改红点后，这一刻没有要点 / 友军时图标可为 0）、题签写关名', !!pm && pm.bakes >= 1 && pm.bakes <= 2 && pm.stamps > 10 && pm.icons + pm.dots >= 1 && /荥阳/.test(pm.title ?? ''), pm);
     ck('敌军红点（2026-11-19 用户「敌军过来就以红点显示就好」）：每兵一点，不再画兵群图标 / 淡墨团；最多 150 个', !!pm && pm.dots > 0 && pm.dots <= 150, pm && { dots: pm.dots, icons: pm.icons });
-    ck('点卷轴展开：先飞到中央、两轴往两边拉开（中途），展开后地图在纸上、8 Hz 重画、不暂停', mid.state === 'opening' && mid.t > 0 && mid.t < 1 && op.state === 'open' && op.t === 1 && op.gap >= 640 && !op.icon && op.mode === 'none' && d1 - d0 >= 4 && d1 - d0 <= 12, { mid, op, hz: d1 - d0 });
+    ck('点卷轴展开：先飞到中央、两轴往两边拉开（中途），展开后地图在纸上、8 Hz 重画、战斗暂停（map 模式）', mid.state === 'opening' && mid.t > 0 && mid.t < 1 && op.state === 'open' && op.t === 1 && op.gap >= 640 && !op.icon && op.mode === 'map' && d1 - d0 >= 4 && d1 - d0 <= 12, { mid, op, hz: d1 - d0 });
     await p.mouse.click(c.x > 900 ? 480 : 480, 270); await p.waitForTimeout(800);
     const cl = await p.evaluate(() => { const S = window.__S, m = S.children.getByName('battle-map-scroll'); return { state: S.battleMap.stats.state, open: S.battleMap.bigOpen, icon: m.visible, x: Math.round(m.x), y: Math.round(m.y), angle: m.angle }; });
     ck('再点卷轴：卷起、飞回角上', cl.state === 'closed' && !cl.open && cl.icon && cl.x > 700 && cl.y < 60 && cl.angle === 0, cl); }
@@ -123,7 +123,7 @@ const panel = p => p.evaluate(() => { const s = window.__S, P = s.ordersPanel; r
   const big2 = await p.evaluate(() => window.__S.battleMap.bigOpen);
   await p.keyboard.press('KeyM'); await settle(p, 900); await p.keyboard.press('Escape'); await settle(p, 800);
   const big3 = await p.evaluate(() => ({ open: window.__S.battleMap.bigOpen, mode: window.__S.mode }));
-  ck('M 展开舆图（不暂停）/ 再按 M 卷起 / Esc 也能卷起（用户「小地图换成m快捷键」）', big1.open && big1.mode === 'none' && !big2 && !big3.open && big3.mode === 'none', { big1, big2, big3 });
+  ck('M 展开舆图（战斗暂停）/ 再按 M 卷起 / Esc 也能卷起（用户「小地图换成m快捷键」）', big1.open && big1.mode === 'map' && !big2 && !big3.open && big3.mode === 'none', { big1, big2, big3 });
   // 用户「军令也可以收起来」：G 收起成小签「军令 n/m」、记在 localStorage；收着时有军令完成，小签闪；点匾额展开
   { await p.keyboard.press('KeyG'); await settle(p, 500);
     const f1 = await p.evaluate(() => { const o = window.__S.ordersPanel; return { folded: o.isFolded, lines: o.lines, store: localStorage.getItem('im_orders_folded'), h: o.bounds().h }; });

@@ -28,6 +28,21 @@ export interface HeroBarkLines {
 }
 
 export const HERO_BARKS: Record<CharacterId, HeroBarkLines> = {
+  zhouyu: {
+    trigger: ['万事俱备，只欠东风！', '火船齐发，烧！', '曲有误，周郎顾。'],
+    bossAppear: ['来得正好，且看我火攻之计。'], bossDown: ['樯橹灰飞烟灭。'],
+    vsBoss: { 曹操: '孟德，赤壁之火可还记得？', 诸葛亮: '孔明……既生瑜，何生亮！' },
+  },
+  zhangliao: {
+    trigger: ['八百虎贲，随我破阵！', '张文远在此，谁敢一战！', '辽来辽来！'],
+    bossAppear: ['敌众我寡，正好破之！'], bossDown: ['敌胆已破。'],
+    vsBoss: { 孙权: '孙仲谋，逍遥津可还记得？', 吕布: '温侯，辽……得罪了。' },
+  },
+  lvbu: {
+    trigger: ['人中吕布，马中赤兔！', '天下谁人能挡我！', '无双之名，岂是虚传！'],
+    bossAppear: ['来者何人，也配与我一战？'], bossDown: ['不堪一击。'],
+    vsBoss: { 张郃: '张儁乂，接我一戟！', 曹操: '曹阿瞒，白门楼之仇今日来报！' },
+  },
   zhaoyun: {
     trigger: ['吾乃常山赵子龙也！', '七进七出，谁可挡我！', '子龙一身都是胆！'],
     bossAppear: ['来将通名！', '贼将休走！'], bossDown: ['贼将已授首！'],

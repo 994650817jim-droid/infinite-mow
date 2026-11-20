@@ -35,6 +35,12 @@ export const HERO_JOIN: Readonly<Partial<Record<CharacterId, HeroJoinInfo>>> = {
     fallbackLines: ['长沙一战负伤遁去的老将黄忠，伤愈来投。', '「定军山下，还须老夫这张弓。」'] },
   pangtong: { kicker: '第七章 · 入蜀', epithet: '凤雏',
     lines: ['凤雏庞统，随军西进入蜀。', '「卧龙、凤雏，两人得一可安天下——主公两人俱得。」'] },
+  lvbu: { kicker: '下邳 · 白门楼', epithet: '飞将',
+    lines: ['白门楼下，吕布卸甲解缚。', '「明公所患不过于布，今已服矣——天下不足忧！」', '方天画戟，从此为公所用。'] },
+  zhouyu: { kicker: '江陵 · 南郡', epithet: '美周郎',
+    lines: ['南郡城下，周瑜解下佩剑，抚琴一曲。', '「公瑾不才，愿以火攻之策，助明公定天下。」', '程普在侧，拱手而笑。'] },
+  zhangliao: { kicker: '下邳 · 白门楼', epithet: '止啼',
+    lines: ['白门楼下，张辽按剑不跪，坦然待死。', '「辽素闻将军仁义……愿效犬马之劳。」', '双戟收鞘，从此为公破阵。'] },
   machao: { kicker: '第七章 · 成都', epithet: '锦马超',
     lines: ['马超自汉中来投，屯兵成都城北。', '城中震怖，刘璋遂开城出降。'] },
 };

@@ -1,0 +1,59 @@
+/**
+ * 战场回血（用户 2026-11-19「我感觉地图上也需要更多回血手段」；盘点见共享笔记 battle-heal-audit.md）。
+ * 全部按最大生命比例算（章节越往后生命越高，回血跟着涨，不用固定值）。数值是初值，交平衡会话复核。
+ * 节奏目标：一关 4.5–5 分钟，正常操作约能回 60–100% 最大生命（新旧来源合计）。
+ */
+export const BATTLE_HEAL = {
+  /**
+   * 干粮 / 酒肉：打破营地道具有概率掉在地上，受伤时走近自动吃（满血不捡，留着以后再吃）。
+   * grain = 粮袋 / 粮车 / 米缸，crate = 木箱 / 钱袋。
+   */
+  food: {
+    grain: { chance: .5, ratio: .05, name: '干粮' },
+    crate: { chance: .25, ratio: .06, name: '酒肉' },
+    /** 地上留多久（毫秒）；最后 3 秒闪烁。 */
+    lifeMs: 45000,
+    /** 受伤时多近开始被吸过来、多近算吃到。 */
+    magnetR: 90, eatR: 26, flySpeed: 460,
+    /** 同时最多几份在地上。 */
+    max: 10,
+  },
+  /** 营地酒罐（补给格的酒罐）：原来固定回 10 点，改成按比例（进药囊）。 */
+  wineJarRatio: .06,
+  /**
+   * 泉眼 / 水井 / 药草丛：站上去（圈里）持续回血；一口泉的水量用完要冷却。地图上看得到，屏外有箭头。
+   * 五段关按段落刷：精锐段 + elite 秒、事件段 + event 秒，首领段开始前 bossLead 秒补一处（让玩家先回满再打）。
+   * 非五段关：开局 firstSec 秒后一处，之后每 everySec 秒一处。同时最多 maxLive 处（多了把最旧的撤掉）。
+   */
+  spot: {
+    radius: 66,
+    /** 每秒回最大生命的比例；一池水总量（比例）；用完冷却秒数。 */
+    rate: .06, charge: .15, cooldownSec: 50,
+    elite: 10, event: 15, bossLead: 15,
+    firstSec: 40, everySec: 80,
+    maxLive: 2,
+    /** 刷点距离（离主将）。 */
+    near: 380, far: 640,
+    /** 生命低于这个比例、泉眼在屏幕外且可用时，屏幕边缘出箭头。 */
+    arrowBelow: .75,
+  },
+  /**
+   * 军中伤药：副将倒下必掉一份；精锐倒下 chance 概率掉，连续 pity 个没掉则下一个必掉。
+   * 拾取进药囊（Q 用，2.5 秒回完）；药囊满了且受伤时直接服下。
+   */
+  medicine: { ratio: .1, lieutenantRatio: .15, chance: .2, pity: 4, name: '军中伤药' },
+  /**
+   * 低血保护：生命跌破 below 时，在附近（敌人最少的方向）放一份军中伤药，让玩家有个去处。
+   * 冷却 cooldownSec 秒，每关最多 perStage 次。
+   */
+  lowHp: { below: .3, ratio: .12, dist: [200, 260] as const, cooldownSec: 70, perStage: 2 },
+} as const;
+
+/** 回血点种类：图来自 scene-v2/waterpoints.png（2×2：0 泉眼 / 1 水潭 / 2 石井 / 3 木水槽）；药草丛等新图到了再接。 */
+export type HealSpotKind = 'spring' | 'well' | 'herb';
+export const HEAL_SPOT_ART = {
+  water: { key: 'scene_v2_waterpoints', file: 'assets/scene-v2/waterpoints.png', cell: 512 },
+  /** 药草丛（新图，heal-spots 图集帧 0 茂盛 / 1 采过）：没载到就不刷这种。 */
+  herb: { key: 'heal_spot_herb', file: 'assets/heal-props/herb_patch.png', cell: 256 },
+} as const;
+export const HEAL_SPOT_NAME: Record<HealSpotKind, string> = { spring: '泉眼', well: '水井', herb: '药草丛' };

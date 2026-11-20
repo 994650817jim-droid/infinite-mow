@@ -210,11 +210,11 @@ export class ItemBagUI {
       tile.setName('item-cell-' + i).setData('uid', item.uid).setSize(cell, cell).setInteractive({ useHandCursor: true });
       const loot = this.isLoot(item.uid);
       this.onTap(tile, () => this.select(item.uid));
-      this.tip.attach(tile, () => item, () => loadout(this.hero)[equipTarget(this.hero, item)]);
+      this.tip.attach(tile, () => item, () => loadout(this.hero)[equipTarget(this.hero, item)], () => ({ x: ix - cell / 2, y: iy - cell / 2, w: cell, h: cell }));
       // 本局缴获：左上角淡金「新」字（穿上即收入行囊；没穿的结算时按原规则带回）
-      if (loot) tile.setData('loot', true).add(this.scene.add.text(-cell / 2 + 3, -cell / 2 + 2, '新', { fontFamily: HEADING_FONT, fontSize: '12px', color: '#2a1a08', backgroundColor: '#f3d48acc', resolution: 2 }).setPadding(3, 0).setName('item-new-badge'));
+      if (loot) tile.setData('loot', true).add(this.scene.add.text(-cell / 2 + 3, -cell / 2 + 2, '新', { fontFamily: HEADING_FONT, fontSize: '12px', color: '#fff4dc', backgroundColor: '#b8321e', resolution: 2 }).setPadding(3, 1).setName('item-new-badge'));
       const owner = loot ? undefined : equippedBy(s, item.uid);
-      if (owner) this.text(ix - cell / 2 + 3, iy + cell / 2 - 3, (ownerName(owner).slice(0, 1) || '装'), 11, '#1c140a').setOrigin(0, 1).setBackgroundColor('#d7b46a').setPadding(2, 0);
+      if (owner) this.text(ix - cell / 2 + 2, iy + cell / 2 - 2, (ownerName(owner).slice(0, 1) || '装'), 12, '#fff0d6').setOrigin(0, 1).setBackgroundColor('#8f2416').setPadding(3, 1).setName('item-worn-seal'); // 已装备：朱印写武将名首字
     });
     // 行囊为空时不在格子上写提示（用户：「不需要这个字」）
     const pageY = y0 + ph - (D ? 36 : 44);
@@ -393,7 +393,7 @@ export class ItemBagUI {
     const offX = tx + (tw - (gcols * cell + (gcols - 1) * gap)) / 2;
     // 空凹格：整页铺满，物品放在上面
     const wells = this.add(sc.add.graphics());
-    const wellArt = bagArt(sc, 'pocket') ?? bagArt(sc, 'slot_frame'), wellAlpha = bagArt(sc, 'pocket') ? .7 : .45;
+    const wellArt = bagArt(sc, 'pocket') ?? bagArt(sc, 'slot_frame'), wellAlpha = bagArt(sc, 'pocket') ? .38 : .3; // 空格更淡更平，有物品的格子更立体（2026-11-20）
     for (let i = 0; i < per; i++) { const ix = offX + (i % gcols) * (cell + gap), iy = gridTop + Math.floor(i / gcols) * (cell + gap); if (wellArt) { this.add(sc.add.image(ix + cell / 2, iy + cell / 2, wellArt).setDisplaySize(cell, cell).setAlpha(wellAlpha)); continue; } wells.fillStyle(0x000000, .28).fillRoundedRect(ix, iy, cell, cell, 5).lineStyle(1, 0xc9a45c, .14).strokeRoundedRect(ix + .5, iy + .5, cell - 1, cell - 1, 5); }
     items.slice(this.page * per, this.page * per + per).forEach((item, i) => {
       const ix = offX + cell / 2 + (i % gcols) * (cell + gap), iy = gridTop + cell / 2 + Math.floor(i / gcols) * (cell + gap);
@@ -401,11 +401,11 @@ export class ItemBagUI {
       tile.setName('item-cell-' + i).setData('uid', item.uid).setSize(cell, cell).setInteractive({ useHandCursor: true });
       const loot = this.isLoot(item.uid);
       this.onTap(tile, () => this.select(item.uid));
-      this.tip.attach(tile, () => item, () => loadout(this.hero)[equipTarget(this.hero, item)]);
+      this.tip.attach(tile, () => item, () => loadout(this.hero)[equipTarget(this.hero, item)], () => ({ x: ix - cell / 2, y: iy - cell / 2, w: cell, h: cell }));
       tile.on('pointerover', () => tile.setY(iy - 2)).on('pointerout', () => tile.setY(iy));
-      if (loot) tile.setData('loot', true).add(sc.add.text(-cell / 2 + 3, -cell / 2 + 2, '新', { fontFamily: HEADING_FONT, fontSize: '11px', color: '#2a1a08', backgroundColor: '#f3d48acc', resolution: 2 }).setPadding(3, 0).setName('item-new-badge'));
+      if (loot) tile.setData('loot', true).add(sc.add.text(-cell / 2 + 3, -cell / 2 + 2, '新', { fontFamily: HEADING_FONT, fontSize: '12px', color: '#fff4dc', backgroundColor: '#b8321e', resolution: 2 }).setPadding(3, 1).setName('item-new-badge'));
       const owner = loot ? undefined : equippedBy(s, item.uid);
-      if (owner) tile.add(sc.add.text(-cell / 2 + 3, cell / 2 - 3, (ownerName(owner).slice(0, 1) || '装'), { fontFamily: FONT, fontSize: '11px', color: '#1c140a', backgroundColor: '#d7b46a', resolution: 2 }).setOrigin(0, 1).setPadding(2, 0));
+      if (owner) tile.add(sc.add.text(-cell / 2 + 2, cell / 2 - 2, (ownerName(owner).slice(0, 1) || '装'), { fontFamily: HEADING_FONT, fontSize: '12px', fontStyle: 'bold', color: '#fff0d6', backgroundColor: '#8f2416', resolution: 2 }).setOrigin(0, 1).setPadding(3, 1).setName('item-worn-seal')); // 已装备：朱印写武将名首字
     });
     // 行囊为空时不在格子上写提示（用户：「不需要这个字」）
     this.button(tx + 30, pageY, '‹', 'item-page-prev', () => { this.page = Math.max(0, this.page - 1); this.render(); }, { disabled: this.page === 0, size: 16 });

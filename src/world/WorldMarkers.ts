@@ -77,7 +77,11 @@ export const CITY_ART_FILES = {wm2_city_large: MK + 'W2-1_city_large.png', wm2_c
   wm2_banner_open: MK + 'W2-6_banner_open.png', wm2_banner_cleared: MK + 'W2-6_banner_cleared.png', wm2_banner_locked: MK + 'W2-6_banner_locked.png',
   wm2_camp: MK + 'W2-7_camp.png', wm2_seal_open: MK + 'W2-8_seal_open.png', wm2_seal_cleared: MK + 'W2-8_seal_cleared.png', wm2_seal_locked: MK + 'W2-8_seal_locked.png',
   wm2_pennant_pole: MK + 'W2-9_pennant_pole.png', wm2_pennant_cloth: MK + 'W2-9_pennant_cloth.png',
-  wm2_plate: MK + 'W2-10_plate.png', wm2_plate_player: MK + 'W2-10_plate_player.png'} as const;
+  wm2_plate: MK + 'W2-10_plate.png', wm2_plate_player: MK + 'W2-10_plate_player.png',
+  // 2026-11-19 用户「做美术」：V1 还在用代用图的四类标记（ChatGPT 一张 3×2，tools/crop-alpha-grid.mjs FLOOR=70 去掉物件周围的淡彩雾）
+  wm2_side_open: MK + 'W2-11_side_open.png', wm2_side_cleared: MK + 'W2-11_side_cleared.png',
+  wm2_challenge_open: MK + 'W2-12_challenge_open.png', wm2_challenge_cleared: MK + 'W2-12_challenge_cleared.png',
+  wm2_attack_tag: MK + 'W2-13_attack_tag.png', wm2_next_arrow: MK + 'W2-14_next_arrow.png'} as const;
 const has = (scene: Phaser.Scene, ...keys: string[]) => keys.every(k => scene.textures.exists(k));
 /** 正式图在地图上的显示宽度（设计像素）。 */
 const CITY_ART_W = {large: 78, medium: 62, small: 50} as const;
@@ -237,16 +241,29 @@ export function nodeBannerTexture(scene: Phaser.Scene, st: NodeState): string {
 }
 
 /** v2 章节节点：返回要放进节点容器的物件（命中区沿用旧名 node-<id>）。 */
-export function nodeMarkerV2(scene: Phaser.Scene, st: NodeState, glyph: string, label: string, active: boolean): {parts: Phaser.GameObjects.GameObject[]; hit: Phaser.GameObjects.Arc; label: Phaser.GameObjects.Text; plate: Phaser.GameObjects.Graphics | Phaser.GameObjects.Container; icon: Phaser.GameObjects.Image} {
+/**
+ * 2026-11-19 用户「做美术」：V1 天下地图里还在用章节牙旗代替的两类节点换成专属正式图（W2-11 讨伐令、W2-12 三英战吕布挑战点），
+ * 已平定 / 已胜用 _cleared 图，未解锁用 _open 图压灰。缺图时照旧画章节牙旗。
+ */
+export type NodeVariant = 'chapter' | 'side' | 'challenge';
+const VARIANT_ART: Record<Exclude<NodeVariant, 'chapter'>, string> = { side: 'wm2_side', challenge: 'wm2_challenge' };
+export function nodeMarkerV2(scene: Phaser.Scene, st: NodeState, glyph: string, label: string, active: boolean, variant: NodeVariant = 'chapter'): {parts: Phaser.GameObjects.GameObject[]; hit: Phaser.GameObjects.Arc; label: Phaser.GameObjects.Text; plate: Phaser.GameObjects.Graphics | Phaser.GameObjects.Container; icon: Phaser.GameObjects.Image} {
+  const vBase = variant !== 'chapter' && st !== 'home' ? VARIANT_ART[variant] : '', vKey = vBase ? vBase + (st === 'cleared' ? '_cleared' : '_open') : '', vArt = !!vKey && has(scene, vKey);
   const artKey = st === 'home' ? 'wm2_camp' : 'wm2_banner_' + st, art = has(scene, artKey);
   let img: Phaser.GameObjects.Image, gx = 34 * (.55 - .32), gy = 8 - 50 * .55;
-  if (art) {
+  if (vArt) {
+    // 专属正式图：底边落在锚点，高约 54；未解锁压灰。图上不写字（讨伐令 / 挑战点本身就是标识）
+    const fr = scene.textures.getFrame(vKey), H = variant === 'challenge' ? 54 : 46, W = H * fr.width / fr.height;
+    img = scene.add.image(0, 10, vKey).setOrigin(.5, 1).setDisplaySize(W, H);
+    if (st === 'locked') img.setTint(0x8f8f86).setAlpha(.85);
+    glyph = '';
+  } else if (art) {
     const fr = scene.textures.getFrame(artKey);
     if (st === 'home') img = scene.add.image(0, 10, artKey).setOrigin(.5, 1).setDisplaySize(48, 48 * fr.height / fr.width);
     else { const H = 56, W = H * fr.width / fr.height; img = scene.add.image(0, 8, artKey).setOrigin(.3, 1).setDisplaySize(W, H); gx = (.56 - .3) * W; gy = 8 - H * (1 - .47); }
   } else img = scene.add.image(0, 8, nodeBannerTexture(scene, st)).setOrigin(.32, 1).setDisplaySize(34, 50);
   const parts: Phaser.GameObjects.GameObject[] = [img];
-  if (st !== 'home') parts.push(scene.add.text(gx, gy, glyph, {fontFamily: HEADING_FONT, fontSize: '15px', color: st === 'locked' ? '#d8d8cc' : '#fff1cc', resolution: 2 * RENDER_SCALE}).setOrigin(.5).setStroke('#1a0e08', 3));
+  if (st !== 'home' && glyph) parts.push(scene.add.text(gx, gy, glyph, {fontFamily: HEADING_FONT, fontSize: '15px', color: st === 'locked' ? '#d8d8cc' : '#fff1cc', resolution: 2 * RENDER_SCALE}).setOrigin(.5).setStroke('#1a0e08', 3));
   const t = scene.add.text(0, 12, label, {fontFamily: HEADING_FONT, fontSize: '12px', color: active ? '#fff0cd' : '#c9c7b8', resolution: 2 * RENDER_SCALE}).setOrigin(.5, 0);
   const pw = t.width + 16, ph = t.height + 2, g = scene.add.graphics();
   const edge = st === 'open' ? 0xb0321f : st === 'cleared' ? 0x5f9a5a : st === 'home' ? 0x88c5a4 : 0x6a6d64;

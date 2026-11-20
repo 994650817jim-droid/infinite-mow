@@ -50,6 +50,10 @@ export const PASSIVE_FULL_SHOUTS: Partial<Record<CharacterId, PassiveFullShout>>
   machao: { lines: ['吾乃西凉马孟起！', '铁骑踏阵，片甲不留！', '锦马超在此，谁敢一战！'], color: '#ffe08a', cooldownMs: 0 },
   // 2026-11-16 用户定稿台词：孙尚香「侍婢执刀」疾步满 6 层、下一次掷刀召侍婢时喊一句，三句轮流
   sunshangxiang: { lines: ['侍婢何在，随我执刀！', '弓腰姬在此，谁敢近前！', '江东孙尚香，岂输男儿！'], color: '#ffc8b0' },
+  // P2：吕布「无双」进狂暴、张辽「止啼」召八百虎贲时喊一句
+  lvbu: { lines: ['人中吕布，马中赤兔！', '天下谁人能挡我！', '无双之名，岂是虚传！'], color: '#ff9c8a' },
+  zhouyu: { lines: ['万事俱备，东风已至！', '火船齐发！', '樯橹灰飞烟灭！'], color: '#ffb080' },
+  zhangliao: { lines: ['八百虎贲，随我破阵！', '辽来辽来！', '张文远在此！'], color: '#c8d4e8' },
 };
 /** 附近敌人（只做「吓一缩」表现用）。 */
 export interface ShoutTarget { active: boolean; sprite: Phaser.GameObjects.Components.Transform & Phaser.GameObjects.GameObject; isSupplySlot?: boolean; }

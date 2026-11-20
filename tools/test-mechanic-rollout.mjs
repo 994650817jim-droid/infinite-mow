@@ -46,7 +46,8 @@ const states = p => p.evaluate(async ids => { const M = await import('/src/data/
   const log = await p.evaluate(() => window.__game.scene.getScene('GameScene').data.get('__storyBarkCardLog') ?? []);
   await p.screenshot({ path: OUT + '/unlock-card.png' });
   const seen = await p.evaluate(() => JSON.parse(localStorage.getItem('im_mech_seen') ?? '[]'));
-  ck('2-1 开打：播剧情引子（张世平兵装 / 斥候机缘 / 诸葛亮锦囊…）并记已看；早开放的部曲 / 舆图静默记掉', /新玩法 · 兵装/.test(log.join('|')) && /张世平/.test(log.join('|')) && ['gear', 'fortune', 'jinnang', 'medic', 'squad', 'atlas'].every(i => seen.includes(i)) && !/新玩法 · 部曲/.test(log.join('|')), { log: log.slice(0, 8), seen });
+  // 一关最多 2 张（第二章检查 11-20）：2-1 播兵装、机缘；锦囊、军医顺延到下一关 / 天下地图；早开放两关以上的部曲 / 舆图静默记掉
+ck('2-1 开打：播剧情引子（张世平兵装 / 斥候机缘）并记已看，一关最多 2 张；锦囊、军医、部曲、舆图顺延不记（开放超过两关才静默记掉）', /新玩法 · 兵装/.test(log.join('|')) && /张世平/.test(log.join('|')) && /新玩法 · 战场机缘/.test(log.join('|')) && log.filter(x => x.startsWith('新玩法')).length === 2 && ['gear', 'fortune'].every(i => seen.includes(i)) && !seen.includes('jinnang') && !seen.includes('medic') && !/新玩法 · 部曲/.test(log.join('|')), { log: log.slice(0, 8), seen });
   await p.close();
 }
 // ③ 开发期 ?dev=1 默认全开

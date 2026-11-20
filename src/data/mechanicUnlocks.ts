@@ -92,6 +92,8 @@ export function mechLockText(id: MechId): string {
 }
 
 const SEEN_KEY = 'im_mech_seen';
+/** 一次（一关开打 / 进一次天下地图）最多播几个新玩法引子。 */
+export const MECH_INTRO_CAP = 2;
 function seen(): Set<string> { try { return new Set(JSON.parse(localStorage.getItem(SEEN_KEY) ?? '[]') as string[]); } catch { return new Set(); } }
 /**
  * 刚开放、还没播过剧情引子的玩法（播完记一笔）。where：battle = 开打时（全部；章后开放的若还没在地图上播过也在这里播），map = 天下地图（只播 when 'after'）。
@@ -100,10 +102,14 @@ function seen(): Set<string> { try { return new Set(JSON.parse(localStorage.getI
 export function takeMechIntros(where: 'battle' | 'map'): MechId[] {
   if (allOpen()) return [];
   const s = seen(), out: MechId[] = [], n0 = s.size; let n = 0; try { n = mainlineCleared(); } catch { return []; }
-  for (const id of Object.keys(MECHANICS) as MechId[]) {
-    const m = MECHANICS[id]; if (s.has(id) || (where === 'map' && m.when !== 'after') || n < mechNeed(id)) continue;
-    if (n === mechNeed(id)) out.push(id); // 早就开放的（老存档、跳过的）静默记掉，不一次补播一串
-    s.add(id);
+  // 一次最多播 MECH_INTRO_CAP 个（第二章检查：2-1 原来一口气 4 张新玩法卡）：最近开放、本关开打的（when 'start'）优先，章后开放的（锦囊、军医）顺延到下一关 / 天下地图；
+  // 开放超过两关还没播的（老存档、跳过的）静默记掉，不一次补播一串
+  const ids = (Object.keys(MECHANICS) as MechId[]).filter(id => !s.has(id) && !(where === 'map' && MECHANICS[id].when !== 'after') && n >= mechNeed(id))
+    .sort((a, b) => mechNeed(b) - mechNeed(a) || (MECHANICS[a].when === 'start' ? 0 : 1) - (MECHANICS[b].when === 'start' ? 0 : 1)); // 最近开放的优先，同一关里本关开打的优先
+  for (const id of ids) {
+    if (n - mechNeed(id) > 2) { s.add(id); continue; } // 顺延最多两关（2-1 的锦囊 → 2-2、军医 → 2-3）
+    if (out.length >= MECH_INTRO_CAP) continue; // 顺延，不记已看
+    out.push(id); s.add(id);
   }
   if (s.size !== n0) try { localStorage.setItem(SEEN_KEY, JSON.stringify([...s])); } catch { /* ignore */ }
   return out;

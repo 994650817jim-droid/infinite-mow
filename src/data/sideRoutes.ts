@@ -47,7 +47,7 @@ export const SIDE_ROUTES: readonly SideRouteDef[] = [
     open: { arc: 'qunxiong', stages: 3, hint: '第三章「群雄割据」平定后开放' }, base: 'qunxiong',
     stages: [
       { name: '小沛', kind: 'siege', city: undefined, behavior: 1, scenery: 1, waves: ['小沛城外', '并州狼骑', '曹性守城'], story: '吕布夺了徐州，屯兵小沛。先拔小沛，断其羽翼。',
-        boss: B('caoxing', '曹性', '吕布部将', 'shu_yanghuai', 'phase23/lijue', 'yanghuai') },
+        boss: B('caoxing', '曹性', '吕布部将', 'side_caoxing', 'phase23/lijue', 'yanghuai') },
       { name: '辕门射戟', kind: 'field', behavior: 2, scenery: 2, waves: ['辕门前营', '陷阵营压阵', '高顺出阵'], story: '吕布辕门射戟，营前列阵。陷阵营攻无不克，先破高顺。',
         boss: B('gaoshun', '高顺', '陷阵营', 'side_gaoshun', 'guandu/yanliang', 'zhuran') },
       { name: '下邳', kind: 'siege', city: 'xiapi', behavior: 3, scenery: 4, waves: ['下邳外郭', '泗水决堤', '张辽守城'], story: '围下邳，决泗水。张辽据城而守，城破在即。',
@@ -74,7 +74,7 @@ export const SIDE_ROUTES: readonly SideRouteDef[] = [
       { name: '宛城旧地', kind: 'field', behavior: 2, scenery: 2, waves: ['宛城旧营', '虎卫军', '许褚出阵'], story: '宛城旧地，虎卫军拦路。许褚赤膊来战。',
         boss: B('xuchu', '许褚', '虎痴', 'side_xuchu', 'guandu/wenchou', 'zhuran') },
       { name: '许昌', kind: 'siege', city: 'xuchang', behavior: 3, scenery: 4, waves: ['许昌外城', '虎豹骑巡城', '乐进守城'], story: '天子所在，许都门户。乐进先登，誓守许昌。',
-        boss: B('yuejin', '乐进', '先登之将', 'third_lijue', 'phase23/lijue', 'lijue') },
+        boss: B('yuejin', '乐进', '先登之将', 'side_yuejin', 'phase23/lijue', 'lijue') },
       { name: '许都决战', kind: 'final', behavior: 1, scenery: 4, waves: ['许都城下', '虎豹骑出城', '曹操亲至'], story: '中原诸城尽下，曹操与夏侯惇出城决战。',
         boss: B('caocao', '曹操', '魏王', 'hanzhong_caocao', 'chibi/caoren', 'caocao', true),
         partner: B('xiahoudun', '夏侯惇', '独眼将军', 'side_xiahoudun', 'guandu/wenchou', 'xiahouyuan') },

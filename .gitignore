@@ -329,3 +329,5 @@ assets/raw/*
 !/tools/shot-attr-panel.mjs
 !/tools/test-attr-panel-view.mjs
 !/tools/test-stat-curve.mjs
+!/tools/gif-school-fx.mjs
+!/tools/test-vfx-tune.mjs

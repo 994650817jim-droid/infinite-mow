@@ -38,9 +38,12 @@ const rules = await p.evaluate(async () => {
     t('machao', { arc: { shu: 2 } }, { arc: { shu: 3 } }),
     t('lvbu', { top: { lubu: 1, persuaded: id => id === 'chengong' } }, { top: { persuaded: id => id === 'lubu' } }), // P2：打赢吕布不算，劝降吕布才来投
     t('zhangliao', { top: { persuaded: id => id === 'lubu' } }, { top: { persuaded: id => id === 'zhangliao' } }), // P2：劝降张辽才来投
+    t('zhouyu', { top: { persuaded: id => id === 'chengpu' } }, { top: { persuaded: id => id === 'zhouyu' } }), // P2：劝降周瑜才来投（程普先降只是前置）
+    t('taishici', { top: { persuaded: id => id === 'zhouyu' } }, { top: { persuaded: id => id === 'taishici' } }), // P2：劝降太史慈
+    t('mengde', { top: { persuaded: id => id === 'xiahoudun' } }, { top: { persuaded: id => id === 'caocao' } }), // P2：曹操归附（首领 id 仍是 caocao）
   ];
 });
-ck('各节点：诸葛亮第一章后、貂蝉第三章白门楼、黄月英 5-2、孙尚香 5-3、魏延 / 黄忠 6-3、庞统 7-1、马超 7-3、吕布 / 张辽劝降——差一步不解锁、到了就解锁', rules.every(r => !r.before && r.at), rules);
+ck('各节点：诸葛亮第一章后、貂蝉第三章白门楼、黄月英 5-2、孙尚香 5-3、魏延 / 黄忠 6-3、庞统 7-1、马超 7-3、吕布 / 张辽 / 周瑜 / 太史慈劝降、曹操归附——差一步不解锁、到了就解锁', rules.every(r => !r.before && r.at), rules);
 ck('貂蝉挑战线：「三英战吕布」赢一次就来投（先于白门楼）', rules[2].at && !rules[2].before, rules[2]);
 ck('黄忠保底：长沙打死（未放过）→ 第八章开放前伤愈来投', rules[7].at && !rules[7].before, rules[7]);
 

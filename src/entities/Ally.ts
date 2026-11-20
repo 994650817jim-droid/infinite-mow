@@ -16,6 +16,8 @@ export class Ally {
   private campaignHpMultiplier=1;
   applyCampaignHp(multiplier:number):void{const ratio=this.maxHp>0?this.hp/this.maxHp:1;this.campaignHpMultiplier=multiplier;this.maxHp=Math.round(this.def.hp*(1+.3*(this.level-1))*multiplier);this.hp=Math.min(this.maxHp,this.maxHp*ratio);}
   active = true; level = 1; hp = 1; maxHp = 1; cooldown = 0; hurtUntil = 0; bossImmuneUntil = 0; attackUntil = 0;
+  /** 太史慈「单骑突围」给的护盾：shieldUntil 前挨打先扣 shield（Legion.hurt）。 */
+  shield = 0; shieldUntil = 0;
   reserveSoldier=false;
   lifeId = 0; attackStarted = 0;
   /** 弓兵射击时目标在左侧（攻击表各行都朝右拉弓，向左射时需镜像）。 */

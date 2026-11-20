@@ -2,6 +2,8 @@ import { stopMenuMusic } from '../systems/Music';
 import { SCHOOL_TIER, SHI_SOURCES, FOLLOWER_SCHOOL, heroAffinity, type SchoolId } from '../data/schools';
 import { playSheet } from '../systems/SkillFxSheets';
 import { ZHANGLIAO } from '../data/zhangliao';
+import { TAISHICI } from '../data/taishici';
+import { MENGDE } from '../data/mengde';
 import { HeroCastFx } from '../systems/HeroCastFx';
 import { MOUNT_VISUAL, isHorseCavalry } from '../data/mounts';
 import { buildSettingsPanel, type SettingSpec } from '../ui/SettingsPanel';
@@ -816,6 +818,8 @@ export class GameScene extends Phaser.Scene {
     // 新存档开局无兵，第一波后招募；已开放主城的出征另应用军营与后备。
     this.allies = [];
     this.legion = new Legion(this, this.allies, this.player);
+    this.legion.onDeath = (_u, now) => { if (this.runConfig.character !== 'mengde') return; this.player.passive.onAllyDeath(now); this.player.heal(this.player.maxHp * (MENGDE.healPct + MENGDE.wangmei * this.player.growth.masteries.wangmei)); }; // 曹操「奸雄」
+    this.legion.onHurt = (u, now) => { if (Math.hypot(u.x - this.player.x, u.y - this.player.y) <= TAISHICI.allyR) this.player.passive.onAllyHurt(now); }; // 太史慈「信义」
     this.legion.attackSound = kind => { const k = TROOP_ATTACK_SFX[kind]; if (k) this.sfx.play(k); };
     // 战地免费招兵每波人数随章节增加（档位与掉落一致：一章 0 … 五章 4）
     this.legion.freeRecruitCount = FREE_RECRUIT_BY_TIER[Math.max(0, Math.min(FREE_RECRUIT_BY_TIER.length - 1, this.itemTier()))];
@@ -2274,6 +2278,9 @@ export class GameScene extends Phaser.Scene {
       draggingBladeWave: (angle, size, kind, hits) => scene.dragBladeFx().release(angle, size, kind, hits),
       rallyAllies: (fraction: number) => { for (const u of scene.allies) if (u.active) u.hp = Math.min(u.maxHp, u.hp + u.maxHp * fraction); },
       martialField: (...args) => scene.martialFields.add(...args),
+      shieldAllies: (ax, ay, bx, by, r, frac, until) => { const ux = bx - ax, uy = by - ay, len = Math.hypot(ux, uy) || 1; for (const u of scene.allies) { if (!u.active) continue; const t = Math.max(0, Math.min(1, ((u.x - ax) * ux + (u.y - ay) * uy) / (len * len))); if (Math.hypot(u.x - (ax + ux * t), u.y - (ay + uy * t)) > r) continue; u.shield = Math.max(u.shield, u.maxHp * frac); u.shieldUntil = Math.max(u.shieldUntil, until); } },
+      focusAllies: e => { scene.legion.focus = e; scene.legion.focusLife = e.spawnId; },
+      healAlliesIn: (x, y, r, frac) => { for (const u of scene.allies) if (u.active && Math.hypot(u.x - x, u.y - y) <= r) u.hp = Math.min(u.maxHp, u.hp + u.maxHp * frac); },
       hasteAllies: (x, y, r, dt, frac) => { for (const u of scene.allies) if (u.active && Math.hypot(u.x - x, u.y - y) <= r) u.cooldown = Math.max(0, u.cooldown - dt * frac); },
     };
   }
@@ -3113,7 +3120,7 @@ export class GameScene extends Phaser.Scene {
       // 水墨预览：标签统一朱砂底（类别色只在现版用）
       if (GameScene.INK_LEVELUP) view.tag.setBackgroundColor('#8a2a1c').setColor('#fff0d6'); else view.tag.setBackgroundColor(style.bg).setColor(style.color);
       const iconKey = option.kind === 'potion' ? 'icon_rare' : option.kind === 'weapon' ? ({
-        spear_orbit:'icon_1',crossbow:'icon_2',flame_banner:'icon_3',guandao:'icon_guandao',zhenbei_blade:'icon_zhenbei',lianhuan_mines:'icon_lianhuan',sun_knives:'icon_sunknives',diaochan_fans:'icon_fans',baodiao_bow:'icon_baodiao',dangyang_roar:'icon_shemao',zhanjin_lance:'icon_zhanjin',shuanggu_swords:'icon_shuanggu',fangtian_ji:'icon_fangtian',pozhen_shuangji:'icon_pozhen',huochuan_ling:'icon_huochuan',
+        spear_orbit:'icon_1',crossbow:'icon_2',flame_banner:'icon_3',guandao:'icon_guandao',zhenbei_blade:'icon_zhenbei',lianhuan_mines:'icon_lianhuan',sun_knives:'icon_sunknives',diaochan_fans:'icon_fans',baodiao_bow:'icon_baodiao',dangyang_roar:'icon_shemao',zhanjin_lance:'icon_zhanjin',shuanggu_swords:'icon_shuanggu',fangtian_ji:'icon_fangtian',pozhen_shuangji:'icon_pozhen',huochuan_ling:'icon_huochuan',donglai_ji:'icon_donglai',yitian_jian:'icon_yitian',
       } as const)[option.weaponId!] : option.weaponId === 'spear_orbit'
         ? 'icon_1'
         : option.weaponId === 'crossbow'

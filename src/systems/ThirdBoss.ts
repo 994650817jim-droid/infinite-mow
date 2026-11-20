@@ -1,4 +1,5 @@
 import { meleeReach } from '../data/bossReach';
+import { ensureBossTheme, playThemeFx, themeShake, type BossTheme } from './BossThemeFx';
 import Phaser from 'phaser';import{HINT_MOCK,keyOutline,keyLane}from'../ui/HintStyle';import{WARN_FX_ON}from'../ui/WarnFx';import type{Enemy}from'../entities/Enemy';import type{Player}from'../entities/Player';import type{Legion}from'./Legion';import type{EnemyKind}from'../types';import{THIRD_STAGES,type ThirdStage}from'../data/thirdChapter';import{warnCircle,warnLane,TELEGRAPH_CLASSIC,windupFlash}from'../ui/Telegraph';
 interface Host{scene:Phaser.Scene;boss:Enemy;player:Player;army:Legion;spawn:(kind:EnemyKind,x:number,y:number)=>Enemy|null;}
 interface Zone{x:number;y:number;angle:number;length:number;width:number;radius:number;due:number;done:boolean;}
@@ -9,7 +10,12 @@ export class ThirdBoss{
  readonly metrics={charge:0,command:0,thrust:0,ambush:0,flags:0,guards:0,rage:0,damage:0,signature:0};
  /** 绝技（第五章首领）：半血后立刻放一次，之后每三轮一次。 */
  private sigPending=false;private sigWait=0;private warnFrom=0;
- constructor(private h:Host,readonly stage:ThirdStage,now:number,private look?:{texture:string;name:string;skills?:[string,string,string];signature?:{id:'caochun'|'caimao'|'caoren';name:string}}){this.gfx=h.scene.add.graphics().setDepth(39);this.next=now+800;h.boss.controlImmune=true;}
+ constructor(private h:Host,readonly stage:ThirdStage,now:number,private look?:{texture:string;name:string;skills?:[string,string,string];signature?:{id:'caochun'|'caimao'|'caoren';name:string}}){this.gfx=h.scene.add.graphics().setDepth(39);this.next=now+800;h.boss.controlImmune=true;ensureBossTheme(h.scene,this.theme);}
+ /** 主题特效（BossThemeFx）：第三章 李傕 / 郭汜 = 血红刀气，张绣 = 枪芒；第五章 曹纯 = 尘土冲锋、蔡瑁 = 枪芒、曹仁 = 魏紫。 */
+ private get theme():BossTheme{const id=this.look?.signature?.id;return id==='caochun'?'dust':id==='caimao'?'lance':id==='caoren'?'wei':this.stage===2?'lance':'blood';}
+ private trailAt=0;
+ /** 区域结算那一刻在真实范围上补手绘冲击（圆形 = 落点爆，长条 = 冲锋 / 枪刺）；没图什么都不画。 */
+ private fx(z:Zone){const sc=this.h.scene,t=this.theme,ok=z.radius?playThemeFx(sc,t,{kind:'circle',x:z.x,y:z.y,r:z.radius}):playThemeFx(sc,t,{kind:'lane',x:z.x,y:z.y,angle:z.angle,len:z.length,width:z.width});if(ok)themeShake(sc,false);}
  forceSkill(now:number){this.state='approach';this.next=now;this.update(0,now);}
  get label(){const names=[...(this.look?.skills??(this.stage===1?['铁骑破阵','号令援军','军刀横扫']:this.stage===2?['连环枪击','突刺追击','伏兵包围']:['旗令轰击','亲军护驾','弓阵齐射']))];if(this.look?.signature)(names as string[])[3]='绝技 · '+this.look.signature.name;return this.state==='dead'?this.name+'负伤退走':this.state==='rage'?'军势强化 · 躲避下一轮':(this.state==='warn'?'预警 · ':this.state==='recover'?'收势 · 反击机会 · ':'')+names[this.skill];}
  get name(){return this.look?.name??THIRD_STAGES[this.stage-1].boss;}
@@ -46,8 +52,8 @@ export class ThirdBoss{
   const age=(this.skill===3?1300:1000)-(this.until-now),frames=[18,19,20,22,23];this.pose(frames[Math.min(4,Math.floor(age/160))]);
   const summon=this.skill!==3&&(this.stage===1&&this.skill===1||this.stage===2&&this.skill===2||this.stage===3&&this.skill===1);
   if(summon){this.zones.forEach((z,i)=>{if(z.done)return;z.done=true;this.h.spawn(this.stage===3?'shield':'infantry',z.x,z.y);if(this.phase2||this.stage===1)this.h.spawn(this.stage===1?'cavalry':'archer',z.x+25,z.y+18);});}
-  else if(this.skill!==3&&(this.skill===0&&this.stage===1||this.skill===1&&this.stage===2)){const z=this.zones[0],speed=this.phase2?430:360,step=Math.min(z.length-this.travelled,dt*speed);b.sprite.x+=Math.cos(z.angle)*step;b.sprite.y+=Math.sin(z.angle)*step;const segment={...z,x:b.x-Math.cos(z.angle)*step,y:b.y-Math.sin(z.angle)*step,length:step};this.impact(segment,now,this.stage===1?18:14,'charge');this.travelled+=step;this.gfx.lineStyle(3,0xd5b77f,.6).lineBetween(b.x-Math.cos(z.angle)*35,b.y-Math.sin(z.angle)*35,b.x,b.y);if(this.zones.length>1){const extra=this.zones[1];this.draw(extra,.2);if(age>250&&!extra.done){extra.done=true;this.h.spawn('cavalry',extra.x+Math.cos(extra.angle)*160,extra.y+Math.sin(extra.angle)*160);}}}
-  else this.zones.forEach((z,i)=>{if(age<z.due){this.draw(z,.15,age/Math.max(1,z.due));return;}if(!z.done){z.done=true;this.impact(z,now,this.stage===2?12:16,'hit'+i);}if(age-z.due<250){this.draw(z,.4);if(z.radius)for(let n=0;n<5;n++){const a=n*1.256;this.gfx.lineStyle(1.2,0xffdb99,.35).lineBetween(z.x+Math.cos(a)*10,z.y+Math.sin(a)*10,z.x+Math.cos(a)*z.radius,z.y+Math.sin(a)*z.radius);}}});
+  else if(this.skill!==3&&(this.skill===0&&this.stage===1||this.skill===1&&this.stage===2)){const z=this.zones[0],speed=this.phase2?430:360,step=Math.min(z.length-this.travelled,dt*speed);b.sprite.x+=Math.cos(z.angle)*step;b.sprite.y+=Math.sin(z.angle)*step;const segment={...z,x:b.x-Math.cos(z.angle)*step,y:b.y-Math.sin(z.angle)*step,length:step};this.impact(segment,now,this.stage===1?18:14,'charge');if(now>=this.trailAt){this.trailAt=now+90;playThemeFx(this.h.scene,this.theme,{kind:'puff',x:b.x-Math.cos(z.angle)*26,y:b.y-Math.sin(z.angle)*26+4,size:90},{ms:360,alpha:.75});}this.travelled+=step;this.gfx.lineStyle(3,0xd5b77f,.6).lineBetween(b.x-Math.cos(z.angle)*35,b.y-Math.sin(z.angle)*35,b.x,b.y);if(this.zones.length>1){const extra=this.zones[1];this.draw(extra,.2);if(age>250&&!extra.done){extra.done=true;this.h.spawn('cavalry',extra.x+Math.cos(extra.angle)*160,extra.y+Math.sin(extra.angle)*160);}}}
+  else this.zones.forEach((z,i)=>{if(age<z.due){this.draw(z,.15,age/Math.max(1,z.due));return;}if(!z.done){z.done=true;this.fx(z);this.impact(z,now,this.stage===2?12:16,'hit'+i);}if(age-z.due<250){this.draw(z,.4);if(z.radius)for(let n=0;n<5;n++){const a=n*1.256;this.gfx.lineStyle(1.2,0xffdb99,.35).lineBetween(z.x+Math.cos(a)*10,z.y+Math.sin(a)*10,z.x+Math.cos(a)*z.radius,z.y+Math.sin(a)*z.radius);}}});
   if(now>=this.until){this.state='recover';this.until=now+650;}
  }else if(this.state==='recover'){this.pose(23);if(now>=this.until){this.state='approach';this.next=now+(this.phase2?1000:1700);}}
  }

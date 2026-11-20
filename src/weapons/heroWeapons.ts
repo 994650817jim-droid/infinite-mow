@@ -10,7 +10,7 @@ import { SHOW_OWN_RANGE_FX } from '../ui/HintStyle';
 
 /**
  * 魏延「镇北环首刀」与庞统「凤雏连环令」两把专属本命武器（2026-11-15 重做，不再沿用关羽偃月刀 / 诸葛亮战旗）。
- * 魏延特效为程序化过渡（地裂纹、碎石），劈下瞬间沿用劈地序列帧；庞统 2026-11-16 改为方案 A「铁索连环」，见下方庞统段落。
+ * 魏延地裂纹 / 碎石 = 手绘序列帧 weiyan_crack（2026-11-17），缺图时才退回程序化地裂纹；庞统 2026-11-16 改为方案 A「铁索连环」，烧红铁索 pangtong_chain_hot 已有手绘图，缺图才退回程序化，见下方庞统段落。
  */
 /** 正式序列帧图集是否已加载（缺图时退回程序化特效）。 */
 export const hasFxSheet = (host: WeaponHost, sheet: string): boolean => (host.add as unknown as { scene: Phaser.Scene }).scene.textures.exists('hero_fx_' + sheet);

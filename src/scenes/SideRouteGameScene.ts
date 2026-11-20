@@ -120,6 +120,8 @@ export function sideGameSceneClass(Base: typeof GameScene, r: SideRouteDef) {
       if (r.base === 'guandu' || r.look === 'guandu') ensureYuanTextures(this, guanduYuanSourceKeys());
       super.create();
     }
+    /** 支线攻城关（kind siege）带上当前征程构筑（只读，打完不写回；2026-11-20）；野战 / 终局照旧空构筑。 */
+    protected inheritsCampaign(): boolean { return r.stages[((this.registry.get(cfg.stageKey) as number | undefined) ?? 1) - 1]?.kind === 'siege'; }
     protected dualSetup(first: BossMoveset): boolean {
       const d = r.stages[this.arcStage - 1], b = this.boss, p = d?.partner;
       if (!d || !p || !b || dualOff()) return false;

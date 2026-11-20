@@ -923,10 +923,12 @@ export class GameScene extends Phaser.Scene {
       this.events.on('postupdate',poll);}}
     const transfer = this.registry.get('campaignTransfer') as CampaignTransfer | undefined;
     this.registry.remove('campaignTransfer');
-    // 征程构筑：同章连打用内存里的 transfer；否则主线未通关的关读存档里的征程构筑（重打旧关 / 攻城 / 军情 / 挑战为空构筑）
+    // 征程构筑：同章连打用内存里的 transfer；否则主线未通关的关读存档里的征程构筑（重打旧关 / 挑战为空构筑）。
+    // 2026-11-20 用户「我发现攻城战之前的build没有了」（统筹定）：攻城 / 守城 / 军情 / 支线攻城关读当前主公的征程构筑但只读（inheritsCampaign）——
+    // campaignReplay 仍为真，所以打完不写回（存档点只在主线首次通关时更新），不会刷攻城滚雪球
     this.campaignReplay = !this.stableRewardKey() || stageCleared(this.stableRewardKey());
     const chained = transfer && this.chapter.id === transfer.chapter && this.runConfig.character === transfer.character ? transfer : undefined;
-    const carriedState = chained ?? (this.campaignReplay ? undefined : loadCampaignBuild(this.runConfig.character));
+    const carriedState = chained ?? (this.campaignReplay && !this.inheritsCampaign() ? undefined : loadCampaignBuild(this.runConfig.character));
     if (carriedState) {
       restoreCampaign(carriedState, this.player, this.legion);
       const ownId=getCharacter(this.runConfig.character).startWeapon;
@@ -3776,6 +3778,8 @@ export class GameScene extends Phaser.Scene {
   /** 道具掉落的品质段（0 一、二章 … 4 十一、十二章；乱世 +1）：品质表与封顶见 data/items.ts。也用于开局免费招兵数。 */
   protected itemTier(): number { return lootBand(this.lootChapter(), this.hardMode); }
   /** 马厩赠马用的关卡键（见 data/mounts.ts HORSES.reward）；章节场景覆盖，攻城 / 军情为空。 */
+  /** 只读继承征程构筑（攻城 / 守城 / 军情 / 支线攻城关覆盖为 true）：开打时读存档里的征程构筑，打完不写回。 */
+  protected inheritsCampaign(): boolean { return false; }
   protected stableRewardKey(): string | null {
     if (this.runConfig.encounter || this.customChapter()) return null;
     return this.chapter.id === 'huangjin' ? 'huangjin-' + (this.chapter.stage ?? 3) : this.chapter.id === 'hulao' ? 'hulao-' + (this.chapter.westStage ?? 3) : null;

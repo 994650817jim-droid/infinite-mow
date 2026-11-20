@@ -38,6 +38,8 @@ import {SIEGE_TIMER} from '../data/siegeTimer';
 export function siegeGameSceneClass(Base: typeof GameScene) {
   return class SiegeGameScene extends Base {
     protected achievementArc() { return this.defense ? 'defense' : 'siege'; }
+    /** 攻城 / 守城带上当前征程构筑（只读，打完不写回；2026-11-20 用户「攻城战之前的build没有了」）。 */
+    protected inheritsCampaign() { return true; }
     protected padTargets() { return this.enemyCamps?.padTargets() ?? []; }
     protected padClearTargets() { this.enemyCamps?.cancel(); }
     private city!: CityDef; private owner: FactionId = 'han'; private defense = false; private receipt = ''; private test = false;

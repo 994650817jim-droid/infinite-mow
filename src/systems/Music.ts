@@ -40,6 +40,17 @@ const MENU_PHRASES: Record<string, Phrase> = {
 const MENU_FORM: Array<string | null> = [null, null, 'm1', 'm2', 'm1', 'm4', null, 'm3', 'm5', 'm3', 'm2', 'm4', null, 'm1', 'm4', null];
 const MENU_ROOTS = [50, 50, 55, 55, 53, 57, 48, 50];
 export type MusicTheme = 'battle' | 'menu';
+/**
+ * 界面曲的「情绪」（2026-11-20 用户「检查界面bgm」）：同一首《营火望乡》的旋律，各界面换编制与速度——
+ * home 主页 / 选将 / 选关（原样）· map 天下地图（大气：慢、号角与合唱铺底、大鼓）· camp 营寨 / 城池（暖：拨弦八分、小鼓、远处人声嘈嘈与营火噼啪）·
+ * hall 招贤馆 / 名将堂（雅：古琴、箫、编钟，无鼓）· rest 战斗结算 / 战败退守（静：古琴 + 二胡，无鼓）。
+ * 换情绪时淡出 0.45 秒、换编制、淡入 0.9 秒；同一情绪再进不重来（共用一个实例，切界面不断音）。
+ */
+export type MenuMood = 'home' | 'map' | 'camp' | 'hall' | 'rest';
+export const MENU_MOODS: readonly MenuMood[] = ['home', 'map', 'camp', 'hall', 'rest'];
+const MOOD_BPM: Record<MenuMood, number> = { home: 72, map: 64, camp: 80, hall: 60, rest: 66 };
+/** 各情绪响度对齐（tools/test-audio.mjs 实测 12 秒 RMS 后定）：编制轻的抬一点，和主页相差 ≤ 2 dB。 */
+const MOOD_GAIN: Record<MenuMood, number> = { home: 1, map: .9, camp: 1.4, hall: 1.55, rest: 1.35 };
 
 export class Music {
   private ctx: BaseAudioContext | null = null;
@@ -57,6 +68,11 @@ export class Music {
   private intensity: 0 | 1 = 0;
   private volume = 0.4;
   private duck = 1;
+  /** 战斗里打开面板 / 暂停（舆图、升级、行营）时把音乐压到一半（setPaused）。 */
+  private pauseMul = 1;
+  /** 界面曲情绪（只对 menu 生效）。 */
+  mood: MenuMood = 'home';
+  private moodTimer: number | null = null;
   muted = false;
   private bpm: number;
   private stepDur: number; // 十六分音符
@@ -91,7 +107,19 @@ export class Music {
     }
   }
 
-  private level(): number { return this.muted ? 0 : this.volume * 0.55 * this.duck; }
+  private level(): number { return this.muted ? 0 : this.volume * 0.55 * this.duck * this.pauseMul * (this.theme === 'menu' ? MOOD_GAIN[this.mood] : 1); }
+  /** 暂停 / 打开面板：音乐压到一半（0.25 秒渐变）；关掉恢复。 */
+  setPaused(on: boolean): void { const m = on ? .5 : 1; if (m === this.pauseMul) return; this.pauseMul = m; this.applyGain(this.level(), .25); }
+  get pausedDuck(): boolean { return this.pauseMul < 1; }
+  /** 换界面曲情绪：没在播时直接换；在播时淡出 → 换编制、从乐段开头起 → 淡入。同一情绪不动。 */
+  setMood(mood: MenuMood, immediate = false): void {
+    if (this.theme !== 'menu' || mood === this.mood && this.moodTimer === null) return;
+    const apply = (): void => { this.mood = mood; this.bpm = MOOD_BPM[mood]; this.stepDur = 60 / this.bpm / 4; this.step = 0; };
+    if (this.moodTimer !== null) { window.clearTimeout(this.moodTimer); this.moodTimer = null; }
+    if (immediate || !this.playing || !this.ctx) { apply(); return; }
+    this.applyGain(0, .45 / 3);
+    this.moodTimer = window.setTimeout(() => { this.moodTimer = null; apply(); if (this.ctx) this.nextTime = Math.max(this.nextTime, this.ctx.currentTime + .05); this.applyGain(this.level(), .9 / 3); }, 480);
+  }
   /** 统一设置主音量：先取消排队中的渐变，避免直接赋值被忽略。 */
   private applyGain(value: number, smooth = 0): void { if (!this.master || !this.ctx) return; const p = this.master.gain, now = this.ctx.currentTime; p.cancelScheduledValues(now); if (smooth > 0) { p.setValueAtTime(p.value, now); p.setTargetAtTime(value, now, smooth); } else p.setValueAtTime(value, now); }
 
@@ -226,7 +254,7 @@ export class Music {
         this.nextTime += b.stepDur;
         continue;
       }
-      if (this.epic && this.theme === 'menu') { this.epic.menuStep(this.step, this.nextTime, this.stepDur, this.melodyAt, MENU_ROOTS, ARP); this.step++; }
+      if (this.epic && this.theme === 'menu') { this.epic.menuStep(this.step, this.nextTime, this.stepDur, this.melodyAt, MENU_ROOTS, ARP, this.mood); this.step++; }
       else if (this.epic) { this.epic.battleStep(this.step, this.nextTime, this.stepDur, this.intensity === 1); this.step++; }
       else { this.scheduleStep(this.step, this.nextTime); this.step = (this.step + 1) % 512; }
       this.nextTime += this.stepDur;
@@ -491,9 +519,10 @@ export function menuMusic(): Music {
   return menuInstance;
 }
 /** 在界面场景 create() 中调用：开始/续播界面曲；首次手势时解锁音频。 */
-export function playMenuMusic(scene: { events: { once(event: string, fn: () => void): unknown } }): void {
+export function playMenuMusic(scene: { events: { once(event: string, fn: () => void): unknown } }, mood: MenuMood = 'home'): void {
   const m = menuMusic();
   m.reloadPrefs();
+  m.setMood(mood, !m.playingState);
   if (!m.playingState) m.start();
   else { m.cancelFade(); m.setVolume(m.getVolume(), false); }
   const unlock = (): void => m.unlock();

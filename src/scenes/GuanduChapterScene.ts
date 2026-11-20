@@ -28,7 +28,7 @@ export class GuanduChapterScene extends Phaser.Scene {
   /** 已实装且已解锁（试炼模式下只要已实装）。 */
   private open(stage: number) { return stage <= GUANDU_PLAYABLE && (arcStagePlayable('guandu', stage) || isChapterTestRun()); }
   create() {
-    playMenuMusic(this);
+    playMenuMusic(this, 'map');
     if (!this.registry.get('battleReady')) { this.registry.set('pendingWarlord', 'GuanduChapterScene'); this.registry.set('loadBattle', true); this.scene.start('BootScene'); return; }
     this.cards = []; this.heroButtons = [];
     const desk = W > 600;

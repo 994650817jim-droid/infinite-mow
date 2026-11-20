@@ -25,7 +25,7 @@ async function open(stage, hero = 'zhaoyun') {
   await p.evaluate(S0 => {
     const g = window.__game, s = eval(S0); window.__S = s; s.player.damageImmune = true; for (let i = 0; i <= s.chapter.waves.length; i++) s.recruitedWaves.add(i); s.pendingRecruit = false;
     g.loop.sleep(); window.__T = performance.now(); s.readMove = () => new Phaser.Math.Vector2(0, 0);
-    window.__step = n => { for (let i = 0; i < n; i++) { if (s.mode !== 'none' && s.mode !== 'story' && s.mode !== 'rest' && s.mode !== 'result' && !s.over) { s.__DEV_ACTIONS?.closePopup?.(); if (s.mode === 'levelup') s.chooseUpgrade?.(0); if (s.mode !== 'none') s.setMode('none'); } window.__T += 1000 / 60; g.step(window.__T, 1000 / 60); } };
+    window.__step = n => { for (let i = 0; i < n; i++) { if (s.mode === 'parley' && s.parley?.choose) s.parley.choose('execute'); /* 首领 15% 劝降弹窗：选斩杀（2026-11-20） */ if (s.mode !== 'none' && s.mode !== 'story' && s.mode !== 'rest' && s.mode !== 'result' && !s.over) { s.__DEV_ACTIONS?.closePopup?.(); if (s.mode === 'levelup') s.chooseUpgrade?.(0); if (s.mode !== 'none') s.setMode('none'); } window.__T += 1000 / 60; g.step(window.__T, 1000 / 60); } };
     window.__clear = () => { for (const e of s.enemies) if (e.active && !e.isSupplySlot && e.kind !== 'boss') e.deactivate(); };
     window.__story = name => { let n = 0; for (let i = 0; i < 20; i++) { const c = s.children.getByName(name); if (!c) break; const hit = c.list.find(o => o.name === name + '-next' || o.name === name + '-confirm'); if (!hit) break; hit.emit('pointerup'); n++; window.__step(1); } return n; };
   }, S);
@@ -64,7 +64,7 @@ const killBoss = async p => {
   const p = await open(1);
   const s0 = await p.evaluate(() => ({ story: !!window.__S.children.getByName('xf-opening'), mode: window.__S.mode, wall: window.__S.sishuiObstacles.footprints.length }));
   await p.evaluate(() => window.__story('xf-opening'));
-  ck('9-1：章首卷轴（冻结战斗）；北面城墙碰撞框', s0.story && s0.mode === 'story' && s0.wall === 1, s0);
+  ck('9-1：章首卷轴（冻结战斗）；北面城墙碰撞框', s0.story && s0.mode === 'story' && s0.wall >= 1 /* 有边场地后另有场地边碰撞框（现 12 个） */, s0);
   const bk = await killBoss(p);
   const end = await p.evaluate(() => ({ over: window.__S.over, victory: window.__S.victory, mode: window.__S.mode }));
   await shot(p, '1-victory');

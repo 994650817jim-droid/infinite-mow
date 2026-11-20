@@ -148,8 +148,8 @@ export class OpeningScene extends Phaser.Scene {
     if (this.sound.locked) this.sound.once(Phaser.Sound.Events.UNLOCKED, () => this.startMusic()); else this.startMusic();
   }
   private startMusic(): void {
-    let vol = .4; try { vol = Number(localStorage.getItem('im_bgm_vol') ?? 40) / 100; } catch { /* 存储不可用 */ }
-    const play = () => { if (this.done || !this.sys.isActive()) return; this.music = this.sound.add(MUSIC_KEY, { volume: Phaser.Math.Clamp(vol, 0, 1) }); this.music.play({ seek: this.clock }); };
+    let vol = .4; try { vol = localStorage.getItem('im_music') === '0' ? 0 : Number(localStorage.getItem('im_bgm_vol') ?? 40) / 100; } catch { /* 存储不可用 */ }
+    const play = () => { if (this.done || !this.sys.isActive()) return; this.music = this.sound.add(MUSIC_KEY, { volume: Phaser.Math.Clamp(vol * .55, 0, 1) }); /* 界面 BGM 检查：原来按音量设置直接播，比游戏 BGM 响约 5 dB；× 0.55 与 Music.level 一致 */ this.music.play({ seek: this.clock }); };
     if (this.cache.audio.exists(MUSIC_KEY)) { play(); return; }
     fetch(MUSIC_URL, { method: 'HEAD' }).then(r => {
       if (!r.ok || !/audio|ogg|octet-stream/.test(r.headers.get('content-type') ?? '') || this.done) return;

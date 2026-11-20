@@ -316,11 +316,11 @@ export const BOSS_MOVES: Record<string, BossMovesetDef> = {
       { kind: 'summon', name: '益州援兵', windupMs: 800, cd: 9000, dmg: 0, troop: 'infantry', count: 5, radius: 260, around: 'player' },
     ] },
   },
-  // 9-1 曹仁（樊城守将，不骑；第五章有专属八门金锁控制器，这里用章节键单配）：白耳精兵 + 大刀 →「城门死守」：盾兵护体
+  // 9-1 曹仁（樊城守将，不骑；第五章有专属八门金锁控制器，这里用章节键单配）：樊城精兵 + 大刀 →「城门死守」：盾兵护体
   'xiangfan.caoren': {
     id: 'caoren', name: '曹仁', phaseAt: .5,
-    p1: { name: '樊城守将', caption: '白耳精兵 · 坚守', gapMs: 2500, speedMul: 1, moves: [
-      { kind: 'summon', name: '白耳精兵', windupMs: 900, cd: 8500, dmg: 0, troop: 'infantry', count: 6, radius: 230, around: 'player' },
+    p1: { name: '樊城守将', caption: '樊城精兵 · 坚守', gapMs: 2500, speedMul: 1, moves: [
+      { kind: 'summon', name: '樊城精兵', windupMs: 900, cd: 8500, dmg: 0, troop: 'infantry', count: 6, radius: 230, around: 'player' },
       { kind: 'sweep', name: '大刀横扫', windupMs: 650, cd: 3400, dmg: 1.3, r: 130, arc: Math.PI * .9 },
     ] },
     p2: { name: '城门死守', caption: '盾兵护体时曹仁减伤 · 先破盾阵', gapMs: 2100, speedMul: .95, guards: { troop: 'shield', count: 5, takenMul: .35 }, moves: [

@@ -329,3 +329,4 @@ assets/raw/*
 !/tools/shot-attr-panel.mjs
 !/tools/test-attr-panel-view.mjs
 !/tools/test-stat-curve.mjs
+!/tools/render-ui-bgm.mjs

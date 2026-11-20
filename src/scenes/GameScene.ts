@@ -1,4 +1,4 @@
-import { stopMenuMusic } from '../systems/Music';
+import { playMenuMusic, stopMenuMusic } from '../systems/Music';
 import { SCHOOLS, SCHOOL_TIER, SHI_SOURCES, FOLLOWER_SCHOOL, heroAffinity, type SchoolId } from '../data/schools';
 import { playSheet } from '../systems/SkillFxSheets';
 import { ZHANGLIAO } from '../data/zhangliao';
@@ -93,6 +93,7 @@ import { RESULT_GOLD, RESULT_IVORY, RESULT_STROKE, buildRewardView, parseHeroLin
 import { loadBagArt } from '../ui/ItemQuality';
 import { bagBundle, type BagBundle } from '../ui/BagBundleButton';
 import { HeroStatusFrame } from '../ui/HeroStatusFrame';
+import { BossHud } from '../ui/BossHud';
 import type { EnemyDef } from '../data/enemies';
 import { WEAPON_META, weaponName, buildUpgradeOptions, canOfferRejuvenation } from '../data/upgrades';
 import { waveIndexAt } from '../data/waves';
@@ -393,7 +394,8 @@ export class GameScene extends Phaser.Scene {
   /** 武将出招起手特效（systems/HeroCastFx.ts） */
   heroCastFx?: HeroCastFx;
   /** 首领血条换人时淡入（bossBarKey = 当前显示的是谁）。 */
-  private bossBarKey = ''; private bossBarAt = 0;
+  /** 首领血条（ui/BossHud.ts，每帧画）。 */
+  bossHud?: BossHud;
   barksMuted():boolean{return !!this.cutscene?.active||performance.now()-this.cutsceneEndedAt<1000;}
   /** 播过场：战斗暂停（story 模式）、HUD 藏起；剧情设置关掉时不播，返回 false（调用方走原来的演出）。播完或跳过都回调 done。 */
   playCutscene(script:CutsceneScript,anchors:CutHost['anchors'],done:(skipped:boolean)=>void):boolean{
@@ -1244,6 +1246,7 @@ export class GameScene extends Phaser.Scene {
     this.battlefieldDetails.update(this.cameras.main.scrollX, this.cameras.main.scrollY);
     this.hudAcc += dt;
     this.updateHud();
+    this.updateBossHud();
     // 被动满层台词每帧检测（HUD 0.1 秒一刷，孙尚香这类攒满后马上触发的会漏掉）
     this.passiveShout.update(this.player.passive, this.combatNow, this.player.x, this.player.y, this.mode === 'none' && !this.over, this.player.sprite);
     this.statusFrame?.update({ hp: this.player.hp, maxHp: this.player.maxHp, xp: this.player.xp, xpNext: this.player.xpNext, level: this.player.level, over: this.player.level >= this.player.softLevel, now: this.time.now, hpText: this.hudTexts?.hp, badge: this.hudAttrBadge ??= (this.children.getByName('hud-attr-badge') as Phaser.GameObjects.Image | null) ?? undefined });
@@ -3018,6 +3021,7 @@ export class GameScene extends Phaser.Scene {
     if(mode!=='pause')this.children.getByName('build-panel')?.destroy();if(mode!=='pause')this.children.getByName('item-bag')?.destroy();
     const canPlay = mode === 'none' && !this.over;
     this.time.paused = !canPlay;
+    if (!this.over) this.music?.setPaused(mode !== 'none'); // 界面 BGM 检查：暂停 / 升级 / 招募 / 舆图 / 行营面板打开时战斗曲压到一半
     if (canPlay) this.tweens.resumeAll();
     else this.tweens.pauseAll();
     if (canPlay && this.pendingGrowthNotices.length) this.showGrowthNotice(this.pendingGrowthNotices.shift()!);
@@ -4204,6 +4208,8 @@ export class GameScene extends Phaser.Scene {
     if(victory&&this.chapter.stage===3)this.finaleFadeMs=800;
     this.feedback.clearAttacks();
     if (!jingle) { if (victory) this.sfx.win(); else this.sfx.lose(); }
+    // 界面 BGM 检查：结算 / 战败退守原来短曲（约 4 秒）后就没声了——短曲之后接界面曲「静」（古琴 + 二胡），回营寨 / 地图时同一实例淡入换情绪
+    this.music.setPaused(false); this.time.delayedCall(jingle ? 4400 : 300, () => { if (this.over && this.sys.isActive()) playMenuMusic(this, 'rest'); });
     this.cameras.main.flashEffect.reset();this.cameras.main.shakeEffect.reset();
     this.setMode('result');
     const stats: RunStats = {
@@ -4397,6 +4403,7 @@ export class GameScene extends Phaser.Scene {
     attrBadge(this, 196, 31, this.runConfig.character, 20, { scrollFactor: 0, depth: DEPTH.hud + 2 })?.setName('hud-attr-badge'); // 主将主属性印（ui/AttrBadge.ts）
     // 2026-11-19 用户「这里ui做一下」：电脑版左上换成漆金状态框（头像 / 名字 + 等级印 + 主属性印 / 铜框朱红血条 + 残血拖尾 / 细金经验条）；
     // 旧的「赵云 Lv.N」文字留作数据（测试读），不再显示；HP 数字摆进新血条中央
+    this.bossHud?.destroy(); this.bossHud = new BossHud(this, DEPTH.hud, { name: this.hudTexts.boss, pct: this.hudTexts.bossHp, status: this.hudTexts.bossEnergy }); this.events.once('shutdown', () => { this.bossHud?.destroy(); this.bossHud = undefined; });
     this.hudAttrBadge = undefined; if (IS_DESKTOP) { this.statusFrame?.destroy(); this.statusFrame = new HeroStatusFrame(this, this.runConfig.character, getCharacter(this.runConfig.character).name, DEPTH.hud); this.events.once('shutdown', () => { this.statusFrame?.destroy(); this.statusFrame = undefined; }); }
     this.hudTexts.details = this.add.text(GAME_WIDTH - 24, 94, '战况 ▾', style(13, '#dfcfab'))
       .setOrigin(1,0).setFixedSize(96,62).setAlign('center').setPadding(10,12).setScrollFactor(0).setDepth(DEPTH.hud+1)
@@ -4532,53 +4539,42 @@ export class GameScene extends Phaser.Scene {
     const tokens = wornTokens(this.runConfig.character), sets = this.charmInfo ? (Object.keys(this.charmInfo.schools) as CharmSchool[]).filter(sc => this.charmInfo!.schools[sc] >= 2) : [];
     this.hudTexts.relics.setText(tokens.length ? !IS_DESKTOP && !this.relicExpanded ? `信物 ${tokens.length}  · 点按展开` : `信物 ${tokens.map(t => charmDef(t.base)?.name ?? itemName(t)).join(' · ')}${sets.map(sc => `  ${CHARM_SCHOOL_NAMES[sc]}套装 ${CHARM_SET_DESC[sc]}`).join('')}` : '');
 
-    // 双首领：屏幕下方两条并排（DualBoss.drawHud）
-    if (this.dual?.hudActive) { this.hintText?.setVisible(false); this.hudTexts.boss.setVisible(false); this.hudTexts.bossHp.setVisible(false); this.hudTexts.bossEnergy.setVisible(false); this.dual.drawHud(g, COLORS.red, WAR.danger); return; }
-    this.dual?.hideHud();
+  }
+
+  /**
+   * 首领血条（每帧；2026-11-20 用户「还有ui boss血条优化一下」→ ui/BossHud.ts 漆金框 + 圆形头像 + 称号印 + 铜框朱红血条 + 半血刻度 + 破势细金条）。
+   * 名字 / 百分比 / 状态仍用 hudTexts.boss / bossHp / bossEnergy（各关子类在 update 末尾改 bossEnergy 文字，测试也读）。
+   */
+  protected updateBossHud(): void {
+    const hud = this.bossHud; if (!hud || !this.hudTexts) return;
+    const overlay = this.mode !== 'none', rn = performance.now();
+    hud.setVisible(!overlay);
+    if (overlay) { this.dual?.hideHud(); hud.hideDual(); for (const t of [this.hudTexts.boss, this.hudTexts.bossHp, this.hudTexts.bossEnergy]) t.setVisible(false); return; }
+    // 双首领：屏幕下方两块并排（DualBoss.drawHud → BossHud.drawDualPanel）
+    if (this.dual?.hudActive) { this.hintText?.setVisible(false); this.hudTexts.boss.setVisible(false); this.hudTexts.bossHp.setVisible(false); this.hudTexts.bossEnergy.setVisible(false); hud.update(null, rn, true); this.dual.drawHud(hud, COLORS.red, WAR.danger); return; }
+    this.dual?.hideHud(); hud.hideDual();
     // 本关首领未击败、战线已推进时，追兵首领的血条继续显示（用户反馈血条不应消失）
     const chaser = this.boss?.active ? null : this.chasingBosses.find(t => t.enemy.active && t.enemy.spawnId === t.life) ?? null;
     const dzLb = this.dzLubu?.lubuFocus ?? null; // 2-3：吕布跃下后血条给吕布（逃走前锁在 1/3）
-    // 用户「董卓吕布出来之前不要显示血条」：两人站在城头（打不到）时不显示首领血条；吕布跃下起显示吕布、董卓下城后显示董卓（换人时淡入）
+    // 用户「董卓吕布出来之前不要显示血条」：两人站在城头（打不到）时不显示首领血条；吕布跃下起显示吕布、董卓下城后显示董卓（换人时框重新展开）
     const boss = dzLb ?? (this.dzLubu?.hidesBossBar ? null : this.boss?.active ? this.boss : chaser?.enemy ?? null);
-    const barKey = boss ? (dzLb ? 'lb' : 'b') + boss.spawnId : '';
-    if (barKey !== this.bossBarKey) { this.bossBarKey = barKey; this.bossBarAt = performance.now(); }
-    const fk = Math.min(1, (performance.now() - this.bossBarAt) / 380); // 首领血条淡入
-    for (const t of [this.hudTexts.boss, this.hudTexts.bossHp, this.hudTexts.bossEnergy]) t.setAlpha(fk);
     if (boss && boss.active) {
-      const barW = Math.min(440, GAME_WIDTH * 0.9);
-      const left = (GAME_WIDTH - barW) / 2;
-      const barY = GAME_HEIGHT - 68;
       const ratio = Phaser.Math.Clamp(boss.hp / boss.maxHp, 0, 1);
       this.hintText?.setVisible(false);
-      this.hudTexts.boss.setVisible(true).setPosition(left, barY - 24).setText(dzLb ? '吕布' : chaser ? chaser.name + ' · 追兵' : this.chapter.bossName);
-      const hpLabel = !chaser && !dzLb && this.bossShield > 0 ? `${Math.round(ratio * 100)}% 🛡${Math.round(this.bossShield)}` : `${Math.round(ratio * 100)}%`;
-      this.hudTexts.bossHp.setVisible(true).setPosition(left + barW, barY - 24).setText(hpLabel);
+      this.hudTexts.boss.setText(dzLb ? '吕布' : chaser ? chaser.name + ' · 追兵' : this.chapter.bossName);
+      this.hudTexts.bossHp.setText(!chaser && !dzLb && this.bossShield > 0 ? `${Math.round(ratio * 100)}% · 盾 ${Math.round(this.bossShield)}` : `${Math.round(ratio * 100)}%`);
       const stageBoss=!!chaser||!!dzLb||!!this.xurong||!!this.huaxiong||!!this.chapter.stage&&this.chapter.stage<3;
       const energy = this.lubu ? this.lubu.energy : this.bossEnergy;
-      this.hudTexts.bossEnergy.setVisible(!chaser).setPosition(left + barW, barY + 31)
-        .setText(dzLb?(this.dzLubu?.phase==='fleeing'?'吕布败走':'打到三分之一，吕布败走'):this.zhangjiao?this.zhangjiao.label:this.xurong?this.xurong.label+' · 推进 '+Math.max(0,Math.ceil(90-(this.combatNow-this.firstBossAt)/1000))+'秒':this.huaxiong?this.huaxiong.label+' · 推进 '+Math.max(0,Math.ceil(90-(this.combatNow-this.firstBossAt)/1000))+'秒':this.lubu ? `${this.lubu.phase2 ? `魔神 ${Math.floor(energy)}%` : '半血解锁大招'} · ${this.lubu.statusLabel}` : stageBoss?`${this.moveset?.wardInfo?this.moveset.wardInfo+' · 先打碎符柱 · ':''}${boss.hp<=boss.maxHp*.5?'半血强化 · ':''}${this.battleStage()<3?'战线推进倒计时 '+Math.max(0,Math.ceil(90-(this.combatNow-this.firstBossAt)/1000))+'秒':'注意地裂与环形预警'}`:`⚡ ${Math.floor(energy)}%`);
-      g.fillStyle(0x000000, 0.72 * fk);
-      g.fillRect(left, barY, barW, 12);
+      if (this.hudAcc === 0 || this.hudTexts.bossEnergy.text === '') this.hudTexts.bossEnergy.setVisible(!chaser)
+        .setText(dzLb?(this.dzLubu?.phase==='fleeing'?'吕布败走':'打到三分之一，吕布败走'):this.zhangjiao?this.zhangjiao.label:this.xurong?this.xurong.label+' · 推进 '+Math.max(0,Math.ceil(90-(this.combatNow-this.firstBossAt)/1000))+'秒':this.huaxiong?this.huaxiong.label+' · 推进 '+Math.max(0,Math.ceil(90-(this.combatNow-this.firstBossAt)/1000))+'秒':this.lubu ? `${this.lubu.phase2 ? `魔神 ${Math.floor(energy)}%` : '半血解锁大招'} · ${this.lubu.statusLabel}` : stageBoss?`${this.moveset?.wardInfo?this.moveset.wardInfo+' · 先打碎符柱 · ':''}${boss.hp<=boss.maxHp*.5?'半血强化 · ':''}${this.battleStage()<3?'战线推进倒计时 '+Math.max(0,Math.ceil(90-(this.combatNow-this.firstBossAt)/1000))+'秒':'注意地裂与环形预警'}`:`大招蓄力 ${Math.floor(energy)}%`);
       // 白色残血条：受击的那一截先显示成白色，停一下再慢慢缩到当前血量（按真实时间，不跟顿帧慢动作走）
-      { const rn = performance.now(), dtr = Math.min(.25, (rn - (this.lastHudReal || rn)) / 1000); this.lastHudReal = rn; this.bossStagger.track(boss.spawnId, ratio); const tr = this.bossStagger.trailRatio(ratio, rn, dtr);
-        if (tr > ratio) { g.fillStyle(0xfff4e0, 0.92 * fk); g.fillRect(left + 2 + (barW - 4) * ratio, barY + 2, (barW - 4) * (tr - ratio), 8); } }
-      g.fillStyle(COLORS.red, 0.95 * fk);
-      g.fillRect(left + 2, barY + 2, Math.max(0, (barW - 4) * ratio), 8);
-      if (!chaser && !dzLb && this.bossShield > 0) {
-        const sr = Math.min(1, this.bossShield / 300);
-        g.fillStyle(0x66d9ff, 0.9);
-        // 独立细盾条，不与生命段拼接后溢出容器。
-        g.fillRect(left + 2, barY + 11, (barW - 4) * sr, 3);
-      }
-      if(!stageBoss){g.fillStyle(0x1a1020, 0.85);
-      g.fillRect(left, barY + 18, barW, 7);
-      g.fillStyle(WAR.gold, 0.95);
-      g.fillRect(left, barY + 18, Math.max(0, barW * (energy / 100)), 7);}
+      const dtr = Math.min(.25, (rn - (this.lastHudReal || rn)) / 1000); this.lastHudReal = rn; this.bossStagger.track(boss.spawnId, ratio);
+      const trail = this.bossStagger.trailRatio(ratio, rn, dtr);
+      const id = dzLb ? 'lubu' : chaser ? ({ 张梁: 'zhangliang', 张宝: 'zhangbao', 华雄: 'huaxiong', 徐荣: 'xurong' } as Record<string, string>)[chaser.name] ?? '' : this.chapter.bossStyle;
+      hud.update({ id, name: this.hudTexts.boss.text, ratio, trail, stagger: this.bossStagger.value / BOSS_FEEL.staggerMax, breaks: this.bossStagger.breaks, shield: !chaser && !dzLb && this.bossShield > 0 ? Math.min(1, this.bossShield / 300) : 0 }, rn);
     } else {
       this.hintText?.setVisible((this.elapsed < 8 || this.relicExpanded) && !this.tutorial?.active); // 新手引导在时不叠旧操作提示
-      this.hudTexts.boss.setVisible(false);
-      this.hudTexts.bossHp.setVisible(false);
-      this.hudTexts.bossEnergy.setVisible(false);
+      hud.update(null, rn);
     }
   }
 

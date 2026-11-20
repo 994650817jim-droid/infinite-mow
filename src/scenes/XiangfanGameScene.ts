@@ -20,7 +20,7 @@ import { markSurrender, surrenderLive } from '../systems/SurrenderStore';
 
 /**
  * 第九章 · 襄樊之战（数据 data/xiangfanChapter.ts）。三关沿用第三章篇章框架（关间军营、首领招式组、倒地 → 宝箱）。
- * 9-1 樊城：围城（城墙在北，白耳精兵）；9-2 水淹七军：洪水（systems/Flood.ts），庞德半血抬棺狂暴；9-3 麦城突围：限时冲出口（systems/Breakout.ts），吕蒙拦截。
+ * 9-1 樊城：围城（城墙在北，樊城精兵）；9-2 水淹七军：洪水（systems/Flood.ts），庞德半血抬棺狂暴；9-3 麦城突围：限时冲出口（systems/Breakout.ts），吕蒙拦截。
  * 剧情卷轴：章首（9-1）、水淹七军开场、章末（9-3 突围成功，主将是关羽时改写）。
  */
 function xfScenery(scene: Phaser.Scene, stage: number) {

@@ -120,14 +120,22 @@ export function drawQualityArt(scene: Phaser.Scene, c: Phaser.GameObjects.Contai
   // 2026-11-19 用户「行囊做成行囊的样子」：格子是缝在包袱布上的口袋（行囊格赭黄、穿戴槽靛青）；品质改成口袋内一圈品质色针脚 + 右上角品质宝石（白无宝石）
   const pocket = o.slot ? bagArt(scene, 'pocket_slot') ?? bagArt(scene, 'pocket') : bagArt(scene, 'pocket');
   if (pocket) {
-    c.add(scene.add.image(0, 0, pocket).setDisplaySize(size, size));
-    if (q && q !== 'white') {
-      const col = QUALITIES[q].color, g = scene.add.graphics().setName('item-quality-frame'), r = size / 2 - size * .13, dash = size * .07;
-      g.fillStyle(col, .14).fillRect(-r, -r, r * 2, r * 2);
-      g.lineStyle(Math.max(1.5, size * .04), col, .95);
-      for (const [x0, y0, x1, y1] of [[-r, -r, r, -r], [r, -r, r, r], [r, r, -r, r], [-r, r, -r, -r]] as const) { const len = Math.hypot(x1 - x0, y1 - y0), n = Math.floor(len / (dash * 2)); for (let k = 0; k < n; k++) { const t0 = (k * 2 + .5) * dash / len, t1 = Math.min(1, t0 + dash / len); g.lineBetween(x0 + (x1 - x0) * t0, y0 + (y1 - y0) * t0, x0 + (x1 - x0) * t1, y0 + (y1 - y0) * t1); } }
+    // 2026-11-20 用户「这里背包ui的装备没有特别清晰」：有物品的格子 = 立体（底下一层投影、顶边一线高光）、麻布底纹压淡、整格按品质淡色渐变、
+    // 实线品质描边加粗（紫 / 橙再加一圈内发光）、图标下一团柔和暗底把图标托出来；去掉右上角小宝石点。空格（q 为空）照旧。
+    const hs = size / 2, r = hs - 2;
+    if (q) { const sh = scene.add.graphics(); sh.fillStyle(0x000000, .38).fillRoundedRect(-hs + 2, -hs + 3, size, size, 6); c.add(sh); }
+    c.add(scene.add.image(0, 0, pocket).setDisplaySize(size, size).setAlpha(q ? .55 : 1));
+    if (q) {
+      const col = q === 'white' ? 0xcfc6b2 : QUALITIES[q].color, top = q === 'white' ? .16 : .42, bottom = q === 'white' ? .05 : .12, g = scene.add.graphics();
+      g.fillStyle(0x1a120a, .35).fillRect(-r, -r, r * 2, r * 2);
+      g.fillGradientStyle(col, col, col, col, top, top, bottom, bottom).fillRect(-r, -r, r * 2, r * 2);
+      g.lineStyle(1, 0xffffff, .2).lineBetween(-r + 4, -r + 1.5, r - 4, -r + 1.5);
+      g.fillStyle(0x000000, .2).fillCircle(0, 1, size * .4).fillStyle(0x000000, .16).fillCircle(0, 1, size * .32);
       c.add(g);
-      const gem = bagArt(scene, 'gem_' + q); if (gem) c.add(scene.add.image(size / 2 - size * .15, -size / 2 + size * .15, gem).setDisplaySize(size * .26, size * .26));
+      const fr = scene.add.graphics().setName('item-quality-frame');
+      if (q === 'purple' || q === 'orange') for (let k = 1; k <= 4; k++) fr.lineStyle(2, col, .34 - k * .07).strokeRoundedRect(-r + k * 2, -r + k * 2, (r - k * 2) * 2, (r - k * 2) * 2, 4);
+      fr.lineStyle(Math.max(2, size * .055), col, q === 'white' ? .7 : 1).strokeRoundedRect(-r, -r, r * 2, r * 2, 5);
+      c.add(fr);
     }
     if (o.selected) c.add(scene.add.graphics().lineStyle(2.5, 0xffe7a0, 1).strokeRoundedRect(-size / 2 + 2, -size / 2 + 2, size - 4, size - 4, 4));
     return true;
@@ -137,6 +145,19 @@ export function drawQualityArt(scene: Phaser.Scene, c: Phaser.GameObjects.Contai
   return true;
 }
 
+/**
+ * 清晰图标（2026-11-20「装备没有特别清晰」）：图集帧 128 像素，格子里只显示 40–50 像素，WebGL 无 mipmap 一次缩 3 倍会发糊 / 闪锯齿；
+ * 先用画布高质量插值缩到 96 存一份（键 crisp96:<key>:<frame>），显示时再缩 ~1.5 倍就清楚了。画布不可用时返回 null（用原图）。
+ */
+export function crispIcon(scene: Phaser.Scene, key: string, frame?: string): string | null {
+  const ck = 'crisp96:' + key + ':' + (frame ?? ''); if (scene.textures.exists(ck)) return ck;
+  try {
+    const f = scene.textures.getFrame(key, frame); const src = f?.source?.image as CanvasImageSource | undefined; if (!f || !src) return null;
+    const N = 96, t = scene.textures.createCanvas(ck, N, N); if (!t) return null; const ctx = t.getContext();
+    ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
+    const w = f.cutWidth, h = f.cutHeight, k = Math.min(N / w, N / h); ctx.drawImage(src, f.cutX, f.cutY, w, h, (N - w * k) / 2, (N - h * k) / 2, w * k, h * k); t.refresh(); return ck;
+  } catch { return null; }
+}
 /** 道具小图块（品质框 + 图标 + 名器星），返回容器；size 为边长。 */
 export function itemTile(scene: Phaser.Scene, x: number, y: number, size: number, item: ItemInstance | null, slotHint?: IconSlot, o: { hover?: boolean; selected?: boolean; slot?: boolean } = {}): Phaser.GameObjects.Container {
   ensureItemTextures(scene);
@@ -144,10 +165,12 @@ export function itemTile(scene: Phaser.Scene, x: number, y: number, size: number
   if (!art) { const g = scene.add.graphics(); drawQualityFrame(g, -size / 2, -size / 2, size, size, item?.quality ?? null, o); c.add(g); }
   const slot = item ? itemSlot(item) : slotHint;
   // 厚涂框边较宽，图标缩到框内（.7）；程序框沿用原比例
-  if (item) { const ic = itemIcon(scene, item), k = art ? (ic.art ? .7 : .6) : ic.art ? .84 : .72; const img = scene.add.image(0, 0, ic.key, ic.frame).setDisplaySize(size * k, size * k).setName('item-icon').setData('art', ic.art); if (art) c.addAt(img, 1); else c.add(img); }
+  if (item) { const ic = itemIcon(scene, item), k = art ? (ic.art ? .8 : .62) : ic.art ? .84 : .72, ck = ic.art ? crispIcon(scene, ic.key, ic.frame) : null;
+    const img = (ck ? scene.add.image(0, 0, ck) : scene.add.image(0, 0, ic.key, ic.frame)).setDisplaySize(size * k, size * k).setName('item-icon').setData('art', ic.art);
+    const fr = c.getByName('item-quality-frame'); if (art && fr) c.addAt(img, c.getIndex(fr)); else if (art) c.addAt(img, 1); else c.add(img); }
   else if (slot) { const sil = art && bagArt(scene, 'sil_' + slot); c.add(sil ? scene.add.image(0, 0, sil).setDisplaySize(size * .62, size * .62).setAlpha(.42) : scene.add.image(0, 0, itemIconKey(slot)).setDisplaySize(size * .72, size * .72).setAlpha(.22)); }
   // 首领遗珍：右下角「珍」字
-  if (item && relicDef(item.base)) c.add(scene.add.text(size / 2 - 3, size / 2 - 3, '珍', { fontFamily: 'serif', fontSize: Math.max(10, Math.round(size * .2)) + 'px', color: '#2a1606', backgroundColor: '#f3c66acc', resolution: 2 }).setOrigin(1, 1).setPadding(2, 0).setName('item-relic-badge'));
+  if (item && relicDef(item.base)) c.add(scene.add.text(size / 2 - 2, size / 2 - 2, '珍', { fontFamily: 'serif', fontSize: Math.max(12, Math.round(size * .2)) + 'px', fontStyle: 'bold', color: '#2a1606', backgroundColor: '#e9b64e', resolution: 2 }).setOrigin(1, 1).setPadding(3, 1).setName('item-relic-badge'));
   if (item?.special) c.add(scene.add.text(size / 2 - 4, -size / 2 + 2, '★', { fontFamily: 'serif', fontSize: Math.round(size * .26) + 'px', color: '#ffd27a', resolution: 2 }).setOrigin(1, 0));
   return c;
 }

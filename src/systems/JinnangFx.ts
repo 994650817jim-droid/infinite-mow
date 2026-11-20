@@ -4,7 +4,7 @@ import type { Enemy } from '../entities/Enemy';
 import type { JinnangId } from './LevelCards';
 import { vfxFrame } from './BuildVfx';
 /** 激活爆发放大 / 放慢（2026-11-20 用户「流派特效太小太快」）：尺寸 ×1.3、时长 ×1.5，首帧淡入、尾段淡出、峰值帧停留。 */
-const BURST_SIZE = 1.3, BURST_MS = 1.5;
+const BURST_SIZE = 1.1, BURST_MS = 1.2;
 
 /**
  * 锦囊激活特效（2026-11-19 用户「关于流派和道具特效做一下」）：8 个锦囊原来只有横幅 + 音效（只有火计有画面）。
@@ -44,7 +44,7 @@ export class JinnangFx {
     if (this.live >= JINNANG_FX.cap) return;
     this.live++;
     const sz = b.size * BURST_SIZE, img = this.scene.add.image(x, y - 6, b.key, b.row * 6).setDisplaySize(sz, sz).setAlpha(0).setDepth(DEPTH.fx + 2).setName('jinnang-fx');
-    this.scene.tweens.addCounter({ from: 0, to: 1, duration: b.ms * BURST_MS, onUpdate: tw => { const t = tw.getValue() ?? 0; img.setFrame(b.row * 6 + vfxFrame(t)).setAlpha(.85 * Math.min(1, t / .12) * (t < .75 ? 1 : (1 - t) / .25)); }, onComplete: () => { this.live--; img.destroy(); } });
+    this.scene.tweens.addCounter({ from: 0, to: 1, duration: b.ms * BURST_MS, onUpdate: tw => { const t = tw.getValue() ?? 0; img.setFrame(b.row * 6 + vfxFrame(t)).setAlpha(.72 * Math.min(1, t / .12) * (t < .75 ? 1 : (1 - t) / .25)); }, onComplete: () => { this.live--; img.destroy(); } });
   }
   private ensureSustain(): Phaser.GameObjects.Image { return this.sustainImg ??= this.scene.add.image(0, 0, 'fx_jn3', 0).setOrigin(.5, .62).setVisible(false).setName('jinnang-sustain'); }
 

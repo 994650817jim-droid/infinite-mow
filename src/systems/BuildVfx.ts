@@ -12,9 +12,20 @@ interface Slot{image:Phaser.GameObjects.Image;start:number;end:number;row:number
  * - 不盖主将：离主将很近的特效半透明（×.5）并放到主将身后一层；
  * - 节流：同一流派 0.5 秒（密度高时 0.8 秒）只播一次（核心样式不受限），同屏上限 18 → 12（密度高 10 → 7）。
  */
-export const VFX_TUNE: Record<string, number> = { hold: 1, small: 1.7, mid: 1.4, range: 1.15, smallMax: 72, midMax: 140, durMul: 1.7, durMax: 1600, nearPlayer: .5, gateMs: 500, gateMsDense: 800, activeCap: 12, activeCapDense: 7, fadeIn: .12 };
-/** 测试 / 录屏用：恢复改前的尺寸、时长、帧节奏和节流（对比 GIF）。 */
-export function vfxLegacy(on: boolean): void { Object.assign(VFX_TUNE, on ? { hold: 0, small: 1, mid: 1, range: 1, durMul: 1, nearPlayer: 1, gateMs: 100, gateMsDense: 200, activeCap: 18, activeCapDense: 10, fadeIn: 0 } : { hold: 1, small: 1.7, mid: 1.4, range: 1.15, durMul: 1.7, nearPlayer: .5, gateMs: 500, gateMsDense: 800, activeCap: 12, activeCapDense: 7, fadeIn: .12 }); }
+export const VFX_TUNE: Record<string, number> = { hold: 2, small: 1.25, mid: 1.15, range: 1, smallMax: 72, midMax: 140, durMul: 1.25, durMax: 1000, nearPlayer: .45, gateMs: 800, gateMsDense: 1100, activeCap: 9, activeCapDense: 5, fadeIn: .12, alphaMul: .8 };
+/**
+ * 三档参数（2026-11-20 两次调整）：orig = 改前原版；prev = 第一版（太夸张）；now = 现行（点缀感）。
+ * 「点缀」版：小图标 ×1.25 / 中等 ×1.15 / 范围型 ×1.0（与作用范围一致）、时长 ×1.25（≤1 秒）、整体透明度 ×0.8、同流派 0.8 秒一次、同屏上限 9。
+ */
+export const VFX_PRESETS: Record<'orig' | 'prev' | 'now', Record<string, number>> = {
+  orig: { hold: 0, small: 1, mid: 1, range: 1, durMul: 1, durMax: 1600, nearPlayer: 1, gateMs: 100, gateMsDense: 200, activeCap: 18, activeCapDense: 10, fadeIn: 0, alphaMul: 1 },
+  prev: { hold: 1, small: 1.7, mid: 1.4, range: 1.15, durMul: 1.7, durMax: 1600, nearPlayer: .5, gateMs: 500, gateMsDense: 800, activeCap: 12, activeCapDense: 7, fadeIn: .12, alphaMul: 1 },
+  now: { hold: 2, small: 1.25, mid: 1.15, range: 1, durMul: 1.25, durMax: 1000, nearPlayer: .45, gateMs: 800, gateMsDense: 1100, activeCap: 9, activeCapDense: 5, fadeIn: .12, alphaMul: .8 },
+};
+/** 测试 / 录屏用：切换参数档（对比 GIF）。 */
+export function vfxPreset(p: 'orig' | 'prev' | 'now'): void { Object.assign(VFX_TUNE, VFX_PRESETS[p]); }
+/** 兼容旧调用：true = 改前原版，false = 现行。 */
+export function vfxLegacy(on: boolean): void { vfxPreset(on ? 'orig' : 'now'); }
 /** 样式 → 流派（同一流派合并节流用）。 */
 const SCHOOL_OF: Record<string, string> = {
   combo: 'warrior', pure_combo: 'warrior', peerless: 'warrior', heavy: 'warrior',
@@ -26,7 +37,11 @@ const SCHOOL_OF: Record<string, string> = {
 };
 export const vfxScale = (size: number): number => size <= VFX_TUNE.smallMax ? VFX_TUNE.small : size <= VFX_TUNE.midMax ? VFX_TUNE.mid : VFX_TUNE.range;
 /** 6 帧的停留表：t(0–1) → 帧号；开头 / 峰值（帧 2–3）停得更久，尾帧快速收。 */
-export function vfxFrame(t: number): number { if (!VFX_TUNE.hold) return Math.min(5, Math.floor(t * 6)); return t < .14 ? 0 : t < .28 ? 1 : t < .52 ? 2 : t < .72 ? 3 : t < .88 ? 4 : 5; }
+export function vfxFrame(t: number): number {
+  if (!VFX_TUNE.hold) return Math.min(5, Math.floor(t * 6));
+  if (VFX_TUNE.hold === 1) return t < .14 ? 0 : t < .28 ? 1 : t < .52 ? 2 : t < .72 ? 3 : t < .88 ? 4 : 5;
+  return t < .16 ? 0 : t < .32 ? 1 : t < .5 ? 2 : t < .68 ? 3 : t < .84 ? 4 : 5; // 点缀版：峰值帧只比匀速多停一点
+}
 export function buildVfx(scene:Phaser.Scene):BuildVfx{const host=scene as Phaser.Scene&{buildVfxPool?:BuildVfx};if(!host.buildVfxPool){const pool=new BuildVfx(scene);host.buildVfxPool=pool;scene.events.once('shutdown',()=>{pool.clear();delete host.buildVfxPool;});}return host.buildVfxPool;}
 /** One pre-rendered atlas, fixed slot budget, no emit-time Graphics/Tweens/Timers. */
 export class BuildVfx{
@@ -44,7 +59,7 @@ export class BuildVfx{
   if(!core)this.gate.set(school,now+(dense?V.gateMsDense:V.gateMs));slot.start=now;slot.end=now+duration;slot.row=row;slot.core=core;slot.alpha=core?.9:.78;
   // 离主将很近：半透明 + 放到主将身后一层，不遮住主将
   const pl=(this.scene as unknown as {player?:{x:number;y:number}}).player,near=!!pl&&Math.hypot(x-pl.x,y-pl.y)<size*.35;
-  slot.alpha=(core?.9:.78)*(near?V.nearPlayer:1);
+  slot.alpha=(core?.9:.78)*V.alphaMul*(near?V.nearPlayer:1);
   slot.image.setFrame(row*6).setPosition(x,y).setRotation(angle).setDisplaySize(size,size).setAlpha(0).setDepth(['control','fire_gate','pure_control'].includes(style)?19:near&&pl?actorDepth(pl.y)-.3:41).setVisible(true);this.emitted++;
  }
  update(now:number):void{for(const s of this.slots){if(now>=s.end){s.image.setVisible(false);continue;}const t=Math.max(0,(now-s.start)/(s.end-s.start));s.image.setFrame(s.row*6+vfxFrame(t)).setAlpha(s.alpha*(VFX_TUNE.fadeIn?Math.min(1,t/VFX_TUNE.fadeIn):1)*(t<.7?1:(1-t)/.3));}}

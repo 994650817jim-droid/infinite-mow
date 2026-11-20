@@ -18,7 +18,8 @@ export class EnemyCamps{
  private ch(){return this.h.tent?.chapter()??2;}
  constructor(private h:Host,points:readonly CampPoint[],now:number){
   this.gfx=h.scene.add.graphics().setDepth(35);this.marker=h.scene.add.graphics().setDepth(37);
-  for(const point of points){const enemy=h.create(point.x,point.y,C.hp);if(!enemy)continue;const label=worldText(h.scene,point.x,point.y-155,'敌营',13,'#e4ba85').setOrigin(.5).setDepth(36);this.camps.push({point,enemy,life:enemy.spawnId,next:now+C.firstDelay,warnUntil:0,destroyed:false,members:[],label,spawned:0,batches:0});}
+  for(const point of points){const enemy=h.create(point.x,point.y,C.hp);if(!enemy)continue;const idx=this.camps.length;h.tent?.armor?.(enemy,'camp',{bar:false,onAlarm:()=>{const c=this.camps[idx];if(c&&!c.destroyed)c.next=0;}}); // 营寨攻坚（耐久按章节、半血起火伏兵、守将；附近营寨被烧时本营马上出兵）
+  const label=worldText(h.scene,point.x,point.y-155,'敌营',13,'#e4ba85').setOrigin(.5).setDepth(36);this.camps.push({point,enemy,life:enemy.spawnId,next:now+C.firstDelay,warnUntil:0,destroyed:false,members:[],label,spawned:0,batches:0});}
   // 舆图小帐 + 屏外边缘提示（systems/SpawnTents）
   this.unregister=registerTents(h.scene,()=>this.camps.filter(c=>!c.destroyed&&c.enemy.active&&c.enemy.spawnId===c.life).map(c=>({x:c.point.x,y:c.point.y,ratio:c.enemy.hp/Math.max(1,c.enemy.maxHp),hit:false,awake:Math.hypot(this.h.player.x-c.point.x,this.h.player.y-c.point.y)<=C.activationRadius})));
  }
@@ -62,7 +63,7 @@ export class EnemyCamps{
    if(warn){this.gfx.lineStyle(2,0xd9a061,.8);for(let k=-1;k<=1;k++){const x=p.x+k*16,y=p.y+28;this.gfx.lineBetween(x-5,y,x,y+7).lineBetween(x,y+7,x+5,y);}}
    if(e.hp<e.maxHp){this.gfx.fillStyle(0x211a14,.8).fillRect(p.x-35,p.y-139,70,4).fillStyle(0xbf754d).fillRect(p.x-35,p.y-139,70*Math.max(0,e.hp/e.maxHp),4);}
    if(c.warnUntil&&now>=c.warnUntil){c.warnUntil=0;if((this.h.tent?.crowd()??0)>=SPAWN_TENT.crowdCap){c.next=now+1000;this.stats.crowded++;continue;} // 同屏敌兵太多：先不出，1 秒后再看
-    c.next=now+tentIntervalMs(ch,e.hp/Math.max(1,e.maxHp),this.h.tent?.bossOn()??false);c.batches++;this.stats.squads++;const n=SPAWN_TENT.squad(ch);for(let i=0;i<n&&c.members.length<cap;i++){const x=p.x+(i-(n-1)/2)*42,y=p.y+C.spawnRadius;if(Math.hypot(this.h.player.x-x,this.h.player.y-y)<65)continue;const unit=this.h.spawn(p.kind,x,y);if(!unit)break;c.members.push({enemy:unit,life:unit.spawnId});c.spawned++;this.stats.spawned++;}continue;}
+    c.next=now+tentIntervalMs(ch,e.hp/Math.max(1,e.maxHp),this.h.tent?.bossOn()??false)*(this.h.tent?.campMul?.(e)??1);c.batches++;this.stats.squads++;const n=SPAWN_TENT.squad(ch);for(let i=0;i<n&&c.members.length<cap;i++){const x=p.x+(i-(n-1)/2)*42,y=p.y+C.spawnRadius;if(Math.hypot(this.h.player.x-x,this.h.player.y-y)<65)continue;const unit=this.h.spawn(p.kind,x,y);if(!unit)break;c.members.push({enemy:unit,life:unit.spawnId});c.spawned++;this.stats.spawned++;}continue;}
    if(full)this.stats.paused++;
    if(!c.warnUntil&&now>=c.next&&!full){c.warnUntil=now+C.warning;tentMuster(this.h.scene,p.x,p.y+C.spawnRadius*.6,C.warning);} // 帐篷口扬尘：要出兵了
   }

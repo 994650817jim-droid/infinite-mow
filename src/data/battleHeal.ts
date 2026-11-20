@@ -14,7 +14,8 @@ export const BATTLE_HEAL = {
     /** 地上留多久（毫秒）；最后 3 秒闪烁。 */
     lifeMs: 45000,
     /** 受伤时多近开始被吸过来、多近算吃到。 */
-    magnetR: 90, eatR: 26, flySpeed: 460,
+    // 用户 11-20「回血不要一下子刷在角色脸上」：主将走近 60 内才吸过来（原 90，远远就飞进脸上）
+    magnetR: 60, eatR: 26, flySpeed: 460,
     /** 同时最多几份在地上。 */
     max: 10,
   },
@@ -33,7 +34,8 @@ export const BATTLE_HEAL = {
     firstSec: 40, everySec: 80,
     maxLive: 2,
     /** 刷点距离（离主将）。 */
-    near: 380, far: 640,
+    // 用户 11-20：离主将 260–480、并且在画面里（或刚好在画面边上）——原 380–640 常常刷在屏幕外
+    near: 260, far: 480,
     /** 生命低于这个比例、泉眼在屏幕外且可用时，屏幕边缘出箭头。 */
     arrowBelow: .75,
   },
@@ -47,6 +49,11 @@ export const BATTLE_HEAL = {
    * 冷却 cooldownSec 秒，每关最多 perStage 次。
    */
   lowHp: { below: .3, ratio: .12, dist: [200, 260] as const, cooldownSec: 70, perStage: 2 },
+  /**
+   * 掉落不砸在主将脸上（用户 11-20）：打碎的道具 / 倒下的精锐副将离主将不足 minDrop 时，回血物从那里「蹦」出去，落到离主将 minDrop–minDrop+spread 处
+   * （方向 = 主将 → 掉落点，还在画面里）；本来就够远的就落在原处。低血保护放的药也落在 minDrop–maxDrop 之间、画面里。
+   */
+  drop: { minDrop: 150, spread: 40, maxDrop: 290, hopMs: 360, viewPad: 50 },
 } as const;
 
 /** 回血点种类：图来自 scene-v2/waterpoints.png（2×2：0 泉眼 / 1 水潭 / 2 石井 / 3 木水槽）；药草丛等新图到了再接。 */

@@ -31,6 +31,8 @@ import { loadBossSheet } from '../systems/ArtStyle';
  */
 export function intelGameSceneClass(Base: typeof GameScene) {
   return class IntelGameScene extends Base {
+    /** 军情战带上当前征程构筑（只读，打完不写回；2026-11-20）。 */
+    protected inheritsCampaign() { return true; }
     protected achievementArc() { return 'intel'; }
     /** 掉落品质段：按已开放章节（GameScene.lootChapter 默认），悬赏再 +1 段（2026-11-19 掉落随章节）。 */
     protected itemTier() { return Math.min(4, super.itemTier() + (this.event?.kind === 'bounty' ? 1 : 0)); }

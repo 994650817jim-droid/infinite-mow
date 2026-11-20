@@ -91,7 +91,7 @@ const OLD = { small: { balanced: [10, 0], farm: [16, 0], military: [5, 1] }, med
   // 民居与居民：纯装饰，不可点、不挡建筑（用户 2026-11-17）
   const life = await p.evaluate(() => { const t = window.__game.scene.getScene('TownScene'), folk = [...t.folk.walkers.filter(w => w.img.visible).map(w => w.img), ...t.folk.ambient.map(a => a.img)], houses = t.pano.list.filter(o => /^house-/.test(o.name ?? ''));
     return { folk: t.folk.count, npc: t.folk.ambient.length, houses: houses.length, folkInput: folk.some(o => o.input), houseInput: houses.some(o => o.input) }; });
-  ck('洛阳（大城、府衙 1 级）：民居店铺 2 座（另有营寨功能建筑分署）、走动居民 10 人 + 小景人物，都不接收点击（11-19 市井加密、按比例尺）', life.houses === 2 && life.folk === 10 && life.npc >= 4 && !life.folkInput && !life.houseInput, life);
+  ck('洛阳（大城、府衙 1 级）：民居店铺成街区（街区规划，至少 4 座；另有营寨功能建筑分署）、走动居民 10 人 + 小景人物，都不接收点击（11-20 加密）', life.houses >= 4 && life.folk === 10 && life.npc >= 4 && !life.folkInput && !life.houseInput, life);
   // 把一个居民挪到府衙正中，用真实鼠标点那里：仍然打开府衙面板
   const spot = await p.evaluate(() => { const t = window.__game.scene.getScene('TownScene'), h = t.hits.find(h => h.name === 'bld-office'), w = t.folk.walkers[0]; w.pause = 99; const wx = h.x, wy = h.y; w.img.setPosition(wx, wy + h.height * .3); w.img.setScale(w.img.scaleX * 3);
     const R = window.__game.canvas.getBoundingClientRect(), k = R.width / window.__game.scale.width * t.cameras.main.zoom; const z = t.pano.scaleX; return { x: R.left + (wx * z + t.pano.x) * k, y: R.top + (wy * z + t.pano.y) * k }; });
@@ -115,7 +115,7 @@ const OLD = { small: { balanced: [10, 0], farm: [16, 0], military: [5, 1] }, med
   await p.evaluate(() => window.__game.scene.getScene('TownScene').children.getByName('town-build-card').getByName('town-build-upgrade').emit('pointerdown'));
   await p.waitForTimeout(600);
   const grown = await p.evaluate(() => { const t = window.__game.scene.getScene('TownScene'); return { h: t.pano.list.filter(o => /^house-/.test(o.name ?? '')).length, f: t.folk.count }; });
-  ck('府衙升到 2 级：民居、居民都变多（大城 2→3 座、10→12 人）', before.h === 2 && before.f === 10 && grown.h === 3 && grown.f === 12, { before, grown });
+  ck('府衙升到 2 级：民居、居民都变多（大城民居变多、10→12 人）', before.h >= 4 && before.f === 10 && grown.h > before.h && grown.f === 12, { before, grown });
   await p.screenshot({ path: `${out}/town-large-life-desktop.png` });
   // 中城、小城各看一眼
   for (const id of ['xuchang', 'guandu']) {

@@ -56,7 +56,7 @@ const quiet = `const s = window.__game.scene.getScene(KEY), P = s.player, wait =
   ck('舆图登记了刷兵帐篷，营在屏外时边缘有小提示', r.marks >= 2 && r.hints >= 1, { marks: r.marks, hints: r.hints });
   const d = await p.evaluate(async () => {
     const s = window.__game.scene.getScene('GuanduGameScene'), EC = s.enemyCamps, c = EC.camps[0], wait = ms => new Promise(r => setTimeout(r, ms));
-    const food0 = s.legion.food; s.hitEnemy(c.enemy, 1e7, s.combatNow, 'melee', false, false); await wait(300);
+    const food0 = s.legion.food; c.enemy.hp = 0; s.killEnemy(c.enemy); /* 营寨攻坚有每秒掉血上限（CampSiege），这里直接拆 */ await wait(300);
     const fire = s.children.list.some(o => o.name === 'tent-burn'); const sq = EC.stats.squads; s.devTimeScale = 4; await wait(6000); s.devTimeScale = 1;
     return { destroyed: c.destroyed, grain: s.legion.food - food0, fire, more: EC.stats.squads - sq, label: c.label.text, alive: EC.camps.filter(x => !x.destroyed).length };
   });
@@ -74,7 +74,7 @@ const quiet = `const s = window.__game.scene.getScene(KEY), P = s.player, wait =
     const o = s.objective, L = s.luoyangCamps; if (!o || !L) return { none: true };
     const before = { standing: o.standing.length, max: o.snapshot?.().max ?? o.max };
     const clear = () => { for (let i = 0; i < 20 && s.mode !== 'none' && !s.over; i++) { s.__DEV_ACTIONS?.closePopup?.(); if (s.mode !== 'none' && s.mode !== 'result') s.setMode?.('none'); } };
-    const t = o.standing[0]; clear(); s.hitEnemy(t, 1e7, s.combatNow, 'melee', false, false); for (let i = 0; i < 20 && !L.stats.burned; i++) { clear(); await wait(200); }
+    const t = o.standing[0]; clear(); t.hp = 0; s.killEnemy(t); for (let i = 0; i < 20 && !L.stats.burned; i++) { clear(); await wait(200); }
     return { before, after: o.standing.length, cur: o.snapshot?.().cur ?? o.cur, burned: L.stats.burned, done: !!o.done, mode: s.mode, camps: L.camps.map(c => c.destroyed), sameTent: L.camps.some(c => c.tent === t) };
   });
   ck('2-3 破营目标不受影响：5 座营寨，打掉 1 座计 1、营寨起火停兵', r.before?.standing === 5 && r.after === 4 && r.burned === 1 && !r.done, r);

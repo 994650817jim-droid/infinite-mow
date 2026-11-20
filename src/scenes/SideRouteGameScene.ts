@@ -14,6 +14,15 @@ import { BOSS_MOVES, type BossMovesetDef, type MoveDef } from '../data/bossMoves
 import type { ChapterDef } from '../data/chapters';
 import { getChapter } from '../data/chapters';
 import { lubuChallengeChapter } from '../data/dongzhuo';
+import type { Enemy } from '../entities/Enemy';
+import { DEPTH, FONT } from '../config';
+import { castBark } from '../systems/Story';
+import { storyMode } from '../systems/BattleSettings';
+import { markSurrender, surrenderLive } from '../systems/SurrenderStore';
+import { gainProvisions } from '../world/WorldStore';
+import { SURRENDER } from '../data/surrender';
+/** 白门楼陈宫（初值，交平衡）：生命 = 吕布 ×hpMul、伤害 ×dmgMul、移速 ×speedMul；献计：首次 plotFirstMs 后、每 plotEveryMs 一次，吕布伤害 +plotDmg 持续 plotMs。 */
+export const CHENGONG = { hpMul: .35, dmgMul: .6, speedMul: .6, plotFirstMs: 8000, plotEveryMs: 16000, plotDmg: .15, plotMs: 6000 } as const;
 import { BossMoveset } from '../systems/BossMoveset';
 import { dualOff, type DualPlan } from '../systems/DualBoss';
 import { loadBossSheet } from '../systems/ArtStyle';
@@ -130,9 +139,68 @@ export function sideGameScenes(Base: typeof GameScene): Array<typeof GameScene> 
 /** 下邳终局「白门楼」：三英战吕布的吕布战（完整招式与大招），结算走支线；劝降成功记进招降名单（P2 吕布可玩时读）。 */
 export function sideLubuGameSceneClass(Base: typeof GameScene) {
   const route = sideRoute('xiapi')!, stage = route.stages.length, d = route.stages[stage - 1];
+  const cg = d.partner!;
   return class SideLubuGameScene extends Base {
     private test = false;
+    /** 陈宫（后排军师）：招式控制器、名牌 / 血条、献计计时。 */
+    chengong: Enemy | null = null; private cgLife = 0; private cgCtrl: BossMoveset | null = null; private cgTag?: Phaser.GameObjects.Text; private cgBar?: Phaser.GameObjects.Graphics; private cgPlotAt = 0; private cgBuffUntil = 0; private cgBaseDmg = 0;
+    /** 测试用。 */ readonly cgStats = { plots: 0, fell: false };
     constructor() { super('SideLubuGameScene'); }
+    preload() { if (!this.textures.exists(sideTexture(cg.id))) loadBossSheet(this.load, sideTexture(cg.id), cg.v1); }
+    /** 吕布出阵 1.5 秒后陈宫在他身后现身。 */
+    protected spawnBoss(): void {
+      const had = this.boss?.active; super.spawnBoss();
+      if (!had && this.boss?.active && !this.chengong) this.time.delayedCall(1500, () => this.spawnChengong());
+    }
+    private spawnChengong(): void {
+      const b = this.boss; if (!b?.active || this.over || this.chengong) return;
+      const base = this.chapter.enemies.boss, def = { ...base, texture: sideTexture(cg.id), walkVisual: undefined, attackVisual: undefined, hp: base.hp * CHENGONG.hpMul, damage: base.damage * CHENGONG.dmgMul, speed: base.speed * CHENGONG.speedMul };
+      const P = this.player, side = b.x >= P.x ? 1 : -1, e = this.spawnEnemy('boss', b.x + side * 200, b.y + 70, 1, true, def); if (!e) return; // 吕布身侧略后，进得了画面
+      this.chengong = e; this.cgLife = e.spawnId; this.cgPlotAt = this.combatNow + CHENGONG.plotFirstMs;
+      this.cgCtrl = new BossMoveset({ scene: this, boss: e, player: this.player, army: this.legion, spawn: (k, x, y, df) => this.spawnEnemy(k, x, y, 1, true, df), def: k => this.chapter.enemies[k], banner: (t, c) => this.showWaveBanner(t, true, c), sfx: k => this.sfx.play(k) }, sideTexture(cg.id), this.combatNow, BOSS_MOVES['xiapi.' + cg.id] ?? BOSS_MOVES.chengong, 'arc');
+      this.cgTag = this.add.text(e.x, e.y, cg.title + ' · ' + cg.name, { fontFamily: FONT, fontSize: '14px', color: '#ffd98a', resolution: 2, stroke: '#2a0c06', strokeThickness: 4 }).setOrigin(.5, 1).setDepth(DEPTH.dmgText - 1).setName('chengong-tag');
+      this.cgBar = this.add.graphics().setDepth(DEPTH.dmgText - 1).setName('chengong-bar');
+      if (storyMode() !== 'off') castBark(this, e.sprite, cg.name, '奉先！公台在此，为将军设谋！', 'chengong');
+      this.showWaveBanner('陈宫随吕布出阵', true, '后排火攻、号令伏兵、给吕布献计——先除陈宫，吕布势孤');
+    }
+    protected customBossStep(enemy: Enemy, dt: number, now: number): boolean {
+      if (enemy === this.chengong && this.cgCtrl) { this.cgCtrl.update(dt, now); return true; }
+      return super.customBossStep(enemy, dt, now);
+    }
+    protected hitEnemy(enemy: Enemy, raw: number, now: number, source: 'melee' | 'arrow' | 'fire' = 'melee', ally = false, weaponHit = true) {
+      if (enemy === this.chengong && this.cgCtrl) { raw *= this.cgCtrl.incoming(ally); this.cgCtrl.hit(now); }
+      return super.hitEnemy(enemy, raw, now, source, ally, weaponHit);
+    }
+    /** 陈宫倒下：不结算本关（吕布才是本关首领）；拒降就义——临终一句、以礼厚葬（军粮 + 仁名，本存档首次）。 */
+    protected killEnemy(enemy: Enemy): void {
+      if (enemy !== this.chengong) { super.killEnemy(enemy); return; }
+      const at = { x: enemy.x, y: enemy.y }; this.cgCtrl?.clear(); this.cgCtrl = null; this.cgTag?.destroy(); this.cgBar?.destroy(); this.chengong = null; this.cgStats.fell = true;
+      this.endPlot();
+      if (this.deathFx) this.deathFx.play(enemy, this.player.x, this.player.y, this.combatNow, this.deathOptsOf(enemy));
+      enemy.deactivate(); this.kills += 1;
+      if (storyMode() !== 'off') castBark(this, at, cg.name, '今日有死而已！请出就戮，以明军法。', 'chengong');
+      let cap = '吕布势孤';
+      if (surrenderLive() && markSurrender('honored', cg.id)) { gainProvisions(SURRENDER.persuadeProvisions); cap = '以礼厚葬 · 军粮 +' + SURRENDER.persuadeProvisions + ' · 仁名 +1'; }
+      this.showWaveBanner('陈宫拒降就义', false, cap); this.sfx.play('gong');
+    }
+    update(time: number, delta: number) {
+      super.update(time, delta);
+      const e = this.chengong; if (!e) return;
+      if (!e.active || e.spawnId !== this.cgLife) { this.cgTag?.destroy(); this.cgBar?.destroy(); this.chengong = null; return; }
+      const sp = e.sprite, top = sp.y - sp.displayHeight * sp.originY - 12, w = 70, k = Math.max(0, e.hp / Math.max(1, e.maxHp));
+      this.cgTag?.setPosition(e.x, top); this.cgBar?.clear().fillStyle(0x140a06, .8).fillRect(e.x - w / 2 - 1, top + 2, w + 2, 7).fillStyle(0xd8432a, 1).fillRect(e.x - w / 2, top + 3, w * k, 5);
+      this.cgCtrl?.updateDeath(delta);
+      // 献计：每 plotEveryMs 一次，吕布伤害 +plotDmg，持续 plotMs
+      if (this.mode === 'none' && !this.over && this.boss?.active && this.combatNow >= this.cgPlotAt) {
+        this.cgPlotAt = this.combatNow + CHENGONG.plotEveryMs; this.cgStats.plots++;
+        if (this.cgBuffUntil <= this.combatNow) { this.cgBaseDmg = this.boss.def.damage; this.boss.def = { ...this.boss.def, damage: this.cgBaseDmg * (1 + CHENGONG.plotDmg) }; }
+        this.cgBuffUntil = this.combatNow + CHENGONG.plotMs; this.boss.sprite.setTint(0xffb080);
+        if (storyMode() !== 'off') castBark(this, e.sprite, cg.name, '奉先，左翼空虚，可从侧击！', 'chengong');
+        this.showWaveBanner('陈宫献计', true, '吕布伤害 +' + Math.round(CHENGONG.plotDmg * 100) + '% · ' + CHENGONG.plotMs / 1000 + ' 秒');
+      }
+      if (this.cgBuffUntil && this.combatNow >= this.cgBuffUntil) this.endPlot();
+    }
+    private endPlot(): void { if (!this.cgBuffUntil) return; this.cgBuffUntil = 0; if (this.boss?.active && this.cgBaseDmg) { this.boss.def = { ...this.boss.def, damage: this.cgBaseDmg }; this.boss.sprite.clearTint(); } }
     protected achievementArc() { return 'lubu'; }
     protected surrenderKey(): string | null { return `xiapi-${stage}:lubu`; }
     protected customChapter() { return this.sideChapter(); }

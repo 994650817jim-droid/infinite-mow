@@ -49,6 +49,15 @@ const toBoss = async p => { for (let i = 0; i < 24 && !(await p.evaluate(() => !
   const q = await battle('SideLubuGameScene', {});
   const l = await q.evaluate(() => { const s = window.__S; return { name: s.chapter.name, key: s.surrenderKey(), style: s.chapter.bossStyle }; });
   ck('下邳终局「白门楼」：三英战吕布的吕布战（bossStyle lubu）、劝降键 xiapi-4:lubu', /白门楼/.test(l.name) && l.key === 'xiapi-4:lubu' && l.style === 'lubu', l);
+  await toBoss(q); await q.waitForTimeout(2600); await q.evaluate(() => window.__calm());
+  const cg = await q.evaluate(() => { const s = window.__S, e = s.chengong; return { on: !!e?.active, tex: e?.sprite.texture.key, tag: s.children.getByName('chengong-tag')?.text, ratio: e && s.boss ? +(e.maxHp / s.boss.maxHp).toFixed(2) : 0, boss: s.boss?.active }; });
+  await q.evaluate(() => { const s = window.__S, e = s.chengong; if (e) s.player.sprite.setPosition(e.x - 120, e.y + 150); }); await q.waitForTimeout(700); await q.screenshot({ path: OUT + '/baimen-chengong.png' });
+  ck('白门楼：吕布出阵后陈宫在后排现身（专属图 side_chengong、名牌「公台 · 陈宫」、生命约吕布 35%）', cg.on && cg.tex === 'side_chengong' && /陈宫/.test(cg.tag ?? '') && Math.abs(cg.ratio - .35) < .08 && cg.boss, cg);
+  await q.evaluate(() => { const s = window.__S; s.cgPlotAt = 0; }); await q.waitForTimeout(400);
+  const plot = await q.evaluate(() => ({ plots: window.__S.cgStats.plots }));
+  await q.evaluate(() => { const s = window.__S, e = s.chengong; e.invulnerable = false; s.hitEnemy(e, e.maxHp * 3, s.combatNow, 'melee', false, false); }); await q.waitForTimeout(500);
+  const fell = await q.evaluate(() => { const s = window.__S; return { fell: s.cgStats.fell, over: s.over, killed: s.bossKilled, boss: !!s.boss?.active, lubu: s.surrenderKey(), never: true }; });
+  ck('陈宫献计（吕布短时加伤）；陈宫倒下＝拒降就义，不结算本关（吕布还在、还是本关首领）', plot.plots >= 1 && fell.fell && !fell.over && !fell.killed && fell.boss && fell.lubu === 'xiapi-4:lubu', { plot, fell });
   await q.close();
 }
 // ④ P1b 各支线终局（ROUTES=逗号分隔，默认当前批次）：首领、借来的首领图、双首领同伴、招式名已改成本人、敌兵贴图都在

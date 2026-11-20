@@ -120,6 +120,7 @@ const RAW_DEFS: readonly SurrenderDef[] = [
   D('xiapi-2:gaoshun', '高顺', '陷阵营', 'never', { template: 'blade', camp: 'lubu', bonuses: [{ kind: 'surrendered', id: 'lubu', add: .3, label: '温侯已降' }],
     yes: '温侯都降了……陷阵营，听将军调遣。', yesIfSurrendered: { id: 'lubu', text: '温侯既已归顺，高顺岂敢独违。' }, no: '陷阵营只有战死的，没有降的！' }),
   D('xiapi-3:zhangliao', '张辽', '吕布骁将', 'can', { template: 'spear', camp: 'lubu', yes: '辽素闻将军仁义……愿效犬马之劳。', no: '大丈夫死则死耳，何惧之有！' }),
+  D('xiapi-4:chengong', '陈宫', '公台', 'never', { no: '今日有死而已！请出就戮，以明军法。' }),
   D('xiapi-4:lubu', '吕布', '飞将', 'hard', { template: 'spear', camp: 'lubu', bonuses: [{ kind: 'hero', id: 'diaochan', add: .2, label: '貂蝉在侧' }, { kind: 'lord', id: 'liubei', add: -.2, label: '大耳儿最叵信' }],
     yes: '明公得布，天下不足定也！', no: '白门楼上，吕奉先宁死不跪！', noIfLord: { id: 'liubei', text: '大耳儿最叵信，你也配劝我？' } }),
   // 江东 · 南郡（第五章后）
@@ -218,6 +219,7 @@ export const SURRENDER_RULES: Readonly<Record<string, { reason: string; need?: S
   'xiapi-1:caoxing': { reason: '吕布部将，城破时肯降' },
   'xiapi-2:gaoshun': { reason: '陷阵营主将，白门楼上一言不发，引颈受戮' },
   'xiapi-3:zhangliao': { reason: '史上下邳城破后降曹，后成名将' },
+  'xiapi-4:chengong': { reason: '白门楼拒降就义：「请出就戮，以明军法」，曹操垂泪送之' },
   'xiapi-4:lubu': { reason: '白门楼上自请归降、愿为明公平天下' },
   'nanjun-1:chengpu': { reason: '江东老将，与周瑜不睦，可以一劝' },
   'nanjun-2:zhouyu': { reason: '蒋干说之不动；老将程普素敬公瑾（「若饮醇醪」），程普先降并现身说法，周瑜才肯坐下来谈', need: { kind: 'surrendered', id: 'chengpu', label: '程普已降（江陵外围劝降程普）' } },

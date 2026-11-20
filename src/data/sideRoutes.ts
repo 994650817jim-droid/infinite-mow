@@ -56,7 +56,9 @@ export const SIDE_ROUTES: readonly SideRouteDef[] = [
       { name: '下邳', kind: 'siege', city: 'xiapi', behavior: 3, scenery: 4, waves: ['下邳外郭', '泗水决堤', '张辽守城'], story: '围下邳，决泗水。张辽据城而守，城破在即。',
         boss: B('zhangliao', '张辽', '吕布骁将', 'side_zhangliao', 'phase23/zhangxiu', 'zhanghe', true) },
       { name: '白门楼', kind: 'final', scene: 'lubu', behavior: 1, scenery: 1, waves: ['白门楼下', '吕布亲军', '吕布出阵'], story: '下邳城破，吕布退守白门楼。飞将末路，劝降还是斩杀？',
-        boss: B('lubu', '吕布', '飞将', 'third_lijue', 'phase23/lijue', 'lijue', true) },
+        boss: B('lubu', '吕布', '飞将', 'third_lijue', 'phase23/lijue', 'lijue', true),
+        // 陈宫：后排军师（专属图 side_chengong，美术 5dc8d5f），火攻 / 号令伏兵 / 给吕布献计；拒降就义（surrender-rules）
+        partner: B('chengong', '陈宫', '公台', 'side_chengong', 'phase23/yuanshu', 'chengong') },
     ],
     annex: ['xiapi'], specialty: { title: '并州狼骑', text: '本命武器伤害 +3%', damage: .03 }, lord: 'lubu' },
   { id: 'nanjun', name: '江东 · 南郡', faction: '江东', flag: '南郡', region: '荆州 · 江陵', x: .375, y: .745, props: 4,
@@ -224,7 +226,7 @@ const SIDE_STYLE: Record<string, { p1: [string, string]; p2: [string, string]; m
 export function sideMoves(src: Record<string, BossMovesetDef>): Record<string, BossMovesetDef> {
   const out: Record<string, BossMovesetDef> = {};
   for (const r of SIDE_ROUTES) for (const st of r.stages) for (const b of [st.boss, st.partner]) {
-    if (!b || st.scene) continue; const m = src[b.moves]; if (!m) continue;
+    if (!b || (st.scene && b === st.boss)) continue; const m = src[b.moves]; if (!m) continue;
     const sty = SIDE_STYLE[b.id], ph = (p: BossMovesetDef['p1'], t?: [string, string]) => ({ ...p, name: t?.[0] ?? p.name, caption: t?.[1] ?? p.caption, moves: p.moves.map(x => ({ ...x, name: sty?.moves[x.name] ?? x.name })) });
     out[r.id + '.' + b.id] = b.id === 'caocao' ? { ...m, id: b.id, name: b.name } : { ...m, id: b.id, name: b.name, mount: undefined, p1: ph(m.p1, sty?.p1), p2: ph(m.p2, sty?.p2) };
   }

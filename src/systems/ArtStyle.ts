@@ -324,7 +324,7 @@ export function applyArtStyleUrls(load: Phaser.Loader.LoaderPlugin): string[] {
 
 /** 其他势力支线（data/sideRoutes.ts）：首领图键 side_<id>，专属图到之前借现有首领 v2 图。 */
 function sideBossFiles(base: Record<string, string>): Record<string, string> {
-  for (const r of SIDE_ROUTES) for (const st of r.stages) for (const b of [st.boss, st.partner]) if (b && !st.scene) base[sideTexture(b.id)] = b.v2;
+  for (const r of SIDE_ROUTES) for (const st of r.stages) for (const b of [st.boss, st.partner]) if (b && !(st.scene && b === st.boss)) base[sideTexture(b.id)] = b.v2;
   return base;
 }
 /** BootScene 里按固定格子载入的首领表，v2 版的格边长（v1 华雄 / 徐荣 128、吕布 256）。 */

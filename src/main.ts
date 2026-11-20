@@ -10,6 +10,7 @@ import {loadGameFonts} from './ui/GameFonts';
 import Phaser from 'phaser';
 import { GAME_HEIGHT, GAME_WIDTH, IS_DESKTOP, RENDER_SCALE, initLayout, switchLayout } from './config';
 import { BootScene } from './scenes/BootScene';
+import { installFastFill } from './systems/RenderTweaks';
 import { sideGameScenes, sideLubuGameSceneClass } from './scenes/SideRouteGameScene';
 import { GameScene } from './scenes/GameScene';
 import { CityRecruitScene } from './scenes/CityRecruitScene';
@@ -86,6 +87,7 @@ async function startGame(): Promise<void> {
   const LubuBattleScene=lubuGameSceneClass(BattleScene);
   // 其他势力支线（data/sideRoutes.ts）：每条支线一个三关框架场景 + 下邳白门楼的吕布战
   const SideBattleScenes=sideGameScenes(BattleScene),SideLubuBattleScene=sideLubuGameSceneClass(BattleScene);
+  installFastFill(); // 凸多边形填充走扇形三角化（systems/RenderTweaks）
   const game = new Phaser.Game({
     type: Phaser.AUTO,
     parent: 'game',

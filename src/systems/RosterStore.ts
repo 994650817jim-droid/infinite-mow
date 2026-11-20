@@ -11,6 +11,7 @@ import { isChapterTestRun } from './ChapterProgress';
 import { SURRENDER, recruitableName } from '../data/surrender';
 import { activeValue, passiveValue } from '../data/commonerSkills';
 import { heroUnlocked } from './HeroUnlocks';
+import { STARTER_HEROES, LOCKED_HINT as UNJOINED_HINT } from '../data/heroUnlocks';
 
 /**
  * 人才库与已招武将（RECRUIT_PLAN.md，用户选 A 方案）：独立存档键 im_roster_v1（在 SaveSlots.PROGRESS_KEYS 里，随存档位切换）。
@@ -27,6 +28,8 @@ export interface RosterSave {
   /** 主公已最终确定（开新存档时选定，或老存档在提示里确认 / 改选过一次）。false = 老存档自动指定，还有一次改选机会。 */
   lordFinal: boolean;
   offers: Offer[]; captives: Offer[]; season: number; manual: number; dry: number; seq: number; hall: number;
+  /** 开局四人（刘关张赵）已默认招进麾下（新存档一次；之后遣散了也不再补）。 */
+  starters?: boolean;
 }
 
 const RANDOM_KEY = '__im_roster_random';
@@ -67,7 +70,7 @@ function read(): RosterSave | null {
     const raw = localStorage.getItem(ROSTER_KEY); if (!raw) return null;
     const v = JSON.parse(raw); if (!v || v.version !== 1) return null;
     const s = empty();
-    s.lord = isHero(v.lord) ? v.lord : null; s.lordFinal = !!s.lord && v.lordFinal === true;
+    s.lord = isHero(v.lord) ? v.lord : null; s.lordFinal = !!s.lord && v.lordFinal === true; s.starters = v.starters === true;
     const seen = new Set<string>();
     for (const r of Array.isArray(v.owned) ? v.owned.slice(0, RECRUIT.maxOwned + 5) : []) { const p = parseRecruit(r); if (p && !seen.has(p.id)) { seen.add(p.id); s.owned.push(p); } }
     if (s.lord && !seen.has(s.lord)) s.owned.unshift(heroRecruit(s.lord));
@@ -115,7 +118,10 @@ export function loadRoster(): RosterSave {
   if (!worldUnlocked()) return empty();
   let s = read() ?? migrate();
   clampFollowerLevels(s);
-  { const n = s.offers.length; s.offers = s.offers.filter(o => !o.hero || heroUnlocked(o.hero)); if (s.offers.length !== n) write(s); } // 老档里挂着的还没来投的武将撤牌
+  // 可玩武将改在「名将」页直接招募：席位里不再挂可玩武将（老档挂着的一并撤牌）
+  { const n = s.offers.length; s.offers = s.offers.filter(o => !o.hero); if (s.offers.length !== n) write(s); }
+  // 开局四人（刘关张赵）新存档默认已招、互为随从（随行名额内）
+  if (!s.starters) { s.starters = true; for (const h of STARTER_HEROES) if (!s.owned.some(r => r.hero === h)) s.owned.push(heroRecruit(h)); const cap = followerCap(s); for (const r of s.owned) if (r.hero && r.hero !== s.lord && (STARTER_HEROES as readonly string[]).includes(r.hero) && s.followers.length < cap && !s.followers.includes(r.id)) s.followers.push(r.id); write(s); }
   const now = currentSeason();
   if (s.season !== now) {
     s.captives = s.captives.filter(o => (o.expires ?? now) > now);
@@ -243,7 +249,7 @@ const pityOf = (s: RosterSave): number => RECRUIT.pity[hallIdx(s)];
 /** 当前招贤馆等级下的名将出现率（界面用）：每席出名将（史事 + 可玩）的概率、其中可玩名将的概率、保底还差几次（0 = 这一级没有保底）。 */
 export function hallOdds(s: RosterSave = loadRoster()): { seat: number; hero: number; pity: number; pityLeft: number } {
   const r = RECRUIT.rates[hallIdx(s)], pity = pityOf(s);
-  return { seat: r.named + r.hero, hero: r.hero, pity, pityLeft: pity > 0 ? Math.max(1, pity - s.dry + 1) : 0 };
+  void pity; return { seat: r.named + r.hero, hero: 0, pity: 0, pityLeft: 0 }; // 可玩武将改在「名将」页直接招募
 }
 /** 刷新全部席位（自动换季与手动刷新共用），处理保底。 */
 function rollOffers(s: RosterSave): void {
@@ -252,12 +258,12 @@ function rollOffers(s: RosterSave): void {
   const seats = RECRUIT.seats[hallIdx(s)], rates = RECRUIT.rates[hallIdx(s)];
   for (let i = 0; i < seats; i++) {
     const r = rand(); let o: Offer | null = null;
-    if (r < rates.hero) o = heroOffer(s); else if (r < rates.hero + rates.named) o = namedOffer(s);
+    if (r < rates.hero + rates.named) o = namedOffer(s); // 可玩武将不再随机挂牌（改在「名将」页招募），原先那份概率并给史事名将
     s.offers.push(o ?? commonOffer(s));
   }
   const anyLeft = CHARACTERS.some(c => !s.owned.some(r => r.hero === c.id));
-  if (s.offers.some(o => o.kind === 'hero')) s.dry = 0;
-  else if (anyLeft && pityOf(s) > 0) { // Lv1 没有保底，也不攒次数
+  void anyLeft; s.dry = 0; // 可玩武将改为直接招募：不再有「再刷 N 次必出名将」保底
+  if (false as boolean) { // 旧保底（保留结构，不再触发）
     s.dry++;
     if (s.dry > pityOf(s)) { const h = heroOffer(s); if (h) { s.offers[s.offers.length - 1] = h; s.dry = 0; } }
   }
@@ -352,6 +358,8 @@ export function captureBoss(b: { id: string; name: string; template: FollowerTem
  * 麾下已满时不加，返回提示。新增内容会话 2026-11-17。
  */
 export function joinByPersuasion(name: string, hero?: CharacterId, opts: { boss?: string; template?: FollowerTemplate; quality?: ItemQuality } = {}): RosterResult {
+  // 可玩武将（黄忠）劝降成功：只算「解锁可玩」，要当随从得去招贤馆「名将」页招募（2026-11-20）
+  if (hero) return { ok: true, message: name + '归附 · 可选为主将；往招贤馆「名将」页招募后才随行' };
   const s = loadRoster();
   if (hero ? s.owned.some(r => r.hero === hero) : s.owned.some(r => r.name === name || (opts.boss && r.boss === opts.boss))) return { ok: true, message: `${name}已在麾下` };
   if (s.owned.length >= RECRUIT.maxOwned) return { ok: false, message: `麾下已满 ${RECRUIT.maxOwned} 人，${name}暂回乡里（遣散一些后再来）` };
@@ -380,6 +388,26 @@ export function toggleFollower(id: string): RosterResult {
  * 武将来投（systems/HeroUnlocks）：免费直接进本档麾下（不进降将栏、不花军粮），顺手撤掉招贤馆里同一人的挂牌。
  * 天下还没开放（没有人才库）时返回 false——等开放后下次补查再入。已在麾下也算 true。
  */
+/** 这位可玩武将在不在本档麾下（主公算在）。 */
+export function heroHired(hero: CharacterId, s: RosterSave = loadRoster()): boolean { return s.lord === hero || s.owned.some(r => r.hero === hero); }
+/** 招为随从的价（按档次，data/recruits RECRUIT.heroHire；开局四人 0）。 */
+export function heroHireCost(hero: CharacterId): number { if ((STARTER_HEROES as readonly string[]).includes(hero)) return 0; const H = RECRUIT.heroHire; return H.highIds.includes(hero) ? H.high : H.base; }
+/**
+ * 招贤馆「名将」页：把已解锁（可玩）的武将招进麾下当随从（2026-11-20 用户「解锁了不是就能跟随，要去招贤那里招」）。
+ * 没解锁 / 已在麾下 / 军粮不够都不招；招到后随行名额有空就直接随行。
+ */
+export function hireHero(hero: CharacterId): RosterResult {
+  if (!worldUnlocked()) return { ok: false, message: '天下尚未开放' };
+  const name = getCharacter(hero).name;
+  if (!heroUnlocked(hero)) return { ok: false, message: name + ' · ' + UNJOINED_HINT };
+  const s = loadRoster(); if (heroHired(hero, s)) return { ok: false, message: name + '已在麾下' };
+  if (s.owned.length >= RECRUIT.maxOwned) return { ok: false, message: '麾下已满 ' + RECRUIT.maxOwned + ' 人（遣散一些后再招）' };
+  const cost = heroHireCost(hero); if (cost > 0 && !spendWorld({ provisions: cost })) return { ok: false, message: '军粮不足：招募' + name + '需要 ' + cost };
+  const s2 = loadRoster(), r = heroRecruit(hero); s2.owned.push(r); if (s2.followers.length < followerCap(s2)) s2.followers.push(r.id);
+  // 同 recruit()：新入队定在「随行上限 − 2」级（早有更高的武将等级记录就保留，但不超过上限）
+  { const joinCap = followerLevelCap(), joinLevel = Math.max(1, joinCap - FOLLOWER_LEVEL.joinBelowCap), key = hero as HeroKey, keep = hasHeroRecord(key) ? Math.min(heroLevel(key), joinCap) : 0; clampHeroLevel(key, joinCap, Math.max(joinLevel, keep)); }
+  write(s2); return { ok: true, message: name + '应募入麾下' + (s2.followers.includes(r.id) ? ' · 已随行' : ' · 可在「麾下」设为随行') + (cost ? ' · 花费 ' + cost + ' 军粮' : '') };
+}
 export function grantHero(hero: CharacterId): boolean {
   if (!worldUnlocked()) return false;
   const s = loadRoster();

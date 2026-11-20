@@ -43,6 +43,11 @@ export const RECRUIT = {
   ] as ReadonlyArray<Partial<Record<ItemQuality, number>>>,
   /** 招募费（军粮）。 */
   cost: { white: 80, green: 150, blue: 260, named: 500, hero: 900 },
+  /**
+   * 可玩武将招募为随从（2026-11-20 用户「角色解锁是指可以玩到的角色，不是解锁就可以跟随了，需要去招贤那里招」）：
+   * 解锁只代表能选为主将；要当随从得在招贤馆「名将」页花军粮招。价按档次：开局四人 0（新存档默认已招），一般 900，顶尖 1200。初值，交平衡会话。
+   */
+  heroHire: { base: 900, high: 1200, highIds: ['zhuge', 'lvbu', 'zhouyu', 'machao', 'zhangliao'] as readonly string[] },
   /** 保底（按招贤馆等级）：连续这么多次刷新都没有出现未拥有的可玩名将，下一次必出；0 = 这一级没有保底（Lv1 不出名将）。 */
   pity: [0, 10, 6],
   /** 击败敌将后被俘的概率：名将悬赏 / 攻城 / 守城。 */

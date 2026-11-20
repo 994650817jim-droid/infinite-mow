@@ -1,5 +1,8 @@
 import Phaser from 'phaser';
-import {canPickLord,lordFinal,lordHero,lordRules} from '../systems/RosterStore';
+import {canPickLord,heroHired,lordFinal,lordHero,lordRules} from '../systems/RosterStore';
+import {worldUnlocked} from '../world/WorldStore';
+/** 已归附（可选为主将）但本档还没在招贤馆招为随从（2026-11-20 用户：解锁不等于能跟随）。 */
+const needHire=(id:string):boolean=>{try{return heroUnlocked(id)&&worldUnlocked()&&!heroHired(id as Parameters<typeof heroHired>[0]);}catch{return false;}};
 import {FONT,HEADING_FONT,TITLE_FONT,GAME_WIDTH as W,GAME_HEIGHT as H,IS_DESKTOP as D} from '../config';
 import {HeroWarCard} from './HeroWarCard';
 import {CHARACTERS} from '../data/characters';
@@ -56,7 +59,7 @@ export class HomeHeroPicker{
    if(locked)c.art.setTintFill(0x17120c);else c.art.clearTint();this.lockTexts[i]?.setName('pick-lock-'+id).setText(locked?LOCKED_TITLE+'\n'+LOCKED_HOW:'').setVisible(locked);}});
   if(this.armed!==this.candidate)this.armed=-1;
   const cid=CHARACTERS[this.order[this.candidate]]?.id??'zhaoyun',lock=!canPickLord(cid);
-  if(!heroUnlocked(cid)&&this.armed<0){this.hint?.setColor(D?IVORY:'#ff9a72').setText(`${CHARACTERS[this.order[this.candidate]].name} · ${LOCKED_HINT}`);this.pageText?.setText(D?`${this.page+1} / ${this.pages}`:`第 ${this.page+1} / ${this.pages} 页 · 共 ${CHARACTERS.length} 将`);return;}if(this.armed<0)this.hint?.setColor(D?IVORY:'#ff9a72').setText(lock?this.lockText():lordRules()&&!lordHero()?(D?'选定即为主公 · 不可更改':'择一良将为主公 · 选定后本存档不可更改'):'');this.hint?.setVisible(!!this.hint.text);
+  if(!heroUnlocked(cid)&&this.armed<0){this.hint?.setColor(D?IVORY:'#ff9a72').setText(`${CHARACTERS[this.order[this.candidate]].name} · ${LOCKED_HINT}`);this.pageText?.setText(D?`${this.page+1} / ${this.pages}`:`第 ${this.page+1} / ${this.pages} 页 · 共 ${CHARACTERS.length} 将`);return;}if(this.armed<0)this.hint?.setColor(D?IVORY:'#ff9a72').setText(lock?(needHire(cid)?`${CHARACTERS[this.order[this.candidate]].name}已归附 · 随行需往招贤馆招募`:this.lockText()):lordRules()&&!lordHero()?(D?'选定即为主公 · 不可更改':'择一良将为主公 · 选定后本存档不可更改'):'');this.hint?.setVisible(!!this.hint.text);
   this.pageText?.setText(D?`${this.page+1} / ${this.pages}`:`第 ${this.page+1} / ${this.pages} 页 · 共 ${CHARACTERS.length} 将`);
  }
 }

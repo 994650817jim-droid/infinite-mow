@@ -21,7 +21,7 @@ export interface HeroJoinInfo {
 }
 export const HERO_JOIN: Readonly<Partial<Record<CharacterId, HeroJoinInfo>>> = {
   zhuge: { kicker: '第一章 · 黄巾平定', epithet: '卧龙',
-    lines: ['广宗告捷，营中收到一封南阳隆中的书信。', '寥寥数语，竟把黄巾余部的去向一一料中。', '落款「卧龙」——愿以客卿之身，随军参谋。'] },
+    lines: ['广宗告捷，营中收到一封南阳隆中的书信。', '寥寥数语，竟把黄巾余部的去向一一料中。', '落款「卧龙」——愿以客卿之身，随军参谋。', '随信另附锦囊三枚：「危急时拆看。」'] },
   diaochan: { kicker: '吕布败亡', epithet: '闭月',
     lines: ['吕布已败，貂蝉素衣出城，拜于皇叔马前。', '「妾身一介女流，愿以双扇，随军效力。」'] },
   huangyueying: { kicker: '第五章 · 赤壁之后', epithet: '巧思',

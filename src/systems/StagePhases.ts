@@ -56,6 +56,18 @@ export class StagePhaseRunner {
   /** 副将段起的小兵生命倍率。 */
   waveHpMul(): number { const k = this.kind(); return k === 'lieutenant' ? PHASES.lieutenantWaveHp : 1; }
 
+  /** 「大军压境」段：刷兵间隔倍率（< 1 更密）。 */
+  intervalMul(): number { return this.kind() === 'surge' ? PHASES.surge.intervalMul : 1; }
+  /** 伏兵 / 大军用的兵种：第一章按关只用已登场的兵（1-1 步 / 盾、1-2 步 / 弓、1-3 步 / 骑），其余章步 / 骑。 */
+  private crowdKinds(): [EnemyKind, EnemyKind] {
+    if (this.plan.chapter === 1) return this.plan.stage <= 1 ? ['infantry', 'shield'] : this.plan.stage === 2 ? ['infantry', 'archer'] : ['infantry', 'cavalry'];
+    return ['infantry', 'cavalry'];
+  }
+  private surge(): void {
+    this.eliteSquad(1); const [a, b] = this.crowdKinds();
+    for (const [i, p] of this.ring(PHASES.surge.ring(this.plan.chapter), 420, .4).entries()) { if (this.h.spawn(i % 3 === 2 ? b : a, p.x, p.y)) this.stats.ambush++; }
+    this.h.sfx('gong');
+  }
   /** 场景检测到段落变化时调用。 */
   enter(i: number): void {
     if (i === this.phase) return;
@@ -64,6 +76,7 @@ export class StagePhaseRunner {
     if (p.kind === 'elite' && this.plan.phases.length > 3) this.eliteSquad();
     else if (p.kind === 'elite') this.eliteSquad(1);
     else if (p.kind === 'event') this.ambush();
+    else if (p.kind === 'surge') this.surge();
     else if (p.kind === 'lieutenant' && this.plan.lieutenant) this.lieutenant(this.plan.lieutenant);
   }
 
@@ -80,7 +93,8 @@ export class StagePhaseRunner {
 
   private ambush(): void {
     const n = PHASES.ambush(this.plan.chapter);
-    for (const [i, p] of this.ring(n, 380, .3).entries()) { if (this.h.spawn(i % 2 ? 'cavalry' : 'infantry', p.x, p.y)) this.stats.ambush++; }
+    const [a, b] = this.crowdKinds();
+    for (const [i, p] of this.ring(n, 380, .3).entries()) { if (this.h.spawn(i % 2 ? b : a, p.x, p.y)) this.stats.ambush++; }
     this.h.sfx('gong');
   }
 

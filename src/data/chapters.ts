@@ -127,6 +127,8 @@ function rawBattleChapter(id?:string, stage:YellowStage=1,westStage:YellowStage=
  const base=getChapter(id);if(base.id==='hulao'){const n=DONGZHUO_STAGES.find(s=>s.stage===westStage)?.stage??3;return xiliangCavalry(n===1?{...getSishuiEncounter(),westStage:1,victoryText:'汜水关告捷 · 荥阳之战已解锁'}:n===2?{...getXingyangEncounter(),westStage:2,victoryText:'荥阳破围 · 虎牢关已解锁'}:{...getLuoyangChapter(),westStage:3});}
  const info=YELLOW_STAGES[stage-1]??YELLOW_STAGES[0];stage=info.stage;
  if(stage===3)return {...base,stage,name:'1-3 广宗决战',waves:['黄巾先锋','黄巾大军','张角决战'].map((name,i)=>({name,start:i*45})),recruitWaves:[1,2],ground:'yellow_ground_3',victoryTitle:'黄巾平定',victoryText:'雷云消散 · 讨伐董卓已解锁',
+  // 1-3 新兵黄巾骑兵（精锐段起约 20%）；时间轴按 pace（约 ×1.2）
+  pickEnemy:(t:number)=>{const r=Math.random();if(t<66)return r<.7?'infantry':r<.88?'shield':'archer';return r<.45?'infantry':r<.65?'shield':r<.8?'archer':'cavalry';},
   // 人物画风 v2：张角有行走 / 施法方向表时改走 walkVisual 通路（v1 只有一张静态图，靠程序姿态）
   ...(isV2Texture('zhangjiao_walk')?{enemies:{...base.enemies,boss:{...base.enemies.boss,walkVisual:{texture:'zhangjiao_walk',scale:.5,groundY:.9},attackVisual:'zhangjiao_cast'}}}:{})};
  const boss=stage===1?'zhangliang':'zhangbao';
@@ -139,19 +141,10 @@ function rawBattleChapter(id?:string, stage:YellowStage=1,westStage:YellowStage=
  pickEnemy:t=>{
   // 1-1 新手关（用户 2026-11-16：只要 3 波、不要歼敌）。t 为加速后的刷怪时间轴（pace 4/3：每波 45 秒 ≈ 60）
   // 第 1 波 外围哨兵：全是刀兵；第 2 波 刀盾阻路：刀兵 85% · 刀盾兵 15%（初见两段盾）；第 3 波 张梁迎战：刀兵 75% · 刀盾兵 15% · 弓手 10%
-  if(stage===1){const r=Math.random();if(t<60)return 'infantry';if(t<120)return r<.85?'infantry':'shield';return r<.75?'infantry':r<.9?'shield':'archer';}
-  if(stage===2){
-   const r=Math.random();
-   // 1-2 opens with cavalry and archers; shield soldiers join at wave four.
-   // 弓手占比按用户反馈调低（原 33% / 26% → 约 15% / 14%），其余补给步兵与骑兵
-   if(t>=180){
-    if(r<.34)return 'infantry';
-    if(r<.56)return 'cavalry';
-    if(r<.70)return 'archer';
-    return 'shield';
-   }
-   return r<.5?'infantry':r<.85?'cavalry':'archer';
-  }
+  // 第一章 v2（chapter1-redesign.md，用户 11-20「按你的建议」）：每关至多一种新兵——1-1 刀盾（精锐段起）、1-2 弓手（精锐段起）、1-3 黄巾骑兵（精锐段起）。
+  // t 为刷怪时间轴（五段后 phasedPace ≈ 1，约等于关内秒数）
+  if(stage===1){const r=Math.random();if(t<45)return 'infantry';return r<.85?'infantry':'shield';}
+  if(stage===2){const r=Math.random();if(t<50)return r<.8?'infantry':'shield';return r<.6?'infantry':r<.82?'shield':'archer';}
   return pickEnemyKind(t);
  },
  victoryTitle:`${info.boss}败退`,victoryText:`1-${stage} ${info.name}已突破 · 下一关已解锁`};

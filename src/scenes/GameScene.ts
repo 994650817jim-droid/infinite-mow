@@ -10,7 +10,7 @@ import { MOUNT_VISUAL, isHorseCavalry } from '../data/mounts';
 import { buildSettingsPanel, type SettingSpec } from '../ui/SettingsPanel';
 import {FollowerSquad,type Follower} from '../systems/FollowerSquad';
 import {showBarkCard} from '../ui/StoryBarkCard';
-import { DEFEAT, defeatLines } from '../data/defeatFlow';
+import { DEFEAT, DEFEAT_TIPS, defeatLines } from '../data/defeatFlow';
 import { battlePoint, retreatTarget, type RetreatTarget } from '../world/DefeatRetreat';
 import { patchCampaignDefeat } from '../systems/Campaign';
 import { loseProvisionsPct } from '../world/WorldStore';
@@ -121,7 +121,7 @@ import { allocateHeroAttr, claimFirstClear, creditHeroXp, enlistHero, heroFreePo
 import { HERO_XP_RATE, OVERFLOW_XP_PER_GRAIN, PICK_GUARANTEE, PICK_PACE, XP_SHIFT, chapterXpMul } from '../data/heroLevels';
 import { attributePointsBetween } from '../systems/RunGrowth';
 import { vigorHp } from '../data/attributes';
-import { CHAPTER_INDEX, PHASES, buildPhasePlan, phasedPace, type PhaseKind, type PhasePlan } from '../data/stagePhases';
+import { CHAPTER_INDEX, PHASES, PHASE_BARKS, buildPhasePlan, phasedPace, type PhaseKind, type PhasePlan } from '../data/stagePhases';
 import { StagePhaseRunner } from '../systems/StagePhases';
 import { BattleFortunes } from '../systems/BattleFortunes';
 import { BattleHeal } from '../systems/BattleHeal';
@@ -1211,7 +1211,8 @@ export class GameScene extends Phaser.Scene {
       const ph = this.phasePlan?.phases[nextWave];
       this.hudTexts.wave.setText(`第 ${nextWave + 1}/${this.chapter.waves.length} 波 · ${this.chapter.waves[nextWave].name}`);
       // 五段关：横幅只写段落故事名（不写「第 x 波」），小字写段落类别
-      if (ph) { if (this.waveBannerShown || nextWave > 0) this.showWaveBanner(ph.name, ph.kind === 'elite' || ph.kind === 'lieutenant', this.phaseCaption(ph.kind)); this.phaseRunner?.enter(nextWave); }
+      if (ph) { if (this.waveBannerShown || nextWave > 0) this.showWaveBanner(ph.name, ph.kind === 'elite' || ph.kind === 'lieutenant' || ph.kind === 'surge', this.phaseCaption(ph.kind)); this.phaseRunner?.enter(nextWave);
+        const bark = PHASE_BARKS[this.hardKey() + '-' + this.hardStage()]?.[ph.kind]; if (bark && nextWave > 0 && storyMode() !== 'off') showBarkCard(this, { side: 'left', name: bark.who, text: bark.text, id: bark.id }); } // 段落台词（data/stagePhases.ts PHASE_BARKS）
       else if (this.waveBannerShown || nextWave > 0) this.showWaveBanner(`第 ${nextWave + 1}/${this.chapter.waves.length} 波 · ${this.chapter.waves[nextWave].name}`);
       this.waveBannerShown = true;
       // Finish a wave before recruiting; the opening wave starts immediately.
@@ -1602,7 +1603,7 @@ export class GameScene extends Phaser.Scene {
       // 刷怪时间轴按关卡节奏加速（stageTuning.pace）：原来第 N 波的刷怪强度在新的第 N 波出现
       const paced = this.elapsed * (this.chapter.pace ?? 1);
       const easy = this.tutorial?.easy(this.elapsed); // 新手引导：开局 30 秒刷兵放缓
-      this.spawnTimer = this.chapter.spawnInterval(paced) * (this.phaseRunner?.calm() || this.combatNow < this.beaconCalmUntil ? PHASES.calmIntervalMul : 1) * (easy?.interval ?? 1) * (this.sishuiPass?.spawnMul ?? 1) * (bossOn ? B.intervalMul : 1) * (this.dual?.spawnIntervalMul ?? 1); // 汜水关西凉营帐全塌后变稀；双首领在场再 ×0.7
+      this.spawnTimer = this.chapter.spawnInterval(paced) * (this.phaseRunner?.calm() || this.combatNow < this.beaconCalmUntil ? PHASES.calmIntervalMul : 1) * (this.phaseRunner?.intervalMul() ?? 1) * (easy?.interval ?? 1) * (this.sishuiPass?.spawnMul ?? 1) * (bossOn ? B.intervalMul : 1) * (this.dual?.spawnIntervalMul ?? 1); // 汜水关西凉营帐全塌后变稀；双首领在场再 ×0.7
       const rawBurst = this.chapter.spawnBurst(paced), burst0 = easy && easy.burstDiv > 1 ? Math.max(1, Math.ceil(rawBurst / easy.burstDiv)) : rawBurst, burst = bossOn ? Math.max(1, Math.ceil(burst0 * B.burstMul)) : burst0;
       for (let i = 0; i < burst; i += 1) {
         if (this.activeEnemyCount() >= cap) break;
@@ -3841,7 +3842,7 @@ export class GameScene extends Phaser.Scene {
   protected pickCap(): number { return this.phasePlan ? this.phasePlan.phases.length : PICK_GUARANTEE.main; }
   /** 进第 2…n 段时至少补到的次数（五段关 1 / 2 / 3 / 4，首领宝箱补到 pickCap）。 */
   protected pickWaves(): readonly number[] { return this.phasePlan ? PHASES.picks.waves.slice(0, this.phasePlan.phases.length - 1) : this.paceOn() ? PICK_PACE.waves : PICK_GUARANTEE.waves; }
-  private phaseCaption(k: PhaseKind): string { return k === 'vanguard' ? '先锋' : k === 'elite' ? '精锐来袭' : k === 'event' ? '伏兵四起' : k === 'lieutenant' ? '副将出阵' : '首领将至'; }
+  private phaseCaption(k: PhaseKind): string { return k === 'vanguard' ? '先锋' : k === 'elite' ? '精锐来袭' : k === 'event' ? '伏兵四起' : k === 'lieutenant' ? '副将出阵' : k === 'surge' ? '大军压境' : '首领将至'; }
   /** 主线关才套用五段：攻城 / 守城 / 军情 / 挑战、带关卡目标的关、开场即首领的关不套。 */
   protected phaseEligible(): boolean {
     const c = this.chapter, k = this.scene.key;
@@ -3880,7 +3881,7 @@ export class GameScene extends Phaser.Scene {
       this.battleTrack = new BattleTrack(this, plan);
       // 战况线贴着屏幕上沿：计时器、关名往下挪一截（不和战况线叠）
       this.hudTexts.timer.setY(BattleTrack.HEIGHT + 3); this.hudTexts.chapter.setY(BattleTrack.HEIGHT + 33);
-      this.fortunes = !mechOpen('fortune') ? null : new BattleFortunes({ // 玩法逐章解锁：战场机缘 2-1 开放
+      this.fortunes = !mechOpen('fortune') || plan.chapter === 1 ? null : new BattleFortunes({ // 玩法逐章解锁：战场机缘 2-1 开放；第一章（v2）一律没有机缘
         scene: this, player: () => this.player, elapsed: () => this.elapsed, chapter: () => plan.chapter,
         // 远处刷点：夹进场地、挪出墙 / 营栅 / 房子，再避开水与树（2026-11-19 用户「不可以太近……不刷进墙里」）
         place: (x, y) => this.fieldPlace(x, y),
@@ -4086,6 +4087,7 @@ export class GameScene extends Phaser.Scene {
       const g = loseProvisionsPct(DEFEAT.grainPct, DEFEAT.grainCap); if (g) notes.push('营寨军粮 −' + g);
     }
     this.defeatNotes = notes;
+    if (!worldUnlocked()) { const tip = DEFEAT_TIPS[Math.floor(Math.random() * DEFEAT_TIPS.length)]; this.resultTexts.body.setText(this.resultTexts.body.text + '\n小贴士  ' + tip); } // 第一章：不扣东西，给一条小贴士
     if (notes.length) this.resultTexts.body.setText(this.resultTexts.body.text + '\n战败惩罚  ' + notes.join(' · '));
     // 演出：慢动作 + 压暗 + 左下角电影感对话卡（部将护主突围）；结算面板晚 resultDelayMs 出
     this.devTimeScale = DEFEAT.slowMul; window.setTimeout(() => { if (this.sys?.isActive()) this.devTimeScale = 1; }, DEFEAT.slowMs);

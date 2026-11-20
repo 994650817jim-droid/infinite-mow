@@ -30,7 +30,10 @@ export const DEFEAT_SPECIAL: Readonly<Record<string, DefeatLine[]>> = {
   xiapi: [{ who: '', text: '温侯骁勇，暂避其锋，主公快走！' }, { who: '@lord', text: '下邳……我还会回来！' }],
   nanjun: [{ who: '', text: '周郎火攻，主公暂避！' }, { who: '@lord', text: '南郡……来日再争！' }],
   caowei: [{ who: '', text: '虎豹骑太凶，主公先撤！' }, { who: '@lord', text: '中原未定，岂能就此罢手！' }],
+  huangjin: [{ who: '关羽', text: '大哥，黄巾势众，暂退整军！' }, { who: '@lord', text: '……回营，整顿再来！' }],
 };
+/** 第一章战败小贴士（天下未开，没有惩罚与退守，结算正文加一条）。 */
+export const DEFEAT_TIPS: readonly string[] = ['三选一多拿本命兵器，伤害涨得最快', '血少了去捡干粮、站泉眼回血', '张宝的护法符柱先打碎，他才会受伤', '张角的天雷有红圈预警，看准再走', '战斗支援选一队兵随行，按 E 让部曲出击'];
 /** 这一关的战败台词：先找「id-关」，再找「id」，都没有就随机一套通用的。 */
 export function defeatLines(key: string, stage: number, rnd: () => number = Math.random): DefeatLine[] {
   return DEFEAT_SPECIAL[key + '-' + stage] ?? DEFEAT_SPECIAL[key] ?? DEFEAT_LINES[Math.floor(rnd() * DEFEAT_LINES.length)];

@@ -70,14 +70,14 @@ export const SIDE_ROUTES: readonly SideRouteDef[] = [
     open: { arc: 'hanzhong', stages: 3, hint: '第八章「汉中之战」平定后开放' }, base: 'hanzhong',
     stages: [
       { name: '陈留', kind: 'siege', city: 'chenliu', behavior: 1, scenery: 1, waves: ['陈留城外', '青州兵列阵', '李典守城'], story: '曹操起兵之地。先下陈留，动摇中原。',
-        boss: B('lidian', '李典', '曹营儒将', 'third_zhangxiu', 'phase23/zhangxiu', 'zhangxiu') },
+        boss: B('lidian', '李典', '曹营儒将', 'side_lidian', 'phase23/zhangxiu', 'zhangxiu') },
       { name: '宛城旧地', kind: 'field', behavior: 2, scenery: 2, waves: ['宛城旧营', '虎卫军', '许褚出阵'], story: '宛城旧地，虎卫军拦路。许褚赤膊来战。',
-        boss: B('xuchu', '许褚', '虎痴', 'guandu_wenchou', 'guandu/wenchou', 'zhuran') },
+        boss: B('xuchu', '许褚', '虎痴', 'side_xuchu', 'guandu/wenchou', 'zhuran') },
       { name: '许昌', kind: 'siege', city: 'xuchang', behavior: 3, scenery: 4, waves: ['许昌外城', '虎豹骑巡城', '乐进守城'], story: '天子所在，许都门户。乐进先登，誓守许昌。',
         boss: B('yuejin', '乐进', '先登之将', 'third_lijue', 'phase23/lijue', 'lijue') },
       { name: '许都决战', kind: 'final', behavior: 1, scenery: 4, waves: ['许都城下', '虎豹骑出城', '曹操亲至'], story: '中原诸城尽下，曹操与夏侯惇出城决战。',
         boss: B('caocao', '曹操', '魏王', 'hanzhong_caocao', 'chibi/caoren', 'caocao', true),
-        partner: B('xiahoudun', '夏侯惇', '独眼将军', 'hanzhong_xiahouyuan', 'guandu/wenchou', 'xiahouyuan') },
+        partner: B('xiahoudun', '夏侯惇', '独眼将军', 'side_xiahoudun', 'guandu/wenchou', 'xiahouyuan') },
     ],
     annex: ['luoyang', 'baima', 'guandu', 'wuchao', 'runan', 'wancheng'], specialty: { title: '中原兵员', text: '出征可多带 1 名后备兵', reserveSlots: 1 }, lord: 'caocao' },
 ];

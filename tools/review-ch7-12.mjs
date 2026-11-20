@@ -52,7 +52,8 @@ const HELPERS = () => {
     for (const e of s.enemies) if (e.active && !e.isSupplySlot && e.kind !== 'boss' && e.def.behavior !== 'supply') R.tex.add(e.kind + ':' + (e.def.walkVisual?.texture ?? e.def.texture));
     if (s.mode === 'none') R.fps.push(s.game.loop.actualFps);
     let tgt = s.boss?.active ? s.boss : null, best = 1e9; if (!tgt) for (const e of s.enemies) if (e.active && !e.isSupplySlot) { const d = Math.hypot(e.x - pl.x, e.y - pl.y); if (d < best) { best = d; tgt = e; } }
-    if (tgt) { const tx = tgt.x + Math.cos(a) * 90, ty = tgt.y + Math.sin(a) * 90, dx = tx - pl.x, dy = ty - pl.y, d = Math.hypot(dx, dy) || 1; window.__IM.setMove(dx / d, dy / d); } else window.__IM.setMove(Math.cos(a) * .5, Math.sin(a) * .5);
+    const IM = window.__IM; if (!IM) { R.noIM = (R.noIM ?? 0) + 1; return; }
+    if (tgt) { const tx = tgt.x + Math.cos(a) * 90, ty = tgt.y + Math.sin(a) * 90, dx = tx - pl.x, dy = ty - pl.y, d = Math.hypot(dx, dy) || 1; IM.setMove(dx / d, dy / d); } else IM.setMove(Math.cos(a) * .5, Math.sin(a) * .5);
   };
   // 屏幕层文字两两重叠（只算可见、有字、透明度 > .1；同一容器里的阴影 / 描边副本不算）
   window.__overlaps = () => {
@@ -110,7 +111,7 @@ async function runStage(tag) {
   // 结算后再推几下（章末卷轴）
   for (let i = 0; i < 20; i++) { await p.evaluate(() => window.__step(0)); await p.waitForTimeout(150); }
   const res = await p.evaluate(() => { const s = window.__S, R = window.__R, f = R.fps.slice(5).sort((x, y) => x - y);
-    return { end: R.end ?? null, ltName: s.phaseRunner?.stats?.lieutenant ?? null, objectiveNow: s.objectiveText?.text ?? null, over: s.over, victory: s.victory, elapsed: Math.round(s.elapsed), kills: s.kills, bossAt: R.bossAt, bossKilledAt: R.bossKilledAt, lt: R.ltSeen, stuck: !!R.stuck, mode: s.mode,
+    return { noIM: R.noIM ?? 0, end: R.end ?? null, ltName: s.phaseRunner?.stats?.lieutenant ?? null, objectiveNow: s.objectiveText?.text ?? null, over: s.over, victory: s.victory, elapsed: Math.round(s.elapsed), kills: s.kills, bossAt: R.bossAt, bossKilledAt: R.bossKilledAt, lt: R.ltSeen, stuck: !!R.stuck, mode: s.mode,
       story: [...R.story], barks: (s.data.get('__storyBarkCardLog') ?? []).map(x => typeof x === 'string' ? x : (x.who ?? '') + ':' + (x.text ?? '')).slice(0, 30), tex: [...R.tex].slice(0, 16),
       fpsAvg: f.length ? Math.round(f.reduce((x, y) => x + y, 0) / f.length) : 0, fpsP5: f.length ? Math.round(f[Math.floor(f.length * .05)]) : 0, chests: s.bossChests?.length ?? null }; });
   const row = { tag, key, ...info, ...res, bossTex, ovStart, ovBoss, wall: Math.round((Date.now() - t0) / 1000), errors: [...new Set(errors)].slice(0, 6) };

@@ -98,16 +98,16 @@ export function playStoryScroll(scene: Phaser.Scene, node: StoryNode, lines: Sto
 // ———— 大字台词（首领登场 / 倒下、bark）————
 interface BarkTarget { x: number; y: number; active?: boolean; displayHeight?: number }
 /**
- * 用首领本人的行走图当台词卡立绘（2026-11-20 第 7–12 章检查：8-2 夏侯渊等登场大卡头像圈是空的）。取当前帧中间偏上一块（格宽 56% 的正方形、从格高 4% 起），
- * 台词卡再按立绘规则取「宽 64%、上 1%–40%」——落在头肩。target 不是精灵（头顶冒字的点）返回 undefined。
+ * 用首领本人的行走图当台词卡立绘（2026-11-20 第 7–12 章检查：8-2 夏侯渊等登场大卡头像圈是空的）。取正面第一帧（同血条头像 BossHud.fallbackMedal）中间一块：
+ * 格宽 75% 的正方形、从格高 9% 起；台词卡再按立绘规则取「宽 64%、上 1%–40%」——最后落在格的头肩一带（约格宽 48%、格高 10%–38%）。target 不是精灵（头顶冒字的点）返回 undefined。
  */
 function spritePortrait(scene: Phaser.Scene, target: BarkTarget): string | undefined {
-  const sp = target as Partial<Phaser.GameObjects.Sprite>, fr = sp.frame; if (!fr || !sp.texture || sp.texture.key === '__MISSING') return undefined;
+  const t0 = target as Partial<Phaser.GameObjects.Sprite> & { sprite?: Phaser.GameObjects.Sprite }, sp = (t0.frame ? t0 : t0.sprite ?? {}) as Partial<Phaser.GameObjects.Sprite>, names = sp.texture?.getFrameNames() ?? [], fr = sp.texture && names.length ? sp.texture.get(['0', 'down_0'].find(n => names.includes(n)) ?? names[0]) : sp.frame; /* 传进来的是敌兵（双首领台词 line(id, enemy)）时取它的 sprite */ if (!fr || !sp.texture || sp.texture.key === '__MISSING') return undefined;
   const key = 'barkfb_' + sp.texture.key; if (scene.textures.exists(key)) return key;
   const S = 256, c = document.createElement('canvas'); c.width = c.height = S; const ctx = c.getContext('2d'); if (!ctx) return undefined;
-  const side = Math.min(fr.cutWidth, fr.cutHeight) * .56;
+  const side = Math.min(fr.cutWidth, fr.cutHeight) * .75;
   ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
-  ctx.drawImage(fr.source.image as CanvasImageSource, fr.cutX + fr.cutWidth / 2 - side / 2, fr.cutY + fr.cutHeight * .04, side, side, 0, 0, S, S);
+  ctx.drawImage(fr.source.image as CanvasImageSource, fr.cutX + fr.cutWidth / 2 - side / 2, fr.cutY + fr.cutHeight * .09, side, side, 0, 0, S, S);
   scene.textures.addCanvas(key, c); return key;
 }
 interface BarkHost { heroBark?: { sayLine?: (target: BarkTarget, name: string, text: string) => boolean } }
@@ -120,7 +120,8 @@ export function castBark(scene: Phaser.Scene, target: BarkTarget, name: string, 
   const who = id ?? (heroIdByName(name) ?? Object.keys(STORY_CAST).find(k => STORY_CAST[k].name === name));
   if (!who || !(STORY_CAST[who] || heroName(who))) { storyBark(scene, target, name, text); return; }
   const s: { portrait?: string } = speaker(who, { lord: '' } as unknown as StoryCtx);
-  showBarkCard(scene, { side: heroName(who) ? 'left' : 'right', name, text, portrait: s.portrait, id: who });
+  const ally = !!heroName(who), inked = !!s.portrait && (scene.textures.exists(s.portrait) || !!storyArtFile(s.portrait)); // 敌将没有立绘：用本人（target）裁头肩，同 StoryDirector.bark
+  showBarkCard(scene, { side: ally ? 'left' : 'right', name, text, portrait: inked || ally ? s.portrait : spritePortrait(scene, target) ?? s.portrait, id: who });
   storyBark(scene, target, '', '！');
 }
 const heroIdByName = (name: string): string | undefined => CHARACTERS.find(c => c.name === name)?.id;

@@ -313,3 +313,4 @@ assets/raw/*
 !/tools/build-vfx-atlas.mjs
 !/tools/shot-build-vfx.mjs
 !/tools/test-jinnang-fx.mjs
+!/tools/test-combo-fx.mjs

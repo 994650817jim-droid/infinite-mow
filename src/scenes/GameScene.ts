@@ -30,7 +30,8 @@ import {chapterVictoryNotice} from '../ui/ChapterVictoryNotice';
 import {HARD_MODE,HARD_TITLES} from '../data/hardMode';
 import {recordHardClear,rewardGrain} from "../world/WorldStore";
 import {chapterState,openChapterCount,type TimelineChapterId} from '../world/ChapterTimeline';
-import {buildVfx} from '../systems/BuildVfx';
+import {buildVfx,comboFx} from '../systems/BuildVfx';
+import {COMBOS} from '../data/schoolCombos';
 import {SchoolSynergy} from '../systems/SchoolSynergy';
 import {SchoolBanner} from '../ui/SchoolBanner';
 import {BulwarkBuild} from '../systems/BulwarkBuild';
@@ -902,7 +903,7 @@ export class GameScene extends Phaser.Scene {
     this.buildCombat.onShock=(x,y,r)=>buildVfx(this).emit('pure_charge',x,y-6,this.combatNow,r*2,0,320,true);
     this.buildCombat.onNapalm=(x,y,r,dmg,lv)=>{this.martialFields.add(x,y,r,dmg,3000,lv);this.spawnFlameFx(x,y,r);};
     // 合击（data/schoolCombos.ts）：第一次触发打横幅；烈马脚下火；冲势打出 / 眩晕交给 SchoolSynergy（声东击西、铁骑冲阵、十面埋伏）
-    this.buildCombat.onCombo=id=>this.synergy?.note(id);
+    this.buildCombat.onCombo=id=>{this.synergy?.note(id);const c=COMBOS.find(x=>x.id===id);if(c)comboFx(this,c.a,c.b,id,this.player.x,this.player.y,this.combatNow);};
     this.buildCombat.onFirePatch=(x,y,r,dmg,ms)=>{this.martialFields.add(x,y,r,dmg,ms,1);this.spawnFlameFx(x,y,r*.8);};
     this.buildCombat.onCharge=(e,n)=>this.synergy?.onCharge(e,n);
     this.buildCombat.onStun=(e,n)=>this.synergy?.onStun(e,n);

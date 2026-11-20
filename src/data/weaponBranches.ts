@@ -45,6 +45,9 @@ export const WEAPON_BRANCHES: readonly WeaponBranch[] = [
   B('zhenbei_blade', 'wy_hanzhong', 'formation', '镇守汉中', '重劈处插下营栅区 5 秒：部曲在区内减伤、敌兵减速', '营栅区更大', '营栅区更久', '汉中太守', '营栅区可同时存在 2 处', true),
   // P2 吕布（效果在 weapons/lvbuWeapon.ts 里结算）
   B('fangtian_ji', 'lb_renzhong', 'warrior', '人中吕布', '横扫变旋戟风暴：转两圈、范围更大\n无双狂暴中每次击杀延长狂暴 0.4 秒', '风暴伤害 +30%', '风暴伤害再 +30%', '无双', '狂暴中击杀延长 0.8 秒、旋戟转三圈', true),
+  // P2 张辽（效果在 weapons/zhangliaoWeapon.ts 里结算）
+  B('pozhen_shuangji', 'zl_shiwan', 'cavalry', '八百破十万', '八百虎贲 +4 骑、多冲一圈\n撞上的敌兵眩晕 0.6 秒', '虎贲伤害 +30%', '虎贲伤害再 +30%', '八百破十万 · 极', '虎贲再多冲一圈', true),
+  B('pozhen_shuangji', 'zl_xiaoyao', 'stratagem', '威震逍遥津', '溃逃会传给身边敌兵\n溃兵互相踩踏掉血', '踩踏伤害 +30%', '踩踏伤害再 +30%', '逍遥津', '踩踏伤害再 ×1.5', true),
   B('fangtian_ji', 'lb_yuanmen', 'archery', '辕门射戟', '每 5 次出手朝远处掷戟\n钉住一线敌兵 1 秒，戟飞回再割一次', '掷戟伤害 +30%', '掷戟伤害再 +30%', '辕门射戟 · 神射', '掷戟穿得更远', true),
 ];
 /** 已出图的分支图标（public/assets/upgrade-icons/branch_<id>.webp）。 */

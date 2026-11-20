@@ -47,12 +47,16 @@ export const SKILL_FX: Readonly<Record<string, { file: string; cell: number; fra
   fx_dz: { file: 'assets/dongzhuo-fx/dz.png', cell: 256, frames: 6 },
   fx_zhurong_knife: { file: 'assets/zhurong-fx/knife_fx.png', cell: 256, frames: 8 },
   // 武将出招起手特效（2026-11-19 ChatGPT 黑底 6×4 三张，tools/build-hero-cast-fx.mjs 去底切条；systems/HeroCastFx.ts 用）：每人 6 帧
-  ...Object.fromEntries(['guanyu', 'zhangfei', 'zhaoyun', 'huangzhong', 'machao', 'weiyan', 'liubei', 'zhuge', 'pangtong', 'huangyueying', 'sunshangxiang', 'diaochan', 'lvbu']
+  ...Object.fromEntries(['guanyu', 'zhangfei', 'zhaoyun', 'huangzhong', 'machao', 'weiyan', 'liubei', 'zhuge', 'pangtong', 'huangyueying', 'sunshangxiang', 'diaochan', 'lvbu', 'zhangliao']
     .map(h => ['fx_cast_' + h, { file: `assets/hero-fx/cast/cast_${h}.png`, cell: 256, frames: 6 }])),
   // 吕布方天画戟（ChatGPT 黑底 6×4，tools/build-lvbu-fx.mjs 切条；weapons/lvbuWeapon.ts 用）：戟刺朝右、横扫环、旋转飞戟（循环）
   fx_lvbu_thrust: { file: 'assets/hero-fx/lvbu/thrust.png', cell: 256, frames: 6 },
   fx_lvbu_sweep: { file: 'assets/hero-fx/lvbu/sweep.png', cell: 256, frames: 6 },
   fx_lvbu_halberd: { file: 'assets/hero-fx/lvbu/halberd.png', cell: 256, frames: 6 },
+  // 张辽破阵双戟（ChatGPT 黑底 6×4，tools/build-zhangliao-fx.mjs 切条；weapons/zhangliaoWeapon.ts 用）：双戟扇形斩（朝右）、虎贲虚影骑兵（朝右跑，循环）、溃逃标记（循环）
+  fx_zl_slash: { file: 'assets/hero-fx/zhangliao/slash.png', cell: 256, frames: 6 },
+  fx_zl_rider: { file: 'assets/hero-fx/zhangliao/rider.png', cell: 256, frames: 6 },
+  fx_zl_rout: { file: 'assets/hero-fx/zhangliao/rout.png', cell: 256, frames: 6 },
 };
 
 export function loadSkillFx(load: Phaser.Loader.LoaderPlugin): void {

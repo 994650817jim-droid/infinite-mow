@@ -1,5 +1,6 @@
 import type { Enemy } from '../entities/Enemy';
 import { LVBU } from '../data/lvbu';
+import { ZHANGLIAO } from '../data/zhangliao';
 import type { CharacterId } from '../data/characters';
 import type { WeaponId } from '../types';
 import { CHARACTER_PASSIVES, PASSIVE_RULES as R } from '../data/passives';
@@ -58,12 +59,16 @@ export class CharacterPassives {
   wushuangLeft(now: number): number { return this.isWushuang(now) ? this.wsUntil - now : 0; }
   /** 测试 / 开发：立刻进入人中吕布。 */
   grantWushuang(now: number): void { if (this.stopped || this.character !== 'lvbu') return; this.stacks = 0; this.wsStart = now; this.wsUntil = now + LVBU.frenzyMs; this.triggers++; }
+  /** 张辽「止啼」：溃逃中的敌兵被击杀时攒 1 点，满了出一次「八百虎贲」（weapons/zhangliaoWeapon 取走）。 */
+  private hubenPending = 0;
+  onRoutKill(now: number): void { if (this.stopped || this.character !== 'zhangliao') return; this.stacks++; this.gains++; this.lastGain = now; if (this.stacks >= ZHANGLIAO.need) { this.stacks = 0; this.triggers++; this.hubenPending++; } }
+  takeHuben(): boolean { if (this.hubenPending <= 0 || this.stopped) return false; this.hubenPending--; return true; }
   /** 孙尚香最近一次移动的时间（移动中掷刀更快）。 */
   private lastMoveAt = -Infinity;
   constructor(character: CharacterId = 'zhaoyun', now = 0) { this.reset(character, now); }
   reset(character: CharacterId, now: number): void {
     this.character = character; this.stacks = 0; this.lastGain = -Infinity; this.charmKillAt = -Infinity; this.lastDamage = now; this.sharpUntil = -Infinity; this.sharpMs = HZ_SHARP.sharpMs; this.hurtDropAt = -Infinity; this.surroundAcc = 0; this.stars.clear(); this.bazhen = []; this.stageKills = 0; this.sharpEliteKills = 0;
-    this.generation++; this.stopped = false; this.gains = 0; this.triggers = 0; this.burns.clear(); this.charms.clear(); this.crowdStar = { marks: 0, last: -Infinity }; this.guardUntil = -Infinity; this.wsUntil = this.wsStart = -Infinity; this.chargeInvulnUntil = this.chargeGuardUntil = -Infinity;
+    this.generation++; this.stopped = false; this.gains = 0; this.triggers = 0; this.burns.clear(); this.charms.clear(); this.crowdStar = { marks: 0, last: -Infinity }; this.guardUntil = -Infinity; this.wsUntil = this.wsStart = -Infinity; this.hubenPending = 0; this.chargeInvulnUntil = this.chargeGuardUntil = -Infinity;
   }
   get characterId(): CharacterId { return this.character; }
   stop(): void { this.stopped = true; this.stacks = 0; this.generation++; this.burns.clear(); this.charms.clear(); this.stars.clear(); this.crowdStar = { marks: 0, last: -Infinity }; this.bazhen = []; this.chargeInvulnUntil = this.chargeGuardUntil = -Infinity; }
@@ -116,8 +121,8 @@ export class CharacterPassives {
   private charmOf(enemy: Enemy): Charm | undefined { const c = this.charms.get(enemy.uid); return c && c.spawnId === enemy.spawnId ? c : undefined; }
   /** 貂蝉离间：倒戈的敌人受伤 +20%，被魅惑满层的首领受伤 +25%；诸葛亮八阵图：阵内敌人受伤 ×1.15。 */
   vulnerability(enemy: Enemy, now: number): number {
-    let v = 1;
-    if (this.bazhen.length) { this.bazhen = this.bazhen.filter(z => z.until > now); if (this.bazhen.some(z => Math.hypot(enemy.x - z.x, enemy.y - z.y) <= z.r + enemy.radius)) v = ZG_TIANHUO.bazhen.vuln; }
+    let v = this.character === 'zhangliao' && enemy.routUntil > now ? 1 + ZHANGLIAO.routVuln : 1; // 张辽：溃逃的敌兵受伤加成
+    if (this.bazhen.length) { this.bazhen = this.bazhen.filter(z => z.until > now); if (this.bazhen.some(z => Math.hypot(enemy.x - z.x, enemy.y - z.y) <= z.r + enemy.radius)) v *= ZG_TIANHUO.bazhen.vuln; }
     if (!this.charms.size) return v;
     const c = this.charmOf(enemy); if (!c) return v;
     return v * (c.turnedUntil > now ? R.turnVulnerability : c.vulnUntil > now ? R.charmVulnerability : 1);
@@ -304,6 +309,7 @@ export class CharacterPassives {
   label(now: number): string {
     const name = CHARACTER_PASSIVES[this.character].name;
     if (this.character === 'zhuge') return `${name} · 星象 ${this.starTop(now)}/${ZG_TIANHUO.starNeed}${this.starTop(now) >= ZG_TIANHUO.starNeed ? ' · 下一发算无遗策' : ''}`;
+    if (this.character === 'zhangliao') return `${name} · 止啼 ${this.stacks}/${ZHANGLIAO.need}`;
     if (this.character === 'lvbu') return this.isWushuang(now) ? `${name} · 人中吕布 ${(this.wushuangLeft(now) / 1000).toFixed(1)}秒：每击两次 · 移速攻速 +40%` : `${name} · 战意 ${this.stacks}/${LVBU.need}`;
     if (this.character === 'huangzhong') return this.isSharpshooter(now) ? `${name} · 神射 ${(this.sharpLeft(now) / 1000).toFixed(1)}秒：暴击+10% / 重箭爆裂` : `${name} · 蓄势 ${this.stacks}/${HZ_SHARP.need}`;
     return `${name} · ${this.character === 'zhaoyun' ? '龙胆' : this.character === 'guanyu' ? '武势' : this.character === 'zhangfei' ? '怒气' : this.character === 'huangyueying' ? '机括' : this.character === 'pangtong' ? '计策' : this.character === 'liubei' ? '仁德' : this.character === 'weiyan' ? '拒敌' : this.character === 'machao' ? '铁骑' : this.character === 'sunshangxiang' ? '疾步' : this.character === 'diaochan' ? '舞势' : '星象'} ${this.stacks}/${this.maxStacks}${this.snapshot(now).ready ? ' · 下次强化' : ''}${this.character === 'diaochan' && this.snapshot(now).turned ? ` · 离间${this.snapshot(now).turned}` : ''}${this.character === 'weiyan' && this.damageTakenMultiplier(now) < 1 ? ' · 谁敢杀我' : ''}`;

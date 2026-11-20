@@ -43,6 +43,7 @@ export const UNLOCK_RULES: Readonly<Partial<Record<CharacterId, (p: UnlockProgre
   pangtong: p => p.arc('shu') >= 1,                                           // 7-1 葭萌关（落凤坡之前）
   machao: p => p.arc('shu') >= 3 || p.arc('hanzhong') >= 1,
   lvbu: p => !!p.persuaded?.('lubu'),                                         // P2：劝降吕布（下邳支线白门楼，或三英战吕布挑战）                   // 7-3 成都；保底第八章
+  zhangliao: p => !!p.persuaded?.('zhangliao'),                               // P2：劝降张辽（下邳支线白门楼）
 };
 /** 黄忠走的是不是保底（长沙没放过）——揭幕换文案。 */
 export function joinedByFallback(id: CharacterId, p: UnlockProgress = realProgress()): boolean { return id === 'huangzhong' && !p.flag('spared_huangzhong'); }

@@ -116,5 +116,5 @@ export function commonName(random: () => number): string {
 /** 可玩名将跟随时的模板（用于界面标签；战斗里仍用专属武器）。 */
 export const HERO_TEMPLATE: Record<CharacterId, FollowerTemplate> = {
   zhaoyun: 'spear', guanyu: 'blade', huangzhong: 'bow', zhuge: 'strategist', zhangfei: 'spear', machao: 'spear',
-  weiyan: 'blade', liubei: 'blade', pangtong: 'strategist', huangyueying: 'bow', sunshangxiang: 'bow', diaochan: 'strategist', lvbu: 'spear',
+  weiyan: 'blade', liubei: 'blade', pangtong: 'strategist', huangyueying: 'bow', sunshangxiang: 'bow', diaochan: 'strategist', lvbu: 'spear', zhangliao: 'blade',
 };

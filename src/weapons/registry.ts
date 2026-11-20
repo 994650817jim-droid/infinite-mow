@@ -8,6 +8,7 @@ import { PASSIVE_RULES } from '../data/passives';
 import { TIANHUO_DEF, tianhuoBehavior } from './zhugeTianhuo';
 import { HERO_TINT } from '../data/characters';
 import { LVBU_DEF, lvbuBehavior } from './lvbuWeapon';
+import { ZHANGLIAO_DEF, zhangliaoBehavior } from './zhangliaoWeapon';
 import { BAODIAO_DEF, DANGYANG_DEF, ZHANJIN_DEF, SHUANGGU_DEF, baodiaoBehavior, dangyangBehavior, zhanjinBehavior, shuangguBehavior, smartTarget } from './heroWeapons2';
 import { HINT_MOCK, groundScar } from '../ui/HintStyle';
 import { DRAG_TRAVEL, DRAG_WAVE_MUL, DRAG_SPIN_MUL } from '../systems/RunGrowth';
@@ -118,6 +119,7 @@ export const WEAPON_DEFS: Record<WeaponId, WeaponDef> = {
   zhanjin_lance: ZHANJIN_DEF,
   shuanggu_swords: SHUANGGU_DEF,
   fangtian_ji: LVBU_DEF, // P2 吕布（weapons/lvbuWeapon.ts）
+  pozhen_shuangji: ZHANGLIAO_DEF, // P2 张辽（weapons/zhangliaoWeapon.ts）
 };
 
 export const WEAPON_ORDER: WeaponId[] = ['spear_orbit', 'crossbow', 'flame_banner', 'guandao'];
@@ -462,5 +464,6 @@ export const WEAPON_BEHAVIORS: Record<WeaponId, (host: WeaponHost, weapon: Weapo
   zhanjin_lance: zhanjinBehavior,
   shuanggu_swords: shuangguBehavior,
   fangtian_ji: lvbuBehavior,
+  pozhen_shuangji: zhangliaoBehavior,
 };
 

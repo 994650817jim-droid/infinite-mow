@@ -6,6 +6,7 @@ import {TACTICS,TREASURES,tacticDescription,type TacticId} from '../data/builds'
 import {charmDef} from '../data/charms';
 import {PASSIVE_RULES} from '../data/passives';
 import {LVBU} from '../data/lvbu';
+import {hubenLeft} from '../weapons/zhangliaoWeapon';
 import {WEAPON_META,martialDescription} from '../data/upgrades';
 import {MARTIALS,DRAG_TRAVEL,ATTRIBUTE_INFO,attributeIcon,type MasteryId,type AttributeId,type RunGrowth} from '../systems/RunGrowth';
 import {FONT,DEPTH,IS_DESKTOP as D} from '../config';
@@ -81,6 +82,7 @@ export class BuffHud {
   // 流派档位（2026-11-19 流派重做）：到 2 / 4 势的派各一个图标，角标写势
   {const t=g.build.tags();for(const sc of SCHOOL_IDS){const n=t[sc],tier=tierOf(n);if(tier<2)continue;const d=SCHOOLS[sc],got=TIER_STEPS.filter(x=>n>=x);entries.push({id:'school_'+sc,icon:d.icon,name:d.name+' · 势 '+n,desc:got.map(x=>x+' 势「'+d.tiers[x].name+'」：'+d.tiers[x].desc).join('\n'),kind:'流派 · '+got.map(x=>d.tiers[x].name).join(' · '),badge:String(n),rare:tier>=4});}}
   if(g.berserkUntil>now)entries.push({id:'berserk',icon:'growth_icon_berserk',name:'狂战丹',desc:'武器伤害提高25%，攻击速度提高20%。限时效果，进入新关卡会清除。',kind:'丹药 · 限时 '+Math.ceil((g.berserkUntil-now)/1000)+' 秒',badge:Math.ceil((g.berserkUntil-now)/1000)+'s',mark:'药',remaining:Math.min(1,(g.berserkUntil-now)/10000)});
+  {const h=hubenLeft(player,now);if(h.left>0)entries.push({id:'zl_huben',icon:'icon_zhiti',name:'八百虎贲',desc:'止啼攒满：虚影骑兵绕主将环冲，沿途撞伤敌兵。',kind:'被动 · 限时 '+(h.left/1000).toFixed(1)+' 秒',badge:Math.ceil(h.left/1000)+'s',remaining:Math.min(1,h.left/h.total),rare:true});}
   {const left=player.passive.wushuangLeft(now);if(left>0)entries.push({id:'lvbu_wushuang',icon:'icon_wushuang',name:'无双',desc:'狂暴：每次出手连打两次，攻速、移速 ×'+LVBU.haste+'，不会被击飞。',kind:'被动 · 限时 '+(left/1000).toFixed(1)+' 秒',badge:Math.ceil(left/1000)+'s',remaining:Math.min(1,left/LVBU.frenzyMs),rare:true});}
   {const left=player.passive.chargeGuardLeft(now);if(left>0)entries.push({id:'tieqi_guard',icon:'icon_zhanjin',name:'铁骑余威',desc:'锦马冲锋之后，受到的伤害减少'+Math.round((1-PASSIVE_RULES.chargeGuardMul)*100)+'%。',kind:'被动 · 限时 '+(left/1000).toFixed(1)+' 秒',badge:Math.ceil(left/1000)+'s',remaining:left/PASSIVE_RULES.chargeGuardMs,rare:true});}
   for(const id of g.build.treasures){const d=TREASURES[id];entries.push({id:'treasure_'+id,icon:'build_icon_'+id,name:d.name,desc:d.desc,kind:'信物 · 宝物',badge:'信',rare:true});}
@@ -88,7 +90,7 @@ export class BuffHud {
   for(const id of Object.keys(g.build.tactics)as TacticId[]){const level=g.build.level(id),d=TACTICS[id];if(level)entries.push({id:'tactic_'+id,icon:'build_icon_'+id,name:d.name+' Lv.'+level,desc:tacticDescription(id,level),kind:'战法',badge:String(level)});}
   // 合击排在战法后面（多了会挤进「其余 N 项」，不挤掉战法图标）
   for(const c of activeCombos(g.build.tags()))entries.push({id:'combo_'+c.id,icon:SCHOOLS[c.a].icon,name:'合击 · '+c.name,desc:c.desc,kind:'合击 · '+SCHOOLS[c.a].name+' × '+SCHOOLS[c.b].name,badge:'合',mark:SCHOOLS[c.a].short+SCHOOLS[c.b].short,rare:true});
-  for(const w of player.weapons)if(w.level>1)entries.push({id:'weapon_'+w.id,icon:({spear_orbit:'icon_1',crossbow:'icon_2',guandao:'icon_guandao',flame_banner:'icon_3',zhenbei_blade:'icon_zhenbei',lianhuan_mines:'icon_lianhuan',sun_knives:'icon_sunknives',diaochan_fans:'icon_fans',baodiao_bow:'icon_baodiao',dangyang_roar:'icon_shemao',zhanjin_lance:'icon_zhanjin',shuanggu_swords:'icon_shuanggu',fangtian_ji:'icon_fangtian'})[w.id],name:WEAPON_META[w.id].name+' Lv.'+w.level,desc:WEAPON_META[w.id].desc+'。已强化至 Lv.'+w.level+'，详细属性可在修习面板查看。',kind:'本命武器 · 自动攻击',badge:String(w.level),mark:'兵'});
+  for(const w of player.weapons)if(w.level>1)entries.push({id:'weapon_'+w.id,icon:({spear_orbit:'icon_1',crossbow:'icon_2',guandao:'icon_guandao',flame_banner:'icon_3',zhenbei_blade:'icon_zhenbei',lianhuan_mines:'icon_lianhuan',sun_knives:'icon_sunknives',diaochan_fans:'icon_fans',baodiao_bow:'icon_baodiao',dangyang_roar:'icon_shemao',zhanjin_lance:'icon_zhanjin',shuanggu_swords:'icon_shuanggu',fangtian_ji:'icon_fangtian',pozhen_shuangji:'icon_pozhen'})[w.id],name:WEAPON_META[w.id].name+' Lv.'+w.level,desc:WEAPON_META[w.id].desc+'。已强化至 Lv.'+w.level+'，详细属性可在修习面板查看。',kind:'本命武器 · 自动攻击',badge:String(w.level),mark:'兵'});
   for(const id of Object.keys(g.attributes)as AttributeId[])if(g.attributes[id]>0)entries.push({id:'attribute_'+id,icon:attributeIcon(id),name:ATTRIBUTE_INFO[id].name+' '+g.attributes[id]+'/'+g.attrMax,desc:ATTRIBUTE_INFO[id].effect,kind:'属性 · 常驻',badge:String(g.attributes[id]),mark:ATTRIBUTE_INFO[id].name[0]});
   for(const k of Object.keys(g.charmLegend)as (keyof typeof g.charmLegend)[]){const d=charmDef('charm_'+k);if(d)entries.push({id:'relic_'+k,icon:d.icon,name:d.name,desc:d.desc(g.charmLegend[k]?'orange':'purple'),kind:'信物 · 传奇',badge:'信',rare:true});}
   const overflow=entries.length>this.maximum,show=entries.slice(0,overflow?this.maximum-1:this.maximum);

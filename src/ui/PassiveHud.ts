@@ -1,4 +1,5 @@
 import type { CharacterId } from '../data/characters';
+import { ZHANGLIAO } from '../data/zhangliao';
 import Phaser from 'phaser';
 import { DEPTH, FONT, IS_DESKTOP } from '../config';
 import { CHARACTER_PASSIVES } from '../data/passives';
@@ -6,6 +7,7 @@ import type { CharacterPassives } from '../systems/CharacterPassives';
 
 /** 被动技能完整说明（悬停 / 点按弹出）。数值见 data/passives.ts 的 PASSIVE_RULES。 */
 export const PASSIVE_DETAILS: Record<CharacterId, string> = {
+  zhangliao: '止啼：双戟每击叠震慑，3 层溃逃 2 秒（溃兵受伤 +25%）；击杀溃逃的敌兵积 1 层，满 12 层召「八百虎贲」虚影骑兵绕身环冲两圈。',
   lvbu: '无双：每击杀 1 名敌人积 1 层战意，满 25 层进入「人中吕布」8 秒：移速、攻速 +40%，每次出手打两次，不被击退；随后清空。',
   sunshangxiang: '侍婢执刀：移动中每 0.8 秒积 1 层疾步（停下不会掉层）。\n满 6 层后，下一次掷刀时召来 2 名执刀侍婢护身 6 秒（最多 3 名）：绕身巡护，70 像素内的敌人每 0.5 秒挨一刀（掷刀伤害的 50%–70%，随武器等级提高），随后清空。',
   diaochan: '离间：飞扇每命中一次加 1 层魅惑，满 3 层的敌人倒戈 3 秒（精锐 1.5 秒）——转身去撞最近的同伴，自己受伤 +20%；首领不倒戈，改为 3 秒受伤 +15%。\n每离间 1 名敌人积 1 层舞势，满 5 层后下一次化为「闭月」：舞带环身旋舞 2 秒，半径 160 内每 0.4 秒 50% 伤害并令圈内敌人倒戈。',
@@ -75,11 +77,11 @@ export class PassiveHud {
     if (!visible) { this.renderTip(now, false); return; }
     const s = passive.snapshot(now);
     this.character = s.character; this.ready = s.ready;
-    const colors = { lvbu: 0xe0604a, zhaoyun: 0x70cbdc, guanyu: 0x88c88b, huangzhong: 0xe8c16a, zhuge: 0xe49a6d, zhangfei: 0xd8645a, huangyueying: 0x7fc4a8, pangtong: 0xd9824a, liubei: 0xe0c37a, weiyan: 0xc8885a, machao: 0x9fc6e8, sunshangxiang: 0xe88a7a, diaochan: 0xd9a0e8 };
+    const colors = { zhangliao: 0x8fa0b8, lvbu: 0xe0604a, zhaoyun: 0x70cbdc, guanyu: 0x88c88b, huangzhong: 0xe8c16a, zhuge: 0xe49a6d, zhangfei: 0xd8645a, huangyueying: 0x7fc4a8, pangtong: 0xd9824a, liubei: 0xe0c37a, weiyan: 0xc8885a, machao: 0x9fc6e8, sunshangxiang: 0xe88a7a, diaochan: 0xd9a0e8 };
     const tint = s.ready ? 0xf5d780 : colors[s.character];
     const g = this.graphics.clear();
     g.fillStyle(tint, 1).fillRect(0, 10, 3, 22);
-    this.emblem.setText({ lvbu: '戟', zhaoyun: '龙', guanyu: '势', huangzhong: '弓', zhuge: '策', zhangfei: '怒', huangyueying: '巧', pangtong: '凤', liubei: '仁', weiyan: '战', machao: '骑', sunshangxiang: '姬', diaochan: '月' }[s.character]);
+    this.emblem.setText({ zhangliao: '啼', lvbu: '戟', zhaoyun: '龙', guanyu: '势', huangzhong: '弓', zhuge: '策', zhangfei: '怒', huangyueying: '巧', pangtong: '凤', liubei: '仁', weiyan: '战', machao: '骑', sunshangxiang: '姬', diaochan: '月' }[s.character]);
     this.emblem.setColor(`#${tint.toString(16).padStart(6, '0')}`);
     this.title.setText(CHARACTER_PASSIVES[s.character].name);
     this.counter.setText(s.ready ? (s.character === 'huangzhong' ? '神射中' : '已就绪') : s.maxStacks ? `${s.stacks} / ${s.maxStacks}` : `${(s.calmProgress * 5).toFixed(1)}秒`);
@@ -94,6 +96,7 @@ export class PassiveHud {
       }
     }
     const hints = {
+      zhangliao: `击杀溃兵积止啼 · 满 ${ZHANGLIAO.need} 层召八百虎贲`,
       lvbu: s.ready ? '人中吕布：每击两次 · 移速攻速 +40%' : '击杀积战意 · 满 25 层人中吕布',
       zhaoyun: s.ready ? '下次龙枪 +1枪 · 穿透距离 +25%' : '命中蓄龙胆 · 每0.15秒最多1层',
       guanyu: s.ready ? '下次斩击 伤害+25% · 范围+18%' : `斩中3敌蓄势 · 当前范围 +${s.stacks * 6}%`,

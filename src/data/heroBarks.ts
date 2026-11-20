@@ -28,6 +28,11 @@ export interface HeroBarkLines {
 }
 
 export const HERO_BARKS: Record<CharacterId, HeroBarkLines> = {
+  zhangliao: {
+    trigger: ['八百虎贲，随我破阵！', '张文远在此，谁敢一战！', '辽来辽来！'],
+    bossAppear: ['敌众我寡，正好破之！'], bossDown: ['敌胆已破。'],
+    vsBoss: { 孙权: '孙仲谋，逍遥津可还记得？', 吕布: '温侯，辽……得罪了。' },
+  },
   lvbu: {
     trigger: ['人中吕布，马中赤兔！', '天下谁人能挡我！', '无双之名，岂是虚传！'],
     bossAppear: ['来者何人，也配与我一战？'], bossDown: ['不堪一击。'],

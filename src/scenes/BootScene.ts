@@ -72,7 +72,7 @@ export class BootScene extends Phaser.Scene {
     if(lean){ // 手机精简启动到此为止：另外只带上主页 / 选将 / 章节卡会用到的小图（立绘头像、章节首领小像），走同一套 v2 画风换图
       this.load.image('rest_camp','assets/world/rest-camp.webp');this.load.image('hero_zhaoyun','assets/processed/hero_zhaoyun.png');
       this.load.image('portrait_zhuge','assets/processed/portrait_zhuge.png');
-      for(const id of ['huangzhong','guanyu','machao','weiyan','liubei','pangtong','huangyueying','sunshangxiang','diaochan','zhangfei','lvbu'])this.load.image(id+'_portrait','assets/processed/'+id+'_portrait.png');
+      for(const id of ['huangzhong','guanyu','machao','weiyan','liubei','pangtong','huangyueying','sunshangxiang','diaochan','zhangfei','lvbu','zhangliao'])this.load.image(id+'_portrait','assets/processed/'+id+'_portrait.png');
       this.load.image('huaxiong_portrait','assets/phase17/huaxiong/portrait.png');
       this.load.spritesheet('xurong','assets/phase17/xurong/sheet.png',{frameWidth:128,frameHeight:128});
       this.load.spritesheet('boss_lubu','assets/processed/hulao/lubu-walk.png',{frameWidth:256,frameHeight:256});
@@ -158,6 +158,7 @@ export class BootScene extends Phaser.Scene {
     this.load.spritesheet('zhangfei_walk_sheet', 'assets/processed/zhangfei_walk_sheet.png', { frameWidth: 96, frameHeight: 96 });
     // P2 吕布：只有 v2 行走图（4×4、每格 176）
     this.load.spritesheet('lvbu_walk_sheet', 'assets/processed-v2/lvbu_walk_sheet.png', { frameWidth: 176, frameHeight: 176 });
+    this.load.spritesheet('zhangliao_walk_sheet', 'assets/processed-v2/zhangliao_walk_sheet.png', { frameWidth: 176, frameHeight: 176 });
     this.load.spritesheet('huangzhong_walk_sheet', 'assets/processed/huangzhong_walk_sheet.png', { frameWidth: 96, frameHeight: 96 });
     this.load.spritesheet('enemy_infantry_walk_sheet', 'assets/processed/enemy_infantry_walk_sheet.png', { frameWidth: 96, frameHeight: 96 });
     this.load.spritesheet('enemy_shield_walk_sheet', 'assets/processed/enemy_shield_walk_sheet.png', { frameWidth: 96, frameHeight: 96 });
@@ -232,6 +233,7 @@ export class BootScene extends Phaser.Scene {
     this.load.image('diaochan_portrait', 'assets/processed/diaochan_portrait.png');
     this.load.image('zhangfei_portrait', 'assets/processed/zhangfei_portrait.png');
     this.load.image('lvbu_portrait', 'assets/processed/lvbu_portrait.png');
+    this.load.image('zhangliao_portrait', 'assets/processed/zhangliao_portrait.png');
     this.load.image('item_drum', 'assets/processed/item_drum.png');
     this.load.image('item_whetstone', 'assets/processed/item_whetstone.png');
     this.load.image('item_armor', 'assets/processed/item_armor.png');
@@ -246,7 +248,7 @@ export class BootScene extends Phaser.Scene {
     this.load.image('ui_panel', 'assets/processed/ui_panel.png');
     this.load.image('ui_button', 'assets/processed/ui_button.png');
     // 本命武器 / 通用被动 / 稀有：新厚涂图标（程序化 icon_* 在已存在时不会再生成）
-    for(const [key,id] of [['icon_1','weapon_spear'],['icon_2','weapon_crossbow'],['icon_3','weapon_flame'],['icon_guandao','weapon_guandao'],['icon_zhenbei','weapon_zhenbei'],['icon_lianhuan','weapon_lianhuan'],['icon_sunknives','weapon_sunknives'],['icon_fans','weapon_fans'],['icon_baodiao','weapon_baodiao'],['icon_shemao','weapon_shemao'],['icon_zhanjin','weapon_zhanjin'],['icon_shuanggu','weapon_shuanggu'],['icon_fangtian','weapon_fangtian'],['icon_wushuang','wushuang'],['icon_passive','passive'],['icon_rare','rare']] as const)this.load.image(key,'assets/upgrade-icons/'+id+'.webp');
+    for(const [key,id] of [['icon_1','weapon_spear'],['icon_2','weapon_crossbow'],['icon_3','weapon_flame'],['icon_guandao','weapon_guandao'],['icon_zhenbei','weapon_zhenbei'],['icon_lianhuan','weapon_lianhuan'],['icon_sunknives','weapon_sunknives'],['icon_fans','weapon_fans'],['icon_baodiao','weapon_baodiao'],['icon_shemao','weapon_shemao'],['icon_zhanjin','weapon_zhanjin'],['icon_shuanggu','weapon_shuanggu'],['icon_fangtian','weapon_fangtian'],['icon_pozhen','weapon_pozhen'],['icon_zhiti','zhiti'],['icon_wushuang','wushuang'],['icon_passive','passive'],['icon_rare','rare']] as const)this.load.image(key,'assets/upgrade-icons/'+id+'.webp');
     // 人物画风 v2（?art=v2）：有新图的图集换成 v2 文件，键名不变
     applyArtStyleUrls(this.load);
     // 关羽拖刀斩专属图（拖刀行走 / 拖刀上撩，src/data/dragArt.ts）：只在 v2 画风、且已登记文件时加载

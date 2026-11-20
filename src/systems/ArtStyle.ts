@@ -42,6 +42,8 @@ export const ART_V2_FILES: Readonly<Record<string, string>> = sideBossFiles({
   // P2 第一批可玩武将：吕布（只有 v2 图；v1 也直接用这张）
   lvbu_walk_sheet: 'assets/processed-v2/lvbu_walk_sheet.png',
   lvbu_actions: 'assets/hero-actions-v2/lvbu.png',
+  zhangliao_walk_sheet: 'assets/processed-v2/zhangliao_walk_sheet.png',
+  zhangliao_actions: 'assets/hero-actions-v2/zhangliao.png',
   // 第 2 批：我方兵种（4×4，见 V2_TROOP_KEYS / applyV2TroopFrames）
   shu_swordsman_walk_sheet: 'assets/processed-v2/troops/swordsman_walk.png',
   shu_swordsman_attack_sheet: 'assets/processed-v2/troops/swordsman_attack.png',

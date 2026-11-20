@@ -29,7 +29,7 @@ await p.waitForTimeout(500);
 const start = await p.evaluate(() => { const s = window.__game.scene.getScene('GameScene'), g = s.player.growth; s.updateHud?.();
   return { might: g.attributes.strength, free: g.heroFree, un: g.unallocated, lv: s.heroLv, battle: s.player.level, hud: s.hudTexts.level.text, full: s.player.hp === s.player.maxHp }; });
 ck('属性改版：旧记录的点数全部退回（不换算），Lv6 共 5 点待分配；开局等级即武将等级 Lv6（2026-11-17 取消局内等级）；新开一场生命回满', start.might === 0 && start.free === 5 && start.un === 5 && start.lv === 6 && start.battle === 6 && start.full, start);
-ck('HUD 只显示「赵云 Lv.6」（不再有局内「战功」）', start.hud === '赵云 Lv.6', start.hud);
+ck('HUD 显示「赵云 Lv.6」+ 建议等级（2026-11-20 软上限：「· 建议 x」，越级时字和经验条换暗金），不再有局内「战功」', /^赵云 Lv\.6 · 建议 \d+$/.test(start.hud), start.hud);
 await p.screenshot({ path: `${out}/desktop-hud.png`, clip: { x: 0, y: 0, width: 640, height: 200 } });
 
 // 2) 局内升级 = 战功，不再给属性点；加点用的是永久点（测试战斗不写回）
@@ -102,16 +102,16 @@ const store = await p.evaluate(async () => {
 });
 ck('武将经验表（2026-11-19 wave-progression-redesign §3.3：16 / 20 / 28 / 36 / 120 / … / Lv10 550，上限 B）', JSON.stringify(store.table) === '[16,20,28,36,120,550]' && store.slot, store);
 ck('只开第一章：上限 10，新武将从 Lv1 起步（含招募的 r_）', JSON.stringify(store.open1) === '[1,10,1,1,1]', store.open1);
-ck('结算记经验：Lv1 + 16 → Lv2；超出上限停在 Lv10，经验暂存', JSON.stringify(store.lv2) === '[1,2]' && JSON.stringify(store.capped) === '[10,true,10]', store);
-ck('属性点：Lv25 前每级 1 点、Lv25–38 每 2 级、之后每 3 级 1 点（Lv10 = 9、Lv25 = 24、Lv26 = 24、Lv38 = 30、Lv42 = 31、Lv54 = 35），加点写入存档', JSON.stringify(store.points) === '[9,true,8,1,9,24,24,30,31,35]', store.points);
+ck('结算记经验：Lv1 + 16 → Lv2；软上限（2026-11-20）：越过建议等级 Lv10 后每级 ×1.45，99999 经验也只到 Lv15–25，不再封顶（capped = false）', JSON.stringify(store.lv2) === '[1,2]' && store.capped[0] > 10 && store.capped[0] <= 25 && store.capped[1] === false && store.capped[2] === 10, store);
+ck('属性点：Lv25 前每级 1 点、Lv25–38 每 2 级、之后每 3 级 1 点（Lv10 = 9、Lv25 = 24、Lv26 = 24、Lv38 = 30、Lv42 = 31、Lv54 = 35），加点写入存档', store.points[0] === store.capped[0] - 1 && store.points[1] === true && store.points[2] === store.points[0] - 1 && JSON.stringify(store.points.slice(3)) === '[1,9,24,24,30,31,35]', store.points);
 ck('2026-11-19 等级重做（上限 B）：10 / 14 / … / 54；宝石经验章节倍率 ×1 / 1.5 / 3 / 6.5；体魄生命 Lv1 0、Lv10 +72、Lv26 +312、Lv54 +480', store.caps.every(Boolean) && JSON.stringify(store.chapterMul) === '[1,1.5,3,6.5]' && JSON.stringify(store.vigor) === '[0,72,312,480]', { caps: store.caps, mul: store.chapterMul, vigor: store.vigor });
 ck('开第二章：上限 14，暂存经验补升；新武将从 Lv10（上限 − 4，落后一章）起步', store.open2[0] === 2 && store.open2[1] === 14 && store.open2[2] === 10 && store.open2[3] > 10 && store.open2[4] === 10, store.open2);
 ck('单项属性最多 10 点', JSON.stringify(store.maxOne) === '[10,false]', store.maxOne);
 ck('属性改版老档：六项点数全部退回（Lv9 → 8 点待分配），提示只给一次', JSON.stringify(store.refund.attrs) === '{"strength":0,"agility":0,"intellect":0,"command":0}' && store.refund.free === 8 && JSON.stringify(store.refund.notice) === '[true,false]', store.refund);
 ck('老档迁移：打赢过仗的武将补到当前上限的一半（≥ 起始等级 Lv10），只迁移一次', store.migr[0] === 10 && store.migr[1] === 10 && store.migr[2] === true, store.migr);
-ck('主线首次打经验 × 1.0', store.rate === 1, store.rate);
-ck('第 3–5 章场景有首通键（third-1 / guandu-1 / chibi-1，× 1.0）；攻城、军情、三英战吕布没有键、× 0.5', JSON.stringify(store.keys) === JSON.stringify({ ThirdGameScene: ['third-1', 1], GuanduGameScene: ['guandu-1', 1], ChibiGameScene: ['chibi-1', 1], SiegeGameScene: [null, .5], IntelGameScene: [null, .5], LubuGameScene: [null, .5] }), store.keys);
-ck('首次通关经验：一章 120、二章 250、三章 380、四章 510、五章 640；每关只给一次，存档保留；挑战关不给', JSON.stringify(store.fc) === '[120,0,250,380,510,640,0,0]' && JSON.stringify(store.fcKept) === '[0,120]' && store.key === 'huangjin-1', { fc: store.fc, fcKept: store.fcKept, key: store.key });
+ck('主线首次打宝石经验 × 1.4（2026-11-20 XP_SHIFT：过关经验挪进关内）', Math.abs(store.rate - 1.4) < 1e-9, store.rate);
+ck('第 3–5 章场景有首通键（third-1 / guandu-1 / chibi-1，× 1.0 × 1.4）；攻城、军情、三英战吕布没有键、× 0.5 × 1.4', JSON.stringify(store.keys) === JSON.stringify({ ThirdGameScene: ['third-1', 1.4], GuanduGameScene: ['guandu-1', 1.4], ChibiGameScene: ['chibi-1', 1.4], SiegeGameScene: [null, .7], IntelGameScene: [null, .7], LubuGameScene: [null, .7] }), store.keys);
+ck('首次通关经验（2026-11-20 大半挪进关内，×0.35）：一章 42、二章 88、三章 133、四章 179、五章 224；每关只给一次，存档保留；挑战关不给', JSON.stringify(store.fc) === '[42,0,88,133,179,224,0,0]' && JSON.stringify(store.fcKept) === '[0,42]' && store.key === 'huangjin-1', { fc: store.fc, fcKept: store.fcKept, key: store.key });
 
 ck('控制台无报错', errors.length === 0, errors.slice(0, 6));
 console.log(`\n${pass} passed, ${fail} failed`);

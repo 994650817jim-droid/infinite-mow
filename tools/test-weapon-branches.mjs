@@ -48,6 +48,27 @@ const branchFire = async (hero, branches) => {
   ck('24 枚分支卡面图标都已载入（branch_icon_*）', ic.length === 0, ic);
   await p.close();
 }
+// 兵器专职面板（2026-11-20）：本命 Lv5 单独弹面板（暂停、两张大卡、立绘、契合印），不再混在三选一；先专职再三选一；选契合那条效果 +10%；构筑总览显示分支栏；进阶短演出
+{
+  const p = await open({ key: 'GameScene', run: { chapter: 'hulao', westStage: 2, character: 'zhaoyun' } });
+  await p.evaluate(() => { const s = window.__S; window.__calm(); const w = s.player.weapons[0]; w.level = 5; delete w.branch; delete w.attuned; w.over = 0; s.pendingLevels = 1; s.lastPickAt = -1e9; s.openUpgrade(); });
+  await p.waitForTimeout(1500);
+  const pn = await p.evaluate(() => { const s = window.__S, root = s.children.getByName('branch-panel'); const texts = root ? root.list.filter(o => o.type === 'Text').map(o => o.text) : []; return { mode: s.mode, panel: !!root, cards: root ? root.list.filter(o => /^branch-card-/.test(o.name ?? '')).length : 0, fit: s.branchFitId, fitSeal: texts.includes('契合'), portrait: !!root?.getByName?.('branch-portrait') || !s.textures.exists('ink_hero_zhaoyun'), final: texts.some(t => /进阶形态「/.test(t)), lv6: texts.some(t => /Lv6（第四章开放）/.test(t)), pending: s.pendingLevels }; });
+  await p.screenshot({ path: OUT + '/branch-panel.png' });
+  ck('本命 Lv5：单独弹「兵器专职」面板（暂停、两张大卡、契合印、写 Lv6 / 进阶形态），三选一排在后面', pn.mode === 'branch' && pn.panel && pn.cards === 2 && pn.fitSeal && pn.final && pn.lv6 && pn.pending === 1, pn);
+  const idx = await p.evaluate(() => { const s = window.__S; return s.branchOpts ? s.branchOpts.findIndex(b => b.id === s.branchFitId) : 0; });
+  await p.keyboard.press(idx === 0 ? 'Digit1' : 'Digit2'); await p.waitForTimeout(600);
+  const pk = await p.evaluate(() => { const s = window.__S, w = s.player.weapons[0]; return { branch: w.branch, attuned: w.attuned, mode: s.mode, panel: !!s.children.getByName('branch-panel'), opts: (s.upgradeOptions ?? []).map(o => o.id), banner: window.__banners.slice(-2) }; });
+  ck('按键选契合那条：锁定分支、记「契合」（效果 +10%）、面板关；接着弹排队的三选一，里面不再有专职卡', pk.branch === pn.fit && pk.attuned === true && !pk.panel && pk.mode === 'levelup' && !pk.opts.some(id => id.startsWith('branch_')) && pk.banner.some(b => /兵器专职 · .*契合流派/.test(b)), pk);
+  await p.evaluate(() => { const s = window.__S; window.__calm(); s.togglePause(); s.openBuildPanel(); }); await p.waitForTimeout(900);
+  const ov = await p.evaluate(() => { const s = window.__S, all = []; const walk = l => { for (const o of l) { if (o.type === 'Text' && o.visible !== false) all.push({ n: o.name, t: o.text }); if (o.list) walk(o.list); } }; walk(s.children.list); return all.filter(x => /-branch/.test(x.n ?? '')).map(x => x.t); });
+  await p.screenshot({ path: OUT + '/branch-overview.png' });
+  ck('构筑总览：专职栏写分支名 + 契合、Lv6 / Lv7 进度、进阶条件（Lv7 + 本派 4 势）', ov.some(t => /契合/.test(t)) && ov.some(t => /Lv6 · （第四章）|Lv6 ·（第四章）|Lv6 .（第四章）/.test(t) || /Lv6/.test(t)) && ov.some(t => /进阶「/.test(t) && /4 势/.test(t)), ov);
+  await p.evaluate(async () => { const s = window.__S, wb = await import('/src/data/weaponBranches.ts'); s.click?.('build-panel-back'); s.children.getByName('build-panel')?.destroy(); s.setMode('none'); s.branchFinalShow(wb.branchById(s.player.weapons[0].branch)); }); await p.waitForTimeout(300);
+  const fin = await p.evaluate(() => ({ title: window.__S.children.getByName('branch-final-title')?.text }));
+  ck('进阶形态短演出：分支进阶名大字（+ BranchFinalFx 手绘爆发、本派觉醒光、震屏）', !!fin.title, fin);
+  await p.close();
+}
 await b.close();
 ck('无页面报错', errors.length === 0, errors.slice(0, 4));
 console.log(fail ? `FAILED ${fail}` : 'ALL PASS');

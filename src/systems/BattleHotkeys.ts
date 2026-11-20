@@ -35,6 +35,8 @@ export interface HotkeyHost {
   mapOpen?(): boolean;
   /** 军令面板收起 / 展开（G）；没有面板（手机布局）时不传。 */
   toggleOrders?(): void;
+  /** 兵器专职面板：选第 i 条（1 / 2）。 */
+  chooseBranch?(i: number): boolean;
 }
 
 type GO = Phaser.GameObjects.GameObject & { visible?: boolean; parentContainer?: Phaser.GameObjects.Container | null; getBounds?: () => Phaser.Geom.Rectangle };
@@ -132,6 +134,9 @@ export class BattleHotkeys {
         if (a === 'build') { h.openBuild(); this.buildFromBattle = false; return true; }
         if (a === 'attributes' && h.canAttributes()) { h.openAttributes('pause'); return true; }
         return false;
+      case 'branch':
+        if (i !== undefined && i < 2) return h.chooseBranch?.(i) ?? false;
+        return false;
       case 'levelup': case 'bossloot':
         if (i !== undefined && i < 3) { h.chooseUpgrade(i); return true; }
         if (a === 'reroll' && mode === 'levelup') return click(s, 'upgrade-reroll');
@@ -187,6 +192,7 @@ const HINTS: Record<string, Array<[string | RegExp, HotkeyAction | ((i: number) 
   rest: [[/^camp-tab-[0-9]+$/, i => (['pick1', 'pick2', 'pick3', 'pick4'] as const)[i]], ['camp-depart', 'confirm'], ['camp-bag', 'bag']],
   result: [['result-home', 'confirm'], ['result-restart', 'reroll']],
   parley: [['parley-persuade', 'pick1'], ['parley-execute', 'pick2'], ['parley-press', 'pick3']],
+  branch: [[/^branch-card-[0-1]$/, i => (['pick1', 'pick2'] as const)[i]]],
 };
 
 /** 键位提示：HUD 圆钮与面板按钮右上角的米色小字（电脑布局；手机布局、手柄输入时隐藏）。 */

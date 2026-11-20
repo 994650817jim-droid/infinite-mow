@@ -161,7 +161,7 @@ export class WeaponBranches {
     const ang = Math.atan2(t.y - P.y, t.x - P.x), range = this.tier() >= 3 ? 440 : 360, sx = P.x, sy = P.y, hit = new Set<Enemy>(), fin = this.final(); let lastSlow = 0;
     playSheet(this.h.scene, 'fx_drag_wave', sx, sy, { size: 150, ms: 450, depth: DEPTH.fx, tint: 0x7fe0c0, rotation: ang, add: true, onUpdate: (img, t2) => {
       const x = sx + Math.cos(ang) * range * t2, y = sy + Math.sin(ang) * range * t2; img.setPosition(x, y);
-      for (const e of this.h.query(x, y, 70)) if (e.active && !e.isSupplySlot && !hit.has(e) && Math.hypot(e.x - x, e.y - y) <= 60 + e.radius) { hit.add(e); this.deal(e, .8); }
+      for (const e of this.h.query(x, y, 70)) if (e.active && !e.isSupplySlot && !hit.has(e) && Math.hypot(e.x - x, e.y - y) <= 60 + e.radius) { hit.add(e); this.deal(e, .68); } // 2026-11-19 平衡：青龙月牙 .8 → .68（−15%）
       if (fin && t2 - lastSlow > .2) { lastSlow = t2; this.h.slow(x, y, 80, .5, 1500); }
     } });
     this.stats.procs++;
@@ -169,7 +169,7 @@ export class WeaponBranches {
   /** 第二批：出手触发的分支（返回 true = 已处理）。 */
   private onFire2(b: WeaponBranch, now: number): boolean {
     const P = this.h.player, k = this.k(), t = this.nearest(460);
-    if (b.id === 'zg_liaoyuan') { if (!t) return true; const tx = t.x, ty = t.y; this.h.scene.time.delayedCall(850, () => this.field(tx, ty, 80 * (this.tier() >= 2 ? 1.2 : 1), 3000 * (this.tier() >= 3 ? 1.4 : 1), .25, true)); return true; }
+    if (b.id === 'zg_liaoyuan') { if (!t) return true; const tx = t.x, ty = t.y; this.h.scene.time.delayedCall(850, () => this.field(tx, ty, 80 * (this.tier() >= 2 ? 1.2 : 1), 3000 * (this.tier() >= 3 ? 1.4 : 1), .21 /* 2026-11-19 平衡：.25 → .21（−15%，5-2 首领接战 5 秒就倒） */, true)); return true; }
     if (b.id === 'zg_bazhen') { if (!t) return true; const max = this.final() ? 8 : 2 + this.tier(); if (this.traps.length >= max) this.traps.shift(); this.traps.push({ x: t.x, y: t.y, until: now + 6000, armed: 0 }); this.fx('fx_awaken_stratagem', t.x, t.y, 110, 500, 0x9fc8ff); this.stats.procs++; return true; }
     if (b.id === 'hz_chuanyang') {
       const far = this.farthest(520); if (!far) return true; this.shots++;

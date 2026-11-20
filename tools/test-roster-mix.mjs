@@ -18,7 +18,7 @@ for (const key of STAGES) {
   const picks = {}, firstWave = {}, maxId = {}, maxRole = {}; let worst = 0, worstAt = null, basePicks = 0, total = 0;
   const counts = () => M.tallyRoster(alive.map(id => ({ active: true, def: { roster: id || undefined } })));
   for (let t = 0; t < TICKS; t++) {
-    const wave = 1 + Math.floor(t / (TICKS / 3));
+    const wave = 1 + Math.floor(t / (TICKS / 5)); // 五段关：1 先锋 … 5 首领（2026-11-19 原按三波，第 4 段起出的兵种测不到）
     // 在场人数先涨到 140 左右再维持（死得快 / 慢交替，模拟割草）
     const target = Math.min(140, 20 + t / 10);
     while (alive.length > target || (alive.length && rnd() < .35)) alive.splice(Math.floor(rnd() * alive.length), 1);

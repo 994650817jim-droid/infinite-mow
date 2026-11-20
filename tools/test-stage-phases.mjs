@@ -30,19 +30,19 @@ const state = p => p.evaluate(() => { const s = window.__S, r = s.phaseRunner, t
 async function stageCase(label, start, shot) {
   const p = await open(start);
   const a = await state(p);
-  ck(`${label}：五段（先锋 / 精锐 / 事件 / 副将 / 首领），首领 205 秒登场；不显示「第 x 波」，顶部战况线；保底 5 次；首领生命按章节加倍（PHASES.bossHpMul，2-1 ≈ ×2.2）`, a.kinds?.join() === 'vanguard,elite,event,lieutenant,boss' && a.starts.join() === '0,45,100,155,205' && !a.waveText && a.track?.visible && a.cap === 5 && a.bossHpMul > 0, a);
-  await jump(p, 46); const e = await state(p);
+  ck(`${label}：五段（先锋 / 精锐 / 事件 / 副将 / 首领），首领 245 秒登场；不显示「第 x 波」，顶部战况线；保底 5 次；首领生命按章节加倍（PHASES.bossHpMul，2-1 ≈ ×2.2）`, a.kinds?.join() === 'vanguard,elite,event,lieutenant,boss' && a.starts.join() === '0,55,120,185,245' && !a.waveText && a.track?.visible && a.cap === 5 && a.bossHpMul > 0, a);
+  await jump(p, 56); const e = await state(p);
   ck(`${label}：精锐段——横幅写段落故事名（不带「第 x 波」）+「精锐来袭」，精锐小队压上，战况线点亮 2 个图标，保底补到 1`, e.phase === 1 && e.run.elites >= 2 && /精锐来袭/.test(e.banners.join()) && !/第 \d/.test(e.banners.join()) && e.track.iconsLit === 2 && e.picks >= 1, e);
-  await jump(p, 101); const v = await state(p);
+  await jump(p, 121); const v = await state(p);
   ck(`${label}：事件段——伏兵一圈冲阵，保底 2`, v.phase === 2 && v.run.ambush >= 8 && v.picks >= 2 && /伏兵四起/.test(v.banners.join()), v);
-  await jump(p, 156); await p.waitForTimeout(600); const l = await state(p);
+  await jump(p, 186); await p.waitForTimeout(600); const l = await state(p);
   const bossHp = await p.evaluate(async () => { const s = window.__S, m = await import('/src/data/stagePhases.ts'); /* 副将按「参考首领生命」夹（去掉章节加倍、×bossRef，P6 平衡） */ return Math.round(s.chapter.enemies.boss.hp * s.chapter.growth.bossHp / m.PHASES.bossHpMul(s.phasePlan.chapter, s.phasePlan.phases.length) * m.PHASES.lieutenantHp.bossRef); });
   ck(`${label}：副将段——副将（名牌 + 小血条），生命为参考首领 35%–60%（精锐 ×3 夹在其间），保底 3`, l.phase === 3 && !!l.run.lieutenant && l.run.lieutenantHp / bossHp >= .33 && l.run.lieutenantHp / bossHp <= .62 && l.picks >= 3 && /副将出阵/.test(l.banners.join()), { ...l, bossHp });
   if (shot) { await p.evaluate(() => window.__calm()); await p.waitForTimeout(900); await p.evaluate(() => window.__calm()); await p.waitForTimeout(300); await p.screenshot({ path: `${OUT}/${shot}-lieutenant.png` }); }
   await p.evaluate(() => { const s = window.__S, e = s.phaseRunner.lt.e; e.hp = 0; s.killEnemy(e); }); await p.waitForTimeout(400); await p.evaluate(() => window.__calm()); const d = await state(p);
   ck(`${label}：副将倒下——「X 授首」横幅，保底补到 4`, d.run.lieutenantDown && d.picks >= 4 && /授首/.test(d.banners.join()), d);
-  await jump(p, 206); await p.waitForTimeout(800); await p.evaluate(() => window.__calm()); await p.waitForTimeout(400); const z = await state(p);
-  ck(`${label}：首领段——205 秒首领登场，战况线淡出让位给首领血条`, z.phase === 4 && z.boss && z.run.phase === 4, z);
+  await jump(p, 246); await p.waitForTimeout(800); await p.evaluate(() => window.__calm()); await p.waitForTimeout(400); const z = await state(p);
+  ck(`${label}：首领段——245 秒首领登场，战况线淡出让位给首领血条`, z.phase === 4 && z.boss && z.run.phase === 4, z);
   await p.close();
 }
 await stageCase('2-1 汜水关（GameScene）', { key: 'GameScene', run: { chapter: 'hulao', westStage: 1 } }, null);
@@ -51,16 +51,16 @@ await stageCase('3-2 宛城夜袭（ThirdGameScene）', { key: 'ThirdGameScene',
 // 战况线截图（事件段中途）+ 1-1 只有三段
 {
   const p = await open({ key: 'GameScene', run: { chapter: 'hulao', westStage: 2 } });
-  await jump(p, 120); await p.waitForTimeout(300);
+  await jump(p, 150); await p.waitForTimeout(300);
   await p.screenshot({ path: `${OUT}/track-2-2.png` });
   const r = await p.evaluate(async () => { const m = await import('/src/data/stagePhases.ts'); const one = m.buildPhasePlan('huangjin', 1, [{ start: 0, name: 'a' }, { start: 45, name: 'b' }, { start: 90, name: 'c' }], '张梁'), two = m.buildPhasePlan('huangjin', 2, [{ start: 0, name: 'a' }, { start: 45, name: 'b' }, { start: 90, name: 'c' }], '张宝'); return { one: one.phases.map(x => x.kind + '@' + x.start), two: two.phases.map(x => x.kind + '@' + x.start), cap: window.__S.pickCap(), caption: window.__S.battleTrack.caption.text }; });
-  ck('第一章逐关加长：1-1 三段（0 / 45 / 90，时间同原来）、1-2 四段（无副将）；战况线下写「下一段 · 名字 · 秒数」', r.one.join() === 'vanguard@0,elite@45,boss@90' && r.two.join() === 'vanguard@0,elite@45,event@100,boss@155' && /下一段 · .+ · \d+ 秒/.test(r.caption), r);
+  ck('第一章逐关加长：1-1 三段（0 / 45 / 90，时间同原来）、1-2 四段（无副将）；战况线下写「下一段 · 名字 · 秒数」', r.one.join() === 'vanguard@0,elite@45,boss@90' && r.two.join() === 'vanguard@0,elite@55,event@120,boss@185' && /下一段 · .+ · \d+ 秒/.test(r.caption), r);
   await p.close();
 }
 // P2 战场机缘：精锐段 20 秒后出粮车（地上圈 + 道具 + 军令箭头），站满 3 秒弹「战场机缘 · 本关有效」三选一；选了只改本关（征程构筑存档扣掉）；事件段再来一次
 {
   const p = await open({ key: 'GameScene', run: { chapter: 'hulao', westStage: 2 } });
-  await jump(p, 66); await p.waitForTimeout(500);
+  await jump(p, 76); await p.waitForTimeout(500);
   const c = await p.evaluate(() => { const s = window.__S, f = s.fortunes, L = f.live[0]; return { spawned: f.stats.spawned, at: L && { x: Math.round(L.x - s.player.x), y: Math.round(L.y - s.player.y) }, label: L?.label.text, props: L?.props.length, order: !!s.battleOrders?.list?.get('fortune-cart') }; });
   ck('P2 粮车：精锐段 20 秒后出现（地上圈 + 粮车道具 + 提示），军令表挂「机缘 · 敌军粮车」', c.spawned[0] === 'cart' && /敌军粮车/.test(c.label ?? '') && c.props >= 1 && c.order, c);
   await p.evaluate(() => { const s = window.__S, L = s.fortunes.live[0]; s.player.sprite.setPosition(L.x + 60, L.y + 60); });
@@ -76,7 +76,7 @@ await stageCase('3-2 宛城夜袭（ThirdGameScene）', { key: 'ThirdGameScene',
   ck('P2 选了增益：属性当场变化，征程构筑存档时扣掉（不带到下一关），回到战斗', pick.mode === 'none' && pick.changed.length > 0 && pick.packedSame && Object.values(pick.taken)[0] === 1, pick);
   const f0 = await p.evaluate(async () => { const s = window.__S, up = await import('/src/data/upgrades.ts'), ce = await import('/src/systems/CharmEffects.ts'); const hp0 = s.player.maxHp, packed0 = ce.statsWithoutCharms(s.player).maxHpBonus; up.foundationOptions()[0].apply(s.player); return { up: s.player.maxHp - hp0, packedDelta: ce.statsWithoutCharms(s.player).maxHpBonus - packed0, label: up.foundationOptions()[0].scope === 'stage' ? '本关有效' : '' }; });
   ck('P0 固本培元改为本关有效：当场生命上限 +12，征程构筑存档不带走（不再无限叠加）', f0.up === 12 && f0.packedDelta === 0 && /本关/.test(f0.label), f0);
-  await jump(p, 109); await p.waitForTimeout(500);
+  await jump(p, 129); await p.waitForTimeout(500);
   const ev = await p.evaluate(() => { const s = window.__S, f = s.fortunes, L = f.live.find(x => !x.done); return { spawned: f.stats.spawned, kind: L?.kind, label: L?.label.text }; });
   ck('P2 事件段 8 秒后再来一次机缘（义军被围 / 降将来投 / 烽燧之一）', ev.spawned.length === 2 && ['rescue', 'defector', 'beacon'].includes(ev.kind), ev);
   await p.evaluate(() => { const s = window.__S, L = s.fortunes.live.find(x => !x.done); s.player.sprite.setPosition(L.x, L.y); if (L.kind === 'rescue') for (const g of L.guards) { g.e.hp = 0; s.killEnemy(g.e); } });
@@ -122,7 +122,7 @@ await stageCase('3-2 宛城夜袭（ThirdGameScene）', { key: 'ThirdGameScene',
   ck('P4b 草船借箭期满：放箭雨', ar.until === 0 && /草船借箭 · 箭雨/.test(ar.banner), ar);
   // 赌命：孤注一掷只在本关
   const gm = await p.evaluate(async () => { const s = window.__S, ce = await import('/src/systems/CharmEffects.ts'); const hp0 = s.player.maxHp, packed0 = JSON.stringify(ce.statsWithoutCharms(s.player)); s.takeGamble('allin'); s.takeGamble('beiwei'); return { hpDrop: hp0 - s.player.maxHp, packedSame: JSON.stringify(ce.statsWithoutCharms(s.player)) === packed0, desperate: s.player.growth.stageDesperate }; });
-  ck('P4b 赌命：孤注一掷生命上限 −15%、伤害 +25%（征程构筑不带走）；背嵬生效', gm.hpDrop > 0 && gm.packedSame && gm.desperate === .3, gm);
+  ck('P4b 赌命：孤注一掷生命上限 −15%、伤害 +25%（征程构筑不带走）；背嵬生效', gm.hpDrop > 0 && gm.packedSame && gm.desperate === .2 /* 背嵬 +30% → +20%（3c4bd28） */, gm);
   // 悬赏破锐：接下后击杀 8 名精锐 → 随军粮 +60
   const bt = await p.evaluate(() => { const s = window.__S, food0 = s.legion.food; s.bounties.elites = { elites: 0 }; for (let i = 0; i < 8; i++) { const e = s.spawnEnemy('elite', s.player.x + 200, s.player.y, 1, true); if (e) { e.hp = 0; s.killEnemy(e); } } return { food: s.legion.food - food0, banner: window.__banners.slice(-2).join(' / ') }; });
   ck('P4b 悬赏 · 破锐：击杀 8 名精锐 → 随军粮 +60（另含精锐自身掉粮）、信物一件', bt.food >= 60 && /破锐 达成/.test(bt.banner), bt);

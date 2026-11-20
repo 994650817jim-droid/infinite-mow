@@ -710,7 +710,7 @@ export class GameScene extends Phaser.Scene {
   private relicWaveGfx!:Phaser.GameObjects.Graphics;private relicWaves:Array<{x:number;y:number;at:number}>=[];
   private firstBossAt=-1;private settledFrontlineKills=0;private frontlineNextSettlement=1;
   private frontlineVictories=new Map<number,{elapsed:number}>();private frontlineStarts=new Map<number,number>();
-  private chasingBosses:ChasingBoss[]=[];private deadBossControllers:Array<HuaxiongBoss|XurongBoss>=[];
+  private chasingBosses:ChasingBoss[]=[];/** 剧情卷轴占用计数（StoryDirector pause / resume）。 */protected storyHolds=0;private deadBossControllers:Array<HuaxiongBoss|XurongBoss>=[];
   private get trailingBoss():ChasingBoss|null{return this.chasingBosses[0]??null;}
   /** 首领倒地后掉的宝箱（捡起遗物才进下一阶段）。 */
   protected bossChests:BossChest[]=[];
@@ -1047,7 +1047,8 @@ export class GameScene extends Phaser.Scene {
    */
   protected setupStory(chapterId: string, stage: number, done: () => void = () => {}): void {
     this.storyDir = new StoryDirector({ scene: this, chapterId, stage, ctx: this.storyCtx(),
-      pause: () => { if (this.mode === 'none' && !this.over) this.setMode('story'); }, resume: () => { if (this.mode === 'story' && !this.over) this.setMode('none'); },
+      // 剧情卷轴播放期间记一个「剧情占用」：卷轴开播时正在三选一（首领宝箱补发的升级）也要记上，选完回到剧情暂停而不是回战斗（2026-11-20 夜间回归：1-3 章末卷轴在场时战斗照打、升级弹在卷轴上）
+      pause: () => { this.storyHolds++; if (this.mode === 'none' && !this.over) this.setMode('story'); }, resume: () => { this.storyHolds = Math.max(0, this.storyHolds - 1); if (this.mode === 'story' && !this.over && !this.storyHolds) this.setMode('none'); },
       reward: r => { if (r.merit) addMerit(r.merit); if (r.grain) addProvisions(r.grain); }, banner: (t, c) => { this.showWaveBanner(t, true, c); this.sfx.play('gong'); }, bossId: () => this.storyBossId() });
     { const lord = this.runConfig.character, k = this.storyDir.bondDamageMul(lord), v = this.storyDir.bondSpeedMul(lord); if (k !== 1) this.player.stats.damageMul *= k; if (v !== 1) this.player.stats.moveMul *= v; this.player.stats.critChance += this.storyDir.bondCritBonus(lord); // 羁绊（「桃园」伤害、「借将」移速、「古城」暴击）
       for (const m of this.followers?.members ?? []) if (m.recruit.hero) m.weaponDamageMul *= this.storyDir.bondDamageMul(m.recruit.hero);
@@ -1086,7 +1087,7 @@ export class GameScene extends Phaser.Scene {
   protected resetState(): void {
     this.phaseRunner?.clear();this.battleTrack?.destroy();this.phaseRunner=null;this.battleTrack=null;this.phasePlan=null;this.phasedFor=null;this.fortunes?.clear();this.fortunes=null;this.fortuneQueue=[];this.fortuneTaken={};this.beaconCalmUntil=0;this.jinnang=null;this.jinnangButton=undefined;this.resetStageCards();this.branchRt?.clear();this.branchRt=null;this.branchFor=null;
     this.relicWaves=[];this.runMerit={elite:0,boss:0};this.picksGiven=0;this.militaryPending=0; // 场景实例会被重复使用：每场重置
-    this.firstBossAt=-1;this.settledFrontlineKills=0;this.frontlineNextSettlement=1;this.frontlineVictories.clear();this.frontlineStarts.clear();this.chasingBosses=[];this.deadBossControllers=[];for(const c of this.bossChests)c.clear();this.bossChests=[];this.lootContinue=null;this.relicHits=0;this.relicFireAt=0;this.relicHealAt=0;
+    this.firstBossAt=-1;this.settledFrontlineKills=0;this.frontlineNextSettlement=1;this.frontlineVictories.clear();this.frontlineStarts.clear();this.chasingBosses=[];this.storyHolds=0;this.deadBossControllers=[];for(const c of this.bossChests)c.clear();this.bossChests=[];this.lootContinue=null;this.relicHits=0;this.relicFireAt=0;this.relicHealAt=0;
     this.rerolls=0;this.warfeedCount=0;this.pointsButton=undefined;this.pointsBadge=undefined;this.potionButton=undefined;this.potionBadge=undefined;this.potionIcon=undefined;this.potionGlow=undefined;this.rerollButton=undefined;
     this.crowdSteering = true; this.freeRecruit = false; this.resting = false; this.restIntroPlayed = false; this.restIntroSkip = undefined; this.recruitedWaves.clear();
     this.pendingGrowthNotices.length = 0;
@@ -3029,6 +3030,8 @@ export class GameScene extends Phaser.Scene {
   // ---------------- 升级 / 结算 ----------------
 
   protected setMode(mode: Mode): void {
+    // 剧情卷轴还在播（storyHolds）时，三选一 / 招募等收起后回到剧情暂停
+    if (mode === 'none' && this.storyHolds > 0 && !this.over) mode = 'story';
     // 所有战斗 Timer / Tween 一起冻结；绝对期限使用 combatNow。
     this.mode = mode;
     if(mode!=='pause')this.children.getByName('build-panel')?.destroy();if(mode!=='pause')this.children.getByName('item-bag')?.destroy();

@@ -21,10 +21,15 @@ await p.waitForFunction(() => { const s = window.__game.scene.getScene('ThirdGam
 const before = await p.evaluate(async () => { const W = await import('/src/world/WorldStore.ts'); return { prov: W.loadWorld().provisions, stage: window.__game.scene.getScene('ThirdGameScene').hardStage(), playable: W.arcStagePlayable('qunxiong', 2) }; });
 // 主将倒下（剧情开着，看对话卡）
 await p.evaluate(() => { globalThis.__IM_DEFEAT_LIVE = true; localStorage.setItem('im_story', 'full'); const s = window.__game.scene.getScene('ThirdGameScene'); window.__S = s; s.finish(false, 'death'); });
-await p.waitForTimeout(1300);
+// 慢动作 / 压暗 / 结算面板先不出：倒下后 0.3 秒看；对话卡要先载手绘件 / 立绘再滑入、逐字打出（机器忙时超过 1.5 秒），另等它出字（结算面板 3 秒后才出）
+await p.waitForTimeout(300);
+const early = await p.evaluate(() => { const s = window.__S; return { slow: s.devTimeScale, panel: s.resultPanel.visible, t0: performance.now() }; });
+const cardText = () => window.__S.children.list.filter(o => o.name === 'story-bark-card' && o.visible).flatMap(o => o.list ?? []).filter(o => o.type === 'Text').map(o => o.text).join(' | ');
+await p.waitForFunction(f => /主公|撤|退/.test(eval('(' + f + ')')()), cardText.toString(), { timeout: 2600 }).catch(() => {});
+const cardMs = await p.evaluate(t0 => Math.round(performance.now() - t0 + 300), early.t0);
 const mid = await p.evaluate(() => { const s = window.__S; return { dim: s.children.getByName('defeat-dim')?.alpha ?? 0, slow: s.devTimeScale, panel: s.resultPanel.visible, cards: s.children.list.filter(o => o.type === 'Container' && o.depth >= 1400 && o.depth < 1500 && o.visible).length, texts: s.children.list.filter(o => o.depth >= 1400 && o.depth < 1500).flatMap(o => o.list ?? []).filter(o => o.type === 'Text').map(o => o.text).join(' | ').slice(0, 200) }; });
 await p.screenshot({ path: OUT + '/defeat-card.png' });
-ck('倒下后：慢动作（×0.35）+ 压暗 + 对话卡，结算面板先不出', mid.slow < .5 && mid.dim > .4 && !mid.panel && /主公|撤|退/.test(mid.texts), mid);
+ck('倒下后：慢动作（×0.35）+ 压暗 + 对话卡，结算面板先不出', early.slow < .5 && mid.dim > .4 && !early.panel && /主公|撤|退/.test(mid.texts), { ...mid, early: { slow: early.slow, panel: early.panel }, cardMs });
 await p.waitForTimeout(2600);
 const res = await p.evaluate(async () => { const s = window.__S, W = await import('/src/world/WorldStore.ts'), c = JSON.parse(localStorage.getItem('im_campaign_v1')).heroes.zhaoyun;
   return { panel: s.resultPanel.visible, slow: s.devTimeScale, btn: s.resultPanel.getByName('result-home')?.text, body: s.resultTexts.body.text.slice(-120), hp: c.player.hpFrac, troops: c.army.soldiers.length, prov: W.loadWorld().provisions, stages: W.arcStages('qunxiong'), playable: W.arcStagePlayable("qunxiong", 2), notes: s.defeatNotes, dbg: { wu: W.worldUnlocked(), prev: s.encounterPreview, rt: s.defeatRetreat, live: s.defeatLive(), has: typeof s.runDefeatFlow } }; });

@@ -16,7 +16,7 @@ type InkBtn={btn:ReturnType<typeof worldButton>;plate:Phaser.GameObjects.NineSli
 import {WORLD_NODES,type WorldNode} from '../world/WorldNodes';
 import {loadWorld,rewardGrain} from '../world/WorldStore';
 import {sideRoute,type SideRouteId} from '../data/sideRoutes';
-import {sideNextStage,sidePersuaded,sideRetries,sideRouteOpen,sideStageOpen,sideState} from '../world/SideRouteStore';
+import {sideLordPersuadable,sideNextStage,sidePersuaded,sideRetries,sideRouteOpen,sideStageOpen,sideState} from '../world/SideRouteStore';
 import {SIDE_STAGE_KEY,sideSceneFor} from '../data/sideRoutes';
 import {SIDE_REWARD} from '../data/sideRoutes';
 import {SURRENDER} from '../data/surrender';
@@ -155,7 +155,7 @@ export class WorldMapSceneV1 extends Phaser.Scene {
    const icon=v2?null:worldText(this,0,0,glyphText,13,st==='cleared'?'#ffe7a8':active?'#f5dc9e':'#a4aa9c').setOrigin(.5);
    const label=v2?null:worldText(this,0,25,labelText,13,active?'#fff0cd':'#b6b8aa').setOrigin(.5).setStroke('#142016',3);
    circle.on('pointerup',(pointer:Phaser.Input.Pointer)=>{if(pointer.getDistance()>10*RENDER_SCALE||this.pinching)return;this.selected={kind:'node',node};this.refresh();});
-   if(node.side&&W>600){const r=sideRoute(node.side)!;circle.on('pointerover',()=>{const s2=sideState(node.side!);this.showTip(`讨伐令 · ${r.name}\n${s2.done?(sidePersuaded(r.lord)?'已讨平 · 势力之主已归附':'已讨平 · 可再战劝降'):`已过 ${s2.stage}/${r.stages.length} 关 · 下一关「${r.stages[sideNextStage(node.side!)-1].name}」`}\n势力特产「${r.specialty.title}」${r.specialty.text}`,marker.x,marker.y-40,.5);}).on('pointerout',()=>this.hideTip());}
+   if(node.side&&W>600){const r=sideRoute(node.side)!;circle.on('pointerover',()=>{const s2=sideState(node.side!);this.showTip(`讨伐令 · ${r.name}\n${s2.done?(sidePersuaded(r.lord)?'已讨平 · 势力之主已归附':sideLordPersuadable(node.side!)?'已讨平 · 可再战劝降':'已讨平 · 势力之主宁死不降'):`已过 ${s2.stage}/${r.stages.length} 关 · 下一关「${r.stages[sideNextStage(node.side!)-1].name}」`}\n势力特产「${r.specialty.title}」${r.specialty.text}`,marker.x,marker.y-40,.5);}).on('pointerout',()=>this.hideTip());}
    if(node.challenge&&W>600)circle.on('pointerover',()=>{const locked=this.nodeState(node)==='locked';this.showTip(`挑战 · ${node.region} · ${node.name}\n${locked?LUBU_CHALLENGE.unlockHint:lubuClears()?`已胜 ${lubuClears()} 场 · 可反复挑战`:'首胜得名马「赤兔」'}`,marker.x,marker.y-40,.5);}).on('pointerout',()=>this.hideTip());marker.add(v2?[...v2.parts,circle]:[circle,icon!,label!]);if(v2)marker.setData('label',v2.label).setData('plate',v2.plate).setData('icon',v2.icon);marker.setData('locked',st==='locked');
    {const ch=this.chapterOf(node)?.id,role=st==='home'?'home':st==='cleared'?'cleared':st==='locked'?(ch&&ch===nextLocked?'next-locked':'far-locked'):'open';marker.setData('role',role).setName('world-node-'+node.id);
     if(role==='cleared')marker.setScale(.74).setAlpha(.7);else if(role==='next-locked')marker.setAlpha(.78);}
@@ -576,7 +576,7 @@ export class WorldMapSceneV1 extends Phaser.Scene {
   const rows=`第 ${next}/${r.stages.length} 关「${nd.name}」${kind(nd.kind)} · 首领 ${bosses}`;
   const cities=[...new Set([...r.stages.map(d=>d.city).filter((c):c is string=>!!c),...r.annex])].map(c=>cityById(c)?.name??c);
   const retry=s.done&&!sidePersuaded(r.lord)?Math.min(SURRENDER.cap*100,Math.round(SIDE_REWARD.retryAdd*100*sideRetries(id))):0;
-  const tail=s.done?(sidePersuaded(r.lord)?'已讨平 · 势力之主已归附':`已讨平 · 再战终局劝降把握 +${retry}%`):`讨平后：${cities.length?'并入 '+(cities.length>2?cities.slice(0,2).join('、')+` 等 ${cities.length} 城`:cities.join('、'))+' · ':''}特产「${r.specialty.title}」`;
+  const tail=s.done?(!sideLordPersuadable(id)?'已讨平 · 势力之主宁死不降，已以礼厚葬':sidePersuaded(r.lord)?'已讨平 · 势力之主已归附':`已讨平 · 再战终局劝降把握 +${retry}%`):`讨平后：${cities.length?'并入 '+(cities.length>2?cities.slice(0,2).join('、')+` 等 ${cities.length} 城`:cities.join('、'))+' · ':''}特产「${r.specialty.title}」`;
   this.setDetail(`讨伐令 · ${r.name}`,locked?0x4a4f46:s.done?0x5f8f4e:0x8c2a2a,locked?'锁':s.done?'捷':'讨',locked?`未开放：${r.open.hint}`:`${rows}\n${tail}${this.lossWarning()?'\n'+this.lossWarning():''}`);
   this.action.text.setText(locked?'尚未开放':s.done?`再战 · ${nd.name}`:`出征 · ${nd.name}`);this.action.image.setAlpha(locked?.45:1);if(locked)this.action.image.disableInteractive();else this.action.image.setInteractive({useHandCursor:true});this.layoutActions(false);}
  /** 讨伐令出征：下一关（打完后为终局再战），主公亲征。 */

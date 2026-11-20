@@ -26,24 +26,32 @@ try {
       return {
         zhangxiuLiubei2: pct('qunxiong-2:zhangxiu', { lord: 'liubei', team: ['liubei'], surrendered: ['huaxiong', 'xurong'] }),
         zhangxiuLiubei2Press: pct('qunxiong-2:zhangxiu', { lord: 'liubei', team: ['liubei'], surrendered: ['huaxiong', 'xurong'], pressed: true }),
-        yanliang: pct('guandu-2:yanliang', {}), yanliangPress: pct('guandu-2:yanliang', { pressed: true }),
-        renownCap: pct('guandu-2:yanliang', { surrendered: ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'] }),
-        sameCampOnce: pct('guandu-2:yanliang', { followerBosses: ['wenchou', 'chunyuqiong'] }),
-        wenchouYan: pct('guandu-2:wenchou', { surrendered: ['yanliang'] }),
+        yanliang: pct('hulao-2:xurong', {}), yanliangPress: pct('hulao-2:xurong', { pressed: true }),
+        renownCap: pct('hulao-2:xurong', { surrendered: ['a', 'b', 'c', 'd'], honored: ['e', 'f', 'g', 'h'] }),
+        sameCampOnce: pct('hulao-2:xurong', { followerBosses: ['huaxiong', 'lijue'] }),
+        wenchouYan: pct('caowei-4:xiahoudun', { surrendered: ['caocao'] }),
+        dunBlocked: M.surrenderOdds(d('caowei-4:xiahoudun'), base), chunyuBlocked: M.surrenderOdds(d('guandu-3:chunyuqiong'), base),
+        dunPartner: pct('caowei-4:xiahoudun', { partner: { id: 'caocao', persuaded: true, executed: false } }) > 0,
+        zhouyu0: M.surrenderOdds(d('nanjun-2:zhouyu'), base).blocked, zhouyu1: pct('nanjun-2:zhouyu', { flags: { sideRetry1: true } }),
+        neverTiers: ['hulao-1:huaxiong', 'guandu-2:yanliang', 'guandu-2:wenchou', 'xiapi-2:gaoshun', 'hebei-4:yuanshao', 'gongsun-3:gongsunzan'].map(k => d(k).tier),
+        reasons: M.SURRENDER_DEFS.filter(x => !x.reason).map(x => x.key),
+        recruit: ['典韦', '陈宫', '张任', '庞德', '高览', '太史慈'].map(n => M.recruitableName(n)),
         chunyuBurn: pct('guandu-3:chunyuqiong', { flags: { depotsAllBurned: true } }),
         lubuDiao: pct('lubu-1:lubu', { team: ['zhaoyun', 'diaochan'] }), lubuLiubei: pct('lubu-1:lubu', { lord: 'liubei', team: ['liubei'] }),
         cap: pct('qunxiong-2:zhangxiu', { lord: 'liubei', surrendered: ['a', 'b', 'c', 'd', 'e'], followerBosses: ['zhangxiu2'], pressed: true, team: ['liubei'] }),
         sure: M.surrenderOdds(d('jingnan-1:zhaofan'), base), never: pct('qunxiong-3:yuanshu', {}),
-        count: M.SURRENDER_DEFS.length, tiers: M.SURRENDER_DEFS.reduce((a, x) => (a[x.tier] = (a[x.tier] ?? 0) + 1, a), {}),
+        count: M.SURRENDER_DEFS.filter(x => /^(huangjin|hulao|lubu|qunxiong|guandu|chibi|jingnan|shu|hanzhong|xiangfan|yiling|nanzheng|beifa)-/.test(x.key)).length, tiers: M.SURRENDER_DEFS.filter(x => /^(huangjin|hulao|lubu|qunxiong|guandu|chibi|jingnan|shu|hanzhong|xiangfan|yiling|nanzheng|beifa)-/.test(x.key)).reduce((a, x) => (a[x.tier] = (a[x.tier] ?? 0) + 1, a), {}),
       };
     });
     ck('成功率：刘备主公、已降 2 人劝张绣 = 55+10+4 = 69%；再压一压 84%', o.zhangxiuLiubei2 === 69 && o.zhangxiuLiubei2Press === 84, o);
-    ck('成功率：赵云劝颜良 15%、再压一压 30%', o.yanliang === 15 && o.yanliangPress === 30, o);
-    ck('仁名上限 +10（降 8 人 → 15+10 = 25%）', o.renownCap === 25, o);
-    ck('同阵营降将在队只算一次（两名河北降将 → +10）', o.sameCampOnce === 25, o);
-    ck('关系 / 旗标：颜良已降劝文丑 +20、粮仓尽焚劝淳于琼 +15、貂蝉在侧劝吕布 +20、刘备主公劝吕布（+10 −20）', o.wenchouYan === 35 + 2 && o.chunyuBurn === 30 && o.lubuDiao === 35 && o.lubuLiubei === 5, o);
+    ck('成功率：赵云劝徐荣 15%、再压一压 30%', o.yanliang === 15 && o.yanliangPress === 30, o);
+    ck('仁名上限 +10（劝降 4 人 + 厚葬 4 人 → 15+10 = 25%）', o.renownCap === 25, o);
+    ck('同阵营降将在队只算一次（两名董卓旧部 → +10）', o.sameCampOnce === 25, o);
+    ck('关系 / 旗标：曹操已降劝夏侯惇 +30、粮仓尽焚劝淳于琼 +15、貂蝉在侧劝吕布 +20、刘备主公劝吕布（+10 −20）', o.wenchouYan === 45 + 2 && o.chunyuBurn === 30 && o.lubuDiao === 35 && o.lubuLiubei === 5, o);
+    ck('前置条件（surrender-rules）：夏侯惇要曹操先归附（本场同伴已降也算）、淳于琼要先焚尽粮仓、周瑜要先胜一回——没满足时把握 0 并写条件', o.dunBlocked.pct === 0 && /曹操已归附/.test(o.dunBlocked.blocked) && /粮仓/.test(o.chunyuBlocked.blocked) && o.dunPartner && /胜他一回/.test(o.zhouyu0) && o.zhouyu1 > 0, o);
+    ck('宁死不降改档：华雄、颜良、文丑、高顺、袁绍、公孙瓒；每个首领都写了依据；典韦 / 陈宫 / 张任 / 庞德不进招贤馆，高览 / 太史慈可以', o.neverTiers.every(t => t === 'never') && o.reasons.length === 0 && o.recruit.join() === 'false,false,false,false,true,true', o);
     ck('上限 90%；必降 100% 不掷骰；宁死不降 0', o.cap === 90 && o.sure.pct === 100 && o.sure.sure && o.never === 0, o);
-    ck('招降表：39 个首领（含挑战关吕布；颜良 4-1 败走、4-2 难降），可降 3 / 必降 3 / 难降 10 / 宁死不降 9 + 败退型 3（4-1 颜良、5-3 曹仁、8-1 张郃）+ 第一章 3 / 剧情 7 / 孟获 1', o.count === 39 && o.tiers.retreat === 3 && o.tiers.can === 3 && o.tiers.sure === 3 && o.tiers.hard === 10 && o.tiers.never === 9 && o.tiers.story === 7 && o.tiers.silent === 3 && o.tiers.meng === 1, o.tiers);
+    ck('主线招降表：39 个首领（含挑战关吕布），可降 3 / 必降 3 / 难降 6 / 宁死不降 13（华雄、颜良、文丑、兀突骨改宁死不降）+ 败退型 3 + 第一章 3 / 剧情 7 / 孟获 1', o.count === 39 && o.tiers.retreat === 3 && o.tiers.can === 3 && o.tiers.sure === 3 && o.tiers.hard === 6 && o.tiers.never === 13 && o.tiers.story === 7 && o.tiers.silent === 3 && o.tiers.meng === 1, o.tiers);
   }
 
   // 场景工具：开某关、首领出场、把首领打到残血
@@ -80,7 +88,7 @@ try {
   }
   // ③ 失败：难降华雄掷骰失败 → 拒绝台词 + 横幅、25% 血、伤害 +20%，本场不再弹窗；打死掉宝箱
   if (want('huaxiong')) {
-    const ev = await open('GameScene', {}, { chapter: 'hulao', westStage: 1 });
+    const ev = await open('GameScene', {}, { chapter: 'hulao', westStage: 2 });
     await ev(s => { s.parley.constructor.random = () => .99; });
     const dmg0 = await ev(s => s.boss.def.damage);
     await hurtTo(ev, .12);
@@ -88,11 +96,11 @@ try {
     const bt = await buttons(ev);
     await p.waitForTimeout(900); await p.screenshot({ path: `${OUT}/seal-hard.png` });
     const pre = await ev(s => s.parley.snapshot());
-    ck('难降（华雄）：15% 血弹窗，三个按钮、把握 15%、黄印「难降」', panel && bt.length === 3 && pre.odds.pct === 15 && pre.tier === 'hard', { panel, bt, pre });
+    ck('难降（徐荣）：15% 血弹窗，三个按钮、把握 15%、黄印「难降」', panel && bt.length === 3 && pre.odds.pct === 15 && pre.tier === 'hard', { panel, bt, pre });
     await ev(s => s.choose('persuade')); await p.waitForTimeout(300);
     const f = await ev(s => ({ ...s.parley.snapshot(), hp: s.boss.hp / s.boss.maxHp, dmg: s.boss.def.damage, mode: s.mode, banner: (() => { const all = []; const walk = l => { for (const o of l) { if (o.type === 'Text') all.push(o.text); if (o.list) walk(o.list); } }; walk(s.children.list); return all.find(t => t?.includes('劝降不成')); })() }));
     await p.screenshot({ path: `${OUT}/fail-banner.png` });
-    ck('劝降失败：红横幅「劝降不成 · 华雄怒而再战」、回到 25% 血、伤害 +20%', f.state === 'failed' && f.hp >= .249 && Math.abs(f.dmg - dmg0 * 1.2) < .01 && f.mode === 'none' && !!f.banner, { f, dmg0 });
+    ck('劝降失败：红横幅「劝降不成 · 徐荣怒而再战」、回到 25% 血、伤害 +20%', f.state === 'failed' && f.hp >= .249 && Math.abs(f.dmg - dmg0 * 1.2) < .01 && f.mode === 'none' && !!f.banner, { f, dmg0 });
     await hurtTo(ev, .05); await p.waitForTimeout(300);
     const again = await ev(s => ({ panel: !!s.children.getByName('parley-panel'), opens: s.parley.log.opens }));
     ck('失败后本场不再弹窗', !again.panel && again.opens === 1, again);
@@ -122,13 +130,17 @@ try {
     let ev = await open('ThirdGameScene', { thirdStage: 3 }, { thirdStage: 3 });
     await hurtTo(ev, .12); const first = await waitPanel(ev);
     await p.waitForTimeout(900); await p.screenshot({ path: `${OUT}/seal-never.png` });
-    const bt0 = await buttons(ev);
+    const bt0 = await buttons(ev), why = await ev(s => { const pn = s.children.getByName('parley-panel'); return { reason: pn.getByName('parley-reason')?.text, honor: pn.getByName('parley-honor')?.text, grey: pn.list.filter(o => o.type === 'Text').map(o => o.text).includes('宁死不降') }; });
     await ev(s => s.choose('persuade')); await p.waitForTimeout(250);
     const bt1 = await buttons(ev), st = await ev(s => s.parley.snapshot());
-    ck('宁死不降（袁术）首次：弹窗（红印、无「再压一压」）→ 劝降必拒 → 只剩「斩杀」', first && bt0.length === 2 && !bt0.includes('parley-press') && st.refused && bt1.length === 1 && bt1[0] === 'parley-execute' && st.log.rolls.length === 0, { first, bt0, bt1, st });
+    ck('宁死不降（袁术）首次：弹窗就写「宁死不降 · 依据」与厚葬奖励，劝降置灰（按钮写「宁死不降」）、点了没反应，只能斩杀', first && bt0.length === 1 && bt0[0] === 'parley-execute' && /^宁死不降 · 僭号称帝/.test(why.reason ?? '') && /厚葬/.test(why.honor ?? '') && why.grey && st.state === 'open' && st.log.rolls.length === 0 && bt1.length === 1, { first, bt0, bt1, why, st });
+    const food0 = await p.evaluate(async () => (await import('/src/world/WorldStore.ts')).loadWorld().provisions ?? 0);
     await ev(s => s.choose('execute')); await p.waitForTimeout(700);
     const k = await ev(s => ({ boss: !!s.boss?.active, chests: s.bossChests.length }));
     ck('斩杀袁术：倒地掉宝箱', !k.boss && k.chests >= 1, k);
+    const hon = await ev(s => { const out = []; s.parleyExecuteRewards(out); return { names: out.map(o => o.name), flags: JSON.parse(localStorage.getItem('im_story_v1') ?? '{}').flags ?? {} }; });
+    const food1 = await p.evaluate(async () => (await import('/src/world/WorldStore.ts')).loadWorld().provisions ?? 0);
+    ck('宁死不降的替代奖励：本存档首次厚葬袁术 · 军粮 +60 · 仁名 +1（记入 honored）', hon.names.some(n => /^厚葬袁术 · 军粮 \+60 · 仁名 \+1/.test(n)) && String(hon.flags.honored).includes('yuanshu') && food1 - food0 >= 60, { hon, food0, food1 });
     ev = await open('ThirdGameScene', { thirdStage: 3 }, { thirdStage: 3 });
     const r = await ev(s => ({ state: s.parley?.state }));
     await hurtTo(ev, .1); await p.waitForTimeout(300);
@@ -173,8 +185,8 @@ try {
   // ⑧ 特例：文丑换台词、吕布对刘备的拒绝台词；于禁 9-2 胜利后进降将栏；孟获心服直接入麾下、不掉宝箱
   if (want('special')) {
     await mod('/src/data/surrender.ts');
-    const lines = await p.evaluate(() => { const M = window.__m, d = k => M.surrenderDef(k); return { wen: M.surrenderLine(d('guandu-2:wenchou'), true, { lord: 'zhaoyun', team: [], surrendered: ['yanliang'] }), wen0: M.surrenderLine(d('guandu-2:wenchou'), true, { lord: 'zhaoyun', team: [], surrendered: [] }), lubu: M.surrenderLine(d('lubu-1:lubu'), false, { lord: 'liubei', team: [], surrendered: [] }), pang: M.surrenderLine(d('xiangfan-2:pangde'), false, { lord: 'zhaoyun', team: ['machao'], surrendered: [] }) }; });
-    ck('颜良已降时文丑换归降台词；吕布对刘备「大耳儿最叵信」；马超在队庞德换拒绝台词', lines.wen.startsWith('颜良兄弟都降了') && lines.wen0 === '……文丑认栽。' && lines.lubu.startsWith('大耳儿') && lines.pang.startsWith('孟起'), lines);
+    const lines = await p.evaluate(() => { const M = window.__m, d = k => M.surrenderDef(k); return { wen: M.surrenderLine(d('caowei-4:xiahoudun'), true, { lord: 'zhaoyun', team: [], surrendered: ['caocao'] }), wen0: M.surrenderLine(d('caowei-4:xiahoudun'), true, { lord: 'zhaoyun', team: [], surrendered: [] }), lubu: M.surrenderLine(d('lubu-1:lubu'), false, { lord: 'liubei', team: [], surrendered: [] }), pang: M.surrenderLine(d('xiangfan-2:pangde'), false, { lord: 'zhaoyun', team: ['machao'], surrendered: [] }) }; });
+    ck('曹操已降时夏侯惇换归降台词；吕布对刘备「大耳儿最叵信」；马超在队庞德换拒绝台词', lines.wen.startsWith('孟德既已归附') && lines.wen0.startsWith('孟德都降了') && lines.lubu.startsWith('大耳儿') && lines.pang.startsWith('孟起'), lines);
     let ev = await open('XiangfanGameScene', { xiangfanStage: 2 }, { thirdStage: 2 });
     await ev(s => { s.finish(true, 'boss'); }); await p.waitForTimeout(300);
     const yj = await p.evaluate(() => (JSON.parse(localStorage.getItem('im_roster_v1') ?? '{}').captives ?? []).filter(o => o.boss === 'yujin').map(o => o.quality));

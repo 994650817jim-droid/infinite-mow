@@ -4,6 +4,7 @@ import { cityById } from './WorldCities';
 import { addProvisions, arcStages, grantCity, ownedCities } from './WorldStore';
 import { isChapterTestRun } from '../systems/ChapterProgress';
 import { surrenderedIds } from '../systems/SurrenderStore';
+import { surrenderDef } from '../data/surrender';
 
 /**
  * 其他势力支线的存档（other-factions-design.md §1.2）：键 im_side_routes_v1，在存档位里（SaveSlots.PROGRESS_KEYS）；开发期不做老档兼容。
@@ -41,6 +42,8 @@ export function sideStageOpen(id: SideRouteId, stage: number): boolean {
 export function sideNextStage(id: SideRouteId): number { const r = sideRoute(id)!, st = sideState(id); return st.done ? r.stages.length : Math.min(r.stages.length, st.stage + 1); }
 /** 这位首领本存档劝降了没。 */
 export function sidePersuaded(bossId: string): boolean { return surrenderedIds().includes(bossId); }
+/** 势力之主能不能劝（宁死不降的袁绍、公孙瓒、黄祖：终局没有再战劝降加成，改为厚葬奖励，surrender-rules.md）。 */
+export function sideLordPersuadable(id: SideRouteId): boolean { const r = sideRoute(id); if (!r) return false; const t = surrenderDef(`${id}-${r.stages.length}:${r.lord}`)?.tier; return t === 'can' || t === 'hard' || t === 'sure'; }
 /** 终局再战的劝降加成次数（招降表用旗标 sideRetry<N>）。 */
 export function sideRetries(id: SideRouteId): number { return sideState(id).retries; }
 
@@ -63,7 +66,7 @@ export function settleSideStage(id: SideRouteId, stage: number, result: { victor
   let done = false;
   if (final) {
     if (!st.done) { st.done = true; done = true; for (const c of r.annex) take(c); }
-    if (!sidePersuaded(r.lord)) st.retries = Math.min(SIDE_REWARD.retryMax, st.retries + 1);
+    if (!sidePersuaded(r.lord) && sideLordPersuadable(id)) st.retries = Math.min(SIDE_REWARD.retryMax, st.retries + 1);
   }
   put(id, st);
   const base = SIDE_REWARD.provisions[id] * (final ? SIDE_REWARD.finalMul : 1) * (first ? 1 : SIDE_REWARD.replayMul);

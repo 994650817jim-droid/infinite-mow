@@ -81,7 +81,8 @@ export class Parley {
     if (c === 'press') { if (d.tier === 'never' || d.tier === 'sure' || this.pressed) return; this.pressed = true; this.state = 'pressing'; this.pressUntil = this.h.now() + SURRENDER.pressTimeoutMs; this.close(); b.invulnerable = false; this.h.banner('再压一压', false, `打到 ${Math.round(SURRENDER.pressLine * 100)}% 再劝 · 把握 +${Math.round(SURRENDER.press * 100)}%`); return; }
     if (c === 'execute') { this.state = 'done'; if (d.flag) setStoryFlag(d.flag.key, d.flag.no); this.close(); b.invulnerable = false; b.hp = 0; this.h.kill(b); return; }
     // 劝降
-    if (d.tier === 'never') { if (this.refused) return; this.refused = true; this.say(b, false, ctx); this.h.sfx('bossSummon'); this.render(false); return; }
+    // 宁死不降 / 条件未满足：劝降按钮置灰，点了也没用（surrender-rules.md：不让玩家白点）
+    if (d.tier === 'never' || this.odds().blocked) return;
     const o = this.odds(), roll = Parley.random ? Parley.random() : Math.random(), ok = o.sure || roll * 100 < o.pct;
     this.log.rolls.push({ pct: o.pct, roll, ok });
     this.close();
@@ -142,21 +143,24 @@ export class Parley {
     const tier = SURRENDER_TIERS[d.tier], sx = x0 + pw - 62, sy = y0 + 40, sealKey = `seal_${d.tier === 'sure' ? 'can' : d.tier}`;
     if (s.textures.exists(sealKey)) root.add(s.add.image(sx, sy, sealKey).setDisplaySize(64, 64).setScrollFactor(0).setAngle(-8).setName('parley-seal'));
     else { const c = Phaser.Display.Color.HexStringToColor(tier.color).color, sg = s.add.graphics().setScrollFactor(0); sg.lineStyle(2.5, c, .95).strokeRoundedRect(sx - 34, sy - 22, 68, 44, 6); root.add([sg, t(sx, sy, tier.seal, tier.seal.length > 2 ? 14 : 18, tier.color, true).setAngle(-6).setName('parley-seal')]); }
-    root.add(t(W / 2, y0 + 78, d.tier === 'never' && this.refused ? `${d.name}宁死不降——只能阵前斩杀` : '是劝其归降，还是阵前斩杀？', 16, '#eadcbd'));
-    const o = this.odds(), oddsText = o.sure ? '劝降把握：必成' : d.tier === 'never' ? '劝降把握：——' : `劝降把握：${o.pct}%`;
-    root.add(t(W / 2, y0 + 112, oddsText, 20, o.sure ? '#9fe0a0' : d.tier === 'never' ? '#c07060' : '#ffe08a', true).setName('parley-odds'));
-    if (!o.sure && d.tier !== 'never') root.add(t(W / 2, y0 + 140, o.parts.map((p, i) => (i ? `${p.label} ${p.add >= 0 ? '+' : ''}${p.add}` : `${p.label} ${p.add}`)).join(' · '), 13, '#b9a57a').setName('parley-parts'));
+    const never = d.tier === 'never', o = this.odds(), blocked = !never ? o.blocked : undefined;
+    root.add(t(W / 2, y0 + 78, never ? `宁死不降 · ${d.reason ?? `${d.name}不肯归降`}` : blocked ? `劝降条件：${blocked}（尚未满足）· ${d.reason ?? ''}` : '是劝其归降，还是阵前斩杀？', never || blocked ? 15 : 16, never ? '#f0a090' : '#eadcbd').setName('parley-reason'));
+    const oddsText = o.sure ? '劝降把握：必成' : never ? '劝降把握：——' : blocked ? '劝降把握：条件未满足' : `劝降把握：${o.pct}%`;
+    root.add(t(W / 2, y0 + 112, oddsText, 20, o.sure ? '#9fe0a0' : never || blocked ? '#c07060' : '#ffe08a', true).setName('parley-odds'));
+    if (never) root.add(t(W / 2, y0 + 140, `斩杀后以礼厚葬：军粮 +${SURRENDER.persuadeProvisions} · 仁名 +1（本存档首次）`, 13, '#d8c08a').setName('parley-honor'));
+    else if (!o.sure && !blocked) root.add(t(W / 2, y0 + 140, o.parts.map((p, i) => (i ? `${p.label} ${p.add >= 0 ? '+' : ''}${p.add}` : `${p.label} ${p.add}`)).join(' · '), 13, '#b9a57a').setName('parley-parts'));
     const relic = (this.h as unknown as { relicName?: () => string | null }).relicName?.() ?? null;
-    root.add(t(W / 2, y0 + 168, `劝降：${d.hero ? '以武将身份加入麾下' : '入降将栏（四季内六折招降）'} · 军粮 +${SURRENDER.persuadeProvisions}　|　斩杀：首领宝箱${relic ? `（遗珍：${relic}）` : ''} · 军粮 +${SURRENDER.executeProvisions}`, 13, '#b9a57a'));
+    if (never) root.add(t(W / 2, y0 + 168, `斩杀：首领宝箱${relic ? `（遗珍：${relic}）` : ''} · 军粮 +${SURRENDER.executeProvisions}`, 13, '#b9a57a'));
+    else root.add(t(W / 2, y0 + 168, `劝降：${d.hero ? '以武将身份加入麾下' : '入降将栏（四季内六折招降）'} · 军粮 +${SURRENDER.persuadeProvisions}　|　斩杀：首领宝箱${relic ? `（遗珍：${relic}）` : ''} · 军粮 +${SURRENDER.executeProvisions}`, 13, '#b9a57a'));
     // 按钮：劝降（水墨主按钮）/ 斩杀 / 再压一压（漆底描金）
-    const by = y0 + ph - 62, three = !second && !this.pressed && d.tier !== 'never' && d.tier !== 'sure', canPersuade = !(d.tier === 'never' && this.refused);
+    const by = y0 + ph - 62, three = !second && !this.pressed && !never && !blocked && d.tier !== 'sure', canPersuade = !never && !blocked;
     const xs = three ? [W / 2 - 190, W / 2, W / 2 + 190] : [W / 2 - 110, W / 2 + 110];
     if (canPersuade) {
       const c = homeCommand(s, xs[0], by, D ? 170 : 150, 50, '劝 降', true); [c.g, c.caption, c.hit].forEach(o2 => o2.setScrollFactor(0)); c.hit.setName('parley-persuade').on('pointerup', () => this.choose('persuade')); root.add([c.g, c.caption, c.hit]);
-    } else root.add(this.lq(xs[0], by, D ? 170 : 150, 46, '劝 降', 'parley-persuade', null));
+    } else root.add(this.lq(xs[0], by, D ? 170 : 150, 46, never ? '宁死不降' : '劝 降', 'parley-persuade', null));
     root.add(this.lq(xs[1], by, D ? 170 : 150, 46, '斩 杀', 'parley-execute', () => this.choose('execute')));
     if (three) { root.add(this.lq(xs[2], by, D ? 170 : 150, 46, '再压一压', 'parley-press', () => this.choose('press'))); root.add(t(xs[2], by + 36, `打到 ${Math.round(SURRENDER.pressLine * 100)}% 再劝，把握 +${Math.round(SURRENDER.press * 100)}%`, 12, '#a8977a')); }
-    root.add(t(W / 2, y0 + ph - 18, three ? '键盘 1 劝降 · 2 斩杀 · 3 再压一压' : '键盘 1 劝降 · 2 斩杀', 11, '#8f8068'));
+    root.add(t(W / 2, y0 + ph - 18, three ? '键盘 1 劝降 · 2 斩杀 · 3 再压一压' : canPersuade ? '键盘 1 劝降 · 2 斩杀' : '键盘 2 斩杀', 11, '#8f8068'));
     this.panel = root;
     if (this.keys) window.removeEventListener('keydown', this.keys);
     this.keys = (e: KeyboardEvent) => { if (e.key === '1') this.choose('persuade'); else if (e.key === '2') this.choose('execute'); else if (e.key === '3' && three) this.choose('press'); };

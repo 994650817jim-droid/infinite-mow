@@ -8,11 +8,13 @@ import { isChapterTestRun } from './ChapterProgress';
  *   neverSeen：宁死不降首领本存档弹过窗的（以后不再弹、倒下播临终台词）
  * Story 旗标只存标量，这里用逗号分隔的字符串。
  */
-type ListKey = 'surrendered' | 'executed' | 'neverSeen';
+type ListKey = 'surrendered' | 'executed' | 'neverSeen' | 'honored';
 const list = (k: ListKey): string[] => { const v = storyFlag(k); return typeof v === 'string' && v ? v.split(',') : []; };
 export const surrenderedIds = (): string[] => list('surrendered');
 export const executedIds = (): string[] => list('executed');
 export const neverSeenIds = (): string[] => list('neverSeen');
+/** 宁死不降之将本存档以礼厚葬过的（斩杀的替代奖励：军粮 + 仁名，surrender-rules.md）。 */
+export const honoredIds = (): string[] => list('honored');
 /** 加入名单；返回是否本存档第一次。 */
 export function markSurrender(k: ListKey, id: string): boolean {
   const l = list(k); if (l.includes(id)) return false; l.push(id); setStoryFlag(k, l.join(','));

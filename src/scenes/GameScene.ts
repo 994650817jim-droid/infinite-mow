@@ -18,7 +18,7 @@ import {OrdersPanel} from '../ui/OrdersPanel';
 import {BattleMap} from '../ui/BattleMap';
 import type {BossMount as BossMountT} from '../systems/BossMount';
 import {SURRENDER,surrenderDef} from '../data/surrender';
-import {markSurrender,surrenderedIds,surrenderLive} from '../systems/SurrenderStore';
+import {honoredIds,markSurrender,surrenderedIds,surrenderLive} from '../systems/SurrenderStore';
 import { StoryDirector, campTalkStrip, setStoryFlag, storyBark, castBark, type StoryCtx } from '../systems/Story';
 import { warnCircle, TELEGRAPH_CLASSIC, groundCracks, windupFlash } from '../ui/Telegraph';
 import { HINT_MOCK, SHOW_OWN_RANGE_FX, groundScar, keyOutline } from '../ui/HintStyle';
@@ -298,7 +298,7 @@ export class GameScene extends Phaser.Scene {
   /** 建一个招降控制器（单首领：本关首领；双首领：每人一个，partner = 同伴结果加减把握）。 */
   protected makeParley(boss:()=>Enemy|null,def:ReturnType<typeof surrenderDef>,dual?:{partner:()=>{id:string;persuaded:boolean;executed:boolean}|undefined}):Parley|null{
     return Parley.for({scene:this,boss,mode:()=>this.mode,setMode:m=>this.setMode(m as Mode),over:()=>this.over,now:()=>this.combatNow,
-      ctx:()=>({lord:lordHero()??this.runConfig.character,team:[this.runConfig.character,...(this.followers?.members??[]).map(m=>m.recruit.hero??'').filter(Boolean)],surrendered:surrenderedIds(),followerBosses:(this.followers?.members??[]).map(m=>(m.recruit as {boss?:string}).boss??'').filter(Boolean),flags:this.parleyFlags(),partner:dual?.partner()}),
+      ctx:()=>({honored:honoredIds(),lord:lordHero()??this.runConfig.character,team:[this.runConfig.character,...(this.followers?.members??[]).map(m=>m.recruit.hero??'').filter(Boolean)],surrendered:surrenderedIds(),followerBosses:(this.followers?.members??[]).map(m=>(m.recruit as {boss?:string}).boss??'').filter(Boolean),flags:this.parleyFlags(),partner:dual?.partner()}),
       wenjiu:()=>!!this.sishuiPass?.wenjiuLive(),banner:(t,d,c)=>this.showWaveBanner(t,d,c),sfx:k=>this.sfx.play(k),
       bark:(t,name,text)=>{if(storyMode()==='off')return false;storyBark(this,t,name,text);return true;},
       kill:b=>this.killEnemy(b),persuaded:b=>{this.persuadeKill=true;b.invulnerable=false;b.hp=0;this.killEnemy(b);},
@@ -353,6 +353,8 @@ export class GameScene extends Phaser.Scene {
     gainProvisions(SURRENDER.executeProvisions);const first=markSurrender('executed',p.def.id);
     if(first){const q=capLootQuality('purple',this.itemTier()),item=rollItem(q,Math.random,undefined,this.lootChapter());addItems([item]);out.push({name:`${QUALITIES[q].label}兵装一件 · 军粮 +${SURRENDER.executeProvisions}`,desc:'首次斩杀此将所得 · 已入行囊',tag:'斩杀'});}
     else out.push({name:`军粮 +${SURRENDER.executeProvisions}`,desc:'斩将所得',tag:'斩杀'});
+    // 宁死不降之将不能白打（surrender-rules.md）：本存档首次斩杀后以礼厚葬，军粮 +60、仁名 +1（仁名算进以后的劝降把握）
+    if(p.def.tier==='never'&&markSurrender('honored',p.def.id)){gainProvisions(SURRENDER.persuadeProvisions);out.push({name:`厚葬${p.def.name} · 军粮 +${SURRENDER.persuadeProvisions} · 仁名 +1`,desc:p.def.reason??'忠烈之士，以礼厚葬',tag:'厚葬'});}
   }
   /** 正在播的过场动画（systems/Cutscene.ts）。 */
   cutscene:Cutscene|null=null;

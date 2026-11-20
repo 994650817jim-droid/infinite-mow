@@ -316,3 +316,4 @@ assets/raw/*
 !/tools/test-jinnang-fx.mjs
 !/tools/test-combo-fx.mjs
 !/tools/test-extra-vfx.mjs
+!/tools/test-treasure-fx.mjs

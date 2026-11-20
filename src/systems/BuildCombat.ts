@@ -132,7 +132,7 @@ export class BuildCombat {
    if(edge||ring||jade){this.distances.charge=0;this.stats.charge++;
     if(edge)this.knock(e,this.position(),40,now);
     if(ring){const C=T.cavalry;this.onShock?.(e.x,e.y,C.ringR);for(const t of this.targets(e,C.ringR,e).slice(0,C.targets)){this.fx(t,false);this.deal(t,raw*C.splash,false);this.knock(t,e,C.push,now);}}
-    if(jade){this.jadeAt=now+4000;const jr=.15*this.state.power('stored_jade');for(const t of this.targets(e,75,e).slice(0,3)){this.fx(t,false);this.deal(t,raw*jr,false);}this.pendingEcho={x:e.x,y:e.y,at:now+250,damage:raw*jr};}
+    if(jade){this.jadeAt=now+4000;const jr=.15*this.state.power('stored_jade');for(const t of this.targets(e,75,e).slice(0,3)){this.fx(t,false);this.deal(t,raw*jr,false);}this.pendingEcho={x:e.x,y:e.y,at:now+250,damage:raw*jr};this.onFx?.('charge',e.x,e.y,96);}
     this.onCharge?.(e,now);
    }
   }
@@ -154,11 +154,11 @@ export class BuildCombat {
   const level=this.lv('pursuit'),pursuit=level&&this.hits%[6,5,4][level-1]===0,bell=this.has('soul_bell')&&this.hits%8===0;
   const flank=this.lv('flank')&&this.distances.flank>=[200,170,140][this.lv('flank')-1],horse=this.has('horse_order')&&this.distances.horse>=150,jade=this.has('breaker_jade')&&this.hits%10===0;
   if(now>=this.procAt&&(pursuit||bell||flank||horse||jade)){
-   this.procAt=now+400;const area=flank||horse||jade,ratio=Math.max(pursuit?[.25,.35,.45][level-1]:0,bell?.4*this.state.power('soul_bell'):0,flank?[.35,.45,.55][this.lv('flank')-1]:0,horse?.25*this.state.power('horse_order'):0,jade?.35*this.state.power('breaker_jade'):0);
+   this.procAt=now+400;if(bell)this.onFx?.('sunder_hit',e.x,e.y,84);if(horse)this.onFx?.('skirmish',e.x,e.y,90);if(jade)this.onFx?.('heavy',e.x,e.y,100);const area=flank||horse||jade,ratio=Math.max(pursuit?[.25,.35,.45][level-1]:0,bell?.4*this.state.power('soul_bell'):0,flank?[.35,.45,.55][this.lv('flank')-1]:0,horse?.25*this.state.power('horse_order'):0,jade?.35*this.state.power('breaker_jade'):0);
    if(flank)this.distances.flank=0;if(horse)this.distances.horse=0;
    const targets=this.targets(e,area?70:160,e);if(flank)this.onFlank?.(targets.slice(0,3));for(let i=0;i<Math.min(area?3:1,targets.length);i++){this.fx(targets[i],false);this.deal(targets[i],raw*ratio,false);}
   }
-  if(crit&&this.has('slayer_tally')&&(e.kind==='elite'||e.kind==='boss')&&now>=this.slayerAt&&e.active){this.slayerAt=now+500;this.fx(e,false);this.deal(e,raw*.25*this.state.power('slayer_tally'),false);}
+  if(crit&&this.has('slayer_tally')&&(e.kind==='elite'||e.kind==='boss')&&now>=this.slayerAt&&e.active){this.slayerAt=now+500;this.onFx?.('peerless',e.x,e.y,110);this.fx(e,false);this.deal(e,raw*.25*this.state.power('slayer_tally'),false);}
  }
  /** 合击「火牛阵」：部曲 / 随行 / 义军的攻击有概率点燃（GameScene 的 fromAlly 命中调这里）。 */
  allyHit(e:Enemy,now:number):void{if(!e.active||!this.combo('fire_ox')||Math.random()>=CV.fireOxChance)return;this.burn(e,this.rawBase()*.08,now,true);this.noteCombo('fire_ox');}

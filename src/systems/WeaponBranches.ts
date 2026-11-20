@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { DEPTH } from '../config';
-import { BRANCH_FIT, branchById, branchTier, BENXI, type WeaponBranch } from '../data/weaponBranches';
+import { BRANCH_FIT, LONGDAN, branchById, branchTier, BENXI, type WeaponBranch } from '../data/weaponBranches';
 import type { SchoolId } from '../data/schools';
 import type { Enemy } from '../entities/Enemy';
 import type { Player } from '../entities/Player';
@@ -42,6 +42,10 @@ interface Seg { x: number; y: number; until: number; nextTick: number }
 export class WeaponBranches {
   private lastCd = 0; private nextAt = 0; private dashQueue: number[] = []; private finalShown = false;
   private moveX = 0; private moveY = 0; private travel = 0; private segs: Seg[] = [];
+  /** 主将移动速度（像素 / 秒，平滑后；七进七出冲刺方向用）。 */
+  private vx = 0; private vy = 0; private vAt = -1; private vpx = 0; private vpy = 0;
+  /** 测试用：最近一次七进七出冲刺（方向来源、距离、落点敌数）。 */
+  lastDash: { mode: 'move' | 'target'; len: number; ox: number; oy: number; ux: number; uy: number; back?: { x: number; y: number } } | null = null;
   private barrier?: { ax: number; ay: number; bx: number; by: number; until: number; nextTick: number };
   /** 火场（天火燎原 / 火矢 / 铁骑蹄火）、八阵陷阱、营栅区。 */
   private fields: Array<{ x: number; y: number; r: number; until: number; nextTick: number; mul: number; spread: boolean }> = [];
@@ -71,6 +75,7 @@ export class WeaponBranches {
   update(): void {
     const b = this.branch, w = this.h.weapon(); if (!b || !w) return;
     const now = this.h.now(), P = this.h.player;
+    { const dtv = this.vAt < 0 ? 0 : (now - this.vAt) / 1000; if (dtv > 0 && dtv < .3) { const k2 = Math.min(1, dtv * 10); this.vx += ((P.x - this.vpx) / dtv - this.vx) * k2; this.vy += ((P.y - this.vpy) / dtv - this.vy) * k2; } this.vAt = now; this.vpx = P.x; this.vpy = P.y; }
     if (!this.finalShown && this.final()) { this.finalShown = true; this.stats.final = true; this.h.banner('兵器进阶 · ' + b.finalName, b.finalDesc); this.h.onFinal?.(b); }
     // 「出手」：冷却被重置（跳回较大的值）
     const fired = w.cooldownLeft > this.lastCd + .05; this.lastCd = w.cooldownLeft;
@@ -98,7 +103,7 @@ export class WeaponBranches {
   private onFire(b: WeaponBranch, now: number): void {
     const P = this.h.player, k = this.k();
     if (this.onFire2(b, now) || this.onFire3(b, now)) return;
-    if (b.id === 'zy_longdan' && now >= this.nextAt) { this.nextAt = now + 3000 / k; this.dash(); if (this.final()) this.dashQueue.push(now + 170, now + 340); }
+    if (b.id === 'zy_longdan' && now >= this.nextAt) { this.nextAt = now + 3000 / k; this.dash(); if (this.final()) this.dashQueue.push(now + 420, now + 840); } // 进阶：再进出两次（一次往返约 0.4 秒）
     else if (b.id === 'gy_qinglong') this.crescent();
     else if (b.id === 'zf_duanqiao') {
       const t = this.nearest(320), ang = t ? Math.atan2(t.y - P.y, t.x - P.x) : 0, w = 200 * (1 + .15 * (this.tier() - 1)), cx = P.x + Math.cos(ang) * 150, cy = P.y + Math.sin(ang) * 150, px = -Math.sin(ang), py = Math.cos(ang);
@@ -147,13 +152,27 @@ export class WeaponBranches {
   }
 
   private deal(e: Enemy, mul: number, fire = false): void { this.h.damage(e, this.h.hit() * mul * this.k(), fire); this.stats.hits++; }
+  /** 七进七出：杀进去再杀回原位（data/weaponBranches.ts LONGDAN）。 */
   private dash(): void {
-    const P = this.h.player, t = this.nearest(260); if (!t) return; const now = this.h.now();
-    const dx = t.x - P.x, dy = t.y - P.y, d = Math.hypot(dx, dy) || 1, ux = dx / d, uy = dy / d, L = Math.min(150, d + 40), px = P.x, py = P.y;
-    P.knockUp(now, 140, ux * L, uy * L, true); P.invulnUntil = Math.max(P.invulnUntil, now + 250);
-    for (const e of this.h.query(px + ux * L / 2, py + uy * L / 2, L / 2 + 40)) if (e.active && !e.isSupplySlot && segDist(e.x, e.y, px, py, px + ux * L, py + uy * L) <= 26 + e.radius) this.deal(e, .9);
-    const s = this.h.scene; if (s.textures.exists('spear_thrust')) { const img = s.add.image(px + ux * L / 2, py - 6 + uy * L / 2, 'spear_thrust', 'tight').setRotation(Math.atan2(uy, ux)).setDisplaySize(L + 50, 30).setTint(0xdcecff).setAlpha(.9).setDepth(DEPTH.fx); s.tweens.add({ targets: img, alpha: 0, scaleY: img.scaleY * 1.7, duration: 300, onComplete: () => img.destroy() }); }
-    this.h.sfx('atk_charge'); this.stats.procs++;
+    const P = this.h.player, t = this.nearest(300); if (!t) return; const now = this.h.now(), D = LONGDAN, s = this.h.scene;
+    let ux = 0, uy = 0, mode: 'move' | 'target' = 'move'; const sp = Math.hypot(this.vx, this.vy);
+    if (sp > D.moveMin) { ux = this.vx / sp; uy = this.vy / sp; } // 在走：沿玩家走的方向
+    else { mode = 'target'; const dx = t.x - P.x, dy = t.y - P.y, d = Math.hypot(dx, dy) || 1; ux = dx / d; uy = dy / d; } // 站定：朝最近的敌兵
+    const L = D.len, ox = P.x, oy = P.y;
+    this.lastDash = { mode, len: L, ox: Math.round(ox), oy: Math.round(oy), ux: +ux.toFixed(2), uy: +uy.toFixed(2) };
+    P.invulnUntil = Math.max(P.invulnUntil, now + D.outMs + D.holdMs + D.backMs + 120); // 往返全程无敌
+    const strike = (x0: number, y0: number, x1: number, y1: number, mul: number) => { const len = Math.hypot(x1 - x0, y1 - y0) || 1, mx = (x0 + x1) / 2, my = (y0 + y1) / 2;
+      for (const e of this.h.query(mx, my, len / 2 + 40)) if (e.active && !e.isSupplySlot && segDist(e.x, e.y, x0, y0, x1, y1) <= 26 + e.radius) this.deal(e, mul);
+      const a = Math.atan2(y1 - y0, x1 - x0);
+      if (s.textures.exists('spear_thrust')) { const img = s.add.image(mx, my - 6, 'spear_thrust', 'tight').setRotation(a).setDisplaySize(len + 50, 30).setTint(0xeef6ff).setAlpha(.92).setDepth(DEPTH.fx); s.tweens.add({ targets: img, alpha: 0, scaleY: img.scaleY * 1.7, duration: 280, onComplete: () => img.destroy() }); }
+      this.fx('fx_flank_streak', mx, my, len + 40, 260, 0xeef6ff, a); }; // 白龙枪影 + 残影（手绘）
+    // 去：冲进去
+    P.knockUp(now, D.outMs, ux * L, uy * L, true); strike(ox, oy, ox + ux * L, oy + uy * L, .9); this.h.sfx('atk_charge');
+    // 回：折返回出发点（按此刻实际位置算回程，落点就是原位）
+    s.time.delayedCall(D.outMs + D.holdMs, () => { const t2 = this.h.now(), bx = P.x, by = P.y; P.knockUp(t2, D.backMs, ox - bx, oy - by, true); strike(bx, by, ox, oy, .9 * D.backMul); this.h.sfx('atk_charge');
+      // 回到原位：把贴身的敌兵推开（首领不推）
+      s.time.delayedCall(D.backMs, () => { const t3 = this.h.now(); for (const e of this.h.query(ox, oy, D.pushR)) if (e.active && !e.isSupplySlot && e.kind !== 'boss') e.hitRecoil(t3, Math.atan2(e.y - oy, e.x - ox), D.push, 140); this.fx('fx_windstep_burst', ox, oy + 6, D.pushR * 2.2, 380, 0xdcecff); if (this.lastDash) this.lastDash.back = { x: Math.round(P.x), y: Math.round(P.y) }; }); });
+    this.stats.procs++;
   }
   private storm(): void {
     const P = this.h.player, s = this.h.scene; this.sweep(170, 1.2, 0xcfe6ff);

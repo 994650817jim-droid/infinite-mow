@@ -7,13 +7,14 @@ import { RESPEC, respecCost } from '../data/respec';
 
 /**
  * 重整构筑（data/respec.ts）：退回次数直接从当前构筑算（不另记选卡日志），所以关页面 / 读档都不会多算少算：
- *  本命兵器等级 − 1、兵器专职（选了算 1）、专职加深（over）、武艺各级（含精熟）、战法各级 − 商人买的级、研读心法 − 商人买的派。
+ *  本命兵器等级 − 1（选了专职时不退，本命留在 Lv5 待选专职）、兵器专职（选了算 1）、专职加深（over）、武艺各级（含精熟）、战法各级 − 商人买的级、研读心法 − 商人买的派。
  * 重整 = 这些全退回初始；退回的次数记进 growth.respecPending，在休整里一张张重选（选完前关页面也不丢，下一关开打时补上）。
  */
 export interface RespecCount { picks: number; weapon: number; branch: number; over: number; martial: number; tactic: number; manual: number }
 export function countRespecPicks(player: Player): RespecCount {
   const g = player.growth, b = g.build, own = player.weapons.find(w => w.id === getCharacter(g.character).startWeapon);
-  const weapon = Math.max(0, (own?.level ?? 1) - 1), branch = own?.branch ? 1 : 0, over = Math.max(0, own?.over ?? 0);
+  // 2026-11-20 用户「选定一个转职之后就选不了另外一个了，除非去洗掉」：有专职时洗掉只退分支与加深，本命留在 Lv5 待选专职
+  const weapon = own?.branch ? 0 : Math.max(0, (own?.level ?? 1) - 1), branch = own?.branch ? 1 : 0, over = Math.max(0, own?.over ?? 0);
   let martial = 0; for (const v of Object.values(g.masteries)) martial += Math.max(0, v); for (const v of Object.values(g.masteryExtra)) martial += Math.max(0, v ?? 0);
   let tactic = 0; for (const [id, lv] of Object.entries(b.tactics)) tactic += Math.max(0, (lv ?? 0) - (b.bought[id as TacticId] ?? 0));
   const manual = b.manuals.filter(s => !b.boughtManuals.includes(s)).length;
@@ -26,7 +27,7 @@ export function respecPrice(player: Player, chapter: number): number { return re
 /** 退回初始：本命兵器 Lv1、去掉专职与加深、武艺全退、战法只留商人买的级、心法只留商人买的派。返回退回的次数（同时记进 respecPending）。 */
 export function resetBuild(player: Player, chapter: number): number {
   const g = player.growth, b = g.build, n = countRespecPicks(player).picks, own = player.weapons.find(w => w.id === getCharacter(g.character).startWeapon);
-  if (own) { own.level = 1; delete own.branch; delete own.attuned; own.over = 0; } // 换专职：重整后重升到 Lv5 会再弹专职面板
+  if (own) { if (own.branch) { delete own.branch; delete own.attuned; } else own.level = 1; own.over = 0; } // 换专职：本命留 Lv5，下一场开战时再弹专职面板
   g.weaponOver = 0;
   for (const id of Object.keys(g.masteries) as Array<keyof typeof g.masteries>) g.masteries[id] = 0;
   g.masteryExtra = {};

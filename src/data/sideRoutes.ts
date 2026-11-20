@@ -10,8 +10,10 @@ import type { Specialty } from '../world/WorldCities';
  * 战斗复用对应时期的章节战场（第三章式三关框架 / 三英战吕布挑战关）；还没有专属形象的首领先借现有首领图（ART_V2_FILES 的 side_* 键）。
  * 数值都是初值，交平衡会话。
  */
-export type SideRouteId = 'xiapi' | 'nanjun' | 'caowei';
+export type SideRouteId = 'xiapi' | 'nanjun' | 'caowei' | 'gongsun' | 'hebei' | 'jiangxia';
 export type SideStageKind = 'siege' | 'field' | 'final';
+/** 借兵种 / 数值 / 外观的基础章节。 */
+export type SideBaseId = 'qunxiong' | 'guandu' | 'chibi' | 'jingnan' | 'hanzhong' | 'yiling' | 'nanzheng' | 'huangjin';
 export interface SideBoss {
   id: string; name: string; title: string;
   /** 借用的首领 v2 图（assets/bosses-v2 下）与 v1 回退图。 */ v2: string; v1: string;
@@ -30,9 +32,9 @@ export interface SideStage {
 export interface SideRouteDef {
   id: SideRouteId; name: string; faction: string; region: string;
   /** 天下地图上的讨伐令位置（归一化坐标）。 */ x: number; y: number;
-  /** 开放：主线某篇章通关几关（WorldStore.arcStages）。 */ open: { arc: 'qunxiong' | 'chibi' | 'hanzhong'; stages: number; hint: string };
-  /** 借哪一章的兵种与数值。 */ base: 'qunxiong' | 'chibi' | 'hanzhong';
-  /** 敌兵外观借哪一章（江东借第十章吴军）。 */ look?: 'yiling';
+  /** 开放：主线某篇章通关几关（WorldStore.arcStages）。 */ open: { arc: 'qunxiong' | 'guandu' | 'chibi' | 'jingnan' | 'shu' | 'hanzhong' | 'xiangfan' | 'yiling' | 'nanzheng'; stages: number; hint: string };
+  /** 借哪一章的兵种与数值。 */ base: SideBaseId;
+  /** 敌兵外观借哪一章（江东借第十章吴军；数值仍按 base）。 */ look?: SideBaseId;
   stages: readonly SideStage[];
   /** 终局通关后并入的城池（攻城关已并入的不重复）。 */ annex: readonly string[];
   specialty: Specialty;
@@ -80,6 +82,43 @@ export const SIDE_ROUTES: readonly SideRouteDef[] = [
         partner: B('xiahoudun', '夏侯惇', '独眼将军', 'hanzhong_xiahouyuan', 'guandu/wenchou', 'xiahouyuan') },
     ],
     annex: ['luoyang', 'baima', 'guandu', 'wuchao', 'runan', 'wancheng'], specialty: { title: '中原兵员', text: '出征可多带 1 名后备兵', reserveSlots: 1 }, lord: 'caocao' },
+  // —— P1b 第一批（第三、四章后）——
+  { id: 'gongsun', name: '公孙瓒 · 幽州', faction: '公孙瓒', region: '幽州 · 青州', x: .745, y: .12, props: 2,
+    open: { arc: 'qunxiong', stages: 3, hint: '第三章「群雄割据」平定后开放' }, base: 'qunxiong',
+    stages: [
+      { name: '平原', kind: 'siege', city: 'pingyuan', behavior: 1, scenery: 1, waves: ['平原城外', '白马斥候', '田楷守城'], story: '公孙瓒遣田楷据平原，与袁绍争青州。先下平原，打开北上之路。',
+        boss: B('tiankai', '田楷', '青州刺史', 'jingnan_zhaofan', 'phase23/lijue', 'zhaofan') },
+      { name: '界桥', kind: 'field', behavior: 2, scenery: 2, waves: ['界桥两岸', '白马义从', '严纲出阵'], story: '界桥两岸，白马义从往来驰射。严纲领骑兵来冲，先破白马阵。',
+        boss: B('yangang', '严纲', '白马义从统领', 'third_lijue', 'phase23/lijue', 'lijue') },
+      { name: '易京楼', kind: 'final', behavior: 3, scenery: 4, waves: ['易京楼下', '楼橹死守', '公孙瓒亲至'], story: '公孙瓒退守易京，楼橹千重。白马将军与田豫出楼决战。',
+        boss: B('gongsunzan', '公孙瓒', '白马将军', 'third_zhangxiu', 'phase23/zhangxiu', 'zhangxiu'),
+        partner: B('tianyu', '田豫', '幽州从事', 'shu_yanghuai', 'phase23/lijue', 'yanghuai') },
+    ],
+    annex: ['ji'], specialty: { title: '白马义从', text: '开局增援 +1 名士兵', reinforcements: 1 }, lord: 'gongsunzan' },
+  { id: 'hebei', name: '袁绍 · 河北', faction: '袁绍', region: '冀州 · 并州 · 青州', x: .505, y: .215, props: 2,
+    open: { arc: 'guandu', stages: 3, hint: '第四章「官渡之战」平定后开放' }, base: 'guandu',
+    stages: [
+      { name: '南皮', kind: 'siege', city: 'nanpi', behavior: 1, scenery: 1, waves: ['南皮城外', '大戟士', '高览守城'], story: '官渡之后，袁氏退守河北。先取南皮，断其东面。',
+        boss: B('gaolan', '高览', '河北名将', 'guandu_yanliang', 'guandu/yanliang', 'zhuran') },
+      { name: '仓亭', kind: 'field', behavior: 2, scenery: 2, waves: ['仓亭渡口', '先登死士', '麴义出阵'], story: '仓亭渡口，麴义的先登死士伏弩以待。破其强弩，渡河北进。',
+        boss: B('quyi', '麴义', '先登营', 'guandu_wenchou', 'guandu/wenchou', 'zhangxiu') },
+      { name: '邺城', kind: 'siege', city: 'ye', behavior: 3, scenery: 4, waves: ['邺城外郭', '漳水围城', '沮授守城'], story: '引漳水围邺城。沮授据城死守，城中粮尽。',
+        boss: B('jushou', '沮授', '河北谋主', 'jingnan_liudu', 'phase23/yuanshu', 'liudu') },
+      { name: '冀州决战', kind: 'final', behavior: 1, scenery: 4, waves: ['冀州城下', '袁氏亲军', '袁绍亲至'], story: '河北诸城尽下，袁绍与审配出城，作最后一战。',
+        boss: B('yuanshao', '袁绍', '四世三公', 'third_yuanshu', 'phase23/yuanshu', 'liuzhang'),
+        partner: B('shenpei', '审配', '河北忠臣', 'jingnan_hanxuan', 'phase23/lijue', 'hanxuan') },
+    ],
+    annex: ['jinyang', 'shangdang', 'linzi', 'beihai', 'donglai', 'pingyuan'], specialty: { title: '河北钱粮', text: '战后粮草收益 +15%', provisions: .15 }, lord: 'yuanshao' },
+  { id: 'jiangxia', name: '荆州 · 江夏', faction: '江夏', region: '荆州 · 江夏', x: .665, y: .81, props: 3,
+    open: { arc: 'guandu', stages: 3, hint: '第四章「官渡之战」平定后开放' }, base: 'guandu', look: 'jingnan',
+    stages: [
+      { name: '江夏外围', kind: 'field', behavior: 2, scenery: 2, waves: ['江夏水寨', '锦帆贼', '甘宁出阵'], story: '黄祖据江夏，锦帆贼甘宁屈居其下。江边水寨，铃声先至。',
+        boss: B('ganning', '甘宁', '锦帆贼', 'xf_lvmeng', 'chibi/caimao', 'sunhuan', true) },
+      { name: '江夏', kind: 'final', behavior: 3, scenery: 3, waves: ['江夏城下', '荆州水军', '黄祖亲至'], story: '黄祖与文聘出城迎战。江夏一下，荆州门户洞开。',
+        boss: B('huangzu', '黄祖', '江夏太守', 'chibi_caimao', 'chibi/caimao', 'caimao'),
+        partner: B('wenpin', '文聘', '荆州大将', 'jingnan_zhaofan', 'chibi/caochun', 'zhaofan') },
+    ],
+    annex: ['jiangxia'], specialty: { title: '锦帆水寨', text: '最大生命 +5%', maxHp: .05 }, lord: 'huangzu' },
 ];
 
 export function sideRoute(id: string | null | undefined): SideRouteDef | undefined { return SIDE_ROUTES.find(r => r.id === id); }
@@ -108,6 +147,18 @@ const SIDE_STYLE: Record<string, { p1: [string, string]; p2: [string, string]; m
   xuchu: { p1: ['虎痴', '虎卫冲锋 · 赤膊突刺'], p2: ['裸衣力战', '亲兵护体时许褚减伤 · 先打亲兵'], moves: { 连营反扑: '虎卫冲锋', 长枪突刺: '赤膊突刺', 长枪横扫: '大刀横扫', 营寨弓弩: '虎卫弓弩' } },
   yuejin: { p1: ['先登之将', '先登冲锋 · 绕城箭雨'], p2: ['困守许昌', '亲兵护卫时乐进减伤 · 先打亲兵'], moves: { 西凉铁骑: '先登冲锋', 劫掠长安: '绕城箭雨', 困兽连劈: '死战连劈', 西凉残部: '许昌守军' } },
   xiahoudun: { p1: ['独眼将军', '疾行突袭 · 拔矢啖睛'], p2: ['刚烈', '大范围横扫'], moves: { 三日五百: '拔矢啖睛' } },
+  tiankai: { p1: ['青州刺史', '亲军护驾 · 弓阵齐射'], p2: ['弃城欲逃', '田楷绕城奔逃 · 身后落下绊索'], moves: {} },
+  yangang: { p1: ['白马义从', '白马冲阵 · 绕阵骑射'], p2: ['界桥死战', '义从亲兵护卫时严纲减伤 · 先打亲兵'], moves: { 西凉铁骑: '白马冲阵', 劫掠长安: '绕阵骑射', 困兽连劈: '死战连劈', 西凉残部: '白马残部' } },
+  gongsunzan: { p1: ['白马将军', '白马枪阵 · 易京夜袭'], p2: ['楼橹死守', '一线贯穿长枪'], moves: { 百鸟朝凤枪: '白马枪阵', 宛城夜袭: '易京夜袭', 白马突阵: '白马突阵', 枪出如龙: '枪出如龙' } },
+  tianyu: { p1: ['幽州从事', '伏弩暗射 · 楼头滚石'], p2: ['困守易京', '亲兵护体时田豫减伤 · 先打亲兵'], moves: { 白水伏杀: '伏弩暗射', 关隘滚石: '楼头滚石' } },
+  gaolan: { p1: ['河北名将', '大戟冲锋 · 长戟突刺'], p2: ['南皮死守', '亲兵护体时高览减伤 · 先打亲兵'], moves: { 连营反扑: '大戟冲锋', 长枪突刺: '长戟突刺', 长枪横扫: '大戟横扫', 营寨弓弩: '河北强弩' } },
+  quyi: { p1: ['先登营', '先登伏弩 · 仓亭夜袭'], p2: ['强弩死战', '一线贯穿长枪'], moves: { 百鸟朝凤枪: '先登枪阵', 宛城夜袭: '仓亭夜袭', 白马突阵: '先登突阵' } },
+  jushou: { p1: ['河北谋主', '伏兵四起 · 盾阵推进'], p2: ['据城死守', '盾兵护体时沮授减伤 · 先破盾兵'], moves: { 山越伏林: '伏兵四起', 藤牌推进: '盾阵推进', 山越毒箭: '城头冷箭' } },
+  yuanshao: { p1: ['四世三公', '闭城自守 · 城头弓阵'], p2: ['袁氏余威', '盾兵护体时袁绍减伤 · 先破盾兵'], moves: { 州府箭雨: '冀州箭雨', 益州援兵: '河北援兵' } },
+  shenpei: { p1: ['河北忠臣', '严令督战 · 城头弓阵'], p2: ['宁死不降', '亲兵护体时审配减伤 · 先打亲兵'], moves: { 严刑督战: '严令督战' } },
+  ganning: { p1: ['锦帆贼', '锦帆夜袭 · 铃声为号'], p2: ['百骑劫营', '连斩 · 步战突进'], moves: { 宗室锐气: '锦帆夜袭', 夷道死守: '铃声为号' } },
+  huangzu: { p1: ['江夏太守', '楼船箭雨 · 水军旗令'], p2: ['江夏火起', '火箭雨落处起火 · 水军增援'], moves: {} },
+  wenpin: { p1: ['荆州大将', '亲军护驾 · 弓阵齐射'], p2: ['江夏死守', '文聘绕城奔逃 · 身后落下绊索'], moves: {} },
 };
 /** 招式组：借现成首领的招式，改名登记（mount 去掉：借来的图没有骑乘姿态）。 */
 export function sideMoves(src: Record<string, BossMovesetDef>): Record<string, BossMovesetDef> {
@@ -122,7 +173,7 @@ export function sideMoves(src: Record<string, BossMovesetDef>): Record<string, B
 
 /** 支线战斗：基础章节数值（base）+ 首领 / 波次 / 文案换成本关。 */
 export function sideBattle(r: SideRouteDef, stage: number, base: ChapterDef, look?: ChapterDef): ChapterDef {
-  const d = r.stages[stage - 1], hp = { xiapi: [1900, 2100, 2300, 2600], nanjun: [3000, 3400], caowei: [3400, 3600, 3800, 4200] }[r.id][stage - 1] ?? 2400;
+  const d = r.stages[stage - 1], hp = ({ xiapi: [1900, 2100, 2300, 2600], nanjun: [3000, 3400], caowei: [3400, 3600, 3800, 4200] } as Partial<Record<SideRouteId, number[]>>)[r.id]?.[stage - 1] ?? Math.round(base.enemies.boss.hp * (d.kind === 'final' ? 1.15 : 1)); // 新支线：按基础章节同关首领生命，终局 ×1.15
   const enemies = look ? Object.fromEntries(Object.entries(base.enemies).map(([k, e]) => {
     const v = (look.enemies as Record<string, typeof e>)[k]; return [k, k === 'boss' || !v ? e : { ...v, hp: e.hp, speed: e.speed, damage: e.damage }];
   })) as ChapterDef['enemies'] : base.enemies;

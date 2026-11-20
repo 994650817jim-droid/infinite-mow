@@ -51,15 +51,32 @@ const toBoss = async p => { for (let i = 0; i < 24 && !(await p.evaluate(() => !
   ck('下邳终局「白门楼」：三英战吕布的吕布战（bossStyle lubu）、劝降键 xiapi-4:lubu', /白门楼/.test(l.name) && l.key === 'xiapi-4:lubu' && l.style === 'lubu', l);
   await q.close();
 }
+// ④ P1b 各支线终局（ROUTES=逗号分隔，默认当前批次）：首领、借来的首领图、双首领同伴、招式名已改成本人、敌兵贴图都在
+{
+  const ROUTES = (process.env.ROUTES ?? 'gongsun,hebei,jiangxia').split(',').filter(Boolean);
+  const BORROWED = /白衣|昭武|桂阳|零陵|益州牧|长沙|荆州水军|西凉|北地枪王|白水|落凤|南蛮王|乌戈|蛮将|抬榇|宗室|巧变|疾行之将/;
+  let shot = false;
+  for (const id of ROUTES) {
+    const info = await (async () => { const p0 = await page(); await p0.goto(BASE + '?dev=1&layout=desktop'); await p0.waitForFunction(() => window.__game, null, { timeout: 120000 }); const r = await p0.evaluate(async id => { const m = await import('/src/data/sideRoutes.ts'), rt = m.sideRoute(id); return { n: rt.stages.length, key: m.SIDE_SCENE_KEY(id), stage: rt.stages[rt.stages.length - 1] }; }, id); await p0.close(); return r; })();
+    const p = await battle(info.key, { ['side_' + id + 'Stage']: info.n });
+    const early = await p.evaluate(() => { const s = window.__S; return s.enemies.filter(e => e.active).map(e => e.sprite.texture.key).filter(k => k === '__MISSING' || !window.__S.textures.exists(k)); });
+    await toBoss(p); await p.waitForTimeout(2200); await p.evaluate(() => window.__calm());
+    const c = await p.evaluate(id => { const s = window.__S; return { boss: s.chapter.bossName, tex: s.boss?.sprite.texture.key, key: s.surrenderKey(), dual: s.dual?.entries.map(e => e.name) ?? [], labels: s.dual ? s.dual.entries.map(e => e.ctrl.label) : [s.hudTexts.bossEnergy.text], missing: s.enemies.filter(e => e.active).map(e => e.sprite.texture.key).filter(k => k === '__MISSING') }; }, id);
+    if (!shot) { await p.screenshot({ path: OUT + '/' + id + '-final.png' }); shot = true; }
+    const want = [info.stage.boss.name, ...(info.stage.partner ? [info.stage.partner.name] : [])];
+    ck(id + ' 终局：首领 ' + want.join(' + ') + '（side_ 借图）出阵、劝降键、招式名已改、无缺图', c.boss === info.stage.boss.name && /^side_/.test(c.tex ?? '') && c.key === id + '-' + info.n + ':' + info.stage.boss.id && want.every(n => !info.stage.partner || c.dual.includes(n)) && !c.labels.some(l => BORROWED.test(l)) && !early.length && !c.missing.length, { ...c, early });
+    await p.close();
+  }
+}
 // ③ 天下地图（真实进度：第三章已平定）→ 讨伐令节点、详情、出征；结算并城、特产、再战加成、解锁钩子
 {
   const p = await page();
   await p.goto(BASE + '?layout=desktop'); await p.waitForFunction(() => window.__game?.scene.isActive('MenuScene'), null, { timeout: 180000 });
   await p.evaluate(() => window.__game.scene.getScene('MenuScene').scene.start('WorldMapScene')); await p.waitForFunction(() => window.__game.scene.isActive('WorldMapScene')); await p.waitForTimeout(1800);
   const m = await p.evaluate(() => { const s = window.__game.scene.getScene('WorldMapScene'), mk = s.markers.find(x => x.node.id === 'side-xiapi'); if (mk) { s.centerOn(mk.node); s.selected = { kind: 'node', node: mk.node }; s.refresh(); }
-    return { xiapi: !!mk, state: mk && s.nodeState(mk.node), nanjun: s.markers.some(x => x.node.id === 'side-nanjun'), caowei: s.markers.some(x => x.node.id === 'side-caowei'), pulse: !!mk?.root.list.find(o => o.name === 'node-pulse-side-xiapi'), detail: s.detail.text, title: s.detailTitle?.text, action: s.action.text.text }; });
+    return { xiapi: !!mk, state: mk && s.nodeState(mk.node), nanjun: s.markers.some(x => x.node.id === 'side-nanjun'), caowei: s.markers.some(x => x.node.id === 'side-caowei'), gongsun: s.markers.some(x => x.node.id === 'side-gongsun'), hebei: s.markers.some(x => x.node.id === 'side-hebei'), pulse: !!mk?.root.list.find(o => o.name === 'node-pulse-side-xiapi'), detail: s.detail.text, title: s.detailTitle?.text, action: s.action.text.text }; });
   await p.screenshot({ path: `${OUT}/map-xiapi.png` });
-  ck('第三章已平定：地图出现「讨伐 · 吕布」讨伐令（开放 + 红色脉冲）；江东、曹魏未开放不画', m.xiapi && m.state === 'open' && m.pulse && !m.nanjun && !m.caowei, m);
+  ck('第三章已平定：地图出现「讨伐 · 吕布」讨伐令（开放 + 红色脉冲）；江东、曹魏未开放不画', m.xiapi && m.state === 'open' && m.pulse && !m.nanjun && !m.caowei && m.gongsun && !m.hebei, m);
   ck('讨伐令详情（两行）：第 1/4 关「小沛」攻城 · 首领曹性 · 可劝降；讨平后并入下邳 + 特产；按钮「出征 · 小沛」', /第 1\/4 关「小沛」攻城 · 首领 曹性 · 可劝降/.test(m.detail) && m.detail.split(String.fromCharCode(10)).length === 2 && /并入 下邳/.test(m.detail) && /并州狼骑/.test(m.detail) && m.action === '出征 · 小沛', m);
   const r = await p.evaluate(async () => {
     const S = await import('/src/world/SideRouteStore.ts'), W = await import('/src/world/WorldStore.ts'), U = await import('/src/data/surrender.ts'), H = await import('/src/systems/HeroUnlocks.ts');

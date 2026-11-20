@@ -8,7 +8,7 @@ import type { CharacterId } from './characters';
  */
 export type SurrenderTier = 'can' | 'hard' | 'never' | 'sure' | 'story' | 'silent' | 'meng' | 'retreat';
 /** 同阵营降将在队（现身说法）用的阵营。 */
-export type SurrenderCamp = 'dongzhuo' | 'zhangxiu' | 'yuan' | 'jingzhou' | 'yizhou' | 'wu' | 'nanzhong' | 'lubu' | 'wei';
+export type SurrenderCamp = 'dongzhuo' | 'zhangxiu' | 'yuan' | 'jingzhou' | 'yizhou' | 'wu' | 'nanzhong' | 'lubu' | 'wei' | 'gongsun' | 'hebei';
 /** 关系 / 旗标加成：某武将在队（主将或随行）、主公是谁、本存档已劝降过谁、本关的旗标。 */
 export interface SurrenderBonus { kind: 'hero' | 'lord' | 'surrendered' | 'flag'; id: string; add: number; label: string }
 export interface SurrenderDef {
@@ -131,6 +131,22 @@ export const SURRENDER_DEFS: readonly SurrenderDef[] = [
   D('caowei-2:xuchu', '许褚', '虎痴', 'hard', { template: 'blade', camp: 'wei', yes: '俺服了！你比俺还能打！', no: '俺只护着曹公，谁也别想劝俺！' }),
   D('caowei-3:yuejin', '乐进', '先登之将', 'can', { template: 'spear', camp: 'wei', yes: '许昌守不住了……进，降。', no: '先登之将，不知退字！' }),
   D('caowei-4:caocao', '曹操', '魏王', 'sure', { template: 'strategist', camp: 'wei', yes: '中原尽失，大势已去……天下英雄，唯使君与操耳。操，愿归附。', yesIfLord: { id: 'liubei', text: '玄德……煮酒论英雄，今日方知是你。操，归附。' } }),
+  // 公孙瓒 · 幽州（第三章后）
+  D('gongsun-1:tiankai', '田楷', '青州刺史', 'can', { template: 'bow', camp: 'gongsun', yes: '平原守不住了……楷愿降。', no: '公孙将军待我恩重，休想！' }),
+  D('gongsun-2:yangang', '严纲', '白马义从统领', 'hard', { template: 'spear', camp: 'gongsun', yes: '白马义从……听将军调遣。', no: '白马义从，只有战死的！' }),
+  D('gongsun-3:gongsunzan', '公孙瓒', '白马将军', 'hard', { template: 'spear', camp: 'gongsun', bonuses: [{ kind: 'hero', id: 'zhaoyun', add: .25, label: '子龙在侧' }, ...RETRY],
+    yes: '……子龙，你选的主公，果然不错。瓒，降了。', no: '易京楼在，公孙瓒在！', noIfHero: { id: 'zhaoyun', text: '子龙……你也来劝我？我公孙瓒岂是降人！' } }),
+  D('gongsun-3:tianyu', '田豫', '幽州从事', 'can', { template: 'bow', camp: 'gongsun', bonuses: [{ kind: 'surrendered', id: 'gongsunzan', add: .2, label: '伯珪已降' }], yes: '豫早知易京难守……愿随将军。', no: '豫既事公孙，不改其志！' }),
+  // 袁绍 · 河北（第四章后）
+  D('hebei-1:gaolan', '高览', '河北名将', 'can', { template: 'blade', camp: 'hebei', yes: '袁公不能用人……览愿降。', no: '河北男儿，岂肯投降！' }),
+  D('hebei-2:quyi', '麴义', '先登营', 'hard', { template: 'bow', camp: 'hebei', yes: '先登营服了你……愿听调遣。', no: '先登死士，宁死不退！' }),
+  D('hebei-3:jushou', '沮授', '河北谋主', 'hard', { template: 'strategist', camp: 'hebei', yes: '袁氏气数已尽……授愿为将军献策。', no: '授生为袁氏之臣，死为袁氏之鬼！' }),
+  D('hebei-4:yuanshao', '袁绍', '四世三公', 'sure', { template: 'strategist', camp: 'hebei', yes: '河北尽失……四世三公，竟落到这般田地。绍，归附。' }),
+  D('hebei-4:shenpei', '审配', '河北忠臣', 'never', { no: '吾主在北，岂可南面而降！' }),
+  // 荆州 · 江夏（第四章后）
+  D('jiangxia-1:ganning', '甘宁', '锦帆贼', 'can', { template: 'bow', camp: 'jingzhou', yes: '黄祖不识人，宁早想另投明主——愿随将军！', no: '锦帆甘兴霸，岂是你劝得动的！' }),
+  D('jiangxia-2:huangzu', '黄祖', '江夏太守', 'hard', { template: 'bow', camp: 'jingzhou', bonuses: [...RETRY], yes: '江夏……保不住了。祖，降。', no: '江夏是我的！谁也别想拿走！' }),
+  D('jiangxia-2:wenpin', '文聘', '荆州大将', 'hard', { template: 'blade', camp: 'jingzhou', bonuses: [{ kind: 'surrendered', id: 'huangzu', add: .2, label: '黄祖已降' }], yes: '聘守不住江夏，愧对刘荆州……愿降。', no: '聘受刘荆州厚恩，宁死不降！' }),
   D('caowei-4:xiahoudun', '夏侯惇', '独眼将军', 'hard', { template: 'blade', camp: 'wei', bonuses: [{ kind: 'surrendered', id: 'caocao', add: .3, label: '孟德已降' }],
     yes: '孟德都降了……惇随他便是。', yesIfSurrendered: { id: 'caocao', text: '孟德既已归附，惇岂敢独违。' }, no: '父精母血，不可弃也——惇宁死不降！' }),
 ];

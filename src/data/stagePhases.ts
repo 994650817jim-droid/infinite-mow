@@ -21,12 +21,22 @@ export const PHASES = {
   eliteSquad: (chapter: number): number => chapter <= 3 ? 2 : chapter <= 7 ? 3 : 4,
   /** 本关事件段开头的一圈伏兵（P1；P2 起再加战场机缘事件）。 */
   ambush: (chapter: number): number => 8 + Math.min(8, chapter),
-  /** 副将生命 = 本关精锐生命 × 2，夹在首领生命的 35%–60% 之间（前几章首领只有约 3 个精锐的血）；体型 ×lieutenantScale。 */
-  lieutenantHp: { eliteMul: 2, minBoss: .35, maxBoss: .6 }, lieutenantScale: 1.3,
+  /**
+   * 副将生命 = 本关精锐生命 × eliteMul，夹在「参考首领生命」的 35%–60% 之间；参考首领生命 = 首领基础生命 × bossRef（不跟 bossHpMul 的章节加倍走，
+   * 否则首领一加倍副将也翻倍）。P6 平衡（2026-11-19）：原 ×2、按实际首领夹，5-2 / 10-3 副将约 25 秒倒（段长 50 秒）；改 ×3、参考 ×1.6 后约 35 秒。体型 ×lieutenantScale。
+   */
+  lieutenantHp: { eliteMul: 3, minBoss: .35, maxBoss: .6, bossRef: 1.6 }, lieutenantScale: 1.3,
   /** 副将段起小兵生命 ×（首领段不再乘：首领在场本来就少刷兵）。 */
   lieutenantWaveHp: 1.1,
-  /** 首领生命 ×（玩家多一次三选一 + 关内机缘增益）。 */
+  /** 首领生命 ×（玩家多一次三选一 + 关内机缘增益）。初值 1.15，见 bossHpMul（P6 平衡按章节）。 */
   bossHp: 1.15,
+  /**
+   * 首领生命倍率按章节（2026-11-19 P6 平衡，wave-progression-redesign.md「平衡会话 P6」）：
+   * 同等级、同构筑对照，五段关打了 205 秒后（战场机缘约 +10～40% 伤害、锦囊、多 1～2 次三选一、局内升级），
+   * 从接战到首领倒下比旧三波关快约 2.7 倍（5-2）、3.5 倍（10-3）。按章节线性补回到旧的首领战用时：
+   * 段数 ≤ 3（1-1，首领时刻同旧）×1；第一章 4 / 5 段 ×1.6；第二章起 1.9 + 0.16 × 章，封顶 3.8（5-2 ≈ 2.7、10-3 ≈ 3.5、12 章 3.8）。
+   */
+  bossHpMul: (chapter: number, phases: number): number => phases <= 3 ? 1 : chapter <= 1 ? 1.6 : Math.min(3.8, 1.9 + .16 * chapter),
   /** 三选一保底：进第 2 / 3 / 4 / 5 段时至少 1 / 2 / 3 / 4 次，首领宝箱补到 5 次。 */
   picks: { waves: [1, 2, 3, 4] as readonly number[], main: 5 },
 } as const;

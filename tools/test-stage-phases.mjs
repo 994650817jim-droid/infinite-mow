@@ -30,14 +30,14 @@ const state = p => p.evaluate(() => { const s = window.__S, r = s.phaseRunner, t
 async function stageCase(label, start, shot) {
   const p = await open(start);
   const a = await state(p);
-  ck(`${label}：五段（先锋 / 精锐 / 事件 / 副将 / 首领），首领 205 秒登场；不显示「第 x 波」，顶部战况线；保底 5 次；首领生命 ×1.15`, a.kinds?.join() === 'vanguard,elite,event,lieutenant,boss' && a.starts.join() === '0,45,100,155,205' && !a.waveText && a.track?.visible && a.cap === 5 && a.bossHpMul > 0, a);
+  ck(`${label}：五段（先锋 / 精锐 / 事件 / 副将 / 首领），首领 205 秒登场；不显示「第 x 波」，顶部战况线；保底 5 次；首领生命按章节加倍（PHASES.bossHpMul，2-1 ≈ ×2.2）`, a.kinds?.join() === 'vanguard,elite,event,lieutenant,boss' && a.starts.join() === '0,45,100,155,205' && !a.waveText && a.track?.visible && a.cap === 5 && a.bossHpMul > 0, a);
   await jump(p, 46); const e = await state(p);
   ck(`${label}：精锐段——横幅写段落故事名（不带「第 x 波」）+「精锐来袭」，精锐小队压上，战况线点亮 2 个图标，保底补到 1`, e.phase === 1 && e.run.elites >= 2 && /精锐来袭/.test(e.banners.join()) && !/第 \d/.test(e.banners.join()) && e.track.iconsLit === 2 && e.picks >= 1, e);
   await jump(p, 101); const v = await state(p);
   ck(`${label}：事件段——伏兵一圈冲阵，保底 2`, v.phase === 2 && v.run.ambush >= 8 && v.picks >= 2 && /伏兵四起/.test(v.banners.join()), v);
   await jump(p, 156); await p.waitForTimeout(600); const l = await state(p);
-  const bossHp = await p.evaluate(() => { const s = window.__S; return Math.round(s.chapter.enemies.boss.hp * s.chapter.growth.bossHp); });
-  ck(`${label}：副将段——副将（名牌 + 小血条），生命为首领 35%–60%（精锐 ×2 夹在其间），保底 3`, l.phase === 3 && !!l.run.lieutenant && l.run.lieutenantHp / bossHp >= .33 && l.run.lieutenantHp / bossHp <= .62 && l.picks >= 3 && /副将出阵/.test(l.banners.join()), { ...l, bossHp });
+  const bossHp = await p.evaluate(async () => { const s = window.__S, m = await import('/src/data/stagePhases.ts'); /* 副将按「参考首领生命」夹（去掉章节加倍、×bossRef，P6 平衡） */ return Math.round(s.chapter.enemies.boss.hp * s.chapter.growth.bossHp / m.PHASES.bossHpMul(s.phasePlan.chapter, s.phasePlan.phases.length) * m.PHASES.lieutenantHp.bossRef); });
+  ck(`${label}：副将段——副将（名牌 + 小血条），生命为参考首领 35%–60%（精锐 ×3 夹在其间），保底 3`, l.phase === 3 && !!l.run.lieutenant && l.run.lieutenantHp / bossHp >= .33 && l.run.lieutenantHp / bossHp <= .62 && l.picks >= 3 && /副将出阵/.test(l.banners.join()), { ...l, bossHp });
   if (shot) { await p.evaluate(() => window.__calm()); await p.waitForTimeout(900); await p.evaluate(() => window.__calm()); await p.waitForTimeout(300); await p.screenshot({ path: `${OUT}/${shot}-lieutenant.png` }); }
   await p.evaluate(() => { const s = window.__S, e = s.phaseRunner.lt.e; e.hp = 0; s.killEnemy(e); }); await p.waitForTimeout(400); await p.evaluate(() => window.__calm()); const d = await state(p);
   ck(`${label}：副将倒下——「X 授首」横幅，保底补到 4`, d.run.lieutenantDown && d.picks >= 4 && /授首/.test(d.banners.join()), d);

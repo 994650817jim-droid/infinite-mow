@@ -3657,7 +3657,7 @@ export class GameScene extends Phaser.Scene {
     this.fortunes?.clear(); this.fortunes = null; this.fortuneQueue = []; this.fortuneTaken = {}; if (this.player) clearStageBuffs(this.player);
     if (this.phaseEligible()) {
       const base = this.chapter, plan = buildPhasePlan(this.hardKey(), this.hardStage(), base.waves, base.bossName), g = base.growth;
-      this.chapter = { ...base, waves: plan.waves, pace: phasedPace(base.pace, chapterBossTime(base), plan.bossAt), growth: { hp: g?.hp ?? 1, damage: g?.damage ?? 1, bossHp: (g?.bossHp ?? 1) * PHASES.bossHp } };
+      this.chapter = { ...base, waves: plan.waves, pace: phasedPace(base.pace, chapterBossTime(base), plan.bossAt), growth: { hp: g?.hp ?? 1, damage: g?.damage ?? 1, bossHp: (g?.bossHp ?? 1) * PHASES.bossHpMul(plan.chapter, plan.phases.length) } };
       this.phasePlan = plan;
       BuildState.rankCap = BuildState.rankCapFor(plan.chapter); // 战法精研：第五章起 Lv4、第九章起 Lv5
       const hard = (n: number) => this.hardMode ? n : 1;
@@ -3665,7 +3665,8 @@ export class GameScene extends Phaser.Scene {
         scene: this, player: () => this.player, elapsed: () => this.elapsed,
         spawn: (kind, x, y, def) => this.spawnEnemy(kind, x, y, def ? 1 : this.chapter.hpScale(this.elapsed), true, def),
         def: kind => this.chapter.enemies[kind],
-        bossHp: () => this.chapter.enemies.boss.hp * (this.chapter.growth?.bossHp ?? 1) * hard(HARD_MODE.bossHp),
+        // 副将夹血用的「参考首领生命」：去掉五段的章节加倍（bossHpMul），换成固定 bossRef（data/stagePhases.ts lieutenantHp）
+        bossHp: () => this.chapter.enemies.boss.hp * (this.chapter.growth?.bossHp ?? 1) / PHASES.bossHpMul(plan.chapter, plan.phases.length) * PHASES.lieutenantHp.bossRef * hard(HARD_MODE.bossHp),
         growthHp: () => (this.chapter.growth?.hp ?? 1) * hard(HARD_MODE.enemyHp),
         banner: (t, d, c) => this.showWaveBanner(t, d, c), sfx: k => this.sfx.play(k),
         onLieutenantDown: (name, x, y) => {

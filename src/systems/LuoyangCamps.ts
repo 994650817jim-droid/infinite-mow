@@ -114,6 +114,8 @@ export class LuoyangCamps {
     for (let i = 0; i < C.elites; i++) this.add(c, this.h.spawn('elite', c.x + (i % 2 ? 90 : -90), c.y + 60), false);
   }
 
+  /** 把一个兵编进第 i 座营寨的守军（开局在营里待命，主将走近 / 营寨挨打才出营）。2-3 营寨守将李傕用。 */
+  enlist(i: number, e: Enemy | null): void { const c = this.camps[i]; if (c && e) this.add(c, e, false); }
   /** 本营援兵还活着几个。 */
   private live(c: Camp): number { c.reinf = c.reinf.filter(r => r.e.active && r.e.spawnId === r.life); return c.reinf.length; }
   private inside(c: Camp, x: number, y: number, pad = 0): boolean { const C = LUOYANG.camp; return x > c.x - C.halfW - pad && x < c.x + C.halfW + pad && y > c.y + C.north - pad && y < c.y + C.south + pad; }

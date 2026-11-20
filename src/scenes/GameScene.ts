@@ -1785,7 +1785,15 @@ export class GameScene extends Phaser.Scene {
       // 张辽「震慑」叠满：溃逃中的敌兵背向主将逃跑、不出手（weapons/zhangliaoWeapon.ts 设 routUntil；首领 / 免控的不会溃逃）
       if (enemy.routUntil > this.combatNow && enemy.kind !== 'boss' && !enemy.controlImmune) { const fx = enemy.x - player.x, fy = enemy.y - player.y, fd = Math.hypot(fx, fy) || 1; enemy.contactCd = Math.max(enemy.contactCd, .2); const v = enemy.def.speed * ZHANGLIAO.routSpeed; enemy.moveVx = fx / fd * v; enemy.moveVy = fy / fd * v; enemy.intentDx = fx / fd; enemy.intentDy = fy / fd; enemy.sprite.x += enemy.moveVx * dt; enemy.sprite.y += enemy.moveVy * dt; continue; } // 人群转向会把速度算成朝主将，溃逃直接按背向位移
       // 貂蝉「离间」：倒戈中的敌人不追主将，转身冲撞最近的同伴（逻辑在 CharacterPassives.driveTurned）
-      if (player.passive.driveTurned(enemy, dt, this.combatNow, (x, y, r) => this.grid.query(x, y, r), (t, n) => this.hitEnemy(t, n, this.combatNow, 'melee', true, false)) || this.followerPassives.some(fp => fp.driveTurned(enemy, dt, this.combatNow, (x, y, r) => this.grid.query(x, y, r), (t, n) => this.hitEnemy(t, n, this.combatNow, 'melee', true, false)))) { enemy.contactCd = Math.max(0, enemy.contactCd - dt); continue; }
+      // 出手：攻击帧（driveTurned 里 startAttack）+ 前冲（feedback.attack）+ 打中同伴的受击反馈（hitEnemy）；之后照常更新攻击 / 行走帧与深度（原来直接 continue，倒戈的兵定格平移、出手没动作）
+      const turnedHit = (t: Enemy, n: number): void => { this.feedback.attack(enemy, Math.atan2(t.y - enemy.y, t.x - enemy.x), this.combatNow, 360); if (n > 0) this.hitEnemy(t, n, this.combatNow, 'melee', true, false); }; // n = 0：闭月分支的魅惑用分支自己的伤害（strike），这里只出动作
+      if (player.passive.driveTurned(enemy, dt, this.combatNow, (x, y, r) => this.grid.query(x, y, r), turnedHit) || this.followerPassives.some(fp => fp.driveTurned(enemy, dt, this.combatNow, (x, y, r) => this.grid.query(x, y, r), turnedHit))) {
+        enemy.contactCd = Math.max(0, enemy.contactCd - dt);
+        enemy.updateAttackVisual(this.combatNow);
+        if (enemy.kind !== 'boss' && enemy.kind !== 'elite') enemy.sprite.setDepth(actorDepth(enemy.y + enemy.radius * .72));
+        if (enemy.walkSheet && !enemy.externalWalk) enemy.updateWalk(dt, enemy.x - enemy.frameStartX, enemy.y - enemy.frameStartY);
+        continue;
+      }
       enemy.contactCd = Math.max(0, enemy.contactCd - dt);
       enemy.shootCd -= dt;
       enemy.dashCd -= dt;

@@ -94,7 +94,7 @@ export function beifaGameSceneClass(Base: typeof GameScene, cfg: ArcSceneConfig)
     protected spawnBoss(): void {
       const s = this as unknown as Host;
       // 陈仓：城门未破，郝昭不出城（到点也只提示）
-      if (this.arcStage === 2 && this.siege?.gateAlive) { if (!this.gateWarned) { this.gateWarned = true; s.showWaveBanner('城门紧闭', true, '先破陈仓城门 · 郝昭才会出城'); } return; }
+      if (this.arcStage === 2 && this.siege?.gateAlive) { if (!this.gateWarned) { this.gateWarned = true; s.showWaveBanner('城门紧闭', true, '先破陈仓城门 · 郝昭才会出城（60 秒内未破城门即退兵）'); /* 2026-11-20 第 7–12 章检查：基类在首领时刻 + 60 秒首领未出判超时，原横幅没说限时 */ } return; }
       const had = s.boss?.active; super.spawnBoss();
       if (!s.boss || had) return;
       if (this.arcStage === 3 && this.strikes) {

@@ -97,6 +97,19 @@ export function playStoryScroll(scene: Phaser.Scene, node: StoryNode, lines: Sto
 
 // ———— 大字台词（首领登场 / 倒下、bark）————
 interface BarkTarget { x: number; y: number; active?: boolean; displayHeight?: number }
+/**
+ * 用首领本人的行走图当台词卡立绘（2026-11-20 第 7–12 章检查：8-2 夏侯渊等登场大卡头像圈是空的）。取当前帧中间偏上一块（格宽 56% 的正方形、从格高 4% 起），
+ * 台词卡再按立绘规则取「宽 64%、上 1%–40%」——落在头肩。target 不是精灵（头顶冒字的点）返回 undefined。
+ */
+function spritePortrait(scene: Phaser.Scene, target: BarkTarget): string | undefined {
+  const sp = target as Partial<Phaser.GameObjects.Sprite>, fr = sp.frame; if (!fr || !sp.texture || sp.texture.key === '__MISSING') return undefined;
+  const key = 'barkfb_' + sp.texture.key; if (scene.textures.exists(key)) return key;
+  const S = 256, c = document.createElement('canvas'); c.width = c.height = S; const ctx = c.getContext('2d'); if (!ctx) return undefined;
+  const side = Math.min(fr.cutWidth, fr.cutHeight) * .56;
+  ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(fr.source.image as CanvasImageSource, fr.cutX + fr.cutWidth / 2 - side / 2, fr.cutY + fr.cutHeight * .04, side, side, 0, 0, S, S);
+  scene.textures.addCanvas(key, c); return key;
+}
 interface BarkHost { heroBark?: { sayLine?: (target: BarkTarget, name: string, text: string) => boolean } }
 /** 大字台词：跟着说话人走，弹出 → 停 1.8 秒 → 淡出；同时最多 2 句（新的顶掉最旧的）。HeroBark 合入后由它接管。 */
 /**
@@ -238,7 +251,10 @@ export class StoryDirector {
       if (!l.who) { storyBark(this.h.scene, target, s.name ?? '', l.text); return; }
       const id = l.who === '{lord}' ? this.h.ctx.lord : l.who, ally = l.who === '{lord}' || !!heroName(id);
       const big = intro && i === 0;
-      showBarkCard(this.h.scene, { side: ally ? 'left' : 'right', name: s.name ?? id, text: l.text, portrait: s.portrait, id, intro: big, pause: big ? () => this.h.pause?.() : undefined, resume: big ? () => this.h.resume?.() : undefined });
+      // 敌方说话人没有水墨立绘（第七章起多数首领，见 MISSING_PORTRAITS_CH712）：头像圈原来是空的——用说话的首领本人（target）当前这一帧裁上半身
+      const inked = !!s.portrait && (this.h.scene.textures.exists(s.portrait) || !!storyArtFile(s.portrait));
+      const portrait = inked || ally ? s.portrait : spritePortrait(this.h.scene, target) ?? s.portrait;
+      showBarkCard(this.h.scene, { side: ally ? 'left' : 'right', name: s.name ?? id, text: l.text, portrait, id, intro: big, pause: big ? () => this.h.pause?.() : undefined, resume: big ? () => this.h.resume?.() : undefined });
       if (i === 0) storyBark(this.h.scene, target, '', '！');
     };
     // 2026-11-20：几句一起排进台词卡队列（一张一张出，卡上有「下一句 ▸」）；旁白句仍按 1.4 秒错开冒头顶大字

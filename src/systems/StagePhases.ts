@@ -119,9 +119,14 @@ export class StagePhaseRunner {
   captainDef(): EnemyDef { return { ...this.lieutenantDef(), hp: this.h.def('elite').hp * 3 }; }
   /** 刷一个副将一档的精锐（体型放大）。 */
   spawnLieutenant(x: number, y: number): Enemy | null { const e = this.h.spawn('elite', x, y, this.lieutenantDef()); if (e) this.enlarge(e); return e; }
+  /**
+   * 副将没刷出来（场上敌兵已到上限 BALANCE.enemyCap，spawnEnemy 连 force 也返回 null）时先挂起、每 0.5 秒再试——
+   * 2026-11-20 第 7–12 章检查：后期关敌兵常满，8-3 徐晃、9-1 满宠、10-1 谢旌、10-2 潘璋、12-2 王双整关没出来。
+   */
+  private ltPending: { name: string; at: number } | null = null;
   private lieutenant(name: string): void {
     const P = this.h.player(), at = { x: P.x + (Math.random() < .5 ? -340 : 340), y: P.y - 80 }; // 从侧面进场（电脑版视野左右各 480，一出来就看得到）
-    this.spawnLieutenantAt(name, at.x, at.y);
+    this.ltPending = this.spawnLieutenantAt(name, at.x, at.y) ? null : { name, at: this.h.elapsed() + .5 };
   }
   /** 在指定位置放一名副将（名牌 label + 名字、小血条；倒下同样走 onLieutenantDown）。2-3 洛阳营寨守将李傕也用它。 */
   spawnLieutenantAt(name: string, x: number, y: number, label = '副将 · '): Enemy | null {
@@ -137,6 +142,7 @@ export class StagePhaseRunner {
 
   /** 每帧：副将名牌 / 血条跟随；倒下时通知场景。 */
   update(): void {
+    if (this.ltPending && !this.lt && this.h.elapsed() >= this.ltPending.at) this.lieutenant(this.ltPending.name);
     const t = this.lt; if (!t || t.down) return;
     const alive = t.e.active && t.e.spawnId === t.life && t.e.hp > 0;
     if (!alive) {
@@ -149,5 +155,5 @@ export class StagePhaseRunner {
     t.bar.clear().fillStyle(0x140a06, .8).fillRect(t.e.x - w / 2 - 1, top + 2, w + 2, 6).fillStyle(0xd8432a, 1).fillRect(t.e.x - w / 2, top + 3, w * k, 4);
   }
 
-  clear(): void { if (this.lt && !this.lt.down) { this.lt.tag.destroy(); this.lt.bar.destroy(); } this.lt = undefined; }
+  clear(): void { if (this.lt && !this.lt.down) { this.lt.tag.destroy(); this.lt.bar.destroy(); } this.lt = undefined; this.ltPending = null; }
 }

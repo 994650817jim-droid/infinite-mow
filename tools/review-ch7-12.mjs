@@ -100,7 +100,8 @@ async function runStage(tag) {
   let ovBoss = null, bossTex = null;
   if (r.pause) {
     await p.evaluate(() => { const s = window.__S; s.devOneHit = false; const B = s.boss; if (B) s.player.sprite.setPosition(B.x - 170, B.y + 90); });
-    await p.waitForTimeout(900);
+    for (let i = 0; i < 24; i++) { await p.evaluate(() => { const s = window.__S; window.__step(0); if (s.mode === 'none' && s.boss?.active) { const B = s.boss; s.player.sprite.setPosition(B.x - 170, B.y + 90); } }); await p.waitForTimeout(150); } // 登场大卡（暂停）点过去再截，首领血条才在
+    await p.waitForTimeout(600);
     ovBoss = await p.evaluate(() => window.__overlaps()); bossTex = await p.evaluate(() => { const B = window.__S.boss; return B ? (B.def.walkVisual?.texture ?? B.def.texture) : null; });
     await p.screenshot({ path: `${OUT}/${tag}-boss.png` });
     await p.evaluate(async () => { const s = window.__S, R = window.__R; s.devOneHit = true; s.devTimeScale = 4; let a = 0; const t0 = performance.now(); let lastE = s.elapsed, lastK = s.kills, lastChange = performance.now();

@@ -1,4 +1,5 @@
 import { SCHOOL_TIER } from '../data/schools';
+import { LVBU } from '../data/lvbu';
 import {visualTextureKey} from '../systems/ReadableTextures';
 import {framesFigure, sheetFigureHeight} from '../systems/SpriteMetrics';
 import {ACTION_MS, HERO_ACTIONS, IDLE_FRAME_MS, ZHUGE_FALLBACK, type ActionFrame, type HeroActionKind, type HeroActionSet} from '../data/heroActions';
@@ -167,12 +168,13 @@ export class Player {
   /** 打碎甲胄架 / 盾牌堆偶得的短时减伤：截止时间与受伤倍率（data/propLoot.ts PROP_LOOT.armor） */
   propGuardUntil = 0; propGuardMul = 1;
   get speed(): number {
-    return BALANCE.player.speed * Math.min(1.6, this.stats.moveMul * this.growth.movementMultiplier()*(this.growth.build.tier('cavalry')>=2?1+SCHOOL_TIER.cavalry.move:1)) * this.mountSpeedMul * this.envSpeedMul * this.terrainSpeedMul * this.snareSpeedMul;
+    const wu = this.passive.isWushuang((this.scene as Phaser.Scene & { combatNow?: number }).combatNow ?? this.scene.time.now) ? LVBU.moveMul : 1; // 吕布人中吕布：移速 +40%（可超 1.6 上限）
+    return wu * BALANCE.player.speed * Math.min(1.6, this.stats.moveMul * this.growth.movementMultiplier()*(this.growth.build.tier('cavalry')>=2?1+SCHOOL_TIER.cavalry.move:1)) * this.mountSpeedMul * this.envSpeedMul * this.terrainSpeedMul * this.snareSpeedMul;
   }
 
   /** 被外力击退 / 挑起；self 为自己的突进（冲锋、龙胆突刺）。马超冲锋无敌中不被外力击退。 */
   knockUp(now: number, duration: number, dx: number, dy: number, self = false): void {
-    if (!self && this.passive.isInvulnerable(now)) return;
+    if (!self && (this.passive.isInvulnerable(now) || this.passive.isWushuang(now))) return; // 吕布人中吕布：不被击退
     this.knockedAt = now; this.knockedUntil = now + duration;
     this.knockVx = dx / (duration / 1000); this.knockVy = dy / (duration / 1000);
   }

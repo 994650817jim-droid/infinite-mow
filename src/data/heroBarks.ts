@@ -28,6 +28,11 @@ export interface HeroBarkLines {
 }
 
 export const HERO_BARKS: Record<CharacterId, HeroBarkLines> = {
+  lvbu: {
+    trigger: ['人中吕布，马中赤兔！', '天下谁人能挡我！', '无双之名，岂是虚传！'],
+    bossAppear: ['来者何人，也配与我一战？'], bossDown: ['不堪一击。'],
+    vsBoss: { 张郃: '张儁乂，接我一戟！', 曹操: '曹阿瞒，白门楼之仇今日来报！' },
+  },
   zhaoyun: {
     trigger: ['吾乃常山赵子龙也！', '七进七出，谁可挡我！', '子龙一身都是胆！'],
     bossAppear: ['来将通名！', '贼将休走！'], bossDown: ['贼将已授首！'],

@@ -41,7 +41,8 @@ export const UNLOCK_RULES: Readonly<Partial<Record<CharacterId, (p: UnlockProgre
   weiyan: p => p.arc('jingnan') >= 3,                                         // 6-3 魏延献城（去留两个选项都留下）
   huangzhong: p => (p.arc('jingnan') >= 3 && !!p.flag('spared_huangzhong')) || p.arcOpen('hanzhong') || p.arc('hanzhong') >= 1, // 长沙放过 → 当场；打死 → 负伤遁去，第八章开放前伤愈来投
   pangtong: p => p.arc('shu') >= 1,                                           // 7-1 葭萌关（落凤坡之前）
-  machao: p => p.arc('shu') >= 3 || p.arc('hanzhong') >= 1,                   // 7-3 成都；保底第八章
+  machao: p => p.arc('shu') >= 3 || p.arc('hanzhong') >= 1,
+  lvbu: p => !!p.persuaded?.('lubu'),                                         // P2：劝降吕布（下邳支线白门楼，或三英战吕布挑战）                   // 7-3 成都；保底第八章
 };
 /** 黄忠走的是不是保底（长沙没放过）——揭幕换文案。 */
 export function joinedByFallback(id: CharacterId, p: UnlockProgress = realProgress()): boolean { return id === 'huangzhong' && !p.flag('spared_huangzhong'); }

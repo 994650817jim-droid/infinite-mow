@@ -94,7 +94,7 @@ ck('谋「包扎」：第 3 次施术给身边随行回 4% 最大生命', c.heal
 ck('强度：招式让刀卫 6 秒伤害提高，但不超过 +50%（大众脸的强度）；名将不受招式影响', c.dealt[1] > c.plain[1] && c.dealt[1] <= c.plain[1] * 1.5 && Math.abs(c.dealt[2] - c.plain[2]) <= c.plain[2] * .35, c);
 ck('实战中招式会自己放出来（横斩 / 包扎都 ≥ 1）', c.skills.sweep >= 1 && c.skills.heal >= 1, c.skills);
 
-// —— 3. 数值说明随将阶提高（讲武堂「随从操练」的升级前后） ——
+// —— 3. 数值说明随将阶提高（讲武堂「随行操练」的升级前后） ——
 const d = await p.evaluate(async () => {
   const R = await import('/src/systems/RosterStore.ts'), C = await import('/src/data/commonerSkills.ts'), o = {};
   for (const t of ['blade', 'spear', 'bow', 'strategist']) o[t] = { a0: C.activeValue(t, 0), a3: C.activeValue(t, 3), p0: C.passiveValue(t, 0), p3: C.passiveValue(t, 3) };

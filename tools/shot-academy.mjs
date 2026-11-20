@@ -1,4 +1,4 @@
-// 讲武堂弹窗截图（2026-11-18：页签 / 研究行 / 随从操练行 / 翻页 / 返回都换成漆金按钮，一屏不留水墨按钮）。电脑布局 960×540。
+// 讲武堂弹窗截图（2026-11-18：页签 / 研究行 / 随行操练行 / 翻页 / 返回都换成漆金按钮，一屏不留水墨按钮）。电脑布局 960×540。
 // 用法：BASE=http://127.0.0.1:5173/ TAG=after node tools/shot-academy.mjs   → assets/review/camp-full/<TAG>-academy-{supply,drill}.png
 import { chromium } from 'playwright';
 import { mkdirSync } from 'node:fs';

@@ -62,7 +62,7 @@ export class CityScene extends Phaser.Scene {
  private drag:{x:number;y:number;sx:number;sy:number;moved:boolean}|null=null;private pressedSlot:string|null=null;
  private popId:TownBuildingId|null=null;
  private techTab:TechBranch|'drill'='supply';
- /** 讲武堂「随从操练」翻页。 */
+ /** 讲武堂「随行操练」翻页。 */
  private drillPage=0;
  constructor(){super('CityScene');}
  /**
@@ -357,7 +357,7 @@ export class CityScene extends Phaser.Scene {
   type Fn=[string,()=>void];
   const funcs:Partial<Record<TownBuildingId,Fn[]>>={
    barracks:[['招募后备',()=>this.scene.start('CityRecruitScene')]],
-   academy:[['研究科技',()=>{m.root.destroy();if(this.techTab==='drill')this.techTab='supply';this.openTech();}],['随从操练',()=>{m.root.destroy();this.techTab='drill';this.openTech();}],['战功换残卷',()=>{m.root.destroy();this.openMeritExchange();}]],
+   academy:[['研究科技',()=>{m.root.destroy();if(this.techTab==='drill')this.techTab='supply';this.openTech();}],['随行操练',()=>{m.root.destroy();this.techTab='drill';this.openTech();}],['战功换残卷',()=>{m.root.destroy();this.openMeritExchange();}]],
    talent:[['进入招贤馆',()=>this.scene.start('TalentHallScene')]],
    stable:[['进入马厩',()=>this.openStable(msg)]],
    // 城池发展已改为各城自己的建筑（天下地图 → 进入城池）
@@ -422,7 +422,7 @@ export class CityScene extends Phaser.Scene {
   const tabW=Math.min(140,(m.w-60)/4),tabY=m.y+(acad||this.techTab==='drill'?70:100);
   BRANCH_ORDER.forEach((b,i)=>{const on=this.techTab===b,done=TECH_IDS.filter(id=>TECHS[id].branch===b&&t.tech.includes(id)).length,all=TECH_IDS.filter(id=>TECHS[id].branch===b).length;
    const btn=lqCommand(this,W/2+(i-1.5)*(tabW+8),tabY,tabW,38,`${BRANCH_NAME[b]} ${done}/${all}`,on,true,D?15:13);btn.hit.setName('tech-tab-'+b).on('pointerdown',()=>{this.techTab=b;this.openTech();});m.root.add([btn.g,btn.hit,btn.caption]);});
-  { const on=this.techTab==='drill',btn=lqCommand(this,W/2+1.5*(tabW+8),tabY,tabW,38,'随从操练',on,true,D?15:13);btn.hit.setName('tech-tab-drill').on('pointerdown',()=>{this.techTab='drill';this.drillPage=0;this.openTech();});m.root.add([btn.g,btn.hit,btn.caption]); }
+  { const on=this.techTab==='drill',btn=lqCommand(this,W/2+1.5*(tabW+8),tabY,tabW,38,'随行操练',on,true,D?15:13);btn.hit.setName('tech-tab-drill').on('pointerdown',()=>{this.techTab='drill';this.drillPage=0;this.openTech();});m.root.add([btn.g,btn.hit,btn.caption]); }
   if(this.techTab==='drill'){m.root.getByName('town-tech-need')?.destroy();this.drawDrill(m,h);return;}
   const branch:TechBranch=this.techTab;
   let padSet=false;
@@ -460,7 +460,7 @@ export class CityScene extends Phaser.Scene {
    const g=this.add.graphics();g.fillStyle(0x2a241c,.7).fillRoundedRect(x,y,w,rowH-8,8).lineStyle(2,lord?0x5a5040:0xc9ad74,.7).strokeRoundedRect(x,y,w,rowH-8,8);m.root.add(g);
    const lv=followerLevel(r,s),skill=r.hero?null:COMMONER_SKILLS[r.template];
    m.root.add(txt(this,x+12,y+6,`${r.name.replace(/（.*）/,'')} ${lord?`Lv ${lv} · 主公`:`Lv ${lv} / 上限 ${lvCap}`}${following?' · 随行':''}　将阶 ${r.rank}/${cap}${skill?`　招式「${skill.active.name}」· 被动「${skill.passive.name}」`:''}`,D?15:14,q.css,HEADING_FONT).setName('drill-name-'+r.id));
-   if(lord){m.root.add(txt(this,x+12,y+(D?34:38),LORD_LEVEL_HINT+'，不能在随从操练里升级',13,'#9d927c').setName('drill-lord-'+r.id));}
+   if(lord){m.root.add(txt(this,x+12,y+(D?34:38),LORD_LEVEL_HINT+'，不能在随行操练里升级',13,'#9d927c').setName('drill-lord-'+r.id));}
    const tight=(v:string)=>v.replace(/ \+/g,'+').replace(/ · /g,' '); // 一行放得下：「生命+4% 攻速+3% 伤害+9.2%」
    (['weapon','passive'] as const).forEach((line,k)=>{
     const pv=rankPreview(r,line,s),ly=y+(D?30:34)+k*(D?24:28),ok=!lord&&!pv.full&&pv.afford;

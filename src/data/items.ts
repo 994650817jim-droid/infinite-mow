@@ -49,7 +49,7 @@ export const AFFIXES: Record<AffixId, { name: string; base: number; percent: boo
   xp: { name: '经验获取', base: .03, percent: true, gearCap: .4 },
   ally: { name: '友军伤害', base: .03, percent: true, gearCap: .4 },
   regen: { name: '每秒回血', base: .3, percent: false, gearCap: 3 },
-  elite: { name: '对精锐 / 首领伤害', base: .04, percent: true, gearCap: .4 },
+  elite: { name: '首领精锐伤害' /* 2026-11-19：原「对精锐 / 首领伤害」太长，商人卡片里把数值折成两行 */, base: .04, percent: true, gearCap: .4 },
 };
 export const AFFIX_IDS = Object.keys(AFFIXES) as AffixId[];
 

@@ -9,7 +9,7 @@ export type MedicKind = 'small' | 'full' | 'army';
 export const CAMP_MEDIC = {
   small: { name: '小治', desc: '敷药包扎 · 回复 25% 生命', frac: .25, base: 10, perChapter: 3 },
   full: { name: '大治', desc: '施针用药 · 生命回满', base: 26, perChapter: 8 },
-  army: { name: '为全军疗伤', desc: '部曲与随从伤兵全部回满', base: 12, perChapter: 4 },
+  army: { name: '为全军疗伤', desc: '部曲与随行伤兵全部回满', base: 12, perChapter: 4 },
 } as const;
 
 /** 第几章（1–12）：按战斗场景与章节 id 推出。 */

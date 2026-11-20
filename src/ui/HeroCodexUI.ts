@@ -235,7 +235,7 @@ export class HeroCodexUI {
     // 旧版一行文字（测试按名字读）
     this.text(-999, -999, `属性：${(Object.keys(ATTRIBUTE_INFO) as AttributeId[]).map(id => `${ATTRIBUTE_INFO[id].name}${prim === id ? '（主）' : ''} ${a[id]}`).join('　')}　· 未分配 ${heroFreePoints(this.hero)} 点`, 10).setVisible(false).setName('codex-attrline');
     yy += 4 + 4 * 22 + 8;
-    if (!c) { yy = this.section(x, yy + 6, lw, '随行'); this.text(x + 8, yy + 2, '招募武将：随行时按等级成长（每级生命、伤害提高），将阶请到讲武堂「随从操练」提升。', 13, '#bfae8a').setWordWrapWidth(lw - 16); return; }
+    if (!c) { yy = this.section(x, yy + 6, lw, '随行'); this.text(x + 8, yy + 2, '招募武将：随行时按等级成长（每级生命、伤害提高），将阶请到讲武堂「随行操练」提升。', 13, '#bfae8a').setWordWrapWidth(lw - 16); return; }
     const weapon = WEAPON_DEFS[CHARACTERS.find(h => h.id === c)!.startWeapon], lv = temperLevel(c);
     yy = this.section(x, yy + 6, lw, '本命', `淬炼 ${lv} / ${TEMPER.max}`);
     this.text(x + 8, yy + 8, weapon?.name ?? '', 15, '#f2ddae', true).setOrigin(0, .5);
@@ -377,7 +377,7 @@ export class HeroCodexUI {
     this.text(x, y + 36, `等级 Lv.${info.level}（本章上限 Lv.${info.cap}）· 经验 ${info.xp} / ${info.next}${info.level >= info.cap ? '（已到上限，经验暂存）' : ''}`, 14, '#d8ccb0').setName('codex-level');
     const a = heroAttrs(this.hero), attrs = (Object.keys(ATTRIBUTE_INFO) as AttributeId[]).map(id => `${ATTRIBUTE_INFO[id].name}${primaryAttribute(this.hero) === id ? '（主）' : ''} ${a[id]}`).join('　');
     this.text(x, y + 64, `属性：${attrs}　· 未分配 ${heroFreePoints(this.hero)} 点`, 14, '#d8ccb0').setWordWrapWidth(w);
-    if (!c) { this.text(x, y + 100, '招募武将：随行时按等级成长（每级生命、伤害提高），将阶请到讲武堂「随从操练」提升。', 13, '#9c8c6c').setWordWrapWidth(w); return; }
+    if (!c) { this.text(x, y + 100, '招募武将：随行时按等级成长（每级生命、伤害提高），将阶请到讲武堂「随行操练」提升。', 13, '#9c8c6c').setWordWrapWidth(w); return; }
     const weapon = WEAPON_DEFS[CHARACTERS.find(h => h.id === c)!.startWeapon];
     this.text(x, y + 100, `本命：${weapon?.name ?? ''} · 淬炼 ${temperLevel(c)}/${TEMPER.max}（本命伤害 +${Math.round(temperLevel(c) * TEMPER.step * 100)}%）`, 14, '#e8d6a4');
     const xd = getXinde(c);

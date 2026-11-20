@@ -36,7 +36,7 @@ export const WEAPON_BRANCHES: readonly WeaponBranch[] = [
   B('crossbow', 'hy_liannu', 'archery', '诸葛连弩', '每轮多 2 支弩矢，弹射 +2', '再多 1 支', '弹射再 +1', '元戎', '弩矢命中时 20% 再分裂', true),
   B('crossbow', 'hy_muniu', 'stratagem', '木牛流马', '每 10 秒放出一只木牛，自动射弩 8 秒', '木牛射得更快', '木牛更耐打', '机关术', '木牛同时 2 只，被打坏时爆炸', true),
   B('sun_knives', 'ss_wanren', 'archery', '万刃', '环身飞刀每 3 秒向外齐射一轮', '齐射更频繁', '飞刀更多', '枭姬', '齐射的刀会折返再割一次', true),
-  B('sun_knives', 'ss_benxi', 'cavalry', '奔袭', '冲刺时身后撒下一路飞刀，结束时收回再割一次', '飞刀更多', '冲刺更频繁', '乘龙', '冲刺冷却 −30%', true),
+  B('sun_knives', 'ss_benxi', 'cavalry', '奔袭', '走动时身后撒下一路飞刀，每 2.5 秒或撒满 8 把就收回，飞回途中一路再割', '飞刀更多', '冲刺更频繁', '乘龙', '冲刺冷却 −30%', true),
   B('diaochan_fans', 'dc_biyue', 'stratagem', '闭月', '团扇命中有几率魅惑敌兵 2 秒（反打身边敌兵）', '魅惑几率提高', '魅惑更久', '离间', '被魅惑的精锐会攻击首领', true),
   B('diaochan_fans', 'dc_meirenji', 'formation', '连环美人计', '团扇飞过的路线留下舞圈 4 秒，圈内敌兵受伤 +20%', '舞圈更大', '易伤更高', '凤仪亭', '舞圈相交处每秒爆一次花', true),
   B('zhanjin_lance', 'mc_tieqi', 'cavalry', '西凉铁骑', '挑飞时召一排虚影铁骑沿枪向冲过', '铁骑更多', '铁骑伤害提高', '锦马超', '铁骑踏过留下马蹄火痕', true),
@@ -45,6 +45,12 @@ export const WEAPON_BRANCHES: readonly WeaponBranch[] = [
   B('zhenbei_blade', 'wy_hanzhong', 'formation', '镇守汉中', '重劈处插下营栅区 5 秒：部曲在区内减伤、敌兵减速', '营栅区更大', '营栅区更久', '汉中太守', '营栅区可同时存在 2 处', true),
 ];
 /** 已出图的分支图标（public/assets/upgrade-icons/branch_<id>.webp）。 */
+/**
+ * 孙尚香 · 奔袭（2026-11-19 平衡：原来要站定 0.5 秒才收刀，主将几乎一直在走，DPS 只有「万刃」的 0.72）：
+ * 走动每 dropStep 像素身后撒一把刀（落地割一下 dropMul）；第一把落地后 recallMs 毫秒、或撒满 fullCount 把、或站定 stillMs 毫秒——先到先收，
+ * 收刀时每把刀从落点飞回主将，沿途割一下（recallMul，进阶 recallFinalMul），同一个敌人一次收刀最多被割 maxHitsPerEnemy 下。初值，交平衡会话。
+ */
+export const BENXI = { dropStep: 90, dropMul: .4, recallMs: 2500, fullCount: 8, stillMs: 500, recallWidth: 44, recallMul: .45, recallFinalMul: .6, maxHitsPerEnemy: 3, keepMax: 8 } as const;
 export const BRANCH_ICON_READY: readonly string[] = WEAPON_BRANCHES.map(b => b.id); // 24 枚都已出图（ChatGPT 两张 4×3）
 export function branchesFor(weapon: WeaponId): WeaponBranch[] { return WEAPON_BRANCHES.filter(b => b.weapon === weapon); }
 export function branchById(id: string | undefined): WeaponBranch | undefined { return id ? WEAPON_BRANCHES.find(b => b.id === id) : undefined; }

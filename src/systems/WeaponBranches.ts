@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { DEPTH } from '../config';
-import { branchById, branchTier, type WeaponBranch } from '../data/weaponBranches';
+import { branchById, branchTier, BENXI, type WeaponBranch } from '../data/weaponBranches';
 import type { SchoolId } from '../data/schools';
 import type { Enemy } from '../entities/Enemy';
 import type { Player } from '../entities/Player';
@@ -47,7 +47,7 @@ export class WeaponBranches {
   private shots = 0; private slamAt = 0; private fieldAt = 0; private campAt = 0; private burstAt = 0;
   /** 第三批：连环计锁链、木牛、飞刀、魅惑、舞圈。 */
   private chained = new Map<Enemy, number>(); private chainUntil = 0; private oxen: Array<{ x: number; y: number; until: number; nextShot: number; img?: Phaser.GameObjects.Image }> = []; private oxAt = 0;
-  private volleyAt = 0; private knives: Array<{ x: number; y: number }> = []; private still = 0; private charmed: Array<{ e: Enemy; life: number; until: number; nextTick: number }> = [];
+  private volleyAt = 0; private knives: Array<{ x: number; y: number }> = []; private still = 0; private recallAt = 0; private charmed: Array<{ e: Enemy; life: number; until: number; nextTick: number }> = [];
   private rings: Array<{ x: number; y: number; until: number; nextTick: number }> = [];
   private stunned = new Map<Enemy, number>(); private guardUntil = 0; private healAt = 0; private healFxAt = 0; private thirdAt = 0;
   /** 测试用。 */
@@ -224,10 +224,29 @@ export class WeaponBranches {
     if (b.id === 'ss_wanren' && now >= this.volleyAt && this.nearest(260)) { this.volleyAt = now + 3000 / k; const volley = () => { const near = this.h.query(P.x, P.y, 260).filter(e => e.active && !e.isSupplySlot).slice(0, 8); for (const e of near) { this.deal(e, .5); this.fx('fx_strike_glint', e.x, e.y - 10, 56, 260, 0xffd0d0); } this.fx('fx_dianwei_whirl', P.x, P.y, 300, 380, 0xffc0c0); };
       volley(); if (this.final()) this.h.scene.time.delayedCall(400, volley); this.stats.procs++; }
     if (b.id === 'ss_benxi') {
-      const d = Math.hypot(P.x - this.moveX, P.y - this.moveY);
-      if (d >= 90) { this.knives.push({ x: this.moveX, y: this.moveY }); if (this.knives.length > 8 + 2 * this.tier()) this.knives.shift(); this.fx('fx_strike_glint', this.moveX, this.moveY, 50, 400, 0xe0e8ff); this.moveX = P.x; this.moveY = P.y; this.still = now;
-        for (const e of this.h.query(this.moveX, this.moveY, 60)) if (e.active && !e.isSupplySlot && Math.hypot(e.x - this.moveX, e.y - this.moveY) <= 50 + e.radius) this.deal(e, .4); } // 2026-11-19 平衡：撒刀 .25 → .4（10-3 DPS 只有万刃的 0.72）
-      else if (this.knives.length && now - this.still > 500) { for (const kn of this.knives) for (const e of this.h.query(kn.x, kn.y, 60)) if (e.active && !e.isSupplySlot && Math.hypot(e.x - kn.x, e.y - kn.y) <= 50 + e.radius) this.deal(e, this.final() ? .6 : .45); this.knives = []; this.stats.procs++; } // 2026-11-19 平衡：收刀 .3 / .4 → .45 / .6
+      // 奔袭（data/weaponBranches BENXI）：走动撒刀；定时 / 撒满 / 站定，先到先收；收刀时刀飞回主将、沿途割
+      const B = BENXI, d = Math.hypot(P.x - this.moveX, P.y - this.moveY);
+      if (d >= B.dropStep) {
+        if (!this.knives.length) this.recallAt = now + B.recallMs;
+        this.knives.push({ x: this.moveX, y: this.moveY }); if (this.knives.length > B.keepMax + 2 * this.tier()) this.knives.shift();
+        this.fx('fx_strike_glint', this.moveX, this.moveY, 50, 400, 0xe0e8ff);
+        for (const e of this.h.query(this.moveX, this.moveY, 60)) if (e.active && !e.isSupplySlot && Math.hypot(e.x - this.moveX, e.y - this.moveY) <= 50 + e.radius) this.deal(e, B.dropMul);
+        this.moveX = P.x; this.moveY = P.y; this.still = now;
+      }
+      if (this.knives.length && (now >= this.recallAt || this.knives.length >= B.fullCount || now - this.still > B.stillMs)) {
+        const mul = this.final() ? B.recallFinalMul : B.recallMul, hits = new Map<Enemy, number>();
+        for (const kn of this.knives) {
+          const vx = P.x - kn.x, vy = P.y - kn.y, len = Math.hypot(vx, vy) || 1, ux = vx / len, uy = vy / len;
+          for (const e of this.h.query((kn.x + P.x) / 2, (kn.y + P.y) / 2, len / 2 + B.recallWidth + 20)) {
+            if (!e.active || e.isSupplySlot) continue;
+            const ex = e.x - kn.x, ey = e.y - kn.y, along = ex * ux + ey * uy, side = Math.abs(-ex * uy + ey * ux);
+            if (along < -e.radius || along > len + e.radius || side > B.recallWidth + e.radius) continue;
+            const n = hits.get(e) ?? 0; if (n >= B.maxHitsPerEnemy) continue; hits.set(e, n + 1); this.deal(e, mul);
+          }
+          this.fx('fx_flank_streak', (kn.x + P.x) / 2, (kn.y + P.y) / 2, len + 20, 220, 0xe0e8ff, Math.atan2(vy, vx));
+        }
+        this.knives = []; this.recallAt = 0; this.stats.procs++;
+      }
     }
     for (const c of this.charmed) if (now < c.until && now >= c.nextTick && c.e.active && c.e.spawnId === c.life) { c.nextTick = now + 500; for (const o of this.h.query(c.e.x, c.e.y, 90)) if (o !== c.e && o.active && !o.isSupplySlot && o.kind !== 'boss' && Math.hypot(o.x - c.e.x, o.y - c.e.y) <= 80 + o.radius) this.deal(o, .3); }
     this.charmed = this.charmed.filter(c => now < c.until && c.e.active && c.e.spawnId === c.life);

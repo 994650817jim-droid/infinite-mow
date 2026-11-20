@@ -64,6 +64,8 @@ export const PASSIVE_RULES = {
   heavyArrowSpeed: 900, heavyArrowRange: 600, heavyArrowKnock: 40, heavyBurstRadius: 60, heavyBurstMul: .5,
   /** 2026-11-18 平衡（统筹：「12-3 黄忠还差得远」；实测 5-2 每分钟击杀 30、全体均值 103）：重箭命中锁定目标后再穿 heavyPierce 人，每穿一人伤害 ×heavyPierceMul。 */
   heavyPierce: 2, heavyPierceMul: .6,
+  /** 2026-11-20 平衡第二轮：重箭打首领 ×heavyBossMul。首领是单一大目标，每支重箭都中、神射蓄势攒得最快、几乎常驻，首领用时每格 3 局几何均值只有中位数的 0.43 倍（5-2 / 10-3 0.16～0.38）；清杂不变。 */
+  heavyBossMul: .6,
   /** 2026-11-16 方案 C「老当益壮」（用户选定，初值待平衡）：静心每级缩短进入神射时间 jingxinStepMs；3 级神射第一箭扇形三连（夹角 fanSpreadRad、每支 fanMul）；
    *  老骥伏枥（2026-11-16 用户：「不靠残血触发」→ 越战越勇）：本关每击杀 laojiKillsPerStack 名敌人射速 +laojiPerStack，上限 laojiCap（Lv1–3）；
    *  3 级「宝刀未老」：神射中每射杀一名精锐 / 首领，回复 laojiHealMul 最大生命，且 laojiGuardMs 内受伤不退出神射。 */

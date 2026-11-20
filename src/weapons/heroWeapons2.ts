@@ -128,7 +128,7 @@ export function baodiaoBehavior(host: WeaponHost, weapon: WeaponState, dt: numbe
       if (e.active && e.isSupplySlot && !a.hit.has(e.spawnId) && Math.hypot(e.x - a.img.x, e.y - a.img.y) <= 12 + e.radius) { a.hit.add(e.spawnId); host.hitEnemy(e, a.damage, time, 'arrow'); continue; }
       if (!alive(e) || a.hit.has(e.spawnId) || (locked && e !== a.target) || Math.hypot(e.x - a.img.x, e.y - a.img.y) > 12 + e.radius) continue;
       const ex = e.x, ey = e.y; // 爆裂以中箭位置为圆心（击退之前）
-      a.hit.add(e.spawnId); host.hitEnemy(e, a.damage, time, 'arrow'); shove(e, a.ux, a.uy, R.heavyArrowKnock);
+      a.hit.add(e.spawnId); host.hitEnemy(e, e.kind === 'boss' ? a.damage * R.heavyBossMul : a.damage, time, 'arrow'); shove(e, a.ux, a.uy, R.heavyArrowKnock);
       // 神射蓄势：每支主箭第一次命中积 1 层（三连扇形的两侧箭 spawn = -1 不算）
       if (a.spawn >= 0 && a.hit.size === 1) pl.passive.onSharpHit(time);
       if (fxD(host)) host.heroFx?.('heavyHit', ex - a.ux * 30, ey - 8 - a.uy * 30, 130, Math.atan2(a.uy, a.ux));

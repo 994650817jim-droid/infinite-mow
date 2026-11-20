@@ -363,8 +363,10 @@ export class WeaponBranches {
     if (spread) { const n = this.fields.find(f => f !== this.fields[this.fields.length - 1] && f.spread && Math.hypot(f.x - x, f.y - y) < 160 && Math.hypot(f.x - x, f.y - y) > 40);
       if (n && this.fields.length < 10) { const mx = (n.x + x) / 2, my = (n.y + y) / 2; this.fields.push({ x: mx, y: my, r: r * .8, until: now + ms * .7, nextTick: now, mul, spread: false }); this.fx('fx_ground_fire', mx, my, r * 1.8, ms * .7, 0xffb070); } }
   }
+  /** 2026-11-20 平衡第二轮：首领上次被分支火场烧的时刻——叠着的火场（天火燎原蔓延 / 火矢等）打首领不叠加，每 500ms 只烧一次。 */
+  private bossFieldAt = new WeakMap<Enemy, number>();
   private tickZones(now: number): void {
-    for (const f of this.fields) if (now < f.until && now >= f.nextTick) { f.nextTick = now + 500; for (const e of this.h.query(f.x, f.y, f.r + 20)) if (e.active && !e.isSupplySlot && Math.hypot(e.x - f.x, e.y - f.y) <= f.r + e.radius) this.deal(e, f.mul, true); }
+    for (const f of this.fields) if (now < f.until && now >= f.nextTick) { f.nextTick = now + 500; for (const e of this.h.query(f.x, f.y, f.r + 20)) if (e.active && !e.isSupplySlot && Math.hypot(e.x - f.x, e.y - f.y) <= f.r + e.radius) { if (e.kind === 'boss') { if (now - (this.bossFieldAt.get(e) ?? -1e9) < 500) continue; this.bossFieldAt.set(e, now); } this.deal(e, f.mul, true); } }
     this.fields = this.fields.filter(f => now < f.until);
     if (this.branch?.id === 'zg_liaoyuan' && this.final() && now >= this.burstAt) { const sp = this.fields.filter(f => f.spread); if (sp.length >= 3) { this.burstAt = now + 4000; const cx = sp.reduce((a, f) => a + f.x, 0) / sp.length, cy = sp.reduce((a, f) => a + f.y, 0) / sp.length; for (const e of this.h.query(cx, cy, 160)) if (e.active && !e.isSupplySlot && Math.hypot(e.x - cx, e.y - cy) <= 140 + e.radius) this.deal(e, 1.5, true); this.fx('fx_explosion', cx, cy, 300, 600, 0xffa060); } }
     for (const tp of this.traps) { if (now >= tp.until) continue;

@@ -1,10 +1,10 @@
 import Phaser from 'phaser';
 import {GAME_WIDTH as W,GAME_HEIGHT as H,IS_DESKTOP as D,FONT,HEADING_FONT,DEPTH} from '../config';
-import {ItemTooltip} from './ItemTooltip';import {itemTile} from './ItemQuality';import {warPanelTexture} from './HomeCommand';import {lqButton,lqLabelColor,type LqState} from './LacquerKit';
-import {MERCHANT_PRICE,QUALITIES,formatAffix,itemName,SLOTS,itemSlot,SPECIALS,type ItemInstance} from '../data/items';
+import {ItemTooltip} from './ItemTooltip';import {itemTile} from './ItemQuality';import {warPanelTexture} from './HomeCommand';import {lqButton,lqLabelColor,lqPanel,type LqState} from './LacquerKit';
+import {MERCHANT_PRICE,QUALITIES,formatAffix,itemName,SLOTS,itemSlot,SPECIALS,sellPrice,type ItemInstance} from '../data/items';
 import {TACTICS,TAG_NAMES,tacticDescription,type TacticId} from '../data/builds';
 import type {CharacterId} from '../data/characters';
-import {addItems,loadout,type GearOwner} from '../systems/ItemStore';
+import {addItems,loadout,loadItems,sellItems,sellableItems,sellLegacy,type GearOwner} from '../systems/ItemStore';
 import {currentMerchantStock,saveMerchantStock,type MerchantStock} from '../systems/MerchantStock';
 import {campaignTacticBook,learnCampaignTactic,learnCampaignManual} from '../systems/Campaign';
 import {manualText,type CampOffer} from '../systems/CampMarket';
@@ -20,7 +20,8 @@ import {MERCHANT_FIGURE,drawCampFigure,loadCampFigure,type FigurePlace} from './
 export const MERCHANT_ART_KEY=MERCHANT_FIGURE.key;
 export const MERCHANT_ART_PATH=MERCHANT_FIGURE.path;
 /** 付账用的粮：name 用于按钮（「粮不足」）与提示；spend 失败返回 false。 */
-export interface MerchantWallet{name:string;get():number;spend(amount:number):boolean;}
+/** gain：卖兵装进账（2026-11-19 出售）；不给 = 这家只买不收。 */
+export interface MerchantWallet{name:string;get():number;spend(amount:number):boolean;gain?(amount:number):void;}
 /** 战法卷轴怎么学：canBuy 现在能不能学（等级没变、没满）；learn 学下并返回是否成功。 */
 export interface MerchantTactics{/** 某派现在的势（心法卡写「势 n → n+1」；不给就不写）。 */shi?(s:SchoolId):number;canBuy(offer:CampOffer):boolean;learn(offer:CampOffer):boolean;doneText:string;lockedText?:string;/** 学下并付过粮之后（行营用来改存档点）。 */afterBuy?:()=>void;}
 export interface MerchantShopOptions{
@@ -29,6 +30,8 @@ export interface MerchantShopOptions{
  notice:(text:string)=>void;changed:()=>void;sound?:(kind:string)=>void;tooltipDepth?:number;
  /** 宿主已有的兵装提示框（行营与将帅帐共用一个）；不给就自己建。 */
  tooltip?:ItemTooltip;
+ /** 第几章（卖价随章节，data/items sellPrice）。 */
+ chapter?:()=>number;
 }
 /** 把立绘排进加载队列（已在 / 正在载就跳过）；载好回调。 */
 export function loadMerchantArt(scene:Phaser.Scene,done?:()=>void):void{
@@ -46,6 +49,8 @@ export function tacticCardText(id:TacticId,level:number):{effect:string;cooldown
 }
 export class MerchantShop{
  private tip?:ItemTooltip;private root!:Phaser.GameObjects.Container;
+ /** 购入 / 出售（2026-11-19 用户「分解不需要背包，可以去军需商人卖装备」）。出售：选中的 uid、页码、待确认（含紫 / 橙）。 */
+ mode:'buy'|'sell'='buy';private sel=new Set<string>();private sellPage=0;private confirmSell=false;
  /** 立绘载好时调用（宿主重绘）。 */
  onArtLoaded?:()=>void;
  constructor(private scene:Phaser.Scene,private o:MerchantShopOptions){}
@@ -66,12 +71,13 @@ export class MerchantShop{
   this.root=root;const s=this.o.stock(),t=s.tactic,n=s.items.length+(t?1:0),gap=10;
   this.tip??=this.o.tooltip??new ItemTooltip(this.scene,this.o.tooltipDepth??DEPTH.overlay+40);
   if(D){drawCampFigure(this.scene,root,MERCHANT_FIGURE,figure??{cx:left+80,bottom:top+h+30,height:h-10},()=>this.onArtLoaded?.());left=Math.max(left+196,figure?figure.cx+108:0);}
+  if(this.mode==='sell'&&this.canSell()){this.renderSell(left,top,right,h);return;}
   const w=D?((right-left)-gap*(n-1))/n:(right-left-gap)/2;
   const at=(i:number)=>D?{x:left+i*(w+gap),y:top}:{x:left+(i%2)*(w+gap),y:top+Math.floor(i/2)*(h+gap)};
   s.items.forEach((item,i)=>this.itemCard(s,item,i,at(i).x,at(i).y,w,h));
   if(t){const p=at(s.items.length);this.tacticCard(s,t,p.x,p.y,w,h);}
  }
- hint():string{const t=this.o.stock().tactic;if(t?.kind==='manual')return '今日商人还捎来一卷「流派心法」（偶尔才有）：研读后本次征程'+SCHOOLS[t.school].name+'势 +1，每派只能研读一次；'+(this.o.tactics?.doneText.startsWith('本局')?'当场生效。':'写进征程构筑，下次出征生效。');return t?'今日商人还捎来一卷战法（偶尔才有）：'+(this.o.tactics?.doneText.startsWith('本局')?'买下当场学会或精进一级，本局生效':'买下写进征程构筑，下次出征生效')+'；最多 6 种战法、每种到 3 级。':'每次进营 4 件兵装，甲胄、头盔、战靴、信物各一；偶尔还捎来一卷战法。鼠标移到卡片上看属性对比，买下的立即收入行囊。';}
+ hint():string{if(this.mode==='sell')return '把行囊里没穿戴的兵装卖给军需商人换'+this.o.wallet.name+'：点兵装选中（可多选），紫 / 橙出售前会再确认。穿着的先去行囊卸下，首领遗珍不收。';const t=this.o.stock().tactic;if(t?.kind==='manual')return '今日商人还捎来一卷「流派心法」（偶尔才有）：研读后本次征程'+SCHOOLS[t.school].name+'势 +1，每派只能研读一次；'+(this.o.tactics?.doneText.startsWith('本局')?'当场生效。':'写进征程构筑，下次出征生效。');return t?'今日商人还捎来一卷战法（偶尔才有）：'+(this.o.tactics?.doneText.startsWith('本局')?'买下当场学会或精进一级，本局生效':'买下写进征程构筑，下次出征生效')+'；最多 6 种战法、每种到 3 级。':'每次进营 4 件兵装，甲胄、头盔、战靴、信物各一；偶尔还捎来一卷战法。鼠标移到卡片上看属性对比，买下的立即收入行囊。';}
  private itemCard(s:MerchantStock,item:ItemInstance,i:number,x:number,y:number,w:number,h:number){
   const q=QUALITIES[item.quality],price=MERCHANT_PRICE[item.quality]??120,sold=s.sold[i],purse=this.o.wallet.get();
   this.plate(x,y,w,h);
@@ -138,6 +144,61 @@ export class MerchantShop{
   },bw,!t.sold&&able&&!poor).hit.setName('camp-tactic-buy');
   void s;
  }
+ /** 这家收不收兵装（钱包有 gain）。 */
+ canSell():boolean{return !!this.o.wallet.gain;}
+ /** 「购入 / 出售」切换（宿主放在自己的标题行；对象名 merchant-mode-buy / merchant-mode-sell）。 */
+ modeToggle(root:Phaser.GameObjects.Container,x:number,y:number){
+  if(!this.canSell())return;this.root=root;
+  ([['buy','购入'],['sell','出售兵装']] as const).forEach(([m,label],i)=>{const bw=i?92:60,bx=x+(i?66:0),g=this.scene.add.graphics().setScrollFactor(0),on=this.mode===m;
+   const cap=this.scene.add.text(bx+bw/2,y+15,label,{fontFamily:HEADING_FONT,fontSize:'14px',color:'#ffe9bd',resolution:2}).setOrigin(.5).setScrollFactor(0);
+   const hit=this.scene.add.rectangle(bx+bw/2,y+15,bw,30,0,.001).setScrollFactor(0).setInteractive({useHandCursor:true}).setName('merchant-mode-'+m);
+   const paint=(st:LqState)=>{g.clear();const d=lqButton(g,bx+bw/2,y+15,bw,30,on?'on':st,on?'gold':'quiet');cap.setY(y+15+d).setColor(lqLabelColor(on?'on':st));};
+   hit.on('pointerover',()=>paint('hover')).on('pointerout',()=>paint('idle')).on('pointerdown',()=>{if(this.mode===m)return;this.o.sound?.('uiClick');this.mode=m;this.sel.clear();this.sellPage=0;this.confirmSell=false;this.o.notice('');this.o.changed();});
+   paint('idle');root.add([g,cap,hit]);});
+ }
+ private chapterNo():number{return Math.max(1,this.o.chapter?.()??1);}
+ /** 出售页：行囊里未穿戴的兵装一格格排（品质框 + 卖价），点选 / 多选；下方「选白绿」「清空」「出售所选」与旧物；紫 / 橙先确认。 */
+ private renderSell(left:number,top:number,right:number,h:number){
+  const items=sellableItems().sort((a,b)=>Object.keys(QUALITIES).indexOf(b.quality)-Object.keys(QUALITIES).indexOf(a.quality)),ch=this.chapterNo(),legacy=loadItems().legacy;
+  for(const uid of [...this.sel])if(!items.some(i=>i.uid===uid))this.sel.delete(uid);
+  const w=right-left;this.plate(left,top,w,h);
+  const cell=74,rowH=86,cols=Math.max(1,Math.floor((w-24)/cell)),rows=Math.max(1,Math.floor((h-64)/rowH)),per=cols*rows,pages=Math.max(1,Math.ceil(items.length/per));this.sellPage=Math.min(this.sellPage,pages-1);
+  const x0=left+12+((w-24)-cols*cell)/2,y0=top+12,owner=this.o.owner();
+  if(!items.length)this.text(left+w/2,top+h/2-24,'行囊里没有可出售的兵装\n（穿着的先去行囊卸下；首领遗珍不收）',14).setOrigin(.5).setAlign('center').setColor('#b9a57a').setName('merchant-sell-empty');
+  items.slice(this.sellPage*per,this.sellPage*per+per).forEach((it,k)=>{
+   const cx=x0+(k%cols)*cell+cell/2,cy=y0+Math.floor(k/cols)*rowH+30,on=this.sel.has(it.uid);
+   if(on){const g=this.scene.add.graphics().setScrollFactor(0);g.lineStyle(2,0xf3d48a,1).strokeRoundedRect(cx-31,cy-31,62,62,6).fillStyle(0xf3d48a,.12).fillRoundedRect(cx-31,cy-31,62,62,6);this.root.add(g);}
+   this.root.add(itemTile(this.scene,cx,cy,52,it).setScrollFactor(0));
+   this.text(cx,cy+32,'+'+sellPrice(it,ch),12).setOrigin(.5,0).setColor(on?'#ffe7b0':'#c9b38a');
+   const hit=this.scene.add.rectangle(cx,cy,60,60,0,.001).setScrollFactor(0).setInteractive({useHandCursor:true}).setName('merchant-sell-item-'+it.uid);this.root.add(hit);
+   this.tip!.attach(hit,()=>it,()=>owner?loadout(owner)[itemSlot(it)]:undefined);
+   hit.on('pointerdown',()=>{this.o.sound?.('uiClick');if(this.sel.has(it.uid))this.sel.delete(it.uid);else this.sel.add(it.uid);this.o.changed();});
+  });
+  const picked=items.filter(i=>this.sel.has(i.uid)),total=picked.reduce((n,i)=>n+sellPrice(i,ch),0),by=top+h-50;
+  this.button(left+12,by,'选白绿',()=>{for(const i of items)if(i.quality==='white'||i.quality==='green')this.sel.add(i.uid);this.o.changed();},90,items.some(i=>i.quality==='white'||i.quality==='green')).hit.setName('merchant-sell-low');
+  this.button(left+110,by,'清空',()=>{this.sel.clear();this.o.changed();},70,this.sel.size>0).hit.setName('merchant-sell-clear');
+  if(pages>1){this.button(left+190,by,'‹',()=>{this.sellPage=(this.sellPage+pages-1)%pages;this.o.changed();},36,true).hit.setName('merchant-sell-prev');this.text(left+246,by+22,(this.sellPage+1)+'/'+pages,13).setOrigin(.5);this.button(left+266,by,'›',()=>{this.sellPage=(this.sellPage+1)%pages;this.o.changed();},36,true).hit.setName('merchant-sell-next');}
+  if(legacy.length){const lv=legacy.reduce((n,i)=>n+sellPrice(i,ch),0);this.button(right-12-200-12-150,by,'出售旧物 · +'+lv,()=>{const sold=sellLegacy();const m=sold.reduce((n,i)=>n+sellPrice(i,ch),0);if(m)this.o.wallet.gain!(m);this.o.sound?.('purchase');this.o.notice('旧物 '+sold.length+' 件已卖 · '+this.o.wallet.name+' +'+m);this.o.changed();},150,true).hit.setName('merchant-sell-legacy');}
+  const sellBtn=this.button(right-12-200,by,picked.length?'出售 '+picked.length+' 件 · +'+total:'先点选要卖的兵装',()=>{if(picked.some(i=>i.quality==='purple'||i.quality==='orange')){this.confirmSell=true;this.o.changed();return;}this.doSell(picked.map(i=>i.uid));},200,picked.length>0);
+  sellBtn.hit.setName('merchant-sell-go');
+  if(this.confirmSell&&picked.length)this.sellConfirm(picked,total);else this.confirmSell=false;
+ }
+ /** 紫 / 橙出售前确认（漆底描金，无水墨按钮）。 */
+ private sellConfirm(picked:ItemInstance[],total:number){
+  const dim=this.scene.add.rectangle(0,0,W,H,0x080604,.72).setOrigin(0).setScrollFactor(0).setInteractive();this.root.add(dim);
+  const w=D?520:W-40,h=D?220:300,x=(W-w)/2,y=(H-h)/2,g=this.scene.add.graphics().setScrollFactor(0);lqPanel(g,x,y,w,h);this.root.add(g);
+  const rare=picked.filter(i=>i.quality==='purple'||i.quality==='orange');
+  this.text(x+24,y+22,'确认出售',22).setFontFamily(HEADING_FONT).setColor('#f6dc9a');
+  this.text(x+24,y+64,'其中有 '+rare.length+' 件紫 / 橙兵装：'+rare.slice(0,4).map(i=>itemName(i)).join('、')+(rare.length>4?' 等':'')+'。\n共 '+picked.length+' 件，卖得 '+this.o.wallet.name+' '+total+'。卖出后不能买回。',15).setWordWrapWidth(w-48,true).setLineSpacing(5).setColor('#e6d3ad').setName('merchant-sell-confirm-text');
+  this.button(x+w/2-170,y+h-60,'取消',()=>{this.confirmSell=false;this.o.changed();},150,true).hit.setName('merchant-sell-cancel');
+  this.button(x+w/2+20,y+h-60,'确认出售 · +'+total,()=>{this.confirmSell=false;this.doSell(picked.map(i=>i.uid));},150,true).hit.setName('merchant-sell-confirm');
+ }
+ /** 真卖：从行囊拿掉（只拿未穿戴、非遗珍）、按实际卖掉的件发钱。 */
+ private doSell(uids:string[]){
+  const ch=this.chapterNo(),sold=sellItems(uids),m=sold.reduce((n,i)=>n+sellPrice(i,ch),0);
+  if(m)this.o.wallet.gain!(m);for(const u of uids)this.sel.delete(u);
+  this.o.sound?.('purchase');this.o.notice(sold.length?'卖出 '+sold.length+' 件兵装 · '+this.o.wallet.name+' +'+m:'没有卖出（穿着的或首领遗珍不收）');this.o.changed();
+ }
  hideTip(){this.tip?.hide();}
  destroy(){if(this.tip!==this.o.tooltip)this.tip?.destroy();this.tip=undefined;}
 }
@@ -172,9 +233,9 @@ export function openMerchantShop(scene:Phaser.Scene,opts:OpenMerchantOptions):()
  const tactics:MerchantTactics|null=hero&&book()?{canBuy:o=>{const b=book();return !!b&&(o.kind==='manual'?!b.manualsRead().includes(o.school):b.canLearn(o.id)&&b.level(o.id)===o.level);},learn:o=>o.kind==='manual'?learnCampaignManual(hero,o.school):learnCampaignTactic(hero,o.id,o.level),doneText:'已写进征程构筑，下次出征生效',lockedText:'已无法研习'}:null;
  const stock=currentMerchantStock(opts.tier,book()??undefined,opts.chapter??1);
  let notice='',closed=false;
- const shop=new MerchantShop(scene,{stock:()=>stock,wallet:opts.wallet,tactics,onBuyItem:opts.onBuyItem??(item=>addItems([item])),owner:()=>hero,notice:t=>{notice=t;},changed:()=>draw(),sound:opts.sound,tooltipDepth:depth+10});
+ const shop=new MerchantShop(scene,{chapter:()=>opts.chapter??1,stock:()=>stock,wallet:opts.wallet,tactics,onBuyItem:opts.onBuyItem??(item=>addItems([item])),owner:()=>hero,notice:t=>{notice=t;},changed:()=>draw(),sound:opts.sound,tooltipDepth:depth+10});
  const top=py+64,h=D?250:200;
- const draw=()=>{if(closed)return;shop.hideTip();body.removeAll(true);shop.render(body,px+16,top,px+pw-16,h);purse.setText(opts.wallet.name+' '+opts.wallet.get());note.setPosition(D?(px+16+196+px+pw-16)/2:W/2,D?top+h+18:H-210).setWordWrapWidth(D?pw-16-196-32:pw-60,true).setText(notice||shop.hint());};
+ const draw=()=>{if(closed)return;shop.hideTip();body.removeAll(true);shop.render(body,px+16,top,px+pw-16,h);shop.modeToggle(body,px+pw/2-79,py+16);purse.setText(opts.wallet.name+' '+opts.wallet.get());note.setPosition(D?(px+16+196+px+pw-16)/2:W/2,D?top+h+18:H-210).setWordWrapWidth(D?pw-16-196-32:pw-60,true).setText(notice||shop.hint());};
  shop.onArtLoaded=draw;
  const finish=(reason:'leave'|'shutdown')=>{if(closed)return;closed=true;scene.input.keyboard?.off('keydown-ESC',close);scene.events.off('shutdown',onShutdown);shop.destroy();root.destroy();opts.onClose?.(reason);};
  const close=()=>finish('leave'),onShutdown=()=>finish('shutdown');

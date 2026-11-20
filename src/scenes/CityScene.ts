@@ -24,7 +24,7 @@ import {CHARACTERS,type CharacterId} from '../data/characters';
 import {uiSfx} from '../systems/Sfx';
 import {startCityAmbient} from '../systems/ContentSfx';
 import {checkWorld} from '../systems/Achievements';
-import {spendProvisions,loadWorld,saveWorld,worldUnlocked,ensureStableBuilt,storageUnavailable,incompatibleSave,townUpgrade,granaryLevy,researchTech,townProgress,stableCapacity,drillInfo,trainTroops,cityLevels} from '../world/WorldStore';
+import {gainProvisions,spendProvisions,loadWorld,saveWorld,worldUnlocked,ensureStableBuilt,storageUnavailable,incompatibleSave,townUpgrade,granaryLevy,researchTech,townProgress,stableCapacity,drillInfo,trainTroops,cityLevels} from '../world/WorldStore';
 import {cityIncome} from '../data/cityBuildings';
 import {CAMP_LOCK,TOWN_BUILDINGS,FOCUS_NAME,FOCUS_INCOME,FOCUS_CHANGE_COST,CITY_SIZE,CITY_TITLE,HALL_UPGRADE,nextCost,buildBlockers,buildingOpen,citySize,focusOpen,levelOf,costText,incomeText,townArtLevel,type TownBuildingId,type TownState,type CityFocus,type TownProgress} from '../town/TownData';
 import {TECHS,TECH_IDS,BRANCH_NAME,BRANCH_ORDER,techBlockers,techTotals,type TechBranch} from '../data/tech';
@@ -270,7 +270,7 @@ export class CityScene extends Phaser.Scene {
  private openMerchant(){
   uiSfx().play('uiClick');
   const s=loadWorld(),lootCh=chaptersOpen(),tier=lootBand(lootCh); /* 掉落品质随章节（data/items.ts lootBand）：按已开放章节 */let hero='zhaoyun';try{hero=localStorage.getItem('im_last_hero')||hero;}catch{/* 存储不可用 */}
-  const open=()=>{if(!this.sys.isActive())return;openMerchantShop(this,{wallet:{name:'军粮',get:()=>loadWorld().provisions,spend:spendProvisions},tier,chapter:lootCh,hero:(CHARACTERS.some(c=>c.id===hero)?hero:'zhaoyun') as CharacterId,depth:600,onClose:()=>{if(this.sys.settings.status===Phaser.Scenes.RUNNING)this.refresh();},sound:k=>uiSfx().play(k as 'uiClick')});};
+  const open=()=>{if(!this.sys.isActive())return;openMerchantShop(this,{wallet:{name:'军粮',get:()=>loadWorld().provisions,spend:spendProvisions,gain:gainProvisions},tier,chapter:lootCh,hero:(CHARACTERS.some(c=>c.id===hero)?hero:'zhaoyun') as CharacterId,depth:600,onClose:()=>{if(this.sys.settings.status===Phaser.Scenes.RUNNING)this.refresh();},sound:k=>uiSfx().play(k as 'uiClick')});};
   if(this.textures.exists('item_icons'))open();else{this.load.atlas('item_icons','assets/items/item-icons.webp','assets/items/item-icons.json');this.load.once('complete',open);this.load.start();}
  }
  private panKeys?:Record<string,Phaser.Input.Keyboard.Key>;

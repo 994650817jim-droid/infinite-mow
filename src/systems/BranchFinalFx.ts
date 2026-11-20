@@ -10,7 +10,7 @@ import { WEAPON_BRANCHES } from '../data/weaponBranches';
  */
 export const BRANCH_FX_HERO: Readonly<Record<string, string>> = { zy: 'zhaoyun', gy: 'guanyu', zf: 'zhangfei', lb: 'liubei', zg: 'zhuge', pt: 'pangtong', hz: 'huangzhong', hy: 'huangyueying', ss: 'sunshangxiang', dc: 'diaochan', mc: 'machao', wy: 'weiyan' };
 /** 已出图的武将（图到一位登记一位，避免请求不存在的文件）。 */
-export const BRANCH_FX_READY: readonly string[] = ['zhaoyun', 'guanyu', 'zhangfei', 'liubei', 'zhuge', 'pangtong', 'huangzhong', 'huangyueying', 'sunshangxiang', 'diaochan', 'machao'];
+export const BRANCH_FX_READY: readonly string[] = ['zhaoyun', 'guanyu', 'zhangfei', 'liubei', 'zhuge', 'pangtong', 'huangzhong', 'huangyueying', 'sunshangxiang', 'diaochan', 'machao', 'weiyan'];
 export const branchFxKey = (hero: string): string => 'fx_bf_' + hero;
 export const branchFxFile = (hero: string): string => `assets/branch-fx/${hero}.png`;
 

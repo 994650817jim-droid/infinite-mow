@@ -5,6 +5,7 @@ import {Enemy} from '../entities/Enemy';
 import type {Player} from '../entities/Player';
 import {ENEMY_DEFS} from '../data/enemies';
 import {BRAZIER_FIRE,FIRE_FRAME_MS,FIREPIT_ART} from '../data/fireProps';
+import {BATTLE_HEAL} from '../data/battleHeal';
 import {DEPTH,actorDepth} from '../config';
 import type {BattlefieldProp} from './BattlefieldDetails';
 import type {Ally} from '../entities/Ally';
@@ -18,7 +19,7 @@ interface Crate {enemy:Enemy;shadow:Phaser.GameObjects.Image;cell:string|null;li
 export type HealProp='wine'|'herb';
 /** 回血道具（heal_props 图集帧：0 酒罐 / 1 药篓 / 2 酒葫芦 / 3 草药包）；回复量按最大生命比例，2.5 秒内回完。 */
 export const HEAL_PROPS:Record<HealProp,{name:string;frame:number;drop:number;ratio:number;size:number}>={wine:{name:'酒罐',frame:0,drop:2,ratio:.08,size:70},herb:{name:'药篓',frame:1,drop:3,ratio:.12,size:66}};
-interface Potion {image:Phaser.GameObjects.Image;until:number;active:boolean;amount?:number;}
+interface Potion {image:Phaser.GameObjects.Image;until:number;active:boolean;amount?:number;/** 药名（军中伤药等）；没写按贴图认。 */name?:string;/** 药囊满了、主将受伤时直接服下（军中伤药）。 */instant?:boolean;}
 /** 药囊里的一份药：回复量（未设则为原药瓶的固定 10 点）与图标。 */
 /** 回血药的手绘图（2026-11-17 用户「用药的ui图标也改一下」：不用程序画的像素药瓶）。缺图时退回旧的 healing_potion。 */
 export const POTION_ART='potion_jar';
@@ -167,10 +168,18 @@ export class BattlefieldSupplies {
  /** 直接打破一个环境物件（连锁引爆等）：与被武器打破同一流程。 */
  breakEnv(enemy:Enemy):void{if(!enemy.active)return;enemy.deactivate();this.onBroken(enemy);}
  /** 在指定位置掉一份回血补给（营帐掉落用）。 */
+ /** 军中伤药等（systems/BattleHeal）：地上放一份药，拾取进药囊（回复量 amount），药囊满了且受伤时直接服下。 */
+ dropPotion(x:number,y:number,amount:number,name:string):boolean{
+  let potion=this.potions.find(p=>!p.active);
+  if(!potion){if(this.potions.length>=12)return false;potion={image:this.scene.add.image(0,0,potionTexture(this.scene)).setDepth(DEPTH.gem+1),until:0,active:false};this.potions.push(potion);}
+  potion.active=true;potion.until=this.now()+60000;potion.amount=amount;potion.name=name;potion.instant=true;
+  potion.image.setTexture(potionTexture(this.scene)).setPosition(x,y).setDisplaySize(...this.potionSize()).setAlpha(1).setVisible(true);
+  return true;
+ }
  dropHeal(x:number,y:number,kind:HealProp='herb'):void{
   let potion=this.potions.find(p=>!p.active);
   if(!potion){if(this.potions.length>=12)return;potion={image:this.scene.add.image(0,0,potionTexture(this.scene)).setDepth(DEPTH.gem+1),until:0,active:false};this.potions.push(potion);}
-  potion.active=true;potion.until=this.now()+60000;
+  potion.active=true;potion.until=this.now()+60000;potion.name=undefined;potion.instant=false;
   if(this.healArt){const heal=HEAL_PROPS[kind];potion.amount=this.player.maxHp*heal.ratio;potion.image.setTexture('heal_props',heal.drop).setPosition(x,y).setDisplaySize(34,34).setAlpha(1).setVisible(true);}
   else{potion.amount=undefined;potion.image.setTexture(potionTexture(this.scene)).setPosition(x,y).setDisplaySize(...this.potionSize()).setAlpha(1).setVisible(true);}
  }
@@ -190,9 +199,9 @@ export class BattlefieldSupplies {
   const heal=crate.heal?HEAL_PROPS[crate.heal]:undefined;crate.heal=undefined;
   let potion=this.potions.find(p=>!p.active);
   if(!potion){if(this.potions.length>=12)return;potion={image:this.scene.add.image(0,0,potionTexture(this.scene)).setDepth(DEPTH.gem+1),until:0,active:false};this.potions.push(potion);}
-  potion.active=true;potion.until=this.now()+60000;
+  potion.active=true;potion.until=this.now()+60000;potion.name=undefined;potion.instant=false;
   if(heal){potion.amount=this.player.maxHp*heal.ratio;potion.image.setTexture('heal_props',heal.drop).setPosition(enemy.x,enemy.y+6).setDisplaySize(34,34).setAlpha(1).setVisible(true);}
-  else{potion.amount=undefined;potion.image.setTexture(potionTexture(this.scene)).setPosition(enemy.x,enemy.y+10).setDisplaySize(...this.potionSize()).setAlpha(1).setVisible(true);}
+  else{potion.amount=this.player.maxHp*BATTLE_HEAL.wineJarRatio;potion.name='酒葫芦';potion.image.setTexture(potionTexture(this.scene)).setPosition(enemy.x,enemy.y+10).setDisplaySize(...this.potionSize()).setAlpha(1).setVisible(true);}
  }
  update(dt:number,now:number,placements:readonly BattlefieldProp[]=[],burn:(enemy:Enemy,damage:number)=>void=()=>{},allies:readonly Ally[]=[],hurtAlly:(ally:Ally,damage:number,now:number)=>void=()=>{}):void {
   this.updateDebris(now);
@@ -217,7 +226,9 @@ export class BattlefieldSupplies {
   }
   if(this.healRemaining>0&&this.player.alive){const n=Math.min(this.healRemaining,this.healRate*dt);this.player.heal(n);this.healRemaining=Math.max(0,this.healRemaining-n);}
   for(const p of this.potions){if(!p.active)continue;if(now>=p.until){p.active=false;p.image.setVisible(false);continue;}
-   if(this.player.alive&&this.pouch.length<POUCH_MAX&&Math.hypot(p.image.x-this.player.x,p.image.y-this.player.y)<30){p.active=false;p.image.setVisible(false);const heal=p.image.texture.key==='heal_props';this.pouch.push({amount:p.amount,texture:p.image.texture.key,frame:heal?Number(p.image.frame.name):undefined,name:heal?(Number(p.image.frame.name)===2?'酒葫芦':'草药包'):'疗伤药'});this.onPickup(heal&&[0,2].includes(Number(p.image.frame.name))?'wine':'other');}
+   const near=this.player.alive&&Math.hypot(p.image.x-this.player.x,p.image.y-this.player.y)<30;
+   if(near&&p.instant&&this.pouch.length>=POUCH_MAX&&this.player.hp<this.player.maxHp-.5){p.active=false;p.image.setVisible(false);this.healRemaining+=p.amount??HEAL_TOTAL;this.healRate=Math.max(this.healRate,(p.amount??HEAL_TOTAL)/2.5);this.onPickup('other');continue;} // 军中伤药：药囊满了直接服下
+   if(near&&this.pouch.length<POUCH_MAX){p.active=false;p.image.setVisible(false);const heal=p.image.texture.key==='heal_props';this.pouch.push({amount:p.amount,texture:p.image.texture.key,frame:heal?Number(p.image.frame.name):undefined,name:p.name??(heal?(Number(p.image.frame.name)===2?'酒葫芦':'草药包'):'疗伤药')});this.onPickup(heal&&[0,2].includes(Number(p.image.frame.name))?'wine':'other');}
   }
   for(const c of this.crates)if(c.enemy.active&&!c.cell?.startsWith('fixed-')&&Math.hypot(c.enemy.x-this.player.x,c.enemy.y-this.player.y)>1400){c.enemy.deactivate();c.shadow.setVisible(false);c.cell=null;}
   this.generateHealProps();

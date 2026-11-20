@@ -55,6 +55,8 @@ export const HERO_AFFINITY: Readonly<Record<CharacterId, readonly SchoolId[]>> =
   huangzhong: ['archery'], huangyueying: ['archery', 'stratagem'], sunshangxiang: ['archery', 'cavalry'],
   diaochan: ['stratagem', 'formation'], liubei: ['formation'],
   lvbu: ['warrior', 'archery'], // P2 吕布：猛将 + 弓弩
+  zhangliao: ['cavalry', 'stratagem'], // P2 张辽：骑突 + 奇谋
+  zhouyu: ['fire', 'formation'], // P2 周瑜：火攻 + 兵阵
 };
 export function heroAffinity(hero: string): readonly SchoolId[] { return (HERO_AFFINITY as Record<string, readonly SchoolId[]>)[hero] ?? []; }
 /** 随行按兵种算势（每名 +1，全部随行合计最多 followerCap）。 */

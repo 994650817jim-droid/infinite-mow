@@ -39,15 +39,15 @@ const battle = p => p.evaluate(() => { const g = window.__game, gs = g.scene.get
   await p.screenshot({ path: `${out}/2-battle-start.png` });
   await p.close();
 }
-// ② 点关卡印 2-1（已过）：「重打此关」→ 直接打 2-1
+// ② 点关卡印 2-1（已过）：写「已平定」、不能再出征（main 097922d「打过的关不能再打」）
 {
   const p = await open();
   const pin = await p.evaluate(M0 => { const s = eval(M0); const n = s.markers.find(m => m.node.chapter === 'hulao' || m.node.id === 'hulao'); s.selected = { kind: 'node', node: n.node }; s.refresh(); s.selected = { kind: 'stage', chapter: 'hulao', stage: 1 }; s.refresh(); return { title: s.detailTitle.text, view: s.detailView?.text, action: s.action.text.text }; }, M);
-  ck('关卡印 2-1：「重打此关」（不再写「选将」），小卡写出战主公', /汜水关/.test(pin.title) && pin.action === '重打此关' && /主公 关羽/.test(pin.view ?? ''), pin);
-  await p.evaluate(M0 => eval(M0).action.image.emit('pointerup'), M);
-  await p.waitForFunction(() => window.__game.scene.isActive('GameScene') && window.__game.scene.getScene('GameScene').player, null, { timeout: 90000 });
-  const r = await battle(p);
-  ck('重打 2-1：直接进战斗、关羽出战', r.active && !r.menuSeen && r.west === 2 - 1 && r.hero === 'guanyu', r);
+  // 2026-11-19（main 097922d「打过的关不能再打」）：已过的关卡印写「已平定」、不能再出征
+  ck('关卡印 2-1（已过）：写「已平定」、按钮不能再出征', /汜水关/.test(pin.title) && pin.action === '已平定' && /已平定/.test(pin.view ?? ''), pin);
+  await p.evaluate(M0 => eval(M0).action.image.emit('pointerup'), M); await p.waitForTimeout(1500);
+  const r = await p.evaluate(() => ({ battle: window.__game.scene.isActive('GameScene'), map: window.__game.scene.isActive('WorldMapScene') }));
+  ck('点「已平定」不会进战斗、仍在天下地图', !r.battle && r.map, r);
   await p.close();
 }
 // ③④ 2026-11-19 用户「打第三章的时候又出现这个老界面了」：第三章起（各章自己的选关场景）也直接出征，不显示「出战武将」选将页

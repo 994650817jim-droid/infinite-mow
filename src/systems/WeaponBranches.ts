@@ -6,6 +6,7 @@ import type { Enemy } from '../entities/Enemy';
 import type { Player } from '../entities/Player';
 import type { WeaponState } from '../types';
 import { playSheet } from './SkillFxSheets';
+import { BranchFinalFx } from './BranchFinalFx';
 
 /**
  * 兵器专职分支的战斗效果（data/weaponBranches.ts；wave-progression-redesign.md §4.7）。
@@ -53,7 +54,10 @@ export class WeaponBranches {
   /** 测试用。 */
   readonly stats = { fires: 0, procs: 0, hits: 0, final: false };
 
-  constructor(private readonly h: BranchHost) { const p = h.player; this.moveX = p.x; this.moveY = p.y; }
+  /** 进阶形态专属手绘特效（BranchFinalFx）：final() 时出手爆发 + 常驻光环。 */
+  private readonly fin: BranchFinalFx;
+  constructor(private readonly h: BranchHost) { const p = h.player; this.moveX = p.x; this.moveY = p.y; this.fin = new BranchFinalFx(h.scene, () => h.player); }
+  get finalFx(): BranchFinalFx { return this.fin; }
 
   get branch(): WeaponBranch | undefined { return branchById(this.h.weapon()?.branch); }
   private tier(): number { const w = this.h.weapon(); return w ? branchTier(w) : 0; }
@@ -68,7 +72,8 @@ export class WeaponBranches {
     if (!this.finalShown && this.final()) { this.finalShown = true; this.stats.final = true; this.h.banner('兵器进阶 · ' + b.finalName, b.finalDesc); }
     // 「出手」：冷却被重置（跳回较大的值）
     const fired = w.cooldownLeft > this.lastCd + .05; this.lastCd = w.cooldownLeft;
-    if (fired) { this.stats.fires++; this.onFire(b, now); }
+    if (fired) { this.stats.fires++; this.onFire(b, now); if (this.final()) { const t = this.nearest(300); this.fin.burst(b.id, P.x, P.y, t ? Math.atan2(t.y - P.y, t.x - P.x) : 0); } }
+    this.fin.setAura(b.id, this.final(), now);
     while (this.dashQueue.length && now >= this.dashQueue[0]) { this.dashQueue.shift(); this.dash(); }
     // 移动距离（千里走单骑）
     const dx = P.x - this.moveX, dy = P.y - this.moveY, d = Math.hypot(dx, dy);

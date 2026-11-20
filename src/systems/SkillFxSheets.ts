@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { BRANCH_FX_READY, branchFxKey, branchFxFile } from './BranchFinalFx';
 
 /**
  * 技艺 / 战法手绘特效序列帧（用户 2026-11-16：「不要再做像素特效了」，改用像诸葛亮 flame_burst 那样的手绘透明序列帧）。
@@ -47,16 +48,29 @@ export const SKILL_FX: Readonly<Record<string, { file: string; cell: number; fra
   fx_dz: { file: 'assets/dongzhuo-fx/dz.png', cell: 256, frames: 6 },
   fx_zhurong_knife: { file: 'assets/zhurong-fx/knife_fx.png', cell: 256, frames: 8 },
   // 武将出招起手特效（2026-11-19 ChatGPT 黑底 6×4 三张，tools/build-hero-cast-fx.mjs 去底切条；systems/HeroCastFx.ts 用）：每人 6 帧
-  ...Object.fromEntries(['guanyu', 'zhangfei', 'zhaoyun', 'huangzhong', 'machao', 'weiyan', 'liubei', 'zhuge', 'pangtong', 'huangyueying', 'sunshangxiang', 'diaochan', 'lvbu']
+  ...Object.fromEntries(['guanyu', 'zhangfei', 'zhaoyun', 'huangzhong', 'machao', 'weiyan', 'liubei', 'zhuge', 'pangtong', 'huangyueying', 'sunshangxiang', 'diaochan', 'lvbu', 'zhangliao', 'zhouyu']
     .map(h => ['fx_cast_' + h, { file: `assets/hero-fx/cast/cast_${h}.png`, cell: 256, frames: 6 }])),
   // 吕布方天画戟（ChatGPT 黑底 6×4，tools/build-lvbu-fx.mjs 切条；weapons/lvbuWeapon.ts 用）：戟刺朝右、横扫环、旋转飞戟（循环）
   fx_lvbu_thrust: { file: 'assets/hero-fx/lvbu/thrust.png', cell: 256, frames: 6 },
   fx_lvbu_sweep: { file: 'assets/hero-fx/lvbu/sweep.png', cell: 256, frames: 6 },
   fx_lvbu_halberd: { file: 'assets/hero-fx/lvbu/halberd.png', cell: 256, frames: 6 },
+  // 张辽破阵双戟（ChatGPT 黑底 6×4，tools/build-zhangliao-fx.mjs 切条；weapons/zhangliaoWeapon.ts 用）：双戟扇形斩（朝右）、虎贲虚影骑兵（朝右跑，循环）、溃逃标记（循环）
+  fx_zl_slash: { file: 'assets/hero-fx/zhangliao/slash.png', cell: 256, frames: 6 },
+  fx_zl_rider: { file: 'assets/hero-fx/zhangliao/rider.png', cell: 256, frames: 6 },
+  fx_zl_rout: { file: 'assets/hero-fx/zhangliao/rout.png', cell: 256, frames: 6 },
+  // 周瑜火船令（ChatGPT 黑底 6×4 两张，tools/build-hero-fx-rows.mjs 切条；weapons/zhouyuWeapon.ts 用）：火船（朝右，循环）、爆燃、火场（循环）、火索（循环）、琴音环（循环）、东风
+  fx_zy_ship: { file: 'assets/hero-fx/zhouyu/ship.png', cell: 256, frames: 6 },
+  fx_zy_blast: { file: 'assets/hero-fx/zhouyu/blast.png', cell: 256, frames: 6 },
+  fx_zy_field: { file: 'assets/hero-fx/zhouyu/field.png', cell: 256, frames: 6 },
+  fx_zy_rope: { file: 'assets/hero-fx/zhouyu/rope.png', cell: 256, frames: 6 },
+  fx_zy_qin: { file: 'assets/hero-fx/zhouyu/qin.png', cell: 256, frames: 6 },
+  fx_zy_wind: { file: 'assets/hero-fx/zhouyu/wind.png', cell: 256, frames: 6 },
 };
 
 export function loadSkillFx(load: Phaser.Loader.LoaderPlugin): void {
   for (const [key, d] of Object.entries(SKILL_FX)) load.spritesheet(key, d.file, { frameWidth: d.cell, frameHeight: d.cellH ?? d.cell });
+  // 兵器专职进阶形态专属图（每位武将 1 张 6×4，已出图的才加载；BranchFinalFx 用）
+  for (const h of BRANCH_FX_READY) load.spritesheet(branchFxKey(h), branchFxFile(h), { frameWidth: 256, frameHeight: 256 });
 }
 
 export interface SheetOpts {

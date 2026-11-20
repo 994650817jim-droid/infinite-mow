@@ -11,6 +11,8 @@ import { applyStageBuff } from '../systems/StageBuffs';
 import { WEAPON_OVER, branchById, branchesFor, type WeaponBranch } from './weaponBranches';
 import { hotkeyLabel } from './hotkeys';
 import { lvbuThrustLen, lvbuSweepRadius } from '../weapons/lvbuWeapon';
+import { zhangliaoReach } from '../weapons/zhangliaoWeapon';
+import { zhouyuBlast } from '../weapons/zhouyuWeapon';
 
 export const WEAPON_META: Record<WeaponId, { name: string; desc: string }> = {
   spear_orbit: { name: '七探盘龙枪', desc: '银枪自动索敌，向不同敌人突刺' },
@@ -25,6 +27,8 @@ export const WEAPON_META: Record<WeaponId, { name: string; desc: string }> = {
   zhanjin_lance: { name: '虎头湛金枪', desc: '一枪把敌人挑飞，落地时砸出范围伤害；铁骑满层后向前冲锋破阵' },
   shuanggu_swords: { name: '双股剑', desc: '双剑同时出手，分别在两名敌人身上斩出「×」形交叉斩；仁德满层时攻速提高' },
   fangtian_ji: { name: '方天画戟', desc: '两次长突穿透一线，接一次 360° 横扫，循环；无双狂暴时每次出手打两次' },
+  pozhen_shuangji: { name: '破阵双戟', desc: '左右双戟极快连斩身前一扇；每击叠震慑，3 层溃逃 2 秒（溃兵受伤 +25%）' },
+  huochuan_ling: { name: '火船令', desc: '朝敌群放出 2 艘小火船，撞上敌兵或到尽头爆燃，留下短火场' },
   diaochan_fans: { name: '双花扇', desc: '掷出回旋团扇，去回各打一次；被扇中 2 次的敌人倒戈（3 秒内转而攻击同伴）' },
 };
 /** 武器显示名：张飞用同一套长枪，叫丈八蛇矛。 */
@@ -84,6 +88,8 @@ export function weaponUpgrade(weapon: WeaponState, player: Player): UpgradeOptio
     if (parts.length) desc += '\n' + parts.join(' · ');
     if (sunThrowCount(next) !== sunThrowCount(L)) desc += `\n每次掷 ${sunThrowCount(L)} → ${sunThrowCount(next)} 把（多的 60%）`;
   }
+  if (weapon.id === 'huochuan_ling') desc += `\n爆燃半径 ${zhouyuBlast(weapon.level)} → ${zhouyuBlast(next)}`;
+  if (weapon.id === 'pozhen_shuangji') desc += `\n连斩距离 ${zhangliaoReach(weapon.level)} → ${zhangliaoReach(next)}`;
   if (weapon.id === 'fangtian_ji') desc += `\n长突 ${lvbuThrustLen(weapon.level)} → ${lvbuThrustLen(next)} · 横扫半径 ${lvbuSweepRadius(weapon.level, 0)} → ${lvbuSweepRadius(next, 0)}`;
   if (weapon.id === 'diaochan_fans' && diaochanFanCount(next) !== diaochanFanCount(weapon.level)) desc += `\n每次掷扇 ${diaochanFanCount(weapon.level)} → ${diaochanFanCount(next)} 柄`;
   if (weapon.id === 'guandao') desc += `\n范围 ${GUANDAO_TABLE[weapon.level - 1].radius} → ${GUANDAO_TABLE[next - 1].radius}${weapon.level < 3 && next >= 3 ? '\n解锁二段刀气' : ''}`;
@@ -172,6 +178,10 @@ export function martialDescription(id:MasteryId,level:number):string {
  xiemin:'仁德回复量 +'+(25*n)+'%\n自身与部曲都算',
  chitu:'无双狂暴时每 '+[3.5,3,2.5][i]+' 秒朝前冲刺\n穿过沿途敌兵造成 '+[60,80,100][i]+'% 伤害',
  huaji:'横扫范围 +'+(15*n)+'%',
+ xiandeng:'每 '+[5,4.5,4][i]+' 秒先突进到敌前\n再连斩 '+[2,2,3][i]+' 击',
+ yaliang:'英发少攒 '+(15*n)+'%\n（满 '+Math.round(20*(1-.15*n))+' 层刮东风）',
+ lianchuan:'每轮火船 +'+n+' 艘',
+ weiming:'震慑 2 层就溃逃'+(n>=2?'\n溃逃再久 '+[0,.5,1][i]+' 秒':''),
  };
  return descriptions[id];
 }

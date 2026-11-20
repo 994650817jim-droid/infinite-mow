@@ -1,7 +1,7 @@
 import type { ChapterId } from './chapters';
 import type { WeaponId } from '../types';
 
-export type CharacterId = 'zhaoyun' | 'guanyu' | 'huangzhong' | 'zhuge' | 'zhangfei' | 'machao' | 'weiyan' | 'liubei' | 'pangtong' | 'huangyueying' | 'sunshangxiang' | 'diaochan' | 'lvbu';
+export type CharacterId = 'zhaoyun' | 'guanyu' | 'huangzhong' | 'zhuge' | 'zhangfei' | 'machao' | 'weiyan' | 'liubei' | 'pangtong' | 'huangyueying' | 'sunshangxiang' | 'diaochan' | 'lvbu' | 'zhangliao' | 'zhouyu';
 
 export interface CharacterDef {
   id: CharacterId;
@@ -181,11 +181,35 @@ export const CHARACTERS: CharacterDef[] = [
     startWeapon: 'fangtian_ji',
     faction: '群',
   },
+  // P2 第一批：张辽（魏）——破阵双戟、被动「止啼」（data/zhangliao.ts）
+  {
+    id: 'zhangliao',
+    name: '张辽',
+    desc: '止啼 · 以少破多、威震敌胆',
+    hpMul: 1,
+    speedMul: 1.06,
+    damageMul: 1.05,
+    portrait: 'zhangliao_portrait',
+    startWeapon: 'pozhen_shuangji',
+    faction: '魏',
+  },
+  // P2 第一批：周瑜（吴）——火船令、被动「英发」（data/zhouyu.ts）
+  {
+    id: 'zhouyu',
+    name: '周瑜',
+    desc: '英发 · 儒将火攻、调度水军',
+    hpMul: .92,
+    speedMul: 1.02,
+    damageMul: 1.05,
+    portrait: 'zhouyu_portrait',
+    startWeapon: 'huochuan_ling',
+    faction: '吴',
+  },
 
 ];
 
 /** 有主页大幅立绘（epic-home）与水墨立轴（ink-scroll）的武将；其余用 portrait。 */
-export const HOME_ART_HEROES: readonly string[] = ['zhaoyun', 'guanyu', 'huangzhong', 'zhuge', 'zhangfei', 'machao', 'weiyan', 'liubei', 'pangtong', 'huangyueying', 'sunshangxiang', 'diaochan', 'lvbu'];
+export const HOME_ART_HEROES: readonly string[] = ['zhaoyun', 'guanyu', 'huangzhong', 'zhuge', 'zhangfei', 'machao', 'weiyan', 'liubei', 'pangtong', 'huangyueying', 'sunshangxiang', 'diaochan', 'lvbu', 'zhangliao', 'zhouyu'];
 
 export const STARTING_WEAPONS: Array<{ id: WeaponId; name: string; icon: string; desc: string }> = [
   { id: 'spear_orbit', name: '枪影旋舞', icon: 'icon_1', desc: '环绕枪刃，近身持续伤害' },

@@ -33,6 +33,8 @@ export class Enemy {
   kind: EnemyKind = 'infantry';
   /** 普通杂兵临时步动：记录基础缩放与相位。 */
   baseScaleY = 1;
+  /** 额外体型倍率（副将放大等）：v2 图每帧按 V2_TROOP_SCALE 重算缩放，单改 setScale 会被冲掉，所以记在这里。spawn 时归 1。 */
+  sizeMul = 1;
   /** 素材比例校正倍数（按行走表标准身高统一攻击表与个别画小的帧）。 */
   frameScale = 1;
   private stepStretch = 0;
@@ -176,7 +178,7 @@ export class Enemy {
     this.baseTint = def.tint ?? 0xffffff;
     if (this.baseTint !== 0xffffff) this.sprite.setTint(this.baseTint);
     this.sprite.setRotation(0);
-    this.baseScaleY = visualScale;
+    this.baseScaleY = visualScale; this.sizeMul = 1;
     this.walkPhase = Math.random() * Math.PI * 2;
     this.direction = 'down';
     this.frameElapsed = 0;
@@ -467,7 +469,7 @@ export class Enemy {
     if (isV2Texture(key)) {
       // 人物画风 v2：0.5 倍（1080p 像素 1:1），脚底 = 帧高-7；行走 / 攻击格子大小可以不同，按当前帧重算锚点
       const fh = this.sprite.frame.height || 96;
-      this.baseScaleY = V2_TROOP_SCALE * (this.def.walkVisual?.v2Mul ?? 1);
+      this.baseScaleY = V2_TROOP_SCALE * (this.def.walkVisual?.v2Mul ?? 1) * this.sizeMul;
       this.baseOriginY = v2TroopGround(fh) - this.def.radius * .72 / (fh * this.baseScaleY);
       this.frameScale = 1;
     } else
@@ -475,6 +477,13 @@ export class Enemy {
     this.stepStretch = 0;
     this.sprite.setRotation(0);
     this.applyScale();
+  }
+
+  /** 设额外体型倍率（v1 / v2 图都持久；spawn 后调用）。 */
+  setSizeMul(k: number): void {
+    const r = k / this.sizeMul; this.sizeMul = k;
+    if (!this.walkSheet) { this.sprite.setScale(this.sprite.scaleX * r, this.sprite.scaleY * r); return; }
+    this.baseScaleY *= r; this.applyScale();
   }
 
   private applyScale(): void {

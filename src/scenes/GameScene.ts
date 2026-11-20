@@ -80,7 +80,8 @@ import {REPLAY_CLEARED} from '../data/replayRules';
 import {abandonExpedition,beginExpedition,settleExpedition,permanentEffects,worldUnlocked,worldChapterCleared,takeExpeditionReserve} from '../world/WorldStore';
 import Phaser from 'phaser';
 import { PAD, PAD_LABEL, gamepad, keyHint } from '../platform/gamepad';
-import { bossProfile } from '../data/bossMusic';
+import { bossProfile, BOSS_PROFILES } from '../data/bossMusic';
+import { titleOf } from '../ui/StoryBarkCardStyles';
 import { onBattleEnd, unlock as unlockAchievement, addCounter, checkWorld } from '../systems/Achievements';
 import { loadWorld as loadWorldState } from '../world/WorldStore';
 import { ArtEffects } from '../systems/ArtEffects';
@@ -1735,7 +1736,9 @@ export class GameScene extends Phaser.Scene {
     this.presence?.entrance(boss);
     // 剧情：首领登场大卡（立绘 + 名号，短暂停顿）；说了就不再弹中间的名号牌，免得名字出两遍（2026-11-20）
     const introSpoke = !!this.storyDir?.bossIntro(boss.sprite);
-    if (!introSpoke) this.announceBoss(profile.title, this.chapter.bossName);
+    // 没有专属名号的首领（第七章起多数）原来一律写攻城用的「城池守将」（7-1 杨怀出场写城池守将、血条却是白水关守将）：先用首领称号表（与血条同源），都没有才用通用名号
+    const named = !!BOSS_PROFILES[this.chapter.bossName] || Object.keys(BOSS_PROFILES).some(k => this.chapter.bossName.includes(k));
+    if (!introSpoke) this.announceBoss(named ? profile.title : titleOf(this.chapter.bossStyle) || profile.title, this.chapter.bossName);
     this.lordBossBark('bossAppear', introSpoke); // 主将（HeroBark）接一句
   }
 
@@ -1744,6 +1747,8 @@ export class GameScene extends Phaser.Scene {
    *  放在顶部 HUD 与主将之间的空地，不压 HUD、不挡主将。 */
   protected announceBoss(title: string, name: string): void {
     this.children.getByName('boss-announce')?.destroy();
+    // 同时在播的战场横幅（如 7-1 山道「山上伏兵！」）收掉：两者都在上半屏中间，墨幅会压在横幅字上（2026-11-20 第 7–12 章检查）
+    for (const n of this.children.list.filter(o => o.name === 'combat-notice')) { this.tweens.killTweensOf(n); n.destroy(); }
     const W = GAME_WIDTH, D = IS_DESKTOP, y = GAME_HEIGHT * (D ? .25 : .2), bw = D ? 500 : Math.min(W * .78, 400), bh = D ? 70 : 72;
     const root = this.add.container(0, 0).setScrollFactor(0).setDepth(DEPTH.overlay - 8).setName('boss-announce').setVisible(this.mode === 'none');
     const ink = this.textures.exists('btn_ink_secondary_normal') ? this.add.image(W / 2, y, 'btn_ink_secondary_normal').setDisplaySize(bw, bh).setTint(0x2a2420).setAlpha(.92) : this.add.rectangle(W / 2, y, bw, bh * .7, 0x120d0a, .8);
@@ -4627,6 +4632,7 @@ export class GameScene extends Phaser.Scene {
       const dtr = Math.min(.25, (rn - (this.lastHudReal || rn)) / 1000); this.lastHudReal = rn; this.bossStagger.track(boss.spawnId, ratio);
       const trail = this.bossStagger.trailRatio(ratio, rn, dtr);
       const id = dzLb ? 'lubu' : chaser ? ({ 张梁: 'zhangliang', 张宝: 'zhangbao', 华雄: 'huaxiong', 徐荣: 'xurong' } as Record<string, string>)[chaser.name] ?? '' : this.chapter.bossStyle;
+      hud.setFallback(id, boss.def.walkVisual?.texture ?? boss.def.texture);
       hud.update({ id, name: this.hudTexts.boss.text, ratio, trail, stagger: this.bossStagger.value / BOSS_FEEL.staggerMax, breaks: this.bossStagger.breaks, shield: !chaser && !dzLb && this.bossShield > 0 ? Math.min(1, this.bossShield / 300) : 0 }, rn);
     } else {
       this.hintText?.setVisible((this.elapsed < 8 || this.relicExpanded) && !this.tutorial?.active); // 新手引导在时不叠旧操作提示

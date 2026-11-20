@@ -108,7 +108,7 @@ export class TutorialOverlay {
 export function tutorialReplayLink(scene: Phaser.Scene, x: number, y: number): Phaser.GameObjects.Text {
   const t = scene.add.text(x, y, '重看新手引导', { fontFamily: FONT, fontSize: '13px', color: '#d9c7a3', stroke: STROKE, strokeThickness: 3, resolution: 2 }).setOrigin(1, .5).setName('settings-tutorial-replay')
     .setInteractive({ useHandCursor: true });
-  const sync = () => t.setText(tutorialSeen() ? '重看新手引导' : '下次第一章重看引导 ✓').setColor(tutorialSeen() ? '#d9c7a3' : GOLD);
+  const sync = () => t.setText(tutorialSeen() ? '重看新手引导' : '下次重看引导 ✓').setColor(tutorialSeen() ? '#d9c7a3' : GOLD);
   sync();
   t.on('pointerover', () => t.setAlpha(.8)).on('pointerout', () => t.setAlpha(1)).on('pointerdown', () => { setTutorialSeen(false); try { localStorage.removeItem('im_tut_lessons'); } catch { /* ignore */ } sync(); }); // 连同按关分课的「看过的课」一起清（systems/Tutorial.ts TUTORIAL_LESSONS_KEY）
   return t;

@@ -34,7 +34,7 @@ export class BootScene extends Phaser.Scene {
 
   preload(): void {
     const lean=this.lean=LOW_RES&&!this.registry.get('loadBattle')&&!this.registry.get('battleReady');
-    if(!lean)this.load.spritesheet('build_vfx','assets/build-vfx/styles-ai-v1.png',{frameWidth:64,frameHeight:64});
+    if(!lean)this.load.spritesheet('build_vfx','assets/build-vfx/styles-hp-v1.png',{frameWidth:128,frameHeight:128});   // 手绘版（2026-11-19，原 styles-ai-v1.png 是 64px 像素风；行序不变，后面多 8 个额外样式）
     // 特效型警示序列帧（src/ui/WarnFx.ts；缺图时首领招式退回细虚线 / 无提示）
     if(!lean){loadWarnFx(this.load); // 手绘版优先，缺图的种类退回像素版
     this.load.spritesheet('refined_spear','assets/combat-refined/spear-sequence.png',{frameWidth:384,frameHeight:64});

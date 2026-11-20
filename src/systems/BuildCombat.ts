@@ -65,6 +65,8 @@ export class BuildCombat {
  windstepCharge():{level:number;ratio:number}{const l=this.lv('windstep');return{level:l,ratio:l?Math.min(1,this.distances.windstep/120):0};}
  onWindstep?:(e:Enemy)=>void;
  naturalBurn(e:Enemy,now:number):boolean{const b=this.burns.get(e.spawnId);return !!b&&b.enemy===e&&b.until>=now&&!b.spread;}
+ /** 破甲（断金 / 弓弩 4 势暴击打上的易伤）还在不在：StatusFx 画标记用。 */
+ isSundered(e:Enemy,now:number):boolean{const m=this.marks.get(e);return !!m&&m.spawn===e.spawnId&&m.vulnerable>now;}
  isBurning(e:Enemy,now:number):boolean{const b=this.burns.get(e.spawnId);return !!b&&b.enemy===e&&b.until>=now;}
  igniteDerived(e:Enemy,damage:number,now:number,ms?:number):void{this.burn(e,damage,now,true,ms);}
  movement(d:number):void{

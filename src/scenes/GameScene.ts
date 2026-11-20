@@ -196,6 +196,7 @@ import { WEAPON_OVER, branchById } from '../data/weaponBranches';
 import { WeaponBranches } from '../systems/WeaponBranches';
 import { layoutRich, SCOPE_BADGE, cardScope } from '../ui/CardRichText';
 import { checkHeroJoins } from '../ui/HeroJoinReveal';
+import {StatusFx} from '../systems/StatusFx';
 
 interface Gem {
   img: Phaser.GameObjects.Image;
@@ -646,7 +647,7 @@ export class GameScene extends Phaser.Scene {
   protected spearShots: SpearShot[] = [];
   protected weaponHost!: WeaponHost;
   private martialFields!: MartialFields;
-  private buildCombat!:BuildCombat;
+  private buildCombat!:BuildCombat;private statusFx?:StatusFx;
   private controlBuild?:ControlBuild;
   private bulwarkBuild?:BulwarkBuild;
   /** 流派合击（部曲 / 伏兵 / 背水一战）+ 六派觉醒（2026-11-19 流派重做第 2 期）。 */
@@ -892,7 +893,7 @@ export class GameScene extends Phaser.Scene {
         onUpdate:o.follow?img=>img.setPosition(pl.x+ox,pl.y+oy):mv?(img,t)=>img.setPosition(x+mv.dx*t,y+mv.dy*t):undefined});}});
     this.legion.awakeningDefense={incoming:(_u,n)=>(this.synergy?.allyIncoming(n)??1)*(this.player.growth.build.tier('formation')>=2?1-SCHOOL_TIER.formation.allyTaken:1),onAllyHurt:()=>{}};
     this.events.once('shutdown',()=>{this.synergy?.clear();this.synergy=undefined;});
-    this.buildCombat.setOrigin(()=>({x:this.player.x,y:this.player.y}));
+    this.buildCombat.setOrigin(()=>({x:this.player.x,y:this.player.y}));this.statusFx=new StatusFx(this,this.buildCombat);   // 敌人身上的灼烧 / 迟滞 / 眩晕 / 破甲标记（手绘序列帧）
     this.buildCombat.onFlank=targets=>this.flankBladeFx().strike(targets);
     this.buildCombat.onWindstep=e=>this.windstepFx().burst(e.x,e.y);
     // 流派重做（data/schools.ts）：奇谋 2 势被控制加深、震荡 / 冲阵 / 燎原的一圈、火油罐火区、疾风
@@ -1273,7 +1274,7 @@ export class GameScene extends Phaser.Scene {
     this.applyContactDamage();
     if (this.over) return;
     this.martialFields.update(dt);
-    this.buildCombat.update(this.combatNow);
+    this.buildCombat.update(this.combatNow);this.statusFx?.update(this.combatNow,this.enemies);
     // 兵阵 4 势「援军」：每 12 秒从后方冲来 3 名义军助战 10 秒（data/schools.ts SCHOOL_TIER.formation）
     if(this.player.growth.build.tier('formation')>=4&&this.combatNow>=this.reinforceAt){const F=SCHOOL_TIER.formation;this.reinforceAt=this.combatNow+F.everyMs;
       this.reinforcePush().spawnEscort(F.n,F.lifeMs);}

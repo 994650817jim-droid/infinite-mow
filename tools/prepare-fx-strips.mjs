@@ -12,9 +12,10 @@ try {
     const c = document.createElement('canvas'); c.width = W; c.height = H; const g = c.getContext('2d', { willReadFrequently: true }); g.imageSmoothingQuality = 'high'; g.drawImage(img, 0, 0, W, H);
     const d = g.getImageData(0, 0, W, H), p = d.data;
     for (let i = 0; i < p.length; i += 4) { const m = Math.max(p[i], p[i + 1], p[i + 2]), a = Math.min(1, Math.max(0, (m - 6) / (R - 6))); if (a <= .004) { p[i + 3] = 0; continue; } p[i] = Math.min(255, p[i] / a); p[i + 1] = Math.min(255, p[i + 1] / a); p[i + 2] = Math.min(255, p[i + 2] / a); p[i + 3] = Math.round(a * 255); }
-    g.putImageData(d, 0, 0); const out = [];
+    g.putImageData(d, 0, 0); const out = []; out.push(c.toDataURL('image/png'));   // out[0] = 整张透明图，之后每行一条
     for (let r = 0; r < H / C; r++) { const s = document.createElement('canvas'); s.width = W; s.height = C; s.getContext('2d').drawImage(c, 0, r * C, W, C, 0, 0, W, C); out.push(s.toDataURL('image/png')); }
     return out;
   }, ['data:image/png;base64,' + readFileSync(src).toString('base64'), COLS * CELL, ROWS * CELL, RAMP, CELL]);
-  names.split(',').forEach((n, i) => { writeFileSync(`${outDir}/${n}.png`, Buffer.from(urls[i].split(',')[1], 'base64')); console.log('wrote', `${outDir}/${n}.png`); });
+  if (E.FULL) { writeFileSync(`${outDir}/${E.FULL}.png`, Buffer.from(urls[0].split(',')[1], 'base64')); console.log('wrote full', `${outDir}/${E.FULL}.png`); }
+  names.split(',').forEach((n, i) => { if (!E.FULL || E.STRIPS) { writeFileSync(`${outDir}/${n}.png`, Buffer.from(urls[i + 1].split(',')[1], 'base64')); console.log('wrote', `${outDir}/${n}.png`); } });
 } finally { await b.close(); }

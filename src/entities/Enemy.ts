@@ -523,6 +523,7 @@ export class Enemy {
 
   /** 受击后仰：横向压扁一下再弹回；push 像素沿 angle 方向轻推（首领 / 不受控的单位只压扁不推）。 */
   hitRecoil(now: number, angle: number, push: number, ms = 90): void {
+    if (this.isSupplySlot) return; // 营垒 / 营寨 / 城门等补给格：可以被打（锁定），但不被击退挪位（碰撞框、耐久条跟着物件）
     if (this.kind === 'boss' || !this.walkSheet) return; // 首领的缩放由各首领控制器管，不在这里压扁
     this.recoilUntil = now + ms; this.recoilMs = ms; this.squash = 1; this.applyScale();
     if (push > 0 && !this.controlImmune && this.def.behavior !== 'wall') this.sprite.setPosition(this.sprite.x + Math.cos(angle) * push, this.sprite.y + Math.sin(angle) * push);

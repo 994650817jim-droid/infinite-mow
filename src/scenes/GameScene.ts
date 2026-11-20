@@ -2732,6 +2732,8 @@ export class GameScene extends Phaser.Scene {
     bolt.life = 2.6;
     bolt.lastHit = null;
     bolt.hitIds = new Set();
+    // 射向营垒 / 连营 / 城门的主将箭：锁定它，途中伏兵不挡（11-20：黄月英连弩站营垒边 270 秒只拆 1 座，箭全被身边伏兵挡掉）
+    bolt.aim = null; if (fromPlayer && this.gateSet.size) for (const g of this.gateSet) if (g.active && g.hp > 0 && Math.hypot(g.x - tx, g.y - ty) <= g.radius + 8) { bolt.aim = g; break; }
     bolt.ally = this.boltAlly;
     if (fromPlayer && !bolt.ally) this.sfx.attack();
     bolt.img
@@ -2765,6 +2767,7 @@ export class GameScene extends Phaser.Scene {
       let target: Enemy | null = null;
       for (const enemy of candidates) {
         if (!enemy.active || bolt.hitIds.has(enemy.spawnId)) continue;
+        if (bolt.aim && bolt.aim.active && bolt.aim.hp > 0 && enemy !== bolt.aim) continue; // 射营垒的箭只撞营垒
         if (Math.hypot(enemy.x - bolt.img.x, enemy.y - bolt.img.y) <= enemy.radius + 12) {
           target = enemy;
           break;

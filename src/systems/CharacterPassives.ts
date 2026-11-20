@@ -299,8 +299,10 @@ export class CharacterPassives {
   critBonus(now: number): number { return this.isSharpshooter(now) ? R.critBonus : 0; }
   /** 智力的范围倍率（GameScene 开局 / 加点后设置，RunGrowth.areaMultiplier）。 */
   areaMul = 1;
+  /** 守城登城（systems/DefenseBattle）：站在城头带里武器范围加成；平时 1。 */
+  rampartMul = 1;
   rangeMultiplier(weapon: WeaponId): number {
-    return (!this.stopped && this.character === 'guanyu' && weapon === 'guandao' ? 1 + this.stacks * R.guandaoRangePerStack : 1) * this.areaMul;
+    return (!this.stopped && this.character === 'guanyu' && weapon === 'guandao' ? 1 + this.stacks * R.guandaoRangePerStack : 1) * this.areaMul * this.rampartMul;
   }
   beginCast(weapon: WeaponId): PassiveCast {
     const c: PassiveCast = { owner: this.character, generation: this.generation, weapon, empowered: false, radiusMul: this.rangeMultiplier(weapon), damageMul: 1, extraSpear: false, spearLengthMul: 1, roar: false, dash: false, heal: 0, rally: 0, fan: false, whoDares: false, formation: false, maids: false, moonDance: false, bridge: false, charge: false, hits: new Set(), awarded: false };

@@ -54,7 +54,7 @@ export function siegeGameSceneClass(Base: typeof GameScene) {
     protected padClearTargets() { this.enemyCamps?.cancel(); }
     private city!: CityDef; private owner: FactionId = 'han'; private defense = false; private intercept = false;
     /** 守城战（守城重做 · systems/DefenseBattle）：城墙在北、城门有耐久、府衙最后防线；迎击不用。 */
-    private defend: DefenseBattle | null = null; private defTier: DefenseTier = 'early'; private receipt = ''; private test = false;
+    private defend: DefenseBattle | null = null; private defInside = false; private defTier: DefenseTier = 'early'; private receipt = ''; private test = false;
     private enemyCamps?: EnemyCamps; private controller?: GuanduBoss;
     private gate: Enemy | null = null; private gateLife = 0; private gateLabel?: Phaser.GameObjects.Text; private gateWarned = false;
     /** 攻城目标：帅旗 / 箭楼（可摧毁）→ 占领府衙。 */
@@ -240,6 +240,8 @@ export function siegeGameSceneClass(Base: typeof GameScene) {
     }
     /** 攻城守军有限：首领以外的兵从守军池出；池空（或本段份额用完）后普通刷兵停止，必刷的兵照出但不给经验 / 掉落。 */
     protected spawnEnemy(kind: EnemyKind, x: number, y: number, hpScale?: number, force = false, override?: Parameters<GameScene['spawnEnemy']>[5]): Enemy | null {
+      // 守城：城里不刷兵（精锐小队、特色兵等「在主将身边刷」的都挪到墙外敌营；云梯爬上来的除外）
+      if (this.defend && kind !== 'boss' && !this.defInside && y > this.defend.gatePos.y - 20) { const sp = this.defend.spawnPoint(); x = sp.x; y = sp.y; }
       const g = this.garrison; if (!g || kind === 'boss') return super.spawnEnemy(kind, x, y, hpScale, force, override);
       const paid = this.garrisonLeft > 0 && g.spent + g.cut < this.garrisonCap;
       // 池空后：只有剧情 / 目标必刷的兵（中城段落脚本、首领召唤）照出；普通刷兵（含强制精英）不再出
@@ -321,13 +323,14 @@ export function siegeGameSceneClass(Base: typeof GameScene) {
       this.defend = new DefenseBattle({
         scene: this, player: () => this.player, now: () => this.combatNow, elapsed: () => this.elapsed, paused: () => this.mode !== 'none' || this.over,
         enemies: () => this.enemies, hit: (e, d) => this.hitEnemy(e, d, this.combatNow, 'arrow', true, false),
-        spawn: (kind, x, y) => this.spawnEnemy(kind, x, y, undefined, true),
+        spawn: (kind, x, y) => { this.defInside = true; try { return this.spawnEnemy(kind, x, y, undefined, true); } finally { this.defInside = false; } }, // 云梯爬上城头的兵：允许刷在城里
         spawnTarget: (x, y, hp, size, tex, frame) => { const e = this.supplies?.spawnGate(x, y, hp, size) ?? null; e?.sprite.setTexture(tex, frame).setOrigin(.5, 1).setDisplaySize(size, size).setAlpha(1); return e; },
         advance: (e, nx, ny, dt) => this.advanceEnemy(e, nx, ny, dt),
         food: () => this.legion.food, spend: n => { if (this.legion.food < n) return false; this.legion.food -= n; return true; },
         banner: (t, d, c) => this.showWaveBanner(t, d, c), sfx: k => this.sfx.play(k as never),
         openGate: () => pass.openGate(), skipTo: sec => { this.elapsed = Math.max(this.elapsed, sec); },
         hpScale: () => this.chapter.hpScale(this.elapsed),
+        rampart: mul => { this.player.passive.rampartMul = mul; if (mul > 1) this.showWaveBanner('登城', false, `城头上武器范围 +${Math.round((mul - 1) * 100)}%`); },
         win: () => { if (this.over) return; this.bossKilled = true; this.finish(true, 'boss'); }, lose: () => { if (!this.over) this.finish(false, 'death'); },
       }, {tier: this.city.tier, dtier: this.defTier, office: lv.office ?? 1, muster: lv.muster ?? 0, start, wallLine: start.y + DEFENSE.wallY, gateX: start.x});
       this.events.once('shutdown', () => { this.defend?.clear(); this.defend = null; });

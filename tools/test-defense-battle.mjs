@@ -104,6 +104,23 @@ const calm = async (p, ms = 400) => { for (let i = 0; i < Math.ceil(ms / 200); i
   ck('迎击：「迎击 · 陈留」三波短野战，不建城墙城门', /迎击 · 陈留/.test(i.name) && !i.defend && i.waves === 3, i);
   await p.close();
 }
+// ⑤ 小城平衡（11-20 夜间回归「小城无人防守约 50 秒破门」）：登城范围加成；无人防守时第 1 波（85 秒）城门还在
+{
+  const w2 = JSON.parse(JSON.stringify(world)); w2.ownedCities = ['shangdang']; w2.capturedEver = ['shangdang']; w2.alerts = [{ city: 'shangdang', attacker: 'caocao', cause: 'era', countdown: 0 }]; w2.warlordStages = 0;
+  const p = await b.newPage({ viewport: { width: 1280, height: 720 } });
+  p.on('pageerror', e => errors.push(e.message.slice(0, 200)));
+  await p.addInitScript(w => { if (!sessionStorage.getItem('seeded')) { localStorage.clear(); localStorage.setItem('im_world_v1', JSON.stringify(w)); localStorage.setItem('im_last_hero', 'zhaoyun'); sessionStorage.setItem('seeded', '1'); } }, w2);
+  await p.goto(BASE + '?dev=1&autostart=1&stage=1&layout=desktop');
+  await p.waitForFunction(() => window.__game?.scene.getScene('GameScene')?.player, null, { timeout: 120000 });
+  await p.evaluate(() => { const g = window.__game; g.registry.set('siegeCity', 'shangdang'); g.registry.set('siegeMode', 'defense'); g.registry.set('runConfig', { character: 'zhaoyun' }); for (const s of g.scene.getScenes(true)) s.scene.stop(); g.scene.start('SiegeGameScene'); });
+  await p.waitForFunction(() => { const s = window.__game.scene.getScene('SiegeGameScene'); return s?.player && s.elapsed > .5; }, null, { timeout: 120000 });
+  const rp = await p.evaluate(async () => { const s = window.__game.scene.getScene('SiegeGameScene'), d = s.defenseBattle, wait = ms => new Promise(r => setTimeout(r, ms)); s.player.sprite.setPosition(d.gatePos.x + 200, d.gatePos.y + 60); await wait(400); const on = s.player.passive.rampartMul; s.player.sprite.setPosition(d.keepPos.x, d.keepPos.y + 150); await wait(400); return { on, off: s.player.passive.rampartMul }; });
+  ck('登城：站上城头武器范围 ×1.2，下城恢复', rp.on === 1.2 && rp.off === 1, rp);
+  await p.evaluate(() => { const s = window.__game.scene.getScene('SiegeGameScene'); window.__S = s; s.player.damageImmune = true; s.devTimeScale = 3; });
+  let r = null; for (let i = 0; i < 80; i++) { await p.waitForTimeout(500); r = await p.evaluate(() => { const s = window.__S; if (s.mode === 'levelup' || s.mode === 'bossloot') s.chooseUpgrade(0); else if (s.mode === 'branch') s.chooseBranch(0); else if (s.mode !== 'none' && !s.over) s.setMode('none'); const k = s.defenseBattle.keepPos; if (!s.over) s.player.sprite.setPosition(k.x + 300, k.y + 150); const d = s.defenseBattle.snapshot(); return { el: Math.round(s.elapsed), gate: d.gate, gateMax: d.gateMax, open: d.gateOpen, keep: d.keep, over: s.over }; }); if (r.el >= 86 || r.over) break; }
+  ck('小城（上党）无人防守：第 1 波打完（85 秒）城门还在、府衙没挨打（原来约 50 秒就破门）', r && r.el >= 85 && !r.open && !r.over && r.keep === 1600, r);
+  await p.close();
+}
 ck('无报错', !errors.length, errors.slice(0, 5));
 await b.close();
 console.log(fail ? `\n${fail} 项失败` : '\n全部通过'); process.exit(fail ? 1 : 0);

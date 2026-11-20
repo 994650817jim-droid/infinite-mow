@@ -61,7 +61,7 @@ const fell = await p.evaluate(async T0 => { const s = eval(T0), wait = ms => new
   s.boss.hp = 1; s.debugCrit = false; s.hitEnemy(s.boss, 50, s.combatNow, 'melee', false, true); s.debugCrit = null; await wait(100);
   return { down: s.dianwei.down, flag: JSON.parse(localStorage.getItem('im_story_v1') ?? '{}').flags?.dianwei ?? null, overMode: s.mode, banner }; }, T);
 const fellLines = await L('stages/2/after/0', 'zhaoyun', [], { dianwei: 'fell' }), savedLines = await L('stages/2/after/0', 'zhaoyun', [], { dianwei: 'saved' });
-ck('典韦战死：不判负、张绣倒下时写 dianwei=fell；幕间播「独号泣典韦」那一支', fell.down && fell.flag === 'fell' && fellLines.join().includes('号泣') && !fellLines.join().includes('还没砍够'), { fell, fellLines });
+ck('典韦战死：不判负、张绣倒下时写 dianwei=fell；幕间播「重伤抢回、生死未卜」那一支（第二批可玩武将：不写战死，曹魏支线随曹操来投）', fell.down && fell.flag === 'fell' && fellLines.join().includes('生死未卜') && !fellLines.join().includes('还没砍够'), { fell, fellLines });
 await third(2, 'zhaoyun', { clear: false });
 const saved = await p.evaluate(async T0 => { const s = eval(T0), wait = ms => new Promise(r => setTimeout(r, ms)); s.player.damageImmune = true; const merit0 = (await import('/src/systems/MasteryStore.ts')).merit();
   s.spawnBoss(); for (let k = 0; k < 6 && s.mode === 'levelup'; k++) { s.chooseUpgrade(0); await wait(60); } s.boss.hp = 1; s.hitEnemy(s.boss, 50, s.combatNow, 'melee', false, true); await wait(100);

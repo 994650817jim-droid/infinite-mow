@@ -85,6 +85,15 @@ export const ART_V2_FILES: Readonly<Record<string, string>> = sideBossFiles({
   enemy_qiangbing_attack: 'assets/processed-v2/enemies/enemy_qiangbing_attack.png',
   enemy_huojian_walk: 'assets/processed-v2/enemies/enemy_huojian_walk.png',
   enemy_huojian_attack: 'assets/processed-v2/enemies/enemy_huojian_attack.png',
+  // 副将专属形象（每章 1 套，2026-11-19 ChatGPT 出图，行走 / 攻击 4×4 每格 176，原图 enemies/originals/artv2_enemy_lt_*）：键 lt_<章节键>_walk / _attack
+  lt_huangjin_walk: 'assets/processed-v2/enemies/enemy_lt_huangjin_walk.png',
+  lt_huangjin_attack: 'assets/processed-v2/enemies/enemy_lt_huangjin_attack.png',
+  lt_hulao_walk: 'assets/processed-v2/enemies/enemy_lt_hulao_walk.png',
+  lt_hulao_attack: 'assets/processed-v2/enemies/enemy_lt_hulao_attack.png',
+  lt_qunxiong_walk: 'assets/processed-v2/enemies/enemy_lt_qunxiong_walk.png',
+  lt_qunxiong_attack: 'assets/processed-v2/enemies/enemy_lt_qunxiong_attack.png',
+  lt_guandu_walk: 'assets/processed-v2/enemies/enemy_lt_guandu_walk.png',
+  lt_guandu_attack: 'assets/processed-v2/enemies/enemy_lt_guandu_attack.png',
   // 小怪兵种第一批（2026-11-19 Gemini 出图，原图 enemies/originals/artv2_enemy_*）：行走 4×4、攻击 4×4，行 = 下 / 左 / 右 / 上
   enemy_huogong_walk: 'assets/processed-v2/enemies/enemy_huogong_walk.png',
   enemy_huogong_attack: 'assets/processed-v2/enemies/enemy_huogong_attack.png',

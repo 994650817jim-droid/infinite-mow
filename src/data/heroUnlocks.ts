@@ -39,6 +39,8 @@ export const HERO_JOIN: Readonly<Partial<Record<CharacterId, HeroJoinInfo>>> = {
     lines: ['白门楼下，吕布卸甲解缚。', '「明公所患不过于布，今已服矣——天下不足忧！」', '方天画戟，从此为公所用。'] },
   mengde: { kicker: '许都', epithet: '魏王',
     lines: ['中原尽失，曹操卸下魏王冠冕，独自出城。', '「天下英雄，唯使君与操耳。」', '「操，愿归附——这天下，便看你我如何收拾。」'] },
+  ganning: { kicker: '荆州 · 江夏', epithet: '锦帆',
+    lines: ['江夏水寨，铃声渐近，锦帆贼甘宁弃了黄祖。', '「宁在江夏数年，黄祖以凡人畜之。」', '「明公若不弃，宁愿以百骑，为公劫营！」'] },
   taishici: { kicker: '江陵 · 南郡', epithet: '信义',
     lines: ['南郡城下，太史慈插戟于地，拱手而立。', '「大丈夫当带七尺之剑，以升天子之阶。」', '「慈愿随明公，再战三百合！」'] },
   zhouyu: { kicker: '江陵 · 南郡', epithet: '美周郎',

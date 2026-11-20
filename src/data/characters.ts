@@ -1,7 +1,7 @@
 import type { ChapterId } from './chapters';
 import type { WeaponId } from '../types';
 
-export type CharacterId = 'zhaoyun' | 'guanyu' | 'huangzhong' | 'zhuge' | 'zhangfei' | 'machao' | 'weiyan' | 'liubei' | 'pangtong' | 'huangyueying' | 'sunshangxiang' | 'diaochan' | 'lvbu' | 'zhangliao' | 'zhouyu' | 'taishici' | 'mengde';
+export type CharacterId = 'zhaoyun' | 'guanyu' | 'huangzhong' | 'zhuge' | 'zhangfei' | 'machao' | 'weiyan' | 'liubei' | 'pangtong' | 'huangyueying' | 'sunshangxiang' | 'diaochan' | 'lvbu' | 'zhangliao' | 'zhouyu' | 'taishici' | 'mengde' | 'ganning';
 
 export interface CharacterDef {
   id: CharacterId;
@@ -229,11 +229,23 @@ export const CHARACTERS: CharacterDef[] = [
     startWeapon: 'yitian_jian',
     faction: '魏',
   },
+  // P3 第二批：甘宁（吴）——锦帆铁索钩、被动「锦帆」（data/ganning.ts）；江夏支线劝降来投
+  {
+    id: 'ganning',
+    name: '甘宁',
+    desc: '锦帆 · 甩钩拉敌、夜袭点火',
+    hpMul: 1.02,
+    speedMul: 1.04,
+    damageMul: 1.04,
+    portrait: 'ganning_portrait',
+    startWeapon: 'jinfan_gou',
+    faction: '吴',
+  },
 
 ];
 
 /** 有主页大幅立绘（epic-home）与水墨立轴（ink-scroll）的武将；其余用 portrait。 */
-export const HOME_ART_HEROES: readonly string[] = ['zhaoyun', 'guanyu', 'huangzhong', 'zhuge', 'zhangfei', 'machao', 'weiyan', 'liubei', 'pangtong', 'huangyueying', 'sunshangxiang', 'diaochan', 'lvbu', 'zhangliao', 'zhouyu', 'taishici', 'mengde'];
+export const HOME_ART_HEROES: readonly string[] = ['zhaoyun', 'guanyu', 'huangzhong', 'zhuge', 'zhangfei', 'machao', 'weiyan', 'liubei', 'pangtong', 'huangyueying', 'sunshangxiang', 'diaochan', 'lvbu', 'zhangliao', 'zhouyu', 'taishici', 'mengde', 'ganning'];
 
 export const STARTING_WEAPONS: Array<{ id: WeaponId; name: string; icon: string; desc: string }> = [
   { id: 'spear_orbit', name: '枪影旋舞', icon: 'icon_1', desc: '环绕枪刃，近身持续伤害' },

@@ -4,6 +4,10 @@ import { ZHANGLIAO } from '../data/zhangliao';
 import { ZHOUYU } from '../data/zhouyu';
 import { TAISHICI } from '../data/taishici';
 import { MENGDE } from '../data/mengde';
+/** P3 第二批可玩武将（共用量表 p3*）。 */
+const P3_HEROES = new Set<string>(['ganning', 'dianwei', 'sunquan', 'menghuo', 'zhurong']);
+/** P3 限时状态的名字（被动条显示）。 */
+const P3_ACTIVE_NAME: Record<string, string> = { ganning: '百骑劫营', dianwei: '古之恶来' };
 import type { CharacterId } from '../data/characters';
 import type { WeaponId } from '../types';
 import { CHARACTER_PASSIVES, PASSIVE_RULES as R } from '../data/passives';
@@ -78,12 +82,30 @@ export class CharacterPassives {
   onAllyDeath(now: number): void { if (this.stopped || this.character !== 'mengde') return; this.stacks++; this.gains++; this.lastGain = now; if (this.stacks >= this.mdNeed) { this.stacks = 0; this.triggers++; this.hubaoPending++; } }
   takeHubao(): boolean { if (this.hubaoPending <= 0 || this.stopped) return false; this.hubaoPending--; return true; }
   takeHuben(): boolean { if (this.hubenPending <= 0 || this.stopped) return false; this.hubenPending--; return true; }
+  /**
+   * P3 第二批可玩武将（甘宁 / 典韦 / 孙权 / 孟获 / 祝融，共享笔记 p3-heroes-plan.md）共用一套量表：
+   * 攒满 p3Need（武器每帧写入，分支会改）出一次招（p3Pending，武器 takeP3 取走）；甘宁「百骑劫营」、典韦「古之恶来」等限时状态记在 p3Until，
+   * 期间移速 ×p3SpeedMul、受伤 ×p3GuardMul（Player.speed / takeDamage 读）。攒法按武将：p3KillCounts（击杀）/ onDamage（典韦受伤）。
+   */
+  p3Need = 10; private p3Pending = 0; p3Until = -Infinity; p3SpeedMul = 1; p3GuardMul = 1;
+  get isP3(): boolean { return P3_HEROES.has(this.character); }
+  p3Gain(now: number, n = 1): void { if (this.stopped || !this.isP3) return; this.stacks += n; this.gains++; this.lastGain = now; if (this.stacks >= this.p3Need) { this.stacks = 0; this.triggers++; this.p3Pending++; } }
+  takeP3(): boolean { if (this.p3Pending <= 0 || this.stopped) return false; this.p3Pending--; return true; }
+  startP3(now: number, ms: number, speedMul = 1, guardMul = 1): void { if (this.stopped) return; this.p3Until = now + ms; this.p3SpeedMul = speedMul; this.p3GuardMul = guardMul; }
+  p3Active(now: number): boolean { return !this.stopped && now < this.p3Until; }
+  /** 这名敌兵被击杀时算不算攒量（GameScene 在 deactivate 之前问）：甘宁 = 被钩过的；其余按各自规则。 */
+  p3KillCounts(enemy: Enemy, now: number): boolean {
+    if (this.stopped || !this.isP3) return false;
+    const c = this.character as string;
+    if (c === 'ganning') return enemy.hookedUntil > now;
+    return false;
+  }
   /** 孙尚香最近一次移动的时间（移动中掷刀更快）。 */
   private lastMoveAt = -Infinity;
   constructor(character: CharacterId = 'zhaoyun', now = 0) { this.reset(character, now); }
   reset(character: CharacterId, now: number): void {
     this.character = character; this.stacks = 0; this.lastGain = -Infinity; this.charmKillAt = -Infinity; this.lastDamage = now; this.sharpUntil = -Infinity; this.sharpMs = HZ_SHARP.sharpMs; this.hurtDropAt = -Infinity; this.surroundAcc = 0; this.stars.clear(); this.bazhen = []; this.stageKills = 0; this.sharpEliteKills = 0;
-    this.generation++; this.stopped = false; this.gains = 0; this.triggers = 0; this.burns.clear(); this.charms.clear(); this.crowdStar = { marks: 0, last: -Infinity }; this.guardUntil = -Infinity; this.wsUntil = this.wsStart = -Infinity; this.hubenPending = 0; this.dongfengPending = 0; this.breakoutPending = 0; this.hubaoPending = 0; this.chargeInvulnUntil = this.chargeGuardUntil = -Infinity;
+    this.generation++; this.stopped = false; this.gains = 0; this.triggers = 0; this.burns.clear(); this.charms.clear(); this.crowdStar = { marks: 0, last: -Infinity }; this.guardUntil = -Infinity; this.wsUntil = this.wsStart = -Infinity; this.hubenPending = 0; this.dongfengPending = 0; this.breakoutPending = 0; this.hubaoPending = 0; this.chargeInvulnUntil = this.chargeGuardUntil = -Infinity; this.p3Pending = 0; this.p3Until = -Infinity; this.p3SpeedMul = this.p3GuardMul = 1;
   }
   get characterId(): CharacterId { return this.character; }
   stop(): void { this.stopped = true; this.stacks = 0; this.generation++; this.burns.clear(); this.charms.clear(); this.stars.clear(); this.crowdStar = { marks: 0, last: -Infinity }; this.bazhen = []; this.chargeInvulnUntil = this.chargeGuardUntil = -Infinity; }
@@ -105,7 +127,9 @@ export class CharacterPassives {
     while (this.surroundAcc >= 1 && this.stacks < this.maxStacks) { this.surroundAcc -= 1; this.stacks++; this.gains++; }
   }
   /** 魏延「谁敢杀我」期间受到伤害的倍率。 */
-  damageTakenMultiplier(now: number): number { if (this.stopped) return 1; return (now < this.guardUntil ? R.whoDaresGuardMul : 1) * (now < this.chargeGuardUntil && now >= this.chargeInvulnUntil ? R.chargeGuardMul : 1); }
+  damageTakenMultiplier(now: number): number { if (this.stopped) return 1; return (now < this.guardUntil ? R.whoDaresGuardMul : 1) * (now < this.chargeGuardUntil && now >= this.chargeInvulnUntil ? R.chargeGuardMul : 1) * (now < this.p3Until ? this.p3GuardMul : 1); }
+  /** P3 限时状态的移速倍数（甘宁百骑劫营）。 */
+  speedMultiplier(now: number): number { return this.p3Active(now) ? this.p3SpeedMul : 1; }
   /** 马超锦马冲锋：invulnMs 内无敌（不吃伤害、不被外力击退），之后 guardMs 内受伤减免。 */
   startChargeGuard(now: number, invulnMs: number, guardMs: number): void { if (this.stopped) return; this.chargeInvulnUntil = now + invulnMs; this.chargeGuardUntil = now + invulnMs + guardMs; }
   /** 冲锋无敌中。 */
@@ -317,9 +341,9 @@ export class CharacterPassives {
   }
   snapshot(now: number) {
     // P2：分支 / 武艺会改满层数（周瑜雅量、太史慈北海突围、曹操虎豹骑），被动条和脚下刻度都按实际满层显示
-    const need = this.character === 'zhouyu' ? this.zyNeed : this.character === 'taishici' ? this.tscNeed : this.character === 'mengde' ? this.mdNeed : this.maxStacks;
+    const need = this.character === 'zhouyu' ? this.zyNeed : this.character === 'taishici' ? this.tscNeed : this.character === 'mengde' ? this.mdNeed : this.isP3 ? this.p3Need : this.maxStacks;
     return { character: this.character, stacks: this.character === 'zhuge' ? this.starTop(now) : this.character === 'lvbu' && this.isWushuang(now) ? need : this.stacks, maxStacks: need,
-      ready: !this.stopped && (this.character === 'lvbu' ? this.isWushuang(now) : this.character === 'huangzhong' ? this.isSharpshooter(now) : (this.character === 'zhuge' ? this.starTop(now) : this.stacks) >= need),
+      ready: !this.stopped && (this.character === 'lvbu' ? this.isWushuang(now) : this.isP3 && this.p3Active(now) ? true : this.character === 'huangzhong' ? this.isSharpshooter(now) : (this.character === 'zhuge' ? this.starTop(now) : this.stacks) >= need),
       // 黄忠：神射中为剩余时间比例，否则为蓄势比例（PassiveHud 进度条）
       calmProgress: this.stopped || this.character !== 'huangzhong' ? 0 : this.isSharpshooter(now) ? this.sharpLeft(now) / this.sharpMs : this.stacks / HZ_SHARP.need,
       critBonus: this.critBonus(now), guandaoRangeMul: this.rangeMultiplier('guandao'), burns: this.burns.size, charms: this.charms.size, turned: [...this.charms.values()].filter(c => c.turnedUntil > now).length, gains: this.gains, triggers: this.triggers, stopped: this.stopped };
@@ -328,6 +352,7 @@ export class CharacterPassives {
     const name = CHARACTER_PASSIVES[this.character].name;
     if (this.character === 'zhuge') return `${name} · 星象 ${this.starTop(now)}/${ZG_TIANHUO.starNeed}${this.starTop(now) >= ZG_TIANHUO.starNeed ? ' · 下一发算无遗策' : ''}`;
     if (this.character === 'mengde') return `${name} ${this.stacks}/${this.mdNeed}`;
+    if (this.isP3) return this.p3Active(now) ? `${name} · ${P3_ACTIVE_NAME[this.character] ?? '发动'} ${((this.p3Until - now) / 1000).toFixed(1)}秒` : `${name} ${this.stacks}/${this.p3Need}`;
     if (this.character === 'taishici') return `${name} ${this.stacks}/${this.tscNeed}`;
     if (this.character === 'zhouyu') return `${name} ${this.stacks}/${this.zyNeed}`;
     if (this.character === 'zhangliao') return `${name} ${this.stacks}/${ZHANGLIAO.need}`;

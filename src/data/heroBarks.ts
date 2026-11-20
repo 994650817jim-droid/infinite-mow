@@ -28,6 +28,11 @@ export interface HeroBarkLines {
 }
 
 export const HERO_BARKS: Record<CharacterId, HeroBarkLines> = {
+  ganning: {
+    trigger: ['锦帆贼甘宁在此！', '百骑劫营，随我来！', '听见铃声了吗？'],
+    bossAppear: ['水寨里的铃声，就是你们的丧钟。'], bossDown: ['痛快！'],
+    vsBoss: { 黄祖: '黄祖，你不用我，今日便知道厉害！', 凌统: '公绩，旧怨今日了结！' },
+  },
   mengde: {
     trigger: ['宁教我负天下人！', '虎豹骑，随我冲阵！', '天下英雄，唯使君与操耳。'],
     bossAppear: ['来者何人？报上名来。'], bossDown: ['吾好梦中杀人。'],

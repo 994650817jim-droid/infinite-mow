@@ -35,6 +35,7 @@ export const HERO_STATS: Record<CharacterId, { base: Stat4; growth: Stat4 }> = {
   zhouyu: { base: [66, 72, 96, 98], growth: [0, .2, .5, .3] },
   taishici: { base: [95, 86, 64, 82], growth: [.4, .4, 0, .2] },
   mengde: { base: [72, 70, 95, 100], growth: [.2, 0, .3, .5] },
+  ganning: { base: [90, 86, 58, 80], growth: [.3, .5, 0, .2] }, // P3：拟值（表里没有），交平衡会话
 };
 
 /** 无名随从模板底子（力 / 敏 / 智 / 统）与成长权重；品质加成：白 +0 / 蓝 +6 / 紫 +12（四项）。 */

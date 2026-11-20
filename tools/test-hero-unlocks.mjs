@@ -41,6 +41,7 @@ const rules = await p.evaluate(async () => {
     t('zhouyu', { top: { persuaded: id => id === 'chengpu' } }, { top: { persuaded: id => id === 'zhouyu' } }), // P2：劝降周瑜才来投（程普先降只是前置）
     t('taishici', { top: { persuaded: id => id === 'zhouyu' } }, { top: { persuaded: id => id === 'taishici' } }), // P2：劝降太史慈
     t('mengde', { top: { persuaded: id => id === 'xiahoudun' } }, { top: { persuaded: id => id === 'caocao' } }), // P2：曹操归附（首领 id 仍是 caocao）
+    t('ganning', { top: { persuaded: id => id === 'huangzu' } }, { top: { persuaded: id => id === 'ganning' } }), // P3：劝降甘宁（江夏支线江夏外围）
   ];
 });
 ck('各节点：诸葛亮第一章后、貂蝉第三章白门楼、黄月英 5-2、孙尚香 5-3、魏延 / 黄忠 6-3、庞统 7-1、马超 7-3、吕布 / 张辽 / 周瑜 / 太史慈劝降、曹操归附——差一步不解锁、到了就解锁', rules.every(r => !r.before && r.at), rules);

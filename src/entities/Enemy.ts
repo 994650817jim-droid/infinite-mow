@@ -108,6 +108,8 @@ export class Enemy {
   zhenshe = 0; zhensheAt = 0; routUntil = 0; trampleAt = 0;
   /** 曹操「军令」标记到期时间（weapons/mengdeWeapon.ts；受伤加成在 CharacterPassives.vulnerability）。 */
   junlingUntil = 0;
+  /** P3：甘宁铁索钩钩过的到期时间（被钩过的被击杀才攒「锦帆」）；P3 火攻（甘宁 / 祝融）着火标记到期时间。 */
+  hookedUntil = 0; p3BurnUntil = 0;
   martialSlow = 1;
   martialSlowUntil = 0;
   /** 首领出招间隔倍率与截止（诸葛亮八阵图 3 级；ArcBossV2 系首领在 toIdle 时读）。 */
@@ -162,7 +164,7 @@ export class Enemy {
     this.invulnerable = false;
     this.controlImmune = false;
     this.stunUntil = 0;
-    this.zhenshe = 0; this.zhensheAt = 0; this.routUntil = 0; this.trampleAt = 0; this.junlingUntil = 0;
+    this.zhenshe = 0; this.zhensheAt = 0; this.routUntil = 0; this.trampleAt = 0; this.junlingUntil = 0; this.hookedUntil = 0; this.p3BurnUntil = 0;
     this.targetAlly = null; this.targetLife = 0;
     this.flashUntil = 0; this.flashReadyAt = 0;
     this.recoilUntil = 0; this.squash = 0;

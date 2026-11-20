@@ -12,6 +12,11 @@ import { CHARACTERS } from '../data/characters';
 export const BRANCH_FX_HERO: Readonly<Record<string, string>> = { zy: 'zhaoyun', gy: 'guanyu', zf: 'zhangfei', lb: 'liubei', zg: 'zhuge', pt: 'pangtong', hz: 'huangzhong', hy: 'huangyueying', ss: 'sunshangxiang', dc: 'diaochan', mc: 'machao', wy: 'weiyan' };
 /** 已出图的武将（图到一位登记一位，避免请求不存在的文件）。 */
 export const BRANCH_FX_READY: readonly string[] = ['zhaoyun', 'guanyu', 'zhangfei', 'liubei', 'zhuge', 'pangtong', 'huangzhong', 'huangyueying', 'sunshangxiang', 'diaochan', 'machao', 'weiyan', 'lvbu', 'zhangliao', 'zhouyu', 'taishici', 'mengde']; // P2 五人 2026-11-20 补图（攻击特效检查缺图）
+/**
+ * P3 第二批可玩武将的进阶图没出之前，按分支借风格接近的老武将那一行（缺图清单 p3-heroes-plan.md）：分支 → 借谁的图、第几个分支那两行。
+ * 甘宁「夜袭点火」借周瑜「火烧赤壁」，「百骑劫魏营」借马超「西凉铁骑」。
+ */
+export const BRANCH_FX_BORROW: Readonly<Record<string, { hero: string; slot: number }>> = { gn_yexi: { hero: 'zhouyu', slot: 0 }, gn_jieying: { hero: 'machao', slot: 0 } };
 export const branchFxKey = (hero: string): string => 'fx_bf_' + hero;
 export const branchFxFile = (hero: string): string => `assets/branch-fx/${hero}.png`;
 
@@ -23,6 +28,7 @@ export const lastBranchBurst = { at: -Infinity };
 /** 分支 → { 贴图 key, 第几个分支（0 / 1，按 WEAPON_BRANCHES 同武器内顺序） }；没图返回 null。 */
 export function branchFxOf(scene: Phaser.Scene, branchId: string): { key: string; slot: number } | null {
   const b = WEAPON_BRANCHES.find(x => x.id === branchId); if (!b) return null;
+  const borrow = BRANCH_FX_BORROW[branchId]; if (borrow) return BRANCH_FX_READY.includes(borrow.hero) && scene.textures.exists(branchFxKey(borrow.hero)) ? { key: branchFxKey(borrow.hero), slot: borrow.slot } : null;
   // 按分支的本命武器找武将（不能按 id 前缀：P2 吕布 lb_* 撞刘备、周瑜 zy_* 撞赵云，会播别人的进阶图）
   const hero = CHARACTERS.find(c => c.startWeapon === b.weapon)?.id; if (!hero || !BRANCH_FX_READY.includes(hero)) return null;
   const key = branchFxKey(hero); if (!scene.textures.exists(key)) return null;

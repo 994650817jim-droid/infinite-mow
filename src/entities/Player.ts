@@ -172,7 +172,8 @@ export class Player {
   propGuardUntil = 0; propGuardMul = 1;
   get speed(): number {
     const wu = this.passive.isWushuang((this.scene as Phaser.Scene & { combatNow?: number }).combatNow ?? this.scene.time.now) ? LVBU.moveMul : 1; // 吕布人中吕布：移速 +40%（可超 1.6 上限）
-    return wu * BALANCE.player.speed * Math.min(1.6, this.stats.moveMul * this.growth.movementMultiplier()*(this.growth.build.tier('cavalry')>=2?1+SCHOOL_TIER.cavalry.move:1)) * this.mountSpeedMul * this.envSpeedMul * this.terrainSpeedMul * this.snareSpeedMul;
+    const p3 = this.passive.speedMultiplier((this.scene as Phaser.Scene & { combatNow?: number }).combatNow ?? this.scene.time.now); // P3 甘宁百骑劫营等
+    return wu * p3 * BALANCE.player.speed * Math.min(1.6, this.stats.moveMul * this.growth.movementMultiplier()*(this.growth.build.tier('cavalry')>=2?1+SCHOOL_TIER.cavalry.move:1)) * this.mountSpeedMul * this.envSpeedMul * this.terrainSpeedMul * this.snareSpeedMul;
   }
 
   /** 被外力击退 / 挑起；self 为自己的突进（冲锋、龙胆突刺）。马超冲锋无敌中不被外力击退。 */

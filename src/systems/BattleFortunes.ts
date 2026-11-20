@@ -124,8 +124,8 @@ export class BattleFortunes {
     const s = this.h.scene, cam = s.cameras.main, v = cam.worldView, kx = GAME_WIDTH / v.width, ky = GAME_HEIGHT / v.height;
     const sx = (L.x - v.x) * kx, sy = (L.y - v.y) * ky, pad = 40;
     if (this.h.overlay() || (sx >= pad && sy >= pad && sx <= GAME_WIDTH - pad && sy <= GAME_HEIGHT - pad)) { L.arrow.setVisible(false); return; }
-    // 避开顶部战况线 / 计时器（上 100）、底部首领血条（下 100）、右侧圆钮列（右 110）
-    const top = 100, bottom = GAME_HEIGHT - 100, left = 48, right = GAME_WIDTH - 110, cx = GAME_WIDTH / 2, cy = GAME_HEIGHT / 2, a = Math.atan2(sy - cy, sx - cx), dx = Math.cos(a), dy = Math.sin(a);
+    // 避开顶部战况线 / 计时器（上 100）、底部首领血条（下 100）、右侧圆钮列（右 140）
+    const top = 100, bottom = GAME_HEIGHT - 100, left = 48, right = GAME_WIDTH - 140, /* 右 140：原 110 时箭头圆圈 + 字压到右列加点 / 护阵圆钮（第二章检查 11-20） */ cx = GAME_WIDTH / 2, cy = GAME_HEIGHT / 2, a = Math.atan2(sy - cy, sx - cx), dx = Math.cos(a), dy = Math.sin(a);
     const t = Math.min(dx > 0 ? (right - cx) / dx : dx < 0 ? (left - cx) / dx : Infinity, dy > 0 ? (bottom - cy) / dy : dy < 0 ? (top - cy) / dy : Infinity);
     let ax = cx + dx * t; const ay = cy + dy * t, r = 12, g = L.arrow.getByName('fa-g') as Phaser.GameObjects.Graphics;
     if (ax < 250 && ay < 260) ax = 250; // 左上角是主将血条 / 随军粮 / 增益图标：箭头往右让开

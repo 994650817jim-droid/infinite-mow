@@ -19,7 +19,7 @@ const B = (weapon: WeaponId, id: string, school: SchoolId, name: string, desc: s
   ({ id, weapon, school, name, desc, lv6, lv7, finalName, finalDesc, icon: 'branch_icon_' + id, ready });
 
 export const WEAPON_BRANCHES: readonly WeaponBranch[] = [
-  B('spear_orbit', 'zy_longdan', 'cavalry', '龙胆 · 七进七出', '约每 4 秒杀进敌阵、回马一枪再杀回原位\n沿途与回马枪下的敌兵受创\n杀进去时无敌，杀回那段要小心', '冲刺伤害 +30%、间隔缩短', '冲刺伤害再 +30%、间隔再缩短', '七进七出', '冲刺可连 3 次，路径留银白枪痕', true),
+  B('spear_orbit', 'zy_longdan', 'cavalry', '龙胆 · 七进七出', '约每 6 秒杀进敌阵、回马一枪\n再杀回你所在之处（冲阵时照常移动）\n杀进去时无敌，杀回那段要小心', '冲刺伤害 +30%、间隔缩短（最短约 5 秒）', '冲刺伤害再 +30%、间隔再缩短', '七进七出', '冲刺连 3 次（约每 9 秒），路径留银白枪痕', true),
   B('spear_orbit', 'zy_bainiao', 'warrior', '百鸟朝凤', '每 6 秒一次 360° 枪风暴\n重创身边一圈敌兵', '风暴伤害 +30%、更频繁', '风暴伤害再 +30%、更频繁', '百鸟朝凤 · 极', '风暴后把周围敌兵吸向身边、减速 2 秒', true),
   B('guandao', 'gy_qinglong', 'warrior', '青龙出水', '每次扇形斩，额外放出\n一道向前穿透的青龙月牙', '月牙伤害 +30%', '月牙伤害再 +30%、飞得更远', '水淹七军', '月牙落地化水浪，沿路敌兵减速', true),
   B('guandao', 'gy_danqi', 'cavalry', '千里走单骑', '移动时身后留下刀痕带\n敌兵踩上持续受创', '刀痕伤害 +30%', '刀痕伤害再 +30%、更长', '过五关', '每走一段路自动横扫一圈', true),
@@ -88,14 +88,21 @@ export const BRANCH_FIT = { fitMul: 1.2 } as const;
  * 改成四段约 1.1 秒：起手 windMs（压枪蓄势、脚下扬尘）→ 冲入 outMs（持枪突刺、沿途枪影残影、挑开敌兵、首次命中顿帧）
  * → 回马枪 turnMs（最远点转身横扫 turnR）→ 杀回 backMs（回到原位、落地收枪、推开贴身敌兵）。全程无敌。冷却按新时长放宽（交平衡会话复核）。
  */
-export const LONGDAN = { len: 170, moveMin: 40, windMs: 200, outMs: 350, turnMs: 200, backMs: 350, backMul: .9, turnR: 95, turnMul: .8, pathPush: 26, ghostMs: 70, hitStopMs: 45, pushR: 90, push: 46, cdMs: 3800 } as const;
+/*
+ * 2026-11-20 用户「七进七出，返回的位置是移动的位置，而且触发不要太频繁」：
+ *  - 杀回的落点改为「锚点」：冲刺期间玩家照常推摇杆，锚点按主将移速跟着走（不进障碍），回程每帧朝锚点修正；不推摇杆就是原位。
+ *  - 间隔 max(minMs, cdMs ÷ k)：基础约 6.5 秒，Lv6 / 7、契合最多缩到 5 秒；进阶连三次 max(finalMinMs, finalCdMs ÷ k)。
+ *  - 频率降了单次伤害提高（outMul / turnMul，原 .9 / .8）：按「伤害 × 覆盖面积 ÷ 间隔」估算约为百鸟朝凤的 92%（原约 58%）。交平衡会话复核。
+ */
+export const LONGDAN = { len: 170, moveMin: 40, windMs: 200, outMs: 350, turnMs: 200, backMs: 350, outMul: 2.4, backMul: .9, turnR: 95, turnMul: 2.2, pathPush: 26, ghostMs: 70, hitStopMs: 45, pushR: 90, push: 46, cdMs: 6500, minMs: 5000, finalCdMs: 9500, finalMinMs: 7500, anchorR: 16 } as const;
 export const longdanTotalMs = (): number => LONGDAN.windMs + LONGDAN.outMs + LONGDAN.turnMs + LONGDAN.backMs;
 /**
  * 七进七出的无敌与节奏（2026-11-20 平衡会话）：原来全程无敌 1.31 秒、冷却 3.8 秒 ÷ k（Lv6 / 7、契合会把 k 推到 ~1.9），
  * Lv7 + 契合时无敌约占 63%，进阶连三次约 85%。改为：只有起手 + 冲入 + 回马枪无敌（约 0.85 秒），杀回那段要挨打；
  * 一轮至少隔「无敌时长 ÷ invulnShare」（普通 25% → 3.4 秒，进阶连三次 40% → 6.4 秒），k 只让冷却在此之上缩短。
  */
-export const LONGDAN_GUARD = { graceMs: 100, invulnShare: .25, finalShare: .4 } as const;
+// 2026-11-20 七进七出放慢（约每 6 秒）：无敌占比下限随之调到普通 17%（≈ 5 秒）、进阶连三次 34%（≈ 7.5 秒），与 LONGDAN.minMs / finalMinMs 一致
+export const LONGDAN_GUARD = { graceMs: 100, invulnShare: .17, finalShare: .34 } as const;
 export const longdanInvulnMs = (): number => LONGDAN.windMs + LONGDAN.outMs + LONGDAN.turnMs + LONGDAN_GUARD.graceMs;
 /** 专职状态（HUD 专职行与构筑总览专职栏共用）：当前 Lv（5–7）、进阶进度、是否已进阶、悬停全文。 */
 export interface BranchStatus { b: WeaponBranch; lv: number; over: number; shi: number; final: boolean; attuned: boolean; progress: string; tip: string }

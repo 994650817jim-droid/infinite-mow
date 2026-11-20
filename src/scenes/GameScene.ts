@@ -1211,7 +1211,7 @@ export class GameScene extends Phaser.Scene {
     if (!this.over && nextWave !== this.waveIndex) {
       this.waveIndex = nextWave;
       const ph = this.phasePlan?.phases[nextWave];
-      this.hudTexts.wave.setText(`第 ${nextWave + 1}/${this.chapter.waves.length} 波 · ${this.chapter.waves[nextWave].name}`);
+      this.hudTexts.wave.setText(this.chapter.waves.length === 1 ? this.chapter.waves[0].name : `第 ${nextWave + 1}/${this.chapter.waves.length} 波 · ${this.chapter.waves[nextWave].name}`); // 不分波的关（2-3 洛阳）不写「第 1/1 波」
       // 五段关：横幅只写段落故事名（不写「第 x 波」），小字写段落类别
       if (ph) { if (this.waveBannerShown || nextWave > 0) this.showWaveBanner(ph.name, ph.kind === 'elite' || ph.kind === 'lieutenant' || ph.kind === 'surge', this.phaseCaption(ph.kind)); this.phaseRunner?.enter(nextWave);
         const bark = PHASE_BARKS[this.hardKey() + '-' + this.hardStage()]?.[ph.kind]; if (bark && nextWave > 0 && storyMode() !== 'off') showBarkCard(this, { side: 'left', name: bark.who, text: bark.text, id: bark.id }); } // 段落台词（data/stagePhases.ts PHASE_BARKS）
@@ -3957,6 +3957,7 @@ export class GameScene extends Phaser.Scene {
       this.branchRt?.clear(); this.branchFor = P;
       this.branchRt = new WeaponBranches({
         hitStop: ms => { this.hitFeel.hitStop(ms); },
+        blocked: (x, y, r) => !!this.supplies?.healBlocked?.(x, y, r) || this.grid.query(x, y, r + 80).some(w => w.active && w.def.behavior === 'wall' && Math.hypot(w.x - x, w.y - y) < w.radius + r), // 七进七出锚点不进障碍 / 城墙 / 场地外
         scene: this, player: P, now: () => this.combatNow, weapon: () => this.player.weapons[0], hit: () => this.weaponHit(),
         query: (x, y, r) => this.grid.query(x, y, r), damage: (e, n, fire) => { this.hitEnemy(e, n, this.combatNow, fire ? 'fire' : 'melee', false, false); },
         shi: s => this.player.growth.build.tags()[s] ?? 0, allies: () => this.allies,
@@ -4527,7 +4528,7 @@ export class GameScene extends Phaser.Scene {
     this.hudTexts.chapter.setText(this.chapter.name);
     this.hudTexts.kills.setText(`击杀 ${this.kills}`);
     if (this.waveIndex >= 0) {
-      this.hudTexts.wave.setText(`第 ${this.waveIndex + 1}/${this.chapter.waves.length} 波 · ${this.chapter.waves[this.waveIndex].name}`);
+      this.hudTexts.wave.setText(this.chapter.waves.length === 1 ? this.chapter.waves[0].name : `第 ${this.waveIndex + 1}/${this.chapter.waves.length} 波 · ${this.chapter.waves[this.waveIndex].name}`); // 不分波（2-3）只写名字
     }
     this.hudTexts.details.setText(this.relicExpanded?'收起战况 ▴':'战况 ▾');
     for(const key of ['gear','relics']) this.hudTexts[key].setVisible(this.relicExpanded);

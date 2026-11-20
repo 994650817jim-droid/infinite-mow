@@ -83,7 +83,7 @@ const branchFire = async (hero, branches) => {
   const hr = await p.evaluate(() => { const s = window.__S, all = []; const walk = l => { for (const o of l) { if (o.name && /^passive-branch-/.test(o.name)) all.push({ n: o.name, t: o.text, v: o.visible }); if (o.list) walk(o.list); } }; walk(s.children.list); return { rows: all, buffY: s.buffHud?.root.y }; });
   await p.screenshot({ path: OUT + '/hud-branch.png', clip: { x: 0, y: 0, width: 520, height: 420 } });
   ck('HUD：被动栏下多一行专职（分支名 · Lv.5、进阶 x/4 势），增益栏往下让', hr.rows.some(r => r.n === 'passive-branch-name' && r.v && /龙胆 · 七进七出 · Lv\.5/.test(r.t)) && hr.rows.some(r => r.n === 'passive-branch-progress' && /进阶 \d\/4 势/.test(r.t)) && hr.buffY === 214, hr);
-  // 七进七出（定案「冲进去再杀回原位」；2026-11-20 改四段约 1.1 秒：起手 → 冲入 → 回马枪 → 杀回）：站定朝最近敌兵、在走沿走的方向；冲进去 170 再折返回出发点，全程无敌，回原位推开贴身敌兵
+  // 七进七出（定案「冲进去再杀回原位」；2026-11-20 改四段约 1.1 秒：起手 → 冲入 → 回马枪 → 杀回）：站定朝最近敌兵、在走沿走的方向；冲进去 170 再杀回锚点（不推摇杆即出发点），起手到回马枪无敌，回原位推开贴身敌兵
   const dz = await p.evaluate(() => { const s = window.__S, P = s.player, rt = s.branchRt; window.__calm();
     for (const e of s.enemies) if (e.active && e.kind !== 'boss') { e.hp = 0; s.killEnemy(e); }
     for (let i = 0; i < 6; i++) s.spawnEnemy('infantry', P.x + 120 + (i % 3) * 22, P.y - 11 + Math.floor(i / 3) * 22, 3, true); rt.lastDash = null; rt.nextAt = 1e12; });
@@ -97,6 +97,24 @@ const branchFire = async (hero, branches) => {
   ck('七进七出：四段（起手 → 冲入 → 回马枪 → 杀回）依次发生，整套约 1–1.3 秒', ['wind', 'out', 'turn', 'back', 'land'].every(k => typeof back.d?.phases?.[k] === 'number') && back.d.phases.out >= 150 && back.d.phases.turn - back.d.phases.out >= 250 && back.d.phases.back - back.d.phases.turn >= 150 && back.d.phases.land >= 950 && back.d.phases.land <= 1500, back.d?.phases);
   ck('七进七出：站定时朝最近的敌兵冲进去，随即杀回出发点（误差 ≤ 24），冲入到回马枪无敌（约 0.85 秒，杀回那段不无敌）', dz2.mode === 'target' && dz2.ux > .9 && dz2.inv >= 800 && dz2.inv <= 900 /* 2026-11-20 平衡：只有起手 + 冲入 + 回马枪无敌（约 0.85 秒），杀回那段不无敌 */ && back.d?.back && Math.hypot(back.at.x - back.d.ox, back.at.y - back.d.oy) <= 24, { dz2, back });
   ck('七进七出：在走时沿走的方向冲（玩家控制）', mv.mode === 'move' && mv.uy === 1, mv);
+  // 2026-11-20 用户「返回的位置是移动的位置」：冲阵期间一直往下推摇杆 → 锚点按移速往下走，杀回落在锚点（不是出发点）
+  await p.waitForTimeout(1400);
+  await p.evaluate(() => { const s = window.__S, P = s.player; window.__calm();
+    for (const e of s.enemies) if (e.active && e.kind !== 'boss') { e.hp = 0; s.killEnemy(e); }
+    for (let i = 0; i < 4; i++) s.spawnEnemy('infantry', P.x + 120, P.y - 30 + i * 20, 3, true); });
+  await p.waitForTimeout(200); // 新兵要过一帧才进空间网格（nearest 才找得到）
+  const an0 = await p.evaluate(() => { const s = window.__S, P = s.player, rt = s.branchRt;
+    rt.vx = 0; rt.vy = 0; rt.nextAt = 1e12; rt.lastDash = null; rt.dash(); const d = rt.lastDash, mv0 = P.move;
+    P.move = function (dt) { return mv0.call(this, dt, 0, 220); }; // 模拟一直按「下」
+    return d && { ox: d.ox, oy: d.oy, mode: d.mode, speed: Math.round(P.speed) }; });
+  await p.waitForTimeout(1500);
+  const an = await p.evaluate(() => { const s = window.__S; delete s.player.move; return s.branchRt.lastDash; });
+  ck('七进七出：冲阵时一直往下走 → 锚点跟着往下（≥ 80）、杀回落在锚点（误差 ≤ 24），不是出发点', !!an0 && !!an?.back && !!an?.anchor && an.anchor.y - an0.oy >= 80 && Math.abs(an.anchor.x - an0.ox) <= 6 && Math.hypot(an.back.x - an.anchor.x, an.back.y - an.anchor.y) <= 24, { an0, an });
+  // 频率：基础约 6.5 秒；Lv7 + 契合（k≈1.92）最短 5 秒；进阶连三次约 9.5 秒、最短 7.5 秒
+  const gap = await p.evaluate(() => { const s = window.__S, rt = s.branchRt, w = s.player.weapons[0], b = rt.branch, keep = { over: w.over, attuned: w.attuned }; rt.dash = () => {};
+    const one = (over, att, fin) => { w.over = over; w.attuned = att; if (fin) rt.final = () => true; rt.nextAt = 0; const now = s.combatNow; rt.onFire(b, now); const r = { k: +rt.k().toFixed(2), gap: Math.round(rt.nextAt - now) }; delete rt.final; rt.dashQueue.length = 0; return r; };
+    const out = { base: one(0, false), top: one(2, true), fin: one(0, false, true), finTop: one(2, true, true) }; delete rt.dash; Object.assign(w, keep); rt.nextAt = 1e12; return out; });
+  ck('七进七出：间隔基础约 6.5 秒、Lv7 + 契合最短 5 秒；进阶连三次约 9.5 秒、最短 7.5 秒', gap.base.gap >= 6400 && gap.base.gap <= 6600 && gap.top.k >= 1.3 && gap.top.gap >= 5000 && gap.top.gap <= 5100 && gap.fin.gap >= 9400 && gap.fin.gap <= 9600 && gap.finTop.gap >= 7500 && gap.finTop.gap <= 7600, gap);
   ck('进阶形态短演出：分支进阶名大字（+ BranchFinalFx 手绘爆发、本派觉醒光、震屏）', !!fin.title, fin);
   await p.close();
 }

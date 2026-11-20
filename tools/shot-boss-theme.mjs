@@ -48,7 +48,7 @@ try {
     await ev((s, sc) => { s.devTimeScale = sc; }, SLOW);
     for (const i of (MOVES.length ? MOVES : names.map((_, k) => k))) {
       await ev((s, [k, i0]) => { const b = s.boss; b.sprite.x = s.player.x + 200; b.sprite.y = s.player.y; s.player.damageImmune = true; s[k].debug.force(i0, s.combatNow); }, [c.ctl, i]);
-      for (let n = 0; n < NSHOT; n++) { await p.waitForTimeout(Math.round(STEP / SLOW)); await p.screenshot({ path: `${OUT}/${id}-m${i}-${n}.png`, clip: { x: 300, y: 190, width: 700, height: 340 } }); }
+      for (let n = 0; n < NSHOT; n++) { await p.waitForTimeout(Math.round(STEP / SLOW)); await p.screenshot({ path: `${OUT}/${id}-m${i}-${n}.png`, ...(E.FULL ? {} : { clip: { x: 300, y: 190, width: 700, height: 340 } }) }); }
       await p.waitForTimeout(1500 / SLOW);
     }
   }

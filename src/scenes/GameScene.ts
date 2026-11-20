@@ -172,6 +172,7 @@ import { envConfigFor, type Faction } from '../data/envInteractions';
 import { Terrain } from '../systems/Terrain';
 import { attrBadge } from '../ui/AttrBadge';
 import { AttributePanelView } from '../ui/AttributePanelView';
+import { dmgFontKey } from '../ui/DamageFont';
 import { baseEquiv, baseStat, statMultiplier, statSource } from '../data/heroStats';
 import { ATTRIBUTE_IDS } from '../data/attributes';
 import { PROP_LOOT, rollPropItem, rollPropQuality, type PropLootKind } from '../data/propLoot';
@@ -246,7 +247,7 @@ interface DmgFx {
   crit: boolean;
   /** 伤害数字样式（2026-11-17 用户：「造成伤害字体也改优化一下」）：普通 / 暴击 / 技艺法术 / 首领 / 治疗 / 部曲随行 */
   kind: DmgKind;
-  text: Phaser.GameObjects.Text;
+  text: Phaser.GameObjects.BitmapText;
   /** 暴击时数字左侧的小「暴」字 */
   tag?: Phaser.GameObjects.Text;
   life: number;
@@ -2816,11 +2817,11 @@ export class GameScene extends Phaser.Scene {
     if(!fx&&(crit||priority)&&this.dmgFx.length>=40)fx=this.dmgFx.filter(f=>!f.crit).sort((a,b)=>a.life-b.life)[0];
     if (!fx) {
       if (this.dmgFx.length >= 40) return;
-      fx = { crit, kind: k, text: this.add.text(0, 0, '', { fontFamily: DMG_FONT, fontStyle: 'bold', fontSize: '15px' }).setOrigin(0.5).setDepth(DEPTH.dmgText).setShadow(1, 2, '#000000', 2, true, true), life: 0, vx: 0, vy: 0, active: false };
+      fx = { crit, kind: k, text: this.add.bitmapText(0, 0, dmgFontKey(this, k, DMG_FONT, DMG_STYLE[k]), '', DMG_STYLE[k].size).setOrigin(0.5).setDepth(DEPTH.dmgText), life: 0, vx: 0, vy: 0, active: false };
       fx.kind = '' as DmgKind; // 强制下面套用样式
       this.dmgFx.push(fx);
     }
-    if (fx.kind !== k) { const st = DMG_STYLE[k]; fx.kind = k; fx.text.setStyle({ fontSize: st.size + 'px', color: st.color, stroke: st.stroke, strokeThickness: st.sw }); }
+    if (fx.kind !== k) { const st = DMG_STYLE[k]; fx.kind = k; fx.text.setFont(dmgFontKey(this, k, DMG_FONT, st), st.size); }
     fx.crit = crit;
     fx.tag?.setVisible(false); // 2026-11-18 用户：暴击不再显示「暴」字，只靠更大的金色数字区分
     fx.active = true;

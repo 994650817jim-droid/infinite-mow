@@ -333,3 +333,5 @@ assets/raw/*
 !/tools/gif-school-fx.mjs
 !/tools/test-vfx-tune.mjs
 !/tools/render-ui-bgm.mjs
+!/tools/test-perf-tweaks.mjs
+!/tools/perf-night.mjs

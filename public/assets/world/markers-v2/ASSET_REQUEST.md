@@ -26,3 +26,7 @@
 - 2026-11-15 W2-4 ～ W2-10 已交付（同一对话，3 张素材表）：旗帜（W2-5 军旗、W2-6 牙旗×3、W2-9 令旗）、营寨 / 方印 / 名牌（W2-7、W2-8×3、W2-10×2）、告急城郭（W2-4×3；原图为白底，tools/cut-markers-v2.py 从四边泛洪抠成透明）。
   原图 dsh_ui_markers_{flags,camp_seals_plates,siege}.png；切图与缩放：py tools/cut-markers-v2.py。军旗、令旗的米白旗面拆成 *_cloth 层供按势力染色，杆与金边在 *_pole 层。
   缺图时各标记自动退回程序画。
+- 2026-11-19 W2-11 ～ W2-14（V1 天下地图仍在用代用画法的四类标记，用户「做美术」）：ChatGPT 自己的新聊天一张 1536×1024 真透明 3×2（附 V1 地图截图作参考）。
+  W2-11 讨伐令（支线节点；_open 朱漆令牌、_cleared 墨绿描金 + 红绸）、W2-12 三英战吕布挑战点（_open 黑底赤边大将旗 + 方天画戟头 + 交叉偃月刀 / 蛇矛、_cleared 旗半卷 + 金绸）、W2-13 「可攻」朱漆挂牌（字由程序写）、W2-14 下一战令箭（插在「下一步」目标上方）。
+  原图 assets/source/world-markers-v2-raw/originals/dsh_ui_markers_v1_extra.png；切图 FLOOR=70 COLS=3 ROWS=2 node tools/crop-alpha-grid.mjs（去掉物件周围的淡彩雾；第一行另裁掉下沿以免带进第二行戟尖），再转 PNG。
+  代码：WorldMarkers.nodeMarkerV2 的 variant（side / challenge，未解锁压灰）、WorldMapSceneV1 可攻牌与 guideMark；缺图时都退回原画法。

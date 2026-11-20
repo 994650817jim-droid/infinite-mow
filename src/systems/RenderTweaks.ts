@@ -41,8 +41,24 @@ function installFastArc(): void {
     return this;
   };
 }
+/**
+ * 文字：Phaser 的 Text.setColor / setStroke / setBackgroundColor / setFontSize 不管值有没有变都会重算尺寸并重画 canvas、重传纹理。
+ * HUD 每帧「set 一遍当前颜色」很常见（攻城场景里 paintGarrison / updateRam / updateHud 占 update 的约 10%），这里值没变就直接返回。
+ */
+function installFastText(): void {
+  type St = { parent: unknown; color: unknown; stroke: unknown; strokeThickness: number; backgroundColor: unknown; fontSize: unknown };
+  const TS = (Phaser.GameObjects as unknown as { TextStyle: { prototype: Record<string, unknown> } }).TextStyle.prototype;
+  const wrap = (name: string, same: (st: St, a: unknown[]) => boolean): void => {
+    const orig = TS[name] as (this: St, ...a: unknown[]) => unknown; if (!orig) return;
+    TS[name] = function (this: St, ...a: unknown[]): unknown { return same(this, a) ? this.parent : orig.apply(this, a); };
+  };
+  wrap('setColor', (st, [c]) => typeof c === 'string' && st.color === c);
+  wrap('setBackgroundColor', (st, [c]) => typeof c === 'string' && st.backgroundColor === c);
+  wrap('setStroke', (st, [c, t]) => typeof c === 'string' && st.stroke === c && (t === undefined || t === st.strokeThickness));
+  wrap('setFontSize', (st, [z]) => (typeof z === 'number' ? z + 'px' : z) === st.fontSize);
+}
 export function installFastFill(): void {
-  if (installed) return; installed = true; installFastArc();
+  if (installed) return; installed = true; installFastArc(); installFastText();
   const MP = (Phaser.Renderer.WebGL.Pipelines as unknown as { MultiPipeline?: { prototype: Record<string, unknown> } }).MultiPipeline?.prototype;
   const orig = MP?.batchFillPath as ((this: unknown, path: Pt[], cm: unknown, pm: unknown) => void) | undefined; if (!MP || !orig) return;
   MP.batchFillPath = function (this: { renderer: { pipelines: { set(p: unknown): void } }; calcMatrix: { getX(x: number, y: number): number; getY(x: number, y: number): number }; fillTint: { TL: number; TR: number; BL: number }; batchTri: (...a: unknown[]) => void }, path: Pt[], currentMatrix: { }, parentMatrix?: { multiply(m: unknown, out: unknown): void }): void {

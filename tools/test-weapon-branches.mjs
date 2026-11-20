@@ -27,7 +27,7 @@ const branchFire = async (hero, branches) => {
   const out = {};
   for (const br of branches) {
     const p = await open({ key: 'GameScene', run: { chapter: 'hulao', westStage: 2, character: hero } });
-    await p.evaluate(br => { const s = window.__S; window.__calm(); const w = s.player.weapons[0]; w.level = 5; w.branch = br; w.over = 0; s.player.stats.cooldownMul = .5; for (const a of s.allies) if (a.active) a.hp = Math.max(1, a.maxHp * .4); }, br);
+    await p.evaluate(br => { const s = window.__S; window.__calm(); const w = s.player.weapons[0]; w.level = 5; w.branch = br; w.over = 0; s.player.stats.cooldownMul = .5; if (br === 'lb_rende') s.legion.recruit('swordsman', 2, true); for (const a of s.allies) if (a.active) a.hp = Math.max(1, a.maxHp * .4); }, br); // 仁德：存档没部曲时先招两名，再打伤
     for (let k = 0; k < 4; k++) { await p.evaluate(() => { const s = window.__S; for (let i = 0; i < 10; i++) { const a = i / 10 * Math.PI * 2; s.spawnEnemy(i % 3 ? 'infantry' : 'shield', s.player.x + Math.cos(a) * 110, s.player.y + Math.sin(a) * 110, 3, true); } if (s.player.sprite) s.player.sprite.x += 90; window.__calm(); }); await p.waitForTimeout(1400); }
     out[br] = await p.evaluate(() => { const r = window.__S.branchRt; return r ? { ...r.stats } : null; });
     if (br === 'gy_qinglong') await p.screenshot({ path: `${OUT}/branch-gy-qinglong.png` });

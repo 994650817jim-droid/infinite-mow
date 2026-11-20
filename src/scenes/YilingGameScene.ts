@@ -65,7 +65,7 @@ export function yilingGameSceneClass(Base: typeof GameScene, cfg: ArcSceneConfig
         for (let i = 0; i < CAMPS.count; i++) {
           const a = i / CAMPS.count * Math.PI * 2 + .3, r = CAMPS.ringMin + (i % 2) * (CAMPS.ringMax - CAMPS.ringMin);
           const t = s.env.placeTent(p.x + Math.cos(a) * r, p.y + Math.sin(a) * r * .75, `fixed-yiling-camp-${i}`, CAMPS.hp, 3);
-          if (t) this.camps.push(t);
+          if (t) { this.camps.push(t); (this as unknown as GameScene).markGate(t, 'tent'); } // 连营：所有武器都打、舆图 / 屏外提示、营寨攻坚小营帐档
         }
       } else if (this.arcStage === 3) {
         // 我军连营：主将前方（北面）成排营帐，火烧过来会一片片塌

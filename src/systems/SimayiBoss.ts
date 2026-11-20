@@ -39,11 +39,17 @@ export class SimayiBoss extends ArcBossV2<Move> {
     super(h, tex, '司马懿', now);
     const b = h.boss;
     for (let i = 0; i < SMY.forts; i++) { const a = i / SMY.forts * Math.PI * 2 + Math.PI / 4, f = x.placeFort(b.x + Math.cos(a) * SMY.fortRadius, b.y + Math.sin(a) * SMY.fortRadius * .8, i); if (f) this.forts.push(f); }
-    this.volleyAt = now + 2500; this.ambushAt = now + 6000;
+    this.volleyAt = now + 2500; this.ambushAt = now + 6000; this.remindAt = now + 6000; // 先拆营垒提醒：首领登场题字过了再说
     h.banner('司马懿坚守不出', `营垒在时司马懿不出营 · 拆掉 ${this.forts.length} 座营垒`);
   }
   get fortsAlive(): number { return this.forts.filter(f => f.active).length; }
-  protected takenMul(): number { return this.phase === 'hold' && this.fortsAlive > 0 ? SMY.fortTakenMul : 1; }
+  private remindAt = 0;
+  /** 坚守时受伤 ×fortTakenMul；被打时每 10 秒提醒一次先拆营垒（原来只有开场横幅和血条小字，打他半天不掉血不知道为什么）。 */
+  protected takenMul(): number {
+    const hold = this.phase === 'hold' && this.fortsAlive > 0;
+    if (hold && this.kit.now >= this.remindAt) { this.remindAt = this.kit.now + 10000; this.h.banner('司马懿坚守营中', `先拆营垒（还剩 ${this.fortsAlive} 座）· 营垒在时打他只掉一成`); }
+    return hold ? SMY.fortTakenMul : 1;
+  }
   get label(): string {
     if (this.state === 'dead') return '司马懿退兵';
     if (this.phase === 'hold') return `坚守不出 · 营垒 ${this.fortsAlive}/${this.forts.length} · 拆光营垒逼他出营`;

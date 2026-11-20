@@ -153,7 +153,7 @@ export class SishuiPass {
   update(): void {
     const now = this.h.now(), P = SISHUI_PASS, p = this.h.player;
     this.strikes.update();
-    if (!this.tentsPlaced && this.o.tents !== false && this.h.envReady()) { this.tentsPlaced = true; (this.o.tentSpots ?? P.tents).forEach(([dx, dy], i) => { const x = this.start.x + dx, y = this.start.y + dy, e = this.h.placeTent(x, y, `fixed-${this.tag}-tent-${i}`, P.tentHp, this.o.tentFaction); this.tents.push({ e, x, y, at: 0, down: !e, members: [] }); }); }
+    if (!this.tentsPlaced && this.o.tents !== false && this.h.envReady()) { this.tentsPlaced = true; (this.o.tentSpots ?? P.tents).forEach(([dx, dy], i) => { const x = this.start.x + dx, y = this.start.y + dy, e = this.h.placeTent(x, y, `fixed-${this.tag}-tent-${i}`, P.tentHp, this.o.tentFaction); const t = { e, x, y, at: 0, down: !e, members: [] as Array<{ e: Enemy; life: number }> }; this.tents.push(t); if (e) this.h.tent?.armor?.(e, 'tent', { guards: false, onAlarm: () => { if (t.at > 0) t.at = Math.min(t.at, this.h.now()); } }); }); } // 关前营帐：小营帐档营寨攻坚
     // 箭楼：放箭雨；被打塌换毁坏帧、掉战功、主将短时攻击加成
     for (const t of this.towers) {
       if (t.down) continue;
@@ -171,7 +171,7 @@ export class SishuiPass {
         if (full || (this.h.tent?.crowd() ?? 0) >= SPAWN_TENT.crowdCap) { if (now >= t.at - SPAWN_TENT.musterMs) t.at = now + 1000; continue; } // 本帐兵满 / 同屏太多：先不出，被杀了再补
         if (!warn && !t.warned && now >= t.at - SPAWN_TENT.musterMs) { t.warned = true; tentMuster(this.h.scene, t.x, t.y + 40, SPAWN_TENT.musterMs); } // 帐篷口扬尘：要出兵了
         if (warn && !t.warned && now >= t.at - warn) { t.warned = true; this.metrics.warns++; playSheet(this.h.scene, 'fx_collapse_dust', t.x, t.y + 10, { size: 170, ms: warn, depth: actorDepth(t.y) + .3, originY: .8, name: this.tag + '-tent-warn' }); this.h.sfx('chargeWarn'); if (this.metrics.warns === 1) this.h.banner('营中有伏兵', true, '看到营帐扬尘就是伏兵要冲出 · 烧掉营帐断其伏兵'); }
-        if (now >= t.at) { t.at = now + tentIntervalMs(ch, t.e ? t.e.hp / Math.max(1, t.e.maxHp) : 1, this.gateOpen || (this.h.tent?.bossOn() ?? false)); t.warned = false; const n = this.o.tentCount ?? P.tentRiders, p0 = this.h.player, a = Math.atan2(p0.y - t.y, p0.x - t.x); for (let k = 0; k < n && t.members.length < cap; k++) { const o = (k - (n - 1) / 2) * 44, u = this.h.spawn(this.o.tentRider ?? 'cavalry', t.x + Math.cos(a) * 60 - Math.sin(a) * o, t.y + 30 + Math.sin(a) * 60 + Math.cos(a) * o); if (u) { this.metrics.rides++; t.members.push({ e: u, life: u.spawnId }); } } } }
+        if (now >= t.at) { t.at = now + tentIntervalMs(ch, t.e ? t.e.hp / Math.max(1, t.e.maxHp) : 1, this.gateOpen || (this.h.tent?.bossOn() ?? false)) * (this.h.tent?.campMul?.(t.e) ?? 1); t.warned = false; const n = this.o.tentCount ?? P.tentRiders, p0 = this.h.player, a = Math.atan2(p0.y - t.y, p0.x - t.x); for (let k = 0; k < n && t.members.length < cap; k++) { const o = (k - (n - 1) / 2) * 44, u = this.h.spawn(this.o.tentRider ?? 'cavalry', t.x + Math.cos(a) * 60 - Math.sin(a) * o, t.y + 30 + Math.sin(a) * 60 + Math.cos(a) * o); if (u) { this.metrics.rides++; t.members.push({ e: u, life: u.spawnId }); } } } }
     }
     if (!this.allTentsDown && this.tents.length && this.tents.every(t => t.down)) { this.allTentsDown = true; this.h.banner((this.o.campName ?? '西凉营寨') + '尽毁', true, '敌军后继乏力 · 余下来兵变稀'); }
     if (this.buffed && now >= this.buffUntil) { this.buffed = false; p.stats.damageMul /= P.buffMul; }

@@ -1,6 +1,9 @@
 import Phaser from 'phaser';
 import { DEPTH, GAME_HEIGHT, GAME_WIDTH, actorDepth } from '../config';
 import { playSheet } from './SkillFxSheets';
+import type { Enemy } from '../entities/Enemy';
+import type { CampTier } from '../data/campSiege';
+import type { CampOpts } from './CampSiege';
 
 /**
  * 刷兵帐篷的共用部分（规则数值在 data/spawnTents.ts）：
@@ -16,6 +19,10 @@ export interface TentCtx {
   sfx?: (key: string) => void;
   /** 拆营奖励：随军粮 n；food = 掉一份干粮（BattleHeal）。 */
   reward?: (x: number, y: number, grain: number, food: boolean) => void;
+  /** 营寨攻坚登记（systems/CampSiege：耐久按章节、每秒掉血上限、半血起火伏兵、守将…）。 */
+  armor?: (e: Enemy, tier: CampTier, opts?: CampOpts) => void;
+  /** 本营出兵间隔倍率（正被攻打时更急）。 */
+  campMul?: (e: Enemy | null | undefined) => number;
 }
 export interface TentMark { x: number; y: number; ratio: number; hit: boolean; /** 正在刷兵（主将在激活范围内）。 */ awake: boolean; /** 已是破营目标（舆图已经画了，不重复）。 */ objective?: boolean }
 

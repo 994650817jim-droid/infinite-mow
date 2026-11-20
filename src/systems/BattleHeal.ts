@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { DEPTH, FONT, GAME_HEIGHT, GAME_WIDTH, actorDepth } from '../config';
-import { BATTLE_HEAL, HEAL_SPOT_ART, HEAL_SPOT_NAME, type HealSpotKind } from '../data/battleHeal';
+import { BATTLE_HEAL, HEAL_SPOT_ART, type HealSpotKind } from '../data/battleHeal';
 import type { PhasePlan } from '../data/stagePhases';
 import type { PropLootKind } from '../data/propLoot';
 import type { Enemy } from '../entities/Enemy';
@@ -22,15 +22,15 @@ export interface BattleHealHost {
   /** 场景可放东西的位置（夹进场地、避开水 / 树 / 墙）。 */
   place: (x: number, y: number) => { x: number; y: number };
   /** 往药囊那套地上药品里丢一份（拾取进药囊）；放不了返回 false。 */
-  dropPotion: (x: number, y: number, amount: number, name: string) => boolean;
+  dropPotion: (x: number, y: number, amount: number, name: string, from?: { x: number; y: number }) => boolean;
   /** 画面被全屏面板挡着（屏外箭头先藏）。 */
   overlay: () => boolean;
   sfx: (key: string) => void;
   notice: (text: string) => void;
 }
-interface Food { img: Phaser.GameObjects.Image; x: number; y: number; until: number; ratio: number; name: string; active: boolean; flying: boolean; born: number }
+interface Food { img: Phaser.GameObjects.Image; x: number; y: number; until: number; ratio: number; name: string; active: boolean; flying: boolean; born: number; /** 从掉落处蹦到落点：起点与落地时刻。 */ sx: number; sy: number; landAt: number }
 interface Spot {
-  kind: HealSpotKind; x: number; y: number; img: Phaser.GameObjects.Image; ring: Phaser.GameObjects.Graphics; ambAt?: number; label: Phaser.GameObjects.Text;
+  kind: HealSpotKind; x: number; y: number; img: Phaser.GameObjects.Image; ring: Phaser.GameObjects.Graphics; ambAt?: number;
   arrow: Phaser.GameObjects.Container;
   /** 剩余水量（0–1，乘 spot.charge 的最大生命比例）；冷却到什么时刻（elapsed 秒）。 */
   left: number; readyAt: number; fxAt: number; boss: boolean;
@@ -45,7 +45,27 @@ export class BattleHeal {
   private lowHpUsed = 0;
   private wasLow = false;
   /** 测试 / 平衡用：各来源实际回了多少（最大生命比例累加）、发生次数。 */
-  readonly stats = { food: 0, foodEaten: 0, foodDropped: 0, spot: 0, spotsSpawned: 0, spotUses: 0, medicineDropped: 0, lowHpDrops: 0 };
+  readonly stats = { food: 0, foodEaten: 0, foodDropped: 0, spot: 0, spotsSpawned: 0, spotUses: 0, medicineDropped: 0, lowHpDrops: 0, nudged: 0 };
+
+  /** 画面里（留 pad 边）吗。 */
+  private inView(x: number, y: number, pad: number = BATTLE_HEAL.drop.viewPad): boolean { const v = this.h.scene.cameras.main.worldView; return x > v.left + pad && x < v.right - pad && y > v.top + pad && y < v.bottom - pad; }
+  /**
+   * 掉落点：离主将不足 minDrop 时从掉落处往外蹦到 minDrop–minDrop+spread（方向 = 主将 → 掉落处，挪进画面里）；够远就落在原处。
+   * 用户 11-20「关于战场上的回血不要一下子刷在角色脸上」。
+   */
+  landing(x: number, y: number): { x: number; y: number; moved: boolean } {
+    const P = this.h.player(), D = BATTLE_HEAL.drop, d = Math.hypot(x - P.x, y - P.y);
+    if (d >= D.minDrop) return { x, y, moved: false };
+    const a0 = d > 1 ? Math.atan2(y - P.y, x - P.x) : Math.random() * Math.PI * 2;
+    let best: { x: number; y: number } | null = null;
+    for (const da of [0, .5, -.5, 1, -1, 1.6, -1.6, Math.PI]) { // 先试原方向，挤到画面外 / 墙里就偏一点
+      const a = a0 + da, r = D.minDrop + Math.random() * D.spread, p = this.h.place(P.x + Math.cos(a) * r, P.y + Math.sin(a) * r), pd = Math.hypot(p.x - P.x, p.y - P.y);
+      if (pd >= D.minDrop * .9 && this.inView(p.x, p.y)) { best = p; break; }
+      best ??= p;
+    }
+    this.stats.nudged++;
+    return { ...best!, moved: true };
+  }
 
   constructor(private readonly h: BattleHealHost) {
     const s = h.scene, W = HEAL_SPOT_ART.water;
@@ -72,16 +92,18 @@ export class BattleHeal {
     if (!d || rng() >= d.chance) return;
     this.dropFood(x + 14, y + 12, d.ratio, d.name);
   }
+  /** 放一份干粮 / 酒肉（从 x, y 掉出来；离主将太近就蹦远一点再落地）。 */
   dropFood(x: number, y: number, ratio: number, name: string): Food | null {
     const s = this.h.scene, F = BATTLE_HEAL.food;
     let f = this.foods.find(o => !o.active);
-    if (!f) { if (this.foods.length >= F.max) return null; f = { img: s.add.image(0, 0, 'yellow_props', 16).setName('heal-food'), x: 0, y: 0, until: 0, ratio, name, active: false, flying: false, born: 0 }; this.foods.push(f); }
+    if (!f) { if (this.foods.length >= F.max) return null; f = { img: s.add.image(0, 0, 'yellow_props', 16).setName('heal-food'), x: 0, y: 0, until: 0, ratio, name, active: false, flying: false, born: 0, sx: 0, sy: 0, landAt: 0 }; this.foods.push(f); }
     const grain = name === BATTLE_HEAL.food.grain.name;
     // 图：新图（heal_food 0 干粮 / 1 酒肉）到了用新图；先借营地粮袋（干粮）、酒葫芦（酒肉）
     if (s.textures.exists('heal_food')) f.img.setTexture('heal_food', grain ? 0 : 1).setDisplaySize(58, 58); // 物件约占格子六成宽
     else if (grain || !s.textures.exists('heal_props')) f.img.setTexture('yellow_props', 16).setDisplaySize(42, 42);
     else f.img.setTexture('heal_props', 2).setDisplaySize(36, 36);
-    Object.assign(f, { x, y, until: this.h.now() + F.lifeMs, ratio, name, active: true, flying: false, born: this.h.now() });
+    const at = this.landing(x, y), now = this.h.now();
+    Object.assign(f, { x: at.x, y: at.y, sx: x, sy: y, landAt: at.moved ? now + BATTLE_HEAL.drop.hopMs : now, until: now + F.lifeMs, ratio, name, active: true, flying: false, born: now });
     f.img.setPosition(x, y).setOrigin(.5, f.img.texture.key === 'heal_food' ? .74 : .8).setAlpha(1).setVisible(true).setDepth(DEPTH.gem + 1);
     this.stats.foodDropped++;
     return f;
@@ -97,7 +119,8 @@ export class BattleHeal {
   /** 副将倒下：必掉一份（回得多一点）。 */
   onLieutenantDown(x: number, y: number): boolean { return this.medicine(x, y, BATTLE_HEAL.medicine.lieutenantRatio); }
   private medicine(x: number, y: number, ratio: number): boolean {
-    const P = this.h.player(), ok = this.h.dropPotion(x, y + 10, P.maxHp * ratio, BATTLE_HEAL.medicine.name);
+    // 落在尸体处；离主将太近就从尸体处蹦远一点（不飞到主将身上）
+    const P = this.h.player(), at = this.landing(x, y + 10), ok = this.h.dropPotion(at.x, at.y, P.maxHp * ratio, BATTLE_HEAL.medicine.name, at.moved ? { x, y: y + 10 } : undefined);
     if (ok) this.stats.medicineDropped++;
     return ok;
   }
@@ -118,7 +141,8 @@ export class BattleHeal {
     for (let i = 0; i < 12; i++) {
       const a = a0 + i / 12 * Math.PI * 2, r = S.near + Math.random() * (S.far - S.near), p = this.h.place(P.x + Math.cos(a) * r, P.y + Math.sin(a) * r);
       const d = Math.hypot(p.x - P.x, p.y - P.y), clash = this.spots.some(o => Math.hypot(o.x - p.x, o.y - p.y) < 260);
-      const score = (d >= S.near * .6 && d <= S.far * 1.2 ? 0 : 1000) + (clash ? 500 : 0) + Math.abs(d - (S.near + S.far) / 2) * .1;
+      // 离主将 ≥ minDrop、在画面里（或刚好在边上）优先
+      const score = (d >= BATTLE_HEAL.drop.minDrop && d <= S.far * 1.1 ? 0 : 1000) + (this.inView(p.x, p.y, -40) ? 0 : 600) + (clash ? 500 : 0) + Math.abs(d - (S.near + S.far) / 2) * .1;
       if (!best || score < best.score) best = { ...p, score };
     }
     return best!;
@@ -133,16 +157,22 @@ export class BattleHeal {
       : kind === 'well' ? s.add.image(x, y, W.key, 2).setOrigin(.5, .82).setDisplaySize(150, 150).setDepth(actorDepth(y))
         : s.add.image(x, y, W.key, 0).setOrigin(.5, .55).setDisplaySize(170, 170).setDepth(DEPTH.ground + 3);
     img.setName('heal-spot-' + kind);
-    // 水井立着：圈画在井前（往下挪）；泉眼平铺：圈就在泉上
+    // 水井立着：回血范围在井前（往下挪）；泉眼平铺：就在泉上。不写名签（用户 11-20「不需要文字说明」）：可用时水面泛手绘微光，冷却时变暗
     const cy = kind === 'well' ? y + 52 : y;
     const ring = s.add.graphics().setDepth(DEPTH.ground + 3.5).setName('heal-spot-ring');
-    // 字：泉眼写在泉下面（主将站在泉上，头顶是「主将」名牌），水井 / 药草丛写在上面
-    const label = s.add.text(x, kind !== 'well' ? y + 74 : y - 132, '', { fontFamily: FONT, fontSize: '13px', color: '#c8ffd8', align: 'center', resolution: 2, stroke: '#08180e', strokeThickness: 4 }).setOrigin(.5, kind !== 'well' ? 0 : 1).setDepth(DEPTH.dmgText - 2).setName('heal-spot-label');
-    const spot: Spot = { kind, x, y: cy, img, ring, label, arrow: this.makeArrow(), left: 1, readyAt: 0, fxAt: 0, boss };
+    const spot: Spot = { kind, x, y: cy, img, ring, arrow: this.makeArrow(), left: 1, readyAt: 0, fxAt: 0, boss };
     this.spots.push(spot); this.stats.spotsSpawned++;
+    this.tipOnce();
     return spot;
   }
-  private removeSpot(sp: Spot): void { sp.img.destroy(); sp.ring.destroy(); sp.label.destroy(); sp.arrow.destroy(); this.spots = this.spots.filter(o => o !== sp); }
+  private removeSpot(sp: Spot): void { sp.img.destroy(); sp.ring.destroy(); sp.arrow.destroy(); this.spots = this.spots.filter(o => o !== sp); }
+  /** 第一次见到回血点：只提示一次（整个存档一次，记在 localStorage）。 */
+  private tipOnce(): void {
+    const K = 'im_tip_heal_spot'; let seen = false;
+    try { seen = localStorage.getItem(K) === '1'; if (!seen) localStorage.setItem(K, '1'); } catch { seen = this.tipShown; }
+    if (seen || this.tipShown) return; this.tipShown = true; this.h.notice('泉眼 / 水井 / 药草丛：站上去回血');
+  }
+  private tipShown = false;
   private clearSpots(): void { for (const sp of [...this.spots]) this.removeSpot(sp); }
 
   private makeArrow(): Phaser.GameObjects.Container {
@@ -151,7 +181,7 @@ export class BattleHeal {
     parts.push(s.add.text(0, 0, '', { fontFamily: FONT, fontSize: '12px', color: '#c8ffd8', resolution: 2, stroke: '#08180e', strokeThickness: 4 }).setOrigin(.5).setName('ha-text'));
     return s.add.container(0, 0, parts).setScrollFactor(0).setDepth(DEPTH.hud + 1).setName('heal-spot-arrow').setVisible(false);
   }
-  /** 屏外箭头（同机缘箭头的版式，换成青绿色）：只在受伤、泉眼可用、又看不到它时出。 */
+  /** 屏外箭头（同机缘箭头的版式，换成青绿色；只有图标 + 距离数字，不写字）：只在受伤、泉眼可用、又看不到它时出。 */
   private drawArrow(sp: Spot, show: boolean): void {
     if (!show || this.h.overlay()) { sp.arrow.setVisible(false); return; }
     const cam = this.h.scene.cameras.main, v = cam.worldView, kx = GAME_WIDTH / v.width, ky = GAME_HEIGHT / v.height;
@@ -166,24 +196,24 @@ export class BattleHeal {
     g.clear().fillStyle(0x08180e, .6).fillCircle(0, 0, 17).lineStyle(1.5, 0x9be8b4, .95).strokeCircle(0, 0, 17)
       .fillStyle(0x7fe0a0, 1).fillTriangle(dx * 26, dy * 26, Math.cos(a + 2.6) * 10 + dx * 18, Math.sin(a + 2.6) * 10 + dy * 18, Math.cos(a - 2.6) * 10 + dx * 18, Math.sin(a - 2.6) * 10 + dy * 18);
     const P = this.h.player(), d = Math.round(Math.hypot(sp.x - P.x, sp.y - P.y));
-    (sp.arrow.getByName('ha-text') as Phaser.GameObjects.Text).setText(HEAL_SPOT_NAME[sp.kind] + ' · ' + d + ' 步').setPosition(-dx * 46, -dy * 30 + (Math.abs(dy) < .5 ? 22 : 0));
+    (sp.arrow.getByName('ha-text') as Phaser.GameObjects.Text).setText(String(d)).setPosition(-dx * 46, -dy * 30 + (Math.abs(dy) < .5 ? 22 : 0));
   }
 
   // —— 低血保护 ——
   private lowHpCheck(t: number): void {
     const P = this.h.player(), L = BATTLE_HEAL.lowHp, low = P.alive && P.hp < P.maxHp * L.below;
     if (low && !this.wasLow && this.lowHpUsed < L.perStage && t - this.lowHpAt >= L.cooldownSec) {
-      // 往敌人最少的方向放（试 8 个方向，数 140 内的敌兵）
+      // 往敌人最少的方向放（试 8 个方向，数 140 内的敌兵）；夹进场地后实际距离要在 minDrop–maxDrop、在画面里（不落在主将身上、也不跑出屏幕）
+      const D = BATTLE_HEAL.drop;
       let best: { x: number; y: number; n: number } | null = null;
       for (let i = 0; i < 8; i++) {
         const a = i / 8 * Math.PI * 2, r = L.dist[0] + Math.random() * (L.dist[1] - L.dist[0]), p = this.h.place(P.x + Math.cos(a) * r, P.y + Math.sin(a) * r);
         let n = 0; for (const e of this.h.enemies()) if (e.active && !e.isSupplySlot && Math.abs(e.x - p.x) < 140 && Math.abs(e.y - p.y) < 140) n++;
-        if (Math.hypot(p.x - P.x, p.y - P.y) < 90) n += 50;
+        const pd = Math.hypot(p.x - P.x, p.y - P.y); if (pd < D.minDrop || pd > D.maxDrop) n += 50; if (!this.inView(p.x, p.y)) n += 30;
         if (!best || n < best.n) best = { ...p, n };
       }
       if (best && this.h.dropPotion(best.x, best.y, P.maxHp * L.ratio, BATTLE_HEAL.medicine.name)) {
-        this.lowHpAt = t; this.lowHpUsed++; this.stats.lowHpDrops++;
-        this.h.notice('军医送来伤药 · 就在附近');
+        this.lowHpAt = t; this.lowHpUsed++; this.stats.lowHpDrops++; // 不打字：落点泛一下手绘符水光
         playSheet(this.h.scene, 'fx_heal_fushui', best.x, best.y - 10, { size: 70, depth: actorDepth(best.y) + .05, ms: 700, alpha: .8, tint: 0xbff0c0 });
       }
     }
@@ -194,11 +224,12 @@ export class BattleHeal {
     const t = this.h.elapsed(), now = this.h.now(), P = this.h.player(), F = BATTLE_HEAL.food, S = BATTLE_HEAL.spot;
     const hurt = P.alive && P.hp < P.maxHp - .5;
     // 排好的泉眼：首领那一处在首领段前出；其余首领出场后不再刷
-    for (const e of this.schedule) if (!e.fired && t >= e.at && (e.boss || !bossOn)) { e.fired = true; const p = this.spotPoint(); if (this.spawnSpot(p.x, p.y, e.boss) && e.boss) this.h.notice('首领将至 · 附近有' + HEAL_SPOT_NAME[this.spots[this.spots.length - 1].kind] + '可以回血'); }
+    for (const e of this.schedule) if (!e.fired && t >= e.at && (e.boss || !bossOn)) { e.fired = true; const p = this.spotPoint(); this.spawnSpot(p.x, p.y, e.boss); }
     // 干粮 / 酒肉
     for (const f of this.foods) {
       if (!f.active) continue;
       if (now >= f.until) { f.active = false; f.img.setVisible(false); continue; }
+      if (now < f.landAt) { const k = 1 - (f.landAt - now) / BATTLE_HEAL.drop.hopMs; f.img.setPosition(f.sx + (f.x - f.sx) * k, f.sy + (f.y - f.sy) * k - Math.sin(k * Math.PI) * 46); continue; } // 从掉落处蹦出去
       const d = Math.hypot(P.x - f.x, P.y - f.y);
       if (hurt && (f.flying || d < F.magnetR)) {
         f.flying = true; const step = Math.min(d, F.flySpeed * dt); f.x += (P.x - f.x) / (d || 1) * step; f.y += (P.y - 10 - f.y) / (d || 1) * step;
@@ -223,7 +254,7 @@ export class BattleHeal {
         const want = Math.min(S.rate * dt, sp.left * S.charge, (P.maxHp - P.hp) / P.maxHp);
         P.heal(want * P.maxHp); sp.left -= want / S.charge; this.stats.spot += want;
         if (now >= sp.fxAt) { sp.fxAt = now + 650; playSheet(this.h.scene, 'fx_heal_fushui', P.x, P.y - 14, { size: 84, depth: actorDepth(P.y) + .1, ms: 640, alpha: .8, tint: 0xbff0e0 }); }
-        if (sp.left <= .001) { sp.left = 0; sp.readyAt = t + S.cooldownSec; this.stats.spotUses++; this.h.sfx('pickup'); this.h.notice(HEAL_SPOT_NAME[sp.kind] + '的水用完了 · ' + S.cooldownSec + ' 秒后再满'); }
+        if (sp.left <= .001) { sp.left = 0; sp.readyAt = t + S.cooldownSec; this.stats.spotUses++; this.h.sfx('pickup'); } // 水用完：变暗（不打字）
       }
       const cool = !ready, R = S.radius, pulse = .45 + .25 * Math.sin(t * 3.4);
       sp.img.setTint(cool ? 0x7f8a90 : 0xffffff).setAlpha(cool ? .82 : 1);
@@ -231,8 +262,6 @@ export class BattleHeal {
       // 用户 2026-11-20「不要这些圈 / 或者换个特效」：不画地面圈和进度弧，改为水面上偶尔泛起手绘符水微光（可用时），剩余水量写在名签上
       sp.ring.clear();
       if (!cool && !using && now >= (sp.ambAt ?? 0)) { sp.ambAt = now + 1700; playSheet(this.h.scene, 'fx_heal_fushui', sp.x, sp.y - 6, { size: Math.round(R * 1.1), depth: DEPTH.ground + 3.6, ms: 900, alpha: .45, tint: 0xbff0e0 }); }
-      const left = Math.round(sp.left * 100);
-      sp.label.setText(HEAL_SPOT_NAME[sp.kind] + (cool ? ' · ' + Math.ceil(sp.readyAt - t) + ' 秒后水满' : using ? ' · 回血中 ' + left + '%' : left < 100 ? ' · 站上去回血 · 余 ' + left + '%' : ' · 站上去回血')).setColor(cool ? '#b8c4c0' : '#c8ffd8');
       this.drawArrow(sp, ready && P.alive && P.hp < P.maxHp * S.arrowBelow);
     }
     this.lowHpCheck(t);

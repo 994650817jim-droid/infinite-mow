@@ -169,11 +169,12 @@ export class BattlefieldSupplies {
  breakEnv(enemy:Enemy):void{if(!enemy.active)return;enemy.deactivate();this.onBroken(enemy);}
  /** 在指定位置掉一份回血补给（营帐掉落用）。 */
  /** 军中伤药等（systems/BattleHeal）：地上放一份药，拾取进药囊（回复量 amount），药囊满了且受伤时直接服下。 */
- dropPotion(x:number,y:number,amount:number,name:string):boolean{
+ dropPotion(x:number,y:number,amount:number,name:string,from?:{x:number;y:number}):boolean{
   let potion=this.potions.find(p=>!p.active);
   if(!potion){if(this.potions.length>=12)return false;potion={image:this.scene.add.image(0,0,potionTexture(this.scene)).setDepth(DEPTH.gem+1),until:0,active:false};this.potions.push(potion);}
   potion.active=true;potion.until=this.now()+60000;potion.amount=amount;potion.name=name;potion.instant=true;
   potion.image.setTexture(potionTexture(this.scene)).setPosition(x,y).setDisplaySize(...this.potionSize()).setAlpha(1).setVisible(true);
+  if(from){const img=potion.image;img.setPosition(from.x,from.y);this.scene.tweens.addCounter({from:0,to:1,duration:BATTLE_HEAL.drop.hopMs,onUpdate:tw=>{const k=tw.getValue()??0;img.setPosition(from.x+(x-from.x)*k,from.y+(y-from.y)*k-Math.sin(k*Math.PI)*46);}});} // 从尸体 / 掉落处蹦出去（不砸在主将脸上）
   return true;
  }
  dropHeal(x:number,y:number,kind:HealProp='herb'):void{

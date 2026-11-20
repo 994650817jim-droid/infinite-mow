@@ -86,8 +86,9 @@ export const QUNXIONG_STORY: StoryChapter = {
       after: [{ id: 'qunxiong-2.dianwei', type: 'interlude', kicker: '幕间', title: '古之恶来', lines: [
         { who: 'dianwei', text: '（拄双戟大笑）哈！某这双戟，还没砍够！', ifFlag: 'dianwei=saved' },
         { who: 'caocao', text: '{lord}救我恶来，此恩操记下了。', ifFlag: 'dianwei=saved' },
-        { text: '典韦独守营门，身被数十创，至死不退。', ifFlag: '!dianwei=saved' },
-        { who: 'caocao', text: '吾折长子、爱侄，俱无深痛；独号泣典韦也！', ifFlag: '!dianwei=saved' },
+        // 没救下：不写战死（典韦是第二批可玩武将，曹魏支线曹操归附时伤愈随来，没有永久错过——同黄忠「负伤遁去」）
+        { text: '典韦独守营门，身被数十创，力尽倒地。曹军拼死将他抢回，生死未卜。', ifFlag: '!dianwei=saved' },
+        { who: 'caocao', text: '吾折长子、爱侄，俱无深痛；恶来若有不测，操何以自处！', ifFlag: '!dianwei=saved' },
       ] }],
     },
     3: {

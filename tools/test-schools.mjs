@@ -69,7 +69,7 @@ ck('兵阵 4 势「援军」：后方冲来义军', fx.reinforce >= 3, fx);
 // 4. 军需商人
 const shop = await p.evaluate(async () => {
   const cm = await window.__mod('systems/CampMarket.ts'), builds = await window.__mod('data/builds.ts');
-  const lv = { ember: 2, spread: 1, chain: 1 }, book = { canLearn: id => (lv[id] ?? 0) < 3 && (lv[id] > 0 || Object.keys(lv).length < 6) && !builds.TACTICS[id].hidden, level: id => lv[id] ?? 0 };
+  const lv = { ember: 2, spread: 1, chain: 1 }, book = { canLearn: id => (lv[id] ?? 0) < 3 && (lv[id] > 0 || Object.keys(lv).length < 6) && !builds.TACTICS[id].hidden, level: id => lv[id] ?? 0, manualsRead: () => ['fire', 'stratagem', 'archery', 'cavalry', 'warrior', 'formation'] }; /* 只测战法卷轴的流派偏向：心法（第 4 期，势 ≥ 2 时 30% 换成心法）当作都读过，不混进样本 */
   let fire = 0, warrior = 0, n = 0; for (let i = 0; i < 2000; i++) { const o = cm.rollMerchantTactic(book, Math.random, 1); if (!o) continue; n++; const sc = builds.tacticSchool(o.id); if (sc === 'fire') fire++; if (sc === 'warrior') warrior++; }
   return { fire: fire / n, warrior: warrior / n, n };
 });

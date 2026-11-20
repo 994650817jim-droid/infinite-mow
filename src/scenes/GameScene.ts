@@ -5,6 +5,9 @@ import { HeroCastFx } from '../systems/HeroCastFx';
 import { MOUNT_VISUAL, isHorseCavalry } from '../data/mounts';
 import { buildSettingsPanel, type SettingSpec } from '../ui/SettingsPanel';
 import {FollowerSquad,type Follower} from '../systems/FollowerSquad';
+import {showBarkCard} from '../ui/StoryBarkCard';
+import type {DefectorInfo} from '../data/fortunes';
+import type {Recruit} from '../systems/RosterStore';
 import {CharacterPassives} from '../systems/CharacterPassives';
 import {FOLLOW} from '../data/recruits';
 import type {PlayerStats} from '../types';
@@ -2498,6 +2501,7 @@ export class GameScene extends Phaser.Scene {
   }
   protected killEnemy(enemy: Enemy): void {
     if (this.dzLubu?.preventKill(enemy)) return; // 2-3 吕布打到底不死：锁血逃走
+    if (!this.persuadeKill && this.fortunes?.preventKill(enemy)) return; // 机缘降将：试阵中打到底不死，跪地请降
     if (!this.persuadeKill && this.parley?.preventKill(enemy)) return; // 首领招降：没表态前不死
     if (!this.persuadeKill && this.dual?.preventKill(enemy)) return; // 双首领：每人一个招降窗
     if (!enemy.active) return;
@@ -3771,6 +3775,13 @@ export class GameScene extends Phaser.Scene {
         riderTexture: () => this.chapter.enemies.cavalry.walkVisual?.texture ?? 'enemy_cavalry_walk_sheet',
         banner: (t, d, c) => this.showWaveBanner(t, d, c), sfx: k => this.sfx.play(k),
         reward: (k, mult, x, y) => this.fortuneReward(k, mult, x, y),
+        // 降将来投（systems/FortuneDefector.ts）：副将一档的试阵对手、跪降后撤下、本关临时随从、左下角对话卡
+        duelist: (x, y) => this.phaseRunner?.spawnLieutenant(x, y) ?? this.spawnEnemy('elite', x, y, this.chapter.hpScale(this.elapsed), true),
+        troopTexture: () => this.chapter.enemies.infantry.walkVisual?.texture ?? 'enemy_infantry_walk_sheet',
+        now: () => this.combatNow,
+        retire: e => { e.invulnerable = false; e.hp = 0; this.persuadeKill = true; this.killEnemy(e); this.persuadeKill = false; },
+        joinAlly: (d, x, y) => this.joinDefector(d, x, y),
+        card: (name, text) => { if (storyMode() !== 'off') showBarkCard(this, { side: 'left', name, text }); },
         overlay: () => this.mode !== 'none' || this.over,
       }, plan);
       this.hudTexts.wave.setVisible(false);
@@ -3910,6 +3921,12 @@ export class GameScene extends Phaser.Scene {
     this.showWaveBanner('锦囊 · ' + JINNANG[id].name, false, JINNANG[id].desc.split('\n')[0]); this.sfx.play('gong');
     return true;
   }
+  /** 机缘降将归附：本关临时随从（随行系统；没有随行时现建一支），名牌「降将 · 名字」。不进人才库。 */
+  private joinDefector(d: DefectorInfo, x: number, y: number): Follower | null {
+    if (!this.followers) { this.followers = new FollowerSquad(this, this.player, [], (qx, qy, r) => this.grid.query(qx, qy, r), (e, dmg, fire) => this.hitEnemy(e, dmg, this.combatNow, fire ? 'fire' : 'melee', true, false), () => this.player.growth.damageMultiplier(this.combatNow)); this.followers.onHitFx = (e, k, fx, fy) => this.followerTemplateHitFx(e, k, fx, fy); this.followers.attackSound = t => this.sfx.play(FOLLOWER_ATTACK_SFX[t]); this.wireFollowerObstacles(this.followers); }
+    const r: Recruit = { id: 'fortune_defector_' + this.combatNow, kind: 'named', name: d.name, template: d.template, quality: 'purple', rank: 0, picks: [] };
+    const f = this.followers.addTemp(r, x, y); f.label.setText('降将 · ' + d.name); return f;
+  }
   /** 战场机缘各类事件的奖励（stage-event-rewards.md）；mult = 距离倍率 1–1.25。返回横幅小字。 */
   private fortuneReward(kind: FortuneEventKind, mult: number, x: number, y: number): string {
     const P = this.player, ch = this.phasePlan?.chapter ?? 2;
@@ -3985,6 +4002,7 @@ export class GameScene extends Phaser.Scene {
   protected finish(victory: boolean, reason: RunEndReason = 'death'): void {
     if (this.over) return;
     this.over = true;
+    if (victory) this.fortunes?.farewell(); // 机缘降将：本关结束告别一句
     commitBattle(); // 告捷（战报）与战败都按现行规则结算，本场写入生效
     this.player.passive.stop();
     // 动作层：胜利举兵器 / 战败倒地（有素材的武将才播放，播完定格）

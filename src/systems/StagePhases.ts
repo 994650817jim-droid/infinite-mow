@@ -73,12 +73,17 @@ export class StagePhaseRunner {
     this.h.sfx('gong');
   }
 
-  private lieutenant(name: string): void {
-    const base = this.h.def('elite'), P = this.h.player(), at = { x: P.x + (Math.random() < .5 ? -340 : 340), y: P.y - 80 }; // 从侧面进场（电脑版视野左右各 480，一出来就看得到）
-    const L = PHASES.lieutenantHp, g = Math.max(.1, this.h.growthHp()), boss = this.h.bossHp();
+  /** 副将一档的精锐（机缘「降将来投」试阵也用）：精锐 ×eliteMul，夹在参考首领的 35%–60%。 */
+  lieutenantDef(): EnemyDef {
+    const base = this.h.def('elite'), L = PHASES.lieutenantHp, g = Math.max(.1, this.h.growthHp()), boss = this.h.bossHp();
     const hp = Math.min(boss * L.maxBoss, Math.max(boss * L.minBoss, base.hp * g * L.eliteMul)) / g; // 最终生命 = hp × g（spawnEnemy 乘小兵成长）
-    const def: EnemyDef = { ...base, hp, damage: base.damage * 1.4, xp: base.xp * 6, radius: Math.round(base.radius * 1.2), speed: base.speed * .95 };
-    const e = this.h.spawn('elite', at.x, at.y, def); if (!e) return;
+    return { ...base, hp, damage: base.damage * 1.4, xp: base.xp * 6, radius: Math.round(base.radius * 1.2), speed: base.speed * .95 };
+  }
+  /** 刷一个副将一档的精锐（体型放大）。 */
+  spawnLieutenant(x: number, y: number): Enemy | null { const e = this.h.spawn('elite', x, y, this.lieutenantDef()); if (e) e.sprite.setScale(e.sprite.scaleX * PHASES.lieutenantScale); return e; }
+  private lieutenant(name: string): void {
+    const P = this.h.player(), at = { x: P.x + (Math.random() < .5 ? -340 : 340), y: P.y - 80 }; // 从侧面进场（电脑版视野左右各 480，一出来就看得到）
+    const e = this.h.spawn('elite', at.x, at.y, this.lieutenantDef()); if (!e) return;
     e.sprite.setScale(e.sprite.scaleX * PHASES.lieutenantScale);
     const s = this.h.scene;
     const tag = s.add.text(e.x, e.y, '副将 · ' + name, { fontFamily: FONT, fontSize: '13px', color: '#ffd98a', resolution: 2, stroke: '#2a0c06', strokeThickness: 4 }).setOrigin(.5, 1).setDepth(DEPTH.dmgText - 1).setName('lieutenant-tag');

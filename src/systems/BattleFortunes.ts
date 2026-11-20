@@ -5,6 +5,7 @@ import type { PhasePlan } from '../data/stagePhases';
 import type { Enemy } from '../entities/Enemy';
 import type { EnemyKind } from '../types';
 import { ordersOf } from './BattleOrders';
+import { FortuneDefector, type DefectorHost } from './FortuneDefector';
 
 /**
  * 战场机缘事件（wave-progression-redesign.md §2.1b；设计表 stage-event-rewards.md，2026-11-19）：
@@ -14,7 +15,7 @@ import { ordersOf } from './BattleOrders';
  * - 各类事件奖励不同（host.reward）：粮车 军粮 + 回春丹；军械库 兵装；传令兵 多一次军略三选一；义军 随冲 + 补员；降将 机缘三选一；烽燧 刷兵减半 + 回血。
  * - 屏幕标记（不依赖默认收起的军令面板）：出现横幅、地上「图标 + 名字 + 剩余秒数」与进度弧、屏外金色箭头（图标 + 距离）、军令表 side 条目（舆图小旗）。
  */
-export interface FortuneHost {
+export interface FortuneHost extends DefectorHost {
   scene: Phaser.Scene;
   player: () => { x: number; y: number; alive?: boolean };
   elapsed: () => number;
@@ -39,6 +40,8 @@ interface Live {
   arrow: Phaser.GameObjects.Container;
   /** 传令兵：开跑时刻（-1 = 还没看到你）。 */
   fleeAt: number;
+  /** 降将来投：出场 → 试阵 → 跪降 → 随战（systems/FortuneDefector.ts）。 */
+  defector?: FortuneDefector;
 }
 
 export class BattleFortunes {
@@ -46,6 +49,10 @@ export class BattleFortunes {
   private live: Live[] = [];
   /** 测试用。 */
   readonly stats = { spawned: [] as string[], done: [] as string[], lost: [] as string[], dist: [] as number[], rewards: [] as string[] };
+  /** 已归附、本关随战的降将（随战台词、关末告别）。 */
+  readonly allies: FortuneDefector[] = [];
+  /** 测试：当前 / 最近一位降将。 */
+  defector: FortuneDefector | null = null;
 
   constructor(private readonly h: FortuneHost, plan: PhasePlan, rnd: () => number = Math.random) {
     const at = (k: string) => plan.phases.find(p => p.kind === k)?.start;
@@ -59,6 +66,7 @@ export class BattleFortunes {
     const t = this.h.elapsed(), dt = this.lastT < 0 ? 0 : Math.max(0, Math.min(.1, t - this.lastT)); this.lastT = t;
     for (const s of this.schedule) if (!s.fired && t >= s.at && !bossOn) { s.fired = true; this.spawn(s.kind); }
     for (const L of this.live) if (!L.done && !L.gone) this.tick(L, t, dt);
+    for (const d of this.allies) d.allyTick(t);
     this.live = this.live.filter(L => !L.gone);
   }
   /** 测试 / 调试：立刻刷一个指定事件。 */
@@ -82,6 +90,7 @@ export class BattleFortunes {
     const L: Live = { kind, x: at.x, y: at.y, born: this.h.elapsed(), life: kind === 'armory' ? FORTUNE.armoryLifeSec : FORTUNE.lifeSec, hold: 0, done: false, gone: false, mult, dist: Math.round(at.d),
       guards: [], ring, label, icon, props, arrow: this.makeArrow(ev.icon), fleeAt: -1 };
     const guard = (k: EnemyKind, n: number, r: number) => { for (let i = 0; i < n; i++) { const g = i / n * Math.PI * 2 + Math.random() * .3, e = this.h.spawn(k, at.x + Math.cos(g) * r, at.y + Math.sin(g) * r * .7); if (e) L.guards.push({ e, life: e.spawnId }); } };
+    if (kind === 'defector') { L.defector = this.defector = new FortuneDefector(this.h, at.x, at.y); }
     if (kind === 'cart') guard('infantry', FORTUNE.cartGuards, 64);
     else if (kind === 'rescue') { guard('infantry', FORTUNE.rescueGuards - 2, 64); guard('shield', 2, 70); }
     else if (kind === 'armory') { guard('elite', FORTUNE.armoryElites, 80); guard('shield', FORTUNE.armoryShields, 96); }
@@ -99,7 +108,7 @@ export class BattleFortunes {
     else if (kind === 'beacon') img(29, 0, 8, 96)?.setTint(0x6a6058).setName('fortune-beacon');
     else if (kind === 'rescue') img(4, 0, 6, 84);
     else if (kind === 'courier') { const r = sprite(this.h.riderTexture(), 0, .6, 'fortune-courier'); if (!r) img(7, 0, 8, 64)?.setName('fortune-courier'); }
-    else { sprite(this.h.officerTexture(), 0, .62, 'fortune-defector'); img(7, 34, 8, 64)?.setTint(0xf2efe6); }
+    // 降将：人和旗由 FortuneDefector 自己画（走过来、插旗）
     return out;
   }
 
@@ -128,6 +137,7 @@ export class BattleFortunes {
   }
 
   private tick(L: Live, t: number, dt: number): void {
+    if (L.defector) { this.tickDefector(L, L.defector, t); return; }
     const P = this.h.player(), alive = P.alive !== false;
     // 传令兵：看到主将就往远处跑；chaseSec 秒内追到身边截下，否则逃走
     if (L.kind === 'courier') {
@@ -155,16 +165,31 @@ export class BattleFortunes {
     if (expired) this.lose(L);
   }
 
-  private complete(L: Live): void {
+  /** 降将：出场 / 等你走近时画圈与倒计时；试阵、跪降时标记跟着他；归附即完成（发三选一）。 */
+  private tickDefector(L: Live, D: FortuneDefector, t: number): void {
+    const r = D.tick(t); L.x = D.x; L.y = D.y;
+    if (r === 'yield') { this.allies.push(D); this.complete(L, D.info.name + '本关随你作战'); return; }
+    const pulse = .6 + .25 * Math.sin(t * 4), R = 150;
+    L.ring.clear(); if (D.waiting) L.ring.fillStyle(0xf0c060, .06).fillEllipse(L.x, L.y, R * 2, R * 1.4).lineStyle(2, 0xf0c060, pulse).strokeEllipse(L.x, L.y, R * 2, R * 1.4);
+    const left = Math.max(0, Math.ceil(L.life - (t - L.born)));
+    L.label.setText(D.waiting ? D.label() + ' · ' + left + ' 秒' : '').setPosition(L.x, L.y - 118); L.icon?.setVisible(D.waiting).setPosition(L.x, L.y - 148);
+    this.drawArrow(L);
+    if (D.waiting && t - L.born > L.life) this.lose(L);
+  }
+  /** 致命一击：试阵中的降将不死，改跪地请降。 */
+  preventKill(e: Enemy): boolean { for (const L of this.live) if (L.defector?.preventKill(e)) return true; return false; }
+  /** 本关结束：随战的降将告别一句。 */
+  farewell(): void { for (const d of this.allies) d.farewell(); }
+  private complete(L: Live, lead = ''): void {
     L.done = true; this.stats.done.push(L.kind); const ev = FORTUNE_EVENT[L.kind], s = this.h.scene;
     ordersOf(s)?.done('fortune-' + L.kind, ev.done);
     const beacon = L.props.find(o => o.name === 'fortune-beacon') as Phaser.GameObjects.Image | undefined; beacon?.clearTint();
     const got = this.h.reward(L.kind, L.mult, L.x, L.y); this.stats.rewards.push(L.kind + ':' + got);
-    this.h.sfx('gong'); this.h.banner('机缘 · ' + ev.done, false, got);
+    this.h.sfx('gong'); this.h.banner('机缘 · ' + ev.done, false, (lead ? lead + ' · ' : '') + got);
     this.fade(L, 900);
   }
   private lose(L: Live): void {
-    L.done = true; this.stats.lost.push(L.kind); ordersOf(this.h.scene)?.remove('fortune-' + L.kind);
+    L.done = true; this.stats.lost.push(L.kind); ordersOf(this.h.scene)?.remove('fortune-' + L.kind); L.defector?.leave();
     this.h.banner('机缘已失', false, FORTUNE_EVENT[L.kind].name + (L.kind === 'courier' ? ' 跑掉了' : ' 已经离去')); this.fade(L, 600);
   }
   private fade(L: Live, delay: number): void {
@@ -172,5 +197,5 @@ export class BattleFortunes {
     L.arrow.destroy();
     s.tweens.add({ targets: objs, alpha: 0, delay, duration: 700, onComplete: () => { for (const o of objs) o.destroy(); L.gone = true; ordersOf(s)?.remove('fortune-' + L.kind); } });
   }
-  clear(): void { for (const L of this.live) { L.ring.destroy(); L.label.destroy(); L.icon?.destroy(); L.arrow.destroy(); for (const o of L.props) o.destroy(); ordersOf(this.h.scene)?.remove('fortune-' + L.kind); } this.live = []; }
+  clear(): void { for (const d of this.allies) d.clear(); this.allies.length = 0; for (const L of this.live) { L.defector?.clear(); L.ring.destroy(); L.label.destroy(); L.icon?.destroy(); L.arrow.destroy(); for (const o of L.props) o.destroy(); ordersOf(this.h.scene)?.remove('fortune-' + L.kind); } this.live = []; }
 }

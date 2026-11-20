@@ -239,6 +239,8 @@ export class FollowerSquad {
     return { x: this.player.x + Math.cos(a) * r, y: this.player.y + Math.sin(a) * r };
   }
 
+  /** 本关临时随从（机缘「降将来投」）：不进人才库、不写存档，换关就没了。 */
+  addTemp(r: Recruit, x: number, y: number): Follower { const f = new Follower(this.scene, r, x, y, 1); f.slot = this.members.length; this.members.push(f); return f; }
   update(dt: number, now: number): void {
     const p = this.player, n = this.members.length, dmgShare = 1 + FOLLOW.shareLeaderDamage * (Math.max(.2, this.leaderDamage()) - 1); this.share = dmgShare;
     // 部曲 HUD 的「出击」也带上随行（护阵时紧贴主将）
@@ -637,7 +639,7 @@ export class FollowerSquad {
     else if (now < f.hurtUntil) f.sprite.setTintFill(0xffd0c0); else if (f.sprite.tintFill || f.sprite.isTinted) { f.sprite.clearTint(); if (!f.recruit.hero && f.sheet === 'hero_walk_sheet') f.sprite.setTint(QUALITIES[f.recruit.quality].color); }
     f.shadow.setPosition(f.x, f.y + 2); f.label.setPosition(f.x, f.y - 66);
     // 站得离主将太近时隐藏名牌和血条（用户 2026-11-18 截图：随行名牌 / 血条压在主将身上，和「主将」标记叠在一起）
-    const pl = this.player, near = Math.hypot(f.x - pl.x, f.y - pl.y) < 96; f.label.setAlpha(near ? 0 : 1);
+    const pl = this.player, near = Math.hypot(f.x - pl.x, f.y - pl.y) < 96; f.label.setAlpha(near && !f.recruit.id.startsWith('fortune_defector_') ? 0 : 1); // 机缘降将（临时随从）一直挂名牌
     f.sprite.setDepth(DEPTH.player - 1 + f.y / 100000);
     const w = 36, r = Math.max(0, f.hp / f.maxHp); f.bar.clear();
     if (r < 1 && !near) { f.bar.fillStyle(0x1a0f08, .8).fillRect(f.x - w / 2, f.y - 58, w, 4); f.bar.fillStyle(r > .4 ? 0x6fd06a : 0xe0603a, 1).fillRect(f.x - w / 2, f.y - 58, w * r, 4); }

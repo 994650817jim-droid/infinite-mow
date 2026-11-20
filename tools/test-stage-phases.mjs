@@ -86,14 +86,25 @@ await stageCase('3-2 宛城夜袭（ThirdGameScene）', { key: 'ThirdGameScene',
   for (let i = 0; i < 30 && await p.evaluate(() => !window.__S.fortunes.stats.done.includes('courier')); i++) { await p.evaluate(() => { const s = window.__S; if (s.mode !== 'none') { if (s.mode === 'levelup' || s.mode === 'bossloot') s.chooseUpgrade(0); else s.setMode('none'); } const L = s.fortunes.live.find(x => !x.done && x.kind === 'courier'); if (L) s.player.sprite.setPosition(L.x, L.y); }); await p.waitForTimeout(200); }
   const cr = await p.evaluate(() => ({ done: window.__S.fortunes.stats.done, reward: window.__S.fortunes.stats.rewards.find(r => r.startsWith('courier')) }));
   ck('P2 传令兵：看到你就往远处跑；追上截下 → 多一次军略三选一', fled.fleeing && fled.moved > 40 && cr.done.includes('courier') && /多一次军略三选一/.test(cr.reward ?? ''), { fled, cr });
-  // 降将来投：走到身边 → 机缘三选一（本关增益，不带走）
-  await p.evaluate(() => { window.__calm(); window.__S.fortunes.force('defector'); }); await p.waitForTimeout(300);
-  for (let i = 0; i < 40 && await p.evaluate(() => window.__S.mode !== 'bossloot'); i++) { await p.evaluate(() => { const s = window.__S; if (s.mode === 'levelup') s.chooseUpgrade(0); const L = s.fortunes.live.find(x => !x.done && x.kind === 'defector'); if (L) s.player.sprite.setPosition(L.x, L.y); }); await p.waitForTimeout(250); }
+  // 降将来投（systems/FortuneDefector.ts）：带亲兵走来 → 插旗「来投」→ 走近应战（副将一档、名牌血条）→ 残血跪地请降 → 本关随战 + 机缘三选一
+  await p.evaluate(() => { window.__calm(); const s = window.__S; s.fortunes.force('defector'); const L = s.fortunes.live.find(x => x.kind === 'defector' && !x.done); s.player.sprite.setPosition(L.x - 250, L.y + 140); });
+  await p.waitForTimeout(3200); await p.evaluate(() => window.__calm());
+  const arr = await p.evaluate(() => { const s = window.__S, D = s.fortunes.defector; return { phase: D.phase, head: s.children.getByName('defector-name')?.text, flag: !!s.children.getByName('defector-flag'), officer: !!s.children.getByName('defector-officer'), guards: s.children.list.filter(o => o.name === 'defector-guard').length, name: D.info.name, title: D.info.title }; });
+  await p.screenshot({ path: OUT + '/defector-arrive.png' });
+  ck('P2 降将来投出场：带亲兵走到事件点、插旗、头顶「来投 · 名字」（本章敌方阵营的无名将领）', arr.phase === 'wait' && /^来投 · /.test(arr.head ?? '') && arr.flag && arr.officer && arr.guards === 3 && /校尉|司马|都尉|牙门将/.test(arr.title), arr);
+  await p.evaluate(() => { const s = window.__S, D = s.fortunes.defector; s.player.sprite.setPosition(D.x + 60, D.y); }); await p.waitForTimeout(500);
+  const duel = await p.evaluate(() => { const s = window.__S, D = s.fortunes.defector, e = D.e; return { phase: D.phase, hp: Math.round(e?.maxHp ?? 0), elite: Math.round(s.chapter.enemies.elite.hp * (s.chapter.growth?.hp ?? 1)), tag: s.children.getByName('defector-tag')?.text, bar: !!s.children.getByName('defector-bar'), lines: [...D.stats.lines] }; });
+  ck('P2 降将试阵：走近即开打，小首领（副将一档，生命远高于精锐）、名牌 + 血条、出场台词', duel.phase === 'duel' && duel.hp > duel.elite * 1.5 && duel.tag?.includes(arr.name) && duel.bar && duel.lines.length === 1, duel);
+  await p.evaluate(() => { const s = window.__S, e = s.fortunes.defector.e; e.invulnerable = false; s.hitEnemy(e, e.maxHp * 2, s.combatNow, 'melee', false, false); });
+  for (let i = 0; i < 30 && await p.evaluate(() => window.__S.mode !== 'bossloot'); i++) { await p.evaluate(() => { const s = window.__S; if (s.mode === 'levelup') s.chooseUpgrade(0); }); await p.waitForTimeout(200); }
+  const ally = await p.evaluate(() => { const s = window.__S, D = s.fortunes.defector, f = s.followers?.members.find(m => m.label?.text?.startsWith('降将 · ')); return { phase: D.phase, allied: D.stats.allied, label: f?.label.text, lines: [...D.stats.lines], enemyGone: !D.e?.active || D.e.hp <= 0, roster: (localStorage.getItem('im_roster_v1') ?? '').includes(D.info.name) }; });
+  ck('P2 降将打到底不死、跪地请降（台词）→ 本关临时随从（头顶「降将 · 名字」），不进人才库', ally.phase === 'ally' && ally.allied && ally.label === '降将 · ' + arr.name && ally.lines.length === 2 && ally.enemyGone && !ally.roster, ally);
   const panel = await p.evaluate(() => { const s = window.__S; return { mode: s.mode, title: s.levelPanel.getByName('upgrade-title')?.text, cards: s.upgradeOptions.map(o => o.name + '｜' + o.categoryLabel) }; });
   ck('P2 降将来投：受降 → 「战场机缘 · 受降」三选一（本关有效）', panel.mode === 'bossloot' && /战场机缘/.test(panel.title ?? '') && panel.cards.length === 3, panel);
   await p.waitForTimeout(1200); await p.screenshot({ path: `${OUT}/fortune-cards.png` });
   const pick = await p.evaluate(async () => { const s = window.__S, ce = await import('/src/systems/CharmEffects.ts'), before = { ...s.player.stats }, packed0 = ce.statsWithoutCharms(s.player); s.chooseUpgrade(0); const packed = ce.statsWithoutCharms(s.player); const keys = Object.keys(before).filter(k => before[k] !== s.player.stats[k]); return { mode: s.mode, changed: keys, packedSame: keys.every(k => Math.abs(packed[k] - packed0[k]) < 1e-6) }; });
   ck('P2 选了增益：属性当场变化，征程构筑存档时扣掉（不带到下一关）', pick.changed.length > 0 && pick.packedSame, pick);
+  await p.evaluate(() => { const s = window.__S; window.__calm(); const f = s.followers?.members.find(m => m.label?.text?.startsWith('降将 · ')); s.player.sprite.setPosition(0, 0); if (f) f.sprite.setPosition(70, 20); }); await p.waitForTimeout(1600); await p.evaluate(() => window.__calm()); await p.screenshot({ path: OUT + '/defector-ally.png' });
   await p.close();
 }
 // P4 新卡池：五段主线关的升级三选一里，战法位按章节概率换成新卡（战场机缘 / 锦囊 / 兵源 / 军资 / 心法）；锦囊 R 键使用

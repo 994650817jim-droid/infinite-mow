@@ -7,6 +7,10 @@
  *   为全军疗伤：部曲与名将随从全部回满  第 1 章 16 → 第 12 章 ≈ 90（没人受伤时不可点）
  */
 export type MedicKind = 'small' | 'full' | 'army';
+/** 初诊不收粮（11-20：1-1 后行营郎中来投时给一次，小治 / 大治任选；用过即消）。 */
+export const MEDIC_FREE_KEY = 'im_medic_free';
+export function medicFree(): boolean { try { return localStorage.getItem(MEDIC_FREE_KEY) === '1'; } catch { return false; } }
+export function setMedicFree(on: boolean): void { try { if (on) localStorage.setItem(MEDIC_FREE_KEY, '1'); else localStorage.removeItem(MEDIC_FREE_KEY); } catch { /* ignore */ } }
 /** 每章复利（基价部分）。 */
 export const MEDIC_GROWTH = 1.12;
 export const CAMP_MEDIC = {

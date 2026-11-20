@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { DEPTH, FONT, HEADING_FONT } from '../config';
 import { inkPlate } from './HomeCommand';
+import { cnPunct } from './StoryBarkCardStyles';
 
 /**
  * 剧情卷轴（漆金卷轴同款，见 ChapterVictoryNotice）：逐句对白，点一下翻下一句，最后一页显示奖励和确认按钮。
@@ -20,6 +21,24 @@ export interface StoryScrollOptions {
   choices?: readonly string[]; onChoice?: (index: number) => void;
   /** 战斗中途的对白（2026-11-19 用户：「对话框想半透明」）：底下战场只压暗一点，漆底半透明、边缘渐淡，不铺营帐横幅；描金边、立绘、文字保持不透明并加阴影。章头 / 军情等整屏剧情不用。 */
   translucent?: boolean;
+  /**
+   * 对话排版（2026-11-20 用户「剧情对话ui也可以改一下」，关前军情用）：所有台词一次排开——左边圆形立绘、描金名字、台词；tip 句做成一条朱漆「锦囊」签；
+   * 只有一个水墨主按钮（confirm，如「开战」），「跳过」是浅色字。排不下（超出屏高）时退回逐句翻页。只在电脑布局生效。
+   */
+  dialogue?: boolean;
+}
+/** 对话排版尺寸（电脑布局，游戏坐标） */
+const DL = { face: 58, pad: 44, gapX: 16, gap: 10, size: 17 } as const;
+/** 圆形头像贴图（取立绘头肩，裁成圆；缓存为 briefface_<key>） */
+function roundFace(scene: Phaser.Scene, key: string, size: number): string | undefined {
+  if (!scene.textures.exists(key)) return undefined;
+  const tk = `briefface_${key}_${size}`; if (scene.textures.exists(tk)) return tk;
+  const src = scene.textures.get(key).getSourceImage() as HTMLImageElement, can = scene.textures.createCanvas(tk, size, size); if (!can) return undefined;
+  const g = can.getContext(), cx = src.width * .2, cy = src.height * .02, cw = src.width * .6, ch = src.height * .3, k = Math.max(size / cw, size / ch);
+  g.save(); g.beginPath(); g.arc(size / 2, size / 2, size / 2 - 1, 0, Math.PI * 2); g.clip();
+  g.fillStyle = '#2a1d12'; g.fillRect(0, 0, size, size);
+  g.drawImage(src, cx, cy, cw, ch, (size - cw * k) / 2, 0, cw * k, ch * k); g.restore();
+  can.refresh(); return tk;
 }
 
 const GOLD = 0xc9a35e, GOLD_HI = 0xf3d48a, LACQUER = 0x1b120b;
@@ -30,8 +49,13 @@ export function storyScroll(scene: Phaser.Scene, W: number, H: number, desk: boo
     fontFamily: heading ? HEADING_FONT : FONT, fontSize: size + 'px', color, resolution: 2,
   }).setScrollFactor(0).setShadow(0, 2, '#000000', o.translucent ? 5 : 0, false, !!o.translucent);
   const art = !!o.illustration && scene.textures.exists(o.illustration), extra = art ? (desk ? 90 : 90) : 0;
-  const pw = desk ? 640 : Math.min(500, W - 32), ph = (desk ? 420 : 560) + extra, x0 = (W - pw) / 2, y0 = Math.round((H - ph) / 2), cx = W / 2;
-  const bannerH = (desk ? 120 : 160) + extra;
+  const pw = desk ? 640 : Math.min(500, W - 32), bannerH = (desk ? 120 : 160) + extra;
+  // 对话排版：先量每行高度，排得下就整张卷轴加高到刚好装下
+  const dTw = pw - DL.pad * 2 - DL.face - DL.gapX;
+  const dMeasure = (l: StoryLine): number => { const t = scene.add.text(0, 0, cnPunct(l.text), { fontFamily: FONT, fontSize: DL.size + 'px', lineSpacing: 5, wordWrap: { width: dTw, useAdvancedWrap: true } }); const h = t.height; t.destroy(); return l.tip ? h + 22 : Math.max(DL.face + 4, h + 30); };
+  const dHeights = o.dialogue && desk ? o.lines.map(dMeasure) : [], dRowsH = dHeights.reduce((a, b) => a + b + DL.gap, 0), dNeed = bannerH + 34 + dRowsH + 74;
+  const dlg = dHeights.length > 0 && dNeed <= H - 12;
+  const ph = dlg ? Math.max((desk ? 420 : 560) + extra, dNeed) : (desk ? 420 : 560) + extra, x0 = (W - pw) / 2, y0 = Math.round((H - ph) / 2), cx = W / 2;
 
   const tl = !!o.translucent;
   root.add(scene.add.rectangle(W / 2, H / 2, W, H, 0x0c0805, tl ? .3 : .84).setScrollFactor(0).setInteractive());
@@ -82,6 +106,37 @@ export function storyScroll(scene: Phaser.Scene, W: number, H: number, desk: boo
   const page = text(x0 + pw - (desk ? 40 : 24), y0 + ph - (desk ? 92 : 108), '', desk ? 13 : 14, '#8d7d60').setOrigin(1, .5);
   const reward = text(cx, y0 + ph - (desk ? 92 : 108), o.reward, desk ? 15 : 16, '#f6dc9a').setOrigin(.5).setVisible(false).setName(o.name + '-reward');
   root.add([who, say, page, reward]);
+  if (dlg) {
+    root.setData('dialogue', true);
+    let ry = y0 + bannerH + 34;
+    o.lines.forEach((l, k) => {
+      const rh = dHeights[k], lx = x0 + DL.pad, tx2 = lx + DL.face + DL.gapX, row = o.name + '-row-' + k;
+      if (l.tip) {
+        // 锦囊签：朱漆长条 + 描金边 + 左头一枚「锦囊」竖印
+        const g = scene.add.graphics().setScrollFactor(0).setName(row);
+        g.fillStyle(0x000000, .35).fillRoundedRect(lx + 2, ry + 3, pw - DL.pad * 2, rh, 6).fillStyle(0x6e1a12, .95).fillRoundedRect(lx, ry, pw - DL.pad * 2, rh, 6)
+          .lineStyle(1.5, GOLD, .9).strokeRoundedRect(lx + 3, ry + 3, pw - DL.pad * 2 - 6, rh - 6, 4)
+          .fillStyle(0xf3d48a, .95).fillRoundedRect(lx + 8, ry + rh / 2 - 22, 40, 44, 4).lineStyle(1.5, 0x8a1a10, 1).strokeRoundedRect(lx + 11, ry + rh / 2 - 19, 34, 38, 3);
+        const seal = text(lx + 28, ry + rh / 2, '锦\n囊', 15, '#8a1a10', true).setOrigin(.5).setAlign('center').setLineSpacing(-3).setShadow(0, 0, '#000', 0);
+        const t = text(tx2, ry + rh / 2, cnPunct(l.text), DL.size, '#ffe3b0').setOrigin(0, .5).setWordWrapWidth(dTw, true).setLineSpacing(5).setName(row + '-tip');
+        root.add([g, seal, t]);
+      } else {
+        // 圆形立绘（漆金圈）或朱红名字章
+        const fcx = lx + DL.face / 2, fcy = ry + DL.face / 2 + 2, ring = scene.add.graphics().setScrollFactor(0).setName(row);
+        ring.fillStyle(0x120b06, .9).fillCircle(fcx, fcy, DL.face / 2 + 2);
+        root.add(ring);
+        const fk = l.portrait ? roundFace(scene, l.portrait, DL.face * 2) : undefined;
+        if (fk) root.add(scene.add.image(fcx, fcy, fk).setDisplaySize(DL.face, DL.face).setScrollFactor(0).setName(row + '-face'));
+        else if (l.who || l.seal) { ring.fillStyle(0x9a2a1a, .95).fillCircle(fcx, fcy, DL.face / 2 - 3); root.add(text(fcx, fcy, [...(l.seal ?? l.who ?? '')][0] ?? '', 24, '#fff1dc', true).setOrigin(.5)); }
+        const rg = scene.add.graphics().setScrollFactor(0); rg.lineStyle(2.5, GOLD, .95).strokeCircle(fcx, fcy, DL.face / 2 + 2).lineStyle(1, GOLD_HI, .5).strokeCircle(fcx, fcy, DL.face / 2 - 2); root.add(rg);
+        if (!l.who) ring.setVisible(false), rg.setVisible(false);
+        const nm = l.who ? text(tx2, ry + 2, l.who, 16, '#f3d48a', true).setStroke('#2a170b', 4).setName(row + '-who') : null;
+        const t = text(tx2, ry + (l.who ? 26 : 8), cnPunct(l.text), DL.size, l.who ? '#eadcbd' : '#cdb88c').setWordWrapWidth(dTw, true).setLineSpacing(5).setName(row + '-say');
+        root.add(nm ? [nm, t] : [t]);
+      }
+      ry += rh + DL.gap;
+    });
+  }
 
   // 按钮：前几页是「继续」，最后一页是确认
   const bw = desk ? 260 : 300, bh = desk ? 48 : 58, by = y0 + ph - (desk ? 46 : 54);
@@ -101,14 +156,17 @@ export function storyScroll(scene: Phaser.Scene, W: number, H: number, desk: boo
   const hit = scene.add.rectangle(cx, by, bw, bh, 0, 0).setScrollFactor(0).setInteractive({ useHandCursor: true }).setName(o.name + '-next');
   root.add(plate ? [plate, label, hit] : [btn, label, hit]);
 
-  let i = 0;
+  let i = dlg ? o.lines.length - 1 : 0; // 对话排版：一页排完，直接是最后一页（开战）
   const show = () => {
     const l = o.lines[i], last = i === o.lines.length - 1;
     const named = !!l.who || !!l.tip;
-    who.setText(l.tip ? '提示' : l.who ? l.who + '：' : '').setColor(l.tip ? '#9fd59a' : l.who ? '#f0b48a' : '#b9a57a');
-    say.setText(l.text).setY(ty + (named ? (desk ? 30 : 34) : 0)).setColor(l.tip ? '#cfe8c4' : l.who ? '#eadcbd' : '#cdb88c');
-    if (cast) showFace(l);
-    page.setText(`${i + 1} / ${o.lines.length}`).setVisible(!last);
+    if (dlg) { who.setVisible(false); say.setVisible(false); face.setVisible(false); sealBox.setVisible(false); sealText.setVisible(false); page.setVisible(false); }
+    else {
+      who.setText(l.tip ? '锦囊' : l.who ? l.who + '：' : '').setColor(l.tip ? '#ffb48a' : l.who ? '#f0b48a' : '#b9a57a');
+      say.setText(cnPunct(l.text)).setY(ty + (named ? (desk ? 30 : 34) : 0)).setColor(l.tip ? '#ffe3b0' : l.who ? '#eadcbd' : '#cdb88c');
+      if (cast) showFace(l);
+      page.setText(`${i + 1} / ${o.lines.length}`).setVisible(!last);
+    }
     reward.setVisible(last); label.setText(last ? o.confirm : '继续 ▸');
     hit.setName(last ? o.confirmName : o.name + '-next');
     // 抉择：最后一页把确认按钮换成选项

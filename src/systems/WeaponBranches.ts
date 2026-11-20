@@ -75,7 +75,7 @@ export class WeaponBranches {
     if (b.id === 'gy_danqi' && d >= 70) { this.segs.push({ x: this.moveX, y: this.moveY, until: now + (this.tier() >= 3 ? 2600 : 2000), nextTick: now }); this.fx('fx_drag_scar', this.moveX, this.moveY, 92, this.tier() >= 3 ? 2600 : 2000, 0x8fe0b0, Math.atan2(dy, dx)); if (this.segs.length > 12) this.segs.shift(); this.travel += d; this.stats.procs++; this.moveX = P.x; this.moveY = P.y;
       if (this.final() && this.travel >= 400) { this.travel = 0; this.sweep(150, 1.5, 0x7fd6a0); } }
     else if (b.id !== 'gy_danqi' && b.id !== 'ss_benxi') { this.moveX = P.x; this.moveY = P.y; }
-    for (const s of this.segs) if (now < s.until && now >= s.nextTick) { s.nextTick = now + 500; for (const e of this.h.query(s.x, s.y, 46)) if (e.active && Math.hypot(e.x - s.x, e.y - s.y) <= 46 + e.radius) this.deal(e, .35); }
+    for (const s of this.segs) if (now < s.until && now >= s.nextTick) { s.nextTick = now + 500; for (const e of this.h.query(s.x, s.y, 46)) if (e.active && Math.hypot(e.x - s.x, e.y - s.y) <= 46 + e.radius) this.deal(e, .5); } // 2026-11-19 平衡：刀痕 .35 → .5（分支伤害只占关羽 5～6%）
     this.segs = this.segs.filter(s => now < s.until);
     this.tickZones(now); this.tick3(b, now);
     // 百鸟朝凤：定时风暴
@@ -115,7 +115,7 @@ export class WeaponBranches {
     const b = this.branch; if (!b) return; const now = this.h.now(), k = this.k();
     if (b.id === 'pt_lianhuan' && now < this.chainUntil && this.chained.get(e) === e.spawnId) { for (const [o, life] of this.chained) if (o !== e && o.active && o.spawnId === life) this.h.damage(o, dmg * (this.tier() >= 3 ? .4 : .3)); this.stats.hits++; return; }
     if (b.id === 'dc_biyue' && Math.random() < Math.min(.45, .15 * k) && e.kind !== 'boss' && (e.kind !== 'elite' || this.final()) && !this.charmed.some(c => c.e === e)) { this.charmed.push({ e, life: e.spawnId, until: now + 2000 * (this.tier() >= 3 ? 1.5 : 1), nextTick: now }); e.stunUntil = Math.max(e.stunUntil, now + 2000); this.fx('fx_heal_fushui', e.x, e.y - 20, 70, 600, 0xffa0d0); this.stats.procs++; return; }
-    if (b.id === 'hz_huoshi' && now >= this.fieldAt) { this.fieldAt = now + 400; this.field(e.x, e.y, 55, 2000 * (1 + .25 * (this.tier() - 1)), this.final() ? .26 : .2, false); return; }
+    if (b.id === 'hz_huoshi' && now >= this.fieldAt) { this.fieldAt = now + 400; this.field(e.x, e.y, 65, 2000 * (1 + .25 * (this.tier() - 1)), this.final() ? .34 : .26, false); return; } // 2026-11-19 平衡：半径 55 → 65、灼烧 .2 / .26 → .26 / .34
     if (b.id === 'mc_weishui' && now >= this.slamAt) { this.slamAt = now + 500; const r = 90 * (1 + .15 * (this.tier() - 1));
       for (const o of this.h.query(e.x, e.y, r)) if (o.active && !o.isSupplySlot && Math.hypot(o.x - e.x, o.y - e.y) <= r + o.radius) this.deal(o, .5);
       this.fx('fx_collapse_dust', e.x, e.y, r * 2.2, 500, 0xc8a878); this.stats.procs++;
@@ -175,7 +175,7 @@ export class WeaponBranches {
       const far = this.farthest(520); if (!far) return true; this.shots++;
       const ang = Math.atan2(far.y - P.y, far.x - P.x), L = 520, ex = P.x + Math.cos(ang) * L, ey = P.y + Math.sin(ang) * L, crit = this.tier() >= 3 ? 1.5 : 1, fifth = this.final() && this.shots % 5 === 0;
       for (const e of this.h.query((P.x + ex) / 2, (P.y + ey) / 2, L / 2 + 30)) { if (!e.active || e.isSupplySlot || segDist(e.x, e.y, P.x, P.y, ex, ey) > 18 + e.radius) continue;
-        const d = Math.hypot(e.x - P.x, e.y - P.y); this.deal(e, .6 * (1 + d / 400) * crit * (fifth && (e.kind === 'boss' || e.kind === 'elite') ? 3 : 1)); }
+        const d = Math.hypot(e.x - P.x, e.y - P.y); this.deal(e, .32 * (1 + d / 400) * crit /* 2026-11-19 平衡：.6 → .32（10-3 分支伤害占 56%、总 DPS 是火矢 1.65 倍） */ * (fifth && (e.kind === 'boss' || e.kind === 'elite') ? 3 : 1)); }
       this.fx('fx_flank_streak', (P.x + ex) / 2, (P.y + ey) / 2, L, 320, 0xf0f8ff, ang); this.stats.procs++; return true; }
     if (b.id === 'mc_tieqi') {
       if (!t) return true; const ang = Math.atan2(t.y - P.y, t.x - P.x), L = 300, ex = P.x + Math.cos(ang) * L, ey = P.y + Math.sin(ang) * L;
@@ -226,8 +226,8 @@ export class WeaponBranches {
     if (b.id === 'ss_benxi') {
       const d = Math.hypot(P.x - this.moveX, P.y - this.moveY);
       if (d >= 90) { this.knives.push({ x: this.moveX, y: this.moveY }); if (this.knives.length > 8 + 2 * this.tier()) this.knives.shift(); this.fx('fx_strike_glint', this.moveX, this.moveY, 50, 400, 0xe0e8ff); this.moveX = P.x; this.moveY = P.y; this.still = now;
-        for (const e of this.h.query(this.moveX, this.moveY, 60)) if (e.active && !e.isSupplySlot && Math.hypot(e.x - this.moveX, e.y - this.moveY) <= 50 + e.radius) this.deal(e, .25); }
-      else if (this.knives.length && now - this.still > 500) { for (const kn of this.knives) for (const e of this.h.query(kn.x, kn.y, 60)) if (e.active && !e.isSupplySlot && Math.hypot(e.x - kn.x, e.y - kn.y) <= 50 + e.radius) this.deal(e, this.final() ? .4 : .3); this.knives = []; this.stats.procs++; }
+        for (const e of this.h.query(this.moveX, this.moveY, 60)) if (e.active && !e.isSupplySlot && Math.hypot(e.x - this.moveX, e.y - this.moveY) <= 50 + e.radius) this.deal(e, .4); } // 2026-11-19 平衡：撒刀 .25 → .4（10-3 DPS 只有万刃的 0.72）
+      else if (this.knives.length && now - this.still > 500) { for (const kn of this.knives) for (const e of this.h.query(kn.x, kn.y, 60)) if (e.active && !e.isSupplySlot && Math.hypot(e.x - kn.x, e.y - kn.y) <= 50 + e.radius) this.deal(e, this.final() ? .6 : .45); this.knives = []; this.stats.procs++; } // 2026-11-19 平衡：收刀 .3 / .4 → .45 / .6
     }
     for (const c of this.charmed) if (now < c.until && now >= c.nextTick && c.e.active && c.e.spawnId === c.life) { c.nextTick = now + 500; for (const o of this.h.query(c.e.x, c.e.y, 90)) if (o !== c.e && o.active && !o.isSupplySlot && o.kind !== 'boss' && Math.hypot(o.x - c.e.x, o.y - c.e.y) <= 80 + o.radius) this.deal(o, .3); }
     this.charmed = this.charmed.filter(c => now < c.until && c.e.active && c.e.spawnId === c.life);

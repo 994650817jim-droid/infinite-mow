@@ -20,6 +20,8 @@ await p.waitForFunction(() => window.__game?.scene.isActive('MenuScene'), null, 
 for (const t of tiers) {
   await p.evaluate(id => window.__game.scene.getScenes(true).forEach(sc => sc.scene.start('TownScene', { city: id })), CITY[t] ?? t);
   await p.waitForFunction(() => window.__game.scene.isActive('TownScene') && window.__game.scene.getScene('TownScene').hits?.length, null, { timeout: 60000 }); await p.waitForTimeout(2500);
+  // REBUILD=1：像造完 / 升完建筑那样重画全景两次再截（11-20 造建筑后底图变巨型石板的回归）
+  if (process.env.REBUILD) { await p.evaluate(() => { const t = window.__game.scene.getScene('TownScene'); t.refresh(); t.refresh(); }); await p.waitForTimeout(600); }
   for (const [name, y] of [['top', 0], ['bottom', 1e4]]) { await p.evaluate(y => window.__game.scene.getScene('TownScene').scrollTo(0, y), y); await p.waitForTimeout(1200); await p.screenshot({ path: `${out}/${tag}-${t}-${name}.png` }); }
   if (process.env.REF) { // 比例参照：每种建筑旁站一个居民（同走动居民的大小），放大到 1:1 截两处
     await p.evaluate(() => { const s = window.__game.scene.getScene('TownScene'), w = s.folk.walkers[0].img, list = [...s.pano.list];

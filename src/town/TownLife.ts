@@ -13,6 +13,7 @@
 import Phaser from 'phaser';
 import type { CityTier } from '../world/WorldCities';
 import type { CityBuildingId } from '../data/cityBuildings';
+import { TOWN_BLOCKS } from './TownBlocks';
 
 /** 居民人数（小城 4–6、中城 6–10、大城 10–15），封顶 FOLK_MAX。 */
 export const FOLK_MAX = 15;
@@ -45,7 +46,7 @@ const BUILDING = /^(st[0-3]|ct[02])$/;
  */
 export const CITIZEN = 34;
 const DOOR: Record<string, number> = { st0: .295, st1: .24, st2: .34, st3: .35, ct2: .37, ct0: .41, ct1: .52 };
-const decorWidth = (id: string, scale = 1): number => DOOR[id] ? CITIZEN * 1.3 / DOOR[id] * scale : 0;
+export const decorWidth = (id: string, scale = 1): number => DOOR[id] ? CITIZEN * 1.3 / DOOR[id] * scale : 0;
 
 export function loadTownLife(scene: Phaser.Scene): void {
   for (const f of FOLK_SHEETS) if (!scene.textures.exists(f.key)) scene.load.image(f.key, f.url);
@@ -59,8 +60,8 @@ const d = (a: Art, f: number, x: number, y: number, w = 0, lv = 1, flip = false)
 /** 民居店铺（x, y = 底边中点）。不放在建筑位、路面、河上。 */
 export const TOWN_DECOR: Record<CityTier, Decor[]> = {
   small: [
-    d('ct', 0, 620, 702), d('cp', 16, 690, 708, 36), d('cp', 24, 455, 990, 56),
-    d('st', 1, 1420, 985, 0, 2), d('st', 0, 330, 990), d('cp', 18, 1110, 690, 34),
+    d('ct', 0, 620, 702), d('cp', 16, 690, 708, 36),
+    d('st', 1, 1420, 985, 0, 2), d('cp', 18, 1110, 690, 34),
   ],
   medium: [
     // 左上地基（正在府衙身后：府衙升级后屋顶会挡住它，所以这里只放民居，不放功能建筑）
@@ -87,7 +88,7 @@ export type HqId = 'talent' | 'academy' | 'stable' | 'barracks';
 /** medic = 军医（医馆：店铺图，与民居同比例；与旅商分开）。 */
 export const HQ_SLOTS: Record<CityTier, Record<HqId | 'merchant' | 'medic', { x: number; y: number; w: number }>> = {
   // 功能建筑不放在府衙正后方的地基上（府衙 Lv3 屋顶会盖住）；院落宽约 250（府衙 Lv1 284、Lv3 350，仍最大）
-  small: { talent: { x: 270, y: 392, w: 250 }, academy: { x: 1262, y: 690, w: 250 }, barracks: { x: 600, y: 996, w: 240 }, stable: { x: 1160, y: 975, w: 240 }, merchant: { x: 985, y: 730, w: 130 }, medic: { x: 1450, y: 772, w: 130 } },
+  small: { talent: { x: 270, y: 392, w: 250 }, academy: { x: 1262, y: 690, w: 250 }, barracks: { x: 455, y: 996, w: 240 }, stable: { x: 1160, y: 975, w: 240 }, merchant: { x: 985, y: 730, w: 130 }, medic: { x: 1450, y: 772, w: 130 } },
   medium: { talent: { x: 190, y: 1000, w: 250 }, academy: { x: 1215, y: 373, w: 250 }, barracks: { x: 1145, y: 509, w: 230 }, stable: { x: 1240, y: 1004, w: 250 }, merchant: { x: 1318, y: 509, w: 130 }, medic: { x: 1452, y: 1000, w: 130 } },
   large: { talent: { x: 330, y: 372, w: 270 }, academy: { x: 310, y: 477, w: 260 }, barracks: { x: 1170, y: 1004, w: 230 }, stable: { x: 1410, y: 1004, w: 230 }, merchant: { x: 1420, y: 606, w: 130 }, medic: { x: 515, y: 478, w: 130 } },
 };
@@ -136,6 +137,8 @@ const TOWN_SCENES: Record<CityTier, Vignette[]> = {
   medium: [{ kind: 'chat', x: 600, y: 404 }, { kind: 'buy', x: 572, y: 788 }, { kind: 'well', x: 988, y: 582 }, { kind: 'chat', x: 985, y: 552 }, { kind: 'farm', x: 292, y: 800, need: 'tuntian' }, { kind: 'drill', x: 1300, y: 812, need: 'muster' }],
   large: [{ kind: 'chat', x: 620, y: 552 }, { kind: 'buy', x: 1425, y: 620 }, { kind: 'well', x: 668, y: 616 }, { kind: 'chat', x: 1360, y: 552 }, { kind: 'farm', x: 392, y: 740, need: 'tuntian' }, { kind: 'drill', x: 1292, y: 752, need: 'muster' }],
 };
+/** 闲谈两人头顶轮换的话。 */
+const CHAT_LINES = ['今年收成不错', '听说主公又打了胜仗', '米价落了些', '募兵所在招人呢', '城南新开了茶肆', '夜里莫出城'];
 /** 点居民时的话（按行走图）。 */
 const BARKS: Record<string, string[]> = {
   folk_man: ['今年雨水足，收成错不了', '听说主公又打了胜仗！', '城南新开了茶肆，去喝一碗？'],
@@ -155,14 +158,16 @@ export function drawTownDecor(scene: Phaser.Scene, pano: Phaser.GameObjects.Cont
   for (const [bi, b] of BRIDGES[tier].entries()) {
     if (!bgKey || !scene.textures.exists(bgKey)) break;
     const bgT = scene.textures.get(bgKey), bs = (bgT.getSourceImage() as { width: number }).width / 1536, fr = `town-bridge-${tier}-${bi}`;
-    if (!bgT.has(fr)) bgT.add(fr, 0, b.src[0] * bs, b.src[1] * bs, b.src[2] * bs, b.src[3] * bs);
+    if (!bgT.has(fr)) { bgT.add(fr, 0, b.src[0] * bs, b.src[1] * bs, b.src[2] * bs, b.src[3] * bs); bgT.firstFrame = '__BASE'; } // 11-20 修：Phaser 给贴图加第一个帧时会把它设成默认帧，重画全景时底图就拿成了这块石板（造建筑后满屏巨型石板）
     const w = (b.r - b.l) * k, h = (b.b - b.t) * k, add = (o: Phaser.GameObjects.GameObject, z: number) => { zy(o, z); pano.add(o); };
     // 水影：桥身两侧水面上一道暗影，看起来是架在水上
     add(scene.add.rectangle(b.l * k - 4, b.t * k + h * .5, w + 8, h * .42, 0x0b1714, .4).setOrigin(0, .5).setName('town-bridge-shadow'), -1e8);
     add(scene.add.image(b.l * k, b.t * k, bgKey, fr).setOrigin(0).setDisplaySize(w, h).setName('town-bridge'), -1e8 + 1);
 
   }
-  for (const it of TOWN_DECOR[tier]) {
+  // 手摆的装饰 + 规划出的街区（TownBlocks，tools/plan-town-blocks.mjs）
+  const blocks: Decor[] = TOWN_BLOCKS[tier].map(([a, f, x, y, lv, fl]) => ({ a: a as Art, f, x, y, w: 0, lv, flip: !!fl }));
+  for (const it of [...TOWN_DECOR[tier], ...blocks]) {
     if ((it.lv ?? 1) > office) continue;
     const A = ATLAS[it.a]; if (!scene.textures.exists(A.key)) continue;
     const id = it.a + it.f, w = it.w || decorWidth(id) || 80, img = scene.add.image(it.x * k, it.y * k, A.key, it.f).setOrigin(.5, FOOT[id] ?? .95).setFlipX(!!it.flip);
@@ -240,7 +245,9 @@ export class TownFolk {
       if (v.need && !(built[v.need] > 0)) continue;
       if (v.kind === 'chat') {
         const a = put('folk_man', v.x - 7, v.y, 'right'), b = put('folk_woman', v.x + 7, v.y, 'left');
-        if (a && b) { const dots = this.bubble(v.x * this.k, (v.y - CITIZEN * 1.4) * this.k, '……', 11).setAlpha(0); a.extra.push(dots); this.scene.tweens.add({ targets: dots, alpha: { from: 0, to: 1 }, yoyo: true, hold: 1400, repeatDelay: 2600 + Math.random() * 2000, repeat: -1, duration: 260 }); }
+        if (a && b) { // 闲谈：轮换几句市井闲话（11-20：原来只冒「……」，看着像空白气泡）
+          let n = Math.floor(Math.random() * CHAT_LINES.length); const dots = this.bubble(v.x * this.k, (v.y - CITIZEN * 1.4) * this.k, CHAT_LINES[n], 11).setAlpha(0); a.extra.push(dots);
+          this.scene.tweens.add({ targets: dots, alpha: { from: 0, to: 1 }, yoyo: true, hold: 1800, repeatDelay: 2600 + Math.random() * 2000, repeat: -1, duration: 260, onRepeat: () => { n = (n + 1) % CHAT_LINES.length; if (dots.active) dots.setText(CHAT_LINES[n]); } }); }
       } else if (v.kind === 'buy') put('folk_woman', v.x, v.y, 'up');
       else if (v.kind === 'well') { const a = put('folk_woman', v.x, v.y, 'up'); if (a) this.scene.tweens.add({ targets: a.img, scaleY: a.img.scaleY * .93, yoyo: true, repeat: -1, duration: 700, hold: 300, ease: 'Sine.easeInOut' }); }
       else if (v.kind === 'farm') { const a = put('folk_man', v.x, v.y, 'down', true); if (a) this.scene.tweens.add({ targets: a.img, scaleY: a.img.scaleY * .9, yoyo: true, repeat: -1, duration: 520, hold: 200, repeatDelay: 300 }); }

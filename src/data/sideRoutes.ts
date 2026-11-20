@@ -118,8 +118,8 @@ export const SIDE_ROUTES: readonly SideRouteDef[] = [
       { name: '江夏外围', kind: 'field', behavior: 2, scenery: 2, waves: ['江夏水寨', '锦帆贼', '甘宁出阵'], story: '黄祖据江夏，锦帆贼甘宁屈居其下。江边水寨，铃声先至。',
         boss: B('ganning', '甘宁', '锦帆贼', 'side_ganning', 'chibi/caimao', 'sunhuan', true) },
       { name: '江夏', kind: 'final', behavior: 3, scenery: 3, waves: ['江夏城下', '荆州水军', '黄祖亲至'], story: '黄祖与文聘出城迎战。江夏一下，荆州门户洞开。',
-        boss: B('huangzu', '黄祖', '江夏太守', 'chibi_caimao', 'chibi/caimao', 'caimao'),
-        partner: B('wenpin', '文聘', '荆州大将', 'jingnan_zhaofan', 'chibi/caochun', 'zhaofan') },
+        boss: B('huangzu', '黄祖', '江夏太守', 'side_huangzu', 'chibi/caimao', 'caimao'),
+        partner: B('wenpin', '文聘', '荆州大将', 'side_wenpin', 'chibi/caochun', 'zhaofan') },
     ],
     annex: ['jiangxia'], specialty: { title: '锦帆水寨', text: '最大生命 +5%', maxHp: .05 }, lord: 'huangzu' },
   // —— P1b 第二批（第七、九章后）——

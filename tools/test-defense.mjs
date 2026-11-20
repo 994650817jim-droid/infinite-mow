@@ -51,7 +51,7 @@ await p.evaluate(G0 => { const s = eval(G0); s.player.damageImmune = false; s.fi
 const lose = await p.evaluate(G0 => { const s = eval(G0), home = s.resultPanel?.getByName('result-home'); return { sub: s.resultTexts.subtitle.text, body: s.resultTexts.body.text.split('\n').slice(-3).join(' | '), home: home?.text, retreat: s.defeatRetreat?.name ?? null }; }, G);
 const w1 = await world();
 const coreOf = j => { const h = JSON.parse(j).heroes.zhaoyun.player; return JSON.stringify({ b: h.build, w: h.weapons.map(x => [x.id, x.level]) }); };
-ck('守城战败：结算「守城失利 · 陈留仍在告急」，按钮写退守去处（最近的另一座我方城 / 营寨，不是陈留本身）；城还在、告急还在', /守城失利/.test(lose.sub) && /仍在告急/.test(lose.sub) && w1.owned.includes('chenliu') && w1.alerts.includes('chenliu') && !!lose.retreat && lose.retreat !== '陈留' && /退守/.test(lose.home ?? ''), { lose, w1 }); // 不退回刚没守住的陈留
+ck('守城战败：结算「守城失利 · 陈留已被围」（守城重做：守城输了 = 被围），按钮写退守去处（最近的另一座我方城 / 营寨，不是陈留本身）；城还在、告急还在', /守城失利/.test(lose.sub) && /已被围/.test(lose.sub) && w1.owned.includes('chenliu') && w1.alerts.includes('chenliu') && !!lose.retreat && lose.retreat !== '陈留' && /退守/.test(lose.home ?? ''), { lose, w1 }); // 不退回刚没守住的陈留
 const shown = await p.evaluate(G0 => { const n = eval(G0).resultPanel.getByName('result-notes'); return n?.visible ? n.text : ''; }, G);
 ck('守城战败：结算面板显示「城池尚在；若改去别处出征，此城将失守」', /城池尚在/.test(shown), shown);
 ck('守城战败：征程构筑内容不写回（战法 / 本命不变）', coreOf(await p.evaluate(() => localStorage.getItem('im_campaign_v1'))) === coreOf(camp0));

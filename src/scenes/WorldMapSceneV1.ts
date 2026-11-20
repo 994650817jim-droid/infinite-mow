@@ -1,3 +1,5 @@
+import { DEFENSE_RULES } from '../data/defenseRules';
+import { abandonCity, alertLossWarning } from '../world/WorldStore';
 import { sortieBlocked } from '../ui/SortieGuard';
 import {playMenuMusic} from '../systems/Music';
 import {requestDirectDepart} from '../systems/DirectDepart';
@@ -280,7 +282,7 @@ export class WorldMapSceneV1 extends Phaser.Scene {
   this.flyTo(x,y,z,dur);}
 /** 城池可攻状态：我方 / 告急 / 可攻 / 章节未开 / 不相邻（给出先攻哪座）。 */
  private cityStatusOf(c:CityDef):CityStatus{
-  if(this.alertFor(c.id))return{kind:'alert',reason:'告急：守住可解除'};
+  {const a=this.alertFor(c.id);if(a)return{kind:'alert',reason:a.countdown>0?`敌军集结 · 还剩 ${a.countdown} 战围城`:'被围：守城或弃城'};}
   if(this.owned.includes(c.id))return{kind:'own',reason:'你的城池'};
   if(cityAttackable(c.id,this.owned)){if(!mechOpen('siege'))return{kind:'gate',reason:'未解锁：攻城'+mechLockText('siege')}; // 玩法逐章解锁：攻城第二章通关后 + 相邻（用户 11-20）
    if(!siegeUnlocked(c.id,loadWorld())&&!isChapterTestRun()){const a=siegeGateStage(c.id),d=a?.chapter&&a.stage?chapterStages(a.chapter)[a.stage-1]:undefined,g=chapterById(a?.chapter??CITY_CHAPTER[c.id]??'hulao');return{kind:'gate',reason:d?`未解锁：打下 ${d.code}「${d.name}」后开放攻城`:`未解锁：第${g.numeral}章「${g.title}」中开放攻城`};}return{kind:'attack',reason:'与你的领地相邻，可以攻打'};}
@@ -308,7 +310,7 @@ export class WorldMapSceneV1 extends Phaser.Scene {
   if(!st)return head;
   if(st.kind==='fog')return '？ · 迷雾未散\n迷雾未散，需先攻下相邻城池';
   if(st.kind==='own')return `${head}\n我方城池 · 每战 ${incomeText(inc)}\n点选后「进入城池」建设`;
-  if(st.kind==='alert'){const a=this.alertFor(c.id)!;return `${head} · 告急\n${FACTIONS[a.attacker].name}来犯：守住可解除，出征别处则失守`;}
+  if(st.kind==='alert'){const a=this.alertFor(c.id)!;return a.countdown>0?`${head} · 集结\n${FACTIONS[a.attacker].name}集结：还剩 ${a.countdown} 战围城（可先迎击）`:`${head} · 被围\n${FACTIONS[a.attacker].name}围城：守城或弃城；出征别处则失守`;}
   const T=SIEGE[c.tier],first=!this.capturedEver.includes(c.id),k=first?1+FIRST_CAPTURE_BONUS:1;
   const base=`守军：${FACTIONS[owner].name} · 推荐等级 ${TIER_STARS[c.tier]}\n奖励：军粮 +${rewardGrain(T.reward.merits*k,T.reward.provisions*k)}${first?'（首次 +50%）':''} · 占领后每战 ${incomeText(inc)}`;
   return st.kind==='attack'?`${head} · 可攻\n${base}`:`${head} · 不可攻\n${st.reason.replace(/^未解锁：|^尚不相邻：/,'')}\n${base}`;}
@@ -418,7 +420,8 @@ export class WorldMapSceneV1 extends Phaser.Scene {
     const cur=CHAPTER_TIMELINE.find(c=>c.id===sel);name?.setText(cur?`${cur.numeral} · ${cur.title}`:'').setPosition((last?.x??0)+16,last?.y??0);return;}
   for(const c of this.chips){c.g.clear();lacquerPlate(c.g,c.x,c.y,c.w,c.h,.78,c.state==='cleared'?0x7fc48f:c.state==='open'?0xe5c47d:0x6b6f66);if(c.id===sel)c.g.lineStyle(2,0xffe2a0,1).strokeRoundedRect(c.x-2,c.y-2,c.w+4,c.h+4,7);}}
  /** 有告急城池时出征别处的警示（空串表示无告急）。 */
- private lossWarning(){const names=this.alerts.map(a=>cityById(a.city)?.name).filter(Boolean);return names.length?`⚠ ${names.join('、')}告急：此时出征别处，${names.length>1?'这些城池':'该城'}将失守！`:'';}
+ private lossWarning(){return alertLossWarning();}
+ private lossWarningOld(){const names=this.alerts.map(a=>cityById(a.city)?.name).filter(Boolean);return names.length?`⚠ ${names.join('、')}告急：此时出征别处，${names.length>1?'这些城池':'该城'}将失守！`:'';}
  /** W4 时局变化 / 城池失守 提示面板。 */
  /** 玩法逐章解锁（data/mechanicUnlocks.ts）：刚开放的玩法——人物一两句引子 + 一行说明。 */
  private showMechIntro(ids:MechId[]){
@@ -448,7 +451,7 @@ export class WorldMapSceneV1 extends Phaser.Scene {
    const moved=advance.changes.map(c=>`${cityById(c.city)?.name}：${FACTIONS[c.from].name} → ${FACTIONS[c.to].name}`);
    if(moved.length)lines.push('城池易主：'+(moved.length>8?moved.slice(0,8).join('；')+`；等 ${moved.length} 城`:moved.join('；')));
    if(advance.fallen.length)lines.push('势力覆灭：'+advance.fallen.map(f=>FACTIONS[f].name).join('、'));
-   lines.push(advance.alerts.length?'边城告急：'+advance.alerts.map(a=>`${cityById(a.city)?.name}（${FACTIONS[a.attacker].name}来犯）`).join('、')+'\n点选告急城池即可守城；若出征别处，告急城池将失守。':'我方城池暂无战事。');}
+   lines.push(advance.alerts.length?'边城告急：'+advance.alerts.map(a=>`${cityById(a.city)?.name}（${FACTIONS[a.attacker].name}来犯）`).join('、')+'\n敌军集结，'+DEFENSE_RULES.muster+' 战后围城：点选告急城池可迎击、守城或弃城；被围后出征别处才失守。':'我方城池暂无战事。');}
   if(lost.length)lines.push(`上次出征时告急未救，${lost.map(id=>cityById(id)?.name).join('、')}已失守。`);
   const text=worldText(this,0,0,lines.join('\n\n'),desk?15:16,'#e4dcc4').setWordWrapWidth(pw-48,true).setLineSpacing(5);
   const ph=Math.min(H-80,text.height+150),px=W/2-pw/2,py=H/2-ph/2;root.add(this.modalPanel(pw,ph));
@@ -591,7 +594,7 @@ export class WorldMapSceneV1 extends Phaser.Scene {
    // 攻城分区：城池所属章节通关后才可攻打（守城不受限）
    const gateStage=siegeGateStage(c.id),gateDef=gateStage?.chapter&&gateStage.stage?chapterStages(gateStage.chapter)[gateStage.stage-1]:undefined,gateChapter=chapterById(gateStage?.chapter??CITY_CHAPTER[c.id]??'hulao'),gateName=gateDef?`${gateDef.code}「${gateDef.name}」`:`第${gateChapter.numeral}章「${gateChapter.title}」`;
    const alert=this.alertFor(c.id),gate=!siegeUnlocked(c.id,loadWorld())&&!isChapterTestRun()&&!alert&&owner!=='player',usable=(attack||!!alert)&&!gate,warn=attack?this.lossWarning():'';
-   this.setDetail(`${c.name} · ${TIER_NAME[c.tier]} · ${c.region}`,FACTIONS[owner].color,sealGlyph(owner),`归属：${FACTIONS[owner].name}（公元${era.year}年 · ${era.name}）\n${alert?`告急：${FACTIONS[alert.attacker].name}来犯！守住可解除；出征别处则此城失守`:owner==='player'?'你的城池':gate?`打下 ${gateName} 后开放攻城`:attack?warn||'与你的领地相邻，可以攻打':this.status.get(c.id)?.reason??'尚不相邻：先攻下相邻城池'}\n${yieldText}\n相邻：${neighbors}`);
+   this.setDetail(`${c.name} · ${TIER_NAME[c.tier]} · ${c.region}`,FACTIONS[owner].color,sealGlyph(owner),`归属：${FACTIONS[owner].name}（公元${era.year}年 · ${era.name}）\n${alert?(alert.countdown>0?`告急：${FACTIONS[alert.attacker].name}来犯，集结中——还剩 ${alert.countdown} 战围城；可迎击、守城或弃城`:`告急：${FACTIONS[alert.attacker].name}来犯，已被围！守城或弃城；出征别处则此城失守`):owner==='player'?'你的城池':gate?`打下 ${gateName} 后开放攻城`:attack?warn||'与你的领地相邻，可以攻打':this.status.get(c.id)?.reason??'尚不相邻：先攻下相邻城池'}\n${yieldText}\n相邻：${neighbors}`);
    const enter=owner==='player'&&!alert;
    this.action.text.setText(alert?'亲征 · 守城':enter?'进入城池':gate?`打下 ${gateDef?.code??gateChapter.short} 后可攻`:attack?'亲征 · 攻城':'尚不可攻打');this.action.image.setAlpha(usable||enter?1:.45);if(usable||enter)this.action.image.setInteractive({useHandCursor:true});else this.action.image.disableInteractive();
    this.layoutActions(false);return;
@@ -647,10 +650,10 @@ export class WorldMapSceneV1 extends Phaser.Scene {
   const t=(x:number,y:number,s:string,size=16,color='#ede3c9')=>{const o=worldText(this,x,y,s,size,color);root.add(o);return o;};
   t(px+24,py+20,`${alert?'守卫':'攻打'} ${city.name}`,24,'#f0d79e').setFontFamily(W>600?TITLE_FONT:HEADING_FONT);t(px+24,py+54,`${TIER_NAME[city.tier]} · ${city.region} · ${alert?'来犯':'守军'}：${FACTIONS[owner].name}`,14,FACTIONS[owner].css);
   const how=city.tier==='small'?'拔掉帅旗，再占领府衙（限 2 分 30 秒）':city.tier==='medium'?'摧毁两座箭楼（会放箭），再占领府衙（限 3 分 30 秒）':'破城门、毁两座箭楼、击败大将，再占领府衙（限 5 分 30 秒）';
-  const body=alert?`胜利条件：击退${city.tier==='small'?'两':city.tier==='medium'?'三':'四'}波来犯之敌，击败敌将（无城门）
-敌将：${defenseBossName(city,owner)}
-守城奖励：军粮 +${rewardGrain(T.reward.merits/2,T.reward.provisions/2)}，告急解除
-失败城池仍在，可再守；改去别处出征则此城失守。`:`胜利条件：${how}
+  const R=DEFENSE_RULES,muster=(alert?.countdown??0)>0;
+  const body=alert?`${muster?`敌军集结：还剩 ${alert.countdown} 战围城（被围后出征别处则失守）`:'已被围：出征别处则此城失守'}
+守城：击败敌将 ${defenseBossName(city,owner)}，军粮 +${rewardGrain(T.reward.merits*R.rewardMul,T.reward.provisions*R.rewardMul)}，守住后 ${R.moraleBattles} 战产粮 +${Math.round(R.moraleMul*100)}%
+${muster?`迎击：出城野战（较短），赢了直接解除告急，军粮 +${rewardGrain(T.reward.merits*R.interceptMul,T.reward.provisions*R.interceptMul)}；输了围城提前一战\n`:''}弃城：城归${FACTIONS[owner].name}，建筑等级保留，日后可再打回来`:`胜利条件：${how}
 ${city.tier==='large'?'守城大将：'+siegeBossName(city,owner):'守军：'+FACTIONS[owner].name+' · 占领府衙即破城'}
 占领奖励：军粮 +${rewardGrain(T.reward.merits*k,T.reward.provisions*k)}${first?'（首次攻占 +50%）':''}
 失败不损失城池与资源，可再次攻打。`;
@@ -658,8 +661,15 @@ ${city.tier==='large'?'守城大将：'+siegeBossName(city,owner):'守军：'+FA
   if(warn)t(px+24,info.y+info.height+4,warn,13,'#ff8a70').setWordWrapWidth(pw-48).setName('siege-warning');
   this.lordLine(root,px+24,py+dy+(desk?214:236),pw-48,hero,'siege-lord');
   const close=()=>{root.destroy();this.siegeModal=undefined;};
+  if(alert){ // 守城重做：返回 / 弃城 / 迎击（集结期间）/ 守城
+   const by=py+ph-(desk?48:58),n=muster?4:3,bw=pw*(n===4?.22:.29),gap=(pw-bw*n)/(n+1),bx=(i:number)=>px+gap*(i+1)+bw*i+bw/2;let armed=false;
+   this.modalButton(root,bx(0),by,bw,'返回',false,'siege-cancel',close);
+   this.modalButton(root,bx(1),by,bw,'弃城',false,'siege-abandon',()=>{if(!armed){armed=true;const i=root.list.findIndex(o=>o.name==='siege-abandon'),cap=root.list[W>600?i-1:i+1] as Phaser.GameObjects.Text|undefined;if(cap&&'setText' in cap)cap.setText('确认弃城');return;}if(abandonCity(city.id)){close();this.scene.restart();}});
+   if(muster)this.modalButton(root,bx(2),by,bw,'迎击',false,'siege-intercept',()=>this.launchSiege(city,hero,true,true));
+   this.modalButton(root,bx(n-1),by,bw,'守城',true,'siege-go',()=>this.launchSiege(city,hero,true));
+  }else{
   this.modalButton(root,px+pw*.27,py+ph-(desk?48:58),pw*.38,'返回',false,'siege-cancel',close);
-  this.modalButton(root,px+pw*.73,py+ph-(desk?48:58),pw*.38,alert?'出征守城':'出征攻城',true,'siege-go',()=>this.launchSiege(city,hero,!!alert));
+  this.modalButton(root,px+pw*.73,py+ph-(desk?48:58),pw*.38,'出征攻城',true,'siege-go',()=>this.launchSiege(city,hero,false));}
  }
  /** 攻城 / 守城 / 军情只由主公亲征（用户 2026-11-17「攻城取消选择武将，所有地图占领需要自己亲历亲为」）：面板只写出战的主公，不能换将。 */
  private lordLine(root:Phaser.GameObjects.Container,x:number,y:number,w:number,hero:CharacterId,name:string){
@@ -669,10 +679,10 @@ ${city.tier==='large'?'守城大将：'+siegeBossName(city,owner):'守军：'+FA
   else root.add(this.add.rectangle(x+w/2,y+42,w,44,0x51402b,.96).setStrokeStyle(1,0xd7b778).setName(name));
   root.add(worldText(this,x+w/2,y+42,`主公 ${n} · 亲征`,18,'#f0d79e').setOrigin(.5).setName(name+'-text'));
  }
- private launchSiege(city:CityDef,hero:CharacterId,defense=false){
+ private launchSiege(city:CityDef,hero:CharacterId,defense=false,intercept=false){
   if(!defense&&sortieBlocked(this,()=>this.launchSiege(city,hero,defense)))return;
   if(!isChapterTestRun())try{localStorage.setItem('im_last_hero',hero);}catch{/* storage unavailable */}
-  this.registry.remove('campaignTransfer');this.registry.set('siegeCity',city.id);if(defense)this.registry.set('siegeMode','defense');else this.registry.remove('siegeMode');this.registry.set('runConfig',{character:hero});
+  this.registry.remove('campaignTransfer');this.registry.set('siegeCity',city.id);if(defense)this.registry.set('siegeMode',intercept?'intercept':'defense');else this.registry.remove('siegeMode');this.registry.set('runConfig',{character:hero});
   if(this.registry.get('battleReady'))this.scene.start('SiegeGameScene');else{this.registry.set('pendingWarlord','SiegeGameScene');this.registry.set('loadBattle',true);this.scene.start('BootScene');}
  }
  /** 出征：主按钮（hard=false）或「乱世难度」（hard=true）。章节节点从下一关出征，关卡标记从该关出征。 */

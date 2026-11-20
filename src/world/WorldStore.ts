@@ -10,6 +10,7 @@ import {siegeUnlocked} from './RouteMap';
 import {territorySummary,cityAttacker,cityById,eraChanges,eraIndexFor,type FactionId} from './WorldCities';
 import {type TownState,type TownBuildingId,type CityFocus,type SeasonReport,type TownProgress,TOWN_BUILDINGS,FOCUS_CHANGE_COST,FOCUS_NAME,migrateTown,parseTown,legacyLevels,settleSeason,nextCost,buildBlockers,CITY_SIZE,CITY_TITLE,levyCost,LEVY_SOLDIERS,costText,buildingBattleEffects,levelOf,focusOpen,MERIT_TO_GRAIN,MONEY_TO_GRAIN,STABLE_HORSES,drillCap,drillCost,drillMultiplier,DRILL_MAX} from '../town/TownData';
 import {TECHS,techTotals,techBlockers,type TechId} from '../data/tech';
+import {DEFENSE_RULES} from '../data/defenseRules';
 import {TROOP_UNLOCK,troopUnlocked,barracksReinforcements} from '../data/barracks';
 import {CITY_BUILDINGS,cityBuildCost,cityBuildBlockers,cityIncome,emptyCityLevels,parseCityLevels,type CityBuildingId,type CityLevels} from '../data/cityBuildings';
 /**
@@ -25,7 +26,8 @@ function parseCities(s:WorldSave,v:{version?:number;cities?:unknown}):void{
  for(const id of s.ownedCities){const c=cityById(id);if(c&&!s.cities[id])s.cities[id]=emptyCityLevels();}
 }
 /** W4 告急：某座玩家城池正被来犯；cause 为时代更替或攻城后反扑。 */
-export interface CityAlert{city:string;attacker:FactionId;cause:'era'|'retaliation';}
+/** 告急（守城重做 data/defenseRules.ts）：countdown = 还剩几战围城（0 = 被围）。 */
+export interface CityAlert{city:string;attacker:FactionId;cause:'era'|'retaliation';countdown:number;}
 export type BuildingId='barracks'|'farm'|'clinic';
 /** 第三章起的群雄篇章：各自独立的关卡进度与失败最佳成绩。 */
 export type WarlordArc='qunxiong'|'guandu'|'chibi'|'jingnan'|'shu'|'hanzhong'|'xiangfan'|'yiling'|'nanzheng'|'beifa';
@@ -44,7 +46,7 @@ export interface WorldSave {version:10;
  /** 第十二章 北伐（最终章）进度；开发期不做旧档迁移。 */
  beifaStages:number; beifaFailureBest:number;
  /** v7 天下地图：玩家已占城池 id；已看过的时代（W4 时局变化用）。 */
- ownedCities:string[]; eraSeen:number; capturedEver:string[]; alerts:CityAlert[]; lastLost:string[]; dongzhuoStages:number; legacyHulaoAccess:boolean; worldAvailable:boolean;
+ ownedCities:string[]; eraSeen:number; capturedEver:string[]; alerts:CityAlert[]; lastLost:string[]; /** 守城冷却：还剩几战不再告急。 */ defenseCooldown:number; /** 守住后的民心：城 → 还剩几战产粮加成。 */ morale:Record<string,number>; dongzhuoStages:number; legacyHulaoAccess:boolean; worldAvailable:boolean;
  /** 天下地图上已见过的开放章节数（新篇解锁提示用）；旧存档按当前开放数迁移，不补弹提示。 */
  chapterSeen:number;
  /** 新手引导（1-1 情境式教学）已看完或已跳过；设置里「重看新手引导」清掉。开发期不做旧档迁移。 */
@@ -63,12 +65,12 @@ let memory:WorldSave|undefined;
 export let storageUnavailable=false;
 export let incompatibleSave=false;
 const integer=(v:unknown,max=1_000_000)=>typeof v==='number'&&Number.isFinite(v)?Math.max(0,Math.min(max,Math.floor(v))):0;
-const defaults=():WorldSave=>({version:10,cities:{},town:migrateTown({barracks:1,farm:1,clinic:1}),ownedCities:[],eraSeen:0,capturedEver:[],alerts:[],lastLost:[],yellowStages:0,warlordStages:0,thirdFailureBest:0,guanduStages:0,guanduFailureBest:0,chibiStages:0,jingnanStages:0,jingnanFailureBest:0,shuStages:0,shuFailureBest:0,hanzhongStages:0,hanzhongFailureBest:0,xiangfanStages:0,xiangfanFailureBest:0,yilingStages:0,yilingFailureBest:0,nanzhengStages:0,nanzhengFailureBest:0,beifaStages:0,beifaFailureBest:0,chibiFailureBest:0,dongzhuoStages:0,legacyHulaoAccess:false,worldAvailable:false,chapterSeen:1,tutorialDone:false,mountTutorialDone:false,mountHintDone:false,hardCleared:[],intel:[],intelSeq:0,lubuClears:0,revision:0,merits:0,provisions:0,buildings:{barracks:1,farm:1,clinic:1},cleared:{huangjin:false,hulao:false},failureBest:{huangjin:0,hulao:0},nodes:['huangjin'],reserve:{},armyPlan:{capacity:2,garrison:0},active:null,receipts:[]});
+const defaults=():WorldSave=>({version:10,cities:{},town:migrateTown({barracks:1,farm:1,clinic:1}),ownedCities:[],eraSeen:0,capturedEver:[],alerts:[],lastLost:[],defenseCooldown:0,morale:{},yellowStages:0,warlordStages:0,thirdFailureBest:0,guanduStages:0,guanduFailureBest:0,chibiStages:0,jingnanStages:0,jingnanFailureBest:0,shuStages:0,shuFailureBest:0,hanzhongStages:0,hanzhongFailureBest:0,xiangfanStages:0,xiangfanFailureBest:0,yilingStages:0,yilingFailureBest:0,nanzhengStages:0,nanzhengFailureBest:0,beifaStages:0,beifaFailureBest:0,chibiFailureBest:0,dongzhuoStages:0,legacyHulaoAccess:false,worldAvailable:false,chapterSeen:1,tutorialDone:false,mountTutorialDone:false,mountHintDone:false,hardCleared:[],intel:[],intelSeq:0,lubuClears:0,revision:0,merits:0,provisions:0,buildings:{barracks:1,farm:1,clinic:1},cleared:{huangjin:false,hulao:false},failureBest:{huangjin:0,hulao:0},nodes:['huangjin'],reserve:{},armyPlan:{capacity:2,garrison:0},active:null,receipts:[]});
 function parse(raw:string|null):WorldSave|null {try{if(!raw)return null;const v=JSON.parse(raw);if(![1,2,3,4,5,6,7,8,9,10].includes(v.version)||!v.buildings||!v.cleared)return null;const s=defaults();s.warlordStages=integer(v.warlordStages,3);s.thirdFailureBest=integer(v.thirdFailureBest,20);
  // v6：第四章（官渡）进度；旧档默认为 0，第三章全通后开放。
  s.guanduStages=v.version>=6?integer(v.guanduStages,3):0;s.chibiStages=integer(v.chibiStages,3);s.jingnanStages=integer(v.jingnanStages,3);s.jingnanFailureBest=integer(v.jingnanFailureBest,20);s.shuStages=integer(v.shuStages,3);s.shuFailureBest=integer(v.shuFailureBest,20);s.hanzhongStages=integer(v.hanzhongStages,3);s.hanzhongFailureBest=integer(v.hanzhongFailureBest,20);s.xiangfanStages=integer(v.xiangfanStages,3);s.xiangfanFailureBest=integer(v.xiangfanFailureBest,20);s.yilingStages=integer(v.yilingStages,3);s.yilingFailureBest=integer(v.yilingFailureBest,20);s.nanzhengStages=integer(v.nanzhengStages,3);s.nanzhengFailureBest=integer(v.nanzhengFailureBest,20);s.beifaStages=integer(v.beifaStages,3);s.beifaFailureBest=integer(v.beifaFailureBest,20);s.chibiFailureBest=integer(v.chibiFailureBest,20);s.guanduFailureBest=v.version>=6?integer(v.guanduFailureBest,20):0;
  // v7：天下地图城池；旧档无城池，eraSeen=0（之后按当前时代处理）
- s.ownedCities=v.version>=7&&Array.isArray(v.ownedCities)?[...new Set(v.ownedCities.filter((c:unknown)=>typeof c==='string'&&c.length<=32))].slice(0,64) as string[]:[];s.eraSeen=v.version>=7?integer(v.eraSeen,3):0;s.capturedEver=v.version>=7&&Array.isArray(v.capturedEver)?[...new Set(v.capturedEver.filter((c:unknown)=>typeof c==='string'&&c.length<=32))].slice(0,64) as string[]:[];s.alerts=v.version>=7&&Array.isArray(v.alerts)?v.alerts.filter((a:CityAlert)=>a&&typeof a.city==='string'&&s.ownedCities.includes(a.city)&&typeof a.attacker==='string'&&a.attacker.length<=16).slice(0,16).map((a:CityAlert)=>({city:a.city,attacker:a.attacker,cause:a.cause==='era'?'era':'retaliation'})):[];s.lastLost=v.version>=7&&Array.isArray(v.lastLost)?v.lastLost.filter((c:unknown)=>typeof c==='string'&&c.length<=32).slice(0,16):[];s.yellowStages=integer(v.yellowStages,3);s.revision=integer(v.revision);s.provisions=integer(v.provisions);for(const id of ['barracks','farm','clinic'] as BuildingId[])s.buildings[id]=Math.max(1,integer(v.buildings[id],3));
+ s.ownedCities=v.version>=7&&Array.isArray(v.ownedCities)?[...new Set(v.ownedCities.filter((c:unknown)=>typeof c==='string'&&c.length<=32))].slice(0,64) as string[]:[];s.eraSeen=v.version>=7?integer(v.eraSeen,3):0;s.capturedEver=v.version>=7&&Array.isArray(v.capturedEver)?[...new Set(v.capturedEver.filter((c:unknown)=>typeof c==='string'&&c.length<=32))].slice(0,64) as string[]:[];s.alerts=v.version>=7&&Array.isArray(v.alerts)?v.alerts.filter((a:CityAlert)=>a&&typeof a.city==='string'&&s.ownedCities.includes(a.city)&&typeof a.attacker==='string'&&a.attacker.length<=16).slice(0,16).map((a:CityAlert)=>({city:a.city,attacker:a.attacker,cause:a.cause==='era'?'era':'retaliation',countdown:typeof a.countdown==='number'?Math.max(0,Math.min(9,Math.floor(a.countdown))):DEFENSE_RULES.muster})):[];s.defenseCooldown=integer(v.defenseCooldown,9);s.morale=v.morale&&typeof v.morale==='object'?Object.fromEntries(Object.entries(v.morale as Record<string,unknown>).filter(([k,n])=>typeof k==='string'&&k.length<=32&&typeof n==='number'&&n>0).map(([k,n])=>[k,Math.min(9,Math.floor(n as number))])):{};s.lastLost=v.version>=7&&Array.isArray(v.lastLost)?v.lastLost.filter((c:unknown)=>typeof c==='string'&&c.length<=32).slice(0,16):[];s.yellowStages=integer(v.yellowStages,3);s.revision=integer(v.revision);s.provisions=integer(v.provisions);for(const id of ['barracks','farm','clinic'] as BuildingId[])s.buildings[id]=Math.max(1,integer(v.buildings[id],3));
  // v9：统一军粮。旧档的军功、钱（含在途商队）与已删建筑的退还一并折成军粮；v9 存档 merits 恒为 0。
  {const pt=parseTown(v.version>=8?v.town:null,s.buildings);s.town=pt.town;s.provisions=Math.min(1_000_000,s.provisions+Math.round(integer(v.merits)*MERIT_TO_GRAIN)+Math.round(pt.money*MONEY_TO_GRAIN)+pt.refund);s.merits=0;}if(!(v.town?.levels&&typeof v.town.levels==='object'&&'talent' in v.town.levels)){try{const r=JSON.parse(localStorage.getItem('im_roster_v1')??'null');s.town.levels.talent=Math.max(1,Math.min(3,integer(r?.hall,3)));}catch{s.town.levels.talent=1;}}applyCampRule(s);for(const id of ['huangjin','hulao'] as ChapterId[]){s.cleared[id]=v.cleared[id]===true;s.failureBest[id]=integer(v.failureBest?.[id],20);}if(s.cleared.huangjin||s.cleared.hulao)s.yellowStages=3;
  // v1/v2 builds opened the map directly after Zhangjiao. Keep that access for existing saves;
@@ -172,7 +174,8 @@ function bank(s:WorldSave,merits:number,provisions:number,money=0):{merits:numbe
 function applyIncome(s:WorldSave,eligible:boolean,merits:number,provisions:number):{merits:number;provisions:number;cityMerits:number;cityProvisions:number;season:SeasonReport|null}{
  const t=territorySummary(s.ownedCities),bonus=1+t.specialties.reduce((n,x)=>n+(x.specialty.provisions??0),0),tech=techTotals(s.town.tech),battle=Math.round((provisions*bonus+grainOf(merits))*(1+tech.grain));
  if(!eligible)return{merits:0,provisions:battle,cityMerits:0,cityProvisions:0,season:null};
- const cities=s.ownedCities.map(id=>cityById(id)).filter((c):c is NonNullable<typeof c>=>!!c).map(c=>({...cityIncome(c.tier,s.cities[c.id]??emptyCityLevels()),mult:raidedNow(s).includes(c.id)?.5:1}));
+ const cities=s.ownedCities.map(id=>cityById(id)).filter((c):c is NonNullable<typeof c>=>!!c).map(c=>({...cityIncome(c.tier,s.cities[c.id]??emptyCityLevels()),mult:(raidedNow(s).includes(c.id)?.5:1)*((s.morale[c.id]??0)>0?1+DEFENSE_RULES.moraleMul:1)}));
+ for(const k of Object.keys(s.morale)){s.morale[k]--;if(s.morale[k]<=0)delete s.morale[k];} // 民心安定（守城重做）：守住后 moraleBattles 战产粮 +moraleMul
  const troops=Object.values(s.reserve).reduce((n,v)=>n+(v||0),0),raided=raidedNow(s).map(id=>cityById(id)?.name??id);
  const farmList=s.ownedCities.map(id=>{const c=cityById(id);if(!c)return null;const f=cityIncome(c.tier,s.cities[id]??emptyCityLevels()).farm;return f?{city:c.name,grain:Math.round(f*(raidedNow(s).includes(id)?.5:1)*bonus)}:null;}).filter((x):x is {city:string;grain:number}=>!!x);
  const r=settleSeason(s.town,{troops,cities,provisionsHave:s.provisions+battle,provisionsMultiplier:bonus});if(raided.length)r.raided=raided;if(farmList.length)r.farms=farmList;refreshIntel(s);
@@ -229,10 +232,15 @@ export function setWorldRandom(f?:()=>number):void{(globalThis as Record<string,
 const eraOf=(s:WorldSave)=>eraIndexFor({hulaoCleared:s.cleared.hulao,warlordStages:s.warlordStages,guanduStages:s.guanduStages});
 export function currentEra():1|2|3{return eraOf(loadWorld());}
 /** 攻城后反扑概率（按被占城池档位）。 */
-export const RETALIATION_CHANCE={small:.25,medium:.4,large:.6} as const;
-function retaliate(s:WorldSave,cityId:string):CityAlert|null{const c=cityById(cityId);if(!c||s.alerts.some(a=>a.city===cityId))return null;const attacker=cityAttacker(cityId,eraOf(s),s.ownedCities);if(!attacker||random()>=RETALIATION_CHANCE[c.tier])return null;const alert:CityAlert={city:cityId,attacker,cause:'retaliation'};s.alerts=[...s.alerts,alert];return alert;}
-/** 有告急城池时出征别处（章节 / 群雄篇 / 攻城）：告急城池失守。守城战不触发。 */
-function loseAlerted(s:WorldSave):void{if(!s.alerts.length)return;const lost=s.alerts.map(a=>a.city).filter(c=>s.ownedCities.includes(c));s.ownedCities=s.ownedCities.filter(c=>!lost.includes(c));s.alerts=[];s.lastLost=lost;}
+export const RETALIATION_CHANCE=DEFENSE_RULES.retaliation; // 守城重做：原 .25 / .4 / .6
+function retaliate(s:WorldSave,cityId:string):CityAlert|null{const c=cityById(cityId);if(!c||s.alerts.some(a=>a.city===cityId)||s.alerts.length>=DEFENSE_RULES.maxAlerts||s.defenseCooldown>0)return null;const attacker=cityAttacker(cityId,eraOf(s),s.ownedCities);if(!attacker||random()>=RETALIATION_CHANCE[c.tier])return null;const alert:CityAlert={city:cityId,attacker,cause:'retaliation',countdown:DEFENSE_RULES.muster};s.alerts=[...s.alerts,alert];return alert;}
+/**
+ * 出征别处（章节 / 群雄篇 / 攻城 / 军情 / 挑战；守城与迎击不算）：被围的城（countdown 0）失守，集结中的倒计时 −1（到 0 变被围）；守城冷却 −1。
+ * 守城重做（defense-redesign.md）：原来是「有告急就全部失守」。
+ */
+function loseAlerted(s:WorldSave):void{if(s.defenseCooldown>0)s.defenseCooldown--;if(!s.alerts.length)return;
+ const lost=s.alerts.filter(a=>a.countdown<=0).map(a=>a.city).filter(c=>s.ownedCities.includes(c));
+ s.ownedCities=s.ownedCities.filter(c=>!lost.includes(c));s.alerts=s.alerts.filter(a=>a.countdown>0).map(a=>({...a,countdown:a.countdown-1}));s.lastLost=lost;if(lost.length)s.defenseCooldown=DEFENSE_RULES.cooldown;}
 export function cityAlerts():CityAlert[]{return loadWorld().alerts;}
 /** 地图读取一次“上次失守”提示后清空。 */
 export function takeLostNotice():string[]{const s=loadWorld();if(!s.lastLost.length)return[];const lost=s.lastLost;s.lastLost=[];commit(s);return lost;}
@@ -245,18 +253,21 @@ export function advanceEra():EraAdvance|null{const s=loadWorld(),to=eraOf(s);if(
  const from=Math.max(1,Math.min(3,s.eraSeen)) as 1|2|3,{changes,fallen}=eraChanges(from,to,s.ownedCities);
  const border=s.ownedCities.filter(c=>!s.alerts.some(a=>a.city===c)).map(c=>({city:c,attacker:cityAttacker(c,to,s.ownedCities)})).filter((x):x is {city:string;attacker:FactionId}=>!!x.attacker);
  for(let i=border.length-1;i>0;i--){const j=Math.floor(random()*(i+1));[border[i],border[j]]=[border[j],border[i]];}
- const alerts=border.slice(0,Math.min(border.length,1+Math.floor(random()*3))).map(x=>({...x,cause:'era' as const}));
+ const room=s.defenseCooldown>0?0:Math.max(0,DEFENSE_RULES.maxAlerts-s.alerts.length);
+ const alerts=border.slice(0,Math.min(border.length,room,DEFENSE_RULES.eraMax)).map(x=>({...x,cause:'era' as const,countdown:DEFENSE_RULES.muster}));
  s.alerts=[...s.alerts,...alerts];s.eraSeen=to;commit(s);return{from,to,changes,fallen,alerts};}
 /** 守城出征：须为告急中的我方城池；不触发失守。 */
 export function beginDefense(cityId:string,deployed:TroopKind[]=[]):string{const s=loadWorld();if(!s.ownedCities.includes(cityId)||!s.alerts.some(a=>a.city===cityId))return '';const id=createExpeditionId();refundStaleExpedition(s);s.active={id,chapter:'hulao',arc:'defense',cityId,stage:1,state:'active',farm:s.buildings.farm,deployed:[...deployed]};commit(s);return id;}
 /** 守城结算：胜利解除告急并发放攻城奖励的一半；失败城池仍在、告急不变。 */
-export function settleDefense(id:string,result:{victory:boolean;bossKilled:boolean;debug:boolean;elapsed?:number;reward:{merits:number;provisions:number};returned?:TroopKind[]}):{merits:number;provisions:number;cityMerits?:number;cityProvisions?:number;season?:SeasonReport|null;held:boolean;message:string}{
+export function settleDefense(id:string,result:{victory:boolean;bossKilled:boolean;debug:boolean;/** 迎击（集结期间出城野战）：奖励 ×interceptMul，不给民心 */intercept?:boolean;elapsed?:number;reward:{merits:number;provisions:number};returned?:TroopKind[]}):{merits:number;provisions:number;cityMerits?:number;cityProvisions?:number;season?:SeasonReport|null;held:boolean;message:string}{
  const zero={merits:0,provisions:0,held:false};if(result.debug)return{...zero,message:'测试战斗，不写入永久进度'};
  const s=loadWorld(),a=s.active;if(!a||a.arc!=='defense'||!a.cityId||a.id!==id||a.state!=='active'||s.receipts.some(r=>r.id===id))return{...zero,message:'本场已结算或无效'};
  a.state='settled';let merits=0,provisions=0,held=false;
- if(result.victory&&result.bossKilled&&s.alerts.some(x=>x.city===a.cityId)){s.alerts=s.alerts.filter(x=>x.city!==a.cityId);held=true;merits=Math.round(result.reward.merits/2);provisions=Math.round(result.reward.provisions/2*(1+(a.farm-1)*.08));}
+ const R=DEFENSE_RULES,mul=result.intercept?R.interceptMul:R.rewardMul;
+ if(result.victory&&result.bossKilled&&s.alerts.some(x=>x.city===a.cityId)){s.alerts=s.alerts.filter(x=>x.city!==a.cityId);held=true;s.defenseCooldown=R.cooldown;merits=Math.round(result.reward.merits*mul);provisions=Math.round(result.reward.provisions*mul*(1+(a.farm-1)*.08));}
+ else if(!result.victory){s.alerts=s.alerts.map(x=>x.city!==a.cityId?x:{...x,countdown:result.intercept?Math.max(0,x.countdown-1):0});} // 迎击输了倒计时 −1；守城输了 = 被围
  const available=[...(a.deployed??[])];for(const k of result.returned??[]){const i=available.indexOf(k);if(i>=0){available.splice(i,1);s.reserve[k]=Math.min(999,(s.reserve[k]??0)+1);}}
- const inc=applyIncome(s,result.victory||(result.elapsed??0)>=60,merits,provisions);merits=inc.merits;provisions=inc.provisions;
+ const inc=applyIncome(s,result.victory||(result.elapsed??0)>=60,merits,provisions);merits=inc.merits;provisions=inc.provisions;if(held&&!result.intercept)s.morale[a.cityId]=R.moraleBattles; /* 民心：算在本场收成之后，接下来 moraleBattles 战才加 */
  ({merits,provisions}=bank(s,merits,provisions));s.receipts.push({id,merits,provisions});s.receipts=s.receipts.slice(-32);const persisted=commit(s);
  return{merits,provisions,cityMerits:inc.cityMerits,cityProvisions:inc.cityProvisions,season:inc.season,held,message:persisted?(held?'城池守住了':'守城失利，城池仍告急'):'已保留本次会话，存储不可用'};
 }
@@ -331,8 +342,13 @@ export function beginThirdExpedition(stage:number,deployed:TroopKind[]=[]):strin
 export function settleThirdExpedition(id:string,result:{victory:boolean;bossKilled:boolean;kills:number;elapsed:number;debug:boolean;returned?:TroopKind[]}):ReturnType<typeof settleArcExpedition>{return settleArcExpedition('qunxiong',id,result);}
 /** W4：有告急城池时，出征别处前的警示语（无告急为空串）。 */
 /** 这时出征别处会失守的城池（城名；出征确认弹窗 ui/SortieGuard 用）。现行规则：所有告急的我方城池。 */
-export function sortieLossCities():string[]{const s=loadWorld();return s.alerts.map(a=>a.city).filter(c=>s.ownedCities.includes(c)).map(c=>cityById(c)?.name??c);}
-export function alertLossWarning():string{const names=loadWorld().alerts.map(a=>cityById(a.city)?.name).filter(Boolean);return names.length?`⚠ ${names.join('、')}告急：此时出征别处，${names.length>1?'这些城池':'该城'}将失守`:'';}
+export function sortieLossCities():string[]{const s=loadWorld();return s.alerts.filter(a=>a.countdown<=0).map(a=>a.city).filter(c=>s.ownedCities.includes(c)).map(c=>cityById(c)?.name??c);}
+/** 弃城（守城重做）：城归来犯势力、解除告急、冷却；建筑等级保留（s.cities 不动，打回来还在）。 */
+export function abandonCity(cityId:string):boolean{const s=loadWorld();if(!s.ownedCities.includes(cityId)||!s.alerts.some(a=>a.city===cityId))return false;
+ s.ownedCities=s.ownedCities.filter(c=>c!==cityId);s.alerts=s.alerts.filter(a=>a.city!==cityId);s.lastLost=[];s.defenseCooldown=DEFENSE_RULES.cooldown;delete s.morale[cityId];commit(s);return true;}
+export function alertLossWarning():string{const s=loadWorld(),siege=s.alerts.filter(a=>a.countdown<=0).map(a=>cityById(a.city)?.name).filter(Boolean),muster=s.alerts.filter(a=>a.countdown>0);
+ if(!siege.length)return muster.length?muster.map(a=>`⚔ ${cityById(a.city)?.name}：敌军集结，再打 ${a.countdown} 战围城（可先迎击）`).join('；'):'';
+ const names=siege;return names.length?`⚠ ${names.join('、')}被围：此时出征别处，${names.length>1?'这些城池':'该城'}将失守`:'';}
 /** 道具分解所得（旧称“钱”）折成军粮记入营寨（ItemStore 调用）。 */
 /** 招贤馆等花费：一律扣军粮。旧参数 merits / money 按折算系数并入军粮（招贤馆已只传 provisions）；不够返回 false 且不扣。 */
 /** 直接加军粮（第六章劝降：降城府库）。 */

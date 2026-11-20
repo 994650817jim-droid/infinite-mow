@@ -1,3 +1,4 @@
+import { statEffective, statSource } from '../data/heroStats';
 import { XP_SHIFT, heroXpNeed } from '../data/heroLevels';
 import { attributePointsAt } from '../data/attributes';
 import type { CharacterId } from '../data/characters';
@@ -172,4 +173,9 @@ export function hasHeroRecord(id: HeroKey): boolean { return !!read().heroes[id]
 /** 战斗中升级：直接写入武将等级与当前经验（软上限：不封顶；经验压到「差 1 点升级」以内，读档时不会按存档的软上限自动补升）。 */
 export function setHeroProgress(id: HeroKey, level: number, xp: number): void {
   const r = record(id, true); r.level = Math.max(r.level, Math.floor(level)); r.xp = Math.max(0, Math.min(need(r.level) - 1, Math.round(xp))); commit();
+}
+
+/** 武将某项属性的生效点数（本色折算 + 加点，折扣与擅长倍率之后）；武将谱 / 随从 / 面板共用（2026-11-20 属性改版）。 */
+export function heroStatE(id: HeroKey, attr: AttributeId): number {
+  const r = record(id, false); return statEffective(statSource(id), attr, r.attributes[attr], r.level);
 }

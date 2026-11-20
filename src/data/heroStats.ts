@@ -44,7 +44,7 @@ export const TEMPLATE_STATS: Record<string, { base: Stat4; growth: Stat4 }> = {
   bow: { base: [44, 54, 40, 40], growth: [.2, .6, .2, 0] },
   strategist: { base: [34, 46, 56, 44], growth: [0, .2, .6, .2] },
 };
-export const QUALITY_STAT_BONUS: Record<string, number> = { white: 0, blue: 6, purple: 12 };
+export const QUALITY_STAT_BONUS: Record<string, number> = { white: 0, green: 3, blue: 6, purple: 12, orange: 15 };
 
 /** 史事名将（名将悬赏名单，只能跟随）：名字 → 本色（力 / 敏 / 智 / 统）；成长权重按最高两项自动生成。 */
 export const GENERAL_STATS: Record<string, Stat4> = {

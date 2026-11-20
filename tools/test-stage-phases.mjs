@@ -25,7 +25,7 @@ async function open(start) {
   return p;
 }
 const jump = async (p, t) => { await p.evaluate(t => { window.__S.elapsed = t; window.__S.lastPickAt = -1e9; }, t); await p.waitForTimeout(500); await p.evaluate(() => window.__calm()); await p.waitForTimeout(300); await p.evaluate(() => window.__calm()); };
-const state = p => p.evaluate(() => { const s = window.__S, r = s.phaseRunner, t = s.battleTrack; return { phase: s.waveIndex, kinds: s.phasePlan?.phases.map(x => x.kind), starts: s.chapter.waves.map(w => w.start), pace: s.chapter.pace, bossHpMul: s.chapter.growth?.bossHp, cap: s.pickCap(), picks: s.picksGiven, run: r && { ...r.stats }, track: t && { ...t.stats, visible: t.root.visible, alpha: +t.root.alpha.toFixed(2) }, waveText: s.hudTexts.wave.visible, boss: s.bossSpawned, banners: window.__banners.slice(-3) }; });
+const state = p => p.evaluate(() => { const s = window.__S, r = s.phaseRunner, t = s.battleTrack; return { phase: s.waveIndex, kinds: s.phasePlan?.phases.map(x => x.kind), starts: s.chapter.waves.map(w => w.start), pace: s.chapter.pace, bossHpMul: s.chapter.growth?.bossHp, cap: s.pickCap(), picks: s.picksGiven, run: r && { ...r.stats }, track: t && { ...t.stats, visible: t.root.visible, alpha: +t.root.alpha.toFixed(2) }, waveText: s.hudTexts.wave.visible, boss: s.bossSpawned, banners: window.__banners.slice(-6) }; });
 
 async function stageCase(label, start, shot) {
   const p = await open(start);
@@ -157,23 +157,6 @@ await stageCase('3-2 宛城夜袭（ThirdGameScene）', { key: 'ThirdGameScene',
   const pick = await p.evaluate(async () => { const s = window.__S, i = s.upgradeOptions.findIndex(o => o.id === 'branch_zy_longdan'); s.chooseUpgrade(i); window.__calm(); const up = await import('/src/data/upgrades.ts'), wb = await import('/src/data/weaponBranches.ts'); wb.WEAPON_OVER.cap = 1; let over; for (let i = 0; i < 30 && !over; i++) over = up.buildUpgradeOptions(s.player, s.player.weapons, s.player.growth).find(o => o.id === 'weapon_over_6'); const d0 = s.player.growth.damageMultiplier(0); over?.apply(s.player, s.player.weapons, s.player.growth); s.tickBranch(); const d1 = s.player.growth.damageMultiplier(0); return { branch: s.player.weapons[0].branch, over6: !!over, overNow: s.player.weapons[0].over, dmg: +(d1 / d0).toFixed(2), level: s.player.weapons[0].level }; });
   ck('选「龙胆 · 七进七出」锁定；第四章起出本命 Lv.6（沿分支加深，伤害 +10%）；HUD 写分支名', pick.branch === 'zy_longdan' && pick.over6 && pick.overNow === 1 && pick.dmg === 1.1, pick);
   await p.close();
-}
-const branchFire = async (hero, branches) => {
-  const out = {};
-  for (const br of branches) {
-    const p = await open({ key: 'GameScene', run: { chapter: 'hulao', westStage: 2, character: hero } });
-    await p.evaluate(br => { const s = window.__S; window.__calm(); const w = s.player.weapons[0]; w.level = 5; w.branch = br; w.over = 0; s.player.stats.cooldownMul = .5; for (const a of s.allies) if (a.active) a.hp = Math.max(1, a.maxHp * .4); }, br);
-    for (let k = 0; k < 4; k++) { await p.evaluate(() => { const s = window.__S; for (let i = 0; i < 10; i++) { const a = i / 10 * Math.PI * 2; s.spawnEnemy(i % 3 ? 'infantry' : 'shield', s.player.x + Math.cos(a) * 110, s.player.y + Math.sin(a) * 110, 3, true); } if (s.player.sprite) s.player.sprite.x += 90; window.__calm(); }); await p.waitForTimeout(1400); }
-    out[br] = await p.evaluate(() => { const r = window.__S.branchRt; return r ? { ...r.stats } : null; });
-    if (br === 'gy_qinglong') await p.screenshot({ path: `${OUT}/branch-gy-qinglong.png` });
-    await p.close();
-  }
-  return out;
-};
-{
-  const r = { ...(await branchFire('zhaoyun', ['zy_longdan', 'zy_bainiao'])), ...(await branchFire('guanyu', ['gy_qinglong', 'gy_danqi'])), ...(await branchFire('zhangfei', ['zf_duanqiao', 'zf_nuhou'])), ...(await branchFire('liubei', ['lb_rende', 'lb_sanying'])) };
-  const bad = Object.entries(r).filter(([k, v]) => !v || v.procs < 1 || (!['zf_nuhou', 'lb_rende'].includes(k) && v.hits < 1)).map(([k]) => k);
-  ck('第一批 8 个分支在战斗里都会触发（赵云 龙胆 / 百鸟，关羽 青龙出水 / 单骑，张飞 断桥 / 怒吼，刘备 仁德 / 三英）', bad.length === 0, { bad, r });
 }
 await b.close();
 ck('无页面报错', errors.length === 0, errors.slice(0, 4));

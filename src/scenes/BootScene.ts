@@ -6,6 +6,7 @@ import { BOOT_TO_KEY } from '../systems/BattleSnapshot';
 import {loadWarnFx} from '../ui/WarnFx';
 import {HOME_ART_HEROES} from '../data/characters';
 import {GROWTH_ICON_IDS} from '../ui/GrowthIcons';
+import {BRANCH_ICON_READY} from '../data/weaponBranches';
 import {TACTICS,TREASURES} from '../data/builds';
 import {loadWorld,worldUnlocked} from '../world/WorldStore';
 import Phaser from 'phaser';
@@ -45,6 +46,8 @@ export class BootScene extends Phaser.Scene {
     // 三选一 / 增益栏图标：2026-11-14 起使用 ChatGPT 生成的厚涂图标（assets/upgrade-icons，tools/build-upgrade-icons.mjs 切图）；
     // 旧像素图标仍保留在 growth-icons / build 目录，未被删除。
     if(!lean)for(const id of GROWTH_ICON_IDS)this.load.image('growth_icon_'+id,'assets/upgrade-icons/'+id+'.webp');
+    // 兵器专职分支卡面图标（ChatGPT 手绘，tools/prepare-branch-icons.py）：只载已出图的（BRANCH_ICON_READY）
+    if(!lean)for(const id of BRANCH_ICON_READY)this.load.image('branch_icon_'+id,'assets/upgrade-icons/branch_'+id+'.webp');
     if(!lean)for(const id of [...Object.keys(TACTICS),...Object.keys(TREASURES)])this.load.image('build_icon_'+id,'assets/upgrade-icons/'+(TACTIC_ICON_ALIAS[id]??id)+'.webp'); // 流派重做新战法第 1 期借现有图标（火油罐 → 燎原灯、疾风 → 镇军盘），第 3 期出新图
     if(!lean){for(const sc of SCHOOL_IDS)this.load.image('build_icon_school_'+sc,'assets/schools/seal_'+sc+'.png');this.load.image('school_banner_combo','assets/schools/banner_combo.png');this.load.image('school_banner_awaken','assets/schools/banner_awaken.png');} // 流派重做第 3 期：六派徽印、合击 / 觉醒横幅
     // 水墨按钮底板（ChatGPT 生成，tools/prepare-button-art.mjs 切图）；homeCommand 有图即用，缺图退回程序画底板

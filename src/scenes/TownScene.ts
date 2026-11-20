@@ -15,6 +15,7 @@ import {uiSfx} from '../systems/Sfx';
 import {startCityAmbient} from '../systems/ContentSfx';
 import {loadWorld,worldUnlocked,storageUnavailable,incompatibleSave,cityLevels,cityBuild,spendProvisions,gainProvisions} from '../world/WorldStore';
 import {openMerchantShop} from '../ui/MerchantShop';
+import {openMedicPanel} from '../ui/MedicPanel';
 import {CHARACTERS,type CharacterId} from '../data/characters';
 import {CAMP_ART_IDS} from '../town/CampLife';
 import {cityById,SPECIALTIES,TIER_NAME,type CityTier} from '../world/WorldCities';
@@ -207,6 +208,18 @@ export class TownScene extends Phaser.Scene {
    const base = art ? {x: art.scaleX, y: art.scaleY} : null, color = tag.style.color as string;
    hit.on('pointerover', () => { tag.setColor('#ffe08a').setScale(1.18 / this.z); if (art && base) art.setScale(base.x * 1.04, base.y * 1.04); })
     .on('pointerout', () => { tag.setColor(color).setScale(1 / this.z); if (art && base) art.setScale(base.x, base.y); });
+   this.pano.add(hit); this.hits.push(hit);
+  }
+  // 军医（医馆）：店铺图（门面里摆着药罐），与民居同比例；点开军医面板（同行营，扣军粮，治存档点里的伤）。与旅商分开（用户「军医和商人不要一个框框住」）
+  const md = slots.medic, dx = md.x * k, dy = md.y * k;
+  if (this.textures.exists('town_street')) {
+   const shop = this.add.image(dx, dy, 'town_street', 2).setOrigin(.5, .99).setName('hq-medic'); shop.setScale(md.w * k / 384 * 1.08); this.pano.add(shop);
+   const tag = this.label(dx, dy - 4, '军医', 'built', 'tag-hq-medic'), sh = shop.displayHeight;
+   const hit = this.add.rectangle(dx, dy - sh / 2, Math.max(md.w * k * .9, 60), Math.max(sh, 46), 0xffffff, .001).setName('bld-hq-medic').setInteractive({useHandCursor: true});
+   hit.on('pointerdown', () => { this.pressed = 'hq-medic'; });
+   hit.on('pointerup', () => { const own = this.pressed === 'hq-medic'; this.pressed = null; if (!own || this.drag?.moved) return; uiSfx().play('uiClick'); openMedicPanel(this, {wallet: {name: '军粮', get: () => loadWorld().provisions, spend: spendProvisions}, depth: 600, onClose: () => { if (this.sys.settings.status === Phaser.Scenes.RUNNING) this.refresh(); }}); });
+   const base = {x: shop.scaleX, y: shop.scaleY};
+   hit.on('pointerover', () => { tag.setColor('#ffe08a').setScale(1.18 / this.z); shop.setScale(base.x * 1.04, base.y * 1.04); }).on('pointerout', () => { tag.setColor('#f6e3b4').setScale(1 / this.z); shop.setScale(base.x, base.y); });
    this.pano.add(hit); this.hits.push(hit);
   }
   // 旅商摊：市集摊棚（攻城城内图集，与民居同比例）+ 坛罐，点开军需商人；名牌同其它建筑

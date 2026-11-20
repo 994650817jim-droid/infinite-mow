@@ -291,6 +291,7 @@ assets/raw/*
 !/tools/test-camp-return.mjs
 !/tools/test-camp-merchant.mjs
 !/tools/shot-town-life.mjs
+!/tools/test-medic-anywhere.mjs
 !/tools/shot-camp-full.mjs
 !/tools/deathfx-horse.mjs
 !/tools/shot-academy.mjs

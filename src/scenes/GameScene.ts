@@ -129,6 +129,7 @@ import type { NewCardSource } from '../data/upgrades';
 import { BattleTrack } from '../ui/BattleTrack';
 import { addProvisions, gainProvisions } from '../world/WorldStore';
 import { medicChapter } from '../data/campMedic';
+import { worldMedicChapter } from '../town/CampMedic';
 import { applyCarriedHp, patchCampaignHp, patchCampaignBuild, loadCampaignBuild, packCampaign, restoreCampaign, saveCampaignBuild, type CampaignTransfer } from '../systems/Campaign';
 import { TROOP_KINDS, INITIAL_TROOPS, LEGION, FREE_RECRUIT_BY_TIER, type TroopKind } from '../data/legion';
 import { DEFAULT_RUN_CONFIG, getCharacter, type RunConfig , HERO_TINT, HERO_FX, type CharacterId } from '../data/characters';
@@ -962,7 +963,7 @@ export class GameScene extends Phaser.Scene {
     // 行营休整在本关结算之后：买下的兵装直接收入行囊（2026-11-18 用户报「休整买的装备背包没显示」——原先推进已结算的 runLoot，背包看不到、下一关重建时还会丢）。测试 / 调试战斗同结算规则不入行囊。
     this.campUI.onBuyItem=item=>{const debug=isChapterTestRun()||this.debugModified||this.debugJumped||!!this.player.damageImmune||!!this.runConfig.encounter;if(this.over&&!debug)addItems([item]);else this.itemDrops?.runLoot.push(item);};
     // 军医（2026-11-18）：按章定价；治疗后把存档里的征程构筑血量也改掉（存档点是打赢那一刻存的，治疗在之后；重打旧关不存档也不改）
-    this.campUI.chapterNo=medicChapter(this.scene.key,this.chapter.id);
+    this.campUI.chapterNo=medicChapter(this.scene.key,this.chapter.id,worldMedicChapter());
     // 重整构筑：退回与每次重选后都把存档点改成当前构筑（含待补选次数），关页面再进不会多出或少掉强化；重打旧关 / 测试战斗不写
     this.campUI.onRespecSave=()=>{if(this.campaignReplay||isChapterTestRun()||this.debugModified||this.debugJumped||this.player.damageImmune)return;saveCampaignBuild(this.runConfig.character,packCampaign(this.runConfig.character,this.player,this.legion,this.followers));};
     this.campUI.onLearnTactic=()=>{if(this.campaignReplay)return;patchCampaignBuild(this.runConfig.character,this.player.growth.build.snapshot(),this.legion.food);};

@@ -18,7 +18,7 @@ import { playSheet } from './SkillFxSheets';
 
 /** 战场支援援兵入场（用户 2026-11-17：「支援的兵不要立刻出现在武将脚下，而是场外进入到武将那里」）：比平时跑得快一点，3 秒还没到就直接归位。 */
 export const ARRIVAL = { speedMul: 1.25, maxSeconds: 3, joinDist: 34, dustEvery: .16 } as const;
-export interface LegionState { training?:CampTraining;groups?:Partial<Record<TroopKind,CampGroup>>; food: number; dead: number; recruited: number; levels: Record<TroopKind, number>; soldiers: Array<{ kind: TroopKind; hp: number;reserveSoldier?:boolean }> }
+export interface LegionState { training?:CampTraining;groups?:Partial<Record<TroopKind,CampGroup>>; food: number; dead: number; recruited: number; levels: Record<TroopKind, number>; soldiers: Array<{ kind: TroopKind; hp: number;reserveSoldier?:boolean;/** 生命上限（营寨 / 城池军医判断伤兵用；旧档没有） */max?:number }> }
 
 export class Legion {
   /** 部曲挨了一次打（扣血之后）：太史慈「信义」攒量用（GameScene 接）。 */
@@ -85,7 +85,7 @@ export class Legion {
   }
   get count(): number { let n = 0; for (const u of this.units) if (u.active) n++; return n; }
   recover(): void { for (const u of this.units) if (u.active) u.hp = u.maxHp; }
-  exportState(): LegionState { return { training:{...this.training},groups:{...this.groups},food: this.food, dead: this.dead, recruited: this.recruited, levels: { ...this.levels }, soldiers: this.units.filter(u => u.active).map(u => ({ kind: u.kind, hp: u.hp,reserveSoldier:u.reserveSoldier||undefined })) }; }
+  exportState(): LegionState { return { training:{...this.training},groups:{...this.groups},food: this.food, dead: this.dead, recruited: this.recruited, levels: { ...this.levels }, soldiers: this.units.filter(u => u.active).map(u => ({ kind: u.kind, hp: u.hp,reserveSoldier:u.reserveSoldier||undefined,max:u.maxHp })) }; }
   restore(state: LegionState): void {
     this.clear();this.training=freshTraining();for(const id of Object.keys(this.training)as CampTrainingId[])this.training[id]=Math.max(0,Math.min(3,Math.floor(state.training?.[id]??0)));this.groups={...state.groups};this.command.setState(this.player.growth.build); Object.assign(this.levels, state.levels);
     for(const kind of TROOP_KINDS){const saved=state.soldiers.filter(s=>s.kind===kind),start=this.units.length;if(saved.length)this.recruit(kind,saved.length,true,true);saved.forEach((s,i)=>{const u=this.units[start+i];u.hp=Math.max(0,Math.min(u.maxHp,s.hp));u.reserveSoldier=s.reserveSoldier===true;});}for(const u of this.units){const p=this.formation.position(u);u.setPosition(p.x,p.y);}

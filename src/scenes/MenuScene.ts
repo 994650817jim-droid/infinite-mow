@@ -1,3 +1,4 @@
+import { sortieBlocked } from '../ui/SortieGuard';
 import { IS_DESKTOP_APP, desktop } from '../platform/desktop';
 import { hotkeySettingsLink } from '../ui/HotkeySettingsUI';
 import { confirmLord, defaultHero, ensureLegacyLord, heroOwned, lordFinal, lordHero, lordRules, setLord } from '../systems/RosterStore';
@@ -558,6 +559,7 @@ export class MenuScene extends Phaser.Scene {
     this.startGame();
   }
   private startGame(): void {
+    if (sortieBlocked(this, () => this.startGame())) return; // 出征确认：会让告急城池失守时先问（ui/SortieGuard）
     if (this.heroModal?.visible||this.westModal?.visible||this.children.getByName('home-settings-panel')||this.children.getByName('game-codex')) return;
     if(this.selectedChapter==='hulao'&&!dongzhuoStagePlayable(this.selectedWestStage)&&!isChapterTestRun())return;
     if(this.selectedChapter==='huangjin'&&!yellowStagePlayable(this.selectedStage)&&!isChapterTestRun()&&loadWorld().yellowStages>0)return; // 打过的关不能再打（data/replayRules.ts）

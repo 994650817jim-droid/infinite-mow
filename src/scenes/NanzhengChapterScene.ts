@@ -1,3 +1,4 @@
+import { sortieBlocked } from '../ui/SortieGuard';
 import {playMenuMusic,menuMusic} from '../systems/Music';
 import {takeDirectDepart} from '../systems/DirectDepart';
 import {defaultHero,heroOwned,LOCKED_HINT} from '../systems/RosterStore';
@@ -56,6 +57,6 @@ export class NanzhengChapterScene extends Phaser.Scene {
   if(desk)this.text(30,488,'军旗所向 · 率众再征',15,'#b8a17d');
   this.text(desk?30:W/2,desk?512:934,'关间可休整 · 成长与部队随军继承',11,'#8f8473').setOrigin(desk?0:.5,0);this.refresh();
  }
- private depart(){if(!stageOpen(this.selected)&&!isChapterTestRun())return;if(!isChapterTestRun())try{localStorage.setItem('im_last_hero',this.hero);}catch{}this.registry.remove('campaignTransfer');this.registry.remove('nanzhengTransfer');this.registry.set('nanzhengStage',this.selected);this.registry.set('runConfig',{character:this.hero,thirdStage:this.selected});this.scene.start('NanzhengGameScene');}
+ private depart(){if(sortieBlocked(this,()=>this.depart()))return; /* 出征确认：会让告急城池失守时先问（ui/SortieGuard） */if(!stageOpen(this.selected)&&!isChapterTestRun())return;if(!isChapterTestRun())try{localStorage.setItem('im_last_hero',this.hero);}catch{}this.registry.remove('campaignTransfer');this.registry.remove('nanzhengTransfer');this.registry.set('nanzhengStage',this.selected);this.registry.set('runConfig',{character:this.hero,thirdStage:this.selected});this.scene.start('NanzhengGameScene');}
  private refresh(){const save=loadWorld(),test=isChapterTestRun();this.cards.forEach((c,i)=>{const open=stageOpen(i+1)||test,chosen=this.selected===i+1;c.bg.setFillStyle(chosen?0x413020:0x29231d).setStrokeStyle(chosen?2:1,chosen?0xd7b778:0x65543f);c.strip.setVisible(chosen);c.status.setText(save.nanzhengStages>=i+1?'✓ 已告捷':!open?!nzOpen()?'锁定 · 夷陵之战告捷':'锁定 · 完成前关':chosen?'◆ 当前出征':'可出征').setColor(chosen?'#f0ce8f':'#a99c86');});this.heroButtons.forEach((h,i)=>h.setFillStyle(CHARACTERS[i].id===this.hero?0x51402b:0x241e1a).setStrokeStyle(1,CHARACTERS[i].id===this.hero?0xd7b778:0x70604b).setAlpha(h.getData('locked')?.35:1));this.deployText.setText('出征  ·  '+NANZHENG_STAGES[this.selected-1].name);}
 }

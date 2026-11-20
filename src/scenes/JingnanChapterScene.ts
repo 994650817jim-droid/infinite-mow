@@ -1,3 +1,4 @@
+import { sortieBlocked } from '../ui/SortieGuard';
 import {playMenuMusic,menuMusic} from '../systems/Music';
 import {takeDirectDepart} from '../systems/DirectDepart';
 import {defaultHero,heroOwned,LOCKED_HINT} from '../systems/RosterStore';
@@ -70,6 +71,6 @@ export class JingnanChapterScene extends Phaser.Scene {
     {text:'本章敌将残血时可选「劝降」或「斩杀」：劝降者入招贤馆（黄忠可收为麾下武将），斩杀者掉首领宝箱与兵装。'},
     {who:lord,text:'先取桂阳，再下零陵、武陵，最后会一会长沙的老将。'}],
    reward:'本章玩法：劝降 / 斩杀',confirm:'出征荆南',background:'rest_camp',onDone:()=>{try{localStorage.setItem(OPEN_KEY,'1');}catch{}}});}
- private depart(){if(!stageOpen(this.selected)&&!isChapterTestRun())return;if(!isChapterTestRun())try{localStorage.setItem('im_last_hero',this.hero);}catch{}this.registry.remove('campaignTransfer');this.registry.remove('jingnanTransfer');this.registry.set('jingnanStage',this.selected);this.registry.set('runConfig',{character:this.hero,thirdStage:this.selected});this.scene.start('JingnanGameScene');}
+ private depart(){if(sortieBlocked(this,()=>this.depart()))return; /* 出征确认：会让告急城池失守时先问（ui/SortieGuard） */if(!stageOpen(this.selected)&&!isChapterTestRun())return;if(!isChapterTestRun())try{localStorage.setItem('im_last_hero',this.hero);}catch{}this.registry.remove('campaignTransfer');this.registry.remove('jingnanTransfer');this.registry.set('jingnanStage',this.selected);this.registry.set('runConfig',{character:this.hero,thirdStage:this.selected});this.scene.start('JingnanGameScene');}
  private refresh(){const save=loadWorld(),test=isChapterTestRun();this.cards.forEach((c,i)=>{const open=stageOpen(i+1)||test,chosen=this.selected===i+1;c.bg.setFillStyle(chosen?0x413020:0x29231d).setStrokeStyle(chosen?2:1,chosen?0xd7b778:0x65543f);c.strip.setVisible(chosen);c.status.setText(save.jingnanStages>=i+1?'✓ 已告捷':!open?!jingnanOpen()?'锁定 · 赤壁之战告捷':'锁定 · 完成前关':chosen?'◆ 当前出征':'可出征').setColor(chosen?'#f0ce8f':'#a99c86');});this.heroButtons.forEach((h,i)=>h.setFillStyle(CHARACTERS[i].id===this.hero?0x51402b:0x241e1a).setStrokeStyle(1,CHARACTERS[i].id===this.hero?0xd7b778:0x70604b).setAlpha(h.getData('locked')?.35:1));this.deployText.setText('出征  ·  '+JINGNAN_STAGES[this.selected-1].name);}
 }

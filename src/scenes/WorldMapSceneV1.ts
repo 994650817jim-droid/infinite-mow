@@ -1,3 +1,4 @@
+import { sortieBlocked } from '../ui/SortieGuard';
 import {playMenuMusic} from '../systems/Music';
 import {requestDirectDepart} from '../systems/DirectDepart';
 import {defaultHero,loadRoster} from '../systems/RosterStore';
@@ -669,12 +670,14 @@ ${city.tier==='large'?'守城大将：'+siegeBossName(city,owner):'守军：'+FA
   root.add(worldText(this,x+w/2,y+42,`主公 ${n} · 亲征`,18,'#f0d79e').setOrigin(.5).setName(name+'-text'));
  }
  private launchSiege(city:CityDef,hero:CharacterId,defense=false){
+  if(!defense&&sortieBlocked(this,()=>this.launchSiege(city,hero,defense)))return;
   if(!isChapterTestRun())try{localStorage.setItem('im_last_hero',hero);}catch{/* storage unavailable */}
   this.registry.remove('campaignTransfer');this.registry.set('siegeCity',city.id);if(defense)this.registry.set('siegeMode','defense');else this.registry.remove('siegeMode');this.registry.set('runConfig',{character:hero});
   if(this.registry.get('battleReady'))this.scene.start('SiegeGameScene');else{this.registry.set('pendingWarlord','SiegeGameScene');this.registry.set('loadBattle',true);this.scene.start('BootScene');}
  }
  /** 出征：主按钮（hard=false）或「乱世难度」（hard=true）。章节节点从下一关出征，关卡标记从该关出征。 */
  private launch(hard:boolean){const sel=this.selected;if(sel.kind==='city'||sel.kind==='intel')return;
+  if(sortieBlocked(this,()=>this.launch(hard)))return; // 出征确认：会让告急城池失守时先问（守城重做 ②）
   if(sel.kind==='node'&&sel.node.side){if(this.nodeState(sel.node)!=='locked')this.launchSide(sel.node.side);return;}
   if(sel.kind==='node'&&sel.node.challenge){if(lubuChallengePlayable()||isChapterTestRun())this.launchChallenge();return;}
   if(sel.kind==='stage'){if(!stageOpen(sel.chapter,sel.stage,loadWorld())&&!isChapterTestRun())return;this.enterStage(sel.chapter,sel.stage,hard);return;}
@@ -860,6 +863,7 @@ ${fail}`;
   this.modalButton(root,px+pw*.73,py+ph-(desk?48:58),pw*.38,'出征',true,'intel-go',()=>this.launchIntel(event,hero));
  }
  private launchIntel(event:IntelEvent,hero:CharacterId){
+  if(sortieBlocked(this,()=>this.launchIntel(event,hero)))return;
   if(!isChapterTestRun())try{localStorage.setItem('im_last_hero',hero);}catch{/* storage unavailable */}
   this.registry.remove('campaignTransfer');this.registry.set('intelEvent',event.id);this.registry.set('runConfig',{character:hero});
   if(this.registry.get('battleReady'))this.scene.start('IntelGameScene');else{this.registry.set('pendingWarlord','IntelGameScene');this.registry.set('loadBattle',true);this.scene.start('BootScene');}

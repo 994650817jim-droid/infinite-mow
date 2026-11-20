@@ -330,6 +330,8 @@ export function thirdStageUnlocked(stage:number):boolean{return arcStageUnlocked
 export function beginThirdExpedition(stage:number,deployed:TroopKind[]=[]):string{return beginArcExpedition('qunxiong',stage,deployed);}
 export function settleThirdExpedition(id:string,result:{victory:boolean;bossKilled:boolean;kills:number;elapsed:number;debug:boolean;returned?:TroopKind[]}):ReturnType<typeof settleArcExpedition>{return settleArcExpedition('qunxiong',id,result);}
 /** W4：有告急城池时，出征别处前的警示语（无告急为空串）。 */
+/** 这时出征别处会失守的城池（城名；出征确认弹窗 ui/SortieGuard 用）。现行规则：所有告急的我方城池。 */
+export function sortieLossCities():string[]{const s=loadWorld();return s.alerts.map(a=>a.city).filter(c=>s.ownedCities.includes(c)).map(c=>cityById(c)?.name??c);}
 export function alertLossWarning():string{const names=loadWorld().alerts.map(a=>cityById(a.city)?.name).filter(Boolean);return names.length?`⚠ ${names.join('、')}告急：此时出征别处，${names.length>1?'这些城池':'该城'}将失守`:'';}
 /** 道具分解所得（旧称“钱”）折成军粮记入营寨（ItemStore 调用）。 */
 /** 招贤馆等花费：一律扣军粮。旧参数 merits / money 按折算系数并入军粮（招贤馆已只传 provisions）；不够返回 false 且不扣。 */

@@ -1,3 +1,4 @@
+import { sortieBlocked } from '../ui/SortieGuard';
 import Phaser from 'phaser';
 import { takeDirectDepart } from '../systems/DirectDepart';
 import {defaultHero,heroOwned,LOCKED_HINT} from '../systems/RosterStore';
@@ -74,6 +75,7 @@ export class GuanduChapterScene extends Phaser.Scene {
     this.refresh();
   }
   private depart() {
+    if (sortieBlocked(this, () => this.depart())) return; // 出征确认：会让告急城池失守时先问（ui/SortieGuard）
     if (!this.open(this.selected)) return;
     if (!isChapterTestRun()) try { localStorage.setItem('im_last_hero', this.hero); } catch { /* storage unavailable */ }
     this.registry.remove('campaignTransfer'); this.registry.remove('guanduTransfer');

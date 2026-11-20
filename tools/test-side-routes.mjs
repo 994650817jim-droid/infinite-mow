@@ -77,7 +77,7 @@ const toBoss = async p => { for (let i = 0; i < 24 && !(await p.evaluate(() => !
     return { xiapi: !!mk, state: mk && s.nodeState(mk.node), nanjun: s.markers.some(x => x.node.id === 'side-nanjun'), caowei: s.markers.some(x => x.node.id === 'side-caowei'), gongsun: s.markers.some(x => x.node.id === 'side-gongsun'), hebei: s.markers.some(x => x.node.id === 'side-hebei'), pulse: !!mk?.root.list.find(o => o.name === 'node-pulse-side-xiapi'), detail: s.detail.text, title: s.detailTitle?.text, action: s.action.text.text }; });
   await p.screenshot({ path: `${OUT}/map-xiapi.png` });
   ck('第三章已平定：地图出现「讨伐 · 吕布」讨伐令（开放 + 红色脉冲）；江东、曹魏未开放不画', m.xiapi && m.state === 'open' && m.pulse && !m.nanjun && !m.caowei && m.gongsun && !m.hebei, m);
-  ck('讨伐令详情（两行）：第 1/4 关「小沛」攻城 · 首领曹性 · 可劝降；讨平后并入下邳 + 特产；按钮「出征 · 小沛」', /第 1\/4 关「小沛」攻城 · 首领 曹性 · 可劝降/.test(m.detail) && m.detail.split(String.fromCharCode(10)).length === 2 && /并入 下邳/.test(m.detail) && /并州狼骑/.test(m.detail) && m.action === '出征 · 小沛', m);
+  ck('讨伐令详情（两行）：第 1/4 关「小沛」攻城 · 首领曹性；讨平后并入下邳 + 特产；按钮「出征 · 小沛」', /第 1\/4 关「小沛」攻城 · 首领 曹性$/m.test(m.detail) && m.detail.split(String.fromCharCode(10)).length === 2 && /并入 下邳/.test(m.detail) && /并州狼骑/.test(m.detail) && m.action === '出征 · 小沛', m);
   const r = await p.evaluate(async () => {
     const S = await import('/src/world/SideRouteStore.ts'), W = await import('/src/world/WorldStore.ts'), U = await import('/src/data/surrender.ts'), H = await import('/src/systems/HeroUnlocks.ts');
     const dmg0 = W.permanentEffects().damageBonus, prov0 = W.loadWorld().provisions;

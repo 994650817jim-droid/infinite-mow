@@ -573,7 +573,7 @@ export class WorldMapSceneV1 extends Phaser.Scene {
  private sideDetail(id:SideRouteId,st:'home'|ChapterState){const r=sideRoute(id)!,s=sideState(id),locked=st==='locked',next=sideNextStage(id),nd=r.stages[next-1];
   // 详情面板电脑版只显示两行：本关（第几关、攻城 / 野战 / 终局、首领）+ 讨平后（并城、特产）或再战加成；各关一览在悬停提示里
   const kind=(k:string)=>k==='siege'?'攻城':k==='final'?'终局':'野战',bosses=[nd.boss,...(nd.partner?[nd.partner]:[])].map(b=>b.name+(sidePersuaded(b.id)?'（已降）':'')).join(' + ');
-  const rows=`第 ${next}/${r.stages.length} 关「${nd.name}」${kind(nd.kind)} · 首领 ${bosses} · 可劝降`;
+  const rows=`第 ${next}/${r.stages.length} 关「${nd.name}」${kind(nd.kind)} · 首领 ${bosses}`;
   const cities=[...new Set([...r.stages.map(d=>d.city).filter((c):c is string=>!!c),...r.annex])].map(c=>cityById(c)?.name??c);
   const retry=s.done&&!sidePersuaded(r.lord)?Math.min(SURRENDER.cap*100,Math.round(SIDE_REWARD.retryAdd*100*sideRetries(id))):0;
   const tail=s.done?(sidePersuaded(r.lord)?'已讨平 · 势力之主已归附':`已讨平 · 再战终局劝降把握 +${retry}%`):`讨平后：${cities.length?'并入 '+(cities.length>2?cities.slice(0,2).join('、')+` 等 ${cities.length} 城`:cities.join('、'))+' · ':''}特产「${r.specialty.title}」`;

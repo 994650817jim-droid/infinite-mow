@@ -21,5 +21,5 @@ export const WORLD_NODES:readonly WorldNode[]=[
  {id:'yiling',name:'夷陵之战',x:.47,y:.62,kind:'battle',campaign:'yiling',region:'猇亭 · 连营 · 火烧连营',owner:'neutral'},
  {id:'beifa',name:'北伐',x:.25,y:.36,kind:'battle',campaign:'beifa',region:'街亭 · 陈仓 · 五丈原',owner:'neutral'},
  {id:'lubu',name:'三英战吕布',x:.417,y:.488,kind:'battle',challenge:'lubu',region:'虎牢关',owner:'neutral'},
- ...SIDE_ROUTES.map(r=>({id:'side-'+r.id,name:'讨伐 · '+r.faction,x:r.x,y:r.y,kind:'battle' as const,side:r.id,region:r.region,owner:'neutral' as const})),
+ ...SIDE_ROUTES.map(r=>({id:'side-'+r.id,name:'讨伐 · '+(r.flag??r.faction),x:r.x,y:r.y,kind:'battle' as const,side:r.id,region:r.region,owner:'neutral' as const})),
 ];

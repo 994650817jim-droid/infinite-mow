@@ -156,6 +156,15 @@ export const SURRENDER_DEFS: readonly SurrenderDef[] = [
   D('xiliang-2:yanxing', '阎行', '西凉猛将', 'hard', { template: 'spear', camp: 'xiliang', yes: '……行服了。韩公那边，行也不回了。', no: '阎彦明只认韩公！' }),
   D('xiliang-3:hansui', '韩遂', '九曲黄河', 'hard', { template: 'blade', camp: 'xiliang', bonuses: [{ kind: 'surrendered', id: 'yanxing', add: .1, label: '阎行已降' }, ...RETRY], yes: '九曲黄河，到头了……遂，降。', no: '老夫纵横西凉三十年，岂肯低头！' }),
   D('xiliang-3:madai', '马岱', '西凉骁将', 'can', { template: 'spear', camp: 'xiliang', bonuses: [{ kind: 'hero', id: 'machao', add: 1, label: '孟起在侧' }], yes: '兄长在此，岱还打什么——愿随兄长！', no: '岱身在西凉，不能弃韩公而去！' }),
+  // 东吴 · 江东（第十章后）：孙权归附（江东城全下）
+  D('dongwu-1:jiangqin', '蒋钦', '江东水将', 'can', { template: 'spear', camp: 'wu', yes: '庐江丢了……钦愿降。', no: '吴侯待我恩重，休想！' }),
+  D('dongwu-2:huanggai', '黄盖', '江东老将', 'hard', { template: 'blade', camp: 'wu', yes: '老夫三世事孙氏……今日，罢了，降了。', no: '老夫苦肉都受过，还怕你这一刀？' }),
+  D('dongwu-3:sunquan', '孙权', '吴侯', 'sure', { template: 'strategist', camp: 'wu', yes: '江东诸城尽失……父兄基业，权守不住了。愿归附。' }),
+  D('dongwu-3:zhoutai', '周泰', '江东猛将', 'hard', { template: 'blade', camp: 'wu', bonuses: [{ kind: 'surrendered', id: 'sunquan', add: .3, label: '吴侯已降' }], yesIfSurrendered: { id: 'sunquan', text: '主公既降，泰这条命，便随主公。' }, yes: '泰……服了。', no: '泰身被十二创，也要护着主公！' }),
+  // 南中 · 银坑（第十一章后）：七擒之后南中心服 → 洞主必降
+  D('nanzhong-1:mengyou', '孟优', '孟获之弟', 'can', { template: 'blade', camp: 'nanzhong', bonuses: [{ kind: 'surrendered', id: 'menghuo', add: .2, label: '兄长已降' }], yes: '兄长都服了，优还打什么——降了！', no: '南人只服兄长！' }),
+  D('nanzhong-2:dailai', '带来洞主', '祝融之弟', 'sure', { template: 'blade', camp: 'nanzhong', yes: '姐夫都服了……带来也服了！' }),
+  D('nanzhong-2:duosi', '朵思大王', '秃龙洞主', 'sure', { template: 'blade', camp: 'nanzhong', yes: '毒泉都挡不住你们……朵思服了！' }),
   D('caowei-4:xiahoudun', '夏侯惇', '独眼将军', 'hard', { template: 'blade', camp: 'wei', bonuses: [{ kind: 'surrendered', id: 'caocao', add: .3, label: '孟德已降' }],
     yes: '孟德都降了……惇随他便是。', yesIfSurrendered: { id: 'caocao', text: '孟德既已归附，惇岂敢独违。' }, no: '父精母血，不可弃也——惇宁死不降！' }),
 ];

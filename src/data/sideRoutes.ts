@@ -10,7 +10,7 @@ import type { Specialty } from '../world/WorldCities';
  * 战斗复用对应时期的章节战场（第三章式三关框架 / 三英战吕布挑战关）；还没有专属形象的首领先借现有首领图（ART_V2_FILES 的 side_* 键）。
  * 数值都是初值，交平衡会话。
  */
-export type SideRouteId = 'xiapi' | 'nanjun' | 'caowei' | 'gongsun' | 'hebei' | 'jiangxia' | 'zhanglu' | 'xiliang';
+export type SideRouteId = 'xiapi' | 'nanjun' | 'caowei' | 'gongsun' | 'hebei' | 'jiangxia' | 'zhanglu' | 'xiliang' | 'dongwu' | 'nanzhong';
 export type SideStageKind = 'siege' | 'field' | 'final';
 /** 借兵种 / 数值 / 外观的基础章节。 */
 export type SideBaseId = 'qunxiong' | 'guandu' | 'chibi' | 'jingnan' | 'hanzhong' | 'yiling' | 'nanzheng' | 'huangjin';
@@ -31,6 +31,7 @@ export interface SideStage {
 }
 export interface SideRouteDef {
   id: SideRouteId; name: string; faction: string; region: string;
+  /** 地图讨伐令上的名字（默认 faction；南郡写「南郡」免得和东吴混）。 */ flag?: string;
   /** 天下地图上的讨伐令位置（归一化坐标）。 */ x: number; y: number;
   /** 开放：主线某篇章通关几关（WorldStore.arcStages）。 */ open: { arc: 'qunxiong' | 'guandu' | 'chibi' | 'jingnan' | 'shu' | 'hanzhong' | 'xiangfan' | 'yiling' | 'nanzheng'; stages: number; hint: string };
   /** 借哪一章的兵种与数值。 */ base: SideBaseId;
@@ -58,7 +59,7 @@ export const SIDE_ROUTES: readonly SideRouteDef[] = [
         boss: B('lubu', '吕布', '飞将', 'third_lijue', 'phase23/lijue', 'lijue', true) },
     ],
     annex: ['xiapi'], specialty: { title: '并州狼骑', text: '本命武器伤害 +3%', damage: .03 }, lord: 'lubu' },
-  { id: 'nanjun', name: '江东 · 南郡', faction: '江东', region: '荆州 · 江陵', x: .565, y: .735, props: 4,
+  { id: 'nanjun', name: '江东 · 南郡', faction: '江东', flag: '南郡', region: '荆州 · 江陵', x: .375, y: .745, props: 4,
     open: { arc: 'chibi', stages: 3, hint: '第五章「赤壁之战」平定后开放' }, base: 'chibi', look: 'yiling',
     stages: [
       { name: '江陵外围', kind: 'field', behavior: 2, scenery: 2, waves: ['江岸吴营', '水军跳帮', '程普出阵'], story: '赤壁之后，周瑜移兵来争南郡。江陵城外，吴军水军登岸。',
@@ -120,7 +121,7 @@ export const SIDE_ROUTES: readonly SideRouteDef[] = [
     ],
     annex: ['jiangxia'], specialty: { title: '锦帆水寨', text: '最大生命 +5%', maxHp: .05 }, lord: 'huangzu' },
   // —— P1b 第二批（第七、九章后）——
-  { id: 'zhanglu', name: '张鲁 · 汉中', faction: '张鲁', region: '汉中 · 南郑', x: .07, y: .42, props: 5,
+  { id: 'zhanglu', name: '张鲁 · 汉中', faction: '张鲁', region: '汉中 · 南郑', x: .095, y: .42, props: 5,
     open: { arc: 'shu', stages: 3, hint: '第七章「入蜀」平定后开放' }, base: 'hanzhong', look: 'huangjin',
     stages: [
       { name: '五斗米道坛', kind: 'field', behavior: 2, scenery: 2, waves: ['道坛外围', '五斗米祭酒', '杨任出阵'], story: '张鲁以五斗米道治汉中，鬼卒、祭酒层层设坛。先破道坛，再下南郑。',
@@ -142,6 +143,29 @@ export const SIDE_ROUTES: readonly SideRouteDef[] = [
         partner: B('madai', '马岱', '西凉骁将', 'third_zhangxiu', 'phase23/zhangxiu', 'zhangxiu') },
     ],
     annex: [], specialty: { title: '西凉铁骑', text: '本命武器伤害 +3%', damage: .03 }, lord: 'hansui' },
+  // —— P1b 第三批（第十、十一章后）——
+  { id: 'dongwu', name: '东吴 · 江东', faction: '东吴', region: '扬州 · 庐江 · 吴郡', x: .9, y: .7, props: 4,
+    open: { arc: 'yiling', stages: 3, hint: '第十章「夷陵之战」平定后开放' }, base: 'yiling',
+    stages: [
+      { name: '庐江', kind: 'siege', city: 'lujiang', behavior: 1, scenery: 1, waves: ['庐江城外', '江东弓手', '蒋钦守城'], story: '夷陵之仇未报，挥师东下。先取庐江，兵临濡须。',
+        boss: B('jiangqin', '蒋钦', '江东水将', 'yiling_zhuran', 'chibi/caochun', 'zhuran') },
+      { name: '濡须口', kind: 'field', behavior: 2, scenery: 2, waves: ['濡须坞前', '吴军水师', '黄盖出阵'], story: '濡须口坞堡坚固，吴军水师往来。老将黄盖亲自督战。',
+        boss: B('huanggai', '黄盖', '江东老将', 'yiling_sunhuan', 'chibi/caimao', 'sunhuan') },
+      { name: '吴郡', kind: 'final', behavior: 3, scenery: 3, waves: ['吴郡城下', '江东子弟', '孙权亲至'], story: '江东诸城尽下，孙权与周泰出城。坐断东南的碧眼儿，今日当如何？',
+        boss: B('sunquan', '孙权', '吴侯', 'xf_lvmeng', 'chibi/caimao', 'lvmeng', true),
+        partner: B('zhoutai', '周泰', '江东猛将', 'yiling_zhuran', 'chibi/caochun', 'zhuran') },
+    ],
+    annex: ['wujun'], specialty: { title: '吴郡富庶', text: '战后粮草收益 +10%', provisions: .1 }, lord: 'sunquan' },
+  { id: 'nanzhong', name: '南中 · 银坑', faction: '南中', region: '南中 · 银坑洞', x: .13, y: .9, props: 6,
+    open: { arc: 'nanzheng', stages: 3, hint: '第十一章「南征」平定后开放' }, base: 'nanzheng',
+    stages: [
+      { name: '银坑洞', kind: 'field', behavior: 2, scenery: 2, waves: ['银坑山口', '藤甲兵', '孟优出阵'], story: '孟获虽已心服，银坑洞仍有余部不肯归顺。孟优领藤甲兵据洞而守。',
+        boss: B('mengyou', '孟优', '孟获之弟', 'nz_mangyachang', 'guandu/chunyuqiong', 'mangyachang') },
+      { name: '秃龙洞', kind: 'final', behavior: 3, scenery: 3, waves: ['秃龙洞外', '象兵冲阵', '带来洞主亲至'], story: '秃龙洞毒泉密布，带来洞主与朵思大王驱象兵出洞。南中一定，再无后顾之忧。',
+        boss: B('dailai', '带来洞主', '祝融之弟', 'nz_menghuo', 'guandu/chunyuqiong', 'menghuo'),
+        partner: B('duosi', '朵思大王', '秃龙洞主', 'nz_mangyachang', 'guandu/chunyuqiong', 'wutugu') },
+    ],
+    annex: [], specialty: { title: '南中象兵', text: '最大生命 +6%', maxHp: .06 }, lord: 'dailai' },
 ];
 
 export function sideRoute(id: string | null | undefined): SideRouteDef | undefined { return SIDE_ROUTES.find(r => r.id === id); }
@@ -188,6 +212,13 @@ const SIDE_STYLE: Record<string, { p1: [string, string]; p2: [string, string]; m
   yanxing: { p1: ['西凉猛将', '铁骑冲锋 · 刺马一矛'], p2: ['死战不退', '狂暴连斩 · 步战冲杀'], moves: { 抬榇冲锋: '铁骑冲锋', 额前一箭: '刺马一矛' } },
   hansui: { p1: ['九曲黄河', '厚背砍刀 · 纵兵劫掠'], p2: ['困守金城', '三连劈 · 拖刀突进'], moves: {} },
   madai: { p1: ['西凉骁将', '马家枪阵 · 金城夜袭'], p2: ['枪出如龙', '一线贯穿长枪'], moves: { 百鸟朝凤枪: '马家枪阵', 宛城夜袭: '金城夜袭', 白马突阵: '西凉突阵' } },
+  jiangqin: { p1: ['江东水将', '水军突袭 · 长枪突刺'], p2: ['死守庐江', '亲兵护体时蒋钦减伤 · 先打亲兵'], moves: { 连营反扑: '水军突袭', 营寨弓弩: '庐江弓弩' } },
+  huanggai: { p1: ['江东老将', '苦肉锐气 · 濡须死守'], p2: ['老当益壮', '连斩 · 步战突进'], moves: { 宗室锐气: '苦肉锐气', 夷道死守: '濡须死守' } },
+  sunquan: { p1: ['吴侯', '江东奇袭 · 坐断东南'], p2: ['吴郡合围', '召兵封路 · 箭雨'], moves: { 白衣渡江: '江东奇袭', 士别三日: '坐断东南', 麦城合围: '吴郡合围', 吴军箭雨: '江东箭雨', 白衣再渡: '江东再袭' } },
+  zhoutai: { p1: ['江东猛将', '护主冲阵 · 长枪突刺'], p2: ['身被十二创', '亲兵护体时周泰减伤 · 先打亲兵'], moves: { 连营反扑: '护主冲阵', 营寨弓弩: '江东弓弩' } },
+  mengyou: { p1: ['孟获之弟', '蛮刀乱劈 · 象兵冲撞'], p2: ['银坑瘴气', '身边瘴气一圈圈外扩'], moves: {} },
+  dailai: { p1: ['祝融之弟', '洞主冲阵 · 洞主怒吼'], p2: ['困守秃龙洞', '象兵冲阵 · 洞主震地'], moves: { 蛮王冲阵: '洞主冲阵', 蛮王怒吼: '洞主怒吼', 蛮王震地: '洞主震地', 蛮王横扫: '洞主横扫' } },
+  duosi: { p1: ['秃龙洞主', '巨人践踏 · 震地'], p2: ['毒泉狂怒', '朵思狂怒 · 三重震地'], moves: {} },
   wenpin: { p1: ['荆州大将', '亲军护驾 · 弓阵齐射'], p2: ['江夏死守', '文聘绕城奔逃 · 身后落下绊索'], moves: {} },
 };
 /** 招式组：借现成首领的招式，改名登记（mount 去掉：借来的图没有骑乘姿态）。 */

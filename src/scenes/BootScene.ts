@@ -103,6 +103,9 @@ export class BootScene extends Phaser.Scene {
     this.load.spritesheet('heal_props','assets/heal-props/heal_props.png',{frameWidth:128,frameHeight:128});
     // 回血药手绘药罐（由 troop-portraits-v2/potion_card.png 缩成 128px）：用药按钮、地上的药、药囊图标；替代程序画的像素药瓶
     this.load.image('potion_jar','assets/heal-props/potion_jar.webp');
+    // 战场回血（systems/BattleHeal，美术会话 ChatGPT 出图、洋红抠底）：heal_food 0 干粮 / 1 酒肉；heal_spot_herb 药草丛 0 茂盛 / 1 采过（256 格）
+    this.load.spritesheet('heal_food','assets/heal-props/heal_food.png',{frameWidth:256,frameHeight:256});
+    this.load.spritesheet('heal_spot_herb','assets/heal-props/herb_patch.png',{frameWidth:256,frameHeight:256});
     // 首领招降档位印（手绘朱印，Gemini 生成后白底抠透明）：可降 / 难降 / 宁死不降 + 降将栏「首领」小印
     for(const k of ['can','hard','never','boss'])this.load.image('seal_'+k,'assets/ui-seals/seal_'+k+'.png');
     // 军令圆钮图标（电脑版 HUD「护阵 / 出击」，沿用手绘增益图标）

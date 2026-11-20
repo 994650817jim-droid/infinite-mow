@@ -89,6 +89,8 @@ export class Enemy {
   invulnerable = false;
   controlImmune = false;
   stunUntil = 0;
+  /** 张辽「震慑」层数 / 最后叠层时间、「溃逃」到期时间、溃兵踩踏冷却（weapons/zhangliaoWeapon.ts）。 */
+  zhenshe = 0; zhensheAt = 0; routUntil = 0; trampleAt = 0;
   martialSlow = 1;
   martialSlowUntil = 0;
   /** 首领出招间隔倍率与截止（诸葛亮八阵图 3 级；ArcBossV2 系首领在 toIdle 时读）。 */
@@ -143,6 +145,7 @@ export class Enemy {
     this.invulnerable = false;
     this.controlImmune = false;
     this.stunUntil = 0;
+    this.zhenshe = 0; this.zhensheAt = 0; this.routUntil = 0; this.trampleAt = 0;
     this.targetAlly = null; this.targetLife = 0;
     this.flashUntil = 0;
     this.recoilUntil = 0; this.squash = 0;

@@ -8,7 +8,7 @@ import type { CharacterId } from './characters';
  */
 export type AttributeId = 'strength' | 'agility' | 'intellect' | 'command';
 /** 法术武器：武器命中也吃智力的法术伤害（诸葛亮火旗、庞统连环火雷、黄月英连弩、貂蝉团扇）；其余主武器是物理。 */
-export const SPELL_WEAPONS: ReadonlySet<string> = new Set(['flame_banner', 'lianhuan_mines', 'crossbow', 'diaochan_fans']);
+export const SPELL_WEAPONS: ReadonlySet<string> = new Set(['flame_banner', 'lianhuan_mines', 'crossbow', 'diaochan_fans', 'huochuan_ling']);
 export const ATTRIBUTE_IDS: readonly AttributeId[] = ['strength', 'agility', 'intellect', 'command'];
 /**
  * 单项上限（2026-11-18 平衡）：Lv41 以前每项 10 点（四项 40 点正好装下 40 级的点数）；之后随等级放宽到能装下全部点数，Lv58 封顶 15。
@@ -88,5 +88,7 @@ export const PRIMARY_ATTRIBUTE: Record<CharacterId, AttributeId> = {
   zhuge: 'intellect', pangtong: 'intellect', huangyueying: 'intellect', diaochan: 'intellect',
   liubei: 'command',
   lvbu: 'strength', // P2 吕布
+  zhangliao: 'agility', // P2 张辽
+  zhouyu: 'intellect', // P2 周瑜
 };
 export function primaryAttribute(hero: string): AttributeId | undefined { return (PRIMARY_ATTRIBUTE as Record<string, AttributeId>)[hero]; }

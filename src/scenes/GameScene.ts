@@ -1,6 +1,7 @@
 import { stopMenuMusic } from '../systems/Music';
 import { SCHOOL_TIER, SHI_SOURCES, FOLLOWER_SCHOOL, heroAffinity, type SchoolId } from '../data/schools';
 import { playSheet } from '../systems/SkillFxSheets';
+import { ZHANGLIAO } from '../data/zhangliao';
 import { HeroCastFx } from '../systems/HeroCastFx';
 import { MOUNT_VISUAL, isHorseCavalry } from '../data/mounts';
 import { buildSettingsPanel, type SettingSpec } from '../ui/SettingsPanel';
@@ -1693,6 +1694,8 @@ export class GameScene extends Phaser.Scene {
       enemy.frameStartX = enemy.x;
       enemy.frameStartY = enemy.y;
       if (!enemy.controlImmune && enemy.stunUntil > time) { enemy.moveVx = enemy.moveVy = enemy.intentDx = enemy.intentDy = 0; continue; }
+      // 张辽「震慑」叠满：溃逃中的敌兵背向主将逃跑、不出手（weapons/zhangliaoWeapon.ts 设 routUntil；首领 / 免控的不会溃逃）
+      if (enemy.routUntil > this.combatNow && enemy.kind !== 'boss' && !enemy.controlImmune) { const fx = enemy.x - player.x, fy = enemy.y - player.y, fd = Math.hypot(fx, fy) || 1; enemy.contactCd = Math.max(enemy.contactCd, .2); const v = enemy.def.speed * ZHANGLIAO.routSpeed; enemy.moveVx = fx / fd * v; enemy.moveVy = fy / fd * v; enemy.intentDx = fx / fd; enemy.intentDy = fy / fd; enemy.sprite.x += enemy.moveVx * dt; enemy.sprite.y += enemy.moveVy * dt; continue; } // 人群转向会把速度算成朝主将，溃逃直接按背向位移
       // 貂蝉「离间」：倒戈中的敌人不追主将，转身冲撞最近的同伴（逻辑在 CharacterPassives.driveTurned）
       if (player.passive.driveTurned(enemy, dt, this.combatNow, (x, y, r) => this.grid.query(x, y, r), (t, n) => this.hitEnemy(t, n, this.combatNow, 'melee', true, false)) || this.followerPassives.some(fp => fp.driveTurned(enemy, dt, this.combatNow, (x, y, r) => this.grid.query(x, y, r), (t, n) => this.hitEnemy(t, n, this.combatNow, 'melee', true, false)))) { enemy.contactCd = Math.max(0, enemy.contactCd - dt); continue; }
       enemy.contactCd = Math.max(0, enemy.contactCd - dt);
@@ -2258,6 +2261,7 @@ export class GameScene extends Phaser.Scene {
       draggingBladeWave: (angle, size, kind, hits) => scene.dragBladeFx().release(angle, size, kind, hits),
       rallyAllies: (fraction: number) => { for (const u of scene.allies) if (u.active) u.hp = Math.min(u.maxHp, u.hp + u.maxHp * fraction); },
       martialField: (...args) => scene.martialFields.add(...args),
+      hasteAllies: (x, y, r, dt, frac) => { for (const u of scene.allies) if (u.active && Math.hypot(u.x - x, u.y - y) <= r) u.cooldown = Math.max(0, u.cooldown - dt * frac); },
     };
   }
 
@@ -2516,6 +2520,7 @@ export class GameScene extends Phaser.Scene {
     const dualRes = this.dual?.owns(enemy) ? this.dual.resolve(enemy, this.persuadeKill, this.combatNow) : null;
     const retreat = dualRes ? dualRes.how === 'retreated' : this.bossRetreats(enemy);
     this.objective?.onKill(enemy);
+    const routed = enemy.routUntil > this.combatNow; // 张辽「止啼」：击杀溃逃中的敌兵才攒
     const kind = enemy.kind;
     // 吕布倒地改由 playBossFall（倒地 4 帧）播，不再叠旧的通用死亡闪影
     if(kind==='boss'){const old=this.chasingBosses.find(t=>t.enemy===enemy&&t.life===enemy.spawnId),h=old?old.huaxiong:this.huaxiong,x=old?old.xurong:this.xurong;h?.defeat();x?.defeat();if(enemy===this.boss){this.sishuiPass?.onBossDown();{const at={x:enemy.x,y:enemy.y,displayHeight:enemy.sprite.displayHeight};if(retreat&&!dualRes)retreatFade(this,enemy,this.player);this.storyBossFell=dualRes||this.persuadeKill?true:retreat?this.retreatLine(at):(this.parley?.dyingLine(at)??false)||!!this.storyDir?.bossFall(at);if(this.sishuiPass?.wenjiu){setStoryFlag('wenjiu_huaxiong');this.time.delayedCall(1600,()=>this.storyDir?.line('hulao-1.wenjiu',this.player.sprite));}}this.moveset?.defeat();this.moveset=null;this.bossMount?.destroy();this.bossMount=null;}if(old){if(h)this.deadBossControllers.push(h);if(x)this.deadBossControllers.push(x);}
@@ -2528,6 +2533,7 @@ export class GameScene extends Phaser.Scene {
     if(this.deathFx){const from=this.hitSourceOf(enemy);this.deathFx.play(enemy,from.x,from.y,this.combatNow,this.deathOptsOf(enemy));}
     this.kills += 1;
     this.player.passive.onKill(kind, this.combatNow);
+    if (routed) this.player.passive.onRoutKill(this.combatNow);
     this.buildCombat.onKill(enemy,this.combatNow);
     this.controlBuild?.onKill(enemy,this.combatNow);
     this.legion.onKill(enemy);
@@ -3062,7 +3068,7 @@ export class GameScene extends Phaser.Scene {
       // 水墨预览：标签统一朱砂底（类别色只在现版用）
       if (GameScene.INK_LEVELUP) view.tag.setBackgroundColor('#8a2a1c').setColor('#fff0d6'); else view.tag.setBackgroundColor(style.bg).setColor(style.color);
       const iconKey = option.kind === 'potion' ? 'icon_rare' : option.kind === 'weapon' ? ({
-        spear_orbit:'icon_1',crossbow:'icon_2',flame_banner:'icon_3',guandao:'icon_guandao',zhenbei_blade:'icon_zhenbei',lianhuan_mines:'icon_lianhuan',sun_knives:'icon_sunknives',diaochan_fans:'icon_fans',baodiao_bow:'icon_baodiao',dangyang_roar:'icon_shemao',zhanjin_lance:'icon_zhanjin',shuanggu_swords:'icon_shuanggu',fangtian_ji:'icon_fangtian',
+        spear_orbit:'icon_1',crossbow:'icon_2',flame_banner:'icon_3',guandao:'icon_guandao',zhenbei_blade:'icon_zhenbei',lianhuan_mines:'icon_lianhuan',sun_knives:'icon_sunknives',diaochan_fans:'icon_fans',baodiao_bow:'icon_baodiao',dangyang_roar:'icon_shemao',zhanjin_lance:'icon_zhanjin',shuanggu_swords:'icon_shuanggu',fangtian_ji:'icon_fangtian',pozhen_shuangji:'icon_pozhen',huochuan_ling:'icon_huochuan',
       } as const)[option.weaponId!] : option.weaponId === 'spear_orbit'
         ? 'icon_1'
         : option.weaponId === 'crossbow'

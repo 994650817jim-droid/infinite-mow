@@ -318,3 +318,5 @@ assets/raw/*
 !/tools/test-extra-vfx.mjs
 !/tools/test-treasure-fx.mjs
 !/tools/test-event-fx.mjs
+!/tools/test-third-boss-fx.mjs
+!/tools/test-dongzhuo-fx.mjs

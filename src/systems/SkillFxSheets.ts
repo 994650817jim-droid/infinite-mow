@@ -43,6 +43,8 @@ export const SKILL_FX: Readonly<Record<string, { file: string; cell: number; fra
   fx_jn1: { file: 'assets/jinnang-fx/jn1.png', cell: 256, frames: 6 },
   fx_jn2: { file: 'assets/jinnang-fx/jn2.png', cell: 256, frames: 6 },
   fx_jn3: { file: 'assets/jinnang-fx/jn3.png', cell: 256, frames: 6 },
+  // 董卓主效果（ChatGPT 黑底 6×4，FULL 去底整张；DongzhuoBoss 用）：行 0 纵火点燃 / 行 1 号令铁骑 / 行 2 飞熊军护驾 / 行 3 迁都焚城
+  fx_dz: { file: 'assets/dongzhuo-fx/dz.png', cell: 256, frames: 6 },
   fx_zhurong_knife: { file: 'assets/zhurong-fx/knife_fx.png', cell: 256, frames: 8 },
   // 武将出招起手特效（2026-11-19 ChatGPT 黑底 6×4 三张，tools/build-hero-cast-fx.mjs 去底切条；systems/HeroCastFx.ts 用）：每人 6 帧
   ...Object.fromEntries(['guanyu', 'zhangfei', 'zhaoyun', 'huangzhong', 'machao', 'weiyan', 'liubei', 'zhuge', 'pangtong', 'huangyueying', 'sunshangxiang', 'diaochan', 'lvbu']

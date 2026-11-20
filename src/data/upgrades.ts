@@ -13,6 +13,7 @@ import { hotkeyLabel } from './hotkeys';
 import { lvbuThrustLen, lvbuSweepRadius } from '../weapons/lvbuWeapon';
 import { zhangliaoReach } from '../weapons/zhangliaoWeapon';
 import { zhouyuBlast } from '../weapons/zhouyuWeapon';
+import { taishiciReach } from '../weapons/taishiciWeapon';
 
 export const WEAPON_META: Record<WeaponId, { name: string; desc: string }> = {
   spear_orbit: { name: '七探盘龙枪', desc: '银枪自动索敌，向不同敌人突刺' },
@@ -29,6 +30,7 @@ export const WEAPON_META: Record<WeaponId, { name: string; desc: string }> = {
   fangtian_ji: { name: '方天画戟', desc: '两次长突穿透一线，接一次 360° 横扫，循环；无双狂暴时每次出手打两次' },
   pozhen_shuangji: { name: '破阵双戟', desc: '左右双戟极快连斩身前一扇；每击叠震慑，3 层溃逃 2 秒（溃兵受伤 +25%）' },
   huochuan_ling: { name: '火船令', desc: '朝敌群放出 2 艘小火船，撞上敌兵或到尽头爆燃，留下短火场' },
+  donglai_ji: { name: '东莱双戟', desc: '近身双戟交叉斩；每第 4 击射出短戟，钉住敌兵 1 秒、留下减速圈' },
   diaochan_fans: { name: '双花扇', desc: '掷出回旋团扇，去回各打一次；被扇中 2 次的敌人倒戈（3 秒内转而攻击同伴）' },
 };
 /** 武器显示名：张飞用同一套长枪，叫丈八蛇矛。 */
@@ -88,6 +90,7 @@ export function weaponUpgrade(weapon: WeaponState, player: Player): UpgradeOptio
     if (parts.length) desc += '\n' + parts.join(' · ');
     if (sunThrowCount(next) !== sunThrowCount(L)) desc += `\n每次掷 ${sunThrowCount(L)} → ${sunThrowCount(next)} 把（多的 60%）`;
   }
+  if (weapon.id === 'donglai_ji') desc += `\n双戟距离 ${taishiciReach(weapon.level)} → ${taishiciReach(next)}`;
   if (weapon.id === 'huochuan_ling') desc += `\n爆燃半径 ${zhouyuBlast(weapon.level)} → ${zhouyuBlast(next)}`;
   if (weapon.id === 'pozhen_shuangji') desc += `\n连斩距离 ${zhangliaoReach(weapon.level)} → ${zhangliaoReach(next)}`;
   if (weapon.id === 'fangtian_ji') desc += `\n长突 ${lvbuThrustLen(weapon.level)} → ${lvbuThrustLen(next)} · 横扫半径 ${lvbuSweepRadius(weapon.level, 0)} → ${lvbuSweepRadius(next, 0)}`;
@@ -179,6 +182,8 @@ export function martialDescription(id:MasteryId,level:number):string {
  chitu:'无双狂暴时每 '+[3.5,3,2.5][i]+' 秒朝前冲刺\n穿过沿途敌兵造成 '+[60,80,100][i]+'% 伤害',
  huaji:'横扫范围 +'+(15*n)+'%',
  xiandeng:'每 '+[5,4.5,4][i]+' 秒先突进到敌前\n再连斩 '+[2,2,3][i]+' 击',
+ shenshe:'射戟射程 +'+(15*n)+'%',
+ qichi:'双戟伤害 +'+(8*n)+'%',
  yaliang:'英发少攒 '+(15*n)+'%\n（满 '+Math.round(20*(1-.15*n))+' 层刮东风）',
  lianchuan:'每轮火船 +'+n+' 艘',
  weiming:'震慑 2 层就溃逃'+(n>=2?'\n溃逃再久 '+[0,.5,1][i]+' 秒':''),

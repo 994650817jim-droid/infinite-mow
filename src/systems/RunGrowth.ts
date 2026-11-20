@@ -52,6 +52,8 @@ export const MARTIALS = {
   chitu: {character:'lvbu',name:'赤兔',desc:'无双狂暴时每 3.5/3/2.5 秒朝前冲刺，穿过沿途敌兵造成 60%/80%/100% 伤害'},
   huaji: {character:'lvbu',name:'画戟',desc:'每级横扫范围 +15%'},
   xiandeng: {character:'zhangliao',name:'先登',desc:'每 5/4.5/4 秒先突进到敌前，再连斩 2/2/3 击'},
+  shenshe: {character:'taishici',name:'神射',desc:'射戟射程每级 +15%'},
+  qichi: {character:'taishici',name:'七尺之剑',desc:'双戟伤害每级 +8%'},
   yaliang: {character:'zhouyu',name:'雅量',desc:'英发每级少攒 15%'},
   lianchuan: {character:'zhouyu',name:'连环',desc:'每级火船 +1 艘'},
   weiming: {character:'zhangliao',name:'威名',desc:'震慑 2 层就溃逃；Lv2 / Lv3 溃逃再久 0.5 / 1 秒'},
@@ -75,7 +77,7 @@ export class RunGrowth {
   revivalUsed=false;
   awakenRescueUsed=false;
   readonly attributes: Record<AttributeId, number> = { strength: 0, agility: 0, intellect: 0, command: 0 };
-  readonly masteries: Record<MasteryId, number> = { dragon_gallop: 0, cloud_pierce: 0, dragon_charge:0, dragging_blade:0, steady_aim:0, pearl_volley:0, wildfire:0, eight_trigrams:0, kaishan:0, gujun:0, fulei:0, lianying:0, huishen:0, baibi:0, nichang:0, meirenji:0, jingxin:0, laoji:0, wanrendi:0, dahe:0, jinma:0, tieqi:0, taoyuan:0, xiemin:0, chitu:0, huaji:0, xiandeng:0, weiming:0, yaliang:0, lianchuan:0 };
+  readonly masteries: Record<MasteryId, number> = { dragon_gallop: 0, cloud_pierce: 0, dragon_charge:0, dragging_blade:0, steady_aim:0, pearl_volley:0, wildfire:0, eight_trigrams:0, kaishan:0, gujun:0, fulei:0, lianying:0, huishen:0, baibi:0, nichang:0, meirenji:0, jingxin:0, laoji:0, wanrendi:0, dahe:0, jinma:0, tieqi:0, taoyuan:0, xiemin:0, chitu:0, huaji:0, xiandeng:0, weiming:0, yaliang:0, lianchuan:0, shenshe:0, qichi:0 };
   /** 信物库新信物（CharmEffects）：本局加到 player.stats 上的量、铁壁套装生命、传奇信物档位、回生玉佩无敌时长。 */
   charmDelta?: CharmStatDelta;
   charmHp = 0;

@@ -21,6 +21,8 @@ export const ARRIVAL = { speedMul: 1.25, maxSeconds: 3, joinDist: 34, dustEvery:
 export interface LegionState { training?:CampTraining;groups?:Partial<Record<TroopKind,CampGroup>>; food: number; dead: number; recruited: number; levels: Record<TroopKind, number>; soldiers: Array<{ kind: TroopKind; hp: number;reserveSoldier?:boolean }> }
 
 export class Legion {
+  /** 部曲挨了一次打（扣血之后）：太史慈「信义」攒量用（GameScene 接）。 */
+  onHurt?: (u: Ally, now: number) => void;
   training=freshTraining();groups:Partial<Record<TroopKind,CampGroup>>={};
   purchaseCampTraining(id:CampTrainingId):boolean{const def=CAMP_TRAINING[id],lv=this.training[id];if(!def||lv>=3||this.food<def.costs[lv])return false;this.food-=def.costs[lv];this.training[id]++;if(id==='hp')for(const u of this.units)if(u.active)u.applyCampaignHp(this.hpMultiplier());return true;}
   campTarget?:(u:Ally)=>Enemy|null;
@@ -143,8 +145,11 @@ export class Legion {
       if (frontal && u.kind === 'swordsman' && now >= u.ai.blockReady) { mitigation *= .5; u.ai.blockReady = now + TACTICS.blockMs; u.ai.blockUntil = now + 180; }
     }
     mitigation*=1-CAMP_TRAINING.armor.perLevel*this.training.armor;
-    u.hp = Math.max(Math.min(floor, u.hp), u.hp - Math.max(1, Math.round(Math.max(1, raw - armor) * mitigation)));
+    let dmg = Math.max(1, Math.round(Math.max(1, raw - armor) * mitigation));
+    if (u.shield > 0 && now < u.shieldUntil) { const a = Math.min(u.shield, dmg); u.shield -= a; dmg -= a; } // 太史慈突围护盾先扣
+    u.hp = Math.max(Math.min(floor, u.hp), u.hp - dmg);
     u.hurtUntil = now + 350;
+    this.onHurt?.(u, now);
     this.defense?.onAllyHurt(u,now);this.awakeningDefense?.onAllyHurt(u,now);
     if (!u.hp) {
       this.corpses.spawn(u, u.view?.sprite, now);

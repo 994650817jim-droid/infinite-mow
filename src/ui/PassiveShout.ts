@@ -52,6 +52,7 @@ export const PASSIVE_FULL_SHOUTS: Partial<Record<CharacterId, PassiveFullShout>>
   sunshangxiang: { lines: ['侍婢何在，随我执刀！', '弓腰姬在此，谁敢近前！', '江东孙尚香，岂输男儿！'], color: '#ffc8b0' },
   // P2：吕布「无双」进狂暴、张辽「止啼」召八百虎贲时喊一句
   lvbu: { lines: ['人中吕布，马中赤兔！', '天下谁人能挡我！', '无双之名，岂是虚传！'], color: '#ff9c8a' },
+  taishici: { lines: ['随我杀出重围！', '东莱太史慈在此！', '信义所在，万死不辞！'], color: '#b8e0c0' },
   zhouyu: { lines: ['万事俱备，东风已至！', '火船齐发！', '樯橹灰飞烟灭！'], color: '#ffb080' },
   zhangliao: { lines: ['八百虎贲，随我破阵！', '辽来辽来！', '张文远在此！'], color: '#c8d4e8' },
 };

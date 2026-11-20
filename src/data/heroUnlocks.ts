@@ -37,6 +37,8 @@ export const HERO_JOIN: Readonly<Partial<Record<CharacterId, HeroJoinInfo>>> = {
     lines: ['凤雏庞统，随军西进入蜀。', '「卧龙、凤雏，两人得一可安天下——主公两人俱得。」'] },
   lvbu: { kicker: '下邳 · 白门楼', epithet: '飞将',
     lines: ['白门楼下，吕布卸甲解缚。', '「明公所患不过于布，今已服矣——天下不足忧！」', '方天画戟，从此为公所用。'] },
+  taishici: { kicker: '江陵 · 南郡', epithet: '信义',
+    lines: ['南郡城下，太史慈插戟于地，拱手而立。', '「大丈夫当带七尺之剑，以升天子之阶。」', '「慈愿随明公，再战三百合！」'] },
   zhouyu: { kicker: '江陵 · 南郡', epithet: '美周郎',
     lines: ['南郡城下，周瑜解下佩剑，抚琴一曲。', '「公瑾不才，愿以火攻之策，助明公定天下。」', '程普在侧，拱手而笑。'] },
   zhangliao: { kicker: '下邳 · 白门楼', epithet: '止啼',

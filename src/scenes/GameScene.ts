@@ -1830,6 +1830,7 @@ export class GameScene extends Phaser.Scene {
       const xp = withdrawXp(picks.map(p => list[p.index].def.xp)); this.bossClearStats.xp = xp;
       this.bossClearPending = { at: this.combatNow + BOSS_CLEAR.ms, xp, n: picks.length };
     }
+  }
   /**
    * 黄巾首领的法坛（1-2 张宝 / 1-3 张角）：首领出阵时立在首领身后，首领站台前（统筹 11-21，用户「这个祭坛我直接穿模进去了」）。
    * 原来是贴地层的半透明图（DEPTH.ground、无碰撞），主将 / 部曲 / 敌兵直接走上石台、站进石碑里。

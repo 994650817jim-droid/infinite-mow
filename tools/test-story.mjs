@@ -7,7 +7,8 @@ const BASE = process.env.BASE ?? 'http://127.0.0.1:5173/', out = 'assets/review/
 mkdirSync(out, { recursive: true });
 const world = { version: 7, yellowStages: 3, dongzhuoStages: 3, warlordStages: 3, guanduStages: 0, worldAvailable: true, cleared: { huangjin: true }, merits: 0, provisions: 1000, buildings: { barracks: 1, farm: 1, clinic: 1 }, reserve: {}, receipts: [], nodes: ['home', 'huangjin', 'hulao'] };
 const rec = id => ({ id, kind: 'hero', hero: id, name: id, template: 'spear', quality: 'orange', rank: 1, picks: [] });
-const roster = (lord, fs) => ({ version: 1, lord, lordFinal: true, owned: [rec(lord), ...fs.map(rec)], followers: fs, offers: [], captives: [], season: -1, manual: 0, dry: 0, seq: 0, hall: 3 });
+// starters: true —— 2026-11-21 起没这个标记的存档读档时会自动补刘关张赵并编进随从（RosterStore 开局四人），测试要自己定随从就得带上
+const roster = (lord, fs) => ({ version: 1, lord, lordFinal: true, starters: true, owned: [rec(lord), ...fs.map(rec)], followers: fs, offers: [], captives: [], season: -1, manual: 0, dry: 0, seq: 0, hall: 3 });
 const b = await chromium.launch({ channel: 'chrome', headless: true });
 const p = await b.newPage({ viewport: { width: 1280, height: 720 } });
 const errors = []; p.on('pageerror', e => errors.push(e.message)); p.on('console', m => { if (m.type() === 'error' && !/Texture key already in use/.test(m.text())) errors.push(m.text()); });

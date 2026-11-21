@@ -25,6 +25,8 @@ jobs:
       - run: npm ci
         env:
           ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+      # 发布包瘦身要用 cwebp 把大 PNG 无损转 WebP（tools/prune-dist.mjs；没装就跳过压缩，dist 会大约 2 倍）
+      - run: sudo apt-get update && sudo apt-get install -y webp
       - run: npm run build
       - uses: actions/upload-pages-artifact@v4
         with:

@@ -335,3 +335,6 @@ assets/raw/*
 !/tools/render-ui-bgm.mjs
 !/tools/test-perf-tweaks.mjs
 !/tools/perf-night.mjs
+!/tools/verify-dist-assets.mjs
+!/tools/check-dist-refs.mjs
+!/tools/prune-dist.mjs

@@ -1,3 +1,4 @@
+import { CH1_TRIAL, CH1V6 } from './ch1Trial';
 import type { EnemyKind } from '../types';
 
 /**
@@ -183,7 +184,7 @@ export const ROSTER_MIX = {
 export const STAGE_MIX: Record<string, StageMix> = {
   // 2026-11-19 平衡会话审查（用户「每一关敌军兵种配比也要检查调整一下」）：wave = 五段里第几段起出（1 先锋 · 2 精锐 · 3 事件 · 4 副将 · 5 首领）。
   // 原则：先锋只出本章底层兵 + 最多一种轻量新兵；第 2 段起出本关主题兵；第 3～4 段再加一种本章兵加码；新兵种合计权重约 10～13（场上占比另有 20% 上限）。
-  'huangjin.1': { traits: { liumin: { w: 10 } } }, // 1-1 新手关：只有流民（成群、很脆）
+  'huangjin.1': { traits: { liumin: { w: CH1_TRIAL ? CH1V6.stage1Mix.liumin : 10 } } }, // 1-1 新手关：只有流民（成群、很脆）
   'huangjin.2': { traits: { liumin: { w: 8 }, fushui: { w: 5, wave: 3 } } }, // 符水道徒挪到事件段：先学会打人群，再学先杀治疗
   'huangjin.3': { traits: { fushui: { w: 4, wave: 2 }, lishi: { w: 3, wave: 3 }, liumin: { w: 4, wave: 1 } } }, // 原 fushui 第 1 波就出 → 第 2 段；先锋补流民
   'hulao.1': { traits: { gunshi: { w: 6 }, qianghu: { w: 3, wave: 4 } } }, // 汜水关：关守滚石兵 + 副将段西凉弓骑

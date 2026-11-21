@@ -1,9 +1,11 @@
+import { CH1_TRIAL, CH1V6 } from './ch1Trial';
 /**
  * 只留武将等级（2026-11-17 用户：「没用局内等级只有总等级」，选「武将升级时弹三选一」；数值见共享笔记 level-merge-proposal.md）。
  * 打怪经验直接加武将等级；每升 1 级弹一次三选一并给 1 个属性点。每章大约打完最后一关时刚好到上限。
  */
 /** 升到下一级所需经验（Lv1→2 起）。累计：Lv5 100、Lv10 1280、Lv15 7280、Lv20 16030、Lv25 27280、Lv30 40780。 */
-const TABLE: readonly number[] = [
+// 第一章试验数值 ch1v6（?balance=ch1v6）开着时用 data/ch1Trial 的升级表
+const TABLE: readonly number[] = CH1_TRIAL ? CH1V6.xpTable : [
   16, 20, 28, 36,                 // Lv1–5
   120, 150, 180, 210, 240,        // Lv5–10（第一章）
 ];

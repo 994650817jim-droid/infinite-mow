@@ -143,6 +143,7 @@ import { CHAPTER_INDEX, PHASES, PHASE_BARKS, buildPhasePlan, phasedPace, planLen
 import { StagePhaseRunner } from '../systems/StagePhases';
 import { BattleFortunes } from '../systems/BattleFortunes';
 import { BattleHeal } from '../systems/BattleHeal';
+import { CH1_TRIAL_ID, CH1V6, ch1TrialOn } from '../data/ch1Trial';
 import { BATTLE_HEAL } from '../data/battleHeal';
 import { TentEdgeHints, registerTents, tentMarks, type TentCtx } from '../systems/SpawnTents';
 import type { CampTier } from '../data/campSiege';
@@ -1446,6 +1447,7 @@ export class GameScene extends Phaser.Scene {
     for(const t of this.chasingBosses){if(t.enemy.active&&t.enemy.spawnId===t.life){t.battle?.update(dt,time);t.label.setPosition(t.enemy.x,t.enemy.y-100).setText(t.name+" · 追兵 "+Math.ceil(Math.max(0,t.enemy.hp)/t.enemy.maxHp*100)+"%");}}
     this.rebuildGrid();
     if(time>=this.navigationAt){this.navigationAt=time+250;const boxes=[...(this.sishuiObstacles?.footprints??[]),...(this.terrain?(this.terrain.stats.burnt?(this.terrainNav=this.terrain.navBoxes()):this.terrainNav):[])];this.supplies?.appendNavigationBoxes(boxes);this.legion.navigation.setBoxes(boxes);}
+    this.legion.setCh1Trial(ch1TrialOn(this.hardKey())); // 第一章试验数值 ch1v6：随军粮、部曲生命
     this.legion.update(dt, time, this.enemies, this.grid, (enemy, amount) => this.hitEnemy(enemy, amount, this.combatNow, 'melee', true));
     if (this.followers && !this.followers.nav) this.followers.nav = this.allyNav;
     if (this.followers && !this.followers.rejoin) this.followers.rejoin = (f, x, y) => { this.allyRejoin.move(f, f.sprite, f, { x, y }, () => f.place(x, y)); }; // 随行接绕障导航（开局 / 降将来投两处创建，这里统一挂）
@@ -1792,7 +1794,8 @@ export class GameScene extends Phaser.Scene {
     // 首领在场：杂兵上限减半、刷兵间隔加倍、每次数量减半（BALANCE.bossSpawn）
     const bossOn = !!this.boss?.active, B = BALANCE.bossSpawn;
     const spent = bossOn && !this.frontlineBoss() && this.bossClockMs() / 1000 >= this.bossStallCfg.quotaSec, S = BOSS_STALL.spent; // 首领阶段收益额度用完：刷兵再降一档（data/bossStall.ts）
-    const cap = bossOn ? Math.round(BALANCE.enemyCap * B.capMul * (spent ? S.capMul : 1)) : BALANCE.enemyCap;
+    const capBase = this.chapter.enemyCap ?? BALANCE.enemyCap; // 本关同屏上限（现只第一章试验数值 ch1v6 设）
+    const cap = bossOn ? Math.round((this.chapter.bossCapBase ?? capBase) * B.capMul * (spent ? S.capMul : 1)) : capBase;
     if (this.spawnTimer <= 0 && this.activeEnemyCount() < cap && this.combatNow >= this.bossQuietUntil) { /* 首领登场静场（BOSS_CLEAR.quietMs）期间不刷 */
       // 刷怪时间轴按关卡节奏加速（stageTuning.pace）：原来第 N 波的刷怪强度在新的第 N 波出现
       const paced = this.elapsed * (this.chapter.pace ?? 1);
@@ -1913,6 +1916,7 @@ export class GameScene extends Phaser.Scene {
       return;
     }
     this.boss = boss;
+    this.battleHeal?.bossEntryAid(this.hardKey()+'.'+this.hardStage(), boss); // 首领出场保底回血点（data/battleHeal bossEntry，现只第一章试验数值 ch1v6 的 1-1）
     this.bossClearStage(boss); // 鸣金让道：首领登场时普通小兵往两侧退开撤走一部分（data/bossClear.ts）
     { const sc = this.stageChapter(); this.bossStallCfg = stallFor(sc ?? chaptersOpen(), sc ? this.hardStage() : 0); this.bossRageAnnounced = false; } // 首领阶段防拖：额度 / 震怒起点按章 / 关（data/bossStall.ts）；攻城 / 军情 / 挑战 / 支线按已开放章节数取章默认值，不套「12-3」这类按关覆盖
     this.startParley(boss);
@@ -4696,6 +4700,7 @@ export class GameScene extends Phaser.Scene {
         row('击杀敌军', String(stats.kills)),
         row('等级', `Lv.${stats.level}`),
         row('造成伤害', String(Math.round(stats.damageDealt))),
+        ...(ch1TrialOn(this.hardKey()) ? [row('试验数值', CH1_TRIAL_ID)] : []), // 第一章试验数值开关（data/ch1Trial）
         row('随军粮', String(this.legion.food)), // 11-21 用户试玩：资源数字从 1-1 起就要看得到
         ...(mechOpen('squad') ? [row('部曲战损', `${this.legion.count}存活 / ${this.legion.dead}阵亡`)] : []),
         row(this.chapter.bossName, stats.bossKilled ? '已击败' : '未击败'),
@@ -4725,7 +4730,7 @@ export class GameScene extends Phaser.Scene {
      const firstClear=!debug&&victory&&this.bossKilled?claimFirstClear(this.stableRewardKey()):0;if(firstClear){this.heroXpBonus=firstClear;this.itemDrops?.gainScrolls(SCROLL.firstClear);this.resultTexts.body.setText(this.resultTexts.body.text+'\n首次通关  经验 +'+firstClear);}
      if(!debug&&this.lordHeroXp()>0){const id=this.runConfig.character,name=getCharacter(id).name;
       // 战斗中升的级已随时写入；这里写入当前经验，再加首次通关经验（可能再升级）
-      setHeroProgress(id,this.player.level,this.player.xp);const r=creditHeroXp(id,this.heroXpBonus);
+      setHeroProgress(id,this.player.level,this.player.xp);const r=creditHeroXp(id,this.heroXpBonus,undefined,ch1TrialOn(this.hardKey())&&CH1V6.postXpSoftByStage?this.stageSuggestedLevel():undefined); /* ch1v6：战后经验按本关建议等级算软上限 */
       const grain=addProvisions(r.grain+Math.floor(this.player.overflowXp/OVERFLOW_XP_PER_GRAIN));
       this.resultTexts.body.setText(this.resultTexts.body.text+'\n武将等级  '+name+(r.to>this.heroStartLevel?' Lv.'+this.heroStartLevel+' → Lv.'+r.to:' Lv.'+r.to)+' · 经验 +'+Math.round(this.lordHeroXp())+(r.capped?' · 已到本章上限 Lv.'+r.cap:'')+(grain>0?'\n经验已满  折军粮 +'+grain:''));
       // 随行武将：每人拿主公折算后经验的一半（hero-level-proposal 方案 A，用户批准）

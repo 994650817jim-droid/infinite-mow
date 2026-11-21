@@ -1,4 +1,5 @@
 import type { ChapterDef } from './chapters';
+import { CH1_TRIAL, CH1V6 } from './ch1Trial';
 
 /**
  * 主线关卡的刷怪节奏与小怪成长（2026-11-16 平衡，用户批准；试玩反馈「每关太久」「小怪到后面数值需要提高」）。
@@ -40,8 +41,9 @@ export const STAGE_TUNING: Record<TunedChapter, readonly StageTuning[]> = {
 };
 
 export function stageTuning(chapter: TunedChapter, stage: number): StageTuning {
-  const list = STAGE_TUNING[chapter];
-  return list[Math.max(0, Math.min(list.length - 1, Math.round(stage) - 1))];
+  const list = STAGE_TUNING[chapter], i = Math.max(0, Math.min(list.length - 1, Math.round(stage) - 1));
+  if (chapter === 'huangjin' && CH1_TRIAL) return { ...list[i], ...CH1V6.tuning[i] }; // 第一章试验数值 ch1v6
+  return list[i];
 }
 
 /** 把刷怪节奏与成长倍率套到一关的 ChapterDef 上（波次、目标不动）。 */

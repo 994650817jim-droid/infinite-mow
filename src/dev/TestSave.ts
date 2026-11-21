@@ -11,9 +11,12 @@
  * main.ts 第一行就 import 本文件，保证任何模块读存档之前已经装好。
  * 正式构建 import.meta.env.DEV 为 false，下面的代码整段被摇掉，不会进包。
  */
-const PFX = 'imdev:';
+/** 第一章试验数值 ch1v6（?balance=ch1v6）用自己的前缀，和 ?dev=1 的测试存档分开。 */
+const TRIAL = CH1_TRIAL;
+import { CH1_TRIAL, CH1_TRIAL_ID } from '../data/ch1Trial';
+const PFX = TRIAL ? `imtrial-${CH1_TRIAL_ID}:` : 'imdev:';
 /** 测试键分叉时的正式值快照。 */
-const BASE = 'imdev#:';
+const BASE = TRIAL ? `imtrial-${CH1_TRIAL_ID}#:` : 'imdev#:';
 const TOMB = '\u0000deleted', NONE = '\u0000none';
 /** 设置类键：清空测试存档时保留（音量、布局、画风、渲染倍率、面板位置等）。 */
 const SETTINGS = ['im_sfx_vol', 'im_bgm_vol', 'im_muted', 'im_music', 'im_layout', 'im_render_scale', 'im_iff_outline', 'im_dev_panel', 'im_bgm_ver', 'im_art_style'];
@@ -29,7 +32,7 @@ export interface TestSaveApi {
 
 export function testSaveActive(): boolean {
   if (!import.meta.env.DEV) return false;
-  try { return new URLSearchParams(window.location.search).get('dev') === '1'; } catch { return false; }
+  try { return new URLSearchParams(window.location.search).get('dev') === '1' || CH1_TRIAL; } catch { return false; }
 }
 export function testSaveApi(): TestSaveApi | undefined { return (window as unknown as { __testSave?: TestSaveApi }).__testSave; }
 
@@ -44,7 +47,8 @@ if (import.meta.env.DEV && testSaveActive()) {
     const v = raw.get.call(ls, PFX + key), realNow = raw.get.call(ls, key);
     if (v !== null) {
       const base = raw.get.call(ls, BASE + key);
-      if (base !== null && base !== (realNow ?? NONE)) { raw.remove.call(ls, PFX + key); raw.remove.call(ls, BASE + key); return realNow; }
+      if (!TRIAL && base !== null && base !== (realNow ?? NONE)) { // 试验存档不跟随正式存档
+ raw.remove.call(ls, PFX + key); raw.remove.call(ls, BASE + key); return realNow; }
       return v === TOMB ? null : v;
     }
     return realNow;
@@ -76,11 +80,13 @@ if (import.meta.env.DEV && testSaveActive()) {
     resetToReal: () => { dropTest(); window.location.reload(); },
   };
   (window as unknown as { __testSave?: TestSaveApi }).__testSave = api;
+  // 试验存档第一次打开：全新空档（设置保留）；之后接着用
+  if (TRIAL && raw.get.call(ls, BASE + '__fresh') === null) { for (const k of rawKeys()) if (k.startsWith('im_') && !SETTINGS.includes(k)) write(k, TOMB); raw.set.call(ls, BASE + '__fresh', '1'); }
 
   // 全局角标：任何场景都能看出现在用的是测试存档（不拦点击）
   const badge = (): void => {
     if (document.getElementById('dev-test-save')) return;
-    const el = document.createElement('div'); el.id = 'dev-test-save'; el.textContent = '测试存档 · 不写正式存档';
+    const el = document.createElement('div'); el.id = 'dev-test-save'; el.textContent = TRIAL ? `试验数值 ${CH1_TRIAL_ID} · 独立存档（不写正式存档）` : '测试存档 · 不写正式存档';
     el.style.cssText = 'position:fixed;right:6px;bottom:4px;z-index:999998;pointer-events:none;font:11px/1.2 system-ui,sans-serif;color:#ffe2a0;background:rgba(122,42,28,.82);border:1px solid #c9a45c;border-radius:3px;padding:2px 6px';
     document.body.appendChild(el);
   };

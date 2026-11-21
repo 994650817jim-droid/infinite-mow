@@ -15,6 +15,7 @@ import { DEPTH } from '../config';
 import { AllyCorpses } from './AllyCorpses';
 import { HINT_MOCK, groundScar } from '../ui/HintStyle';
 import { playSheet } from './SkillFxSheets';
+import { CH1V6 } from '../data/ch1Trial';
 
 /** 战场支援援兵入场（用户 2026-11-17：「支援的兵不要立刻出现在武将脚下，而是场外进入到武将那里」）：比平时跑得快一点，3 秒还没到就直接归位。 */
 export const ARRIVAL = { speedMul: 1.25, maxSeconds: 3, joinDist: 34, dustEvery: .16, /** 超时后冲刺：移速倍率、再给几秒；还到不了才走兜底换位（AllyRejoin：屏外直接换、屏内淡出淡入） */ sprintMul: 2.2, sprintSeconds: 3 } as const;
@@ -74,7 +75,7 @@ export class Legion {
   drillMultiplier = 1;
   /** 设置练兵倍率，并按新倍率重算在场部曲的生命上限（保持血量比例）。 */
   setDrill(multiplier: number): void { this.drillMultiplier = Math.max(1, multiplier); for (const u of this.units) if (u.active) u.applyCampaignHp(this.hpMultiplier()); }
-  private hpMultiplier(): number { return (1 + CAMP_TRAINING.hp.perLevel * this.training.hp) * this.drillMultiplier * this.player.growth.allyHpMultiplier(); } // 统御：部曲生命
+  private hpMultiplier(): number { return (1 + CAMP_TRAINING.hp.perLevel * this.training.hp) * this.drillMultiplier * this.player.growth.allyHpMultiplier() * (this.ch1Trial ? CH1V6.troopHp : 1); } // 统御：部曲生命
   food: number = LEGION.startingFood; dead = 0; recruited = 0;
   order: Order = 'guard';
   private readonly projectiles: LegionProjectiles;
@@ -225,7 +226,13 @@ export class Legion {
   hurtArea(x: number, y: number, radius: number, damage: number, now: number, angle?: number, arc = Math.PI * 2): void {
     for (const u of this.grid.query(x, y, radius + 20, this.friends)) if (u.active && Math.hypot(u.x - x, u.y - y) <= radius + u.radius && (angle === undefined || Math.cos(Math.atan2(u.y - y, u.x - x) - angle) >= Math.cos(arc / 2))) this.hurtByBoss(u, damage, now);
   }
-  onKill(enemy: Enemy): void { this.food += enemy.kind === 'boss' ? 20 : enemy.kind === 'elite' ? 5 : 1; }
+  onKill(enemy: Enemy): void {
+    if (this.ch1Trial) { const F = CH1V6.food; if (enemy.kind === 'boss') this.food += F.boss; else if (enemy.kind === 'elite') this.food += F.elite; else if (++this.trialKills >= F.perKills) { this.trialKills = 0; this.food += 1; } return; } // 第一章试验数值 ch1v6
+    this.food += enemy.kind === 'boss' ? 20 : enemy.kind === 'elite' ? 5 : 1;
+  }
+  /** 第一章试验数值 ch1v6（GameScene 每帧设）：随军粮、部曲生命按 data/ch1Trial。 */
+  private ch1Trial = false; private trialKills = 0;
+  setCh1Trial(on: boolean): void { if (on === this.ch1Trial) return; this.ch1Trial = on; for (const u of this.units) if (u.active) u.applyCampaignHp(this.hpMultiplier()); }
   stop(): void { this.command.clear(); this.stopped = true; this.player.armyDamageTakenMul = 1; this.effects.length = 0; this.artEffects.clear(); this.heals.length = 0; this.strikes.length=0; this.projectiles.clear(); this.gfx.clear(); }
   clear(): void { this.corpses.clear(); this.command.clear();this.projectiles.clear(); this.heals.length = 0;this.strikes.length=0; for (const u of this.units) { const v = u.release(); if (v) this.views.push(v); } this.units.length = 0;this.navigation.clear();this.formation.clear(); this.squads.clear(); this.grid.clear(); }
   /** 援兵从场外跑向自己的阵位：到了（或 3 秒到点）才入列。 */

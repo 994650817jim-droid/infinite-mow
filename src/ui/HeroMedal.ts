@@ -24,11 +24,11 @@ export const MEDAL_CROP: Record<string, { cx: number; cy: number; side: number }
   zhouyu: { cx: .46, cy: .15, side: .19 },
   taishici: { cx: .45, cy: .15, side: .19 },
   mengde: { cx: .46, cy: .15, side: .19 },
-  ganning: { cx: .5, cy: .42, side: .2 }, // 主页立绘没出前是像素头像放大（缺图清单）
-  dianwei: { cx: .45, cy: .17, side: .2 }, // 主页立绘没出前用水墨立轴（缺图清单）
-  sunquan: { cx: .5, cy: .14, side: .19 }, // 同上
-  menghuo: { cx: .5, cy: .19, side: .2 }, // 同上
-  zhurong: { cx: .5, cy: .18, side: .19 }, // 同上
+  ganning: { cx: .43, cy: .18, side: .2 }, // P3 主页彩绘 2026-11-21 到图
+  dianwei: { cx: .52, cy: .13, side: .19 },
+  sunquan: { cx: .44, cy: .15, side: .19 },
+  menghuo: { cx: .48, cy: .17, side: .19 },
+  zhurong: { cx: .54, cy: .15, side: .19 },
 };
 const DEFAULT_CROP = { cx: .5, cy: .14, side: .22 };
 

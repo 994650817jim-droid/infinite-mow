@@ -81,8 +81,8 @@ export const WEAPON_BRANCHES: readonly WeaponBranch[] = [
  * 收刀时每把刀从落点飞回主将，沿途割一下（recallMul，进阶 recallFinalMul），同一个敌人一次收刀最多被割 maxHitsPerEnemy 下。初值，交平衡会话。
  */
 export const BENXI = { dropStep: 90, dropMul: .4, recallMs: 2500, fullCount: 8, stillMs: 500, recallWidth: 44, recallMul: .45, recallFinalMul: .6, maxHitsPerEnemy: 3, keepMax: 8 } as const;
-/** P3 第二批可玩武将的分支图标还没出图（缺图清单 p3-heroes-plan.md）：不去载，卡面退回本命武器图标。 */
-export const BRANCH_ICON_PENDING: ReadonlySet<string> = new Set(['gn_yexi', 'gn_jieying', 'dw_sizhan', 'dw_huzhu', 'sq_zuoduan', 'sq_gongnu', 'mh_bufu', 'mh_xiangzhen', 'zr_huoshen', 'zr_feidao']);
+/** 还没出图的分支图标：不去载，卡面退回本命武器图标（P3 第二批 10 枚 2026-11-21 已出图，清空）。 */
+export const BRANCH_ICON_PENDING: ReadonlySet<string> = new Set<string>([]);
 export const BRANCH_ICON_READY: readonly string[] = WEAPON_BRANCHES.map(b => b.id).filter(id => !BRANCH_ICON_PENDING.has(id)); // 老 12 人 + P2 已出图
 export function branchesFor(weapon: WeaponId): WeaponBranch[] { return WEAPON_BRANCHES.filter(b => b.weapon === weapon); }
 export function branchById(id: string | undefined): WeaponBranch | undefined { return id ? WEAPON_BRANCHES.find(b => b.id === id) : undefined; }

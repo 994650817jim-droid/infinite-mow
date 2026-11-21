@@ -24,7 +24,7 @@ const H = `const s = ${G}, pl = s.player, w = pl.weapons[0], wait = ms => new Pr
   const hook = async (ms = 520) => { const a0 = D().hooks; w.cooldownLeft = 0; const r0 = Date.now(); while (D().hooks === a0 && Date.now() - r0 < 3000) await wait(8); w.cooldownLeft = 1e9; await waitG(ms); };`;
 
 const r0 = await p.evaluate(`(async () => { ${H}
-  return { weapon: w.id, label: pl.passive.label?.(s.combatNow), tex: ['ganning_walk_sheet','ganning_actions','ganning_portrait','pangtong_chain','pangtong_chain_hot','fx_zy_field','fx_lvbu_sweep','fx_flank_streak','fx_cast_ganning','icon_lianhuan','growth_icon_wind_boots','growth_icon_lianying'].filter(k => !s.textures.exists(k)), walkFrame: s.textures.get('ganning_walk_sheet').frameTotal, actFrame: s.textures.get('ganning_actions').frameTotal };
+  return { weapon: w.id, label: pl.passive.label?.(s.combatNow), tex: ['ganning_walk_sheet','ganning_actions','ganning_portrait','pangtong_chain','pangtong_chain_hot','fx_zy_field','fx_lvbu_sweep','fx_flank_streak','fx_cast_ganning','icon_jinfan','branch_icon_gn_yexi','branch_icon_gn_jieying','growth_icon_wind_boots','growth_icon_lianying'].filter(k => !s.textures.exists(k)), walkFrame: s.textures.get('ganning_walk_sheet').frameTotal, actFrame: s.textures.get('ganning_actions').frameTotal };
 })()`);
 ck('甘宁开局本命武器是锦帆铁索钩（jinfan_gou）', r0.weapon === 'jinfan_gou', r0);
 ck('甘宁的行走 / 动作（首领图拼成）/ 头像、借用的铁索 / 火 / 横扫 / 起手特效、图标全部载入', r0.tex.length === 0 && r0.walkFrame >= 16, r0);

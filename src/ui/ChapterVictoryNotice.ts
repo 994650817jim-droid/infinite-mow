@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { DEPTH, FONT, HEADING_FONT, TITLE_FONT } from '../config';
 import { inkPlate } from './HomeCommand';
+import { lqDivider } from './LacquerKit';
 
 /**
  * 章节告捷弹窗（漆金卷轴）：深色漆底 + 双层描金线 + 四角菱饰（同 HomePlaque 一系），
@@ -61,6 +62,9 @@ export function chapterVictoryNotice(scene: Phaser.Scene, W: number, H: number, 
 
   // 双层描金线 + 四角菱饰
   const trim = scene.add.graphics().setScrollFactor(0);
+  // 电脑版不要整圈金边（2026-11-21 全界面体检：「不要大框」）：只留上下两条金线
+  if (desk) { trim.fillStyle(GOLD_HI, .85); lqDivider(trim, x0 + pw / 2, y0 + 3, pw / 2 - 16); lqDivider(trim, x0 + pw / 2, y0 + ph - 3, pw / 2 - 16); root.add(trim); }
+  else {
   trim.lineStyle(2, GOLD, .95).strokeRoundedRect(x0 + 4, y0 + 4, pw - 8, ph - 8, 8);
   trim.lineStyle(1, GOLD, .45).strokeRoundedRect(x0 + 11, y0 + 11, pw - 22, ph - 22, 5);
   trim.fillStyle(GOLD_HI, 1);
@@ -68,6 +72,7 @@ export function chapterVictoryNotice(scene: Phaser.Scene, W: number, H: number, 
   trim.fillStyle(GOLD, 1);
   for (const [px, py] of [[x0 + 11, y0 + 11], [x0 + pw - 11, y0 + 11], [x0 + 11, y0 + ph - 11], [x0 + pw - 11, y0 + ph - 11]]) diamond(trim, px, py, 3);
   root.add(trim);
+  }
 
   // 小标题缎带（章节 · 告捷）
   let y = y0 + bannerH - (desk ? 34 : 44);

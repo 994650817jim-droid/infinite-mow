@@ -66,11 +66,12 @@ export class SaveSlotsUI {
       if (enabled && fn) b.hit.on('pointerdown', fn);
       return b;
     };
-    if (s.active) button(bx, '当前存档', false, false, `save-slot-${s.index}-current`);
+    // 当前档位只有标题旁的「当前」小签，不再另放一个灰色「当前存档」按钮（2026-11-21 全界面体检：信息重复）
+    if (s.active) { /* 无按钮 */ }
     // 2026-11-21 全界面体检：空档位有两三个时「新建征途」水墨按钮会叠出好几个；一律漆金（每屏最多一个水墨）
     else button(bx, s.empty ? '新建征途' : '读取', false, true, `save-slot-${s.index}-load`, () => this.load(s.index));
     if (!s.empty) {
-      const del = button(bx - bw - 14, '删除', false, true, `save-slot-${s.index}-delete`);
+      const del = button(s.active ? bx : bx - bw - 14, '删除', false, true, `save-slot-${s.index}-delete`);
       del.hit.on('pointerdown', () => {
         if (!del.hit.getData('confirm')) { del.hit.setData('confirm', true); del.caption.setText('确认删除？').setColor('#ff9f86'); return; }
         deleteSlot(s.index);

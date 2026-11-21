@@ -428,7 +428,7 @@ export function upgradeHall(): RosterResult {
   const s = loadRoster(); if (s.hall >= 3) return { ok: false, message: '招贤馆已满级' };
   const c = RECRUIT.hallUpgrade[s.hall - 1];
   if (!spendWorld({ provisions: c.provisions })) return { ok: false, message: `军粮不足：升级需要 ${c.provisions}` };
-  s.hall++; write(s); return { ok: true, message: `招贤馆升到 ${s.hall} 级：席位 ${RECRUIT.seats[s.hall - 1]}，随行 ${RECRUIT.followerCap[s.hall - 1]} 人` };
+  s.hall++; write(s); return { ok: true, message: `招贤馆升到 Lv.${s.hall}：席位 ${RECRUIT.seats[s.hall - 1]}，随行 ${RECRUIT.followerCap[s.hall - 1]} 人` };
 }
 export function rankCap(s: RosterSave = loadRoster()): number { return RANK.capByHall[hallIdx(s)]; }
 export function rankUp(id: string, line: RankLine): RosterResult {

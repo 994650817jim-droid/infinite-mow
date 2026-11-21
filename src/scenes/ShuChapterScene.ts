@@ -33,7 +33,7 @@ export class ShuChapterScene extends Phaser.Scene {
   g.lineStyle(1,0x8a7049,.09);for(let y=110;y<H;y+=40)g.lineBetween(0,y,W,y-90);g.lineStyle(1,0xa98250,.45).lineBetween(28,desk?113:144,W-28,desk?113:144);
   this.text(30,desk?19:24,'征 战  ·  第 七 章',12,'#b69a6b');this.text(28,desk?40:49,'入蜀',desk?35:39,'#e8cf98').setFontFamily(TITLE_FONT);
   this.text(30,desk?86:106,'刘璋迎客入川，蜀道险绝，凤雏危于落凤。',desk?14:17,'#b9ae99');
-  this.action(W-83,desk?48:52,110,40,'返回地图',()=>this.scene.start('WorldMapScene')).bg.setName('shu-return');
+  this.action(W-98,desk?48:52,140,40,'返回天下地图',()=>this.scene.start('WorldMapScene')).bg.setName('shu-return');
   if(test)this.text(W-30,desk?91:116,'试炼模式 · 全关可选',11,'#b09573').setOrigin(1,0);
   const cardY=desk?135:166,cw=desk?(W-84)/3:W-56,ch=desk?248:170;
   SHU_STAGES.forEach((d,i)=>{

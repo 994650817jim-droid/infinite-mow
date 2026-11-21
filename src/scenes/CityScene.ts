@@ -379,7 +379,7 @@ export class CityScene extends Phaser.Scene {
   if(id==='hall'&&cost!==null)line(lv===1?'占领第一座城镇后，营寨自动升为县城：开放马厩、粮仓，建筑可升到 Lv2':`扩建为${CITY_TITLE[lv+1]}：开放城池发展、奇观麒麟阁，建筑可升到 Lv3`,13,'#b9d2a8');
   if(id==='stable'&&lv)line('只能在营中休整时换马。',12,'#b9c9b2');
   // 军营「练兵」：全体部曲生命、伤害每级 +15%，上限随已开放章节
-  if(id==='barracks'){const d=drillInfo(s);line(`练兵 ${d.level} / ${d.cap} 级：全体部曲生命、伤害 ×${d.multiplier.toFixed(2)}${d.cost!==null?`；下一级 ×${d.next.toFixed(2)}`:d.level<12?'；开放新章节后可继续练':''}`,13,'#cfe0c8','town-card-drill');
+  if(id==='barracks'){const d=drillInfo(s);line(`练兵 Lv.${d.level} / ${d.cap}：全体部曲生命、伤害 ×${d.multiplier.toFixed(2)}${d.cost!==null?`；下一级 ×${d.next.toFixed(2)}`:d.level<12?'；开放新章节后可继续练':''}`,13,'#cfe0c8','town-card-drill');
    const db=homeCommand(this,tx+Math.min(220,tw)/2,y+20,Math.min(220,tw),38,d.cost!==null?`练兵 · 军粮 ${d.cost}`:'练兵已达上限',false,d.cost!==null&&s.provisions>=d.cost,14);db.hit.setName('town-drill').on('pointerdown',()=>{const res=trainTroops();if(!res.ok){(m.root.getByName('town-card-msg') as Phaser.GameObjects.Text|null)?.setText(res.message);return;}uiSfx().play('uiClick');this.toast(res.message);this.openCard('barracks');this.refresh();});m.root.add([db.g,db.hit,db.caption]);y+=50;}
   if(block.length&&cost!==null&&!campLock)line('需要：'+block.join('、'),14,'#e59a83','town-card-block');
   const msg=txt(this,W/2,m.y+h-(D?118:132),'',13,'#e8c98a').setOrigin(.5).setName('town-card-msg');m.root.add(msg);

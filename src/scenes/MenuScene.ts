@@ -181,7 +181,7 @@ export class MenuScene extends Phaser.Scene {
     bind('keydown-ENTER', () => this.startGame()); bind('keydown-L', () => switchLayout(D ? 'mobile' : 'desktop'));
     ['ONE', 'TWO', 'THREE', 'FOUR'].forEach((key, i) => bind(`keydown-${key}`, () => { this.selectedChar = i; this.renderSelection(); }));
     // 返回首页：原先是贴着画面底边的小字（电脑版被裁掉，进来就出不去），改为明显按钮 + Esc。
-    const home=homeCommand(this,D?112:W/2,D?490:932,D?150:200,D?44:42,'返回首页');home.hit.setName('review-home').on('pointerdown',()=>this.scene.restart());
+    const home=homeCommand(this,D?112:W/2,D?490:932,D?150:200,D?44:42,'返回');home.hit.setName('review-home').on('pointerdown',()=>this.scene.restart());
     bind('keydown-ESC',()=>this.scene.restart());
     this.createWestPicker();this.renderSelection();
     if (params.has('autostart') || params.has('perf')) this.time.delayedCall(80, () => this.startGame());
@@ -304,7 +304,7 @@ export class MenuScene extends Phaser.Scene {
         });
       }
     }
-    const back=label(W/2,D?H-40:H-70,'返回首页',20).setPadding(32,14).setInteractive({useHandCursor:true}).setName('dev-stages-close').on('pointerdown',()=>modal.destroy());modal.add(back);
+    const back=label(W/2,D?H-40:H-70,'返回',20).setPadding(32,14).setInteractive({useHandCursor:true}).setName('dev-stages-close').on('pointerdown',()=>modal.destroy());modal.add(back);
   }
   private ensureHomeArt(all=false):void{
     if(this.load.isLoading()){this.load.once('complete',()=>{if(this.sys.isActive())this.ensureHomeArt(all);});return;}

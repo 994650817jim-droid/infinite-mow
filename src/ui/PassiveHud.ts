@@ -55,7 +55,8 @@ export class PassiveHud {
     this.root = scene.add.container(22, 136).setScale(.68).setScrollFactor(0).setDepth(DEPTH.hud + 1);
     this.graphics = scene.add.graphics();
     const text = (x: number, y: number, size: number, color: string) => scene.add.text(x, y, '', {
-      fontFamily: FONT, fontSize: `${size}px`, color, resolution: 2, stroke: '#111d16', strokeThickness: 2,
+      fontFamily: FONT, fontSize: `${size}px`, color, resolution: 2, stroke: '#0c0805', strokeThickness: 5, // 容器缩到 .68，描边 5 ≈ 屏上 3.4（同顶部 HUD 字）
+      shadow: { offsetX: 0, offsetY: 1, color: '#000000', blur: 5, stroke: true, fill: true },
     });
     this.emblem = text(24, 24, 22, '#e7c474').setOrigin(.5);
     this.title = text(47, 8, 19, '#f7eedc').setFontStyle('bold');

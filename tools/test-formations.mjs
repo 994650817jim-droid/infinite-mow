@@ -136,13 +136,20 @@ for (let i = 0; i < 5; i++) { await calm(p); await p.waitForTimeout(500); }
 await p.screenshot({ path: `${OUT}/battle-circle-sigil.png` });
 
 // ⑦ 行营「布阵」页
-const camp = await p.evaluate(async () => { const s = window.__S; s.resting = true; s.setMode('rest'); s.campUI.open('test-form-rest', '下一关'); await new Promise(r => setTimeout(r, 5200));
+const camp = await p.evaluate(async () => { const s = window.__S; s.resting = true; s.setMode('rest'); s.campUI.open('test-form-rest', '下曲阳破阵'); await new Promise(r => setTimeout(r, 5200));
   const ui = s.campUI, f = n => window.__find(ui.root, n), tab = f('camp-tab-5'); tab?.emit('pointerdown'); await new Promise(r => setTimeout(r, 300));
   const pick = f('formation-pick-0-geese'); pick?.emit('pointerdown'); await new Promise(r => setTimeout(r, 300));
   const texts = []; const w = l => { for (const o of l) { if (typeof o.text === 'string') texts.push(o.text); if (o.list) w(o.list); } }; w(ui.root.list);
-  const r = s.formationRt; return { tab: !!tab?.visible, cur: ui.tab, picked: !!pick, load: r.loadout, rtCur: r.current, name: f('formation-focus-name')?.text, cap: f('formation-cap')?.text, diagram: !!f('formation-diagram'), fit: texts.find(t => /远程部曲（弓兵、连弩）多时用/.test(t)) ?? null }; });
+  // 版面（11-21 制作人验收）：没学会的阵上锁、选中态、下方不重复写提示、各块不重叠、右上写真关名
+  const B = n => { const o = f(n); if (!o?.getBounds) return null; const b = o.getBounds(); return { x: b.x, y: b.y, r: b.right, b: b.bottom }; }, hitR = (a, c) => a && c && a.x < c.r && c.x < a.r && a.y < c.b && c.y < a.b;
+  const picks = ['circle', 'wedge', 'crane', 'geese', 'snake', 'bazhen'].flatMap(id => [B('formation-pick-0-' + id), B('formation-pick-1-' + id)]).filter(Boolean);
+  const blocks = ['formation-legend', 'formation-cap', 'formation-help', 'formation-focus-name'].map(B);
+  const overlap = picks.some(pk => blocks.some(bl => hitR(pk, bl))) || hitR(B('formation-legend'), B('formation-help'));
+  const lay = { locked: f('formation-pick-0-bazhen')?.getData('learned') === false, sel: f('formation-pick-0-geese')?.getData('on') === true, detail: ui.detail?.text ?? '', next: ui.next?.text ?? '', overlap, sigil: !!f('formation-diagram-sigil') };
+  const r = s.formationRt; return { tab: !!tab?.visible, cur: ui.tab, picked: !!pick, load: r.loadout, rtCur: r.current, name: f('formation-focus-name')?.text, cap: f('formation-cap')?.text, diagram: !!f('formation-diagram'), fit: texts.find(t => /远程部曲（弓兵、连弩）多时用/.test(t)) ?? null, lay }; });
 await p.waitForTimeout(300); await p.screenshot({ path: `${OUT}/formation-panel.png` });
 ck('行营「布阵」页：点「雁行阵」布为主阵，战斗里的军阵跟着改；有说明（含「适用：远程部曲多时用」）与站位示意、入阵人数', camp.tab && camp.cur === 5 && camp.picked && camp.load[0] === 'geese' && camp.rtCur === 'geese' && camp.name === '雁行阵' && /入阵 \d+ \/ \d+ 人/.test(camp.cap ?? '') && camp.diagram && !!camp.fit, camp);
+ck('布阵页版面：没学会的八阵上锁；选中阵有选中态；站位图有阵纹淡底；下方不再重复写提示；阵签、图例、人数、说明互不重叠；右上写真关名', camp.lay.locked && camp.lay.sel && camp.lay.sigil && camp.lay.detail === '' && !camp.lay.overlap && camp.lay.next === '下一关 · 下曲阳破阵', camp.lay);
 await p.close();
 
 // ⑧ 按进度：第一章通关（&mech=real）军阵还没开：没有阵、X 无效、没有布阵页签

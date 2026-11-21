@@ -16,7 +16,7 @@ const S = src('src/scenes/SiegeGameScene.ts'), DB = src('src/systems/DefenseBatt
 
 ck('守城：经 spawnEnemy 的兵（除首领、云梯爬上来的）落点在墙内的一律挪到墙外敌营', /if \(this\.defend && kind !== 'boss' && !this\.defInside && y > this\.defend\.gatePos\.y - 20\) \{ const sp = this\.defend\.spawnPoint\(\); x = sp\.x; y = sp\.y; \}/.test(S));
 ck('守城：环形刷兵（含精英计时）不按主将四周，改从墙外敌营出', /if \(this\.defend\) \{ const p = this\.defend\.spawnPoint\(\); return this\.spawnEnemy\(kind, p\.x, p\.y, undefined, force\); \}/.test(S));
-ck('守城：野战布景的敌营帐篷不要（会在城里出兵）；喘息时主刷兵停', /this\.enemyCamps\?\.clear\(\); this\.enemyCamps = undefined;/.test(S) && /protected updateSpawner\(dt: number, time: number\) \{ if \(this\.defend\?\.resting\) return; super\.updateSpawner\(dt, time\); \}/.test(S));
+ck('守城：野战布景的敌营帐篷不要（会在城里出兵）；喘息时主刷兵停', /this\.enemyCamps\?\.clear\(\); this\.enemyCamps = undefined;/.test(S) && S.includes('protected updateSpawner(dt: number, time: number) { if (this.defend?.resting || this.assault?.resting) return; super.updateSpawner(dt, time); }'));
 ck('其他刷兵入口（特色兵、敌阵小队、首领招式召唤）都走场景的 spawnEnemy（会被上面这条挪出去）', /spawn:\(k,x,y\)=>this\.spawnEnemy\(k,x,y,undefined,true\)/.test(src('src/scenes/GameScene.ts')));
 const D = (await load('src/data/defenseBattle.ts')).DEFENSE, P = SP.match(/northReach: (\d+)/);
 const north = P ? +P[1] : 0, spawnTop = D.spawn.y - 60, spawnBot = D.spawn.y + 60;

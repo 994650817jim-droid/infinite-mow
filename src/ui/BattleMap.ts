@@ -52,6 +52,9 @@ export interface MapHost {
   title?(): string;
   /** 友军攻势（2-3）：每队的出发点、目标营寨、兵的位置。 */
   pushes?(): ReadonlyArray<{ from: { x: number; y: number }; to: { x: number; y: number } | null; members: ReadonlyArray<{ x: number; y: number }> }>;
+  /** 舆图画心中心（守城 v2：整张定宽场地）；守城标记（见 PaintedMap.FortMark）。 */
+  center?(): { x: number; y: number } | null;
+  fort?(): import('./PaintedMap').FortMark | null;
 }
 /** 舆图细节（用户「小地图可以在做精细点，里面内容」）：路、树林。 */
 type Road = { x: number; y: number; len: number; w: number; ang: number };

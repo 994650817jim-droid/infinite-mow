@@ -44,6 +44,14 @@ export interface PaintHost {
   /** 部曲、当前军阵、敌阵阵眼（同 BattleMap.MapHost）。 */ army?(): ReadonlyArray<{ x: number; y: number; active?: boolean }>; eyes?(): ReadonlyArray<{ x: number; y: number }>; formation?(): { frame: number; rot: number } | null;
   camps?(): ReadonlyArray<{ x: number; y: number; ratio: number; hit: boolean }>;
   pushes?(): ReadonlyArray<{ from: { x: number; y: number }; to: { x: number; y: number } | null; members: ReadonlyArray<{ x: number; y: number }> }>;
+  /** 画心中心（守城 v2：整张定宽场地；不给 = 主将）。 */ center?(): { x: number; y: number } | null;
+  /** 守城 v2：四段城头状态、城门 / 府衙血量、云梯车 / 冲车位置。 */ fort?(): FortMark | null;
+}
+/** 舆图上的守城标记（守城 v2，用户 c 段第 4 条「整张图、四段城头状态、城门血量、冲车和云梯车位置一眼看全」）。 */
+export interface FortMark {
+  walls: ReadonlyArray<{ x0: number; x1: number; y: number; state: 'ok' | 'ladder' | 'lost' }>;
+  gate?: { x: number; y: number; ratio: number; open: boolean }; keep?: { x: number; y: number; ratio: number };
+  engines: ReadonlyArray<{ x: number; y: number; kind: 'ladder' | 'ram' }>;
 }
 /** 底图范围（世界坐标，以开局点为原点）与分辨率（画心 1 像素 = RES 个底图像素，电脑布局放大后不糊）。 */
 const EXT = { x0: -6000, y0: -4500, w: 12000, h: 9000 }, RES = 1.5;
@@ -161,7 +169,7 @@ export class PaintedMap {
 
   /** 每次重画（8 Hz）：底图按主将位置裁出画心、动态标记重摆。 */
   draw(h: PaintHost, orders: BattleOrders): void {
-    const c = h.player(), W = this.w, H = this.h, k = this.k, now = performance.now(), g = this.dyn.clear();
+    const c = h.center?.() ?? h.player(), W = this.w, H = this.h, k = this.k, now = performance.now(), g = this.dyn.clear();
     const map = (wx: number, wy: number): [number, number] => [W / 2 + (wx - c.x) * k, H / 2 + (wy - c.y) * k];
     const inside = (x: number, y: number, pad = 4) => x >= pad && y >= pad && x <= W - pad && y <= H - pad;
     // 底图：裁出以主将为中心的画心
@@ -188,6 +196,13 @@ export class PaintedMap {
       this.icon('camp', px, py, 28, { originY: .8 });
       g.fillStyle(0x1a0e08, .75).fillRect(px - 12, py + 6, 24, 4); g.fillStyle(cp.ratio > .5 ? 0xc8402a : 0xe0962e, 1).fillRect(px - 12, py + 6, 24 * Phaser.Math.Clamp(cp.ratio, 0, 1), 4);
     }
+    // 守城 v2：四段城头（墨 = 守着、橙 = 有梯子、朱 = 失守）、城门 / 府衙血量、云梯车（梯）/ 冲车（冲）
+    { const f = h.fort?.(); if (f) {
+      for (const w of f.walls) { const [x0, y0] = map(w.x0, w.y), [x1] = map(w.x1, w.y); g.lineStyle(w.state === 'ok' ? 4 : 6, w.state === 'lost' ? CINNABAR : w.state === 'ladder' ? 0xe0962e : INK, .9).lineBetween(x0 + 2, y0, x1 - 2, y0); if (w.state !== 'ok') this.label(w.state === 'lost' ? '失守' : '有梯', (x0 + x1) / 2, y0 - 9, w.state === 'lost' ? '#9a1a10' : '#8a4a08', 11); }
+      if (f.gate) { const [px, py] = map(f.gate.x, f.gate.y); this.label(f.gate.open ? '门破' : '门 ' + Math.round(f.gate.ratio * 100) + '%', px, py + 10, f.gate.open || f.gate.ratio < .3 ? '#9a1a10' : '#2a1608', 12); }
+      if (f.keep) { const [px, py] = map(f.keep.x, f.keep.y); this.label('府衙 ' + Math.round(f.keep.ratio * 100) + '%', px, py, f.keep.ratio < .5 ? '#9a1a10' : '#2a1608', 12); }
+      for (const e of f.engines) { const [px, py] = map(e.x, e.y); if (inside(px, py, 6)) this.label(e.kind === 'ram' ? '冲' : '梯', px, py, '#9a1a10', 12); }
+    } }
     // 随行：碧点
     g.fillStyle(0x3f8f6a, 1).lineStyle(1, 0x10241a, .9);
     for (const f of h.followers()) { if (f.active === false) continue; const [px, py] = map(f.x, f.y); if (inside(px, py)) g.fillCircle(px, py, 3.2).strokeCircle(px, py, 3.2); }

@@ -391,7 +391,8 @@ export function siegeGameSceneClass(Base: typeof GameScene) {
         block: (img, frameKey) => { this.sishuiObstacles?.footprints.push(...propFootprint(img, frameKey)); },
         fx: (key, x, y, size, depth) => { playSheet(this, key, x, y, {size, ms: 700, depth}); },
         skipPressed: () => !!this.v2Space && Phaser.Input.Keyboard.JustDown(this.v2Space),
-        bigBanner: (t, c) => { this.v2Big = true; try { this.showWaveBanner(t, true, c); } finally { this.v2Big = false; } } });
+        bigBanner: (t, c) => { this.v2Big = true; try { this.showWaveBanner(t, true, c); } finally { this.v2Big = false; } },
+        gateArt: broken => this.defV2?.setGateBroken(broken) });
       // 垛口掩护：城外射上来的箭打到走道上的我方士兵 × cover.arrowMul
       this.legion.hurtMul = (u, src) => { const gg = this.defV2?.g; return gg && src?.normal && src.y > gg.W - 10 && u.y > gg.top && u.y < gg.W + 6 ? DEFENSE_V2.assault.cover.arrowMul : 1; };
       // 一键预览（?dev=1&defenseV2=1&defensePreview=1）：测试战斗没有出征带兵，补一支部曲

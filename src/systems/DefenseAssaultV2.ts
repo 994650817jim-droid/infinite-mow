@@ -57,6 +57,8 @@ export interface AssaultHost {
   skipPressed: () => boolean;
   /** 全屏大横幅（城门被破这种一场只有一次的大事）。 */
   bigBanner: (title: string, caption: string) => void;
+  /** 门楼换图：破门版（true）/ 完好的（false）。 */
+  gateArt: (broken: boolean) => void;
 }
 type LadderState = 'drive' | 'warn' | 'up' | 'down';
 interface Ladder { seg: number; x: number; cart: Enemy; life: number; state: LadderState; until: number; img: Phaser.GameObjects.Image | null; ring: Phaser.GameObjects.Image | null; label: Phaser.GameObjects.Text; next: number; climbers: Set<Enemy> }
@@ -94,7 +96,7 @@ export class DefenseAssaultV2 {
   /** F 位的小字签（滚木 / 热油 / 修门）：主将走近时收起，头顶只留当前会触发的那一个提示（b 段验收第 4 条）。 */
   private spotLabels: Array<{ o: Phaser.GameObjects.Text; x: number; y: number }> = [];
   /** 测试读。 */
-  readonly stats = { ladders: 0, raised: 0, climbs: 0, landed: 0, pushed: 0, logs: 0, oil: 0, repairs: 0, rams: 0, ramHits: 0, gateHits: 0, fell: 0, captures: 0, retakes: 0, carts: 0, ramsBroken: 0, rewardFood: 0, sorties: 0, sortieKills: 0, passed: 0, keepHits: 0, chopDmg: 0, ramDmg: 0, bossDmg: 0, gateShots: 0, gateBrokeAt: -1, wallDown: 0 };
+  readonly stats = { ladders: 0, raised: 0, climbs: 0, landed: 0, pushed: 0, logs: 0, oil: 0, repairs: 0, rams: 0, ramHits: 0, gateHits: 0, fell: 0, captures: 0, retakes: 0, carts: 0, ramsBroken: 0, rewardFood: 0, sorties: 0, sortieKills: 0, passed: 0, keepHits: 0, chopDmg: 0, ramDmg: 0, bossDmg: 0, gateShots: 0, gateBrokeAt: -1, wallDown: 0, reopened: 0 };
 
   constructor(private readonly h: AssaultHost) {
     const A = DEFENSE_V2.assault, s = h.scene, g = h.g;
@@ -143,7 +145,7 @@ export class DefenseAssaultV2 {
 
   // ———— 场景接口 ————
   /** 不受碰撞（正在爬 / 正在摔的，人在墙面上）。 */
-  ghost(e: Enemy): boolean { const c = this.climbing.get(e); return (!!c && c.life === e.spawnId) || this.falling.get(e) === e.spawnId; } // 敌兵对象是池子里复用的：按 spawnId 认（不然新刷的兵顶着上一个的「在爬梯」不受碰撞、推不下城）
+  ghost(e: Enemy): boolean { const c = this.climbing.get(e); return (!!c && c.life === e.spawnId) || this.falling.get(e) === e.spawnId || this.tunnel.get(e) === e.spawnId; } // 敌兵对象是池子里复用的：按 spawnId 认（不然新刷的兵顶着上一个的「在爬梯」不受碰撞、推不下城）
   /** 这段被占着（测试 / 舆图用）。 */
   get segmentsCaptured(): readonly boolean[] { return this.captured; }
   /** 屏边指示：在撞门的冲车、被占的段。 */
@@ -229,8 +231,18 @@ export class DefenseAssaultV2 {
   private toArch(e: Enemy, dt: number): boolean {
     const g = this.h.g, K = DEFENSE_V2.keep, ax = g.gx + ((e.spawnId % 5) - 2) * 14, ay = g.F + 8;
     if (Math.hypot(ax - e.x, ay - e.y) > K.passR && !(Math.abs(e.x - g.gx) <= K.passHalf && e.y <= g.F + K.passDepth)) return this.walk(e, ax, ay, dt, 2); // 门前一片都算到了门洞（被停在门前的车挡住也能进）
-    const s = this.h.scene, life = e.spawnId; e.sprite.setPosition(ax, g.innerTop - K.insideDy).setAlpha(0); this.stats.passed++;
-    s.tweens.add({ targets: e.sprite, alpha: 1, duration: 260, onUpdate: tw => { if (e.spawnId !== life) { tw.stop(); e.sprite.setAlpha(1); } } });
+    // 门洞是破门版门楼里的暗通道：走进去（淡出），在通道里往城里走，从城内一侧走出来（淡入）
+    const s = this.h.scene, life = e.spawnId; this.tunnel.set(e, life); e.invulnerable = true; this.stats.passed++;
+    s.tweens.add({ targets: e.sprite, alpha: 0, duration: 180, onUpdate: tw => { if (e.spawnId !== life) { tw.stop(); e.sprite.setAlpha(1); } } });
+    return true;
+  }
+  /** 在门洞暗通道里往城里走（tunnelMul 倍速）；出了城内一侧就淡入、照常行动。 */
+  private walkTunnel(e: Enemy, dt: number): boolean {
+    const g = this.h.g, K = DEFENSE_V2.keep, life = this.tunnel.get(e);
+    if (life !== e.spawnId) { this.tunnel.delete(e); e.invulnerable = false; e.sprite.setAlpha(1); return false; }
+    const sp = e.def.speed * K.tunnelMul, dy = sp * dt, tx = g.gx + ((e.spawnId % 5) - 2) * 14, outY = g.innerTop - K.insideDy;
+    e.sprite.x += (tx - e.x) * Math.min(1, 8 * dt); e.sprite.y = Math.max(outY, e.y - dy); e.moveVx = 0; e.moveVy = -sp; e.intentDx = 0; e.intentDy = -dy;
+    if (e.y <= outY) { this.tunnel.delete(e); e.invulnerable = false; this.h.scene.tweens.add({ targets: e.sprite, alpha: 1, duration: 220, onUpdate: tw => { if (e.spawnId !== life) { tw.stop(); e.sprite.setAlpha(1); } } }); }
     return true;
   }
   /** 走道上的敌兵：站在失守段、离主将远（> raidDist）的，走马道下城去砍府衙；其余照常追人。 */
@@ -351,6 +363,7 @@ export class DefenseAssaultV2 {
       return true;
     }
     if (this.falling.has(e)) { e.moveVx = e.moveVy = 0; return true; }
+    if (this.tunnel.has(e)) return this.walkTunnel(e, dt);
     const g = this.h.g;
     if (e.y < g.innerTop - 4) return this.raid(e, dt); // 城里：离主将远的去砍府衙
     if (e.y < g.F - 24) return this.onWall(e, dt); // 走道上：照常追人；失守段离主将远的下城去砍府衙
@@ -441,12 +454,13 @@ export class DefenseAssaultV2 {
   private breakGate(): void {
     const g = this.h.g; this.gate.open = true; this.gate.hp = 0; this.h.sfx('gong'); if (this.sortie.open) this.endSortie(true);
     for (const r of this.rams) { const sp = r.e.sprite, e = r.e; r.label.destroy(); this.h.scene.tweens.add({ targets: sp, y: sp.y + 120, alpha: 0, duration: 1200, onComplete: () => { if (e.active) e.deactivate(); sp.setAlpha(1); } }); } this.rams = []; // 城门撞开了：冲车往后退走（不挡门洞）
+    this.h.gateArt(true); // 门楼换破门版：门板撞碎、门洞是暗通道
     for (const dx of [-60, 0, 60]) this.h.fx('fx_collapse_dust', g.gx + dx, g.F - 40, 170, actorDepth(g.F) + .2); // 城门塌（手绘尘土序列帧）
     this.stats.gateBrokeAt = this.h.elapsed(); this.h.bigBanner('城门已破！', '敌兵入城——退守府衙（门楼内侧按 F 下城）'); this.h.guide('gate');
   }
 
   // ———— 门楼放箭（主将站门楼上，往门前一片打）————
-  private shotAt = 0; /** 从失守段下城的敌兵（测试数人头）。 */ private downIds = new Map<Enemy, number>();
+  private shotAt = 0; /** 在门洞暗通道里的敌兵（spawnId）。 */ private tunnel = new Map<Enemy, number>(); /** 从失守段下城的敌兵（测试数人头）。 */ private downIds = new Map<Enemy, number>();
   private gateShots(now: number): void {
     const G = DEFENSE_V2.assault.gateShot, g = this.h.g, p = this.h.player(), s = this.h.scene;
     if (now < this.shotAt || this.gate.open || this.sortie.open || Math.abs(p.x - g.gx) > DEFENSE_V2.layout.gateHalf || p.y < g.top || p.y > g.W) return;
@@ -460,12 +474,10 @@ export class DefenseAssaultV2 {
       s.tweens.add({ targets: a, x: t.x, y: t.y - 10, duration: 220, onComplete: () => { a.destroy(); if (t.active && t.spawnId === life) this.h.hit(t, G.damage * k); } });
     }
   }
-  /** 门破了：门洞处持续冒尘土（手绘序列帧）、两团地火一直烧。 */
-  private dustAt = 0; private brokenFires: Phaser.GameObjects.Sprite[] = [];
+  /** 门破了：门洞处持续冒尘土（手绘序列帧）；破门版门楼本身看得出门板撞碎，不再摆地火。 */
+  private dustAt = 0;
   private brokenFx(now: number): void {
-    if (!this.gate.open) return; const g = this.h.g, B = DEFENSE_V2.assault.broken, s = this.h.scene;
-    if (!this.brokenFires.length && s.textures.exists('ground_fire')) for (let i = 0; i < B.fires; i++) { const f = s.add.sprite(g.gx + (i - (B.fires - 1) / 2) * 110, g.F + 18, 'ground_fire', 0).setOrigin(.5, .85).setDisplaySize(110, 110).setDepth(actorDepth(g.F + 18) + .05).setName('defv2-broken-fire'); this.brokenFires.push(f); this.objs.push(f); }
-    this.brokenFires.forEach((f, i) => f.setFrame(Math.floor(now / 120 + i * 3) % 8));
+    if (!this.gate.open) return; const g = this.h.g, B = DEFENSE_V2.assault.broken;
     if (now >= this.dustAt) { this.dustAt = now + B.dustMs; this.h.fx('fx_collapse_dust', g.gx + (Math.random() - .5) * 80, g.F - 30, 150, actorDepth(g.F) + .2); }
   }
 
@@ -478,6 +490,7 @@ export class DefenseAssaultV2 {
     if (Math.hypot(p.x - cs.x, p.y - cs.y) <= DEFENSE_V2.assault.spots.reach) { const gs = v2Spots(this.h.g).gate; this.h.teleport(gs.x, gs.y); return true; } // 城门内侧楼梯：上城头
     const sp = this.spot(); if (!sp) return true;
     if (sp.kind === 'gate' && this.sortieReady()) { this.startSortie(); return true; } // 门楼内侧：能出城时 F = 出城冲阵
+    if (sp.kind === 'gate' && this.gate.open && this.resting) { if (!this.channel) { this.channel = { start: now, x: p.x, y: p.y }; } return true; } // 门破了、喘息：F = 堵门
     if (sp.kind === 'gate' && this.gate.open) { this.h.teleport(cs.x, cs.y); return true; } // 门破了：F = 下城守府衙
     if (sp.kind === 'ladder') { const l = this.ladders.find(q => q.seg === sp.seg && q.state === 'up'); if (l) this.topple(l, 'push'); return true; }
     if (sp.kind === 'rack') { if (this.logs[sp.seg] > 0) this.dropLog(sp.seg); else this.h.sfx('playerHurt'); return true; }
@@ -518,9 +531,14 @@ export class DefenseAssaultV2 {
   }
   private updateChannel(now: number): void {
     const c = this.channel; if (!c) return; const R = DEFENSE_V2.assault.repair, p = this.h.player();
-    if (this.gate.open || Math.hypot(p.x - c.x, p.y - c.y) > R.moveTol) { this.channel = null; return; }
+    const block = this.gate.open; if ((block && !this.resting) || Math.hypot(p.x - c.x, p.y - c.y) > R.moveTol) { this.channel = null; return; }
     if (now - c.start < R.channelMs) return;
-    this.channel = null; this.repairCd = now + R.cdMs; this.gate.hp = Math.min(this.gate.max, this.gate.hp + this.gate.max * R.amount); this.stats.repairs++;
+    this.channel = null; this.repairCd = block ? now : now + R.cdMs; this.gate.hp = Math.min(this.gate.max, Math.max(0, this.gate.hp) + this.gate.max * R.amount); this.stats.repairs++;
+    if (block) { // 堵门：修回 reopenPct 就把门关上、换回完好的门
+      if (this.gate.hp >= this.gate.max * R.reopenPct) { this.gate.open = false; this.h.gateArt(false); this.gateWarn = this.gate.hp / this.gate.max; this.stats.reopened++; this.h.banner('城门堵上了', false, `现在 ${Math.round(this.gate.hp / this.gate.max * 100)}% · 冲车还会再来`, '城门堵上了'); }
+      else this.h.banner(`堵门 ${Math.round(this.gate.hp / this.gate.max * 100)}%`, false, `修到 ${Math.round(R.reopenPct * 100)}% 关门`, `堵门 ${Math.round(this.gate.hp / this.gate.max * 100)}%`);
+      return;
+    }
     this.h.banner('城门补好了一些', false, `+${Math.round(R.amount * 100)}% · 现在 ${Math.round(this.gate.hp / this.gate.max * 100)}%`);
   }
   // ———— 占段 / 夺回 ————
@@ -546,6 +564,7 @@ export class DefenseAssaultV2 {
     if (Math.hypot(p.x - cs.x, p.y - cs.y) <= DEFENSE_V2.assault.spots.reach) return 'F · 上城头';
     const sp = this.spot(); if (!sp) return '';
     if (sp.kind === 'gate' && this.sortieReady()) return 'F · 出城冲阵';
+    if (sp.kind === 'gate' && this.gate.open && this.resting) return this.channel ? `堵门中 ${Math.max(0, (DEFENSE_V2.assault.repair.channelMs - (now - this.channel.start)) / 1000).toFixed(1)} 秒` : `F · 堵门（修到 ${Math.round(DEFENSE_V2.assault.repair.reopenPct * 100)}% 关门）`;
     if (sp.kind === 'gate' && this.gate.open) return 'F · 下城守府衙';
     if (sp.kind === 'ladder') return 'F · 推梯';
     if (sp.kind === 'rack') return this.logs[sp.seg] > 0 ? `F · 滚木 ×${this.logs[sp.seg]}` : '滚木用完';
@@ -581,6 +600,7 @@ export class DefenseAssaultV2 {
   clear(): void {
     this.done = true;
     for (const e of this.falling.keys()) if (e.active) e.sprite.setAngle(0);
+    for (const e of this.tunnel.keys()) if (e.active) { e.sprite.setAlpha(1); e.invulnerable = false; } this.tunnel.clear();
     this.climbing.clear(); this.falling.clear();
     for (const l of this.ladders) { l.label.destroy(); l.img?.destroy(); l.ring?.destroy(); } for (const r of this.rams) r.label.destroy();
     for (const f of this.burning?.fires ?? []) f.destroy(); this.burning = null;

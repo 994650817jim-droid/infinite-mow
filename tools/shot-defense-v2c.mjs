@@ -106,8 +106,8 @@ try {
   await ev(() => { const s = window.__S; s.defenseAssault.gate.hp = 0; }); await wait(700);
   await p.screenshot({ path: OUT + '/c-9-gate-broken.png' });
   const brk = await ev(() => { const s = window.__S, A = s.defenseAssault; const big = s.children.list.filter(o => o.name === 'combat-notice' && o.type === 'Container').flatMap(o => o.list).filter(o => o.type === 'Text').map(o => o.text);
-    return { big, fires: s.children.list.filter(o => o.name === 'defv2-broken-fire').length, edge: A.guideTargets().find(t => t.key === 'gate')?.label ?? '', rams: A.rams.length }; });
-  ck('破门那一刻做明显（c 段验收第 4 条）：全屏大横幅一次、门洞处持续的火光 / 尘土、屏边指示「城门已破 · 敌兵入城」；冲车退走不挡门洞', brk.big.some(t => /城门已破/.test(t)) && brk.fires >= 2 && brk.edge === '城门已破 · 敌兵入城' && brk.rams === 0, brk);
+    return { big, tex: s.defenseV2.gateTexture, front: s.children.getByName('defv2-gate-front')?.texture.key, edge: A.guideTargets().find(t => t.key === 'gate')?.label ?? '', rams: A.rams.length }; });
+  ck('破门那一刻：门楼两层都换成破门版（门板撞碎、门洞暗通道）+ 全屏大横幅一次 + 屏边指示「城门已破 · 敌兵入城」；冲车退走不挡门洞', brk.big.some(t => /城门已破/.test(t)) && brk.tex === 'defv2_gate_v2_broken' && brk.front === 'defv2_gate_v2_broken' && brk.edge === '城门已破 · 敌兵入城' && brk.rams === 0, brk);
   await wait2(600);
   await ev(() => { const s = window.__S, g = s.defenseV2.g; for (let i = 0; i < 6; i++) s.spawnEnemy('infantry', g.gx - 150 + i * 60, g.F + 120, 1, true); });
   const passOk = await until(() => window.__S.defenseAssault.stats.passed > 0, 15000);
@@ -124,6 +124,13 @@ try {
   // ———— 首次引导
   const guides = await ev(() => [...window.__S.v2GuideShown]);
   ck('首次引导：开局 / 立梯 / 能出城 / 喘息 / 冲车 / 门破的军师卡都出过（每张一次）', ['start', 'ladder', 'rest', 'sortie', 'ram', 'gate'].every(k => guides.includes(k)) && new Set(guides).size === guides.length, guides);
+  // ———— 喘息「堵门」：门破了，喘息时站门楼内侧 F 读条（不冷却），修回 40% 关门、换回完好的门
+  await ev(() => { const s = window.__S; s.elapsed = 236; s.player.sprite.setPosition(s.defenseV2.g.gx, s.defenseV2.g.top + 72); }); await wait2(800);
+  const bp = await ev(() => ({ prompt: window.__S.defenseAssault.prompt.text, phase: window.__S.defenseAssault.phase, open: window.__S.defenseAssault.gate.open }));
+  for (let i = 0; i < 4; i++) { await ev(() => { const s = window.__S; s.player.sprite.setPosition(s.defenseV2.g.gx, s.defenseV2.g.top + 72); s.interactOverride(); }); await wait2(3300); }
+  const shut = await ev(() => { const s = window.__S, A = s.defenseAssault; return { open: A.gate.open, pct: Math.round(A.gate.hp / A.gate.max * 100), tex: s.defenseV2.gateTexture, reopened: A.stats.reopened, phase: A.phase }; });
+  await p.screenshot({ path: OUT + '/c-11-gate-blocked.png' });
+  ck('喘息「F · 堵门」：读条不冷却，修回 40% 关门、换回完好的门楼', /^F · 堵门/.test(bp.prompt) && bp.open && !shut.open && shut.pct >= 40 && shut.tex === 'defv2_gate_v2' && shut.reopened === 1, { bp, shut });
   // ———— 府衙失守结局
   await ev(() => { const s = window.__S; s.defenseAssault.keep.hp = 0; });
   const lostOk = await until(() => window.__S.over, 6000);

@@ -18,8 +18,8 @@ export interface DefenseWallV2Host {
 /** auto = 按威胁自动派去的增援（威胁没了就回预备队）；E 叫来的不算 auto。 */
 interface Slot { post: Post; life: number; auto?: boolean }
 
-const KEY = { seg: 'luoyang_wall_seg', corner: 'luoyang_wall_corner', gate: 'defv2_gate_v2', walkA: 'defv2_walkway_a', walkB: 'defv2_walkway_b' } as const;
-const FILE: Record<keyof typeof KEY, string> = { seg: DEFENSE_V2.art.seg.file, corner: DEFENSE_V2.art.corner.file, gate: DEFENSE_V2.art.gate.file, walkA: DEFENSE_V2.art.walkway.a, walkB: DEFENSE_V2.art.walkway.b };
+const KEY = { seg: 'luoyang_wall_seg', corner: 'luoyang_wall_corner', gate: 'defv2_gate_v2', gateBroken: 'defv2_gate_v2_broken', walkA: 'defv2_walkway_a', walkB: 'defv2_walkway_b' } as const;
+const FILE: Record<keyof typeof KEY, string> = { seg: DEFENSE_V2.art.seg.file, corner: DEFENSE_V2.art.corner.file, gate: DEFENSE_V2.art.gate.file, gateBroken: DEFENSE_V2.art.gateBroken.file, walkA: DEFENSE_V2.art.walkway.a, walkB: DEFENSE_V2.art.walkway.b };
 
 export class DefenseWallV2 {
   readonly g: V2Geo;
@@ -28,6 +28,8 @@ export class DefenseWallV2 {
   private refillAt = 0; private alive = true; private reinforceAt = 0;
   /** 走道贴图的纹理名（walkway_a + b 横拼成一张；占段变红的那层复用）。 */
   readonly walkKey = 'defv2_walk_ab';
+  /** 城门楼两层（整张在人后、外侧城垛往下在人前）；城门破了换成破门版（同尺寸同标注）。 */
+  private gateBack: Phaser.GameObjects.Image | null = null; private gateFront: Phaser.GameObjects.Image | null = null; private gateBroken = false;
   /** 测试读。 */
   readonly stats = { built: false, assigned: 0, refills: 0, called: 0, autoSent: 0, autoBack: 0 };
 
@@ -108,6 +110,14 @@ export class DefenseWallV2 {
       }
     }
   }
+  /** 城门破了 / 堵上了：门楼两层一起换图（破门版：门板撞碎、门洞是暗通道），分层不变。墙图还没载入完就先记着，摆出来时再换。 */
+  setGateBroken(on: boolean): void {
+    this.gateBroken = on; const key = on ? KEY.gateBroken : KEY.gate, A = DEFENSE_V2.art.gate;
+    if (!this.h.scene.textures.exists(key)) return;
+    this.gateBack?.setTexture(key); if (this.gateFront) { this.gateFront.setTexture(key); this.gateFront.setCrop(0, A.crenel, A.w, A.h - A.crenel); }
+  }
+  /** 测试读：门楼现在用的贴图。 */
+  get gateTexture(): string { return this.gateBack?.texture.key ?? ''; }
   /** 岗位一览（测试 / 截图用）。 */
   postsInfo(): Array<{ kind: string; seg: number; held: boolean }> { return this.g.posts.map(p => ({ kind: p.kind, seg: p.seg, held: !!this.holder(p) })); }
 
@@ -138,9 +148,9 @@ export class DefenseWallV2 {
     }
     // 城门楼（可通行版）：墙脚对齐 F，外侧城垛和墙段齐平。画两层：整张在走道上所有人身后（楼阁、后排女墙、楼前平台），
     // 从外侧城垛往下裁一层盖在墙段和走道南沿的人前面（门楼正面不被墙段盖住、城垛挡住腿）——人从楼前平台走过，楼阁在人后面
-    { this.art.push(s.add.image(g.gx, g.F, KEY.gate).setOrigin(.5, A.gate.ground / A.gate.h).setScale(gs).setDepth(actorDepth(g.top) - .01).setName('defv2-gate'));
+    { this.gateBack = s.add.image(g.gx, g.F, KEY.gate).setOrigin(.5, A.gate.ground / A.gate.h).setScale(gs).setDepth(actorDepth(g.top) - .01).setName('defv2-gate'); this.art.push(this.gateBack);
       const front = s.add.image(g.gx, g.F, KEY.gate).setOrigin(.5, A.gate.ground / A.gate.h).setScale(gs).setDepth(actorDepth(g.W) + .005).setName('defv2-gate-front');
-      front.setCrop(0, A.gate.crenel, A.gate.w, A.gate.h - A.gate.crenel); this.art.push(front); }
+      front.setCrop(0, A.gate.crenel, A.gate.w, A.gate.h - A.gate.crenel); this.art.push(front); this.gateFront = front; if (this.gateBroken) this.setGateBroken(true); }
     // 角楼：在墙两端外侧（不压走道）
     { const cs = (g.F - (g.W - A.crenelOver)) / (A.corner.ground - A.corner.crenel), half = A.corner.w * cs / 2;
       for (const [x, flip] of [[g.X0 - half + 10, false], [g.X1 + half - 10, true]] as const) this.art.push(s.add.image(x, g.F, KEY.corner).setOrigin(.5, A.corner.ground / A.corner.h).setScale(cs).setFlipX(flip).setDepth(actorDepth(g.W) + .01).setName('defv2-corner')); }
@@ -151,5 +161,5 @@ export class DefenseWallV2 {
     if (s.textures.exists('siege_mid_ram')) for (const dx of DEFENSE_V2.spawn.xs) this.art.push(s.add.image(g.gx + dx, g.F + DEFENSE_V2.spawn.dy + 90, 'siege_mid_ram', 7).setOrigin(.5, .85).setDisplaySize(190, 190).setDepth(actorDepth(g.F + DEFENSE_V2.spawn.dy + 90)).setName('defv2-camp'));
     this.stats.built = true;
   }
-  clear(): void { this.alive = false; for (const o of this.art) o.destroy(); this.art.length = 0; this.slots.clear(); }
+  clear(): void { this.alive = false; this.gateBack = this.gateFront = null; for (const o of this.art) o.destroy(); this.art.length = 0; this.slots.clear(); }
 }

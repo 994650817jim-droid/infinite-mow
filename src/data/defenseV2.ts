@@ -80,7 +80,7 @@ export const DEFENSE_V2 = {
     /** 城外同屏敌兵上限（c 段验收第 1 条：原来峰值 120～150 全堆在门前）；多出来的预算换成云梯车 / 冲车（waves.ladders / rams）。 */
     outsideCap: 70,
     /** 门破了：门洞处持续的尘土（每 dustMs 一团）和火光（地火序列帧 fires 团）。 */
-    broken: { dustMs: 1400, fires: 2 },
+    broken: { dustMs: 1400 },
     /** 占段：一段里我方士兵全没了、且这段城头敌兵 ≥ minFoes → 这段变红、梯子上人 ×fastMul；这段敌兵清光即夺回。 */
     capture: { minFoes: 3, fastMul: 2, checkMs: 250 },
     /** 推下城：主将近战打中走道南沿 band 以内的普通兵（主将在它北边）→ 摔下城。 */
@@ -93,8 +93,8 @@ export const DEFENSE_V2 = {
     logs: { charges: 2, damage: 160, engineDamage: 220, foot: 200, fallMs: 340 },
     /** 热油：charges 次（喘息时补满）、冷却 cdMs；门前 radius 一片持续烧 ticks × tickMs，冲车 ×engineMul。 */
     oil: { charges: 3, cdMs: 5000, radius: 120, tickMs: 400, ticks: 10, damage: 22, engineMul: 4 },
-    /** 修门：站定读条 channelMs（走开就断），+amount（占满耐久的比例），冷却 cdMs。 */
-    repair: { channelMs: 3000, amount: .12, cdMs: 15000, moveTol: 24 },
+    /** 修门：站定读条 channelMs（走开就断），+amount（占满耐久的比例），冷却 cdMs。门破了以后喘息时可以「堵门」：读条不冷却，修回 reopenPct 就把门关上（换回完好的门）。 */
+    repair: { channelMs: 3000, amount: .12, cdMs: 15000, moveTol: 24, reopenPct: .4 },
     /** 头顶提示离主将脚下多高。 */
     promptDy: 86,
   },
@@ -133,7 +133,7 @@ export const DEFENSE_V2 = {
    * 城里离主将远于 raidDist 的敌兵去砍府衙（同时最多 cap 个，每秒 自身伤害 × contactMul）；府衙耐久（按城池档，同旧守城）归零 = 府衙失守。
    * 门楼内侧 F「下城守府衙」/ 城门内侧 F「上城头」：主将走门楼里的楼梯上下（不用绕到马道）。
    */
-  keep: { hp: { small: 1600, medium: 2000, large: 2600 } as Record<'small' | 'medium' | 'large', number>, raidDist: 340, reach: 90, cap: 8, chopPct: .0007, passR: 28, passHalf: 80, passDepth: 40, insideDy: 50, stairDy: 60 },
+  keep: { hp: { small: 1600, medium: 2000, large: 2600 } as Record<'small' | 'medium' | 'large', number>, raidDist: 340, reach: 90, cap: 8, chopPct: .0007, passR: 28, passHalf: 80, passDepth: 40, tunnelMul: 3, insideDy: 50, stairDy: 60 },
   /**
    * 借鉴清单第 1 条 · 预备队按威胁自动增援：每 checkMs 算各段威胁（立着的梯子 ×ladder + 这段城头敌兵 + 失守 lost），
    * 威胁 ≥ 1 的段派 ceil(威胁 / per) 个预备队近战过去（每段最多 max 个）；那段没威胁了就回预备队。
@@ -164,6 +164,8 @@ export const DEFENSE_V2 = {
     seg: { file: 'assets/siege-v2/luoyang/wall_seg.png', w: 1339, h: 464, crenel: 92, ground: 452, walkTop: 50, walkBot: 90 },
     walkway: { a: 'assets/siege-v2/defense-v2/walkway_a.png', b: 'assets/siege-v2/defense-v2/walkway_b.png', w: 1024, h: 256, band: 44 },
     gate: { file: 'assets/siege-v2/defense-v2/gate_passable_v2.png', w: 873, h: 816, rear: 186, base: 260, crenel: 449, ground: 809 },
+    /** 破门版门楼（同尺寸同标注，只有拱门不同：门板撞碎、门洞是暗通道）：城门耐久归零换上，喘息堵门修回 reopenPct 换回完好的。 */
+    gateBroken: { file: 'assets/siege-v2/defense-v2/gate_passable_v2_broken.png' },
     corner: { file: 'assets/siege-v2/luoyang/wall_corner.png', w: 487, h: 674, crenel: 205, ground: 640 },
     /** 外侧城垛顶比 W 高多少（城垛压住走道南沿，站在后面的人腿被挡住）。 */
     crenelOver: 50,

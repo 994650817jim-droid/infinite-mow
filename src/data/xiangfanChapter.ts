@@ -52,7 +52,7 @@ export function xiangfanBattle(stage: XiangfanStage): ChapterDef {
       infantry: stage === 3 ? v(e.infantry, XF_TROOPS.jiangdong.walk, { hp: Math.round(e.infantry.hp * 1.15), speed: Math.round(e.infantry.speed * 1.1) }) : e.infantry,
       boss: { ...e.boss, texture: xfBossTexture(d.id), hp: [2800, 3000, 3300][stage - 1], speed: [44, 56, 40][stage - 1], damage: [16, 17, 16][stage - 1] },
     },
-    pickEnemy: tt => { const r = Math.random(); return stage === 1 ? (tt < 25 ? 'infantry' : r < .45 ? 'infantry' : r < .75 ? 'shield' : r < .92 ? 'archer' : 'elite') : stage === 2 ? (r < .5 ? 'infantry' : r < .75 ? 'shield' : r < .92 ? 'archer' : 'elite') : (r < .55 ? 'infantry' : r < .75 ? 'archer' : r < .9 ? 'cavalry' : 'elite'); },
+    pickEnemy: tt => { const r = Math.random(); return stage === 1 ? (tt < 25 ? 'infantry' : r < .45 ? 'infantry' : r < .75 ? 'shield' : r < .92 ? 'archer' : tt < 50 ? 'shield' : 'elite') : stage === 2 ? (r < .5 ? 'infantry' : r < .75 ? 'shield' : r < .92 ? 'archer' : tt < 50 ? 'shield' : 'elite') : (r < .55 ? 'infantry' : r < .75 ? 'archer' : r < .9 ? 'cavalry' : tt < 50 ? 'infantry' : 'elite'); }, // 2026-11-21 配兵审计：先锋段不出精锐
     growth: { hp: t.hp * 1.15, damage: t.damage * 1.08, bossHp: t.bossHp },
     // 麦城：被包围——刷兵更密
     ...(stage === 3 ? { spawnInterval: (tt: number) => base.spawnInterval(tt) * .75 } : {}),

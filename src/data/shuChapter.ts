@@ -60,7 +60,7 @@ export function shuBattle(stage: ShuStage, hasArt: (key: string) => boolean = sh
       archer: v(e.archer, SHU_TROOPS.nushou.walk, { hp: Math.round(e.archer.hp * 1.1) }),
       boss: { ...e.boss, texture: bossTex, hp: [2400, 2700, 3000][stage - 1], speed: [58, 46, 36][stage - 1], damage: [15, 16, 14][stage - 1] },
     },
-    pickEnemy: tt => { const r = Math.random(); return stage === 1 ? (tt < 25 ? 'infantry' : r < .55 ? 'infantry' : r < .85 ? 'archer' : 'shield') : stage === 2 ? (r < .4 ? 'infantry' : r < .85 ? 'archer' : 'elite') : (r < .35 ? 'infantry' : r < .6 ? 'shield' : r < .88 ? 'archer' : 'elite'); },
+    pickEnemy: tt => { const r = Math.random(); return stage === 1 ? (tt < 25 ? 'infantry' : r < .55 ? 'infantry' : r < .85 ? 'archer' : 'shield') : stage === 2 ? (tt < 50 ? (r < .62 ? 'infantry' : 'archer') : r < .5 ? 'infantry' : r < .85 ? 'archer' : 'elite') : (tt < 50 ? (r < .4 ? 'infantry' : r < .65 ? 'shield' : 'archer') : r < .35 ? 'infantry' : r < .6 ? 'shield' : r < .88 ? 'archer' : 'elite'); }, // 2026-11-21 配兵审计：7-2 弓手 45% → 35%；先锋段不出精锐
     growth: { hp: t.hp * 1.08, damage: t.damage * 1.05, bossHp: t.bossHp },
     victoryTitle: d.boss + (stage === 3 ? '出降' : '败退'), victoryText: stage === 3 ? '刘璋开城出降 · 益州归附 · 入蜀告捷' : d.name + '告捷 · 进入军营休整',
   };

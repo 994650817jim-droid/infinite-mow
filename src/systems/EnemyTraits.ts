@@ -9,6 +9,7 @@ import { warnFx } from '../ui/WarnFx';
 import { isV2Texture, loadV2TroopSheets, V2_TROOP_SCALE, v2TroopGround } from './ArtStyle';
 import { addCount, canAdd, mixSummary, pickRoster, tallyRoster, type MixPick } from './RosterMix';
 import { playSheet } from './SkillFxSheets';
+import { throwPot } from './PotThrow';
 
 /**
  * 各章新兵种的机制（data/enemyRoster；共享笔记 enemy-roster-design.md）。
@@ -616,7 +617,7 @@ export class EnemyTraits {
         if (now < z.at) { wf.circle(z.id, look, z.x, z.y, z.r, (now - z.from) / (z.at - z.from), now); continue; }
         wf.shapeImpact(z.id, look, z.x, z.y, z.r, 0, now);
         if (look === 'slam') playSheet(this.h.scene, 'fx_collapse_dust', z.x, z.y - 14, { size: z.r * 2.4, depth: DEPTH.fx, ms: 480, alpha: .85 });
-        this.h.sfx(look === 'arrows' ? 'enemyArrow' : 'mn_stone');
+        this.h.sfx(look === 'arrows' ? 'enemyArrow' : z.fire ? 'mn_firepot' : 'mn_stone');
         if (z.fire) { this.addFire(z.x, z.y, z.fire.r, now, z.fire.ms, z.fire.dmg); this.metrics.firepots += 1; }
         this.hitPlayer(z.x, z.y, z.r, z.damage, now);
         this.h.hurtTroops(z.x, z.y, z.r, z.allyDamage);
@@ -680,6 +681,7 @@ export class EnemyTraits {
   private flyStone(x0: number, y0: number, tx: number, ty: number, startAt: number, ms: number, pot = false): void {
     const sc = this.h.scene, usePot = pot && sc.textures.exists('fx_firepot'); if (!usePot && !sc.textures.exists('shu_pass')) return;
     const delay = Math.max(0, startAt - this.now());
+    if (usePot) { sc.time.delayedCall(delay, () => { throwPot(sc, { x0, y0: y0 + 28, x1: tx, y1: ty, ms, now: () => this.now(), sfxLand: false }); }); return; } // 火罐：出手小火团 → 抛物线 + 影子 + 火星 → 落地碎裂（systems/PotThrow）；伤害 / 起火仍由预警区在落地时刻结算
     sc.time.delayedCall(delay, () => {
       const img = (usePot ? sc.add.image(x0, y0, 'fx_firepot') : sc.add.image(x0, y0, 'shu_pass', STONE_FRAME)).setDisplaySize(usePot ? 44 : 40, usePot ? 44 : 40).setDepth(DEPTH.projectile);
       sc.tweens.addCounter({ from: 0, to: 1, duration: ms, onUpdate: tw => { const k = tw.getValue() ?? 0; img.setPosition(x0 + (tx - x0) * k, y0 + (ty - y0) * k - Math.sin(k * Math.PI) * 140).setRotation(k * 6); }, onComplete: () => img.destroy() });

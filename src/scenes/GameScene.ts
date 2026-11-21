@@ -11,6 +11,7 @@ import { playMenuMusic, stopMenuMusic } from '../systems/Music';
 import { startCityAmbient } from '../systems/ContentSfx';
 import { SCHOOLS, SCHOOL_TIER, SHI_SOURCES, FOLLOWER_SCHOOL, heroAffinity, type SchoolId } from '../data/schools';
 import { ensureHeroSkillFx, playSheet } from '../systems/SkillFxSheets';
+import { throwPot } from '../systems/PotThrow';
 import { ZHANGLIAO } from '../data/zhangliao';
 import { FOOT_HUD } from '../data/passiveGauge';
 import { TAISHICI } from '../data/taishici';
@@ -1055,6 +1056,7 @@ export class GameScene extends Phaser.Scene {
     this.buildCombat.onFx=(st,x,y,sz)=>buildVfx(this).emit(st,x,y,this.combatNow,sz,0,420);
     this.buildCombat.onShock=(x,y,r)=>buildVfx(this).emit('pure_charge',x,y-6,this.combatNow,r*2,0,320,true);
     this.buildCombat.onNapalm=(x,y,r,dmg,lv)=>{this.martialFields.add(x,y,r,dmg,3000,lv);this.spawnFlameFx(x,y,r);};
+    this.buildCombat.onNapalmThrow=(sx,sy,x,y,ms)=>{throwPot(this,{x0:sx,y0:sy,x1:x,y1:y,ms,now:()=>this.combatNow});}; // 火油罐：出手 → 抛物线飞行 → 落地碎裂（落地起火由 BuildCombat 在同一时刻触发）
     // 合击（data/schoolCombos.ts）：第一次触发打横幅；烈马脚下火；冲势打出 / 眩晕交给 SchoolSynergy（声东击西、铁骑冲阵、十面埋伏）
     this.buildCombat.onCombo=id=>{this.synergy?.note(id);const c=COMBOS.find(x=>x.id===id);if(c)comboFx(this,c.a,c.b,id,this.player.x,this.player.y,this.combatNow);};
     this.buildCombat.onFirePatch=(x,y,r,dmg,ms)=>{this.martialFields.add(x,y,r,dmg,ms,1);this.spawnFlameFx(x,y,r*.8);};

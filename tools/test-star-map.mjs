@@ -50,7 +50,7 @@ ck('开关默认关', SM.starMapOn() === false);
   ck('四个入口连成一圈', ATTRS.every((a, i) => SM.starNeighbors(SM.gateOf(a)).includes(SM.gateOf(ATTRS[(i + 1) % 4]))));
   const small = { strength: 0, agility: 0, intellect: 0, command: 0 }; for (const n of SM.STAR_NODES) if (n.attr && n.kind === 'small') small[n.attr]++;
   ck('每一维 13 颗小星（区内 11 + 桥上 2），加别人的入口时最多 14 点', ATTRS.every(a => small[a] === 13), small);
-  ck('旧专精 12 颗有 perk 标记；第二期起只有 4 颗主星标「效果未实现」，12 颗新要星都有 STAR_EFFECT 数值', SM.STAR_NODES.filter(n => n.perk).length === 12 && SM.STAR_NODES.filter(n => n.todo).length === 4 && SM.STAR_NODES.filter(n => n.todo).every(n => n.kind === 'keystone') && same(Object.keys(SM.STAR_EFFECT).sort(), SM.STAR_NODES.filter(n => n.kind === 'notable' && !n.perk).map(n => n.id).sort()));
+  ck('旧专精 12 颗有 perk 标记；第三期起没有「效果未实现」的星：12 颗新要星有 STAR_EFFECT、4 颗主星有 STAR_KEYSTONE', SM.STAR_NODES.filter(n => n.perk).length === 12 && SM.STAR_NODES.every(n => !n.todo) && same(Object.keys(SM.STAR_KEYSTONE).sort(), SM.STAR_NODES.filter(n => n.kind === 'keystone').map(n => n.id).sort()) && same(Object.keys(SM.STAR_EFFECT).sort(), SM.STAR_NODES.filter(n => n.kind === 'notable' && !n.perk).map(n => n.id).sort()));
   const names = ATTRS.flatMap(a => [1, 2, 3].map(t => SM.starNode(SM.perkStarId(a, t)).name)), old = ATTRS.flatMap(a => AT.PRIMARY_PERK_INFO[a].map(p => p.name));
   ck('三档专精对应 NC / NL1 / NL2，名字与 PRIMARY_PERK_INFO 一致', same(names, old), names);
 }
@@ -201,6 +201,27 @@ for (const key of Object.keys(TABLE)) {
   const off = mk('guanyu', ALL), none = mk('guanyu'); off.hpRatio = none.hpRatio = .2; off.recordMovement(3, .016); none.recordMovement(3, .016); off.spellSurgeUntil = 1e9;
   ck('开关关着：星全亮也没有任何效果（十二项都是中性值，原有数值不变）', off.critDamageBonus() === 0 && off.pickupMultiplier() === 1 && same(off.dotBonus(), { mul: 1, extraMs: 0 }) && off.jinnangMultiplier() === 1 && off.allyBossTakenMultiplier() === 1 && off.allyNearDamageFactor(0, 0) === 1 && off.allyNearTakenFactor(0, 0) === 1 && off.starHit(0, true, true, true) === 1 && off.starHit(0, false, false, false) === 1 && off.allyDamageBucket() === 0
     && off.damageMultiplier(0) === none.damageMultiplier(0) && off.attackSpeedMultiplier(0) === none.attackSpeedMultiplier(0) && off.bonusMaxHp() === none.bonusMaxHp() && off.incomingDamageMultiplier() === none.incomingDamageMultiplier() && off.allyHpMultiplier() === none.allyHpMultiplier() && off.allyDamageMultiplier() === none.allyDamageMultiplier());
+}
+// ⑪ 第三期：4 颗主星（数值 = 设计稿第 4 节的表）
+{
+  SM.setStarMap(true);
+  const id = name => byName.get(name).id, mk = (hero, extra = [], level = 30) => { const g = new RG.RunGrowth(hero); g.heroLevel = level; g.stars = [...extra]; return g; };
+  const near = x => Math.abs(x) < 1e-12;
+  { const a = mk('guanyu'), g = mk('guanyu', [id('万人敌')]);
+    ck('万人敌：主将全伤害 +15%，对首领再 +5%（精锐、小兵不加），部曲伤害 −30%', near(g.damageMultiplier(0) / a.damageMultiplier(0) - 1.15) && near(g.gearHitMultiplier('boss') / a.gearHitMultiplier('boss') - 1.05) && g.gearHitMultiplier('elite') === a.gearHitMultiplier('elite') && g.gearHitMultiplier('infantry') === 1 && g.allyDamageBucket() === -.3 && near(g.allyDamageMultiplier() / a.allyDamageMultiplier() - .7), [a.damageMultiplier(0), g.damageMultiplier(0)]); }
+  { const a = mk('zhaoyun'), g = mk('zhaoyun', [id('一骑当千')]), g2 = mk('zhaoyun', [id('一骑当千'), id('游刃')]);
+    ck('一骑当千：暴击 +10%，闪避 +10%（和游刃合计封顶 20%），生命上限 ×0.8', near(g.criticalBonus() - a.criticalBonus() - .1) && g.dodgeChance() === .1 && g2.dodgeChance() === .2 && SM.STAR_TUNING.dodgeCap === .2 && g.maxHpMultiplier() === .8 && a.maxHpMultiplier() === 1, [g.dodgeChance(), g2.dodgeChance()]); }
+  { const a = mk('zhuge'), g = mk('zhuge', [id('火烧连营')]), P = SM.STAR_PYRE;
+    const took = [0, 100, 200, 300, 400, 500, 600, 999, 1000, 1050, 1100].map(t => g.pyreTake(t));
+    ck('火烧连营：法术武器冷却 +15%（攻速 ÷1.15）；爆燃任意 1 秒内最多 6 次', near(g.attackSpeedMultiplier(0) / a.attackSpeedMultiplier(0) - 1 / 1.15) && same(took, [true, true, true, true, true, true, false, false, true, false, true]) && a.pyreTake(0) === false, took);
+    ck('火烧连营的常量：范围 / 比例 / 每秒上限 / 基准兵种', P.radius === 90 && P.ratio === .1 && P.perSecond === 6 && P.windowMs === 1000 && P.basis === 'infantry', P); }
+  { const a = mk('liubei'), g = mk('liubei', [id('三军统帅')]), both = mk('liubei', [id('三军统帅'), id('万人敌')]), full = mk('liubei', [id('三军统帅'), id('励军'), id('号令')]);
+    ck('三军统帅：部曲伤害 +30%（进桶）、部曲生命 +20%、免费招兵 +1；主将自身伤害 −25%', g.allyDamageBucket() === .3 && near(g.allyDamageMultiplier() / a.allyDamageMultiplier() - 1.3) && near(g.allyHpMultiplier() / a.allyHpMultiplier() - 1.2) && g.freeRecruitBonus() === 1 && mk('liubei', [id('三军统帅'), id('募众')]).freeRecruitBonus() === 2 && near(g.damageMultiplier(0) / a.damageMultiplier(0) - .75));
+    ck('万人敌 + 三军统帅：部曲伤害正好抵消，主将伤害 ×1.15 ×0.75', near(both.allyDamageBucket()) && near(both.allyDamageMultiplier() - a.allyDamageMultiplier()) && near(both.damageMultiplier(0) / a.damageMultiplier(0) - 1.15 * .75));
+    ck('统御一路：励军 + 三军统帅 + 号令（身边）= 1 + 15% + 30% + 12%，不相乘', near(full.allyDamageMultiplier() * full.allyNearDamageFactor(0, 0) / a.allyDamageMultiplier() - 1.57), [full.allyDamageBucket()]); }
+  SM.setStarMap(false);
+  const off = mk('zhaoyun', SM.STAR_NODES.map(n => n.id)), none = mk('zhaoyun');
+  ck('开关关着：四颗主星都点着也没有任何效果', off.maxHpMultiplier() === 1 && off.pyreTake(0) === false && off.freeRecruitBonus() === none.freeRecruitBonus() && off.criticalBonus() === none.criticalBonus() && off.dodgeChance() === none.dodgeChance() && off.damageMultiplier(0) === none.damageMultiplier(0) && off.attackSpeedMultiplier(0) === none.attackSpeedMultiplier(0) && off.gearHitMultiplier('boss') === none.gearHitMultiplier('boss') && off.allyDamageMultiplier() === none.allyDamageMultiplier() && off.allyHpMultiplier() === none.allyHpMultiplier());
 }
 // ⑩ 第二期：开关打开时的显示
 {

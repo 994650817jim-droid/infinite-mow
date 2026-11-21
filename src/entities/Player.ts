@@ -159,7 +159,8 @@ export class Player {
   }
 
   get maxHp(): number {
-    return BALANCE.player.maxHp + this.stats.maxHpBonus + this.growth.bonusMaxHp() + vigorHp(this.level); // 体魄：武将等级生命（2026-11-19）
+    const k = this.growth.maxHpMultiplier(), hp = BALANCE.player.maxHp + this.stats.maxHpBonus + this.growth.bonusMaxHp() + vigorHp(this.level);
+    return k === 1 ? hp : Math.max(1, Math.round(hp * k)); // k：星图主星「一骑当千」生命上限 −20%（开关关着恒为 1） // 体魄：武将等级生命（2026-11-19）
   }
 
   get radius(): number {

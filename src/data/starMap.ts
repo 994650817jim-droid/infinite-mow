@@ -30,7 +30,7 @@ export interface StarNode {
   between?: readonly [AttributeId, AttributeId];
   /** 已有的 12 个主属性专精（attributes.PRIMARY_PERK）：哪一维的第几档（1–3）。 */
   perk?: { attr: AttributeId; tier: number };
-  /** 效果未实现：4 颗主星（第三期）可以点亮（不堵路），但点了没有效果。12 颗新要星第二期已接上（STAR_EFFECT）。 */
+  /** 效果未实现的标记。第三期起 28 颗有名字的星都已接上效果（STAR_EFFECT / STAR_KEYSTONE），现在恒为 false；留着给以后新加的星用。 */
   todo: boolean;
   links: readonly string[];
 }
@@ -74,6 +74,28 @@ export const STAR_EFFECT = {
   'bridge3.h': { nearAllyTaken: .1, hp: .06 },
 } as const;
 export type StarEffectId = keyof typeof STAR_EFFECT;
+/**
+ * 第三期：4 颗主星（设计稿第 4 节，已含平衡评审的修订；初值，归平衡会话）。结算在 systems/RunGrowth.ts（keyOn），爆燃在 GameScene.starPyre。
+ * 万人敌的部曲伤害 −30% 与三军统帅的 +30% 都进部曲伤害加法桶，同时点正好抵消（设计稿「方向相反，互相抵消，是有意的」）。
+ */
+export const STAR_KEYSTONE = {
+  /** 万人敌：主将全伤害 +15%，对首领再 +5%；部曲伤害 −30%。 */
+  'strength.K': { damage: .15, boss: .05, allyDamage: -.3 },
+  /** 一骑当千：暴击 +10%，闪避 +10%（合计封顶 STAR_TUNING.dodgeCap）；生命上限 −20%（最终生命上限 ×0.8）。 */
+  'agility.K': { crit: .1, dodge: .1, maxHp: -.2 },
+  /** 火烧连营：法术击杀爆燃（STAR_PYRE）；法术武器冷却 +15%。 */
+  'intellect.K': { cooldown: .15 },
+  /** 三军统帅：部曲伤害 +30%（进加法桶）、部曲生命 +20%、免费招兵再多 1 人；主将自身伤害 −25%。 */
+  'command.K': { allyDamage: .3, allyHp: .2, freeRecruit: 1, selfDamage: -.25 },
+} as const;
+export type StarKeystoneId = keyof typeof STAR_KEYSTONE;
+/**
+ * 火烧连营的爆燃：被主将法术伤害（非武器伤害，或法术武器的武器命中）打死的敌人，在原地对 radius 内的其他敌人造成一次伤害。
+ * - 伤害基准 = 本关此刻新刷出来的一名 basis 兵种（刀兵）的生命上限 × ratio，与死的是谁无关（精锐、副将倒下不会炸得更狠）；
+ * - 爆燃打死的敌人不再爆燃；任意 1 秒内最多 perSecond 次，超出的不炸；
+ * - fxRadius = 借用手绘火焰序列帧 flame_burst 时传的半径（只管画面大小）。
+ */
+export const STAR_PYRE = { radius: 90, ratio: .1, perSecond: 6, windowMs: 1000, basis: 'infantry', fxRadius: 60 } as const;
 export const STAR_REGIONS: Record<AttributeId, { name: string; color: number }> = {
   strength: { name: '力量', color: 0xc8553d }, agility: { name: '敏捷', color: 0x4fa38f }, intellect: { name: '智力', color: 0x8f7fd0 }, command: { name: '统御', color: 0xd39a3a },
 };
@@ -194,7 +216,7 @@ export const STAR_NODES: readonly StarNode[] = ROWS.map(([id, region, kind, x, y
   const tier = kind === 'notable' && region !== 'bridge' ? PERK_SLOTS.indexOf(slot) + 1 : 0, perk = tier > 0 ? { attr: region as AttributeId, tier } : undefined;
   const links = EDGES.filter(e => e[0] === id || e[1] === id).map(e => (e[0] === id ? e[1] : e[0]));
   return {
-    id, region, kind, x, y, attr, between, perk, links, todo: kind === 'keystone',
+    id, region, kind, x, y, attr, between, perk, links, todo: false,
     name: name ?? STAR_REGIONS[attr!].name + ' +1', desc: desc ?? `+1 ${STAR_REGIONS[attr!].name}点（与现在加 1 点相同）`,
   };
 });

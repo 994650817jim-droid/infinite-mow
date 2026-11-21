@@ -9,7 +9,7 @@ const nodes = JSON.parse(fs.readFileSync(E.NODES, 'utf8')), files = {};
 for (const s of ['neutral', 'strength', 'agility', 'intellect', 'command']) for (const k of ['gate', 'small', 'notable', 'keystone']) for (const t of ['off', 'ready', 'on']) files[`${s}/${k}_${t}`] = rd(D + `nodes/${s}/${k}_${t}.png`);
 const ICONS = { '千钧': 'qianjun', '破阵': 'pozhen', '斩将': 'zhanjiang', '铁骨': 'tiegu', '背水': 'beishui', '万人敌': 'wanrendi', '轻骑': 'qingqi', '游刃': 'youren', '疾影': 'jiying', '连击': 'lianji', '追风': 'zhuifeng', '一骑当千': 'yiqi', '凝神': 'ningshen', '连珠': 'lianzhu', '广域': 'guangyu', '余烬': 'yujin', '妙算': 'miaosuan', '火烧连营': 'huoshao', '励军': 'lijun', '募众': 'muzhong', '同袍': 'tongpao', '严阵': 'yanzhen', '号令': 'haoling', '三军统帅': 'sanjun', '骁锐': 'xiaorui', '奇谋': 'qimou', '帷幄': 'weiwo', '身先士卒': 'shenxian' };
 for (const id of Object.values(ICONS)) files['icon_' + id] = rd(D + `icon_${id}.png`);
-files.bg = rd(D + 'originals/bg_starmap.png'); files.lineInk = rd(D + 'line_ink.png'); files.lineGold = rd(D + 'line_gold.png'); files.fx = rd(D + 'fx_light_strip.png');
+files.bg = rd(E.BG || (D + 'originals/bg_starmap.png')); files.lineInk = rd(D + 'line_ink.png'); files.lineGold = rd(D + 'line_gold.png'); files.fx = rd(D + 'fx_light_strip.png');
 const b = await chromium.launch({ channel: 'chrome', headless: true });
 try {
   const p = await b.newPage();
@@ -53,6 +53,6 @@ try {
     fg.fillStyle = '#bbb'; fg.fillText('上：12 帧（96px）；中：套在要星（特效 88px）；下：套在主星（特效 128px）', 10, 392);
     return { full: full.toDataURL('image/png'), alloff: alloff.toDataURL('image/png'), crop: crop.toDataURL('image/png'), table: tb.toDataURL('image/png'), fx: fc.toDataURL('image/png') };
   }, [nodes, files, ICONS]);
-  const w = (f, u) => fs.writeFileSync('assets/review/star-map/' + f, Buffer.from(u.split(',')[1], 'base64'));
-  w('star_map_mock_1600x900.png', r.full); w('star_map_mock_alloff.png', r.alloff); w('star_map_actual_size_crop.png', r.crop); w('star_map_icon_table.png', r.table); w('star_map_fx_strip.png', r.fx); console.log('ok');
+  const w = (f, u) => fs.writeFileSync('assets/review/star-map/' + f, Buffer.from(u.split(',')[1], 'base64')), T = E.TAG || '';
+  w(`star_map_mock_1600x900${T}.png`, r.full); w(`star_map_mock_alloff${T}.png`, r.alloff); w(`star_map_actual_size_crop${T}.png`, r.crop); if (!T) { w('star_map_icon_table.png', r.table); w('star_map_fx_strip.png', r.fx); } console.log('ok');
 } finally { await b.close(); }

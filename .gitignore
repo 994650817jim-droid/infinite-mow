@@ -223,6 +223,7 @@ assets/raw/*
 !/tools/cut-star-fx.mjs
 !/tools/make-star-lines.mjs
 !/tools/bake-gate-glyphs.mjs
+!/tools/compose-bagua-bg.mjs
 !/tools/shot-story-portraits.mjs
 !/tools/resize-image.mjs
 !/tools/shot-boss-still.mjs

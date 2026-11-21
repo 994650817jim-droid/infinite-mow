@@ -11,6 +11,8 @@ export class SishuiObstacles {
     {left:-274,right:-186,top:-260,bottom:-228},
     {left:186,right:274,top:-260,bottom:-228},
   ];}
+  /** 不受碰撞的敌兵（守城 v2：正在爬云梯 / 摔下城的，人在墙面上）。 */
+  pass?:(e:Enemy)=>boolean;
   private pushX=0;private pushY=0;
   private correction(x:number,y:number,r:number,box:typeof this.footprints[number]):boolean{
     if(x<box.left-r||x>box.right+r||y<box.top-r||y>box.bottom+r)return false;
@@ -25,7 +27,7 @@ export class SishuiObstacles {
     for(const box of this.footprints){
       if(this.correction(player.x,player.y,player.radius,box)){player.sprite.x+=this.pushX;player.sprite.y+=this.pushY;}
       for(const a of allies)if(a.active&&this.correction(a.x,a.y,a.radius,box))a.push(this.pushX,this.pushY);
-      for(const e of enemies)if(e.active&&!e.isSupplySlot&&this.correction(e.x,e.y,e.radius,box)){e.sprite.x+=this.pushX;e.sprite.y+=this.pushY;}
+      for(const e of enemies)if(e.active&&!e.isSupplySlot&&!this.pass?.(e)&&this.correction(e.x,e.y,e.radius,box)){e.sprite.x+=this.pushX;e.sprite.y+=this.pushY;}
     }
   }
 }

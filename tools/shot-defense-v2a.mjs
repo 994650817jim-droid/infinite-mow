@@ -22,7 +22,7 @@ try {
     for (const [k, n] of [['archer', 6], ['swordsman', 6], ['spearman', 6], ['rider', 2]]) s.legion.recruit(k, n, true);
     s.defenseV2.assignAll(true);
     const w = s.defenseV2, g = w.g, info = w.postsInfo();
-    return { v2: !!w, oldDefense: !!s.defenseBattle, held: info.filter(x => x.held).length, posts: info.length, start: { x: Math.round(s.player.x), y: Math.round(s.player.y) }, onWalk: s.player.y > g.top && s.player.y < g.W, bias: w.cameraBias(s.player), W: g.W, F: g.F };
+    return { v2: !!w, oldDefense: !!s.defenseBattle, held: info.filter(x => x.held).length, posts: info.length, start: { x: Math.round(s.player.x), y: Math.round(s.player.y) }, onWalk: s.player.y > g.top && s.player.y < g.W, bias: s.cameraBiasY(), W: g.W, F: g.F };
   });
   ck('开关开：建守城 v2（不建旧 DefenseBattle），主将开局站在城头走道上，镜头往城外让', setup.v2 && !setup.oldDefense && setup.onWalk && setup.bias > 80, setup);
   ck('我方士兵上墙：26 个岗位里守住 ' + setup.held + ' 个（6 弓进垛口、8 近战梯口、2 马道口）', setup.held >= 16, setup);

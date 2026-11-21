@@ -27,6 +27,8 @@ export const DEFENSE_V2 = {
     city: 650, outside: 1000, flank: 500,
     /** 府衙：内侧女墙以北多远。 */
     keepDy: 380,
+    /** 开打时主将站在走道南半边（离外沿 heroDy，垛口后面）：镜头往城外让以后主将在画面上部，站南半边不顶到顶部计时器。 */
+    heroDy: 90,
   },
   /** 城头分段：每段一个梯口（段中点），4 个垛口位（避开梯口 ±mouth），梯口 2 个驻守位。 */
   posts: { crenelDy: 40, crenels: 4, mouth: 70, guardDx: 36, guardDy: 95, rampDy: 210, reserveDy: 70, reserveGap: 34, reserveCols: 8 },
@@ -34,13 +36,52 @@ export const DEFENSE_V2 = {
   wallRangeMul: 1.6,
   /** 预备队补位间隔（毫秒）；E 一次叫几个近战上来（去主将所在这段）。 */
   refillMs: 5000, callReserve: 3,
-  /** 镜头：主将在城头（走道带里）时往城外（下方）让多少像素。 */
-  camera: { onWall: 120 },
+  /**
+   * 镜头（b 段，总制作人 a 段验收第 2 条：墙脚以下的城外地面只有约 110 像素一条）：主将在城头时
+   * 电脑布局把战场镜头再拉远到 ×zoomMul，镜头锁在「墙脚线在屏幕下方留 outside 设计像素」的位置；主将走到走道北沿时
+   * 镜头跟着往上让，保证主将脚下离屏幕顶至少 heroMin 设计像素（不钻到顶部计时器下面）。城内那一侧多裁掉。
+   */
+  camera: { zoomMul: .82, outside: 195, heroMin: 110 },
+  /** 城门楼过渡（新图到之前）：主将 / 士兵在门楼范围内时楼阁半透明到 alpha，离开恢复；pad = 门楼图半宽两侧外扩。 */
+  gateFade: { alpha: .35, pad: 24, lerp: 8 },
+  /**
+   * b 段：云梯与攀爬、城头近战、占段 / 夺回、一键 F（推梯 / 滚木 / 泼油 / 修门）、冲车撞门。时间用关内秒数，距离是世界像素。
+   * （波次 / 喘息补满次数在 c 段接；c 段之前滚木 / 热油按 regenSec 慢慢回一次。）
+   */
+  assault: {
+    /** 云梯车：开局 firstSec 秒第一架，之后每 everySec 秒一架，同时最多 max 架（每段一架）；开到墙脚后亮圈 warnMs 再立梯。
+     *  被推倒 / 被滚木砸倒后 raiseMs 再立起来（车还在的话）；梯上每 climbGapMs 上一个人，爬完外墙要 climbSec 秒；
+     *  一段城头敌兵满 segCap 个就不再上人；墙脚 footReach 以内的近战兵会排队上梯。 */
+    ladder: { firstSec: 6, everySec: 16, max: 4, hp: 320, speed: 46, warnMs: 2000, raiseMs: 8000, climbGapMs: 1500, climbSec: 2.5, segCap: 8, footReach: 130, size: 150, footDy: 34 },
+    /** 冲车：开局 firstSec 秒第一辆，之后每 everySec 秒，同时最多 max 辆；开到门前每 hitMs 撞一下扣 damage。 */
+    ram: { firstSec: 28, everySec: 55, max: 1, hp: 600, speed: 28, hitMs: 1600, damage: 90, size: 150, footDy: 48 },
+    /** 城门耐久（按城池档，同旧守城 DEFENSE.gateHp）；门前同时最多 cap 个砍门（每秒 自身伤害 × contactMul），首领 × bossMul；
+     *  城外近战每 share 个里有 1 个（骑兵全部）去砍门，其余去排云梯。 */
+    gate: { hp: { small: 1500, medium: 1900, large: 2500 } as Record<'small' | 'medium' | 'large', number>, reach: 64, cap: 6, contactMul: .4, bossMul: 3, share: 3 },
+    /** 占段：一段里我方士兵全没了、且这段城头敌兵 ≥ minFoes → 这段变红、梯子上人 ×fastMul；这段敌兵清光即夺回。 */
+    capture: { minFoes: 3, fastMul: 2, checkMs: 250 },
+    /** 推下城：主将近战打中走道南沿 band 以内的普通兵（主将在它北边）→ 摔下城。 */
+    push: { band: 64, fallMs: 420 },
+    /** 主将在城头：武器范围 ×rampartMul；近战打墙面 / 墙脚（外沿以南）的 ×belowMelee。 */
+    hero: { rampartMul: 1.3, belowMelee: .6 },
+    /** 一键 F 的站位（离点 reach 以内）：梯口 = 梯子顶端；滚木架在梯口东侧 dx；油锅在门楼前沿；修门在门楼内侧（走道北沿）。 */
+    spots: { reach: 70, ladderDy: 40, rackDx: 130, rackDy: 48, oilDy: 52, gateDy: 50 },
+    /** 滚木：每个滚木架 charges 次（c 段之前每 regenSec 回一次）；砸这段的梯子（梯上的人摔下去、梯子倒、云梯车 −engineDamage）+ 墙脚 foot 以内 damage。 */
+    logs: { charges: 2, regenSec: 45, damage: 160, engineDamage: 220, foot: 200, fallMs: 340 },
+    /** 热油：charges 次、冷却 cdMs（c 段之前每 regenSec 回一次）；门前 radius 一片持续烧 ticks × tickMs，冲车 ×engineMul。 */
+    oil: { charges: 3, regenSec: 40, cdMs: 5000, radius: 120, tickMs: 400, ticks: 10, damage: 22, engineMul: 4 },
+    /** 修门：站定读条 channelMs（走开就断），+amount（占满耐久的比例），冷却 cdMs。 */
+    repair: { channelMs: 3000, amount: .12, cdMs: 15000, moveTol: 24 },
+    /** 头顶提示离主将脚下多高。 */
+    promptDy: 86,
+  },
   /** 刷兵口（城外）：墙脚以南 dy，x 三处 ± jitter；攻城主将在墙脚以南 bossDy。 */
   spawn: { dy: 820, xs: [-900, 0, 900] as readonly number[], jitter: 200, bossDy: 600 },
   /** 2.5D 城墙图（复用 2-3 洛阳那套，data/dongzhuo.ts wallArt 的像素标注）：crenel = 外侧城垛顶、ground = 墙脚、walk = 走道石板带。 */
   art: {
     seg: { file: 'assets/siege-v2/luoyang/wall_seg.png', w: 1339, h: 464, crenel: 92, ground: 452, walkTop: 50, walkBot: 90 },
+    /** 走道过渡贴图取的石板带（去掉两端斜边和上沿阴影线，那几处铺出来就是楔形深缝 / 横条）：x0..x1 × y0..y1。 */
+    walkBand: { x0: 60, x1: 1290, y0: 52, y1: 90 },
     gate: { file: 'assets/siege-v2/luoyang/wall_gate.png', w: 836, h: 643, crenel: 276, ground: 605 },
     corner: { file: 'assets/siege-v2/luoyang/wall_corner.png', w: 487, h: 674, crenel: 205, ground: 640 },
     /** 外侧城垛顶比 W 高多少（城垛压住走道南沿，站在后面的人腿被挡住）。 */
@@ -120,3 +161,42 @@ export function nextWaypoint(g: V2Geo, at: Pt, post: Pt): Pt {
   if (Math.abs(at.x - r) > 40) return { x: r, y: inCity(at) ? g.innerTop - 40 : g.top + 30 };
   return { x: r, y: inCity(at) ? g.top + 40 : g.innerTop - 60 };
 }
+
+// ———— b 段 ————
+/** 一键 F 的站位（纯函数）：每段梯口（梯子顶端）、每段滚木架、门楼前沿油锅、门楼内侧修门（c 段出城也在这）。 */
+export function v2Spots(g: V2Geo) {
+  const S = DEFENSE_V2.assault.spots;
+  return {
+    ladders: g.segs.map(s => ({ seg: s.i, x: s.ladderX, y: g.W - S.ladderDy })),
+    racks: g.segs.map(s => ({ seg: s.i, x: s.ladderX + S.rackDx, y: g.W - S.rackDy })),
+    oil: { x: g.gx, y: g.W - S.oilDy },
+    gate: { x: g.gx, y: g.top + S.gateDy },
+  };
+}
+export type V2SpotKind = 'ladder' | 'rack' | 'oil' | 'gate';
+/** 主将站在哪个 F 位上（优先级 梯口 > 滚木架 > 门楼油锅 > 门洞修门）；ladderUp(seg) = 这段梯子正立着（倒着 / 没有就不算梯口）。 */
+export function spotAt(g: V2Geo, p: Pt, ladderUp: (seg: number) => boolean): { kind: V2SpotKind; seg: number } | null {
+  const S = v2Spots(g), r = DEFENSE_V2.assault.spots.reach, near = (q: Pt) => Math.hypot(p.x - q.x, p.y - q.y) <= r;
+  for (const l of S.ladders) if (ladderUp(l.seg) && near(l)) return { kind: 'ladder', seg: l.seg };
+  for (const k of S.racks) if (near(k)) return { kind: 'rack', seg: k.seg };
+  if (near(S.oil)) return { kind: 'oil', seg: -1 };
+  if (near(S.gate)) return { kind: 'gate', seg: -1 };
+  return null;
+}
+/** 点在哪一段的城头（走道带里、段的 x 范围内）；不在返回 −1。 */
+export function walkSegment(g: V2Geo, p: Pt): number {
+  if (p.y < g.top - 4 || p.y > g.W + 4) return -1;
+  for (const s of g.segs) if (p.x >= s.x0 && p.x < s.x1) return s.i;
+  return -1;
+}
+/**
+ * 镜头中心 y（纯函数；主将不在城头返回 null）：zoom = 设计倍率（镜头 zoom / RENDER_SCALE），H = 设计画面高。
+ * 锁在「墙脚线离屏幕底 camera.outside」；主将往北走时跟着上让，主将脚下离屏幕顶不少于 camera.heroMin。
+ */
+export function cameraCenterY(g: V2Geo, p: Pt, zoom: number, H: number): number | null {
+  if (!onWalk(g, p)) return null;
+  const C = DEFENSE_V2.camera, lock = g.F - (H / 2 - C.outside) / zoom, cap = p.y + (H / 2 - C.heroMin) / zoom;
+  return Math.max(p.y, Math.min(lock, cap));
+}
+/** 爬梯速度（像素 / 秒）：从墙脚爬到翻上垛口（W − 26）用 climbSec 秒。 */
+export function climbSpeed(g: V2Geo): number { return (g.F - (g.W - 26)) / DEFENSE_V2.assault.ladder.climbSec; }

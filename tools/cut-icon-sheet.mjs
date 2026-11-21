@@ -4,13 +4,13 @@
 //   IDS 按行优先；留空的格用 - 占位（跳过）。输出 <OUT><id>.webp
 import { chromium } from 'playwright';
 import fs from 'fs';
-const E = process.env, SRC = E.SRC, COLS = +(E.COLS ?? 3), ROWS = +(E.ROWS ?? 2), IDS = (E.IDS ?? '').split(','), OUT = E.OUT ?? 'public/assets/upgrade-icons/', TOL = +(E.TOL ?? 60), SIZE = +(E.SIZE ?? 256), PAD = +(E.PAD ?? .06);
+const E = process.env, SRC = E.SRC, COLS = +(E.COLS ?? 3), ROWS = +(E.ROWS ?? 2), IDS = (E.IDS ?? '').split(','), OUT = E.OUT ?? 'public/assets/upgrade-icons/', TOL = +(E.TOL ?? 60), DESPILL = +(E.DESPILL ?? 40), SIZE = +(E.SIZE ?? 256), PAD = +(E.PAD ?? .06);
 if (!SRC || IDS.length !== COLS * ROWS) { console.error(`需要 SRC，且 IDS 个数 = COLS×ROWS（${COLS * ROWS}）`); process.exit(2); }
 const mime = SRC.endsWith('.png') ? 'png' : 'jpeg';
 const b = await chromium.launch({ channel: 'chrome', headless: true });
 try {
   const p = await b.newPage();
-  const res = await p.evaluate(async ([src, COLS, ROWS, TOL, SIZE, PAD]) => {
+  const res = await p.evaluate(async ([src, COLS, ROWS, TOL, SIZE, PAD, DESPILL]) => {
     const im = new Image(); im.src = src; await im.decode();
     const W = im.width, H = im.height, c = document.createElement('canvas'); c.width = W; c.height = H;
     const g = c.getContext('2d', { willReadFrequently: true }); g.drawImage(im, 0, 0);
@@ -44,7 +44,7 @@ try {
       for (let j = 0; j < w * h; j++) if (a[j] > .5) { const x = j % w, y = (j / w) | 0; if (x < bx0) bx0 = x; if (x > bx1) bx1 = x; if (y < by0) by0 = y; if (y > by1) by1 = y; }
       for (let j = 0; j < w * h; j++) { const i = j * 4; if (a[j] < 1 && a[j] > 0) for (let k = 0; k < 3; k++) { const base = [BR, BG, BB][k]; q[i + k] = Math.max(0, Math.min(255, (q[i + k] - base * (1 - a[j])) / a[j])); } q[i + 3] = Math.round(255 * a[j]); }
       // 去洋红溢色（同 prepare-branch-icons.py unpink）：光晕 / 烟尘里 min(红,蓝) 明显高于绿的像素降不透明度、把蓝压回去
-      for (let j = 0; j < w * h; j++) { const i = j * 4; if (!q[i + 3]) continue; const R = q[i], G = q[i + 1], B = q[i + 2], tint = Math.max(0, Math.min(R, B) - G - 40); if (tint > 0) { q[i + 3] = Math.round(q[i + 3] * Math.max(0, Math.min(1, 1 - tint / 60))); q[i + 2] = Math.min(B, G + (R - G) * .5 + 10); } }
+      for (let j = 0; j < w * h; j++) { const i = j * 4; if (!q[i + 3]) continue; const R = q[i], G = q[i + 1], B = q[i + 2], tint = Math.max(0, Math.min(R, B) - G - DESPILL); if (tint > 0) { q[i + 3] = Math.round(q[i + 3] * Math.max(0, Math.min(1, 1 - tint / 60))); q[i + 2] = Math.min(B, G + (R - G) * .5 + 10); } }
       cg.putImageData(img, 0, 0);
       const bw = bx1 - bx0 + 1, bh = by1 - by0 + 1, side = Math.max(bw, bh) * (1 + PAD * 2);
       const o = document.createElement('canvas'); o.width = SIZE; o.height = SIZE; const og = o.getContext('2d'); og.imageSmoothingQuality = 'high';
@@ -52,7 +52,7 @@ try {
       outs.push({ box: [bx0, by0, bx1, by1, w, h], webp: o.toDataURL('image/webp', .92) });
     }
     return { bg: [BR, BG, BB].map(Math.round), outs };
-  }, [`data:image/${mime};base64,` + fs.readFileSync(SRC).toString('base64'), COLS, ROWS, TOL, SIZE, PAD]);
+  }, [`data:image/${mime};base64,` + fs.readFileSync(SRC).toString('base64'), COLS, ROWS, TOL, SIZE, PAD, DESPILL]);
   fs.mkdirSync(OUT, { recursive: true });
   res.outs.forEach((o, k) => { const id = IDS[k]; if (!id || id === '-') return; const buf = Buffer.from(o.webp.split(',')[1], 'base64'); fs.writeFileSync(OUT + id + '.webp', buf); console.log('→', OUT + id + '.webp', buf.length, 'box', o.box.join(',')); });
   console.log('底色', res.bg);

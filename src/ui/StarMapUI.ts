@@ -68,6 +68,8 @@ export const BAGUA = {
     { id: 'zhen', x: 800, y: 255 }, { id: 'dui', x: 1000, y: 450 }, { id: 'kan', x: 800, y: 645 }, { id: 'gen', x: 600, y: 450 },
   ],
   trigram: { w: 56, h: 52, alpha: .32 },
+  /** 星空层（透明星点，铺满全屏、叠在底图上；不跟星图平移缩放）。星的强度单独调这个 alpha；不用烘好的 bg_starmap_stars.webp。 */
+  sky: { file: 'stars_layer.png', alpha: 1 },
 } as const;
 /** 可见区边上的淡出带宽度（逻辑像素）。 */
 const FADE_E = 16;
@@ -79,7 +81,7 @@ const nodeKey = (n: StarNode, st: NodeState): string => `${P}${setOf(n)}_${n.kin
 function queueArt(scene: Phaser.Scene, hero: string): number {
   const L = scene.load; let n = 0;
   const img = (k: string, url: string) => { if (!scene.textures.exists(k)) { L.image(k, url); n++; } };
-  img(STAR_BG.key, BASE + STAR_BG.file); img(P + 'bagua_plate', BASE + BAGUA.plate.file); for (const t of BAGUA.trigrams) img(P + 'bagua_' + t.id, `${BASE}bagua/trigram_${t.id}.png`); img(P + 'line_ink', BASE + 'line_ink.png'); img(P + 'line_gold', BASE + 'line_gold.png');
+  img(STAR_BG.key, BASE + STAR_BG.file); img(P + 'sky', BASE + BAGUA.sky.file); img(P + 'bagua_plate', BASE + BAGUA.plate.file); for (const t of BAGUA.trigrams) img(P + 'bagua_' + t.id, `${BASE}bagua/trigram_${t.id}.png`); img(P + 'line_ink', BASE + 'line_ink.png'); img(P + 'line_gold', BASE + 'line_gold.png');
   for (const s of SETS) for (const k of KINDS) for (const st of STATES) img(`${P}${s}_${k}_${st}`, `${BASE}nodes/${s}/${k}_${st}.png`);
   for (const id of new Set(Object.values(ICONS))) img(P + 'icon_' + id, `${BASE}icon_${id}.png`);
   if (!scene.textures.exists(P + 'fx')) { L.spritesheet(P + 'fx', BASE + 'fx_light_strip.png', { frameWidth: 192, frameHeight: 192 }); n++; }
@@ -135,6 +137,7 @@ export class StarMapUI {
     this.built = true;
     if (!s.anims.exists(P + 'fx_play')) s.anims.create({ key: P + 'fx_play', frames: s.anims.generateFrameNumbers(P + 'fx', { start: 0, end: 11 }), frameRate: 15, repeat: 0 });
     const bg = s.add.image(W / 2, H / 2, STAR_BG.key).setScrollFactor(0); bg.setScale(Math.max(W / bg.width, H / bg.height)); this.root.add(bg);
+    if (s.textures.exists(P + 'sky')) { const sky = s.add.image(W / 2, H / 2, P + 'sky').setScrollFactor(0).setAlpha(BAGUA.sky.alpha).setName('star-map-sky'); sky.setScale(Math.max(W / sky.width, H / sky.height)); this.root.add(sky); }
     // 图：容器里用设计稿坐标；默认缩放 = 正好一屏放下（左右各留出文字栏）
     this.map = s.add.container(0, 0).setScrollFactor(0).setName('star-map-layer'); this.root.add(this.map);
     const sideL = IS_DESKTOP ? 210 : 0, sideR = IS_DESKTOP ? 230 : 0;

@@ -63,8 +63,10 @@ const bagua = await ui('GameScene', r => { const layer = r.list.find(o => o.name
   layer.list.forEach((o, i) => { if (!/^star-bagua-/.test(o.name ?? '')) return; out.n++; if (o.input) out.interactive++; if (i > firstLine) out.belowLines = false;
     const m = o.getWorldTransformMatrix(), ex = layer.x + o.x * layer.scaleX, ey = layer.y + o.y * layer.scaleY; if (Math.abs(m.tx - ex) > 1 || Math.abs(m.ty - ey) > 1) out.follow = false;
     if (m.tx < 210 || m.tx > W - 230 || m.ty > H - 24) { if (o.alpha > .02) out.leak.push([o.name, +o.alpha.toFixed(2)]); else out.hidden++; } });
+  const sky = r.list.find(o => o.name === 'star-map-sky'); out.sky = sky ? { inLayer: sky.parentContainer === layer, x: Math.round(sky.x), y: Math.round(sky.y), a: sky.alpha, cover: sky.displayWidth >= 959 && sky.displayHeight >= 539, belowLayer: r.list.indexOf(sky) < r.list.indexOf(layer) } : null;
   out.scale = +layer.scaleX.toFixed(3); return out; });
 ck('八卦阵：太极 + 8 卦在场、随缩放平移、在连线之下、不可点、文字栏下淡出', bagua.n === 9 && bagua.follow && bagua.belowLines && bagua.interactive === 0 && bagua.leak.length === 0, bagua);
+ck('星空层：铺满全屏、在星图层之下、不跟平移缩放（放大拖动后仍在屏幕正中）', !!bagua.sky && !bagua.sky.inLayer && bagua.sky.x === 480 && bagua.sky.y === 270 && bagua.sky.cover && bagua.sky.belowLayer, bagua.sky);
 // 验收第 2 条：悬停在当前选中的星上不弹悬停框（不盖右栏）
 const tipChk = await ui('GameScene', r => { const zones = []; const walk = l => { for (const o of l) { if (/^star-/.test(o.name ?? '') && o.type === 'Zone') zones.push(o); if (o.list) walk(o.list); } }; walk(r.list); const tip = r.list.find(o => o.name === 'star-map-tip'), sel = r.list.find(o => o.name === 'star-map-sel-name').text; const vis = zones.filter(z => z.input?.enabled); vis[0].emit('pointerup', { upTime: 1 }); /* 选中第一颗可见的星 */ vis[0].emit('pointerover'); const onSel = tip.visible; vis[0].emit('pointerout'); vis[vis.length - 1].emit('pointerover'); const b = tip.getBounds(); const other = { visible: tip.visible, right: Math.round(b.right) }; vis[vis.length - 1].emit('pointerout'); return { sel, onSel, other }; });
 ck('悬停在选中的星上不弹框；别的星的悬停框不伸进右栏', !tipChk.onSel && tipChk.other.visible && tipChk.other.right <= 960 - 230, tipChk);

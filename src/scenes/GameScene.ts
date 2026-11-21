@@ -31,6 +31,7 @@ import {followersFor,followerLevelCap,heroOwned,lordHero} from '../systems/Roste
 import {Parley} from '../systems/Parley';
 import {freeSpawn} from '../systems/SpawnClear';
 import {luoyangRuins,xiaquyangAltarCamp} from '../systems/ChapterDressing';
+import {boxesOverlap,propFootprint,propFrontV} from '../systems/PropFootprint';
 import {DUAL, DualBoss, retreatFade, type DualCtrl, type DualPlan} from '../systems/DualBoss';
 import {BattleOrders} from '../systems/BattleOrders';
 import {OrdersPanel} from '../ui/OrdersPanel';
@@ -946,7 +947,7 @@ export class GameScene extends Phaser.Scene {
     {const horse=heroHorse(this.runConfig.character);this.mount=horse?new HeroMount({barDy:()=>this.passiveGauge?.showing?FOOT_HUD.barBelowGauge:FOOT_HUD.bar,scene:this,player:this.player,enemies:this.enemies,hit:(e,d,now)=>this.hitEnemy(e,d,now,'melee',false,false),notice:t=>this.showGrowthNotice(t)},{base:horse.id,name:horse.name},this.runConfig.character,this.player.growth.gear.specials.includes('hubao')?{trampleMul:RELIC.hubaoTrample,remountMs:RELIC.hubaoRemountMs}:{}):null;this.player.mountGuard=this.mount?(n,now)=>this.mount?.guard(n,now)??n:undefined;this.mountHint=MountRideHint.maybeShow(this,!!this.mount);this.events.once('shutdown',()=>{this.mount?.clear();this.mount=null;});}
     this.bossPace=new BossPace(this as unknown as ConstructorParameters<typeof BossPace>[0]); // 首领走路提速 / 追击（BALANCE.bossPace）
     this.itemDrops=new ItemDrops(this,this.player,this.itemTier(),this.lootChapter(),()=>this.elapsed,()=>this.isFinalBoss(),()=>{this.sfx.play('pickup');this.mechEvent('gear');},()=>this.bossRelicKey());this.itemDrops.deferBossRelic=true; // 首领遗珍由首领宝箱发（BossChest）
-    this.tentHints?.destroy();this.tentHints=null;this.battleHeal?.clear();this.battleHeal=new BattleHeal({scene:this,player:()=>this.player,enemies:()=>this.enemies,elapsed:()=>this.elapsed,now:()=>this.combatNow,place:(x,y)=>this.fieldPlace(x,y),dropPotion:(x,y,a,n,f)=>this.supplies?.dropPotion(x,y,a,n,f)??false,overlay:()=>this.mode!=='none'||this.over,sfx:k=>this.sfx.play(k),notice:t=>this.showGrowthNotice(t),moveDir:()=>this.moveDir,potionAt:(x,y)=>!!this.supplies?.potions.some(q=>q.active&&Math.hypot(q.image.x-x,q.image.y-y)<12)});if(this.supplies)this.supplies.landing=(x,y)=>this.battleHeal?.landing(x,y)??{x,y,moved:false};this.battleHeal.setPlan(this.phasePlan);this.events.once('shutdown',()=>{this.battleHeal?.clear();this.battleHeal=null;});
+    this.tentHints?.destroy();this.tentHints=null;this.battleHeal?.clear();this.battleHeal=new BattleHeal({block:(b,on)=>this.blockBoxes(b,on),scene:this,player:()=>this.player,enemies:()=>this.enemies,elapsed:()=>this.elapsed,now:()=>this.combatNow,place:(x,y)=>this.fieldPlace(x,y),dropPotion:(x,y,a,n,f)=>this.supplies?.dropPotion(x,y,a,n,f)??false,overlay:()=>this.mode!=='none'||this.over,sfx:k=>this.sfx.play(k),notice:t=>this.showGrowthNotice(t),moveDir:()=>this.moveDir,potionAt:(x,y)=>!!this.supplies?.potions.some(q=>q.active&&Math.hypot(q.image.x-x,q.image.y-y)<12)});if(this.supplies)this.supplies.landing=(x,y)=>this.battleHeal?.landing(x,y)??{x,y,moved:false};this.battleHeal.setPlan(this.phasePlan);this.events.once('shutdown',()=>{this.battleHeal?.clear();this.battleHeal=null;});
     this.relics=new BossRelics({scene:this,player:this.player,enemies:()=>this.enemies,hit:(e,d,now)=>{this.hitEnemy(e,d,now,'melee',false,false);},notice:t=>this.showGrowthNotice(t)},this.player.growth.gear.specials,this.combatNow);
     this.syncRelicShips();
     this.events.once('shutdown',()=>{this.relics?.clear();this.relics=null;this.relicShips?.clear();this.relicShips=null;});
@@ -1394,7 +1395,7 @@ export class GameScene extends Phaser.Scene {
       gainFood:n=>{this.legion.food+=n;},boss:()=>this.boss,farPoint:(x,y)=>{const g=this.arena?.info.gates;if(!g?.length)return null;const p=this.player;return [...g].sort((a,b)=>Math.hypot(b.x-p.x,b.y-p.y)-Math.hypot(a.x-p.x,a.y-p.y))[0]??null;void x;void y;}}); // 机制自己定方向（保持距离 / 绕圈）：不用群体寻路的追击速度
     if(!this.arenaInit&&this.player&&this.terrainInit){this.arenaInit=true;const def=stageMapFor(this.hardKey(),this.hardStage());if(def)this.arena=new StageArena({scene:this,player:this.player,allies:()=>this.allies,enemies:()=>this.enemies,now:()=>this.combatNow,
       spawnTarget:(x,y,hp,size)=>{const e=this.supplies?.spawnGate(x,y,hp,size)??null;e?.sprite.setAlpha(0);return e;},hitEnemy:(e,d,src)=>{this.hitEnemy(e,d,this.combatNow,src??'melee',true,false);},spawnEnemy:(k,x,y)=>this.spawnEnemy(k,x,y,undefined,true),breakBridgeNear:(x,y)=>{const t=this.terrain as unknown as {rivers?:Array<{bridges:Array<{x:number;y:number}>}>;setBridgeBroken?:(i:number,b?:boolean)=>boolean}|null;const all=t?.rivers?.flatMap(r=>r.bridges)??[];let bi=-1,bd=300;all.forEach((b,i)=>{const d=Math.hypot(b.x-x,b.y-y);if(d<bd){bd=d;bi=i;}});return bi>=0&&!!t?.setBridgeBroken?.(bi,true);},
-      hurtTroops:(x,y,r,d)=>this.legion.hurtArea(x,y,r,d,this.combatNow),banner:(t,d,c)=>this.showWaveBanner(t,!!d,c),sfx:k=>this.sfx.play(k),purge:pred=>{this.supplies?.purge(pred);}},def);}
+      hurtTroops:(x,y,r,d)=>this.legion.hurtArea(x,y,r,d,this.combatNow),banner:(t,d,c)=>this.showWaveBanner(t,!!d,c),sfx:k=>this.sfx.play(k),purge:pred=>{this.supplies?.purge(pred);},block:b=>this.blockBoxes(b,true)},def);}
     if(this.terrain){this.terrain.update(this.combatNow,dt);this.player.terrainSpeedMul=this.terrain.speedMul(this.player.x,this.player.y);}
     this.updateEnemies(dt, time);
     if(this.arena&&this.mode==='none'&&!this.over)this.arena.update(this.combatNow); // 有边场地：断桥 / 营帐起火 / 滚木（守边在 postupdate，见 StageArena）
@@ -1730,8 +1731,40 @@ export class GameScene extends Phaser.Scene {
     for (const f of this.followers?.members ?? []) if (f.recruit.hero && !f.downed) out.push({ id: f.recruit.hero, passive: f.passive, sprite: f.sprite, lord: false });
     return out;
   }
+  /**
+   * 黄巾首领的法坛（1-2 张宝 / 1-3 张角）：首领出阵时立在首领身后，首领站台前（统筹 11-21，用户「这个祭坛我直接穿模进去了」）。
+   * 原来是贴地层的半透明图（DEPTH.ground、无碰撞），主将 / 部曲 / 敌兵直接走上石台、站进石碑里。
+   * 现在是实心布景：碰撞按底座（systems/PropFootprint），进场景碰撞框（主将 / 部曲 / 随从 / 敌兵都挡、敌兵绕障导航与刷兵 / 回血点 / 掉落都避开），深度按排序线。
+   * 1-2 开局已经有北面那座法坛营（ChapterDressing），不再叠第二座；落点压着别的障碍 / 树 / 主将就不立。
+   */
+  private yellowAltarBoxes:{left:number;right:number;top:number;bottom:number}[]=[];
+  private placeBossAltar(x:number,y:number,key:'zhang_bao_altar'|'zhang_jiao_altar'):void{
+    this.removeBossAltar();
+    if(!this.textures.exists(key)||this.children.getByName('xiaquyang-altar'))return;
+    const W=key==='zhang_bao_altar'?280:300,H=Math.round(W*260/(key==='zhang_bao_altar'?271:259)),bottom=y-26+(1-propFrontV(key))*H; // 台前沿离首领脚下 26
+    const img=this.add.image(x,bottom,key).setOrigin(.5,1).setDisplaySize(W,H).setName('boss-altar');
+    const boxes=propFootprint(img,key),fp=this.sishuiObstacles?.footprints??[],dz=this.dzLubu?.obstacles.footprints??[],P=this.player;
+    const hitTree=boxes.some(b=>!!this.terrain?.treeNear((b.left+b.right)/2,(b.top+b.bottom)/2,Math.max(b.right-b.left,b.bottom-b.top)/2));
+    const hitArena=!!this.arena&&boxes.some(b=>!this.arena!.inside((b.left+b.right)/2,(b.top+b.bottom)/2,Math.max(b.right-b.left,b.bottom-b.top)/2));
+    if(boxesOverlap(boxes,fp,40)||boxesOverlap(boxes,dz,40)||hitTree||hitArena||boxes.some(b=>P.x>b.left-120&&P.x<b.right+120&&P.y>b.top-120&&P.y<b.bottom+120)){img.destroy();return;}
+    if(!this.sishuiObstacles)this.sishuiObstacles=new SishuiObstacles([]);
+    this.sishuiObstacles.footprints.push(...boxes);this.yellowAltar=img;this.yellowAltarBoxes=boxes;
+    const inside=(px:number,py:number,pad=0)=>boxes.some(b=>px>b.left-pad&&px<b.right+pad&&py>b.top-pad&&py<b.bottom+pad);
+    this.supplies?.purge((px,py)=>inside(px,py,40)); /* 压在台上的营具收掉 */
+    this.battleHeal?.evict((px,py)=>inside(px,py,48)); /* 压在台上的回血点 / 干粮挪走 */
+  }
+  /** 后来立起 / 撤掉的实心布景（回血水井等）登记进场景碰撞框（主将 / 部曲 / 随从 / 敌兵、绕障导航、刷兵与回血点都认）。 */
+  protected blockBoxes(boxes:readonly {left:number;right:number;top:number;bottom:number}[],on:boolean):void{
+    if(on){if(!this.sishuiObstacles)this.sishuiObstacles=new SishuiObstacles([]);this.sishuiObstacles.footprints.push(...boxes);return;}
+    const fp=this.sishuiObstacles?.footprints;if(fp)for(const b of boxes){const i=fp.indexOf(b);if(i>=0)fp.splice(i,1);}
+  }
+  private removeBossAltar():void{
+    this.yellowAltar?.destroy();this.yellowAltar=null;
+    const fp=this.sishuiObstacles?.footprints;if(fp&&this.yellowAltarBoxes.length)for(const b of this.yellowAltarBoxes){const i=fp.indexOf(b);if(i>=0)fp.splice(i,1);}
+    this.yellowAltarBoxes=[];
+  }
   protected spawnBoss(): void {
-    if(this.boss?.active)return;this.yellowAltar?.destroy();this.yellowAltar=null;
+    if(this.boss?.active)return;this.removeBossAltar();
     if (this.bossSpawned) return;
     this.bossSpawned = true;
     { const ws = this.pickWaves(); this.ensurePicks(ws[ws.length - 1]); } // 保底：第 3 波后直接是首领、波次不再推进，首领登场时补到最后一档
@@ -1746,7 +1779,7 @@ export class GameScene extends Phaser.Scene {
     this.startParley(boss);
     preloadBossDeath(this, this.chapter.bossStyle); // 倒地帧（张角 / 张梁 / 张宝 / 董卓 / 吕布）提前载好
     this.firstBossAt=this.combatNow;
-    if(this.chapter.stage&&this.chapter.stage>=2){this.yellowAltar=this.add.image(x,y+10,this.chapter.stage===2?'zhang_bao_altar':'zhang_jiao_altar').setDepth(DEPTH.ground+2).setDisplaySize(245,200).setAlpha(.75);}
+    if(this.chapter.stage&&this.chapter.stage>=2)this.placeBossAltar(x,y,this.chapter.stage===2?'zhang_bao_altar':'zhang_jiao_altar');
 
     if(this.chapter.bossStyle==='xurong')this.xurong=new XurongBoss({scene:this,boss,player:this.player,army:this.legion,spawn:(kind,x,y)=>this.spawnEnemy(kind,x,y,1),sfx:()=>this.sfx.play('allySlash')},this.combatNow);
     // 2-3 洛阳：董卓上城、弱化吕布在城下（吕布 1/3 血逃走 → 董卓下城 → 20% 吕布杀回斩董卓）

@@ -1,12 +1,13 @@
 import Phaser from 'phaser';
 import { burningDecor } from './FireProps';
 import { actorDepth } from '../config';
+import { propFootprint } from './PropFootprint';
 import { terrainConfigFor, type Pt } from '../data/terrain';
 
 /**
  * 5-2 赤壁：北岸的曹军水寨布景（全场景审查 P1「赤壁一格水都没有」）。江面本身是 Terrain 的河（data/terrain.ts 'chibi' 2），
  * 这里沿北岸排一溜营栅、望楼、营帐、军旗（曹军营具图集 props_v2_cao；缺图用通用营具 yellow_props 染色），留出两座浮桥的桥头。
- * 水寨只是布景：不加碰撞（北岸本来就隔着江，过江要涉水或走浮桥）。
+ * 水寨实心（统筹 11-21 大件布景碰撞检查：涉水 / 走浮桥能上北岸，原来能穿营栅 / 望楼 / 营帐而过）：营栅、望楼、营帐按底座进场景碰撞框，件与件之间照旧留缝；军旗、火盆不挡。
  * 战船（场景审查 P3，美术风格会话出图 scene-v2/warships.png，2×2 每格 512：楼船 / 斗舰 / 双层楼船 / 三桅战船，船头朝右）：
  * 泊在江北半幅、首尾相连（连环船），躲开两座浮桥；船身进场景碰撞框（不能从船上穿过去），江南半幅照常涉水。
  */
@@ -43,6 +44,7 @@ export function chibiRiverCamp(scene: Phaser.Scene, boxes?: Array<{ left: number
     const fire = r.f === 7 ? burningDecor(scene, x, y, r.size, 'brazier', 'chibi-river-camp') : null; if (fire) { out.push(fire); continue; }
     const img = v2 ? scene.add.image(x, y, CAO, r.f) : scene.add.image(x, y, 'yellow_props', FALLBACK[r.f] ?? 12).setTint(0xc89080);
     img.setOrigin(.5, 1).setDisplaySize(r.size, r.size).setDepth(actorDepth(y)).setName('chibi-river-camp');
+    const shape = r.f === 3 ? 'fort_palisade' : r.f === 1 ? 'fort_tower' : r.f === 2 ? 'fort_tent' : null; if (shape) propFootprint(img, shape, boxes);
     out.push(img);
   }
   placeWarships(scene, river.points, river.width, landings, boxes, out);

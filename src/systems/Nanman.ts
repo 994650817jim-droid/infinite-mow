@@ -39,6 +39,8 @@ export interface NanmanHost {
   hitEnemy: (e: Enemy, dmg: number) => void;
   hurtTroops: (x: number, y: number, r: number, dmg: number) => void;
   banner: (t: string, danger?: boolean, caption?: string) => void; sfx: (k: string) => void; boss: () => Enemy | null;
+  /** 火盆底座登记进场景碰撞（统筹 11-21 大件布景碰撞检查：原来能站进火盆里；取火范围 70 照旧够得着）。 */
+  block?: (boxes: Array<{ left: number; right: number; top: number; bottom: number }>) => void;
 }
 interface Charge { state: 'idle' | 'warn' | 'charge' | 'recover'; at: number; angle: number; sx: number; sy: number; moved: number; hit: boolean; id: string }
 interface Brazier { x: number; y: number; img: Phaser.GameObjects.Image; lit: boolean; relightAt: number }
@@ -82,6 +84,7 @@ export class Nanman {
       const key = sc.textures.exists('brazier_burning') ? 'brazier_burning' : 'yellow_props';
       const img = sc.add.image(b.x, b.y, key, 0).setOrigin(.5, .9).setDisplaySize(NANMAN.brazier.size, NANMAN.brazier.size).setDepth(actorDepth(b.y));
       this.objects.push(img); this.braziers.push({ x: b.x, y: b.y, img, lit: true, relightAt: 0 });
+      this.h.block?.([{ left: b.x - 24, right: b.x + 24, top: b.y - 16, bottom: b.y + 4 }]);
     }
     this.label = worldText(sc, 0, 0, '', 15, '#ffd28a').setOrigin(.5).setDepth(36).setStroke('#1a0f08', 4).setVisible(false); this.objects.push(this.label);
   }

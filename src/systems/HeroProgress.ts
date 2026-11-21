@@ -98,9 +98,9 @@ function migrate(s: HeroSave): void {
 }
 
 /** 消化存着的经验（软上限：越过本章建议等级后每级 ×1.45，不再卡死）。返回是否有变化。hardCap 只给随行用（招贤馆上限）。 */
-function settle(r: HeroRecord, hardCap = Infinity): boolean {
+function settle(r: HeroRecord, hardCap = Infinity, soft = levelCap()): boolean {
   let changed = false;
-  while (r.level < hardCap && r.xp >= need(r.level)) { r.xp -= need(r.level); r.level++; changed = true; }
+  while (r.level < hardCap && r.xp >= need(r.level, soft)) { r.xp -= need(r.level, soft); r.level++; changed = true; }
   return changed;
 }
 /** 读一位武将（没有记录时按 startLevel 新建；persist=true 才写入存档）。 */
@@ -147,10 +147,12 @@ export function claimFirstClear(stageKey: string | null): number {
 /** grain 恒为 0（软上限后不再「满级折军粮」，字段留着给旧调用）；capped = 随行到了招贤馆上限。 */
 export interface XpResult { from: number; to: number; gained: number; capped: boolean; cap: number; grain: number }
 /** 结算记经验（已按来源折算好的数值）。主将没有硬上限（软上限）；随行给 capLevel = 招贤馆上限（硬）。 */
-export function creditHeroXp(id: HeroKey, amount: number, capLevel?: number): XpResult {
+export function creditHeroXp(id: HeroKey, amount: number, capLevel?: number, soft?: number): XpResult {
   const r = record(id, true), from = r.level, cap = capLevel ?? levelCap();
   r.xp = Math.min(1e8, r.xp + Math.max(0, Math.round(amount)));
-  settle(r, capLevel ?? Infinity);
+  settle(r, capLevel ?? Infinity, soft ?? levelCap());
+  // soft（第一章试验数值 ch1v6 才传）：按本关建议等级算软上限；已过建议等级时剩余经验压到「按本章上限也差 1 点升级」，免得读档时补升
+  if (soft !== undefined && r.level >= soft) r.xp = Math.min(r.xp, need(r.level) - 1);
   // 随行（招贤馆）的上限比主将低：到顶时经验压到「差 1 点升级」，读档时不会自动补升
   if (capLevel !== undefined && r.level >= cap) { r.level = cap; r.xp = Math.min(r.xp, need(r.level) - 1); }
   commit();

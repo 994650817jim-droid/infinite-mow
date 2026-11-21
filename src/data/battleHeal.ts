@@ -1,3 +1,4 @@
+import { CH1_TRIAL, CH1V6 } from './ch1Trial';
 /**
  * 战场回血（用户 2026-11-19「我感觉地图上也需要更多回血手段」；盘点见共享笔记 battle-heal-audit.md）。
  * 全部按最大生命比例算（章节越往后生命越高，回血跟着涨，不用固定值）。数值是初值，交平衡会话复核。
@@ -49,6 +50,8 @@ export const BATTLE_HEAL = {
    * 低血保护：生命跌破 below 时，在附近（敌人最少的方向）放一份军中伤药，让玩家有个去处。
    * 冷却 cooldownSec 秒，每关最多 perStage 次。
    */
+  /** 首领出场保底（第一章试验数值 ch1v6，见 data/ch1Trial bossEntryAid）：首领出场时主将生命 < below，在主将与首领之间必出一处回血点（水量 charge）；stages 为空 = 关。 */
+  bossEntry: { stages: (CH1_TRIAL ? ['huangjin.1'] : []) as readonly string[], ...CH1V6.bossEntryAid },
   lowHp: { below: .3, ratio: .12, dist: [350, 450] as const, cooldownSec: 70, perStage: 2 }, // 残血不让跑太远：350–450（11-21），屏外有箭头
   /**
    * 掉落不砸在主将脸上（用户 11-20）：打碎的道具 / 倒下的精锐副将离主将不足 minDrop 时，回血物从那里「蹦」出去，落到离主将 minDrop–minDrop+spread 处

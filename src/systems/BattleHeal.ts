@@ -41,6 +41,7 @@ interface Spot {
   arrow: Phaser.GameObjects.Container;
   /** 剩余水量（0–1，乘 spot.charge 的最大生命比例）；冷却到什么时刻（elapsed 秒）。 */
   left: number; readyAt: number; fxAt: number; boss: boolean;
+  /** 这一处的水量（最大生命比例）；不填 = spot.charge。首领出场保底那处用 bossEntry.charge。 */ charge?: number;
   /** 水井的碰撞框（泉眼 / 药草贴地，没有）。 */ boxes?: Box[];
 }
 
@@ -53,7 +54,7 @@ export class BattleHeal {
   private lowHpUsed = 0;
   private wasLow = false;
   /** 测试 / 平衡用：各来源实际回了多少（最大生命比例累加）、发生次数。 */
-  readonly stats = { food: 0, foodEaten: 0, foodDropped: 0, spot: 0, spotsSpawned: 0, spotUses: 0, medicineDropped: 0, lowHpDrops: 0, nudged: 0 };
+  readonly stats = { food: 0, foodEaten: 0, foodDropped: 0, spot: 0, spotsSpawned: 0, spotUses: 0, medicineDropped: 0, lowHpDrops: 0, nudged: 0, bossEntryAids: 0 };
 
   /** 画面里（留 pad 边）吗。 */
   private inView(x: number, y: number, pad: number = BATTLE_HEAL.drop.viewPad): boolean { const v = this.h.scene.cameras.main.worldView; return x > v.left + pad && x < v.right - pad && y > v.top + pad && y < v.bottom - pad; }
@@ -223,6 +224,18 @@ export class BattleHeal {
     (sp.arrow.getByName('ha-text') as Phaser.GameObjects.Text).setText(String(d)).setPosition(-dx * 46, -dy * 30 + (Math.abs(dy) < .5 ? 22 : 0));
   }
 
+  /**
+   * 首领出场保底（data/battleHeal BATTLE_HEAL.bossEntry；第一章试验数值 ch1v6，接口给玩法组过目）：GameScene.spawnBoss 在首领生成后调一次。
+   * stageKey（篇章.关，如 huangjin.1）不在 bossEntry.stages 里、或主将生命 ≥ below 时什么都不做，返回 false；否则在主将 → 首领方向离主将 dist 处放一处回血点（水量 charge），返回 true。
+   */
+  bossEntryAid(stageKey: string, boss: { x: number; y: number }): boolean {
+    const B = BATTLE_HEAL.bossEntry, P = this.h.player();
+    if (!B.stages.includes(stageKey) || !P.alive || P.hp >= P.maxHp * B.below) return false;
+    const a0 = Math.atan2(boss.y - P.y, boss.x - P.x), dB = Math.hypot(boss.x - P.x, boss.y - P.y), max = Math.max(B.dist[0], Math.min(B.dist[1], dB * B.distFrac));
+    const p = this.findAround(a0, B.dist[0], max), sp = this.spawnSpot(p.x, p.y, true); if (!sp) return false;
+    sp.charge = B.charge; this.stats.bossEntryAids++; return true;
+  }
+
   // —— 低血保护 ——
   /** 低血保护放的那份药（还在地上时屏外有箭头）。 */
   private lowPot: { x: number; y: number } | null = null; private lowArrow: Phaser.GameObjects.Container | null = null;
@@ -272,8 +285,8 @@ export class BattleHeal {
       let using = false;
       if (ready && inside && hurt && sp.left > 0) {
         using = true;
-        const want = Math.min(S.rate * dt, sp.left * S.charge, (P.maxHp - P.hp) / P.maxHp);
-        P.heal(want * P.maxHp); sp.left -= want / S.charge; this.stats.spot += want; this.h.sfx('heal_spring'); // 站着回血：咕嘟水声（自带 1.2 秒节流）
+        const cap = sp.charge ?? S.charge, want = Math.min(S.rate * dt, sp.left * cap, (P.maxHp - P.hp) / P.maxHp);
+        P.heal(want * P.maxHp); sp.left -= want / cap; this.stats.spot += want; this.h.sfx('heal_spring'); // 站着回血：咕嘟水声（自带 1.2 秒节流）
         if (now >= sp.fxAt) { sp.fxAt = now + 650; playSheet(this.h.scene, 'fx_heal_fushui', P.x, P.y - 14, { size: 84, depth: actorDepth(P.y) + .1, ms: 640, alpha: .8, tint: 0xbff0e0 }); }
         if (sp.left <= .001) { sp.left = 0; sp.readyAt = t + S.cooldownSec; this.stats.spotUses++; this.h.sfx('pickup'); } // 水用完：变暗（不打字）
       }

@@ -7,6 +7,10 @@ import { ENEMY_DEFS, enemyHpScale, pickEnemyKind, spawnBurst, spawnInterval, typ
 import { WAVES, type WaveDef } from './waves';
 import type { EnemyKind } from '../types';
 import { tuneStage } from './stageTuning';
+import { CH1_TRIAL, CH1V6 } from './ch1Trial';
+const T1 = CH1V6.stage1Spawn, M2 = CH1V6.stage2Mix;
+/** 第一章试验数值 ch1v6：1-2、1-3 弓手伤害 × archerDamage（只改弓手，齐射间隔不动）。 */
+function ch1TrialArchers(c: ChapterDef): ChapterDef { const a = c.enemies.archer; return CH1_TRIAL && (c.stage ?? 3) >= 2 && a && CH1V6.archerDamage !== 1 ? { ...c, enemies: { ...c.enemies, archer: { ...a, damage: a.damage * CH1V6.archerDamage } } } : c; }
 import { meleeReach } from './bossReach';
 import { isV2Texture } from '../systems/ArtStyle';
 
@@ -27,6 +31,10 @@ export interface ChapterDef {
   hpScale(elapsed: number): number;
   spawnInterval(elapsed: number): number;
   spawnBurst(elapsed: number): number;
+  /** 本关普通刷兵的同屏上限（不填 = BALANCE.enemyCap 150；现只第一章试验数值 ch1v6 用）。 */
+  enemyCap?: number;
+  /** 首领在场时算同屏上限的基数（不填 = enemyCap），实际 = 基数 × BALANCE.bossSpawn.capMul。 */
+  bossCapBase?: number;
   pickEnemy(elapsed: number): EnemyKind;
   /** 刷怪时间轴加速倍率（见 stageTuning.ts；不填 = 1）。 */
   pace?: number;
@@ -121,12 +129,12 @@ function xiliangCavalry(c:ChapterDef):ChapterDef{return {...c,enemies:{...c.enem
 /** 主线第一、二章的关卡（已套用 stageTuning 的节奏与小怪成长）。 */
 export function getBattleChapter(id?:string, stage:YellowStage=1,westStage:YellowStage=3):ChapterDef {
  const c=rawBattleChapter(id,stage,westStage);
- return c.id==='hulao'?tuneStage(c,'hulao',c.westStage??3):tuneStage(c,'huangjin',c.stage??3);
+ return c.id==='hulao'?tuneStage(c,'hulao',c.westStage??3):ch1TrialArchers(tuneStage(c,'huangjin',c.stage??3));
 }
 function rawBattleChapter(id?:string, stage:YellowStage=1,westStage:YellowStage=3):ChapterDef {
  const base=getChapter(id);if(base.id==='hulao'){const n=DONGZHUO_STAGES.find(s=>s.stage===westStage)?.stage??3;return xiliangCavalry(n===1?{...getSishuiEncounter(),westStage:1,victoryText:'汜水关告捷 · 荥阳之战已解锁'}:n===2?{...getXingyangEncounter(),westStage:2,victoryText:'荥阳破围 · 虎牢关已解锁'}:{...getLuoyangChapter(),westStage:3});}
  const info=YELLOW_STAGES[stage-1]??YELLOW_STAGES[0];stage=info.stage;
- if(stage===3)return {...base,stage,name:'1-3 广宗决战',waves:['黄巾先锋','黄巾大军','张角决战'].map((name,i)=>({name,start:i*45})),recruitWaves:[1,2],ground:'yellow_ground_3',victoryTitle:'黄巾平定',victoryText:'雷云消散 · 讨伐董卓已解锁',
+ if(stage===3)return {...base,stage,...(CH1_TRIAL?{enemyCap:CH1V6.enemyCap[2]}:{}),name:'1-3 广宗决战',waves:['黄巾先锋','黄巾大军','张角决战'].map((name,i)=>({name,start:i*45})),recruitWaves:[1,2],ground:'yellow_ground_3',victoryTitle:'黄巾平定',victoryText:'雷云消散 · 讨伐董卓已解锁',
   // 1-3 新兵黄巾骑兵（精锐段起约 20%）；时间轴按 pace（约 ×1.2）
   pickEnemy:(t:number)=>{const r=Math.random();if(t<66)return r<.7?'infantry':r<.88?'shield':'archer';return r<.45?'infantry':r<.65?'shield':r<.8?'archer':'cavalry';},
   // 人物画风 v2：张角有行走 / 施法方向表时改走 walkVisual 通路（v1 只有一张静态图，靠程序姿态）
@@ -137,14 +145,15 @@ function rawBattleChapter(id?:string, stage:YellowStage=1,westStage:YellowStage=
  waves:names.map((name,i)=>({name,start:i*45})),recruitWaves:[1,2],
  // 1-1、1-2 按用户反馈都是普通推波：打完 3 波首领登场（不设歼敌 / 祭坛目标；目标系统代码保留在 StageObjectives 供以后复用）
  enemies:{...ENEMY_DEFS,boss:{...ENEMY_DEFS.boss,texture:`yellow_${boss}_walk`,walkVisual:{texture:`yellow_${boss}_walk`,scale:1.35,groundY:91/96},attackVisual:`yellow_${boss}_${stage===1?'attack':'cast'}`,hp:stage===1?1100:1700,speed:stage===1?54:35,damage:stage===1?12:14}},
- hpScale:t=>1+t/600,spawnInterval:t=>t<60?.8:.6,spawnBurst:t=>t<60?1:2,
+ hpScale:t=>1+t/600,spawnInterval:t=>CH1_TRIAL&&stage===1?(t<T1.at[0]?T1.interval[0]:t<T1.at[1]?T1.interval[1]:T1.interval[2]):t<60?.8:.6,spawnBurst:t=>CH1_TRIAL&&stage===1?T1.burst:t<60?1:2,
+ ...(CH1_TRIAL?{enemyCap:CH1V6.enemyCap[stage-1],...(stage===1?{bossCapBase:CH1V6.bossCapBase1}:{})}:{}), // 第一章试验数值 ch1v6
  pickEnemy:t=>{
   // 1-1 新手关（用户 2026-11-16：只要 3 波、不要歼敌）。t 为加速后的刷怪时间轴（pace 4/3：每波 45 秒 ≈ 60）
   // 第 1 波 外围哨兵：全是刀兵；第 2 波 刀盾阻路：刀兵 85% · 刀盾兵 15%（初见两段盾）；第 3 波 张梁迎战：刀兵 75% · 刀盾兵 15% · 弓手 10%
   // 第一章 v2（chapter1-redesign.md，用户 11-20「按你的建议」）：每关至多一种新兵——1-1 刀盾（精锐段起）、1-2 弓手（精锐段起）、1-3 黄巾骑兵（精锐段起）。
   // t 为刷怪时间轴（五段后 phasedPace ≈ 1，约等于关内秒数）
-  if(stage===1){const r=Math.random();if(t<45)return 'infantry';return r<.85?'infantry':'shield';}
-  if(stage===2){const r=Math.random();if(t<50)return r<.8?'infantry':'shield';return r<.6?'infantry':r<.82?'shield':'archer';}
+  if(stage===1){const r=Math.random();if(t<45)return 'infantry';return r<(CH1_TRIAL?CH1V6.stage1Mix.infantry:.85)?'infantry':'shield';}
+  if(stage===2){const r=Math.random();if(t<50)return r<.8?'infantry':'shield';return r<(CH1_TRIAL?M2.infantry:.6)?'infantry':r<(CH1_TRIAL?M2.infantry+M2.shield:.82)?'shield':'archer';}
   return pickEnemyKind(t);
  },
  victoryTitle:`${info.boss}败退`,victoryText:`1-${stage} ${info.name}已突破 · 下一关已解锁`};

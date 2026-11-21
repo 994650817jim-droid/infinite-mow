@@ -30,7 +30,7 @@ export interface StarNode {
   between?: readonly [AttributeId, AttributeId];
   /** 已有的 12 个主属性专精（attributes.PRIMARY_PERK）：哪一维的第几档（1–3）。 */
   perk?: { attr: AttributeId; tier: number };
-  /** 效果未实现（第一期）：另外 12 颗新要星与 4 颗主星可以点亮（不堵路），但点了没有效果。 */
+  /** 效果未实现：4 颗主星（第三期）可以点亮（不堵路），但点了没有效果。12 颗新要星第二期已接上（STAR_EFFECT）。 */
   todo: boolean;
   links: readonly string[];
 }
@@ -39,7 +39,41 @@ export const STAR_RULES = { keystoneNeed: 10, keystoneMax: 2 } as const;
 export const STAR_TUNING = {
   /** 破阵：重击倍率 ×2 → ×1.6；定身每秒最多一次。 */
   crushMul: 1.6, crushStunCdMs: 1000,
+  /** 闪避合计封顶（游刃 10% + 第三期一骑当千 10%）。 */
+  dodgeCap: .2,
 } as const;
+/**
+ * 第二期：12 颗新要星的效果数值（设计稿第 4 节的表，初值，归平衡会话）。键 = 节点编号；结算在 systems/RunGrowth.ts（starOn / STAR_EFFECT）。
+ * STAR_NEAR_RADIUS =「主将身边」的半径（号令、身先士卒）。
+ */
+export const STAR_NEAR_RADIUS = 220;
+export const STAR_EFFECT = {
+  /** 铁骨：生命上限 +8%，受到的伤害 −5%。 */
+  'strength.NR1': { hp: .08, taken: .05 },
+  /** 背水：生命低于 40% 时伤害 +15%。 */
+  'strength.NR2': { below: .4, damage: .15 },
+  /** 连击：暴击伤害 +20%。 */
+  'agility.NR1': { critDamage: .2 },
+  /** 追风：移动中攻速 +8%，拾取范围 +20%。 */
+  'agility.NR2': { moveHaste: .08, pickup: .2 },
+  /** 余烬：灼烧、地火等持续伤害 +20%，持续时间 +1 秒。 */
+  'intellect.NR1': { dot: .2, extraMs: 1000 },
+  /** 妙算：锦囊效果 +15%。 */
+  'intellect.NR2': { jinnang: .15 },
+  /** 严阵：部曲生命 +15%，部曲受首领伤害 −15%。 */
+  'command.NR1': { allyHp: .15, bossTaken: .15 },
+  /** 号令：主将身边的部曲伤害 +12%（进部曲伤害加法桶）。 */
+  'command.NR2': { nearAllyDamage: .12 },
+  /** 骁锐：武器伤害 +6%，攻速 +6%。 */
+  'bridge0.h': { weapon: .06, attackSpeed: .06 },
+  /** 奇谋：暴击后 3 秒内法术伤害 +12%。 */
+  'bridge1.h': { ms: 3000, spell: .12 },
+  /** 帷幄：每 1 点智力生效点，部曲伤害 +0.8%（进部曲伤害加法桶）。 */
+  'bridge2.h': { allyDamagePerInt: .008 },
+  /** 身先士卒：主将身边的部曲受伤 −10%，主将生命上限 +6%。 */
+  'bridge3.h': { nearAllyTaken: .1, hp: .06 },
+} as const;
+export type StarEffectId = keyof typeof STAR_EFFECT;
 export const STAR_REGIONS: Record<AttributeId, { name: string; color: number }> = {
   strength: { name: '力量', color: 0xc8553d }, agility: { name: '敏捷', color: 0x4fa38f }, intellect: { name: '智力', color: 0x8f7fd0 }, command: { name: '统御', color: 0xd39a3a },
 };
@@ -160,7 +194,7 @@ export const STAR_NODES: readonly StarNode[] = ROWS.map(([id, region, kind, x, y
   const tier = kind === 'notable' && region !== 'bridge' ? PERK_SLOTS.indexOf(slot) + 1 : 0, perk = tier > 0 ? { attr: region as AttributeId, tier } : undefined;
   const links = EDGES.filter(e => e[0] === id || e[1] === id).map(e => (e[0] === id ? e[1] : e[0]));
   return {
-    id, region, kind, x, y, attr, between, perk, links, todo: named && !perk,
+    id, region, kind, x, y, attr, between, perk, links, todo: kind === 'keystone',
     name: name ?? STAR_REGIONS[attr!].name + ' +1', desc: desc ?? `+1 ${STAR_REGIONS[attr!].name}点（与现在加 1 点相同）`,
   };
 });

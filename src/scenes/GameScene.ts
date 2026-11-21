@@ -24,7 +24,7 @@ import { buildSettingsPanel, type SettingSpec } from '../ui/SettingsPanel';
 import {FollowerSquad,type Follower} from '../systems/FollowerSquad';
 import {showBarkCard,clearBarkCards} from '../ui/StoryBarkCard';
 import { BATTLE_LOOT_CAP, type BattleCapKind } from '../data/battleLootCap';
-import { POINTS_GUIDE_KEY, pointsGuideText, pointsHint } from '../data/pointsHint';
+import { POINTS_GUIDE_KEY, pointsGuideText, pointsHint, pointsResultLine } from '../data/pointsHint';
 import { DEFEAT, buildCarryNote, defeatTip, defeatLines } from '../data/defeatFlow';
 import { battleNodeId, battlePoint, retreatTarget, type RetreatTarget } from '../world/DefeatRetreat';
 import { patchCampaignDefeat } from '../systems/Campaign';
@@ -1079,7 +1079,8 @@ export class GameScene extends Phaser.Scene {
     this.buildCombat.controlled=(e,n)=>this.controlBuild?.isControlled(e,n)??false;
     this.buildCombat.onFx=(st,x,y,sz)=>buildVfx(this).emit(st,x,y,this.combatNow,sz,0,420);
     this.buildCombat.onShock=(x,y,r)=>buildVfx(this).emit('pure_charge',x,y-6,this.combatNow,r*2,0,320,true);
-    this.buildCombat.onNapalm=(x,y,r,dmg,lv)=>{this.martialFields.add(x,y,r,dmg,3000,lv);this.spawnFlameFx(x,y,r);};
+    this.buildCombat.dot=()=>this.player.growth.dotBonus(); // 星图「余烬」（开关关着 = ×1、+0 秒）
+    this.buildCombat.onNapalm=(x,y,r,dmg,lv)=>{this.martialFields.add(x,y,r,dmg,3000+this.player.growth.dotBonus().extraMs,lv);this.spawnFlameFx(x,y,r);};
     this.buildCombat.onNapalmThrow=(sx,sy,x,y,ms)=>{throwPot(this,{x0:sx,y0:sy,x1:x,y1:y,ms,now:()=>this.combatNow});}; // 火油罐：出手 → 抛物线飞行 → 落地碎裂（落地起火由 BuildCombat 在同一时刻触发）
     // 合击（data/schoolCombos.ts）：第一次触发打横幅；烈马脚下火；冲势打出 / 眩晕交给 SchoolSynergy（声东击西、铁骑冲阵、十面埋伏）
     this.buildCombat.onCombo=id=>{this.synergy?.note(id);const c=COMBOS.find(x=>x.id===id);if(c)comboFx(this,c.a,c.b,id,this.player.x,this.player.y,this.combatNow);};
@@ -1311,7 +1312,7 @@ export class GameScene extends Phaser.Scene {
       scene: this as Phaser.Scene, mode: () => this.mode as string, over: () => this.over,
       togglePause: () => this.togglePause(), usePotion: () => this.usePotion(), useJinnang: () => this.useJinnang(),
       order: () => this.legion.order, interact: () => this.interactOverride(), cycleOrder: () => { if (this.legionOrderOverride()) return; if (mechOpen('squad')) this.legion.cycleOrder(); }, switchFormation: () => this.formationRt?.switch(this.combatNow) ?? false,
-      openBag: () => this.openBattleBag(), canAttributes: () => this.player.growth.unallocated > 0 && mechOpen('attributes'),
+      openBag: () => this.openBattleBag(), canAttributes: () => (this.player.growth.unallocated > 0 || starMapOn()) && mechOpen('attributes'), // 星图开着：C 键始终能打开星图
       openAttributes: (from: 'none' | 'pause') => { this.attributeReturn = from; this.renderAttributePanel(); this.setMode('attributes'); },
       openBuild: () => this.openBuildPanel(), chooseUpgrade: (i: number) => { if (this.upgradeCardShown(i)) this.chooseUpgrade(i); }, chooseBranch: (i: number) => this.chooseBranch(i),
       ...(IS_DESKTOP ? {toggleMap: () => this.battleMap?.toggleBig(), mapOpen: () => !!this.battleMap?.bigOpen, toggleOrders: () => this.ordersPanel?.toggleFold()} : {}),
@@ -2774,7 +2775,8 @@ export class GameScene extends Phaser.Scene {
     // 智力：非武器伤害（技艺、灼烧等）按法术系数 × 智力、含主属性；法术武器（火旗 / 火雷 / 连弩 / 团扇）的武器命中再乘法术系数
     if(!fromAlly&&!weaponHit)rawDamage*=this.player.growth.skillDamageMultiplier();else if(!fromAlly)rawDamage*=this.player.growth.spellWeaponMultiplier(this.player.weapons[0]?.id);
     if(!fromAlly)rawDamage*=this.primaryPerkHit(enemy,time,weaponHit,crit); // 主属性专精（千钧 / 破阵 / 疾影 / 连珠）
-    let damage = Math.max(1, Math.round(rawDamage * (crit ? BALANCE.critMultiplier * (fromAlly ? 1 : 1 + this.buildCombat.critDamageBonus()) : 1) * (firstStrike ? RELIC.zhanjiangMul : 1)));
+    if(!fromAlly)rawDamage*=this.player.growth.starHit(time,weaponHit,crit,SPELL_WEAPONS.has(this.player.weapons[0]?.id??'')); // 星图·骁锐 / 奇谋（开关关着恒为 1）
+    let damage = Math.max(1, Math.round(rawDamage * (crit ? BALANCE.critMultiplier * (fromAlly ? 1 : 1 + this.buildCombat.critDamageBonus() + this.player.growth.critDamageBonus()) : 1) * (firstStrike ? RELIC.zhanjiangMul : 1)));
     enemy.flash(time);
     if(!fromAlly&&source==='arrow')this.artEffects.show(3,enemy.x,enemy.y-8,32,time,120);
     if (!fromAlly) {
@@ -3183,7 +3185,7 @@ export class GameScene extends Phaser.Scene {
   /** “搜集辎重”：此时刻之前全场宝石无视距离飞向主将。 */
   gemMagnetUntil = 0;
   protected updateGems(dt: number): void {
-    const radius = this.combatNow < this.gemMagnetUntil ? 1e9 : this.player.stats.pickupRadius * (1 + this.player.growth.gear.pickup), now = this.combatNow, art = this.gemArt();
+    const radius = this.combatNow < this.gemMagnetUntil ? 1e9 : this.player.stats.pickupRadius * this.player.growth.pickupMultiplier(), now = this.combatNow, art = this.gemArt();
     for (const sp of this.gemSparks) { const t = (now - sp.at) / GEM_FX.sparkMs; if (t >= 1) { if (sp.img.visible) sp.img.setVisible(false); continue; } sp.img.setFrame(Math.min(3, Math.floor(t * 4))).setPosition(this.player.x, this.player.y - 18); }
     for (const gem of this.gems) {
       if (!gem.active) continue;
@@ -4469,15 +4471,15 @@ export class GameScene extends Phaser.Scene {
   /** 使用锦囊（R 键 / 锦囊钮）。 */
   protected useJinnang(): boolean {
     const id = this.jinnang; if (!id || this.mode !== 'none' || this.over || !this.player?.alive) return false;
-    const P = this.player, now = this.combatNow;
-    if (id === 'ambush') this.reinforcePush().spawnEscortAt(P.x, P.y, 6, 20000);
-    else if (id === 'gong') { this.gemMagnetUntil = now + 2500; P.heal(Math.round(P.maxHp * .2)); }
-    else if (id === 'feint') this.controlBuild?.slowArea(P.x, P.y, 260, .6, 5000, now);
-    else if (id === 'drum') P.growth.berserkUntil = Math.max(P.growth.berserkUntil, now) + 10000;
-    else if (id === 'fire') { const hit = this.weaponHit() * 4; for (const e of this.grid.query(P.x, P.y, 220)) if (e.active && !e.isSupplySlot && Math.hypot(e.x - P.x, e.y - P.y) <= 220) this.hitEnemy(e, hit, now, 'fire', false, false); if (!this.jinnangFx?.has('fx_jn2')) this.artEffects.show(5, P.x, P.y - 10, 220, now, 700); }
-    else if (id === 'empty') P.invulnUntil = Math.max(P.invulnUntil, now + 2500);
-    else if (id === 'arrows') { this.arrows = { until: now + 6000, absorbed: 0 }; const prev = P.damageGuard; P.damageGuard = (n, t) => { const m = prev ? prev(n, t) : n; if (t < this.arrows.until) { this.arrows.absorbed += m * .5; return m * .5; } return m; }; }
-    else { this.chain.set.clear(); const near = this.grid.query(P.x, P.y, 260).filter(e => e.active && !e.isSupplySlot && e.kind !== 'boss').sort((a, b) => Math.hypot(a.x - P.x, a.y - P.y) - Math.hypot(b.x - P.x, b.y - P.y)).slice(0, 8); for (const e of near) this.chain.set.set(e, e.spawnId); this.chain.until = now + 8000; }
+    const P = this.player, now = this.combatNow, k = P.growth.jinnangMultiplier(); // k：星图「妙算」锦囊效果 +15%（数值或持续时间；人数、范围、目标数不变；开关关着 = 1）
+    if (id === 'ambush') this.reinforcePush().spawnEscortAt(P.x, P.y, 6, 20000 * k);
+    else if (id === 'gong') { this.gemMagnetUntil = now + 2500; P.heal(Math.round(P.maxHp * .2 * k)); }
+    else if (id === 'feint') this.controlBuild?.slowArea(P.x, P.y, 260, .6, 5000 * k, now);
+    else if (id === 'drum') P.growth.berserkUntil = Math.max(P.growth.berserkUntil, now) + 10000 * k;
+    else if (id === 'fire') { const hit = this.weaponHit() * 4 * k; for (const e of this.grid.query(P.x, P.y, 220)) if (e.active && !e.isSupplySlot && Math.hypot(e.x - P.x, e.y - P.y) <= 220) this.hitEnemy(e, hit, now, 'fire', false, false); if (!this.jinnangFx?.has('fx_jn2')) this.artEffects.show(5, P.x, P.y - 10, 220, now, 700); }
+    else if (id === 'empty') P.invulnUntil = Math.max(P.invulnUntil, now + 2500 * k);
+    else if (id === 'arrows') { this.arrows = { until: now + 6000 * k, absorbed: 0 }; const prev = P.damageGuard; P.damageGuard = (n, t) => { const m = prev ? prev(n, t) : n; if (t < this.arrows.until) { this.arrows.absorbed += m * .5; return m * .5; } return m; }; }
+    else { this.chain.set.clear(); const near = this.grid.query(P.x, P.y, 260).filter(e => e.active && !e.isSupplySlot && e.kind !== 'boss').sort((a, b) => Math.hypot(a.x - P.x, a.y - P.y) - Math.hypot(b.x - P.x, b.y - P.y)).slice(0, 8); for (const e of near) this.chain.set.set(e, e.spawnId); this.chain.until = now + 8000 * k; }
     this.jinnangFx?.cast(id, P.x, P.y, now);   // 手绘激活特效（伏兵 / 鸣金 / 疑兵 / 擂鼓 / 火计 / 空城计 / 草船借箭 / 连环计）
     this.jinnang = null; this.jinnangButton?.setVisible(false);
     this.showWaveBanner('锦囊 · ' + JINNANG[id].name, false, JINNANG[id].desc.split('\n')[0]); this.sfx.play('gong');
@@ -4729,7 +4731,7 @@ export class GameScene extends Phaser.Scene {
     {const loot=this.itemDrops?.runLoot??[],debug=this.lootBlocked(),dep=depositRunLoot(loot,{victory,elapsed:victory?this.elapsed:0,debug,pity:this.itemDrops?.pity}); /* 战败（data/defeatFlow.ts）：只带回一半，品质高的留下 */
      if(loot.length)this.resultTexts.body.setText(this.resultTexts.body.text+'\n缴获兵装  '+loot.length+' 件（'+this.itemDrops!.summary()+'）'+(debug?' · 测试战斗不入行囊':dep.lost?' · 败退遗失 '+dep.lost+' 件':' · 已收入行囊'));}
     // 结算：属性点没加 → 写一行（第一次能加时另弹引导卡）
-    if(!(isChapterTestRun()||this.debugModified||this.debugJumped||this.player.damageImmune)){const ph=this.pointsHint();if(ph){this.resultTexts.body.setText(this.resultTexts.body.text+'\n属性点  '+ph.n+' 点未加 · 去'+ph.where+'加点');this.pointsGuide();}}
+    if(!(isChapterTestRun()||this.debugModified||this.debugJumped||this.player.damageImmune)){const ph=this.pointsHint();if(ph){this.resultTexts.body.setText(this.resultTexts.body.text+(starMapOn()?'\n'+pointsResultLine(ph):'\n属性点  '+ph.n+' 点未加 · 去'+ph.where+'加点'));this.pointsGuide();}}
     // 结算：行囊里有比身上好的兵装没穿 → 写一行（行营「行囊」按钮另有小红点）
     if(victory&&mechShown('gear')&&!(isChapterTestRun()||this.debugModified||this.debugJumped||this.player.damageImmune)){const n=gearUpgrades(this.runConfig.character).length;if(n)this.resultTexts.body.setText(this.resultTexts.body.text+'\n兵装  行囊里有 '+n+' 件更好的兵装没穿 · 点「行囊」→「一键穿戴」');}
     if(this.worldCampaign){const reward=settleExpedition(this.expeditionId,{...stats,kills:Math.max(0,stats.kills-this.settledFrontlineKills),chapter:this.chapter.id,returned:this.allies.filter(a=>a.active&&a.reserveSoldier).map(a=>a.kind),debug:isChapterTestRun()||this.debugModified||this.debugJumped||this.player.damageImmune});

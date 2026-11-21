@@ -496,7 +496,7 @@ export class Player {
     this.sprite.setOrigin(.5, this.baseOriginY + (lift + this.riseY + this.gaitLift) / Math.max(1, this.sprite.displayHeight));
     const regen = this.stats.regen + this.growth.gear.regen;
     if (regen > 0) this.heal(regen * dt);
-    this.growth.lowHp = this.hp < this.maxHp * .35;
+    this.growth.lowHp = this.hp < this.maxHp * .35; this.growth.hpRatio = this.hp / Math.max(1, this.maxHp); // hpRatio：星图「背水」（RunGrowth）
     const blinking = now < this.invulnUntil;
     this.sprite.setAlpha(blinking ? (Math.floor(now / 80) % 2 === 0 ? 0.35 : 1) : 1);
     if (this.action?.hold) this.renderAction(false);

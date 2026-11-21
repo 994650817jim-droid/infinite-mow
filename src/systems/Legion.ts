@@ -171,7 +171,7 @@ export class Legion {
   hurt(u: Ally, raw: number, now: number, source?: { x: number; y: number; normal: boolean }, floor = 0, ignoreHurtGap = false): boolean {
     if (!u.active || (!ignoreHurtGap && now < u.hurtUntil)) return false;
     const armor = u.def.armor + (u.kind === 'guardian' && u.level === 3 ? 5 : 0);
-    let mitigation = Math.min(this.command.incoming(u,now),this.defense?.incoming(u,now)??1,this.awakeningDefense?.incoming(u,now)??1)*(this.fm?.taken(u)??1)*(this.hurtMul?.(u,source)??1);
+    let mitigation = Math.min(this.command.incoming(u,now),this.defense?.incoming(u,now)??1,this.awakeningDefense?.incoming(u,now)??1)*(this.fm?.taken(u)??1)*(this.hurtMul?.(u,source)??1)*this.player.growth.allyNearTakenFactor(u.x-this.player.x,u.y-this.player.y); // 末项：星图「身先士卒」（开关关着恒为 1）
     if (source?.normal) {
       const dx = source.x - u.x, dy = source.y - u.y, d = Math.hypot(dx, dy) || 1;
       const frontal = (dx * u.facingX + dy * u.facingY) / d >= .25;
@@ -209,7 +209,7 @@ export class Legion {
   hurtFromBoss(u: Ally, raw: number, now: number, source?: { x: number; y: number; normal: boolean }): boolean {
     if (!u.active || now < u.bossImmuneUntil) return false;
     if (now !== this.bossCastAt) { this.bossCastAt = now; this.bossCastKills = 0; }
-    const ok = this.hurt(u, raw * BOSS_VS_ALLY.mul, now, source, this.bossCastKills >= BOSS_VS_ALLY.killCapPerCast ? 1 : 0);
+    const ok = this.hurt(u, raw * BOSS_VS_ALLY.mul * this.player.growth.allyBossTakenMultiplier(), now, source, this.bossCastKills >= BOSS_VS_ALLY.killCapPerCast ? 1 : 0);
     if (ok) { u.bossImmuneUntil = now + BOSS_VS_ALLY.immuneMs; if (!u.active) this.bossCastKills++; }
     return ok;
   }
@@ -314,7 +314,7 @@ export class Legion {
             if (u.ai.chargeHits.has(e.spawnId) || u.ai.chargeHits.size >= (u.level === 3 ? 3 : 1)) continue;
             u.ai.chargeHits.add(e.spawnId);
           }
-          const amount = u.def.damage * this.drillMultiplier * (1+CAMP_TRAINING.attack.perLevel*this.training.attack) * (1 + .25 * (u.level - 1)) * stats.melee * (u.kind === 'spearman' && e.kind === 'cavalry' && u.level === 3 ? 2 : 1) * (this.fm?.dmg(u, e) ?? 1) * (this.hitMul?.(u, e) ?? 1);
+          const amount = u.def.damage * this.drillMultiplier * (1+CAMP_TRAINING.attack.perLevel*this.training.attack) * (1 + .25 * (u.level - 1)) * stats.melee * (u.kind === 'spearman' && e.kind === 'cavalry' && u.level === 3 ? 2 : 1) * (this.fm?.dmg(u, e) ?? 1) * (this.hitMul?.(u, e) ?? 1) * this.player.growth.allyNearDamageFactor(u.x - this.player.x, u.y - this.player.y); // 末项：星图「号令」（开关关着恒为 1）
           if (u.def.ranged) { if (u.kind === 'crossbowman') { const total = Math.max(1, Math.round(amount)), first = u.level === 3 ? total : Math.ceil(total / 2), second = u.level === 3 ? total : Math.floor(total / 2); this.projectiles.fire(u, e, first, now + 180); if (second) this.projectiles.fire(u, e, second, now + 260); } else this.projectiles.fire(u, e, amount, now + 180); }
           else if(u.kind==='spearman'){this.strikes.push({owner:u,life:u.lifeId,target:e,spawn:e.spawnId,due:now+120,amount});}
           else { this.fx(u, e.x, e.y, now, false); this.knock(u, e, u.kind==='rider'?5:3, now); damage(e, amount); }

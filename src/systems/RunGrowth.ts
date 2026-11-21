@@ -11,7 +11,7 @@ import { emptyGear, type GearStats } from './ItemEffects';
 import { attributePointsAt } from '../data/attributes';
 import { ATTRIBUTE_EFFECT, SPELL_WEAPONS, ATTRIBUTE_IDS, ATTRIBUTE_INFO, ATTRIBUTE_MAX, attributeCap, ATTRIBUTE_POINT_EVERY, PRIMARY_BONUS, PRIMARY_MUL, PRIMARY_TIERS, PRIMARY_PERK, primaryAttribute, type AttributeId } from '../data/attributes';
 import { LB_COMMAND } from '../data/heroMechanics';
-import { STAR_TUNING, canLight, heroGate, orderStars, perkLit, starMapOn, starPoints, starsAt } from '../data/starMap';
+import { STAR_EFFECT, STAR_NEAR_RADIUS, STAR_TUNING, canLight, heroGate, orderStars, perkLit, starMapOn, starPoints, starsAt, type StarEffectId } from '../data/starMap';
 export { ATTRIBUTE_IDS, ATTRIBUTE_INFO, ATTRIBUTE_MAX, ATTRIBUTE_POINT_EVERY, attributeCap, type AttributeId };
 export type ZhaoMasteryId = 'dragon_gallop' | 'cloud_pierce';
 /**
@@ -135,6 +135,7 @@ export class RunGrowth {
   formationReadyAt = 0;
   recordMovement(distance: number, dt: number): void {
     if(this.masteries.dragging_blade) this.travel=Math.min(DRAG_TRAVEL[0],this.travel+Math.max(0,distance));
+    this.moving=distance>.5;
     this.stationarySeconds=distance>.5?Math.max(0,this.stationarySeconds-dt*2):Math.min(5,this.stationarySeconds+dt);
   }
   aimCriticalBonus(): number { return this.masteries.steady_aim ? this.stationarySeconds*(.02+.01*this.masteries.steady_aim) : 0; }
@@ -169,6 +170,50 @@ export class RunGrowth {
     this.setStars([...this.stars, id]); this.unallocated -= 1;
     if (player.maxHp > oldMax) player.heal(player.maxHp - oldMax);
     return true;
+  }
+  /**
+   * 第二期：12 颗新要星（数值在 starMap.STAR_EFFECT）。starOn(id) = 开关开着且这颗星点亮；关着时下面每个量都是「没有效果」的那个值（0 或 1）。
+   * moving / hpRatio 由 recordMovement / Player.update 每帧写；spellSurgeUntil = 奇谋的截止时刻。
+   */
+  starOn(id: StarEffectId): boolean { return starMapOn() && this.stars.includes(id); }
+  moving = false; hpRatio = 1; spellSurgeUntil = -Infinity;
+  /** 铁骨 + 身先士卒：主将生命上限（按基础生命的比例，和力量每点 +3% 加在一起）。 */
+  private starHp(): number { return (this.starOn('strength.NR1') ? STAR_EFFECT['strength.NR1'].hp : 0) + (this.starOn('bridge3.h') ? STAR_EFFECT['bridge3.h'].hp : 0); }
+  /** 连击：暴击伤害加成（和战法的暴击伤害加成相加）。 */
+  critDamageBonus(): number { return this.starOn('agility.NR1') ? STAR_EFFECT['agility.NR1'].critDamage : 0; }
+  /** 拾取范围倍率：兵装词条 ×（追风 +20%）。 */
+  pickupMultiplier(): number { return (1 + this.gear.pickup) * (this.starOn('agility.NR2') ? 1 + STAR_EFFECT['agility.NR2'].pickup : 1); }
+  /** 余烬：灼烧 / 地火等持续伤害倍率与多烧的毫秒数（BuildCombat 的灼烧与地火读这里）。 */
+  dotBonus(): { mul: number; extraMs: number } { const E = STAR_EFFECT['intellect.NR1']; return this.starOn('intellect.NR1') ? { mul: 1 + E.dot, extraMs: E.extraMs } : { mul: 1, extraMs: 0 }; }
+  /** 妙算：锦囊效果倍率（数值或持续时间 ×1.15，见 GameScene.useJinnang）。 */
+  jinnangMultiplier(): number { return this.starOn('intellect.NR2') ? 1 + STAR_EFFECT['intellect.NR2'].jinnang : 1; }
+  /** 严阵：部曲受首领伤害倍率。 */
+  allyBossTakenMultiplier(): number { return this.starOn('command.NR1') ? 1 - STAR_EFFECT['command.NR1'].bossTaken : 1; }
+  /** 主将身边（dx, dy = 部曲相对主将的位移）。 */
+  private near(dx: number, dy: number): boolean { return dx * dx + dy * dy <= STAR_NEAR_RADIUS * STAR_NEAR_RADIUS; }
+  /**
+   * 号令：主将身边的部曲再 +12%，进同一个加法桶——全军倍率 allyDamageMultiplier() 里已经乘过 (1 + 桶)，
+   * 这里返回身边这名部曲要补乘的系数 (1 + 桶 + 12%) ÷ (1 + 桶)。
+   */
+  allyNearDamageFactor(dx: number, dy: number): number {
+    if (!this.starOn('command.NR2') || !this.near(dx, dy)) return 1;
+    const b = this.allyDamageBucket(); return (1 + b + STAR_EFFECT['command.NR2'].nearAllyDamage) / (1 + b);
+  }
+  /** 身先士卒：主将身边的部曲受伤倍率。 */
+  allyNearTakenFactor(dx: number, dy: number): number { return this.starOn('bridge3.h') && this.near(dx, dy) ? 1 - STAR_EFFECT['bridge3.h'].nearAllyTaken : 1; }
+  /**
+   * 主将每次命中的星图倍率（GameScene.hitEnemy，在主属性专精之后乘）：骁锐 = 武器命中 +6%；
+   * 奇谋 = 暴击后 3 秒内法术伤害（非武器伤害、法术武器的武器命中）+12%，触发它的那一下暴击本身不吃。
+   */
+  starHit(time: number, weaponHit: boolean, crit: boolean, spellWeapon: boolean): number {
+    if (!starMapOn()) return 1;
+    let mul = 1;
+    if (weaponHit && this.starOn('bridge0.h')) mul *= 1 + STAR_EFFECT['bridge0.h'].weapon;
+    if (this.starOn('bridge1.h')) {
+      if ((!weaponHit || spellWeapon) && time < this.spellSurgeUntil) mul *= 1 + STAR_EFFECT['bridge1.h'].spell;
+      if (crit) this.spellSurgeUntil = time + STAR_EFFECT['bridge1.h'].ms;
+    }
+    return mul;
   }
   /** 力量「破阵」重击倍率（星图开着 ×1.6，平衡评审第 30 节；关着是原值 ×2）。 */
   crushMul(): number { return starMapOn() ? STAR_TUNING.crushMul : PRIMARY_PERK.strength.crushMul; }
@@ -225,14 +270,16 @@ export class RunGrowth {
     const might = (1 + ATTRIBUTE_EFFECT.strength.damage * this.pts('strength')) * (1 + this.primaryBonus());
     const mastered = (1 + .04 * Object.values(this.masteryExtra).reduce((n: number, v) => n + (v ?? 0), 0)) * (1 + .1 * this.weaponOver); // 武艺精熟、本命 Lv6 / 7
     const fury = mastered * (this.lowHp && this.gear.specials.includes('fury') ? 1.25 : 1) * (this.lowHp && this.stageDesperate ? 1 + this.stageDesperate : 1);
+    const stand = this.starOn('strength.NR2') && this.hpRatio < STAR_EFFECT['strength.NR2'].below ? 1 + STAR_EFFECT['strength.NR2'].damage : 1; // 星图·背水
     const wine = now < this.wineUntil && this.gear.specials.includes('jiuhu') ? 1.4 : 1; // 遗珍「乌巢酒葫」（BossRelics.RELIC.jiuhuDamage）
-    return Math.min(2, might * (now < this.berserkUntil ? 1.25 : 1) * (1 + this.permanentDamage) * (1 + this.gear.damage) * (1 + this.temperDamage)) * fury * wine;
+    return Math.min(2, might * (now < this.berserkUntil ? 1.25 : 1) * (1 + this.permanentDamage) * (1 + this.gear.damage) * (1 + this.temperDamage)) * fury * wine * stand;
   }
 
   attackSpeedMultiplier(now: number): number {
     const quickness = 1 + ATTRIBUTE_EFFECT.agility.attackSpeed * this.pts('agility');
     const haste = this.perk('agility', 3) && now < this.hasteUntil ? 1 + PRIMARY_PERK.agility.haste : 1, focus = this.perk('intellect', 1) ? 1 / (1 - PRIMARY_PERK.intellect.cooldown) : 1;
-    return Math.min(1.8, quickness * (now < this.berserkUntil ? 1.2 : 1) * (1 + this.gear.attackSpeed) * haste * focus) * (now < this.frenzyUntil ? 1 + this.frenzyHaste : 1);
+    const star = (this.starOn('bridge0.h') ? 1 + STAR_EFFECT['bridge0.h'].attackSpeed : 1) * (this.moving && this.starOn('agility.NR2') ? 1 + STAR_EFFECT['agility.NR2'].moveHaste : 1); // 星图·骁锐 / 追风
+    return Math.min(1.8, quickness * (now < this.berserkUntil ? 1.2 : 1) * (1 + this.gear.attackSpeed) * haste * focus * star) * (now < this.frenzyUntil ? 1 + this.frenzyHaste : 1);
   }
 
   movementMultiplier(): number {
@@ -241,8 +288,8 @@ export class RunGrowth {
   }
 
   criticalBonus(): number { return Math.min(0.1, ATTRIBUTE_EFFECT.agility.crit * this.pts('agility')) + this.gear.crit + (this.perk('agility', 2) ? PRIMARY_PERK.agility.crit : 0); }
-  bonusMaxHp(): number { return Math.round(BALANCE.player.maxHp * (ATTRIBUTE_EFFECT.strength.hp * this.pts('strength') + this.gear.hp + this.charmHp)); }
-  incomingDamageMultiplier(): number { return (this.gear.specials.includes('weixi') ? 1.15 : 1)*Math.max(.6, 1 - this.gear.reduce)*this.commandSelfGuard(); }
+  bonusMaxHp(): number { return Math.round(BALANCE.player.maxHp * (ATTRIBUTE_EFFECT.strength.hp * this.pts('strength') + this.gear.hp + this.charmHp + this.starHp())); }
+  incomingDamageMultiplier(): number { return (this.gear.specials.includes('weixi') ? 1.15 : 1)*Math.max(.6, 1 - this.gear.reduce)*this.commandSelfGuard()*(this.starOn('strength.NR1') ? 1 - STAR_EFFECT['strength.NR1'].taken : 1); }
   /** 刘备：统御每点本人受伤 −1%（2026-11-18 平衡审查，data/heroMechanics.ts LB_COMMAND）；其他武将为 1。 */
   commandSelfGuard(): number { return this.character === 'liubei' ? 1 - LB_COMMAND.selfGuardPerPoint * Math.min(LB_COMMAND.maxPoints, this.attributes.command) : 1; }
   allyDamageMultiplier(): number { return (this.build.tier('formation')>=2?1+SCHOOL_TIER.formation.allyDmg:1)*(1 + this.gear.ally)*(1 + ATTRIBUTE_EFFECT.command.allyDamage * this.pts('command')) * (1 + this.allyDamageBucket()); }
@@ -250,7 +297,7 @@ export class RunGrowth {
    * 部曲伤害加法桶（平衡评审第 30 节）：励军等「部曲伤害 +x%」的星互相相加，加完再乘统御点数那一项，不互相相乘。
    * 现在桶里只有励军（+15%，和原来 ×1.15 算出来一样）；第二期的号令 / 三军统帅 / 帷幄往这里加。
    */
-  allyDamageBucket(): number { return this.perk('command', 1) ? PRIMARY_PERK.command.allyDamage : 0; }
+  allyDamageBucket(): number { return (this.perk('command', 1) ? PRIMARY_PERK.command.allyDamage : 0) + (this.starOn('bridge2.h') ? STAR_EFFECT['bridge2.h'].allyDamagePerInt * this.pts('intellect') : 0); } // 励军 + 帷幄；号令只给主将身边的（allyNearDamageFactor）
   /** 主属性：每点额外全伤害 +1%（最多 10 点）。 */
   primaryBonus(): number { const p = primaryAttribute(this.character); return p ? Math.min(PRIMARY_BONUS.maxPoints, this.attributes[p]) * PRIMARY_BONUS.perPoint : 0; }
   /** 智力：非普攻伤害（技艺、灼烧、遗珍等）倍率，含主属性加成。 */
@@ -260,7 +307,7 @@ export class RunGrowth {
   /** 智力：范围倍率（经 CharacterPassives.rangeMultiplier 作用到武器）。 */
   areaMultiplier(): number { return (1 + ATTRIBUTE_EFFECT.intellect.area * this.pts('intellect')) * (this.perk('intellect', 3) ? 1 + PRIMARY_PERK.intellect.area : 1); }
   /** 敏捷「游刃」：受伤时闪避的几率。 */
-  dodgeChance(): number { return this.perk('agility', 2) ? PRIMARY_PERK.agility.dodge : 0; }
+  dodgeChance(): number { const d = this.perk('agility', 2) ? PRIMARY_PERK.agility.dodge : 0; return starMapOn() ? Math.min(STAR_TUNING.dodgeCap, d) : d; } // 星图开着：闪避合计封顶 20%
   /** 智力「连珠」：法术伤害翻倍的倍率（掷骰）。 */
   spellEcho(): number { return this.perk('intellect', 2) && Math.random() < PRIMARY_PERK.intellect.echoChance ? 2 : 1; }
   /** 统御「募众」：每次免费招兵多给的人数。 */
@@ -268,7 +315,7 @@ export class RunGrowth {
   /** 统御「同袍」：随从救起所需时间倍率与救起生命比例（null = 用默认）。 */
   followerRevive(): { secMul: number; hp: number } | null { return this.perk('command', 3) ? { secMul: 1 - PRIMARY_PERK.command.reviveFaster, hp: PRIMARY_PERK.command.reviveHp } : null; }
   /** 统御：部曲生命倍率。 */
-  allyHpMultiplier(): number { return 1 + ATTRIBUTE_EFFECT.command.allyHp * this.pts('command'); }
+  allyHpMultiplier(): number { return (1 + ATTRIBUTE_EFFECT.command.allyHp * this.pts('command')) * (this.starOn('command.NR1') ? 1 + STAR_EFFECT['command.NR1'].allyHp : 1); } // 星图·严阵
   /** 兵装「对精锐 / 首领伤害」与名器「斩将」：只作用于武将本人的命中。 */
   gearHitMultiplier(kind: string): number { return (this.perk('strength', 3) && (kind === 'boss' || kind === 'elite') ? 1 + PRIMARY_PERK.strength.eliteMul : 1) * (kind === 'boss' ? 1 + this.gear.elite + this.gear.boss : kind === 'elite' ? 1 + this.gear.elite : 1); }
   /** 兵装「经验获取」× 来源倍率（主线 1.0、其余 0.5）：小数部分累计，不丢失。 */

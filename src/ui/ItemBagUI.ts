@@ -7,7 +7,7 @@ import { CHARACTERS, HOME_ART_HEROES, type CharacterId } from '../data/character
 import { AFFIXES, BAG_CAPACITY, LEGENDS, QUALITIES, QUALITY_ORDER, SLOTS, SLOT_ORDER, SPECIALS, formatAffix, itemDef, itemName, itemSlot, type AffixId, type ItemInstance, type ItemSlot } from '../data/items';
 import { HORSES, horseQuality, mountStyle } from '../data/mounts';
 import { gearFromItems, gearSummary, horseBonusText } from '../systems/ItemEffects';
-import { type GearOwner, type LoadoutKey, LOADOUT_KEYS, equipTarget, keySlot, tokenSlots, equipItem, equippedBy, heroHorse, horseRider, loadItems, loadout, looseCount, markBagSeen, rideHorse, stableUnlocked, takeItemNotice, takeStableAnnouncement, unequipSlot } from '../systems/ItemStore';
+import { type GearOwner, type LoadoutKey, LOADOUT_KEYS, equipTarget, keySlot, tokenSlots, equipItem, equippedBy, heroHorse, horseRider, loadItems, loadout, looseCount, markBagSeen, rideHorse, stableUnlocked, takeItemNotice, takeStableAnnouncement, unequipSlot, gearUpgrades, markGearGuideSeen } from '../systems/ItemStore';
 import { bagArt, drawQualityArt, drawQualityFrame, ensureItemTextures, horseIcon, itemIconKey, itemTile, loadBagArt, type IconSlot } from './ItemQuality';
 import { lqHitBox, lqPanel, lqSkin } from './LacquerKit';
 import { padNavigator } from './PadNavigator';
@@ -103,11 +103,19 @@ export class ItemBagUI {
   }
 
   /** 穿戴（行囊里的）或穿上缴获（战斗中）。返回是否成功。 */
-  private wear(item: ItemInstance): boolean {
+  private wear(item: ItemInstance, slot?: LoadoutKey): boolean {
     const inBag = loadItems().bag.some(i => i.uid === item.uid);
-    const ok = inBag ? equipItem(this.hero, item.uid) : !!this.o.claimLoot?.(item);
+    const ok = inBag ? equipItem(this.hero, item.uid, slot) : !!this.o.claimLoot?.(item);
     if (ok) { this.notice = `${ownerName(this.hero)} 穿戴 ${itemName(item)}${inBag ? '' : ' · 已收入行囊'}`; this.o.onGearChange?.(); }
     return ok;
+  }
+  /** 一键穿戴（data/gearAuto.ts）：行囊（含战斗中的缴获）里比身上好的都换上；先品质后评分，信物同名只取一件。 */
+  private autoWear(): void {
+    const picks = gearUpgrades(this.hero, this.o.runLoot ?? []); let n = 0;
+    for (const p of picks) if (this.wear(p.item, p.slot)) n++;
+    markGearGuideSeen();
+    this.notice = n ? `一键穿戴 · ${ownerName(this.hero)} 换上 ${n} 件更好的兵装` : '身上已是行囊里最好的兵装';
+    this.render();
   }
   private takeOff(slot: LoadoutKey): void { if (unequipSlot(this.hero, slot)) { this.notice = '已卸下'; this.o.onGearChange?.(); } }
 
@@ -129,8 +137,12 @@ export class ItemBagUI {
     const loose = looseCount(s), over = loose > BAG_CAPACITY;
     this.text(x0 + (D ? 100 : 108), y0 + (D ? 28 : 34), `未穿戴 ${loose} / ${BAG_CAPACITY}${over ? ' · 已超出，可去军需商人出售' : ''}${this.battle ? (this.o.atRest ? ' · 休整中' : ' · 战斗中可换装') : ''}`, 13, over ? '#f08a6a' : '#b9a57a').setName('item-bag-count');
     this.button(x0 + pw - (D ? 52 : 56), y0 + (D ? 32 : 40), '返回', 'item-bag-close', () => this.close(), { size: D ? 15 : 17 });
+    // 一键穿戴（总制作人第一章试玩：20 件兵装一件没穿）：有更好的没穿时按钮后面带个小红点
+    { const ups = gearUpgrades(this.hero, this.o.runLoot ?? [], s).length, bx = x0 + pw - (D ? 170 : 176), by = y0 + (D ? 32 : 40);
+      this.button(bx, by, '一键穿戴', 'item-auto-wear', () => this.autoWear(), { size: D ? 14 : 15 });
+      if (ups) this.add(this.scene.add.circle(bx + (D ? 46 : 50), by - (D ? 12 : 14), 5, 0xe0412a).setStrokeStyle(1.5, 0xffe2b0).setName('item-auto-wear-dot')); }
     // 旧物（旧档的兵刃挂饰、重复的马）：原样保留，可在军需商人「出售兵装」里整批卖掉
-    if (s.legacy.length) this.button(x0 + pw - (D ? 170 : 176), y0 + (D ? 32 : 40), `旧物 ${s.legacy.length}`, 'item-legacy', () => this.select('legacy'), { size: D ? 14 : 15 });
+    if (s.legacy.length) this.button(x0 + pw - (D ? 290 : 296), y0 + (D ? 32 : 40), `旧物 ${s.legacy.length}`, 'item-legacy', () => this.select('legacy'), { size: D ? 14 : 15 });
 
     const pageY = D ? this.renderDesk(s, x0, y0, pw, ph) : this.renderMobile(s, x0, y0, pw, ph);
     // 电脑版提示放在顶栏中间（标题行空处；原来在左下「兵装加成」说明上面，把字压住了，2026-11-21 总制作人）

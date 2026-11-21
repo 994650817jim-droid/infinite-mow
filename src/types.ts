@@ -53,7 +53,8 @@ export interface UpgradeOption {
   apply: (player: Player, weapons: WeaponState[], growth?: RunGrowth) => void;
 }
 
-export type RunEndReason = 'boss' | 'death' | 'timeout';
+/** 结局：boss 讨伐成功、death 主将阵亡、timeout 超时 / 撤军、keep 守城府衙失守（主将还活着）。 */
+export type RunEndReason = 'boss' | 'death' | 'timeout' | 'keep';
 
 export interface RunStats {
   victory: boolean;

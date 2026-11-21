@@ -23,6 +23,8 @@ import { MOUNT_VISUAL, isHorseCavalry } from '../data/mounts';
 import { buildSettingsPanel, type SettingSpec } from '../ui/SettingsPanel';
 import {FollowerSquad,type Follower} from '../systems/FollowerSquad';
 import {showBarkCard,clearBarkCards} from '../ui/StoryBarkCard';
+import { BATTLE_LOOT_CAP, type BattleCapKind } from '../data/battleLootCap';
+import { POINTS_GUIDE_KEY, pointsGuideText, pointsHint } from '../data/pointsHint';
 import { DEFEAT, buildCarryNote, defeatTip, defeatLines } from '../data/defeatFlow';
 import { battlePoint, retreatTarget, type RetreatTarget } from '../world/DefeatRetreat';
 import { patchCampaignDefeat } from '../systems/Campaign';
@@ -171,7 +173,7 @@ import {ItemDrops} from '../systems/ItemDrops';
 import {BossRelics, RELIC} from '../systems/BossRelics';
 import {FireShips} from '../systems/FireShips';
 import {gearFor} from '../systems/ItemEffects';
-import {addItems,claimRunLoot,depositRunLoot,grantHorse,heroHorse,ownedHorses,tokenSlots} from '../systems/ItemStore';
+import {addItems,claimRunLoot,depositRunLoot,gearUpgrades,grantHorse,heroHorse,ownedHorses,tokenSlots} from '../systems/ItemStore';
 import { ItemTooltip } from '../ui/ItemTooltip';
 import { primarySummary } from '../ui/PrimaryAttrInfo';
 import {STARTER_HORSE} from '../data/mounts';
@@ -966,6 +968,7 @@ export class GameScene extends Phaser.Scene {
     {const horse=heroHorse(this.runConfig.character);this.mount=horse?new HeroMount({barDy:()=>this.passiveGauge?.showing?FOOT_HUD.barBelowGauge:FOOT_HUD.bar,scene:this,player:this.player,enemies:this.enemies,hit:(e,d,now)=>this.hitEnemy(e,d,now,'melee',false,false),notice:t=>this.showGrowthNotice(t)},{base:horse.id,name:horse.name},this.runConfig.character,this.player.growth.gear.specials.includes('hubao')?{trampleMul:RELIC.hubaoTrample,remountMs:RELIC.hubaoRemountMs}:{}):null;this.player.mountGuard=this.mount?(n,now)=>this.mount?.guard(n,now)??n:undefined;this.mountHint=MountRideHint.maybeShow(this,!!this.mount);this.events.once('shutdown',()=>{this.mount?.clear();this.mount=null;});}
     this.bossPace=new BossPace(this as unknown as ConstructorParameters<typeof BossPace>[0]); // 首领走路提速 / 追击（BALANCE.bossPace）
     this.itemDrops=new ItemDrops(this,this.player,this.itemTier(),this.lootChapter(),()=>this.elapsed,()=>this.isFinalBoss(),()=>{this.sfx.play('pickup');this.mechEvent('gear');},()=>this.bossRelicKey());this.itemDrops.deferBossRelic=true; // 首领遗珍由首领宝箱发（BossChest）
+    {const c=BATTLE_LOOT_CAP[this.battleCapKind()];if(this.itemDrops)this.itemDrops.cap={scrolls:c.scrolls,drops:c.drops};} // 单场收益上限（总制作人第四轮：一场守城精锐 83 个 → 兵装 10 件、残卷 +6）
     this.tentHints?.destroy();this.tentHints=null;this.battleHeal?.clear();this.battleHeal=new BattleHeal({block:(b,on)=>this.blockBoxes(b,on),scene:this,player:()=>this.player,enemies:()=>this.enemies,elapsed:()=>this.elapsed,now:()=>this.combatNow,place:(x,y)=>this.fieldPlace(x,y),dropPotion:(x,y,a,n,f)=>this.supplies?.dropPotion(x,y,a,n,f)??false,overlay:()=>this.mode!=='none'||this.over,sfx:k=>this.sfx.play(k),notice:t=>this.showGrowthNotice(t),moveDir:()=>this.moveDir,potionAt:(x,y)=>!!this.supplies?.potions.some(q=>q.active&&Math.hypot(q.image.x-x,q.image.y-y)<12)});if(this.supplies)this.supplies.landing=(x,y)=>this.battleHeal?.landing(x,y)??{x,y,moved:false};this.battleHeal.setPlan(this.phasePlan);this.events.once('shutdown',()=>{this.battleHeal?.clear();this.battleHeal=null;});
     this.relics=new BossRelics({scene:this,player:this.player,enemies:()=>this.enemies,hit:(e,d,now)=>{this.hitEnemy(e,d,now,'melee',false,false);},notice:t=>this.showGrowthNotice(t)},this.player.growth.gear.specials,this.combatNow);
     this.syncRelicShips();
@@ -1017,6 +1020,10 @@ export class GameScene extends Phaser.Scene {
     // 信物库（2026-11-17）：穿着的信物开局生效（属性、套装、机制类注入构筑宝物）
     this.charmInfo=applyCharms(this.player,wornTokens(this.runConfig.character));
     this.campaignLoaded = !!carriedState && !chained;
+    // 出征前整军（总制作人试玩 + 测试组 honest-journey：重进本关 0 兵开局，攒着上千随军粮却没有行营可花）：从存档点开打的主线关先进行营再出征
+    this.preCampDue = this.campaignLoaded && !this.campaignReplay && this.worldCampaign && !isChapterTestRun() && mechOpen('squad'); this.preCampArmed = false; this.preCamp = false;
+    // 篇章没有关前剧情（没调 setupStory 带章节 id）时：开打第一帧直接进整军
+    if (this.preCampDue) this.events.once(Phaser.Scenes.Events.UPDATE, () => { if (this.preCampDue && !this.preCampArmed && !this.over) { this.preCampDue = false; this.openPreCamp(() => {}); } });
     this.applyHeroLevel(!!carriedState);
     this.syncHeroLevel();
     if(carriedState)applyCarriedHp(carriedState,this.player,this.followers); // 2026-11-18 用户：前一关受的伤带到下一关（主将按比例、名将随从同样；部曲在 Legion 存档里本来就带血量）
@@ -1089,19 +1096,23 @@ export class GameScene extends Phaser.Scene {
     this.buildOverlays();
     if(preview&&encounter==='sishui'&&!this.customChapter())this.add.image(48,180,'huaxiong_portrait').setDisplaySize(42,42).setScrollFactor(0).setDepth(901);
     this.legionUI = new LegionUI(this, () => { if (this.mode === 'none' && !this.over) this.legion.cycleOrder(); }, (kind, train) => this.buyTroops(kind, train), () => {
-      if (this.mode === 'rest') this.continueCampaign();
+      if (this.mode === 'rest') this.departRest();
       else if (this.mode === 'recruit') { this.recruitedWaves.add(this.waveIndex); this.freeRecruit = false; this.resumePendingChoices(); }
     }, () => this.takeRecruitPotion(), () => canOfferRejuvenation(this.player));
-    this.campUI=new CampRestUI(this,this.player,this.legion,()=>this.continueCampaign());
+    this.campUI=new CampRestUI(this,this.player,this.legion,()=>this.departRest());
     // 行营休整在本关结算之后：买下的兵装直接收入行囊（2026-11-18 用户报「休整买的装备背包没显示」——原先推进已结算的 runLoot，背包看不到、下一关重建时还会丢）。测试 / 调试战斗同结算规则不入行囊。
-    this.campUI.onBuyItem=item=>{const debug=this.lootBlocked();if(this.over&&!debug)addItems([item]);else this.itemDrops?.runLoot.push(item);};
+    this.campUI.onBuyItem=item=>{const debug=this.lootDebug();if((this.over||this.preCamp)&&!debug)addItems([item]); /* 整军页（还没开打）买的也直接入行囊，不算本局缴获（败退会丢一半） */else this.itemDrops?.runLoot.push(item);};
     // 军医（2026-11-18）：按章定价；治疗后把存档里的征程构筑血量也改掉（存档点是打赢那一刻存的，治疗在之后；重打旧关不存档也不改）
     this.campUI.chapterNo=medicChapter(this.scene.key,this.chapter.id,worldMedicChapter());
     // 重整构筑：退回与每次重选后都把存档点改成当前构筑（含待补选次数），关页面再进不会多出或少掉强化；重打旧关 / 测试战斗不写
-    this.campUI.onRespecSave=()=>{if(this.campaignReplay||isChapterTestRun()||this.debugModified||this.debugJumped||this.player.damageImmune)return;saveCampaignBuild(this.runConfig.character,packCampaign(this.runConfig.character,this.player,this.legion,this.followers));};
-    this.campUI.onLearnTactic=()=>{if(this.campaignReplay)return;patchCampaignBuild(this.runConfig.character,this.player.growth.build.snapshot(),this.legion.food);};
-    this.campUI.onHealed=()=>{if(this.campaignReplay)return;const fh:Record<string,number>={};for(const m of this.followers?.members??[])fh[m.recruit.id]=m.downed?0:m.hp/Math.max(1,m.maxHp);patchCampaignHp(this.runConfig.character,this.player.hp/Math.max(1,this.player.maxHp),fh);};
+    this.campUI.onRespecSave=()=>this.saveRestPoint();
+    this.campUI.onLearnTactic=()=>this.saveRestPoint();
+    this.campUI.onHealed=()=>this.saveRestPoint();
     this.campUI.onOpenBag=()=>this.openBattleBag(true);
+    // 行营存档点（总制作人第一章试玩 r3：行营招的兵 / 花的粮阵亡续打全丢）：每次重绘（招兵、治疗、买卖、学战法、重整之后）把整份征程构筑写回存档点
+    this.campUI.onChanged=()=>this.saveRestPoint();
+    this.campUI.pointsHint=()=>this.pointsHint();
+    this.campUI.gearUpgrades=()=>mechShown('gear')?gearUpgrades(this.runConfig.character,this.itemDrops?.runLoot??[]).length:0;
     // 从营寨 / 天下地图出征的战役：关与关之间的休整可直接回营寨（本场奖励已在胜利时入库）
     if(this.worldCampaign&&worldUnlocked())this.campUI.onReturnHome=()=>{this.resting=false;this.registry.remove('campaignTransfer');this.scene.start('CityScene');};
     this.reinforcements = new Reinforcements(this, this.runConfig.character, this.player, id => {
@@ -1145,7 +1156,8 @@ export class GameScene extends Phaser.Scene {
       for (const m of this.followers?.members ?? []) if (m.recruit.hero) m.weaponDamageMul *= this.storyDir.bondDamageMul(m.recruit.hero);
       const cd = this.storyDir.bondCooldownMul(lord); if (cd !== 1) this.player.stats.cooldownMul *= cd; // 羁绊「卧龙凤雏」冷却
       for (const m of this.followers?.members ?? []) if (m.recruit.hero) m.weaponCooldownMul *= this.storyDir.bondCooldownMul(m.recruit.hero); }
-    this.storyDir.beginStage(done);
+    if (chapterId && this.preCampDue) { this.preCampArmed = true; this.storyDir.beginStage(() => { if (!this.preCampDue || this.over) { done(); return; } this.preCampDue = false; this.openPreCamp(done); }); }
+    else this.storyDir.beginStage(done);
   }
   /** 剧情用的当前首领 id（一关先后两位首领时子类覆盖，如 6-3 黄忠 → 韩玄）；默认不区分。 */
   protected storyBossId(): string | undefined { return undefined; }
@@ -2850,7 +2862,7 @@ export class GameScene extends Phaser.Scene {
     if (grant.food) this.legion.onKill(enemy); // 首领阶段超额：随军粮 0
     if (grant.drops) this.itemDrops?.onKill(enemy); // 超额：不掉兵装、不掉残卷
     if(kind==='elite')this.battleHeal?.onEliteDown(enemy.x,enemy.y); // 精锐：概率掉军中伤药（保底）
-    if(enemy.kind==='boss')this.runMerit.boss++;else if(enemy.kind==='elite'&&grant.merit)this.runMerit.elite++; // 战功：精英 / 首领（首领阶段超额的精锐不计）
+    if(enemy.kind==='boss')this.runMerit.boss++;else if(enemy.kind==='elite'&&grant.merit&&this.runMerit.elite<BATTLE_LOOT_CAP[this.battleCapKind()].merit)this.runMerit.elite++; // 战功：精英 / 首领（首领阶段超额的精锐不计）
     this.relics?.onKill();
     if(this.player.growth.gear.specials.includes('bloodthirst')&&this.combatNow>=this.player.growth.killHealAt){this.player.growth.killHealAt=this.combatNow+500;this.player.heal(this.player.maxHp*.01);}
     const jade=this.player.growth.charmLegend.army_jade;if(jade!==undefined&&this.combatNow>=this.relicHealAt){const k=CHARM_LEGEND.charm_army_jade.heal[jade];this.relicHealAt=this.combatNow+1000;this.player.heal(k);this.artEffects.show(5,this.player.x,this.player.y-12,35,this.combatNow,260);for(const u of this.allies.filter(u=>u.active&&u.hp<u.maxHp).slice(0,2)){u.hp=Math.min(u.maxHp,u.hp+2*k);this.artEffects.show(5,u.x,u.y-10,30,this.combatNow,260);}}
@@ -3305,6 +3317,7 @@ export class GameScene extends Phaser.Scene {
     if (mode === 'result' && this.victory) window.setTimeout(() => { if (this.scene.isActive() && this.mode === 'result') checkHeroJoins(this); }, 700);
     if (mode === 'rest') commitBattle(); // 关卡告捷进行营：本场所得生效
     if (mode === 'rest' && !this.restIntroPlayed) { this.restIntroPlayed = true; this.playRestIntro(); }
+    if (mode === 'rest') this.pointsGuide(); // 属性点：第一次能加时引导一次
   }
 
   protected openUpgrade(): void {
@@ -3731,6 +3744,53 @@ export class GameScene extends Phaser.Scene {
     this.resumePendingChoices();
   }
 
+  /**
+   * 行营存档点（总制作人第一章试玩 r3：1-1 后行营招兵 6 人（随军粮 495→432）出征 1-2，阵亡后续打兵粮回到打赢那一刻、兵力 0）。
+   * 规则：打赢一关（主线首次）存一次；之后在行营里招兵、治疗、买卖、学战法、重整构筑，每一步都把当前整份征程构筑写回存档点，率军出征时再写一次。
+   * 所以阵亡后续打 / 再战 = 从最近一次出征那一刻开打（兵、粮、军医治疗都在），不用再进行营。重打旧关 / 测试战斗不写。
+   */
+  /** 出征前整军：本场是否从存档点开打、该先进行营（create 定）；剧情钩子是否已接上；正在整军。 */
+  protected preCampDue = false; private preCampArmed = false; preCamp = false; private preCampAfter: (() => void) | null = null;
+  /**
+   * 出征前整军（行营）：从存档点开打的主线关（战败后「再战此关」、主页「继续征程」、天下地图出征各章第一关）先进行营——
+   * 招兵、军医、军需商人、布阵都能用，花费随时写回存档点（saveRestPoint），点「率军出征」才开战。
+   * 部曲按存档点恢复：存档点 = 最近一次出征那一刻的编制（行营每一步都写回），天下开启后战败另按 DEFEAT.troopLoss 折损（patchCampaignDefeat）。
+   */
+  protected openPreCamp(after: () => void): void {
+    this.preCamp = true; this.preCampAfter = after; this.resting = true; this.pendingRecruit = false; this.freeRecruit = false;
+    if (this.campUI) this.campUI.preBattle = this.chapter.name;
+    this.restIntroPlayed = true; // 入营水墨过场写的是「某关 · 平定 · 捷」，整军时还没打，不播（出征时复位，打赢进行营照播）
+    this.renderRecruit(); this.setMode('rest'); // 同打赢进行营：renderRecruit 只开页面，模式要另外切（战斗冻结、营中闲话）
+  }
+  /** 行营「率军出征」：整军页 → 开战（本关不变）；打赢后的行营 → 下一关（continueCampaign）。 */
+  protected departRest(): void {
+    if (!this.preCamp) { this.continueCampaign(); return; }
+    if (!this.resting || this.mode !== 'rest') return;
+    this.saveRestPoint(); // 存档点 = 出征那一刻
+    this.preCamp = false; this.resting = false; this.restIntroPlayed = false; if (this.campUI) this.campUI.preBattle = undefined;
+    this.setMode('none');
+    commitBattle(); beginBattle(this.scene.key); // 整军里的花费已写进存档点，不随中途退出回滚；从这里起才算「进行中的战斗」
+    const after = this.preCampAfter; this.preCampAfter = null; after?.();
+  }
+  /** 属性点提醒（data/pointsHint.ts）：主将还有几点没加、去哪加；都还加不了返回 null。 */
+  protected pointsHint(): { n: number; where: string } | null { return pointsHint(heroFreePoints(this.runConfig.character as HeroKey), { world: worldUnlocked(), battle: mechOpen('attributes') }); }
+  /** 第一次能加点时引导一次（行营 / 整军页打开、结算时查）。 */
+  protected pointsGuide(): void {
+    const h = this.pointsHint(); if (!h || isChapterTestRun()) return;
+    try { if (localStorage.getItem(POINTS_GUIDE_KEY) === '1') return; localStorage.setItem(POINTS_GUIDE_KEY, '1'); } catch { return; }
+    showBarkCard(this, { side: 'left', name: '新玩法 · 属性点', text: pointsGuideText(h) });
+  }
+  /**
+   * 兵装入库按测试战斗算吗：测试 / 调试战斗、网址 ?encounter= 预览。原来还算上 runConfig.encounter——可第三～十二章、攻城、守城、军情都把它设成 'qunxiong'（只表示「篇章式战斗」），
+   * 于是这些仗的缴获、行营军需商人买的兵装全显示「测试战斗不入行囊」并丢掉（new-content-intel.md 11-15 发现，没人改；总制作人第二轮第 8 条「行营买的兵装有没有丢」一并修）。
+   */
+  protected lootDebug(): boolean { return isChapterTestRun() || this.debugModified || this.debugJumped || !!this.player.damageImmune || this.encounterPreview; }
+  /** 单场收益上限按哪一档（data/battleLootCap.ts）；攻城 / 守城场景覆盖。 */
+  protected battleCapKind(): BattleCapKind { return 'stage'; }
+  protected saveRestPoint(): void {
+    if (!this.resting || this.mode !== 'rest' || this.campaignReplay || isChapterTestRun() || this.debugModified || this.debugJumped || this.player.damageImmune) return;
+    saveCampaignBuild(this.runConfig.character, packCampaign(this.runConfig.character, this.player, this.legion, this.followers));
+  }
   protected continueCampaign(): void {
     if (!this.resting || this.mode !== 'rest' || this.children.getByName('chapter1-volunteers')) return;
     const west=this.chapter.id==='hulao';
@@ -3741,6 +3801,7 @@ export class GameScene extends Phaser.Scene {
     const transfer=packCampaign(this.runConfig.character,this.player,this.legion,this.followers);transfer.chapter=chapter;transfer.stage=chapter==='huangjin'?next:undefined;
     this.registry.set('campaignTransfer',transfer);
     this.registry.set('runConfig',{...this.runConfig,chapter,stage:chapter==='huangjin'?next:undefined,westStage:chapter==='hulao'?next:undefined});
+    this.saveRestPoint(); // 率军出征：存档点 = 出征那一刻
     this.resting = false; this.scene.restart();
   }
 
@@ -4434,14 +4495,15 @@ export class GameScene extends Phaser.Scene {
     return (!debug || !!(globalThis as Record<string, unknown>).__IM_DEFEAT_LIVE) && !this.encounterPreview && worldUnlocked();
   }
   /** 战败：惩罚（存档点主将 / 随行负伤、部曲折损，营寨军粮）、撤回目标、慢动作压暗 + 对话卡、结算面板晚出、按钮改「退守 X」。 */
-  protected runDefeatFlow(): void {
+  /** reason：只有主将阵亡（death）才「主将 / 随行负伤、部曲折损」；守城府衙失守（keep）、超时撤军（timeout）主将还活着，只按各自规则（守城：城池被围；营寨军粮照扣）。 */
+  protected runDefeatFlow(reason: RunEndReason = 'death'): void {
     const key = this.hardKey(), stage = this.hardStage(), city = this.scene.key === 'SiegeGameScene' ? String(this.registry.get('siegeCity') ?? '') : null;
     // 守城战败：退到最近的「另一座」我方城池或营寨（原来退回刚没守住、仍在告急的那座城本身）
     const defending = !!city && (this.registry.get('siegeMode') === 'defense' || this.registry.get('siegeMode') === 'intercept');
     this.defeatRetreat = worldUnlocked() && !this.encounterPreview ? retreatTarget(battlePoint(key, city), defending ? city : null) : null;
     const notes: string[] = [];
     if (this.defeatLive()) {
-      const fids = (this.followers?.members ?? []).map(m => m.recruit.id), camp = patchCampaignDefeat(this.runConfig.character, { hpFrac: DEFEAT.hpFrac, followerFrac: DEFEAT.followerFrac, troopLoss: DEFEAT.troopLoss, followerIds: fids });
+      const fids = (this.followers?.members ?? []).map(m => m.recruit.id), camp = reason !== 'death' ? null : patchCampaignDefeat(this.runConfig.character, { hpFrac: DEFEAT.hpFrac, followerFrac: DEFEAT.followerFrac, troopLoss: DEFEAT.troopLoss, followerIds: fids });
       if (camp) { notes.push('主将负伤 · 下次出征生命 ' + Math.round(DEFEAT.hpFrac * 100) + '%（军医可治）'); if (fids.length) notes.push('随行负伤 · 生命 ' + Math.round(DEFEAT.followerFrac * 100) + '%'); if (camp.troops) notes.push('部曲折损 ' + camp.troops + ' 人'); }
       const g = loseProvisionsPct(DEFEAT.grainPct, DEFEAT.grainCap); if (g) notes.push('营寨军粮 −' + g);
     }
@@ -4532,7 +4594,7 @@ export class GameScene extends Phaser.Scene {
     if ((this.over && !atRest) || this.children.getByName('item-bag')) return;
     const fromPlay = this.mode === 'none';
     if (fromPlay) this.togglePause();
-    const debug = this.lootBlocked();
+    const debug = this.lootDebug();
     new ItemBagUI(this, {
       hero: this.runConfig.character, battle: true, atRest, runLoot: this.over ? [] : this.itemDrops?.runLoot ?? [],
       // 已结算时缴获都收进行囊了，不再单列「本局缴获」
@@ -4594,12 +4656,16 @@ export class GameScene extends Phaser.Scene {
         row('随军粮', String(this.legion.food)), // 11-21 用户试玩：资源数字从 1-1 起就要看得到
         ...(mechOpen('squad') ? [row('部曲战损', `${this.legion.count}存活 / ${this.legion.dead}阵亡`)] : []),
         row(this.chapter.bossName, stats.bossKilled ? '已击败' : '未击败'),
-        row('结局', victory ? '讨伐成功' : reason === 'timeout' ? '超时' : '阵亡'),
+        row('结局', victory ? '讨伐成功' : reason === 'timeout' ? '超时' : reason === 'keep' ? '府衙失守' : '阵亡'),
       ].join('\n'),
     );
     // 兵装缴获：胜利或坚持 60 秒带回全部，速败只带回一半；测试 / 调试战斗不入行囊
-    {const loot=this.itemDrops?.runLoot??[],debug=this.lootBlocked(),dep=depositRunLoot(loot,{victory,elapsed:victory?this.elapsed:0,debug,pity:this.itemDrops?.pity}); /* 战败（data/defeatFlow.ts）：只带回一半，品质高的留下 */
+    {const loot=this.itemDrops?.runLoot??[],debug=this.lootDebug(),dep=depositRunLoot(loot,{victory,elapsed:victory?this.elapsed:0,debug,pity:this.itemDrops?.pity}); /* 战败（data/defeatFlow.ts）：只带回一半，品质高的留下 */
      if(loot.length)this.resultTexts.body.setText(this.resultTexts.body.text+'\n缴获兵装  '+loot.length+' 件（'+this.itemDrops!.summary()+'）'+(debug?' · 测试战斗不入行囊':dep.lost?' · 败退遗失 '+dep.lost+' 件':' · 已收入行囊'));}
+    // 结算：属性点没加 → 写一行（第一次能加时另弹引导卡）
+    if(!(isChapterTestRun()||this.debugModified||this.debugJumped||this.player.damageImmune)){const ph=this.pointsHint();if(ph){this.resultTexts.body.setText(this.resultTexts.body.text+'\n属性点  '+ph.n+' 点未加 · 去'+ph.where+'加点');this.pointsGuide();}}
+    // 结算：行囊里有比身上好的兵装没穿 → 写一行（行营「行囊」按钮另有小红点）
+    if(victory&&mechShown('gear')&&!(isChapterTestRun()||this.debugModified||this.debugJumped||this.player.damageImmune)){const n=gearUpgrades(this.runConfig.character).length;if(n)this.resultTexts.body.setText(this.resultTexts.body.text+'\n兵装  行囊里有 '+n+' 件更好的兵装没穿 · 点「行囊」→「一键穿戴」');}
     if(this.worldCampaign){const reward=settleExpedition(this.expeditionId,{...stats,kills:Math.max(0,stats.kills-this.settledFrontlineKills),chapter:this.chapter.id,returned:this.allies.filter(a=>a.active&&a.reserveSoldier).map(a=>a.kind),debug:isChapterTestRun()||this.debugModified||this.debugJumped||this.player.damageImmune});
       this.resultTexts.body.setFontSize(IS_DESKTOP?14:16).setLineSpacing(IS_DESKTOP?5:8).setText(this.resultTexts.body.text+`\n永久奖励  军粮 +${reward.provisions}`+cityIncomeLine(reward));
       // 败走副标题说人话（2026-11-21 总制作人：第一次失败就写「未超过本章失败最佳成绩，无新增奖励」看不懂）
@@ -4631,7 +4697,10 @@ export class GameScene extends Phaser.Scene {
     // 马厩：各章首领首次击杀赠马（第一章通关送驽马由 ItemStore 读档时补发）
     {const key=victory&&this.bossKilled&&!(isChapterTestRun()||this.debugModified||this.debugJumped||this.player.damageImmune)?this.stableRewardKey():null,horse=key&&!(key==='huangjin-3'&&this.merchantStoryDue())?horseForReward(key):undefined; // 第一章首通：驽马改由告捷后的献马剧情送出
      if(horse&&grantHorse(horse.id))this.resultTexts.body.setText(this.resultTexts.body.text+'\n获得坐骑  '+horse.name+' · 已入马厩（休整时可换马）');}
-    const nextWest=victory&&this.worldCampaign&&!this.runConfig.encounter&&((this.chapter.id==='huangjin'&&this.chapter.stage===3)?1:(this.chapter.id==='hulao'&&(this.chapter.westStage??3)<3)?(this.chapter.westStage??1)+1:0);
+    // 第一章章末（总制作人第一章试玩 r3：打完张角直接进行营、按钮「下一关 · 汜水关」）：天下地图已开（正常主线都会开）就不进行营、不直赴汜水关，
+    // 结算 →「黄巾平定 · 展开天下地图」→ 告捷卷 → 献马（首次）→ 天下地图（mechanic-rollout.md 13b、chapter1-redesign.md 章末）。地图没开（测试 / 调试战斗）仍走旧流程。
+    const ch1Map=victory&&this.worldCampaign&&!this.runConfig.encounter&&this.chapter.id==='huangjin'&&this.chapter.stage===3&&worldUnlocked();this.ch1MapEnd=ch1Map;
+    const nextWest=victory&&this.worldCampaign&&!this.runConfig.encounter&&((this.chapter.id==='huangjin'&&this.chapter.stage===3)?(ch1Map?0:1):(this.chapter.id==='hulao'&&(this.chapter.westStage??3)<3)?(this.chapter.westStage??1)+1:0);
     const canAdvance=!!nextWest&&dongzhuoStageUnlocked(nextWest);
     const openedMap=victory&&this.worldCampaign&&this.chapter.id==='hulao'&&(this.chapter.westStage??3)===3&&worldUnlocked();
     const homeLink=this.resultPanel.getByName('result-home') as Phaser.GameObjects.Text|null;
@@ -4640,15 +4709,16 @@ export class GameScene extends Phaser.Scene {
     {const again=victory&&(REPLAY_CLEARED||isChapterTestRun());/* 打过的关不能再打（data/replayRules.ts） */this.resultPanel.getByName('result-restart')?.setActive(again);(this.resultPanel.getByName('result-restart') as Phaser.GameObjects.Image)?.setVisible(again);(this.resultPanel.getByName('result-restart-text') as Phaser.GameObjects.Text)?.setVisible(again);
      if(retry){this.resultPanel.getByName('result-restart')?.setActive(true);(this.resultPanel.getByName('result-restart') as Phaser.GameObjects.Image)?.setVisible(true);(this.resultPanel.getByName('result-restart-text') as Phaser.GameObjects.Text)?.setVisible(true).setText('返回主菜单');}}
     const retryNames=():void=>{if(!retry)return;const R=this.resultPanel,img=R.list.find(o=>o.type==='Image'&&(o.name==='result-restart'||o.name==='result-home')),cap=R.list.find(o=>o.type==='Text'&&(o.name==='result-home'||o.name==='result-restart')&&(o as Phaser.GameObjects.Text).text==='再战此关');img?.setName('result-home');R.list.find(o=>o.name==='result-restart-text')?.setName('result-home-text');cap?.setName('result-restart');};
-    homeLink?.setText(!victory?(retry?'再战此关':'返回主菜单'):canAdvance?`下一关 · ${nextWest===1?'汜水关':nextWest===2?'荥阳':'虎牢关'}`:openedMap?(openChapterCount(loadWorldState())>loadWorldState().chapterSeen?'天下地图 · 新篇解锁':'返回天下地图'):this.worldCampaign&&worldUnlocked()?"返回营寨":'返回选关');
+    homeLink?.setText(!victory?(retry?'再战此关':'返回主菜单'):ch1Map?'黄巾平定 · 展开天下地图':canAdvance?`下一关 · ${nextWest===1?'汜水关':nextWest===2?'荥阳':'虎牢关'}`:openedMap?(openChapterCount(loadWorldState())>loadWorldState().chapterSeen?'天下地图 · 新篇解锁':'返回天下地图'):this.worldCampaign&&worldUnlocked()?"返回营寨":'返回选关');
     homeLink?.removeAllListeners('pointerdown').on('pointerdown',()=>{
-      if(!victory){if(retry){this.retryStage();return;}this.registry.remove('campaignTransfer');this.registry.remove('menuChapterPicker');this.scene.start('MenuScene');return;}
+      if(!victory){this.registry.remove('campaignTransfer');this.registry.remove('menuChapterPicker');if(retry)this.registry.set('autoCampaignEntry',true);this.scene.start('MenuScene');return;}
+      if(ch1Map){this.showChapter1End();return;}
       if(canAdvance){this.registry.remove('campaignTransfer');const {encounter:_preview,...config}=this.runConfig;this.registry.set('runConfig',{...config,chapter:'hulao',stage:undefined,westStage:nextWest});this.scene.restart();return;}
       if(this.worldCampaign&&worldUnlocked())this.scene.start(openedMap||this.registry.get('worldReveal')?'WorldMapScene':'CityScene');
       else {this.registry.set('menuChapterPicker',true);this.scene.start('MenuScene');}
     });
     mechRefresh();
-    if (!victory) this.runDefeatFlow();
+    if (!victory) this.runDefeatFlow(reason);
     this.layoutResultButtons?.(); retryNames();
     // 电脑版结算展示：子类 finish 还会追加结算文字，等本轮调用结束再解析
     if (IS_DESKTOP) queueMicrotask(() => { if (this.sys?.isActive() && this.mode === 'result') this.presentResult(victory); });
@@ -4659,7 +4729,7 @@ export class GameScene extends Phaser.Scene {
     // 乱世难度首通（该章第三关击败首领）：一次性军粮与称号
     if(victory&&this.hardMode&&this.bossKilled&&this.hardStage()===3&&!isChapterTestRun()&&!this.debugModified&&!this.debugJumped&&!this.player.damageImmune){const key=this.hardKey() as TimelineChapterId;if(recordHardClear(key,HARD_MODE.reward))this.resultTexts.body.setText(this.resultTexts.body.text+`
 乱世首通 · 称号「${HARD_TITLES[key]}」 · 军粮 +${rewardGrain(HARD_MODE.reward.merits,HARD_MODE.reward.provisions)}`);}
-    if (victory && !this.runConfig.encounter && (this.chapter.id==='huangjin'||(this.chapter.westStage??3)<3)) {
+    if (victory && !this.runConfig.encounter && !this.ch1MapEnd && (this.chapter.id==='huangjin'||(this.chapter.westStage??3)<3)) {
       this.showRestSummary();
       this.cameras.main.flashEffect.reset(); this.cameras.main.shakeEffect.reset();
       this.pendingRecruit = false; this.pendingLevels = 0; this.freeRecruit = false; this.resting = true;
@@ -4680,6 +4750,17 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
+  /** 第一章章末走天下地图（不进行营）：本场结算时定（测试读）。 */
+  ch1MapEnd = false;
+  /** 第一章章末告捷卷：结算后点「黄巾平定 · 展开天下地图」→ 告捷卷 → 献马（首次）→ 天下地图。 */
+  protected showChapter1End(): void {
+    if (this.children.getByName('chapter1-volunteers')) return;
+    const notice: Phaser.GameObjects.Container = chapterVictoryNotice(this, GAME_WIDTH, GAME_HEIGHT, IS_DESKTOP, { name: 'chapter1-volunteers', confirmName: 'volunteers-confirm',
+      kicker: '第一章 · 黄巾之乱 告捷', title: '黄巾平定 · 天下地图开启',
+      lines: ['将军威名远扬，四方义士前来投靠。', '天下大势初现：营寨已立，于地图上按史事逐章出征。'],
+      route: ['黄巾告捷', '天下地图', '讨伐董卓'], confirm: '确认 · 展开天下地图', background: 'rest_camp',
+      onConfirm: () => { notice.destroy(); if (this.merchantStoryDue()) { this.showMerchantHorseStory(() => this.showChapter1MapAfterStory()); return; } this.showChapter1MapAfterStory(); } });
+  }
   /** 第一章首次通关剧情是否该播：本场开打时还没有驽马、剧情没看过、不是调试 / 测试战斗。 */
   protected merchantStoryDue(): boolean { return !this.hadStarterHorse && !merchantStorySeen() && !(isChapterTestRun() || this.debugModified || this.debugJumped || this.player.damageImmune); }
   /** 「中山商旅 · 献马」：张世平、苏双献驽马，马厩开放（只送一次；读档补发驽马的兜底仍在 ItemStore）。 */

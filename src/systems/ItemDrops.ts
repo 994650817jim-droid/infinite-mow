@@ -29,6 +29,8 @@ export class ItemDrops {
   readonly pity: PityState = loadPity();
   /** 武将谱：本局获得的武学残卷（首领 3、精锐 5% 掉 1、宝箱 20% 掉 1；结算时收入，测试战斗不收）。 */
   scrolls = 0;
+  /** 单场收益上限（data/battleLootCap.ts）：精锐掉的残卷、非首领的兵装掉落；GameScene 开局按场景设。 */
+  cap = { scrolls: Infinity, drops: Infinity }; private capped = { scrolls: 0, drops: 0 };
   /** 首领遗珍改由「首领宝箱」发放时设为 true：击杀首领不再自动发，由宝箱拾取时调用 claimBossRelic()。 */
   deferBossRelic = false;
 
@@ -46,7 +48,7 @@ export class ItemDrops {
 
   onKill(enemy: KilledEnemy): void {
     if (enemy.kind === 'boss') this.gainScrolls(SCROLL.boss);
-    else if (enemy.kind === 'elite' && this.rng() < SCROLL.eliteChance) this.gainScrolls(1);
+    else if (enemy.kind === 'elite' && this.capped.scrolls < this.cap.scrolls && this.rng() < SCROLL.eliteChance) { this.capped.scrolls++; this.gainScrolls(1); }
     if (!mechOpen('gear')) return; // 玩法逐章解锁：行囊 / 兵装 1-1 开放（11-20 用户「第一章就可以开发背包」）
     if (enemy.kind === 'boss') {
       const n = this.finalBoss() ? 2 : 1;
@@ -56,7 +58,9 @@ export class ItemDrops {
     }
     const elite = enemy.kind === 'elite';
     if (!mechOpen('merchant')) return; // 第一章只有首领掉兵装；杂兵 / 精英掉兵装随军需商人（第二章）开放，多余的有地方卖
+    if (this.capped.drops >= this.cap.drops) return; // 单场上限
     if (this.rng() >= DROP_CHANCE[elite ? 'elite' : 'normal']) return;
+    this.capped.drops++;
     this.drop(rollItem(rollDropQuality(elite ? 'elite' : 'normal', this.tier, this.pity, this.rng), this.rng, undefined, this.chapter), enemy.x, enemy.y);
   }
 

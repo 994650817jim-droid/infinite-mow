@@ -32,12 +32,22 @@ export const DEFENSE = {
   logs: { charges: 2, cdMs: 6000, reach: 70, band: 150, damage: 160, rollMs: 1100 },
   oil: { charges: 2, cdMs: 8000, reach: 70, radius: 130, tickMs: 400, ticks: 10, damage: 22, engineMul: 4 },
   /** 喘息时布防（花随军粮）：修城门 +repair、补设施各 +1 次、补一名城头弓手；站在门内读条 channelMs 免费修 +freeRepair（每次喘息一回）。 */
-  prep: { repairCost: 30, repair: .3, refillCost: 20, archerCost: 25, channelMs: 3000, freeRepair: .15, freeReach: 90 },
+  // 价格（总制作人第四轮：原 20～30 粮、守完还剩 4344 粮，等于免费）= 底价 ×(1 + chapterStep ×(章 − 2)) ×(1 + waveStep × 第几次喘息)，同一次喘息里同一项再买 ×repeatMul^已买次数（prepCost）。初值，和平衡会话的随军粮减收一起调
+  prep: { repairCost: 120, repair: .3, refillCost: 80, archerCost: 100, chapterStep: .25, waveStep: .5, repeatMul: 1.6, channelMs: 3000, freeRepair: .15, freeReach: 90 },
   /** 攻城器械（中档起）：冲车每波 rams 辆，撞门每 ramMs 一下 ramDamage；云梯每波 ladders 架，立起后每 climbMs 爬上来一个兵。 */
   rams: { mid: 1, late: 2 } as Partial<Record<DefenseTier, number>>, ramHp: 600, ramSpeed: 26, ramMs: 1600, ramDamage: 90,
   ladders: { mid: 2, late: 3 } as Partial<Record<DefenseTier, number>>, ladderHp: 260, ladderWarnMs: 2000, climbMs: 3200,
   /** 奖励：守住按攻城奖励 × DEFENSE_RULES.rewardMul（data/defenseRules.ts）。 */
 } as const;
+
+/** 喘息布防价格：base 底价、chapter 章节（1–12）、wave 第几次喘息（0 起）、bought 这次喘息里这一项已买几次。 */
+export function prepCost(base: number, chapter: number, wave: number, bought: number): number {
+  const P = DEFENSE.prep;
+  return Math.round(base * (1 + P.chapterStep * Math.max(0, chapter - 2)) * (1 + P.waveStep * Math.max(0, wave)) * Math.pow(P.repeatMul, Math.max(0, bought)));
+}
+/** 第一次守城、第一次喘息时的引导（只一次）。 */
+export const DEFENSE_PREP_GUIDE_KEY = 'im_defense_prep_guide_v1';
+export function defensePrepGuide(gatePct: number): string { return '喘息只有 15 秒：城门还剩 ' + gatePct + '%——站到城门内读条免费修一点，或花随军粮「修城门」；滚木 / 热油、城头弓手也在这时补。不修城门，撑不过第三波。'; }
 
 /** 第 i 波（0 起）开始的关内秒数；末波开始 = 首领出场。 */
 export function defenseWaveStarts(n: number): number[] { const D = DEFENSE, out: number[] = []; for (let i = 0; i < n; i++) out.push(i * (D.attackSec + D.restSec)); return out; }

@@ -8,6 +8,7 @@ import { AFFIXES, BAG_CAPACITY, BAG_OVERFLOW, LEGACY_MOUNT_BASES, LEGACY_WEAPON_
 import { HORSES, STARTER_HORSE, horseDef, type HorseDef } from '../data/mounts';
 import { addTownMoney, worldChapterCleared } from '../world/WorldStore';
 import { chapterOneCleared } from './ChapterProgress';
+import { gearPlan } from '../data/gearAuto';
 
 /**
  * 行囊（局外持久）：存档键 im_items_v2，已加入 SaveSlots.PROGRESS_KEYS，随存档位切换。
@@ -228,13 +229,27 @@ export function loadPity(): PityState { return { ...loadItems().pity }; }
 
 export function addItems(items: ItemInstance[]): void { const s = loadItems(); addToBag(s, items); commit(s); }
 
-export function equipItem(hero: GearOwner, uid: string): boolean {
+/** 穿上；slot 指定穿到哪一位（一键穿戴给信物第二位用；须与道具的位相符），不指定按 equipTarget。 */
+export function equipItem(hero: GearOwner, uid: string, slot?: LoadoutKey): boolean {
   const s = loadItems(), item = s.bag.find(i => i.uid === uid); if (!item) return false;
   if (wornKey(hero, uid, s)) return true;
-  const target = equipTarget(hero, item, s);
+  const fits = slot && (slot === itemSlot(item) || (slot === 'token2' && itemSlot(item) === 'token' && tokenSlots() > 1));
+  const target = fits ? slot : equipTarget(hero, item, s);
   for (const slots of Object.values(s.loadouts)) if (slots) for (const slot of LOADOUT_KEYS) if (slots[slot] === uid) delete slots[slot];
   (s.loadouts[hero] ??= {})[target] = uid; commit(s); return true;
 }
+/**
+ * 一键穿戴 / 小红点（data/gearAuto.ts）：这位武将该换上的兵装。extra = 战斗中还没带回的缴获（runLoot），一并比较。
+ * 只挑没被任何武将穿着的；身上已是最好的返回空。
+ */
+export function gearUpgrades(hero: GearOwner, extra: readonly ItemInstance[] = [], s: ItemSave = loadItems()): Array<{ slot: LoadoutKey; item: ItemInstance }> {
+  const worn = new Set(Object.values(s.loadouts).flatMap(l => Object.values(l ?? {})));
+  return gearPlan(loadout(hero, s), [...s.bag.filter(i => !worn.has(i.uid)), ...extra.filter(valid)], tokenSlots());
+}
+/** 第一次缴获兵装后的行营引导（只一次）：看过没有。 */
+const GEAR_GUIDE_KEY = 'im_gear_guide_v1';
+export function gearGuideSeen(): boolean { try { return localStorage.getItem(GEAR_GUIDE_KEY) === '1'; } catch { return true; } }
+export function markGearGuideSeen(): void { try { localStorage.setItem(GEAR_GUIDE_KEY, '1'); } catch { /* 存储不可用 */ } }
 /** 战斗中穿上本局缴获：立刻收入行囊并穿上（算作已带回，败退不丢）。调用方负责把它从 runLoot 移除。 */
 export function claimRunLoot(hero: GearOwner, item: ItemInstance): boolean {
   if (!valid(item)) return false;

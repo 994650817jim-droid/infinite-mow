@@ -1,6 +1,7 @@
 import { getCharacter } from '../data/characters';
 import { storyScroll } from '../ui/StoryScroll';
 import { showBarkCard } from '../ui/StoryBarkCard';
+import type { BattleCapKind } from '../data/battleLootCap';
 import { storyWanted } from '../systems/Story';
 import { defenseBrief, defenseBossLine, DEFENSE_FIRST_KEY } from '../data/story/defense';
 import { DefenseBattle } from '../systems/DefenseBattle';
@@ -332,8 +333,9 @@ export function siegeGameSceneClass(Base: typeof GameScene) {
         hpScale: () => this.chapter.hpScale(this.elapsed),
         guardGate: p => { this.legion.formation.anchor = p; for (const u of this.legion.units) u.ai.nextThink = 0; },
         rampart: mul => { this.player.passive.rampartMul = mul; if (mul > 1) this.showWaveBanner('登城', false, `城头上武器范围 +${Math.round((mul - 1) * 100)}%`); },
-        win: () => { if (this.over) return; this.bossKilled = true; this.finish(true, 'boss'); }, lose: () => { if (!this.over) this.finish(false, 'death'); },
-      }, {tier: this.city.tier, dtier: this.defTier, office: lv.office ?? 1, muster: lv.muster ?? 0, start, wallLine: start.y + DEFENSE.wallY, gateX: start.x});
+        win: () => { if (this.over) return; this.bossKilled = true; this.finish(true, 'boss'); }, lose: () => { if (!this.over) this.finish(false, 'keep'); }, // 府衙失守（主将还活着）：不按阵亡结算
+        guide: t => showBarkCard(this, { side: 'left', name: '守城 · 喘息布防', text: t }),
+      }, {tier: this.city.tier, dtier: this.defTier, office: lv.office ?? 1, muster: lv.muster ?? 0, start, wallLine: start.y + DEFENSE.wallY, gateX: start.x, chapter: this.lootChapter()});
       this.events.once('shutdown', () => { this.defend?.clear(); this.defend = null; });
       this.defenseBrief();
     }
@@ -428,6 +430,7 @@ export function siegeGameSceneClass(Base: typeof GameScene) {
     /** 攻城：大将倒下后不立即结算，进入占领府衙阶段。 */
     protected finish(victory: boolean, reason: RunEndReason = 'death') {
       if (this.over) return;
+      this.defend?.closePrep(); // 结算时收掉喘息布防面板（主将阵亡 / 失守 / 守住）
       if (this.mid && victory && !this.captured) { if (this.mid.phase !== 'done') { this.setMode('none'); this.mid.plantFinalFlag(() => { this.captured = true; this.bossKilled = true; this.finish(true, 'boss'); }); } return; }
       if (!this.defense && victory && !this.captured) { this.setMode('none'); this.startCapture(); return; }
       super.finish(victory, reason);
@@ -451,6 +454,8 @@ export function siegeGameSceneClass(Base: typeof GameScene) {
       this.resultTexts.body.setText(this.resultTexts.body.text + '\n永久奖励 · 军粮 +' + reward.provisions + cityIncomeLine(reward) + captureLine(victory && this.bossKilled && !this.capturesBlocked() ? tryCapture('defense', factionGeneral(this.owner) ?? '', this.owner) : null) + (victory ? (this.intercept ? '' : `\n民心安定 · ${this.city.name}接下来 ${DEFENSE_RULES.moraleBattles} 战产粮 +${Math.round(DEFENSE_RULES.moraleMul * 100)}%`) : '\n城池尚在；若改去别处出征，此城将失守'));
       this.mapButtons(victory);
     }
+    /** 单场收益上限：守城 / 攻城各一档（data/battleLootCap.ts）。 */
+    protected battleCapKind(): BattleCapKind { return this.defense ? 'defense' : 'siege'; }
     /** 测试 / 调试战斗不触发招降（?roster=1 时测试照常）。 */
     private capturesBlocked() { return (this.test && new URLSearchParams(location.search).get('roster') !== '1') || this.debugModified || this.debugJumped || this.player.damageImmune;
     }

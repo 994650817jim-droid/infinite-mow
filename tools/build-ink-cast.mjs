@@ -2,6 +2,7 @@
 // 处理与 build-ink-scroll-assets.mjs 的武将立绘完全一致（与边缘连通的近白像素转透明并反算颜色、底部 14% 渐隐），
 // 人物按整列高度缩放到 900、水平居中，和 12 将立轴同比例（对白里取上 56%）。
 // 用法：SRC=public/assets/ink-cast/originals/sheet_a.png IDS=jiaxu,wangyun,lijue node tools/build-ink-cast.mjs
+//   PAPER=170：额外把「低饱和 + 亮度高于 170」的灰白飞溅按亮度淡出（170→210 渐变为透明），去掉暗底上发脏的宣纸残留（Bing 立绘用）。
 //   PAD（默认 .14）：每格向两侧多裁的比例；两人在底部云雾里连在一起、邻居衣角混进来时设 PAD=0（只裁本格）。
 //   MINBLOB（默认 .01）：离人物较远、小于最大墨块这个比例的零碎墨块丢掉；画面分格底色不一留下灰块时调大（如 .06）。
 //   KEEP=x0,y0,x1,y1（源图像素）：这块里只有近纯白才算背景（浅色钢刃、白袍不被抠掉），如张梁的刀：KEEP=930,740,1180,960
@@ -12,7 +13,7 @@ const { SRC } = process.env, IDS = (process.env.IDS ?? '').split(',').filter(Boo
 if (!SRC || !IDS.length) { console.error('需要 SRC 与 IDS'); process.exit(2); }
 fs.mkdirSync(OUT, { recursive: true });
 const b = await chromium.launch({ channel: 'chrome', headless: true }); const p = await b.newPage();
-const res = await p.evaluate(async ([src, N, PAD, MINBLOB, KEEP, TIGHT]) => {
+const res = await p.evaluate(async ([src, N, PAD, MINBLOB, KEEP, TIGHT, PAPER]) => {
   const im = new Image(); im.src = src; await im.decode();
   const W = im.width, H = im.height, c0 = document.createElement('canvas'); c0.width = W; c0.height = H;
   const g0 = c0.getContext('2d', { willReadFrequently: true }); g0.drawImage(im, 0, 0);
@@ -54,6 +55,7 @@ const res = await p.evaluate(async ([src, N, PAD, MINBLOB, KEEP, TIGHT]) => {
       if (bg[j] === 2 || (bg[j] && !near[j])) a = 0;
       else if (bg[j]) a = TIGHT ? Math.max(0, Math.min(1, (light(i) - 30) / 16)) : Math.max(0, Math.min(1, (light(i) - 6) / 42));
       else if (light(i) < 18) a = Math.max(.15, Math.min(1, (light(i) - 3) / 15));
+      if (PAPER && a > 0) { const mn = Math.min(d[i], d[i + 1], d[i + 2]), sat = Math.max(d[i], d[i + 1], d[i + 2]) - mn; if (sat < 26 && mn > PAPER) a *= Math.max(0, 1 - (mn - PAPER) / 40); } // 去宣纸底的灰白飞溅：低饱和 + 高亮度的像素按亮度衰减
       const fy = y / H; if (fy > .86) a *= Math.max(0, 1 - (fy - .86) / .14);
       if (a < 1 && a > 0) for (let ch = 0; ch < 3; ch++) d[i + ch] = Math.max(0, Math.min(255, (d[i + ch] - 255 * (1 - a)) / a));
       d[i + 3] = Math.round(255 * a);
@@ -65,7 +67,7 @@ const res = await p.evaluate(async ([src, N, PAD, MINBLOB, KEEP, TIGHT]) => {
     outs.push(o.toDataURL('image/webp', .86));
   }
   return { size: [W, H], cuts, outs };
-}, ['data:image/png;base64,' + fs.readFileSync(SRC).toString('base64'), IDS.length, +(process.env.PAD ?? .14), +(process.env.MINBLOB ?? .01), process.env.KEEP ? process.env.KEEP.split(",").map(Number) : null, process.env.TIGHT === '1']);
+}, ['data:image/png;base64,' + fs.readFileSync(SRC).toString('base64'), IDS.length, +(process.env.PAD ?? .14), +(process.env.MINBLOB ?? .01), process.env.KEEP ? process.env.KEEP.split(",").map(Number) : null, process.env.TIGHT === '1', +(process.env.PAPER ?? 0)]);
 res.outs.forEach((u, k) => { const f = OUT + IDS[k] + '.webp', buf = Buffer.from(u.split(',')[1], 'base64'); fs.writeFileSync(f, buf); console.log('→', f, buf.length); });
 console.log('源图', res.size.join('×'), '分界', res.cuts.join(','));
 await b.close();

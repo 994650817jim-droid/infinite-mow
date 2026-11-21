@@ -54,6 +54,8 @@ export class CampRestUI {
  preBattle?:string;
  /** 行囊里有几件比身上好的兵装（data/gearAuto.ts）：> 0 时「行囊」按钮带小红点；第一次还会在页面下方提示一次。 */
  gearUpgrades?:()=>number;
+ /** 属性点提醒（data/pointsHint.ts）：有没加的点、且有地方能加时，顶部资源行后面写「属性点 N 未加」。 */
+ pointsHint?:()=>{n:number;where:string}|null;
  private bagDot?:Phaser.GameObjects.Arc;
  private visit='';private tab=0;private page=0;private destination='';private notice='';
  constructor(private scene:Phaser.Scene,private player:Player,private army:Legion,depart:()=>void){
@@ -167,7 +169,7 @@ export class CampRestUI {
    if(on){const to={x:t.x+18,w:w-36};if(!this.lineTo){this.tabLine.setX(to.x);this.tabLine.width=to.w;}this.lineTo=to;}});
   // 兵装（总制作人第一章试玩：20 件兵装一件没穿、全程没提示）：有更好的没穿 → 「行囊」小红点；第一次还在下方提示一句
   {const ups=this.gearUpgrades?.()??0;this.bagDot?.setVisible(ups>0);if(ups>0&&!this.notice&&!gearGuideSeen())this.notice='缴获的兵装还没穿上（'+ups+' 件更好）：点右上「行囊」，再点「一键穿戴」';}
-  this.resources.setText('随军粮 '+this.army.food+' · 兵力 '+this.army.count);this.next.setText(this.preBattle?'出征 · '+this.preBattle:'下一关 · '+this.destination);this.header.setText(this.preBattle?'出征整军':'行营休整');this.detail.setText(this.notice);
+  {const ph=this.pointsHint?.();this.resources.setText('随军粮 '+this.army.food+' · 兵力 '+this.army.count+(ph?' · 属性点 '+ph.n+' 未加（'+ph.where+'）':''));}this.next.setText(this.preBattle?'出征 · '+this.preBattle:'下一关 · '+this.destination);this.header.setText(this.preBattle?'出征整军':'行营休整');this.detail.setText(this.notice);
   {const side=D&&(this.tab===2||this.tab===4),l=CampRestUI.STATION_LEFT;this.detail.setX(side?l+(W-40-l)/2:D?W/2:28).setWordWrapWidth(side?W-40-l-16:W-(D?120:56),true);}
   if(this.tab===0)this.renderRecruit();if(this.tab===2)this.renderMarket();if(this.tab===3)this.renderBuild(D?154:229);if(this.tab===4)this.renderMedic();if(this.tab===5)this.renderFormation();
   this.onChanged?.();

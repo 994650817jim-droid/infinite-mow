@@ -23,6 +23,7 @@ import { MOUNT_VISUAL, isHorseCavalry } from '../data/mounts';
 import { buildSettingsPanel, type SettingSpec } from '../ui/SettingsPanel';
 import {FollowerSquad,type Follower} from '../systems/FollowerSquad';
 import {showBarkCard} from '../ui/StoryBarkCard';
+import { POINTS_GUIDE_KEY, pointsGuideText, pointsHint } from '../data/pointsHint';
 import { DEFEAT, buildCarryNote, defeatTip, defeatLines } from '../data/defeatFlow';
 import { battlePoint, retreatTarget, type RetreatTarget } from '../world/DefeatRetreat';
 import { patchCampaignDefeat } from '../systems/Campaign';
@@ -1098,7 +1099,7 @@ export class GameScene extends Phaser.Scene {
     }, () => this.takeRecruitPotion(), () => canOfferRejuvenation(this.player));
     this.campUI=new CampRestUI(this,this.player,this.legion,()=>this.departRest());
     // 行营休整在本关结算之后：买下的兵装直接收入行囊（2026-11-18 用户报「休整买的装备背包没显示」——原先推进已结算的 runLoot，背包看不到、下一关重建时还会丢）。测试 / 调试战斗同结算规则不入行囊。
-    this.campUI.onBuyItem=item=>{const debug=isChapterTestRun()||this.debugModified||this.debugJumped||!!this.player.damageImmune||!!this.runConfig.encounter;if(this.over&&!debug)addItems([item]);else this.itemDrops?.runLoot.push(item);};
+    this.campUI.onBuyItem=item=>{const debug=this.lootDebug();if((this.over||this.preCamp)&&!debug)addItems([item]); /* 整军页（还没开打）买的也直接入行囊，不算本局缴获（败退会丢一半） */else this.itemDrops?.runLoot.push(item);};
     // 军医（2026-11-18）：按章定价；治疗后把存档里的征程构筑血量也改掉（存档点是打赢那一刻存的，治疗在之后；重打旧关不存档也不改）
     this.campUI.chapterNo=medicChapter(this.scene.key,this.chapter.id,worldMedicChapter());
     // 重整构筑：退回与每次重选后都把存档点改成当前构筑（含待补选次数），关页面再进不会多出或少掉强化；重打旧关 / 测试战斗不写
@@ -1108,6 +1109,7 @@ export class GameScene extends Phaser.Scene {
     this.campUI.onOpenBag=()=>this.openBattleBag(true);
     // 行营存档点（总制作人第一章试玩 r3：行营招的兵 / 花的粮阵亡续打全丢）：每次重绘（招兵、治疗、买卖、学战法、重整之后）把整份征程构筑写回存档点
     this.campUI.onChanged=()=>this.saveRestPoint();
+    this.campUI.pointsHint=()=>this.pointsHint();
     this.campUI.gearUpgrades=()=>mechShown('gear')?gearUpgrades(this.runConfig.character,this.itemDrops?.runLoot??[]).length:0;
     // 从营寨 / 天下地图出征的战役：关与关之间的休整可直接回营寨（本场奖励已在胜利时入库）
     if(this.worldCampaign&&worldUnlocked())this.campUI.onReturnHome=()=>{this.resting=false;this.registry.remove('campaignTransfer');this.scene.start('CityScene');};
@@ -3313,6 +3315,7 @@ export class GameScene extends Phaser.Scene {
     if (mode === 'result' && this.victory) window.setTimeout(() => { if (this.scene.isActive() && this.mode === 'result') checkHeroJoins(this); }, 700);
     if (mode === 'rest') commitBattle(); // 关卡告捷进行营：本场所得生效
     if (mode === 'rest' && !this.restIntroPlayed) { this.restIntroPlayed = true; this.playRestIntro(); }
+    if (mode === 'rest') this.pointsGuide(); // 属性点：第一次能加时引导一次
   }
 
   protected openUpgrade(): void {
@@ -3763,6 +3766,19 @@ export class GameScene extends Phaser.Scene {
     commitBattle(); beginBattle(this.scene.key); // 整军里的花费已写进存档点，不随中途退出回滚；从这里起才算「进行中的战斗」
     const after = this.preCampAfter; this.preCampAfter = null; after?.();
   }
+  /** 属性点提醒（data/pointsHint.ts）：主将还有几点没加、去哪加；都还加不了返回 null。 */
+  protected pointsHint(): { n: number; where: string } | null { return pointsHint(heroFreePoints(this.runConfig.character as HeroKey), { world: worldUnlocked(), battle: mechOpen('attributes') }); }
+  /** 第一次能加点时引导一次（行营 / 整军页打开、结算时查）。 */
+  protected pointsGuide(): void {
+    const h = this.pointsHint(); if (!h || isChapterTestRun()) return;
+    try { if (localStorage.getItem(POINTS_GUIDE_KEY) === '1') return; localStorage.setItem(POINTS_GUIDE_KEY, '1'); } catch { return; }
+    showBarkCard(this, { side: 'left', name: '新玩法 · 属性点', text: pointsGuideText(h) });
+  }
+  /**
+   * 兵装入库按测试战斗算吗：测试 / 调试战斗、网址 ?encounter= 预览。原来还算上 runConfig.encounter——可第三～十二章、攻城、守城、军情都把它设成 'qunxiong'（只表示「篇章式战斗」），
+   * 于是这些仗的缴获、行营军需商人买的兵装全显示「测试战斗不入行囊」并丢掉（new-content-intel.md 11-15 发现，没人改；总制作人第二轮第 8 条「行营买的兵装有没有丢」一并修）。
+   */
+  protected lootDebug(): boolean { return isChapterTestRun() || this.debugModified || this.debugJumped || !!this.player.damageImmune || this.encounterPreview; }
   protected saveRestPoint(): void {
     if (!this.resting || this.mode !== 'rest' || this.campaignReplay || isChapterTestRun() || this.debugModified || this.debugJumped || this.player.damageImmune) return;
     saveCampaignBuild(this.runConfig.character, packCampaign(this.runConfig.character, this.player, this.legion, this.followers));
@@ -4556,7 +4572,7 @@ export class GameScene extends Phaser.Scene {
     if ((this.over && !atRest) || this.children.getByName('item-bag')) return;
     const fromPlay = this.mode === 'none';
     if (fromPlay) this.togglePause();
-    const debug = isChapterTestRun() || this.debugModified || this.debugJumped || !!this.player.damageImmune || !!this.runConfig.encounter;
+    const debug = this.lootDebug();
     new ItemBagUI(this, {
       hero: this.runConfig.character, battle: true, atRest, runLoot: this.over ? [] : this.itemDrops?.runLoot ?? [],
       // 已结算时缴获都收进行囊了，不再单列「本局缴获」
@@ -4622,8 +4638,10 @@ export class GameScene extends Phaser.Scene {
       ].join('\n'),
     );
     // 兵装缴获：胜利或坚持 60 秒带回全部，速败只带回一半；测试 / 调试战斗不入行囊
-    {const loot=this.itemDrops?.runLoot??[],debug=isChapterTestRun()||this.debugModified||this.debugJumped||!!this.player.damageImmune||!!this.runConfig.encounter,dep=depositRunLoot(loot,{victory,elapsed:victory?this.elapsed:0,debug,pity:this.itemDrops?.pity}); /* 战败（data/defeatFlow.ts）：只带回一半，品质高的留下 */
+    {const loot=this.itemDrops?.runLoot??[],debug=this.lootDebug(),dep=depositRunLoot(loot,{victory,elapsed:victory?this.elapsed:0,debug,pity:this.itemDrops?.pity}); /* 战败（data/defeatFlow.ts）：只带回一半，品质高的留下 */
      if(loot.length)this.resultTexts.body.setText(this.resultTexts.body.text+'\n缴获兵装  '+loot.length+' 件（'+this.itemDrops!.summary()+'）'+(debug?' · 测试战斗不入行囊':dep.lost?' · 败退遗失 '+dep.lost+' 件':' · 已收入行囊'));}
+    // 结算：属性点没加 → 写一行（第一次能加时另弹引导卡）
+    if(!(isChapterTestRun()||this.debugModified||this.debugJumped||this.player.damageImmune)){const ph=this.pointsHint();if(ph){this.resultTexts.body.setText(this.resultTexts.body.text+'\n属性点  '+ph.n+' 点未加 · 去'+ph.where+'加点');this.pointsGuide();}}
     // 结算：行囊里有比身上好的兵装没穿 → 写一行（行营「行囊」按钮另有小红点）
     if(victory&&mechShown('gear')&&!(isChapterTestRun()||this.debugModified||this.debugJumped||this.player.damageImmune)){const n=gearUpgrades(this.runConfig.character).length;if(n)this.resultTexts.body.setText(this.resultTexts.body.text+'\n兵装  行囊里有 '+n+' 件更好的兵装没穿 · 点「行囊」→「一键穿戴」');}
     if(this.worldCampaign){const reward=settleExpedition(this.expeditionId,{...stats,kills:Math.max(0,stats.kills-this.settledFrontlineKills),chapter:this.chapter.id,returned:this.allies.filter(a=>a.active&&a.reserveSoldier).map(a=>a.kind),debug:isChapterTestRun()||this.debugModified||this.debugJumped||this.player.damageImmune});

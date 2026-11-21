@@ -62,6 +62,12 @@ export const MID_SIEGE = {
     charge: { everyMs: 6500, warnMs: 1000, length: 380, width: 70, speed: 900, damage: 18 }, // 二阶段加：冲锋 · 待平衡会话复核
     flagMs: 1600, // 击败守将后插旗占领的动画时长
   },
+  /**
+   * 城外段没人护送冲车（总制作人试玩 11-21：许昌城外站着近三分钟，场上 6 个敌人、没人来打，冲车在远处「靠近护送」）：
+   * 冲车停着（主将不在 ram.escortRadius 内）urgeMs 后横幅催一次；sallyMs 后守军出城袭扰一队（squad 人，从城门 / 护城河南岸出来，冲着主将），
+   * 之后每 repeatMs 再出一队、每队多 grow 人（封顶 max）；主将回到冲车旁就全部清零。· 待平衡会话复核
+   */
+  idle: { urgeMs: 15000, sallyMs: 30000, repeatMs: 25000, squad: 6, grow: 2, max: 14 },
   transitionMs: 1400,
   limitSeconds: 520, // 中城限时（11-19 场地加大、冲车路拉长 +40）（原 210 秒是一段式，三段推进约 5 分钟）· 待平衡会话复核
 } as const;

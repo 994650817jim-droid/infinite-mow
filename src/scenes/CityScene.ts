@@ -33,7 +33,8 @@ import {TECHS,TECH_IDS,BRANCH_NAME,BRANCH_ORDER,techBlockers,techTotals,type Tec
 import {LORD_LEVEL_HINT,followerLevel,followerLevelCap,hallLevel,loadRoster,rankCap,rankPreview,rankUp,rosterFollowers,type Recruit} from '../systems/RosterStore';
 import {COMMONER_SKILLS} from '../data/commonerSkills';
 import {QUALITIES, lootBand} from '../data/items';
-import {chaptersOpen} from '../systems/HeroProgress';
+import {chaptersOpen,heroFreePoints} from '../systems/HeroProgress';
+import {pointsHint} from '../data/pointsHint';
 import {PANO_ZOOM,CAMP_BARS,CAMP_PAN,PANO_W,PANO_H,CITY_SLOTS,LEVEL_SCALE,CITY_BG_SIZES,CITY_ART_LEVELS,ART_ALIAS} from '../town/CityLayout';
 import {cityById,TIER_NAME} from '../world/WorldCities';
 import {CampLife,loadCampLife,CAMP_ART_IDS} from '../town/CampLife';
@@ -130,6 +131,8 @@ export class CityScene extends Phaser.Scene {
   if(this.openOnStart){const id=this.openOnStart;this.focusOn(id);this.openCard(id);return;}
   if(!this.introSeen())this.time.delayedCall(250,()=>this.openIntro());
   if(stableNew)this.time.delayedCall(400,()=>this.toast('营中已设马厩 · 点马厩换马、看已有的马'));
+  // 属性点提醒（data/pointsHint.ts）：主公有没加的点 → 进营一句（马厩那句之后）
+  {let h='zhaoyun';try{h=localStorage.getItem('im_last_hero')||h;}catch{/* 存储不可用 */}const ph=pointsHint(heroFreePoints(h as never),{world:true,battle:mechOpen('attributes')});if(ph)this.time.delayedCall(stableNew?2600:600,()=>this.toast('有 '+ph.n+' 点属性点没加 · 主帐「武将谱」里加点'));}
   // 坐骑引导（第一次有马：马厩 → 骑乘 → 效果说明），只出一次，设置「重看新手引导」可重看
   this.mountGuide=MountGuide.maybeStart(this,()=>{let h='zhaoyun';try{h=localStorage.getItem('im_last_hero')||h;}catch{/* 存储不可用 */}return (CHARACTERS.some(c=>c.id===h)?h:'zhaoyun') as CharacterId;});
  }

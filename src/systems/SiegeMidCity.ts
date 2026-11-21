@@ -84,7 +84,7 @@ interface Log { x: number; y: number; at: number; rolling: boolean; id: string; 
 
 export class SiegeMidCity {
   phase: MidSiegePhase = 'outside';
-  readonly stats = { volleys: 0, zones: 0, ramHits: 0, ramsLost: 0, ramsTaken: 1, fireArrows: 0, burns: 0, putOut: 0, ambushes: 0, transitions: 0, guardWaves: 0, shieldHits: 0, bossSkills: 0, ropesCut: 0, logs: 0, logHits: 0, sally: 0, leaders: 0, cityVolleys: 0 };
+  readonly stats = { idleUrges: 0, idleSallies: 0, volleys: 0, zones: 0, ramHits: 0, ramsLost: 0, ramsTaken: 1, fireArrows: 0, burns: 0, putOut: 0, ambushes: 0, transitions: 0, guardWaves: 0, shieldHits: 0, bossSkills: 0, ropesCut: 0, logs: 0, logHits: 0, sally: 0, leaders: 0, cityVolleys: 0 };
   /** 档位配置（小 / 中 / 大城） */
   readonly prof: SiegeProfile; readonly tier: 'small' | 'medium' | 'large';
   /** 城内段布局（data/siegeCity.ts） */
@@ -441,6 +441,19 @@ export class SiegeMidCity {
     r.label.setText('');
     this.h.sfx('propBreak'); this.h.banner('冲车被毁', true, this.ramReadyAt > this.h.now() ? `回营地重领 · 冷却 ${Math.ceil(this.ramCfg.respawnMs / 1000)} 秒` : '回营地领备用冲车');
   }
+  /** 城外段无人护送冲车：先催、再出城袭扰，越拖越多（MID_SIEGE.idle）；主将回到冲车旁清零。 */
+  private idleSince = -1; private idleUrged = false; private idleNextSally = 0; private idleSallies = 0;
+  private updateIdle(near: boolean, now: number): void {
+    const I = M.idle;
+    if (near) { this.idleSince = -1; this.idleUrged = false; this.idleSallies = 0; return; }
+    if (this.idleSince < 0) { this.idleSince = now; this.idleNextSally = now + I.sallyMs; return; }
+    if (!this.idleUrged && now - this.idleSince >= I.urgeMs) { this.idleUrged = true; this.stats.idleUrges++; this.h.banner('冲车无人护送', true, '守军就要出城 · 回去护送冲车到城门'); }
+    if (now < this.idleNextSally) return;
+    const n = Math.min(I.max, I.squad + I.grow * this.idleSallies), gy = this.tier === 'large' && !this.bridgeDown ? L.moat.bottom + 40 : M.outside.wallY + 40;
+    this.idleSallies++; this.idleNextSally = now + I.repeatMs; this.stats.idleSallies++;
+    for (let i = 0; i < n; i++) this.h.spawnEnemy(i % 3 === 2 ? 'cavalry' : i % 3 === 1 ? 'shield' : 'infantry', (i - n / 2) * 36, gy + (i % 2) * 24, true);
+    this.h.banner('守军出城袭扰！', true, '冲车停在原地 · 护送冲车攻门');
+  }
   private updateRam(dt: number, now: number) {
     const r = this.ram, p = this.h.player, gateY = this.tier === 'large' && !this.bridgeDown ? L.moat.bottom + 40 - M.ram.size * .1 : M.outside.wallY + 30 + 20;
     if (!r) return;
@@ -454,6 +467,7 @@ export class SiegeMidCity {
     }
     if (r.state === 'move') {
       const near = Math.hypot(p.x - r.x, p.y - r.y) <= M.ram.escortRadius;
+      this.updateIdle(near, now);
       const tx = 0, ty = gateY + M.ram.size * .1, dx = tx - r.x, dy = ty - r.y, d = Math.hypot(dx, dy);
       if (d < 6 && (this.tier !== 'large' || this.bridgeDown)) { r.state = 'ram'; r.hitAt = now + 400; }
       else if (near) { const s = Math.min(d, M.ram.speed * dt); r.x += dx / d * s; r.y += dy / d * s; }

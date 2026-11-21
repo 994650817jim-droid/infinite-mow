@@ -57,5 +57,7 @@ export const CR = {
   gates: { radius: 330, rotateMs: 10000, rotateMs2: 5000, warnMs: 1500, live: 1, dead: 3, dead2: 4, deadTickMs: 1000, deadDamage: 6, liveTakenMul: 1.2 },
   wall: { windupMs: 500, holdMs: 4000, turnPerSec: 1.05, frontDeg: 140, frontTakenMul: .1, recoverMs: 800 },
   hold: { windupMs: 600, count: 4, ahead: 120, spacing: 46, recoverMs: 700 },
+  /** 破阵（formation-design.md §5，徐庶授法「从生门入」）：站生门打中曹仁 hits 下 → 八门停转 ms 毫秒、曹仁受伤 ×vuln（护阵用八阵 ×counterVuln）。 */
+  break: { hits: 10, ms: 6000, vuln: 1.3, counterVuln: 1.5 },
   phase2At: .4,
 } as const;

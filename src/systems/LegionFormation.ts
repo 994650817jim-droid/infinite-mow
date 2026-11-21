@@ -29,6 +29,10 @@ export class LegionFormation {
  cap=Infinity;
  /** 在阵里的士兵 id（吃阵势）。 */
  readonly inForm=new Set<number>();
+ /** 锚点（守城「部曲守门」：城门内一点、朝城外）；null = 跟着主将。 */
+ anchor:{x:number;y:number;facing:number}|null=null;
+ private get bx(){return this.anchor?this.anchor.x:this.player.x;}
+ private get by(){return this.anchor?this.anchor.y:this.player.y;}
  /** 入阵士兵站位的中心（局部坐标；阵纹铺在这里）。 */
  center={x:0,y:0};
  /** 长蛇阵：每名士兵在队列里的序号（随从占前 3 个）。 */
@@ -72,7 +76,7 @@ export class LegionFormation {
     rear.forEach((u,j)=>{const per=9,row=Math.floor(j/per),cnt=Math.min(per,rear.length-row*per);put(u,(j%per-(cnt-1)/2)*S,-54-row*36);});break;}
    case 'bazhen':{ // 八队站八门方位
     const all=[...M,...B];all.forEach((u,i)=>{const g=i%8,k=Math.floor(i/8),a=g/8*Math.PI*2+Math.PI/2,r=FORMATION.bazhen.ring+Math.floor(k/2)*30,lat=(k%2?1:-1)*(k?12:0);put(u,Math.cos(a)*r-Math.sin(a)*lat,Math.sin(a)*r+Math.cos(a)*lat);});break;}
-   case 'snake':{const all=[...M,...B];all.forEach((u,i)=>{this.column.set(u.id,i+3);this.offsets.set(u.id,{x:0,y:-(FORMATION.snake.lead+(i+3)*FORMATION.snake.gap)});});this.extent=FORMATION.snake.lead+(all.length+3)*FORMATION.snake.gap;break;}
+   case 'snake':{const all=[...M,...B];all.forEach((u,i)=>{this.column.set(u.id,i+3);this.offsets.set(u.id,{x:(i%5-2)*34,y:-(50+Math.floor(i/5)*34)});}); /* 偏移只在有锚点（守门）时用：收成 5 列的方块，平时沿路径排一列 */this.extent=FORMATION.snake.lead+(all.length+3)*FORMATION.snake.gap;break;}
   }
   {let sx=0,sy=0,n=0;for(const u of [...M,...B]){const o=this.offsets.get(u.id);if(o){sx+=o.x;sy+=o.y;n++;}}this.center=this.shape==='snake'||!n?{x:0,y:0}:{x:sx/n,y:sy/n};}
   // 后军：入阵人数之外的士兵排在阵后
@@ -90,28 +94,29 @@ export class LegionFormation {
  setNarrow(narrow:boolean){if(narrow===this.narrow)return;this.narrow=narrow;this.rebuild(this.members,this.groups);}
  update(dt:number){const dx=this.player.x-this.lastX,dy=this.player.y-this.lastY;this.lastX=this.player.x;this.lastY=this.player.y;
   if(this.shape==='snake'){const t=this.trail,h=t[0];if(!h||Math.hypot(this.player.x-h.x,this.player.y-h.y)>=FORMATION.snake.trailStep){t.unshift({x:this.player.x,y:this.player.y});const keep=Math.ceil(this.extent/FORMATION.snake.trailStep)+12;if(t.length>keep)t.length=keep;}}
+  if(this.anchor){this.angle=this.anchor.facing;return;}
   if(Math.hypot(dx,dy)<.2||Math.hypot(dx,dy)>100)return;const target=Math.atan2(dy,dx),delta=Math.atan2(Math.sin(target-this.angle),Math.cos(target-this.angle));this.angle+=delta*(1-Math.exp(-2.5*dt));}
  /** 沿路径往后 d 像素的点（路径不够长时沿朝向反方向延伸）。 */
  private along(d:number):{x:number;y:number}{
-  let px=this.player.x,py=this.player.y,left=d;
+  let px=this.bx,py=this.by,left=d;
   for(const p of this.trail){const seg=Math.hypot(p.x-px,p.y-py);if(seg>=left&&seg>0){const k=left/seg;return{x:px+(p.x-px)*k,y:py+(p.y-py)*k};}left-=seg;px=p.x;py=p.y;}
   const back=this.angle+Math.PI;return{x:px+Math.cos(back)*left,y:py+Math.sin(back)*left};
  }
  /** 局部坐标 → 世界坐标。 */
  world(p:{x:number;y:number}){return this.toWorld(p);}
- private toWorld(p:{x:number;y:number}){const c=Math.cos(this.angle),s=Math.sin(this.angle);return{x:this.player.x+c*p.y-s*p.x,y:this.player.y+s*p.y+c*p.x};}
+ private toWorld(p:{x:number;y:number}){const c=Math.cos(this.angle),s=Math.sin(this.angle);return{x:this.bx+c*p.y-s*p.x,y:this.by+s*p.y+c*p.x};}
  position(u:Ally){
-  if(this.shape==='snake'){const i=this.column.get(u.id);if(i!==undefined)return this.along(FORMATION.snake.lead+i*FORMATION.snake.gap);}
+  if(this.shape==='snake'&&!this.anchor){const i=this.column.get(u.id);if(i!==undefined)return this.along(FORMATION.snake.lead+i*FORMATION.snake.gap);}
   return this.toWorld(this.offsets.get(u.id)??{x:0,y:-80});
  }
  /** 随从阵位（世界坐标）；常阵返回 null（FollowerSquad 用自己的身后阵位）。 */
  followerSlot(i:number,n:number):{x:number;y:number}|null{
-  if(!this.shape)return null;
+  if(!this.shape||this.anchor)return null; // 部曲守门时随从仍跟着主将
   if(this.shape==='snake')return this.along(FORMATION.snake.lead+i*FORMATION.snake.gap);
   const k=Math.min(3,Math.max(1,n))-1,p=FOLLOWER_SLOTS[this.shape][k][i]??{x:0,y:-50};return this.toWorld(p);
  }
  /** 某点相对主将朝向的局部坐标（锋矢「正前方」判断用）。 */
- local(x:number,y:number):{x:number;y:number}{const dx=x-this.player.x,dy=y-this.player.y,c=Math.cos(this.angle),s=Math.sin(this.angle);return{x:-s*dx+c*dy,y:c*dx+s*dy};}
+ local(x:number,y:number):{x:number;y:number}{const dx=x-this.bx,dy=y-this.by,c=Math.cos(this.angle),s=Math.sin(this.angle);return{x:-s*dx+c*dy,y:c*dx+s*dy};}
  /** 局部偏移（测试 / 小地图示意用）。 */
  offsetOf(u:Ally){return this.offsets.get(u.id)??null;}
  clear(){this.offsets.clear();this.inForm.clear();this.column.clear();this.trail=[];this.members=[];this.narrow=false;this.extent=0;this.angle=-Math.PI/2;this.lastX=this.player.x;this.lastY=this.player.y;}

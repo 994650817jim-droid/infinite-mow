@@ -1,3 +1,4 @@
+import { EnemyFormations } from '../systems/EnemyFormations';
 import { SIGIL_LABEL, formationSigil, setFormationSigil, type FormationSigil } from '../systems/BattleSettings';
 import { FORMATION_IDS } from '../data/formations';
 import { FormationFx } from '../systems/FormationFx';
@@ -613,6 +614,8 @@ export class GameScene extends Phaser.Scene {
   formationRt?:FormationRuntime;
   /** 军阵表现：地面阵纹、变阵竖旗（systems/FormationFx）。 */
   formationFx?:FormationFx;
+  /** 敌方军阵（systems/EnemyFormations）。 */
+  enemyForms?:EnemyFormations;
   private buffProgress(id:string,now:number):BuffProgress|null{
     if(id==='formation')return this.formationRt?.progress(now)??null;
     if(id.startsWith('awakening_'))return this.synergy?.progress(id,now)??null;
@@ -991,8 +994,12 @@ export class GameScene extends Phaser.Scene {
       majors:()=>this.player.growth.build.majors(),command:()=>this.player.growth.pts('command'),
       enemiesNear:(x,y,r)=>this.grid.query(x,y,r),stun:(e,ms,n)=>this.buildCombat.stun(e,ms,n),hit:(e,d)=>this.hitEnemy(e,d,this.combatNow,'melee',true),
       banner:(t,s)=>this.showWaveBanner(t,false,s),sfx:k=>this.sfx.play(k)});
+     // 敌方军阵（formation-design.md §5）：第四章起刷盾墙阵，斩阵眼破阵
+     this.enemyForms=new EnemyFormations({scene:this,player:this.player,chapter:()=>this.lootChapter(),enabled:()=>this.mode==='none'&&!this.over&&!this.cutscene?.active&&!this.runConfig.encounter,
+      spawn:(k,x,y,m)=>this.spawnEnemy(k,x,y,this.chapter.hpScale(this.elapsed)*m,true),stun:(e,ms,n)=>this.buildCombat.stun(e,ms,n),banner:(t,s)=>this.showWaveBanner(t,false,s),sfx:k=>this.sfx.play(k),
+      playerFormation:()=>this.formationRt?.formed?this.formationRt.current:null,ringDistance:()=>this.spawnRingDistance(),bark:(who,text)=>showBarkCard(this,{side:'left',name:who,text})});
      this.formationFx=new FormationFx(this,this.legion,this.player,()=>{const r=this.formationRt;return{id:r?.current??null,formed:!!r?.formed,settling:!!r&&this.combatNow<r.settleUntil,switches:r?.stats.switches??0};});
-     this.events.once('shutdown',()=>{this.formationRt?.clear();this.formationRt=undefined;this.formationFx?.destroy();this.formationFx=undefined;});}
+     this.events.once('shutdown',()=>{this.formationRt?.clear();this.formationRt=undefined;this.formationFx?.destroy();this.formationFx=undefined;this.enemyForms?.clear();this.enemyForms=undefined;});}
     this.buildCombat.setOrigin(()=>({x:this.player.x,y:this.player.y}));this.statusFx=new StatusFx(this,this.buildCombat);this.jinnangFx=new JinnangFx(this,()=>({x:this.player.x,y:this.player.y}));   // 敌人身上的灼烧 / 迟滞 / 眩晕 / 破甲标记（手绘序列帧）
     this.buildCombat.onFlank=targets=>this.flankBladeFx().strike(targets);
     this.buildCombat.onWindstep=e=>this.windstepFx().burst(e.x,e.y);
@@ -1366,7 +1373,7 @@ export class GameScene extends Phaser.Scene {
     if(time>=this.navigationAt){this.navigationAt=time+250;const boxes=[...(this.sishuiObstacles?.footprints??[]),...(this.terrain?(this.terrain.stats.burnt?(this.terrainNav=this.terrain.navBoxes()):this.terrainNav):[])];this.supplies?.appendNavigationBoxes(boxes);this.legion.navigation.setBoxes(boxes);}
     this.legion.update(dt, time, this.enemies, this.grid, (enemy, amount) => this.hitEnemy(enemy, amount, this.combatNow, 'melee', true));
     this.followers?.update(dt, this.combatNow);
-    this.formationRt?.update(dt, this.combatNow); this.formationFx?.update(dt, this.combatNow);
+    this.formationRt?.update(dt, this.combatNow); this.formationFx?.update(dt, this.combatNow); this.enemyForms?.update(dt, this.combatNow);
     if (this.over) return;
     this.rebuildGrid();
     this.separateEnemies();
@@ -1552,7 +1559,7 @@ export class GameScene extends Phaser.Scene {
       if (ordersPanelSetting() === 'on') this.ordersPanel = new OrdersPanel(this, orders);
       this.battleMap = new BattleMap({locked: () => !mechOpen('atlas'), scene: this, player: () => this.player, enemies: () => this.enemies, followers: () => this.followers?.members ?? [],
         // 军阵：部曲淡青点 + 主将脚下当前阵纹小图
-        army: () => this.legion.units, formation: () => { const r = this.formationRt; return r?.current ? { frame: FORMATION_IDS.indexOf(r.current), rot: this.legion.formation.facing + Math.PI / 2 } : null; },
+        army: () => this.legion.units, eyes: () => this.enemyForms?.eyes() ?? [], formation: () => { const r = this.formationRt; return r?.current ? { frame: FORMATION_IDS.indexOf(r.current), rot: this.legion.formation.facing + Math.PI / 2 } : null; },
         title: () => this.chapter.name ?? this.chapter.label ?? '',
         // 2026-11-19 用户「打开小地图会暂停是我要要求的」：舆图展开时战斗暂停，卷回后恢复
         pause: on => { if (on) { if (this.mode === 'none' && !this.over) this.setMode('map'); } else if (this.mode === 'map') this.setMode('none'); },
@@ -1933,7 +1940,7 @@ export class GameScene extends Phaser.Scene {
     // 出手（拉弓放箭、挥砍）期间原地站定，避免攻击帧边播边平移；首领与骑兵冲锋有各自的位移逻辑。
     if (enemy.kind !== 'boss' && enemy.kind !== 'cavalry' && enemy.attackUntil > this.combatNow) { enemy.moveVx = enemy.moveVy = 0; return; }
     const controlSpeed=this.controlBuild?.motion(enemy,this.combatNow,dt)??1;
-    const martialSpeed=controlSpeed*(enemy.kind!=='boss'&&this.combatNow<enemy.martialSlowUntil?enemy.martialSlow:1)*(this.env?.speedMul(enemy)??1)*(this.traits?.speedMul(enemy)??1)*(this.terrain?.speedMul(enemy.x,enemy.y)??1);
+    const martialSpeed=controlSpeed*(enemy.kind!=='boss'&&this.combatNow<enemy.martialSlowUntil?enemy.martialSlow:1)*(this.env?.speedMul(enemy)??1)*(this.traits?.speedMul(enemy)??1)*(this.enemyForms?.speedMul(enemy)??1)*(this.terrain?.speedMul(enemy.x,enemy.y)??1);
     enemy.sprite.x += (this.crowdSteering ? enemy.moveVx : nx * enemy.def.speed) * dt * martialSpeed;
     enemy.sprite.y += (this.crowdSteering ? enemy.moveVy : ny * enemy.def.speed) * dt * martialSpeed;
   }
@@ -2513,7 +2520,8 @@ export class GameScene extends Phaser.Scene {
     if (this.xiliang) rawDamage *= this.xiliang.incoming(enemy, source);
     if (enemy === this.boss && this.moveset) { rawDamage *= this.moveset.incoming(fromAlly); this.moveset.hit(time); }
     if (this.dzLubu && enemy === this.dzLubu.lubu) rawDamage = this.dzLubu.clampDamage(enemy, rawDamage); // 2-3 吕布锁在 1/3 血
-    if (enemy.def.trait && this.traits) rawDamage *= this.traits.damageTakenMul(enemy); // 新兵种：盾墙 / 举盾正面减伤
+    if (enemy.def.trait && this.traits) rawDamage *= this.traits.damageTakenMul(enemy);
+    if (this.enemyForms) rawDamage *= this.enemyForms.damageMul(enemy, time); // 敌方军阵：盾墙正面减伤 / 阵破易伤 // 新兵种：盾墙 / 举盾正面减伤
     if(this.yellow&&enemy.kind==='shield'&&enemy.shieldMax===0&&enemy.def.behavior!=='wall'&&!fromAlly&&source!=='fire'){const angle=enemy.direction==='left'?Math.PI:enemy.direction==='right'?0:enemy.direction==='up'?-Math.PI/2:Math.PI/2;if(Math.cos(Math.atan2(this.player.y-enemy.y,this.player.x-enemy.x)-angle)>.25)rawDamage*=.65;}
     if (source === 'arrow') this.sfx.play('hitArrow');
     else if (source === 'fire') this.sfx.play('hitFire');

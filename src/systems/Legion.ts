@@ -38,6 +38,8 @@ export class Legion {
   onOrder?:(o:Order)=>void;
   /** 军阵齐射（雁行出击）：借部曲的箭矢。 */
   volley(u:Ally,e:Enemy,amount:number,due:number):void{this.projectiles.fire(u,e,amount,due);}
+  /** 部曲的战术中心：平时是主将，守城「部曲守门」时是城门内的锚点（拴绳、回撤、找安全点都按它算）。 */
+  private centerProxy(player:Player):Player{const self=this;return{get x(){return self.formation?.anchor?.x??player.x;},get y(){return self.formation?.anchor?.y??player.y;}} as unknown as Player;}
   readonly command:CommandBuild;
   readonly formation:LegionFormation;
   readonly navigation=new LegionNavigation();
@@ -87,7 +89,7 @@ export class Legion {
     this.formation=new LegionFormation(player);this.artEffects=new ArtEffects(scene);
     this.command=new CommandBuild(scene,player.growth.build,units,player,(u,now)=>this.fx(u,u.x,u.y,now,true));
     this.gfx = scene.add.graphics().setDepth(DEPTH.fx);
-    this.projectiles = new LegionProjectiles(scene); this.tactics = new LegionTactics(player,u=>this.command.target(u)??(this.focus?.active&&this.focus.spawnId===this.focusLife?this.focus:null)??this.campTarget?.(u)??null,u=>this.formation.position(u),o=>this.formation.extent+(o==='guard'?this.formation.leashAdj:0),(u,x,y,now)=>this.navigation.steer(u.id,u.x,u.y,x,y,u.radius,now));
+    this.projectiles = new LegionProjectiles(scene); this.tactics = new LegionTactics(this.centerProxy(player),u=>this.command.target(u)??(this.focus?.active&&this.focus.spawnId===this.focusLife?this.focus:null)??this.campTarget?.(u)??null,u=>this.formation.position(u),o=>this.formation.extent+(o==='guard'?this.formation.leashAdj:0),(u,x,y,now)=>this.navigation.steer(u.id,u.x,u.y,x,y,u.radius,now));
   }
   get count(): number { let n = 0; for (const u of this.units) if (u.active) n++; return n; }
   recover(): void { for (const u of this.units) if (u.active) u.hp = u.maxHp; }

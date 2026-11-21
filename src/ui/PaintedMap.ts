@@ -41,7 +41,7 @@ type TreeDot = { x: number; y: number; dead: boolean };
 export interface PaintLayout { boxes: readonly Box[]; rivers: readonly River[]; roads: readonly Road[]; trees: readonly TreeDot[]; gates: ReadonlyArray<{ x: number; y: number }>; bridges: ReadonlyArray<{ x: number; y: number; ang: number; len: number }> }
 export interface PaintHost {
   player(): { x: number; y: number }; enemies(): readonly Enemy[]; followers(): ReadonlyArray<{ x: number; y: number; active?: boolean }>; bosses(): readonly Enemy[];
-  /** 部曲、当前军阵（同 BattleMap.MapHost）。 */ army?(): ReadonlyArray<{ x: number; y: number; active?: boolean }>; formation?(): { frame: number; rot: number } | null;
+  /** 部曲、当前军阵、敌阵阵眼（同 BattleMap.MapHost）。 */ army?(): ReadonlyArray<{ x: number; y: number; active?: boolean }>; eyes?(): ReadonlyArray<{ x: number; y: number }>; formation?(): { frame: number; rot: number } | null;
   camps?(): ReadonlyArray<{ x: number; y: number; ratio: number; hit: boolean }>;
   pushes?(): ReadonlyArray<{ from: { x: number; y: number }; to: { x: number; y: number } | null; members: ReadonlyArray<{ x: number; y: number }> }>;
 }
@@ -207,6 +207,7 @@ export class PaintedMap {
       else { const a = Math.atan2(py - H / 2, px - W / 2); this.icon('arrowhead', cx, cy, 13, { tint: CINNABAR, angle: Phaser.Math.RadToDeg(a) }); }
       this.label(o.label, cx, cy - 15, '#7a1408', 12);
     }
+    for (const e of h.eyes?.() ?? []) { const [px, py] = map(e.x, e.y); if (inside(px, py)) { g.fillStyle(0x3a0c08, 1); lqDiamond(g, px, py, 7); g.fillStyle(0xd0402c, 1); lqDiamond(g, px, py, 5); } } // 敌阵阵眼：朱菱
     // 部曲淡青点；主将金菱下垫当前阵纹小图
     g.fillStyle(0x7fa8c0, .95); for (const u of h.army?.() ?? []) { if (u.active === false) continue; const [px, py] = map(u.x, u.y); if (inside(px, py)) g.fillCircle(px, py, 2.4); }
     { const fm = h.formation?.(); if (fm && this.scene.textures.exists('formation_sigils')) { if (!this.fmImg) { this.fmImg = this.scene.add.image(0, 0, 'formation_sigils', 0).setName('painted-map-formation'); this.root.addAt(this.fmImg, Math.max(0, this.root.getIndex(this.dyn))); }

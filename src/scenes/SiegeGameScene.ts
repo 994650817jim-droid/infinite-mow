@@ -330,6 +330,7 @@ export function siegeGameSceneClass(Base: typeof GameScene) {
         banner: (t, d, c) => this.showWaveBanner(t, d, c), sfx: k => this.sfx.play(k as never),
         openGate: () => pass.openGate(), skipTo: sec => { this.elapsed = Math.max(this.elapsed, sec); },
         hpScale: () => this.chapter.hpScale(this.elapsed),
+        guardGate: p => { this.legion.formation.anchor = p; for (const u of this.legion.units) u.ai.nextThink = 0; },
         rampart: mul => { this.player.passive.rampartMul = mul; if (mul > 1) this.showWaveBanner('登城', false, `城头上武器范围 +${Math.round((mul - 1) * 100)}%`); },
         win: () => { if (this.over) return; this.bossKilled = true; this.finish(true, 'boss'); }, lose: () => { if (!this.over) this.finish(false, 'death'); },
       }, {tier: this.city.tier, dtier: this.defTier, office: lv.office ?? 1, muster: lv.muster ?? 0, start, wallLine: start.y + DEFENSE.wallY, gateX: start.x});

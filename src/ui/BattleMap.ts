@@ -42,6 +42,8 @@ export interface MapHost {
   bosses(): readonly Enemy[];
   /** 部曲（淡青小点）。 */
   army?(): ReadonlyArray<{ x: number; y: number; active?: boolean }>;
+  /** 敌方军阵的阵眼（朱菱）。 */
+  eyes?(): ReadonlyArray<{ x: number; y: number }>;
   /** 当前军阵：阵纹帧号与朝向（主将金菱下垫一张手绘阵纹小图）。 */
   formation?(): { frame: number; rot: number } | null;
   /** 摧毁型关卡的营寨（血量比例；最近被友军砍过的闪烁）。 */
@@ -182,6 +184,8 @@ class MapView {
       const t = this.names[ni++]; if (t) t.setText(o.label).setPosition(cx, cy - 10).setVisible(true);
     }
     for (; ni < this.names.length; ni++) this.names[ni].setVisible(false);
+    // 敌阵阵眼：朱菱
+    for (const e of h.eyes?.() ?? []) { const [px, py] = this.map(c, e.x, e.y); if (this.inside(px, py)) { g.fillStyle(0x3a0c08, 1); lqDiamond(g, px, py, big ? 7 : 5); g.fillStyle(0xd0402c, 1); lqDiamond(g, px, py, big ? 5 : 3.6); } }
     // 部曲：淡青小点；军阵：主将金菱下垫当前阵纹小图（手绘，formation-design.md §6）
     g.fillStyle(0x9ec4d8, .9); for (const u of h.army?.() ?? []) { if (u.active === false) continue; const [px, py] = this.map(c, u.x, u.y); if (this.inside(px, py)) g.fillCircle(px, py, big ? 2.4 : 1.6); }
     { const fm = h.formation?.(), sc = this.root.scene; if (fm && sc.textures.exists('formation_sigils')) { if (!this.fmImg) { this.fmImg = sc.add.image(0, 0, 'formation_sigils', 0).setName('battle-map-formation'); this.root.addAt(this.fmImg, Math.max(0, this.root.getIndex(this.g))); }

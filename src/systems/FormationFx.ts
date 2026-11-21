@@ -39,7 +39,7 @@ export class FormationFx {
     if (!this.img) this.img = this.scene.add.image(0, 0, SIGIL_KEY, 0).setDepth(DEPTH.deco + 1).setName('formation-sigil');
     const id = s.id ?? this.shown; if (!id) { this.img.setVisible(false); return; }
     this.shown = id;
-    const f = this.legion.formation, c = id === 'snake' ? { x: this.player.x, y: this.player.y } : f.world(f.center);
+    const f = this.legion.formation, c = id === 'snake' && !f.anchor ? { x: this.player.x, y: this.player.y } : f.world(f.center);
     const base = id === 'snake' ? SIGIL.snakeSize : id === 'bazhen' ? (FORMATION.bazhen.ring + 40) * 2.3 : Phaser.Math.Clamp(f.extent * 2.25, SIGIL.minSize, SIGIL.maxSize);
     const t = Math.min(1, (now - this.unfoldAt) / SIGIL.unfoldMs), grow = .45 + .55 * (1 - Math.pow(1 - t, 3)), flash = t < 1 ? (1 - t) * .25 : 0;
     this.img.setFrame(FORMATION_IDS.indexOf(id)).setPosition(c.x, c.y).setRotation(f.facing + Math.PI / 2).setDisplaySize(base * grow, base * grow)

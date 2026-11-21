@@ -29,6 +29,7 @@ export interface DefenseHost {
   /** 跳过喘息：把关内时间拨到下一波。 */ skipTo: (sec: number) => void;
   /** 小兵成长（弓手伤害跟着涨一点）。 */ hpScale: () => number;
   /** 登城：主将在城头带里时武器范围加成（1 = 没有）。 */ rampart?: (mul: number) => void;
+  /** 部曲守门（formation-design.md §3）：p = 城门内锚点、朝城外；null = 随主将。 */ guardGate?: (p: { x: number; y: number; facing: number } | null) => void;
   win: () => void; lose: () => void;
 }
 export interface DefenseOpts { tier: CityTier; dtier: DefenseTier; office: number; muster: number; start: { x: number; y: number }; wallLine: number; gateX: number }
@@ -76,6 +77,9 @@ export class DefenseBattle {
   }
   get keepPos() { return { x: this.o.start.x + DEFENSE.keep.x, y: this.o.start.y + DEFENSE.keep.y }; }
   get gatePos() { return { x: this.o.gateX, y: this.o.wallLine }; }
+  /** 部曲守门（默认开）：守在城门内，面朝城外。 */
+  gateGuard = true; private guardSet = false;
+  setGateGuard(on: boolean): void { this.gateGuard = on; this.guardSet = true; this.h.guardGate?.(on ? { x: this.o.gateX, y: this.o.wallLine + 80, facing: -Math.PI / 2 } : null); }
   /** 敌营刷兵口（墙外北面三处）。 */
   spawnPoint(): { x: number; y: number } { const S = DEFENSE.spawn, x = S.xs[Math.floor(Math.random() * S.xs.length)]; return { x: this.o.start.x + x + (Math.random() - .5) * 2 * S.jitter, y: this.o.start.y + S.y + (Math.random() - .5) * 120 }; }
   /** 攻城主将出场点：墙外正北、对着城门。 */
@@ -100,6 +104,7 @@ export class DefenseBattle {
     this.wave = idx; this.phase = phase;
     const key = phase + idx;
     if (key !== this.lastPhase) { this.lastPhase = key; this.enterPhase(phase, idx); }
+    if (!this.guardSet) { this.setGateGuard(true); this.h.banner('部曲守城门', false, '喘息布防时可改为随主将'); }
     { const P = this.h.player(), R = DEFENSE.rampart, on = P.y > this.o.wallLine + R.top - 10 && P.y < this.o.wallLine + R.bottom + 10; if (on !== this.onRampart) { this.onRampart = on; this.h.rampart?.(on ? 1 + R.rangeBonus : 1); } }
     if (!this.h.paused()) {
       this.fireArchers(now);
@@ -226,6 +231,10 @@ export class DefenseBattle {
     };
     btn(W / 2 - 180, '修城门 +25%', P.repairCost, 'defense-prep-repair', () => { if (this.gate.open) return false; this.gate.hp = Math.min(this.gate.max, this.gate.hp + this.gate.max * P.repair); this.stats.repairs++; return true; });
     btn(W / 2, '补滚木 / 热油', P.refillCost, 'defense-prep-refill', () => { this.facility.logs.charges++; this.facility.oil.charges++; return true; });
+    // 部曲守门 / 随主将：一行字签（不另加按钮）
+    const gg = s.add.text(W / 2, y + 40, '', { fontFamily: FONT, fontSize: '12px', color: '#e8d3a6', resolution: 2 }).setOrigin(.5).setName('defense-prep-guard').setInteractive({ useHandCursor: true });
+    const ggPaint = () => gg.setText(this.gateGuard ? '部曲 · 守城门（点此改为随主将）' : '部曲 · 随主将（点此改为守城门）');
+    gg.on('pointerup', () => { this.setGateGuard(!this.gateGuard); ggPaint(); this.h.sfx('uiClick'); }); ggPaint(); root.add(gg);
     btn(W / 2 + 180, '补城头弓手', P.archerCost, 'defense-prep-archer', () => { const dead = this.archers.find(a => a.hp <= 0); if (dead) { dead.hp = DEFENSE.archerHp; dead.img.setAlpha(1).clearTint(); return true; } return false; });
     const tick = () => { if (!root.active) return; head.setText(`喘息 · 布防　随军粮 ${Math.floor(this.h.food())}　·　站在城门内读条免费修一点　·　Space 跳过`); };
     tick(); const ev = s.time.addEvent({ delay: 500, loop: true, callback: tick, callbackScope: this }); root.once('destroy', () => ev.remove());
@@ -288,5 +297,5 @@ export class DefenseBattle {
   /** 测试 / 舆图用。 */
   snapshot() { return { phase: this.phase, wave: this.wave, waves: this.waves, gate: Math.round(this.gate.hp), gateMax: this.gate.max, gateOpen: this.gate.open, keep: Math.round(this.keep.hp), keepMax: this.keep.max, archers: this.archers.filter(a => a.hp > 0).length, engines: this.engines.map(g => g.kind), charges: { logs: this.facility.logs.charges, oil: this.facility.oil.charges }, stats: { ...this.stats, phaseLog: [...this.stats.phaseLog] } }; }
   get facilities() { return { logs: { x: this.facility.logs.x, y: this.facility.logs.y }, oil: { x: this.facility.oil.x, y: this.facility.oil.y } }; }
-  clear(): void { if (this.onRampart) this.h.rampart?.(1); this.done = true; for (const o of this.objs) o.destroy(); for (const a of this.archers) a.img.destroy(); for (const g of this.engines) g.label.destroy(); this.ui?.destroy(); this.rolling?.img.destroy(); for (const f of this.burning?.fires ?? []) f.destroy(); this.objs = []; this.archers = []; this.engines = []; }
+  clear(): void { if (this.onRampart) this.h.rampart?.(1); if (this.gateGuard) this.h.guardGate?.(null); this.done = true; for (const o of this.objs) o.destroy(); for (const a of this.archers) a.img.destroy(); for (const g of this.engines) g.label.destroy(); this.ui?.destroy(); this.rolling?.img.destroy(); for (const f of this.burning?.fires ?? []) f.destroy(); this.objs = []; this.archers = []; this.engines = []; }
 }

@@ -109,7 +109,8 @@ async function honestFight(key, tag) {
     await p.waitForTimeout(120);
   }
 }
-const honestLog = [], attempts = {}; let heroSwitched = false; const HERO_POOL = ['zhaoyun', 'guanyu', 'zhangfei', 'liubei'];
+// 只有主公出战（主将不可换）：「换将再试一轮」在游戏里做不到（2026-11-21 首跑：改 im_last_hero 后仍是赵云）——3 次不过直接记卡关
+const honestLog = [], attempts = {}; let heroSwitched = !process.env.HONEST_SWITCH; const HERO_POOL = ['zhaoyun', 'guanyu', 'zhangfei', 'liubei'];
 /** 等某个场景活动。 */
 const waitScene = (pred, ms = 120000) => p.waitForFunction(pred, null, { timeout: ms }).then(() => true).catch(() => false);
 
@@ -185,7 +186,10 @@ for (; stages < MAX; ) {
     if (r.result === 'stuck' || r.result === 'timeout') { issue(tag, `软锁 / 卡住（${r.result}）：` + JSON.stringify(r.st).slice(0, 240), '高'); break; }
     if (r.result === 'lose') {
       if (att < 3) { note(tag + '-retry', { attempt: att });
-        if (await honestRetry(p, key)) { await waitScene(() => window.__game.scene.getScenes(true).some(s => /GameScene$/.test(s.scene.key) && s.player && s.elapsed < 3), 60000); continue; }
+        if (await honestRetry(p, key)) { const back = await waitScene(() => window.__game.scene.getScenes(true).some(s => /GameScene$/.test(s.scene.key) && s.player && s.elapsed < 3) || window.__game.scene.isActive('MenuScene'), 60000);
+          // 总制作人实测：败走面板「再战此关」现在会回主菜单而不是重开（已退回界面组）——记一条，按「回主页 → 继续征程」走（主循环见 MenuScene 会点开始 / 继续征程）
+          if (back && await p.evaluate(() => window.__game.scene.isActive('MenuScene'))) { if (!globalThis.__retryMenuNoted) { globalThis.__retryMenuNoted = true; issue(tag, '败走面板「再战此关」回到主菜单而不是重开本关（已退回界面组）', '中'); } }
+          continue; }
         // 没有「再战」（天下已开：战败走「退守」）：点退守回地图，下一轮从地图重新出征同一关（仍算一次尝试）
         await p.evaluate(k => { const s = window.__game.scene.getScene(k); const h = s?.resultPanel?.getByName?.('result-home'); h?.emit('pointerdown', { x: h.x, y: h.y }); h?.emit('pointerup', { x: h.x, y: h.y }); }, key); await p.waitForTimeout(3000); continue; }
       if (!heroSwitched) { heroSwitched = true; attempts[nm] = 0; const cur = r.start?.hero, next = HERO_POOL.find(h => h !== cur); issue(tag, `卡关：${nm} 用 ${cur} 3 次不过，换 ${next} 再试一轮`, '中');

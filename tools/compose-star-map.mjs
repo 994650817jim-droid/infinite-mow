@@ -11,6 +11,7 @@ const ICONS = { '千钧': 'qianjun', '破阵': 'pozhen', '斩将': 'zhanjiang', 
 for (const id of Object.values(ICONS)) files['icon_' + id] = rd(D + `icon_${id}.png`);
 files.bg = rd(E.BG || (D + 'originals/bg_starmap.png')); files.lineInk = rd(D + 'line_ink.png'); files.lineGold = rd(D + 'line_gold.png'); files.fx = rd(D + 'fx_light_strip.png');
 const LAY = E.DECOR ? JSON.parse(fs.readFileSync(E.DECOR + 'layout.json', 'utf8')) : null; if (LAY) { files['d_plate'] = rd(E.DECOR + 'taiji_plate.png'); for (const t of LAY.trigrams) files['d_' + t.id] = rd(E.DECOR + 'trigram_' + t.id + '.png'); }
+if (E.STARS) files.stars = rd(E.STARS);
 const A1 = E.A1 ? rd(E.A1) : null; if (A1) files.a1 = A1;
 const b = await chromium.launch({ channel: 'chrome', headless: true });
 try {
@@ -62,7 +63,8 @@ try {
         const t = document.createElement('canvas'); t.width = 1920; t.height = 1080; const tg = t.getContext('2d'); tg.imageSmoothingQuality = 'high'; const s = FIT * zoom * 2; tg.drawImage(ml, 470 * 2 - px * s, 264 * 2 - py * s, 1600 * s, 900 * s);
         const mask = (x0, x1, y0, y1) => { const m = document.createElement('canvas'); m.width = 1920; m.height = 1080; const mg = m.getContext('2d'); const gh = mg.createLinearGradient(0, 0, 1920, 0); const E2 = 32 / 1920; gh.addColorStop(0, 'rgba(0,0,0,0)'); gh.addColorStop(x0 * 2 / 1920, 'rgba(0,0,0,0)'); gh.addColorStop(x0 * 2 / 1920 + E2, '#000'); gh.addColorStop(x1 * 2 / 1920 - E2, '#000'); gh.addColorStop(x1 * 2 / 1920, 'rgba(0,0,0,0)'); gh.addColorStop(1, 'rgba(0,0,0,0)'); mg.fillStyle = gh; mg.fillRect(0, 0, 1920, 1080); tg.globalCompositeOperation = 'destination-in'; tg.drawImage(m, 0, 0); const m2 = document.createElement('canvas'); m2.width = 1920; m2.height = 1080; const m2g = m2.getContext('2d'); const gv = m2g.createLinearGradient(0, 0, 0, 1080); gv.addColorStop(0, 'rgba(0,0,0,0)'); gv.addColorStop(y0 * 2 / 1080, 'rgba(0,0,0,0)'); gv.addColorStop(y0 * 2 / 1080 + E2 * 1.78, '#000'); gv.addColorStop(y1 * 2 / 1080 - E2 * 1.78, '#000'); gv.addColorStop(y1 * 2 / 1080, 'rgba(0,0,0,0)'); gv.addColorStop(1, 'rgba(0,0,0,0)'); m2g.fillStyle = gv; m2g.fillRect(0, 0, 1920, 1080); tg.drawImage(m2, 0, 0); tg.globalCompositeOperation = 'source-over'; };
         mask(CL.l, CL.r, CL.t, CL.b); g.drawImage(t, 0, 0);
-        g.drawImage(IM.a1, 0, 0, 205, 540, 0, 0, 410, 1080); g.drawImage(IM.a1, 735, 0, 225, 540, 1470, 0, 450, 1080); g.drawImage(IM.a1, 205, 516, 530, 24, 410, 1032, 1060, 48); return c; };
+        g.drawImage(IM.a1, 0, 0, 205, 540, 0, 0, 410, 1080); g.drawImage(IM.a1, 735, 0, 225, 540, 1470, 0, 450, 1080); g.drawImage(IM.a1, 205, 516, 530, 24, 410, 1032, 1060, 48);
+        if (IM.stars) { g.save(); g.beginPath(); g.rect(0, 0, 410, 1080); g.rect(1470, 0, 450, 1080); g.clip(); g.drawImage(IM.stars, 0, 0, 1920, 1080); g.restore(); } return c; };
       frames.A = mk(1, 800, 450).toDataURL('image/png'); frames.B = mk(1.5, 900, 450).toDataURL('image/png'); }
     return { frames, full: full.toDataURL('image/png'), alloff: alloff.toDataURL('image/png'), crop: crop.toDataURL('image/png'), table: tb.toDataURL('image/png'), fx: fc.toDataURL('image/png') };
   }, [nodes, files, ICONS, LAY]);

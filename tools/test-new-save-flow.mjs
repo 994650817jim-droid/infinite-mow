@@ -27,7 +27,7 @@ await shot('picker-selected');
 const pk = await p.evaluate(M0 => { const r = eval(M0).children.getByName('hero-picker'); const ink = r.list.filter(o => o.visible && o.type === 'NineSlice' && /btn_ink/.test(o.texture?.key ?? '')).length; const sel = r.getByName('hero-picker-selected'); const ys = r.list.filter(o => /^pick-/.test(o.name ?? '') && o.type === 'Container' && o.visible).map(o => [o.name, Math.round(o.y), +o.alpha.toFixed(2)]); return { ink, sel: !!sel, ys, label: r.list.find(o => o.type === 'Text' && /确认出战|选定武将/.test(o.text ?? ''))?.text }; }, M);
 await emit('hero-confirm'); await p.waitForTimeout(400);
 await shot('picker-confirm1');
-await emit('hero-confirm'); await p.waitForTimeout(4000);
+await emit('hero-confirm'); await p.waitForFunction(() => window.__game.scene.getScenes(true).some(s => /GameScene/.test(s.scene.key)), null, { timeout: 30000 }).catch(() => {}); await p.waitForTimeout(1500); // 先过 BootScene 载入战斗资源（约 3 秒）
 const after = await p.evaluate(() => ({ active: window.__game.scene.getScenes(true).map(s => s.scene.key) }));
 await shot('after-confirm');
 // 进到战斗场景后：章头 / 军情卡（剧情卷轴）——截两张，点开战

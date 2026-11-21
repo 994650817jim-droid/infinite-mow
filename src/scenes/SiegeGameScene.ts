@@ -40,6 +40,7 @@ import {AllyPush, pushOutBoxes} from '../systems/AllyPush';
 import {loadMidSiegeArt} from '../systems/SiegeMidArt';
 import type {EnemyKind} from '../types';
 import {SIEGE_TIMER} from '../data/siegeTimer';
+import {EdgeGuide} from '../ui/EdgeGuide';
 
 /**
  * 攻城战（WORLD_MAP_PLAN.md · W2）：按城市档位的短战。胜利（击败守将 / 大将）即占领该城。
@@ -114,7 +115,7 @@ export function siegeGameSceneClass(Base: typeof GameScene) {
       const keys = (this.registry.get('battleTextureKeys') ?? []) as string[];
       this.registry.set('battleTextureKeys', [...new Set([...keys, ...Object.keys(GUANDU_ATLAS_FILES), art.key, art.roadKey, ...paletteKeys])]);
       this.hudTexts.chapter.setText(`${this.chapter.name} · ${TIER_NAME[city.tier]}`);
-      this.flag = null; this.towers = []; this.capturing = false; this.captured = false; this.captureProgress = 0; this.captureG = undefined; this.captureLabel = undefined; this.goalText = undefined;
+      this.flag = null; this.towers = []; this.edgeGuide = undefined; this.capturing = false; this.captured = false; this.captureProgress = 0; this.captureG = undefined; this.captureLabel = undefined; this.goalText = undefined;
       this.mid?.clear(); this.mid = undefined;
       if (midCity) this.setupMid();
       if (!this.defense) this.setupGoals();
@@ -147,6 +148,18 @@ export function siegeGameSceneClass(Base: typeof GameScene) {
       this.captureG = this.add.graphics().setDepth(2).setName('siege-capture');
       const cp = this.capturePoint; this.captureLabel = worldText(this, cp.x, cp.y - SG.capture.radius - 26, '府衙', 16, '#ffe1a0').setOrigin(.5).setStroke('#1a120b', 4).setDepth(36);
       this.showWaveBanner('城防已破 · 占领府衙', true, '站进府衙圈内，进度满即破城');
+    }
+    private edgeGuide?: EdgeGuide;
+    /** 屏边要指的目标：中城按 SiegeMidCity.guideTargets；小城是还在的箭楼、军旗。 */
+    private siegeGuideTargets(): Array<{key: string; x: number; y: number; label: string}> {
+      // 军令箭头（舆图那套，指当前军令目标）在时，不再重复指「当前目标」，只补冲车
+      const ordersOn = (() => { const c = (this as unknown as {battleOrders?: {current(): {kind: string} | null} | null}).battleOrders?.current(); return !!c && c.kind !== 'boss'; })();
+      if (this.mid) return this.mid.guideTargets.filter(t => !(ordersOn && t.key === 'goal'));
+      const tw = this.towers.find(t => t.e.active && t.e.spawnId === t.life);
+      if (ordersOn) return [];
+      if (tw) return [{key: 'goal', x: tw.e.x, y: tw.e.y, label: '箭楼'}];
+      if (this.flag && this.flag.e.active && this.flag.e.spawnId === this.flag.life) return [{key: 'goal', x: this.flag.e.x, y: this.flag.e.y, label: '军旗'}];
+      return [];
     }
     private updateGoals(dt: number) {
       this.paintGarrison();
@@ -420,6 +433,8 @@ export function siegeGameSceneClass(Base: typeof GameScene) {
       const midPhase = this.mid?.phase; if (midPhase && midPhase !== this.lastMidPhase) { if (this.lastMidPhase === 'outside' && this.allyPush) { for (let i = 0; i < SIEGE_ALLIES.gateWave; i++) this.allyPush.spawn(); this.showWaveBanner('援军跟进', false, '城门已破 · 义军随后杀入'); } this.lastMidPhase = midPhase; }
       if (this.combatNow > before && !this.over && this.mode === 'none') { if (!this.awaitingChest) this.enemyCamps?.update(this.combatNow); if (!this.defense) this.updateGoals((this.combatNow - before) / 1000); }
       this.controller?.updateDeath(delta);
+      // 屏边目标指示：冲车 / 箭楼 / 城门 / 要点在屏外时指方向（2026-11-21 总制作人：原地站了近三分钟不知道往哪走）
+      if (!this.defense) { this.edgeGuide ??= new EdgeGuide(this); this.edgeGuide.update(this.siegeGuideTargets(), this.player, this.mode === 'none' && !this.over); }
       if (this.gateLabel && this.gateAlive) {
         const left = this.chapter.waves[this.chapter.waves.length - 1].start + 60 - this.elapsed;
         this.gateLabel.setText(`城门 ${Math.ceil(this.gate!.hp)}/${this.gate!.maxHp}` + (this.bossTimeReached ? ` · ${Math.max(0, Math.ceil(left))}秒内破门` : ''));

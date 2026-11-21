@@ -149,3 +149,14 @@ export function lqCommand(scene: Phaser.Scene, x: number, y: number, width: numb
   const sk = lqSkin(scene, hit, caption, () => ({ w: width, h: height }), { tone: primary ? 'gold' : 'quiet', enabled: () => enabled, on: () => primary });
   return { g: sk.gfx, hit, caption };
 }
+
+/**
+ * 无框弹窗底（2026-11-21 总制作人「弹窗去整块大框」）：内容区一层很淡的暗底（无边），上下两道细金线；配合调用方的全屏压暗用。
+ * 代替 warPanelTexture / lqPanel 的金边大框（电脑版）。返回 Graphics，加进弹窗容器即可。
+ */
+export function lqFloat(scene: Phaser.Scene, cx: number, cy: number, w: number, h: number): Phaser.GameObjects.Graphics {
+  const g = scene.add.graphics();
+  g.fillStyle(0x0b0806, .5).fillRect(cx - w / 2, cy - h / 2, w, h);
+  g.fillStyle(LQ.goldHi, .85); lqDivider(g, cx, cy - h / 2, w / 2); lqDivider(g, cx, cy + h / 2, w / 2);
+  return g;
+}

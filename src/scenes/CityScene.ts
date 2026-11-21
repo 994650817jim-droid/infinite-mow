@@ -11,7 +11,7 @@ import {exchangeMerit,merit,scrolls} from '../systems/MasteryStore';
 import {playMenuMusic} from '../systems/Music';
 import {isChapterTestRun} from '../systems/ChapterProgress';
 import Phaser from 'phaser';
-import {lqCommand} from '../ui/LacquerKit';
+import {lqCommand,lqFloat} from '../ui/LacquerKit';
 import {W,H,worldShell,worldAssets} from '../world/WorldUI';
 import {FONT,HEADING_FONT} from '../config';
 import {homeCommand,warPanelTexture} from '../ui/HomeCommand';
@@ -350,8 +350,8 @@ export class CityScene extends Phaser.Scene {
  private modal(name:string,title:string,h:number,depth=600,lacquer=false):{root:Phaser.GameObjects.Container;x:number;y:number;w:number;h:number}{
   this.children.getByName(name)?.destroy();
   const root=this.add.container(0,0).setDepth(depth).setName(name),w=Math.min(D?640:W-24,W-24),y=(H-h)/2;
-  root.add(this.add.rectangle(W/2,H/2,W,H,0x0b0806,.78).setInteractive());
-  root.add(this.add.image(W/2,H/2,warPanelTexture(this,w,h,true)).setDisplaySize(w+16,h+16));
+  root.add(this.add.rectangle(W/2,H/2,W,H,0x0b0806,D?.86:.78).setInteractive());
+  root.add(D?lqFloat(this,W/2,H/2,w,h):this.add.image(W/2,H/2,warPanelTexture(this,w,h,true)).setDisplaySize(w+16,h+16)); // 电脑版去金边大框（2026-11-21）
   root.add(txt(this,W/2,y+30,title,22,'#efd399',HEADING_FONT).setOrigin(.5).setName(name+'-title'));
   const close=(lacquer?lqCommand:homeCommand)(this,W/2,y+h-34,160,40,'返回',false,true,15);close.hit.setName(name+'-close').setData('padDefault',true).on('pointerdown',()=>{root.destroy();this.refresh();});root.add([close.g,close.hit,close.caption]);
   return{root,x:(W-w)/2,y,w,h};

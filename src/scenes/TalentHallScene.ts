@@ -10,7 +10,8 @@ import {startCityAmbient} from '../systems/ContentSfx';
 import { uiSfx } from '../systems/Sfx';
 import { isChapterTestRun } from '../systems/ChapterProgress';
 import { W, H, worldText, worldButton, worldShell, panel } from '../world/WorldUI';
-import { loadWorld, worldUnlocked } from '../world/WorldStore';
+import { loadWorld, worldUnlocked, townProgress } from '../world/WorldStore';
+import { buildBlockers } from '../town/TownData';
 import { FACTIONS } from '../world/WorldCities';
 import { QUALITIES } from '../data/items';
 import { CHARACTERS, getCharacter } from '../data/characters';
@@ -39,6 +40,10 @@ export class TalentHallScene extends Phaser.Scene {
     const added: string[] = [];
     for (const c of CHARACTERS) if (!this.textures.exists(c.portrait)) { this.load.image(c.portrait, `assets/processed/${c.portrait}.png`); added.push(c.portrait); }
     // 史事名将 / 无名之辈的模板头像（ChatGPT 正式图，tools/prepare-recruit-faces.mjs；帧顺序 枪 / 刀 / 弓 / 谋）。缺图时退回印章字
+    // 2026-11-21 总制作人（招贤馆太素、整页大框）：背景用营帐图（同营寨招募），名将行用水墨立轴裁圆头像
+    if (!this.textures.exists('city_recruit_art')) this.load.image('city_recruit_art', 'assets/world/rest-camp.webp');
+    for (const c of CHARACTERS) { const k = 'ink_hero_' + c.id; if (!this.textures.exists(k)) { this.load.image(k, `assets/ink-scroll/${c.id}.webp`); added.push(k); } }
+    this.load.on('loaderror', () => { /* 缺图的武将退回印章字 */ });
     if (!this.textures.exists('recruit_faces')) this.load.spritesheet('recruit_faces', 'assets/recruits/recruit_faces.png', { frameWidth: 128, frameHeight: 128 });
     this.events.once('shutdown', () => { for (const k of added) if (this.textures.exists(k)) this.textures.remove(k); });
   }
@@ -47,7 +52,7 @@ export class TalentHallScene extends Phaser.Scene {
     if (!worldUnlocked() && !isChapterTestRun()) { this.scene.start('MenuScene'); return; }
     // 2026-11-17 用户批准 UI 审查 A：电脑版整页改漆底描金 + 水墨按钮（原深绿底、扁平矩形按钮、绿木纹行，像网页）
     const D = W > 600;
-    if (D) { this.cameras.main.setBackgroundColor('#0e0a07'); const fr = this.add.graphics(); lqPanel(fr, 8, 8, W - 16, H - 16, { shadow: false }); }
+    if (D) { this.cameras.main.setBackgroundColor('#0e0a07'); if (this.textures.exists('city_recruit_art')) this.add.image(W / 2, H / 2, 'city_recruit_art').setDisplaySize(Math.max(W, H * 1.5), Math.max(H, W / 1.5)).setAlpha(.32).setDepth(-1); } // 不画整页金边大框，用营帐图压暗做底
     worldShell(this, '招贤馆');
     this.status = worldText(this, D ? MX + 4 : 24, 64, '', 13, D ? '#e8d8b2' : '#cfdcc6').setWordWrapWidth(W - 48);
     if (D) { const back = homeCommand(this, W / 2, H - 34, 220, 42, '返回营寨'); back.hit.setName('talent-home').on('pointerdown', () => this.scene.start('CityScene')); }
@@ -67,6 +72,15 @@ export class TalentHallScene extends Phaser.Scene {
     const t = worldText(this, x, y, label, W > 600 ? 13 : 14, enabled ? '#f2dfb2' : '#8a7e68').setOrigin(.5);
     if (enabled) bg.setInteractive({ useHandCursor: true }).on('pointerup', () => fn());
     this.content!.add([bg, t]); return bg;
+  }
+  /** 名将水墨圆头像（ink-scroll 立轴取头肩、金圈；没归附压成墨色剪影）；没图返回 false。 */
+  private inkFace(id: string, x: number, y: number, size: number, unlocked: boolean): boolean {
+    const src = 'ink_hero_' + id, key = 'talent_face_' + id; if (!this.textures.exists(src)) return false;
+    if (!this.textures.exists(key)) { const img = this.textures.get(src).getSourceImage() as HTMLImageElement, S = 128, cv = document.createElement('canvas'); cv.width = cv.height = S; const g = cv.getContext('2d')!; g.save(); g.beginPath(); g.arc(S / 2, S / 2, S / 2, 0, Math.PI * 2); g.clip(); g.fillStyle = '#2a1d12'; g.fillRect(0, 0, S, S); const side = img.width * .56; g.imageSmoothingQuality = 'high'; g.drawImage(img, img.width * .22, img.height * .03, side, side, 0, 0, S, S); g.restore(); this.textures.addCanvas(key, cv); }
+    const r = size / 2, ring = this.add.graphics(); ring.fillStyle(0x0d0806, 1).fillCircle(x, y, r + 1);
+    const im = this.add.image(x, y, key).setDisplaySize(size - 4, size - 4); if (!unlocked) im.setVisible(false); // 没归附：不露脸，只写一个提示字
+    const rim = this.add.graphics(); rim.lineStyle(2.5, unlocked ? 0xd9b46a : 0x6a5a40, 1).strokeCircle(x, y, r + 1);
+    this.content!.add([ring, im, rim]); if (!unlocked) this.content!.add(worldText(this, x, y, getCharacter(id as CharacterId).name.slice(0, 1), Math.round(size * .44), '#6a5a40').setOrigin(.5)); return true;
   }
   private seal(x: number, y: number, size: number, quality: keyof typeof QUALITIES, glyph: string, portrait?: string, template?: FollowerTemplate) {
     const q = QUALITIES[quality];
@@ -88,7 +102,11 @@ export class TalentHallScene extends Phaser.Scene {
     // 名将（2026-11-20 用户「解锁是指可以玩到的角色，不是解锁就可以跟随了，需要去招贤那里招」）：可玩武将在这里花军粮招为随从
     const heroList = CHARACTERS.filter(c => c.id !== s.lord), hirable = heroList.filter(c => heroUnlocked(c.id) && !heroHired(c.id, s)).length;
     this.small(D ? MX + 70 + 300 : 390, tabY, 140, `名将（可招 ${hirable}）`, () => { this.tab = 'heroes'; this.page = 0; this.render(); }, 'talent-tab-heroes', true, this.tab === 'heroes');
-    if (hall < 3) { const c = RECRUIT.hallUpgrade[Math.max(1, hall) - 1]; this.small(W - (D ? MX + 110 : 110), tabY, D ? 220 : 180, `升级招贤馆（${c.provisions} 军粮）`, () => { this.message = upgradeHall().message; this.render(); }, 'talent-hall-up'); }
+    if (hall < 3) {
+      const c = RECRUIT.hallUpgrade[Math.max(1, hall) - 1], ws = loadWorld(), block = hallInTown() ? buildBlockers(ws.town, 'talent', townProgress(ws)) : [], poor = ws.provisions < c.provisions, why = block[0] ?? (poor ? `军粮不足，还差 ${c.provisions - ws.provisions}` : '');
+      this.small(W - (D ? MX + 110 : 110), tabY, D ? 220 : 180, `升级招贤馆（${c.provisions} 军粮）`, () => { this.message = upgradeHall().message; this.render(); }, 'talent-hall-up', !why);
+      if (why) this.content.add(worldText(this, W - (D ? MX + 230 : 200), tabY, why, 12, '#d8a890').setOrigin(1, .5).setName('talent-hall-why')); // 2026-11-21：营寨 Lv1 时点了没反应也没提示
+    }
     const top = tabY + (D ? 26 : 34), bottom = H - (D ? 64 : 104) - 30, rowH = D ? 74 : this.tab === 'roster' ? 118 : 104;
     // 名将页（22 将）电脑版两列排：一页 8 将（原来一列 4 将、要翻 6 页，右边大半空着；2026-11-21 UI 审查）
     const twoCol = D && this.tab === 'heroes', per = Math.max(1, Math.floor((bottom - top) / rowH)) * (twoCol ? 2 : 1);
@@ -120,7 +138,7 @@ export class TalentHallScene extends Phaser.Scene {
       this.content.add(worldText(this, W / 2, bottom - 4, `${this.page + 1}/${pages}`, 13, '#e6c88e').setOrigin(.5));
       this.small(W / 2 + 90, bottom - 4, 70, '下页', () => { this.page = (this.page + 1) % pages; this.render(); }, 'talent-next');
     }
-    this.content.add(worldText(this, D ? MX + 4 : 24, bottom + 28, this.message, 13, '#ffd98a').setWordWrapWidth(W - 48).setName('talent-message'));
+    this.content.add((D ? worldText(this, W - MX, 70, this.message, 13, '#ffd98a').setOrigin(1, 0).setWordWrapWidth(W / 2, true) : worldText(this, 24, bottom + 28, this.message, 13, '#ffd98a').setWordWrapWidth(W - 48)).setName('talent-message'));
   }
   private offerRow(o: Offer, i: number, captive: boolean, y: number, h: number) {
     const D = W > 600, x0 = D ? MX : 16, w = W - x0 * 2, q = QUALITIES[o.quality];
@@ -139,12 +157,11 @@ export class TalentHallScene extends Phaser.Scene {
   private heroRow(id: CharacterId, y: number, h: number, following: number, cap: number, grain: number, cx0?: number, cw?: number) {
     const D = W > 600, x0 = cx0 ?? (D ? MX : 16), w = cw ?? W - x0 * 2, c = getCharacter(id), unlocked = heroUnlocked(id), hired = unlocked && heroHired(id), cost = heroHireCost(id);
     if (D) { const g = this.add.graphics(); g.fillStyle(0x000000, .35).fillRoundedRect(x0 + 2, y - h / 2 + 3, w, h, 8).fillStyle(0x1b120b, .96).fillRoundedRect(x0, y - h / 2, w, h, 8).lineStyle(1.5, unlocked && !hired ? 0xe0b25a : 0xc9a35e, unlocked ? .9 : .4).strokeRoundedRect(x0, y - h / 2, w, h, 8); this.content!.add(g); } else this.content!.add(panel(this, W / 2, y, w, h));
-    const size = h - 16; this.seal(x0 + 12 + size / 2, y, size, 'orange', c.name.slice(0, 1), unlocked ? c.portrait : undefined);
-    if (!unlocked) { const sh = this.content!.list[this.content!.list.length - 1] as Phaser.GameObjects.Text; sh?.setColor?.('#5a4a36'); }
+    const size = h - 16; if (!this.inkFace(id, x0 + 12 + size / 2, y, size, unlocked)) { this.seal(x0 + 12 + size / 2, y, size, 'orange', c.name.slice(0, 1), unlocked ? c.portrait : undefined); if (!unlocked) { const sh = this.content!.list[this.content!.list.length - 1] as Phaser.GameObjects.Text; sh?.setColor?.('#5a4a36'); } }
     const tx = x0 + 24 + size;
     this.content!.add(worldText(this, tx, y - h / 2 + 8, unlocked ? c.name : '？？？', D ? 17 : 18, unlocked ? '#f2a24e' : '#8a7a62').setName('talent-hero-name-' + id));
-    const status = !unlocked ? UNJOINED_HINT : hired ? '已在麾下 · 去「麾下」页设随行' : '已归附 · 可选为主将 · 需在此招募才会随行出战';
-    this.content!.add(worldText(this, tx, y - h / 2 + (D ? 32 : 36), status, 12, unlocked ? '#cdbf9f' : '#8a7a62').setName('talent-hero-status-' + id));
+    const status = !unlocked ? UNJOINED_HINT : hired ? '已在麾下 · 去「麾下」页设随行' : grain < cost ? `已归附 · 招募还差 ${cost - grain} 军粮` : '已归附 · 招募后随行出战';
+    this.content!.add(worldText(this, tx, y - h / 2 + (D ? 32 : 36), status, 12, unlocked && !hired && grain < cost ? '#d8a890' : unlocked ? '#cdbf9f' : '#8a7a62').setName('talent-hero-status-' + id).setWordWrapWidth(w - (tx - x0) - 180, true)); // 不再被右边按钮截断
     const label = !unlocked ? '未归附' : hired ? '已在麾下' : `招募 · ${cost} 军粮`, can = unlocked && !hired && grain >= cost;
     this.small(x0 + w - 90, y, 160, label, () => { const r = hireHero(id); this.message = r.message; this.render(); }, 'talent-hire-' + id, can, unlocked && !hired);
     void following; void cap;

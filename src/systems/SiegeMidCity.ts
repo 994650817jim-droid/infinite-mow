@@ -582,6 +582,16 @@ export class SiegeMidCity {
       this.zones.splice(this.zones.indexOf(z), 1);
     }
   }
+  /** 屏边目标指示（ui/EdgeGuide，2026-11-21）：城外段冲车 + 当前要打的（箭楼 → 城门）；瓮城段内城门；街巷段第一个没拿下的要点。 */
+  get guideTargets(): Array<{ key: string; x: number; y: number; label: string }> {
+    const out: Array<{ key: string; x: number; y: number; label: string }> = [], alive = (t: { e: Enemy; life: number } | null): boolean => !!t && t.e.active && t.e.spawnId === t.life;
+    if (this.phase === 'outside') {
+      const r = this.ram; if (r && r.state !== 'wreck') out.push({ key: 'ram', x: r.x, y: r.y, label: '冲车' });
+      const tw = this.towers.find(t => alive(t)); if (tw) out.push({ key: 'goal', x: tw.e.x, y: tw.e.y, label: '箭楼' }); else if (this.woodGate && alive(this.woodGate)) out.push({ key: 'goal', x: this.woodGate.x, y: this.woodGate.y, label: '城门' });
+    } else if (this.phase === 'barbican') { if (this.innerGate && alive(this.innerGate)) out.push({ key: 'goal', x: this.innerGate.x, y: this.innerGate.y, label: '内城门' }); }
+    else if (this.phase === 'street') { const p = this.points.find(q => q.state !== 'secured'); if (p) out.push({ key: 'goal', x: p.x, y: p.y, label: p.name }); }
+    return out;
+  }
   get towersAlive() { return this.towers.filter(t => t.e.active && t.e.spawnId === t.life).length; }
   get volleyZones() { return this.zones.length; }
   onKilled(e: Enemy) {

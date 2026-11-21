@@ -14,7 +14,7 @@ import {worldUnlocked} from '../world/WorldStore';
 import Phaser from 'phaser';
 import {W,H,worldText,worldButton,worldShell,panel,worldAssets,releaseWorldArt} from '../world/WorldUI';
 import {inkPlate,homeCommand} from '../ui/HomeCommand';
-import {lqPanel} from '../ui/LacquerKit';
+import {lqPanel,lqFloat} from '../ui/LacquerKit';
 type InkBtn={btn:ReturnType<typeof worldButton>;plate:Phaser.GameObjects.NineSlice|null;primary:boolean;hover:boolean};
 import {WORLD_NODES,type WorldNode} from '../world/WorldNodes';
 import {loadWorld,rewardGrain} from '../world/WorldStore';
@@ -197,16 +197,16 @@ export class WorldMapSceneV1 extends Phaser.Scene {
   {const t=worldText(this,desktop?W-34:W-55,this.area.y+(desktop?100:140),'',11,'#efe0b4').setOrigin(.5).setPadding(6,3).setDepth(9).setName('world-zoom-tier');const g=this.add.graphics().setDepth(8);this.tierLabel=t;t.setData('plate',g);this.paintTier();}
   // 年号与时代：点击展开势力图例
   const resRight=desktop?res.getBounds().right+12:0;
-  const era=eraDef(this.era),chipG=this.add.graphics(),chip=worldText(this,desktop?resRight:this.area.x+12,desktop?12:this.area.y+12,`公元${era.year}年 · ${era.name}  ▾`,desktop?13:16,'#f6dc9a').setPadding(desktop?10:12,desktop?5:7).setInteractive({useHandCursor:true}).setName('world-era');
+  const era=eraDef(this.era),chipG=this.add.graphics(),chip=worldText(this,desktop?resRight:this.area.x+12,desktop?12:this.area.y+12,`公元${era.year}年 · ${era.name}  ▾`,desktop?13:16,'#f6dc9a').setPadding(desktop?7:12,desktop?5:7).setInteractive({useHandCursor:true}).setName('world-era');
   chip.on('pointerup',()=>this.toggleLegend());
   // 领地：城池数、每次出征产出、生效特产
-  const land=worldText(this,chip.x+chip.width+8,chip.y,`领地 ${this.owned.length}  ▾`,desktop?13:16,'#bff0c8').setPadding(desktop?10:12,desktop?5:7).setInteractive({useHandCursor:true}).setName('world-territory');
+  const land=worldText(this,chip.x+chip.width+5,chip.y,`领地 ${this.owned.length}  ▾`,desktop?13:16,'#bff0c8').setPadding(desktop?7:12,desktop?5:7).setInteractive({useHandCursor:true}).setName('world-territory');
   land.on('pointerup',()=>this.toggleTerritory());
-  const intelChip=this.intel.length?worldText(this,land.x+land.width+8,chip.y,`军情 ${this.intel.length}  ▸`,desktop?13:16,'#ffc49a').setPadding(desktop?10:12,desktop?5:7).setInteractive({useHandCursor:true}).setName('world-intel'):null;
+  const intelChip=this.intel.length?worldText(this,land.x+land.width+5,chip.y,`军情 ${this.intel.length}  ▸`,desktop?13:16,'#ffc49a').setPadding(desktop?7:12,desktop?5:7).setInteractive({useHandCursor:true}).setName('world-intel'):null;
   intelChip?.on('pointerup',()=>this.nextIntel());
   lacquerPlate(chipG,chip.x,chip.y,chip.width,chip.height,.9);lacquerPlate(chipG,land.x,land.y,land.width,land.height,.9,0x7fc48f);if(intelChip){lacquerPlate(chipG,intelChip.x,intelChip.y,intelChip.width,intelChip.height,.9,0xd0704a);intelChip.setDepth(1);}chipG.setDepth(chip.depth);chip.setDepth(1);land.setDepth(1);
   // 底边：势力排行（按城池数）+ 操作提示
-  if(desktop){const last=intelChip??land,fb=worldText(this,last.x+last.width+8,chip.y,'势力  ▾',13,'#f2e6c8').setPadding(10,5).setInteractive({useHandCursor:true}).setName('world-factions');lacquerPlate(chipG,fb.x,fb.y,fb.width,fb.height,.9,0xc9a35e);fb.setDepth(1);
+  if(desktop){const last=intelChip??land,fb=worldText(this,last.x+last.width+5,chip.y,'势力  ▾',13,'#f2e6c8').setPadding(7,5).setInteractive({useHandCursor:true}).setName('world-factions');lacquerPlate(chipG,fb.x,fb.y,fb.width,fb.height,.9,0xc9a35e);fb.setDepth(1);
    // 2026-11-18：势力图例放地图左上角竖排（各势力色块 + 城数），默认展开、点「势力」收起；收起状态记在本机
    let open=true;try{open=localStorage.getItem('im_world_legend')!=='0';}catch{/* 存储不可用 */}
    this.factionStripC=factionCorner(this,this.area.x+8,this.area.y+8,this.era,this.owned).setDepth(20).setVisible(open);this.factionBtn=fb;fb.setText(open?'势力  ▴':'势力  ▾');this.legendRect=open?this.factionStripC.getBounds():undefined;
@@ -231,7 +231,8 @@ export class WorldMapSceneV1 extends Phaser.Scene {
   if(advance||lost.length)this.showNotice(advance,lost);
   // 战败退守（data/defeatFlow.ts）：选中 / 居中退守的城池或营寨，弹败退告示（叠在时局告示之上）
   const retreat=this.registry.get('defeatRetreat') as DefeatRetreatNote|undefined;this.registry.remove('defeatRetreat');
-  const intros=takeMechIntros('map');if(intros.length)this.showMechIntro(intros);
+  // 「新玩法开放」等「新篇解锁」横幅收起再弹（2026-11-21 总制作人：两层叠在一起）
+  const intros=takeMechIntros('map');if(intros.length){const banner=this.children.getByName('chapter-unlock-banner');if(banner)banner.once('destroy',()=>{if(this.sys.isActive())this.showMechIntro(intros);});else this.showMechIntro(intros);}
   if(retreat){if(retreat.kind==='home'&&!focus){this.layer.setPosition(this.area.x+this.area.w/2-HOME.x*this.zoom,(this.area.y+this.viewBottom)/2-HOME.y*this.zoom);this.clampMap();}this.showRetreat(retreat);}
   if(captured){this.selected={kind:'city',city:captured};this.refresh();this.playCapture(captured,nowRealm,prevRealm);}
   this.buildAmbient();
@@ -425,8 +426,8 @@ export class WorldMapSceneV1 extends Phaser.Scene {
  /** W4 时局变化 / 城池失守 提示面板。 */
  /** 玩法逐章解锁（data/mechanicUnlocks.ts）：刚开放的玩法——人物一两句引子 + 一行说明。 */
  private showMechIntro(ids:MechId[]){
-  const desk=W>600,pw=Math.min(W-40,540),root=this.add.container(0,0).setDepth(69).setName('mech-intro-modal');
-  root.add(this.add.rectangle(W/2,H/2,W,H,0x07100b,.72).setInteractive());
+  const desk=W>600,pw=Math.min(W-40,540),root=this.add.container(0,0).setDepth(1029).setName('mech-intro-modal');
+  root.add(this.add.rectangle(W/2,H/2,W,H,0x07100b,W>600?.9:.72).setInteractive());
   const parts=ids.map(id=>{const m=MECHANICS[id];return `【${m.name}】\n`+m.lines.map(l=>`${l.who}：「${l.text}」`).join('\n')+'\n· '+m.tip;});
   const text=worldText(this,0,0,parts.join('\n\n'),desk?15:16,'#e4dcc4').setWordWrapWidth(pw-48,true).setLineSpacing(5);
   const ph=Math.min(H-80,text.height+150),px=W/2-pw/2,py=H/2-ph/2;root.add(this.modalPanel(pw,ph));
@@ -435,8 +436,8 @@ export class WorldMapSceneV1 extends Phaser.Scene {
  }
  /** 战败退守告示：退到哪、受了什么惩罚、关卡未平定可再出征。 */
  private showRetreat(r:DefeatRetreatNote){
-  const desk=W>600,pw=Math.min(W-40,500),root=this.add.container(0,0).setDepth(71).setName('defeat-modal');
-  root.add(this.add.rectangle(W/2,H/2,W,H,0x07100b,.72).setInteractive());
+  const desk=W>600,pw=Math.min(W-40,500),root=this.add.container(0,0).setDepth(1031).setName('defeat-modal');
+  root.add(this.add.rectangle(W/2,H/2,W,H,0x07100b,W>600?.9:.72).setInteractive());
   const lines=[`【${r.stage}】失利，全军退守${r.name}。`,...(r.notes.length?['战败惩罚：\n· '+r.notes.join('\n· ')]:[]),r.kind==='home'?'营寨军医可治伤、补部曲；整顿之后，这一仗照样可以再出征。':'城中军医可治伤、补部曲；整顿之后，这一仗照样可以再出征。','关卡未平定 · 等级、属性点、已招武将都不受影响。'];
   const text=worldText(this,0,0,lines.join('\n\n'),desk?15:16,'#e4dcc4').setWordWrapWidth(pw-48,true).setLineSpacing(5);
   const ph=Math.min(H-80,text.height+150),px=W/2-pw/2,py=H/2-ph/2;root.add(this.modalPanel(pw,ph));
@@ -444,7 +445,7 @@ export class WorldMapSceneV1 extends Phaser.Scene {
   this.modalButton(root,W/2,py+ph-(desk?44:54),pw*.5,'整军再战',true,'defeat-ok',()=>root.destroy());
  }
  private showNotice(advance:EraAdvance|null,lost:string[]){
-  const desk=W>600,pw=Math.min(W-40,540),root=this.add.container(0,0).setDepth(70).setName('era-modal');this.notice=root;
+  const desk=W>600,pw=Math.min(W-40,540),root=this.add.container(0,0).setDepth(1030).setName('era-modal');this.notice=root;
   root.add(this.add.rectangle(W/2,H/2,W,H,0x07100b,.78).setInteractive());
   const lines:string[]=[];let title='城池失守';
   if(advance){const e=eraDef(advance.to);title=`时局变化 · 公元${e.year}年`;lines.push(`【${e.name}】${e.summary}`);
@@ -567,7 +568,7 @@ export class WorldMapSceneV1 extends Phaser.Scene {
  }
  private refresh(){this.refreshInner();this.syncInks();}
  /** 攻城 / 军情 / 时局弹窗底板：电脑版漆底描金（2026-11-17 用户批准 UI 审查 C），手机仍用原底板。 */
- private modalPanel(pw:number,ph:number):Phaser.GameObjects.GameObject{if(W<=600)return panel(this,W/2,H/2,pw,ph);const g=this.add.graphics();lqPanel(g,W/2-pw/2,H/2-ph/2,pw,ph);return g;}
+ private modalPanel(pw:number,ph:number):Phaser.GameObjects.GameObject{if(W<=600)return panel(this,W/2,H/2,pw,ph);return lqFloat(this,W/2,H/2,pw,ph);} // 电脑版不画金边大框（2026-11-21）
  /** 弹窗按钮：电脑版水墨笔触（主按钮朱墨），手机仍是漆金按钮；命中对象名不变，pointerup 触发。 */
  private modalButton(root:Phaser.GameObjects.Container,x:number,y:number,w:number,label:string,primary:boolean,name:string,fn:()=>void){
   if(W>600){const b=homeCommand(this,x,y,w,46,label,primary);b.hit.setName(name).on('pointerup',fn);root.add([b.g,b.caption,b.hit]);return;}
@@ -643,9 +644,9 @@ export class WorldMapSceneV1 extends Phaser.Scene {
   const warn=alert?'':this.lossWarning(),dy=warn?(W>600?36:54):0;
   const owner=alert?alert.attacker:cityOwner(city.id,this.era,this.owned),T=SIEGE[city.tier],first=!this.capturedEver.includes(city.id),k=first?1+FIRST_CAPTURE_BONUS:1,desk=W>600;
   let hero:CharacterId=defaultHero(null);try{hero=defaultHero(localStorage.getItem('im_last_hero'));}catch{/* storage unavailable */}
-  const root=this.add.container(0,0).setDepth(60).setName('siege-modal');this.siegeModal=root;
+  const root=this.add.container(0,0).setDepth(1032).setName('siege-modal');this.siegeModal=root;
   const pw=Math.min(W-40,520),ph=(desk?400:560)+dy,px=W/2-pw/2,py=H/2-ph/2;
-  root.add(this.add.rectangle(W/2,H/2,W,H,0x07100b,.72).setInteractive());
+  root.add(this.add.rectangle(W/2,H/2,W,H,0x07100b,W>600?.9:.72).setInteractive());
   root.add(this.modalPanel(pw,ph));
   const t=(x:number,y:number,s:string,size=16,color='#ede3c9')=>{const o=worldText(this,x,y,s,size,color);root.add(o);return o;};
   t(px+24,py+20,`${alert?'守卫':'攻打'} ${city.name}`,24,'#f0d79e').setFontFamily(W>600?TITLE_FONT:HEADING_FONT);t(px+24,py+54,`${TIER_NAME[city.tier]} · ${city.region} · ${alert?'来犯':'守军'}：${FACTIONS[owner].name}`,14,FACTIONS[owner].css);
@@ -829,7 +830,7 @@ ${city.tier==='large'?'守城大将：'+siegeBossName(city,owner):'守军：'+FA
   const title=worldText(this,0,0,`新篇解锁 · 第${c.numeral}章「${c.title}」`,desk?20:22,'#ffe2a0').setOrigin(.5,0).setStroke('#1b120b',4);
   const fs=desk?13:15,intro=worldText(this,0,0,`公元${c.year}年（${c.era}）\n${wrapCJK(chapterIntro(c.id),Math.floor((pw-40)/fs))}`,fs,'#eadfc4').setOrigin(.5,0).setAlign('center').setLineSpacing(3);
   const ph=title.height+intro.height+34;title.setY(-ph/2+12);intro.setY(title.y+title.height+8);
-  const g=this.add.graphics();lacquerPlate(g,-pw/2,-ph/2,pw,ph,.95,0xe5c47d);const hit=this.add.rectangle(0,0,pw,ph,0x000000,.001).setInteractive({useHandCursor:true}).setName('chapter-unlock-close');
+  const g=desk?lqFloat(this,0,0,pw,ph):this.add.graphics();if(!desk)lacquerPlate(g,-pw/2,-ph/2,pw,ph,.95,0xe5c47d);const hit=this.add.rectangle(0,0,pw,ph,0x000000,.001).setInteractive({useHandCursor:true}).setName('chapter-unlock-close'); // 电脑版不画框（淡暗底 + 细金线）
   root.add([g,title,intro,hit]);root.setAlpha(0);const close=()=>{if(!root.active)return;this.tweens.add({targets:root,alpha:0,duration:350,onComplete:()=>root.destroy()});};hit.on('pointerup',close);
   this.tweens.add({targets:root,alpha:1,duration:450});this.time.delayedCall(5200,close);}
  /* —— 军情事件（WorldIntel.ts）—— */
@@ -855,9 +856,9 @@ ${intelBrief(event,f)}
  private openIntel(event:IntelEvent){
   if(this.siegeModal)return;const info=INTEL_INFO[event.kind],desk=W>600,warn=this.lossWarning(),dy=warn?(desk?36:54):0;
   let hero:CharacterId=defaultHero(null);try{hero=defaultHero(localStorage.getItem('im_last_hero'));}catch{/* storage unavailable */}
-  const root=this.add.container(0,0).setDepth(60).setName('intel-modal');this.siegeModal=root;
+  const root=this.add.container(0,0).setDepth(1032).setName('intel-modal');this.siegeModal=root;
   const pw=Math.min(W-40,520),ph=(desk?400:560)+dy,px=W/2-pw/2,py=H/2-ph/2;
-  root.add(this.add.rectangle(W/2,H/2,W,H,0x07100b,.72).setInteractive());root.add(this.modalPanel(pw,ph));
+  root.add(this.add.rectangle(W/2,H/2,W,H,0x07100b,W>600?.9:.72).setInteractive());root.add(this.modalPanel(pw,ph));
   const t=(x:number,y:number,str:string,size=16,color='#ede3c9')=>{const o=worldText(this,x,y,str,size,color);root.add(o);return o;};
   t(px+24,py+20,intelTitle(event),24,'#f0d79e').setFontFamily(W>600?TITLE_FONT:HEADING_FONT);t(px+24,py+54,`军情 · ${info.name} · ${this.intelLeft(event)}`,14,info.css);
   const how=event.kind==='escort'?'胜利条件：商车抵达终点（守在车旁它才前进，约 90 秒）':event.kind==='bandit'?'胜利条件：清剿两波流寇，击败寇首（约 2 分钟）':`胜利条件：清剿三波亲兵，击败${event.general}（约 3 分钟）`;

@@ -211,7 +211,7 @@ export class BattleHeal {
     const cam = this.h.scene.cameras.main, v = cam.worldView, kx = GAME_WIDTH / v.width, ky = GAME_HEIGHT / v.height;
     const sx = (sp.x - v.x) * kx, sy = (sp.y - v.y) * ky, pad = 40;
     if (sx >= pad && sy >= pad && sx <= GAME_WIDTH - pad && sy <= GAME_HEIGHT - pad) { sp.arrow.setVisible(false); return; }
-    const top = 100, bottom = GAME_HEIGHT - 100, left = 48, right = GAME_WIDTH - 110, cx = GAME_WIDTH / 2, cy = GAME_HEIGHT / 2, a = Math.atan2(sy - cy, sx - cx), dx = Math.cos(a), dy = Math.sin(a);
+    const top = 150 /* 让开顶部目标文字（攻城「破城门 · N 步」等，2026-11-21） */, bottom = GAME_HEIGHT - 100, left = 48, right = GAME_WIDTH - 110, cx = GAME_WIDTH / 2, cy = GAME_HEIGHT / 2, a = Math.atan2(sy - cy, sx - cx), dx = Math.cos(a), dy = Math.sin(a);
     const t = Math.min(dx > 0 ? (right - cx) / dx : dx < 0 ? (left - cx) / dx : Infinity, dy > 0 ? (bottom - cy) / dy : dy < 0 ? (top - cy) / dy : Infinity);
     let ax = cx + dx * t; const ay = cy + dy * t;
     if (ax < 250 && ay < 260) ax = 250; // 左上角是主将血条：让开

@@ -31,7 +31,7 @@ export const TUNTIAN_GRAIN: Record<CityTier, number> = { small: 10, medium: 15, 
 export const MUSTER_TROOPS: Record<CityTier, number> = { small: 1, medium: 1, large: 2 };
 
 export const CITY_BUILDINGS: Record<CityBuildingId, CityBuildingDef> = {
-  office: { name: '府衙', blurb: '一城之治所。城池等级，其它建筑的等级不能高于府衙。', max: { small: 2, medium: 3, large: 3 }, cost: [0, 200, 500],
+  office: { name: '府衙', blurb: '一城之治所，决定城池等级；其它建筑的等级不能高于府衙。', max: { small: 2, medium: 3, large: 3 }, cost: [0, 200, 500],
     effect: l => `城池等级 ${l}；基础产粮 +${Math.round(OFFICE_BONUS * (l - 1) * 100)}%` },
   tuntian: { name: '屯田', blurb: '兵农合一，开荒屯田。每打完一仗收一次粮。', max: { small: 2, medium: 3, large: 3 }, cost: [80, 200, 450],
     effect: (l, t) => `每战产军粮 +${TUNTIAN_GRAIN[t] * l}` },

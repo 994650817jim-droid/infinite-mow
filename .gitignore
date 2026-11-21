@@ -224,6 +224,7 @@ assets/raw/*
 !/tools/make-star-lines.mjs
 !/tools/bake-gate-glyphs.mjs
 !/tools/compose-bagua-bg.mjs
+!/tools/make-bagua-layers.mjs
 !/tools/shot-story-portraits.mjs
 !/tools/resize-image.mjs
 !/tools/shot-boss-still.mjs

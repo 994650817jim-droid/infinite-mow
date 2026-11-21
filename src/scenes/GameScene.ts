@@ -1,4 +1,5 @@
 import { EnemyFormations } from '../systems/EnemyFormations';
+import {SIDE_STAGE_KEY,sideRoute,type SideRouteId} from '../data/sideRoutes';
 import { safeWorldPoint } from '../ui/SafeLabel';
 import { SIGIL_LABEL, formationSigil, setFormationSigil, type FormationSigil } from '../systems/BattleSettings';
 import { FORMATION_IDS } from '../data/formations';
@@ -4545,7 +4546,7 @@ export class GameScene extends Phaser.Scene {
   /** 乱世难度用：本场所属章节（黄巾 / 讨董取 chapter.id，群雄 / 官渡 / 赤壁取战线）。 */
   protected hardKey(): string { return this.achievementArc() ?? this.chapter.id; }
   /** 乱世难度用：本场是该章第几关。 */
-  protected hardStage(): number { const k = this.hardKey(), key = k === 'qunxiong' ? 'thirdStage' : k === 'guandu' ? 'guanduStage' : k === 'chibi' ? 'chibiStage' : k === 'jingnan' ? 'jingnanStage' : k === 'shu' ? 'shuStage' : k === 'hanzhong' ? 'hanzhongStage' : k === 'xiangfan' ? 'xiangfanStage' : k === 'yiling' ? 'yilingStage' : k === 'nanzheng' ? 'nanzhengStage' : k === 'beifa' ? 'beifaStage' : ''; return key ? Number(this.registry.get(key) ?? 1) : this.battleStage(); }
+  protected hardStage(): number { const k = this.hardKey(), key = k === 'qunxiong' ? 'thirdStage' : k === 'guandu' ? 'guanduStage' : k === 'chibi' ? 'chibiStage' : k === 'jingnan' ? 'jingnanStage' : k === 'shu' ? 'shuStage' : k === 'hanzhong' ? 'hanzhongStage' : k === 'xiangfan' ? 'xiangfanStage' : k === 'yiling' ? 'yilingStage' : k === 'nanzheng' ? 'nanzhengStage' : k === 'beifa' ? 'beifaStage' : sideRoute(k) ? SIDE_STAGE_KEY(k as SideRouteId) : ''; return key ? Number(this.registry.get(key) ?? 1) : this.battleStage(); } // 支线（arc = 支线 id）：按支线自己的关序（原来落到基础章节的 stage / westStage，各关配兵表键都一样）
   /** 成就用：本场属于哪条战线（攻城 / 守城 / 群雄 / 官渡由子类返回）。 */
   protected achievementArc(): string | undefined { return undefined; }
   /** 手柄锁定目标：子类（有敌营 / 粮草的战场）返回可锁定列表。 */

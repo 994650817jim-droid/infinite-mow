@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { boxDist, propFootprint, type Box } from './PropFootprint';
 import { DEPTH, FONT, GAME_HEIGHT, GAME_WIDTH, actorDepth } from '../config';
 import { DEFENSE, defenseWaveStarts, type DefenseTier } from '../data/defenseBattle';
 import { isRangedSpawn } from '../data/gateSpawn';
@@ -26,6 +27,7 @@ export interface DefenseHost {
   food: () => number; spend: (n: number) => boolean;
   banner: (t: string, danger: boolean, c?: string) => void; sfx: (k: string) => void;
   /** 城门破了：把门的碰撞框撤掉、换破门图。 */ openGate: () => void;
+  /** 府衙大堂的碰撞框（按台基，systems/PropFootprint）登记进场景碰撞（统筹 11-21 大件布景碰撞检查：原来能走进府衙）。 */ block?: (boxes: Box[]) => void;
   /** 跳过喘息：把关内时间拨到下一波。 */ skipTo: (sec: number) => void;
   /** 小兵成长（弓手伤害跟着涨一点）。 */ hpScale: () => number;
   /** 登城：主将在城头带里时武器范围加成（1 = 没有）。 */ rampart?: (mul: number) => void;
@@ -46,6 +48,7 @@ export class DefenseBattle {
   private facility = { logs: { charges: DEFENSE.logs.charges as number, cd: 0, x: 0, y: 0 }, oil: { charges: DEFENSE.oil.charges as number, cd: 0, x: 0, y: 0 } };
   private rolling: { img: Phaser.GameObjects.Image; t0: number; x0: number; dir: number; hit: Set<Enemy> } | null = null;
   private burning: { until: number; next: number; fires: Phaser.GameObjects.Sprite[] } | null = null;
+  /** 府衙大堂碰撞框（没有图时为空）。 */ private keepBox: Box[] = [];
   private done = false; private spaceKey?: Phaser.Input.Keyboard.Key; private onRampart = false;
   /** 正在砍城门 / 府衙的人（最后一次贴上来的时刻）：超过 gateCap / keepCap 的在后面排着。 */
   private atGate = new Map<Enemy, number>(); private atKeep = new Map<Enemy, number>();
@@ -58,7 +61,7 @@ export class DefenseBattle {
     this.gate = { hp: Math.round(D.gateHp[o.tier] * mul), max: Math.round(D.gateHp[o.tier] * mul), open: false };
     this.keep = { hp: Math.round(D.keepHp[o.tier] * mul), max: Math.round(D.keepHp[o.tier] * mul) };
     const s = h.scene, K = this.keepPos;
-    if (s.textures.exists('siege_mid_hall')) { this.keepImg = s.add.image(K.x, K.y, 'siege_mid_hall', 0).setOrigin(.5, .85).setDisplaySize(260, 260).setDepth(actorDepth(K.y)).setName('defense-keep'); this.objs.push(this.keepImg); }
+    if (s.textures.exists('siege_mid_hall')) { this.keepImg = s.add.image(K.x, K.y, 'siege_mid_hall', 0).setOrigin(.5, .85).setDisplaySize(260, 260).setDepth(actorDepth(K.y)).setName('defense-keep'); this.objs.push(this.keepImg); this.keepBox = propFootprint(this.keepImg, 'siege_mid_hall#0'); this.h.block?.(this.keepBox); }
     this.objs.push(s.add.text(K.x, K.y + 30, '府衙', { fontFamily: FONT, fontSize: '16px', color: '#ffe1a0', resolution: 2, stroke: '#1a120b', strokeThickness: 4 }).setOrigin(.5).setDepth(DEPTH.dmgText - 2));
     // 马道（两头）、城头设施位（城门左侧滚木、门上热油）
     const R = o.wallLine + (D.rampart.top + D.rampart.bottom) / 2;
@@ -267,7 +270,7 @@ export class DefenseBattle {
       if (d <= D.gateReach) { e.moveVx = e.moveVy = 0; this.h.advance(e, 0, 0, dt); return true; }
       e.moveVx = dx / d * e.def.speed; e.moveVy = dy / d * e.def.speed; this.h.advance(e, dx / d, dy / d, dt); return true; }
     const dx = K.x - e.x, dy = K.y - e.y, d = Math.hypot(dx, dy) || 1;
-    if (d <= D.keepReach) { if (this.slot(this.atKeep, e, D.keepCap)) { this.atKeep.set(e, this.h.now()); this.keep.hp -= e.def.damage * D.contactMul * dt; this.stats.keepHits++; } e.moveVx = e.moveVy = 0; this.h.advance(e, 0, 0, dt); return true; }
+    if (d <= D.keepReach || boxDist(this.keepBox, e.x, e.y) <= e.radius + 26) { if (this.slot(this.atKeep, e, D.keepCap)) { this.atKeep.set(e, this.h.now()); this.keep.hp -= e.def.damage * D.contactMul * dt; this.stats.keepHits++; } e.moveVx = e.moveVy = 0; this.h.advance(e, 0, 0, dt); return true; }
     e.moveVx = dx / d * e.def.speed; e.moveVy = dy / d * e.def.speed; this.h.advance(e, dx / d, dy / d, dt); return true;
   }
   /** 还有没有位子砍（已经在砍的算有）：最近 250 毫秒内贴上来过的算在砍。 */

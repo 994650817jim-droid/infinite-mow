@@ -60,7 +60,7 @@ export function nanzhengBattle(stage: NanzhengStage): ChapterDef {
       cavalry: { ...ele, ...big },
       boss: { ...e.boss, texture: nzBossTexture(d.id), hp: [2700, 3100, 2600][stage - 1], speed: [46, 40, 48][stage - 1], damage: [16, 18, 17][stage - 1] },
     },
-    pickEnemy: tt => { const r = Math.random(); return stage === 1 ? (tt < 25 ? 'infantry' : r < .6 ? 'infantry' : r < .78 ? 'archer' : r < .9 ? 'cavalry' : 'elite') : stage === 2 ? (tt < 15 ? 'infantry' : r < .3 ? 'infantry' : r < .78 ? 'shield' : r < .9 ? 'archer' : 'elite') : (r < .42 ? 'infantry' : r < .64 ? 'shield' : r < .8 ? 'cavalry' : r < .92 ? 'archer' : 'elite'); },
+    pickEnemy: tt => { const r = Math.random(); return stage === 1 ? (tt < 25 ? 'infantry' : r < .6 ? 'infantry' : r < .78 ? 'archer' : r < .9 ? 'cavalry' : tt < 50 ? 'archer' : 'elite') : stage === 2 ? (tt < 15 ? 'infantry' : r < .45 ? 'infantry' : r < .78 ? 'shield' : r < .9 ? 'archer' : tt < 50 ? 'infantry' : 'elite') : (r < .42 ? 'infantry' : r < .64 ? 'shield' : r < .8 ? 'cavalry' : r < .92 ? 'archer' : tt < 50 ? 'infantry' : 'elite'); }, // 2026-11-21 配兵审计：11-2 藤甲 48% → 33%（单调又扛打）；先锋段不出精锐
     growth: { hp: t.hp * 1.2, damage: t.damage * 1.1, bossHp: t.bossHp },
     victoryTitle: stage === 3 ? '孟获心服' : d.boss + '败退', victoryText: stage === 3 ? '七擒七纵 · 南中平定' : d.name + '告捷 · 进入军营休整',
   };

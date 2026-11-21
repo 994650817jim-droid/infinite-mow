@@ -276,6 +276,9 @@ export class Sfx {
   /** 正在响的同组音效数（武将出手 / 兵种出手）。 */
   private groupActive(group: SfxGroup): number { let n = 0; for (const [k, c] of Object.entries(this.active)) if (CONFIG[k.replace(/^f:/, '')]?.group === group) n += c; return n; }
 
+  private duckUntil = 0; private duckMul = 1;
+  /** 接下来 ms 毫秒内新起的低 / 中优先级音效音量 × mul（高光时刻突出主音效；不影响正在响的、不影响高优先级）。 */
+  duck(ms: number, mul: number): void { this.duckUntil = performance.now() + ms; this.duckMul = mul; }
   play(kind: string, gainMul = 1, slot = ''): void {
     const cfg = CONFIG[kind];
     if (!cfg) return;
@@ -295,6 +298,7 @@ export class Sfx {
       stat.dropped += 1;
       return;
     }
+    if (cfg.priority < 2 && now < this.duckUntil) gainMul *= this.duckMul;
     this.last[key] = now;
     this.active[key] = (this.active[key] || 0) + 1;
     stat.played += 1;

@@ -328,7 +328,7 @@ export function siegeGameSceneClass(Base: typeof GameScene) {
         advance: (e, nx, ny, dt) => this.advanceEnemy(e, nx, ny, dt),
         food: () => this.legion.food, spend: n => { if (this.legion.food < n) return false; this.legion.food -= n; return true; },
         banner: (t, d, c) => this.showWaveBanner(t, d, c), sfx: k => this.sfx.play(k as never),
-        openGate: () => pass.openGate(), skipTo: sec => { this.elapsed = Math.max(this.elapsed, sec); },
+        openGate: () => pass.openGate(), block: b => { this.sishuiObstacles?.footprints.push(...b); }, skipTo: sec => { this.elapsed = Math.max(this.elapsed, sec); },
         hpScale: () => this.chapter.hpScale(this.elapsed),
         guardGate: p => { this.legion.formation.anchor = p; for (const u of this.legion.units) u.ai.nextThink = 0; },
         rampart: mul => { this.player.passive.rampartMul = mul; if (mul > 1) this.showWaveBanner('登城', false, `城头上武器范围 +${Math.round((mul - 1) * 100)}%`); },
@@ -406,7 +406,8 @@ export function siegeGameSceneClass(Base: typeof GameScene) {
       if (this.defend && enemy === this.boss) showBarkCard(this, { side: 'left', name: this.chapter.bossName.replace(/^.*·\s*/, ''), text: defenseBossLine('fall', this.city.name, enemy.spawnId) });
       if (enemy.kind !== 'boss' && this.unpaid.delete(enemy.spawnId) && enemy.active && !enemy.isSupplySlot) {
         const drops = this.itemDrops, elite = enemy.kind === 'elite'; this.noLoot = true; this.itemDrops = null;
-        try { super.killEnemy(enemy); } finally { this.noLoot = false; this.itemDrops = drops; } if (elite) this.runMerit.elite = Math.max(0, this.runMerit.elite - 1); return;
+        const m0 = this.runMerit.elite; /* 首领阶段超额的精锐本来就没计战功（data/bossStall.ts），只扣真记上的 */
+        try { super.killEnemy(enemy); } finally { this.noLoot = false; this.itemDrops = drops; } if (elite && this.runMerit.elite > m0) this.runMerit.elite -= 1; return;
       }
       super.killEnemy(enemy);
     }

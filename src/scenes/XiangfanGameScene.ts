@@ -136,6 +136,7 @@ export function xiangfanGameSceneClass(Base: typeof GameScene) {
       this.rage = true; b.def = { ...b.def, speed: b.def.speed * PANGDE_RAGE.speed, damage: b.def.damage * PANGDE_RAGE.damage };
       b.sprite.setTint(0xff9a7a); this.cameras.main.shake(260, .006); this.sfx.play('bossSummon');
       const v2 = this.textures.exists('xf_props'); this.coffin = this.add.image(b.x - 60, b.y + 20, v2 ? 'xf_props' : 'yellow_props', v2 ? 2 : 22).setOrigin(.5, 1).setDisplaySize(130, 130).setDepth(actorDepth(b.y + 20));
+      this.blockBoxes([{ left: b.x - 108, right: b.x - 12, top: b.y - 6, bottom: b.y + 16 }], true); // 棺材实心（统筹 11-21 大件布景碰撞检查：原来能站进棺材里）
       this.showWaveBanner('庞德抬棺死战！', true, '狂暴 · 移速与伤害大增');
     }
     protected checkEnd() {

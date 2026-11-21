@@ -1,3 +1,5 @@
+import { storyArtFile } from '../data/story/art';
+import { speakerArt } from '../data/story/speakers';
 import Phaser from 'phaser';
 import { DEPTH, FONT, HEADING_FONT } from '../config';
 import { inkPlate } from './HomeCommand';
@@ -46,6 +48,20 @@ function roundFace(scene: Phaser.Scene, key: string, size: number): string | und
 const GOLD = 0xc9a35e, GOLD_HI = 0xf3d48a, LACQUER = 0x1b120b;
 
 export function storyScroll(scene: Phaser.Scene, W: number, H: number, desk: boolean, o: StoryScrollOptions): Phaser.GameObjects.Container {
+  // 说话人（speaker-portrait-audit.md）：各章章头等直接调卷轴的台词只写了中文名——按统一入口补立绘 / 名字章
+  const lines = o.lines.map(l => l.who && !l.tip && !l.portrait ? (a => ({ ...l, portrait: a.portrait, seal: l.seal ?? a.seal }))(speakerArt(l.who)) : l);
+  const need = [...new Set(lines.map(l => l.portrait).filter((k): k is string => !!k && !scene.textures.exists(k) && !!storyArtFile(k)))];
+  if (need.length) {
+    const holder = scene.add.container(0, 0).setName(o.name + '-loading');
+    let fired = false; const go = (): void => { if (fired) return; fired = true; holder.destroy(); if (scene.sys.settings.status >= Phaser.Scenes.SHUTDOWN) return; buildStoryScroll(scene, W, H, desk, { ...o, lines }); };
+    for (const k of need) scene.load.image(k, storyArtFile(k)!);
+    scene.load.once(Phaser.Loader.Events.COMPLETE, go); if (!scene.load.isLoading()) scene.load.start();
+    window.setTimeout(go, 2500);
+    return holder;
+  }
+  return buildStoryScroll(scene, W, H, desk, { ...o, lines });
+}
+function buildStoryScroll(scene: Phaser.Scene, W: number, H: number, desk: boolean, o: StoryScrollOptions): Phaser.GameObjects.Container {
   const root = scene.add.container(0, 0).setScrollFactor(0).setDepth(DEPTH.overlay + 11).setName(o.name);
   playIn(scene, 'scroll_open'); // 卷轴展开（战败剧情卡、玩法解锁卡、关前 / 关后剧情）
   const text = (x: number, y: number, value: string, size: number, color: string, heading = false) => scene.add.text(x, y, value, {

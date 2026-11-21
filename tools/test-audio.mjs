@@ -101,6 +101,23 @@ const sw = await page.evaluate(async () => {
 ck('界面 BGM：同一情绪再进不从头播（共用实例续播）', sw.sameKept, sw);
 ck('界面 BGM：换情绪先淡出（音量明显降）、再换编制从乐段开头起、再淡入回原音量', sw.dip < sw.full * .6 && sw.changed && sw.stepReset && Math.abs(sw.back - sw.full) < sw.full * .15, sw);
 ck('界面 BGM：暂停压到一半、恢复回原音量', Math.abs(sw.paused - sw.full * .5) < sw.full * .12 && Math.abs(sw.resumed - sw.full) < sw.full * .12, sw);
+// ———— 觉醒音效（2026-11-21 用户「关于觉醒音效触发优化一下」）————
+const SCHOOLS = ['fire', 'stratagem', 'archery', 'cavalry', 'warrior', 'formation'];
+const noAwaken = await has(SCHOOLS.map(s => 'awaken_' + s));
+ck('觉醒：六派觉醒音效键都存在（awaken_<派>）', noAwaken.length === 0, noAwaken);
+ck('觉醒：横幅那一刻按流派播觉醒音、同时压低其他音效（duck）；合击仍是短提示', /sfx\.duck\(1400,\.4\);this\.sfx\.play\(sch\?\.\[0\]\?'awaken_'\+sch\[0\]/.test(gs) && /if\(k==='combo'\)this\.sfx\.play\('toast_combo'\)/.test(gs), null);
+const wb = readFileSync('src/systems/WeaponBranches.ts', 'utf8');
+ck('觉醒：兵器进阶本局只演一次（换关继承构筑不再弹横幅 / 大字 / 音效）', /if \(!this\.h\.finalSeen\?\.\(b\.id\)\)/.test(wb) && /finalSeen: id => this\.shownOnce\('final:' \+ id\)/.test(gs) && /if \(!carriedState\) this\.registry\.set\('runShownOnce', \[\]\)/.test(gs), null);
+ck('觉醒：合击首触本局只演一次（继承构筑的后续关沿用已见）', /sy\.seen\.add\(/.test(gs) && /this\.markShownOnce\('combo:'\+id\)/.test(gs), null);
+const dk = await page.evaluate(async () => {
+  const { Sfx } = window.__T, s = new Sfx(); s.unlock?.(); for (let i = 0; i < 40 && s.ctx?.state !== 'running'; i++) await new Promise(r => setTimeout(r, 25));
+  // 记录 play 时为 hitLight 建的增益节点值：压低期间应 ≈ 0.4，高优先级（awaken）不压
+  const gains = []; const orig = s.ctx.createGain.bind(s.ctx); s.ctx.createGain = () => { const g = orig(); gains.push(g); return g; };
+  s.duck(1400, .4); const n0 = gains.length; s.play('hitLight'); const hitGain = gains.slice(n0).map(g => +g.gain.value.toFixed(2));
+  const n1 = gains.length; s.play('awaken_fire'); const awakenGains = gains.slice(n1, n1 + 3).map(g => +g.gain.value.toFixed(2));
+  return { hitGain, awakenGains, state: s.ctx.state };
+});
+ck('觉醒：压低期间新起的命中音效 × 0.4，觉醒本身（高优先级）不压', dk.hitGain.includes(.4) && !dk.awakenGains.includes(.4), dk);
 ck('无页面报错', errs.length === 0, errs);
 await b.close();
 console.log(fail ? `TEST-AUDIO FAIL ${fail}` : 'TEST-AUDIO OK');

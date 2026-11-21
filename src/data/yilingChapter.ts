@@ -64,7 +64,7 @@ export function yilingBattle(stage: YilingStage): ChapterDef {
     ...base,
     waves: base.waves.map((w, i) => ({ ...w, name: WAVE_NAMES[stage - 1][i] ?? w.name })),
     name: `10-${stage} ${d.name}`, label: `第十章 · 夷陵之战 · ${d.name}`, description: d.story, bossName: d.boss, bossStyle: d.id,
-    pickEnemy: (t: number) => { const r = Math.random(); return r < .28 ? 'archer' : r < .5 ? 'infantry' : base.pickEnemy(t); },
+    pickEnemy: (t: number) => { const r = Math.random(); return r < .2 ? 'archer' : r < .5 ? 'infantry' : base.pickEnemy(t); }, // 2026-11-21 配兵审计：原 .28，10-2 / 10-3 远程 42～46%
     enemies: { ...base.enemies, infantry, archer, boss: { ...base.enemies.boss, texture: yilingTexture(d.id), hp: [3400, 3700, 4400][stage - 1], speed: [56, 44, 46][stage - 1], damage: [18, 19, 20][stage - 1] } },
     victoryTitle: d.boss + '败退', victoryText: stage === 3 ? '火海突围 · 退守白帝 · 夷陵之战终' : d.name + '告捷 · 进入军营休整',
   };

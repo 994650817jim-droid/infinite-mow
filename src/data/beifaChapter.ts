@@ -69,7 +69,7 @@ export function beifaBattle(stage: BeifaStage): ChapterDef {
     ...base,
     waves: base.waves.map((w, i) => ({ ...w, name: WAVE_NAMES[stage - 1][i] ?? w.name })),
     name: `12-${stage} ${d.name}`, label: `第十二章 · 北伐 · ${d.name}`, description: d.story, bossName: d.boss, bossStyle: d.id,
-    pickEnemy: (t: number) => { const r = Math.random(); return r < .3 ? 'archer' : r < .55 ? 'infantry' : base.pickEnemy(t); },
+    pickEnemy: (t: number) => { const r = Math.random(); return r < .22 ? 'archer' : r < .55 ? 'infantry' : base.pickEnemy(t); }, // 2026-11-21 配兵审计：原 .3，12-2 远程 44～47%
     enemies: { ...base.enemies, infantry, archer, boss: { ...base.enemies.boss, texture: beifaTexture(d.id), hp: [4000, 4300, 5300][stage - 1] /* 12-3 司马懿 6200 → 5300（2026-11-18 平衡：两种刷兵设置下都只 1/6 通关、首领掉血约 40%） */, speed: [60, 40, 50][stage - 1], damage: [20, 21, 23][stage - 1] } },
     victoryTitle: d.boss + (stage === 3 ? '退兵' : '败退'), victoryText: stage === 3 ? '五丈原决胜 · 北伐功成' : d.name + '告捷 · 进入军营休整',
   };

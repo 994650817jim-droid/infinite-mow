@@ -62,7 +62,7 @@ export function jingnanBattle(stage: JingnanStage): ChapterDef {
     waves: base.waves.map((w, i) => ({ ...w, name: WAVE_NAMES[stage - 1][i] ?? w.name })),
     name: `6-${stage} ${d.name}`, label: `第六章 · 平定荆南 · ${d.name}`, description: d.story, bossName: d.boss, bossStyle: d.id,
     // 第二、三关山越弓手、藤牌兵比例更高
-    pickEnemy: stage === 1 ? base.pickEnemy : (t: number) => { const r = Math.random(); return r < .3 ? 'archer' : r < .55 ? 'shield' : base.pickEnemy(t); },
+    pickEnemy: stage === 1 ? base.pickEnemy : (t: number) => { const r = Math.random(); return r < .22 ? 'archer' : r < .47 ? 'shield' : base.pickEnemy(t); }, // 2026-11-21 配兵审计：原弓 .3，6-3 远程约 42%
     enemies: { ...base.enemies, archer, shield, boss: { ...base.enemies.boss, texture: jingnanTexture(d.id), hp: [2500, 2700, 3000][stage - 1], speed: [44, 56, 44][stage - 1], damage: [15, 16, 17][stage - 1] } },
     victoryTitle: d.boss + '败退', victoryText: stage === 3 ? '长沙易帜 · 荆南四郡尽归 · 平定荆南告捷' : d.name + '告捷 · 进入军营休整',
   };

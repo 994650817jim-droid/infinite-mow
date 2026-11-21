@@ -5,6 +5,7 @@ import type { Enemy } from '../entities/Enemy';
 import { figureTop } from './SpriteMetrics';
 import { outlineKeyOf } from './IffOverlay';
 import { BOSS_SCALE, ELITE_SCALE, PRESENCE_ON } from '../data/bossReach';
+import { BOSS_STALL } from '../data/bossStall';
 
 /**
  * 首领存在感（用户 2026-11-17「boss出来后不要明显，感觉需要把boss做大一点或者明显一点，把小兵区分开来」）。
@@ -54,7 +55,7 @@ export class BossPresence {
   readonly look = { x: 0, y: 0 };
   private entranceAt = -1; private entranceDir = { x: 0, y: 0 }; private dimMul = 1;
   /** 测试用（ring / plate / arrow / glow：任一位首领有；plates / arrows / glows / rings：数量）。 */
-  readonly stats = { scaled: 0, ring: false, plate: false, arrow: false, entrance: false, glow: false, plateGap: 0, plateBelow: false, plates: 0, arrows: 0, glows: 0, rings: 0, arrowColors: [] as string[] };
+  readonly stats = { rageGlows: 0, scaled: 0, ring: false, plate: false, arrow: false, entrance: false, glow: false, plateGap: 0, plateBelow: false, plates: 0, arrows: 0, glows: 0, rings: 0, arrowColors: [] as string[] };
   /** 测试用：关掉身上辉光（同一页面里对比帧率）。 */
   glowOff = false;
 
@@ -110,7 +111,8 @@ export class BossPresence {
         const sp = boss.sprite as Phaser.GameObjects.Sprite, pre = (sp as unknown as { preFX?: Phaser.GameObjects.Components.FX }).preFX;
         if (pre) { pre.setPadding(10); sl.glow = { sp, fx: pre.addGlow(b.color === 'red' ? 0xff9a5a : 0xffd070, 2, 0, false, .1, 10) }; /* 统一金色（11-3 孟获那样）；双首领右边朱色 */ }
       }
-      if (sl.glow) { sl.glow.fx.outerStrength = 2.4 + 1 * Math.sin(s.time.now / 380 + i * 1.3); glows++; } // 加强（原 1.6 ± .9）：人群里也看得出金边
+      // 首领震怒（data/bossStall.ts）：辉光转朱红、呼吸加快加强（染色，不另画特效）
+      if (sl.glow) { const rage = boss.rageStacks > 0; sl.glow.fx.color = rage ? BOSS_STALL.enrage.glow : b.color === 'red' ? 0xff9a5a : 0xffd070; sl.glow.fx.outerStrength = rage ? 3.4 + .2 * boss.rageStacks + 1.2 * Math.sin(s.time.now / 200 + i * 1.3) : 2.4 + 1 * Math.sin(s.time.now / 380 + i * 1.3); glows++; if (rage) this.stats.rageGlows++; } // 加强（原 1.6 ± .9）：人群里也看得出金边
       // 脚下火环
       if (live && s.textures.exists(RING_KEY)) {
         const r = sl.ring ?? (sl.ring = s.add.image(0, 0, RING_KEY, RING_FRAMES[0]).setName('boss-presence-ring'));

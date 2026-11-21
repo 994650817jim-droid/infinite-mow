@@ -19,6 +19,7 @@ import { ganningReach, ganningSweepR } from '../weapons/ganningWeapon';
 import { dianweiWhirlR } from '../weapons/dianweiWeapon';
 import { sunquanReach } from '../weapons/sunquanWeapon';
 import { menghuoReach } from '../weapons/menghuoWeapon';
+import { mechOpen } from './mechanicUnlocks';
 
 export const WEAPON_META: Record<WeaponId, { name: string; desc: string }> = {
   spear_orbit: { name: '七探盘龙枪', desc: '银枪自动索敌，向不同敌人突刺' },
@@ -283,7 +284,8 @@ export function buildUpgradeOptions(player: Player, weapons: WeaponState[], grow
   // 战法卡（流派重做：三选一 = 1 张本命 / 武艺 + 2 张战法）；卸力 / 以战养战是「基础成长」，不占战法卡位
   const tacticCards:UpgradeOption[]=[];
   for(const id of Object.keys(TACTICS)as TacticId[])if(b.canLearn(id)){
-    const d=TACTICS[id],n=b.rank(id)+1,school=tacticSchool(id); // 精研 Lv4 / 5（按章开放）显示实际等级
+    const d=TACTICS[id],n=b.rank(id)+1,school=tacticSchool(id);
+    if(school==='formation'&&!mechOpen('squad'))continue; // 兵阵战法（协击 / 整军 / 破围令 / 守望）管的是士兵：部曲（1-2）开放前不出卡（总制作人试玩 11-20：1-1 出了「守望」） // 精研 Lv4 / 5（按章开放）显示实际等级
     const option:UpgradeOption={id:'tactic_'+id,name:d.name+' · Lv.'+n,desc:tacticDescription(id,n),kind:'tactic',scope:'run',icon:'build_icon_'+id,categoryLabel:school?schoolLabel(school,tags):'基础成长',apply:(_p,_w,g)=>{g?.build.learn(id);}};
     if(school&&!tacticGeneral(id))tacticCards.push(option);else pool.push(option);
   }

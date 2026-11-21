@@ -37,7 +37,7 @@ function rawGuanduBattle(stage: GuanduStage): ChapterDef {
     recruitWaves: [1, 2],
     enemies: { ...base.enemies, ...tinted, boss: { ...base.enemies.boss, texture: d.atlas, walkVisual: undefined, attackVisual: undefined, hp: [2000, 2000, 2400][stage - 1], speed: [52, 60, 34][stage - 1], damage: [14, 13, 13][stage - 1] } } as ChapterDef['enemies'],
     // 4-1 攻城步兵与刀盾为主，少量弓骑
-    pickEnemy: t => { const r = Math.random(); return stage === 1 ? (t < 30 ? 'infantry' : r < .42 ? 'infantry' : r < .64 ? 'shield' : r < .84 ? 'archer' : 'cavalry') : stage === 2 ? (r < .4 ? 'cavalry' : r < .7 ? 'infantry' : r < .9 ? 'archer' : 'elite') : (r < .3 ? 'shield' : r < .65 ? 'archer' : r < .88 ? 'infantry' : 'elite'); },
+    pickEnemy: t => { const r = Math.random(); return stage === 1 ? (t < 30 ? 'infantry' : r < .42 ? 'infantry' : r < .64 ? 'shield' : r < .84 ? 'archer' : 'cavalry') : stage === 2 ? (r < .4 ? 'cavalry' : r < .7 ? 'infantry' : r < .9 ? 'archer' : t < 50 ? 'infantry' : 'elite') : (r < .3 ? 'shield' : r < .65 ? 'archer' : r < .88 ? 'infantry' : t < 50 ? 'infantry' : 'elite'); }, // 2026-11-21 配兵审计：先锋段不出精锐
     victoryTitle: d.boss + '授首',
     victoryText: stage === 3 ? '袁军溃败 · 官渡告捷' : last ? d.name + '告捷 · 后续战报筹备中' : d.name + '告捷 · 进入军营休整',
   };

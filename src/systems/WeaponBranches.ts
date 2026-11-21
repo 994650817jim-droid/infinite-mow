@@ -35,6 +35,9 @@ export interface BranchHost {
   banner: (title: string, sub: string) => void;
   /** 进阶形态第一次达成（宿主播短演出）。 */
   onFinal?: (b: WeaponBranch) => void;
+  /** 本局（含换关继承的构筑）这个进阶形态是否已经演过——演过就只静默生效，不再弹横幅 / 大字 / 音效（音效审计：觉醒触发优化）。 */
+  finalSeen?: (branchId: string) => boolean;
+  markFinal?: (branchId: string) => void;
   sfx: (k: string) => void;
   /** 顿帧（毫秒）：七进七出冲刺首次命中用。 */
   hitStop?: (ms: number) => void;
@@ -81,7 +84,7 @@ export class WeaponBranches {
     const now = this.h.now(), P = this.h.player;
     this.steerAnchor(now);
     { const dtv = this.vAt < 0 ? 0 : (now - this.vAt) / 1000; if (dtv > 0 && dtv < .3) { const k2 = Math.min(1, dtv * 10); this.vx += ((P.x - this.vpx) / dtv - this.vx) * k2; this.vy += ((P.y - this.vpy) / dtv - this.vy) * k2; } this.vAt = now; this.vpx = P.x; this.vpy = P.y; }
-    if (!this.finalShown && this.final()) { this.finalShown = true; this.stats.final = true; this.h.banner('兵器进阶 · ' + b.finalName, b.finalDesc); this.h.onFinal?.(b); }
+    if (!this.finalShown && this.final()) { this.finalShown = true; this.stats.final = true; if (!this.h.finalSeen?.(b.id)) { this.h.markFinal?.(b.id); this.h.banner('兵器进阶 · ' + b.finalName, b.finalDesc); this.h.onFinal?.(b); } }
     // 「出手」：冷却被重置（跳回较大的值）
     const fired = w.cooldownLeft > this.lastCd + .05; this.lastCd = w.cooldownLeft;
     if (fired) { this.stats.fires++; this.onFire(b, now); if (this.final()) { const t = this.nearest(300); this.fin.burst(b.id, P.x, P.y, t ? Math.atan2(t.y - P.y, t.x - P.x) : 0); } }

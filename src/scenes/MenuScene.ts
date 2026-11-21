@@ -254,6 +254,8 @@ export class MenuScene extends Phaser.Scene {
     if(isChapterTestRun())text(W-34,24,'测试选关 ›',14,'#dcc399').setOrigin(1,.5).setPadding(12,10).setInteractive({useHandCursor:true}).setName('dev-stage-picker').on('pointerdown',()=>this.openTestStages());
     const keys=this.input.keyboard,enter=()=>{if(modal.visible)modal.getByName('hero-confirm')?.emit('pointerdown');else this.startButton.emit('pointerdown');},escape=()=>closeHeroes();
     keys?.on('keydown-ENTER',enter);keys?.on('keydown-ESC',escape);this.events.once('shutdown',()=>{keys?.off('keydown-ENTER',enter);keys?.off('keydown-ESC',escape);});
+    // 第一章败走点「再战此关」：回到主页直接再出征（2026-11-21）
+    if(this.registry.get('autoCampaignEntry')){this.registry.remove('autoCampaignEntry');this.time.delayedCall(60,()=>{if(!this.children.getByName('chapter-select'))this.campaignEntry();});}
     this.renderSelection();if(params.has('autostart')||params.has('perf'))this.time.delayedCall(80,()=>this.startGame());
   }
   /** 章节选择（2026-11-17）：已打到的章可进，没打到的锁住；第一、二章由主页直接出征，第三章起进各章选关场景。 */

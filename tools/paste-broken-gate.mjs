@@ -15,7 +15,7 @@ try {
     const oc = document.createElement('canvas'); oc.width = W; oc.height = H; const og = oc.getContext('2d', { willReadFrequently: true }); og.drawImage(oi, 0, 0);
     const O = og.getImageData(0, 0, W, H);
     // 掩膜（整图坐标）
-    const inMask = (x, y, m) => { const dx = x - P.cx, dy = y - P.cy; if (y > 807) return false; if (y >= P.cy) return x >= P.left - m && x <= P.right + m; return dx * dx + dy * dy <= (P.r + m) * (P.r + m); };
+    const inMask = (x, y, m) => { const dx = x - P.cx, dy = y - P.cy; if (y > 807) return false; if (y > 802 && (x < 343 || x > 523)) return false; if (y >= P.cy) return x >= P.left - m && x <= P.right + m; return dx * dx + dy * dy <= (P.r + m) * (P.r + m); };
     // 生成图缩回到裁图尺寸（300×280），带搜索平移
     const gc = document.createElement('canvas'); gc.width = P.w; gc.height = P.h; const gg = gc.getContext('2d', { willReadFrequently: true });
     const diffAt = (tx, ty) => { gg.clearRect(0, 0, P.w, P.h); gg.imageSmoothingQuality = 'high'; gg.drawImage(gi, tx, ty, P.w, P.h); const G = gg.getImageData(0, 0, P.w, P.h).data; let s = 0, n = 0; for (let y = 0; y < P.h; y += 2) for (let x = 0; x < P.w; x += 2) { const X = P.x0 + x, Y = P.y0 + y; if (inMask(X, Y, 10) || O.data[(Y * W + X) * 4 + 3] < 200) continue; const i = (Y * W + X) * 4, j = (y * P.w + x) * 4; s += Math.abs(O.data[i] - G[j]) + Math.abs(O.data[i + 1] - G[j + 1]) + Math.abs(O.data[i + 2] - G[j + 2]); n++; } return s / n; };

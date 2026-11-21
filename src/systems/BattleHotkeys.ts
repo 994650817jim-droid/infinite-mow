@@ -164,9 +164,14 @@ export class BattleHotkeys {
         if (a === 'bag') return click(s, 'camp-bag');
         if (a === 'back') return click(s, 'camp-close-details');
         return false;
-      case 'result':
-        if (a === 'confirm') return click(s, 'result-home');
+      case 'result': {
+        // 结算页统一：Enter = 主按钮（2026-11-21 统筹）。第一章败走时主按钮是「再战此关」（result-restart），「返回主菜单」不绑 Enter、改 Esc
+        const retry = !!(s as unknown as { resultRetry?: boolean }).resultRetry;
+        if (a === 'confirm') return click(s, retry ? 'result-restart' : 'result-home');
+        if (a === 'back') return retry ? click(s, 'result-home') : false;
         if (a === 'reroll') return click(s, 'result-restart');
+        return false;
+      }
         return false;
       case 'parley': case 'story': {
         // 招降弹窗（content 会话 systems/Parley.ts，面板 parley-panel）自带 1 劝降 / 2 斩杀 / 3 再压一压：默认数字键交给它处理（不重复触发），
@@ -200,6 +205,9 @@ const HINTS: Record<string, Array<[string | RegExp, HotkeyAction | ((i: number) 
   branch: [[/^branch-card-[0-1]$/, i => (['pick1', 'pick2'] as const)[i]]],
 };
 
+/** 第一章败走结算：主按钮「再战此关」标 Enter，「返回主菜单」标 Esc。 */
+const RESULT_RETRY_HINTS: Array<[string, HotkeyAction]> = [['result-restart', 'confirm'], ['result-home', 'back']];
+
 /** 键位提示：HUD 圆钮与面板按钮右上角的米色小字（电脑布局；手机布局、手柄输入时隐藏）。 */
 export class HotkeyHints {
   private pool: Phaser.GameObjects.Text[] = [];
@@ -212,7 +220,7 @@ export class HotkeyHints {
     const show = IS_DESKTOP && gamepad.device !== 'pad' && !this.h.over() || IS_DESKTOP && this.h.mode() === 'result' && gamepad.device !== 'pad';
     if (show) {
       const overlay = s.children.getByName('item-bag') ? [['item-bag-close', 'bag'] as [string, HotkeyAction]] : s.children.getByName('build-panel') ? [['build-panel-back', 'back'] as [string, HotkeyAction]] : null;
-      const list = overlay ?? HINTS[this.h.mode()] ?? [];
+      const list = overlay ?? (this.h.mode() === 'result' && (s as unknown as { resultRetry?: boolean }).resultRetry ? RESULT_RETRY_HINTS : HINTS[this.h.mode()]) ?? [];
       const depth = overlay ? DEPTH.overlay + 30 : this.h.mode() === 'none' ? DEPTH.hud + 6 : DEPTH.overlay + 26;
       for (const [name, act] of list) {
         let objs = findVisible(s, name).filter(o => o.getBounds);
@@ -224,7 +232,7 @@ export class HotkeyHints {
           // 目标是按钮文字本身（如结算「返回主菜单」）时，角标贴在字右上方外侧；原来贴在字框右上角里，「Enter」压在「菜单」上（2026-11-20 夜间 UI 审查）
           if (o.type === 'Text') t.setOrigin(0, .5).setPosition(b.right + 3, b.top + 2);
           else if (o.name === 'attribute-plus') t.setOrigin(0, 0).setPosition(b.left + 3, b.top + 1); // 右上是未加点数的红角标，键位放左上（2026-11-21 全界面体检）
-          else t.setOrigin(1, 0).setPosition(b.right - 3, b.top + 1);
+          else t.setOrigin(1, 0).setPosition(b.right - 7, b.top + 4); // 往里收，不压按钮描边（2026-11-21 全界面体检）
           t.setText(hotkeyLabel(a)).setDepth(depth).setAlpha(.92).setVisible(true).setData('action', a).setData('target', o.name);
           n++;
         });

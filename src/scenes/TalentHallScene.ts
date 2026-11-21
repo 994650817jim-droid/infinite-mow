@@ -52,9 +52,12 @@ export class TalentHallScene extends Phaser.Scene {
     if (!worldUnlocked() && !isChapterTestRun()) { this.scene.start('MenuScene'); return; }
     // 2026-11-17 用户批准 UI 审查 A：电脑版整页改漆底描金 + 水墨按钮（原深绿底、扁平矩形按钮、绿木纹行，像网页）
     const D = W > 600;
-    if (D) { this.cameras.main.setBackgroundColor('#0e0a07'); if (this.textures.exists('city_recruit_art')) this.add.image(W / 2, H / 2, 'city_recruit_art').setDisplaySize(Math.max(W, H * 1.5), Math.max(H, W / 1.5)).setAlpha(.32).setDepth(-1); } // 不画整页金边大框，用营帐图压暗做底
     worldShell(this, '招贤馆');
-    this.status = worldText(this, D ? MX + 4 : 24, 64, '', 13, D ? '#e8d8b2' : '#cfdcc6').setWordWrapWidth(W - 48);
+    // 三个页签都用营帐图压暗做底（2026-11-21 统筹）：底色要在 worldShell 之后设（它会刷成深绿）；图被别的场景卸掉时当场补载
+    if (D) { this.cameras.main.setBackgroundColor('#0e0a07'); const put = () => { if (this.sys.settings.status <= Phaser.Scenes.RUNNING && this.textures.exists('city_recruit_art')) this.add.image(W / 2, H / 2, 'city_recruit_art').setDisplaySize(Math.max(W, H * 1.5), Math.max(H, W / 1.5)).setAlpha(.32).setDepth(-1).setName('talent-bg'); };
+      if (this.textures.exists('city_recruit_art')) put(); else { this.load.image('city_recruit_art', 'assets/world/rest-camp.webp'); this.load.once('complete', put); this.load.start(); } }
+    // 电脑：军粮 / 招贤馆等级 / 随行 并成一行，放标题右侧（原来两行小字挤在标题和页签之间）
+    this.status = D ? worldText(this, 150, 37, '', 13, '#e8d8b2').setOrigin(0, .5) : worldText(this, 24, 64, '', 13, '#cfdcc6').setWordWrapWidth(W - 48);
     if (D) { const back = homeCommand(this, W / 2, H - 34, 220, 42, '返回营寨'); back.hit.setName('talent-home').on('pointerdown', () => this.scene.start('CityScene')); }
     else worldButton(this, W / 2, H - (W > 600 ? 34 : 62), '返回营寨', () => this.scene.start('CityScene'), 220).image.setName('talent-home');
     this.render();
@@ -93,7 +96,7 @@ export class TalentHallScene extends Phaser.Scene {
   private render() {
     this.content?.destroy(true); this.content = this.add.container(0, 0);
     const s = loadRoster(), w = loadWorld(), D = W > 600, cap = followerCap(s), hall = hallLevel(s);
-    this.status.setText(`军粮 ${w.provisions}\n${hall > 0 ? `招贤馆 ${hall} 级 · 席位 ${RECRUIT.seats[hall - 1]}` : '营寨尚未建造招贤馆 · 暂不能招募'} · 随行 ${s.followers.length}/${cap} · 将阶上限 ${rankCap(s)}`);
+    this.status.setText(`军粮 ${w.provisions}${D ? ' · ' : '\n'}${hall > 0 ? `招贤馆 Lv.${hall} · 席位 ${RECRUIT.seats[hall - 1]}` : '营寨尚未建造招贤馆 · 暂不能招募'} · 随行 ${s.followers.length}/${cap} · 将阶上限 ${rankCap(s)}`);
     // 页签
     const tabY = D ? 112 : 124;
     this.small(D ? MX + 70 : 90, tabY, 140, `人才（${s.offers.length + s.captives.length}）`, () => { this.tab = 'offers'; this.page = 0; this.render(); }, 'talent-tab-offers', true, this.tab === 'offers');

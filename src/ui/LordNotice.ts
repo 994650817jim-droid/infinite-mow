@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import { FONT, HEADING_FONT, GAME_WIDTH as W, GAME_HEIGHT as H, IS_DESKTOP as D } from '../config';
 import { getCharacter, type CharacterId } from '../data/characters';
 import { homeCommand } from './HomeCommand';
-import { lqSkin, lqHitBox } from './LacquerKit';
+import { lqSkin, lqHitBox, lqSheet } from './LacquerKit';
 
 /**
  * 老存档第一次进主页：说明「主公选定后本存档不可更改」，已按最近出战的武将自动定下主公，给一次改选机会。
@@ -13,8 +13,9 @@ export function showLordNotice(s: Phaser.Scene, lord: CharacterId, keep: () => v
   root.add(s.add.rectangle(W / 2, H / 2, W, H, 0x0c0906, .78).setInteractive());
   const pw = D ? 560 : W - 40, ph = D ? 300 : 420, px = W / 2, py = H / 2;
   const g = s.add.graphics();
-  g.fillStyle(0x1d140c, .97).fillRoundedRect(px - pw / 2, py - ph / 2, pw, ph, 12);
-  g.lineStyle(2, 0xc9a66a, .9).strokeRoundedRect(px - pw / 2, py - ph / 2, pw, ph, 12);
+  // 电脑版无整圈金边（2026-11-21 全界面体检：「不要大框」）
+  if (D) lqSheet(g, px - pw / 2, py - ph / 2, pw, ph, .97);
+  else { g.fillStyle(0x1d140c, .97).fillRoundedRect(px - pw / 2, py - ph / 2, pw, ph, 12); g.lineStyle(2, 0xc9a66a, .9).strokeRoundedRect(px - pw / 2, py - ph / 2, pw, ph, 12); }
   root.add(g);
   const name = getCharacter(lord).name;
   const t = (y: number, v: string, size: number, color: string, font = FONT) => s.add.text(px, y, v, { fontFamily: font, fontSize: size + 'px', color, align: 'center', resolution: 2, wordWrap: { width: pw - 60, useAdvancedWrap: true } }).setOrigin(.5, 0);

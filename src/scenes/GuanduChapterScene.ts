@@ -48,7 +48,7 @@ export class GuanduChapterScene extends Phaser.Scene {
     this.text(30, desk ? 19 : 24, '征 战  ·  第 四 章', 12, '#b69a6b');
     this.text(28, desk ? 40 : 49, '官渡之战', desk ? 35 : 39, '#e8cf98').setFontFamily(TITLE_FONT);
     this.text(30, desk ? 86 : 106, '袁曹相持，胜负系于粮道。', desk ? 14 : 17, '#b9ae99');
-    this.action(W - 83, desk ? 48 : 52, 110, 40, '返回地图', () => this.scene.start('WorldMapScene')).bg.setName('guandu-return');
+    this.action(W - 98, desk ? 48 : 52, 140, 40, '返回天下地图', () => this.scene.start('WorldMapScene')).bg.setName('guandu-return');
     if (isChapterTestRun()) this.text(W - 30, desk ? 91 : 116, '试炼模式 · 已实装关可选', 11, '#b09573').setOrigin(1, 0);
     const cardY = desk ? 135 : 166, cw = desk ? (W - 84) / 3 : W - 56, ch = desk ? 248 : 170;
     GUANDU_STAGES.forEach((d, i) => {

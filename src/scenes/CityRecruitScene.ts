@@ -41,8 +41,8 @@ export class CityRecruitScene extends Phaser.Scene{
   this.notice=worldText(this,D?220:24,D?48:110,'',D?13:12,'#d5c5a2').setWordWrapWidth(D?W-244:W-48).setName('reserve-notice');
   if(!D)this.notice.setVisible(false);
   // 2026-11-17 用户批准 UI 审查 B：电脑版卡片换漆底描金、按钮换水墨（原绿木纹卡 + 漆金方钮）
-  if(D){const back=homeCommand(this,W/2,H-30,240,42,'返回义军营寨');back.hit.setName('reserve-home').on('pointerdown',()=>this.scene.start('CityScene'));}
-  else worldButton(this,W/2,H-(D?30:62),'返回义军营寨',()=>this.scene.start('CityScene'),240).image.setName('reserve-home');this.render();
+  if(D){const back=homeCommand(this,W/2,H-30,240,42,'返回营寨');back.hit.setName('reserve-home').on('pointerdown',()=>this.scene.start('CityScene'));}
+  else worldButton(this,W/2,H-(D?30:62),'返回营寨',()=>this.scene.start('CityScene'),240).image.setName('reserve-home');this.render();
   // 圆框 Q 版胸像（与战地招募卡一致；Q 版缺的兵种先用 v2 胸像过渡）：加载完重绘
   loadTroopPortraits(this,()=>this.render(),true);}
  /** 「下」行四帧里双脚最并拢的一帧（脚底一带横向跨度最小）作为站姿；读像素失败就用第 0 帧。 */

@@ -1134,7 +1134,7 @@ export class GameScene extends Phaser.Scene {
       .text(GAME_WIDTH / 2, GAME_HEIGHT - 32, IS_DESKTOP ? 'WASD / 方向键移动 · 自动攻击' : '自动攻击 · 拖动摇杆移动', {
         fontFamily: FONT,
         fontSize: '14px',
-        color: '#8a8078',
+        color: '#cfc2a8', stroke: '#120904', strokeThickness: 3, // 原 #8a8078 无描边，在土地上几乎看不见（2026-11-21 全界面体检）
       })
       .setOrigin(0.5)
       .setScrollFactor(0)
@@ -3373,7 +3373,7 @@ export class GameScene extends Phaser.Scene {
     (this.levelPanel.getByName('upgrade-title') as Phaser.GameObjects.Text)?.setText('选择本次强化');
     { const lv = this.player.level, n = this.player.growth.unallocated, military = this.militaryPending > 0;
       (this.levelPanel.getByName('upgrade-title') as Phaser.GameObjects.Text)?.setText(military ? '军略 · 本关保底强化' : '武将升级 · 选择本次强化');
-      (this.levelPanel.getByName('upgrade-points-hint') as Phaser.GameObjects.Text)?.setVisible(true).setText(`${military ? '军略（不给属性点）· ' : ''}武将 Lv.${lv}${n > 0 ? ` · 待分配属性点 ${n}` : ''}`).setName('upgrade-points-hint'); }
+      (this.levelPanel.getByName('upgrade-points-hint') as Phaser.GameObjects.Text)?.setVisible(true).setText(`${military ? '不给属性点 · ' : ''}武将 Lv.${lv}${n > 0 ? ` · 待分配属性点 ${n}` : ''}`).setName('upgrade-points-hint'); }
     this.rerolls=0;
     if (this.paceOn()) { this.lastPickAt = this.elapsed; this.forcePickNow = false; this.pickBatch = this.pendingLevels; this.pickBatchDone = 0; this.batchHint(); }
     this.upgradeOptions = buildUpgradeOptions(this.player, this.player.weapons, this.player.growth, this.newCardSource());
@@ -5151,7 +5151,7 @@ export class GameScene extends Phaser.Scene {
     const toMenu=this.add.text(cx,top+ph-66,'返回主菜单',warText(16,'#b5c4b2')).setOrigin(.5).setPadding(24,10).setInteractive({useHandCursor:true}).setName('pause-menu');
     toMenu.on('pointerdown',()=>{if(toMenu.getData('confirm'))this.leaveBattle('MenuScene','MenuScene');else toMenu.setData('confirm',true).setText('返回主菜单？本关进度不保留').setColor('#e7b68e');if(!d)armPauseChip(toMenu,'返回主菜单？本关进度不保留');});
     // 手机：撤退与返回主菜单并排（各占半宽）；待确认时半宽小牌只写「再点确认」，完整提示写到底下整行（另一块牌复原，底行只说一件事）
-    const armPauseChip=(t:Phaser.GameObjects.Text,warn:string):void=>{const o=t===exit?toMenu:exit;o.setData('confirm',false).setText(o===exit?'返回选将':'返回主菜单').setColor('#b5c4b2');t.setText('再点确认');this.pauseKeysText?.setData('warn',true).setText(warn).setColor('#e7b68e');};
+    const armPauseChip=(t:Phaser.GameObjects.Text,warn:string):void=>{const o=t===exit?toMenu:exit;o.setData('confirm',false).setText(o===exit?(IS_DESKTOP?'撤退':'返回选将'):'返回主菜单').setColor('#b5c4b2');t.setText('再点确认');this.pauseKeysText?.setData('warn',true).setText(warn).setColor('#e7b68e');};
     if(!d){const half=(pw-120)/2-6;exit.setX(cx-half/2-6);toMenu.setX(cx+half/2+6);}
     const keys=this.pauseKeysText=this.add.text(cx,top+ph-22,d?'Esc / P 继续战斗':'战斗已冻结 · 点击「继续战斗」恢复',warText(12,'#7f9987')).setOrigin(.5);
     // 暂停菜单里的文字入口改为漆金小牌：有底板、悬停 / 按下态，命中区与底板一致

@@ -73,7 +73,7 @@ export function temperUp(id: HeroKey): Result {
   const cost = temperCost(id); if (cost === null) return { ok: false, message: '本命已淬炼至满级' };
   if (!spendWorld({ provisions: cost })) return { ok: false, message: `军粮不足（需要 ${cost}）` };
   const s = read(); s.temper[id] = temperLevel(id) + 1; commit();
-  return { ok: true, message: `本命淬炼至 ${s.temper[id]} 级 · 本命伤害 +${Math.round(s.temper[id] * TEMPER.step * 100)}%` };
+  return { ok: true, message: `本命淬炼至 Lv.${s.temper[id]} · 本命伤害 +${Math.round(s.temper[id] * TEMPER.step * 100)}%` };
 }
 
 // —— 洗点 ——

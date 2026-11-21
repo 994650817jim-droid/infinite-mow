@@ -33,7 +33,7 @@ export class NanzhengChapterScene extends Phaser.Scene {
   g.lineStyle(1,0x8a7049,.09);for(let y=110;y<H;y+=40)g.lineBetween(0,y,W,y-90);g.lineStyle(1,0xa98250,.45).lineBetween(28,desk?113:144,W-28,desk?113:144);
   this.text(30,desk?19:24,'征 战  ·  第 十 一 章',12,'#b69a6b');this.text(28,desk?40:49,'南征',desk?35:39,'#e8cf98').setFontFamily(TITLE_FONT);
   this.text(30,desk?86:106,'五月渡泸，深入不毛；火烧藤甲，七擒孟获。',desk?14:17,'#b9ae99');
-  this.action(W-83,desk?48:52,110,40,'返回地图',()=>this.scene.start('WorldMapScene')).bg.setName('nanzheng-return');
+  this.action(W-98,desk?48:52,140,40,'返回天下地图',()=>this.scene.start('WorldMapScene')).bg.setName('nanzheng-return');
   if(test)this.text(W-30,desk?91:116,'试炼模式 · 全关可选',11,'#b09573').setOrigin(1,0);
   const cardY=desk?135:166,cw=desk?(W-84)/3:W-56,ch=desk?248:170;
   NANZHENG_STAGES.forEach((d,i)=>{

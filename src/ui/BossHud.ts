@@ -1,3 +1,5 @@
+import { storyArtFile } from '../data/story/art';
+import { portraitOf, speakerId } from '../data/story/speakers';
 import Phaser from 'phaser';
 import { GAME_WIDTH, GAME_HEIGHT, HEADING_FONT, FONT } from '../config';
 import { LQ, lqDiamond } from './LacquerKit';
@@ -38,6 +40,9 @@ export class BossHud {
   readonly g: Phaser.GameObjects.Graphics;
   private readonly seal: Phaser.GameObjects.Text;
   private readonly breakT: Phaser.GameObjects.Text;
+  private readonly rageT: Phaser.GameObjects.Text;
+  /** 首领震怒层数（GameScene.updateBossRage 写；data/bossStall.ts）：> 0 时血条旁一个小「怒」印。 */
+  rage = 0;
   private readonly portrait: Phaser.GameObjects.Image;
   private readonly dualImgs: Phaser.GameObjects.Image[] = [];
   private key = ''; private openAt = -1e9; private dieAt = -1e9; private last: (BossView & { title: string }) | null = null;
@@ -50,6 +55,7 @@ export class BossHud {
     this.g = scene.add.graphics().setScrollFactor(0).setDepth(depth).setName('boss-hud');
     this.seal = scene.add.text(0, 0, '', { fontFamily: FONT, fontSize: '11px', color: '#fff1d0', fontStyle: 'bold', resolution: 2 }).setOrigin(.5).setScrollFactor(0).setDepth(depth + .3).setName('boss-hud-title').setVisible(false);
     this.breakT = scene.add.text(0, 0, '破势', { fontFamily: HEADING_FONT, fontSize: '13px', color: '#fff2c4', resolution: 2 }).setStroke('#5a1a08', 3).setOrigin(.5).setScrollFactor(0).setDepth(depth + .4).setName('boss-hud-break').setVisible(false);
+    this.rageT = scene.add.text(0, 0, '', { fontFamily: FONT, fontSize: '11px', color: '#ffe6d0', fontStyle: 'bold', resolution: 2 }).setOrigin(.5).setScrollFactor(0).setDepth(depth + .3).setName('boss-hud-rage').setVisible(false);
     this.portrait = scene.add.image(0, 0, '__DEFAULT').setScrollFactor(0).setDepth(depth + .2).setName('boss-hud-portrait').setVisible(false);
     texts.name.setDepth(depth + .3); texts.pct.setDepth(depth + .3); texts.status.setDepth(depth + .3);
   }
@@ -59,7 +65,7 @@ export class BossHud {
 
   setVisible(v: boolean): void {
     this.visible = v;
-    if (!v) { this.g.clear(); for (const o of [this.seal, this.breakT, this.portrait, ...this.dualImgs]) o.setVisible(false); }
+    if (!v) { this.g.clear(); for (const o of [this.seal, this.breakT, this.rageT, this.portrait, ...this.dualImgs]) o.setVisible(false); }
   }
 
   /** 首领头像贴图：有水墨立绘用立绘，没有就用首领本人的贴图裁头肩（fallbackMedal）；都没有返回 null（画阵营色圈）。 */
@@ -88,13 +94,15 @@ export class BossHud {
   }
   /** 水墨立绘头像（按需加载、裁成圆形头肩）；还没好 / 没有返回 null。 */
   private inkMedal(id: string): string | null {
-    const s = this.scene, key = 'bosshud_medal_' + id, src = 'ink_cast_' + id;
+    // 说话人统一入口（data/story/speakers.ts，11-21）：首领 / 降将 id 或中文名 → 立绘（可玩武将用立轴、其余用 ink_cast）；查不到的不载
+    const s = this.scene, key = 'bosshud_medal_' + id, pid = speakerId(id), src = pid ? portraitOf(pid) : undefined;
     if (s.textures.exists(key)) return key;
+    if (!src) return null;
     if (!s.textures.exists(src)) {
-      // 只载剧情人物表里登记过水墨立绘的（攻城 / 守城的通用首领 id 'siege' 等没有图：原来每场都去请求 ink_cast_siege，控制台报错、头像圈空着；2026-11-20 守城排查）
-      if (!/^[a-z]+$/.test(id) || STORY_CAST[id]?.portrait !== src || s.registry.get('bosshud_try_' + id)) return null;
+      // 只载登记过立绘的（攻城 / 守城的通用首领 id 'siege' 等没有图：原来每场都去请求 ink_cast_siege，控制台报错、头像圈空着；2026-11-20 守城排查）
+      const file = storyArtFile(src); if (!file || s.registry.get('bosshud_try_' + id)) return null;
       s.registry.set('bosshud_try_' + id, true);
-      s.load.image(src, 'assets/ink-cast/' + id + '.webp'); s.load.start();
+      s.load.image(src, file); s.load.start();
       return null;
     }
     const img = s.textures.get(src).getSourceImage() as HTMLImageElement, S = 128, c = document.createElement('canvas'); c.width = c.height = S;
@@ -144,7 +152,7 @@ export class BossHud {
   /** 每帧：v = 当前首领（null 表示没有）；dualActive 时由 DualBoss 画，这里只收起单首领部件。 */
   update(v: BossView | null, now: number, dualActive = false): void {
     const B = BOSS_HUD, T = this.texts, g = this.g;
-    if (dualActive) { this.mode = 'dual'; this.seal.setVisible(false); this.breakT.setVisible(false); this.portrait.setVisible(false); this.key = ''; this.last = null; return; }
+    if (dualActive) { this.mode = 'dual'; this.seal.setVisible(false); this.breakT.setVisible(false); this.rageT.setVisible(false); this.portrait.setVisible(false); this.key = ''; this.last = null; return; }
     for (const im of this.dualImgs) im.setVisible(false);
     g.clear();
     if (!this.visible) return;
@@ -158,7 +166,7 @@ export class BossHud {
     if (!v) {
       this.mode = 'none';
       for (const t of [T.name, T.pct, T.status]) t.setVisible(false);
-      this.seal.setVisible(false); this.breakT.setVisible(false);
+      this.seal.setVisible(false); this.breakT.setVisible(false); this.rageT.setVisible(false);
       const t = (now - this.dieAt) / B.dieMs, L = this.last;
       if (!L || t >= 1) { this.portrait.setVisible(false); this.last = null; return; }
       // 授首：血条从中间裂开，两半向外滑开、淡出；头像跟着淡出
@@ -188,6 +196,8 @@ export class BossHud {
       g.fillStyle(0x000000, .3 * ta).fillRoundedRect(sx + 1, sy + 1, sw, sh, 3).fillStyle(LQ.cinnabar, ta).fillRoundedRect(sx, sy, sw, sh, 3).lineStyle(1, LQ.goldHi, .9 * ta).strokeRoundedRect(sx + 1.5, sy + 1.5, sw - 3, sh - 3, 2);
     } else this.seal.setVisible(false);
     T.pct.setVisible(true).setAlpha(ta).setOrigin(1, 0).setPosition(x0 + R.w - 14, y0 + 8).setFontSize(13).setColor('#f5e6c8').setStroke('#140c06', 4).setShadow(1, 2, '#000000', 3, true, true);
+    // 首领震怒：百分比左边一个朱印「怒 ×N」（不弹大框）
+    if (this.rage > 0) this.drawRage(x0 + R.w - 14 - T.pct.width - 8, y0 + 6, ta, now, 1); else this.rageT.setVisible(false);
     T.status.setVisible(T.status.text !== '' && T.status.visible).setAlpha(ta).setOrigin(1, 0).setPosition(x0 + R.w - 10, y0 + R.h + 3).setColor('#e6cf9a').setStroke('#140c06', 4).setShadow(1, 2, '#000000', 3, true, true);
     if (ko <= 0) return;
     // 血条（登场时从中间向两边展开）
@@ -230,9 +240,18 @@ export class BossHud {
     this.hpBar(bx, by, bw, D.hpH, o.done ? 0 : o.ratio, o.done ? 0 : o.trail, o.a, o.fill);
     if (o.done) g.fillStyle(0x6a6460, .5 * o.a).fillRect(bx, by, bw, D.hpH);
     if (o.rage && !o.done) { const a = .35 + .3 * Math.sin(now / 120); g.lineStyle(2, 0xff5a3a, a * o.a).strokeRoundedRect(bx - 4, by - 4, bw + 8, D.hpH + 8, 4); }
+    if (i === 0) { if (this.rage > 0) this.drawRage(GAME_WIDTH / 2, o.y - 21, o.a, now, .5); else this.rageT.setVisible(false); } // 双首领：两块框正上方居中
     // 阵营色：头像外再一圈细线区分两人（金 / 朱）
     g.lineStyle(1.5, o.ring, .9 * o.a).strokeCircle(o.x + 24, o.y + h / 2, D.r + 6);
     return { barX: bx, barY: by, barW: bw };
+  }
+  /** 震怒印：anchor 1 = right 是右边缘，.5 = right 是中心；y 是上边。 */
+  private drawRage(right: number, y: number, a: number, now: number, anchor: number): void {
+    const s = '怒' + (this.rage > 1 ? ' ×' + this.rage : '');
+    if (this.rageT.text !== s) this.rageT.setText(s);
+    const sw = this.rageT.width + 12, sh = 17, sx = right - sw * anchor, pulse = .78 + .22 * Math.sin(now / 160), g = this.g;
+    this.rageT.setVisible(a > .02).setAlpha(a).setPosition(sx + sw / 2, y + sh / 2);
+    g.fillStyle(0x000000, .3 * a).fillRoundedRect(sx + 1, y + 1, sw, sh, 3).fillStyle(0x8a1a0c, pulse * a).fillRoundedRect(sx, y, sw, sh, 3).lineStyle(1, 0xff9a6a, .9 * a).strokeRoundedRect(sx + 1.5, y + 1.5, sw - 3, sh - 3, 2);
   }
   /** 双首领画完：隐藏多出来的头像槽。 */
   endDual(count: number): void { for (let i = count; i < this.dualImgs.length; i++) this.dualImgs[i].setVisible(false); }
@@ -263,5 +282,5 @@ export class BossHud {
     return out;
   }
 
-  destroy(): void { for (const o of [this.g, this.seal, this.breakT, this.portrait, ...this.dualImgs]) o.destroy(); }
+  destroy(): void { for (const o of [this.g, this.seal, this.breakT, this.rageT, this.portrait, ...this.dualImgs]) o.destroy(); }
 }

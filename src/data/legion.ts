@@ -14,6 +14,13 @@ export const TROOPS: Record<TroopKind, TroopDef> = {
 };
 export const TROOP_KINDS = Object.keys(TROOPS) as TroopKind[];
 export const ORDERS: Record<Order, string> = { guard: '护阵', sortie: '出击' };
+/**
+ * 战斗左上的部曲状态行（11-21 用户试玩「1-1 看不到自己军粮」）：资源和状态数字尽量显示，没开放的操作按钮才藏——
+ * 随军粮从 1-1 起就写（打怪、拆营帐会掉）；部曲开放（squad，1-2）后才加「兵力 / 阵亡」。
+ */
+export function legionStatusText(food: number, count: number, dead: number, squad: boolean): string {
+  return squad ? `随军粮 ${food} · 兵力 ${count}${dead ? ` · 阵亡 ${dead}` : ''}` : `随军粮 ${food}`;
+}
 export const LEGION = { startingFood: 0, waveFood: 0, trainCost: [0, 40, 80], squadSize: 12, nearStep: .1, farStep: .5 } as const;
 
 export const INITIAL_TROOPS:readonly TroopKind[]=['swordsman','spearman','archer'];

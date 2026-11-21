@@ -32,8 +32,28 @@ export const DEFEAT_SPECIAL: Readonly<Record<string, DefeatLine[]>> = {
   caowei: [{ who: '', text: '虎豹骑太凶，将军先撤！' }, { who: '@lord', text: '中原未定，岂能就此罢手！' }],
   huangjin: [{ who: '关羽', text: '大哥，黄巾势众，暂退整军！' }, { who: '@lord', text: '……回营，整顿再来！' }],
 };
-/** 第一章战败小贴士（天下未开，没有惩罚与退守，结算正文加一条）。 */
-export const DEFEAT_TIPS: readonly string[] = ['三选一多拿本命兵器，伤害涨得最快', '血少了去捡干粮、站泉眼回血', '张宝的护法符柱先打碎，他才会受伤', '张角的天雷有红圈预警，看准再走', '战斗支援选一队兵随行，按 E 让部曲出击'];
+/**
+ * 第一章战败小贴士（天下未开，没有惩罚与退守，结算正文加一条）。
+ * 只说已经见过的东西（总制作人新存档试玩 11-20：1-1 还没开部曲，小贴士却写「按 E 让部曲出击」）：
+ * stage = 只在这一关出（张宝符柱 1-2、张角天雷 1-3）；mech = 这项玩法开放后才出（data/mechanicUnlocks.ts mechOpen）。
+ */
+export const DEFEAT_TIPS: readonly { text: string; stage?: number; mech?: 'squad' }[] = [
+  { text: '三选一多拿本命兵器，伤害涨得最快' }, { text: '血少了去捡干粮、站泉眼回血' },
+  { text: '张宝的护法符柱先打碎，他才会受伤', stage: 2 }, { text: '张角的天雷有红圈预警，看准再走', stage: 3 },
+  { text: '战斗支援选一队兵随行，按 E 让部曲出击', mech: 'squad' },
+];
+/** 抽一条这一关能出的小贴士。open = 玩法是否开放（mechOpen）。 */
+export function defeatTip(stage: number, open: (id: 'squad') => boolean, rnd: () => number = Math.random): string {
+  const ok = DEFEAT_TIPS.filter(t => (t.stage === undefined || t.stage === stage) && (!t.mech || open(t.mech)));
+  return ok[Math.floor(rnd() * ok.length)]?.text ?? DEFEAT_TIPS[0].text;
+}
+/**
+ * 战败结算写明征程构筑怎么算（总制作人试玩 11-20 问「阵亡后重进同一关构筑是空的，是惩罚还是丢档」——是设计）：
+ * 征程构筑只在主线某关第一次打赢时存档、作为下一关的起点；打输不存，本关新学的战法不保留。征程第一仗（还没打赢过任何一关）重打从零开始。
+ */
+export function buildCarryNote(hasSave: boolean): string {
+  return '征程构筑  本关新学的战法不保留 · ' + (hasSave ? '重打从上一关打赢时的构筑开始' : '征程第一仗，重打从零开始');
+}
 /** 这一关的战败台词：先找「id-关」，再找「id」，都没有就随机一套通用的。 */
 export function defeatLines(key: string, stage: number, rnd: () => number = Math.random): DefeatLine[] {
   return DEFEAT_SPECIAL[key + '-' + stage] ?? DEFEAT_SPECIAL[key] ?? DEFEAT_LINES[Math.floor(rnd() * DEFEAT_LINES.length)];

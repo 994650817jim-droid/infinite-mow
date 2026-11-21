@@ -141,6 +141,9 @@ export class StagePhaseRunner {
     return e;
   }
 
+  /** e 是不是本关副将（首领阶段收益额度不管副将：data/bossStall.ts）。 */
+  isLieutenant(e: Enemy): boolean { const t = this.lt; return !!t && !t.down && t.e === e && e.spawnId === t.life; }
+
   /** 每帧：副将名牌 / 血条跟随；倒下时通知场景。 */
   update(): void {
     if (this.ltPending && !this.lt && this.h.elapsed() >= this.ltPending.at) this.lieutenant(this.ltPending.name);

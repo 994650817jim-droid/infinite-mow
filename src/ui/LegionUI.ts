@@ -3,7 +3,7 @@ import Phaser from 'phaser';
 import { WAR, warFrame } from './WarStyle';
 import { inkPlate } from './HomeCommand';
 import { DEPTH, FONT, HEADING_FONT, GAME_HEIGHT as H, GAME_WIDTH as W, IS_DESKTOP as D } from '../config';
-import { LEGION, ORDERS, TROOPS, TROOP_KINDS, INITIAL_TROOPS, type TroopKind } from '../data/legion';
+import { LEGION, ORDERS, TROOPS, TROOP_KINDS, INITIAL_TROOPS, type TroopKind, legionStatusText } from '../data/legion';
 import type { Legion } from '../systems/Legion';
 import { loadTroopPortraits, portraitHeadY, portraitKey } from '../systems/TroopPortraits';
 import { artStyle } from '../systems/ArtStyle';
@@ -313,7 +313,17 @@ export class LegionUI {
     } else this.potion.root.setVisible(false);
     this.prev.setVisible(!wave && !D).setAlpha(this.page === 0 ? .4 : 1); this.next.setVisible(!wave && !D).setAlpha(this.page === 1 ? .4 : 1); this.pageText.setVisible(!wave && !D).setText(`${this.page + 1} / 2`);
   }
-  update(army: Legion, visible: boolean): void { this.hud.setVisible(visible); if (!visible) return; this.status.setText(`随军粮 ${army.food} · 兵力 ${army.count}${army.dead ? ` · 阵亡 ${army.dead}` : ''}`); this.paintOrder(army); }
+  /**
+   * squad：部曲开放没有（mechanic-rollout #5，1-2）。原则（11-21 用户试玩「1-1 看不到自己军粮」）：资源和状态数字尽量显示，没开放的操作按钮才隐藏——
+   * 随军粮从 1-1 起就显示（打怪、拆营帐会掉）；「兵力 / 阵亡」和护阵 / 出击按钮等部曲开放再出现。
+   */
+  update(army: Legion, visible: boolean, squad = true): void {
+    this.hud.setVisible(visible); if (!visible) return;
+    this.status.setText(legionStatusText(army.food, army.count, army.dead, squad));
+    if (squad !== this.orderShown) { this.orderShown = squad; for (const o of [this.orderPlate, this.orderIcon, this.order, this.keyHint]) o?.setVisible(squad); if (squad) this.order.setInteractive({ useHandCursor: true }); else this.order.disableInteractive(); }
+    if (squad) this.paintOrder(army);
+  }
+  private orderShown = true;
   private paintOrder(army: Legion): void {
     if (this.orderState === army.order) return;
     this.orderState = army.order;

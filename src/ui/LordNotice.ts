@@ -18,14 +18,14 @@ export function showLordNotice(s: Phaser.Scene, lord: CharacterId, keep: () => v
   root.add(g);
   const name = getCharacter(lord).name;
   const t = (y: number, v: string, size: number, color: string, font = FONT) => s.add.text(px, y, v, { fontFamily: font, fontSize: size + 'px', color, align: 'center', resolution: 2, wordWrap: { width: pw - 60, useAdvancedWrap: true } }).setOrigin(.5, 0);
-  root.add(t(py - ph / 2 + 22, `主公 · ${name}`, D ? 28 : 26, '#efd399', HEADING_FONT).setName('lord-notice-title'));
+  root.add(t(py - ph / 2 + 22, `主将 · ${name}`, D ? 28 : 26, '#efd399', HEADING_FONT).setName('lord-notice-title'));
   // 电脑版按意思断行（原来自动折行把「机会。」「更换。」最后一两个字甩到下一行）
-  const body = D ? `新规：每个存档在开局选定一名主公，之后整个存档都由主公出战，\n不能再更换。其他武将可在招贤馆招为随行。\n\n这个存档已按你最近出战的武将，把${name}定为主公。\n你有一次改选的机会。` : `新规：每个存档在开局选定一名主公，之后整个存档都由主公出战，不能再更换。其他武将可在招贤馆招为随行。\n\n这个存档已按你最近出战的武将，把${name}定为主公。你有一次改选的机会。`;
+  const body = D ? `新规：每个存档在开局选定一名主将，之后整个存档都由主将出战，\n不能再更换。其他武将可在招贤馆招为随行。\n\n这个存档已按你最近出战的武将，把${name}定为主将。\n你有一次改选的机会。` : `新规：每个存档在开局选定一名主将，之后整个存档都由主将出战，不能再更换。其他武将可在招贤馆招为随行。\n\n这个存档已按你最近出战的武将，把${name}定为主将。你有一次改选的机会。`;
   root.add(t(py - ph / 2 + (D ? 76 : 72), body, 15, '#e2d4bd').setLineSpacing(4));
   const by = py + ph / 2 - (D ? 44 : 52), bw = D ? 220 : (pw - 50) / 2;
   const a = homeCommand(s, px - bw / 2 - 10, by, bw, D ? 52 : 60, `就用${name}`, true);
   // 一屏只留一个水墨按钮（2026-11-20 夜间 UI 审查）：「改选主公」改漆金次要按钮
-  const bh = D ? 40 : 48, b = s.add.text(px + bw / 2 + 10, by, '改选主公', { fontFamily: HEADING_FONT, fontSize: (D ? 17 : 18) + 'px', color: '#ffe9bd', resolution: 2 }).setOrigin(.5).setInteractive({ useHandCursor: true }).setName('lord-repick');
+  const bh = D ? 40 : 48, b = s.add.text(px + bw / 2 + 10, by, '改选主将', { fontFamily: HEADING_FONT, fontSize: (D ? 17 : 18) + 'px', color: '#ffe9bd', resolution: 2 }).setOrigin(.5).setInteractive({ useHandCursor: true }).setName('lord-repick');
   lqHitBox(b, bw - 30, bh); const skin = lqSkin(s, b, b, () => ({ w: bw - 30, h: bh }), { tone: 'quiet' });
   a.hit.setName('lord-keep').setData('padDefault', true).on('pointerdown', () => { root.destroy(); keep(); });
   b.on('pointerdown', () => { root.destroy(); repick(); });

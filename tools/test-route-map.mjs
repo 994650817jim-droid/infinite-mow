@@ -43,7 +43,7 @@ const modalGo = async (p, name, go) => { await p.evaluate(([M0, n, g]) => { cons
   ck('规则 B：汜水关挂在 2-1 后，2-1 打下即露出可攻；洛阳挂在 2-3 后仍在雾里；我方陈留一直露出', v.vis.sishui === 'open' && v.vis.luoyang === 'hidden' && v.vis.chenliu === 'cleared', v.vis);
   await p.screenshot({ path: `${OUT}/chapter-view.png` });
   const d = await pick(p, 'hulao-2');
-  ck('详情栏：2-2 荥阳、写出战主公（存档主公关羽）、打下后散开到哪；按钮「出征」', d.title === '2-2 荥阳' && /主公 关羽/.test(d.detail) && /打下后 · 迷雾散开：2-3 火烧洛阳/.test(d.detail) && d.action === '出征' && d.enabled && !d.hard, d);
+  ck('详情栏：2-2 荥阳、写出战主公（存档主公关羽）、打下后散开到哪；按钮「出征」', d.title === '2-2 荥阳' && /主将 关羽/.test(d.detail) && /打下后 · 迷雾散开：2-3 火烧洛阳/.test(d.detail) && d.action === '出征' && d.enabled && !d.hard, d);
   const w1 = await act(p);
   ck('主线出征：讨董 2-2、主公关羽，直接进战斗（经 BootScene 载入）', (w1.key === 'GameScene' || w1.pending === 'GameScene') && w1.run?.chapter === 'hulao' && w1.run?.westStage === 2 && w1.run?.character === 'guanyu', w1);
   const r1 = await pick(p, 'hulao-1');

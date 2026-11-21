@@ -29,7 +29,7 @@ const battle = p => p.evaluate(() => { const g = window.__game, gs = g.scene.get
 {
   const p = await open();
   const card = await p.evaluate(M0 => { const s = eval(M0); const n = s.markers.find(m => m.node.chapter === 'hulao' || m.node.id === 'hulao'); s.selected = { kind: 'node', node: n.node }; s.refresh(); return { title: s.detailTitle.text, detail: s.detail.text, view: s.detailView?.text, action: s.action.text.text }; }, M);
-  ck('第贰章小卡：第一行进度、第二行「主公 关羽 亲征」（存档主公，不是缺省赵云）；按钮「出征」', /第贰章/.test(card.title) && card.view?.split('\n')[1]?.startsWith('主公 关羽') && card.action === '出征', card);
+  ck('第贰章小卡：第一行进度、第二行「主将 关羽 亲征」（存档主公，不是缺省赵云）；按钮「出征」', /第贰章/.test(card.title) && card.view?.split('\n')[1]?.startsWith('主将 关羽') && card.action === '出征', card);
   await p.screenshot({ path: `${out}/1-map-card.png` });
   await p.evaluate(M0 => eval(M0).action.image.emit('pointerup'), M);
   await p.waitForFunction(() => window.__game.scene.isActive('GameScene') && window.__game.scene.getScene('GameScene').player, null, { timeout: 90000 });

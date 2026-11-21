@@ -45,7 +45,8 @@ export class DevGameScene extends GameScene {
 
   protected override installDevelopment(): void {
     this.installDebug();
-    this.devText = this.add.text(16, GAME_HEIGHT - 8, '', { fontFamily: FONT, fontSize: '11px', color: '#8a8078' })
+    // 左下 FPS / 敌 / 弹 / 宝石 / 内存 一行：只在 ?dev=1 时显示（正式打包本来就没有这个场景；开发服务器上不带 dev 的「正式模式」也不显示，跟正式包一致，2026-11-21 制作人验收）
+    if (new URLSearchParams(window.location.search).get('dev') === '1') this.devText = this.add.text(16, GAME_HEIGHT - 8, '', { fontFamily: FONT, fontSize: '11px', color: '#8a8078' })
       .setOrigin(0,1).setResolution(2).setStroke('#111710',2).setScrollFactor(0).setDepth(DEPTH.hud + 2);
     this.setupPerfMode();
     if (new URLSearchParams(window.location.search).get('dev') === '1') this.setupDevPanel();

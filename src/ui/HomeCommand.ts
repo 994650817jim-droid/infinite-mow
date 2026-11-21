@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import {HEADING_FONT,RENDER_SCALE} from '../config';
 import {uiSfx} from '../systems/Sfx';
+import {lqButton,lqLabelColor,type LqState} from './LacquerKit';
 
 type CommandState='normal'|'hover'|'pressed'|'selected'|'disabled';
 const PAD=14;
@@ -186,4 +187,23 @@ export function inkSkin(scene:Phaser.Scene,target:Phaser.GameObjects.Text,size:(
  target.on('pointerover',()=>repaint('hover')).on('pointerout',()=>repaint('normal')).on('pointerdown',()=>repaint('pressed')).on('pointerup',()=>repaint('hover'));
  repaint();
  return plate?{gfx:plate,repaint}:null;
+}
+
+/**
+ * 次要按钮的漆金版（2026-11-21 制作人验收「一屏一个水墨按钮」：主页「更换武将 / 主公 · xx」原来是黑色水墨）。
+ * 接口同 homeCommand（g / hit / caption / paint / setY / y），调用方不用改；外观是漆底描金（LacquerKit.lqButton）。
+ */
+export function homeLqCommand(scene:Phaser.Scene,x:number,y:number,width:number,height:number,label:string,fontSize=17){
+ const g=scene.add.graphics(),hit=scene.add.rectangle(x,y,width,height,0,0.001).setInteractive({useHandCursor:true});
+ const caption=scene.add.text(x,y,label,{fontFamily:HEADING_FONT,fontSize:fontSize+'px',color:'#ffe9bd',resolution:2}).setOrigin(.5).setLetterSpacing(2).setShadow(0,1,'#120a05',3,true,true);
+ let current='normal';
+ const paint=(state:string='normal')=>{
+  current=state;const st:LqState=!hit.input?.enabled?'off':state==='hover'?'hover':state==='pressed'?'down':state==='selected'?'on':'idle';
+  g.clear();const d=lqButton(g,x,y,width,height,st,'quiet');caption.setPosition(x,y+d).setColor(lqLabelColor(st));
+ };
+ paint();
+ hit.on('pointerdown',()=>{const s=uiSfx();s.unlock();s.play('uiClick');});
+ hit.on('pointerover',()=>{if(current!=='selected'){paint('hover');uiSfx().play('uiHover');}}).on('pointerout',()=>{if(current!=='selected')paint();}).on('pointerdown',()=>paint('pressed')).on('pointerup',()=>paint('hover'));
+ const setY=(ny:number)=>{y=ny;hit.setY(ny);paint(current);};
+ return{g,hit,caption,paint,setY,get y(){return y;}};
 }

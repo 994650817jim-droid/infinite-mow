@@ -13,7 +13,7 @@ import { scaleFor, statMultiplier, statSource } from '../data/heroStats';
 import { gearFor, gearSummary } from '../systems/ItemEffects';
 import { gearOwners, ownerName } from '../systems/RosterStore';
 import { TACTIC_UNLOCK_SCROLLS, TEMPER, XINDE_SLOTS, getXinde, grain, respec, respecCost, scrolls, tacticUnlocked, temperCost, temperLevel, temperUp, toggleXinde, unlockTactic } from '../systems/MasteryStore';
-import { LQ, lqDiamond, lqHitBox, lqPanel, lqSkin } from './LacquerKit';
+import { LQ, lqDiamond, lqHitBox, lqPanel, lqSheet, lqSkin } from './LacquerKit';
 import { attrBadge } from './AttrBadge';
 import { lockedHeroes } from '../systems/HeroUnlocks';
 import { LOCKED_TITLE, LOCKED_HOW, LOCKED_TAG } from '../data/heroUnlocks';
@@ -143,8 +143,10 @@ export class HeroCodexUI {
   private section(x: number, y: number, w: number, title: string, right = ''): number {
     // 九宫拉伸：左端朱印与右端收边保持原比例，只拉中段（标题牌原图 866×82）
     if (this.has('header')) { const k = 24 / 82; this.add(this.scene.add.nineslice(x, y, 'codex_header', undefined, w / k, 82, 90, 40).setOrigin(0, .5).setScale(k).setAlpha(.95)); }
-    else { const g = this.add(this.scene.add.graphics()); g.fillStyle(0x9a2a1c, 1).fillRect(x + 4, y - 7, 14, 14); g.lineStyle(1, LQ.gold, .7).lineBetween(x + 24, y, x + w, y); }
-    this.text(x + 32, y, title, 14, '#f3d48a', true).setOrigin(0, .5);
+    const fallback = !this.has('header') ? this.add(this.scene.add.graphics()) : null;
+    const tt = this.text(x + 32, y, title, 14, '#f3d48a', true).setOrigin(0, .5);
+    // 标题牌图没载入时的替代：朱印 + 金线，金线从标题字右侧起画（原来横穿标题字，像删除线；2026-11-21 全界面体检）
+    if (fallback) { fallback.fillStyle(0x9a2a1c, 1).fillRect(x + 4, y - 7, 14, 14); fallback.lineStyle(1, LQ.gold, .7).lineBetween(x + 40 + tt.width, y, x + w, y); }
     if (right) this.text(x + w - 10, y, right, 11.5, '#c8b88f').setOrigin(1, .5);
     return y + 18;
   }
@@ -163,7 +165,7 @@ export class HeroCodexUI {
     const W = GAME_WIDTH, H = GAME_HEIGHT; this.ensureArt();
     this.add(this.scene.add.rectangle(0, 0, W, H, 0x0b0805, .86).setOrigin(0).setInteractive()).on('pointerdown', (_p: unknown, _x: unknown, _y: unknown, e?: Phaser.Types.Input.EventData) => e?.stopPropagation?.());
     const x0 = 18, y0 = 12, pw = W - 36, ph = H - 24, bottom = y0 + ph - 18;
-    lqPanel(this.add(this.scene.add.graphics()), x0, y0, pw, ph);
+    lqSheet(this.add(this.scene.add.graphics()), x0, y0, pw, ph);
     // 顶栏：标题 · 资源 · 返回
     this.text(x0 + 28, y0 + 16, '武将谱', 26, '#f2ddae', true);
     this.text(x0 + 128, y0 + 27, `武学残卷 ${scrolls()} · 军粮 ${grain()}`, 13, '#e8d6a4').setName('codex-resources');
@@ -172,7 +174,10 @@ export class HeroCodexUI {
 
     // 左：武将名册（主公在前；降将 / 招募将同列），行高按人数收紧
     const owners = gearOwners(), lx = x0 + 22, lw = 152, top = y0 + 66, listH = bottom - top, locked = lockedHeroes();
-    const rowH = Math.max(24, Math.min(36, Math.floor(listH / Math.max(1, owners.length + locked.length))));
+    // 未归附的武将排成两列小格（2026-11-21 全界面体检：二十多人一列排不下，末尾几行出了面板）
+    const lockRows = Math.ceil(locked.length / 2), rowH = Math.max(22, Math.min(36, Math.floor(listH / Math.max(1, owners.length + lockRows + (locked.length ? 1 : 0)))));
+    const ly0 = top + owners.length * rowH + 4, lrH = Math.max(16, Math.min(rowH, Math.floor((top + listH - ly0 - 18) / Math.max(1, lockRows))));
+    if (locked.length) this.text(lx + 4, ly0 + 7, '未归附', 11, '#7d705a').setOrigin(0, .5);
     const lg = this.add(this.scene.add.graphics());
     lg.fillStyle(0x0d0906, .55).fillRoundedRect(lx - 4, top - 4, lw + 8, Math.min(listH, owners.length * rowH) + 6, 6);
     owners.forEach((o, i) => {
@@ -195,11 +200,10 @@ export class HeroCodexUI {
 
     // 没来投的武将（systems/HeroUnlocks）：名册末尾墨色一行；点开只看剪影与来投提示
     locked.forEach((id, j) => {
-      const y = top + (owners.length + j) * rowH, h = rowH - 4, on = id === this.hero, nm = CHARACTERS.find(c => c.id === id)?.name ?? id;
-      if (on) this.add(this.scene.add.graphics()).fillStyle(0x2a2016, .95).fillRoundedRect(lx, y, lw, h, 4).lineStyle(1, 0x8a7a5a, .9).strokeRoundedRect(lx + .5, y + .5, lw - 1, h - 1, 4);
-      this.text(lx + 30, y + h / 2, nm, 15, on ? '#b8a888' : '#6f6452', true).setOrigin(0, .5);
-      this.text(lx + lw - 10, y + h / 2, LOCKED_TAG, 12, '#6f6452').setOrigin(1, .5);
-      this.add(this.scene.add.rectangle(lx, y, lw, h, 0, .001).setOrigin(0)).setName('codex-locked-' + id).setInteractive({ useHandCursor: true })
+      const cw = lw / 2, x = lx + (j % 2) * cw, y = ly0 + 16 + Math.floor(j / 2) * lrH, h = lrH - 2, on = id === this.hero, nm = CHARACTERS.find(c => c.id === id)?.name ?? id;
+      if (on) this.add(this.scene.add.graphics()).fillStyle(0x2a2016, .95).fillRoundedRect(x, y, cw - 3, h, 4).lineStyle(1, 0x8a7a5a, .9).strokeRoundedRect(x + .5, y + .5, cw - 4, h - 1, 4);
+      this.text(x + 10, y + h / 2, nm, 14, on ? '#b8a888' : '#6f6452', true).setOrigin(0, .5);
+      this.add(this.scene.add.rectangle(x, y, cw - 3, h, 0, .001).setOrigin(0)).setName('codex-locked-' + id).setInteractive({ useHandCursor: true })
         .on('pointerdown', (_p: unknown, _x: unknown, _y: unknown, e?: Phaser.Types.Input.EventData) => { e?.stopPropagation?.(); this.hero = id as HeroKey; this.render(); });
     });
     if ((locked as string[]).includes(this.hero)) { this.deskLocked(x0 + 196, top, x0 + pw - 24 - (x0 + 196), bottom); return; }

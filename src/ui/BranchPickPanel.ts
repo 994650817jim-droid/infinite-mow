@@ -1,9 +1,9 @@
 import Phaser from 'phaser';
-import { DEPTH, FONT, GAME_HEIGHT, GAME_WIDTH, HEADING_FONT } from '../config';
+import { DEPTH, FONT, GAME_HEIGHT, GAME_WIDTH, HEADING_FONT, IS_DESKTOP } from '../config';
 import { BRANCH_FIT, type WeaponBranch } from '../data/weaponBranches';
 import { SCHOOLS } from '../data/schools';
 import { storyArtFile } from '../data/story/art';
-import { lqButton, lqLabelColor, lqPanel, type LqState } from './LacquerKit';
+import { lqButton, lqLabelColor, lqPanel, lqSheet, type LqState } from './LacquerKit';
 
 /**
  * 兵器专职面板（2026-11-20 用户「可以按照你建议去开发」）：本命练到 Lv5 时单独弹出（暂停战斗），两条分支并排大卡、中间武将立绘；
@@ -14,7 +14,7 @@ export interface BranchPanelOpts { hero: string; heroName: string; weaponName: s
 export function openBranchPanel(scene: Phaser.Scene, o: BranchPanelOpts): Phaser.GameObjects.Container {
   const W = GAME_WIDTH, H = GAME_HEIGHT, pw = Math.min(W - 40, 860), ph = Math.min(H - 40, 470), x0 = (W - pw) / 2, y0 = (H - ph) / 2;
   const root = scene.add.container(0, 0).setScrollFactor(0).setDepth(DEPTH.overlay + 14).setName('branch-panel');
-  const g = scene.add.graphics(); g.fillStyle(0x0c0805, .7).fillRect(0, 0, W, H); lqPanel(g, x0, y0, pw, ph, { glow: true }); root.add(g);
+  const g = scene.add.graphics(); g.fillStyle(0x0c0805, .7).fillRect(0, 0, W, H); if (IS_DESKTOP) lqSheet(g, x0, y0, pw, ph); else lqPanel(g, x0, y0, pw, ph, { glow: true }); root.add(g);
   root.add(scene.add.rectangle(W / 2, H / 2, W, H, 0, .001).setInteractive()); // 挡住下面的点击
   const t = (x: number, y: number, v: string, size: number, color: string, heading = false, wrap = 0) => scene.add.text(x, y, v, { fontFamily: heading ? HEADING_FONT : FONT, fontSize: size + 'px', color, resolution: 2, align: 'center', lineSpacing: 3, ...(wrap ? { wordWrap: { width: wrap, useAdvancedWrap: true } } : {}) }).setOrigin(.5, 0);
   root.add(t(W / 2, y0 + 18, '兵器专职 · 二选一', 28, '#f6dc9a', true).setName('branch-title'));

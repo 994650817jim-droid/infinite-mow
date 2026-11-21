@@ -10,7 +10,7 @@ import { CHARACTERS } from '../data/characters';
 import { uiSfx } from '../systems/Sfx';
 import { outHeal, outMedicState, type MedicWallet } from '../town/CampMedic';
 import { drawCampFigure, MEDIC_FIGURE } from './CampFigure';
-import { LQ, lqCommand, lqPanel } from './LacquerKit';
+import { LQ, lqCommand, lqPanel, lqSheet } from './LacquerKit';
 
 export function openMedicPanel(scene: Phaser.Scene, opts: { wallet: MedicWallet; depth?: number; onClose?: () => void }): () => void {
   const W = scene.scale.width, H = scene.scale.height, D = W > 600, depth = opts.depth ?? 600;
@@ -24,7 +24,7 @@ export function openMedicPanel(scene: Phaser.Scene, opts: { wallet: MedicWallet;
   const body = scene.add.container(0, 0); root.add([scene.add.rectangle(0, 0, W, H, 0x0b0805, .82).setOrigin(0).setInteractive(), body]);
   const draw = () => {
     if (closed) return; body.removeAll(true);
-    const pw = D ? Math.min(820, W - 40) : W - 24, ph = D ? 430 : 700, px = (W - pw) / 2, py = (H - ph) / 2, g = scene.add.graphics(); lqPanel(g, px, py, pw, ph, { shadow: true }); body.add(g);
+    const pw = D ? Math.min(820, W - 40) : W - 24, ph = D ? 430 : 700, px = (W - pw) / 2, py = (H - ph) / 2, g = scene.add.graphics(); if (D) lqSheet(g, px, py, pw, ph); else lqPanel(g, px, py, pw, ph, { shadow: true }); body.add(g);
     const st = outMedicState(hero), food = opts.wallet.get();
     txt(W / 2, py + 28, '军医', D ? 24 : 26, LQ.title, true).setOrigin(.5);
     txt(px + pw - 22, py + 28, opts.wallet.name + ' ' + food, 15, '#f3d48a').setOrigin(1, .5).setName('medic-purse');

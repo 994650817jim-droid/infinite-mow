@@ -16,7 +16,7 @@ export function addMainMenuButton(scene: Phaser.Scene, x: number, y: number, dep
   lqHitBox(t, w, h);
   const skin = lqSkin(scene, t, t, () => ({ w, h }), { tone: 'quiet' }); skin.gfx.setScrollFactor(0).setDepth(depth);
   // 快捷键提示：按钮右上角米色小字（电脑布局）
-  if (IS_DESKTOP) scene.add.text(x + w / 2 - 3, y - h / 2 + 1, hotkeyLabel('menu'), { fontFamily: HEADING_FONT, fontSize: '11px', color: '#efe0b4', resolution: 2 })
+  if (IS_DESKTOP) scene.add.text(x + w / 2 - 8, y - h / 2 + 3, hotkeyLabel('menu') /* 往里收，不再压在描边上被截半个（2026-11-21 全界面体检） */, { fontFamily: HEADING_FONT, fontSize: '11px', color: '#efe0b4', resolution: 2 })
     .setOrigin(1, 0).setScrollFactor(0).setDepth(depth + 2).setStroke('#120904', 3).setName('main-menu-key');
   const onKey = (e: KeyboardEvent): void => { if (e.repeat || typingTarget(e)) return; if (hotkeyCodes('menu').includes(eventCode(e))) go(); };
   scene.input.keyboard?.on('keydown', onKey);

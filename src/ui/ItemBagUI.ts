@@ -9,7 +9,7 @@ import { HORSES, horseQuality, mountStyle } from '../data/mounts';
 import { gearFromItems, gearSummary, horseBonusText } from '../systems/ItemEffects';
 import { type GearOwner, type LoadoutKey, LOADOUT_KEYS, equipTarget, keySlot, tokenSlots, equipItem, equippedBy, heroHorse, horseRider, loadItems, loadout, looseCount, markBagSeen, rideHorse, stableUnlocked, takeItemNotice, takeStableAnnouncement, unequipSlot, gearUpgrades, markGearGuideSeen } from '../systems/ItemStore';
 import { bagArt, drawQualityArt, drawQualityFrame, ensureItemTextures, horseIcon, itemIconKey, itemTile, loadBagArt, type IconSlot } from './ItemQuality';
-import { lqHitBox, lqPanel, lqSkin } from './LacquerKit';
+import { lqHitBox, lqPanel, lqSheet, lqSkin } from './LacquerKit';
 import { padNavigator } from './PadNavigator';
 import { ItemTooltip, compareLines } from './ItemTooltip';
 
@@ -129,7 +129,7 @@ export class ItemBagUI {
     const dim = this.add(this.scene.add.rectangle(0, 0, W, H, 0x0b0805, .86).setOrigin(0).setInteractive());
     dim.on('pointerdown', (_p: unknown, _x: unknown, _y: unknown, e?: Phaser.Types.Input.EventData) => e?.stopPropagation?.());
     const x0 = D ? 18 : 10, y0 = D ? 12 : 14, pw = W - x0 * 2, ph = H - y0 * 2;
-    lqPanel(this.add(this.scene.add.graphics()), x0, y0, pw, ph);
+    (D ? lqSheet : lqPanel)(this.add(this.scene.add.graphics()), x0, y0, pw, ph); // 电脑版无整圈金边（马厩单开时露在后面）
     { const bg = D && bagArt(this.scene, 'panel_bg'); if (bg) this.add(this.scene.add.image(x0 + pw / 2, y0 + ph / 2, bg).setDisplaySize(pw + 8, ph + 8)); }
 
     // 标题 + 计数（只算未穿戴的）+ 关闭
@@ -484,7 +484,7 @@ export class ItemBagUI {
     return { card, x, y, g };
   }
   private plainFrame(g: Phaser.GameObjects.Graphics, x: number, y: number, w: number, h: number): void {
-    g.fillStyle(0x1b120b, .97).fillRoundedRect(x, y, w, h, 10); g.lineStyle(2, 0xc9a35e, .9).strokeRoundedRect(x, y, w, h, 10);
+    lqSheet(g, x, y, w, h, .97); // 马厩 / 旧物：不要整圈金边（2026-11-21 全界面体检）
   }
 
 

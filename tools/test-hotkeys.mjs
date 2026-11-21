@@ -58,7 +58,7 @@ ck('文字输入框有焦点时 E / Q / Esc 都不触发', s2.order === s1.order
 await p.evaluate(G0 => { const s = eval(G0); s.player.growth.unallocated = 2; s.setMode('none'); }, G); await p.waitForTimeout(400);
 const hud = await p.evaluate(G0 => eval(G0).children.list.filter(x => x.name === 'hotkey-hint' && x.visible).map(x => [x.getData('target'), x.text]), G);
 await p.screenshot({ path: `${out}/hud-hints.png` });
-ck('HUD 圆钮标了键位：行囊 B、设置 Esc、加点 C', ['hud-bag:B', 'hud-pause:Esc', 'attribute-plus:C'].every(k => hud.some(([t, v]) => `${t}:${v}` === k)), hud);
+ck('HUD 圆钮标了键位：行囊 B、设置 Esc、加点 C', ['bag-bundle-icon:B', 'hud-pause:Esc', 'attribute-plus:C'].every(k => hud.some(([t, v]) => `${t}:${v}` === k)), hud);
 await p.evaluate(G0 => { eval(G0).player.growth.unallocated = 0; }, G);
 
 // 4. 三选一：R 刷新、2 选第二张

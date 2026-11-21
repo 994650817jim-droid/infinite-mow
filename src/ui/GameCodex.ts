@@ -1,5 +1,4 @@
 import Phaser from 'phaser';
-import {inkSkin} from './HomeCommand';
 import {CHARACTERS} from '../data/characters';
 import {TROOPS,TROOP_KINDS,type TroopKind} from '../data/legion';
 import {CHARACTER_PASSIVES} from '../data/passives';
@@ -22,22 +21,23 @@ export class GameCodex {
   this.root=scene.add.container(0,0).setDepth(550).setName('game-codex');this.content=scene.add.container(0,0);
   // 漆底描金整屏卷（与结算卷、行囊同系）；页签、卡片、按钮都是漆金三态
   this.root.add(scene.add.rectangle(W/2,H/2,W,H,0x0c0805,.96).setInteractive());
-  const frame=scene.add.graphics();lqPanel(frame,8,8,W-16,H-16,{shadow:false});this.root.add(frame);
+  // 2026-11-21 全界面体检：电脑版不要整屏金边大框、不用水墨页签 / 返回（每屏最多一个水墨按钮）
+  if(!D){const frame=scene.add.graphics();lqPanel(frame,8,8,W-16,H-16,{shadow:false});this.root.add(frame);}
   this.root.add(this.text(W/2,D?40:46,'将士图鉴',28,D?TITLE_FONT:HEADING_FONT).setOrigin(.5).setColor(D?'#efd399':'#f6dc9a').setStroke(D?'#120904':'#2a170b',4));
   const TABS=['hero','troop','surrender'] as const;
   this.tabs=['武将','兵种','降将'].map((label,i)=>{const t=this.text(W/2+(i-1)*136,D?76:92,label,18,HEADING_FONT).setOrigin(.5).setInteractive({useHandCursor:true}).setName('codex-tab-'+i).on('pointerdown',()=>{this.tab=TABS[i];this.index=0;this.render();});
-   const on=()=>this.tab===TABS[i],skin=(D?inkSkin(scene,t,()=>({w:120,h:38}),{active:on}):null)??lqSkin(scene,t,t,()=>({w:120,h:38}),{tone:'auto',on});lqHitBox(t,120,38);this.root.add([skin.gfx,t]);return skin;});
+   const on=()=>this.tab===TABS[i],skin=lqSkin(scene,t,t,()=>({w:120,h:38}),{tone:'auto',on});lqHitBox(t,120,38);this.root.add([skin.gfx,t]);return skin;});
   this.root.add(this.content);
   const close=this.text(W/2,H-(D?32:40),D?'返回':'返回首页',18,HEADING_FONT).setOrigin(.5).setInteractive({useHandCursor:true}).setName('codex-close').on('pointerdown',()=>this.root.destroy());
-  const cs=(D?inkSkin(scene,close,()=>({w:200,h:42})):null)??lqSkin(scene,close,close,()=>({w:200,h:42}),{tone:'quiet'});lqHitBox(close,200,42);this.root.add([cs.gfx,close]);this.render();
+  const cs=lqSkin(scene,close,close,()=>({w:D?160:200,h:D?38:42}),{tone:'quiet'});lqHitBox(close,D?160:200,D?38:42);this.root.add([cs.gfx,close]);this.render();
  }
  private tabs:Array<{repaint:(s?:LqState)=>void}>=[];
  private text(x:number,y:number,value:string,size=16,font=FONT){return this.scene.add.text(x,y,value,{fontFamily:font,fontSize:size+'px',color:'#e9d5b0',resolution:2}).setScrollFactor(0);}
  private render():void{
   this.content.removeAll(true);for(const t of this.tabs)t.repaint();
-  const hero=this.tab==='hero',sur=this.tab==='surrender',items=hero?CHARACTERS.map(c=>c.name):sur?SURRENDERED.map(s=>s.name):TROOP_KINDS.map(k=>TROOPS[k].name),cols=D?3:4;
+  const hero=this.tab==='hero',sur=this.tab==='surrender',items=hero?CHARACTERS.map(c=>c.name):sur?SURRENDERED.map(s=>s.name):TROOP_KINDS.map(k=>TROOPS[k].name),cols=4;
   // 电脑：左侧 3 列小卡（头像 + 名字），右侧详情；手机：上方 4 列卡片，详情紧跟在卡片下方（按行数排，不再与卡片重叠）
-  const cw=D?118:(W-52-24)/4,ch=sur?(D?40:52):D?60:104,gap=D?8:8,gx=D?24:26,gy=D?112:124; // 降将 17 人：卡片矮一些（只写名字）
+  const cw=D?96:(W-52-24)/4,ch=sur?(D?40:52):D?50:104,gap=D?6:8,gx=D?24:26,gy=D?112:124; // 降将 17 人：卡片矮一些（只写名字）
   for(const [i,name]of items.entries()){
    const x=gx+cw/2+(i%cols)*(cw+gap),y=gy+ch/2+Math.floor(i/cols)*(ch+gap),sel=this.index===i;
    const g=this.scene.add.graphics();let st:LqState=sel?'on':'idle';const paint=()=>{g.clear();lqButton(g,x,y,cw,ch,st,sel?'cinnabar':'quiet');};paint();
@@ -45,8 +45,8 @@ export class GameCodex {
     .on('pointerover',()=>{if(!sel){st='hover';paint();}}).on('pointerout',()=>{if(!sel){st='idle';paint();}});
    this.content.add([g,hit]);
    const def=hero||sur?null:TROOPS[TROOP_KINDS[i]],key=sur?'':hero?CHARACTERS[i].portrait:visualTextureKey(this.scene,def!.walkVisual?.texture??(def!.art.startsWith('xiliang')?def!.art+'_walk':def!.art+'_walk_sheet'));
-   if(key&&this.scene.textures.exists(key))this.content.add(this.scene.add.image(D?x-cw/2+28:x,D?y-1:y-15,key,hero?undefined:'down_0').setDisplaySize(D?46:58,D?46:58));
-   this.content.add(this.text(sur?x:D?x+18:x,sur?y:D?y:y+35,name,D?15:15,HEADING_FONT).setOrigin(.5).setColor(sel?'#fff3d6':'#e9d5b0'));
+   if(key&&this.scene.textures.exists(key))this.content.add(this.scene.add.image(D?x-cw/2+24:x,D?y-1:y-15,key,hero?undefined:'down_0').setDisplaySize(D?40:58,D?40:58));
+   this.content.add(this.text(sur?x:D?x+16:x,sur?y:D?y:y+35,name,D?15:15,HEADING_FONT).setOrigin(.5).setColor(sel?'#fff3d6':'#e9d5b0'));
   }
   const gridBottom=gy+Math.ceil(items.length/cols)*(ch+gap);
   const x=D?gx+cols*(cw+gap)+22:36,y=D?112:gridBottom+16,width=D?W-x-36:W-72;

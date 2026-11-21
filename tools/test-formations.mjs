@@ -66,6 +66,8 @@ const bonus = await ev(p, s => { const r = s.formationRt, L = s.legion, f = L.fo
   set('snake'); o.snake = { speed: inU.formSpeed, mul: r.pow().mul, favored: r.pow().favored };
   // 呼应：学一招骑突战法 → 主修含骑突 → 锋矢主效果 ×1.5
   P.growth.build.learn('stored_edge'); set('wedge'); o.echo = { front: L.fm.dmg(inU, front), majors: P.growth.build.majors(), echo: r.pow().echo };
+  // 方圆单独封顶 0.25：主修兵阵（呼应 ×1.5 → 0.3）也只减 25%
+  P.growth.build.tactics = {}; P.growth.build.learn('rally'); set('circle'); o.circleCap = { taken: L.fm.taken(inU), fol: r.followerHooks.taken(), echo: r.pow().echo, majors: P.growth.build.majors() };
   P.growth.build.tactics = {}; set('circle');
   return o; });
 ck('方圆：入阵士兵受伤 ×0.8、伤害 ×0.9；后军不吃；主将受伤 ×0.92', Math.abs(bonus.circle.taken - .8) < 1e-6 && Math.abs(bonus.circle.dmg - .9) < 1e-6 && (bonus.circle.outTaken ?? 1) === 1 && Math.abs(bonus.circle.hero - .92) < 1e-6, bonus.circle);
@@ -74,6 +76,7 @@ ck('锋矢：正前方 ×1.15、身后 ×1；受伤 ×1.1；主将移速 ×1.06'
 ck('雁行：远程伤害 ×1.2、射程 ×1.2，近战 ×0.85；主将范围 ×1.05', Math.abs(bonus.geese.ranged - 1.2) < 1e-6 && Math.abs(bonus.geese.range - 1.2) < 1e-6 && Math.abs(bonus.geese.melee - .85) < 1e-6 && Math.abs(bonus.geese.heroRange - 1.05) < 1e-6, bonus.geese);
 ck('长蛇：入阵士兵移速 ×1.25；赵云擅长蛇 ×1.25', Math.abs(bonus.snake.speed - 1.25) < 1e-6 && bonus.snake.favored && Math.abs(bonus.snake.mul - 1.25) < 1e-6, bonus.snake);
 ck('呼应：主修骑突 → 锋矢正前方 ×(1 + 0.15 × 1.5)', bonus.echo.echo && Math.abs(bonus.echo.front - 1.225) < 1e-6, bonus.echo);
+ck('方圆减伤单独封顶 0.25：主修兵阵呼应也只到 ×0.75（部曲与随从）', bonus.circleCap.echo && Math.abs(bonus.circleCap.taken - .75) < 1e-6 && Math.abs(bonus.circleCap.fol - .75) < 1e-6, bonus.circleCap);
 
 // ⑤ X 变阵：冷却、成阵、横幅、增益图标
 await use(p, 'circle', 'crane');

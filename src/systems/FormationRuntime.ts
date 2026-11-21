@@ -67,7 +67,7 @@ export class FormationRuntime {
   taken(u: Ally): number {
     if (!this.on(u)) return 1;
     switch (this.current) {
-      case 'circle': return 1 - this.main(FORMATION.circle.taken);
+      case 'circle': return 1 - Math.min(FORMATION.circle.cap, this.main(FORMATION.circle.taken));
       case 'wedge': return 1 + FORMATION.wedge.taken;
       case 'crane': return 1 + FORMATION.crane.taken;
       case 'bazhen': return 1 - FORMATION.bazhen.taken;
@@ -93,7 +93,7 @@ export class FormationRuntime {
   readonly followerHooks: FormationFollowerHooks = {
     slot: (i, n) => this.current ? this.h.legion.formation.followerSlot(i, n) : null,
     dmg: t => this.followerDmg(t),
-    taken: () => !this.formed ? 1 : this.current === 'circle' ? 1 - this.main(FORMATION.circle.taken) : this.current === 'bazhen' ? 1 - FORMATION.bazhen.taken : 1,
+    taken: () => !this.formed ? 1 : this.current === 'circle' ? 1 - Math.min(FORMATION.circle.cap, this.main(FORMATION.circle.taken)) : this.current === 'bazhen' ? 1 - FORMATION.bazhen.taken : 1,
   };
   /** 随从伤害（随从不占入阵名额，阵在就吃）。 */
   private followerDmg(template: string): number {

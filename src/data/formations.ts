@@ -48,7 +48,8 @@ export const FORMATION = {
   echoMul: 1.5, favoredMul: 1.25, halfMul: .5,
   /** 主效果（受伤减免 / 伤害加成）封顶。 */ mainCap: .3,
   spacing: 38,
-  circle: { taken: .2, heroTaken: .08, dmg: -.1, speed: -.1, pushR: 70, push: 46, slowMs: 1000, slow: .6 },
+  // 方圆减伤单独封顶 cap（平衡会话复核 11-20：它和练兵甲胄、统御、铁壁都相乘，又基本常驻），呼应 / 擅阵叠满也不超过 −25%
+  circle: { taken: .2, cap: .25, heroTaken: .08, dmg: -.1, speed: -.1, pushR: 70, push: 46, slowMs: 1000, slow: .6 },
   wedge: { front: .15, arcDeg: 60, heroMove: .06, taken: .1, chargeDist: 300, chargeMs: 650, chargeCd: 6000, chargeHit: .6, chargePush: 38 },
   crane: { pincer: .2, range: .2, taken: .1, pincerR: 120, flankMs: 1200 },
   geese: { ranged: .2, range: .2, melee: -.15, heroRange: .05, volleys: 3, volleyGapMs: 450, volleyR: 90 },

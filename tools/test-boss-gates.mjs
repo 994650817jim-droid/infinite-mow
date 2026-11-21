@@ -49,6 +49,26 @@ for (const hero of HEROES) {
   ck(`12-3 ${hero}（${r.weapon}）：站营垒边自动攻击 ${r.secs} 秒拆光 → 司马懿出营；主将武器打营垒 ${r.own}（部曲 ${r.ally}）`, r.forts?.length >= 3 && r.forts.every(f => f.lock) && r.marks >= r.forts.length && r.phase !== 'hold' && r.secs < 200 && r.own > r.ally, { secs: r.secs, own: r.own, ally: r.ally, phase: r.phase, fortsDown: r.fortsDown, lvl: r.lvl });
   await p.close();
 }
+// —— 12-3 太史慈专项（11-21 平衡模拟：卡在最后一座营垒、阵亡 3 次）：站在营垒外 140（近身双戟够不着、营垒又是优先目标），
+// 原来整个人发呆（不砍身边伏兵、射戟计数不涨）；现在先砍身边的，身边没有就射戟打营垒。无分支 / 神亭 / 北海 三种都测 ——
+if (!process.env.SKIP_TSC) for (const br of ['', 'tsc_shenting', 'tsc_beihai']) {
+  const p = await open('BeifaGameScene', 'beifaStage', 3, 'taishici'); await calm(p, 4);
+  await p.evaluate(t => { window.__S.elapsed = t; window.__S.lastPickAt = -1e9; }, 9999);
+  for (let i = 0; i < 30; i++) { await calm(p, 2); if (await p.evaluate(() => !!window.__S.simayi?.forts.length)) break; }
+  const r = await p.evaluate(async br => {
+    const s = window.__S, smy = s.simayi, P = s.player, wait = ms => new Promise(r => setTimeout(r, ms)), w = P.weapons[0];
+    if (!smy) return { none: true };
+    w.level = Math.max(w.level, 5); if (br) w.branch = br;
+    const set = new Set(smy.forts), dmg = { own: 0, ally: 0 }, orig = s.hitEnemy.bind(s); s.hitEnemy = (e, d, t, src, ally, wh) => { const h0 = e.hp, rr = orig(e, d, t, src, ally, wh); if (set.has(e)) dmg[ally ? 'ally' : 'own'] += Math.max(0, h0 - e.hp); return rr; };
+    const t0 = s.combatNow; s.devTimeScale = 3;
+    for (let i = 0; i < 1500 && smy.phase === 'hold'; i++) { window.__calm(); const f = smy.forts.find(o => o.active); if (!f) break; P.sprite.setPosition(f.x, f.y + 140); await wait(100); }
+    const secs = Math.round((s.combatNow - t0) / 100) / 10; s.devTimeScale = 1; await wait(800);
+    return { branch: br || '无', secs, phase: smy.phase, fortsDown: smy.metrics.fortsDown, own: Math.round(dmg.own), weapon: w.id, lvl: w.level };
+  }, br);
+  console.log('INFO 12-3 太史慈', JSON.stringify(r));
+  ck(`12-3 太史慈（${r.branch}）：站在营垒外 140（近身够不着）也能拆光营垒 → 司马懿出营（${r.secs} 秒）`, r.phase !== 'hold' && r.fortsDown >= 4 && r.secs < 200 && r.own > 0, r);
+  await p.close();
+}
 // —— 12-3 坚守时打司马懿：有说明 ——
 {
   const p = await open('BeifaGameScene', 'beifaStage', 3, 'zhaoyun'); await calm(p, 4);

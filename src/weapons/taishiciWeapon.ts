@@ -134,10 +134,24 @@ export function taishiciBehavior(host: WeaponHost, weapon: WeaponState, dt: numb
   st.bursts = st.bursts.filter(b => b.at !== Infinity);
   weapon.cooldownLeft -= dt;
   if (weapon.cooldownLeft > 0) return;
-  const target = smartTarget(host, Math.max(TS.range, TS.throwRange * .9));
+  let target = smartTarget(host, Math.max(TS.range, TS.throwRange * .9));
   if (!target) return;
-  const dx = target.x - pl.x, dy = target.y - pl.y, d = Math.hypot(dx, dy) || 1, rot = Math.atan2(dy, dx);
   const reach = taishiciReach(weapon.level) * pl.passive.rangeMultiplier('donglai_ji');
+  // 选中的目标在近身双戟够不着时：先砍身边够得着的；身边没有、目标又是营垒 / 连营 / 城门（锁定的物件）就直接射戟过去。
+  // 原来直接 return——既不砍身边的伏兵、射戟计数也不涨，站在营垒附近就整个人发呆（11-21 平衡模拟：12-3 太史慈卡在最后一座营垒、阵亡 3 次）
+  if (Math.hypot(target.x - pl.x, target.y - pl.y) > reach + target.radius + 10) {
+    let near: typeof target | null = null, nd = Infinity;
+    for (const e of host.grid.query(pl.x, pl.y, reach + 60)) { if (!e.active || (e.isSupplySlot && !e.lockTarget) || e.invulnerable) continue; const ed = Math.hypot(e.x - pl.x, e.y - pl.y) - e.radius; if (ed <= reach + 10 && ed < nd) { nd = ed; near = e; } }
+    if (near) target = near;
+    else if (!(target.isSupplySlot && target.lockTarget)) return; // 远处是普通敌兵：照旧等它靠近（原设计）
+    else {
+      const far = target, fdx = far.x - pl.x, fdy = far.y - pl.y, fd = Math.hypot(fdx, fdy) || 1;
+      throwJi(host, st, weapon, far, time, shenting, k); st.strikes++;
+      pl.faceDirection(cardinal(fdx / fd, fdy / fd), 160); pl.playAction('attack', cardinal(fdx / fd, fdy / fd));
+      weapon.cooldownLeft = Math.max(.2, TAISHICI_DEF.cooldown(weapon.level, pl.stats) / g.attackSpeedMultiplier(time)); return;
+    }
+  }
+  const dx = target.x - pl.x, dy = target.y - pl.y, d = Math.hypot(dx, dy) || 1, rot = Math.atan2(dy, dx);
   const cd = Math.max(.2, TAISHICI_DEF.cooldown(weapon.level, pl.stats) / g.attackSpeedMultiplier(time));
   // 每第 4 击射戟（目标在射程内就射，不必近身）；其余是近身双戟，够不着就等敌兵靠近
   if ((st.strikes + 1) % TS.throwEvery === 0) {

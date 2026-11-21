@@ -50,7 +50,7 @@ export function drawFormationPanel(h: FormationPanelHost, x0: number, y0: number
   if (ix) h.root.add(s.add.image(x0 + 26, yy + 14, fik).setDisplaySize(56, 56).setScrollFactor(0).setName('formation-focus-icon'));
   T(x0 + ix, yy, d.name, 22, '#f3e3bf', true).setName('formation-focus-name');
   T(x0 + ix + 96, yy + 6, CN_ROLE[id] + ' · 呼应「' + SCHOOLS[d.echo].name + '」' + (p.echo ? '（主修，×1.5）' : ''), 13, p.echo ? '#cfe3b0' : '#a8956c');
-  const rows: Array<[string, string, string]> = [['阵势', d.main, '#e8dcc0'], ['代价', d.cost, '#d8a890'], ['主将', d.hero, '#e8dcc0'], ['出击', d.sortie.replace(/^出击：/, ''), '#e8dcc0']];
+  const rows: Array<[string, string, string]> = [['阵势', d.main, '#e8dcc0'], ['代价', d.cost, '#d8a890'], ['主将', d.hero, '#e8dcc0'], ['出击', d.sortie.replace(/^出击：/, ''), '#e8dcc0'], ['适用', d.fit, '#cfe3b0']];
   if (p.favored) rows.push(['擅阵', '主将擅长此阵，阵势 ×1.25', '#f6dc9c']);
   if (p.half) rows.push(['半效', '靠诸葛亮随行布八阵，阵势减半', '#d8a890']);
   let ry = yy + 36;

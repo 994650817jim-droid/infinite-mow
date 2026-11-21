@@ -43,6 +43,14 @@ export class Legion {
   readonly command:CommandBuild;
   readonly formation:LegionFormation;
   readonly navigation=new LegionNavigation();
+  /**
+   * 我方绕障（2026-11-21 用户试玩「关于我自己的兵也会被围栏卡住」）：GameScene 接到敌兵绕障导航（EnemyFlowField，以主将为终点）。
+   * flowRoute：去阵位 / 目标的连线被挡时给绕路路点（null = 直走或交回 navigation 局部绕角）；freeAt：阵位点压在栅栏 / 城墙里时挪到最近可走点。
+   */
+  flowRoute:((x:number,y:number,tx:number,ty:number)=>{x:number;y:number}|null)|null=null;
+  freeAt:((x:number,y:number)=>{x:number;y:number})|null=null;
+  /** 掉队卡住：离阵位 > STUCK.far 且 STUCK.ms 内没再靠近 → 在阵位旁可走点淡入归队。 */
+  private readonly stuck=new Map<Ally,{best:number;at:number}>();readonly navStats={routed:0,rejoined:0};
   private visualAt=0;
   /** Legacy callers may still inspect capacity; recruitment has no gameplay cap. */
   readonly capacity=Infinity;
@@ -89,7 +97,7 @@ export class Legion {
     this.formation=new LegionFormation(player);this.artEffects=new ArtEffects(scene);
     this.command=new CommandBuild(scene,player.growth.build,units,player,(u,now)=>this.fx(u,u.x,u.y,now,true));
     this.gfx = scene.add.graphics().setDepth(DEPTH.fx);
-    this.projectiles = new LegionProjectiles(scene); this.tactics = new LegionTactics(this.centerProxy(player),u=>this.command.target(u)??(this.focus?.active&&this.focus.spawnId===this.focusLife?this.focus:null)??this.campTarget?.(u)??null,u=>this.formation.position(u),o=>this.formation.extent+(o==='guard'?this.formation.leashAdj:0),(u,x,y,now)=>this.navigation.steer(u.id,u.x,u.y,x,y,u.radius,now));
+    this.projectiles = new LegionProjectiles(scene); this.tactics = new LegionTactics(this.centerProxy(player),u=>this.command.target(u)??(this.focus?.active&&this.focus.spawnId===this.focusLife?this.focus:null)??this.campTarget?.(u)??null,u=>{const p=this.formation.position(u);return this.freeAt?this.freeAt(p.x,p.y):p;},o=>this.formation.extent+(o==='guard'?this.formation.leashAdj:0),(u,x,y,now)=>{const w=this.flowRoute?.(u.x,u.y,x,y);if(w){this.navStats.routed++;return w;}return this.navigation.steer(u.id,u.x,u.y,x,y,u.radius,now);});
   }
   get count(): number { let n = 0; for (const u of this.units) if (u.active) n++; return n; }
   recover(): void { for (const u of this.units) if (u.active) u.hp = u.maxHp; }
@@ -220,6 +228,16 @@ export class Legion {
     if (a.dust <= 0) { a.dust = ARRIVAL.dustEvery; playSheet(this.scene, 'fx_collapse_dust', u.x, u.y + 8, { size: 46, depth: DEPTH.ground + 4, ms: 420, alpha: .42 }); }
     if (Math.hypot(p.x - u.x, p.y - u.y) <= ARRIVAL.joinDist || a.left <= 0) { if (a.left <= 0) u.setPosition(p.x, p.y); u.ai.x = p.x; u.ai.y = p.y; u.ai.nextThink = 0; this.arriving.delete(u); }
   }
+  /** 掉队卡住（离阵位 260 以外、2 秒没靠近 40 像素）：在阵位旁的可走点淡入归队（不穿墙：落点由 freeAt 挑主将走得到的格）。出击追敌时不管。 */
+  private rejoinIfStuck(u: Ally, now: number): void {
+    if (this.order === 'sortie' && this.tactics.canAttack(u)) { this.stuck.delete(u); return; }
+    const p = this.formation.position(u), d = Math.hypot(p.x - u.x, p.y - u.y); let s = this.stuck.get(u);
+    if (d < 260) { if (s) this.stuck.delete(u); return; }
+    if (!s || d < s.best - 40) { this.stuck.set(u, { best: d, at: now }); return; }
+    if (now - s.at < 2000) return;
+    const q = this.freeAt!(p.x, p.y); u.setPosition(q.x, q.y); u.ai.x = q.x; u.ai.y = q.y; u.ai.nextThink = 0; this.stuck.delete(u); this.navStats.rejoined++;
+    const sp = u.view?.sprite; if (sp) { sp.setAlpha(.3); this.scene.tweens.add({ targets: sp, alpha: 1, duration: 260 }); }
+  }
   update(dt: number, now: number, enemies: Enemy[], enemyGrid: SpatialGrid<Enemy>, damage: (e: Enemy, n: number) => void): void {
     this.corpses.update(now);
     if (this.stopped) return;
@@ -245,6 +263,7 @@ export class Legion {
       this.tactics.think(u, now, this.order, enemyGrid, this.grid);
       this.tactics.move(u, step, now, this.grid);
       u.cooldown = Math.max(0, u.cooldown - step);
+      if (this.freeAt) this.rejoinIfStuck(u, now);
     }
     this.rebuildGrid();
     if (this.combatClock >= LEGION.nearStep) {

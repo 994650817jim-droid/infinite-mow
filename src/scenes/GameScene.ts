@@ -221,6 +221,7 @@ import { enemyArrowTexture } from '../systems/ArrowPalette';
 import { EnemyTraits } from '../systems/EnemyTraits';
 import { LuoyangCamps } from '../systems/LuoyangCamps';
 import { EnemyFlowField, type FlowBox } from '../systems/EnemyFlowField';
+import { AllySeparation, type SepBody } from '../systems/AllySeparation';
 import { HitFeel, BossStagger } from '../systems/HitFeel';
 /** 武将序列帧的透明度与时长（缺省 1 / 450 毫秒）。2026-11-17 用户：「张飞攻击特效有点太夸张」「魏延也是」→ 张飞声浪 / 断桥怒吼、魏延劈地 / 裂波 / 谁敢杀我 调淡、调短。 */
 const HERO_FX_TONE: Record<string, { alpha: number; ms: number }> = {
@@ -501,7 +502,7 @@ export class GameScene extends Phaser.Scene {
   /** 兵阵 4 势「援军」：义军小队（AllyPush 的 escort 模式，独立于 2-3 的友军攻势），reinforceAt = 下一队的时刻。 */
   reinforce:AllyPush|null=null;private reinforceAt=0;
   /** 助战兵（兵阵援军、十面埋伏伏兵、铁骑冲阵骑卒、铁壁军阵）共用一个 AllyPush（escort 模式，不打营寨）。 */
-  private reinforcePush():AllyPush{return this.reinforce??=new AllyPush({scene:this,now:()=>this.combatNow,paused:()=>this.mode!=='none'||this.over||!!this.cutscene?.active,player:()=>this.player,camps:()=>[],enemies:()=>this.enemies,hit:(e,d)=>{this.hitEnemy(e,d,this.combatNow,'melee',true,false);},push:(x,y,r)=>this.terrain?.pushCircle(x,y,r)??null},{...LUOYANG.push,firstMs:1e15,everyMs:1e15});}private ordersPanel:OrdersPanel|null=null;/** 军令面板开着（电脑布局）：子场景据此收起自己的目标行，免得和面板重复。 */protected get ordersPanelOn():boolean{return !!this.ordersPanel;}battleMap:BattleMap|null=null;
+  private reinforcePush():AllyPush{return this.reinforce??=new AllyPush({route:(x,y,tx,ty)=>this.enemyFlow.route(x,y,tx,ty),scene:this,now:()=>this.combatNow,paused:()=>this.mode!=='none'||this.over||!!this.cutscene?.active,player:()=>this.player,camps:()=>[],enemies:()=>this.enemies,hit:(e,d)=>{this.hitEnemy(e,d,this.combatNow,'melee',true,false);},push:(x,y,r)=>this.terrain?.pushCircle(x,y,r)??null},{...LUOYANG.push,firstMs:1e15,everyMs:1e15});}private ordersPanel:OrdersPanel|null=null;/** 军令面板开着（电脑布局）：子场景据此收起自己的目标行，免得和面板重复。 */protected get ordersPanelOn():boolean{return !!this.ordersPanel;}battleMap:BattleMap|null=null;
   protected supplies:BattlefieldSupplies|null=null;
   /** 道具掉落与本局缴获（局外兵装，结算带回行囊）。 */
   protected itemDrops:ItemDrops|null=null;
@@ -759,6 +760,17 @@ export class GameScene extends Phaser.Scene {
     if(!blocked){this.flowTmp.x=tx/d;this.flowTmp.y=ty/d;if(e===this.boss)this.zhangjiao?.unstick(this.combatNow);this.bossGuard.resets++;}
     e.sprite.x+=this.flowTmp.x*70;e.sprite.y+=this.flowTmp.y*70;this.bossGuard.nudges++;s.x=e.x;s.y=e.y;s.t=this.combatNow;
   }
+  /** 我方互相避让（用户试玩「我方自己的兵会重叠一起」，systems/AllySeparation）：主将固定，部曲 / 名将随从 / 义军 / 攻城友军互相推开到 半径之和 + 间隙。 */
+  readonly allySep=new AllySeparation();private readonly sepBodies:SepBody[]=[];
+  private separateAllies(dt:number):void{
+    const out=this.sepBodies;out.length=0;const P=this.player;
+    if(P?.alive)out.push({id:0,x:P.x,y:P.y,r:P.radius,fixed:true,move:()=>{}});
+    for(const u of this.allies)if(u.active)out.push({id:u.id,get x(){return u.x;},get y(){return u.y;},r:u.radius,move:(dx,dy)=>u.push(dx,dy)});
+    this.followers?.bodies(out,1_000_000);this.allyPush?.bodies(out,2_000_000);this.reinforce?.bodies(out,3_000_000);
+    if(out.length>1)this.allySep.resolve(out,dt);
+  }
+  /** 我方单位（名将随从等）共用的绕障接口：去阵位 / 追击点被挡时给绕路路点，瞬移落点挪到可走点。 */
+  readonly allyNav={route:(x:number,y:number,tx:number,ty:number)=>this.enemyFlow.route(x,y,tx,ty),free:(x:number,y:number)=>this.enemyFlow.free(x,y)};
   /** 敌兵绕障导航（栅栏 / 营栅 / 城墙等挡住的近战兵绕到缺口）。 */
   readonly enemyFlow=new EnemyFlowField();
   /** 导航用碰撞框：关墙 / 营栅 / 城墙（sishuiObstacles，攻城 / 官渡 / 军情 / 北伐等都放这里）、2-3 城头、战场拒马 / 栅栏等物件（supplies crates，1-3 栏杆）。 */
@@ -911,6 +923,8 @@ export class GameScene extends Phaser.Scene {
     // 新存档开局无兵，第一波后招募；已开放主城的出征另应用军营与后备。
     this.allies = [];
     this.legion = new Legion(this, this.allies, this.player);
+    // 我方绕障（用户试玩「关于我自己的兵也会被围栏卡住」）：部曲接敌兵绕障导航（以主将为终点），去阵位 / 目标被挡时绕路、阵位压墙挪到可走点、掉队卡住淡入归队
+    this.legion.flowRoute=(x,y,tx,ty)=>this.enemyFlow.route(x,y,tx,ty);this.legion.freeAt=(x,y)=>this.enemyFlow.free(x,y);
     this.legion.onDeath = (_u, now) => { if (this.runConfig.character !== 'mengde') return; this.player.passive.onAllyDeath(now); this.player.heal(this.player.maxHp * (MENGDE.healPct + MENGDE.wangmei * this.player.growth.masteries.wangmei)); }; // 曹操「奸雄」
     this.legion.onHurt = (u, now) => { if (Math.hypot(u.x - this.player.x, u.y - this.player.y) <= TAISHICI.allyR) this.player.passive.onAllyHurt(now); }; // 太史慈「信义」
     this.legion.attackSound = kind => { const k = TROOP_ATTACK_SFX[kind]; if (k) this.sfx.play(k); };
@@ -1406,6 +1420,7 @@ export class GameScene extends Phaser.Scene {
     this.rebuildGrid();
     if(time>=this.navigationAt){this.navigationAt=time+250;const boxes=[...(this.sishuiObstacles?.footprints??[]),...(this.terrain?(this.terrain.stats.burnt?(this.terrainNav=this.terrain.navBoxes()):this.terrainNav):[])];this.supplies?.appendNavigationBoxes(boxes);this.legion.navigation.setBoxes(boxes);}
     this.legion.update(dt, time, this.enemies, this.grid, (enemy, amount) => this.hitEnemy(enemy, amount, this.combatNow, 'melee', true));
+    if (this.followers && !this.followers.nav) this.followers.nav = this.allyNav; // 随行接绕障导航（开局 / 降将来投两处创建，这里统一挂）
     this.followers?.update(dt, this.combatNow);
     this.formationRt?.update(dt, this.combatNow); this.formationFx?.update(dt, this.combatNow); this.enemyForms?.update(dt, this.combatNow);
     this.updateBossRage(dt);
@@ -1416,6 +1431,7 @@ export class GameScene extends Phaser.Scene {
     this.rebuildGrid();
     this.separateEnemies();
     this.separateAlliesFromEnemies(dt);
+    this.separateAllies(dt); // 我方互相避让（部曲 / 随从 / 义军 / 友军 / 主将）：在障碍推开之前，墙最后推、不会被挤进墙里
     this.supplies?.resolveBodies(this.allies,(a,d,n)=>this.legion.hurt(a,d,n),(e,d,n)=>this.hitEnemy(e,d,n,'melee',false,false));
     this.sishuiObstacles?.resolve(this.player,this.allies,this.enemies);
     if(this.terrain){this.terrain.resolve(this.player,this.allies,this.enemies);this.terrain.updateCanopy(this.player,this.enemies.filter(e=>e.active&&!e.isSupplySlot&&(e.kind==='boss'||e.kind==='elite')));}
@@ -1845,7 +1861,7 @@ export class GameScene extends Phaser.Scene {
       this.supplies?.purge((x,y)=>lc.camps.some(c=>c.boxes.some(b=>x>b.left-40&&x<b.right+40&&y>b.top-40&&y<b.bottom+40))); /* 落在营栅上的布景收掉 */
       this.spawnLuoyangCommander(lc);}
     // 2-3 友军攻势：义军小队从后方一路打向营寨（data/dongzhuo.ts LUOYANG.push）
-    if(this.dzLubu&&this.objective&&!this.objective.done&&!this.allyPush)this.allyPush=new AllyPush({scene:this,now:()=>this.combatNow,paused:()=>this.mode!=='none'||this.over||!!this.cutscene?.active,player:()=>this.player,
+    if(this.dzLubu&&this.objective&&!this.objective.done&&!this.allyPush)this.allyPush=new AllyPush({route:(x,y,tx,ty)=>this.enemyFlow.route(x,y,tx,ty),scene:this,now:()=>this.combatNow,paused:()=>this.mode!=='none'||this.over||!!this.cutscene?.active,player:()=>this.player,
       camps:()=>this.objective?.standing??[],enemies:()=>this.enemies,hit:(e,d)=>{this.hitEnemy(e,d,this.combatNow,'melee',true,false);},push:(x,y,r)=>{const t=this.terrain?.pushCircle(x,y,r)??null,c=this.luoyangCamps?.pushOut(x+(t?.x??0),y+(t?.y??0),r)??null;return t||c?{x:(t?.x??0)+(c?.x??0),y:(t?.y??0)+(c?.y??0)}:null;} /* 推开量相加（树 + 营栅） */,approach:(c,x,y)=>this.luoyangCamps?.approach(c,x,y)??null},LUOYANG.push);
     // 2-3：城墙 / 洛水封口建好后，撤掉开局先于城墙生成、落在城墙里或场地外的布景与旗子
     {const z=this.dzLubu;if(z)this.supplies?.purge((x,y)=>!z.inArena(x,y,0)||z.obstacles.footprints.some(b=>x>b.left&&x<b.right&&y>b.top&&y<b.bottom));}

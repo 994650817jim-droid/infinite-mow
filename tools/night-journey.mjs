@@ -3,10 +3,15 @@
 // 记录：每关进出、模式卡住（软锁）、控制台报错、军粮、玩法开放（mechOpen）、存档读档（中途刷新页面）、帧率。
 // 用法：BASE=http://127.0.0.1:5187/ node tools/night-journey.mjs [最多关数=12] [out.json]
 // 环境变量：SEED=jingnan（存档种到该篇章已平定，从下一章接着推）；SKIP_EXTRAS=intel,siege,defense,side（不打途中的军情 / 攻城 / 守城 / 讨伐令）
+// HONEST=1：不作弊打法（tools/honest-bot.mjs：不回血 / 不跳时间 / 不改首领血量 / 不强推攻城段，像人一样走位、选卡、领兵、用军医补兵；阵亡走「再战」最多 3 次，不过换一名武将再试一轮，仍不过停下记卡关）；
+//   每关首尾截图到 assets/review/honest/，输出 out.json + NOTE（默认 honest-journey.md，按章列表 + 卡关点 + 经济曲线）。SPEED=2 可用倍速（默认 1）。
+// SPEND=1：天下地图上按优先级花军粮（军营 → 科技 → 练兵 → 招武将）、行营休整先军医再补兵（HONEST 时默认开），回归能看到真实的各章结余。
 import { chromium } from 'playwright';
 import { writeFileSync, mkdirSync } from 'node:fs';
+import { honestTick, honestStart, honestStats, honestCamp, spendWorld, honestRetry, honestReport } from './honest-bot.mjs';
+const HONEST = !!process.env.HONEST, SPEND = HONEST || !!process.env.SPEND, SPEED = Number(process.env.SPEED ?? 1);
 const base = process.env.BASE ?? 'http://127.0.0.1:5173/', MAX = Number(process.argv[2] ?? 12), OUT = process.argv[3] ?? 'night-journey.json';
-const shots = 'assets/review/night'; mkdirSync(shots, { recursive: true });
+const shots = HONEST ? 'assets/review/honest' : 'assets/review/night'; mkdirSync(shots, { recursive: true });
 const b = await chromium.launch({ channel: 'chrome', headless: true, args: ['--mute-audio'] });
 const p = await b.newPage({ viewport: { width: 1280, height: 720 } });
 const errors = [], log = [], issues = [];
@@ -89,6 +94,22 @@ async function fight(key, tag) {
     await p.waitForTimeout(250);
   }
 }
+/** HONEST：不作弊打一场。卡住（模式 none 时 90 秒游戏时间不动）= 软锁；超过 30 分钟 = 超时。 */
+async function honestFight(key, tag) {
+  const t0 = Date.now(); let lastEl = -1, lastProg = Date.now(), fpsMin = 999, seen = new Set();
+  const start = await honestStart(p, key, SPEED);
+  for (;;) {
+    const st = await honestTick(p, key);
+    if (st.gone) return { result: 'left', scenes: st.scenes, ms: Date.now() - t0, start };
+    if (st.enemies > 60) fpsMin = Math.min(fpsMin, st.fps); seen.add(st.mode);
+    if (st.elapsed !== lastEl || st.mode !== 'none') { lastEl = st.elapsed; lastProg = Date.now(); }
+    if (st.over || st.mode === 'rest') { const stats = await honestStats(p, key); await p.waitForTimeout(1500); await shot(tag + '-end'); return { result: st.mode === 'rest' ? 'rest' : st.victory ? 'win' : 'lose', name: st.name, elapsed: st.elapsed, fpsMin, modes: [...seen], ms: Date.now() - t0, start, ...stats }; }
+    if (Date.now() - lastProg > 90000) { await shot(tag + '-stuck'); return { result: 'stuck', st, modes: [...seen], ms: Date.now() - t0, start, ...(await honestStats(p, key)) }; }
+    if (Date.now() - t0 > 1800000) { await shot(tag + '-timeout'); return { result: 'timeout', st, ms: Date.now() - t0, start, ...(await honestStats(p, key)) }; }
+    await p.waitForTimeout(120);
+  }
+}
+const honestLog = [], attempts = {}; let heroSwitched = false; const HERO_POOL = ['zhaoyun', 'guanyu', 'zhangfei', 'liubei'];
 /** 等某个场景活动。 */
 const waitScene = (pred, ms = 120000) => p.waitForFunction(pred, null, { timeout: ms }).then(() => true).catch(() => false);
 
@@ -114,6 +135,7 @@ for (; stages < MAX; ) {
       // 每 10 关在天下地图上刷新一次页面（也是读档测试；headless 长跑约 1 小时会崩，见 night-regression.md）
       if (stages - (globalThis.__lastReload ?? 0) >= 10) { globalThis.__lastReload = stages; const bw = await p.evaluate(() => localStorage.getItem('im_world_v1')); await p.reload(); await waitScene(() => window.__game && window.__game.scene.isActive('MenuScene'), 180000); const aw = await p.evaluate(() => localStorage.getItem('im_world_v1')); note('reload-map', { same: bw === aw, save: await rev() }); if (bw !== aw) issue('读档', '天下地图上刷新页面后存档变了', '中'); continue; }
       await shot(`map-${stages}`);
+      if (SPEND) note('spend-world', await spendWorld(p));
       // 天下地图：选「下一步」引导的章节 / 城，主按钮出征
       await p.waitForTimeout(2500);
       // 地图上的弹窗（时代推进 / 失守 / 剧情）先点掉
@@ -152,14 +174,32 @@ for (; stages < MAX; ) {
   const tag = `s${String(stages).padStart(2, '0')}-${key}${globalThis.__extra ? '-' + globalThis.__extra : ''}`; globalThis.__extra = null;
   const g0 = await grain();
   await p.waitForTimeout(1200); await shot(tag + '-start');
-  const r = await fight(key, tag); stages++;
+  const r = HONEST ? await honestFight(key, tag) : await fight(key, tag); stages++;
   const g1 = await grain();
   note(tag, { ...r, grain: [g0, g1], save: await rev(), heapMB: await p.evaluate(() => Math.round((performance.memory?.usedJSHeapSize ?? 0) / 1048576)), tex: await p.evaluate(() => window.__game.textures.getTextureKeys().length) });
+  if (HONEST) {
+    const nm = r.name ?? tag, att = attempts[nm] = (attempts[nm] | 0) + 1;
+    honestLog.push({ tag, attempt: att, hero: r.start?.hero, ...r, st: undefined });
+    if (att > 1 && r.start?.build && honestLog.filter(x => x.name === nm).length > 1) { const prev = honestLog.filter(x => x.name === nm).at(-2)?.start?.build; if (prev && prev !== r.start.build) issue(tag, `重进后构筑变了：上次开局 ${prev} → 这次开局 ${r.start.build}`, '中'); }
+    if (r.result === 'lose' && r.bossSec != null && r.kills != null) { const killed = await p.evaluate(k => !!window.__game.scene.getScene(k)?.bossKilled, key).catch(() => false); if (killed) issue(tag, '首领倒下后主将仍被打死', '高'); }
+    if (r.result === 'stuck' || r.result === 'timeout') { issue(tag, `软锁 / 卡住（${r.result}）：` + JSON.stringify(r.st).slice(0, 240), '高'); break; }
+    if (r.result === 'lose') {
+      if (att < 3) { note(tag + '-retry', { attempt: att });
+        if (await honestRetry(p, key)) { await waitScene(() => window.__game.scene.getScenes(true).some(s => /GameScene$/.test(s.scene.key) && s.player && s.elapsed < 3), 60000); continue; }
+        // 没有「再战」（天下已开：战败走「退守」）：点退守回地图，下一轮从地图重新出征同一关（仍算一次尝试）
+        await p.evaluate(k => { const s = window.__game.scene.getScene(k); const h = s?.resultPanel?.getByName?.('result-home'); h?.emit('pointerdown', { x: h.x, y: h.y }); h?.emit('pointerup', { x: h.x, y: h.y }); }, key); await p.waitForTimeout(3000); continue; }
+      if (!heroSwitched) { heroSwitched = true; attempts[nm] = 0; const cur = r.start?.hero, next = HERO_POOL.find(h => h !== cur); issue(tag, `卡关：${nm} 用 ${cur} 3 次不过，换 ${next} 再试一轮`, '中');
+        await p.evaluate(h => localStorage.setItem('im_last_hero', h), next); await p.evaluate(k => { const s = window.__game.scene.getScene(k); const h = s?.resultPanel?.getByName?.('result-home'); h?.emit('pointerdown', { x: h.x, y: h.y }); h?.emit('pointerup', { x: h.x, y: h.y }); }, key); await p.waitForTimeout(3000); continue; }
+      issue(tag, `卡关：${nm} 换将后仍 3 次不过，停在这里`, '高'); break;
+    }
+  } else {
   if (r.result === 'stuck' || r.result === 'timeout') { issue(tag, `战斗卡住（${r.result}）：` + JSON.stringify(r.st), '高'); await p.evaluate(k => { const s = window.__game.scene.getScene(k); s.finish?.(true, 'boss'); }, key); }
   if (r.result === 'lose') issue(tag, '主将满血仍判负：' + JSON.stringify(r).slice(0, 160), '高');
+  }
   // 行营休整：出征下一关
   if (r.result === 'rest' && stages === 3 && !globalThis.__reloaded) { globalThis.__reloaded = true; note('pre-reload', { save: await rev() }); const bw = await p.evaluate(() => localStorage.getItem('im_world_v1')); await p.reload(); await waitScene(() => window.__game && (window.__game.scene.isActive('MenuScene') || window.__game.scene.isActive('WorldMapScene')), 180000); const aw = await p.evaluate(() => localStorage.getItem('im_world_v1')); note('reload', { same: bw === aw, save: await rev(), scenes: await active() }); if (bw !== aw) issue('读档', '刷新页面后天下存档变了（营寨休整中刷新）', '中'); continue; }
   if (r.result === 'rest') { await p.waitForTimeout(6500); await shot(tag + '-camp'); let moved = false;
+    if (SPEND) note(tag + '-camp-spend', await honestCamp(p, key));
     for (let i = 0; i < 15 && !moved; i++) {
       const st = await p.evaluate(k => { const g = window.__game, s = g.scene.getScene(k); if (!s?.sys.isActive()) return { left: true };
         const all = []; const walk = l => { for (const x of l) { all.push(x); if (x.list) walk(x.list); } }; walk(s.children.list);
@@ -184,7 +224,8 @@ for (; stages < MAX; ) {
   if (stages === 3) { note('pre-reload', { save: await rev() }); const before = await p.evaluate(() => localStorage.getItem('im_world_v1')); const bj = JSON.parse(before ?? '{}'); await p.reload(); await waitScene(() => window.__game && (window.__game.scene.isActive('MenuScene') || window.__game.scene.isActive('WorldMapScene')), 180000); const after = await p.evaluate(() => localStorage.getItem('im_world_v1')); note('reload', { same: before === after, scenes: await active(), save: await rev() }); if (before !== after) { const aj = JSON.parse(after ?? '{}'); const diff = Object.keys({ ...bj, ...aj }).filter(k => JSON.stringify(bj[k]) !== JSON.stringify(aj[k])).map(k => k + ':' + JSON.stringify(bj[k]).slice(0, 60) + '→' + JSON.stringify(aj[k]).slice(0, 60)); note('reload-diff', { diff }); if (diff.length) issue('读档', '刷新页面后天下存档变了：' + diff.join(' ; ').slice(0, 300), '中'); } }
 }
 note('end', { stages, scenes: await active(), grain: await grain(), mech: await mech() });
-writeFileSync(OUT, JSON.stringify({ log, issues, errors }, null, 1));
+writeFileSync(OUT, JSON.stringify(HONEST ? { honest: honestLog, log, issues, errors } : { log, issues, errors }, null, 1));
+if (HONEST) { const NOTE = process.env.NOTE ?? 'honest-journey.md'; writeFileSync(NOTE, honestReport(honestLog, issues, errors)); console.log('NOTE', NOTE); }
 console.log('\nSTAGES', stages, 'ISSUES', issues.length, 'ERRORS', errors.length);
 for (const e of errors.slice(0, 10)) console.log('ERR', e.at, e.msg);
 await b.close();

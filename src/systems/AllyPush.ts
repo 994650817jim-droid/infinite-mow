@@ -34,6 +34,8 @@ export interface PushHost {
   camps: () => Enemy[]; enemies: () => readonly Enemy[];
   hit: (e: Enemy, dmg: number) => void;
   push?: (x: number, y: number, r: number) => { x: number; y: number } | null;
+  /** 绕障（用户试玩「关于我自己的兵也会被围栏卡住」）：去目标的连线被挡时给绕路路点（GameScene 接敌兵绕障导航，目标在主将附近时有效），null = 直走。 */
+  route?: (x: number, y: number, tx: number, ty: number) => { x: number; y: number } | null;
   /** 有营栅的营寨（2-3 LuoyangCamps）：在营外时先去哪个路点（营门），null = 直接走向营帐。 */
   approach?: (camp: Enemy, x: number, y: number) => { x: number; y: number } | null;
   /** 没有营寨目标时的集结点（攻城：跟着冲车 → 城内要点 → 府衙）。给了它，小队没营寨可打也不散，照集结点推进。 */
@@ -55,6 +57,10 @@ export class AllyPush {
     this.nextAt = h.now() + c.firstMs; this.lastNow = h.now();
     h.scene.events.on('update', this.tick, this);
     h.scene.events.once('shutdown', () => this.clear());
+  }
+  /** 我方避让（AllySeparation）：活着的兵作为碰撞体（半径 13）；base 让 id 不和别的单位撞。 */
+  bodies(out: Array<{ id: number; x: number; y: number; r: number; move(dx: number, dy: number): void }>, base: number): void {
+    let k = 0; for (const s of this.squads) for (const m of s.members) { k++; if (m.dead) continue; out.push({ id: base + k, get x() { return m.x; }, get y() { return m.y; }, r: 13, move: (dx, dy) => { m.x += dx; m.y += dy; } }); }
   }
   get alive(): number { let n = 0; for (const s of this.squads) for (const m of s.members) if (!m.dead) n++; return n; }
 
@@ -123,6 +129,7 @@ export class AllyPush {
         else if (!camp) { const r = sq.escort ? null : this.h.rally?.(), pl = r ?? this.h.player(); tx = pl.x + m.ox * 1.6; ty = pl.y + (r ? 0 : 70) + m.oy; reach = 0; }
         else { const a = Math.atan2(m.y - camp.y, m.x - camp.x) || Math.PI / 2, rr = camp.radius + C.campReach * .6; tx = camp.x + Math.cos(a) * rr + m.ox * .4; ty = camp.y + Math.sin(a) * rr * .7; reach = camp.radius + C.campReach; if (cd <= reach) strike = camp; else { const via = this.h.approach?.(camp, m.x, m.y); if (via) { tx = via.x + m.ox * .4; ty = via.y + m.oy * .3; } } }
         if (!strike) {
+          { const w = this.h.route?.(m.x, m.y, tx, ty); if (w) { tx = w.x; ty = w.y; } }
           const dx = tx - m.x, dy = ty - m.y, d = Math.hypot(dx, dy);
           if (d > 2) { const st = Math.min(d, C.speed * dt); m.x += dx / d * st; m.y += dy / d * st; m.walk += st; m.dir = Math.abs(dx) > Math.abs(dy) ? dx < 0 ? 'left' : 'right' : dy < 0 ? 'up' : 'down'; }
         } else {

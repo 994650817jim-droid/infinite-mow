@@ -314,6 +314,8 @@ export class ZhangjiaoBoss {
   private toRecover(now: number, ms: number): void { this.beat.set(this.beat.move, 'recover', now, ms); this.kit.recover(now, ms); }
   private endRecover(now: number): void { if (this.beat.done(now)) { this.beat.set(null, 'idle', now, 0); this.next = now + (this.phase2 ? ZJ.gapMs2 : ZJ.gapMs); } }
   private abort(): void { this.dropPillars(); this.grid = null; this.safe = []; this.beat.set(null, 'idle', 0, 0); }
+  /** 卡住保护（GameScene.bossDetour）：首领很久没位移又不在出招时，收掉当前招式、0.8 秒后重新出手。 */
+  unstick(now: number): void { if (this.kit.inShift) return; this.abort(); this.stunUntil = 0; this.next = now + 800; }
   private enterPhase2(now: number): void {
     if (this.phase2) return;
     this.phase2 = true; this.metrics.phase2++; this.abort(); this.order = 0;

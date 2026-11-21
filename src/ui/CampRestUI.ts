@@ -1,4 +1,6 @@
 import { loadFormationArt } from '../systems/FormationFx';
+import {pointsLeftText} from '../data/pointsHint';
+import {starMapOn} from '../data/starMap';
 import { drawFormationPanel } from './FormationPanel';
 import { MECHANICS, mechLockText, mechOpen, mechShown, takeMechIntros, type MechId } from '../data/mechanicUnlocks';
 /** 行营页签 → 玩法：未开放的页签不出现（11-20「开放前隐藏而不是灰掉」），其余往左挤。军需商人第二章、将帅帐四维 2-3、军医 1-1 打完。 */
@@ -173,7 +175,7 @@ export class CampRestUI {
    if(on){const to={x:t.x+18,w:w-36};if(!this.lineTo){this.tabLine.setX(to.x);this.tabLine.width=to.w;}this.lineTo=to;}});
   // 兵装（总制作人第一章试玩：20 件兵装一件没穿、全程没提示）：有更好的没穿 → 「行囊」小红点；第一次还在下方提示一句
   {const ups=this.gearUpgrades?.()??0;this.bagDot?.setVisible(ups>0);if(ups>0&&!this.notice&&!gearGuideSeen())this.notice='缴获的兵装还没穿上（'+ups+' 件更好）：点右上「行囊」，再点「一键穿戴」';}
-  {const ph=this.pointsHint?.();this.resources.setText('随军粮 '+this.army.food+' · 兵力 '+this.army.count+(ph?' · 属性点 '+ph.n+' 未加 ⓘ':''));this.resTip.setText(ph?'加点：'+ph.where:''); /* 2026-11-21：资源行太长、快顶到「下一关」——说明放悬停 */}this.next.setText(this.preBattle?'出征 · '+this.preBattle:'下一关 · '+this.destination);this.header.setText(this.preBattle?'出征整军':'行营休整');this.detail.setText(this.notice);
+  {const ph=this.pointsHint?.();this.resources.setText('随军粮 '+this.army.food+' · 兵力 '+this.army.count+(ph?' · 属性点 '+ph.n+' 未加 ⓘ':''));this.resTip.setText(ph?'加点：'+ph.where:'');if(ph&&starMapOn()){this.resources.setText('随军粮 '+this.army.food+' · 兵力 '+this.army.count+' · '+pointsLeftText(ph.n)+' ⓘ');this.resTip.setText('点星：'+ph.where);} /* 星图开着：「N 星未点」 */ /* 2026-11-21：资源行太长、快顶到「下一关」——说明放悬停 */}this.next.setText(this.preBattle?'出征 · '+this.preBattle:'下一关 · '+this.destination);this.header.setText(this.preBattle?'出征整军':'行营休整');this.detail.setText(this.notice);
   {const side=D&&(this.tab===2||this.tab===4),l=CampRestUI.STATION_LEFT;this.detail.setX(side?l+(W-40-l)/2:D?W/2:28).setWordWrapWidth(side?W-40-l-16:W-(D?120:56),true);}
   if(this.tab===0)this.renderRecruit();if(this.tab===2)this.renderMarket();if(this.tab===3)this.renderBuild(D?154:229);if(this.tab===4)this.renderMedic();if(this.tab===5)this.renderFormation();
   this.onChanged?.();

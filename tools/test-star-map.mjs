@@ -18,7 +18,10 @@ export * as HP from './src/systems/HeroProgress';
 export * as MS from './src/systems/MasteryStore';
 export * as RG from './src/systems/RunGrowth';
 export * as HS from './src/data/heroStats';
-export * as AT from './src/data/attributes';`;
+export * as AT from './src/data/attributes';
+export * as PA from './src/ui/PrimaryAttrInfo';
+export * as PH from './src/data/pointsHint';
+export * as MU from './src/data/mechanicUnlocks';`;
 const ENTRY_BASE = ENTRY.replace(/^export \* as SM.*$/m, '');
 /** 打包在内存里；base = true 时 src 下的文件内容改从 git 的 BASE 提交读（对照「改动前」）。 */
 async function load(entry, base) {
@@ -32,7 +35,7 @@ let pass = 0, fail = 0;
 const ck = (n, ok, d) => { ok ? pass++ : fail++; console.log((ok ? 'PASS ' : 'FAIL ') + n + (d !== undefined ? ' · ' + JSON.stringify(d).slice(0, 400) : '')); };
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 
-const { SM, HP, MS, RG, HS, AT } = await load(ENTRY, false);
+const { SM, HP, MS, RG, HS, AT, PA, PH, MU } = await load(ENTRY, false);
 const ATTRS = AT.ATTRIBUTE_IDS, byName = new Map(SM.STAR_NODES.filter(n => n.kind === 'notable' || n.kind === 'keystone').map(n => [n.name, n]));
 ck('开关默认关', SM.starMapOn() === false);
 
@@ -47,7 +50,7 @@ ck('开关默认关', SM.starMapOn() === false);
   ck('四个入口连成一圈', ATTRS.every((a, i) => SM.starNeighbors(SM.gateOf(a)).includes(SM.gateOf(ATTRS[(i + 1) % 4]))));
   const small = { strength: 0, agility: 0, intellect: 0, command: 0 }; for (const n of SM.STAR_NODES) if (n.attr && n.kind === 'small') small[n.attr]++;
   ck('每一维 13 颗小星（区内 11 + 桥上 2），加别人的入口时最多 14 点', ATTRS.every(a => small[a] === 13), small);
-  ck('旧专精 12 颗有 perk 标记、没有「未实现」；另外 12 颗要星 + 4 颗主星标「效果未实现」', SM.STAR_NODES.filter(n => n.perk).length === 12 && SM.STAR_NODES.filter(n => n.perk).every(n => !n.todo) && SM.STAR_NODES.filter(n => n.todo).length === 16 && SM.STAR_NODES.filter(n => n.todo).every(n => n.kind === 'keystone' || n.kind === 'notable'));
+  ck('旧专精 12 颗有 perk 标记；第二期起只有 4 颗主星标「效果未实现」，12 颗新要星都有 STAR_EFFECT 数值', SM.STAR_NODES.filter(n => n.perk).length === 12 && SM.STAR_NODES.filter(n => n.todo).length === 4 && SM.STAR_NODES.filter(n => n.todo).every(n => n.kind === 'keystone') && same(Object.keys(SM.STAR_EFFECT).sort(), SM.STAR_NODES.filter(n => n.kind === 'notable' && !n.perk).map(n => n.id).sort()));
   const names = ATTRS.flatMap(a => [1, 2, 3].map(t => SM.starNode(SM.perkStarId(a, t)).name)), old = ATTRS.flatMap(a => AT.PRIMARY_PERK_INFO[a].map(p => p.name));
   ck('三档专精对应 NC / NL1 / NL2，名字与 PRIMARY_PERK_INFO 一致', same(names, old), names);
 }
@@ -130,7 +133,7 @@ for (const key of Object.keys(TABLE)) {
       if (!same(attrs, p) || !same(pt, oldN.pts) || !same(pt, direct) || !same(NUM(again), oldN)) bad.push([key, hero, stars, attrs, pt, oldN.pts]);
       // 开着开关时，不靠专精的那些量也应和旧式逐位相同
       SM.setStarMap(true); const on = NUM(g); SM.setStarMap(false);
-      for (const k of ['pts', 'hp', 'allyHp', 'area0', 'spell', 'primary', 'guard', 'skill']) if (!same(on[k], oldN[k])) bad.push([key, hero, stars, k, on[k], oldN[k]]);
+      for (const k of ['pts', 'area0', 'spell', 'primary', 'guard', 'skill']) /* 生命、部曲生命第二期起会被铁骨、身先士卒、严阵改动，另测 */ if (!same(on[k], oldN[k])) bad.push([key, hero, stars, k, on[k], oldN[k]]);
     } else if (!same(oldN.pts, direct)) bad.push([key, hero, stars, 'direct']);
     n++;
   }
@@ -166,21 +169,68 @@ for (const key of Object.keys(TABLE)) {
   ck('关着：lightStar 不生效', new RG.RunGrowth('guanyu').lightStar(player, 'strength.T1') === false);
 }
 
+// ⑨ 第二期：12 颗新要星的效果（数值 = 设计稿第 4 节的表）
+{
+  SM.setStarMap(true);
+  const E = SM.STAR_EFFECT, ALL = SM.STAR_NODES.filter(n => n.kind !== 'keystone').map(n => n.id), id = name => byName.get(name).id;
+  const base = SM.presetStars('guanyu', 9); // 千钧、破阵 + 7 力量小星，没有任何新要星
+  const mk = (hero, extra = [], level = 30) => { const g = new RG.RunGrowth(hero); g.heroLevel = level; g.stars = [...extra]; return g; }; // 直接写 stars：只开某一颗的效果，点数不变
+  const a = mk('guanyu'), near = [100, 100], far = [200, 100];
+  ck('没点新要星：十二项都是「没有效果」', a.critDamageBonus() === 0 && a.pickupMultiplier() === 1 && same(a.dotBonus(), { mul: 1, extraMs: 0 }) && a.jinnangMultiplier() === 1 && a.allyBossTakenMultiplier() === 1 && a.allyNearDamageFactor(0, 0) === 1 && a.allyNearTakenFactor(0, 0) === 1 && a.starHit(0, true, true, false) === 1 && a.allyDamageBucket() === 0);
+  { const g = mk('guanyu', [id('铁骨')]); ck('铁骨：生命上限 +8%（基础生命的），受伤 −5%', g.bonusMaxHp() > a.bonusMaxHp() && Math.abs((g.bonusMaxHp() - a.bonusMaxHp()) / a.bonusMaxHp() * (AT.ATTRIBUTE_EFFECT.strength.hp * a.pts('strength')) - .08) < .002 && Math.abs(g.incomingDamageMultiplier() / a.incomingDamageMultiplier() - .95) < 1e-12, [a.bonusMaxHp(), g.bonusMaxHp()]); }
+  { const g = mk('guanyu', [id('背水')]); g.hpRatio = .41; const hi = g.damageMultiplier(0); g.hpRatio = .39; const lo = g.damageMultiplier(0); ck('背水：生命低于 40% 时伤害 +15%（40% 以上没有）', hi === a.damageMultiplier(0) && Math.abs(lo / hi - 1.15) < 1e-12, [hi, lo]); }
+  { const g = mk('zhaoyun', [id('连击')]); ck('连击：暴击伤害 +20%', g.critDamageBonus() === .2); }
+  { const g = mk('zhaoyun', [id('追风')]), z = mk('zhaoyun'); g.recordMovement(0, .016); z.recordMovement(0, .016); const still = g.attackSpeedMultiplier(0) === z.attackSpeedMultiplier(0); g.recordMovement(3, .016); z.recordMovement(3, .016);
+    ck('追风：移动中攻速 +8%（站着没有），拾取范围 +20%', still && Math.abs(g.attackSpeedMultiplier(0) / z.attackSpeedMultiplier(0) - 1.08) < 1e-12 && g.pickupMultiplier() === 1.2 && z.pickupMultiplier() === 1); }
+  { const g = mk('zhuge', [id('余烬')]); ck('余烬：持续伤害 +20%、多烧 1 秒', same(g.dotBonus(), { mul: 1.2, extraMs: 1000 })); }
+  { const g = mk('zhuge', [id('妙算')]); ck('妙算：锦囊效果 ×1.15', g.jinnangMultiplier() === 1.15); }
+  { const g = mk('liubei', [id('严阵')]), z = mk('liubei'); ck('严阵：部曲生命 +15%，部曲受首领伤害 −15%', Math.abs(g.allyHpMultiplier() / z.allyHpMultiplier() - 1.15) < 1e-12 && g.allyBossTakenMultiplier() === .85); }
+  { const g = mk('liubei', [id('号令')]), g2 = mk('liubei', [id('号令'), id('励军')]);
+    ck('号令：主将身边（220 内）的部曲 +12%，进加法桶——单点时 ×1.12，和励军一起是 (1 + 15% + 12%) 而不是 ×1.15 ×1.12', g.allyNearDamageFactor(...near) === 1.12 && g.allyNearDamageFactor(...far) === 1 && g.allyNearDamageFactor(220, 0) === 1.12 && g.allyNearDamageFactor(221, 0) === 1 && Math.abs(g2.allyNearDamageFactor(...near) * (1 + g2.allyDamageBucket()) - 1.27) < 1e-12 && g2.allyDamageBucket() === .15, [g2.allyNearDamageFactor(...near), SM.STAR_NEAR_RADIUS]); }
+  { const g = mk('zhaoyun', [id('骁锐')]), z = mk('zhaoyun'); ck('骁锐：武器伤害 +6%（非武器伤害不加），攻速 +6%', g.starHit(0, true, false, false) === 1.06 && g.starHit(0, false, false, false) === 1 && Math.abs(g.attackSpeedMultiplier(0) / z.attackSpeedMultiplier(0) - 1.06) < 1e-12); }
+  { const g = mk('zhaoyun', [id('奇谋')]);
+    const before = g.starHit(1000, false, false, false), critHit = g.starHit(1000, true, true, true), within = g.starHit(3999, false, false, false), spellWeapon = g.starHit(2000, true, false, true), physical = g.starHit(2000, true, false, false), after = g.starHit(4000, false, false, false);
+    ck('奇谋：暴击后 3 秒内法术伤害 +12%（非武器伤害、法术武器的命中），物理武器命中不加，触发的那一下本身不加，过 3 秒没有', before === 1 && critHit === 1 && within === 1.12 && spellWeapon === 1.12 && physical === 1 && after === 1, [before, critHit, within, spellWeapon, physical, after]); }
+  { const g = mk('zhuge', [id('帷幄')]), g2 = mk('zhuge', [id('帷幄'), id('励军')]); ck('帷幄：每 1 点智力生效点部曲伤害 +0.8%，和励军相加', Math.abs(g.allyDamageBucket() - .008 * g.pts('intellect')) < 1e-12 && g.pts('intellect') > 5 && Math.abs(g2.allyDamageBucket() - (.15 + .008 * g2.pts('intellect'))) < 1e-12 && g2.allyDamageMultiplier() === (1 + AT.ATTRIBUTE_EFFECT.command.allyDamage * g2.pts('command')) * (1 + g2.allyDamageBucket()), [g.pts('intellect'), g.allyDamageBucket()]); }
+  { const g = mk('guanyu', [id('身先士卒')]); ck('身先士卒：主将身边的部曲受伤 −10%，主将生命上限 +6%', g.allyNearTakenFactor(...near) === .9 && g.allyNearTakenFactor(...far) === 1 && g.bonusMaxHp() > a.bonusMaxHp() && mk('guanyu', [id('身先士卒'), id('铁骨')]).bonusMaxHp() - a.bonusMaxHp() === Math.round((mk('guanyu', [id('铁骨')]).bonusMaxHp() - a.bonusMaxHp()) * 14 / 8), [a.bonusMaxHp(), g.bonusMaxHp()]); }
+  { const g = mk('zhaoyun', [id('游刃')]); ck('闪避合计封顶 20%（现在只有游刃 10%）', g.dodgeChance() === .1 && SM.STAR_TUNING.dodgeCap === .2); }
+  // 统御一路全拿：励军 + 帷幄 + 号令（身边）相加，不相乘
+  { const g = mk('liubei', [id('励军'), id('帷幄'), id('号令')]), b = g.allyDamageBucket(); ck('部曲伤害桶：励军 + 帷幄 + 号令相加后再乘统御那一项', Math.abs(g.allyDamageMultiplier() * g.allyNearDamageFactor(0, 0) - (1 + AT.ATTRIBUTE_EFFECT.command.allyDamage * g.pts('command')) * (1 + b + .12)) < 1e-12, [b]); }
+  // 开关关着：星全亮也没有任何效果
+  SM.setStarMap(false);
+  const off = mk('guanyu', ALL), none = mk('guanyu'); off.hpRatio = none.hpRatio = .2; off.recordMovement(3, .016); none.recordMovement(3, .016); off.spellSurgeUntil = 1e9;
+  ck('开关关着：星全亮也没有任何效果（十二项都是中性值，原有数值不变）', off.critDamageBonus() === 0 && off.pickupMultiplier() === 1 && same(off.dotBonus(), { mul: 1, extraMs: 0 }) && off.jinnangMultiplier() === 1 && off.allyBossTakenMultiplier() === 1 && off.allyNearDamageFactor(0, 0) === 1 && off.allyNearTakenFactor(0, 0) === 1 && off.starHit(0, true, true, true) === 1 && off.starHit(0, false, false, false) === 1 && off.allyDamageBucket() === 0
+    && off.damageMultiplier(0) === none.damageMultiplier(0) && off.attackSpeedMultiplier(0) === none.attackSpeedMultiplier(0) && off.bonusMaxHp() === none.bonusMaxHp() && off.incomingDamageMultiplier() === none.incomingDamageMultiplier() && off.allyHpMultiplier() === none.allyHpMultiplier() && off.allyDamageMultiplier() === none.allyDamageMultiplier());
+}
+// ⑩ 第二期：开关打开时的显示
+{
+  SM.setStarMap(true);
+  const lit = SM.presetStars('guanyu', 9), s = PA.primarySummary('guanyu', 7, 10, lit);
+  ck('专精小标按星是否点亮：关羽 9 星 = 千钧、破阵亮，斩将还差 2 星；破阵说明写 ×1.6', same(s.tiers.map(t => t.on), [true, true, false]) && s.tiers[2].left === 2 && same(s.chips, ['◆ 千钧', '◆ 破阵', '◇ 斩将 · 还差 2 星']) && s.tiers[1].desc.includes('×1.6') && !s.tip.body.includes('×2') && s.next.includes('斩将'), s.chips);
+  const z = PA.primarySummary('zhaoyun', 10, 10, ['agility.T1']);
+  ck('点数够 10 但没点要星：一档都不亮（不再按 4 / 7 / 10 点）', z.tiers.every(t => !t.on) && same(z.tiers.map(t => t.left), [3, 4, 6]), z.chips);
+  ck('「属性点 N 未加」改「N 星未点」（行营 / 结算 / 营寨），玩法卡叫「星图」', PH.pointsLeftText(3) === '3 星未点' && PH.pointsResultLine({ n: 3, where: 'X' }) === '星图  3 星未点 · 去X点亮' && PH.pointsCityToast(3).includes('3 星未点') && MU.MECHANICS.attributes.name === '星图' && MU.MECHANICS.attributes.tip.includes('星图') && PH.pointsHint(2, { world: false, battle: true }).where.includes('星图'));
+  SM.setStarMap(false);
+  ck('开关关着：字样照旧', PH.pointsLeftText(3) === '属性点 3 未加' && PH.pointsResultLine({ n: 3, where: 'X' }) === '属性点  3 点未加 · 去X加点' && PH.pointsCityToast(3) === '有 3 点属性点没加 · 主帐「武将谱」里加点' && MU.MECHANICS.attributes.name === '四维加点' && MU.MECHANICS.attributes.tip.startsWith('按 C（头像旁「属性」）') && PA.primarySummary('guanyu', 7, 10, lit).chips[2] === '◇ 斩将 · 再加 3 点');
+}
+
 // ⑧ 开关关闭时与改动前（BASE 提交）逐项相同
 {
   let haveBase = true; try { execFileSync('git', ['cat-file', '-e', BASE + '^{commit}'], { stdio: 'ignore' }); } catch { haveBase = false; }
   if (!haveBase) ck(`对照提交 ${BASE} 不在本仓库里（STAR_BASE 可改）`, false);
   else {
     const snapshot = M => {
-      const { RG, HP, MS, AT } = M, out = [];
+      const { RG, HP, MS, AT, PA, PH, MU } = M, out = [], ALLSTARS = SM.STAR_NODES.map(n => n.id);
       for (const hero of ['guanyu', 'zhangfei', 'zhaoyun', 'huangzhong', 'zhuge', 'diaochan', 'liubei', 'mengde', 'lvbu', 'zhurong'])
         for (const [level, attrs] of [[1, [0, 0, 0, 0]], [5, [4, 0, 0, 0]], [9, [0, 4, 3, 1]], [12, [7, 2, 0, 2]], [20, [0, 7, 7, 5]], [26, [10, 4, 4, 6]], [40, [3, 10, 10, 3]], [54, [12, 9, 4, 10]], [62, [14, 0, 10, 14]], [30, [0, 0, 0, 10]]]) {
           const g = new RG.RunGrowth(hero); g.heroLevel = level; ATTRS.forEach((a, i) => { g.attributes[a] = attrs[i]; });
-          g.hasteUntil = 5000;
+          g.hasteUntil = 5000; g.stars = ALLSTARS; g.hpRatio = .2; g.lowHp = level % 2 === 0; g.recordMovement(level % 3 ? 3 : 0, .016); // 星全亮、残血、移动中：开关关着都不该有影响（旧代码里这几个字段没人读）
+          out.push([PA.primarySummary(hero, attrs[ATTRS.indexOf(AT.primaryAttribute(hero))], 10), g.aimCriticalBonus(), g.masteryLabel()]);
           out.push([hero, level, ATTRS.map(a => g.pts(a)), g.primaryTier(), ATTRS.flatMap(a => [1, 2, 3].map(t => g.perk(a, t))), g.damageMultiplier(0), g.attackSpeedMultiplier(0), g.movementMultiplier(), g.criticalBonus(), g.bonusMaxHp(),
             g.incomingDamageMultiplier(), g.allyDamageMultiplier(), g.allyHpMultiplier(), g.primaryBonus(), g.spellWeaponMultiplier('flame_banner'), g.spellWeaponMultiplier('spear_orbit'), g.skillDamageMultiplier(), g.areaMultiplier(), g.dodgeChance(),
             g.freeRecruitBonus(), g.followerRevive(), g.gearHitMultiplier('boss'), g.gearHitMultiplier('elite'), g.gearHitMultiplier('minion'), g.hasAttributeRoom]);
         }
+      out.push([PH.pointsHint(3, { world: true, battle: true }), PH.pointsHint(3, { world: false, battle: true }), PH.pointsGuideText({ n: 3, where: 'X' }), MU.MECHANICS.attributes.name, MU.MECHANICS.attributes.tip, JSON.stringify(MU.MECHANICS.attributes)]);
       out.push(Array.from({ length: 80 }, (_, i) => [RG.attributePointsBetween(1, i + 1), RG.attributePointsBetween(i + 1, i + 4), RG.levelsToNextAttributePoint(i + 1), AT.attributePointsAt(i + 1)]));
       // HeroProgress / MasteryStore：同一串操作，比返回值和最后的存档原文
       store.clear(); HP.resetHeroCache(); MS.resetMasteryCache();
@@ -192,7 +242,7 @@ for (const key of Object.keys(TABLE)) {
       return { out, ops, saves };
     };
     SM.setStarMap(false);
-    const now = snapshot({ RG, HP, MS, AT }), was = snapshot(await load(ENTRY_BASE, true));
+    const now = snapshot({ RG, HP, MS, AT, PA, PH, MU }), was = snapshot(await load(ENTRY_BASE, true));
     ck(`开关关闭：RunGrowth 的数值与 ${BASE} 逐项相同（10 位武将 × 10 组点数 × 25 项，另 80 个等级的点数表）`, same(now.out, was.out), now.out.length);
     ck(`开关关闭：HeroProgress / 洗点的返回值与 ${BASE} 相同`, same(now.ops, was.ops), now.ops.length);
     ck(`开关关闭：没点过星时存档原文与 ${BASE} 相同（不多出字段）`, same(now.saves, was.saves), now.saves[0].length);

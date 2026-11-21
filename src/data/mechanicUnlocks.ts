@@ -1,5 +1,6 @@
 import { arcStages, loadWorld, type WarlordArc } from '../world/WorldStore';
 import { isChapterTestRun } from '../systems/ChapterProgress';
+import { starMapOn } from './starMap';
 
 /**
  * 玩法逐章解锁（共享笔记 mechanic-rollout.md；2026-11-20 用户「不用一次性把所有玩法都一次性在第一章加入」，批准「同意」「按你的建议」）。
@@ -47,8 +48,9 @@ export const MECHANICS: Readonly<Record<MechId, MechDef>> = {
     lines: [{ who: '斥候', text: '报！远处山坳有辎重车无人看守！' }], tip: '跟着屏幕边缘的箭头，走过去触发机缘' },
   lieutenant: { chapter: 2, stage: 2, when: 'start', pre: 'hidden', name: '副将',
     lines: [{ who: '斥候', text: '报！徐荣帐下李肃压阵，先锋已到！' }], tip: '副将压阵：倒下必掉伤药，军略 +1' },
-  attributes: { chapter: 1, stage: 3, when: 'start', pre: 'locked', name: '四维加点', // 2026-11-21 用户批准提前（原 2-3）：放 1-3 开打——1-2 已有部曲、舆图两张新玩法卡，一关不超过两张
-    lines: [{ who: '关羽', id: 'guanyu', text: '兄长，练兵先练将。某夜读春秋，也不废这臂力。' }], tip: '按 C（头像旁「属性」）：升级攒下的属性点可以加了，力 / 敏 / 智 / 统各有加成' },
+  attributes: { chapter: 1, stage: 3, when: 'start', pre: 'locked', get name() { return starMapOn() ? '星图' : '四维加点'; }, // 星图开着（data/starMap.ts）玩法卡叫「星图」
+    // 2026-11-21 用户批准提前（原 2-3）：放 1-3 开打——1-2 已有部曲、舆图两张新玩法卡，一关不超过两张
+    lines: [{ who: '关羽', id: 'guanyu', text: '兄长，练兵先练将。某夜读春秋，也不废这臂力。' }], get tip() { return starMapOn() ? '按 C 打开星图：每升 1 级得 1 颗星，沿着连线点亮，小星加属性、要星有专门的效果' : '按 C（头像旁「属性」）：升级攒下的属性点可以加了，力 / 敏 / 智 / 统各有加成'; } },
   siege: { chapter: 2, stage: 3, when: 'after', pre: 'locked', name: '攻城',
     lines: [{ who: '刘备', id: 'liubei', text: '讨董联军已散，诸侯各怀异心——我等也需一块立足之地。' }], tip: '天下地图上与我方相邻的城池可以出征攻打' },
   parley: { chapter: 3, stage: 1, when: 'start', pre: 'hidden', name: '劝降',

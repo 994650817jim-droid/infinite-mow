@@ -32,7 +32,9 @@ export const STAR_FEEDBACK: Record<string, StarFeedbackKind> = {
 export const STAR_HUD = { perRow: 10, rows: 2, size: 20, gap: 3, flashMs: 400, flashScale: 1.35, idleAlpha: .4 } as const;
 
 /**
- * 手绘特效的 8 个挂点。**现在一张图都还没有**（美术在画，成品放 public/assets/star-map/fx/），所以每项 ready 都是 false：不加载、不显示、也不画任何程序图形。
+ * 手绘特效的 8 个挂点（成品在 public/assets/star-map/fx/fx_<名>.png，参数以同目录 fx.json 为准）。
+ * **已接上：背水、破阵**（2026-11-21 美术样张 d7386d87）。其余 6 项还没有可用的图，ready 是 false：不加载、不显示、也不画任何程序图形
+ * （万人敌的样张被退回重画，文件虽在目录里但不要接；它和其余几项现在的帧数 / 尺寸 / 锚点都是占位值）。
  * 美术到位后只改这张表：填 frames / frameW / frameH / fps / 锚点 / 缩放，把 ready 改成 true。
  * - mode：loop = 条件成立期间循环播放，跟着主将；once = 在触发点播一遍。
  * - attach：hero 主将身上 / feet 主将脚下（画在主将后面）/ behind 主将身后 / ring 以主将为圆心的半径环（显示直径 = 2 × STAR_NEAR_RADIUS × scale）
@@ -40,24 +42,26 @@ export const STAR_HUD = { perRow: 10, rows: 2, size: 20, gap: 3, flashMs: 400, f
  * - star：由哪颗星驱动（loop 看这颗星的状态，once 看这颗星的触发信号）；ring 那一项由号令、身先士卒任意一颗驱动。
  * - anchor：贴图的锚点（0–1）；scale：显示缩放（ring 例外，见上）；fps：帧率；frames：帧数（横向一条）。
  */
+/** 主将脚底相对主将坐标的下移（主将坐标在身体中段，影子画在 +26；循环类特效的锚点都对这里）。 */
+export const STAR_FX_FOOT = 26;
 export interface StarFxDef {
   star: string; alsoStar?: string; mode: 'loop' | 'once';
   attach: 'hero' | 'feet' | 'behind' | 'ring' | 'hit' | 'side' | 'kill';
   key: string; url: string; frames: number; frameW: number; frameH: number; fps: number;
   anchor: { x: number; y: number }; scale: number; ready: boolean;
 }
-const fx = (file: string, d: Omit<StarFxDef, 'key' | 'url'>): StarFxDef => ({ key: 'star_fx_' + file, url: `assets/star-map/fx/${file}.png`, ...d });
+const fx = (file: string, d: Omit<StarFxDef, 'key' | 'url'>): StarFxDef => ({ key: 'star_fx_' + file, url: `assets/star-map/fx/fx_${file}.png`, ...d });
 export const STAR_FX = {
-  /** 背水：生命低于 40% 期间，主将身上循环。 */
-  beishui: fx('beishui', { star: 'strength.NR2', mode: 'loop', attach: 'hero', frames: 8, frameW: 192, frameH: 192, fps: 12, anchor: { x: .5, y: .8 }, scale: .6, ready: false }),
+  /** 背水：生命低于 40% 期间，主将身上循环。2× 图 192×224 显示 96×112，锚点 (96, 208) = 脚底中心，10 帧 / 秒；画在主将之上、名字牌（HUD 层）之下。 */
+  beishui: fx('beishui', { star: 'strength.NR2', mode: 'loop', attach: 'hero', frames: 8, frameW: 192, frameH: 224, fps: 10, anchor: { x: .5, y: 208 / 224 }, scale: .5, ready: true }),
   /** 万人敌：点亮后常驻，主将脚下循环。 */
   wanrendi: fx('wanrendi', { star: 'strength.K', mode: 'loop', attach: 'feet', frames: 8, frameW: 256, frameH: 256, fps: 10, anchor: { x: .5, y: .5 }, scale: .5, ready: false }),
   /** 三军统帅：点亮后常驻，主将身后循环。 */
   sanjun: fx('sanjun', { star: 'command.K', mode: 'loop', attach: 'behind', frames: 8, frameW: 256, frameH: 256, fps: 10, anchor: { x: .5, y: .9 }, scale: .6, ready: false }),
   /** 号令 / 身先士卒：有部曲在主将身边时的半径环。 */
   ring: fx('ring', { star: 'command.NR2', alsoStar: 'bridge3.h', mode: 'loop', attach: 'ring', frames: 8, frameW: 512, frameH: 512, fps: 8, anchor: { x: .5, y: .5 }, scale: 1, ready: false }),
-  /** 破阵：重击命中点，一次性。 */
-  pozhen: fx('pozhen', { star: 'strength.NL1', mode: 'once', attach: 'hit', frames: 8, frameW: 192, frameH: 192, fps: 20, anchor: { x: .5, y: .5 }, scale: .6, ready: false }),
+  /** 破阵：重击命中点，一次性。2× 图 256×256 显示 128×128，锚点 = 爆点中心，16 帧 / 秒。 */
+  pozhen: fx('pozhen', { star: 'strength.NL1', mode: 'once', attach: 'hit', frames: 8, frameW: 256, frameH: 256, fps: 16, anchor: { x: .5, y: .5 }, scale: .5, ready: true }),
   /** 连珠：翻倍那一下的命中点，一次性。 */
   lianzhu: fx('lianzhu', { star: 'intellect.NL1', mode: 'once', attach: 'hit', frames: 8, frameW: 192, frameH: 192, fps: 20, anchor: { x: .5, y: .5 }, scale: .6, ready: false }),
   /** 游刃：闪避那一下，主将身侧，一次性。 */

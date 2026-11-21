@@ -11,6 +11,7 @@ import { emptyGear, type GearStats } from './ItemEffects';
 import { attributePointsAt } from '../data/attributes';
 import { ATTRIBUTE_EFFECT, SPELL_WEAPONS, ATTRIBUTE_IDS, ATTRIBUTE_INFO, ATTRIBUTE_MAX, attributeCap, ATTRIBUTE_POINT_EVERY, PRIMARY_BONUS, PRIMARY_MUL, PRIMARY_TIERS, PRIMARY_PERK, primaryAttribute, type AttributeId } from '../data/attributes';
 import { LB_COMMAND } from '../data/heroMechanics';
+import { STAR_TUNING, canLight, heroGate, orderStars, perkLit, starMapOn, starPoints, starsAt } from '../data/starMap';
 export { ATTRIBUTE_IDS, ATTRIBUTE_INFO, ATTRIBUTE_MAX, ATTRIBUTE_POINT_EVERY, attributeCap, type AttributeId };
 export type ZhaoMasteryId = 'dragon_gallop' | 'cloud_pierce';
 /**
@@ -81,9 +82,9 @@ export type PotionId = 'rejuvenation' | 'berserk';
 
 /** 2026-11-17 属性改版：力量 / 敏捷 / 智力 + 统御，单项最多 10、每级 1 点，武将主属性（数值见 data/attributes.ts）。 */
 /** 从 from 级升到 to 级途中到达的「加点等级」数。 */
-export function attributePointsBetween(from: number, to: number): number { return Math.max(0, attributePointsAt(to) - attributePointsAt(from)); }
+export function attributePointsBetween(from: number, to: number): number { return starMapOn() ? Math.max(0, starsAt(to) - starsAt(from)) : Math.max(0, attributePointsAt(to) - attributePointsAt(from)); } // 星图开着：每升 1 级 1 颗星
 /** 当前等级再升几级可获得下一个属性点（1 或 2）。 */
-export function levelsToNextAttributePoint(level: number): number { const p = attributePointsAt(level); let n = 1; while (attributePointsAt(level + n) <= p && n < 8) n++; return n; }
+export function levelsToNextAttributePoint(level: number): number { if (starMapOn()) return 1; const p = attributePointsAt(level); let n = 1; while (attributePointsAt(level + n) <= p && n < 8) n++; return n; }
 /** 武将经验表（2026-11-17 取消局内等级，只留武将等级；见 data/heroLevels.ts）：从 level 升到 level+1 所需经验。 */
 export function xpToNext(level: number): number { return heroXpToNext(level); }
 /** 属性图标（智力暂借「属性点」图标、统御暂借「虎符」图标，没有专属图）。 */
@@ -146,11 +147,38 @@ export class RunGrowth {
   /** 当前武将等级（本色自动成长要用；GameScene 开局 / 升级时写入）。 */
   heroLevel = 1;
   /** 主属性专精档位（0–3）：主属性满 4 / 7 / 10 点各一档。 */
-  primaryTier(): number { const p = primaryAttribute(this.character); return p ? PRIMARY_TIERS.filter(n => this.attributes[p] >= n).length : 0; }
-  /** 是否已解锁某属性的第 tier 档专精（只看主属性）。 */
-  perk(id: AttributeId, tier: number): boolean { return primaryAttribute(this.character) === id && this.primaryTier() >= tier; }
+  primaryTier(): number { const p = primaryAttribute(this.character); if (p && starMapOn()) return [1, 2, 3].filter(t => perkLit(this.stars, p, t)).length; return p ? PRIMARY_TIERS.filter(n => this.attributes[p] >= n).length : 0; }
+  /** 是否已解锁某属性的第 tier 档专精（只看主属性）。星图开着：改查对应要星是否点亮（第 1 / 2 / 3 档 = 该区 NC / NL1 / NL2，任何武将都能跨区拿）。 */
+  perk(id: AttributeId, tier: number): boolean { return starMapOn() ? perkLit(this.stars, id, tier) : primaryAttribute(this.character) === id && this.primaryTier() >= tier; }
   /** 敏捷「疾影」：暴击后攻速提升的截止时刻；力量「破阵」：武器命中计数。 */
   hasteUntil = -Infinity; crushCount = 0;
+  /**
+   * 星图（data/starMap.ts，开关 starMapOn() 默认关）：本局已点亮的星（不含自己的入口）。开着时四维点数 attributes = 小星汇总（setStars 写入），
+   * 专精 perk() 查要星；关着时这个字段没人读。
+   */
+  stars: string[] = [];
+  get starGate(): string { return heroGate(this.character); }
+  /** 读入一组已点亮的星（按规则整理过）；星图开着时同时把四维点数改成小星汇总。 */
+  setStars(ids: Iterable<string>): void { this.stars = orderStars(ids, this.starGate); if (starMapOn()) Object.assign(this.attributes, starPoints(this.stars, this.starGate)); }
+  /** 开局 / 换关：从存档读入已点亮的星；carried = 同章连打，保留上一关在本局里点的（测试战斗不写存档）。 */
+  syncStars(saved: readonly string[], carried: boolean): void { this.setStars(carried ? [...saved, ...this.stars] : saved); }
+  /** 战斗内点亮一颗星（花 1 个 unallocated）；写存档由调用方做（HeroProgress.lightHeroStar）。 */
+  lightStar(player: Player, id: string): boolean {
+    if (!starMapOn() || this.unallocated <= 0 || !canLight(this.stars, id, this.starGate)) return false;
+    const oldMax = player.maxHp;
+    this.setStars([...this.stars, id]); this.unallocated -= 1;
+    if (player.maxHp > oldMax) player.heal(player.maxHp - oldMax);
+    return true;
+  }
+  /** 力量「破阵」重击倍率（星图开着 ×1.6，平衡评审第 30 节；关着是原值 ×2）。 */
+  crushMul(): number { return starMapOn() ? STAR_TUNING.crushMul : PRIMARY_PERK.strength.crushMul; }
+  /** 「破阵」这一下能不能定身：星图开着时每秒最多一次（关着每次重击都定）。返回 true 时记下时刻。 */
+  private crushStunAt = -Infinity;
+  crushStunReady(time: number): boolean {
+    if (!starMapOn()) return true;
+    if (time - this.crushStunAt < STAR_TUNING.crushStunCdMs) return false;
+    this.crushStunAt = time; return true;
+  }
   /** 猛将觉醒「横扫千军」：狂斗截止时刻与攻速加成（SchoolSynergy 设）。 */
   frenzyUntil = -Infinity; frenzyHaste = 0;
   /** 本局单项上限（attributeCap(武将等级)，开局 / 升级时由 GameScene 写入）。 */
@@ -217,7 +245,12 @@ export class RunGrowth {
   incomingDamageMultiplier(): number { return (this.gear.specials.includes('weixi') ? 1.15 : 1)*Math.max(.6, 1 - this.gear.reduce)*this.commandSelfGuard(); }
   /** 刘备：统御每点本人受伤 −1%（2026-11-18 平衡审查，data/heroMechanics.ts LB_COMMAND）；其他武将为 1。 */
   commandSelfGuard(): number { return this.character === 'liubei' ? 1 - LB_COMMAND.selfGuardPerPoint * Math.min(LB_COMMAND.maxPoints, this.attributes.command) : 1; }
-  allyDamageMultiplier(): number { return (this.build.tier('formation')>=2?1+SCHOOL_TIER.formation.allyDmg:1)*(1 + this.gear.ally)*(1 + ATTRIBUTE_EFFECT.command.allyDamage * this.pts('command')) * (this.perk('command', 1) ? 1 + PRIMARY_PERK.command.allyDamage : 1); }
+  allyDamageMultiplier(): number { return (this.build.tier('formation')>=2?1+SCHOOL_TIER.formation.allyDmg:1)*(1 + this.gear.ally)*(1 + ATTRIBUTE_EFFECT.command.allyDamage * this.pts('command')) * (1 + this.allyDamageBucket()); }
+  /**
+   * 部曲伤害加法桶（平衡评审第 30 节）：励军等「部曲伤害 +x%」的星互相相加，加完再乘统御点数那一项，不互相相乘。
+   * 现在桶里只有励军（+15%，和原来 ×1.15 算出来一样）；第二期的号令 / 三军统帅 / 帷幄往这里加。
+   */
+  allyDamageBucket(): number { return this.perk('command', 1) ? PRIMARY_PERK.command.allyDamage : 0; }
   /** 主属性：每点额外全伤害 +1%（最多 10 点）。 */
   primaryBonus(): number { const p = primaryAttribute(this.character); return p ? Math.min(PRIMARY_BONUS.maxPoints, this.attributes[p]) * PRIMARY_BONUS.perPoint : 0; }
   /** 智力：非普攻伤害（技艺、灼烧、遗珍等）倍率，含主属性加成。 */

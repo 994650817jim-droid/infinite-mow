@@ -138,6 +138,9 @@ import { chaptersOpen, stageCleared, takeAttrNotice } from '../systems/HeroProgr
 import { allocateHeroAttr, claimFirstClear, creditHeroXp, enlistHero, heroFreePoints, heroInfo, heroLevel, levelCap, setHeroProgress, suggestedLevel, type HeroKey } from '../systems/HeroProgress';
 import { HERO_XP_RATE, OVERFLOW_XP_PER_GRAIN, PICK_GUARANTEE, PICK_PACE, XP_SHIFT, chapterXpMul } from '../data/heroLevels';
 import { attributePointsBetween } from '../systems/RunGrowth';
+import { starMapOn } from '../data/starMap';
+import { heroStars, lightHeroStar } from '../systems/HeroProgress';
+import { StarMapDevPanel } from '../ui/StarMapDevPanel';
 import { vigorHp } from '../data/attributes';
 import { CHAPTER_INDEX, PHASES, PHASE_BARKS, buildPhasePlan, phasedPace, planLen, stageLieutenant, withPhases, type PhaseKind, type PhasePlan, type StagePhase } from '../data/stagePhases';
 import { StagePhaseRunner } from '../systems/StagePhases';
@@ -2714,8 +2717,8 @@ export class GameScene extends Phaser.Scene {
     if (crit && g.perk('agility', 3)) g.hasteUntil = time + P.agility.hasteMs; // 敏捷·疾影
     const pushable = enemy.kind !== 'boss' && !enemy.controlImmune && !enemy.isSupplySlot;
     if (g.perk('strength', 2) && ++g.crushCount >= P.strength.crushEvery) { // 力量·破阵
-      g.crushCount = 0; mul *= P.strength.crushMul;
-      if (pushable) enemy.stunUntil = Math.max(enemy.stunUntil, time + P.strength.crushStunMs);
+      g.crushCount = 0; mul *= g.crushMul(); // 星图开着 ×1.6（RunGrowth.crushMul），关着是 P.strength.crushMul
+      if (pushable && g.crushStunReady(time)) enemy.stunUntil = Math.max(enemy.stunUntil, time + P.strength.crushStunMs); // 星图开着：定身每秒最多一次
     }
     if (g.perk('strength', 1) && pushable && time - (this.perkShoveAt.get(enemy) ?? -1e9) >= P.strength.shoveCdMs) { // 力量·千钧
       this.perkShoveAt.set(enemy, time);
@@ -4210,6 +4213,7 @@ export class GameScene extends Phaser.Scene {
     g.heroFree = heroFreePoints(id);
     const room = (Object.values(g.attributes) as number[]).reduce((n, v) => n + g.attrMax - v, 0);
     g.unallocated = Math.min(room, g.heroFree + (carried ? bonusLeft : 0));
+    if (starMapOn()) g.syncStars(heroStars(id), carried); // 星图（开关默认关）：读入已点亮的星，四维点数改成小星汇总
     // 武将谱：本命淬炼、战法心得（新开一场时开局第一次升级保证出一张心得卡）
     g.temperDamage = temperBonus(id); g.xinde = getXinde(id); if (!carried) g.xindeFirst = g.xinde.length > 0;
     this.player.passive.areaMul = g.areaMultiplier();
@@ -5376,8 +5380,20 @@ export class GameScene extends Phaser.Scene {
     this.player.passive.areaMul=g.areaMultiplier();if(g.heroFree>0){g.heroFree--;if(!isChapterTestRun())allocateHeroAttr(this.runConfig.character,id);}
     this.renderAttributePanel();this.updateHud();return true;
   }
+  /** 星图 · 临时界面（程序占位，ui/StarMapDevPanel）：开关 starMapOn() 打开时顶替属性面板（C 键 / 暂停菜单进）。 */
+  private starPanel?: StarMapDevPanel;
+  protected renderStarPanel(): void {
+    this.attributePauseText?.setText(`星图（临时界面）· ${this.player.growth.unallocated}`);
+    if(this.starPanel&&!this.starPanel.root.scene)this.starPanel=undefined; // 场景重开后旧面板已随属性面板销毁
+    this.starPanel??=(()=>{const p=new StarMapDevPanel(this,{x:16,y:12,w:GAME_WIDTH-32,h:GAME_HEIGHT-24,
+      state:()=>{const g=this.player.growth;return{heroName:getCharacter(g.character).name,level:this.heroLv,gate:g.starGate,lit:g.stars,free:g.unallocated};},
+      onLight:star=>{const g=this.player.growth;if(!g.lightStar(this.player,star))return false;this.player.passive.areaMul=g.areaMultiplier();if(g.heroFree>0){g.heroFree--;if(!isChapterTestRun())lightHeroStar(this.runConfig.character as HeroKey,star);}this.updateHud();return true;},
+      close:{label:()=>this.attributeReturn==='none'?'继续战斗':'返回暂停菜单',act:()=>this.setMode(this.attributeReturn)}});this.attributePanel.add(p.root);return p;})();
+    this.starPanel.render();
+  }
   protected renderAttributePanel(): void {
     if (!this.player || !this.attributePointsText) return;
+    if (starMapOn()) { this.renderStarPanel(); return; } // 星图（开关默认关）：临时界面盖在原属性面板上
     const growth=this.player.growth;
     {const close=this.attributePanel.getByName('attributes-close') as Phaser.GameObjects.Text|null;close?.setText(this.attributeReturn==='none'?'继续战斗':'返回暂停菜单');if(close&&!close.getData('hitBox')){lqHitBox(close,220,44);close.setData('hitBox',true);}}
     this.attributePointsText.setText(growth.unallocated>0?`可分配属性点 ${growth.unallocated}`:`属性点已用完 · Lv25 前每级 1 点、之后每 2–3 级 1 点（当前 Lv.${this.heroLv}）`).setColor(growth.unallocated>0?(IS_DESKTOP?'#efd399':'#1c160c'):'#91ab98').setBackgroundColor(growth.unallocated>0&&!IS_DESKTOP?'#e2bd6a':'#00000000');if(IS_DESKTOP)this.attributePointsText.setFontFamily(HEADING_FONT).setFontSize(growth.unallocated>0?20:15).setStroke('#120904',growth.unallocated>0?4:0);

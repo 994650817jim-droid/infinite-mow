@@ -1,0 +1,202 @@
+// 星图第一期（data/starMap.ts、systems/HeroProgress.ts、systems/RunGrowth.ts；设计稿 docs/STAR_MAP_DESIGN.md）：纯 node，不开浏览器。
+// ① 全图连通、84 颗的构成；② 从本区入口到各要星的最少花费与设计稿第 4 节一致（4 / 5 / 5 / 7 / 7，跨系要星 6）；
+// ③ 点亮规则：相连、主星门槛（本区 ≥10）、主星最多 2 颗；④ 存档：点亮 / 可用星数 / 洗点 / 读档；
+// ⑤ 同样的点数下，星图汇总出的四维生效点与旧式加点完全相等；⑥ 三套示例走法（设计稿第 5 节）按星数取前 N 颗与表一致；
+// ⑦ 开关打开时的专精 / 破阵 / 部曲伤害桶；⑧ 开关关闭时 RunGrowth / HeroProgress 的输出与改动前（git 里的 BASE 提交）逐项相同。
+// 用法：node tools/test-star-map.mjs      （STAR_BASE=<提交号> 可换对照的提交，默认 718f2bc7 = 星图开工前的 main）
+import { build } from 'esbuild';
+import { execFileSync } from 'node:child_process';
+import { relative } from 'node:path';
+
+const root = process.cwd(), BASE = process.env.STAR_BASE ?? '718f2bc7';
+// 存档用的假 localStorage（HeroProgress / MasteryStore / WorldStore 都读它）
+const store = new Map();
+globalThis.localStorage = { getItem: k => (store.has(k) ? store.get(k) : null), setItem: (k, v) => { store.set(k, String(v)); }, removeItem: k => { store.delete(k); }, clear: () => store.clear(), key: i => [...store.keys()][i] ?? null, get length() { return store.size; } };
+const ENTRY = `
+export * as SM from './src/data/starMap';
+export * as HP from './src/systems/HeroProgress';
+export * as MS from './src/systems/MasteryStore';
+export * as RG from './src/systems/RunGrowth';
+export * as HS from './src/data/heroStats';
+export * as AT from './src/data/attributes';`;
+const ENTRY_BASE = ENTRY.replace(/^export \* as SM.*$/m, '');
+/** 打包在内存里；base = true 时 src 下的文件内容改从 git 的 BASE 提交读（对照「改动前」）。 */
+async function load(entry, base) {
+  // Phaser 只在界面 / 场景代码里用，这里测的是数据与结算：给一个空壳（任何属性都是一个可继承的空类），免得打包整个引擎
+  const stub = { name: 'phaser-stub', setup(b) { b.onResolve({ filter: /^phaser$/ }, () => ({ path: 'phaser', namespace: 'stub' })); b.onLoad({ filter: /.*/, namespace: 'stub' }, () => ({ contents: "const mk = () => new Proxy(class {}, { get: (t, k) => (k in t || typeof k === 'symbol' ? t[k] : (t[k] = mk())) }); const P = mk(); export default P; export const Scene = P.Scene, GameObjects = P.GameObjects, Math = P.Math, Geom = P.Geom, Scale = P.Scale, Input = P.Input, Display = P.Display;", loader: 'js' })); } };
+  const plugins = base ? [stub, { name: 'git-base', setup(b) { b.onLoad({ filter: /[\\/]src[\\/].*\.ts$/ }, a => ({ contents: execFileSync('git', ['show', `${BASE}:${relative(root, a.path).replace(/\\/g, '/')}`], { encoding: 'utf8', maxBuffer: 1 << 28 }), loader: 'ts', resolveDir: a.path.replace(/[\\/][^\\/]*$/, '') })); } }] : [stub];
+  const r = await build({ stdin: { contents: entry, resolveDir: root, loader: 'ts' }, bundle: true, format: 'esm', platform: 'node', write: false, logLevel: 'error', plugins });
+  return import('data:text/javascript;base64,' + Buffer.from(r.outputFiles[0].text).toString('base64') + '#' + (base ? 'base' : 'new'));
+}
+let pass = 0, fail = 0;
+const ck = (n, ok, d) => { ok ? pass++ : fail++; console.log((ok ? 'PASS ' : 'FAIL ') + n + (d !== undefined ? ' · ' + JSON.stringify(d).slice(0, 400) : '')); };
+const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+
+const { SM, HP, MS, RG, HS, AT } = await load(ENTRY, false);
+const ATTRS = AT.ATTRIBUTE_IDS, byName = new Map(SM.STAR_NODES.filter(n => n.kind === 'notable' || n.kind === 'keystone').map(n => [n.name, n]));
+ck('开关默认关', SM.starMapOn() === false);
+
+// ① 构成与连通
+{
+  const kinds = {}; for (const n of SM.STAR_NODES) kinds[n.kind] = (kinds[n.kind] ?? 0) + 1;
+  ck('84 颗：4 入口 / 52 小星 / 24 要星 / 4 主星', SM.STAR_NODES.length === 84 && same(kinds, { gate: 4, small: 52, notable: 24, keystone: 4 }), kinds);
+  ck('编号不重复、连线两端都存在、没有自环 / 重复', new Set(SM.STAR_NODES.map(n => n.id)).size === 84 && SM.STAR_EDGES.every(([a, b]) => a !== b && SM.STAR_BY_ID.has(a) && SM.STAR_BY_ID.has(b)) && new Set(SM.STAR_EDGES.map(([a, b]) => [a, b].sort().join('|'))).size === SM.STAR_EDGES.length, SM.STAR_EDGES.length);
+  const seen = new Set(['strength.G']), q = ['strength.G']; while (q.length) for (const n of SM.starNeighbors(q.shift())) if (!seen.has(n)) { seen.add(n); q.push(n); }
+  ck('全图连通（从力量入口走得到每一颗）', seen.size === 84, seen.size);
+  ck('相邻查询是对称的', SM.STAR_NODES.every(n => n.links.every(l => SM.starNeighbors(l).includes(n.id))));
+  ck('四个入口连成一圈', ATTRS.every((a, i) => SM.starNeighbors(SM.gateOf(a)).includes(SM.gateOf(ATTRS[(i + 1) % 4]))));
+  const small = { strength: 0, agility: 0, intellect: 0, command: 0 }; for (const n of SM.STAR_NODES) if (n.attr && n.kind === 'small') small[n.attr]++;
+  ck('每一维 13 颗小星（区内 11 + 桥上 2），加别人的入口时最多 14 点', ATTRS.every(a => small[a] === 13), small);
+  ck('旧专精 12 颗有 perk 标记、没有「未实现」；另外 12 颗要星 + 4 颗主星标「效果未实现」', SM.STAR_NODES.filter(n => n.perk).length === 12 && SM.STAR_NODES.filter(n => n.perk).every(n => !n.todo) && SM.STAR_NODES.filter(n => n.todo).length === 16 && SM.STAR_NODES.filter(n => n.todo).every(n => n.kind === 'keystone' || n.kind === 'notable'));
+  const names = ATTRS.flatMap(a => [1, 2, 3].map(t => SM.starNode(SM.perkStarId(a, t)).name)), old = ATTRS.flatMap(a => AT.PRIMARY_PERK_INFO[a].map(p => p.name));
+  ck('三档专精对应 NC / NL1 / NL2，名字与 PRIMARY_PERK_INFO 一致', same(names, old), names);
+}
+// ② 最少花费（设计稿第 4 节）
+{
+  const COST = { 千钧: 4, 破阵: 5, 斩将: 7, 铁骨: 5, 背水: 7, 轻骑: 4, 游刃: 5, 疾影: 7, 连击: 5, 追风: 7, 凝神: 4, 连珠: 5, 广域: 7, 余烬: 5, 妙算: 7, 励军: 4, 募众: 5, 同袍: 7, 严阵: 5, 号令: 7 };
+  const bad = Object.entries(COST).filter(([name, c]) => { const n = byName.get(name); return !n || SM.starCost([], n.id, SM.gateOf(n.region)) !== c; });
+  ck('区内 20 颗要星从本区入口的最少花费与设计稿一致（4 / 5 / 5 / 7 / 7）', bad.length === 0 && Object.keys(COST).length === 20, bad);
+  const bridges = ['骁锐', '奇谋', '帷幄', '身先士卒'].map(name => { const n = byName.get(name); return [name, ...n.between.map(a => SM.starCost([], n.id, SM.gateOf(a)))]; });
+  ck('跨系要星从任一侧入口 6 星', bridges.every(b => b[1] === 6 && b[2] === 6), bridges);
+  ck('主星从本区入口连通最少 7 星（含主星本身；另有门槛）', ATTRS.every(a => SM.starCost([], a + '.K', SM.gateOf(a)) === 7));
+}
+// ③ 点亮规则
+{
+  const G = 'strength.G';
+  ck('只能点亮相连的：入口旁的 T1 可以，隔一颗的 T2 不行', SM.canLight([], 'strength.T1', G) && !SM.canLight([], 'strength.T2', G) && !SM.canLight([], 'nope', G) && !SM.canLight(['strength.T1'], 'strength.T1', G));
+  ck('别人的入口当普通小星：花 1 星、加 1 点；自己的入口免费、不加点', SM.canLight([], 'agility.G', G) && same(SM.starPoints(['agility.G'], G), { strength: 0, agility: 1, intellect: 0, command: 0 }) && SM.starsSpent(['agility.G'], G) === 1 && SM.starsSpent([], G) === 0 && same(SM.starPoints([], G), { strength: 0, agility: 0, intellect: 0, command: 0 }));
+  const path = ['strength.T1', 'strength.T2', 'strength.C1', 'strength.NC', 'strength.C2', 'strength.C3']; // 连到主星的最短路：本区 6 颗 + 入口 = 7
+  ck('主星门槛：相连但本区不够 10 颗时不能点', SM.regionLit(path, 'strength', G) === 7 && !SM.canLight(path, 'strength.K', G), SM.lightBlock(path, 'strength.K', G));
+  const nine = [...path, 'strength.L1', 'strength.L2']; // 本区 9
+  ck('本区 9 颗（含入口）仍不能点，10 颗可以', !SM.canLight(nine, 'strength.K', G) && SM.canLight([...nine, 'strength.R1'], 'strength.K', G), [SM.regionLit(nine, 'strength', G), SM.regionLit([...nine, 'strength.R1'], 'strength', G)]);
+  ck('别区的星不算进本区门槛', !SM.canLight([...nine, 'agility.G'], 'strength.K', G));
+  // 主星最多 2 颗：关羽走法里有万人敌、一骑当千；把敏捷、智力两区补满后第三颗（火烧连营）仍点不了
+  const all = SM.STAR_NODES.filter(n => n.kind !== 'keystone').map(n => n.id), two = [...all, 'strength.K', 'agility.K'];
+  ck('主星最多同时 2 颗', SM.canLight(all, 'intellect.K', G) && SM.keystonesLit(two) === 2 && !SM.canLight(two, 'intellect.K', G), SM.lightBlock(two, 'intellect.K', G));
+  ck('orderStars 丢掉点不到的（不相连 / 第三颗主星 / 不认识的）', same(SM.orderStars(['strength.T2', 'strength.T1', 'xx', 'command.K'], G), ['strength.T1', 'strength.T2']) && SM.orderStars([...all, 'strength.K', 'agility.K', 'intellect.K', 'command.K'], G).filter(id => id.endsWith('.K')).length === 2);
+  ck('starsAt：每升 1 级 1 颗，不减速', [1, 2, 10, 26, 54, 70].map(SM.starsAt).join() === '0,1,9,25,53,69');
+  ck('入口：有主属性的按主属性，招募武将按本色最高一维', SM.heroGate('guanyu') === 'strength.G' && SM.heroGate('zhuge') === 'intellect.G' && SM.heroGate('liubei') === 'command.G' && SM.heroGate('zhaoyun') === 'agility.G' && SM.heroEntryAttr('bow') === 'agility' && SM.heroEntryAttr('strategist') === 'intellect' && SM.heroEntryAttr('张郃') === 'strength' && SM.heroEntryAttr('r_12', HS.statSource('程普')) === 'command');
+}
+// ⑥ 三套示例走法（设计稿第 5 节的表）
+const TABLE = {
+  guanyu: { 9: ['7/0/0/0', '千钧、破阵'], 25: ['10/6/0/0', '千钧、破阵、铁骨、斩将、万人敌、背水、骁锐、游刃、轻骑'], 53: ['11/12/3/8', '千钧、破阵、铁骨、斩将、万人敌、背水、骁锐、游刃、轻骑、连击、疾影、身先士卒、严阵、追风、一骑当千、励军、募众、号令、奇谋'], 69: ['12/12/9/10', '千钧、破阵、铁骨、斩将、万人敌、背水、骁锐、游刃、轻骑、连击、疾影、身先士卒、严阵、追风、一骑当千、励军、募众、号令、奇谋、凝神、同袍、连珠、广域、妙算、余烬、帷幄'] },
+  zhuge: { 9: ['0/0/7/0', '凝神、连珠'], 25: ['0/0/10/6', '凝神、连珠、余烬、火烧连营、广域、帷幄、励军、严阵、妙算'], 53: ['4/9/11/11', '凝神、连珠、余烬、火烧连营、广域、帷幄、励军、严阵、妙算、募众、号令、同袍、三军统帅、奇谋、轻骑、游刃、连击、骁锐'], 69: ['10/11/11/12', '凝神、连珠、余烬、火烧连营、广域、帷幄、励军、严阵、妙算、募众、号令、同袍、三军统帅、奇谋、轻骑、游刃、连击、骁锐、千钧、破阵、疾影、铁骨、斩将、背水、追风'] },
+  liubei: { 9: ['0/0/0/7', '励军、募众'], 25: ['5/0/0/11', '励军、募众、严阵、同袍、三军统帅、号令、身先士卒、帷幄、铁骨'], 53: ['12/1/9/11', '励军、募众、严阵、同袍、三军统帅、号令、身先士卒、帷幄、铁骨、凝神、千钧、妙算、破阵、连珠、斩将、背水、万人敌、余烬、广域、骁锐'], 69: ['13/9/10/11', '励军、募众、严阵、同袍、三军统帅、号令、身先士卒、帷幄、铁骨、凝神、千钧、妙算、破阵、连珠、斩将、背水、万人敌、余烬、广域、骁锐、轻骑、游刃、疾影、追风、连击、奇谋'] },
+};
+for (const key of Object.keys(TABLE)) {
+  const P = SM.STAR_PRESETS[key], gate = SM.heroGate(P.hero), all = SM.presetStars(key);
+  ck(`预设 ${P.name}：整条顺序每一步都合规（81 颗，前缀任取都能直接摆）`, all.length === 81 && same(SM.orderStars(all, gate), all) && [9, 25, 53, 69].every(n => same(SM.orderStars(SM.presetStars(key, n), gate), SM.presetStars(key, n))));
+  const got = Object.fromEntries([9, 25, 53, 69].map(n => { const s = SM.presetStars(key, n), p = SM.starPoints(s, gate); return [n, [ATTRS.map(a => p[a]).join('/'), s.map(id => SM.starNode(id)).filter(x => !x.attr).map(x => x.name).join('、')]]; }));
+  ck(`预设 ${P.name}：Lv10 / 26 / 54 / 70（9 / 25 / 53 / 69 星）的小星数与要星清单和设计稿的表一致`, same(got, TABLE[key]), Object.fromEntries(Object.entries(got).map(([n, v]) => [n, v[0]])));
+}
+
+// ④ 存档：点亮 / 可用星数 / 洗点 / 读档（这些接口不看开关）
+{
+  store.clear(); HP.resetHeroCache(); MS.resetMasteryCache();
+  ck('新武将 Lv1：没有星可点', HP.heroFreeStars('guanyu') === 0 && HP.lightHeroStar('guanyu', 'strength.T1') === false && same(HP.heroStars('guanyu'), []));
+  HP.setHeroStars('guanyu', [], 4); // Lv4 = 3 颗星
+  ck('Lv4：3 颗可点；不相连的点不了', HP.heroStarsTotal('guanyu') === 3 && HP.heroFreeStars('guanyu') === 3 && !HP.lightHeroStar('guanyu', 'strength.T2'));
+  const lit = ['strength.T1', 'strength.T2', 'strength.C1'].map(id => HP.lightHeroStar('guanyu', id));
+  ck('点亮 3 颗后用完，第 4 颗点不了', lit.every(Boolean) && HP.heroFreeStars('guanyu') === 0 && !HP.lightHeroStar('guanyu', 'strength.NC') && same(HP.heroStars('guanyu'), ['strength.T1', 'strength.T2', 'strength.C1']) && same(HP.heroStarPoints('guanyu'), { strength: 3, agility: 0, intellect: 0, command: 0 }));
+  ck('开关关着：旧属性点接口不受星影响', same(HP.heroAttrs('guanyu'), { strength: 0, agility: 0, intellect: 0, command: 0 }) && HP.heroFreePoints('guanyu') === 3);
+  HP.resetHeroCache();
+  ck('读档后还在', same(HP.heroStars('guanyu'), ['strength.T1', 'strength.T2', 'strength.C1']) && JSON.parse(store.get(HP.HEROES_KEY)).heroes.guanyu.stars.length === 3);
+  { const v = JSON.parse(store.get(HP.HEROES_KEY)); v.heroes.guanyu.stars = ['strength.T1', 'bogus', 'strength.K', 'strength.T2', 7]; store.set(HP.HEROES_KEY, JSON.stringify(v)); HP.resetHeroCache(); }
+  ck('读档时丢掉不认识的 / 点不到的星', same(HP.heroStars('guanyu'), ['strength.T1', 'strength.T2']));
+  HP.allocateHeroAttr('guanyu', 'strength');
+  SM.setStarMap(true);
+  ck('开关打开：四维点数 = 小星汇总，可用点 = 没点的星，旧式加点被拒', same(HP.heroAttrs('guanyu'), { strength: 2, agility: 0, intellect: 0, command: 0 }) && HP.heroFreePoints('guanyu') === 1 && HP.allocateHeroAttr('guanyu', 'agility') === false && same(HP.enlistHero('guanyu').attributes, { strength: 2, agility: 0, intellect: 0, command: 0 }));
+  const r = MS.respec('guanyu');
+  ck('洗点（MasteryStore.respec，开关打开）：星全部退回，等级与旧属性点不动，本章首次免费', r.ok && same(HP.heroStars('guanyu'), []) && HP.heroFreeStars('guanyu') === 3 && HP.heroLevel('guanyu') === 4 && JSON.parse(store.get(HP.HEROES_KEY)).heroes.guanyu.attributes.strength === 1 && !('stars' in JSON.parse(store.get(HP.HEROES_KEY)).heroes.guanyu), r.message);
+  ck('洗点第二次按等级收军粮（沿用旧规则：100 × 等级）', MS.respecCost('guanyu') === 400);
+  SM.setStarMap(false);
+  ck('开关关着：洗点仍是清旧属性点', (HP.resetHeroAttrs('guanyu'), JSON.parse(store.get(HP.HEROES_KEY)).heroes.guanyu.attributes.strength === 0));
+  const set = HP.setHeroStars('liubei', SM.presetStars('liubei', 25), 26);
+  ck('setHeroStars + 预设：刘备 Lv26 摆 25 颗', set.length === 25 && HP.heroLevel('liubei') === 26 && HP.heroFreeStars('liubei') === 0 && same(HP.heroStarPoints('liubei'), { strength: 5, agility: 0, intellect: 0, command: 11 }));
+}
+
+// ⑤ 同样的点数：星图汇总出的四维生效点 === 旧式加点
+{
+  const mk = (hero, level, attrs, stars) => { const g = new RG.RunGrowth(hero); g.heroLevel = level; if (attrs) Object.assign(g.attributes, attrs); if (stars) g.setStars(stars); return g; };
+  const NUM = g => ({ pts: ATTRS.map(a => g.pts(a)), dmg: g.damageMultiplier(0), aspd: g.attackSpeedMultiplier(0), move: g.movementMultiplier(), crit: g.criticalBonus(), hp: g.bonusMaxHp(), allyHp: g.allyHpMultiplier(), area0: 1 + AT.ATTRIBUTE_EFFECT.intellect.area * g.pts('intellect'), skill: g.skillDamageMultiplier(), spell: g.spellWeaponMultiplier('flame_banner'), primary: g.primaryBonus(), guard: g.commandSelfGuard() });
+  let n = 0, bad = [];
+  for (const key of Object.keys(TABLE)) for (const hero of ['guanyu', 'zhuge', 'liubei', 'zhaoyun', 'diaochan', 'mengde']) for (const stars of [0, 3, 9, 14, 25, 40, 53, 69, 81]) {
+    // 把预设走法搬到这位武将的入口上不一定合规，所以只在预设自己的武将上用整条走法；别的武将用「同样的点数」对照旧式公式
+    const level = stars + 1, gateHero = SM.STAR_PRESETS[key].hero, lit = SM.presetStars(key, stars), p = SM.starPoints(lit, SM.heroGate(gateHero));
+    SM.setStarMap(false); const old = mk(hero, level, p, null), oldN = NUM(old), direct = ATTRS.map(a => HS.statEffective(HS.statSource(hero), a, p[a], level));
+    if (hero === gateHero) {
+      SM.setStarMap(true); const g = mk(hero, level, null, lit), pt = ATTRS.map(a => g.pts(a)), attrs = { ...g.attributes };
+      SM.setStarMap(false); const again = mk(hero, level, attrs, null); // 关掉开关、手填同样点数：除专精外的数值应一模一样
+      if (!same(attrs, p) || !same(pt, oldN.pts) || !same(pt, direct) || !same(NUM(again), oldN)) bad.push([key, hero, stars, attrs, pt, oldN.pts]);
+      // 开着开关时，不靠专精的那些量也应和旧式逐位相同
+      SM.setStarMap(true); const on = NUM(g); SM.setStarMap(false);
+      for (const k of ['pts', 'hp', 'allyHp', 'area0', 'spell', 'primary', 'guard', 'skill']) if (!same(on[k], oldN[k])) bad.push([key, hero, stars, k, on[k], oldN[k]]);
+    } else if (!same(oldN.pts, direct)) bad.push([key, hero, stars, 'direct']);
+    n++;
+  }
+  ck(`同样的点数下，星图汇总出的四维生效点与旧式完全相等（${n} 组：3 套走法 × 6 位武将 × 9 个星数）`, bad.length === 0, bad.slice(0, 3));
+  SM.setStarMap(true);
+  const g = mk('guanyu', 26, null, SM.presetStars('guanyu', 25));
+  ck('关羽 25 星：主属性 +1% / 点按力量小星数算（10 点封顶）', g.attributes.strength === 10 && g.primaryBonus() === 10 * AT.PRIMARY_BONUS.perPoint && mk('guanyu', 10, null, SM.presetStars('guanyu', 9)).primaryBonus() === 7 * AT.PRIMARY_BONUS.perPoint);
+  SM.setStarMap(false);
+}
+
+// ⑦ 开关打开：专精查要星、破阵 ×1.6 + 定身每秒一次、部曲伤害加法桶、每级 1 星
+{
+  SM.setStarMap(true);
+  const g = new RG.RunGrowth('zhaoyun'); g.heroLevel = 20; // 敏捷武将
+  g.setStars(['strength.G', 'strength.T1', 'strength.T2', 'strength.C1', 'strength.NC', 'strength.L1', 'strength.L2', 'strength.NL1']);
+  ck('专精改查要星：敏捷武将跨区点亮千钧（第 1 档）、破阵（第 2 档），没点斩将；自己的敏捷专精一档没有', g.perk('strength', 1) && g.perk('strength', 2) && !g.perk('strength', 3) && !g.perk('agility', 1) && g.primaryTier() === 0 && g.attributes.strength === 6 && g.attributes.agility === 0);
+  ck('破阵重击 ×1.6（关着 ×2）', g.crushMul() === 1.6 && (SM.setStarMap(false), g.crushMul() === AT.PRIMARY_PERK.strength.crushMul && g.crushMul() === 2));
+  SM.setStarMap(true);
+  ck('破阵定身每秒最多一次', g.crushStunReady(1000) === true && g.crushStunReady(1500) === false && g.crushStunReady(1999) === false && g.crushStunReady(2000) === true && g.crushStunReady(2100) === false);
+  SM.setStarMap(false); ck('关着：每次重击都定身', g.crushStunReady(2100) && g.crushStunReady(2101)); SM.setStarMap(true);
+  const c = new RG.RunGrowth('guanyu'); c.heroLevel = 30; const before = c.allyDamageMultiplier();
+  c.setStars(['command.G', 'command.T1', 'command.T2', 'command.C1', 'command.NC']);
+  const cmd = 1 + AT.ATTRIBUTE_EFFECT.command.allyDamage * c.pts('command');
+  ck('励军进部曲伤害加法桶：桶 = +15%，相加后再乘统御点数那一项', c.allyDamageBucket() === AT.PRIMARY_PERK.command.allyDamage && c.allyDamageMultiplier() === cmd * (1 + c.allyDamageBucket()) && c.allyDamageMultiplier() > before && new RG.RunGrowth('guanyu').allyDamageBucket() === 0, [before, c.allyDamageMultiplier()]);
+  const z = new RG.RunGrowth('zhuge'); z.heroLevel = 12; z.setStars(SM.presetStars('zhuge', 9));
+  ck('诸葛亮 9 星：凝神、连珠生效，广域没有；攻速含凝神', z.perk('intellect', 1) && z.perk('intellect', 2) && !z.perk('intellect', 3) && z.primaryTier() === 2 && z.attackSpeedMultiplier(0) > 1.1 && z.areaMultiplier() === 1 + AT.ATTRIBUTE_EFFECT.intellect.area * z.pts('intellect'));
+  ck('每升 1 级 1 颗星（Lv25 以后也不减速）', RG.attributePointsBetween(24, 40) === 16 && RG.attributePointsBetween(40, 70) === 30 && RG.levelsToNextAttributePoint(45) === 1);
+  const player = { maxHp: 100, healed: 0, heal(n) { this.healed += n; } }, l = new RG.RunGrowth('guanyu'); l.unallocated = 2;
+  ck('战斗内点亮：花 1 颗、点不到的不花、没星不能点', l.lightStar(player, 'strength.T2') === false && l.lightStar(player, 'strength.T1') && l.unallocated === 1 && l.attributes.strength === 1 && l.lightStar(player, 'strength.T2') && l.lightStar(player, 'strength.C1') === false && same(l.stars, ['strength.T1', 'strength.T2']));
+  l.syncStars(['strength.T1'], true); const kept = [...l.stars]; l.syncStars(['strength.T1'], false);
+  ck('换关 syncStars：同章连打保留本局点的，新开一场按存档', same(kept, ['strength.T1', 'strength.T2']) && same(l.stars, ['strength.T1']) && l.attributes.strength === 1);
+  SM.setStarMap(false);
+  ck('关着：lightStar 不生效', new RG.RunGrowth('guanyu').lightStar(player, 'strength.T1') === false);
+}
+
+// ⑧ 开关关闭时与改动前（BASE 提交）逐项相同
+{
+  let haveBase = true; try { execFileSync('git', ['cat-file', '-e', BASE + '^{commit}'], { stdio: 'ignore' }); } catch { haveBase = false; }
+  if (!haveBase) ck(`对照提交 ${BASE} 不在本仓库里（STAR_BASE 可改）`, false);
+  else {
+    const snapshot = M => {
+      const { RG, HP, MS, AT } = M, out = [];
+      for (const hero of ['guanyu', 'zhangfei', 'zhaoyun', 'huangzhong', 'zhuge', 'diaochan', 'liubei', 'mengde', 'lvbu', 'zhurong'])
+        for (const [level, attrs] of [[1, [0, 0, 0, 0]], [5, [4, 0, 0, 0]], [9, [0, 4, 3, 1]], [12, [7, 2, 0, 2]], [20, [0, 7, 7, 5]], [26, [10, 4, 4, 6]], [40, [3, 10, 10, 3]], [54, [12, 9, 4, 10]], [62, [14, 0, 10, 14]], [30, [0, 0, 0, 10]]]) {
+          const g = new RG.RunGrowth(hero); g.heroLevel = level; ATTRS.forEach((a, i) => { g.attributes[a] = attrs[i]; });
+          g.hasteUntil = 5000;
+          out.push([hero, level, ATTRS.map(a => g.pts(a)), g.primaryTier(), ATTRS.flatMap(a => [1, 2, 3].map(t => g.perk(a, t))), g.damageMultiplier(0), g.attackSpeedMultiplier(0), g.movementMultiplier(), g.criticalBonus(), g.bonusMaxHp(),
+            g.incomingDamageMultiplier(), g.allyDamageMultiplier(), g.allyHpMultiplier(), g.primaryBonus(), g.spellWeaponMultiplier('flame_banner'), g.spellWeaponMultiplier('spear_orbit'), g.skillDamageMultiplier(), g.areaMultiplier(), g.dodgeChance(),
+            g.freeRecruitBonus(), g.followerRevive(), g.gearHitMultiplier('boss'), g.gearHitMultiplier('elite'), g.gearHitMultiplier('minion'), g.hasAttributeRoom]);
+        }
+      out.push(Array.from({ length: 80 }, (_, i) => [RG.attributePointsBetween(1, i + 1), RG.attributePointsBetween(i + 1, i + 4), RG.levelsToNextAttributePoint(i + 1), AT.attributePointsAt(i + 1)]));
+      // HeroProgress / MasteryStore：同一串操作，比返回值和最后的存档原文
+      store.clear(); HP.resetHeroCache(); MS.resetMasteryCache();
+      const ops = [];
+      ops.push(HP.enlistHero('guanyu'), HP.creditHeroXp('guanyu', 5000), HP.heroFreePoints('guanyu'), HP.allocateHeroAttr('guanyu', 'strength'), HP.allocateHeroAttr('guanyu', 'strength'), HP.allocateHeroAttr('guanyu', 'command'), HP.heroAttrs('guanyu'), HP.heroFreePoints('guanyu'), HP.heroStatE('guanyu', 'strength'), HP.heroStatE('guanyu', 'agility'));
+      ops.push(HP.enlistHero('zhuge'), HP.creditHeroXp('zhuge', 1200), HP.allocateHeroAttr('zhuge', 'intellect'), HP.heroInfo('zhuge'), MS.respecCost('guanyu'), MS.respec('guanyu'), HP.heroAttrs('guanyu'), HP.heroFreePoints('guanyu'), MS.respecCost('guanyu'), HP.pointsAt(30), HP.heroFreePoints('r_3'), HP.heroAttrs('r_3'));
+      HP.resetHeroCache(); ops.push(HP.heroAttrs('zhuge'), HP.heroInfo('guanyu'));
+      const saves = [store.get(HP.HEROES_KEY), store.get(MS.MASTERY_KEY)].map(s => JSON.stringify(JSON.parse(s)));
+      return { out, ops, saves };
+    };
+    SM.setStarMap(false);
+    const now = snapshot({ RG, HP, MS, AT }), was = snapshot(await load(ENTRY_BASE, true));
+    ck(`开关关闭：RunGrowth 的数值与 ${BASE} 逐项相同（10 位武将 × 10 组点数 × 25 项，另 80 个等级的点数表）`, same(now.out, was.out), now.out.length);
+    ck(`开关关闭：HeroProgress / 洗点的返回值与 ${BASE} 相同`, same(now.ops, was.ops), now.ops.length);
+    ck(`开关关闭：没点过星时存档原文与 ${BASE} 相同（不多出字段）`, same(now.saves, was.saves), now.saves[0].length);
+  }
+}
+console.log(`\n${fail ? 'FAILED' : 'OK'} · ${pass} 通过 / ${fail} 失败`);
+process.exit(fail ? 1 : 0);

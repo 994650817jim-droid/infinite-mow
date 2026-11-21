@@ -8,6 +8,9 @@ import { COMBO_AT } from '../data/schoolCombos';
 import { WEAPON_DEFS } from '../weapons/registry';
 import { ATTRIBUTE_INFO, attributeCap, attributeIcon, type AttributeId } from '../systems/RunGrowth';
 import { allocateHeroAttr, heroAttrs, heroFreePoints, heroInfo, takeAttrNotice, type HeroKey } from '../systems/HeroProgress';
+import { heroFreeStars, heroStarGate, heroStars, lightHeroStar } from '../systems/HeroProgress';
+import { starMapOn } from '../data/starMap';
+import { StarMapDevPanel } from './StarMapDevPanel';
 import { primaryAttribute, PRIMARY_PERK_INFO, PRIMARY_TIERS } from '../data/attributes';
 import { scaleFor, statMultiplier, statSource } from '../data/heroStats';
 import { gearFor, gearSummary } from '../systems/ItemEffects';
@@ -287,6 +290,7 @@ export class HeroCodexUI {
 
   /** 属性页：每项一张漆卡（图标 · 名字 · 效果 · 点数刻度 · +），主属性另起一行列专精三档。 */
   private deskAttrs(x: number, y: number, w: number, bottom: number): void {
+    if (starMapOn()) { this.starPanel(x, y + 2, w, bottom - y - 2); return; } // 星图（开关默认关）：加点区换成临时界面
     const a = heroAttrs(this.hero), free = heroFreePoints(this.hero), cost = respecCost(this.hero), spent = Object.values(a).reduce((n, v) => n + v, 0), cap = attributeCap(heroInfo(this.hero).level);
     const head = this.text(x + 4, y + 8, `未分配属性点 ${free}　（Lv25 前每级 1 点、之后每 2–3 级 1 点，单项不封顶，超过 10 点收益递减）`, 14, free ? '#f3d48a' : '#b9a57a').setOrigin(0, .5).setName('codex-free');
     const head0 = head.text, ids = Object.keys(ATTRIBUTE_INFO) as AttributeId[], cardH = Math.min(66, Math.floor((bottom - y - 70) / ids.length));
@@ -421,7 +425,17 @@ export class HeroCodexUI {
     this.text(x, y + 184, gear.length ? gear.join('　') : '尚未穿戴兵装', 13, '#d8ccb0').setWordWrapWidth(tw).setLineSpacing(4);
   }
 
+  /** 星图 · 临时界面（程序占位，ui/StarMapDevPanel）：开关 starMapOn() 打开时顶替属性页的加点区；每次 render 随 body 重建。 */
+  private starPanel(x: number, y: number, w: number, h: number): void {
+    const hero = this.hero, owner = gearOwners().find(o => o.id === hero);
+    const p = new StarMapDevPanel(this.scene, { x, y, w, h,
+      state: () => ({ heroName: owner?.name ?? hero, level: heroInfo(hero).level, gate: heroStarGate(hero), lit: heroStars(hero), free: heroFreeStars(hero) }),
+      onLight: id => lightHeroStar(hero, id),
+      respec: { label: () => { const cost = respecCost(hero); return cost ? `洗点 · 军粮 ${cost}` : '洗点 · 本章首次免费'; }, act: () => respec(hero).message } });
+    this.body.add(p.root);
+  }
   private renderAttrs(x: number, y: number, w: number): void {
+    if (starMapOn()) { this.starPanel(x, y, w, Math.min(520, GAME_HEIGHT - y - 70)); return; } // 星图（开关默认关）
     const a = heroAttrs(this.hero), free = heroFreePoints(this.hero), cost = respecCost(this.hero), spent = Object.values(a).reduce((n, v) => n + v, 0);
     const head = this.text(x, y, `未分配属性点 ${free}　（Lv25 前每级 1 点、之后每 2–3 级 1 点，单项最多 ${attributeCap(heroInfo(this.hero).level)} 点）`, 14, free ? '#f3d48a' : '#b9a57a').setName('codex-free');
     (Object.keys(ATTRIBUTE_INFO) as AttributeId[]).forEach((id, i) => {

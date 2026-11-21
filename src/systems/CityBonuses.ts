@@ -2,6 +2,7 @@ import type {Player} from '../entities/Player';
 import type {permanentEffects} from '../world/WorldStore';
 import type {Legion} from './Legion';
 import {POUCH_MAX, type BattlefieldSupplies} from './BattlefieldSupplies';
+import {starMapOn} from '../data/starMap';
 
 /**
  * 营寨与大城特产在战斗开局生效：武器伤害（每关都设）；最大生命与属性点只在一次出征的首关发放
@@ -16,7 +17,7 @@ export function applyCitySpecialties(player: Player, effects: ReturnType<typeof 
   if (firstStage) {
     if (extra?.legion) for (const [kind, level] of Object.entries(effects.troopLevels) as Array<[keyof Legion['levels'], number]>) extra.legion.levels[kind] = Math.max(extra.legion.levels[kind] ?? 1, level);
     if (effects.maxHpBonus !== 0) { player.stats.maxHpBonus += Math.round(player.maxHp * effects.maxHpBonus); player.hp = player.maxHp; }
-    if (effects.attributePoints > 0) player.growth.addAttributePoints(effects.attributePoints);
+    if (effects.attributePoints > 0 && !starMapOn()) player.growth.addAttributePoints(effects.attributePoints); // 星图开着：赠点算作额外的星（HeroProgress.heroStarBonus），不在这里发
   }
   const pouch = extra?.supplies?.pouch, potions = effects.potions;
   if (pouch && potions) for (let i = 0; i < potions.count && pouch.length < POUCH_MAX; i++) pouch.push({amount: Math.round(player.maxHp * potions.ratio), texture: 'healing_potion', name: '回血药'});

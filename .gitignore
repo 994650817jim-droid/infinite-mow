@@ -215,6 +215,7 @@ assets/raw/*
 !/tools/make-ramp.mjs
 !/tools/compose-wallend.mjs
 !/tools/compose-stair.mjs
+!/tools/match-wallend.mjs
 !/tools/shot-story-portraits.mjs
 !/tools/resize-image.mjs
 !/tools/shot-boss-still.mjs

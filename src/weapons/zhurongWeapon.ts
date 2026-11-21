@@ -5,6 +5,8 @@ import type { PlayerStats, WeaponState } from '../types';
 import type { WeaponHost } from './registry';
 import { ZHURONG as Z } from '../data/zhurong';
 import { branchTier } from '../data/weaponBranches';
+/** 2026-11-20 平衡（P3 复核）：一条条火线叠在首领身上不叠加——同一首领每 fire.tickMs 只被火线烧一次。 */
+const BOSS_FIRE_AT = new WeakMap<object, number>();
 
 /**
  * 祝融 · 火焰飞枪（P3 第二批可玩武将，数值 data/zhurong.ts）：远程穿透火枪 + 沿途火线；每第 3 掷扇形飞刀。
@@ -26,9 +28,9 @@ export const ZHURONG_DEF = {
 interface Shot { x: number; y: number; ux: number; uy: number; went: number; max: number; speed: number; w: number; dmg: number; pierce: boolean; spear: boolean; hit: Set<string>; img: Phaser.GameObjects.Image | null; lastFire: number }
 interface Fire { x: number; y: number; r: number; until: number; next: number; dmg: number; img: Phaser.GameObjects.Image | null }
 interface Orbit { start: number; dmg: number; knives: Array<{ a: number; img: Phaser.GameObjects.Image | null; hit: Set<string> }> }
-interface ZrState { throws: number; spears: number; fans: number; knives: number; orbits: number; spreads: number; shots: Shot[]; fires: Fire[]; orbit: Orbit | null }
+interface ZrState { throws: number; spears: number; fans: number; knives: number; orbits: number; spreads: number; shots: Shot[]; fires: Fire[]; orbit: Orbit | null; spreadQueue: Array<{ at: number; x: number; y: number; dmg: number; skip: string }> }
 const STATE = new WeakMap<Player, ZrState>();
-const state = (pl: Player): ZrState => { let s = STATE.get(pl); if (!s) { s = { throws: 0, spears: 0, fans: 0, knives: 0, orbits: 0, spreads: 0, shots: [], fires: [], orbit: null }; STATE.set(pl, s); } return s; };
+const state = (pl: Player): ZrState => { let s = STATE.get(pl); if (!s) { s = { throws: 0, spears: 0, fans: 0, knives: 0, orbits: 0, spreads: 0, shots: [], fires: [], orbit: null, spreadQueue: [] }; STATE.set(pl, s); } return s; };
 /** 测试读。 */
 export function zhurongDebug(pl: Player): { throws: number; spears: number; fans: number; knives: number; orbits: number; spreads: number; fires: number; orbiting: boolean; shots: number } { const s = state(pl); return { throws: s.throws, spears: s.spears, fans: s.fans, knives: s.knives, orbits: s.orbits, spreads: s.spreads, fires: s.fires.length, orbiting: !!s.orbit, shots: s.shots.length }; }
 
@@ -50,12 +52,24 @@ function throwShot(host: WeaponHost, st: ZrState, ux: number, uy: number, spear:
   if (spear) st.spears++; else st.knives++;
 }
 
-/** 火神祝融：着火的敌兵死时火蔓延（GameScene 击杀时调；不是祝融 / 没选这条分支时什么都不做）。 */
+/**
+ * 火神祝融：着火的敌兵死时火蔓延（GameScene 击杀时调；不是祝融 / 没选这条分支时什么都不做）。
+ * 2026-11-20 平衡会话报的连锁 bug：原来在击杀调用里同步打邻居、再给邻居标着火——邻居死了又同步蔓延，同一个调用栈里一路烧下去
+ * （密集怪堆一帧整屏烧光、5-2 一局击杀七千到一万二，10-3 报 Maximum call stack size exceeded）。现在：
+ * ① 只排进队列，spreadDelayMs 后在武器更新里才烧（看得出一圈圈烧过去）；② 被蔓延烧到的不再标着火（它死了不再接着蔓延）；③ 每帧最多烧 spreadPerFrame 处。
+ */
 export function zhurongSpread(host: WeaponHost, enemy: Enemy, time: number): void {
   const pl = host.player, w = pl.weapons[0]; if (!w || w.id !== 'huoyan_feiqiang' || w.branch !== 'zr_huoshen' || enemy.p3BurnUntil <= time) return;
   const st = state(pl), tier = branchTier(w), k = 1 + .3 * Math.max(0, tier - 1), dmg = ZHURONG_DEF.damage(w.level, pl.stats) * pl.growth.damageMultiplier(time) * Z.huoshen.spreadMul * k;
-  for (const e of host.grid.query(enemy.x, enemy.y, Z.huoshen.spreadR + 30)) { if (e === enemy || !e.active || e.isSupplySlot || Math.hypot(e.x - enemy.x, e.y - enemy.y) > Z.huoshen.spreadR + e.radius) continue; host.hitEnemy(e, dmg, time, 'fire'); e.p3BurnUntil = time + Z.fire.burnMarkMs; }
-  st.spreads++; burst(host, enemy.x, enemy.y, Z.huoshen.spreadR * 2);
+  if (st.spreadQueue.length < Z.huoshen.spreadQueueMax) st.spreadQueue.push({ at: time + Z.huoshen.spreadDelayMs, x: enemy.x, y: enemy.y, dmg, skip: enemy.uid + ':' + enemy.spawnId });
+}
+function runSpreads(host: WeaponHost, st: ZrState, time: number): void {
+  let n = 0;
+  while (st.spreadQueue.length && st.spreadQueue[0].at <= time && n < Z.huoshen.spreadPerFrame) {
+    const q = st.spreadQueue.shift()!; n++;
+    for (const e of host.grid.query(q.x, q.y, Z.huoshen.spreadR + 30)) { if (!e.active || e.isSupplySlot || e.uid + ':' + e.spawnId === q.skip || Math.hypot(e.x - q.x, e.y - q.y) > Z.huoshen.spreadR + e.radius) continue; host.hitEnemy(e, q.dmg, time, 'fire'); }
+    st.spreads++; burst(host, q.x, q.y, Z.huoshen.spreadR * 2);
+  }
 }
 
 export function zhurongBehavior(host: WeaponHost, weapon: WeaponState, dt: number, time: number): void {
@@ -66,6 +80,7 @@ export function zhurongBehavior(host: WeaponHost, weapon: WeaponState, dt: numbe
   const base = ZHURONG_DEF.damage(weapon.level, pl.stats) * g.damageMultiplier(time);
   const fireMul = (1 + Z.huoshenM * (g.masteries.huoshen ?? 0)) * (huoshen ? k * (final ? Z.huoshen.finalMul : 1) : 1);
   const fireR = Z.fire.r * (huoshen ? Z.huoshen.rMul : 1), fireMs = Z.fire.ms * (huoshen ? Z.huoshen.msMul : 1);
+  runSpreads(host, st, time); // 火神祝融：排队的蔓延（延后、不连锁）
   // 火神后裔：量表满 → 烈焰飞刀阵
   if (pl.passive.takeP3()) {
     st.orbit = { start: time, dmg: base * Z.orbit.mul, knives: Array.from({ length: Z.orbit.n }, (_, i) => ({ a: i / Z.orbit.n * Math.PI * 2, hit: new Set<string>(), img: s.textures.exists('fx_zhurong_knife') ? host.add.image(pl.x, pl.y, 'fx_zhurong_knife', 4).setDisplaySize(56, 56).setDepth(42).setBlendMode(1).setName('zr-orbit') : null })) };
@@ -89,7 +104,7 @@ export function zhurongBehavior(host: WeaponHost, weapon: WeaponState, dt: numbe
     for (const e of host.grid.query(sh.x, sh.y, sh.w + 40)) {
       if (!e.active || e.isSupplySlot || Math.hypot(e.x - sh.x, e.y - sh.y) > sh.w + e.radius) continue;
       const key = e.uid + ':' + e.spawnId; if (sh.hit.has(key)) continue; sh.hit.add(key);
-      host.hitEnemy(e, sh.dmg, time, sh.spear ? 'fire' : 'arrow'); e.p3BurnUntil = time + Z.fire.burnMarkMs;
+      host.hitEnemy(e, e.kind === 'boss' ? sh.dmg * Z.bossMul : sh.dmg, time, sh.spear ? 'fire' : 'arrow'); e.p3BurnUntil = time + Z.fire.burnMarkMs;
       if (!sh.pierce) { sh.went = sh.max; burst(host, sh.x, sh.y, 70); break; }
     }
   }
@@ -98,7 +113,7 @@ export function zhurongBehavior(host: WeaponHost, weapon: WeaponState, dt: numbe
   // 火线
   for (const f of st.fires) {
     f.img?.setFrame(Math.floor(time / 90) % 6).setAlpha(Math.min(.85, (f.until - time) / 400));
-    if (time >= f.next) { f.next += Z.fire.tickMs; for (const e of host.grid.query(f.x, f.y, f.r + 30)) if (e.active && !e.isSupplySlot && Math.hypot(e.x - f.x, e.y - f.y) <= f.r + e.radius) { host.hitEnemy(e, f.dmg, time, 'fire'); e.p3BurnUntil = time + Z.fire.burnMarkMs; } }
+    if (time >= f.next) { f.next += Z.fire.tickMs; for (const e of host.grid.query(f.x, f.y, f.r + 30)) if (e.active && !e.isSupplySlot && Math.hypot(e.x - f.x, e.y - f.y) <= f.r + e.radius) { if (e.kind === 'boss') { if (time - (BOSS_FIRE_AT.get(e) ?? -1e9) < Z.fire.tickMs) continue; BOSS_FIRE_AT.set(e, time); } host.hitEnemy(e, f.dmg, time, 'fire'); e.p3BurnUntil = time + Z.fire.burnMarkMs; } }
   }
   for (const f of st.fires) if (time >= f.until) f.img?.destroy();
   st.fires = st.fires.filter(f => time < f.until);

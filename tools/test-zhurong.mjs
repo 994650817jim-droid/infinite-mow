@@ -7,7 +7,7 @@ let pass = 0, fail = 0; const errors = [];
 const ck = (n, ok, d) => { ok ? pass++ : fail++; console.log((ok ? 'PASS ' : 'FAIL ') + n + (d !== undefined ? ' · ' + JSON.stringify(d).slice(0, 460) : '')); };
 const b = await chromium.launch({ channel: 'chrome', headless: true });
 const p = await b.newPage({ viewport: { width: 1280, height: 720 } });
-p.on('pageerror', e => errors.push(e.message)); p.on('console', m => { if (m.type() === 'error') errors.push(m.text()); });
+p.on('pageerror', e => errors.push(e.message)); p.on('console', m => { if (m.type() === 'error' && !/Texture key already in use/.test(m.text())) errors.push(m.text()); }); /* 部曲头像等重复载入的警告（别的系统）不算 */
 const G = "window.__game.scene.getScene('GameScene')";
 await p.goto(base + '?dev=1&autostart=1&stage=1&layout=desktop');
 await p.waitForFunction(() => window.__game?.scene.getScene('GameScene')?.__DEV_ACTIONS, null, { timeout: 60000 });
@@ -24,10 +24,11 @@ const H = `const s = ${G}, pl = s.player, w = pl.weapons[0], wait = ms => new Pr
   const killBurning = n => { for (let i = 0; i < n; i++) { const e = mk('infantry', pl.x + 700, pl.y + 500, 5); e.p3BurnUntil = s.combatNow + 3000; e.hp = 0; s.killEnemy(e); } };`;
 
 const r0 = await p.evaluate(`(async () => { ${H}
-  return { weapon: w.id, tex: ['zhurong_walk_sheet','zhurong_actions','zhurong_portrait','ink_hero_zhurong','fx_zhurong_knife','fx_zy_field','fx_cast_zhurong','icon_sunknives','growth_icon_wildfire','growth_icon_pearl_volley'].filter(k => !s.textures.exists(k)), die: !!pl.actionSet?.die, skill: !!pl.actionSet?.skill };
+  const ink = (await fetch('/assets/ink-scroll/zhurong.webp', { method: 'HEAD' })).ok; /* 水墨立轴只在主页主将是她时开局就载：查文件 */
+  return { ink, weapon: w.id, tex: ['zhurong_walk_sheet','zhurong_actions','zhurong_portrait','fx_zhurong_knife','fx_zy_field','fx_cast_zhurong','icon_sunknives','growth_icon_wildfire','growth_icon_pearl_volley'].filter(k => !s.textures.exists(k)), die: !!pl.actionSet?.die, skill: !!pl.actionSet?.skill };
 })()`);
 ck('祝融开局本命武器是火焰飞枪（huoyan_feiqiang）', r0.weapon === 'huoyan_feiqiang', r0);
-ck('祝融的行走 / 动作（首领图拼成，只登记待机 / 出招 / 招牌技）/ 头像 / 水墨立轴、燃火飞刀 / 火场特效、图标全部载入', r0.tex.length === 0 && r0.skill && !r0.die, r0);
+ck('祝融的行走 / 动作（首领图拼成，只登记待机 / 出招 / 招牌技）/ 头像 / 水墨立轴、燃火飞刀 / 火场特效、图标全部载入', r0.tex.length === 0 && r0.ink && r0.skill && !r0.die, r0);
 
 // 1) 火枪：朝最远的敌兵掷，穿透一线（近的、远的都挨），沿途留火、挨烧的带着火标记
 const r1 = await p.evaluate(`(async () => { ${H}
@@ -56,13 +57,15 @@ const r3 = await p.evaluate(`(async () => { ${H}
 ck('火神后裔：没着火的击杀不攒；满 12 层烈焰飞刀阵（8 把绕身、放起手特效）', r3.st0 === 0 && r3.orbits === 1 && r3.orbiting && r3.img === 8 && r3.cast >= 1, r3);
 ck('烈焰飞刀阵：绕身时碰到的敌兵挨打', r3.ringHit > 0, r3);
 
-// 4) 分支「火神祝融」：着火的敌兵倒下时火蔓延到身边
+// 4) 分支「火神祝融」：着火的敌兵倒下时火蔓延到身边——延后约 0.13 秒才烧，被蔓延烧死的不再接着蔓延（平衡会话报的连锁 bug）
 const r4 = await p.evaluate(`(async () => { ${H}
   clear(); w.cooldownLeft = 1e9; w.branch = 'zr_huoshen'; w.over = 0; await waitG(80);
-  const a = mk('infantry', pl.x + 300, pl.y, 5), nb = mk('infantry', pl.x + 340, pl.y + 20); a.p3BurnUntil = s.combatNow + 3000; const sp0 = D().spreads; a.hp = 0; s.killEnemy(a); await waitG(60);
-  w.branch = undefined; return { spreads: D().spreads - sp0, nbHit: nb.maxHp - nb.hp, nbBurning: nb.p3BurnUntil > s.combatNow };
+  const a = mk('infantry', pl.x + 300, pl.y - 200, 5), nb = mk('infantry', pl.x + 340, pl.y - 180, 3), nb2 = mk('infantry', pl.x + 400, pl.y - 170); /* 离开前面火枪留下的火线（还在烧） */
+  a.p3BurnUntil = s.combatNow + 3000; const sp0 = D().spreads; a.hp = 0; s.killEnemy(a); const sync = D().spreads - sp0, nbAtOnce = nb.active;
+  await waitG(700);
+  w.branch = undefined; return { sync, nbAtOnce, spreads: D().spreads - sp0, nbKilled: !nb.active, nb2Hit: nb2.maxHp - nb2.hp };
 })()`);
-ck('火神祝融：着火的敌兵倒下时火蔓延到身边（邻兵挨烧、着火）', r4.spreads === 1 && r4.nbHit > 0 && r4.nbBurning, r4);
+ck('火神祝融：火延后蔓延（击杀当下不烧），烧死身边的兵；被蔓延烧死的不再接着蔓延（不连锁）', r4.sync === 0 && r4.nbAtOnce && r4.spreads === 1 && r4.nbKilled && r4.nb2Hit === 0, r4);
 
 // 5) 分支「飞刀连环」：每第 2 掷 7 把；武艺「飞刀」多 1 把
 const r5 = await p.evaluate(`(async () => { ${H}

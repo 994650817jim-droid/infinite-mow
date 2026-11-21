@@ -40,7 +40,7 @@ function crack(host: WeaponHost, st: MhState, x: number, y: number, ux: number, 
     if (!e.active || e.isSupplySlot) continue;
     const t = Math.max(0, Math.min(1, ((e.x - ax) * vx + (e.y - ay) * vy) / l2));
     if (Math.hypot(e.x - ax - vx * t, e.y - ay - vy * t) > M.crackW / 2 + e.radius) continue;
-    host.hitEnemy(e, dmg, time, 'melee');
+    host.hitEnemy(e, e.kind === 'boss' ? dmg * M.bossMul : dmg, time, 'melee');
   }
   st.cracks++;
   if (s.textures.exists('weiyan_crack')) { const img = host.add.sprite((ax + bx) / 2, (ay + by) / 2, 'weiyan_crack', 0).setDisplaySize(L * 1.15, L * .29).setRotation(Math.atan2(uy, ux)).setDepth(3).setName('mh-crack'); s.tweens.addCounter({ from: 0, to: 5.99, duration: 420, onUpdate: tw => img.setFrame(Math.floor(tw.getValue() ?? 0)), onComplete: () => s.tweens.add({ targets: img, alpha: 0, duration: 260, onComplete: () => img.destroy() }) }); }
@@ -100,7 +100,7 @@ export function menghuoBehavior(host: WeaponHost, weapon: WeaponState, dt: numbe
     const ex = e.x - pl.x, ey = e.y - pl.y, ed = Math.hypot(ex, ey);
     if (ed > reach + e.radius) continue;
     if (ed > e.radius && Math.abs(Math.atan2(Math.sin(Math.atan2(ey, ex) - rot), Math.cos(Math.atan2(ey, ex) - rot))) > M.arc) continue;
-    host.hitEnemy(e, base * M.cleaveMul, time, 'melee');
+    host.hitEnemy(e, base * M.cleaveMul * (e.kind === 'boss' ? M.bossMul : 1), time, 'melee');
   }
   st.cleaves++;
   playSheet(s, 'fx_md_slash', pl.x + ux * reach * .45, pl.y - 8 + uy * reach * .45, { size: reach * 1.9, ms: 280, depth: 41, add: true, rotation: rot, tint: 0xff9a70, name: 'mh-cleave' });

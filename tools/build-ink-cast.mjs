@@ -12,7 +12,7 @@ const { SRC } = process.env, IDS = (process.env.IDS ?? '').split(',').filter(Boo
 if (!SRC || !IDS.length) { console.error('需要 SRC 与 IDS'); process.exit(2); }
 fs.mkdirSync(OUT, { recursive: true });
 const b = await chromium.launch({ channel: 'chrome', headless: true }); const p = await b.newPage();
-const res = await p.evaluate(async ([src, N, PAD, MINBLOB, KEEP]) => {
+const res = await p.evaluate(async ([src, N, PAD, MINBLOB, KEEP, TIGHT]) => {
   const im = new Image(); im.src = src; await im.decode();
   const W = im.width, H = im.height, c0 = document.createElement('canvas'); c0.width = W; c0.height = H;
   const g0 = c0.getContext('2d', { willReadFrequently: true }); g0.drawImage(im, 0, 0);
@@ -46,13 +46,13 @@ const res = await p.evaluate(async ([src, N, PAD, MINBLOB, KEEP]) => {
     let bx0 = cw, bx1 = 0;
     for (let j = 0; j < cw * H; j++) if (!bg[j]) { if (!keepLab[lab[j]]) bg[j] = 2; else { const x = j % cw; if (x < bx0) bx0 = x; if (x > bx1) bx1 = x; } }
     // 人物墨块向外 R 像素以内的背景才保留软边；更远处宣纸上的淡痕一律全透明（不然卷轴上会看到一道道浅灰丝）
-    const R = 10, near = new Uint8Array(cw * H), tmp = new Uint8Array(cw * H);
+    const R = TIGHT ? 2 : 10, near = new Uint8Array(cw * H), tmp = new Uint8Array(cw * H);
     for (let y = 0; y < H; y++) { let last = -1e9; for (let x = 0; x < cw; x++) { if (bg[y * cw + x] === 0) last = x; if (x - last <= R) tmp[y * cw + x] = 1; } last = 1e9; for (let x = cw - 1; x >= 0; x--) { if (bg[y * cw + x] === 0) last = x; if (last - x <= R) tmp[y * cw + x] = 1; } }
     for (let x = 0; x < cw; x++) { let last = -1e9; for (let y = 0; y < H; y++) { if (tmp[y * cw + x]) last = y; if (y - last <= R) near[y * cw + x] = 1; } last = 1e9; for (let y = H - 1; y >= 0; y--) { if (tmp[y * cw + x]) last = y; if (last - y <= R) near[y * cw + x] = 1; } }
     for (let j = 0; j < cw * H; j++) {
       const i = j * 4, y = (j / cw) | 0; let a = 1;
       if (bg[j] === 2 || (bg[j] && !near[j])) a = 0;
-      else if (bg[j]) a = Math.max(0, Math.min(1, (light(i) - 6) / 42));
+      else if (bg[j]) a = TIGHT ? Math.max(0, Math.min(1, (light(i) - 30) / 16)) : Math.max(0, Math.min(1, (light(i) - 6) / 42));
       else if (light(i) < 18) a = Math.max(.15, Math.min(1, (light(i) - 3) / 15));
       const fy = y / H; if (fy > .86) a *= Math.max(0, 1 - (fy - .86) / .14);
       if (a < 1 && a > 0) for (let ch = 0; ch < 3; ch++) d[i + ch] = Math.max(0, Math.min(255, (d[i + ch] - 255 * (1 - a)) / a));
@@ -65,7 +65,7 @@ const res = await p.evaluate(async ([src, N, PAD, MINBLOB, KEEP]) => {
     outs.push(o.toDataURL('image/webp', .86));
   }
   return { size: [W, H], cuts, outs };
-}, ['data:image/png;base64,' + fs.readFileSync(SRC).toString('base64'), IDS.length, +(process.env.PAD ?? .14), +(process.env.MINBLOB ?? .01), process.env.KEEP ? process.env.KEEP.split(",").map(Number) : null]);
+}, ['data:image/png;base64,' + fs.readFileSync(SRC).toString('base64'), IDS.length, +(process.env.PAD ?? .14), +(process.env.MINBLOB ?? .01), process.env.KEEP ? process.env.KEEP.split(",").map(Number) : null, process.env.TIGHT === '1']);
 res.outs.forEach((u, k) => { const f = OUT + IDS[k] + '.webp', buf = Buffer.from(u.split(',')[1], 'base64'); fs.writeFileSync(f, buf); console.log('→', f, buf.length); });
 console.log('源图', res.size.join('×'), '分界', res.cuts.join(','));
 await b.close();

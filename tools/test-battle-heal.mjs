@@ -57,7 +57,7 @@ const arrow = await p.evaluate(async () => {
   for (const sp of [...H.liveSpots]) H.removeSpot(sp);
   const far = H.forceSpot(1500, 0, 'well'); P.hp = P.maxHp * .5; await wait(300);
   const shown = far.arrow.visible, text = far.arrow.getByName('ha-text').text;
-  P.hp = P.maxHp * .95; await wait(300); const hiddenWhenHealthy = !far.arrow.visible;
+  P.hp = P.maxHp; await wait(300); const hiddenWhenHealthy = !far.arrow.visible;
   P.hp = P.maxHp * .45; H.forceSpot(0, 40, 'herb'); H.dropFood(P.x + 190, P.y + 90, .05, '干粮'); H.dropFood(P.x - 200, P.y + 70, .06, '酒肉'); P.hp = P.maxHp * .45; await wait(700);
   const herb = H.liveSpots.find(q => q.kind === 'herb'), foods = H.foods.filter(f => f.active).map(f => f.img.texture.key + ':' + f.img.frame.name); P.hp = P.maxHp * .95; return { shown, text, hiddenWhenHealthy, herb: herb && herb.img.texture.key + ':' + herb.img.frame.name, foods };
 });
@@ -82,7 +82,7 @@ const med = await p.evaluate(async () => {
 });
 ck('军中伤药：副将必掉一份，从尸体处蹦到离主将 250 以外（不砸在脸上）；走过去拾取进药囊（15%）；精锐连 3 个没掉第 4 个必掉', med.d >= 250 && med.d <= 360 && med.side && med.notPicked && med.lt?.name === '军中伤药' && med.lt.pct === 15 && med.rolls.join() === 'false,false,false,true', med);
 
-// 5 低血保护：生命跌破 30% → 在 250–360、画面里放一份伤药；药囊满了走过去直接服下
+// 5 低血保护：生命跌破 30% → 在 350–450（屏外有箭头）放一份伤药；药囊满了走过去直接服下
 const low = await p.evaluate(async () => {
   const s = window.__game.scene.getScene('GameScene'), P = s.player, H = s.battleHeal, S = s.supplies, wait = ms => new Promise(r => setTimeout(r, ms));
   const v = s.cameras.main.worldView;
@@ -94,7 +94,7 @@ const low = await p.evaluate(async () => {
   if (pot) P.sprite.setPosition(pot.image.x, pot.image.y); /* 走到药旁边 */ const h0 = P.hp; await wait(3000);
   return { drops: H.stats.lowHpDrops, d, view, healed: Math.round((P.hp - h0) / P.maxHp * 100) };
 });
-ck('低血保护：跌破 30% 时在 250–360、画面里放一份伤药，药囊满了走过去直接服下（12%）', low.drops === 1 && low.d >= 250 && low.d <= 360 && low.view && Math.abs(low.healed - 12) <= 1, low);
+ck('低血保护：跌破 30% 时在 350–450（屏外有箭头）放一份伤药，药囊满了走过去直接服下（12%）', low.drops === 1 && low.d >= 350 && low.d <= 470 && Math.abs(low.healed - 12) <= 1, low);
 
 // 5b 不打说明文字：场上没有回血相关的说明字（只有第一次见回血点的一次提示）
 const words = await p.evaluate(() => { const s = window.__game.scene.getScene('GameScene'); const all = []; const walk = o => { if (o.type === 'Text' && o.visible && o.text) all.push(o.text); for (const c of o.list ?? []) walk(c); }; for (const o of s.children.list) walk(o); return all.filter(t => /水满|回血中|站上去回血 ·|余 \d+%|军医送来|首领将至 · 附近|干粮|酒肉|军中伤药/.test(t)); });

@@ -14,4 +14,6 @@ export const MENGHUO = {
   bufu: { gapMs: 1000, max: 7, per: .06, decayMs: 6000 },
   xiang: { beasts: 6, stunMs: 800, need: 16 },
   manli: .1, tengjia: .04,
+  /** 2026-11-20 平衡（P3 复核）：首领体型大，重劈 ×1.2 + 裂地 ×0.7 每刀都两下全中，首领用时只有中位数的 0.38 倍；重劈 / 裂地打首领 ×bossMul（猛兽冲阵不变）。 */
+  bossMul: .45, // 先试 .6 仍 0.51 倍
 } as const;

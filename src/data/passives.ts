@@ -58,7 +58,7 @@ export const PASSIVE_RULES = {
   knifeOrbitR: 55, knifeOrbitHitMs: 500, knifeRange: 380, knifeSpeed: 650, knifeRegenMs: 1200, knifeMovingCdMul: .7,
   /** 每次掷几把（多出的飞向别的敌人、伤害 knifeExtraMul）与每把穿透人数，按武器等级 Lv1–Lv5。 */
   knifeCountByLevel: [1, 1, 2, 2, 3], knifePierceByLevel: [2, 2, 3, 3, 4], knifeExtraMul: .6,
-  /** 貂蝉·双花扇：回旋飞扇（距离 / 速度）；离间：魅惑 3 层倒戈 3 秒（精锐减半），倒戈者受伤 +20%、冲向 260 内最近同伴每 0.5 秒撞一次；首领改为 3 秒受伤 +25%；4 秒没扇中魅惑消散。 */
+  /** 貂蝉·双花扇：回旋飞扇（距离 / 速度）；离间：魅惑 charmNeed 层（11-16 起 2 层）倒戈 3 秒（精锐减半），倒戈者受伤 +20%、冲向 260 内最近同伴每 0.5 秒撞一次；首领改为 3 秒受伤 +15%（11-18 起）；4 秒没扇中魅惑消散。 */
   // 2026-11-16 平衡（12 将基线：1-1 整关放不出大招）：倒戈所需扇中次数 3 → 2
   fanRange: 230, fanSpeed: 520, charmNeed: 2, turnMs: 3000, turnVulnerability: 1.2, charmVulnerability: 1.15, /* 2026-11-18 平衡：首领易伤 +25% → +15%（貂蝉打首领 9–10 秒，全员最快） */ turnSeek: 260, turnHitMs: 500, charmDecayMs: 4000,
   /** 貂蝉·闭月：舞带环身 2 秒，半径 160，每 0.4 秒 50% 伤害，圈内敌人倒戈。 */

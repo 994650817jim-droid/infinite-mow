@@ -19,5 +19,5 @@ export const ZHURONG = {
   feidao: { every: 2, fan: 7 },
   huoshenM: .15,
   /** 2026-11-20 平衡（P3 复核）：火枪 / 飞刀直击打首领 ×bossMul（首领用时 0.38 倍中位数、整局 DPS 约平均 2 倍；火线叠加已另修）。 */
-  bossMul: .7, // 暂定：火神祝融的蔓延连锁（击杀 → zhurongSpread 同步打死邻居 → 再蔓延）修好后重测
+  bossMul: .7, // 2026-11-21 定稿：蔓延连锁修好后（045049de）平衡会话重测首领用时 0.95 倍中位数，0.7 定下（hero-balance-review.md 16.1）
 } as const;

@@ -240,6 +240,7 @@ import { BuildState } from '../data/builds';
 import { WEAPON_OVER, branchById, branchesFor, branchStatus, fitBranch, BRANCH_FIT, type WeaponBranch } from '../data/weaponBranches';
 import { openBranchPanel } from '../ui/BranchPickPanel';
 import { WeaponBranches } from '../systems/WeaponBranches';
+import { makeTroopBoost } from '../systems/TroopBoost';
 import { layoutRich, SCOPE_BADGE, cardScope } from '../ui/CardRichText';
 import { checkHeroJoins } from '../ui/HeroJoinReveal';
 import {StatusFx} from '../systems/StatusFx';
@@ -4364,7 +4365,7 @@ export class GameScene extends Phaser.Scene {
         scene: this, player: P, now: () => this.combatNow, weapon: () => this.player.weapons[0], hit: () => this.weaponHit(),
         query: (x, y, r) => this.grid.query(x, y, r), damage: (e, n, fire) => { this.hitEnemy(e, n, this.combatNow, fire ? 'fire' : 'melee', false, false); },
         shi: s => this.player.growth.build.tags()[s] ?? 0, allies: () => this.allies,
-        troopBoost: (mul, ms) => { this.legion.drillMultiplier *= mul; this.time.delayedCall(ms, () => { this.legion.drillMultiplier /= mul; }); },
+        troopBoost: makeTroopBoost(() => this.legion, (ms, fn) => this.time.delayedCall(ms, fn)), /* 刷新不叠加（原来每次喝断再乘一次，见 systems/TroopBoost.ts） */
         escort: (x, y, n, ms) => { this.reinforcePush().spawnEscortAt(x, y, n, ms); buildVfx(this).emit('reinforce', x, y - 8, this.combatNow, 150, 0, 800, true); },
         slow: (x, y, r, sl, ms) => { this.controlBuild?.slowArea(x, y, r, sl, ms, this.combatNow); },
         followerHeroes: () => (this.followers?.members ?? []).map(m => m.recruit.hero).filter((h): h is NonNullable<typeof h> => !!h),

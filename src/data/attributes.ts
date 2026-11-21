@@ -7,7 +7,7 @@ import type { CharacterId } from './characters';
  * 计算在 systems/RunGrowth.ts；数值归平衡会话，改这里即可。
  */
 export type AttributeId = 'strength' | 'agility' | 'intellect' | 'command';
-/** 法术武器：武器命中也吃智力的法术伤害（诸葛亮火旗、庞统连环火雷、黄月英连弩、貂蝉团扇）；其余主武器是物理。 */
+/** 法术武器：武器命中也吃智力的法术伤害（诸葛亮七星灯·天火、庞统连环火雷、黄月英连弩、貂蝉团扇、周瑜火船令）；其余主武器是物理。 */
 export const SPELL_WEAPONS: ReadonlySet<string> = new Set(['flame_banner', 'lianhuan_mines', 'crossbow', 'diaochan_fans', 'huochuan_ling']);
 export const ATTRIBUTE_IDS: readonly AttributeId[] = ['strength', 'agility', 'intellect', 'command'];
 /**
@@ -59,7 +59,7 @@ export const ATTRIBUTE_INFO: Record<AttributeId, { name: string; effect: string;
 };
 /**
  * 主属性加成（2026-11-17 用户：「属性点点武将的主属性，有更多加成或者有特殊加成」；主管理定方案，初值待平衡）：
- * 1. 主属性每点按 1.25 倍计算（2026-11-18 由 1.5 下调）（力量的伤害 / 生命、敏捷的攻速 / 移速 / 暴击、智力的法术 / 范围、统御的部曲伤害 / 生命）。
+ * 1. （已废止，2026-11-20 属性改版）原「主属性每点按 1.25 倍」改为按本色：擅长（本色 ≥90）×1.25、熟练（≥75）×1.1，与是不是主属性无关，见 heroStats.statMultiplier；PRIMARY_MUL 现已无人使用。
  * 2. 主属性专精：主属性满 4 / 7 / 10 点各解锁一档（单项上限 10 点，所以门槛按 4 / 7 / 10）。
  */
 // 2026-11-18 平衡（hero-balance-review.md 第 5 节，用户「让平衡组决定」）：实测满 10 点 DPS 约翻倍 → 1.5 → 1.25，专精第 3 档减半

@@ -88,7 +88,7 @@ export const GUANDAO_TABLE = [
   { radius: 180, angle: 135, damage: 56, cooldown: 1.25, arc: 261 },
 ];
 const levelIndex = (level: number): number => Math.max(0, Math.min(4, Math.floor(level) - 1));
-/** 黄忠连弩每级额外箭数（Lv1 0 支 … Lv5 4 支，共 5 支）。 */
+/** 黄月英连弩每级额外箭数（Lv1 0 支 … Lv5 4 支，共 5 支）。 */
 export const crossbowExtraArrows = (level: number): number => levelIndex(level);
 
 export interface WeaponDef {

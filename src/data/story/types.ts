@@ -89,7 +89,7 @@ export const STORY_CAST: Record<string, { name: string; portrait?: string }> = {
   fazheng: { name: '法正', portrait: 'ink_cast_fazheng' }, zhanghe: { name: '张郃', portrait: 'ink_cast_zhanghe' }, xiahouyuan: { name: '夏侯渊', portrait: 'ink_cast_xiahouyuan' },
   pangde: { name: '庞德', portrait: 'ink_cast_pangde' }, lvmeng: { name: '吕蒙', portrait: 'ink_cast_lvmeng' }, wangfu: { name: '王甫', portrait: 'ink_cast_wangfu' }, guanping: { name: '关平', portrait: 'ink_cast_guanping' },
   huangquan: { name: '黄权', portrait: 'ink_cast_huangquan' }, sunhuan: { name: '孙桓', portrait: 'ink_cast_sunhuan' }, zhuran: { name: '朱然', portrait: 'ink_cast_zhuran' }, luxun: { name: '陆逊', portrait: 'ink_cast_luxun' },
-  zhangsong: { name: '张松', portrait: 'ink_cast_zhangsong' }, mangyachang: { name: '忙牙长', portrait: 'ink_cast_mangyachang' }, wutugu: { name: '兀突骨', portrait: 'ink_cast_wutugu' }, masu: { name: '马谡', portrait: 'ink_cast_masu' },
+  zhangsong: { name: '张松', portrait: 'ink_cast_zhangsong' }, huatuo: { name: '华佗', portrait: 'ink_cast_huatuo' }, mangyachang: { name: '忙牙长', portrait: 'ink_cast_mangyachang' }, wutugu: { name: '兀突骨', portrait: 'ink_cast_wutugu' }, masu: { name: '马谡', portrait: 'ink_cast_masu' },
   wangping: { name: '王平', portrait: 'ink_cast_wangping' }, jiangwei: { name: '姜维', portrait: 'ink_cast_jiangwei' }, haozhao: { name: '郝昭', portrait: 'ink_cast_haozhao' }, simayi: { name: '司马懿', portrait: 'ink_cast_simayi' },
 };
 /** 第一、二章还没有对白立绘的（通用角色只显示名字章）。人物立绘 2026-11-18 夜已全部补齐。 */

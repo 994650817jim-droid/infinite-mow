@@ -19,6 +19,8 @@ export const DEFENSE_V2 = {
     startDx: -700,
     /** 墙半宽（到角楼内侧）、走道宽（3.5 个身位）、外墙立面高、内侧女墙厚。 */
     half: 1300, walk: 240, face: 220, inner: 50,
+    /** 走道图上沿 44 像素是内侧女墙顶（walkway_a / b）：女墙的碰撞往走道里伸 band，人不站到女墙顶上。 */
+    band: 40,
     /** 城门楼半宽（门楼在走道上，主将可以走过去）：按城门楼图（外侧城垛与墙段齐平时约 990 宽）。 */
     gateHalf: 340,
     /** 马道（内侧女墙的两个缺口，上下城头）：离城门的 x、半宽。 */
@@ -31,7 +33,7 @@ export const DEFENSE_V2 = {
     heroDy: 90,
   },
   /** 城头分段：每段一个梯口（段中点），4 个垛口位（避开梯口 ±mouth），梯口 2 个驻守位。 */
-  posts: { crenelDy: 40, crenels: 4, mouth: 70, guardDx: 36, guardDy: 95, rampDy: 210, reserveDy: 70, reserveGap: 34, reserveCols: 8 },
+  posts: { crenelDy: 40, crenels: 4, mouth: 70, guardDx: 36, guardDy: 95, rampDy: 175, reserveDy: 70, reserveGap: 34, reserveCols: 8 },
   /** 墙上的远程兵射程 ×（够得到墙脚：外沿到墙脚 330）。 */
   wallRangeMul: 1.6,
   /** 预备队补位间隔（毫秒）；E 一次叫几个近战上来（去主将所在这段）。 */
@@ -42,8 +44,6 @@ export const DEFENSE_V2 = {
    * 镜头跟着往上让，保证主将脚下离屏幕顶至少 heroMin 设计像素（不钻到顶部计时器下面）。城内那一侧多裁掉。
    */
   camera: { zoomMul: .82, outside: 195, heroMin: 110 },
-  /** 城门楼过渡（新图到之前）：主将 / 士兵在门楼范围内时楼阁半透明到 alpha，离开恢复；pad = 门楼图半宽两侧外扩。 */
-  gateFade: { alpha: .35, pad: 24, lerp: 8 },
   /**
    * b 段：云梯与攀爬、城头近战、占段 / 夺回、一键 F（推梯 / 滚木 / 泼油 / 修门）、冲车撞门。时间用关内秒数，距离是世界像素。
    * （波次 / 喘息补满次数在 c 段接；c 段之前滚木 / 热油按 regenSec 慢慢回一次。）
@@ -65,7 +65,7 @@ export const DEFENSE_V2 = {
     /** 主将在城头：武器范围 ×rampartMul；近战打墙面 / 墙脚（外沿以南）的 ×belowMelee。 */
     hero: { rampartMul: 1.3, belowMelee: .6 },
     /** 一键 F 的站位（离点 reach 以内）：梯口 = 梯子顶端；滚木架在梯口东侧 dx；油锅在门楼前沿；修门在门楼内侧（走道北沿）。 */
-    spots: { reach: 70, ladderDy: 40, rackDx: 130, rackDy: 48, oilDy: 52, gateDy: 50 },
+    spots: { reach: 70, ladderDy: 40, rackDx: 130, rackDy: 48, oilDy: 52, gateDy: 72 },
     /** 滚木：每个滚木架 charges 次（c 段之前每 regenSec 回一次）；砸这段的梯子（梯上的人摔下去、梯子倒、云梯车 −engineDamage）+ 墙脚 foot 以内 damage。 */
     logs: { charges: 2, regenSec: 45, damage: 160, engineDamage: 220, foot: 200, fallMs: 340 },
     /** 热油：charges 次、冷却 cdMs（c 段之前每 regenSec 回一次）；门前 radius 一片持续烧 ticks × tickMs，冲车 ×engineMul。 */
@@ -77,12 +77,16 @@ export const DEFENSE_V2 = {
   },
   /** 刷兵口（城外）：墙脚以南 dy，x 三处 ± jitter；攻城主将在墙脚以南 bossDy。 */
   spawn: { dy: 820, xs: [-900, 0, 900] as readonly number[], jitter: 200, bossDy: 600 },
-  /** 2.5D 城墙图（复用 2-3 洛阳那套，data/dongzhuo.ts wallArt 的像素标注）：crenel = 外侧城垛顶、ground = 墙脚、walk = 走道石板带。 */
+  /**
+   * 2.5D 城墙图：墙段 / 角楼复用 2-3 洛阳那套（data/dongzhuo.ts wallArt 的像素标注；crenel = 外侧城垛顶、ground = 墙脚）。
+   * 走道（美术组 walkway_a / b，1024×256 不透明、左右无缝，上沿 band 像素是内侧女墙顶）：游戏里 1:1，a / b 交替横铺，上沿对齐走道北沿。
+   * 城门楼（美术组 gate_passable_v2，合成版，总制作人验收）：rear = 后排女墙顶、base = 楼阁台基下沿；和墙段同缩放（外侧城垛顶→墙脚 = 墙段），
+   * 楼前是和走道同款的石板平台，人从楼前走过、楼阁在人后面。
+   */
   art: {
     seg: { file: 'assets/siege-v2/luoyang/wall_seg.png', w: 1339, h: 464, crenel: 92, ground: 452, walkTop: 50, walkBot: 90 },
-    /** 走道过渡贴图取的石板带（去掉两端斜边和上沿阴影线，那几处铺出来就是楔形深缝 / 横条）：x0..x1 × y0..y1。 */
-    walkBand: { x0: 60, x1: 1290, y0: 52, y1: 90 },
-    gate: { file: 'assets/siege-v2/luoyang/wall_gate.png', w: 836, h: 643, crenel: 276, ground: 605 },
+    walkway: { a: 'assets/siege-v2/defense-v2/walkway_a.png', b: 'assets/siege-v2/defense-v2/walkway_b.png', w: 1024, h: 256, band: 44 },
+    gate: { file: 'assets/siege-v2/defense-v2/gate_passable_v2.png', w: 873, h: 816, rear: 186, base: 260, crenel: 449, ground: 809 },
     corner: { file: 'assets/siege-v2/luoyang/wall_corner.png', w: 487, h: 674, crenel: 205, ground: 640 },
     /** 外侧城垛顶比 W 高多少（城垛压住走道南沿，站在后面的人腿被挡住）。 */
     crenelOver: 50,
@@ -115,7 +119,7 @@ export function v2Geometry(o: Pt) {
   ramps.forEach((x, k) => posts.push({ kind: 'ramp', seg: k === 0 ? 0 : 3, x, y: W - P.rampDy }));
   // 碰撞：墙身（走道南沿到墙脚，含关着的城门）、内侧女墙（马道处留缺口）、四面封边、角楼
   const boxes: Box[] = [{ left: X0, right: X1, top: W - 6, bottom: F - 18 }];
-  { let x = X0; for (const r of ramps) { boxes.push({ left: x, right: r - L.rampHalf, top: innerTop, bottom: top + 6 }); x = r + L.rampHalf; } boxes.push({ left: x, right: X1, top: innerTop, bottom: top + 6 }); }
+  { let x = X0; for (const r of ramps) { boxes.push({ left: x, right: r - L.rampHalf, top: innerTop, bottom: top + L.band }); x = r + L.rampHalf; } boxes.push({ left: x, right: X1, top: innerTop, bottom: top + L.band }); }
   boxes.push({ left: X0 - L.flank, right: X0, top: cityTop - L.flank, bottom: outBot + L.flank }, { left: X1, right: X1 + L.flank, top: cityTop - L.flank, bottom: outBot + L.flank });
   boxes.push({ left: X0 - L.flank, right: X1 + L.flank, top: cityTop - L.flank, bottom: cityTop }, { left: X0 - L.flank, right: X1 + L.flank, top: outBot, bottom: outBot + L.flank });
   const keep = { x: gx, y: innerTop - L.keepDy };
@@ -158,8 +162,9 @@ export function nextWaypoint(g: V2Geo, at: Pt, post: Pt): Pt {
   const inCity = (p: Pt) => p.y < g.innerTop - 4, onWallP = (p: Pt) => p.y >= g.top - 30;
   if (inCity(at) === inCity(post) && !(inCity(at) && onWallP(post))) return post;
   const r = g.ramps.reduce((a, b) => Math.abs(b - at.x) < Math.abs(a - at.x) ? b : a, g.ramps[0]);
-  if (Math.abs(at.x - r) > 40) return { x: r, y: inCity(at) ? g.innerTop - 40 : g.top + 30 };
-  return { x: r, y: inCity(at) ? g.top + 40 : g.innerTop - 60 };
+  const walkIn = g.top + DEFENSE_V2.layout.band + 24; // 过了女墙带才算上到走道
+  if (Math.abs(at.x - r) > 40) return { x: r, y: inCity(at) ? g.innerTop - 40 : walkIn };
+  return { x: r, y: inCity(at) ? walkIn + 10 : g.innerTop - 60 };
 }
 
 // ———— b 段 ————

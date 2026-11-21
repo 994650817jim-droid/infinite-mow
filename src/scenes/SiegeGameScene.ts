@@ -417,6 +417,8 @@ export function siegeGameSceneClass(Base: typeof GameScene) {
     protected behindClosedWall(x: number, y: number) { return this.defend || this.defV2 ? null : super.behindClosedWall(x, y); }
     /** 守城 v2：宝箱 / 回血点 / 机缘这些要主将去捡的，落在墙面上或城外就挪到城头走道（墙面上捡不到；城外要等出城冲阵）。 */
     protected fieldPlace(x: number, y: number) { const p = super.fieldPlace(x, y), w = this.defV2?.g; if (!w || p.y < w.W - 20) return p; return { x: Math.max(w.X0 + 60, Math.min(w.X1 - 60, p.x)), y: (w.top + w.W) / 2 }; }
+    /** 守城 v2：泉眼 / 水井放城里（内侧女墙以北，走马道下城去喝；屏外有箭头），不立在城头走道上。 */
+    protected healPlace(x: number, y: number) { const w = this.defV2?.g; if (!w || y < w.innerTop - 40) return super.healPlace(x, y); return super.healPlace(Math.max(w.X0 + 80, Math.min(w.X1 - 80, x)), w.innerTop - 90); }
     /** 守城 v2：主将在城头时镜头往城外让（墙面 + 墙脚在画面里）。 */
     protected cameraBiasY() { return this.defV2?.cameraBias(this.player, this.cameras.main.zoom / RENDER_SCALE, GAME_HEIGHT) ?? 0; }
     /** 守城 v2：F = 一键互动（推梯 / 滚木 / 泼油 / 修门），不再当「出击」。 */
@@ -493,7 +495,7 @@ export function siegeGameSceneClass(Base: typeof GameScene) {
     update(time: number, delta: number) {
       const before = this.combatNow; super.update(time, delta);
       if (this.defend && !this.over) this.defend.update(delta / 1000);
-      if (this.defV2 && !this.over && this.mode === 'none') { this.defV2.update(this.combatNow, delta / 1000); this.assault?.update(delta / 1000);
+      if (this.defV2 && !this.over && this.mode === 'none') { this.defV2.update(this.combatNow); this.assault?.update(delta / 1000);
         const on = onWalk(this.defV2.g, this.player); if (on !== this.v2Rampart) { this.v2Rampart = on; this.player.passive.rampartMul = on ? DEFENSE_V2.assault.hero.rampartMul : 1; } } // 登城：武器范围加成
       if (this.assault) { this.edgeGuide ??= new EdgeGuide(this); this.edgeGuide.update(this.assault.guideTargets(), this.player, this.mode === 'none' && !this.over); } // 屏外：撞门的冲车、失守的段
       // 城门 / 吊桥一破（城外段结束）：援军跟进 SIEGE_ALLIES.gateWave 队（2026-11-20 用户「攻城战我方兵生成太快了」：平时少、破城后再加一波）

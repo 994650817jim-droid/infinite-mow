@@ -70,7 +70,7 @@ export class DefenseAssaultV2 {
     label(sp.gate.x, sp.gate.y + 22, '修门').setName('defv2-gate-label');
     this.prompt = s.add.text(0, 0, '', { fontFamily: FONT, fontSize: '15px', color: '#ffe9bd', fontStyle: 'bold', resolution: 2, stroke: '#140d07', strokeThickness: 4 }).setOrigin(.5).setDepth(DEPTH.dmgText + 1).setVisible(false).setName('defv2-prompt');
     this.bar = s.add.graphics().setDepth(DEPTH.dmgText - 1).setName('defv2-gate-bar');
-    this.barText = s.add.text(g.gx, g.F - 192, '', { fontFamily: FONT, fontSize: '13px', color: '#ffe1a0', resolution: 2, stroke: '#1a120b', strokeThickness: 3 }).setOrigin(.5).setDepth(DEPTH.dmgText - 1).setName('defv2-gate-text');
+    this.barText = s.add.text(g.gx, g.F - 212, '', { fontFamily: FONT, fontSize: '13px', color: '#ffe1a0', resolution: 2, stroke: '#1a120b', strokeThickness: 3 }).setOrigin(.5).setDepth(DEPTH.dmgText - 1).setName('defv2-gate-text');
     this.objs.push(this.prompt, this.bar, this.barText);
   }
 
@@ -334,7 +334,7 @@ export class DefenseAssaultV2 {
   /** 这段走道变红（复用走道贴图染红叠一层，不画代码特效；墙图是异步载入的，第一次用到时再建）。 */
   private markSeg(i: number, on: boolean): void {
     const s = this.h.scene, g = this.h.g, sg = g.segs[i];
-    if (on && !this.overlays[i] && s.textures.exists(this.h.walkKey)) { const o = s.add.tileSprite((sg.x0 + sg.x1) / 2, (g.top + g.W) / 2, sg.x1 - sg.x0, g.W - g.top, this.h.walkKey).setTint(0xff5a40).setAlpha(.55).setDepth(DEPTH.ground + 3).setName('defv2-captured'); this.overlays[i] = o; this.objs.push(o); }
+    if (on && !this.overlays[i] && s.textures.exists(this.h.walkKey)) { const o = s.add.tileSprite((sg.x0 + sg.x1) / 2, (g.top + g.W) / 2, sg.x1 - sg.x0, g.W - g.top, this.h.walkKey).setTilePosition(sg.x0 - g.X0, 0).setTint(0xff5a40).setAlpha(.55).setDepth(DEPTH.ground + 3).setName('defv2-captured'); this.overlays[i] = o; this.objs.push(o); }
     this.overlays[i]?.setVisible(on);
   }
   private checkSegments(): void {
@@ -359,8 +359,10 @@ export class DefenseAssaultV2 {
   }
   private paint(now: number): void {
     const p = this.h.player(), t = this.promptText(now), g = this.h.g;
-    this.prompt.setText(t).setVisible(!!t && p.alive !== false).setPosition(p.x, p.y - DEFENSE_V2.assault.promptDy);
-    const k = Math.max(0, this.gate.hp / this.gate.max), b = this.bar.clear(), w = 150, x = g.gx - w / 2, y = g.F - 178;
+    // 头顶提示；主将在画面最上面时（镜头往城外让，城头在画面上部）头顶会压到计时器，改放脚下
+    const v = this.h.scene.cameras.main.worldView, above = p.y - DEFENSE_V2.assault.promptDy, py = v.height > 0 && (above - v.y) / v.height < .17 ? p.y + 26 : above;
+    this.prompt.setText(t).setVisible(!!t && p.alive !== false).setPosition(p.x, py);
+    const k = Math.max(0, this.gate.hp / this.gate.max), b = this.bar.clear(), w = 150, x = g.gx - w / 2, y = g.F - 198;
     if (this.gate.open) { this.barText.setText('城门已破').setColor('#ff8a70'); return; }
     b.fillStyle(0x140a06, .85).fillRect(x - 1, y - 1, w + 2, 9).fillStyle(k < .3 ? 0xd8432a : 0xd8a03a, 1).fillRect(x, y, w * k, 7);
     this.barText.setText(`城门 ${Math.round(k * 100)}%`).setColor(k < .3 ? '#ff8a70' : '#ffe1a0');

@@ -1,4 +1,4 @@
-// 守城 v2 试玩版 · b 段实机（dev 测试战斗 + ?defenseV2=1）：a 段验收四条（镜头 / 门楼半透明 / 单行横幅）+ 云梯攀爬 + 推梯 / 滚木 / 泼油 / 修门 + 冲车撞门 + 占段夺回 + 推下城。
+// 守城 v2 试玩版 · b 段实机（dev 测试战斗 + ?defenseV2=1）：a 段验收（镜头 / 城门楼新图分层 / 单行横幅）+ 云梯攀爬 + 推梯 / 滚木 / 泼油 / 修门 + 冲车撞门 + 占段夺回 + 推下城。
 // 用法：BASE=http://127.0.0.1:5197/ node tools/shot-defense-v2b.mjs → assets/review/defense-v2/b-*.png
 import { chromium } from 'playwright';
 import { mkdirSync } from 'node:fs';
@@ -30,13 +30,13 @@ try {
   ck('镜头（a 段第 2 条）：主将在城头，墙脚以下城外地面 ≥ 240 截图像素，主将不钻到顶部 HUD 下', cam.outsidePx >= 240 && cam.hero >= 100, cam);
   ck('横幅（a 段第 4 条）：一次一行、在主将下方（外墙面高度）', cam.notes.length <= 1 && cam.notes.every(n => n.lines === 1 && n.y > cam.hero + 40), cam.notes);
   await p.screenshot({ path: OUT + '/b-1-start.png' });
-  // ———— 门楼半透明
-  await to(G.gx + 40, (G.top + G.W) / 2); await wait(1300);
-  const fade = await ev(() => window.__S.defenseV2.gateAlpha);
+  // ———— 城门楼（可通行版 gate_passable_v2）：主将从楼前平台走过，楼阁在人后面、外侧城垛在人前面，不再半透明
+  await to(G.gx + 40, G.W - 100); await wait(1300);
+  const gate = await ev(() => { const s = window.__S, back = s.children.getByName('defv2-gate'), front = s.children.getByName('defv2-gate-front'), d = s.player.sprite.depth;
+    return { back: back ? +back.depth.toFixed(3) : null, front: front ? +front.depth.toFixed(3) : null, hero: +d.toFixed(3), alpha: back?.alpha ?? null, tex: back?.texture.key }; });
   await p.screenshot({ path: OUT + '/b-2-gate.png' });
-  await to(G.gx - 900, G.W - 90); await wait(1300);
-  const back = await ev(() => window.__S.defenseV2.gateAlpha);
-  ck('城门楼（a 段第 1 条）：主将走上门楼楼阁淡到 ≈ .35，离开恢复', fade < .5 && back > .9, { fade: +fade.toFixed(2), back: +back.toFixed(2) });
+  await to(G.gx - 900, G.W - 90); await wait(1000);
+  ck('城门楼（新图）：主将站在楼前平台上——楼阁在主将身后、外侧城垛在主将身前，不透明', gate.tex === 'defv2_gate_v2' && gate.back < gate.hero && gate.front > gate.hero && gate.alpha === 1, gate);
   // ———— 云梯：开到墙脚 → 立梯 → 攀爬 → 翻上城头
   await ev(() => { const s = window.__S; s.elapsed = Math.max(s.elapsed, 40); const A = s.defenseAssault; A.spawnLadder(); A.spawnLadder(); for (const l of A.ladders) l.cart.sprite.y = s.defenseV2.g.F + 90; });
   const upOk = await until(() => window.__S.defenseAssault.ladders.some(l => l.state === 'up'), 8000);
@@ -110,6 +110,10 @@ try {
   await wait(700);
   const dead = await ev(() => { const q = window.__push; return !q.a.active || q.a.spawnId !== q.life; });
   ck('主将近战打中走道南沿的普通兵 → 摔下城摔死；精英推不下', push.normalFalling && !push.eliteFalling && dead, { ...push, dead });
+  // 回血点（泉眼 / 水井）落点：城头走道 / 墙面上一个都没有，都在城里
+  const heal = await ev(() => { const s = window.__S, g = s.defenseV2.g, pts = [0, 1, 2, 3, 4, 5].map(i => s.healPlace(g.gx - 800 + i * 320, g.W - 60 + (i % 2) * 260)), spots = (s.battleHeal?.spots ?? []).map(q => ({ x: Math.round(q.x), y: Math.round(q.y), kind: q.kind }));
+    return { placed: pts.map(p => Math.round(p.y)), innerTop: g.innerTop, spots, bad: spots.filter(q => q.y >= g.innerTop - 10).length + pts.filter(p => p.y >= g.innerTop - 10).length }; });
+  ck('泉眼 / 水井不立在城头走道上（放城里，走马道下城去喝）', heal.bad === 0, heal);
   const perf = await ev(() => ({ fps: Math.round(window.__game.loop.actualFps), enemies: window.__S.enemies.filter(e => e.active && !e.isSupplySlot).length }));
   ck('帧率 > 20、同屏敌兵 ≤ 150', perf.fps > 20 && perf.enemies <= 150, perf);
 } catch (e) { fail++; console.log('FAIL 异常', String(e).slice(0, 400)); }

@@ -5,7 +5,7 @@ import { MECHANICS, mechLockText, mechOpen, mechShown, takeMechIntros, type Mech
 const CAMP_TAB_MECH: Record<number, MechId | undefined> = { 2: 'merchant', 3: 'attributes', 4: 'medic', 5: 'formation' };
 /** 行营引子（mechanicUnlocks at 'camp'）落在哪个页签。 */
 const CAMP_INTRO_TAB: Partial<Record<MechId, number>> = { merchant: 2, medic: 4 };
-import Phaser from 'phaser';import {ItemTooltip} from './ItemTooltip';import {drawBuildOverview} from './BuildOverview';import {wornTokens} from '../systems/CharmEffects';import {tokenSlots} from '../systems/ItemStore';import {GAME_WIDTH as W,GAME_HEIGHT as H,IS_DESKTOP as D,FONT,HEADING_FONT,DEPTH,screenPoint} from '../config';import type {Player} from '../entities/Player';import type {Legion} from '../systems/Legion';import {campOption,type CampOffer} from '../systems/CampMarket';import {merchantStockForVisit,saveMerchantStock,type MerchantStock} from '../systems/MerchantStock';import {MerchantShop} from './MerchantShop';import {MEDIC_FIGURE,drawCampFigure,type FigurePlace} from './CampFigure';import {CAMP_TRAINING,type CampTrainingId,type CampGroup} from '../data/camp';import {INITIAL_TROOPS,TROOPS,type TroopKind} from '../data/legion';import {TREASURES,type TacticId,type TreasureId,type BuildTag} from '../data/builds';import {getCharacter} from '../data/characters';import {WEAPON_META} from '../data/upgrades';import {ATTRIBUTE_INFO,MARTIALS,type AttributeId,type MasteryId} from '../systems/RunGrowth';import type {ItemInstance} from '../data/items';import {troopBadge} from './TroopBadge';import {loadTroopPortraits} from '../systems/TroopPortraits';
+import Phaser from 'phaser';import {ItemTooltip} from './ItemTooltip';import {drawBuildOverview} from './BuildOverview';import {wornTokens} from '../systems/CharmEffects';import {tokenSlots,gearGuideSeen,markGearGuideSeen} from '../systems/ItemStore';import {GAME_WIDTH as W,GAME_HEIGHT as H,IS_DESKTOP as D,FONT,HEADING_FONT,DEPTH,screenPoint} from '../config';import type {Player} from '../entities/Player';import type {Legion} from '../systems/Legion';import {campOption,type CampOffer} from '../systems/CampMarket';import {merchantStockForVisit,saveMerchantStock,type MerchantStock} from '../systems/MerchantStock';import {MerchantShop} from './MerchantShop';import {MEDIC_FIGURE,drawCampFigure,type FigurePlace} from './CampFigure';import {CAMP_TRAINING,type CampTrainingId,type CampGroup} from '../data/camp';import {INITIAL_TROOPS,TROOPS,type TroopKind} from '../data/legion';import {TREASURES,type TacticId,type TreasureId,type BuildTag} from '../data/builds';import {getCharacter} from '../data/characters';import {WEAPON_META} from '../data/upgrades';import {ATTRIBUTE_INFO,MARTIALS,type AttributeId,type MasteryId} from '../systems/RunGrowth';import type {ItemInstance} from '../data/items';import {troopBadge} from './TroopBadge';import {loadTroopPortraits} from '../systems/TroopPortraits';
 import {homeCommand,inkPlate,warPanelTexture} from './HomeCommand';
 import {lqButton,lqLabelColor,lqPanel,type LqState} from './LacquerKit';
 import {countRespecPicks,resetBuild,respecLeft,respecOptions,respecPick,respecPrice} from '../systems/Respec';
@@ -48,6 +48,11 @@ export class CampRestUI {
  onLearnTactic?:()=>void;
  /** 重整构筑后（退回、每次重选）由 GameScene 把存档点改成当前构筑。 */
  onRespecSave?:()=>void;
+ /** 每次重绘后（招兵 / 治疗 / 买卖 / 学战法 / 重整之后都会重绘）：GameScene 把当前整份征程构筑写回存档点（续打 = 从出征那一刻开打）。 */
+ onChanged?:()=>void;
+ /** 行囊里有几件比身上好的兵装（data/gearAuto.ts）：> 0 时「行囊」按钮带小红点；第一次还会在页面下方提示一次。 */
+ gearUpgrades?:()=>number;
+ private bagDot?:Phaser.GameObjects.Arc;
  private visit='';private tab=0;private page=0;private destination='';private notice='';
  constructor(private scene:Phaser.Scene,private player:Player,private army:Legion,depart:()=>void){
   this.root=scene.add.container(0,0).setScrollFactor(0).setDepth(DEPTH.overlay+2).setVisible(false).setName('camp-rest');
@@ -81,8 +86,9 @@ export class CampRestUI {
    // 2026-11-19 用户「行囊做成行囊的样子」：手绘包袱到位后不画漆牌，包袱大图标代替小图标（字仍在右边）
    const bundle=bagBundle(scene,cx-bw/2+20,cy-2,D?40:40,{caption:false,onReady:()=>paint('idle')});this.root.add(bundle.icon);
    const paint=(st:LqState)=>{g.clear();if(bundle.ready()){icon.setVisible(false);bundle.setHover(st==='hover'||st==='down');cap.setY(cy).setColor(st==='idle'?'#f6e2b8':'#fff3d6').setStroke('#1a0f08',3);return;}const d=lqButton(g,cx,cy,bw,bh,st,'gold');cap.setY(cy+d).setColor(lqLabelColor(st));icon.setY(cy+d);};
-   hit.on('pointerover',()=>paint('hover')).on('pointerout',()=>paint('idle')).on('pointerdown',()=>{paint('down');this.sound('uiClick');if(!mechShown('gear')){this.notice='行囊 · '+mechLockText('gear');this.render();return;}this.onOpenBag?.();}).on('pointerup',()=>paint('hover'));paint('idle');
-   this.root.add([g,icon,cap,hit]);bagLeft=cx-bw/2-12;}
+   hit.on('pointerover',()=>paint('hover')).on('pointerout',()=>paint('idle')).on('pointerdown',()=>{paint('down');this.sound('uiClick');if(!mechShown('gear')){this.notice='行囊 · '+mechLockText('gear');this.render();return;}markGearGuideSeen();this.onOpenBag?.();}).on('pointerup',()=>paint('hover'));paint('idle');
+   this.bagDot=scene.add.circle(cx+bw/2-6,cy-bh/2+5,5,0xe0412a).setStrokeStyle(1.5,0xffe2b0).setScrollFactor(0).setName('camp-bag-dot').setVisible(false); /* 有更好的兵装没穿 */
+   this.root.add([g,icon,cap,hit,this.bagDot]);bagLeft=cx-bw/2-12;}
   // 回营寨：电脑在「行囊」左侧，手机在它下方
   this.homeGfx=scene.add.graphics().setScrollFactor(0);this.root.add(this.homeGfx);
   this.homeBtn=this.text(D?bagLeft:W-28,D?62:76,'回营寨',D?15:16).setOrigin(1,0).setPadding(14,8,14,8).setColor('#ffe9bd').setInteractive({useHandCursor:true}).setName('camp-home').setVisible(false);
@@ -157,9 +163,12 @@ export class CampRestUI {
  private render(){
   this.body.removeAll(true);this.layoutTabs();this.tabs.forEach((t,k)=>{if(!t.visible)return;const on=t.getData('tab')===this.tab;const lk=CAMP_TAB_MECH[t.getData('tab') as number],locked=!!lk&&!mechOpen(lk);t.setColor(on?'#ffe7b0':'#bcae93').setAlpha(on?1:locked?.38:.78);this.tabIcons[k]?.setAlpha(locked?.38:1);const w=t.width;this.tabFrames[k].setTexture(warPanelTexture(this.scene,w,46,on)).setDisplaySize(w+16,46+16).setVisible(true).setAlpha(on?1:.62);this.tabIcons[k]?.setAlpha(on?1:.6);
    if(on){const to={x:t.x+18,w:w-36};if(!this.lineTo){this.tabLine.setX(to.x);this.tabLine.width=to.w;}this.lineTo=to;}});
+  // 兵装（总制作人第一章试玩：20 件兵装一件没穿、全程没提示）：有更好的没穿 → 「行囊」小红点；第一次还在下方提示一句
+  {const ups=this.gearUpgrades?.()??0;this.bagDot?.setVisible(ups>0);if(ups>0&&!this.notice&&!gearGuideSeen())this.notice='缴获的兵装还没穿上（'+ups+' 件更好）：点右上「行囊」，再点「一键穿戴」';}
   this.resources.setText('随军粮 '+this.army.food+' · 兵力 '+this.army.count);this.next.setText('下一关 · '+this.destination);this.detail.setText(this.notice);
   {const side=D&&(this.tab===2||this.tab===4),l=CampRestUI.STATION_LEFT;this.detail.setX(side?l+(W-40-l)/2:D?W/2:28).setWordWrapWidth(side?W-40-l-16:W-(D?120:56),true);}
   if(this.tab===0)this.renderRecruit();if(this.tab===2)this.renderMarket();if(this.tab===3)this.renderBuild(D?154:229);if(this.tab===4)this.renderMedic();if(this.tab===5)this.renderFormation();
+  this.onChanged?.();
  }
  // ---------- 军医（data/campMedic.ts）----------
  /** 第几章（定价用），GameScene 打开休整前设置。 */
@@ -241,7 +250,7 @@ export class CampRestUI {
    const role=this.text(D?x+w/2:x+112,y+(D?160:56),roles[i],D?14:15).setColor('#c9b38a');if(D)role.setOrigin(.5,0);this.body.add(role);
    const cost=this.army.recruitCost(kind),poor=this.army.food<cost,bw=D?w-36:w-130;
    const buy=this.button(D?x+18:x+112,y+h-(D?60:58),poor?'随军粮不足 · '+cost+'粮':'招募 · '+cost+'粮',()=>{const ok=this.army.recruit(kind,1);if(ok)this.sound('recruit');this.notice=ok?TROOPS[kind].name+'入队 · 下一名招募价 '+this.army.recruitCost(kind)+'粮':'无法招募';this.render();},bw,!poor).setName('camp-recruit-'+kind);this.body.add(buy);
-  });if(!this.notice)this.detail.setText('兵力越多，招募越贵：每名在编士兵使招募价 +20%（当前在编 '+this.army.count+' 人）。');
+  });if(!this.notice)this.detail.setText('行营招兵是主要兵源：随军粮按人招，在编越多越贵（每名在编士兵使招募价 +20%，当前在编 '+this.army.count+' 人）。战斗中的「战斗支援」只免费补一小队。');
  }
  /** 军需商人（ui/MerchantShop，与营寨旅商共用）：电脑版左侧立绘，4 件兵装 + 偶尔 1 卷战法；用随军粮，战法学进本局构筑当场生效。 */
  private renderMarket(){

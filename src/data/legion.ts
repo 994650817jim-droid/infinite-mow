@@ -24,7 +24,13 @@ export function legionStatusText(food: number, count: number, dead: number, squa
 export const LEGION = { startingFood: 0, waveFood: 0, trainCost: [0, 40, 80], squadSize: 12, nearStep: .1, farStep: .5 } as const;
 
 export const INITIAL_TROOPS:readonly TroopKind[]=['swordsman','spearman','archer'];
-/** 战地免费招兵每波人数，按章节档位 0–4（第一到第五章；攻城与第三章同档）。2026-11-16 平衡（用户批准）：原来每波 1 人、每关 3 波，场上平均不到 1 个兵。 */
+/**
+ * 战地免费招兵每波人数，按章节档位 0–4（第一到第五章；攻城与第三章同档）。2026-11-16 平衡（用户批准）：原来每波 1 人、每关 3 波，场上平均不到 1 个兵。
+ * 两个招兵入口的定位（总制作人第一章试玩 11-21 问「战斗支援只给 2 个、行营一次十几个」）：
+ * - 战斗支援 = 补员：免费补一小队（本表的人数，每关 chapter.recruitWaves 那几波各一次），战斗中顶上缺口；
+ * - 行营招兵 = 主要兵源：随军粮按人招，不限次数，在编越多越贵（每名在编 +20%，Legion.recruitCost）。
+ * 两处说明文字都按这个口径写（行营招兵页、部曲玩法引子）。
+ */
 export const FREE_RECRUIT_BY_TIER: readonly number[] = [2, 3, 3, 4, 4];
 
 /** Living soldiers, including starting reinforcements and reserves. */

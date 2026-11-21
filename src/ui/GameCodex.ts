@@ -28,7 +28,7 @@ export class GameCodex {
   this.tabs=['武将','兵种','降将'].map((label,i)=>{const t=this.text(W/2+(i-1)*136,D?76:92,label,18,HEADING_FONT).setOrigin(.5).setInteractive({useHandCursor:true}).setName('codex-tab-'+i).on('pointerdown',()=>{this.tab=TABS[i];this.index=0;this.render();});
    const on=()=>this.tab===TABS[i],skin=lqSkin(scene,t,t,()=>({w:120,h:38}),{tone:'auto',on});lqHitBox(t,120,38);this.root.add([skin.gfx,t]);return skin;});
   this.root.add(this.content);
-  const close=this.text(W/2,H-(D?32:40),D?'返回':'返回首页',18,HEADING_FONT).setOrigin(.5).setInteractive({useHandCursor:true}).setName('codex-close').on('pointerdown',()=>this.root.destroy());
+  const close=this.text(W/2,H-(D?32:40),'返回',18,HEADING_FONT).setOrigin(.5).setInteractive({useHandCursor:true}).setName('codex-close').on('pointerdown',()=>this.root.destroy());
   const cs=lqSkin(scene,close,close,()=>({w:D?160:200,h:D?38:42}),{tone:'quiet'});lqHitBox(close,D?160:200,D?38:42);this.root.add([cs.gfx,close]);this.render();
  }
  private tabs:Array<{repaint:(s?:LqState)=>void}>=[];

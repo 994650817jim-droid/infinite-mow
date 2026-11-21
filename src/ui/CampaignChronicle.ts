@@ -43,13 +43,13 @@ export class CampaignChronicle{
   arcs.forEach((arc,i)=>{const info=this.progress[arc],x=W/2+(i-(n-1)/2)*(tabW+(D?12:8)),active=i===this.chapter;
    const frame=this.scene.add.image(x,tabY,warPanelTexture(this.scene,tabW,42,active)).setDisplaySize(tabW+16,58).setAlpha(info.open?1:.55);
    const name=CHRONICLE[i].title.split(' · ')[1];
-   const label=this.text(x,tabY,info.open?name+(n>3&&!D?' ':'  ')+info.cleared+'/3':name+(n>3&&!D?'':' · ')+(n>3&&!D?'':'未开'),D?16:n>3?14:15,active?'#fff0cc':info.open?'#d8c39a':'#857a68',HEADING_FONT).setOrigin(.5);
+   const label=this.text(x,tabY,info.open?name+(n>3&&!D?' ':'  ')+info.cleared+'/3':name+(n>3&&!D?'':' · ')+(n>3&&!D?'':'未解锁'),D?16:n>3?14:15,active?'#fff0cc':info.open?'#d8c39a':'#857a68',HEADING_FONT).setOrigin(.5);
    // 手机五个页签较窄：字比页签宽时整体缩小，不再顶到描金边
    if(label.width>tabW-26)label.setScale((tabW-26)/label.width);
    // 2026-11-17 用户批准 UI 审查 J：电脑版十二章页签太窄，原来整行字缩到约 9px；改成大字章序（壹…拾贰）+ 下方小字进度，章名在正文标题里
    let prog:Phaser.GameObjects.Text|undefined;
    if(D&&n>6){const num=CHRONICLE[i].title.split(' · ')[0].replace(/^第|章$/g,'');label.setScale(1).setText(num).setFontFamily(TITLE_FONT).setFontSize(num.length>2?17:20).setY(tabY-6);if(label.width>tabW-10)label.setScale((tabW-10)/label.width);
-    prog=this.text(x,tabY+12,info.open?(info.cleared>=3?'✓ 平定':info.cleared+'/3'):'未开',11,active?'#fff0cc':info.open?'#c9b38a':'#7d7362').setOrigin(.5);}
+    prog=this.text(x,tabY+12,info.open?(info.cleared>=3?'✓ 平定':info.cleared+'/3'):'未解锁',11,active?'#fff0cc':info.open?'#c9b38a':'#7d7362').setOrigin(.5);}
    const hit=this.scene.add.rectangle(x,tabY,tabW,42,0,.001).setInteractive({useHandCursor:true}).setName('chronicle-tab-'+i).on('pointerdown',()=>{this.chapter=i;this.render();});
    this.body.add([frame,label,hit]);if(prog)this.body.add(prog);
   });
@@ -92,7 +92,7 @@ export class CampaignChronicle{
   });
   // 底部操作
   const by=H-(D?36:52);
-  const back=homeCommand(this.scene,W/2,by,D?220:240,D?46:54,'返回首页',true);back.hit.setName('chronicle-close').on('pointerdown',()=>this.root.destroy());
+  const back=homeCommand(this.scene,W/2,by,D?220:240,D?46:54,'返回',true);back.hit.setName('chronicle-close').on('pointerdown',()=>this.root.destroy());
   this.body.add([back.g,back.caption,back.hit]);
  }
 }

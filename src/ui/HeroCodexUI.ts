@@ -332,7 +332,7 @@ export class HeroCodexUI {
     for (let i = 0; i < TEMPER.max; i++) {
       const px = x + 8 + i * (cw + 10), got = i < lv, next = i === lv;
       g.fillStyle(got ? 0x7a2a1c : 0x18120c, .95).fillRoundedRect(px, yy, cw, 46, 5).lineStyle(got || next ? 1.5 : 1, got ? 0xf3d48a : next ? 0xc9a35e : 0x5e4a2c, 1).strokeRoundedRect(px + .5, yy + .5, cw - 1, 45, 5);
-      this.text(px + cw / 2, yy + 14, `${i + 1} 级`, 13, got ? '#fff3d0' : next ? '#ecd49a' : '#8d7d60', true).setOrigin(.5);
+      this.text(px + cw / 2, yy + 14, `Lv.${i + 1}`, 13, got ? '#fff3d0' : next ? '#ecd49a' : '#8d7d60', true).setOrigin(.5);
       this.text(px + cw / 2, yy + 33, `+${Math.round((i + 1) * TEMPER.step * 100)}% · ${TEMPER.cost[i]} 粮`, 11, got ? '#ffe2a0' : '#9c8c6c').setOrigin(.5);
     }
     yy += 78;

@@ -14,7 +14,7 @@ import {worldUnlocked} from '../world/WorldStore';
 import Phaser from 'phaser';
 import {W,H,worldText,worldButton,worldShell,panel,worldAssets,releaseWorldArt} from '../world/WorldUI';
 import {inkPlate,homeCommand} from '../ui/HomeCommand';
-import {lqPanel,lqFloat} from '../ui/LacquerKit';
+import {lqFloat} from '../ui/LacquerKit';
 type InkBtn={btn:ReturnType<typeof worldButton>;plate:Phaser.GameObjects.NineSlice|null;primary:boolean;hover:boolean};
 import {WORLD_NODES,type WorldNode} from '../world/WorldNodes';
 import {loadWorld,rewardGrain} from '../world/WorldStore';
@@ -655,7 +655,7 @@ export class WorldMapSceneV1 extends Phaser.Scene {
   const body=alert?`${muster?`敌军集结：还剩 ${alert.countdown} 战围城（被围后出征别处则失守）`:'已被围：出征别处则此城失守'}
 守城：击败敌将 ${defenseBossName(city,owner)}，军粮 +${rewardGrain(T.reward.merits*R.rewardMul,T.reward.provisions*R.rewardMul)}，守住后 ${R.moraleBattles} 战产粮 +${Math.round(R.moraleMul*100)}%
 ${muster?`迎击：出城野战（较短），赢了直接解除告急，军粮 +${rewardGrain(T.reward.merits*R.interceptMul,T.reward.provisions*R.interceptMul)}；输了围城提前一战\n`:''}弃城：城归${FACTIONS[owner].name}，建筑等级保留，日后可再打回来`:`胜利条件：${how}
-${city.tier==='large'?'守城大将：'+siegeBossName(city,owner):'守军：'+FACTIONS[owner].name+' · 占领府衙即破城'}
+${city.tier==='large'?'守城大将：'+siegeBossName(city,owner):'占领府衙即破城'}
 占领奖励：军粮 +${rewardGrain(T.reward.merits*k,T.reward.provisions*k)}${first?'（首次攻占 +50%）':''}
 失败不损失城池与资源，可再次攻打。`;
   const info=t(px+24,py+86,body,14,'#d6cdb4').setLineSpacing(6).setWordWrapWidth(pw-48);
@@ -676,7 +676,8 @@ ${city.tier==='large'?'守城大将：'+siegeBossName(city,owner):'守军：'+FA
  private lordLine(root:Phaser.GameObjects.Container,x:number,y:number,w:number,hero:CharacterId,name:string){
   const n=CHARACTERS.find(c=>c.id===hero)?.name??hero;
   root.add(worldText(this,x,y,'出战',13,'#b6a07b'));
-  if(W>600){const g=this.add.graphics();lqPanel(g,x,y+20,w,44,{shadow:false,glow:false});root.add(g);root.add(this.add.rectangle(x+w/2,y+42,w,44,0x000000,0).setName(name));}
+  // 电脑：出战一栏只垫浅底 + 底下一条金线，不再用双层粗金框（2026-11-21 全界面体检：比弹窗本身还重）
+  if(W>600){const g=this.add.graphics();g.fillStyle(0x000000,.28).fillRect(x,y+20,w,44).lineStyle(1,0xc9a35e,.55).lineBetween(x,y+64,x+w,y+64);root.add(g);root.add(this.add.rectangle(x+w/2,y+42,w,44,0x000000,0).setName(name));}
   else root.add(this.add.rectangle(x+w/2,y+42,w,44,0x51402b,.96).setStrokeStyle(1,0xd7b778).setName(name));
   root.add(worldText(this,x+w/2,y+42,`主将 ${n} · 亲征`,18,'#f0d79e').setOrigin(.5).setName(name+'-text'));
  }

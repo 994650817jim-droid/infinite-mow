@@ -76,7 +76,7 @@ export class HeroStatusFrame {
     if (this.lastLevel >= 0 && o.level > this.lastLevel) { this.flashAt = now; this.stats.flashes++; }
     this.lastLevel = o.level;
     // 名字 · 等级印 · 主属性印
-    const sx = this.name.x + this.name.width + 8, seal = `${o.level}级`;
+    const sx = this.name.x + this.name.width + 8, seal = `Lv.${o.level}`; // 等级统一写 Lv.N（2026-11-21 统筹）
     if (this.seal.text !== seal) this.seal.setText(seal);
     const sw = this.seal.width + 10, sh = 18; this.seal.setPosition(sx + sw / 2, F.y + 19);
     this.sealG.clear().fillStyle(0x000000, .3).fillRoundedRect(sx + 1, F.y + 11, sw, sh, 3).fillStyle(LQ.cinnabar, 1).fillRoundedRect(sx, F.y + 10, sw, sh, 3).lineStyle(1, LQ.goldHi, .9).strokeRoundedRect(sx + 1.5, F.y + 11.5, sw - 3, sh - 3, 2);

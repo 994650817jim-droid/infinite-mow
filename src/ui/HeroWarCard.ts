@@ -289,12 +289,16 @@ export class HeroWarCard{
   this.hit.setSize(this.width,hh).setPosition(this.width/2,hh/2);if(this.hit.input)this.hit.input.hitArea.setTo(0,0,this.width,hh);this.paint();
  }
  setSelected(value:boolean):void{this.chosen=value;this.paint();}
+ private loadingText?:Phaser.GameObjects.Text;
  setHero(index:number):void{
   const c=CHARACTERS[index],key='epic_hero_'+c.id,target=this.s.textures.exists(key)?key:c.portrait;
   const {px,py,pw,ph,small}=this.L;
   // 立绘（水墨 / 主页大图）正在加载时不先显示像素头像（会先闪出“游戏里的小人”）：画像留空，加载完由 refreshArt 再次调用时淡入。
   // 加载结束仍没有立绘（缺图）时，下一次调用照旧退回像素头像。
   const artPending=!this.s.textures.exists(inkHeroKey(c.id))&&!this.s.textures.exists(key)&&HOME_ART_HEROES.includes(c.id)&&this.s.load.isLoading();
+  // 立绘载入中：卷轴底上写「载入中…」（2026-11-21 统筹：未载完显示卷轴底 + 载入中，不闪像素小人）
+  if(artPending&&!this.loadingText){this.loadingText=this.s.add.text(px+pw/2,py+ph*.38,'载入中…',{fontFamily:HEADING_FONT,fontSize:(small?12:14)+'px',color:'#8a7656',resolution:2}).setOrigin(.5);this.root.add(this.loadingText);}
+  this.loadingText?.setVisible(artPending);
   if(artPending&&(this.index!==index||this.artKey!=='')){this.index=index;this.artKey='';this.s.tweens.killTweensOf(this.art);this.art.setAlpha(0);}
   let artKey:string,place:()=>void;
   if(this.painted&&this.s.textures.exists(inkHeroKey(c.id))){

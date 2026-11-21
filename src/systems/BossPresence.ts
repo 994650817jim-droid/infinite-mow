@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { safeWorldPoint } from '../ui/SafeLabel';
 import { DEPTH, GAME_HEIGHT, GAME_WIDTH, HEADING_FONT, TITLE_FONT } from '../config';
 import type { Enemy } from '../entities/Enemy';
 import { figureTop } from './SpriteMetrics';
@@ -203,7 +204,7 @@ export class BossPresence {
     const r = { x0: (px - w / 2 - view.x) * z - m, x1: (px + w / 2 - view.x) * z + m, y0: (y - plateH - view.y) * z - m, y1: (y - view.y) * z + m };
     sl.plateBelow = r.y0 < 4 || this.hudRects().some(h => r.x1 > h.x && r.x0 < h.right && r.y1 > h.y && r.y0 < h.bottom);
     if (sl.plateBelow) y = py + 16 + plateH;
-    sl.plate!.setPosition(Math.round(px), Math.round(y));
+    { const q = safeWorldPoint(this.h.scene, px, y, w / 2, plateH / z); sl.plate!.setPosition(Math.round(q.x), Math.round(q.y)); } // 左右也收进 HUD 安全区（原来只管上下）
     if (sl === this.slots[0]) { this.stats.plateGap = Math.round(top - y); this.stats.plateBelow = sl.plateBelow; } // 名牌底边到身体最高点的距离（放脚下时为负）
   }
   /** 顶部 HUD 占的屏幕范围（固定在屏幕上的 HUD 层对象，屏幕上方 160 设计像素内；每 0.4 秒重算一次）。 */

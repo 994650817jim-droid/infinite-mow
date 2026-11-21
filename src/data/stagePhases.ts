@@ -10,7 +10,19 @@ import type { WaveDef } from './waves';
  */
 export type PhaseKind = 'vanguard' | 'elite' | 'event' | 'lieutenant' | 'surge' | 'boss';
 export interface StagePhase { kind: PhaseKind; start: number; name: string }
-export interface PhasePlan { chapter: number; stage: number; phases: StagePhase[]; waves: WaveDef[]; bossAt: number; lieutenant?: string; event?: string }
+export interface PhasePlan { chapter: number; stage: number; phases: StagePhase[]; waves: WaveDef[]; bossAt: number; lieutenant?: string; event?: string;
+  /** 自定段落表的关（withPhases）：原五段表的段数——首领 / 副将血量倍率仍按它算（不因段数少了就降成 ×1）。 */ tuneLen?: number;
+  /** 按进度推进的关（7-3 进州府）：段落不按时间切换。 */ progress?: boolean }
+/** 段数（算首领 / 副将血量倍率用）：自定表按原五段表算。 */
+export function planLen(p: PhasePlan): number { return p.tuneLen ?? p.phases.length; }
+/**
+ * 换成本关自己的段落表（不套五段时间轴，同 2-3 走目标的思路）：9-3 麦城限时 180 秒突围、7-3 成都打进州府才出首领。
+ * 章节成长（首领 / 副将血量倍率、精研格数等）仍按原五段表；副将名沿用本关名册。
+ */
+export function withPhases(plan: PhasePlan, phases: StagePhase[], progress = false): PhasePlan {
+  const lt = phases.find(p => p.kind === 'lieutenant');
+  return { ...plan, phases, waves: phases.map(p => ({ start: p.start, name: p.name })), bossAt: phases[phases.length - 1].start, lieutenant: lt ? (plan.lieutenant ?? lt.name.replace(/(压阵|截杀|守街)$/, '')) : undefined, event: phases.some(p => p.kind === 'event') ? plan.event : undefined, tuneLen: planLen(plan), progress };
+}
 
 export const PHASES = {
   /** 各段开始时刻（秒，关内时间）。首领段开始 = 首领登场。 */
@@ -107,6 +119,8 @@ export const PHASE_BARKS: Record<string, Partial<Record<PhaseKind, { who: string
  * 由原来的波次（名字）排出五段：先锋 = 原第 1 波名，精锐 = 原第 2 波名，事件 = 本章事件名，副将 = 「X 压阵」，首领 = 原最后一波名。
  * 三段关（1-1）沿用原时刻（0 / 45 / 90）；四段关去掉副将。
  */
+/** 本关副将名（名册）。 */
+export function stageLieutenant(key: string, stage: number, bossName: string): string { const n = LIEUTENANTS[key]?.[Math.max(0, Math.min(2, stage - 1))] ?? ''; return n && n !== bossName ? n : ''; }
 export function buildPhasePlan(key: string, stage: number, waves: readonly WaveDef[], bossName: string): PhasePlan {
   const chapter = CHAPTER_INDEX[key] ?? 2, n = phaseCount(chapter, stage), names = waves.map(w => w.name);
   const first = names[0] ?? '先锋', second = names[1] ?? '精锐来袭', last = names[names.length - 1] ?? bossName + '决战';

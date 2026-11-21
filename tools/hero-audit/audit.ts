@@ -63,7 +63,7 @@ type Alloc = Partial<Record<'strength' | 'agility' | 'intellect' | 'command', nu
 function attr(hero: string, weapon: string, L: number, alloc: Alloc) {
   const src = statSource(hero), pts = (id: any) => statEffective(src, id, alloc[id as keyof Alloc] ?? 0, L), prim = primaryAttribute(hero)!, raw = alloc[prim] ?? 0, tier = PRIMARY_TIERS.filter(n => raw >= n).length;
   const spell = SPELL_WEAPONS.has(weapon);
-  const dmg = (1 + ATTRIBUTE_EFFECT.strength.damage * pts('strength')) * (1 + Math.min(PRIMARY_BONUS.maxPoints, raw) * PRIMARY_BONUS.perPoint);
+  const dmg = (1 + ATTRIBUTE_EFFECT.strength.damage * pts('strength')) * (1 + Math.min(PRIMARY_BONUS.maxPoints, raw) * PRIMARY_BONUS.perPoint) * (prim === 'command' ? 1 + ((ATTRIBUTE_EFFECT.command as any).selfDamage ?? 0) * pts('command') : 1); // 统御主将亲率（补丁 P2；没有时为 1）
   const spellMul = spell ? 1 + ATTRIBUTE_EFFECT.intellect.skill * pts('intellect') : 1;
   const zhugeRaw = weapon === 'flame_banner' ? 1 + Z.intPerPoint * (alloc.intellect ?? 0) : 1;
   const spd = Math.min(1.8, 1 + ATTRIBUTE_EFFECT.agility.attackSpeed * pts('agility'));

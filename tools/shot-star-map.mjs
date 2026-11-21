@@ -52,7 +52,20 @@ const e = await toScreen(470, 100); await p.mouse.move(e.x, e.y); await p.mouse.
 const s3 = await ui('GameScene', r => { const m = r.list.find(o => o.name === 'star-map-layer'); return { x: m.x, y: m.y }; });
 ck('拖动平移', Math.abs(s3.x - s0.x) > 20 || Math.abs(s3.y - s0.y) > 20, { s0, s3 });
 for (let i = 0; i < 4; i++) { await p.mouse.wheel(0, -120); await p.waitForTimeout(40); }
-await p.mouse.move(sp.x, sp.y); await p.waitForTimeout(300); await p.screenshot({ path: `${OUT}/ui-battle-zoom-hover.png` });
+// 验收第 1 条：放大 + 拖动后，左右文字栏和底部提示行范围内的星 / 线都淡出（不压字），也点不到
+const leak = await ui('GameScene', (r, s) => { const W = 960, H = 540, out = []; const walk = l => { for (const o of l) { if (o.list) walk(o.list); else if (/^star-base-/.test(o.name ?? '') && o.alpha > .05) { const b = o.getBounds(), cx = b.centerX, cy = b.centerY; if (cx < 210 || cx > W - 230 || cy > H - 30) out.push([o.name, Math.round(cx), Math.round(cy), +o.alpha.toFixed(2)]); } } }; walk(r.list); return out; });
+const hidden = await ui('GameScene', r => { let n = 0; const walk = l => { for (const o of l) { if (o.list) walk(o.list); else if (/^star-base-/.test(o.name ?? '') && o.alpha <= .05) n++; } }; walk(r.list); return n; });
+ck('放大拖动后文字栏 / 底部提示下的星都淡出（星图不压字）', leak.length === 0 && hidden > 0, { leak: leak.slice(0, 6), hidden });
+await p.screenshot({ path: `${OUT}/ui-battle-zoom-clip.png` });
+// 验收第 2 条：悬停在当前选中的星上不弹悬停框（不盖右栏）
+const tipChk = await ui('GameScene', r => { const zones = []; const walk = l => { for (const o of l) { if (/^star-/.test(o.name ?? '') && o.type === 'Zone') zones.push(o); if (o.list) walk(o.list); } }; walk(r.list); const tip = r.list.find(o => o.name === 'star-map-tip'), sel = r.list.find(o => o.name === 'star-map-sel-name').text; const vis = zones.filter(z => z.input?.enabled); vis[0].emit('pointerup', { upTime: 1 }); /* 选中第一颗可见的星 */ vis[0].emit('pointerover'); const onSel = tip.visible; vis[0].emit('pointerout'); vis[vis.length - 1].emit('pointerover'); const b = tip.getBounds(); const other = { visible: tip.visible, right: Math.round(b.right) }; vis[vis.length - 1].emit('pointerout'); return { sel, onSel, other }; });
+ck('悬停在选中的星上不弹框；别的星的悬停框不伸进右栏', !tipChk.onSel && tipChk.other.visible && tipChk.other.right <= 960 - 230, tipChk);
+// 验收第 4 条：星点完（没有可用的星）后按 C 也能打开星图
+await ui('GameScene', r => r.list.find(o => o.name === 'star-map-close').emit('pointerup')); await p.waitForTimeout(400);
+await p.evaluate(() => { const s = window.__game.scene.getScene('GameScene'); s.player.growth.unallocated = 0; });
+await p.mouse.click(10, 10); await p.keyboard.press('KeyC'); await p.waitForTimeout(800);
+const cOpen = await p.evaluate(() => { const s = window.__game.scene.getScene('GameScene'); let v = false; const walk = (l, vis) => { for (const o of l) { const ok = vis && o.visible; if (o.name === 'star-map' && ok) v = true; if (o.list) walk(o.list, ok); } }; walk(s.children.list, true); return { mode: s.mode, v }; });
+ck('没有可用的星时按 C 仍能打开星图', cOpen.mode === 'attributes' && cOpen.v, cOpen);
 
 // ② 营寨武将谱 · 属性页
 await fresh('?layout=desktop&starMap=1', 'MenuScene');
@@ -65,6 +78,8 @@ await p.waitForTimeout(1200);
 await p.evaluate(() => { const s = window.__game.scene.getScene('CityScene'); let t = null; const walk = l => { for (const o of l) { if (o.name === 'codex-tab-attrs') t = o; if (o.list) walk(o.list); } }; walk(s.children.list); t?.emit('pointerdown'); t?.emit('pointerup'); });
 await p.waitForFunction(() => { const s = window.__game.scene.getScene('CityScene'); return s.children.list.some(o => o.name === 'star-map'); }, null, { timeout: 60000 }); await p.waitForTimeout(1500);
 await hide(); await p.screenshot({ path: `${OUT}/ui-codex-starmap.png` });
+const dim = await ui('CityScene', r => { const out = []; const walk = l => { for (const o of l) { if (o.list) walk(o.list); else if (/^star-base-/.test(o.name ?? '') && o.alpha < .79) out.push([o.name, +o.alpha.toFixed(2)]); } }; walk(r.list); return out; });
+ck('默认视图（一屏放下）里没有被淡出的星', dim.length === 0, dim.slice(0, 6));
 const cod = await ui('CityScene', r => ({ hero: r.list.find(o => o.name === 'star-map-hero')?.text, stats: r.list.find(o => o.name === 'star-map-stats')?.text, respec: !!r.list.find(o => o.name === 'star-map-respec'), face: (() => { let f = false; const walk = l => { for (const o of l) { if (o.name === 'star-map-face') f = true; if (o.list) walk(o.list); } }; walk(r.list); return f; })() }));
 ck('武将谱属性页自动打开整屏星图：武将名、星数、四维生效点、洗点、中心头像', cod.hero === '赵云' && /生效/.test(cod.stats) && cod.respec && cod.face, cod);
 const rs = await ui('CityScene', r => { r.list.find(o => o.name === 'star-map-respec').emit('pointerup'); return r.list.find(o => o.name === 'star-map-msg')?.text; });

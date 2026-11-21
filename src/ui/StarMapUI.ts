@@ -55,6 +55,8 @@ const BOUNDS = { x0: Math.min(...XS) - 40, x1: Math.max(...XS) + 40, y0: Math.mi
 /** 中心头像位：四个入口围出的方框中点。 */
 const CENTER = (() => { const g = STAR_NODES.filter(n => n.kind === 'gate'); return { x: g.reduce((s, n) => s + n.x, 0) / g.length, y: g.reduce((s, n) => s + n.y, 0) / g.length }; })();
 const ZOOM_MIN = .8, ZOOM_MAX = 1.6;
+/** 可见区边上的淡出带宽度（逻辑像素）。 */
+const FADE_E = 16;
 
 const setOf = (n: StarNode): string => (n.region === 'bridge' ? 'neutral' : n.region);
 const nodeKey = (n: StarNode, st: NodeState): string => `${P}${setOf(n)}_${n.kind}_${st}`;
@@ -74,7 +76,7 @@ function queueArt(scene: Phaser.Scene, hero: string): number {
 export class StarMapUI {
   readonly root: Phaser.GameObjects.Container;
   private map!: Phaser.GameObjects.Container;
-  private readonly nodes = new Map<string, { n: StarNode; base: Phaser.GameObjects.Image; icon?: Phaser.GameObjects.Image }>();
+  private readonly nodes = new Map<string, { n: StarNode; base: Phaser.GameObjects.Image; icon?: Phaser.GameObjects.Image; hit: Phaser.GameObjects.Zone; baseAlpha: number; iconAlpha: number; fade: number }>();
   private readonly lines: Array<{ a: string; b: string; ink: Phaser.GameObjects.TileSprite; gold: Phaser.GameObjects.TileSprite }> = [];
   private ring!: Phaser.GameObjects.Graphics;
   private left!: Phaser.GameObjects.Text;
@@ -121,9 +123,12 @@ export class StarMapUI {
     const bg = s.add.image(W / 2, H / 2, P + 'bg').setScrollFactor(0); bg.setScale(Math.max(W / bg.width, H / bg.height)); this.root.add(bg);
     // 图：容器里用设计稿坐标；默认缩放 = 正好一屏放下（左右各留出文字栏）
     this.map = s.add.container(0, 0).setScrollFactor(0).setName('star-map-layer'); this.root.add(this.map);
-    const sideL = IS_DESKTOP ? 210 : 0, sideR = IS_DESKTOP ? 230 : 0, availW = W - sideL - sideR, availH = H - 40;
+    const sideL = IS_DESKTOP ? 210 : 0, sideR = IS_DESKTOP ? 230 : 0;
+    this.clip = { l: sideL, r: W - sideR, t: 4, b: H - 24 };
+    // 默认缩放：整张图放进可见区并让出淡出带，默认视图里没有一颗星是半透明的
+    const availW = this.clip.r - this.clip.l - 2 * FADE_E, availH = this.clip.b - this.clip.t - 2 * FADE_E;
     this.fit = Math.min(availW / (BOUNDS.x1 - BOUNDS.x0), availH / (BOUNDS.y1 - BOUNDS.y0));
-    this.home = { x: sideL + availW / 2, y: H / 2 + 6 };
+    this.home = { x: (this.clip.l + this.clip.r) / 2, y: (this.clip.t + this.clip.b) / 2 };
     // 连线（先画，在节点下面）
     for (const [a, b] of STAR_EDGES) {
       const A = STAR_BY_ID.get(a)!, B = STAR_BY_ID.get(b)!, len = Math.hypot(B.x - A.x, B.y - A.y), ang = Math.atan2(B.y - A.y, B.x - A.x);
@@ -144,7 +149,7 @@ export class StarMapUI {
       hit.on('pointerout', () => { if (this.hover === n.id) { this.hover = null; this.renderTip(); } });
       hit.on('pointerup', (p: Phaser.Input.Pointer) => { if (this.drag?.moved) return; this.click(n.id, p); });
       this.map.add(hit);
-      this.nodes.set(n.id, { n, base, icon });
+      this.nodes.set(n.id, { n, base, icon, hit, baseAlpha: 1, iconAlpha: 1, fade: 1 });
     }
     this.ring = s.add.graphics().setScrollFactor(0); this.map.add(this.ring);
     this.applyView();
@@ -153,6 +158,25 @@ export class StarMapUI {
     this.render();
   }
   private home = { x: 0, y: 0 };
+  /** 星图可见区（左右文字栏与底部操作提示之外）；区外的星、线、头像淡出到 0 并关掉点击（2026-11-21 验收：放大 / 拖动后文字栏压在星上）。 */
+  private clip = { l: 0, r: 0, t: 0, b: 0 };
+  private portraitParts: Array<{ setAlpha: (a: number) => unknown }> = [];
+  private fadeAt(x: number, y: number): number {
+    const s = this.fit * this.zoom, sx = this.map.x + x * s, sy = this.map.y + y * s, c = this.clip, E = FADE_E;
+    return Phaser.Math.Clamp(Math.min((sx - c.l) / E, (c.r - sx) / E, (sy - c.t) / E, (c.b - sy) / E), 0, 1);
+  }
+  /** 按屏幕位置给每颗星 / 每条线 / 中心头像算淡出（平移、缩放、刷新后调用）。 */
+  private applyFade(): void {
+    if (!this.built) return;
+    for (const v of this.nodes.values()) {
+      const a = this.fadeAt(v.n.x, v.n.y); v.fade = a;
+      v.base.setAlpha(a * v.baseAlpha); v.icon?.setAlpha(a * v.iconAlpha);
+      if (v.hit.input) v.hit.input.enabled = a > .5;
+    }
+    for (const l of this.lines) { const A = STAR_BY_ID.get(l.a)!, B = STAR_BY_ID.get(l.b)!, a = Math.min(this.fadeAt(A.x, A.y), this.fadeAt(B.x, B.y)); l.ink.setAlpha(.72 * a); l.gold.setAlpha(a); }
+    const pa = this.fadeAt(CENTER.x, CENTER.y); for (const o of this.portraitParts) o.setAlpha(pa);
+    this.ring.setAlpha(this.selected ? this.nodes.get(this.selected)?.fade ?? 1 : 1);
+  }
   /** 底座图的显示尺寸系数（图是 2×，显示按设计稿 1×；入口 / 要星图 128 宽包含外圈笔触，按设计稿 44 直径换算）。 */
   private baseScale(kind: StarNode['kind']): number { const img2x = { gate: 128, small: 58, notable: 128, keystone: 186 }[kind], disp2x = DISP[kind] * 2; return img2x / disp2x; }
 
@@ -165,10 +189,10 @@ export class StarMapUI {
       const w = src.width * .7, sx = (src.width - w) / 2, sy = src.height * .06; g.drawImage(src, sx, sy, w, w, 0, 0, 160, 160);
       s.textures.addCanvas(faceKey, c);
     }
-    const ring = s.add.graphics().setScrollFactor(0); ring.fillStyle(0x0b0806, .85).fillCircle(CENTER.x, CENTER.y, R + 3).lineStyle(2, 0xc9a35e, .9).strokeCircle(CENTER.x, CENTER.y, R + 3); this.map.add(ring);
+    const ring = s.add.graphics().setScrollFactor(0); this.portraitParts.push(ring); ring.fillStyle(0x0b0806, .85).fillCircle(CENTER.x, CENTER.y, R + 3).lineStyle(2, 0xc9a35e, .9).strokeCircle(CENTER.x, CENTER.y, R + 3); this.map.add(ring);
     const c = CHARACTERS.find(x => x.id === st.hero);
-    if (s.textures.exists(faceKey)) this.map.add(s.add.image(CENTER.x, CENTER.y, faceKey).setDisplaySize(R * 2, R * 2).setScrollFactor(0).setName('star-map-face'));
-    else if (c && s.textures.exists(c.portrait)) { const im = s.add.image(CENTER.x, CENTER.y, c.portrait).setScrollFactor(0).setName('star-map-face'); im.setScale(Math.min(R * 1.6 / im.width, R * 1.6 / im.height)); this.map.add(im); }
+    if (s.textures.exists(faceKey)) { const im = s.add.image(CENTER.x, CENTER.y, faceKey).setDisplaySize(R * 2, R * 2).setScrollFactor(0).setName('star-map-face'); this.map.add(im); this.portraitParts.push(im); }
+    else if (c && s.textures.exists(c.portrait)) { const im = s.add.image(CENTER.x, CENTER.y, c.portrait).setScrollFactor(0).setName('star-map-face'); im.setScale(Math.min(R * 1.6 / im.width, R * 1.6 / im.height)); this.map.add(im); this.portraitParts.push(im); }
   }
 
   private buildText(): void {
@@ -208,15 +232,15 @@ export class StarMapUI {
     const p = this.scene.input.activePointer, before = this.zoom, next = Phaser.Math.Clamp(this.zoom * (dy > 0 ? 1 / 1.12 : 1.12), ZOOM_MIN, ZOOM_MAX);
     if (next === before) return;
     // 以鼠标为中心缩放
-    const k = next / before; this.map.x = p.x - (p.x - this.map.x) * k; this.map.y = p.y - (p.y - this.map.y) * k; this.zoom = next; this.map.setScale(this.fit * this.zoom); this.clampPan(); this.renderTip();
+    const k = next / before; this.map.x = p.x - (p.x - this.map.x) * k; this.map.y = p.y - (p.y - this.map.y) * k; this.zoom = next; this.map.setScale(this.fit * this.zoom); this.clampPan(); this.applyFade(); this.renderTip();
   };
   private readonly onDown = (p: Phaser.Input.Pointer): void => { if (!this.visible()) return; this.drag = { x: this.map.x, y: this.map.y, mx: p.x, my: p.y, moved: false }; };
   private readonly onMove = (p: Phaser.Input.Pointer): void => {
     const d = this.drag; if (!d || !p.isDown || !this.visible()) return;
     if (!d.moved && Math.hypot(p.x - d.mx, p.y - d.my) < 6) return;
-    d.moved = true; this.map.setPosition(d.x + p.x - d.mx, d.y + p.y - d.my); this.clampPan(); this.renderTip();
+    d.moved = true; this.map.setPosition(d.x + p.x - d.mx, d.y + p.y - d.my); this.clampPan(); this.applyFade(); this.renderTip();
   };
-  private readonly onUp = (): void => { const d = this.drag; if (d?.moved) this.scene.time.delayedCall(0, () => { if (this.drag === d) this.drag = null; }); else this.drag = null; };
+  private readonly onUp = (): void => { const d = this.drag; if (d?.moved) setTimeout(() => { if (this.drag === d) this.drag = null; }, 0); /* 战斗内暂停时 scene.time 不走，不能用 delayedCall */ else this.drag = null; };
   private bind(): void { const i = this.scene.input; i.on('wheel', this.onWheel); i.on('pointerdown', this.onDown); i.on('pointermove', this.onMove); i.on('pointerup', this.onUp); }
   private unbind(): void { const i = this.scene.input; i?.off('wheel', this.onWheel); i?.off('pointerdown', this.onDown); i?.off('pointermove', this.onMove); i?.off('pointerup', this.onUp); }
   private visible(): boolean { let o: Phaser.GameObjects.Container | null = this.root; while (o) { if (!o.visible || !o.active) return false; o = o.parentContainer; } return this.built; }
@@ -265,10 +289,14 @@ export class StarMapUI {
   render(): void {
     if (!this.built || !this.root.active) return;
     const st = this.o.state(), lit = litSet(st.lit, st.gate);
-    for (const { n, base, icon } of this.nodes.values()) {
-      const s = this.stateOf(n, lit, st); base.setTexture(nodeKey(n, s)); icon?.setAlpha(ICON_ALPHA[s]);
+    for (const v of this.nodes.values()) {
+      const n = v.n, s = this.stateOf(n, lit, st), k = this.baseScale(n.kind) * DISP[n.kind];
+      // 入口：已点亮的放大 12%、全亮；可点的略压暗——两者在 44px 下原来几乎一样（2026-11-21 验收第 3 条）
+      const gk = n.kind === 'gate' ? (s === 'on' ? 1.12 : 1) : 1;
+      v.base.setTexture(nodeKey(n, s)).setDisplaySize(k * gk, k * gk); v.baseAlpha = n.kind === 'gate' && s === 'ready' ? .8 : 1; v.iconAlpha = ICON_ALPHA[s];
     }
     for (const l of this.lines) { const on = lit.has(l.a) && lit.has(l.b); l.gold.setVisible(on); l.ink.setVisible(!on); }
+    this.applyFade();
     // 选中圈
     this.ring.clear();
     const sel = this.selected ? STAR_BY_ID.get(this.selected) : undefined;
@@ -306,10 +334,12 @@ export class StarMapUI {
   private renderTip(): void {
     if (!this.built) return;
     const id = this.hover, n = id ? STAR_BY_ID.get(id) : undefined;
-    if (!n || this.drag?.moved) { this.tip.setVisible(false); return; }
+    // 悬停的就是选中的那颗：右栏已经写着，不再弹框（2026-11-21 验收第 2 条：悬停框盖住右栏「已点亮」）
+    if (!n || this.drag?.moved || id === this.selected || (this.nodes.get(n.id)?.fade ?? 1) < .5) { this.tip.setVisible(false); return; }
     const st = this.o.state(), s = this.fit * this.zoom, x = this.map.x + n.x * s, y = this.map.y + n.y * s;
     this.tip.setText(`${n.name}${n.todo ? '（效果尚未开放）' : ''}\n${n.id === st.gate ? '你的入口' : n.desc}`).setVisible(true);
-    const tx = Phaser.Math.Clamp(x + 16, 8, this.W - this.tip.width - 8), ty = Phaser.Math.Clamp(y - this.tip.height - 12, 8, this.H - this.tip.height - 8);
+    // 放在星的右侧；会伸进右栏时改放左侧（左侧也放不下就贴在可见区内）
+    const c = this.clip, right = x + 16 + this.tip.width <= c.r - 4, tx = right ? x + 16 : Math.max(c.l + 4, x - 16 - this.tip.width), ty = Phaser.Math.Clamp(y - this.tip.height - 12, 8, c.b - this.tip.height - 4);
     this.tip.setPosition(tx, ty);
   }
 }

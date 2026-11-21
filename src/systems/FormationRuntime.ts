@@ -134,7 +134,7 @@ export class FormationRuntime {
     const tags = [p.echo ? '呼应 ×1.5' : '', p.favored ? '擅阵 ×1.25' : '', p.half ? '诸葛亮随行 · 半效' : ''].filter(Boolean).join(' · ');
     const ik = 'formation_icon_' + this.current;
     return { name: '阵 · ' + d.name, mark: d.short, icon: this.h.player.scene.textures.exists(ik) ? ik : undefined,
-      desc: `${d.main}\n代价：${d.cost}\n主将：${d.hero}\n${d.sortie}\n入阵 ${Math.min(n, f.cap)} / ${Number.isFinite(f.cap) ? f.cap : n} 人（8 + 2 × 统御）${tags ? '\n' + tags : ''}`,
+      desc: `${d.main}\n代价：${d.cost}\n主将：${d.hero}\n${d.sortie}\n适用：${d.fit}\n入阵${Math.min(n, f.cap)} / ${Number.isFinite(f.cap) ? f.cap : n} 人（8 + 2 × 统御）${tags ? '\n' + tags : ''}`,
       kind: (this.formed ? '军阵 · 护阵生效' : this.h.legion.order === 'sortie' ? '军阵 · 出击散阵' : '军阵 · 成阵中') + (this.loadout.length > 1 ? ' · X 变阵' : '') };
   }
 

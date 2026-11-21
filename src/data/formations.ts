@@ -17,21 +17,22 @@ export interface FormationDef {
   name: string; /** 一字简称（增益图标角标、小地图） */ short: string; role: string;
   /** 呼应流派：是主修之一（或主修兵阵）时主效果 ×echoMul。 */ echo: SchoolId;
   main: string; cost: string; hero: string; sortie: string;
+  /** 什么时候用（布阵页「适用」一行；平衡会话实测 11-21：雁行要远程部曲多才划算，其余阵也写明）。 */ fit: string;
   /** 护阵拴绳（像素，原来 260）：阵形要看得出来，士兵离位追敌的距离收紧。 */ leash: number;
 }
 export const FORMATIONS: Readonly<Record<FormationId, FormationDef>> = {
   circle: { name: '方圆阵', short: '圆', role: '守', echo: 'formation', leash: 150,
-    main: '部曲 / 随从受伤 −20%', cost: '部曲伤害 −10%、移速 −10%', hero: '主将受伤 −8%', sortie: '出击：外圈向四周推开一圈（击退、减速 1 秒）' },
+    main: '部曲 / 随从受伤 −20%', cost: '部曲伤害 −10%、移速 −10%', hero: '主将受伤 −8%', sortie: '出击：外圈向四周推开一圈（击退、减速 1 秒）', fit: '近战部曲多、要站住守点或硬吃首领时用' },
   wedge: { name: '锋矢阵', short: '矢', role: '突', echo: 'cavalry', leash: 220,
-    main: '部曲打正前方的敌人伤害 +15%', cost: '部曲受伤 +10%', hero: '主将移速 +6%', sortie: '出击：全队沿朝向直线冲锋，穿透撞退（冷却 6 秒）' },
+    main: '部曲打主将前方（半边）的敌人伤害 +15%', cost: '部曲受伤 +5%', hero: '主将移速 +6%', sortie: '出击：全队沿朝向直线冲锋，穿透撞退、沿途重击（冷却 6 秒）', fit: '一路往前推进、主将常朝一个方向冲时用' },
   crane: { name: '鹤翼阵', short: '翼', role: '包抄', echo: 'stratagem', leash: 220,
-    main: '被两侧夹击的敌人受伤 +20%；部曲攻击范围 +20%', cost: '部曲受伤 +10%（中军空虚）', hero: '—', sortie: '出击：两翼向敌人最密处合拢包抄' },
+    main: '被两侧夹击的敌人受伤 +30%；部曲攻击范围 +20%', cost: '部曲受伤 +10%（中军空虚）', hero: '—', sortie: '出击：两翼向敌人最密处合拢包抄', fit: '部曲人多、敌人成团扑来时用' },
   geese: { name: '雁行阵', short: '雁', role: '射', echo: 'archery', leash: 190,
-    main: '远程部曲伤害 +20%、射程 +20%', cost: '近战部曲伤害 −15%', hero: '主将武器范围 +5%', sortie: '出击：远程朝敌人最密处齐射三轮' },
+    main: '远程部曲伤害 +20%、射程 +20%', cost: '近战部曲伤害 −15%', hero: '主将武器范围 +5%', sortie: '出击：远程朝敌人最密处齐射三轮', fit: '远程部曲（弓兵、连弩）多时用；近战多反而吃亏' },
   snake: { name: '长蛇阵', short: '蛇', role: '机动', echo: 'cavalry', leash: 220,
-    main: '绕击：蛇身路过的敌人，每名士兵每 1.2 秒顺手一击；部曲 / 随从移速 +25%', cost: '部曲伤害 −10%', hero: '主将移速 +5%', sortie: '出击：蛇身沿来路反卷回去' },
+    main: '绕击：蛇身路过的敌人，每名士兵每 1.2 秒顺手一击（0.7 倍）；部曲 / 随从移速 +25%', cost: '部曲伤害 −10%', hero: '主将移速 +5%', sortie: '出击：蛇身沿来路反卷回去', fit: '主将跑动多、绕着敌群放风筝时用' },
   bazhen: { name: '八阵', short: '八', role: '困', echo: 'stratagem', leash: 220,
-    main: '阵内敌人减速 15%，每 4 秒困住一个（眩晕 1.2 秒）；部曲伤害 +10%、受伤 −10%', cost: '换入后 3 秒才成阵', hero: '技艺「八阵图」范围 +25%', sortie: '出击：八队向阵心合围' },
+    main: '阵内敌人减速 15%，每 4 秒困住一个（眩晕 1.2 秒）；部曲伤害 +10%、受伤 −10%', cost: '换入后 3 秒才成阵', hero: '技艺「八阵图」范围 +25%', sortie: '出击：八队向阵心合围', fit: '敌人密集围上来、想边打边控时用' },
 };
 
 /** 名将擅阵（主效果 ×favoredMul）。 */
@@ -50,10 +51,11 @@ export const FORMATION = {
   spacing: 38,
   // 方圆减伤单独封顶 cap（平衡会话复核 11-20：它和练兵甲胄、统御、铁壁都相乘，又基本常驻），呼应 / 擅阵叠满也不超过 −25%
   circle: { taken: .2, cap: .25, heroTaken: .08, dmg: -.1, speed: -.1, pushR: 70, push: 46, slowMs: 1000, slow: .6 },
-  wedge: { front: .15, arcDeg: 60, heroMove: .06, taken: .1, chargeDist: 300, chargeMs: 650, chargeCd: 6000, chargeHit: .6, chargePush: 38 },
-  crane: { pincer: .2, range: .2, taken: .1, pincerR: 120, flankMs: 1200 },
+  // 11-21 平衡实测（hero-balance-review.md §15.3）：锋矢原来反效果（部曲伤害 ×0.69）→ 正前方 60° → 90°、代价受伤 +10% → +5%、冲锋 0.6 → 1.2 倍；鹤翼夹击 .2 → .3；长蛇绕击 .5 → .7
+  wedge: { front: .15, arcDeg: 90, heroMove: .06, taken: .05, chargeDist: 300, chargeMs: 650, chargeCd: 6000, chargeHit: 1.2, chargePush: 38 },
+  crane: { pincer: .3, range: .2, taken: .1, pincerR: 120, flankMs: 1200 },
   geese: { ranged: .2, range: .2, melee: -.15, heroRange: .05, volleys: 3, volleyGapMs: 450, volleyR: 90 },
-  snake: { grazeMs: 1200, grazeR: 44, graze: .5, speed: .25, heroMove: .05, dmg: -.1, trailStep: 14, gap: 30, lead: 56 },
+  snake: { grazeMs: 1200, grazeR: 44, graze: .7, speed: .25, heroMove: .05, dmg: -.1, trailStep: 14, gap: 30, lead: 56 },
   bazhen: { r: 200, slow: .15, trapMs: 4000, stunMs: 1200, dmg: .1, taken: .1, eightRange: .25, ring: 118 },
 } as const;
 

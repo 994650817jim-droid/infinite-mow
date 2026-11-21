@@ -85,7 +85,7 @@ export const STORY_CAST: Record<string, { name: string; portrait?: string }> = {
   zhaofan: { name: '赵范', portrait: 'ink_cast_zhaofan' }, liudu: { name: '刘度', portrait: 'ink_cast_liudu' }, hanxuan: { name: '韩玄', portrait: 'ink_cast_hanxuan' }, fanshi: { name: '樊氏', portrait: 'ink_cast_fanshi' },
   liuxian: { name: '刘贤', portrait: 'ink_cast_liuxian' }, xingdaorong: { name: '邢道荣', portrait: 'ink_cast_xingdaorong' }, yangling: { name: '杨龄', portrait: 'ink_cast_yangling' },
   // 第七–十二章（2026-11-20 补剧本）：立绘待补，先只显示名字章（清单 MISSING_PORTRAITS_CH712）
-  yanghuai: { name: '杨怀' }, zhangren: { name: '张任' }, liuzhang: { name: '刘璋' }, liuxun: { name: '刘循', portrait: 'ink_cast_liuxun' },
+  yanghuai: { name: '杨怀', portrait: 'ink_cast_yanghuai' }, zhangren: { name: '张任' }, liuzhang: { name: '刘璋' }, liuxun: { name: '刘循', portrait: 'ink_cast_liuxun' },
   fazheng: { name: '法正', portrait: 'ink_cast_fazheng' }, zhanghe: { name: '张郃' }, xiahouyuan: { name: '夏侯渊' },
   pangde: { name: '庞德' }, lvmeng: { name: '吕蒙' }, wangfu: { name: '王甫', portrait: 'ink_cast_wangfu' }, guanping: { name: '关平', portrait: 'ink_cast_guanping' },
   huangquan: { name: '黄权', portrait: 'ink_cast_huangquan' }, sunhuan: { name: '孙桓' }, zhuran: { name: '朱然' }, luxun: { name: '陆逊' },

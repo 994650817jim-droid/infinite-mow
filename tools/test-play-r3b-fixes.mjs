@@ -24,7 +24,7 @@ ck('结算一行「属性点 N 点未加 · 去…加点」；第一次能加时
 ck('营寨进门：主公有没加的点 → 一句「主帐「武将谱」里加点」', /pointsHint\(heroFreePoints\(h as never\),\{world:true,battle:mechOpen\('attributes'\)\}\);if\(ph\)this\.time\.delayedCall\(stableNew\?2600:600,\(\)=>this\.toast\('有 '\+ph\.n\+' 点属性点没加 · 主帐「武将谱」里加点'\)\);/.test(CS));
 
 // ———— 6) 章节第一关前整军
-ck('天下地图出征各章第一关：从存档点开打（主线没打过、天下战役）→ 先进出征整军（同战败重进一套）', /this\.preCampDue = this\.campaignLoaded && \(this\.campaignReplay \? this\.inheritsCampaign\(\) : this\.worldCampaign\)/.test(G) && /this\.registry\.remove\('campaignTransfer'\); this\.registry\.set\('worldCampaign', true\);/.test(src('src/scenes/WorldMapScene.ts')));
+ck('天下地图出征各章第一关：从存档点开打（主线没打过、天下战役）→ 先进出征整军（同战败重进一套）', /this\.preCampDue = this\.campaignLoaded && \(this\.campaignReplay \? this\.inheritsCampaign\(\) : this\.musterOnSortie\(\)\)/.test(G) && /this\.registry\.remove\('campaignTransfer'\); this\.registry\.set\('worldCampaign', true\);/.test(src('src/scenes/WorldMapScene.ts')));
 
 // ———— 7) 攻城城外段
 const S = await load('src/data/siegeMedium.ts'), I = S.MID_SIEGE.idle;

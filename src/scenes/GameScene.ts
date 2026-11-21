@@ -26,7 +26,7 @@ import {showBarkCard,clearBarkCards} from '../ui/StoryBarkCard';
 import { BATTLE_LOOT_CAP, type BattleCapKind } from '../data/battleLootCap';
 import { POINTS_GUIDE_KEY, pointsGuideText, pointsHint } from '../data/pointsHint';
 import { DEFEAT, buildCarryNote, defeatTip, defeatLines } from '../data/defeatFlow';
-import { battlePoint, retreatTarget, type RetreatTarget } from '../world/DefeatRetreat';
+import { battleNodeId, battlePoint, retreatTarget, type RetreatTarget } from '../world/DefeatRetreat';
 import { patchCampaignDefeat } from '../systems/Campaign';
 import { loseProvisionsPct } from '../world/WorldStore';
 import type {DefectorInfo} from '../data/fortunes';
@@ -1022,7 +1022,7 @@ export class GameScene extends Phaser.Scene {
     this.campaignLoaded = !!carriedState && !chained;
     // 出征前整军（总制作人试玩 + 测试组 honest-journey：重进本关 0 兵开局，攒着上千随军粮却没有行营可花）：从存档点开打的主线关先进行营再出征
     // 第五轮：攻城 / 守城 / 军情 / 支线攻城关（只读继承征程构筑）也先整军——原来直接开打，兵力 0、主将带着上一场战败的伤；整军花费只写增量（saveMusterDelta）
-    this.preCampDue = this.campaignLoaded && (this.campaignReplay ? this.inheritsCampaign() : this.worldCampaign) && !isChapterTestRun() && !this.encounterPreview && mechOpen('squad'); this.preCampArmed = false; this.preCamp = false; this.musterBase = null;
+    this.preCampDue = this.campaignLoaded && (this.campaignReplay ? this.inheritsCampaign() : this.musterOnSortie()) && !isChapterTestRun() && !this.encounterPreview && mechOpen('squad'); this.preCampArmed = false; this.preCamp = false; this.musterBase = null;
     // 篇章没有关前剧情（没调 setupStory 带章节 id）时：开打第一帧直接进整军
     if (this.preCampDue) { const tryOpen = (): void => { if (!this.preCampDue || this.preCampArmed || this.over) { this.events.off(Phaser.Scenes.Events.UPDATE, tryOpen); return; } if (this.mode !== 'none') return; /* 军情卷轴等先放完 */ this.events.off(Phaser.Scenes.Events.UPDATE, tryOpen); this.preCampDue = false; this.openPreCamp(() => {}); };
       this.events.on(Phaser.Scenes.Events.UPDATE, tryOpen); this.events.once('shutdown', () => this.events.off(Phaser.Scenes.Events.UPDATE, tryOpen)); }
@@ -1512,6 +1512,8 @@ export class GameScene extends Phaser.Scene {
   protected legionOrderOverride(): boolean { return false; }
   /** F（出击键）的场景覆盖（守城 v2：一键 F 推梯 / 滚木 / 泼油 / 修门）；返回 true 表示已处理。 */
   protected interactOverride(): boolean { return false; }
+  /** 主线没打过的关从存档点开打时先整军：第一、二章看天下战役标记（worldCampaign）；第 3～12 章篇章场景、官渡覆盖成 true（第六轮试玩：8-1 两次直接开打）。 */
+  protected musterOnSortie(): boolean { return this.worldCampaign; }
   /** 回血点（泉眼 / 水井 / 干粮）落点：默认同 fieldPlace；守城 v2 放城里。 */
   protected healPlace(x: number, y: number): { x: number; y: number } { return this.fieldPlace(x, y); }
   protected updateCamera(dt: number): void {
@@ -4511,7 +4513,7 @@ export class GameScene extends Phaser.Scene {
   }
   // ———— 战败流程（data/defeatFlow.ts，共享笔记 defeat-flow.md） ————
   /** 这一仗退到哪（最近的我方城池 / 营寨）；战败惩罚的说明行。 */
-  defeatRetreat: RetreatTarget | null = null; defeatNotes: string[] = [];
+  defeatRetreat: RetreatTarget | null = null; defeatNotes: string[] = []; /** 攻城 / 守城战败时这一仗的城（出城回地图时选中它）。 */ private defeatCity: string | null = null;
   /** 遭遇战预览（?encounter= 汜水 / 荥阳 / 自定关）：不算正式出征。注意篇章场景的 runConfig 都带 encounter，不能拿它判断。 */
   encounterPreview = false;
   /** 惩罚生效：正式战斗（测试战斗只有 __IM_DEFEAT_LIVE 时）、天下已开放、不是遭遇战预览。 */
@@ -4522,7 +4524,7 @@ export class GameScene extends Phaser.Scene {
   /** 战败：惩罚（存档点主将 / 随行负伤、部曲折损，营寨军粮）、撤回目标、慢动作压暗 + 对话卡、结算面板晚出、按钮改「退守 X」。 */
   /** reason：只有主将阵亡（death）才「主将 / 随行负伤、部曲折损」；守城府衙失守（keep）、超时撤军（timeout）主将还活着，只按各自规则（守城：城池被围；营寨军粮照扣）。 */
   protected runDefeatFlow(reason: RunEndReason = 'death'): void {
-    const key = this.hardKey(), stage = this.hardStage(), city = this.scene.key === 'SiegeGameScene' ? String(this.registry.get('siegeCity') ?? '') : null;
+    const key = this.hardKey(), stage = this.hardStage(), city = this.scene.key === 'SiegeGameScene' ? String(this.registry.get('siegeCity') ?? '') : null; this.defeatCity = city || null;
     // 守城战败：退到最近的「另一座」我方城池或营寨（原来退回刚没守住、仍在告急的那座城本身）
     const defending = !!city && (this.registry.get('siegeMode') === 'defense' || this.registry.get('siegeMode') === 'intercept');
     this.defeatRetreat = worldUnlocked() && !this.encounterPreview ? retreatTarget(battlePoint(key, city), defending ? city : null) : null;
@@ -4547,14 +4549,17 @@ export class GameScene extends Phaser.Scene {
     window.setTimeout(() => { if (!this.sys?.isActive() || this.mode !== 'result') return; clearBarkCards(this); /* 阵亡台词卡（连同还没轮到的）收掉，免得压在去框后的结算文字后面（2026-11-21） */ this.resultPanel.setVisible(true); this.presentResult(false); }, DEFEAT.resultDelayMs);
     queueMicrotask(() => this.wireDefeatButton());
   }
-  /** 结算按钮改成「退守 X」：回天下地图，选中并居中那座城（或营寨），弹败退告示；关卡没平定，照样能再出征。 */
+  /**
+   * 结算按钮改成「退守 X」：真的进那座城（TownScene，城里军医治伤、募兵所补兵）或义军营寨（CityScene），弹一条败退提示；
+   * 出城回天下地图时选中这一仗的关卡（retreatReturn：主线 / 篇章 / 支线的地图节点，攻城守城的那座城），主按钮就是再出征。
+   * 第六轮试玩（8-1）：原来回的是天下地图、选中的是许昌，再点主按钮进的是许昌城而不是接着打这一章。
+   */
   protected wireDefeatButton(): void {
     const t = this.defeatRetreat, home = this.resultPanel.getByName('result-home') as Phaser.GameObjects.Text | null; if (!t || !home) return;
     home.setText('退守 ' + t.name).removeAllListeners('pointerdown').on('pointerdown', () => {
       for (const k of Object.keys(this.registry.getAll())) if (/Transfer$/.test(k)) this.registry.remove(k);
-      this.registry.set('defeatRetreat', { name: t.name, kind: t.kind, stage: this.chapter.name, notes: [...this.defeatNotes] });
-      if (t.kind === 'city') this.registry.set('mapFocusCity', t.id); // 营寨：地图那边按 defeatRetreat 居中营寨
-      this.scene.start('WorldMapScene');
+      this.registry.set('retreatReturn', { node: battleNodeId(this.hardKey()), city: this.defeatCity, stage: this.chapter.name, name: t.name, notes: [...this.defeatNotes] });
+      if (t.kind === 'city') this.scene.start('TownScene', { city: t.id }); else this.scene.start('CityScene');
     });
     this.layoutResultButtons?.();
   }

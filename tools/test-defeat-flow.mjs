@@ -1,5 +1,5 @@
 // 战败流程（共享笔记 defeat-flow.md，用户 2026-11-20「被打败被打死后做一段剧情然后回到最近的城市或者营寨，需要给一些惩罚。然后还可以再次挑战」）：
-// 主将倒下 → 慢动作压暗 + 对话卡 → 惩罚（存档点负伤 / 部曲折损 / 营寨军粮）→ 「退守 X」→ 天下地图告示；战败的关还能再出征。
+// 主将倒下 → 慢动作压暗 + 对话卡 → 惩罚（存档点负伤 / 部曲折损 / 营寨军粮）→ 「退守 X」→ 真的进那座城 / 营寨（败退提示）→ 回地图选中这一仗；战败的关还能再出征。
 // 用法：BASE=http://127.0.0.1:5241/ node tools/test-defeat-flow.mjs   截图在 assets/review/defeat-flow/
 import { chromium } from 'playwright';
 import { mkdirSync } from 'node:fs';
@@ -25,24 +25,28 @@ await p.evaluate(() => { globalThis.__IM_DEFEAT_LIVE = true; localStorage.setIte
 await p.waitForTimeout(300);
 const early = await p.evaluate(() => { const s = window.__S; return { slow: s.devTimeScale, panel: s.resultPanel.visible, t0: performance.now() }; });
 const cardText = () => window.__S.children.list.filter(o => o.name === 'story-bark-card' && o.visible).flatMap(o => o.list ?? []).filter(o => o.type === 'Text').map(o => o.text).join(' | ');
-await p.waitForFunction(f => /主公|撤|退/.test(eval('(' + f + ')')()), cardText.toString(), { timeout: 2600 }).catch(() => {});
+await p.waitForFunction(f => /主公|撤|退|将军|护住/.test(eval('(' + f + ')')()), cardText.toString(), { timeout: 2600 }).catch(() => {});
 const cardMs = await p.evaluate(t0 => Math.round(performance.now() - t0 + 300), early.t0);
 const mid = await p.evaluate(() => { const s = window.__S; return { dim: s.children.getByName('defeat-dim')?.alpha ?? 0, slow: s.devTimeScale, panel: s.resultPanel.visible, cards: s.children.list.filter(o => o.type === 'Container' && o.depth >= 1400 && o.depth < 1500 && o.visible).length, texts: s.children.list.filter(o => o.depth >= 1400 && o.depth < 1500).flatMap(o => o.list ?? []).filter(o => o.type === 'Text').map(o => o.text).join(' | ').slice(0, 200) }; });
 await p.screenshot({ path: OUT + '/defeat-card.png' });
-ck('倒下后：慢动作（×0.35）+ 压暗 + 对话卡，结算面板先不出', early.slow < .5 && mid.dim > .4 && !early.panel && /主公|撤|退/.test(mid.texts), { ...mid, early: { slow: early.slow, panel: early.panel }, cardMs });
+ck('倒下后：慢动作（×0.35）+ 压暗 + 对话卡，结算面板先不出', early.slow < .5 && mid.dim > .4 && !early.panel && /主公|撤|退|将军|护住/.test(mid.texts), { ...mid, early: { slow: early.slow, panel: early.panel }, cardMs });
 await p.waitForTimeout(2600);
 const res = await p.evaluate(async () => { const s = window.__S, W = await import('/src/world/WorldStore.ts'), c = JSON.parse(localStorage.getItem('im_campaign_v1')).heroes.zhaoyun;
   return { panel: s.resultPanel.visible, slow: s.devTimeScale, btn: s.resultPanel.getByName('result-home')?.text, body: s.resultTexts.body.text.slice(-120), hp: c.player.hpFrac, troops: c.army.soldiers.length, prov: W.loadWorld().provisions, stages: W.arcStages('qunxiong'), playable: W.arcStagePlayable("qunxiong", 2), notes: s.defeatNotes, dbg: { wu: W.worldUnlocked(), prev: s.encounterPreview, rt: s.defeatRetreat, live: s.defeatLive(), has: typeof s.runDefeatFlow } }; });
 ck('结算面板晚出、慢动作恢复；按钮改「退守 义军营寨」（没有城就退营寨）', res.panel && res.slow === 1 && res.btn === '退守 义军营寨', res);
 ck('惩罚：存档点主将生命 ≤55%、部曲 10→7、营寨军粮 1000→920，结算正文写明', res.hp === .55 && res.troops === 7 && res.prov === before.prov - 80 && /战败惩罚/.test(res.body), { before, res });
 ck('关卡没平定：群雄篇章进度不变，第 ' + before.stage + ' 关照样可以再出征', res.stages === 1 && before.playable && res.playable, { before: before.playable, after: res.playable, stages: res.stages });
-// 退守 → 天下地图告示
+// 退守 → 真的进营寨（第六轮试玩：原来回天下地图、选中的是城，主按钮进城而不是接着打）→ 营寨弹败退提示 → 回地图选中这一仗
 await p.evaluate(() => window.__S.resultPanel.getByName('result-home').emit('pointerdown'));
-await p.waitForFunction(() => window.__game.scene.isActive('WorldMapScene') && window.__game.scene.getScene('WorldMapScene').children.getByName('defeat-modal'), null, { timeout: 30000 });
-await p.waitForTimeout(900);
-const map = await p.evaluate(() => { const m = window.__game.scene.getScene('WorldMapScene').children.getByName('defeat-modal'); return { texts: m.list.filter(o => o.type === 'Text').map(o => o.text).join(' | ') }; });
+await p.waitForFunction(() => window.__game.scene.isActive('CityScene') && window.__game.scene.getScene('CityScene').children.getByName('city-toast'), null, { timeout: 30000 });
+await p.waitForTimeout(600);
+const camp2 = await p.evaluate(() => ({ toast: window.__game.scene.getScene('CityScene').children.getByName('city-toast')?.text ?? '' }));
 await p.screenshot({ path: OUT + '/retreat-notice.png' });
-ck('天下地图：弹「败退 · 退守义军营寨」告示，列惩罚、写明可再出征', /败退 · 退守义军营寨/.test(map.texts) && /部曲折损/.test(map.texts) && /再出征/.test(map.texts), map);
+ck('退守义军营寨：真的进营寨，弹败退提示（列惩罚、军医 / 募兵所、可再出征）', /失利/.test(camp2.toast) && /退守义军营寨/.test(camp2.toast) && /部曲折损/.test(camp2.toast) && /再出征/.test(camp2.toast), camp2);
+await p.evaluate(() => window.__game.scene.getScene('CityScene').children.getByName('city-map')?.emit('pointerdown'));
+await p.waitForFunction(() => window.__game.scene.isActive('WorldMapScene'), null, { timeout: 30000 }); await p.waitForTimeout(1500);
+const sel = await p.evaluate(() => { const m = window.__game.scene.getScene('WorldMapScene'); return { kind: m.selected?.kind, node: m.selected?.node?.id }; });
+ck('出营寨回天下地图：选中的是这一仗的关卡（主按钮就是再出征）', sel.kind === 'node' && !!sel.node, sel);
 ck('无报错', !errors.length, errors);
 await b.close();
 console.log(fail ? `\n${fail} 项失败` : '\n全部通过'); process.exit(fail ? 1 : 0);

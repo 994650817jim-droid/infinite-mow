@@ -11,6 +11,7 @@ import { warnFx } from '../ui/WarnFx';
 import { playSheet } from './SkillFxSheets';
 import { worldText } from '../world/WorldUI';
 import type { Enemy } from '../entities/Enemy';
+import { HIT_FLASH } from '../entities/Enemy';
 import type { Player } from '../entities/Player';
 import type { Ally } from '../entities/Ally';
 import type { EnemyKind } from '../types';
@@ -430,7 +431,7 @@ export class SiegeMidCity {
     if (src !== 'burn') { if (now < r.guardUntil) return; r.guardUntil = now + M.ram.guardMs; }
     if (src === 'arrow') d *= M.ram.arrowMul;
     r.flashUntil = now + 260; if (now >= this.ramAlertNext) { this.ramAlertNext = now + M.ram.alertCdMs; this.ramAlertUntil = now + 1500; }
-    r.hp -= d; r.img.setTintFill(0xffffff); this.h.scene.time.delayedCall(70, () => r.img.active && r.img.clearTint());
+    r.hp -= d; r.img.setTint(HIT_FLASH.propTint); this.h.scene.time.delayedCall(70, () => r.img.active && r.img.clearTint()); // 冲车受击：暖色着色，不整块刷白（同战场物件，Enemy.HIT_FLASH.propTint）
     if (r.hp > 0) { if (r.hp < this.ramCfg.hp * .45 && this.has(ART.ram)) r.img.setFrame(4); return; }
     r.state = 'wreck'; this.stats.ramsLost++;
     // 有备用台数就不用等冷却

@@ -1,3 +1,4 @@
+import { MAX_SCHOOLS } from '../data/schools';
 import { mechOpen } from '../data/mechanicUnlocks';
 import { scaleFor } from '../data/heroStats';
 import Phaser from 'phaser';
@@ -68,7 +69,7 @@ const INK_FACE: Record<string, { fx: number; fy: number; w: number }> = {
   zhaoyun: { fx: .47, fy: .12, w: .40 }, guanyu: { fx: .38, fy: .135, w: .44 }, zhangfei: { fx: .36, fy: .175, w: .44 }, machao: { fx: .48, fy: .165, w: .42 },
   huangzhong: { fx: .34, fy: .145, w: .42 }, zhuge: { fx: .33, fy: .165, w: .40 }, liubei: { fx: .33, fy: .15, w: .42 }, weiyan: { fx: .52, fy: .135, w: .42 },
   pangtong: { fx: .49, fy: .19, w: .40 }, huangyueying: { fx: .45, fy: .15, w: .40 }, sunshangxiang: { fx: .41, fy: .15, w: .40 }, diaochan: { fx: .31, fy: .195, w: .42 },
-  lvbu: { fx: .47, fy: .19, w: .42 }, zhangliao: { fx: .37, fy: .19, w: .42 }, zhouyu: { fx: .43, fy: .22, w: .42 }, taishici: { fx: .4, fy: .2, w: .42 }, mengde: { fx: .39, fy: .15, w: .42 },
+  lvbu: { fx: .47, fy: .19, w: .42 }, zhangliao: { fx: .37, fy: .19, w: .42 }, zhouyu: { fx: .43, fy: .22, w: .42 }, taishici: { fx: .4, fy: .2, w: .42 }, mengde: { fx: .39, fy: .15, w: .42 }, ganning: { fx: .5, fy: .43, w: .42 }, dianwei: { fx: .45, fy: .17, w: .44 }, sunquan: { fx: .5, fy: .14, w: .4 }, menghuo: { fx: .5, fy: .19, w: .44 }, zhurong: { fx: .5, fy: .18, w: .4 },
 };
 const inkKey = (id: string) => 'ink_hero_' + id;
 /** 画头像进 (x, y, w, h) 框；水墨立绘未加载时先加载、加载完再补画（root 已销毁则不画）。 */
@@ -254,16 +255,19 @@ export function drawBuildOverview(o: BuildOverviewOpts): void {
     frame(R.x, R.y, R.w, R.h);
     const pad = 10, rowH = D ? 30 : 34, sealW = 22, nameW = 34, barW = R.w - pad * 2 - sealW - nameW - 46, sw = barW / 6;
     text(R.x + pad, R.y + 7, '流派 · 势', 15, '#f6dc9a', true);
-    text(R.x + R.w - pad, R.y + 10, '2 / 4 / 6 势各一档', 11, '#a8956c').setOrigin(1, 0);
+    // 主修两派（用户 11-20「关于流派也是最多往两个流派发展」）：满两派后第三派的战法 / 心法不再出，想换派走「重整构筑」
+    const majors = b.majors(), full = majors.length >= MAX_SCHOOLS;
+    text(R.x + R.w - pad, R.y + 9, '主修：' + (majors.length ? majors.map(s => SCHOOLS[s].name).join(' · ') + (full ? '' : ' · （还可选一派）') : '尚未选定（最多两派）'), 12, '#f0d79e').setOrigin(1, 0).setName(P + '-majors');
     let y = R.y + 32;
     for (const t of TAG_ORDER) {
       const n = tags[t], st = TAG_STYLE[t], d = SCHOOLS[t], tier = tierOf(n), src = b.sources(t), notes = b.bonusNotes[t] ?? [];
       icon(R.x + pad + 9, y + 6, d.icon, 20); // 流派徽印（第 3 期）
-      text(R.x + pad + sealW, y - 1, d.name, 12, n ? st.css : '#8e7f62', true);
+      const out = full && !majors.includes(t); // 主修满两派后，第三派只显示势（来自亲和 / 随行 / 信物），不能再学
+      text(R.x + pad + sealW, y - 1, d.name, 12, out ? '#6f6350' : n ? st.css : '#8e7f62', true);
       const bx = R.x + pad + sealW + nameW;
       for (let k = 0; k < 6; k++) g0.fillStyle(k < n ? st.color : 0x3a2c1c, k < n ? 1 : .85).fillRect(bx + k * sw + .5, y + 3, sw - 2, 8);
       for (const m of [2, 4]) g0.lineStyle(1, 0xf3d48a, .8).lineBetween(bx + m * sw - 1, y + 1, bx + m * sw - 1, y + 13);
-      text(bx + barW + 4, y - 1, '势 ' + n, 12, tier ? '#f3d48a' : '#d8c8a4').setName(P + '-tag-' + t);
+      text(bx + barW + 4, y - 1, out ? '非主修' : '势 ' + n, 12, out ? '#6f6350' : tier ? '#f3d48a' : '#d8c8a4').setName(P + '-tag-' + t);
       const reached = TIER_STEPS.filter(x => n >= x).map(x => d.tiers[x].name).join(' · ');
       text(bx, y + 13, reached || ('2 势：' + d.tiers[2].name), 10, reached ? st.css : '#8e7f62').setName(P + '-tag-tier-' + t);
       const srcLine = [src.tactics ? '战法 ' + src.tactics : '', src.treasures ? '信物 ' + src.treasures : '', src.extra ? '信物 ' + src.extra : '', src.manual ? '心法 1' : '', ...notes].filter(Boolean).join('、') || '还没有';
@@ -273,7 +277,7 @@ export function drawBuildOverview(o: BuildOverviewOpts): void {
     }
     // 下一步：势最高、还没到 6 的那派，下一档是什么
     y += 2; g0.lineStyle(1, GOLD, .35).lineBetween(R.x + pad, y, R.x + R.w - pad, y); y += 6;
-    const next = [...TAG_ORDER].filter(t => tags[t] < 6).sort((a1, b1) => tags[b1] - tags[a1]).slice(0, 2);
+    const next = [...TAG_ORDER].filter(t => tags[t] < 6 && b.schoolOpen(t)).sort((a1, b1) => tags[b1] - tags[a1]).slice(0, 2);
     next.forEach((t, i) => {
       if (y > R.y + R.h - 20) return;
       const gp = tagGap(tags[t]), d = SCHOOLS[t];
@@ -281,7 +285,7 @@ export function drawBuildOverview(o: BuildOverviewOpts): void {
       y += line.height + 4;
     });
     // 合击（第 2 期）：两派都到 2 势即生效；没有生效的就提示最近的两个（差几势）
-    const on = activeCombos(tags), near = on.length >= 4 || !mechOpen('combo') ? [] : COMBOS.filter(c => !on.includes(c) && Math.max(tags[c.a], tags[c.b]) >= COMBO_AT).map(c => ({ c, left: Math.max(0, COMBO_AT - tags[c.a]) + Math.max(0, COMBO_AT - tags[c.b]) })).sort((a1, b1) => a1.left - b1.left).slice(0, on.length ? 1 : 2);
+    const on = activeCombos(tags, majors), near = on.length >= 4 || !mechOpen('combo') ? [] : COMBOS.filter(c => !on.includes(c) && b.schoolOpen(c.a) && b.schoolOpen(c.b) && Math.max(tags[c.a], tags[c.b]) >= COMBO_AT).map(c => ({ c, left: Math.max(0, COMBO_AT - tags[c.a]) + Math.max(0, COMBO_AT - tags[c.b]) })).sort((a1, b1) => a1.left - b1.left).slice(0, on.length ? 1 : 2);
     if (y < R.y + R.h - 44) {
       y += 2; g0.lineStyle(1, GOLD, .35).lineBetween(R.x + pad, y, R.x + R.w - pad, y); y += 6;
       text(R.x + pad, y, '合击', 13, '#f6dc9a', true).setName(P + '-combo-title'); text(R.x + R.w - pad, y + 2, on.length ? '已生效 ' + on.length : '两派都到 2 势即生效', 11, '#a8956c').setOrigin(1, 0).setName(P + '-combo-count'); y += 20;

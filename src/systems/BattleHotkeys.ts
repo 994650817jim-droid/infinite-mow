@@ -25,6 +25,8 @@ export interface HotkeyHost {
   useJinnang?(): boolean;
   order(): 'guard' | 'sortie';
   cycleOrder(): void;
+  /** 军阵：变阵（X）。没开放 / 冷却中返回 false。 */
+  switchFormation?(): boolean;
   openBag(): void;
   canAttributes(): boolean;
   openAttributes(from: 'none' | 'pause'): void;
@@ -119,6 +121,7 @@ export class BattleHotkeys {
         case 'reroll': return h.useJinnang?.() ?? false;
         case 'order': h.cycleOrder(); return true;
         case 'sortie': if (h.order() === 'guard') h.cycleOrder(); return true;
+        case 'formation': return h.switchFormation?.() ?? false;
         case 'bag': h.openBag(); return true;
         case 'attributes': if (!h.canAttributes()) return false; h.openAttributes('none'); return true;
         case 'build': h.togglePause(); h.openBuild(); this.buildFromBattle = true; return true;
@@ -216,7 +219,9 @@ export class HotkeyHints {
           const a = typeof act === 'function' ? act(i) : act, b = o.getBounds!();
           if (b.width < 2 || b.height < 2) return;
           const t = this.pool[n] ?? (this.pool[n] = s.add.text(0, 0, '', { fontFamily: FONT, fontSize: '11px', color: '#e8d3a6', resolution: 2, stroke: '#120904', strokeThickness: 3 }).setOrigin(1, 0).setScrollFactor(0).setName('hotkey-hint'));
-          t.setText(hotkeyLabel(a)).setPosition(b.right - 3, b.top + 1).setDepth(depth).setAlpha(.92).setVisible(true).setData('action', a).setData('target', o.name);
+          // 目标是按钮文字本身（如结算「返回主菜单」）时，角标贴在字右上方外侧；原来贴在字框右上角里，「Enter」压在「菜单」上（2026-11-20 夜间 UI 审查）
+          if (o.type === 'Text') t.setOrigin(0, .5).setPosition(b.right + 3, b.top + 2); else t.setOrigin(1, 0).setPosition(b.right - 3, b.top + 1);
+          t.setText(hotkeyLabel(a)).setDepth(depth).setAlpha(.92).setVisible(true).setData('action', a).setData('target', o.name);
           n++;
         });
       }

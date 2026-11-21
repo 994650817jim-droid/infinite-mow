@@ -21,7 +21,7 @@ export class LegionTactics {
   private readonly densityScratch: Enemy[] = [];
   private readonly friends: Ally[] = [];
   private friendGrid: SpatialGrid<Ally> | null = null;
-  constructor(private readonly player: Player,private readonly preferred:(u:Ally)=>Enemy|null=()=>null,private readonly anchor?:(u:Ally)=>{x:number;y:number},private readonly extent:()=>number=()=>0,private readonly navigate?:(u:Ally,x:number,y:number,now:number)=>{x:number;y:number}) {}
+  constructor(private readonly player: Player,private readonly preferred:(u:Ally)=>Enemy|null=()=>null,private readonly anchor?:(u:Ally)=>{x:number;y:number},private readonly extent:(order?:Order)=>number=()=>0,private readonly navigate?:(u:Ally,x:number,y:number,now:number)=>{x:number;y:number}) {}
   private dangerAt(x: number, y: number, grid: SpatialGrid<Enemy>): number {
     let danger = 0;
     for (const e of grid.query(x, y, 105, this.densityScratch)) if (e.active && !e.isSupplySlot && Math.hypot(e.x - x, e.y - y) < 105) danger += e.kind === 'boss' ? 3 : e.kind === 'elite' ? 2 : 1;
@@ -70,7 +70,7 @@ export class LegionTactics {
     this.friendGrid=friends;
     const epoch = Math.floor(now / TACTICS.thinkMs);
     if (epoch !== this.epoch) { this.epoch = epoch; this.clusterCache.clear(); }
-    const a = u.ai, ratio = u.hp / u.maxHp, leash = (order === 'guard' ? TACTICS.guardLeash : TACTICS.sortieLeash)+this.extent();
+    const a = u.ai, ratio = u.hp / u.maxHp, leash = (order === 'guard' ? TACTICS.guardLeash : TACTICS.sortieLeash)+this.extent(order);
     // Low health is urgent; the recovery threshold and minimum duration prevent oscillation.
     if (ratio < TACTICS.retreatHp && a.mode !== 'retreat') { a.mode = 'retreat'; a.until = now + TACTICS.retreatMinMs; a.nextThink = 0; u.attackUntil = now; }
     if (a.mode === 'retreat' && ratio >= TACTICS.returnHp && now >= a.until) { a.mode = 'advance'; a.nextThink = 0; }
@@ -174,7 +174,7 @@ export class LegionTactics {
       // 近战接敌（含长枪兵拉开距离）时保持面向目标，避免一退一进来回翻身造成闪烁。
       const target=a.target,engaged=!!target?.active&&!u.def.ranged&&u.kind!=='rider'&&a.mode!=='retreat'&&a.mode!=='regroup'&&Math.hypot(target.x-u.x,target.y-u.y)<=u.def.range*1.2;
       if(engaged&&target)u.face(target.x,target.y);
-      u.moveTo(goal.x,goal.y,dt,u.def.speed*(a.mode==='charge'?1.8:a.recall?RECALL.speedMul:1),engaged);
+      u.moveTo(goal.x,goal.y,dt,u.def.speed*(a.mode==='charge'?1.8:a.recall?RECALL.speedMul:1)*u.formSpeed,engaged);
     }
   }
 

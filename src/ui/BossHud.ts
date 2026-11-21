@@ -3,6 +3,7 @@ import { GAME_WIDTH, GAME_HEIGHT, HEADING_FONT, FONT } from '../config';
 import { LQ, lqDiamond } from './LacquerKit';
 import { factionOf, titleOf } from './StoryBarkCardStyles';
 import { STORY_CAST } from '../data/story/types';
+import { playIn } from '../systems/Sfx';
 
 /**
  * 首领血条（2026-11-20 用户「还有ui boss血条优化一下」；风格同左上主将状态框 HeroStatusFrame：漆底金边、铜框朱红）。
@@ -61,8 +62,32 @@ export class BossHud {
     if (!v) { this.g.clear(); for (const o of [this.seal, this.breakT, this.portrait, ...this.dualImgs]) o.setVisible(false); }
   }
 
-  /** 首领头像贴图（按需加载水墨立绘、裁成圆形头肩）；还没好时返回 null。 */
-  private medal(id: string): string | null {
+  /** 首领头像贴图：有水墨立绘用立绘，没有就用首领本人的贴图裁头肩（fallbackMedal）；都没有返回 null（画阵营色圈）。 */
+  private medal(id: string): string | null { return this.inkMedal(id) ?? this.fallbackMedal(id); }
+  /** 其他界面（劝降面板）借用同一套圆形头像：返回贴图键，立绘还在加载时返回 null。 */
+  medalKey(id: string, fallbackTex?: string): string | null { if (fallbackTex) this.setFallback(id, fallbackTex); return this.medal(id); }
+  private readonly fallbackTex = new Map<string, string>();
+  /** 记下首领本人的贴图（update 传入的 tex），没有水墨立绘时拿来当头像。 */
+  setFallback(id: string, tex: string | undefined): void { if (id && tex && this.scene.textures.exists(tex)) this.fallbackTex.set(id, tex); }
+  /**
+   * 没有水墨立绘的首领（2026-11-20 第 7–12 章检查：第七章起的首领头像圈都是空的）：取首领行走图第一帧，裁上半身中间的正方形（头肩），
+   * 同样的圆形裁切、暗底与下缘阴影；之后立绘若载到，medal() 先返回立绘。
+   */
+  private fallbackMedal(id: string): string | null {
+    const tex = this.fallbackTex.get(id), key = 'bosshud_medal_fb_' + id, s = this.scene; if (!tex || !s.textures.exists(tex)) return null;
+    if (s.textures.exists(key)) return key;
+    const T = s.textures.get(tex), names = T.getFrameNames(), fr = T.get(names.includes('0') ? '0' : names[0] ?? '__BASE'), img = fr.source.image as HTMLImageElement | HTMLCanvasElement;
+    const S = 128, c = document.createElement('canvas'); c.width = c.height = S; const ctx = c.getContext('2d')!; ctx.save(); ctx.beginPath(); ctx.arc(S / 2, S / 2, S / 2, 0, Math.PI * 2); ctx.clip();
+    const bg = ctx.createRadialGradient(S * .5, S * .42, S * .05, S * .5, S * .5, S * .62); bg.addColorStop(0, '#5a4630'); bg.addColorStop(.55, '#2a1c10'); bg.addColorStop(1, '#0b0705'); ctx.fillStyle = bg; ctx.fillRect(0, 0, S, S);
+    // 行走图一格里人物大约占中间六成、头在上方 15–40%：取格宽 44% 的正方形，从格高 10% 处起
+    const side = Math.min(fr.cutWidth * .44, fr.cutHeight * .44), sx = fr.cutX + fr.cutWidth * .5 - side / 2, sy = fr.cutY + fr.cutHeight * .1;
+    ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high'; ctx.drawImage(img, sx, sy, side, side, 0, 0, S, S);
+    const sh = ctx.createLinearGradient(0, S * .7, 0, S); sh.addColorStop(0, 'rgba(10,6,4,0)'); sh.addColorStop(1, 'rgba(10,6,4,.5)'); ctx.fillStyle = sh; ctx.fillRect(0, 0, S, S);
+    ctx.restore(); s.textures.addCanvas(key, c); s.textures.get(key).setFilter(Phaser.Textures.FilterMode.LINEAR);
+    return key;
+  }
+  /** 水墨立绘头像（按需加载、裁成圆形头肩）；还没好 / 没有返回 null。 */
+  private inkMedal(id: string): string | null {
     const s = this.scene, key = 'bosshud_medal_' + id, src = 'ink_cast_' + id;
     if (s.textures.exists(key)) return key;
     if (!s.textures.exists(src)) {
@@ -125,8 +150,8 @@ export class BossHud {
     if (!this.visible) return;
     const key = v ? v.id + ':' + v.name : '';
     if (key !== this.key) {
-      if (!v && this.last) { this.dieAt = now; this.stats.deaths++; }
-      if (v) { this.openAt = now; this.stats.opens++; this.lastRatio = v.ratio; this.lastBreaks = v.breaks ?? 0; }
+      if (!v && this.last) { this.dieAt = now; this.stats.deaths++; playIn(this.scene, 'bossbar_shatter'); }
+      if (v) { this.openAt = now; this.stats.opens++; playIn(this.scene, 'bossbar_open'); this.lastRatio = v.ratio; this.lastBreaks = v.breaks ?? 0; }
       this.key = key;
     }
     const R = this.rect(), x0 = R.x, y0 = R.y;

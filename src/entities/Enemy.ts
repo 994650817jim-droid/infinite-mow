@@ -16,7 +16,7 @@ const WALK_STRIDES: Partial<Record<EnemyKind, number>> = { infantry: 11, shield:
  * 受击闪白：一次多久、闪完多久才能再闪（连击时不再一直是白剪影）；
  * 全场每 windowMs 最多 budget 个敌人闪白（含 DeathFx 死亡闪白）——范围技一下打中一大片时不会整群变成白剪影（2026-11-20 攻击特效检查）。
  */
-export const HIT_FLASH = { ms: 60, gapMs: 160, budget: 6, windowMs: 100 } as const;
+export const HIT_FLASH = { ms: 60, gapMs: 160, budget: 6, windowMs: 100, /** 战场物件受击：暖色着色（不刷白）。 */ propTint: 0xffc89a } as const;
 let flashWindowAt = -Infinity, flashUsed = 0;
 /** 申请一个闪白名额（受击闪白 / 死亡闪白共用）；本窗口用完返回 false。 */
 export function takeFlashSlot(now: number): boolean {
@@ -108,6 +108,8 @@ export class Enemy {
   zhenshe = 0; zhensheAt = 0; routUntil = 0; trampleAt = 0;
   /** 曹操「军令」标记到期时间（weapons/mengdeWeapon.ts；受伤加成在 CharacterPassives.vulnerability）。 */
   junlingUntil = 0;
+  /** P3：甘宁铁索钩钩过的到期时间（被钩过的被击杀才攒「锦帆」）；P3 火攻（甘宁 / 祝融）着火标记到期时间。 */
+  hookedUntil = 0; p3BurnUntil = 0;
   martialSlow = 1;
   martialSlowUntil = 0;
   /** 首领出招间隔倍率与截止（诸葛亮八阵图 3 级；ArcBossV2 系首领在 toIdle 时读）。 */
@@ -162,7 +164,7 @@ export class Enemy {
     this.invulnerable = false;
     this.controlImmune = false;
     this.stunUntil = 0;
-    this.zhenshe = 0; this.zhensheAt = 0; this.routUntil = 0; this.trampleAt = 0; this.junlingUntil = 0;
+    this.zhenshe = 0; this.zhensheAt = 0; this.routUntil = 0; this.trampleAt = 0; this.junlingUntil = 0; this.hookedUntil = 0; this.p3BurnUntil = 0;
     this.targetAlly = null; this.targetLife = 0;
     this.flashUntil = 0; this.flashReadyAt = 0;
     this.recoilUntil = 0; this.squash = 0;
@@ -516,11 +518,15 @@ export class Enemy {
   flash(now: number): void {
     if (now < this.flashReadyAt || !takeFlashSlot(now)) return;
     this.flashUntil = now + HIT_FLASH.ms; this.flashReadyAt = now + HIT_FLASH.ms + HIT_FLASH.gapMs;
-    this.sprite.setTintFill(this.kind === 'elite' ? 0xffdddd : 0xffffff);
+    // 战场物件（栅栏 / 拒马 / 营帐 / 城门等补给格）：不整块刷白，只短暂着暖色——2026-11-20 制作人巡检截图「栅栏整个纯白剪影、像贴图丢失」：
+    // 部曲 / 主将连着打物件时每 220ms 白 60ms，截图常拍到整块白剪影。复原同样走 updateVisual（setTint(baseTint)）。
+    if (this.isSupplySlot) this.sprite.setTint(HIT_FLASH.propTint);
+    else this.sprite.setTintFill(this.kind === 'elite' ? 0xffdddd : 0xffffff);
   }
 
   /** 受击后仰：横向压扁一下再弹回；push 像素沿 angle 方向轻推（首领 / 不受控的单位只压扁不推）。 */
   hitRecoil(now: number, angle: number, push: number, ms = 90): void {
+    if (this.isSupplySlot) return; // 营垒 / 营寨 / 城门等补给格：可以被打（锁定），但不被击退挪位（碰撞框、耐久条跟着物件）
     if (this.kind === 'boss' || !this.walkSheet) return; // 首领的缩放由各首领控制器管，不在这里压扁
     this.recoilUntil = now + ms; this.recoilMs = ms; this.squash = 1; this.applyScale();
     if (push > 0 && !this.controlImmune && this.def.behavior !== 'wall') this.sprite.setPosition(this.sprite.x + Math.cos(angle) * push, this.sprite.y + Math.sin(angle) * push);

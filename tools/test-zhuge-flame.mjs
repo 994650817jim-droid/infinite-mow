@@ -22,7 +22,7 @@ const H = `const s = ${G}, pl = s.player, w = pl.weapons[0], wait = ms => new Pr
   const mk = (kind, x, y, hp = 99999) => { const e = s.spawnEnemy(kind, x, y, 1); e.hp = e.maxHp = hp; e.stunUntil = 1e12; return e; };
   const { TIANHUO_DEF } = await import('/src/weapons/zhugeTianhuo.ts'); const Z = window.__zgTuning; if (!Z) throw new Error('no __zgTuning'); /* 游戏实际在用的那份（热更新后 import 拿到的是另一份） */
   Z.ember.mul = 0; // 天火余烬（2026-11-18）另在 test-hero-mechanics 1c 测；这里只量天火本身，免得上一发的余烬烧到下一发新刷的兵
-  const one = () => TIANHUO_DEF.damage(w.level, pl.stats) * pl.growth.damageMultiplier(s.combatNow) * (1 + Z.intPerPoint * pl.growth.attributes.intellect);`;
+  const one = () => TIANHUO_DEF.damage(w.level, pl.stats) * pl.growth.damageMultiplier(s.combatNow) * (1 + Z.intPerPoint * pl.growth.attributes.intellect) * pl.growth.spellWeaponMultiplier(w.id); /* 四维改版：法器类武器另吃「有效智力」（含武将天生智力）× intellect.skill，在 hitEnemy 里结算 */`;
 
 // 1) 星位 → 0.8 秒后落下；单体伤害、溅射
 const r1 = await p.evaluate(`(async () => { ${H}

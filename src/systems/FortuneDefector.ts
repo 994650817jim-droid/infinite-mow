@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { safeWorldPoint } from '../ui/SafeLabel';
 import { DEPTH, FONT, HEADING_FONT, actorDepth } from '../config';
 import { DEFECTOR, DEFECTOR_LINES, rollDefector, type DefectorInfo } from '../data/fortunes';
 import type { Enemy } from '../entities/Enemy';
@@ -129,8 +130,9 @@ export class FortuneDefector {
   private drawTag(): void {
     const e = this.e; if (!e || !this.tag || !this.bar) return;
     const sp = e.sprite, top = sp.y - sp.displayHeight * sp.originY - 12, w = 58, k = Math.max(0, e.hp / Math.max(1, e.maxHp));
-    this.tag.setPosition(e.x, top);
-    this.bar.clear().fillStyle(0x140a06, .8).fillRect(e.x - w / 2 - 1, top + 2, w + 2, 6).fillStyle(0xe0b040, 1).fillRect(e.x - w / 2, top + 3, w * k, 4);
+    const q = safeWorldPoint(this.h.scene, e.x, top, Math.max(w / 2, this.tag.displayWidth / 2), this.tag.displayHeight + 10); // 靠屏幕边时往内收
+    this.tag.setPosition(q.x, q.y);
+    this.bar.clear().fillStyle(0x140a06, .8).fillRect(q.x - w / 2 - 1, q.y + 2, w + 2, 6).fillStyle(0xe0b040, 1).fillRect(q.x - w / 2, q.y + 3, w * k, 4);
   }
   private startKneel(): void {
     if (this.phase !== 'duel') return;
@@ -141,7 +143,7 @@ export class FortuneDefector {
       e.invulnerable = true; e.stunUntil = this.h.now() + DEFECTOR.kneelMs + 400; this.x = e.x; this.y = e.y;
       const sp = e.sprite, sy = sp.scaleY; s.tweens.add({ targets: sp, scaleY: sy * .78, duration: 220, ease: 'Quad.easeOut' }); // 跪地：身子一矮
     }
-    this.say(pick(DEFECTOR_LINES.yield)); this.h.sfx('gong');
+    this.say(pick(DEFECTOR_LINES.yield)); this.h.sfx('kneel');
   }
   private join(): 'yield' {
     this.phase = 'ally';

@@ -359,6 +359,7 @@ export class DualBoss {
       const word = x.done === 'killed' ? '授首' : x.done === 'persuaded' ? '归降' : x.done === 'retreated' ? '退走' : '';
       if (!show) { nameT.setVisible(false); pctT.setVisible(false); stT.setVisible(false); return; }
       const tr = x.done ? 0 : this.h.trail(x.spawnId, ratio);
+      hud.setFallback(x.id, e.def.walkVisual?.texture ?? e.def.texture); // 没有水墨立绘的首领用本人行走图当头像（BossHud.fallbackMedal）
       const bar = hud.drawDualPanel(drawn++, { id: x.id, x: bx, y: top, w: bw, ratio, trail: tr, a, done: !!x.done, fill: x.rage ? danger : 0xa82e1c, rage: !!x.rage, ring: x.color === 'gold' ? 0xd8a23a : 0xc8321e }, rn);
       nameT.setVisible(true).setAlpha(a).setOrigin(0, 0).setFontSize(15).setPosition(bar.barX, top + 5).setText(x.name + (word ? ' · ' + word : '')).setColor(x.done ? '#9a9088' : x.color === 'gold' ? '#f0d488' : '#f4b8a0').setStroke('#140c06', 4).setShadow(1, 2, '#000000', 3, true, true);
       pctT.setVisible(true).setAlpha(a).setOrigin(1, 0).setPosition(bar.barX + bar.barW, top + 7).setText(x.done ? '' : Math.round(ratio * 100) + '%').setStroke('#140c06', 4).setShadow(1, 2, '#000000', 3, true, true);

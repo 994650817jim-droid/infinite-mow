@@ -76,6 +76,14 @@ export function heroBarksOn(): boolean { return heroBarks() === 'on'; }
 export function setHeroBarks(v: HeroBarks): void { set('im_hero_barks', v); barkCache = v; }
 export const BARKS_LABEL: Record<HeroBarks, string> = { on: '开', off: '关' };
 
+/** 军阵阵纹（formation-design.md：阵纹透明度低，设置里可关）。 */
+export type FormationSigil = 'on' | 'off';
+let sigilCache: FormationSigil | null = null;
+export function formationSigil(): FormationSigil { if (sigilCache) return sigilCache; return sigilCache = get('im_formation_sigil') === 'off' ? 'off' : 'on'; }
+export function formationSigilOn(): boolean { return formationSigil() === 'on'; }
+export function setFormationSigil(v: FormationSigil): void { set('im_formation_sigil', v); sigilCache = v; }
+export const SIGIL_LABEL: Record<FormationSigil, string> = { on: '开', off: '关' };
+
 /** 在一组取值里循环切换（‹ › 按钮用）。 */
 export function cycle<T>(list: readonly T[], cur: T, dir: number): T { const i = list.indexOf(cur); return list[((i < 0 ? 0 : i) + dir + list.length) % list.length]; }
 

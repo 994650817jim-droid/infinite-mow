@@ -39,6 +39,7 @@ export const SCENE_LOOKS: Readonly<Record<string, SceneLook>> = {
 export const ARC_FACTIONS: Readonly<Record<string, number>> = {
   'qunxiong.1': 1, 'qunxiong.2': 1, 'qunxiong.3': 2, // 李傕、张绣（西凉系）；袁术（袁氏）
   'chibi.1': 3, 'chibi.2': 3, 'chibi.3': 3,
+  'jingnan.1': 7, 'jingnan.2': 7, 'jingnan.3': 7, // 荆南四郡守军：营具用西凉营具换成荆南青灰（PropsV2 FACTION_PROPS[7]，开局生成）
   'shu.1': 5, 'shu.2': 5, 'shu.3': 5, // 刘璋益州军
   'hanzhong.1': 3, 'hanzhong.2': 3, 'hanzhong.3': 3,
   'xiangfan.1': 3, 'xiangfan.2': 3, 'xiangfan.3': 4, // 麦城：吴军合围

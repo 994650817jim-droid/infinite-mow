@@ -31,7 +31,7 @@ await p.evaluate(async () => {
 });
 await p.waitForTimeout(3200); // 首领自己的登场台词（若有）先放完
 // ?story=1 时关前军情卷轴会开着（mode story）：收掉卷轴、回到战斗，再量「出卡不暂停」
-await p.evaluate(() => { const s = window.__game.scene.getScene('GameScene'); for (const o of s.children.list.filter(o => typeof o.name === 'string' && o.name.startsWith('story-'))) o.destroy(); s.data.set('__storyBarkCards', undefined); if (s.mode === 'story') s.setMode('none'); });
+await p.evaluate(() => { const s = window.__game.scene.getScene('GameScene'); for (const o of s.children.list.filter(o => typeof o.name === 'string' && o.name.startsWith('story-'))) o.destroy(); s.data.set('__storyBarkCards', undefined); s.storyHolds = 0; /* 卷轴是直接销毁的，没走 resume：占用计数清零，否则 setMode('none') 会被拉回 story */ if (s.mode === 'story') s.setMode('none'); });
 await p.waitForTimeout(300);
 // 1) 张角登场：右边出卡、立绘对、头顶只冒「！」、不暂停（mode 仍 none，战斗时钟在走）、约 3 秒后自己滑走
 const r1 = await p.evaluate(async () => {

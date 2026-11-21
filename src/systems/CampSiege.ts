@@ -31,6 +31,10 @@ export interface CampOpts {
   bar?: boolean;
   /** 附近营寨被烧到半血时叫本营马上出兵。 */
   onAlarm?: () => void;
+  /** 半血起火伏兵 / 20% 守将这些阶段（首领关卡的营垒自己有伏兵节奏，不要）。默认 true。 */
+  phases?: boolean;
+  /** 保留物件原有耐久（首领关卡的营垒 / 连营按关卡设计的血量），只加每秒掉血上限。 */
+  keepHp?: boolean;
 }
 interface Rec {
   e: Enemy; life: number; tier: CampTier; x: number; y: number; bank: number; bankAt: number; lastHit: number;
@@ -45,8 +49,8 @@ export class CampSiege {
   /** 登记一座营寨 / 营帐：按章节定耐久（满血开局）。 */
   add(e: Enemy, tier: CampTier, opts: CampOpts = {}): void {
     if (this.recs.some(r => r.e === e && r.life === e.spawnId)) return;
-    const T = C.tier[tier], hp = Math.round(Math.max(T.minHp, this.h.eliteHp() * T.eliteMul));
-    e.maxHp = e.hp = hp; e.def = { ...e.def, hp };
+    const T = C.tier[tier], hp = opts.keepHp ? e.maxHp : Math.round(Math.max(T.minHp, this.h.eliteHp() * T.eliteMul));
+    if (!opts.keepHp) { e.maxHp = e.hp = hp; e.def = { ...e.def, hp }; }
     const now = this.h.now();
     this.recs.push({ e, life: e.spawnId, tier, x: e.x, y: e.y, bank: hp / T.minSec * C.bankSec, bankAt: now, lastHit: -1e9, opts, guarded: opts.guards === false, burned: false, captain: false, fireAt: 0,
       bar: opts.bar === false ? null : this.h.scene.add.graphics().setDepth(DEPTH.dmgText - 3).setName('camp-siege-bar') });
@@ -86,15 +90,15 @@ export class CampSiege {
       // 守军：主将第一次走近
       if (!r.guarded && d < C.guardR) { r.guarded = true; this.stats.guards += this.squad(r, this.h.chapter() >= 5 ? ['elite', 'shield', 'shield', 'infantry'] : ['elite', 'shield', 'shield'], 120); }
       // 半血：起火 + 号角 + 伏兵 + 附近营寨马上出兵
-      if (!r.burned && k <= C.burnAt) {
-        r.burned = true; this.stats.burns++; this.h.sfx('chargeWarn'); this.h.sfx('tent_fire');
+      if (r.opts.phases === false) { /* 只要耐久 / 上限 / 倒塌 */ } else if (!r.burned && k <= C.burnAt) {
+        r.burned = true; this.stats.burns++; this.h.sfx('camp_burn'); this.h.sfx('tent_fire');
         const kinds: EnemyKind[] = this.h.chapter() >= 4 ? ['shield', 'shield', 'infantry', 'elite'] : ['shield', 'shield', 'infantry', 'infantry'];
         this.stats.ambush += this.squad(r, kinds.slice(0, C.ambush), C.ambushR);
         for (const o of this.recs) if (o !== r && Math.hypot(o.x - r.x, o.y - r.y) < C.nearbyR && o.opts.onAlarm) { o.opts.onAlarm(); this.stats.alarms++; }
         r.opts.onAlarm?.();
       }
       // 快拆完：守将出营拼命（一座营一次）
-      if (!r.captain && k <= C.captainAt) { r.captain = true; if (this.h.captain(r.x + (P.x < r.x ? -70 : 70), r.y + 40)) this.stats.captains++; this.h.sfx('gong'); }
+      if (r.opts.phases !== false && !r.captain && k <= C.captainAt) { r.captain = true; if (this.h.captain(r.x + (P.x < r.x ? -70 : 70), r.y + 40)) this.stats.captains++; this.h.sfx('camp_captain'); }
       // 起火后营帐上一直烧（手绘地火序列帧，镜头外不放）
       if (r.burned && now >= r.fireAt) { r.fireAt = now + 1300; const v = this.h.scene.cameras.main.worldView; if (r.x > v.left - 150 && r.x < v.right + 150 && r.y > v.top - 150 && r.y < v.bottom + 250) playSheet(this.h.scene, 'fx_ground_fire', r.x + (Math.random() - .5) * 50, r.y - 20, { size: 130, ms: 1400, depth: actorDepth(r.y) + .2, originY: .8, alpha: .9, name: 'camp-siege-fire' }); }
       // 头顶细耐久条（挨过打才显示）
@@ -105,7 +109,7 @@ export class CampSiege {
   private collapse(r: Rec): void {
     this.recs = this.recs.filter(o => o !== r); r.bar?.destroy(); this.stats.collapses++;
     playSheet(this.h.scene, 'fx_collapse_dust', r.x, r.y + 10, { size: r.tier === 'camp' ? 260 : 190, ms: 800, depth: actorDepth(r.y) + .4, originY: .8, name: 'camp-siege-collapse' });
-    this.h.shake(); this.h.sfx('propBreak');
+    this.h.shake(); this.h.sfx('camp_collapse');
     for (let i = 0; i < C.gems; i++) { const a = i / C.gems * Math.PI * 2; this.h.gem(r.x + Math.cos(a) * 40, r.y + 14 + Math.sin(a) * 20, C.gemXp); }
   }
   clear(): void { for (const r of this.recs) r.bar?.destroy(); this.recs = []; }

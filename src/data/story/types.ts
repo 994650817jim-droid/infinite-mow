@@ -85,12 +85,12 @@ export const STORY_CAST: Record<string, { name: string; portrait?: string }> = {
   zhaofan: { name: '赵范', portrait: 'ink_cast_zhaofan' }, liudu: { name: '刘度', portrait: 'ink_cast_liudu' }, hanxuan: { name: '韩玄', portrait: 'ink_cast_hanxuan' }, fanshi: { name: '樊氏', portrait: 'ink_cast_fanshi' },
   liuxian: { name: '刘贤', portrait: 'ink_cast_liuxian' }, xingdaorong: { name: '邢道荣', portrait: 'ink_cast_xingdaorong' }, yangling: { name: '杨龄', portrait: 'ink_cast_yangling' },
   // 第七–十二章（2026-11-20 补剧本）：立绘待补，先只显示名字章（清单 MISSING_PORTRAITS_CH712）
-  yanghuai: { name: '杨怀' }, zhangren: { name: '张任' }, liuzhang: { name: '刘璋' }, liuxun: { name: '刘循' },
-  fazheng: { name: '法正' }, zhanghe: { name: '张郃' }, xiahouyuan: { name: '夏侯渊' },
-  pangde: { name: '庞德' }, lvmeng: { name: '吕蒙' }, wangfu: { name: '王甫' }, guanping: { name: '关平' },
-  huangquan: { name: '黄权' }, sunhuan: { name: '孙桓' }, zhuran: { name: '朱然' }, luxun: { name: '陆逊' },
-  mangyachang: { name: '忙牙长' }, wutugu: { name: '兀突骨' }, masu: { name: '马谡' },
-  wangping: { name: '王平' }, jiangwei: { name: '姜维' }, haozhao: { name: '郝昭' }, simayi: { name: '司马懿' },
+  yanghuai: { name: '杨怀', portrait: 'ink_cast_yanghuai' }, zhangren: { name: '张任', portrait: 'ink_cast_zhangren' }, liuzhang: { name: '刘璋', portrait: 'ink_cast_liuzhang' }, liuxun: { name: '刘循', portrait: 'ink_cast_liuxun' },
+  fazheng: { name: '法正', portrait: 'ink_cast_fazheng' }, zhanghe: { name: '张郃', portrait: 'ink_cast_zhanghe' }, xiahouyuan: { name: '夏侯渊', portrait: 'ink_cast_xiahouyuan' },
+  pangde: { name: '庞德', portrait: 'ink_cast_pangde' }, lvmeng: { name: '吕蒙', portrait: 'ink_cast_lvmeng' }, wangfu: { name: '王甫', portrait: 'ink_cast_wangfu' }, guanping: { name: '关平', portrait: 'ink_cast_guanping' },
+  huangquan: { name: '黄权', portrait: 'ink_cast_huangquan' }, sunhuan: { name: '孙桓', portrait: 'ink_cast_sunhuan' }, zhuran: { name: '朱然', portrait: 'ink_cast_zhuran' }, luxun: { name: '陆逊', portrait: 'ink_cast_luxun' },
+  mangyachang: { name: '忙牙长', portrait: 'ink_cast_mangyachang' }, wutugu: { name: '兀突骨', portrait: 'ink_cast_wutugu' }, masu: { name: '马谡', portrait: 'ink_cast_masu' },
+  wangping: { name: '王平', portrait: 'ink_cast_wangping' }, jiangwei: { name: '姜维', portrait: 'ink_cast_jiangwei' }, haozhao: { name: '郝昭', portrait: 'ink_cast_haozhao' }, simayi: { name: '司马懿', portrait: 'ink_cast_simayi' },
 };
 /** 第一、二章还没有对白立绘的（通用角色只显示名字章）。人物立绘 2026-11-18 夜已全部补齐。 */
 export const MISSING_PORTRAITS = ['旁白卷首图（通用）', '斥候（通用）', '卢植', '皇甫嵩'];

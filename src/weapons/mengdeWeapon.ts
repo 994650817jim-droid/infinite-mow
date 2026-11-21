@@ -4,7 +4,7 @@ import type { Player } from '../entities/Player';
 import type { PlayerStats, WeaponState } from '../types';
 import type { WeaponHost } from './registry';
 import { MENGDE as MD } from '../data/mengde';
-import { smartTarget } from './heroWeapons2';
+import { meleeTarget } from './heroWeapons2';
 import { playSheet } from '../systems/SkillFxSheets';
 import { branchTier } from '../data/weaponBranches';
 
@@ -36,7 +36,7 @@ const state = (pl: Player): MdState => { let s = STATE.get(pl); if (!s) { s = { 
 export function mengdeDebug(pl: Player): { slashes: number; charges: number; charging: boolean; riders: number; banners: number; zones: number } { const s = state(pl); return { slashes: s.slashes, charges: s.charges, charging: !!s.charge, riders: s.charge?.riders.length ?? 0, banners: s.banners, zones: s.zones.length }; }
 
 function mark(host: WeaponHost, st: MdState, e: Enemy, time: number): void {
-  if (!e.active || e.isSupplySlot) return;
+  if (!e.active || (e.isSupplySlot && !e.lockTarget)) return;
   e.junlingUntil = time + MD.markMs;
   const s = sceneOf(host);
   if (!st.marks.has(e) && s.textures.exists('fx_md_mark')) st.marks.set(e, { img: host.add.image(e.x, e.y - e.radius - 24, 'fx_md_mark', 0).setDisplaySize(48, 48).setDepth(43).setBlendMode(1).setName('md-mark'), life: e.spawnId });
@@ -45,7 +45,7 @@ function mark(host: WeaponHost, st: MdState, e: Enemy, time: number): void {
 function summonHubao(host: WeaponHost, st: MdState, weapon: WeaponState, time: number, hubao: boolean, final: boolean, k: number): void {
   const pl = host.player, s = sceneOf(host);
   let best: Enemy | null = null, bestN = -1;
-  for (const e of host.grid.query(pl.x, pl.y, 420)) { if (!e.active || e.isSupplySlot) continue; let n = 0; for (const o of host.grid.query(e.x, e.y, 100)) if (o.active && !o.isSupplySlot) n++; if (n > bestN) { bestN = n; best = e; } }
+  for (const e of host.grid.query(pl.x, pl.y, 420)) { if (!e.active || (e.isSupplySlot && !e.lockTarget)) continue; let n = 0; for (const o of host.grid.query(e.x, e.y, 100)) if (o.active && !(o.isSupplySlot && !o.lockTarget)) n++; if (n > bestN) { bestN = n; best = e; } }
   const hd = Math.hypot(pl.heading.x, pl.heading.y) || 1; let ux = pl.heading.x / hd, uy = pl.heading.y / hd;
   if (best) { const d = Math.hypot(best.x - pl.x, best.y - pl.y) || 1; ux = (best.x - pl.x) / d; uy = (best.y - pl.y) / d; }
   st.charge?.riders.forEach(r => r.img?.destroy());
@@ -70,7 +70,7 @@ function updateCharge(host: WeaponHost, st: MdState, time: number): void {
     const x = c.x + c.ux * along + px * r.off, y = c.y + c.uy * along + py * r.off;
     r.img?.setPosition(x, y - 14).setFrame(Math.floor(time / 70) % 6);
     for (const e of host.grid.query(x, y, MD.chargeW + 30)) {
-      if (!e.active || e.isSupplySlot || Math.hypot(e.x - x, e.y - y) > MD.chargeW / 2 + e.radius) continue;
+      if (!e.active || (e.isSupplySlot && !e.lockTarget) || Math.hypot(e.x - x, e.y - y) > MD.chargeW / 2 + e.radius) continue;
       const key = e.uid + ':' + e.spawnId + ':' + i; if (c.hit.has(key)) continue; c.hit.add(key);
       host.hitEnemy(e, c.dmg, time, 'melee');
       if (c.stun && e.active && e.kind !== 'boss' && !e.controlImmune) e.stunUntil = Math.max(e.stunUntil, time + c.stun);
@@ -118,14 +118,15 @@ export function mengdeBehavior(host: WeaponHost, weapon: WeaponState, dt: number
   }
   weapon.cooldownLeft -= dt;
   if (weapon.cooldownLeft > 0) return;
-  const target = smartTarget(host, MD.range);
-  if (!target) return;
   const reach = mengdeReach(weapon.level) * pl.passive.rangeMultiplier('yitian_jian');
+  // 只挑剑够得着的（2026-11-20 P3 孙权同款修）：原来按 MD.range 170 找「最密处」，挑中够不着的那个时整把剑卡住不砍身边的兵
+  const target = meleeTarget(host, reach);
+  if (!target) return;
   const dx = target.x - pl.x, dy = target.y - pl.y, d = Math.hypot(dx, dy) || 1, rot = Math.atan2(dy, dx);
   if (d > reach + target.radius + 10) return;
   const dmg = MENGDE_DEF.damage(weapon.level, pl.stats) * g.damageMultiplier(time);
   for (const e of host.grid.query(pl.x, pl.y, reach + 40)) {
-    if (!e.active || e.isSupplySlot) continue;
+    if (!e.active || (e.isSupplySlot && !e.lockTarget)) continue;
     const ex = e.x - pl.x, ey = e.y - pl.y, ed = Math.hypot(ex, ey);
     if (ed > reach + e.radius) continue;
     if (ed > e.radius && Math.abs(Math.atan2(Math.sin(Math.atan2(ey, ex) - rot), Math.cos(Math.atan2(ey, ex) - rot))) > MD.arc) continue;

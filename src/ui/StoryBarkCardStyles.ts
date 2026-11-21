@@ -6,7 +6,7 @@
  * - 名字 / 称号 / 台词在内侧一栏，台词压在只铺这一栏的撕边水墨笔刷带上（半透明墨带 + 文字阴影），长句在栏里换行、带子跟着加高；
  *   笔刷带后面压一层同形状、按阵营上色的淡影（敌方阵营色，我方义军绿）；
  * - 入场时笔刷带后面晕开一团手绘墨迹（8 帧）。
- * 手绘件：public/assets/ui/barkcard/brush.png（ChatGPT 透明底出图）、inkbloom.png（UI 会话的墨迹扩散转透明底），tools/build-barkcard-ui.mjs 生成。
+ * 手绘件：public/assets/ui/barkcard/brush.png（ChatGPT 透明底出图）、inkbloom.png（UI 会话的墨迹扩散转透明底；2026-11-20 起卡片不再用），tools/build-barkcard-ui.mjs 生成。
  */
 import Phaser from 'phaser';
 import { HEADING_FONT } from '../config';
@@ -16,12 +16,11 @@ import { SURRENDER_DEFS } from '../data/surrender';
 export const BARK_UI: Record<string, string> = { barkui_brush: 'assets/ui/barkcard/brush.png', barkui_seal: 'assets/camp/seal.webp' };
 /** 载入手绘件（不能只等一次 COMPLETE：场景加载器可能正忙别的立绘，那次 COMPLETE 来时手绘件还没到；轮询到全齐，最多 4 秒）。 */
 export function loadBarkUi(scene: Phaser.Scene, done: () => void): void {
-  const need = Object.entries(BARK_UI).filter(([k]) => !scene.textures.exists(k)), ink = !scene.textures.exists('barkui_inkbloom');
-  if (!need.length && !ink) { done(); return; }
+  const need = Object.entries(BARK_UI).filter(([k]) => !scene.textures.exists(k));
+  if (!need.length) { done(); return; }
   for (const [k, f] of need) scene.load.image(k, f);
-  if (ink) scene.load.spritesheet('barkui_inkbloom', 'assets/ui/barkcard/inkbloom.png', { frameWidth: 256, frameHeight: 256 });
   scene.load.start();
-  const t0 = performance.now(), keys = [...Object.keys(BARK_UI), 'barkui_inkbloom'];
+  const t0 = performance.now(), keys = Object.keys(BARK_UI);
   const poll = (): void => { if (keys.every(k => scene.textures.exists(k)) || performance.now() - t0 > 4000) { done(); return; } if (!scene.load.isLoading()) scene.load.start(); window.setTimeout(poll, 50); };
   poll();
 }
@@ -105,9 +104,8 @@ export function buildCinematic(s: Phaser.Scene, l: In, W: number, margin: number
   const sy = big ? 62 : 56, sh = Math.max(big ? 60 : 52, say.height + 24), h = sy + sh, y0 = place ? place.bottom - h : 290;
   root.setY(y0);
   say.setY(sy + (sh - say.height) / 2).setFixedSize(0, say.height).setData('full', full).setText('');
-  // 墨迹晕开（入场时在笔刷带后面放一遍，手绘 8 帧）
-  const bloom = s.textures.exists('barkui_inkbloom') ? s.add.sprite(cx0 + colW / 2, sy + sh / 2, 'barkui_inkbloom', 0).setDisplaySize(colW * .95, sh * 2.2).setScrollFactor(0).setAlpha(.7).setName('story-bark-card-ink') : null;
-  if (bloom) root.add(bloom);
+  // 2026-11-20 去掉入场墨迹晕开（用户「每次剧情对话会先浮现出一个黑框框然后快速消失」）：inkbloom.png 转图时丢了透明通道、八帧都是实心暗色方块，
+  // 笔刷带后面先闪一块黑框再淡掉；图已重做成透明底，但末几帧仍铺满整块（≈94%），照样像一块暗框——卡片改成从全透明直接淡入。
   root.add(s.add.image(cx0 + colW / 2 + (right ? -4 : 4), sy + sh / 2 + 5, 'barkui_brush').setDisplaySize(colW + 6, sh + 6).setScrollFactor(0).setTintFill(f.color).setAlpha(.5).setFlipX(!right).setName('story-bark-card-faction'));
   root.add(s.add.image(cx0 + colW / 2, sy + sh / 2, 'barkui_brush').setDisplaySize(colW, sh).setScrollFactor(0).setAlpha(.86).setFlipX(!right));
   // 立绘：外侧一栏；下垫一枚漆金圆托（暗底 + 金圈），头肩破出圆托上沿
@@ -127,7 +125,6 @@ export function buildCinematic(s: Phaser.Scene, l: In, W: number, margin: number
   root.add(hit);
   const typeMs = [...full].length / BARK_TYPE.cps * 1000;
   return { root, w, h, x0, y0, off: right ? 40 : -40, typeMs, onTick: t => {
-    if (bloom?.active) { const k = Math.min(1, t / 380); bloom.setFrame(Math.min(7, Math.floor(k * 8))).setAlpha(.7 * (t < 380 ? 1 : Math.max(0, 1 - (t - 380) / 300))); }
     if (!shownAll && say.active) { const n = Math.min([...full].length, Math.floor(Math.max(0, t - 180) / 1000 * BARK_TYPE.cps)); const cur = [...full].slice(0, n).join(''); if (say.text !== cur) say.setText(cur); if (n >= [...full].length) shownAll = true; }
     if (nextHint?.active) nextHint.setVisible(!!o.more?.()).setAlpha(.55 + .45 * Math.abs(Math.sin(t / 380)));
   } };

@@ -45,7 +45,7 @@ export const COMBO_VALUES = {
   lastStandHp: .4, lastStandDmg: .15, lastStandLeech: .03, lastStandLeechCapPerSec: .015, // 11-19 平衡复核：原 .5 / .25 / .05 / .03 偏强
 } as const;
 /** 合击 3-2 开放（data/mechanicUnlocks.ts）：之前一律不生效、不显示。 */
-export function activeCombos(tags: Record<SchoolId, number>): ComboDef[] { if (!mechOpen('combo')) return []; return COMBOS.filter(c => tags[c.a] >= COMBO_AT && tags[c.b] >= COMBO_AT); }
+export function activeCombos(tags: Record<SchoolId, number>, majors?: readonly SchoolId[]): ComboDef[] { if (!mechOpen('combo')) return []; return COMBOS.filter(c => !majors || (majors.includes(c.a) && majors.includes(c.b))).filter(/* 主修两派之间才有合击（用户 11-20「流派最多两派」） */ c => tags[c.a] >= COMBO_AT && tags[c.b] >= COMBO_AT); }
 export function comboOf(a: SchoolId, b: SchoolId): ComboDef | undefined { return COMBOS.find(c => (c.a === a && c.b === b) || (c.a === b && c.b === a)); }
 
 /** 觉醒：每关最多 perStage 次、间隔 cooldownMs；到 6 势后至少 firstDelayMs 才第一次；身边（minRange 内）至少 minEnemies 个敌人才放。 */

@@ -37,8 +37,8 @@ export function zhouyuWindLeft(pl: Player, now: number): number { const s = STAT
 
 /** 伤害一个敌兵（火），烧死了给「英发」攒量。 */
 function burn(host: WeaponHost, e: Enemy, dmg: number, time: number): void {
-  if (!e.active || e.isSupplySlot) return;
-  host.hitEnemy(e, dmg, time, 'fire');
+  if (!e.active || (e.isSupplySlot && !e.lockTarget)) return;
+  host.hitEnemy(e, e.kind === 'boss' ? dmg * ZY.bossMul : dmg, time, 'fire');
   if (!e.active) host.player.passive.onFireKill(time);
 }
 
@@ -63,7 +63,7 @@ function updateShips(host: WeaponHost, st: ZyState, weapon: WeaponState, dt: num
     const step = ZY.speed * dt; sh.x += sh.ux * step; sh.y += sh.uy * step; sh.left -= step;
     sh.img?.setPosition(sh.x, sh.y - 12).setFrame(Math.floor(time / 80) % 6);
     let hit = sh.left <= 0;
-    if (!hit) for (const e of host.grid.query(sh.x, sh.y, ZY.shipR + 40)) if (e.active && !e.isSupplySlot && Math.hypot(e.x - sh.x, e.y - sh.y) <= ZY.shipR + e.radius) { hit = true; break; }
+    if (!hit) for (const e of host.grid.query(sh.x, sh.y, ZY.shipR + 40)) if (e.active && !(e.isSupplySlot && !e.lockTarget) && Math.hypot(e.x - sh.x, e.y - sh.y) <= ZY.shipR + e.radius) { hit = true; break; }
     if (hit) explode(host, st, sh, weapon, time, chibi, final, k);
   }
   st.ships = st.ships.filter(s => !s.dead);
@@ -80,13 +80,15 @@ function updateShips(host: WeaponHost, st: ZyState, weapon: WeaponState, dt: num
     if (!tick) continue;
     const ux = (b.x - a.x) / len, uy = (b.y - a.y) / len;
     for (const e of host.grid.query((a.x + b.x) / 2, (a.y + b.y) / 2, len / 2 + 30)) {
-      if (!e.active || e.isSupplySlot) continue;
+      if (!e.active || (e.isSupplySlot && !e.lockTarget)) continue;
       const dx = e.x - a.x, dy = e.y - a.y, along = dx * ux + dy * uy, side = Math.abs(-dx * uy + dy * ux);
       if (along >= 0 && along <= len && side <= ZY.chibi.ropeW / 2 + e.radius) burn(host, e, dmg, time);
     }
   }
 }
 
+/** 首领上一次被火场烧的时刻（2026-11-20 平衡：火场打首领不叠加）。 */
+const BOSS_FIELD_AT = new WeakMap<Enemy, number>();
 function updateFields(host: WeaponHost, st: ZyState, dt: number, time: number): void {
   const wind = time < st.windUntil, mul = wind ? ZY.windMul : 1;
   if (!wind && st.windUntil) st.windUntil = 0;
@@ -95,7 +97,11 @@ function updateFields(host: WeaponHost, st: ZyState, dt: number, time: number): 
     f.img?.setPosition(f.x, f.y).setFrame(Math.floor(time / 90) % 6).setAlpha(Math.min(.9, (f.until - time) / 400));
     if (time < f.nextTick) continue;
     f.nextTick = time + ZY.tickMs;
-    for (const e of host.grid.query(f.x, f.y, f.r + 30)) if (Math.hypot(e.x - f.x, e.y - f.y) <= f.r + e.radius) burn(host, e, f.dmg * mul, time);
+    for (const e of host.grid.query(f.x, f.y, f.r + 30)) {
+      if (Math.hypot(e.x - f.x, e.y - f.y) > f.r + e.radius) continue;
+      if (e.kind === 'boss') { if (time - (BOSS_FIELD_AT.get(e) ?? -1e9) < ZY.tickMs) continue; BOSS_FIELD_AT.set(e, time); } // 叠着的火场打首领不叠加：每 tickMs 只烧一次
+      burn(host, e, f.dmg * mul, time);
+    }
   }
   for (const f of st.fields) if (time >= f.until) f.img?.destroy();
   st.fields = st.fields.filter(f => time < f.until);

@@ -29,13 +29,17 @@ const crowd = (s, r = 260) => { for (const e of s.enemies) if (e.active && !e.is
 await p.evaluate(src => { const c = eval('(' + src + ')'); window.crowd = (s, r = 260) => { for (let k = s.enemies.filter(e => e.active && !e.isSupplySlot && Math.hypot(e.x - s.player.x, e.y - s.player.y) < 400).length; k < 12; k++) { const a = Math.random() * Math.PI * 2; s.spawnEnemy('infantry', s.player.x + Math.cos(a) * r * .8, s.player.y + Math.sin(a) * r * .6, 1, true); } c(s, r); }; }, String(crowd));
 
 // 1. 合击生效条件
-const gate = await ev(async s => { const b = s.player.growth.build, sc = await window.__mod('data/schoolCombos.ts'); b.tactics = {}; b.treasures = []; b.extraTags = []; s.player.damageImmune = true;
-  b.bonus = { fire: 2, archery: 1 }; const t1 = sc.activeCombos(b.tags()).map(c => c.id); b.bonus = { fire: 2, archery: 2 }; const t2 = sc.activeCombos(b.tags()).map(c => c.id);
-  s.buildCombat.update(s.combatNow + 1); return { t1, t2, live: s.buildCombat.combo('fire_arrow') }; });
+const gate = await ev(async s => { const b = s.player.growth.build, sc = await window.__mod('data/schoolCombos.ts'); b.tactics = {}; b.treasures = []; b.extraTags = []; b.manuals = []; b.branchSchool = null; s.player.damageImmune = true;
+  b.learn('ember'); b.learn('eagle'); /* 主修：火攻 · 弓弩 */
+  b.bonus = { fire: 1, archery: 0 }; const t1 = sc.activeCombos(b.tags(), b.majors()).map(c => c.id); b.bonus = { fire: 1, archery: 1 }; const t2 = sc.activeCombos(b.tags(), b.majors()).map(c => c.id);
+  s.buildCombat.update(s.combatNow + 1); const live = s.buildCombat.combo('fire_arrow');
+  b.bonus = { fire: 3, stratagem: 4, archery: 3, cavalry: 4, warrior: 4, formation: 4 }; const all = sc.activeCombos(b.tags(), b.majors()).map(c => c.id);
+  return { t1, t2, live, all, majors: b.majors() }; });
 ck('合击：火攻 2 势 + 弓弩 1 势不生效，两派都到 2 势「火箭」生效', !gate.t1.includes('fire_arrow') && gate.t2.includes('fire_arrow') && gate.live, gate);
+ck('主修两派：六派都 ≥ 4 势（亲和 / 随行等）也只有主修两派之间的合击（火攻 × 弓弩 =「火箭」）', gate.all.join() === 'fire_arrow', gate);
 
 // 2. 实战：六派都 4 势（15 个合击全生效），学火种 / 疾风 / 绊阵 / 连环 / 鹰眼 / 蓄势冲锋，主将半血（背水一战），打 16 秒
-await ev(s => { const b = s.player.growth.build; b.tactics = {}; for (const id of ['ember', 'ember', 'ember', 'gust', 'snare', 'chain', 'eagle', 'stored_edge']) b.learn(id);
+await ev(s => { const b = s.player.growth.build; b.tactics = { ember: 3, gust: 1, snare: 1, chain: 1, eagle: 1, stored_edge: 1 }; b.majors = () => ['fire', 'stratagem', 'archery', 'cavalry', 'warrior', 'formation']; /* 合击效果烟测：临时把六派都当主修（正常一局只有一个合击） */
   b.bonus = { fire: 3, stratagem: 3, archery: 3, cavalry: 3, warrior: 4, formation: 4 }; b.bonusNotes = {}; s.player.hp = s.player.maxHp * .3; return true; });
 const seenBanners = new Set();
 for (let i = 0; i < 16; i++) {
@@ -105,11 +109,17 @@ ck('每派每关最多 2 次：用完后 HUD 写「本关觉醒已用完」', /�
 // 5. 三选一卡面写合击；战法构筑面板有合击栏（截图一张）
 const label = await p.evaluate(async () => { const up = await window.__mod('data/upgrades.ts'); return up.schoolLabel('fire', { fire: 1, stratagem: 0, archery: 3, cavalry: 0, warrior: 0, formation: 0 }); });
 ck('三选一：这张卡让火攻到 2 势、弓弩已 2 势 → 卡面写「合击【火箭】」', /解锁【火势】· 合击【火箭】/.test(label), label);
-await ev(s => { const b = s.player.growth.build; b.bonus = { fire: 2, stratagem: 2, archery: 1, cavalry: 0, warrior: 2, formation: 0 }; b.tactics = {}; return true; });
-await p.evaluate(() => { const s = window.__S; s.setMode('pause'); s.openBuildPanel(); }); await p.waitForTimeout(700);
-const ov = await p.evaluate(() => { const s = window.__S, names = {}; const walk = l => { for (const o of l) { if (o.name?.startsWith('build-panel-combo')) names[o.name] = o.text ?? ''; if (o.list) walk(o.list); } }; walk(s.children.list); return names; });
-await p.screenshot({ path: `${OUT}/build-panel-combos.png` });
-ck('战法构筑面板：「合击」栏列出已生效的合击（含火借风势）、写已生效几个、给出差几势的提示', !!ov['build-panel-combo-title'] && /已生效 \d/.test(ov['build-panel-combo-count'] ?? '') && ov['build-panel-combo-fire_wind'] === '火借风势' && Object.keys(ov).some(k => k.startsWith('build-panel-combo-near-') && !k.includes('hit')), ov);
+const panel = async (shot) => { await p.evaluate(() => { const s = window.__S; s.setMode('pause'); s.openBuildPanel(); }); await p.waitForTimeout(700);
+  const r = await p.evaluate(() => { const s = window.__S, names = {}; const walk = l => { for (const o of l) { if (o.name?.startsWith('build-panel-combo') || o.name === 'build-panel-majors' || /^build-panel-tag-\w+$/.test(o.name ?? '')) names[o.name] = o.text ?? ''; if (o.list) walk(o.list); } }; walk(s.children.list); return names; });
+  if (shot) await p.screenshot({ path: `${OUT}/${shot}.png` }); await ev(s => { s.setMode('none'); return true; }); return r; };
+/* 只学火攻（主修还空一派）：差几势的提示 */
+await ev(s => { const b = s.player.growth.build; delete b.majors; b.tactics = {}; b.manuals = []; b.learn('ember'); b.bonus = { fire: 1, stratagem: 1, archery: 1, cavalry: 0, warrior: 0, formation: 0 }; return true; });
+const ov1 = await panel();
+ck('战法构筑面板：主修还空一派时，「合击」栏给出差几势的提示；表头写「主修：火攻 · （还可选一派）」', Object.keys(ov1).some(k => k.startsWith('build-panel-combo-near-') && !k.includes('hit')) && /主修：火攻 · （还可选一派）/.test(ov1['build-panel-majors'] ?? ''), ov1);
+/* 火攻 + 奇谋 主修满：只有火借风势，猛将（亲和给的势）标「非主修」 */
+await ev(s => { const b = s.player.growth.build; b.learn('gust'); b.bonus = { fire: 1, stratagem: 1, archery: 1, cavalry: 0, warrior: 2, formation: 0 }; return true; });
+const ov = await panel('build-panel-combos');
+ck('战法构筑面板：「合击」栏列出已生效的合击（火借风势）、写已生效几个；表头「主修：火攻 · 奇谋」，第三派标「非主修」、不再提示第三派合击', !!ov['build-panel-combo-title'] && /已生效 1/.test(ov['build-panel-combo-count'] ?? '') && ov['build-panel-combo-fire_wind'] === '火借风势' && /主修：火攻 · 奇谋$/.test(ov['build-panel-majors'] ?? '') && ov['build-panel-tag-warrior'] === '非主修' && !Object.keys(ov).some(k => k.startsWith('build-panel-combo-near-')), ov);
 ck('无页面报错', errors.length === 0, errors.slice(0, 3));
 await b.close();
 console.log(fail ? `FAILED ${fail}` : 'ALL PASS');

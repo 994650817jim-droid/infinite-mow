@@ -49,7 +49,7 @@ export function beifaGameSceneClass(Base: typeof GameScene, cfg: ArcSceneConfig)
       // 陈仓城墙要进场景碰撞（这关 arcForts 登记是 clear：城门 / 城墙由 ChencangSiege 自己摆，城门可攻破）
       const so = this as unknown as { sishuiObstacles: SishuiObstacles | null }; if (!so.sishuiObstacles) so.sishuiObstacles = new SishuiObstacles([]);
       this.siege = new ChencangSiege({ scene: this, player: s.player, strikes: this.strikes, footprints: so.sishuiObstacles.footprints,
-        spawnGate: (x, y, hp) => sup.spawnGate(x, y, hp, 260),
+        spawnGate: (x, y, hp) => { const g = sup.spawnGate(x, y, hp, 260); if (g) (this as unknown as GameScene).markGate(g); return g; }, // 陈仓城门：所有武器都打、舆图 / 屏外提示
         spawnTower: (x, y, hp) => { const e = sup.spawnCamp(x, y, hp); e?.sprite.setTexture('sishui_props_refined', 1).setOrigin(.5, 1).setDisplaySize(140, 140).setAlpha(1); return e; },
         banner: (t, c) => s.showWaveBanner(t, false, c), sfx: k => s.sfx.play(k),
         timeLeft: () => { const h = this as unknown as { elapsed: number; chapter: { waves: { start: number }[] } }, bt = h.chapter.waves[h.chapter.waves.length - 1].start; return h.elapsed >= bt ? Math.max(0, bt + 60 - h.elapsed) : null; } }, s.combatNow);
@@ -94,12 +94,12 @@ export function beifaGameSceneClass(Base: typeof GameScene, cfg: ArcSceneConfig)
     protected spawnBoss(): void {
       const s = this as unknown as Host;
       // 陈仓：城门未破，郝昭不出城（到点也只提示）
-      if (this.arcStage === 2 && this.siege?.gateAlive) { if (!this.gateWarned) { this.gateWarned = true; s.showWaveBanner('城门紧闭', true, '先破陈仓城门 · 郝昭才会出城'); } return; }
+      if (this.arcStage === 2 && this.siege?.gateAlive) { if (!this.gateWarned) { this.gateWarned = true; s.showWaveBanner('城门紧闭', true, '先破陈仓城门 · 郝昭才会出城（60 秒内未破城门即退兵）'); /* 2026-11-20 第 7–12 章检查：基类在首领时刻 + 60 秒首领未出判超时，原横幅没说限时 */ } return; }
       const had = s.boss?.active; super.spawnBoss();
       if (!s.boss || had) return;
       if (this.arcStage === 3 && this.strikes) {
         const host: ArcHost = { scene: this, boss: s.boss, player: s.player, army: s.legion, spawn: (k, x, y, def) => s.spawnEnemy(k, x, y, 1, true, def), def: k => s.chapter.enemies[k] as never, banner: (t, c) => s.showWaveBanner(t, true, c), sfx: k => s.sfx.play(k) };
-        this.simayi = new SimayiBoss(host, cfg.texture('simayi'), s.combatNow, { strikes: this.strikes, placeFort: (x, y, i) => s.env?.placeTent(x, y, `fixed-beifa-fort-${i}`, SMY.fortHp, 3) ?? null });
+        this.simayi = new SimayiBoss(host, cfg.texture('simayi'), s.combatNow, { strikes: this.strikes, placeFort: (x, y, i) => { const f = s.env?.placeTent(x, y, `fixed-beifa-fort-${i}`, SMY.fortHp, 3) ?? null; if (f) (this as unknown as GameScene).markGate(f, 'tent'); return f; } }); // 营垒：所有武器都打、舆图 / 屏外提示、营寨攻坚小营帐档（11-20 平衡模拟 7/17 将拆不完）
         const self = this as unknown as { controller?: { clear(): void } };
         self.controller?.clear(); self.controller = this.simayi; // 换掉 ThirdGameScene 默认挂的 ThirdBoss
       }
@@ -108,9 +108,8 @@ export function beifaGameSceneClass(Base: typeof GameScene, cfg: ArcSceneConfig)
     protected spawnBossChest(x: number, y: number, done: () => void): void { super.spawnBossChest(x, y, this.arcStage === 3 ? () => this.endChapter(done) : done); }
     private endChapter(next: () => void): void {
       const s = this as unknown as Host;
-      s.setMode('parley');
       const lord = getCharacter(s.runConfig.character as never).name;
-      storyScroll(this, GAME_WIDTH, GAME_HEIGHT, IS_DESKTOP, { name: 'story-beifa-end', confirmName: 'story-beifa-end-confirm', kicker: '第十二章 · 北伐 · 终', title: '五丈原',
+      (this as unknown as GameScene).endScroll(close => storyScroll(this, GAME_WIDTH, GAME_HEIGHT, IS_DESKTOP, { name: 'story-beifa-end', confirmName: 'story-beifa-end-confirm', kicker: '第十二章 · 北伐 · 终', title: '五丈原',
         lines: [
           { text: '将星坠而复明。司马懿望见我军阵势不乱，叹曰：「吾能料生，不能料死。」遂引兵退去。' },
           { who: '司马懿', text: '此人用兵，吾不及也。传令：收兵，坚守关中。' },
@@ -118,10 +117,10 @@ export function beifaGameSceneClass(Base: typeof GameScene, cfg: ArcSceneConfig)
           { text: '乱世百年，至此将终。天下大势，就看这些年攻下的城池了……' },
         ], reward: '北伐功成 · 进入结局', confirm: '观天下大势', background: 'rest_camp',
         onDone: () => {
-          s.setMode('none'); next();
+          close(); next();
           // 结算后场景时钟会暂停（setMode 冻结 Timer），用真实时间切到结局
           const lord = s.runConfig.character; window.setTimeout(() => { if (this.sys.isActive()) this.scene.start('EndingScene', { lord }); }, 1500);
-        } });
+        } }));
     }
     snapshotBeifa() { return { stage: this.arcStage, water: this.water?.snapshot() ?? null, siege: this.siege?.snapshot() ?? null, simayi: this.simayi?.snapshot() ?? null, strikes: this.strikes?.pending ?? 0 }; }
   };

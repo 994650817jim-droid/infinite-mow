@@ -9,6 +9,8 @@ import type { CharacterId } from './characters';
 import type { FollowerTemplate } from './recruits';
 
 export type SchoolId = 'fire' | 'stratagem' | 'archery' | 'cavalry' | 'warrior' | 'formation';
+/** 一次征程最多发展几派（用户 11-20「关于流派也是最多往两个流派发展」；BuildState.majors）。 */
+export const MAX_SCHOOLS = 2;
 export const SCHOOL_IDS: readonly SchoolId[] = ['fire', 'stratagem', 'archery', 'cavalry', 'warrior', 'formation'];
 
 export interface SchoolDef {
@@ -59,6 +61,11 @@ export const HERO_AFFINITY: Readonly<Record<CharacterId, readonly SchoolId[]>> =
   zhouyu: ['fire', 'formation'], // P2 周瑜：火攻 + 兵阵
   taishici: ['archery', 'formation'], // P2 太史慈：弓弩 + 兵阵
   mengde: ['formation', 'cavalry'], // P2 曹操：兵阵 + 骑突
+  ganning: ['fire', 'cavalry'], // P3 甘宁：火攻 + 骑突
+  dianwei: ['warrior', 'formation'], // P3 典韦：猛将 + 兵阵（设计会话改）
+  sunquan: ['formation', 'archery'], // P3 孙权：兵阵 + 弓弩
+  menghuo: ['warrior', 'formation'], // P3 孟获：猛将 + 兵阵
+  zhurong: ['fire', 'archery'], // P3 祝融：火攻 + 弓弩
 };
 export function heroAffinity(hero: string): readonly SchoolId[] { return (HERO_AFFINITY as Record<string, readonly SchoolId[]>)[hero] ?? []; }
 /** 随行按兵种算势（每名 +1，全部随行合计最多 followerCap）。 */

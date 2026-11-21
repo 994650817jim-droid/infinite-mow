@@ -1,7 +1,10 @@
+import { sortieBlocked } from '../ui/SortieGuard';
 import Phaser from 'phaser';
 import { takeDirectDepart } from '../systems/DirectDepart';
 import {defaultHero,heroOwned,LOCKED_HINT} from '../systems/RosterStore';
 import {playMenuMusic} from '../systems/Music';
+import {startCityAmbient} from '../systems/ContentSfx';
+import {uiSfx} from '../systems/Sfx';
 import {GUANDU_STAGES, GUANDU_PLAYABLE, GUANDU_ATLAS_FILES, type GuanduStage} from '../data/guanduChapter';
 import {arcUnlocked, arcStagePlayable, arcStages, alertLossWarning} from '../world/WorldStore';
 import {isChapterTestRun} from '../systems/ChapterProgress';
@@ -28,7 +31,7 @@ export class GuanduChapterScene extends Phaser.Scene {
   /** 已实装且已解锁（试炼模式下只要已实装）。 */
   private open(stage: number) { return stage <= GUANDU_PLAYABLE && (arcStagePlayable('guandu', stage) || isChapterTestRun()); }
   create() {
-    playMenuMusic(this, 'map');
+    playMenuMusic(this, 'map'); startCityAmbient(this, k => uiSfx().play(k), ["amb_wind","amb_wind","amb_horn","amb_drum","amb_flag"]);
     if (!this.registry.get('battleReady')) { this.registry.set('pendingWarlord', 'GuanduChapterScene'); this.registry.set('loadBattle', true); this.scene.start('BootScene'); return; }
     this.cards = []; this.heroButtons = [];
     const desk = W > 600;
@@ -74,6 +77,7 @@ export class GuanduChapterScene extends Phaser.Scene {
     this.refresh();
   }
   private depart() {
+    if (sortieBlocked(this, () => this.depart())) return; // 出征确认：会让告急城池失守时先问（ui/SortieGuard）
     if (!this.open(this.selected)) return;
     if (!isChapterTestRun()) try { localStorage.setItem('im_last_hero', this.hero); } catch { /* storage unavailable */ }
     this.registry.remove('campaignTransfer'); this.registry.remove('guanduTransfer');

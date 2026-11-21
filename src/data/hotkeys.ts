@@ -9,7 +9,7 @@
  * 移动（WASD / 方向键）固定不可改，只在列表里显示。
  */
 export type HotkeyAction =
-  | 'back' | 'potion' | 'order' | 'sortie' | 'bag' | 'attributes' | 'build' | 'map' | 'orders' | 'menu'
+  | 'back' | 'potion' | 'order' | 'sortie' | 'formation' | 'bag' | 'attributes' | 'build' | 'map' | 'orders' | 'menu'
   | 'pick1' | 'pick2' | 'pick3' | 'pick4' | 'reroll' | 'confirm';
 
 export interface HotkeyDef {
@@ -27,6 +27,8 @@ export const HOTKEYS: Record<HotkeyAction, HotkeyDef> = {
   potion: { label: '服药', where: '战斗中', key: 'KeyQ' },
   order: { label: '护阵 / 出击 切换', where: '战斗中', key: 'KeyE' },
   sortie: { label: '出击', where: '战斗中（已在出击时不变）', key: 'KeyF' },
+  // 军阵（formation-design.md）：主阵 ⇄ 备阵，有冷却；军阵开放前无反应
+  formation: { label: '变阵', where: '战斗中（军阵开放后）：主阵 ⇄ 备阵', key: 'KeyX' },
   bag: { label: '行囊', where: '战斗中开关；行营休整', key: 'KeyB', alt: ['Tab'] },
   attributes: { label: '属性加点', where: '战斗中有属性点时开关', key: 'KeyC' },
   build: { label: '战法构筑', where: '战斗中开关', key: 'KeyV' },

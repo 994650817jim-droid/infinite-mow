@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { stageLieutenant, type PhasePlan, type StagePhase } from '../data/stagePhases';
 import { GameScene } from './GameScene';
 import { thirdGameSceneClass, type ArcSceneConfig } from './ThirdGameScene';
 import { XIANGFAN_STAGES, XF_TROOPS, xfArt, xiangfanBattle, xfBossSheet, xfBossTexture, XF_OPENING, XF_FLOOD_OPENING, xfEnding, type XiangfanStage } from '../data/xiangfanChapter';
@@ -103,6 +104,15 @@ export function xiangfanGameSceneClass(Base: typeof GameScene) {
     }
     /** 洪水里的敌人自身移动变慢。 */
     protected advanceEnemy(enemy: Enemy, nx: number, ny: number, dt: number) { const m = this.flood?.enemyMoveMul(enemy) ?? 1; super.advanceEnemy(enemy, nx * m, ny * m, dt); }
+    /**
+     * 9-3 麦城突围不套五段（原副将段 185 秒、首领段 245 秒，限时 180 秒——马忠永远出不来，段落横幅与实际不符）：
+     * 自己的段落表压进 180 秒：0 突围 / 35 吴军合围 / 70 马忠截杀（副将）/ 125 吕蒙截道（吕蒙按突围进度约 130 秒截道）。
+     */
+    protected customPhases(plan: PhasePlan): { phases: StagePhase[] } | null {
+      if (this.xfStage !== 3) return null;
+      const lt = plan.lieutenant || stageLieutenant('xiangfan', 3, '吕蒙') || '马忠';
+      return { phases: [{ kind: 'vanguard', start: 0, name: '麦城突围' }, { kind: 'elite', start: 35, name: '吴军合围' }, { kind: 'lieutenant', start: 70, name: lt + '截杀' }, { kind: 'boss', start: 125, name: '吕蒙截道' }] };
+    }
     /** 麦城：吕蒙只在接近出口时出场。 */
     protected spawnBoss() { if (this.breakout && !this.breakout.bossCalled) return; super.spawnBoss(); }
     update(time: number, delta: number) {
@@ -113,6 +123,8 @@ export function xiangfanGameSceneClass(Base: typeof GameScene) {
         if (this.breakout) {
           this.breakout.update();
           this.timerText?.setText(`突围 · 剩 ${Math.ceil(this.breakout.timeLeft)} 秒 · 距出口 ${this.breakout.distance} 步${this.breakout.gateOpen ? '' : this.breakout.bossCalled ? ' · 吕蒙截道' : ''}`);
+          // 关名（五段关的计时 / 关名下移了）在 y 78 附近：突围行原来固定 y 78 压在「9-3 麦城突围」上（2026-11-20 第 7–12 章检查），改为跟在关名下面
+          { const w = this.hudTexts?.wave; if (this.timerText && w?.visible && w.text) { const bd = w.getBounds(); if (Math.abs(bd.centerX - GAME_WIDTH / 2) < 240) this.timerText.setY(Math.max(78, bd.bottom + 2)); } }
           if (this.pendingWin && this.breakout.exited) { this.pendingWin = false; this.finish(true, 'boss'); }
         }
         this.updateRage();

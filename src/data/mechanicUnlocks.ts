@@ -9,8 +9,13 @@ import { isChapterTestRun } from '../systems/ChapterProgress';
  * - 开发期 ?dev=1（isChapterTestRun）默认全开，测试不被锁；?dev=1&mech=real 才按进度。
  * - allMechanics：以后二周目 / 老兵模式新档勾选 = 全开（先留口子，没有入口）。
  * 天下地图、马厩、招贤馆、支线的开放沿用原有判断（worldUnlocked / stableUnlocked / other-factions-design），这里只记剧情引子。
+ * 11-20 用户「第一章就可以开发背包，但是军需商人第二章才开，军医1-1打完就开，加入相应剧情」：
+ * - 行囊（gear）1-1 就开放，1-1 首领第一次掉兵装时张飞一句引出（at 'event'，GameScene.mechEvent）；之前行囊按钮不显示（mechShown）。
+ * - 军需商人（merchant）第一章通关后开放：1-3 打完直接进天下地图（没有行营），张世平在天下地图上来投（2-1 前）；错过了就在之后第一次行营休整时补（at 'camp'）。第一章行营 / 营寨里没有商人。
+ * - 军医（medic）1-1 打完开放，1-1 后的行营乡里郎中来投、简雍介绍，初诊不收粮（at 'camp'，CampRestUI）。
+ * - 开放前一律隐藏（页签、按钮、建筑不出现），不再灰掉。
  */
-export type MechId = 'squad' | 'atlas' | 'jinnang' | 'medic' | 'gear' | 'fortune' | 'lieutenant' | 'attributes' | 'siege' | 'parley' | 'branch' | 'combo';
+export type MechId = 'squad' | 'atlas' | 'jinnang' | 'medic' | 'gear' | 'merchant' | 'fortune' | 'lieutenant' | 'attributes' | 'siege' | 'parley' | 'branch' | 'combo' | 'formation' | 'f_snake' | 'f_crane' | 'f_geese';
 export interface MechLine { who: string; id?: string; text: string }
 export interface MechDef {
   /** 第几章第几关；when = 'start' 该关开打即开放，'after' 该章通关后开放。 */
@@ -19,8 +24,10 @@ export interface MechDef {
   pre: 'hidden' | 'locked';
   /** 玩法名（锁住时的「第 X 章 · 某某之后开放」、开放卡标题）。 */
   name: string;
-  /** 剧情引子（1–2 句，左下对话卡）；tip = 跟在后面的一行提示。 */
+  /** 剧情引子（1–2 句，左下对话卡）；tip = 跟在后面的一行提示。at 'camp' 时第一句写进人物头顶气泡（要短），其余写在行营下方提示行。 */
   lines: readonly MechLine[]; tip: string;
+  /** 引子在哪播：缺省 = 开打（when 'after' 也可在天下地图）；camp = 行营休整打开时（CampRestUI；when 'after' 的也在天下地图播；都错过了下一关开打补播）；event = 场景里事件触发（GameScene.mechEvent）。 */
+  at?: 'camp' | 'event';
 }
 
 export const MECHANICS: Readonly<Record<MechId, MechDef>> = {
@@ -30,10 +37,12 @@ export const MECHANICS: Readonly<Record<MechId, MechDef>> = {
     lines: [{ who: '简雍', id: 'jianyong', text: '下曲阳地形复杂，看看舆图再走。' }], tip: '按 M 展开舆图（战斗暂停）' },
   jinnang: { chapter: 1, stage: 3, when: 'after', pre: 'hidden', name: '锦囊',
     lines: [{ who: '诸葛亮', id: 'zhuge', text: '另附锦囊三枚，危急时拆看。' }], tip: '三选一里出现锦囊；按 R 拆开锦囊' },
-  medic: { chapter: 1, stage: 3, when: 'after', pre: 'locked', name: '军医',
-    lines: [{ who: '华佗', text: '将军身上带伤，老夫替你看看。' }], tip: '营寨 / 城池军医可治伤、补部曲' },
-  gear: { chapter: 2, stage: 1, when: 'start', pre: 'locked', name: '兵装',
-    lines: [{ who: '张世平', id: 'zhangshiping', text: '镔铁打的好兵器，张某也备了几件——将军用不上的，张某也收。' }], tip: '首领宝箱开始掉兵装；行营里打开行囊换装，商人收卖兵装' },
+  medic: { chapter: 1, stage: 2, when: 'start', pre: 'hidden', name: '军医', at: 'camp',
+    lines: [{ who: '乡里郎中', text: '在下略通岐黄，愿随军效力。' }, { who: '简雍', id: 'jianyong', text: '主公，这一仗受的伤会带到下一仗——休整时请先生看看。' }], tip: '血量跨关继承，休整时找军医治伤；初诊不收粮' },
+  gear: { chapter: 1, stage: 1, when: 'start', pre: 'hidden', name: '行囊', at: 'event',
+    lines: [{ who: '张飞', id: 'zhangfei', text: '大哥，缴来的甲胄先穿上！' }], tip: '按 B 打开行囊，点兵装穿上；首领宝箱会掉兵装' },
+  merchant: { chapter: 1, stage: 3, when: 'after', pre: 'hidden', name: '军需商人', at: 'camp',
+    lines: [{ who: '张世平', id: 'zhangshiping', text: '张某随军贩些兵甲，将军看看？' }, { who: '刘备', id: 'liubei', text: '张兄当年资助我等起兵，如今又随军相助。' }], tip: '行营休整「军需商人」、营寨「旅商」：买兵装、战法卷轴，用不上的兵装也收' },
   fortune: { chapter: 2, stage: 1, when: 'start', pre: 'hidden', name: '战场机缘',
     lines: [{ who: '斥候', text: '报！远处山坳有辎重车无人看守！' }], tip: '跟着屏幕边缘的箭头，走过去触发机缘' },
   lieutenant: { chapter: 2, stage: 2, when: 'start', pre: 'hidden', name: '副将',
@@ -46,6 +55,15 @@ export const MECHANICS: Readonly<Record<MechId, MechDef>> = {
     lines: [{ who: '简雍', id: 'jianyong', text: '李傕反复小人，势穷必肯低头——不妨劝他一劝。' }], tip: '首领残血时出现劝降窗；有的首领宁死不降' },
   branch: { chapter: 3, stage: 1, when: 'start', pre: 'hidden', name: '兵器专职',
     lines: [{ who: '涿郡良匠', text: '将军这兵器，还能再往深里打——两条路，只能选一条。' }], tip: '本命兵器 Lv5 时选专职；选定后要行营「重整构筑」才能换' },
+  // 军阵（formation-design.md，用户 11-20「全按推荐」）：第四章通关后徐庶在新野来投，授方圆、锋矢；之后按剧情学长蛇（5-1 后）、鹤翼（5-2 后）、雁行（黄忠来投，第六章后）
+  formation: { chapter: 4, stage: 3, when: 'after', pre: 'hidden', name: '军阵',
+    lines: [{ who: '徐庶', id: 'xushu', text: '主公用兵，胜在人和，失在无阵。庶有二阵相赠——守则方圆，攻则锋矢。' }], tip: '行营「布阵」选主阵 / 备阵；战斗中按 X 变阵；护阵（E）时阵势生效，出击时各阵有各自的打法' },
+  f_snake: { chapter: 5, stage: 2, when: 'start', pre: 'hidden', name: '长蛇阵',
+    lines: [{ who: '赵云', id: 'zhaoyun', text: '七进七出，靠的是阵随人走、首尾相应。' }], tip: '学会长蛇阵：行营「布阵」可选' },
+  f_crane: { chapter: 5, stage: 3, when: 'start', pre: 'hidden', name: '鹤翼阵',
+    lines: [{ who: '周瑜', id: 'zhouyu', text: '两翼齐张，敌入其中，如鹤敛翅。' }], tip: '学会鹤翼阵：行营「布阵」可选' },
+  f_geese: { chapter: 6, stage: 3, when: 'after', pre: 'hidden', name: '雁行阵',
+    lines: [{ who: '黄忠', id: 'huangzhong', text: '老夫弓手一字排开，箭如雁阵。' }], tip: '学会雁行阵：行营「布阵」可选' },
   combo: { chapter: 3, stage: 2, when: 'start', pre: 'hidden', name: '合击',
     lines: [{ who: '诸葛亮', id: 'zhuge', text: '兵法相济：两派各得其二，便成合击。' }], tip: '两个流派各到 2 势，触发合击' },
 };
@@ -68,6 +86,8 @@ export function mainlineCleared(): number {
 export function mechNeed(id: MechId): number { const m = MECHANICS[id]; return m.when === 'after' ? m.chapter * 3 : (m.chapter - 1) * 3 + (m.stage - 1); }
 
 let cache: { at: number; n: number } | null = null;
+const SEEN_KEY = 'im_mech_seen';
+function seen(): Set<string> { try { return new Set(JSON.parse(localStorage.getItem(SEEN_KEY) ?? '[]') as string[]); } catch { return new Set(); } }
 /** 测试 / 二周目口子：全开。 */
 export const MECH_FLAGS = { allMechanics: false };
 function allOpen(): boolean {
@@ -76,12 +96,31 @@ function allOpen(): boolean {
   try { if (isChapterTestRun() && new URLSearchParams(window.location.search).get('mech') !== 'real') return true; } catch { /* ignore */ }
   return false;
 }
+function clearedNow(): number {
+  const now = Date.now();
+  if (!cache || now - cache.at > 1000) { let n = 99; try { n = mainlineCleared(); } catch { /* 存档不可用：全开 */ } cache = { at: now, n }; }
+  return cache.n;
+}
 /** 这项玩法开放没有（每秒最多读一次存档）。 */
 export function mechOpen(id: MechId): boolean {
   if (allOpen()) return true;
-  const now = Date.now();
-  if (!cache || now - cache.at > 1000) { let n = 99; try { n = mainlineCleared(); } catch { /* 存档不可用：全开 */ } cache = { at: now, n }; }
-  return cache.n >= mechNeed(id);
+  return clearedNow() >= mechNeed(id);
+}
+/**
+ * 事件引子的玩法（at 'event'，如行囊）：开放了、且引子已经播过（或老存档早过了那段）才显示入口。
+ * 1-1 首领掉第一件兵装之前，行囊按钮不出现。
+ */
+export function mechShown(id: MechId): boolean {
+  if (!mechOpen(id)) return false;
+  if (allOpen() || MECHANICS[id].at !== 'event') return true;
+  return seen().has(id) || clearedNow() - mechNeed(id) > 2;
+}
+/** 事件触发的引子（at 'event'）：第一次返回 true 并记已看；早过了那段（开放超过两关）的静默记掉。 */
+export function takeMechEvent(id: MechId): boolean {
+  if (allOpen() || !mechOpen(id)) return false;
+  const s = seen(); if (s.has(id)) return false;
+  s.add(id); try { localStorage.setItem(SEEN_KEY, JSON.stringify([...s])); } catch { /* ignore */ }
+  return clearedNow() - mechNeed(id) <= 2;
 }
 /** 存档变了（关卡结算后）立刻重读。 */
 export function mechRefresh(): void { cache = null; }
@@ -91,24 +130,24 @@ export function mechLockText(id: MechId): string {
   return m.when === 'after' ? `第${CN[m.chapter]}章通关后开放` : `第${CN[m.chapter]}章 · ${m.chapter}-${m.stage} 开放`;
 }
 
-const SEEN_KEY = 'im_mech_seen';
 /** 一次（一关开打 / 进一次天下地图）最多播几个新玩法引子。 */
 export const MECH_INTRO_CAP = 2;
-function seen(): Set<string> { try { return new Set(JSON.parse(localStorage.getItem(SEEN_KEY) ?? '[]') as string[]); } catch { return new Set(); } }
 /**
  * 刚开放、还没播过剧情引子的玩法（播完记一笔）。where：battle = 开打时（全部；章后开放的若还没在地图上播过也在这里播），map = 天下地图（只播 when 'after'）。
  * 测试全开时不播（?dev=1&mech=real 照播）。
  */
-export function takeMechIntros(where: 'battle' | 'map'): MechId[] {
+export function takeMechIntros(where: 'battle' | 'map' | 'camp', cap: number = MECH_INTRO_CAP): MechId[] {
   if (allOpen()) return [];
   const s = seen(), out: MechId[] = [], n0 = s.size; let n = 0; try { n = mainlineCleared(); } catch { return []; }
+  // 行营引子（at 'camp'）只在行营播；没进行营就开打了下一关（n 已过开放那关）才在开打时补播。事件引子（at 'event'）不在这里播
+  const fits = (id: MechId): boolean => { const d = MECHANICS[id]; if (d.at === 'event') return false; if (where === 'camp') return d.at === 'camp'; if (where === 'map') return d.when === 'after'; return d.at !== 'camp' || n > mechNeed(id); };
   // 一次最多播 MECH_INTRO_CAP 个（第二章检查：2-1 原来一口气 4 张新玩法卡）：最近开放、本关开打的（when 'start'）优先，章后开放的（锦囊、军医）顺延到下一关 / 天下地图；
   // 开放超过两关还没播的（老存档、跳过的）静默记掉，不一次补播一串
-  const ids = (Object.keys(MECHANICS) as MechId[]).filter(id => !s.has(id) && !(where === 'map' && MECHANICS[id].when !== 'after') && n >= mechNeed(id))
+  const ids = (Object.keys(MECHANICS) as MechId[]).filter(id => !s.has(id) && fits(id) && n >= mechNeed(id))
     .sort((a, b) => mechNeed(b) - mechNeed(a) || (MECHANICS[a].when === 'start' ? 0 : 1) - (MECHANICS[b].when === 'start' ? 0 : 1)); // 最近开放的优先，同一关里本关开打的优先
   for (const id of ids) {
     if (n - mechNeed(id) > 2) { s.add(id); continue; } // 顺延最多两关（2-1 的锦囊 → 2-2、军医 → 2-3）
-    if (out.length >= MECH_INTRO_CAP) continue; // 顺延，不记已看
+    if (out.length >= cap) continue; // 顺延，不记已看
     out.push(id); s.add(id);
   }
   if (s.size !== n0) try { localStorage.setItem(SEEN_KEY, JSON.stringify([...s])); } catch { /* ignore */ }

@@ -1,4 +1,7 @@
+import { sortieBlocked } from '../ui/SortieGuard';
 import {playMenuMusic,menuMusic} from '../systems/Music';
+import {startCityAmbient} from '../systems/ContentSfx';
+import {uiSfx} from '../systems/Sfx';
 import {takeDirectDepart} from '../systems/DirectDepart';
 import {defaultHero,heroOwned,LOCKED_HINT} from '../systems/RosterStore';
 import Phaser from 'phaser';
@@ -22,7 +25,7 @@ export class BeifaChapterScene extends Phaser.Scene {
  preload(){for(const [key,url] of Object.entries(BEIFA_SHEETS))if(!this.textures.exists(key))loadBossSheet(this.load,key,url);}
  private text(x:number,y:number,s:string,size=16,color='#ded2b9'){return worldText(this,x,y,s,size,color);}
  private action(x:number,y:number,w:number,h:number,label:string,fn:()=>void,primary=false){const bg=this.add.rectangle(x,y,w,h,primary?0x744530:0x241e1a,.96).setStrokeStyle(1,primary?0xc39b61:0x70604b).setInteractive({useHandCursor:true});const t=this.text(x,y,label,primary?22:17,primary?'#ffdf9d':'#d1c2a7').setOrigin(.5);bg.on('pointerover',()=>bg.setFillStyle(primary?0x8b5438:0x3a2c23)).on('pointerout',()=>bg.setFillStyle(primary?0x744530:0x241e1a)).on('pointerdown',()=>bg.setAlpha(bg.getData('locked')?.3:.7)).on('pointerup',()=>{bg.setAlpha(bg.getData('locked')?.35:1);fn();});return{bg,t};}
- create(){playMenuMusic(this, 'map');
+ create(){playMenuMusic(this, 'map'); startCityAmbient(this, k => uiSfx().play(k), ["amb_wind","amb_wind","amb_horn","amb_drum","amb_flag"]);
   if(!this.registry.get('battleReady')){this.registry.set('pendingWarlord','BeifaChapterScene');this.registry.set('loadBattle',true);this.scene.start('BootScene');return;}
   this.cards=[];this.heroButtons=[];const desk=W>600,state=loadWorld(),test=isChapterTestRun();this.selected=Math.min(3,state.beifaStages+1)as BeifaStage;{const pick=Number(this.registry.get('worldStagePick'));this.registry.remove('worldStagePick');if([1,2,3].includes(pick)&&(stageOpen(pick)||test))this.selected=pick as BeifaStage;}
   try{this.hero=defaultHero(localStorage.getItem('im_last_hero'));}catch{this.hero=defaultHero(null);}
@@ -70,6 +73,6 @@ export class BeifaChapterScene extends Phaser.Scene {
     {who:lord,text:'出祁山，取街亭，下陈仓——与司马懿决于五丈原！'},
     {text:'街亭要守住水源；陈仓先破城门、拆城头箭楼；五丈原司马懿三阶段：坚守不出 → 出营决战 → 天象异变。打赢之后，按占下的城池进入结局。'}],
    reward:'最终章 · 打赢进入结局',confirm:'北伐中原',background:'rest_camp',onDone:()=>{try{localStorage.setItem(OPEN_KEY,'1');}catch{}}});}
- private depart(){if(!stageOpen(this.selected)&&!isChapterTestRun())return;if(!isChapterTestRun())try{localStorage.setItem('im_last_hero',this.hero);}catch{}this.registry.remove('campaignTransfer');this.registry.remove('beifaTransfer');this.registry.set('beifaStage',this.selected);this.registry.set('runConfig',{character:this.hero,thirdStage:this.selected});this.scene.start('BeifaGameScene');}
+ private depart(){if(sortieBlocked(this,()=>this.depart()))return; /* 出征确认：会让告急城池失守时先问（ui/SortieGuard） */if(!stageOpen(this.selected)&&!isChapterTestRun())return;if(!isChapterTestRun())try{localStorage.setItem('im_last_hero',this.hero);}catch{}this.registry.remove('campaignTransfer');this.registry.remove('beifaTransfer');this.registry.set('beifaStage',this.selected);this.registry.set('runConfig',{character:this.hero,thirdStage:this.selected});this.scene.start('BeifaGameScene');}
  private refresh(){const save=loadWorld(),test=isChapterTestRun();this.cards.forEach((c,i)=>{const open=stageOpen(i+1)||test,chosen=this.selected===i+1;c.bg.setFillStyle(chosen?0x413020:0x29231d).setStrokeStyle(chosen?2:1,chosen?0xd7b778:0x65543f);c.strip.setVisible(chosen);c.status.setText(save.beifaStages>=i+1?'✓ 已告捷':!open?!beifaOpen()?'锁定 · 南征告捷':'锁定 · 完成前关':chosen?'◆ 当前出征':'可出征').setColor(chosen?'#f0ce8f':'#a99c86');});this.heroButtons.forEach((h,i)=>h.setFillStyle(CHARACTERS[i].id===this.hero?0x51402b:0x241e1a).setStrokeStyle(1,CHARACTERS[i].id===this.hero?0xd7b778:0x70604b).setAlpha(h.getData('locked')?.35:1));this.deployText.setText('出征  ·  '+BEIFA_STAGES[this.selected-1].name);}
 }

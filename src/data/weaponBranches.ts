@@ -48,6 +48,21 @@ export const WEAPON_BRANCHES: readonly WeaponBranch[] = [
   // P2 曹操（效果在 weapons/mengdeWeapon.ts 里结算）
   B('yitian_jian', 'cc_xietianzi', 'formation', '挟天子以令诸侯', '每 8 秒插令旗成阵地 6 秒：\n阵内部曲攻速 +25%、每秒回血 2%', '部曲攻速加成提高', '部曲攻速加成再提高', '魏王', '阵地范围 +30%', true),
   B('yitian_jian', 'cc_hubao', 'cavalry', '虎豹骑', '奸雄只需 5 层，铁骑冲撞眩晕 0.8 秒\n冲过留下尘浪 4 秒（敌兵减速）', '铁骑伤害 +30%', '铁骑伤害再 +30%', '虎豹骑 · 极', '铁骑 7 骑', true),
+  // P3 祝融（效果在 weapons/zhurongWeapon.ts 里结算）
+  B('huoyan_feiqiang', 'zr_huoshen', 'fire', '火神祝融', '火线更宽（+40%）、更久（+50%）\n着火的敌兵倒下时火蔓延到身边', '火伤 +30%', '火伤再 +30%', '火神降世', '火伤再 ×1.5', true),
+  B('huoyan_feiqiang', 'zr_feidao', 'archery', '飞刀连环', '每第 2 掷就带一扇飞刀、7 把\n飞刀穿透', '飞刀伤害 +30%', '飞刀伤害再 +30%', '飞刀连环 · 漫天', '每一掷都带一扇飞刀', true),
+  // P3 孟获（效果在 weapons/menghuoWeapon.ts 里结算）
+  B('nanman_dao', 'mh_bufu', 'warrior', '七擒不服', '每挨一下攒 1 层「不服」（最多 7 层）\n每层伤害 +6%，6 秒没挨打清空', '不服加成 +30%', '不服加成再 +30%', '七擒七纵', '满 7 层时重劈裂地两次', true),
+  B('nanman_dao', 'mh_xiangzhen', 'formation', '南中象阵', '驱兽冲阵改为 6 头象兵，撞中眩晕 0.8 秒\n南蛮王只需 16 层', '象兵伤害 +30%', '象兵伤害再 +30%', '象阵 · 踏平', '象兵冲过去再冲回来', true),
+  // P3 孙权（效果在 weapons/sunquanWeapon.ts 里结算）
+  B('guding_dao', 'sq_zuoduan', 'formation', '坐断东南', '制衡的三种阵势效果加倍\n切换阵势时身边部曲得护盾（最大生命 12%）', '阵势效果再强', '阵势效果再强', '坐断东南 · 江东', '切换阵势时再朝最密处齐射一轮', true),
+  B('guding_dao', 'sq_gongnu', 'archery', '江东弓弩', '齐射范围 +30%、每第 3 斩就齐射\n落点留减速 2 秒', '齐射伤害 +30%', '齐射伤害再 +30%', '江东弓弩 · 连射', '每次齐射连发两轮', true),
+  // P3 典韦（效果在 weapons/dianweiWeapon.ts 里结算；设计会话：专职乙改兵阵，两条同派等于没得选）
+  B('shuang_tieji', 'dw_sizhan', 'warrior', '宛城死战', '半血以下旋风范围 +30%\n旋风伤害的 4% 回血', '旋风伤害 +30%', '旋风伤害再 +30%', '古之恶来', '不看血量常驻，每第 3 击就旋风', true),
+  B('shuang_tieji', 'dw_huzhu', 'formation', '护主', '每 5 秒护主：身边部曲得护盾（最大生命 12%）\n身边部曲攻速 +15%', '护盾与攻速 +30%', '护盾与攻速再 +30%', '宿卫', '护盾更厚、每 4 秒一次', true),
+  // P3 甘宁（效果在 weapons/ganningWeapon.ts 里结算）
+  B('jinfan_gou', 'gn_yexi', 'fire', '夜袭点火', '每一钩铁索都烧红、沿索留火\n着火的敌兵被拉到身边时爆燃', '钩与爆燃伤害 +30%', '钩与爆燃伤害再 +30%', '夜袭点火 · 燎原', '火烧得更久、爆燃更大', true),
+  B('jinfan_gou', 'gn_jieying', 'cavalry', '百骑劫魏营', '不再拉敌兵：甘宁顺着铁索飞身扑过去\n扑过去时无敌，落地横扫（范围 +25%）', '扑斩伤害 +30%', '扑斩伤害再 +30%', '百骑劫营 · 不折一人', '落地后再扫一次', true),
   // P2 太史慈（效果在 weapons/taishiciWeapon.ts 里结算）
   B('donglai_ji', 'tsc_shenting', 'archery', '神亭酣战', '射戟一次 2 支\n钉住的敌兵 3 秒后爆裂', '射戟伤害 +30%', '射戟伤害再 +30%', '神亭', '爆裂范围更大', true),
   B('donglai_ji', 'tsc_beihai', 'formation', '北海突围', '信义只需 10 层、护盾更厚\n突围路线留下阵地 4 秒（敌兵减速）', '突围伤害 +30%', '突围伤害再 +30%', '北海', '护盾再厚 30%', true),
@@ -66,7 +81,9 @@ export const WEAPON_BRANCHES: readonly WeaponBranch[] = [
  * 收刀时每把刀从落点飞回主将，沿途割一下（recallMul，进阶 recallFinalMul），同一个敌人一次收刀最多被割 maxHitsPerEnemy 下。初值，交平衡会话。
  */
 export const BENXI = { dropStep: 90, dropMul: .4, recallMs: 2500, fullCount: 8, stillMs: 500, recallWidth: 44, recallMul: .45, recallFinalMul: .6, maxHitsPerEnemy: 3, keepMax: 8 } as const;
-export const BRANCH_ICON_READY: readonly string[] = WEAPON_BRANCHES.map(b => b.id); // 24 枚都已出图（ChatGPT 两张 4×3）
+/** P3 第二批可玩武将的分支图标还没出图（缺图清单 p3-heroes-plan.md）：不去载，卡面退回本命武器图标。 */
+export const BRANCH_ICON_PENDING: ReadonlySet<string> = new Set(['gn_yexi', 'gn_jieying', 'dw_sizhan', 'dw_huzhu', 'sq_zuoduan', 'sq_gongnu', 'mh_bufu', 'mh_xiangzhen', 'zr_huoshen', 'zr_feidao']);
+export const BRANCH_ICON_READY: readonly string[] = WEAPON_BRANCHES.map(b => b.id).filter(id => !BRANCH_ICON_PENDING.has(id)); // 老 12 人 + P2 已出图
 export function branchesFor(weapon: WeaponId): WeaponBranch[] { return WEAPON_BRANCHES.filter(b => b.weapon === weapon); }
 export function branchById(id: string | undefined): WeaponBranch | undefined { return id ? WEAPON_BRANCHES.find(b => b.id === id) : undefined; }
 /** 本命 Lv6 / 7 的章节门槛（超出 Lv5 的级数上限）。 */

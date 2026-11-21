@@ -6,6 +6,7 @@ import { LQ, lqImageButton } from './LacquerKit';
 import { heroPortrait } from './BuildOverview';
 import { attrBadge } from './AttrBadge';
 import { primarySummary } from './PrimaryAttrInfo';
+import { heroAttributeExtra } from '../data/heroMechanics';
 import type { InfoTip, ItemTooltip } from './ItemTooltip';
 
 /**
@@ -180,7 +181,9 @@ export class AttributePanelView {
       for (const at of [10, 20]) if (n > at) { const cx = px + at * step - 1; cardsG.lineStyle(2, 0xd9503a, .9).lineBetween(cx, py - 3, cx, py + 12); }
       if (primary) for (const at of [4, 7, 10]) { const cx = px + (baseCells + at - 1) * step + cell / 2, on = lv >= at; if (baseCells + at > n) continue; cardsG.fillStyle(on ? GOLD_HI : 0x6e5a3a, 1); cardsG.fillTriangle(cx - 3, py - 6, cx + 3, py - 6, cx, py - 1); }
       const disc = e > 10 ? ' · 已折扣' : '';
-      c.effect.setText(ATTRIBUTE_INFO[c.id].effect + `\n等效 ${+e.toFixed(1)} 点${k.mult > 1 ? ' · ' + (k.mult >= 1.25 ? '擅长' : '熟练') + ' ×' + k.mult : ''}${disc}`).setColor(primary ? '#d8c78e' : '#a9b9a3');
+      const extra = heroAttributeExtra(this.o.hero, c.id); // 武将专属的额外收益（刘备统御：本人受伤 −1% / 点）——四维面板重做时漏了，原面板写在效果行后
+      c.effect.setText(ATTRIBUTE_INFO[c.id].effect + (extra ? '；' + extra : '') + `\n等效 ${+e.toFixed(1)} 点${k.mult > 1 ? ' · ' + (k.mult >= 1.25 ? '擅长' : '熟练') + ' ×' + k.mult : ''}${disc}`).setColor(primary ? '#d8c78e' : '#a9b9a3');
+      { const room = this.mw - 74 - 70; c.effect.setScale(Math.min(1, room / Math.max(1, c.effect.width))); } // 中文不按字折行：最长一行比「＋」按钮左边还宽时整段略缩（2026-11-20 夜间 UI 审查）
       c.value.setText(`${Math.round(k.base)}＋${lv}`).setColor('#e5d4ab');
       // 「+」两态：可点 / 没点数（暗、不可点）；不再有「已满」
       c.button.setVisible(true); c.plus.setText('+').setFontSize(26);

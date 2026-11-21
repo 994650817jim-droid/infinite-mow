@@ -11,6 +11,15 @@ export const THIRD_STAGES=[
 ];
 /** 第三章敌军配色（用户 11-19 批准换色）：3-1 李傕、3-2 张绣是凉州残部——深铁灰带锈褐（liangzhou），3-3 袁术用袁术势力紫（yuanshu）；只换衣甲红色，图不变。ThirdGameScene 开局按这里生成换色贴图。 */
 export function thirdPalette(stage:ThirdStage):PaletteId{return stage===3?'yuanshu':'liangzhou';}
+/**
+ * 借第三章底兵（thirdBattle）的各篇章敌军配色（第 3–6 章逐关检查 11-20：第五章起各篇沿用了第三章的换色键，但换色贴图只在群雄篇生成——
+ * 长坂 / 赤壁 / 江陵的曹军、荆南守军都退回成第二章西凉红）。曹 / 魏各篇用曹军蓝青；荆南四郡守军暂用凉州深铁灰（中性，不和我方绿、黄巾黄撞色；最终色待定）。
+ * 第 7–12 章逐关检查（11-20 heroes 会话）补上其余四篇：入蜀刘璋益州军用刘璋色（黄绿，同攻城战成都守军）；襄樊 9-1 / 9-2 曹军蓝青、9-3 麦城吴军合围用孙吴橙；
+ * 夷陵吴军孙吴橙；南征南蛮没有势力色，保持原来的凉州深铁灰（原来同样只在群雄篇生成：刷新后直接进第十一章，蛮兵弓手 / 精锐找不到贴图）。
+ */
+export function arcPalette(arc:string,stage:ThirdStage):PaletteId|null{return arc==='qunxiong'?thirdPalette(stage):arc==='chibi'||arc==='hanzhong'||arc==='beifa'?'caocao':arc==='jingnan'?'jingnan':arc==='nanzheng'?'liangzhou':arc==='shu'?'liuzhang':arc==='xiangfan'?(stage===3?'sun':'caocao'):arc==='yiling'?'sun':null;}
+/** 把借来的换色键（f_<配色>_<原键>）换成本篇配色。 */
+export function repaintChapter<C extends {enemies:Record<string,EnemyDef>}>(c:C,p:PaletteId):C{return {...c,enemies:Object.fromEntries(Object.entries(c.enemies).map(([k,d])=>{const t=d.walkVisual?.texture;if(!t||!/^f_[a-z]+_/.test(t))return[k,d];const raw=t.replace(/^f_[a-z]+_/,'');return[k,{...d,walkVisual:{...d.walkVisual!,texture:factionKey(p,raw)}}];})) as C['enemies']};}
 const recolor=(es:Record<string,EnemyDef>,p:PaletteId)=>Object.fromEntries(Object.entries(es).map(([k,d])=>[k,k==='boss'||!d.walkVisual?d:{...d,walkVisual:{...d.walkVisual,texture:factionKey(p,d.walkVisual.texture)}}])) as typeof es;
 /** The battle engine's west-army template is reused; progression uses WorldStore's qunxiong arc. */
 /** 第三章关卡（已套用 stageTuning 的刷怪节奏与小怪成长）。 */

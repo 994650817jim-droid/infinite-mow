@@ -25,7 +25,10 @@ export class CaorenBoss extends ArcBossV2<Move> {
   private gates: Gate[] = []; private nextGates: Gate[] = []; private cx = 0; private cy = 0; private rotateAt = 0; private tickAt = 0;
   private facing = 0; private order = 0; private lastAt = 0;
   private texts: Phaser.GameObjects.Text[] = []; private arena: Phaser.GameObjects.Graphics; private disc: Phaser.GameObjects.Image | null | undefined;
-  readonly metrics = { rotations: 0, wall: 0, hold: 0, deadTicks: 0, frontBlocks: 0, phase2: 0 };
+  readonly metrics = { rotations: 0, wall: 0, hold: 0, deadTicks: 0, frontBlocks: 0, phase2: 0, broken: 0, countered: 0 };
+  /** 破阵：生门里打中的次数、八门停转到何时、这次是不是用八阵破的。 */
+  private breakHits = 0; private brokenUntil = 0; private breakCounter = false;
+  get broken(): boolean { return this.kit.now < this.brokenUntil; }
   readonly debug: BossDebug = {
     moves: ['铁壁', '坚守', '八门轮转'],
     force: (i, now) => { if (i === 2) { this.rotateAt = now; return; } this.beat.set(null, 'idle', now, 0); this.start((['wall', 'hold'] as const)[i] ?? 'wall', now); },
@@ -49,11 +52,24 @@ export class CaorenBoss extends ArcBossV2<Move> {
   get playerGate(): Gate { const p = this.h.player; return this.inArena(p.x, p.y) ? this.gates[this.sectorOf(p.x, p.y)] : 'none'; }
   /** 举盾时，主将在盾面正前方 → 几乎免伤；站生门 → +20%。 */
   private get front(): boolean { const b = this.h.boss, p = this.h.player; return this.beat.move === 'wall' && this.beat.phase === 'release' && Math.cos(Math.atan2(p.y - b.y, p.x - b.x) - this.facing) >= Math.cos(CR.wall.frontDeg * Math.PI / 360); }
-  protected takenMul(): number { if (this.front) { this.metrics.frontBlocks++; return CR.wall.frontTakenMul; } return this.playerGate === 'live' ? CR.gates.liveTakenMul : 1; }
+  protected takenMul(): number {
+    if (this.front) { this.metrics.frontBlocks++; return CR.wall.frontTakenMul; }
+    if (this.broken) return this.breakCounter ? CR.break.counterVuln : CR.break.vuln;
+    if (this.playerGate === 'live') { if (++this.breakHits >= CR.break.hits) this.breakLock(this.kit.now); return CR.gates.liveTakenMul; }
+    return 1;
+  }
+  /** 破阵：八门停转、阵盘碎裂淡出、曹仁易伤；之后重新布阵。 */
+  private breakLock(now: number): void {
+    const pf = (this.h.scene as unknown as { formationRt?: { formed: boolean; current: string | null } }).formationRt;
+    this.breakHits = 0; this.brokenUntil = now + CR.break.ms; this.breakCounter = !!pf?.formed && pf.current === 'bazhen'; this.metrics.broken++; if (this.breakCounter) this.metrics.countered++;
+    this.h.banner('破阵 · 八门金锁', this.breakCounter ? '以八阵破八门：八门停转，曹仁受伤 +50%' : '从生门入：八门停转 ' + CR.break.ms / 1000 + ' 秒，曹仁受伤 +30%'); this.h.sfx('gong');
+    if (this.disc) this.h.scene.tweens.add({ targets: this.disc, alpha: 0, scaleX: this.disc.scaleX * 1.25, scaleY: this.disc.scaleY * 1.25, duration: 600 });
+  }
   get label(): string {
     const now = this.kit.now;
     if (this.state === 'dead') return '曹仁弃城北撤';
     if (this.kit.inShift) return '此阵何人可破！';
+    if (this.broken) return '破阵 · 八门停转 ' + Math.max(0, Math.ceil((this.brokenUntil - now) / 1000)) + ' 秒 · 曹仁受伤加深';
     const gate = this.playerGate, where = gate === 'live' ? ' · 你在生门（伤害提高）' : gate === 'dead' ? ' · 你在死门！快离开' : '';
     const turn = ' · ' + Math.max(0, Math.ceil((this.rotateAt - now) / 1000)) + ' 秒后轮转';
     const m = this.beat.move, names: Record<Move, string> = { wall: '铁壁 · 绕到背后', hold: '坚守' };
@@ -112,6 +128,8 @@ export class CaorenBoss extends ArcBossV2<Move> {
   // ---------- 八门 ----------
   private updateGates(now: number): void {
     const G = CR.gates, every = this.phase2 ? G.rotateMs2 : G.rotateMs, p = this.h.player;
+    if (this.broken) { this.arena.clear(); for (const t of this.texts) t.setVisible(false); this.rotateAt = Math.max(this.rotateAt, this.brokenUntil + 500); return; }
+    if (this.brokenUntil && !this.disc?.alpha) { for (const t of this.texts) t.setVisible(true); }
     if (now >= this.rotateAt) {
       this.metrics.rotations++; this.gates = this.nextGates; this.nextGates = this.roll(); this.rotateAt = now + every;
       this.h.sfx('gong');
@@ -165,5 +183,5 @@ export class CaorenBoss extends ArcBossV2<Move> {
     this.nextGates = this.roll(); this.rotateAt = now + 1500;
   }
   protected onDefeat(): void { this.disc?.destroy(); this.disc = null; this.arena.clear(); for (const t of this.texts) t.setVisible(false); if (this.gone) { this.arena.destroy(); for (const t of this.texts) t.destroy(); this.texts = []; } }
-  snapshot() { return { move: this.beat.move, phase: this.beat.phase, phase2: this.phase2, gates: [...this.gates], playerGate: this.playerGate, front: this.front, metrics: { ...this.metrics } }; }
+  snapshot() { return { move: this.beat.move, phase: this.beat.phase, phase2: this.phase2, gates: [...this.gates], playerGate: this.playerGate, front: this.front, broken: this.broken, breakHits: this.breakHits, metrics: { ...this.metrics } }; }
 }

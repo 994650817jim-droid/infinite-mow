@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { DEPTH, FONT, GAME_HEIGHT, GAME_WIDTH, HEADING_FONT } from '../config';
 import { setTutorialSeen, tutorialSeen } from '../world/WorldStore';
+import { playIn } from '../systems/Sfx';
 
 /** 屏幕坐标里的一块区域（界面元素的包围盒，或世界物件换算到屏幕后的位置）。 */
 export interface ScreenRect { x: number; y: number; w: number; h: number }
@@ -46,6 +47,7 @@ export class TutorialOverlay {
   /** 显示一行提示（keys：按键图标，如 ['W','A','S','D']）；at：'battle' 底部 / 'camp' 营地底部偏上 / 'top' 顶部。 */
   /** fadeMs：提示型步骤（只说一句、不等操作）几毫秒后自动淡出；popup：升级 / 支援那两步盖在弹窗上。 */
   show(line: string, keys: string[] = [], at: 'battle' | 'camp' | 'popup' = 'battle', fadeMs?: number): void {
+    playIn(this.scene, 'tutorial_tip'); // 第一章新手引导提示音（自带 0.8 秒节流）
     this.active = true; this.fadeAt = fadeMs ? performance.now() + fadeMs : null;
     this.root.setDepth(at === 'popup' ? TutorialOverlay.DEPTH_TOP : TutorialOverlay.DEPTH_UNDER);
     // 战场：底部；行营：顶部居中（标题与「下一关」之间的空处）；弹窗（升级 / 支援）：卡片下沿之下
@@ -108,7 +110,7 @@ export class TutorialOverlay {
 export function tutorialReplayLink(scene: Phaser.Scene, x: number, y: number): Phaser.GameObjects.Text {
   const t = scene.add.text(x, y, '重看新手引导', { fontFamily: FONT, fontSize: '13px', color: '#d9c7a3', stroke: STROKE, strokeThickness: 3, resolution: 2 }).setOrigin(1, .5).setName('settings-tutorial-replay')
     .setInteractive({ useHandCursor: true });
-  const sync = () => t.setText(tutorialSeen() ? '重看新手引导' : '下次第一章重看引导 ✓').setColor(tutorialSeen() ? '#d9c7a3' : GOLD);
+  const sync = () => t.setText(tutorialSeen() ? '重看新手引导' : '下次重看引导 ✓').setColor(tutorialSeen() ? '#d9c7a3' : GOLD);
   sync();
   t.on('pointerover', () => t.setAlpha(.8)).on('pointerout', () => t.setAlpha(1)).on('pointerdown', () => { setTutorialSeen(false); try { localStorage.removeItem('im_tut_lessons'); } catch { /* ignore */ } sync(); }); // 连同按关分课的「看过的课」一起清（systems/Tutorial.ts TUTORIAL_LESSONS_KEY）
   return t;

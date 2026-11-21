@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { safeWorldPoint } from '../ui/SafeLabel';
 import { GameScene } from './GameScene';
 import { thirdGameSceneClass, type ArcSceneConfig } from './ThirdGameScene';
 import { SIDE_ROUTES, SIDE_SCENE_KEY, SIDE_STAGE_KEY, sideBattle, sideRoute, sideTexture, type SideBaseId, type SideBoss, type SideRouteDef, type SideRouteId } from '../data/sideRoutes';
@@ -190,7 +191,8 @@ export function sideLubuGameSceneClass(Base: typeof GameScene) {
       const e = this.chengong; if (!e) return;
       if (!e.active || e.spawnId !== this.cgLife) { this.cgTag?.destroy(); this.cgBar?.destroy(); this.chengong = null; return; }
       const sp = e.sprite, top = sp.y - sp.displayHeight * sp.originY - 12, w = 70, k = Math.max(0, e.hp / Math.max(1, e.maxHp));
-      this.cgTag?.setPosition(e.x, top); this.cgBar?.clear().fillStyle(0x140a06, .8).fillRect(e.x - w / 2 - 1, top + 2, w + 2, 7).fillStyle(0xd8432a, 1).fillRect(e.x - w / 2, top + 3, w * k, 5);
+      const q = safeWorldPoint(this, e.x, top, Math.max(w / 2, (this.cgTag?.displayWidth ?? 0) / 2), (this.cgTag?.displayHeight ?? 16) + 10); // 靠屏幕边时往内收
+      this.cgTag?.setPosition(q.x, q.y); this.cgBar?.clear().fillStyle(0x140a06, .8).fillRect(q.x - w / 2 - 1, q.y + 2, w + 2, 7).fillStyle(0xd8432a, 1).fillRect(q.x - w / 2, q.y + 3, w * k, 5);
       this.cgCtrl?.updateDeath(delta);
       // 献计：每 plotEveryMs 一次，吕布伤害 +plotDmg，持续 plotMs
       if (this.mode === 'none' && !this.over && this.boss?.active && this.combatNow >= this.cgPlotAt) {

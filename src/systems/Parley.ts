@@ -6,7 +6,7 @@ import { bossInRoster, captureBoss, joinByPersuasion } from './RosterStore';
 import { markSurrender, neverSeenIds, surrenderedIds, surrenderLive } from './SurrenderStore';
 import { gainProvisions } from '../world/WorldStore';
 import { homeCommand } from '../ui/HomeCommand';
-import { lqButton, lqLabelColor, lqPanel, type LqState } from '../ui/LacquerKit';
+import { LQ, lqButton, lqDivider, lqLabelColor, type LqState } from '../ui/LacquerKit';
 import { bossDeathKey } from './BossDeathArt';
 import { setStoryFlag } from './Story';
 
@@ -100,7 +100,7 @@ export class Parley {
       if (first) gainProvisions(SURRENDER.persuadeProvisions);
     } else where = '试炼不入册';
     this.h.banner(`${d.name}归降`, false, where + (live ? ` · 军粮 +${SURRENDER.persuadeProvisions}` : ''));
-    this.h.sfx('parleyYes');
+    this.h.sfx('parleyYes'); this.h.sfx('kneel');
     this.kneel(b);
   }
   private fail(b: Enemy, ctx: Omit<OddsCtx, 'pressed'>): void {
@@ -134,24 +134,42 @@ export class Parley {
   private close(): void { this.panel?.destroy(); this.panel = undefined; if (this.keys) { window.removeEventListener('keydown', this.keys); this.keys = undefined; } if (this.h.mode() === 'parley') this.h.setMode('none'); }
   private render(second: boolean): void {
     this.panel?.destroy(); const s = this.h.scene, d = this.def, W = GAME_WIDTH, H = GAME_HEIGHT, D = IS_DESKTOP;
-    const pw = D ? 600 : W - 32, ph = D ? 300 : 330, x0 = (W - pw) / 2, y0 = D ? H * .2 : H * .24;
+    // 2026-11-21 统筹（同剧情对话卡、首领血条）：不要整块漆框——压暗全屏，内容浮在上面（文字描边 + 投影），上下两道细金线分隔；
+    // 左边首领圆形头像（同首领血条的水墨头肩 + 金圈），名字大字 + 朱砂名号印，右边招降档位印
+    const pw = D ? 600 : W - 32, ph = D ? 330 : 360, x0 = (W - pw) / 2, y0 = D ? H * .18 : H * .2;
     const root = s.add.container(0, 0).setScrollFactor(0).setDepth(DEPTH.overlay + 12).setName('parley-panel');
-    const g = s.add.graphics().setScrollFactor(0); g.fillStyle(0x0c0805, .55).fillRect(0, 0, W, H); lqPanel(g, x0, y0, pw, ph); root.add(g);
-    const t = (x: number, y: number, v: string, size: number, color: string, heading = false, ox = .5) => s.add.text(x, y, v, { fontFamily: heading ? HEADING_FONT : FONT, fontSize: size + 'px', color, resolution: 2, align: 'center', wordWrap: { width: pw - 60, useAdvancedWrap: true } }).setOrigin(ox, .5).setScrollFactor(0);
-    root.add(t(W / 2 - 30, y0 + 38, `${d.title} · ${d.name} 败势已成`, D ? 24 : 21, '#f6dc9a', true).setName('parley-title'));
+    const g = s.add.graphics().setScrollFactor(0); g.fillStyle(0x0c0805, .7).fillRect(0, 0, W, H);
+    g.fillStyle(LQ.goldHi, .85); lqDivider(g, W / 2, y0 + 4, pw / 2 - 10); lqDivider(g, W / 2, y0 + ph - 2, pw / 2 - 10); lqDivider(g, W / 2, y0 + 122, pw / 2 - 70);
+    root.add(g);
+    const t = (x: number, y: number, v: string, size: number, color: string, heading = false, ox = .5) => s.add.text(x, y, v, { fontFamily: heading ? HEADING_FONT : FONT, fontSize: size + 'px', color, resolution: 2, align: 'center', wordWrap: { width: pw - 60, useAdvancedWrap: true } }).setOrigin(ox, .5).setScrollFactor(0).setStroke('#0c0805', 4).setShadow(1, 2, '#000000', 3, true, true);
+    // 头像：首领血条同款圆形头肩（立绘在加载时稍后补上）
+    const mx = x0 + 62, my = y0 + 62, mr = D ? 44 : 38, ring = s.add.graphics().setScrollFactor(0);
+    ring.fillStyle(0x000000, .4).fillCircle(mx + 2, my + 3, mr + 4).fillStyle(0x0d0806, 1).fillCircle(mx, my, mr + 1).lineStyle(3, LQ.gold, 1).strokeCircle(mx, my, mr + 1.5).lineStyle(1, LQ.goldHi, .8).strokeCircle(mx, my, mr + 4);
+    const face = s.add.image(mx, my, '__DEFAULT').setScrollFactor(0).setVisible(false).setName('parley-portrait'); root.add([ring, face]);
+    const hud = (s as unknown as { bossHud?: { medalKey(id: string, fb?: string): string | null } }).bossHud, boss = this.h.boss();
+    // 先用手头有的（首领本人贴图裁头肩），水墨立绘载到后换上；返回 true = 已是立绘，不用再等
+    const putFace = (): boolean => { const k = hud?.medalKey(d.id, boss?.sprite.texture.key); if (k && face.active) face.setTexture(k).setDisplaySize(mr * 2, mr * 2).setVisible(true); return !!k && !k.includes('_fb_'); };
+    if (!putFace()) { let n = 0; const tick = (): void => { if (!face.active || putFace() || ++n > 12) return; window.setTimeout(tick, 250); }; window.setTimeout(tick, 250); } // 弹窗时战斗暂停，用真实时钟补头像
+    // 名字 · 名号印 · 败势已成
+    const nx = mx + mr + 18, name = t(nx, y0 + 44, d.name, D ? 30 : 26, '#f6dc9a', true, 0).setName('parley-name');
+    const titleT = s.add.text(0, 0, d.title, { fontFamily: FONT, fontSize: '12px', color: '#fff1d0', fontStyle: 'bold', resolution: 2 }).setOrigin(.5).setScrollFactor(0);
+    const sw = titleT.width + 12, sh = 20, sx0 = nx + name.width + 10, sy0 = y0 + 44 - sh / 2, sealG = s.add.graphics().setScrollFactor(0);
+    sealG.fillStyle(0x000000, .3).fillRoundedRect(sx0 + 1, sy0 + 1, sw, sh, 3).fillStyle(LQ.cinnabar, 1).fillRoundedRect(sx0, sy0, sw, sh, 3).lineStyle(1, LQ.goldHi, .9).strokeRoundedRect(sx0 + 1.5, sy0 + 1.5, sw - 3, sh - 3, 2);
+    titleT.setPosition(sx0 + sw / 2, sy0 + sh / 2);
+    root.add([name, sealG, titleT, t(nx, y0 + 84, '败势已成', 16, '#d8c8a0', true, 0).setName('parley-title')]);
     // 档位印（手绘印章图到之前用文字章）
-    const tier = SURRENDER_TIERS[d.tier], sx = x0 + pw - 62, sy = y0 + 40, sealKey = `seal_${d.tier === 'sure' ? 'can' : d.tier}`;
+    const tier = SURRENDER_TIERS[d.tier], sx = x0 + pw - 56, sy = y0 + 58, sealKey = `seal_${d.tier === 'sure' ? 'can' : d.tier}`;
     if (s.textures.exists(sealKey)) root.add(s.add.image(sx, sy, sealKey).setDisplaySize(64, 64).setScrollFactor(0).setAngle(-8).setName('parley-seal'));
     else { const c = Phaser.Display.Color.HexStringToColor(tier.color).color, sg = s.add.graphics().setScrollFactor(0); sg.lineStyle(2.5, c, .95).strokeRoundedRect(sx - 34, sy - 22, 68, 44, 6); root.add([sg, t(sx, sy, tier.seal, tier.seal.length > 2 ? 14 : 18, tier.color, true).setAngle(-6).setName('parley-seal')]); }
     const never = d.tier === 'never', o = this.odds(), blocked = !never ? o.blocked : undefined;
-    root.add(t(W / 2, y0 + 78, never ? `宁死不降 · ${d.reason ?? `${d.name}不肯归降`}` : blocked ? `劝降条件：${blocked}（尚未满足）· ${d.reason ?? ''}` : '是劝其归降，还是阵前斩杀？', never || blocked ? 15 : 16, never ? '#f0a090' : '#eadcbd').setName('parley-reason'));
+    root.add(t(W / 2, y0 + 148, never ? `宁死不降 · ${d.reason ?? `${d.name}不肯归降`}` : blocked ? `劝降条件：${blocked}（尚未满足）· ${d.reason ?? ''}` : '是劝其归降，还是阵前斩杀？', never || blocked ? 15 : 16, never ? '#f0a090' : '#eadcbd').setName('parley-reason'));
     const oddsText = o.sure ? '劝降把握：必成' : never ? '劝降把握：——' : blocked ? '劝降把握：条件未满足' : `劝降把握：${o.pct}%`;
-    root.add(t(W / 2, y0 + 112, oddsText, 20, o.sure ? '#9fe0a0' : never || blocked ? '#c07060' : '#ffe08a', true).setName('parley-odds'));
-    if (never) root.add(t(W / 2, y0 + 140, `斩杀后以礼厚葬：军粮 +${SURRENDER.persuadeProvisions} · 仁名 +1（本存档首次）`, 13, '#d8c08a').setName('parley-honor'));
-    else if (!o.sure && !blocked) root.add(t(W / 2, y0 + 140, o.parts.map((p, i) => (i ? `${p.label} ${p.add >= 0 ? '+' : ''}${p.add}` : `${p.label} ${p.add}`)).join(' · '), 13, '#b9a57a').setName('parley-parts'));
+    root.add(t(W / 2, y0 + 180, oddsText, 22, o.sure ? '#9fe0a0' : never || blocked ? '#c07060' : '#ffe08a', true).setName('parley-odds'));
+    if (never) root.add(t(W / 2, y0 + 208, `斩杀后以礼厚葬：军粮 +${SURRENDER.persuadeProvisions} · 仁名 +1（本存档首次）`, 13, '#d8c08a').setName('parley-honor'));
+    else if (!o.sure && !blocked) root.add(t(W / 2, y0 + 208, o.parts.map((p, i) => (i ? `${p.label} ${p.add >= 0 ? '+' : ''}${p.add}` : `${p.label} ${p.add}`)).join(' · '), 13, '#b9a57a').setName('parley-parts'));
     const relic = (this.h as unknown as { relicName?: () => string | null }).relicName?.() ?? null;
-    if (never) root.add(t(W / 2, y0 + 168, `斩杀：首领宝箱${relic ? `（遗珍：${relic}）` : ''} · 军粮 +${SURRENDER.executeProvisions}`, 13, '#b9a57a'));
-    else root.add(t(W / 2, y0 + 168, `劝降：${d.hero ? '以武将身份加入麾下' : '入降将栏（四季内六折招降）'} · 军粮 +${SURRENDER.persuadeProvisions}　|　斩杀：首领宝箱${relic ? `（遗珍：${relic}）` : ''} · 军粮 +${SURRENDER.executeProvisions}`, 13, '#b9a57a'));
+    if (never) root.add(t(W / 2, y0 + 232, `斩杀：首领宝箱${relic ? `（遗珍：${relic}）` : ''} · 军粮 +${SURRENDER.executeProvisions}`, 13, '#b9a57a'));
+    else root.add(t(W / 2, y0 + 232, `劝降：${d.hero ? '以武将身份加入麾下' : '入降将栏（四季内六折招降）'} · 军粮 +${SURRENDER.persuadeProvisions}　|　斩杀：首领宝箱${relic ? `（遗珍：${relic}）` : ''} · 军粮 +${SURRENDER.executeProvisions}`, 13, '#b9a57a'));
     // 按钮：劝降（水墨主按钮）/ 斩杀 / 再压一压（漆底描金）
     const by = y0 + ph - 62, three = !second && !this.pressed && !never && !blocked && d.tier !== 'sure', canPersuade = !never && !blocked;
     const xs = three ? [W / 2 - 190, W / 2, W / 2 + 190] : [W / 2 - 110, W / 2 + 110];

@@ -22,7 +22,7 @@ export const CONTENT_SFX_CONFIG: Record<string, Cfg> = {
   // 武将出招起手（招牌技 / 被动触发）；被动版另叠 cast_sigil
   cast_guanyu: F(.7, 500, 1, 2), cast_zhangfei: F(.7, 500, 1, 2), cast_zhaoyun: F(.6, 500, 1, 2), cast_zhuge: F(.8, 500, 1, 2),
   cast_huangzhong: F(.6, 500, 1, 2), cast_machao: F(.6, 500, 1, 2), cast_weiyan: F(.7, 500, 1, 2), cast_liubei: F(.8, 500, 1, 2),
-  cast_pangtong: F(.7, 500, 1, 2), cast_huangyueying: F(.6, 500, 1, 2), cast_sunshangxiang: F(.6, 500, 1, 2), cast_diaochan: F(.8, 500, 1, 2), cast_lvbu: F(.7, 500, 1, 2), cast_zhangliao: F(.7, 500, 1, 2), cast_zhouyu: F(.8, 500, 1, 2), cast_taishici: F(.7, 500, 1, 2), cast_mengde: F(.8, 500, 1, 2),
+  cast_pangtong: F(.7, 500, 1, 2), cast_huangyueying: F(.6, 500, 1, 2), cast_sunshangxiang: F(.6, 500, 1, 2), cast_diaochan: F(.8, 500, 1, 2), cast_lvbu: F(.7, 500, 1, 2), cast_zhangliao: F(.7, 500, 1, 2), cast_zhouyu: F(.8, 500, 1, 2), cast_taishici: F(.7, 500, 1, 2), cast_mengde: F(.8, 500, 1, 2), cast_ganning: F(.7, 500, 1, 2), cast_dianwei: F(.8, 500, 1, 2), cast_sunquan: F(.8, 500, 1, 2), cast_menghuo: F(.8, 500, 1, 2), cast_zhurong: F(.7, 500, 1, 2),
   cast_sigil: F(.9, 600, 1, 2, .02),
   // 首领主题：起手（蓄力 / 法阵）与命中
   bcast_blood: F(.7, 350, 1), bcast_yellow: F(.8, 350, 1), bcast_dust: F(.7, 350, 1), bcast_quake: F(.8, 350, 1),
@@ -91,6 +91,11 @@ export const CONTENT_SFX: Record<string, Recipe> = {
   cast_huangyueying: (v, t, p) => { for (let i = 0; i < 4; i++) v.noise(t + i * .045, .012, 'bandpass', (2600 + i * 300) * p, .035, 2600, 4); v.tone(t + .2, .25, 'triangle', 520 * p, .03, 780 * p); glint(v, t + .35, 1560 * p, .02); return .6; },
   cast_sunshangxiang: (v, t, p) => { for (let i = 0; i < 3; i++) glint(v, t + i * .06, (1980 + i * 240) * p, .02); whoosh(v, t, .2, 2600 * p, 6000 * p, .03, 2.5); return .6; },
   cast_diaochan: (v, t, p) => { v.swell(t, .7, 'bandpass', 900 * p, 2400 * p, .03, 1.2, .4); for (let i = 0; i < 3; i++) bell(v, t + .08 + i * .1, (1320 + i * 220) * p, .012, .5); return .8; },
+  cast_zhurong: (v, t, p) => { for (let i = 0; i < 4; i++) whoosh(v, t + i * .05, .18, 700 * p, 2600 * p, .04, .7); drum(v, t + .22, .07, 140 * p); return .7; }, // 飞刀出鞘
+  cast_menghuo: (v, t, p) => { drum(v, t, .12, 60 * p); drum(v, t + .1, .12, 56 * p); drum(v, t + .2, .1, 52 * p); thud(v, t + .3, 46 * p, .12, .5); return .8; }, // 象鼓
+  cast_sunquan: (v, t, p) => { for (let i = 0; i < 3; i++) drum(v, t + i * .09, .06, (110 + i * 8) * p); whoosh(v, t + .3, .4, 500 * p, 2000 * p, .05, .9); return .8; }, // 令旗换阵
+  cast_dianwei: (v, t, p) => { drum(v, t, .1, 70 * p); drum(v, t + .08, .1, 64 * p); thud(v, t + .16, 50 * p, .1, .5); return .8; }, // 恶来怒吼
+  cast_ganning: (v, t, p) => { for (let i = 0; i < 3; i++) whoosh(v, t + i * .05, .2, 600 * p, 2400 * p, .04, .7); drum(v, t + .18, .08, 120 * p); return .7; }, // 铃响 + 甩索
   cast_mengde: (v, t, p) => { for (let i = 0; i < 5; i++) drum(v, t + i * .06, .05, (100 + i * 6) * p); whoosh(v, t + .25, .5, 400 * p, 1800 * p, .05, 1); return .8; },
   cast_taishici: (v, t, p) => { drum(v, t, .07, 110 * p); whoosh(v, t + .05, .4, 500 * p, 2400 * p, .05, 1.4); thud(v, t + .32, 80 * p, .06, .3); return .7; },
   cast_zhouyu: (v, t, p) => { for (let i = 0; i < 3; i++) bell(v, t + i * .09, (523 + i * 131) * p, .02, .6); whoosh(v, t + .15, .6, 300 * p, 1600 * p, .05, .7); return .8; },
@@ -182,6 +187,8 @@ Object.assign(CONTENT_SFX_CONFIG, {
   amb_horn: A(1.8), amb_drum: A(1.2), amb_flag: A(.9),
 });
 Object.assign(CONTENT_SFX, <Record<string, Recipe>>{
+  // 军阵变阵：三通鼓 + 一声低号（formation-design.md）
+  formation_switch: (v, t, p) => { drum(v, t, .09, 96 * p); drum(v, t + .16, .08, 92 * p); drum(v, t + .3, .1, 84 * p); v.swell(t + .2, .6, 'lowpass', 160, 700, .04, .8, .2); return .9; },
   bossPhase: (v, t, p) => { bell(v, t, 110 * p, .05, 1.4); for (let i = 0; i < 4; i++) drum(v, t + .12 + i * .1, .07 + i * .01, 95); v.swell(t, 1.2, 'lowpass', 120, 900, .05, .8, .5); return 1.4; },
   bossFall: (v, t, p) => { thud(v, t, 42 * p, .12, 1.4); drum(v, t, .1, 70); drum(v, t + .28, .09, 65); bell(v, t + .05, 98 * p, .06, 2.3); v.swell(t, 2, 'lowpass', 900, 120, .05, .6, .02); return 2.4; },
   killBurst: (v, t, p) => { thud(v, t, 88 * p, .06, .3); v.noise(t, .08, 'bandpass', 1300 * p, .05, 500, 1.1); crackle(v, t + .02, 3, .12, .025); return .45; },
@@ -200,8 +207,41 @@ Object.assign(CONTENT_SFX, <Record<string, Recipe>>{
   amb_flag: (v, t, p) => { for (let i = 0; i < 3; i++) v.swell(t + i * .22, .25, 'bandpass', 700 * p, 1400 * p, .01, .8, .3); return .9; },
 });
 
+// ———— 音效第二批（2026-11-20 夜，统筹「音效第二批」）：营寨攻坚、回血泉、跪降、新手提示、剧情卷轴、首领血条 ————
+Object.assign(CONTENT_SFX_CONFIG, {
+  camp_burn: F(1.1, 600, 1, 1, .04), camp_captain: F(1.4, 1500, 1, 2, 0), camp_collapse: F(1.2, 400, 2, 1, .05),
+  heal_spring: F(.8, 1200, 1, 0, .06), kneel: F(1, 1500, 1, 2, 0),
+  tutorial_tip: F(.5, 800, 1, 2, 0), scroll_open: F(.6, 400, 1, 2, .03), uiPage: F(.25, 120, 1, 1, .05),
+  bossbar_open: F(.7, 1500, 1, 2, 0), bossbar_shatter: F(.9, 1500, 1, 2, 0),
+  formation_switch: F(.9, 800, 1, 2, .03),
+});
+Object.assign(CONTENT_SFX, <Record<string, Recipe>>{
+  // 营寨半血起火 + 伏兵：号角急吹两声 + 火「呼」（原来借 chargeWarn 的电子警报）
+  camp_burn: (v, t, p) => { v.tone(t, .35, 'sawtooth', 196 * p, .02, 208 * p, .05); v.tone(t + .4, .35, 'sawtooth', 196 * p, .02, 208 * p, .05); flare(v, t + .1, .9, .045, 220, 1600); crackle(v, t + .3, 6, .7, .02); return 1.1; },
+  // 守将出营：号角长鸣 + 三通鼓（原来借锣）
+  camp_captain: (v, t, p) => { v.tone(t, 1, 'sawtooth', 147 * p, .022, 156 * p, .12); v.tone(t, 1, 'sine', 73 * p, .03, 73 * p, .12); for (let i = 0; i < 3; i++) drum(v, t + .5 + i * .2, .07, 100); return 1.4; },
+  // 营寨 / 营帐倒塌：木架断裂 + 帆布塌落 + 尘土闷响（原来借 propBreak 一声小破碎）
+  camp_collapse: (v, t, p) => { crack(v, t, .06); crack(v, t + .12, .045); thud(v, t + .2, 65 * p, .07, .5); v.swell(t + .15, .9, 'lowpass', 900, 200, .04, .6, .05); return 1.2; },
+  // 泉眼 / 水井回血：咕嘟水声（站着回血时约 1.2 秒一声）
+  heal_spring: (v, t, p) => { for (let i = 0; i < 3; i++) { const f = (420 + Math.random() * 220) * p; v.tone(t + i * .16 + Math.random() * .05, .12, 'sine', f, .02, f * 1.6); } v.noise(t, .5, 'bandpass', 900, .008, 600, .8); return .8; },
+  // 跪降：甲叶落地一声 + 温和低钟（降将试阵认输、首领劝降成功）
+  kneel: (v, t, p) => { v.metal(t, 520 * p, .018, .25); v.noise(t, .06, 'bandpass', 2800, .03, 1500, 1.5); thud(v, t + .05, 110 * p, .035, .25); bell(v, t + .2, 196 * p, .025, .9); return 1; },
+  // 第一章新手引导提示：木鱼两响 + 小铃（轻，不打扰）
+  tutorial_tip: (v, t, p) => { v.tone(t, .06, 'sine', 900 * p, .03, 760 * p); v.tone(t + .1, .06, 'sine', 1200 * p, .025, 1000 * p); glint(v, t + .18, 1760 * p, .012); return .5; },
+  // 剧情卷轴展开（战败剧情卡、玩法解锁卡、关前 / 关后剧情都用同一卷轴）
+  scroll_open: (v, t, p) => { v.swell(t, .5, 'bandpass', 700 * p, 2400 * p, .03, .9, .55); v.noise(t + .42, .06, 'lowpass', 600, .025, 300); return .6; },
+  // 翻下一句：纸页轻翻
+  uiPage: (v, t, p) => { v.swell(t, .18, 'bandpass', 1600 * p, 3200 * p, .018, 1.1, .4); return .25; },
+  // 首领血条登场：铜框展开的金属扫声 + 小锣
+  bossbar_open: (v, t, p) => { v.swell(t, .35, 'bandpass', 900 * p, 3000 * p, .025, 1.6, .7); bell(v, t + .3, 247 * p, .02, .5); return .7; },
+  // 首领血条授首碎裂：瓷 / 铜碎响（叠在 bossFall 上，偏高频，不和重鼓抢）
+  bossbar_shatter: (v, t, p) => { for (let i = 0; i < 5; i++) glint(v, t + i * .04 + Math.random() * .03, (1800 + Math.random() * 1600) * p, .015); v.noise(t, .3, 'highpass', 3500, .03, 6000); v.metal(t, 700 * p, .012, .4); return .9; },
+});
+
 /** 响度校准倍数（tools/render-sfx.mjs 实测后填；未列出的 = 1）。 */
 const LEVEL: Record<string, number> = {
+  // 音效第二批（2026-11-20 夜）
+  camp_burn: 3.98, camp_captain: 1.88, camp_collapse: 1.40, heal_spring: 1.80, kneel: 2.14, tutorial_tip: 1.53, scroll_open: 2.48, uiPage: 1.97, bossbar_open: 1.95, bossbar_shatter: 1.04,
   // 音效审计补齐（2026-11-19）
   bossPhase: 1.60, bossFall: 1.29, killBurst: 1.10, killSweep: 0.94, brazierBreak: 1.70, healPickup: 1.95, promote: 1.76, parleyYes: 1.76, parleyNo: 1.20, shop_sell: 2.85, mapOpen: 3.05, mapClose: 2.92, uiHover: 1.80, amb_horn: 1.58, amb_drum: 0.92, amb_flag: 3.20,
   cast_guanyu: 2.57, cast_zhangfei: 1.20, cast_zhaoyun: 2.72, cast_zhuge: 3.13, cast_huangzhong: 2.04, cast_machao: 1.93,
@@ -227,8 +267,8 @@ export const bossHitSfx = (theme: string): string => 'bhit_' + theme;
 export function sceneSfx(scene: unknown, key: string): void { (scene as { sfx?: { play(k: string): void } } | null)?.sfx?.play(key); }
 
 /** 城池 / 营寨环境声：每 3.5–7 秒随机一声（鸟、打铁、车轮、远钟、风），轻轻的；场景关闭自动停。 */
-export function startCityAmbient(scene: { time: { addEvent(o: object): { remove(): void } }; events: { once(e: string, f: () => void): void } }, play: (k: string) => void, keys: readonly string[] = ['amb_bird', 'amb_bird', 'amb_hammer', 'amb_cart', 'amb_bell', 'amb_wind']): void {
+export function startCityAmbient(scene: { time: { addEvent(o: object): { remove(): void } }; events: { once(e: string, f: () => void): void } }, play: (k: string) => void, keys: readonly string[] = ['amb_bird', 'amb_bird', 'amb_hammer', 'amb_cart', 'amb_bell', 'amb_wind'], gapMs: readonly [number, number] = [3500, 7000]): void {
   let ev: { remove(): void } | null = null;
-  const next = (): void => { ev = scene.time.addEvent({ delay: 3500 + Math.random() * 3500, callback: () => { play(pick(keys)); next(); } }); };
+  const next = (): void => { ev = scene.time.addEvent({ delay: gapMs[0] + Math.random() * (gapMs[1] - gapMs[0]), callback: () => { play(pick(keys)); next(); } }); };
   next(); scene.events.once('shutdown', () => ev?.remove());
 }

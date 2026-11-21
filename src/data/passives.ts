@@ -12,6 +12,11 @@ export const CHARACTER_PASSIVES: Record<CharacterId, { name: string; maxStacks: 
   machao: { name: '西凉铁骑', maxStacks: 6 },
   sunshangxiang: { name: '侍婢执刀', maxStacks: 6 },
   diaochan: { name: '离间', maxStacks: 5 },
+  zhurong: { name: '火神后裔', maxStacks: 12 }, // P3：着火的敌兵被击杀攒，满了「烈焰飞刀阵」（data/zhurong.ts）
+  menghuo: { name: '南蛮王', maxStacks: 20 }, // P3：任意击杀攒，满了「驱兽冲阵」（data/menghuo.ts）
+  sunquan: { name: '制衡', maxStacks: 15 }, // P3：任意击杀攒，满了切下一阵势（data/sunquan.ts）
+  dianwei: { name: '恶来', maxStacks: 10 }, // P3：受伤攒，满了「古之恶来」（data/dianwei.ts）
+  ganning: { name: '锦帆', maxStacks: 12 }, // P3：被钩过的敌兵被击杀攒，满了「百骑劫营」（data/ganning.ts）
   mengde: { name: '奸雄', maxStacks: 8 }, // P2：部曲阵亡攒、回血，满了召「虎豹骑」（data/mengde.ts）
   taishici: { name: '信义', maxStacks: 15 }, // P2：身边部曲挨打攒，满了「单骑突围」（data/taishici.ts）
   zhouyu: { name: '英发', maxStacks: 20 }, // P2：火船 / 火场烧死敌兵攒，满了刮「东风」（data/zhouyu.ts）
@@ -64,6 +69,8 @@ export const PASSIVE_RULES = {
   heavyArrowSpeed: 900, heavyArrowRange: 600, heavyArrowKnock: 40, heavyBurstRadius: 60, heavyBurstMul: .5,
   /** 2026-11-18 平衡（统筹：「12-3 黄忠还差得远」；实测 5-2 每分钟击杀 30、全体均值 103）：重箭命中锁定目标后再穿 heavyPierce 人，每穿一人伤害 ×heavyPierceMul。 */
   heavyPierce: 2, heavyPierceMul: .6,
+  /** 2026-11-20 平衡第二轮：重箭打首领 ×heavyBossMul。首领是单一大目标，每支重箭都中、神射蓄势攒得最快、几乎常驻，首领用时每格 3 局几何均值只有中位数的 0.43 倍（5-2 / 10-3 0.16～0.38）；清杂不变。 */
+  heavyBossMul: .6,
   /** 2026-11-16 方案 C「老当益壮」（用户选定，初值待平衡）：静心每级缩短进入神射时间 jingxinStepMs；3 级神射第一箭扇形三连（夹角 fanSpreadRad、每支 fanMul）；
    *  老骥伏枥（2026-11-16 用户：「不靠残血触发」→ 越战越勇）：本关每击杀 laojiKillsPerStack 名敌人射速 +laojiPerStack，上限 laojiCap（Lv1–3）；
    *  3 级「宝刀未老」：神射中每射杀一名精锐 / 首领，回复 laojiHealMul 最大生命，且 laojiGuardMs 内受伤不退出神射。 */

@@ -19,7 +19,7 @@ export function campOption(offer:CampOffer,player:Player):UpgradeOption|null{
  const id=offer.id;if(!b.canLearn(id)||rk(b,id)!==offer.level)return null;
  return{id:'camp_'+id,name:TACTICS[id].name+' · Lv.'+offer.level+'→'+(offer.level+1),desc:tacticDescription(id,offer.level+1),kind:'tactic',icon:'build_icon_'+id,apply:()=>{if(b.learn(id))b.bought[id]=(b.bought[id]??0)+1;}};
 }
-interface TacticBook{canLearn(id:TacticId):boolean;level(id:TacticId):number;/** 研读过的心法（没有 = 都没研读）。 */manualsRead?():readonly SchoolId[];}
+interface TacticBook{canLearn(id:TacticId):boolean;level(id:TacticId):number;/** 研读过的心法（没有 = 都没研读）。 */manualsRead?():readonly SchoolId[];/** 这派心法还能不能研读（主修两派之外不行）；没有 = 不限。 */canManual?(s:SchoolId):boolean;}
 /** 势（按已学战法等级 + 心法；营寨里读出的征程构筑没有亲和等加成）。 */
 function bookShi(build:TacticBook):Record<SchoolId,number>{
  const shi=Object.fromEntries(SCHOOL_IDS.map(sc=>[sc,0]))as Record<SchoolId,number>;for(const t of Object.keys(TACTICS)as TacticId[]){const sc=tacticSchool(t);if(sc)shi[sc]+=rk(build,t);}
@@ -33,7 +33,7 @@ function bookShi(build:TacticBook):Record<SchoolId,number>{
 export function rollMerchantTactic(build:TacticBook,rng:()=>number=Math.random,chance:number=MERCHANT_TACTIC.chance):CampOffer|null{
  if(!(rng()<chance))return null;
  const shi=bookShi(build),order=[...SCHOOL_IDS].sort((a,b)=>shi[b]-shi[a]),best=order[0],read=build.manualsRead?.()??[];
- if(shi[best]>=MERCHANT_SCHOOL.manualMinShi&&!read.includes(best)&&rng()<MERCHANT_SCHOOL.manualChance)return{id:'manual',kind:'manual',school:best,level:0,price:MERCHANT_SCHOOL.manualPrice,sold:false};
+ if(shi[best]>=MERCHANT_SCHOOL.manualMinShi&&!read.includes(best)&&(build.canManual?.(best)??true)&&rng()<MERCHANT_SCHOOL.manualChance)return{id:'manual',kind:'manual',school:best,level:0,price:MERCHANT_SCHOOL.manualPrice,sold:false};
  const pool=(Object.keys(TACTICS)as TacticId[]).filter(id=>build.canLearn(id));if(!pool.length)return null;
  // 流派重做：优先出势最高的两派（权重 ×MERCHANT_SCHOOL.topWeight）
  const top=new Set(order.filter(sc=>shi[sc]>0).slice(0,2));

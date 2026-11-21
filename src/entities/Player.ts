@@ -38,6 +38,10 @@ function weightedIndex(t: number, n: number, weights?: readonly number[]): numbe
 /** 赵云：位置/生命/等级/属性。表现层只负责把 sprite 摆到位。 */
 export class Player {
   armyDamageTakenMul = 1;
+  /** 军阵主将加成（FormationRuntime 每帧设）：方圆受伤 −8%；锋矢 / 长蛇移速。 */
+  formationTakenMul = 1; formationSpeedMul = 1;
+  /** 增益条上的军阵图标（GameScene 设）。 */
+  formationInfo?: () => { name: string; desc: string; kind: string; mark: string; icon?: string } | null;
   readonly passive = new CharacterPassives();
   growth = new RunGrowth('zhaoyun');
   readonly scene: Phaser.Scene;
@@ -172,7 +176,8 @@ export class Player {
   propGuardUntil = 0; propGuardMul = 1;
   get speed(): number {
     const wu = this.passive.isWushuang((this.scene as Phaser.Scene & { combatNow?: number }).combatNow ?? this.scene.time.now) ? LVBU.moveMul : 1; // 吕布人中吕布：移速 +40%（可超 1.6 上限）
-    return wu * BALANCE.player.speed * Math.min(1.6, this.stats.moveMul * this.growth.movementMultiplier()*(this.growth.build.tier('cavalry')>=2?1+SCHOOL_TIER.cavalry.move:1)) * this.mountSpeedMul * this.envSpeedMul * this.terrainSpeedMul * this.snareSpeedMul;
+    const p3 = this.passive.speedMultiplier((this.scene as Phaser.Scene & { combatNow?: number }).combatNow ?? this.scene.time.now); // P3 甘宁百骑劫营等
+    return wu * p3 * BALANCE.player.speed * Math.min(1.6, this.stats.moveMul * this.growth.movementMultiplier()*(this.growth.build.tier('cavalry')>=2?1+SCHOOL_TIER.cavalry.move:1)) * this.mountSpeedMul * this.envSpeedMul * this.terrainSpeedMul * this.snareSpeedMul * this.formationSpeedMul;
   }
 
   /** 被外力击退 / 挑起；self 为自己的突进（冲锋、龙胆突刺）。马超冲锋无敌中不被外力击退。 */
@@ -429,7 +434,7 @@ export class Player {
     if (!this.alive || this.damageImmune || now < this.invulnUntil || this.passive.isInvulnerable(now)) return false; // 马超锦马冲锋中无敌
     if (Math.random() < this.growth.dodgeChance()) return false; // 敏捷·游刃：闪避
     const afterArmor = Math.max(1, raw - this.stats.armor);
-    const unguarded = Math.max(1, Math.round(afterArmor * this.stats.damageTakenMul * this.armyDamageTakenMul * this.growth.incomingDamageMultiplier() * this.passive.damageTakenMultiplier(now) * (now < this.propGuardUntil ? this.propGuardMul : 1)));
+    const unguarded = Math.max(1, Math.round(afterArmor * this.stats.damageTakenMul * this.armyDamageTakenMul * this.formationTakenMul * this.growth.incomingDamageMultiplier() * this.passive.damageTakenMultiplier(now) * (now < this.propGuardUntil ? this.propGuardMul : 1)));
     const ridden=this.mountGuard?this.mountGuard(unguarded,now):unguarded;if(ridden<=0)return false;
     const dmg=Math.max(1,this.damageGuard?.(ridden,now)??ridden);
     (this.scene as unknown as {sfx?:{play(k:string):void}}).sfx?.play('playerHurt');

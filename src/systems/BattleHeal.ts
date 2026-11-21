@@ -25,6 +25,10 @@ export interface BattleHealHost {
   dropPotion: (x: number, y: number, amount: number, name: string, from?: { x: number; y: number }) => boolean;
   /** 画面被全屏面板挡着（屏外箭头先藏）。 */
   overlay: () => boolean;
+  /** 主将当前移动方向（单位向量，站着为 null）：刷点不放在正前方。 */
+  moveDir?: () => { x: number; y: number } | null;
+  /** 地上 (x, y) 那份药还在吗（低血保护那份的屏外箭头用）。 */
+  potionAt?: (x: number, y: number) => boolean;
   sfx: (key: string) => void;
   notice: (text: string) => void;
 }
@@ -55,16 +59,29 @@ export class BattleHeal {
    */
   landing(x: number, y: number): { x: number; y: number; moved: boolean } {
     const P = this.h.player(), D = BATTLE_HEAL.drop, d = Math.hypot(x - P.x, y - P.y);
-    if (d >= D.minDrop) return { x, y, moved: false };
-    const a0 = d > 1 ? Math.atan2(y - P.y, x - P.x) : Math.random() * Math.PI * 2;
-    let best: { x: number; y: number } | null = null;
-    for (const da of [0, .5, -.5, 1, -1, 1.6, -1.6, Math.PI]) { // 先试原方向，挤到画面外 / 墙里就偏一点
-      const a = a0 + da, r = D.minDrop + Math.random() * D.spread, p = this.h.place(P.x + Math.cos(a) * r, P.y + Math.sin(a) * r), pd = Math.hypot(p.x - P.x, p.y - P.y);
-      if (pd >= D.minDrop * .9 && this.inView(p.x, p.y)) { best = p; break; }
-      best ??= p;
-    }
+    if (d >= D.minDrop) return { x, y, moved: false }; // 够远：就落在掉落源（尸体 / 营寨 / 道具）那里
+    const a0 = d > 1 ? Math.atan2(y - P.y, x - P.x) : Math.random() * Math.PI * 2; // 从掉落源往外蹦（方向 = 主将 → 掉落源），不飞向主将
     this.stats.nudged++;
-    return { ...best!, moved: true };
+    return { ...this.findAround(a0, D.minDrop + 20, D.minDrop + D.spread + 40), moved: true }; // 留 20 的余量：主将被挤动一下也不会贴到 250 以内
+  }
+  /** 主将移动方向正前方 ±aheadDeg° 内吗（站着不算）。 */
+  private ahead(x: number, y: number): boolean {
+    const m = this.h.moveDir?.(); if (!m) return false; const P = this.h.player(), dx = x - P.x, dy = y - P.y, d = Math.hypot(dx, dy) || 1;
+    return (dx * m.x + dy * m.y) / d > Math.cos(BATTLE_HEAL.drop.aheadDeg * Math.PI / 180);
+  }
+  /**
+   * 在主将周围找一点：夹进场地后实际离主将 min–max、不在移动方向正前方、优先画面里；从 a0 往两边转着试，几圈都不行取最好的。
+   * extra：额外扣分（如离别的回血点太近、身边敌兵多）。
+   */
+  findAround(a0: number, min: number, max: number, extra?: (p: { x: number; y: number }) => number, preferView = true): { x: number; y: number } {
+    const P = this.h.player(); let best: { x: number; y: number; s: number } | null = null;
+    for (let ring = 0; ring < 3; ring++) for (const da of [0, .45, -.45, .9, -.9, 1.4, -1.4, 1.9, -1.9, 2.5, -2.5, Math.PI]) {
+      const a = a0 + da, r = min + (ring === 0 ? Math.random() * (max - min) : ring * 60 + 10), p = this.h.place(P.x + Math.cos(a) * r, P.y + Math.sin(a) * r), pd = Math.hypot(p.x - P.x, p.y - P.y);
+      const s = (pd < min ? 3000 + (min - pd) * 20 : 0) + (pd > max + ring * 60 ? 200 : 0) + (this.ahead(p.x, p.y) ? 900 : 0) + (!preferView || this.inView(p.x, p.y, -40) ? 0 : 400) + (extra?.(p) ?? 0); // 远处的回血事件不求在画面里（屏外有箭头）；够不到 min 时分数最低的就是能到的最远处
+      if (s === 0) return p;
+      if (!best || s < best.s) best = { ...p, s };
+    }
+    return best!;
   }
 
   constructor(private readonly h: BattleHealHost) {
@@ -135,17 +152,10 @@ export class BattleHeal {
     if (s.textures.exists(HEAL_SPOT_ART.herb.key)) kinds.push('herb');
     return kinds[Math.floor(Math.random() * kinds.length)];
   }
-  private spotPoint(): { x: number; y: number } {
-    const P = this.h.player(), S = BATTLE_HEAL.spot, a0 = Math.random() * Math.PI * 2;
-    let best: { x: number; y: number; score: number } | null = null;
-    for (let i = 0; i < 12; i++) {
-      const a = a0 + i / 12 * Math.PI * 2, r = S.near + Math.random() * (S.far - S.near), p = this.h.place(P.x + Math.cos(a) * r, P.y + Math.sin(a) * r);
-      const d = Math.hypot(p.x - P.x, p.y - P.y), clash = this.spots.some(o => Math.hypot(o.x - p.x, o.y - p.y) < 260);
-      // 离主将 ≥ minDrop、在画面里（或刚好在边上）优先
-      const score = (d >= BATTLE_HEAL.drop.minDrop && d <= S.far * 1.1 ? 0 : 1000) + (this.inView(p.x, p.y, -40) ? 0 : 600) + (clash ? 500 : 0) + Math.abs(d - (S.near + S.far) / 2) * .1;
-      if (!best || score < best.score) best = { ...p, score };
-    }
-    return best!;
+  /** 回血点刷点：离主将 300–480、不在移动方向正前方、优先画面里、不和别的回血点挤在一起。 */
+  spotPoint(): { x: number; y: number } {
+    const S = BATTLE_HEAL.spot;
+    return this.findAround(Math.random() * Math.PI * 2, S.near, S.far, p => this.spots.some(o => Math.hypot(o.x - p.x, o.y - p.y) < 260) ? 500 : 0, false);
   }
   private spawnSpot(x: number, y: number, boss: boolean, kind = this.pickKind()): Spot | null {
     const s = this.h.scene, W = HEAL_SPOT_ART.water;
@@ -182,7 +192,9 @@ export class BattleHeal {
     return s.add.container(0, 0, parts).setScrollFactor(0).setDepth(DEPTH.hud + 1).setName('heal-spot-arrow').setVisible(false);
   }
   /** 屏外箭头（同机缘箭头的版式，换成青绿色；只有图标 + 距离数字，不写字）：只在受伤、泉眼可用、又看不到它时出。 */
-  private drawArrow(sp: Spot, show: boolean): void {
+  private drawArrow(sp: Spot, show: boolean): void { this.drawArrowAt(sp.arrow, sp.x, sp.y, show); }
+  private drawArrowAt(arrow: Phaser.GameObjects.Container, x: number, y: number, show: boolean): void {
+    const sp = { x, y, arrow };
     if (!show || this.h.overlay()) { sp.arrow.setVisible(false); return; }
     const cam = this.h.scene.cameras.main, v = cam.worldView, kx = GAME_WIDTH / v.width, ky = GAME_HEIGHT / v.height;
     const sx = (sp.x - v.x) * kx, sy = (sp.y - v.y) * ky, pad = 40;
@@ -200,20 +212,17 @@ export class BattleHeal {
   }
 
   // —— 低血保护 ——
+  /** 低血保护放的那份药（还在地上时屏外有箭头）。 */
+  private lowPot: { x: number; y: number } | null = null; private lowArrow: Phaser.GameObjects.Container | null = null;
   private lowHpCheck(t: number): void {
     const P = this.h.player(), L = BATTLE_HEAL.lowHp, low = P.alive && P.hp < P.maxHp * L.below;
     if (low && !this.wasLow && this.lowHpUsed < L.perStage && t - this.lowHpAt >= L.cooldownSec) {
       // 往敌人最少的方向放（试 8 个方向，数 140 内的敌兵）；夹进场地后实际距离要在 minDrop–maxDrop、在画面里（不落在主将身上、也不跑出屏幕）
-      const D = BATTLE_HEAL.drop;
-      let best: { x: number; y: number; n: number } | null = null;
-      for (let i = 0; i < 8; i++) {
-        const a = i / 8 * Math.PI * 2, r = L.dist[0] + Math.random() * (L.dist[1] - L.dist[0]), p = this.h.place(P.x + Math.cos(a) * r, P.y + Math.sin(a) * r);
-        let n = 0; for (const e of this.h.enemies()) if (e.active && !e.isSupplySlot && Math.abs(e.x - p.x) < 140 && Math.abs(e.y - p.y) < 140) n++;
-        const pd = Math.hypot(p.x - P.x, p.y - P.y); if (pd < D.minDrop || pd > D.maxDrop) n += 50; if (!this.inView(p.x, p.y)) n += 30;
-        if (!best || n < best.n) best = { ...p, n };
-      }
+      // 离主将 260–330、不在移动方向正前方、画面里、敌兵少的方向（夹进场地后的实际距离）
+      const crowd = (p: { x: number; y: number }) => { let n = 0; for (const e of this.h.enemies()) if (e.active && !e.isSupplySlot && Math.abs(e.x - p.x) < 140 && Math.abs(e.y - p.y) < 140) n++; return n * 15; };
+      const best = this.findAround(Math.random() * Math.PI * 2, L.dist[0], L.dist[1], crowd, false);
       if (best && this.h.dropPotion(best.x, best.y, P.maxHp * L.ratio, BATTLE_HEAL.medicine.name)) {
-        this.lowHpAt = t; this.lowHpUsed++; this.stats.lowHpDrops++; // 不打字：落点泛一下手绘符水光
+        this.lowHpAt = t; this.lowHpUsed++; this.stats.lowHpDrops++; this.lowPot = { x: best.x, y: best.y }; // 不打字：落点泛一下手绘符水光
         playSheet(this.h.scene, 'fx_heal_fushui', best.x, best.y - 10, { size: 70, depth: actorDepth(best.y) + .05, ms: 700, alpha: .8, tint: 0xbff0c0 });
       }
     }
@@ -252,7 +261,7 @@ export class BattleHeal {
       if (ready && inside && hurt && sp.left > 0) {
         using = true;
         const want = Math.min(S.rate * dt, sp.left * S.charge, (P.maxHp - P.hp) / P.maxHp);
-        P.heal(want * P.maxHp); sp.left -= want / S.charge; this.stats.spot += want;
+        P.heal(want * P.maxHp); sp.left -= want / S.charge; this.stats.spot += want; this.h.sfx('heal_spring'); // 站着回血：咕嘟水声（自带 1.2 秒节流）
         if (now >= sp.fxAt) { sp.fxAt = now + 650; playSheet(this.h.scene, 'fx_heal_fushui', P.x, P.y - 14, { size: 84, depth: actorDepth(P.y) + .1, ms: 640, alpha: .8, tint: 0xbff0e0 }); }
         if (sp.left <= .001) { sp.left = 0; sp.readyAt = t + S.cooldownSec; this.stats.spotUses++; this.h.sfx('pickup'); } // 水用完：变暗（不打字）
       }
@@ -262,13 +271,15 @@ export class BattleHeal {
       // 用户 2026-11-20「不要这些圈 / 或者换个特效」：不画地面圈和进度弧，改为水面上偶尔泛起手绘符水微光（可用时），剩余水量写在名签上
       sp.ring.clear();
       if (!cool && !using && now >= (sp.ambAt ?? 0)) { sp.ambAt = now + 1700; playSheet(this.h.scene, 'fx_heal_fushui', sp.x, sp.y - 6, { size: Math.round(R * 1.1), depth: DEPTH.ground + 3.6, ms: 900, alpha: .45, tint: 0xbff0e0 }); }
-      this.drawArrow(sp, ready && P.alive && P.hp < P.maxHp * S.arrowBelow);
+      this.drawArrow(sp, ready && P.alive && P.hp < P.maxHp); // 刷远了（450–700）：可用、在屏外就给箭头（满血不出）
     }
     this.lowHpCheck(t);
+    if (this.lowPot && !(this.h.potionAt?.(this.lowPot.x, this.lowPot.y) ?? false)) this.lowPot = null; // 捡了 / 没了
+    if (this.lowPot) { this.lowArrow ??= this.makeArrow(); this.drawArrowAt(this.lowArrow, this.lowPot.x, this.lowPot.y, P.alive); } else this.lowArrow?.setVisible(false);
   }
 
   clear(): void {
-    this.clearSpots(); this.schedule = [];
+    this.clearSpots(); this.schedule = []; this.lowPot = null; this.lowArrow?.destroy(); this.lowArrow = null;
     for (const f of this.foods) { f.active = false; f.img.setVisible(false); }
   }
 }

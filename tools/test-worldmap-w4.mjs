@@ -38,15 +38,21 @@ const winSiege = async p => { await p.evaluate(G0 => { const s = eval(G0); s.spa
     out.badDefense = other ? w.beginDefense(other) : 'none';
     const id = w.beginDefense(target); const before = w.loadWorld();
     const d = w.settleDefense(id, { victory: true, bossKilled: true, debug: false, elapsed: 100, reward: { merits: 60, provisions: 120 } }); const after = w.loadWorld();
-    out.defense = { held: d.held, grain: d.provisions, gain: after.provisions - before.provisions, alertGone: !after.alerts.some(a => a.city === target), owned: after.ownedCities.includes(target) };
+    out.defense = { held: d.held, grain: d.provisions, gain: after.provisions - before.provisions, alertGone: !after.alerts.some(a => a.city === target), owned: after.ownedCities.includes(target), cooldown: after.defenseCooldown, morale: after.morale[target] };
+    // 守城重做：冷却中不反扑——先清冷却再测反扑
+    { const raw2 = JSON.parse(localStorage.getItem('im_world_v1')); raw2.defenseCooldown = 0; localStorage.setItem('im_world_v1', JSON.stringify(raw2)); localStorage.removeItem('im_world_backup_v1'); }
     // 反扑：随机 0 → 必定告急；0.99 → 不告急
     w.setWorldRandom(() => 0); const s1 = w.beginSiege('wancheng', true); const r1 = w.settleSiege(s1, { victory: true, bossKilled: true, debug: false, elapsed: 120, reward: { merits: 60, provisions: 120 }, firstBonus: .5 });
     out.retaliation = r1.alert; out.attackerExpected = c.cityAttacker('wancheng', 2, w.loadWorld().ownedCities);
-    // 告急时出征别处 → 失守
+    // 守城重做：告急是集结 2 战——出征别处一场 −1，到 0 被围，被围时再出征别处才失守
+    out.muster0 = w.cityAlerts().find(a => a.city === 'wancheng')?.countdown;
+    const sA = w.beginSiege('chenliu', true); out.muster1 = w.cityAlerts().find(a => a.city === 'wancheng')?.countdown; out.loss1 = w.sortieLossCities(); w.abandonExpedition(sA, []);
+    const sB = w.beginSiege('chenliu', true); out.muster2 = w.cityAlerts().find(a => a.city === 'wancheng')?.countdown; out.loss2 = w.sortieLossCities(); w.abandonExpedition(sB, []);
     const s2 = w.beginSiege('chenliu', true); const lost = w.loadWorld();
-    out.lost = { owned: lost.ownedCities.includes('wancheng'), alerts: lost.alerts.length, lastLost: lost.lastLost };
+    out.lost = { owned: lost.ownedCities.includes('wancheng'), alerts: lost.alerts.length, lastLost: lost.lastLost, cooldown: lost.defenseCooldown };
     w.abandonExpedition(s2, []);
     out.notice = w.takeLostNotice(); out.notice2 = w.takeLostNotice();
+    { const raw3 = JSON.parse(localStorage.getItem('im_world_v1')); raw3.defenseCooldown = 0; localStorage.setItem('im_world_v1', JSON.stringify(raw3)); localStorage.removeItem('im_world_backup_v1'); }
     w.setWorldRandom(() => .99); const s3 = w.beginSiege('chenliu', true); const r3 = w.settleSiege(s3, { victory: true, bossKilled: true, debug: false, elapsed: 120, reward: { merits: 30, provisions: 60 }, firstBonus: .5 });
     out.noRetaliation = r3.alert;
     w.setWorldRandom();
@@ -54,12 +60,13 @@ const winSiege = async p => { await p.evaluate(G0 => { const s = eval(G0); s.spa
   });
   ck('eraSeen=0：静默记为当前时代（二），无时局面板', r.silent === null && r.seen === 2, { silent: r.silent, seen: r.seen });
   ck('时代一→二：洛阳 董卓→曹操、董卓/袁术覆灭、我方城池不在易主列表', r.adv?.from === 1 && r.adv?.to === 2 && r.adv.luoyang?.from === 'dongzhuo' && r.adv.luoyang?.to === 'caocao' && r.adv.fallen.includes('dongzhuo') && r.adv.fallen.includes('yuanshu') && !r.adv.owned, r.adv);
-  ck('时代更替告急 1–3 城（random .99 → 3 城或全部边城），来犯者为大势力', r.adv?.alerts.length >= 1 && r.adv.alerts.length <= 3 && r.adv.alerts.every(a => a.cause === 'era' && !['han', 'yellow', 'player'].includes(a.attacker)), r.adv?.alerts);
+  ck('时代更替告急最多 1 城（守城重做：同时最多 1 座），集结 2 战，来犯者为大势力', r.adv?.alerts.length === 1 && r.adv.alerts.every(a => a.cause === 'era' && a.countdown === 2 && !['han', 'yellow', 'player'].includes(a.attacker)), r.adv?.alerts);
   ck('同一时代再开地图不再触发', r.again === null);
   ck('非告急城池不能守城', r.badDefense === '' || r.badDefense === 'none', r.badDefense);
-  ck('守城胜利：告急解除、城池仍在、发军粮（军功已并入军粮，2026-11-17）', r.defense.held && r.defense.alertGone && r.defense.owned && r.defense.grain > 0 && r.defense.gain === r.defense.grain, r.defense);
+  ck('守城胜利：告急解除、城池仍在、发军粮；冷却 3 战、民心 3 战（守城重做）', r.defense.held && r.defense.alertGone && r.defense.owned && r.defense.grain > 0 && r.defense.gain === r.defense.grain && r.defense.cooldown === 3 && r.defense.morale === 3, r.defense);
   ck('攻城反扑：random 0 → 宛城告急，来犯者=相邻最强大势力', r.retaliation?.city === 'wancheng' && r.retaliation.cause === 'retaliation' && r.retaliation.attacker === r.attackerExpected, { got: r.retaliation, expected: r.attackerExpected });
-  ck('告急时出征别处：宛城失守、告急清空、记录失守', !r.lost.owned && r.lost.alerts === 0 && r.lost.lastLost.includes('wancheng'), r.lost);
+  ck('告急集结：出征别处一场倒计时 2→1、再一场 →0（被围，这时才算会失守）', r.muster0 === 2 && r.muster1 === 1 && r.loss1.length === 0 && r.muster2 === 0 && r.loss2.includes('宛城'), { m0: r.muster0, m1: r.muster1, m2: r.muster2, l1: r.loss1, l2: r.loss2 });
+  ck('被围时出征别处：宛城失守、告急清空、记录失守、进入冷却', !r.lost.owned && r.lost.alerts === 0 && r.lost.lastLost.includes('wancheng') && r.lost.cooldown === 3, r.lost);
   ck('失守提示只读一次', r.notice.includes('wancheng') && r.notice2.length === 0, { n1: r.notice, n2: r.notice2 });
   ck('random .99 → 不反扑', !r.noRetaliation, r.noRetaliation);
   await p.close();
@@ -83,16 +90,17 @@ const winSiege = async p => { await p.evaluate(G0 => { const s = eval(G0); s.spa
   await p.screenshot({ path: `${out}/mobile-alert-card.png` });
   // 可攻城池：攻城面板带失守警示
   const warn = await p.evaluate(M0 => { const s = eval(M0); const c = s.cityMarkers.find(m => m.city.id === 'chenliu') ?? s.cityMarkers.find(m => s.owned.length && !s.owned.includes(m.city.id)); c.hit.emit('pointerup', { getDistance: () => 0 }); const detail = s.detail.text; s.action.image.emit('pointerup'); const modal = s.children.getByName('siege-modal'); const w = modal?.getByName('siege-warning')?.text; return { detail, w, open: !!modal }; }, M);
-  ck('攻城面板与信息卡均有“出征别处将失守”警示', warn.open && warn.w?.includes('将失守') && warn.detail.includes('将失守'), warn);
+  // 守城重做：集结中只提示「再打 N 战围城」，被围才写「将失守」（第 3 节测被围）
+  ck('攻城面板与信息卡均有告急提示（集结中：再打 2 战围城）', warn.open && warn.w?.includes('集结') && warn.detail.includes('集结'), warn);
   await p.screenshot({ path: `${out}/mobile-siege-warning.png` });
   await p.evaluate(M0 => eval(M0).children.getByName('siege-modal').getByName('siege-cancel').emit('pointerup'), M);
   // 战役节点信息也有警示
   const node = await p.evaluate(M0 => { const s = eval(M0); const m = s.markers.find(x => x.node.campaign || x.node.chapter); m.root.list[0].emit('pointerup', { getDistance: () => 0 }); return s.detail.text; }, M);
-  ck('战役节点信息卡有失守警示', node.includes('将失守'), node);
+  ck('战役节点信息卡有告急提示（集结中）', node.includes('集结'), node);
   // 守城面板 → 出征守城
   await pick(p, target);
   const dm = await p.evaluate(M0 => { const s = eval(M0); s.action.image.emit('pointerup'); const m = s.children.getByName('siege-modal'); return { texts: m.list.filter(o => o.type === 'Text').map(o => o.text).join('|'), warn: !!m.getByName('siege-warning') }; }, M);
-  ck('守城面板：标题「守卫」、来犯势力、奖励减半、无失守警示', dm.texts.includes('守卫') && dm.texts.includes('来犯') && dm.texts.includes('守城奖励') && dm.texts.includes('出征守城') && !dm.warn, dm);
+  ck('守城面板：标题「守卫」、来犯势力、集结倒计时、迎击 / 守城 / 弃城三条路（守城重做）', dm.texts.includes('守卫') && dm.texts.includes('来犯') && dm.texts.includes('还剩 2 战围城') && dm.texts.includes('迎击：') && dm.texts.includes('弃城：') && await p.evaluate(M0 => { const m = eval(M0).children.getByName('siege-modal'); return !!m.getByName('siege-go') && !!m.getByName('siege-intercept') && !!m.getByName('siege-abandon'); }, M) && !dm.warn, dm);
   ck('守城面板：主公亲征，没有选将按钮（用户 11-17「攻城取消选择武将」）', dm.texts.includes('亲征') && await p.evaluate(M0 => { const m = eval(M0).children.getByName('siege-modal'); return !!m.getByName('siege-lord') && !m.list.some(o => /^siege-hero-/.test(o.name || '')); }, M), dm.texts);
   await p.screenshot({ path: `${out}/mobile-defense-modal.png` });
   await p.evaluate(M0 => eval(M0).children.getByName('siege-modal').getByName('siege-go').emit('pointerup'), M);
@@ -116,7 +124,7 @@ const winSiege = async p => { await p.evaluate(G0 => { const s = eval(G0); s.spa
 
 // —— 3. 失守：带告急去打别处，回地图看到失守提示；主页与选关警示 ——
 {
-  const p = await page(mk({ eraSeen: 2, alerts: [{ city: 'runan', attacker: 'caocao', cause: 'era' }] }));
+  const p = await page(mk({ eraSeen: 2, alerts: [{ city: 'runan', attacker: 'caocao', cause: 'era', countdown: 0 }] })); // 被围（守城重做：集结倒计时到 0）
   const home = await p.evaluate(() => window.__game.scene.getScene('MenuScene').children.getByName('home-alert-warning')?.text);
   ck('主页出征按钮上方有失守警示', !!home && home.includes('汝南') && home.includes('将失守'), home);
   await p.screenshot({ path: `${out}/mobile-home-warning.png` });
@@ -130,6 +138,9 @@ const winSiege = async p => { await p.evaluate(G0 => { const s = eval(G0); s.spa
   ck('无时代推进时不弹时局面板', await p.evaluate(M0 => !eval(M0).children.getByName('era-modal'), M));
   // 出征攻城（非守城）→ 汝南失守
   await p.evaluate(M0 => { const s = eval(M0); s.cityMarkers.find(m => m.city.id === 'chenliu').hit.emit('pointerup', { getDistance: () => 0 }); s.action.image.emit('pointerup'); s.children.getByName('siege-modal').getByName('siege-go').emit('pointerup'); }, M);
+  // 被围时出征别处先弹确认（ui/SortieGuard）→「仍要出征」
+  const guard = await p.evaluate(M0 => { const g = eval(M0).children.getByName('sortie-guard'); const t = g ? g.list.filter(o => o.type === 'Text').map(o => o.text).join('|') : ''; g?.getByName('sortie-guard-go')?.emit('pointerup'); return t; }, M);
+  ck('被围时出征攻城：先弹确认「汝南将失守」', guard.includes('汝南') && guard.includes('失守'), guard);
   await p.waitForFunction(() => window.__game.scene.getScene('SiegeGameScene')?.player && window.__game.scene.isActive('SiegeGameScene'), null, { timeout: 20000 }); await p.waitForTimeout(300);
   const w = await store(p, w => w.loadWorld());
   ck('出征攻城后汝南失守', !w.ownedCities.includes('runan') && w.alerts.length === 0, { owned: w.ownedCities });

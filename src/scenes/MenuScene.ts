@@ -1,3 +1,5 @@
+import { SIGIL_LABEL, formationSigil, setFormationSigil, type FormationSigil } from '../systems/BattleSettings';
+import { sortieBlocked } from '../ui/SortieGuard';
 import { IS_DESKTOP_APP, desktop } from '../platform/desktop';
 import { hotkeySettingsLink } from '../ui/HotkeySettingsUI';
 import { confirmLord, defaultHero, ensureLegacyLord, heroOwned, lordFinal, lordHero, lordRules, setLord } from '../systems/RosterStore';
@@ -354,6 +356,7 @@ export class MenuScene extends Phaser.Scene {
       {key:'death-fx',name:'死亡特效',tab:'view',kind:'toggle',options:ch(['on','off'],DEATHFX_LABEL),get:()=>deathFxSetting(),set:v=>setDeathFx(v as DeathFxSetting)},
       {key:'damage',name:'伤害数字',tab:'battle',kind:'choice',options:ch(['all','crit','off'],DAMAGE_LABEL),get:()=>damageNumbers(),set:v=>setDamageNumbers(v as DamageNumbers)},
       {key:'orders-panel',name:'军令面板',tab:'battle',kind:'toggle',options:ch(['on','off'],ORDERS_PANEL_LABEL),get:()=>ordersPanelSetting(),set:v=>setOrdersPanelSetting(v as OrdersPanelSetting)},
+      {key:'formation-sigil',name:'阵纹',tab:'battle',kind:'toggle',options:ch(['on','off'],SIGIL_LABEL),get:()=>formationSigil(),set:v=>setFormationSigil(v as FormationSigil)},
       {key:'school-hint',name:'合击觉醒提示',tab:'battle',kind:'choice',options:ch(['brief','full','off'],SCHOOL_HINT_LABEL),get:()=>schoolHint(),set:v=>setSchoolHint(v as SchoolHint)},
       {key:'hero-barks',name:'武将台词',tab:'battle',kind:'toggle',options:ch(['on','off'],BARKS_LABEL),get:()=>heroBarks(),set:v=>setHeroBarks(v as HeroBarks)},
       {key:'story',name:'剧情',tab:'story',kind:'choice',options:ch(['full','chapter','off'],STORY_LABEL),get:()=>storyMode(),set:v=>setStoryMode(v as 'full')},
@@ -558,6 +561,7 @@ export class MenuScene extends Phaser.Scene {
     this.startGame();
   }
   private startGame(): void {
+    if (sortieBlocked(this, () => this.startGame())) return; // 出征确认：会让告急城池失守时先问（ui/SortieGuard）
     if (this.heroModal?.visible||this.westModal?.visible||this.children.getByName('home-settings-panel')||this.children.getByName('game-codex')) return;
     if(this.selectedChapter==='hulao'&&!dongzhuoStagePlayable(this.selectedWestStage)&&!isChapterTestRun())return;
     if(this.selectedChapter==='huangjin'&&!yellowStagePlayable(this.selectedStage)&&!isChapterTestRun()&&loadWorld().yellowStages>0)return; // 打过的关不能再打（data/replayRules.ts）

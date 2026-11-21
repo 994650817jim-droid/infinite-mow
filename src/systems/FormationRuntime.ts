@@ -128,11 +128,12 @@ export class FormationRuntime {
     return now < this.cdUntil ? timerProgress(this.cdUntil, this.cdMs, now, '', '变阵冷却') : { cur: 1, max: 1, seg: 0, ready: true, text: '可变阵（X）' };
   }
   /** 增益图标说明。 */
-  info(): { name: string; desc: string; kind: string; mark: string } | null {
+  info(): { name: string; desc: string; kind: string; mark: string; icon?: string } | null {
     if (!this.current) return null;
     const d = FORMATIONS[this.current], p = this.pow(), f = this.h.legion.formation, n = this.h.legion.units.filter(u => u.active).length;
     const tags = [p.echo ? '呼应 ×1.5' : '', p.favored ? '擅阵 ×1.25' : '', p.half ? '诸葛亮随行 · 半效' : ''].filter(Boolean).join(' · ');
-    return { name: '阵 · ' + d.name, mark: d.short,
+    const ik = 'formation_icon_' + this.current;
+    return { name: '阵 · ' + d.name, mark: d.short, icon: this.h.player.scene.textures.exists(ik) ? ik : undefined,
       desc: `${d.main}\n代价：${d.cost}\n主将：${d.hero}\n${d.sortie}\n入阵 ${Math.min(n, f.cap)} / ${Number.isFinite(f.cap) ? f.cap : n} 人（8 + 2 × 统御）${tags ? '\n' + tags : ''}`,
       kind: (this.formed ? '军阵 · 护阵生效' : this.h.legion.order === 'sortie' ? '军阵 · 出击散阵' : '军阵 · 成阵中') + (this.loadout.length > 1 ? ' · X 变阵' : '') };
   }

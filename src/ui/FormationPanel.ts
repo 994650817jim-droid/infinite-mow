@@ -32,7 +32,8 @@ export function drawFormationPanel(h: FormationPanelHost, x0: number, y0: number
     T(x0, y + 4, slot ? '备阵' : '主阵', 17, '#e9cf96', true).setName('formation-slot-' + slot);
     let x = x0 + 58;
     for (const id of known) {
-      const on = load[slot] === id, d = FORMATIONS[id], fav = HERO_FORMATION[h.hero] === id;
+      const on = load[slot] === id, d = FORMATIONS[id], fav = HERO_FORMATION[h.hero] === id, ik = 'formation_icon_' + id;
+      if (s.textures.exists(ik)) { h.root.add(s.add.image(x + 12, y + 16, ik).setDisplaySize(26, 26).setScrollFactor(0).setAlpha(on ? 1 : .55)); x += 28; }
       const t = T(x, y + 5, d.name + (fav ? '·擅' : ''), 15, on ? '#f6dc9c' : '#a99a7c').setName(`formation-pick-${slot}-${id}`).setPadding(2, 3, 2, 3).setInteractive({ useHandCursor: true });
       t.on('pointerover', () => { t.setColor('#fff0cd'); }).on('pointerout', () => t.setColor(on ? '#f6dc9c' : '#a99a7c'))
         .on('pointerdown', () => { setFormationLoadout(h.hero, slot, id, known); focus = id; h.changed?.(); });
@@ -45,8 +46,10 @@ export function drawFormationPanel(h: FormationPanelHost, x0: number, y0: number
   // 说明
   const id = focus, d = FORMATIONS[id], p = formationPower(id, h.hero, h.majors), yy = y0 + 112;
   lines.lineStyle(1, 0x6f5a3a, .7).lineBetween(x0, yy - 8, x0 + leftW, yy - 8);
-  T(x0, yy, d.name, 22, '#f3e3bf', true).setName('formation-focus-name');
-  T(x0 + 96, yy + 6, CN_ROLE[id] + ' · 呼应「' + SCHOOLS[d.echo].name + '」' + (p.echo ? '（主修，×1.5）' : ''), 13, p.echo ? '#cfe3b0' : '#a8956c');
+  const fik = 'formation_icon_' + id, ix = s.textures.exists(fik) ? 62 : 0;
+  if (ix) h.root.add(s.add.image(x0 + 26, yy + 14, fik).setDisplaySize(56, 56).setScrollFactor(0).setName('formation-focus-icon'));
+  T(x0 + ix, yy, d.name, 22, '#f3e3bf', true).setName('formation-focus-name');
+  T(x0 + ix + 96, yy + 6, CN_ROLE[id] + ' · 呼应「' + SCHOOLS[d.echo].name + '」' + (p.echo ? '（主修，×1.5）' : ''), 13, p.echo ? '#cfe3b0' : '#a8956c');
   const rows: Array<[string, string, string]> = [['阵势', d.main, '#e8dcc0'], ['代价', d.cost, '#d8a890'], ['主将', d.hero, '#e8dcc0'], ['出击', d.sortie.replace(/^出击：/, ''), '#e8dcc0']];
   if (p.favored) rows.push(['擅阵', '主将擅长此阵，阵势 ×1.25', '#f6dc9c']);
   if (p.half) rows.push(['半效', '靠诸葛亮随行布八阵，阵势减半', '#d8a890']);

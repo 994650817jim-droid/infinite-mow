@@ -29,6 +29,8 @@ export class LegionFormation {
  cap=Infinity;
  /** 在阵里的士兵 id（吃阵势）。 */
  readonly inForm=new Set<number>();
+ /** 入阵士兵站位的中心（局部坐标；阵纹铺在这里）。 */
+ center={x:0,y:0};
  /** 长蛇阵：每名士兵在队列里的序号（随从占前 3 个）。 */
  private column=new Map<number,number>();
  /** 主将走过的路径（长蛇阵用），最新在前。 */
@@ -72,6 +74,7 @@ export class LegionFormation {
     const all=[...M,...B];all.forEach((u,i)=>{const g=i%8,k=Math.floor(i/8),a=g/8*Math.PI*2+Math.PI/2,r=FORMATION.bazhen.ring+Math.floor(k/2)*30,lat=(k%2?1:-1)*(k?12:0);put(u,Math.cos(a)*r-Math.sin(a)*lat,Math.sin(a)*r+Math.cos(a)*lat);});break;}
    case 'snake':{const all=[...M,...B];all.forEach((u,i)=>{this.column.set(u.id,i+3);this.offsets.set(u.id,{x:0,y:-(FORMATION.snake.lead+(i+3)*FORMATION.snake.gap)});});this.extent=FORMATION.snake.lead+(all.length+3)*FORMATION.snake.gap;break;}
   }
+  {let sx=0,sy=0,n=0;for(const u of [...M,...B]){const o=this.offsets.get(u.id);if(o){sx+=o.x;sy+=o.y;n++;}}this.center=this.shape==='snake'||!n?{x:0,y:0}:{x:sx/n,y:sy/n};}
   // 后军：入阵人数之外的士兵排在阵后
   const back0=this.shape==='snake'?0:Math.max(70,this.extent*.75)+40;
   rest.forEach((u,j)=>{if(this.shape==='snake'){const i=this.column.size;this.column.set(u.id,i+3);this.offsets.set(u.id,{x:0,y:0});return;}const per=8,row=Math.floor(j/per),cnt=Math.min(per,rest.length-row*per);put(u,(j%per-(cnt-1)/2)*S,-back0-row*S);});
@@ -94,6 +97,8 @@ export class LegionFormation {
   for(const p of this.trail){const seg=Math.hypot(p.x-px,p.y-py);if(seg>=left&&seg>0){const k=left/seg;return{x:px+(p.x-px)*k,y:py+(p.y-py)*k};}left-=seg;px=p.x;py=p.y;}
   const back=this.angle+Math.PI;return{x:px+Math.cos(back)*left,y:py+Math.sin(back)*left};
  }
+ /** 局部坐标 → 世界坐标。 */
+ world(p:{x:number;y:number}){return this.toWorld(p);}
  private toWorld(p:{x:number;y:number}){const c=Math.cos(this.angle),s=Math.sin(this.angle);return{x:this.player.x+c*p.y-s*p.x,y:this.player.y+s*p.y+c*p.x};}
  position(u:Ally){
   if(this.shape==='snake'){const i=this.column.get(u.id);if(i!==undefined)return this.along(FORMATION.snake.lead+i*FORMATION.snake.gap);}

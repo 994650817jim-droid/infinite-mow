@@ -14,7 +14,7 @@ async function open(q, world) {
   await p.addInitScript(w => { if (sessionStorage.getItem('__init')) return; sessionStorage.setItem('__init', '1'); localStorage.removeItem('im_formation_loadout'); localStorage.setItem('im_last_hero', 'zhaoyun'); if (w) { localStorage.clear(); localStorage.setItem('im_world_v1', JSON.stringify(w)); localStorage.setItem('im_last_hero', 'zhaoyun'); localStorage.setItem('im_home_seen', '1'); } }, world ?? null);
   await p.goto(BASE + '?dev=1&autostart=1&stage=1&layout=desktop&story=off' + q, { timeout: 180000 });
   await p.waitForFunction(() => window.__game?.scene.getScene('GameScene')?.player && window.__game.scene.getScene('GameScene').elapsed > .5, null, { timeout: 120000 });
-  await p.evaluate(() => { window.__find = (root, name) => { const list = root.list ?? root.getChildren?.() ?? []; for (const o of list) { if (o.name === name) return o; if (o.list) { const r = window.__find(o, name); if (r) return r; } } return null; }; });
+  await p.evaluate(() => { window.__mod = async part => import(performance.getEntriesByType('resource').map(e => e.name).find(n => n.includes(part)) ?? ('/src/' + part)); window.__find = (root, name) => { const list = root.list ?? root.getChildren?.() ?? []; for (const o of list) { if (o.name === name) return o; if (o.list) { const r = window.__find(o, name); if (r) return r; } } return null; }; });
   return p;
 }
 const ev = (p, fn, a) => p.evaluate(([f, a]) => { const s = window.__game.scene.getScene('GameScene'); window.__S = s; for (let i = 0; i < 8 && s.mode !== 'none' && !s.over; i++) { if (s.mode === 'levelup' || s.mode === 'bossloot') s.chooseUpgrade?.(0); else { s.__DEV_ACTIONS?.closePopup?.(); if (s.mode !== 'none' && s.mode !== 'result' && s.mode !== 'story' && s.mode !== 'rest') s.setMode?.('none'); } } return eval('(' + f + ')')(s, a); }, [String(fn), a]);
@@ -107,6 +107,29 @@ const sBz = await ev(p, s => ({ trapped: s.formationRt.stats.trapped, slowed: s.
 ck('八阵（护阵）：阵内敌人减速、困住一个', sBz.trapped >= 1 && sBz.slowed >= 3, sBz);
 await use(p, 'crane', 'circle'); for (let i = 0; i < 9; i++) { await calm(p); await p.waitForTimeout(500); }
 await p.screenshot({ path: `${OUT}/battle-crane.png` });
+
+// ⑥b 二期表现：地面阵纹（低透明、只在护阵成阵时）、出击淡出、设置可关；变阵竖旗；小地图阵纹；增益条阵旗图标
+await p.waitForFunction(() => window.__game.scene.getScene('GameScene').textures.exists('formation_sigils'), null, { timeout: 30000 });
+const fx1 = await ev(p, s => { const f = window.__find(s.children, 'formation-sigil') ?? s.children.getByName('formation-sigil'); const mf = null;
+  return { vis: !!f?.visible, alpha: f?.alpha ?? 0, frame: f?.frame?.name, cur: s.formationRt.current, w: f?.displayWidth ?? 0, mini: !!mf?.visible, icon: s.player.formationInfo?.()?.icon }; });
+ck('地面阵纹：鹤翼阵纹铺在部曲脚下（透明度 ≈ 0.3）；增益条用阵旗图标', fx1.vis && Math.abs(fx1.alpha - .3) < .06 && String(fx1.frame) === '2' && fx1.w >= 200 && fx1.icon === 'formation_icon_crane', fx1);
+await ev(p, s => { s.battleMap?.toggleBig(); return 1; }); await p.waitForTimeout(1600);
+const mapFm = await ev(p, s => { const o = window.__find(s.children, 'painted-map-formation') ?? window.__find(s.children, 'battle-map-formation'); return { vis: !!o?.visible, frame: o?.frame?.name, mode: s.mode }; });
+await p.screenshot({ path: `${OUT}/map-formation.png` });
+ck('舆图（M）：主将金菱下垫当前阵纹小图，部曲画淡青点', mapFm.vis && String(mapFm.frame) === '2', mapFm);
+await ev(p, s => { s.battleMap?.toggleBig(); return 1; }); await p.waitForTimeout(1200);
+await ev(p, s => { s.legion.cycleOrder(); return 1; }); await p.waitForTimeout(900);
+const fx2 = await ev(p, s => { const f = s.children.getByName('formation-sigil'); const a = f?.visible ? f.alpha : 0; s.legion.cycleOrder(); return a; });
+ck('出击时阵纹淡出', fx2 < .05, fx2);
+await ev(p, s => { localStorage.setItem('im_formation_sigil', 'off'); return 1; });
+const fx3 = await p.evaluate(async () => { const B = await window.__mod('systems/BattleSettings.ts'); B.setFormationSigil('off'); await new Promise(r => setTimeout(r, 900)); const s = window.__S, f = s.children.getByName('formation-sigil'); const off = f?.visible ? f.alpha : 0; B.setFormationSigil('on'); return off; });
+ck('设置「阵纹 · 关」：不画阵纹', fx3 < .05, fx3);
+await ev(p, s => { const r = s.formationRt; r.loadout = ['crane', 'circle']; r.idx = 0; r.cdUntil = 0; return r.switch(s.combatNow); });
+await p.waitForTimeout(250);
+const fx4 = await ev(p, s => ({ flag: s.children.list.filter(o => o.name === 'formation-flag').length, cur: s.formationRt.current }));
+ck('按 X 变阵：主将脚下竖起金盾旗（手绘序列帧）', fx4.flag >= 1 && fx4.cur === 'circle', fx4);
+for (let i = 0; i < 5; i++) { await calm(p); await p.waitForTimeout(500); }
+await p.screenshot({ path: `${OUT}/battle-circle-sigil.png` });
 
 // ⑦ 行营「布阵」页
 const camp = await p.evaluate(async () => { const s = window.__S; s.resting = true; s.setMode('rest'); s.campUI.open('test-form-rest', '下一关'); await new Promise(r => setTimeout(r, 5200));

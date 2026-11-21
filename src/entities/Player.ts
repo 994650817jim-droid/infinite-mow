@@ -41,7 +41,7 @@ export class Player {
   /** 军阵主将加成（FormationRuntime 每帧设）：方圆受伤 −8%；锋矢 / 长蛇移速。 */
   formationTakenMul = 1; formationSpeedMul = 1;
   /** 增益条上的军阵图标（GameScene 设）。 */
-  formationInfo?: () => { name: string; desc: string; kind: string; mark: string } | null;
+  formationInfo?: () => { name: string; desc: string; kind: string; mark: string; icon?: string } | null;
   readonly passive = new CharacterPassives();
   growth = new RunGrowth('zhaoyun');
   readonly scene: Phaser.Scene;

@@ -1,3 +1,4 @@
+import { loadFormationArt } from '../systems/FormationFx';
 import { drawFormationPanel } from './FormationPanel';
 import { MECHANICS, mechLockText, mechOpen, mechShown, takeMechIntros, type MechId } from '../data/mechanicUnlocks';
 /** 行营页签 → 玩法：未开放的页签不出现（11-20「开放前隐藏而不是灰掉」），其余往左挤。军需商人第二章、将帅帐四维 2-3、军医 1-1 打完。 */
@@ -187,8 +188,10 @@ export class CampRestUI {
   this.onHealed?.();this.render();this.playMedicFx();return true;
  }
  /** 布阵（ui/FormationPanel）：主阵 / 备阵、说明、站位示意。改了就让战斗里的军阵重读。 */
+ private formationArtSeen=false;
  private renderFormation(){
   const sc=this.scene as unknown as {followers?:{members:Array<{recruit:{hero?:string}}>}|null;formationRt?:{refresh():void}},g=this.player.growth,fm=sc.followers?.members??[];
+  loadFormationArt(this.scene,()=>{if(this.root.active&&this.tab===5&&!this.formationArtSeen){this.formationArtSeen=true;this.render();}});
   drawFormationPanel({scene:this.scene,root:this.body,player:this.player,units:this.army.units,hero:g.character??'liubei',followerHeroes:fm.map(m=>m.recruit.hero).filter((x):x is string=>!!x),followers:fm.length,
    majors:g.build.majors(),command:g.pts('command'),changed:()=>{sc.formationRt?.refresh();this.render();}},D?40:24,D?158:229,D?W-80:W-48,D?330:420);
   if(!this.notice)this.detail.setText('布阵只在这里改；出征后按 X 在主阵、备阵之间变阵。');

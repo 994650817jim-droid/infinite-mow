@@ -1,3 +1,6 @@
+import { SIGIL_LABEL, formationSigil, setFormationSigil, type FormationSigil } from '../systems/BattleSettings';
+import { FORMATION_IDS } from '../data/formations';
+import { FormationFx } from '../systems/FormationFx';
 import { FormationRuntime } from '../systems/FormationRuntime';
 import { playMenuMusic, stopMenuMusic } from '../systems/Music';
 import { startCityAmbient } from '../systems/ContentSfx';
@@ -608,6 +611,8 @@ export class GameScene extends Phaser.Scene {
   /** 增益图标的触发进度（BuffHud 读，见 ui/BuffProgress）：战法 / 宝物 / 觉醒 / 遗物里的「每 N 次 / 每 N 秒 / 攒满」计数。 */
   /** 军阵（systems/FormationRuntime）：当前阵、变阵冷却。 */
   formationRt?:FormationRuntime;
+  /** 军阵表现：地面阵纹、变阵竖旗（systems/FormationFx）。 */
+  formationFx?:FormationFx;
   private buffProgress(id:string,now:number):BuffProgress|null{
     if(id==='formation')return this.formationRt?.progress(now)??null;
     if(id.startsWith('awakening_'))return this.synergy?.progress(id,now)??null;
@@ -986,7 +991,8 @@ export class GameScene extends Phaser.Scene {
       majors:()=>this.player.growth.build.majors(),command:()=>this.player.growth.pts('command'),
       enemiesNear:(x,y,r)=>this.grid.query(x,y,r),stun:(e,ms,n)=>this.buildCombat.stun(e,ms,n),hit:(e,d)=>this.hitEnemy(e,d,this.combatNow,'melee',true),
       banner:(t,s)=>this.showWaveBanner(t,false,s),sfx:k=>this.sfx.play(k)});
-     this.events.once('shutdown',()=>{this.formationRt?.clear();this.formationRt=undefined;});}
+     this.formationFx=new FormationFx(this,this.legion,this.player,()=>{const r=this.formationRt;return{id:r?.current??null,formed:!!r?.formed,settling:!!r&&this.combatNow<r.settleUntil,switches:r?.stats.switches??0};});
+     this.events.once('shutdown',()=>{this.formationRt?.clear();this.formationRt=undefined;this.formationFx?.destroy();this.formationFx=undefined;});}
     this.buildCombat.setOrigin(()=>({x:this.player.x,y:this.player.y}));this.statusFx=new StatusFx(this,this.buildCombat);this.jinnangFx=new JinnangFx(this,()=>({x:this.player.x,y:this.player.y}));   // 敌人身上的灼烧 / 迟滞 / 眩晕 / 破甲标记（手绘序列帧）
     this.buildCombat.onFlank=targets=>this.flankBladeFx().strike(targets);
     this.buildCombat.onWindstep=e=>this.windstepFx().burst(e.x,e.y);
@@ -1360,7 +1366,7 @@ export class GameScene extends Phaser.Scene {
     if(time>=this.navigationAt){this.navigationAt=time+250;const boxes=[...(this.sishuiObstacles?.footprints??[]),...(this.terrain?(this.terrain.stats.burnt?(this.terrainNav=this.terrain.navBoxes()):this.terrainNav):[])];this.supplies?.appendNavigationBoxes(boxes);this.legion.navigation.setBoxes(boxes);}
     this.legion.update(dt, time, this.enemies, this.grid, (enemy, amount) => this.hitEnemy(enemy, amount, this.combatNow, 'melee', true));
     this.followers?.update(dt, this.combatNow);
-    this.formationRt?.update(dt, this.combatNow);
+    this.formationRt?.update(dt, this.combatNow); this.formationFx?.update(dt, this.combatNow);
     if (this.over) return;
     this.rebuildGrid();
     this.separateEnemies();
@@ -1545,6 +1551,8 @@ export class GameScene extends Phaser.Scene {
     if (IS_DESKTOP) {
       if (ordersPanelSetting() === 'on') this.ordersPanel = new OrdersPanel(this, orders);
       this.battleMap = new BattleMap({locked: () => !mechOpen('atlas'), scene: this, player: () => this.player, enemies: () => this.enemies, followers: () => this.followers?.members ?? [],
+        // 军阵：部曲淡青点 + 主将脚下当前阵纹小图
+        army: () => this.legion.units, formation: () => { const r = this.formationRt; return r?.current ? { frame: FORMATION_IDS.indexOf(r.current), rot: this.legion.formation.facing + Math.PI / 2 } : null; },
         title: () => this.chapter.name ?? this.chapter.label ?? '',
         // 2026-11-19 用户「打开小地图会暂停是我要要求的」：舆图展开时战斗暂停，卷回后恢复
         pause: on => { if (on) { if (this.mode === 'none' && !this.over) this.setMode('map'); } else if (this.mode === 'map') this.setMode('none'); },
@@ -3412,6 +3420,7 @@ export class GameScene extends Phaser.Scene {
       { key: 'death-fx', name: '死亡特效', tab: 'view', kind: 'toggle', options: ch(['on', 'off'], DEATHFX_LABEL), get: () => deathFxSetting(), set: v => setDeathFx(v as DeathFxSetting) },
       { key: 'damage', name: '伤害数字', tab: 'battle', kind: 'choice', options: ch(['all', 'crit', 'off'], DAMAGE_LABEL), get: () => damageNumbers(), set: v => setDamageNumbers(v as DamageNumbers) },
       { key: 'orders-panel', name: '军令面板', tab: 'battle', kind: 'toggle', options: ch(['on', 'off'], ORDERS_PANEL_LABEL), get: () => ordersPanelSetting(), set: v => { setOrdersPanelSetting(v as OrdersPanelSetting); this.applyOrdersPanelSetting(); } },
+      { key: 'formation-sigil', name: '阵纹', tab: 'battle', kind: 'toggle', options: ch(['on', 'off'], SIGIL_LABEL), get: () => formationSigil(), set: v => setFormationSigil(v as FormationSigil) },
       { key: 'school-hint', name: '合击觉醒提示', tab: 'battle', kind: 'choice', options: ch(['brief', 'full', 'off'], SCHOOL_HINT_LABEL), get: () => schoolHint(), set: v => setSchoolHint(v as SchoolHint) },
       { key: 'hero-barks', name: '武将台词', tab: 'battle', kind: 'toggle', options: ch(['on', 'off'], BARKS_LABEL), get: () => heroBarks(), set: v => { setHeroBarks(v as HeroBarks); if (v === 'off') this.heroBark?.clear(); } },
       { key: 'story', name: '剧情', tab: 'story', kind: 'choice', options: ch(['full', 'chapter', 'off'], STORY_LABEL), get: () => storyMode(), set: v => setStoryMode(v as StoryMode) },

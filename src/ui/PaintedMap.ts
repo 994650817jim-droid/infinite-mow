@@ -41,6 +41,7 @@ type TreeDot = { x: number; y: number; dead: boolean };
 export interface PaintLayout { boxes: readonly Box[]; rivers: readonly River[]; roads: readonly Road[]; trees: readonly TreeDot[]; gates: ReadonlyArray<{ x: number; y: number }>; bridges: ReadonlyArray<{ x: number; y: number; ang: number; len: number }> }
 export interface PaintHost {
   player(): { x: number; y: number }; enemies(): readonly Enemy[]; followers(): ReadonlyArray<{ x: number; y: number; active?: boolean }>; bosses(): readonly Enemy[];
+  /** 部曲、当前军阵（同 BattleMap.MapHost）。 */ army?(): ReadonlyArray<{ x: number; y: number; active?: boolean }>; formation?(): { frame: number; rot: number } | null;
   camps?(): ReadonlyArray<{ x: number; y: number; ratio: number; hit: boolean }>;
   pushes?(): ReadonlyArray<{ from: { x: number; y: number }; to: { x: number; y: number } | null; members: ReadonlyArray<{ x: number; y: number }> }>;
 }
@@ -54,7 +55,7 @@ export class PaintedMap {
   private readonly dyn: Phaser.GameObjects.Graphics;
   private readonly icons: Phaser.GameObjects.Image[] = []; private iconN = 0;
   private readonly labels: Phaser.GameObjects.Text[] = []; private labelN = 0;
-  private sig = '';
+  private sig = ''; private fmImg?: Phaser.GameObjects.Image;
   readonly stats = { bakes: 0, icons: 0, labels: 0, stamps: 0, dots: 0, legend: { w: 0, h: 0 } };
   constructor(private readonly scene: Phaser.Scene, private readonly w: number, private readonly h: number, private readonly range: number, title: string) {
     const k = this.k;
@@ -206,6 +207,10 @@ export class PaintedMap {
       else { const a = Math.atan2(py - H / 2, px - W / 2); this.icon('arrowhead', cx, cy, 13, { tint: CINNABAR, angle: Phaser.Math.RadToDeg(a) }); }
       this.label(o.label, cx, cy - 15, '#7a1408', 12);
     }
+    // 部曲淡青点；主将金菱下垫当前阵纹小图
+    g.fillStyle(0x7fa8c0, .95); for (const u of h.army?.() ?? []) { if (u.active === false) continue; const [px, py] = map(u.x, u.y); if (inside(px, py)) g.fillCircle(px, py, 2.4); }
+    { const fm = h.formation?.(); if (fm && this.scene.textures.exists('formation_sigils')) { if (!this.fmImg) { this.fmImg = this.scene.add.image(0, 0, 'formation_sigils', 0).setName('painted-map-formation'); this.root.addAt(this.fmImg, Math.max(0, this.root.getIndex(this.dyn))); }
+      this.fmImg.setFrame(fm.frame).setPosition(W / 2, H / 2).setRotation(fm.rot).setDisplaySize(70, 70).setAlpha(.85).setTint(0x6a4a20).setVisible(true); } else this.fmImg?.setVisible(false); }
     // 主将：金菱（中心）
     g.fillStyle(LQ.lacquer, 1); lqDiamond(g, W / 2, H / 2, 8); g.fillStyle(LQ.goldHi, 1); lqDiamond(g, W / 2, H / 2, 6);
     for (let i = this.iconN; i < this.icons.length; i++) this.icons[i].setVisible(false);

@@ -1512,6 +1512,9 @@ export class GameScene extends Phaser.Scene {
    */
   protected syncGround(): void {
     const camera = this.cameras.main;
+    // 地面这块要盖满镜头看到的世界：镜头拉远（守城 v2 电脑布局 ×0.82）时 GAME_WIDTH + 512 不够宽，按 256 对齐后右边会露出一条底色（用户试玩 u3「角楼右边一大条纯黑」）
+    { const vw = camera.width / camera.zoom, vh = camera.height / camera.zoom, nw = Math.ceil(vw / 256) * 256 + 512, nh = Math.ceil(vh / 256) * 256 + 512;
+      if (vw > 0 && vh > 0 && (this.ground.width < nw || this.ground.height < nh)) this.ground.setSize(Math.max(this.ground.width, nw), Math.max(this.ground.height, nh)); }
     const x = Math.floor(camera.scrollX / 256) * 256;
     const y = Math.floor(camera.scrollY / 256) * 256;
     this.ground.setPosition(x, y);
@@ -1526,6 +1529,16 @@ export class GameScene extends Phaser.Scene {
   protected interactOverride(): boolean { return false; }
   /** 舆图画心中心 / 守城标记（守城 v2 覆盖：整张定宽场地、四段城头状态）。 */
   protected mapCenter(): { x: number; y: number } | null { return null; }
+  /** 敌方飞行物打到主将的伤害倍率（守城 v2：城头上挨城外射上来的箭有垛口掩护）。 */
+  protected playerBulletMul(_bullet: { vy: number; img: { x: number; y: number } }): number { return 1; }
+  /** 这个敌方弓手这一箭专瞄主将（不管离它最近的兵）：守城 v2 城外弓手每 N 个里 1 个。 */
+  protected aimHero(_enemy: Enemy): boolean { return false; }
+  /** 下一支敌箭是不是瞄主将放的（fireBolt 读完就清）。 */
+  private nextBoltAtHero = false;
+  /** 瞄主将的敌箭从兵头上抛过去（不先打在前面的兵身上）：守城 v2 城外往城头射时（垛口后面站满了兵，箭全被前排挡掉、主将一下都挨不着）。 */
+  protected bulletArcs(_bullet: { vy: number }): boolean { return false; }
+  /** 结算「结局」一栏打赢时写什么（守城：守城成功）。 */
+  protected victoryLabel(): string { return '讨伐成功'; }
   protected mapFort(): import('../ui/PaintedMap').FortMark | null { return null; }
   /** 本关的地形配置 / 有边场地定义（默认按章节表；守城 v2 换成自己算的定宽场地）。 */
   protected terrainDef(): TerrainConfig | null { return terrainConfigFor(this.hardKey(), this.hardStage()); }
@@ -2078,9 +2091,10 @@ export class GameScene extends Phaser.Scene {
           this.time.delayedCall(180, () => {
             // 只在放箭帧生成箭矢
             if (!enemy.active || enemy.spawnId !== spawnId || this.over) return;
-            const p = enemy.targetAlly?.active && enemy.targetAlly.lifeId === enemy.targetLife ? enemy.targetAlly : this.player;
+            const p = !this.aimHero(enemy) && enemy.targetAlly?.active && enemy.targetAlly.lifeId === enemy.targetLife ? enemy.targetAlly : this.player;
             this.sfx.play('enemyArrow');
             // 箭矢颜色跟射箭的人穿的阵营色走（第二章西凉暗红、袁军土黄、各势力色；黄巾原样），只换颜色
+            this.nextBoltAtHero = p === this.player;
             this.fireBolt(this.bullets, enemy.x, enemy.y, p.x, p.y, enemy.def.damage*(this.env?.damageMul(enemy)??1)*(this.traits?.damageMul(enemy)??1), 0, false, 210, enemyArrowTexture(this, enemy.sprite.texture.key));
           });
         }
@@ -2982,7 +2996,7 @@ export class GameScene extends Phaser.Scene {
     const dx = tx - x;
     const dy = ty - y;
     const dist = Math.hypot(dx, dy) || 1;
-    bolt.active = true;
+    bolt.active = true; bolt.atHero = !fromPlayer && this.nextBoltAtHero; this.nextBoltAtHero = false;
     bolt.vx = (dx / dist) * speed;
     bolt.vy = (dy / dist) * speed;
     bolt.damage = damage;
@@ -3063,14 +3077,14 @@ export class GameScene extends Phaser.Scene {
       bullet.img.x += bullet.vx * dt;
       bullet.img.y += bullet.vy * dt;
       bullet.life -= dt;
-      const soldier = this.legion.grid.query(bullet.img.x, bullet.img.y, 26, this.legionBulletScratch).find(u => u.active && Math.hypot(u.x - bullet.img.x, u.y - bullet.img.y) < u.radius + 8);
+      const soldier = bullet.atHero && this.bulletArcs(bullet) ? undefined : this.legion.grid.query(bullet.img.x, bullet.img.y, 26, this.legionBulletScratch).find(u => u.active && Math.hypot(u.x - bullet.img.x, u.y - bullet.img.y) < u.radius + 8);
       if (soldier) { this.legion.hurt(soldier, bullet.damage, this.combatNow, { x: bullet.img.x - bullet.vx * .1, y: bullet.img.y - bullet.vy * .1, normal: bullet.img.texture.key.startsWith('arrow')||bullet.img.texture.key === 'yellow_arrow' }); bullet.active = false; bullet.img.setVisible(false); continue; }
       if (Math.hypot(this.player.x - bullet.img.x, this.player.y - bullet.img.y) < this.player.radius + 8) {
         bullet.active = false;
         bullet.img.setVisible(false);
         const spark = this.add.image(bullet.img.x, bullet.img.y, 'spark').setDepth(DEPTH.fx).setScale(2.2);
         this.tweens.add({ targets: spark, alpha: 0, scale: 0.6, duration: 180, onComplete: () => spark.destroy() });
-        if (this.player.takeDamage(bullet.damage, this.combatNow)) this.cameras.main.flash(90, 180, 40, 40, false);
+        if (this.player.takeDamage(bullet.damage * this.playerBulletMul(bullet), this.combatNow)) this.cameras.main.flash(90, 180, 40, 40, false);
         continue;
       }
       if (bullet.life <= 0) {
@@ -4708,7 +4722,7 @@ export class GameScene extends Phaser.Scene {
         row('随军粮', String(this.legion.food)), // 11-21 用户试玩：资源数字从 1-1 起就要看得到
         ...(mechOpen('squad') ? [row('部曲战损', `${this.legion.count}存活 / ${this.legion.dead}阵亡`)] : []),
         row(this.chapter.bossName, stats.bossKilled ? '已击败' : '未击败'),
-        row('结局', victory ? '讨伐成功' : reason === 'timeout' ? '超时' : reason === 'keep' ? '府衙失守' : '阵亡'),
+        row('结局', victory ? this.victoryLabel() : reason === 'timeout' ? '超时' : reason === 'keep' ? '府衙失守' : '阵亡'),
       ].join('\n'),
     );
     // 兵装缴获：胜利或坚持 60 秒带回全部，速败只带回一半；测试 / 调试战斗不入行囊

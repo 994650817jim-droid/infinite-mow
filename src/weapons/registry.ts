@@ -27,6 +27,8 @@ export interface WeaponBolt {
   img: Phaser.GameObjects.Image; vx: number; vy: number; life: number;
   damage: number; bounce: number; active: boolean;
   lastHit: Enemy | null; hitIds: Set<number>;
+  /** 敌方的箭：放箭时瞄的是主将（不是某个兵）。 */
+  atHero?: boolean;
   /** 射向首领关卡要先拆的营垒 / 城门（GameScene.markGate）的箭：途中的敌兵不挡箭，先撞到它（同黄忠重箭的锁定）；撞到 / 它没了以后照常。 */
   aim?: Enemy | null;
   /** 随行本命武器射出的箭：命中按友军结算并记到随行名下（GameScene.createFollowerWeapon）。 */

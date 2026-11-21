@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { DEPTH, FONT, GAME_WIDTH, actorDepth } from '../config';
-import { DEFENSE_V2, climbSpeed, nextWaypoint, spotAt, v2Engines, v2Phase, v2Spots, v2WaveReward, walkSegment, type Pt, type V2Geo, type V2SpotKind } from '../data/defenseV2';
+import { DEFENSE_V2, climbSpeed, nextWaypoint, spotAt, v2Engines, v2Phase, v2Spots, v2WaveReward, walkSegment, type PostKind, type Pt, type V2Geo, type V2SpotKind } from '../data/defenseV2';
 import { isRangedSpawn } from '../data/gateSpawn';
 import type { Enemy } from '../entities/Enemy';
 import type { Ally } from '../entities/Ally';
@@ -18,7 +18,7 @@ import type { Ally } from '../entities/Ally';
 export interface AssaultHost {
   scene: Phaser.Scene;
   g: V2Geo;
-  player: () => Pt & { alive?: boolean };
+  player: () => Pt & { alive?: boolean; hp?: number };
   units: () => readonly Ally[];
   enemies: () => readonly Enemy[];
   now: () => number;
@@ -55,12 +55,20 @@ export interface AssaultHost {
   fx: (key: string, x: number, y: number, size: number, depth: number) => void;
   /** Space 是否刚按下（喘息时跳过）。 */
   skipPressed: () => boolean;
+  /** F（互动键）现在是不是按住着（推梯要按住）。 */
+  interactHeld: () => boolean;
   /** 全屏大横幅（城门被破这种一场只有一次的大事）。 */
   bigBanner: (title: string, caption: string) => void;
   /** 门楼换图：破门版（true）/ 完好的（false）。 */
   gateArt: (broken: boolean) => void;
+  /** 站在某类岗位（某段）上的我方兵（士兵用守城道具挑人）。 */
+  holders: (kind: PostKind, seg?: number) => Ally[];
+  /** 进入喘息（城防弓手补员）。 */
+  restStart: () => void;
 }
 type LadderState = 'drive' | 'warn' | 'up' | 'down';
+/** 城外一队兵：队首位置（往墙脚推进）、列队开始的时刻、人数、速度（队里最慢的）；每人在队里的位置、spawnId（对象池复用时认人）。 */
+interface Squad { x: number; y: number; born: number; members: number; speed: number; sum: number; marching: boolean; slot: Map<Enemy, { dx: number; dy: number }>; life: Map<Enemy, number> }
 interface Ladder { seg: number; x: number; cart: Enemy; life: number; state: LadderState; until: number; img: Phaser.GameObjects.Image | null; ring: Phaser.GameObjects.Image | null; label: Phaser.GameObjects.Text; next: number; climbers: Set<Enemy> }
 interface Ram { e: Enemy; life: number; x: number; y: number; next: number; label: Phaser.GameObjects.Text; atGate: boolean }
 
@@ -68,6 +76,8 @@ interface Ram { e: Enemy; life: number; x: number; y: number; next: number; labe
 const LADDER_CROP = { x: 103, w: 52, capY: 5, capH: 20, y: 25, h: 18, scale: .6 } as const;
 /** 背面冲车（撞锤朝上、朝城门开）：车轮底边在格内 y = 244；行进时上下颠 bob 像素、撞门那一下往城门冲 lunge 像素再回弹。 */
 const RAM_BACK = { key: 'defv2_ram_back', file: 'assets/siege-v2/defense-v2/ram_back.png', foot: 244 / 256, bob: 1.5, lunge: 9 } as const;
+/** 背面冲车图在场景 preload 里先排进去（同 preloadDefenseV2Wall）。 */
+export function preloadDefenseV2Assault(scene: Phaser.Scene): void { if (!scene.textures.exists(RAM_BACK.key)) scene.load.spritesheet(RAM_BACK.key, RAM_BACK.file, { frameWidth: 256, frameHeight: 256 }); }
 
 export class DefenseAssaultV2 {
   readonly gate: { hp: number; max: number; open: boolean };
@@ -96,7 +106,7 @@ export class DefenseAssaultV2 {
   /** F 位的小字签（滚木 / 热油 / 修门）：主将走近时收起，头顶只留当前会触发的那一个提示（b 段验收第 4 条）。 */
   private spotLabels: Array<{ o: Phaser.GameObjects.Text; x: number; y: number }> = [];
   /** 测试读。 */
-  readonly stats = { ladders: 0, raised: 0, climbs: 0, landed: 0, pushed: 0, logs: 0, oil: 0, repairs: 0, rams: 0, ramHits: 0, gateHits: 0, fell: 0, captures: 0, retakes: 0, carts: 0, ramsBroken: 0, rewardFood: 0, sorties: 0, sortieKills: 0, passed: 0, keepHits: 0, chopDmg: 0, ramDmg: 0, bossDmg: 0, gateShots: 0, gateBrokeAt: -1, wallDown: 0, reopened: 0 };
+  readonly stats = { ladders: 0, raised: 0, climbs: 0, landed: 0, pushed: 0, logs: 0, oil: 0, repairs: 0, rams: 0, ramHits: 0, gateHits: 0, fell: 0, captures: 0, retakes: 0, carts: 0, ramsBroken: 0, rewardFood: 0, sorties: 0, sortieKills: 0, passed: 0, keepHits: 0, chopDmg: 0, ramDmg: 0, bossDmg: 0, gateShots: 0, gateBrokeAt: -1, wallDown: 0, reopened: 0, pushBroken: 0, pushHit: 0, troopPushed: 0, troopPushHit: 0, troopLogs: 0, troopOil: 0, squadded: 0, squadsReleased: 0 };
 
   constructor(private readonly h: AssaultHost) {
     const A = DEFENSE_V2.assault, s = h.scene, g = h.g;
@@ -120,7 +130,8 @@ export class DefenseAssaultV2 {
     // 屏幕顶一行（计时器下方）：喘息 / 出城时的状态；门楼上的出城倒计时
     this.status = s.add.text(GAME_WIDTH / 2, DEFENSE_V2.notice.y, '', { fontFamily: FONT, fontSize: '15px', color: '#f3e3bf', fontStyle: 'bold', resolution: 2, stroke: '#140d07', strokeThickness: 4 }).setOrigin(.5).setScrollFactor(0).setDepth(DEPTH.hud + 1).setVisible(false).setName('defv2-status');
     this.gateCount = s.add.text(g.gx, g.F - 240, '', { fontFamily: FONT, fontSize: '18px', color: '#ffe9bd', fontStyle: 'bold', resolution: 2, stroke: '#140d07', strokeThickness: 4 }).setOrigin(.5).setDepth(DEPTH.dmgText).setVisible(false).setName('defv2-gate-count');
-    this.objs.push(this.keepBar, this.keepText, this.status, this.gateCount);
+    this.troopBar = s.add.graphics().setDepth(DEPTH.dmgText - 1).setName('defv2-troop-bar');
+    this.objs.push(this.keepBar, this.keepText, this.status, this.gateCount, this.troopBar);
   }
   /** 城门内侧的楼梯口（城里，门楼正下方）：F 上城头；门破后从门楼内侧 F 下到这里。 */
   private citySpot(): Pt { const g = this.h.g; return { x: g.gx, y: g.innerTop - DEFENSE_V2.keep.stairDy }; }
@@ -167,7 +178,7 @@ export class DefenseAssaultV2 {
     this.updateWaves(el);
     if (this.done) return;
     for (const q of [...this.queue]) if (el >= q.at) { this.queue.splice(this.queue.indexOf(q), 1); const ok = q.kind === 'ladder' ? this.spawnLadder() : this.spawnRam(); if (!ok && this.phase !== 'rest') this.queue.push({ at: el + 3, kind: q.kind }); } // 没地方（四段都有梯 / 冲车满了）：3 秒后再看
-    this.updateLadders(now, dt); this.updateRams(now, dt); this.updateBurning(now); this.updateChannel(now); this.updateSortie(now); this.gateShots(now); this.brokenFx(now);
+    this.updateSquads(now, dt); this.updateLadders(now, dt); this.updateRams(now, dt); this.updateBurning(now); this.updateChannel(now); this.updatePush(now); this.updateTroops(now); this.updateSortie(now); this.gateShots(now); this.brokenFx(now);
     if (now >= this.checkAt) { this.checkAt = now + A.capture.checkMs; this.checkSegments(); }
     if (!this.gate.open && this.gate.hp <= 0) this.breakGate();
     if (!this.keepBlocked) { const img = this.h.scene.children.getByName('defv2-keep') as Phaser.GameObjects.Image | null; if (img) { this.keepBlocked = true; this.h.block(img, 'siege_mid_hall#0'); } } // 府衙大堂挡人（墙图异步载入，等它摆出来）
@@ -187,7 +198,7 @@ export class DefenseAssaultV2 {
     if (ph.phase === 'rest' && this.h.skipPressed()) this.h.skipTo(ph.start + W.attackSec + W.restSec);
   }
   private enterAttack(i: number, start: number, final: boolean): void {
-    const W = DEFENSE_V2.waves, n = v2Engines(i, this.nextCut); this.ladderCut = this.nextCut; this.nextCut = 0; this.waveLost.clear();
+    const W = DEFENSE_V2.waves, n = v2Engines(i, this.nextCut); this.ladderCut = this.nextCut; this.nextCut = 0; this.waveLost.clear(); this.troopLogs = this.troopLogs.map(() => 0); this.troopOil = 0;
     this.queue = [];
     for (let k = 0; k < n.ladders; k++) this.queue.push({ at: start + W.ladderAt + k * W.ladderGap, kind: 'ladder' });
     for (let k = 0; k < n.rams; k++) this.queue.push({ at: start + W.ramAt + k * W.ramGap, kind: 'ram' });
@@ -200,7 +211,7 @@ export class DefenseAssaultV2 {
     const lost = this.waveLost.size, r = v2WaveReward(lost, this.gate.open ? 0 : this.gate.hp / this.gate.max); this.h.gainFood(r.food); this.stats.rewardFood += r.food;
     if (r.clean) this.h.allyBuff(R.cleanMul, el + W.restSec + W.attackSec);
     this.h.banner(r.clean ? `四段无失 · 赏粮 ${r.food}` : `失守 ${lost} 段 · 赏粮 ${r.food}`, false, (r.clean ? `下一波部曲伤害 +${Math.round((R.cleanMul - 1) * 100)}% · ` : '') + '喘息：滚木、热油补满 · Space 跳过', r.clean ? `四段无失 · 赏粮 ${r.food}` : `失守 ${lost} 段 · 赏粮 ${r.food}`);
-    this.h.guide('rest');
+    this.h.guide('rest'); this.h.restStart();
   }
 
   // ———— 出城冲阵 ————
@@ -295,18 +306,20 @@ export class DefenseAssaultV2 {
     s.tweens.add({ targets: im, scaleY: sc, duration: 380, ease: 'Back.easeOut' });
   }
   /** 梯子倒（推梯 / 滚木）：往城外倒，梯上的人摔下去；车还在的话 raiseMs 后重新立。 */
-  private topple(l: Ladder, why: 'push' | 'log'): number {
+  private topple(l: Ladder, why: 'push' | 'log' | 'troop'): number {
     const s = this.h.scene, g = this.h.g, n = l.climbers.size; l.state = 'down'; l.until = this.h.now() + DEFENSE_V2.assault.ladder.raiseMs; l.cart.sprite.setFrame(0);
     for (const c of [...l.climbers]) this.fall(c); l.climbers.clear();
     const im = l.img; if (im) { s.tweens.killTweensOf(im); s.tweens.add({ targets: im, y: g.F - 60, scaleY: im.scaleY * .18, alpha: 0, duration: 460, ease: 'Quad.easeIn', onComplete: () => im.setVisible(false) }); }
     if (why === 'push') { this.stats.pushed++; this.h.banner('推倒云梯', false, n ? `梯上 ${n} 人摔下城` : '车还在，过一会儿会再立起来'); }
+    if (why === 'troop') this.troopNote('push', '守军推倒云梯', n ? `第 ${l.seg + 1} 段 · 梯上 ${n} 人摔下城` : `第 ${l.seg + 1} 段`);
+    const tp = this.troopPush.get(l); if (tp) { tp.u.pose = null; this.troopPush.delete(l); }
     this.h.sfx('gong'); return n;
   }
   private updateLadders(now: number, dt: number): void {
     const A = DEFENSE_V2.assault.ladder, g = this.h.g, footY = g.F + A.footDy;
     for (const l of [...this.ladders]) {
       if (!this.alive(l.cart, l.life)) {
-        this.wreck(l.x, footY, 'siege_mid_ladder', 3); for (const c of [...l.climbers]) this.fall(c); l.climbers.clear(); l.img?.destroy(); l.ring?.destroy(); l.label.destroy(); this.ladders.splice(this.ladders.indexOf(l), 1);
+        this.wreck(l.x, footY, 'siege_mid_ladder', 3); for (const c of [...l.climbers]) this.fall(c); l.climbers.clear(); l.state = 'down'; /* 车毁了：正在推这架梯子的（主将 / 士兵）一起断 */ l.img?.destroy(); l.ring?.destroy(); l.label.destroy(); this.ladders.splice(this.ladders.indexOf(l), 1);
         this.segBlocked[l.seg] = this.wave; if (this.sortie.open) { this.nextCut++; this.stats.sortieKills++; } // 这一波这段不再立梯；出城砸掉的，下一波少一架
         this.h.banner('云梯车被毁', false, `第 ${l.seg + 1} 段这一波不会再立梯` + (this.sortie.open ? ' · 下一波少一架' : ''), '云梯车被毁'); continue;
       }
@@ -325,7 +338,7 @@ export class DefenseAssaultV2 {
       const fast = this.captured[l.seg] ? DEFENSE_V2.assault.capture.fastMul : 1;
       if (now < l.next || this.segFoes(l.seg) + l.climbers.size >= A.segCap) continue;
       let best: Enemy | null = null, bd = Infinity;
-      for (const e of this.h.enemies()) { if (!this.climbable(e) || this.climbing.has(e) || this.falling.has(e)) continue; const dx = Math.abs(e.x - l.x), dy = e.y - g.F; if (dx > A.footReach || dy < -10 || dy > 120) continue; const d = dx + Math.abs(dy - 20); if (d < bd) { bd = d; best = e; } }
+      for (const e of this.h.enemies()) { if (!this.climbable(e) || this.climbing.has(e) || this.falling.has(e)) continue; const dx = Math.abs(e.x - l.x), dy = e.y - g.F; if (dx > A.footReach || dy < -10 || dy > A.footDepth) continue; const d = dx + Math.abs(dy - 20); if (d < bd) { bd = d; best = e; } }
       if (!best) continue;
       l.next = now + A.climbGapMs / fast; l.climbers.add(best); this.climbing.set(best, { lad: l, life: best.spawnId }); this.stats.climbs++;
     }
@@ -359,11 +372,12 @@ export class DefenseAssaultV2 {
       const g = this.h.g, sp = climbSpeed(g) * (this.captured[c.lad.seg] ? DEFENSE_V2.assault.capture.fastMul : 1), dy = sp * dt, tx = c.lad.x + ((e.spawnId % 3) - 1) * 5;
       e.sprite.x += (tx - e.x) * Math.min(1, 10 * dt); e.sprite.y -= dy;
       e.moveVx = 0; e.moveVy = -sp; e.intentDx = 0; e.intentDy = -dy; // 背面行走帧往上挪（过渡，不冒充手绘攀爬帧）
-      if (e.y <= g.W - 26) { e.sprite.y = g.W - 26; this.climbing.delete(e); c.lad.climbers.delete(e); this.stats.landed++; } // 翻上垛口，落到走道上
+      if (e.y <= g.W - 26) { e.sprite.y = g.W - DEFENSE_V2.layout.rim - 18; this.climbing.delete(e); c.lad.climbers.delete(e); this.stats.landed++; } // 翻上垛口，落到城垛内沿后面的走道上
       return true;
     }
     if (this.falling.has(e)) { e.moveVx = e.moveVy = 0; return true; }
     if (this.tunnel.has(e)) return this.walkTunnel(e, dt);
+    { const q = this.inSquad.get(e); if (q && q.life.get(e) === e.spawnId) { const m = q.slot.get(e)!; return this.walk(e, q.x + m.dx, q.y + m.dy, dt, 3); } if (q) this.inSquad.delete(e); } // 城外成队推进
     const g = this.h.g;
     if (e.y < g.innerTop - 4) return this.raid(e, dt); // 城里：离主将远的去砍府衙
     if (e.y < g.F - 24) return this.onWall(e, dt); // 走道上：照常追人；失守段离主将远的下城去砍府衙
@@ -407,7 +421,7 @@ export class DefenseAssaultV2 {
   tryPushOff(e: Enemy, from: Pt): boolean {
     const g = this.h.g, P = DEFENSE_V2.assault.push;
     if (!e.active || e.isSupplySlot || e.kind === 'elite' || e.kind === 'boss' || e.def.behavior === 'wall' || this.ghost(e)) return false;
-    if (e.y < g.W - P.band || e.y > g.W || from.y > e.y - 8 || e.x < g.X0 || e.x > g.X1) return false;
+    const rim = g.W - DEFENSE_V2.layout.rim; if (e.y < rim - P.band || e.y > rim + 4 || from.y > e.y - 8 || e.x < g.X0 || e.x > g.X1) return false;
     this.fall(e); return true;
   }
 
@@ -459,6 +473,117 @@ export class DefenseAssaultV2 {
     this.stats.gateBrokeAt = this.h.elapsed(); this.h.bigBanner('城门已破！', '敌兵入城——退守府衙（门楼内侧按 F 下城）'); this.h.guide('gate');
   }
 
+  // ———— 推梯（按住 F）————
+  /** 正在推的梯子：开始时刻、主将站的位置和血量（走开 / 挨打 / 松手就断）。 */
+  private pushing: { lad: Ladder; start: number; x: number; y: number; hp: number } | null = null;
+  /** 推倒这架梯子要按住多久：holdMs + 梯上每人 perClimberMs（梯上的人多了推得更慢）。 */
+  private pushNeed(l: Ladder): number { const H = DEFENSE_V2.assault.pushHold; return H.holdMs + l.climbers.size * H.perClimberMs; }
+  private updatePush(now: number): void {
+    const P = this.pushing; if (!P) return; const H = DEFENSE_V2.assault.pushHold, p = this.h.player();
+    if ((p.hp ?? 0) < P.hp) { P.start = Math.min(now, P.start + H.hitBackMs); P.hp = p.hp ?? 0; this.stats.pushHit++; } // 挨一下：往回退一点
+    const why = P.lad.state !== 'up' ? '' : Math.hypot(p.x - P.x, p.y - P.y) > H.moveTol ? '走开了' : !this.h.interactHeld() ? '松手了' : null;
+    if (why !== null) { this.pushing = null; if (why) { this.stats.pushBroken++; this.h.banner('推梯被打断', false, why + ' · 重新按住 F', '推梯被打断'); } return; }
+    if (now - P.start >= this.pushNeed(P.lad)) { this.pushing = null; this.topple(P.lad, 'push'); }
+  }
+
+  // ———— 城外成队推进 / 敌营待命（总制作人走查 I）————
+  private squads: Squad[] = []; private inSquad = new Map<Enemy, Squad>(); private idleBuilt = false;
+  /** 城外刷出来的兵编队：同一处敌营 gatherMs 内刷的进同一队（满 size 另起一队），先摆到队里的位置。 */
+  enlist(e: Enemy): void {
+    const F = DEFENSE_V2.formation, now = this.h.now();
+    let q = this.squads.find(s => !s.marching && s.members < F.size && now - s.born < F.gatherMs && Math.abs(s.x - e.x) < 260);
+    if (!q) { q = { x: e.x, y: e.y, born: now, members: 0, speed: 0, sum: 0, marching: false, slot: new Map(), life: new Map() }; this.squads.push(q); }
+    const k = q.members++, col = k % F.cols, row = Math.floor(k / F.cols), dx = (col - (F.cols - 1) / 2) * F.gap, dy = row * F.gap;
+    q.slot.set(e, { dx, dy }); q.life.set(e, e.spawnId); q.sum += e.def.speed; q.speed = q.sum / q.members; this.inSquad.set(e, q);
+    e.sprite.setPosition(q.x + dx, q.y + dy); this.stats.squadded++;
+    if (!this.idleBuilt) this.buildCampIdle(e);
+  }
+  /** 队伍：列好队（gatherMs）后按队里的平均速度往墙脚推进（往最近一架梯子 / 城门那边靠），到墙脚以南 releaseDy 散开。 */
+  private updateSquads(now: number, dt: number): void {
+    const F = DEFENSE_V2.formation, g = this.h.g;
+    for (const q of [...this.squads]) {
+      for (const [e, life] of q.life) if (!e.active || e.spawnId !== life || this.inSquad.get(e) !== q) { q.life.delete(e); q.slot.delete(e); }
+      if (!q.life.size) { this.squads.splice(this.squads.indexOf(q), 1); continue; }
+      if (now - q.born < F.gatherMs) continue; q.marching = true;
+      const lad = this.ladders.filter(l => l.state !== 'down').sort((a, b) => Math.abs(a.x - q.x) - Math.abs(b.x - q.x))[0], tx = lad ? lad.x : g.gx;
+      q.y -= q.speed * dt * .92; q.x += Math.max(-q.speed * dt * .4, Math.min(q.speed * dt * .4, tx - q.x));
+      if (q.y <= g.F + F.releaseDy) { for (const e of q.life.keys()) this.inSquad.delete(e); this.squads.splice(this.squads.indexOf(q), 1); this.stats.squadsReleased++; }
+    }
+  }
+  /** 敌营待命的兵（只做阵势）：用这一场敌兵的图，每座营左右各一小队站着、轻轻起伏；不算兵数、打不着。 */
+  private buildCampIdle(e: Enemy): void {
+    this.idleBuilt = true; const s = this.h.scene, g = this.h.g, C = DEFENSE_V2.campIdle, S = DEFENSE_V2.spawn, sp = e.sprite, tex = sp.texture.key;
+    const frame = sp.texture.has('up_0') ? 'up_0' : sp.frame.name, per = Math.ceil(C.perSide / C.ranks);
+    for (const cx of S.xs) for (const side of [-1, 1]) for (let k = 0; k < C.perSide; k++) {
+      const x = g.gx + cx + side * C.dx + ((k % per) - (per - 1) / 2) * C.gap, y = g.F + S.dy + C.dy + Math.floor(k / per) * C.gap;
+      const im = s.add.image(x, y, tex, frame).setOrigin(sp.originX, sp.originY).setScale(sp.scaleX, sp.scaleY).setDepth(actorDepth(y)).setName('defv2-camp-idle');
+      if (sp.isTinted) im.setTint(sp.tintTopLeft);
+      s.tweens.add({ targets: im, y: y - 1.5, duration: 650 + (k * 97) % 400, yoyo: true, repeat: -1, delay: (k * 131) % 600 }); this.objs.push(im);
+    }
+  }
+
+  // ———— 我方士兵用守城道具（总制作人试玩反馈三）————
+  /** 士兵正在推的梯子：谁、开始时刻、血量（挨一下往回退）。 */
+  private troopPush = new Map<Ladder, { u: Ally; life: number; start: number; hp: number }>();
+  /** 举手 / 举锅中的士兵：到 at 出手（滚木 / 泼油）。 */
+  private troopAct: Array<{ u: Ally; life: number; kind: 'log' | 'oil'; seg: number; at: number }> = [];
+  /** 这一波士兵放过几次滚木（每段）/ 泼过几次油；下一次判断的时刻；头顶小进度条。 */
+  private troopLogs = [0, 0, 0, 0]; private troopOil = 0; private troopAt = 0; private troopBar!: Phaser.GameObjects.Graphics;
+  /** 士兵推倒这架梯子要多久（比主将慢）。 */
+  private troopNeed(l: Ladder): number { const T = DEFENSE_V2.troops; return T.pushMs + l.climbers.size * T.perClimberMs; }
+  /** 是不是攻城器械（云梯车 / 冲车）。 */
+  isEngine(e: Enemy): boolean { return this.ladders.some(l => l.cart === e) || this.rams.some(r => r.e === e); }
+  /** 正在梯子上爬（还没翻上垛口）。 */
+  climbingNow(e: Enemy): boolean { const c = this.climbing.get(e); return !!c && c.life === e.spawnId; }
+  /** 这个兵正在用守城道具（Legion.busy：不走位、不出手）。 */
+  troopBusy(u: Ally): boolean { if (u.pose && this.h.now() < u.pose.until) return true; for (const t of this.troopPush.values()) if (t.u === u) return true; return false; }
+  /** 士兵用守城道具的横幅：每种只出第一次（告诉玩家士兵会自己做）；之后只有士兵头顶喊一声 / 进度条，不刷横幅（免得把要紧的提示顶掉）。 */
+  private troopSaid = new Set<string>();
+  private troopNote(key: string, title: string, caption: string): void { if (this.troopSaid.has(key)) return; this.troopSaid.add(key); this.h.banner(title, false, caption + ' · 主将亲自做更快'); }
+  /** 士兵头顶喊一声（放滚木 / 泼油前）。 */
+  private bark(u: Ally, text: string): void {
+    const s = this.h.scene, t = s.add.text(u.x, u.y - 64, text, { fontFamily: FONT, fontSize: '13px', color: '#ffe9bd', fontStyle: 'bold', resolution: 2, stroke: '#140d07', strokeThickness: 3 }).setOrigin(.5).setDepth(DEPTH.dmgText).setName('defv2-troop-bark');
+    s.tweens.add({ targets: t, y: t.y - 14, alpha: 0, delay: 650, duration: 400, onComplete: () => t.destroy() });
+  }
+  private updateTroops(now: number): void {
+    const T = DEFENSE_V2.troops, g = this.h.g, p = this.h.player(), reach = DEFENSE_V2.assault.spots.reach;
+    for (const [l, t] of [...this.troopPush]) { // 推梯读条：完成 / 被打断（兵死了、梯子倒了）/ 挨一下往回退
+      const u = t.u; if (!u.active || u.lifeId !== t.life || l.state !== 'up') { u.pose = null; this.troopPush.delete(l); continue; }
+      if (u.hp < t.hp) { t.start = Math.min(now, t.start + T.hitBackMs); this.stats.troopPushHit++; } t.hp = u.hp;
+      if (now - t.start >= this.troopNeed(l)) { this.stats.troopPushed++; this.topple(l, 'troop'); }
+    }
+    for (const a of [...this.troopAct]) if (now >= a.at) { // 举手 / 举锅完：出手
+      this.troopAct.splice(this.troopAct.indexOf(a), 1); if (!a.u.active || a.u.lifeId !== a.life) continue;
+      if (a.kind === 'log' && this.logs[a.seg] > 0) this.dropLog(a.seg, true);
+      if (a.kind === 'oil' && this.oil.charges > 0 && !this.gate.open) this.pourOil(true);
+    }
+    if (now < this.troopAt || this.resting || this.sortie.open || this.done) return; this.troopAt = now + T.checkMs;
+    const heroSeg = walkSegment(g, p), free = (u: Ally) => !this.troopBusy(u);
+    // 推梯：梯上有人、这段走道上没有登城的敌兵（有就先打）、主将不在这段 → 梯口驻守兵推
+    for (const l of this.ladders) {
+      if (l.state !== 'up' || !l.climbers.size || this.troopPush.has(l) || this.pushing?.lad === l || heroSeg === l.seg || this.segFoes(l.seg) > 0) continue;
+      const u = this.h.holders('guard', l.seg).filter(free).sort((a, b) => Math.abs(a.x - l.x) - Math.abs(b.x - l.x))[0]; if (!u) continue;
+      this.troopPush.set(l, { u, life: u.lifeId, start: now, hp: u.hp }); u.pose = { kind: 'push', start: now, until: now + 60000 };
+    }
+    // 滚木：这段墙脚敌兵 ≥ logFoot、主将没站在这段的滚木架上 → 滚木架旁的兵喊一声、举手、放
+    const racks = v2Spots(g).racks;
+    for (const sg of g.segs) {
+      const rk = racks[sg.i]; if (this.troopLogs[sg.i] >= T.logPerWave || this.logs[sg.i] <= 0 || this.troopAct.some(a => a.kind === 'log' && a.seg === sg.i) || Math.hypot(p.x - rk.x, p.y - rk.y) <= reach) continue;
+      const lad = this.ladders.find(q => q.seg === sg.i && q.state === 'up' && q.climbers.size > 0); if (!lad) continue; // 梯子立着、梯上有人才砸（不先手砸排队的人）
+      const x = lad.x; let n = 0;
+      for (const e of this.h.enemies()) if (e.active && !e.isSupplySlot && e.hp > 0 && !this.falling.has(e) && Math.abs(e.x - x) < T.logReach && e.y > g.F - 30 && e.y < g.F + 160) n++;
+      if (n < T.logFoot) continue;
+      const u = [...this.h.holders('crenel', sg.i), ...this.h.holders('guard', sg.i)].filter(free).sort((a, b) => Math.hypot(a.x - rk.x, a.y - rk.y) - Math.hypot(b.x - rk.x, b.y - rk.y))[0]; if (!u) continue;
+      this.troopLogs[sg.i]++; this.troopAct.push({ u, life: u.lifeId, kind: 'log', seg: sg.i, at: now + T.logWindMs }); u.pose = { kind: 'log', start: now, until: now + T.logWindMs + 320 }; this.bark(u, '放滚木！');
+    }
+    // 泼油：冲车到门前、主将没站在油锅上 → 门楼守军举锅、泼（每波 oilPerWave 次，其余留给主将）
+    const oil = v2Spots(g).oil;
+    if (this.troopOil < T.oilPerWave && !this.gate.open && this.oil.charges > 0 && now >= this.oil.cd && !this.troopAct.some(a => a.kind === 'oil') && this.rams.some(r => r.atGate && r.e.active) && Math.hypot(p.x - oil.x, p.y - oil.y) > reach) {
+      const u = this.h.holders('gate').filter(free).sort((a, b) => Math.hypot(a.x - oil.x, a.y - oil.y) - Math.hypot(b.x - oil.x, b.y - oil.y))[0];
+      if (u) { this.troopOil++; this.troopAct.push({ u, life: u.lifeId, kind: 'oil', seg: -1, at: now + T.oilWindMs }); u.pose = { kind: 'oil', start: now, until: now + T.oilWindMs + 360 }; this.bark(u, '泼油！'); }
+    }
+  }
+
   // ———— 门楼放箭（主将站门楼上，往门前一片打）————
   private shotAt = 0; /** 在门洞暗通道里的敌兵（spawnId）。 */ private tunnel = new Map<Enemy, number>(); /** 从失守段下城的敌兵（测试数人头）。 */ private downIds = new Map<Enemy, number>();
   private gateShots(now: number): void {
@@ -492,34 +617,34 @@ export class DefenseAssaultV2 {
     if (sp.kind === 'gate' && this.sortieReady()) { this.startSortie(); return true; } // 门楼内侧：能出城时 F = 出城冲阵
     if (sp.kind === 'gate' && this.gate.open && this.resting) { if (!this.channel) { this.channel = { start: now, x: p.x, y: p.y }; } return true; } // 门破了、喘息：F = 堵门
     if (sp.kind === 'gate' && this.gate.open) { this.h.teleport(cs.x, cs.y); return true; } // 门破了：F = 下城守府衙
-    if (sp.kind === 'ladder') { const l = this.ladders.find(q => q.seg === sp.seg && q.state === 'up'); if (l) this.topple(l, 'push'); return true; }
+    if (sp.kind === 'ladder') { const l = this.ladders.find(q => q.seg === sp.seg && q.state === 'up'); if (l && this.pushing?.lad !== l) { this.pushing = { lad: l, start: now, x: p.x, y: p.y, hp: p.hp ?? 0 }; const tp = this.troopPush.get(l); if (tp) { tp.u.pose = null; this.troopPush.delete(l); } } return true; } // 推梯：按住 F 读条（updatePush）
     if (sp.kind === 'rack') { if (this.logs[sp.seg] > 0) this.dropLog(sp.seg); else this.h.sfx('playerHurt'); return true; }
     if (sp.kind === 'oil') { if (this.oil.charges > 0 && now >= this.oil.cd) this.pourOil(); else this.h.sfx('playerHurt'); return true; }
     if (sp.kind === 'gate') { if (!this.gate.open && this.gate.hp < this.gate.max && now >= this.repairCd && !this.channel) { const p = this.h.player(); this.channel = { start: now, x: p.x, y: p.y }; } else this.h.sfx('playerHurt'); return true; }
     return true;
   }
-  private dropLog(seg: number): void {
+  private dropLog(seg: number, troop = false): void {
     const A = DEFENSE_V2.assault.logs, g = this.h.g, s = this.h.scene, l = this.ladders.find(q => q.seg === seg && q.state !== 'drive'), x = l?.x ?? g.segs[seg].ladderX;
-    this.logs[seg]--; this.stats.logs++;
+    this.logs[seg]--; if (troop) this.stats.troopLogs++; else this.stats.logs++;
     const hit = () => {
       const k = Math.sqrt(Math.max(1, this.h.hpScale())); let n = 0;
       if (l && l.state === 'up') n = this.topple(l, 'log');
       if (l && this.alive(l.cart, l.life)) this.h.hit(l.cart, A.engineDamage * k);
       for (const e of this.h.enemies()) if (e.active && !e.isSupplySlot && e.hp > 0 && !this.falling.has(e) && Math.abs(e.x - x) < A.foot && e.y > g.F - 30 && e.y < g.F + 160) this.h.hit(e, A.damage * k);
-      this.h.banner('滚木！', false, (n ? `梯上 ${n} 人砸下城 · ` : '') + `第 ${seg + 1} 段还剩 ${this.logs[seg]} 次`);
+      const cap = (n ? `梯上 ${n} 人砸下城 · ` : '') + `第 ${seg + 1} 段还剩 ${this.logs[seg]} 次`; if (troop) this.troopNote('log', '守军放滚木', cap); else this.h.banner('滚木！', false, cap);
     };
     if (!s.textures.exists('siege_mid_barb')) { hit(); return; }
     const log = s.add.image(x, g.W - 40, 'siege_mid_barb', 5).setDisplaySize(104, 104).setDepth(actorDepth(g.F) + .2).setName('defv2-log');
     s.tweens.add({ targets: log, y: g.F + 10, angle: 200, duration: A.fallMs, ease: 'Quad.easeIn', onComplete: () => { hit(); s.tweens.add({ targets: log, x: x + (Math.random() < .5 ? -1 : 1) * 160, angle: 520, alpha: 0, duration: 700, onComplete: () => log.destroy() }); } });
     this.h.sfx('gong');
   }
-  private pourOil(): void {
+  private pourOil(troop = false): void {
     const O = DEFENSE_V2.assault.oil, g = this.h.g, s = this.h.scene, now = this.h.now(), fires: Phaser.GameObjects.Sprite[] = [];
-    this.oil.charges--; this.oil.cd = now + O.cdMs; this.stats.oil++;
+    this.oil.charges--; this.oil.cd = now + O.cdMs; if (troop) this.stats.troopOil++; else this.stats.oil++;
     if (s.textures.exists('ground_fire')) for (const dx of [-80, 0, 80]) fires.push(s.add.sprite(g.gx + dx, g.F + 44, 'ground_fire', 0).setOrigin(.5, .85).setDisplaySize(130, 130).setDepth(actorDepth(g.F + 44) + .05).setName('defv2-oil'));
     this.burning?.fires.forEach(f => f.destroy());
     this.burning = { until: now + O.tickMs * O.ticks, next: now, fires };
-    this.h.banner('热油！', false, `门前一片持续烧 · 还剩 ${this.oil.charges} 次`);
+    if (troop) this.troopNote('oil', '守军泼油', `门前一片持续烧 · 还剩 ${this.oil.charges} 次`); else this.h.banner('热油！', false, `门前一片持续烧 · 还剩 ${this.oil.charges} 次`);
   }
   private updateBurning(now: number): void {
     const b = this.burning; if (!b) return; const O = DEFENSE_V2.assault.oil, g = this.h.g;
@@ -566,7 +691,7 @@ export class DefenseAssaultV2 {
     if (sp.kind === 'gate' && this.sortieReady()) return 'F · 出城冲阵';
     if (sp.kind === 'gate' && this.gate.open && this.resting) return this.channel ? `堵门中 ${Math.max(0, (DEFENSE_V2.assault.repair.channelMs - (now - this.channel.start)) / 1000).toFixed(1)} 秒` : `F · 堵门（修到 ${Math.round(DEFENSE_V2.assault.repair.reopenPct * 100)}% 关门）`;
     if (sp.kind === 'gate' && this.gate.open) return 'F · 下城守府衙';
-    if (sp.kind === 'ladder') return 'F · 推梯';
+    if (sp.kind === 'ladder') { const l = this.ladders.find(q => q.seg === sp.seg && q.state === 'up'), n = l?.climbers.size ?? 0; if (this.pushing && this.pushing.lad === l) return `推梯中 ${Math.max(0, (this.pushNeed(l!) - (now - this.pushing.start)) / 1000).toFixed(1)} 秒` + (n ? ` · 梯上 ${n} 人` : ''); return 'F · 按住推梯' + (n ? ` · 梯上 ${n} 人` : ''); }
     if (sp.kind === 'rack') return this.logs[sp.seg] > 0 ? `F · 滚木 ×${this.logs[sp.seg]}` : '滚木用完';
     if (sp.kind === 'oil') return this.oil.charges <= 0 ? '热油用完' : now < this.oil.cd ? `热油冷却 ${Math.ceil((this.oil.cd - now) / 1000)} 秒` : `F · 泼油 ×${this.oil.charges}`;
     if (this.gate.open) return '';
@@ -574,6 +699,8 @@ export class DefenseAssaultV2 {
     if (now < this.repairCd) return `修门冷却 ${Math.ceil((this.repairCd - now) / 1000)} 秒`;
     return this.gate.hp >= this.gate.max ? '城门完好' : 'F · 修门';
   }
+  /** 门楼上的城门血条在不在画面里（在的话顶上那一行 / 告急横幅不再写城门 %，免得两个数不同步——c 段验收第 4 条）。 */
+  private gateBarOnScreen(): boolean { const g = this.h.g, v = this.h.scene.cameras.main.worldView; return v.contains(g.gx, g.F - 198); }
   private paint(now: number): void {
     const p = this.h.player(), t = this.promptText(now), g = this.h.g;
     // 头顶提示；主将在画面最上面时（镜头往城外让，城头在画面上部）头顶会压到计时器，改放脚下
@@ -584,17 +711,18 @@ export class DefenseAssaultV2 {
     { const kk = Math.max(0, this.keep.hp / this.keep.max), kb = this.keepBar.clear(), kw = 150, kx = g.keep.x - kw / 2, ky = g.keep.y + 54; // 府衙大堂台基下面（上面太高，镜头看府衙时出画）
       kb.fillStyle(0x140a06, .85).fillRect(kx - 1, ky - 1, kw + 2, 9).fillStyle(0xd8432a, 1).fillRect(kx, ky, kw * kk, 7); this.keepText.setText(`府衙 ${Math.round(kk * 100)}%`); }
     // 屏幕顶一行：喘息 / 出城时的状态（横幅出着时先让开）；门楼上的出城倒计时
-    { const ph = v2Phase(this.h.waves, this.h.elapsed()), notice = this.h.scene.children.list.some(o => o.name === 'combat-notice'), gp = this.gate.open ? '城门已破' : `城门 ${Math.round(this.gate.hp / this.gate.max * 100)}%`, kp = `府衙 ${Math.round(this.keep.hp / this.keep.max * 100)}%`, left = this.h.waves - 1 - this.wave;
-      const line = this.sortie.open ? `出城冲阵 · 剩 ${Math.max(0, Math.ceil((this.sortie.until - now) / 1000))} 秒 · 回到城门洞关门` : this.phase === 'rest' ? `喘息 ${Math.ceil(ph.left)} 秒 · ${gp} · ${kp} · 还有 ${left} 波 · Space 跳过` : '';
+    { const ph = v2Phase(this.h.waves, this.h.elapsed()), notice = this.h.scene.children.list.some(o => o.name === 'combat-notice'), gp = this.gateBarOnScreen() ? '' : this.gate.open ? '城门已破 · ' : `城门 ${Math.round(this.gate.hp / this.gate.max * 100)}% · `, kp = `府衙 ${Math.round(this.keep.hp / this.keep.max * 100)}%`, left = this.h.waves - 1 - this.wave;
+      const line = this.sortie.open ? `出城冲阵 · 剩 ${Math.max(0, Math.ceil((this.sortie.until - now) / 1000))} 秒 · 回到城门洞关门` : this.phase === 'rest' ? `喘息 ${Math.ceil(ph.left)} 秒 · ${gp}${kp} · 还有 ${left} 波 · Space 跳过` : '';
       this.status.setText(line).setVisible(!!line && !notice);
       this.gateCount.setVisible(false); } // 门楼上的倒计时和头顶提示 / 顶上一行重复，镜头跟到城外时还压在计时器上——不显示
     if (this.sortieReady()) this.h.guide('sortie');
+    { const tb = this.troopBar.clear(); for (const [l, t] of this.troopPush) { const f = Math.min(1, (now - t.start) / this.troopNeed(l)), bx = t.u.x - 16, by = t.u.y - 58; tb.fillStyle(0x140a06, .85).fillRect(bx - 1, by - 1, 34, 6).fillStyle(0xe8c070, 1).fillRect(bx, by, 32 * f, 4); } } // 士兵推梯：头顶小进度条
     const k = Math.max(0, this.gate.hp / this.gate.max), b = this.bar.clear(), w = 150, x = g.gx - w / 2, y = g.F - 198;
     if (this.gate.open) { this.barText.setText('城门已破').setColor('#ff8a70'); return; }
     b.fillStyle(0x140a06, .85).fillRect(x - 1, y - 1, w + 2, 9).fillStyle(k < .3 ? 0xd8432a : 0xd8a03a, 1).fillRect(x, y, w * k, 7);
     this.barText.setText(`城门 ${Math.round(k * 100)}%`).setColor(k < .3 ? '#ff8a70' : '#ffe1a0');
     // 城门告急（70% / 40% / 15%）：横幅提一次
-    for (const th of [.7, .4, .15]) if (k <= th && this.gateWarn > th) { this.gateWarn = th; this.h.banner(`城门 ${Math.round(k * 100)}%`, true, th <= .4 ? '站门楼内侧按 F 修门，或去门楼泼热油' : '冲车在撞门', `城门 ${Math.round(k * 100)}%`); break; }
+    for (const th of [.7, .4, .15]) if (k <= th && this.gateWarn > th) { this.gateWarn = th; if (!this.gateBarOnScreen()) this.h.banner(`城门 ${Math.round(k * 100)}%`, true, th <= .4 ? '站门楼内侧按 F 修门，或去门楼泼热油' : '冲车在撞门', `城门 ${Math.round(k * 100)}%`); break; }
   }
 
   clear(): void {
@@ -603,6 +731,8 @@ export class DefenseAssaultV2 {
     for (const e of this.tunnel.keys()) if (e.active) { e.sprite.setAlpha(1); e.invulnerable = false; } this.tunnel.clear();
     this.climbing.clear(); this.falling.clear();
     for (const l of this.ladders) { l.label.destroy(); l.img?.destroy(); l.ring?.destroy(); } for (const r of this.rams) r.label.destroy();
+    this.squads = []; this.inSquad.clear();
+    for (const t of this.troopPush.values()) t.u.pose = null; this.troopPush.clear(); for (const a of this.troopAct) a.u.pose = null; this.troopAct = [];
     for (const f of this.burning?.fires ?? []) f.destroy(); this.burning = null;
     for (const o of this.objs) o.destroy(); this.objs = []; this.ladders = []; this.rams = []; this.overlays = [null, null, null, null];
   }

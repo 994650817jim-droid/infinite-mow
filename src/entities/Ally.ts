@@ -19,6 +19,16 @@ export class Ally {
   /** 太史慈「单骑突围」给的护盾：shieldUntil 前挨打先扣 shield（Legion.hurt）。 */
   shield = 0; shieldUntil = 0;
   reserveSoldier=false;
+  /** 守城 v2 城防弓手：属于这座城的守军（不占玩家部曲、不进存档、不算战损；Legion.count / exportState / 阵亡数都跳过）。 */
+  garrison = false;
+  /**
+   * 守城 v2 过渡姿态（推梯 / 放滚木 / 泼油，总制作人试玩反馈三）：转身朝城外（下）、前倾、举手 + 出手帧循环——用现有行走 / 出手帧做，
+   * 不是手绘动作帧（要补的帧清单见共享笔记 defense-redesign-v2 r10）。
+   */
+  pose: { kind: 'push' | 'log' | 'oil'; start: number; until: number } | null = null;
+  /** 守城 v2：城头上的远程兵往这条线以南（城垛内沿）射时探身前倾；null = 不探身（其它关）。 */
+  static leanBelow: number | null = null;
+  private aimY = 0;
   lifeId = 0; attackStarted = 0;
   /** 弓兵射击时目标在左侧（攻击表各行都朝右拉弓，向左射时需镜像）。 */
   private aimLeft = false;
@@ -41,7 +51,7 @@ export class Ally {
   get shadow(): Phaser.GameObjects.Image { if (!this.view) this.attach(Ally.makeView(this.scene)); return this.view!.shadow; }
   reset(x: number, y: number, kind: TroopKind, level: number, slot: number): void {
     this.campaignHpMultiplier=1;this.kind = kind; this.active = true; this.level = level; this.maxHp = Math.round(this.def.hp * (1 + .3 * (level - 1))); this.hp = this.maxHp;
-    this.reserveSoldier=false;this.lifeId++; this.attackStarted = 0; this.moving = false; this.ai = createTacticState(x, y); this.ai.nextThink = slot % 12 * 17;
+    this.reserveSoldier=false;this.garrison=false;this.pose=null;this.lifeId++; this.attackStarted = 0; this.moving = false; this.ai = createTacticState(x, y); this.ai.nextThink = slot % 12 * 17;
     this.px = x; this.py = y; this.slot = slot; this.cooldown = (slot % 10) * .08; this.hurtUntil = this.bossImmuneUntil = this.attackUntil = this.simDebt = this.walked = 0; this.deathsReported = false; this.dir = 'down';
     this.view?.sprite.setPosition(x, y);
   }
@@ -68,12 +78,13 @@ export class Ally {
   }
   face(x: number, y: number): void { const dx = x - this.x, dy = y - this.y; if (Math.abs(dx) < 1 && Math.abs(dy) < 1) return; this.dir = Math.abs(dx) > Math.abs(dy) ? dx < 0 ? 'left' : 'right' : dy < 0 ? 'up' : 'down'; }
   attach(view: AllyView): void { this.view = view; view.sprite.setPosition(this.px, this.py); this.render(0); }
-  act(x: number, y: number, now: number, duration: number): void { this.aimLeft = x < this.x; this.dir = Math.abs(x - this.x) > Math.abs(y - this.y) ? x < this.x ? 'left' : 'right' : y < this.y ? 'up' : 'down'; this.attackStarted = now; this.attackUntil = now + duration; }
+  act(x: number, y: number, now: number, duration: number): void { this.aimLeft = x < this.x; this.aimY = y; this.dir = Math.abs(x - this.x) > Math.abs(y - this.y) ? x < this.x ? 'left' : 'right' : y < this.y ? 'up' : 'down'; this.attackStarted = now; this.attackUntil = now + duration; }
   release(): AllyView | null { const v = this.view; if (v) { this.px = v.sprite.x; this.py = v.sprite.y; v.sprite.setVisible(false); v.shadow.setVisible(false); v.label.setVisible(false); } this.view = null; return v; }
   render(now: number): void {
     const v = this.view; if (!v) return; const art = this.def.art, reused = art.startsWith('xiliang'), custom = this.def.walkVisual;
     const sheet = custom?.texture ?? (reused ? `${art}_walk` : `${art}_walk_sheet`);
-    const attack = !custom && !reused && this.kind !== 'medic' && now < this.attackUntil && this.scene.textures.exists(`${art}_attack_sheet`);
+    const pose = this.pose && now < this.pose.until ? this.pose : null, pp = pose ? Ally.posePhase(pose, now) : null; if (pose) this.dir = 'down';
+    const attack = !custom && !reused && this.kind !== 'medic' && (now < this.attackUntil || (!!pose && this.kind !== 'archer')) && this.scene.textures.exists(`${art}_attack_sheet`);
     const meleeAction=this.kind==='halberdier';
     const anticipation=meleeAction&&this.cooldown>0&&this.cooldown<=.1&&this.ai.target?.active&&Math.hypot(this.ai.target.x-this.x,this.ai.target.y-this.y)<=this.def.range;
     const progress=Math.max(0,Math.min(1,(now-this.attackStarted)/Math.max(1,this.attackUntil-this.attackStarted)));
@@ -81,7 +92,7 @@ export class Ally {
     const texture = action ? this.def.actionVisual!.texture : attack ? `${art}_attack_sheet` : sheet;
     // 弓兵攻击表的“左”行实为朝右、上下行也朝右拉弓：统一用朝右的侧身拉弓/放箭两帧，目标在左时水平镜像
     const archerAim = attack && this.kind === 'archer';
-    const frame = action ? `${this.dir}_${(meleeAction?(now>=this.attackUntil?0:Math.min(3,1+Math.floor(progress*3))):Math.min(3,Math.floor(progress*4)))}` : attack ? `atk_${archerAim ? 'right' : this.dir}_${(now-this.attackStarted)/Math.max(1,this.attackUntil-this.attackStarted)<.5 ? 0 : 1}` : `${this.dir}_${!this.moving || (custom||this.kind==='spearman') && now < this.attackUntil ? 0 : Math.floor(this.walked / 14) % 4}`;
+    const frame = pp && !action ? (attack ? `atk_down_${pp.frame}` : `down_${pp.frame ? 2 : 0}`) : action ? `${this.dir}_${(meleeAction?(now>=this.attackUntil?0:Math.min(3,1+Math.floor(progress*3))):Math.min(3,Math.floor(progress*4)))}` : attack ? `atk_${archerAim ? 'right' : this.dir}_${(now-this.attackStarted)/Math.max(1,this.attackUntil-this.attackStarted)<.5 ? 0 : 1}` : `${this.dir}_${!this.moving || (custom||this.kind==='spearman') && now < this.attackUntil ? 0 : Math.floor(this.walked / 14) % 4}`;
     // 人物画风 v2：图集格子更大、像素 1:1（ArtStyle.V2_TROOP_SCALE），按实际帧高换算脚底锚点
     const v2art = isV2Texture(texture), v2fh = v2art ? (this.scene.textures.getFrame(texture, frame)?.height || 96) : 0;
     const scale = v2art ? V2_TROOP_SCALE : custom?.scale ?? (this.kind === 'rider' ? .8 : .58);
@@ -91,14 +102,24 @@ export class Ally {
     const hop=this.moving&&now>=this.attackUntil?Math.abs(Math.sin(Math.PI*this.walked/14))*2:0;
     // 出手动作：沿朝向前冲后收回（远程为后坐），并带轻微伸缩；保持同一角色素材，不冒充独立攻击帧。
     const strike=now<this.attackUntil?Math.sin(progress*Math.PI):0,lunge=(LUNGE[this.kind]??0)*strike,horizontal=this.facingX!==0;
+    // 探身往下射：城头上的远程兵射城垛线以南的目标时前倾（朝目标那侧转 lean 弧度、往下沉 3 像素）
+    const lean = !pose && Ally.leanBelow !== null && !!this.def.ranged && now < this.attackUntil + 250 && this.y < Ally.leanBelow && this.aimY > Ally.leanBelow;
+    const poseSy = pp?.sy ?? 1, poseDy = pp?.dy ?? (lean ? 3 : 0), poseRot = pp?.rot ?? (lean ? (this.aimLeft ? -1 : 1) * .16 : 0);
     const tex=visualTextureKey(this.scene,texture),corr=texture===sheet||v2art?1:figureCorrection(this.scene,visualTextureKey(this.scene,sheet),tex,frame,!(attack&&!action));
-    v.sprite.setVisible(this.active).setTexture(tex, frame).setScale(corr*scale*(1+(horizontal?.07:-.03)*Math.abs(strike)*(lunge?1:0)),corr*scale*(1+(horizontal?-.03:.06)*Math.abs(strike)*(lunge?1:0))).setTint(now < this.hurtUntil ? 0xff9999 : this.def.tint).setOrigin(.5-this.facingX*lunge/((v2art?v2fh:96)*scale), ground - this.radius * .72 / (frameHeight * scale)-this.facingY*lunge/(frameHeight*scale)+hop/(frameHeight*scale)).setDepth(actorDepth(this.y + this.radius * .72));
+    v.sprite.setVisible(this.active).setTexture(tex, frame).setScale(corr*scale*(1+(horizontal?.07:-.03)*Math.abs(strike)*(lunge?1:0)),corr*scale*(1+(horizontal?-.03:.06)*Math.abs(strike)*(lunge?1:0))*poseSy).setTint(now < this.hurtUntil ? 0xff9999 : this.def.tint).setOrigin(.5-this.facingX*lunge/((v2art?v2fh:96)*scale), ground - this.radius * .72 / (frameHeight * scale)-this.facingY*lunge/(frameHeight*scale)+hop/(frameHeight*scale)-poseDy/(frameHeight*scale)).setDepth(actorDepth(this.y + this.radius * .72));
     // Same-character procedural follow-through where independent attack art is still absent.
     const follow=now<this.attackUntil?Math.sin(progress*Math.PI):0;
-    v.sprite.setRotation(this.kind==='guardian'?follow*.035*(this.facingX||1):this.kind==='rider'?follow*.045*(this.facingX||1):0);
+    v.sprite.setRotation((this.kind==='guardian'?follow*.035*(this.facingX||1):this.kind==='rider'?follow*.045*(this.facingX||1):0)+poseRot);
     v.sprite.setFlipX(archerAim && this.aimLeft);
     v.shadow.setVisible(this.active).setPosition(this.x, this.y + this.radius * .72);
     v.label.setVisible(false);
+  }
+  /** 过渡姿态的这一刻：用第几帧出手帧（0 蓄力 / 1 出手）、纵向伸缩、往下沉几像素、转多少。推梯 = 0.52 秒一推循环；滚木 / 泼油 = 前 62% 举手（往上抻）、之后出手（前倾往下）。 */
+  static posePhase(p: { kind: 'push' | 'log' | 'oil'; start: number; until: number }, now: number): { frame: 0 | 1; sy: number; dy: number; rot: number } {
+    const el = now - p.start;
+    if (p.kind === 'push') { const shove = (el % 520) / 520 >= .45; return { frame: shove ? 1 : 0, sy: shove ? .93 : .97, dy: shove ? 5 : 2, rot: 0 }; }
+    const wind = el / Math.max(1, p.until - p.start) < .62;
+    return { frame: wind ? 0 : 1, sy: wind ? 1.07 : .92, dy: wind ? -3 : 6, rot: 0 };
   }
   static makeView(scene: Phaser.Scene): AllyView { return { sprite: scene.add.image(0, 0, 'shu_swordsman_walk_sheet', 'down_0'), shadow: scene.add.image(0, 0, 'shadow').setDisplaySize(35, 14).setAlpha(.5).setDepth(DEPTH.enemy - 1), label: scene.add.text(0, 0, '', { fontFamily: FONT, fontSize: '11px', resolution: 2, stroke: '#162018', strokeThickness: 2 }).setOrigin(.5).setDepth(DEPTH.enemy + 3) }; }
 }

@@ -33,6 +33,9 @@ try {
   await wait(9000);
   const foot = await p.evaluate(() => { const s = window.__S, g = s.defenseV2.g; const es = s.enemies.filter(e => e.active && e.kind !== 'boss' && !e.isSupplySlot && e.def.behavior !== 'wall'); return { n: es.length, outside: es.filter(e => e.y >= g.F - 40).length, inside: es.filter(e => e.y < g.W).length, nearFoot: es.filter(e => e.y >= g.F - 40 && e.y < g.F + 260).length }; });
   ck('敌兵只在城外（墙内一个都没有），有的已经到了墙脚', foot.inside === 0 && foot.outside === foot.n, foot);
+  // 总制作人试玩：开局城里站着一个「盾兵」——其实是场地互动物件（军旗等，算 kind shield 的补给槽）摆进了城里
+  const env = await p.evaluate(() => { const s = window.__S, g = s.defenseV2.g, ps = s.supplies?.envProps() ?? []; return { n: ps.length, inside: ps.filter(q => q.enemy.y < g.F + 40).map(q => ({ env: q.env, x: Math.round(q.enemy.x), y: Math.round(q.enemy.y) })) }; });
+  ck('场地互动物件（军旗 / 木桶 / 营帐）只放在城外，城里城头一个都没有', env.inside.length === 0, env);
   await p.screenshot({ path: OUT + '/a-2-foot.png' });
   // 定时宝箱：不落在墙面上 / 城外（落点钩子挪回走道）
   const chest = await p.evaluate(() => { const s = window.__S, g = s.defenseV2.g, d = s.itemDrops; const q = d.place?.(g.gx + 200, g.F + 60); return { hook: !!d.place, moved: q ? { y: Math.round(q.y), onWalk: q.y > g.top && q.y < g.W } : null, n: d.chests.length, bad: d.chests.filter(c => c.y >= g.W - 6).map(c => Math.round(c.y)) }; });

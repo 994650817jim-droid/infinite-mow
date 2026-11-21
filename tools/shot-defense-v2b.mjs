@@ -20,7 +20,7 @@ try {
   await p.waitForFunction(() => window.__game?.scene.getScene('GameScene')?.player, null, { timeout: 180000 });
   await ev(() => { const g = window.__game; g.registry.remove('campaignTransfer'); g.registry.set('siegeCity', 'chenliu'); g.registry.set('siegeMode', 'defense'); g.registry.set('runConfig', { character: 'zhaoyun' }); for (const s of g.scene.getScenes(true)) s.scene.stop(); g.scene.start('SiegeGameScene'); });
   await p.waitForFunction(() => { const s = window.__game.scene.getScene('SiegeGameScene'); return s?.player && window.__game.scene.isActive('SiegeGameScene') && s.elapsed > .5 && s.defenseV2?.stats.built && s.defenseAssault; }, null, { timeout: 120000 });
-  const G = await ev(() => { const s = window.__game.scene.getScene('SiegeGameScene'); window.__S = s; s.player.damageImmune = true;
+  const G = await ev(() => { const s = window.__game.scene.getScene('SiegeGameScene'); window.__S = s; s.player.damageImmune = true; s.defenseAssault.troopAt = 1e15; /* b 段测主将自己的推梯 / 滚木 / 泼油：士兵自己用守城道具关掉（那条在 shot-defense-v2-walk 测） */
     for (const [k, n] of [['archer', 6], ['swordsman', 6], ['spearman', 6], ['rider', 2]]) s.legion.recruit(k, n, true);
     s.defenseV2.assignAll(true); const g = s.defenseV2.g; return { gx: g.gx, W: g.W, top: g.top, F: g.F, segs: g.segs.map(q => ({ x0: q.x0, x1: q.x1, lx: q.ladderX })) }; });
   await wait(1400);
@@ -57,10 +57,12 @@ try {
     await to(L.x, G.W - 40); await wait(150);
     const prompt = await ev(() => window.__S.defenseAssault.prompt.text);
     const before = await ev(() => ({ ...window.__S.defenseAssault.stats }));
-    await ev(() => window.__S.interactOverride()); await wait(220);
+    // 推梯要按住 F（总制作人试玩：原来按一下就倒）：按住读条 0.8 秒 + 梯上每人 0.25 秒
+    const mid = await ev(async () => { const s = window.__S; s.v2Held.add('KeyF'); s.interactOverride(); await new Promise(r => setTimeout(r, 350)); const m = { prompt: s.defenseAssault.prompt.text, pushing: !!s.defenseAssault.pushing, state: s.defenseAssault.ladders.find(l => l.state === 'up') ? 'up' : '?' }; return m; });
+    await until(() => !window.__S.defenseAssault.pushing, 5000); await wait(150); await ev(() => window.__S.v2Held.delete('KeyF'));
     await p.screenshot({ path: OUT + '/b-4-push.png' });
     const after = await ev(seg => { const A = window.__S.defenseAssault; return { stats: { ...A.stats }, state: A.ladders.find(l => l.seg === seg)?.state }; }, L.seg);
-    ck('站梯口头顶出「F · 推梯」，按 F 梯子往外倒、梯上的人摔下城', prompt === 'F · 推梯' && after.stats.pushed === before.pushed + 1 && after.state === 'down', { prompt, fell: after.stats.fell - before.fell, state: after.state });
+    ck('站梯口头顶出「F · 按住推梯」，按住 F 读条（推梯中 x 秒）→ 梯子往外倒、梯上的人摔下城', /^F · 按住推梯/.test(prompt) && /^推梯中/.test(mid.prompt) && mid.pushing && after.stats.pushed === before.pushed + 1 && after.state === 'down', { prompt, mid, fell: after.stats.fell - before.fell, state: after.state });
     // ———— F · 滚木（同一段）
     await to(G.segs[L.seg].lx + 84, G.W - 48); await wait(150);
     const lp = await ev(() => window.__S.defenseAssault.prompt.text);
@@ -104,8 +106,8 @@ try {
   ck('清掉这段的敌兵 → 夺回（变回原色）', retOk && (await ev(() => window.__S.defenseAssault.stats.retakes)) >= 1);
   // ———— 推下城：普通兵摔死、精英推不下
   const push = await ev(() => { const s = window.__S, g = s.defenseV2.g, x = g.segs[2].ladderX + 160; s.player.sprite.setPosition(x, g.W - 100);
-    s.defInside = true; let a, el; try { a = s.spawnEnemy('infantry', x, g.W - 22, 1, true); el = s.spawnEnemy('elite', x + 50, g.W - 22, 1, true); } finally { s.defInside = false; }
-    a.sprite.setPosition(x, g.W - 24); if (el) el.sprite.setPosition(x + 50, g.W - 24); // 刷兵会把落点挪离墙身，这里摆回走道南沿
+    s.defInside = true; let a, el; try { a = s.spawnEnemy('infantry', x, g.W - 66, 1, true); el = s.spawnEnemy('elite', x + 50, g.W - 66, 1, true); } finally { s.defInside = false; }
+    a.sprite.setPosition(x, g.W - 66); if (el) el.sprite.setPosition(x + 50, g.W - 66); // 刷兵会把落点挪离墙身，这里摆回走道南沿（城垛内沿后面）
     const A = s.defenseAssault, f0 = A.stats.fell; s.hitEnemy(a, 1, s.combatNow, 'melee', false, true); if (el) s.hitEnemy(el, 1, s.combatNow, 'melee', false, true);
     window.__push = { a, life: a.spawnId }; return { normalFalling: A.ghost(a), eliteFalling: el ? A.ghost(el) : false, fell: A.stats.fell - f0 }; });
   await wait(700);

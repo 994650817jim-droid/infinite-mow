@@ -26,7 +26,7 @@ try {
       const push = (x, y) => { const j = y * w + x; if (bg[j] || dist(j) > TOL) return; bg[j] = 1; st[qt++] = j; };
       for (let x = 0; x < w; x++) { push(x, 0); push(x, h - 1); } for (let y = 0; y < h; y++) { push(0, y); push(w - 1, y); }
       while (qh < qt) { const j = st[qh++], x = j % w, y = (j / w) | 0; if (x > 0) push(x - 1, y); if (x < w - 1) push(x + 1, y); if (y > 0) push(x, y - 1); if (y < h - 1) push(x, y + 1); }
-      for (const [POCKET, MIN] of [[TOL * .75, 500], [TOL * .5, 20]]) { // 被图标围住的背景块（链环里、盾后）
+      for (const [POCKET, MIN] of [[TOL * .75, 500], [TOL * .5, 20], [TOL * .4, 3]]) { // 被图标围住的背景块（链环里、盾后）
         const seen = new Uint8Array(w * h);
         for (let s0 = 0; s0 < w * h; s0++) {
           if (bg[s0] || seen[s0] || dist(s0) > POCKET) continue; let sp = 0; const comp = []; st[sp++] = s0; seen[s0] = 1;

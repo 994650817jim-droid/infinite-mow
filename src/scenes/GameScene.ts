@@ -969,7 +969,7 @@ export class GameScene extends Phaser.Scene {
     this.bossPace=new BossPace(this as unknown as ConstructorParameters<typeof BossPace>[0]); // 首领走路提速 / 追击（BALANCE.bossPace）
     this.itemDrops=new ItemDrops(this,this.player,this.itemTier(),this.lootChapter(),()=>this.elapsed,()=>this.isFinalBoss(),()=>{this.sfx.play('pickup');this.mechEvent('gear');},()=>this.bossRelicKey());this.itemDrops.deferBossRelic=true; // 首领遗珍由首领宝箱发（BossChest）
     {const c=BATTLE_LOOT_CAP[this.battleCapKind()];if(this.itemDrops)this.itemDrops.cap={scrolls:c.scrolls,drops:c.drops};} // 单场收益上限（总制作人第四轮：一场守城精锐 83 个 → 兵装 10 件、残卷 +6）
-    this.tentHints?.destroy();this.tentHints=null;this.battleHeal?.clear();this.battleHeal=new BattleHeal({block:(b,on)=>this.blockBoxes(b,on),scene:this,player:()=>this.player,enemies:()=>this.enemies,elapsed:()=>this.elapsed,now:()=>this.combatNow,place:(x,y)=>this.fieldPlace(x,y),dropPotion:(x,y,a,n,f)=>this.supplies?.dropPotion(x,y,a,n,f)??false,overlay:()=>this.mode!=='none'||this.over,sfx:k=>this.sfx.play(k),notice:t=>this.showGrowthNotice(t),moveDir:()=>this.moveDir,potionAt:(x,y)=>!!this.supplies?.potions.some(q=>q.active&&Math.hypot(q.image.x-x,q.image.y-y)<12)});if(this.supplies)this.supplies.landing=(x,y)=>this.battleHeal?.landing(x,y)??{x,y,moved:false};this.battleHeal.setPlan(this.phasePlan);this.events.once('shutdown',()=>{this.battleHeal?.clear();this.battleHeal=null;});
+    this.tentHints?.destroy();this.tentHints=null;this.battleHeal?.clear();this.battleHeal=new BattleHeal({block:(b,on)=>this.blockBoxes(b,on),scene:this,player:()=>this.player,enemies:()=>this.enemies,elapsed:()=>this.elapsed,now:()=>this.combatNow,place:(x,y)=>this.healPlace(x,y),dropPotion:(x,y,a,n,f)=>this.supplies?.dropPotion(x,y,a,n,f)??false,overlay:()=>this.mode!=='none'||this.over,sfx:k=>this.sfx.play(k),notice:t=>this.showGrowthNotice(t),moveDir:()=>this.moveDir,potionAt:(x,y)=>!!this.supplies?.potions.some(q=>q.active&&Math.hypot(q.image.x-x,q.image.y-y)<12)});if(this.supplies)this.supplies.landing=(x,y)=>this.battleHeal?.landing(x,y)??{x,y,moved:false};this.battleHeal.setPlan(this.phasePlan);this.events.once('shutdown',()=>{this.battleHeal?.clear();this.battleHeal=null;});
     this.relics=new BossRelics({scene:this,player:this.player,enemies:()=>this.enemies,hit:(e,d,now)=>{this.hitEnemy(e,d,now,'melee',false,false);},notice:t=>this.showGrowthNotice(t)},this.player.growth.gear.specials,this.combatNow);
     this.syncRelicShips();
     this.events.once('shutdown',()=>{this.relics?.clear();this.relics=null;this.relicShips?.clear();this.relicShips=null;});
@@ -1512,6 +1512,8 @@ export class GameScene extends Phaser.Scene {
   protected legionOrderOverride(): boolean { return false; }
   /** F（出击键）的场景覆盖（守城 v2：一键 F 推梯 / 滚木 / 泼油 / 修门）；返回 true 表示已处理。 */
   protected interactOverride(): boolean { return false; }
+  /** 回血点（泉眼 / 水井 / 干粮）落点：默认同 fieldPlace；守城 v2 放城里。 */
+  protected healPlace(x: number, y: number): { x: number; y: number } { return this.fieldPlace(x, y); }
   protected updateCamera(dt: number): void {
     if (this.cutscene?.active) return; // 过场动画时镜头归过场管
     const cam = this.cameras.main;

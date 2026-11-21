@@ -7,7 +7,7 @@
 import { build } from 'esbuild';
 import { execFileSync } from 'node:child_process';
 import { relative, join } from 'node:path';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 
 const root = process.cwd(), BASE = process.env.STAR_BASE ?? '718f2bc7';
 // 存档用的假 localStorage（HeroProgress / MasteryStore / WorldStore 都读它）
@@ -236,6 +236,9 @@ for (const key of Object.keys(TABLE)) {
   const fx = Object.entries(FX.STAR_FX);
   ck('特效挂点表：8 项（背水 / 万人敌 / 三军统帅 / 半径环 / 破阵 / 连珠 / 游刃 / 火烧连营），每项有贴图 key、帧数、帧率、锚点、缩放', same(fx.map(e => e[0]).sort(), ['beishui', 'huoshao', 'lianzhu', 'pozhen', 'ring', 'sanjun', 'wanrendi', 'youren']) && fx.every(([, d]) => d.key.startsWith('star_fx_') && d.url.startsWith('assets/star-map/fx/') && d.frames > 0 && d.fps > 0 && d.frameW > 0 && d.frameH > 0 && d.scale > 0 && d.anchor.x >= 0 && d.anchor.y <= 1 && SM.starNode(d.star)) && same(fx.filter(e => e[1].mode === 'loop').map(e => e[0]).sort(), ['beishui', 'ring', 'sanjun', 'wanrendi']));
   ck('特效表里标了 ready 的项，图一定已经在 fx 目录里（没到位的必须是 ready = false，不会去加载）', fx.every(([, d]) => !d.ready || existsSync(join(root, 'public', d.url))), fx.filter(e => e[1].ready).map(e => e[0]));
+  { const J = JSON.parse(readFileSync(join(root, 'public/assets/star-map/fx/fx.json'), 'utf8')), ready = fx.filter(e => e[1].ready);
+    const bad = ready.filter(([k, d]) => { const j = J[k]; return !j || d.url !== 'assets/star-map/fx/' + j.file || d.frames !== j.frames || d.frameW !== j.frame[0] || d.frameH !== j.frame[1] || d.fps !== j.fps || Math.abs(d.anchor.x - j.anchor[0] / j.frame[0]) > 1e-9 || Math.abs(d.anchor.y - j.anchor[1] / j.frame[1]) > 1e-9 || Math.abs(d.frameW * d.scale - j.display[0]) > 1e-9 || Math.abs(d.frameH * d.scale - j.display[1]) > 1e-9 || (d.mode === 'loop') !== j.loop; }).map(e => e[0]);
+    ck('已接上的特效 = 背水、破阵，参数与美术的 fx.json 逐项一致（帧数 / 单帧尺寸 / 帧率 / 锚点 / 显示尺寸 / 是否循环）；万人敌被退回，没有接', same(ready.map(e => e[0]).sort(), ['beishui', 'pozhen']) && bad.length === 0 && FX.STAR_FX.wanrendi.ready === false && FX.STAR_FX_FOOT === 26, bad); }
   { const g = mk('guanyu', [id('破阵'), id('连珠')]); g.crushMul({ x: 5, y: 6 }); g.crushMul(); const p = g.takePulses();
     ck('破阵重击发触发信号（带命中点），取走后清空；没点亮的星不发', same(p, [{ id: 'strength.NL1', x: 5, y: 6 }, { id: 'strength.NL1' }]) && g.takePulses().length === 0 && (mk('guanyu').crushMul({ x: 1, y: 1 }), mk('guanyu').takePulses().length === 0)); }
   { const g = mk('zhuge', [id('连珠')]); let doubled = 0; for (let i = 0; i < 400; i++) if (g.spellEcho({ x: 1, y: 2 }) === 2) doubled++; const p = g.takePulses();

@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { actorDepth } from '../config';
-import { STAR_FX, type StarFxDef, type StarFxId } from '../data/starFx';
+import { STAR_FX, STAR_FX_FOOT, type StarFxDef, type StarFxId } from '../data/starFx';
 import { STAR_BY_ID, STAR_NEAR_RADIUS } from '../data/starMap';
 import type { Player } from '../entities/Player';
 import { StarBuffHud, type StarBuffEntry } from '../ui/StarBuffHud';
@@ -44,7 +44,7 @@ export class StarFx {
       const d: StarFxDef = STAR_FX[id]; let img = this.loops.get(id);
       if (!on(id) || !this.has(id)) { if (img) { img.destroy(); this.loops.delete(id); } continue; }
       if (!img || !img.scene) { img = this.scene.add.image(player.x, player.y, d.key, 0).setOrigin(d.anchor.x, d.anchor.y).setName('star-fx-' + id); this.loops.set(id, img); }
-      img.setPosition(player.x, player.y).setFrame(Math.floor(now / 1000 * d.fps) % d.frames).setDepth(actorDepth(player.y) + (d.attach === 'hero' ? .6 : -.5));
+      img.setPosition(player.x, player.y + STAR_FX_FOOT).setFrame(Math.floor(now / 1000 * d.fps) % d.frames).setDepth(actorDepth(player.y) + (d.attach === 'hero' ? .6 : -.5));
       if (d.attach === 'ring') img.setDisplaySize(STAR_NEAR_RADIUS * 2 * d.scale, STAR_NEAR_RADIUS * 2 * d.scale); else img.setScale(d.scale);
     }
   }

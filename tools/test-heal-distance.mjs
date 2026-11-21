@@ -29,7 +29,7 @@ async function measure(p, where) {
     let at0 = null; const mark = () => { at0 = { x: P.x, y: P.y }; }; const dist = (x, y) => Math.round(Math.hypot(x - (at0?.x ?? P.x), y - (at0?.y ?? P.y)));
     const rndDir = () => { const a = Math.random() * Math.PI * 2; return { x: Math.cos(a), y: Math.sin(a) }; };
     const aheadOf = (m, x, y) => { if (!m) return false; const dx = x - P.x, dy = y - P.y, d = Math.hypot(dx, dy) || 1; return (dx * m.x + dy * m.y) / d > Math.cos(35 * Math.PI / 180); };
-    const rec = (k, d, ahead = false) => { const o = out[k] ??= { n: 0, min: 1e9, ahead: 0 }; o.n++; o.min = Math.min(o.min, d); if (ahead) o.ahead++; };
+    const rec = (k, d, ahead = false) => { const o = out[k] ??= { n: 0, min: 1e9, max: 0, ahead: 0 }; o.n++; o.min = Math.min(o.min, d); o.max = Math.max(o.max, d); if (ahead) o.ahead++; };
     const nearSrc = () => { const a = Math.random() * Math.PI * 2, r = Math.random() * 220; return { x: P.x + Math.cos(a) * r, y: P.y + Math.sin(a) * r }; };
     const clearAll = () => { for (const f of H.foods) { f.active = false; f.img.setVisible(false); } for (const q of S.potions) { q.active = false; q.image.setVisible(false); } S.pouch.length = 0; };
     P.hp = P.maxHp * .95;
@@ -62,11 +62,15 @@ async function measure(p, where) {
 }
 { const p = await open('GameScene', null, null); await measure(p, '1-1'); await p.close(); }
 { const p = await open('ThirdGameScene', ['thirdStage', 1], { thirdStage: 1 }); await measure(p, '3-1'); await p.close(); }
-console.log('\n来源 | 1-1 最小距离 | 3-1 最小距离 | 正前方次数');
+console.log('\n来源 | 1-1 最小–最大 | 3-1 最小–最大 | 正前方次数');
+// 11-21「回血事件刷远一点」：主动刷出的回血点 450–700、低血药 350–450（小场地取能到的最远处），掉落照旧落在掉落源（≥ 250），机缘 600–900
+const RANGE = k => /回血点/.test(k) ? [450, 720] : /低血/.test(k) ? [350, 470] : /机缘/.test(k) ? [450, 1000] : [250, 1e9];
 for (const [k, v] of Object.entries(table)) {
   const a = v['1-1'], c = v['3-1'], ahead = (a?.ahead ?? 0) + (c?.ahead ?? 0);
-  console.log(`${k} | ${a ? a.min + '（' + a.n + ' 次）' : '—'} | ${c ? c.min + '（' + c.n + ' 次）' : '—'} | ${ahead}`);
-  ck(`${k}：离主将最小 ≥ 250、不在移动方向正前方`, [a, c].filter(Boolean).every(o => o.min >= 250 && o.n >= 10) && ahead === 0, v);
+  const fmt = o => o ? o.min + '–' + o.max + '（' + o.n + ' 次）' : '—';
+  console.log(`${k} | ${fmt(a)} | ${fmt(c)} | ${ahead}`);
+  const [lo, hi] = RANGE(k);
+  ck(`${k}：离主将 ${lo}${hi < 1e8 ? '–' + hi : ' 以上'}、不在移动方向正前方`, [a, c].filter(Boolean).every(o => o.min >= lo && o.max <= hi && o.n >= 10) && ahead === 0, v);
 }
 writeFileSync(`${OUT}/table.json`, JSON.stringify(table, null, 1));
 ck('全程无页面报错', errors.length === 0, errors.slice(0, 5));

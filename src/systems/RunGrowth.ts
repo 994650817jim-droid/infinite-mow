@@ -141,7 +141,7 @@ export class RunGrowth {
 
   constructor(readonly character: CharacterId) {}
 
-  /** 属性生效点数：主属性每点按 PRIMARY_MUL 倍计算。 */
+  /** 属性生效点数：本色折算 + 加点，分段折扣后乘擅长 / 熟练倍率（heroStats.statEffective；与主属性无关）。 */
   pts(id: AttributeId): number { return statEffective(statSource(this.character), id, this.attributes[id], this.heroLevel); }
   /** 当前武将等级（本色自动成长要用；GameScene 开局 / 升级时写入）。 */
   heroLevel = 1;

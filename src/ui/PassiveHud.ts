@@ -5,7 +5,7 @@ import { TAISHICI } from '../data/taishici';
 import { MENGDE } from '../data/mengde';
 import Phaser from 'phaser';
 import { DEPTH, FONT, IS_DESKTOP } from '../config';
-import { CHARACTER_PASSIVES } from '../data/passives';
+import { CHARACTER_PASSIVES, PASSIVE_RULES as R } from '../data/passives';
 import type { CharacterPassives } from '../systems/CharacterPassives';
 import type { BranchStatus } from '../data/weaponBranches';
 
@@ -22,7 +22,7 @@ export const PASSIVE_DETAILS: Record<CharacterId, string> = {
   zhangliao: '止啼：双戟每击叠震慑，3 层溃逃 2 秒（溃兵受伤 +25%）；击杀溃逃的敌兵积 1 层，满 12 层召「八百虎贲」虚影骑兵绕身环冲两圈。',
   lvbu: '无双：每击杀 1 名敌人积 1 层战意，满 25 层进入「人中吕布」8 秒：移速 +40%、攻速 +25%，每次出手打两次，不被击退；随后清空。',
   sunshangxiang: '侍婢执刀：移动中每 0.8 秒积 1 层疾步（停下不会掉层）。\n满 6 层后，下一次掷刀时召来 2 名执刀侍婢护身 6 秒（最多 3 名）：绕身巡护，70 像素内的敌人每 0.5 秒挨一刀（掷刀伤害的 50%–70%，随武器等级提高），随后清空。',
-  diaochan: '离间：飞扇每命中一次加 1 层魅惑，满 3 层的敌人倒戈 3 秒（精锐 1.5 秒）——转身去撞最近的同伴，自己受伤 +20%；首领不倒戈，改为 3 秒受伤 +15%。\n每离间 1 名敌人积 1 层舞势，满 5 层后下一次化为「闭月」：舞带环身旋舞 2 秒，半径 160 内每 0.4 秒 50% 伤害并令圈内敌人倒戈。',
+  diaochan: `离间：飞扇每命中一次加 1 层魅惑，满 ${R.charmNeed} 层的敌人倒戈` + ' 3 秒（精锐 1.5 秒）——转身去撞最近的同伴，自己受伤 +20%；首领不倒戈，改为 3 秒受伤 +15%。\n每离间 1 名敌人积 1 层舞势，满 5 层后下一次化为「闭月」：舞带环身旋舞 2 秒，半径 160 内每 0.4 秒 50% 伤害并令圈内敌人倒戈。',
   machao: '西凉铁骑：湛金枪每命中敌人积 1 层铁骑（每 0.3 秒最多 1 层）。\n满 6 层后，下一枪化为「锦马冲锋」：向前突进 180 像素，沿途敌人受到 160% 伤害并被撞开，随后清空。',
   weiyan: '镇守汉中：每次受到伤害积 1 层拒敌（每 0.5 秒最多 1 层）；身边每有 3 名敌人，每秒再积 1 层（被围也能蓄势）。\n满 5 层后，下一刀化为「谁敢杀我」：怒吼并朝 6 个方向劈出裂波（各 80% 伤害），自身 3 秒内受到伤害 -30%，随后清空。',
   liubei: '双剑一次砍中 2 名敌人积 1 层仁德。\n满 4 层后，下一次出剑伤害 +15%，自身回复 8% 最大生命、身边部曲回复 35% 生命，并在 4 秒内攻速 +30%，随后清空。',
@@ -30,7 +30,8 @@ export const PASSIVE_DETAILS: Record<CharacterId, string> = {
   huangyueying: '连弩每命中敌人上紧 1 层机括（每 0.25 秒最多 1 层）。\n满 12 层后，下一次射击额外扇形齐射 6 支机关弩箭（60% 伤害、弹射 +1），随后清空。',
   zhangfei: '声浪每命中敌人积 1 层怒气（每 0.35 秒最多 1 层）。\n满 5 层后，下一次大喝化为「据水断桥」：周围敌人受到 140% 伤害并被震慑 1.2 秒（首领只受伤害），原地留下 3 秒敌人进不来的断桥区，随后清空。',
   zhaoyun: '本命龙枪每命中敌人积累 1 层龙胆（每 0.15 秒最多 1 层）。\n满 7 层后，下一次出枪多 1 枪、枪长 +25%，随后清空重新积累。',
-  guanyu: '一次斩击命中至少 3 名敌人积 1 层武势，每层斩击范围 +6%。\n满 3 层后，下一次斩击伤害 +25%、范围 +18%，随后清空。',
+  /* 2026-11-21 武将数值体检：原文写死「每层 +6%、满层 +18%」，11-16 平衡已削到每层 +4%（满层 +12%）——改为从数据表读 */
+  guanyu: `一次斩击命中至少 ${R.coneThreshold} 名敌人积 1 层武势，每层斩击范围 +${Math.round(R.guandaoRangePerStack * 100)}%。\n满 ${CHARACTER_PASSIVES.guanyu.maxStacks} 层后，下一次斩击伤害 +${Math.round((R.guandaoDamageMul - 1) * 100)}%、范围 +${Math.round(R.guandaoRangePerStack * CHARACTER_PASSIVES.guanyu.maxStacks * 100)}%，随后清空。`,
   huangzhong: '重箭每命中一次积 1 层蓄势，满 4 层进入「神射」6 秒（技艺「静心」可延长到 9 秒）：暴击率 +10%，重箭命中处再爆裂一圈（半径 60、50% 伤害）。\n受到伤害掉 1 层蓄势（神射中受伤不打断）。',
   zhuge: '观星：场上没有首领 / 精锐时，天火每发都积 1 层星象；有首领 / 精锐时，同一目标每吃一发天火积 1 层（最多同时记 5 个目标）。4 秒没再落地就散。\n满 3 层后，下一发天火必定暴击且伤害 ×2（算无遗策），落地留下 4.5 秒星火焦土，灼烧范围内所有敌人，随后清空。',
 };
@@ -144,7 +145,7 @@ export class PassiveHud {
       zhangliao: `击杀溃兵积止啼 · 满 ${ZHANGLIAO.need} 层召八百虎贲`,
       lvbu: s.ready ? '人中吕布：每击两次 · 移速 +40% · 攻速 +25%' : '击杀积战意 · 满 25 层人中吕布',
       zhaoyun: s.ready ? '下次龙枪 +1枪 · 穿透距离 +25%' : '命中蓄龙胆 · 每0.15秒最多1层',
-      guanyu: s.ready ? '下次斩击 伤害+25% · 范围+18%' : `斩中3敌蓄势 · 当前范围 +${s.stacks * 6}%`,
+      guanyu: s.ready ? `下次斩击 伤害+${Math.round((R.guandaoDamageMul - 1) * 100)}% · 范围+${Math.round(R.guandaoRangePerStack * s.stacks * 100)}%` : `斩中${R.coneThreshold}敌蓄势 · 当前范围 +${Math.round(s.stacks * R.guandaoRangePerStack * 100)}%`, /* 原来写死 +18% / 每层 6%（实际每层 4%） */
       huangzhong: s.ready ? '暴击率 +10% · 重箭爆裂' : '重箭命中积蓄势 · 满4层进入神射',
       machao: s.ready ? '下一枪 锦马冲锋' : '命中积铁骑 · 每0.3秒最多1层',
       weiyan: s.ready ? '下一刀 谁敢杀我 · 六向裂波' : '受伤或被围积拒敌 · 身边每3敌每秒1层',

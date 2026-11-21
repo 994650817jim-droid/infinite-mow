@@ -21,8 +21,8 @@ export const CH1V6 = {
   postXpSoftByStage: true,
   /** 小兵生命 / 伤害、首领生命（原 1-1 1 / 1 / .48，1-2 1.3 / 1.05 / .65，1-3 1.7 / 1.1 / .5）。 */
   tuning: [{ hp: .8, damage: .9, bossHp: .48 }, { hp: 1.05, damage: .95, bossHp: .65 }, { hp: 1.4, damage: 1, bossHp: .9 }] as ReadonlyArray<{ hp: number; damage: number; bossHp: number }>,
-  /** 同屏杂兵上限（原都是 150）；首领在场时上限 = 基数 × .5——1-1 基数 bossCapBase1（原 75 → 25），另两关按 enemyCap。 */
-  enemyCap: [80, 100, 110] as readonly number[],
+  /** 同屏杂兵上限（原都是 150）；首领在场时上限 = 基数 × .5——1-1 基数 bossCapBase1（原 75 → 25），另两关按 enemyCap。1-3 110 → 90（2026-11-21 第 7 轮：1-3 0 / 9、上限每次顶满，三大承伤来源随在场人数涨）。 */
+  enemyCap: [80, 100, 90] as readonly number[],
   bossCapBase1: 50,
   /** 1-1 刷兵节奏（原 间隔 .8 / .6 秒、每次 1 / 2 个）：每次 1 个，间隔 先锋段 .8、精锐段 .5、事件段起 .42 秒（at = 换档时刻，刷怪时间轴秒）。 */
   stage1Spawn: { interval: [.8, .5, .42] as readonly number[], at: [45, 100] as readonly number[], burst: 1 },

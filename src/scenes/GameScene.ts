@@ -1017,6 +1017,10 @@ export class GameScene extends Phaser.Scene {
     // 信物库（2026-11-17）：穿着的信物开局生效（属性、套装、机制类注入构筑宝物）
     this.charmInfo=applyCharms(this.player,wornTokens(this.runConfig.character));
     this.campaignLoaded = !!carriedState && !chained;
+    // 出征前整军（总制作人试玩 + 测试组 honest-journey：重进本关 0 兵开局，攒着上千随军粮却没有行营可花）：从存档点开打的主线关先进行营再出征
+    this.preCampDue = this.campaignLoaded && !this.campaignReplay && this.worldCampaign && !isChapterTestRun() && mechOpen('squad'); this.preCampArmed = false; this.preCamp = false;
+    // 篇章没有关前剧情（没调 setupStory 带章节 id）时：开打第一帧直接进整军
+    if (this.preCampDue) this.events.once(Phaser.Scenes.Events.UPDATE, () => { if (this.preCampDue && !this.preCampArmed && !this.over) { this.preCampDue = false; this.openPreCamp(() => {}); } });
     this.applyHeroLevel(!!carriedState);
     this.syncHeroLevel();
     if(carriedState)applyCarriedHp(carriedState,this.player,this.followers); // 2026-11-18 用户：前一关受的伤带到下一关（主将按比例、名将随从同样；部曲在 Legion 存档里本来就带血量）
@@ -1089,10 +1093,10 @@ export class GameScene extends Phaser.Scene {
     this.buildOverlays();
     if(preview&&encounter==='sishui'&&!this.customChapter())this.add.image(48,180,'huaxiong_portrait').setDisplaySize(42,42).setScrollFactor(0).setDepth(901);
     this.legionUI = new LegionUI(this, () => { if (this.mode === 'none' && !this.over) this.legion.cycleOrder(); }, (kind, train) => this.buyTroops(kind, train), () => {
-      if (this.mode === 'rest') this.continueCampaign();
+      if (this.mode === 'rest') this.departRest();
       else if (this.mode === 'recruit') { this.recruitedWaves.add(this.waveIndex); this.freeRecruit = false; this.resumePendingChoices(); }
     }, () => this.takeRecruitPotion(), () => canOfferRejuvenation(this.player));
-    this.campUI=new CampRestUI(this,this.player,this.legion,()=>this.continueCampaign());
+    this.campUI=new CampRestUI(this,this.player,this.legion,()=>this.departRest());
     // 行营休整在本关结算之后：买下的兵装直接收入行囊（2026-11-18 用户报「休整买的装备背包没显示」——原先推进已结算的 runLoot，背包看不到、下一关重建时还会丢）。测试 / 调试战斗同结算规则不入行囊。
     this.campUI.onBuyItem=item=>{const debug=isChapterTestRun()||this.debugModified||this.debugJumped||!!this.player.damageImmune||!!this.runConfig.encounter;if(this.over&&!debug)addItems([item]);else this.itemDrops?.runLoot.push(item);};
     // 军医（2026-11-18）：按章定价；治疗后把存档里的征程构筑血量也改掉（存档点是打赢那一刻存的，治疗在之后；重打旧关不存档也不改）
@@ -1148,7 +1152,8 @@ export class GameScene extends Phaser.Scene {
       for (const m of this.followers?.members ?? []) if (m.recruit.hero) m.weaponDamageMul *= this.storyDir.bondDamageMul(m.recruit.hero);
       const cd = this.storyDir.bondCooldownMul(lord); if (cd !== 1) this.player.stats.cooldownMul *= cd; // 羁绊「卧龙凤雏」冷却
       for (const m of this.followers?.members ?? []) if (m.recruit.hero) m.weaponCooldownMul *= this.storyDir.bondCooldownMul(m.recruit.hero); }
-    this.storyDir.beginStage(done);
+    if (chapterId && this.preCampDue) { this.preCampArmed = true; this.storyDir.beginStage(() => { if (!this.preCampDue || this.over) { done(); return; } this.preCampDue = false; this.openPreCamp(done); }); }
+    else this.storyDir.beginStage(done);
   }
   /** 剧情用的当前首领 id（一关先后两位首领时子类覆盖，如 6-3 黄忠 → 韩玄）；默认不区分。 */
   protected storyBossId(): string | undefined { return undefined; }
@@ -3735,6 +3740,29 @@ export class GameScene extends Phaser.Scene {
    * 规则：打赢一关（主线首次）存一次；之后在行营里招兵、治疗、买卖、学战法、重整构筑，每一步都把当前整份征程构筑写回存档点，率军出征时再写一次。
    * 所以阵亡后续打 / 再战 = 从最近一次出征那一刻开打（兵、粮、军医治疗都在），不用再进行营。重打旧关 / 测试战斗不写。
    */
+  /** 出征前整军：本场是否从存档点开打、该先进行营（create 定）；剧情钩子是否已接上；正在整军。 */
+  protected preCampDue = false; private preCampArmed = false; preCamp = false; private preCampAfter: (() => void) | null = null;
+  /**
+   * 出征前整军（行营）：从存档点开打的主线关（战败后「再战此关」、主页「继续征程」、天下地图出征各章第一关）先进行营——
+   * 招兵、军医、军需商人、布阵都能用，花费随时写回存档点（saveRestPoint），点「率军出征」才开战。
+   * 部曲按存档点恢复：存档点 = 最近一次出征那一刻的编制（行营每一步都写回），天下开启后战败另按 DEFEAT.troopLoss 折损（patchCampaignDefeat）。
+   */
+  protected openPreCamp(after: () => void): void {
+    this.preCamp = true; this.preCampAfter = after; this.resting = true; this.pendingRecruit = false; this.freeRecruit = false;
+    if (this.campUI) this.campUI.preBattle = this.chapter.name;
+    this.restIntroPlayed = true; // 入营水墨过场写的是「某关 · 平定 · 捷」，整军时还没打，不播（出征时复位，打赢进行营照播）
+    this.renderRecruit(); this.setMode('rest'); // 同打赢进行营：renderRecruit 只开页面，模式要另外切（战斗冻结、营中闲话）
+  }
+  /** 行营「率军出征」：整军页 → 开战（本关不变）；打赢后的行营 → 下一关（continueCampaign）。 */
+  protected departRest(): void {
+    if (!this.preCamp) { this.continueCampaign(); return; }
+    if (!this.resting || this.mode !== 'rest') return;
+    this.saveRestPoint(); // 存档点 = 出征那一刻
+    this.preCamp = false; this.resting = false; this.restIntroPlayed = false; if (this.campUI) this.campUI.preBattle = undefined;
+    this.setMode('none');
+    commitBattle(); beginBattle(this.scene.key); // 整军里的花费已写进存档点，不随中途退出回滚；从这里起才算「进行中的战斗」
+    const after = this.preCampAfter; this.preCampAfter = null; after?.();
+  }
   protected saveRestPoint(): void {
     if (!this.resting || this.mode !== 'rest' || this.campaignReplay || isChapterTestRun() || this.debugModified || this.debugJumped || this.player.damageImmune) return;
     saveCampaignBuild(this.runConfig.character, packCampaign(this.runConfig.character, this.player, this.legion, this.followers));

@@ -50,6 +50,8 @@ export class CampRestUI {
  onRespecSave?:()=>void;
  /** 每次重绘后（招兵 / 治疗 / 买卖 / 学战法 / 重整之后都会重绘）：GameScene 把当前整份征程构筑写回存档点（续打 = 从出征那一刻开打）。 */
  onChanged?:()=>void;
+ /** 出征前整军（GameScene.openPreCamp）：本关名；设了就把右上「下一关 · X」写成「出征 · 本关名」，商人货架另算一次来访。 */
+ preBattle?:string;
  /** 行囊里有几件比身上好的兵装（data/gearAuto.ts）：> 0 时「行囊」按钮带小红点；第一次还会在页面下方提示一次。 */
  gearUpgrades?:()=>number;
  private bagDot?:Phaser.GameObjects.Arc;
@@ -136,7 +138,7 @@ export class CampRestUI {
   return hit;
  }
 
- open(key:string,destination:string){if(this.visit!==key){this.visit=key;this.page=this.tab=0;if(this.shop)this.shop.mode='buy';this.stock=merchantStockForVisit(key,(this.scene as unknown as {itemTier?:()=>number}).itemTier?.()??0,this.player.growth.build,(this.scene as unknown as {lootChapter?:()=>number}).lootChapter?.()??1);this.buildSection=this.buildOffset=0;this.notice='';this.intro=null;
+ open(key:string,destination:string){if(this.preBattle)key+=':pre';if(this.visit!==key){this.visit=key;this.page=this.tab=0;if(this.shop)this.shop.mode='buy';this.stock=merchantStockForVisit(key,(this.scene as unknown as {itemTier?:()=>number}).itemTier?.()??0,this.player.growth.build,(this.scene as unknown as {lootChapter?:()=>number}).lootChapter?.()??1);this.buildSection=this.buildOffset=0;this.notice='';this.intro=null;
    // 行营引子：刚开放的军医 / 军需商人在这里来投（一次休整最多一个），直接切到那一页
    const id=takeMechIntros('camp',1).find(x=>CAMP_INTRO_TAB[x]!==undefined);
    if(id){const m=MECHANICS[id];this.intro={id,tab:CAMP_INTRO_TAB[id]!};this.tab=this.intro.tab;this.page=0;if(id==='medic')setMedicFree(true);
@@ -165,7 +167,7 @@ export class CampRestUI {
    if(on){const to={x:t.x+18,w:w-36};if(!this.lineTo){this.tabLine.setX(to.x);this.tabLine.width=to.w;}this.lineTo=to;}});
   // 兵装（总制作人第一章试玩：20 件兵装一件没穿、全程没提示）：有更好的没穿 → 「行囊」小红点；第一次还在下方提示一句
   {const ups=this.gearUpgrades?.()??0;this.bagDot?.setVisible(ups>0);if(ups>0&&!this.notice&&!gearGuideSeen())this.notice='缴获的兵装还没穿上（'+ups+' 件更好）：点右上「行囊」，再点「一键穿戴」';}
-  this.resources.setText('随军粮 '+this.army.food+' · 兵力 '+this.army.count);this.next.setText('下一关 · '+this.destination);this.detail.setText(this.notice);
+  this.resources.setText('随军粮 '+this.army.food+' · 兵力 '+this.army.count);this.next.setText(this.preBattle?'出征 · '+this.preBattle:'下一关 · '+this.destination);this.header.setText(this.preBattle?'出征整军':'行营休整');this.detail.setText(this.notice);
   {const side=D&&(this.tab===2||this.tab===4),l=CampRestUI.STATION_LEFT;this.detail.setX(side?l+(W-40-l)/2:D?W/2:28).setWordWrapWidth(side?W-40-l-16:W-(D?120:56),true);}
   if(this.tab===0)this.renderRecruit();if(this.tab===2)this.renderMarket();if(this.tab===3)this.renderBuild(D?154:229);if(this.tab===4)this.renderMedic();if(this.tab===5)this.renderFormation();
   this.onChanged?.();

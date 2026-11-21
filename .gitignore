@@ -209,6 +209,7 @@ assets/raw/*
 !/tools/cut-icon-sheet.mjs
 !/tools/make-seamless.mjs
 !/tools/trim-scale.mjs
+!/tools/compose-gate-v2.mjs
 !/tools/shot-story-portraits.mjs
 !/tools/resize-image.mjs
 !/tools/shot-boss-still.mjs

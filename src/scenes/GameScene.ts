@@ -3361,7 +3361,7 @@ export class GameScene extends Phaser.Scene {
     if (!canPlay) this.joystick.reset();
     if (this.levelPanel) this.levelPanel.setVisible(mode === 'levelup'||mode==='bossloot');
     this.rerollButton?.setVisible(mode==='levelup');
-    this.pointsButton?.setVisible(mode==='none'&&!this.over&&this.player.growth.unallocated>0&&mechOpen('attributes'));
+    this.pointsButton?.setVisible(mode==='none'&&!this.over&&(this.player.growth.unallocated>0||starMapOn())&&mechOpen('attributes')); // 星图开着：按钮常驻（和 C 键一样随时能开）
     if (this.attributePanel) this.attributePanel.setVisible(mode === 'attributes');
     if (mode !== 'attributes') this.attributeTip?.hide();
     if (this.recruitPanel) this.recruitPanel.setVisible(false);
@@ -4972,9 +4972,9 @@ export class GameScene extends Phaser.Scene {
       const icon=this.add.image(0,-1,this.textures.exists('growth_icon_points')?'growth_icon_points':'icon_passive').setDisplaySize(40,40);
       const bubble=this.add.circle(21,-21,11,0xb8322a,1).setStrokeStyle(1.5,0xffe2a4,1);
       this.pointsBadge=this.add.text(21,-21,'0',{fontFamily:FONT,fontSize:'13px',color:'#fff6e0',resolution:2,fontStyle:'bold'}).setOrigin(.5);
-      const caption=this.add.text(0,40,'加点',{fontFamily:FONT,fontSize:'13px',color:'#ffe2a4',resolution:2,stroke:'#17140d',strokeThickness:3}).setOrigin(.5);
+      const caption=this.add.text(0,40,'加点',{fontFamily:FONT,fontSize:'13px',color:'#ffe2a4',resolution:2,stroke:'#17140d',strokeThickness:3}).setOrigin(.5).setName('attribute-plus-caption'); // 星图开着时 updateHud 把字换成「星图」
       root.add([glow,disc,icon,bubble,this.pointsBadge,caption]);
-      root.setInteractive(new Phaser.Geom.Circle(0,0,34),Phaser.Geom.Circle.Contains).on('pointerdown',(_p:Phaser.Input.Pointer,_x:number,_y:number,event:Phaser.Types.Input.EventData)=>{event?.stopPropagation?.();if(this.mode==='none'&&!this.over&&this.player.growth.unallocated>0){this.attributeReturn='none';this.renderAttributePanel();this.setMode('attributes');}});
+      root.setInteractive(new Phaser.Geom.Circle(0,0,34),Phaser.Geom.Circle.Contains).on('pointerdown',(_p:Phaser.Input.Pointer,_x:number,_y:number,event:Phaser.Types.Input.EventData)=>{event?.stopPropagation?.();if(this.mode==='none'&&!this.over&&(this.player.growth.unallocated>0||starMapOn())){this.attributeReturn='none';this.renderAttributePanel();this.setMode('attributes');}});
       if(root.input)root.input.cursor='pointer';
       this.tweens.add({targets:glow,scale:1.18,alpha:{from:.9,to:.15},duration:900,yoyo:true,repeat:-1,ease:'Sine.easeInOut'});
       this.pointsButton=root;
@@ -5010,7 +5010,7 @@ export class GameScene extends Phaser.Scene {
       {const tk=next?potionTexture(this,next.texture):'';if(next&&this.potionIcon&&(this.potionIcon.texture.key!==tk||(next.frame!==undefined&&this.potionIcon.frame.name!==String(next.frame))))this.potionIcon.setTexture(tk,tk===next.texture?next.frame:undefined).setDisplaySize(tk==='heal_props'?40:tk==='healing_potion'?30:42,tk==='heal_props'?40:tk==='healing_potion'?36:42);}
       this.potionGlow?.setVisible(can&&low);
     }
-    this.pointsBadge?.setText(String(Math.min(99,this.player.growth.unallocated)));if(this.pointsButton)this.pointsButton.setVisible(!overlay&&!this.over&&this.player.growth.unallocated>0&&mechOpen('attributes')).setData('points',this.player.growth.unallocated);
+    this.pointsBadge?.setText(String(Math.min(99,this.player.growth.unallocated)));if(this.pointsButton){this.pointsButton.setVisible(!overlay&&!this.over&&(this.player.growth.unallocated>0||starMapOn())&&mechOpen('attributes')).setData('points',this.player.growth.unallocated);const cap=this.pointsButton.getByName('attribute-plus-caption') as Phaser.GameObjects.Text|null,word=starMapOn()?'星图':'加点';if(cap&&cap.text!==word)cap.setText(word);} // 星图开着：按钮叫「星图」、常驻，角标 = 可用星数
     // 部曲（1-2 开放，mechanic-rollout #5）开放前：护阵 / 出击按钮与「兵力」不显示；随军粮从 1-1 起就显示（11-21 用户试玩「1-1 看不到自己军粮」）
     this.legionUI?.update(this.legion, !overlay && !this.over, mechOpen('squad'));
     this.passiveHud.update(this.player.passive, this.combatNow, !overlay);

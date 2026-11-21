@@ -38,7 +38,7 @@ export const MARTIALS = {
   huishen: {character:'sunshangxiang',name:'回身飞刀',desc:'移动中掷出的飞刀每级多穿透 1 人'},
   baibi: {character:'sunshangxiang',name:'百婢',desc:'每级侍婢上限 +1、存在时间 +2 秒'},
   nichang: {character:'diaochan',name:'霓裳',desc:'每级飞扇距离 +15%；3 级时多掷 1 柄'},
-  meirenji: {character:'diaochan',name:'美人计',desc:'每级倒戈时间 +0.5 秒；3 级时 2 层魅惑即可离间'},
+  meirenji: {character:'diaochan',name:'美人计',desc:'每级倒戈时间 +0.5 秒' /* 2026-11-21 体检：原写「3 级时 2 层魅惑即可离间」，11-16 起所有人都是 2 层（R.charmNeed），这一条已不生效；3 级换什么另议（hero-balance.patch） */},
   // 2026-11-16 方案 C「老当益壮」（用户选定）：「百步」去掉（和黄月英「百步穿杨」撞名），换成「静心」
   jingxin: {character:'huangzhong',name:'静心',desc:'神射持续 7/8/9 秒，神射重箭伤害 +20%/22%/25%；3 级时神射第一箭化为扇形三连重箭'},
   // 2026-11-16 用户：「不靠残血触发」→ 改为越战越勇
